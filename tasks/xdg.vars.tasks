@@ -1,0 +1,7 @@
+---
+- name: get xdg_config_dir
+  shell: echo ${XDG_CONFIG_HOME:-~/.config}
+  register: xdg_config_dir
+- name: test xdg_config_dir
+  shell: test -d $xdg_config_dir && echo 1 || echo 0
+  register: has_xdg_config_dir
