@@ -1,0 +1,33 @@
+#! /bin/sh
+
+set -e
+
+# If an error occurs, and you don't want to redo the full build sequence from
+# scratch, invoke with the name of the first source package to build
+startat=$1
+
+if [ -z "$startat" ] ; then
+    echo "Elimininating non existant pbuilder"
+    # rm -rf /srv/pbuilder/roland/repo
+    seen=true
+fi
+
+for i in openstack-pkg-tools python-warlock python-tox \
+    python-swiftclient python-keystoneclient python-novaclient \
+    python-quantumclient python-cinderclient python-glanceclient swift \
+    keystone nova glance cinder python-django-appconf \
+    python-django-compressor python-django-openstack-auth horizon \
+    quantum novnc openstack-meta-packages ; do
+    if [ "$seen" != true ] ; then
+	if [ "$i" = "$startat" ] ; then
+	    seen=true
+	else
+	    continue
+	fi
+    fi
+    (
+	cd $i
+	DEB_BUILD_OPTIONS=parallel=4,nocheck git-buildpackage
+	debrelease -f pbuilder
+    )
+done

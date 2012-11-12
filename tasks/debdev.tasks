@@ -1,3 +1,0 @@
----
-- name: mini-dinstall, debrelease, dput deps
-  apt: pkg=mini-dinstall,dput,pbuilder,devscripts,fakeroot state=latest

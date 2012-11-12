@@ -1,0 +1,10 @@
+---
+- name: copy in pdebuild-cross.rc
+  copy: src=files/dd/pdebuild-cross.rc dest=/etc/pdebuild-cross/
+- name: copy in cross-compile
+  copy: src=files/dd/cross-compile dest=/etc/dpkg-cross/cross-compile
+- name: run pdebuilder
+  shell: /usr/sbin/pdebuild-cross-create
+  only_if: "${NO_PDEBUILD_CROSS_BUILD.stdout} > 0"
+- name: link sid pdebuild
+  file: src=/var/lib/pdebuild-cross/pdebuild-cross-sid.tar.gz dest=/var/lib/pdebuild-cross/pdebuild-cross.tar.gz state=link

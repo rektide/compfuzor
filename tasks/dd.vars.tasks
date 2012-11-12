@@ -1,0 +1,13 @@
+---
+- shell: echo build-essential,debhelper,fakeroot,git-buildpackage,pbuilder,devscripts
+  register: DEBDEV_PKGS_BASIC
+- shell: echo multistrap,pdebuild-cross,xapt,dpkg-cross
+  register: DEBDEV_PKGS_MULTISTRAP
+- shell: echo mini-dinstall,dput
+  register: DEBDEV_PKGS_REPO
+- name: test -d /var/lib/multistrap as NO_MULTISTRAP_DIR
+  shell: test -d /var/lib/multistrap; echo $?
+  register: NO_MULTISTRAP_DIR 
+- name: test -e /var/lib/pdebuild-cross/pdebuild-cross.tgz as NO_PDEBUILD_CROSS_BUILD
+  shell: test -e /var/lib/pdebuild-cross/pdebuild-cross.tgz; echo $?
+  register: NO_PDEBUILD_CROSS_BUILD
