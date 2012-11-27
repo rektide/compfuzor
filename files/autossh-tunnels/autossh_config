@@ -1,0 +1,15 @@
+{% for host in hosts %}
+Host cfg-{{ host.host }}
+	User {{ host.user }}
+	HostName {{ host.host }}
+	Port {{ host.port }}
+	IdentityFile {{ dest }}/keys/{{ host.key }}
+{% for lf in host.local.iterkeys() %}
+	LocalForward {{ lf }} {{ host.local.get(lf) }}
+{% endfor %}
+{% for rf in host.remote.iterkeys() %}
+	RemoteForward {{ rf }} {{ host.remote.get(rf) }}
+{% endfor %}
+	ExitOnForwardFailure yes
+
+{% endfor %}
