@@ -1,0 +1,10 @@
+[Unit]
+Description={{item.srv}}.{{item.share}} directory
+Wants=network.target
+After=network.target
+ 
+[Mount]
+What=//{{item.srv}}/{{item.share}}
+Where=/mnt/smb/{{item.srv}}/{{item.share}}
+Type=cifs
+Options=credentials=/root/.cifscred-{{item.srv}}-{{item.share}},rw,iocharset=utf8,uid=500,gid=500,_netdev{{ extra_opts }}

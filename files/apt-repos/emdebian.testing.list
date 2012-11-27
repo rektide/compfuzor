@@ -1,0 +1,2 @@
+#deb http://www.emdebian.org/debian/ testing main
+deb http://ftp.uk.debian.org/emdebian/toolchains testing main

@@ -1,6 +1,8 @@
 ---
 - hosts: all
   sudo: True
+  vars:
+    extra_opts: ,fsc
   vars_files:
   - private/automount-cifs/xone.downloads
   - private/automount-cifs/xone.x1

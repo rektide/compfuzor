@@ -1,0 +1,2 @@
+#deb http://www.emdebian.org/debian/ unstable main
+deb http://ftp.uk.debian.org/emdebian/toolchains unstable main

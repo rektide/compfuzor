@@ -1,0 +1,5 @@
+deb http://live.debian.net/ squeeze-snapshots main contrib non-free
+deb-src http://live.debian.net/ squeeze-snapshots main contrib non-free
+
+deb http://live.debian.net/ sid-snapshots main contrib non-free
+deb-src http://live.debian.net/ sid-snapshots main contrib non-free

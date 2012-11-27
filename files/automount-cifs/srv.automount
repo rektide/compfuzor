@@ -1,0 +1,10 @@
+[Unit]
+Description={{item.srv}}.{{item.share}} automount
+Wants=network.target
+After=network.target
+ 
+[Automount]
+Where=/mnt/smb/{{item.srv}}/{{item.share}}
+ 
+[Install]
+WantedBy=multi-user.target

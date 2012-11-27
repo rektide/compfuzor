@@ -1,0 +1,2 @@
+#deb http://packages.prosody.im/debian stable main
+deb http://packages.prosody.im/debian unstable main

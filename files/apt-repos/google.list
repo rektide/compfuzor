@@ -1,0 +1,3 @@
+deb http://dl.google.com/chrome/linux/deb/ stable non-free main
+deb http://dl.google.com/chrome/linux/deb/ testing non-free main
+
