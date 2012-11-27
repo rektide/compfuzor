@@ -6,7 +6,7 @@ After=network.target
 [Service]
 Type=simple
 EnvironmentFile=
-Environment=HOST={{ srv.host }} PORT={{ srv.port }}
+Environment=IP={{ srv.host }} PORT={{ srv.port }}
 WorkingDirectory=/srv/cloud9/webapp
 ExecStart=/usr/bin/env node server.js -w /srv/cloud9/workspace
 PIDFile=/var/run/cloud9.pid
