@@ -1,0 +1,4 @@
+---
+remotes:
+- $cifs_host_share1
+- $cifs_host_share2

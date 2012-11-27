@@ -1,0 +1,3 @@
+---
+- name: reload cloud9
+  action: systemd reload-or-try-restart cloud9.service

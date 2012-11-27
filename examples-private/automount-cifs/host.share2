@@ -1,0 +1,6 @@
+---
+cifs_host_share2:
+  srv: host
+  share: share2
+  user: bob
+  password: alsonotsecure
