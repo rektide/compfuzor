@@ -8,6 +8,8 @@ Type=simple
 ExecStart=/usr/bin/autossh -M {{ item.monitor_port }} -F "{{ dest }}/autossh_config" -tt "cfg-{{ item.host }}"
 PIDFile=/var/run/autossh-tunnel-{{ item.host }}.pid
 User={{ exec_user }}
+RestartSec=1s
+Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
