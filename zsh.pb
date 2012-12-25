@@ -3,13 +3,15 @@
   user: root
   vars:
   - STATE: installed
+  #- STATE: latest
+  - DEFAULT_SHELL: true
   tasks:
   - apt: package=zsh state=$STATE
   - file: path=$item state=directory
     with_items:
     - /etc/zsh/z.d
     - /etc/zsh/zfunc.d
-  - copy: src=files/zsh/etc/$item dest=/etc/zsh/$item
+  - copy: src=files/zsh/$item dest=/etc/zsh/$item
     with_items:
     - zprofile
     - zshrc
@@ -19,4 +21,6 @@
     - zfunc.d/zsource-all
     - zfunc.d/zautoload-all
     - z.d/handjam
+  - lineinfile: dest=/etc/default/useradd regexp=^SHELL=/bin/zsh$ line=SHELL=/bin/zsh
+    only_if: $DEFAULT_SHELL
   - shell: executable=/bin/zsh zcompile-all /etc/zsh/z.d /etc/zsh/zfunc.d
