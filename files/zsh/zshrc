@@ -6,6 +6,8 @@
 #
 # Global Order: zshenv, zprofile, zshrc, zlogin
 
+setopt extended_glob
+
 READNULLCMD=${PAGER:-/usr/bin/pager}
 
 if [[ "$TERM" != emacs ]]; then
@@ -48,4 +50,4 @@ autoload zautoload-all
 zautoload-all /etc/zsh/zfunc.d
 
 # source any other system configs we need to load
-source /etc/zsh/z.d/**/*(.)
+zsource-all /etc/zsh/z.d
