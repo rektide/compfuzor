@@ -1,0 +1,21 @@
+# /etc/zsh/zlogin: system-wide .zlogin file for zsh(1).
+#
+# This file is sourced only for login shells. It
+# should contain commands that should be executed only
+# in login shells. It should be used to set the terminal
+# type and run a series of external commands (fortune,
+# msgs, from, etc.)
+#
+# Global Order: zshenv, zprofile, zshrc, zlogin
+echo ZLOGIN
+
+# add ~/.local/bin to path
+path=(~/.local/bin $path)
+
+# add ~/.zfunc.d and ~/.config/zfunc.d to fpath (function path)
+fpath=($fpath ~/{.zfunc.d,.config/zsh.func.d})
+# autoload all function path modules
+zautoload-all ~/{.zfunc.d,.config/zsh.func.d}
+
+# source init files
+zsource-all ~/{.z.d,.zsh.d,.config/zsh.d}

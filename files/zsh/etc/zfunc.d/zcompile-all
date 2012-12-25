@@ -1,0 +1,4 @@
+for src in $(flatten $*)
+do
+	zcompile -U $src
+done
