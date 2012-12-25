@@ -1,12 +1,12 @@
 ---
 - hosts: all
   user: root
+  vars_files:
+  - vars/apt.vars
   vars:
-  - STATE: installed
-  #- STATE: latest
   - DEFAULT_SHELL: true
   tasks:
-  - apt: package=zsh state=$STATE
+  - apt: package=zsh state=$APT_INSTALL
   - file: path=$item state=directory
     with_items:
     - /etc/zsh/z.d

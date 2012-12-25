@@ -3,10 +3,11 @@
   sudo: True
   vars_files:
   - private/sabnzbd.vars
+  - vars/apt.vars
   handlers:
   - include: handlers.yaml
   tasks:
-  - apt: state=latest pkg=sabnzbdplus
+  - apt: state=$APT_INSTALL pkg=sabnzbdplus
   - user: name=sabnzbd home=/srv/nzb shell=/bin/false system=true
   - file: state=directory path=/srv/nzb/~queue~ owner=sabnzbd group=daemon mode=0777
   - file: state=directory path=/srv/nzb/.sabnzbd owner=sabnzbd group=daemon mode=0770

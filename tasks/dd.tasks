@@ -1,7 +1,7 @@
 ---
 - name: debdev basics
-  apt: pkg=${DEBDEV_PKGS_BASIC.stdout} state=latest
+  apt: pkg=${DEBDEV_PKGS_BASIC.stdout} state=$APT_INSTALL
 - name: debdev multistrap
-  apt: pkg=${DEBDEV_PKGS_MULTISTRAP.stdout} state=latest
+  apt: pkg=${DEBDEV_PKGS_MULTISTRAP.stdout} state=$APT_INSTALL
 - name: debdev repo
-  apt: pkg=${DEBDEV_PKGS_REPO.stdout} state=latest
+  apt: pkg=${DEBDEV_PKGS_REPO.stdout} state=$APT_INSTALL

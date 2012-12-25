@@ -5,9 +5,10 @@
     exec_user: root
     dest: /etc/autossh-tunnels
   vars_files:
+  - vars/apt.vars
   - private/autossh-tunnels/autossh_config.vars
   tasks:
-  - apt: state=latest pkg=autossh
+  - apt: state=$APT_INSTALL pkg=autossh
   - file: state=directory owner=${exec_user} group=root mode=0600 path=${dest}
   - file: state=directory owner=${exec_user} group=root mode=0600 path=${dest}/keys
   - template: src=files/autossh-tunnels/autossh_config dest=${dest}/autossh_config
