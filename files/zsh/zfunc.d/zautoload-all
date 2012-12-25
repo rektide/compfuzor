@@ -1,2 +1,1 @@
-# TODO: do not autoload *.zwc files
-autoload -- $^@/[^_]*(.N:t)
+autoload -- $^@/[^_]*^.zwc(.N:t)

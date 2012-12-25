@@ -1,6 +1,6 @@
 for src in $(flatten $*)
 do
-	# TODO: do not zcompile if this is a *.zwc file
+	[[ $src[-4,-1] == ".zwc ]] && continue
 	zcompile -U $src
 	source $src
 done
