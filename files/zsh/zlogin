@@ -7,7 +7,6 @@
 # msgs, from, etc.)
 #
 # Global Order: zshenv, zprofile, zshrc, zlogin
-echo ZLOGIN
 
 # add ~/.local/bin to path
 path=(~/.local/bin $path)

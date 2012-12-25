@@ -21,6 +21,7 @@
     - zfunc.d/zsource-all
     - zfunc.d/zautoload-all
     - z.d/handjam
+    - z.d/prompt
   - lineinfile: dest=/etc/default/useradd regexp=^SHELL=/bin/zsh$ line=SHELL=/bin/zsh
     only_if: $DEFAULT_SHELL
   - shell: executable=/bin/zsh zcompile-all /etc/zsh/z.d /etc/zsh/zfunc.d

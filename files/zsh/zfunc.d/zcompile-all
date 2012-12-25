@@ -1,4 +1,5 @@
 for src in $(flatten $*)
 do
+	# TODO: bail if we have a *.zwc file
 	zcompile -U $src
 done
