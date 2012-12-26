@@ -9,7 +9,7 @@
 #CROSSARCH=armel
 CROSSARCH=amd64
 #DEBBUILDOPTS="-aarmel"
-DEBBUILDOPTS=""
+DEBBUILDOPTS="-aamd64"
 MULTISTRAPFILE=/etc/multistrap.d/sid-geo-ga.conf
 BASETGZ=/var/lib/pdebuild-cross/pdebuild-cross-sid.tgz
 BUILDPLACE=/var/lib/pdebuild-cross/build/

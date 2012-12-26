@@ -5,7 +5,7 @@
     exec_user: root
     dest: /etc/autossh-tunnels
   vars_files:
-  - vars/apt.vars
+  - vars/common.vars
   - private/autossh-tunnels/autossh_config.vars
   tasks:
   - apt: state=$APT_INSTALL pkg=autossh

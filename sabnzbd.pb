@@ -3,7 +3,7 @@
   sudo: True
   vars_files:
   - private/sabnzbd.vars
-  - vars/apt.vars
+  - vars/common.vars
   handlers:
   - include: handlers.yaml
   tasks:

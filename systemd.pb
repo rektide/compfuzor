@@ -2,7 +2,7 @@
 - hosts: all
   user: root
   vars_files:
-  - vars/apt.vars
+  - vars/common.vars
   tasks:
   - apt: state=$APT_INSTALL pkg=systemd,python-dbus,libpam-systemd
   - shell: dpkg -s systemd|grep Status|grep installed;echo $?

@@ -1,0 +1,2 @@
+---
+- apt: state=$APT_INSTALL pkg=python-jinja2,python-yaml,python-paramiko,python-apt,git

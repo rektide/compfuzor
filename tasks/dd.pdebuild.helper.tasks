@@ -1,0 +1,2 @@
+---
+- apt: state=${APT_INSTALL} pkg=git-buildpackage

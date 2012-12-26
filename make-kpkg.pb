@@ -2,7 +2,7 @@
 - hosts: all
   sudo: True
   vars_files:
-  - vars/apt.vars
+  - vars/common.vars
   tasks:
   - name: install kernel-package main deps
     apt: state=$APT_INSTALL pkg=binutils,build-essential,debianutils,gettext,make,module-init-tools,po-debconf,util-linux

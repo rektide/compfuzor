@@ -2,7 +2,7 @@
 - hosts: all
   user: root
   vars_files:
-  - vars/apt.vars
+  - vars/common.vars
   vars:
   - DEFAULT_SHELL: true
   tasks:

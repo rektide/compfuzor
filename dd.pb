@@ -2,7 +2,7 @@
 - hosts: all
   sudo: true
   vars_files:
-  - vars/apt.vars
+  - vars/common.vars
   tasks:
     - include: "tasks/dd.vars.tasks"
     - include: "tasks/dd.tasks"
