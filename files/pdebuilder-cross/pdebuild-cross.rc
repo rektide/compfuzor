@@ -7,14 +7,14 @@
 # change your target cross-building architecture from armel.
 
 #CROSSARCH=armel
-CROSSARCH=amd64
+CROSSARCH={{ ARCH }}
 #DEBBUILDOPTS="-aarmel"
-DEBBUILDOPTS="-aamd64"
-MULTISTRAPFILE=/etc/multistrap.d/sid-geo-ga.conf
-BASETGZ=/var/lib/pdebuild-cross/pdebuild-cross-sid.tgz
-BUILDPLACE=/var/lib/pdebuild-cross/build/
-BUILDRESULT=/var/lib/pdebuild-cross/result/
-APTCACHE=/var/lib/pdebuild-cross/aptcache/
+DEBBUILDOPTS="-a{{ ARCH }}"
+MULTISTRAPFILE={{ SRV_ETC.stdout }}/{{ MULTISTRAPFILE }}
+BASETGZ={{ SRV_DIR.stdout }}/{{ BASETGZ }}
+BUILDPLACE={{ SRV_DIR.stdout }}/build
+BUILDRESULT={{ SRV_DIR.stdout }}/result
+APTCACHE={{ SRV_DIR.stdout }}/apt-cache
 HOOKDIR=/usr/share/pdebuild-cross/hookdir/
 APTCACHEHARDLINK=no
 PBUILDERSATISFYDEPENDSCMD=/usr/sbin/embuilddeps

@@ -8,4 +8,4 @@
 # if ~/.dpkg-cross/cross-compile exists or by specifying an
 # architecture on the command line.
 # Use '[sudo] dpkg-reconfigure dpkg-cross' to change this value.
-default_arch = amd64
+default_arch = {{ ARCH }}

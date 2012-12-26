@@ -1,6 +1,0 @@
----
-- copy: src=files/dd/pdebuild-cross.rc dest=/etc/pdebuild-cross/
-- template: src=files/dd/cross-compile dest=/etc/dpkg-cross/cross-compile
-- shell: /usr/sbin/pdebuild-cross-create
-  only_if: "${NO_PDEBUILD_CROSS_BUILD.stdout} > 0"
-- file: src=/var/lib/pdebuild-cross/pdebuild-cross-sid.tar.gz dest=/var/lib/pdebuild-cross/pdebuild-cross.tar.gz state=link

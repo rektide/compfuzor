@@ -1,8 +1,0 @@
----
-- name: create multistrap destination dir
-  file: path=/srv/multistrap-main state=directory
-- name: copy sid-geo-ga multistrap conf
-  copy: src=files/dd/sid-geo-ga.conf dest=/etc/multistrap.d/
-- name: build multistrap
-  shell: multistrap -s sid-geo-ga -d /srv/multistrap-main
-  only_if: "not not ${NO_MULTISTRAP_DIR.stdout}"

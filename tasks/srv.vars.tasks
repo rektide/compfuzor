@@ -1,0 +1,10 @@
+---
+- shell: echo $SRV_TYPE-$SRV_INSTANCE
+  register: SRV_NAME
+  only_if: is_unset('$SRV_NAME')
+- shell: echo $SRVS_DIR/${SRV_NAME.stdout}
+  register: SRV_DIR
+  only_if: is_unset('$SRV_DIR')
+- shell: echo $ETCS_DIR/${SRV_NAME.stdout}
+  register: SRV_ETC
+  only_if: is_unset('$SRV_ETC')
