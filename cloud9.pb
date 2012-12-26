@@ -8,23 +8,25 @@
       port: 3232
       user: ${user}
     repo: https://github.com/ajaxorg/cloud9.git
-    dest: /srv/cloud9
+    SRV_TYPE: c9
     npm_opts: --node-dir=/usr/src/node
   tasks:
-  - user: name=${user} system=true home=/srv/cloud9
-  - file: owner=${user} group=root state=directory path=${dest}
-  - file: owner=${user} group=root state=directory path=${dest}/workspace
+  - include: handlers.yml
+  - include: tasks/srv.vars.tasks
+  - user: name=${user} system=true home=${SRV_DIR.stdout}
+  - file: owner=${user} group=root state=directory path=${SRV_DIR.stdout}
+  - file: owner=${user} group=root state=directory path=${SRV_DIR.stdout}/workspace
   - shell: which sm; echo $?
     register: has_sm
   - shell: npm ${npm_opts} install sm
     only_if: ${has_sm.rc} > 0
-  - git: repo=${repo} dest=${dest}/webapp
+  - git: repo=${repo} dest=${SRV_DIR.stdout}/webapp
     register: has_webapp
-  - shell: chown ${user} ${dest}/webapp
+  - shell: chown ${user} ${SRV_DIR.stdout}/webapp
     only_if: ${has_webapp.changed}
-  - shell: chdir=${dest}/webapp sudo -u ${user} sm install
+  - shell: chdir=${SRV_DIR.stdout}/webapp sudo -u ${user} sm install
     only_if: ${has_webapp.changed}
-  - shell: chown ${user} ${dest}/webapp
+  - shell: chown ${user} ${SRV_DIR.stdout}/webapp
     only_if: ${has_webapp.changed}
   - template: owner=root group=root src=files/cloud9/cloud9.service dest=/etc/systemd/system/cloud9.service
     register: has_service

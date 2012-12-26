@@ -1,0 +1,7 @@
+---
+- name: restart-sabnzbd
+  service: name=sabnzbdplus state=restarted
+- name: install cloud9
+  shell: systemctl enable ${SRV_NAME.stdout}.service
+- name: reload cloud9
+  action: systemd reload-or-try-restart ${SRV_NAME.stdout}.service

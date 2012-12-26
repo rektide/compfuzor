@@ -1,3 +1,0 @@
----
-- name: restart-sabnzbd
-  service: name=sabnzbdplus state=restarted

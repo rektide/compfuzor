@@ -5,7 +5,7 @@
   - private/sabnzbd.vars
   - vars/common.vars
   handlers:
-  - include: handlers.yaml
+  - include: handlers.yml
   tasks:
   - apt: state=$APT_INSTALL pkg=sabnzbdplus
   - user: name=sabnzbd home=/srv/nzb shell=/bin/false system=true
