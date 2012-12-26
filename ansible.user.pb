@@ -42,5 +42,5 @@
   tags:
   - deps
   tasks:
-  - include: tasks/ansible-deps.task
+  - include: tasks/ansible.deps.task
     only_if: not $SKIP_DEPS
