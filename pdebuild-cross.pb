@@ -13,7 +13,9 @@
   gather_facts: false
   tasks:
   - include: tasks/srv.vars.tasks
-  - include: tasks/dd.vars.tasks
+  - name: test -e ${DIR.stdout}/$BASETGZ as NO_PDEBUILD_CROSS_BUILD
+    shell: test -e ${DIR.stdout}/$BASETGZ; echo $?
+    register: NO_PDEBUILD_CROSS_BUILD
   - file: path=$item state=directory
     with_items:
     - ${DIR.stdout}
@@ -27,4 +29,3 @@
   # execute
   - shell: /usr/sbin/pdebuild-cross-create
     only_if: "${NO_PDEBUILD_CROSS_BUILD.stdout} > 0"
-  #- include: tasks/dd.pdebuild.helper.tasks
