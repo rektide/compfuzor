@@ -8,6 +8,7 @@
 - name: test -d /var/lib/multistrap as NO_MULTISTRAP_DIR
   shell: test -d /var/lib/multistrap; echo $?
   register: NO_MULTISTRAP_DIR 
-- name: test -e ${SRV_DIR.stdout}/$BASETGZ as NO_PDEBUILD_CROSS_BUILD
-  shell: test -e ${SRV_DIR.stdout}/$BASETGZ; echo $?
+- shell: echo ${DIR.stdout}
+- name: test -e ${DIR.stdout}/$BASETGZ as NO_PDEBUILD_CROSS_BUILD
+  shell: test -e ${DIR.stdout}/$BASETGZ; echo $?
   register: NO_PDEBUILD_CROSS_BUILD

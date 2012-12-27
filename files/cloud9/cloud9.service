@@ -7,9 +7,9 @@ After=network.target
 Type=simple
 EnvironmentFile=
 Environment=IP={{ srv.host }} PORT={{ srv.port }}
-WorkingDirectory=/srv/cloud9/webapp
-ExecStart=/usr/bin/env node server.js -w /srv/cloud9/workspace
-PIDFile=/var/run/cloud9.pid
+WorkingDirectory={{ DIR.stdout }}/webapp
+ExecStart=/usr/bin/env node server.js -w {{ DIR.stdout }}/workspace
+PIDFile=/var/run/{{ NAME.stdout }}.pid
 User={{ srv.user }}
 
 [Install]

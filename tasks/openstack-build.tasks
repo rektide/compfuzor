@@ -1,11 +1,6 @@
 ---
-- name: insure repo dir
-  file: path=${BUILD_DIR}/repo state=directory
-- name: copy build to ${BUILD_DIR}
-  copy: src=files/openstack/build dest=$BUILD_DIR/ mode=0744
-- name: copy archlits to ${BUILD_DIR}
-  copy: src=files/openstack/archlist dest=$BUILD_DIR/
-- name: link archlist from repo dir
-  file: src=${BUILD_DIR}/archlist dest=${BUILD_DIR}/repo/archlist state=link
-- name: archivalist checkout of repo
-  shell: chdir=$BUILD_DIR/repo archivalist
+- file: path=${BUILD_DIR}/repo state=directory
+- copy: src=files/openstack/build dest=$BUILD_DIR/ mode=0744
+- copy: src=files/openstack/archlist dest=$BUILD_DIR/
+- file: src=${BUILD_DIR}/archlist dest=${BUILD_DIR}/repo/archlist state=link
+- shell: chdir=$BUILD_DIR/repo archivalist
