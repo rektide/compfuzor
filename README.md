@@ -40,6 +40,9 @@ It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance
 + ideally all services can be installed multiple times! make it so!
 + `handlers.yml` ought provide a `restart $TYPE` directive that ought expect the above vars be defined.
 + services ought have their own user & group, typically ${NAME.stdout}. A common tasks is in the works.
+++ lordy be, here me now: all "services" are to be templates with their sudo_user injected at execution time.
+++ i have no idea right now how to pull off this execution framework.
+++ similarly, having INSTANCE baked in, not having defaults, these are major ansible warts I don't know how to factor out yet. ideas welcome.
 
 = Miscellenary =
 + Some vars are listed as $FOO.stdout. This ought go away pending some assistance in ansible#1730.

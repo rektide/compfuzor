@@ -1,0 +1,56 @@
+---
+## STOCK BASE DIRECTORIES ##
+# BASE
+- file: path=${DIR.stdout} state=directory mode=770
+# ETC
+- file: path=${ETC.stdout} state=directory mode=770
+  only_if: is_unset("$ETC_BYPASS")
+- file: src=${ETC.stdout} dest=${DIR.stdout}/etc state=link
+  only_if: is_unset("$ETC_BYPASS")
+# VAR
+- file: path=${VAR.stdout} state=directory mode=770
+  only_if: is_unset("$VAR_BYPASS")
+- file: src=${VAR.stdout} dest=${DIR.stdout}/var state=link
+  only_if: is_unset("$VAR_BYPASS")
+# LOG
+- debug: msg="LOG ${LOG.stdout}"
+- file: path=${LOG.stdout} state=directory mode=770
+  only_if: is_unset("$LOG_BYPASS")
+- file: src=${LOG.stdout} dest=${DIR.stdout}/log state=link
+  only_if: is_unset("$LOG_BYPASS")
+## SERVICE DEFINED ##
+# DIRS aka DIR_DIRS
+- file: path=${DIR.stdout}/${item} state=directory mode=770
+  with_items: $DIRS
+  only_if: not is_unset("$DIRS")
+- file: path=${DIR.stdout}/${item} state=directory mode=770
+  with_items: $DIR_DIRS
+  only_if: not is_unset("$DIR_DIRS")
+# FILES aka DIR_FILES
+- template: src=${TYPE}/${item} dest=${DIR.stdout}/${item} mode=660
+  with_items: $FILES
+  only_if: not is_unset("$FILES")
+- template: src=${TYPE}/${item} dest=${DIR.stdout}/${item} mode=660
+  with_items: $DIR_FILES
+  only_if: not is_unset("$DIR_FILES")
+# ETC_DIRS
+- file: path=${ETC.stdout}/${item} state=directory mode=770
+  with_items: $ETC_DIRS
+  only_if: not is_unset("$ETC_DIRS")
+# ETC_FILES
+- template: src=${TYPE}/${item} dest=${ETC.stdout}/${item} mode=660
+  with_items: $ETC_FILES
+  only_if: not is_unset("$ETC_FILES")
+# VAR_DIRS
+- file: path=${VAR.stdout}/${item} state=directory mode=770
+  with_items: $VAR_DIRS
+  only_if: not is_unset("$VAR")
+# VAR_FILES
+- template: src=${TYPE}/${item} dest=${VAR.stdout}/${item} mode=660
+  with_items: $VAR_FILES
+  only_if: not is_unset("$VAR_FILES")
+# LINKS
+- file: src=${DIR.stdout}/${LINKS.${item}} dest=${DIR.stdout}/${item} state=link
+  with_items: $LINKS
+  only_if: not is_unset("$LINKS")
+- debug: msg="done with srv.tasks"
