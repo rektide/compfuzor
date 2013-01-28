@@ -17,4 +17,4 @@ fpath=($fpath ~/{.zfunc.d,.config/zsh.func.d})
 zautoload-all ~/{.zfunc.d,.config/zsh.func.d}
 
 # source init files
-zsource-all ~/{.z.d,.zsh.d,.config/zsh.d}
+zsource-all ~/{.z,.z.d,.zsh.d,.config/zsh.d}
