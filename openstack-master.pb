@@ -1,6 +1,7 @@
 ---
 - hosts: all
   sudo: True
+  gather_facts: False
   tags:
   - packages
   - root
@@ -9,4 +10,4 @@
   sudo: True
   tasks:
   - apt: pkg=postgresql,rabbitmq-server,memcached state=$APT_INSTALL
-    unless: ${APT_BYPASS}
+    only_if: not ${APT_BYPASS}
