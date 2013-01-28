@@ -3,7 +3,7 @@
   sudo: True
   gather_facts: false
   tags:
-  - package
+  - packages
   - root
   vars_files:
   - vars/common.vars

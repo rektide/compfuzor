@@ -1,0 +1,217 @@
+#!/bin/sh
+
+set -e
+set -x
+
+ESSENTIAL="devscripts git-buildpackage debhelper python-setuptools build-essential fakeroot quilt libwww-perl"
+OSTACK_BUILD_DEPS="python-all python-setuptools-git python-sphinx python-nosexcover python-eventlet python-iso8601 python-keyring python-cmd2 python-pyparsing python-py python-virtualenv python-amqplib python-anyjson python-configobj python-gflags pylint python-ldap python-memcache python-migrate python-pam python-passlib python-paste python-pastedeploy python-routes python-webob python-webtest sqlite3 python-boto python-crypto python-kombu python-xattr python-netifaces python-openssl bpython euca2ools ipython python-babel python-carrot python-cheetah python-distutils-extra python-feedparser python-libvirt python-lockfile python-netaddr python-paramiko python-qpid python-suds python-xenapi python-sqlite python-pyudev python-requests python-daemon python-libxml2 python-pycurl python-sqlalchemy-ext python-mysqldb python-django-nose nodejs-legacy node-less python-dev python-mock pep8 python-prettytable python-jsonschema python-httplib2 python-mox python-simplejson python-unittest2 python-lxml curl python-all-dev python-flask python-ming python-stevedore libvirt-bin python-zmq python-testtools python-tox python-cliff python-mako python-pycryptopp python-sendfile python-yaml"
+CLIENTS="keystone glance swift cinder nova" # quantum" # melange
+SRC=sources
+REPO_DEST="repo"
+TARGET_FLAVOR=experimental
+DISTRO="debian/${TARGET_FLAVOR}"
+URL="git://anonscm.debian.org/git/openstack"
+if [ -z "$DEBSIGN_KEYID" ]; then
+	DEBSIGN_KEYID="41FF5D6E"
+	#DEBSIGN_KEYID="0EF14B3F"
+fi
+GIT_BUILD_ENV=""
+GIT_BUILD_OPT="-k${DEBSIGN_KEYID}"
+GIT_BUILD_COMMAND="${GIT_BUILD_ENV}git-buildpackage ${GIT_BUILD_OPT}"
+
+ARCH=i386 ; if [ `uname -m` = "x86_64" ] ; then ARCH=amd64 ; fi
+if ! [ `whoami` = "root" ] ; then SU=sudo ; fi
+
+# Param:
+# $1 path of a debian source folder
+get_deb_version() {
+	MY_TEMP_CWD=`pwd`
+	cd $1
+	PKG_NAME=`dpkg-parsechangelog | grep -E "^Source:" | cut -d" " -f2`
+	DEB_VERS=`dpkg-parsechangelog | grep -E "^Version: " | cut -d" " -f2`
+	NO_EPOC=`echo ${DEB_VERS} | cut -d":" -f2`
+	UPSTREAM_VERS=`echo ${NO_EPOC} | cut -d"-" -f1`
+	if [ "${DEB_VERS}" = "${UPSTREAM_VERS}" ] ; then IS_NATIVE="yes" ; else IS_NATIVE="no" ; fi
+	ORIG=${PKG_NAME}_${UPSTREAM_VERS}.orig.tar.xz
+	CHANGE=${PKG_NAME}_${NO_EPOC}_${ARCH}.changes
+	cd ${MY_TEMP_CWD}
+}
+
+# Param:
+# $1 package name
+build_it(){
+	mkdir -p ${SRC}/${1}/build-area
+	# Clone if no folder present
+	if [ ! -d ${SRC}/${1}/${1} ] ; then
+		echo CLONE
+		cd ${SRC}/${1}
+
+		git clone ${URL}/${1}.git
+		cd ${1}
+		if [ -n "${DISTRO}" ] ; then
+			git checkout -b ${DISTRO} origin/${DISTRO} || true
+		fi
+		cd ../../..
+	fi
+
+	echo GET DEB VER
+	get_deb_version ${SRC}/${1}/${1}
+
+	cd ${SRC}/${1}/${1}
+	# Make sure we got the orig.tar.xz from upstream
+	if [ ! -f ../${ORIG} ] ; then
+		# HACKED
+		debian/rules get-vcs-source
+		echo HACK
+	fi
+	if [ ! -f ../build-area/${ORIG} ] && [ "${IS_NATIVE}" = "no" ] ; then
+		echo COPY
+		cp ../${ORIG} ../build-area
+	fi
+
+	# Finally build
+	if [ ! -f ../build-area/${CHANGE} ] ; then
+		echo BUILD `pwd`, $GIT_BUILD_COMMAND
+		${GIT_BUILD_COMMAND}
+	fi
+	cd ../../..
+}
+
+# Param:
+# $1 source package name
+# $2 binary package name
+# $3 binary file name
+install_it(){
+	if dpkg -l $2 ; then
+		echo "$2 already installed."
+	else
+		$SU dpkg -i ${SRC}/${1}/build-area/${3}
+	fi
+}
+# Param:
+# $1 source package name
+# $2 binary package name
+install_this(){
+	if dpkg -l $2 ; then
+		echo "$2 already installed."
+	else
+		get_deb_version ${SRC}/${1}/${1}
+		DEB_FILE=${SRC}/${1}/build-area/${2}_${NO_EPOC}_all.deb
+		if [ ! -f $DEB_FILE ] ; then
+			DEB_FILE=${SRC}/${1}/build-area/${2}_${NO_EPOC}_${ARCH}.deb
+		fi
+		$SU dpkg -i ${DEB_FILE}
+	fi
+}
+
+# Install a package which produce only a single binary
+# Param:
+# $1 source package name
+build_and_install (){
+	build_it $1
+	DEB=${1}_${NO_EPOC}_all.deb
+	install_it ${1} ${1} ${DEB}
+}
+
+build_all_clients (){
+	for p in ${CLIENTS} ; do
+		NAME=python-${p}client
+		build_it ${NAME}
+		DEB=${NAME}_${NO_EPOC}_all.deb
+		install_it ${NAME} ${NAME} ${DEB}
+	done
+}
+
+build_openstack_pkgs () {
+	build_and_install openstack-pkg-tools
+	# All of our python modules.
+	build_and_install python-warlock
+	build_it factory-boy
+	install_this factory-boy python-factory-boy
+	build_it python-django-appconf
+	install_this python-django-appconf python-appconf
+	build_it python-django-compressor
+	install_this python-django-compressor python-compressor
+	build_it python-cloudfiles
+	install_this python-cloudfiles python-cloudfiles
+
+	# All openstack clients but the quantum one
+	build_all_clients
+
+	# All of openstack projects
+	build_it swift
+	install_this swift python-swift
+	build_it keystone
+	install_this keystone python-keystone
+	build_it python-quantumclient
+	install_this python-quantumclient python-quantumclient
+	build_it quantum
+	install_this quantum python-quantum
+	build_it glance
+	install_this glance python-glance
+	build_it nova
+	install_this nova python-nova
+	build_it cinder
+	install_this cinder python-cinder
+	build_it python-django-openstack-auth
+	install_this python-django-openstack-auth python-openstack-auth
+
+	build_it horizon
+	build_it novnc
+	install_this novnc python-novnc
+	build_it cinder
+	build_it swift-plugin-s3
+
+	build_and_install python-pecan
+	build_it ceilometer
+	build_and_install python-extras
+	build_it heat
+	build_it openstack-meta-packages
+}
+
+copy_files_to_repo() {
+	cd ${SRC}
+	for i in * ; do
+		X=`echo $i | awk '{print substr($0,1,1)}'`
+		TARGET="../${REPO_DEST}/debian/pool/${TARGET_FLAVOR}/main/${X}/$i"
+		if [ ! -d ${TARGET} ] ; then
+			mkdir -p ${TARGET}
+		fi
+		if [ -e $i/build-area/*.orig.tar.* ] ; then
+			cp -auxfv $i/build-area/*.deb $i/build-area/*.changes $i/build-area/*.dsc $i/build-area/*.orig.tar.* $i/build-area/*.debian.tar.gz ${TARGET}
+		else
+			cp -auxfv $i/build-area/*.deb $i/build-area/*.changes $i/build-area/*.dsc $i/build-area/*.tar.gz ${TARGET}
+		fi
+	done
+	cd ..
+}
+
+scan_repo() {
+	cd ${REPO_DEST}/debian
+	mkdir -p dists/${TARGET_FLAVOR}/main/binary-${ARCH}
+	dpkg-scanpackages -a ${ARCH} pool/${TARGET_FLAVOR}/main /dev/null > dists/${TARGET_FLAVOR}/main/binary-${ARCH}/Packages
+	gzip -c dists/${TARGET_FLAVOR}/main/binary-${ARCH}/Packages >dists/${TARGET_FLAVOR}/main/binary-${ARCH}/Packages.gz
+	mkdir -p dists/${TARGET_FLAVOR}/main/source
+	dpkg-scansources pool/${TARGET_FLAVOR}/main /dev/null >dists/${TARGET_FLAVOR}/main/source/Sources
+	gzip -c dists/${TARGET_FLAVOR}/main/source/Sources >dists/${TARGET_FLAVOR}/main/source/Sources.gz
+	cd dists/${TARGET_FLAVOR}
+	rm -f Release Release.gpg
+	TMPFILE=`mktemp -t pkgos_scan.XXXXXX`
+	apt-ftparchive release . -o APT::FTPArchive::Release::Origin="GPLHost" -o APT::FTPArchive::Release::Codename="${TARGET_FLAVOR}" > ${TMPFILE}
+	mv ${TMPFILE} ./Release
+	gpg -abs -o Release.gpg Release
+	cd ../../../..
+}
+
+
+check_pgp_key() {
+	if [ ! -d ~/.gnupg ] ; then
+		gpg --gen-key
+	fi
+}
+
+check_pgp_key
+$SU apt-get install --no-install-recommends ${ESSENTIAL} ${OSTACK_BUILD_DEPS}
+build_openstack_pkgs
+copy_files_to_repo
+scan_repo
