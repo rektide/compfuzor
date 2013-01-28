@@ -25,8 +25,6 @@
   tasks:
   - include: tasks/srv.vars.tasks
   - include: tasks/srv.tasks
-  - apt: pkg=reprepro state=$APT_INSTALL
-    only_if: not $APT_BYPASS
   - template: src=files/reprepro/override dest=${ETC.stdout}/override-dsc.${item.codename}
     with_items: $REPOS
   - template: src=files/reprepro/override dest=${ETC.stdout}/override-deb.${item.codename}
@@ -37,3 +35,14 @@
     with_items: $REPOS
   # TODO: private/ keys install
   #- file: src=${DIR.stdout}/www dest=${WWW_LINKS_D}/*.*.archive state=link
+- hosts: all
+  sudo: True
+  tags:
+  - packages
+  - root
+  vars_files:
+  - vars/common.vars
+  tasks:
+   - apt: pkg=reprepro state=$APT_INSTALL
+     only_if: not $APT_BYPASS
+ 

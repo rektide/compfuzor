@@ -27,10 +27,10 @@
   with_items: $DIR_DIRS
   only_if: not is_unset("$DIR_DIRS")
 # FILES aka DIR_FILES
-- template: src=${TYPE}/${item} dest=${DIR.stdout}/${item} mode=660
+- template: src=files/${TYPE}/${item} dest=${DIR.stdout}/${item} mode=660
   with_items: $FILES
   only_if: not is_unset("$FILES")
-- template: src=${TYPE}/${item} dest=${DIR.stdout}/${item} mode=660
+- template: src=files/${TYPE}/${item} dest=${DIR.stdout}/${item} mode=660
   with_items: $DIR_FILES
   only_if: not is_unset("$DIR_FILES")
 # ETC_DIRS
@@ -38,7 +38,7 @@
   with_items: $ETC_DIRS
   only_if: not is_unset("$ETC_DIRS")
 # ETC_FILES
-- template: src=${TYPE}/${item} dest=${ETC.stdout}/${item} mode=660
+- template: src=files/${TYPE}/${item} dest=${ETC.stdout}/${item} mode=660
   with_items: $ETC_FILES
   only_if: not is_unset("$ETC_FILES")
 # VAR_DIRS
@@ -46,7 +46,7 @@
   with_items: $VAR_DIRS
   only_if: not is_unset("$VAR")
 # VAR_FILES
-- template: src=${TYPE}/${item} dest=${VAR.stdout}/${item} mode=660
+- template: src=files/${TYPE}/${item} dest=${VAR.stdout}/${item} mode=660
   with_items: $VAR_FILES
   only_if: not is_unset("$VAR_FILES")
 # LINKS

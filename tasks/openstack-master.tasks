@@ -1,3 +1,0 @@
----
-- name: install openstack server pre-depdecies
-  apt: pkg=postgresql,rabbitmq-server,memcached state=$APT_INSTALL
