@@ -8,11 +8,11 @@ var readDir= Q.nfbind(fs.readDir),
 
 var AUTORUN= 3
 
-function matrixize(components){
+function __matrixize(components){
 	var agg= [],
 	  k= []
-	for(var i= 0; i< arguments.legnth; ++i){
-		k= k.concat(arguments[i]
+	for(var i= 0; i< arguments.length; ++i){
+		k= k.concat(arguments[i])
 		agg.push(k)
 		k= k.concat(null,"/")
 		agg.push(k)
@@ -20,9 +20,9 @@ function matrixize(components){
 	return agg
 }
 
-var addrMatrix= matrixize("/proc/asound/card","/pcm","","/sub")
-addrMatrix.phrase= _phrase
-function phrase(c,p,isPlaybackNotCapture,s){
+var addrMatrix= __matrixize("/proc/asound/card","/pcm","","/sub")
+addrMatrix.phrase= __phrase
+function __phrase(c,p,isPlaybackNotCapture,s){
 	var val
 	if(s){
 		val= this[5]
@@ -56,7 +56,7 @@ var card= function(c){
 	  captures= __resolveMore([],cMaker).then(__assignTo.bind(val,"captures"))
 	all.push(playbacks,captures)
 	return Q.allResolved(all).then(__checkException(val))
-}
+}.bind(addrMatrix)
 
 var cop= function(c,p,isPlayback){
 	var maker= function(i){
@@ -69,22 +69,22 @@ var cop= function(c,p,isPlayback){
 	  subs= __resolveMore([],maker).then(__assignTo.bind(val,"subs"))
 	all.push(subs)
 	return Q.allResolved(all).then(__checkException(val))
-}
+}.bind(addrMatrix)
 
 function __resolveMore(s,make){
 	var resolve= function(s){
 		s= s||[]
 		for(var i= 0; i< AUTORUN; ++i){
-			this.push(this(s.length))
+			s.push(this(s.length))
 		}
 		return s
 	}.bind(make)
-	var try= function(s){
+	var tr= function(s){
 		s= s||[]
-		return Q.allResolve(this(s)).then(function(s){
+		return Q.allResolved(this(s)).then(function(s){
 			var last= s[s.length-1]
 			if(last && !last.valueOf().exception)
-				return try(s)
+				return tr(s)
 			while(!last || last.valueOf().exception){
 				s.pop()
 				last= s[s.length-1]
@@ -92,14 +92,14 @@ function __resolveMore(s,make){
 			return s
 		})
 	}.bind(resolve)
-	return try([])
+	return tr([])
 }
 
-function sub(c,p,isPlayback,s){
+var sub= function(c,p,isPlayback,s){
 	var addr= this.phrase(c,p,isPlayback,s),
 	  val= runAll(addr,["hw_params","info","prealloc","prealloc_max","status","sw_params"])
 	return val
-}
+}.bind(addrMatrix)
 
 function runAll(addr,files,val){
 	val= val||{}
@@ -118,7 +118,7 @@ function __this(){return this}
 
 function __assignTo(name,data){
 	return Q.when(data,function(d){
-		this[name= d;
+		this[name]= d;
 		return d
 	}.bind(this.name))
 }
@@ -133,3 +133,5 @@ function __checkException(val){
 	throw "No context accured"
 }
 
+var card0= card(0)
+console.log(card0)
