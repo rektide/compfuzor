@@ -51,9 +51,15 @@ var playback= function(c,p){
 }
 
 function capture(c,p){
-	sub(c,p,0,false)
-	sub(c,p,1,false)
-	sub(c,p,2,false)
+	var sub0= sub(c,p,0,false),
+	  sub1= sub(c,p,1,false),
+	  sub2= sub(c,p,2,false),
+	  addr= this.phrase(c,p,true),
+	  val= runAll(addr,["info"]).then(function(val){
+		
+	  })
+	return Q.all([sub0,sub1,sub2,
+	
 }
 
 function sub(c,p,isPlayback,s){
@@ -62,9 +68,9 @@ function sub(c,p,isPlayback,s){
 	return val
 }
 
-function runAll(addr,files){
-	var val= {},
-	  all= ["hw_params","info","prealloc","prealloc_max","status","sw_params"].map(function(name,i,arr){
+function runAll(addr,files,val){
+	val= val||{}
+	var all= ["hw_params","info","prealloc","prealloc_max","status","sw_params"].map(function(name,i,arr){
 		return __readContext.call(val,name,addr+name)
 	})
 	return Q.all(all).then(__this.bind(val))
