@@ -3,9 +3,6 @@
   vars_files:
   - vars/common.vars
   tasks:
-  - name: debdev basics
-    apt: pkg=build-essential,debhelper,fakeroot,git-buildpackage,pbuilder,devscripts state=$APT_INSTALL
-  - name: debdev multistrap
-    apt: pkg=multistrap,pdebuild-cross,xapt,dpkg-cross state=$APT_INSTALL
-  - name: debdev repo
-    apt: pkg=mini-dinstall,dput state=$APT_INSTALL
+  - apt: pkg=build-essential,debhelper,fakeroot,git-buildpackage,pbuilder,devscripts,dput-ng state=$APT_INSTALL
+  - apt: pkg=multistrap,pdebuild-cross,xapt,dpkg-cross state=$APT_INSTALL
+  - apt: pkg=libterm-size-perl,libtimedate-perl,curl,wget,dctrl-tools,fakeroot,gnupg,libdistro-info-perl,libjson-perl,libparse-debcontrol-perl,patch,patchutils,python-debian,sensible-utils,stace,unzip,xz-utils,debian-keyring,equivs
