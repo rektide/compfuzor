@@ -56,29 +56,23 @@ function capture(c,p){
 	sub(c,p,2,false)
 }
 
-function __ready(val){
-	if(--this.ref==0){
-		this.ready.resolve(this)
-	}
-	return val
-}
-
-function __readContext(name,addr){
-	return this[name]= readFile(addr,"utf8").fin(__ready.bind(this))
+function __readContext(name,file){
+	return this[name]= readFile(file,"utf8")
 }
 
 function __this{return this}
 
 function sub(c,p,isPlayback,s){
 	var addr= this.phrase(c,p,isPlayback,s),
-	  val= {ready:Q.defer()}
-	var all= ["hw_params","info","prealloc","prealloc_max","status","sw_params"].map(function(name,i,arr){
-		return __readContext.call(val,name,addr)
-	})
-	return Q.all(all).then(__this.bind(val))
+	  val= runAll(addr,["hw_params","info","prealloc","prealloc_max","status","sw_params"])
+	return val
 }
 
-function runAll(){
-	
+function runAll(addr,files){
+	var val= {},
+	  all= ["hw_params","info","prealloc","prealloc_max","status","sw_params"].map(function(name,i,arr){
+		return __readContext.call(val,name,addr+name)
+	})
+	return Q.all(all).then(__this.bind(val))
 }
 
