@@ -1,0 +1,108 @@
+-------------------~/.asoundrc----------------------
+# playback PCM device: using loopback subdevice 0,0
+pcm.amix {
+type dmix
+ipc_key 219345
+slave.pcm "hw:Loopback,0,0"
+}
+
+# capture PCM device: using loopback subdevice 0,1
+pcm.asnoop {
+type dsnoop
+ipc_key 219346
+slave.pcm "hw:Loopback,0,1"
+}
+
+# duplex device combining above PCM devices
+pcm.aduplex {
+type asym
+playback.pcm "amix"
+capture.pcm "asnoop"
+}
+
+# ------------------------------------------------------
+# default device
+
+pcm.!default {
+type plug
+slave.pcm "aduplex"
+}
+
+## use with
+## modprobe snd-aloop pcm_substreams=2
+## jackd ...
+#
+# zita-a2j -L -d hw:Loopback,1,0 -j cloop -n 3 -p 256 &>/dev/null &
+# zita-j2a -L -d hw:Loopback,1,1 -j ploop -n 3 -p 256 &>/dev/null &
+# sleep .5
+## cloop -> jack output ports
+# jack_connect cloop:capture_1 system:playback_1 &>/dev/null
+# jack_connect cloop:capture_2 system:playback_2 &>/dev/null
+#
+## jack input ports -> ploop
+# jack_connect system:capture_1 ploop:playback_1 &>/dev/null
+# jack_connect system:capture_2 ploop:playback_2 &>/dev/null
+
+
+
+
+
+
+
+
+
+
+#pcm.amix { 
+#        type dmix 
+#        ipc_key 219345 
+#        slave.pcm "hw:Loopback,0,0" 
+#} 
+
+## capture PCM device: using loopback subdevice 0,1 
+#pcm.asnoop { 
+#        type dsnoop 
+#        ipc_key 219346 
+#        slave.pcm "hw:Loopback,0,1" 
+#} 
+#
+## duplex device combining above PCM devices 
+#pcm.aduplex { 
+#        type asym 
+#        playback.pcm "amix" 
+#        capture.pcm "asnoop" 
+#} 
+#
+#pcm.merge { 
+#    type multi; 
+#    slaves.a.pcm hw:Blackjack 
+#    slaves.a.channels 2; 
+#    slaves.b.pcm hw:Loopback 
+#    slaves.b.channels 2; 
+#    bindings.0.slave a; 
+#    bindings.0.channel 0; 
+#    bindings.1.slave b; 
+#    bindings.1.channel 0; 
+#    bindings.2.slave a; 
+#    bindings.2.channel 1; 
+#    bindings.3.slave b; 
+#    bindings.3.channel 1; 
+#} 
+
+#ctl.merge { 
+#    type hw 
+#    card 2 
+#} 
+
+
+
+#break
+
+#pcm.cloop { 
+#    type dsnoop 
+#    ipc_key 219347 
+#    slave.pcm "hw:Loopback,1,0" 
+#} 
+#pcm.ploop { 
+#    type plug 
+#    slave.pcm "hw:Loopback,1,1" 
+#} 
