@@ -3,7 +3,8 @@
 var Q= require("q"),
   fs= require("fs")
 
-var readDir= Q.nfbind(FS.readDir)
+var readDir= Q.nfbind(fs.readDir),
+  readFile= Q.nfbind(fs.readFile)
 
 var AUTORUN= 3
 
@@ -41,26 +42,33 @@ function phrase(c,p,isPlaybackNotCapture,s){
 }
 
 var card= function(c){
-	
-}.bind(addrMatrix)
-
-var playback= function(c,p){
-	sub(c,p,0,true)
-	sub(c,p,1,true)
-	sub(c,p,2,true)
-}
-
-function capture(c,p){
-	var maker= function(i){
-		return sub(c,p,+i,false)
+	var pMaker= function(i){
+		return cop(c,i,true)
+	}
+	var cMaker= function(i){
+		return cop(c,i,false)
 	}
 
-	var addr= this.phrase(c,p,true),
+	var addr= this.phrase(c),
+	  val= {},
+	  all= __buildExtract(addr,["id"],val),
+	  playbacks= __resolveMore([],pMaker).then(__assignTo.bind(val,"playbacks")),
+	  captures= __resolveMore([],cMaker).then(__assignTo.bind(val,"captures"))
+	all.push(playbacks,captures)
+	return Q.allResolved(all).then(__checkException(val))
+}
+
+var cop= function(c,p,isPlayback){
+	var maker= function(i){
+		return sub(c,p,isPlayback,i)
+	}
+
+	var addr= this.phrase(c,p,isPlayback),
 	  val= {},
 	  all= __buildExtract(addr,["info"],val),
 	  subs= __resolveMore([],maker).then(__assignTo.bind(val,"subs"))
 	all.push(subs)
-	return Q.allResolved(all).then(__this.bind(val))
+	return Q.allResolved(all).then(__checkException(val))
 }
 
 function __resolveMore(s,make){
@@ -77,11 +85,14 @@ function __resolveMore(s,make){
 			var last= s[s.length-1]
 			if(last && !last.valueOf().exception)
 				return try(s)
-			else
-				return s
+			while(!last || last.valueOf().exception){
+				s.pop()
+				last= s[s.length-1]
+			}
+			return s
 		})
 	}.bind(resolve)
-	return try()
+	return try([])
 }
 
 function sub(c,p,isPlayback,s){
@@ -92,7 +103,7 @@ function sub(c,p,isPlayback,s){
 
 function runAll(addr,files,val){
 	val= val||{}
-	return Q.allResolved(__buildExtract(addr,files,val)).then(__this.bind(val))
+	return Q.allResolved(__buildExtract(addr,files,val)).then(__checkException.bind(val))
 }
 
 function __buildExtract(addr,files,val){ // perhaps an alternate pattern might be trying the first entry first, then follow up
@@ -111,3 +122,14 @@ function __assignTo(name,data){
 		return d
 	}.bind(this.name))
 }
+
+function __checkException(val){
+	var keys= Object.keys(val)
+	for(var i in keys){
+		if(!val.hasOwnProperty(i))
+			continue
+		return val
+	}
+	throw "No context accured"
+}
+
