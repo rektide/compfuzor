@@ -51,15 +51,30 @@ var playback= function(c,p){
 }
 
 function capture(c,p){
-	var sub0= sub(c,p,0,false),
-	  sub1= sub(c,p,1,false),
-	  sub2= sub(c,p,2,false),
-	  addr= this.phrase(c,p,true),
-	  val= runAll(addr,["info"]).then(function(val){
-		
-	  })
-	return Q.all([sub0,sub1,sub2,
-	
+
+	function resolveMore(s){
+		s= s||[]
+		function resolve(s){
+			for(var i= 0; i< AUTORUN; ++i){
+				s.push(sub(c,p,s.length+i,false))
+			}
+			return s
+		}
+		return Q.allResolve(resolve(s)).then(function(s){
+			if(s[s.length-1])
+				return resolveMore(s)
+			else
+				return s
+		})
+	}
+
+	var addr= this.phrase(c,p,true),
+	  val= {},
+	  all= __buildExtract(addr,["info"],val),
+	  s= resolveMore(),
+	  subs= s.then(__assignTo.bind(val,"subs"))
+	all.push(subs)
+	return Q.allResolved(all).then(__this.bind(val))
 }
 
 function sub(c,p,isPlayback,s){
@@ -69,17 +84,23 @@ function sub(c,p,isPlayback,s){
 }
 
 function runAll(addr,files,val){
+	return Q.allResolved(__buildExtract(addr,files,val)).then(__this.bind(val))
+}
+
+function __buildExtract(addr,files,val){
 	val= val||{}
-	var all= ["hw_params","info","prealloc","prealloc_max","status","sw_params"].map(function(name,i,arr){
+	var all= files.map(function(name,i,arr){
 		return __readContext.call(val,name,addr+name)
 	})
-	return Q.all(all).then(__this.bind(val))
+	return all
 }
 
 function __readContext(name,file){
 	return this[name]= readFile(file,"utf8")
 }
 
-function __this{return this}
+function __this(){return this}
 
-
+function __assignTo(name,data){
+	this[name]= data
+}
