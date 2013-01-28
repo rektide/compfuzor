@@ -56,12 +56,6 @@ function capture(c,p){
 	sub(c,p,2,false)
 }
 
-function __readContext(name,file){
-	return this[name]= readFile(file,"utf8")
-}
-
-function __this{return this}
-
 function sub(c,p,isPlayback,s){
 	var addr= this.phrase(c,p,isPlayback,s),
 	  val= runAll(addr,["hw_params","info","prealloc","prealloc_max","status","sw_params"])
@@ -75,4 +69,11 @@ function runAll(addr,files){
 	})
 	return Q.all(all).then(__this.bind(val))
 }
+
+function __readContext(name,file){
+	return this[name]= readFile(file,"utf8")
+}
+
+function __this{return this}
+
 
