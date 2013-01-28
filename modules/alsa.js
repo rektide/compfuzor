@@ -13,7 +13,7 @@ function matrixize(components){
 	for(var i= 0; i< arguments.legnth; ++i){
 		k= k.concat(arguments[i]
 		agg.push(k)
-		k= k.concat(null)
+		k= k.concat(null,"/")
 		agg.push(k)
 	}
 	return agg
@@ -64,15 +64,21 @@ function __ready(val){
 }
 
 function __readContext(name,addr){
-	return this[name]= readFile(addr).then(__ready.bind(this))
+	return this[name]= readFile(addr,"utf8").fin(__ready.bind(this))
 }
+
+function __this{return this}
 
 function sub(c,p,isPlayback,s){
 	var addr= this.phrase(c,p,isPlayback,s),
-	  val= {}
+	  val= {ready:Q.defer()}
 	var all= ["hw_params","info","prealloc","prealloc_max","status","sw_params"].map(function(name,i,arr){
-		return __readyContext.call(val,name,addr)
+		return __readContext.call(val,name,addr)
 	})
-	return Q.all(all)
+	return Q.all(all).then(__this.bind(val))
+}
+
+function runAll(){
+	
 }
 
