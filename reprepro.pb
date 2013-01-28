@@ -11,6 +11,10 @@
     - incoming
     - tmp/list
     - tmp/incoming
+    DIRS:
+    - .z
+    FILES:
+    - reprepro.env
     ETC_FILES:
     - distributions
     - options
@@ -18,6 +22,7 @@
     LINKS:
       dists: var/www/dists
       pool: var/www/pool
+      .z/reprepro.env: reprepro.env
   vars_files:
   - vars/common.vars
   - private/reprepro.vars
