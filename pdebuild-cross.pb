@@ -4,8 +4,8 @@
   sudo_user: root
   vars:
     TYPE: pdebuildx
-    ARCH: amd64
     INSTANCE: $ARCH
+    ARCH: amd64
     MULTISTRAPFILE: multistrap.conf
     BASETGZ: pdebuild-cross.tgz
   vars_files:

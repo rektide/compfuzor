@@ -27,13 +27,12 @@
   - include: tasks/srv.tasks
   - apt: pkg=reprepro state=$APT_INSTALL
     only_if: not $APT_BYPASS
-  - template: src=reprepro/override dest=${ETC.stdout}/override-dsc.${item.codename}
+  - template: src=files/reprepro/override dest=${ETC.stdout}/override-dsc.${item.codename}
     with_items: $REPOS
-  - template: src=reprepro/override dest=${ETC.stdout}/override-deb.${item.codename}
+  - template: src=files/reprepro/override dest=${ETC.stdout}/override-deb.${item.codename}
     with_items: $REPOS
   - file: path=${VAR.stdout}/incoming/${item.codename} state=directory
     with_items: $REPOS
-
   - file: path=${VAR.stdout}/tmp/incoming/${item.codename} state=directory
     with_items: $REPOS
   # TODO: private/ keys install
