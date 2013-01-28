@@ -58,8 +58,7 @@ function capture(c,p){
 	var addr= this.phrase(c,p,true),
 	  val= {},
 	  all= __buildExtract(addr,["info"],val),
-	  s= __resolveMore([],maker),
-	  subs= s.then(__assignTo.bind(val,"subs"))
+	  subs= __resolveMore([],maker).then(__assignTo.bind(val,"subs"))
 	all.push(subs)
 	return Q.allResolved(all).then(__this.bind(val))
 }
@@ -99,7 +98,7 @@ function runAll(addr,files,val){
 function __buildExtract(addr,files,val){ // perhaps an alternate pattern might be trying the first entry first, then follow up
 	val= val||{}
 	var all= files.map(function(name,i,arr){
-		return readFile(addr+name,"utf8").then(_assignTo(name,val))
+		return readFile(addr+name,"utf8").then(__assignTo.bind(val,name))
 	})
 	return all
 }
@@ -107,5 +106,8 @@ function __buildExtract(addr,files,val){ // perhaps an alternate pattern might b
 function __this(){return this}
 
 function __assignTo(name,data){
-	this[name]= data
+	return Q.when(data,function(d){
+		this[name= d;
+		return d
+	}.bind(this.name))
 }
