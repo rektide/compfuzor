@@ -51,30 +51,38 @@ var playback= function(c,p){
 }
 
 function capture(c,p){
-
-	function resolveMore(s){
-		s= s||[]
-		function resolve(s){
-			for(var i= 0; i< AUTORUN; ++i){
-				s.push(sub(c,p,s.length+i,false))
-			}
-			return s
-		}
-		return Q.allResolve(resolve(s)).then(function(s){
-			if(s[s.length-1])
-				return resolveMore(s)
-			else
-				return s
-		})
+	var maker= function(i){
+		return sub(c,p,+i,false)
 	}
 
 	var addr= this.phrase(c,p,true),
 	  val= {},
 	  all= __buildExtract(addr,["info"],val),
-	  s= resolveMore(),
+	  s= __resolveMore([],maker),
 	  subs= s.then(__assignTo.bind(val,"subs"))
 	all.push(subs)
 	return Q.allResolved(all).then(__this.bind(val))
+}
+
+function __resolveMore(s,make){
+	var resolve= function(s){
+		s= s||[]
+		for(var i= 0; i< AUTORUN; ++i){
+			this.push(this(s.length))
+		}
+		return s
+	}.bind(make)
+	var try= function(s){
+		s= s||[]
+		return Q.allResolve(this(s)).then(function(s){
+			var last= s[s.length-1]
+			if(last && !last.valueOf().exception)
+				return try(s)
+			else
+				return s
+		})
+	}.bind(resolve)
+	return try()
 }
 
 function sub(c,p,isPlayback,s){
@@ -84,19 +92,16 @@ function sub(c,p,isPlayback,s){
 }
 
 function runAll(addr,files,val){
+	val= val||{}
 	return Q.allResolved(__buildExtract(addr,files,val)).then(__this.bind(val))
 }
 
-function __buildExtract(addr,files,val){
+function __buildExtract(addr,files,val){ // perhaps an alternate pattern might be trying the first entry first, then follow up
 	val= val||{}
 	var all= files.map(function(name,i,arr){
-		return __readContext.call(val,name,addr+name)
+		return readFile(addr+name,"utf8").then(_assignTo(name,val))
 	})
 	return all
-}
-
-function __readContext(name,file){
-	return this[name]= readFile(file,"utf8")
 }
 
 function __this(){return this}
