@@ -1,6 +1,6 @@
 ---
 - hosts: all
-  user: root
+  gather_facts: False
   vars_files:
   - vars/common.vars
   vars:
