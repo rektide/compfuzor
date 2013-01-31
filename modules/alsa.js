@@ -14,7 +14,7 @@ function __matrixize(components){
 	for(var i= 0; i< arguments.length; ++i){
 		k= k.concat(arguments[i])
 		agg.push(k)
-		k= k.concat(null,"/")
+		k= k.concat(null)
 		agg.push(k)
 	}
 	return agg
@@ -23,16 +23,17 @@ function __matrixize(components){
 var addrMatrix= __matrixize("/proc/asound/card","/pcm","","/sub")
 addrMatrix.phrase= __phrase
 function __phrase(c,p,isPlaybackNotCapture,s){
-	var val
-	if(s){
-		val= this[5]
+	var val,
+	  hasS= s!==undefined,
+	  hasP= p!==undefined
+	if(hasS){
+		val= this[7]
 		val[7]= s
-	}else if(p){
-		val= this[3]
 	}
-
-	if(s||p){
-		val[5]= isPlaybackNotCapture? "p": "c"
+	if(hasS || hasP){
+		if(!hasS)
+			val= this[5]
+		val[4]= isPlaybackNotCapture? "p": "c"
 		val[3]= p
 	}else{
 		val= this[1]
@@ -50,50 +51,55 @@ var card= function(c){
 	}
 
 	var addr= this.phrase(c),
-	  val= {},
+	  val= {addr:addr},
 	  all= __buildExtract(addr,["id"],val),
 	  playbacks= __resolveMore([],pMaker).then(__assignTo.bind(val,"playbacks")),
 	  captures= __resolveMore([],cMaker).then(__assignTo.bind(val,"captures"))
 	all.push(playbacks,captures)
 	return Q.allResolved(all).then(__checkException.bind(val))
+	//return Q.allResolved(all).then(__empty)
 }.bind(addrMatrix)
 
 var cop= function(c,p,isPlayback){
 	var maker= function(i){
 		return sub(c,p,isPlayback,i)
 	}
-
 	var addr= this.phrase(c,p,isPlayback),
-	  val= {},
+	  val= {addr:addr},
 	  all= __buildExtract(addr,["info"],val),
 	  subs= __resolveMore([],maker).then(__assignTo.bind(val,"subs"))
+console.log("cop",addr)
 	all.push(subs)
 	return Q.allResolved(all).then(__checkException.bind(val))
 }.bind(addrMatrix)
 
 function __resolveMore(s,make){
-	var resolve= function(s){
+	var b= function(s){
 		s= s||[]
 		for(var i= 0; i< AUTORUN; ++i){
 			s.push(this(s.length))
 		}
-		return s
-	}.bind(make)
-	var b= function(more,s){
-		s= more(s||[])
 		return Q.allResolved(s).then(function(s){
+s.forEach(function(v,i,arr){
+	if(v.valueOf().exception)
+		console.log("ex",v.valueOf().exception)
+})
+console.log("tr'ing",s)
 			var last= s[s.length-1]
 			if(last && last.valueOf && !last.valueOf().exception){
+console.log("x",last.valueOf())
 				return this(s)
 			}
 			while( (s.length&&!last) || last.valueOf().exception){
+if(last.valueOf&&last.valueOf().exception)
+console.log("tossing exception",last.valueOf().exception)
 				s.pop()
 				last= s[s.length-1]
 			}
 			return s
 		}) },
-	  tr= b.bind(b,resolve)
-	return tr([])
+	  tr= b.bind(make)
+	return tr(s)
 }
 
 var sub= function(c,p,isPlayback,s){
@@ -103,25 +109,37 @@ var sub= function(c,p,isPlayback,s){
 }.bind(addrMatrix)
 
 function runAll(addr,files,val){
-	val= val||{}
-	return Q.allResolved(__buildExtract(addr,files,val)).then(__checkException.bind(val))
+	val= val||{addr:addr}
+	return Q.allResolved(__buildExtract(addr,files,val)).then(__empty)
 }
 
 function __buildExtract(addr,files,val){ // perhaps an alternate pattern might be trying the first entry first, then follow up
-	val= val||{}
+	val= val||{addr:addr}
 	var all= files.map(function(name,i,arr){
-		return readFile(addr+name,"utf8").then(__assignTo.bind(val,name))
-	})
+		return readFile(addr+name,"utf8").then(__assignTo.bind(this,name))
+	}.bind(val))
 	return all
 }
 
 function __this(){return this}
 
+
+
 function __assignTo(name,data){
 	return Q.when(data,function(name,d){
+console.log("assigning",name,d)
 		this[name]= d;
 		return d
 	}.bind(this,name))
+}
+
+function __empty(d){
+	try{
+		return __checkException.call(d)
+	}catch(e){
+		if(d.addr)
+			console.log("aborted",d.addr)
+	}
 }
 
 function __checkException(){
@@ -129,15 +147,23 @@ function __checkException(){
 	for(var i in keys){
 		if(!this.hasOwnProperty(i))
 			continue
+		if(i=="addr")
+			continue
+		if(!isNaN(i) && this[i].valueOf && this[i].valueOf().exception)
+			continue
+console.log("check ok, had",i,this[i].valueOf?this[i].valueOf():this[i])
 		return this
 	}
-	throw "No context accured"
 	if(this.exception)
 		console.log("exception",this.exception)
+	if(this.addr)
+		throw "No context accrued on "+this.addr
+	else
+		throw "No context accrued"
 }
 
 var card0= card(0)
 card0.then(function(d){
-	console.log(d)
+	console.log("GOT",d)
 	return d
-})
+}).done()
