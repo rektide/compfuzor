@@ -7,3 +7,5 @@
   shell: systemctl enable ${NAME.stdout}.service
 - name: reload cloud9
   action: systemctl reload-or-try-restart ${NAME.stdout}.service
+- name: rebuild initramfs
+  action: update-initramfs -u
