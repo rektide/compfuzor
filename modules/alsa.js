@@ -55,7 +55,7 @@ var card= function(c){
 	  playbacks= __resolveMore([],pMaker).then(__assignTo.bind(val,"playbacks")),
 	  captures= __resolveMore([],cMaker).then(__assignTo.bind(val,"captures"))
 	all.push(playbacks,captures)
-	return Q.allResolved(all).then(function(){return __checkException(val)})
+	return Q.allResolved(all).then(__checkException.bind(val))
 }.bind(addrMatrix)
 
 var cop= function(c,p,isPlayback){
@@ -68,7 +68,7 @@ var cop= function(c,p,isPlayback){
 	  all= __buildExtract(addr,["info"],val),
 	  subs= __resolveMore([],maker).then(__assignTo.bind(val,"subs"))
 	all.push(subs)
-	return Q.allResolved(all).then(__checkException(val))
+	return Q.allResolved(all).then(__checkException.bind(val))
 }.bind(addrMatrix)
 
 function __resolveMore(s,make){
@@ -79,19 +79,20 @@ function __resolveMore(s,make){
 		}
 		return s
 	}.bind(make)
-	var tr= function(s){
-		s= s||[]
-		return Q.allResolved(this(s)).then(function(s){
+	var b= function(more,s){
+		s= more(s||[])
+		return Q.allResolved(s).then(function(s){
 			var last= s[s.length-1]
-			if(last && !last.valueOf().exception)
-				return tr(s)
-			while(!last || last.valueOf().exception){
+			if(last && last.valueOf && !last.valueOf().exception){
+				return this(s)
+			}
+			while( (s.length&&!last) || last.valueOf().exception){
 				s.pop()
 				last= s[s.length-1]
 			}
 			return s
-		})
-	}.bind(resolve)
+		}) },
+	  tr= b.bind(b,resolve)
 	return tr([])
 }
 
@@ -117,23 +118,26 @@ function __buildExtract(addr,files,val){ // perhaps an alternate pattern might b
 function __this(){return this}
 
 function __assignTo(name,data){
-	return Q.when(data,function(d){
+	return Q.when(data,function(name,d){
 		this[name]= d;
 		return d
-	}.bind(this.name))
+	}.bind(this,name))
 }
 
-function __checkException(val){
-	var keys= Object.keys(val)
+function __checkException(){
+	var keys= Object.keys(this)
 	for(var i in keys){
-		if(!val.hasOwnProperty(i))
+		if(!this.hasOwnProperty(i))
 			continue
-		return val
+		return this
 	}
-	//throw "No context accured"
-	if(val.exception)
-		console.log("exceptoin",val.exception)
+	throw "No context accured"
+	if(this.exception)
+		console.log("exception",this.exception)
 }
 
 var card0= card(0)
-console.log(card0)
+card0.then(function(d){
+	console.log(d)
+	return d
+})
