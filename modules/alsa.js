@@ -55,7 +55,7 @@ var card= function(c){
 	  playbacks= __resolveMore([],pMaker).then(__assignTo.bind(val,"playbacks")),
 	  captures= __resolveMore([],cMaker).then(__assignTo.bind(val,"captures"))
 	all.push(playbacks,captures)
-	return Q.allResolved(all).then(__checkException(val))
+	return Q.allResolved(all).then(function(){return __checkException(val)})
 }.bind(addrMatrix)
 
 var cop= function(c,p,isPlayback){
@@ -130,7 +130,9 @@ function __checkException(val){
 			continue
 		return val
 	}
-	throw "No context accured"
+	//throw "No context accured"
+	if(val.exception)
+		console.log("exceptoin",val.exception)
 }
 
 var card0= card(0)
