@@ -57,6 +57,9 @@ var card= function(c){
 	  playbacks= __resolveMore([],pMaker).then(__assignTo.bind(val,"playbacks")),
 	  captures= __resolveMore([],cMaker).then(__assignTo.bind(val,"captures"))
 	all.push(playbacks,captures)
+	Q.allResolved(all).then(function(v){
+		console.log("RESOLVED",v,v[0].valueOf())
+	})
 	return Q.allResolved(all).then(__checkException.bind(val))
 	//return Q.allResolved(all).then(__empty)
 }.bind(addrMatrix)
@@ -74,43 +77,62 @@ console.log("cop",addr)
 	return Q.allResolved(all).then(__checkException.bind(val))
 }.bind(addrMatrix)
 
-function __resolveMore(s,make){
-	var b= function(s){
-		s= s||[]
-		for(var i= 0; i< AUTORUN; ++i){
-			s.push(this(s.length))
+
+function __printPromisary(s,c){
+	c= c||[]
+	if(!s){
+		console.log("nop")
+		return
+	}
+	if(s.valueOf){
+		s=s.valueOf()
+	}
+	if(s.exception){
+		console.log("ex",s.exception)
+		return
+	}
+	if(s instanceof Array){
+		console.log("child",c)
+		for(var i in s){
+			var v= s[i]
+			c.push(i)
+			__printPromisary(v,c)
 		}
-		return Q.allResolved(s).then(function(s){
-			s.forEach(function(p,i,arr){
-				var v= p.valueOf()
-				if(v.exception){
-					console.log("ex",v.exception)
-					return
-				}
-				if(v instanceof Array){
-					for(var i in v){
-						console.log("es",i,v[i].valueOf())
-					}
-					return
-				}
-				console.log("ey",v)
-			})
-			var last= s[s.length-1]
-			if(last && last.valueOf && !last.valueOf().exception){
-	console.log("x",last.valueOf())
-				return this(s)
+		return
+	}
+	console.log("ey",s,c.join(":"))
+}
+
+function __more(fn,arr){
+	arr.push(fn(arr.length))
+}
+
+function __lotsMore(fn,arr){
+	for(var i= 0; i< AUTORUN; ++i){
+		arr.push(fn(arr.length))
+	}
+}
+
+function __resolveMore(s,make){
+	function tryAgain(fn,s){
+		if(this instanceof Function){
+			s= fn
+			fn= this
+		}
+		while(s.length){
+			var last= s[s.length].valueOf()
+			if(last.exception){
+				console.log("x",last.exception)
+			}else{
+				__lotsMore(fn,s)
+				return Q.all(s).then(arguments.callee)
 			}
-			while( (s.length&&!last) || last.valueOf().exception){
-				if(last.valueOf&&last.valueOf().exception){
-	console.log("tossing exception",last.valueOf().exception)
-				}
-				s.pop()
-				last= s[s.length-1]
-			}
-			return s
-		}) },
-	  tr= b.bind(make)
-	return tr(s)
+			s.pop()
+		}
+		throw "resolved nothing"
+	}
+	__lotsMore(make,s)
+	return Q.all(s).then(tryAgain.bind(make))
 }
 
 var sub= function(c,p,isPlayback,s){
@@ -126,10 +148,10 @@ function runAll(addr,files,val){
 
 function __buildExtract(addr,files,val){ // perhaps an alternate pattern might be trying the first entry first, then follow up
 	val= val||{addr:addr}
-	var all= files.map(function(name,i,arr){
-//console.log("file",addr+path.sep+name)
+	var all= files.map(function(addr,name,i,arr){
+console.log("file",addr+path.sep+name,this)
 		return readFile(addr+path.sep+name,"utf8").then(__assignTo.bind(this,name))
-	}.bind(val))
+	}.bind(val,addr))
 	return all
 }
 
@@ -138,11 +160,14 @@ function __this(){return this}
 
 
 function __assignTo(name,data){
-	return Q.when(data,function(name,d){
+	console.log("ASSIGNED",this,name,data)
+	this[name]= data
+	return data
+//	return Q.when(data,function(name,d){
 //console.log("assigning",name,d)
-		this[name]= d;
-		return d
-	}.bind(this,name),function(){console.log("failed",this.val)}.bind({val:name}))
+//		this[name]= d;
+//		return d
+//	}.bind(this,name),function(){console.log("failed",this.val)}.bind({val:name}))
 }
 
 function __empty(d){
@@ -156,14 +181,21 @@ function __empty(d){
 
 function __checkException(){
 	var keys= Object.keys(this)
+console.log("check keys",keys)
 	for(var i in keys){
-		if(!this.hasOwnProperty(i))
+		var key= keys[i],
+		  val= this[key],
+		  res= val && val.valueOf && val.valueOf()
+__printPromisary(this[key])
+		if(!this.hasOwnProperty(key))
 			continue
-		if(i=="addr")
+		if(key=="addr")
 			continue
-		if(!isNaN(i) && this[i].valueOf && this[i].valueOf().exception)
+		if(!isNaN(key) && res.exception){ // exceptions do not count
+console.log("exception",res.exception)
 			continue
-console.log("check ok, had",i,this[i].valueOf?this[i].valueOf():this[i])
+		}
+console.log("check ok, had",key)
 		return this
 	}
 	if(this.exception)
