@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 var Q= require("q"),
-  fs= require("fs")
+  fs= require("fs"),
+  path= require("path")
 
 var readDir= Q.nfbind(fs.readDir),
   readFile= Q.nfbind(fs.readFile)
@@ -80,19 +81,29 @@ function __resolveMore(s,make){
 			s.push(this(s.length))
 		}
 		return Q.allResolved(s).then(function(s){
-s.forEach(function(v,i,arr){
-	if(v.valueOf().exception)
-		console.log("ex",v.valueOf().exception)
-})
-console.log("tr'ing",s)
+			s.forEach(function(p,i,arr){
+				var v= p.valueOf()
+				if(v.exception){
+					console.log("ex",v.exception)
+					return
+				}
+				if(v instanceof Array){
+					for(var i in v){
+						console.log("es",i,v[i].valueOf())
+					}
+					return
+				}
+				console.log("ey",v)
+			})
 			var last= s[s.length-1]
 			if(last && last.valueOf && !last.valueOf().exception){
-console.log("x",last.valueOf())
+	console.log("x",last.valueOf())
 				return this(s)
 			}
 			while( (s.length&&!last) || last.valueOf().exception){
-if(last.valueOf&&last.valueOf().exception)
-console.log("tossing exception",last.valueOf().exception)
+				if(last.valueOf&&last.valueOf().exception){
+	console.log("tossing exception",last.valueOf().exception)
+				}
 				s.pop()
 				last= s[s.length-1]
 			}
@@ -116,7 +127,8 @@ function runAll(addr,files,val){
 function __buildExtract(addr,files,val){ // perhaps an alternate pattern might be trying the first entry first, then follow up
 	val= val||{addr:addr}
 	var all= files.map(function(name,i,arr){
-		return readFile(addr+name,"utf8").then(__assignTo.bind(this,name))
+//console.log("file",addr+path.sep+name)
+		return readFile(addr+path.sep+name,"utf8").then(__assignTo.bind(this,name))
 	}.bind(val))
 	return all
 }
@@ -127,10 +139,10 @@ function __this(){return this}
 
 function __assignTo(name,data){
 	return Q.when(data,function(name,d){
-console.log("assigning",name,d)
+//console.log("assigning",name,d)
 		this[name]= d;
 		return d
-	}.bind(this,name))
+	}.bind(this,name),function(){console.log("failed",this.val)}.bind({val:name}))
 }
 
 function __empty(d){
