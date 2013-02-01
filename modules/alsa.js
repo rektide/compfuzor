@@ -54,11 +54,20 @@ var card= function(c){
 	var addr= this.phrase(c),
 	  val= {addr:addr},
 	  all= __buildExtract(addr,["id"],val),
-	  playbacks= __resolveMore([],pMaker).then(__assignTo.bind(val,"playbacks")),
-	  captures= __resolveMore([],cMaker).then(__assignTo.bind(val,"captures"))
-	all.push(playbacks,captures)
+	  captures= __resolveMore([],cMaker).then(__assignTo.bind(val,"captures")),
+	  playbacks= __resolveMore([],pMaker)
+	  //playbacks= __resolveMore([],pMaker).then(__assignTo.bind(val,"playbacks")),
+
+playbacks.then(function(d){
+console.log("PLAYBACK",d)
+},function(b){console.log("PLAYFAIL",b)})
+	playbacks= playbacks.then(__assignTo.bind(val,"playbacks")),
+	all= all.concat(playbacks,captures)
+console.log("AWAIT",all)
+all[1].then(function(p){console.log("PLAPLAYYbacks",p)})
 	Q.allResolved(all).then(function(v){
-		console.log("RESOLVED",v,v[0].valueOf())
+		console.log("RESOLVED")
+		console.log("RESOLVED",v,":",v[0].valueOf(),":",v[1].valueOf(),":",v[2].valueOf())
 	})
 	return Q.allResolved(all).then(__checkException.bind(val))
 	//return Q.allResolved(all).then(__empty)
@@ -66,14 +75,22 @@ var card= function(c){
 
 var cop= function(c,p,isPlayback){
 	var maker= function(i){
-		return sub(c,p,isPlayback,i)
+		var s= sub(c,p,isPlayback,i)
+		s.then(function(ok){console.log("subok",ok)},function(bad){console.log("subbad",bad)})
+		return s
 	}
 	var addr= this.phrase(c,p,isPlayback),
 	  val= {addr:addr},
 	  all= __buildExtract(addr,["info"],val),
-	  subs= __resolveMore([],maker).then(__assignTo.bind(val,"subs"))
+	  subs= __resolveMore([],maker)
+
+subs.then(function(d){
+console.log("SUB",d)
+},function(b){console.log("SUBFAIL",b)})
+
+	subs= subs.then(__assignTo.bind(val,"subs"))
 console.log("cop",addr)
-	all.push(subs)
+	all= all.concat(subs)
 	return Q.allResolved(all).then(__checkException.bind(val))
 }.bind(addrMatrix)
 
@@ -120,19 +137,25 @@ function __resolveMore(s,make){
 			fn= this
 		}
 		while(s.length){
-			var last= s[s.length].valueOf()
-			if(last.exception){
-				console.log("x",last.exception)
-			}else{
-				__lotsMore(fn,s)
-				return Q.all(s).then(arguments.callee)
+			var last= s[s.length]
+			if(last){
+				if(!last.exception && last.valueOf)
+					last= last.valueOf()
+				if(last.exception){
+					console.log("x",last.exception)
+				}else{
+console.log("MORE!")
+					__lotsMore(fn,s)
+					return Q.allResolved(s).then(arguments.callee)
+				}
 			}
 			s.pop()
 		}
+console.log("nada")
 		throw "resolved nothing"
 	}
 	__lotsMore(make,s)
-	return Q.all(s).then(tryAgain.bind(make))
+	return Q.allResolved(s).then(tryAgain.bind(make))
 }
 
 var sub= function(c,p,isPlayback,s){
@@ -157,17 +180,10 @@ console.log("file",addr+path.sep+name,this)
 
 function __this(){return this}
 
-
-
 function __assignTo(name,data){
 	console.log("ASSIGNED",this,name,data)
 	this[name]= data
 	return data
-//	return Q.when(data,function(name,d){
-//console.log("assigning",name,d)
-//		this[name]= d;
-//		return d
-//	}.bind(this,name),function(){console.log("failed",this.val)}.bind({val:name}))
 }
 
 function __empty(d){
@@ -186,7 +202,7 @@ console.log("check keys",keys)
 		var key= keys[i],
 		  val= this[key],
 		  res= val && val.valueOf && val.valueOf()
-__printPromisary(this[key])
+//__printPromisary(this[key])
 		if(!this.hasOwnProperty(key))
 			continue
 		if(key=="addr")
