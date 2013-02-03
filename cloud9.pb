@@ -11,16 +11,18 @@
       user: ${user}
     repo: https://github.com/ajaxorg/cloud9.git
     npm_opts: --node-dir=/usr/src/node
+    DIR_DIRS:
+    - workspace
   vars_files:
   - vars/common.vars
+  - vars/srv.vars
   gather_facts: false
   handlers:
   - include: handlers.yml
   tasks:
-  - include: tasks/srv.vars.tasks
+  - include: tasks/cfvar_includes.tasks
   - shell: echo ${DIR.stdout}
   - user: name=${user} system=true home=${DIR.stdout}
-  - file: owner=${user} group=root state=directory path=${DIR.stdout}/workspace
   - shell: which sm; echo $?
     register: missing_sm
   - shell: npm ${npm_opts} install sm

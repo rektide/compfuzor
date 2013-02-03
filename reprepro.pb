@@ -25,11 +25,11 @@
       .z/reprepro.env: reprepro.env
   vars_files:
   - vars/common.vars
+  - vars/srv.vars
   - private/reprepro.vars
   gather_facts: false
   tasks:
-  - include: tasks/srv.vars.tasks
-  - include: tasks/srv.tasks
+  - include: tasks/cfvar_includes.tasks
   - template: src=files/reprepro/override dest=${ETC.stdout}/override-dsc.${item.codename}
     with_items: $REPOS
   - template: src=files/reprepro/override dest=${ETC.stdout}/override-deb.${item.codename}
@@ -42,6 +42,7 @@
   #- file: src=${DIR.stdout}/www dest=${WWW_LINKS_D}/*.*.archive state=link
 - hosts: all
   sudo: True
+  gather_facts: False
   tags:
   - packages
   - root

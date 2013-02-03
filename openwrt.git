@@ -11,6 +11,5 @@
   - vars/src.vars
   tasks:
   - include: tasks/cfvar_includes.tasks
-  - debug: hi
   - git: repo=https://github.com/mirrors/openwrt.git dest=${DIR.stdout}
 
