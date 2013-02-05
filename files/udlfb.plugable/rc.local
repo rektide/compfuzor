@@ -1,0 +1,7 @@
+oldIFS=$IFS
+IFS=/
+for seat in /dev/usbseat/*; do
+	set $seat
+	/lib/udev/usbseat.sh $4
+done
+IFS=$oldIFS
