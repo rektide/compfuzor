@@ -1,5 +1,5 @@
 for src in $(flatten $*)
 do
-	[[ $src[-4,-1] == ".zwc ]] && continue
+	[[ $src[-4,-1] == ".zwc" ]] && continue
 	zcompile -U $src
 done
