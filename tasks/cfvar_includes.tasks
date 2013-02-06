@@ -2,10 +2,10 @@
 ## COMMON
 - shell: echo $TYPE-$INSTANCE
   register: NAME
-  only_if: is_unset('$NAME') and is_set('$INSTANCE')
+  only_if: is_unset('${NAME.stdout}') and is_set('$INSTANCE')
 - shell: echo $TYPE
   register: NAME
-  only_if: is_unset('$NAME') and is_set('$TYPE')
+  only_if: is_unset('${NAME.stdout}') and is_set('$TYPE')
 #- shell: echo ${ ${CLASS}_DIR }/${NAME.stdout}
 #  register: DIR
 #  only_if: is_unset('$DIR') and is_set('$CLASS')
