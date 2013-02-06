@@ -29,6 +29,9 @@
     - libncurses5-dev
     - zlib1g-dev
     - gawk
+    - gettext
+    - xsltproc
+    - libssl-dev
   vars_files:
   - vars/common.vars
   tasks:
