@@ -17,13 +17,22 @@
   - file: src=files/openwrt/feeds.conf.default dest=${DIR.stdout}/feeds.conf.default # ran after git repo is checked out
   #- shell: chdir=${DIR.stdout} ./scripts/feeds update -a  # BROKEN have not install prereqs yet.
   #- shell: chdir=${DIR.stdout} ./scripts/feeds install -a  # BROKEN have not install prereqs yet.
----
 - hosts: all
   tags:
   - packages
   - root
-  vars_file:
+  vars:
+    deps: 
+    - make
+    - gcc
+    - g++
+    - libncurses5-dev
+    - zlib1g-dev
+    - gawk
+  vars_files:
   - vars/common.vars
   tasks:
-  - apt: state=${APT_INSTALL} pkg=make,gcc
+  - apt: state=${APT_INSTALL} pkg=${item}
+    with_items: ${deps}
     only_if: not ${APT_BYPASS}
+
