@@ -43,4 +43,4 @@
   - deps
   tasks:
   - include: tasks/ansible.deps.task
-    only_if: not $SKIP_DEPS
+    only_if: not $APT_BYPASS
