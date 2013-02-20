@@ -12,7 +12,6 @@
   - vars/src.vars
   tasks:
   - include: tasks/cfvar_includes.tasks
-  - git: repo=${REPO} dest=${DIR.stdout}
   - git: repo=git://nbd.name/packages.git dest=${DIR.stdout}/feeds/packages
   - file: src=files/openwrt/feeds.conf.default dest=${DIR.stdout}/feeds.conf.default # ran after git repo is checked out
   #- shell: chdir=${DIR.stdout} ./scripts/feeds update -a  # BROKEN have not install prereqs yet.

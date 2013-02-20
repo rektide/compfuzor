@@ -13,5 +13,4 @@
   - include: tasks/cfvar_includes.tasks
   - apt: state=${APT_INSTALL} pkg=python-jinja2,python-yaml,python-paramiko,python-apt,git
     only_if: not $APT_BYPASS
-  - git: repo=${REPO} dest=${DIR.stdout}
   - template: src=files/ansible/$ANSIBLE_ENV dest=${BINS_DIR}/$ANSIBLE_ENV mode=0755
