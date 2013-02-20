@@ -11,13 +11,13 @@
 #  only_if: is_unset('$DIR') and is_set('$CLASS')
 - shell: echo $ETCS_DIR/${NAME.stdout}
   register: ETC
-  only_if: is_unset('$ETC')
+  only_if: is_unset("$ETC")
 - shell: echo $VARS_DIR/lib/${NAME.stdout}
   register: VAR
-  only_if: is_unset('$VAR')
+  only_if: is_unset("$VAR")
 - shell: echo $VARS_DIR/log/${NAME.stdout}
   register: LOG
-  only_if: is_unset('$LOG')
+  only_if: is_unset("$LOG")
 ## STOCK BASE DIRECTORIES ##
 # BASE
 - file: path=${DIR.stdout} state=directory mode=770
