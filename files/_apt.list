@@ -1,5 +1,5 @@
 {% if APT_DISTRIBUTIONS %}{% for DISTRIBUTION in APT_DISTRIBUTIONS %}
-deb 
+deb{% if APT_SRC %}-src{% endif %}
 {%- if APT_ARCH or APT_ARCHS %} [ 
 {% if APT_ARCH %}arch = {{APT_ARCH}}{{" "}}
 {% elif APT_ARCHS %}arch = {{APT_ARCHS|join(",")}}{{" "}}{% endif %}
@@ -11,7 +11,7 @@ deb
 {% elif APT_DEFAULT_COMPONENT %}{{APT_DEFAULT_COMPONENT }}
 {% else %}main{% endif %}
 {% endfor %}{% else %}
-deb 
+deb{% if APT_SRC %}-src{% endif %}
 {%- if APT_ARCH or APT_ARCHS %} [ 
 {% if APT_ARCH %}arch = {{APT_ARCH}}{{" "}}
 {% elif APT_ARCHS %}arch = {{APT_ARCHS|join(",")}}{{" "}}{% endif %}

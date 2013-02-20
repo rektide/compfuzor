@@ -1,2 +1,2 @@
 #!/bin/sh
-cat x2go.gpg.params|xargs ../UTIL/get-apt-key.sh
+cat *.gpg.params|xargs ../UTIL/get-apt-key.sh
