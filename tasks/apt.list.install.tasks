@@ -1,0 +1,4 @@
+---
+# http://askubuntu.com/questions/65245/apt-get-update-only-for-a-specific-repository
+- template: src=files/_apt.list dest=/etc/apt/sources.list.d/${name}.list
+- include: tasks/apt.list.update.tasks

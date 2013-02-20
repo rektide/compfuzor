@@ -1,0 +1,28 @@
+{% if APT_DISTRIBUTIONS %}{% for DISTRIBUTION in APT_DISTRIBUTIONS %}
+deb 
+{%- if APT_ARCH or APT_ARCHS %} [ 
+{% if APT_ARCH %}arch = {{APT_ARCH}}{{" "}}
+{% elif APT_ARCHS %}arch = {{APT_ARCHS|join(",")}}{{" "}}{% endif %}
+ ]{% endif -%}
+{{" "}}{{APT_REPO}}  {{DISTRIBUTION}}{{" "}}
+{%- if APT_COMPONENTS %}{{APT_COMPONENTS|join(" ")}}
+{% elif APT_COMPONENT %}{{APT_COMPONENT}}
+{% elif APT_DEFAULT_COMPONENTS %}{{APT_DEFAULT_COMPONENTS|join(" ")}}
+{% elif APT_DEFAULT_COMPONENT %}{{APT_DEFAULT_COMPONENT }}
+{% else %}main{% endif %}
+{% endfor %}{% else %}
+deb 
+{%- if APT_ARCH or APT_ARCHS %} [ 
+{% if APT_ARCH %}arch = {{APT_ARCH}}{{" "}}
+{% elif APT_ARCHS %}arch = {{APT_ARCHS|join(",")}}{{" "}}{% endif %}
+ ]{% endif -%}
+{{" "}}{{APT_REPO}}{{" "}}
+{%- if APT_DISTRIBUTION %}{{APT_DISTRIBUTION}}
+{% elif APT_DEFAULT_DISTRIBUTION %}{{APT_DEFAULT_DISTRIBUTION}}
+{% else %}unstable{% endif %}{{" "}}
+{%- if APT_COMPONENTS %}{{APT_COMPONENTS|join(" ")}}
+{% elif APT_COMPONENT %}{{APT_COMPONENT}}
+{% elif APT_DEFAULT_COMPONENTS %}{{APT_DEFAULT_COMPONENTS|join(" ")}}
+{% elif APT_DEFAULT_COMPONENT %}{{APT_DEFAULT_COMPONENT }}
+{% else %}main{% endif %}
+{% endif %}
