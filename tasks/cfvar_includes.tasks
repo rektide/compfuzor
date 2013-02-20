@@ -11,19 +11,19 @@
 #  only_if: is_unset('$DIR') and is_set('$CLASS')
 - shell: echo $ETCS_DIR/${NAME.stdout}
   register: ETC
-  only_if: is_unset("$ETC")
+  only_if: is_unset("$ETC") and is_set("$NAME")
 - shell: echo $VARS_DIR/lib/${NAME.stdout}
   register: VAR
-  only_if: is_unset("$VAR")
+  only_if: is_unset("$VAR") and is_set("$VARS_DIR") and is_set("$NAME")
 - shell: echo $VARS_DIR/log/${NAME.stdout}
   register: LOG
-  only_if: is_unset("$LOG")
+  only_if: is_unset("$LOG") and is_set("$VARS_DIR") and is_set("$NAME")
 ## STOCK BASE DIRECTORIES ##
 # BASE
 - git: repo=${REPO} dest=${DIR.stdout}
-  only_if: is_unset("$DIR_BYPASS") and is_set("$REPO")
+  only_if: is_unset("$DIR_BYPASS") and is_set("$REPO") and is_set("$DIR")
 - file: path=${DIR.stdout} state=directory mode=770
-  only_if: is_unset("$DIR_BYPASS") and is_unset("$REPO")
+  only_if: is_unset("$DIR_BYPASS") and is_unset("$REPO") and is_set("$DIR")
 # ETC
 - file: path=${ETC.stdout} state=directory mode=770
   only_if: is_set("$ETC_DIRS") or is_set("$ETC_FILES") and is_unset("$ETC_BYPASS")
@@ -80,7 +80,7 @@
   only_if: is_set("$LINKS")
 # USER
 - shell: echo ${NAME.stdout}
-  only_if: is_unset("$USER")
+  only_if: is_unset("$USER") and is_set("$NAME")
   register: USER
 # SYSTEMD
 - shell: echo global
@@ -101,9 +101,9 @@
   only_if: is_unset("$SYSTEMD_UNIT_DIR")
   register: SYSTEMD_UNIT_DIR
 - shell: echo ${SYSTEMD_UNIT_DIR.stdout}/${NAME.stdout}.unit
-  only_if: is_unset("$SYSTEMD_UNIT")
+  only_if: is_unset("$SYSTEMD_UNIT") and is_set("$NAME")
   register: SYSTEMD_UNIT
 - shell: echo ${SYSTEMD_UNIT_DIR.stdout}/${NAME.stdout}.service
-  only_if: is_unset("$SYSTEMD_SERVICE")
+  only_if: is_unset("$SYSTEMD_SERVICE") and is_set("$NAME")
   register: SYSTEMD_SERVICE
 - debug: msg="done with cfvars_include"
