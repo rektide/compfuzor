@@ -109,4 +109,11 @@
 - shell: echo ${SYSTEMD_UNIT_DIR.stdout}/${NAME.stdout}.service
   only_if: is_unset("$SYSTEMD_SERVICE") and is_set("$NAME")
   register: SYSTEMD_SERVICE
+# SRC
+- shell: echo files/${TYPE}
+  only_if: is_unset("$SRC") and is_set("$TYPE") and is_unset("$NAME")
+  register: SRC
+- shell: echo files/${NAME.stdout}
+  only_if: is_unset("$SRC") and is_set("$NAME")
+  register: SRC
 - debug: msg="done with cfvars_include"
