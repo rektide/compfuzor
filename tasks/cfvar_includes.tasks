@@ -1,5 +1,8 @@
 ---
 ## COMMON
+- shell: echo $NAME
+  register: NAME
+  only_if: is_set("$NAME") and is_unset("${NAME.stdout}")
 - shell: echo $TYPE-$INSTANCE
   register: NAME
   only_if: is_unset('${NAME.stdout}') and is_set('$INSTANCE')
