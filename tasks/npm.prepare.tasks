@@ -1,0 +1,11 @@
+---
+- include: tasks/srv.user.tasks user=${USER.stdout} home=${DIR.stdout}
+# blow away directory
+- shell: rm -rf ${DIR.stdout}
+# initialize as git
+- git: repo=${repo} dest=${DIR.stdout}
+- shell: echo re-asserting stock config
+# re-assert standard contants
+- include: tasks/cfvar_includes.tasks
+- shell: chdir=${DIR.stdout} npm install
+

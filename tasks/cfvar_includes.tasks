@@ -69,8 +69,39 @@
 - template: src=files/${TYPE}/${item} dest=${VAR.stdout}/${item} mode=660
   with_items: $VAR_FILES
   only_if: is_set("$VAR_FILES")
+- file: path=${LOG.stdout}/${item} state=directory mode=770
+  with_items: $LOG_DIRS
+  only_if: is_set("$LOG_DIRS")
 # LINKS
 - file: src=${DIR.stdout}/${LINKS.${item}} dest=${DIR.stdout}/${item} state=link
   with_items: $LINKS
   only_if: is_set("$LINKS")
+# USER
+- shell: echo ${NAME.stdout}
+  only_if: is_unset("$USER")
+  register: USER
+# SYSTEMD
+- shell: echo global
+  only_if: is_unset("$SYSTEMD_SCOPE")
+  register: SYSTEMD_SCOPE
+- shell: echo ""
+  only_if: is_unset("$SYSTEMD_OPTS")
+  register: SYSTEMD_OPTS
+- shell: echo ${SYSTEMD_OPTS.stdout} --${SYSTEMD_SCOPE.stdout}
+  register: SYSTEMD_OPTS
+- shell: echo /etc/systemd
+  only_if: is_unset("$SYSTEMD_ETC_DIR")
+  register: SYSTEMD_ETC_DIR
+- shell: echo ${SYSTEMD_ETC_DIR.stdout}/system
+  only_if: is_unset("$SYSTEMD_UNIT_DIR") and "${SYSTEMD_SCOPE.stdout}" == "global"
+  register: SYSTEMD_UNIT_DIR
+- shell: echo ${SYSTEMD_ETC_DIR.stdout}/user
+  only_if: is_unset("$SYSTEMD_UNIT_DIR")
+  register: SYSTEMD_UNIT_DIR
+- shell: echo ${SYSTEMD_UNIT_DIR.stdout}/${NAME.stdout}.unit
+  only_if: is_unset("$SYSTEMD_UNIT")
+  register: SYSTEMD_UNIT
+- shell: echo ${SYSTEMD_UNIT_DIR.stdout}/${NAME.stdout}.service
+  only_if: is_unset("$SYSTEMD_SERVICE")
+  register: SYSTEMD_SERVICE
 - debug: msg="done with cfvars_include"

@@ -1,0 +1,3 @@
+---
+- shell: test -d $file/.git
+  register: has_git
