@@ -1,0 +1,2 @@
+#!/bin/sh
+cat *.gpg.params|xargs -n2 ./get-apt-key.sh
