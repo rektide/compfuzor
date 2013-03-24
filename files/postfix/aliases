@@ -1,0 +1,3 @@
+{% for alias, values in aliases.items() -%}
+{{ alias }}: {{ values }}
+{% endfor %}

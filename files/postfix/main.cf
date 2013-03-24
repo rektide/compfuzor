@@ -1,0 +1,3 @@
+{% for key, value in main.items() %}
+{{ key }} = {{ value|join(", ") if not value is string and value is iterable }}{{ value if value is string }}
+{% endfor %}

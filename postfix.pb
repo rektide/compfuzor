@@ -31,3 +31,4 @@
     notify: restart service
   - shell: chdir=${ETC.stdout} postmap ${item}
     with_items: $POSTMAP
+  - file: src=/etc/postfix/master.cf dest=${ETC.stdout}/master.cf state=link
