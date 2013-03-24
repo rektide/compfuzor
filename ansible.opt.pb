@@ -5,6 +5,7 @@
     TYPE: ansible
     INSTANCE: git
     REPO: https://github.com/ansible/ansible.git
+    GIT: true
   vars_files:
   - vars/common.vars
   - vars/src.vars
