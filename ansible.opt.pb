@@ -14,3 +14,4 @@
   - apt: state=${APT_INSTALL} pkg=python-jinja2,python-yaml,python-paramiko,python-apt,git
     only_if: not $APT_BYPASS
   - template: src=files/ansible/$ANSIBLE_ENV dest=${BINS_DIR}/$ANSIBLE_ENV mode=0755
+  - git: repo=$REPO dest=$SRCS_DIR/ansible
