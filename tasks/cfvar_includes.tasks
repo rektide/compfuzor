@@ -24,6 +24,9 @@
 - shell: echo $SPOOLS_DIR/${NAME.stdout}
   register: SPOOL
   only_if: is_unset("$SPOOL") and is_set("$SPOOLS_DIR") and is_set("$NAME")
+- shell: echo $CACHES_DIR/${NAME.stdout}
+  register: CACHE
+  only_if: is_unset("$CACHE") and is_set("$CACHES_DIR") and is_set("$NAME")
 ## STOCK BASE DIRECTORIES ##
 # BASE
 - git: repo=${REPO} dest=${DIR.stdout}

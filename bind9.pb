@@ -20,10 +20,11 @@
     - db.empty
     - db.local
     - db.root
-    - named.conf
-    - named.conf.options
     - named.conf.default-zones
     - zones.rfc1918
+    FILES:
+    - named.conf
+    - named.conf.options
   vars_files:
   - vars/common.vars
   - vars/srv.vars
@@ -44,6 +45,6 @@
   - file: src=/etc/bind/$item dest=${ETC.stdout}/$item state=link
     with_items: $STOCK
   - file: src=$item dest=${ETC.stdout}/rndc.key
-    first_available_files:
+    first_available_file:
     - rndc.$zoneset.key
     - rndc.key
