@@ -1,0 +1,3 @@
+controls {
+	inet {{ rndc_net if rndc_net is defined else '127.0.0.1' }} allow { {{ rndc-allow if rndc_allowed is defined else 'localhost' }}; } keys { {{ rndc_key }}; };
+};

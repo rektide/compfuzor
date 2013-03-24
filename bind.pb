@@ -25,26 +25,25 @@
     FILES:
     - named.conf
     - named.conf.options
+    rndc_key: False
   vars_files:
   - vars/common.vars
   - vars/srv.vars
-  - files/bind9/defaults.vars
-  - [ "private/bind9/$zoneset.vars" ]
+  - files/bind/defaults.vars
+  - [ "private/bind/$zoneset.vars" ]
   handlers:
   - include: handlers.yml
   tasks:
   - include: tasks/cfvar_includes.tasks
   - apt: state=${APT_INSTALL} pkg=bind9,bind9-doc,dnsutils
-  - template: src=files/bind9/named.conf.local dest=${ETC.stdout}/named.conf.local.d/${zoneset}.${item.name}.conf
+  - template: src=files/bind/named.conf.local dest=${ETC.stdout}/named.conf.local.d/${zoneset}.${item.name}.conf
     with_items: $domains
   - assemble: src=${ETC.stdout}/named.conf.local.d dest=${ETC.stdout}/named.conf.local
     notify: restart service
-  - template: src=files/bind9/zone dest=${ETC.stdout}/zone.d/${item.name}.zone
+  - template: src=files/bind/zone dest=${ETC.stdout}/zone.d/${item.name}.zone
     with_items: $domains
     notify: restart service
   - file: src=/etc/bind/$item dest=${ETC.stdout}/$item state=link
     with_items: $STOCK
-  - file: src=$item dest=${ETC.stdout}/rndc.key
-    first_available_file:
-    - rndc.$zoneset.key
-    - rndc.key
+  - template: src=private/bind/rndc.key dest=${ETC.stdout}/rndc.key
+    only_if: "not not ${rndc_key}"
