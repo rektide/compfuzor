@@ -26,8 +26,8 @@
   tasks:
   - include: tasks/cfvar_includes.tasks
   - apt: state=${APT_INSTALL} pkg=postfix
-  - template: src=files/postfix/${item} dest=${DIR.stdout}/${item}
+  - template: src=files/postfix/${item} dest=${ETC.stdout}/${item}
     with_items: $TEMPLATES
     notify: restart service
-  - shell: chdir=${DIR.stdout} postmap ${item}
+  - shell: chdir=${ETC.stdout} postmap ${item}
     with_items: $POSTMAP
