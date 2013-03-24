@@ -7,7 +7,6 @@
     TYPE: openwrt
     INSTANCE: git
     REPO: https://github.com/mirrors/openwrt.git
-    GIT: true
   vars_files:
   - vars/common.vars
   - vars/src.vars

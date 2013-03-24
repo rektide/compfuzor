@@ -9,7 +9,6 @@
       port: 4444
       user: ${USER.stdout}
     repo: REPO
-    GIT: true
     npm_opts: --node-dir=/usr/src/node
     LOG_DIRS:
     - .
