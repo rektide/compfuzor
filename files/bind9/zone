@@ -1,0 +1,74 @@
+$TTL {{ ttl }} ; ttl - {{ ttl / 3600 }} hours
+@ IN SOA {{ ns[0] if not item.ns is defined else item.ns[0] }}.{{ item.name }}. {{ rname if not item.rname is defined else item.rname }}.{{ item.name }}. (
+	{{ serial if not item.serial is defined else item.serial }} ; serial
+	{{ refresh if not item.refresh is defined else item.refresh }} ; refresh
+	{{ retry if not item.retry is defined else item.retry }} ; retry
+	{{ expire if not item.expire is defined else item.expire}} ; expire
+	{{ minimum if not item.minimum is defined else item.minimum }} ; minimum
+);
+
+{# create an indexable form of global #}
+{%- set globalHack = {'ns': ns, 'ns_full': ns_full, 'mx': mx, 'mx_full': mx_full } -%}
+
+{%- macro _r(tag,rec,full) %}
+{% if tag.lower() != 'ns' -%}
+{% if rec.name is defined -%}
+	{{- rec.name }}{{ '.' if full == True }}{{ ' ' -}}
+{% elif rec.service is defined and rec.proto is defined -%}
+	{{- rec.service }}._{{ rec.proto }}{{ ' ' -}}
+{% endif -%}
+{{ rec.ttl if rec.ttl is defined }}{{ ' ' if rec.ttl is defined -}}
+{{ rec.class+' ' if rec.class is defined else 'IN ' -}}
+{{ tag.upper()+' ' -}}
+{{ rec.pref if rec.pref is defined }}{{ ' ' if rec.pref is defined -}}
+{% if rec.val is defined -%}
+	{{ rec.val }}
+{% elif rec.pri is defined and rec.weight is defined and rec.port is defined and rec.target is defined -%}
+	{{ rec.pri }} {{ rec.weight }} {{ rec.port }} {{ rec.target }}
+{% elif rec.txt is defined -%}
+	{{ rec.txt }}
+{% endif -%}
+{% else -%}
+IN {{ tag.upper() }} {{ rec }}{{ '.' if full == True }}
+{% endif -%}
+{%- endmacro -%}
+
+{%- macro _run(upon,tag,full) %}
+{% set runTag = tag + '_full' if full is defined and full == True else tag -%}
+{% set runRecs = upon[runTag] -%}
+{% if runRecs is defined -%}
+	{% if runRecs is string -%}
+		{{- _r(tag,runRecs,full) -}}
+	{% elif runRecs is iterable -%}
+		{% for runRec in runRecs -%}
+			{{- _r(tag,runRec,full) -}}
+		{% endfor -%}
+	{% endif -%}
+{% endif -%}
+{% if full is not defined %}
+	{{ _run(upon,tag,True) -}}
+{% endif -%}
+{% endmacro -%}
+
+{%- macro _full(name,domain) %}
+
+$ORIGIN {{ name }}.
+{% for rr in ['ns','mx','a','aaaa','apl','caa','cert','cname','dhcid','dlv','dname','dnskey','ds','hip','ipseckey','key','kx','loc','naptr','nsec','nsec3','nsec3param','ptr','rrsig','rp','sig','soa','spf','srv','sshfp','ta','tkey','tkey','tlsa','tsig','txt'] -%}
+	{% if not domain.noLocal is defined -%}
+		{{- _run(domain,rr,None) -}}
+	{% endif -%}
+	{# global records -#}
+	{% if domain.noGlobal is not defined or domain.noGlobal != True -%}
+		{{- _run(globalHack,rr,None) -}}
+	{% endif -%}
+{%- endfor -%}
+{#- subdomains -#}
+{% for sub in domain.subdomains if domain.subdomains is defined -%}
+	{{- _full(sub.name+'.'+name,sub) -}}
+	{% if sub.parent == True -%}
+		{{- _full(sub.name+'.'+name,domain,False) -}}
+	{% endif -%}
+{% endfor -%}
+{%- endmacro -%}
+
+{{ _full(item.name,item) }}
