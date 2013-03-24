@@ -7,7 +7,7 @@
   handlers:
   - include: handlers.yml
   tasks:
-  - apt: state=$APT_INSTALL pkg=sabnzbdplus
+  - apt: state=$APT_INSTALL pkg=sabnzbdplus,sabnzbdplus-theme-classic,sabnzbdplus-theme-mobile
   - user: name=sabnzbd home=/srv/nzb shell=/bin/false system=true
   - file: state=directory path=/srv/nzb/~queue~ owner=sabnzbd group=daemon mode=0777
   - file: state=directory path=/srv/nzb/.sabnzbd owner=sabnzbd group=daemon mode=0770
