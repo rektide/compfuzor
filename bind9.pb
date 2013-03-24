@@ -1,5 +1,5 @@
 ---
-# bind9:
+# bind9
 # expects: zoneset - configuration file for a set of zones to load
 - hosts: all
   tags:
@@ -22,7 +22,6 @@
   tasks:
   - include: tasks/cfvar_includes.tasks
   - apt: state=${APT_INSTALL} pkg=bind9,bind9-doc,dnsutils
-  - shell: echo ${ETC.stdout}
   - template: src=files/bind9/named.conf.local dest=${ETC.stdout}/named.conf.local.d/${zoneset}.${item.name}.conf
     with_items: $domains
   - assemble: src=${ETC.stdout}/named.conf.local.d dest=${ETC.stdout}/named.conf.local
