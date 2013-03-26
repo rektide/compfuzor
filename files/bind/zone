@@ -1,5 +1,9 @@
 $TTL {{ ttl }} ; ttl - {{ ttl / 3600 }} hours
-@ IN SOA {{ ns[0] if not item.ns is defined else item.ns[0] }}.{{ item.name }}. {{ rname if not item.rname is defined else item.rname }}.{{ item.name }}. (
+@ IN SOA {% if soa -%}
+{{ soa -}}
+{% elif not item.ns is defined %}{% if ns is string %}{{ ns }}{% else %}{{ ns[0] }}{% endif -%}
+{% else -%}{% if item.ns is string %}{{ item.ns }}{% else %}{{ item.ns[0] }}{% endif %}{% endif -%}
+.{{ item.name }}. {{ rname if not item.rname is defined else item.rname }}.{{ item.name }}. (
 	{{ serial if not item.serial is defined else item.serial }} ; serial
 	{{ refresh if not item.refresh is defined else item.refresh }} ; refresh
 	{{ retry if not item.retry is defined else item.retry }} ; retry
@@ -31,7 +35,7 @@ $TTL {{ ttl }} ; ttl - {{ ttl / 3600 }} hours
 	{{ rec.txt }}
 {% endif -%}
 {% else -%}
-{{ ' ' }}IN {{ tag.upper() }} {{ rec }}{{ '.' if full == True }}
+{{ ' ' }}IN NS {{ rec }}{{ '.' if full == True }}
 {% endif -%}
 {%- endmacro -%}
 
@@ -47,8 +51,8 @@ $TTL {{ ttl }} ; ttl - {{ ttl / 3600 }} hours
 		{% endfor -%}
 	{% endif -%}
 {% endif -%}
-{% if full is not defined %}
-	{{ _run(upon,tag,True) -}}
+{% if full == None -%}
+	{{- _run(upon,tag,True) -}}
 {% endif -%}
 {% endmacro -%}
 
