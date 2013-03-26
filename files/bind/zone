@@ -28,7 +28,7 @@ $TTL {{ ttl }} ; ttl - {{ ttl / 3600 }} hours
 {{ tag.upper()+' ' -}}
 {{ rec.pref if rec.pref is defined }}{{ ' ' if rec.pref is defined -}}
 {% if rec.val is defined -%}
-	{{ rec.val }}
+	{{ rec.val }}{{ '.' if full == True }}
 {% elif rec.pri is defined and rec.weight is defined and rec.port is defined and rec.target is defined -%}
 	{{ rec.pri }} {{ rec.weight }} {{ rec.port }} {{ rec.target }}
 {% elif rec.txt is defined -%}
