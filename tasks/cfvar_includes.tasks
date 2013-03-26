@@ -9,6 +9,10 @@
 - shell: echo $TYPE
   register: NAME
   only_if: is_unset('${NAME.stdout}') and is_set('$TYPE')
+# USER
+- shell: echo ${NAME.stdout}
+  only_if: is_unset("$USER") and is_set("$NAME")
+  register: USER
 #- shell: echo ${ ${CLASS}_DIR }/${NAME.stdout}
 #  register: DIR
 #  only_if: is_unset('$DIR') and is_set('$CLASS')
@@ -80,17 +84,18 @@
 - template: src=files/${TYPE}/${item} dest=${VAR.stdout}/${item} mode=660
   with_items: $VAR_FILES
   only_if: is_set("$VAR_FILES")
+# LOG_DIRS
 - file: path=${LOG.stdout}/${item} state=directory mode=770
   with_items: $LOG_DIRS
   only_if: is_set("$LOG_DIRS")
+# CACHE_DIRS
+- file: path=${CACHE.stdout}/${item} state=directory mode=770
+  with_items: $CACHE_DIRS
+  only_if: is_set("$CACHE_DIRS")
 # LINKS
 - file: src=${DIR.stdout}/${LINKS.${item}} dest=${DIR.stdout}/${item} state=link
   with_items: $LINKS
   only_if: is_set("$LINKS")
-# USER
-- shell: echo ${NAME.stdout}
-  only_if: is_unset("$USER") and is_set("$NAME")
-  register: USER
 # SYSTEMD
 - shell: echo global
   only_if: is_unset("$SYSTEMD_SCOPE")
