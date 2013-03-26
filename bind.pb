@@ -8,7 +8,7 @@
   gather_facts: False
   vars:
     TYPE: bind
-    INSTANCE: main 
+    INSTANCE: main
     ETC_DIRS:
     - named.conf.local.d
     - zone.d
@@ -22,10 +22,16 @@
     - db.root
     - named.conf.default-zones
     - zones.rfc1918
-    FILES:
+    ETC_FILES:
     - named.conf
     - named.conf.options
+    CACHE_DIRS:
+    - .
+    LOG_DIRS:
+    - .
     rndc_key: False
+    user: bind
+    port: 53
   vars_files:
   - vars/common.vars
   - vars/srv.vars
@@ -36,6 +42,7 @@
   tasks:
   - include: tasks/cfvar_includes.tasks
   - apt: state=${APT_INSTALL} pkg=bind9,bind9-doc,dnsutils
+  - user: name=${user} system=true home=${DIR.stdout}
   - template: src=files/bind/named.conf.local dest=${ETC.stdout}/named.conf.local.d/${zoneset}.${item.name}.conf
     with_items: $domains
   - assemble: src=${ETC.stdout}/named.conf.local.d dest=${ETC.stdout}/named.conf.local
@@ -47,3 +54,5 @@
     with_items: $STOCK
   - template: src=private/bind/rndc.key dest=${ETC.stdout}/rndc.key
     only_if: "not not ${rndc_key}"
+  - template: owner=root group=root src=files/bind/bind.service dest=/etc/systemd/system/${NAME.stdout}.service
+    notify: restart service

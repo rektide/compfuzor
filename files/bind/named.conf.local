@@ -1,7 +1,7 @@
 // zone {{ item.name }}
 zone "{{ item.name }}" {
 	type {{ 'master' if not item.zone_type is defined else item.zone_type }};
-	file "/etc/bind/zone.d/{{ item.name }}.zone";
+	file "{{ ETC.stdout }}/zone.d/{{ item.name }}.zone";
 
 	{% if item.update_key is defined %}
 	allow-update { key {{ item.update_key }}; };

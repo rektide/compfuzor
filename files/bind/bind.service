@@ -1,0 +1,16 @@
+[Unit]
+Description={{ NAME.stdout }}
+Requires=network.target
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=
+Environment=
+WorkingDirectory={{ DIR.stdout }}
+ExecStart=/usr/sbin/named -u {{ user }} -c {{ ETC.stdout }}/named.conf -p {{ port if port is defined else 53 }} -f
+PIDFile=/var/run/{{ NAME.stdout }}.pid
+User={{ user }}
+
+[Install]
+WantedBy=multi-user.target

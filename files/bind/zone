@@ -16,6 +16,8 @@ $TTL {{ ttl }} ; ttl - {{ ttl / 3600 }} hours
 	{{- rec.name }}{{ '.' if full == True }}{{ ' ' -}}
 {% elif rec.service is defined and rec.proto is defined -%}
 	{{- rec.service }}._{{ rec.proto }}{{ ' ' -}}
+{% else -%}
+{{ ' ' -}}
 {% endif -%}
 {{ rec.ttl if rec.ttl is defined }}{{ ' ' if rec.ttl is defined -}}
 {{ rec.class+' ' if rec.class is defined else 'IN ' -}}
@@ -29,7 +31,7 @@ $TTL {{ ttl }} ; ttl - {{ ttl / 3600 }} hours
 	{{ rec.txt }}
 {% endif -%}
 {% else -%}
-IN {{ tag.upper() }} {{ rec }}{{ '.' if full == True }}
+{{ ' ' }}IN {{ tag.upper() }} {{ rec }}{{ '.' if full == True }}
 {% endif -%}
 {%- endmacro -%}
 
