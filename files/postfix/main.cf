@@ -1,3 +1,7 @@
-{% for key, value in main.items() %}
+{% for key, value in defaults.items() -%}
+{{ key }} = {{ value|join(", ") if not value is string and value is iterable }}{{ value if value is string }}
+{% endfor %}
+
+{% for key, value in main.items() -%}
 {{ key }} = {{ value|join(", ") if not value is string and value is iterable }}{{ value if value is string }}
 {% endfor %}
