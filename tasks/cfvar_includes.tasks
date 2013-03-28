@@ -54,7 +54,7 @@
   only_if: is_set("$LOG_DIRS") or is_set("$LOG_FILES") and is_unset("$LOG_BYPASS")
 # CACHE
 - file: path=${CACHE.stdout} state=directory mode=770
-  only_if: is_set("$CACHE_DIRS") and is_unset("CACHE_BYPASS")
+  only_if: is_set("$CACHE_DIRS") and is_unset("$CACHE_BYPASS")
 - file: src=${CACHE.stdout} dest=${DIR.stdout}/cache state=link
   only_if: is_set("$CACHE_DIRS") and is_unset("$CACHE_BYPASS")
 ## SERVICE DEFINED ##
