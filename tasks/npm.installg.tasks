@@ -1,0 +1,2 @@
+---
+- shell: chdir=${dir} npm install -g
