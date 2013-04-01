@@ -1,0 +1,2 @@
+---
+- template: src=${src} dest=${dest} content=${content}
