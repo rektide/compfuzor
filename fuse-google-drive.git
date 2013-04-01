@@ -1,0 +1,19 @@
+---
+- hosts: all
+  gather_facts: false
+  vars:
+    TYPE: fuse-google-drive
+    INSTANCE: git
+    REPO: https://github.com/jcline/fuse-google-drive.git
+  vars_files:
+  - vars/common.vars
+  - vars/src.vars
+  tasks:
+  - include: tasks/cfvar_includes.tasks
+  - apt: pkg=libfuse-dev,libcurl4-gnutls-dev,libjson0-dev,libxml2-dev state=$APT_INSTALL
+    only_if: not $APT_BYPASS
+  - shell: chdir=${DIR.stdout} ./autogen.sh
+  - shell: chdir=${DIR.stdout} ./configure --prefix=/usr/local/fuse-google-drive
+  - shell: chdir=${DIR.stdout} make
+  - shell: chdir=${DIR.stdout} make install
+  - file: src=/usr/local/fuse-google-drive/bin/fuse-google-drive dest=/usr/local/bin/fuse-google-drive state=link
