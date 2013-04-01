@@ -1,5 +1,6 @@
 ---
 - hosts: all
+  gather_facts: false
   vars:
     TYPE: grunt
     INSTANCE: git
