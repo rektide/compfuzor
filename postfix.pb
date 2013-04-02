@@ -16,8 +16,6 @@
     - ssl
     VAR_DIRS:
     - .
-    POSTMAP:
-    - aliases
     USER: postfix
   vars_files:
   - vars/common.vars
@@ -33,8 +31,9 @@
   # todo: notify restart service when ETC_FILES changed
   - template: src=files/postfix/postfix.service dest=${SYSTEMD_UNIT_DIR.stdout}/${NAME.stdout}.service
     notify: restart service
-  - shell: chdir=${ETC.stdout} postmap ${item}
-    with_items: ${POSTMAP}
+  - shell: chdir=${ETC.stdout} postalias ${item}
+    with_items:
+    - aliases
   - file: path=${SPOOL.stdout} state=directory
   - file: src=/etc/postfix/${item} dest=${ETC.stdout}/${item} state=link
     with_items:
