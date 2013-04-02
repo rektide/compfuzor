@@ -1,7 +1,11 @@
+{% macro valWriter(value) -%}
+{{ value|join(", ") if not value is string and value is iterable }}{{ value if value is string or value is number and value != True and value != False }}{{ 'no' if value == False }}{{ 'yes' if value == True -}}
+{% endmacro -%}
+
 {% for key, value in defaults.items() -%}
-{{ key }} = {{ value|join(", ") if not value is string and value is iterable }}{{ value if value is string }}
+{{ key }} = {{ valWriter(value) }}
 {% endfor %}
 
 {% for key, value in main.items() -%}
-{{ key }} = {{ value|join(", ") if not value is string and value is iterable }}{{ value if value is string }}
+{{ key }} = {{ valWriter(value) }}
 {% endfor %}
