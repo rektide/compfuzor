@@ -6,6 +6,7 @@
     ARCH: armel
     MULTISTRAPFILE: multistrap.conf
     BASETGZ: pdebuild-cross.tgz
+    SUITE: sid
     ETC_FILES:
     - pdebuild-cross.rc
     - multistrap.conf
