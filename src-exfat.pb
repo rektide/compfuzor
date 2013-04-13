@@ -7,7 +7,7 @@
     TYPE: exfat
     INSTANCE: svn
     REPO: http://exfat.googlecode.com/svn/trunk/
-    NO_GIT: True
+    GIT_BYPASS: True
   vars_files:
   - vars/common.vars
   - vars/src.vars

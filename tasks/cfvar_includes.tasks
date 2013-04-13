@@ -34,7 +34,7 @@
 ## STOCK BASE DIRECTORIES ##
 # BASE
 - git: repo=${REPO} dest=${DIR.stdout}
-  only_if: is_unset("$NO_GIT") and is_unset("$DIR_BYPASS") and is_set("$REPO") and is_set("$DIR")
+  only_if: is_unset("$GIT_BYPASS") and is_unset("$DIR_BYPASS") and is_set("$REPO") and is_set("$DIR")
 - file: path=${DIR.stdout} state=directory mode=770
   only_if: is_unset("$DIR_BYPASS") and is_unset("$REPO") and is_set("$DIR")
 # ETC
