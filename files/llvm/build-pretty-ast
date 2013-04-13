@@ -1,0 +1,12 @@
+diff --git a/lib/ExecutionEngine/JIT/Intercept.cpp b/lib/ExecutionEngine/JIT/Intercept.cpp
+index 169e1ba..0ef2632 100644
+--- a/lib/ExecutionEngine/JIT/Intercept.cpp
++++ b/lib/ExecutionEngine/JIT/Intercept.cpp
+@@ -19,6 +19,7 @@
+ #include "llvm/Support/ErrorHandling.h"
+ #include "llvm/Support/DynamicLibrary.h"
+ #include "llvm/Config/config.h"
++#include <unistd.h>
+ using namespace llvm;
+ 
+ // AtExitHandlers - List of functions to call when the program exits,
