@@ -32,7 +32,7 @@
     with_items: $FOR
   - file: src={{ OUT_OF }}/.git/objects dest={{ DEST }}/.git/objects state=link
     with_items: $FOR
-  - shell: chdir={{ DEST }} git checkout master
+  - shell: chdir={{ DEST }} git checkout master -f
     with_items: $FOR
   - shell: chdir={{ DEST }} git reset --hard HEAD
     with_items: $FOR
@@ -42,3 +42,6 @@
     with_items: $FOR
   - shell: chdir={{ DEST }} git reset --hard HEAD
     with_items: $FOR
+  - copy: src=files/llvm/build-pretty-ast.patch dest={{ SRCS_DIR }}/llvm-{{ MIDFIX }}-{{ INSTANCE }}/build-pretty-ast.patch
+  - file: src={{ SRCS_DIR }}/clang-{{ MIDFIX }}-{{ INSTANCE }} dest={{ SRCS_DIR }}/llvm-{{ MIDFIX }}-{{ INSTANCE }}/tools/clang state=link
+  - shell: chdir={{ SRCS_DIR }}/llvm-{{ MIDFIX }}-{{ INSTANCE }}/lib/ExecutionEngine/JIT patch < ../../../build-pretty-ast.patch
