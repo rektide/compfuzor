@@ -31,9 +31,9 @@
   gather_facts: false
   tasks:
   - include: tasks/cfvar_includes.tasks
-  - template: src=files/reprepro/override dest=${ETC.stdout}/override-dsc.${item.codename}
+  - include: tasks/template.tasks src=files/reprepro/override dest=${ETC.stdout}/override-dsc.${item.codename} content=${OVERRIDES_DSC}
     with_items: $REPOS
-  - template: src=files/reprepro/override dest=${ETC.stdout}/override-deb.${item.codename}
+  - include: tasks/template.tasks src=files/reprepro/override dest=${ETC.stdout}/override-deb.${item.codename} content=${OVERRIDES_DEB}
     with_items: $REPOS
   - file: path=${VAR.stdout}/incoming/${item.codename} state=directory
     with_items: $REPOS
