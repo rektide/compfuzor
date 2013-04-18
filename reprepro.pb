@@ -1,7 +1,6 @@
 ---
 # TODO: inoticoming to watch incoming
 - hosts: all
-  sudo: True
   vars:
     TYPE: reprepro
     INSTANCE: main

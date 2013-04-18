@@ -60,54 +60,54 @@
 ## SERVICE DEFINED ##
 # DIRS aka DIR_DIRS
 - file: path={{DIR.stdout}}/{{item}} state=directory mode=770
-  with_items: DIRS
-  when_set: $DIRS
+  with_items: $DIRS
+  only_if: is_set("$DIRS")
 - file: path={{DIR.stdout}}/{{item}} state=directory mode=770
-  with_items: DIR_DIRS
-  when_set: $DIR_DIRS
+  with_items: $DIR_DIRS
+  only_if: is_set("$DIR_DIRS")
 # FILES aka DIR_FILES
 - template: src=files/{{TYPE}}/{{item}} dest={{DIR.stdout}}/{{item}} mode=660
-  with_items: FILES
-  when_set: $FILES
+  with_items: $FILES
+  only_if: is_set("$FILES")
 - template: src=files/{{TYPE}}/{{item}} dest={{DIR.stdout}}/{item}} mode=660
-  with_items: DIR_FILES
-  when_set: $DIR_FILES
+  with_items: $DIR_FILES
+  only_if: is_set("$DIR_FILES")
 # ETC_DIRS
 - file: path={{ETC.stdout}}/{{item}} state=directory mode=770
-  with_items: ETC_DIRS
-  when_set: $ETC_DIRS
+  with_items: $ETC_DIRS
+  only_if: is_set("$ETC_DIRS")
 # ETC_FILES
 - template: src=files/{{TYPE}}/{{item}} dest={{ETC.stdout}}/{{item}} mode=660
-  with_items: ETC_FILES
-  when_set: $ETC_FILES
+  with_items: $ETC_FILES
+  only_if: is_set("$ETC_FILES")
 # VAR_DIRS
 - file: path={{VAR.stdout}}/{{item}} state=directory mode=770
-  with_items: VAR_DIRS
-  when_set: $VAR_DIRS
+  with_items: $VAR_DIRS
+  only_if: is_set("$VAR_DIRS")
 # VAR_FILES
 - template: src=files/{{TYPE}}/{{item}} dest={{VAR.stdout}}/{{item}} mode=660
-  with_items: VAR_FILES
-  when_set: $VAR_FILES
+  with_items: $VAR_FILES
+  only_if: is_set("$VAR_FILES")
 # LOG_DIRS
 - file: path={{LOG.stdout}}/{{item}} state=directory mode=770
-  with_items: LOG_DIRS
-  when_set: $LOG_DIRS
+  with_items: $LOG_DIRS
+  only_if: is_set("$LOG_DIRS")
 # CACHE_DIRS
 - file: path={{CACHE.stdout}}/{{item}} state=directory mode=770
-  with_items: CACHE_DIRS
-  when_set: $CACHE_DIRS
+  with_items: $CACHE_DIRS
+  only_if: is_set("$CACHE_DIRS")
 # LINKS
 - file: src={{DIR.stdout}}/{{LINKS[item]}} dest={{DIR.stdout}}/{{item}} state=link
   with_items: LINKS.keys()
-  when_set: $LINKS
+  only_if: is_set("$LINKS")
 # SYSTEMD
 - shell: echo global
-  when_set: not $SYSTEMD_SCOPE
+  only_if: is_set("$SYSTEMD_SCOPE")
   register: SYSTEMD_SCOPE
 - shell: echo ""
   only_if: is_unset("$SYSTEMD_OPTS")
   register: SYSTEMD_OPTS
-- shell: echo ${SYSTEMD_OPTS.stdout} --${SYSTEMD_SCOPE.stdout}
+- shell: echo {{SYSTEMD_OPTS.stdout}} --{{SYSTEMD_SCOPE.stdout}}
   register: SYSTEMD_OPTS
 - shell: echo /etc/systemd
   only_if: is_unset("$SYSTEMD_ETC_DIR")
