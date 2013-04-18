@@ -2,9 +2,9 @@
 Origin: {{ repo.origin }}
 Label: {{ repo.label }}
 Codename: {{ repo.codename }}
-Architectures: {{ repo.arch }}
+Architectures: {{ repo.architectures|join(" ") }}
 Components: {{ repo.components }}
-Description: {{ repo.desc }}
+Description: {{ repo.description }}
 DebOverride: override-deb.{{ repo.codename }}
 DscOverride: override-dsc.{{ repo.codename }}
 {% if repo.has_key("keyid") -%}
