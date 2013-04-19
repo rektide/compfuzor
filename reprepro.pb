@@ -23,6 +23,7 @@
       dists: var/www/dists
       pool: var/www/pool
       .z/reprepro.env: reprepro.env
+      conf: etc
   vars_files:
   - vars/common.vars
   - vars/srv.vars
