@@ -24,11 +24,14 @@
       pool: var/www/pool
       .z/reprepro.env: reprepro.env
       conf: etc
+    nginx_prio: 50
   vars_files:
   - vars/common.vars
   - vars/srv.vars
   - private/reprepro.vars
   gather_facts: false
+  handlers:
+  - include: handlers.yml
   tasks:
   - include: tasks/cfvar_includes.tasks
   - include: tasks/template.tasks src=files/reprepro/override dest=${ETC.stdout}/override-dsc.${item.codename} content=${OVERRIDES_DSC}
@@ -41,6 +44,8 @@
     with_items: $REPOS
   # TODO: private/ keys install
   #- file: src=${DIR.stdout}/www dest=${WWW_LINKS_D}/*.*.archive state=link
+  - include: tasks/nginx-conf.tasks conf=files/reprepro/nginx.conf host=${item.origin} ctx=${item} name=${nginx_prio}-${NAME.stdout}
+    with_items: $REPOS
 - hosts: all
   sudo: True
   gather_facts: False
@@ -50,6 +55,5 @@
   vars_files:
   - vars/common.vars
   tasks:
-   - apt: pkg=reprepro state=$APT_INSTALL
-     only_if: not $APT_BYPASS
- 
+  - apt: pkg=reprepro state=$APT_INSTALL
+    only_if: not $APT_BYPASS

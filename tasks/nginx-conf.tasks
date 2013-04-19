@@ -1,0 +1,7 @@
+---
+- file: path={{NGINX.stdout}}/hosts.d/{{host}} state=directory
+- template: src={{conf}} dest={{NGINX.stdout}}/hosts.d/{{host}}/{{name}}.conf
+- assemble: src={{NGINX.stdout}}/global.d dest={{NGINX.stdout}}/hosts.d/global.conf
+- file: src={{NGINX.stdout}}/hosts.d/global.conf dest={{NGINX.stdout}}/hosts.d/{{host}}/00-global.conf state=link
+- assemble: src={{NGINX.stdout}}/hosts.d/{{host}} dest={{NGINX.stdout}}/conf.d/{{host}}.conf
+  notify: restart nginx
