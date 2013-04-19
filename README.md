@@ -30,19 +30,19 @@ It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance
 
 ## Services ##
 + ought be based around these variables:
-++ $TYPE, a name prefix identifying what type of service this is.
-++ $SRVS_DIR, where all services are kept, which common.vars will default to /srv
-++ $INSTANCE, defaulted to main, but overridable to create a new instance of the service.
-++ $NAME.stdout, conventionally set to $TYPE-$INSTANCE by tasks/srv.vars.tasks if none is provided (this ought be included early in most all srv scripts). The stdout will go away when ansible#1730 resolves.
-++ $DIR.stdout, conventionally set to $SRVS_DIR/${NAME.stdout} if none is provided, where the service instance is installed
+    + $TYPE, a name prefix identifying what type of service this is.
+    + $SRVS_DIR, where all services are kept, which common.vars will default to /srv
+    + $INSTANCE, defaulted to main, but overridable to create a new instance of the service.
+    + $NAME.stdout, conventionally set to $TYPE-$INSTANCE by tasks/srv.vars.tasks if none is provided (this ought be included early in most all srv scripts). The stdout will go away when ansible#1730 resolves.
+    + $DIR.stdout, conventionally set to $SRVS_DIR/${NAME.stdout} if none is provided, where the service instance is installed
 + in practices, services need to declare a $TYPE and then run tasks/srv.vars.tasks, leaving most of these var configurations to be done externally.
 + write a `systemd.unit(5)` file into $SYSTEMD_UNITS.
 + ideally all services can be installed multiple times! make it so!
 + `handlers.yml` ought provide a `restart $TYPE` directive that ought expect the above vars be defined.
 + services ought have their own user & group, typically ${NAME.stdout}. A common tasks is in the works.
-++ lordy be, here me now: all "services" are to be templates with their sudo_user injected at execution time.
-++ i have no idea right now how to pull off this execution framework.
-++ similarly, having INSTANCE baked in, not having defaults, these are major ansible warts I don't know how to factor out yet. ideas welcome.
+    + lordy be, here me now: all "services" are to be templates with their sudo_user injected at execution time.
+    + i have no idea right now how to pull off this execution framework.
+    + similarly, having INSTANCE baked in, not having defaults, these are major ansible warts I don't know how to factor out yet. ideas welcome.
 
 # Miscellenary #
 + Some vars are listed as $FOO.stdout. This ought go away pending some assistance in ansible#1730.
