@@ -1,16 +1,16 @@
-= CompFuzor = 
+# CompFuzor #
 
 CF is a repository of systems configuration scripts for onlining new nodes with a variety of services.
 
 It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance.
 
-= Conventions =
+# Conventions #
 
-== Base System ==
+## Base System ##
 + systemd is the init process.
 + dpkg/apt for package management.
 
-== Directories ==
+## Directories ##
 + `/` is the main repository of playbooks.
 + `tasks/` are subtasks used by playbooks.
 + `vars/` hold broad configuration data.
@@ -18,17 +18,17 @@ It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance
 + `private/` holds sensitive data configs.
 + `example-private/` holds dummy data to mock out it's private/ counterpart.
 
-== Playbook Types ==
+## Playbook Types ##
 + `.srv.pb` are _instances_ of services, typically deploying into /srv/$TYPE-$INSTANCE. $INSTANCE defaults to main in common.vars.
 + `.opt.pb` is there to install a software package, usually into /opt. configuration, if possible, ought be split into a `.srv.pb` playbook.
 + `.user.pb` are intended to install into a user's own directory.
 
-== Configuration ==
+## Configuration ##
 + `vars/`, `private/`, and `example-private/` hold non-installation specific, installation specific, and examples of installation specific configuraiton data.
 + `vars/common.vars` is a generic set of variables, for example defining paths such as opt, srv.
 + `vars/common.user.vars` supplements/overrides `common.vars` with user-targetted script configuration: OPTS_DIR becomes ~/.local/opt, for instance.
 
-== Services ==
+## Services ##
 + ought be based around these variables:
 ++ $TYPE, a name prefix identifying what type of service this is.
 ++ $SRVS_DIR, where all services are kept, which common.vars will default to /srv
@@ -44,5 +44,5 @@ It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance
 ++ i have no idea right now how to pull off this execution framework.
 ++ similarly, having INSTANCE baked in, not having defaults, these are major ansible warts I don't know how to factor out yet. ideas welcome.
 
-= Miscellenary =
+# Miscellenary #
 + Some vars are listed as $FOO.stdout. This ought go away pending some assistance in ansible#1730.
