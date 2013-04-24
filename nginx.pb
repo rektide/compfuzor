@@ -1,6 +1,5 @@
 ---
 - hosts: all
-  gather_facts: False
   vars:
     TYPE: nginx
     INSTANCE: main
