@@ -1,0 +1,17 @@
+[Unit]
+Description={{ NAME.stdout }}
+Requires=network.target syslog.target
+After=network.target syslog.target
+
+[Service]
+Type=forking
+ExecStartPre=/usr/sbin/nginx -c {{ ETC.stdout }}/nginx.conf -t
+ExecStart=/usr/sbin/nginx -c {{ ETC.stdout }}/nginx.conf
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s QUIT $MAINPID
+PrivateTmp=true
+PIDFile={{ PID.stdout }}
+User=root
+
+[Install]
+WantedBy=multi-user.target

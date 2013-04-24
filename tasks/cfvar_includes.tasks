@@ -31,6 +31,9 @@
 - shell: echo $CACHES_DIR/${NAME.stdout}
   register: CACHE
   only_if: is_unset("$CACHE") and is_set("$CACHES_DIR") and is_set("$NAME")
+- shell: echo $PIDS_DIR/${NAME.stdout}.pid
+  register: PID
+  only_if: is_unset("$PID") and is_set("$PIDS_DIR") and is_set("$NAME")
 ## STOCK BASE DIRECTORIES ##
 # BASE
 - git: repo=${REPO} dest=${DIR.stdout}
@@ -102,13 +105,13 @@
   only_if: is_set("$LINKS")
 # SYSTEMD
 - shell: echo global
-  only_if: is_set("$SYSTEMD_SCOPE")
+  only_if: is_unset("$SYSTEMD_SCOPE")
   register: SYSTEMD_SCOPE
 - shell: echo ""
   only_if: is_unset("$SYSTEMD_OPTS")
   register: SYSTEMD_OPTS
-- shell: echo {{SYSTEMD_OPTS.stdout}} --{{SYSTEMD_SCOPE.stdout}}
-  register: SYSTEMD_OPTS
+- shell: echo ${SYSTEMD_OPTS.stdout} --${SYSTEMD_SCOPE.stdout}
+  register: SYSTEMD_OPTS_AND_SCOPE
 - shell: echo /etc/systemd
   only_if: is_unset("$SYSTEMD_ETC_DIR")
   register: SYSTEMD_ETC_DIR
