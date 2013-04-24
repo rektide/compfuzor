@@ -10,6 +10,7 @@
     ETC_DIRS:
     - global.d
     - hosts.d
+    - conf.d
     ETC_FILES:
     - nginx.conf
   vars_files:

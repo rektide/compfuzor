@@ -1,3 +1,3 @@
-{% macro onOff(val) -%}
-{% if val -%}on{% else %}off(% endif -%}
+{% macro val(v) -%}
+{% if v == True -%}on{% elif v == False %}off{% else %}{{ v }}{% endif -%}
 {% endmacro %}
