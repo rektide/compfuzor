@@ -104,13 +104,14 @@
   with_items: LINKS.keys()
   only_if: is_set("$LINKS")
 # SYSTEMD
-- shell: echo global
+- shell: echo
+#- shell: echo --global
   only_if: is_unset("$SYSTEMD_SCOPE")
   register: SYSTEMD_SCOPE
 - shell: echo ""
   only_if: is_unset("$SYSTEMD_OPTS")
   register: SYSTEMD_OPTS
-- shell: echo ${SYSTEMD_OPTS.stdout} --${SYSTEMD_SCOPE.stdout}
+- shell: echo ${SYSTEMD_OPTS.stdout} ${SYSTEMD_SCOPE.stdout}
   register: SYSTEMD_OPTS_AND_SCOPE
 - shell: echo /etc/systemd
   only_if: is_unset("$SYSTEMD_ETC_DIR")

@@ -12,7 +12,7 @@
   only_if: "'${SYSTEMD_RUNNING.stdout}' != \"0\""
   register: SYSTEMD_ENABLE_OK
 # RELOAD OR RESTART IF RUNNING
-- shell: systemctl ${SYSTEMD_OPTS_AND_SCOPE.stdout} reload-or-restart ${SYSTEMD_SERVICE.stdout}
+- shell: systemctl ${SYSTEMD_OPTS_AND_SCOPE.stdout} reload-or-restart ${NAME.stdout}.service
   only_if: is_unset("$SYSTEMD_RESTART") and "${SYSTEMD_RUNNING.stdout}" == "0"
-- shell: sytemctl ${SYSTEMD_OPTS_AND_SCOPE.stdout} restart ${SYSTEMD_SERVICE.stdout}
+- shell: sytemctl ${SYSTEMD_OPTS_AND_SCOPE.stdout} restart ${NAME.stdout}.service
   only_if: is_set("$SYSTEMD_RESTART") and "${SYSTEMD_RUNNING.stdout}" == "0"

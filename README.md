@@ -46,3 +46,4 @@ It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance
 
 # Miscellenary #
 + Some vars are listed as $FOO.stdout. This ought go away pending some assistance in ansible#1730.
++ Deal better with permissions- most scripts ought be made to operate without sudo, but do need some initialization routines to be run on their behalf. Device a clean way to separate user from server side.
