@@ -21,5 +21,5 @@
   tasks:
   - include: tasks/cfvar_includes.tasks
   - include: tasks/npm.prepare.tasks
-  - include: tasks/systemctl.thunk.service name=${NAME.stdout}
+  - include: tasks/systemd.thunk.tasks service=${NAME.stdout}
     only_if: ${has_service.changed}

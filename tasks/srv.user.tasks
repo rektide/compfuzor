@@ -1,4 +1,3 @@
 ---
 - user: name=${user} home=${home} system=true
 - include: systemd.service.tasks src=files/${TYPE}/${TYPE}.service service=${NAME.stdoud}
-  register: has_service
