@@ -8,7 +8,7 @@
       host: localhost
       port: 447
       user: ${USER.stdout}
-    repo: https://github.com/rektide/websocket-tunnel.git
+    REPO: https://github.com/rektide/websocket-tunnel.git
     npm_opts: --node-dir=/usr/src/node
     LOG_DIRS:
     - .
