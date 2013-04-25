@@ -43,9 +43,9 @@
   - file: path=${VAR.stdout}/tmp/incoming/${item.codename} state=directory
     with_items: $REPOS
   # TODO: private/ keys install
-  #- file: src=${DIR.stdout}/www dest=${WWW_LINKS_D}/*.*.archive state=link
-  - include: tasks/nginx-conf.tasks conf=files/reprepro/nginx.conf host=${item.origin} ctx=${item} name=${nginx_prio}-${NAME.stdout}
+  - include: tasks/nginx-conf.tasks conf=files/reprepro/nginx.conf host=${item.origin} ctx=${item} name=${nginx_prio}-${NAME.stdout} nginx=${NGINX_ETC} service=${NGINX}
     with_items: $REPOS
+  - include: tasks/systemd.alias.tasks src={{NGINX}} dest={{NAME.stdout}}
 - hosts: all
   sudo: True
   gather_facts: False

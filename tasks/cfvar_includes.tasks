@@ -104,23 +104,22 @@
   with_items: LINKS.keys()
   only_if: is_set("$LINKS")
 # SYSTEMD
-- shell: echo
-#- shell: echo --global
+- shell: echo system
   only_if: is_unset("$SYSTEMD_SCOPE")
   register: SYSTEMD_SCOPE
 - shell: echo ""
   only_if: is_unset("$SYSTEMD_OPTS")
   register: SYSTEMD_OPTS
-- shell: echo ${SYSTEMD_OPTS.stdout} ${SYSTEMD_SCOPE.stdout}
+- shell: echo ${SYSTEMD_OPTS.stdout} --${SYSTEMD_SCOPE.stdout}
   register: SYSTEMD_OPTS_AND_SCOPE
 - shell: echo /etc/systemd
   only_if: is_unset("$SYSTEMD_ETC_DIR")
   register: SYSTEMD_ETC_DIR
 - shell: echo ${SYSTEMD_ETC_DIR.stdout}/system
-  only_if: is_unset("$SYSTEMD_UNIT_DIR") and "${SYSTEMD_SCOPE.stdout}" == "global"
+  only_if: is_unset("$SYSTEMD_UNIT_DIR") and "${SYSTEMD_SCOPE.stdout}" == "system"
   register: SYSTEMD_UNIT_DIR
-- shell: echo ${SYSTEMD_ETC_DIR.stdout}/user
-  only_if: is_unset("$SYSTEMD_UNIT_DIR")
+- shell: echo ${SYSTEMD_ETC_DIR.stdout}/${SYSTEMD_SCOPE.stdout}
+  only_if: is_unset("$SYSTEMD_UNIT_DIR") and "${SYSTEMD_SCOPE.stdout}" != "system"
   register: SYSTEMD_UNIT_DIR
 - shell: echo ${SYSTEMD_UNIT_DIR.stdout}/${NAME.stdout}.unit
   only_if: is_unset("$SYSTEMD_UNIT") and is_set("$NAME")

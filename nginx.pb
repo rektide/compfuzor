@@ -23,6 +23,5 @@
     with_items: $packages
   - template: src=files/nginx/global.conf dest={{ETC.stdout}}/global.d/01-global.conf
   - template: src=files/nginx/nginx.conf dest={{ETC.stdout}}/nginx.conf
-  - template: src=files/nginx/nginx.service dest={{SYSTEMD_SERVICE.stdout}}
   - file: src=/etc/nginx/mime.types dest={{ETC.stdout}}/mime.types state=link
-  - include: tasks/systemctl.thunk.service
+  - include: tasks/systemd.service.tasks src=files/nginx/nginx.service service={{NAME.stdout}}

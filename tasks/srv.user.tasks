@@ -1,4 +1,4 @@
 ---
 - user: name=${user} home=${home} system=true
-- template: owner=root group=root src=files/${TYPE}/${TYPE}.service dest=/etc/systemd/system/${NAME.stdout}.service
+- include: systemd.service.tasks src=files/${TYPE}/${TYPE}.service service=${NAME.stdoud}
   register: has_service

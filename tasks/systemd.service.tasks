@@ -1,0 +1,6 @@
+---
+- file: path={{SYSTEMD_UNIT_DIR.stdout}}/{{service}}.service.d state=directory
+- template: src={{src}} dest={{SYSTEMD_UNIT_DIR.stdout}}/{{service}}.service.d/00-{{service}}.service.conf
+  only_if: is_set("$src") and is_unset("${src.rc}") or "${src.rc}" == "0"
+- assemble: src={{SYSTEMD_UNIT_DIR.stdout}}/{{service}}.service.d dest={{SYSTEMD_UNIT_DIR.stdout}}/{{service}}.service
+- include: systemd.thunk.tasks service={{service}}

@@ -1,10 +1,9 @@
 ---
-- file: path={{NGINX.stdout}}/hosts.d/{{host}} state=directory
-- template: src={{conf}} dest={{NGINX.stdout}}/hosts.d/{{host}}/{{name}}.conf
-- file: path={{NGINX.stdout}}/global.d state=directory
-- assemble: src={{NGINX.stdout}}/global.d dest={{NGINX.stdout}}/hosts.d/global.conf
-- template: src=files/nginx/host.conf dest={{NGINX.stdout}}/hosts.d/{{host}}/01-host-{{host}}.conf
-#- file: src={{NGINX.stdout}}/hosts.d/global.conf dest={{NGINX.stdout}}/hosts.d/{{host}}/01-global.conf state=link
-- template: src=files/nginx/host.conf dest={{NGINX.stdout}}/hosts.d/{{host}}/01-host.conf state=link
-- assemble: src={{NGINX.stdout}}/hosts.d/{{host}} dest={{NGINX.stdout}}/conf.d/{{host}}.conf
-  notify: restart nginx
+- file: path={{nginx}}/hosts.d/{{host}} state=directory
+- template: src={{conf}} dest={{nginx}}/hosts.d/{{host}}/{{name}}.conf
+- file: path={{nginx}}/global.d state=directory
+- assemble: src={{nginx}}/global.d dest={{nginx}}/hosts.d/global.conf
+#- file: src={{nginx}}/hosts.d/global.conf dest={{nginx}}/hosts.d/{{host}}/01-global.conf state=link
+#- template: src=files/nginx/host.conf dest={{nginx}}/hosts.d/{{host}}/01-host.conf
+- assemble: src={{nginx}}/hosts.d/{{host}} dest={{nginx}}/conf.d/{{host}}.conf
+- include: systemd.thunk.tasks service={{service}}

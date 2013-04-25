@@ -1,6 +1,4 @@
 ---
-- include: tasks/srv.user.tasks user=${USER.stdout} home=${DIR.stdout}
+- include: srv.user.tasks user=${USER.stdout} home=${DIR.stdout}
 - git: repo=${repo} dest=${DIR.stdout}
-- shell: echo re-asserting stock config
 - shell: chdir=${DIR.stdout} npm install
-
