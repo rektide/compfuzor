@@ -1,137 +1,114 @@
 ---
 ## COMMON
-- shell: echo $NAME
-  register: NAME
-  only_if: is_set("$NAME") and is_unset("${NAME.stdout}")
-- shell: echo $TYPE-$INSTANCE
-  register: NAME
-  only_if: is_unset('${NAME.stdout}') and is_set('$INSTANCE')
-- shell: echo $TYPE
-  register: NAME
-  only_if: is_unset('${NAME.stdout}') and is_set('$TYPE')
+- set_fact: NAME="{{TYPE}}-{{INSTANCE}}"
+  only_if: is_unset("${NAME}") and is_set("${INSTANCE}")
+- set_fact: NAME="{{TYPE}}"
+  only_if: is_unset("${NAME}") and is_set("${TYPE}")
 # USER
-- shell: echo ${NAME.stdout}
-  only_if: is_unset("$USER") and is_set("$NAME")
-  register: USER
+- set_fact: USER="{{NAME}}"
 #- shell: echo ${ ${CLASS}_DIR }/${NAME.stdout}
 #  register: DIR
 #  only_if: is_unset('$DIR') and is_set('$CLASS')
-- shell: echo $ETCS_DIR/${NAME.stdout}
-  register: ETC
+- set_fact: ETC="{{ETCS_DIR}}/{{NAME}}"
   only_if: is_unset("$ETC") and is_set("$NAME")
-- shell: echo $VARS_DIR/lib/${NAME.stdout}
-  register: VAR
+- set_fact: VAR="{{VARS_DIR}}/lib/{{NAME}}"
   only_if: is_unset("$VAR") and is_set("$VARS_DIR") and is_set("$NAME")
-- shell: echo $LOGS_DIR/${NAME.stdout}
-  register: LOG
+- set_fact: LOG="{{LOGS_DIR}}/{{NAME}}"
   only_if: is_unset("$LOG") and is_set("$LOGS_DIR") and is_set("$NAME")
-- shell: echo $SPOOLS_DIR/${NAME.stdout}
-  register: SPOOL
+- set_fact: SPOOL="{{SPOOLS_DIR}}/{{NAME}}"
   only_if: is_unset("$SPOOL") and is_set("$SPOOLS_DIR") and is_set("$NAME")
-- shell: echo $CACHES_DIR/${NAME.stdout}
-  register: CACHE
+- set_fact: CACHE="{{CACHES_DIR}}/{{NAME}}"
   only_if: is_unset("$CACHE") and is_set("$CACHES_DIR") and is_set("$NAME")
-- shell: echo $PIDS_DIR/${NAME.stdout}.pid
-  register: PID
+- set_fact: PID="{{PIDS_DIR}}/{{NAME}}.pid"
   only_if: is_unset("$PID") and is_set("$PIDS_DIR") and is_set("$NAME")
 ## STOCK BASE DIRECTORIES ##
 # BASE
-- git: repo=${REPO} dest=${DIR.stdout}
+- git: repo=${REPO} dest={{DIR}}
   only_if: is_unset("$GIT_BYPASS") and is_unset("$DIR_BYPASS") and is_set("$REPO") and is_set("$DIR")
-- file: path=${DIR.stdout} state=directory mode=770
+- file: path={{DIR}} state=directory mode=770
   only_if: is_unset("$DIR_BYPASS") and is_unset("$REPO") and is_set("$DIR")
 # ETC
-- file: path=${ETC.stdout} state=directory mode=770
+- file: path={{ETC}} state=directory mode=770
   only_if: is_set("$ETC_DIRS") or is_set("$ETC_FILES") and is_unset("$ETC_BYPASS")
-- file: src=${ETC.stdout} dest=${DIR.stdout}/etc state=link
+- file: src={{ETC}} dest={{DIR}}/etc state=link
   only_if: is_set("$ETC_DIRS") or is_set("$ETC_FILES") and is_unset("$ETC_BYPASS")
 # VAR
-- file: path=${VAR.stdout} state=directory mode=770
+- file: path={{VAR}} state=directory mode=770
   only_if: is_set("$VAR_DIRS") or is_set("$VAR_FILES") and is_unset("$VAR_BYPASS")
-- file: src=${VAR.stdout} dest=${DIR.stdout}/var state=link
+- file: src={{VAR}} dest={{DIR}}/var state=link
   only_if: is_set("$VAR_DIRS") or is_set("$VAR_FILES") and is_unset("$VAR_BYPASS")
 # LOG
-- file: path=${LOG.stdout} state=directory mode=770
+- file: path={{LOG}} state=directory mode=770
   only_if: is_set("$LOG_DIRS") or is_set("$LOG_FILES") and is_unset("$LOG_BYPASS")
-- file: src=${LOG.stdout} dest=${DIR.stdout}/log state=link
+- file: src={{LOG}} dest={{DIR}}/log state=link
   only_if: is_set("$LOG_DIRS") or is_set("$LOG_FILES") and is_unset("$LOG_BYPASS")
 # CACHE
-- file: path=${CACHE.stdout} state=directory mode=770
+- file: path={{CACHE}} state=directory mode=770
   only_if: is_set("$CACHE_DIRS") and is_unset("$CACHE_BYPASS")
-- file: src=${CACHE.stdout} dest=${DIR.stdout}/cache state=link
+- file: src={{CACHE}} dest={{DIR}}/cache state=link
   only_if: is_set("$CACHE_DIRS") and is_unset("$CACHE_BYPASS")
 ## SERVICE DEFINED ##
 # DIRS aka DIR_DIRS
-- file: path={{DIR.stdout}}/{{item}} state=directory mode=770
+- file: path={{DIR}}/{{item}} state=directory mode=770
   with_items: $DIRS
   only_if: is_set("$DIRS")
-- file: path={{DIR.stdout}}/{{item}} state=directory mode=770
+- file: path={{DIR}}/{{item}} state=directory mode=770
   with_items: $DIR_DIRS
   only_if: is_set("$DIR_DIRS")
 # FILES aka DIR_FILES
-- template: src=files/{{TYPE}}/{{item}} dest={{DIR.stdout}}/{{item}} mode=660
+- template: src=files/{{TYPE}}/{{item}} dest={{DIR}}/{{item}} mode=660
   with_items: $FILES
   only_if: is_set("$FILES")
-- template: src=files/{{TYPE}}/{{item}} dest={{DIR.stdout}}/{item}} mode=660
+- template: src=files/{{TYPE}}/{{item}} dest={{DIR}}/{item}} mode=660
   with_items: $DIR_FILES
   only_if: is_set("$DIR_FILES")
 # ETC_DIRS
-- file: path={{ETC.stdout}}/{{item}} state=directory mode=770
+- file: path={{ETC}}/{{item}} state=directory mode=770
   with_items: $ETC_DIRS
   only_if: is_set("$ETC_DIRS")
 # ETC_FILES
-- template: src=files/{{TYPE}}/{{item}} dest={{ETC.stdout}}/{{item}} mode=660
+- template: src=files/{{TYPE}}/{{item}} dest={{ETC}}/{{item}} mode=660
   with_items: $ETC_FILES
   only_if: is_set("$ETC_FILES")
 # VAR_DIRS
-- file: path={{VAR.stdout}}/{{item}} state=directory mode=770
+- file: path={{VAR}}/{{item}} state=directory mode=770
   with_items: $VAR_DIRS
   only_if: is_set("$VAR_DIRS")
 # VAR_FILES
-- template: src=files/{{TYPE}}/{{item}} dest={{VAR.stdout}}/{{item}} mode=660
+- template: src=files/{{TYPE}}/{{item}} dest={{VAR}}/{{item}} mode=660
   with_items: $VAR_FILES
   only_if: is_set("$VAR_FILES")
 # LOG_DIRS
-- file: path={{LOG.stdout}}/{{item}} state=directory mode=770
+- file: path={{LOG}}/{{item}} state=directory mode=770
   with_items: $LOG_DIRS
   only_if: is_set("$LOG_DIRS")
 # CACHE_DIRS
-- file: path={{CACHE.stdout}}/{{item}} state=directory mode=770
+- file: path={{CACHE}}/{{item}} state=directory mode=770
   with_items: $CACHE_DIRS
   only_if: is_set("$CACHE_DIRS")
 # LINKS
-- file: src={{DIR.stdout}}/{{LINKS[item]}} dest={{DIR.stdout}}/{{item}} state=link
+- file: src={{DIR}}/{{LINKS[item]}} dest={{DIR}}/{{item}} state=link
   with_items: LINKS.keys()
   only_if: is_set("$LINKS")
 # SYSTEMD
-- shell: echo system
+- set_fact: SYSTEMD_SCOPE="system"
   only_if: is_unset("$SYSTEMD_SCOPE")
-  register: SYSTEMD_SCOPE
-- shell: echo ""
+- set_fact: SYSTEMD_OPTS=""
   only_if: is_unset("$SYSTEMD_OPTS")
-  register: SYSTEMD_OPTS
-- shell: echo ${SYSTEMD_OPTS.stdout} --${SYSTEMD_SCOPE.stdout}
-  register: SYSTEMD_OPTS_AND_SCOPE
-- shell: echo /etc/systemd
+- set_fact: SYSTEMD_OPTS_AND_SCOPE="{{SYSTEMD_OPTS}} --{{SYSTEMD_SCOPE}}"
+- set_fact: SYSTEMD_ETC_DIR="/etc/systemd"
   only_if: is_unset("$SYSTEMD_ETC_DIR")
-  register: SYSTEMD_ETC_DIR
-- shell: echo ${SYSTEMD_ETC_DIR.stdout}/system
-  only_if: is_unset("$SYSTEMD_UNIT_DIR") and "${SYSTEMD_SCOPE.stdout}" == "system"
-  register: SYSTEMD_UNIT_DIR
-- shell: echo ${SYSTEMD_ETC_DIR.stdout}/${SYSTEMD_SCOPE.stdout}
-  only_if: is_unset("$SYSTEMD_UNIT_DIR") and "${SYSTEMD_SCOPE.stdout}" != "system"
-  register: SYSTEMD_UNIT_DIR
-- shell: echo ${SYSTEMD_UNIT_DIR.stdout}/${NAME.stdout}.unit
+- set_fact: SYSTEMD_UNIT_DIR="{{SYSTEMD_ETC_DIR}}/system"
+  only_if: is_unset("$SYSTEMD_UNIT_DIR") and "${SYSTEMD_SCOPE}" == "system"
+- set_fact: SYSTEMD_UNIT_DIR="{{SYSTEMD_ETC_DIR}}/{{SYSTEMD_SCOPE}}"
+  only_if: is_unset("$SYSTEMD_UNIT_DIR") and "${SYSTEMD_SCOPE}" != "system"
+- set_fact: SYSTEMD_UNIT="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.unit"
   only_if: is_unset("$SYSTEMD_UNIT") and is_set("$NAME")
-  register: SYSTEMD_UNIT
-- shell: echo ${SYSTEMD_UNIT_DIR.stdout}/${NAME.stdout}.service
+- set_fact: SYSTEMD_SERVICE="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.service"
   only_if: is_unset("$SYSTEMD_SERVICE") and is_set("$NAME")
-  register: SYSTEMD_SERVICE
 # SRC
-- shell: echo files/${TYPE}
+- set_fact: SRC="files/{{TYPE}}"
   only_if: is_unset("$SRC") and is_set("$TYPE") and is_unset("$NAME")
-  register: SRC
-- shell: echo files/${NAME.stdout}
+- set_fact: SRC="files/{{NAME}}"
   only_if: is_unset("$SRC") and is_set("$NAME")
-  register: SRC
 - debug: msg="done with cfvars_include"

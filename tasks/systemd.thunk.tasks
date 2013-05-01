@@ -4,23 +4,21 @@
 - shell: ps -e|head -n2|grep systemd>/dev/null; echo $?
   register: SYSTEMD_RUNNING
 # target service to thunk
-- shell: echo {{NAME.stdout}}.service
+- set_fact: THUNK_SERVICE="{{NAME}}.service"
   only_if: is_unset("$service")
-  register: THUNK_SERVICE
-- shell: echo {{service}}.service
+- set_fact: THUNK_SERVICE="{{service}}"
   only_if: is_set("$service")
-  register: THUNK_SERVICE
-- shell: systemctl ${SYSTEMD_OPTS_AND_SCOPE.stdout} is-enabled ${THUNK_SERVICE.stdout}; echo $?
+- shell: systemctl is-enabled {{THUNK_SERVICE}} {{SYSTEMD_OPTS_AND_SCOPE}} -q; echo $?
   register: SYSTEMD_WAS_ENABLED
 # DISABLE IF ENABLED
-- shell: systemctl ${SYSTEMD_OPTS_AND_SCOPE.stdout} disable ${THUNK_SERVICE.stdout}
-  #only_if: "'${SYSTEMD_WAS_ENABLED.stdout}' == \"0\""
+- shell: systemctl disable {{THUNK_SERVICE}} {{SYSTEMD_OPTS_AND_SCOPE}}
+  only_if: '"{{SYSTEMD_WAS_ENABLED}}" == "0"'
 # ENABLE
-- shell: systemctl ${SYSTEMD_OPTS_AND_SCOPE.stdout} enable -f ${THUNK_SERVICE.stdout}; echo $?
-  #only_if: "'${SYSTEMD_RUNNING.stdout}' != \"0\""
+- shell: systemctl enable {{THUNK_SERVICE}} {{SYSTEMD_OPTS_AND_SCOPE}} -fq; echo $?
+  #only_if: "'${SYSTEMD_RUNNING}' != \"0\""
   register: SYSTEMD_ENABLE_OK
 # RELOAD OR RESTART IF RUNNING
-- shell: systemctl ${SYSTEMD_OPTS_AND_SCOPE.stdout} reload-or-restart ${THUNK_SERVICE.stdout}
-  only_if: is_unset("$SYSTEMD_RESTART") and "${SYSTEMD_RUNNING.stdout}" == "0"
-- shell: sytemctl ${SYSTEMD_OPTS_AND_SCOPE.stdout} restart ${THUNK_SERVICE.stdout}
+- shell: systemctl reload-or-restart {{THUNK_SERVICE}} {{SYSTEMD_OPTS_AND_SCOPE}}
+  only_if: is_unset("$SYSTEMD_RESTART") and "${SYSTEMD_RUNNING}" == "0"
+- shell: sytemctl restart {{THUNK_SERVICE}} {{SYSTEMD_OPTS_AND_SCOPE}}
   only_if: is_set("$SYSTEMD_RESTART") and "${SYSTEMD_RUNNING.stdout}" == "0"
