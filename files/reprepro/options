@@ -1,7 +1,7 @@
 verbose
 ask-passphrase
-basedir {{ VAR.stdout }}/www
-confdir {{ ETC.stdout }}
-logdir {{ LOG.stdout }}
-dbdir {{ VAR.stdout }}/db
-listdir {{ VAR.stdout}}/tmp/list
+basedir {{ VAR }}/www
+confdir {{ ETC }}
+logdir {{ LOG }}
+dbdir {{ VAR }}/db
+listdir {{ VAR }}/tmp/list

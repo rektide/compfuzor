@@ -1,7 +1,7 @@
 {% for repo in REPOS %}
 Name: incoming_{{ repo.codename }}
-IncomingDir: {{ VAR.stdout }}/incoming/{{ repo.codename }}
-TempDir: {{ VAR.stdout }}/tmp/incoming/{{ repo.codename }}
+IncomingDir: {{ VAR }}/incoming/{{ repo.codename }}
+TempDir: {{ VAR }}/tmp/incoming/{{ repo.codename }}
 Allow: {{ repo.codename }}
 Cleanup: on_deny on_error
 

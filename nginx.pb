@@ -21,7 +21,7 @@
   - include: tasks/cfvar_includes.tasks
   - apt: pkg=$packages state=${APT_INSTALL}
     with_items: $packages
-  - template: src=files/nginx/global.conf dest={{ETC.stdout}}/global.d/01-global.conf
-  - template: src=files/nginx/nginx.conf dest={{ETC.stdout}}/nginx.conf
-  - file: src=/etc/nginx/mime.types dest={{ETC.stdout}}/mime.types state=link
-  - include: tasks/systemd.service.tasks src=files/nginx/nginx.service service={{NAME.stdout}}
+  - template: src=files/nginx/global.conf dest={{ETC}}/global.d/01-global.conf
+  - template: src=files/nginx/nginx.conf dest={{ETC}}/nginx.conf
+  - file: src=/etc/nginx/mime.types dest={{ETC}}/mime.types state=link
+  - include: tasks/systemd.service.tasks src=files/nginx/nginx.service service={{NAME}}

@@ -34,18 +34,19 @@
   - include: handlers.yml
   tasks:
   - include: tasks/cfvar_includes.tasks
-  - include: tasks/template.tasks src=files/reprepro/override dest=${ETC.stdout}/override-dsc.${item.codename} content=${OVERRIDES_DSC}
+  - include: tasks/template.tasks src=files/reprepro/override dest="{{ETC}}/override-dsc.{{item.codename}}" content="${OVERRIDES_DSC}"
     with_items: $REPOS
-  - include: tasks/template.tasks src=files/reprepro/override dest=${ETC.stdout}/override-deb.${item.codename} content=${OVERRIDES_DEB}
+  - include: tasks/template.tasks src=files/reprepro/override dest="{{ETC}}/override-deb.{{item.codename}}" content=${OVERRIDES_DEB}
     with_items: $REPOS
-  - file: path=${VAR.stdout}/incoming/${item.codename} state=directory
+  - file: path="{{VAR}}/incoming/{{item.codename}}" state=directory
     with_items: $REPOS
-  - file: path=${VAR.stdout}/tmp/incoming/${item.codename} state=directory
+  - file: path="{{VAR}}/tmp/incoming/{{item.codename}}" state=directory
     with_items: $REPOS
   # TODO: private/ keys install
-  - include: tasks/nginx-conf.tasks conf=files/reprepro/nginx.conf host=${item.origin} ctx=${item} name=${nginx_prio}-${NAME.stdout} nginx=${NGINX_ETC} service=${NGINX}
+  - include: tasks/nginx-conf.tasks conf=files/reprepro/nginx.conf host="{{item.origin}}" ctx=${item} name="{{nginx_prio}}-{{NAME}}" nginx={{NGINX_ETC}} service={{NGINX}} port=80
     with_items: $REPOS
-  - include: tasks/systemd.alias.tasks src={{NGINX}} dest={{NAME.stdout}}
+  - include: tasks/systemd.alias.tasks src="{{NGINX}}" dest="{{NAME}}"
+  - include: tasks/systemd.thunk.tasks service="{{NGINX}}"
 - hosts: all
   sudo: True
   gather_facts: False
