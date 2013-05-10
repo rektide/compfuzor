@@ -4,6 +4,8 @@
   vars:
     TYPE: reprepro
     INSTANCE: main
+    LOG_DIRS:
+    - .
     VAR_DIRS:
     - www/dists
     - www/pool
