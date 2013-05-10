@@ -1,15 +1,15 @@
 ---
 - name: restart service
-  shell: systemctl enable ${NAME.stdout}.service
-  shell: systemctl reload-or-try-restart ${NAME.stdout}.service
+  shell: systemctl enable {{NAME}}.service
+  shell: systemctl reload-or-try-restart {{NAME}}.service
 - name: restart nginx
   shell: systemctl enable nginx.service
   shell: systemctl reload-or-try-restart nginx.service
 - name: restart sabnzbd
   service: name=sabnzbdplus state=restarted
 - name: install cloud9
-  shell: systemctl enable ${NAME.stdout}.service
+  shell: systemctl enable {{NAME}}.service
 - name: reload cloud9
-  action: systemctl reload-or-try-restart ${NAME.stdout}.service
+  action: systemctl reload-or-try-restart {{NAME}}.service
 - name: rebuild initramfs
   action: update-initramfs -u

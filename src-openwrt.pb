@@ -12,10 +12,10 @@
   - vars/src.vars
   tasks:
   - include: tasks/cfvar_includes.tasks
-  - git: repo=git://nbd.name/packages.git dest=${DIR.stdout}/feeds/packages
-  - file: src=files/openwrt/feeds.conf.default dest=${DIR.stdout}/feeds.conf.default # ran after git repo is checked out
-  #- shell: chdir=${DIR.stdout} ./scripts/feeds update -a  # BROKEN have not install prereqs yet.
-  #- shell: chdir=${DIR.stdout} ./scripts/feeds install -a  # BROKEN have not install prereqs yet.
+  - git: repo=git://nbd.name/packages.git dest={{DIR}}/feeds/packages
+  - file: src=files/openwrt/feeds.conf.default dest={{DIR}}/feeds.conf.default # ran after git repo is checked out
+  #- shell: chdir={{DIR} ./scripts/feeds update -a  # BROKEN have not install prereqs yet.
+  #- shell: chdir={{DIR}} ./scripts/feeds install -a  # BROKEN have not install prereqs yet.
 - hosts: all
   tags:
   - packages

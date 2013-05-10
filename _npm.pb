@@ -7,7 +7,7 @@
     srv:
       host: 0.0.0.0
       port: 4444
-      user: ${USER.stdout}
+      user: {{USER}}
     repo: REPO
     npm_opts: --node-dir=/usr/src/node
     LOG_DIRS:
@@ -21,6 +21,6 @@
   tasks:
   - include: tasks/cfvar_includes.tasks
   - include: tasks/npm.prepare.tasks
-  - include: tasks/systemd.thunk.tasks service=${NAME.stdout}
+  - include: tasks/systemd.thunk.tasks service={{NAME}}
     only_if: ${has_service.changed}
 

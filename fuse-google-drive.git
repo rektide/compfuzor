@@ -12,8 +12,8 @@
   - include: tasks/cfvar_includes.tasks
   - apt: pkg=libfuse-dev,libcurl4-gnutls-dev,libjson0-dev,libxml2-dev state=$APT_INSTALL
     only_if: not $APT_BYPASS
-  - shell: chdir=${DIR.stdout} ./autogen.sh
-  - shell: chdir=${DIR.stdout} ./configure --prefix=/usr/local/fuse-google-drive
-  - shell: chdir=${DIR.stdout} make
-  - shell: chdir=${DIR.stdout} make install
+  - shell: chdir={{DIR}} ./autogen.sh
+  - shell: chdir={{DIR}} ./configure --prefix=/usr/local/fuse-google-drive
+  - shell: chdir={{DIR}} make
+  - shell: chdir={{DIR}} make install
   - file: src=/usr/local/fuse-google-drive/bin/fuse-google-drive dest=/usr/local/bin/fuse-google-drive state=link

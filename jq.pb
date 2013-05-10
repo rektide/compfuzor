@@ -10,5 +10,5 @@
   - vars/src.vars
   tasks:
   - include: tasks/cfvar_includes.tasks
-  - shell: chdir=${DIR.stdout} make
-  - shell: chdir=${DIR.stdout} make install
+  - shell: chdir={{DIR}} make
+  - shell: chdir={{DIR}} make install

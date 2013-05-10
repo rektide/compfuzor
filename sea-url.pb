@@ -13,5 +13,5 @@
   - vars/src.vars
   tasks:
   - include: tasks/cfvar_includes.tasks
-  - file: src=${DIR.stdout}/${item} dest=/usr/local/bin/${item} state=link
+  - file: src={{DIR}}/{{item}} dest=/usr/local/bin/{{item}} state=link
     with_items: $BINARIES

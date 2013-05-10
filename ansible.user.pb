@@ -14,7 +14,7 @@
   - shell: test -e $ANSIBLE_HOSTS_FILE && echo 1 || echo 0
     register: has_ansible_hosts_file
   - file: src=$CONFIG_DIR/$DEFAULT_HOSTS dest=$ANSIBLE_HOSTS_FILE state=link
-    when_integer: ${has_ansible_hosts_file.stdout} == 0
+    when_integer: {{has_ansible_hosts_file}} == 0
   #### env setter helper
   - shell: test -e $CONFIG_DIR/$ANSIBLE_ENV && echo 1 || echo 0
     register: has_ansible_env

@@ -18,4 +18,4 @@
   tasks:
   - include: tasks/cfvar_includes.tasks
   - apt: state=${APT_INSTALL} pkg=gitolite
-  - user: name=${USER} system=true home=${DIR.stdout}
+  - user: name={{USER}} system=true home={{DIR}}

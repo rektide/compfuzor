@@ -27,15 +27,15 @@
   tasks:
   - include: tasks/cfvar_includes.tasks
   - apt: state=${APT_INSTALL} pkg=postfix
-  - user: name=${USER.stdout} system=true home=${DIR.stdout}
+  - user: name={{USER}} system=true home={{DIR}}
   # todo: notify restart service when ETC_FILES changed
-  - template: src=files/postfix/postfix.service dest=${SYSTEMD_UNIT_DIR.stdout}/${NAME.stdout}.service
+  - template: src=files/postfix/postfix.service dest={{SYSTEMD_UNIT_DIR}}/{{NAME}}.service
     notify: restart service
-  - shell: chdir=${ETC.stdout} postalias ${item}
+  - shell: chdir={{ETC}} postalias ${item}
     with_items:
     - aliases
-  - file: path=${SPOOL.stdout} state=directory
-  - file: src=/etc/postfix/${item} dest=${ETC.stdout}/${item} state=link
+  - file: path={{SPOOL}} state=directory
+  - file: src=/etc/postfix/${item} dest={{ETC}}/${item} state=link
     with_items:
     - master.cf
     - post-install

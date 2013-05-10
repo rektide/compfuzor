@@ -11,8 +11,8 @@
   - "vars/common.vars"
   tasks:
   - include: tasks/opts.vars.tasks
-  - git: repo=git://anonscm.debian.org/git/openstack/openstack-auto-builder.git dest=${DIR.stdout}
-  - copy: src=files/openstack-build/build_openstack.compfuzor dest=${DIR.stdout}/build_openstack.compfuzor mode=774
+  - git: repo=git://anonscm.debian.org/git/openstack/openstack-auto-builder.git dest={{DIR}}
+  - copy: src=files/openstack-build/build_openstack.compfuzor dest={{DIR}}/build_openstack.compfuzor mode=774
 - hosts: all
   tags:
   - packages

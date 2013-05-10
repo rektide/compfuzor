@@ -13,5 +13,5 @@
   - vars/src.vars
   tasks:
   - include: tasks/cfvar_includes.tasks
-  - file: path=${DIR.stdout} state=directory
-  - shell: chdir=${SRCS_DIR} svn co ${REPO} ${NAME.stdout}
+  - file: path={{DIR}} state=directory
+  - shell: chdir={{SRCS_DIR}} svn co {{REPO}} {{NAME}}

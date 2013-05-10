@@ -21,23 +21,22 @@
   - include: handlers.yml
   tasks:
   - include: tasks/cfvar_includes.tasks
-  - shell: echo ${DIR.stdout}
-  - user: name=${user} system=true home=${DIR.stdout}
+  - user: name=${user} system=true home={{DIR}}
   - shell: which sm; echo $?
     register: missing_sm
   - shell: npm ${npm_opts} install sm
     only_if: ${missing_sm.rc} > 0
-  - git: repo=${repo} dest=${DIR.stdout}/webapp
+  - git: repo=${repo} dest={{DIR}}/webapp
     register: has_webapp
-  - shell: chown ${user} ${DIR.stdout}/webapp
+  - shell: chown ${user} {{DIR}}/webapp
     only_if: ${has_webapp.changed}
-  - shell: chdir=${DIR.stdout}/webapp sudo -u ${user} sm install
+  - shell: chdir={{DIR}}/webapp sudo -u ${user} sm install
     only_if: ${has_webapp.changed}
-  - shell: chown ${user} ${DIR.stdout}/webapp
+  - shell: chown ${user} {{DIR}}/webapp
     only_if: ${has_webapp.changed}
-  - template: owner=root group=root src=files/cloud9/cloud9.service dest=/etc/systemd/system/${NAME.stdout}.service
+  - template: owner=root group=root src=files/cloud9/cloud9.service dest=/etc/systemd/system/{{NAME}}.service
     register: has_service
-  - shell: systemctl enable ${NAME.stdout}.service
+  - shell: systemctl enable {{NAME}}.service
     only_if: ${has_service.changed}
-  - shell: systemctl restart ${NAME.stdout}.service
+  - shell: systemctl restart {{NAME}}.service
     only_if: ${has_service.changed} or ${has_webapp.changed}

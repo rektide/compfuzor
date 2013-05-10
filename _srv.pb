@@ -19,6 +19,6 @@
   - include: handlers.yml
   tasks:
   - include: tasks/cfvar_includes.tasks
-  - shell: echo ${DIR.stdout}
-  - user: name=${user} system=true home=${DIR.stdout}
-  - include: tasks/systemd.service.tasks src=files/${TYPE}/${TYPE}.service service=${NAME.stdout}
+  - shell: echo {{DIR}}
+  - user: name=${user} system=true home={{DIR}}
+  - include: tasks/systemd.service.tasks src=files/${TYPE}/${TYPE}.service service={{NAME}}

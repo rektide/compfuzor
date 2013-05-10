@@ -12,4 +12,4 @@
   - vars/src.vars
   tasks:
   - include: tasks/cfvar_includes.tasks
-  - shell: chdir=${DIR.stdout} npm install -g
+  - shell: chdir={{DIR}} npm install -g

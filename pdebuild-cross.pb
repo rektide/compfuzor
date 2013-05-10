@@ -16,17 +16,17 @@
   - vars/pkgs.vars
   - [ "private/pdebuild-cross/$configset.vars", "private/pdebuild-cross.vars", "examples-private/pdebuild-cross.vars" ]
   tasks:
-  - shell: echo "no $ARCH configured"; return 1
-    only_if: is_unset("$ARCH")
+  - shell: echo "no {{ARCH}} configured"; return 1
+    only_if: is_unset("{{ARCH}}")
   - include: tasks/cfvar_includes.tasks
-  - name: test -e ${DIR.stdout}/$BASETGZ as NO_PDEBUILD_CROSS_BUILD
-    shell: test -e ${DIR.stdout}/$BASETGZ; echo $?
+  - name: test -e {{DIR}}/{{BASETGZ}} as NO_PDEBUILD_CROSS_BUILD
+    shell: test -e {{DIR}}/{{BASETGZ}}; echo $?
     register: NO_PDEBUILD_CROSS_BUILD
   # TODO: HAZARD: it'd be swell if pdebuild-cross-create let us pass in a config file as a parameter. it doesn't, so smash the global config! http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=696756
   - file: path=/etc/pdebuild-cross/pdebuild-cross.rc state=absent
   - file: path=/etc/pdebuild-cross state=directory
-  - file: src=${ETC.stdout}/pdebuild-cross.rc dest=/etc/pdebuild-cross/pdebuild-cross.rc state=link
+  - file: src={{ETC}}/pdebuild-cross.rc dest=/etc/pdebuild-cross/pdebuild-cross.rc state=link
   # execute
-  - apt: pkg=pdebuild-cross state=${APT_INSTALL}
+  - apt: pkg=pdebuild-cross state={{APT_INSTALL}}
   - shell: /usr/sbin/pdebuild-cross-create
     only_if: "${NO_PDEBUILD_CROSS_BUILD.stdout} > 0"

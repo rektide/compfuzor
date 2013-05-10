@@ -7,7 +7,7 @@
     srv:
       host: localhost
       port: 447
-      user: ${USER.stdout}
+      user: {{USER}}
     REPO: https://github.com/rektide/websocket-tunnel.git
     npm_opts: --node-dir=/usr/src/node
     LOG_DIRS:
@@ -21,5 +21,5 @@
   tasks:
   - include: tasks/cfvar_includes.tasks
   - include: tasks/npm.prepare.tasks
-  - include: tasks/systemd.thunk.tasks service=${NAME.stdout}
+  - include: tasks/systemd.thunk.tasks service={{NAME}}
     only_if: ${has_service.changed}
