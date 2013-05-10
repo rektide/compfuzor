@@ -1,18 +1,18 @@
 [Unit]
-Description={{ NAME.stdout }}
+Description={{ NAME }}
 Requires=network.target
 After=network.target
 
 [Service]
 Type=forking
-PIDFile={{ VAR.stdout }}d/master.pid
+PIDFile={{ VAR }}d/master.pid
 #EnvironmentFile=-/etc/sysconfig/network
 #ExecStartPre=/usr/libexec/aliasesdb
 #ExecStartPre=-/etc/postfix/chroot-update
-ExecStart=/usr/sbin/postfix start -c '{{ ETC.stdout }}'
-ExecReload=/usr/sbin/postfix reload -c '{{ ETC.stdout }}'
-ExecStop=/usr/sbin/postfix stop -c '{{ ETC.stdout }}'
-PIDFile=/var/run/{{ NAME.stdout }}.pid
+ExecStart=/usr/sbin/postfix start -c '{{ ETC }}'
+ExecReload=/usr/sbin/postfix reload -c '{{ ETC }}'
+ExecStop=/usr/sbin/postfix stop -c '{{ ETC }}'
+PIDFile=/var/run/{{ NAME }}.pid
 User=root
 
 [Install]

@@ -7,10 +7,10 @@ After=network.target
 Type=simple
 EnvironmentFile=env
 Environment=
-WorkingDirectory={{ DIR.stdout }}
+WorkingDirectory={{ DIR }}
 ExecStart=/usr/bin/env node server.js
-PIDFile=/var/run/{{ NAME.stdout }}.pid
-User={{ USER.stdout }}
+PIDFile=/var/run/{{ NAME }}.pid
+User={{ USER }}
 
 [Install]
 WantedBy=multi-user.target

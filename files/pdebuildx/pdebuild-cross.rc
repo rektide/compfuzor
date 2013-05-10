@@ -10,11 +10,11 @@
 CROSSARCH={{ ARCH }}
 #DEBBUILDOPTS="-aarmel"
 DEBBUILDOPTS="-a{{ ARCH }}"
-MULTISTRAPFILE={{ ETC.stdout }}/{{ MULTISTRAPFILE }}
-BASETGZ={{ DIR.stdout }}/{{ BASETGZ }}
-BUILDPLACE={{ DIR.stdout }}/build
-BUILDRESULT={{ DIR.stdout }}/result
-APTCACHE={{ DIR.stdout }}/apt-cache
+MULTISTRAPFILE={{ETC}}/{{MULTISTRAPFILE}}
+BASETGZ={{DIR}}/{{ BASETGZ }}
+BUILDPLACE={{DIR}}/build
+BUILDRESULT={{DIR}}/result
+APTCACHE={{DIR}}/apt-cache
 HOOKDIR=/usr/share/pdebuild-cross/hookdir/
 APTCACHEHARDLINK=no
 PBUILDERSATISFYDEPENDSCMD=/usr/sbin/embuilddeps
