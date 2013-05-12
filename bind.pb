@@ -36,7 +36,7 @@
   - vars/common.vars
   - vars/srv.vars
   - files/bind/defaults.vars
-  - [ "private/bind/$zoneset.vars" ]
+  - [ "private/bind/$zoneset.vars", "private/bind9.vars" ]
   handlers:
   - include: handlers.yml
   tasks:
