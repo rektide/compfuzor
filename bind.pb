@@ -43,7 +43,9 @@
   - include: tasks/cfvar_includes.tasks
   - apt: state=${APT_INSTALL} pkg=bind9,bind9-doc,dnsutils
   - user: name=${user} system=true home={{DIR}}
-  - template: src=files/bind/named.conf.local dest={{ETC}}/named.conf.local.d/${zoneset}.${item.name}.conf
+  - set_fact: zoneset=GLOBAL
+    only_if: is_unset("{{zoneset}}")
+  - template: src=files/bind/named.conf.local dest={{ETC}}/named.conf.local.d/{{zoneset}}.{{item.name}}.conf
     with_items: $domains
   - assemble: src={{ETC}}/named.conf.local.d dest={{ETC}}/named.conf.local
     notify: restart service
