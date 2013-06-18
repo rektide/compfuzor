@@ -5,14 +5,14 @@ After=network.target
 
 [Service]
 Type=forking
-PIDFile={{ VAR }}d/master.pid
 #EnvironmentFile=-/etc/sysconfig/network
 #ExecStartPre=/usr/libexec/aliasesdb
 #ExecStartPre=-/etc/postfix/chroot-update
 ExecStart=/usr/sbin/postfix start -c '{{ ETC }}'
 ExecReload=/usr/sbin/postfix reload -c '{{ ETC }}'
 ExecStop=/usr/sbin/postfix stop -c '{{ ETC }}'
-PIDFile=/var/run/{{ NAME }}.pid
+PIDFile={{ SPOOL }}/pid/master.pid
+#User={{ USER }}
 User=root
 
 [Install]
