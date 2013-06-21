@@ -1,0 +1,7 @@
+---
+- shell: test -c {{path}}; echo $?
+  register: DNE
+- file: path={{path}} state=absent
+  only_if: ${DNE.stdout}
+- shell: mknod -m {{mode|default(1)}} {{path}} {{type}} {{major|default(1)}} {minor}}
+  only_if: ${DNE.stdout}

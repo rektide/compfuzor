@@ -31,9 +31,7 @@
   # todo: notify restart service when ETC_FILES changed
   - template: src=files/postfix/postfix.service dest={{SYSTEMD_UNIT_DIR}}/{{NAME}}.service
     notify: restart service
-  - shell: chdir={{ETC}} postalias ${item}
-    with_items:
-    - aliases
+  - shell: chdir={{ETC}} postalias aliases
   - file: path={{SPOOL}} state=directory owner={{USER}}
   - file: src=/etc/postfix/{{item}} dest={{ETC}}/{{item}} state=link
     with_items:
@@ -43,14 +41,8 @@
   - file: path={{ETC}} mode=551 state=directory
   # create {{SPOOL}}/dev subsystem, including rsyslog
   - file: path={{SPOOL}}/dev state=directory
-  - shell: test -c {{SPOOL}}/dev/random; echo $?
-    register: NEED_RANDOM
-  - shell: test -c {{SPOOL}}/dev/urandom; echo $?
-    register: NEED_URANDOM
-  - shell: chdir={{SPOOL}}/dev mknod -m 444 random c 1 8
-    only_if: ${NEED_RANDOM.stdout}
-  - shell: chdir={{SPOOL}}/dev mknod -m 444 urandom c 1 9
-    only_if: ${NEED_URANDOM.stdout}
+  - include: tasks/mknod.tasks path={{SPOOL}}/dev/random minor=8
+  - include: tasks/mknod.tasks path={{SPOOL}}/dev/urandom minor=9
   # todo: check for rsyslog first
   # todo: notify rsyslog when changed
   - template: src=files/postfix/rsyslog.conf dest=/etc/rsyslog.d/{{NAME}}.conf
