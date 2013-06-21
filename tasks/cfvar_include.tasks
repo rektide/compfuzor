@@ -1,0 +1,15 @@
+---
+# build state variables
+- set_fact: base={{base|default("")}}
+- set_fact: path={{base+host_vars[include]}} dir={{include}}+"_DIRS" files={{include}}+"_FILES" bypass={{include}}+"_BYPASS" go=True
+- set_fact: go=False
+  only_if: (is_unset("${${dirs}}") and is_unset("${${files}}")) or is_set("${bypass}")
+# create main directory & link inside DIR
+- file: path={{path}} state=directory mode={{mode|default(770)}} owner={{owner}}
+  only_if: ${go} and is_set("${owner}")
+- file: path={{path}} state=directory mode={{mode|default(770)}}
+  only_if: ${go} and is_unset("${owner}")
+- file: src={{path}} dest={{DIR}}/{{include}} state=link
+  only_if: ${go}
+# ${include}_DIRS
+# ${include}_FILES
