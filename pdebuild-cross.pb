@@ -8,6 +8,7 @@
     ETC_FILES:
     - pdebuild-cross.rc
     - multistrap.conf
+    - preferences
     DIRS:
     - .
   vars_files:
