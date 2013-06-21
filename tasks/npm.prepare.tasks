@@ -1,3 +1,6 @@
 ---
-- git: repo=${repo} dest={{DIR}}
-- shell: chdir={{DIR}} npm install
+- set_fact: npm_dir={{DIR}}
+  only_if: is_unset("$subdir")
+- set_fact: npm_dir={{DIR}}/{{subdir}}
+  only_if: is_set("subdir")
+- shell: chdir={{npm_dir}} npm install

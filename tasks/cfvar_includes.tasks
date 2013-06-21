@@ -23,7 +23,7 @@
   only_if: is_unset("$PID") and is_set("$PIDS_DIR") and is_set("$NAME")
 ## STOCK BASE DIRECTORIES ##
 # BASE
-- git: repo=${REPO} dest={{DIR}}
+- git: repo="{{REPO}}" dest="{{DIR}}"
   only_if: is_unset("$GIT_BYPASS") and is_unset("$DIR_BYPASS") and is_set("$REPO") and is_set("$DIR")
 - file: path={{DIR}} state=directory mode=770
   only_if: is_unset("$DIR_BYPASS") and is_unset("$REPO") and is_set("$DIR")

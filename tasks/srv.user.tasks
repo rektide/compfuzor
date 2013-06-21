@@ -1,3 +1,10 @@
 ---
-- user: name=${user} home=${home} system=true createhome=false
-- include: systemd.service.tasks src=files/${TYPE}/${TYPE}.service service={{NAME}}
+- set_fact: user_user={{USER}}
+  only_if: is_unset("$user") # only going to work once
+- set_fact: user_user={{user}}
+  only_if: is_set("$user")
+- set_fact: user_home={{DIR}}
+  only_if: is_unset("$home")
+- set_fact: user_home={{home}}
+  only_if: is_set("$home")
+- user: name={{user_user}} home={{user_home}} system=true createhome=false

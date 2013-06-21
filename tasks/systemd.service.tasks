@@ -1,6 +1,13 @@
 ---
-- file: path={{SYSTEMD_UNIT_DIR}}/{{service}}.service.d state=directory
-- template: src="{{src}}" dest="{{SYSTEMD_UNIT_DIR}}/{{service}}.service.d/00-{{service}}.service.conf"
-  only_if: not not "{{src}}" and is_unset("${src.rc}") or "${src.rc}" == "0"
-- assemble: src={{SYSTEMD_UNIT_DIR}}/{{service}}.service.d dest={{SYSTEMD_UNIT_DIR}}/{{service}}.service
+- set_fact: service_name="{{service}}"
+  only_if: is_set("$service")
+- set_fact: service_name="{{NAME}}"
+  only_if: is_unset("$service")
+- set_fact: service_template="{{src}}"
+  only_if: is_set("$src")
+- set_fact: service_template=files/{{TYPE}}/{{TYPE}}.service
+  only_if: is_unset("$src")
+- file: path={{SYSTEMD_UNIT_DIR}}/{{service_name}}.service.d state=directory
+- template: src="{{service_template}}" dest="{{SYSTEMD_UNIT_DIR}}/{{service_name}}.service.d/00-{{service_name}}.service.conf"
+- assemble: src={{SYSTEMD_UNIT_DIR}}/{{service_name}}.service.d dest={{SYSTEMD_UNIT_DIR}}/{{service_name}}.service
   register: has_service
