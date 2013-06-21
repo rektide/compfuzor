@@ -1,4 +1,3 @@
 ---
-- include: srv.user.tasks user={{USER}} home={{DIR}}
 - git: repo=${repo} dest={{DIR}}
 - shell: chdir={{DIR}} npm install

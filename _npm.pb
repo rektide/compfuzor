@@ -20,7 +20,9 @@
   - include: handlers.yml
   tasks:
   - include: tasks/cfvar_includes.tasks
+  - include: tasks/srv.user.tasks user={{USER}} home={{DIR}}
   - include: tasks/npm.prepare.tasks
+  - shell: chdir={{DIR}} chown {{USER}} . -R
   - include: tasks/systemd.thunk.tasks service={{NAME}}
     only_if: ${has_service.changed}
 
