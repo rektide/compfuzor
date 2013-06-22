@@ -16,4 +16,3 @@
 - template: src="{{service_template}}" dest="{{SYSTEMD_UNIT_DIR}}/{{service_name}}.service.d/00-{{service_name}}.conf"
 - assemble: src={{SYSTEMD_UNIT_DIR}}/{{service_name}}.service.d dest={{SYSTEMD_UNIT_DIR}}/{{service_name}}.service
   register: has_service
-- fail: msg=die
