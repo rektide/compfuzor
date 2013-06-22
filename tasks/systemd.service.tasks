@@ -1,13 +1,19 @@
 ---
-- set_fact: service_name="{{service}}"
-  only_if: is_set("$service")
-- set_fact: service_name="{{NAME}}"
-  only_if: is_unset("$service")
-- set_fact: service_template="{{src}}"
-  only_if: is_set("$src")
-- set_fact: service_template=files/{{TYPE}}/{{TYPE}}.service
-  only_if: is_unset("$src")
+- shell: echo SERVICE IS {{service}}
+- include: set_fact.or.tasks var="service" alt="{{NAME}}"
+- set_fact: service_name="{{FACT}}"
+#- set_fact: service_name="{{service}}"
+#  only_if: is_set("$service")
+#- set_fact: service_name="{{NAME}}"
+#  only_if: is_unset("$service")
+- include: set_fact.or.tasks var="src" alt="files/{{TYPE}}/{{TYPE}}.service"
+- set_fact: service_template="{{FACT}}"
+#- set_fact: service_template="{{src}}"
+#  only_if: is_set("$src")
+#- set_fact: service_template=files/{{TYPE}}/{{TYPE}}.service
+#  only_if: is_unset("$src")
 - file: path={{SYSTEMD_UNIT_DIR}}/{{service_name}}.service.d state=directory
-- template: src="{{service_template}}" dest="{{SYSTEMD_UNIT_DIR}}/{{service_name}}.service.d/00-{{service_name}}.service.conf"
+- template: src="{{service_template}}" dest="{{SYSTEMD_UNIT_DIR}}/{{service_name}}.service.d/00-{{service_name}}.conf"
 - assemble: src={{SYSTEMD_UNIT_DIR}}/{{service_name}}.service.d dest={{SYSTEMD_UNIT_DIR}}/{{service_name}}.service
   register: has_service
+- fail: msg=die

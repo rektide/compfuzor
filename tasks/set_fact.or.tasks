@@ -1,0 +1,2 @@
+---
+- set_fact: FACT="{{hostvars[inventory_hostname][var]|default(alt)}}"
