@@ -10,5 +10,5 @@
   tasks:
   - apt: pkg=$item state=$APT_INSTALL
     with_items: $DEVEL_JAVA
-  - get_url: url={{ECLIPSE_URL}} dest=/usr/src/{{ECLIPSE_FILE}}
-  - shell: chdir=/usr/src tar -xvzf {{ECLIPSE_FILE}}
+  - get_url: url={{ECLIPSE_URL}} dest={{SRCS_DIR}}/{{ECLIPSE_FILE}}
+  - shell: chdir={{SRCS_DIR}} tar -xvzf {{ECLIPSE_FILE}}
