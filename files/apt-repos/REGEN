@@ -1,2 +1,6 @@
 #!/bin/sh
+if [ -n "$1" ]; then
+	cat "$1.gpg.params"|xargs -n2 ./get-apt-key.sh
+	exit
+fi
 cat *.gpg.params|xargs -n2 ./get-apt-key.sh
