@@ -10,6 +10,6 @@
   - vars/pkgs.vars
   sudo: True
   tasks:
-  - apt: pkg=${items} state=${APT_INSTALL}
+  - apt: pkg=${item} state=${APT_INSTALL}
     with_items: ${OPENSTACK_MASTER}
     only_if: not ${APT_BYPASS}
