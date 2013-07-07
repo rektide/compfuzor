@@ -11,5 +11,5 @@
   sudo: True
   tasks:
   - apt: pkg=${items} state=${APT_INSTALL}
-    with_items: ${OPENSTACK_MASTER}
+    with_items: ${OPENSTACK_NODE}
     only_if: not ${APT_BYPASS}
