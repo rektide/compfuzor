@@ -1,3 +1,5 @@
 ---
+- set_fact: name={{NAME}}
+  only_if: is_unset("$name")
 - template: src=files/_apt.list dest=/etc/apt/sources.list.d/${name}.list
 - include: apt.list.update.tasks
