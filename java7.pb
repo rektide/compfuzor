@@ -1,6 +1,6 @@
 ---
 - hosts: all
-  sudo: True
+  #sudo: True
   tags:
   - packages
   - repo
@@ -14,7 +14,8 @@
     APT_KEY: EEA14886
     APT_DISTRIBUTION: raring
   tasks:
-  - include: tasks/apt.key.install.tasks name={{NAME}}.webupd8
-  - include: tasks/apt.list.install.tasks name={{NAME}}.webupd8
-  - shell: echo "set shared/accepted-oracle-license-v1-1 true"|debconf-communicate
+  - include: tasks/apt.key.install.tasks name="{{NAME}}.webupd8"
+  - include: tasks/apt.list.install.tasks name="{{NAME}}.webupd8"
+  - shell: echo debconf shared/accepted-oracle-license-v1-1 select true | /usr/bin/debconf-set-selections
+  - shell: echo debconf shared/accepted-oracle-license-v1-1 seen true | /usr/bin/debconf-set-selections
   - apt: state={{APT_INSTALL}} pkg=oracle-java7-installer,oracle-java7-set-default
