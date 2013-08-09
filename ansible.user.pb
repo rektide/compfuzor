@@ -40,6 +40,7 @@
   ### install ansible-ec2
   - git: repo=https://github.com/pas256/ansible-ec2.git dest=$OPTS_DIR/ansible-ec2
   - file: src=$OPTS_DIR/ansible-ec2 dest=$BINS_DIR/ansible-ec2
+  - include: tasks/one.dir.tasks a=$CONFIG_DIR b=~/.ansible
 ---
 - hosts: all
   user: root

@@ -1,0 +1,11 @@
+---
+- shell: test -d $a; echo $?
+  register: no_a
+- shell: test -d $b; echo $?
+  register: no_b
+- file: path=$a state=dir
+  only_if: "${no_a.stdout}" == "1" and "${no_b.stdout}" == "1"
+- file: src=$a dest=$b state=link 
+  only_if: "${no_a.stdout}" == "0" and "${no_b.stdout}" == "1"
+- file: src=$b dest=$a state=link 
+  only_if: "${no_a.stdout}" == "1" and "${no_b.stdout}" == "0"
