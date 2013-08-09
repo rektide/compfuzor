@@ -1,6 +1,8 @@
 ---
 - hosts: all
   user: rektide
+  var:
+    INSTALL_DIR: {{OPTS_DIR}}
   vars_files:
   - vars/common.vars
   - vars/common.user.vars
@@ -8,13 +10,14 @@
   tasks:
   - include: "tasks/xdg.vars.tasks"
   - file: path=$CONFIG_DIR state=directory
-  - file: path=$INSTALL_DIR state=directory
+  - file: path=$OPTS_DIR state=directory
   #### default hosts file
   - copy: src=files/ansible/$DEFAULT_HOSTS dest=$CONFIG_DIR/
   - shell: test -e $ANSIBLE_HOSTS_FILE && echo 1 || echo 0
     register: has_ansible_hosts_file
   - file: src=$CONFIG_DIR/$DEFAULT_HOSTS dest=$ANSIBLE_HOSTS_FILE state=link
     when_integer: {{has_ansible_hosts_file}} == 0
+  - file: src=$CONFIG_DIR/$DEFAULT_HOSTS dest=$CONFIG_DIR/hosts.default state=link
   #### env setter helper
   - shell: test -e $CONFIG_DIR/$ANSIBLE_ENV && echo 1 || echo 0
     register: has_ansible_env
@@ -34,6 +37,9 @@
   - file: src=$CONFIG_DIR/$ANSIBLE_ENV dest=$BIN_DIR/$ANSIBLE_ENV state=link
   ### install git
   - git: repo=$ANSIBLE_GIT dest=$INSTALL_DIR
+  ### install ansible-ec2
+  - git: repo=https://github.com/pas256/ansible-ec2.git dest=$OPTS_DIR/ansible-ec2
+  - file: src=$OPTS_DIR/ansible-ec2 dest=$BINS_DIR/ansible-ec2
 ---
 - hosts: all
   user: root

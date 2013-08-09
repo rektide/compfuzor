@@ -5,5 +5,5 @@
 - name: test xdg_config_dir
   shell: test -d $xdg_config_dir && echo 1 || echo 0
   register: has_xdg_config_dir
-- file: path=${xdg_config_dir}
+- file: path=${xdg_config_dir} state=directory
   only_if: ${has_xdg_config_dir.rc}
