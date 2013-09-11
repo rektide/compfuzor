@@ -1,16 +1,16 @@
 ---
 ## COMMON
 - set_fact: NAME="{{TYPE}}-{{INSTANCE}}"
-  only_if: is_unset("${NAME}") and is_set("${INSTANCE}")
+  when: NAME is not defined and INSTANCE is defined
 - set_fact: NAME="{{TYPE}}"
-  only_if: is_unset("${NAME}") and is_set("${TYPE}")
+  when: NAME is not defined and TYPE is defined
 # USER
 - set_fact: USER="{{NAME}}"
 #- shell: echo ${ ${CLASS}_DIR }/${NAME.stdout}
 #  register: DIR
 #  only_if: is_unset('$DIR') and is_set('$CLASS')
 - set_fact: ETC="{{ETCS_DIR}}/{{NAME}}"
-  only_if: is_unset("$ETC") and is_set("$NAME")
+  when: ETC is not defined and NAME is defined
 - set_fact: VAR="{{VARS_DIR}}/lib/{{NAME}}"
   only_if: is_unset("$VAR") and is_set("$VARS_DIR") and is_set("$NAME")
 - set_fact: LOG="{{LOGS_DIR}}/{{NAME}}"
@@ -24,7 +24,7 @@
 ## STOCK BASE DIRECTORIES ##
 # BASE
 - git: repo="{{REPO}}" dest="{{DIR}}"
-  only_if: is_unset("$GIT_BYPASS") and is_unset("$DIR_BYPASS") and is_set("$REPO") and is_set("$DIR")
+  when: GIT_BYPASS is not defined and DIR_BYPASS is not defined and REPO is defined and DIR is defined
 - file: path={{DIR}} state=directory mode=770
   only_if: is_unset("$DIR_BYPASS") and is_unset("$REPO") and is_set("$DIR")
 # ETC
