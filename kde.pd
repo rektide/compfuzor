@@ -1,0 +1,18 @@
+---
+- hosts: all
+  sudo: True
+  tags:
+  - packages
+  - root
+  gather_facts: False
+  vars:
+    NAME: kde
+  vars_files:
+  - vars/common.vars
+  - vars/pkgs.vars
+  tasks:
+  - include: tasks/cfvar_includes.tasks
+  - apt: state={{APT_INSTALL}} pkg=$item
+    with_items: $WORKSTATION_KDE_BASE
+  - apt: state={{APT_INSTALL}} pkg=$item
+    with_items: $WORKSTATION_KDE
