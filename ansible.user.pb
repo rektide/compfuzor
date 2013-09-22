@@ -10,7 +10,8 @@
   tasks:
   - include: "tasks/xdg.vars.tasks"
   - file: path=$CONFIG_DIR state=directory
-  - file: path=$OPTS_DIR state=directory
+  - include: tasks/one.dir.tasks a=$CONFIG_DIR b=~/.ansible
+  - file: path=$INSTALL_DIR state=directory
   #### default hosts file
   - copy: src=files/ansible/$DEFAULT_HOSTS dest=$CONFIG_DIR/
   - shell: test -e $ANSIBLE_HOSTS_FILE && echo 1 || echo 0
@@ -40,7 +41,8 @@
   ### install ansible-ec2
   - git: repo=https://github.com/pas256/ansible-ec2.git dest=$OPTS_DIR/ansible-ec2
   - file: src=$OPTS_DIR/ansible-ec2 dest=$BINS_DIR/ansible-ec2
-  - include: tasks/one.dir.tasks a=$CONFIG_DIR b=~/.ansible
+  - file: src=$INSTALL_DIR/plugins/inventory/ec2.py dest=$CONFIG_DIR/hosts.ec2
+  - file: src=$INSTALL_DIR/plugins/inventory/ec2.ini dest=$CONFIG_DIR/ec2.ini
 ---
 - hosts: all
   user: root
