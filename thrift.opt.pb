@@ -15,3 +15,4 @@
   - shell: chdir={{DIR}} make
   - shell: chdir={{DIR}} make install
     sudo: yes
+  - file: src={{OPTS_DIR}}/bin/thrift dest=/usr/local/src/bin state=link
