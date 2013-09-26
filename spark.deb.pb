@@ -3,8 +3,8 @@
   gather_facts: False
   vars:
     REPO: https://github.com/mesos/spark.git
-    NAME: spark
-    TYPE: git
+    TYPE: spark
+    INSTANCE: git
   vars_files:
   - vars/common.vars
   - vars/src.vars
