@@ -8,6 +8,7 @@
     gems:
     - bourbon
     - sass
+    GEM_HOME: "{{DIR}}/gems"
   vars_files:
   - vars/common.vars
   - vars/opt.vars
@@ -15,6 +16,7 @@
   - include: tasks/cfvar_includes.tasks
   - shell: chdir={{DIR}} git submodule update --init
   - shell: chdir={{DIR}} npm install
-  - shell: chdir={{DIR}} gem install -i `pwd`/gems/{{item}} {{item}}
+  - shell: chdir={{DIR}} GEM_HOME={{GEM_HOME}} gem install {{item}}
     with_items: gems
-  - shell: chdir={{DIR}} PATH={{DIR}}/gems/sass/bin:{{DIR}}/gems/bourbon/bin:"$PATH" grunt
+  - shell: chdir={{DIR}} GEM_HOME={{GEM_HOME}} PATH={{GEM_HOME}}/bin bourbon install
+  - shell: chdir={{DIR}} GEM_HOME={{GEM_HOME}} PATH={{GEM_HOME}}/bin:"$PATH" grunt
