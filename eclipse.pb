@@ -3,8 +3,8 @@
   gather_facts: False
   vars:
     TYPE: eclipse
-    INSTANCE: 4.3
-    file: http://ftp.ussg.iu.edu/eclipse/technology/epp/downloads/release/kepler/R/eclipse-standard-kepler-R-linux-gtk-x86_64.tar.gz
+    INSTANCE: 4.3.1
+    file: http://ftp.osuosl.org/pub/eclipse/technology/epp/downloads/release/kepler/SR1/eclipse-jee-kepler-SR1-linux-gtk-x86_64.tar.gz
     SRCS_NAME: "{{SRCS_DIR}}/{{NAME}}.tgz"
     OPT_DIR: "{{OPTS_DIR}}/{{NAME}}"
   vars_files:
