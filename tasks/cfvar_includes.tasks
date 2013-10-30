@@ -12,7 +12,7 @@
 - set_fact: ETC="{{ETCS_DIR}}/{{NAME}}"
   when: ETC is not defined and NAME is defined
 - set_fact: VAR="{{VARS_DIR}}/lib/{{NAME}}"
-  only_if: is_unset("$VAR") and is_set("$VARS_DIR") and is_set("$NAME")
+  when: VAR is not defined and VARS_DIR is defined and NAME is defined
 - set_fact: LOG="{{LOGS_DIR}}/{{NAME}}"
   only_if: is_unset("$LOG") and is_set("$LOGS_DIR") and is_set("$NAME")
 - set_fact: SPOOL="{{SPOOLS_DIR}}/{{NAME}}"
@@ -26,7 +26,7 @@
 - git: repo="{{REPO}}" dest="{{DIR}}"
   when: GIT_BYPASS is not defined and DIR_BYPASS is not defined and REPO is defined and DIR is defined
 - file: path={{DIR}} state=directory mode=770
-  only_if: is_unset("$DIR_BYPASS") and is_unset("$REPO") and is_set("$DIR")
+  when: DIR_BYPASS is not defined and REPO is not defined and DIR is defined
 # ETC
 - file: path={{ETC}} state=directory mode=770
   only_if: is_set("$ETC_DIRS") or is_set("$ETC_FILES") and is_unset("$ETC_BYPASS")
@@ -34,9 +34,9 @@
   only_if: is_set("$ETC_DIRS") or is_set("$ETC_FILES") and is_unset("$ETC_BYPASS")
 # VAR
 - file: path={{VAR}} state=directory mode=770
-  only_if: is_set("$VAR_DIRS") or is_set("$VAR_FILES") and is_unset("$VAR_BYPASS")
+  when: VAR_DIRS is defined or VAR_FILES is defined and not VAR_BYPASS
 - file: src={{VAR}} dest={{DIR}}/var state=link
-  only_if: is_set("$VAR_DIRS") or is_set("$VAR_FILES") and is_unset("$VAR_BYPASS")
+  when: VAR_DIRS is defined or VAR_FILES is defined and not VAR_BYPASS
 # LOG
 - file: path={{LOG}} state=directory mode=770
   only_if: is_set("$LOG_DIRS") or is_set("$LOG_FILES") and is_unset("$LOG_BYPASS")
