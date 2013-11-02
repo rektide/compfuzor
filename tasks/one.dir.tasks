@@ -1,11 +1,11 @@
 ---
-- shell: test -d $a; echo $?
+- shell: test -d $a || test -d `readlink $a`''; echo $?
   register: no_a
-- shell: test -d $b; echo $?
+- shell: test -d $b || test -d `readlink $b`''; echo $?
   register: no_b
-- file: path=$a state=dir
-  when: no_a.stdout == "1" and no_b.stdout == "1"
+- file: path=$a state=directory
+  when: no_a.stdout|int != 0 and no_b.stdout|int != 0
 - file: src=$a dest=$b state=link 
-  when: no_a.stdout == "0" and no_b.stdout == "1"
+  when: no_b.stdout|int != 0
 - file: src=$b dest=$a state=link 
-  when: no_a.stdout == "1" and no_b.stdout == "0"
+  when: no_a.stdout|int != 0 and no_b.stdout|int == 0
