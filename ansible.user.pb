@@ -3,6 +3,10 @@
   user: rektide
   var:
     INSTALL_DIR: {{OPTS_DIR}}
+    HOSTS_DIR: "{{CONFIG_DIR}}/hosts"
+    aliases:
+    - hosts
+    - ansible/hosts
   vars_files:
   - vars/common.vars
   - vars/common.user.vars
@@ -13,7 +17,10 @@
   - include: tasks/one.dir.tasks a=$CONFIG_DIR b=~/.ansible
   - file: path=$INSTALL_DIR state=directory
   #### default hosts file
-  - copy: src=files/ansible/$DEFAULT_HOSTS dest=$CONFIG_DIR/
+  - file: path={{HOSTS_DIR}} state=directory
+  - file: src={{HOSTS_DIR}} dest=~/.{{item}} state=link
+    with_items: aliases
+  - copy: src=files/ansible/$DEFAULT_HOSTS dest=~/.hosts/default
   - shell: test -e $ANSIBLE_HOSTS_FILE && echo 1 || echo 0
     register: has_ansible_hosts_file
   - file: src=$CONFIG_DIR/$DEFAULT_HOSTS dest=$ANSIBLE_HOSTS_FILE state=link
