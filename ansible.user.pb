@@ -1,8 +1,8 @@
 ---
 - hosts: all
   user: rektide
-  var:
-    INSTALL_DIR: {{OPTS_DIR}}
+  vars:
+    INSTALL_DIR: "{{OPTS_DIR}}"
     HOSTS_DIR: "{{CONFIG_DIR}}/hosts"
     aliases:
     - hosts
@@ -24,7 +24,7 @@
   - shell: test -e $ANSIBLE_HOSTS_FILE && echo 1 || echo 0
     register: has_ansible_hosts_file
   - file: src=$CONFIG_DIR/$DEFAULT_HOSTS dest=$ANSIBLE_HOSTS_FILE state=link
-    when_integer: {{has_ansible_hosts_file}} == 0
+    when_integer: ${has_ansible_hosts_file} == 0
   - file: src=$CONFIG_DIR/$DEFAULT_HOSTS dest=$CONFIG_DIR/hosts.default state=link
   #### env setter helper
   - shell: test -e $CONFIG_DIR/$ANSIBLE_ENV && echo 1 || echo 0
