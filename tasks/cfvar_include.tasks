@@ -3,7 +3,7 @@
 - set_fact: dir="{{include|upper+'S_DIR'}}" dirs="{{include|upper}}_DIRS" files="{{include|upper}}_FILES" bypass="{{include|upper}}_BYPASS" go=True
 - set_fact: basepath="{{hostvars[inventory_hostname][dir]}}" path="{{hostvars[inventory_hostname][dir]}}/{{NAME}}"
 - set_indirect: var="{{include|upper}}" val="{{path}}"
-- set_fact: go=False
+- set_fact: go=""
   when: "({{bypass}} is defined and {{bypass}}) or ({{dirs}} is not defined and {{files}} is not defined)"
 # create main directory & link inside DIR
 - file: path={{path}} state=directory mode={{mode|default(770)}} owner={{owner}}
@@ -11,6 +11,6 @@
 - file: path={{path}} state=directory mode={{mode|default(770)}}
   when: go and owner is not defined
 - file: src={{path}} dest={{DIR}}/{{include|lower}} state=link
-  when: go
+  when: not not go
 # ${include}_DIRS
 # ${include}_FILES

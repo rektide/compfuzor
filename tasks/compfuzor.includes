@@ -13,8 +13,10 @@
   when: DIR_BYPASS is not defined and REPO is not defined and DIR is defined
 - file: path={{DIR}}/{{item}} state=directory mode=770
   with_items: DIRS
+  when: DIRS is defined and DIR_BYPASS is not defined
 - file: path={{DIR}}/{{item}} state=directory mode=770
   with_items: DIR_DIRS
+  when: DIR_DIRS is defined and DIR_BYPASS is not defined
 
 - include: ./cfvar_include.tasks include=OPT
 - include: ./cfvar_include.tasks include=SRV
