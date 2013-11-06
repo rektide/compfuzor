@@ -6,6 +6,16 @@
 - include_vars: vars/common.vars
 - include_vars: "vars/{{type|default('srv')}}.vars"
 - set_fact: USER="{{NAME}}"
+
+- git: repo="{{REPO}}" dest="{{GIT_DIR if GIT_DIR is defined else DIR}}"
+  when: DIR_BYPASS is not defined and GIT_BYPASS is not defined and REPO is defined
+- file: path="{{DIR}}" state=directory mode=770
+  when: DIR_BYPASS is not defined and REPO is not defined and DIR is defined
+- file: path={{DIR}}/{{item}} state=directory mode=770
+  with_items: DIRS
+- file: path={{DIR}}/{{item}} state=directory mode=770
+  with_items: DIR_DIRS
+
 - include: ./cfvar_include.tasks include=OPT
 - include: ./cfvar_include.tasks include=SRV
 - include: ./cfvar_include.tasks include=ETC
@@ -14,3 +24,14 @@
 - include: ./cfvar_include.tasks include=SPOOL
 - include: ./cfvar_include.tasks include=CACHE
 - include: ./cfvar_include.tasks include=SRC
+- include: ./cfvar_include.tasks include=PID
+
+- file: src="{{DIR}}/{{LINKS[item]}}" dest="{{DIR}}/{{item}}" state=link
+  with_items: LINKS.keys()
+  when: LINKS is defined
+
+- set_fact: SRC="files/{{TYPE}}"
+  when: SRC is not defined and TYPE is defined and NAME is not defined
+- set_fact: SRC="files/{{NAME}}"
+  when: SRC is not defined and NAME is defined
+- debug: msg="done with compfuzor.includes"
