@@ -3,5 +3,14 @@
   when: NAME is not defined and INSTANCE is defined
 - set_fact: NAME="{{TYPE}}"
   when: NAME is not defined and TYPE is defined
+- include_vars: vars/common.vars
+- include_vars: "vars/{{type|default('srv')}}.vars"
 - set_fact: USER="{{NAME}}"
-
+- include: ./cfvar_include.tasks include=OPT
+- include: ./cfvar_include.tasks include=SRV
+- include: ./cfvar_include.tasks include=ETC
+- include: ./cfvar_include.tasks include=VAR
+- include: ./cfvar_include.tasks include=LOG
+- include: ./cfvar_include.tasks include=SPOOL
+- include: ./cfvar_include.tasks include=CACHE
+- include: ./cfvar_include.tasks include=SRC

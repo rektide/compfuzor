@@ -1,9 +1,8 @@
 ---
 # build state variables
-- set_fact: base="{{base|default('')}}" include="{{include|upper}}" scene="{{hostvars[inventory_hostname]}}"
-- set_fact: dir="{{include+'S_DIR'}}" dirs="{{include}}_DIRS" files="{{include}}_FILES" bypass="{{include}}_BYPASS" go=True
+- set_fact: dir="{{include|upper+'S_DIR'}}" dirs="{{include|upper}}_DIRS" files="{{include|upper}}_FILES" bypass="{{include|upper}}_BYPASS" go=True
 - set_fact: basepath="{{hostvars[inventory_hostname][dir]}}" path="{{hostvars[inventory_hostname][dir]}}/{{NAME}}"
-- set_indirect: var="{{include}}" val="{{path}}"
+- set_indirect: var="{{include|upper}}" val="{{path}}"
 - set_fact: go=False
   when: "({{bypass}} is defined and {{bypass}}) or ({{dirs}} is not defined and {{files}} is not defined)"
 # create main directory & link inside DIR
