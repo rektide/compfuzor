@@ -1,0 +1,26 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
+
+DOCUMENTATION = '''
+---
+author: rektide
+module: set_indirect
+short_description: Set "var" param to "val" param.
+description:
+     - This module allows setting of variables indirectly.
+options:
+  var:
+    description:
+    - Name of a thing which is to be set.
+    required: true
+  val:
+    description:
+    - Value which is to be set
+    required: true
+version_added: "1.5"
+'''
+
+EXAMPLES = '''
+# Example setting host facts using var val
+- set_indirect: var="greeting" val="hello world"
+'''
