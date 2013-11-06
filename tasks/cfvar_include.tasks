@@ -1,17 +1,17 @@
 ---
 # build state variables
-- set_fact: base={{base|default("")}}
-- set_fact: path={{base+host_vars[include]}} dir={{include}}_DIRS files={{include}}_FILES bypass={{include}}_BYPASS go=True
+- set_fact: base="{{base|default('')}}" include="{{include|upper}}" scene="{{hostvars[inventory_hostname]}}"
+- set_fact: dir="{{include+'S_DIR'}}" dirs="{{include}}_DIRS" files="{{include}}_FILES" bypass="{{include}}_BYPASS" go=True
+- set_fact: basepath="{{hostvars[inventory_hostname][dir]}}" path="{{hostvars[inventory_hostname][dir]}}/{{NAME}}"
+- set_indirect: var="{{include}}" val="{{path}}"
 - set_fact: go=False
-  when: hostvars[ansible_hostname][dirs] is not defined and hostvars[ansible_hostname][files] is not defined and hostvars[ansible_hostname][bypass] is not defined
-  #only_if: (is_unset("${${dirs}}") and is_unset("${${files}}")) or is_set("${bypass}")
+  when: "({{bypass}} is defined and {{bypass}}) or ({{dirs}} is not defined and {{files}} is not defined)"
 # create main directory & link inside DIR
 - file: path={{path}} state=directory mode={{mode|default(770)}} owner={{owner}}
   when: go and owner is defined
-  #only_if: ${go} and is_set("${owner}")
 - file: path={{path}} state=directory mode={{mode|default(770)}}
   when: go and owner is not defined
-- file: src={{path}} dest={{DIR}}/{{include}} state=link
+- file: src={{path}} dest={{DIR}}/{{include|lower}} state=link
   when: go
 # ${include}_DIRS
 # ${include}_FILES

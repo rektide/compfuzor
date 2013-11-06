@@ -1,0 +1,7 @@
+---
+- set_fact: NAME="{{TYPE}}-{{INSTANCE}}"
+  when: NAME is not defined and INSTANCE is defined
+- set_fact: NAME="{{TYPE}}"
+  when: NAME is not defined and TYPE is defined
+- set_fact: USER="{{NAME}}"
+
