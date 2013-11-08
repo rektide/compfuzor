@@ -7,7 +7,21 @@
   register: SYSTEMD_USER_CONF_DIR
 - shell: pkg-config systemd --variable=systemdsystemunitdir"
   register: SYSTEMD_SYSTEM_CONF_DIR
-- set_fact: SYSTEMD_USER_UNIT_DIR="{{SYSTEMD_USER_UNIT_DIR.stdout}}" SYSTEMD_SYSTEM_UNIT_DIR="{{SYSTEMD_SYSTEM_UNIT_DIR.stdout}}" SYSTEMD_USER_CONF_DIR="{{SYSTEMD_USER_CONF_DIR.stdout}}" SYSTEMD_SYSTEM_CONF_DIR="{{SYSTEMD_SYSTEM_CONF_DIR.stdout}}"
+
+- set_fact: SYSTEMD_USER_UNIT_DIR="{{SYSTEMD_USER_UNIT_DIR.stdout}}"
+  when: SYSTEMD_USER_UNIT_DIR is not defined
+- set_fact: SYSTEMD_SYSTEM_UNIT_DIR="{{SYSTEMD_SYSTEM_UNIT_DIR.stdout}}"
+  when: SYSTEMD_SYSTEM_UNIT_DIR is not defined
+- set_fact: SYSTEMD_USER_CONF_DIR="{{SYSTEMD_USER_CONF_DIR.stdout}}"
+  when: SYSTEMD_USER_CONF_DIR is not defined
+- set_fact: SYSTEMD_SYSTEM_CONF_DIR="{{SYSTEMD_SYSTEM_CONF_DIR.stdout}}"
+  when: SYSTEMD_SYSTEM_CONF_DIR is not defined
+
+- set_fact: SYSTEMD_UNIT_DIR="{{hostvars[inventory_hostname]["SYSTEMD_'+SYSTEMD_SCOPE|upper+'_DIR"]}}/{{NAME}}"
+  when: SYSTEMD_UNIT_DIR is not defined
+- set_fact: SYSTEMD_CONF_DIR="{{hostvars[inventory_hostname]["SYSTEMD_'+SYSTEMD_SCOPE|upper+'_CONF"]}}/{{NAME}}"
+  when: SYSTEMD_CONF_DIR is not defined
+
 - include_vars: vars/systemd.vars
 
 - include: systemd.unit.includes include=service
