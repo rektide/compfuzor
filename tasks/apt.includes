@@ -1,0 +1,16 @@
+---
+- set_fact: APT_SOURCE="{{APT_SOURCE|NAME}}" APT_KEY="{{APT_KEY|TYPE}}"
+
+- copy: src="files/apt-repos/{{APT_KEY}}.{{item}}" dest="/etc/apt/trusted.gpg.d/{{APT_KEY}}.{{item}}"
+  with_items:
+  - gpg
+  - gpg.params
+
+- template: src="files/_apt.list dest=/etc/apt/sources.list.d/{{APT_SOURCE}}.list"
+# http://askubuntu.com/questions/65245/apt-get-update-only-for-a-specific-repository
+- shell: apt-get update -o Dir::Etc::sourcelist="sources.list.d/{{APT_SOURCE}}.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
+
+- template: src="files/_apt.list dest=/etc/apt/sources.list.d/{{APT_SOURCE}}.src.list" APT_SRC=1
+  when: APT_SRC is defined
+- shell: apt-get update -o Dir::Etc::sourcelist="sources.list.d/{{APT_SOURCE}}.src.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
+  when: APT_SRC is defined

@@ -37,3 +37,8 @@
 - set_fact: SRC="files/{{NAME}}"
   when: SRC is not defined and NAME is defined
 - debug: msg="done with compfuzor.includes"
+
+- include: apt.includes
+  when: APT_REPO is defined
+
+- include: systemd.includes
