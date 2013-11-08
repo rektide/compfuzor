@@ -1,0 +1,11 @@
+- set_fact: SYSTEMD_SCOPE="{{SYSTEMD_SCOPE|default('system')}}"
+- shell: pkg-config systemd --variable=systemduserunitdir
+  register: SYSTEMD_USER_UNIT_DIR
+- shell: pkg-config systemd --variable=systemdsystemunitdir"
+  register: SYSTEMD_SYSTEM_UNIT_DIR
+- shell: pkg-config systemd --variable=systemduserconfdir"
+  register: SYSTEMD_USER_CONF_DIR
+- shell: pkg-config systemd --variable=systemdsystemunitdir"
+  register: SYSTEMD_SYSTEM_CONF_DIR
+- set_fact: SYSTEMD_USER_UNIT_DIR="{{SYSTEMD_USER_UNIT_DIR.stdout}}" SYSTEMD_SYSTEM_UNIT_DIR="{{SYSTEMD_SYSTEM_UNIT_DIR.stdout}}" SYSTEMD_USER_CONF_DIR="{{SYSTEMD_USER_CONF_DIR.stdout}}" SYSTEMD_SYSTEM_CONF_DIR="{{SYSTEMD_SYSTEM_CONF_DIR.stdout}}"
+- include_vars: vars/systemd.vars
