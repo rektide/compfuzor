@@ -1,0 +1,4 @@
+- template: src="files/{{TYPE}}/{{TYPE}}.{{include}}" dest="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{include}}"
+  when: "SYSTEMD_{{include|upper}} is defined"
+- template: src="files/{{TYPE}}/{{item}}" dest="{{SYSTEMD_UNIT_DIR}}/{{item}}"
+  with_items: "SYSTEMD_{{include}upper}}S"
