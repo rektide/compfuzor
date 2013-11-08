@@ -42,6 +42,6 @@
   when: APT_REPO is defined
 - apt: state="{{APT_INSTALL}}" pkg={{item}}
   with_items: PKGS
-  when: PKGS is defined
+  when: PKGS is defined and PKGS_BYPASS is not defined
 
 - include: systemd.includes
