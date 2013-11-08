@@ -40,5 +40,8 @@
 
 - include: apt.includes
   when: APT_REPO is defined
+- apt: state="{{APT_INSTALL}}" pkg={{item}}
+  with_items: PKGS
+  when: PKGS is defined
 
 - include: systemd.includes
