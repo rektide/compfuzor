@@ -15,10 +15,17 @@
     - libgtk-3-dev
     - libgstreamer0.10-dev 
     - gstreamer-tools
+    - bwidget
     version: 0.4.2
     file: "http://downloads.sourceforge.net/project/snowmix/Snowmix-{{version}}.tar.gz?r=http%3A%2F%2Fsourceforge.net%2Fprojects%2Fsnowmix%2Ffiles%2F%3Fsource%3Dnavbar&ts=1383968317&use_mirror=softlayer-dal"
     bad: "Snowmix-{{version}}"
     nice: "snowmix-{{version}}"
+    bins:
+    - snowmix
+    - bars
+    contents:
+    - scripts
+    - ini
   tasks:
   - include: tasks/compfuzor.includes type=src
   - set_fact: src_dir="{{DIR}}"
@@ -45,7 +52,11 @@
     when: clean.stdout|int != 0
   - include: tasks/compfuzor.includes type=opt 
   - shell: cp -aurv "{{src_dir}}/fonts/Eurosti.ttf" "{{FONTS_TTF}}/Eurosti.ttf"
-  - shell: chdir="{{src_dir}}" ./bootstrap
-  - shell: chdir="{{src_dir}}" LIBS=-lpng12 ./configure --prefix="{{DIR}}"
-  - shell: chdir="{{src_dir}}" make
-  - shell: chdir="{{src_dir}}" make install
+  #- shell: chdir="{{src_dir}}" ./bootstrap
+  #- shell: chdir="{{src_dir}}" LIBS=-lpng12 ./configure --prefix="{{DIR}}"
+  #- shell: chdir="{{src_dir}}" make
+  #- shell: chdir="{{src_dir}}" make install
+  - file: src="{{src_dir}}/{{item}}" dest="{{DIR}}/{{item}}" state=link
+    with_items: contents
+  - file: src="{{DIR}}/bin/{{item}}" dest="{{BINS_DIR}}/{{item}}" state=link
+    with_items: bins
