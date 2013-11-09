@@ -6,6 +6,8 @@
 - include_vars: vars/common.vars
 - include_vars: "vars/{{type|default('srv')}}.vars"
 - set_fact: USER="{{NAME}}"
+- set_fact: DIR="{{hostvars[inventory_hostname][type|lower+'S_DIR']}}/{{NAME}}"
+  when: DIR is not defined
 
 - git: repo="{{REPO}}" dest="{{GIT_DIR if GIT_DIR is defined else DIR}}"
   when: DIR_BYPASS is not defined and GIT_BYPASS is not defined and REPO is defined
