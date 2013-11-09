@@ -1,2 +1,2 @@
 ---
-- shell: chdir=${dir} npm install -g
+- shell: chdir={{DIR}} npm install -g
