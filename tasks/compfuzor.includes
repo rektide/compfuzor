@@ -14,7 +14,7 @@
 - file: path="{{DIR}}" state=directory mode=770
   when: DIR_BYPASS is not defined and REPO is not defined and DIR is defined
 - include: ./hg_repo.includes
-  when: HG_REPO
+  when: HG_REPO is defined
 - file: path={{DIR}}/{{item}} state=directory mode=770
   with_items: DIRS
   when: DIRS is defined and DIR_BYPASS is not defined
