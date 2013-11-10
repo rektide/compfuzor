@@ -1,0 +1,5 @@
+- git: repo="https://github.com/frej/fast-export" dest="{{OPTS_DIR}}/fast-export-git"
+- shell: chdir="{{DIR}}" git init .
+- shell: chdir="{{DIR}}" "{{OPTS_DIR}}/fast-export-git/hg-fast-export.sh" -r "{{HG_REPO}}"
+- shell: chdir="{{DIR}}" git checkout HEAD
+
