@@ -4,9 +4,9 @@
 - set_fact: NAME="{{TYPE}}"
   when: NAME is not defined and TYPE is defined
 - include_vars: vars/common.vars
-- include_vars: "vars/{{type|default('srv')}}.vars"
+- include_vars: "vars/{{type|lower}}.vars"
 - set_fact: USER="{{NAME}}"
-- set_fact: DIR="{{hostvars[inventory_hostname][type|lower+'S_DIR']}}/{{NAME}}"
+- set_fact: DIR="{{hostvars[inventory_hostname][type|upper+'S_DIR']}}/{{NAME}}"
   when: DIR is not defined
 
 - git: repo="{{REPO}}" dest="{{GIT_DIR if GIT_DIR is defined else DIR}}"
