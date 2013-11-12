@@ -41,7 +41,8 @@
     - yapps2
     - libnss3-dev
     - libbind-dev
-    - heimdal-dev
+    # conflicts with libkrb5-dev which is needed for libcups2-dev
+    #- heimdal-dev
     ENABLE:
     - cups
     - iprint
