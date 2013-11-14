@@ -13,4 +13,10 @@
 - file: src={{path}} dest={{DIR}}/{{include|lower}} state=link
   when: not not go
 # ${include}_DIRS
+- file: path="{{path}}/{{item}}" state=directory
+  with_items: "{{dirs}}"
+  when: "not not go and {{dirs}} is defined"
 # ${include}_FILES
+- template: src="files/{{TYPE}}/{{item}}" dest="{{path}}/{{item}}"
+  with_items: "{{files}}"
+  when: "not not go and {{files}} is defined"
