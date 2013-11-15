@@ -17,6 +17,12 @@
     VAR_DIRS:
     - .
     USER: postfix
+    PKGS:
+    - postfix
+    - postfix-doc
+    - postfix-cdb
+    - postfix-pcre
+    - postfix-ldap
   vars_files:
   - vars/common.vars
   - vars/srv.vars
@@ -26,7 +32,6 @@
   - include: handlers.yml
   tasks:
   - include: tasks/cfvar_includes.tasks
-  - apt: state={{APT_INSTALL}} pkg=postfix
   - user: name={{USER}} system=true home={{DIR}}
   # todo: notify restart service when ETC_FILES changed
   - template: src=files/postfix/postfix.service dest={{SYSTEMD_UNIT_DIR}}/{{NAME}}.service
