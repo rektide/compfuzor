@@ -31,6 +31,19 @@
 - include: ./cfvar_include.tasks include=CACHE
 - include: ./cfvar_include.tasks include=SRC
 - include: ./cfvar_include.tasks include=PID
+- include: ./cfvar_include.tasks include=RUN
+
+- include: ./cfvar_files.tasks include=OPT
+- include: ./cfvar_files.tasks include=SRV
+- include: ./cfvar_files.tasks include=ETC
+- include: ./cfvar_files.tasks include=VAR
+- include: ./cfvar_files.tasks include=LOG
+- include: ./cfvar_files.tasks include=SPOOL
+- include: ./cfvar_files.tasks include=CACHE
+- include: ./cfvar_files.tasks include=SRC
+- include: ./cfvar_files.tasks include=PID
+- include: ./cfvar_files.tasks include=RUN
+
 
 - file: src="{{DIR}}/{{LINKS[item]}}" dest="{{DIR}}/{{item}}" state=link
   with_items: LINKS.keys()
