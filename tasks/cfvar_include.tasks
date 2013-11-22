@@ -14,4 +14,4 @@
 # ${include}_DIRS
 - file: path="{{path}}/{{item}}" state=directory
   with_items: "{{dirs}}"
-  when: "not not go and {{dirs}} is defined"
+  when: "not not go and {{dirs}} is defined and {{dirs}} != True"
