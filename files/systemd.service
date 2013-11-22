@@ -1,0 +1,21 @@
+[Unit]
+Description={{ NAME }}
+Requires=network.target
+After=network.target
+
+[Service]
+Type={{ SYSTEMD_TYPE|default("simple") }}
+NonBlocking=yes
+ExecStart={{ SYSTEMD_EXEC }}
+WorkingDirectory={{ SYSTEMD_CWD|default(DIR) }}
+{{ "ExecStop="+SYSTEMD_EXEC_STOP+"\n" if SYSTEMD_EXEC_STOP is defined else "" -}}
+{{ "ExecReload="+SYSTEMD_EXEC_RELOAD+"\n" if SYSTEMD_EXEC_RELOAD is defined else "" -}}
+{{ "PIDFile="+PID_FILE+"\n" if PID_FILE is defined else "" -}}
+{% if SYSTEMD_ENV is defined %}
+{% set s = joiner(" ") %}
+Environment={% for k,v in SYSTEMD_ENV.iteritems() %}{{s()}}"{{k}}={{v}}"{% endfor %}{{""}}
+{% endif %}
+User={{ SYSTEMD_USER|default(USER)|default("root") }}
+
+[Install]
+WantedBy=multi-user.target

@@ -1,6 +1,11 @@
+- set_fact: KEY="SYSTEMD_{{include|upper}}"
+- local_action: shell test -f "files/{{TYPE}}/{{TYPE}}.{{include}}"; echo $?
+  register: has_file
 - template: src="files/{{TYPE}}/{{TYPE}}.{{include}}" dest="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{include}}"
-  when: "SYSTEMD_{{include|upper}} is defined and SYSTEMD_{{include|upper}} == True"
-- template: src="files/{{TYPE}}/{{hostvars[inventory_hostname]['SYSTEMD_'+include|upper}}.{{include}}" dest="{{SYSTEMD_UNIT_DIR}}/{{hostvars[inventory_hostname]['SYSTEMD_'+include|upper]}}.{{include}}"
+  when: "{{KEY}} is defined and {{KEY}} == True and has_file.stdout|int == 0"
+- template: src="files/systemd.{{include}}" dest="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{include}}"
+  when: "{{KEY}} is defined and {{KEY}} == True and has_file.stdout|int != 0"
+- template: src="{{hostvars[inventory_hostname]['SYSTEMD_'+include|upper]|default(vars['SYSTEMD_'+include|upper])}}" dest="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{include}}"
   when: "SYSTEMD_{{include|upper}} is defined and not not SYSTEMD_{{include|upper}} and SYSTEMD_{{include|upper}} != True"
 - template: src="files/{{TYPE}}/{{item}}" dest="{{SYSTEMD_UNIT_DIR}}/{{item}}"
   with_items: "SYSTEMD_{{include|upper}}S"
