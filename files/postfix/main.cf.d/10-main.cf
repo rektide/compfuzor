@@ -1,0 +1,16 @@
+{%- macro valWriter(value) -%}
+{{ value|join(", ") if value is not string and value is iterable else "" -}}
+{{ value if value is string or value is number and value != True and value != False else "" -}}
+{{ 'no' if value == False else "" -}}
+{{ 'yes' if value == True else "" -}}
+{% endmacro -%}
+
+# defs
+{% for key, value in postfix_defaults.items() -%}
+{{ key }} = {{ valWriter(value) }}
+{% endfor %}
+
+# main
+{% for key, value in main.items() -%}
+{{ key }} = {{ valWriter(value) }}
+{% endfor %}

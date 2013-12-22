@@ -1,0 +1,9 @@
+---
+- shell: chdir="{{from}}" find . -type d | sed "s|^\./||"
+  register: targets
+- shell: test -d "{{to|default(DIR)}}/{{item}}" || mkdir "{{to|default(DIR)}}/{{item}}" 
+  with_items: targets.stdout_lines
+- shell: chdir="{{from}}" find . -type f| sed "s|^\./||"
+  register: targets
+- shell: test -f  "{{to|default(DIR)}}/{{item}}" || ln -s "{{from}}/{{item}}" "{{to|default(DIR)}}/{{item}}"
+  with_items: targets.stdout_lines
