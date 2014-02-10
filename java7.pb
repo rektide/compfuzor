@@ -15,7 +15,7 @@
     PKGS_BYPASS: True
     PKGS_LOCAL: True
   tasks:
-  - include: tasks/compfuzor.includes
+  - include: tasks/compfuzor.includes type=opt
   - shell: echo debconf shared/accepted-oracle-license-v1-1 select true | /usr/bin/debconf-set-selections
   - shell: echo debconf shared/accepted-oracle-license-v1-1 seen true | /usr/bin/debconf-set-selections
   - apt: state={{APT_INSTALL}} pkg={{item}}
