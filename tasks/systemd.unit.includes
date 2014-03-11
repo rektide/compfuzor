@@ -1,12 +1,12 @@
-- set_fact: KEY="SYSTEMD_{{include|upper}}" TARGET="{{TYPE|default(NAME)|default('')}}"
-- local_action: shell test -f "files/{{TARGET}}/{{TARGET}}.{{include}}"; echo $?
+- set_fact: KEY="SYSTEMD_{{include|upper}}" SYSTEMD_TARGET="{{TYPE|default(NAME)|default('')}}"
+- local_action: shell test -f "files/{{SYSTEMD_TARGET}}/{{SYSTEMD_TARGET}}.{{include}}"; echo $?
   register: has_file
-- template: src="files/{{TARGET}}/{{TARGET}}.{{include}}" dest="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{include}}"
+- template: src="files/{{SYSTEMD_TARGET}}/{{SYSTEMD_TARGET}}.{{include}}" dest="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{include}}"
   when: "{{KEY}} is defined and {{KEY}} == True and has_file.stdout|int == 0"
 - template: src="files/systemd.{{include}}" dest="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{include}}"
   when: "{{KEY}} is defined and {{KEY}} == True and has_file.stdout|int != 0"
-- template: src="{{hostvars[inventory_hostname]['SYSTEMD_'+include|upper]|default(vars['SYSTEMD_'+include|upper])}}" dest="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{include}}"
+- template: src="files/{{SYSTEMD_TARGET}}/{{hostvars[inventory_hostname]['SYSTEMD_'+include|upper]|default(vars['SYSTEMD_'+include|upper])}}" dest="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{include}}"
   when: "SYSTEMD_{{include|upper}} is defined and not not SYSTEMD_{{include|upper}} and SYSTEMD_{{include|upper}} != True"
-- template: src="files/{{TARGET}}/{{item}}" dest="{{SYSTEMD_UNIT_DIR}}/{{item}}"
+- template: src="files/{{SYSTEMD_TARGET}}/{{item}}" dest="{{SYSTEMD_UNIT_DIR}}/{{item}}"
   with_items: "SYSTEMD_{{include|upper}}S"
   when: "SYSTEMD_{{include|upper}}S is defined"
