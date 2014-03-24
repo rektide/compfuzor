@@ -2,24 +2,22 @@
 - hosts: all
   vars:
     TYPE: pdebuildx
-    INSTANCE: $ARCH
+    INSTANCE: "{{ARCH}}"
     MULTISTRAPFILE: multistrap.conf
     BASETGZ: pdebuild-cross.tgz
     ETC_FILES:
     - pdebuild-cross.rc
     - multistrap.conf
-    - preferences
+    #- preferences
     DIRS:
     - .
   vars_files:
-  - vars/common.vars
-  - vars/srv.vars
   - vars/pkgs.vars
   - [ "private/pdebuild-cross/$configset.vars", "private/pdebuild-cross.vars", "examples-private/pdebuild-cross.vars" ]
   tasks:
   - shell: echo "no {{ARCH}} configured"; return 1
-    only_if: is_unset("{{ARCH}}")
-  - include: tasks/cfvar_includes.tasks
+    when: ARCH is not defined
+  - include: tasks/compfuzor.includes type=srv
   - name: test -e {{DIR}}/{{BASETGZ}} as NO_PDEBUILD_CROSS_BUILD
     shell: test -e {{DIR}}/{{BASETGZ}}; echo $?
     register: NO_PDEBUILD_CROSS_BUILD
@@ -30,4 +28,4 @@
   # execute
   - apt: pkg=pdebuild-cross state={{APT_INSTALL}}
   - shell: /usr/sbin/pdebuild-cross-create
-    only_if: "${NO_PDEBUILD_CROSS_BUILD.stdout} > 0"
+    when: NO_PDEBUILD_CROSS_BUILD.stdout > 0
