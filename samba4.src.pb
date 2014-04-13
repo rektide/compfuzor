@@ -47,6 +47,7 @@
     - cups
     - iprint
     - avahi
+    - fhs
     WITH:
     - winbind
     - ads
@@ -67,8 +68,10 @@
     - regedit
     # FreeIPA, but won't get a DC?
     #- with-system-mitkrb5
+    #PREFIX: "{{OPT}}"
+    PREFIX: /usr
   tasks:
   - include: tasks/compfuzor.includes type=src
-  - shell: chdir={{DIR}} ./configure --with-{{ WITH|join(' --with-') }} --enable-{{ ENABLE|join(' --enable-') }} --prefix="{{OPTS_DIR}}/{{NAME}}"
+  - shell: chdir={{DIR}} ./configure --with-{{ WITH|join(' --with-') }} --enable-{{ ENABLE|join(' --enable-') }} --prefix="{{PREFIX}}"
   - shell: chdir={{DIR}} make
   - shell: chdir={{DIR}} make install

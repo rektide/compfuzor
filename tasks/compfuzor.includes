@@ -58,7 +58,7 @@
   when: SRC is not defined and TYPE is defined and NAME is not defined
 - set_fact: SRC="files/{{NAME}}"
   when: SRC is not defined and NAME is defined
-- set_fact: WITHS="{{ '--with-'+WITH|join(' --with-') if WITH is defined else '' }}" ENABLES="{{ '--enable-'+ENABLE|join(' --enable-') if ENABLE is defined else '' }}"
+- set_fact: WITHS="{{ '--with-'+WITH|join(' --with-') if WITH is defined else '' }}" ENABLES="{{ '--enable-'+ENABLE|join(' --enable-') if ENABLE is defined else '' }}" PREFIX="{{PREFIX|default(OPT)}}"
 
 - include: apt.includes
   when: APT_REPO is defined
