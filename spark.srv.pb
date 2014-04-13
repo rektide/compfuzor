@@ -22,7 +22,7 @@
     - localhost
   tasks:
   - include: tasks/compfuzor.includes type="srv"
-  - include: tasks/linkopt.includes
+  - include: tasks/linkdir.includes from="{{OPTS_DIR}}/{{opt_origin}}"
 
   - shell: chdir="{{DIR}}" mv conf/* etc
   - file: path="{{DIR}}/conf" state=absent

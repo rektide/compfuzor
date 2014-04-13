@@ -1,9 +1,0 @@
----
-- shell: chdir="{{OPTS_DIR}}/{{opt_origin}}" find . -type d | sed "s|^\./||"
-  register: opt_origins
-- file: path="{{DIR}}/{{item}}" state=directory
-  with_items: opt_origins.stdout_lines
-- shell: chdir="{{OPTS_DIR}}/{{opt_origin}}" find . -type f | sed "s|^\./||"
-  register: opt_origins
-- file: src="{{OPTS_DIR}}/{{opt_origin}}/{{item}}" dest="{{DIR}}/{{item}}" state=link
-  with_items: opt_origins.stdout_lines
