@@ -5,7 +5,7 @@
     TYPE: ansible
     INSTANCE: git
     REPO: https://github.com/ansible/ansible
-    HOSTS_DIR: "{{CONFIG_DIR}}/hosts"
+    HOSTS_DIR: "{{CONFIG_DIRS}}/hosts"
   vars_files:
   - vars/common.vars
   - vars/opt.vars

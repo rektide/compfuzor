@@ -4,6 +4,8 @@
 - set_fact: NAME="{{TYPE}}"
   when: NAME is not defined and TYPE is defined
 - include_vars: vars/common.vars
+- set_fact: type="opt"
+  when: type is not defined
 - include_vars: "vars/{{type|lower}}.vars"
 - set_fact: USER="{{NAME}}"
   when: USER is not defined
@@ -12,14 +14,14 @@
 
 - git: repo="{{REPO}}" dest="{{GIT_DIR if GIT_DIR is defined else DIR}}"
   when: DIR_BYPASS is not defined and GIT_BYPASS is not defined and REPO is defined
-- file: path="{{DIR}}" state=directory mode=770
-  when: DIR_BYPASS is not defined and REPO is not defined and DIR is defined
 - include: ./hg_repo.includes
   when: HG_REPO is defined
 - shell: git svn clone {{ "--stdlayout" if SVN_NONSTANDARD is not defined else SVN_NONSTANDARD }} {{SVN_REPO}} {{SVN_DIR|default(GIT_DIR)|default(DIR)}}
   when: SVN_REPO is defined
 - include: ./cvs_repo.includes
   when: CVS_REPO is defined
+- file: path="{{DIR}}" state=directory mode=770
+  when: (DIR is defined or DIRS is defined or DIR_DIRS is defined) and DIR_BYPASS is not defined
 - file: path={{DIR}}/{{item}} state=directory mode=770
   with_items: DIRS
   when: DIRS is defined and DIR_BYPASS is not defined
@@ -48,7 +50,6 @@
 - include: ./cfvar_files.tasks include=SRC
 - include: ./cfvar_files.tasks include=PID
 - include: ./cfvar_files.tasks include=RUN
-
 
 - file: src="{{DIR}}/{{LINKS[item]}}" dest="{{DIR}}/{{item}}" state=link
   with_items: LINKS.keys()
