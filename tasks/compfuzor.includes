@@ -4,6 +4,8 @@
 - set_fact: NAME="{{TYPE}}"
   when: NAME is not defined and TYPE is defined
 - include_vars: vars/common.vars
+- include_vars: vars/common.user.vars
+  when: USERMODE is defined and USERMODE
 - set_fact: type="opt"
   when: type is not defined
 - include_vars: "vars/{{type|lower}}.vars"
