@@ -1,9 +1,10 @@
 ---
 - name: get xdg_config_dir
-  shell: echo '${XDG_CONFIG_HOME:-~/.config}'
+  shell: echo "${XDG_CONFIG_HOME:-~/.config}"
   register: xdg_config_dir
 - name: test xdg_config_dir
-  shell: test -d {{xdg_config_dir}} && echo 1 || echo 0
+  shell: test -d {{xdg_config_dir.stdout}} && echo 1 || echo 0
   register: has_xdg_config_dir
+- set_fact: xdg_config_dir="{{xdg_config_dir.stdout}}" has_xdg_config_dir={{has_xdg_config_dir.stdout}}
 - file: path=${xdg_config_dir} state=directory
-  when: has_xdg_config_dir.rc
+  when: has_xdg_config_dir == 0
