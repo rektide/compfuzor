@@ -9,6 +9,6 @@ BIN="{{bin|default(item.bin)}}"
 cd "${SOURCE_DIR}"
 make distclean
 make "${TARGET}"
-make ARCH="${ARCH}" CROSS_COMPILE="${CC}"
+make CROSS_COMPILE="${CC}"
 cp u-boot.bin "${BIN}"
 make distclean
