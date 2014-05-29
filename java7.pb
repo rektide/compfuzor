@@ -12,6 +12,7 @@
     PKGS:
     - oracle-java7-installer
     - oracle-java7-set-default
+    - maven
     PKGS_BYPASS: True
     PKGS_LOCAL: True
   tasks:

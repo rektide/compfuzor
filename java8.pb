@@ -12,6 +12,7 @@
     PKGS:
     - oracle-java8-installer
     - oracle-java8-set-default
+    - maven
     PKGS_BYPASS: True
     PKGS_LOCAL: True
   tasks:
