@@ -1,2 +1,2 @@
 ---
-- include: apt.list.install.tasks name=${name}.src APT_SRC=1
+- include: apt.list.install.tasks name={{name}}.src APT_SRC=1
