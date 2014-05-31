@@ -19,23 +19,23 @@
     - template: files/build-at91boot.sh
       builder: "{{DIR}}/build-at91boot-sd-uboot.sh"
       target: sama5d3_xplainedsd_uboot_defconfig
-      source_dir: "{{SRCS_DIR}}/at91boot"
+      source_dir: "{{SRCS_DIR}}/at91boot-{{NAME}}"
       bins: "{{DIR}}/bin"
     - template: files/build-at91boot.sh
       builder: "{{DIR}}/build-at91boot-nand-uboot.sh"
-      source_dir: "{{SRCS_DIR}}/at91boot"
+      source_dir: "{{SRCS_DIR}}/at91boot-{{NAME}}"
       target: sama5d3_xplainednf_uboot_defconfig
       bins: "{{DIR}}/bin"
     - template: files/build-uboot.sh
       builder: "{{DIR}}/build-uboot-sd.sh"
-      source_dir: "{{SRCS_DIR}}/u-boot"
+      source_dir: "{{SRCS_DIR}}/u-boot-{{NAME}}"
       target: sama5d3_xplained_mmc_config
-      bin: "{{DIR}}/bin/u-boot-sd.bin"
+      bin: "{{DIR}}/bin/at91boot-u-boot-sd.bin"
     - template: files/build-uboot.sh
       builder: "{{DIR}}/build-uboot-nand.sh"
-      source_dir: "{{SRCS_DIR}}/u-boot"
+      source_dir: "{{SRCS_DIR}}/u-boot-{{NAME}}"
       target: sama5d3_xplained_nandflash_config
-      bin: "{{DIR}}/bin/u-boot-nand.bin"
+      bin: "{{DIR}}/bin/at91boot-u-boot-nand.bin"
 
   tasks:
   - include: tasks/compfuzor.includes type=opt
@@ -47,14 +47,10 @@
   - shell: chdir=/opt tar xf "{{SRCS_DIR}}/{{linaro_simple}}.tar.xz"
   - shell: mv "/opt/{{linaro}}" "/opt/{{linaro_simple}}"
 
-  - git: dest="{{SRCS_DIR}}/at91boot" repo="{{at91boot_repo}}"
-
-  - git: dest="{{SRCS_DIR}}/u-boot" repo="{{uboot_repo}}"
-  - get_url: url="{{uboot_patch}}" dest="{{SRCS_DIR}}/{{NAME}}-uboot.patch"
-  - shell: chdir="{{SRCS_DIR}}/u-boot" patch -p1 < ../{{NAME}}-uboot.patch
+  - git: dest="{{SRCS_DIR}}/at91boot-{{NAME}}" repo="{{at91boot_repo}}"
+  - git: dest="{{SRCS_DIR}}/u-boot-{{NAME}}" repo="{{uboot_repo}}"
 
   - file: path="{{DIR}}/bin" state=directory
-
   - template: src="{{item.template}}" dest="{{item.builder}}" mode="0777"
     with_items: BUILDERS
   - shell: chdir="{{DIR}}" "{{item.builder}}"
