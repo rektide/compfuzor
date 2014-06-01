@@ -14,12 +14,11 @@
     - conf.d
     ETC_FILES:
     - nginx.conf
-    LOG_DIR: true
+    LOG_DIRS: true
+    SYSTEMD_SERVICE: True
   vars_files:
   - ["private/nginx/$configset.vars", "private/nginx.vars", "examples-private/nginx.conf"]
   tasks:
   - include: tasks/compfuzor.includes type=srv
   - template: src=files/nginx/global.conf dest={{ETC}}/global.d/01-global.conf
-  - template: src=files/nginx/nginx.conf dest={{ETC}}/nginx.conf
   - file: src=/etc/nginx/mime.types dest={{ETC}}/mime.types state=link
-  - include: tasks/systemd.service.tasks src=files/nginx/nginx.service service={{NAME}}
