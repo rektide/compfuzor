@@ -33,10 +33,10 @@
   - include: handlers.yml
   tasks:
   - include: tasks/compfuzor.includes type=srv
-  #- template: src=files/reprepro/override dest="{{ETC}}/override-dsc.{{item.name}}" content="{{OVERRIDES_DSC}}"
-  #  with_items: REPOS
-  #- template: src=files/reprepro/override dest="{{ETC}}/override-deb.{{item.name}}" content="{{OVERRIDES_DEB}}"
-  #  with_items: REPOS
+  - template: src=files/reprepro/override dest="{{ETC}}/override-dsc.{{item.name}}"
+    with_items: REPOS
+  - template: src=files/reprepro/override dest="{{ETC}}/override-deb.{{item.name}}"
+    with_items: REPOS
   - file: path="{{VAR}}/incoming/{{item.name}}" state=directory
     with_items: REPOS
   - file: path="{{VAR}}/tmp/incoming/{{item.name}}" state=directory
