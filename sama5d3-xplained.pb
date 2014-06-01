@@ -11,6 +11,8 @@
     arch: ARM
     cc: "/opt/{{linaro_simple}}/bin/arm-linux-gnueabihf-"
 
+    kernel: linux-3.15-rc7
+    kernel_url: "https://www.kernel.org/pub/linux/kernel/v3.x/testing/{{kernel}}.tar.xz"
     at91boot_repo: git://github.com/linux4sam/at91bootstrap.git
     uboot_repo: git://git.denx.de/u-boot.git
     uboot_patch: "https://raw.github.com/eewiki/u-boot-patches/master/v2014.04/0001-sama5d3_xplained-uEnv.txt-bootz-n-fixes.patch"
@@ -18,8 +20,8 @@
     BUILDERS:
     - template: files/build-at91boot.sh
       builder: "{{DIR}}/build-at91boot-sd-uboot.sh"
-      target: sama5d3_xplainedsd_uboot_defconfig
       source_dir: "{{SRCS_DIR}}/at91boot-{{NAME}}"
+      target: sama5d3_xplainedsd_uboot_defconfig
       bins: "{{DIR}}/bin"
     - template: files/build-at91boot.sh
       builder: "{{DIR}}/build-at91boot-nand-uboot.sh"
@@ -36,16 +38,25 @@
       source_dir: "{{SRCS_DIR}}/u-boot-{{NAME}}"
       target: sama5d3_xplained_nandflash_config
       bin: "{{DIR}}/bin/at91boot-u-boot-nand.bin"
+    - template: files/build-deb-kernel.sh
+      builder: "{{DIR}}/build-deb-kernel.sh"
+      source_dir: "{{SRCS_DIR}}/{{kernel}}"
+      config_target: "sama5_defconfig"
+      bin: "{{DIR}}/bin/linux.deb"
+      defconfig: "{{DIR}}/kernel-deconfig"
+      debarch: "armhf"
 
   tasks:
   - include: tasks/compfuzor.includes type=opt
 
-  # TODO: decouple this from here.
   - get_url: url="{{linaro_url}}" dest="{{SRCS_DIR}}/{{linaro_simple}}.tar.xz"
-  - file: path="/opt/{{linaro}}" state=absent
-  - file: path="/opt/{{linaro_simple}}" state=absent
-  - shell: chdir=/opt tar xf "{{SRCS_DIR}}/{{linaro_simple}}.tar.xz"
-  - shell: mv "/opt/{{linaro}}" "/opt/{{linaro_simple}}"
+  - file: path=/opt/{{linaro_simple}} state=directory
+  - shell: chdir=/opt/{{linaro_simple}} tar xfJ "{{SRCS_DIR}}/{{linaro_simple}}.tar.xz" --strip-components=1
+
+  - get_url: url="{{kernel_url}}" dest="{{SRCS_DIR}}/{{kernel}}.tar.xz"
+  - file: path="{{SRCS_DIR}}/{{kernel}}" state=directory
+  - shell: chdir="{{SRCS_DIR}}/{{kernel}}" tar xfJ "{{SRCS_DIR}}/{{kernel}}.tar.xz" --strip-components=1
+  - copy: src=files/sama5d3-xplained/defconfig dest="{{DIR}}/kernel-defconfig"
 
   - git: dest="{{SRCS_DIR}}/at91boot-{{NAME}}" repo="{{at91boot_repo}}"
   - git: dest="{{SRCS_DIR}}/u-boot-{{NAME}}" repo="{{uboot_repo}}"
