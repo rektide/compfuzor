@@ -5,8 +5,15 @@
   when: "{{KEY}} is defined and {{KEY}} == True and has_file.stdout|int == 0"
 - template: src="files/systemd.{{include}}" dest="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{include}}"
   when: "{{KEY}} is defined and {{KEY}} == True and has_file.stdout|int != 0"
+- shell: systemctl --{{SYSTEMD_SCOPE}} enable {{NAME}}.{{include}}
+  when: "{{KEY}} is defined and {{KEY}} == True"
 - template: src="files/{{SYSTEMD_TARGET}}/{{hostvars[inventory_hostname]['SYSTEMD_'+include|upper]|default(vars['SYSTEMD_'+include|upper])}}" dest="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{include}}"
   when: "SYSTEMD_{{include|upper}} is defined and not not SYSTEMD_{{include|upper}} and SYSTEMD_{{include|upper}} != True"
+- shell: systemctl --{{SYSTEMD_SCOPE}} enable {{NAME}}.{{include}}
+  when: "SYSTEMD_{{include|upper}} is defined and not not SYSTEMD_{{include|upper}} and SYSTEMD_{{include|upper}} != True"
 - template: src="files/{{SYSTEMD_TARGET}}/{{item}}" dest="{{SYSTEMD_UNIT_DIR}}/{{item}}"
+  with_items: "SYSTEMD_{{include|upper}}S"
+  when: "SYSTEMD_{{include|upper}}S is defined"
+- shell: systemctl --{{SYSTEMD_SCOPE}} enable {{item}}
   with_items: "SYSTEMD_{{include|upper}}S"
   when: "SYSTEMD_{{include|upper}}S is defined"
