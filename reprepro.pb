@@ -35,17 +35,18 @@
   - include: handlers.yml
   tasks:
   - include: tasks/compfuzor.includes type=srv
-  - template: src=files/reprepro/override dest="{{ETC}}/override-dsc.{{item.codename}}" content="{{OVERRIDES_DSC}}"
-    with_items: REPOS
-  - template: src=files/reprepro/override dest="{{ETC}}/override-deb.{{item.codename}}" content="{{OVERRIDES_DEB}}"
-    with_items: REPOS
+  #- template: src=files/reprepro/override dest="{{ETC}}/override-dsc.{{item.codename}}" content="{{OVERRIDES_DSC}}"
+  #  with_items: REPOS
+  #- template: src=files/reprepro/override dest="{{ETC}}/override-deb.{{item.codename}}" content="{{OVERRIDES_DEB}}"
+  #  with_items: REPOS
   - file: path="{{VAR}}/incoming/{{item.codename}}" state=directory
     with_items: REPOS
   - file: path="{{VAR}}/tmp/incoming/{{item.codename}}" state=directory
     with_items: REPOS
   # TODO: private/ keys install
   # TODO: ??? mdehaan fucked us:
-  - include: tasks/nginx-conf.tasks conf=files/reprepro/nginx.conf host="{{item.origin}}" ctx={{item}} name="{{nginx_prio}}-{{NAME}}" nginx={{NGINX_ETC}} service={{NGINX}} port=80
-    with_items: REPOS
+  - include: tasks/nginx-confs.tasks hosts={{REPOS}} nginx="{{NGINX_ETC}}" conf="files/reprepro/nginx.conf"
+  #- include: tasks/nginx-conf.tasks conf=files/reprepro/nginx.conf host="{{item.origin}}" ctx={{item}} name="{{nginx_prio}}-{{NAME}}" nginx={{NGINX_ETC}} service={{NGINX}} port=80
+  #  with_items: REPOS
   #- include: tasks/systemd.alias.tasks src="{{NGINX}}" dest="{{NAME}}"
   - include: tasks/systemd.thunk.tasks service="{{NGINX}}"

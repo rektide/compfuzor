@@ -1,11 +1,9 @@
 ---
-- set_fact: port=80
-  only_if: is_unset("$port")
-- file: path={{nginx}}/hosts.d/{{host}}:{{port}} state=directory
-- template: src={{conf}} dest={{nginx}}/hosts.d/{{host}}:{{port}}/{{name}}.conf
+- file: path={{nginx}}/hosts/{{host}}:{{port|default(80)}}.d state=directory
+- template: src={{conf}} dest={{nginx}}/hosts/{{host}}:{{port}}.d/{{name}}.conf
 - file: path={{nginx}}/global.d state=directory
-- assemble: src={{nginx}}/global.d dest={{nginx}}/hosts.d/global.conf
-#- file: src={{nginx}}/hosts.d/global.conf dest={{nginx}}/hosts.d/{{host}}:{{port}}/01-global.conf state=link
-- template: src=files/nginx/host-open.conf dest={{nginx}}/hosts.d/{{host}}:{{port}}/01-host.conf
-- template: src=files/nginx/host-close.conf dest={{nginx}}/hosts.d/{{host}}:{{port}}/99-host.conf
-- assemble: src={{nginx}}/hosts.d/{{host}}:{{port}} dest={{nginx}}/conf.d/{{host}}:{{port}}.conf
+- assemble: src={{nginx}}/global.d dest={{nginx}}/hosts/global.conf
+- template: src=files/nginx/host-open.conf dest={{nginx}}/hosts/{{host}}:{{port}}.d/00-host.conf
+- file: src={{nginx}}/hosts/global.conf dest={{nginx}}/hosts/{{host}}:{{port}}.d/01-global.conf state=link
+- template: src=files/nginx/host-close.conf dest={{nginx}}/hosts/{{host}}:{{port}}.d/99-host.conf
+- assemble: src={{nginx}}/hosts/{{host}}:{{port}}.d dest={{nginx}}/conf.d/{{host}}:{{port}}.conf

@@ -1,12 +1,12 @@
 {% for repo in REPOS %}
-Origin: {{ repo.origin }}
+Origin: {{ repo.host }}
 Label: {{ repo.label }}
-Codename: {{ repo.codename }}
+Codename: {{ repo.name }}
 Architectures: {{ repo.architectures|join(" ") }}
 Components: {{ repo.components }}
 Description: {{ repo.description }}
-DebOverride: override-deb.{{ repo.codename }}
-DscOverride: override-dsc.{{ repo.codename }}
+DebOverride: override-deb.{{ repo.name }}
+DscOverride: override-dsc.{{ repo.name }}
 {% if repo.has_key("keyid") -%}
 SignWith: {{ repo.keyid }}
 {% endif %}

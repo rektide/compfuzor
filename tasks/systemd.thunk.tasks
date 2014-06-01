@@ -5,22 +5,22 @@
   register: SYSTEMD_RUNNING
 # target service to thunk
 - set_fact: THUNK_SERVICE="{{NAME}}.service"
-  only_if: is_unset("$service")
+  when: service is not defined
 - set_fact: THUNK_SERVICE="{{service}}.service"
-  only_if: is_set("$service")
-- shell: systemctl is-enabled {{THUNK_SERVICE}} {{SYSTEMD_OPTS_AND_SCOPE}} -q; echo $?
+  when: service is defined
+- shell: systemctl is-enabled "{{THUNK_SERVICE}}" "{{SYSTEMD_OPTS_AND_SCOPE}}" -q; echo $?
   register: SYSTEMD_WAS_ENABLED
 # DISABLE IF ENABLED
-- shell: systemctl disable {{THUNK_SERVICE}} {{SYSTEMD_OPTS_AND_SCOPE}}
-  only_if: '"{{SYSTEMD_WAS_ENABLED.stdout}}" == "0"'
+- shell: systemctl disable "{{THUNK_SERVICE}}" "{{SYSTEMD_OPTS_AND_SCOPE}}"
+  when: SYSTEMD_WAS_ENABLED.stdout == "0"
 # RELOAD DAEMON
 - shell: systemctl daemon-reload {{SYSTEMD_OPTS_AND_SCOPE}}
 # ENABLE
 - shell: systemctl enable {{THUNK_SERVICE}} {{SYSTEMD_OPTS_AND_SCOPE}} -fq; echo $?
-  #only_if: "'${SYSTEMD_RUNNING.stdout}' != \"0\""
+  #when: SYSTEMD_RUNNING.stdout != "0"
   register: SYSTEMD_ENABLE_OK
 # RELOAD OR RESTART IF RUNNING
 - shell: systemctl reload-or-restart {{THUNK_SERVICE}} {{SYSTEMD_OPTS_AND_SCOPE}}
-  only_if: is_unset("$SYSTEMD_RESTART") and "${SYSTEMD_RUNNING.stdout}" == "0"
+  when: SYSTEMD_RESTART is not defined and SYSTEMD_RUNNING.stdout == "0"
 - shell: sytemctl restart {{THUNK_SERVICE}} {{SYSTEMD_OPTS_AND_SCOPE}}
-  only_if: is_set("$SYSTEMD_RESTART") and "${SYSTEMD_RUNNING.stdout}" == "0"
+  when: SYSTEMD_RESTART is defined and SYSTEMD_RUNNING.stdout == "0"

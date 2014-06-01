@@ -1,0 +1,15 @@
+---
+- file: path={{nginx}}/hosts/{{item.host}}:{{item.port|default(port)|default(80)}}.d state=directory
+  with_items: hosts
+- template: src={{item.conf|default(conf)}} dest="{{nginx}}/hosts/{{item.host}}:{{item.port|default(port)|default(80)}}.d/{{item.prio|default(prio)|default(50)}}-{{item.name}}.conf"
+  with_items: hosts
+- file: path={{nginx}}/global.d state=directory
+- assemble: src={{nginx}}/global.d dest={{nginx}}/hosts/global.conf
+- template: src=files/nginx/host-open.conf dest="{{nginx}}/hosts/{{item.host}}:{{item.port|default(port)|default(80)}}.d/00-host.conf"
+  with_items: hosts
+- file: src={{nginx}}/hosts/global.conf dest="{{nginx}}/hosts/{{item.host}}:{{item.port|default(port)|default(80)}}.d/01-global.conf" state=link
+  with_items: hosts
+- template: src=files/nginx/host-close.conf dest="{{nginx}}/hosts/{{item.host}}:{{item.port|default(port)|default(80)}}.d/99-host.conf"
+  with_items: hosts
+- assemble: src="{{nginx}}/hosts/{{item.host}}:{{item.port|default(port)|default(80)}}.d" dest={{nginx}}/conf.d/{{item.host}}:{{item.port|default(port)|default(80)}}.conf
+  with_items: hosts
