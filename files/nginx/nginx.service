@@ -10,7 +10,7 @@ ExecStart=/usr/sbin/nginx -c {{ ETC }}/nginx.conf
 ExecReload=/bin/kill -s HUP $MAINPID
 ExecStop=/bin/kill -s QUIT $MAINPID
 PrivateTmp=true
-PIDFile={{ PID }}
+PIDFile={{ PID }}.pid
 User=root
 
 [Install]
