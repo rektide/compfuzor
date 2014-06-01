@@ -44,6 +44,7 @@
       config_target: "sama5_defconfig"
       bin: "{{DIR}}/bin/linux.deb"
       defconfig: "{{DIR}}/kernel-deconfig"
+      arch: arm
       debarch: "armhf"
 
   tasks:
@@ -56,7 +57,6 @@
   - get_url: url="{{kernel_url}}" dest="{{SRCS_DIR}}/{{kernel}}.tar.xz"
   - file: path="{{SRCS_DIR}}/{{kernel}}" state=directory
   - shell: chdir="{{SRCS_DIR}}/{{kernel}}" tar xfJ "{{SRCS_DIR}}/{{kernel}}.tar.xz" --strip-components=1
-  - copy: src=files/sama5d3-xplained/defconfig dest="{{DIR}}/kernel-defconfig"
 
   - git: dest="{{SRCS_DIR}}/at91boot-{{NAME}}" repo="{{at91boot_repo}}"
   - git: dest="{{SRCS_DIR}}/u-boot-{{NAME}}" repo="{{uboot_repo}}"
@@ -66,6 +66,7 @@
     with_items: BUILDERS
   - shell: chdir="{{DIR}}" "{{item.builder}}"
     with_items: BUILDERS
+  - shell: ln -s "{{SRCS_DIR}}/linux-*xplain_armhf.deb" "{{DIR}}"
 
   #  branch_dest: sama5d3
   #  repo_poky: git://git.yoctoproject.org/poky

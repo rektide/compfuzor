@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -e
+
 SOURCE_DIR="{{source_dir|default(item.source_dir)}}"
 TARGET="{{target|default(item.target)}}"
 ARCH="{{arch|default(item.arch)}}"

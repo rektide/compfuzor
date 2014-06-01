@@ -1,11 +1,13 @@
 #!/bin/sh
 
+set -e
+
 CORES=6
 SOURCE_DIR="{{source_dir|default(item.source_dir)}}"
 #BIN_DIR="{{bins|default(item.bins)|default('')}}"
-DEFCONFIG="{{defconfig|default(item.defconfig)}}"
-export ARCH="{{arch|default(item.arch)}}"
-export CROSS_COMPILE="{{cc|default(item.cc)}}"
+DEFCONFIG="{{item.config_target|default(config_target)}}"
+export ARCH="{{item.arch|default(arch)}}"
+export CROSS_COMPILE="{{item.cc|default(cc)}}"
 export KBUILD_DEBARCH="{{item.debarch}}"
 export LOCALVERSION=-xplain
 export KDEB_PKGVERSION=1.0${LOCALVERSION}
