@@ -9,9 +9,11 @@ DISK="$1"
 #sudo dd if=/dev/zero of=${DISK} bs=1M count=16
 
 sudo sfdisk --in-order --Linux --unit M ${DISK} <<-__EOF__
-,64,0xE
+,64,0xE,*
 ;
 __EOF__
+
+sleep 4
 
 PART1="${DISK}1"
 PART2="${DISK}2"

@@ -17,6 +17,7 @@
     at91boot_repo: git://github.com/linux4sam/at91bootstrap.git
     uboot_repo: git://git.denx.de/u-boot.git
     uboot_patch: "https://raw.github.com/eewiki/u-boot-patches/master/v2014.04/0001-sama5d3_xplained-uEnv.txt-bootz-n-fixes.patch"
+    pdebuild_cross: "/srv/pdebuildx-armhf/pdebuild-cross.tgz"
 
     FILES:
     - uEnv.txt
@@ -88,9 +89,9 @@
     with_items: BUILDERS
 
   # symlink extras
-  - shell: ln -s "{{kernel_dir}}/arch/arm/boot/dts/at91-sama5d3_xplained.dtb" "{{DIR}}/linux.dtb"
-  - shell: ln -s "{{SRCS_DIR}}/linux-*xplain_armhf.deb" "{{DIR}}"
-  - shell: ln -s "/srv/pdebuildx-armhf/pdebuild-cross.tgz" "{{DIR}}/pdebuild-cross.tgz"
+  - shell: ln -sf "{{kernel_dir}}/arch/arm/boot/dts/at91-sama5d3_xplained.dtb" "{{DIR}}/linux.dtb"
+  - shell: ln -sf "{{SRCS_DIR}}/linux-*xplain_armhf.deb" "{{DIR}}"
+  - shell: ln -sf "{{pdebuild_cross}}" "{{DIR}}/pdebuild-cross.tgz"
 
   #  branch_dest: sama5d3
   #  repo_poky: git://git.yoctoproject.org/poky

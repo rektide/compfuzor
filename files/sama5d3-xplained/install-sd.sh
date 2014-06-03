@@ -1,8 +1,10 @@
 #!/bin/sh
 
+IMAGE="{{DIR}}/pdebuild-cross.tgz"
+
 set -e
 
-if [ -n "$1" ]
+if [ -z "$1" ]
 then
 	echo "no target specified"
 	exit 1
@@ -34,6 +36,30 @@ sudo umount "${BOOTMNT}"
 rm -rf "${BOOTMNT}"
 
 ROOTMNT=`mktemp -d --suffix=root-mnt --tmpdir=.`
+OLDD=`pwd`
 sudo mount "${PART2}" "${ROOTMNT}"
+cd "${ROOTMNT}"
+tar -xzf "${IMAGE}"
+sudo cp /usr/bin/qemu-arm-static usr/bin
+sudo mount --bind /proc proc
+sudo mount --bind /dev dev
+sudo chroot . /bin/dash -x <<'EOF'
+export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true
+export LC_ALL=C LANGUAGE=C LANG=C
+debconf-set-selections <<TZSEL
+tzdata tzdata/Areas select US
+tzdata tzdata/Areas seen true
+tzdata tzdata/Zones/US select Eastern
+tzdata tzdata/Zones/US seen true
+TZSEL
+/var/lib/dpkg/info/dash.preinst install
+dpkg --configure -a
+ln -s /proc/self/mounts /etc/mtab
+echo 'root:CHANGENOW' | chpasswd
+EOF
+sudo umount proc
+sudo umount dev
+sudo rm usr/bin/qemu-arm-static
+cd "${OLDD}"
 sudo umount "${ROOTMNT}"
 rm -rf "${ROOTMNT}"
