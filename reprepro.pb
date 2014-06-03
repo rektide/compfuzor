@@ -4,7 +4,7 @@
   vars:
     TYPE: reprepro
     INSTANCE: main
-    LOG_DIR: true
+    LOG_DIRS: true
     VAR_DIRS:
     - www/dists
     - www/pool
@@ -43,6 +43,8 @@
     with_items: REPOS
   - template: src=files/reprepro/build.sh dest="{{DIR}}/build.sh" mode=754
   - template: src=files/reprepro/reprepro.env dest="{{DIR}}/reprepro.env" mode=640
+  - file: path="{{VAR}}" group=www-data mode=710
+  - file: path="{{VAR}}" group=www-data mode=750 recurse=true
   # TODO: private/ keys install
   # TODO: ??? mdehaan fucked us:
   - include: tasks/nginx-confs.tasks hosts={{REPOS}} nginx="{{NGINX_ETC}}" conf="files/reprepro/nginx.conf"
