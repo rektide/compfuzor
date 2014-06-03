@@ -12,5 +12,7 @@ cd "${SOURCE_DIR}"
 make distclean
 make "${TARGET}"
 make CROSS_COMPILE="${CC}"
-cp u-boot.bin "${BIN}"
-make distclean
+cp u-boot.bin "${BIN}.bin"
+cp u-boot.img "${BIN}.img"
+cp spl/u-boot-spl.bin "${BIN}.spl"
+#make distclean

@@ -6,11 +6,11 @@ set -e
 
 DISK="$1"
 
-sudo dd if=/dev/zero of=${DISK} bs=1M count=16
+#sudo dd if=/dev/zero of=${DISK} bs=1M count=16
 
 sudo sfdisk --in-order --Linux --unit M ${DISK} <<-__EOF__
-1,48,0xE,*
-,,,-
+,64,0xE
+;
 __EOF__
 
 PART1="${DISK}1"

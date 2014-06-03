@@ -17,7 +17,7 @@ export KDEB_PKGVERSION=1.0${LOCALVERSION}
 cd "${SOURCE_DIR}"
 
 # clean
-make distclean
+#make distclean
 
 #config
 #[ ! -f .config ] && cp "${DEFCONFIG}" .config && echo "default config copied"

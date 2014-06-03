@@ -1,0 +1,8 @@
+optargs=init=/lib/systemd/systemd console=tty0
+
+console=ttyS0,115200
+
+mmcroot=/dev/mmcblk0p2 ro
+mmcrootfstype=ext4 rootwait fixrtc
+
+fdt_file=linux.dtb
