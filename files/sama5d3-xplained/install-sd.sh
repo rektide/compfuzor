@@ -26,20 +26,21 @@ then
 	exit 2
 fi
 
-BOOTMNT=`mktemp -d --suffix=boot-mnt --tmpdir=.`
-sudo mount "${PART1}" "${BOOTMNT}"
-sudo cp bin/u-boot-sd.spl "${BOOTMNT}/BOOT.BIN"
-sudo cp bin/u-boot-sd.img "${BOOTMNT}/u-boot.img"
-sudo cp uEnv.txt "${BOOTMNT}/"
-sudo cp linux.dtb "${BOOTMNT}/"
-sudo umount "${BOOTMNT}"
-rm -rf "${BOOTMNT}"
+BOOT_MNT=`mktemp -d --suffix=boot-mnt --tmpdir=.`
+sudo mount "${PART1}" "${BOOT_MNT}"
+sudo cp bin/u-boot-sd.spl "${BOOT_MNT}/BOOT.BIN"
+sudo cp bin/u-boot-sd.img "${BOOT_MNT}/u-boot.img"
+sudo cp uEnv.txt "${BOOT_MNT}/"
+sudo cp linux.dtb "${BOOT_MNT}/"
+sudo umount "${BOOT_MNT}"
+rm -rf "${BOOT_MNT}"
 
-ROOTMNT=`mktemp -d --suffix=root-mnt --tmpdir=.`
+INSTALL_MOUNT=`mktemp -d --suffix=install-mnt --tmpdir=.`
 OLDD=`pwd`
-sudo mount "${PART2}" "${ROOTMNT}"
-cd "${ROOTMNT}"
+cd "${INSTALL_MOUNT}"
 tar -xzf "${IMAGE}"
+sudo mkimage -A arm -O linux -C none -T kernel -a 20008000 -e 20008000 -n linux -d /boot/vmlinuz* /boot/zImage
+sudo cp ../linux.dtb 
 sudo cp /usr/bin/qemu-arm-static usr/bin
 sudo mount --bind /proc proc
 sudo mount --bind /dev dev
@@ -61,5 +62,11 @@ sudo umount proc
 sudo umount dev
 sudo rm usr/bin/qemu-arm-static
 cd "${OLDD}"
-sudo umount "${ROOTMNT}"
-rm -rf "${ROOTMNT}"
+
+ROOT_MOUNT=`mktemp -d --suffix=root-mnt --tmpdir=.`
+sudo mount "${PART2}" "${ROOT_MNT}"
+sudo cp -aur "${INSTALL_MNT}" "${ROOT_MNT}/"
+sudo umount "${ROOT_MNT}"
+rm -rf "${ROOT_MNT}"
+sudo umount "${INSTALL_MOUNT}"
+rm -rf "${INSTALL_MOUNT}"

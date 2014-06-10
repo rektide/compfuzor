@@ -1,8 +1,6 @@
-optargs=init=/lib/systemd/systemd console=tty0
-
-console=ttyS0,115200
-
-mmcroot=/dev/mmcblk0p2 ro
-mmcrootfstype=ext4 rootwait fixrtc
-
-fdt_file=linux.dtb
+bootargs=init=/lib/systemd/systemd root=/dev/mmcblk0p2 rootwait rw console=ttyS0,115200
+fdt=linux.dtb
+kernel=vmlinuz-3.15.0-rc7-xplain
+load_dtb=fatload mmc 0:1 21000000 /linux.dtb
+load_kernel=ext4load mmc 0:2 21000000 /boot/${kernel}
+boot_mmc=run load_dtb load_kernel; bootz 22000000 - 21000000 

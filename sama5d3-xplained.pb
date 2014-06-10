@@ -22,6 +22,7 @@
     FILES:
     - uEnv.txt
     SH:
+    - prepare-image.sh
     - prepare-sd.sh
     - install-sd.sh
 
@@ -54,6 +55,7 @@
       defconfig: "{{DIR}}/kernel-deconfig"
       arch: arm
       debarch: "armhf"
+      extra: "mkimage -A arm -O linux -C none -T kernel -a 20008000 -e 20008000 -n linux -d ${SOURCE_DIR}/arch/arm/boot/zImage ${OPT_DIR/zImage"
 
     PKGS:
     - device-tree-compiler
@@ -89,6 +91,7 @@
     with_items: BUILDERS
 
   # symlink extras
+  # TODO: u-boot defaults: at91-sama5d3_xplained.dtb zImage
   - shell: ln -sf "{{kernel_dir}}/arch/arm/boot/dts/at91-sama5d3_xplained.dtb" "{{DIR}}/linux.dtb"
   - shell: ln -sf "{{SRCS_DIR}}/linux-*xplain_armhf.deb" "{{DIR}}"
   - shell: ln -sf "{{pdebuild_cross}}" "{{DIR}}/pdebuild-cross.tgz"
