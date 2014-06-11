@@ -26,6 +26,7 @@ then
 	exit 2
 fi
 
+# copy boot files on to sd card
 BOOT_MNT=`mktemp -d --suffix=boot-mnt --tmpdir=.`
 sudo mount "${PART1}" "${BOOT_MNT}"
 sudo cp bin/u-boot-sd.spl "${BOOT_MNT}/BOOT.BIN"
@@ -35,11 +36,11 @@ sudo cp linux.dtb "${BOOT_MNT}/"
 sudo umount "${BOOT_MNT}"
 rm -rf "${BOOT_MNT}"
 
+# extract image to a temporary folder and configure
 INSTALL_MOUNT=`mktemp -d --suffix=install-mnt --tmpdir=.`
 OLDD=`pwd`
 cd "${INSTALL_MOUNT}"
 tar -xzf "${IMAGE}"
-sudo mkimage -A arm -O linux -C none -T kernel -a 20008000 -e 20008000 -n linux -d /boot/vmlinuz* /boot/zImage
 sudo cp ../linux.dtb 
 sudo cp /usr/bin/qemu-arm-static usr/bin
 sudo mount --bind /proc proc
@@ -63,9 +64,12 @@ sudo umount dev
 sudo rm usr/bin/qemu-arm-static
 cd "${OLDD}"
 
+# copy configured image on to sd card
 ROOT_MOUNT=`mktemp -d --suffix=root-mnt --tmpdir=.`
 sudo mount "${PART2}" "${ROOT_MNT}"
 sudo cp -aur "${INSTALL_MNT}" "${ROOT_MNT}/"
+
+# unmount
 sudo umount "${ROOT_MNT}"
 rm -rf "${ROOT_MNT}"
 sudo umount "${INSTALL_MOUNT}"

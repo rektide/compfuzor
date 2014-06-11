@@ -21,7 +21,9 @@
 
     FILES:
     - uEnv.txt
+    - kernel-defconfig
     SH:
+    - build-dtb.sh
     - prepare-image.sh
     - prepare-sd.sh
     - install-sd.sh
@@ -50,12 +52,14 @@
     - template: files/build-deb-kernel.sh
       builder: "{{DIR}}/build-deb-kernel.sh"
       source_dir: "{{kernel_dir}}"
-      config_target: "sama5_defconfig"
       bin: "{{DIR}}/bin/linux.deb"
-      defconfig: "{{DIR}}/kernel-deconfig"
+      config_target: "sama5_defconfig"
+      defconfig: "{{DIR}}/kernel-defconfig"
+      kernel_param: ''
+      kernel_target: 'dtbs_install deb-pkg'
+      after_kernel: 'cp arch/arm/boot/dts/at91-sama5d3_xplained.dtb "${OPT_DIR}"'
       arch: arm
       debarch: "armhf"
-      extra: "mkimage -A arm -O linux -C none -T kernel -a 20008000 -e 20008000 -n linux -d ${SOURCE_DIR}/arch/arm/boot/zImage ${OPT_DIR/zImage"
 
     PKGS:
     - device-tree-compiler
@@ -84,6 +88,7 @@
   - template: src="files/sama5d3-xplained/{{item}}" dest="{{DIR}}/{{item}}" mode=754
     with_items: SH
   - template: src="{{item.template}}" dest="{{item.builder}}" mode="0754"
+    when: run|default(true) != false
     with_items: BUILDERS
 
   # run
