@@ -18,6 +18,7 @@
   - shell: echo "no {{ARCH}} configured"; return 1
     when: ARCH is not defined
   - include: tasks/compfuzor.includes type=srv
+  # already built? don't build again
   - name: test -e {{DIR}}/{{BASETGZ}} as NO_PDEBUILD_CROSS_BUILD
     shell: test -e {{DIR}}/{{BASETGZ}}; echo $?
     register: NO_PDEBUILD_CROSS_BUILD
@@ -28,4 +29,4 @@
   # execute
   - apt: pkg=pdebuild-cross state={{APT_INSTALL}}
   - shell: /usr/sbin/pdebuild-cross-create
-    when: NO_PDEBUILD_CROSS_BUILD.stdout > 0
+    when: NO_PDEBUILD_CROSS_BUILD.stdout|int != 0
