@@ -8,9 +8,10 @@
     ETC_FILES:
     - pdebuild-cross.rc
     - multistrap.conf
+    - preseed
     #- preferences
-    DIRS:
-    - .
+    BINS:
+    - post-create.sh
   vars_files:
   - vars/pkgs.vars
   - [ "private/pdebuild-cross/$configset.vars", "private/pdebuild-cross.vars", "examples-private/pdebuild-cross.vars" ]
