@@ -12,6 +12,7 @@
     #- preferences
     BINS:
     - post-create.sh
+    - extract-from-tar.sh
   vars_files:
   - vars/pkgs.vars
   - [ "private/pdebuild-cross/$configset.vars", "private/pdebuild-cross.vars", "examples-private/pdebuild-cross.vars" ]
