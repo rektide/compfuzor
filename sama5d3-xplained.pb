@@ -27,6 +27,7 @@
     PKGS:
     - device-tree-compiler
 
+    BINS_RUN_BYPASS: True
     BINS:
     #- build-dtb.sh # kernel does this
     #- prepare-image.sh # pdebuildx does this
@@ -48,11 +49,13 @@
       repo_dir: "{{SRCS_DIR}}/u-boot-{{NAME}}"
       target: sama5d3_xplained_mmc_config
       output: "{{VAR}}/u-boot-sd"
+      run: True
     - src: build-uboot.sh
       dest: build-uboot-nand.sh
       repo_dir: "{{SRCS_DIR}}/u-boot-{{NAME}}"
       target: sama5d3_xplained_nandflash_config
       output: "{{VAR}}/u-boot-nand"
+      run: True
     - src: build-deb-kernel.sh
       dest: build-deb-kernel.sh
       repo_dir: "{{kernel_dir}}"
@@ -65,6 +68,7 @@
       arch: arm
       debarch: armhf
       localverion: xplain
+      run: True
 
   tasks:
   - include: tasks/compfuzor.includes type=opt
@@ -82,6 +86,8 @@
   # get boot programs
   - git: dest="{{SRCS_DIR}}/at91boot-{{NAME}}" repo="{{at91boot_repo}}"
   - git: dest="{{SRCS_DIR}}/u-boot-{{NAME}}" repo="{{uboot_repo}}"
+
+  - include: tasks/compfuzor/bins_run.tasks
 
   # symlink extras
   # TODO: u-boot defaults: at91-sama5d3_xplained.dtb zImage
