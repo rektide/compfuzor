@@ -1,0 +1,23 @@
+- debug: "msg=Compfuzor: source base variables"
+- name: "Set name"
+  set_fact: NAME="{{TYPE}}-{{INSTANCE}}"
+  when: NAME is not defined and INSTANCE is defined
+- name: "Set name"
+  set_fact: NAME="{{TYPE}}"
+  when: NAME is not defined and TYPE is defined
+- name: "Include common vars"
+  include_vars: vars/common.vars
+- name: "Include usermode common vars"
+  include_vars: vars/common.user.vars
+  when: USERMODE|default(False)
+- name: "Default to being an 'opt' class compfuzor script"
+  set_fact: type="opt"
+  when: type is not defined
+- name: "Include {{type|lower}} vars"
+  include_vars: "vars/{{type|lower}}.vars"
+- name: "Select default username {{NAME}}"
+  set_fact: USER="{{NAME}}"
+  when: USER is not defined
+- name: "Set DIR variable"
+  set_fact: DIR="{{hostvars[inventory_hostname][type|upper+'S_DIR']}}/{{NAME}}"
+  when: DIR is not defined

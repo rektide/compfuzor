@@ -1,0 +1,34 @@
+---
+- name: "Compfuzor: sourcing systemd variables"
+  include_vars: vars/systemd.vars
+
+- name: Finding pkgonfig for SYSTEMD_USER_UNIT_DIR
+  shell: pkg-config systemd --variable=systemduserunitdir
+  changed_when: False
+  register: SYSTEMD_USER_UNIT_DIR_SHELL
+- name: Finding pkgonfig for SYSTEMD_USER_CONF_DIR
+  shell: pkg-config systemd --variable=systemduserconfdir
+  changed_when: False
+  register: SYSTEMD_USER_CONF_DIR_SHELL
+- name: Finding pkgonfig for SYSTEMD_SYSTEM_UNIT_DIR
+  shell: pkg-config systemd --variable=systemdsystemunitdir
+  changed_when: False
+  register: SYSTEMD_SYSTEM_UNIT_DIR_SHELL
+- name: Finding pkgonfig for SYSTEMD_SYSTEM_UNIT_DIR
+  shell: pkg-config systemd --variable=systemdsystemconfdir
+  changed_when: False
+  register: SYSTEMD_SYSTEM_CONF_DIR_SHELL
+
+- name: "Setting uninitialized systemd variables"
+  set_fact:
+  args:
+    SYSTEMD_SCOPE: "{{ SYSTEMD_SCOPE|default('system') }}"
+    SYSTEMD_USER_UNIT_DIR: "{{ SYSTEMD_USER_UNIT_DIR|default(SYSTEMD_USER_UNIT_DIR_SHELL.stdout) }}"
+    SYSTEMD_SYSTEM_UNIT_DIR: "{{ SYSTEMD_SYSTEM_UNIT_DIR|default(SYSTEMD_SYSTEM_UNIT_DIR_SHELL.stdout) }}"
+    SYSTEMD_USER_CONF_DIR: "{{ SYSTEMD_USER_CONF_DIR|default(SYSTEMD_USER_CONF_DIR_SHELL.stdout) }}"
+    SYSTEMD_SYSTEM_CONF_DIR: "{{ SYSTEMD_SYSTEM_CONF_DIR|default(SYSTEMD_SYSTEM_CONF_DIR_SHELL.stdout) }}"
+- name: "Setting uninitialized systemd variables, part two"
+  set_fact:
+  args:
+    SYSTEMD_UNIT_DIR: "{{ SYSTEMD_UNIT_DIR|default(hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_UNIT_DIR']) }}"
+    SYSTEMD_CONF_DIR: "{{ SYSTEMD_CONF_DIR|default(hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_CONF_DIR']) +'/'+NAME}}"

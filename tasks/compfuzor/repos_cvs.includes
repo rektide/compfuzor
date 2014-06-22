@@ -1,2 +1,0 @@
----
-- shell: chdir="{{DIR}}" git cvsimport -d "{{CVS_REPO}}" -C . -r cvs -k "{{CVS_MODULE}}"

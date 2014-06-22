@@ -1,0 +1,9 @@
+---
+# BINS, unlike include-components, we want to keep under DIR and link into BINS_DIR as needed, not emplace afar & link in.
+- debug: "msg=Compfuzor: install `BINS`"
+- name: "Create `{{DIR}}/bin`"
+  file: path="{{DIR}}/bin" state=directory
+- name:  "Copy `BINS` into place`"
+  template: src="files/{{item.src|default(item.name) if item is mapping else TYPE|default(NAME)+'/'+item }}" dest="{{DIR}}/bin/{{item.dest|default(item.name) if item is mapping else item}}" mode={{item.mode|default(0755)}}
+  with_items: BINS
+# TODO: link into BINS_DIR if flagged

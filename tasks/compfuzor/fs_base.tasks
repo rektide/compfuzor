@@ -1,0 +1,11 @@
+- debug: "Compfuzor: create base files"
+- name: "Creating base `DIR`"
+  file: path="{{DIR}}" state=directory mode={{DIRMODE}}
+- name: "Creating `DIRS`"
+  file: path={{DIR}}/{{item}} state=directory mode={{DIRMODE}}
+  with_items: DIRS
+  when: DIRS is defined
+- name: "Creating `DIR_DIRS`"
+  file: path={{DIR}}/{{item}} state=directory mode={{DIRMODE}}
+  with_items: DIR_DIRS
+  when: DIR_DIRS is defined

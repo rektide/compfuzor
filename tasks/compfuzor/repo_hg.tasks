@@ -1,0 +1,16 @@
+---
+- debug: "msg=Compfuzor: fetch hg repository as git"
+- name: "Fetch fast-export importer"
+  git: repo="https://github.com/frej/fast-export" dest="{{OPTS_DIR}}/fast-export-git"
+- name: "Create temporary hg directory"
+  file: path="{{DIR}}/hg" state=absent
+- name: "Fetch/clone hg repository"
+  shell: chdir="{{DIR}}" hg clone "{{HG_REPO}}" "hg"
+- name: "Initialize `DIR` as git"
+  shell: chdir="{{DIR}}" git init .
+- name: "Import temporary hg"
+  shell: chdir="{{DIR}}" "{{OPTS_DIR}}/fast-export-git/hg-fast-export.sh" -r "{{DIR}}/hg"
+- name: "Erase temporary hg directory"
+  file: path="{{DIR}}/hg" state=absent
+- name: "Load current head"
+  shell: chdir="{{DIR}}" git checkout HEAD

@@ -1,3 +1,0 @@
----
-# build include variable
-- set_indirect: var="{{include|upper}}" val="{{hostvars[inventory_hostname][include|upper+'S_DIR']}}/{{NAME}}"

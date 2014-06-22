@@ -1,7 +1,0 @@
-- git: repo="https://github.com/frej/fast-export" dest="{{OPTS_DIR}}/fast-export-git"
-- file: path="{{DIR}}/hg" state=absent
-- shell: chdir="{{DIR}}" hg clone "{{HG_REPO}}" "hg"
-- shell: chdir="{{DIR}}" git init .
-- shell: chdir="{{DIR}}" "{{OPTS_DIR}}/fast-export-git/hg-fast-export.sh" -r "{{DIR}}/hg"
-- file: path="{{DIR}}/hg" state=absent
-- shell: chdir="{{DIR}}" git checkout HEAD

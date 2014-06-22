@@ -1,64 +1,68 @@
 ---
-- include: ./compfuzor/basevars.includes
-- include: ./compfuzor/repos.includes
+- debug: "msg=Compfuzor: starting; VARIABLES"
+- include: compfuzor/vars_base.tasks
+- debug: "msg=Compfuzor: sourcing hierarchy vars"
+- include: compfuzor/vars_hierarchy.tasks include=opt
+- include: compfuzor/vars_hierarchy.tasks include=srv
+- include: compfuzor/vars_hierarchy.tasks include=etc
+- include: compfuzor/vars_hierarchy.tasks include=var
+- include: compfuzor/vars_hierarchy.tasks include=log
+- include: compfuzor/vars_hierarchy.tasks include=spool
+- include: compfuzor/vars_hierarchy.tasks include=cache
+- include: compfuzor/vars_hierarchy.tasks include=src
+- include: compfuzor/vars_hierarchy.tasks include=pid
+- include: compfuzor/vars_hierarchy.tasks include=run
+- debug: "msg=Compfuzor: sourcing extra variables"
+- include: compfuzor/vars_apt.tasks
+- include: compfuzor/vars_systemd.tasks
+- include: compfuzor/vars_src.tasks
 
-- include: ./compfuzor/dirs.includes
-- include: ./compfuzor/var.includes include=OPT
-- include: ./compfuzor/var.includes include=SRV
-- include: ./compfuzor/var.includes include=ETC
-- include: ./compfuzor/var.includes include=VAR
-- include: ./compfuzor/var.includes include=VAR
-- include: ./compfuzor/var.includes include=LOG
-- include: ./compfuzor/var.includes include=SPOOL
-- include: ./compfuzor/var.includes include=CACHE
-- include: ./compfuzor/var.includes include=SRC
-- include: ./compfuzor/var.includes include=PID
-- include: ./compfuzor/var.includes include=RUN
+- debug: "msg=Compfuzor: REPOSITORIES"
+- include: compfuzor/repo_git.tasks
+  when: REPO is defined or REPOS is defined
+- include: compfuzor/repo_cvs.tasks
+  when: CVS_REPO is defined
+- include: compfuzor/repo_svn.tasks
+  when: SVN_REPO is defined
+- include: compfuzor/repo_hg.tasks
+  when: HG_REPO is defined
 
-- include: ./compfuzor/fs.includes include=OPT
-- include: ./compfuzor/fs.includes include=SRV
-- include: ./compfuzor/fs.includes include=ETC
-- include: ./compfuzor/fs.includes include=VAR
-- include: ./compfuzor/fs.includes include=LOG
-- include: ./compfuzor/fs.includes include=SPOOL
-- include: ./compfuzor/fs.includes include=CACHE
-- include: ./compfuzor/fs.includes include=SRC
-- include: ./compfuzor/fs.includes include=PID
-- include: ./compfuzor/fs.includes include=RUN
+- debug: "msg=Compfuzor: FILESYSTEM"
+- include: compfuzor/fs_base.tasks
+  when: DIR|default(False) and DIR_BYPASS is not defined
+- include: compfuzor/fs_hierarchy.tasks include=opt
+  when: DIR_BYPASS is not defined and OPT_BYPASS is not defined
+- include: compfuzor/fs_hierarchy.tasks include=srv
+  when: DIR_BYPASS is not defined and SRV_BYPASS is not defined
+- include: compfuzor/fs_hierarchy.tasks include=etc
+  when: DIR_BYPASS is not defined and ETC_BYPASS is not defined
+- include: compfuzor/fs_hierarchy.tasks include=var
+  when: DIR_BYPASS is not defined and VAR_BYPASS is not defined
+- include: compfuzor/fs_hierarchy.tasks include=log
+  when: DIR_BYPASS is not defined and LOG_BYPASS is not defined
+- include: compfuzor/fs_hierarchy.tasks include=spool
+  when: DIR_BYPASS is not defined and SPOOL_BYPASS is not defined
+- include: compfuzor/fs_hierarchy.tasks include=cache
+  when: DIR_BYPASS is not defined and CACHE_BYPASS is not defined
+- include: compfuzor/fs_hierarchy.tasks include=src
+  when: DIR_BYPASS is not defined and SRC_BYPASS is not defined
+- include: compfuzor/fs_hierarchy.tasks include=pid
+  when: DIR_BYPASS is not defined and PID_BYPASS is not defined
+- include: compfuzor/fs_hierarchy.tasks include=run
+  when: DIR_BYPASS is not defined and RUN_BYPASS is not defined
+- include: compfuzor/bins.tasks
+  when: BINS_BYPASS is not defined
+- include: compfuzor/links.tasks
+  when: LINKS_BYPASS is not defined
 
-# BINS, unlike all others, we want to keep under DIR, and link into BINS_DIR as needed, & only if flagged to do so
-- debug: "msg=Compfuzor: Handle `BINS`"
-- name: "Create `{{DIR}}/bin`"
-  file: path="{{DIR}}/bin" state=directory
-  when: BINS is defined and BINS_BYPASS|default(False) != True
-- name:  "Copy `BINS` into place`"
-  template: src="files/{{item.src|default(item.name) if item is mapping else TYPE|default(NAME)+'/'+item }}" dest="{{DIR}}/bin/{{item.dest|default(item.name) if item is mapping else item}}" mode={{item.mode|default(0755)}}
-  with_items: BINS
-  when: BINS is defined and BINS_BYPASS|default(False) != True
-- name: "Run all `BINS` that have an `args`"
-  shell: "chdir={{DIR}} {{ DIR+'/bin/'+item.dest|default(item.name) if item.args is defined else '/bin/true' }}{{ ' '+item.args if item.args is defined else '' }}"
-  changed_when: 'item.args is defined'
-  with_items: BINS
-  when: BINS is defined and BINS_BYPASS|default(False) != True
-
-
-# TODO: link into BINS_DIR if flagged
-
-- file: src="{{ DIR if LINKS[item]|first != '/' else '' }}{{ LINKS[item] }}" dest="{{DIR}}/{{item}}" state=link
-  with_items: LINKS.keys()
-  when: LINKS is defined
-
-- set_fact: SRC="files/{{TYPE}}"
-  when: SRC is not defined and TYPE is defined and NAME is not defined
-- set_fact: SRC="files/{{NAME}}"
-  when: SRC is not defined and NAME is defined
-- set_fact: WITHS="{{ '--with-'+WITH|join(' --with-') if WITH is defined else '' }}" ENABLES="{{ '--enable-'+ENABLE|join(' --enable-') if ENABLE is defined else '' }}" PREFIX="{{PREFIX|default(OPT)}}"
-
-- include: apt.includes
-  when: APT_REPO is defined
-- apt: state="{{APT_INSTALL}}" pkg={{item}}
-  with_items: PKGS
+- debug: "msg=Compfuzor: EXTRAS"
+- include: compfuzor/apt.tasks
+  when: APT_REPO is defined and APT_BYPASS is not defined
+- include: compfuzor/pkgs.tasks
   when: PKGS is defined and PKGS_BYPASS is not defined
+- include: compfuzor/systemd.tasks
+  when: SYSTEMD_BYPASS is not defined
+- include: compfuzor/bins_run.tasks
+  when: BINS_BYPASS is not defined and BINS_RUN_BYPASS is not defined
 
-- include: systemd.includes
-- debug: msg="done with compfuzor.includes"
+- debug: "msg=Compfuzor: complete. Returning to main playbook."

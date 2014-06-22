@@ -1,8 +1,0 @@
-- git: repo="{{REPO}}" dest="{{GIT_DIR if GIT_DIR is defined else DIR}}"
-  when: DIR_BYPASS is not defined and GIT_BYPASS is not defined and REPO is defined
-- include: ./repos_hg.includes
-  when: HG_REPO is defined
-- shell: git svn clone {{ "--stdlayout" if SVN_NONSTANDARD is not defined else SVN_NONSTANDARD }} {{SVN_REPO}} {{SVN_DIR|default(GIT_DIR)|default(DIR)}}
-  when: SVN_REPO is defined
-- include: ./repos_cvs.includes
-  when: CVS_REPO is defined

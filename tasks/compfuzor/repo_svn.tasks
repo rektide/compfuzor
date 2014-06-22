@@ -1,0 +1,3 @@
+---
+- name: "Compfuzor: fetch svn repository"
+  shell: git svn clone {{ "--stdlayout" if SVN_NONSTANDARD is not defined else SVN_NONSTANDARD }} {{SVN_REPO}} {{SVN_DIR|default(GIT_DIR)|default(DIR)}}

@@ -1,0 +1,5 @@
+- name: "Compfuzor: source apt variables"
+  set_fact:
+  args:
+    APT_SOURCE: "{{APT_SOURCE|default(NAME)}}"
+    APT_TRUSTED: "{{APT_TRUSTED|default(TYPE)|default(NAME)}}"

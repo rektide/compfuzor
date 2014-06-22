@@ -1,7 +1,0 @@
-# ${include}_FILES
-- set_fact: files="{{include|upper}}_FILES" bypass="{{include|upper}}_BYPASS" path="{{hostvars[inventory_hostname][include|upper+'S_DIR']}}/{{NAME}}" go=True
-- set_fact: go=""
-  when: "({{bypass}} is defined and {{bypass}}) or ({{files}} is not defined)"
-- template: src="files/{{TYPE}}/{{item}}" dest="{{path}}/{{item}}"
-  with_items: "{{files}}"
-  when: go == "True"

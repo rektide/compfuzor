@@ -1,5 +1,6 @@
 - set_fact: KEY="SYSTEMD_{{include|upper}}" SYSTEMD_TARGET="{{TYPE|default(NAME)|default('')}}"
 - local_action: shell test -f "files/{{SYSTEMD_TARGET}}/{{SYSTEMD_TARGET}}.{{include}}"; echo $?
+  changed_when: False
   register: has_file
 - template: src="files/{{SYSTEMD_TARGET}}/{{SYSTEMD_TARGET}}.{{include}}" dest="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{include}}"
   when: "{{KEY}} is defined and {{KEY}} == True and has_file.stdout|int == 0"
