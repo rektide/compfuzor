@@ -1,6 +1,6 @@
 #!/bin/sh
 
-IMAGE="{{DIR}}/pdebuild-cross.tgz"
+IMAGE="pdebuild-cross.tgz"
 
 set -e
 
@@ -29,8 +29,9 @@ fi
 # copy boot files on to sd card
 BOOT_MNT=`mktemp -d --suffix=boot-mnt --tmpdir=.`
 sudo mount "${PART1}" "${BOOT_MNT}"
-sudo cp bin/u-boot-sd.spl "${BOOT_MNT}/BOOT.BIN"
-sudo cp bin/u-boot-sd.img "${BOOT_MNT}/u-boot.img"
+sudo cp lib/u-boot-sd.spl "${BOOT_MNT}/BOOT.BIN"
+sudo cp lib/u-boot-sd.img "${BOOT_MNT}/u-boot.img"
+sudo bin/extract-from-tar.sh vmlinuz
 sudo cp uEnv.txt "${BOOT_MNT}/"
 sudo cp linux.dtb "${BOOT_MNT}/"
 sudo umount "${BOOT_MNT}"

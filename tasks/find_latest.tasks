@@ -1,0 +1,5 @@
+- name: "Get most recent recent file matching `{{find}}` as `latest`"
+  shell: ls --sort=time -r {{find}} | tail -n 1
+  register: latest
+- name: "Evaluate `latest.stdout` and reassign as `latest`"
+  set_fact: latest="{{latest.stdout}}"

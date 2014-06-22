@@ -2,17 +2,17 @@
 
 set -e
 
-SOURCE_DIR="{{source_dir|default(item.source_dir)}}"
-TARGET="{{target|default(item.target)}}"
-ARCH="{{arch|default(item.arch)}}"
+REPO_DIR="{{item.repo_dir|default(repo_dir)}}"
+TARGET="{{item.target|default(target)}}"
+ARCH="{{item.arch|default(arch)}}"
 CC="{{cc|default(item.cc)}}"
-BIN="{{bin|default(item.bin)}}"
+OUTPUT="{{item.output|default(output)}}"
 
-cd "${SOURCE_DIR}"
+cd "${REPO_DIR}"
 make distclean
 make "${TARGET}"
 make CROSS_COMPILE="${CC}"
-cp u-boot.bin "${BIN}.bin"
-cp u-boot.img "${BIN}.img"
-cp spl/u-boot-spl.bin "${BIN}.spl"
-#make distclean
+cp u-boot.bin "${OUTPUT}.bin"
+cp u-boot.img "${OUTPUT}.img"
+cp spl/u-boot-spl.bin "${OUTPUT}.spl"
+make distclean
