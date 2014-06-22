@@ -1,0 +1,8 @@
+- file: path="{{DIR}}" state=directory mode=770
+  when: (DIR is defined or DIRS is defined or DIR_DIRS is defined) and DIR_BYPASS is not defined
+- file: path={{DIR}}/{{item}} state=directory mode=770
+  with_items: DIRS
+  when: DIRS is defined and DIR_BYPASS is not defined
+- file: path={{DIR}}/{{item}} state=directory mode=770
+  with_items: DIR_DIRS
+  when: DIR_DIRS is defined and DIR_BYPASS is not defined

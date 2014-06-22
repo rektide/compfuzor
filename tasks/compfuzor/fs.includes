@@ -1,0 +1,38 @@
+# initialize temporary vars
+- set_fact:
+  args:
+    dir: "{{include|upper+'S_DIR'}}" # name of directory to use
+    dirs: "{{include|upper}}_DIRS" # subdirectories to create, or True
+    files: "{{include|upper}}_FILES" # files to template into place
+    d: "{{include|upper}}_D" # assemblies to create
+    bypass: "{{include|upper}}_BYPASS" # skip doing this stuff!
+    dirpath: "{{hostvars[inventory_hostname][include|upper+'S_DIR']}}/{{NAME}}" # lookup the path for the dir
+    go: True
+- set_fact: go="" # do not go if bypass, or nothing is defined pertaining to this component
+  when: "({{bypass}} is defined and {{bypass}}) or ({{dirs}} is not defined and {{files}} is not defined and {{d}} is not defined)"
+
+# create main directory
+- file: path="{{dirpath}}" state=directory mode="{{mode|default(770)}}" owner="{{owner}}"
+  when: not not go and owner is defined
+- file: path="{{dirpath}}" state=directory mode="{{mode|default(770)}}"
+  when: not not go and owner is not defined
+# link include dir into DIR
+- file: src="{{dirpath}}" dest="{{DIR}}/{{include|lower}}" state=link
+  when: not not go and DIR_BYPASS is not defined
+
+# create subdirs
+- file: path="{{dirpath}}/{{item}}" state=directory
+  with_items: "{{dirs}}"
+  when: "not not go and {{dirs}} is sequence" # defined and {{dirs}} != True"
+# create .d subdirectories
+- file: path="{{dirpath}}/{{item}}.d" state=directory mode="{{mode|default(770)}}"
+  with_items: vars[d]|default([])
+  when: (not not go) and (vars[d] is defined)
+
+# include files
+- template: src="files/{{TYPE|default(NAME)}}/{{item}}" dest="{{dirpath}}/{{item}}"
+  with_items: "{{files}}"
+  when: not not go and files is defined and owner is not defined
+- template: src="files/{{TYPE|default(NAME)}}/{{item}}" dest="{{dirpath}}/{{item}}" owner=owner
+  with_items: "{{files}}"
+  when: not not go and files is defined and owner is defined

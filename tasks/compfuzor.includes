@@ -1,59 +1,50 @@
 ---
-- set_fact: NAME="{{TYPE}}-{{INSTANCE}}"
-  when: NAME is not defined and INSTANCE is defined
-- set_fact: NAME="{{TYPE}}"
-  when: NAME is not defined and TYPE is defined
-- include_vars: vars/common.vars
-- include_vars: vars/common.user.vars
-  when: USERMODE is defined and USERMODE
-- set_fact: type="opt"
-  when: type is not defined
-- include_vars: "vars/{{type|lower}}.vars"
-- set_fact: USER="{{NAME}}"
-  when: USER is not defined
-- set_fact: DIR="{{hostvars[inventory_hostname][type|upper+'S_DIR']}}/{{NAME}}"
-  when: DIR is not defined
+- include: ./compfuzor/basevars.includes
+- include: ./compfuzor/repos.includes
 
-- git: repo="{{REPO}}" dest="{{GIT_DIR if GIT_DIR is defined else DIR}}"
-  when: DIR_BYPASS is not defined and GIT_BYPASS is not defined and REPO is defined
-- include: ./hg_repo.includes
-  when: HG_REPO is defined
-- shell: git svn clone {{ "--stdlayout" if SVN_NONSTANDARD is not defined else SVN_NONSTANDARD }} {{SVN_REPO}} {{SVN_DIR|default(GIT_DIR)|default(DIR)}}
-  when: SVN_REPO is defined
-- include: ./cvs_repo.includes
-  when: CVS_REPO is defined
-- file: path="{{DIR}}" state=directory mode=770
-  when: (DIR is defined or DIRS is defined or DIR_DIRS is defined) and DIR_BYPASS is not defined
-- file: path={{DIR}}/{{item}} state=directory mode=770
-  with_items: DIRS
-  when: DIRS is defined and DIR_BYPASS is not defined
-- file: path={{DIR}}/{{item}} state=directory mode=770
-  with_items: DIR_DIRS
-  when: DIR_DIRS is defined and DIR_BYPASS is not defined
+- include: ./compfuzor/dirs.includes
+- include: ./compfuzor/var.includes include=OPT
+- include: ./compfuzor/var.includes include=SRV
+- include: ./compfuzor/var.includes include=ETC
+- include: ./compfuzor/var.includes include=VAR
+- include: ./compfuzor/var.includes include=VAR
+- include: ./compfuzor/var.includes include=LOG
+- include: ./compfuzor/var.includes include=SPOOL
+- include: ./compfuzor/var.includes include=CACHE
+- include: ./compfuzor/var.includes include=SRC
+- include: ./compfuzor/var.includes include=PID
+- include: ./compfuzor/var.includes include=RUN
 
-- include: ./cfvar_include.tasks include=OPT
-- include: ./cfvar_include.tasks include=SRV
-- include: ./cfvar_include.tasks include=ETC
-- include: ./cfvar_include.tasks include=VAR
-- include: ./cfvar_include.tasks include=LOG
-- include: ./cfvar_include.tasks include=SPOOL
-- include: ./cfvar_include.tasks include=CACHE
-- include: ./cfvar_include.tasks include=SRC
-- include: ./cfvar_include.tasks include=PID
-- include: ./cfvar_include.tasks include=RUN
+- include: ./compfuzor/fs.includes include=OPT
+- include: ./compfuzor/fs.includes include=SRV
+- include: ./compfuzor/fs.includes include=ETC
+- include: ./compfuzor/fs.includes include=VAR
+- include: ./compfuzor/fs.includes include=LOG
+- include: ./compfuzor/fs.includes include=SPOOL
+- include: ./compfuzor/fs.includes include=CACHE
+- include: ./compfuzor/fs.includes include=SRC
+- include: ./compfuzor/fs.includes include=PID
+- include: ./compfuzor/fs.includes include=RUN
 
-- include: ./cfvar_files.tasks include=OPT
-- include: ./cfvar_files.tasks include=SRV
-- include: ./cfvar_files.tasks include=ETC
-- include: ./cfvar_files.tasks include=VAR
-- include: ./cfvar_files.tasks include=LOG
-- include: ./cfvar_files.tasks include=SPOOL
-- include: ./cfvar_files.tasks include=CACHE
-- include: ./cfvar_files.tasks include=SRC
-- include: ./cfvar_files.tasks include=PID
-- include: ./cfvar_files.tasks include=RUN
+# BINS, unlike all others, we want to keep under DIR, and link into BINS_DIR as needed, & only if flagged to do so
+- debug: "msg=Compfuzor: Handle `BINS`"
+- name: "Create `{{DIR}}/bin`"
+  file: path="{{DIR}}/bin" state=directory
+  when: BINS is defined and BINS_BYPASS|default(False) != True
+- name:  "Copy `BINS` into place`"
+  template: src="files/{{item.src|default(item.name) if item is mapping else TYPE|default(NAME)+'/'+item }}" dest="{{DIR}}/bin/{{item.dest|default(item.name) if item is mapping else item}}" mode={{item.mode|default(0755)}}
+  with_items: BINS
+  when: BINS is defined and BINS_BYPASS|default(False) != True
+- name: "Run all `BINS` that have an `args`"
+  shell: "chdir={{DIR}} {{ DIR+'/bin/'+item.dest|default(item.name) if item.args is defined else '/bin/true' }}{{ ' '+item.args if item.args is defined else '' }}"
+  changed_when: 'item.args is defined'
+  with_items: BINS
+  when: BINS is defined and BINS_BYPASS|default(False) != True
 
-- file: src="{{DIR}}/{{LINKS[item]}}" dest="{{DIR}}/{{item}}" state=link
+
+# TODO: link into BINS_DIR if flagged
+
+- file: src="{{ DIR if LINKS[item]|first != '/' else '' }}{{ LINKS[item] }}" dest="{{DIR}}/{{item}}" state=link
   with_items: LINKS.keys()
   when: LINKS is defined
 
