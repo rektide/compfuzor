@@ -15,4 +15,4 @@ make CROSS_COMPILE="${CC}"
 cp u-boot.bin "${OUTPUT}.bin"
 cp u-boot.img "${OUTPUT}.img"
 cp spl/u-boot-spl.bin "${OUTPUT}.spl"
-make distclean
+#make distclean

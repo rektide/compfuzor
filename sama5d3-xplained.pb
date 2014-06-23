@@ -17,13 +17,12 @@
     at91boot_repo: git://github.com/linux4sam/at91bootstrap.git
     uboot_repo: git://git.denx.de/u-boot.git
     uboot_patch: "https://raw.github.com/eewiki/u-boot-patches/master/v2014.04/0001-sama5d3_xplained-uEnv.txt-bootz-n-fixes.patch"
-    pdebuild_cross: "/srv/pdebuildx-armhf/pdebuild-cross.tgz"
 
     VAR_FILES:
     - uEnv.txt
     - kernel-defconfig
     LINKS:
-      pdebuild-cross.tgz: "{{pdebuild_cross}}"
+      "var/pdebuild-cross.tgz": "/srv/pdebuildx-armhf/pdebuild-cross.tgz"
     PKGS:
     - device-tree-compiler
 
@@ -62,8 +61,7 @@
       output: "{{VAR}}/"
       #config_target: "sama5_defconfig"
       defconfig: "{{VAR}}/kernel-defconfig"
-      kernel_param: 'INSTALL_DTBS_PATH=debian/tmp/boot'
-      kernel_target: 'dtbs_install deb-pkg'
+      kernel_target: 'deb-pkg'
       after_kernel: 'cp arch/arm/boot/dts/at91-sama5d3_xplained.dtb debian/tmp/boot/vmlinuz* "${OUTPUT_DIR}/"'
       arch: arm
       debarch: armhf
@@ -91,7 +89,6 @@
 
   # symlink extras
   # TODO: u-boot defaults: at91-sama5d3_xplained.dtb zImage
-  - file: src="{{kernel_dir}}/arch/arm/boot/dts/at91-sama5d3_xplained.dtb" dest="{{VAR}}/at91-sama5d3_xplained.dtb"
   - include: tasks/find_latest.tasks find="{{SRCS_DIR}}/linux-*xplain_armhf.deb"
-  - debug: msg="{{latest}} is latest"
   - file: src="{{latest}}" dest="{{VAR}}/{{latest|basename}}" state=link
+  - file: src="{{latest}}" dest="{{VAR}}/vmlinuz-latest" state=link

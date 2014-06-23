@@ -1,6 +1,0 @@
-setenv bootargs init=/lib/systemd/systemd root=/dev/mmcblk0p2 rootwait rw console=ttyS0,115200
-setenv fdt linux.dtb
-setenv kernel vmlinuz-3.15.0-rc7-xplain
-setenv load_dtb 'fatload mmc 0:1 21000000 /${fdt}'
-setenv load_kernel 'ext4load mmc 0:2 21000000 /boot/${kernel}'
-setenv boot_mmc run load_dtb load_kernel; bootz 22000000 - 21000000 
