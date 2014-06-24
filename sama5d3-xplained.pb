@@ -1,5 +1,7 @@
 ---
 - hosts: all
+  vars_files:
+  - ["private/$configset.vars", "private/{{TYPE}}.vars", "examples-private/{{TYPE}}.vars"]
   vars:
     TYPE: sama5d3-xplained
     INSTANCE: main
@@ -21,17 +23,19 @@
     VAR_FILES:
     - uEnv.txt
     - kernel-defconfig
+    - uEnv.txt
+    - setenv.txt
     LINKS:
       "var/pdebuild-cross.tgz": "/srv/pdebuildx-armhf/pdebuild-cross.tgz"
     PKGS:
     - device-tree-compiler
 
-    BINS_RUN_BYPASS: True
+    BINS_RUN_BYPASS: True # install but do not run
     BINS:
-    #- build-dtb.sh # kernel does this
-    #- prepare-image.sh # pdebuildx does this
     - prepare-sd.sh
     - install-sd.sh
+    - part1-install-sd.sh
+    - part2-install-sd.sh
     # using mainline uboot is good enough; not seeing any advantage to at91boot
     #- src: build-at91boot.sh
     #  dest: build-at91boot-sd.sh
@@ -82,13 +86,15 @@
   - shell: chdir="{{kernel_dir}}" tar xfJ "{{kernel_dir}}.tar.xz" --strip-components=1
 
   # get boot programs
-  - git: dest="{{SRCS_DIR}}/at91boot-{{NAME}}" repo="{{at91boot_repo}}"
+  #- git: dest="{{SRCS_DIR}}/at91boot-{{NAME}}" repo="{{at91boot_repo}}"
   - git: dest="{{SRCS_DIR}}/u-boot-{{NAME}}" repo="{{uboot_repo}}"
 
+  # build uboots, kernel
   - include: tasks/compfuzor/bins_run.tasks
 
   # symlink extras
   # TODO: u-boot defaults: at91-sama5d3_xplained.dtb zImage
   - include: tasks/find_latest.tasks find="{{SRCS_DIR}}/linux-*xplain_armhf.deb"
   - file: src="{{latest}}" dest="{{VAR}}/{{latest|basename}}" state=link
+  - include: tasks/find_latest.tasks find="{{VAR}}/vmlinuz-3.*"
   - file: src="{{latest}}" dest="{{VAR}}/vmlinuz-latest" state=link
