@@ -14,7 +14,7 @@
     go: True
 - name: "Check for stuff to do"
   set_fact: go="" # do not go if bypass, or nothing is defined pertaining to this component
-  when: "({{bypass}} is defined and {{bypass}}) or ({{dirs}} is not defined and {{files}} is not defined and {{d}} is not defined)"
+  when: "({{bypass}}|default(False)) or ({{dirs}} is not defined and {{files}} is not defined and {{d}} is not defined)"
 
 # create main directory
 - name: "Create top {{include|upper}} directory (with owner)"
@@ -26,7 +26,7 @@
 # link include dir into DIR
 - name: "Link top {{include|upper}} directory into `DIR`"
   file: src="{{dirpath}}" dest="{{DIR}}/{{include|lower}}" state=link
-  when: not not go and DIR_BYPASS is not defined
+  when: not not go and not DIR_BYPASS|default(False)
 
 # create subdirs
 - name: "Create {{include|upper}} subdirs"

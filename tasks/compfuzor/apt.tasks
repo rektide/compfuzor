@@ -2,16 +2,16 @@
 - debug: "msg=Compfuzor: install & update apt repository"
 - name: "Copy in apt gpg keys"
   copy: src="files/apt-repos/{{APT_TRUSTED}}.{{item}}" dest="/etc/apt/trusted.gpg.d/{{APT_TRUSTED}}.{{item}}"
-  when: APT_TRUST != False
+  when: APT_TRUST|default(True)
   with_items:
   - gpg
   - gpg.params
 - name: "Copy in apt sources.list"
   template: src="files/_apt.list" dest="/etc/apt/sources.list.d/{{APT_SOURCE}}.list"
 - include: ../apt.update.tasks repo="{{APT_SOURCE}}"
-  when: APT_UPDATE_BYPASS is not defined
+  when: not APT_UPDATE_BYPASS|default(False)
 - name: "Copy in apt source"
   template: src="files/_apt.list dest=/etc/apt/sources.list.d/{{APT_SOURCE}}.src.list" APT_SRC=1
   when: APT_SRC|default(False)
 - include: ../apt.update.tasks repo="{{APT_SOURCE}}.src"
-  when: APT_SRC|default(False) and APT_UPDATE_BYPASS is not defined
+  when: APT_SRC|default(False) and not APT_UPDATE_BYPASS|default(False)

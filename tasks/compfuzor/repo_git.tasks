@@ -1,4 +1,3 @@
 ---
 - name: "Compfuzor: fetch git repository"
-  git: repo="{{REPO}}" dest="{{ GIT_DIR|default(DIR) }}"
-  when: DIR_BYPASS is not defined and GIT_BYPASS is not defined and REPO is defined
+  git: "repo={{REPO}} dest={{ GIT_DIR|default(DIR) }}"
