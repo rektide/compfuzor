@@ -1,5 +1,6 @@
 #!/bin/bash
 
+{% raw %}
 set -e
 
 FILES=`tar -ztf "$1" | egrep "$2"`
@@ -9,9 +10,10 @@ do
 	BASE=`dirname $FILE`
 	OLD_IFS="${IFS}"
 	IFS=/ COMPONENTS=( $BASE )
-	IFS=${OLD_IFS}
+	IFS="${OLD_IFS}"
 	STRIP_COUNT="${#COMPONENTS[@]}"
 
 	echo "$BASE"
-	tar -xf "$1" "$FILE" --strip-components ${STRIP_COUNT}
+	tar -xf "$1" "$FILE" --strip-components "${STRIP_COUNT}"
 done <<< "$FILES"
+{% endraw %}
