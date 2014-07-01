@@ -47,19 +47,19 @@
     #  repo_dir: "{{SRCS_DIR}}/at91boot-{{NAME}}"
     #  target: sama5d3_xplainednf_uboot_defconfig
     #  output: "{{VAR}}/at91boot-nand"
-    - src: build-uboot.sh
+    - src: ../build-uboot.sh
       dest: build-uboot-sd.sh
       repo_dir: "{{SRCS_DIR}}/u-boot-{{NAME}}"
       target: sama5d3_xplained_mmc_config
       output: "{{VAR}}/u-boot-sd"
       run: True
-    - src: build-uboot.sh
+    - src: ../build-uboot.sh
       dest: build-uboot-nand.sh
       repo_dir: "{{SRCS_DIR}}/u-boot-{{NAME}}"
       target: sama5d3_xplained_nandflash_config
       output: "{{VAR}}/u-boot-nand"
       run: True
-    - src: build-deb-kernel.sh
+    - src: ../build-deb-kernel.sh
       dest: build-deb-kernel.sh
       repo_dir: "{{kernel_dir}}"
       output: "{{VAR}}/"

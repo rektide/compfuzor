@@ -4,6 +4,6 @@
 - name: "Create `{{DIR}}/bin`"
   file: path="{{DIR}}/bin" state=directory
 - name:  "Copy `BINS` into place`"
-  template: src="files/{{item.src|default(item.name) if item is mapping else TYPE|default(NAME)+'/'+item }}" dest="{{DIR}}/bin/{{item.dest|default(item.name) if item is mapping else item}}" mode={{item.mode|default(0755)}}
+  template: src="files/{{ TYPE|default(NAME) }}/{{item.src|default(item.name) if item is mapping else item }}" dest="{{DIR}}/bin/{{item.dest|default(item.name) if item is mapping else item}}" mode={{item.mode|default(0755)}}
   with_items: BINS
 # TODO: link into BINS_DIR if flagged
