@@ -1,0 +1,19 @@
+- name: "Source temporary {{include|upper}} .d facts"
+  set_fact:
+  args:
+    dir: "{{include|upper+'S_DIR'}}"
+    d: "{{include|upper+'_D'}}"
+    files: "{{vars[include|upper+'_D']|default('')}}"
+    path: "{{hostvars[inventory_hostname][include|upper]}}"
+    go: True
+- name: "Check for .d stuff to do"
+  set_fact: go=""
+  when: "{{d}} is not defined"
+- name: "Move existing file instances into their .d directory (if no existing copy found)"
+  shell: test ! -f "{{path}}/{{item}}.d/{{d_default|default(10)}}-$(basename {{item}})" -a -f "{{path}}/{{item}}" && mv "{{path}}/{{item}}" "{{path}}/{{item}}.d/{{d_default|default(10)}}-$(basename {{item}})"; echo $?
+  when: not not go
+  with_items: files
+- name: "Assemble the .d directory"
+  assemble: src="{{path}}/{{item}}.d" dest="{{path}}/{{item}}"
+  when: not not go
+  with_items: files

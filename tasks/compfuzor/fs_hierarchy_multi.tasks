@@ -1,0 +1,21 @@
+- include: fs_hierarchy.tasks include=opt
+  when: DIR_BYPASS is not defined and OPT_BYPASS is not defined
+- include: fs_hierarchy.tasks include=srv
+  when: DIR_BYPASS is not defined and SRV_BYPASS is not defined
+- include: fs_hierarchy.tasks include=etc
+  when: DIR_BYPASS is not defined and ETC_BYPASS is not defined
+- include: fs_hierarchy.tasks include=var
+  when: DIR_BYPASS is not defined and VAR_BYPASS is not defined
+- include: fs_hierarchy.tasks include=log
+  when: DIR_BYPASS is not defined and LOG_BYPASS is not defined
+- include: fs_hierarchy.tasks include=spool
+  when: DIR_BYPASS is not defined and SPOOL_BYPASS is not defined
+- include: fs_hierarchy.tasks include=cache
+  when: DIR_BYPASS is not defined and CACHE_BYPASS is not defined
+- include: fs_hierarchy.tasks include=src
+  when: DIR_BYPASS is not defined and SRC_BYPASS is not defined
+- include: fs_hierarchy.tasks include=pid
+  when: DIR_BYPASS is not defined and PID_BYPASS is not defined
+- include: fs_hierarchy.tasks include=run
+  when: DIR_BYPASS is not defined and RUN_BYPASS is not defined
+

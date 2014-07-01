@@ -1,9 +1,0 @@
-- set_fact: dir="{{include|upper+'S_DIR'}}" d="{{include|upper+'_D'}}" files="{{vars[include|upper+'_D']|default('')}}" path="{{hostvars[inventory_hostname][include|upper]}}" go=True
-- set_fact: go=""
-  when: "not {{d}} is defined"
-- shell: test ! -f "{{path}}/{{item}}.d/{{d_default|default(10)}}-$(basename {{item}})" -a -f "{{path}}/{{item}}" && mv "{{path}}/{{item}}" "{{path}}/{{item}}.d/{{d_default|default(10)}}-$(basename {{item}})"; echo $?
-  when: not not go
-  with_items: files
-- assemble: src="{{path}}/{{item}}.d" dest="{{path}}/{{item}}"
-  when: not not go
-  with_items: files
