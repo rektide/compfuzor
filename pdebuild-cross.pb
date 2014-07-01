@@ -11,8 +11,12 @@
     - preseed
     #- preferences
     BINS:
-    - post-create.sh
     - extract-from-tar.sh
+    - name: post-create.sh
+      run: True
+    BINS_RUN_BYPASS: True
+    PKGS:
+    - pdebuild-cross
   vars_files:
   - vars/pkgs.vars
   - [ "private/pdebuild-cross/$configset.vars", "private/pdebuild-cross.vars", "examples-private/pdebuild-cross.vars" ]
@@ -29,6 +33,7 @@
   - file: path=/etc/pdebuild-cross state=directory
   - file: src={{ETC}}/pdebuild-cross.rc dest=/etc/pdebuild-cross/pdebuild-cross.rc state=link
   # execute
-  - apt: pkg=pdebuild-cross state={{APT_INSTALL}}
   - shell: /usr/sbin/pdebuild-cross-create
+    when: NO_PDEBUILD_CROSS_BUILD.stdout|int != 0
+  - include: tasks/compfuzor/bins_run.tasks
     when: NO_PDEBUILD_CROSS_BUILD.stdout|int != 0

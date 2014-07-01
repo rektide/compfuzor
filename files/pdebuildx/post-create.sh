@@ -20,7 +20,7 @@ if test ! -e "$FILE" ; then
 	exit 1
 elif test -f "$FILE" ; then
 	DIR=`mktemp --suffix=.pdebuildx -d --tmpdir=.`
-	tar -xzf -C "$DIR" "$FILE"
+	tar -C "$DIR" -xzf "$FILE"
 else
 	DIR="$FILE"
 fi
