@@ -78,8 +78,8 @@ fi
 #### Cleanup ####
 
 # unmount
-sudo umount proc
-sudo umount dev
+sudo umount -l proc
+sudo umount -l dev
 
 # cleanup QEMU
 if test -n "$QEMU" ; then
@@ -91,6 +91,6 @@ cd "$OLD_DIR"
 
 # create tar & cleanup
 if test "$CLEANUP" != "false" ; then
-	tar -czf "$FILE" -C "$DIR" .
+	tar --one-file-system -czf "$FILE" -C "$DIR" .
 	rm -r "$DIR"
 fi

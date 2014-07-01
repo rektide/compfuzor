@@ -1,0 +1,24 @@
+export HOSTNAME={{hostname|default(NAME)}}
+export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true
+export LC_ALL=C LANGUAGE=C LANG=C
+
+echo "$HOSTNAME" >> /etc/hostname
+
+debconf-set-selections <<TZSEL
+tzdata tzdata/Areas select US
+tzdata tzdata/Areas seen true
+tzdata tzdata/Zones/US select Eastern
+tzdata tzdata/Zones/US seen true
+TZSEL
+
+/var/lib/dpkg/info/dash.preinst install
+dpkg --configure -a
+
+# booo! base-files?!?! what are you doing?!
+mv /var/run /var/run-bak
+dpkg --configure -a
+mv /var/run-bak/* /var/run
+rm -r /var/run-bak
+
+ln -sf /proc/self/mounts /etc/mtab
+echo 'root:{{ password|default('CHANGE_OR_ELSE') }}' | chpasswd
