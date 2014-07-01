@@ -1,0 +1,3 @@
+{% for l in lines|default(hostvars[inventory_hostname][line_var])|default(vars[line_var]) %}
+{{ l }}
+{% endfor %}
