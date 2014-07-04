@@ -1,5 +1,5 @@
 ---
 - name: "Compfuzor: create `LINKS`"
-  file: src="{{ DIR if LINKS[item]|first != '/' else '' }}{{ LINKS[item] }}" dest="{{DIR}}/{{item}}" state=link
-  with_items: LINKS.keys()
+  file: src="{{ DIR+'/' if item[1]|first != '/' else '' }}{{ item[1] }}" dest="{{ DIR+'/' if item[0]|first != '/' else '' }}{{item[0]}}" state=link
+  with_items: LINKS.items()
   when: LINKS is defined and not LINK_BYPASS|default(False)
