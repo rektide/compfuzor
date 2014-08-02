@@ -1,8 +1,10 @@
 ---
 - hosts: all
-  vars_files:
-  - vars/common.vars
+  vars:
+    TYPE: ceph
+    APT_KEY_URL: 'https://ceph.com/git/?p=ceph.git;a=blob_plain;f=keys/release.asc'
+    APT_REPO: 'http://ceph.com/debian-firefly/'
+    APT_DISTRIBUTION: wheezy
+    PKGSET: CEPH
   tasks:
-  - name: install ceph packages
-    apt: pkg=ceph,btrfs-tools,ceph-fuse,libcephfs1,radosgw state=$APT_INSTALL
-
+  - include: tasks/compfuzor.includes
