@@ -2,4 +2,11 @@
 - name: "Compfuzor: install packages"
   apt: state="{{APT_INSTALL}}" pkg={{item}}
   with_items: PKGS
-  when: PKGS is defined and not PKGS_BYPASS|default(False)
+  when: PKGS is defined
+- name: "install pkgset"
+  apt: state="{{APT_INSTALL}}" pkg="{{hostvars[inventory_hostname][PKGSET]|join(',')}}"
+  when: PKGSET is defined
+- name: "install pkgsets"
+  apt: state="{{APT_INSTALL}}" pkg="{{hostvars[inventory_hostname][item]|join(',')}}"
+  with_items: "{{PKGSETS|default(False)}}"
+  when: PKGSETS is defined
