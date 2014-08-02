@@ -31,12 +31,12 @@
 
 - debug: "msg=Compfuzor: EXTRAS"
 - include: compfuzor/apt.tasks
-  when: APT_REPO is defined and not APT_BYPASS|default(False)
+  when: APT_REPO is defined and not APT_BYPASS|default(False) and not PKGS_BYPASS|default(False)
 - include: compfuzor/pkgs.tasks
-  when: PKGS is defined and not PKGS_BYPASS|default(False)
+  when: (PKGS is defined or PKGSET is defined or PKGSETS is defined) and not PKGS_BYPASS|default(False)
 - include: compfuzor/systemd.tasks
   when: not SYSTEMD_BYPASS|default(False)
 - include: compfuzor/bins_run.tasks
-  when: not BINS_BYPASS|default(False) and BINS_RUN_BYPASS|default(False)
+  when: not BINS_BYPASS|default(False) and not BINS_RUN_BYPASS|default(False)
 
 - debug: "msg=Compfuzor: complete. Returning to main playbook."
