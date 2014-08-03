@@ -31,7 +31,7 @@
 
 - debug: "msg=Compfuzor: EXTRAS"
 - include: compfuzor/apt.tasks
-  when: APT_REPO is defined and not APT_BYPASS|default(False) and not PKGS_BYPASS|default(False)
+  when: APT_REPO|default(APT_REPOS)|default(False) and not APT_BYPASS|default(False) and not PKGS_BYPASS|default(False)
 - include: compfuzor/pkgs.tasks
   when: (PKGS is defined or PKGSET is defined or PKGSETS is defined) and not PKGS_BYPASS|default(False)
 - include: compfuzor/systemd.tasks

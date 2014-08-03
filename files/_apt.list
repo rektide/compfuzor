@@ -1,28 +1,49 @@
-{% if APT_DISTRIBUTIONS is defined %}{% for DISTRIBUTION in APT_DISTRIBUTIONS %}
-deb{% if APT_SRC %}-src{% endif %}
-{%- if APT_ARCH is defined or APT_ARCHS is defined %} [ 
-{%- if APT_ARCH is defined %}arch = {{APT_ARCH}}{{" "}}
-{%- elif APT_ARCHS is defined %}arch = {{APT_ARCHS|join(",")}}{{" "}}{% endif %}
- ]{% endif -%}
-{{" "}}{{APT_REPO}}  {{DISTRIBUTION}}{{" "}}
-{%- if APT_COMPONENTS is defined %}{{APT_COMPONENTS|join(" ")}}
-{%- elif APT_COMPONENT is defined %}{{APT_COMPONENT}}
-{%- elif APT_DEFAULT_COMPONENTS is defined %}{{APT_DEFAULT_COMPONENTS|join(" ")}}
-{%- elif APT_DEFAULT_COMPONENT is defined %}{{APT_DEFAULT_COMPONENT }}
-{%- else %}main{% endif %}
-{%- endfor %}{% else %}
-deb{% if APT_SRC is defined %}-src{% endif %}
-{%- if APT_ARCH is defined or APT_ARCHS is defined %} [ 
-{%- if APT_ARCH is defined %}arch = {{APT_ARCH}}{{" "}}
-{%- elif APT_ARCHS is defined %}arch = {{APT_ARCHS|join(",")}}{{" "}}{% endif %}
- ]{% endif -%}
-{{" "}}{{APT_REPO}}{{" "}}
-{%- if APT_DISTRIBUTION is defined %}{{APT_DISTRIBUTION}}
-{%- elif APT_DEFAULT_DISTRIBUTION is defined %}{{APT_DEFAULT_DISTRIBUTION}}
-{%- else %}unstable{% endif %}{{" "}}
-{%- if APT_COMPONENTS is defined %}{{APT_COMPONENTS|join(" ")}}
-{%- elif APT_COMPONENT is defined %}{{APT_COMPONENT}}
-{%- elif APT_DEFAULT_COMPONENTS is defined %}{{APT_DEFAULT_COMPONENTS|join(" ")}}
-{%- elif APT_DEFAULT_COMPONENT is defined %}{{APT_DEFAULT_COMPONENT }}
-{%- else %}main{% endif %}
-{% endif %}
+{% macro _repo(url, distributions, components, archs) -%}
+{% for distribution in distributions -%}
+deb {{'[ arch = '+archs|join(',')+' ] ' if archs else ''}}{{url}} {{distribution}} {{components|join(' ')}}
+{% if APT_SOURCE|default(False) -%}
+deb-src {{'[ arch = '+archs|join(',')+' ] ' if archs else ''}}{{url}} {{distribution}} {{components|join(' ')}}
+{% endif -%}
+{% endfor -%}
+{% endmacro -%}
+
+{% macro repo(repo) -%}
+{% if APT_DISTRIBUTIONS is defined -%}
+{% set dists = APT_DISTRIBUTIONS -%}
+{% elif APT_DISTRIBUTION is defined -%}
+{% set dists = [APT_DISTRIBUTION] -%}
+{% elif APT_DEFAULT_DISTRIBUTIONS is defined -%}
+{% set dists = APT_DEFAULT_DISTRIBUTIONS -%}
+{% elif APT_DEFAULT_DISTRIBUTION is defined -%}
+{% set dists = [APT_DEFAULT_DISTRIBUTION] -%}
+{% endif -%}
+{% if APT_COMPONENTS is defined -%}
+{% set comps = APT_COMPONENTS -%}
+{% elif APT_COMPONENT is defined -%}
+{% set comps = [APT_COMPONENT] -%}
+{% elif APT_DEFAULT_COMPONENTS is defined -%}
+{% set comps = APT_DEFAULT_COMPONENTS -%}
+{% elif APT_DEFAULT_COMPONENT is defined -%}
+{% set comps = [APT_DEFAULT_COMPONENT] -%}
+{% endif -%}
+{% if APT_ARCHS is defined -%}
+{% set archs = APT_ARCHS -%}
+{% elif APT_ARCH is defined -%}
+{% set archs = [APT_ARCH] -%}
+{% elif APT_DEFAULT_ARCHS is defined -%}
+{% set archs = APT_DEFAULT_ARCHS -%}
+{% elif APT_DEFAULT_ARCH is defined -%}
+{% set archs = [APT_DEFAULT_ARCH] -%}
+{% else %}
+{% set archs = False %}
+{% endif -%}
+{{ _repo(repo, dists, comps, archs) -}}
+{% endmacro -%}
+
+{% for url in APT_REPOS|default([]) -%}
+{{ repo(url) -}}
+{% endfor -%}
+
+{% if APT_REPO is defined -%}
+{{ repo(APT_REPO) -}}
+{% endif -%}

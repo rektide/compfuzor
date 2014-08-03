@@ -7,11 +7,6 @@
   - gpg
   - gpg.params
 - name: "Copy in apt sources.list"
-  template: src="files/_apt.list" dest="/etc/apt/sources.list.d/{{APT_SOURCE}}.list"
-- include: ../apt.update.tasks repo="{{APT_SOURCE}}"
+  template: src="files/_apt.list" dest="/etc/apt/sources.list.d/{{APT_SOURCELIST}}.list"
+- include: ../apt.update.tasks repo="{{APT_SOURCELIST}}"
   when: not APT_UPDATE_BYPASS|default(False)
-- name: "Copy in apt source"
-  template: src="files/_apt.list dest=/etc/apt/sources.list.d/{{APT_SOURCE}}.src.list" APT_SRC=1
-  when: APT_SRC|default(False)
-- include: ../apt.update.tasks repo="{{APT_SOURCE}}.src"
-  when: APT_SRC|default(False) and not APT_UPDATE_BYPASS|default(False)
