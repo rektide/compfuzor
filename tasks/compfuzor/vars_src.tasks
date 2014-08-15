@@ -4,4 +4,3 @@
   args:
     WITHS: "{{ '--with-'+WITH|join(' --with-') if WITH is defined else '' }}" 
     ENABLES: "{{ '--enable-'+ENABLE|join(' --enable-') if ENABLE is defined else '' }}" 
-    PREFIX: "{{PREFIX|default(OPT)}}"

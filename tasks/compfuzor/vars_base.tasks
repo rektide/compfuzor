@@ -18,6 +18,12 @@
 - name: "Select default username {{NAME}}"
   set_fact: USER="{{NAME}}"
   when: USER is not defined
+- name: "Set PREFIX_DIR variable from DIR"
+  set_fact: PREFIX_DIR="{{DIR|dirname}}"
+  when: DIR is defined and PREFIX_DIR is not defined
+- name: "Set PREFIX_DIR variable"
+  set_fact: PREFIX_DIR="{{hostvars[inventory_hostname][type|uppper+'S_DIR']}}"
+  when: PREFIX_DIR is not defined
 - name: "Set DIR variable"
-  set_fact: DIR="{{hostvars[inventory_hostname][type|upper+'S_DIR']}}/{{NAME}}"
+  set_fact: DIR="{{PREFIX_DIR}}/{{NAME}}"
   when: DIR is not defined
