@@ -4,4 +4,6 @@
   when: REPO|default(False)
 - name: "fetch git repositories"
   git: "repo={{ REPOS[item] }} dest={{ PREFIX_DIR+'/' if item|first != '/' else '' }}{{ item }}"
-  with_items: (REPOS|default([])).keys()
+  with_items: REPOS.keys()
+  when: REPOS|default(False)
+

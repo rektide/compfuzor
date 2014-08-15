@@ -10,7 +10,7 @@
 
 - debug: "msg=Compfuzor: REPOSITORIES"
 - include: compfuzor/repo_git.tasks
-  when: REPO is defined or REPOS is defined and not DIR_BYPASS|default(False) and GIT_BYPASS|default(False)
+  when: (REPO is defined or REPOS is defined) and not DIR_BYPASS|default(False) and not GIT_BYPASS|default(False)
 - include: compfuzor/repo_cvs.tasks
   when: CVS_REPO is defined
 - include: compfuzor/repo_svn.tasks
