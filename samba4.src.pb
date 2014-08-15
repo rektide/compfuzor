@@ -68,10 +68,10 @@
     - regedit
     # FreeIPA, but won't get a DC?
     #- with-system-mitkrb5
-    #PREFIX: "{{OPT}}"
-    PREFIX: /usr
+    #PREFIX_DIR: "{{OPT}}"
+    PREFIX_DIR: /usr
   tasks:
   - include: tasks/compfuzor.includes type=src
-  - shell: chdir={{DIR}} ./configure --with-{{ WITH|join(' --with-') }} --enable-{{ ENABLE|join(' --enable-') }} --prefix="{{PREFIX}}"
+  - shell: chdir={{DIR}} ./configure --with-{{ WITH|join(' --with-') }} --enable-{{ ENABLE|join(' --enable-') }} --prefix="{{PREFIX_DIR}}"
   - shell: chdir={{DIR}} make
   - shell: chdir={{DIR}} make install
