@@ -1,27 +1,27 @@
 ---
 - hosts: all
   gather_facts: False
-  vars_files:
-  - vars/common.vars
   vars:
-  - DEFAULT_SHELL: true
+    NAME: zsh
+    DEFAULT_SHELL: true
+    PKGS:
+    - zsh
+    ETCS_DIR: /etc/zsh
+    ETC_DIRS:
+    - z.d
+    - zfunc.d
+    ETC_FILES:
+     - zprofile
+     - zshrc
+     - zlogin
+     - zfunc.d/flatten
+     - zfunc.d/zcompile-all
+     - zfunc.d/zsource-all
+     - zfunc.d/zautoload-all
+     - z.d/handjam
+     - z.d/prompt
   tasks:
-  - apt: package=zsh state=$APT_INSTALL
-  - file: path=$item state=directory
-    with_items:
-    - /etc/zsh/z.d
-    - /etc/zsh/zfunc.d
-  - copy: src=files/zsh/$item dest=/etc/zsh/$item
-    with_items:
-    - zprofile
-    - zshrc
-    - zlogin
-    - zfunc.d/flatten
-    - zfunc.d/zcompile-all
-    - zfunc.d/zsource-all
-    - zfunc.d/zautoload-all
-    - z.d/handjam
-    - z.d/prompt
+  - include: tasks/compfuzor.includes
   - lineinfile: dest=/etc/default/useradd regexp=^SHELL=/bin/zsh$ line=SHELL=/bin/zsh
-    only_if: $DEFAULT_SHELL
+    when: DEFAULT_SHELL|default(False)
   - shell: executable=/bin/zsh . /etc/zsh/zshrc ; zcompile-all /etc/zsh/z.d /etc/zsh/zfunc.d
