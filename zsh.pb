@@ -6,7 +6,8 @@
     DEFAULT_SHELL: true
     PKGS:
     - zsh
-    ETCS_DIR: /etc/zsh
+    - zsh-doc
+    ETC: /etc/zsh
     ETC_DIRS:
     - z.d
     - zfunc.d
@@ -24,4 +25,4 @@
   - include: tasks/compfuzor.includes
   - lineinfile: dest=/etc/default/useradd regexp=^SHELL=/bin/zsh$ line=SHELL=/bin/zsh
     when: DEFAULT_SHELL|default(False)
-  - shell: executable=/bin/zsh . /etc/zsh/zshrc ; zcompile-all /etc/zsh/z.d /etc/zsh/zfunc.d
+  - shell: executable=/bin/zsh . {{ETC}}/zshrc ; zcompile-all {{ETC}}/z.d {{ETC}}/zfunc.d
