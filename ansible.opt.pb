@@ -16,7 +16,7 @@
     - hosts
     ETC_FILES:
     - hosts/localhost
-    BINS:
+    FILES:
     - env.ansible
     LINKS:
       "{{BINS_DIR}}/ansible-ec2": "{{PREFIX_DIR}}/ansible-ec2"

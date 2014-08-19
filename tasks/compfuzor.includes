@@ -23,7 +23,7 @@
   when: DIR|default(False) and not DIR_BYPASS|default(False)
 - include: compfuzor/fs_hierarchy_multi.tasks
 - include: compfuzor/bins.tasks
-  when: not BINS_BYPASS|default(False)
+  when: BINS is defined and not BINS_BYPASS|default(False)
 - include: compfuzor/links.tasks
   when: not LINKS_BYPASS|default(False)
 - include: compfuzor/_multi.tasks multi=fs_d
