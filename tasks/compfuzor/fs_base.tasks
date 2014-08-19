@@ -9,3 +9,7 @@
   file: path={{DIR}}/{{item}} state=directory mode={{DIRMODE}}
   with_items: DIR_DIRS
   when: DIR_DIRS is defined
+- name: "Creating `FILES`"
+  template: src="files/{{TYPE}}/{{item}}" dest="{{DIR}}/{{item}}"
+  with_items: FILES
+  when: FILES is defined
