@@ -1,6 +1,7 @@
 ---
 - debug: "msg=Compfuzor: starting; VARIABLES"
 - include: compfuzor/vars_base.tasks
+- include: compfuzor/vars_env.tasks
 - debug: "msg=Compfuzor: sourcing hierarchy vars"
 - include: compfuzor/_multi.tasks multi=vars_hierarchy
 - debug: "msg=Compfuzor: sourcing extra variables"
@@ -21,6 +22,8 @@
 - debug: "msg=Compfuzor: FILESYSTEM"
 - include: compfuzor/fs_base.tasks
   when: DIR|default(False) and not DIR_BYPASS|default(False)
+- include: compfuzor/fs_env.tasks
+  when: has_env.stdout|int == 0
 - include: compfuzor/fs_hierarchy_multi.tasks
 - include: compfuzor/bins.tasks
   when: BINS is defined and not BINS_BYPASS|default(False)

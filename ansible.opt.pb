@@ -16,8 +16,6 @@
     - hosts
     ETC_FILES:
     - hosts/localhost
-    FILES:
-    - env.ansible
     LINKS:
       "{{BINS_DIR}}/ansible-ec2": "{{PREFIX_DIR}}/ansible-ec2"
       "{{ETC}}/ec2.ini": "{{DIR}}/plugins/inventory/ec2.ini"
@@ -29,6 +27,6 @@
   - name: test for existing ETC/hosts/default
     shell: test -e {{ETC}}/hosts/default; echo $?
     register: has_default
-  - name: create a default ETC/hosts/default
-    file: src="{{ETC}}/hosts/localhost" dest="{{ETC}}/hosts/default" state=link
-    when: has_default.stdout != "0"
+  #- name: create a default ETC/hosts/default
+  #  file: src="{{ETC}}/hosts/localhost" dest="{{ETC}}/hosts/default" state=link
+  #  when: has_default.stdout != "0"

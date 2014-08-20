@@ -1,0 +1,6 @@
+- name: "Compfuzor: test local system for has_env variable"
+  local_action: shell test -e "files/{{TYPE|default(NAME)}}/env"; echo $?
+  register: has_env
+- name: test remote system for has_type_env
+  shell: test -e "{{PREFIX_DIR}}/env.{{TYPE|default(NAME)}}"; echo $?
+  register: has_type_env
