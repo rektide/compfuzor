@@ -10,7 +10,7 @@
     files: "{{include|upper}}_FILES" # files to template into place
     d: "{{include|upper}}_D" # assemblies to create
     bypass: "{{include|upper}}_BYPASS" # skip doing this stuff!
-    dirpath: "{{hostvars[inventory_hostname][include|upper+'S_DIR']}}/{{NAME}}" # lookup the path for the dir
+    dirpath: "{{hostvars[inventory_hostname][include|upper]}}" # lookup the path for the dir
     go: True
 - name: "Check for stuff to do"
   set_fact: go="" # do not go if bypass, or nothing is defined pertaining to this component
