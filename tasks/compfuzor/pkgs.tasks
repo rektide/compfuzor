@@ -7,6 +7,5 @@
   apt: state="{{APT_INSTALL}}" pkg="{{hostvars[inventory_hostname][PKGSET]|join(',')}}"
   when: PKGSET is defined
 - name: "install pkgsets"
-  apt: state="{{APT_INSTALL}}" pkg="{{hostvars[inventory_hostname][item]|join(',')}}"
-  with_items: "{{PKGSETS|default(False)}}"
-  when: PKGSETS is defined
+  apt: state="installed" pkg="{{ item }}"
+  with_flattened: "{{ PKGSETS }}"
