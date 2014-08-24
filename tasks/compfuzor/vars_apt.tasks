@@ -1,6 +1,6 @@
 - name: "Compfuzor: source apt variables"
   set_fact:
   args:
-    APT_SOURCELIST: "{{APT_SOURCELIST|default(NAME)}}"
-    APT_TRUSTED: "{{APT_TRUSTED|default(TYPE)|default(NAME)}}"
+    APT_SOURCELIST: "{{APT_SOURCELIST|default(NAME)|default(TYPE)}}"
+    APT_TRUSTED: "{{APT_TRUSTED|default(APT_SOURCELIST)|default(NAME)|default(TYPE)}}"
 - include_vars: vars/pkgs.vars
