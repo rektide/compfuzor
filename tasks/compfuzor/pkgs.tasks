@@ -8,4 +8,4 @@
   when: PKGSET is defined
 - name: "install pkgsets"
   apt: state="installed" pkg="{{ item }}"
-  with_flattened: "{{ PKGSETS }}"
+  with_flattened: "{{ PKGSETS|default([]) }}"
