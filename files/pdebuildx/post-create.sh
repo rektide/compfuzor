@@ -2,6 +2,8 @@
 
 set -e
 
+export ARCH="{{ARCH}}"
+
 # VARIABLES:
 # QEMU - use this qemu (or false. defaults to qemu-arm-static)
 # CLEAN - clean up after (or false. defaults to true)
@@ -39,7 +41,7 @@ else
 fi
 
 # do we need a qemu?
-if test "$QEMU" = "false" ; then
+if test "$QEMU" = "false" -o "$ARCH" = "amd64" -o "$ARCH" = "i386" ; then
 	QEMU=""
 elif test -n "$QEMU" ; then
 	QEMU="qemu-$2-static"
