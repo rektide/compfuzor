@@ -11,6 +11,6 @@
   tasks:
   - include: tasks/compfuzor.includes
   - get_url: url="{{deb}}" dest="/tmp/skype.deb"
-  - shell: dpkg -i /tmp/skype.deb
+  - shell: dpkg -i --force-architecture /tmp/skype.deb
     sudo: True
   - file: path="/tmp/skype.deb" state=absent
