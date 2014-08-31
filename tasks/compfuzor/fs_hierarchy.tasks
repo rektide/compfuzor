@@ -31,20 +31,20 @@
 # create subdirs
 - name: "Create {{include|upper}} subdirs"
   file: path="{{dirpath}}/{{item}}" state=directory
-  with_items: "{{dirs}}"
+  with_items: "{{dirs|default([])}}"
   when: "not not go and {{dirs}} is sequence" # defined and {{dirs}} != True"
 # create .d subdirectories
 - name: "Create {{include|upper}} .d directories"
   file: path="{{dirpath}}/{{item}}.d" state=directory mode="{{mode|default(770)}}"
-  with_items: vars[d]|default([])
+  with_items: vars[d|default('')]|default([])
   when: (not not go) and (vars[d] is defined)
 
 # include files
 - name: "Create {{include|upper}} files (with owner)"
   template: src="files/{{TYPE|default(NAME)}}/{{item}}" dest="{{dirpath}}/{{item}}" owner="{{owner}}"
-  with_items: "{{files}}"
+  with_items: files|default([])
   when: not not go and files is defined and owner is defined
 - name: "Create {{include|upper}} files"
   template: src="files/{{TYPE|default(NAME)}}/{{item}}" dest="{{dirpath}}/{{item}}"
-  with_items: "{{files}}"
+  with_items: files|default([])
   when: not not go and files is defined and owner is not defined
