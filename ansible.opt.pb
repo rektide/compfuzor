@@ -25,8 +25,8 @@
   tasks:
   - include: tasks/compfuzor.includes
   - name: test for existing ETC/hosts/default
-    shell: test -e {{ETC}}/hosts/default; echo $?
+    shell: test -e "{{ETC}}/hosts/default"; echo $?
     register: has_default
-  #- name: create a default ETC/hosts/default
-  #  file: src="{{ETC}}/hosts/localhost" dest="{{ETC}}/hosts/default" state=link
-  #  when: has_default.stdout != "0"
+  - name: create a default ETC/hosts/default
+    file: src="{{ETC}}/hosts/localhost" dest="{{ETC}}/hosts/default" state=link
+    when: has_default.stdout|int != 0
