@@ -7,11 +7,7 @@
   gather_facts: False
   vars:
     NAME: ceph
-    APT_REPO: http://eu.ceph.com/debian-cuttlefish/
-  vars_files:
-  - vars/common.vars
+    APT_REPO: http://ceph.com/debian-firefly/
+    APT_DISTRIBUTION: wheezy
   tasks:
-  - include: tasks/cfvar_includes.tasks
-  - include: tasks/apt.key.install.tasks
-  - include: tasks/apt.list.install.tasks
-  #- include: tasks/apt.srclist.install.tasks
+  - include: tasks/compfuzor/apt.tasks

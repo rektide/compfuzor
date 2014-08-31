@@ -8,11 +8,6 @@
   vars:
     NAME: cassandra
     APT_REPO: http://www.apache.org/dist/cassandra/debian
-    APT_DISTRIBUTION: 20x
-  vars_files:
-  - vars/common.vars
+    APT_DISTRIBUTION: 21x
   tasks:
-  - include: tasks/cfvar_includes.tasks
-  - include: tasks/apt.key.install.tasks
-  - include: tasks/apt.list.install.tasks
-  #- include: tasks/apt.srclist.install.tasks
+  - include: tasks/compfuzor/apt.tasks
