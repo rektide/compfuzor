@@ -74,8 +74,9 @@ if test -n "$POSTPREP" ; then
 	`$POSTPREP`
 fi
 
-
 #### Cleanup ####
+
+sleep 1
 
 # unmount
 sudo umount -l proc
@@ -91,6 +92,7 @@ cd "$OLD_DIR"
 
 # create tar & cleanup
 if test "$CLEANUP" != "false" ; then
+	sleep 1
 	tar --one-file-system -czf "$FILE" -C "$DIR" .
-	rm -r "$DIR"
+	rm -r "$DIR"; echo $?
 fi
