@@ -5,9 +5,9 @@
     INSTANCE: git
     REPO: git://github.com/kripken/emscripten.git
     cores: 6
+    fastcomp: "{{SRCS_DIR}}/{{TYPE}}-fastcomp-{{INSTANCE}}"
   tasks:
   - include: tasks/compfuzor.includes type=src
-  - set_fact: fastcomp="{{SRCS_DIR}}/{{TYPE}}-fastcomp-{{INSTANCE}}"
   - git: repo=https://github.com/kripken/emscripten-fastcomp dest="{{fastcomp}}"
   - git: repo=https://github.com/kripken/emscripten-fastcomp-clang dest="{{fastcomp}}/tools/clang"
   - file: path="{{fastcomp}}/build" state=directory

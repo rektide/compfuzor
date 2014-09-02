@@ -1,0 +1,2 @@
+export LLVM_ROOT="{{fastcomp}}"
+export PATH="${LLVM_ROOT}/build/Release/bin:{{DIR}}:$PATH"
