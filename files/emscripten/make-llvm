@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+
+rm -rf llvm/build
+mkdir llvm/build
+cd llvm/build
+../configure --enable-optimized --disable-assertions -enable-targets=host,js
+make -j `nproc`
