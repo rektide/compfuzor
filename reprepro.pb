@@ -21,13 +21,14 @@
     LINKS:
       dists: var/www/dists
       pool: var/www/pool
-      .z/reprepro.env: reprepro.env
+      .z/reprepro.env: env
       conf: etc
-    VARS:
-    - reprepro
+    #VARS:
+    #- reprepro
+    GIT_BYPASS: True
     nginx_prio: 50
   vars_files:
-  - private/reprepro.vars
+  - [ "private/reprepro/$configset.vars", "private/reprepro.vars", "examples-private/reprepro.vars" ]
   gather_facts: false
   handlers:
   - include: handlers.yml
@@ -42,7 +43,6 @@
   - file: path="{{VAR}}/tmp/incoming/{{item.name}}" state=directory
     with_items: REPOS
   - template: src=files/reprepro/build.sh dest="{{DIR}}/build.sh" mode=754
-  - template: src=files/reprepro/reprepro.env dest="{{DIR}}/reprepro.env" mode=640
   - file: path="{{VAR}}" group=www-data mode=710
   - file: path="{{VAR}}" group=www-data mode=750 recurse=true
   # TODO: private/ keys install
