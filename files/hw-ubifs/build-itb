@@ -1,0 +1,8 @@
+#!/bin/sh
+
+BOARD="{{board_uboot}}"
+CONF="{{ETC}}/uboot.its"
+ITB="{{DIST}}/boot/${BOARD}.itb"
+
+mkimage -f "${CONF}" "${ITB}"
+#mkimage -l "${DEST}"

@@ -1,0 +1,6 @@
+#!/bin/sh
+
+CFG="{{ETC}}/ubi.cfg"
+IMG="{{VAR}}/ubi.img"
+
+/usr/sbin/ubinize -v -m 2048 -s 512 -p 131072 "${CFG}" -o "${IMG}"

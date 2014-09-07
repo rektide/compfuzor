@@ -1,0 +1,12 @@
+#!/bin/bash -x
+
+BOARD="{{board_uboot}}"
+UBOOT_DIR="{{DIR}}/uboot"
+KWB="{{VAR}}/{{board}}.kwb"
+export CROSS_COMPILE="{{cc_uboot|default(cc)}}"
+
+cd "${UBOOT_DIR}" || exit
+#make distclean
+make "${BOARD}_config"
+make u-boot.kwb
+cp u-boot.kwb "${KWB}"

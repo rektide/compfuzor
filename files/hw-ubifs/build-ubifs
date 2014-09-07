@@ -1,0 +1,6 @@
+#!/bin/sh
+
+DIST="{{DIST}}"
+IMG="{{VAR}}/ubifs.img"
+
+/usr/sbin/mkfs.ubifs -v -r "${DIST}" -m 2048 -e 129024 -c 4096 -x favor_lzo -X 13 -o "${IMG}"

@@ -1,0 +1,7 @@
+#!/bin/sh
+
+TGZ="{{DIR}}/pdebuild-cross.tgz"
+DIST="{{DIST}}"
+
+mkdir "${DIST}"
+tar -xvzf "${TGZ}" -C "${DIST}"

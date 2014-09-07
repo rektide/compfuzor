@@ -1,0 +1,7 @@
+#!/bin/bash
+
+BOARD="{{board}}"
+DTS="{{DIR}}/linux/arch/arm/boot/dts/${BOARD}.dts"
+DTB="{{VAR}}/${BOARD}.dtb"
+
+dtc -O dtb -o "${DTB}" "${DTS}"
