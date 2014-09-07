@@ -43,8 +43,8 @@
 - name: "Create {{include|upper}} files (with owner)"
   template: src="files/{{TYPE|default(NAME)}}/{{item}}" dest="{{dirpath}}/{{item}}" owner="{{owner}}"
   with_items: "{{files|default([])}}"
-  when: not not go and files is defined and owner is defined
+  when: not not go and {{files}} is defined and owner is defined
 - name: "Create {{include|upper}} files"
   template: src="files/{{TYPE|default(NAME)}}/{{item}}" dest="{{dirpath}}/{{item}}"
   with_items: "{{files|default([])}}"
-  when: not not go and files is defined and owner is not defined
+  when: not not go and {{files}} is defined and owner is not defined
