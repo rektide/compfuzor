@@ -28,6 +28,7 @@
     #- build-uimage # legacy uboot
     - build-ubifs
     - build-ubi
+    - install-dtb
 
     REPOS_p:
       uboot: git://git.denx.de/u-boot.git

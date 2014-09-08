@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 
 BOARD="{{board_uboot}}"
 BIN="{{board}}.bin"
@@ -13,6 +14,6 @@ make "${BOARD}_config"
 make u-boot.kwb
 
 cp u-boot.bin "${VAR}/${BIN}"
-ln -s "${VAR}/${BIN}" "${VAR}/uboot.bin"
+ln -sf "${VAR}/${BIN}" "${VAR}/uboot.bin"
 cp u-boot.kwb "${VAR}/${KWB}"
-ln -s "${VAR}/${KWB}" "${VAR}/uboot.kwb"
+ln -sf "${VAR}/${KWB}" "${VAR}/uboot.kwb"

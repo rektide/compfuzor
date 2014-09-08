@@ -1,10 +1,20 @@
 #!/bin/sh
+set -e
 
+VAR="{{VAR}}"
+DIST="{{DIST}}"
 BOARD_DTS="{{board_dts}}"
 BOARD="{{board}}"
 DTS="{{DIR}}/linux/arch/arm/boot/dts/${BOARD_DTS}.dts"
-DTB="{{VAR}}/${BOARD}.dtb"
-#dtc -O dtb -o "${DTB}" "${DTS}"
+DTB="${BOARD}.dtb"
 
+# build
+#dtc -O dtb -o "${VAR}/${BOARD}.dtb" "${DTS}"
+
+# help: dtc compiler is throwing parser errors- copy from what kernel has built
 SRC="{{DIR}}/linux/arch/arm/boot/dts/${BOARD_DTS}.dtb"
-cp "${SRC}" "${DTB}"
+cp "${SRC}" "${VAR}/${BOARD}.dtb"
+
+# instal into DIST too
+cp "${VAR}/${DTB}" "${DIST}/boot/${DTB}"
+ln -sf "${DTB}" "${DIST}/boot/dtb"

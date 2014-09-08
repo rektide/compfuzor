@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+VAR="{{VAR}}"
+DIST="{{DIST}}"
+DTB="{{board}}.dtb"
+
+cp "${VAR}/${DTB}" "${DIST}/boot/${DTB}"
+ln -sf "${DTB}" "${DIST}/boot/dtb"
