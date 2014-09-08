@@ -24,9 +24,17 @@ chmod +x /usr/sbin/policy-rc.d
 # help: sudo installer
 touch /etc/sudoers
 
+# help: base-files
+mkdir /var/bak-run
+mv /var/run/* /var/bak-run/
+
 # configure
 /var/lib/dpkg/info/dash.preinst install
 dpkg --configure -a
+
+# help: base-files
+mv /var/bak-run/* /var/run
+rm -r /var/bak-run
 
 # move out runlevel denial
 mv /usr/sbin/policy-rc.d /usr/sbin/policy-rc.d.single
