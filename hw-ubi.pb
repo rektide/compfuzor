@@ -18,6 +18,7 @@
     - ubi.cfg
     - openocd_iconnect.board.cfg
     - openocd_iconnect.cfg
+    - iconnect.h
     
     BINS_RUN_BYPASS: True # install but do not run
     BINS:
