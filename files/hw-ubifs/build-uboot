@@ -1,14 +1,18 @@
 #!/bin/sh
 
 BOARD="{{board_uboot}}"
+BIN="{{board}}.bin"
+KWB="{{board}}.kwb"
 UBOOT_DIR="{{DIR}}/uboot"
-BIN="{{VAR}}/{{board}}.bin"
-KWB="{{VAR}}/{{board}}.kwb"
+VAR="{{VAR}}"
 export CROSS_COMPILE="{{cc_uboot|default(cc)}}"
 
 cd "${UBOOT_DIR}" || exit
 #make distclean
 make "${BOARD}_config"
 make u-boot.kwb
-cp u-boot.bin "${BIN}"
-cp u-boot.kwb "${KWB}"
+
+cp u-boot.bin "${VAR}/${BIN}"
+ln -s "${VAR}/${BIN}" "${VAR}/uboot.bin"
+cp u-boot.kwb "${VAR}/${KWB}"
+ln -s "${VAR}/${KWB}" "${VAR}/uboot.kwb"
