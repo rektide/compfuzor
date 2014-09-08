@@ -7,6 +7,7 @@
   args:
     dir: "{{include|upper+'S_DIR'}}" # name of directory to use
     dirs: "{{include|upper}}_DIRS" # subdirectories to create, or True
+    base: "{{include|upper}}_DIR" # create empty directory
     files: "{{include|upper}}_FILES" # files to template into place
     d: "{{include|upper}}_D" # assemblies to create
     bypass: "{{include|upper}}_BYPASS" # skip doing this stuff!
@@ -14,7 +15,7 @@
     go: True
 - name: "Check for stuff to do"
   set_fact: go="" # do not go if bypass, or nothing is defined pertaining to this component
-  when: "({{bypass}}|default(False)) or ({{dirs}} is not defined and {{files}} is not defined and {{d}} is not defined)"
+  when: "({{bypass}}|default(False)) or ({{dirs}} is not defined and {{files}} is not defined and {{d}} is not defined and {{base}} is not defined)"
 
 # create main directory
 - name: "Create top {{include|upper}} directory (with owner)"
