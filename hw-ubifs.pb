@@ -5,9 +5,9 @@
     INSTANCE: "{{board}}"
 
     arch: ARM
-    board: "iconnect"
-    board_dtb: "kirkwood-board"
-    board_uboot: "{{board}}"
+    board: "kirkwood-iconnect"
+    board_dts: "{{board}}"
+    board_uboot: "iconnect"
     cc: "arm-linux-gnueabi-"
     #cc_uboot: "arm-linux-gnueabi-"
     DIST: "{{VAR}}/dist"
@@ -32,9 +32,9 @@
     REPOS_p:
       uboot: git://git.denx.de/u-boot.git
     DIRS:
-    - DIST
+    - "{{DIST}}"
     LINKS:
-      "pdebuild-cross.tgz": "{{SRVS_DIR}}/pdebuildx-arm/pdebuild-cross.tgz"
+      "pdebuild-cross.tgz": "{{SRVS_DIR}}/pdebuildx-armel/pdebuild-cross.tgz"
       "linux": "{{SRCS_DIR}}/linux"
     PKGS:
     - device-tree-compiler
