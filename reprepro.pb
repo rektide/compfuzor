@@ -21,10 +21,12 @@
     LINKS:
       dists: var/www/dists
       pool: var/www/pool
-      .z/reprepro.env: env
       conf: etc
-    #VARS:
-    #- reprepro
+      .z/reprepro.env: env
+    PKGS:
+    - reprepro
+    BINS:
+    - build.sh
     GIT_BYPASS: True
     nginx_prio: 50
   vars_files:
@@ -42,13 +44,9 @@
     with_items: REPOS
   - file: path="{{VAR}}/tmp/incoming/{{item.name}}" state=directory
     with_items: REPOS
-  - template: src=files/reprepro/build.sh dest="{{DIR}}/build.sh" mode=754
   - file: path="{{VAR}}" group=www-data mode=710
   - file: path="{{VAR}}" group=www-data mode=750 recurse=true
   # TODO: private/ keys install
-  # TODO: ??? mdehaan fucked us:
   - include: tasks/nginx-confs.tasks hosts={{REPOS}} nginx="{{NGINX_ETC}}" conf="files/reprepro/nginx.conf"
-  #- include: tasks/nginx-conf.tasks conf=files/reprepro/nginx.conf host="{{item.origin}}" ctx={{item}} name="{{nginx_prio}}-{{NAME}}" nginx={{NGINX_ETC}} service={{NGINX}} port=80
-  #  with_items: REPOS
   #- include: tasks/systemd.alias.tasks src="{{NGINX}}" dest="{{NAME}}"
   - include: tasks/systemd.thunk.tasks service="{{NGINX}}"
