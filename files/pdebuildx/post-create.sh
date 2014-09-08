@@ -93,7 +93,7 @@ fi
 cd "$OLD_DIR"
 
 # create tar & cleanup
-if test "$CLEANUP" != "false" ; then
+if test "$CLEANUP" != "false"; then
 	sleep 1
 	tar --one-file-system -czf "$FILE" -C "$DIR" .
 	rm -r "$DIR"; echo $?
