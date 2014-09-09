@@ -74,7 +74,7 @@
 	"ubi part rootfs; "						\
 	"ubifsmount ubi:rootfs; "					\
 	"ubifsload 0x800000 ${kernel}; "				\
-	"bootz 0x800000"
+	"bootm 0x800000"
 
 #define CONFIG_MTDPARTS \
 	"mtdparts=orion_nand:"		\
@@ -86,7 +86,7 @@
 	"console=console=ttyS0,115200\0"	\
 	"mtdids=nand0=orion_nand\0"		\
 	"mtdparts="CONFIG_MTDPARTS		\
-	"kernel=/boot/vmlinuz\0"			\
+	"kernel=/boot/uImage\0"			\
 	"bootargs_root=noinitrd ubi.mtd=2 root=ubi0:rootfs rootfstype=ubifs\0"
 
 /*
@@ -103,13 +103,12 @@
  */
 #define CONFIG_CMD_EXT2
 #define CONFIG_CMD_FAT
+#define CONFIG_CMD_JFFS2
 #define CONFIG_CMD_UBI
 #define CONFIG_CMD_UBIFS
 #define CONFIG_RBTREE
 #define CONFIG_MTD_DEVICE
 #define CONFIG_MTD_PARTITIONS
 #define CONFIG_CMD_MTDPARTS
-
-#define CONFIG_CMD_BOOTZ
 
 #endif /* _CONFIG_ICONNECT_H */

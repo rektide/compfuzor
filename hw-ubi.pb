@@ -1,7 +1,7 @@
 ---
 - hosts: all
   vars:
-    TYPE: hw-ubifs
+    TYPE: hw-ubi
     INSTANCE: "{{board}}"
 
     arch: ARM
@@ -13,12 +13,14 @@
     DIST: "{{VAR}}/dist"
 
     VAR_DIR: True
+    ETC_DIRS:
+    - configs
     ETC_FILES:
     - uboot.its
     - ubi.cfg
     - openocd_iconnect.board.cfg
     - openocd_iconnect.cfg
-    - iconnect.h
+    - configs/iconnect.h
     
     BINS_RUN_BYPASS: True # install but do not run
     BINS:

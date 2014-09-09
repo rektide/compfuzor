@@ -1,18 +1,37 @@
 #!/bin/sh
 set -e
 
-BOARD="{{board_uboot}}"
-BIN="{{board}}.bin"
-KWB="{{board}}.kwb"
-UBOOT_DIR="{{DIR}}/uboot"
+# primary names/dirs
+BOARD="{{board}}"
+BIN="${board}.bin"
+KWB="${board}.kwb"
 VAR="{{VAR}}"
+ETC="{{ETC}}"
 export CROSS_COMPILE="{{cc_uboot|default(cc)}}"
 
+# uboot names
+UBOOT_BOARD="{{board_uboot}}"
+UBOOT_DIR="{{DIR}}/uboot"
+
+# check to see if we should copy in an updated board config
+UBOOT_CONFIG_SRC="${ETC}/configs/${UBOOT_BOARD}.h"
+UBOOT_CONFIG_DEST="${UBOOT_DIR}/include/configs/${UBOOT_BOARD}.h"
+getMd5(){
+	MD5="$(md5sum $1 2>/dev/null|awk '{ print $1 }'||true)"
+	echo "$MD5"
+}
+SRC_MD5=$(getMd5 "${UBOOT_CONFIG_SRC}")
+DEST_MD5=$(getMd5 "${UBOOT_CONFIG_DEST}")
+[ -n "${SRC_MD5}" -a "${SRC_MD5}" != "${DEST_MD5}" ] && cp "${UBOOT_CONFIG_SRC}" "${UBOOT_CONFIG_DEST}"
+
+# build uboot
 cd "${UBOOT_DIR}" || exit
 #make distclean
-make "${BOARD}_config"
+make "${UBOOT_BOARD}_config"
+make
 make u-boot.kwb
 
+# copy built uboot to VAR with board name, and link with generic uboot name.
 cp u-boot.bin "${VAR}/${BIN}"
 ln -sf "${VAR}/${BIN}" "${VAR}/uboot.bin"
 cp u-boot.kwb "${VAR}/${KWB}"
