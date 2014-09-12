@@ -42,10 +42,10 @@
 
 # include files
 - name: "Create {{include|upper}} files (with owner)"
-  template: src="files/{{TYPE|default(NAME)}}/{{item}}" dest="{{dirpath}}/{{item}}" owner="{{owner}}"
+  template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{dirpath}}/{{item.dest|default(item.name)|default(item)}}" owner="{{owner}}"
   with_items: "{{files|default([])}}"
   when: not not go and {{files}} is defined and owner is defined
 - name: "Create {{include|upper}} files"
-  template: src="files/{{TYPE|default(NAME)}}/{{item}}" dest="{{dirpath}}/{{item}}"
+  template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{dirpath}}/{{item.src|default(item.name)|default(item)}}"
   with_items: "{{files|default([])}}"
   when: not not go and {{files}} is defined and owner is not defined

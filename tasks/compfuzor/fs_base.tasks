@@ -10,6 +10,6 @@
   with_items: DIR_DIRS
   when: DIR_DIRS is defined
 - name: "Creating `FILES`"
-  template: src="files/{{TYPE}}/{{item}}" dest="{{DIR}}/{{item}}"
+  template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{DIR}}/{{item.dest|default(item.name)|default(item)}}"
   with_items: FILES
   when: FILES is defined
