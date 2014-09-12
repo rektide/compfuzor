@@ -5,15 +5,57 @@
     TYPE: eclipse
     INSTANCE: 4.4
 
-    eclipse_url: http://ftp.osuosl.org/pub/eclipse//technology/epp/downloads/release/luna/R/eclipse-standard-luna-R-linux-gtk-x86_64.tar.gz
+    eclipse_url: http://ftp.ussg.iu.edu/eclipse/technology/epp/downloads/release/luna/R/eclipse-jee-luna-R-linux-gtk-x86_64.tar.gz
     eclipse_file: "{{NAME}}.tgz"
     release: luna
     eclim_url: http://softlayer-dal.dl.sourceforge.net/project/eclim/eclim/2.4.0/eclim_2.4.0.jar
     iu:
-    - repo: http://download.eclipse.org/egit/updates
-      ius:
+    - repo: "http://download.eclipse.org/releases/{{release}}/"
+      ius: 
+      - org.eclipse.dltk.core.feature.group
+      - org.eclipse.wst.web_ui.feature.feature.group
       - org.eclipse.egit.feature.group
-      - org.eclipse.jgit.java7.feature.group
+      - org.eclipse.jgit.feature.group
+      - org.eclipse.mylyn.github.feature.feature.group
+      - org.eclipse.m2e.sdk.feature.feature.group
+      - org.eclipse.m2e.feature.feature.group
+      - org.eclipse.m2e.logback.feature.feature.group
+      - org.eclipse.mylyn.hudson.feature.group
+      - org.eclipse.cdt.feature.group
+      - org.eclipse.cdt.mylyn.feature.group
+      - org.eclipse.mylyn.ide_feature.feature.group
+      - org.eclipse.mylyn.java_feature.feature.group
+      - org.eclipse.mylyn.git.feature.group
+      - org.eclipse.egit.mylyn.feature.group
+      - org.eclipse.persistence.sdk.feature.group
+      - org.eclipse.cdt.build.crossgcc.feature.group
+      - org.eclipse.cdt.debug.gdbjtag.feature.group
+      - org.eclipse.cdt.launch.remote.feature.group
+      - org.eclipse.papyrus.sdk.feature.feature.group
+      - org.eclipse.cdt.autotools.feature.group
+      - org.eclipse.linuxtools.callgraph.feature.feature.group
+      - org.eclipse.linuxtools.cdt.libhover.feature.feature.group
+      - org.eclipse.cdt.managedbuilder.llvm.feature.group
+      - org.eclipse.wst.jsdt.feature.feature.group
+      - org.eclipse.koneki.ldt.feature.group
+      - org.eclipse.jpt.jaxb.feature.feature.group
+      - org.eclipse.wst.common.fproj.feature.group
+      - org.eclipse.jst.enterprise_ui.feature.feature.group
+      - org.eclipse.jst.web_ui.feature.feature.group
+      - org.eclipse.jst.server_adapters.feature.feature.group
+      - org.eclipse.jst.server_adapters.ext.feature.feature.group
+      - org.eclipse.jst.server_ui.feature.feature.group
+      - org.eclipse.wst.web_ui.feature.feature.group
+      - org.eclipse.wst.xml_ui.feature.feature.group
+      - org.eclipse.wst.xsl.feature.feature.group
+      - org.eclipse.m2e.wtp.jaxrs.feature.feature.group
+      - org.eclipse.m2e.wtp.jpa.feature.feature.group
+      - org.eclipse.m2e.wtp.feature.feature.group
+      - org.eclipse.libra.facet.feature.feature.group
+      - org.eclipse.libra.framework.editor.feature.feature.group
+      - org.eclipse.libra.framework.feature.feature.group
+      - org.eclipse.libra.warproducts.feature.feature.group
+      - org.eclipse.wst.server_adapters.feature.feature.group
     - repo: https://dl-ssl.google.com/android/eclipse/
       ius:
       - com.android.ide.eclipse.ddms.feature.feature.group
