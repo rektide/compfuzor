@@ -5,10 +5,10 @@
     TYPE: jq
     INSTANCE: git
     REPO: https://github.com/stedolan/jq.git
-  vars_files:
-  - vars/common.vars
-  - vars/src.vars
+    PKGS:
+    - libonig-dev
+    BINS: 
+    - name: make-jq
+      run: True
   tasks:
-  - include: tasks/cfvar_includes.tasks
-  - shell: chdir={{DIR}} make
-  - shell: chdir={{DIR}} make install
+  - include: tasks/compfuzor.includes type=src
