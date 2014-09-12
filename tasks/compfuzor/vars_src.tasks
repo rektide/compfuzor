@@ -4,3 +4,7 @@
   args:
     WITHS: "{{ '--with-'+WITH|join(' --with-') if WITH is defined else '' }}" 
     ENABLES: "{{ '--enable-'+ENABLE|join(' --enable-') if ENABLE is defined else '' }}" 
+    PREPREFIX: "{{ DEST|default(NAME|default(TYPE)) }}"
+    CORES: "{{ansible_processor_vcpus|default(8)}}"
+- name: "set PREFIX var"
+  set_fact: PREFIX="{{ ('--prefix='+(OPTS_DIR+'/' if PREPREFIX|first != '/' else '')+PREPREFIX) if PREFIX is not defined else PREFIX|default('', true) }}"

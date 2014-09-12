@@ -1,0 +1,9 @@
+#!/bin/sh
+# Compfuzor make template for {{NAME}}
+set -e
+
+[ -e './autogen.sh' ] && ./autogen.sh
+./configure {{WITHS}} {{ENABLES}} {{PREFIX}}
+make -j{{CORES}}
+make check || echo "no make check"
+make install
