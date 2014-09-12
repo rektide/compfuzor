@@ -1,0 +1,1 @@
+{{ content|to_nice_json if content is not string else content }}

@@ -1,0 +1,2 @@
+#!/bin/sh
+java -Dvim.files="/usr/share/vim/vim74" -Declipse.home="{{OPT}}" -jar "{{SRCS_DIR}}/{{eclim_url|basename}}" install

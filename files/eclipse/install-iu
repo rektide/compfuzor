@@ -1,0 +1,10 @@
+#!/bin/sh
+
+set -e
+
+cat {{DIR}}/iu.json |\
+jq -r '.[] | .repo + " " + (.iu // (.ius|join(",")))' |\
+while read repo iu
+do
+	./eclipse -nosplash -application org.eclipse.equinox.p2.director -repository "${repo}" -installIU "${iu}"
+done
