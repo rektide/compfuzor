@@ -4,7 +4,7 @@
     dir: "{{include|upper+'S_DIR'}}"
     d: "{{include|upper+'_D'}}"
     files: "{{vars[include|upper+'_D']|default('')}}"
-    path: "{{hostvars[inventory_hostname][include|upper]}}"
+    path: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper])}}"
     go: True
 - name: "Check for .d stuff to do"
   set_fact: go=""
