@@ -7,11 +7,15 @@
   gather_facts: False
   vars:
     NAME: spotify
+    OPT: "/opt/spotify"
     APT_REPO: http://repository.spotify.com
     APT_DISTRIBUTION: stable
     APT_COMPONENT: non-free
     PKGS:
     - spotify-client
+    BINS:
+    - no-osd.sh
+    GLOBAL_BINS_BYPASS: True
   tasks:
   - include: tasks/compfuzor.includes
   #- include: tasks/apt.key.install.tasks name=$NAME
