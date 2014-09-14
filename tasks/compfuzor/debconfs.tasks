@@ -1,0 +1,2 @@
+- debconf: name="{{item.name}}" question="{{item.question}}" value="{{item.value|default('')}}" vtype="{{item.vtype}}"
+  with_items: DEBCONFS|default([])
