@@ -1,7 +1,7 @@
 - debug: "msg=Compfuzor: source base variables"
 - name: "Set name"
   set_fact: NAME="{{TYPE}}-{{INSTANCE}}"
-  when: not NAME|default(False) and not INSTANCE|default(False)
+  when: not NAME|default(False) and INSTANCE|default(False)
 - name: "Set name"
   set_fact: NAME="{{TYPE}}"
   when: not NAME|default(False) and TYPE|default(False)

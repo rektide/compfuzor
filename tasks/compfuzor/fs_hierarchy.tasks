@@ -15,15 +15,15 @@
     go: True
 - name: "Check for stuff to do"
   set_fact: go="" # do not go if bypass, or nothing is defined pertaining to this component
-  when: "({{bypass}}|default(False)) or ({{dirs}} is not defined and {{files}} is not defined and {{d}} is not defined and {{base}} is not defined)"
+  when: "{{bypass}}|default(False) or not {{dirs}}|default(False) and not {{files}}|default(False) and not {{d}}|default(False) and {{base}}|default(False)"
 
 # create main directory
 - name: "Create top {{include|upper}} directory (with owner)"
-  file: path="{{dirpath}}" state=directory mode="{{mode|default(770)}}" owner="{{owner}}"
-  when: not not go and owner is defined
+  file: path="{{dirpath}}" state=directory mode="{{mode|default(770)}}" owner="{{OWNER}}"
+  when: not not go and OWNER|default(False)
 - name: "Create top {{include|upper}} directory"
   file: path="{{dirpath}}" state=directory mode="{{mode|default(770)}}"
-  when: not not go and owner is not defined
+  when: not not go and not OWNER|default(False)
 # link include dir into DIR
 - name: "Link top {{include|upper}} directory into `DIR`"
   file: src="{{dirpath}}" dest="{{DIR}}/{{include|lower}}" state=link
@@ -38,14 +38,14 @@
 - name: "Create {{include|upper}} .d directories"
   file: path="{{dirpath}}/{{item}}.d" state=directory mode="{{mode|default(770)}}"
   with_items: vars[d|default('')]|default([])
-  when: (not not go) and (vars[d] is defined)
+  when: (not not go) and vars[d]|default(False)
 
 # include files
-- name: "Create {{include|upper}} files (with owner)"
-  template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{dirpath}}/{{item.dest|default(item.name)|default(item)}}" owner="{{owner}}"
+- name: "Create {{include|upper}} files (with OWNER)"
+  template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{dirpath}}/{{item.dest|default(item.name)|default(item)}}" owner="{{OWNER}}"
   with_items: "{{files|default([])}}"
-  when: not not go and {{files}} is defined and owner is defined
+  when: not not go and {{files}}|default(False) and OWNER|default(False)
 - name: "Create {{include|upper}} files"
   template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{dirpath}}/{{item.src|default(item.name)|default(item)}}"
   with_items: "{{files|default([])}}"
-  when: not not go and {{files}} is defined and owner is not defined
+  when: not not go and {{files}}|default(False) and not OWNER|default(False)

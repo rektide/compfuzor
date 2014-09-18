@@ -5,10 +5,6 @@
   file: path={{DIR+'/' if item|first != '/' else ''}}/{{item}} state=directory mode={{DIRMODE}}
   with_items: DIRS
   when: DIRS is defined
-- name: "Creating `DIR_DIRS`"
-  file: path={{DIR+'/' if item|first != '/' else ''}}/{{item}} state=directory mode={{DIRMODE}}
-  with_items: DIR_DIRS
-  when: DIR_DIRS is defined
 - name: "Creating `FILES`"
   template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{DIR}}/{{item.dest|default(item.name)|default(item)}}"
   with_items: FILES

@@ -1,9 +1,9 @@
 ---
 - debug: "msg=Compfuzor: install & update apt repository"
 - include: vars_base.tasks
-  when: APT_DEFAULT_COMPONENT is not defined and APT_DEFAULT_COMPONENTS is not defined and APT_COMPONENT is not defined and APT_COMPONENTS is not defined
+  when: not APT_DEFAULT_COMPONENT|default(False) and not APT_DEFAULT_COMPONENTS|default(False) and not APT_COMPONENT|default(False) and not APT_COMPONENTS|default(False)
 - include: vars_apt.tasks
-  when: APT_TRUSTED is not defined or APT_SOURCELIST is not defined
+  when: not APT_TRUSTED|default(Fase) or not APT_SOURCELIST|default(False)
 - name: "Copy in apt gpg keys"
   copy: src="files/apt-repos/{{APT_TRUSTED}}.{{item}}" dest="/etc/apt/trusted.gpg.d/{{APT_TRUSTED}}.{{item}}"
   when: APT_TRUST|default(True)

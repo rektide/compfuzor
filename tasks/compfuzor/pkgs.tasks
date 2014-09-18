@@ -2,10 +2,10 @@
 - name: "Compfuzor: install packages"
   apt: state="{{APT_INSTALL}}" pkg={{item}}
   with_items: PKGS
-  when: PKGS is defined
+  when: PKGS|default(False)
 - name: "install pkgset"
   apt: state="{{APT_INSTALL}}" pkg="{{hostvars[inventory_hostname][PKGSET]|join(',')}}"
-  when: PKGSET is defined
+  when: PKGSET|default(False)
 - name: "install pkgsets"
   apt: state="installed" pkg="{{ item }}"
   with_flattened: "{{ PKGSETS|default([]) }}"
