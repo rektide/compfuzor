@@ -1,1 +1,3 @@
+files/apt-repos/*gpg
 *.swp
+*.pyc
