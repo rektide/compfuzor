@@ -11,11 +11,11 @@
     files: "{{include|upper}}_FILES" # files to template into place
     d: "{{include|upper}}_D" # assemblies to create
     bypass: "{{include|upper}}_BYPASS" # skip doing this stuff!
-    dirpath: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper)}}" # lookup the path for the dir
+    dirpath: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper]}}" # lookup the path for the dir
     go: True
-- name: "Check for stuff to do"
+- name: "Cancel go if nothing to do"
   set_fact: go="" # do not go if bypass, or nothing is defined pertaining to this component
-  when: "{{bypass}}|default(False) or not {{dirs}}|default(False) and not {{files}}|default(False) and not {{d}}|default(False) and {{base}}|default(False)"
+  when: "{{bypass}}|default(True) and (not {{dirs}}|default(False) or not {{files}}|default(False) or not {{d}}|default(False) or {{base}}|default(False))"
 
 # create main directory
 - name: "Create top {{include|upper}} directory (with owner)"
@@ -27,7 +27,7 @@
 # link include dir into DIR
 - name: "Link top {{include|upper}} directory into `DIR`"
   file: src="{{dirpath}}" dest="{{DIR}}/{{include|lower}}" state=link
-  when: not not go and not DIR_BYPASS|default(False)
+  when: not not go
 
 # create subdirs
 - name: "Create {{include|upper}} subdirs"
@@ -41,11 +41,7 @@
   when: (not not go) and vars[d]|default(False)
 
 # include files
-- name: "Create {{include|upper}} files (with OWNER)"
-  template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{dirpath}}/{{item.dest|default(item.name)|default(item)}}" owner="{{OWNER}}"
-  with_items: "{{files|default([])}}"
-  when: not not go and {{files}}|default(False) and OWNER|default(False)
 - name: "Create {{include|upper}} files"
-  template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{dirpath}}/{{item.src|default(item.name)|default(item)}}"
+  template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{dirpath}}/{{item.dest|default(item.name)|default(item)}}" owner="{{OWNER|default(omit)}}"
   with_items: "{{files|default([])}}"
-  when: not not go and {{files}}|default(False) and not OWNER|default(False)
+  when: not not go and {{files}}|default(False)
