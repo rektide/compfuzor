@@ -11,19 +11,16 @@
     files: "{{include|upper}}_FILES" # files to template into place
     d: "{{include|upper}}_D" # assemblies to create
     bypass: "{{include|upper}}_BYPASS" # skip doing this stuff!
-    dirpath: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper]}}" # lookup the path for the dir
+    dirpath: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper])}}" # lookup the path for the dir
     go: True
 - name: "Cancel go if nothing to do"
   set_fact: go="" # do not go if bypass, or nothing is defined pertaining to this component
-  when: "{{bypass}}|default(True) and (not {{dirs}}|default(False) or not {{files}}|default(False) or not {{d}}|default(False) or {{base}}|default(False))"
+  when: "({{bypass}}|default(True)) and not (({{dirs}}|default(False)) or ({{files}}|default(False)) or ({{d}}|default(False)) or ({{base}}|default(False)))"
 
 # create main directory
-- name: "Create top {{include|upper}} directory (with owner)"
-  file: path="{{dirpath}}" state=directory mode="{{mode|default(770)}}" owner="{{OWNER}}"
-  when: not not go and OWNER|default(False)
 - name: "Create top {{include|upper}} directory"
-  file: path="{{dirpath}}" state=directory mode="{{mode|default(770)}}"
-  when: not not go and not OWNER|default(False)
+  file: path="{{dirpath}}" state=directory mode="{{mode|default(770)}}" owner="{{OWNER|default(omit)}}"
+  when: not not go
 # link include dir into DIR
 - name: "Link top {{include|upper}} directory into `DIR`"
   file: src="{{dirpath}}" dest="{{DIR}}/{{include|lower}}" state=link
