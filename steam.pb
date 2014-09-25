@@ -16,6 +16,7 @@
       vtype: note
     #PKGS:
     #- steam:i386
+    - fonts-liberation
   tasks:
   - shell: dpkg --add-architecture i386
   - shell: apt-get update
