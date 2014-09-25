@@ -1,0 +1,12 @@
+#!/bin/sh
+cat <<DONE | nc localhost 4444
+init
+init2
+init4
+iconnect_reset_cpu
+nand probe 0
+nand list
+nand erase 0 0x0 0xc0000
+nand info 0 0  10
+nand write 0 {{VAR}}/uboot.kwb 0 oob_softecc_kw
+DONE

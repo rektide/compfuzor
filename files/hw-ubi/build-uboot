@@ -3,8 +3,8 @@ set -e
 
 # primary names/dirs
 BOARD="{{board}}"
-BIN="${board}.bin"
-KWB="${board}.kwb"
+BIN="${BOARD}.bin"
+KWB="${BOARD}.kwb"
 VAR="{{VAR}}"
 ETC="{{ETC}}"
 export CROSS_COMPILE="{{cc_uboot|default(cc)}}"

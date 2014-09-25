@@ -33,6 +33,7 @@
     - build-ubi
     - install-dtb
     - start-openocd
+    - install-uboot
 
     REPOS_p:
       uboot: git://git.denx.de/u-boot.git
