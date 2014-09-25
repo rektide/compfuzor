@@ -18,9 +18,9 @@
     ETC_FILES:
     - uboot.its
     - ubi.cfg
-    - openocd_iconnect.board.cfg
-    - openocd_iconnect.cfg
-    - configs/iconnect.h
+    - openocd-{{board}}.board.cfg
+    - openocd-{{board}}.cfg
+    - configs/{{board_uboot}}.h
     
     BINS_RUN_BYPASS: True # install but do not run
     BINS:
@@ -32,6 +32,7 @@
     - build-ubifs
     - build-ubi
     - install-dtb
+    - start-openocd
 
     REPOS_p:
       uboot: git://git.denx.de/u-boot.git
@@ -40,6 +41,8 @@
     LINKS:
       "pdebuild-cross.tgz": "{{SRVS_DIR}}/pdebuildx-armel/pdebuild-cross.tgz"
       "linux": "{{SRCS_DIR}}/linux"
+      "etc/openocd.cfg": "etc/openocd-{{board}}.cfg"
+      "etc/openocd.board.cfg": "etc/openocd-{{board}}.board.cfg"
     PKGS:
     - device-tree-compiler
     - mtd-utils
