@@ -10,7 +10,7 @@
     board_uboot: "iconnect"
     cc: "arm-linux-gnueabi-"
     #cc_uboot: "arm-linux-gnueabi-"
-    DIST: "{{VAR}}/dist"
+    DIST: "{{VAR|default()}}/dist"
 
     VAR_DIR: True
     ETC_DIRS:
