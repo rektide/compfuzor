@@ -1,8 +1,4 @@
 ---
 # build include variable
-- name: "Compfuzor: source {{include|upper}} path variable (from vars)"
-  set_indirect: var="{{include|upper}}" val="{{ vars[include|upper]|default(hostvars[inventory_hostname][include|upper+'S_DIR']+'/'+NAME) }}"
-  when: not vars[include|upper]|default(False) and not {{include|upper}}|default(False)
-- name: "source {{include|upper}} path variable (from hostvars)"
-  set_indirect: var="{{include|upper}}" val="{{ hostvars[inventory_hostname][include|upper+'S_DIR']+'/'+NAME }}"
-  when: not hostvars[inventory_hostname][include|upper+'S_DIR']|default(False) and not {{include|upper}}|default(False)
+- set_fact: "{{include|upper}}={{ (hostvars[inventory_hostname][include|upper+'S_DIR']|default(vars[include|upper+'S_DIR'])) + '/' + NAME }}"
+  when: not {{include|upper}}|default(False)
