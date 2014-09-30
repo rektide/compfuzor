@@ -1,2 +1,2 @@
-- set_fact: "{{item}}={{ hostvar[inventory_hostname]['_PERSIST_'+item] }}"
+- set_fact: "{{item}}={{ hostvars[inventory_hostname]['_PERSIST_'+item] }}"
   with_items: MULTIFUZOR_VARS
