@@ -1,0 +1,6 @@
+- name: "Compfuzor: fetch tgz file"
+  get_url: url="{{TGZ}}" dest="{{SRCS_DIR}}/{{TGZ|basename}}"
+- name: prep TGZ.url file
+  set_fact: "content={{TGZ}}"
+- name: record TGZ.url file"
+  template: "src=files/content dest={{SRCS_DIR}}/{{TGZ|basename}}.url content={{TGZ}}"

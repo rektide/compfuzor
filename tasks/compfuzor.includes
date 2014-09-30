@@ -25,6 +25,8 @@
 - include: compfuzor/fs_env.tasks
   when: has_env.stdout|int == 0
 - include: compfuzor/fs_hierarchy_multi.tasks
+- include: compfuzor/fs_tgz.tasks
+  when: TGZ is defined and not TGZ_BYPASS|default(False)
 - include: compfuzor/bins.tasks
   when: BINS is defined and not BINS_BYPASS|default(False)
 - include: compfuzor/links.tasks
