@@ -3,18 +3,18 @@ set -e
 
 VAR="{{VAR}}"
 DIST="{{DIST}}"
-BOARD_DTS="{{board_dts}}"
 BOARD="{{board}}"
-DTS="{{DIR}}/linux/arch/arm/boot/dts/${BOARD_DTS}.dts"
-DTB="${BOARD}.dtb"
+BOARD_DTS="{{board_dts}}"
+SRC="{{board_dts_src}}"
+LINUX="{{linux_dir}}"
 
-# build
-#dtc -O dtb -o "${VAR}/${BOARD}.dtb" "${DTS}"
+# source link maintenance
+# link dts if we have none locally
+[ ! -e $ETC/dts/$BOARD.dts ] && ln -s $SRC.dts $ETC/dts/$BOARD.dts
+# copy our dts if we have a real file
+[ -f $ETC/dts/$BOARD.dtb ] && rm $SRC.dts && ln -s $SRC $ETC/dts/$BOARD
 
-# help: dtc compiler is throwing parser errors- copy from what kernel has built
-SRC="{{DIR}}/linux/arch/arm/boot/dts/${BOARD_DTS}.dtb"
-cp "${SRC}" "${VAR}/${BOARD}.dtb"
-
-# instal into DIST too
-cp "${VAR}/${DTB}" "${DIST}/boot/${DTB}"
-ln -sf "${DTB}" "${DIST}/boot/dtb"
+# build dtb
+(cd $LINUX; make ARCH={{arch}} CROSS_COMPILE={{cc}} $BOARD_DTS.dtb)
+# and link. note: symlinked from BOARD_DTS to BOARD variable (often identical)
+ln -sf $SRC.dtb $VAR/$BOARD.dtb

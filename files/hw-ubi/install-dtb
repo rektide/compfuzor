@@ -3,7 +3,12 @@ set -e
 
 VAR="{{VAR}}"
 DIST="{{DIST}}"
-DTB="{{board}}.dtb"
+BOARD="{{board}}"
 
-cp "${VAR}/${DTB}" "${DIST}/boot/${DTB}"
-ln -sf "${DTB}" "${DIST}/boot/dtb"
+# nav in
+cd $DIST/boot || exit
+
+# install into DIST
+cp -L $VAR/$BOARD.dtb $VAR/$BOARD.dts .
+# and link a simple name: dts
+ln -sfL $BOARD.dtb dtb

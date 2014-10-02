@@ -14,7 +14,7 @@ UBOOT_BOARD="{{board_uboot}}"
 UBOOT_DIR="{{DIR}}/uboot"
 
 # check to see if we should copy in an updated board config
-UBOOT_CONFIG_SRC="${ETC}/configs/${UBOOT_BOARD}.h"
+UBOOT_CONFIG_SRC="${ETC}/uboot/${UBOOT_BOARD}.h"
 UBOOT_CONFIG_DEST="${UBOOT_DIR}/include/configs/${UBOOT_BOARD}.h"
 getMd5(){
 	MD5="$(md5sum $1 2>/dev/null|awk '{ print $1 }'||true)"

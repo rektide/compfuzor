@@ -7,30 +7,38 @@
     arch: ARM
     board: "kirkwood-iconnect"
     board_dts: "{{board}}"
+    board_dts_src: "{{DIR}}/linux/arch/arm/boot/dts/{{board_dts}}"
     board_uboot: "iconnect"
+    linux_dir: "{{SRCS_DIR}}/linux"
     cc: "arm-linux-gnueabi-"
     #cc_uboot: "arm-linux-gnueabi-"
     DIST: "{{VAR|default()}}/dist"
 
+    FILES:
+    - README.md
     VAR_DIR: True
     ETC_DIRS:
-    - configs
+    - uboot
+    - dts
+    - openocd
     ETC_FILES:
     - uboot.its
     - ubi.cfg
-    - openocd-{{board}}.board.cfg
-    - openocd-{{board}}.cfg
-    - configs/{{board_uboot}}.h
+    - openocd/openocd-{{board}}.board.cfg
+    - openocd/openocd-{{board}}.cfg
+    - uboot/{{board_uboot}}.h
+    - dts/{{board_dts}}.dts
     
     BINS_RUN_BYPASS: True # install but do not run
     BINS:
     - extract-image
     - build-uboot
     - build-dtb
-    - build-itb
+    #- build-itb # uboot recommended but i dig that funkiness, bootz
     #- build-uimage # legacy uboot
     - build-ubifs
     - build-ubi
+    - split-ubi
     - install-dtb
     - start-openocd
     - install-uboot
@@ -42,13 +50,14 @@
     - "/var/tftpd"
     LINKS:
       "pdebuild-cross.tgz": "{{SRVS_DIR}}/pdebuildx-armel/pdebuild-cross.tgz"
-      "linux": "{{SRCS_DIR}}/linux"
-      "etc/openocd.cfg": "etc/openocd-{{board}}.cfg"
-      "etc/openocd.board.cfg": "etc/openocd-{{board}}.board.cfg"
+      "linux": "{{linux_dir}}"
+      "var/{{board_dts}}.dts": "{{board_dts_src}}.dts"
+      "etc/openocd/openocd.cfg": "etc/openocd/openocd-{{board}}.cfg"
+      "etc/openocd/openocd.board.cfg": "etc/openocd/openocd-{{board}}.board.cfg"
       "/var/tftpd/{{NAME}}": "{{VAR}}"
     PKGS:
-    - device-tree-compiler
-    - mtd-utils
+    #- device-tree-compiler # junky junk junk, doesn't work with kernel dts
+    - mtd-utils # ubi tools
     - tftpd-hpa
   tasks:
   - include: tasks/compfuzor.includes type=srv

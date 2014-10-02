@@ -2,6 +2,7 @@
  * (C) Copyright 2009-2012
  * Wojciech Dubowik <wojciech.dubowik@neratec.com>
  * Luka Perkov <luka@openwrt.org>
+ * rektide <rektide@voodoowarez.com>
  *
  * SPDX-License-Identifier:	GPL-2.0+
  */
@@ -74,7 +75,8 @@
 	"ubi part rootfs; "						\
 	"ubifsmount ubi:rootfs; "					\
 	"ubifsload 0x800000 ${kernel}; "				\
-	"bootz 0x800000"
+	"ubifsload 0x700000 ${dtb}; "				\
+	"bootz 0x800000 - 0x700000"
 
 #define CONFIG_MTDPARTS \
 	"mtdparts=orion_nand:"		\
@@ -87,6 +89,7 @@
 	"mtdids=nand0=orion_nand\0"		\
 	"mtdparts="CONFIG_MTDPARTS		\
 	"kernel=/boot/vmlinuz\0"			\
+	"dtb=/boot/{{board}}.dtb\0"			\
 	"bootargs_root=noinitrd ubi.mtd=2 root=ubi0:rootfs rootfstype=ubifs\0"
 
 /*
@@ -103,6 +106,7 @@
  */
 #define CONFIG_CMD_EXT2
 #define CONFIG_CMD_FAT
+#define CONFIG_CMD_JFFS2
 #define CONFIG_CMD_UBI
 #define CONFIG_CMD_UBIFS
 #define CONFIG_RBTREE
@@ -111,5 +115,7 @@
 #define CONFIG_CMD_MTDPARTS
 
 #define CONFIG_CMD_BOOTZ
+#define CONFIG_OF_LIBFDT
+#define CONFIG_FIT
 
 #endif /* _CONFIG_ICONNECT_H */

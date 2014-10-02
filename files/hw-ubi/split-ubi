@@ -1,0 +1,37 @@
+#!/bin/sh
+
+# http://stackoverflow.com/posts/2395027/revisions
+ceiling_divide() {
+  echo $((($1+$2-1)/$2))
+}
+
+IMG="{{VAR}}/ubi.img"
+[ -n "$1" ] && IMG="$1"
+BLOCK=$((128*1024))
+STRIPE=$((240 * 8)) # max blocks for a chunk
+REMAINING=`ceiling_divide $(ls -l $IMG | awk '{print $5}') $BLOCK`
+I=0
+
+# clear existing splits
+rm $(ls $IMG.*|egrep -v '.[[:digit:]]$')
+
+# if img is small than one chunk, symlink it & exit
+if [ $REMAINING -eq 1 ]; then
+	[ -e $IMG.0 ] && rm $IMG.0
+	ln -s $IMG $IMG.0
+	exit
+fi
+
+# split into chunks
+while [ $REMAINING -gt 0 ]; do
+
+	COUNT=$REMAINING
+	if [ $COUNT -gt $STRIPE ]; then
+		COUNT=$STRIPE
+	fi
+
+	dd if=$IMG of=$IMG.$I bs=$BLOCK count=$COUNT conv=sync
+
+	REMAINING=$(($REMAINING - $STRIPE))
+	I=$(($I+1))
+done
