@@ -39,15 +39,17 @@
       uboot: git://git.denx.de/u-boot.git
     DIRS:
     - "{{DIST}}"
+    - "/var/tftpd"
     LINKS:
       "pdebuild-cross.tgz": "{{SRVS_DIR}}/pdebuildx-armel/pdebuild-cross.tgz"
       "linux": "{{SRCS_DIR}}/linux"
       "etc/openocd.cfg": "etc/openocd-{{board}}.cfg"
       "etc/openocd.board.cfg": "etc/openocd-{{board}}.board.cfg"
+      "/var/tftpd/{{NAME}}": "{{VAR}}"
     PKGS:
     - device-tree-compiler
     - mtd-utils
-
+    - tftpd-hpa
   tasks:
   - include: tasks/compfuzor.includes type=srv
 
