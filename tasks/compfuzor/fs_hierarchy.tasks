@@ -24,7 +24,7 @@
 # link include dir into DIR
 - name: "Link top {{include|upper}} directory into `DIR`"
   file: src="{{dirpath}}" dest="{{DIR}}/{{include|lower}}" state=link
-  when: not not go
+  when: not not go and not DIR_BYPASS|default(False)
 
 # create subdirs
 - name: "Create {{include|upper}} subdirs"
