@@ -1,0 +1,43 @@
+#!/usr/bin/pulseaudio -nF
+
+.nofail
+
+.include /etc/pulse/default.pa
+
+
+# X11 modules should not be started from default.pa so that one daemon
+# can be shared by multiple sessions.
+
+### Load X11 bell module
+#load-module module-x11-bell sample=bell-windowing-system
+
+### Register ourselves in the X11 session manager
+#load-module module-x11-xsmp
+
+### Publish connection data in the X11 root window
+#.ifexists module-x11-publish.so
+#.nofail
+#load-module module-x11-publish
+#.fail
+#.endif
+.ifexists module-x11-publish.so
+.nofail
+load-module module-x11-publish
+.fail
+.endif
+
+
+# Rygel loopback
+load-module module-null-sink sink_name=upnp format=s16be channels=2 rate=44100 sink_properties="device.description='UPnP Streaming' device.bus='network' device.icon_name='network-server'"
+
+# Counter gconf already cobining
+unload-module module-combine-sink
+# Install combine-sink
+load-module module-combine-sink
+#load-module module-combine-sink slaves=upnp,alsa_output.pci-0000_00_1b.0.analog-stereo
+
+
+### Make some devices default
+#set-default-sink output
+#set-default-source input
+set-default-sink combine
