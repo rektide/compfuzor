@@ -11,7 +11,7 @@
 
 - debug: "msg=Compfuzor: REPOSITORIES"
 - include: compfuzor/repo_git.tasks
-  when: (REPO is defined or REPOS is defined) and not DIR_BYPASS|default(False) and not GIT_BYPASS|default(False)
+  when: (REPO is defined or REPOS is defined) and not GIT_BYPASS|default(False)
 - include: compfuzor/repo_cvs.tasks
   when: CVS_REPO is defined
 - include: compfuzor/repo_svn.tasks
@@ -21,7 +21,7 @@
 
 - debug: "msg=Compfuzor: FILESYSTEM"
 - include: compfuzor/fs_base.tasks
-  when: DIR|default(False) and not DIR_BYPASS|default(False)
+  when: DIR|default(False) or DIRS|default(False) or FILES|default(False) and not DIR_BYPASS|default(False)
 - include: compfuzor/fs_env.tasks
   when: has_env.stdout|int == 0
 - include: compfuzor/fs_hierarchy_multi.tasks
