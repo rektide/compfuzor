@@ -18,7 +18,5 @@
   - include: tasks/compfuzor.includes
   - include: tasks/compfuzor/vars_hierarchy.tasks include=xinitrc
   - include: tasks/compfuzor/fs_hierarchy.tasks include=xinitrc
-  - shell: "echo DIR {{DIR}} >> /tmp/FOO"
-  - shell: "echo ETC {{ETC}} >> /tmp/FOO"
   - include: tasks/compfuzor/links.tasks
   - include: tasks/compfuzor/fs_d.tasks include=xinitrc

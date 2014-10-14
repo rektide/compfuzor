@@ -2,7 +2,7 @@
 - name: "Creating base `DIR`"
   file: path="{{DIR}}" state=directory mode={{DIRMODE}}
 - name: "Creating `DIRS`"
-  file: path={{DIR+'/' if item|first != '/' else ''}}/{{item}} state=directory mode={{DIRMODE}}
+  file: path={{DIR+'/' if item|first != '/' and item|first != '~' else ''}}/{{item}} state=directory mode={{DIRMODE}}
   with_items: DIRS
   when: DIRS is defined
 - name: "Creating `FILES`"

@@ -1,4 +1,4 @@
-- name: "Source temporary {{include|upper}} .d facts"
+- name: "CompFuzor: source temporary {{include|upper}} .d facts"
   set_fact:
   args:
     dir: "{{include|upper+'S_DIR'}}"
