@@ -1,0 +1,4 @@
+# packages which are opt but from source (and which retain source in original form) should probably set this, showing themselves a presence in SRCS_DIR.
+- debug: 'msg=CompFuzor: SRCS_TOO'
+- file: src={{DIR}} dest={{SRC}} state=link
+  when: SRCS_TOO|default(False) and not SRCS_DIR|default(False) and not SRCS_FILES|default(False)
