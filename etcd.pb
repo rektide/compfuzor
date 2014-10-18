@@ -10,17 +10,17 @@
     REPO: https://github.com/coreos/etcd
     PKGSETS:
     - GO
-
     SRCS_TOO: True
-    LINKS_BYPASS: True
-    LINKS:
-    - foo
+
     BIN_DIRS: True
     BINS:
     - src: False
       dest: ../build
-      run: true
+      run: True
+    LINKS_BYPASS: True
+    LINKS:
+      "bin/build": "build"
   tasks:
   - include: tasks/compfuzor.includes
   - include: tasks/compfuzor/bins_run.tasks
-  #- include: tasks/compfuzor/links.tasks
+  - include: tasks/compfuzor/links.tasks
