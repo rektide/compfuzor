@@ -3,17 +3,25 @@
   args:
     dir: "{{include|upper+'S_DIR'}}"
     d: "{{include|upper+'_D'}}"
-    files: "{{vars[include|upper+'_D']|default('')}}"
-    path: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper])}}"
+    files: "{{vars[include|upper+'_D']|default([])}}"
+    path: "{{fs_path|default(hostvars[inventory_hostname][include|upper])|default(vars[include|upper])}}"
     go: True
 - name: "Check for .d stuff to do"
   set_fact: go=""
   when: "{{d}} is not defined"
-- name: "Move existing file instances into their .d directory (if no existing copy found)"
-  shell: test ! -f "{{path}}/{{item}}.d/{{d_default|default(10)}}-$(basename {{item}})" -a -f "{{path}}/{{item}}" && mv "{{path}}/{{item}}" "{{path}}/{{item}}.d/{{d_default|default(10)}}-$(basename {{item}})"; echo $?
-  when: not not go
+- name: "Create {{include|upper}} .d directories (duplicating fs_hierarchy work)"
+  file: path="{{dirpath}}/{{item}}.d" state=directory mode="{{mode|default(770)}}"
   with_items: files
+  when: (not not go) and vars[d]|default(False)
+- name: Copy pre-assembed target into backup and link backup into .                                                  d if no backup exists
+  shell: "test ! -f {{path}}/{{item}}.orig -f {{path}}/{{item}} && mv {{path}}/{{item}} {{path}}/{{item}}.orig && ln -s {{path}}/{{item}}.orig {{path}}/{{item}}.d/20-$(basename {{item}}); echo $?"
+  with_items: files
+  when: not not go
 - name: "Assemble the .d directory"
   assemble: src="{{path}}/{{item}}.d" dest="{{path}}/{{item}}"
+  when: not not go
+  with_items: files
+- name: "Insure we have a backup file so as to prevent the baked assembly from being assembled"
+  shell: touch {{path}}/{{item}}.orig
   when: not not go
   with_items: files

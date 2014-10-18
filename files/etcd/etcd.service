@@ -1,0 +1,12 @@
+[Unit]
+Description={{NAME}}
+
+[Service]
+User=etcd
+PermissionsStartOnly=true
+Environment=ETCD_DISCOVERY={{etc_discovery}}
+Environment=ETCD_DATA_DIR={{VAR}}
+Environment=ETCD_NAME=%m
+ExecStart=/usr/local/bin/etcd
+Restart=always
+RestartSec=10s
