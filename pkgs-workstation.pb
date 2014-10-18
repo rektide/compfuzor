@@ -19,5 +19,6 @@
     - JACK_X
     - MEDIA
     - MEDIA_X
+    - DIA
   tasks:
   - include: tasks/compfuzor.includes
