@@ -2,7 +2,7 @@
 
 CF is a repository of systems configuration scripts for onlining new nodes with a variety of services.
 
-It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance.
+It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance. It provides a rich set of default directives which use a construct of context sensitivie settings to create ea consistend framework for emplacing software and processes.
 
 # Conventions #
 
@@ -13,6 +13,7 @@ It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance
 ## Directories ##
 + `/` is the main repository of playbooks.
 + `tasks/` are subtasks used by playbooks.
++ `tasks/compfuzor` is the main-body of compfuzor execution, run by the task `include: tasks/compfuzor.includes`
 + `vars/` hold broad configuration data.
 + `files/` holds files which will be sourced when running a playbook.
 + `private/` holds sensitive data configs.
@@ -22,6 +23,7 @@ It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance
 + `.srv.pb` are _instances_ of services, typically deploying into /srv/$TYPE-$INSTANCE. $INSTANCE defaults to main in common.vars.
 + `.opt.pb` is there to install a software package, usually into /opt. configuration, if possible, ought be split into a `.srv.pb` playbook.
 + `.user.pb` are intended to install into a user's own directory.
++ `.src.pb` are compiled (generally) source packages, often outputing an associated .opt package
 
 ## Configuration ##
 + `vars/`, `private/`, and `example-private/` hold non-installation specific, installation specific, and examples of installation specific configuraiton data.
@@ -47,3 +49,35 @@ It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance
 # Miscellenary #
 + Some vars are listed as $FOO.stdout. This ought go away pending some assistance in ansible#1730.
 + Deal better with permissions- most scripts ought be made to operate without sudo, but do need some initialization routines to be run on their behalf. Device a clean way to separate user from server side.
+
+## BEASTIARY ##
+
+### DIR
+
+Your maindir
+
+### Lesser Dirs
+
+SRV, OPT, ETC, VAR, LOG, SPOOL, CACHE, PID, RUN, SRC, PKGS
+
+SRV, services dir, /srvs
+OPT, optional software packages, /opt
+ETC, configuration settings, /etc (but like the above per instance, not global)
+VAR, various settings, /var
+SRC, package for sources, /usr/local/src
+
+### VARiants
+
+LOG, log directory, /var/log
+SPOOL, transient message queue dir, /var/spool
+CACHE, expiring cache files, /var/cache
+PID, process ids, /var/pid
+RUN, process's runtime data, /var/run
+
+## `Common` Mode Bits ##
+
+`var/common.var` and `var/common.user.var` hold the main system configuration data which will guide (provide all base context for) all CompFuzor runs.
+
+### APT_INSTALL
+
+install apt packages with this state (`latest`, `installed`, &c)
