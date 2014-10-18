@@ -7,8 +7,6 @@
   with_items: BINS
   when: item.name|default(False) or item.src|default(False)
 - name: "Link `BINS` into `GLOBAL_BINS_DIR`"
-  file: src="{{BINS_DIR}}/{{item.dest|default(item.name) if item is mapping else item}}" dest="{{GLOBAL_BINS_DIR}}/{{item.dest|default(item.name) if item is mapping else item}}" state=link
+  file: src="{{BINS_DIR}}/{{item.dest|default(item.global)|default(item.name) if item is mapping else item}}" dest="{{GLOBAL_BINS_DIR}}/{{item.global|default(item.dest)|default(item.name) if item is mapping else item}}" state=link
   with_items: BINS
-  #when: not GLOBAL_BINS_BYPASS|default(False)|bool and item.dest|default(item.name)|default(False) != False
-  #when: item.dest|default(item.name)|default(False)|bool != False
-  when: not GLOBAL_BINS_BYPASS|default(False)|bool and item.dest|default(item.name)|default(False) != False and not item.bypassGlobal|default(False)
+  when: not GLOBAL_BINS_BYPASS|default(False)|bool and item.global|default(item.dest)|default(item.name)|default(False) != False and not item.bypassGlobal|default(False)

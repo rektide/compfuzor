@@ -14,13 +14,16 @@
 
     BIN_DIRS: True
     BINS:
-    - src: False
-      dest: ../build
+    - dest: ../build
       run: True
+      bypassGlobal: True
+    - global: etcd
+    GLOBAL_BINS_BYPASS: True
     LINKS_BYPASS: True
     LINKS:
       "bin/build": "build"
   tasks:
   - include: tasks/compfuzor.includes
   - include: tasks/compfuzor/bins_run.tasks
+  - include: tasks/compfuzor/bins.tasks GLOBAL_BINS_BYPASS=False
   - include: tasks/compfuzor/links.tasks
