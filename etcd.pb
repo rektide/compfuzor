@@ -24,6 +24,6 @@
       "bin/build": "build"
   tasks:
   - include: tasks/compfuzor.includes
-  - include: tasks/compfuzor/bins_run.tasks
-  - include: tasks/compfuzor/bins.tasks GLOBAL_BINS_BYPASS=False
-  - include: tasks/compfuzor/links.tasks
+  - include: tasks/compfuzor/bins.tasks GLOBAL_BINS_BYPASS=False # install into global
+  - include: tasks/compfuzor/links.tasks # link in build
+  - file: path={{DIR}} mode=771 # allow others to use etcd
