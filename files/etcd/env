@@ -1,0 +1,3 @@
+{% for k,v in (ENV|default({})).iteritems() -%}
+{{k|upper}}={{v}}
+{% endfor -%}
