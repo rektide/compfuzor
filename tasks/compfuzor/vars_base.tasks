@@ -1,10 +1,22 @@
 - debug: "msg=Compfuzor: source base variables"
+
+- name: "Set subinstance"
+  shell: "cat /etc/machine-id"
+  register: MACHINE_ID_
+- set_fact: "MACHINE_ID={{ MACHINE_ID_.stdout }}"
+- set_fact: "SUBINSTANCE={{MACHINE_ID}}"
+  when: SUBINSTANCE == True
+ 
+- name: "Set name with subinstance"
+  set_fact: NAME="{{TYPE}}-{{INSTANCE}}-{{SUBINSTANCE}}"
+  when: not NAME|default(False) and INSTANCE|default(False) and SUBINSTANCE|default(False)
 - name: "Set name"
   set_fact: NAME="{{TYPE}}-{{INSTANCE}}"
   when: not NAME|default(False) and INSTANCE|default(False)
 - name: "Set name"
   set_fact: NAME="{{TYPE}}"
   when: not NAME|default(False) and TYPE|default(False)
+
 - name: "Include common vars"
   include_vars: vars/common.vars
 - name: "Include usermode common vars"
@@ -15,6 +27,7 @@
   when: not type|default(False)
 - name: "Include {{type|lower}} vars"
   include_vars: "vars/{{type|lower}}.vars"
+
 - name: "Select default username {{NAME}}"
   set_fact: USER="{{NAME}}"
   when: not USER|default(False)
@@ -24,6 +37,7 @@
 - name: "Set PREFIX_DIR variable"
   set_fact: PREFIX_DIR="{{hostvars[inventory_hostname][type|upper+'S_DIR']}}"
   when: not PREFIX_DIR|default(False)
+
 - name: "Set DIR variable"
   set_fact: DIR="{{PREFIX_DIR}}/{{NAME}}"
   when: not DIR|default(False)

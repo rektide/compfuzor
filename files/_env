@@ -1,0 +1,3 @@
+{% for k,v in (ENV|default({})).iteritems() -%}
+{{ 'export ' if export_mode|default(False) else '' }}{{k|upper}}={{v}}
+{% endfor -%}

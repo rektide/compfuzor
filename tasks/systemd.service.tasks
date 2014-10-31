@@ -1,5 +1,5 @@
 ---
-- shell: echo SERVICE IS {{service}}
+- debug: "msg=SERVICE IS {{service}}"
 - include: set_fact.or.tasks var="service" alt="{{NAME}}"
 - set_fact: service_name="{{FACT}}"
 #- set_fact: service_name="{{service}}"

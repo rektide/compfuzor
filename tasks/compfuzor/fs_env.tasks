@@ -1,8 +1,23 @@
 - debug: "msg=Compufuzor: copy in and link env files"
+- name: copy in default env file
+  template: src="files/_env" dest="{{DIR}}/env"
+  when: has_env.stdout|int == 0 and ENV|default(False)
 - name: copy in env file
   template: src="files/{{TYPE|default(NAME)}}/env" dest="{{DIR}}/env"
+  when: has_env.stdout|int != 0
+
+- name: set env export mode high
+  set_fact: export_mode=True
+- name: copy in default env.export file
+  template: src="files/_env" dest="{{DIR}}/env.export"
+  when: has_env_export.stdout|int == 0 and ENV|default(False)
+- name: copy in env.export file
+  template: src="files/{{TYPE|default(NAME)}}/env.export" dest="{{DIR}}/env.export"
+  when: has_env_export.stdout|int != 0
+
 - name: link env.`NAME` into PREFIX_DIR
   file: src="{{DIR}}/env" dest="{{PREFIX_DIR}}/env.{{NAME|default(TYPE)}}" state=link
+  when: ENV|default(False) or has_env.stdout|int != 0
 - name: link env.`TYPE` into PREFIX_DIR if not defined
   file: src="{{DIR}}/env" dest="{{PREFIX_DIR}}/env.{{TYPE|default(NAME)}}" state=link
-  when: has_type_env.stdout|int != 0
+  when: ENV|default(False) or has_env.stdout|int != 0 and has_type_env.stdout|int != 0

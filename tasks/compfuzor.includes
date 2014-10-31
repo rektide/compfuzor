@@ -23,7 +23,7 @@
 - include: compfuzor/fs_base.tasks
   when: DIR|default(False) or DIRS|default(False) or FILES|default(False) and not DIR_BYPASS|default(False)
 - include: compfuzor/fs_env.tasks
-  when: has_env.stdout|int == 0
+  when: has_env.stdout|int != 0 or ENV|default(False) and not ENV_BYPASS|default(False)
 - include: compfuzor/fs_hierarchy_multi.tasks
 - include: compfuzor/fs_srcs_too.tasks
 - include: compfuzor/fs_tgz.tasks

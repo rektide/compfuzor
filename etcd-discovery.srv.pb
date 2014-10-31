@@ -5,19 +5,21 @@
   gather_facts: False
   vars:
     TYPE: etcd
-    INSTANCE: "main-{{inventory_hostname}}-{{client_port}}"
+    INSTANCE: main
+    SUBINSTANCE: "{{inventory_hostname}}{{ '-'+client_port|string if client_port|int != 4001 else '' }}"
+    OWNER: etcd
 
     VAR_DIR: True
     SYSTEMD_SERVICE: True
 
     discovery_factory: "https://discovery.etcd.io/new?"
-    client_port: "{{port|default(4001)}}"
+    client_port: 4001
     peer_port: "{{client_port|int+3000}}"
     ENV:
       etcd_name: "{{name|default(NAME)}}"
       etcd_advertise_client_urls: "{{advertise_client_urls|default('http://'+inventory_hostname+':'+client_port)}}"
       etcd_listen_client_urls: "{{listen_client_urls|default('http://'+inventory_hostname+':'+client_port)}}"
-      #etcd_advertise_peer_urls: "{{advertise_peer_urls|default('http://'+inventory_hostname+':'+peer_port)}}"
+      etcd_advertise_peer_urls: "{{advertise_peer_urls|default('http://'+inventory_hostname+':'+peer_port)}}"
       etcd_listen_peer_urls: "{{listen_peer_urls|default('http://'+inventory_hostname+':'+peer_port)}}"
       etcd_cluster_active_size: "{{cluster_active_size|default(3)}}"
       etcd_data_dir: "{{VAR}}"
