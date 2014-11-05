@@ -17,7 +17,7 @@
 
 - name: link env.`NAME` into PREFIX_DIR
   file: src="{{DIR}}/env" dest="{{PREFIX_DIR}}/env.{{NAME|default(TYPE)}}" state=link
-  when: ENV|default(False) or has_env.stdout|int != 0
+  when: PREFIX_DIR|default(False) and (ENV|default(False) or has_env.stdout|int != 0)
 - name: link env.`TYPE` into PREFIX_DIR if not defined
   file: src="{{DIR}}/env" dest="{{PREFIX_DIR}}/env.{{TYPE|default(NAME)}}" state=link
-  when: ENV|default(False) or has_env.stdout|int != 0 and has_type_env.stdout|int != 0
+  when: PREFIX_DIR|default(False) and (ENV|default(False) or has_env.stdout|int != 0 and has_type_env.stdout|int != 0)
