@@ -1,18 +1,13 @@
 ---
 - hosts: all
   gather_facts: False
+  vars_files:
+  - vars/common.user.vars
+  - vars/xdg.vars
   vars:
     NAME: xdg-dirs
     DIR: '/etc/xdg'
-    ENV:
-      XDG_DOCUMENTS_DIR: "$HOME/docs"
-      XDG_DESKTOP_DIR: "$HOME/docs/desktop"
-      XDG_DOWNLOAD_DIR: "$HOME/docs/download"
-      XDG_MUSIC_DIR: "$HOME/docs/music"
-      XDG_PICTURES_DIR: "$HOME/docs/picture"
-      XDG_PUBLICSHARE_DIR: "$HOME/docs/public"
-      XDG_TEMPLATES_DIR: "$HOME/docs/templates"
-      XDG_VIDEOS_DIR: "$HOME/docs/video"
+    ENV: "{{XDG}}"
     LINKS:
       'user-dirs.defaults': 'env'
   tasks:
