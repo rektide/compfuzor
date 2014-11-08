@@ -6,7 +6,7 @@
   - vars/xdg.vars
   vars:
     NAME: xdg-dirs
-    DIR: '/etc/xdg'
+    DIR: {{ '/etc/xdg' if not USERMODE|default(False) else '~/.config'
     ENV: "{{XDG}}"
     LINKS:
       'user-dirs.defaults': 'env'
