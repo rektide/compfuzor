@@ -1,0 +1,14 @@
+[Unit]
+DefaultDependencies=no
+Conflicts=umount.target
+Before=local-fs.target umount.target
+Documentation=http://utcc.utoronto.ca/~cks/space/blog/linux/SystemdBindMountUnits
+
+[Mount]
+What={{what}}
+Where={{where}}
+Type=none
+options=bind
+
+[Install]
+WantedBy=local-fs.target
