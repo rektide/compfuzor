@@ -1,0 +1,4 @@
+- name: 'CompFuzor: test to see if systemd unit is active'
+  shell: "systemctl is-active {{unit}} -q; echo $?"
+  register: active
+- set_fact: active={{ active.stdout|int == 0 }}
