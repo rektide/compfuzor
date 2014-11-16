@@ -1,9 +1,9 @@
 ---
 - name: "Compfuzor: fetch git repository"
-  git: "repo={{REPO}} dest={{ GIT_DIR|default(DIR) }}"
+  git: "repo={{REPO}} dest={{ GIT_DIR|default(REPO_DIR)|default(DIR) }}"
   when: REPO|default(False)
 - name: "fetch git repositories"
-  git: "repo={{ REPOS[item] }} dest={{ DIR+'/' if item|first != '/' and item|first != '~' else '' }}{{ item }}"
+  git: "repo={{ REPOS[item] }} dest={{ REPO_DIR|default(DIR)+'/' if item|first != '/' and item|first != '~' else '' }}{{ item }}"
   with_items: REPOS.keys()
   when: REPOS|default(False)
 
