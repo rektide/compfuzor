@@ -5,7 +5,7 @@
   register: MACHINE_ID_
 - set_fact: "MACHINE_ID={{ MACHINE_ID_.stdout }}"
 - set_fact: "SUBINSTANCE={{MACHINE_ID}}"
-  when: SUBINSTANCE == True
+  when: SUBINSTANCE|default(False) == True
  
 - name: "Set name with subinstance"
   set_fact: NAME="{{TYPE}}-{{INSTANCE}}-{{SUBINSTANCE}}"
