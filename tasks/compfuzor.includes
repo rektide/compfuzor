@@ -17,7 +17,9 @@
 - include: compfuzor/repo_svn.tasks
   when: SVN_REPO is defined
 - include: compfuzor/repo_hg.tasks
-  when: HG_REPO is defined
+  when: HG_REPO is defined and not HG_RAW|default(False)
+- include: compfuzor/repo_hg_raw.tasks
+  when: HG_REPO is defined and HG_RAW|default(False)
 
 - debug: "msg=Compfuzor: FILESYSTEM"
 - include: compfuzor/fs_base.tasks
