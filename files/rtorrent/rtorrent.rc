@@ -25,13 +25,13 @@ upload_rate = 500
 
 # Default directory to save the downloaded torrents.
 #directory = ./
-directory = {{XDG.XDG_DOWNLOAD_DIR}}/torrent
+directory = {{incomplete}}
 
 # Default session directory. Make sure you don't run multiple instance
 # of rtorrent using the same session directory. Perhaps using a
 # relative path?
 #session = ./session
-session = ~/{{ETC}}
+session = {{VAR}}/session
 
 # Watch a directory for new torrents, and stop those that have been
 # deleted.
@@ -39,6 +39,9 @@ session = ~/{{ETC}}
 #schedule = untied_directory,5,5,stop_untied=
 schedule = watch_directory,5,5,load_start={{VAR}}/*.torrent
 schedule = untied_directory,5,5,stop_untied=
+
+#
+system.method.set_key = event.download.finished,move_complete,"execute=mv,-u,$d.get_base_path=,{{complete}}/;d.set_directory={{complete}}"
 
 # Close torrents when diskspace is low.
 #schedule = low_diskspace,5,60,close_low_diskspace=100M

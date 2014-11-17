@@ -4,13 +4,25 @@
   vars:
     TYPE: rtorrent
     INSTANCE: main
+    USERMODE: True
+
+    DIRS:
+    - "{{incomplete}}"
+    - "{{complete}}"
     ETC_FILES:
     - rtorrent.rc
-    VAR_DIR: True
+    VAR_DIRS:
+    - session
     PKGS:
     - rtorrent
+
     LINKS:
       "~/.rtorrent.rc": "{{ETC}}/rtorrent.rc"
-    USERMODE: True
+      "~/.torrent": "{{VAR}}"
+
+    complete: "{{XDG.XDG_DOWNLOAD_DIR}}/torrent"
+    incomplete: "{{XDG.XDG_DOWNLOAD_DIR}}/torrent/_incomplete"
   tasks:
   - include: tasks/compfuzor.includes
+  - file: path={{complete}} state=directory
+  - file: path={{incomplete}} state=directory

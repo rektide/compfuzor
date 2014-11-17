@@ -22,6 +22,9 @@
 - name: "Include usermode common vars"
   include_vars: vars/common.user.vars
   when: USERMODE|default(False)
+- name: "Include xdg vars"
+  include_vars: vars/xdg.vars
+  when: USERMODE|default(False)
 - name: "Default to being an 'opt' class compfuzor script"
   set_fact: type="opt"
   when: not type|default(False)
