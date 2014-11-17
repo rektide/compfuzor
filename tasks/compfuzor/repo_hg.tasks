@@ -3,16 +3,16 @@
 - name: "Fetch fast-export importer"
   git: repo="https://github.com/frej/fast-export" dest="{{OPTS_DIR}}/fast-export-git"
 - name: "Wipe temporary hg directory"
-  file: path="{{REPO_DIR|default(DIR)}}/hg" state=absent
+  file: path="{{REPO_DIR|default(DIR, true)}}/hg" state=absent
 - name: "Create temporary hg directory"
-  file: path="{{REPO_DIR|default(DIR)}}/hg" state=directory
+  file: path="{{REPO_DIR|default(DIR, true)}}/hg" state=directory
 - name: "Fetch/clone hg repository"
-  shell: chdir="{{REPO_DIR|default(DIR)}}" hg clone "{{HG_REPO}}" "hg"
+  shell: chdir="{{REPO_DIR|default(DIR, true)}}" hg clone "{{HG_REPO}}" "hg"
 - name: "Initialize `DIR` as git"
-  shell: chdir="{{REPO_DIR|default(DIR)}}" git init .
+  shell: chdir="{{REPO_DIR|default(DIR, true)}}" git init .
 - name: "Import temporary hg"
-  shell: chdir="{{REPO_DIR|default(DIR)}}" "{{OPTS_DIR}}/fast-export-git/hg-fast-export.sh" -r "{{REPO_DIR|default(DIR)}}/hg"
+  shell: chdir="{{REPO_DIR|default(DIR, true)}}" "{{OPTS_DIR}}/fast-export-git/hg-fast-export.sh" -r "{{REPO_DIR|default(DIR, true)}}/hg"
 - name: "Erase temporary hg directory"
-  file: path="{{REPO_DIR|default(DIR)}}/hg" state=absent
+  file: path="{{REPO_DIR|default(DIR, true)}}/hg" state=absent
 - name: "Load current head"
-  shell: chdir="{{REPO_DIR|default(DIR)}}" git checkout HEAD
+  shell: chdir="{{REPO_DIR|default(DIR, true)}}" git checkout HEAD
