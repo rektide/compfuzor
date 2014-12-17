@@ -5,5 +5,5 @@
 - name: record TGZ.url file"
   template: "src=files/content dest={{SRCS_DIR}}/{{TGZ|basename}}.url content={{TGZ}}"
 - name: extract tgz
-  shell: "chdir={{DIR}} tar -xzf {{SRCS_DIR}}/{{TGZ|basename}} --strip-components=1"
+  shell: "chdir={{DIR}} tar -xaf {{SRCS_DIR}}/{{TGZ|basename}} --strip-components=1"
   #unarchive: src="{{SRCS_DIR}}/{{TGZ|basename}}" dest="{{DIR}}" copy="no"
