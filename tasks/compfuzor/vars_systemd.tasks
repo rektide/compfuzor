@@ -1,6 +1,6 @@
 ---
 - name: "Compfuzor: sourcing systemd variables"
-  include_vars: vars/systemd.vars
+  include_defaults: vars/systemd.vars
 
 - name: Finding pkgonfig for SYSTEMD_USER_UNIT_DIR
   shell: pkg-config systemd --variable=systemduserunitdir

@@ -18,18 +18,18 @@
   when: not NAME|default(False) and TYPE|default(False)
 
 - name: "Include common vars"
-  include_vars: vars/common.vars
+  include_defaults: vars/common.vars
 - name: "Include usermode common vars"
-  include_vars: vars/common.user.vars
+  include_defaults: vars/common.user.vars
   when: USERMODE|default(False)
 - name: "Include xdg vars"
-  include_vars: vars/xdg.vars
+  include_defaults: vars/xdg.vars
   when: USERMODE|default(False)
 - name: "Default to being an 'opt' class compfuzor script"
   set_fact: type="opt"
   when: not type|default(False)
 - name: "Include {{type|lower}} vars"
-  include_vars: "vars/{{type|lower}}.vars"
+  include_defaults: "vars/{{type|lower}}.vars"
 
 - name: "Select default username {{NAME}}"
   set_fact: USER="{{NAME}}"
