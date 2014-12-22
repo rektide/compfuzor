@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+cd "{{ DIR }}"
+./bin/build taskd
+./bin/build kronisk
+./bin/build task
+./bin/build tasksh
+

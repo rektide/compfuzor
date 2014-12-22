@@ -3,7 +3,7 @@
   git: "repo={{REPO}} dest={{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }} accept_hostkey={{ GIT_ACCEPT|default(False) }}"
   when: REPO|default(False)
 - name: "fetch git repositories"
-  git: repo="{{ REPOS[item] }}" dest="{{ REPO_DIR|default(DIR, true)+'/' if item|first != '/' and item|first != '~' else '' }}{{ item }} {{ GIT_ACCEPT|default(False) }}"
+  git: "repo={{ REPOS[item] }} dest={{ REPO_DIR|default(DIR, true)+'/' if item|first != '/' and item|first != '~' else '' }}{{ item }} accept_hostkey={{ GIT_ACCEPT|default(False) }}"
   with_items: REPOS.keys()
   when: REPOS|default(False)
 
