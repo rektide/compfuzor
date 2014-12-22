@@ -8,8 +8,11 @@
     PKGS:
     - nodejs
     - libpq-dev
+    - bundler
     # NEEDS:
     #- redis
     #- postgres
+    BINS:
+    - exec: "bundle install --path vendor/bundle"
   tasks:
   - include: tasks/compfuzor.includes
