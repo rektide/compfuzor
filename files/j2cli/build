@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+
+SRC="{{SRC}}"
+
+cd ${SRC}
+make build
+python setup.py develop
