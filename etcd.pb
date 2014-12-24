@@ -16,9 +16,8 @@
     BINS:
     - dest: ../build
       run: True
-      bypassGlobal: True
-    - global: etcd
-    GLOBAL_BINS_BYPASS: True
+      global: False
+    - name: etcd
     LINKS_BYPASS: True
     LINKS:
       "bin/build": "build"
