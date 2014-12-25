@@ -1,0 +1,24 @@
+section: screens
+{%- for screen in screens %}
+        {{ screen }}:
+{%- endfor %}
+end
+
+section: links
+{%- for screen in screens %}
+        {{ screen }}:
+                left = {{ screens[(loop.index0 - 1) % screens|length] }}
+                right = {{ screens[(loop.index0 + 1) % screens|length] }}
+{% endfor -%}
+end
+
+section: aliases
+        {%- if aliases|default(False) %}
+        {%- for screen, alts in aliases.iteritems() %}
+        {{ screen }}:
+                {%- for alt in alts %}
+                {{ alt }}
+                {% endfor -%}
+        {% endfor %}
+        {%- endif %}
+end

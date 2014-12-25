@@ -1,0 +1,14 @@
+#!/bin/bash
+set -e
+
+ETC="{{ETC}}"
+ETC="${ETC/#~/$HOME}"
+J2="{{VAR}}/synergy.conf.j2"
+J2="${J2/#~/$HOME}"
+INPUT=$1
+OUTPUT=$2
+[ -z "$INPUT" ] && INPUT="${ETC}/synergy.json"
+[ -z "$OUTPUT" ] && OUTPUT="${ETC}/synergy.conf"
+
+cd ${ETC}
+j2 ${J2} ${INPUT} > ${OUTPUT}

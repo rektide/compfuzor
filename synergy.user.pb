@@ -8,7 +8,14 @@
     PKGS:
     - synergy
     ETC_FILES:
-    - synergy.conf
+    - synergy.json
+    VAR_FILES:
+    - name: synergy.conf.j2
+      raw: True
+    BINS:
+    - name: build-etc
+      run: True
+      global: False
     LINKS:
       "~/.synergy.conf": "{{ETC}}/synergy.conf"
   tasks:
