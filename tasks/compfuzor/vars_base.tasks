@@ -6,6 +6,7 @@
 - set_fact: "MACHINE_ID={{ MACHINE_ID_.stdout }}"
 - set_fact: "SUBINSTANCE={{MACHINE_ID}}"
   when: SUBINSTANCE|default(False) == True
+  changed_when: False
  
 - name: "Set name with subinstance"
   set_fact: NAME="{{TYPE}}-{{INSTANCE}}-{{SUBINSTANCE}}"

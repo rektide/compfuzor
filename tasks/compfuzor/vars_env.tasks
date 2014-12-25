@@ -1,9 +1,12 @@
 - name: "Compfuzor: test local for has_env variable"
   local_action: shell test ! -e "files/{{TYPE|default(NAME)}}/env"; echo $?
   register: has_env
+  changed_when: False
 - name: "Compfuzor: test local for has_env_export variable"
   local_action: shell test ! -e "files/{{TYPE|default(NAME)}}/env.export"; echo $?
   register: has_env_export
+  changed_when: False
 - name: test remote system for has_type_env
   shell: test -e "{{PREFIX_DIR|default('/nope-nope-nope-no.')}}/env.{{TYPE|default(NAME)}}"; echo $?
   register: has_type_env
+  changed_when: False
