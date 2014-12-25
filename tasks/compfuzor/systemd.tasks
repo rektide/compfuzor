@@ -1,5 +1,5 @@
 ---
 - debug: "msg=Compfuzor: install systemd units"
-- include: ../systemd.unit.includes include=service
-- include: ../systemd.unit.includes include=unit
-- include: ../systemd.unit.includes include=socket
+- include: ../systemd.unit.includes unit_type=service
+- include: ../systemd.unit.includes unit_type=unit
+- include: ../systemd.unit.includes unit_type=socket

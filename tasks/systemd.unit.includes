@@ -1,20 +1,35 @@
-- set_fact: KEY="SYSTEMD_{{include|upper}}" SYSTEMD_TARGET="{{TYPE|default(NAME)|default('')}}"
-- local_action: shell test -f "files/{{SYSTEMD_TARGET}}/{{SYSTEMD_TARGET}}.{{include}}"; echo $?
+- set_fact:
+    unit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False) }}"
+    units: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default(False) }}"
+    target: "{{TYPE|default(NAME)|default('')}}"
+    dest: "{{SYSTEMD_UNIT_DIR}}/{{NAME+'.'+unit_type}}"
+    SYSTEMD_USER: "{{ SYSTEMD_USER|default(USER)|default('root') }}"
+- local_action: shell test ! -f "files/{{target}}/{{target}}.{{unit_type}}"; echo $?
   changed_when: False
-  register: has_file
-- template: src="files/{{SYSTEMD_TARGET}}/{{SYSTEMD_TARGET}}.{{include}}" dest="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{include}}"
-  when: "{{KEY}} is defined and {{KEY}} == True and has_file.stdout|int == 0"
-- template: src="files/systemd.{{include}}" dest="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{include}}"
-  when: "{{KEY}} is defined and {{KEY}} == True and has_file.stdout|int != 0"
-- template: src="files/{{SYSTEMD_TARGET}}/{{hostvars[inventory_hostname]['SYSTEMD_'+include|upper]|default(vars['SYSTEMD_'+include|upper])}}" dest="{{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{include}}"
-  when: "SYSTEMD_{{include|upper}} is defined and not not SYSTEMD_{{include|upper}} and SYSTEMD_{{include|upper}} != True"
-- shell: systemctl --{{SYSTEMD_SCOPE}} enable {{NAME}}.{{include}}
-  when: "({{KEY}} is defined and {{KEY}} == True) or SYSTEMD_{{include|upper}} is defined and not not SYSTEMD_{{include|upper}} and SYSTEMD_{{include|upper}} != True"
-- template: src="files/{{SYSTEMD_TARGET}}/{{item}}" dest="{{SYSTEMD_UNIT_DIR}}/{{item}}"
-  with_items: "SYSTEMD_{{include|upper}}S"
-  when: "SYSTEMD_{{include|upper}}S is defined"
+  register: local_unit
+- file: path="{{SYSTEMD_UNIT_DIR}}" state=directory
+  when: unit or units
+
+- debug: msg="unit {{ unit }} , {{ unit == True }} / {{ unit == False }} / {{ unit is string }} , {{ units is string }}"
+
+- template: src="files/{{target}}/{{target}}.{{unit_type}}" dest="{{dest}}"
+  when: unit == "True" and local_unit.stdout|int == 1
+- template: src="files/systemd.{{unit_type}}" dest="{{dest}}"
+  when: unit == "True" and local_unit.stdout|int == 0
+- shell: "systemctl --{{SYSTEMD_SCOPE}} enable {{NAME+'.'+unit_type}}"
+  when: unit == "True"
+
+- template: src="files/{{target}}/{{unit}}" dest="{{unit}}"
+  when: unit|bool and unit != "True"
+- shell: systemctl --{{SYSTEMD_SCOPE}} enable "{{unit}}"
+  when: unit|bool and unit != "True"
+
+- template: src="files/{{target}}/{{item}}" dest="{{SYSTEMD_UNIT_DIR}}/{{item}}"
+  with_items: units
+  when: units and units != "False"
 - shell: systemctl --{{SYSTEMD_SCOPE}} enable {{item}}
-  with_items: "SYSTEMD_{{include|upper}}S"
-  when: "SYSTEMD_{{include|upper}}S is defined"
-- include: "compfuzor/fs_d.tasks include=SYSTEMD_{{include|upper}} fs_path={{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{include}}"
-  when: "SYSTEMD_{{include|upper}}_D is defined"
+  with_items: units
+  when: units and units != "False"
+
+- include: "compfuzor/fs_d.tasks unit_type=SYSTEMD_{{unit_type|upper}} fs_path={{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{unit_type}}"
+  when: "SYSTEMD_{{unit_type|upper}}_D is defined"
