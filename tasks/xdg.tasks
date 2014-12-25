@@ -1,4 +1,0 @@
----
-- name: install xdg utils
-  apt: pkg=xdg-user-dirs
-- name: register XDG_

@@ -28,12 +28,12 @@
   - shell: test -e $CONFIG_DIR/$INSTALL_LINK && echo 0 || echo 1
     register: need_install_link
   - file: src=$INSTALL_DIR dest=$CONFIG_DIR/$INSTALL_LINK state=link
-    when: need_install_link.stdout|int > 0 and has_xdg_config_dir.stdout|int > 0
-  #### xdg_config_dir/ansible install
+    when: need_install_link.stdout|int > 0
+  #### XDG_CONFIG_DIR/ansible install
   - name: check whether xdg_config_dir exists and is different from CONFIG_DIR:{{CONFIG_DIR}}
-    shell: test "{{has_xdg_config_dir.stdout}}" == 1 -a "x{{xdg_config_dir.stdout}}" != "x{{CONFIG_DIR}}" -a ! -e "{{xdg_config_dir.stdout}}/ansible" && echo 1 || echo 0
+    shell: test -d "{{XDG_CONFIG_DIR}} -a "x{{XDG_CONFIG_DIR}}" != "x{{CONFIG_DIR}}" -a ! -e "{{XDG_CONFIG_DIR}}/ansible" && echo 1 || echo 0
     register: need_config_link
-  - file: src={{CONFIG_DIR}} dest={{xdg_config_dir.stdout}}/ansible state=link
+  - file: src={{CONFIG_DIR}} dest={{XDG_CONFIG_DIR}}/ansible state=link
     when: need_config_link.stdout|int > 0
   - file: src=$CONFIG_DIR/$ANSIBLE_ENV dest=$BINS_DIR/$ANSIBLE_ENV state=link
   ### install ansible-ec2

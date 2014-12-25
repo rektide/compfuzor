@@ -2,6 +2,7 @@
 - debug: "msg=Compfuzor: starting; VARIABLES"
 - include: compfuzor/vars_base.tasks
 - include: compfuzor/vars_env.tasks
+- include: compfuzor/vars_xdg.tasks
 - debug: "msg=Compfuzor: sourcing hierarchy vars"
 - include: compfuzor/_multi.tasks multi=vars_hierarchy
 - debug: "msg=Compfuzor: sourcing extra variables"
