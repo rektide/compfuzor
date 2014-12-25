@@ -1,5 +1,5 @@
 ---
 - name: "Compfuzor: run all `BINS` that have an `args`"
-  shell: "chdir={{item.pwd|default(DIR)}} {{ (item.exec if item.exec|default(False) else DIR+'/bin/'+item.dest|default(item.name)) if (item.args|default(False) or item.run|default(False) or item.exec|default(False)) else '/bin/true' }}{{ ' '+item.args if item.args|default(False) else '' }}"
+  shell: "chdir={{item.pwd|default(DIR)}} {{ (item.exec if item.exec|default(False) else BINS_DIR+'/'+item.dest|default(item.name)) if (item.args|default(False) or item.run|default(False) or item.exec|default(False)) else '/bin/true' }}{{ ' '+item.args if item.args|default(False) else '' }}"
   when: "BINS is defined and (item.args|default(False) or item.run|default(False) or item.exec|default(False))"
   with_items: BINS

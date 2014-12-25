@@ -6,4 +6,8 @@
 - name:  "Copy `BINS` into place`"
   template: src="files/{{ TYPE|default(NAME) }}/{{item.src|default(item.name) if item is mapping else item }}" dest="{{BINS_DIR}}/{{item.dest|default(item.name) if item is mapping else item}}" mode={{item.mode|default(0755)}}
   with_items: BINS
-  when: (item.src|default(True) != False and item.name|default(False)) or item.src|default(False)
+  when: ((item.src|default(True) != False and item.name|default(False)) or item.src|default(False)) and not item.raw|default(False)
+- name:  "Copy raw `BINS` into place`"
+  copy: src="files/{{ TYPE|default(NAME) }}/{{item.src|default(item.name) if item is mapping else item }}" dest="{{BINS_DIR}}/{{item.dest|default(item.name) if item is mapping else item}}" mode={{item.mode|default(0755)}}
+  with_items: BINS
+  when: ((item.src|default(True) != False and item.name|default(False)) or item.src|default(False)) and item.raw|default(False)
