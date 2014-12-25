@@ -15,7 +15,9 @@ WorkingDirectory={{ SYSTEMD_CWD|default(DIR) }}
 {% set s = joiner(" ") %}
 Environment={% for k,v in SYSTEMD_ENV.iteritems() %}{{s()}}"{{k}}={{v}}"{% endfor %}{{""}}
 {% endif %}
-User={{ SYSTEMD_USER|default(USER)|default("root") }}
+{% if SYSTEMD_USER|default(True) and not USERMODE|default(False) %}
+{{ "User="+SYSTEMD_USER|default(USER) }}
+{% endif %}
 
 [Install]
 WantedBy=multi-user.target

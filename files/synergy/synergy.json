@@ -1,3 +1,3 @@
 {
-"screens": ["alpha", "beta", "delta"]
+"screens": ["{{ansible_hostname}}", "alpha", "beta"]
 }
