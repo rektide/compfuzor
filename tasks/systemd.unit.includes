@@ -3,14 +3,11 @@
     units: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default(False) }}"
     target: "{{TYPE|default(NAME)|default('')}}"
     dest: "{{SYSTEMD_UNIT_DIR}}/{{NAME+'.'+unit_type}}"
-    SYSTEMD_USER: "{{ SYSTEMD_USER|default(USER)|default('root') }}"
 - local_action: shell test ! -f "files/{{target}}/{{target}}.{{unit_type}}"; echo $?
   changed_when: False
   register: local_unit
 - file: path="{{SYSTEMD_UNIT_DIR}}" state=directory
   when: unit or units
-
-- debug: msg="unit {{ unit }} , {{ unit == True }} / {{ unit == False }} / {{ unit is string }} , {{ units is string }}"
 
 - template: src="files/{{target}}/{{target}}.{{unit_type}}" dest="{{dest}}"
   when: unit == "True" and local_unit.stdout|int == 1
