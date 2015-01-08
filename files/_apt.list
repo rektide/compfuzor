@@ -1,6 +1,6 @@
 {% macro _repo(url, distributions, components, archs) -%}
 {% for distribution in distributions -%}
-deb {{'[ arch = '+archs|join(',')+' ] ' if archs else ''}}{{url}} {{distribution}} {{components|join(' ')}}
+deb {{'[arch='+archs|join(',')+'] ' if archs else ''}}{{url}} {{distribution}} {{components|join(' ')}}
 {% if APT_SOURCE|default(False) -%}
 deb-src {{'[ arch = '+archs|join(',')+' ] ' if archs else ''}}{{url}} {{distribution}} {{components|join(' ')}}
 {% endif -%}
@@ -28,8 +28,10 @@ deb-src {{'[ arch = '+archs|join(',')+' ] ' if archs else ''}}{{url}} {{distribu
 {% endif -%}
 {% if APT_ARCHS is defined -%}
 {% set archs = APT_ARCHS -%}
-{% elif APT_ARCH is defined -%}
+{% elif APT_ARCH is defined and APT_ARCH != True -%}
 {% set archs = [APT_ARCH] -%}
+{% elif APT_ARCH|default(False) == True -%}
+{% set archs = [ARCH] -%}
 {% elif APT_DEFAULT_ARCHS is defined -%}
 {% set archs = APT_DEFAULT_ARCHS -%}
 {% elif APT_DEFAULT_ARCH is defined -%}

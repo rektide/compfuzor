@@ -3,7 +3,7 @@
 - include: vars_base.tasks
   when: not APT_DEFAULT_COMPONENT|default(False) and not APT_DEFAULT_COMPONENTS|default(False) and not APT_COMPONENT|default(False) and not APT_COMPONENTS|default(False)
 - include: vars_apt.tasks
-  when: not APT_TRUSTED|default(Fase) or not APT_SOURCELIST|default(False)
+  when: not APT_TRUSTED|default(False) or not APT_SOURCELIST|default(False)
 - name: "Copy in apt gpg keys"
   copy: src="files/apt-repos/{{APT_TRUSTED}}.{{item}}" dest="/etc/apt/trusted.gpg.d/{{APT_TRUSTED}}.{{item}}"
   when: APT_TRUST|default(True)
@@ -12,5 +12,11 @@
   - gpg.params
 - name: "Copy in apt sources.list"
   template: src="files/_apt.list" dest="/etc/apt/sources.list.d/{{APT_SOURCELIST}}.list"
+- name: "Insure pin directory"
+  file: path=/etc/apt/preferences.d state=directory
+  when: APT_PIN_PACKAGE|default(False) or APT_PIN_PACKAGES|default(False)
+- name: "Copy in pin"
+  template: src="files/_apt-pin" dest="/etc/apt/preferences.d/{{NAME}}"
+  when: APT_PIN_PACKAGE|default(False) or APT_PIN_PACKAGES|default(False)
 - include: ../apt.update.tasks repo="{{APT_SOURCELIST}}"
   when: not APT_UPDATE_BYPASS|default(False)

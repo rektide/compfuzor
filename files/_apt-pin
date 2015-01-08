@@ -1,0 +1,3 @@
+Package: {{ APT_PIN_PACKAGE|default('*') }}
+Pin: {{ APT_PIN }}
+Pin-Priority: {{ APT_PIN_PRIORITY }}
