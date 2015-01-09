@@ -1,11 +1,20 @@
 - debug: "Compfuzor: create base files"
 - name: "Creating base `DIR`"
   file: path="{{DIR}}" state=directory mode={{DIRMODE}}
+  when: DIR|default(True)
 - name: "Creating `DIRS`"
   file: path={{DIR+'/' if item|first != '/' and item|first != '~' else ''}}{{item}} state=directory mode={{DIRMODE}}
   with_items: DIRS
   when: DIRS is defined
 - name: "Creating `FILES`"
-  template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{DIR}}/{{item.dest|default(item.name)|default(item)}}"
+  template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)|basename}}" dest="{{DIR}}/{{item.dest|default(item.name)|default(item)}}"
   with_items: FILES
-  when: FILES is defined
+  when: FILES is defined and FILES is not mapping
+- name: "Creating `FILES` mapping"
+  template: src="files/{{TYPE|default(NAME)}}/{{ item[1] }}" dest="{{ DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '' }}{{item[0]}}"
+  with_items: FILES.items()
+  when: FILES is defined and FILES is mapping
+- name: "FILES_D"
+  assemble: src={{item}}.d/ dest={{item}}
+  with_items: FILES_D
+  when: FILES_D|default(False)
