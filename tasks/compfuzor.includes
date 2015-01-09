@@ -38,6 +38,7 @@
 - include: compfuzor/links.tasks
   when: not LINKS_BYPASS|default(False)
 - include: compfuzor/_multi.tasks multi=fs_d
+- include: compfuzor/fs_base_d.tasks
 
 
 - debug: "msg=Compfuzor: EXTRAS"

@@ -12,9 +12,5 @@
   when: FILES is defined and FILES is not mapping
 - name: "Creating `FILES` mapping"
   template: src="files/{{TYPE|default(NAME)}}/{{ item[1] }}" dest="{{ DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '' }}{{item[0]}}"
-  with_items: FILES.items()
+  with_items: FILES.iteritems()
   when: FILES is defined and FILES is mapping
-- name: "FILES_D"
-  assemble: src={{item}}.d/ dest={{item}}
-  with_items: FILES_D
-  when: FILES_D|default(False)

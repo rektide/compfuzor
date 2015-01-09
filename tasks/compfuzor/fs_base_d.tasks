@@ -1,0 +1,4 @@
+- name: "FILES_D"
+  assemble: src={{item}}.d/ dest={{item}}
+  with_items: FILES_D
+  when: FILES_D|default(False)
