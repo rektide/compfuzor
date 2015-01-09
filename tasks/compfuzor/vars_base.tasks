@@ -1,10 +1,14 @@
 - debug: "msg=Compfuzor: source base variables"
 
-- name: "Set subinstance"
+- name: "Set MACHINE_ID"
   shell: "cat /etc/machine-id"
   register: MACHINE_ID_
-- set_fact: "MACHINE_ID={{ MACHINE_ID_.stdout }}"
-- set_fact: "SUBINSTANCE={{MACHINE_ID}}"
+- name: "Set ARCH"
+  shell: dpkg --print-architecture
+  register: ARCH_
+- set_fact: "MACHINE_ID={{ MACHINE_ID_.stdout }} ARCH={{ ARCH_.stdout }}"
+- name: "Set SUBINSTANCE if asked for"
+  set_fact: "SUBINSTANCE={{MACHINE_ID}}"
   when: SUBINSTANCE|default(False) == True
   changed_when: False
  
