@@ -1,0 +1,6 @@
+if has("gui_running") 
+	syntax on
+endif
+
+filetype plugin indent on
+ruler on

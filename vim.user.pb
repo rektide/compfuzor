@@ -6,6 +6,12 @@
     DIR: ~/.vim
     DIRS:
     - colors
+    - plugins
+    FILES:
+    - plugins/syntax
+    - plugins/filetype-compfuzor
+    - plugins/font-gvim
+    - plugins/debian-recommended
     REPOS:
      #"{{DIR}}/colorpack": "https://github.com/endel/vim-github-colorscheme" #!
      colorpack: "https://github.com/vim-scripts/Colour-Sampler-Pack"
@@ -13,8 +19,9 @@
       "{{ETC}}": "{{DIR}}"
     USERMODE: True
     DIR_BYPASS: True
+    PKGS:
+    - fonts-ricty-diminished
 
-    random_vim: 
   tasks:
   - include: tasks/compfuzor.includes
   - shell: ln -sf {{DIR}}/colorpack/colors/*vim {{DIR}}/colors/

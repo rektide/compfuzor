@@ -1,0 +1,2 @@
+au BufNewFile,BufRead *.pb set filetype=yaml
+au BufNewFile,BufRead *.tasks set filetype=yaml
