@@ -12,6 +12,7 @@
     - z.d
     - zfunc.d
     ETC_FILES:
+     - zshenv
      - zprofile
      - zshrc
      - zlogin
