@@ -20,8 +20,8 @@
       "~/.rtorrent.rc": "{{ETC}}/rtorrent.rc"
       "~/.torrent": "{{VAR}}"
 
-    complete: "{{XDG.XDG_DOWNLOAD_DIR}}/torrent"
-    incomplete: "{{XDG.XDG_DOWNLOAD_DIR}}/torrent/_incomplete"
+    complete: "{{XDG_DOWNLOAD_DIR}}/torrent"
+    incomplete: "{{XDG_DOWNLOAD_DIR}}/torrent/_incomplete"
   tasks:
   - include: tasks/compfuzor.includes
   - file: path={{complete}} state=directory
