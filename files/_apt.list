@@ -26,14 +26,12 @@ deb-src {{'[ arch = '+archs|join(',')+' ] ' if archs else ''}}{{url}} {{distribu
 {% elif APT_DEFAULT_COMPONENT is defined -%}
 {% set comps = [APT_DEFAULT_COMPONENT] -%}
 {% endif -%}
-{% if APT_ARCHS is defined -%}
-{% set archs = APT_ARCHS -%}
-{% elif APT_ARCH is defined and APT_ARCH != True -%}
+{% if APT_ARCH is defined and APT_ARCH != True -%}
 {% set archs = [APT_ARCH] -%}
 {% elif APT_ARCH|default(False) == True -%}
 {% set archs = [ARCH] -%}
-{% elif APT_DEFAULT_ARCHS is defined -%}
-{% set archs = APT_DEFAULT_ARCHS -%}
+{% elif item %}
+{% set archs = [item] -%}
 {% elif APT_DEFAULT_ARCH is defined -%}
 {% set archs = [APT_DEFAULT_ARCH] -%}
 {% else %}

@@ -11,7 +11,12 @@
   - gpg
   - gpg.params
 - name: "Copy in apt sources.list"
-  template: src="files/_apt.list" dest="/etc/apt/sources.list.d/{{APT_SOURCELIST}}.list"
+  template: src="files/_apt.list" dest="/etc/apt/sources.list.d/{{APT_SOURCELIST}}.{{ARCH if APT_ARCH == True else APT_ARCH}}.list"
+  when: APT_ARCH|default(False)
+- name: "Copy in apt sources.list for each arch"
+  template: src="files/_apt.list" dest="/etc/apt/sources.list.d/{{APT_SOURCELIST}}.{{item}}.list"
+  with_items: ARCHS
+  when: not (APT_ARCH|default(False))
 - name: "Insure pin directory"
   file: path=/etc/apt/preferences.d state=directory
   when: APT_PIN_PACKAGE|default(False) or APT_PIN_PACKAGES|default(False)

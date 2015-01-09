@@ -3,10 +3,20 @@
 - name: "Set MACHINE_ID"
   shell: "cat /etc/machine-id"
   register: MACHINE_ID_
+  changed_when: False
 - name: "Set ARCH"
   shell: dpkg --print-architecture
   register: ARCH_
-- set_fact: "MACHINE_ID={{ MACHINE_ID_.stdout }} ARCH={{ ARCH_.stdout }}"
+  changed_when: False
+- name: "Set ARCHS"
+  shell: dpkg --print-foreign-architectures
+  register: ARCHS_
+  changed_when: False
+- name: "Clean generated system facts"
+  set_fact:
+    MACHINE_ID: "{{MACHINE_ID_.stdout}}"
+    ARCH: "{{ARCH_.stdout}}"
+    ARCHS: "{{ARCHS_.stdout_lines}}"
 - name: "Set SUBINSTANCE if asked for"
   set_fact: "SUBINSTANCE={{MACHINE_ID}}"
   when: SUBINSTANCE|default(False) == True
