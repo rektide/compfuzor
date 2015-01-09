@@ -1,4 +1,4 @@
-{% for repo in REPOS %}
+{% for repo in REPREPROS %}
 Name: incoming_{{ repo.name }}
 IncomingDir: {{ VAR }}/incoming/{{ repo.name }}
 TempDir: {{ VAR }}/tmp/incoming/{{ repo.name }}
