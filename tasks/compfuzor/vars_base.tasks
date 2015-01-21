@@ -53,7 +53,7 @@
   set_fact: PREFIX_DIR="{{DIR|dirname}}"
   when: not DIR|default(False) and not PREFIX_DIR|default(False)
 - name: "Set PREFIX_DIR variable"
-  set_fact: PREFIX_DIR="{{hostvars[inventory_hostname][type|upper+'S_DIR']}}"
+  set_fact: PREFIX_DIR="{{hostvars[inventory_hostname][type|upper+'S_DIR']|default(vars[type|upper+'S_DIR'])}}"
   when: not PREFIX_DIR|default(False)
 
 - name: "Set DIR variable"
