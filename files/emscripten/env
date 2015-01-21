@@ -1,2 +1,3 @@
-export LLVM_ROOT="{{DIR}}/llvm"
-export PATH="${LLVM_ROOT}/build/Release/bin:{{DIR}}:$PATH"
+SRC="{{SRC}}"
+export LLVM_ROOT="${SRC}/llvm/build/Release/bin"
+export PATH="${LLVM_ROOT}:${SRC}/emscripten:$PATH"
