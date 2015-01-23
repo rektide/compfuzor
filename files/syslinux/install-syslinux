@@ -1,0 +1,6 @@
+#!/bin/sh
+set -e
+[ ! -d "$SYSLINUX_MNT_FAT" ] && exit 1
+cp "{{VAR}}/syslinux.cfg" "$SYSLINUX_MNT_FAT"
+umount "$SYSLINUX_MNT_FAT"
+syslinux "$SYSLINUX_DEV_FAT"

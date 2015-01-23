@@ -1,0 +1,7 @@
+#!/bin/sh
+set -e
+[ -d "$SYSLINUX_MNT_FAT" -a -d "$SYSLINUX_MNT_LINUX" ] || exit 1
+
+kernel=$(ls -Aru $SYSLINUX_MNT_LINUX/boot/vmlinuz*|tail -n1)
+[ -z "$kernel" ] && exit 2
+cp "$kernel" "$SYSLINUX_MNT_FAT/{{image}}"

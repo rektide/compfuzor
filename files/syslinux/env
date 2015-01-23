@@ -1,0 +1,26 @@
+export SYSLINUX_DEV="{{device|default('/dev/sdb')}}"
+
+SYSLINUX_DEV_FAT="{{"${SYSLINUX_DEV}" if (fat ~ "")|first != '/' and (fat ~ "")|first != '~' else ''}}{{fat}}"
+[ -b "$SYSLINUX_DEV_FAT" ] && export SYSLINUX_DEV_FAT || bad_dev_fat=1
+
+SYSLINUX_DEV_LINUX="{{"${SYSLINUX_DEV}" if (linux ~ "")|first != '/' and (linux ~ "")|first != '~' else ''}}{{linux}}"
+[ -b "$SYSLINUX_DEV_LINUX" ] && export SYSLINUX_DEV_LINUX || bad_dev_linux=1
+
+[ ! -d "$SYSLINUX_MNT_FAT" ] && export SYSLINUX_MNT_FAT=$(mktemp --tmpdir -d syslinux-fat.XXXXXXXX)
+[ ! -d "$SYSLINUX_MNT_LINUX" ] && export SYSLINUX_MNT_LINUX=$(mktemp --tmpdir -d syslinux-linux.XXXXXXXX)
+
+[ "$bad_dev_fat" -eq "1" -o "$bad_dev_linux" -eq "1" ] && return
+
+df "$SYSLINUX_MNT_FAT" | grep "$SYSLINUX_MNT_FAT"
+if [ "$?" -ne "0" ]
+then
+	[ -d "$SYSLINUX_MNT_FAT" -a -b "$SYSLINUX_DEV_FAT" ] || return
+	mount "$SYSLINUX_DEV_FAT" "$SYSLINUX_MNT_FAT"
+fi
+
+df "$SYSLINUX_MNT_LINUX" | grep "$SYSLINUX_MNT_LINUX"
+if [ "$?" -ne "0" ]
+then
+	[ -d "$SYSLINUX_MNT_LINUX" -a -b "$SYSLINUX_DEV_LINUX" ] || return
+	mount "$SYSLINUX_DEV_LINUX" "$SYSLINUX_MNT_LINUX"
+fi
