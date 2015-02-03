@@ -12,6 +12,7 @@
     linux_dir: "{{SRCS_DIR}}/linux"
     cc: "arm-linux-gnueabi-"
     #cc_uboot: "arm-linux-gnueabi-"
+    GIT_ACCEPT: true
     DIST: "{{VAR|default()}}/dist"
 
     FILES:
@@ -29,7 +30,6 @@
     - uboot/{{board_uboot}}.h
     - dts/{{board_dts}}.dts
     
-    BINS_RUN_BYPASS: True # install but do not run
     BINS:
     - extract-image
     - build-uboot
@@ -42,8 +42,13 @@
     - install-dtb
     - start-openocd
     - install-uboot
+    - src: ../build-deb-kernel.sh
+      dest: build-deb-kernel.sh
+      arch: arm
+      debarch: armel
+      after_kernel: 'cp arch/arm/boot/dts/kirkwood-iconnect.dtb debian/tmp/boot/vmlinuz* "${OUTPUT_DIR}/"'
 
-    REPOS_p:
+    REPOS:
       uboot: git://git.denx.de/u-boot.git
     DIRS:
     - "{{DIST}}"
@@ -55,10 +60,10 @@
       "etc/openocd/openocd.cfg": "etc/openocd/openocd-{{board}}.cfg"
       "etc/openocd/openocd.board.cfg": "etc/openocd/openocd-{{board}}.board.cfg"
       "/var/tftpd/{{NAME}}": "{{VAR}}"
-    PKGS:
+    #PKGS:
     #- device-tree-compiler # junky junk junk, doesn't work with kernel dts
-    - mtd-utils # ubi tools
-    - tftpd-hpa
+    #- mtd-utils # ubi tools
+    #- tftpd-hpa
   tasks:
   - include: tasks/compfuzor.includes type=srv
 

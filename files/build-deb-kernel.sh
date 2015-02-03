@@ -2,10 +2,10 @@
 
 set -e
 
-CORES=6
-OUTPUT_DIR="{{item.output|default(output)}}"
-DEFCONFIG="{{item.defconfig|default(defconfig)|default('')}}"
-REPO_DIR="{{repo_dir|default(item.repo_dir)}}"
+CORES=$(nproc)
+OUTPUT_DIR="{{item.output|default(output)|default(VAR)}}"
+DEFCONFIG="{{item.defconfig|default(defconfig)|default(VAR+'/kernel-defconfig')}}"
+REPO_DIR="{{repo_dir|default(item.repo_dir)|default(linux_dir)}}"
 KERNEL_PARAM_EXTRA="{{item.kernel_param|default(kernel_param)|default('')}}"
 KERNEL_TARGET="{{item.kernel_target|default(kernel_target)|default('deb-pkg')}}"
 export ARCH="{{item.arch|default(arch)}}"
