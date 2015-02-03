@@ -1,6 +1,14 @@
 #!/bin/sh
 set -e
 [ ! -d "$SYSLINUX_MNT_FAT" ] && exit 1
-cp "{{VAR}}/syslinux.cfg" "$SYSLINUX_MNT_FAT"
+
+# copy in config
+cp -n "{{VAR}}/syslinux.cfg" "$SYSLINUX_MNT_FAT/"
+# copy in syslinux assets
+cp -r "{{LIB}}/mbr/"* "$SYSLINUX_MNT_FAT/{{subdir|default('.')}}"
+cp -r "{{LIB}}/modules/bios/"* "$SYSLINUX_MNT_FAT/{{subdir|default('.')}}"
+# finish copy; unmount.
 umount "$SYSLINUX_MNT_FAT"
-syslinux "$SYSLINUX_DEV_FAT"
+
+# install into mbr
+syslinux "$SYSLINUX_DEV_FAT" {{syslinux_opts|default('', true)}}
