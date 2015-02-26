@@ -15,8 +15,10 @@
 - name: "Clean generated system facts"
   set_fact:
     MACHINE_ID: "{{MACHINE_ID_.stdout}}"
-    ARCH: "{{ARCH_.stdout}}"
     ARCHS: "{{ARCHS_.stdout_lines}}"
+- set_fact:
+    ARCH: "{{ARCH_.stdout}}"
+  when: ARCH is not defined
 - name: "Set SUBINSTANCE if asked for"
   set_fact: "SUBINSTANCE={{MACHINE_ID}}"
   when: SUBINSTANCE|default(False) == True
