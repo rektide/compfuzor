@@ -44,10 +44,11 @@ zstyle ':completion:*:sudo:*' command-path /usr/local/sbin /usr/local/bin \
 unalias run-help
 autoload run-help
 
+
 # prep autoloaded functions
 fpath=(/etc/zsh/zfunc.d $fpath)
 autoload zautoload-all
 zautoload-all /etc/zsh/zfunc.d
 
-# source any other system configs we need to load
 zsource-all /etc/zsh/z.d
+
