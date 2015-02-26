@@ -2,6 +2,7 @@
 set -e
 
 VAR="{{VAR}}"
+ETC="{{ETC}}"
 DIST="{{DIST}}"
 BOARD="{{board}}"
 BOARD_DTS="{{board_dts}}"
@@ -15,6 +16,6 @@ LINUX="{{linux_dir}}"
 [ -f $ETC/dts/$BOARD.dtb ] && rm $SRC.dts && ln -s $SRC $ETC/dts/$BOARD
 
 # build dtb
-(cd $LINUX; make ARCH={{arch}} CROSS_COMPILE={{cc}} $BOARD_DTS.dtb)
+(cd $LINUX; make ARCH={{arch|lower}} CROSS_COMPILE={{cc}} $BOARD_DTS.dtb)
 # and link. note: symlinked from BOARD_DTS to BOARD variable (often identical)
 ln -sf $SRC.dtb $VAR/$BOARD.dtb
