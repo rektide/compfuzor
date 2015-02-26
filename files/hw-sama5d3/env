@@ -1,0 +1,11 @@
+OUTPUT_DIR="{{output|default(VAR)}}"
+DEFCONFIG="{{defconfig|default(VAR+'/kernel-defconfig')}}"
+REPO_DIR="{{repo_dir|default(linux_dir)|default('/usr/src/linux')}}"
+KERNEL_PARAM_EXTRA="{{kernel_param|default('')}}"
+KERNEL_TARGET="{{kernel_target|default('deb-pkg')}}"
+export ARCH="{{arch}}"
+export CROSS_COMPILE="{{cc}}"
+export KBUILD_DEBARCH="{{debarch}}"
+export LOCALVERSION="{{ '-'+localversion if localversion is defined else '' }}"
+export KDEB_PKGVERSION="1.0${LOCALVERSION}"
+export CONCURRENCY_LEVEL=$(nproc)
