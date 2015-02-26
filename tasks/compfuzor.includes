@@ -32,7 +32,7 @@
 - include: compfuzor/fs_tgz.tasks
   when: TGZ is defined and not TGZ_BYPASS|default(False)
 - include: compfuzor/bins.tasks
-  when: BINS is defined and not BINS_BYPASS|default(False)
+  when: BINS|default(False) and not BINS_BYPASS|default(False)
 - include: compfuzor/bins_link_global.tasks
   when: BINS is defined and not BINS_BYPASS|default(False) and not GLOBAL_BINS_BYPASS|default(False)
 - include: compfuzor/links.tasks
