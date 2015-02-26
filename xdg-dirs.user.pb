@@ -8,7 +8,7 @@
     DIR: "~/.config"
     MEDIAS_DIR: "${HOME}/media"
     PREFIX_DIR: "${HOME}/"
-    ENV: "{{XDG}}"
+    ENV: "{{XDG_DIRS}}"
   tasks:
   - include_vars: vars/xdg.vars
   - set_fact: MEDIAS_DIR='${HOME}' PREFIX_DIR='${HOME}'

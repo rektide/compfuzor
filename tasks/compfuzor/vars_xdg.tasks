@@ -1,5 +1,6 @@
 ---
 - name: get xdg_config_dir
   shell: echo "${XDG_CONFIG_HOME:-~/.config}"
-  register: XDG_CONFIG_DIR
-- set_fact: XDG_CONFIG_DIR="{{XDG_CONFIG_DIR.stdout}}"
+  register: _XDG_CONFIG_DIR
+  changed_when: False
+- set_fact: XDG_CONFIG_DIR="{{_XDG_CONFIG_DIR.stdout}}"
