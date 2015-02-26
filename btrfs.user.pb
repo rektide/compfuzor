@@ -5,15 +5,13 @@
   - vars/common.user.vars
   - vars/xdg.vars
   vars:
+    TYPE: btrfs
+    INSTANCE: main
     USERMODE: True
+    LOCAL_DIR: "${HOME}/.local"
+    MEDIAS_DIR: "{{ PREFIX_DIR+'media' if PREFIX_DIR is defined else '~/media' }}"
     SUBVOLUMES:
     - "{{LOCAL_DIR}}"
-    - "{{OPTS_DIR}}"
-    - "{{SRVS_DIR}}"
-    - "{{VARS_DIR}}"
-    - "{{SRCS_DIR}}"
-    - "{{LOGS_DIR}}"
-    - "{{ETCS_DIR}}"
     - "{{MEDIAS_DIR}}"
     - "{{CACHES_DIR}}"
     - "{{XDG_DOCUMENTS_DIR}}"
@@ -24,6 +22,8 @@
     - "{{XDG_PUBLICSHARE_DIR}}"
     - "{{XDG_VIDEOS_DIR}}"
     BINS:
-      name: subvolumeize.sh
+    - subvolumize.sh
+    - rootfs.sh
+    - test-subvol.sh
   tasks:
-  #- include: tasks/compfuzor.includes type="opt"
+  - include: tasks/compfuzor.includes type="opt"

@@ -1,0 +1,7 @@
+ROOTVOLUMES_DIR="{{ROOTVOLUMES_DIR|default('root')}}"
+FSNAME="{{FSNAME|default('default')}}"
+VENDORID="{{VENDORID|default('yoyodyne')}}"
+ARCH="{{ARCH|default('$(arch)')}}"
+ROOTVOLUME_DIR="${ROOTVOLUMES_DIR}/${FSNAME}/${VENDORID}/${ARCH}"
+
+SUBVOLUMES=( "{{ SUBVOLUMES|default([])|map('replace', ' ', '\ ')|join('" "') }}" )
