@@ -1,3 +1,9 @@
-{% for k,v in (ENV|default({})).iteritems() -%}
+{% if ENV is mapping -%}
+{% for k,v in ENV.iteritems() -%}
 {{ 'export ' if export_mode|default(False) else '' }}{{k|upper}}="{{v}}"
 {% endfor -%}
+{% elif ENV is sequence -%}
+{% for k in ENV -%}
+{{ 'export ' if export_mode|default(False) else '' }}{{k|upper}}="{{hostvars[inventory_hostname][k|upper]|default(vars[k|upper])}}"
+{% endfor -%}
+{% endif -%}
