@@ -2,8 +2,9 @@
 
 set -e
 
-test -z "$2" && export VAR="{{VAR}}"
-test -z "$3" && export IMAGE="${VAR}/pdebuild-cross.tgz"
+[ -z "$2" ] && export VAR="{{VAR}}"
+[ -z "$3" ] && export IMAGE="${VAR}/pdebuild-cross.tgz"
+BINS_DIR="{{BINS_DIR}}"
 
 if [ -z "$1" ]
 then
@@ -25,6 +26,5 @@ then
 	exit 2
 fi
 
-BIN_DIR=$(dirname $(readlink -f $0))
-"${BIN_DIR}/part1-install-sd.sh" "${PART1}" "$2" "$3"
-"${BIN_DIR}/part2-install-sd.sh" "${PART2}" "$2" "$3"
+"${BINS_DIR}/part1-install-sd.sh" "${PART1}" "$2" "$3"
+"${BINS_DIR}/part2-install-sd.sh" "${PART2}" "$2" "$3"

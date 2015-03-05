@@ -8,6 +8,7 @@ then
 	exit 3
 fi
 
+i
 if [ -z "${VAR}" ]
 then
 	if [ -n "$2" ]

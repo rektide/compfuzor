@@ -8,15 +8,8 @@ then
 	exit 2
 fi
 
-if [ -z "${VAR}" ]
-then
-	if [ -n "$2" ]
-	then
-		VAR="$2"
-	else
-		VAR="{{VAR}}"
-	fi
-fi
+[ -n "$2" ] && VAR="$2"
+[ -z "$VAR" ] && VAR="{{VAR}}"
 
 # copy boot files on to sd card
 BOOT_MNT=`mktemp -d --suffix=boot-mnt --tmpdir=.`
