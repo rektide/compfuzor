@@ -16,5 +16,5 @@
   when: type == "src" and DIR == SRC
 - name: "repo setting"
   set_fact: "{{item|upper}}_DIR={{REPO_DIR}}/{{item}}"
-  with_items: REPOS.keys()|default([])
-  when: vars[item] is not defined and hostvars[inventory_hostname][item] is not defined
+  with_items: REPOS.keys()
+  when: REPOS is sequence and vars[item] is not defined and hostvars[inventory_hostname][item] is not defined

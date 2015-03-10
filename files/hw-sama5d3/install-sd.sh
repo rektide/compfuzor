@@ -4,7 +4,7 @@ set -e
 
 [ -z "$2" ] && export VAR="{{VAR}}"
 [ -z "$3" ] && export IMAGE="${VAR}/pdebuild-cross.tgz"
-BINS_DIR="{{BINS_DIR}}"
+[ -z "$BINS_DIR" ] && export BINS_DIR="{{BINS_DIR}}"
 
 if [ -z "$1" ]
 then
