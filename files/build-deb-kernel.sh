@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
@@ -7,12 +7,11 @@ set -e
 [ -z "$LINUX_DEFCONFIG" ] && export DEFCONFIG="{{item.defconfig|default(LINUX_DEFCONFIG)|default(VAR+'/kernel-defconfig')}}"
 [ -z "$LINUX_DIR" ] && export LINUX_DIR="{{item.repo_dir|default(LINUX_DIR)|default(SRCS_DIR+'/linux')}}"
 [ -z "$LINUX_PARAM_EXTRA" ] && export LINUX_PARAM_EXTRA="{{item.kernel_param|default(LINUX_PARAM_EXTRA)|default('')}}"
-[ -z "$LINUX_TARGET" ] && export KERNEL_TARGET="{{item.target|default(LINUX_TARGET)|default('deb-pkg')}}"
+[ -z "$LINUX_TARGET" ] && export LINUX_TARGET="{{item.target|default(LINUX_TARGET)|default('deb-pkg')}}"
 [ -z "$ARCH" ] && export ARCH="{{item.arch|default(ARCH)}}"
 [ -z "$CROSS_COMPILE" ] && export CROSS_COMPILE="{{item.cc|default(CROSS_COMPILE)}}"
 [ -z "$KBUILD_DEBARCH" ] && export KBUILD_DEBARCH="{{item.debarch|default(KBUILD_DEBARCH)}}"
-[ -z "$LOCALVERSION" ] && export LOCALVERSION="{{ '-'+item.localversion|default(LOCALVERSION)|default('')}}"
-[ -z "$KDEB_PKGVERSION" ] && export KDEB_PKGVERSION="{{ item.pkgversion|default(KDEB_PKGVERSION)|default('1.0${LOCALVERSION}')}}"
+[ -z "$KDEB_PKGVERSION" ] && export KDEB_PKGVERSION="{{ item.pkgversion|default(KDEB_PKGVERSION)|default('1.0')}}"
 
 # "inspired by" and distilled from https://github.com/RobertCNelson/armv7_devel/blob/v3.15.x-sama5-armv7/build_deb.sh
 # http://www.spinics.net/lists/linux-kbuild/msg09276.html also shows hope of dtbs_install someday helping
@@ -27,7 +26,7 @@ cd "${LINUX_DIR}"
 [ ! -f .config ] && cp "${LINUX_DEFCONFIG}" .config && echo "default config copied"
 
 # make
-time fakeroot make ${LINUX_PARAM_EXTRA} ${LINUX_TARGET}
+time make ARCH=$ARCH $LINUX_PARAM_EXTRA $LINUX_TARGET
 
 # extra
 {{item.after_kernel|default(LINUX_AFTER)|default("")}}

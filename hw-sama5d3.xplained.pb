@@ -23,11 +23,12 @@
     PKGS:
     - device-tree-compiler
 
-    localversion: ''
     revision: 1.0
+    localversion: ''
     cc: "{{CROSS_COMPILE}}"
     debarch: "{{KBUILD_DEBARCH}}"
 
+    ARCH: "arm"
     BOARD: at91-sama5d3_xplained
     CROSS_COMPILE: "arm-linux-gnueabihf-"
     CONCURRENCY_LEVEL: '$(nproc)'
@@ -35,12 +36,15 @@
     LINUX_DIR: "{{REPO_DIR}}/linux"
     LINUX_DEFCONFIG: "{{VAR}}/kernel-defconfig"
     LINUX_PARAM_EXTRA: ""
-    LINUX_TARGET: deb-pkg
-    LINUX_REVISION: "{{revision}}{{ '-' + localversion if localversion|default(False) else '' }}"
     KBUILD_DEBARCH: "armhf"
+    KDEB_PKGVERSION: "{{revision}}{{ '-' + localversion if localversion|default(False) else '' }}"
     REPREPRO_DISTRO: main
+    IMAGE: "{{VAR}}/pdebuild-cross.tgz"
 
-    ENV:
+    ENV_VARS:
+    - var
+    - bins_dir
+    - image
     - arch
     - cross_compile
     - concurrency_level
@@ -51,7 +55,10 @@
     - linux_target
     - linux_revision
     - kbuild_debarch
+    - kdeb_pkgversion
     - reprepro_distro
+    - uboot_dir
+    - at91boot_dir
 
     #BINS_RUN_BYPASS: True # install but do not run
     # using mainline uboot is good enough; not seeing any advantage to at91boot
@@ -61,27 +68,25 @@
     - part1-install-sd.sh
     - part2-install-sd.sh
     - collect-compiled.sh
+    - build-dtb.sh
     - src: build-at91boot.sh
       dest: build-at91boot-sd.sh
-      repo_dir: "{{REPO_DIR}}/at91boot"
       target: sama5d3_xplainedsd_uboot_defconfig
     - src: build-at91boot.sh
       dest: build-at91boot-nand.sh
-      repo_dir: "{{REPO_DIR}}/at91boot"
       target: sama5d3_xplainednf_uboot_defconfig
     - src: ../build-uboot.sh
       dest: build-uboot-sd.sh
-      repo_dir: "{{REPO_DIR}}/u-boot"
       target: sama5d3_xplained_mmc_config
+      flavor: -sd
     - src: ../build-uboot.sh
       dest: build-uboot-nand.sh
-      repo_dir: "{{REPO_DIR}}/u-boot"
       target: sama5d3_xplained_nandflash_config
+      flavor: -nand
     - src: ../build-deb-kernel.sh
       dest: build-deb-kernel.sh
-      repo_dir: "{{REPO_DIR}}/linux"
       #config_target: "sama5_defconfig"
-      after_kernel: 'cp arch/arm/boot/dts/at91-sama5d3_xplained.dtb debian/tmp/boot/vmlinuz* "${OUTPUT_DIR}/"'
+      after_kernel: 'cp arch/arm/boot/dts/at91-sama5d3_xplained.dtb debian/tmp/boot/vmlinuz* "$OUTPUT_DIR/"; (linux_dir=$(pwd); ln -sf $(basename $(ls $linux_dir/debian/tmp/boot/vmlinuz*)) vmlinuz-latest)'
 
   tasks:
   - include: tasks/compfuzor.includes type=opt

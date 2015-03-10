@@ -3,7 +3,7 @@
 set -e
 
 [ -z "$2" ] && export VAR="{{VAR}}"
-[ -z "$3" ] && export IMAGE="${VAR}/pdebuild-cross.tgz"
+[ -z "$3" ] && export IMAGE="{{IMAGE|default('${VAR}/pdebuild-cross.tgz')}}"
 [ -z "$BINS_DIR" ] && export BINS_DIR="{{BINS_DIR}}"
 
 if [ -z "$1" ]
