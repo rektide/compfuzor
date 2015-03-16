@@ -7,7 +7,8 @@
   with_items: DIRS
   when: DIRS is defined
 - name: "Creating `FILES`"
-  template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)|basename}}" dest="{{DIR}}/{{item.dest|default(item.name)|default(item)}}"
+  # someone wanted a basename here but eclipse has a ../content & like yeah, that's fine. locales holds the blame. see cf0fdccf0c.
+  template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{DIR}}/{{item.dest|default(item.name)|default(item)}}"
   with_items: FILES
   when: FILES is defined and FILES is not mapping
 - name: "Creating `FILES` mapping"
