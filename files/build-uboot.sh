@@ -10,9 +10,9 @@ set -e
 [ -z "$FLAVOR" ] && export FLAVOR="{{ item.flavor|default(FLAVOR)|default('') }}"
 
 cd "$UBOOT_DIR"
-make distclean
-make "$TARGET"
-make CROSS_COMPILE="$CROSS_COMPILE"
+#make distclean
+[ ! -e '.config' ] && make "$TARGET"
+make
 
 cp u-boot.bin "$OUTPUT_DIR/u-boot$FLAVOR.bin"
 cp u-boot.img "$OUTPUT_DIR/u-boot$FLAVOR.img"
