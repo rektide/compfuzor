@@ -1,0 +1,6 @@
+/set term_charset utf-8
+/set recode_autodetect_utf8 ON
+/set recode_fallback ISO-8859-15
+/set recode_out_default_charset ISO-8859-15
+/set recode_transliterate ON
+/set recode ON
