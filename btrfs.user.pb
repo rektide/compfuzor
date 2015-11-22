@@ -2,7 +2,6 @@
 - hosts: all
   gather_facts: False
   vars_files:
-  - vars/common.user.vars
   - vars/xdg.vars
   vars:
     TYPE: btrfs

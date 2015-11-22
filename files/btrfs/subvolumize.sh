@@ -9,8 +9,8 @@ while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symli
 done
 CSD="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
-SUBVOLUMES=$*
-if [ -z "$SUBVOLUMES" ]
+BTRFS_SUBVOLUMES=$*
+if [ -z "$BTRFS_SUBVOLUMES" ]
 then
 	. $CSD/../env
 fi
@@ -32,7 +32,7 @@ do
 
 done
 
-for v in ${SUBVOLUMES[@]}
+for v in ${BTRFS_SUBVOLUMES[@]}
 do
 	# move existing out of the way
 	bak=0

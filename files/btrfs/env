@@ -1,7 +1,7 @@
-ROOTVOLUMES_DIR="{{ROOTVOLUMES_DIR|default('root')}}"
-FSNAME="{{FSNAME|default('default')}}"
-VENDORID="{{VENDORID|default('yoyodyne')}}"
-ARCH="{{ARCH|default('$(arch)')}}"
-ROOTVOLUME_DIR="${ROOTVOLUMES_DIR}/${FSNAME}/${VENDORID}/${ARCH}"
+[ -n "$BTRFS_DIR_ROOT" ] || BTRFS_DIR_ROOT="{{DIR_ROOT|default('root', true)}}"
+[ -n "$BTRFS_DIR_NAME" ] || BTRFS_DIR_NAME="{{DIR_NAME|default('compfuzor', true)}}"
+[ -n "$BTRFS_DIR_VENDOR" ] || BTRFS_DIR_VENDOR="{{DIR_VENDOR|default('yoyodyne')}}"
+[ -n "$BTRFS_DIR_ARCH" ] || BTRFS_DIR_ARCH="{{DIR_ARCH|default('amd64')}}"
 
-SUBVOLUMES=( "{{ SUBVOLUMES|default([])|map('replace', ' ', '\ ')|join('" "') }}" )
+BTRFS_ROOT_SUBVOLUME="${BTRFS_DIR_ROOT}/${BTRFS_DIR_NAME}/${BTRFS_DIR_VENDOR}/${BTRFS_DIR_ARCH}"
+BTRFS_SUBVOLUMES=( "{{ SUBVOLUMES|default([])|map('replace', ' ', '\ ')|join('" "') }}" )

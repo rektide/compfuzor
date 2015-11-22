@@ -9,16 +9,16 @@ while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symli
 done
 CSD="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
 
-[ -z "$ROOTVOLUME_DIR" ] && . "$CSD/../env"
-[ -z "$ROOTVOLUME_DIR" ] && exit 1
+[ -z "$BTRFS_ROOT_SUBVOLUME" ] && . "$CSD/../env"
+[ -z "$BTRFS_ROOT_SUBVOLUME" ] && exit 1
 
 [ -z "$TARGET" ] && TARGET="."
 
 cd "$TARGET"
-[ ! -e $(dirname $ROOTVOLUME_DIR) ] && mkdir -p "$(dirname $ROOTVOLUME_DIR)"
-$CSD/test-subvol.sh "$ROOTVOLUME_DIR" || btrfs subvolume create "$ROOTVOLUME_DIR"
+[ ! -e $(dirname $BTRFS_ROOT_SUBVOLUME) ] && mkdir -p "$(dirname $BTRFS_ROOT_SUBVOLUME)"
+$CSD/test-subvol.sh "$BTRFS_ROOT_SUBVOLUME" || btrfs subvolume create "$BTRFS_ROOT_SUBVOLUME"
 
-SUBVOL_ID=$(btrfs subvolume list -p . | grep "$ROOTVOLUME_DIR" | cut -d' ' -f2)
+SUBVOL_ID=$(btrfs subvolume list -p . | grep "$BTRFS_ROOT_SUBVOLUME" | cut -d' ' -f2)
 re='^[0-9]+$'
 if ! [[ $SUBVOL_ID =~ $re ]] ; then
 	echo "error: did not get a subvolume id" >&2
