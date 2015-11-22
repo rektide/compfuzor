@@ -1,0 +1,32 @@
+default chain
+
+timeout 20
+prompt 1
+
+label chain
+	com32 chain.c32
+	append hd0 2
+
+label a1
+	kernel vmlinuz
+	append root=/dev/sda1
+
+label a2
+	kernel vmlinuz
+	append root=/dev/sda2
+
+label a3
+	kernel vmlinuz
+	append root=/dev/sda3
+
+label b1
+	kernel vmlinuz
+	append root=/dev/sdb1
+
+label b2
+	kernel vmlinuz
+	append root=/dev/sdb2
+
+label b3
+	kernel vmlinuz
+	append root=/dev/sdb3

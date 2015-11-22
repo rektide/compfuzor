@@ -41,9 +41,11 @@ else
 fi
 
 # do we need a qemu?
-if test "$QEMU" = "false" -o "$ARCH" = "amd64" -o "$ARCH" = "i386" ; then
+if test -n "$QEMU" ; then
+	echo QEMU variable set
+elif test "$QEMU" = "false" -o "$ARCH" = "amd64" -o "$ARCH" = "i386" ; then
 	QEMU=""
-elif test -n "$QEMU" ; then
+elif test -n "$2" ; then
 	QEMU="qemu-$2-static"
 else
 	QEMU="qemu-arm-static"

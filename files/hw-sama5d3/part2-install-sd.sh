@@ -2,22 +2,8 @@
 
 set -e
 
-if [ ! -b "${1}" ]
-then
-	echo Not a block device to instal boot files into
-	exit 3
-fi
-
-i
-if [ -z "${VAR}" ]
-then
-	if [ -n "$2" ]
-	then
-		VAR="$2"
-	else
-		VAR="{{VAR}}"
-	fi
-fi
+. $(dirname $(readlink -f $0))/mnt.env
+. $(dirname $(readlink -f $0))/var.env
 
 if [ -z "${IMAGE}" ]
 then
@@ -33,11 +19,6 @@ then
 fi
 
 # copy configured image on to sd card
-ROOT_MNT=`mktemp -d --suffix=root-mnt --tmpdir=.`
-OLDD=`pwd`
-sudo mount "${1}" "${ROOT_MNT}"
-cd "${ROOT_MNT}"
-tar -xzf "${IMAGE}"
-cd "${OLDD}"
-sudo umount "${ROOT_MNT}"
-rm -rf "${ROOT_MNT}"
+(cd $MNT; tar -xzf "${IMAGE}")
+
+[ "$HAD_MNT" = "false" ] && sudo umount "${MNT}" && rm -rf "${MNT}"

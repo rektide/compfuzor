@@ -89,7 +89,7 @@
       after_kernel: 'cp arch/arm/boot/dts/at91-sama5d3_xplained.dtb debian/tmp/boot/vmlinuz* "$OUTPUT_DIR/"; (linux_dir=$(pwd); ln -sf $(basename $(ls $linux_dir/debian/tmp/boot/vmlinuz*)) vmlinuz-latest)'
 
   tasks:
-  - include: tasks/compfuzor.includes type=opt
+  - include: tasks/compfuzor.includes type=srv
 
 
   # symlink extras

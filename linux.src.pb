@@ -3,9 +3,10 @@
   gather_facts: False
   vars:
     TYPE: linux
-    INSTANCE: 3.19
-    TGZ: "https://www.kernel.org/pub/linux/kernel/v3.x/linux-{{INSTANCE}}.tar.xz"
+    INSTANCE: 4.1-rc6
+    TGZ: "https://www.kernel.org/pub/linux/kernel/v4.x/testing/linux-{{INSTANCE}}.tar.xz"
     SRCS_DIR: "/usr/src"
   tasks:
   - include: tasks/compfuzor.includes type=src
-  - shell: chdir="{{SRCS_DIR}}" tar xaf "linux-{{INSTANCE}}.tar.xz" --strip-components=1
+  # fix config file to strip debug
+  # INSTALL_MOD_STRIP=1

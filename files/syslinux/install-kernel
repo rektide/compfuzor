@@ -4,4 +4,4 @@ set -e
 
 kernel=$(ls -Aru $SYSLINUX_MNT_LINUX/boot/vmlinuz*|tail -n1)
 [ -z "$kernel" ] && exit 2
-cp "$kernel" "$SYSLINUX_MNT_FAT/{{image}}"
+cp "$kernel" "$SYSLINUX_MNT_FAT/syslinux/{{image}}"

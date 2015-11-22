@@ -9,14 +9,19 @@
     - pdebuild-cross.rc
     - multistrap.conf
     - preseed
+    - basic.parted
     #- preferences
     BINS:
     - extract-from-tar.sh
+    - disk-prep.sh
     - name: post-create.sh
       run: True
     BINS_RUN_BYPASS: True
+    BUILD_BYPASS:  true
     PKGS:
     - pdebuild-cross
+    MODULES:
+    - binfmt-misc
   vars_files:
   - vars/pkgs.vars
   - [ "private/pdebuild-cross/$configset.vars", "private/pdebuild-cross.vars", "examples-private/pdebuild-cross.vars" ]
@@ -34,6 +39,6 @@
   - file: src={{ETC}}/pdebuild-cross.rc dest=/etc/pdebuild-cross/pdebuild-cross.rc state=link
   # execute
   - shell: /usr/sbin/pdebuild-cross-create; echo $?
-    when: NO_PDEBUILD_CROSS_BUILD.stdout|int != 0
+    when: NO_PDEBUILD_CROSS_BUILD.stdout|int != 0 and not BUILD_BYPASS|default(False)
   - include: tasks/compfuzor/bins_run.tasks
-    when: NO_PDEBUILD_CROSS_BUILD.stdout|int != 0
+    when: NO_PDEBUILD_CROSS_BUILD.stdout|int != 0 and not BUILD_BYPASS|default(False)
