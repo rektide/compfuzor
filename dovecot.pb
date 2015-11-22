@@ -65,3 +65,4 @@
   - lineinfile: dest="{{ETC}}/conf.d/20-lmtp.conf" regexp="postmaster_address\s+=\s+" line="  postmaster_address = {{postmaster}}" insertafter="^protocol\s+lmtp\s+{"
   - lineinfile: dest="{{postconf_file}}" regexp="^(mailbox|virtual)_transport\s*=\s*" line="mailbox_transport = {{lmtp_postfix_addr}}"
   - include: tasks/compfuzor.d.includes
+  # ssl pem

@@ -6,7 +6,7 @@
     REPO: https://github.com/apache/cordova-android
     PKGS:
     - ant
-    platform: 19
+    platform: 23
   tasks:
   - include: tasks/compfuzor.includes type=src
   - shell: npm install -g cordova

@@ -11,6 +11,7 @@
     - python-yaml
     - python-paramiko
     - python-apt
+    - python-psycopg2
     - pkg-config # for compfuzor
     ETC_DIRS:
     - hosts
