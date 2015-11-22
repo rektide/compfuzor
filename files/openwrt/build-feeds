@@ -1,0 +1,5 @@
+#!/bin/sh
+
+cd {{DIR}
+./script/feeds update -a
+./script/feeds install -a
