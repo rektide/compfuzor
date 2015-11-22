@@ -1,27 +1,30 @@
+{% macro phrase(name, expression) %}
+{% for el in expression|default(None)|arrayitize %}
+{{ name|upper }}={{ el }}
+{% endfor %}
+{% endmacro -%}
+
 [Unit]
 Description={{ NAME }}
 {% if not USERMODE|default(False) %}
 Requires=network.target
 After=network.target
 {% endif %}
+{{ phrase('After', SYSTEMD_AFTER) }}
+{{ phrase('Before', SYSTEMD_BEFORE) }}
+{{ phrase('Required', SYSTEMD_REQUIRED) }}
 
 [Service]
 Type={{ SYSTEMD_TYPE|default("simple") }}
 NonBlocking=yes
 ExecStart={{ SYSTEMD_EXEC }}
-{% if SYSTEMD_CWD|default(True) -%}
-WorkingDirectory={{ SYSTEMD_CWD|default(DIR)|replace('~', '%h', 1) }}
-{% endif -%}
-{{ "ExecStop="+SYSTEMD_EXEC_STOP+"\n" if SYSTEMD_EXEC_STOP is defined else "" -}}
-{{ "ExecReload="+SYSTEMD_EXEC_RELOAD+"\n" if SYSTEMD_EXEC_RELOAD is defined else "" -}}
-{{ "PIDFile="+PID_FILE+"\n" if PID_FILE is defined else "" -}}
-{% if SYSTEMD_ENV is defined %}
-{% set s = joiner(" ") %}
-Environment={% for k,v in SYSTEMD_ENV.iteritems() %}{{s()}}"{{k}}={{v}}"{% endfor %}{{""}}
-{% endif %}
-{% if SYSTEMD_USER|default(True) and not USERMODE|default(False) %}
-{{ "User="+SYSTEMD_USER|default(USER) }}
-{% endif %}
+{% if SYSTEMD_CWD|default(True) %}WorkingDirectory={{ SYSTEMD_CWD|default(DIR)|replace('~', '%h', 1) }}{% endif %}
+{% if SYSTEMD_EXEC_STOP|default(False) %}ExecStop={{ SYSTEMD_EXEC_STOP }}{% endif %}
+{% if SYSTEMD_EXEC_RELOAD|default(False) %}ExecReload={{ SYSTEMD_EXEC_RELOAD }}{% endif %}
+{% if PID_FILE|default(False) %}PIDFile={{ PID_FILE }}{% endif %}
+{% if SYSTEMD_USER|default(True) and not USERMODE|default(False) %}User={{ SYSTEMD_USER|default(USER) }}{% endif %}
+{{ phrase('Environment', SYSTEMD_ENV) }}
+{{ phrase('EnvironmentFile', SYSTEMD_ENVFILE) }}
 
 [Install]
 WantedBy={{ "multi-user" if not USERMODE|default(False) else "default" }}.target
