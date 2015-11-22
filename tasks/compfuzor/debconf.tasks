@@ -1,0 +1,7 @@
+# install system debconfigs
+- apt: name=dbconfig-common state=installed
+  when: "'/db/dbname' in ' '.join(DEBCONF|map(attribute='key'))"
+# vars_debconf has already dbconfig'ed
+- debconf: name="{{item.name}}" question="{{item.question}}" value="{{item.value|default('')}}" vtype="{{item.vtype}}"
+  with_items: DEBCONF
+  when: DEBCONF is sequence

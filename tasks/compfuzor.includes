@@ -1,6 +1,8 @@
 ---
 - debug: "msg=Compfuzor: starting; VARIABLES"
 - include: compfuzor/vars_base.tasks
+- include: compfuzor/vars_type.tasks
+- include: compfuzor/vars_secret.tasks
 - include: compfuzor/vars_env.tasks
 - include: compfuzor/vars_xdg.tasks
 - debug: "msg=Compfuzor: sourcing hierarchy vars"
@@ -9,6 +11,9 @@
 - include: compfuzor/vars_apt.tasks
 - include: compfuzor/vars_systemd.tasks
 - include: compfuzor/vars_src.tasks
+- include: compfuzor/vars_make_autoconf.tasks
+- include: compfuzor/vars_debconf.tasks
+- include: compfuzor/vars_pg.tasks
 
 - debug: "msg=Compfuzor: REPOSITORIES"
 - include: compfuzor/repo_git.tasks
@@ -21,6 +26,8 @@
   when: HG_REPO is defined and not HG_RAW|default(False)
 - include: compfuzor/repo_hg_raw.tasks
   when: HG_REPO is defined and HG_RAW|default(False)
+- include: compfuzor/repo_goget.tasks
+  when: REPO_GOGET is defined and REPO_GOGET|default(False)
 
 - debug: "msg=Compfuzor: FILESYSTEM"
 - include: compfuzor/fs_base.tasks
@@ -30,6 +37,7 @@
   when: has_env.stdout|int != 0 or ENV|default(False) and not ENV_BYPASS|default(False)
 - include: compfuzor/fs_hierarchy_multi.tasks
 - include: compfuzor/fs_srcs_too.tasks
+  when: type == "src"
 - include: compfuzor/fs_tgz.tasks
   when: TGZ is defined and not TGZ_BYPASS|default(False)
 - include: compfuzor/bins.tasks
@@ -41,17 +49,26 @@
 - include: compfuzor/_multi.tasks multi=fs_d
 - include: compfuzor/fs_base_d.tasks
 
-
 - debug: "msg=Compfuzor: EXTRAS"
+- include: compfuzor/pg.tasks
+  when: PG|default(False)
+- include: compfuzor/debconf.tasks
+  when: not DEBCONF_BYPASS|default(False)
 - include: compfuzor/apt.tasks
   when: APT_REPO|default(APT_REPOS)|default(False) and not APT_BYPASS|default(False)
-- include: compfuzor/debconfs.tasks
-  when: not DEBCONF_BYPASS|default(False)
 - include: compfuzor/pkgs.tasks
   when: (PKGS is defined or PKGSET is defined or PKGSETS is defined) and not PKGS_BYPASS|default(False)
+- include: compfuzor/dbconfig.tasks
+  when: DBCONFIG|default(False) and not DBCONFIG_BYPASS|default(False)
 - include: compfuzor/systemd.tasks
   when: not SYSTEMD_BYPASS|default(False)
+- include: compfuzor/kernel_modules.tasks
+  when: MODULES|default(False)
 - include: compfuzor/bins_run.tasks
   when: not BINS_BYPASS|default(False) and not BINS_RUN_BYPASS|default(False)
+- include: compfuzor/make_autoconf.tasks
+  when: MAKE_AUTOCONF|default(False)
+- include: compfuzor/pkgconfig.tasks
+  when: PKGCONFIG|default(False)
 
 - debug: "msg=Compfuzor: complete. Returning to main playbook."

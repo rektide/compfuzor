@@ -9,7 +9,7 @@
   register: ARCH_
   changed_when: False
 - name: "Set ARCHS"
-  shell: dpkg --print-foreign-architectures
+  shell: dpkg --print-architecture && dpkg --print-foreign-architectures
   register: ARCHS_
   changed_when: False
 - name: "Clean generated system facts"
@@ -33,6 +33,9 @@
 - name: "Set name"
   set_fact: NAME="{{TYPE}}"
   when: not NAME|default(False) and TYPE|default(False)
+- name: "Fallback TYPE to NAME"
+  set_fact: TYPE="{{NAME}}"
+  when: not TYPE|default(False)
 
 - name: "Include common vars"
   include_defaults: vars/common.vars
@@ -45,17 +48,25 @@
 - name: "Default to being an 'opt' class compfuzor script"
   set_fact: type="opt"
   when: not type|default(False)
-- name: "Include {{type|lower}} vars"
-  include_defaults: "vars/{{type|lower}}.vars"
+- name: "Include {{type|lower}}-class vars"
+  include_defaults: "../../vars/types/{{type|lower}}.vars"
+- name: "Include (arche)type vars"
+  include_defaults: "{{ item }}"
+  with_first_found:
+  - "../../private/{{configset}}.vars"
+  - "../../private/{{TYPE}}.vars"
+  - "../../examples-private/{{configset}}.vars"
+  - "../../examples-private/{{TYPE}}.vars"
+  - "../../vars/empty.vars"
 
 - name: "Select default username {{NAME}}"
   set_fact: USER="{{NAME}}"
   when: not USER|default(False)
 - name: "Set PREFIX_DIR variable from DIR"
-  set_fact: PREFIX_DIR="{{DIR|dirname}}"
+  set_fact: PREFIX_DIR="{{DIR|default()|dirname}}"
   when: not DIR|default(False) and not PREFIX_DIR|default(False)
 - name: "Set PREFIX_DIR variable"
-  set_fact: PREFIX_DIR="{{hostvars[inventory_hostname][type|upper+'S_DIR']|default(vars[type|upper+'S_DIR'])}}"
+  set_fact: PREFIX_DIR="{{hostvars[inventory_hostname][type|upper+'S_DIR']|default()}}"
   when: not PREFIX_DIR|default(False)
 
 - name: "Set DIR variable"

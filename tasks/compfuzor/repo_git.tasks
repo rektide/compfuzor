@@ -1,9 +1,9 @@
 ---
 - name: "Compfuzor: fetch git repository"
-  git: "repo={{REPO}} dest={{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }} accept_hostkey={{ GIT_ACCEPT|default(False) }}"
+  git: "repo={{REPO}} dest={{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }} accept_hostkey={{ GIT_ACCEPT|default(False) }} depth={{ GIT_DEPTH|default(omit) }}"
   when: REPO|default(False)
 - name: "fetch git repositories"
-  git: "repo={{ REPOS[item] }} dest={{ REPO_DIR|default(DIR, true)+'/' if item|first != '/' and item|first != '~' else '' }}{{ item }} accept_hostkey={{ GIT_ACCEPT|default(False) }}"
+  git: "repo={{ REPOS[item] }} dest={{ REPO_DIR|default(DIR, true)+'/' if item|first != '/' and item|first != '~' else '' }}{{ item }} accept_hostkey={{ GIT_ACCEPT|default(False) }} depth={{ GIT_DEPTH|default(omit) }}"
   with_items: REPOS.keys()
   when: REPOS|default(False)
 

@@ -1,0 +1,37 @@
+- fail: msg="Need a Postgres password (pg_pw)"
+  when: pg_pw is not defined
+- file: path="{{pg_location}}" owner="{{pg_acct}}" state="directory"
+  sudo: True
+- postgresql_user:
+    name="{{pg_user}}"
+    password="{{pg_pw}}"
+    db="postgres"
+    login_user="{{pg_admin}}"
+    login_password="{{pg_admin_pw}}"
+    login_host="{{pg_host}}"
+    port="{{pg_port}}"
+#- postgresql_tablespace:
+#    name="{{pg_ts}}"
+#    owner="{{pg_user}}"
+#    location="{{pg_location}}"
+#    login_user="{{pg_admin}}"
+#    login_password="{{pg_admin_pw}}"
+#    login_host="{{pg_host}}" 
+#    port="{{pg_port}}"
+- postgresql_db:
+    name="{{pg_db}}"
+    owner="{{pg_user}}"
+    login_user="{{pg_admin}}"
+    login_password="{{pg_admin_pw}}"
+    login_host="{{pg_host}}" 
+    port="{{pg_port}}"
+  when: pg_ts is defined and pg_ts
+#    tablespace="{{pg_ts}}"
+- postgresql_db:
+    name="{{pg_db}}"
+    owner="{{pg_user}}"
+    login_user="{{pg_admin}}"
+    login_password="{{pg_admin_pw}}"
+    login_host="{{pg_host}}" 
+    port="{{pg_port}}"
+  when: pg_ts is not defined or not pg_ts

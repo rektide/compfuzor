@@ -1,0 +1,5 @@
+- name: "Compfuzor: set repos variables"
+  set_fact: "{{item|upper}}_DIR={{REPO_DIR}}/{{item}}"
+  with_items: REPOS.keys()|default([])
+  when: vars[item] is not defined and hostvars[inventory_hostname][item] is not defined
+

@@ -10,10 +10,7 @@
   set_fact: PREFIX="{{ ('--prefix='+(OPTS_DIR+'/' if PREPREFIX|first != '/' and PREPREFIX|first !='~' else '')+PREPREFIX) if not PREFIX|default(False) else PREFIX|default('', true) }}"
 - name: "set INSTANCE default for src type"
   set_fact: INSTANCE=src
-  when: type == "src"
-- name: "set DIR"
-  set_fact: DIR="{{OPT}}"
-  when: type == "src" and DIR == SRC
+  when: type == "src" and not INSTANCE|default(False)
 - name: "repo setting"
   set_fact: "{{item|upper}}_DIR={{REPO_DIR}}/{{item}}"
   with_items: REPOS.keys()

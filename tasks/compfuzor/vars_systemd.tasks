@@ -32,3 +32,8 @@
   args:
     SYSTEMD_UNIT_DIR: "{{ SYSTEMD_UNIT_DIR|default(hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_UNIT_DIR']) }}"
     SYSTEMD_CONF_DIR: "{{ SYSTEMD_CONF_DIR|default(hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_CONF_DIR']) +'/'+NAME}}"
+- name: "Defaulting SYSTEMD_SERVER true if SYSTEMD_EXEC"
+  set_fact:
+  args:
+     SYSTEMD_SERVICE: True
+  when: SYSTEMD_EXEC|default(False) and SYSTEMD_SERVICE is not defined

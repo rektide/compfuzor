@@ -1,0 +1,13 @@
+- include_defaults: "{{item}}"
+  with_first_found:
+  - "../../private/pg.vars"
+  - "../../vars/pg.vars"
+  - "../../vars/empty.vars"
+- include: ../varset.tasks varset=pg
+- set_fact:
+    pg_user="{{pg_user|default(NAME)}}"
+    pg_ts="{{pg_tablespace|default(NAME)}}"
+    pg_db="{{pg_db|default(NAME)}}"
+    pg_port="{{pg_port|default(5432)}}"
+    pg_location="{{pg_location|default(VAR+'/db', true)}}"
+    pg_acct="{{pg_acct|default('postgres')}}"

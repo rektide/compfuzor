@@ -1,0 +1,2 @@
+- name: "Compfuzor: install /etc/modules-load.d kernel module"
+  copy: content={{MODULES|join('\n')}} dest=/etc/modules-load.d/{{NAME}}.conf

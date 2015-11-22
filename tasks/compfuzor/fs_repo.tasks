@@ -1,0 +1,7 @@
+---
+- name: "Compfuzor: repo symlink"
+  file: src="{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}" dest="{{DIR}}/repo" state=link
+  when: REPO is defined or REPOS is defined
+- name: "other repo symlinks"
+  file: src="{{ REPO_DIR|default(DIR, true) }}" dest="{{DIR}}/repo" state=link
+  when: HG_REPO is defined or CVS_REPO is defined or SVN_REPO is defined

@@ -1,4 +1,9 @@
 # packages which are opt but from source (and which retain source in original form) should probably set this, showing themselves a presence in SRCS_DIR.
-- debug: 'msg=CompFuzor: SRCS_TOO'
-- file: src={{DIR}} dest={{SRC}} state=link
-  when: SRCS_TOO|default(False) and not SRCS_DIR|default(False) and not SRCS_FILES|default(False)
+- stat: path="{{OPT}}"
+  register: has_opt
+- name: "link source DIR into OPT"
+  file: src="{{DIR}}" dest="{{OPT}}" state=link
+  when: DIR != OPT and not OPT_DIR|default(False)
+- name: "link source DIR into OPT/src"
+  file: src="{{DIR}}" dest="{{OPT}}/src" state=link
+  when: DIR != OPT and OPT_DIR|default(False)

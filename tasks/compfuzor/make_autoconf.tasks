@@ -1,0 +1,12 @@
+# TODO: build a script in BIN to do this work
+- debug: msg="Build autoconf/make src"
+- name: Run autogen if configure does not exist
+  shell: chdir="{{SRC}}" test -f ./configure || NOCONFIGURE=1 ./autogen.sh
+- name: Create build directory
+  file: path="{{BUILD_DIR}}" state=directory
+- name: Configure a build within the build dir
+  command: chdir="{{BUILD_DIR}}" {{SRC}}/configure --prefix="{{OPT}}" {{CONF_OPTIONS|default('')}}
+- name: Make src
+  command: chdir="{{BUILD_DIR}}" make
+- name: Make install
+  command: chdir="{{BUILD_DIR}}" make install

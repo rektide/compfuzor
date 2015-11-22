@@ -1,0 +1,3 @@
+- debug: "msg=CompFuzor: goget repo"
+- file: path={{DIR}} state=directory
+- shell: chdir={{DIR}} GOPATH={{DIR}} go get -u {{REPO_GOGET}}
