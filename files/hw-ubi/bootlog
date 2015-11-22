@@ -1,0 +1,142 @@
+BYTES=(ls -l 
+
+bootargs_root=noinitrd ubi.mtd=2 root=ubi0:rootfs rootfstype=ubifs
+bootcmd=setenv bootargs ${console} ${mtdparts} ${bootargs_root}; ubi part rootfs; ubifsmount ubi:rootfs; ubifsload 0x800000 ${kernel}; ubifsload 0x700000 ${dtb}; bootz 0x800000 - 0x700000
+"usb start; run bootargs_usb; ext2load usb 0:1 0x00800000 boot/vmlinuz-3.19.0 ext2load usb 0:1 0x01100000 boot/kirkwood-iconnect.dtb bootz 0x00800000 - 0x01100000"
+setenv bootargs console=ttyS0,115200 root=/dev/sda1 noinitrd rw init=/lib/systemd/systemd systemd.log_target=kmsg systemd.log_level=debug verbose
+
+setenv bootargs console=ttyS0,115200 root=/dev/sda1 noinitrd rw init=/lib/systemd/systemd systemd.log_target=kmsg systemd.log_level=debug verbose earlycon=smh
+ext2load usb 0:1 0x00800000 boot/vmlinuz-3.19.0
+ext2load usb 0:1 0x01100000 boot/kirkwood-iconnect.dtb
+bootz 0x00800000 - 0x01100000
+
+bootargs=console=ttyS0,115200 ubi.mtd=2 root=ubi0:root rootfstype=ubifs noinitrd rw systemd.log_level=debug verbose
+
+
+
+ext2load usb 0:1 0x00800000 boot/kirkwood-iconnect.dtb
+ext2load usb 0:1 0x01100000 boot/vmlinuz-3.19.0
+bootz 0x01100000 - 0x00800000
+
+
+
+d-i debian-installer/locale string en_US.UTF-8
+d-i debian-installer/language string en
+d-i debian-installer/country string HU
+d-i console-keymaps-at/keymap select us
+d-i netcfg/choose_interface select eth0
+d-i netcfg/get_hostname string nsa320s
+d-i netcfg/get_domain string local
+d-i preseed/early_command string anna-install network-console
+d-i network-console/password password installer
+d-i network-console/password-again password installer
+d-i mirror/country string manual
+d-i mirror/http/hostname string ftp.hu.debian.org
+d-i mirror/http/directory string /debian
+d-i mirror/http/proxy string
+d-i anna/no_kernel_modules boolean true
+
+connect => boot
+UBI: attaching mtd1 to ubi0
+UBI: physical eraseblock size:   131072 bytes (128 KiB)
+UBI: logical eraseblock size:    129024 bytes
+UBI: smallest flash I/O unit:    2048
+UBI: sub-page size:              512
+UBI: VID header offset:          512 (aligned 512)
+UBI: data offset:                2048
+UBI: attached mtd1 to ubi0
+UBI: MTD device name:            "mtd=2"
+UBI: MTD device size:            511 MiB
+UBI: number of good PEBs:        4090
+UBI: number of bad PEBs:         1
+UBI: max. allowed volumes:       128
+UBI: wear-leveling threshold:    4096
+UBI: number of internal volumes: 1
+UBI: number of user volumes:     1
+UBI: available PEBs:             0
+UBI: total number of reserved PEBs: 4090
+UBI: number of PEBs reserved for bad PEB handling: 40
+UBI: max/mean erase counter: 2/0
+UBIFS: recovery needed
+UBIFS: recovery deferred
+UBIFS: mounted UBI device 0, volume 0, name "root"
+UBIFS: mounted read-only
+UBIFS: file system size:   520611840 bytes (508410 KiB, 496 MiB, 4035 LEBs)
+UBIFS: journal size:       9033728 bytes (8822 KiB, 8 MiB, 71 LEBs)
+UBIFS: media format:       w4/r0 (latest is w4/r0)
+UBIFS: default compressor: LZO
+UBIFS: reserved for root:  0 bytes (0 KiB)
+Loading file '/boot/uImage' to addr 0x00800000 with size 3786176 (0x0039c5c0)...
+Done
+Loading file '/boot/kirkwood-iconnect.dtb' to addr 0x01100000 with size 7013 (0x00001b65)...
+Done
+## Booting kernel from Legacy Image at 00800000 ...
+   Image Name:   linux
+   Image Type:   ARM Linux Kernel Image (uncompressed)
+   Data Size:    3786112 Bytes = 3.6 MiB
+   Load Address: 00008000
+   Entry Point:  00008000
+   Verifying Checksum ... OK
+## Flattened Device Tree blob at 01100000
+   Booting using the fdt blob at 0x1100000
+   Loading Kernel Image ... OK
+OK
+   Loading Device Tree to 0fb17000, end 0fb1bb64 ... OK
+
+[    0.000000] Linux version 3.9.6-gamma (rektide@thoth) (gcc version 4.7.2 (Debian 4.7.2-5) ) #4 Sun Jul 7 08:07:59 EDT 2013
+[    0.000000] Kernel command line: console=ttyS0,115200 ubi.mtd=2 root=ubi0:root rootfstype=ubifs noinitrd rw init=/lib/systemd/systemd systemd.log_target=kmsg systemd.log_level=debug verbose
+[   21.677355] 0x000000000000-0x000000080000 : "uboot"
+[   21.683858] 0x000000080000-0x0000000a0000 : "env"
+[   21.690111] 0x0000000a0000-0x000020000000 : "root"
+[   21.947063] UBI: attaching mtd2 to ubi0
+[   22.093650] usb 1-1: new high-speed USB device number 2 using orion-ehci
+[   22.283721] hub 1-1:1.0: USB hub found
+[   22.287629] hub 1-1:1.0: 4 ports detected
+[   22.769414] UBI: scanning is finished
+[   22.788209] UBI warning: print_rsvd_warning: cannot reserve enough PEBs for bad PEB handling, reserved 40, need 79
+[   22.801161] UBI: attached mtd2 (name "root", size 511 MiB) to ubi0
+[   22.807415] UBI: PEB size: 131072 bytes (128 KiB), LEB size: 129024 bytes
+[   22.814247] UBI: min./max. I/O unit sizes: 2048/2048, sub-page size 512
+[   22.820885] UBI: VID header offset: 512 (aligned 512), data offset: 2048
+[   22.827629] UBI: good PEBs: 4090, bad PEBs: 1, corrupted PEBs: 0
+[   22.833673] UBI: user volume: 1, internal volumes: 1, max. volumes count: 128
+[   22.840839] UBI: max/mean erase counter: 2/0, WL threshold: 128, image sequence number: 2032417992
+[   22.849848] UBI: available PEBs: 0, total reserved PEBs: 4090, PEBs reserved for bad PEB handling: 40
+[   22.859128] UBI: background thread "ubi_bgt0d" started, PID 675
+[   22.865109] console [netcon0] enabled
+[   22.868783] netconsole: network logging started
+[   22.873983] input: gpio_keys.2 as /devices/gpio_keys.2/input/input0
+[   22.880901] rtc-mv f1010300.rtc: setting system clock to 2015-02-12 21:48:40 UTC (1423777720)
+[   22.916933] UBIFS: background thread "ubifs_bgt0_0" started, PID 680
+[   22.949555] UBIFS: recovery needed
+[   23.107896] UBIFS: recovery completed
+[   23.111683] UBIFS: mounted UBI device 0, volume 0, name "root"(null)
+[   23.118091] UBIFS: LEB size: 129024 bytes (126 KiB), min./max. I/O unit sizes: 2048 bytes/2048 bytes
+[   23.127281] UBIFS: FS size: 520611840 bytes (496 MiB, 4035 LEBs), journal size 9033728 bytes (8 MiB, 71 LEBs)
+[   23.137252] UBIFS: reserved for root: 0 bytes (0 KiB)
+[   23.142329] UBIFS: media format: w4/r0 (latest is w4/r0), UUID 30965EF9-CFFB-48CE-85AA-7D8BB5C9FCD0, small LPT model
+[   23.153744] VFS: Mounted root (ubifs filesystem) on device 0:12.
+
+
+NOGOOD
+UBI: attaching mtd1 to ubi0
+UBI: scanning is finished
+UBI: attached mtd1 (name "mtd=2", size 511 MiB) to ubi0
+UBI: PEB size: 131072 bytes (128 KiB), LEB size: 129024 bytes
+UBI: min./max. I/O unit sizes: 2048/2048, sub-page size 512
+UBI: VID header offset: 512 (aligned 512), data offset: 2048
+UBI: good PEBs: 4085, bad PEBs: 6, corrupted PEBs: 0
+UBI: user volume: 1, internal volumes: 1, max. volumes count: 128
+UBI: max/mean erase counter: 1/0, WL threshold: 4096, image sequence number: 1077172306
+UBI: available PEBs: 0, total reserved PEBs: 4085, PEBs reserved for bad PEB handling: 74
+Loading file '/boot/vmlinuz' to addr 0x00800000 with size 3422664 (0x003439c8)...
+Done
+Loading file '/boot/kirkwood-iconnect.dtb' to addr 0x00700000 with size 11354 (0x00002c5a)...
+Done
+Kernel image @ 0x800000 [ 0x000000 - 0x3439c8 ]
+## Flattened Device Tree blob at 00700000
+   Booting using the fdt blob at 0x700000
+   Loading Device Tree to 0fb13000, end 0fb18c59 ... OK
+Starting kernel ...
+Uncompressing Linux... done, booting the kernel.
+
