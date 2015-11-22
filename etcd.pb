@@ -10,7 +10,6 @@
     REPO: https://github.com/coreos/etcd
     PKGSETS:
     - GO
-    SRCS_TOO: True
 
     BIN_DIRS: True
     BINS:
@@ -23,7 +22,7 @@
       "bin/build": "build"
     ENV_BYPASS: True
   tasks:
-  - include: tasks/compfuzor.includes type=opt
+  - include: tasks/compfuzor.includes type=src
   - include: tasks/compfuzor/bins.tasks GLOBAL_BINS_BYPASS=False # install into global
   - include: tasks/compfuzor/links.tasks # link in build
   - file: path={{DIR}} mode=771 # allow others to use etcd

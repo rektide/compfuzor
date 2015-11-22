@@ -1,0 +1,10 @@
+[Unit]
+Description={{NAME}}
+
+[Service]
+User=etcd
+PermissionsStartOnly=true
+EnvironmentFile={{ETC}}/environment
+ExecStart=/usr/local/bin/etcd
+Restart=always
+RestartSec=10s
