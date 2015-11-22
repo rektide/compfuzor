@@ -68,13 +68,48 @@
     - repo: http://eclipse-color-theme.github.io/update/
       iu: com.github.eclipsecolortheme.feature.feature.group
     - repo: http://eclipse.jeeeyul.net/update/
-      iu: net.jeeeyul.eclipse.themes.feature.feature.group
+      ius:
+      - net.jeeeyul.eclipse.themes.feature.feature.group
     #- repo: "http://download.eclipse.org/releases/{{release}}"
-    #  ius: org.eclipse.xtend.sdk.feature.group,org.eclipse.uml2.sdk.feature.group
+    #  ius:
+    #  - org.eclipse.xtend.sdk.feature.group
+    #  - org.eclipse.uml2.sdk.feature.group
     - repo: http://download.eclipse.org/technology/m2e/releases
-      ius: org.eclipse.m2e.feature.feature.group,org.eclipse.m2e.logback.feature.feature.group
+      ius:
+      - org.eclipse.m2e.feature.feature.group
+      - org.eclipse.m2e.logback.feature.feature.group
     - repo: "http://download.eclipse.org/tools/cdt/releases/{{release}}"
       ius: org.eclipse.cdt.feature.group
+    - repo: http://chromedevtools.googlecode.com/svn/update/dev/
+      ius:
+      - org.chromium.debug.feature.group
+      - org.chromium.debug.jsdtbridge.feature.group
+      - org.chromium.sdk.wipbackends.feature.group
+    - repo: http://dl.bintray.com/nodeclipse/nodeclipse/0.17/
+    #- repo: http://www.nodeclipse.org/updates/
+      ius:
+      - org.nodeclipse.enide.nodejs.feature.feature.group
+      - com.eclipsesource.jshint.feature.feature.group
+      - org.nodeclipse.enide.editors.jade.feature.feature.group
+      - org.chromium.sdk.feature.group
+      - org.chromium.debug.feature.group
+      - org.nodeclipse.feature.group
+      - org.nodeclipse.jjs.feature.feature.group
+      - jsonedit-feature.feature.group
+      - org.sweetlemonade.eclipse.json.feature.feature.group
+      - markdown.editor.feature.feature.group
+      - code.google.restclient.tool.feature.feature.group
+      - net.sourceforge.shelled.feature.group
+      - com.axmor.eclipse.typescript.feature.feature.group
+      - com.github.eclipsecolortheme.feature.feature.group
+      - com.github.eclipseuitheme.themes.feature.feature.group
+      - com.xored.glance.feature.group
+      - net.jeeeyul.pdetools.feature.feature.group
+      - net.jeeeyul.eclipse.themes.feature.feature.group
+      - org.nodeclipse.bundle.coffee.feature.feature.group
+      - org.nodeclipse.bundle.express.feature.feature.group
+      - net.vtst.ow.eclipse.less.feature.feature.group
+      - EclipseRunnerFeature.feature.group
     content: "{{iu}}"
 
     FILES:
