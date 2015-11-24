@@ -54,6 +54,7 @@ try:
                 data = {k:v for (k,v) in data.iteritems() if k not in task_vars }
                 result['ansible_facts'] = data
                 result['_ansible_no_log'] = not show_content
+                self._task.action = "include_vars"
             else:
                 result['failed'] = True
                 result['msg'] = "Source file not found."
