@@ -1,5 +1,4 @@
 - hosts: all
-  gather_facts: False
   vars:
     TYPE: ansible
     INSTANCE: git
@@ -12,19 +11,22 @@
     - python-paramiko
     - python-apt
     - python-psycopg2
+    - python-six
+    - python-netaddr
+    - python-httplib2
     - pkg-config # for compfuzor
     ETC_DIRS:
     - hosts
     ETC_FILES:
     - hosts/localhost
     LINKS:
-      "{{BINS_DIR}}/ansible-ec2": "{{DIR}}/ansible-ec2/ansible-ec2"
-      "{{ETC}}/ec2.ini": "{{DIR}}/plugins/inventory/ec2.ini"
-      "{{ETC}}/hosts/ec2": "{{DIR}}/plugins/inventory/ec2.py"
+      "{{BINS_DIR}}/ansible-ec2": "{{DIR}}/ansible-ec2/bin/ansible-ec2"
+      "{{ETC}}/ec2.ini": "{{DIR}}/contrib/inventory/ec2.ini"
+      "{{ETC}}/hosts/ec2": "{{DIR}}/contrib/inventory/ec2.py"
   vars_files:
   - vars/ansible.vars
   tasks:
-  - include: tasks/compfuzor.includes
+  - include: tasks/compfuzor.includes type=src
 
   - name: test for existing ETC/hosts/default
     shell: test -e "{{ETC}}/hosts/default"; echo $?
