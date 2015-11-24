@@ -1,1 +1,7 @@
-ppp{{ inventory_hostname }}ooo
+{% set comma = joiner(',') -%}
+{% for h in range(play_hosts|length) -%}
+{{ comma() -}}
+{{play_hosts[h].name|default(TYPE+'-'+INSTANCE+'-'+play_hosts[h]+('-'+hostvars[play_hosts[h]].client_port if hostvars[play_hosts[h]].client_port|default(4001)|int != 4001 else '')) -}}
+=http://
+{{-play_hosts[h]}}:{{hostvars[play_hosts[h]].peer_port|default(vars.peer_port|string)}}
+{%- endfor %}"

@@ -8,21 +8,11 @@
     TYPE: etcd
     INSTANCE: git
     REPO: https://github.com/coreos/etcd
-    PKGSETS:
-    - GO
-
-    BIN_DIRS: True
+    #PKGSETS:
+    #- GO
     BINS:
-    - dest: ../build
-      run: True
-      global: False
-    - name: etcd
-    LINKS_BYPASS: True
-    LINKS:
-      "bin/build": "build"
-    ENV_BYPASS: True
+    - exec: ./build
+    - global: etcd
+    - global: etcdctl
   tasks:
   - include: tasks/compfuzor.includes type=src
-  - include: tasks/compfuzor/bins.tasks GLOBAL_BINS_BYPASS=False # install into global
-  - include: tasks/compfuzor/links.tasks # link in build
-  - file: path={{DIR}} mode=771 # allow others to use etcd
