@@ -1,5 +1,5 @@
 ---
-- debug: "msg=Create {{include|upper}} directories & files"
+- debug: "msg='Create {{include|upper}} directories & files'"
 
 # initialize temporary vars
 - name: "source temporary {{include|upper}} facts"

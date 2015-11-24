@@ -1,4 +1,4 @@
-- debug: "msg=Compfuzor: source base variables"
+- debug: "msg='Compfuzor: source base variables'"
 
 - name: "Set MACHINE_ID"
   shell: "cat /etc/machine-id"

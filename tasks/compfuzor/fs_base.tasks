@@ -1,4 +1,4 @@
-- debug: "Compfuzor: create base files"
+- debug: "msg='Compfuzor: create base files'"
 - name: "Creating base `DIR`"
   file: path="{{DIR}}" state=directory mode={{DIRMODE}}
   when: DIR|default(True)

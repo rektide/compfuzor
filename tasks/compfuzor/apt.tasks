@@ -1,5 +1,5 @@
 ---
-- debug: "msg=Compfuzor: install & update apt repository"
+- debug: "msg='Compfuzor: install & update apt repository'"
 - include: vars_base.tasks
   when: not APT_DEFAULT_COMPONENT|default(False) and not APT_DEFAULT_COMPONENTS|default(False) and not APT_COMPONENT|default(False) and not APT_COMPONENTS|default(False)
 - include: vars_apt.tasks

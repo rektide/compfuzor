@@ -1,4 +1,4 @@
 ---
-- debug: "msg=Compfuzor: fetch (pure) hg repository"
+- debug: "msg='Compfuzor: fetch (pure) hg repository'"
 - file: path="{{REPO_DIR|default(DIR, true)}}" state=directory
 - shell: hg clone "{{HG_REPO}}" "{{REPO_DIR|default(REPO_DIR, true)}}"
