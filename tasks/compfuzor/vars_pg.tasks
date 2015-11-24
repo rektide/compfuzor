@@ -1,4 +1,4 @@
-- include_defaults: "{{item}}"
+- include_defaults: source="{{item}}"
   with_first_found:
   - "../../private/pg.vars"
   - "../../vars/pg.vars"

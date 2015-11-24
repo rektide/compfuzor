@@ -1,13 +1,13 @@
 ---
-- debug: "msg=Compfuzor: starting; VARIABLES"
+- debug: "msg='Compfuzor: starting VARIABLES'"
 - include: compfuzor/vars_base.tasks
 - include: compfuzor/vars_type.tasks
 - include: compfuzor/vars_secret.tasks
 - include: compfuzor/vars_env.tasks
 - include: compfuzor/vars_xdg.tasks
-- debug: "msg=Compfuzor: sourcing hierarchy vars"
+- debug: "msg='Compfuzor: sourcing hierarchy vars'"
 - include: compfuzor/_multi.tasks multi=vars_hierarchy
-- debug: "msg=Compfuzor: sourcing extra variables"
+- debug: "msg='Compfuzor: sourcing extra variables'"
 - include: compfuzor/vars_apt.tasks
 - include: compfuzor/vars_systemd.tasks
 - include: compfuzor/vars_src.tasks
@@ -15,7 +15,7 @@
 - include: compfuzor/vars_debconf.tasks
 - include: compfuzor/vars_pg.tasks
 
-- debug: "msg=Compfuzor: REPOSITORIES"
+- debug: "msg='Compfuzor: REPOSITORIES'"
 - include: compfuzor/repo_git.tasks
   when: (REPO is defined or REPOS is defined) and not GIT_BYPASS|default(False)
 - include: compfuzor/repo_cvs.tasks
@@ -29,7 +29,7 @@
 - include: compfuzor/repo_goget.tasks
   when: REPO_GOGET is defined and REPO_GOGET|default(False)
 
-- debug: "msg=Compfuzor: FILESYSTEM"
+- debug: "msg='Compfuzor: FILESYSTEM'"
 - include: compfuzor/fs_base.tasks
   when: DIR|default(False) or DIRS|default(False) or FILES|default(False) and not DIR_BYPASS|default(False)
 - include: compfuzor/fs_repo.tasks
@@ -49,7 +49,7 @@
 - include: compfuzor/_multi.tasks multi=fs_d
 - include: compfuzor/fs_base_d.tasks
 
-- debug: "msg=Compfuzor: EXTRAS"
+- debug: "msg='Compfuzor: EXTRAS'"
 - include: compfuzor/pg.tasks
   when: PG|default(False)
 - include: compfuzor/debconf.tasks
@@ -71,4 +71,4 @@
 - include: compfuzor/pkgconfig.tasks
   when: PKGCONFIG|default(False)
 
-- debug: "msg=Compfuzor: complete. Returning to main playbook."
+- debug: "msg='Compfuzor: complete. Returning to main playbook.'"
