@@ -1,2 +1,5 @@
 - debug: msg="Install pkg-config into SRCS_DIR/lib/pkgconfig"
-- shell: "ln -s {{PKGCONFIG_SRC|default(DIR+'/lib/pkgconfig')}}/* {{PKGCONFIG_DIR}}"
+- file: src="{{item}}" dest="{{PKGCONFIG_DIR}}/{{item|basename}}"
+  with_fileglob:
+  - "{{PKGCONFIG_SRC|default(DIR+'/lib/pkgconfig')}}"
+#- shell: "ln -s {{PKGCONFIG_SRC|default(DIR+'/lib/pkgconfig')}}/* {{PKGCONFIG_DIR}}"

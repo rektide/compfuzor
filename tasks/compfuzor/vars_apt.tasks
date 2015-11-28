@@ -4,4 +4,4 @@
     APT_SOURCELIST: "{{APT_SOURCELIST|default(NAME)|default(TYPE)}}"
     APT_TRUSTED: "{{APT_TRUSTED|default(APT_SOURCELIST)|default(NAME)|default(TYPE)}}"
     APT_ARCH: "{{APT_ARCH|default(ARCH)}}"
-- include_defaults: source="vars/pkgs.vars"
+- action: include_defaults source="vars/pkgs.vars"

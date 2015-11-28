@@ -1,6 +1,6 @@
 - debug: "msg='Compfuzor: create base files'"
 - name: "Creating base `DIR`"
-  file: path="{{DIR}}" state=directory mode={{DIRMODE}}
+  file: "path={{DIR}} state=directory mode={{DIRMODE}}"
   when: DIR|default(True)
 - name: "Creating `DIRS`"
   file: path={{DIR+'/' if item|first != '/' and item|first != '~' else ''}}{{item}} state=directory mode={{DIRMODE}}
