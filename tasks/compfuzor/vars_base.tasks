@@ -6,7 +6,7 @@
   changed_when: False
 - name: "Set ARCH"
   shell: dpkg --print-architecture
-  register: ARCH_
+  register: NATIVE_ARCH_
   changed_when: False
 - name: "Set ARCHS"
   shell: dpkg --print-architecture && dpkg --print-foreign-architectures
@@ -17,8 +17,10 @@
     MACHINE_ID: "{{MACHINE_ID_.stdout}}"
     ARCHS: "{{ARCHS_.stdout_lines}}"
 - set_fact:
-    ARCH: "{{ARCH_.stdout}}"
+    ARCH: "{{NATIVE_ARCH_.stdout}}"
   when: ARCH is not defined
+- set_fact:
+     NATIVE_ARCH: "{{NATIVE_ARCH_.stdout}}"
 - name: "Set SUBINSTANCE if asked for"
   set_fact: "SUBINSTANCE={{MACHINE_ID}}"
   when: SUBINSTANCE|default(False) == True
@@ -70,5 +72,5 @@
   when: not PREFIX_DIR|default(False)
 
 - name: "Set DIR variable"
-  set_fact: DIR="{{PREFIX_DIR}}/{{NAME}}"
+  set_fact: "DIR={{PREFIX_DIR}}/{{NAME}}"
   when: not DIR|default(False)

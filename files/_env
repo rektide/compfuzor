@@ -1,9 +1,18 @@
-{% if ENV is mapping -%}
-{% for k,v in ENV.iteritems() -%}
-{{ 'export ' if export_mode|default(False) else '' }}{{k|upper}}="{{v}}"
-{% endfor -%}
-{% elif ENV is sequence -%}
-{% for k in ENV -%}
-{{ 'export ' if export_mode|default(False) else '' }}{{k|upper}}="{{hostvars[inventory_hostname][k|upper]|default(vars[k|upper])}}"
-{% endfor -%}
+{% macro def(var, val) -%}
+{% if val is defined and val is not none and val != "MAGIC_NONE_COMPFUZOR" -%}
+{{ 'export ' if export_mode|default(False) else '' -}}
+{{ var|upper }}="
+{%- if val is sequence and val is not string -%}
+	{{ val|join(ENV_SEPARATOR|default(",")) -}}
+{% elif val == True -%}
+	{{ hostvars[inventory_hostname][var|upper]|default(vars[var|upper])|trim -}}
+{% else -%}
+	{{ val|trim -}}
+{% endif -%}"
 {% endif -%}
+{%- endmacro -%}
+
+{{ def(NAME|upper|replace("-","_")+"_VARS", ENV.keys()|join(",")) -}}
+{% for k,v in ENV.iteritems() -%}
+{{ def(k,v) -}}
+{% endfor -%}
