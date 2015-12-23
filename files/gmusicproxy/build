@@ -1,0 +1,6 @@
+#!/bin/sh
+[ -z "$REPO" ] && REPO="{{DIR}}/repo"
+
+mkvirtualenv -p /usr/bin/python2 $REPO
+cd $REPO
+pip install -r requirements.txt

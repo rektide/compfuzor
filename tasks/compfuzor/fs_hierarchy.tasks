@@ -29,20 +29,20 @@
 # create subdirs
 - name: "Create {{include|upper}} subdirs"
   file: path="{{dirpath}}/{{item}}" state=directory
-  with_items: "{{dirs|default([])}}"
-  when: "not not go and {{dirs}} is sequence" # defined and {{dirs}} != True"
+  with_items: "{{hostvars[inventory_hostname][dirs]|default(vars[dirs])|default([])}}"
+  when: "go|bool and {{dirs}} is sequence" # defined and {{dirs}} != True"
 # create .d subdirectories
 - name: "Create {{include|upper}} .d directories"
   file: path="{{dirpath}}/{{item}}.d" state=directory mode="{{mode|default(770)}}"
-  with_items: vars[d|default('')]|default([])
-  when: (not not go) and vars[d]|default(False)
+  with_items: "{{hostvars[inventory_hostname][d]|default(vars[d])|default([])}}"
+  when: go|bool and hostvars[inventory_hostname][d]|default(vars[d])|default(False)
 
 # include files
 - name: "Create {{include|upper}} files"
   template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{dirpath}}/{{item.dest|default(item.name)|default(item)}}" owner="{{OWNER|default(omit)}}"
-  with_items: "{{ hostvars[inventory_hostname][files] |default([])}}"
-  when: not not go and {{files}}|default(False) and not item.raw|default(False)
+  with_items: "{{ hostvars[inventory_hostname][files]|default(vars[files])|default([])}}"
+  when: go|bool and not item.raw|default(False)
 - name: "Create raw {{include|upper}} files"
   copy: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{dirpath}}/{{item.dest|default(item.name)|default(item)}}" owner="{{OWNER|default(omit)}}"
-  with_items: "{{ hostvas[inventory_hostname][files]|default([])}}"
-  when: not not go and {{files}}|default(False) and item.raw|default(False)
+  with_items: "{{ hostvars[inventory_hostname][files]|default(vars[files])|default([])}}"
+  when: go|bool and item.raw|default(False)

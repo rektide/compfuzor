@@ -1,7 +1,7 @@
-{% macro phrase(name, expression) %}
-{% for el in expression|default(None)|arrayitize %}
-{{ name|upper }}={{ el }}
-{% endfor %}
+{% macro phrase(name, expression) -%}
+{% for el in expression|default(None)|arrayitize -%}
+{{ name }}={{ el }}
+{% endfor -%}
 {% endmacro -%}
 
 [Unit]
@@ -10,22 +10,30 @@ Description={{ NAME }}
 Requires=network.target
 After=network.target
 {% endif %}
-{{ phrase('After', SYSTEMD_AFTER) }}
-{{ phrase('Before', SYSTEMD_BEFORE) }}
-{{ phrase('Required', SYSTEMD_REQUIRED) }}
+{{ phrase('After', SYSTEMD_AFTER) -}}
+{{ phrase('Before', SYSTEMD_BEFORE) -}}
+{{ phrase('Requires', SYSTEMD_REQUIRED) }}
 
 [Service]
 Type={{ SYSTEMD_TYPE|default("simple") }}
 NonBlocking=yes
 ExecStart={{ SYSTEMD_EXEC }}
-{% if SYSTEMD_CWD|default(True) %}WorkingDirectory={{ SYSTEMD_CWD|default(DIR)|replace('~', '%h', 1) }}{% endif %}
-{% if SYSTEMD_EXEC_STOP|default(False) %}ExecStop={{ SYSTEMD_EXEC_STOP }}{% endif %}
-{% if SYSTEMD_EXEC_RELOAD|default(False) %}ExecReload={{ SYSTEMD_EXEC_RELOAD }}{% endif %}
-{% if PID_FILE|default(False) %}PIDFile={{ PID_FILE }}{% endif %}
-{% if SYSTEMD_USER|default(True) and not USERMODE|default(False) %}User={{ SYSTEMD_USER|default(USER) }}{% endif %}
-{{ phrase('Environment', SYSTEMD_ENV) }}
-{{ phrase('EnvironmentFile', SYSTEMD_ENVFILE) }}
-{{ phrase('Restart', SYSTEMD_RESTART) }}
+{% if SYSTEMD_CWD|default(True) %}
+WorkingDirectory={{ SYSTEMD_CWD|default(DIR)|replace('~', '%h', 1) }}
+{% endif %}
+{% if SYSTEMD_EXEC_STOP|default(False) %}
+ExecStop={{ SYSTEMD_EXEC_STOP }}
+{% endif %}
+{% if SYSTEMD_EXEC_RELOAD|default(False) %}
+ExecReload={{ SYSTEMD_EXEC_RELOAD }}
+{% endif %}
+{% if PID_FILE|default(False) %}PIDFile={{ PID_FILE }}
+{% endif %}
+{% if SYSTEMD_USER|default(True) and not USERMODE|default(False) %}User={{ SYSTEMD_USER|default(USER) }}
+{% endif %}
+{{ phrase('Environment', SYSTEMD_ENV) -}}
+{{ phrase('EnvironmentFile', SYSTEMD_ENVFILE) -}}
+{{ phrase('Restart', SYSTEMD_RESTART) -}}
 {{ phrase('RestartSec', SYSTEMD_RESTART_SEC) }}
 {{ "PermissionsStartOnly=true" if SYSTEMD_START_ONLY|default(False) else "" }}
 
