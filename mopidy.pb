@@ -13,7 +13,7 @@
     - "{{media}}"
     - "{{playlists}}"
     LINKS:
-    - "~/.config/mopidy": "{{ETC}}"
+      "~/.config/mopidy": "{{ETC}}"
     SYSTEMD_EXEC: "/usr/bin/mopidy"
     #PKGSET: mopidy
     media: "{{XDG_MUSIC_DIR}}"
