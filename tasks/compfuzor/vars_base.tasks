@@ -39,11 +39,11 @@
   set_fact: TYPE="{{NAME}}"
   when: not TYPE|default(False)
 
-- name: "Include common vars"
-  action: include_defaults source=vars/common.vars
 - name: "Include usermode common vars"
   action: include_defaults source=vars/common.user.vars
   when: USERMODE|default(False)
+- name: "Include common vars"
+  action: include_defaults source=vars/common.vars
 - name: "Include xdg vars"
   action: include_defaults source=vars/xdg.vars
   when: USERMODE|default(False)
