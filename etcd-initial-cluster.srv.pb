@@ -30,5 +30,6 @@
     SYSTEMD_EXEC: /usr/local/bin/etcd
     SYSTEMD_USER: True
     SYSTEMD_START_ONLY: True
+    SYSTEMD_ENVFILE: "{{DIR}}/env"
   tasks:
   - include: tasks/compfuzor.includes type=srv
