@@ -61,8 +61,8 @@
   - "examples-private/{{TYPE}}.vars"
   - "vars/empty.vars"
 
-- name: "Select default username {{NAME}}"
-  set_fact: USER="{{NAME}}"
+- name: "Select default username {{TYPE|default(NAME)}}"
+  set_fact: USER="{{TYPE|default(NAME)}}"
   when: not USER|default(False)
 - name: "Set PREFIX_DIR variable from DIR"
   set_fact: PREFIX_DIR="{{DIR|default()|dirname}}"
