@@ -37,3 +37,8 @@
   args:
      SYSTEMD_SERVICE: True
   when: SYSTEMD_EXEC|default(False) and SYSTEMD_SERVICE is not defined
+- name: "Defaulting SYSTEMD_USER"
+  set_fact:
+  args:
+    SYSTEMD_USER: "{{USER}}"
+  when: SYSTEMD_USER|default(False) == True
