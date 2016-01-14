@@ -14,10 +14,10 @@
     ENV:
       #etcd_name: "{{name|default(TYPE + '-' + INSTANCE)}}"
       #etcd_name: "{{NAME|replace('.', '-')}}"
-      etcd_name: "{{SUBINSTANCE|replace('.','-')}}"
+      etcd_name: "{{NAME|replace('.','-')}}"
       etcd_advertise_client_urls: "{{advertise_client_urls|default('http://'+inventory_hostname+':'+client_port|string)}}"
       etcd_listen_client_urls: "{{listen_client_urls|default('http://'+inventory_hostname+':'+client_port|string)}}"
-      etcd_advertise_peer_urls: "{{advertise_peer_urls|default('http://'+inventory_hostname+':'+peer_port|string)}}"
+      etcd_initial_advertise_peer_urls: "{{advertise_peer_urls|default('http://'+inventory_hostname+':'+peer_port|string)}}"
       etcd_listen_peer_urls: "{{listen_peer_urls|default('http://'+inventory_hostname+':'+peer_port|string)}}"
       etcd_cluster_active_size: "{{cluster_active_size|default(3)}}"
       etcd_data_dir: "{{VAR}}"
