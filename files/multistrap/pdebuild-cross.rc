@@ -1,0 +1,30 @@
+# this is your configuration file for pdebuild-cross.
+# /etc/pdebuild-cross/pdebuild-cross.rc is the one meant for editing.
+#
+# read pbuilderrc (5) and pdebuild-cross (1) for notes on specific options.
+
+# remember to change CROSSARCH, DEBBUILDOPTS and MULTISTRAPFILE to
+# change your target cross-building architecture from armel.
+
+#CROSSARCH=armel
+CROSSARCH={{ ARCH }}
+#DEBBUILDOPTS="-aarmel"
+DEBBUILDOPTS="-a{{ ARCH }}"
+MULTISTRAPFILE={{ETC}}/{{MULTISTRAPFILE}}
+BASETGZ={{DIR}}/{{ BASETGZ }}
+BUILDPLACE={{DIR}}/build
+BUILDRESULT={{DIR}}/result
+APTCACHE={{DIR}}/aptcache
+HOOKDIR=/usr/share/pdebuild-cross/hookdir/
+APTCACHEHARDLINK=no
+PBUILDERSATISFYDEPENDSCMD=/usr/sbin/embuilddeps
+#PBUILDERSATISFYDEPENDSOPT="-m -a armel"
+#PBUILDERSATISFYDEPENDSOPT="-m -a {{ARCH}}"
+PBUILDERSATISFYDEPENDSOPT="-m -a amd64"
+USEDEVPTS=yes
+AUTO_DEBSIGN=no
+
+# Only use when testing Xorg apps, not when building
+# also remember to copy ~/.Xauthority into /home/$SUDO_USER/
+# (mkdir /home/$SUDO_USER if necessary).
+#BINDMOUNTS="/tmp"

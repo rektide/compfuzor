@@ -1,0 +1,6 @@
+#!/bin/sh
+
+cd "{{DIR}}"
+
+multistrap -f etc/multistrap.conf
+bin/post-create.sh var/build

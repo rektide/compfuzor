@@ -1,0 +1,11 @@
+#
+# /etc/dpkg-cross/cross-compile: configuration for dpkg-cross
+#
+
+# default architecture for dpkg-cross (to avoid always typing the -a option
+# if you do cross installations only for one architecture)
+# Note: default_arch is managed by debconf - it can be overridden
+# if ~/.dpkg-cross/cross-compile exists or by specifying an
+# architecture on the command line.
+# Use '[sudo] dpkg-reconfigure dpkg-cross' to change this value.
+default_arch = {{ ARCH }}

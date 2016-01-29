@@ -1,0 +1,50 @@
+export HOSTNAME={{hostname|default(NAME)}}
+export DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true
+export LC_ALL=C LANGUAGE=C LANG=C
+
+# configure: hostname
+echo "$HOSTNAME" >> /etc/hostname
+
+# preseed: tz-data
+debconf-set-selections <<TZSEL
+tzdata tzdata/Areas select US
+tzdata tzdata/Areas seen true
+tzdata tzdata/Zones/US select Eastern
+tzdata tzdata/Zones/US seen true
+TZSEL
+
+
+cat <<END > /etc/apt/apt.conf.d/70-no-recommends
+APT::Install-Recommends "0";
+APT::Install-Suggests "0";
+END
+
+# prevent programs from starting
+cat > /usr/sbin/policy-rc.d << EOF
+#!/bin/sh
+# via http://major.io/2014/06/26/install-debian-packages-without-starting-daemons/
+echo "All runlevel operations denied by policy" >&2
+exit 101
+EOF
+chmod +x /usr/sbin/policy-rc.d
+# help: sudo installer
+touch /etc/sudoers
+
+# help: base-files
+mkdir /var/bak-run
+mv /var/run/* /var/bak-run/
+
+# configure
+/var/lib/dpkg/info/dash.preinst install
+dpkg --configure -a
+
+# help: base-files
+mv /var/bak-run/* /var/run
+rm -r /var/bak-run
+
+# move out runlevel denial
+mv /usr/sbin/policy-rc.d /usr/sbin/policy-rc.d.single
+# help: systemd
+ln -sf /proc/self/mounts /etc/mtab
+# install password
+echo 'root:{{ password|default('CHANGE_OR_ELSE') }}' | chpasswd
