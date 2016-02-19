@@ -12,30 +12,35 @@ After=network.target
 {% endif %}
 {{ phrase('After', SYSTEMD_AFTER) -}}
 {{ phrase('Before', SYSTEMD_BEFORE) -}}
-{{ phrase('Requires', SYSTEMD_REQUIRED) }}
+{{ phrase('Requires', SYSTEMD_REQUIRES) -}}
+{{ phrase('Requisite', SYSTEMD_REQUISITE) -}}
+{{ phrase('Wants', SYSTEMD_WANTS) -}}
+{{ phrase('BindsTo', SYSTEMD_BINDS_TO) -}}
+{{ phrase('PartOf', SYSTEMD_PART_OF) -}}
+{{ phrase('Conflicts', SYSTEMD_CONFLICTS) }}
 
 [Service]
 Type={{ SYSTEMD_TYPE|default("simple") }}
-NonBlocking=yes
+NonBlocking={{ SYSTEMD_NONBLOCKING|default("yes") }}
 ExecStart={{ SYSTEMD_EXEC }}
 {% if SYSTEMD_CWD|default(True) %}
 WorkingDirectory={{ SYSTEMD_CWD|default(DIR)|replace('~', '%h', 1) }}
 {% endif %}
-{% if SYSTEMD_EXEC_STOP|default(False) %}
-ExecStop={{ SYSTEMD_EXEC_STOP }}
-{% endif %}
-{% if SYSTEMD_EXEC_RELOAD|default(False) %}
-ExecReload={{ SYSTEMD_EXEC_RELOAD }}
-{% endif %}
-{% if PID_FILE|default(False) %}PIDFile={{ PID_FILE }}
-{% endif %}
+{{ phrase('ExecStop', SYSTEMD_EXEC_STOP) }}
+{{ phrase('ExecReload', SYSTEMD_EXEC_RELOAD) }}
+{{ phrase('PIDFile', SYSTEMD_PID_FILE) }}
 {% if SYSTEMD_USER|default(True) and not USERMODE|default(False) %}User={{ SYSTEMD_USER|default(USER) }}
 {% endif %}
 {{ phrase('Environment', SYSTEMD_ENV) -}}
 {{ phrase('EnvironmentFile', SYSTEMD_ENVFILE) -}}
 {{ phrase('Restart', SYSTEMD_RESTART) -}}
 {{ phrase('RestartSec', SYSTEMD_RESTART_SEC) }}
+{{ phrase('Nice', SYSTEMD_NICE) }}
 {{ "PermissionsStartOnly=true" if SYSTEMD_START_ONLY|default(False) else "" }}
 
 [Install]
 WantedBy={{ "multi-user" if not USERMODE|default(False) else "default" }}.target
+{{ phrase('WantedBy', SYSTEMD_WANTED_BY) }}
+{{ phrase('RequiredBy', SYSTEMD_REQUIRED_BY) }}
+{{ phrase('Also', SYSTEMD_ALSO) }}
+{{ phrase('DefaultInstance', SYSTEMD_DEFAULT_INSTANCE) }}
