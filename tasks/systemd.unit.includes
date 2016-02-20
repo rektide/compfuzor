@@ -1,32 +1,42 @@
-- set_fact:
+- name: "Compfuzor: SYSTEMD {{unit_type}}"
+  set_fact:
     unit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False) }}"
     units: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default(False) }}"
     target: "{{TYPE|default(NAME)|default('')}}"
     dest: "{{SYSTEMD_UNIT_DIR}}/{{NAME+'.'+unit_type}}"
-- local_action: shell test ! -f "files/{{target}}/{{target}}.{{unit_type}}"; echo $?
+- name: testing for target unit
+  local_action: shell test ! -f "files/{{target}}/{{target}}.{{unit_type}}"; echo $?
   changed_when: False
   register: local_unit
-- file: path="{{SYSTEMD_UNIT_DIR}}" state=directory
+- name: "creating unit directory"
+  file: path="{{SYSTEMD_UNIT_DIR}}" state=directory
   when: unit or units
 
-- template: src="files/{{target}}/{{target}}.{{unit_type}}" dest="{{dest}}"
-  when: unit == "True" and local_unit.stdout|int == 1
-- template: src="files/systemd.{{unit_type}}" dest="{{dest}}"
-  when: unit == "True" and local_unit.stdout|int == 0
-- shell: "systemctl --{{SYSTEMD_SCOPE}} enable {{NAME+'.'+unit_type}}"
-  when: unit == "True"
+- name: templating in target unit
+  template: src="files/{{target}}/{{target}}.{{unit_type}}" dest="{{dest}}"
+  when: unit == True and local_unit.stdout|int == 1
+- name: templating in generic unit
+  template: src="files/systemd.{{unit_type}}" dest="{{dest}}"
+  when: unit == True and local_unit.stdout|int == 0
+- name: enabling unit
+  shell: "systemctl --{{SYSTEMD_SCOPE}} enable {{NAME+'.'+unit_type}}"
+  when: unit == True
 
-- template: src="files/{{target}}/{{unit}}" dest="{{unit}}"
-  when: unit|bool and unit != "True"
-- shell: systemctl --{{SYSTEMD_SCOPE}} enable "{{unit}}"
-  when: unit|bool and unit != "True"
+- name: templating in specified unit
+  template: src="files/{{target}}/{{unit}}" dest="{{unit}}"
+  when: unit|bool and unit != True
+- name: enabling specified unit
+  shell: systemctl --{{SYSTEMD_SCOPE}} enable "{{unit}}"
+  when: unit|bool and unit != True
 
-- template: src="files/{{target}}/{{item}}" dest="{{SYSTEMD_UNIT_DIR}}/{{item}}"
+- name: templating units
+  template: src="files/{{target}}/{{item}}" dest="{{SYSTEMD_UNIT_DIR}}/{{item}}"
   with_items: units
-  when: units and units != "False"
-- shell: systemctl --{{SYSTEMD_SCOPE}} enable {{item}}
+  when: units|bool and units != False
+- name: enabling units
+  shell: systemctl --{{SYSTEMD_SCOPE}} enable {{item}}
   with_items: units
-  when: units and units != "False"
+  when: units|bool and units != False
 
 - include: "compfuzor/fs_d.tasks unit_type=SYSTEMD_{{unit_type|upper}} fs_path={{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{unit_type}}"
   when: "SYSTEMD_{{unit_type|upper}}_D is defined"
