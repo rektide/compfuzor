@@ -11,6 +11,7 @@
     files: "{{include|upper}}_FILES" # files to template into place
     d: "{{include|upper}}_D" # assemblies to create
     bypass: "{{include|upper}}_BYPASS" # skip doing this stuff!
+    link_bypass: "{{include_upper}}_LINK_BYPASS"
     dirpath: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper])}}" # lookup the path for the dir
     go: True
 - name: "Cancel go if nothing to do"
@@ -20,11 +21,22 @@
 # create main directory
 - name: "Create top {{include|upper}} directory"
   file: path="{{dirpath}}" state=directory mode="{{mode|default(770)}}"
-  when: not not go
+  when: go|bool and not FS_CONTAINED|default(False)
 # link include dir into DIR
 - name: "Link top {{include|upper}} directory into `DIR`"
   file: src="{{dirpath}}" dest="{{DIR}}/{{include|lower}}" state=link
-  when: not not go and not DIR_BYPASS|default(False)
+  when: "go|bool and not DIR_BYPASS|default(False) and not DIR_LINK_BYPASS|default(False) and not {{link_bypass}}|default(False) and not FS_CONTAINED|default(False)"
+# fs_contained - reverses stoage characteristic, installing under DIR rather than about
+# create include subdirs in DIR
+- name: "Create DIR's {{include|upper}} subdirectory - contained mode"
+  file: path="{{DIR}}/{{include|lower}}" state=directory mode="{{mode|default(770)}}"
+  when: go|bool and FS_CONTAINED|default(False)
+# place links to subdirs into common locations
+- name: "Link {{include|upper}} subdirectory into common global space- contained mode"
+  file: src="{{DIR}}/{{include|lower}}" dest="{{dirpath}}" state=link
+  when: "go|bool and not DIR_BYPASS|default(False) and not DIR_LINK_BYPASS|default(False) and not {{link_bypass}}|default(False) and FS_CONTAINED|default(False)"
+
+
 
 # create subdirs
 - name: "Create {{include|upper}} subdirs"
