@@ -3,7 +3,6 @@
   sudo: True
   vars:
     TYPE: autossh-tunnel
-    NAME: autossh-tunnel
     INSTANCE: main
     ETC_DIR: True
     VAR_DIR: True
@@ -12,37 +11,52 @@
     SYSTEMD_EXEC: "/usr/bin/autossh -M {{item.monitor|default(monitor)|default(10022)}} -F {{ETC}}}/{{NAME}}.config -tt {{item.host}}"
     SYSTEMD_RESTART: on-failure
     SYSTEMD_RESTART_SEC: 2s
+    SYSTEMD_BYPASS: True
     PKGS:
     - autossh
   vars_files:
   - [ "private/autossh-tunnel/{{INSTANCE}}.vars", "private/autossh-tunnel/autossh-tunnel.vars", "private/autossh-tunnel.vars", "example-private/autossh-tunnel/autossh-tunnel.vars" ]
   tasks:
-  - set_fact: key={{item}}
+  - name: look for a global key file to try to use
+    set_fact: key={{item}}
     with_first_found:
-    - "private/autossh/{{INSTANCE}}.pub"
-    - "files/autossh/{{INSTANCE}}.pub"
-    - "private/autossh/autossh.pub"
-    - "files/autossh/autossh.pub"
-    - "private/autossh.pub"
-    register: got_key
-    failed_when: False
-  - include: tasks/compfuzor.includes
-  - file: state=directory owner=${exec_user} group=root mode=0600 path=${dest}
-  - file: state=directory owner=${exec_user} group=root mode=0600 path=${dest}/keys
-  - template: src=files/autossh-tunnels/autossh_config dest=${dest}/autossh_config
-    register: has_config
-  - template: src=files/systemd.service dest={{SYSTEMD_UNIT_DIR}}/{{NAME}}-{{item.host}}.service
-    with_items: $hosts
-    register: has_service
-  - copy: src={{item}} dest={{ETC}}/keys/{{item|basename}} mode=0400
-    with_fileglob: private/autossh-tunnels/keys/*
-  - include: tasks/systemd.thunk.tasks service={{NAME}}-{{item.host}}
-    with_items: $hosts
-    only_if: ${has_service.changed} or ${has_config.changed}
+    - "private/autossh-tunnel/{{NAME}}.pem"
+    - "private/autossh-tunnel/{{TYPE}}.pem"
+    - "private/autossh-tunnel/autossh-tunnel.pem"
+    - "private/autossh-tunnel.pem"
+    - "files/autossh-tunnel/{{NAME}}.pem"
+    - "files/autossh-tunnel/{{INSTANCE}}.pem"
+    - "files/autossh-tunnel/autossh-tunnel.pem"
+    register: has_key
+    ignore_errors: False
+  - name: "autossh-tunnel: fallback to no host key"
+    set_fact: key=False
+    when: has_key|failed
 
-  - shell: systemctl enable autossh-tunnels-${item.host}.service
-    with_items: $hosts
-    only_if: ${has_service.changed} or ${has_config.changed}
-  - shell: systemctl reload-or-restart autossh-tunnels-${item.host}.service
-    with_items: $hosts
-    only_if: ${has_service.changed} or ${has_config.changed}
+  - name: "check for existing ssh"
+    stat: path=~/.ssh
+    register: has_ssh
+  - name: "autossh-tunnel: make ETC merely a pointer to exiting ~/.ssh directory"
+    file: src=~/.ssh/ dest={{ETC}} state=link
+    when: has_ssh.stat.exists
+   
+  - include: tasks/compfuzor.includes
+
+
+  - name: "autossh-tunnel: install top level keys"
+    template: src={{key}} dest={{ETC}}/{{NAME}}.pem mode=0400
+    when: key|default(False)
+    register: has_key
+  - name: "autossh-tunnel: install host keys"
+    template: src=private/autossh-tunnel/{{item.key}} dest={{ETC}}/{{NAME}}-{{item.host}}.pem mode=0400
+    with_items: hosts
+    when: item.key|default(False)
+    register: has_keys
+
+  - name: "autossh-tunnel: install services"
+    include: tasks/systemd.unit.includes unit_type=service service_name={{NAME}}-{{item.host}}
+    with_items: hosts
+  - name: "autossh-tunnel: thunk servics"
+    include: tasks/systemd.thunk.tasks service={{NAME}}-{{item.host}}
+    with_items: hosts
+    when: not SYSTEMD_THUNK_BYPASS|default(False) 
