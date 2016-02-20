@@ -14,7 +14,9 @@
 - include: compfuzor/vars_make_autoconf.tasks
 - include: compfuzor/vars_debconf.tasks
 - include: compfuzor/vars_pg.tasks
+- debug: "msg='Compfuzor: completed vars'"
 
+- debug: "msg=''"
 - debug: "msg='Compfuzor: REPOSITORIES'"
 - include: compfuzor/repo_git.tasks
   when: (REPO is defined or REPOS is defined) and not GIT_BYPASS|default(False)
@@ -29,6 +31,7 @@
 - include: compfuzor/repo_goget.tasks
   when: REPO_GOGET is defined and REPO_GOGET|default(False)
 
+- debug: "msg=''"
 - debug: "msg='Compfuzor: FILESYSTEM'"
 - include: compfuzor/fs_base.tasks
   when: DIR|default(False) or DIRS|default(False) or FILES|default(False) and not DIR_BYPASS|default(False)
@@ -48,7 +51,9 @@
   when: not LINKS_BYPASS|default(False)
 - include: compfuzor/_multi.tasks multi=fs_d
 - include: compfuzor/fs_base_d.tasks
+- debug: "msg='Compfuzor: completed filesystem'"
 
+- debug: "msg=''"
 - debug: "msg='Compfuzor: EXTRAS'"
 - include: compfuzor/pg.tasks
   when: PG|default(False)
