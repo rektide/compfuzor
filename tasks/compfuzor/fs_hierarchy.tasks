@@ -11,17 +11,25 @@
     files: "{{include|upper}}_FILES" # files to template into place
     d: "{{include|upper}}_D" # assemblies to create
     bypass: "{{include|upper}}_BYPASS" # skip doing this stuff!
-    link_bypass: "{{include_upper}}_LINK_BYPASS"
+    link_bypass: "{{include|upper}}_LINK_BYPASS"
     dirpath: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper])}}" # lookup the path for the dir
     go: True
+    has_dirpath:
+      stat:
+        exists: False
 - name: "Cancel go if nothing to do"
   set_fact: go="" # do not go if bypass, or nothing is defined pertaining to this component
   when: "({{bypass}}|default(True)) and not (({{dirs}}|default(False)) or ({{files}}|default(False)) or ({{d}}|default(False)) or ({{base}}|default(False)))"
+- name: "Test for top {{base}} directory - will permit"
+  stat: path="{{dirpath if not FS_CONTAINERED|default(False) else DIR+'/'+include|lower}}"
+  register: has_dirpath
+  changed_when: has_dirpath.stat.exists
+  when: not FS_DIR_TOP_PROPER|default(False) # opposite of a bypass, hard check for proper top dir if set, will let creation attempts run even though something exists
 
 # create main directory
 - name: "Create top {{include|upper}} directory"
   file: path="{{dirpath}}" state=directory mode="{{mode|default(770)}}"
-  when: go|bool and not FS_CONTAINED|default(False)
+  when: go|bool and not FS_CONTAINED|default(False) and not has_dirpath.stat.exists
 # link include dir into DIR
 - name: "Link top {{include|upper}} directory into `DIR`"
   file: src="{{dirpath}}" dest="{{DIR}}/{{include|lower}}" state=link
@@ -30,11 +38,11 @@
 # create include subdirs in DIR
 - name: "Create DIR's {{include|upper}} subdirectory - contained mode"
   file: path="{{DIR}}/{{include|lower}}" state=directory mode="{{mode|default(770)}}"
-  when: go|bool and FS_CONTAINED|default(False)
+  when: go|bool and FS_CONTAINED|default(False) and not has_dirpath
 # place links to subdirs into common locations
 - name: "Link {{include|upper}} subdirectory into common global space- contained mode"
   file: src="{{DIR}}/{{include|lower}}" dest="{{dirpath}}" state=link
-  when: "go|bool and not DIR_BYPASS|default(False) and not DIR_LINK_BYPASS|default(False) and not {{link_bypass}}|default(False) and FS_CONTAINED|default(False)"
+  when: "go|bool and not DIR_BYPASS|default(False) and not DIR_LINK_BYPASS|default(False) and not {{link_bypass}}|default(False) and FS_CONTAINED|default(False) and not has_dirpath.stat.exists"
 
 
 
