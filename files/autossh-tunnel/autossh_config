@@ -1,6 +1,6 @@
 Host *
 	{{ "User " + user if user|default(False) else "" }}
-	{{ "Port " + port if port|default(False) else "" }}
+	{{ "Port " + port|string if port|default(False) else "" }}
 	{{ "IdentityFile " + ETC + "/" + key if key|default(False) else "" }}
 	ControlMaster {{ controlMaster|default("auto") }}
 	ControlPath {{ controlPath|default(VAR + "/%r@%h:%p.control") }}
@@ -9,8 +9,8 @@ Host *
 	{{ "DynamicForward " + dynamicForward if dynamicForward|default(False) else "" }}
 	ExitOnForwardFailure yes
 	{{ "GatewayPorts yes" if gateway|default(True) else "" }}
-	{{ "ServerAliveInterval " + aliveInterval|default(15) }}
-	{{ "ServerAliveCountMax " + aliveCountMax if aliveCountMax|default(False) else "" }}
+	{{ "ServerAliveInterval " + aliveInterval|default(15)|string }}
+	{{ "ServerAliveCountMax " + aliveCountMax|string if aliveCountMax|default(False) else "" }}
 	{{ "UpdateHostKeys yes" if updateHostKeys|default(True) else "" }}
 	{{ "VerifyHostKeyDNS " + verifyHostKeyDns if verifyHostKeyDns|default(False) else "" }}
 	{{ "VisuaHostKey yes" if visualHostKey|default(True) else "" }}
@@ -19,10 +19,10 @@ Host *
 Host {{ host.host }}
 	HostName {{ host.host }}
 	{{ "User " + host.user if host.user|default(False) else "" }}
-	{{ "Port " + host.port if host.port|default(False) else "" }}
+	{{ "Port " + host.port|string if host.port|default(False) else "" }}
 	{{ "PasswordAuthentication " + passwordAuthentication|default("no") }}
-	{{ "ControlMaster + host.controlMaster if host.controlMaster|defaut(False) else "" }}
-	{{ "ControlPath + host.controlPath if host.controlPath|defaut(False) else "" }}
+	{{ "ControlMaster " + host.controlMaster if host.controlMaster|default(False) else "" }}
+	{{ "ControlPath " + host.controlPath if host.controlPath|default(False) else "" }}
 	{{ "IdentityFile " + ETC + "/" + host.key if host.key|default(False) else "" }}
 	{{ "DynamicForward " + host.dynamicForward if host.dynamicForward|default(False) else "" }}
 	{{ "GatewayPorts yes" if host.gateway|default(False) else "" }}
@@ -30,7 +30,7 @@ Host {{ host.host }}
 	LocalForward {{ lf }} {{ host.local.get(lf) }}
 {% endfor %}
 {% for rf in host.remote.iterkeys() %}
-	RemoteForward {{ rf|int + hostnum }} {{ host.remote.get(rf) }}
+	RemoteForward {{ rf|int + hostnum|int }} {{ host.remote.get(rf) }}
 {% endfor %}
 
 {% endfor %}
