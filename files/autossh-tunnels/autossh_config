@@ -30,7 +30,7 @@ Host {{ host.host }}
 	LocalForward {{ lf }} {{ host.local.get(lf) }}
 {% endfor %}
 {% for rf in host.remote.iterkeys() %}
-	RemoteForward {{ rf }} {{ host.remote.get(rf) }}
+	RemoteForward {{ rf|int + hostnum }} {{ host.remote.get(rf) }}
 {% endfor %}
 
 {% endfor %}

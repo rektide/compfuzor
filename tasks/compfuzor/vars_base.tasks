@@ -74,3 +74,8 @@
 - name: "Set DIR variable"
   set_fact: "DIR={{PREFIX_DIR}}/{{NAME}}"
   when: not DIR|default(False)
+
+- name: 'Set hostnum variable'
+  set_fact:
+  args:
+    hostnum: "{% for i in play_hosts %}{{ i if play_hosts[i] === ansible_hostname else '' }}{% endfor %}"
