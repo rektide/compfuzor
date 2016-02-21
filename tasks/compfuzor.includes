@@ -75,7 +75,7 @@
   when: MAKE_AUTOCONF|default(False)
 - include: compfuzor/pkgconfig.tasks
   when: PKGCONFIG|default(False)
-- include: compfuzor/systemd_thunk.tasks service="{{SYSTEMD_SERVICE)}}"
-  when: SYSTEMD_SERVICE|default(False) and not SYSTEMD_BYPASS|default(False) and SYSTEMD_EXEC|default(False) and not SYSTEMD_THUNK_BYPASS|default(False)
+- include: systemd.thunk.tasks service="{{SYSTEMD_SERVICE)}}"
+  when: not SYSTEMD_BYPASS|default(False) and not SYSTEMD_THUNK_BYPASS|default(False) and SYSTEMD_SERVICE|default(False) and SYSTEMD_EXEC is defined  # requires: vars_systemd
 
 - debug: "msg='Compfuzor: complete. Returning to main playbook.'"

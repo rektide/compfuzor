@@ -78,4 +78,4 @@
 - name: 'Set hostnum variable'
   set_fact:
   args:
-    hostnum: "{% for i in play_hosts %}{{ i if play_hosts[i] === ansible_hostname else '' }}{% endfor %}"
+    hostnum: "{% for i in play_hosts %}{{ i if loop.index == ansible_hostname else '' }}{% endfor %}"

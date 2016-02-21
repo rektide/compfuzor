@@ -8,6 +8,7 @@
   local_action: shell test ! -f "files/{{target}}/{{target}}.{{unit_type}}"; echo $?
   changed_when: False
   register: local_unit
+  become: False
 - name: "creating unit directory"
   file: path="{{SYSTEMD_UNIT_DIR}}" state=directory
   when: unit or units
