@@ -17,20 +17,23 @@
     PKGS:
     - autossh
   vars_files:
-  - [ "private/autossh-tunnel/{{NAME}}.vars", "private/autossh-tunnel/{{INSTANCE}}.vars", "private/autossh-tunnel/{{TYPE}}.vars", "private/autossh-tunnel/autossh-tunnel.vars", "private/{{NAME}}.vars", "private/{{TYPE}}.vars", "private/autossh-tunnel.vars", "example-private/autossh-tunnel/autossh-tunnel.vars" ]
+  - [ "private/autossh-tunnel/{{NAME}}.vars",
+      "private/autossh-tunnel/{{INSTANCE}}.vars",
+      "private/{{NAME}}.vars",
+      "private/autossh-tunnel/{{TYPE}}.vars",
+      "private/{{TYPE}}.vars",
+      "example-private/autossh-tunnel/autossh-tunnel.vars" ]
   tasks:
-  - name: look for a global key file to try to use
+  - debug: msg="VARS {{NAME}} {{INSTANCE}}"
+  - name: "look for a global key file to try to use"
     set_fact: key={{item}}
     with_first_found:
     - "private/autossh-tunnel/{{NAME}}.pem"
     - "private/autossh-tunnel/{{INSTANCE}}.pem"
+    - "private/{{NAME}}.pem"
     - "private/autossh-tunnel/{{TYPE}}.pem"
-    - "private/autossh-tunnel/autossh-tunnel.pem"
-    - "private/autossh-tunnel.pem"
-    - "files/autossh-tunnel/{{NAME}}.pem"
-    - "files/autossh-tunnel/{{INSTANCE}}.pem"
+    - "private/{{TYPE}}.pem"
     - "files/autossh-tunnel/{{TYPE}}.pem"
-    - "files/autossh-tunnel/autossh-tunnel.pem"
     when: not key|default(True)
     register: has_key
     ignore_errors: False
