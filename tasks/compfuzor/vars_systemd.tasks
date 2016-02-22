@@ -32,13 +32,13 @@
   args:
     SYSTEMD_UNIT_DIR: "{{ SYSTEMD_UNIT_DIR|default(hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_UNIT_DIR']) }}"
     SYSTEMD_CONF_DIR: "{{ SYSTEMD_CONF_DIR|default(hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_CONF_DIR']) +'/'+NAME}}"
-- name: "Defaulting SYSTEMD_SERVER true if SYSTEMD_EXEC"
+- name: "Defaulting SYSTEMD_SERVICE true if SYSTEMD_EXEC"
   set_fact:
   args:
      SYSTEMD_SERVICE: True
-  when: SYSTEMD_EXEC is defined and SYSTEMD_SERVICE is not defined # prevent evaluation of SYSTEMD_EXEC by using is defined, allowing late-bound (systemd.tasks time) parameritizability
-- name: "Defaulting SYSTEMD_USER"
-  set_fact:
-  args:
-    SYSTEMD_USER: "{{USER}}"
-  when: SYSTEMD_USER|default(False)|bool
+  when: SYSTEMD_EXEC is defined and SYSTEMD_SERVICE is not defined
+#- name: "Defaulting SYSTEMD_USER"
+#  set_fact:
+#  args:
+#    SYSTEMD_USER: "{{USER}}"
+#  when: SYSTEMD_USER|default(False)|bool

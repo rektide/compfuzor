@@ -3,11 +3,7 @@
 # running - todo: check /proc/whatever/cgroup/systemd
 - shell: ps -e|head -n2|grep systemd>/dev/null; echo $?
   register: SYSTEMD_RUNNING
-# target service to thunk
-- set_fact: THUNK_SERVICE="{{NAME}}.service"
-  when: service is not defined
-- set_fact: THUNK_SERVICE="{{service}}.service"
-  when: service is defined
+- set_fact: THUNK_SERVICE="{{NAME if service is not defined else service}}.service"
 - shell: systemctl is-enabled "{{THUNK_SERVICE}}" "{{SYSTEMD_OPTS_AND_SCOPE}}" -q; echo $?
   register: SYSTEMD_WAS_ENABLED
 # DISABLE IF ENABLED
@@ -22,5 +18,5 @@
 # RELOAD OR RESTART IF RUNNING
 - shell: systemctl reload-or-restart {{THUNK_SERVICE}} {{SYSTEMD_OPTS_AND_SCOPE}}
   when: SYSTEMD_RESTART is not defined and SYSTEMD_RUNNING.stdout == "0"
-- shell: sytemctl restart {{THUNK_SERVICE}} {{SYSTEMD_OPTS_AND_SCOPE}}
+- shell: systemctl restart {{THUNK_SERVICE}} {{SYSTEMD_OPTS_AND_SCOPE}}
   when: SYSTEMD_RESTART is defined and SYSTEMD_RUNNING.stdout == "0"

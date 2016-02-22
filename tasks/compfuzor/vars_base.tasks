@@ -25,7 +25,11 @@
   set_fact: "SUBINSTANCE={{MACHINE_ID}}"
   when: SUBINSTANCE|default(False) == True
   changed_when: False
- 
+
+- name: 'Set hostnum variable'
+  set_fact:
+  args:
+    hostnum: "{% for i in play_hosts %}{{ loop.index0 if play_hosts[loop.index0] == inventory_hostname else '' }}{% endfor %}"
 - name: "Set name with subinstance"
   set_fact: NAME="{{TYPE}}-{{INSTANCE}}-{{SUBINSTANCE}}"
   when: not NAME|default(False) and INSTANCE|default(False) and SUBINSTANCE|default(False)
@@ -75,7 +79,4 @@
   set_fact: "DIR={{PREFIX_DIR}}/{{NAME}}"
   when: not DIR|default(False)
 
-- name: 'Set hostnum variable'
-  set_fact:
-  args:
-    hostnum: "{% for i in play_hosts %}{{ i if loop.index == ansible_hostname else '' }}{% endfor %}"
+

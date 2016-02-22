@@ -1,7 +1,7 @@
 Host *
 	{{ "User " + user if user|default(False) else "" }}
 	{{ "Port " + port|string if port|default(False) else "" }}
-	{{ "IdentityFile " + ETC + "/" + key if key|default(False) else "" }}
+	{{ "IdentityFile " + ETC + "/" + NAME + ".pem" if key|default(False) else "" }}
 	ControlMaster {{ controlMaster|default("auto") }}
 	ControlPath {{ controlPath|default(VAR + "/%r@%h:%p.control") }}
 	Compression yes
@@ -13,9 +13,9 @@ Host *
 	{{ "ServerAliveCountMax " + aliveCountMax|string if aliveCountMax|default(False) else "" }}
 	{{ "UpdateHostKeys yes" if updateHostKeys|default(True) else "" }}
 	{{ "VerifyHostKeyDNS " + verifyHostKeyDns if verifyHostKeyDns|default(False) else "" }}
-	{{ "VisuaHostKey yes" if visualHostKey|default(True) else "" }}
+	{{ "VisualHostKey yes" if visualHostKey|default(True) else "" }}
 
-{% for host in hosts %}
+{% for host in hosts -%}
 Host {{ host.host }}
 	HostName {{ host.host }}
 	{{ "User " + host.user if host.user|default(False) else "" }}
@@ -23,7 +23,7 @@ Host {{ host.host }}
 	{{ "PasswordAuthentication " + passwordAuthentication|default("no") }}
 	{{ "ControlMaster " + host.controlMaster if host.controlMaster|default(False) else "" }}
 	{{ "ControlPath " + host.controlPath if host.controlPath|default(False) else "" }}
-	{{ "IdentityFile " + ETC + "/" + host.key if host.key|default(False) else "" }}
+	{{ "IdentityFile " + ETC + "/" + NAME + "-" + host.host + ".pem" if host.key|default(False) else "" }}
 	{{ "DynamicForward " + host.dynamicForward if host.dynamicForward|default(False) else "" }}
 	{{ "GatewayPorts yes" if host.gateway|default(False) else "" }}
 {% for lf in host.local.iterkeys() %}
@@ -32,5 +32,4 @@ Host {{ host.host }}
 {% for rf in host.remote.iterkeys() %}
 	RemoteForward {{ rf|int + hostnum|int }} {{ host.remote.get(rf) }}
 {% endfor %}
-
 {% endfor %}

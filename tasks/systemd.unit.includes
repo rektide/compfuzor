@@ -3,7 +3,7 @@
     unit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False) }}"
     units: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default(False) }}"
     target: "{{TYPE|default(NAME)|default('')}}"
-    dest: "{{SYSTEMD_UNIT_DIR}}/{{NAME+'.'+unit_type}}"
+    dest: "{{SYSTEMD_UNIT_DIR}}/{{unit_name|default(NAME)|replace('.', '-') +'.'+unit_type}}"
 - name: testing for target unit
   local_action: shell test ! -f "files/{{target}}/{{target}}.{{unit_type}}"; echo $?
   changed_when: False
@@ -20,7 +20,7 @@
   template: src="files/systemd.{{unit_type}}" dest="{{dest}}"
   when: unit == True and local_unit.stdout|int == 0
 - name: enabling unit
-  shell: "systemctl --{{SYSTEMD_SCOPE}} enable {{NAME+'.'+unit_type}}"
+  shell: "systemctl --{{SYSTEMD_SCOPE}} enable {{dest}}"
   when: unit == True
 
 - name: templating in specified unit
@@ -39,5 +39,5 @@
   with_items: units
   when: units|bool and units != False
 
-- include: "compfuzor/fs_d.tasks unit_type=SYSTEMD_{{unit_type|upper}} fs_path={{SYSTEMD_UNIT_DIR}}/{{NAME}}.{{unit_type}}"
+- include: "compfuzor/fs_d.tasks unit_type=SYSTEMD_{{unit_type|upper}} fs_path={{SYSTEMD_UNIT_DIR}}/{{dest}}"
   when: "SYSTEMD_{{unit_type|upper}}_D is defined"
