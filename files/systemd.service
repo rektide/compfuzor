@@ -29,7 +29,7 @@ WorkingDirectory={{ SYSTEMD_CWD|default(DIR)|replace('~', '%h', 1) }}
 {{ phrase('ExecStop', SYSTEMD_EXEC_STOP) }}
 {{ phrase('ExecReload', SYSTEMD_EXEC_RELOAD) }}
 {{ phrase('PIDFile', SYSTEMD_PID_FILE) }}
-{% if SYSTEMD_USER|default(True) and not USERMODE|default(False) %}User={{ SYSTEMD_USER|default(USER) }}
+{% if SYSTEMD_USER|default(False) and not USERMODE|default(False) %}User={{ SYSTEMD_USER|default(USER) }}
 {% endif %}
 {{ phrase('Environment', SYSTEMD_ENV) -}}
 {{ phrase('EnvironmentFile', SYSTEMD_ENVFILE) -}}
