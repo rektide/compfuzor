@@ -30,6 +30,7 @@
   set_fact:
   args:
     hostnum: "{% for i in play_hosts %}{{ loop.index0 if play_hosts[loop.index0] == inventory_hostname else '' }}{% endfor %}"
+  when: hostnum is not defined
 - name: "Set name with subinstance"
   set_fact: NAME="{{TYPE}}-{{INSTANCE}}-{{SUBINSTANCE}}"
   when: not NAME|default(False) and INSTANCE|default(False) and SUBINSTANCE|default(False)
