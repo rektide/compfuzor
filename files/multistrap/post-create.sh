@@ -6,31 +6,22 @@ export ARCH="{{ARCH}}"
 
 # VARIABLES:
 # QEMU - use this qemu (or false. defaults to qemu-arm-static)
-# CLEAN - clean up after (or false. defaults to true)
 # PRESEED_FILE - preseed file (defaults to etc/preseed)
 # POSTPREP - run this script after
 
 #### Configure ####
-
-# where are we writing to
-FILE="$1"
-if test -z "$FILE" ; then
-	FILE=multistrap.tgz
+DIR="$1"
+if test -z "$DIR"; then
+	DIR="{{VAR}}/build"
 fi
-if test ! -e "$FILE" ; then
-	echo "specify a file or directory to post process"
+if test ! -d "$DIR"; then
+	echo "specify a directory to post process"
 	exit 1
-elif test -f "$FILE" ; then
-	DIR=`mktemp --suffix=.multistrap -d --tmpdir=.`
-	tar -C "$DIR" -xzf "$FILE"
-else
-	DIR="$FILE"
-	CLEANUP=false
 fi
 
 # preseed
 if test -z "$PRESEED_FILE" ; then
-	PRESEED_FILE="etc/preseed"
+	PRESEED_FILE="{{ETC}}/preseed"
 fi
 if test "$PRESEED_FILE" = "false" ; then
 	true
@@ -94,10 +85,3 @@ fi
 
 # popd
 cd "$OLD_DIR"
-
-# create tar & cleanup
-if test "$CLEANUP" != "false"; then
-	sleep 1
-	tar --one-file-system -czf "$FILE" -C "$DIR" .
-	rm -r "$DIR"; echo $?
-fi
