@@ -2,11 +2,12 @@
 - hosts: all
   gather_facts: False
   vars:
-    NAME: kubernetes
+    TYPE: kubernetes
     INSTANCE: git
     REPO: https://github.com/GoogleCloudPlatform/kubernetes
     BINS:
-    - run: make all
+    - exec: make all
+      pwd: repo
     PKGS:
     - rsync
   tasks:
