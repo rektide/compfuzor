@@ -1,0 +1,5 @@
+{% for host in groups['all'] -%}
+{{ hostvar[host]['KUBE_TOKEN'] }},admin,admin
+{{ hostvar[host]['KUBELET_TOKEN'] }},kubelet,kubelet
+{{ hostvar[host]['KUBE_PROXy_TOKEN'] }},kube-proxy,kube-proxy
+{%- endfor %}

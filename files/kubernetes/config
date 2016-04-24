@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Config
+users:
+- name: kubelet
+  user:
+    token: {{KUBELET_TOKEN}}
+clusters:
+- name: local
+  cluster:
+    certificate-authority-data: {{CA_CERT_BASE64_ENCODED}}
+contexts:
+- context:
+    cluster: local
+    user: kubelet
+  name: service-account-context
+current-context: service-account-context

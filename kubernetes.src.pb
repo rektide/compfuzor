@@ -8,7 +8,11 @@
     BINS:
     - exec: make all
       pwd: repo
+    ENV:
+      gopath: "{{DIR}}:$GOPATH"
     PKGS:
     - rsync
+    LINKS: 
+      bin: "{{REPO}}/cmd"
   tasks:
   - include: tasks/compfuzor.includes
