@@ -65,8 +65,6 @@
   when: (PKGS is defined or PKGSET is defined or PKGSETS is defined) and not PKGS_BYPASS|default(False)
 - include: compfuzor/dbconfig.tasks
   when: DBCONFIG|default(False) and not DBCONFIG_BYPASS|default(False)
-- include: compfuzor/systemd.tasks
-  when: not SYSTEMD_BYPASS|default(False)
 - include: compfuzor/kernel_modules.tasks
   when: MODULES|default(False)
 - include: compfuzor/bins_run.tasks
@@ -75,6 +73,10 @@
   when: MAKE_AUTOCONF|default(False)
 - include: compfuzor/pkgconfig.tasks
   when: PKGCONFIG|default(False)
+- include: compfuzor/sysctl.tasks
+  when: SYSCTLS|default(False)
+- include: compfuzor/systemd.tasks
+  when: not SYSTEMD_BYPASS|default(False)
 - include: systemd.thunk.tasks service="{{SYSTEMD_SERVICE}}"
   when: not SYSTEMD_BYPASS|default(False) and not SYSTEMD_THUNK_BYPASS|default(False) and SYSTEMD_SERVICE|default(False) and SYSTEMD_EXEC is defined  # requires: vars_systemd
 

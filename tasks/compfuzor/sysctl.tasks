@@ -1,0 +1,5 @@
+- file: path="{{SYSCTL_DIR}}" state=directory
+- template: src="files/{{TYPE|default(NAME)}}/{{item}}" dest="{{SYSCTL_DIR}}/{{item}}"
+  with_items: SYSCTLS
+- file: src="{{SYSCTL_DIR}}/{{item}}" dest="/etc/sysctl.d/{{item}}" state=link
+  with_items: SYSCTLS
