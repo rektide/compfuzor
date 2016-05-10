@@ -25,6 +25,7 @@
   set_fact: "SUBINSTANCE={{MACHINE_ID}}"
   when: SUBINSTANCE|default(False) == True
   changed_when: False
+  failed_when: False # this can often be latebound
 
 - name: 'Set hostnum variable'
   set_fact:

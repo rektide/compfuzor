@@ -3,9 +3,10 @@
     unit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False) }}"
     units: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default(False) }}"
     target: "{{TYPE|default(NAME)|default('')}}"
-    dest: "{{SYSTEMD_UNIT_DIR}}/{{unit_name|default(NAME)|replace('.', '-') +'.'+unit_type}}"
-- name: testing for target unit
-  local_action: shell test ! -f "files/{{target}}/{{target}}.{{unit_type}}"; echo $?
+    inst: "{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}"
+    dest: "{{SYSTEMD_UNIT_DIR}}/{{unit_name|default(NAME)|replace('.', '-')}}{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}.{{unit_type}}"
+- name: testing for local target unit
+  local_action: shell test ! -f "files/{{target}}/{{target}}{{inst}}.{{unit_type}}"; echo $?
   changed_when: False
   register: local_unit
   become: False
@@ -14,7 +15,7 @@
   when: unit or units
 
 - name: templating in target unit
-  template: src="files/{{target}}/{{target}}.{{unit_type}}" dest="{{dest}}"
+  template: src="files/{{target}}/{{target}}{{inst}}.{{unit_type}}" dest="{{dest}}"
   when: unit == True and local_unit.stdout|int == 1
 - name: templating in generic unit
   template: src="files/systemd.{{unit_type}}" dest="{{dest}}"
