@@ -6,11 +6,39 @@
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: "{{ GIT_DEPTH|default(omit) }}"
   when: REPO|default(False)
-- name: "fetch git repositories"
+
+- name: "prefetch git repositories"
   git:
     repo: "{{ REPOS[item] }}"
     dest: "{{ REPO_DIR|default(DIR, true)+'/' if item|first != '/' and item|first != '~' else '' }}{{ item }}"
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
-    depth: "{{ GIT_DEPTH|default(omit) }}"
+    depth: 1
   with_items: REPOS.keys()
-  when: REPOS|default(False)
+  when: REPOS|default(False) and REPOS is mapping and GIT_DEPTH|default(False)
+- name: "fetch git repositories dict"
+  git:
+    repo: "{{ REPOS[item] }}"
+    dest: "{{ REPO_DIR|default(DIR, true)+'/' if item|first != '/' and item|first != '~' else '' }}{{ item }}"
+    accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
+    depth: "{{ 1 if GIT_DEPTH|default(omit) else 0 }}"
+  with_items: REPOS.keys()
+  when: REPOS|default(False) and REPOS is mapping
+
+- name: "fetching git repositories list"
+  git:
+    repo: "{{ item }}"
+    dest: "{{ REPO_DIR }}/{{item|basename|regex_replace('^(.*)(.git)?$', '\\1') }}"
+    accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
+    depth: 1
+  with_items: REPOS
+  when: REPOS|default(False) and REPOS is not mapping
+
+- name: "fetching git repositories list"
+  git:
+    repo: "{{ item }}"
+    dest: "{{ REPO_DIR }}/{{item|basename|regex_replace('^(.*)(.git)?$', '\\1') }}"
+    accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
+    depth: "{{ 1 if GIT_DEPTH|default(omit) else 0 }}"
+  with_items: REPOS
+  when: REPOS|default(False) and REPOS is not mapping
+
