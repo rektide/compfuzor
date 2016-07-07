@@ -1,6 +1,15 @@
 #!/bin/sh
-set -e
-[ -b "$SYSLINUX_DEV_FAT" -a -b "$SYSLINUX_DEV_LINUX" ] || exit 1
-[ -d "$SYSLINUX_MNT_FAT" -a -d "$SYSLINUX_MNT_LINUX" ] || exit 2
-mount "$SYSLINUX_DEV_FAT" "$SYSLINUX_MNT_FAT"
-mount "$SYSLINUX_DEV_LINUX" "$SYSLINUX_MNT_LINUX"
+
+MOUNTED_FAT=$(df "$SYSLINUX_DEV_FAT" | grep -q "$SYSLINUX_DEV_FAT"; echo $?)
+if [ "$MOUNTED_FAT" -ne "0" ]
+then
+	[ -d "$SYSLINUX_MNT_FAT" -a -b "$SYSLINUX_DEV_FAT" ] || exit 2
+	mount "$SYSLINUX_DEV_FAT" "$SYSLINUX_MNT_FAT"
+fi
+
+MOUNTED_LINUX=$(df "$SYSLINUX_DEV_LINUX" | grep -q "$SYSLINUX_DEV_LINUX"; echo $?)
+if [ "$MOUNTED_LINUX" -ne "0" ]
+then
+	[ -d "$SYSLINUX_MNT_LINUX" -a -b "$SYSLINUX_DEV_LINUX" ] || exit 3
+	mount "$SYSLINUX_DEV_LINUX" "$SYSLINUX_MNT_LINUX"
+fi

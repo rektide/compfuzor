@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+[ ! -d "$SYSLINUX_MNT_FAT" ] && exit 1
+
+echo syslinux onto $SYSLINUX_MNT_FAT
+mkdir -p $SYSLINUX_MNT_FAT/EFI/BOOT $SYSLINUX_MNT_FAT/EFI/syslinux
+cp /usr/lib/SYSLINUX.EFI/efi64/syslinux.efi $SYSLINUX_MNT_FAT/EFI/BOOT/bootx64.efi
+cp -r /usr/lib/syslinux/modules/efi64/* {{ETC}}/syslinux.cfg $SYSLINUX_MNT_FAT/EFI/BOOT
+
+[ -n "$SYSLINUX_DEV_BIOS" ] && dd if=/usr/lib/syslinux/mbr/gptmbr.bin of=$SySLINuX_DEV_BIOS bs=440 count=1 conv=notrunc

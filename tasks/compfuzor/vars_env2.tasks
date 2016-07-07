@@ -1,0 +1,4 @@
+- name: set default ENV
+  set_fact:
+    ENV: []
+  when: ENV|default(False) == True

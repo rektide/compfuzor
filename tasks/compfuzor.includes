@@ -14,6 +14,7 @@
 - include: compfuzor/vars_make_autoconf.tasks
 - include: compfuzor/vars_debconf.tasks
 - include: compfuzor/vars_pg.tasks
+- include: compfuzor/vars_env2.tasks
 - debug: "msg='Compfuzor: completed vars'"
 
 - debug: "msg=''"

@@ -15,6 +15,7 @@
     BINS:
     - extract-from-tar.sh
     - disk-prep.sh
+    - disk-gpt.sh
     - name: build
       run: True
     - name: post-create.sh
