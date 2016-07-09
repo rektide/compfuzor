@@ -10,10 +10,11 @@
     PKGS:
     - python-yaml
     - python-jinja2
+    - python-setuptools
+    - python-wheel
     - pandoc
     BINS:
     - name: build
       run: True
-      global: False
   tasks:
   - include: tasks/compfuzor.includes type=src
