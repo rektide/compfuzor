@@ -13,6 +13,6 @@
     PKGS:
     - rsync
     LINKS: 
-      bin: "{{REPO}}/cmd"
+      bin: "repo/cmd"
   tasks:
   - include: tasks/compfuzor.includes

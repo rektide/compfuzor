@@ -3,11 +3,11 @@ kind: Config
 users:
 - name: kubelet
   user:
-    token: {{KUBELET_TOKEN}}
+    token: {{KUBELET_TOKEN|default("")}}
 clusters:
 - name: local
   cluster:
-    certificate-authority-data: {{CA_CERT_BASE64_ENCODED}}
+    certificate-authority-data: {{CA_CERT_BASE64_ENCODED|default("")}}
 contexts:
 - context:
     cluster: local
