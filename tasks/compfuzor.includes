@@ -75,7 +75,7 @@
 - include: compfuzor/pkgconfig.tasks
   when: PKGCONFIG|default(False)
 - include: compfuzor/sysctl.tasks
-  when: SYSCTLS|default(False)
+  when: SYSCTLS|default(False) or SYSCTL|default(False)
 - include: compfuzor/systemd.tasks
   when: not SYSTEMD_BYPASS|default(False)
 - include: systemd.thunk.tasks service="{{SYSTEMD_SERVICE}}"
