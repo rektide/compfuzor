@@ -1,6 +1,6 @@
 #!/bin/bash
 [ -z "$REPO" ] && REPO="{{REPO_DIR}}"
-[ -z "$VIRTUALENV" ] && VIRTUALENV="$NAME"
+[ -z "$VIRTUALENV" ] && VIRTUALENV="{{NAME}}"
 set -e
 
 source `whereis virtualenvwrapper.sh | awk '{print $2}'`/virtualenvwrapper.sh || true
