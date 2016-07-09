@@ -9,8 +9,8 @@
     - manifests
     ETC_FILES: 
     - config
-    SYSCTLS:
-    - 80-ipv4-forward.sysctl
+    SYSCTL:
+      "net.ipv4.ip_forward": 1
     HOST_TOKENS:
     - kubelet_token
   tasks:

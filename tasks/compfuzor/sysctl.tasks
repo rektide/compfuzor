@@ -1,5 +1,13 @@
 - file: path="{{SYSCTL_DIR}}" state=directory
 - template: src="files/{{TYPE|default(NAME)}}/{{item}}" dest="{{SYSCTL_DIR}}/{{item}}"
   with_items: SYSCTLS
+  when: SYSCTLS|default(False)
 - file: src="{{SYSCTL_DIR}}/{{item}}" dest="/etc/sysctl.d/{{item}}" state=link
   with_items: SYSCTLS
+  when: SYSCTLS|default(False)
+- lineinfile:
+    dest: "/etc/sysctl.d/81-{{NAME}}.conf"
+    line: "{{item.key}} = {{item.value}}"
+    create: True
+  with_dict: SYSCTL
+  when: SYSCTL|default(False)
