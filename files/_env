@@ -5,7 +5,7 @@
 {%- if val is sequence and val is not string -%}
 	{{ val|join(ENV_SEPARATOR|default(",")) -}}
 {% elif val == True -%}
-	{{ hostvars[inventory_hostname][var|upper]|default(vars[var|upper])|trim -}}
+	{{ hostvars[inventory_hostname][var|upper]|default(vars[var|upper])|trim|default(True, True) -}}
 {% else -%}
 	{{ val|trim -}}
 {% endif -%}"
@@ -16,3 +16,4 @@
 {% for k,v in ENV.iteritems() -%}
 {{ def(k,v) -}}
 {% endfor -%}
+{{ def("DIR", DIR) }}
