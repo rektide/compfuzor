@@ -1,0 +1,23 @@
+#!/bin/sh
+
+BAD=0
+[ -z "$SUITE" ] && BAD=1 && echo "SUITE missing" >&2
+[ -z "$TARGET" ] && BAD=1 && echo "TARGET missing" >&2
+[ -z "$DEBIAN_MIRROR_URI" ] && BAD=1 && echo "DEBIAN_MIRROR_URI missing" >&2
+[ $BAD = 1 ] && exit 1
+
+sbuild-createchroot \
+	${ARCH:+--arch=$ARCH} \
+	${CHROOT_SUFFIX:+--chroot-suffix=$CHROOT_SUFFIX} \
+	${FOREIGN:+--foreign} \
+	$( [ $(echo x$RESOLVE | tr '[:upper:]' '[:lower:]')" == "xfalse" ] && echo "--no-resolve-deps" ) \
+	${KEEP:+--keep-debootstrap-dir} \
+	${DEBOOTSTRAP:+--debootstrap=$DEBOOTSTRAP} \
+	${INCLUDE:+--include=$INCLUDE} \
+	${EXCLUDE:+--exclude=$EXCLUDE} \
+	${COMPONENT:+--components=$COMPONENTS} \
+	${KEYRING:+--keyring=$KEYRING} \
+	$SUITE \
+	$TARGET \
+	$DEBIAN_MIRROR_URI \
+	${SCRIPT:+$SCRIPT}
