@@ -6,6 +6,7 @@
     USERMODE: True
     PKGS:
     - synergy
+    PKGS_BYPASS: True
     ETC_FILES:
     - synergy.json
     - src: "../_empty"
@@ -14,11 +15,10 @@
     - name: synergy.conf.j2
       raw: True
     SYSTEMD_SERVICE: True
-    SYSTEMD_EXEC: "/usr/bin/synergys -f -d INFO"
+    SYSTEMD_EXEC: "/usr/bin/synergys -f -d INFO --config {{ETC}}/synergy.conf"
     BINS:
     - name: build-etc
       run: True
-      global: False
     LINKS:
       "~/.synergy.conf": "{{ETC}}/synergy.conf"
   tasks:

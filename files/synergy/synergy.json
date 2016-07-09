@@ -1,3 +1,9 @@
-{
-"screens": ["{{ansible_hostname}}", "alpha", "beta"]
-}
+{% set hosts = groups["synergy-client"] if groups["synergy-client"] is defined else groups["all"] %}
+{"screens": [
+	{% set comma = joiner(",") %}
+	{{'"'+hostname|default(inventory_hostname)+'"'+comma() if hostname|default(inventory_hostname) not in hosts else ""}}
+	{%- for host in hosts -%}
+	{{ comma() }}
+	"{{host}}"
+	{% endfor %}
+]}
