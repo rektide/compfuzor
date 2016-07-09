@@ -6,10 +6,11 @@
     SUBINSTANCE: wlan0
     ETC:
     - hostapd.conf
-    LINKS:
-      run/hostapd: /var/run/hostapd
     PIDFILE: True
     SYSTEMD_EXEC: /usr/sbin/hostapd -P {{PIDFILE}} -C {{ETC}}/hostapd.conf
+    bridge: "hostapd-{{SUBINSTANCE}}"
+    group: adm # admin group
+    passphrase: "alacazam"
   tasks:
   - includes: tasks/compfuzor.includes
   
