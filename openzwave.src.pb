@@ -4,7 +4,7 @@
   vars:
     TYPE: openzwave
     INSTANCE: git
-    TGZ: http://openzwave.com/downloads/openzwave-1.0.791.tar.gz
+    REPO: https://github.com/OpenZWave/open-zwave/
     OPT_DIR: True
     PKGS:
     - libudev-dev
