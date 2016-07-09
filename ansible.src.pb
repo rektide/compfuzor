@@ -14,6 +14,7 @@
     - python-six
     - python-netaddr
     - python-httplib2
+    - python-keyczar
     - pkg-config # for compfuzor
     ETC_DIRS:
     - hosts
