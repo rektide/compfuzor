@@ -40,8 +40,8 @@
     BINS:
     - name: build.sh
       exec:
-      - "{{BIN_DIR}}/build-prometheus.sh"
-      - "{{BIN_DIR}}/build-node-exporter.sh"
+      - "{{BINS_DIR}}/build-prometheus.sh"
+      - "{{BINS_DIR}}/build-node-exporter.sh"
     - name: build-prometheus.sh
       execs:
       - "cd {{REPO}}/prometheus"
