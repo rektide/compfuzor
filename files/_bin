@@ -1,6 +1,6 @@
 #!/bin/bash
 {% if ENV|default(False) or has_env.stdout|int == 1 -%}
-source "{{DIR}}/env"
+source "{{DIR}}/env.export"
 {% endif %}
 cd {{DIR}}{{ "/"+item.basedir if item.basedir is string else "" }}
 

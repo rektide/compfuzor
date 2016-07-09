@@ -52,7 +52,7 @@
     - name: build-node-exporter.sh
       execs:
       - "cd {{REPO_DIR}}/node_exporter"
-      - "make"
+      - "make build"
       run: True
   tasks:
   - include: tasks/compfuzor.includes type=src
