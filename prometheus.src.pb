@@ -35,5 +35,21 @@
     - https://github.com/prometheus/client_model
     - https://github.com/prometheus/distro-pkgs
     - https://github.com/prometheus/migrate
+    ENVS:
+    - GOPATH: "{{DIR}}"
+    BINS:
+    - name: build.sh
+      exec:
+      - "{{BIN_DIR}}/build-prometheus.sh"
+      - "{{BIN_DIR}}/build-node-exporter.sh"
+    - name: build-prometheus.sh
+      execs:
+      - "cd {{REPO}}/prometheus"
+      - "make build"
+    - name: build-node-exporter.sh
+      execs:
+      - "cd {{REPO}}/node_exporter"
+      - "make"
+    ENV: true
   tasks:
   - include: tasks/compfuzor.includes type=src
