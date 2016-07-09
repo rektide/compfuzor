@@ -1,6 +1,10 @@
-#!/bin/sh
-[ -z "$REPO" ] && REPO="{{DIR}}/repo"
+#!/bin/bash
+[ -z "$REPO" ] && REPO="{{REPO_DIR}}"
+[ -z "$VIRTUALENV" ] && VIRTUALENV="$NAME"
+set -e
 
-mkvirtualenv -p /usr/bin/python2 $REPO
+source `whereis virtualenvwrapper.sh | awk '{print $2}'`/virtualenvwrapper.sh || true
+mkvirtualenv -p /usr/bin/python2 "$VIRTUALENV"
 cd $REPO
+workon "$VIRTUALENV"
 pip install -r requirements.txt
