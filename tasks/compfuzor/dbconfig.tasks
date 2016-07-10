@@ -1,3 +1,3 @@
 - name: load dbconfig
   shell: export DEBIAN_HAS_FRONTEND=1 DEBCONF_REDIR=1 command=configure; . /usr/share/debconf/confmodule; . /usr/share/dbconfig-common/dpkg/config.pgsql; dbc_go {{NAME}} configure
-  sudo: True
+  become: True

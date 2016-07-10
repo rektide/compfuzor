@@ -1,7 +1,7 @@
 - fail: msg="Need a Postgres password (pg_pw)"
   when: pg_pw is not defined
 - file: path="{{pg_location}}" owner="{{pg_acct}}" state="directory"
-  sudo: True
+  become: True
 - postgresql_user:
     name="{{pg_user}}"
     password="{{pg_pw}}"
