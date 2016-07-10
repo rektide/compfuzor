@@ -6,6 +6,7 @@
 - include: compfuzor/vars_env.tasks
 - include: compfuzor/vars_xdg.tasks
 - debug: "msg='Compfuzor: sourcing hierarchy vars'"
+- include: compfuzor/vars_fs.tasks
 - include: compfuzor/_multi.tasks multi=vars_hierarchy
 - debug: "msg='Compfuzor: sourcing extra variables'"
 - include: compfuzor/vars_apt.tasks

@@ -1,8 +1,8 @@
 - action: include_defaults source="{{item}}"
   with_first_found:
-  - "../../private/pg.vars"
-  - "../../vars/pg.vars"
-  - "../../vars/empty.vars"
+  - "private/pg.vars"
+  - "vars/pg.vars"
+  - "vars/empty.vars"
 - include: ../varset.tasks varset=pg
 - set_fact:
     pg_user="{{pg_user|default(NAME)}}"

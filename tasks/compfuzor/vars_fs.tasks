@@ -1,0 +1,16 @@
+- name: "initialize temporary {{include|upper}} facts"
+  set_fact:
+  args:
+    dir: ""
+    dirs: ""
+    base: ""
+    files: ""
+    d: ""
+    bypass: ""
+    link_bypass: ""
+    dirpath: ""
+    go: False
+    has_dirpath:
+      stat:
+        exists: False
+
