@@ -14,7 +14,7 @@
   shell: pkg-config systemd --variable=systemdsystemunitdir
   changed_when: False
   register: SYSTEMD_SYSTEM_UNIT_DIR_SHELL
-- name: Finding pkgonfig for SYSTEMD_SYSTEM_UNIT_DIR
+- name: Finding pkgonfig for SYSTEMD_SYSTEM_CONF_DIR
   shell: pkg-config systemd --variable=systemdsystemconfdir
   changed_when: False
   register: SYSTEMD_SYSTEM_CONF_DIR_SHELL
@@ -30,8 +30,8 @@
 - name: "Setting uninitialized systemd variables, part two"
   set_fact:
   args:
-    SYSTEMD_UNIT_DIR: "{{ SYSTEMD_UNIT_DIR|default(hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_UNIT_DIR']) }}"
-    SYSTEMD_CONF_DIR: "{{ SYSTEMD_CONF_DIR|default(hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_CONF_DIR']) +'/'+NAME}}"
+    SYSTEMD_UNIT_DIR: "{{ SYSTEMD_UNIT_DIR|default(hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_UNIT_DIR'])|default(vars['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_UNIT_DIR']) }}"
+    SYSTEMD_CONF_DIR: "{{ SYSTEMD_CONF_DIR|default(hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_CONF_DIR'])|default(vars['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_CONF_DIR']) +'/'+NAME}}"
 - name: "Defaulting SYSTEMD_SERVICE true if SYSTEMD_EXEC"
   set_fact:
   args:
