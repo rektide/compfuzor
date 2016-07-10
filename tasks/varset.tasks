@@ -9,7 +9,7 @@
   - "../examples-private/{{varset}}/{{configset}}-overrides.vars"
   - "../examples-private/{{varset}}/{{TYPE}}-overrides.vars"
   - "../vars/empty.vars"
-- include_defaults: "{{item}}"
+- action: include_defaults source="{{item}}"
   with_first_found:
   - "../private/{{TYPE}}/{{configset}}.{{varset}}.vars"
   - "../private/{{TYPE}}/{{varset}}.vars"
@@ -20,7 +20,7 @@
   - "../examples-private/{{varset}}/{{configset}}.vars"
   - "../examples-private/{{varset}}/{{TYPE}}.vars"
   - "../vars/empty.vars"
-- include_defaults: "{{item}}"
+- action: include_defaults source="{{item}}"
   with_first_found:
   - "../private/{{TYPE}}/{{varset}}/{{varset}}.vars"
   - "../private/{{TYPE}}/{{varset}}.vars"
