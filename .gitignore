@@ -1,3 +1,4 @@
 files/apt-repos/*gpg
 *.swp
 *.pyc
+private
