@@ -4,6 +4,9 @@
 - name: "link source DIR into OPT"
   file: src="{{DIR}}" dest="{{OPT}}" state=link
   when: DIR != OPT and not OPT_DIR|default(False)
+- name: "insure OPT dir"
+  file: path="{{OPT}}" state=directory
+  when: DIR != OPT and OPT_DIR|default(False)
 - name: "link source DIR into OPT/src"
   file: src="{{DIR}}" dest="{{OPT}}/src" state=link
   when: DIR != OPT and OPT_DIR|default(False)
