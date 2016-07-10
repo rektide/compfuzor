@@ -9,7 +9,7 @@
   when: APT_ARCH|default(ARCH)|default(False)
 - name: "Copy in apt sources.list for each arch"
   template: src="files/_apt.list" dest="/etc/apt/sources.list.d/{{APT_SOURCELIST}}.{{item}}.list"
-  with_items: ARCHS
+  with_items: "{{ARCHS}}"
   when: not (APT_ARCH|default(False)) and not APT_DEFAULT_ARCH|default(False)
 - name: "Insure pin directory"
   file: path=/etc/apt/preferences.d state=directory

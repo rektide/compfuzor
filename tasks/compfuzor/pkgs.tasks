@@ -1,7 +1,7 @@
 ---
 - name: "Compfuzor: install packages"
   apt: state="{{APT_INSTALL}}" pkg={{item}}
-  with_items: PKGS
+  with_items: "{{PKGS}}"
   when: PKGS|default(False)
 - name: "install pkgset"
   apt: state="{{APT_INSTALL}}" pkg="{{hostvars[inventory_hostname][PKGSET|upper]|join(',')}}"
