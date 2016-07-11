@@ -2,4 +2,4 @@
 - name: "Compfuzor: run all `BINS` that have an `args`"
   shell: "chdir={{ DIR+'/' if item.pwd|default('/')|truncate(1, 1, end='') != '/' else ''  }}{{item.pwd|default(DIR)}} {{ (item.exec|default('') if not item.dest|default(item.name)|default(False) else BINS_DIR+'/'+item.dest|default(item.name)) }}{{ ' '+item.args if item.args|default(False) else '' }}"
   when: "BINS|default(False) and item.args|default(False) or item.run|default(False) or (item.exec|default(False) and not item.dest|default(item.name))"
-  with_items: "{{BINS}}"
+  with_items: "{{BINS|default(False)}}"

@@ -1,9 +1,9 @@
 ---
 - name: "Create `GLOBAL_BINS_DIR` dir"
   file: path="{{GLOBAL_BINS_DIR}}" state=directory
-  with_items: "{{BINS}}"
+  with_items: "{{BINS|default([])}}"
   when: item.global|default(False)
 - name: "Link `BINS` into `GLOBAL_BINS_DIR`"
   file: src="{{DIR if item.basedir|default(False) == True else BINS_DIR}}/{{item.dest|default(item.name,true)|default(item.global,true) if item is mapping else item}}" dest="{{GLOBAL_BINS_DIR}}/{{(item.global if item.global != True else item.dest|default((item.global if item.global|default(False) is string else item.name),true)|default(item.global,true)) if item is mapping else item}}" state=link
-  with_items: "{{BINS}}"
+  with_items: "{{BINS|default([])}}"
   when: item.global|default(False)
