@@ -9,5 +9,5 @@
     dest: "/etc/sysctl.d/81-{{NAME}}.conf"
     line: "{{item.key}} = {{item.value}}"
     create: True
-  with_dict: SYSCTL
+  with_dict: "{{SYSCTL|default({})}}"
   when: SYSCTL|default(False)
