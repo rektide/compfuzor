@@ -12,6 +12,6 @@
   set_fact: INSTANCE=src
   when: type == "src" and not INSTANCE|default(False)
 - name: "repo setting"
-  set_fact: "{{item|upper|replace('-', '_')}}_DIR={{ REPO_DIR|default(DIR, true)+'/' if item|first != '/' and item|first != '~' else '' }}{{item}}"
-  with_items: REPOS.keys()
+  set_fact: "{{item.key|upper|replace('-', '_')}}_DIR={{ REPO_DIR|default(DIR, true)+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{item.key}}"
+  with_items: "{{REPOS}}"
   when: REPOS is sequence and vars[item] is not defined and hostvars[inventory_hostname][item] is not defined

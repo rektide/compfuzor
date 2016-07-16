@@ -1,4 +1,4 @@
-- name: "initialize temporary {{include|upper}} facts"
+- name: "initialize temporary fs facts"
   set_fact:
   args:
     dir: ""
