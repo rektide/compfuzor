@@ -5,7 +5,7 @@
   args:
     path: "{{ DIR+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{ item.key|basename }}"
     state: directory
-  with_dict: "{{LINKS}}"
+  with_dict: "{{LINKS|default({})}}"
   when: LINKS|default(False) and not LINK_BYPASS|default(False) and item.key|basename != ""
 - name: "Create LINKS"
   file:
@@ -13,5 +13,5 @@
     dest: "{{ DIR+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{item.key}}"
     src: "{{ DIR+'/' if item.value|first != '/' and item.value|first != '~' else '' }}{{item.value}}"
     state: link
-  with_dict: "{{LINKS}}"
+  with_dict: "{{LINKS|default({})}}"
   when: LINKS|default(False) and not LINK_BYPASS|default(False)
