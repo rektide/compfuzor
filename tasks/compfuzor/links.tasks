@@ -10,8 +10,8 @@
 - name: "Create LINKS"
   file:
   args:
-    dest: "{{ DIR+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{item.key}}"
     src: "{{ DIR+'/' if item.value|first != '/' and item.value|first != '~' else '' }}{{item.value}}"
+    dest: "{{ DIR+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{item.key}}"
     state: link
   with_dict: "{{LINKS|default({})}}"
   when: LINKS|default(False) and not LINK_BYPASS|default(False)
