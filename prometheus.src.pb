@@ -46,13 +46,20 @@
       - "{{BINS_DIR}}/build-node-exporter.sh"
     - name: build-prometheus.sh
       execs:
-      - "cd {{REPO_DIR}}/prometheus"
+      - "cd {{REPO_DIR}}/src/github.com/prometheus/prometheus"
       - "make build"
       run: True
     - name: build-node-exporter.sh
       execs:
-      - "cd {{REPO_DIR}}/node_exporter"
-      - "make build"
+      - "cd {{REPO_DIR}}/src/github.com/prometheus/node_exporter"
+      - "make build" # skip gofmt for all kinds of dependency missing errors arise
       run: True
+    - name: ../node_exporter/node_exporter # no compfuzor mechanism to run bins *then* install global bins atm, have to fail, manually build, then re-run atm
+      global: node_exporter
+      src: False
+    - name: ../prometheus/prometheus
+      global: prometheus
+      src: False
+
   tasks:
   - include: tasks/compfuzor.includes type=src

@@ -14,4 +14,4 @@
 - name: "repo setting"
   set_fact: "{{item.key|upper|replace('-', '_')}}_DIR={{ REPO_DIR|default(DIR, true)+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{item.key}}"
   with_items: "{{REPOS|default([])}}"
-  when: REPOS is sequence and vars[item] is not defined and hostvars[inventory_hostname][item] is not defined
+  when: REPOS is sequence and vars[item] is not defined and hostvars[inventory_hostname][item] is not defined and item.key|default(False)
