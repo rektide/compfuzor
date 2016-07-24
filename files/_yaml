@@ -1,0 +1,6 @@
+{% if not yaml_special|default(False) -%}
+{{item|to_nice_yaml|indent(yaml_indent|default(0)|int, True)}}
+{%- else %}
+{% for i in range(yaml_indent|default(0)|int) %} {% endfor %}- {{item|to_nice_yaml|indent(yaml_indent|default(0)|int+2)}}
+{%- endif %}
+
