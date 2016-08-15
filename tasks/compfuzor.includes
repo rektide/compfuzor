@@ -46,6 +46,8 @@
   when: type == "src"
 - include: compfuzor/fs_tgz.tasks
   when: TGZ is defined and not TGZ_BYPASS|default(False)
+- include: compfuzor/fs_get_urls.tasks
+  when: GET_URLS is defined and not GET_URLS_BYPASS|default(False)
 - include: compfuzor/bins.tasks
   when: BINS|default(False) and not BINS_BYPASS|default(False)
 - include: compfuzor/bins_link_global.tasks

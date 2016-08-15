@@ -1,0 +1,4 @@
+- name: "get urls"
+  get_url: url="{{item}}" dest="{{SRC}}/{{item|basename}}"
+  with_items: "{{GET_URLS|default([])}}"
+  when: GET_URLS|default(False)
