@@ -1,0 +1,4 @@
+setenv bootcmd_backup "movi read kernel 0 40008000;movi read rootfs 0 41000000 1000000;bootz 40008000 41000000"
+setenv bootcmd "fatload mmc 1:1 40008000 zimage;bootz 40008000"
+saveenv
+reset
