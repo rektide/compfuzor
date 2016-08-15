@@ -12,8 +12,10 @@
 {% endif -%}
 {%- endmacro -%}
 
+{% if ENV.keys is defined -%}
 {{ def(NAME|upper|replace("-","_")+"_VARS", ENV.keys()|join(",")) -}}
 {% for k,v in ENV.iteritems() -%}
 {{ def(k,v) -}}
 {% endfor -%}
+{% endif %}
 {{ def("DIR", DIR) }}
