@@ -1,0 +1,5 @@
+#!/bin/sh
+
+NAME=$1
+gpg --no-default-keyring --keyring ./${NAME%.pem}.gpg --import < ${NAME%.pem}.pem
+rm ${NAME%.pem}.gpg~

@@ -2,8 +2,11 @@
 # Compfuzor make template for {{NAME}}
 set -e
 
+[ -d repo ] && cd repo
+{{PRE_CONFIGURE|default("")}}
+
 [ -e './autogen.sh' ] && ./autogen.sh
-./configure {{WITHS}} {{ENABLES}} {{PREFIX}}
+./configure {{WITHS}} {{ENABLES}} {{PREFIX}} {{CONFIGURE|default("")}}
 make -j{{CORES}}
 make check || echo "no make check"
 make install
