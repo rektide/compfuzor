@@ -1,0 +1,9 @@
+- name: "Compfuzor: fetch zip file"
+  get_url: url="{{ZIP}}" dest="{{SRCS_DIR}}/{{ZIP|basename}}"
+- name: prep ZIP.url file
+  set_fact: "content={{ZIP}}"
+- name: record ZIP.url file"
+  template: "src=files/content dest={{SRCS_DIR}}/{{ZIP|basename}}.url content={{ZIP}}"
+- name: extract zip
+  shell: "chdir={{DIR}} unzip -f {{SRCS_DIR}}/{{ZIP|basename}}"
+  #unarchive: src="{{SRCS_DIR}}/{{ZIP|basename}}" dest="{{DIR}}" copy="no"
