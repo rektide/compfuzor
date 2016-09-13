@@ -4,10 +4,10 @@
   vars:
     TYPE: eclipse
     INSTANCE: mars
-    TGZ: http://mirror.cc.columbia.edu/pub/software/eclipse/technology/epp/downloads/release/mars/2/eclipse-jee-mars-2-linux-gtk-x86_64.tar.gz
+    TGZ: http://download.eclipse.org/technology/epp/downloads/release/neon/R/eclipse-jee-neon-R-linux-gtk-x86_64.tar.gz
     eclipse_file: "{{NAME}}.tgz"
     release: mars
-    eclim_url: http://downloads.sourceforge.net/project/eclim/eclim/2.5.0/eclim_2.5.0.jar?r=https%3A%2F%2Fsourceforge.net%2Fprojects%2Feclim%2Ffiles%2Feclim%2F2.5.0%2F
+    eclim_url: https://github.com/ervandew/eclim/releases/download/2.6.0/eclim_2.6.0.jar
     iu:
     - repo: "http://download.eclipse.org/releases/{{release}}/"
       ius: 
