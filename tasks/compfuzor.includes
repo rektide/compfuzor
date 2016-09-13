@@ -89,7 +89,7 @@
   when: not SYSTEMD_BYPASS|default(False) and not SYSTEMD_THUNK_BYPASS|default(False) and SYSTEMD_SERVICE|default(False) and SYSTEMD_EXEC is defined and not SYSTEMD_INSTANCES|default(False) and not SYSTEMD_INSTANCED|default(False)
 - include: systemd.thunk.tasks service="{{SYSTEMD_SERVICE}}@{{item}}"
   when: not SYSTEMD_BYPASS|default(False) and not SYSTEMD_THUNK_BYPASS|default(False) and SYSTEMD_SERVICE|default(False) and SYSTEMD_EXEC is defined and SYSTEMD_INSTANCES|default(False)
-  with_items: SYSTEMD_INSTANCES
+  with_items: "{{SYSTEMD_INSTANCES|default([])}}"
 
 
 - debug: "msg='Compfuzor: complete. Returning to main playbook.'"

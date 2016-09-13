@@ -23,13 +23,13 @@ Host {{ host.host }}
 	{{ "PasswordAuthentication " + passwordAuthentication|default("no") }}
 	{{ "ControlMaster " + host.controlMaster if host.controlMaster|default(False) else "" }}
 	{{ "ControlPath " + host.controlPath if host.controlPath|default(False) else "" }}
-	{{ "IdentityFile " + ETC + "/" + NAME + "-" + host.host + ".pem" if host.key|default(False) else "" }}
-	{{ "DynamicForward " + host.dynamicForward if host.dynamicForward|default(False) else "" }}
+	{{ "IdentityFile " + ETC + "/" + NAME + "-" + host.host|replace('.','-') + ".pem" if host.key|default(False) else "" }}
+	{{ "DynamicForward " + host.dynamicForward|string if host.dynamicForward|default(False) else "" }}
 	{{ "GatewayPorts yes" if host.gateway|default(False) else "" }}
-{% for lf in host.local.iterkeys() %}
-	LocalForward {{ lf }} {{ host.local.get(lf) }}
+{% for k,v in (host.local|default({})).iteritems() %}
+	LocalForward {{ k }} {{ v }}
 {% endfor %}
-{% for rf in host.remote.iterkeys() %}
-	RemoteForward {{ rf|int + hostnum|int }} {{ host.remote.get(rf) }}
+{% for k,v in (host.remote|default({})).iteritems() %}
+	RemoteForward {{ k|int + hostnum|int }} {{ v }}
 {% endfor %}
 {% endfor %}

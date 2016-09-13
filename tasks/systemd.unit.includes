@@ -1,7 +1,7 @@
 - name: "Compfuzor: SYSTEMD {{unit_type}}"
   set_fact:
     unit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False) }}"
-    units: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default(False) }}"
+    units: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default([]) }}"
     d: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'_D']|default(vars['SYSTEMD_'+unit_type|upper+'D'])|default(False) }}"
     target: "{{TYPE|default(NAME)|default('')}}"
     inst: "{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}"
@@ -33,13 +33,17 @@
   when: unit|bool and unit != True
 
 - name: templating units
-  template: src="files/{{target}}/{{item}}" dest="{{SYSTEMD_UNIT_DIR}}/{{item}}"
+  template: src="files/{{target}}/{{i}}" dest="{{SYSTEMD_UNIT_DIR}}/{{i}}"
   with_items: "{{units}}"
+  loop_control:
+    loop_var: i
   when: units|bool and units != False
 - name: enabling units
-  shell: systemctl --{{SYSTEMD_SCOPE}} enable {{item}}
+  shell: systemctl --{{SYSTEMD_SCOPE}} enable {{i}}
   with_items: "{{units}}"
   when: units|bool and units != False
+  loop_control:
+    loop_var: i
 
 - include: compfuzor/fs_d.tasks fs_path="{{SYSTEMD_UNIT_DIR}}/{{dest}}"
   when: hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'_D']|default(vars['SYSTEMD_'+unit_type|upper+'_D'])|default(False)

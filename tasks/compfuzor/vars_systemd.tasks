@@ -19,7 +19,7 @@
 
 - name: "Defaulting unset systemd variables"
   action: include_defaults source="vars/systemd.vars"
-- name: "Defaulting SYSTEMD_SERVICE true if SYSTEMD_EXEC"
+- name: "Defaulting SYSTEMD_SERVICE if SYSTEMD_EXEC"
   set_fact:
   args:
      SYSTEMD_SERVICE: True

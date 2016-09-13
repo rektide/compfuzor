@@ -4,19 +4,19 @@
 - shell: ps -e|head -n2|grep systemd>/dev/null; echo $?
   register: SYSTEMD_RUNNING
 - set_fact: THUNK_SERVICE="{{service if service|default(False) and service != True else NAME}}.service"
-- shell: systemctl is-enabled "{{THUNK_SERVICE}}" "{{SYSTEMD_OPTS_AND_SCOPE}}" -q; echo $?
+- shell: systemctl {{SYSTEMD_OPTS_AND_SCOPE}} is-enabled "{{THUNK_SERVICE}}" -q; echo $?
   register: SYSTEMD_WAS_ENABLED
 # DISABLE IF ENABLED
-- shell: systemctl disable "{{THUNK_SERVICE}}" "{{SYSTEMD_OPTS_AND_SCOPE}}"
+- shell: systemctl {{SYSTEMD_OPTS_AND_SCOPE}} disable "{{THUNK_SERVICE}}"
   when: SYSTEMD_WAS_ENABLED.stdout == "0"
 # RELOAD DAEMON
-- shell: systemctl daemon-reload {{SYSTEMD_OPTS_AND_SCOPE}}
+- shell: systemctl {{SYSTEMD_OPTS_AND_SCOPE}} daemon-reload
 # ENABLE
-- shell: systemctl enable {{THUNK_SERVICE}} {{SYSTEMD_OPTS_AND_SCOPE}} -fq; echo $?
+- shell: "systemctl {{SYSTEMD_OPTS_AND_SCOPE}} enable {{THUNK_SERVICE}}  -fq; echo $?"
   #when: SYSTEMD_RUNNING.stdout != "0"
   register: SYSTEMD_ENABLE_OK
 # RELOAD OR RESTART IF RUNNING
-- shell: systemctl reload-or-restart {{THUNK_SERVICE}} {{SYSTEMD_OPTS_AND_SCOPE}}
+- shell: systemctl {{SYSTEMD_OPTS_AND_SCOPE}} reload-or-restart {{THUNK_SERVICE}} 
   when: SYSTEMD_RESTART is not defined and SYSTEMD_RUNNING.stdout == "0"
-- shell: systemctl restart {{THUNK_SERVICE}} {{SYSTEMD_OPTS_AND_SCOPE}}
+- shell: systemctl {{SYSTEMD_OPTS_AND_SCOPE}} restart {{THUNK_SERVICE}}
   when: SYSTEMD_RESTART is defined and SYSTEMD_RUNNING.stdout == "0"
