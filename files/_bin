@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 {% if ENV|default(False) or has_env.stdout|int == 1 -%}
 source "{{DIR}}/env.export"
 {% endif %}
