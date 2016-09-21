@@ -61,8 +61,15 @@
 - name: "Create {{include|upper}} files"
   template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{dirpath}}/{{item.dest|default(item.name)|default(item)}}" owner="{{OWNER|default(omit)}}"
   with_items: "{{ hostvars[inventory_hostname][files]|default(vars[files])|default([])}}"
-  when: go|bool and not item.raw|default(False)
+  when: go|bool and not item.raw|default(False) and not item.content|default(False)
 - name: "Create raw {{include|upper}} files"
   copy: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{dirpath}}/{{item.dest|default(item.name)|default(item)}}" owner="{{OWNER|default(omit)}}"
   with_items: "{{ hostvars[inventory_hostname][files]|default(vars[files])|default([])}}"
-  when: go|bool and item.raw|default(False)
+  when: go|bool and item.raw|default(False) and not item.content|default(False)
+- name: "Create {{include|upper}} files"
+  copy:
+    content: "{{item.content}}"
+    dest: "{{dirpath}}/{{item.dest|default(item.name)|default(item)}}"
+    owner: "{{OWNER|default(omit)}}"
+  with_items: "{{ hostvars[inventory_hostname][files]|default(vars[files])|default([])}}"
+  when: go|bool and not item.raw|default(False) and item.content|default(False)
