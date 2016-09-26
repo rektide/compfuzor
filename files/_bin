@@ -1,9 +1,16 @@
 #!/bin/bash
 set -e
 {% if ENV|default(False) or has_env.stdout|int == 1 -%}
-source "{{DIR}}/env.export"
+source "{{DIR}}/env"
 {% endif %}
-cd {{DIR}}{{ "/"+item.basedir if item.basedir is string else "" }}
+{% if item.basedir|default(True) == True %}
+cd {{DIR}}
+{% elif item.basedir|default(True) == False %}
+{% elif item.basedir[0] == "/" or item.basedir[0] == "~" %}
+cd {{item.basedir}}
+{% else %}
+cd {{DIR}}/{{item.basedir}}
+{% endif %}
 
 {{ item.exec|default("") }}
 {% for line in item.execs|default([]) %}
