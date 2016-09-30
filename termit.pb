@@ -2,6 +2,7 @@
 - hosts: all
   vars:
     NAME: termit
+    ETC_DIR: "{{ '/etc/xdg/termit' if not USERMODE|default(False) else '~/.config/termit' }}"
     ETC_FILES:
     - name: rc.lua
       raw: True
