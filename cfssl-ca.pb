@@ -3,6 +3,9 @@
   vars:
     TYPE: cfssl-ca
     INSTANCE: yoyodyne 
+    ETC_DIRS:
+    - csr
+    - cert
     ETC_FILES:
     - name: cfssl-ca.json
       content: "{{CA|to_nice_json}}"
@@ -26,7 +29,13 @@
       - "cfssl sign -ca ${ROOT}.pem -ca-key ${ROOT}-key.pem -config {{ETC}}/cfssl-sign.json {{VAR}}/{{INSTANCE}}.csr > {{VAR}}/signed-$(basename $ROOT).json.${TIMESTAMP}"
       - "cd {{VAR}}"
       - "cat signed-$(basename $ROOT).json.${TIMESTAMP} | cfssljson -bare signed-$(basename $ROOT)"
-
+    - name: cert.sh
+      basedir: False
+      execs:
+      - "TIMESTAMP=$(date +%y.%m.%d-%T)"
+      - "cp $1 {{VAR}}/csr/$1.$TIMESTAMP"
+      - "cfssl gencert --ca={{INSTANCE}}.pem --ca-key={{INSTANCE}}-key.pem --config=$2 $1 > {{VAR}}/cert/$((echo $1 | basename))."
+      - "cfssljson -bare {{VAR}}/cert/${2%.json}"
     CA:
       CN: "{{INSTANCE}}"
       key: "{{key}}"
