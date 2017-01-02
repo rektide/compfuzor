@@ -5,7 +5,7 @@
     INSTANCE: yoyodyne 
     ETC_FILES:
     - name: cfssl-ca.json
-      content: "{{CA_def|to_nice_json}}"
+      content: "{{CA|to_nice_json}}"
     - name: cfssl-sign.json
       content: "{{SIGN|to_nice_json}}"
     VAR_DIRS:
@@ -14,44 +14,45 @@
     BINS:
     - name: build.sh
       basedir: var
-      execs:
-      - '# create a ca'
-      - 'cfssl gencert -initca ${ETC}/cfssl-ca.json > ca.json.${TIMESTAMP}'
-      - 'ln -sf ca.json.${TIMESTAMP} ca.json'
-      - 'cat ca.json | cfssljson -bare ca'
+      exec: |
+        # create a ca
+        cfssl gencert -initca ${ETC}/cfssl-ca.json > ca.json.${TIMESTAMP}
+        ln -sf ca.json.${TIMESTAMP} ca.json
+        cat ca.json | cfssljson -bare ca
       run: '{{ not lookup("fileexists", VAR + "/ca.json") }}'
     - name: regen.sh
       basedir: var
-      execs:
-      - '# regenerate ca'
-      - 'cfssl gencert -renewca -ca ca.pem -ca-key ca-key.pem > ca.json.${TIMESTAMP}'
-      - 'ln -sf ca.json.${TIMESTAMP} ca.json'
-      - 'cat ca.json | cfssljson -bare ca'
+      exec: |
+        # regenerate ca'
+        cfssl gencert -renewca -ca ca.pem -ca-key ca-key.pem > ca.json.${TIMESTAMP}
+        ln -sf ca.json.${TIMESTAMP} ca.json
+        cat ca.json | cfssljson -bare ca
     - name: cert.sh
       basedir: False
-      execs:
-      - '# generate a key from the ca'
-      - '[ -z "$HOSTNAMES" ] && [ -n "${1##*/*}" ] && export HOSTNAMES=$1 && export FILENAME=$VAR/cert/$1'
-      - '[ -z "$FILENAME" ] && [ -z "${1##*/*}" ] && export FILENAME=$1'
-      - '[ -z "$CONFIG" ] && export CONFIG=${ETC}/cfssl-sign.ca'
-      - '[ -z "$CSR" ] && echo "need a csr" 2>&1 && exit 1'
-      - '[ -z "$FILENAME" ] && echo "need a filename" 2>&1 && exit 1'
-      - 'cfssl gencert ${CA+-ca=$CA} ${CA_KEY+-ca-key=$CA_KEY} ${HOSTNAMES+-hostname=$HOSTNAMES} ${PROFILE+-profile=$PROFILE} ${LOGLEVEL+-loglevel=$LOGLEVEL} $CSR > $VAR/cert/$(basename $FILENAME).json.$TIMESTAMP'
-      - 'cat $VAR/cert/$(basename $FILENAME).json.$TIMESTAMP | cfssljson -bare $FILENAME'
+      exec: |
+        # generate a key from the ca'
+        [ -z "$HOSTNAMES" ] && [ -n "${1##*/*}" ] && export HOSTNAMES=$1 && export FILENAME=$VAR/cert/$1'
+        [ -z "$FILENAME" ] && [ -z "${2##*/*}" ] && export FILENAME=$1'
+        [ -z "$CONFIG" ] && export CONFIG=${ETC}/cfssl-sign.ca'
+        [ -z "$CSR" ] && echo "need a csr" 2>&1 && exit 1'
+        [ -z "$FILENAME" ] && echo "need a filename" 2>&1 && exit 1'
+        cfssl gencert ${CA+-ca=$CA} ${CA_KEY+-ca-key=$CA_KEY} ${HOSTNAMES+-hostname=$HOSTNAMES} ${PROFILE+-profile=$PROFILE} ${LOGLEVEL+-loglevel=$LOGLEVEL} $CSR > $VAR/cert/$(basename $FILENAME).json.$TIMESTAMP'
+        cat $VAR/cert/$(basename $FILENAME).json.$TIMESTAMP | cfssljson -bare $FILENAME'
     - name: sign.sh
       basedir: False
-      execs:
-      - '# sign a passed in key'
-      - '[ -z "$CA" ]'
-      - 'cfssl sign -ca ${ROOT}.pem -ca-key ${ROOT}-key.pem -config ${ETC}/cfssl-sign.json ${VAR}/{{INSTANCE}}.csr > ${VAR}/signed-$(basename $ROOT).json.${TIMESTAMP}'
-      - 'cd {{VAR}}'
-      - 'cat signed-$(basename $ROOT).json.${TIMESTAMP} | cfssljson -bare signed-$(basename $ROOT)'
+      exec: |
+        # sign a passed in key
+        [ -z "$CA" ]
+        cfssl sign -ca ${ROOT}.pem -ca-key ${ROOT}-key.pem -config ${ETC}/cfssl-sign.json ${VAR}/{{INSTANCE}}.csr > ${VAR}/signed-$(basename $ROOT).json.${TIMESTAMP}
+        cd {{VAR}}
+        cat signed-$(basename $ROOT).json.${TIMESTAMP} | cfssljson -bare signed-$(basename $ROOT)
     ENV:
       ETC: "{{ETC}}"
       VAR: "{{VAR}}"
       CSR: "{{ETC}}/cfssl-ca.json"
       CA: "{{VAR}}/ca.pem"
       CA_KEY: "{{VAR}}/ca-key.pem"
+
     CA:
       CN: "{{INSTANCE}}"
       key: "{{key}}"
@@ -67,7 +68,6 @@
       OU: "Truncheon bomber division"
     ca:
       pathlen: 2
-
     SIGN:
       signing:
         profiles: "{{profiles|default({})}}"
