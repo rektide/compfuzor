@@ -14,8 +14,6 @@
     BINS:
     - name: build.sh
       basedir: var
-      vars:
-      - ETC
       execs:
       - '# create a ca'
       - 'cfssl gencert -initca ${ETC}/cfssl-ca.json > ca.json.${TIMESTAMP}'
@@ -31,15 +29,8 @@
       - 'cat ca.json | cfssljson -bare ca'
     - name: cert.sh
       basedir: False
-      vars:
-      - VAR
-      - ETC
-      - CA
       execs:
       - '# generate a key from the ca'
-      - '[ -z "$CSR" ] && export CSR=${ETC}/cfssl-ca.json'
-      - '[ -z "$CA" ] && export CA={{VAR}}/ca.pem'
-      - '[ -z "$CA_KEY" ] && export CA_KEY={{VAR}}/ca-key.pem'
       - '[ -z "$HOSTNAMES" ] && [ -n "${1##*/*}" ] && export HOSTNAMES=$1 && export FILENAME=$VAR/cert/$1'
       - '[ -z "$FILENAME" ] && [ -z "${1##*/*}" ] && export FILENAME=$1'
       - '[ -z "$CONFIG" ] && export CONFIG=${ETC}/cfssl-sign.ca'
@@ -49,18 +40,18 @@
       - 'cat $VAR/cert/$(basename $FILENAME).json.$TIMESTAMP | cfssljson -bare $FILENAME'
     - name: sign.sh
       basedir: False
-      vars:
-      - VAR
-      - ETC
       execs:
-      - '# sign a passed in key"
-      - '[ -z "$CA"
-      - 'cfssl sign -ca ${ROOT}.pem -ca-key ${ROOT}-key.pem -config ${ETC}/cfssl-sign.json ${VAR}/{{INSTANCE}}.csr > ${VAR}/signed-$(basename $ROOT).json.${TIMESTAMP}"
-      - 'cd {{VAR}}"
-      - 'cat signed-$(basename $ROOT).json.${TIMESTAMP} | cfssljson -bare signed-$(basename $ROOT)"
+      - '# sign a passed in key'
+      - '[ -z "$CA" ]'
+      - 'cfssl sign -ca ${ROOT}.pem -ca-key ${ROOT}-key.pem -config ${ETC}/cfssl-sign.json ${VAR}/{{INSTANCE}}.csr > ${VAR}/signed-$(basename $ROOT).json.${TIMESTAMP}'
+      - 'cd {{VAR}}'
+      - 'cat signed-$(basename $ROOT).json.${TIMESTAMP} | cfssljson -bare signed-$(basename $ROOT)'
     ENV:
       ETC: "{{ETC}}"
       VAR: "{{VAR}}"
+      CSR: "{{ETC}}/cfssl-ca.json"
+      CA: "{{VAR}}/ca.pem"
+      CA_KEY: "{{VAR}}/ca-key.pem"
     CA:
       CN: "{{INSTANCE}}"
       key: "{{key}}"

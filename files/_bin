@@ -1,8 +1,9 @@
 #!/bin/bash
 set -e
 export TIMESTAMP="$(date +%y.%m.%d-%T)"
+[ -z "$DIR" ] && export DIR="{{DIR}}"
 {% if ENV|default(False) or has_env.stdout|int == 1 -%}
-source "{{DIR}}/env"
+source $(command -v envdefault || true) $DIR/env.export
 {% endif %}
 {% for var in item.vars|default([]) %}
 export {{var}}="{{ '${' }}{{ var }}-{{ hostvars[inventory_hostname][var]|default(vars[var]) }}{{ '}'}}"
