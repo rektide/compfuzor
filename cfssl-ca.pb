@@ -27,17 +27,24 @@
         cfssl gencert -renewca -ca ca.pem -ca-key ca-key.pem > ca.json.${TIMESTAMP}
         ln -sf ca.json.${TIMESTAMP} ca.json
         cat ca.json | cfssljson -bare ca
-    - name: cert.sh
+    - name: csr.sh
       basedir: False
       exec: |
-        # generate a key from the ca'
-        [ -z "$HOSTNAMES" ] && [ -n "${1##*/*}" ] && export HOSTNAMES=$1 && export FILENAME=$VAR/cert/$1'
-        [ -z "$FILENAME" ] && [ -z "${2##*/*}" ] && export FILENAME=$1'
-        [ -z "$CONFIG" ] && export CONFIG=${ETC}/cfssl-sign.ca'
-        [ -z "$CSR" ] && echo "need a csr" 2>&1 && exit 1'
-        [ -z "$FILENAME" ] && echo "need a filename" 2>&1 && exit 1'
-        cfssl gencert ${CA+-ca=$CA} ${CA_KEY+-ca-key=$CA_KEY} ${HOSTNAMES+-hostname=$HOSTNAMES} ${PROFILE+-profile=$PROFILE} ${LOGLEVEL+-loglevel=$LOGLEVEL} $CSR > $VAR/cert/$(basename $FILENAME).json.$TIMESTAMP'
-        cat $VAR/cert/$(basename $FILENAME).json.$TIMESTAMP | cfssljson -bare $FILENAME'
+        [ -z "$HOSTNAMES" ] && export HOSTNAMES=$1
+        [ -z "$HOSTNAMES" ] && [ -n "${1##*/*}" ] && export HOSTNAMES=$1 && export FILENAME=$VAR/cert/$1
+        [ -z "$FILENAME" ] && [ -z "${2##*/*}" ] && export FILENAME=$1
+        [ -z "$CSR" ] && echo "need a csr" 2>&1 && exit 1
+        # generate a csr
+        is_ca=$(jq -r 'has("ca") // ""')
+        [ ! -f "$VAR/csr/$FILENAME" ] && cfssl genkey ${is_ca:+-initca=true} $CSR > $FILENAME || echo "CSR $FILENAME already exists"
+        cp $FILENAME $VAR/csr/$(basename $FILENAME).$TIMESTAMP
+        (cd $VAR/csr; cat $VAR/csr/$(basename $FILENAME).$TIMESTAMP | cfssljson -bare $(basename $FILENAME))
+        
+        # sign
+        $DIR/bin/sign.sh $1 $2
+        # oneshot make cert
+        #cfssl gencert ${CA+-ca=$CA} ${CA_KEY+-ca-key=$CA_KEY} ${HOSTNAMES+-hostname=$HOSTNAMES} ${PROFILE+-profile=$PROFILE} ${LOGLEVEL+-loglevel=$LOGLEVEL} $CSR > $VAR/cert/$(basename $FILENAME).json.$TIMESTAMP
+        #cat $VAR/cert/$(basename $FILENAME).json.$TIMESTAMP | cfssljson -bare $FILENAME
     - name: sign.sh
       basedir: False
       exec: |
