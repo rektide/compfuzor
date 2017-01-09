@@ -33,7 +33,8 @@
     - lua-ldoc
     - lua-busted
     - lua-check
-    - liblua5.2-dev
+    - luajit
+    - libluajit-5.1-dev
     - lua-lgi-dev # seems to only support liblua5.2-dev
   tasks:
   - include: tasks/compfuzor.includes type=src
