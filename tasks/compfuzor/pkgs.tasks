@@ -8,4 +8,5 @@
   when: PKGSET|default(False)
 - name: "install pkgsets"
   apt: state="installed" pkg="{{ item }}"
+  become: "{{ PKG_BECOME|default(True) }}"
   with_flattened: "{{ PKGSETS|default([]) }}"

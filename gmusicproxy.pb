@@ -23,6 +23,7 @@
     PKGS:
     - libssl-dev
     - python2.7-dev
+    - python-mutagen
 
   tasks:
   - include: tasks/compfuzor.includes type=src
