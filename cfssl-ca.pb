@@ -4,62 +4,71 @@
     TYPE: cfssl-ca
     INSTANCE: yoyodyne 
     ETC_FILES:
-    - name: cfssl-ca.json
+    - name: ca.json
       content: "{{CA|to_nice_json}}"
-    - name: cfssl-sign.json
+    - name: sign.json
       content: "{{SIGN|to_nice_json}}"
     VAR_DIRS:
     - csr
     - cert
     BINS:
     - name: build.sh
-      basedir: var
       exec: |
         # create a ca
-        cfssl gencert -initca ${ETC}/cfssl-ca.json > ca.json.${TIMESTAMP}
-        ln -sf ca.json.${TIMESTAMP} ca.json
-        cat ca.json | cfssljson -bare ca
+        [ -e "$CAR" ] || echo "need a ca request json" 2>&1 && exit 1
+        cfssl gencert -initca $CAR > $CA_JSON.$TIMESTAMP
+        ln -sf $CA_JSON.$TIMESTAMP $CA_JSON
+        (cd $VAR; cat $CA_JSON | cfssljson -bare $CA_FILE)
+        echo $CA
       run: '{{ not lookup("fileexists", VAR + "/ca.json") }}'
     - name: regen.sh
-      basedir: var
       exec: |
         # regenerate ca'
-        cfssl gencert -renewca -ca ca.pem -ca-key ca-key.pem > ca.json.${TIMESTAMP}
-        ln -sf ca.json.${TIMESTAMP} ca.json
-        cat ca.json | cfssljson -bare ca
+        cfssl gencert -renewca -ca $CA -ca-key $CA_KEY > $CA_JSON.$TIMESTAMP
+        ln -sf $CA_KEY.$TIMESTAMP $CA_KEY
+        (cd $VAR; cat $CA_JSON | cfssljson -bare $CA_FILE)
+        echo $CA
     - name: csr.sh
       basedir: False
       exec: |
         [ -z "$HOSTNAMES" ] && export HOSTNAMES=$1
         [ -z "$HOSTNAMES" ] && [ -n "${1##*/*}" ] && export HOSTNAMES=$1 && export FILENAME=$VAR/cert/$1
         [ -z "$FILENAME" ] && [ -z "${2##*/*}" ] && export FILENAME=$1
-        [ -z "$CSR" ] && echo "need a csr" 2>&1 && exit 1
+        [ -e "$CSR" ] || echo "need a certificate signing request json" 2>&1 && exit 1
+        [ -e "$VAR/csr/$FILENAME" ] && echo "csr already exists" 2>&1 && exit 1
         # generate a csr
         is_ca=$(jq -r 'has("ca") // ""')
-        [ ! -f "$VAR/csr/$FILENAME" ] && cfssl genkey ${is_ca:+-initca=true} $CSR > $FILENAME || echo "CSR $FILENAME already exists"
+        cfssl genkey ${is_ca:+-initca=true} $CSR > $FILENAME || echo "CSR $FILENAME already exists"
         cp $FILENAME $VAR/csr/$(basename $FILENAME).$TIMESTAMP
         (cd $VAR/csr; cat $VAR/csr/$(basename $FILENAME).$TIMESTAMP | cfssljson -bare $(basename $FILENAME))
+        echo $(basename $FILENAME)
         
         # sign
         $DIR/bin/sign.sh $1 $2
-        # oneshot make cert
-        #cfssl gencert ${CA+-ca=$CA} ${CA_KEY+-ca-key=$CA_KEY} ${HOSTNAMES+-hostname=$HOSTNAMES} ${PROFILE+-profile=$PROFILE} ${LOGLEVEL+-loglevel=$LOGLEVEL} $CSR > $VAR/cert/$(basename $FILENAME).json.$TIMESTAMP
-        #cat $VAR/cert/$(basename $FILENAME).json.$TIMESTAMP | cfssljson -bare $FILENAME
     - name: sign.sh
       basedir: False
       exec: |
+        # find thing to sign
+        [ ! -e "$1" ] && 1=$VAR/csr/${1%.csr}.csr
+        [ ! -e "$1" ] && echo "could not find thing to sign: $1" 2>&1 && exit 1
+
         # sign a passed in key
-        [ -z "$CA" ]
-        cfssl sign -ca ${ROOT}.pem -ca-key ${ROOT}-key.pem -config ${ETC}/cfssl-sign.json ${VAR}/{{INSTANCE}}.csr > ${VAR}/signed-$(basename $ROOT).json.${TIMESTAMP}
-        cd {{VAR}}
-        cat signed-$(basename $ROOT).json.${TIMESTAMP} | cfssljson -bare signed-$(basename $ROOT)
+        [ -z "$dest" ] && dest=$VAR/cert/$1
+        dest=${dest%.pem}
+        cfssl sign -ca $CA -ca-key $CA_KEY -config $CSR $1 > $dest.json.$TIMESTAMP
+        (cd $VAR; cat $dest.json.$TIMESTAMP | cfssljson -bare $dest)
+        echo $dest.pem
     ENV:
       ETC: "{{ETC}}"
       VAR: "{{VAR}}"
-      CSR: "{{ETC}}/cfssl-ca.json"
-      CA: "{{VAR}}/ca.pem"
-      CA_KEY: "{{VAR}}/ca-key.pem"
+      CSR: "{{ETC}}/csr.json"
+      CAR: "{{ETC}}/{{CA_FILE}}.json"
+      CA: "{{VAR}}/{{CA_FILE}}.pem"
+      CA_JSON: "{{VAR}}/{{CA_FILE}}.json"
+      CA_KEY: "{{VAR}}/{{CA_FILE}}-key.pem"
+      CA_FILE: "{{CA_FILE}}"
 
+    CA_FILE: ca
     CA:
       CN: "{{INSTANCE}}"
       key: "{{key}}"
