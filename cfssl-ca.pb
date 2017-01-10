@@ -57,7 +57,8 @@
         [ -z "$dest" ] && dest=$VAR/cert/$1
         dest=${dest%.pem}
         cfssl sign -ca $CA -ca-key $CA_KEY -config $CSR $target > $dest.json.$TIMESTAMP
-        (cd $VAR; cat $dest.json.$TIMESTAMP | cfssljson -bare $dest)
+        ln -sf $dest.json.$TIMESTAMP $dest.json
+        (cd $VAR; cat $dest.json | cfssljson -bare $dest)
         echo $dest.pem
     ENV:
       ETC: "{{ETC}}"
