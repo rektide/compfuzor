@@ -6,7 +6,7 @@
     ETC_FILES:
     - name: ca.json
       content: "{{CA|to_nice_json}}"
-    - name: sign.json
+    - name: csr.json
       content: "{{SIGN|to_nice_json}}"
     VAR_DIRS:
     - csr
@@ -15,7 +15,7 @@
     - name: build.sh
       exec: |
         # create a ca
-        [ -e "$CAR" ] || echo "need a ca request json" 2>&1 && exit 1
+        [ ! -e "$CAR" ] && echo "need a ca request json" 2>&1 && exit 1
         cfssl gencert -initca $CAR > $CA_JSON.$TIMESTAMP
         ln -sf $CA_JSON.$TIMESTAMP $CA_JSON
         (cd $VAR; cat $CA_JSON | cfssljson -bare $CA_FILE)
@@ -34,28 +34,29 @@
         [ -z "$HOSTNAMES" ] && export HOSTNAMES=$1
         [ -z "$HOSTNAMES" ] && [ -n "${1##*/*}" ] && export HOSTNAMES=$1 && export FILENAME=$VAR/cert/$1
         [ -z "$FILENAME" ] && [ -z "${2##*/*}" ] && export FILENAME=$1
-        [ -e "$CSR" ] || echo "need a certificate signing request json" 2>&1 && exit 1
+        [ ! -e "$CSR" ] && echo "need a certificate signing request json" 2>&1 && exit 1
         [ -e "$VAR/csr/$FILENAME" ] && echo "csr already exists" 2>&1 && exit 1
         # generate a csr
-        is_ca=$(jq -r 'has("ca") // ""')
+        is_ca=$(jq -r 'has("ca") // ""' $CSR)
         cfssl genkey ${is_ca:+-initca=true} $CSR > $FILENAME || echo "CSR $FILENAME already exists"
         cp $FILENAME $VAR/csr/$(basename $FILENAME).$TIMESTAMP
         (cd $VAR/csr; cat $VAR/csr/$(basename $FILENAME).$TIMESTAMP | cfssljson -bare $(basename $FILENAME))
         echo $(basename $FILENAME)
         
         # sign
-        $DIR/bin/sign.sh $1 $2
+        #$DIR/bin/sign.sh $1 $2
     - name: sign.sh
       basedir: False
       exec: |
         # find thing to sign
-        [ ! -e "$1" ] && 1=$VAR/csr/${1%.csr}.csr
-        [ ! -e "$1" ] && echo "could not find thing to sign: $1" 2>&1 && exit 1
+        target=$1
+        [ ! -e "$target" ] && export target=$VAR/csr/${1%.csr}.csr
+        [ ! -e "$target" ] && echo "could not find thing to sign: $target" 2>&1 && exit 1
 
         # sign a passed in key
         [ -z "$dest" ] && dest=$VAR/cert/$1
         dest=${dest%.pem}
-        cfssl sign -ca $CA -ca-key $CA_KEY -config $CSR $1 > $dest.json.$TIMESTAMP
+        cfssl sign -ca $CA -ca-key $CA_KEY -config $CSR $target > $dest.json.$TIMESTAMP
         (cd $VAR; cat $dest.json.$TIMESTAMP | cfssljson -bare $dest)
         echo $dest.pem
     ENV:
