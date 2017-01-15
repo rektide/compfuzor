@@ -5,6 +5,9 @@ export TIMESTAMP="$(date +%y.%m.%d-%T)"
 {% if ENV|default(False) or has_env.stdout|int == 1 -%}
 source $(command -v envdefault || true) $DIR/env.export
 {% endif %}
+# V>98 triggers set -x. but save set -x state to restore later, in case being sourced.
+(( V > 98 )) && case "$-" in *x*) _BIN_SETX_STATE+=(1) ;; *) _BIN_SETX_STATE+=(0) ;; esac && set -x
+
 {% for var in item.vars|default([]) %}
 export {{var}}="{{ '${' }}{{ var }}-{{ hostvars[inventory_hostname][var]|default(vars[var]) }}{{ '}'}}"
 {% endfor %}
@@ -21,3 +24,8 @@ cd {{DIR}}/{{item.basedir}}
 {% for line in item.execs|default([]) %}
 {{ line }}
 {% endfor %}
+
+if (( V > 98 )); then
+	(( ${_BIN_SETX_STATE[-1]} > 0 )) || set +x # restore
+	_BIN_SETX_STATE=("${_BIN_SETX_STATE[@]:1}") # pop
+fi
