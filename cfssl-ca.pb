@@ -12,7 +12,7 @@
     - csr
     - cert
     BINS:
-    - name: build.sh
+    - name: ca.sh
       exec: |
         # create a ca
         [ ! -e "$CAR" ] && echo "need a ca request json" 2>&1 && exit 1
@@ -49,16 +49,26 @@
       basedir: False
       exec: |
         # find thing to sign
-        target=$1
-        [ ! -e "$target" ] && export target=$VAR/csr/${1%.csr}.csr
+        target="${1%.csr}"
+        target="${1%.pem}"
+        base="$(basename $target)"
+        [ ! -e "$target" ] && export target="$target.csr"
+        [ ! -e "$target" ] && export target="${target%csr}pem"
+        [ ! -e "$target" ] && export target="$VAR/csr/$base"
+        [ ! -e "$target" ] && export target="$target.csr"
+        [ ! -e "$target" ] && export target="${target%csr}pem"
         [ ! -e "$target" ] && echo "could not find thing to sign: $target" 2>&1 && exit 1
+        if [ "$(dirname $(realpath $target))" != "$VAR/csr" ]; then
+        	# keep a copy of anything out of tree that we sign
+        	ln -sf "$(realpath $target)" "$VAR/csr/$base.csr.ln"
+        	cp "$target" "$VAR/csr/$base.csr"
+        fi
 
         # sign a passed in key
-        [ -z "$dest" ] && dest=$VAR/cert/$1
-        dest=${dest%.pem}
-        cfssl sign -ca $CA -ca-key $CA_KEY -config $CSR $target > $dest.json.$TIMESTAMP
-        ln -sf $dest.json.$TIMESTAMP $dest.json
-        (cd $VAR; cat $dest.json | cfssljson -bare $dest)
+        [ -z "$dest" ] && dest="$VAR/cert/$base"
+        cfssl sign -ca $CA -ca-key $CA_KEY -config $CSR "$target" > "$dest.json.$TIMESTAMP"
+        ln -sf "$dest.json.$TIMESTAMP" "$dest.json"
+        (cd $VAR; cat "$dest.json" | cfssljson -bare $base)
         echo $dest.pem
     ENV:
       ETC: "{{ETC}}"
