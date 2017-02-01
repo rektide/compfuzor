@@ -6,7 +6,7 @@
     path: "{{ DIR+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{ item.key|basename }}"
     state: directory
   with_dict: "{{LINKS|default({})}}"
-  when: LINKS|default(False) and not LINK_BYPASS|default(False) and item.key|basename != ""
+  when: LINKS|default(False) and not LINK_BYPASS|default(False) and item.key|dirname != ""
 - name: "Create LINKS"
   file:
   args:

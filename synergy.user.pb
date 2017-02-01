@@ -22,4 +22,4 @@
     LINKS:
       "~/.synergy.conf": "{{ETC}}/synergy.conf"
   tasks:
-  - include: tasks/compfuzor.includes type=opt
+  - include: tasks/compfuzor.includes type=srv
