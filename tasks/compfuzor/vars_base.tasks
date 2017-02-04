@@ -46,20 +46,20 @@
   when: not TYPE|default(False)
 
 - name: "Include usermode common vars"
-  action: include_defaults source=vars/common.user.vars
+  action: include_defaults file=vars/common.user.vars
   when: USERMODE|default(False)
 - name: "Include common vars"
-  action: include_defaults source=vars/common.vars
+  action: include_defaults file=vars/common.vars
 - name: "Include xdg vars"
-  action: include_defaults source=vars/xdg.vars
+  action: include_defaults file=vars/xdg.vars
   when: USERMODE|default(False)
 - name: "Default to being an 'opt' class compfuzor script"
   set_fact: type="opt"
   when: not type|default(False)
 - name: "Include {{type|lower}}-class vars"
-  action: include_defaults source="vars/types/{{type|lower}}.vars"
+  action: include_defaults file="vars/types/{{type|lower}}.vars"
 - name: "Include (arche)type vars"
-  action: include_defaults source="{{ item }}"
+  action: include_defaults file="{{ item }}"
   with_first_found:
   - "private/{{configset}}.vars"
   - "private/{{TYPE}}.vars"
