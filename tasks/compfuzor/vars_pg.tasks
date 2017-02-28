@@ -1,4 +1,6 @@
-- action: include_defaults file="{{item}}"
+- include_vars:
+    file: "{{item}}"
+    override: False
   with_first_found:
   - "private/pg.vars"
   - "vars/pg.vars"

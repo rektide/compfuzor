@@ -46,20 +46,29 @@
   when: not TYPE|default(False)
 
 - name: "Include usermode common vars"
-  action: include_defaults file=vars/common.user.vars
+  include_vars:
+    file: vars/common.user.vars
+    override: False
   when: USERMODE|default(False)
 - name: "Include common vars"
-  action: include_defaults file=vars/common.vars
+  include_vars:
+    file: vars/common.vars
 - name: "Include xdg vars"
-  action: include_defaults file=vars/xdg.vars
+  include_vars:
+    file: vars/xdg.vars
+    override: False
   when: USERMODE|default(False)
 - name: "Default to being an 'opt' class compfuzor script"
   set_fact: type="opt"
   when: not type|default(False)
 - name: "Include {{type|lower}}-class vars"
-  action: include_defaults file="vars/types/{{type|lower}}.vars"
+  include_vars:
+    file: "vars/types/{{type|lower}}.vars"
+    override: False
 - name: "Include (arche)type vars"
-  action: include_defaults file="{{ item }}"
+  include_vars:
+    file: "{{ item }}"
+    override: False
   with_first_found:
   - "private/{{configset}}.vars"
   - "private/{{TYPE}}.vars"
@@ -78,7 +87,5 @@
   when: not PREFIX_DIR|default(False)
 
 - name: "Set DIR variable"
-  set_fact: "DIR={{PREFIX_DIR}}/{{NAME}}"
+  set_fact: DIR="{{PREFIX_DIR}}/{{NAME}}"
   when: not DIR|default(False)
-
-
