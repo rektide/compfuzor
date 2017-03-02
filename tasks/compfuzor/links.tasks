@@ -3,10 +3,10 @@
 - name: "Create directories for LINKS"
   file:
   args:
-    path: "{{ DIR+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{ item.key|basename }}"
+    path: "{{ DIR+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{ item.key|dirname }}"
     state: directory
   with_dict: "{{LINKS|default({})}}"
-  when: LINKS|default(False) and not LINK_BYPASS|default(False) and item.key|dirname != ""
+  when: LINKS|default(False) and not LINK_BYPASS|default(False)
 - name: "Create LINKS"
   file:
   args:
