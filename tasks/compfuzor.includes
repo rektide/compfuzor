@@ -1,5 +1,8 @@
 ---
 - debug: "msg='Compfuzor: starting VARIABLES'"
+# first include all absolutely zero dependency vars
+- include: compfuzor/vars_password.tasks
+  when: PASSWORD is defined and not PASSWORD_BYPASS|default(False)
 - include: compfuzor/vars_base.tasks
 - include: compfuzor/vars_type.tasks
 - include: compfuzor/vars_secret.tasks
