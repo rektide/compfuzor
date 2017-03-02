@@ -21,6 +21,7 @@ cd {{item.basedir}}
 cd {{DIR}}/{{item.basedir}}
 {% endif %}
 
+{{ item.content|arrayitize|join("\n") }}
 {{ item.exec|default("") }}
 {% for line in item.execs|default([]) %}
 {{ line }}
