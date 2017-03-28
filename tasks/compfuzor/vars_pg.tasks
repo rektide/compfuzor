@@ -2,9 +2,9 @@
     file: "{{item}}"
     override: False
   with_first_found:
-  - "private/pg.vars"
-  - "vars/pg.vars"
-  - "vars/empty.vars"
+  - "private/pg.yaml"
+  - "vars/pg.yaml"
+  - "vars/empty.yaml"
 - include: ../varset.tasks varset=pg
 - set_fact:
     pg_user="{{pg_user|default(NAME)}}"

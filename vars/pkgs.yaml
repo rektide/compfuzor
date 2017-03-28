@@ -655,6 +655,10 @@ MEDIA_X:
 - sonata
 - glurp
 - mpv
+- streamtuner2
+- tunapie
+- nemo
+- gnome-mpv
 JAVA:
 - oracle-java9-installer
 - oracle-java9-unlimited-jce-policy

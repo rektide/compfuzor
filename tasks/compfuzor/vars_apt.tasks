@@ -5,5 +5,5 @@
     APT_TRUSTED: "{{APT_TRUSTED|default(TYPE)|default(NAME)}}"
     APT_ARCH: "{{APT_ARCH|default(ARCH)}}"
 - include_vars:
-    file: "vars/pkgs.vars"
+    file: "vars/pkgs.yaml"
     override: false

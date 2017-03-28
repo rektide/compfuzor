@@ -19,7 +19,7 @@
 
 - name: "Defaulting unset systemd variables"
   include_vars:
-    file: "vars/systemd.vars"
+    file: "vars/systemd.yaml"
     override: False
 - name: "Defaulting SYSTEMD_SERVICE if SYSTEMD_EXEC"
   set_fact:
