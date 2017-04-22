@@ -19,12 +19,21 @@
 __metaclass__ = type
 
 from ansible.plugins.action.include_vars import ActionModule as IncludeVars
+from ansible.plugins.action import ActionBase
 
 class ActionModule(IncludeVars):
 
+    #TRANSFERS_FILES = False
+
     def run(self, tmp=None, task_vars=None):
-        results = super(ActionModule, self).run(tmp, task_vars)
-        facts = results['ansible_facts']
-        filtered = {k:v for (k,v) in facts.iteritems() if k not in task_vars }
-        results['ansible_facts'] = filtered
-        return results
+        if task_vars.has_key("INCLUDE_VARS_RAW_PARAM"):
+            self._task.args['_raw_params']= self._task.args.get('file')
+        result = super(ActionModule, self).run(tmp, task_vars)
+
+        facts = result['ansible_facts']
+        if facts:
+            copy = facts.copy()
+            for key in copy:
+                if task_vars.has_key(key):
+                    del facts[key]
+        return result
