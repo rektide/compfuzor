@@ -21,11 +21,9 @@ cd {{item.basedir}}
 cd {{DIR}}/{{item.basedir}}
 {% endif %}
 
-{{ item.content|default|arrayitize|join("\n") }}
-{{ item.exec|default("") }}
-{% for line in item.execs|default([]) %}
-{{ line }}
-{% endfor %}
+{{ item.content|default("")|arrayitize|join("\n") }}
+{{ item.exec|default("")|arrayitize|join("\n") }}
+{{ item.execs|default("")|arrayitize|join("\n") }}
 
 if (( V > 98 )); then
 	(( ${_BIN_SETX_STATE[-1]} > 0 )) || set +x # restore
