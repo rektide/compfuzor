@@ -18,9 +18,9 @@
   register: SYSTEMD_SYSTEM_CONF_DIR_SHELL
 
 - name: "Defaulting unset systemd variables"
-  include_vars:
+  action: include_defaults
+  args:
     file: "vars/systemd.yaml"
-    override: False
 - name: "Defaulting SYSTEMD_SERVICE if SYSTEMD_EXEC"
   set_fact:
   args:

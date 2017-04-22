@@ -1,6 +1,6 @@
-- include_vars:
+- action: include_defaults
+  args:
     file: "{{item}}"
-    override: False
   with_first_found:
   - "private/pg.yaml"
   - "vars/pg.yaml"

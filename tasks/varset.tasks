@@ -1,6 +1,6 @@
-- include_vars:
+- action: include_defaults
+  args:
     file: "{{item}}"
-    override: False
   with_first_found:
   - "private/{{TYPE}}/{{varset}}/{{configset}}-overrides.yaml"
   - "private/{{TYPE}}/{{varset}}/overrides.yaml"
@@ -11,9 +11,9 @@
   - "examples-private/{{varset}}/{{configset}}-overrides.yaml"
   - "examples-private/{{varset}}/{{TYPE}}-overrides.yaml"
   - "vars/empty.yaml"
-- include_vars:
+- action: include_defaults
+  args:
     file: "{{item}}"
-    override: False
   with_first_found:
   - "private/{{TYPE}}/{{configset}}.{{varset}}.yaml"
   - "private/{{TYPE}}/{{varset}}.yaml"
@@ -24,9 +24,9 @@
   - "examples-private/{{varset}}/{{configset}}.yaml"
   - "examples-private/{{varset}}/{{TYPE}}.yaml"
   - "vars/empty.yaml"
-- include_vars:
+- action: include_defaults
+  args:
     file: "{{item}}"
-    override: False
   with_first_found:
   - "private/{{TYPE}}/{{varset}}/{{varset}}.yaml"
   - "private/{{TYPE}}/{{varset}}.yaml"
