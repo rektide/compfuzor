@@ -4,6 +4,6 @@
     APT_SOURCELIST: "{{APT_SOURCELIST|default(NAME)|default(TYPE)}}"
     APT_TRUSTED: "{{APT_TRUSTED|default(TYPE)|default(NAME)}}"
     APT_ARCH: "{{APT_ARCH|default(ARCH)}}"
-- include_vars:
+- action: include_defaults
+  args:
     file: "vars/pkgs.yaml"
-    override: false
