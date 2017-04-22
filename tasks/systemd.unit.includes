@@ -2,7 +2,7 @@
   set_fact:
     unit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False) }}"
     units: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default([]) }}"
-    d: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'_D']|default(vars['SYSTEMD_'+unit_type|upper+'D'])|default(False) }}"
+    d: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'_D']|default(vars['SYSTEMD_'+unit_type|upper+'_D'])|default(False) }}"
     target: "{{TYPE|default(NAME)|default('')}}"
     inst: "{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}"
     dest: "{{SYSTEMD_UNIT_DIR}}/{{unit_name|default(NAME)|replace('.', '-')}}{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}.{{unit_type}}"
@@ -27,10 +27,16 @@
 
 - name: templating in specified unit
   template: src="files/{{target}}/{{unit}}" dest="{{unit}}"
-  when: unit|bool and unit != True
+  when: unit and unit != True
+- name: link specified unit in etc
+  file:
+    src: "{{dest}}"
+    dest: "{{ETC}}/{{dest|basename}}"
+    state: link
+  when: unit and unit != True and (ETC_DIRS|default(False) or ETC_FILES|default(False) or ETC_DIR|default(False))
 - name: enabling specified unit
   shell: systemctl --{{SYSTEMD_SCOPE}} enable "{{unit}}"
-  when: unit|bool and unit != True
+  when: unit and unit != True
 
 - name: templating units
   template: src="files/{{target}}/{{i}}" dest="{{SYSTEMD_UNIT_DIR}}/{{i}}"
@@ -45,5 +51,12 @@
   loop_control:
     loop_var: i
 
-- include: compfuzor/fs_d.tasks fs_path="{{SYSTEMD_UNIT_DIR}}/{{dest}}"
-  when: hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'_D']|default(vars['SYSTEMD_'+unit_type|upper+'_D'])|default(False)
+- name: install systemd unit\'s .d directory
+  include: compfuzor/fs_d.tasks fs_path="{{SYSTEMD_UNIT_DIR}}/{{dest}}"
+  when: d|default(False)
+- name: link systemd unit\'s .d directory to etc
+  file:
+  args:
+    src: "{{dest}}.d"
+    dest: "{{ETC}}/{{dest|basename}}.d"
+  when: d|default(False) and (ETC_DIR|default(False) or ETC_DIRS|default(False) or ETC_FILES|default(False))
