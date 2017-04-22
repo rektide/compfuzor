@@ -1,5 +1,5 @@
 {% macro phrase(name, expression) -%}
-{% for el in expression|default(None)|arrayitize -%}
+{% for el in expression|default([])|arrayitize -%}
 {{ name }}={{ el }}
 {% endfor -%}
 {% endmacro -%}
@@ -18,6 +18,11 @@ After=network.target
 {{ phrase('BindsTo', SYSTEMD_BINDS_TO) -}}
 {{ phrase('PartOf', SYSTEMD_PART_OF) -}}
 {{ phrase('Conflicts', SYSTEMD_CONFLICTS) }}
+{% if item|default(False)|bool and not SYSTEMD_IDENTIFIER|default(False) %}
+SyslogIdentifier={{ NAME }}@%I
+{% else %}
+{{ phrase('SyslogIdentifier', SYSTEMD_IDENTIFIER) }}
+{% endif %}
 
 [Service]
 Type={{ SYSTEMD_TYPE|default("simple") }}
@@ -29,7 +34,8 @@ WorkingDirectory={{ SYSTEMD_CWD|default(DIR)|replace('~', '%h', 1) }}
 {{ phrase('ExecStop', SYSTEMD_EXEC_STOP) }}
 {{ phrase('ExecReload', SYSTEMD_EXEC_RELOAD) }}
 {{ phrase('PIDFile', SYSTEMD_PID_FILE) }}
-{% if SYSTEMD_USER|default(False) and not USERMODE|default(False) %}User={{ SYSTEMD_USER|default(USER) }}
+{% if SYSTEMD_USER|default(False) and not USERMODE|default(False) %}
+User={{ SYSTEMD_USER|default(USER) }}
 {% endif %}
 {{ phrase('Environment', SYSTEMD_ENV) -}}
 {{ phrase('EnvironmentFile', SYSTEMD_ENVFILE) -}}
