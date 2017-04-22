@@ -1,12 +1,9 @@
 ---
 - hosts: all
   gather_facts: False
-  vars_files:
-  - vars/common.user.vars
-  - vars/xdg.vars
   vars:
     NAME: xdg-dirs
-    DIR: {{ '/etc/xdg' if not USERMODE|default(False) else '~/.config'
+    DIR: "{{ '/etc/xdg' if not USERMODE|default(False) else '~/.config' }}"
     ENV: "{{XDG}}"
     LINKS:
       'user-dirs.defaults': 'env'

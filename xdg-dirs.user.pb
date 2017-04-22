@@ -1,16 +1,15 @@
 ---
 - hosts: all
-  gather_facts: False
-  vars_files:
-  - vars/common.user.vars
   vars:
     NAME: xdg-dirs
     DIR: "~/.config"
-    MEDIAS_DIR: "${HOME}/media"
-    PREFIX_DIR: "${HOME}/"
+    MEDIAS_DIR: "$HOME/media"
+    PREFIX_DIR: "$HOME/"
     ENV: "{{XDG_DIRS}}"
+    USERMODE: True
   tasks:
-  - include_vars: vars/xdg.vars
-  - set_fact: MEDIAS_DIR='${HOME}' PREFIX_DIR='${HOME}'
-  - debug: msg={{MEDIAS_DIR}} {{XDG}}
+  - action: include_defaults source=vars/xdg.vars
+  - action: include_defaults source=vars/common.user.vars
+  - action: include_defaults source=vars/common.vars
+  #- set_fact: MEDIAS_DIR='${HOME}/media'
   - template: src=files/_env dest=~/.config/user-dirs.dirs
