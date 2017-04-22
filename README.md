@@ -4,6 +4,10 @@ CF is a repository of systems configuration scripts for onlining new nodes with 
 
 It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance. It provides a rich set of default directives which use a construct of context sensitivie settings to create ea consistend framework for emplacing software and processes.
 
+# Requirements
+
+Ansible 2.1.4.0 is the last version that allowed for templates in ansible_facts from non-core actions. Further versions will not function due to this new limitation of Ansible, as the include_defaults action will not function.
+
 # Conventions #
 
 ## Base System ##
