@@ -11,6 +11,7 @@
   git:
     repo: "{{ item.value }}"
     dest: "{{ REPO_DIR|default(DIR, true)+'/' if item.key|first != '/' and item|first != '~' else '' }}{{ item.key }}"
+    track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: 1
   with_dict: "{{REPOS if REPOS|default(False) is mapping else {} }}"
@@ -19,6 +20,7 @@
   git:
     repo: "{{ item.value }}"
     dest: "{{ REPO_DIR|default(DIR, true)+'/' if item.key|first != '/' and item|first != '~' else '' }}{{ item.key }}"
+    track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: "{{ 1 if GIT_DEPTH|default(omit) else 0 }}"
   with_dict: "{{REPOS if REPOS|default(False) is mapping else {} }}"
@@ -28,6 +30,7 @@
   git:
     repo: "{{ item }}"
     dest: "{{ REPO_DIR }}/{{item|basename|regex_replace('^(.*)(.git)?$', '\\1') }}"
+    track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: 1
   with_items: "{{REPOS if REPOS|default(False) is mapping else {} }}"
@@ -37,6 +40,7 @@
   git:
     repo: "{{ item }}"
     dest: "{{ REPO_DIR }}/{{item|basename|regex_replace('^(.*)(.git)?$', '\\1') }}"
+    track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: "{{ 1 if GIT_DEPTH|default(omit) else 0 }}"
   with_items: "{{REPOS if REPOS|default(False) else {} }}"
