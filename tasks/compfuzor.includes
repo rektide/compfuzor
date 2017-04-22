@@ -73,7 +73,7 @@
 - include: compfuzor/apt.tasks
   when: APT_REPO|default(APT_REPOS)|default(False) and not APT_BYPASS|default(False)
 - include: compfuzor/pkgs.tasks
-  when: (PKGS is defined or PKGSET is defined or PKGSETS is defined) and not PKGS_BYPASS|default(False)
+  when: (PKGS is defined or PKGSET is defined or PKGSETS is defined) and not PKGS_BYPASS|default(False) and not USERMODE|default(False)
 - include: compfuzor/dbconfig.tasks
   when: DBCONFIG|default(False) and not DBCONFIG_BYPASS|default(False)
 - include: compfuzor/kernel_modules.tasks
