@@ -86,6 +86,8 @@
   when: PKGCONFIG|default(False)
 - include: compfuzor/sysctl.tasks
   when: SYSCTLS|default(False) or SYSCTL|default(False)
+- include: compfuzor/bins_link_global.tasks delay_phase=postRun
+  when: BINS is defined and not BINS_BYPASS|default(False) and not GLOBAL_BINS_BYPASS|default(False)
 - include: compfuzor/systemd.tasks
   when: not SYSTEMD_BYPASS|default(False)
 - include: systemd.thunk.tasks service="{{SYSTEMD_SERVICE}}"

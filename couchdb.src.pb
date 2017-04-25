@@ -1,4 +1,3 @@
----
 - hosts: all
   vars:
     TYPE: couchdb
@@ -15,8 +14,15 @@
     - libcurl4-openssl-dev
     BINS:
     - name: build.sh
+      run: '{{ not lookup("fileexists", SRC + "rel/couchdb")}}'
       exec:
-      - "./configure --prefix '{{ OPT_DIR }}"
+      - "[ ! -e 'rel/couchdb' ] && ln -s '{{OPT}}' rel/couchdb"
+      - "./configure --disable-docs"
       - "make release"
-  tn:asks:
+    - name: couchdb
+      global: True
+      src: False
+      basedir: rel/couchdb/bin
+      delay: postRun
+  tasks:
   - include: tasks/compfuzor.includes type=src

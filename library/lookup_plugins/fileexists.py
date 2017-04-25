@@ -17,6 +17,7 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
+import os
 from ansible.errors import AnsibleError, AnsibleParserError
 from ansible.plugins.lookup import LookupBase
 
@@ -30,10 +31,13 @@ class LookupModule(LookupBase):
 	def run(self, terms, variables=None, **kwargs):
 		for term in terms:
 			display.debug("Fileexists lookup term: %s" % term)
-
-			try:
-				lookupfile = self.find_file_in_search_path(variables, 'files', term)
-				display.vvvv(u"Fileexists lookup using %s as file" % lookupfile)
-			except AnsibleError:
-				return False
-		return True
+                        if os.path.exists(term):
+                            return True
+			## latter ansibles
+			#try:
+			#	lookupfile = self.find_file_in_search_path(variables, 'files', term)
+			#	display.vvvv(u"Fileexists lookup using %s as file" % lookupfile)
+			#	return True
+			#except AnsibleError:
+			#	
+		return False
