@@ -6,6 +6,7 @@
     target: "{{TYPE|default(NAME)|default('')}}"
     inst: "{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}"
     dest: "{{SYSTEMD_UNIT_DIR}}/{{unit_name|default(NAME)|replace('.', '-')}}{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}.{{unit_type}}"
+    has_etc: "{{ ETC_DIRS|default(False) or ETC_FILES|default(False) or ETC_DIR|default(False) }}"
 - name: testing for local target unit
   local_action: shell test ! -f "files/{{target}}/{{target}}{{inst}}.{{unit_type}}"; echo $?
   changed_when: False
@@ -21,6 +22,12 @@
 - name: templating in generic unit
   template: src="files/systemd.{{unit_type}}" dest="{{dest}}"
   when: unit == True and local_unit.stdout|int == 0
+- name: link target unit in etc
+  file:
+    src: "{{dest}}"
+    dest: "{{ETC}}/{{dest|basename}}"
+    state: link
+  when: unit|default(False) and has_etc
 - name: enabling unit
   shell: "systemctl --{{SYSTEMD_SCOPE}} enable {{dest}}"
   when: unit == True
@@ -33,7 +40,7 @@
     src: "{{dest}}"
     dest: "{{ETC}}/{{dest|basename}}"
     state: link
-  when: unit and unit != True and (ETC_DIRS|default(False) or ETC_FILES|default(False) or ETC_DIR|default(False))
+  when: unit and unit != True and has_etc
 - name: enabling specified unit
   shell: systemctl --{{SYSTEMD_SCOPE}} enable "{{unit}}"
   when: unit and unit != True
@@ -59,4 +66,4 @@
   args:
     src: "{{dest}}.d"
     dest: "{{ETC}}/{{dest|basename}}.d"
-  when: d|default(False) and (ETC_DIR|default(False) or ETC_DIRS|default(False) or ETC_FILES|default(False))
+  when: d|default(False) and has_etc

@@ -3,6 +3,7 @@
 # first include all absolutely zero dependency vars
 - include: compfuzor/vars_password.tasks
   when: PASSWORD is defined and not PASSWORD_BYPASS|default(False)
+- include: compfuzor/vars_uuid.tasks
 - include: compfuzor/vars_base.tasks
 - include: compfuzor/vars_type.tasks
 - include: compfuzor/vars_secret.tasks
@@ -46,7 +47,7 @@
 - include: compfuzor/fs_hierarchy_multi.tasks
   when: not FS_BYPASS|default(False)
 - include: compfuzor/fs_srcs_too.tasks
-  when: type == "src"
+  when: type == "src" and not FS_SRCS_BYPASS|default(False)
 - include: compfuzor/fs_tgz.tasks
   when: TGZ is defined and not TGZ_BYPASS|default(False)
 - include: compfuzor/fs_zip.tasks

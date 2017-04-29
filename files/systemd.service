@@ -38,6 +38,9 @@ WorkingDirectory={{ SYSTEMD_CWD|default(DIR)|replace('~', '%h', 1) }}
 User={{ SYSTEMD_USER|default(USER) }}
 {% endif %}
 {{ phrase('Environment', SYSTEMD_ENV) -}}
+{% if ENV|default(False) %}
+EnvironmentFile={{DIR}}/env
+{% endif %}
 {{ phrase('EnvironmentFile', SYSTEMD_ENVFILE) -}}
 {{ phrase('Restart', SYSTEMD_RESTART) -}}
 {{ phrase('RestartSec', SYSTEMD_RESTART_SEC) }}

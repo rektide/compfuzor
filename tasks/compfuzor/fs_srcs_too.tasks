@@ -2,7 +2,7 @@
 - stat: path="{{OPT}}"
   register: has_opt
 - name: "link source DIR into OPT"
-  file: src="{{DIR}}" dest="{{OPT}}" state=link
+  file: src="{{OPT_SRCS_DIR|default(DIR)}}" dest="{{OPT}}" state=link
   when: DIR != OPT and not OPT_DIR|default(False)
 - name: "insure OPT dir"
   file: path="{{OPT}}" state=directory

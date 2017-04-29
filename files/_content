@@ -1,1 +1,1 @@
-{{ content|default(item.content) }}
+{{ content|default(item.content)|arrayitize|join("\n") }}
