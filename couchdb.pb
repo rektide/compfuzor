@@ -2,8 +2,8 @@
 - hosts: all
   vars:
     TYPE: couchdb
-    INSTANCE: main
-    couchdb_dir: "{{SRCS_DIR}}/couchdb-git/rel/couchdb"
+    INSTANCE: git
+    couchdb_dir: "{{OPTS_DIR}}/couchdb-{{instance}}"
 
     SYSTEMD_EXEC: "{{DIR}}/opt/bin/couchdb -A '{{ETC}}'"
     SYSTEMD_CWD: "{{DIR}}/opt"
