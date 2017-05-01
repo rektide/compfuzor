@@ -5,6 +5,7 @@
     dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: "{{ GIT_DEPTH|default(omit) }}"
+    version: "{{ GIT_VERSION|default(omit) }}"
   when: REPO|default(False)
 
 - name: "prefetch git repositories"
