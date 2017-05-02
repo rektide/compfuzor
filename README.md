@@ -2,6 +2,12 @@
 
 CF is a repository of systems configuration scripts for onlining new nodes with a variety of services.
 
+As opposed to normal Ansible where one is writing tasks, Compfuzor tries to codify many practices and tasks such that the author declares what they want (as variables). General routines handle all Compfuzor playbooks, enacting the variables for the playbook that have been defined. Thus most good Compfuzor playbooks have only a single task: `include: tasks/compfuzor.includes`.
+
+In addition, CF creates conventions for how and where files should go, with playbooks indirectly asking to place things in an extended Unix Filesystem Hierarchy like place with [common system locations](https://github.com/rektide/compfuzor/blob/master/vars/common.yaml#L5-L15) and [common user locations](https://github.com/rektide/compfuzor/blob/master/vars/common.user.yaml#L6-L15) overridable but used by default. These locations are tied to specific instances of a playbook, such that one can maintain multiple separate runs of a playbook on one machine. For instance, I use this for setting up a "3 node" etcd cluster on a laptop with no VM's or containers, but more generally this is also useful for testing things out on an alternate instance before running them on the main instance.
+
+Added latter, there are a host of other conventions: environment variables are a core concept, and will automatically be used by Systemd services, another core of Compfuzor. Checking out sources a core capability. Extra contextual vars like XDG, a random PASSWORD and UUID are injected into runs.
+
 It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance. It provides a rich set of default directives which use a construct of context sensitivie settings to create ea consistend framework for emplacing software and processes.
 
 # Requirements
