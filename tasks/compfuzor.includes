@@ -4,6 +4,7 @@
 - include: compfuzor/vars_password.tasks
   when: PASSWORD is defined and not PASSWORD_BYPASS|default(False)
 - include: compfuzor/vars_uuid.tasks
+# then start assembling perceieved higher and higher level vars
 - include: compfuzor/vars_base.tasks
 - include: compfuzor/vars_type.tasks
 - include: compfuzor/vars_secret.tasks
