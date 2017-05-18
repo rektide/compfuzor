@@ -8,7 +8,9 @@ def isList(*a):
 def arrayitize(*a, **kw):
     ''' Place passed in arguments into an array '''
     if len(a) is 1:
-        if isList(a):
+        if isinstance(a[0], basestring):
+            return [a[0]]
+        elif isList(a):
             return a[0]
         elif a[0] is None:
             return []
