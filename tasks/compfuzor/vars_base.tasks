@@ -16,7 +16,7 @@
   set_fact:
     MACHINE_ID: "{{MACHINE_ID_.stdout}}"
     ARCHS: "{{ARCHS_.stdout_lines}}"
-    TIMESTAMP_CF: "{{ansible_date.date.replace('-', '.')}}-{{ansible_date.time}}"
+    TIMESTAMP_CF: "{{ansible_date_time.date.replace('-', '.')}}T{{ansible_date_time.time}}{{ansible_date_time.tz_offset}}"
 - set_fact:
     ARCH: "{{NATIVE_ARCH_.stdout}}"
   when: ARCH is not defined
