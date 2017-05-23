@@ -44,7 +44,7 @@
 
     - header: Debugging/Accounting
     - option: log file
-      default: /var/log/samba/log.%m
+      default: "{{VAR}}/log.%m"
       comment: "This tells Samba to use a separate log file for each machine that connects"
     - option: max log size
       default: 1000
@@ -162,7 +162,7 @@
 
     - header: Misc
     - option: include
-      example: /home/samba/etc/smb.conf.%m
+      example: "/home/samba/etc/smb.conf.%m"
       comment:
       - "Using the following line enables you to customise your configuration"
       - "on a per machine basis. The %m gets replaced with the netbios name"
@@ -174,7 +174,7 @@
       example: 10000-20000
       comment:
     - option: template shell
-      exampe: /bin/bash
+      example: /bin/bash
     - comment: "Setup usershare options to enable non-root users to share folders usershare max shares"
     - option: usershare allow guests
       default: True
