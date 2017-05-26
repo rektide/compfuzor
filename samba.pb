@@ -5,6 +5,8 @@
     INSTANCE: main
     ETC_FILES:
     - "smb.conf"
+    ETC_DIRS:
+    - share.d
 
     globalOptions:
     - header: "Browsing/Identification"
@@ -182,9 +184,17 @@
       - "Allow users who've been granted usershare privileges to create"
       - "public shares, not just authenticated ones"
 
-    sections:
-    - name: foo
+    shares:
+    - share: overthruster
+      comments: an example
       enable: False
-      path: "{{VAR}}/example"
+      options:
+      - option: path
+        value: "{{VAR}}/example"
   tasks:
   - include: tasks/compfuzor.includes type="srv"
+  - template:
+    args:
+      src: files/samba/smb.conf
+      dest: "{{ETC}}/share.d/{{item.share}}.conf"
+    with_items: "{{shares|default([])}}"
