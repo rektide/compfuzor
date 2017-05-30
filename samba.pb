@@ -7,6 +7,19 @@
     - "smb.conf"
     ETC_DIRS:
     - share.d
+    VAR_DIRS:
+    - state
+    - usershares
+    - winbindd_privileged
+    RUN_DIRS:
+    - lock
+    - ncalrpc
+    - ntp_signd
+    - winbindd
+    CACHE_DIRS: True
+    LOG_DIRS: True
+    PID_DIRS: True
+    SYSTEMD_EXEC: "/usr/bin/smbd -F -s {{ETC}}/smb.conf"
 
     globalOptions:
     - header: "Browsing/Identification"
@@ -46,7 +59,7 @@
 
     - header: Debugging/Accounting
     - option: log file
-      default: "{{VAR}}/log.%m"
+      default: "{{LOG}}/log.%m"
       comment: "This tells Samba to use a separate log file for each machine that connects"
     - option: max log size
       default: 1000
@@ -183,6 +196,30 @@
       comment:
       - "Allow users who've been granted usershare privileges to create"
       - "public shares, not just authenticated ones"
+
+    - header: Compfuzor options
+    - option: cache directory
+      default: "{{CACHE}}"
+    - option: state directory
+      default: "{{VAR}}/state"
+    - option: lock directory
+      default: "{{RUN}}/lock"
+    - option: ncalrpc dir
+      default: "{{RUN}}/ncalrpc"
+    - option: ntp signd socket dir
+      default: "{{RUN}}/ntp_signd"
+    - option: pid directory
+      default: "{{PID}}"
+    - option: usershare path
+      default: "{{VAR}}/usershares"
+    - option: use sendfile
+      default: True
+    - option: utmp
+      default: True
+    - option: winbindd privileged socket directory
+      default: "{{VAR}}/winbindd_privileged"
+    - option: winbindd socket directory
+      default: "{{RUN}}/winbindd"
 
     shares:
     - share: overthruster
