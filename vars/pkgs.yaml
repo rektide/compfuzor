@@ -189,6 +189,14 @@ BASE:
 - openssh-client
 - haveged
 #- udisks2
+- dosfstools
+- xfsprogs
+- eject
+- exfat-utils
+- gdisk
+- mdadm
+- cryptsetup-bin
+- rng-tools
 #- upower
 - vim-tiny
 - curl
