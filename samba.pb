@@ -223,11 +223,13 @@
 
     shares:
     - share: overthruster
-      comments: an example
+      comment: "an example. has {{VAR}} wtf"
       enable: False
       options:
+      - option: path X
+        default: "{{VAR}}/example"
       - option: path
-        value: "{{VAR}}/example"
+        default: "{{VAR}}/example"
   tasks:
   - include: tasks/compfuzor.includes type="srv"
   - template:

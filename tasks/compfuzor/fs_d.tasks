@@ -1,27 +1,27 @@
 - name: "CompFuzor: source temporary {{include|upper}} .d facts"
   set_fact:
   args:
-    dir: "{{include|upper+'S_DIR'}}"
-    d: "{{include|upper+'_D'}}"
-    files: "{{vars[include|upper+'_D']|default([])}}"
-    path: "{{fs_path|default(hostvars[inventory_hostname][include|upper])|default(vars[include|upper])}}"
-    go: True
+    _dir: "{{include|upper+'S_DIR'}}"
+    _d: "{{include|upper+'_D'}}"
+    _files: "{{vars[include|upper+'_D']|default([])}}"
+    _path: "{{fs_path|default(hostvars[inventory_hostname][include|upper])|default(vars[include|upper])}}"
+    _go: True
 - name: "Check for .d stuff to do"
-  set_fact: go=""
-  when: "{{d}} is not defined"
+  set_fact: _go=""
+  when: "{{_d}} is not defined"
 - name: "Create {{include|upper}} .d directories (duplicating fs_hierarchy work)"
-  file: path="{{dirpath}}/{{item}}.d" state=directory mode="{{mode|default(770)}}"
-  with_items: "{{files}}"
-  when: (not not go) and vars[d]|default(False)
-- name: Copy pre-assembed target into backup and link backup into .                                                  d if no backup exists
-  shell: "test ! -f {{path}}/{{item}}.orig -f {{path}}/{{item}} && mv {{path}}/{{item}} {{path}}/{{item}}.orig && ln -s {{path}}/{{item}}.orig {{path}}/{{item}}.d/20-$(basename {{item}}); echo $?"
-  with_items: "{{files}}"
-  when: not not go
+  file: path="{{_dirpath}}/{{item}}.d" state=directory mode="{{mode|default(770)}}"
+  with_items: "{{_files}}"
+  when: (not not _go) and vars[_d]|default(False)
+- name: Copy pre-assembed target into backup and link backup into .d if no backup exists
+  shell: "test ! -f {{_path}}/{{item}}.orig -f {{_path}}/{{item}} && mv {{_path}}/{{item}} {{_path}}/{{item}}.orig && ln -s {{_path}}/{{item}}.orig {{_path}}/{{item}}.d/20-$(basename {{item}}); echo $?"
+  with_items: "{{_files}}"
+  when: not not _go
 - name: "Assemble the .d directory"
-  assemble: src="{{path}}/{{item}}.d" dest="{{path}}/{{item}}"
-  when: not not go
-  with_items: "{{files}}"
+  assemble: src="{{_path}}/{{item}}.d" dest="{{_path}}/{{item}}"
+  when: not not _go
+  with_items: "{{_files}}"
 - name: "Insure we have a backup file so as to prevent the baked assembly from being assembled"
-  shell: touch {{path}}/{{item}}.orig
-  when: not not go
-  with_items: "{{files}}"
+  shell: touch {{_path}}/{{item}}.orig
+  when: not not _go
+  with_items: "{{_files}}"

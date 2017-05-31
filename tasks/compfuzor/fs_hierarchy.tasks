@@ -5,71 +5,75 @@
 - name: "source temporary {{include|upper}} facts"
   set_fact:
   args:
-    dir: "{{include|upper+'S_DIR'}}" # name of directory to use
-    dirs: "{{include|upper}}_DIRS" # subdirectories to create, or True
-    base: "{{include|upper}}_DIR" # create empty directory
-    files: "{{include|upper}}_FILES" # files to template into place
-    d: "{{include|upper}}_D" # assemblies to create
-    bypass: "{{include|upper}}_BYPASS" # skip doing this stuff!
-    link_bypass: "{{include|upper}}_LINK_BYPASS"
-    dirpath: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper])}}" # lookup the path for the dir
-    go: True
-    has_dirpath:
+    _dir: "{{include|upper+'S_DIR'}}" # name of directory to use
+    _dirs: "{{include|upper}}_DIRS" # subdirectories to create, or True
+    _base: "{{include|upper}}_DIR" # create empty directory
+    _files: "{{include|upper}}_FILES" # files to template into place
+    _d: "{{include|upper}}_D" # assemblies to create
+    _bypass: "{{include|upper}}_BYPASS" # skip doing this stuff!
+    _link_bypass: "{{include|upper}}_LINK_BYPASS"
+    _dirpath: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper])}}" # lookup the path for the dir
+    _go: True
+    _has_dirpath:
       stat:
         exists: False
 - name: "Cancel go if nothing to do"
-  set_fact: go="" # do not go if bypass, or nothing is defined pertaining to this component
-  when: "({{bypass}}|default(True)) and not (({{dirs}}|default(False)) or ({{files}}|default(False)) or ({{d}}|default(False)) or ({{base}}|default(False)))"
+  set_fact: _go="" # do not go if bypass, or nothing is defined pertaining to this component
+  when: "({{_bypass}}|default(True)) and not (({{_dirs}}|default(False)) or ({{_files}}|default(False)) or ({{_d}}|default(False)) or ({{_base}}|default(False)))"
 - name: "Test for top {{base}} directory - will permit"
-  stat: path="{{dirpath if not FS_CONTAINERED|default(False) else DIR+'/'+include|lower}}"
-  register: has_dirpath
-  changed_when: has_dirpath.stat.exists
+  stat: path="{{_dirpath if not FS_CONTAINERED|default(False) else DIR+'/'+include|lower}}"
+  register: _has_dirpath
+  changed_when: _has_dirpath.stat.exists
   when: not FS_DIR_TOP_PROPER|default(False) # opposite of a bypass, hard check for proper top dir if set, will let creation attempts run even though something exists
 
 # create main directory
 - name: "Create top {{include|upper}} directory"
-  file: path="{{dirpath}}" state=directory mode="{{mode|default(770)}}"
-  when: go|bool and not FS_CONTAINED|default(False) and not has_dirpath.stat.exists
+  file: path="{{_dirpath}}" state=directory mode="{{mode|default(770)}}"
+  when: _go|bool and not FS_CONTAINED|default(False) and not _has_dirpath.stat.exists
 # link include dir into DIR
 - name: "Link top {{include|upper}} directory into `DIR`"
-  file: src="{{dirpath}}" dest="{{DIR}}/{{include|lower}}" state=link
-  when: "go|bool and not DIR_BYPASS|default(False) and not DIR_LINK_BYPASS|default(False) and not {{link_bypass}}|default(False) and not FS_CONTAINED|default(False)"
+  file: src="{{_dirpath}}" dest="{{DIR}}/{{include|lower}}" state=link
+  when: "_go|bool and not DIR_BYPASS|default(False) and not DIR_LINK_BYPASS|default(False) and not {{_link_bypass}}|default(False) and not FS_CONTAINED|default(False)"
 # fs_contained - reverses stoage characteristic, installing under DIR rather than about
 # create include subdirs in DIR
 - name: "Create DIR's {{include|upper}} subdirectory - contained mode"
   file: path="{{DIR}}/{{include|lower}}" state=directory mode="{{mode|default(770)}}"
-  when: go|bool and FS_CONTAINED|default(False) and not has_dirpath
+  when: _go|bool and FS_CONTAINED|default(False) and not _has_dirpath
 # place links to subdirs into common locations
 - name: "Link {{include|upper}} subdirectory into common global space- contained mode"
-  file: src="{{DIR}}/{{include|lower}}" dest="{{dirpath}}" state=link
-  when: "go|bool and not DIR_BYPASS|default(False) and not DIR_LINK_BYPASS|default(False) and not {{link_bypass}}|default(False) and FS_CONTAINED|default(False) and not has_dirpath.stat.exists"
+  file: src="{{DIR}}/{{include|lower}}" dest="{{_dirpath}}" state=link
+  when: "_go|bool and not DIR_BYPASS|default(False) and not DIR_LINK_BYPASS|default(False) and not {{_link_bypass}}|default(False) and FS_CONTAINED|default(False) and not _has_dirpath.stat.exists"
 
 
 
 # create subdirs
 - name: "Create {{include|upper}} subdirs"
-  file: path="{{dirpath}}/{{item}}" state=directory
-  with_items: "{{hostvars[inventory_hostname][dirs]|default(vars[dirs])|default([])}}"
-  when: "go|bool and {{dirs}} is sequence" # defined and {{dirs}} != True"
+  file: path="{{_dirpath}}/{{item}}" state=directory
+  with_items: "{{hostvars[inventory_hostname][_dirs]|default(vars[_dirs])|default([])}}"
+  when: "_go|bool and {{_dirs}} is sequence" # defined and {{dirs}} != True"
 # create .d subdirectories
 - name: "Create {{include|upper}} .d directories"
-  file: path="{{dirpath}}/{{item}}.d" state=directory mode="{{mode|default(770)}}"
-  with_items: "{{hostvars[inventory_hostname][d]|default(vars[d])|default([])}}"
-  when: go|bool and hostvars[inventory_hostname][d]|default(vars[d])|default(False)
+  file: path="{{_dirpath}}/{{item}}.d" state=directory mode="{{mode|default(770)}}"
+  with_items: "{{hostvars[inventory_hostname][_d]|default(vars[_d])|default([])}}"
+  when: _go|bool and hostvars[inventory_hostname][_d]|default(vars[_d])|default(False)
 
 # include files
 - name: "Create {{include|upper}} files"
-  template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{dirpath}}/{{item.dest|default(item.name)|default(item)}}" owner="{{OWNER|default(omit)}}"
-  with_items: "{{ hostvars[inventory_hostname][files]|default(vars[files])|default([])}}"
-  when: go|bool and not item.raw|default(False) and not item.content|default(False)
+  template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{_dirpath}}/{{item.dest|default(item.name)|default(item)}}" owner="{{OWNER|default(omit)}}"
+  with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
+  when: _go|bool and not item.raw|default(False) and not item.content|default(False) and not item.var|default(False)
 - name: "Create raw {{include|upper}} files"
-  copy: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{dirpath}}/{{item.dest|default(item.name)|default(item)}}" owner="{{OWNER|default(omit)}}"
-  with_items: "{{ hostvars[inventory_hostname][files]|default(vars[files])|default([])}}"
-  when: go|bool and item.raw|default(False) and not item.content|default(False)
+  copy: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{_dirpath}}/{{item.dest|default(item.name)|default(item)}}" owner="{{OWNER|default(omit)}}"
+  with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
+  when: _go|bool and item.raw|default(False) and not item.content|default(False) and not item.var|default(False)
 - name: "Create {{include|upper}} content files"
+  template: src="files/content" dest="{{_dirpath}}/{{item.dest|default(item.name)|default(item)}}" owner="{{OWNER|default(omit)}}"
+  with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
+  when: _go|bool and not item.raw|default(False) and item.content|default(False) and not item.var|default(False)
+- name: "Create {{include|upper}} vars files"
   copy:
-    content: "{{item.content}}"
-    dest: "{{dirpath}}/{{item.dest|default(item.name)|default(item)}}"
+    content: "{{ hostvars[inventory_hostname][item.var]|default(vars[item.var]) }}"
+    dest: "{{_dirpath}}/{{item.dest|default(item.name)|default(item)}}"
     owner: "{{OWNER|default(omit)}}"
-  with_items: "{{ hostvars[inventory_hostname][files]|default(vars[files])|default([])}}"
-  when: go|bool and not item.raw|default(False) and item.content|default(False)
+  with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
+  when: _go|bool and item.var|default(False)

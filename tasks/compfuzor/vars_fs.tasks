@@ -1,16 +1,16 @@
 - name: "initialize temporary fs facts"
   set_fact:
   args:
-    dir: ""
-    dirs: ""
-    base: ""
-    files: ""
-    d: ""
-    bypass: ""
-    link_bypass: ""
-    dirpath: ""
-    go: False
-    has_dirpath:
+    _dir: ""
+    _dirs: ""
+    _base: ""
+    _files: ""
+    _d: ""
+    _bypass: ""
+    _link_bypass: ""
+    _dirpath: ""
+    _go: False
+    _has_dirpath:
       stat:
         exists: False
 

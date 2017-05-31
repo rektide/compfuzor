@@ -49,8 +49,8 @@
   - file: path={{ETC}} mode=551 state=directory
   # create {{SPOOL}}/dev subsystem, including rsyslog
   - file: path={{SPOOL}}/dev state=directory
-  - include: tasks/mknod.tasks nod="{{SPOOL}}/dev/random" nod_type="c" minor="8"
-  - include: tasks/mknod.tasks nod="{{SPOOL}}/dev/urandom" nod_type="c" minor="9"
+  - include: tasks/mknod.tasks _path="{{SPOOL}}/dev/random" nod_type="c" minor="8"
+  - include: tasks/mknod.tasks _path="{{SPOOL}}/dev/urandom" nod_type="c" minor="9"
   # todo: check for rsyslog first
   # todo: notify rsyslog when changed
   - template: src=files/postfix/rsyslog.conf dest=/etc/rsyslog.d/{{NAME}}.conf
