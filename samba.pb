@@ -19,7 +19,7 @@
     CACHE_DIRS: True
     LOG_DIRS: True
     PID_DIRS: True
-    SYSTEMD_EXEC: "/usr/bin/smbd -F -s {{ETC}}/smb.conf"
+    SYSTEMD_EXEC: "/usr/bin/smbd -F -S -s {{ETC}}/smb.conf"
 
     globalOptions:
     - header: "Browsing/Identification"
@@ -206,7 +206,7 @@
       default: "{{RUN}}/lock"
     - option: ncalrpc dir
       default: "{{RUN}}/ncalrpc"
-    - option: ntp signd socket dir
+    - option: ntp signd socket directory
       default: "{{RUN}}/ntp_signd"
     - option: pid directory
       default: "{{PID}}"
@@ -226,8 +226,6 @@
       comment: "an example. has {{VAR}} wtf"
       enable: False
       options:
-      - option: path X
-        default: "{{VAR}}/example"
       - option: path
         default: "{{VAR}}/example"
   tasks:
