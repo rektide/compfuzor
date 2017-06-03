@@ -13,6 +13,15 @@
     - name: "{{NAME}}.network"
       content: |
         [Match]
+        Name={{NAME}}
+        [Network]
+        DHCP=yes
+        MulticastDNS=yes
+        #Domains=yoyodyne.net
+        IPv6AcceptRA=yes
+    - name: "{{NAME}}-devices.network"
+      content: |
+        [Match]
         Name={{devices|join(" ")}}
         [Network]
         Bridge={{NAME}}
