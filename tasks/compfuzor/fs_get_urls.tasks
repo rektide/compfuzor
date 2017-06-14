@@ -1,4 +1,11 @@
 - name: "get urls"
   get_url: url="{{item}}" dest="{{SRC}}/{{item|basename}}"
   with_items: "{{GET_URLS|default([])}}"
-  when: GET_URLS|default(False)
+  when: GET_URLS|default(False) and GET_URLS|default(False) is string
+- name: "get urls"
+  get_url:
+  args:
+    url: "{{item.url}}"
+    dest: "{{item.dest|defaultDir(SRC)}}"
+  with_items: "{{GET_URLS|default({})}}"
+  when: GET_URLS|default(False) is sequence and GET_URLS|default(False) is not string
