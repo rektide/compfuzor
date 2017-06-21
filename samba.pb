@@ -19,7 +19,7 @@
     CACHE_DIRS: True
     LOG_DIRS: True
     PID_DIRS: True
-    SYSTEMD_EXEC: "/usr/bin/smbd -F -S -s {{ETC}}/smb.conf"
+    SYSTEMD_EXEC: "/usr/sbin/smbd -F -S -s {{ETC}}/smb.conf"
 
     globalOptions:
     - header: "Browsing/Identification"
@@ -223,7 +223,7 @@
 
     shares:
     - share: overthruster
-      comment: "an example. has {{VAR}} wtf"
+      comment: "an example. has {{VAR}}."
       enable: False
       options:
       - option: path
