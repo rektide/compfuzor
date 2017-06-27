@@ -3,31 +3,14 @@
   vars:
     TYPE: bridge
     INSTANCE: main
-    NAME: "br{{INSTANCE}}"
     ETC_FILES:
-    - name: "{{NAME}}.netdev"
-      content: |
-        [NetDev]
-        Name={{NAME}}
-        Kind=bridge
-    - name: "{{NAME}}.network"
-      content: |
-        [Match]
-        Name={{NAME}}
-        [Network]
-        DHCP=yes
-        MulticastDNS=yes
-        #Domains=yoyodyne.net
-        IPv6AcceptRA=yes
-    - name: "{{NAME}}-devices.network"
-      content: |
-        [Match]
-        Name={{devices|join(" ")}}
-        [Network]
-        Bridge={{NAME}}
+    - name: "systemd-bridge.netdev"
+    - name: "systemd-bridge.network"
+    - name: "systemd-bridge-devices.network"
     LINKS:
-      "/etc/systemd/network/{{NAME}}.netdev": "{{ETC}}/{{NAME}}.netdev",
-      "/etc/systemd/network/{{NAME}}.network": "{{ETC}}/{{NAME}}.network"
+     "{{SYSTEMD_NETWORK_DIR}}/{{NAME}}.netdev": "{{ETC}}/systemd-bridge.netdev"
+     "{{SYSTEMD_NETWORK_DIR}}/{{NAME}}.network": "{{ETC}}/systemd-bridge.network"
+     "{{SYSTEMD_NETWORK_DIR}}/{{NAME}}-devices.network": "{{ETC}}/systemd-bridge-devices.network"
     devices:
     - en*
 

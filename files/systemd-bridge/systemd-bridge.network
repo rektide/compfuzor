@@ -1,0 +1,9 @@
+[Match]
+Name={{NAME}}
+
+[Network]
+DHCP=yes
+MulticastDNS=yes
+Domains=yoyodyne.net
+IPv6AcceptRA=yes
+
