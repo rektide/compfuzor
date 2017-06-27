@@ -1,21 +1,37 @@
 ---
-- debug: "msg='Compfuzor: sourcing systemd variables'"
-- name: Finding pkgonfig for SYSTEMD_USER_UNIT_DIR
-  shell: pkg-config systemd --variable=systemduserunitdir
+- name: "msg='Compfuzor: sourcing systemd variables'"
+  shell: "pkg-config systemd --variable=binfmtdir; pkg-config systemd --variable=catalogdir; pkg-config systemd --variable=modulesloaddir; pkg-config systemd --variable=pcfiledir; pkg-config systemd --variable=prefix; pkg-config systemd --variable=sysctldir; pkg-config systemd --variable=systemdshutdowndir; pkg-config systemd --variable=systemdsleepdir; pkg-config systemd --variable=systemdsystemconfdir; pkg-config systemd --variable=systemdsystemgeneratordir; pkg-config systemd --variable=systemdsystempresetdir; pkg-config systemd --variable=systemdsystemunitdir; pkg-config systemd --variable=systemdsystemunitpath; pkg-config systemd --variable=systemduserconfdir; pkg-config systemd --variable=systemdusergeneratordir; pkg-config systemd --variable=systemduserpresetdir; pkg-config systemd --variable=systemduserunitdir; pkg-config systemd --variable=systemduserunitpath; pkg-config systemd --variable=systemdutildir; pkg-config systemd --variable=systemgidmax; pkg-config systemd --variable=systemuidmax; pkg-config systemd --variable=sysusersdir; pkg-config systemd --variable=tmpfilesdir"
   changed_when: False
-  register: SYSTEMD_USER_UNIT_DIR_SHELL
-- name: Finding pkgonfig for SYSTEMD_USER_CONF_DIR
-  shell: pkg-config systemd --variable=systemduserconfdir
-  changed_when: False
-  register: SYSTEMD_USER_CONF_DIR_SHELL
-- name: Finding pkgonfig for SYSTEMD_SYSTEM_UNIT_DIR
-  shell: pkg-config systemd --variable=systemdsystemunitdir
-  changed_when: False
-  register: SYSTEMD_SYSTEM_UNIT_DIR_SHELL
-- name: Finding pkgonfig for SYSTEMD_SYSTEM_CONF_DIR
-  shell: pkg-config systemd --variable=systemdsystemconfdir
-  changed_when: False
-  register: SYSTEMD_SYSTEM_CONF_DIR_SHELL
+  register: _systemd_vars
+- set_fact:
+  args:
+    SYSTEMD_BINFMT: "{{_systemd_vars.stdout_lines[0]}}"
+    SYSTEMD_CATALOG_DIR: "{{_systemd_vars.stdout_lines[1]}}"
+    SYSTEMD_MODULES_LOAD_DIR: "{{_systemd_vars.stdout_lines[2]}}"
+    SYSTEMD_PC_FILE_DIR: "{{_systemd_vars.stdout_lines[3]}}"
+    SYSTEMD_PREFIX: "{{_systemd_vars.stdout_lines[4]}}"
+    SYSTEMD_SYSCTL_DIR: "{{_systemd_vars.stdout_lines[5]}}"
+    SYSTEMD_SHUTDOWN_DIR: "{{_systemd_vars.stdout_lines[6]}}"
+    SYSTEMD_SLEEP_DIR: "{{_systemd_vars.stdout_lines[7]}}"
+    SYSTEMD_CONF_DIR: "{{_systemd_vars.stdout_lines[8]}}"
+    SYSTEMD_SYSTEM_CONF_DIR: "{{_systemd_vars.stdout_lines[8]}}"
+    SYSTEMD_GENERATOR_DIR: "{{_systemd_vars.stdout_lines[9]}}"
+    SYSTEMD_PRESET_DIR: "{{_systemd_vars.stdout_lines[10]}}"
+    SYSTEMD_UNIT_DIR: "{{_systemd_vars.stdout_lines[11]}}"
+    SYSTEMD_SYSTEM_UNIT_DIR: "{{_systemd_vars.stdout_lines[11]}}"
+    SYSTEMD_UNIT_PATH: "{{_systemd_vars.stdout_lines[12]}}"
+    SYSTEMD_USER_CONF_DIR: "{{_systemd_vars.stdout_lines[13]}}"
+    SYSTEMD_USER_GENERATOR_DIR: "{{_systemd_vars.stdout_lines[14]}}"
+    SYSTEMD_USER_PRESET_DIR: "{{_systemd_vars.stdout_lines[15]}}"
+    SYSTEMD_USER_UNIT_DIR: "{{_systemd_vars.stdout_lines[16]}}"
+    SYSTEMD_USER_UNIT_PATH: "{{_systemd_vars.stdout_lines[17]}}"
+    SYSTEMD_UTIL_DIR: "{{_systemd_vars.stdout_lines[18]}}"
+    SYSTEMD_GID_MAX: "{{_systemd_vars.stdout_lines[19]}}"
+    SYSTEMD_UID_MAX: "{{_systemd_vars.stdout_lines[20]}}"
+    SYSTEMD_USERS_DIR: "{{_systemd_vars.stdout_lines[21]}}"
+    SYSTEMD_TMPFILES_DIR: "{{_systemd_vars.stdout_lines[22]}}"
+
+- fail: msg=done
 
 - name: "Defaulting unset systemd variables"
   action: include_defaults
