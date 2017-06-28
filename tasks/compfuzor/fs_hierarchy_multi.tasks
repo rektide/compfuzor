@@ -1,9 +1,9 @@
+- include: fs_hierarchy.tasks include=etc
+  when: not DIRS_BYPASS|default(False) and not ETC_BYPASS|default(False)
 - include: fs_hierarchy.tasks include=opt
   when: not DIRS_BYPASS|default(False) and not OPT_BYPASS|default(False)
 - include: fs_hierarchy.tasks include=srv
   when: not DIRS_BYPASS|default(False) and not SRV_BYPASS|default(False)
-- include: fs_hierarchy.tasks include=etc
-  when: not DIRS_BYPASS|default(False) and not ETC_BYPASS|default(False)
 - include: fs_hierarchy.tasks include=var
   when: not DIRS_BYPASS|default(False) and not VAR_BYPASS|default(False)
 - include: fs_hierarchy.tasks include=log

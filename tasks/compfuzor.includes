@@ -57,6 +57,8 @@
   when: GET_URLS is defined and not GET_URLS_BYPASS|default(False)
 - include: compfuzor/bins.tasks
   when: BINS|default(False) and not BINS_BYPASS|default(False)
+- include: compfuzor/bins_link.tasks
+  when: BINS|default(False) and not BINS_BYPASS|default(False)
 - include: compfuzor/bins_link_global.tasks
   when: BINS is defined and not BINS_BYPASS|default(False) and not GLOBAL_BINS_BYPASS|default(False)
 - include: compfuzor/links.tasks
@@ -88,6 +90,7 @@
   when: PKGCONFIG|default(False)
 - include: compfuzor/sysctl.tasks
   when: SYSCTLS|default(False) or SYSCTL|default(False)
+- include: compfuzor/bins_link.tasks delay_phase=postRun
 - include: compfuzor/bins_link_global.tasks delay_phase=postRun
   when: BINS is defined and not BINS_BYPASS|default(False) and not GLOBAL_BINS_BYPASS|default(False)
 - include: compfuzor/systemd.tasks

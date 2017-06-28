@@ -6,6 +6,7 @@
     ENABLES: "{{ '--enable-'+ENABLE|join(' --enable-') if ENABLE|default(False) else '' }}" 
     PREPREFIX: "{{ DEST|default(NAME|default(TYPE)) }}"
     CORES: "{{ CORES|default(ansible_processor_vcpus)|default(8) }}"
+    GOPATH: "{{DIR}}"
 - name: "set PREFIX var"
   set_fact: PREFIX="{{ ('--prefix='+(OPTS_DIR+'/' if PREPREFIX|first != '/' and PREPREFIX|first !='~' else '')+PREPREFIX) if not PREFIX|default(False) else PREFIX|default('', true) }}"
 - name: "set INSTANCE default for src type"
