@@ -93,7 +93,7 @@
 - include: compfuzor/bins_link.tasks delay_phase=postRun
 - include: compfuzor/bins_link_global.tasks delay_phase=postRun
   when: BINS is defined and not BINS_BYPASS|default(False) and not GLOBAL_BINS_BYPASS|default(False)
-- include: compfuzor/systemd.tasks
+- include: compfuzor/systemd.tasks become=True
   when: not SYSTEMD_BYPASS|default(False)
 - include: systemd.thunk.tasks service="{{SYSTEMD_SERVICE}}"
   when: not SYSTEMD_BYPASS|default(False) and not SYSTEMD_THUNK_BYPASS|default(False) and SYSTEMD_SERVICE|default(False) and SYSTEMD_EXEC is defined and not SYSTEMD_INSTANCES|default(False) and not SYSTEMD_INSTANCED|default(False)

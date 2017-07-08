@@ -15,13 +15,16 @@
 - name: "creating unit directory"
   file: path="{{SYSTEMD_UNIT_DIR}}" state=directory
   when: unit or units
+  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 - name: templating in target unit
   template: src="files/{{target}}/{{target}}{{inst}}.{{unit_type}}" dest="{{dest}}"
   when: unit == True and local_unit.stdout|int == 1
+  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 - name: templating in generic unit
   template: src="files/systemd.{{unit_type}}" dest="{{dest}}"
   when: unit == True and local_unit.stdout|int == 0
+  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 - name: link target unit in etc
   file:
     src: "{{dest}}"
@@ -31,19 +34,23 @@
 - name: enabling unit
   shell: "systemctl --{{SYSTEMD_SCOPE}} enable {{dest}}"
   when: unit == True
+  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 - name: templating in specified unit
   template: src="files/{{target}}/{{unit}}" dest="{{unit}}"
   when: unit and unit != True
+  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 - name: link specified unit in etc
   file:
     src: "{{dest}}"
     dest: "{{ETC}}/{{dest|basename}}"
     state: link
   when: unit and unit != True and has_etc
+  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 - name: enabling specified unit
   shell: systemctl --{{SYSTEMD_SCOPE}} enable "{{unit}}"
   when: unit and unit != True
+  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 - name: templating units
   template: src="files/{{target}}/{{i}}" dest="{{SYSTEMD_UNIT_DIR}}/{{i}}"
@@ -51,16 +58,19 @@
   loop_control:
     loop_var: i
   when: units|bool and units != False
+  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 - name: enabling units
   shell: systemctl --{{SYSTEMD_SCOPE}} enable {{i}}
   with_items: "{{units}}"
   when: units|bool and units != False
   loop_control:
     loop_var: i
+  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 - name: install systemd unit\'s .d directory
   include: compfuzor/fs_d.tasks fs_path="{{SYSTEMD_UNIT_DIR}}/{{dest}}"
   when: d|default(False)
+  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 - name: link systemd unit\'s .d directory to etc
   file:
   args:

@@ -3,8 +3,6 @@
   shell: "pkg-config systemd --variable=binfmtdir; pkg-config systemd --variable=catalogdir; pkg-config systemd --variable=modulesloaddir; pkg-config systemd --variable=pcfiledir; pkg-config systemd --variable=prefix; pkg-config systemd --variable=sysctldir; pkg-config systemd --variable=systemdshutdowndir; pkg-config systemd --variable=systemdsleepdir; pkg-config systemd --variable=systemdsystemconfdir; pkg-config systemd --variable=systemdsystemgeneratordir; pkg-config systemd --variable=systemdsystempresetdir; pkg-config systemd --variable=systemdsystemunitdir; pkg-config systemd --variable=systemdsystemunitpath; pkg-config systemd --variable=systemduserconfdir; pkg-config systemd --variable=systemdusergeneratordir; pkg-config systemd --variable=systemduserpresetdir; pkg-config systemd --variable=systemduserunitdir; pkg-config systemd --variable=systemduserunitpath; pkg-config systemd --variable=systemdutildir; pkg-config systemd --variable=systemgidmax; pkg-config systemd --variable=systemuidmax; pkg-config systemd --variable=sysusersdir; pkg-config systemd --variable=tmpfilesdir"
   changed_when: False
   register: _systemd_vars
-- set_fact:
-  args:
 - name: "Defaulting unset systemd variables"
   action: include_defaults
   args:

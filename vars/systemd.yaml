@@ -2,7 +2,7 @@ SYSTEMD_OPTS: ""
 SYSTEMD_OPTS_AND_SCOPE: "--{{SYSTEMD_SCOPE}} {{SYSTEMD_OPTS}}"
 SYSTEMD_SCOPE: system
 SYSTEMD_UNIT_DIR: "{{ hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_UNIT_DIR']|default(vars['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_UNIT_DIR']) }}"
-SYSTEMD_CONF_DIR: "{{ hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_CONF_DIR']|default(vars['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_CONF_DIR']) +'/'+NAME}}"
+SYSTEMD_CONF_DIR: "{{ hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_CONF_DIR']|default(vars['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_CONF_DIR']) }}"
 
 SYSTEMD_BINFMT: "{{_systemd_vars.stdout_lines[0]}}"
 SYSTEMD_CATALOG_DIR: "{{_systemd_vars.stdout_lines[1]}}"
@@ -12,11 +12,9 @@ SYSTEMD_PREFIX: "{{_systemd_vars.stdout_lines[4]}}"
 SYSTEMD_SYSCTL_DIR: "{{_systemd_vars.stdout_lines[5]}}"
 SYSTEMD_SHUTDOWN_DIR: "{{_systemd_vars.stdout_lines[6]}}"
 SYSTEMD_SLEEP_DIR: "{{_systemd_vars.stdout_lines[7]}}"
-SYSTEMD_CONF_DIR: "{{_systemd_vars.stdout_lines[8]}}"
 SYSTEMD_SYSTEM_CONF_DIR: "{{_systemd_vars.stdout_lines[8]}}"
 SYSTEMD_GENERATOR_DIR: "{{_systemd_vars.stdout_lines[9]}}"
 SYSTEMD_PRESET_DIR: "{{_systemd_vars.stdout_lines[10]}}"
-SYSTEMD_UNIT_DIR: "{{_systemd_vars.stdout_lines[11]}}"
 SYSTEMD_SYSTEM_UNIT_DIR: "{{_systemd_vars.stdout_lines[11]}}"
 SYSTEMD_NETWORK_DIR: "{{_systemd_vars.stdout_lines[11]|regex_replace('system', 'network')}}"
 SYSTEMD_UNIT_PATH: "{{_systemd_vars.stdout_lines[12]}}"
@@ -30,3 +28,191 @@ SYSTEMD_GID_MAX: "{{_systemd_vars.stdout_lines[19]}}"
 SYSTEMD_UID_MAX: "{{_systemd_vars.stdout_lines[20]}}"
 SYSTEMD_USERS_DIR: "{{_systemd_vars.stdout_lines[21]}}"
 SYSTEMD_TMPFILES_DIR: "{{_systemd_vars.stdout_lines[22]}}"
+
+
+
+SYSTEMD_PHRASES_UNIT
+- Description
+- Documentation
+- Requires
+- Requisite
+- Wants
+- Binds To
+- Part Of
+- Conflicts
+- Before
+- After
+- On Failure
+- Propogates Reload To
+- Reload Propogated From
+- Join Namespace Of
+- Requires Mounts For
+- On Failure Job Modes
+- Ignore On Isolate
+- Stop When Unneeded
+- Refuse Manual Start
+- Refuse Manual Stop
+- Default Dependencies
+- Allow Isolate
+- Job Timeout Sec
+- Job Timeout Action
+- Job Timeout Reboot Arguments
+- Start Limit Interval Sec
+- Start Limit Burst
+- Start Limit Action
+- Reboot Argument
+- Condition  Architecture
+- Condition Virtualization
+- Condition Host
+- Condition Kernel Command Line
+- Condition Security
+- Condition Capability
+- Condition AC Power
+- Condition Needs Update
+- Condition First Boot
+- Condition Path Exists
+- Condition Path Exists Glob
+- Condition Path Is Directory
+- Condition Path Is Symbolic Link
+- Condition Path Is Mount Point
+- Condition Path Is Read Write
+- Condition Directory Not Empty
+- Condition File Not Empty
+- Condition File Is Executable
+- Assert Architecture
+- Assert Virtualization
+- Assert Host
+- Assert Kernel Command Line
+- Assert Security
+- Assert Capability
+- Assert AC Power
+- Assert Needs Update
+- Assert First Boot
+- Assert Path Exists
+- Assert Path Exists Glob
+- Assert Path Is Directory
+- Assert Path Is Symbolic Link
+- Assert Path Is Mount Point
+- Assert Path Is Read Write
+- Assert Directory Not Empty
+- Assert File Not Empty
+- Assert File Is Executable
+SYSTEMD_PHRASES_INSTALL:
+- Alias
+- Wanted By
+- Required By
+- Also
+- Default Instances
+SYSTEMD_PHRASES_EXEC:
+- Working Directory
+- Root Directory
+- User
+- Group
+- Dynamic User
+- Supplementary Groups
+- Remove IPC
+- Nice
+- OOM Score Adjust
+- IO Scheduling Class
+- IO Scheduling Priority
+- CPU Scheduling Policy
+- CPU Scheduling Priority
+- CPU Scheduling Reset On Fork
+- CPU Affinity
+- UMask
+- Environment
+- Environment File
+- Pass Environment
+- Standard Input
+- Standard Output
+- Standard Error
+- TTY Path
+- TTY Reset
+- TTY Hangup
+- TTY VT Disallocate
+- Syslog Identifier
+- Syslog Facility
+- Syslog Level
+- Syslog Level Prefix
+- Timer Slack NSec
+- Limit CPU
+- Limit FSIZE
+- Limit DATA
+- Limit STACK
+- Limit CORE
+- Limit RSS
+- Limit NOFILE
+- Limit AS
+- Limit NPROC
+- Limit MEMLOCK
+- Limit LOCKS
+- Limit SIGPENDING
+- Limit MSGQUEUE
+- Limit NICE
+- Limit RTPRIO
+- Limit RTTIME
+- PAM Name
+- Capability Bounding Set
+- Ambient Capabilities
+- Secure Bits
+- Read Write Paths
+- Read Only Paths
+- Inaccessible Paths
+- Private Tmp
+- Private Devices
+- Private Network
+- Private Users
+- Protect System
+- Protect Home
+- Protected Kernel Tunables
+- Protect Control Groups
+- Mount Flags
+- Utmp Identifiers
+- Utmp Modes
+- SELinux Context
+- AppArmor Profile
+- Smack Process Label
+- Ignore SIGPIPE
+- No New Privileges
+- System Call Filter
+- System Call Error Number
+- System Call Architectures
+- Restrict Address Families
+- Protect Kernel Modules
+- Personality
+- Runtime Directory
+- Runtime Directory Mode
+- Memory Deny Write Execute
+- Restrict Realtime
+SYSTEMD_PHRASES_SERVICE:
+- Remain After Exit
+- Guess Main PID
+- PID File
+- Bus Name
+- Exec Start
+- Exec Start Pre
+- Exec Post
+- Exec Reload
+- Exec Stop
+- Exec Stop Post
+- Restart Sec
+- Timeout Start Sec
+- Timeout Stop Sec
+- Timeout Sec
+- Runtime Max Sec
+- Watchdog Sec
+- Restart
+- Success Exit Status
+- Restart Prevent Exit Status
+- Success Exit Status
+- Restart Prevent Exit Status
+- Restart Force Exit Status
+- Permissions Start Only
+- Root Directory Start Only
+- Non Blocking
+- Notify Access
+- Sockets
+- Failure Action
+- File Descriptor Store Max
+- USB Function Description
+- USB Function Strings

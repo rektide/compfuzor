@@ -4,25 +4,22 @@
 {% endfor -%}
 {% endmacro -%}
 
+{% macro phrases(name) %-
+{% set phrs = hostvars[inventory_hostname]['SYSTEMD_PHRASES_'+name|upper]|default(vars['SYSTMED_PHRASES_'+name|upper]) %}
+{% for phr in phrs %}
+{% set vals = hostvars[inventory_hostname]['SYSTEMD_' + phr|upper|replace(' ', '_')]|default(vars['SYSTEMD_' + phr|upper|replace(' ', '_'))|default([])|arrayitize %}
+{% for val in vals %}
+{{ phr|replace(' ', '') }}={{ val if val != True and val != False else val|ternary('true', 'false') }}
+{% endfor %}
+{% endfor %}
+{% endmacro %}
+
 [Unit]
-Description={{ NAME }}
 {% if not USERMODE|default(False) %}
 Requires=network.target
 After=network.target
 {% endif %}
-{{ phrase('After', SYSTEMD_AFTER) -}}
-{{ phrase('Before', SYSTEMD_BEFORE) -}}
-{{ phrase('Requires', SYSTEMD_REQUIRES) -}}
-{{ phrase('Requisite', SYSTEMD_REQUISITE) -}}
-{{ phrase('Wants', SYSTEMD_WANTS) -}}
-{{ phrase('BindsTo', SYSTEMD_BINDS_TO) -}}
-{{ phrase('PartOf', SYSTEMD_PART_OF) -}}
-{{ phrase('Conflicts', SYSTEMD_CONFLICTS) }}
-{% if item|default(False)|bool and not SYSTEMD_IDENTIFIER|default(False) %}
-SyslogIdentifier={{ NAME }}@%I
-{% else %}
-{{ phrase('SyslogIdentifier', SYSTEMD_IDENTIFIER) }}
-{% endif %}
+{{ phrases('unit') }}
 
 [Service]
 Type={{ SYSTEMD_TYPE|default("simple") }}
@@ -31,25 +28,16 @@ ExecStart={{ SYSTEMD_EXEC }}
 {% if SYSTEMD_CWD|default(True) %}
 WorkingDirectory={{ SYSTEMD_CWD|default(DIR)|replace('~', '%h', 1) }}
 {% endif %}
-{{ phrase('ExecStop', SYSTEMD_EXEC_STOP) }}
-{{ phrase('ExecReload', SYSTEMD_EXEC_RELOAD) }}
-{{ phrase('PIDFile', SYSTEMD_PID_FILE) }}
-{% if SYSTEMD_USER|default(False) and not USERMODE|default(False) %}
-User={{ SYSTEMD_USER|default(USER) }}
+{% if item|default(False)|bool and not SYSTEMD_IDENTIFIER|default(False) %}
+SyslogIdentifier={{ NAME }}@%I
 {% endif %}
-{{ phrase('Environment', SYSTEMD_ENV) -}}
-{% if ENV|default(False) %}
+{% if ENV|default(False) and not SYSTEMD_ENV_BYPASS|default(False) %}
 EnvironmentFile={{DIR}}/env
 {% endif %}
-{{ phrase('EnvironmentFile', SYSTEMD_ENVFILE) -}}
-{{ phrase('Restart', SYSTEMD_RESTART) -}}
-{{ phrase('RestartSec', SYSTEMD_RESTART_SEC) }}
-{{ phrase('Nice', SYSTEMD_NICE) }}
-{{ "PermissionsStartOnly=true" if SYSTEMD_START_ONLY|default(False) else "" }}
+{{ phrase('Environment', SYSTEMD_ENV) -}}
+{{ phrases('service') }}
+{{ phrases('exec') }}
 
 [Install]
 WantedBy={{ "multi-user" if not USERMODE|default(False) else "default" }}.target
-{{ phrase('WantedBy', SYSTEMD_WANTED_BY) }}
-{{ phrase('RequiredBy', SYSTEMD_REQUIRED_BY) }}
-{{ phrase('Also', SYSTEMD_ALSO) }}
-{{ phrase('DefaultInstance', SYSTEMD_DEFAULT_INSTANCE) }}
+{{ phrase('install') }}
