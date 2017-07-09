@@ -4,15 +4,14 @@
 {% endfor -%}
 {% endmacro -%}
 
-{% macro phrases(name) %-
-{% set phrs = hostvars[inventory_hostname]['SYSTEMD_PHRASES_'+name|upper]|default(vars['SYSTMED_PHRASES_'+name|upper]) %}
+{%- macro phrases(name) -%}
+{% set phrs = hostvars[inventory_hostname]['SYSTEMD_PHRASES_'+name|upper]|default(vars['SYSTMED_PHRASES_'+name|upper]) -%}
 {% for phr in phrs %}
-{% set vals = hostvars[inventory_hostname]['SYSTEMD_' + phr|upper|replace(' ', '_')]|default(vars['SYSTEMD_' + phr|upper|replace(' ', '_'))|default([])|arrayitize %}
-{% for val in vals %}
+{% for val in hostvars[inventory_hostname]['SYSTEMD_' + phr|upper|replace(' ', '_')]|default(vars['SYSTEMD_' + phr|upper|replace(' ', '_')])|default([])|arrayitize %}
 {{ phr|replace(' ', '') }}={{ val if val != True and val != False else val|ternary('true', 'false') }}
-{% endfor %}
-{% endfor %}
-{% endmacro %}
+{% endfor -%}
+{% endfor -%}
+{% endmacro -%}
 
 [Unit]
 {% if not USERMODE|default(False) %}
