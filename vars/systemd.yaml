@@ -28,10 +28,7 @@ SYSTEMD_GID_MAX: "{{_systemd_vars.stdout_lines[19]}}"
 SYSTEMD_UID_MAX: "{{_systemd_vars.stdout_lines[20]}}"
 SYSTEMD_USERS_DIR: "{{_systemd_vars.stdout_lines[21]}}"
 SYSTEMD_TMPFILES_DIR: "{{_systemd_vars.stdout_lines[22]}}"
-
-
-
-SYSTEMD_PHRASES_UNIT
+SYSTEMD_PHRASES_UNIT:
 - Description
 - Documentation
 - Requires
