@@ -1,0 +1,29 @@
+{#
+	Hi welcome to a terrible file.
+	This generates content to be copy-pasted into systemd.service, since Ansible is incapable of evaluating vars expressions (chump).
+	For a list of some relevant bugs, checkout, https://gist.github.com/rektide/f297a1d4aefa592fe0bdc76a953577fc
+
+	Run with: jinja2 systemd.service.phrases.j2 ../vars/systemd.yaml
+-#}
+
+{% macro phraseList(phrases) -%}
+{% for p in phrases -%}
+{{ '{{' }} phrase('{{ p|replace(' ', '') }}', SYSTEMD_{{ p|replace(' ', '_')|upper }}) {{ '}}' }}
+{% endfor -%}
+{% endmacro -%}
+
+UNIT
+
+{{ phraseList(SYSTEMD_PHRASES_UNIT) }}
+
+SERVICE
+
+{{ phraseList(SYSTEMD_PHRASES_SERVICE) }}
+
+EXEC
+
+{{ phraseList(SYSTEMD_PHRASES_EXEC) }}
+
+INSTALL
+
+{{ phraseList(SYSTEMD_PHRASES_INSTALL) }}
