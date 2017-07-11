@@ -1,7 +1,7 @@
 {% macro phrase(name, expression) -%}
 {%- for el in expression|default([])|arrayitize -%}
-{{ name }}={{ el if el != False and el != True else el|ternary('true', 'false') -}}
-{%- endfor -%}
+{{ name }}={{ el if el != False and el != True else el|ternary('true', 'false') }}
+{% endfor -%}
 {%- endmacro -%}
 
 {%- macro phrases(name) -%}
@@ -84,6 +84,7 @@ After=network.target
 {{ phrase('AssertDirectoryNotEmpty', SYSTEMD_ASSERT_DIRECTORY_NOT_EMPTY) -}}
 {{ phrase('AssertFileNotEmpty', SYSTEMD_ASSERT_FILE_NOT_EMPTY) -}}
 {{ phrase('AssertFileIsExecutable', SYSTEMD_ASSERT_FILE_IS_EXECUTABLE) -}}
+{{ '\n' -}}
 
 [Service]
 Type={{ SYSTEMD_TYPE|default("simple") }}
@@ -213,6 +214,7 @@ EnvironmentFile={{DIR}}/env
 {{ phrase('RuntimeDirectoryMode', SYSTEMD_RUNTIME_DIRECTORY_MODE) -}}
 {{ phrase('MemoryDenyWriteExecute', SYSTEMD_MEMORY_DENY_WRITE_EXECUTE) -}}
 {{ phrase('RestrictRealtime', SYSTEMD_RESTRICT_REALTIME) -}}
+{{ '\n' -}}
 
 [Install]
 WantedBy={{ "multi-user" if not USERMODE|default(False) else "default" }}.target
