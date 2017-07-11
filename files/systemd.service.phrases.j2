@@ -8,7 +8,7 @@
 
 {% macro phraseList(phrases) -%}
 {% for p in phrases -%}
-{{ '{{' }} phrase('{{ p|replace(' ', '') }}', SYSTEMD_{{ p|replace(' ', '_')|upper }}) {{ '}}' }}
+{{ '{{' }} phrase('{{ p|replace(' ', '') }}', SYSTEMD_{{ p|replace(' ', '_')|upper }}) {{ '-}}' }}
 {% endfor -%}
 {% endmacro -%}
 
