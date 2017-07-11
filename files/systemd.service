@@ -1,8 +1,8 @@
 {% macro phrase(name, expression) -%}
-{% for el in expression|default([])|arrayitize -%}
-{{ name }}={{ el }}
-{% endfor -%}
-{% endmacro -%}
+{%- for el in expression|default([])|arrayitize -%}
+{{ name }}={{ el if el != False and el != True else el|ternary('true', 'false') -}}
+{%- endfor -%}
+{%- endmacro -%}
 
 {%- macro phrases(name) -%}
 {% set phrs = hostvars[inventory_hostname]['SYSTEMD_PHRASES_'+name|upper]|default(vars['SYSTMED_PHRASES_'+name|upper]) -%}
