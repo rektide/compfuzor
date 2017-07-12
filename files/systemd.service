@@ -88,10 +88,9 @@ After=network.target
 
 [Service]
 Type={{ SYSTEMD_TYPE|default("simple") }}
-NonBlocking={{ SYSTEMD_NONBLOCKING|default("yes") }}
 ExecStart={{ SYSTEMD_EXEC }}
 {% if SYSTEMD_CWD|default(True) %}
-WorkingDirectory={{ SYSTEMD_CWD|default(DIR)|replace('~', '%h', 1) }}
+WorkingDirectory={{ SYSTEMD_CWD|default(SYSTEMD_WORKING_DIRECTORY)|default(DIR)|replace('~', '%h', 1) }}
 {% endif %}
 {% if item|default(False)|bool and not SYSTEMD_IDENTIFIER|default(False) %}
 SyslogIdentifier={{ NAME }}@%I
@@ -134,7 +133,7 @@ EnvironmentFile={{DIR}}/env
 {{ phrase('USBFunctionDescription', SYSTEMD_USB_FUNCTION_DESCRIPTION) -}}
 {{ phrase('USBFunctionStrings', SYSTEMD_USB_FUNCTION_STRINGS) -}}
 {#- EXEC -#}
-{{ phrase('WorkingDirectory', SYSTEMD_WORKING_DIRECTORY) -}}
+{# {{ phrase('WorkingDirectory', SYSTEMD_WORKING_DIRECTORY) -}} #}
 {{ phrase('RootDirectory', SYSTEMD_ROOT_DIRECTORY) -}}
 {{ phrase('User', SYSTEMD_USER) -}}
 {{ phrase('Group', SYSTEMD_GROUP) -}}
