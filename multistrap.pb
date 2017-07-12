@@ -27,7 +27,7 @@
     MODULES:
     - binfmt-misc
   vars_files:
-  - vars/pkgs.vars
+  - vars/pkgs.yaml
   - [ "private/multistrap/$configset.vars", "private/multistrap.vars", "examples-private/multistrap.vars" ]
   tasks:
   - shell: echo "no {{ARCH}} configured"; return 1

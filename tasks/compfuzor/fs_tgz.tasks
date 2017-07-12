@@ -1,9 +1,12 @@
 - name: "Compfuzor: fetch tgz file"
   get_url: url="{{TGZ}}" dest="{{SRCS_DIR}}/{{TGZ|basename}}"
 - name: prep TGZ.url file
-  set_fact: "content={{TGZ}}"
+  set_fact:
+    content: "{{TGZ}}"
 - name: record TGZ.url file"
-  template: "src=files/content dest={{SRCS_DIR}}/{{TGZ|basename}}.url content={{TGZ}}"
+  template:
+    src: "files/content"
+    dest: "{{SRCS_DIR}}/{{TGZ|basename}}.url"
 - name: extract tgz
-  shell: "chdir={{DIR}} tar -xaf {{SRCS_DIR}}/{{TGZ|basename}} --strip-components=1"
+  shell: "chdir={{DIR}} tar -xaf {{SRCS_DIR}}/{{TGZ|basename}} --strip-components={{TGZ_STRIP_COMPONENTS|default(1)}}"
   #unarchive: src="{{SRCS_DIR}}/{{TGZ|basename}}" dest="{{DIR}}" copy="no"

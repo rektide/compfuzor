@@ -1,1 +1,1 @@
-{{ item.content|arrayitize|join("\n") }}
+{{ (item.content if item is defined and item.content is defined else content)|arrayitize|join("\n") }}

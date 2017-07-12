@@ -2,7 +2,7 @@
 outter_scope:
   #user: '{{USER}}'
   user: www-data
-  worker_processes: '{{ansible_processor_count}}'
+  worker_processes: '{{ansible_processor_cores}}'
   pid: '{{PID}}.pid'
 events:
   worker_connections: 768

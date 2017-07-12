@@ -30,10 +30,7 @@
     GIT_BYPASS: True
     nginx_prio: 50
   vars_files:
-  - [ "private/reprepro/$configset.vars", "private/reprepro.vars", "examples-private/reprepro.vars" ]
-  gather_facts: false
-  handlers:
-  - include: handlers.yml
+  - [ "private/reprepro/$configset.yaml", "private/reprepro.yaml", "examples-private/reprepro.yaml" ]
   tasks:
   - include: tasks/compfuzor.includes type=srv
   - template: src=files/reprepro/override dest="{{ETC}}/override-dsc.{{item.name}}"
