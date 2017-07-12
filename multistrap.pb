@@ -28,7 +28,7 @@
     - binfmt-misc
   vars_files:
   - vars/pkgs.yaml
-  - [ "private/multistrap/$configset.vars", "private/multistrap.vars", "examples-private/multistrap.vars" ]
+  - [ "private/multistrap/$configset.yaml", "private/multistrap.yaml", "examples-private/multistrap.yaml" ]
   tasks:
   - shell: echo "no {{ARCH}} configured"; return 1
     when: ARCH is not defined
