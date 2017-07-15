@@ -16,5 +16,7 @@ echo
 sgdisk -n 3:2048:4095 -c 3:"BIOS Boot Partition" -t 3:ef02 $1
 sgdisk -p $1
 
+partprobe /dev/sde
+
 mkfs.vfat ${1}2
 mkfs.btrfs ${1}1
