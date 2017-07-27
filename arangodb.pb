@@ -13,11 +13,13 @@
     - bison
     BINS:
     - name: build.sh
+      basedir: "{{SRC}}"
       exec: |
         git submodule update --recursive
         git submodule update --init --recursive
-        mkdir build
+        mkdir -p build
         cd build
         cmake ..
+        make
   tasks:
   - include: tasks/compfuzor.includes type=src
