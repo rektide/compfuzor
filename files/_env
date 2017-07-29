@@ -4,8 +4,8 @@
 {{ var|upper }}="
 {%- if val is sequence and val is not string -%}
 	{{ val|join(ENV_SEPARATOR|default(",")) -}}
-{% elif val == True -%}
-	{{ hostvars[inventory_hostname][var|upper]|default(vars[var|upper])|trim|default(True, True) -}}
+{% elif val == True and val|string != "1" -%}
+	{{ hostvars[inventory_hostname][var|upper]|default(vars[var|upper])|trim|default('Welp', True) -}}
 {% else -%}
 	{{ val|trim -}}
 {% endif -%}"
@@ -13,7 +13,6 @@
 {%- endmacro -%}
 
 {% if ENV.keys is defined -%}
-{{ def(NAME|upper|replace("-","_")|replace(".", "_")+"_VARS", ENV.keys()|join(",")) -}}
 {% for k,v in ENV.iteritems() -%}
 {{ def(k,v) -}}
 {% endfor -%}
