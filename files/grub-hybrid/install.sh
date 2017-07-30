@@ -1,9 +1,9 @@
-#!/bin/sh
+#!/bin/bash
 
 # Generally follows multistrap's disk-gpt.sh. 
 
 set -e
-source $(command -v envdefault || true) $DIR/env.export
+[ -n "$ENV_BYPASS" ] || source $(command -v envdefault || true) {{DIR}}/env.export >/dev/null
 
 # efi  partition
 

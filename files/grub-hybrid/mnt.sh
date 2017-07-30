@@ -1,26 +1,27 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
-source $(command -v envdefault || true) $DIR/env.export
-
-# use device
-
 [ -z "$1" ] && echo "Specify a disk" && exit 1 
-dev=$1
-[ -b "$dev" ] || echo "dev '$dev' not a device" && exit 1
+DEV=$1
+[ ! -b "$DEV" ] && echo "dev '$DEV' not a device" >&2 && exit 1
+[ -n "$ENV_BYPASS" ] || source $(command -v envdefault || true) {{DIR}}/env.export >/dev/null
 
-# mount
+# do mount
 
 doMount(){
-	part=$dev$(eval echo \$PARTITION_$(echo $1|tr /a-z/ /A-Z/))
-	found=$(mount|grep "$part")
+	part=$(eval echo \$PARTITION_$(echo $1|tr /a-z/ /A-Z/))
+	options=$(eval echo \$PARTITION_$(echo $1|tr /a-z/ /A-Z/)_OPTIONS)
+	[ -n "$options" ] && options="-o $options"
+	found=$(mount|grep "$part" || true)
+	dest=$VAR/$1
 	if [ -z "$found" ]
-	fi
-		# not mounted at all - great - mount
-		mount "$dev$part" "$var/$1"
-	elif [ echo "$found" | grep -q "$var/$1" ]
 	then
-		# already mounted in the right spot
+		# not mounted at all - great - mount
+		mount "$part" "$dest" $options
+		echo "ok: mounted $dest"
+	elif [ -z "$(echo $found | grep \"$dest\" || true)" ]
+	then
+		echo "ok: $dest already mounted"
 	else
 		echo "partition $part already mounted" >&2
 		exit 1
@@ -28,5 +29,4 @@ doMount(){
 }
 
 doMount efi
-doMount bios
 doMount linux

@@ -1,42 +1,40 @@
-#!/bin/sh
+#!/bin/bash
 # http://www.rodsbooks.com/gdisk/sgdisk-walkthrough.html
 
 set -e
-source $(command -v envdefault || true) $DIR/env.export
-
 [ -z "$1" ] && echo "Specify a disk" && exit 1 
-dev=$1
-[ -b "$dev" ] || echo "dev '$dev' not a device" && exit 1
+DEV=$1
+[ ! -b "$DEV" ] && echo "dev '$DEV' not a device" >&2 && exit 1
+[ -n "$ENV_BYPASS" ] || source $(command -v envdefault || true) {{DIR}}/env.export >/dev/null
 
 echo initial gpt partition table setup
-sgdisk -og $dev
-echo
+sgdisk -og $DEV
 
 # find end of drive
-ENDSECTOR=`sgdisk -E $dev`
-echo
+ENDSECTOR=`sgdisk -E $DEV`
 
 # build partitions
 
-sgdisk -n $PARTITION_EFI:4096:200703 -c $PARTITION_EFI:"EFI System Partition" -t $PARTITION_EFI:ef00 $dev
-echo
-sgdisk -n $PARTITION_BIOS:2048:4095 -c $PARTITION_BIOS:"BIOS Boot Partition" -t $PARTITION_BIOS:ef02 $dev
-echo
-sgdisk -n $PARTITION_LINUX:200704:$ENDSECTOR -c $PARTITION_LINUX:$LABEL_LINUX -t $PARTITION_LINUX:8300 $dev
-echo
+partnum_efi=${PARTITION_EFI:${#PARTITION_EFI}-1:1}
+sgdisk -n $partnum_efi:4096:200703 -c $partnum_efi:"EFI System Partition" -t $partnum_efi:ef00 $DEV
+partnum_bios=${PARTITION_BIOS:${#PARTITION_BIOS}-1:1}
+sgdisk -n $partnum_bios:2048:4095 -c $partnum_bios:"BIOS Boot Partition" -t $partnum_bios:ef02 $DEV
+partnum_linux=${PARTITION_LINUX:${#PARTITION_LINUX}-1:1}
+sgdisk -n $partnum_linux:200704:$ENDSECTOR -c $partnum_linux:"$LABEL_LINUX" -t $partnum_linux:8300 $DEV
 
 # print
 
 echo final state:
-sgdisk -p $dev
+sgdisk -p $DEV
 echo
 
 # tell linux about new partitions
 
-partprobe $dev
+partprobe $DEV
+sleep 1
 
 # partition
 
-mkfs.vfat $dev$PARTITION_EFI
+mkfs.vfat $PARTITION_EFI
 #mkfs.btrfs ${1}1
-mkfs.ext4 $dev$PARTITION_LINUX
+mkfs.ext4 $PARTITION_LINUX

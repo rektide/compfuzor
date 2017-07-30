@@ -8,11 +8,11 @@
     - linux
     ENV:
       var: "{{VAR}}"
-      partition_efi: 1
-      partition_bios: 2
-      partition_linux: 3
-      dir_boot: "$var/linux/bios" # let shell interpolate var
-      dir_efi: "$var/efi"
+      partition_efi: "${DEV}1"
+      partition_bios: "${DEV}2"
+      partition_linux: "${DEV}3"
+      dir_boot: "$VAR/linux/bios" # let shell interpolate var
+      dir_efi: "$VAR/efi"
       label_linux: "{{label_linux|default('LinuxFlash')}}"
     BINS:
     - name: gpt.sh
