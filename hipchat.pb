@@ -7,8 +7,6 @@
     #APT_TRUST: false
     PKGS:
     - hipchat
-  vars_files:
-  - vars/common.vars
   tasks:
   - include: tasks/compfuzor.includes type=opt
   #- include: tasks/apt.list.install.tasks
