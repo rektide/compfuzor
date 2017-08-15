@@ -1,8 +1,9 @@
 {% macro _repo(url, distributions, components, archs) -%}
+{%- set repoOpts = '[ signed-by=/etc/apt/trusted.gpg.d/{{APT_TRUSTED}} ' + ('arch='+archs|join(',')+' ' if archs else '')+ ' ]' -%}
 {% for distribution in distributions -%}
-deb {{'[arch='+archs|join(',')+'] ' if archs else ''}}{{url}} {{distribution}} {{components|join(' ')}}
+deb {{repoOpts}} {{url}} {{distribution}} {{components|join(' ')}}
 {% if APT_SOURCE|default(False) -%}
-deb-src {{'[ arch = '+archs|join(',')+' ] ' if archs else ''}}{{url}} {{distribution}} {{components|join(' ')}}
+deb-src {{repoOpts}} {{url}} {{distribution}} {{components|join(' ')}}
 {% endif -%}
 {% endfor -%}
 {% endmacro -%}
