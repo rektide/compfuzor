@@ -7,21 +7,26 @@
 - name: "Copy in apt sources.list"
   template: src="files/_apt.list" dest="/etc/apt/sources.list.d/{{APT_SOURCELIST}}.{{APT_ARCH}}.list"
   when: APT_ARCH|default(ARCH)|default(False)
+  become: True
 - name: "Copy in apt sources.list for each arch"
   template: src="files/_apt.list" dest="/etc/apt/sources.list.d/{{APT_SOURCELIST}}.{{item}}.list"
   with_items: "{{ARCHS}}"
   when: not (APT_ARCH|default(False)) and not APT_DEFAULT_ARCH|default(False)
+  become: True
 - name: "Insure pin directory"
   file: path=/etc/apt/preferences.d state=directory
   when: APT_PIN_PACKAGE|default(False) or APT_PIN_PACKAGES|default(False)
 - name: "Copy in pin"
   template: src="files/_apt-pin" dest="/etc/apt/preferences.d/{{NAME}}"
   when: APT_PIN_PACKAGE|default(False) or APT_PIN_PACKAGES|default(False)
+  become: True
 - name: "Copy in apt gpg keys"
   copy: src="files/apt-repos/{{APT_TRUSTED}}.{{item}}" dest="/etc/apt/trusted.gpg.d/{{APT_TRUSTED}}.{{item}}"
   when: APT_TRUST|default(True)
   with_items:
   - gpg
   - gpg.params
+  become: True
 - include: ../apt.update.tasks repo="{{APT_SOURCELIST}}.{{APT_ARCH}}"
   when: not APT_UPDATE_BYPASS|default(False)
+  become: True

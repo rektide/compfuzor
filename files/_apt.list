@@ -1,5 +1,5 @@
 {% macro _repo(url, distributions, components, archs) -%}
-{%- set repoOpts = '[ signed-by=/etc/apt/trusted.gpg.d/{{APT_TRUSTED}} ' + ('arch='+archs|join(',')+' ' if archs else '')+ ' ]' -%}
+{%- set repoOpts = '[ signed-by=/etc/apt/trusted.gpg.d/' + APT_TRUSTED + '.gpg' + (' arch='+archs|join(',')+' ' if archs else '')+ ' ]' -%}
 {% for distribution in distributions -%}
 deb {{repoOpts}} {{url}} {{distribution}} {{components|join(' ')}}
 {% if APT_SOURCE|default(False) -%}
