@@ -3,14 +3,17 @@
 # Generally follows multistrap's disk-gpt.sh. 
 
 set -e
-[ -n "$ENV_BYPASS" ] || source $(command -v envdefault || true) {{DIR}}/env.export >/dev/null
+[ -z "$1" ] && echo "Specify a disk" && exit 1 
+DEV=$1
+[ ! -b "$DEV" ] && echo "dev '$DEV' not a device" >&2 && exit 1
+[ -n "$ENV_BYPASS" ] || source $(command -v envdefault || true) /opt/grub-hybrid-main/env.export >/dev/null
 
 # efi  partition
 
 grub-install \
 	--target=x86_64-efi \
-	--efi-directory=$dir_efi
-	--boot-directory=$dir_boot \
+	--efi-directory=$DIR_EFI \
+	--boot-directory=$DIR_BOOT \
 	--removable \
 	--recheck
 
@@ -18,14 +21,15 @@ grub-install \
 
 grub-install \
 	--target=i386-pc \
-	--boot-directory=$dir_boot \
+	--boot-directory=$DIR_BOOT \
 	--recheck \
-	"${drive}${PARTITION_BIOS}"
+	$DEV
 
 # linux partition
 
 grub-install \
 	--target=i386-pc \
-	--boot-directory=$dir_boot \
+	--boot-directory=$DIR_BOOT \
 	--recheck \
-	"${drive}${PARTITION_LINUX}"
+	--force \ # blocklists
+	"$PARTITION_LINUX"

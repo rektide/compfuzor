@@ -2,7 +2,7 @@
 - hosts: all
   vars:
     TYPE: multistrap
-    INSTANCE: "{{ARCH}}"
+    INSTANCE: "amd64"
     MULTISTRAPFILE: multistrap.conf
     BASETGZ: multistrap.tgz
     ETC_FILES:

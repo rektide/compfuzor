@@ -95,7 +95,7 @@ BASE:
 - libpam-modules-bin
 - libpam-runtime
 - libpam0g
-- libprocps5
+- libprocps6
 - libreadline6
 - libselinux1
 - libsemanage-common
@@ -297,7 +297,7 @@ WORKSTATION_X:
 - xinput
 - xmonad
 - xpra
-- python-gst0.10
+- python-gst1.0
 - xsel
 - xorg
 - xdg-utils
@@ -344,9 +344,9 @@ XPRA:
 - python-dbus
 - pulseaudio
 - pulseaudio-utils
-- gstreamer0.10-plugins-good
-- gstreamer0.10-plugins-bad
-- gstreamer0.10-plugins-ugly
+- gstreamer1.0-plugins-good
+- gstreamer1.0-plugins-bad
+- gstreamer1.0-plugins-ugly
 WORKSTATION_KDE:
 - finger
 - akregator
@@ -484,9 +484,6 @@ DEVEL:
 - libltdl7
 - libltdl-dev 
 - intltool
-- lttng-tools
-- lttngtop
-- lttng-modules-dkms
 - liblttng-ctl-dev
 - liblttng-ust-dev
 - uuid-dev
@@ -543,7 +540,7 @@ AUDIO:
 AUDIO_X:
 - alsa-tools-gui
 - alsamixergui
-- pulseaudio-module-x11
+#- pulseaudio-module-x11
 - pulseaudio-utils
 - paman
 - paprefs
@@ -631,8 +628,8 @@ MEDIA:
 - gstreamer1.0-libav
 - gstreamer1.0-pulseaudio
 - libgstreamer1.0-0
-- libgstreamer-plugins-base0.10-0
-- libavcodec-ffmpeg-extra56
+- libgstreamer-plugins-base1.0-0
+- libavcodec-extra57
 - mpdris2
 - mpd
 - mpris-remote
@@ -872,8 +869,8 @@ POSTGRES:
 - postgresql-doc
 - postgis
 - postgis-doc
-- postgresql-9.5-postgis-2.2
-- postgresql-9.5-postgis-scripts
+- postgresql-9.6-postgis-2.3
+- postgresql-9.6-postgis-scripts
 - postgresql-plv8
 ZFSONLINUX:
 - zfsonlinux
