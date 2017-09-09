@@ -1,6 +1,7 @@
 ---
 - hosts: all
   vars:
+    TYPE: xdg-dirs
     NAME: xdg-dirs
     DIR: "~/.config"
     MEDIAS_DIR: "$HOME/media"
@@ -8,8 +9,7 @@
     ENV: "{{XDG_DIRS}}"
     USERMODE: True
   tasks:
-  - action: include_defaults source=vars/xdg.vars
-  - action: include_defaults source=vars/common.user.vars
-  - action: include_defaults source=vars/common.vars
+  - include: tasks/compfuzor/vars_base.tasks
+  - include: tasks/compfuzor/vars_xdg.tasks
   #- set_fact: MEDIAS_DIR='${HOME}/media'
   - template: src=files/_env dest=~/.config/user-dirs.dirs
