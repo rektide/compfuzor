@@ -1,7 +1,7 @@
 ---
 - hosts: all
   vars:
-    TYPE: strongswan-ipsec
+    TYPE: strongswan
     INSTANCE: main
     ETC_FILES:
     - strongswan.conf
@@ -10,7 +10,7 @@
     ETC_DIRS:
     - charon
     - cacerts
-    SYSTEMD_EXEC: /usr/sbin/ipsec start --nofork
+    SYSTEMD_EXEC: "/usr/sbin/ipsec start --nofork --conf={{ETC}}/ipsec.conf"
     SYSTEMD_RELOAD: /usr/bin/ipsec reload
     SYSTEMD_STANDARD_OUTPUT: syslog
     SYSTEMD_RESTART: on-abnormal
