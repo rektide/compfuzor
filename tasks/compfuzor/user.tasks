@@ -1,1 +1,5 @@
-- user: name="{{USER}}" system="{{True if not USERMODE|default(False) else False}}"
+- user:
+  args:
+    name: "{{ USER }}"
+    system: "{{ not USERMODE|default(False) }}"
+  become: True

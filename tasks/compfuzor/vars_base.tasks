@@ -21,7 +21,7 @@
     ARCH: "{{NATIVE_ARCH_.stdout}}"
   when: ARCH is not defined
 - set_fact:
-     NATIVE_ARCH: "{{NATIVE_ARCH_.stdout}}"
+    NATIVE_ARCH: "{{NATIVE_ARCH_.stdout}}"
 - name: "Set SUBINSTANCE if asked for"
   set_fact: "SUBINSTANCE={{MACHINE_ID}}"
   when: SUBINSTANCE|default(False) == True

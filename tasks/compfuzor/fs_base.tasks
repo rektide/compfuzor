@@ -1,17 +1,35 @@
 - debug: "msg='Compfuzor: create base files'"
 - name: "Creating base `DIR`"
-  file: "path={{DIR}} state=directory mode={{DIRMODE}}"
+  file:
+    path: "{{DIR}}"
+    state: directory
+    mode: "{{DIRMODE}}"
+    owner: "{{OWNER|default(omit)}}"
+  become: "{{ not DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid }}"
   when: DIR|default(True)
 - name: "Creating `DIRS`"
-  file: path={{DIR+'/' if item|first != '/' and item|first != '~' else ''}}{{item}} state=directory mode={{DIRMODE}}
+  file:
+    path: "{{DIR+'/' if item|first != '/' and item|first != '~' else ''}}{{item}}"
+    state: directory
+    mode: "{{DIRMODE}}"
+    owner: "{{OWNER|default(omit)}}"
   with_items: DIRS
+  become: "{{ OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid }}"
   when: DIRS is defined
 - name: "Creating `FILES`"
   # someone wanted a basename here but eclipse has a ../content & like yeah, that's fine. locales holds the blame. see cf0fdccf0c.
-  template: src="files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}" dest="{{DIR}}/{{item.dest|default(item.name)|default(item)}}"
+  template:
+    src: "files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}"
+    dest: "{{DIR}}/{{item.dest|default(item.name)|default(item)}}"
+    owner: "{{OWNER|default(omit)}}"
   with_items: FILES
+  become: "{{ not (DIR+'/'+item.dest|default(item.name)|default(item))|basename|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid }}"
   when: FILES is defined and FILES is not mapping
 - name: "Creating `FILES` mapping"
-  template: src="files/{{TYPE|default(NAME)}}/{{ item[1] }}" dest="{{ DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '' }}{{item[0]}}"
+  template:
+    src: "files/{{TYPE|default(NAME)}}/{{ item[1] }}"
+    dest: "{{ DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '' }}{{item[0]}}"
+    owner: "{{OWNER|default(omit)}}"
   with_items: FILES.iteritems()
+  become: "{{ not ((DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '')+ item[0])|basename|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid }}"
   when: FILES is defined and FILES is mapping

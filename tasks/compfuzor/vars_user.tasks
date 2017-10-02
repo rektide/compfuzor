@@ -1,2 +1,8 @@
-- set_fact: USER={{ NAME }}
-  when: USER == True
+- name: 'Set USER as per OWNER'
+  set_fact:
+    USER: "{{OWNER}}"
+  when: OWNER is defined
+- name: 'Set default USER'
+  set_fact:
+    USER: "{{ TYPE + '-' + INSTANCE if TYPE is defined and INSTANCE is defined else NAME }}"
+  when: OWNER|default(False) == True or OWNER|default(False) == "True"

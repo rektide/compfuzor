@@ -5,7 +5,7 @@ import os
 from ansible import errors
 
 def can_write(*a, **kw):
-    return os.access(a, os.W_OK | os.X_OK)
+    return os.access(a[0], os.W_OK | os.X_OK)
 
 class FilterModule(object):
     def filters(self):
