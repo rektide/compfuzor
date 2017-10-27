@@ -1,18 +1,12 @@
 ---
 - hosts: all
-  gather_facts: False
   vars:
     TYPE: kubernetes
     INSTANCE: git
-    REPO: https://github.com/GoogleCloudPlatform/kubernetes
+    REPO: https://github.com/kubernetes/kubernetes
     BINS:
-    - exec: make all
-      pwd: repo
-    ENV:
-      gopath: "{{DIR}}:$GOPATH"
-    PKGS:
-    - rsync
-    LINKS: 
-      bin: "repo/cmd"
+    - name: build.sh
+      exec: bazel build . :kube-controller-manager :kube-proxy :kube-apiserver
+      basedir: build/debs
   tasks:
-  - include: tasks/compfuzor.includes
+  - include: tasks/compfuzor.includes type=src
