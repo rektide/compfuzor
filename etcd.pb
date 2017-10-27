@@ -1,6 +1,5 @@
 ---
 - hosts: all
-  gather_facts: False
   tags:
   - go
   - build
