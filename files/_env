@@ -5,7 +5,7 @@
 {%- if val is sequence and val is not string -%}
 	{{ val|join(ENV_SEPARATOR|default(",")) -}}
 {% elif val == True and val|string != "1" -%}
-	{{ hostvars[inventory_hostname][var|upper]|default(vars[var|upper])|trim|default('Welp', True) -}}
+	{{ hostvars[inventory_hostname][var|upper]|default(vars[var|upper])|trim|default(True, True) -}}
 {% else -%}
 	{{ val|trim -}}
 {% endif -%}"
