@@ -15,11 +15,11 @@
     - name: ca.sh
       exec: |
         # create a ca
-        [ ! -e "$CAR" ] && echo "need a ca request json" 2>&1 && exit 1
+        [ ! -e "$CSR" ] && echo "need a ca request json" >&2 && exit 1
         cfssl gencert -initca $CAR > $CA_JSON.$TIMESTAMP
         ln -sf $CA_JSON.$TIMESTAMP $CA_JSON
         (cd $VAR; cat $CA_JSON | cfssljson -bare $CA_FILE)
-        echo $CA
+        echo $(realpath $CA)
       run: '{{ not lookup("fileexists", VAR + "/ca.json") }}'
     - name: regen.sh
       exec: |
@@ -27,49 +27,41 @@
         cfssl gencert -renewca -ca $CA -ca-key $CA_KEY > $CA_JSON.$TIMESTAMP
         ln -sf $CA_KEY.$TIMESTAMP $CA_KEY
         (cd $VAR; cat $CA_JSON | cfssljson -bare $CA_FILE)
-        echo $CA
+        echo $(realpath $CA)
     - name: csr.sh
-      basedir: False
+      basedir: "{{VAR}}/csr"
       exec: |
-        [ -z "$HOSTNAMES" ] && export HOSTNAMES=$1
-        [ -z "$HOSTNAMES" ] && [ -n "${1##*/*}" ] && export HOSTNAMES=$1 && export FILENAME=$VAR/cert/$1
-        [ -z "$FILENAME" ] && [ -z "${2##*/*}" ] && export FILENAME=$1
-        [ ! -e "$CSR" ] && echo "need a certificate signing request json" 2>&1 && exit 1
-        [ -e "$VAR/csr/$FILENAME" ] && echo "csr already exists" 2>&1 && exit 1
-        # generate a csr
-        is_ca=$(jq -r 'has("ca") // ""' $CSR)
-        cfssl genkey ${is_ca:+-initca=true} $CSR > $FILENAME || echo "CSR $FILENAME already exists"
-        cp $FILENAME $VAR/csr/$(basename $FILENAME).$TIMESTAMP
-        (cd $VAR/csr; cat $VAR/csr/$(basename $FILENAME).$TIMESTAMP | cfssljson -bare $(basename $FILENAME))
-        echo $(basename $FILENAME)
-        
-        # sign
-        #$DIR/bin/sign.sh $1 $2
-    - name: sign.sh
-      basedir: False
-      exec: |
-        # find thing to sign
-        target="${1%.csr}"
-        target="${1%.pem}"
-        base="$(basename $target)"
-        [ ! -e "$target" ] && export target="$target.csr"
-        [ ! -e "$target" ] && export target="${target%csr}pem"
-        [ ! -e "$target" ] && export target="$VAR/csr/$base"
-        [ ! -e "$target" ] && export target="$target.csr"
-        [ ! -e "$target" ] && export target="${target%csr}pem"
-        [ ! -e "$target" ] && echo "could not find thing to sign: $target" 2>&1 && exit 1
-        if [ "$(dirname $(realpath $target))" != "$VAR/csr" ]; then
-        	# keep a copy of anything out of tree that we sign
-        	ln -sf "$(realpath $target)" "$VAR/csr/$base.csr.ln"
-        	cp "$target" "$VAR/csr/$base.csr"
-        fi
+        [ -z "$CN" ] && export CN="$1"
+        [ -z "$CN" ] && echo "need a common-name which will be used as filename" >&2 && exit 1
+        [ ! -e "$CSR" ] && echo "need a certificate signing request json" >&2 && exit 1
+        function joinby { local IFS="$1"; shift; echo "$*"; }
+        [ -z "$HOSTS" ] && export HOSTS="$(jo -a $*)"
 
-        # sign a passed in key
-        [ -z "$dest" ] && dest="$VAR/cert/$base"
-        cfssl sign -ca $CA -ca-key $CA_KEY -config $CSR "$target" > "$dest.json.$TIMESTAMP"
-        ln -sf "$dest.json.$TIMESTAMP" "$dest.json"
-        (cd $VAR; cat "$dest.json" | cfssljson -bare $base)
-        echo $dest.pem
+        # generate a csr
+        [ -n "${INITCA+x}" ] && INITCA=$(jq -r 'has("ca") // ""' $CSR)
+        jq --arg CN "$CN" --argjson HOSTS "$HOSTS" '. + {CN: $CN, hosts: $HOSTS}' $CSR > "$CN.keyconf.$TIMESTAMP"
+        cfssl genkey ${INITCA:+-initca=true} "$CN.keyconf.$TIMESTAMP" > "$CN.jsonkey.$TIMESTAMP" || exit 1
+        ln -sf $CN.keyconf.$TIMESTAMP $CN.keyconf
+        ln -sf $CN.jsonkey.$TIMESTAMP $CN.jsonkey
+        cfssljson -bare -f $CN.jsonkey.$TIMESTAMP $CN
+        mv "$CN-key.pem" "$CN.key"
+        ln -sf $CN.key $CN-key.pem
+        echo $(realpath $CN.jsonkey)
+    - name: sign.sh
+      basedir: "{{VAR}}/cert"
+      exec: |
+        [ -z "$CN" ] && export CN="$1"
+        [ -z "$CN" ] && echo "need a common-name which will be used as filename" >&2 && exit 1
+        if [ "$#" -gte 2 ] ; then
+        	function joinby { local IFS="$1"; shift; echo "$*"; }
+        	[ -z "$HOSTS" ] && export HOSTS="$(joinby , $*)"
+        fi
+        [ ! -e "$VAR/csr/$CN.csr" ] && echo "need a csr" >&2 && exit 1
+
+        cfssl sign -ca $CA -ca-key $CA_KEY -config $CSR ${HOSTS:+-hostname "$HOSTS"} "$VAR/csr/$CN.csr" > "$CN.json.$TIMESTAMP"
+        ln -sf "$CN.json.$TIMESTAMP" "$CN.json"
+        cfssljson -bare -f $CN.json $CN
+        echo $(realpath $CN.pem)
     ENV:
       ETC: "{{ETC}}"
       VAR: "{{VAR}}"
