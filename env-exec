@@ -1,0 +1,17 @@
+#!/bin/bash
+
+ARGS=""
+IFS=","
+for var in $COMPFUZOR_ENVS
+do
+	for black in $COMPFUZOR_ENVS_BLACKLIST
+	do
+		if [ "$black" = "$var" ]
+		then
+			continue 2
+		fi
+	done
+	ARGS+="--$(echo $var| tr '_' '-')='\$$var' "
+done
+
+exec $1 $ARGS
