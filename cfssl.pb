@@ -1,7 +1,7 @@
 ---
 - hosts: all
   vars:
-    TYPE: cfssl-ca
+    TYPE: cfssl
     INSTANCE: yoyodyne 
     ETC_FILES:
     - name: ca.json

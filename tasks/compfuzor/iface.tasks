@@ -1,0 +1,11 @@
+- name: Compfuzor: create network interfaces
+  template:
+    src: tasks/systemd.netdev
+    dest: "/etc/systemd/network/{{item.name}}"
+  with_items: INTERFACE|default([])|arrayitize
+- name: Compfuzor: link network interface contents
+  file:
+    src:
+    dest:
+    state: link
+  with_items: INTERFACE|default([])|arrayitize

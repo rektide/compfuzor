@@ -1,0 +1,25 @@
+{% macro hasOptions(nname) -%}
+{% for var i in vars -%}
+{% endor -%}
+{% for var j in hostvars[inventory_hostname] -%}
+{% endfor -%}
+{% endmacro -%}
+
+{% macro runOptions(name) -%}
+{% for opt in vars["SYSTEMD_NETDEV_"+ name|upper] -%}
+{% set vals= vars["SYSTEMD_NETDEV_"+opt|upper]|default(hostvars[inventory_hostname]["SYSTEMD_NETDEV_"+opt|upper]|default(False) -%} 
+{% for val in vals|arrayitize -%}
+{{key}}={{val}}
+{% endfor -%}
+{% endfor -%}
+{% endmacro -%}
+
+[Match]
+{{ runOptions("Match") }}
+
+[NetDev]
+{{ runOptions("NetDev") }}
+
+{% for type in SYSTEMD_NETDEV_TYPE -%}
+{{ runOptions( type) }}
+{% endfor -%}

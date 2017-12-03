@@ -1,0 +1,143 @@
+SYSTEMD_NETDEV_MATCH:
+- Hosts
+- Virtualization
+- KernelCommandLine
+- Architecture
+SYSTEMD_NETDEV_NETDEV:
+- Description
+- Name
+- King
+- MTUBytes
+- MACAddress
+SYSTEMD_NETDEV_TYPE:
+- bond
+- bridge
+- dummy
+- gre
+- gretap
+- ip6gre
+- ip6tnl
+- ip6gretap
+- ipip
+- ipvlan
+- macvlan
+- macvtap
+- sit
+- tap
+- tun
+- veth
+- vlan
+- vti
+- vti6
+- vxlan
+- geneve
+- vrf
+- vcan
+
+SYSTEMD_NETDEV_BRIDGE:
+- HelloTimeSec
+- MaxAgeSec
+- ForwardDelaySec
+- AgeingTimeSec
+- Priority
+- DefaultPVID
+- MulticastQueirer
+- MulticastSnooping
+- VLANFiltering
+- STP
+SYSTEMD_NETDEV_VLAN:
+- Id
+- GVRP
+- MVRP
+- Loosebinding
+- ReorderHeader
+SYSTEMD_NETDEV_MACLAN:
+- Mode
+SYSTEMD_NETDEV_MACVTAP:
+- Mode
+SYSTEMD_NETDEV_IPVLAN:
+- Mode
+SYSTEMD_NETDEV_VXLAN:
+- Id
+- Remote
+- Local
+- TOS
+- TTL
+- MacLearning
+- FDBAgeingSec
+- MaximumDBEntries
+- ReduceARPProxy
+- L2MissNotification
+- L3MissNotification
+- RouteShortCircuit
+- UDPChecksum
+- UDPZeroChecksumTx
+- UDP6ZeroChecksumRx
+- RemoteChecksumTx
+- RemoteChecksumRx
+- GroupPolicyExtension
+- DestinationPort
+- PortRange
+- FloatLabel
+SYSTEMD_NETDEV_GENEVE:
+- Id
+- Remote
+- TOS
+- TTL
+- UDPChecksum
+- UDP6ZeroChecksumTx
+- UDP6ZeroChecksumRx
+- DestinationPort
+- FlowLabel
+SYSTEMD_NETDEV_TUNNEL:
+- Local
+- Remote
+- TOS
+- TTL
+- DiscoverPathMTU
+- IPv6FlowLabel
+- CopyDSCP
+- EncapsulationLimit
+- Key
+- InputKey
+- OutputKey
+- Mode
+SYSTEMD_NETDEV_PEER:
+- Name
+- MACAddress
+SYSTEMD_NETDEV_TUN:
+- OneQueue
+- MultiQueue
+- PacketInfo
+- VNetHeader
+- User
+- Group
+SYSTEMD_NETDEV_TAP:
+- OneQueue
+- MultiQueue
+- PacketInfo
+- VNetHeader
+- User
+- Group
+SYSTEMD_NETDEV_BOND:
+- Mode
+- TransmissionHashPolicy
+- LACPTransmissionRate
+- MIIMonitorSpec
+- UpDelaySec
+- DownDelaySec
+- LearnPacketInterfaceSec
+- AdSelect
+- FailoverMACPolicy
+- ARPValidate
+- ARPIntervalSec
+- ARPIPTarget
+- ARPAllTargets
+- PrimaryReselectPolicy
+- ResentIGMP
+- PacketsPerSlave
+- GratuitousARP
+- AllSlavesActive
+- MinLink
+- ActiveSlave
+- PrimarySlave
