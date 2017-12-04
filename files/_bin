@@ -14,7 +14,7 @@ export TIMESTAMP="$(date +%y.%m.%d-%T)"
 export {{var}}="{{ '${' }}{{ var }}-{{ hostvars[inventory_hostname][var]|default(vars[var]) }}{{ '}'}}"
 {% endfor %}
 {% if item.basedir|default(True) == True %}
-cd {{DIR}}
+cd "${DIR}"
 {% elif item.basedir|default(True) == False %}
 {% elif item.basedir[0] == "/" or item.basedir[0] == "~" %}
 cd {{item.basedir}}
