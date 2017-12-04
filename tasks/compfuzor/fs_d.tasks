@@ -10,16 +10,25 @@
   set_fact: _go=""
   when: "{{_d}} is not defined"
 - name: "Create {{include|upper}} .d directories (duplicating fs_hierarchy work)"
-  file: path="{{_dirpath}}/{{item}}.d" state=directory mode="{{mode|default(770)}}"
+  file:
+    path: "{{_dirpath}}/{{item}}.d"
+    state: directory
+    mode: "{{mode|default(770)}}"
+    owner: "{{OWNER|default(omit)}}"
   with_items: "{{_files}}"
+  become: "{{not _dirpath|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
   when: (not not _go) and vars[_d]|default(False)
 - name: Copy pre-assembed target into backup and link backup into .d if no backup exists
   shell: "test ! -f {{_path}}/{{item}}.orig -f {{_path}}/{{item}} && mv {{_path}}/{{item}} {{_path}}/{{item}}.orig && ln -s {{_path}}/{{item}}.orig {{_path}}/{{item}}.d/20-$(basename {{item}}); echo $?"
   with_items: "{{_files}}"
   when: not not _go
 - name: "Assemble the .d directory"
-  assemble: src="{{_path}}/{{item}}.d" dest="{{_path}}/{{item}}"
+  assemble:
+    src: "{{_path}}/{{item}}.d"
+    dest: "{{_path}}/{{item}}"
+    owner: "{{OWNER|default(omit)}}"
   when: not not _go
+  become: "{{not _path|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
   with_items: "{{_files}}"
 - name: "Insure we have a backup file so as to prevent the baked assembly from being assembled"
   shell: touch {{_path}}/{{item}}.orig

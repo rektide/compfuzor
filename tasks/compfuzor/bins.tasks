@@ -1,19 +1,43 @@
 ---
 - debug: "msg='Compfuzor: install `BINS`'"
 - name: "Create `BINS_DIR`"
-  file: path="{{BINS_DIR}}" state=directory mode=771
+  file:
+    path: "{{BINS_DIR}}"
+    state: directory
+    mode: 0771
+    owner: "{{OWNER|default(omit)}}"
+  become: "{{ not BINS_DIR|dirname|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
   when: BINS|default(False)
 - name: "Create exec/execs `BINS`"
-  template: dest="{{BINS_DIR}}/{{item.dest|default(item.name)}}" src="files/_bin" mode={{item.mode|default(0755)}}
+  template:
+    dest: "{{BINS_DIR}}/{{item.dest|default(item.name)}}"
+    src: "files/_bin"
+    mode: "{{item.mode|default(0755)}}"
+    owner: "{{OWNER|default(omit)}}"
   with_items: "{{BINS|default([])}}"
+  become: "{{ not BINS_DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
   when: item is mapping and (item.exec|default(False) or item.execs|default(False)) and item.dest|default(item.name)|default(False)
 - name: "Copy `BINS` into place`"
-  template: src="files/{{ TYPE|default(NAME) }}/{{item.src|default(item.name) if item is mapping else item }}" dest="{{BINS_DIR}}/{{item.dest|default(item.name) if item is mapping else item}}" mode={{item.mode|default(0755)}}
+  template:
+    src: "files/{{TYPE|default(NAME)}}/{{item.src|default(item.name) if item is mapping else item }}"
+    dest: "{{_dest}}"
+    mode: "{{item.mode|default(0755)}}"
+    owner: "{{item.owner|default(OWNER)|default(omit)}}"
   with_items: "{{BINS|default([])}}"
+  become: "{{ not _dest|dirname|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
   when: (item is not mapping or (item.src|default(True) != False and item.name|default(False)) or item.src|default(False)) and not item.raw|default(False) and not item.exec|default(False) and not item.execs|default(False) and not item.link|default(False)
+  vars:
+    _dest: "{{BINS_DIR}}/{{item.dest|default(item.name) if item is mapping else item}}"
 - name:  "Copy raw `BINS` into place`"
-  copy: src="files/{{ TYPE|default(NAME) }}/{{item.src|default(item.name) if item is mapping else item }}" dest="{{BINS_DIR}}/{{item.dest|default(item.name) if item is mapping else item}}" mode={{item.mode|default(0755)}}
+  copy:
+    src: "files/{{ TYPE|default(NAME) }}/{{item.src|default(item.name) if item is mapping else item }}"
+    dest: "{{_dest}}"
+    mode: "{{item.mode|default(0755)}}"
+    owner: "{{item.owner|default(OWNER)|default(omit)}}"
   with_items: "{{BINS|default([])}}"
+  become: "{{ not _dest|dirname|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
+  vars:
+    _dest: "{{BINS_DIR}}/{{item.dest|default(item.name) if item is mapping else item}}"
   when: ((item.src|default(True) != False and item.name|default(False)) or item.src|default(False)) and item.raw|default(False) and not item.exec|default(False) and not item.execs|default(False)
 #- name: "Create exec `BINS`"
 #  file:  dest="{{BINS_DIR}}/{{item.dest|default(item.name) if item is mapping else item}}" mode={{item.mode|default(0755)}}

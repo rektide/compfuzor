@@ -7,6 +7,11 @@
   template:
     src: "files/content"
     dest: "{{SRCS_DIR}}/{{TGZ|basename}}.url"
+    owner: "{{OWNER|default(omit)}}"
+  become: "{{not SRCS_DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
 - name: extract tgz
-  shell: "chdir={{DIR}} tar -xaf {{SRCS_DIR}}/{{TGZ|basename}} --strip-components={{TGZ_STRIP_COMPONENTS|default(1)}}"
+  shell: "tar -xaf {{SRCS_DIR}}/{{TGZ|basename}} --strip-components={{TGZ_STRIP_COMPONENTS|default(1)}}"
+  args:
+    chdir: "{{DIR}}"
+  become: "{{not SRCS_DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
   #unarchive: src="{{SRCS_DIR}}/{{TGZ|basename}}" dest="{{DIR}}" copy="no"

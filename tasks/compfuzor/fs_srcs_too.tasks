@@ -2,11 +2,22 @@
 - stat: path="{{OPT}}"
   register: has_opt
 - name: "link source DIR into OPT"
-  file: src="{{OPT_SRCS_DIR|default(DIR)}}" dest="{{OPT}}" state=link
+  file:
+    src: "{{OPT_SRCS_DIR|default(DIR)}}"
+    dest: "{{OPT}}"
+    state: link
+    owner: "{{OWNER|default(omit)}}"
   when: DIR != OPT and not OPT_DIR|default(False)
 - name: "insure OPT dir"
-  file: path="{{OPT}}" state=directory
+  file:
+    path: "{{OPT}}"
+    state: directory
+    owner: "{{OWNER|default(omit)}}"
   when: DIR != OPT and OPT_DIR|default(False)
 - name: "link source DIR into OPT/src"
-  file: src="{{DIR}}" dest="{{OPT}}/src" state=link
+  file:
+    src: "{{DIR}}"
+    dest: "{{OPT}}/src"
+    state: link
+    owner: "{{OWNER|default(omit)}}"
   when: DIR != OPT and OPT_DIR|default(False)

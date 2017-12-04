@@ -1,4 +1,7 @@
 - name: "FILES_D"
-  assemble: src={{item}}.d/ dest={{item}}
+  assemble:
+    src: "{{item}}.d/"
+    dest: "{{item}}"
+    owner: "{{OWNER|default(omit)}}"
   with_items: FILES_D
   when: FILES_D|default(False)

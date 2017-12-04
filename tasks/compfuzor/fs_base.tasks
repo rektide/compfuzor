@@ -23,7 +23,7 @@
     dest: "{{DIR}}/{{item.dest|default(item.name)|default(item)}}"
     owner: "{{OWNER|default(omit)}}"
   with_items: FILES
-  become: "{{ not (DIR+'/'+item.dest|default(item.name)|default(item))|basename|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid }}"
+  become: "{{ not (DIR+'/'+item.dest|default(item.name)|default(item))|dirname|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid }}"
   when: FILES is defined and FILES is not mapping
 - name: "Creating `FILES` mapping"
   template:
@@ -31,5 +31,5 @@
     dest: "{{ DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '' }}{{item[0]}}"
     owner: "{{OWNER|default(omit)}}"
   with_items: FILES.iteritems()
-  become: "{{ not ((DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '')+ item[0])|basename|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid }}"
+  become: "{{ not ((DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '')+ item[0])|dirname|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid }}"
   when: FILES is defined and FILES is mapping
