@@ -1,0 +1,57 @@
+#!/usr/bin/env node
+"use strict"
+var
+  childProcess= require( "child_process"),
+  fs= require( "fs"),
+  util= require( "util")
+var
+  mkdir= util.promisify( fs.mkdir),
+  spawn= util.promisify( child_process.spawn)
+
+async function input(){
+	var source= process.argv[2]
+	if( source){
+		source= fs.createReadStream( source, "utf8")
+	}else{
+		source= process.stdin
+	}
+	var buffer= []
+	source.on( "data", data=> buffer.push( data))
+	function finish( res){
+		res( buffer.join(""))
+	}
+	return new Promise( res=> source.on( "end", ()=> res( buffer.join( "")))).then(JSON.parse)
+}
+input().then(await function( cas){
+
+	// pull out global config
+	var defaultParent
+	for( var ca of cas){
+		if( ca.default_parent){
+			defaultParent= ca
+		}
+	}
+
+	// generate all ca's
+	var baseDir= process.env.DIR|| __dirname
+	var make= cas.map(function( ca){
+		if( !ca.name){
+			console.error("ca failed, name required")
+		}
+		var name= ca.name
+		if( ca.external){
+			// improve ca.sh to accept this as input & run
+			continue
+		}
+		var make= mkdir( baseDir+ "/"+ name).then( function(){
+			spawn( 
+		})
+	})
+	await Promise.all(make)
+
+	// create symlinks if we can
+
+	// set permissions if we can
+
+	return await Promise.all( results)
+}

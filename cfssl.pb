@@ -15,7 +15,7 @@
     - name: ca.sh
       exec: |
         # create a ca
-        [ ! -e "$CSR" ] && echo "need a ca request json" >&2 && exit 1
+        [ ! -e "$CAR" ] && echo "need a ca request json" >&2 && exit 1
         cfssl gencert -initca $CAR > $CA_JSON.$TIMESTAMP
         ln -sf $CA_JSON.$TIMESTAMP $CA_JSON
         (cd $VAR; cat $CA_JSON | cfssljson -bare $CA_FILE)
@@ -29,7 +29,7 @@
         (cd $VAR; cat $CA_JSON | cfssljson -bare $CA_FILE)
         echo $(realpath $CA)
     - name: csr.sh
-      basedir: "{{VAR}}/csr"
+      basedir: "${VAR}/csr"
       exec: |
         [ -z "$CN" ] && export CN="$1"
         [ -z "$CN" ] && echo "need a common-name which will be used as filename" >&2 && exit 1
@@ -48,7 +48,7 @@
         ln -sf $CN.key $CN-key.pem
         echo $(realpath $CN.jsonkey)
     - name: sign.sh
-      basedir: "{{VAR}}/cert"
+      basedir: "${VAR}/cert"
       exec: |
         [ -z "$CN" ] && export CN="$1"
         [ -z "$CN" ] && echo "need a common-name which will be used as filename" >&2 && exit 1
@@ -63,14 +63,14 @@
         cfssljson -bare -f $CN.json $CN
         echo $(realpath $CN.pem)
     ENV:
+      CA_FILE: "{{CA_FILE}}"
       ETC: "{{ETC}}"
       VAR: "{{VAR}}"
       CSR: "{{ETC}}/csr.json"
-      CAR: "{{ETC}}/{{CA_FILE}}.json"
+      CAR: "{{ETC}}/{{CA_FILE}}.request.json"
       CA: "{{VAR}}/{{CA_FILE}}.pem"
       CA_JSON: "{{VAR}}/{{CA_FILE}}.json"
       CA_KEY: "{{VAR}}/{{CA_FILE}}-key.pem"
-      CA_FILE: "{{CA_FILE}}"
 
     CA_FILE: ca
     CA:

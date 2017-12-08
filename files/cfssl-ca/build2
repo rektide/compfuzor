@@ -1,0 +1,46 @@
+#!/bin/bash
+
+[ -n "$DIR" ] && cd $DIR
+export PATH="$DIR/bin:$PATH"
+
+manifest=$1
+
+# initialize each ca
+for row in $(jq -r '.[] $manifest| @base64' $manifest)
+do
+	let name=$(echo $row|base64 --decode|jq -r "$.name")
+	let parent=$(echo $row|base64 --decode|jq -r "$.parent")
+	let default_parent=$(echo $row|base64 --decode|jq -r "$.default_parent")
+	let external=$(echo $row|base64 --decode|jq -r "$.external")
+	let external_sub=$(echo $row|base64 --decode|jq -r "$.external_sub")
+	let alias=$(echo $row|base64 --decode|jq -r "$.alias")
+	let comment=$(echo $row|base64 --decode|jq -r "$.comment")
+	let consumer=$(echo $row|base64 --decode|jq -r "$.consumer")
+	let csr=$(echo $row|base64 --decode|jq -r "$.csr")
+	let car=$(echo $row|base64 --decode|jq -r "$.car")
+
+	let caDir=$VAR/$name
+	let etcdDir=$ETC/$name
+	mkdir -p $caDir
+	mkdir -p $etcDir
+
+	echo << EOF > $caDir/env
+export CA_FILE="${CA_FILE-ca}"
+export ETC="$etcDir"
+export VAR="$varDir"
+export CSR="$etcDir/csr.json"
+export CAR="$etcDir/$CA_FILE.request.json"
+export CA="$varDir/$CA_FILE.pem"
+export CA_JSON="$caDir/$CA_FILE.json"
+export CA_KEY="$caDir/$CA_FILE-key.pem"
+EOF
+
+	source $caDir/env
+
+	[ -n "$csr" ] && echo $csr | base64 --decode > $CSR
+	[ -n "$car" ] && echo $car | base64 --decode > $CAR
+	
+	ca.sh
+done
+
+# 
