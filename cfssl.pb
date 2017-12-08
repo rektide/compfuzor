@@ -35,11 +35,11 @@
         [ -z "$CN" ] && echo "need a common-name which will be used as filename" >&2 && exit 1
         [ ! -e "$CSR" ] && echo "need a certificate signing request json" >&2 && exit 1
         function joinby { local IFS="$1"; shift; echo "$*"; }
-        [ -z "$HOSTS" ] && export HOSTS="$(jo -a $*)"
+        [ -z "$HOSTS" ] && export _HOSTS_J="$(jo -a $*)"
 
         # generate a csr
         [ -n "${INITCA+x}" ] && INITCA=$(jq -r 'has("ca") // ""' $CSR)
-        jq --arg CN "$CN" --argjson HOSTS "$HOSTS" '. + {CN: $CN, hosts: $HOSTS}' $CSR > "$CN.keyconf.$TIMESTAMP"
+        jq --arg CN "$CN" --argjson HOSTS "$_HOSTS_J" '. + {CN: $CN, hosts: $HOSTS}' $CSR > "$CN.keyconf.$TIMESTAMP"
         cfssl genkey ${INITCA:+-initca=true} "$CN.keyconf.$TIMESTAMP" > "$CN.jsonkey.$TIMESTAMP" || exit 1
         ln -sf $CN.keyconf.$TIMESTAMP $CN.keyconf
         ln -sf $CN.jsonkey.$TIMESTAMP $CN.jsonkey
@@ -71,6 +71,8 @@
       CA: "{{VAR}}/{{CA_FILE}}.pem"
       CA_JSON: "{{VAR}}/{{CA_FILE}}.json"
       CA_KEY: "{{VAR}}/{{CA_FILE}}-key.pem"
+      TYPE: "{{TYPE}}"
+      INSTANCE: "{{INSTANCE}}"
 
     CA_FILE: ca
     CA:

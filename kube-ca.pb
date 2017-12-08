@@ -3,6 +3,9 @@
   vars:
     TYPE: kube-ca
     INSTANCE: main
+    ETC_FILES:
+    - name: cas.json
+      content: "{{CAs|to_nice_json}}"
 
     etcd: "etcd-{{INSTANCE}}"
     etcd_client: "etcd-client-{{INSTANCE}}"
@@ -12,23 +15,22 @@
     kubelet: "kubernetes-kubelet-{{INSTANCE}}"
     kubelet_client: "kubernetes-kubelet-client-{{INSTANCE}}"
     api: "kubernetes-api-{{INSTANCE}}"
+    aggregator: "kubernetes-aggregator-{{INSTANCE}}"
 
-    ETC_FILES:
-    - name: cas.json
-      content: "{{CAs|to_nice_json}}"
     CA_PARENT: "ca-{{INSTANCE}}"
+    DEFAULT_DOMAIN: "{{INSTANCE|replace('-', '.')}}"
     CAs:
     - name: parent
-      external: "{{parent}}"
-      external_sub: "current-intermediary" # use this sub-ca within the parent ca. optional.
+      external: "{{EXTERNAL|default(CA_PARENT)}}"
+      externalSub: "current-intermediate" # use this sub-ca within the parent ca. optional.
       comment: point to an external ca to sign these ca's with
     - name: ca
-      default_parent: true
-      parent: "{{parent}}" # it has an external parent
+      defaultParent: true
+      parent: "parent" # it has an external parent
     - name: intermediary
-      alias: current-intermediary
+      alias: current-intermediate
       parent: ca # all other's will be signed with this if they have no parent
-      default_parent: true
+      defaultParent: true
     - name: "{{aggregator}}"
     - name: "{{api}}"
       comment: base api server certs
