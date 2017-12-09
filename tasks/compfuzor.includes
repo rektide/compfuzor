@@ -22,6 +22,7 @@
 - include: compfuzor/vars_pg.tasks
 - include: compfuzor/vars_env2.tasks
 - include: compfuzor/vars_user.tasks
+- include: compfuzor/vars_repo.tasks
 - debug: "msg='Compfuzor: completed vars'"
 
 - include: compfuzor/user.tasks
