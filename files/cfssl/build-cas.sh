@@ -52,7 +52,7 @@ findParent(){
 }
 
 # initialize each ca
-for row in $(jq -rc'.[]' $manifest)
+for row in $(jq -rc '.[]' $manifest)
 do
 	name="$(echo $row|jq -rc '.name // empty')"
 	parent="$(echo $row|jq -rc '.parent // empty')"
@@ -71,11 +71,11 @@ do
 		# is external one of our own ca's?
 		# is it a parent service?
 		# we can't be sure yet because we haven't created all our cas
-		return
+		continue
 	fi
 
 	caDir=$VAR/$name
-	etcdDir=$ETC/$name
+	etcDir=$ETC/$name
 
 	# create directories
 	mkdir -p $caDir
@@ -128,7 +128,7 @@ EOF
 done
 
 # run all external now that 
-for row in $(jq -rc'.[]' $manifest)
+for row in $(jq -rc '.[]' $manifest)
 do
 	name=$(echo $row|jq -rc '.name // empty')
 	external=$(echo $row|jq -rc '.external // empty')
@@ -143,7 +143,7 @@ do
 done
 
 # create cas
-for row in $(jq -rc'.[]' $manifest)
+for row in $(jq -rc '.[]' $manifest)
 do
 	name="$(echo $row|jq -rc '.name')"
 	external="$(echo $row|jq -rc '.external')"
