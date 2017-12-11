@@ -75,7 +75,7 @@
       org: system:masters
       owner: "{{controller_manager}}" # a guess
   tasks:
-  - include: tasks/compfuzor.includes
+  - include: tasks/compfuzor.includes type=srv
   # two outputs: 
   # 1. ca's
   # 2. env files appropriate 

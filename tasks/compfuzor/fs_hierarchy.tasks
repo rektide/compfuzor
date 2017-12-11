@@ -25,6 +25,12 @@
   register: _has_dirpath
   changed_when: _has_dirpath.stat.exists
   when: not FS_DIR_TOP_PROPER|default(False) # opposite of a bypass, hard check for proper top dir if set, will let creation attempts run even though something exists
+- name: "Set _has_dirpath if FS_DIR_TOP_PROPER is set"
+  set_fact:
+    _has_dirpath:
+      stat:
+        exists: False
+  when: FS_DIR_TOP_PROPER|default(False) # opposite of a bypass, hard check for proper top dir if set, will let creation attempts run even though something exists
 
 # create main directory
 - name: "Create top {{include|upper}} directory"

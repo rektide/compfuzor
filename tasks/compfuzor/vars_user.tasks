@@ -1,8 +1,12 @@
+- name: 'Set OWNER'
+  set_fact:
+    OWNER: "{{USER|default(ansible_user_id, True)}}"
+  when: OWNER is not defined
 - name: 'Set USER as per OWNER'
   set_fact:
-    USER: "{{OWNER}}"
-  when: OWNER is defined
+    USER: "{{OWNER|default(TYPE|default(NAME), True)}}"
+  when: OWNER is defined and OWNER|bool and USER is not defined
 - name: 'Set default USER'
   set_fact:
-    USER: "{{ TYPE + '-' + INSTANCE if TYPE is defined and INSTANCE is defined else NAME }}"
+    USER: "{{ TYPE if TYPE is defined else NAME }}"
   when: OWNER|default(False) == True or OWNER|default(False) == "True"

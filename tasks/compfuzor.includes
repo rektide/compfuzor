@@ -7,6 +7,7 @@
 # then start assembling perceieved higher and higher level vars
 - include: compfuzor/vars_base.tasks
 - include: compfuzor/vars_type.tasks
+- include: compfuzor/vars_user.tasks
 - include: compfuzor/vars_secret.tasks
 - include: compfuzor/vars_env.tasks
 - include: compfuzor/vars_xdg.tasks
@@ -21,7 +22,6 @@
 - include: compfuzor/vars_debconf.tasks
 - include: compfuzor/vars_pg.tasks
 - include: compfuzor/vars_env2.tasks
-- include: compfuzor/vars_user.tasks
 - include: compfuzor/vars_repo.tasks
 - debug: "msg='Compfuzor: completed vars'"
 

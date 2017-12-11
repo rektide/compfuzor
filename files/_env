@@ -12,10 +12,10 @@
 {% endif -%}
 {%- endmacro -%}
 
+{{- def("DIR", DIR) }}
 {% if ENV is defined -%}
 {% for k,v in ENV.iteritems() -%}
 {{ def(k,v) -}}
 {% endfor -%}
-{{ def("COMPFUZOR_ENVS", ENV.keys()) }}
+{{ def("COMPFUZOR_ENVS", ENV.keys()) -}}
 {% endif -%}
-{{- def("DIR", DIR) }}

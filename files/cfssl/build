@@ -1,7 +1,6 @@
 #!/bin/bash
 
-[ -n "$DIR" ] && cd $DIR
-export PATH="$DIR/bin:$PATH"
+[ -n "$DIR" ] && export PATH="$DIR/bin:$PATH"
 
 manifest=$1
 [ -z "$DEFAULT_DOMAIN" ] && DEFAULT_DOMAIN="{{DEFAULT_DOMAIN|default('')}}"
@@ -9,19 +8,20 @@ manifest=$1
 [ -z "$TYPE" ] && TYPE="{{TYPE|default('')}}"
 [ -z "$INSTANCE" ] && INSTANCE="{{INSTANCE|default('')}}"
 
-let $defaultParent=""
+defaultParent=""
+IFS=$'\n'
 # extract global facts
-for row in $(jq -r '.[] $manifest| @base64' $manifest)
+for row in $(jq -rc '.[]' $manifest)
 do
-	let _defaultParent=$(echo $row|base64 --decode|jq -r "$.default_parent")
+	_defaultParent="$(echo $row|jq -rc '.default_parent // empty')"
 	[ -n "$_defaultParent" ] && defaultParent=$_defaultParent
 done
 
 # create a line in the env file, and assign that value to _source
 exportStanza(){
 	# args: FINAL_NAME, source, default-source
-	let line=""
-	let value="\$$2"
+	local line=""
+	local value="\$$2"
 	[ -z "$value" ] && [ -n "$3" ] && value="\$$3"
 	if [ -n "$value" ]
 	then
@@ -34,15 +34,15 @@ exportStanza(){
 
 findExternal(){
 	# args: external, externalSub optional
-	let ext="$1"
-	let extSub="$2"
-	let found=""
+	local ext="$1"
+	local extSub="$2"
+	local found=""
 	if [ -z "$extSub" ]
 	then
 		[ -e "$DIR/../$ext" ] found="$DIR/../$ext"
 		[ -e "$VAR/$ext" ] && found="$VAR/$ext"
 	else
-
+		echo OH NO WHAT AM I DOING I FORGOT
 	fi
 	[ -n "$found" ] && echo $found
 }
@@ -52,20 +52,19 @@ findParent(){
 }
 
 # initialize each ca
-for row in $(jq -r '.[] $manifest| @base64' $manifest)
+for row in $(jq -rc'.[]' $manifest)
 do
-	let name=$(echo $row|base64 --decode|jq -r "$.name")
-	let parent=$(echo $row|base64 --decode|jq -r "$.parent")
-	let default_parent=$(echo $row|base64 --decode|jq -r "$.default_parent")
-	let external=$(echo $row|base64 --decode|jq -r "$.external")
-	let external_sub=$(echo $row|base64 --decode|jq -r "$.external_sub")
-	let alias=$(echo $row|base64 --decode|jq -r "$.alias")
-	let comment=$(echo $row|base64 --decode|jq -r "$.comment")
-	let domain=$(echo $row|base64 --decode|jq -r "$.domain")
-	let consumer="$(echo $row|base64 --decode|jq -r '$.consumer')"
-	let hosts="$(echo $row|base64 --decode|jq -r '$.hosts')"
-	let csr="$(echo $row|base64 --decode|jq -r '$.csr')"
-	let car="$(echo $row|base64 --decode|jq -r '$.car')"
+	name="$(echo $row|jq -rc '.name // empty')"
+	parent="$(echo $row|jq -rc '.parent // empty')"
+	external="$(echo $row|jq -rc '.external // empty')"
+	external_sub="$(echo $row|jq -rc '.external_sub // empty')"
+	alias="$(echo $row|jq -rc '.alias // empty')"
+	comment="$(echo $row|jq -rc '.comment // empty')"
+	domain="$(echo $row|jq -rc '.domain // empty')"
+	consumer="$(echo $row|jq -rc '.consumer // empty')"
+	hosts="$(echo $row|jq -rc '.hosts // empty')"
+	csr="$(echo $row|jq -rc '.csr // empty')"
+	car="$(echo $row|jq -rc '.car // empty')"
 
 	if [ -n "$external" ]
 	then
@@ -75,8 +74,8 @@ do
 		return
 	fi
 
-	let caDir=$VAR/$name
-	let etcdDir=$ETC/$name
+	caDir=$VAR/$name
+	etcdDir=$ETC/$name
 
 	# create directories
 	mkdir -p $caDir
@@ -129,10 +128,10 @@ EOF
 done
 
 # run all external now that 
-for row in $(jq -r '.[] $manifest| @base64' $manifest)
+for row in $(jq -rc'.[]' $manifest)
 do
-	let name=$(echo $row|base64 --decode|jq -r "$.name")
-	let external=$(echo $row|base64 --decode|jq -r "$.external")
+	name=$(echo $row|jq -rc '.name // empty')
+	external=$(echo $row|jq -rc '.external // empty')
 
 	if [ -z "$external" ]
 	then
@@ -144,17 +143,17 @@ do
 done
 
 # create cas
-for row in $(jq -r '.[] $manifest| @base64' $manifest)
+for row in $(jq -rc'.[]' $manifest)
 do
-	let name=$(echo $row|base64 --decode|jq -r "$.name")
-	let external=$(echo $row|base64 --decode|jq -r "$.external")
+	name="$(echo $row|jq -rc '.name')"
+	external="$(echo $row|jq -rc '.external')"
 
 	if [ -n "$external" ]
 	then
 		continue
 	fi
 
-	let $caDir="$ETC/$name"
+	caDir="$ETC/$name"
 
 	# source our new env
 	source $caDir/env

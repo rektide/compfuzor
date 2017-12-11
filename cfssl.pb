@@ -2,9 +2,9 @@
 - hosts: all
   vars:
     TYPE: cfssl
-    INSTANCE: yoyodyne 
+    INSTANCE: main
     ETC_FILES:
-    - name: ca.json
+    - name: ca.request.json
       content: "{{CA|to_nice_json}}"
     - name: csr.json
       content: "{{SIGN|to_nice_json}}"
@@ -12,6 +12,7 @@
     - csr
     - cert
     BINS:
+    - name: build-cas.sh
     - name: ca.sh
       exec: |
         # create a ca
@@ -34,7 +35,7 @@
         [ -z "$CN" ] && export CN="$1"
         [ -z "$CN" ] && echo "need a common-name which will be used as filename" >&2 && exit 1
         [ ! -e "$CSR" ] && echo "need a certificate signing request json" >&2 && exit 1
-        function joinby { local IFS="$1"; shift; echo "$*"; }
+        #function joinby { local IFS="$1"; shift; echo "$*"; }
         [ -z "$HOSTS" ] && export _HOSTS_J="$(jo -a $*)"
 
         # generate a csr
@@ -52,7 +53,7 @@
       exec: |
         [ -z "$CN" ] && export CN="$1"
         [ -z "$CN" ] && echo "need a common-name which will be used as filename" >&2 && exit 1
-        if [ "$#" -gte 2 ] ; then
+        if [ "$#" -gt 1 ] ; then
         	function joinby { local IFS="$1"; shift; echo "$*"; }
         	[ -z "$HOSTS" ] && export HOSTS="$(joinby , $*)"
         fi
@@ -73,6 +74,7 @@
       CA_KEY: "{{VAR}}/{{CA_FILE}}-key.pem"
       TYPE: "{{TYPE}}"
       INSTANCE: "{{INSTANCE}}"
+      PATH: "{{DIR}}/bin:$PATH"
 
     CA_FILE: ca
     CA:

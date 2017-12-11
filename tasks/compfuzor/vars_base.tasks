@@ -77,9 +77,9 @@
   - "examples-private/{{TYPE}}.yaml"
   - "vars/empty.yaml"
 
-- name: "Select default username {{TYPE|default(NAME)}}"
-  set_fact: USER="{{TYPE|default(NAME)}}"
-  when: not USER|default(False)
+#- name: "Select default username {{TYPE|default(NAME)}}"
+#  set_fact: USER="{{TYPE|default(NAME)}}"
+#  when: not USER|default(False)
 - name: "Set PREFIX_DIR variable from DIR"
   set_fact: PREFIX_DIR="{{DIR|default()|dirname}}"
   when: not DIR|default(False) and not PREFIX_DIR|default(False)

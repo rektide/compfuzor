@@ -4,14 +4,14 @@
     src: "files/_env"
     dest: "{{DIR}}/env"
     owner: "{{OWNER|default(omit)}}"
-  become: "{{not (DIR|can_write)}}"
+  become: "{{ not DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
   when: has_env.stdout|int == 0 and ENV|default(False)
 - name: copy in env file
   template:
     src: "files/{{TYPE|default(NAME)}}/env"
     dest: "{{DIR}}/env"
     owner: "{{OWNER|default(omit)}}"
-  become: "{{not (DIR|can_write)}}"
+  become: "{{ not DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
   when: has_env.stdout|int != 0
 
 - name: set env export mode high
@@ -21,14 +21,14 @@
     src: "files/_env"
     dest: "{{DIR}}/env.export"
     owner: "{{OWNER|default(omit)}}"
-  become: "{{not (DIR|can_write)}}"
+  become: "{{ not DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
   when: has_env_export.stdout|int == 0 and ENV|default(False)
 - name: copy in env.export file
   template:
     src: "files/{{TYPE|default(NAME)}}/env.export"
     dest: "{{DIR}}/env.export"
     owner: "{{OWNER|default(omit)}}"
-  become: "{{not (DIR|can_write)}}"
+  become: "{{ not DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
   when: has_env_export.stdout|int != 0
 
 - name: link env.`NAME` into PREFIX_DIR
