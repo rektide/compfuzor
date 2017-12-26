@@ -74,6 +74,9 @@
     - cn: kubecfg
       org: system:masters
       owner: "{{controller_manager}}" # a guess
+    ENV:
+      ETC: "{{DIR}}/etc"
+      VAR: "{{DIR}}/var"
   tasks:
   - include: tasks/compfuzor.includes type=srv
   # two outputs: 
