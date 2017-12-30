@@ -164,18 +164,55 @@ echo >&2
 echo "create CAs" >&2
 for row in $(jq -rc '.[]' $manifest)
 do
-	name="$(echo $row|jq -rc '.name')"
-	external="$(echo $row|jq -rc '.external')"
-
+	external="$(echo $row|jq -rc '.external // empty')"
 	if [ -z "$external" ]
 	then
 		continue
 	fi
 
+	# extract supplemental records
+	name="$(echo $row|jq -rc '.name // empty')"
+	# preserve "false" for cn
+	cn="$(echo $row|jq -rc 'if .cn != false then .cn // "MAGIC_NONE" else false')"
+	# default domain
+	defaultDomain="\"${DEFAULT_DOMAIN}\""
+	[ ${#defaultDomain} -eq 2 ] && defaultDomain="empty"
+	domain="$(echo $row|jq -rc ".domain // $defaultDomain")"
+	
+	supplementalCar=""
+	ourCar=""
+	parentCar=""
+
+	# default to name
+	[ "$cn" = "MAGIC_NONE" ] && cn="$name"
+	# if not absolute, add domain
+	[ -n "$cn" ] && [[ "$cn" != *"."* ]] && [ -n "$domain" ] && cn="$cn.$domain"
+	# supplement CAR with 
+	[ -n "$cn" ] && [ "$cn" != "false" ] && supplementalCar+="CN:\"$cn\","
+	# trim trailing, wrap json object in it's {}
+	supplemental="{${supplemental%?}}"
+
+	# from the parent we need a default CA Request profile
+	if [ -e "$_etc/$name/parent" ]  && [ -e "$_etc/$name/parent/env.export" ]
+	then
+		# source parent
+		source "$_etc/$name/parent/env.export" 
+		# read car
+		[ -e "$CAR" ] && parentCar="$(cat $CAR)"
+	fi
+
 	# source our new env
 	source $_etc/$name/env
+
+	ourCar="{}"
+	[ -e "$CAR" ] && ourCar="$(cat $CAR)"
+
+	# add up all our CAR's
+	addJson supplementalCar parentCar
+	addJson supplementalCar ourCar
+
 	# generate a ca
-	ca.sh
+	ca.sh <(cat $supplementalCar)
 done
 ETC=$_etc
 VAR=$_var
