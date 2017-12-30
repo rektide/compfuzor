@@ -17,17 +17,17 @@
     api: "kubernetes-api-{{INSTANCE}}"
     aggregator: "kubernetes-aggregator-{{INSTANCE}}"
 
-    CA_PARENT: "ca-{{INSTANCE}}"
+    CA_PARENT: "cfssl-{{INSTANCE}}"
     DEFAULT_DOMAIN: "{{INSTANCE|replace('-', '.')}}"
     CAs:
     - name: parent
       external: "{{EXTERNAL|default(CA_PARENT)}}"
-      externalSub: "current-intermediate" # use this sub-ca within the parent ca. optional.
+      #externalSub: "current-intermediate" # use this sub-ca within the parent ca. optional.
       comment: point to an external ca to sign these ca's with
     - name: ca
       defaultParent: true
       parent: "parent" # it has an external parent
-    - name: intermediary
+    - name: intermediate
       alias: current-intermediate
       parent: ca # all other's will be signed with this if they have no parent
       defaultParent: true

@@ -1,8 +1,11 @@
 #!/bin/bash
 
+[ -z "$DIR" ] && echo "Need a DIR of root cfssl instance" >&2 && exit 2
 [ -n "$DIR" ] && export PATH="$DIR/bin:$PATH"
 
 manifest=$1
+_etc="$ETC"
+_var="$VAR"
 [ -z "$DEFAULT_DOMAIN" ] && DEFAULT_DOMAIN="{{DEFAULT_DOMAIN|default('')}}"
 [ -z "$CA_PARENT" ] && CA_PARENT="{{CA_PARENT|default('')}}"
 [ -z "$TYPE" ] && TYPE="{{TYPE|default('')}}"
@@ -16,13 +19,14 @@ do
 	_defaultParent="$(echo $row|jq -rc '.default_parent // empty')"
 	[ -n "$_defaultParent" ] && defaultParent=$_defaultParent
 done
+[ -z "$defaultParent" ] && echo "default parent: $defaultParent" >&2
 
 # create a line in the env file, and assign that value to _source
 exportStanza(){
-	# args: FINAL_NAME, source, default-source
+	# args: FINAL_NAME, source, default-source, default-literal
 	local line=""
-	local value="\$$2"
-	[ -z "$value" ] && [ -n "$3" ] && value="\$$3"
+	local value="$(eval echo "\$$2")"
+	[ -z "$value" ] && [ -n "$3" ] && eval value="\$$3"
 	if [ -n "$value" ]
 	then
 		line="export $1=$value"
@@ -49,9 +53,12 @@ findExternal(){
 
 findParent(){
 	# args: 
+	echo findParent
 }
 
 # initialize each ca
+echo >&2
+echo "initize CAs" >&2
 for row in $(jq -rc '.[]' $manifest)
 do
 	name="$(echo $row|jq -rc '.name // empty')"
@@ -78,12 +85,12 @@ do
 	etcDir=$ETC/$name
 
 	# create directories
-	mkdir -p $varDir
+	mkdir -p $varDir/{cert,csr}
 	mkdir -p $etcDir
 	if [ -n "$alias" ]
 	then
-		ln -s $varDir $VAR/$alias
-		ln -s $etcDir $ETC/$alias
+		ln -sf $varDir $VAR/$alias
+		ln -sf $etcDir $ETC/$alias
 	fi
 
 	# create certificate-signing-request (csr) and certificate authority request
@@ -102,7 +109,7 @@ do
 	exportStanza HOSTS hosts
 	exportStanza CAR car
 	exportStanza CSR csr
-	echo << EOF > $etcDir/env
+	cat << EOF > $etcDir/env
 # $comment
 export CA_FILE="${CA_FILE-ca}"
 export ETC="$etcDir"
@@ -128,38 +135,50 @@ EOF
 done
 
 # run all external now that 
+echo >&2
+echo "run external" >&2
 for row in $(jq -rc '.[]' $manifest)
 do
-	name=$(echo $row|jq -rc '.name // empty')
 	external=$(echo $row|jq -rc '.external // empty')
+	if [ -z "$external" ]
+	then
+		continue
+	fi
+
+	name=$(echo $row|jq -rc '.name // empty')
+	[ -z "$name" ] && echo "Need a name for external directory" >&2 && exit 1
+
+	externalDir="$external"
+	[[ "$externalDir" == /* ]] || externalDir="$(realpath "$DIR/../$external")"
+	[ ! -d "$externalDir" ] && echo "External '$external' not found at '$externalDir'" >&2 && exit 1
+
+	sub=$(echo $row|jq -rc '.externalSub // empty')
+	[ ! -z "$sub" ] && sub="/$sub"
+	ln -sf "$externalDir/var$sub" "$VAR/$name"
+	ln -sf "$externalDir/etc$sub" "$ETC/$name"
+
+done
+
+# create cas
+echo >&2
+echo "create CAs" >&2
+for row in $(jq -rc '.[]' $manifest)
+do
+	name="$(echo $row|jq -rc '.name')"
+	external="$(echo $row|jq -rc '.external')"
 
 	if [ -z "$external" ]
 	then
 		continue
 	fi
 
-	# is this external one of our sub-cas
-	# is this external is a separate ca service
-done
-
-# create cas
-for row in $(jq -rc '.[]' $manifest)
-do
-	name="$(echo $row|jq -rc '.name')"
-	external="$(echo $row|jq -rc '.external')"
-
-	if [ -n "$external" ]
-	then
-		continue
-	fi
-
-	varDir="$ETC/$name"
-
 	# source our new env
-	source $varDir/env
+	source $_etc/$name/env
 	# generate a ca
 	ca.sh
 done
+ETC=$_etc
+VAR=$_var
 
 # sign ca's with parent
 # give all consumers links to us

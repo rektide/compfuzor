@@ -8,22 +8,31 @@
       content: "{{CA|to_nice_json}}"
     - name: csr.json
       content: "{{SIGN|to_nice_json}}"
+    - name: cas.json
+      content: "{{CAs|to_nice_json}}"
     VAR_DIRS:
     - csr
     - cert
+    CAs:
+    - name: "."
+    - name: intermediate
+      parent: signing
+      alias: current-intermediate
+      defaultParent: true
     BINS:
     - name: build-cas.sh
+      args: "{{ETC}}/cas.json"
     - name: ca.sh
-      exec: |
+      content: |
         # create a ca
         [ ! -e "$CAR" ] && echo "need a ca request json" >&2 && exit 1
         cfssl gencert -initca $CAR > $CA_JSON.$TIMESTAMP
         ln -sf $CA_JSON.$TIMESTAMP $CA_JSON
         (cd $VAR; cat $CA_JSON | cfssljson -bare $CA_FILE)
         echo $(realpath $CA)
-      run: '{{ not lookup("fileexists", VAR + "/ca.json") }}'
+      #run: '{{ not lookup("fileexists", VAR + "/ca.json") }}'
     - name: regen.sh
-      exec: |
+      content: |
         # regenerate ca'
         cfssl gencert -renewca -ca $CA -ca-key $CA_KEY > $CA_JSON.$TIMESTAMP
         ln -sf $CA_KEY.$TIMESTAMP $CA_KEY
@@ -31,7 +40,7 @@
         echo $(realpath $CA)
     - name: csr.sh
       basedir: "${VAR}/csr"
-      exec: |
+      content: |
         [ -z "$CN" ] && export CN="$1"
         [ -z "$CN" ] && echo "need a common-name which will be used as filename" >&2 && exit 1
         [ ! -e "$CSR" ] && echo "need a certificate signing request json" >&2 && exit 1
@@ -50,7 +59,7 @@
         echo $(realpath $CN.jsonkey)
     - name: sign.sh
       basedir: "${VAR}/cert"
-      exec: |
+      content: |
         [ -z "$CN" ] && export CN="$1"
         [ -z "$CN" ] && echo "need a common-name which will be used as filename" >&2 && exit 1
         if [ "$#" -gt 1 ] ; then
