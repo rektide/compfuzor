@@ -9,27 +9,33 @@
   when: DIR|default(True)
 - name: "Creating `DIRS`"
   file:
-    path: "{{DIR+'/' if item|first != '/' and item|first != '~' else ''}}{{item}}"
+    path: "{{_dest}}"
     state: directory
     mode: "{{DIRMODE}}"
     owner: "{{OWNER|default(omit)}}"
   with_items: DIRS
-  become: "{{ OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid }}"
+  become: "{{ not _dest|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid }}"
   when: DIRS is defined
+  vars:
+    _dest: "{{DIR+'/' if item|first != '/' and item|first != '~' else ''}}{{item}}"
 - name: "Creating `FILES`"
   # someone wanted a basename here but eclipse has a ../content & like yeah, that's fine. locales holds the blame. see cf0fdccf0c.
   template:
     src: "files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}"
-    dest: "{{DIR}}/{{item.dest|default(item.name)|default(item)}}"
+    dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
   with_items: FILES
-  become: "{{ not (DIR+'/'+item.dest|default(item.name)|default(item))|dirname|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid }}"
+  become: "{{ not _dest|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid }}"
   when: FILES is defined and FILES is not mapping
+  vars:
+    dest: "{{DIR}}/{{item.dest|default(item.name)|default(item)}}"
 - name: "Creating `FILES` mapping"
   template:
     src: "files/{{TYPE|default(NAME)}}/{{ item[1] }}"
-    dest: "{{ DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '' }}{{item[0]}}"
+    dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
   with_items: FILES.iteritems()
-  become: "{{ not ((DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '')+ item[0])|dirname|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid }}"
+  become: "{{ not _dest|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid }}"
   when: FILES is defined and FILES is mapping
+  vars:
+    _dest: "{{ DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '' }}{{item[0]}}"

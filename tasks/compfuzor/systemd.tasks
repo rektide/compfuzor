@@ -1,12 +1,12 @@
 ---
 - debug: "msg='Compfuzor: install systemd units'"
 - set_fact:
-    _SYSTEMD_PREFIX_DIR: "{{PREFIX_DIR}}"
+    _SYSTEMD_PREFIX_DIR: "{{PREFIX_DIR|default(False)}}"
     PREFIX_DIR: "%h{{ PREFIX_DIR[1:] }}"
-  when: "{{PREFIX_DIR[0] == '~'}}"
+  when: "{{PREFIX_DIR|default(False) and PREFIX_DIR[0] == '~'}}"
 - include: ../systemd.unit.includes unit_type=service
 - include: ../systemd.unit.includes unit_type=unit
 - include: ../systemd.unit.includes unit_type=socket
 - set_fact:
     PREFIX_DIR: "{{_SYSTEMD_PREFIX_DIR}}"
-  when: "{{_PREFIX_DIR is defined}}"
+  when: "{{_SYSTEMD_PREFIX_DIR|default(False)}}"

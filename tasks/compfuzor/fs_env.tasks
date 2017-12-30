@@ -4,14 +4,14 @@
     src: "files/_env"
     dest: "{{DIR}}/env"
     owner: "{{OWNER|default(omit)}}"
-  become: "{{ not DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
+  become: "{{ not DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid}}"
   when: has_env.stdout|int == 0 and ENV|default(False)
 - name: copy in env file
   template:
     src: "files/{{TYPE|default(NAME)}}/env"
     dest: "{{DIR}}/env"
     owner: "{{OWNER|default(omit)}}"
-  become: "{{ not DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
+  become: "{{ not DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid}}"
   when: has_env.stdout|int != 0
 
 - name: set env export mode high
@@ -21,14 +21,14 @@
     src: "files/_env"
     dest: "{{DIR}}/env.export"
     owner: "{{OWNER|default(omit)}}"
-  become: "{{ not DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
+  become: "{{ not DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid}}"
   when: has_env_export.stdout|int == 0 and ENV|default(False)
 - name: copy in env.export file
   template:
     src: "files/{{TYPE|default(NAME)}}/env.export"
     dest: "{{DIR}}/env.export"
     owner: "{{OWNER|default(omit)}}"
-  become: "{{ not DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
+  become: "{{ not DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid}}"
   when: has_env_export.stdout|int != 0
 
 - name: link env.`NAME` into PREFIX_DIR
@@ -37,7 +37,7 @@
     dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
     state: link
-  become: "{{ not _dest|can_write or not _dest|dirname|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid }}"
+  become: "{{ not _dest|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid }}"
   when: PREFIX_DIR|default(False) and (ENV|default(False) or has_env.stdout|int != 0)
   vars:
     _dest: "{{PREFIX_DIR}}/env.{{NAME|default(TYPE)}}"
@@ -47,7 +47,7 @@
     dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
     state: link
-  become: "{{ not _dest|can_write or not _dest|dirname|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid }}"
+  become: "{{ not _dest|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid }}"
   when: PREFIX_DIR|default(False) and (ENV|default(False) or has_env.stdout|int != 1 and has_type_env.stdout|int != 0)
   vars:
     _dest: "{{PREFIX_DIR}}/env.{{TYPE|default(NAME)}}"
