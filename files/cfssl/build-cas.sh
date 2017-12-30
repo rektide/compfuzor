@@ -74,15 +74,15 @@ do
 		continue
 	fi
 
-	caDir=$VAR/$name
+	varDir=$VAR/$name
 	etcDir=$ETC/$name
 
 	# create directories
-	mkdir -p $caDir
+	mkdir -p $varDir
 	mkdir -p $etcDir
 	if [ -n "$alias" ]
 	then
-		ln -s $caDir $VAR/$alias
+		ln -s $varDir $VAR/$alias
 		ln -s $etcDir $ETC/$alias
 	fi
 
@@ -110,8 +110,8 @@ export VAR="$varDir"
 export CSR="$etcDir/csr.json"
 export CAR="$etcDir/$CA_FILE.request.json"
 export CA="$varDir/$CA_FILE.pem"
-export CA_JSON="$caDir/$CA_FILE.json"
-export CA_KEY="$caDir/$CA_FILE-key.pem"
+export CA_JSON="$varDir/$CA_FILE.json"
+export CA_KEY="$varDir/$CA_FILE-key.pem"
 export NAME="$name"
 export ALIAS="$alias"
 $_parent
@@ -153,10 +153,10 @@ do
 		continue
 	fi
 
-	caDir="$ETC/$name"
+	varDir="$ETC/$name"
 
 	# source our new env
-	source $caDir/env
+	source $varDir/env
 	# generate a ca
 	ca.sh
 done
