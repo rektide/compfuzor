@@ -24,6 +24,7 @@
       args: "{{ETC}}/cas.json"
     - name: ca.sh
       content: |
+        [ -n "$1" ] && CAR="$1"
         # create a ca
         [ ! -e "$CAR" ] && echo "need a ca request json" >&2 && exit 1
         cfssl gencert -initca $CAR > $CA_JSON.$TIMESTAMP

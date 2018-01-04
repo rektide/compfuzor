@@ -165,16 +165,12 @@ addJson(){
 	[ -z "$agg" ] && agg="{}"
 
 	# name of variable with file of json in it
-	file="$(eval echo \$$2)"
-	# clear if no such file
-	[ ! -e "$file" ] && file=""
-	# read file
-	[ -n "$file" ] && file="$(cat $file)"
+	more="$(eval echo \$$2)"
 	# fallback to minimal json form if something has gone wrong & are empty
-	[ -z "$file" ] && file="{}"
+	[ -z "$more" ] && more="{}"
 
 	# write value back into aggregate
-	eval "$1='$(jq -s ".[0] * .[1]" <(echo $agg) <(echo $file))'"
+	eval "$1='$(jq -s ".[0] * .[1]" <(echo $agg) <(echo $more))'"
 }
 
 # create cas
@@ -185,9 +181,9 @@ do
 	# this ought be broken out somehow.
 	# i like moving most to ca.sh?
 
-	# no CA to generate, must exist already, is linked
+	# external means we expect someone else created it already
 	external="$(echo $row|jq -rc '.external // empty')"
-	if [ -z "$external" ]
+	if [ -n "$external" ]
 	then
 		continue
 	fi
@@ -195,7 +191,7 @@ do
 	# extract supplemental records
 	name="$(echo $row|jq -rc '.name // empty')"
 	# preserve "false" for cn
-	cn="$(echo $row|jq -rc 'if .cn != false then .cn // "MAGIC_NONE" else false')"
+	cn="$(echo $row|jq -rc 'if .cn != false then .cn // "MAGIC_NONE" else false end')"
 	# default domain
 	defaultDomain="\"${DEFAULT_DOMAIN}\""
 	[ ${{ '{' }}#defaultDomain} -eq 2 ] && defaultDomain="empty"
@@ -211,15 +207,15 @@ do
 	# if not absolute, add domain
 	[ -n "$cn" ] && [[ "$cn" != *"."* ]] && [ -n "$domain" ] && cn="$cn.$domain"
 	# supplement CAR with 
-	[ -n "$cn" ] && [ "$cn" != "false" ] && supplementalCar+="CN:\"$cn\","
+	[ -n "$cn" ] && [ "$cn" != "false" ] && supplementalCar+="\"CN\":\"$cn\","
 	# trim trailing, wrap json object in it's {}
-	supplemental="{${supplemental%?}}"
+	supplementalCar="{${supplementalCar%?}}"
 
 	# from the parent we need a default CA Request profile
-	if [ -e "$_etc/$name/parent" ]  && [ -e "$_etc/$name/parent/env.export" ]
+	if [ -e "$_etc/$name/parent/env" ]
 	then
 		# source parent
-		source "$_etc/$name/parent/env.export" 
+		source "$_etc/$name/parent/env" 
 		# read car
 		[ -e "$CAR" ] && parentCar="$(cat $CAR)"
 	fi
@@ -235,7 +231,7 @@ do
 	addJson finalCar supplementalCar
 
 	# generate a ca
-	ca.sh <(cat $finalCar)
+	ca.sh <(echo $finalCar)
 done
 ETC=$_etc
 VAR=$_var
