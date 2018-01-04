@@ -77,6 +77,7 @@
     ENV:
       ETC: "{{DIR}}/etc"
       VAR: "{{DIR}}/var"
+      DEFAULT_DOMAIN: "{{DEFAULT_DOMAIN}}"
   tasks:
   - include: tasks/compfuzor.includes type=srv
   # two outputs: 

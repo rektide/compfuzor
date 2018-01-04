@@ -159,11 +159,33 @@ do
 
 done
 
+addJson(){
+	# name of variable with json in it
+	local agg="$(eval echo \$$1)"
+	[ -z "$agg" ] && agg="{}"
+
+	# name of variable with file of json in it
+	file="$(eval echo \$$2)"
+	# clear if no such file
+	[ ! -e "$file" ] && file=""
+	# read file
+	[ -n "$file" ] && file="$(cat $file)"
+	# fallback to minimal json form if something has gone wrong & are empty
+	[ -z "$file" ] && file="{}"
+
+	# write value back into aggregate
+	eval "$1='$(jq -s ".[0] * .[1]" <(echo $agg) <(echo $file))'"
+}
+
 # create cas
 echo >&2
 echo "create CAs" >&2
 for row in $(jq -rc '.[]' $manifest)
 do
+	# this ought be broken out somehow.
+	# i like moving most to ca.sh?
+
+	# no CA to generate, must exist already, is linked
 	external="$(echo $row|jq -rc '.external // empty')"
 	if [ -z "$external" ]
 	then
@@ -176,12 +198,13 @@ do
 	cn="$(echo $row|jq -rc 'if .cn != false then .cn // "MAGIC_NONE" else false')"
 	# default domain
 	defaultDomain="\"${DEFAULT_DOMAIN}\""
-	[ ${#defaultDomain} -eq 2 ] && defaultDomain="empty"
+	[ ${{ '{' }}#defaultDomain} -eq 2 ] && defaultDomain="empty"
 	domain="$(echo $row|jq -rc ".domain // $defaultDomain")"
 	
 	supplementalCar=""
 	ourCar=""
 	parentCar=""
+	finalCar="{}"
 
 	# default to name
 	[ "$cn" = "MAGIC_NONE" ] && cn="$name"
@@ -203,16 +226,16 @@ do
 
 	# source our new env
 	source $_etc/$name/env
-
-	ourCar="{}"
+	# load "our" CAR
 	[ -e "$CAR" ] && ourCar="$(cat $CAR)"
 
 	# add up all our CAR's
-	addJson supplementalCar parentCar
-	addJson supplementalCar ourCar
+	addJson finalCar parentCar
+	addJson finalCar ourCar
+	addJson finalCar supplementalCar
 
 	# generate a ca
-	ca.sh <(cat $supplementalCar)
+	ca.sh <(cat $finalCar)
 done
 ETC=$_etc
 VAR=$_var
