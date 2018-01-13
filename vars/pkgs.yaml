@@ -187,7 +187,7 @@ BASE:
 #- dhcpcd5
 - openssh-server
 - openssh-client
-- haveged
+#- haveged
 #- udisks2
 - dosfstools
 - xfsprogs
@@ -257,6 +257,8 @@ WORKSTATION:
 - exfat-fuse
 - sshfs
 - s3fs
+- tlp
+- exiftool
 VIRTUALIZATION:
 #- qemu
 - qemu-kvm
@@ -286,7 +288,7 @@ WORKSTATION_X:
 - dbus-x11
 - gtk-redshift
 - gnome-settings-daemon
-- parcellite
+- parcellite # clipboard manager
 #- rxvt-unicode
 - rxvt-unicode-256color
 - stalonetray
@@ -295,7 +297,7 @@ WORKSTATION_X:
 - xauth
 - xbase-clients
 - xinput
-- xmonad
+#- xmonad
 - xpra
 - python-gst1.0
 - xsel
