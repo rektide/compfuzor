@@ -46,4 +46,3 @@
     depth: "{{ 1 if GIT_DEPTH|default(omit) else 0 }}"
   with_items: "{{REPOS if REPOS|default(False) else {} }}"
   when: REPOS|default(False) and REPOS is not mapping
-

@@ -6,7 +6,7 @@
     group: "{{GROUP|default(omit)}}"
   with_items: "{{GET_URLS|default([])}}"
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: GET_URLS|default(False) and GET_URLS|default(False) is string
+  when: GET_URLS|default(False) is iterable
   vars:
     _dest: "{{SRC}}/{{item|basename}}"
 - name: "get urls"
@@ -17,6 +17,6 @@
     group: "{{GROUP|default(omit)}}"
   with_items: "{{GET_URLS|default({})}}"
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: GET_URLS|default(False) is sequence and GET_URLS|default(False) is not string
+  when: GET_URLS|default(False) is mapping
   vars:
     _dest: "{{item.dest|defaultDir(SRC)}}"
