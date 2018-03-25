@@ -7,17 +7,25 @@
     dest: "{{OPT}}"
     state: link
     owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
+  become: "{{OPT|should_become(OWNER|default(), ansible_user_gid, GROUP|default(), ansible_user_gid)}}"
   when: DIR != OPT and not OPT_DIR|default(False)
 - name: "insure OPT dir"
   file:
     path: "{{OPT}}"
     state: directory
     owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
+  become: "{{OPT|should_become(OWNER|default(), ansible_user_gid, GROUP|default(), ansible_user_gid)}}"
   when: DIR != OPT and OPT_DIR|default(False)
 - name: "link source DIR into OPT/src"
   file:
     src: "{{DIR}}"
-    dest: "{{OPT}}/src"
+    dest: "{{_dest}}"
     state: link
     owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_gid, GROUP|default(), ansible_user_gid)}}"
   when: DIR != OPT and OPT_DIR|default(False)
+  vars:
+    _dest: "{{OPT}}/src"

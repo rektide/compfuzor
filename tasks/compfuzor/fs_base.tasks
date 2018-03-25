@@ -5,16 +5,18 @@
     state: directory
     mode: "{{DIRMODE}}"
     owner: "{{OWNER|default(omit)}}"
-  become: "{{ not DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid }}"
-  when: DIR|default(True)
+    group: "{{GROUP|default(omit)}}"
+  become: "{{DIR|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  when: DIR|default(False)
 - name: "Creating `DIRS`"
   file:
     path: "{{_dest}}"
     state: directory
     mode: "{{DIRMODE}}"
     owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
   with_items: DIRS
-  become: "{{ not _dest|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid }}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: DIRS is defined
   vars:
     _dest: "{{DIR+'/' if item|first != '/' and item|first != '~' else ''}}{{item}}"
@@ -24,8 +26,9 @@
     src: "files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}"
     dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
   with_items: FILES
-  become: "{{ not _dest|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid }}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: FILES is defined and FILES is not mapping
   vars:
     dest: "{{DIR}}/{{item.dest|default(item.name)|default(item)}}"
@@ -34,8 +37,9 @@
     src: "files/{{TYPE|default(NAME)}}/{{ item[1] }}"
     dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
   with_items: FILES.iteritems()
-  become: "{{ not _dest|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid }}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: FILES is defined and FILES is mapping
   vars:
     _dest: "{{ DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '' }}{{item[0]}}"

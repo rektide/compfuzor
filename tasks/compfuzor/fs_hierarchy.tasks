@@ -39,7 +39,8 @@
     state: directory
     mode: "{{mode|default(770)}}"
     owner: "{{OWNER|default(omit)}}"
-  become: "{{ not _dirpath|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid}}"
+    group: "{{GROUP|default(omit)}}"
+  become: "{{_dirpath|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and not FS_CONTAINED|default(False) and not _has_dirpath.stat.exists
 # link include dir into DIR
 - name: "Link top {{include|upper}} directory into `DIR`"
@@ -48,7 +49,8 @@
     dest: "{{_dest}}"
     state: link
     owner: "{{OWNER|default(omit)}}"
-  become: "{{not _dest|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid}}"
+    group: "{{GROUP|default(omit)}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: "_go|bool and not DIR_BYPASS|default(False) and not DIR_LINK_BYPASS|default(False) and not {{_link_bypass}}|default(False) and not FS_CONTAINED|default(False)"
   vars:
     _dest: "{{DIR}}/{{include|lower}}"
@@ -60,7 +62,8 @@
     state: directory
     mode: "{{mode|default(770)}}"
     owner: "{{OWNER|default(omit)}}"
-  become: "{{not _dest|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid}}"
+    group: "{{GROUP|default(omit)}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and FS_CONTAINED|default(False) and not _has_dirpath
   vars:
     _dest: "{{DIR}}/{{include|lower}}"
@@ -71,58 +74,77 @@
     dest: "{{_dirpath}}"
     state: link
     owner: "{{OWNER|default(omit)}}"
-  become: "{{not _dirpath|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid}}"
+    group: "{{GROUP|default(omit)}}"
+  become: "{{_dirpath|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: "_go|bool and not DIR_BYPASS|default(False) and not DIR_LINK_BYPASS|default(False) and not {{_link_bypass}}|default(False) and FS_CONTAINED|default(False) and not _has_dirpath.stat.exists"
 # create subdirs
 - name: "Create {{include|upper}} subdirs"
   file:
-    path: "{{_dirpath}}/{{item}}"
+    path: "{{_dest}}"
     state: directory
     owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
   with_items: "{{hostvars[inventory_hostname][_dirs]|default(vars[_dirs])|default([])}}"
-  become: "{{not _dirpath|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: "_go|bool and {{_dirs}} is sequence" # defined and {{dirs}} != True"
+  vars:
+    _dest: "{{_dirpath}}/{{item}}"
 # create .d subdirectories
 - name: "Create {{include|upper}} .d directories"
   file:
-    path: "{{_dirpath}}/{{item}}.d"
+    path: "{{_dest}}"
     state: directory
     mode: "{{mode|default(770)}}"
     owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
   with_items: "{{hostvars[inventory_hostname][_d]|default(vars[_d])|default([])}}"
-  become: "{{not _dirpath|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and hostvars[inventory_hostname][_d]|default(vars[_d])|default(False)
+  vars:
+    _dest: "{{_dirpath}}/{{item}}.d"
 
 # include files
 - name: "Create {{include|upper}} files"
   template:
     src: "files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}"
-    dest: "{{_dirpath}}/{{item.dest|default(item.name)|default(item)}}"
+    dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
   with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
-  become: "{{not _dirpath|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and not item.raw|default(False) and not item.content|default(False) and not item.var|default(False)
+  vars:
+    _dest: "{{_dirpath}}/{{item.dest|default(item.name)|default(item)}}"
 - name: "Create raw {{include|upper}} files"
   copy:
     src: "files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}"
-    dest: "{{_dirpath}}/{{item.dest|default(item.name)|default(item)}}"
+    dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
   with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
-  become: "{{not _dirpath|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and item.raw|default(False) and not item.content|default(False) and not item.var|default(False)
+  vars:
+    _dest: "{{_dirpath}}/{{item.dest|default(item.name)|default(item)}}"
 - name: "Create {{include|upper}} content files"
   template:
     src: "files/content"
-    dest: "{{_dirpath}}/{{item.dest|default(item.name)|default(item)}}"
+    dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
   with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
-  become: "{{not _dirpath|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and not item.raw|default(False) and item.content|default(False) and not item.var|default(False)
+  vars:
+    _dest: "{{_dirpath}}/{{item.dest|default(item.name)|default(item)}}"
 - name: "Create {{include|upper}} vars files"
   copy:
     content: "{{ hostvars[inventory_hostname][item.var]|default(vars[item.var]) }}"
-    dest: "{{_dirpath}}/{{item.dest|default(item.name)|default(item)}}"
+    dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
   with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
-  become: "{{not _dirpath|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and item.var|default(False)
+  vars:
+    _dest: "{{_dirpath}}/{{item.dest|default(item.name)|default(item)}}"

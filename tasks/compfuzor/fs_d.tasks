@@ -15,8 +15,9 @@
     state: directory
     mode: "{{mode|default(770)}}"
     owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
   with_items: "{{_files}}"
-  become: "{{not _dirpath|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
+  become: "{{_dirpath|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: (not not _go) and vars[_d]|default(False)
 - name: Copy pre-assembed target into backup and link backup into .d if no backup exists
   shell: "test ! -f {{_path}}/{{item}}.orig -f {{_path}}/{{item}} && mv {{_path}}/{{item}} {{_path}}/{{item}}.orig && ln -s {{_path}}/{{item}}.orig {{_path}}/{{item}}.d/20-$(basename {{item}}); echo $?"
@@ -25,11 +26,14 @@
 - name: "Assemble the .d directory"
   assemble:
     src: "{{_path}}/{{item}}.d"
-    dest: "{{_path}}/{{item}}"
+    dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
   when: not not _go
-  become: "{{not _path|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   with_items: "{{_files}}"
+  vars:
+    _dest: "{{_path}}/{{item}}"
 - name: "Insure we have a backup file so as to prevent the baked assembly from being assembled"
   shell: touch {{_path}}/{{item}}.orig
   when: not not _go

@@ -1,17 +1,29 @@
 - name: "Compfuzor: fetch tgz file"
-  get_url: url="{{TGZ}}" dest="{{SRCS_DIR}}/{{TGZ|basename}}"
+  get_url:
+    url: "{{TGZ}}"
+    dest: "{{_dest}}"
+    owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  vars:
+    _dest: "{{SRCS_DIR}}/{{TGZ|basename}}"
 - name: prep TGZ.url file
   set_fact:
     content: "{{TGZ}}"
 - name: record TGZ.url file"
   template:
     src: "files/content"
-    dest: "{{SRCS_DIR}}/{{TGZ|basename}}.url"
+    dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
-  become: "{{not SRCS_DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
+    group: "{{GROUP|default(omit)}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  vars:
+    _dest: "{{SRCS_DIR}}/{{TGZ|basename}}.url"
 - name: extract tgz
-  shell: "tar -xaf {{SRCS_DIR}}/{{TGZ|basename}} --strip-components={{TGZ_STRIP_COMPONENTS|default(1)}}"
+  shell: "tar -xaf {{_tar}} --strip-components={{TGZ_STRIP_COMPONENTS|default(1)}}"
+  #unarchive: src="{{SRCS_DIR}}/{{TGZ|basename}}" dest="{{DIR}}" copy="no"
   args:
     chdir: "{{DIR}}"
-  become: "{{not SRCS_DIR|can_write or OWNER|default(ansible_user_id) != ansible_user_id or OWNER|default(ansible_user_gid) != ansible_user_gid}}"
-  #unarchive: src="{{SRCS_DIR}}/{{TGZ|basename}}" dest="{{DIR}}" copy="no"
+  become: "{{_tar|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  vars:
+    _tar: "{{SRCS_DIR}}/{{TGZ|basename}}"

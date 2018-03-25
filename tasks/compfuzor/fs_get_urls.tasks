@@ -3,18 +3,20 @@
     url: "{{item}}"
     dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
   with_items: "{{GET_URLS|default([])}}"
-  become: "{{not _dest|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: GET_URLS|default(False) and GET_URLS|default(False) is string
   vars:
     _dest: "{{SRC}}/{{item|basename}}"
 - name: "get urls"
   get_url:
-  args:
     url: "{{item.url}}"
     dest: "{{_dest}}"
+    owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
   with_items: "{{GET_URLS|default({})}}"
-  become: "{{not _dest|can_write or OWNER|default(ansible_user_id) != ansible_user_id or GROUP|default(ansible_user_gid) != ansible_user_gid}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: GET_URLS|default(False) is sequence and GET_URLS|default(False) is not string
   vars:
     _dest: "{{item.dest|defaultDir(SRC)}}"
