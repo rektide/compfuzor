@@ -16,11 +16,13 @@
     - libcolorhug-dev # inside colord repo blah
     - docbook
     ENVS:
-      COLORHUG_LIBS: "-l{{SRCS_DIR}}/colord-{{INSTANCE}}/build/lib"
-      COLORHUG_CFLAGS: "-I{{SRCS_DIR}}/colord-{{INSTANCE}}/lib/colorhug"
+      COLORD: "{{SRCS_DIR}}/colord-{{INSTANCE}}"
     BINS:
     - name: build.sh
-      content: ./autogen.sh
+      content: |
+        [ -f $COLORD/env.export ] && source $COLORD/env.export
+        ./autogen.sh
+        make
       run: True
   tasks:
   - include: tasks/compfuzor.includes type=src

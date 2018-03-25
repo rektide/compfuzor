@@ -23,12 +23,17 @@
     - argyll
     - libgirepository1.0-dev
     - dpkg-dev
+    - gtk-doc-tools
+    ENVS:
+      PKG_CONFIG_PATH: "{{DIR}}/opt/lib/x86_64-linux-gnu/pkgconfig"
     BINS:
     - name: build.sh
       content: |
-        meson . build/
+        mkdir opt
+        meson --prefix "{{DIR}}/opt" . build/
         cd build
         ninja
+        ninja install # afils but gets far enough
   tasks:
   - include: tasks/compfuzor.includes type=src
   
