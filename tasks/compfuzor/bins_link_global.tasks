@@ -1,13 +1,18 @@
 ---
 - name: "Create `GLOBAL_BINS_DIR` dir"
-  file: path="{{GLOBAL_BINS_DIR}}" state=directory
+  file:
+    path: "{{GLOBAL_BINS_DIR}}"
+    state: directory
   with_items: "{{BINS|default([])}}"
+  become: "{{GLOBAL_BINS_DIR|should_become(OWNER|default(), ansible_user_gid, GROUP|default(), ansible_user_gid)}}"
   when: item.global|default(False)
 - name: "Link `BINS` into `GLOBAL_BINS_DIR`"
   file:
-  args:
     src: "{{DIR+'/' if item.basedir|default(False) and item.basedir|first != '/' else ''}}{{DIR if item.basedir|default(False) == True else item.basedir|default(BINS_DIR)}}/{{item.dest|default(item.name,true)|default(item.global,true) if item is mapping else item}}"
-    dest: "{{GLOBAL_BINS_DIR}}/{{(item.global if item.global != True else item.dest|default((item.global if item.global|default(False) is string else item.name),true)|default(item.global,true)) if item is mapping else item}}"
+    dest: "{{_dest}}"
     state: link
   with_items: "{{BINS|default([])}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_gid, GROUP|default(), ansible_user_gid)}}"
   when: item.global|default(False) and item.delay|default(False) == delay_phase|default(False)
+  vars:
+    _dest: "{{GLOBAL_BINS_DIR}}/{{(item.global if item.global != True else item.dest|default((item.global if item.global|default(False) is string else item.name),true)|default(item.global,true)) if item is mapping else item}}"

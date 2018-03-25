@@ -3,6 +3,9 @@
   file:
   args:
     src: "{{(item.link if item.link != True else item.name)|defaultDir(BINS_DIR)}}"
-    dest: "{{BINS_DIR}}/{{item.dest|default(item.name)}}"
+    dest: "{{_dest}}"
   with_items: "{{BINS|default([])}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_gid, GROUP|default(), ansible_user_gid)}}"
   when: item is mapping and item.link|default(False) and item.delay|default(False) == delay_phase|default(False)
+  vars:
+    _dest: "{{BINS_DIR}}/{{item.dest|default(item.name)}}"

@@ -1,7 +1,7 @@
 - name: "Compfuzor: set repos variables"
   set_fact: "{{item|upper}}_DIR={{REPO_DIR}}/{{item}}"
   with_items: "{{(REPOS|default({})).keys()}}"
-  when: "vars[item|upper + '_DIR'] is not defined and hostvars[inventory_hostname][item|upper + '_DIR'] is not defined"
+  when: "REPOS is defined and vars[item|upper + '_DIR'] is not defined and hostvars[inventory_hostname][item|upper + '_DIR'] is not defined"
 - name: "Add GOPATH to ENV"
   set_fact:
     ENV: "{{ ENV|default({})|combine({'GOPATH': DIR}) }}"
