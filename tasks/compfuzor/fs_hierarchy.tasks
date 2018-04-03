@@ -12,22 +12,22 @@
     _d: "{{include|upper}}_D" # assemblies to create
     _bypass: "{{include|upper}}_BYPASS" # skip doing this stuff!
     _link_bypass: "{{include|upper}}_LINK_BYPASS"
-    _dirpath: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper])}}" # lookup the path for the dir
+    __defaultDir: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper])}}" # lookup the path for the dir
     _go: True
-    _has_dirpath:
+    _has_defaultDir:
       stat:
         exists: False
 - name: "Cancel go if nothing to do"
   set_fact: _go="" # do not go if bypass, or nothing is defined pertaining to this component
   when: "({{_bypass}}|default(True)) and not (({{_dirs}}|default(False)) or ({{_files}}|default(False)) or ({{_d}}|default(False)) or ({{_base}}|default(False)))"
 - name: "Test for top {{base}} directory - will permit"
-  stat: path="{{_dirpath if not FS_CONTAINERED|default(False) else DIR+'/'+include|lower}}"
-  register: _has_dirpath
-  changed_when: _has_dirpath.stat.exists
+  stat: path="{{__defaultDir if not FS_CONTAINERED|default(False) else DIR+'/'+include|lower}}"
+  register: _has_defaultDir
+  changed_when: _has_defaultDir.stat.exists
   when: not FS_DIR_TOP_PROPER|default(False) # opposite of a bypass, hard check for proper top dir if set, will let creation attempts run even though something exists
-- name: "Set _has_dirpath if FS_DIR_TOP_PROPER is set"
+- name: "Set _has_defaultDir if FS_DIR_TOP_PROPER is set"
   set_fact:
-    _has_dirpath:
+    _has_defaultDir:
       stat:
         exists: False
   when: FS_DIR_TOP_PROPER|default(False) # opposite of a bypass, hard check for proper top dir if set, will let creation attempts run even though something exists
@@ -35,17 +35,17 @@
 # create main directory
 - name: "Create top {{include|upper}} directory"
   file:
-    path: "{{_dirpath}}"
+    path: "{{__defaultDir}}"
     state: directory
     mode: "{{mode|default(770)}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
-  become: "{{_dirpath|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: _go|bool and not FS_CONTAINED|default(False) and not _has_dirpath.stat.exists
+  become: "{{__defaultDir|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  when: _go|bool and not FS_CONTAINED|default(False) and not _has_defaultDir.stat.exists
 # link include dir into DIR
 - name: "Link top {{include|upper}} directory into `DIR`"
   file:
-    src: "{{_dirpath}}"
+    src: "{{__defaultDir}}"
     dest: "{{_dest}}"
     state: link
     owner: "{{OWNER|default(omit)}}"
@@ -64,87 +64,75 @@
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: _go|bool and FS_CONTAINED|default(False) and not _has_dirpath
+  when: _go|bool and FS_CONTAINED|default(False) and not _has_defaultDir
   vars:
     _dest: "{{DIR}}/{{include|lower}}"
 # place links to subdirs into common locations
 - name: "Link {{include|upper}} subdirectory into common global space- contained mode"
   file:
     src: "{{DIR}}/{{include|lower}}"
-    dest: "{{_dirpath}}"
+    dest: "{{__defaultDir}}"
     state: link
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
-  become: "{{_dirpath|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: "_go|bool and not DIR_BYPASS|default(False) and not DIR_LINK_BYPASS|default(False) and not {{_link_bypass}}|default(False) and FS_CONTAINED|default(False) and not _has_dirpath.stat.exists"
+  become: "{{__defaultDir|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  when: "_go|bool and not DIR_BYPASS|default(False) and not DIR_LINK_BYPASS|default(False) and not {{_link_bypass}}|default(False) and FS_CONTAINED|default(False) and not _has_defaultDir.stat.exists"
 # create subdirs
 - name: "Create {{include|upper}} subdirs"
   file:
-    path: "{{_dest}}"
+    path: "{{__DEST}}"
     state: directory
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{hostvars[inventory_hostname][_dirs]|default(vars[_dirs])|default([])}}"
-  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  become: "{{_DEST|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: "_go|bool and {{_dirs}} is sequence" # defined and {{dirs}} != True"
-  vars:
-    _dest: "{{_dirpath}}/{{item}}"
 # create .d subdirectories
 - name: "Create {{include|upper}} .d directories"
   file:
-    path: "{{_dest}}"
+    path: "{{__DEST}}.d"
     state: directory
     mode: "{{mode|default(770)}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{hostvars[inventory_hostname][_d]|default(vars[_d])|default([])}}"
-  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  become: "{{__DEST|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and hostvars[inventory_hostname][_d]|default(vars[_d])|default(False)
-  vars:
-    _dest: "{{_dirpath}}/{{item}}.d"
 
 # include files
 - name: "Create {{include|upper}} files"
   template:
     src: "files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}"
-    dest: "{{_dest}}"
+    dest: "{{__DEST}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
-  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  become: "{{__DEST|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and not item.raw|default(False) and not item.content|default(False) and not item.var|default(False)
-  vars:
-    _dest: "{{_dirpath}}/{{item.dest|default(item.name)|default(item)}}"
 - name: "Create raw {{include|upper}} files"
   copy:
     src: "files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}"
-    dest: "{{_dest}}"
+    dest: "{{__DEST}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
-  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  become: "{{__DEST|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and item.raw|default(False) and not item.content|default(False) and not item.var|default(False)
-  vars:
-    _dest: "{{_dirpath}}/{{item.dest|default(item.name)|default(item)}}"
 - name: "Create {{include|upper}} content files"
   template:
     src: "files/content"
-    dest: "{{_dest}}"
+    dest: "{{__DEST}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
-  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  become: "{{__DEST|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and not item.raw|default(False) and item.content|default(False) and not item.var|default(False)
-  vars:
-    _dest: "{{_dirpath}}/{{item.dest|default(item.name)|default(item)}}"
 - name: "Create {{include|upper}} vars files"
   copy:
     content: "{{ hostvars[inventory_hostname][item.var]|default(vars[item.var]) }}"
-    dest: "{{_dest}}"
+    dest: "{{__DEST}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
-  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  become: "{{__DEST|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and item.var|default(False)
-  vars:
-    _dest: "{{_dirpath}}/{{item.dest|default(item.name)|default(item)}}"
