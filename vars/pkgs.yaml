@@ -28,6 +28,7 @@ BASE_armel:
 BASE_armhf:
 - mtd-utils
 BASE:
+# the first segment of base is "essential" Debian packages
 - acl
 - apt
 - apt-transport-https
@@ -260,6 +261,8 @@ WORKSTATION:
 - tlp
 - exiftool
 - libglib2.0-bin
+- flent
+- x11-xserver-utils
 VIRTUALIZATION:
 #- qemu
 - qemu-kvm
