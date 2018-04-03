@@ -91,4 +91,5 @@ PERSIST_VARS:
 - WITH
 - ENABLE
 CA_EXPIRY: "26280h"
+HOMEDIR: "~{{USER|default(OWNER)|default(ansible_user_id)}}/"
 __DEST: "{{item.dest|default(item.name)|default(item)|defaultDir(__defaultDir|default(DIR))}}"

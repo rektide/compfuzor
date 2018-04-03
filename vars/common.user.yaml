@@ -1,6 +1,6 @@
 ---
 USERMODE: True
-PREFIX_DIR: "~{{USER|default(OWNER)|default(ansible_user_id)}}/"
+PREFIX_DIR: "{{HOMEDIR}}"
 USERMODE_DIR: "{{PREFIX_DIR}}.local"
 BINS_DIR: "{{DIR}}/bin"
 GLOBAL_BINS_DIR: "{{USERMODE_DIR}}/bin"
