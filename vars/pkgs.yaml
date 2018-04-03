@@ -259,6 +259,7 @@ WORKSTATION:
 - s3fs
 - tlp
 - exiftool
+- libglib2.0-bin
 VIRTUALIZATION:
 #- qemu
 - qemu-kvm
@@ -313,6 +314,7 @@ WORKSTATION_X:
 - fonts-liberation
 - ttf-anonymous-pro
 - lightdm
+- d-feet
 WORKSTATION_KDE_BASE:
 - kde-baseapps
 - konqueror-nsplugins

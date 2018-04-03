@@ -7,7 +7,7 @@
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   become: "{{DIR|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: DIR|default(False)
+  when: DIR|default(True)
 - name: "Creating `DIRS`"
   file:
     path: "{{_dest}}"
