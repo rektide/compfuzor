@@ -9,4 +9,4 @@
 - include: ../systemd.unit.includes unit_type=socket
 - set_fact:
     PREFIX_DIR: "{{_SYSTEMD_PREFIX_DIR}}"
-  when: "{{_SYSTEMD_PREFIX_DIR|default(False)}}"
+  when: "{{_SYSTEMD_PREFIX_DIR|default(False)|bool}}"
