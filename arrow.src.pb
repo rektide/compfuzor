@@ -19,7 +19,7 @@
     - plasma
     - jemalloc
     - with_grpc
-    - use_sse4
+    - use_sse
     - extra_error_context
     ENV:
       CMAKE_FLAGS: "-DARROW_{{features|map('upper')|join('=on -DARROW_')}}=on"
