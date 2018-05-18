@@ -22,15 +22,15 @@
     - use_sse4
     - extra_error_context
     ENV:
-      FLAGS: "-DARRROW_{{features|map(upper)|join('=on -DARRROW_')}}=on"
+      CMAKE_FLAGS: "-DARROW_{{features|map('upper')|join('=on -DARROW_')}}=on"
     BINS:
     - name: build.sh
       basedir: True
       run: True
       content: |
-        mkdir release
-        cd release
-        cmake ..
-        make $FLAGS
+        mkdir -p release-cpp
+        cd release-cpp
+        cmake ../cpp $CMAKE_FLAGS
+        make
   tasks:
   - include: tasks/compfuzor.includes type=src
