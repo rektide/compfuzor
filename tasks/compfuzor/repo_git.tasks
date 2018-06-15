@@ -2,30 +2,41 @@
 - name: "Compfuzor: fetch git repository"
   git:
     repo: "{{REPO}}"
-    dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
+    dest: "{{ dest }}"
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: "{{ GIT_DEPTH|default(omit) }}"
     version: "{{ GIT_VERSION|default(omit) }}"
+  become: "{{dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: REPO|default(False)
+  vars:
+    dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
 
 - name: "prefetch git repositories"
   git:
     repo: "{{ item.value }}"
-    dest: "{{ REPO_DIR|default(DIR, true)+'/' if item.key|first != '/' and item|first != '~' else '' }}{{ item.key }}"
+    dest: "{{ dest }}"
     track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: 1
+    version: "{{ GIT_VERSION|default(omit) }}"
   with_dict: "{{REPOS if REPOS|default(False) is mapping else {} }}"
+  become: "{{dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: REPOS|default(False) and REPOS is mapping and GIT_DEPTH|default(False)
+  vars:
+    dest: "{{ REPO_DIR|default(DIR, true)+'/' if item.key|first != '/' and item|first != '~' else '' }}{{ item.key }}"
 - name: "fetch git repositories dict"
   git:
     repo: "{{ item.value }}"
-    dest: "{{ REPO_DIR|default(DIR, true)+'/' if item.key|first != '/' and item|first != '~' else '' }}{{ item.key }}"
+    dest: "{{ dest }}"
     track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: "{{ 1 if GIT_DEPTH|default(omit) else 0 }}"
+    version: "{{ GIT_VERSION|default(omit) }}"
+  become: "{{dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   with_dict: "{{REPOS if REPOS|default(False) is mapping else {} }}"
   when: REPOS|default(False) and REPOS is mapping
+  vars:
+    dest: "{{ REPO_DIR|default(DIR, true)+'/' if item.key|first != '/' and item|first != '~' else '' }}{{ item.key }}"
 
 - name: "fetching git repositories list"
   git:
@@ -34,6 +45,7 @@
     track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: 1
+    version: "{{ GIT_VERSION|default(omit) }}"
   with_items: "{{REPOS if REPOS|default(False) is mapping else {} }}"
   when: REPOS|default(False) and REPOS is not mapping
 
@@ -44,5 +56,6 @@
     track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: "{{ 1 if GIT_DEPTH|default(omit) else 0 }}"
+    version: "{{ GIT_VERSION|default(omit) }}"
   with_items: "{{REPOS if REPOS|default(False) else {} }}"
   when: REPOS|default(False) and REPOS is not mapping

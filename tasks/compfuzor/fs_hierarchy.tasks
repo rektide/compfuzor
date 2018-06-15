@@ -58,7 +58,7 @@
 # create include subdirs in DIR
 - name: "Create DIR's {{include|upper}} subdirectory - contained mode"
   file:
-    path: "{{DIR}}/{{include|lower}}"
+    path: "{{_dest}}"
     state: directory
     mode: "{{mode|default(770)}}"
     owner: "{{OWNER|default(omit)}}"
@@ -80,38 +80,44 @@
 # create subdirs
 - name: "Create {{include|upper}} subdirs"
   file:
-    path: "{{__DEST}}"
+    path: "{{_defaultItem}}"
     state: directory
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{hostvars[inventory_hostname][_dirs]|default(vars[_dirs])|default([])}}"
-  become: "{{_DEST|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  become: "{{_defaultItem|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: "_go|bool and {{_dirs}} is sequence" # defined and {{dirs}} != True"
+  vars:
+    _defaultItem: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper])}}/{{item}}" # lookup the path for the dir
 # create .d subdirectories
 - name: "Create {{include|upper}} .d directories"
   file:
-    path: "{{__DEST}}.d"
+    path: "{{_defaultItem}}.d"
     state: directory
     mode: "{{mode|default(770)}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{hostvars[inventory_hostname][_d]|default(vars[_d])|default([])}}"
-  become: "{{__DEST|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  become: "{{_defaultItem|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and hostvars[inventory_hostname][_d]|default(vars[_d])|default(False)
+  vars:
+    _defaultItem: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper])}}/{{item}}" # lookup the path for the dir
 
 # include files
 - name: "Create {{include|upper}} files"
   template:
     src: "files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}"
-    dest: "{{__DEST}}"
+    dest: "{{_defaultItem}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
-  become: "{{__DEST|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  become: "{{_defaultItem|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and not item.raw|default(False) and not item.content|default(False) and not item.var|default(False) and not item.line|default(False)
+  vars:
+    _defaultItem: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper])}}/{{item}}" # lookup the path for the dir
 - name: "Do {{include|upper}} lineinfile"
   lineinfile:
-    dest: "{{__DEST}}"
+    dest: "{{_defaultItem}}"
     line: "{{item.line}}"
     regexp: "{{item.regexp|default('^' + item.line)}}"
     create: "{{item.create|default(True)}}"
@@ -119,33 +125,33 @@
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
-  become: "{{__DEST|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  become: "{{_defaultItem|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and item.line|default(False)
 - name: "Create raw {{include|upper}} files"
   copy:
     src: "files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}"
-    dest: "{{__DEST}}"
+    dest: "{{_defaultItem}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
-  become: "{{__DEST|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  become: "{{_defaultItem|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and item.raw|default(False) and not item.content|default(False) and not item.var|default(False) and not item.line|default(False)
 - name: "Create {{include|upper}} content files"
   template:
     src: "files/content"
-    dest: "{{__DEST}}"
+    dest: "{{_defaultItem}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
-  become: "{{__DEST|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  become: "{{_defaultItem|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and not item.raw|default(False) and item.content|default(False) and not item.var|default(False) and not item.line|default(False)
 # I believe this used to be used a lot, and let the user specify indirectly what goes in. I believe ansible changed.
 #- name: "Create {{include|upper}} vars files"
 #  copy:
 #    content: "{{ hostvars[inventory_hostname][item.var]|default(vars[item.var]) }}"
-#    dest: "{{__DEST}}"
+#    dest: "{{_defaultItem}}"
 #    owner: "{{OWNER|default(omit)}}"
 #    group: "{{GROUP|default(omit)}}"
 #  with_items: "{{ hostvars[inventory_hostname][_files]|default(vars[_files])|default([])}}"
-#  become: "{{__DEST|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+#  become: "{{_defaultItem|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
 #  when: _go|bool and item.var|default(False) and not item.line|default(False)

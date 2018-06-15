@@ -37,7 +37,6 @@ BASE:
 - base-passwd
 - bash
 - bsdutils
-- consolekit
 - coreutils
 - dash
 - debconf
@@ -72,7 +71,7 @@ BASE:
 - iputils-ping
 - initscripts
 - insserv
-- iproute
+- iproute2
 - kmod
 - libacl1
 - libapt-pkg5.0
@@ -172,7 +171,7 @@ BASE:
 - ntpdate
 - grep
 - base-files
-- btrfs-tools
+- btrfs-progs
 - systemd
 - systemd-sysv # special, replaces essential sysvinit
 - libpam-systemd
@@ -303,7 +302,7 @@ WORKSTATION_X:
 - xinput
 #- xmonad
 - xpra
-- python-gst1.0
+- python-gst-1.0
 - xsel
 - xorg
 - xdg-utils
@@ -497,6 +496,8 @@ DEVEL:
 - zlib1g-dev
 - build-essential
 - cmake
+- libncurses5-dev
+- meson
 DEBDEV:
 - build-essential
 - debhelper
@@ -530,17 +531,16 @@ DEBDEV:
 - equivs
 - apt-src
 AUDIO:
-- alsa-base
 - alsa-utils
 - libasound2
 - libasound2-plugins
-- libasound2-plugin-equal
+#- libasound2-plugin-equal
 - pulseaudio
 - libpulse0
 - liblircclient0
 - pulseaudio-module-gconf
-- pulseaudio-module-lirc
-- pulseaudio-module-raop
+#- pulseaudio-module-lirc
+#- pulseaudio-module-raop
 - pulseaudio-module-zeroconf
 - vorbis-tools
 #- earcandy
@@ -549,7 +549,7 @@ AUDIO_X:
 - alsamixergui
 #- pulseaudio-module-x11
 - pulseaudio-utils
-- paman
+#- paman
 - paprefs
 - pavucontrol
 - pasystray
@@ -659,7 +659,7 @@ VAAPI:
 # multimedia-audio-plugins
 MEDIA_X:
 - gimmix
-- tracker-gui
+#- tracker-gui
 - gstreamer1.0-x
 - gstreamer1.0-plugins-bad
 - gstreamer1.0-nice
@@ -748,7 +748,7 @@ OPENSTACK_KEYSTONE_CLIENT:
 - python-six
 - python-stevedore
 CEPH:
-- btrfs-tools
+- btrfs-progs
 - ceph
 - ceph-common
 - ceph-fs-common
@@ -865,7 +865,7 @@ GO:
 DOCKER:
 - docker.io
 #- aufs-tools # sane people only
-- btrfs-tools
+- btrfs-progs
 - cgroupfs-mount
 - git
 - xz-utils
@@ -876,8 +876,8 @@ POSTGRES:
 - postgresql-doc
 - postgis
 - postgis-doc
-- postgresql-9.6-postgis-2.3
-- postgresql-9.6-postgis-scripts
+- postgresql-10-postgis-2.4
+- postgresql-10-postgis-scripts
 - postgresql-plv8
 ZFSONLINUX:
 - zfsonlinux
