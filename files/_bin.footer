@@ -1,0 +1,5 @@
+# restore the set -x/+x to what it was when we started, if we changed it
+if (( V > 98 )); then
+	(( ${_BIN_SETX_STATE[-1]} > 0 )) || set +x # restore
+	_BIN_SETX_STATE=("${_BIN_SETX_STATE[@]:1}") # pop
+fi

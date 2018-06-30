@@ -1,12 +1,7 @@
 #!/bin/bash
 set -e
-export TIMESTAMP="$(date +%y.%m.%d-%T)"
-[ -z "$DIR" ] && export DIR="{{DIR}}"
-{% if ENV|default(False) or has_env.stdout|int == 1 -%}
-[ -n "$ENV_BYPASS" ] || source $(command -v envdefault || true) $DIR/env.export
-{% endif %}
-# V>98 triggers set -x. but save set -x state to restore later, in case being sourced.
-(( V > 98 )) && case "$-" in *x*) _BIN_SETX_STATE+=(1) ;; *) _BIN_SETX_STATE+=(0) ;; esac && set -x
+
+{% include "_bin.header" %}
 
 {% if item.comments is defined %}#{{item.comments}}{% endif %}
 
@@ -26,7 +21,4 @@ cd {{DIR}}/{{item.basedir}}
 {{ item.exec|default("")|arrayitize|join("\n") }}
 {{ item.execs|default("")|arrayitize|join("\n") }}
 
-if (( V > 98 )); then
-	(( ${_BIN_SETX_STATE[-1]} > 0 )) || set +x # restore
-	_BIN_SETX_STATE=("${_BIN_SETX_STATE[@]:1}") # pop
-fi
+{% include "_bin.footer" %}
