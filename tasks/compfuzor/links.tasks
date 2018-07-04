@@ -3,15 +3,21 @@
 - name: "Create directories for LINKS"
   file:
   args:
-    path: "{{ DIR+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{ item.key|dirname }}"
+    path: "{{_path}}"
     state: directory
   with_dict: "{{LINKS|default({})}}"
+  become: "{{_path|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: LINKS|default(False) and not LINK_BYPASS|default(False)
+  vars:
+    _path: "{{ DIR+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{ item.key|dirname }}"
 - name: "Create LINKS"
   file:
   args:
     src: "{{ DIR+'/' if item.value|first != '/' and item.value|first != '~' else '' }}{{item.value}}"
-    dest: "{{ DIR+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{item.key}}"
+    dest: "{{_path}}"
     state: link
   with_dict: "{{LINKS|default({})}}"
+  become: "{{_path|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: LINKS|default(False) and not LINK_BYPASS|default(False)
+  vars:
+    _path: "{{ DIR+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{item.key}}"
