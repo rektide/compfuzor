@@ -20,6 +20,10 @@
       run: True
     - name: post-create.sh
       run: True
+    - name: multihack.sh
+      content: |
+        mkdir -p var/build/etc/apt/trusted.gpg.d
+        cp -aur /etc/apt/trusted.gpg.d/debian*gpg var/build/etc/apt/trusted.gpg.d
     BINS_RUN_BYPASS: True
     BUILD_BYPASS:  False
     PKGS:

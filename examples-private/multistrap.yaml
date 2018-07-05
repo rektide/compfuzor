@@ -4,7 +4,7 @@ noauth: true
 MULTISTRAP_REPOS:
 - name: debian
   source: http://mirrors.kernel.org/debian
-  suite: testing
+  suite: unstable
   keyring: debian-keyring
   pkg_sets:
   - BASE
@@ -16,6 +16,7 @@ MULTISTRAP_REPOS:
   - DOCKER
   - JACK
   - MEDIA
+  - VAAPI
   - POSTGRES
   - RYGEL
   - WORKSTATION
@@ -32,14 +33,18 @@ MULTISTRAP_REPOS:
   - JACK_PLUGINS
   - JACK_X
   - MEDIA_X
+  - WORKSTATION_WAYLAND
   - XPRA
   - MOPIDY
   pkgs:
   - pwgen
   - screen
-  - mumble-server
+  #- mumble-server
   - usbip
   #- linux-image-3.16
+  pkgs:
+  - linux-image-amd64
+  - linux-headers-amd64
   components:
   - main
   - contrib
@@ -48,5 +53,5 @@ MULTISTRAP_REPOS:
   source: http://archive.voodoowarez.com/debian/
   suite: archive
   pkgs:
-  - linux-image-amd64
-  - linux-headers-amd64
+  #- linux-image-amd64
+  #- linux-headers-amd64

@@ -41,7 +41,7 @@ BASE:
 - dash
 - debconf
 - debconf-utils
-- dhcpcd5
+#- dhcpcd5
 #- debian-archive-keyring
 - debian-keyring
 - debianutils
@@ -67,7 +67,7 @@ BASE:
 - grep
 - gzip
 - hostname
-- ifupdown
+#- ifupdown
 - iputils-ping
 - initscripts
 - insserv
@@ -96,7 +96,7 @@ BASE:
 - libpam-runtime
 - libpam0g
 - libprocps6
-- libreadline6
+- libreadline7
 - libselinux1
 - libsemanage-common
 - libsemanage1
@@ -175,6 +175,8 @@ BASE:
 - systemd
 - systemd-sysv # special, replaces essential sysvinit
 - libpam-systemd
+- libnss-systemd
+- libnss3-tools
 - libpam0g
 - libdbus-1-3
 - libcap2
@@ -228,7 +230,7 @@ WORKSTATION:
 - fakeroot
 - acl
 - quota
-- cfv
+#- cfv
 #- dict
 #- dict-wn
 #- dict-devil
@@ -261,7 +263,6 @@ WORKSTATION:
 - exiftool
 - libglib2.0-bin
 - flent
-- x11-xserver-utils
 VIRTUALIZATION:
 #- qemu
 - qemu-kvm
@@ -296,10 +297,18 @@ WORKSTATION_X:
 - rxvt-unicode-256color
 - stalonetray
 - x11-apps
+- x11-xfs-utils
 - x11vnc
 - xauth
 - xbase-clients
 - xinput
+- xserver-xorg-input-all
+- xserver-xorg-input-synaptics
+- xserver-xorg-input-wacom
+- xserver-xorg-video-all
+- xserver-xorg-video-qxl
+- xserver-xorg-video-intel
+- xserver-xspice
 #- xmonad
 - xpra
 - python-gst-1.0
@@ -317,6 +326,29 @@ WORKSTATION_X:
 - ttf-anonymous-pro
 - lightdm
 - d-feet
+- xterm
+- xtermcontrol
+- xtermset
+- xtrlock
+- xtightvncviewer
+- tigervnc-common
+- tigervnc-viewer
+- tigervnc-xorg-extension
+- xutils
+- x11-xserver-utils
+- xvfb
+- xserver-xephyr
+- xrestop
+- xfstt
+- xdo
+- xdotool
+- xcolors
+- xclip
+- mesa-utils
+- mesa-vulkan-drivers
+- libegl1-mesa
+- libgl1-mesa-dri
+- libglx-mesa0
 WORKSTATION_KDE_BASE:
 - kde-baseapps
 - konqueror-nsplugins
@@ -562,7 +594,7 @@ MOPIDY:
 - mopidy-local-sqlite
 - mopidy-mpris
 - mopidy-podcast
-- mopidy-podcast-gpodder
+#- mopidy-podcast-gpodder
 - mopidy-scrobbler
 - mopidy-soundcloud
 - mopidy-tunein
@@ -620,8 +652,8 @@ JACK_X:
 - jack-mixer
 - qjackctl
 #- jacktrip
-- laditools
-- ladish
+#- laditools
+#- ladish
 #- meterbridge
 #- patchage
 MEDIA:
@@ -642,21 +674,30 @@ MEDIA:
 - mpris-remote
 - ncmpc
 VAAPI:
-- i965-va-driver
-- libgstreamer-vaapi1.0-0
-- libva-drm1
-- libva-glx1
-#- libva-wayland
-- libva-x11
+- gstreamer1.0-vaapi
+- libva2
+- libva-drm2
+- libva-glx2
+- libva-wayland2
+- libva-x11-2
 - libvdpau-va-gl1
 - vainfo
-- vdpau
-- vdpau-va-driver
+- va-driver-all
+- mesa-va-drivers
+- i965-va-driver-shaders
 - libvdpau1
+- vdpau-driver-all
 - libvdpau-va-gl1
 - mesa-vdpau-drivers
-- mesa-offscreen
+- vdpau-va-driver
+- vdpauinfo
+- mesa-vdpau-drivers
+- mesa-utils-extra
 # multimedia-audio-plugins
+WORKSTATION_WAYLAND:
+- xwayland
+- libwayland-egl1-mesa
+- weston
 MEDIA_X:
 - gimmix
 #- tracker-gui
@@ -878,7 +919,7 @@ POSTGRES:
 - postgis-doc
 - postgresql-10-postgis-2.4
 - postgresql-10-postgis-scripts
-- postgresql-plv8
+#- postgresql-plv8
 ZFSONLINUX:
 - zfsonlinux
 - zfsutils
