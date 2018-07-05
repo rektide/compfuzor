@@ -37,14 +37,7 @@ MULTISTRAP_REPOS:
   - XPRA
   - MOPIDY
   pkgs:
-  - pwgen
-  - screen
   #- mumble-server
-  - usbip
-  #- linux-image-3.16
-  pkgs:
-  - linux-image-amd64
-  - linux-headers-amd64
   components:
   - main
   - contrib

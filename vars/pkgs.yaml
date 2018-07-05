@@ -23,6 +23,8 @@ BASE_amd64:
 - grub2-common
 - grub-common
 - os-prober
+- linux-image-amd64
+- linux-headers-amd64
 BASE_armel:
 - mtd-utils
 BASE_armhf:
