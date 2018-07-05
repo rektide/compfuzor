@@ -36,7 +36,7 @@ MULTISTRAP_REPOS:
   - WORKSTATION_WAYLAND
   - XPRA
   - MOPIDY
-  pkgs:
+  pkgs: []
   #- mumble-server
   components:
   - main
@@ -45,6 +45,6 @@ MULTISTRAP_REPOS:
 - name: archive
   source: http://archive.voodoowarez.com/debian/
   suite: archive
-  pkgs:
+  pkgs: []
   #- linux-image-amd64
   #- linux-headers-amd64

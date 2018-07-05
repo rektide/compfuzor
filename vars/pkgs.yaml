@@ -324,10 +324,16 @@ WORKSTATION_X:
 - fonts-ricty-diminished
 - fonts-mplus
 - fonts-inconsolata
-- fonts-liberation
+- fonts-liberation2
+#- fonts-materialdesignicons-webfont
+#-fonts-mathjax
+- fonts-opensymbol
+- fonts-open-sans
 - fonts-noto-hinted
 - fonts-noto-mono
 - fonts-roboto-hinted
+- fonts-powerline
+- xfonts-terminus
 - ttf-anonymous-pro
 - lightdm
 - d-feet
@@ -361,6 +367,7 @@ WORKSTATION_KDE_BASE:
 - virtuoso-minimal
 - kde-plasma-desktop
 - lightdm-kde-greeter
+- fonts-oxygen
 OPENCL:
 - ocl-icd-libopencl1
 - python-pyopencl
@@ -687,7 +694,6 @@ MEDIA:
 - mpd
 - mpris-remote
 - ncmpc
-- libav-tools
 - youtube-dl
 - lame
 - opus-tools
