@@ -59,3 +59,12 @@
     version: "{{ GIT_VERSION|default(omit) }}"
   with_items: "{{REPOS if REPOS|default(False) else {} }}"
   when: REPOS|default(False) and REPOS is not mapping
+
+- name: "fetching git worktrees"
+  command: "{{WORKDIR_BIN}} . {{dest}} {{item.branch|default(WORKTREE_BRANCH)}}"
+  args:
+    chdir: "{{ item.src|defaultDir(SRCS_DIR) }}"
+  with_items: "{{REPO_WORKTREE|default([])}}"
+  vars:
+    dest: "{{ REPO_DIR|default(DIR, true)+'/' if item.dest|first != '/' and item|first != '~' else '' }}{{ item.dest }}"
+  when: REPO_WORKTREE|default(False) and not dest|has_write

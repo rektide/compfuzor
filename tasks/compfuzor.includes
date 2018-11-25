@@ -30,7 +30,7 @@
 - debug: "msg=''"
 - debug: "msg='Compfuzor: REPOSITORIES'"
 - include: compfuzor/repo_git.tasks
-  when: (REPO is defined or REPOS is defined) and not GIT_BYPASS|default(False) and not REPO_BYPASS|default(False)
+  when: (REPO is defined or REPOS is defined or REPO_WORKTREE is defined) and not GIT_BYPASS|default(False) and not REPO_BYPASS|default(False)
 - include: compfuzor/repo_cvs.tasks
   when: CVS_REPO is defined and not REPO_BYPASS|default(False)
 - include: compfuzor/repo_svn.tasks

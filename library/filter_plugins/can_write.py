@@ -32,6 +32,10 @@ def diff_user( *a, **kw):
             return True
     return False
 
+def has_write( *a, **kw):
+    path = a[0]
+    return os.access( path, os.W_OK)
+
 def can_write( *a, **kw):
     path = a[0]
     exists = os.access( path, os.F_OK)
@@ -83,6 +87,7 @@ class FilterModule(object):
     def filters(self):
         return {
             'should_become': should_become,
+            'has_write': has_write,
             'can_write': can_write,
             'diff_user': diff_user,
             'to_uid': to_uid,

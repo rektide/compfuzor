@@ -16,6 +16,8 @@ SRCS_DIR: /usr/local/src
 
 BUILD_DIR: "{{OPT}}/build"
 REPO_DIR: "{{SRC}}"
+WORKTREE_BRANCH: master
+WORKDIR_BIN: /usr/share/doc/git/contrib/workdir/git-new-workdir
 PKGCONFIG_DIR: "/usr/local/lib/pkgconfig"
 PKGSS_DIR: "{{SRCS_DIR}}"
 SPECS_DIR: "{{SRCS_DIR}}/spec"
