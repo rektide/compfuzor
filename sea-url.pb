@@ -1,6 +1,5 @@
 ---
 - hosts: all
-  gather_facts: false
   vars:
     TYPE: sea-url
     INSTANCE: git
@@ -8,10 +7,18 @@
     BINARIES:
     - seacurli
     - urlize
-  vars_files:
-  - vars/common.vars
-  - vars/src.vars
+    BINS:
+    - name: seaurli
+      src: false
+      basedir: "{{DIR}}"
+      global: true
+    - name: uget
+      src: false
+      basedir: "{{DIR}}"
+      global: true
+    - name: urlize
+      src: false
+      basedir: "{{DIR}}"
+      global: true
   tasks:
-  - include: tasks/cfvar_includes.tasks
-  - file: src={{DIR}}/{{item}} dest=/usr/local/bin/{{item}} state=link
-    with_items: $BINARIES
+  - include: tasks/compfuzor.includes type=src
