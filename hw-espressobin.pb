@@ -3,12 +3,10 @@
   vars:
     TYPE: hw-espressobin
     INSTANCE: main
-    REPO_WORKTREE:
-    - src: uboot-git
+    REPOS:
+    - repo: git://git.denx.de/u-boot.git
       dest: uboot
-    - src: linux
-      dest: linux
-    ETC_FILES:
+      reference: uboot-git
     BINS:
     - name: build.sh
       exec: |

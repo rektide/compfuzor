@@ -11,60 +11,33 @@
   vars:
     dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
 
-- name: "prefetch git repositories"
-  git:
-    repo: "{{ item.value }}"
-    dest: "{{ dest }}"
-    track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
-    accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
-    depth: 1
-    version: "{{ GIT_VERSION|default(omit) }}"
-  with_dict: "{{REPOS if REPOS|default(False) is mapping else {} }}"
-  become: "{{dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: REPOS|default(False) and REPOS is mapping and GIT_DEPTH|default(False)
-  vars:
-    dest: "{{ REPO_DIR|default(DIR, true)+'/' if item.key|first != '/' and item|first != '~' else '' }}{{ item.key }}"
 - name: "fetch git repositories dict"
   git:
     repo: "{{ item.value }}"
     dest: "{{ dest }}"
     track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
-    depth: "{{ 1 if GIT_DEPTH|default(omit) else 0 }}"
+    depth: "{{ GIT_DEPTH|default(omit) }}"
     version: "{{ GIT_VERSION|default(omit) }}"
-  become: "{{dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  with_dict: "{{REPOS if REPOS|default(False) is mapping else {} }}"
+  become: "{{ dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
+  with_dict: "{{ REPOS if REPOS|default(False) is mapping else {} }}"
   when: REPOS|default(False) and REPOS is mapping
   vars:
-    dest: "{{ REPO_DIR|default(DIR, true)+'/' if item.key|first != '/' and item|first != '~' else '' }}{{ item.key }}"
+    dest: "{{ REPO_DIR|default(DIR, true)+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{ item.key }}"
 
 - name: "fetching git repositories list"
   git:
-    repo: "{{ item }}"
-    dest: "{{ REPO_DIR }}/{{item|basename|regex_replace('^(.*)(.git)?$', '\\1') }}"
+    repo: "{{ item.repo }}"
+    dest: "{{ dest }}"
     track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
-    depth: 1
+    depth: "{{ GIT_DEPTH|default(omit) }}"
     version: "{{ GIT_VERSION|default(omit) }}"
-  with_items: "{{REPOS if REPOS|default(False) is mapping else {} }}"
+    reference: "{{ item.reference|defaultDir(SRCS_DIR) if item.reference|default(False) else omit }}"
+  become: "{{ dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
+  with_items: "{{ REPOS if REPOS|default(False) else [] }}"
   when: REPOS|default(False) and REPOS is not mapping
-
-- name: "fetching git repositories list"
-  git:
-    repo: "{{ item }}"
-    dest: "{{ REPO_DIR }}/{{item|basename|regex_replace('^(.*)(.git)?$', '\\1') }}"
-    track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
-    accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
-    depth: "{{ 1 if GIT_DEPTH|default(omit) else 0 }}"
-    version: "{{ GIT_VERSION|default(omit) }}"
-  with_items: "{{REPOS if REPOS|default(False) else {} }}"
-  when: REPOS|default(False) and REPOS is not mapping
-
-- name: "fetching git worktrees"
-  command: "{{WORKDIR_BIN}} . {{dest}} {{item.branch|default(WORKTREE_BRANCH)}}"
-  args:
-    chdir: "{{ item.src|defaultDir(SRCS_DIR) }}"
-  with_items: "{{REPO_WORKTREE|default([])}}"
   vars:
-    dest: "{{ REPO_DIR|default(DIR, true)+'/' if item.dest|first != '/' and item|first != '~' else '' }}{{ item.dest }}"
-  when: REPO_WORKTREE|default(False) and not dest|has_write
+    dest: "{{ REPO_DIR }}/{{item.repo|basename|regex_replace('\\.git$', '') }}"
+
+- fail: msg="fuck"
