@@ -15,4 +15,4 @@
   become: "{{_dest|should_become(OWNER|default(), ansible_user_gid, GROUP|default(), ansible_user_gid)}}"
   when: item.global|default(False) and item.delay|default(False) == delay_phase|default(False)
   vars:
-    _dest: "{{GLOBAL_BINS_DIR}}/{{(item.global if item.global != True else item.dest|default((item.global if item.global|default(False) is string else item.name),true)|default(item.global,true)) if item is mapping else item}}"
+    _dest: "{{GLOBAL_BINS_DIR}}/{{(item.global if item.global != True else item.dest|default(item.link|basename)|default((item.global if item.global|default(False) is string else item.name),true)|default(item.global,true)) if item is mapping else item}}"

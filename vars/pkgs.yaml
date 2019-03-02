@@ -267,6 +267,8 @@ WORKSTATION:
 - exiftool
 - libglib2.0-bin
 - flent
+- x11-xserver-utils
+- fonts-noto-color-emoji
 VIRTUALIZATION:
 #- qemu
 - qemu-kvm
