@@ -39,5 +39,3 @@
   when: REPOS|default(False) and REPOS is not mapping
   vars:
     dest: "{{ REPO_DIR }}/{{item.repo|basename|regex_replace('\\.git$', '') }}"
-
-- fail: msg="fuck"
