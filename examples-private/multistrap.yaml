@@ -3,9 +3,10 @@ ARCH: "{{INSTANCE}}"
 noauth: true
 MULTISTRAP_REPOS:
 - name: debian
+  # source: http://localhost:3142/mirrors.kernel.org/debian # apt-cacher-ng
   source: http://mirrors.kernel.org/debian
   suite: unstable
-  keyring: debian-keyring
+  keyring: debian-archive-keyring
   pkg_sets:
   - BASE
   - "BASE_{{ARCH}}"
@@ -16,12 +17,12 @@ MULTISTRAP_REPOS:
   - DOCKER
   - JACK
   - MEDIA
-  - VAAPI
+  #- VAAPI
   - POSTGRES
   - RYGEL
-  - WORKSTATION
   - AVAHI_X
-  - WORKSTATION_X
+  - WORKSTATION
+  - "WORKSTATION_X_{{ARCH}}"
   #- WORKSTATION_KDE_BASE
   #- WORKSTATION_KDE
   #- WORKSTATION_MATE

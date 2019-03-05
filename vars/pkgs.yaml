@@ -29,6 +29,8 @@ BASE_armel:
 - mtd-utils
 BASE_armhf:
 - mtd-utils
+BASE_aarch64:
+- mtd-utils
 BASE:
 # the first segment of base is "essential" Debian packages
 - acl
@@ -97,7 +99,7 @@ BASE:
 - libpam-modules-bin
 - libpam-runtime
 - libpam0g
-- libprocps6
+- libprocps7
 - libreadline7
 - libselinux1
 - libsemanage-common
@@ -284,6 +286,10 @@ AVAHI:
 - avahi-utils
 AVAHI_X:
 - avahi-discover
+WORKSTATION_X_aarch64: []
+WORKSTATION_X_amd64:
+- xserver-xorg-video-intel
+- xserver-xspice
 WORKSTATION_X:
 - awesome
 - openbox
@@ -309,8 +315,6 @@ WORKSTATION_X:
 - xserver-xorg-input-wacom
 - xserver-xorg-video-all
 - xserver-xorg-video-qxl
-- xserver-xorg-video-intel
-- xserver-xspice
 #- xmonad
 - xpra
 - python-gst-1.0
@@ -582,7 +586,7 @@ AUDIO:
 - pulseaudio
 - libpulse0
 - liblircclient0
-- pulseaudio-module-gconf
+- pulseaudio-module-gsettings
 #- pulseaudio-module-lirc
 #- pulseaudio-module-raop
 - pulseaudio-module-zeroconf
@@ -614,7 +618,7 @@ MOPIDY:
 - mopidy-scrobbler
 - mopidy-soundcloud
 - mopidy-tunein
-- mopidy-youtube
+#- mopidy-youtube
 - mopidy-somafm
 - mopidy-internetarchive
 BT:
@@ -689,7 +693,7 @@ MEDIA:
 - gstreamer1.0-tools
 - libgstreamer1.0-0
 - libgstreamer-plugins-base1.0-0
-- libavcodec-extra57
+- libavcodec-extra58
 - mpdris2
 - mpd
 - mpris-remote
@@ -724,7 +728,6 @@ WORKSTATION_WAYLAND:
 - libwayland-egl1-mesa
 - weston
 MEDIA_X:
-- gimmix
 #- tracker-gui
 - gstreamer1.0-x
 - gstreamer1.0-plugins-bad
@@ -942,8 +945,8 @@ POSTGRES:
 - postgresql-doc
 - postgis
 - postgis-doc
-- postgresql-10-postgis-2.4
-- postgresql-10-postgis-scripts
+- postgresql-11-postgis-2.5
+- postgresql-11-postgis-scripts
 #- postgresql-plv8
 ZFSONLINUX:
 - zfsonlinux

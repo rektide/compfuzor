@@ -18,6 +18,9 @@
     - disk-gpt.sh
     - name: build
       run: True
+      content: |
+        multistrap -f {{ETC}}/multistrap.conf
+        bin/post-create.sh {{VAR}}/build
     - name: post-create.sh
       run: True
     - name: multihack.sh
