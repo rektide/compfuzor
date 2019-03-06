@@ -4,6 +4,7 @@
     TYPE: watchman
     INSTANCE: git
     REPO: https://github.com/facebook/watchman
+    OPT_DIR: True
     BINS:
     - name: build.sh
       run: True
@@ -11,8 +12,12 @@
         #./autogen.sh
         fizz_DIR="{{fizz}}/usr/local/lib/cmake/fizz" \
           FBThrift_dir="{{fbthrift}}/usr/local/lib/cmake/fbthrift" \
+          rsocket_DIR="{{rsocket}}/usr/local/lib/cmake/rsocket" \
           wangle_DIR="{{wangle}}/usr/local/lib/cmake/wangle" \
-          cmake . 
+          yarpl_DIR="{{rsocket}}/usr/local/lib/cmake/yarpl" \
+          cmake .
+        make
+        make install DESTDIR="{{OPT}}"
     PKGS:
     - libelf-dev
     - libevent-dev
@@ -33,5 +38,6 @@
     fizz: "{{OPTS_DIR}}/fizz-git"
     fbthrift: "{{OPTS_DIR}}/fbthrift-git"
     wangle: "{{OPTS_DIR}}/wangle-git"
+    rsocket: "{{OPTS_DIR}}/rsocket-git"
   tasks:
   - include: tasks/compfuzor.includes type=src
