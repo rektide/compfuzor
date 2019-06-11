@@ -9,7 +9,7 @@
       content: |
         [ -n "$BOARD" ] && make "$BOARD_defconfig"
         make
-    ENVS:
+    ENV:
       ARCH: aarch64
       BOARD: "{{board}}"
       CROSS_COMPILE: /usr/bin/arm-linux-gnueabihf-gcc-8

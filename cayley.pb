@@ -3,7 +3,7 @@
   vars:
     TYPE: cayley
     INSTANCE: git
-    ENVS:
+    ENV:
       GOPATH: "{{DIR}}"
     REPO_GOGET: https://github.com/cayleygraph/cayley
     DIRS:

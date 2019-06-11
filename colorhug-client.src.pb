@@ -15,7 +15,7 @@
     - libsoup2.4-dev
     - libcolorhug-dev # inside colord repo blah
     - docbook
-    ENVS:
+    ENV:
       COLORD: "{{SRCS_DIR}}/colord-{{INSTANCE}}"
     BINS:
     - name: build.sh

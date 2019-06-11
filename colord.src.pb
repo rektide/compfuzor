@@ -24,7 +24,7 @@
     - libgirepository1.0-dev
     - dpkg-dev
     - gtk-doc-tools
-    ENVS:
+    ENV:
       PKG_CONFIG_PATH: "{{DIR}}/opt/lib/x86_64-linux-gnu/pkgconfig"
     BINS:
     - name: build.sh
