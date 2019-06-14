@@ -61,9 +61,12 @@ cd $DIR
 # bindmounts
 sudo mount --bind /proc proc
 sudo mount --bind /dev dev
+sudo mount --bind /dev/pts dev/pts
 
 # preseed
+echo preseed
 echo "$PRESEED" | sudo chroot . /bin/dash -x
+echo preseed done
 
 # postprep
 if test -n "$POSTPREP" ; then
@@ -76,6 +79,10 @@ sleep 1
 
 # unmount
 sudo umount -l proc
+sudo umount -l dev/pts
+sleep 1
+echo sync
+sync
 sudo umount -l dev
 
 # cleanup QEMU
