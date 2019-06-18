@@ -1,4 +1,13 @@
----
+- name: "Compfuzor: precreate git dir"
+  file:
+    path: "{{dest}}"
+    state: directory
+    owner: "{{ OWNER|default(ansible_user_id)|default(omit) }}"
+    group: "{{ GROUP|default(ansible_group_id)|default(omit) }}"
+  become: "{{dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  when: REPO|default(False) or REPOS|default(False)
+  vars:
+    dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
 - name: "Compfuzor: fetch git repository"
   git:
     repo: "{{REPO}}"
@@ -6,23 +15,11 @@
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: "{{ GIT_DEPTH|default(omit) }}"
     version: "{{ GIT_VERSION|default(omit) }}"
-  become: "{{dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  #become: "{{dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: REPO|default(False)
   vars:
     dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
 
-- name: precreating git repos
-  file:
-    path: "{{dest}}"
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
-    mode: "{{DIRMODE|default(omit)}}"
-    state: directory
-  become: "{{ dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
-  with_dict: "{{ REPOS if REPOS|default(False) is mapping else {} }}"
-  when: REPOS|default(False) and REPOS is mapping
-  vars:
-    dest: "{{ REPO_DIR|default(DIR, true)+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{ item.key }}"
 - name: "fetch git repositories dict"
   git:
     repo: "{{ item.value }}"
