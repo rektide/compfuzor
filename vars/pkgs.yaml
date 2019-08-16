@@ -76,6 +76,7 @@ BASE:
 - initscripts
 - insserv
 - iproute2
+- i2c-tools
 - kmod
 - libacl1
 - libapt-pkg5.0
@@ -137,6 +138,7 @@ BASE:
 - python-pytools
 - readline-common
 - resolvconf
+- ripgrep
 - sed
 - sensible-utils
 - sshpass
@@ -161,6 +163,7 @@ BASE:
 - groff-base
 - vim
 - aptitude
+- uuid
 - uuid-runtime
 - usbutils
 - pciutils
@@ -269,6 +272,8 @@ WORKSTATION:
 - flent
 - x11-xserver-utils
 - fonts-noto-color-emoji
+- nodejs
+- npm
 VIRTUALIZATION:
 #- qemu
 - qemu-kvm
@@ -366,6 +371,8 @@ WORKSTATION_X:
 - libegl1-mesa
 - libgl1-mesa-dri
 - libglx-mesa0
+- uvcdynctrl
+- guvcview
 WORKSTATION_KDE_BASE:
 - kde-baseapps
 - konqueror-nsplugins
