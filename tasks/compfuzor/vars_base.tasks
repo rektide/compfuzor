@@ -27,10 +27,15 @@
   when: SUBINSTANCE|default(False) == True
   changed_when: False
   failed_when: False # this can often be latebound
-
+- name: "Defaulting kernel release"
+  shell: uname -r
+  register: KERNEL_RELEASE_
+- name: "Set kernel release variable"
+  set_fact:
+    KERNEL_RELEASE: "{{KERNEL_RELEASE_.stdout}}"
+  when: not KERNEL_RELEASE|default(false)
 - name: 'Set hostnum variable'
   set_fact:
-  args:
     hostnum: "{% for i in play_hosts %}{{ loop.index0 if play_hosts[loop.index0] == inventory_hostname else '' }}{% endfor %}"
   when: hostnum is not defined
 - name: "Set name with subinstance"
