@@ -2,7 +2,7 @@
 - hosts: all
   vars:
     TYPE: iwd
-    INSTANCE: main
+    INSTANCE: git
     REPO: https://git.kernel.org/pub/scm/network/wireless/iwd.git
     OPT_DIRS: True
     BINS:
@@ -15,5 +15,6 @@
         make install
     PKGS:
     - libreadline-dev
+    - libell-dev
   tasks:
   - include: tasks/compfuzor.includes type=src
