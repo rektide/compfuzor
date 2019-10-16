@@ -284,6 +284,7 @@ WORKSTATION:
 - npm
 - oomd
 - pci.ids
+- extra-xdg-menus
 VIRTUALIZATION:
 #- qemu
 - qemu-kvm
@@ -384,6 +385,7 @@ WORKSTATION_X:
 - libglx-mesa0
 - uvcdynctrl
 - guvcview
+- feh
 WORKSTATION_KDE_BASE:
 - kde-baseapps
 - konqueror-nsplugins
