@@ -9,6 +9,8 @@
     - name: build.sh
       content: |
         ./configure --prefix="{{OPT}}"
+        make
+        make instal
     - name: install.sh
       content: |
         # echo lol wut
