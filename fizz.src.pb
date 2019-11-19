@@ -8,7 +8,8 @@
     - name: build.sh
       basedir: fizz
       content: |
-        cmake .
+        folly_DIR="{{folly}}/usr/local/lib/cmake/folly" \
+          cmake .
         make -j $(nproc)
         make install DESTDIR={{OPT}}
     OPT_DIR: true
@@ -24,5 +25,6 @@
       - zlib1g-dev
       - libjemalloc-dev
       - libsodium-dev
+      folly: "{{OPTS_DIR}}/folly-{{INSTANCE|default('-git')}}"
   tasks:
   - include: tasks/compfuzor.includes type=src
