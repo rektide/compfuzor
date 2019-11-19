@@ -1,0 +1,11 @@
+---
+- name: "Compfuzor: write the compfuzor.pkgs file"
+  lineinfile:
+    dest: "{{ETC}}/compfuzor.pkgs"
+    line: "{{item}}
+    regexp: "^{{item}}$"
+    create: true
+    owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
+  with_items: PKGS|default([])
+  when: PKGS is defined
