@@ -14,17 +14,17 @@
         make install DESTDIR={{OPT}}
     OPT_DIR: true
     PKGS:
-      - libevent-dev
-      - libdouble-conversion-dev
-      - libgoogle-glog-dev
-      - libgflags-dev
-      - libiberty-dev
-      - liblz4-dev
-      - liblzma-dev
-      - libsnappy-dev
-      - zlib1g-dev
-      - libjemalloc-dev
-      - libsodium-dev
-      folly: "{{OPTS_DIR}}/folly-{{INSTANCE|default('-git')}}"
+    - libevent-dev
+    - libdouble-conversion-dev
+    - libgoogle-glog-dev
+    - libgflags-dev
+    - libiberty-dev
+    - liblz4-dev
+    - liblzma-dev
+    - libsnappy-dev
+    - zlib1g-dev
+    - libjemalloc-dev
+    - libsodium-dev
+    folly: "{{OPTS_DIR}}/folly-{{INSTANCE|default('-git')}}"
   tasks:
   - include: tasks/compfuzor.includes type=src
