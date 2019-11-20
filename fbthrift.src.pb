@@ -17,14 +17,16 @@
       basedir: True
       run: True
       content: |
+        mkdir -p build_
+        cd build_
         fizz_DIR="{FIZZ_CMAKE}" \
           folly_DIR="{FOLLY_CMAKE}" \
           rsocket_DIR="{RSOCKET_CMAKE}" \
           wangle_DIR="{WANGLE_CMAKE}" \
           yarpl_DIR="{YARPL_CMAKE}" \
-          cmake .
-          make
-          sudo make install DESTDIR="{{OPT}}"
+          cmake ..
+        make
+        make install DESTDIR="{{OPT}}"
     ENV_PRIO:
       LIBDIR: "/usr/local/lib/cmake/"
       FIZZ_DIR: "{{OPTS_DIR}}/fizz-{{INSTANCE|default('-git')}}"

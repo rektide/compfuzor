@@ -8,8 +8,8 @@
     - name: build.sh
       basedir: fizz
       content: |
-        mkdir -p build
-        cd build
+        mkdir -p build_
+        cd build_
         folly_DIR="${FOLLY_CMAKE}" \
           cmake ..
         make -j $(nproc)

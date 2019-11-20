@@ -10,18 +10,20 @@
       basedir: "{{SRC}}/wangle"
       run: True
       content: |
-        mkdir -p wangle/build
-        cd wangle/build
+        mkdir -p build_
+        cd build_
         fizz_DIR="${FIZZ_CMAKE}" \
+        folly_DIR="${FOLLY_CMAKE}" \
           cmake ..
         make
         make install DESTDIR="${INSTALL_DIR}"
     ENV_PRIO:
       LIBDIR: "/usr/local/lib/cmake/"
       FIZZ_DIR: "{{OPTS_DIR}}/fizz-{{INSTANCE|default('-git')}}"
+      FOLLY_DIR: "{{OPTS_DIR}}/folly-{{INSTANCE|default('-git')}}"
     ENV:
-      FBTHRIFT_CMAKE: "${TBTHRIFT_DIR}${LIBDIR}fbthrift"
       FIZZ_CMAKE: "${FIZZ_DIR}${LIBDIR}fizz"
+      FOLLY_CMAKE: "${FOLLY_DIR}${LIBDIR}folly"
       INSTALL_DIR: "{{OPT}}"
     PKGS:
     - libevent-dev

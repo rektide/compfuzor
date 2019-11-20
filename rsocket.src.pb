@@ -11,21 +11,23 @@
     - libgoogle-glog-dev
     - libgflags-dev
     - libgmock-dev
+    - google-mock
     BINS:
     - name: build.sh
       basedir: True
       content: |
-        echo START=`pwd`
-        mkdir -p build yarpl/build
+        START=`pwd`
 
+        mkdir -p yarpl/build_
         cd $START/yarpl/build
         echo '[building yarpl]'
         cmake ../
         make
         make install DESTDIR="{{OPT}}"
 
-        cd $START/build
         echo
+        mkdir -p $START/build_
+        cd $START/build_
         echo '[building rsocket]'
         folly_DIR="${FOLLY_CMAKE}" \
           cmake ../
@@ -41,6 +43,7 @@
     ENV:
       FBTHRIFT_CMAKE: "${TBTHRIFT_DIR}${LIBDIR}fbthrift"
       FIZZ_CMAKE: "${FIZZ_DIR}${LIBDIR}fizz"
+      FOLLY_CMAKE: "${FOLLY_DIR}${LIBDIR}folly"
       RSOCKET_CMAKE: "${RSOCKET_DIR}${LIBDIR}rsocket"
       WANGLE_CMAKE: "${WANGLE_DIR}${LIBDIR}wangle"
       INSTALL_DIR: "{{OPT}}"
