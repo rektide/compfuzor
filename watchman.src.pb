@@ -10,14 +10,27 @@
       run: True
       content: |
         #./autogen.sh
-        fizz_DIR="{{fizz}}/usr/local/lib/cmake/fizz" \
-          FBThrift_dir="{{fbthrift}}/usr/local/lib/cmake/fbthrift" \
-          rsocket_DIR="{{rsocket}}/usr/local/lib/cmake/rsocket" \
-          wangle_DIR="{{wangle}}/usr/local/lib/cmake/wangle" \
-          yarpl_DIR="{{rsocket}}/usr/local/lib/cmake/yarpl" \
-          cmake .
+        mkdir -f build
+        cd build
+        FBThrift_dir="${FBTHRIFT_CMAKE}" \
+          fizz_CMAKE="${FIZZ_CMAKE}" \
+          rsocket_CMAKE="${RSOCKET_CMAKE}" \
+          wangle_CMAKE="${WANGLE_CMAKE}" \
+          yarpl_CMAKE="${RSOCKET_CMAKE}" \
+          cmake ..
         make
         make install DESTDIR="{{OPT}}"
+    ENV:
+      LIBDIR: "/usr/local/lib/cmake/"
+      FBTHRIFT_DIR: True
+      FBTHRIFT_CMAKE: "${TBTHRIFT_DIR}${LIBDIR}fbthrift"
+      FIZZ_DIR: True
+      FIZZ_DIR: "${FIZZ_DIR}${LIBDIR}fizz"
+      RSOCKET_DIR: True
+      RSOCKET_CMAKE: "${RSOCKET_DIR}${LIBDIR}rsocket"
+      WANGLE_DIR: True
+      WANGLE_CMAKE: "${WANGLE_DIR}${LIBDIR}wangle"
+      INSTALL_DIR: "{{OPT}}"
     PKGS:
     - libelf-dev
     - libevent-dev
@@ -35,9 +48,9 @@
     - liblzma-dev
     - libboost-context-dev
     - libboost-chrono-dev
-    fizz: "{{OPTS_DIR}}/fizz-git"
-    fbthrift: "{{OPTS_DIR}}/fbthrift-git"
-    wangle: "{{OPTS_DIR}}/wangle-git"
-    rsocket: "{{OPTS_DIR}}/rsocket-git"
+    FBTHRIFT_DIR: "{{OPTS_DIR}}/fbthrift-{{INSTANCE|default('-git')}}"
+    FIZZ_DIR: "{{OPTS_DIR}}/fizz-{{INSTANCE|default('-git')}}"
+    WANGLE_DIR: "{{OPTS_DIR}}/wangle-{{INSTANCE|default('-git')}}"
+    RSOCKET_DIR: "{{OPTS_DIR}}/rsocket-{{INSTANCE|default('git')}}"
   tasks:
   - include: tasks/compfuzor.includes type=src

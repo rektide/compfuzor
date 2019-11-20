@@ -10,10 +10,14 @@
       basedir: "{{SRC}}/wangle"
       run: True
       content: |
+        mkdir -p build
+        cd build
         fizz_DIR="{{fizz}}/usr/local/lib/cmake/fizz" \
-          cmake .
+          cmake ..
         make
-        sudo make install DESTDIR="{{OPT}}"
+        make install DESTDIR="${INSTALL_DIR}"
+    ENVS:
+      INSTALL_DIR: "{{OPT}}"
     PKGS:
     - libevent-dev
     - libgoogle-glog-dev

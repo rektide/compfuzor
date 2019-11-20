@@ -11,12 +11,12 @@
     - libgoogle-glog-dev
     - libgflags-dev
     - libgmock-dev
-    -
     BINS:
     - name: build.sh
       basedir: True
       content: |
         mkdir -p build yarpl/build
+        cd build
         #pushd .
         #cd yarpl/build
         #echo '[building yarpl]'
@@ -24,10 +24,9 @@
         #make
         #make install DESTDIR="{{OPT}}"
 
-        popd
-        echo
-        echo '[building rsocket]' 
-        cd build
+        #popd
+        #echo
+        #echo '[building rsocket]' 
         cmake ../
         make
         make install DESTDIR="{{OPT}}"
