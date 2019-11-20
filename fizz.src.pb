@@ -8,10 +8,17 @@
     - name: build.sh
       basedir: fizz
       content: |
-        folly_DIR="{{folly}}/usr/local/lib/cmake/folly" \
-          cmake .
+        mkdir -p build
+        cd build
+        folly_DIR="${FOLLY_CMAKE}" \
+          cmake ..
         make -j $(nproc)
-        make install DESTDIR={{OPT}}
+        make install DESTDIR=${INSTALL_DIR}
+    ENV:
+      FOLLY_DIR: "{{FOLLY_DIR}}"
+      FOLLY_CMAKE_DIR: "/usr/local/lib/cmake/folly"
+      FOLLY_CMAKE: "${FOLLY_DIR}${FOLLY_CMAKE_DIR}"
+      INSTALL_DIR: "{{OPT}}"
     OPT_DIR: true
     PKGS:
     - libevent-dev
@@ -25,6 +32,6 @@
     - zlib1g-dev
     - libjemalloc-dev
     - libsodium-dev
-    folly: "{{OPTS_DIR}}/folly-{{INSTANCE|default('-git')}}"
+    FOLLY_DIR: "{{OPTS_DIR}}/folly-{{INSTANCE|default('-git')}}"
   tasks:
   - include: tasks/compfuzor.includes type=src
