@@ -10,13 +10,18 @@
       basedir: "{{SRC}}/wangle"
       run: True
       content: |
-        mkdir -p build
-        cd build
-        fizz_DIR="{{fizz}}/usr/local/lib/cmake/fizz" \
+        mkdir -p wangle/build
+        cd wangle/build
+        fizz_DIR="${FIZZ_CMAKE}" \
           cmake ..
         make
         make install DESTDIR="${INSTALL_DIR}"
-    ENVS:
+    ENV_PRIO:
+      LIBDIR: "/usr/local/lib/cmake/"
+      FIZZ_DIR: "{{OPTS_DIR}}/fizz-{{INSTANCE|default('-git')}}"
+    ENV:
+      FBTHRIFT_CMAKE: "${TBTHRIFT_DIR}${LIBDIR}fbthrift"
+      FIZZ_CMAKE: "${FIZZ_DIR}${LIBDIR}fizz"
       INSTALL_DIR: "{{OPT}}"
     PKGS:
     - libevent-dev

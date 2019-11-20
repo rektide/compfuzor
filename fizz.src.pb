@@ -14,10 +14,11 @@
           cmake ..
         make -j $(nproc)
         make install DESTDIR=${INSTALL_DIR}
+    ENV_PRIO:
+      LIBDIR: "/usr/local/lib/cmake/"
+      FOLLY_DIR: "{{OPTS_DIR}}/folly-{{INSTANCE|default('-git')}}"
     ENV:
-      FOLLY_DIR: "{{FOLLY_DIR}}"
-      FOLLY_CMAKE_DIR: "/usr/local/lib/cmake/folly"
-      FOLLY_CMAKE: "${FOLLY_DIR}${FOLLY_CMAKE_DIR}"
+      FOLLY_CMAKE: "${FOLLY_DIR}${LIBDIR}folly"
       INSTALL_DIR: "{{OPT}}"
     OPT_DIR: true
     PKGS:
@@ -32,6 +33,6 @@
     - zlib1g-dev
     - libjemalloc-dev
     - libsodium-dev
-    FOLLY_DIR: "{{OPTS_DIR}}/folly-{{INSTANCE|default('-git')}}"
+
   tasks:
   - include: tasks/compfuzor.includes type=src

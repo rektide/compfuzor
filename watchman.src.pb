@@ -20,15 +20,16 @@
           cmake ..
         make
         make install DESTDIR="{{OPT}}"
-    ENV:
+    ENV_PRIO:
       LIBDIR: "/usr/local/lib/cmake/"
-      FBTHRIFT_DIR: True
+      FBTHRIFT_DIR: "{{OPTS_DIR}}/fbthrift-{{INSTANCE|default('-git')}}"
+      FIZZ_DIR: "{{OPTS_DIR}}/fizz-{{INSTANCE|default('-git')}}"
+      RSOCKET_DIR: "{{OPTS_DIR}}/rsocket-{{INSTANCE|default('git')}}"
+      WANGLE_DIR: "{{OPTS_DIR}}/wangle-{{INSTANCE|default('-git')}}"
+    ENV:
       FBTHRIFT_CMAKE: "${TBTHRIFT_DIR}${LIBDIR}fbthrift"
-      FIZZ_DIR: True
-      FIZZ_DIR: "${FIZZ_DIR}${LIBDIR}fizz"
-      RSOCKET_DIR: True
+      FIZZ_CMAKE: "${FIZZ_DIR}${LIBDIR}fizz"
       RSOCKET_CMAKE: "${RSOCKET_DIR}${LIBDIR}rsocket"
-      WANGLE_DIR: True
       WANGLE_CMAKE: "${WANGLE_DIR}${LIBDIR}wangle"
       INSTALL_DIR: "{{OPT}}"
     PKGS:
@@ -48,9 +49,5 @@
     - liblzma-dev
     - libboost-context-dev
     - libboost-chrono-dev
-    FBTHRIFT_DIR: "{{OPTS_DIR}}/fbthrift-{{INSTANCE|default('-git')}}"
-    FIZZ_DIR: "{{OPTS_DIR}}/fizz-{{INSTANCE|default('-git')}}"
-    WANGLE_DIR: "{{OPTS_DIR}}/wangle-{{INSTANCE|default('-git')}}"
-    RSOCKET_DIR: "{{OPTS_DIR}}/rsocket-{{INSTANCE|default('git')}}"
   tasks:
   - include: tasks/compfuzor.includes type=src

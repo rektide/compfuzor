@@ -13,6 +13,11 @@
 {%- endmacro -%}
 
 {{- def("DIR", DIR) }}
+{% if ENV_PRIO is defined -%}
+{% for k,v in ENV_PRIO.iteritems() -%}
+{{ def(k,v) -}}
+{% endfor -%}
+{% endif -%}
 {% if ENV is defined -%}
 {% for k,v in ENV.iteritems() -%}
 {{ def(k,v) -}}
