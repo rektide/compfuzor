@@ -16,19 +16,8 @@
     - name: build.sh
       basedir: True
       content: |
-        START=`pwd`
-
-        mkdir -p yarpl/build_
-        cd $START/yarpl/build
-        echo '[building yarpl]'
-        cmake ../
-        make
-        make install DESTDIR="{{OPT}}"
-
-        echo
-        mkdir -p $START/build_
-        cd $START/build_
-        echo '[building rsocket]'
+        mkdir -p build_
+        cd build_
         folly_DIR="${FOLLY_CMAKE}" \
           cmake ../
         make
@@ -38,12 +27,14 @@
       FBTHRIFT_DIR: "{{OPTS_DIR}}/fbthrift-{{INSTANCE|default('-git')}}"
       FOLLY_DIR: "{{OPTS_DIR}}/folly-{{INSTANCE|default('-git')}}"
       FIZZ_DIR: "{{OPTS_DIR}}/fizz-{{INSTANCE|default('-git')}}"
+      GLOG_DIR: "{{OPTS_DIR}}/glog-{{INSTANCE|default('-git')}}"
       RSOCKET_DIR: "{{OPTS_DIR}}/rsocket-{{INSTANCE|default('git')}}"
       WANGLE_DIR: "{{OPTS_DIR}}/wangle-{{INSTANCE|default('-git')}}"
     ENV:
       FBTHRIFT_CMAKE: "${TBTHRIFT_DIR}${LIBDIR}fbthrift"
       FIZZ_CMAKE: "${FIZZ_DIR}${LIBDIR}fizz"
       FOLLY_CMAKE: "${FOLLY_DIR}${LIBDIR}folly"
+      GLOG_CMAKE: "${GLOG_DIR}${LIBDIR}glog"
       RSOCKET_CMAKE: "${RSOCKET_DIR}${LIBDIR}rsocket"
       WANGLE_CMAKE: "${WANGLE_DIR}${LIBDIR}wangle"
       INSTALL_DIR: "{{OPT}}"

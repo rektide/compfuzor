@@ -10,25 +10,34 @@
       run: True
       content: |
         #./autogen.sh
-        mkdir -f build
-        cd build
-        FBThrift_dir="${FBTHRIFT_CMAKE}" \
-          fizz_CMAKE="${FIZZ_CMAKE}" \
-          rsocket_CMAKE="${RSOCKET_CMAKE}" \
-          wangle_CMAKE="${WANGLE_CMAKE}" \
-          yarpl_CMAKE="${RSOCKET_CMAKE}" \
-          cmake ..
+        mkdir -p build_
+        cd build_
+        folly_DIR="${FOLLY_CMAKE}" \
+          cmake \
+          -DCMAKE_INSTALL_PREFIX="${INSTALL_DIR}" \
+          ..
         make
-        make install DESTDIR="{{OPT}}"
+        make install #DESTDIR="{{OPT}}"
+    - name: proc-inotify.sh
+      run: False
+      become: true
+      content: |
+        # impacts how many different root dirs you can watch.
+        echo 409 > /proc/sys/fs/inotify/max_user_instances
+        # impacts how many dirs you can watch across all watched roots.
+        echo 131072 > /proc/sys/fs/inotify/max_user_watches
+        echo 65536 > /proc/sys/fs/inotify/max_queued_events 
     ENV_PRIO:
       LIBDIR: "/usr/local/lib/cmake/"
       FBTHRIFT_DIR: "{{OPTS_DIR}}/fbthrift-{{INSTANCE|default('-git')}}"
       FIZZ_DIR: "{{OPTS_DIR}}/fizz-{{INSTANCE|default('-git')}}"
+      FOLLY_DIR: "{{OPTS_DIR}}/folly-{{INSTANCE|default('-git')}}"
       RSOCKET_DIR: "{{OPTS_DIR}}/rsocket-{{INSTANCE|default('git')}}"
       WANGLE_DIR: "{{OPTS_DIR}}/wangle-{{INSTANCE|default('-git')}}"
     ENV:
       FBTHRIFT_CMAKE: "${TBTHRIFT_DIR}${LIBDIR}fbthrift"
       FIZZ_CMAKE: "${FIZZ_DIR}${LIBDIR}fizz"
+      FOLLY_CMAKE: "${FOLLY_DIR}${LIBDIR}folly"
       RSOCKET_CMAKE: "${RSOCKET_DIR}${LIBDIR}rsocket"
       WANGLE_CMAKE: "${WANGLE_DIR}${LIBDIR}wangle"
       INSTALL_DIR: "{{OPT}}"
@@ -49,5 +58,7 @@
     - liblzma-dev
     - libboost-context-dev
     - libboost-chrono-dev
+    - libpcre2-dev
+    - inotify-tools
   tasks:
   - include: tasks/compfuzor.includes type=src

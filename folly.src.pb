@@ -8,7 +8,9 @@
     - name: build.sh
       run: True
       content: |
-        cmake .
+        mkdir build_
+        cd build_
+        cmake ..
         make
         make DESTDIR="{{OPT}}" install
     OPT_DIR: true
