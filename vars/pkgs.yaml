@@ -41,6 +41,7 @@ BASE:
 - base-passwd
 - bash
 - bsdutils
+- cifs-utils
 - coreutils
 - dash
 - debconf
@@ -49,10 +50,13 @@ BASE:
 #- debian-archive-keyring
 - debian-keyring
 - debianutils
+- dfu-utils
 - dialog
 - diffutils
 - direnv
 - dpkg
+- efivar
+- efitools
 - e2fslibs
 - e2fsprogs
 - ethtool
@@ -124,7 +128,7 @@ BASE:
 - mawk
 - mime-support
 - mount
-- multiarch-support
+#- multiarch-support
 - ncurses-base
 - ncurses-term
 - ncurses-bin
@@ -134,8 +138,8 @@ BASE:
 - perl-base
 - procps
 - psmisc
-- python2.7-minimal
-- python-pytools
+#- python2.7-minimal
+- python3-pytools
 - readline-common
 - resolvconf
 - ripgrep
@@ -149,9 +153,11 @@ BASE:
 - udev
 - util-linux
 - xz-utils
+- zstd
 - zlib1g
 # supplemental:
 - unzip
+- util-linux
 - zip
 - bzip2
 - adduser
@@ -173,6 +179,7 @@ BASE:
 - dbus
 - zip
 - unzip
+- xz-utils
 - less
 - git
 - ntpdate
@@ -211,7 +218,8 @@ BASE:
 - curl
 - patch
 - openssl
-- fuse
+#- fuse
+- fuse3
 - screen
 - sudo
 - mount
@@ -274,6 +282,8 @@ WORKSTATION:
 - fonts-noto-color-emoji
 - nodejs
 - npm
+- oomd
+- pci.ids
 VIRTUALIZATION:
 #- qemu
 - qemu-kvm
@@ -292,7 +302,7 @@ AVAHI:
 - avahi-dnsconfd
 - avahi-utils
 AVAHI_X:
-- avahi-discover
+#2- avahi-discover
 WORKSTATION_X_aarch64: []
 WORKSTATION_X_amd64:
 - xserver-xorg-video-intel
@@ -322,9 +332,10 @@ WORKSTATION_X:
 - xserver-xorg-input-wacom
 - xserver-xorg-video-all
 - xserver-xorg-video-qxl
+- xserver-xorg-input-libinput
 #- xmonad
 - xpra
-- python-gst-1.0
+- python3-gst-1.0
 - xsel
 - xorg
 - xdg-utils
@@ -383,28 +394,28 @@ WORKSTATION_KDE_BASE:
 - fonts-oxygen
 OPENCL:
 - ocl-icd-libopencl1
-- python-pyopencl
+- python3-pyopencl
 #- mesa-opencl-icd
 #- beignet
 #- clinfo
 #- ocl-icd-opencl-dev
 XPRA:
 - xpra
-- python-opengl
-- python-mako
-- python-matplotlib
-- python-pil.imagetk
-- python-pytools
-- python-avahi
-- python-pil
-- python-netifaces
-- python-lzo
-- python-lz4
-- python-gtkglext1
+- python3-opengl
+- python3-mako
+- python3-matplotlib
+- python3-pil.imagetk
+- python3-pytools
+#- python-avahi
+- python3-pil
+- python3-netifaces
+- python3-lzo
+- python3-lz4
+#- python-gtkglext1
 - openssh-client
 - ssh-askpass
 #- kssaskpass
-- python-dbus
+- python3-dbus
 - pulseaudio
 - pulseaudio-utils
 - gstreamer1.0-plugins-good
@@ -555,6 +566,10 @@ DEVEL:
 - cmake
 - libncurses5-dev
 - meson
+- ninja-build
+- gperf
+- gcc
+- gcc-multibuild
 DEBDEV:
 - build-essential
 - debhelper
@@ -580,7 +595,7 @@ DEBDEV:
 - libparse-debcontrol-perl
 - patch
 - patchutils
-- python-debian
+- python3-debian
 - sensible-utils
 - strace
 - unzip
@@ -618,9 +633,9 @@ MOPIDY:
 - mopidy
 - mopidy-doc
 - mopidy-alsamixer
-- mopidy-dirble
+#- mopidy-dirble
 - mopidy-dleyna
-- mopidy-local-sqlite
+#- mopidy-local-sqlite
 - mopidy-mpris
 - mopidy-podcast
 #- mopidy-podcast-gpodder
@@ -680,7 +695,7 @@ JACK_PLUGINS:
 - swh-plugins
 - cmt
 JACK_X:
-- jack-mixer
+#- jack-mixer
 - qjackctl
 #- jacktrip
 #- laditools
@@ -727,7 +742,7 @@ VAAPI:
 - vdpau-driver-all
 - libvdpau-va-gl1
 - mesa-vdpau-drivers
-- vdpau-va-driver
+#- vdpau-va-driver
 - vdpauinfo
 - mesa-vdpau-drivers
 - mesa-utils-extra
@@ -736,6 +751,15 @@ WORKSTATION_WAYLAND:
 - xwayland
 - libwayland-egl1-mesa
 - weston
+- swayidle
+- swaybg
+- swaylock
+- wl-clipboard
+WORKSTATION_GNOME:
+- gnome-shell
+- mutter
+#- chrome-gnome-shell
+- gnome-control-center
 MEDIA_X:
 #- tracker-gui
 - gstreamer1.0-x
@@ -746,7 +770,7 @@ MEDIA_X:
 - glurp
 - mpv
 - streamtuner2
-- tunapie
+#- tunapie
 - nemo
 - gnome-mpv
 JAVA:
@@ -844,7 +868,7 @@ CEPH:
 - librbd1
 - libuuid1
 - liblzo2-2
-- python-ceph
+- python3-ceph
 - rbd-fuse
 - radosgw
 - uuid-runtime
@@ -954,8 +978,8 @@ POSTGRES:
 - postgresql-doc
 - postgis
 - postgis-doc
-- postgresql-11-postgis-2.5
-- postgresql-11-postgis-scripts
+- postgresql-11-postgis-3
+- postgresql-11-postgis-3-scripts
 #- postgresql-plv8
 ZFSONLINUX:
 - zfsonlinux
