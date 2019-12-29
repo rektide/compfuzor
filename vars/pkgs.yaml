@@ -285,6 +285,7 @@ WORKSTATION:
 - oomd
 - pci.ids
 - extra-xdg-menus
+- mdevctl
 VIRTUALIZATION:
 #- qemu
 - qemu-kvm
@@ -618,6 +619,7 @@ AUDIO:
 - pulseaudio-module-zeroconf
 - vorbis-tools
 #- earcandy
+- playerctl
 AUDIO_X:
 - alsa-tools-gui
 - alsamixergui
@@ -639,6 +641,7 @@ MOPIDY:
 - mopidy-dleyna
 #- mopidy-local-sqlite
 - mopidy-mpris
+- mopidy-mpd
 - mopidy-podcast
 #- mopidy-podcast-gpodder
 - mopidy-scrobbler
@@ -647,6 +650,7 @@ MOPIDY:
 #- mopidy-youtube
 - mopidy-somafm
 - mopidy-internetarchive
+- playerctl
 BT:
 - bluez
 - bluez-firmware
