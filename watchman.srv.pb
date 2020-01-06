@@ -3,7 +3,7 @@
   vars:
     TYPE: watchman
     INSTANCE: main
-    SYSTEMD_EXEC: "{{WATCHMAN_BIN}} -p -f --statefile={{VAR}}/state --pidfile={{VAR}}/pid --sockname={{VAR}}/socket --logfile={{VAR}}/log"
+    SYSTEMD_EXEC: "{{WATCHMAN_BIN}} --persistent --foreground --statefile={{VAR}}/state --pidfile={{VAR}}/pid --sockname={{VAR}}/socket --logfile={{VAR}}/log"
     WATCHMAN_BIN: "{{OPTS_DIR}}/watchman-git/bin/watchman"
     VAR_DIR: True
   tasks:
