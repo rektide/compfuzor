@@ -18,6 +18,9 @@
           DEVICE:
             EVENTS:
               EV_KEY: [KEY_CAPSLOCK, KEY_ESC]
+    BINS_DIR: "{{ OPT }}/bin"
+    LINKS:
+      bin: "{{ BINS_DIR }}"
     BINS:
     - name: build-interception-tools.sh
       basedir: interception-tools
@@ -44,14 +47,18 @@
     - name: caps2esc
       src: false
       global: true
+      delay: postRun
     - name: intercept
       src: false
       global: true
+      delay: postRun
     - name: udevmon
       src: false
       global: true
+      delay: postRun
     - name: uinput
       src: false
       global: true
+      delay: postRun
   tasks:
   - include: tasks/compfuzor.includes type=src

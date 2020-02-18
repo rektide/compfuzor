@@ -1,4 +1,5 @@
 import collections
+import numbers
 
 listType = type(list())
 
