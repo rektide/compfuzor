@@ -11,6 +11,13 @@
     - libevdev-dev
     - libyaml-cpp-dev
     - libudev-dev
+    ETC_FILES:
+    - name: caps2esc.yaml
+      content: |
+        - JOB: "intercept -g $DEVNODE | caps2esc | uinput -d $DEVNODE"
+          DEVICE:
+            EVENTS:
+              EV_KEY: [KEY_CAPSLOCK, KEY_ESC]
     BINS:
     - name: build-interception-tools.sh
       basedir: interception-tools
@@ -33,5 +40,18 @@
       exec: |
         ./bin/build-interception-tools.sh
         ./bin/build-caps2esc.sh
+    # links to built resource
+    - name: caps2esc
+      src: false
+      global: true
+    - name: intercept
+      src: false
+      global: true
+    - name: udevmon
+      src: false
+      global: true
+    - name: uinput
+      src: false
+      global: true
   tasks:
   - include: tasks/compfuzor.includes type=src

@@ -11,6 +11,8 @@ def arrayitize(*a, **kw):
     if len(a) is 1:
         if isinstance(a[0], basestring):
             return [a[0]]
+        if isinstance(a[0], numbers.Number):
+            return [a[0]]
         elif a[0] == True:
             return [True]
         elif a[0] == False:
