@@ -9,5 +9,6 @@
       baseidr: src
   tasks:
   - include: tasks/compfuzor.includes type=opt
-
-  
+  - file:
+      path: "{{SRC}}/k3s"
+      mode: a+x
