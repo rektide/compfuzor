@@ -221,7 +221,9 @@ BASE:
 - openssl
 #- fuse
 - fuse3
-- screen
+#- screen
+- tmux
+- dtach
 - sudo
 - mount
 - nftables
