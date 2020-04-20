@@ -84,6 +84,9 @@ After=network.target
 {{ phrase('AssertDirectoryNotEmpty', SYSTEMD_ASSERT_DIRECTORY_NOT_EMPTY) -}}
 {{ phrase('AssertFileNotEmpty', SYSTEMD_ASSERT_FILE_NOT_EMPTY) -}}
 {{ phrase('AssertFileIsExecutable', SYSTEMD_ASSERT_FILE_IS_EXECUTABLE) -}}
+{% for key, value in (SYSTEMD_UNITS|default({})).items() -%}
+{{key}}={{value}}
+{% endfor -%}
 {{ '\n' -}}
 
 [Service]
@@ -213,6 +216,12 @@ EnvironmentFile={{DIR}}/env
 {{ phrase('RuntimeDirectoryMode', SYSTEMD_RUNTIME_DIRECTORY_MODE) -}}
 {{ phrase('MemoryDenyWriteExecute', SYSTEMD_MEMORY_DENY_WRITE_EXECUTE) -}}
 {{ phrase('RestrictRealtime', SYSTEMD_RESTRICT_REALTIME) -}}
+{{ phrase('TasksMax', SYSTEMD_TASKS_MAX) -}}
+{{ phrase('Delegate', SYSTEMD_DELEGATE) -}}
+{{ phrase('KillMode', SYSTEMD_KILL_MODE) -}}
+{% for key, value in (SYSTEMD_SERVICES|default({})).items() -%}
+{{key}}={{value}}
+{% endfor -%}
 {{ '\n' -}}
 
 [Install]
@@ -223,3 +232,6 @@ WantedBy={{ "multi-user" if not USERMODE|default(False) else "default" }}.target
 {{ phrase('RequiredBy', SYSTEMD_REQUIRED_BY) -}}
 {{ phrase('Also', SYSTEMD_ALSO) -}}
 {{ phrase('DefaultInstances', SYSTEMD_DEFAULT_INSTANCES) -}}
+{% for key, value in (SYSTEMD_INSTALLS|default({})).items() -%}
+{{key}}={{value}}
+{% endfor -%}
