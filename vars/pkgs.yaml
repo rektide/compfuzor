@@ -57,6 +57,7 @@ BASE:
 - dpkg
 - efivar
 - efitools
+- efibootmgr
 - e2fslibs
 - e2fsprogs
 - ethtool
@@ -230,6 +231,8 @@ BASE:
 - xdg-user-dirs
 - accountsservice
 - iw
+- rsync
+- ecryptfs-utils
 WORKSTATION:
 - dnsutils
 - dstat
@@ -289,7 +292,6 @@ WORKSTATION:
 - pci.ids
 - extra-xdg-menus
 - mdevctl
-- rsync
 VIRTUALIZATION:
 #- qemu
 - qemu-kvm
@@ -761,10 +763,12 @@ WORKSTATION_WAYLAND:
 - xwayland
 - libwayland-egl1-mesa
 - weston
+- sway
 - swayidle
 - swaybg
 - swaylock
 - wl-clipboard
+#- libwayland-bin
 WORKSTATION_GNOME:
 - gnome-shell
 - mutter
@@ -951,6 +955,29 @@ ANDROID:
 - libxml2-utils
 - xsltproc
 - g++-multilib
+- fastboot
+- adb
+- libgradle-android-plugin-java
+- libgradle-android-plugin-java-doc
+- android-libnativehelper
+- android-libnativehelper-dev
+- gradle
+- android-sdk-helpers
+- android-sdk
+- android-sdk-build-tools
+- android-sdk-build-tools-common
+- android-sdk-common
+- android-platform-tools
+- android-platform-frameworks-native-headers
+- android-platform-libcore-headers
+- android-platform-system-core-headers
+- android-platform-tools-base
+- android-sdk-platform-tools-common
+- google-android-build-tools-installer
+- google-android-platform-24-installer
+- google-android-m2repository-installer
+- google-android-ndk-installer
+- google-android-sdk-docs-installer
 CRYPTAGENT:
 - monkeysign
 BONUS:
