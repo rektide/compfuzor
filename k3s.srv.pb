@@ -18,7 +18,7 @@
       After: network.target
       Description: "{{ NAME }}"
     # service
-    SYSTEMD_EXEC: "/usr/local/bin/k3s server {{args|join('\n	')}}"
+    SYSTEMD_EXEC: "/usr/local/bin/k3s server {{args|join('\\\n	')}}"
     # support added in https://github.com/rancher/k3s/pull/100 ?
     SYSTEMD_SERVICES:
       Delegate: yes

@@ -2,8 +2,10 @@
 - hosts: all
   vars:
     TYPE: k3s
-    INSTANCE: v1.17.4+k3s1
-    GET_URLS: https://github.com/rancher/k3s/releases/download/{{INSTANCE|urlencode}}/k3s
+    release: v1.18.3+k3s1
+    #INSTANCE: "{{ release }}"
+    INSTANCE: main
+    GET_URLS: https://github.com/rancher/k3s/releases/download/{{release|urlencode}}/k3s
     BINS:
     - link: "{{SRC}}/k3s"
       global: True
