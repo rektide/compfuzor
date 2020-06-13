@@ -1,26 +1,36 @@
 {% macro def(var, val) -%}
-{% if val is defined and val is not none and val != "MAGIC_NONE_COMPFUZOR" -%}
-{{ 'export ' if export_mode|default(False) else '' -}}
-{{ var|upper }}="
-{%- if val is sequence and val is not string -%}
-	{{ val|join(ENV_SEPARATOR|default(",")) -}}
-{% elif val == True and val|string != "1" -%}
-	{{ hostvars[inventory_hostname][var|upper]|default(vars[var|upper])|trim|default(True, True) -}}
+
+{% if val == True and val|string != "1" -%}
+	{% set finalVal = hostvars[inventory_hostname][var]|default(vars[var]|default(None))|trim -%}
 {% else -%}
-	{{ val|trim -}}
-{% endif -%}"
+	{% set finalVal = val -%}
+{% endif -%}
+
+{% if finalVal is not none and finalVal != "MAGIC_NONE_COMPFUZOR" -%}
+	{{ 'export ' if export_mode|default(False) else '' -}}
+	{{ var|upper }}="{{ finalVal }}"
 {% endif -%}
 {%- endmacro -%}
 
-{{- def("DIR", DIR) }}
-{% if ENV_PRIO is defined -%}
-{% for k,v in ENV_PRIO.iteritems() -%}
-{{ def(k,v) -}}
+{% macro mdef(env) -%}
+{% if env is none -%}
+{% elif env is sequence and env is not string -%}
+{% for key in env -%}
+	{{ def(key, True) -}}
+	{{ keys.append(key) -}}
+{% endfor -%}
+{% elif env is mapping -%}
+{% for key,val in env.iteritems() -%}
+	{{ keys.append(k) -}}
+	{% for vsub in val|arrayitize -%}
+		{{ def(k,vsub) -}}
+	{% endfor -%}
 {% endfor -%}
 {% endif -%}
-{% if ENV is defined -%}
-{% for k,v in ENV.iteritems() -%}
-{{ def(k,v) -}}
-{% endfor -%}
-{{ def("COMPFUZOR_ENVS", ENV.keys()) -}}
-{% endif -%}
+{% endmacro -%}
+
+{% set keys = [] -%}
+
+{{ mdef(ENV_PRIO|default(None)) -}}
+{{ mdef(ENV|default(None)) -}}
+{{ def("COMPFUZOR_ENVS", keys|join(",")) -}}

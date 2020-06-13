@@ -14,10 +14,12 @@
 {% endmacro -%}
 
 [Unit]
+{#
 {% if not USERMODE|default(False) %}
 Requires=network.target
 After=network.target
 {% endif %}
+-#}
 {# {{ phrases('unit') }} -#}
 {{ phrase('Description', SYSTEMD_DESCRIPTION) -}}
 {{ phrase('Documentation', SYSTEMD_DOCUMENTATION) -}}
