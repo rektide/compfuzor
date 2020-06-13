@@ -39,18 +39,24 @@
       WantedBy: multi-user.target
 
     domain: base.yoyodyne.net
-    cluster_cidr: "10.41.0.0/16"
-    service_cidr: "10.42.0.0/16"
+    cluster_cidr: "10.39.0.0/16"
+    service_cidr: "10.40.0.0/16"
+    cluster_dns: "10.40.0.2"
     flannel_backend: none
     v: 2
+    ENV:
+      cluster_cidr: "{{cluster_cidr}}"
+      service_cidr: "{{service_cidr}}"
+      cluster_dns: ""
+      flannel_backend: "{{flannel_backend}}"
     args:
     - "{{ '-v '+(v|string) if v|default(false) else '' }}"
-    - "--tls-san {{ domain }}"
-    - "--cluster-domain {{ domain }}"
+    - "--tls-san cluster.{{ domain }}"
+    - "--cluster-domain cluster.{{ domain }}"
     - "--data-dir {{ VAR }}"
-    - "--cluster-cidr {{ cluster_cidr }}"
-    - "--service-cidr {{ service_cidr }}"
-    - "--cluster-dns 10.32.0.2"
+    - "--cluster-cidr {{cluster_cidr}}"
+    - "--service-cidr {{service_cidr}}"
+    - "--cluster-dns {{cluster_dns}}"
     - "--flannel-backend {{ flannel_backend }}"
     # etc input
     - "--token-file {{ETC}}/token"
