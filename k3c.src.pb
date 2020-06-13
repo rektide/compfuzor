@@ -4,14 +4,14 @@
     TYPE: k3c
     INSTANCE: git
     REPO: https://github.com/rancher/k3c
-    OPTS_DIRS: True
+    GROUP: adm
     BINS:
     - name: build.sh
       run: True
       exec: |
         make build
-        make image
-    - link: k3c
-      global: true
+        #make package
+    - dest: k3c
+      global: True
   tasks:
   - include: tasks/compfuzor.includes type=src

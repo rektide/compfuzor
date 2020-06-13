@@ -10,4 +10,4 @@
   when: item is mapping and item.link|default(False) and item.delay|default(False) == delay_phase|default(False)
   vars:
     #_dest: "{{item.dest|default(item.link|basename)|default(item.name)|defaultDir(BINS_DIR)}}"
-    _dest: "{{item.dest|default(item.link|basename)|default(item.name)|defaultDir(BINS_DIR)}}"
+    _dest: "{{item.dest|default(item.link|basename)|default(item.name|default(''))|defaultDir(BINS_DIR)}}"
