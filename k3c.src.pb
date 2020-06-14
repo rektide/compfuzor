@@ -4,7 +4,6 @@
     TYPE: k3c
     INSTANCE: git
     REPO: https://github.com/rancher/k3c
-    GROUP: adm
     BINS:
     - name: build.sh
       run: True

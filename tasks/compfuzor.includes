@@ -2,7 +2,7 @@
 - debug: "msg='Compfuzor: starting VARIABLES'"
 # first include all absolutely zero dependency vars
 - include: compfuzor/vars_password.tasks
-  when: not PASSWORD|default(False) and not PASSWORD_BYPASS|default(False)
+  when: PASSWORD|default(False) and not PASSWORD_BYPASS|default(False)
 - include: compfuzor/vars_uuid.tasks
 # then start assembling perceieved higher and higher level vars
 - include: compfuzor/vars_base.tasks

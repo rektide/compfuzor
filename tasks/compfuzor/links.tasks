@@ -3,21 +3,26 @@
 - name: "Create directories for LINKS"
   file:
   args:
-    path: "{{_path}}"
+    path: "{{ _dest }}"
     state: directory
-  with_dict: "{{LINKS|default({})}}"
-  become: "{{_path|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  with_items: "{{LINKS.iteritems() if links is mapping else LINKS}}"
+  become: "{{ _dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
   when: LINKS|default(False) and not LINK_BYPASS|default(False)
   vars:
-    _path: "{{ DIR+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{ item.key|dirname }}"
+    _src: "{{ item.src|default(item.value) }}"
+    __dest: "{{ item.dest|default(item.key) }}"
+    _dest: "{{ DIR+'/' if __dest|first != '/' and __dest|first != '~' else '' }}{{ _src|dirname }}"
 - name: "Create LINKS"
   file:
   args:
-    src: "{{ DIR+'/' if item.value|first != '/' and item.value|first != '~' else '' }}{{item.value}}"
-    dest: "{{_path}}"
+    src: "{{ _src }}"
+    dest: "{{ _dest }}"
+    force: "{{ item.force|default(False) }}"
     state: link
-  with_dict: "{{LINKS|default({})}}"
-  become: "{{_path|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  with_items: "{{ LINKS.iteritems() if links is mapping else LINKS }}"
+  become: "{{ _dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: LINKS|default(False) and not LINK_BYPASS|default(False)
   vars:
-    _path: "{{ DIR+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{item.key}}"
+    _src: "{{ item.src|default(item.value) }}"
+    __dest: "{{ item.dest|default(item.key) }}"
+    _dest: "{{ DIR+'/' if __dest|first != '/' and __dest|first != '~' else '' }}{{ _src|dirname }}"

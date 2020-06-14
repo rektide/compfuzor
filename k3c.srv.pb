@@ -1,40 +1,41 @@
 ---
 - hosts: all
   vars:
-    NAME: k3c
+    TYPE: k3c
     INSTANCE: main
+    GROUP: adm
     LINKS:
     - key: "{{ETC}}/k3c.toml"
-      value: "{{K3C_CONFIG}}"
+      value: "{{ENV.K3C_CONFIG}}"
       force: True
     - key: "{{RUN}}/k3c.sock"
-      value: "{{K3C_ADDRESS}}"
+      value: "{{ENV.K3C_ADDRESS}}"
       force: True
     - key: "{{VAR}}/k3c.state"
-      value: "{{K3C_STATE}}"
+      value: "{{ENV.K3C_STATE}}"
       force: True
     VAR_DIRS: True
     RUN_DIRS: True
 
-    K3C_CONFIG: "{{ETC}}/{{NAME}}.toml"
-    K3C_ADDRESS: "{{RUN}}/{{NAME}}.sock"
-    K3C_ROOT: "{{VAR}}"
-    K3C_STATE: "{{RUN}}/{{NAME}}.state"
-    K3C_BRIDGE_NAME: "k3{{NAME}}"
-    K3C_BRIDGE_CIDR: "172.18.0.0/16"
-    K3C_BOOTSTRAP_IMAGE: "docker.io/rancher/k3c:dev"
-    K3C_BOOTSTRAP_SKIP: "false"
-    #K3C_CNI_BIN: ""
-    #K3C_CNI_NETCONF: ""
-    K3C_SANDBOX_IMAGE: "docker.io/rancher/pause:3.1"
-    K3C_SOCKET_GID: 0
-    K3C_SOCKET_UID: "{{GROUP}}"
-    ENV: ["K3C_CONFIG", "K3C_ADDRESS", "K3C_ROOT", "K3C_STATE", "K3C_BRIDGE_NAME", "K3C_BRIDGE_CIDR", "K3C_BOOTSTRAP_IMAGE", "K3C_BOOTSTRAP_SKIP", "#K3C_CNI_BIN", "#K3C_CNI_NETCONF", "K3C_SANDBOX_IMAGE", "K3C_SOCKET_GID", "K3C_SOCKET_UID"]
+    ENV:
+      K3C_CONFIG: "{{ETC}}/{{NAME}}.toml"
+      K3C_ADDRESS: "{{RUN}}/{{NAME}}.sock"
+      K3C_ROOT: "{{VAR}}"
+      K3C_STATE: "{{RUN}}/{{NAME}}.state"
+      K3C_BRIDGE_NAME: "k3{{NAME}}"
+      K3C_BRIDGE_CIDR: "172.18.0.0/16"
+      K3C_BOOTSTRAP_IMAGE: "docker.io/rancher/k3c:dev"
+      K3C_BOOTSTRAP_SKIP: "false"
+      #K3C_CNI_BIN: ""
+      #K3C_CNI_NETCONF: ""
+      K3C_SANDBOX_IMAGE: "docker.io/rancher/pause:3.1"
+      K3C_SOCKET_GID: 0
+      K3C_SOCKET_UID: "{{GROUP}}"
 
     SYSTEMD_UNITS:
       #After: network.target
       Description: "{{ NAME }}"
-    SYSTEMD_EXEC: "{{SRC}}/bin/k3c daemon"
+    SYSTEMD_EXEC: "/usr/local/bin/k3c daemon"
     SYSTEMD_SERVICES:
       EnvironmentFile: "{{DIR}}/env"
       WorkingDirectory: "{{DIR}}"
@@ -44,4 +45,4 @@
       #Alias: k3c.service
       #WantedBy: multi-user.target
   tasks:
-  - include: tasks/compfuzor.includes type=src
+  - include: tasks/compfuzor.includes type=srv
