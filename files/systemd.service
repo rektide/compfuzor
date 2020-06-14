@@ -87,7 +87,9 @@ After=network.target
 {{ phrase('AssertFileNotEmpty', SYSTEMD_ASSERT_FILE_NOT_EMPTY) -}}
 {{ phrase('AssertFileIsExecutable', SYSTEMD_ASSERT_FILE_IS_EXECUTABLE) -}}
 {% for key, value in (SYSTEMD_UNITS|default({}, True)).items() -%}
+{% for vsub in value|arrayitize -%}
 {{key}}={{value}}
+{% endfor -%}
 {% endfor -%}
 {{ '\n' -}}
 
@@ -222,7 +224,9 @@ EnvironmentFile={{DIR}}/env
 {{ phrase('Delegate', SYSTEMD_DELEGATE) -}}
 {{ phrase('KillMode', SYSTEMD_KILL_MODE) -}}
 {% for key, value in (SYSTEMD_SERVICES|default({}, True)).items() -%}
-{{key}}={{value}}
+{% for vsub in value|arrayitize -%}
+{{key}}={{vsub}}
+{% endfor -%}
 {% endfor -%}
 {{ '\n' -}}
 
@@ -235,5 +239,7 @@ WantedBy={{ "multi-user" if not USERMODE|default(False) else "default" }}.target
 {{ phrase('Also', SYSTEMD_ALSO) -}}
 {{ phrase('DefaultInstances', SYSTEMD_DEFAULT_INSTANCES) -}}
 {% for key, value in (SYSTEMD_INSTALLS|default({}, True)).items() -%}
+{% for vsub in value|arrayitize -%}
 {{key}}={{value}}
+{% endfor -%}
 {% endfor -%}
