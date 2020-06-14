@@ -20,11 +20,14 @@
 - name: "Cancel go if nothing to do"
   set_fact: _go="" # do not go if bypass, or nothing is defined pertaining to this component
   when: "({{_bypass}}|default(True)) and not (({{_dirs}}|default(False)) or ({{_files}}|default(False)) or ({{_d}}|default(False)) or ({{_base}}|default(False)))"
-- name: "Test for top {{base}} directory - will permit"
-  stat: path="{{__defaultDir if not FS_CONTAINERED|default(False) else DIR+'/'+include|lower}}"
+- name: "Test for top {{include|upper}} directory - will permit"
+  stat:
+    path: "{{_path}}"
   register: _has_defaultDir
   changed_when: _has_defaultDir.stat.exists
   when: not FS_DIR_TOP_PROPER|default(False) # opposite of a bypass, hard check for proper top dir if set, will let creation attempts run even though something exists
+  vars:
+    _path: "{{__defaultDir if not FS_CONTAINERED|default(False) else DIR+'/'+include|lower}}"
 - name: "Set _has_defaultDir if FS_DIR_TOP_PROPER is set"
   set_fact:
     _has_defaultDir:
@@ -43,7 +46,7 @@
   become: "{{__defaultDir|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _go|bool and not FS_CONTAINED|default(False) and not _has_defaultDir.stat.exists
 # link include dir into DIR
-- name: "Link top {{include|upper}} directory into `DIR`"
+- name: "Link top {{include|upper}} directory into `DIR`RUN"
   file:
     src: "{{__defaultDir}}"
     dest: "{{_dest}}"
@@ -51,7 +54,7 @@
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: "_go|bool and not DIR_BYPASS|default(False) and not DIR_LINK_BYPASS|default(False) and not {{_link_bypass}}|default(False) and not FS_CONTAINED|default(False)"
+  when: "_go|bool and not DIR_BYPASS|default(False) and not DIR_LINK_BYPASS|default(False) and not {{_link_bypass}}|default(False) and not FS_CONTAINED|default(False) and not _has_defaultDir.stat.exists"
   vars:
     _dest: "{{DIR}}/{{include|lower}}"
 # fs_contained - reverses stoage characteristic, installing under DIR rather than about

@@ -2,7 +2,7 @@
 - hosts: all
   vars:
     TYPE: k3s
-    INSTANCE: "{{ domain|replace('.', '-') }}"
+    INSTANCE: "{{ DOMAIN|replace('.', '-') }}"
     VAR_DIR: True
     PASSWORD:
     - token
@@ -22,8 +22,9 @@
     # support added in https://github.com/rancher/k3s/pull/100 ?
     SYSTEMD_SERVICES:
       Delegate: yes
-      ExecStartPre: -/sbin/modprobe br_netfilter
-      ExecStartPre: -/sbin/modprobe overlay
+      ExecStartPre:
+      - "-/sbin/modprobe br_netfilter"
+      - "-/sbin/modprobe overlay"
       KillMode: process
       LimitNOFILE: infinity
       LimitNPROC: infinity

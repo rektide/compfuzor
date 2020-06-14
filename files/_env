@@ -14,23 +14,24 @@
 
 {% macro mdef(env) -%}
 {% if env is none -%}
+{% elif env is mapping -%}
+{% for key,val in env.iteritems() -%}
+	{{ keys.append(key) -}}
+	{% for vsub in val|arrayitize -%}
+		{{ def(key,vsub) -}}
+	{% endfor -%}
+{% endfor -%}
 {% elif env is sequence and env is not string -%}
 {% for key in env -%}
 	{{ def(key, True) -}}
 	{{ keys.append(key) -}}
-{% endfor -%}
-{% elif env is mapping -%}
-{% for key,val in env.iteritems() -%}
-	{{ keys.append(k) -}}
-	{% for vsub in val|arrayitize -%}
-		{{ def(k,vsub) -}}
-	{% endfor -%}
 {% endfor -%}
 {% endif -%}
 {% endmacro -%}
 
 {% set keys = [] -%}
 
+{{ def("DIR", DIR) -}}
 {{ mdef(ENV_PRIO|default(None)) -}}
 {{ mdef(ENV|default(None)) -}}
 {{ def("COMPFUZOR_ENVS", keys|join(",")) -}}

@@ -6,7 +6,7 @@
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: has_env.stdout|int == 0 and ENV|default(False)
+  when: has_env.stdout|int == 0
   vars:
     _dest: "{{DIR}}/env"
 - name: copy in env file
@@ -29,7 +29,7 @@
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: has_env_export.stdout|int == 0 and ENV|default(False)
+  when: has_env_export.stdout|int == 0
   vars:
     _dest: "{{DIR}}/env.export"
 - name: copy in env.export file

@@ -1,16 +1,27 @@
 ---
 - debug: "msg='Compfuzor: create `LINKS`'"
+- name: "Test for directories for LINKS"
+  stat:
+    path: "{{_dest}}"
+  with_items: "{{LINKS.iteritems() if links is mapping else LINKS}}"
+  become: "{{ _dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
+  when: LINKS|default(False) and not LINK_BYPASS|default(False)
+  register: _link_stats
+  vars:
+    _src: "{{ item.src|default(item.value) }}"
+    __dest: "{{ item.dest|default(item.key) }}"
+    _dest: "{{ DIR+'/' if __dest|first != '/' and __dest|first != '~' else '' }}{{ _src|dirname }}"
 - name: "Create directories for LINKS"
   file:
   args:
     path: "{{ _dest }}"
     state: directory
-  with_items: "{{LINKS.iteritems() if links is mapping else LINKS}}"
+  with_indexed_items: "{{LINKS.iteritems() if links is mapping else LINKS}}"
   become: "{{ _dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
-  when: LINKS|default(False) and not LINK_BYPASS|default(False)
+  when: LINKS|default(False) and not LINK_BYPASS|default(False) and _link_stats.results[ item.0].stat.exists == False
   vars:
-    _src: "{{ item.src|default(item.value) }}"
-    __dest: "{{ item.dest|default(item.key) }}"
+    _src: "{{ item.1.src|default(item.1.value) }}"
+    __dest: "{{ item.1.dest|default(item.1.key) }}"
     _dest: "{{ DIR+'/' if __dest|first != '/' and __dest|first != '~' else '' }}{{ _src|dirname }}"
 - name: "Create LINKS"
   file:
@@ -25,4 +36,4 @@
   vars:
     _src: "{{ item.src|default(item.value) }}"
     __dest: "{{ item.dest|default(item.key) }}"
-    _dest: "{{ DIR+'/' if __dest|first != '/' and __dest|first != '~' else '' }}{{ _src|dirname }}"
+    _dest: "{{ DIR+'/' if __dest|first != '/' and __dest|first != '~' else '' }}{{ _src }}"

@@ -36,15 +36,17 @@ def has_write( *a, **kw):
     path = a[0]
     return os.access( path, os.W_OK)
 
+# this does not work at all on remote hosts, ha oops duh crap
 def can_write( *a, **kw):
     path = a[0]
+
     exists = os.access( path, os.F_OK)
     dirpath = os.path.dirname( path)
     # can we write the directory? needed if we need to (re-)constitute
     if not os.access( dirpath, os.W_OK):
         return False
     # now check - exists but not writable
-    if exists and  not os.access( path, os.W_OK):
+    if exists and not os.access( path, os.W_OK):
         return False
     # optional user/uid passed in?
     if len(a) >= 2:
