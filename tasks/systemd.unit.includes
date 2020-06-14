@@ -32,7 +32,7 @@
     state: link
   when: unit|default(False) and has_etc
 - name: enabling unit
-  shell: "systemctl --{{SYSTEMD_SCOPE}} enable {{dest}}"
+  shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{dest}}"
   when: unit == True
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
@@ -48,7 +48,7 @@
   when: unit and unit != True and has_etc
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 - name: enabling specified unit
-  shell: systemctl --{{SYSTEMD_SCOPE}} enable "{{unit}}"
+  shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{unit}}"
   when: unit and unit != True
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
@@ -60,7 +60,7 @@
   when: units|bool and units != False
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 - name: enabling units
-  shell: systemctl --{{SYSTEMD_SCOPE}} enable {{i}}
+  shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{i}}"
   with_items: "{{units}}"
   when: units|bool and units != False
   loop_control:
