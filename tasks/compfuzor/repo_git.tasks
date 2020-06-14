@@ -35,7 +35,7 @@
 
 - name: "fetching git repositories list"
   git:
-    repo: "{{ item.repo }}"
+    repo: "{{ item.repo|default(item) }}"
     dest: "{{ dest }}"
     track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
@@ -46,4 +46,4 @@
   with_items: "{{ REPOS if REPOS|default(False) else [] }}"
   when: REPOS|default(False) and REPOS is not mapping
   vars:
-    dest: "{{ REPO_DIR }}/{{item.repo|basename|regex_replace('\\.git$', '') }}"
+    dest: "{{ REPO_DIR }}/{{item.repo|default(item)|basename|regex_replace('\\.git$', '') }}"
