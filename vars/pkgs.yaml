@@ -43,6 +43,7 @@ BASE:
 - bsdutils
 - cifs-utils
 - coreutils
+- criu
 - dash
 - debconf
 - debconf-utils
@@ -55,6 +56,7 @@ BASE:
 - diffutils
 - direnv
 - dpkg
+- dpkg-source-gitarchive
 - efivar
 - efitools
 - efibootmgr
@@ -190,6 +192,7 @@ BASE:
 - btrfs-progs
 - systemd
 - systemd-sysv # special, replaces essential sysvinit
+- systemd-timesyncd
 - libpam-systemd
 - libnss-systemd
 - libnss3-tools
@@ -393,6 +396,13 @@ WORKSTATION_X:
 - uvcdynctrl
 - guvcview
 - feh
+- gpsd-tools
+- gpsd
+- gpsd-clients
+WORKSTATION_MEDIA:
+- gimp
+- hdrmerge
+- photoflow
 WORKSTATION_KDE_BASE:
 - kde-baseapps
 - konqueror-nsplugins
@@ -1003,6 +1013,7 @@ GO:
 - golang-metrics-dev
 DOCKER:
 - docker.io
+- docker-clean
 #- aufs-tools # sane people only
 - btrfs-progs
 - cgroupfs-mount
