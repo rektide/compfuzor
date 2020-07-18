@@ -63,6 +63,8 @@ BASE:
 - e2fslibs
 - e2fsprogs
 - ethtool
+- fdutils
+- feedbackd
 - findutils
 - firmware-atheros
 - firmware-brcm80211
@@ -73,6 +75,7 @@ BASE:
 - firmware-linux-nonfree
 - firmware-realtek
 - firmware-ti-connectivity
+- fl-cow
 - gawk
 - gnupg
 - grep
@@ -236,6 +239,10 @@ BASE:
 - iw
 - rsync
 - ecryptfs-utils
+- fzf
+- jq
+- jo
+- xatter
 WORKSTATION:
 - dnsutils
 - dstat
@@ -276,6 +283,7 @@ WORKSTATION:
 - fatrace
 - powertop
 - hdparm
+- sdparm
 - ca-certificates
 - lockfile-progs
 - apt-utils
@@ -295,6 +303,34 @@ WORKSTATION:
 - pci.ids
 - extra-xdg-menus
 - mdevctl
+- gpsd-tools
+- gpsd
+- gpsd-clients
+- gpsbabel
+- hadori
+- hddtemp
+- input-utils
+- irqbalance
+- irqtop
+#- fdupes
+- fnotifystat
+- jdupes
+- evtest
+- kacpimon
+- kbd
+- console-data
+- unicode-data
+- kcapi-tools
+- mmc-utils
+- smartmontools
+- spacenavd
+- spi-tools
+- u2f-host
+- u2f-tools
+- watchman
+- weather-util
+- weather-util-data
+- wipe
 VIRTUALIZATION:
 #- qemu
 - qemu-kvm
@@ -338,6 +374,7 @@ WORKSTATION_X:
 - xauth
 - xbase-clients
 - xinput
+- xinput-calibrator
 - xserver-xorg-input-all
 - xserver-xorg-input-synaptics
 - xserver-xorg-input-wacom
@@ -366,6 +403,7 @@ WORKSTATION_X:
 - fonts-noto-mono
 - fonts-roboto-hinted
 - fonts-powerline
+- fonts-recommended
 - xfonts-terminus
 - ttf-anonymous-pro
 - lightdm
@@ -396,9 +434,6 @@ WORKSTATION_X:
 - uvcdynctrl
 - guvcview
 - feh
-- gpsd-tools
-- gpsd
-- gpsd-clients
 WORKSTATION_MEDIA:
 - gimp
 - hdrmerge
@@ -747,6 +782,10 @@ MEDIA:
 - youtube-dl
 - lame
 - opus-tools
+- vpx-tools
+- x265
+- aom-tools
+- dov4l
 - ffmpeg
 VAAPI:
 - gstreamer1.0-vaapi
@@ -778,6 +817,11 @@ WORKSTATION_WAYLAND:
 - swaybg
 - swaylock
 - wl-clipboard
+- wdisplays
+- wev
+- kanshi
+- drm-info
+# fonts-recommended
 #- libwayland-bin
 WORKSTATION_GNOME:
 - gnome-shell
