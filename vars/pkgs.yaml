@@ -36,6 +36,7 @@ BASE:
 - acl
 - apt
 - apt-transport-https
+- arch-test
 - attr
 - base-files
 - base-passwd
@@ -331,6 +332,7 @@ WORKSTATION:
 - weather-util
 - weather-util-data
 - wipe
+- pv
 VIRTUALIZATION:
 #- qemu
 - qemu-kvm
@@ -343,6 +345,8 @@ VIRTUALIZATION:
 - qemu-static-arm
 - libvirt-bin
 - libvirt-daemon-system
+- systemd-container
+- libnss-mymachines
 AVAHI:
 - avahi-autoipd
 - avahi-daemon
@@ -633,6 +637,8 @@ DEBDEV:
 - devscripts
 - dput-ng
 - multistrap
+- mmdebstrap
+- proot
 - mtd-utils
 - u-boot-tools
 - device-tree-compiler
@@ -1065,6 +1071,17 @@ DOCKER:
 - xz-utils
 #- golang-docker-dev
 - vim-syntax-docker
+- fuse-overlayfs
+#- crun
+- crun
+- containers-storage
+- buildah
+#- rootlesskit
+#- podman
+#- slirp4netns
+#- containerd
+- containernetworking-plugins
+- conmon
 POSTGRES:
 - postgresql
 - postgresql-doc
