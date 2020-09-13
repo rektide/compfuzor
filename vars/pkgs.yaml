@@ -298,6 +298,7 @@ WORKSTATION:
 - flent
 - x11-xserver-utils
 - fonts-noto-color-emoji
+- fonts-stix
 - nodejs
 - npm
 - oomd
@@ -333,6 +334,12 @@ WORKSTATION:
 - weather-util-data
 - wipe
 - pv
+- bpftool
+- exfatprogs
+- jc
+- jo
+- userbindmount
+#- gthd
 VIRTUALIZATION:
 #- qemu
 - qemu-kvm
@@ -408,6 +415,7 @@ WORKSTATION_X:
 - fonts-roboto-hinted
 - fonts-powerline
 - fonts-recommended
+- fonts-lmodern
 - xfonts-terminus
 - ttf-anonymous-pro
 - lightdm
@@ -432,12 +440,15 @@ WORKSTATION_X:
 - xclip
 - mesa-utils
 - mesa-vulkan-drivers
+- libosmesa6
 - libegl1-mesa
 - libgl1-mesa-dri
 - libglx-mesa0
 - uvcdynctrl
 - guvcview
 - feh
+- drm-info
+- wpan-tools
 WORKSTATION_MEDIA:
 - gimp
 - hdrmerge
@@ -628,6 +639,8 @@ DEVEL:
 - gperf
 - gcc
 - gcc-multibuild
+- binutils-bpf
+- gcc-bpf
 DEBDEV:
 - build-essential
 - debhelper
@@ -677,6 +690,7 @@ AUDIO:
 - vorbis-tools
 #- earcandy
 - playerctl
+- cava
 AUDIO_X:
 - alsa-tools-gui
 - alsamixergui
@@ -690,6 +704,7 @@ AUDIO_X:
 # big, pyqt5
 - mkchromecast
 - mkchromecast-pulseaudio
+- mkchromecast-gstreamer
 MOPIDY:
 - mopidy
 - mopidy-doc
@@ -827,6 +842,7 @@ WORKSTATION_WAYLAND:
 - wev
 - kanshi
 - drm-info
+- wlr-rand
 # fonts-recommended
 #- libwayland-bin
 WORKSTATION_GNOME:
@@ -839,6 +855,11 @@ MEDIA_X:
 - gstreamer1.0-x
 - gstreamer1.0-plugins-bad
 - gstreamer1.0-nice
+- gstreamer1.0-gl
+- gstreamer1.0-opencv
+- gstreamer1.0-pipewire
+- gstreamer1.0-plugins-rtp
+- gstreamer1.0-rtsp
 - ario
 - sonata
 - glurp
