@@ -1,28 +1,25 @@
 ---
 - debug: "msg='Compfuzor: create `LINKS`'"
-- name: "Test for directories for LINKS"
+
+- name: "Test for parent directories for LINKS"
   stat:
-    path: "{{_dest}}"
-  with_items: "{{LINKS.iteritems() if links is mapping else LINKS}}"
-  become: "{{ _dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
+    path: "{{_parent}}"
+  become: "{{ _parent|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
   when: LINKS|default(False) and not LINK_BYPASS|default(False)
-  register: _link_stats
+  with_items: "{{ lookup('dict', LINKS) if LINKS is mapping else LINKS }}"
   vars:
-    _src: "{{ item.src|default(item.value) }}"
-    __dest: "{{ item.dest|default(item.key) }}"
-    _dest: "{{ DIR+'/' if __dest|first != '/' and __dest|first != '~' else '' }}{{ _src|dirname }}"
+    _parent: "{{ item.dest|default(item.key)|defaultDir(DIR)|basename }}"
+  register: _link_stats
 - name: "Create directories for LINKS"
   file:
   args:
     path: "{{ _dest }}"
     state: directory
-  with_indexed_items: "{{LINKS.iteritems() if links is mapping else LINKS}}"
   become: "{{ _dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
-  when: LINKS|default(False) and not LINK_BYPASS|default(False) and _link_stats.results[ item.0].stat.exists == False
+  when: LINKS|default(False) and not LINK_BYPASS|default(False) and (_link_stats.results|map(attribute='item')|selectattr('key', 'eq', item.key)|list|first).stat.exists == False
+  with_items: "{{ lookup('dict', LINKS) if LINKS is mapping else LINKS }}"
   vars:
-    _src: "{{ item.1.src|default(item.1.value) }}"
-    __dest: "{{ item.1.dest|default(item.1.key) }}"
-    _dest: "{{ DIR+'/' if __dest|first != '/' and __dest|first != '~' else '' }}{{ _src|dirname }}"
+    _dest: "{{ item.dest|default(item.key)|defaultDir(DIR) }}"
 - name: "Create LINKS"
   file:
   args:
@@ -30,10 +27,10 @@
     dest: "{{ _dest }}"
     force: "{{ item.force|default(False) }}"
     state: link
-  with_items: "{{ LINKS.iteritems() if links is mapping else LINKS }}"
   become: "{{ _dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: LINKS|default(False) and not LINK_BYPASS|default(False)
+  with_items: "{{ lookup('dict', LINKS) if LINKS is mapping else LINKS }}"
   vars:
-    _src: "{{ item.src|default(item.value) }}"
-    __dest: "{{ item.dest|default(item.key) }}"
-    _dest: "{{ DIR+'/' if __dest|first != '/' and __dest|first != '~' else '' }}{{ _src }}"
+    _src: "{{ item.src|default(item.value)|defaultDir(DIR) }}"
+    _dest: "{{ item.dest|default(item.key)|defaultDir(DIR) }}"
+- fail: msg="nope"
