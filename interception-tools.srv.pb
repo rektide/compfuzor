@@ -11,6 +11,7 @@
     SYSTEMD_WANTED_BY: multi-user.target
     SYSTEMD_ENVIRONMENT:
     - "PATH={{ INTERCEPTION_TOOLS }}:/usr/bin:/bin"
+    SYSTEMD_NICE: -16
     ETC_FILES:
     - name: caps2esc.yaml
       content: |

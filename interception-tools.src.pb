@@ -20,6 +20,8 @@
               EV_KEY: [KEY_CAPSLOCK, KEY_ESC]
     BINS_DIR: "{{ OPT }}/bin"
     LINKS:
+    #- key: bin
+    #  value: "{{ BINS_DIR }}"
       bin: "{{ BINS_DIR }}"
     BINS:
     - name: build-interception-tools.sh
@@ -40,6 +42,7 @@
         make install
     - name: build.sh
       run: true
+      basedir: True
       exec: |
         ./bin/build-interception-tools.sh
         ./bin/build-caps2esc.sh
