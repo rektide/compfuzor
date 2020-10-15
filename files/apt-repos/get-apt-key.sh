@@ -1,5 +1,8 @@
 #!/bin/zsh
 
+set -x
+set -e
+
 # originally:
 #sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 94558F59
 
@@ -8,11 +11,18 @@
 #gpg --no-default-keyring --keyring
 #--keyserver keyserver.ubuntu.com --export 94558F59 > trusted.gpg.d/spotify.key
 
+# getting a public keyring
+# https://stackoverflow.com/questions/51300627/apt-rejects-keyrings-in-etc-apt-trusted-gpg-d-on-ubuntu-18-04
+
+
 NAME=$1
 KEY=$2
 KEYSERVER=$3
 [[ -z "$KEYSERVER" ]] && KEYSERVER=keys.gnupg.net
 echo Fetching key $KEY into $NAME.gpg
 
-gpg --no-default-keyring --keyring `pwd`/$NAME.gpg --keyserver $KEYSERVER --recv-keys $KEY
-rm $NAME.gpg~
+tmp=`pwd`/$NAME.gpg.tmp
+gpg --no-default-keyring --keyring $tmp --keyserver $KEYSERVER --recv-keys $KEY
+gpg --no-default-keyring --keyring $tmp --export > $NAME.gpg
+
+#rm $NAME.gpg~
