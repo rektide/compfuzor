@@ -9,9 +9,7 @@ MULTISTRAP_REPOS:
   keyring: debian-archive-keyring
   pkg_sets:
   - BASE
-  - "BASE_{{ARCH}}"
   - AUDIO
-  - AVAHI
   - BT
   #- CEPH
   - DOCKER
@@ -19,10 +17,12 @@ MULTISTRAP_REPOS:
   - MEDIA
   - VAAPI
   - POSTGRES
-  - RYGEL
-  - AVAHI_X
+  #- RYGEL
+  #- RYGEL_X
+  # systemd is an adequate avahi replacement these days
+  #- AVAHI
+  #- AVAHI_X
   - WORKSTATION
-  - "WORKSTATION_X_{{ARCH}}"
   #- WORKSTATION_KDE_BASE
   #- WORKSTATION_KDE
   #- WORKSTATION_MATE
@@ -30,7 +30,6 @@ MULTISTRAP_REPOS:
   - DEBDEV
   - AUDIO_X
   - BT_X
-  - RYGEL_X
   - JACK_PLUGINS
   - JACK_X
   - MEDIA_X

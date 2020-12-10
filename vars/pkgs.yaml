@@ -363,7 +363,6 @@ AVAHI:
 - avahi-utils
 AVAHI_X:
 #2- avahi-discover
-WORKSTATION_X_aarch64: []
 WORKSTATION_X_amd64:
 - xserver-xorg-video-intel
 - xserver-xspice
@@ -742,6 +741,8 @@ RYGEL:
 - rygel-playbin
 - dleyna-renderer
 - dleyna-server
+RYGEL_X:
+- rygel-preferences
 EDA:
 - kicad
 - kicad-common
@@ -763,8 +764,6 @@ USERSPACE:
 TRACKER:
 - rygel-tracker
 - rygel-miner-fs
-RYGEL_X:
-- rygel-preferences
 JACK:
 - jackd2
 #- jack-tools
@@ -811,6 +810,7 @@ MEDIA:
 - aom-tools
 - dov4l
 - ffmpeg
+- playerctl
 VAAPI:
 - gstreamer1.0-vaapi
 - libva2
