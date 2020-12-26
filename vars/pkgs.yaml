@@ -146,6 +146,7 @@ BASE:
 - procps
 - psmisc
 #- python2.7-minimal
+#- python-pip-whl
 - python3-pytools
 - readline-common
 - resolvconf
@@ -154,6 +155,7 @@ BASE:
 - sed
 - sensible-utils
 - sshpass
+- sysstat
 - sysv-rc
 - sysvinit-utils
 - tar
@@ -727,6 +729,7 @@ BT:
 - bluez
 - bluez-firmware
 - bluez-hcidump
+- bluez-meshd
 - bluez-obexd
 - bluez-tools
 - bluetooth
@@ -843,8 +846,20 @@ WORKSTATION_WAYLAND:
 - kanshi
 - drm-info
 - wlr-rand
+- wdisplays
+- wf-recorder
 # fonts-recommended
 #- libwayland-bin
+- foot
+- xdg-desktop-portal-wlr
+- xdg-desktop-portal
+- xdg-dbus-proxy
+- pipewire-audio-client-libraries
+- pipewire
+- pipewire-bin
+- grimshot
+- gammastep
+- squeekboard # 30MB! touchscreen keyboard
 WORKSTATION_GNOME:
 - gnome-shell
 - mutter
