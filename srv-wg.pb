@@ -21,8 +21,10 @@
     - name: build.sh
       #run: True
       exec: |
-        [ ! -f "{{ETC}}/$KEY_FILE" ] && (umask 0077; wg genkey > "{{ETC}}/$KEY_FILE")
-        echo "{\"peers\":$(cat {{ETC}}/peers.json)}" | jinja2 {{ETC}}/netdev.j2 > {{ETC}}/wg.netdev
+        [ ! -f "{{ETC}}/$KEY_FILE" ] && (umask 0007; wg genkey > "{{ETC}}/$KEY_FILE")
+        [ ! -f "{{ETC}}/$KEY_FILE.pub" ] && cat {{ETC}}/$KEY_FILE | wg pubkey > "{{ETC}}/$KEY_FILE.pub"
+        echo "{\"peers\":$(cat {{ETC}}/peers.json)}" | jinja2 {{SHARE}}/wg.netdev.j2 > {{ETC}}/wg.netdev
+        sudo chgrp systemd-network "{{ETC}}/$KEY_FILE"
     LINKS:
     - src: "{{ETC}}/wg.netdev"
       dest: "/etc/systemd/network/90-{{NAME}}.netdev"
@@ -32,8 +34,8 @@
     - name: "wg.netdev"
       # stub file that we generate in build.sh
       content: ""
-      #SHARE_FILES:
-    - name: "netdev.j2"
+    SHARE_FILES:
+    - name: "wg.netdev.j2"
       content: |
         [NetDev]
         Name={{NAME}}
@@ -50,8 +52,8 @@
         {{'{%'}} for peer in peers {{'%}'}}
         [WireGuardPeer]
         PublicKey={{'{{'}}peer.key{{'}}'}}
-        PresharedKey={{ETC}}/key.{{'{{'}}peer.name}{{'}}'}}.key
-        {{'{{'}} 'Endpoint=' + peer.endpoint if peer.endpoint|default(False) else '#Endpoint=' {{'}}'}}
+        PresharedKey={{ETC}}/key.{{'{{'}}peer.name{{'}}'}}.key
+        {{'{{'}} 'Endpoint=' + peer.endpoint if peer.endpoint is defined else '#Endpoint=' {{'}}'}}
         {{'{%'}} for ip in peer.ips {{'%}'}}
         AllowedIPs={{'{{'}}ip{{'}}'}}
         {{'{%'}} endfor {{'%}'}}
