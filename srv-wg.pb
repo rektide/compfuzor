@@ -15,14 +15,14 @@
       endpoint: b.example:51902
 
     ENV:
-    - keyFile
-    - listenPort
+      KEY_FILE: "{{keyFile}}"
+      LISTEN_PORT: "{{listenPort}}"
     BINS:
     - name: build.sh
       #run: True
       exec: |
-        [ ! -f $keyfile} ] && (umask 0077; wg genkey > $keyfile})
-        cat {{ETC}}/peers.json | jinja2 {{ETC|default('oops')}}/netdev.j2 > {{ETC}}/wg.netdev
+        [ ! -f "{{ETC}}/$KEY_FILE" ] && (umask 0077; wg genkey > "{{ETC}}/$KEY_FILE")
+        echo "{\"peers\":$(cat {{ETC}}/peers.json)}" | jinja2 {{ETC}}/netdev.j2 > {{ETC}}/wg.netdev
     LINKS:
     - src: "{{ETC}}/wg.netdev"
       dest: "/etc/systemd/network/90-{{NAME}}.netdev"
@@ -44,7 +44,7 @@
          
         [WireGuard]
         ListenPort={{listenPort}}
-        PrivateKeyFile={{keyfile|defaultDir(ETC)}}
+        PrivateKeyFile={{keyFile|defaultDir(ETC)}}
         {{ 'FirewallMark=' + firewallMark if firewallMark|default(False) else '#FirewallMark=' }}
 
         {{'{%'}} for peer in peers {{'%}'}}
@@ -53,7 +53,7 @@
         PresharedKey={{ETC}}/key.{{'{{'}}peer.name}{{'}}'}}.key
         {{'{{'}} 'Endpoint=' + peer.endpoint if peer.endpoint|default(False) else '#Endpoint=' {{'}}'}}
         {{'{%'}} for ip in peer.ips {{'%}'}}
-        AllowedIPs={{'{{'}}ip{{'}}'}}'}
+        AllowedIPs={{'{{'}}ip{{'}}'}}
         {{'{%'}} endfor {{'%}'}}
         {{'{%'}} endfor {{'%}'}}
   tasks:
