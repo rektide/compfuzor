@@ -8,3 +8,4 @@
 - include: "{{ multi }}.tasks include=src"
 - include: "{{ multi }}.tasks include=pid"
 - include: "{{ multi }}.tasks include=run"
+- include: "{{ multi }}.tasks include=share"

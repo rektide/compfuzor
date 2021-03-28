@@ -9,21 +9,17 @@
   vars:
     _parent: "{{ item.dest|default(item.key)|defaultDir(DIR)|dirname }}"
   register: _link_stats
-- debug:
-    msg: "spew {{ _link_stats }}"
 - name: "Create directories for LINKS"
   file:
   args:
-    path: "{{ _dest }}"
+    path: "{{ item.path }}"
     state: directory
     user: "{{ USER }}" # OWNER?
     group: "{{ GROUP|default(omit) }}"
     mode: "{{ DIRMODE|default(MODE)|default(omit)}}"
-  become: "{{ _dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
-  when: LINKS|default(False) and not LINK_BYPASS|default(False) and (_link_stats.results|selectattr('item.key', 'eq', item.key)|list|first).stat.exists == False
-  with_items: "{{ LINKS|listify }}"
-  vars:
-    _dest: "{{ item.dest|default(item.key)|defaultDir(DIR)|dirname }}"
+  become: "{{ item.path|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
+  when: LINKS|default(False) and not LINK_BYPASS|default(False) and item.stat.exists == False
+  with_items: "{{ _link_stats.results }}"
 - name: "Create LINKS"
   file:
   args:

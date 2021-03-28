@@ -25,12 +25,8 @@ BASE_amd64:
 - os-prober
 - linux-image-amd64
 - linux-headers-amd64
-BASE_armel:
-- mtd-utils
-BASE_armhf:
-- mtd-utils
-BASE_aarch64:
-- mtd-utils
+- dfu-utils
+- fdutils
 BASE:
 # the first segment of base is "essential" Debian packages
 - acl
@@ -52,7 +48,6 @@ BASE:
 #- debian-archive-keyring
 - debian-keyring
 - debianutils
-- dfu-utils
 - dialog
 - diffutils
 - direnv
@@ -64,7 +59,6 @@ BASE:
 - e2fslibs
 - e2fsprogs
 - ethtool
-- fdutils
 - feedbackd
 - findutils
 - firmware-atheros
@@ -90,7 +84,7 @@ BASE:
 - i2c-tools
 - kmod
 - libacl1
-- libapt-pkg5.0
+- libapt-pkg6.0
 - libattr1
 - libblkid1
 - libbz2-1.0
@@ -111,8 +105,8 @@ BASE:
 - libpam-modules-bin
 - libpam-runtime
 - libpam0g
-- libprocps7
-- libreadline7
+- libprocps8
+- libreadline8
 - libselinux1
 - libsemanage-common
 - libsemanage1
@@ -135,6 +129,7 @@ BASE:
 - mawk
 - mime-support
 - mount
+- mtd-utils
 #- multiarch-support
 - ncurses-base
 - ncurses-term
@@ -245,7 +240,7 @@ BASE:
 - fzf
 - jq
 - jo
-- xatter
+- xattr
 WORKSTATION:
 - dnsutils
 - dstat
@@ -330,7 +325,10 @@ WORKSTATION:
 - spacenavd
 - spi-tools
 - u2f-host
-- u2f-tools
+- u2f-server
+- libu2f-udev
+- libpam-u2f
+- pamu2fcfg
 - watchman
 - weather-util
 - weather-util-data
@@ -800,7 +798,6 @@ MEDIA:
 - libavcodec-extra58
 - mpdris2
 - mpd
-- mpris-remote
 - ncmpc
 - youtube-dl
 - lame
@@ -822,7 +819,6 @@ VAAPI:
 - vainfo
 - va-driver-all
 - mesa-va-drivers
-- i965-va-driver-shaders
 - libvdpau1
 - vdpau-driver-all
 - libvdpau-va-gl1
@@ -832,6 +828,8 @@ VAAPI:
 - mesa-vdpau-drivers
 - mesa-utils-extra
 # multimedia-audio-plugins
+VAAPI_amd64:
+- i965-va-driver-shaders
 WORKSTATION_WAYLAND:
 - xwayland
 - libwayland-egl1-mesa
@@ -1123,8 +1121,9 @@ POSTGRES:
 - postgresql-doc
 - postgis
 - postgis-doc
-- postgresql-11-postgis-3
-- postgresql-11-postgis-3-scripts
+POSTGRES_amd64:
+- postgresql-12-postgis-3
+- postgresql-12-postgis-3-scripts
 #- postgresql-plv8
 ZFSONLINUX:
 - zfsonlinux

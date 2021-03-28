@@ -18,3 +18,5 @@
   when: not DIRS_BYPASS|default(False) and not PID_BYPASS|default(False)
 - include: fs_hierarchy.tasks include=run
   when: not DIRS_BYPASS|default(False) and not RUN_BYPASS|default(False)
+- include: fs_hierarchy.tasks include=share
+  when: not DIRS_BYPASS|default(False) and not SHARE_BYPASS|default(False)

@@ -15,5 +15,6 @@ CACHES_DIR: "{{VARS_DIR}}/cache"
 ETCS_DIR: "{{PREFIX_DIR}}.config"
 # TODO: link MEDIAS_DIR out of USERMODE_DIR
 MEDIAS_DIR: "{{PREFIX_DIR}}media"
+SHARES_DIR: "{{PREFIX_DIR}}share"
 SYSTEMD_SCOPE: user
 SYSTEMD_UNIT_DIR: "{{XDG_CONFIG_DIR}}/systemd/user"
