@@ -5,7 +5,7 @@
   - root
   vars:
     TYPE: nodesource
-    INSTANCE: 11.x
+    INSTANCE: 16.x
     NAME: "{{TYPE}}-{{INSTANCE}}"
     APT_REPO: "https://deb.nodesource.com/node_{{INSTANCE}}"
     APT_SOURCELIST: "{{TYPE}}"
