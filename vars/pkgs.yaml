@@ -42,6 +42,7 @@ BASE:
 - coreutils
 - criu
 - dash
+- ddccontrol
 - debconf
 - debconf-utils
 #- dhcpcd5
@@ -60,6 +61,7 @@ BASE:
 - e2fsprogs
 - ethtool
 - feedbackd
+- fd-find
 - findutils
 - firmware-atheros
 - firmware-brcm80211
@@ -366,6 +368,8 @@ WORKSTATION_X_amd64:
 - xserver-xspice
 WORKSTATION_X:
 - awesome
+#- ddcutil
+#- gddccontrol
 - openbox
 - openbox-menu
 - tint2
