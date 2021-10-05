@@ -1,0 +1,4 @@
+{% set sep=joiner(',') -%}
+{% for s in mmpkgset -%}
+{{sep()}}{{vars[s]|default(hostvars[inventory_hostname][s])|join(',')}}
+{%- endfor -%}

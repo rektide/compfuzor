@@ -187,7 +187,7 @@ BASE:
 - less
 - zsh
 #- cron
-- systemd-cron
+#- systemd-cron
 - dbus
 - dbus-bin
 - dbus-daemon
@@ -356,7 +356,6 @@ WORKSTATION:
 - wipe
 - pv
 - bpftool
-- exfatprogs
 - jc
 - jo
 - userbindmount
@@ -369,7 +368,7 @@ WORKSTATION:
 - ethtool
 - i2c-tools
 - iw
-- edac-tools
+- edac-utils
 - libedac1
 - libsysfs2
 - cec-utils
@@ -410,22 +409,29 @@ WORKSTATION:
 #- encfs
 VIRTUALIZATION:
 #- qemu
+- qemu-efi
+- qemu-efi-aarch64
+- qemu-efi-arm
 - qemu-kvm
+- qemu-block-extra
+- qemu-guest-agent
+- qemu-system
 - qemu-system-arm
 - qemu-system-common
+- qemu-system-data
+#- qemu-system-gui
 - qemu-system-x86
 - qemu-user
 - qemu-user-static
+#- qemu-user-binfmt
 - qemu-utils
-- qemu-static-arm
-- qemu-block-extra
-- qemu-guest-agent
-- qemu-img
+#- qemu-static-arm
 - libqcow-utils
-- libvirt-bin
 - libvirt-daemon-system
+- libvirt-daemon-driver-qemu
 - systemd-container
 - libnss-mymachines
+- u-boot-qemu
 #- libvhdi-utils
 #- libvmdk-utils
 #- vmfs-tools
@@ -451,11 +457,11 @@ WORKSTATION_X:
 - vim-gtk
 - obconf
 - dbus-x11
-- gtk-redshift
+- redshift
+- redshift-gtk
 - gnome-settings-daemon
 - parcellite # clipboard manager
-#- rxvt-unicode
-- rxvt-unicode-256color
+- rxvt-unicode
 - stalonetray
 - x11-apps
 - x11-xfs-utils
@@ -753,7 +759,6 @@ DEVEL:
 - ninja-build
 - gperf
 - gcc
-- gcc-multibuild
 - binutils-bpf
 - gcc-bpf
 - loggedfs
@@ -985,7 +990,7 @@ MEDIA:
 - libwebp6
 - ffmpeg
 - davs2
-- libdavs2
+- libdavs2-16
 - dav1d
 - libdav1d5
 - libavif12
@@ -1391,13 +1396,13 @@ DOCKER:
 CONTAINER:
 - podman
 - libvirt0
-- libvirt-bin
 - libvirt-clients
 - libvirt-dbus
 - libvirt-daemon
 - libvirt-daemon-config-network
 - libvirt-daemon-system
 - libvirt-daemon-driver-lxc
+#- libvirt-daemon-driver-qemu
 - libvirt-daemon-driver-storage-iscsi-direct
 - libvirt-daemon-driver-storage-rbd
 #- libvirt-daemon-driver-storage-zfs
@@ -1696,7 +1701,7 @@ POSTGRES:
 - postgresql-doc-14
 - libpq5
 - dbconfig-common
-- dbconfig-no-thanks
+#- dbconfig-no-thanks
 - dbconfig-pgsql
 #- postgresql-plv8
 ZFSONLINUX:
