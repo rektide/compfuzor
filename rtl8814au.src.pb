@@ -7,8 +7,8 @@
     BINS:
     - name: build.sh
       exec: |
-        dkms build -m {{NAME}} -v {{KERNEL_RELEASE}}
-        dkms install -m {{NAME}} -v {{KERNEL_RELEASE}}
+        dkms build -m {{NAME}} -v 4.3.21
+        dkms install -m {{NAME}} -v 4.3.21
     LINKS:
       "/usr/src/{{NAME}}": "{{DIR}}"
       "/usr/src/{{NAME}}-{{KERNEL_RELEASE}}": "/usr/src/{{NAME}}"
