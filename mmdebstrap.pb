@@ -16,11 +16,10 @@
     - DEBDEV
     - AUDIO
     - AUDIO_X
-    - PIPEWIRE
     - BT
     - BT_X
     - RYGEL
-    - RYGEL_PREFERENCES
+    - RYGEL_X
     - USERSPACE
     - JACK
     - JACK_X
@@ -30,14 +29,18 @@
     - WORKSTATION_WAYLAND
     - MEDIA_X
     - POSTGRES
-    #mmpkgs: "{%set sep=joiner(',')%}{%for s in mmpkgset%} {{sep()}}{{(vars[s]|default(hostvars[inventory_hostname][s])|join(',')}}{%endfor%}"
-    mmpkgs: "{% set sep=joiner(',) %}{{ sep() }}{{ sep() }}yas"
-    #mmpkgs: "wut"
+    mmpkgs: "{{lookup('template', '../files/mmdebstrap.pkgs')}}"
+    MMDEBSTRAP_COMPONENTS: "main,contrib,non-free"
+    MMDEBSTRAP_SUITE: sid
+    ENVS:
+      MMDEBSTARP_COMPONENTS: true
+      MMDEBSTRAP_SUITE: true
     BINS:
     - name: build.sh
       exec: |
-        mmdebootstrap --format="directory" --components="main,contrib,non-free" --include="{{mmpkgs}}" sid {{VAR}}
-    VARS_DIR: build
+        mmdebstrap --format="directory" --components="${MMDEBSTRAP_COMPONENTS:-{{MMDEBSTRAP_COMPONENTS}}}" --include="{{mmpkgs}}" "${MMDEBSTRAP_SUITE:-{{MMDEBSTRAP_SUITE}}}" "{{VAR}}/build"
+    VAR_DIRS:
+    - build
     PKGS:
     - mmdebstrap
     - arch-test
