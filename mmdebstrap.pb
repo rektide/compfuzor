@@ -6,7 +6,7 @@
     arch: amd64
     mmpkgset:
     - BASE
-    - BASE_x86
+    - BASE_amd64
     - WORKSTATION
     - VIRTUALIZATION
     - WORKSTATION_X
@@ -35,10 +35,13 @@
     ENVS:
       MMDEBSTARP_COMPONENTS: true
       MMDEBSTRAP_SUITE: true
+    ETC_FILES:
+    - name: pkgs
+      content: "{{mmpkgs}}"
     BINS:
     - name: build.sh
       exec: |
-        mmdebstrap --format="directory" --components="${MMDEBSTRAP_COMPONENTS:-{{MMDEBSTRAP_COMPONENTS}}}" --include="{{mmpkgs|trim}}" "${MMDEBSTRAP_SUITE:-{{MMDEBSTRAP_SUITE}}}" "{{VAR}}/build"
+        mmdebstrap --format="directory" --components="${MMDEBSTRAP_COMPONENTS:-{{MMDEBSTRAP_COMPONENTS}}}" --include="$(sed -z 's/\n/,/g' etc/pkgs)" "${MMDEBSTRAP_SUITE:-{{MMDEBSTRAP_SUITE}}}" "{{VAR}}/build"
     VAR_DIRS:
     - build
     PKGS:
