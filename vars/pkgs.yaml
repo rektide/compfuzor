@@ -34,6 +34,7 @@ BASE:
 - apt-transport-https
 - arch-test
 - attr
+- b3sum
 - base-files
 - base-passwd
 - bash
@@ -132,6 +133,7 @@ BASE:
 - login
 - lsb-base
 - lsof
+- manpages
 - mawk
 - mime-support
 - mount
@@ -258,6 +260,10 @@ BASE:
 - unicode-data
 - iso-codes
 - radvd
+- lvm2
+- wireless-regdb
+- j2cli
+- jc
 WORKSTATION:
 - dnsutils
 - dstat
@@ -359,7 +365,7 @@ WORKSTATION:
 - jc
 - jo
 - userbindmount
-#- gthd
+- gthd
 - kitty
 - kitty-terminfo
 - bpfmon
@@ -406,6 +412,18 @@ WORKSTATION:
 - kacpimon
 - bindfs
 - casync
+- libxml2-utils
+- bcachefs-tools
+#- bookworm
+- bpytop
+- crazydiskinfo
+- disk-filltest
+- fido2-tools
+- otpclient
+- otpclient-cli
+- profanity
+- userbindmount
+- zbd-utils
 #- encfs
 VIRTUALIZATION:
 #- qemu
@@ -487,6 +505,7 @@ WORKSTATION_X:
 - totem-plugins
 - wireshark
 - termshark
+- fonts-recommended
 - fonts-ricty-diminished
 - fonts-mplus
 - fonts-inconsolata
@@ -566,10 +585,15 @@ WORKSTATION_X:
 - lm-sensors
 - smartmontools
 - libinput-tools
+- bookworm
+- mcomix
+#- mupdf-tools
 WORKSTATION_MEDIA:
 - gimp
 - hdrmerge
 - photoflow
+- megapixels
+- metadata-cleaner
 WORKSTATION_KDE_BASE:
 - kde-baseapps
 - konqueror-nsplugins
@@ -745,6 +769,7 @@ DEVEL:
 - libtool
 - libtool-bin
 - autopoint
+- libc-devtools
 - libltdl7
 - libltdl-dev 
 - intltool
@@ -770,6 +795,7 @@ DEVEL:
 #- radare2
 #- python3-jsondiff
 - disorderfs
+- pcm
 DEVEL_EMBEDDED:
 - sigrok
 - sigrok-cli
@@ -897,9 +923,13 @@ PIPEWIRE:
 #- carla
 - libspa-0.2-modules
 - libspa-0.2-bluetooth
+- libspa-0.2-jack
+- pamix
 - libsbc1
 - libldacbt-abr2
 - libldacbt-enc2
+- projectm-jack
+#- jack-mixer
 REMOTE_DESKTOP:
 - obs-studio
 - obs-plugins
@@ -1095,11 +1125,16 @@ WORKSTATION_WAYLAND:
 #- wob
 #- wofi
 - imv
+- waypipe
+- wtype
+#- ydotools
 WORKSTATION_GNOME:
 - gnome-shell
 - mutter
 #- chrome-gnome-shell
 - gnome-control-center
+- gnome-books
+- megapixels
 MEDIA_X:
 #- tracker-gui
 - gstreamer1.0-x
@@ -1436,6 +1471,7 @@ CONTAINER:
 - buildah
 - conmon
 - toolbox
+- podman-toolbox
 - lxc
 - lxc-templates
 - cloud-image-utils
