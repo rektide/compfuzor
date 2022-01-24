@@ -27,6 +27,8 @@ BASE_amd64:
 - linux-headers-amd64
 - dfu-utils
 - fdutils
+- intel-microcode
+- amd64-microcode
 BASE:
 # the first segment of base is "essential" Debian packages
 - acl
@@ -116,8 +118,8 @@ BASE:
 - libreadline8
 - libselinux1
 - libsemanage-common
-- libsemanage1
-- libsepol1
+- libsemanage2
+- libsepol2
 - libslang2
 - libss2
 - libstdc++6
@@ -230,7 +232,6 @@ BASE:
 - dosfstools
 - xfsprogs
 - eject
-- exfat-utils
 - gdisk
 - mdadm
 - cryptsetup-bin
@@ -308,7 +309,6 @@ WORKSTATION:
 - ca-certificates
 - lockfile-progs
 - apt-utils
-- exfat-utils
 - exfat-fuse
 - sshfs
 - s3fs
@@ -334,7 +334,6 @@ WORKSTATION:
 - gpsd-clients
 - gpsbabel
 - hadori
-- hddtemp
 - input-utils
 - irqbalance
 - irqtop
@@ -425,6 +424,7 @@ WORKSTATION:
 - userbindmount
 - zbd-utils
 #- encfs
+- brotli
 VIRTUALIZATION:
 #- qemu
 - qemu-efi
@@ -449,7 +449,7 @@ VIRTUALIZATION:
 - libvirt-daemon-driver-qemu
 - systemd-container
 - libnss-mymachines
-- u-boot-qemu
+#- u-boot-qemu
 #- libvhdi-utils
 #- libvmdk-utils
 #- vmfs-tools
@@ -537,7 +537,6 @@ WORKSTATION_X:
 - xvfb
 - xserver-xephyr
 - xrestop
-- xfstt
 - xdo
 - xdotool
 - xcolors
@@ -1023,7 +1022,7 @@ MEDIA:
 - libdavs2-16
 - dav1d
 - libdav1d5
-- libavif12
+- libavif13
 - libavif-bin
 #- libgav1-0
 #- libgav1-bin
@@ -1388,6 +1387,7 @@ BONUS:
 - fusesmb
 - smbnetfs
 - gocryptfs
+- gphoto2
 - gphotofs
 - ifuse
 - jmtpfs
@@ -1398,6 +1398,7 @@ BONUS:
 - ostree
 #- tmfs
 #- waydroid
+- usbtop
 DIA:
 - dia
 - dia-shapes
@@ -1445,7 +1446,6 @@ CONTAINER:
 - libvirt-daemon-system-systemd
 - libvirt-glib-1.0-0
 - libvirt-login-shell
-- libvirt-login-shell
 #- libvirt-sandbox-1.0-5
 - libvirt-sanlock
 - libvirt-wireshark
@@ -1470,9 +1470,10 @@ CONTAINER:
 - crun
 - buildah
 - conmon
-- toolbox
 - podman-toolbox
 - lxc
+- libvirt-dbus
+- lxctl
 - lxc-templates
 - cloud-image-utils
 - cloud-utils
@@ -1488,6 +1489,7 @@ CONTAINER:
 - python3-lxc
 - containers-storage
 - fuse-overlayfs
+- fuse-posixovl
 - containernetworking-plugins
 - golang-github-containernetworking-plugin-dnsname
 - golang-github-containers-common
@@ -1497,15 +1499,22 @@ CONTAINER:
 - slirp4netns
 - rootlesskit
 - bpftrace
+- bpfcc-introspection
+- bpfcc-lua
+- bpfcc-tools
 - python3-bpfcc
 - sensible-utils
 - dnsmasq-base-lua
+- dnsmasq-utils
 - dmidecode
 - mdevctl
 - parted
 - auditd
 - nfs-common
 - open-iscsi
+#- open-isns-discoveryd
+#- open-isns-server
+#- open-isns-utils
 - pm-utils
 - systemtap
 - systemtap-client
@@ -1549,7 +1558,9 @@ CONTAINER:
 #- zfsutils-linux
 #- apparmor
 - numad
+- numatop
 - open-infrastructure-container-tools
+- open-infrastructure-storage-tools
 - vlan
 #- collectd
 #- collectd-utils
@@ -1558,6 +1569,7 @@ CONTAINER:
 #- aufs-dkms
 - unionfs-fuse
 - skopeo
+- virgl-server
 META:
 # mostly just taking notes here
 - bfh-base-system
@@ -1725,13 +1737,16 @@ INFINIBAND:
 - perftest
 - infiniband-diags
 - ibutils
+- libiscsi7
+- libiscsi-bin
+- tgt
 POSTGRES:
 - postgresql
 - postgresql-doc
 - postgis
 - postgis-doc
-- postgresql-13-postgis-3
-- postgresql-13-postgis-3-scripts
+- postgresql-14-postgis-3
+- postgresql-14-postgis-3-scripts
 - pgcluu
 - postgresql-client-common
 - postgresql-doc-14
