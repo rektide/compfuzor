@@ -29,7 +29,9 @@
     - WORKSTATION_WAYLAND
     - MEDIA_X
     - POSTGRES
-    mmpkgs: "{{lookup('template', '../files/mmdebstrap.pkgs')}}"
+    - CONTAINER
+    - BONUS
+    mmpkgs: "{{lookup('template', '../files/mmdebstrap/_pkgs')}}"
     MMDEBSTRAP_COMPONENTS: "main,contrib,non-free"
     MMDEBSTRAP_SUITE: sid
     ENVS:
@@ -42,6 +44,10 @@
     - name: build.sh
       exec: |
         mmdebstrap --format="directory" --components="${MMDEBSTRAP_COMPONENTS:-{{MMDEBSTRAP_COMPONENTS}}}" --include="$(sed -z 's/\n/,/g' etc/pkgs)" "${MMDEBSTRAP_SUITE:-{{MMDEBSTRAP_SUITE}}}" "{{VAR}}/build"
+    VAR_FILES:
+    - src: overlay
+      dest: .
+      raw: true
     VAR_DIRS:
     - build
     PKGS:
