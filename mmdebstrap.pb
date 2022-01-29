@@ -43,6 +43,7 @@
     BINS:
     - name: build.sh
       exec: |
+        chmod a+x /etc/kernel/postinst.d/zz-systemd-boot-install /etc/kernel/postrm.d/zz-systemd-boot-remove
         mmdebstrap --format="directory" --components="${MMDEBSTRAP_COMPONENTS:-{{MMDEBSTRAP_COMPONENTS}}}" --include="$(sed -z 's/\n/,/g' etc/pkgs)" "${MMDEBSTRAP_SUITE:-{{MMDEBSTRAP_SUITE}}}" "{{VAR}}/build"
     VAR_FILES:
     - src: overlay
