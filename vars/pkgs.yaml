@@ -25,7 +25,7 @@ BASE_amd64:
 - os-prober
 - linux-image-amd64
 - linux-headers-amd64
-- dfu-utils
+- dfu-util
 - fdutils
 - intel-microcode
 - amd64-microcode
@@ -62,7 +62,7 @@ BASE:
 - libefivar1
 - efitools
 - efibootmgr
-- e2fslibs
+- libext2fs2
 - e2fsprogs
 - ethtool
 - feedbackd
@@ -100,9 +100,9 @@ BASE:
 - libc-bin
 - libc6
 - libcap2
-- libcomerr2
+- libcom-err2
 - libdb5.3
-- libgcc1
+- libgcc-s1
 - liblocale-gettext-perl
 - liblzma5
 - libmount1
@@ -317,7 +317,8 @@ WORKSTATION:
 #- tuned-gtk
 #- tuned-utils
 #- tuned-systemtap
-- exiftool
+#- exiftool
+- libimage-exiftool-perl
 - libglib2.0-bin
 - flent
 - x11-xserver-utils
@@ -430,7 +431,7 @@ VIRTUALIZATION:
 - qemu-efi
 - qemu-efi-aarch64
 - qemu-efi-arm
-- qemu-kvm
+#- qemu-kvm
 - qemu-block-extra
 - qemu-guest-agent
 - qemu-system
