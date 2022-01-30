@@ -12,7 +12,11 @@ timeout 2
 editor 1
 EOF
 
-[ "$DO" = 1 ] &&  bootctl install --path=$EFI
+# i have no idea who generates this line but as i've seen it, it means regenerating the machine-id doesn't affect bootctl
+# just comment it out & kernel-install works
+sed -i "s/^KERNEL_INSTALL_MACHINE_ID=.*/#&/" /etc/machine-info
+
+[ "$DO" = 1 ] &&  bootctl install --make-machine-id=yes
 # check with efibootmgr
 
 mkdir -p $EFI/$(cat /etc/machine-id)

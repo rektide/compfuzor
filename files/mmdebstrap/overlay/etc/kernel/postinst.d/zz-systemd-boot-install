@@ -2,6 +2,7 @@
 set -e
 
 # https://p5r.uk/blog/2020/using-systemd-boot-on-debian-bullseye.html
+# example: /usr/bin/kernel-install 5.15.0-3-amd64 /boot/vmlinuz-5.15.0-3-amd64
 /usr/bin/kernel-install add "$1" "$2"
 
 exit 0
