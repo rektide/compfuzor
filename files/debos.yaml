@@ -1,8 +1,15 @@
-{%- macro pkgs() -%}
-{%- set sep=joiner(', ') -%}
-{%- for ps in pkgsets -%}
-{{sep()}}{{vars[ps]|default(hostvars[inventory_hostname][ps])|join(', ')}}
-{%- endfor -%}
+{%- macro pkgsetYaml(ps) -%}
+{%- for pkg in ps %}
+- {{ pkg }}
+{% endfor -%}
+{%- endmacro -%}
+
+{%- macro pkgsYaml() -%}
+{{ pkgsetYaml(pkgs) }}
+{% for ps in pkgsets -%}
+# {{ ps }}
+{{ pkgsetYaml(vars[ps]|default(hostvars[inventory_hostname][ps])) }}
+{% endfor -%}
 {%- endmacro -%}
 
 architecture: {{arch}}
@@ -17,13 +24,43 @@ actions:
     mirror: https://deb.debian.org/debian
     variant: minbase
 
+  - action: run
+    chroot: true
+    command: |
+      cat <<END > /etc/apt/apt.conf.d/70-no-recommends
+      APT::Install-Recommends "0";
+      APT::Install-Suggests "0";
+      END
+
   - action: apt
-    packages: [ {{pkgs()}} ]
+    packages:
+{{ pkgsYaml()|indent(first=true, width=6) }}
 
   - action: run
     chroot: true
-    command: echo debos > /etc/hostname
+    command: "echo {{hostname|default('debos')}} > /etc/hostname"
 
-  - action: pack
-    file: debian.tgz
-    compression: gz
+  #- action: run
+  #  chroot: true
+  #  command: |
+  #    # preseed: tz-data
+  #    debconf-set-selections <<TZSEL
+  #    tzdata tzdata/Areas select US
+  #    tzdata tzdata/Areas seen true
+  #    tzdata tzdata/Zones/US select Eastern
+  #    tzdata tzdata/Zones/US seen true
+  #    TZSEL
+
+  - action: run
+    chroot: true
+    command: ln -sf /proc/self/mounts /etc/mtab
+
+  - actions: run
+    chroot: true
+    command: |
+      # install password
+      echo 'root:{{ password|default('CHANGE_OR_ELSE') }}' | chpasswd
+
+  #- action: pack
+  #  file: debian.tgz
+  #  compression: gz
