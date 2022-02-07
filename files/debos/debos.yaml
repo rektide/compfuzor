@@ -36,6 +36,7 @@ actions:
     packages:
 {{ pkgsYaml()|indent(first=true, width=6) }}
 
+  # todo: hostnamectl?
   - action: run
     chroot: true
     command: "echo {{hostname|default('debos')}} > /etc/hostname"

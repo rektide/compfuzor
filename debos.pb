@@ -13,6 +13,10 @@
     - src: overlay
       dest: .
       raw: true
+    LINKS:
+    - src: /proc/self/mounts
+      dest: "{{VAR}}/overlay/etc/mtab"
+      force: true
     BINS:
     - name: build.sh
       basedir: "{{VAR}}/build"
