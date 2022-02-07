@@ -9,11 +9,14 @@
       #content: "{{lookup('template', '../files/debos.yaml')}}"
     VAR_DIRS:
     - build
+    VAR_FILES:
+    - src: overlay
+      dest: .
+      raw: true
     BINS:
     - name: build.sh
       basedir: "{{VAR}}/build"
       exec: |
-        # --disable-fakemachine
         debos {{ETC}}/debos.yaml
     pkgs: []
     #- "kernel-image-{{arch}}"

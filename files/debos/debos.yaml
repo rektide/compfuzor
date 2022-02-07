@@ -51,6 +51,9 @@ actions:
   #    tzdata tzdata/Zones/US seen true
   #    TZSEL
 
+  - action: overlay
+    origin: "{{VAR}}/overlay"
+
   - action: run
     chroot: true
     command: ln -sf /proc/self/mounts /etc/mtab
@@ -61,6 +64,6 @@ actions:
       # install password
       echo 'root:{{ password|default('CHANGE_OR_ELSE') }}' | chpasswd
 
-  #- action: pack
-  #  file: debian.tgz
-  #  compression: gz
+  - action: pack
+    file: debian.tgz
+    compression: gz
