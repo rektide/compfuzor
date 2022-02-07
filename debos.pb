@@ -6,7 +6,7 @@
     arch: amd64
     ETC_FILES:
     - name: debos.yaml
-      content: "{{lookup('template', '../files/debos.yaml')}}"
+      #content: "{{lookup('template', '../files/debos.yaml')}}"
     VAR_DIRS:
     - build
     BINS:
