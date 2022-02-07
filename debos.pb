@@ -15,9 +15,12 @@
       exec: |
         # --disable-fakemachine
         debos {{ETC}}/debos.yaml
+    pkgs: []
+    #- "kernel-image-{{arch}}"
+    #- "kernel-headers-{{arch}}"
     pkgsets:
     - BASE
-    - BASE_x86
+    - "BASE_{{arch}}"
     - WORKSTATION
     - VIRTUALIZATION
     - WORKSTATION_X
@@ -40,6 +43,7 @@
     - WORKSTATION_WAYLAND
     - MEDIA_X
     - POSTGRES
+    - BONUS
 
     # PKGS:
     #- debos
