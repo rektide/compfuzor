@@ -4,9 +4,12 @@
     TYPE: debos
     INSTANCE: main
     arch: amd64
+    hostname: debos
+    password: CHANGE_OR_ELSE
+    scratchsize: 11g
+
     ETC_FILES:
     - name: debos.yaml
-      #content: "{{lookup('template', '../files/debos.yaml')}}"
     VAR_DIRS:
     - build
     VAR_FILES:
@@ -15,13 +18,19 @@
       raw: true
     LINKS:
     - src: /proc/self/mounts
-      dest: "{{VAR}}/overlay/etc/mtab"
+      # symlinks don't work
+      dest: "{{VARS_DIR}}/{{NAME}}/overlay/etc/mtab"
       force: true
+    ENVS:
+      DEBOS_SCRATCHSIZE: "{{scratchsize}}"
     BINS:
     - name: build.sh
       basedir: "{{VAR}}/build"
       exec: |
-        debos {{ETC}}/debos.yaml
+        # debos can't resolve outside symlinks so we copy stuff into our working dir
+        rsync -av {{VAR}}/overlay overlay
+        cp {{ETC}}/debos.yaml debos.yaml
+        debos -v --scratchsize=$DEBOS_SCRATCHSIZE debos.yaml
     pkgs: []
     #- "kernel-image-{{arch}}"
     #- "kernel-headers-{{arch}}"

@@ -15,6 +15,9 @@
 architecture: {{arch}}
 
 actions:
+
+  # base system
+
   - action: debootstrap
     suite: "sid"
     components:
@@ -24,22 +27,51 @@ actions:
     mirror: https://deb.debian.org/debian
     variant: minbase
 
+  # add basic system conf
+
+  - action: overlay
+    source: overlay
+
+  - action: apt
+    packages:
+    - systemd
+    - dbus
+    - chrony
+
+  - action: run
+    chroot: true
+    command: ln -sf /proc/self/mounts /etc/mtab
+
+  - action: run
+    chroot: true
+    #command: hostnamectl set-hostname {{hostname|default('debos')}}
+    command: echo {{hostname}} > /etc/hostname
+
   - action: run
     chroot: true
     command: |
-      cat <<END > /etc/apt/apt.conf.d/70-no-recommends
-      APT::Install-Recommends "0";
-      APT::Install-Suggests "0";
-      END
+      systemctl enable systemd-networkd
+      systemctl enable systemd-resolved
+      systemctl enable chrony
+
+  # configure users
+
+  - action: run
+    chroot: true
+    command: |
+      # install password
+      echo "root:{{password}}" | chpasswd
+
+  - action: run
+    chroot: true
+    command: |
+      adduser --gecos rektide --disabled-password rektide
+      adduser rektide sudo
+      echo "user:{{password}}" | chpasswd
 
   - action: apt
     packages:
 {{ pkgsYaml()|indent(first=true, width=6) }}
-
-  # todo: hostnamectl?
-  - action: run
-    chroot: true
-    command: "echo {{hostname|default('debos')}} > /etc/hostname"
 
   #- action: run
   #  chroot: true
@@ -51,19 +83,6 @@ actions:
   #    tzdata tzdata/Zones/US select Eastern
   #    tzdata tzdata/Zones/US seen true
   #    TZSEL
-
-  - action: overlay
-    origin: "{{VAR}}/overlay"
-
-  - action: run
-    chroot: true
-    command: ln -sf /proc/self/mounts /etc/mtab
-
-  - actions: run
-    chroot: true
-    command: |
-      # install password
-      echo 'root:{{ password|default('CHANGE_OR_ELSE') }}' | chpasswd
 
   - action: pack
     file: debian.tgz
