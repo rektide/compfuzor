@@ -7,6 +7,7 @@
     hostname: debos
     password: CHANGE_OR_ELSE
     scratchsize: 11g
+    user: "{{ansible_user_id}}"
 
     ETC_FILES:
     - name: debos.yaml

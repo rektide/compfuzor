@@ -65,9 +65,9 @@ actions:
   - action: run
     chroot: true
     command: |
-      adduser --gecos rektide --disabled-password rektide
-      adduser rektide sudo
-      echo "user:{{password}}" | chpasswd
+      adduser --gecos {{user}} --disabled-password {{user}}
+      adduser {{user}} sudo
+      echo "{{user}}:{{password}}" | chpasswd
 
   - action: apt
     packages:
