@@ -37,7 +37,7 @@
       linkProp: "{{hostvars[inventory_hostname][names.linkProp]|default(vars[names.linkProp]|default({}))}}"
       linkBypass: "{{(DIR_LINK_BYPASS|default(False) or hostvars[inventory_hostname][names.linkBypass]|default(vars[names.linkBypass]|default(False))) or not (names.sDir or names.dirs or names.dir or names.files or names.d)}}"
 
-- name: "Test for dir and link"
+- name: "Test for {{_upper}} dir and link"
   stat:
     path: "{{item}}"
   register: _stat
@@ -47,7 +47,7 @@
   - "{{_link}}"
 
 # create main directory
-- name: "Create top {{include|upper}} directory"
+- name: "Create top {{_upper}} directory"
   file:
     path: "{{_dir}}"
     state: directory
@@ -62,7 +62,7 @@
     should_become: "{{_dir|should_become(owner, ansible_user_id, group, ansible_user_gid)}}"
 
 # link include dir into DIR
-- name: "Link {{_link}} to the base {{_base}}"
+- name: "Link {{_upper}}"
   file:
     src: "{{_dir}}"
     dest: "{{_link}}"
@@ -77,7 +77,7 @@
     should_become: "{{_link|should_become(owner, ansible_user_id, group, ansible_user_gid)}}"
 
 # create subdirs
-- name: "Create {{include|upper}} subdirs and .d dirs"
+- name: "Create {{_upper}} subdirs and .d dirs"
   file:
     path: "{{subdir}}"
     state: directory
@@ -94,7 +94,7 @@
     should_become: "{{subdir|should_become(owner, ansible_user_id, group, ansible_user_gid)}}"
 
 # include files
-- name: "Create {{include|upper}} files"
+- name: "Create {{_upper}} files"
   template:
     src: "{{src}}"
     dest: "{{dest}}"
@@ -114,7 +114,7 @@
     dest: "{{_dir}}/{{item.dest|default(item.name|default(item))}}"
     should_become: "{{dest|should_become(owner, ansible_user_id, group, ansible_user_gid)}}"
 
-- name: "Do {{include|upper}} lineinfile"
+- name: "Do {{_upper}} lineinfile"
   lineinfile:
     dest: "{{dest}}"
     line: "{{item.line}}"
@@ -132,7 +132,7 @@
     dest: "{{_dir}}/{{item.dest|default(item.name|default(item))}}"
     should_become: "{{dest|should_become(owner, ansible_user_id, group, ansible_user_gid)}}"
 
-- name: "Create raw {{include|upper}} files"
+- name: "Create raw {{_upper}} files"
   copy:
     src: "files/{{TYPE|default(NAME)}}/{{item.src}}"
     dest: "{{dest}}"
@@ -150,7 +150,7 @@
     dest: "{{_dir}}/{{item.dest|default(item.name|default(item))}}"
     should_become: "{{dest|should_become(owner, ansible_user_id, group, ansible_user_gid)}}"
 
-- name: "Assemble the .d directory"
+- name: "Assemble .d directory"
   assemble:
     src: "{{dest}}.d"
     dest: "{{dest}}"
