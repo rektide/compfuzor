@@ -51,6 +51,7 @@ FONTS_TTF: /usr/share/fonts/truetype
 MEDIAS_DIR: /srv/media
 SYSTEMD_SYSTEM_UNIT_DIR: /etc/systemd/system
 DIRMODE: 0770
+FILEMODE: 0550
 PERSIST_VARS:
 - NAME
 - INSTANCE
