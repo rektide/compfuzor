@@ -22,7 +22,7 @@
       # symlinks don't work
       dest: "{{VARS_DIR}}/{{NAME}}/overlay/etc/mtab"
       force: true
-    ENVS:
+    ENV:
       DEBOS_SCRATCHSIZE: "{{scratchsize}}"
     BINS:
     - name: build.sh

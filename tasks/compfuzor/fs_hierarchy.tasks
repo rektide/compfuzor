@@ -160,7 +160,7 @@
     group: "{{should_become|ternary(group|default(ansible_user_gid, true),omit)}}"
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: _vals.d
-  with_items: _vals.d|default([], true)
+  with_items: "{{_vals.d|default([], true)}}"
   vars:
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
