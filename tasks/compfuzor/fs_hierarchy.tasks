@@ -51,7 +51,7 @@
   file:
     path: "{{_dir}}"
     state: directory
-    mode: "{{item.mode|default(_vals.prop.mode|default(DIRMODE, true), true)}}"
+    mode: "{{_vals.props.mode|default(DIRMODE|default(omit, true), true)}}"
     owner: "{{should_become|ternary(owner|default(ansible_user_id, true),omit)}}"
     group: "{{should_become|ternary(group|default(ansible_user_gid, true),omit)}}"
   become: "{{should_become}}"
