@@ -210,7 +210,7 @@ BASE:
 - btrfs-progs
 - systemd
 - systemd-sysv # special, replaces essential sysvinit
-- systemd-timesyncd
+#- systemd-timesyncd
 - libpam-systemd
 - libnss-systemd
 - libnss3-tools
@@ -397,7 +397,7 @@ WORKSTATION:
 #- samba-vfs-modules
 - python3-samba
 - ldb-tools
-#- chrony
+- chrony
 - smbldap-tools
 #- winbind
 - python3-systemd
@@ -426,6 +426,7 @@ WORKSTATION:
 - zbd-utils
 #- encfs
 - brotli
+- networkd-dispatcher
 VIRTUALIZATION:
 #- qemu
 - qemu-efi
@@ -1138,6 +1139,9 @@ WORKSTATION_GNOME:
 - gnome-control-center
 - gnome-books
 - megapixels
+- gnome-connections
+- gnome-remote-desktop
+#- gnome-boxes
 MEDIA_X:
 #- tracker-gui
 - gstreamer1.0-x
