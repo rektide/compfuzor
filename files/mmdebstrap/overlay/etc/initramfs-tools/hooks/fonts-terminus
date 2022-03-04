@@ -1,0 +1,18 @@
+#!/bin/sh
+
+PREREQ=""
+preqreqs()
+{
+	echo "$PREREQ"
+}
+
+case $1 in
+preqreqs)
+	preqreqs
+	exit 0
+	;;
+esac
+
+FONTS=/usr/share/consolefonts
+# 14, 16, 18x10, 12x6 for non-bold
+cp $FONTS/Uni2-Terminus1* $FONTS/Uni2-TerminusBold1* "${DESTDIR}/"
