@@ -1131,7 +1131,8 @@ WORKSTATION_WAYLAND:
 - imv
 - waypipe
 - wtype
-#- ydotools
+- ydotool
+- ydotoold
 WORKSTATION_GNOME:
 - gnome-shell
 - mutter
@@ -1379,8 +1380,9 @@ BONUS:
 #- openrazer-driver-dkms
 #- openrazer-daemon
 #- python3-openrazer
-#- ratbagd
-#- piper
+- ratbagd
+- libratbag-tools
+- piper
 #- s3ql
 #- btfs
 #- libtorrent-rasterbar10
