@@ -52,7 +52,10 @@ actions:
     command: |
       systemctl enable systemd-networkd
       systemctl enable systemd-resolved
+      systemctl unmask chrony
       systemctl enable chrony
+      systemctl mask systemd-timesyncd
+      localectl set-locale en_US.UTF-8
 
   # configure users
 
