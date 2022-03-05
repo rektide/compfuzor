@@ -146,6 +146,7 @@ BASE:
 - ncurses-bin
 - net-tools
 - netbase
+- nvme-cli
 - passwd
 - perl-base
 - procps
@@ -209,8 +210,12 @@ BASE:
 - base-files
 - btrfs-progs
 - systemd
+- systemd-cron
+- systemd-journal-remote
+- systemd-oomd
 - systemd-sysv # special, replaces essential sysvinit
 #- systemd-timesyncd
+- chrony
 - libpam-systemd
 - libnss-systemd
 - libnss3-tools
@@ -265,6 +270,10 @@ BASE:
 - wireless-regdb
 - j2cli
 - jc
+- console-data
+- console-data-linux
+- console-setup
+- console-setup-linux
 WORKSTATION:
 - dnsutils
 - dstat
@@ -326,7 +335,6 @@ WORKSTATION:
 - fonts-stix
 - nodejs
 - npm
-- oomd
 - pci.ids
 - extra-xdg-menus
 - mdevctl
@@ -344,7 +352,6 @@ WORKSTATION:
 - evtest
 - kacpimon
 - kbd
-- console-data
 - unicode-data
 - kcapi-tools
 - mmc-utils
@@ -378,7 +385,7 @@ WORKSTATION:
 - libedac1
 - libsysfs2
 - cec-utils
-#- ddcci-dkms
+- ddcci-dkms
 #- acpi-call-dkms
 - libcec6
 - kcapi-tools
@@ -397,7 +404,6 @@ WORKSTATION:
 #- samba-vfs-modules
 - python3-samba
 - ldb-tools
-- chrony
 - smbldap-tools
 #- winbind
 - python3-systemd
@@ -427,6 +433,13 @@ WORKSTATION:
 #- encfs
 - brotli
 - networkd-dispatcher
+- bolt
+- neovim
+- vim-ale
+- vim-ctrlp
+- vim-gitgutter
+- universal-ctags
+- playerctl
 VIRTUALIZATION:
 #- qemu
 - qemu-efi
@@ -469,8 +482,9 @@ WORKSTATION_X_amd64:
 - xserver-xspice
 WORKSTATION_X:
 - awesome
-#- ddcutil
-#- gddccontrol
+#- ddcutil # in base
+- ddccontrol
+- gddccontrol
 - openbox
 - openbox-menu
 - tint2
@@ -499,6 +513,12 @@ WORKSTATION_X:
 #- xmonad
 - xpra
 - python3-gst-1.0
+- python3-pyinotify
+- python3-uritools
+- python3-setproctitle
+- python3-paramiko
+- python3-dns
+- python3-cpuinfo
 - xsel
 - xorg
 - xdg-utils
@@ -522,6 +542,7 @@ WORKSTATION_X:
 - fonts-powerline
 - fonts-recommended
 - fonts-lmodern
+- fonts-terminus
 - xfonts-terminus
 - ttf-anonymous-pro
 - lightdm
@@ -797,18 +818,34 @@ DEVEL:
 #- python3-jsondiff
 - disorderfs
 - pcm
+- syslinux
+- syslinux-efi
+- syslinux-utils
+- extlinux
 DEVEL_EMBEDDED:
 - sigrok
 - sigrok-cli
 - pulseview
 - libsigrok4
 - openocd
+- libhidapi-libusb0
 - libhidapi-hidraw0
 - squashfuse
 DEVEL_WASM:
 - binaryen
 - emscripten
 - wabt
+RUST:
+- rust-all
+- rust
+- rust-doc
+- cargo
+- cargo-doc
+- rust-clippy
+- rust-gdb
+- rustc
+- rustfmt
+- libstd-rust-dev-wasm32
 DEBDEV:
 - build-essential
 - debhelper
@@ -897,7 +934,9 @@ MOPIDY:
 #- mopidy-youtube
 - mopidy-somafm
 - mopidy-internetarchive
-- playerctl
+- mpdris2
+- mpd
+- ncmpc
 BT:
 - bluez
 - bluez-firmware
@@ -934,10 +973,20 @@ PIPEWIRE:
 - libldacbt-enc2
 - projectm-jack
 #- jack-mixer
-REMOTE_DESKTOP:
+STREAMING:
 - obs-studio
 - obs-plugins
+#- obs-advanced-scene-switcher
+#- obs-advanced-scene-switcher-data
+- obs-downstream-keyer
+- obs-move-transition
+- obs-scene-collection-manager
+- obs-scene-notes-dock
+- obs-text-slideshow
+- obs-transition-table
+- obs-websocket
 - v4l2loopback-dkms
+- v4l2loopback-utils
 - xdg-desktop-portal-tests
 - ustreamer
 #- guacd
@@ -950,6 +999,11 @@ RYGEL:
 - dleyna-server
 RYGEL_X:
 - rygel-preferences
+LIBREOFFICE:
+- libreoffice-calc
+- libreoffice-gnome
+- libreoffice-imprss
+- libreoffice-writer
 EDA:
 - kicad
 - kicad-common
@@ -1004,11 +1058,8 @@ MEDIA:
 - gstreamer1.0-tools
 - libgstreamer1.0-0
 - libgstreamer-plugins-base1.0-0
-- libavcodec-extra58
+- libavcodec-extra
 - playerctl
-- mpdris2
-- mpd
-- ncmpc
 - youtube-dl
 - lame
 - opus-tools
@@ -1017,7 +1068,6 @@ MEDIA:
 - aom-tools
 - dov4l
 - ffmpeg
-- playerctl
 - libwebm-tools
 - libwebm1
 - webp
@@ -1034,7 +1084,7 @@ MEDIA:
 #- libaom0
 #- aom-tools
 - libheif1
-#- celluloid
+- celluloid
 #- deepin
 #- kylin-video
 - mpv
@@ -1133,16 +1183,98 @@ WORKSTATION_WAYLAND:
 - wtype
 - ydotool
 - ydotoold
+- desktop-base
+- wayvnc
 WORKSTATION_GNOME:
+- accountservice
+#- bijiben - big deps
+- dino-im
 - gnome-shell
-- mutter
+- chrome-authenticator
 #- chrome-gnome-shell
-- gnome-control-center
-- gnome-books
-- megapixels
-- gnome-connections
-- gnome-remote-desktop
+- gnome-bluetooth
 #- gnome-boxes
+- gnome-books
+- gnome-calls
+- gnome-calendar
+- gnome-calculator
+- gnome-clocks
+- gnome-connections
+- gnome-contacts
+- gnome-control-center
+#- gnome-core
+- gnome-docments
+- gnome-feeds
+- gnome-firmware
+#- gnome-genius
+- gnome-initial-setup
+- gnome-keyring
+- gnome-maps
+- gnome-menus
+- gnome-metronome
+- gnome-photos
+- gnome-power-manager
+- gnome-remote-desktop
+- gnome-screenshot
+- gnome-session
+- gnome-settings-daemon
+- gnome-shell-extensions
+- gnome-sound-recorder
+- gnome-sushi
+- gnome-system-monitor
+- gnome-system-tools
+- gnome-todo
+- gnome-tweaks
+- gnome-weather
+- libgsf-bin
+- megapixels
+- mutter
+- pinhole
+- realmd
+- rygel-tracker
+- simple-scan
+- xdg-user-dirs-gtk
+- xdg-desktop-portal-gnome
+WORKSTATION_MOBILE:
+- chatty # huge
+- lollypop
+- kgx
+- gnome-clocks
+- gnome-contacts
+- mmsd-tng
+- pinhole
+- phosh-core
+- phosh-phone
+- phosh-tablet
+- phosh-full
+WORKSTATION_COMMS:
+- purple-lurch
+- purple-xmpp-carbons
+- purple-xmpp-http-upload
+- libpurple0
+#- chatty - big deps
+- telepathy-rakia
+- telepathy-gabble
+- telepathy-salut
+#- teleapthy-haze
+- telepathy-idle
+- telepathy-mission-control-5
+- telepathy-logger
+SUGAR:
+- python3-sugar
+- python3-jarabe
+- python3-carquinyol
+- sucrose
+- sugar-browse-activity
+- sugar-calculate-activity
+- sugar-chat-activity
+- sugar-imageviewer-activity
+- sugar-jukebox-activity
+- sugar-log-activity
+- sugar-pippy-activity
+- sugar-read-activity
+- sugar-terminal-activity
+- sugar-write-activity
 MEDIA_X:
 #- tracker-gui
 - gstreamer1.0-x
@@ -1159,7 +1291,6 @@ MEDIA_X:
 - mpv
 - streamtuner2
 #- tunapie
-- nemo
 - gnome-mpv
 JAVA:
 - oracle-java9-installer
@@ -1177,6 +1308,23 @@ LLVM:
 DEVEL_JAVA:
 - visualvm
 - maven
+OBSERVABILITY:
+- prometheus
+- prometheus-alertmanager
+- prometheus-blackbox-exporter
+#- prometheus-frr-exporter
+#- prometheus-bird-exporter
+- prometheus-ipmi-exporter
+- prometheus-libvirt-exporter
+- prometheus-homeplug-exporter
+- prometheus-mailexporter
+- prometheus-node-exporter
+- prometheus-node-exporter-collectors
+- prometheus-postgres-exporter
+- prometheus-process-exporter
+- prometheus-pushgateway
+- prometheus-smokeping-prober
+#- prometheus-xmpp-alerts
 OPENSTACK_KEYSTONE:
 - keystone
 - keystone-doc
@@ -1366,9 +1514,9 @@ BONUS:
 #- mumble-server
 - opus-tools
 #- projectm-pulseaudio
-#- projectm-jack
-#- projectm-data
-#- libprojectm3
+- projectm-jack
+- projectm-data
+- libprojectm3
 #- dpf-plugins
 #- dpf-plugins-common
 #- dpf-plugins-dssi
@@ -1401,24 +1549,46 @@ BONUS:
 - gphotofs
 - ifuse
 - jmtpfs
-#- winregfs
+- winregfs
 #- libregf-utils
 - libvshadow-utils
-#- mhddfs
+- mhddfs
 - ostree
-#- tmfs
+- tmfs
 #- waydroid
 - usbtop
-DIA:
-- dia
-- dia-shapes
-- dia-rib-network
+- fish
+- unpaper
+- virgl-server
+- zfs-fuse
+- udftools
+- retroarch
+- retroarch-assets
+- hfsplus
+- hfsprogs
+- fatresize
+- exfatprogs
+- dosbox
+- bchunk
+- inkscape
+- thefuck
+- firefox
+- golang-cfssl
+- shotdetect
+- libevdi0
+- evdi-dkms
+- wireguard
+- wireguard-dkms
+- wireguard-tools
+- playerctl
+#- w3-recs
+#- prosody
 GO:
 - golang
 - golang-src
 - golang-go
 - golang-doc
-- gccgo-5
+- gccgo-12
 - golang-go.tools
 # go fluff
 - golang-etcd-dev
@@ -1441,6 +1611,7 @@ DOCKER:
 - slirp4netns
 CONTAINER:
 - podman
+- systemd-container
 - libvirt0
 - libvirt-clients
 - libvirt-dbus
@@ -1525,7 +1696,6 @@ CONTAINER:
 #- open-isns-discoveryd
 #- open-isns-server
 #- open-isns-utils
-- pm-utils
 - systemtap
 - systemtap-client
 - systemtap-common
@@ -1547,10 +1717,11 @@ CONTAINER:
 - python3-guestfs
 #- lua-guestfs
 - libosinfo-1.0-0
+- libosinfo-bin
 #- recap
 - scrub
 - osinfo-db
-- fsfs-tools
+- f2fs-tools
 - cryptsetup-bin
 - btrfs-progs
 - attr
@@ -1771,3 +1942,94 @@ ZFSONLINUX:
 - zfs-initramfs
 - zfs-module
 - zfs-dkms
+FIO:
+- libbfio1
+- python3-dfvfs
+- python3-plaso
+- libcreg-utils
+- libesedb-utils
+- libevtutils
+- libevtx-utils
+- libfsapfs-utils
+- libfsext-utils
+- libfshfs-utils
+- libfsntfs-utils
+- libfsxs-utils
+- libfvde-utils
+- libhivex-bin
+- liblnk-utils
+- libluksde-utils
+- libmsiecf-utils
+- libolecf-utils
+- libreg-utils
+- libscca-utils
+- libsigscan-utils
+- libsmdev-utils
+- libsmraw-utils
+- libvhdi-utils
+- libvmdk-utils
+- libvslvm-utils
+- libvshadow1
+- libvshadow-utils
+- python3-libvshadow
+- python3-libvmdk
+- libvmdk1
+- python3-libsmraw
+- libsmraw1
+- python3-libsigscan
+- libsigscan1
+- python3-libscca
+- libscca1
+- python3-libregf
+- libregf1
+- python3-pypff
+- libpff1
+- python3-libolecf
+- libolecf1
+- python3-libmsiecf
+- libmsiecf1
+- python3-libluksde
+- libluksde1
+- python3-liblnk
+- liblnk1
+- python3-libfvde
+- libfvde1
+- libfvde-utils
+- python3-libfsxfs
+- libfsxfs1
+- libfsxfs-utils
+- python3-libfsntfs
+- libfsntfs1
+- libfsntfs-utils
+- python3-libfshfs
+- libfshfs1
+- libfshfs-utils
+- python3-libfsext
+- libfsext1
+- libfsext-utils
+- python3-fsapfs
+- libfsapfs1
+- libfsapfs-utils
+- python3-libevtx
+- libevtx1
+- libevtx-utils
+- python3-libevt
+- libevt1
+- libevt-utils
+- python3-libesedb
+- libesedb1
+- python3-libcreg
+- libcreg1
+- ewf-tools
+- python3-libbde
+- libbde1
+- libbde-utils
+- python3-libewf
+- python-libewf
+- libewf3
+- vmfs-tools
+- vmfs6-tools
+DIA:
+- dia
+- dia-shapes
+- dia-rib-network
