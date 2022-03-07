@@ -1,4 +1,7 @@
 ---
 - name: build include hierarchy variable
   set_fact: "{{include|upper}}={{ (hostvars[inventory_hostname][include|upper+'S_DIR']|default(vars[include|upper+'S_DIR'])) + '/' + NAME }}"
-  when: not {{include|upper}}|default(False) # |upper causes default to trip if boolean
+  when: val is defined
+  vars:
+    name: include|upper
+    val: hostvars[inventory_hostname][name]|default(vars[name]|default(omit))
