@@ -63,5 +63,10 @@
       src: false
       global: true
       delay: postRun
+    PKGS:
+    - libboost-dev
+    - libevdev-dev
+    - libudev-dev
+    - libyaml-cpp-dev
   tasks:
   - include: tasks/compfuzor.includes type=src
