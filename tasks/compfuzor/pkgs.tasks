@@ -8,4 +8,4 @@
     state: "{{APT_INSTALL}}"
     pkg: "{{_pkgs}}"
   become: "{{ PKG_BECOME|default(True) }}"
-  when: _pkgs|length > 0
+  when: _pkgs is defined and _pkgs|length > 0
