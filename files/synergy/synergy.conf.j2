@@ -14,7 +14,7 @@ end
 
 section: aliases
         {%- if aliases|default(False) %}
-        {%- for screen, alts in aliases.iteritems() %}
+        {%- for screen, alts in aliases.items() %}
         {{ screen }}:
                 {%- for alt in alts %}
                 {{ alt }}

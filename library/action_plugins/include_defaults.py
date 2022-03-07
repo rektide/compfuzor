@@ -51,7 +51,7 @@ try:
                     data = {}
                 if not isinstance(data, dict):
                     raise AnsibleError("%s must be stored as a dictionary/hash" % source)
-                data = {k:v for (k,v) in data.iteritems() if k not in task_vars }
+                data = {k:v for (k,v) in data.items() if k not in task_vars }
                 result['ansible_facts'] = data
                 result['_ansible_no_log'] = not show_content
                 self._task.action = "include_vars"
@@ -93,7 +93,7 @@ except ImportError:
                     raise errors.AnsibleError("%s must be stored as a dictionary/hash" % source)
                 elif data is None:
                     data = {}
-                data = {k:v for (k,v) in data.iteritems() if k not in inject['vars'] and k not in inject['hostvars']}
+                data = {k:v for (k,v) in data.items() if k not in inject['vars'] and k not in inject['hostvars']}
                 result = dict(ansible_facts=data)
                 return ReturnData(conn=conn, comm_ok=True, result=result)
             else:

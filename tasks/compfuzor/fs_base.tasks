@@ -43,7 +43,7 @@
     dest: "{{_dest}}"
     owner: "{{should_become|ternary(OWNER|default(ansible_user_id),omit)}}"
     group: "{{should_become|ternary(GROUP|default(ansible_user_gid),omit)}}"
-  with_items: FILES.iteritems()
+  with_items: FILES.items()
   become: True
   when: FILES is defined and FILES is mapping
   vars:

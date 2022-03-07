@@ -15,7 +15,7 @@
 {% macro mdef(env) -%}
 {% if env is none -%}
 {% elif env is mapping -%}
-{% for key,val in env.iteritems() -%}
+{% for key,val in env.items() -%}
 	{{ keys.append(key) -}}
 	{% for vsub in val|arrayitize -%}
 		{{ def(key,vsub) -}}

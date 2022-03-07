@@ -26,10 +26,10 @@ Host {{ host.host }}
 	{{ "IdentityFile " + ETC + "/" + NAME + "-" + host.host|replace('.','-') + ".pem" if host.key|default(False) else "" }}
 	{{ "DynamicForward " + host.dynamicForward|string if host.dynamicForward|default(False) else "" }}
 	{{ "GatewayPorts yes" if host.gateway|default(False) else "" }}
-{% for k,v in (host.local|default({})).iteritems() %}
+{% for k,v in (host.local|default({})).items() %}
 	LocalForward {{ k }} {{ v }}
 {% endfor %}
-{% for k,v in (host.remote|default({})).iteritems() %}
+{% for k,v in (host.remote|default({})).items() %}
 	RemoteForward {{ k|int + hostnum|int }} {{ v }}
 {% endfor %}
 {% endfor %}
