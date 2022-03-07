@@ -18,10 +18,10 @@ BASE_amd64:
 - acpi-support
 - acpi-support-base
 - acpi-fakekey
-- grub-pc
-- grub-pc-bin
-- grub2-common
-- grub-common
+#- grub-pc
+#- grub-pc-bin
+#- grub2-common
+#- grub-common
 - os-prober
 - linux-image-amd64
 - linux-headers-amd64
