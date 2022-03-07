@@ -13,7 +13,7 @@
   template:
     dest: "{{_dest}}"
     src: "files/_bin"
-    mode: "{{item.mode|default(0755)}}"
+    mode: "{{item.mode|default(755)}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{BINS|default([])}}"
