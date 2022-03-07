@@ -4,10 +4,10 @@ __metaclass__ = type
 import os
 import pwd
 import grp
-import types
+#import types
 from ansible import errors
 
-NumberTypes = (types.IntType, types.LongType, types.FloatType)
+NumberTypes = (int, float)
 
 def good(arg):
     return arg is not None and arg != ""
