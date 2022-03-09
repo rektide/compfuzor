@@ -13,12 +13,9 @@
   with_items: "{{ARCHS}}"
   when: not (APT_ARCH|default(False)) and not APT_DEFAULT_ARCH|default(False)
   become: True
-- name: "Insure pin directory"
-  file: path=/etc/apt/preferences.d state=directory
-  when: APT_PIN_PACKAGE|default(False) or APT_PIN_PACKAGES|default(False)
 - name: "Copy in pin"
   template: src="files/_apt-pin" dest="/etc/apt/preferences.d/{{NAME}}"
-  when: APT_PIN_PACKAGE|default(False) or APT_PIN_PACKAGES|default(False)
+  when: APT_PIN_PRIORITY|default(False) or APT_PIN_PRIORITY|default(False)
   become: True
 - name: "Copy in apt gpg keys"
   copy: src="files/apt-repos/{{APT_TRUSTED}}.{{item}}" dest="/etc/apt/trusted.gpg.d/{{APT_TRUSTED}}.{{item}}"

@@ -1,6 +1,6 @@
 ---
 - hosts: all
-  sudo: True
+  become: True
   tags:
   - packages
   - root
