@@ -94,26 +94,6 @@
     should_become: "{{subdir|should_become(owner, ansible_user_id, group, ansible_user_gid)}}"
 
 # include files
-- name: "Create {{_upper}} files"
-  template:
-    src: "{{src}}"
-    dest: "{{dest}}"
-    mode: "{{item.mode|default(_vals.prop.mode|default(FILEMODE, true), true)}}"
-    owner: "{{should_become|ternary(owner|default(ansible_user_id, true),omit)}}"
-    group: "{{should_become|ternary(group|default(ansible_user_gid, true),omit)}}"
-  with_items: "{{_vals.files|default([], true)}}"
-  become: "{{should_become}}"
-  when: not item.line|default(False) and not item.raw|default(False)
-  vars:
-    contentful: "{{ item.content|default(False) or item.var|default(False) or item.raw|default(False) }}"
-    src: "{{ 'files/content' if contentful else 'files/' + TYPE|default(NAME) + '/' + item.src|default(item.name|default(item)) }}"
-    v: "{{item.var|default('variablewhichdoesnotexistplease')}}"
-    content: "{{ hostvars[inventory_hostname][v]|default(vars[v]|default('')) if not item.raw|default(False) else lookup('file', 'files/' + TYPE|default(NAME) + '/' + item.raw|default('')) }}"
-    owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
-    group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
-    dest: "{{_dir}}/{{item.dest|default(item.name|default(item))}}"
-    should_become: "{{dest|should_become(owner, ansible_user_id, group, ansible_user_gid)}}"
-
 - name: "Do {{_upper}} lineinfile"
   lineinfile:
     dest: "{{dest}}"
@@ -132,19 +112,30 @@
     dest: "{{_dir}}/{{item.dest|default(item.name|default(item))}}"
     should_become: "{{dest|should_become(owner, ansible_user_id, group, ansible_user_gid)}}"
 
-- name: "Create raw {{_upper}} files"
+- name: "Create {{_upper}} files"
   copy:
-    src: "files/{{TYPE|default(NAME)}}/{{item.src}}"
+    content: "{{all}}"
     dest: "{{dest}}"
     mode: "{{item.mode|default(_vals.prop.mode|default(FILEMODE, true), true)}}"
     owner: "{{should_become|ternary(owner|default(ansible_user_id, true),omit)}}"
     group: "{{should_become|ternary(group|default(ansible_user_gid, true),omit)}}"
     # TODO: ansible 2.3+:
     #mode: "{{COPY_MODE|default(preserve)}}"
-  with_items: "{{_vals.files|default([])}}"
+  loop: "{{_vals.files|default([])}}"
+  loop_control:
+    index_var: idx
   become: "{{should_become}}"
-  when: item.raw|default(False)
+  when: not item.line|default(False)
   vars:
+    src: "{{'files/'+TYPE|default(NAME)+'/'+item.src|default('')}}"
+    files: "{{include|upper}}_FILES"
+    # unsafe because _vals.files is looked up?
+    #content: "{{lookup('templateVar', item.content)}}"
+    content: "{{lookup('templateVar', (hostvars[inventory_hostname][files]|default(vars[files]|default(False)))[idx].content) if item.content else ''}}"
+    fileType: "{{'file' if item.raw|default(False) else 'template'}}"
+    file: "{{lookup(filetype, item.src|default(item.name|default(item, true), true)) if not item.content|default(False) and not item.var|default(False) else '' }}"
+    var: "{{hostvars[inventory_hostname][item.var]|default(vars[item.var]) if item.var|default(False) else '' }}"
+    all: "{{ content|default('') + file|default('') + var|default('') }}"
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
     dest: "{{_dir}}/{{item.dest|default(item.name|default(item))}}"
