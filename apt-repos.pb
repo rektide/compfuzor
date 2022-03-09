@@ -6,10 +6,10 @@
     src: files/apt-repos/sources.list.d
     dest: /etc/apt/sources.list.d
     REPOS:
-    - debian.unstable
-    - debian.testing
-    - emdebian.unstable
-    - mate
+    #- debian.unstable
+    #- debian.testing
+    #- emdebian.unstable
+    #- mate
     - prosody
     - google
     - google.testing

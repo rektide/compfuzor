@@ -18,6 +18,7 @@ set -e
 NAME=$1
 KEY=$2
 KEYSERVER=$3
+#[[ -z "$KEYSERVER" ]] && KEYSERVER=keyserver.ubuntu.com
 [[ -z "$KEYSERVER" ]] && KEYSERVER=keys.gnupg.net
 echo Fetching key $KEY into $NAME.gpg
 
