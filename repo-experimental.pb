@@ -11,5 +11,9 @@
     APT_PIN: "release a=experimental"
     APT_PIN_PRIORITY: 200
     APT_TRUST: false # assume we have debian keys
+    APT_COMPONENTS:
+    - main
+    - contrib
+    - non-free
   tasks:
   - include: tasks/compfuzor/apt.tasks

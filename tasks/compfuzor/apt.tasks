@@ -1,9 +1,9 @@
 ---
 - debug: "msg='Compfuzor: install & update apt repository'"
-- include: vars_base.tasks
-  when: not APT_DEFAULT_COMPONENT|default(False) and not APT_DEFAULT_COMPONENTS|default(False) and not APT_COMPONENT|default(False) and not APT_COMPONENTS|default(False)
-- include: vars_apt.tasks
-  when: not APT_TRUSTED|default(False) or not APT_SOURCELIST|default(False)
+- include_tasks: vars_base.tasks
+  when: (APT_DEFAULT_COMPONENT is not defined and APT_DEFAULT_COMPONENTS is not defined and APT_COMPONENT is not defined and APT_COMPONENTS is not defined) or ARCH is not defined
+- include_tasks: vars_apt.tasks
+  when: APT_TRUSTED is not defined or APT_SOURCELIST is not defined
 - name: "Copy in apt sources.list"
   template: src="files/_apt.list" dest="/etc/apt/sources.list.d/{{APT_SOURCELIST}}.{{APT_ARCH}}.list"
   when: APT_ARCH|default(ARCH)|default(False)
