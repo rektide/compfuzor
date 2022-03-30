@@ -6,8 +6,7 @@
     mode: "{{DIRMODE}}"
     owner: "{{should_become|ternary(OWNER|default(ansible_user_id),omit)}}"
     group: "{{should_become|ternary(GROUP|default(ansible_user_gid),omit)}}"
-  become: True
-  become_user: "{{ansible_user_id}}"
+  become: "{{should_become}}"
   vars:
     should_become: "{{DIR|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: DIR|default(True)

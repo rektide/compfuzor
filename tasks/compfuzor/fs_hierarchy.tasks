@@ -121,7 +121,7 @@
     group: "{{should_become|ternary(group|default(ansible_user_gid, true),omit)}}"
     # TODO: ansible 2.3+:
     #mode: "{{COPY_MODE|default(preserve)}}"
-  loop: "{{_vals.files|default([])}}"
+  loop: "{{_vals.files|default([], true)}}"
   loop_control:
     index_var: idx
   become: "{{should_become}}"
@@ -131,7 +131,7 @@
     files: "{{include|upper}}_FILES"
     # unsafe because _vals.files is looked up?
     #content: "{{lookup('templateVar', item.content)}}"
-    content: "{{lookup('templateVar', (hostvars[inventory_hostname][files]|default(vars[files]|default(False)))[idx].content) if item.content else ''}}"
+    content: "{{lookup('templateVar', (hostvars[inventory_hostname][files]|default(vars[files]|default(False)))[idx].content) if item.content|default(False) else ''}}"
     fileType: "{{'file' if item.raw|default(False) else 'template'}}"
     file: "{{lookup(filetype, item.src|default(item.name|default(item, true), true)) if not item.content|default(False) and not item.var|default(False) else '' }}"
     var: "{{hostvars[inventory_hostname][item.var]|default(vars[item.var]) if item.var|default(False) else '' }}"
