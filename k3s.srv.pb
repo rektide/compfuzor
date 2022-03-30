@@ -19,6 +19,8 @@
     # unit
     SYSTEMD_UNITS:
       Description: "{{ NAME }}"
+      After: network-online.target
+      Wants: network-online.target
     # service
     SYSTEMD_EXEC: "/usr/local/bin/k3s server {{args|join('\\\n	')}}"
     # support added in https://github.com/rancher/k3s/pull/100 ?
@@ -28,7 +30,7 @@
       - "-/sbin/modprobe br_netfilter"
       - "-/sbin/modprobe overlay"
       KillMode: process
-      LimitNOFILE: infinity
+      LimitNOFILE: 1048576
       LimitNPROC: infinity
       LimitCORE: infinity
       Restart: always
