@@ -1,0 +1,15 @@
+[Service]
+Name={{SYSTEMD_DNSSD_NAME|default(SYSTEMD_DNSSD.name|default("%H"))}}
+Type={{SYSTEMD_DNSSD_TYPE|default(SYSTEMD_DNSSD.type|default(NAME|split('-')|map('regex_replace', '.*', '_\\1')|join('.')}}
+{% if SYSTEMD_DNSSD_PORT|default(SYSTEMD_DNSSD.port|default(False) -%}
+Port={{SYSTEMD_DNSSD_PORT}}
+{% endif -%}
+{% if SYSTEMD_DNSSD_PRIORITY|default(SYSTEMD_DNSSD.priority is defined) -%}
+Priority={{ SYSTEMD_DNSSD_PRIORITY|default(SYSTEMD_DNSSD.priority) }}
+{% endif -%}
+{% if SYSTEMD_DNSSD_TXT|default(SYSTEMD_DNSSD.txt is defined) -%}
+TxtText={{ SYSTEMD_DNSSD_TXT|default(SYSTEMD_DNSSD.txt) }}
+{% endif -%}
+{% if SYSTEMD_DNSSD_DATA|default(SYSTEMD_DNSSD.data is defined) -%}
+TxtText={{ SYSTEMD_DNSSD_DATA|default(SYSTEMD_DNSSD.data) }}
+{% endif -%}
