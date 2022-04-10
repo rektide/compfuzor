@@ -85,8 +85,8 @@
     - "--cluster-dns {{CLUSTER_DNS}}"
     - "--flannel-backend {{FLANNEL_BACKEND}}"
     # etc input
-    ##- "--token-file {{K3S_TOKEN_FILE}}"
-    ##- "--agent-token-file {{K3S_AGENT_TOKEN_FILE}}"
+    - "--token-file {{K3S_TOKEN_FILE}}"
+    - "--agent-token-file {{K3S_AGENT_TOKEN_FILE}}"
     # etc output
     ##- "--write-kubeconfig {{K3S_KUBECONFIG_OUTPUT}}"
     ##- "--write-kubeconfig-mode {{K3S_KUBECONFIG_MODE}}"
