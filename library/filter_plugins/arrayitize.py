@@ -4,12 +4,12 @@ import numbers
 listType = type(list())
 
 def isList(*a):
-    return isinstance(a, collections.Sequence) and not isinstance(a, str)
+    return isinstance(a, collections.abc.Sequence) and not isinstance(a, str)
 
 def arrayitize(*a, **kw):
     ''' Place passed in arguments into an array '''
 
-    if len(a) is 1:
+    if len(a) == 1:
         if isinstance(a[0], str):
             return [a[0]]
         if isinstance(a[0], numbers.Number):
