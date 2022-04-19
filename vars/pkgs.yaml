@@ -413,6 +413,7 @@ WORKSTATION:
 - snapper-gui
 - libsnapper5
 - miniupnpc
+- libnfc-bin
 - neard
 - input-utils
 - kacpimon
