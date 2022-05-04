@@ -4,13 +4,15 @@
     TYPE: k3s-agent
     INSTANCE: "{{ DOMAIN|replace('.', '-') }}"
     VAR_DIRS:
-    - data/server
+    - data/agent/etc/containerd
     - local-provisioner
     token: "{{lookup('file', '/srv/k3s-'+INSTANCE+'/var/data/server/token')}}"
     ETC_FILES:
     - name: agent-token
       var: token
     - name: config.toml.tmpl
+    LINKS:
+      '{{VAR}}/data/agent/etc/containerd': "{{ETC}}/config.toml.tmpl"
 
     # unit
     SYSTEMD_UNITS:
