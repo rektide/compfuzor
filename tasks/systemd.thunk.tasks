@@ -15,13 +15,10 @@
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 # ENABLE
 - shell: "systemctl {{SYSTEMD_OPTS_AND_SCOPE}} enable {{THUNK_SERVICE}}  -fq; echo $?"
-  #when: SYSTEMD_RUNNING.stdout != "0"
+  when: SYSTEMD_RUNNING.stdout != "0" and SYSTEMD_RUN|default(True)
   register: SYSTEMD_ENABLE_OK
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 # RELOAD OR RESTART IF RUNNING
-- shell: systemctl {{SYSTEMD_OPTS_AND_SCOPE}} reload-or-restart {{THUNK_SERVICE}} 
-  when: SYSTEMD_RESTART is not defined and SYSTEMD_RUNNING.stdout == "0"
-  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
-- shell: systemctl {{SYSTEMD_OPTS_AND_SCOPE}} restart {{THUNK_SERVICE}}
-  when: SYSTEMD_RESTART is defined and SYSTEMD_RUNNING.stdout == "0"
+- shell: "systemctl {{SYSTEMD_OPTS_AND_SCOPE}} restart {{THUNK_SERVICE}}"
+  when: SYSTEMD_RESTART is defined and SYSTEMD_RUNNING.stdout == "0" and SYSTEMD_RUN|default(True)
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"

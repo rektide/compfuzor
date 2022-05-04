@@ -1,25 +1,35 @@
 ---
 - debug: "msg='Compfuzor: create `LINKS`'"
-- name: "Test for parent directories for LINKS"
-  stat:
-    path: "{{_parent}}"
-  become: "{{ _parent|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
+#- name: "Test for parent directories for LINKS"
+#  stat:
+#    path: "{{_parent}}"
+#  become: "{{ _parent|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
+#  when: LINKS|default(False) and not LINK_BYPASS|default(False)
+#  with_items: "{{ LINKS|listify }}"
+#  vars:
+#    _parent: "{{ item.dest|default(item.key)|defaultDir(DIR)|dirname }}"
+#  register: _link_stats
+#- debug:
+#    msg: "what the {{item|to_json}}"
+#  with_items: "{{ _link_stats.results }}"
+#- name: "Create directories for LINKS"
+#  file:
+#  args:
+#    path: "{{ item.item.path|default(item.item.value) }}"
+#    state: directory
+#    user: "{{ USER|default(omit) }}" # OWNER?
+#    group: "{{ GROUP|default(omit) }}"
+#    mode: "{{ DIRMODE|default(MODE)|default(omit)}}"
+#  become: "{{ item.item.path|default(item.item.value)|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
+#  when: LINKS|default(False) and not LINK_BYPASS|default(False) and item.stat.exists == False
+#  with_items: "{{ _link_stats.results }}"
+- debug:
+    msg: "Create LINKS {{ _src}} {{_dest}}"
   when: LINKS|default(False) and not LINK_BYPASS|default(False)
   with_items: "{{ LINKS|listify }}"
   vars:
-    _parent: "{{ item.dest|default(item.key)|defaultDir(DIR)|dirname }}"
-  register: _link_stats
-- name: "Create directories for LINKS"
-  file:
-  args:
-    path: "{{ item.path }}"
-    state: directory
-    user: "{{ USER }}" # OWNER?
-    group: "{{ GROUP|default(omit) }}"
-    mode: "{{ DIRMODE|default(MODE)|default(omit)}}"
-  become: "{{ item.path|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
-  when: LINKS|default(False) and not LINK_BYPASS|default(False) and item.stat.exists == False
-  with_items: "{{ _link_stats.results }}"
+    _src: "{{ item.src|default(item.value)|defaultDir(DIR) }}"
+    _dest: "{{ lookup('templateVar', item.dest|default(item.key))|defaultDir(DIR) }}"
 - name: "Create LINKS"
   file:
   args:
@@ -32,4 +42,4 @@
   with_items: "{{ LINKS|listify }}"
   vars:
     _src: "{{ item.src|default(item.value)|defaultDir(DIR) }}"
-    _dest: "{{ item.dest|default(item.key)|defaultDir(DIR) }}"
+    _dest: "{{ lookup('templateVar', item.dest|default(item.key))|defaultDir(DIR) }}"
