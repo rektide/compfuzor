@@ -82,6 +82,7 @@ from ansible.plugins.lookup import LookupBase
 from ansible.module_utils._text import to_bytes, to_text
 from ansible.template import generate_ansible_template_vars, AnsibleEnvironment, USE_JINJA2_NATIVE
 from ansible.utils.display import Display
+from ansible.utils.unsafe_proxy import to_unsafe_text
 
 if USE_JINJA2_NATIVE:
     from ansible.utils.native_jinja import NativeJinjaText
@@ -147,7 +148,7 @@ class LookupModule(LookupBase):
                                                comment_start_string=comment_start_string,
                                                comment_end_string=comment_end_string,
                                                available_variables=vars, searchpath=searchpath):
-                res = templar.template(template_data, preserve_trailing_newlines=True,
+                res = templar.template(to_unsafe_text(template_data), preserve_trailing_newlines=True,
                                        convert_data=convert_data_p, escape_backslashes=False)
 
             if USE_JINJA2_NATIVE and not jinja2_native:
