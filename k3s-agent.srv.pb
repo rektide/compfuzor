@@ -4,15 +4,13 @@
     TYPE: k3s-agent
     INSTANCE: "{{ DOMAIN|replace('.', '-') }}"
     VAR_DIRS:
-    - data
+    - data/server
     - local-provisioner
-    PASSWORD_LENGTH: 96
-    PASSWORD:
-    - agentToken
+    token: "{{lookup('file', '/srv/k3s-'+INSTANCE+'/var/data/server/token')}}"
     ETC_FILES:
     - name: agent-token
-      var: agentToken
-
+      var: token
+    - name: config.toml.tmpl
 
     # unit
     SYSTEMD_UNITS:
