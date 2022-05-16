@@ -127,7 +127,7 @@
   become: "{{should_become}}"
   when: not item.line|default(False)
   vars:
-    src: "{{'files/'+TYPE|default(NAME)+'/'+item.src|default('')}}"
+    src: "{{ item.src|default(item.name|default(item, true), true)|defaultDir('files/'+TYPE|default(NAME)) if not item.srcTemplate is defined else lookup('templateVar', item.srcTemplate)|defaultDir('files/'+TYPE|default(NAME)) }}"
     files: "{{include|upper}}_FILES"
     # unsafe because _vals.files is looked up?
     #content: "{{lookup('templateVar', item.content)}}"
