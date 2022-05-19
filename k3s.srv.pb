@@ -1,5 +1,5 @@
 ---
-- hosts: all
+- hosts: servers
   vars:
     TYPE: k3s
     INSTANCE: "{{ DOMAIN|replace('.', '-') }}"
@@ -22,7 +22,7 @@
       After: network-online.target
       Wants: network-online.target
     # service
-    SYSTEMD_EXEC: "/usr/local/bin/k3s server {{args|join('\\\n	')}}"
+    SYSTEMD_EXEC: "/usr/local/bin/k3s server {{execArgs|join('\\\n	')}}"
     # support added in https://github.com/rancher/k3s/pull/100 ?
     SYSTEMD_SERVICES:
       Delegate: yes
@@ -74,19 +74,17 @@
       CONTAINER_RUNTIME_ENDPOINT: "{{CONTAINER_RUNTIME_ENDPOINT}}"
       PRIVATE_REGISTRY: "{{PRIVATE_REGISTRY}}"
       K3S_URL: "{{K3S_URL}}"
-    v: 2
-    args:
-    - "{{ '-v '+(v|string) if v|default(false) else '' }}"
-    - "--tls-san {{CLUSTER_DOMAIN}}"
-    - "--cluster-domain {{CLUSTER_DOMAIN}}"
-    - "--data-dir {{DATA}}"
-    - "--cluster-cidr {{CLUSTER_CIDR}}"
-    - "--service-cidr {{SERVICE_CIDR}}"
-    - "--cluster-dns {{CLUSTER_DNS}}"
-    - "--flannel-backend {{FLANNEL_BACKEND}}"
+      V: "{{V|default(2)}}"
+    execArgs:
+    - "-v $V"
+    - "--tls-san $CLUSTER_DOMAIN"
+    - "--cluster-domain $CLUSTER_DOMAIN"
+    - "--data-dir $DATA"
+    - "--cluster-cidr $CLUSTER_CIDR"
+    - "--service-cidr $SERVICE_CIDR"
+    - "--cluster-dns $CLUSTER_DNS"
+    - "--flannel-backend $FLANNEL_BACKEND"
     # etc input
-    - "--token-file {{K3S_TOKEN_FILE}}"
-    - "--agent-token-file {{K3S_AGENT_TOKEN_FILE}}"
     # etc output
     ##- "--write-kubeconfig {{K3S_KUBECONFIG_OUTPUT}}"
     ##- "--write-kubeconfig-mode {{K3S_KUBECONFIG_MODE}}"
