@@ -33,7 +33,7 @@
   when: unit|default(False) and has_etc
 - name: enabling unit
   shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{dest}}"
-  when: unit == True
+  when: unit == True and SYSTEMD_ENABLE|default(True) != False
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 - name: templating in specified unit
@@ -49,7 +49,7 @@
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 - name: enabling specified unit
   shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{unit}}"
-  when: unit and unit != True
+  when: unit and unit != True and SYSTEMD_ENABLE|default(True) != False
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 - name: templating units
