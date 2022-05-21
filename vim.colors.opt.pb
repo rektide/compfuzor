@@ -12,7 +12,7 @@
     - scripts
     - docs
     - autoload
-    paths: "{{ SRC + dirs|join(',' ~ SRC) }}"
+    paths: "{{ SRC ~ '/' ~ REPOS|list|join(',' ~ SRC ~ '/') }}"
     ETC_FILES:
     - name: runtimepath.vim
       content: |
