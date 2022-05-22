@@ -42,4 +42,5 @@
   with_items: "{{ LINKS|listify }}"
   vars:
     _src: "{{ item.src|default(item.value)|defaultDir(DIR) }}"
-    _dest: "{{ lookup('templateVar', item.dest|default(item.key))|defaultDir(DIR) }}"
+    #_dest: "{{ lookup('templateVar', item.dest|default(item.key))|defaultDir(DIR) }}"
+    _dest: "{{ item.dest|default(item.key)|defaultDir(DIR) }}"
