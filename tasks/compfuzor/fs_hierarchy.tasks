@@ -133,7 +133,7 @@
     #content: "{{lookup('templateVar', item.content)}}"
     content: "{{lookup('templateVar', (hostvars[inventory_hostname][files]|default(vars[files]|default(False)))[idx].content) if item.content|default(False) else ''}}"
     fileType: "{{'file' if item.raw|default(False) else 'template'}}"
-    file: "{{lookup(filetype, item.src|default(item.name|default(item, true), true)) if not item.content|default(False) and not item.var|default(False) else '' }}"
+    file: "{{lookup(fileType, item.src|default(item.name|default(item, true), true)|defaultDir(srcDir)) if not item.content|default(False) and not item.var|default(False) else '' }}"
     var: "{{hostvars[inventory_hostname][item.var]|default(vars[item.var]) if item.var|default(False) else '' }}"
     all: "{{ content|default('') + file|default('') + var|default('') }}"
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
