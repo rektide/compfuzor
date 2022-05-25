@@ -8,11 +8,12 @@
     - local-provisioner
     token: "{{lookup('file', '/srv/k3s-'+INSTANCE+'/var/data/server/token')}}"
     ETC_FILES:
-    - name: agent-token
+    - name: token
       var: token
     - name: config.toml.tmpl
     LINKS:
-      '{{VAR}}/data/agent/etc/containerd': "{{ETC}}/config.toml.tmpl"
+    - src: "{{ETC}}/config.toml.tmpl"
+      dest: "{{VAR}}/data/agent/etc/containerd/config.toml.tmpl"
 
     # unit
     SYSTEMD_UNITS:
@@ -49,9 +50,11 @@
     CLUSTER_DNS: "10.40.0.2"
     FLANNEL_BACKEND: none
     LOCAL_PROVISIONER_PATH: "{{VAR}}/local-provisioner"
-    CONTAINER_RUNTIME_ENDPOINT: ""
-    PRIVATE_REGISTRY: ""
+    CONTAINER_RUNTIME_ENDPOINT: "''"
+    PRIVATE_REGISTRY: "/etc/rancher/k3s/registries.yaml"
     K3S_URL: ""
+    KUBE_PROXY_ARG: ""
+    KUBELET_ARG: ""
 
     ENV:
       DOMAIN: "{{DOMAIN}}"
@@ -60,7 +63,6 @@
       K3S_TOKEN_FILE: "{{K3S_TOKEN_FILE}}"
       K3S_KUBECONFIG_OUTPUT: "{{K3S_KUBECONFIG_OUTPUT}}"
       K3S_KUBECONFIG_MODE: "{{K3S_KUBECONFIG_MODE}}"
-      K3S_AGENT_TOKEN_FILE: "{{K3S_AGENT_TOKEN_FILE}}"
       CLUSTER_CIDR: "{{CLUSTER_CIDR}}"
       SERVICE_CIDR: "{{SERVICE_CIDR}}"
       CLUSTER_DNS: "{{CLUSTER_DNS}}"
@@ -69,18 +71,18 @@
       CONTAINER_RUNTIME_ENDPOINT: "{{CONTAINER_RUNTIME_ENDPOINT}}"
       PRIVATE_REGISTRY: "{{PRIVATE_REGISTRY}}"
       K3S_URL: "{{K3S_URL}}"
-    v: 2
+      V: "{{V|default(1)}}"
     args:
-    - "{{ '-v '+(v|string) if v|default(false) else '' }}"
-    - "--data-dir {{DATA}}"
-    - "--flannel-backend {{FLANNEL_BACKEND}}"
-    # etc input
-    - "--token-file {{K3S_TOKEN_FILE}}"
+    - "-v $V"
+    - "--data-dir $DATA"
     # etc output
     ##- "--write-kubeconfig {{K3S_KUBECONFIG_OUTPUT}}"
     ##- "--write-kubeconfig-mode {{K3S_KUBECONFIG_MODE}}"
-    - "{{ '--container-runtime-endpoint '+CONTAINER_RUNTIME_ENDPOINT if CONTAINER_RUNTIME_ENDPOINT != '' else '' }}"
-    - "{{ '--private-registry '+PRIVATE_REGISTRY if PRIVATE_REGISTRY != '' else '' }}"
-    - "--server {{K3S_URL}}"
+    #- "{{ '--container-runtime-endpoint $CONTAINER_RUNTIME_ENDPOINT' if CONTAINER_RUNTIME_ENDPOINT != '' else '' }}"
+    #- "{{ '--private-registry $PRIVATE_REGISTRY' if PRIVATE_REGISTRY != ''  else '' }}"
+    - "--container-runtime-endpoint $CONTAINER_RUNTIME_ENDPOINT"
+    - "--private-registry $PRIVATE_REGISTRY"
+    - "--kubelet-arg $KUBELET_ARG"
+    - "--kube-proxy-arg $KUBE_PROXY_ARG"
   tasks:
   - include: tasks/compfuzor.includes type=srv
