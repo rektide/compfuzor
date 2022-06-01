@@ -6,10 +6,10 @@
     VAR_DIRS:
     - data/agent/etc/containerd
     - local-provisioner
-    token: "{{lookup('file', '/srv/k3s-'+INSTANCE+'/var/data/server/token')}}"
+    token: "{{lookup('file', '/srv/k3s-'+INSTANCE+'/etc/agent-token')}}"
     ETC_FILES:
     - name: token
-      var: token
+      content: "{{lookup('file', '/srv/k3s-'+INSTANCE+'/etc/agent-token')}}"
     - name: config.toml.tmpl
     LINKS:
     - src: "{{ETC}}/config.toml.tmpl"
