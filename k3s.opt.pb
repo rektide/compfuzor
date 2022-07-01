@@ -2,7 +2,7 @@
 - hosts: all
   vars:
     TYPE: k3s
-    release: v1.24.1-rc1+k3s1
+    release: v1.24.2+k3s1
     #INSTANCE: "{{ release }}"
     INSTANCE: main
     GET_URLS: https://github.com/k3s-io/k3s/releases/download/{{release|urlencode}}/k3s
