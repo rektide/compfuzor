@@ -15,6 +15,13 @@
     VAR_DIRS:
     - data
     - local-provisioner
+    LINKS:
+    - src: "{{ETC}}/config.toml.tmpl"
+      dest: "{{VAR}}/data/agent/etc/containerd/config.toml.tmpl"
+    - src: "{{VAR}}/data"
+      dest: "/var/lib/rancher/k3s"
+    - src: "{{ETC}}"
+      dest: "/etc/rancher/k3s"
 
     # unit
     SYSTEMD_UNITS:
