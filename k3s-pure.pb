@@ -1,7 +1,7 @@
 ---
 - hosts: all
   vars:
-    prefix: "k3s-pure-"
+    prefix: "k3s-pure"
     TYPE: "{{prefix}}{{ is_server|ternary('', '-agent') }}"
     INSTANCE: "{{server|replace('.', '-')}}"
     PASSWORD:

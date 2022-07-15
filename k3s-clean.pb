@@ -39,10 +39,8 @@
     loop:
       - "/srv/{{NAME}}"
       - "/var/lib/{{NAME}}"
-      - "{{svc}}"
       - "/etc/opt/{{NAME}}"
-      - "/etc/rancher/k3s"
-      - "/var/lib/rancher/k3s"
+      - "{{SYSTEMD_SYSTEM_UNIT_DIR}}/{{NAME}}.service"
   - name: delete global links
     ansible.builtin.file:
       path: "{{item.item.dest}}"
