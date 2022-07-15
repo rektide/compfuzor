@@ -12,8 +12,10 @@
       var: token
     - name: agent-token
       var: agentToken
+    - name: config.toml.tmpl
     VAR_DIRS:
     - data
+    - data/agent/etc/containerd
     - local-provisioner
     LINKS:
     - src: "{{ETC}}/config.toml.tmpl"
