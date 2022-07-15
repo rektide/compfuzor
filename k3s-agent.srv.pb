@@ -86,7 +86,7 @@
     #- "{{ '--private-registry $PRIVATE_REGISTRY' if PRIVATE_REGISTRY != ''  else '' }}"
     - "--container-runtime-endpoint $CONTAINER_RUNTIME_ENDPOINT"
     - "--private-registry $PRIVATE_REGISTRY"
-    - "--kubelet-arg $KUBELET_ARG"
-    - "--kube-proxy-arg $KUBE_PROXY_ARG"
+    - "{{ '--kubelet-arg KUBELET_ARG' if KUBELET_ARG else '' }}"
+    - "{{ '--kube-proxy-arg $KUBE_PROXY_ARG' if KUBE_PROXY_ARG else '' }}"
   tasks:
   - include: tasks/compfuzor.includes type=srv
