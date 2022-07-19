@@ -11,6 +11,13 @@
 
     force_clean: False
     is_server: "{{ 'servers' in group_names }}"
+    paths:
+      - "/srv/{{NAME}}"
+      - "/var/lib/{{NAME}}"
+      - "/etc/opt/{{NAME}}"
+      - "{{SYSTEMD_SYSTEM_UNIT_DIR}}/{{NAME}}.service"
+    # dest will be deleted if it points at src
+    # or if force_clean
     global_links:
     - dest: "{{SYSTEMD_SYSTEM_UNIT_DIR}}/k3s.service"
       src:  "{{SYSTEMD_SYSTEM_UNIT_DIR}}/{{NAME}}.service"
@@ -37,11 +44,7 @@
       state: absent
     become: true
     when: item != ""
-    loop:
-      - "/srv/{{NAME}}"
-      - "/var/lib/{{NAME}}"
-      - "/etc/opt/{{NAME}}"
-      - "{{SYSTEMD_SYSTEM_UNIT_DIR}}/{{NAME}}.service"
+    loop: "{{paths}}"
   - name: delete global links
     ansible.builtin.file:
       path: "{{item.item.dest}}"
