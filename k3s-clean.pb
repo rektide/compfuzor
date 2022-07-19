@@ -9,6 +9,7 @@
     prefix: "k3s"
     server: "k3s.example"
 
+    force_clean: False
     is_server: "{{ 'servers' in group_names }}"
     global_links:
     - dest: "{{SYSTEMD_SYSTEM_UNIT_DIR}}/k3s.service"
@@ -45,7 +46,7 @@
     ansible.builtin.file:
       path: "{{item.item.dest}}"
       state: absent
-    when: item.stat.lnk_target|default('') == item.item.src or item.stat.lnk_source|default('') == item.item.src
+    when: force_clean|default(False) or item.stat.lnk_target|default('') == item.item.src or item.stat.lnk_source|default('') == item.item.src
     become: true
     loop: "{{global_stat.results}}"
   - name: systemd daeon-reload
