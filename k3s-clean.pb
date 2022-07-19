@@ -25,6 +25,9 @@
       src: "{{VAR}}/data"
     - dest: "/etc/rancher/k3s"
       src: "{{ETC}}"
+    # currently not setup by k3s playbooks
+    - dest: "/etc/rancher/node"
+      src: "/dev/null"
   tasks:
   - include: tasks/compfuzor/vars_base.tasks
   - include: tasks/compfuzor/vars_hierarchy_multi.tasks
