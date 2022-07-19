@@ -40,6 +40,7 @@
     ansible.builtin.systemd:
       name: "{{NAME}}"
       state: stopped
+    failed_when: False
     become: true
   - name: delete files
     ansible.builtin.file:
