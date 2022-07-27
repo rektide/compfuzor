@@ -55,7 +55,7 @@
     CLUSTER_DOMAIN: "cluster.{{DOMAIN}}"
     DATA: "{{VAR}}/data"
     K3S_TOKEN_FILE: "{{ETC}}/token"
-    K3S_KUBECONFIG_OUTPUT: "{{ETC}}/kubeconfig.admin"
+    K3S_KUBECONFIG_OUTPUT: "{{ETC}}/k3s.yaml"
     K3S_KUBECONFIG_MODE: "0640"
     K3S_AGENT_TOKEN_FILE: "{{ETC}}/agent-token"
     CLUSTER_CIDR: "10.39.0.0/16"
