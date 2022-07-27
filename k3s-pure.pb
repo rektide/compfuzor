@@ -9,6 +9,7 @@
     PASSWORD_LENGTH: 96
     server: k3s.example
     url: "https://{{server}}:6443"
+    generated_token: "write-me-plz"
 
     is_server: "{{ 'servers' in group_names }}"
     exec: "{{ is_server|ternary('server --tls-san ' + server, 'agent --server ' + url) }}"
@@ -37,7 +38,7 @@
       Alias: k3s.service
     ENV:
       # yeah so this needs to be the generated  /var/lib/rancher/k3s/server/node-token
-      K3S_TOKEN: "{{token}}"
+      K3S_TOKEN: "{{is_server|ternary(token, generated_token)}}"
       K3S_KUBECONFIG_MODE: "0640"
   tasks:
     - include: tasks/compfuzor.includes type=srv
