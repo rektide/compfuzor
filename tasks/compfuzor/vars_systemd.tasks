@@ -10,7 +10,7 @@
 - name: "Defaulting SYSTEMD_SERVICE if SYSTEMD_EXEC"
   set_fact:
   args:
-     SYSTEMD_SERVICE: True
+     SYSTEMD_SERVICE: "{{SYTEMD_SERVICE|default(SYSTEMD_EXEC is defined)}}"
   when: SYSTEMD_EXEC is defined and SYSTEMD_SERVICE is not defined
 - name: "Defaulting SYSTEMD_USER"
   set_fact:
