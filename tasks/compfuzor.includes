@@ -99,11 +99,8 @@
   when: BINS is defined and not BINS_BYPASS|default(False) and not GLOBAL_BINS_BYPASS|default(False)
 - include: compfuzor/systemd.tasks become=True
   when: not SYSTEMD_BYPASS|default(False)
-- include: systemd.thunk.tasks service="{{SYSTEMD_SERVICE}}"
-  when: not SYSTEMD_BYPASS|default(False) and not SYSTEMD_THUNK_BYPASS|default(False) and SYSTEMD_SERVICE|default(False) and SYSTEMD_EXEC is defined and not SYSTEMD_INSTANCES|default(False) and not SYSTEMD_INSTANCED|default(False)
-- include: systemd.thunk.tasks service="{{SYSTEMD_SERVICE}}@{{item}}"
-  when: not SYSTEMD_BYPASS|default(False) and not SYSTEMD_THUNK_BYPASS|default(False) and SYSTEMD_SERVICE|default(False) and SYSTEMD_EXEC is defined and SYSTEMD_INSTANCES|default(False)
-  with_items: "{{SYSTEMD_INSTANCES|default([])}}"
-
+- include: systemd.thunk.tasks service="{{SYSTEMD_SERVICE}}{{ '@' + item if item != '' else '' }}"
+  when: not SYSTEMD_BYPASS|default(False) and not SYSTEMD_THUNK_BYPASS|default(False) and SYSTEMD_SERVICE|default(False) and SYSTEMD_EXEC is defined
+  with_items: "{{SYSTEMD_INSTANCES|default([''])}}"
 
 - debug: "msg='Compfuzor: complete. Returning to main playbook.'"
