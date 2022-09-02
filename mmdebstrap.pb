@@ -31,6 +31,7 @@
     - POSTGRES
     - CONTAINER
     - BONUS
+    - WORDS
     mmpkgs: "{{lookup('template', '../files/mmdebstrap/_pkgs')}}"
     MMDEBSTRAP_COMPONENTS: "main,contrib,non-free"
     MMDEBSTRAP_SUITE: sid

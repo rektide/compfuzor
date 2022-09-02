@@ -294,11 +294,6 @@ WORKSTATION:
 - quota
 #- cfv
 #- dict
-#- dict-wn
-#- dict-devil
-#- dict-elements
-#- dict-foldoc
-#- dict-gcide
 #- dictd
 - usbip
 - screen
@@ -441,6 +436,23 @@ WORKSTATION:
 - vim-gitgutter
 - universal-ctags
 - playerctl
+WORDS:
+- an
+- aspell
+- aspell-doc
+- aspell-en
+- dico
+- dico-module-python
+- dico-module-wordnet
+- dicod
+- dict-wn
+- dict-devil
+- dict-elements
+- dict-foldoc
+- dict-gcide
+- wamerican-huge
+- wordnet
+- wordnet-base
 VIRTUALIZATION:
 #- qemu
 - qemu-efi
@@ -471,6 +483,7 @@ VIRTUALIZATION:
 #- vmfs-tools
 #- vmfs6-tools
 #- xmount
+#- vde2
 AVAHI:
 - avahi-autoipd
 - avahi-daemon

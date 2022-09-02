@@ -61,6 +61,7 @@
     - MEDIA_X
     - POSTGRES
     - BONUS
+    - WORDS
 
     # PKGS:
     #- debos
