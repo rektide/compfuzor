@@ -1,7 +1,7 @@
 ---
 - hosts: servers
   vars:
-    TYPE: k3s
+    TYPE: "k3s{{ is_server|ternary('-server', '-agent') }}"
     INSTANCE: "{{ DOMAIN|replace('.', '-') }}"
     PASSWORD:
     - token
@@ -14,7 +14,6 @@
       var: agentToken
     - name: config.toml.tmpl
     VAR_DIRS:
-    - data
     - data/agent/etc/containerd
     - local-provisioner
     LINKS:
@@ -24,6 +23,7 @@
       dest: "/var/lib/rancher/k3s"
     - src: "{{ETC}}"
       dest: "/etc/rancher/k3s"
+    is_server: "{{ 'servers' in group_names }}"
 
     # unit
     SYSTEMD_UNITS:
@@ -31,7 +31,11 @@
       After: network-online.target
       Wants: network-online.target
     # service
-    SYSTEMD_EXEC: "/usr/local/bin/k3s server {{execArgs|join('\\\n	')}}"
+    SYSTEMD_EXEC:
+    - "/usr/local/bin/k3"
+    - "{{is_server|ternary('server', 'agent')}}"
+    - commonArgs
+    - "{{is_server|ternary(serverArgs, agentArgs)}}"
     # support added in https://github.com/rancher/k3s/pull/100 ?
     SYSTEMD_SERVICES:
       Delegate: yes
@@ -49,7 +53,7 @@
       Type: notify
     # install
     SYSTEMD_INSTALLS:
-      Alias: k3s.service
+      Alias: "{{TYPE}}.service"
 
     DOMAIN: base.yoyodyne.example.net
     CLUSTER_DOMAIN: "cluster.{{DOMAIN}}"
@@ -82,9 +86,11 @@
       LOCAL_PROVISIONER_PATH: "{{LOCAL_PROVISIONER_PATH}}"
       CONTAINER_RUNTIME_ENDPOINT: "{{CONTAINER_RUNTIME_ENDPOINT}}"
       PRIVATE_REGISTRY: "{{PRIVATE_REGISTRY}}"
-      K3S_URL: "{{K3S_URL}}"
+      K3S_URL: "{{'https://' + K3S_URL + ':6443' if K3S_URL is not search('https://') else K3S_URL}}"
       V: "{{V|default(2)}}"
-    execArgs:
+    commonArgs: {}
+    agentArgs: {}
+    serverArgs:
     - "-v $V"
     - "--tls-san $CLUSTER_DOMAIN"
     - "--cluster-domain $CLUSTER_DOMAIN"

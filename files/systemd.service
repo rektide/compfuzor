@@ -1,3 +1,13 @@
+{% macro joinLines(expr, sep = joiner("\n	") -%}
+{% if expr is string -%}
+{{sep()}}{{ expr -}}
+{% else -%}
+{% for line in expr -%}
+{{sep()}}{{ joinLines(line) -}}
+{% endfor -%}
+{% endif -%}
+{% endmacro -%}
+
 {% macro phrase(name, expression) -%}
 {%- for el in expression|default([])|arrayitize -%}
 {{ name }}={{ el if el != False and el != True else el|ternary('true', 'false') }}
