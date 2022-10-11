@@ -3,17 +3,17 @@
 - set_fact:
     _SYSTEMD_PREFIX_DIR: "{{PREFIX_DIR|default(False)}}"
     PREFIX_DIR: "%h{{ PREFIX_DIR[1:] }}"
-  when: "{{PREFIX_DIR|default(False) and PREFIX_DIR[0] == '~'}}"
+  when: PREFIX_DIR|default(False) and PREFIX_DIR[0] == '~'
 - include: ../systemd.unit.includes
   loop:
   - service
   - unit
   - socket
   - dnssd
-  when: "{{vars[v]|default(False) or hostvars[inventory_hostname][v]|default(False)}}"
+  when: vars[v]|default(False) or hostvars[inventory_hostname][v]|default(False)
   vars:
     v: "SYSTEMD_{{item|upper}}"
     unit_type: "{{item}}"
 - set_fact:
     PREFIX_DIR: "{{_SYSTEMD_PREFIX_DIR}}"
-  when: "{{_SYSTEMD_PREFIX_DIR|default(False)|bool}}"
+  when: _SYSTEMD_PREFIX_DIR|default(False)
