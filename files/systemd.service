@@ -1,13 +1,3 @@
-{% macro joinLines(expr, sep = joiner("\n	") -%}
-{% if expr is string -%}
-{{sep()}}{{ expr -}}
-{% else -%}
-{% for line in expr -%}
-{{sep()}}{{ joinLines(line) -}}
-{% endfor -%}
-{% endif -%}
-{% endmacro -%}
-
 {% macro phrase(name, expression) -%}
 {%- for el in expression|default([])|arrayitize -%}
 {{ name }}={{ el if el != False and el != True else el|ternary('true', 'false') }}
@@ -105,7 +95,7 @@ After=network.target
 
 [Service]
 Type={{ SYSTEMD_TYPE|default("simple") }}
-ExecStart={{ SYSTEMD_EXEC }}
+ExecStart={{ SYSTEMD_EXEC | flatten | join(" \\\n	") }}
 {% if SYSTEMD_CWD|default(True) %}
 WorkingDirectory={{ SYSTEMD_CWD|default(SYSTEMD_WORKING_DIRECTORY)|default(DIR)|replace('~', '%h', 1) }}
 {% endif %}
