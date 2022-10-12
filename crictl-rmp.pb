@@ -32,3 +32,23 @@
      tags:
       - stop
       - crictl
+
+   - name: list relevant units
+     shell: "systemctl list-units -t mount -t scope | grep -e '\\(run-k3s-containerd-io.*mount\\|cri-containerd-.*scope\\)' | awk '{print $1}'"
+     register: systemd_units
+     tags:
+       - get
+       - systemd
+   - name: stop systemd units
+     systemd:
+       name: "{{item}}"
+       state: stopped
+     # finger cross this deletes scopes first
+     loop: "{{scopes + mounts}}"
+     vars:
+       scopes: "{{ systemd_units.stdout_lines|select('search', '.scope') }}"
+       mounts: "{{ systemd_units.stdout_lines|select('search', '.mount') }}"
+     become: true
+     tags:
+       - stop
+       - systemd
