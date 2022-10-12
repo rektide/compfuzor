@@ -32,7 +32,7 @@
       Wants: network-online.target
     # service
     SYSTEMD_EXEC:
-    - "/usr/local/bin/k3"
+    - "/usr/local/bin/k3s"
     - "{{is_server|ternary('server', 'agent')}}"
     - commonArgs
     - "{{is_server|ternary(serverArgs, agentArgs)}}"
