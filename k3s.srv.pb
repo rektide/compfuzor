@@ -34,7 +34,7 @@
     SYSTEMD_EXEC:
     - "/usr/local/bin/k3s"
     - "{{is_server|ternary('server', 'agent')}}"
-    - commonArgs
+    - "{{commonArgs}}"
     - "{{is_server|ternary(serverArgs, agentArgs)}}"
     # support added in https://github.com/rancher/k3s/pull/100 ?
     SYSTEMD_SERVICES:
@@ -86,7 +86,7 @@
       LOCAL_PROVISIONER_PATH: "{{LOCAL_PROVISIONER_PATH}}"
       CONTAINER_RUNTIME_ENDPOINT: "{{CONTAINER_RUNTIME_ENDPOINT}}"
       PRIVATE_REGISTRY: "{{PRIVATE_REGISTRY}}"
-      K3S_URL: "{{'https://' + K3S_URL + ':6443' if K3S_URL is not search('https://') else K3S_URL}}"
+      K3S_URL: "{{'https://' + K3S_URL|default(inventory_hostname, true) + ':6443' if K3S_URL is not search('https://') else K3S_URL}}"
       V: "{{V|default(2)}}"
     commonArgs: {}
     agentArgs: {}
