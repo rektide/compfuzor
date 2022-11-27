@@ -3,52 +3,59 @@
     unit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False) }}"
     units: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default([]) }}"
     d: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'_D']|default(vars['SYSTEMD_'+unit_type|upper+'_D'])|default(False) }}"
-    target: "{{TYPE|default(NAME)|default('')}}"
+    target: "{{TYPE|default(NAME)|default('.')}}"
     inst: "{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}"
-    dest: "{{SYSTEMD_UNIT_DIR}}/{{unit_name|default(NAME)|replace('.', '-')}}{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}.{{unit_type}}"
-    has_etc: "{{ ETC_DIRS|default(False) or ETC_FILES|default(False) or ETC_DIR|default(False) }}"
-- name: testing for local target unit
-  local_action: shell test ! -f "files/{{target}}/{{target}}{{inst}}.{{unit_type}}"; echo $?
-  changed_when: False
-  register: local_unit
-  become: False
+
+    unitname: "{{ unitname }}"
+    unit: "{{ unit }}"
+    src: "{{ src }}"
+    dest: "{{ dest }}"
+    link: "{{ link }}"
+  vars:
+    # currently no support for UNITS here
+    varunit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False) }}"
+    unitname: "{{ varunit|default(TYPE|default(NAME), true) }}"
+    inst: "{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}"
+    unit: "{{ unitname }}{{ inst }}.{{unit_type}}"
+    local_src: "files/{{unitname}}/{{unit}}"
+    src: "{{ local_src if lookup('fileexists', local_src) else 'files/systemd.' + unit_type }}"
+    dest: "{{ETC}}/{{unit}}"
+    #dest: "{{SYSTEMD_UNIT_DIR}}/{{unit_name|default(NAME)|replace('.', '-')}}{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}.{{unit_type}}"
+    link: "{{SYSTEMD_UNIT_DIR}}/{{unit}}"
+
+#- name: testing for local target unit
+#  local_action: shell test ! -f "files/{{target}}/{{target}}{{inst}}.{{unit_type}}"; echo $?
+#  changed_when: False
+#  register: local_unit
+#  become: False
+
 - name: "creating unit directory"
-  file: path="{{SYSTEMD_UNIT_DIR}}" state=directory
+  file:
+    path: "{{item}}"
+    state: directory
+  loop:
+    - "{{ dest | dirname }}"
+    - "{{ link | dirname }}"
   when: unit or units
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
-- name: templating in target unit
-  template: src="files/{{target}}/{{target}}{{inst}}.{{unit_type}}" dest="{{dest}}"
-  when: unit == True and local_unit.stdout|int == 1
+- name: templating in unit
+  template:
+    src: "{{src}}"
+    dest: "{{dest}}"
+  when: unit == True
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
-- name: templating in generic unit
-  template: src="files/systemd.{{unit_type}}" dest="{{dest}}"
-  when: unit == True and local_unit.stdout|int == 0
-  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
+
 - name: link target unit in etc
   file:
     src: "{{dest}}"
-    dest: "{{ETC}}/{{dest|basename}}"
+    dest: "{{link}}"
     state: link
-  when: unit|default(False) and has_etc
+  when: unit|default(False)
 - name: enabling unit
-  shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{dest}}"
-  when: unit == True and SYSTEMD_ENABLE|default(True) != False
-  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
-
-- name: templating in specified unit
-  template: src="files/{{target}}/{{unit}}" dest="{{unit}}"
-  when: unit and unit != True
-  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
-- name: link specified unit in etc
-  file:
-    src: "{{dest}}"
-    dest: "{{ETC}}/{{dest|basename}}"
-    state: link
-  when: unit and unit != True and has_etc
-  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
-- name: enabling specified unit
+  shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{dest|basename}}"
   shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{unit}}"
+  when: unit == True and SYSTEMD_ENABLE|default(True) != False
   when: unit and unit != True and SYSTEMD_ENABLE|default(True) != False
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
@@ -66,7 +73,6 @@
   loop_control:
     loop_var: i
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
-
 - name: install systemd unit\'s .d directory
   include: compfuzor/fs_d.tasks fs_path="{{SYSTEMD_UNIT_DIR}}/{{dest}}"
   when: d|default(False)
@@ -76,4 +82,4 @@
   args:
     src: "{{dest}}.d"
     dest: "{{ETC}}/{{dest|basename}}.d"
-  when: d|default(False) and has_etc
+  when: d|default(False)
