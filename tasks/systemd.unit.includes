@@ -14,7 +14,7 @@
   vars:
     # currently no support for UNITS here
     varunit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False) }}"
-    unitname: "{{ varunit|default(TYPE|default(NAME), true) }}"
+    unitname: "{{ varunit|default(TYPE|default(NAME)) if varunit != True else TYPE|default(NAME) }}"
     inst: "{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}"
     unit: "{{ unitname }}{{ inst }}.{{unit_type}}"
     local_src: "files/{{unitname}}/{{unit}}"
@@ -29,7 +29,7 @@
 #  register: local_unit
 #  become: False
 
-- name: "creating unit directory"
+- name: "creating unit directory" # now usually ETC but let's do it
   file:
     path: "{{item}}"
     state: directory
@@ -37,14 +37,14 @@
     - "{{ dest | dirname }}"
     - "{{ link | dirname }}"
   when: unit or units
-  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
+  #become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 - name: templating in unit
   template:
     src: "{{src}}"
     dest: "{{dest}}"
-  when: unit == True
-  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
+  when: unit
+  #become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 - name: link target unit in etc
   file:
@@ -52,12 +52,15 @@
     dest: "{{link}}"
     state: link
   when: unit|default(False)
+  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
+
 - name: enabling unit
   shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{dest|basename}}"
   shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{unit}}"
   when: unit == True and SYSTEMD_ENABLE|default(True) != False
   when: unit and unit != True and SYSTEMD_ENABLE|default(True) != False
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
+
 
 - name: templating units
   template: src="files/{{target}}/{{i}}" dest="{{SYSTEMD_UNIT_DIR}}/{{i}}"

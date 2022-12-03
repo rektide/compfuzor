@@ -31,8 +31,8 @@ class LookupModule(LookupBase):
 	def run(self, terms, variables=None, **kwargs):
 		for term in terms:
 			display.debug("Fileexists lookup term: %s" % term)
-				if os.path.exists(term):
-					return True
+			if os.path.exists(term):
+				return True
 			## latter ansibles
 			#try:
 			#	lookupfile = self.find_file_in_search_path(variables, 'files', term)
