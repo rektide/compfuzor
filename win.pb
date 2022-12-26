@@ -7,6 +7,7 @@
        name:
         - alacritty
         - autohotkey
+        - bonjour
         - curl
         - Cygwin
         - cyg-get
@@ -23,6 +24,7 @@
         - mpc-hc-clsid2
         - mpc-be
         - mumble
+        - nodejs
         - notepadplusplus
         #- openssh # ick! super old!
         - procexp
