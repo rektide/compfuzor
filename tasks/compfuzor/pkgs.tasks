@@ -1,11 +1,15 @@
 ---
 - name: "Compfuzor: gather list of packages"
   set_fact:
-    _pkgs: "{{ _pkgs|default(PKGS|default([])) + hostvars[inventory_hostname][item]|default(vars[item]) }}"
-  loop: "{{ PKGSET|default([])|arrayitize + PKGSETS|default([]) }}"
+    # first iteration loads in PKGS, next add each PKGSET.
+    # this could be turned into two passes for clarity but this ought be faster
+    _pkgs: "{{ _pkgs|default(PKGS|default([])) + (_pkgset if item != '' else []) }}"
+  loop: "{{ [''] + PKGSET|default([])|arrayitize + PKGSETS|default([]) }}"
+  vars:
+    _pkgset: "{{ hostvars[inventory_hostname][item]|default(vars[item]) }}"
 - name: install pkgs
   apt:
     state: "{{APT_INSTALL}}"
     pkg: "{{_pkgs}}"
   become: "{{ PKG_BECOME|default(True) }}"
-  when: _pkgs is defined and _pkgs|length > 0
+  when: _pkgs|default([])|length or PKKGS|default(False)
