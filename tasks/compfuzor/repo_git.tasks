@@ -29,9 +29,9 @@
     depth: "{{ GIT_DEPTH|default(omit) }}"
     version: "{{ GIT_VERSION|default(omit) }}"
   become: "{{ dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
-  with_dict: "{{ REPOS if REPOS|default(False) is mapping else {} }}"
+  loop: "{{ (REPOS if REPOS|default(False) is mapping else {})|dict2items }}"
   vars:
-    dest: "{{ REPO_DIR|default(DIR, true)+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{ item.key }}"
+    dest: "{{ item.key|defaultDir(REPO_DIR|default(DIR, true)) }}"
 
 - name: "fetching git repositories list"
   git:
