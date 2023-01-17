@@ -33,6 +33,7 @@
 - name: "hack to resolve LINKS"
   set_fact:
     LINKS: "{{LINKS|to_nice_json}}"
+  when: LINKS|default(False)
 - name: "Create LINKS"
   file:
   args:
