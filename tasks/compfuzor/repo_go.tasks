@@ -7,15 +7,17 @@
     go_url: "{{item}}"
     repo: "{ '{{GO_DIR}}': '{{item}}' }"
   when: REPO_GO|default(False)
-- name: 'add GOPATH and Go build'
+- name: 'add ENV gopath, BIN build.sh and LINKS repo/bin'
   set_fact:
-    ENV: "{{ ENV|default({})|combine(gopath) }}"
-    BINS: "{{ BINS|default([]) + [gobuild] }}"
+    BINS: "{{ BINS|default([]) + goBins }}"
+    ENV: "{{ ENV|default({})|combine(goEnvs) }}"
+    LINKS: "{{ LINKS|default({})|combine({\"{{REPO_DIR}}/bin\": \"{{BINS_DIR}}\"}) }}"
   vars:
-    gopath: {"GOPATH": "{{REPO_DIR}}"}
-    gobuild: {
-      "name": "{{GO_BUILD|default('build.sh')}}",
-      "run": True,
-      "basedir": "{{REPO_DIR}}",
-      "exec": "for r in {{goRepos}} ; do (cd $r; go install ./...) ; done"
-    }
+    goBins: [{
+        "name": "{{GO_BUILD|default('build.sh')}}",
+        "run": True,
+        "basedir": "{{REPO_DIR}}",
+        "exec": "for r in {{goRepos}} ; do (cd $r; go install ./...) ; done"
+      }]
+    goEnvs: {"GOPATH": "{{REPO_DIR}}"}
+    goRepo: "{{REPO_DIR}}/bin"
