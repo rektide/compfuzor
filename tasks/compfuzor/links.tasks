@@ -23,13 +23,16 @@
 #  become: "{{ item.item.path|default(item.item.value)|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
 #  when: LINKS|default(False) and not LINK_BYPASS|default(False) and item.stat.exists == False
 #  with_items: "{{ _link_stats.results }}"
-- debug:
-    msg: "Create LINKS {{ _src}} {{_dest}}"
-  when: LINKS|default(False) and not LINK_BYPASS|default(False)
-  with_items: "{{ LINKS|listify }}"
-  vars:
-    _src: "{{ item.src|default(item.value)|defaultDir(DIR) }}"
-    _dest: "{{ lookup('templateVar', item.dest|default(item.key))|defaultDir(DIR) }}"
+#- debug:
+#    msg: "Create LINKS {{ _src}} {{_dest}}"
+#  when: LINKS|default(False) and not LINK_BYPASS|default(False)
+#  with_items: "{{ LINKS|to_json|from_json|listify }}"
+#  vars:
+#    _src: "{{ item.src|default(item.value)|defaultDir(DIR) }}"
+#    _dest: "{{ lookup('templateVar', item.dest|default(item.key))|defaultDir(DIR) }}"
+- name: "hack to resolve LINKS"
+  set_fact:
+    LINKS: "{{LINKS|to_nice_json}}"
 - name: "Create LINKS"
   file:
   args:
