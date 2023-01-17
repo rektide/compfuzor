@@ -80,9 +80,11 @@ import os
 from ansible.errors import AnsibleError
 from ansible.plugins.lookup import LookupBase
 from ansible.module_utils._text import to_bytes, to_text
-from ansible.template import generate_ansible_template_vars, AnsibleEnvironment, USE_JINJA2_NATIVE
+from ansible.template import generate_ansible_template_vars, AnsibleEnvironment# , USE_JINJA2_NATIVE
 from ansible.utils.display import Display
 from ansible.utils.unsafe_proxy import to_unsafe_text
+
+USE_JINJA2_NATIVE = True
 
 if USE_JINJA2_NATIVE:
     from ansible.utils.native_jinja import NativeJinjaText
