@@ -36,7 +36,7 @@ def has_write( *a, **kw):
     path = a[0]
     return os.access( path, os.W_OK)
 
-# this does not work at all on remote hosts, ha oops duh crap
+# os.access checks in current user's access, not target users boo
 def can_write( *a, **kw):
     path = a[0]
 
@@ -49,11 +49,8 @@ def can_write( *a, **kw):
         aParent = tuple(aParentList)
         return can_write(*aParent, **kw)
 
-    # can we write the directory? needed if we need to (re-)constitute
-    if not os.access( dirpath, os.W_OK):
-        return False
-    # now check - exists but not writable
-    if exists and not os.access( path, os.W_OK):
+    # now check - if writable
+    if not os.access( path, os.W_OK):
         return False
     # optional user/uid passed in?
     if len(a) >= 2:
