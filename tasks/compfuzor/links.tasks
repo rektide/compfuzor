@@ -32,7 +32,7 @@
 #    _dest: "{{ lookup('templateVar', item.dest|default(item.key))|defaultDir(DIR) }}"
 - name: "hack to resolve LINKS"
   set_fact:
-    LINKS: "{{LINKS|to_nice_json}}"
+    LINKS: "{{LINKS|to_nice_json|from_json}}"
   when: LINKS|default(False)
 - name: "Create LINKS"
   file:
