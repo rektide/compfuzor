@@ -42,6 +42,13 @@ def can_write( *a, **kw):
 
     exists = os.access( path, os.F_OK)
     dirpath = os.path.dirname( path)
+
+    if not exists:
+        aParentList = list( a)
+        aParentList[0] = dirpath
+        aParent = tuple(aParentList)
+        return can_write(*aParent, **kw)
+
     # can we write the directory? needed if we need to (re-)constitute
     if not os.access( dirpath, os.W_OK):
         return False
