@@ -30,7 +30,7 @@
 - debug: "msg=''"
 - debug: "msg='Compfuzor: REPOSITORIES'"
 - include: compfuzor/repo_go.tasks
-  when: REPO_GO is defined and REPO_GO|default(False) and not REPO_BYPASS|default(False)
+  when: REPO_GO|default(False) and not REPO_BYPASS|default(False)
 - include: compfuzor/repo_git.tasks
   when: (REPO is defined or REPOS is defined or REPO_WORKTREE is defined) and not GIT_BYPASS|default(False) and not REPO_BYPASS|default(False)
 - include: compfuzor/repo_cvs.tasks
@@ -97,6 +97,8 @@
 - include: compfuzor/bins_link.tasks delay_phase=postRun
 - include: compfuzor/bins_link_global.tasks delay_phase=postRun
   when: BINS is defined and not BINS_BYPASS|default(False) and not GLOBAL_BINS_BYPASS|default(False)
+- include: compfuzor/go.tasks
+  when: REPO_GO|default(False)
 - include: compfuzor/systemd.tasks become=True
   when: not SYSTEMD_BYPASS|default(False)
 - include: systemd.thunk.tasks service="{{SYSTEMD_SERVICE}}{{ '@' + item if item != '' else '' }}"
