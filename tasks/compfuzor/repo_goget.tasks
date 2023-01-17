@@ -1,4 +1,0 @@
-- name: 'Compfuzor: goget repo'
-  file: path={{DIR}} state=directory
-- shell: chdir={{DIR}} GOPATH={{DIR}} go get -u {{item}}
-  with_items: "{{REPO_GOGET|default([])|arrayitize}}"

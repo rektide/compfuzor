@@ -52,6 +52,7 @@ MEDIAS_DIR: /srv/media
 SYSTEMD_SYSTEM_UNIT_DIR: /etc/systemd/system
 DIRMODE: "0770"
 FILEMODE: "0660"
+GO_DIR: "src/{{go_url|deprefix('\\w+@')|deprefix('https?://')|regex_replace('^(\\w+):', '\\1/')|trim}}"
 PERSIST_VARS:
 - NAME
 - INSTANCE
