@@ -11,6 +11,7 @@
         - curl
         - Cygwin
         - cyg-get
+        - fd
         - gajim
         - git
         - google-cast-chrome
@@ -30,6 +31,7 @@
         - procexp
         - procmon
         - putty
+        - ripgrep
         - sshfs
         - steam
         - tailscale
