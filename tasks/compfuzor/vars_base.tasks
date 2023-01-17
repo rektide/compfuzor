@@ -56,10 +56,10 @@
   args:
     file: vars/common.user.yaml
   when: USERMODE|default(False)
-#- name: "Include common vars"
-#  action: include_defaults
-#  args:
-#    file: vars/main.yaml
+- name: "Include common vars"
+  action: include_defaults
+  args:
+    file: vars/common.yaml
 - name: "Include xdg vars"
   action: include_defaults
   args:
