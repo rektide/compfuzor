@@ -6,7 +6,7 @@
     REPO: https://github.com/denoland/deno
     BINS:
     - name: build.sh
-      exec: "cargo build"
+      exec: "cargo build --locked"
       run: true
   tasks:
   - include: tasks/compfuzor.includes type=src
