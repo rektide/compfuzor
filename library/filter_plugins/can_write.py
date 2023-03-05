@@ -57,18 +57,20 @@ def can_write( *a, **kw):
         # check permissions on file
         if not exists:
             return True
-        if good(a[1]):
-            arg_uid = a[1]
-            uid = arg_uid if isinstance( arg_uid, NumberTypes) else pwd.getpwnam( arg_uid).pw_uid
-            stat = os.lstat( path)
-            if uid != stat.st_uid:
-                return False
         # optional group/gid passed in?
         if len(a) >= 3 and good(a[2]):
             arg_gid = a[2]
             gid = arg_gid if isinstance( arg_gid, NumberTypes) else grp.getgrnam( arg_gid).gr_gid 
-            if gid != stat.st_gid:
-                return False
+            if gid == stat.st_gid:
+                return True
+        if good(a[1]):
+            arg_uid = a[1]
+            uid = arg_uid if isinstance( arg_uid, NumberTypes) else pwd.getpwnam( arg_uid).pw_uid
+            stat = os.lstat( path)
+            if uid == stat.st_uid:
+                return True
+        return False
+
     return True
 
 def should_become( *a):
