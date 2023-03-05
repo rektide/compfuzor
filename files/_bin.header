@@ -5,6 +5,6 @@ export TIMESTAMP="$(date +%y.%m.%d-%T)"
 # default a DIR
 [ -z "$DIR" ] && export DIR="{{DIR}}"
 # source envs, using envdefaults if available to not override any variables the shell already has set
-[ -n "$ENV_BYPASS" ] || [ ! -f "$DIR/env.export" ] || source <(command -v envdefault >/dev/null && envdefault env.export || cat env.export)
+[ -n "$ENV_BYPASS" ] || [ ! -f "$DIR/env.export" ] || source <(command -v envdefault >/dev/null && envdefault "$DIR/env.export" || cat "$DIR/env.export")
 # V>98 triggers set -x. but save set -x state to restore later, in case being sourced.
 (( V > 98 )) && case "$-" in *x*) _BIN_SETX_STATE+=(1) ;; *) _BIN_SETX_STATE+=(0) ;; esac && set -x
