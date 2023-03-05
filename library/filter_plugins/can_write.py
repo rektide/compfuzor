@@ -49,7 +49,7 @@ def can_write( *a, **kw):
         aParent = tuple(aParentList)
         return can_write(*aParent, **kw)
 
-    return os.access( path, os.W_OK):
+    return os.access( path, os.W_OK)
 
 def should_become( *a):
     # check user and group
