@@ -7,7 +7,7 @@ def defaultDir(path, defaultDir=False):
     #    defaultDir = 'files/' + environment.globals["TYPE"]
 
     first = path[0]
-    if first == "/" or first == "~":
+    if first == "/" or first == "~" or first == ".":
         return path
     else:
         if not defaultDir:
