@@ -1,25 +1,13 @@
 # deprecate/remove this first one
 - name: "get urls"
   get_url:
-    url: "{{item}}"
+    url: "{{_url}}"
     dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{GET_URLS|default([])}}"
-  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: GET_URLS|default(False) is iterable and GET_URLS|default(False) is not mapping
-  vars:
-    _dest: "{{SRC}}/{{item|basename}}"
-
-- name: "get urls"
-  get_url:
-    url: "{{_url}}"
-    dest: "{{_dest}}"
-    owner: "{{item.owner|default(OWNER)|default(omit)}}"
-    group: "{{item.group|default(GROUP)|default(omit)}}"
-  with_items: "{{GET_URLS|default({})}}"
-  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: GET_URLS|default(False) is mapping
+  become: "{{_dest|dirname|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  when: GET_URLS|default(False) is iterable
   vars:
     _url: "{{GET_URLS[item] if item is string else item.url}}"
-    _dest: "{{(item if item is string else item.dest)|defaultDir(SRC)}}"
+    _dest: "{{(item|basename if item is string else item.dest)|defaultDir(SRC)}}"
