@@ -37,41 +37,19 @@ def has_write( *a, **kw):
     return os.access( path, os.W_OK)
 
 # os.access checks in current user's access, not target users boo
+# we really need to know if we can write this. should_become checks for mismatching users separately!
 def can_write( *a, **kw):
     path = a[0]
 
     exists = os.access( path, os.F_OK)
-    dirpath = os.path.dirname( path)
 
     if not exists:
         aParentList = list( a)
-        aParentList[0] = dirpath
+        aParentList[0] = os.path.dirname( path)
         aParent = tuple(aParentList)
         return can_write(*aParent, **kw)
 
-    # now check - if writable
-    if not os.access( path, os.W_OK):
-        return False
-    # optional user/uid passed in?
-    if len(a) >= 2:
-        # check permissions on file
-        if not exists:
-            return True
-        # optional group/gid passed in?
-        if len(a) >= 3 and good(a[2]):
-            arg_gid = a[2]
-            gid = arg_gid if isinstance( arg_gid, NumberTypes) else grp.getgrnam( arg_gid).gr_gid 
-            if gid == stat.st_gid:
-                return True
-        if good(a[1]):
-            arg_uid = a[1]
-            uid = arg_uid if isinstance( arg_uid, NumberTypes) else pwd.getpwnam( arg_uid).pw_uid
-            stat = os.lstat( path)
-            if uid == stat.st_uid:
-                return True
-        return False
-
-    return True
+    return os.access( path, os.W_OK):
 
 def should_become( *a):
     # check user and group
