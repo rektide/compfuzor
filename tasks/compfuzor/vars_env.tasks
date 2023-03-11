@@ -8,8 +8,3 @@
   register: has_env_export
   changed_when: False
   become: False
-- name: test remote system for has_type_env
-  shell: test -e "{{PREFIX_DIR|default('/nope-nope-nope-no.')}}/env.{{TYPE|default(NAME)}}"; echo $?
-  register: has_type_env
-  changed_when: False
-  become: False

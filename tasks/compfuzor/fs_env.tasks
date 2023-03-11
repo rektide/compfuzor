@@ -1,67 +1,49 @@
 - debug: "msg='Compufuzor: copy in and link env files'"
-- name: copy in default env file
-  template:
-    src: "files/_env"
-    dest: "{{_dest}}"
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
-  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: has_env.stdout|int == 0
-  vars:
-    _dest: "{{DIR}}/env"
 - name: copy in env file
   template:
-    src: "files/{{TYPE|default(NAME)}}/env"
-    dest: "{{_dest}}"
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
-  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: has_env.stdout|int != 0
-  vars:
-    _dest: "{{DIR}}/env"
-
-- name: set env export mode high
-  set_fact: export_mode=True
-- name: copy in default env.export file
-  template:
     src: "files/_env"
     dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: has_env_export.stdout|int == 0
+  when: (item.hasEnv or ENV|default(False)) and not item.skip|default(False)
+  loop:
+    - file: env
+      hasEnv: "{{has_env.stdout|default(0)|int > 0}}"
+    - file: env.export
+      hasEnv: "{{has_env_export.stdout|default(0)|int > 0}}"
+      skip: "{{ENV_IS_EXPORT|default(False)}}"
+      exportMode: True
   vars:
-    _dest: "{{DIR}}/env.export"
-- name: copy in env.export file
-  template:
-    src: "files/{{TYPE|default(NAME)}}/env.export"
-    dest: "{{_dest}}"
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
-  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: has_env_export.stdout|int != 0
-  vars:
-    _dest: "{{DIR}}/env.export"
+    _dest: "{{DIR}}/{{item.file}}"
+    _srcHas: "files/{{TYPE|default(NAME)}}/{{item.file}}"
+    _srcDefault: "files/_env"
+    _src: "{{_srcDefault if not item.hasEnv else _srcHas}}"
+    export_mode: "{{item.exportMode|default(False)}}"
 
-- name: link env.`NAME` into PREFIX_DIR
+# in case one only needs a env, and env.export is the same
+- name: link env export to env if the same
   file:
     src: "{{DIR}}/env"
-    dest: "{{_dest}}"
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
+    dest: "{{DIR}}/env.export"
     state: link
-  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: PREFIX_DIR|default(False) and (ENV|default(False) or has_env.stdout|int != 0)
-  vars:
-    _dest: "{{PREFIX_DIR}}/env.{{NAME|default(TYPE)}}"
-- name: link env.`TYPE` into PREFIX_DIR if not defined
+  when: ENV_IS_EXPORT|default(False)
+
+- name: link env.`NAME` into PREFIX_DIR, if not existing
   file:
-    src: "{{DIR}}/env"
+    src: "{{DIR}}/{{item.file}}"
     dest: "{{_dest}}"
+    state: link
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
-    state: link
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: PREFIX_DIR|default(False) and (ENV|default(False) or has_env.stdout|int != 1 and has_type_env.stdout|int != 0)
+  # might be cool to have an exists check that ignores dead symlinks
+  when: PREFIX_DIR|default(False) and (item.hasEnv or ENV|default(False)) and not item.skip|default(False) and _dest is not exists
+  loop:
+    - file: env
+      hasEnv: "{{has_env.stdout|default(0)|int > 0}}"
+    - file: env.export
+      hasEnv: "{{has_env_export.stdout|default(0)|int > 0}}"
+      skip: "{{ENV_IS_EXPORT|default(False)}}"
   vars:
-    _dest: "{{PREFIX_DIR}}/env.{{TYPE|default(NAME)}}"
+    _dest: "{{PREFIX_DIR}}/{{item}}.{{NAME|default(TYPE)}}"
