@@ -32,6 +32,9 @@
 {% set keys = [] -%}
 
 {{ def("DIR", DIR) -}}
+{{ def("NAME", NAME) -}}
+{{ def("TYPE", TYPE|default("")) -}}
+{{ def("INSTANCE", INSTANCE|default("")) -}}
 {{ mdef(ENV_PRIO|default(None)) -}}
 {{ mdef(ENV|default(None)) -}}
 {{ def("COMPFUZOR_ENVS", keys|join(",")) -}}
