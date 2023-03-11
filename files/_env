@@ -35,6 +35,7 @@
 {{ def("NAME", NAME) -}}
 {{ def("TYPE", TYPE|default("")) -}}
 {{ def("INSTANCE", INSTANCE|default("")) -}}
+{{ def("REPO", REPO|default("")) -}}
 {{ mdef(ENV_PRIO|default(None)) -}}
 {{ mdef(ENV|default(None)) -}}
 {{ def("COMPFUZOR_ENVS", keys|join(",")) -}}
