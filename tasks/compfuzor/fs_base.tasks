@@ -19,7 +19,7 @@
     group: "{{should_become|ternary(GROUP|default(ansible_user_gid),omit)}}"
   with_items: DIRS
   become: True
-  when: DIRS is defined
+  when: DIRS is defined and _dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)
   vars:
     _dest: "{{DIR+'/' if item|first != '/' and item|first != '~' else ''}}{{item}}"
     should_become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
