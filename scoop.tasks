@@ -1,0 +1,68 @@
+---
+# upgrade to shovel, https://github.com/Ash258/Scoop-Core
+# use ACooper81 for vs-community, https://github.com/ACooper81/scoop-apps
+- hosts: all
+  vars:
+    TYPE: scoop
+    INSTANCE: main
+  tasks:
+    - name: get scoop installer
+      ansible.windows.win_powershell:
+        script: |
+          irm get.scoop.sh -outfile 'install-scoop.ps1'
+      when: get_scoop|default(True) == True
+    - name: install scoop
+      ansible.windows.win_powershell:
+        script: |
+          #$oldPolicy = Get-ExecutionPolicy -Scope CurrentUser
+          #Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+          #.\install-scoop.ps1 -ScoopDir 'D:\utils\scoop'
+          #.\install-scoop.ps1 -ScoopDir $env:USERPROFILE\scoop
+          .\install-scoop.ps1
+          #Set-ExecutionPolicy $oldPolicy -Scope CurrentUser -Force
+      when: install_scoop|default(True) == True
+    - name: add shovel deps
+      ansible.windows.win_scoop:
+        global: True
+        script: |
+          - 7zip
+          - git
+          - sudo
+          - dark
+          - innounp
+          - lessmsi
+          - aria2
+    - name: set shovel repo
+      ansible.windows.win_powershell:
+        script: |
+         # shovel
+         scoop config SCOOP_REPO 'https://github.com/Ash258/Scoop-Core'
+    - name: add ACooper81 bucket
+      community.windows.win_scoop_bucket:
+        name: ACooper81
+        repo: 'https://github.com/ACooper81/scoop-apps'
+    # probably not needed
+    - name: update scoop
+      ansible.windows.win_powershell:
+        script: |
+         scoop update
+         scoop status
+         scoop checkup
+    - name: install scoop apps
+      community.windows.win_scoop:
+        name:
+          - nodejs
+          - cmake
+    - name: install acooper81 vs-studio-community
+      community.windows.win_scoop:
+        name:
+          - ACooper81/MicrosoftVisualStudioCommunity2022-Install
+    - name: "uninstall (typically skipped)"
+      ansible.windows.win_powershell:
+        script: |
+          #scoop config rm root_path
+          #scoop config rm scoop_repo
+          #scoop config rm global_path
+          rm $env:USERPROFILE\.config\scoop
+          rm $env:USERPROFILE\scoop
+      when: scoop_uninstall|default(False) == True
