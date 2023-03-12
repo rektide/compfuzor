@@ -50,13 +50,16 @@
           Enable-PSRemoting
       - name: quickconfig.ps1
           Set-WSManQuickConfig -SkipNetworkProfileCheck -UseSSL
-      - name: open-firewall.bat
+      - name: open-firewall.ps1
         exec:
           # psremoting-enable.ps1 might be doing this maybe?
           # https://www.visualstudiogeeks.com/devops/how-to-configure-winrm-for-https-manually
           # would also need to configure listener for this to work
-          port={{port}}
-          netsh advfirewall firewall add rule name="Windows Remote Management (HTTPS-In)" dir=in action=allow protocol=TCP localport=$port
+          #port={{port}}
+          #netsh advfirewall firewall add rule name="Windows Remote Management (HTTPS-In)" dir=in action=allow protocol=TCP localport=$port
+          # https://help.f-secure.com/product.html?business/radar/4.0/en/task_8772A6A76D994406B4809EB264EB51EE-4.0-en
+          $port = {{port}}
+          New-NetFirewallRule -DisplayName "Windows Remote Management (HTTPS-In)" -Name "Windows Remote Management (HTTPS-In)" -Profile Any -LocalPort $port -Protocol TCP
       - name: verify.ps1
         exec:
           $hostName="{{hostname}}" # example: "mywindowsvm.westus.cloudapp.azure.com"
