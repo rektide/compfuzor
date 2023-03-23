@@ -9,6 +9,10 @@
         exec: |
           echo 'export NVIM_APPNAME="$ASTROVIM_APPNAME"' | blockinfile -n "$ASTROVIM_APPNAME" ~/.zshrc
           ln -s $REPO_DIR ~/.config/$ASTROVIM_APPNAME
+    ETC_FILES:
+      - init.lua
+    LINKS:
+      "{{REPO_DIR}}/lua/user/init.lua": "{{ETC}}/init.lua"
     ENV:
       ASTROVIM_APPNAME: "{{NAME}}"
   tasks:
