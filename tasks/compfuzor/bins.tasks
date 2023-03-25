@@ -1,6 +1,5 @@
 ---
-- debug: "msg='Compfuzor: install `BINS`'"
-- name: "Create `BINS_DIR`"
+- name: "Compfuzor: create `BINS_DIR`"
   file:
     path: "{{BINS_DIR}}"
     state: directory

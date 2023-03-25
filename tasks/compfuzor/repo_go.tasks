@@ -1,4 +1,4 @@
-- name: 'Compfuzor: add go repo'
+- name: "Compfuzor: add go repo"
   set_fact:
     REPOS: "{{ REPOS|default({})|combine(repo) }}"
     goRepos: "{{ goRepos|default('') }} {{GO_DIR}}"
