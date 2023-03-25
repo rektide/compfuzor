@@ -6,15 +6,15 @@
 [ -n "$RC" ] || RC=~/.zshrc
 
 # install in $RC if not existing
-if ! greq -q asdf.sh $SCRIPT
+if ! grep -q asdf.sh $RC
 then
 	echo installing asdf in $RC
 	cat << EOF >> $RC
 . "$ASDF_SCRIPT"
 # append completions to fpath
-fpath=(${ASDF_DIR}/completions $fpath)
+#fpath=(${ASDF_DIR}/completions $fpath)
 # initialise completions with ZSH's compinit
-autoload -Uz compinit && compinit
+#autoload -Uz compinit && compinit
 EOF
 else
 	echo skipping $RC, already installed
