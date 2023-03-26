@@ -1,9 +1,22 @@
 return {
 	plugins = {
-		"jauntywunderkind/nvim-random-color",
-		"rainglow/vim",
-		"rafi/awesome-vim-colorschemes",
-		"flazz/vim-colorschemes",
+		{
+			"jauntywunderkind/nvim-random-color",
+			-- our random is best
+			priority = 100,
+		},
+		{
+			"rainglow/vim",
+			lazy = false,
+		},
+		{
+			"rafi/awesome-vim-colorschemes",
+			lazy = false,
+		},
+		{
+			"flazz/vim-colorschemes",
+			lazy = false,
+		},
 		"jose-elias-alvarez/typescript.nvim",
 		"sigmasd/deno-nvim",
 		{
