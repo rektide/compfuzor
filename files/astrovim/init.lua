@@ -1,5 +1,6 @@
 return {
   plugins = {
+    "jauntywunderkind/nvim-random-color",
     "jose-elias-alvarez/typescript.nvim",
     "sigmasd/deno-nvim",
     {
