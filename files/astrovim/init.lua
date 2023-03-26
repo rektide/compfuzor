@@ -17,7 +17,8 @@ return {
 			"flazz/vim-colorschemes",
 			lazy = false,
 		},
-		"https://github.com/ojroques/nvim-osc52",
+		"ojroques/nvim-osc52",
+		"samjwill/nvim-unception",
 		"jose-elias-alvarez/typescript.nvim",
 		"sigmasd/deno-nvim",
 		{
