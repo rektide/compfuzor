@@ -19,5 +19,8 @@
     ENV:
       ASTROVIM_APPNAME: "{{NAME}}"
       ZSHRC: "~/.zshrc"
+    BINS:
+      - name: install-unception-git.sh
+        exec: git config --global --add core.editor "nvim --cmd 'let g:unception_block_while_host_edits=1'"
   tasks:
     - include: tasks/compfuzor.includes type=opt
