@@ -18,7 +18,14 @@ return {
 			lazy = false,
 		},
 		"ojroques/nvim-osc52",
-		"samjwill/nvim-unception",
+		{
+			"samjwill/nvim-unception",
+			lazy = false,
+			init = function()
+				--vim.g.unception_open_buffer_in_new_tab = true
+				vim.g.unception_enable_flavor_text = false
+			end,
+		},
 		"jose-elias-alvarez/typescript.nvim",
 		"sigmasd/deno-nvim",
 		{
