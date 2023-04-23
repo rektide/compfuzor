@@ -14,7 +14,7 @@
   vars:
     # currently no support for UNITS here
     varunit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False) }}"
-    unitname: "{{ varunit|default(TYPE|default(NAME)) if varunit != True else TYPE|default(NAME) }}"
+    unitname: "{{ varunit|default(NAME|default(TYPE)) if varunit != True else TYPE|default(NAME) }}"
     inst: "{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}"
     unit: "{{ unitname }}{{ inst }}.{{unit_type}}"
     local_src: "files/{{unitname}}/{{unit}}"
