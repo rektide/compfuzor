@@ -55,10 +55,8 @@
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 - name: enabling unit
-  shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{dest|basename}}"
-  shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{unit}}"
-  when: unit == True and SYSTEMD_ENABLE|default(True) != False
-  when: unit and unit != True and SYSTEMD_ENABLE|default(True) != False
+  shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{link | basename}}"
+  when: unit and SYSTEMD_ENABLE|default(True) != False
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 
