@@ -6,10 +6,15 @@
     REPO: https://github.com/asdf-vm/asdf.git
     BINS:
       - name: install-user.sh
+    ETC_FILES:
+      - name: plugins.json
+        content: "{{plugins|to_nice_json}}"
     plugins:
-      clojure:  https://github.com/halcyon/asdf-clojure.git
-      nodejs: https://github.com/asdf-vm/asdf-nodejs.git
-
+      - name: java
+        version: openjdk-20
+      - name: clojure
+        url: https://github.com/halcyon/asdf-clojure.git
+      - name: deno
+      - name: nodejs
   tasks:
     - include: tasks/compfuzor.includes type=src
-  

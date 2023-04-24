@@ -1,7 +1,8 @@
-#!/bin/sh
+#!/bin/zsh
 
 # wanted: blockinfile shell-script
-[ -n "$ASDF_DIR" ] || ASDF_DIR="{{DIR}}"
+[ -n "$DIR" ] || DIR="{{DIR}}"
+[ -n "$ASDF_DIR" ] || ASDF_DIR="$DIR"
 [ -n "$ASDF_SCRIPT" ] || ASDF_SCRIPT="${ASDF_DIR}/asdf.sh"
 [ -n "$RC" ] || RC=~/.zshrc
 
@@ -16,17 +17,37 @@ then
 # initialise completions with ZSH's compinit
 #autoload -Uz compinit && compinit
 EOF
+	. "$ASDF_SCRIPT"
 else
 	echo skipping $RC, already installed
 fi
 
-# install plugins
-{% for plugin, url in plugins.items() -%}
-if ! asdf list {{plugin}} 1>/dev/null 2>/dev/null
-then
-	echo installing plugin {{plugin}}
-	asdf plugin add {{plugin}} {{url}}
-else
-	echo skipping plugin {{plugin}}, already installed
-fi
-{% endfor %}
+for frag in $(jq -r '.[] | @base64' $DIR/etc/plugins.json)
+do
+	decode=$(echo $frag | base64 --decode)
+	plugin=$(echo $decode | jq -r .name)
+	url=$(echo $decode | jq -r '.url // ""')
+	version=$(echo $decode | jq -r '.version // ""')
+
+	# install plugins
+	if ! asdf list $plugin 1>/dev/null 2>/dev/null
+	then
+		echo installing plugin $plugin
+		asdf plugin add $plugin $url
+
+		if [ "$version" = 'false' ]
+		then
+			continue
+		fi
+
+		if [ "$version" = '' ]
+		then
+			version=$(asdf latest $plugin)
+		fi
+
+		asdf install $plugin $version
+		asdf global $plugin $version
+	else
+		echo skipping plugin $plugin, already installed
+	fi
+done
