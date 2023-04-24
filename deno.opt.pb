@@ -7,9 +7,12 @@
       - url: https://deno.land/x/install/install.sh
         dest: deno-install.sh
     BINS:
-      - name: build.sh
+      - name: install.sh
         basedir: src
-        exec: |
-          sh deno-install.sh $*
+        content: |
+          DENO_INSTALL=$DIR sh deno-install.sh $*
+          ln -sf $DIR/bin/deno ${GLOBAL_BINS_DIR}/deno
+    ENV:
+      GLOBAL_BINS_DIR: "{{GLOBAL_BINS_DIR}}"
   tasks:
     - include: tasks/compfuzor.includes type=opt
