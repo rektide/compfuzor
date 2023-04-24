@@ -9,6 +9,7 @@
     BINS:
       - name: install.sh
         basedir: src
+        run: True
         content: |
           DENO_INSTALL=$DIR sh deno-install.sh $*
           ln -sf $DIR/bin/deno ${GLOBAL_BINS_DIR}/deno

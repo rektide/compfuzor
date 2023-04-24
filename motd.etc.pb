@@ -9,8 +9,9 @@
     BINS:
       - name: install.sh
         become: True
+        run: True
         content: |
-          sudo ln -s "{{ETC}}/motd" /etc/motd
+          sudo ln -sf "{{ETC}}/motd" /etc/motd
     message: "welcome!"
   tasks:
     - include: tasks/compfuzor.includes type=etc

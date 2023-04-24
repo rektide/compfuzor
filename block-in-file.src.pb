@@ -7,6 +7,7 @@
     BINS:
       - name: install.sh
         basedir: repo
+        run: True
         content: |
           # deno automatically adds "/bin" to the path so pre-remove our copy of it
           ROOT=$(dirname $GLOBAL_BINS_DIR) deno task install:dir
