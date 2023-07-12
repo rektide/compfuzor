@@ -8,7 +8,7 @@
 
 {% if finalVal is not none and finalVal != "MAGIC_NONE_COMPFUZOR" -%}
 	{{ 'export ' if export_mode|default(False) else '' -}}
-	{{ var|upper }}="{{ finalVal }}"
+	{{ var|upper }}="{{ finalVal|string }}"
 {% endif -%}
 {%- endmacro -%}
 
