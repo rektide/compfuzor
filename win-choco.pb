@@ -29,6 +29,7 @@
         - nodejs
         - notepadplusplus
         #- openssh # ick! super old!
+        - powertoys
         - procexp
         - procmon
         - putty
