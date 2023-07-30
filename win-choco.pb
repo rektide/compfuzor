@@ -11,6 +11,7 @@
         - curl
         - Cygwin
         - cyg-get
+        - displayfusion.portable
         - fd
         - gajim
         - git
