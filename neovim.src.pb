@@ -14,6 +14,11 @@
           cmake $(env|grep -e '^CMAKE\|^LIB'|sed -e 's/^/-D /') -G Ninja ..
           ninja
           ninja install
+      - name: clean.sh
+        basedir: repo
+        exec: |
+          make distclean
+          rm -rf build
       - name: nvim
         global: True
         src: False
