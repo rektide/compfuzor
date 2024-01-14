@@ -34,9 +34,7 @@
   when: APT_PIN_PRIORITY|default(False) or APT_PIN_PRIORITY|default(False)
   become: True
 - name: "Copy in apt gpg keys"
-  copy:
-    src: "files/apt-repos/{{APT_TRUSTED}}.{{item}}"
-    dest: "/etc/apt/trusted.gpg.d/{{APT_TRUSTED}}.{{item}}"
+  copy: src="files/apt-repos/{{APT_TRUSTED}}.{{item}}" dest="/etc/apt/keyrings/{{APT_TRUSTED}}.{{item}}"
   when: APT_TRUST|default(True) and not APT_GPG_URL|default(False) and not APT_KEYRING_URL|default(False)
   with_items:
   - gpg
