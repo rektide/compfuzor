@@ -40,10 +40,10 @@
   template:
     src: "files/{{TYPE|default(NAME)}}/{{ item[1] }}"
     dest: "{{_dest}}"
-    owner: "{{should_become|ternary(OWNER|default(ansible_user_id),omit)}}"
-    group: "{{should_become|ternary(GROUP|default(ansible_user_gid),omit)}}"
-  with_items: "{{FILES.items()}}"
-  become: True
+    owner: "{{OWNER|default(omit)}}"
+    group: "{{GROUP|default(omit)}}"
+  with_items: FILES.items()
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: FILES is defined and FILES is mapping
   vars:
     _dest: "{{ DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '' }}{{item[0]}}"

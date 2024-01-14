@@ -7,6 +7,7 @@ import grp
 #import types
 from ansible import errors
 
+#NumberTypes = (types.IntType, types.LongType, types.FloatType)
 NumberTypes = (int, float)
 
 def good(arg):
