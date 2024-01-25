@@ -11,6 +11,7 @@
     - libevdev-dev
     - libyaml-cpp-dev
     - libudev-dev
+    - libboost-container-dev
     ETC_FILES:
     - name: caps2esc.yaml
       content: |
