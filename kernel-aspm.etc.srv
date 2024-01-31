@@ -1,0 +1,15 @@
+---
+- hosts: all
+  vars:
+    TYPE: kernel-aspm
+    INSTANCE: main
+    SYSTEMD_SERVICE: True
+    SYSTEMD_EXEC: "{{BINS_DIR}}/setup.sh"
+    BINS:
+      - name: setup.sh
+        exec: |
+          echo powersupersave | sudo tee /sys/module/pcie_aspm/parameters/policy
+          sleep 1
+          lspci -vv | grep 'ASPM.*abled;'
+  tasks:
+    - include: tasks/compfuzor.includes type=etc
