@@ -1,0 +1,21 @@
+---
+- hosts: all
+  vars:
+    TYPE: amd-epp
+    INSTANCE: main
+    SYSTEMD_SERVICE: True
+    SYSTEMD_EXEC: "{{BINS_DIR}}/setup.sh"
+    ENV:
+      EPP: "{{epp}}"
+    BINS:
+      - name: setup.sh
+        exec: |
+          shopt -s nullglob
+          for c in /sys/devices/system/cpu/cpufreq/policy*/energy_performance_preference
+          do
+            [ -z "$EPP" ] || (echo $EPP > $c)
+          done 
+    # power as in powersave, opposite of performance.
+    epp: balance_power
+  tasks:
+    - include: tasks/compfuzor.includes type=etc
