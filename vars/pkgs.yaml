@@ -1156,12 +1156,14 @@ VAAPI_amd64:
 - i965-va-driver-shaders
 WORKSTATION_WAYLAND:
 - xwayland
+- helvum
 - libwayland-egl1-mesa
 - weston
 - sway
 - swayidle
 - swaybg
 - swaylock
+- fuzzel
 - wl-clipboard
 - wdisplays
 - wev
@@ -1173,8 +1175,21 @@ WORKSTATION_WAYLAND:
 #- fonts-recommended
 - foot
 - pipewire-audio-client-libraries
+- helvum
 - pipewire
 - pipewire-bin
+- gstreamer1.0-libcamera
+- libcamera0.2
+- libcamera-doc
+- libcamera-tools
+- libcamera-v4l2
+- libeis1
+- liboeffis1
+- libei1
+- libspa-0.2
+- libspa-0.2-bluetooth
+- libspa-0.2-libcamera
+- libspa-0.2-modules
 - grimshot
 - gammastep
 - squeekboard # 30MB! touchscreen keyboard
