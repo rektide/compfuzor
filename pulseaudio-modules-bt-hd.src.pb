@@ -9,7 +9,7 @@
       exec: |
         #./bin/backup.sh # when snapshot backup
         git submodule update --init
-        mkdir -f build
+        mkdir -p build
         cd build
         cmake -DCMAKE_INSTALL_PREFIX:PATH={{DIR}}.. # -DFORCE_LARGEST_PA_VERSION+ON
         make

@@ -14,7 +14,7 @@
     - name: build-foundationdb.sh
       basedir: "{{GIT_DIR}}/foundationdb"
       exec: |
-        mkdir -f build
+        mkdir -p build
         cd build
         #cmake -DBOOST_ROOT=<PATH_TO_BOOST> -DLibreSSL_ROOT=<> <PATH_TO_FOUNDATIONDB_DIRECTORY>
         cmake ..
