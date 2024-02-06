@@ -7,7 +7,7 @@
     ENV: True
     VAR_FILES:
       - name: jellyfin-mpv-shim.desktop
-        contents: |
+        content: |
           [Desktop Entry]
           Name=Jellyfin MPV Shim
           Comment=Jellyfin MPV Shim
@@ -20,7 +20,9 @@
       - name: install.sh
         exec: |
           #systemctl --user enable $NAME
-          ln -s $(pwd)/var/jellyfin-mpv-shim ~/.local/share/applications/
-          ln -s $(pwd)/var/jellyfin-mpv-shim ~/.config/autostart/
+          mkdir -p ~/.local/share/application
+          ln -s $(pwd)/var/jellyfin-mpv-shim.desktop ~/.local/share/applications/
+          mkdir -p ~/.config/autostart
+          ln -s ~/.local/share/applications/jellyfin-mpv-shim.desktop ~/.config/autostart/
   tasks:
     - include: tasks/compfuzor.includes type=srv
