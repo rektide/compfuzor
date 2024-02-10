@@ -3,7 +3,7 @@
   vars:
     TYPE: interception-tools
     INSTANCE: main
-    INTERCEPTION_TOOLS: /opt/interception-tools-git/bin
+    INTERCEPTION_TOOLS: /usr/bin
     SYSTEMD_WANTS: systemd-udev-settle.service
     SYSTEMD_AFTER: systemd-udev-settle.service
     SYSTEMD_EXEC: "{{INTERCEPTION_TOOLS}}/udevmon -c {{ETC}}/caps2esc.yaml"

@@ -1214,6 +1214,8 @@ WORKSTATION_WAYLAND:
 - ydotoold
 - desktop-base
 - wayvnc
+- interception-tools
+- interception-tools-caps2esc
 WORKSTATION_GNOME:
 - accountservice
 #- bijiben - big deps
