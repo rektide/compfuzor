@@ -4,6 +4,7 @@
     TYPE: kernel-aspm
     INSTANCE: main
     SYSTEMD_SERVICE: True
+    SYSTEMD_TYPE: oneshot
     SYSTEMD_EXEC: "{{BINS_DIR}}/setup.sh"
     BINS:
       - name: setup.sh
