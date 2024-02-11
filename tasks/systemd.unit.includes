@@ -31,11 +31,13 @@
 
 - name: "creating unit directory" # now usually ETC but let's do it
   file:
-    path: "{{item}}"
+    path: "{{path}}"
     state: directory
   loop:
     - "{{ dest | dirname }}"
     - "{{ link | dirname }}"
+  loop_control:
+    loop_var: path
   when: unit or units
   #become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
