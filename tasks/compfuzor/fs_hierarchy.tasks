@@ -128,8 +128,8 @@
   when: not item.line|default(False)
   vars:
     srcDir: "files/{{ TYPE|default(NAME) }}"
-    src: "{{ item.src|default(item.name|default(item, true), true)|defaultDir(srcDir) }}"
-    #src: "{{ item.src|default(item.name|default(item, true), true)|defaultDir('files/'+TYPE|default(NAME)) if not item.srcTemplate is defined else lookup('templateVar', item.srcTemplate)|defaultDir('files/'+TYPE|default(NAME)) }}"
+    #src: "{{ item.src|default(item.name|default(item, true), true)|defaultDir(srcDir) }}"
+    src: "{{ item.src|default(item.name|default(item, true), true)|defaultDir('files/'+TYPE|default(NAME)) if not item.srcTemplate is defined else lookup('templateVar', item.srcTemplate)|defaultDir('files/'+TYPE|default(NAME)) }}"
     files: "{{include|upper}}_FILES"
     # unsafe because _vals.files is looked up?
     #content: "{{lookup('templateVar', item.content)}}"
@@ -140,7 +140,7 @@
     all: "{{ content|default('') + file|default('') + var|default('') }}"
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
-    dest: "{{_dir}}/{{item.dest|default(item.name|default(item))}}"
+    dest: "{{ item.dest|default(item.name|default(item, true), true)|defaultDir(_dir) if not item.destTemplate is defined else lookup('templateVar', item.destTemplate)|defaultDir(_dir) }}"
     should_become: "{{dest|should_become(owner, ansible_user_id, group, ansible_user_gid)}}"
 
 - name: "Assemble .d directory"
