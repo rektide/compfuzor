@@ -1,0 +1,25 @@
+{%- macro attrs(key, val=false, attr=false, assign=false) -%}
+{%- if val|default(false) -%}
+ATTR{{'' if attr else 'S'-}}
+{{'{'}}{{key}}{{'}'-}}
+={{'' if assign else '='-}}
+"{{val}}"
+{%- endif -%}
+{%- endmacro -%}
+{%- macro match(dev) -%}
+,{{' '-}}
+{{ attrs('idVendor', dev.idVendor) -}}
+{{ attrs('idProduct', dev.idProduct) -}}
+{{ attrs('manufacturer', dev.manufacturer) -}}
+{{ attrs('product', dev.product) -}}
+{{ attrs('devpath', dev.devpath) -}}
+{%- endmacro -%}
+{%- macro sets(dev) -%}
+{%- for key, val in dev.set|items -%}
+,{{' '}}
+{{- attrs(key, val, attr=true, assign=true) }}
+{%- endfor -%}
+{%- endmacro -%}
+{%- for d in devices -%}
+ACTION=="{{dev.action|default('add')}}", SUBSYSTEM=="{{dev.subsystem|default('usb')}}"{{match(d)}}{{sets(d)}}
+{% endfor -%}
