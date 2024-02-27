@@ -16,5 +16,6 @@
         url: https://github.com/halcyon/asdf-clojure.git
       - name: deno
       - name: nodejs
+      - name: protonge
   tasks:
     - include: tasks/compfuzor.includes type=src
