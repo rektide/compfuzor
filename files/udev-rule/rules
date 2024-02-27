@@ -1,25 +1,38 @@
-{%- macro attrs(key, val=false, attr=false, assign=false) -%}
+{%- for d in devices -%}
+
+{%- set comma = joiner(', ') -%}
+{%- macro kv(key, val=false, sep='=') -%}
 {%- if val|default(false) -%}
-ATTR{{'' if attr else 'S'-}}
-{{'{'}}{{key}}{{'}'-}}
-={{'' if assign else '='-}}
-"{{val}}"
+{{comma()}}{{key}}{{sep}}"{{val}}"
 {%- endif -%}
 {%- endmacro -%}
+{%- macro attrs(key, val=false, attr=false, assign=false) -%}
+{{ kv('ATTR' + ('S' if not attr else '') + '{' + key + '}', val, ('=' if assign else '==')) }}
+{%- endmacro -%}
 {%- macro match(dev) -%}
-,{{' '-}}
+{{ kv('ACTION', dev.action|default(action), '==') -}}
+{{ kv('SUBSYSTEM', dev.subsystem|default(subsystem), '==') -}}
+{{ kv('DRIVER', dev.driver, '==') -}}
+{{ kv('KERNEL', dev.kernel, '==') -}}
 {{ attrs('idVendor', dev.idVendor) -}}
 {{ attrs('idProduct', dev.idProduct) -}}
 {{ attrs('manufacturer', dev.manufacturer) -}}
 {{ attrs('product', dev.product) -}}
 {{ attrs('devpath', dev.devpath) -}}
 {%- endmacro -%}
+{%- macro effect(dev) -%}
+{{ kv('GROUP', dev.group) -}}
+{{ kv('MODE', dev.mode) -}}
+{{ kv('NAME', dev.name) -}}
+{{ kv('PROGRAM', dev.program) -}}
+{{ kv('RUN', dev.run) -}}
+{{ kv('SYMLINK', dev.symlink, '+=') -}}
+{%- endmacro -%}
 {%- macro sets(dev) -%}
-{%- for key, val in dev.set|items -%}
-,{{' '}}
-{{- attrs(key, val, attr=true, assign=true) }}
+{%- for key, val in dev.set|default({})|items -%}
+{{ attrs(key, val, attr=true, assign=true) }}
 {%- endfor -%}
 {%- endmacro -%}
-{%- for d in devices -%}
-ACTION=="{{dev.action|default('add')}}", SUBSYSTEM=="{{dev.subsystem|default('usb')}}"{{match(d)}}{{sets(d)}}
-{% endfor -%}
+
+{{match(d)}}{{effect(d)}}{{sets(d)}}
+{%- endfor -%}
