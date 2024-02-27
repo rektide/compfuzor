@@ -1003,6 +1003,9 @@ STREAMING:
 - v4l2loopback-utils
 - xdg-desktop-portal-tests
 - ustreamer
+- v4l-utils
+- v4l2loopback-utils
+- guvcview
 #- guacd
 #- guacamole
 RYGEL:
@@ -1148,7 +1151,6 @@ VAAPI:
 - mesa-vdpau-drivers
 #- vdpau-va-driver
 - vdpauinfo
-- mesa-vdpau-drivers
 - mesa-utils-extra
 # multimedia-audio-plugins
 VAAPI_amd64:

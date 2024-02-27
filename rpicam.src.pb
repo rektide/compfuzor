@@ -7,8 +7,8 @@
     BINS:
       - name: build.sh
         exec: |
-          meson setup build ${FLAGS}
-          meson compile -C build
+          time meson setup build ${FLAGS}
+          time meson compile -C build
       - name: install.sh
         exec: |
           sudo meson install -C build

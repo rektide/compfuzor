@@ -20,6 +20,7 @@
       #- qttools5-dev-tools
       - meson
       - cmake
+      - ninja-build
       - python3-yaml
       - python3-ply
       - libglib2.0-dev
@@ -30,8 +31,8 @@
     BINS:
       - name: build.sh
         exec: |
-          meson setup build ${FLAGS}
-          ninja -C build
+          time meson setup build ${FLAGS}
+          time ninja -C build
       - name: install.sh
         exec: |
           sudo ninja -C build install
@@ -39,8 +40,8 @@
       FLAGS: "{{flags|join(' ')}}"
     flags:
       - --buildtype=release
-      - -Dpipelines=rpi/vc4,rpi/pisp
-      - -Dipas=rpi/vc4,rpi/pisp
+      - -Dpipelines=rpi/vc4,rpi/pisp,uvcvideo,vimc,simple
+      - -Dipas=rpi/vc4,rpi/pisp,vimc
       - -Dv4l2=true
       - -Dgstreamer=enabled
       - -Dtest=false

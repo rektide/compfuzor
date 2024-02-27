@@ -7,7 +7,7 @@
     PKGS:
      - nlohmann-json3-dev
      - cmake
-     - ninja
+     - ninja-build
      - meson
      - libboost-log-dev
      - libboost-system-dev
@@ -15,10 +15,10 @@
     BINS:
       - name: build.sh
         exec: |
-          meson setup build
-          ninja -C build
+          time meson setup build
+          time ninja -C build
       - name: install.sh
         exec: |
-          sudo ninja -C build install
+          sudo time ninja -C build install
   tasks:
     - include: tasks/compfuzor.includes type=src
