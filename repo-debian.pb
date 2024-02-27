@@ -12,6 +12,7 @@
       - main
       - non-free
       - contrib
+      - non-free-firmware
     APT_TRUST: False
   tasks:
-    - include: tasks/compfuzor/apt.tasks
+    - include: tasks/compfuzor.includes type=etc
