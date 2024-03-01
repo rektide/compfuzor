@@ -31,6 +31,7 @@
      - --autofocus-mode manual
      - --lens-position 1
      - --timelapse 1000
+     - "--timeout {{1000*60*60*24*365.2}}"
      #- --output 'var/frame_%09d.jpg'
      - --timestamp
      # fixed exposures: --shutter 100000000 --gain 1 --awbgains 1,1
