@@ -16,6 +16,13 @@
           Terminal=false
           Type=Application
           Categories=AudioVideo;
+    ETC:
+      - name: conf.json
+        content: |
+          vo=gpu-next
+    LINKS:
+      - src: "{{DIR}}/etc/conf.json"
+        dest: ~/.config/jellyfin-mpv-shim/conf.json
     BINS:
       - name: install.sh
         exec: |
