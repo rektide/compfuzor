@@ -20,7 +20,10 @@
     ETC_FILES:
       - name: mpv.conf
         content: |
+          #vo=dmabuf-wayland
           vo=gpu-next
+          #hwdec=auto-safe
+          #hwdec=vulkan
           drm-vrr-enabled=yes
           spirv-compiler=auto
           tone-mapping=auto
