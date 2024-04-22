@@ -117,8 +117,8 @@
     content: "{{all}}"
     dest: "{{dest}}"
     mode: "{{item.mode|default(_vals.prop.mode|default(FILEMODE, true), true)}}"
-    owner: "{{should_become|ternary(owner|default(ansible_user_id, true),omit)}}"
-    group: "{{should_become|ternary(group|default(ansible_user_gid, true),omit)}}"
+    owner: "{{dest|should_become|ternary(owner|default(ansible_user_id, true),omit)}}"
+    group: "{{dest|should_become|ternary(group|default(ansible_user_gid, true),omit)}}"
     # TODO: ansible 2.3+:
     #mode: "{{COPY_MODE|default(preserve)}}"
   loop: "{{_vals.files|default([], true)}}"
