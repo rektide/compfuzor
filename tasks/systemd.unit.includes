@@ -1,7 +1,7 @@
 - name: "Compfuzor: SYSTEMD {{unit_type}}"
   set_fact:
-    unit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False) }}"
-    units: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default([]) }}"
+    unit: "{{ varunit }}"
+    units: "{{ varunits }}"
     d: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'_D']|default(vars['SYSTEMD_'+unit_type|upper+'_D'])|default(False) }}"
     target: "{{TYPE|default(NAME)|default('.')}}"
     inst: "{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}"
@@ -14,6 +14,7 @@
   vars:
     # currently no support for UNITS here
     varunit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False) }}"
+    varunits: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default(False) }}"
     unitname: "{{ varunit|default(NAME|default(TYPE)) if varunit != True else TYPE|default(NAME) }}"
     inst: "{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}"
     unit: "{{ unitname }}{{ inst }}.{{unit_type}}"
