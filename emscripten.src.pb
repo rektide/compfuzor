@@ -3,15 +3,19 @@
   vars:
     TYPE: emscripten
     INSTANCE: git
-    DIR: "{{SRC}}"
-    REPOS: 
-      llvm: https://github.com/kripken/emscripten-fastcomp 
-      "fastcomp-clang": https://github.com/kripken/emscripten-fastcomp-clang 
-      emscripten: https://github.com/kripken/emscripten.git
-    LINKS:
-      "{{DIR}}/llvm/tools/clang": "{{DIR}}/fastcomp-clang"
+    REPO: https://github.com/emscripten-core/emscripten.git
+    ENV:
+      INSTALL_DIR: /usr/local/bin
     BINS:
-    - name: "make-llvm"
-      run: True
+      - name: "build.sh"
+        basedir: True
+        exec: |
+          # not really a build, just a prep. but build.sh is typical in compfuzor.
+          ./bootstrap
+      # have not found a way to install yet, just add to PATH i guess?
+      #- name: "install.sh"
+      #  basedir: True
+      #  exec: |
+      #     ln -s $(printf "$(pwd)/%s\n" $(fd -tx --maxdepth=1 -E '*.py' em)) ${INSTALL_DIR}
   tasks:
   - include: tasks/compfuzor.includes type=src
