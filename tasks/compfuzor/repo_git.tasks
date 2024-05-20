@@ -15,6 +15,7 @@
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: "{{ GIT_DEPTH|default(omit) }}"
     version: "{{ GIT_VERSION|default(omit) }}"
+    update: "{{GIT_UPDATE|default(omit)}}"
   #become: "{{dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: REPO|default(False)
   vars:
