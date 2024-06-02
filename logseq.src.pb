@@ -5,19 +5,29 @@
     INSTANCE: git
     REPO: https://github.com/logseq/logseq
     ETC_FILES:
-      - name: .tool-versions
+      - name: ".tool-versions"
         content: |
           nodejs 18.20.3
           clojure 1.11.1.1413
     LINKS:
       ".tool-versions": "{{ETC}}/.tool-versions"
     BINS:
-      - name: build.sh
+      - name: watch.sh
+        basedir: True
         exec: |
           asdf install
-          yarn && \
-          yarn release-electron
-          # ignoring release and release-app targets
+          yarn
+          yarn watch # then kill it after some time?!
+          # yarn release
+          # yarn release-electron
+      - name: launch
+        basedir: True
+        exec: |
+          cd static
+          # undesired having another build step in launch
+          yarn
+          cd ..
+          yarn electron:dev
     PKGS:
       - rlwrap
   tasks:
