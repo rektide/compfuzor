@@ -16,7 +16,8 @@
         exec: |
           asdf install
           yarn && \
-          yarn release
+          yarn release-electron
+          # ignoring release and release-app targets
     PKGS:
       - rlwrap
   tasks:
