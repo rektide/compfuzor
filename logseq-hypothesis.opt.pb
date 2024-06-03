@@ -2,10 +2,11 @@
 - hosts: all
   vars:
     TYPE: logseq-hypothesis
-    INSTANCE: giot
+    INSTANCE: git
     REPO: https://github.com/c6p/logseq-hypothesis
     BINS:
       - name: build.sh
+        basedir: repo
         exec: |
           pnpm install && \
           pnpm build
