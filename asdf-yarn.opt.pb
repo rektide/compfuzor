@@ -8,7 +8,7 @@
         exec: |
           asdf plugin-add yarn
           asdf install yarn latest
-          if [ ! grep -q yarn ~/.tool-version ]; then
+          if ! test -f ~/.tool-versions || ! grep -q asdf ~/.tool-versions; then
             asdf global yarn latest
           fi
   tasks:
