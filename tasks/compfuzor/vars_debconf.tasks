@@ -1,4 +1,6 @@
 # like directory indexes used in metamaps
-- include: ../varset.tasks varset=debconf
+- import_tasks: ../varset.tasks
+  vars:
+    varset: debconf
 - set_fact:
     DEBCONF: "{{ DBCONFIG_BASE|default([]) + DBCONFIG|default([]) + DEBCONF_BASE|default([]) + DEBCONF_OVERRIDE|default([]) + DEBCONF|default([]) }}"

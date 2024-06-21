@@ -40,6 +40,8 @@
   - gpg
   - gpg.params
   become: True
-- include: ../apt.update.tasks repo="{{APT_SOURCELIST}}"
+- import_tasks: ../apt.update.tasks
+  vars:
+    repo: "{{APT_SOURCELIST}}"
   when: not APT_UPDATE_BYPASS|default(False)
   become: True

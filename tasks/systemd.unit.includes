@@ -78,7 +78,7 @@
     loop_var: i
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 - name: install systemd unit\'s .d directory
-  include: compfuzor/fs_d.tasks fs_path="{{SYSTEMD_UNIT_DIR}}/{{dest}}"
+  include_tasks: compfuzor/fs_d.tasks fs_path="{{SYSTEMD_UNIT_DIR}}/{{dest}}"
   when: d|default(False)
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 - name: link systemd unit\'s .d directory to etc

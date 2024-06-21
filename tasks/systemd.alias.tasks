@@ -1,6 +1,11 @@
 ---
 - file: path={{SYSTEMD_UNIT_DIR}}/{{src}}.service.d state=directory
 - set_fact: save_dest="{{dest}}" save_src="{{src}}"
-- include: template.tasks src=files/systemd.alias.conf dest="{{SYSTEMD_UNIT_DIR}}/{{save_src}}.service.d/80-alias-{{save_dest}}.conf" alias="{{save_dest}}.service"
+- import_tasks: template.tasks
+    src: files/systemd.alias.conf
+    dest: "{{SYSTEMD_UNIT_DIR}}/{{save_src}}.service.d/80-alias-{{save_dest}}.conf"
+    alias: "{{save_dest}}.service"
 - set_fact: src=""
-- include: systemd.service.tasks service={{save_src}}
+- import_tasks: systemd.service.tasks
+  vars:
+    service: "{{save_src}}"

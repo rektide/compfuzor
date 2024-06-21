@@ -52,29 +52,19 @@
   when: not TYPE|default(False)
 
 - name: "Include usermode common vars"
-  action: include_defaults
-  args:
-    file: vars/common.user.yaml
+  include_defaults: file=vars/common.user.yaml
   when: USERMODE|default(False)
-- name: "Include common vars"
-  action: include_defaults
-  args:
-    file: vars/common.yaml
+- name: "Include common vars {{file}}"
+  include_defaults: file=vars/common.yaml
 - name: "Include xdg vars"
-  action: include_defaults
-  args:
-    file: vars/xdg.yaml
+  include_defaults: file=vars/xdg.yaml
   when: USERMODE|default(False)
 - name: "Default to being an 'opt' class compfuzor script"
   set_fact: type="opt"
   when: not type|default(False)
-- action: include_defaults
-  args:
-    file: "vars/types/{{type|lower}}.yaml"
+- include_defaults: file="vars/types/{{type|lower}}.yaml"
 - name: "Include (arche)type vars"
-  action: include_defaults
-  args:
-    file: "{{ item }}"
+  include_defaults: file="{{ item }}"
   with_first_found:
   - "private/{{configset}}.yaml"
   - "private/{{TYPE}}.yaml"

@@ -1,1 +1,3 @@
-- include: ../varset.tasks varset="{{TYPE}}"
+- import_tasks: ../varset.tasks
+  vars:
+    varset: "{{TYPE}}"

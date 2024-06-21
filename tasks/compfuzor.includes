@@ -1,107 +1,119 @@
 ---
 - debug: "msg='Compfuzor: starting VARIABLES'"
 # first include all absolutely zero dependency vars
-- include: compfuzor/vars_password.tasks
+- import_tasks: compfuzor/vars_password.tasks
   when: PASSWORD|default(False) and not PASSWORD_BYPASS|default(False)
-- include: compfuzor/vars_uuid.tasks
+- import_tasks: compfuzor/vars_uuid.tasks
 # then start assembling perceieved higher and higher level vars
-- include: compfuzor/vars_base.tasks
-- include: compfuzor/vars_type.tasks
-- include: compfuzor/vars_user.tasks
-- include: compfuzor/vars_secret.tasks
-- include: compfuzor/vars_env.tasks
-- include: compfuzor/vars_xdg.tasks
+- import_tasks: compfuzor/vars_base.tasks
+- import_tasks: compfuzor/vars_type.tasks
+- import_tasks: compfuzor/vars_user.tasks
+- import_tasks: compfuzor/vars_secret.tasks
+- import_tasks: compfuzor/vars_env.tasks
+- import_tasks: compfuzor/vars_xdg.tasks
 - debug: "msg='Compfuzor: sourcing hierarchy vars'"
-- include: compfuzor/vars_fs.tasks
-- include: compfuzor/_multi.tasks multi=vars_hierarchy
+- import_tasks: compfuzor/vars_fs.tasks
+- import_tasks: compfuzor/_multi.tasks
+  vars:
+    multi: vars_hierarchy
 - debug: "msg='Compfuzor: sourcing extra variables'"
-- include: compfuzor/vars_apt.tasks
-- include: compfuzor/vars_systemd.tasks
-- include: compfuzor/vars_src.tasks
-- include: compfuzor/vars_make_autoconf.tasks
-- include: compfuzor/vars_debconf.tasks
-- include: compfuzor/vars_pg.tasks
-- include: compfuzor/vars_env2.tasks
-- include: compfuzor/vars_repo.tasks
+- import_tasks: compfuzor/vars_apt.tasks
+- import_tasks: compfuzor/vars_systemd.tasks
+- import_tasks: compfuzor/vars_src.tasks
+- import_tasks: compfuzor/vars_make_autoconf.tasks
+- import_tasks: compfuzor/vars_debconf.tasks
+- import_tasks: compfuzor/vars_pg.tasks
+- import_tasks: compfuzor/vars_env2.tasks
+- import_tasks: compfuzor/vars_repo.tasks
 - debug: "msg='Compfuzor: completed vars'"
 
-- include: compfuzor/user.tasks
+- import_tasks: compfuzor/user.tasks
 
 - debug: "msg=''"
 - debug: "msg='Compfuzor: REPOSITORIES'"
-- include: compfuzor/repo_go.tasks
+- import_tasks: compfuzor/repo_go.tasks
   when: REPO_GO|default(False) and not REPO_BYPASS|default(False)
-- include: compfuzor/repo_git.tasks
+- import_tasks: compfuzor/repo_git.tasks
   when: (REPO is defined or REPOS is defined or REPO_WORKTREE is defined) and not GIT_BYPASS|default(False) and not REPO_BYPASS|default(False)
-- include: compfuzor/repo_cvs.tasks
+- import_tasks: compfuzor/repo_cvs.tasks
   when: CVS_REPO is defined and not REPO_BYPASS|default(False)
-- include: compfuzor/repo_svn.tasks
+- import_tasks: compfuzor/repo_svn.tasks
   when: SVN_REPO is defined and not REPO_BYPASS|default(False)
-- include: compfuzor/repo_hg.tasks
+- import_tasks: compfuzor/repo_hg.tasks
   when: HG_REPO is defined and not HG_RAW|default(False) and not REPO_BYPASS|default(False)
-- include: compfuzor/repo_hg_raw.tasks
+- import_tasks: compfuzor/repo_hg_raw.tasks
   when: HG_REPO is defined and HG_RAW|default(False) and not REPO_BYPASS|default(False)
 
 - debug: "msg=''"
 - debug: "msg='Compfuzor: FILESYSTEM'"
-- include: compfuzor/fs_base.tasks
+- import_tasks: compfuzor/fs_base.tasks
   when: DIR|default(False) or DIRS|default(False) or FILES|default(False) and not DIR_BYPASS|default(False)
-- include: compfuzor/fs_repo.tasks
-- include: compfuzor/fs_env.tasks
+- import_tasks: compfuzor/fs_repo.tasks
+- import_tasks: compfuzor/fs_env.tasks
   when: has_env.stdout|int != 0 or ENV|default(False) or ENV|default(False) == {} and not ENV_BYPASS|default(False)
-- include: compfuzor/fs_hierarchy_multi.tasks
+- import_tasks: compfuzor/fs_hierarchy_multi.tasks
   when: not FS_BYPASS|default(False)
-- include: compfuzor/fs_srcs_too.tasks
+- import_tasks: compfuzor/fs_srcs_too.tasks
   when: type == "src" and not FS_SRCS_BYPASS|default(False)
-- include: compfuzor/fs_tgz.tasks
+- import_tasks: compfuzor/fs_tgz.tasks
   when: TGZ is defined and not TGZ_BYPASS|default(False)
-- include: compfuzor/fs_zip.tasks
+- import_tasks: compfuzor/fs_zip.tasks
   when: ZIP is defined and not ZIP_BYPASS|default(False)
-- include: compfuzor/fs_get_urls.tasks
+- import_tasks: compfuzor/fs_get_urls.tasks
   when: GET_URLS is defined and not GET_URLS_BYPASS|default(False)
-- include: compfuzor/bins.tasks
+- import_tasks: compfuzor/bins.tasks
   when: BINS|default(False) and not BINS_BYPASS|default(False)
-- include: compfuzor/bins_link.tasks
+- import_tasks: compfuzor/bins_link.tasks
   when: BINS|default(False) and not BINS_BYPASS|default(False)
-- include: compfuzor/bins_link_global.tasks
+- import_tasks: compfuzor/bins_link_global.tasks
   when: BINS is defined and not BINS_BYPASS|default(False) and not GLOBAL_BINS_BYPASS|default(False)
-- include: compfuzor/links.tasks
+- import_tasks: compfuzor/links.tasks
   when: not LINKS_BYPASS|default(False) and LINKS|default(False)
-- include: compfuzor/_multi.tasks multi=fs_d
+- import_tasks: compfuzor/_multi.tasks
+  vars:
+    multi: fs_d
   when: not FS_BYPASS|default(False)
-- include: compfuzor/fs_base_d.tasks
+- import_tasks: compfuzor/fs_base_d.tasks
 - debug: "msg='Compfuzor: completed filesystem'"
 
 - debug: "msg=''"
 - debug: "msg='Compfuzor: EXTRAS'"
-- include: compfuzor/pg.tasks
+- import_tasks: compfuzor/pg.tasks
   when: PG|default(False)
-- include: compfuzor/debconf.tasks
+- import_tasks: compfuzor/debconf.tasks
   when: not DEBCONF_BYPASS|default(False)
-- include: compfuzor/apt.tasks
+- import_tasks: compfuzor/apt.tasks
   when: (APT_REPO|default(APT_REPOS)|default(False) or APT_LIST_URL|default(False)) and not APT_BYPASS|default(False)
-- include: compfuzor/pkgs.tasks
+- import_tasks: compfuzor/pkgs.tasks
   when: (PKGS is defined or PKGSET is defined or PKGSETS is defined) and not PKGS_BYPASS|default(False) and not USERMODE|default(False)
-- include: compfuzor/dbconfig.tasks
+- import_tasks: compfuzor/dbconfig.tasks
   when: DBCONFIG|default(False) and not DBCONFIG_BYPASS|default(False)
-- include: compfuzor/kernel_modules.tasks
+- import_tasks: compfuzor/kernel_modules.tasks
   when: MODULES|default(False)
-- include: compfuzor/bins_run.tasks
+- import_tasks: compfuzor/bins_run.tasks
   when: not BINS_BYPASS|default(False) and not BINS_RUN_BYPASS|default(False)
-- include: compfuzor/make_autoconf.tasks
+- import_tasks: compfuzor/make_autoconf.tasks
   when: MAKE_AUTOCONF|default(False)
-- include: compfuzor/pkgconfig.tasks
+- import_tasks: compfuzor/pkgconfig.tasks
   when: PKGCONFIG|default(False)
-- include: compfuzor/sysctl.tasks
+- import_tasks: compfuzor/sysctl.tasks
   when: SYSCTLS|default(False) or SYSCTL|default(False)
-- include: compfuzor/bins_link.tasks delay_phase=postRun
-- include: compfuzor/bins_link_global.tasks delay_phase=postRun
+- import_tasks: compfuzor/bins_link.tasks
+  vars:
+    delay_phase: postRun
+- import_tasks: compfuzor/bins_link_global.tasks
+  vars:
+    delay_phase: postRun
   when: BINS is defined and not BINS_BYPASS|default(False) and not GLOBAL_BINS_BYPASS|default(False)
-- include: compfuzor/go.tasks
+- import_tasks: compfuzor/go.tasks
   when: REPO_GO|default(False)
-- include: compfuzor/systemd.tasks become=True
+- import_tasks: compfuzor/systemd.tasks
+  vars:
+    become: True
   when: not SYSTEMD_BYPASS|default(False)
-- include: systemd.thunk.tasks service="{{SYSTEMD_SERVICE}}{{ '@' + item if item != '' else '' }}"
+- include_tasks: systemd.thunk.tasks
+  vars:
+    service: "{{SYSTEMD_SERVICE}}{{ '@' + item if item != '' else '' }}"
   when: not SYSTEMD_BYPASS|default(False) and not SYSTEMD_THUNK_BYPASS|default(False) and SYSTEMD_SERVICE|default(False) and SYSTEMD_EXEC is defined
   with_items: "{{SYSTEMD_INSTANCES|default([''])}}"
 

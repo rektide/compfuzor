@@ -1,2 +1,5 @@
 ---
-- include: apt.list.install.tasks name={{name}}.src APT_SRC=1
+- import_tasks: apt.list.install.tasks
+  vars:
+    name: "{{name}}.src"
+    APT_SRC: 1
