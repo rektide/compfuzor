@@ -14,4 +14,6 @@
     ENV:
       GLOBAL_BINS_DIR: "{{GLOBAL_BINS_DIR}}"
   tasks:
-    - include: tasks/compfuzor.includes type=opt
+    - import_tasks: tasks/compfuzor.includes
+      vars:
+        type: opt
