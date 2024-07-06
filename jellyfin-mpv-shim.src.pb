@@ -28,4 +28,6 @@
           ./gen_pkg.sh
           sudo pip3 install .
   tasks:
-    - include: tasks/compfuzor.includes type=src
+    - import_tasks: tasks/compfuzor.includes
+      vars:
+        type: src
