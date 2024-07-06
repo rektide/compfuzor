@@ -7,11 +7,16 @@
     BINS:
       - name: build.sh
         exec: |
-          echo hi
+          qmake6 moonlight-qt.pro
+          make
+      - name: install.sh
+        become: True
+        exec: |
+          make install
     PKGS:
       - libegl1-mesa-dev
       - libgl1-mesa-dev
-      - libopus-gev
+      - libopus-dev
       - libsdl2-dev
       - libsdl2-ttf-dev
       - libssl-dev
@@ -32,6 +37,7 @@
       - qml6-module-qtquick-layouts
       - qml6-module-qtquick-templates
       - qml6-module-qtquick-window
+      - libplacebo-dev
   tasks:
     - import_tasks: tasks/compfuzor.includes
       vars:
