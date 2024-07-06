@@ -22,20 +22,27 @@
         content: |
           #vo=dmabuf-wayland
           vo=gpu-next
-          #hwdec=auto-safe
-          #hwdec=vulkan
+          hwdec=auto-safe
+          hwdec=vulkan
           drm-vrr-enabled=yes
           spirv-compiler=auto
           tone-mapping=auto
           hdr-compute-peak=yes
           tone-mapping-mode=auto
+          # https://github.com/Zamundaaa/VK_hdr_layer
+          #vo=gpu-next
+          gpu-api=vulkan
+          gpu-context=waylandvk
+          target-colorspace-hint=yes
     #LINKS:
     #  - src: "{{DIR}}/etc/mpv.conf"
     #    dest: ~/.config/jellyfin-mpv-shim/mpv.conf
     BINS:
-      - name: install.sh
+      - name: install-systemd.sh
         exec: |
-          #systemctl --user enable $NAME
+          systemctl --user enable $NAME
+      - name: install-desktop.sh
+        exec: |
           mkdir -p ~/.local/share/application
           ln -s $(pwd)/var/jellyfin-mpv-shim.desktop ~/.local/share/applications/
           mkdir -p ~/.config/autostart
@@ -43,4 +50,6 @@
           mkdir -p ~/.config/jellyfin-mpv-shim
           ln -s $(pwd)/etc/mpv.conf ~/.config/jellyfin-mpv-shim/mpv.conf
   tasks:
-    - include: tasks/compfuzor.includes type=srv
+    - import_tasks: tasks/compfuzor.includes
+      vars:
+        type: src
