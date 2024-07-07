@@ -12,7 +12,7 @@
       - name: install.sh
         basedir: True
         exec: |
-          ln -s $(pwd)/target/release/bottom $GLOBAL_BINS_DIR/
+          ln -sf $(pwd)/target/release/btm $GLOBAL_BINS_DIR/
     ENV:
       GLOBAL_BINS_DIR: "{{GLOBAL_BINS_DIR}}"
   tasks:
