@@ -11,7 +11,7 @@
           while read -d, -a font
           do
             wget ${FONTS_URL}/v${RELEASE}/${font}.tar.xz
-          done <<< "$FONTS"
+          done <<< "$FONTS,"
       - name: install.sh
         exec: |
           mkdir -p $DEST
@@ -19,7 +19,7 @@
           while read -d, -a font
           do
             tar xvaf ${DIR}/src/$font.tar.xz --touch --no-overwrite-dir --no-same-permissions --no-same-owner --exclude '*.md' --exclude '*.txt' --exclude LICENSE
-          done <<< "$FONTS"
+          done <<< "$FONTS,"
           # rebuild font cache
           fc-cache -fv
     ENV:
@@ -28,34 +28,37 @@
       RELEASE: "{{release}}"
       #DEST: "$HOME/.local/share/fonts"
       DEST: /usr/share/fonts
-    release: 3.1.1
+    release: 3.2.1
     fonts:
-      - 0xProto
-      - 3270
-      - Agave
-      - AnonymousPro
-      - Arimo
-      - AurulentSansMono
-      - CascadiaMono
-      - DaddyTimeMono
-      - EnvyCodeR
-      - FantasqueSansMono
-      - FiraCode
-      - Go-Mono
-      - Inconsolata
-      - Iosevka
-      - IosevkaTerm
-      - Lekton
-      - JetBrainsMono
-      - MartianMono
-      - Monofur
-      - Meslo
-      - Monaspace
-      - Mononoki
-      - MPlus
-      - ProFont
-      - ProggyClean
-      - RobotoMono
-      - VictorMono
+      - NerdFontsSymbolsOnly
+      #- 0xProto
+      #- 3270
+      #- Agave
+      #- AnonymousPro
+      #- Arimo
+      #- AurulentSansMono
+      #- CascadiaMono
+      #- DaddyTimeMono
+      #- EnvyCodeR
+      #- FantasqueSansMono
+      #- FiraCode
+      #- Go-Mono
+      #- Inconsolata
+      #- Iosevka
+      #- IosevkaTerm
+      #- Lekton
+      #- JetBrainsMono
+      #- MartianMono
+      #- Monofur
+      #- Meslo
+      #- Monaspace
+      #- Mononoki
+      #- MPlus
+      #- ProFont
+      #- ProggyClean
+      #- RobotoMono
+      #- VictorMono
   tasks:
-    - include: tasks/compfuzor.includes
+    - import_tasks: tasks/compfuzor.includes
+      vars:
+        type: opt
