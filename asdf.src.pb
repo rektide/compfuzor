@@ -17,6 +17,7 @@
       - name: deno
       - name: nodejs
       - name: protonge
+      - name: rust
   tasks:
     - import_tasks: tasks/compfuzor.includes
       vars:
