@@ -1,87 +1,105 @@
 - debug: "msg='Compfuzor: source base variables'"
 
-- name: "Set MACHINE_ID"
-  shell: "cat /etc/machine-id"
-  register: MACHINE_ID_
+- name: "include common vars"
+  include_defaults:
+    file: vars/common.yaml
+
+- name: "read in compfuzor base vars"
+  # found ansible vars for these:
+  #cat /etc/machine-id
+  #dpkg --print-architecture
+  shell: |
+    xdg-user-dir DESKTOP
+    xdg-user-dir DOCUMENTS
+    xdg-user-dir DOWNLOAD
+    xdg-user-dir MUSIC
+    xdg-user-dir PUBLICSHARE
+    xdg-user-dir PICTURES
+    xdg-user-dir TEMPLATES
+    xdg-user-dir VIDEOS
+    uname -r
+    (dpkg --print-architecture && dpkg --print-foreign-architectures) | tr "\n" ","; echo
+    uuid -v4
+    pwgen {{PASSWORD_LENGTH|default(20)}} -N {{PASSWORDS|default([])|length}} | tr "\n" ","; echo
+    echo last
+  register: COMPFUZOR_BASE
   changed_when: False
-- name: "Set ARCH"
-  shell: dpkg --print-architecture
-  register: NATIVE_ARCH_
-  changed_when: False
-- name: "Set ARCHS"
-  shell: dpkg --print-architecture && dpkg --print-foreign-architectures
-  register: ARCHS_
-  changed_when: False
-- name: "Clean generated system facts"
+
+- name: set compfuzor base facts
   set_fact:
-    MACHINE_ID: "{{MACHINE_ID_.stdout}}"
-    ARCHS: "{{ARCHS_.stdout_lines}}"
-    TIMESTAMP_CF: "{{ansible_date_time.date.replace('-', '.')}}T{{ansible_date_time.time}}{{ansible_date_time.tz_offset}}"
-- set_fact:
-    ARCH: "{{NATIVE_ARCH_.stdout}}"
-  when: ARCH is not defined
-- set_fact:
-    NATIVE_ARCH: "{{NATIVE_ARCH_.stdout}}"
-- name: "Set SUBINSTANCE if asked for"
-  set_fact: "SUBINSTANCE={{MACHINE_ID}}"
-  when: SUBINSTANCE|default(False) == True
-  changed_when: False
-  failed_when: False # this can often be latebound
-- name: "Defaulting kernel release"
-  shell: uname -r
-  register: KERNEL_RELEASE_
-- name: "Set kernel release variable"
-  set_fact:
-    KERNEL_RELEASE: "{{KERNEL_RELEASE_.stdout}}"
-  when: not KERNEL_RELEASE|default(false)
-- name: 'Set hostnum variable'
-  set_fact:
+    XDG_DESKTOP_DIR: "{{COMPFUZOR_BASE.stdout_lines[0]}}"
+    XDG_DOCUMENTS_DIR: "{{COMPFUZOR_BASE.stdout_lines[1]}}"
+    XDG_DOWNLOAD_DIR: "{{COMPFUZOR_BASE.stdout_lines[2]}}"
+    XDG_MUSIC_DIR: "{{COMPFUZOR_BASE.stdout_lines[3]}}"
+    XDG_PICTURES_DIR: "{{COMPFUZOR_BASE.stdout_lines[4]}}"
+    XDG_PUBICSHARE_DIR: "{{COMPFUZOR_BASE.stdout_lines[5]}}"
+    XDG_TEMPLATES_DIR: "{{COMPFUZOR_BASE.stdout_lines[6]}}"
+    XDG_VIDEOS_DIR: "{{COMPFUZOR_BASE.stdout_lines[7]}}"
+    MACHINE_ID: "{{MACHINE_ID|default(machineId)}}"
+    SUBINSTANCE: "{{SUBINSTANCE|default(omit)}}"
+    ARCH: "{{ARCH|default(arch)}}"
+    NATIVE_ARCH: "{{NATIVE_ARCH|default(arch)}}"
+    ARCHS: "{{ARCHS|default(archs)}}"
+    KERNEL_RELEASE: "{{KERNEL_RELEASE|default(kernel)}}"
+    UUID: "{{uuid}}"
+    PASSWORD: "{{dict(PASSWORDS | zip(passwords) | list) | combine(PASSWORD|default({}))}}"
+    TIMESTAMP_CF: "{{TIMESTAMP_CF|default(timestamp)}}"
+    NAME: "{{name}}"
+    TYPE: "{{TYPE|default(name)}}"
+    PREFIX_DIR: "{{prefix}}"
+    DIR: "{{prefix}}/{{name}}"
     hostnum: "{% for i in play_hosts %}{{ loop.index0 if play_hosts[loop.index0] == inventory_hostname else '' }}{% endfor %}"
-  when: hostnum is not defined
-- name: "Set name with subinstance"
-  set_fact: NAME="{{TYPE}}-{{INSTANCE}}-{{SUBINSTANCE}}"
-  when: not NAME|default(False) and INSTANCE|default(False) and SUBINSTANCE|default(False)
-- name: "Set name"
-  set_fact: NAME="{{TYPE}}-{{INSTANCE}}"
-  when: not NAME|default(False) and INSTANCE|default(False)
-- name: "Set name"
-  set_fact: NAME="{{TYPE}}"
-  when: not NAME|default(False) and TYPE|default(False)
-- name: "Fallback TYPE to NAME"
-  set_fact: TYPE="{{NAME}}"
-  when: not TYPE|default(False)
+    type: "{{type|default(typeDetect)}}"
+  changed_when: False
+  failed_when: False
+  vars:
+    typeDetect: "{{ (lookup('file', '/proc/self/cmdline') | regex_replace('\u0000',' ')).split() | select('match','^.*[.]pb$') | list | first | regex_replace('^.*\\.(.*)\\.pb$', '\\1')}}"
+    # above via https://stackoverflow.com/questions/59981172/how-to-get-the-current-file-name-in-ansible
+    type_: "{{type|default(typeDetect)}}" # used to default to opt
+    #machineId: "{{COMPFUZOR_BASE.stdout_lines[]}}"
+    machineId: "{{ansible_machine_id}}"
+    #arch: "{{COMPFUZOR_BASE.stdout_lines[]}}"
+    arch: "{{ansible_machine}}"
+    kernel: "{{COMPFUZOR_BASE.stdout_lines[8]}}"
+    archs: "{{COMPFUZOR_BASE.stdout_lines[9][:-1] | split(',')}}"
+    uuid: "{{UUID|default(COMPFUZOR_BASE.stdout_lines[10])}}"
+    passwords: "{{COMPFUZOR_BASE.stdout_lines[11].split(',')}}"
+
+    # computed
+    timestamp: "{{ansible_date_time.date.replace('-', '.')}}T{{ansible_date_time.time}}{{ansible_date_time.tz_offset}}"
+    instanceName: "{{'-' if INSTANCE else ''}}{{INSTANCE|default('')}}"
+    subinstance: "{{(SUBINSTANCE if SUBINSTANCE is string else MACHINE_ID) if SUBINSTANCE|default(False) else ''}}"
+    subinstanceName: "{{'-' if subinstance|default(False) else ''}}{{subinstance|default('')}}"
+    name: "{{NAME|default(TYPE + instanceName + subinstanceName)}}"
+    prefixType: "{{hostvars[inventory_hostname][type_|upper+'S_DIR']|default()}}"
+    prefixDir: "{{DIR|default()|dirname}}"
+    prefix: "{{PREFIX_DIR|default(prefixDir|default(prefixType, true), true)}}"
+    dir: "{{DIR|default(prefix + '/' + name)}}"
+
+- fail: msg=done
 
 - name: "Include usermode common vars"
   include_defaults: file=vars/common.user.yaml
   when: USERMODE|default(False)
-- name: "Include common vars {{file}}"
-  include_defaults: file=vars/common.yaml
-- name: "Include xdg vars"
-  include_defaults: file=vars/xdg.yaml
-  when: USERMODE|default(False)
-- name: "Default to being an 'opt' class compfuzor script"
-  set_fact: type="opt"
-  when: not type|default(False)
-- include_defaults: file="vars/types/{{type|lower}}.yaml"
-- name: "Include (arche)type vars"
-  include_defaults: file="{{ item }}"
-  with_first_found:
-  - "private/{{configset}}.yaml"
-  - "private/{{TYPE}}.yaml"
-  - "examples-private/{{configset}}.yaml"
-  - "examples-private/{{TYPE}}.yaml"
-  - "vars/empty.yaml"
+- name: "include type {{type|lower}} vars"
+  include_defaults:
+    file: "{{item}}"
+  loop:
+    - vars/common.yaml
+    - vars/types/{{type|lower}}.yaml
+
+# vars_type does a more expanded version
+# that ideally we can reduce to a single pass run-all-found
+#- name: "Include configset or extra type vars"
+#  include_defaults: file="{{ item }}"
+#  with_first_found:
+#  - "private/{{configset}}.yaml"
+#  - "private/{{TYPE}}.yaml"
+#  - "examples-private/{{configset}}.yaml"
+#  - "examples-private/{{TYPE}}.yaml"
+#  - "vars/empty.yaml"
 
 #- name: "Select default username {{TYPE|default(NAME)}}"
 #  set_fact: USER="{{TYPE|default(NAME)}}"
 #  when: not USER|default(False)
-- name: "Set PREFIX_DIR variable from DIR"
-  set_fact: PREFIX_DIR="{{DIR|default()|dirname}}"
-  when: not DIR|default(False) and not PREFIX_DIR|default(False)
-- name: "Set PREFIX_DIR variable"
-  set_fact: PREFIX_DIR="{{hostvars[inventory_hostname][type|upper+'S_DIR']|default()}}"
-  when: not PREFIX_DIR|default(False)
 
-- name: "Set DIR variable"
-  set_fact: DIR="{{PREFIX_DIR}}/{{NAME}}"
-  when: not DIR|default(False)

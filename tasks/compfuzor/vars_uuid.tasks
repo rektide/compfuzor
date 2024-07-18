@@ -1,7 +1,0 @@
-- name: "Compfuzor: generate uuid"
-  command: uuid -v4
-  register: _uuid
-- set_fact:
-  args:
-    UUID: "{{_uuid.stdout}}"
-  when: UUID is not defined

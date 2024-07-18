@@ -1,4 +1,6 @@
-- action: include_defaults
+# TODO: make one big loop
+- name: include varset
+  action: include_defaults
   args:
     file: "{{item}}"
   with_first_found:
