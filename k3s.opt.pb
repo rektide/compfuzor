@@ -2,7 +2,7 @@
 - hosts: all
   vars:
     TYPE: k3s
-    release: v1.28.3+k3s2
+    release: v1.30.3+k3s1
     #INSTANCE: "{{ release }}"
     INSTANCE: main
     GET_URLS: https://github.com/k3s-io/k3s/releases/download/{{release|urlencode}}/k3s
@@ -19,7 +19,7 @@
       link: k3s
       global: True
   tasks:
-  - include: tasks/compfuzor.includes type=opt
+  - import_tasks: tasks/compfuzor.includes
   - file:
       path: "{{SRC}}/k3s"
       mode: a+x
