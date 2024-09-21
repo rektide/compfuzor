@@ -42,7 +42,7 @@
     ARCHS: "{{ARCHS|default(archs)}}"
     KERNEL_RELEASE: "{{KERNEL_RELEASE|default(kernel)}}"
     UUID: "{{uuid}}"
-    PASSWORD: "{{dict(PASSWORDS | zip(passwords) | list) | combine(PASSWORD|default({}))}}"
+    PASSWORD: "{{dict(PASSWORDS | default([]) | zip(passwords) | list) | combine(PASSWORD|default({}))}}"
     TIMESTAMP_CF: "{{TIMESTAMP_CF|default(timestamp)}}"
     NAME: "{{name}}"
     TYPE: "{{TYPE|default(name)}}"
