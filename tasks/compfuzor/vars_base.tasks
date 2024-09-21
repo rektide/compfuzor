@@ -76,8 +76,6 @@
     prefix: "{{PREFIX_DIR|default(prefixDir|default(prefixType, true), true)}}"
     dir: "{{DIR|default(prefix + '/' + name)}}"
 
-- fail: msg=done
-
 - name: "Include usermode common vars"
   include_defaults: file=vars/common.user.yaml
   when: USERMODE|default(False)
