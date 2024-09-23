@@ -82,7 +82,7 @@
           $hostIP=(Get-NetAdapter| Get-NetIPAddress).IPv4Address|Out-String
     ETC_FILES:
       - name: example.inv
-        content:
+        content: |
           [win]
           {{hostname}}
 
