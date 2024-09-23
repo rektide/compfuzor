@@ -13,7 +13,8 @@
           # build/gamescope -- <game>
       - name: install.sh
         exec: |
-          meson install -C build/ --skip-subprojects
+          sudo setcap 'cap_sys_nice=eip' build/src/gamescope
+          sudo meson install -C build/ --skip-subprojects
       - name: run.sh
         exec: |
           # --ready-fd --rt
