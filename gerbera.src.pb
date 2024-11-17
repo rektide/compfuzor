@@ -19,6 +19,7 @@
       - libmagic-dev
       - libmatroska-dev
       - libebml-dev
+      - libavformat-dev
       - libavcodec-dev
       - libexif-dev
       - libexiv2-dev
@@ -39,5 +40,4 @@
           sudo make install
 
   tasks:
-    - include: tasks/compfuzor.includes type=src
-  
+    - import_tasks: tasks/compfuzor.includes
