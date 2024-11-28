@@ -18,5 +18,8 @@
       - name: install.sh
         exec: |
           cp $GOPATH/bin/clipman {{GLOBAL_BINS_DIR}}/
+    PKGS:
+      - wl-clipboard
+      - fyi # notify-send
   tasks:
     - import_tasks: tasks/compfuzor.includes
