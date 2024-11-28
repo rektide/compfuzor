@@ -4,6 +4,8 @@
     TYPE: upmpdcli
     INSTANCE: git
     REPO: https://framagit.org/medoc92/upmpdcli
+    PKGS:
+      - libjsoncpp-dev
     ENV:
       womp: womp
     BINS:
