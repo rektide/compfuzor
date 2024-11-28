@@ -9,6 +9,7 @@
       - name: build.sh
         basedir: True
         exec: |
+          #cargo install below
           cargo build --release
       - name: install.sh
         basedir: True
