@@ -17,6 +17,9 @@
       - name: init-13.sh
         exec:
           sudo waydroid init -f -i $DIR/repo $INIT_ARGS
+      - name: wm-integration.sh
+        exec: |
+          waydroid prop set persist.waydroid.multi_windows true
       - name: clean.sh
         exec: |
           rm -rf \
