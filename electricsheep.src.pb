@@ -22,13 +22,13 @@
       - libtinyxml-dev
       - freeglut3-dev
       - glee-dev
-      - libwxgtk3.0-dev
+      #- libwxgtk3.0-dev
+      - libwxgtk3.2-dev
     ENV: {}
     BINS:
       - name: build.sh
         basedir: client_generic
         exec: |
-          ./autogen.sh
           #./configure --prefix=${DIR}
           ./configure
           make
