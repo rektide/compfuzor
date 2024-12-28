@@ -11,12 +11,13 @@
           libtoolize
           automake --add-missing
           autoconf
+          mkdir -p build
+          #./configure --prefix=$DIR/build
           ./configure
           make
       - name: install.sh
         become: True
         exec: |
-
           make install
   tasks:
     - import_tasks: tasks/compfuzor.includes
