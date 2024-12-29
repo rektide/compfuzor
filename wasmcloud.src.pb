@@ -8,5 +8,7 @@
       - name: build.sh
         exec: |
           cargo build --release
+          cd creates/wash-cli
+          cargo build --release
   tasks:
     - import_tasks: tasks/compfuzor.includes
