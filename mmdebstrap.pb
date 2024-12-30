@@ -35,7 +35,7 @@
     mmpkgs: "{{lookup('template', '../files/mmdebstrap/_pkgs')}}"
     MMDEBSTRAP_COMPONENTS: "main,contrib,non-free"
     MMDEBSTRAP_SUITE: sid
-    ENVS:
+    ENV:
       MMDEBSTARP_COMPONENTS: true
       MMDEBSTRAP_SUITE: true
     ETC_FILES:

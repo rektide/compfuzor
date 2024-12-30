@@ -7,7 +7,7 @@
     GET_URLS: 
       - https://github.com/gmankab/waydroid/releases/download/jul-12-2024/system.img
       - https://github.com/gmankab/waydroid/releases/download/jul-12-2024/vendor.img
-    ENVS:
+    ENV:
       INIT_ARGS: "-s GAPPS"
     BINS:
       - name: init-11.sh
@@ -25,7 +25,6 @@
           rm -rf \
             /etc/waydroid-extra \
             /var/lib/waydroid \
-            $HOME/.waydroid \
             ~/waydroid \
             ~/.share/waydroid \
             ~/.local/share/applications/*aydroid* \

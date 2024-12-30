@@ -4,7 +4,7 @@
     TYPE: scrcpy
     INSTANCE: git
     REPO: https://github.com/Genymobile/scrcpy
-    ENVS:
+    ENV:
       ANDROID_SDK_ROOT: /usr/lib/android-sdk
     PKGS:
       # runtime
