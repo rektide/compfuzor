@@ -30,4 +30,4 @@
         # Builds the executable with ninja
         ninja -C out/debug osp_demo
   tasks:
-  - include: tasks/compfuzor.includes type=src
+  - import_tasks: tasks/compfuzor.includes
