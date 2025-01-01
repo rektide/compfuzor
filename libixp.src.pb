@@ -4,6 +4,8 @@
     TYPE: libixp
     INSTANCE: git
     REPO: https://github.com/0intro/libixp
+    PKGS:
+      - txt2tags
     BINS:
       - name: build.sh
         exec: |
