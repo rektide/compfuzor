@@ -1,8 +1,8 @@
 - name: "Compfuzor: source apt variables"
   set_fact:
   args:
-    APT_SOURCELIST: "{{APT_SOURCELIST|default(NAME)|default(TYPE)}}"
-    APT_TRUSTED: "{{APT_TRUSTED|default(NAME)|default(TYPE)}}"
+    APT_SOURCELIST: "{{APT_SOURCELIST|default(TYPE)|default(NAME)}}"
+    APT_TRUSTED: "{{APT_TRUSTED|default(TYPE)|default(NAME)}}"
     APT_ARCH: "{{APT_ARCH|default(ARCH)}}"
 - action: include_defaults
   args:
