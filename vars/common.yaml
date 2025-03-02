@@ -22,7 +22,7 @@ WORKDIR_BIN: /usr/share/doc/git/contrib/workdir/git-new-workdir
 PKGCONFIG_DIR: "/usr/local/lib/pkgconfig"
 PKGSS_DIR: "{{SRCS_DIR}}"
 SPECS_DIR: "{{SRCS_DIR}}/spec"
-SYSCTL_DIR: "/etc/sysctl.conf.d"
+SYSCTL_DIR: "/etc/sysctl.d"
 WWW_LINKS_D: /etc/lighttpd2/links.d
 NGINX: /etc/nginx
 # package installation config
