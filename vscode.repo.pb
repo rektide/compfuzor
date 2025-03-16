@@ -9,4 +9,4 @@
     APT_COMPONENTS: main
     APT_DISTRIBUTION: stable
   tasks:
-    - include: tasks/compfuzor.includes type=repo
+    - import_tasks: tasks/compfuzor.includes
