@@ -74,4 +74,6 @@
     - qemu-user-static
     - squashfs-tools-ng
   tasks:
-  - include: tasks/compfuzor.includes type=srv
+    - import_tasks: tasks/compfuzor.includes
+      vars:
+        type: srv

@@ -39,11 +39,13 @@
   tasks:
   - shell: echo "no {{ARCH}} configured"; return 1
     when: ARCH is not defined
-  - include: tasks/compfuzor.includes type=srv
+  - import_tasks: tasks/compfuzor.includes
+    vars:
+      type: srv
   # already built? don't build again
   - name: test -e {{DIR}}/{{BASETGZ}} as NO_MULTISTRAP_BUILD
     shell: test -e {{DIR}}/{{BASETGZ}}; echo $?
     register: NO_MULTISTRAP_BUILD
   # execute
-  - include: tasks/compfuzor/bins_run.tasks
+  - import_tasks: tasks/compfuzor/bins_run.tasks
     when: NO_MULTISTRAP_BUILD.stdout|int != 0 and not BUILD_BYPASS|default(False)
