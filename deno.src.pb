@@ -16,4 +16,4 @@
       src: False
       delay: postRun
   tasks:
-  - include: tasks/compfuzor.includes type=src
+    - import_tasks: tasks/compfuzor.includes
