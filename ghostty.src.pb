@@ -17,7 +17,7 @@
         exec: zig build -Doptimize=ReleaseFast
       - name: global.sh
         exec: |
-          exec: zig build -Doptimize=ReleaseFast -p $GLOBAL_BINS_DIR/..
+          zig build -Doptimize=ReleaseFast -p $GLOBAL_BINS_DIR/..
       - name: install.sh
         exec: |
           ln -s $(pwd)/zig-out/bin/ghostty ${GLOBAL_BINS_DIR}/ghostty
