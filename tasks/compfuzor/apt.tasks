@@ -4,41 +4,32 @@
   when: (APT_DEFAULT_COMPONENT is not defined and APT_DEFAULT_COMPONENTS is not defined and APT_COMPONENT is not defined and APT_COMPONENTS is not defined) or ARCH is not defined
 - include_tasks: vars_apt.tasks
   when: APT_TRUSTED is not defined or APT_SOURCELIST is not defined
-- name: "Copy in apt sources.list s"
-  template:
-    src: "files/_apt.list"
-    dest: "/etc/apt/sources.list.d/{{APT_SOURCELIST}}.list"
-  when: APT_REPO|default(False) or APT_REPOS|default(False)
-  become: True
-- name: "Download apt list and gpg"
+- name: "Download apt urls"
   ansible.builtin.get_url:
     url: "{{item.url}}"
-    dest: "{{item.dir}}/{{item.name}}.{{item.ext}}"
-  with_items:
-   - dir: /etc/apt/sources.list.d
-     ext: list
-     name: "{{APT_SOURCELIST}}"
-     url: "{{APT_LIST_URL|default('')}}"
-   - dir: /etc/apt/trusted.gpg.d
-     ext: "{{APT_GPG_EXT|default('gpg')}}"
-     name: "{{APT_TRUSTED}}"
-     url: "{{APT_GPG_URL|default('')}}"
-   - dir: /usr/share/keyrings
-     ext: gpg
-     name: "{{APT_TRUSTED}}"
-     url: "{{APT_KEYRING_URL|default('')}}"
-  when: item.url != ""
+    dest: "{{ETC}}/{{item.name}}{{_ext}}"
+  with_items: "{{APT_INSTALLS}}"
+  when: item.url|default(False)
   become: True
-- name: "Copy in pin"
-  template: src="files/_apt-pin" dest="/etc/apt/preferences.d/{{NAME}}"
-  when: APT_PIN_PRIORITY|default(False) or APT_PIN_PRIORITY|default(False)
+- name: "Template in apt file"
+  template:
+    src: "files/{{item.template}}"
+    dest: "{{ETC}}/{{item.name}}{{_ext}}"
+  with_items: "{{APT_INSTALLS}}"
+  when: item.template|default(False) and item.conditional|default(False)
   become: True
-- name: "Copy in apt gpg keys"
-  copy: src="files/apt-repos/{{APT_TRUSTED}}.{{item}}" dest="/etc/apt/keyrings/{{APT_TRUSTED}}.{{item}}"
-  when: APT_TRUST|default(True) and not APT_GPG_URL|default(False) and not APT_KEYRING_URL|default(False)
-  with_items:
-  - gpg
-  - gpg.params
+- name: "Dearmor apt-keys"
+  shell:
+    cmd: "gpg --yes --output {{APT_TRUSTED}}.gpg --dearmor {{APT_TRUSTED}}.gpg.armor"
+    chdir: "{{ETC}}"
+  when: APT_DEARMOR|default(False)
+- name: "Link apt list and gpg"
+  file:
+    state: link
+    src: "{{ETC}}/{{item.name}}{{_ext}}"
+    dest: "{{item.dir}}/{{item.name}}{{_ext}}"
+  with_items: "{{APT_INSTALLS}}"
+  when: item.dir|default(False) and (ETC + '/' + item.name + _ext) is file
   become: True
 - import_tasks: ../apt.update.tasks
   vars:
