@@ -1,9 +1,46 @@
 - name: "Compfuzor: source apt variables"
   set_fact:
+  vars:
+    _sourcelist: "{{APT_SOURCELIST|default(TYPE)|default(NAME)}}"
+    _trusted: "{{APT_TRUSTED|default(TYPE)|default(NAME)}}"
+    _arch: "{{APT_ARCH|default(ARCH)}}"
+    _name: "{{TYPE|default(NAME)}}"
+    _gpg: "{{APT_GPG_EXT|default('gpg')}}"
+    _armor: "{{'.armor' if APT_DEARMOR|default(False) else ''}}"
   args:
-    APT_SOURCELIST: "{{APT_SOURCELIST|default(TYPE)|default(NAME)}}"
-    APT_TRUSTED: "{{APT_TRUSTED|default(TYPE)|default(NAME)}}"
-    APT_ARCH: "{{APT_ARCH|default(ARCH)}}"
+    APT_SOURCELIST: "{{_sourcelist}}"
+    APT_TRUSTED: "{{_trusted}}"
+    APT_ARCH: "{{_arch}}"
+    APT_INSTALLS:
+      - name: "{{_sourcelist}}"
+        ext: list
+        dir: /etc/apt/sources.list.d
+        template: _apt.list
+        conditional: "{{APT_REPO|default(False) or APT_REPOS|default(False)}}"
+      # alt to above, source.list via url
+      - name: "{{_sourcelist}}"
+        ext: list
+        dir: /etc/apt/sources.list.d
+        url: "{{APT_LIST_URL|default('')}}"
+      - name: "{{_name}}"
+        dir: /etc/apt/preferences.d
+        ext: "pref"
+        template: _apt-pin
+        conditional: "{{APT_PIN_PRIORITY|default(False)}}"
+      - name: "{{_trusted}}"
+        ext: "gpg.params"
+        template: "files/apt-repos/{{_trusted}}.gpg.params"
+        conditional: "{{ (_trusted + '.gpg.params') is file }}"
+      - name: "{{_trusted}}"
+        ext: "{{_gpg}}{{_armor}}"
+        dir: /usr/share/keyrings
+        template: "files/apt-repos/{{_trusted}}{{_gpg}}"
+        conditional: "{{ (_trusted + _gpg) is file }}"
+      # alt to above, keyring via url
+      - name: "{{_trusted}}"
+        ext: "{{_gpg}}{{_armor}}"
+        dir: /usr/share/keyrings
+        url: "{{APT_KEYRING_URL|default('')}}"
 - action: include_defaults
   args:
     file: "vars/pkgs.yaml"
