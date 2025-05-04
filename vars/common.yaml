@@ -36,16 +36,16 @@ APT_ARCH: amd64
 UBUNTU_DISTRIBUTION: noble
 BIND: 0.0.0.0
 DIRSET:
-- opt
-- srv
-- etc
-- var
-- log
-- spool
-- cache
-- src
-- pid
-- share
+  - opt
+  - srv
+  - etc
+  - var
+  - log
+  - spool
+  - cache
+  - src
+  - pid
+  - share
 FONTS_TTF: /usr/share/fonts/truetype
 MEDIAS_DIR: /srv/media
 SYSTEMD_SYSTEM_UNIT_DIR: /etc/systemd/system
@@ -53,55 +53,57 @@ DIRMODE: "0770"
 FILEMODE: "0660"
 GO_DIR: "src/{{go_url|deprefix('\\w+@')|deprefix('https?://')|regex_replace('^(\\w+):', '\\1/')|trim}}"
 PERSIST_VARS:
-- NAME
-- INSTANCE
-- DIR
-- PREFIX
-- USER
-- USERMODE
-- OWNER
-- APT_COMPONENT 
-- APT_COMPONENTS
-- APT_TRUSTED
-- APT_SOURCELIST
-- APT_TRUST
-- APT_UPDATE_BYPASS
-- BINS
-- GLOBAL_BINS_BYPASS
-- DIR
-- DIRS
-- FILES
-- DIR_BYPASS
-- OPT_BYPASS
-- SRV_BYPASS
-- ETC_BYPASS
-- VAR_BYPASS
-- LOG_BYPASS
-- SPOOL_BYPASS
-- CACHE_BYPASS
-- SRC_BYPASS
-- PID_BYPASS
-- RUN_BYPASS
-- SHARE_BYPASS
-- LINKS
-- LINK_BYPASS
-- PKGS
-- PKGSET
-- PKGSETS
-- REPO
-- REPO_DIR
-- REPOS
-- HG_REPO
-- SVN_REPO
-- GIT_DIR
-- WITH
-- ENABLE
+  - NAME
+  - INSTANCE
+  - DIR
+  - PREFIX
+  - USER
+  - USERMODE
+  - OWNER
+  - APT_COMPONENT
+  - APT_COMPONENTS
+  - APT_TRUSTED
+  - APT_SOURCELIST
+  - APT_TRUST
+  - APT_UPDATE_BYPASS
+  - BINS
+  - GLOBAL_BINS_BYPASS
+  - DIR
+  - DIRS
+  - FILES
+  - DIR_BYPASS
+  - OPT_BYPASS
+  - SRV_BYPASS
+  - ETC_BYPASS
+  - VAR_BYPASS
+  - LOG_BYPASS
+  - SPOOL_BYPASS
+  - CACHE_BYPASS
+  - SRC_BYPASS
+  - PID_BYPASS
+  - RUN_BYPASS
+  - SHARE_BYPASS
+  - LINKS
+  - LINK_BYPASS
+  - PKGS
+  - PKGSET
+  - PKGSETS
+  - REPO
+  - REPO_DIR
+  - REPOS
+  - HG_REPO
+  - SVN_REPO
+  - GIT_DIR
+  - WITH
+  - ENABLE
 CA_EXPIRY: "26280h"
 HOMEDIR: "~{{USER|default(OWNER)|default(ansible_user_id)}}/"
 GIT_DIR: "{{REPO_DIR|default(DIR, true)}}"
 __DEST: "{{item.dest|default(item.name)|default(item)|defaultDir(__defaultDir|default(DIR))}}"
 MULTISTRAP_COMPONENTS:
-- main
-- contrib
-- non-free
-- non-free-firmware
+  - main
+  - contrib
+  - non-free
+  - non-free-firmware
+
+_ext: "{{ '.' + item.ext if item.ext|default(False) else '' }}"
