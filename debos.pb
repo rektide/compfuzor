@@ -15,8 +15,8 @@
     - build
     VAR_FILES:
     - src: overlay
-      dest: .
-      raw: true
+      destTemplate: "{{VAR}}"
+      copyDir: true
     LINKS:
     - src: /proc/self/mounts
       # symlinks don't work
@@ -32,17 +32,17 @@
         rsync -av {{VAR}}/overlay overlay
         cp {{ETC}}/debos.yaml debos.yaml
         debos -v --scratchsize=$DEBOS_SCRATCHSIZE debos.yaml
-    pkgs: []
-    #- "kernel-image-{{arch}}"
-    #- "kernel-headers-{{arch}}"
+    pkgs:
+    - "kernel-image-{{arch}}"
+    - "kernel-headers-{{arch}}"
     pkgsets:
     - BASE
     - "BASE_{{arch}}"
     - WORKSTATION
     - VIRTUALIZATION
     - WORKSTATION_X
-    - OPENCL
-    - XPRA
+    #- OPENCL
+    #- XPRA
     - DEVEL
     - DEBDEV
     - AUDIO
@@ -59,7 +59,7 @@
     - VAAPI_amd64
     - WORKSTATION_WAYLAND
     - MEDIA_X
-    - POSTGRES
+    #- POSTGRES
     - BONUS
     - WORDS
 
