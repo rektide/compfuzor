@@ -114,7 +114,8 @@
 
 - name: "Create {{_upper}} files"
   copy:
-    content: "{{all}}"
+    content: "{{all if not item.copyDir|default(False)  else omit}}"
+    src: "{{src|default(False) if item.copyDir|default(False) == True else omit}}"
     dest: "{{dest}}"
     mode: "{{item.mode|default(_vals.prop.mode|default(FILEMODE, true), true)}}"
     owner: "{{do_become|ternary(owner|default(ansible_user_id, true),omit)}}"
@@ -140,7 +141,7 @@
     all: "{{ content|default('') + file|default('') + var|default('') }}"
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
-    dest: "{{ item.dest|default(item.name|default(item, true), true)|defaultDir(_dir) if not item.destTemplate is defined else lookup('templateVar', item.destTemplate)|defaultDir(_dir) }}"
+    dest: "{{ item.dest|default(item.name|default(item.src|default(item, true), true), true)|defaultDir(_dir) if not item.destTemplate is defined else lookup('templateVar', item.destTemplate)|defaultDir(_dir) }}"
     do_become: "{{dest|should_become(owner, ansible_user_id, group, ansible_user_gid)}}"
 
 - name: "Assemble .d directory"
