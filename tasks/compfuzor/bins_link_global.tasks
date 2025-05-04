@@ -15,5 +15,5 @@
   become: "{{_dest|should_become(OWNER|default(), ansible_user_gid, GROUP|default(), ansible_user_gid)}}"
   when: item.global|default(False) and item.delay|default(False) == delay_phase|default(False)
   vars:
-    _src: "{{item.src|default(item.name|default(item.link))}}"
-    _dest: "{{item.global if item.global is string else item.dest|default(_src|basename)|defaultDir(GLOBAL_BINS_DIR)}}"
+    _src: "{{item.src|default(item.name|default(item.link, True), True)}}"
+    _dest: "{{(item.global if item.global|default(False) is string else item.dest|default(item.name|default(_src|basename, True), True))|defaultDir(GLOBAL_BINS_DIR)}}"
