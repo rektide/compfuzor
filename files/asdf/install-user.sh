@@ -33,7 +33,6 @@ do
 	then
 		echo installing plugin $plugin
 		asdf plugin add $plugin $url
-
 	else
 		echo skipping plugin $plugin, already installed
 	fi
