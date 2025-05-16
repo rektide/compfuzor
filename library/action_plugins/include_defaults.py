@@ -20,6 +20,7 @@ __metaclass__ = type
 
 import os
 
+from ansible._internal._datatag import _tags
 from ansible.errors import AnsibleError
 from ansible.module_utils.common.text.converters import to_text
 from ansible.plugins.action import ActionBase
@@ -47,7 +48,11 @@ class ActionModule(ActionBase):
                 data = {}
             if not isinstance(data, dict):
                 raise AnsibleError("%s must be stored as a dictionary/hash" % filename)
-            data = {k:v for (k,v) in data.items() if k not in task_vars }
+            data = {
+                k: _tags.TrustedAsTemplate().tag(v)
+                for (k, v) in data.items()
+                if k not in task_vars
+            }
             result['ansible_facts'] = data
             result['_ansible_no_log'] = not show_content
             self._task.action = "include_vars"
@@ -55,4 +60,4 @@ class ActionModule(ActionBase):
             result['failed'] = True
             result['msg'] = "Source file not found."
             result['file'] = filename or file
-        return result
+        return _tags.TrustedAsTemplate().tag(result)
