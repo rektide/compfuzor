@@ -10,6 +10,7 @@
 - import_tasks: compfuzor/_multi.tasks
   vars:
     multi: vars_hierarchy
+    keys: False
 - debug: "msg='Compfuzor: sourcing extra variables'"
 - import_tasks: compfuzor/vars_apt.tasks
 - import_tasks: compfuzor/vars_systemd.tasks
@@ -41,11 +42,17 @@
 - debug: "msg=''"
 - debug: "msg='Compfuzor: FILESYSTEM'"
 - import_tasks: compfuzor/fs_base.tasks
-  when: DIR|default(False) or DIRS|default(False) or FILES|default(False) and not DIR_BYPASS|default(False)
+  when: DIR|default(False) is truthy or DIRS|default(False) is truthy or FILES|default(False) is truthy and DIR_BYPASS|default(False) is not truthy
 - import_tasks: compfuzor/fs_repo.tasks
 - import_tasks: compfuzor/fs_env.tasks
   when: has_env.stdout|int != 0 or ENV|default(False) or ENV|default(False) == {} and not ENV_BYPASS|default(False)
-- import_tasks: compfuzor/fs_hierarchy_multi.tasks
+- import_tasks: compfuzor/_multi.tasks
+  vars:
+    multi: fs_hierarchy
+    keys:
+      - "DIRS"
+      - "DIR"
+      - "FILES"
   when: not FS_BYPASS|default(False)
 - import_tasks: compfuzor/fs_srcs_too.tasks
   when: type == "src" and not FS_SRCS_BYPASS|default(False)
@@ -66,6 +73,8 @@
 - import_tasks: compfuzor/_multi.tasks
   vars:
     multi: fs_d
+    keys:
+      - "D"
   when: not FS_BYPASS|default(False)
 - import_tasks: compfuzor/fs_base_d.tasks
 - debug: "msg='Compfuzor: completed filesystem'"

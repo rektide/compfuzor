@@ -1,4 +1,12 @@
-- include_tasks: "{{ multi }}.tasks"
+- name: "include fs_hierarchy"
+  include_tasks: "{{multi}}.tasks"
+  when: matches and not bypass
   loop: "{{DIRSET}}"
+  loop_control:
+    loop_var: fs_hierarchy_loop
   vars:
-    include: "{{item}}"
+    include: "{{fs_hierarchy_loop}}"
+    upper: "{{fs_hierarchy_loop|upper}}"
+    bypass: "{{lookup('vars', upper + '_BYPASS', default=False) or lookup('vars', upper + '_D_BYPASS', default=False)}}"
+    regex: "^{{upper}}_({{keys|default('', True)|join('|')}})$"
+    matches: "{{keys is falsy or query('varnames', regex)|length > 0}}"
