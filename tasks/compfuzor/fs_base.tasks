@@ -9,7 +9,7 @@
   become: "{{should_become}}"
   vars:
     should_become: "{{DIR|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: DIR|default(True)
+  when: DIR|default(True) is truthy
 - name: "Creating `DIRS`"
   file:
     path: "{{_dest}}"
@@ -19,7 +19,7 @@
     group: "{{should_become|ternary(GROUP|default(ansible_user_gid),omit)}}"
   with_items: DIRS
   become: "{{should_become}}"
-  when: DIRS is defined
+  when: DIRS is defined and DIRS is truthy
   vars:
     _dest: "{{item|defaultDir(DIR)}}"
     should_become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
@@ -32,7 +32,7 @@
     group: "{{should_become|ternary(GROUP|default(ansible_user_gid),omit)}}"
   with_items: "{{FILES}}"
   become: True
-  when: FILES is defined and FILES is not mapping and not item.line|default(False)
+  when: FILES is defined and FILES is not mapping and item.line|default(False) is not truthy
   vars:
     dest: "{{DIR}}/{{item.dest|default(item.name)|default(item)}}"
     should_become: "{{dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"

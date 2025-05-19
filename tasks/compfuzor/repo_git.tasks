@@ -5,7 +5,7 @@
     owner: "{{ OWNER|default(ansible_user_id)|default(omit) }}"
     group: "{{ GROUP|default(ansible_group_id)|default(omit) }}"
   become: "{{dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: REPO|default(False) or REPOS|default(False)
+  when: REPO|default(False) is truthy or REPOS|default(False) is truthy
   vars:
     dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
 - name: "Compfuzor: fetch git repository"
@@ -17,7 +17,7 @@
     version: "{{ GIT_VERSION|default(omit) }}"
     update: "{{GIT_UPDATE|default(omit)}}"
   #become: "{{dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: REPO|default(False)
+  when: REPO|default(False) is truthy
   vars:
     dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
 
@@ -45,6 +45,6 @@
     reference: "{{ item.reference|defaultDir(SRCS_DIR) if item.reference|default(False) else omit }}"
   become: "{{ dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
   with_items: "{{ REPOS if REPOS|default(False) else [] }}"
-  when: REPOS|default(False) and REPOS is not mapping
+  when: REPOS|default({}) is not mapping
   vars:
     dest: "{{ REPO_DIR }}/{{item.repo|default(item)|basename|regex_replace('\\.git$', '') }}"
