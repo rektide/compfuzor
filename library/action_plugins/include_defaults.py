@@ -15,7 +15,8 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
-from __future__ import (absolute_import, division, print_function)
+from __future__ import absolute_import, division, print_function
+
 __metaclass__ = type
 
 import os
@@ -53,7 +54,7 @@ class ActionModule(ActionBase):
                 for (k, v) in data.items()
                 if k not in task_vars
             }
-            result['ansible_facts'] = data
+            result['ansible_facts'] = _tags.TrustedAsTemplate().tag(data)
             result['_ansible_no_log'] = not show_content
             self._task.action = "include_vars"
         else:
