@@ -44,11 +44,11 @@
     UUID: "{{uuid}}"
     PASSWORD: "{{dict(PASSWORDS | default([]) | zip(passwords) | list) | combine(PASSWORD|default({}))}}"
     TIMESTAMP_CF: "{{TIMESTAMP_CF|default(timestamp)}}"
-    NAME: "{{name}}"
-    TYPE: "{{TYPE|default(name)}}"
+    NAME: "{{name_}}"
+    TYPE: "{{TYPE|default(name_)}}"
     PREFIX_DIR: "{{prefix}}"
-    DIR: "{{prefix}}/{{name}}"
-    hostnum: "{% for i in play_hosts %}{{ loop.index0 if play_hosts[loop.index0] == inventory_hostname else '' }}{% endfor %}"
+    DIR: "{{prefix}}/{{name_}}"
+    hostnum: "{% for i in ansible_play_batch %}{{ loop.index0 if ansible_play_batch[loop.index0] == inventory_hostname else '' }}{% endfor %}"
     type: "{{type|default(typeDetect)}}"
   changed_when: False
   failed_when: False
@@ -70,11 +70,11 @@
     instanceName: "{{'-' if INSTANCE else ''}}{{INSTANCE|default('')}}"
     subinstance: "{{(SUBINSTANCE if SUBINSTANCE is string else MACHINE_ID) if SUBINSTANCE|default(False) else ''}}"
     subinstanceName: "{{'-' if subinstance|default(False) else ''}}{{subinstance|default('')}}"
-    name: "{{NAME|default(TYPE + instanceName + subinstanceName)}}"
+    name_: "{{NAME|default(TYPE + instanceName + subinstanceName)}}"
     prefixType: "{{hostvars[inventory_hostname][type_|upper+'S_DIR']|default()}}"
     prefixDir: "{{DIR|default()|dirname}}"
     prefix: "{{PREFIX_DIR|default(prefixDir|default(prefixType, true), true)}}"
-    dir: "{{DIR|default(prefix + '/' + name)}}"
+    dir: "{{DIR|default(prefix + '/' + name_)}}"
 
 - name: "Include usermode common vars"
   include_defaults: file=vars/common.user.yaml
