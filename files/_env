@@ -1,3 +1,4 @@
+{% set ns = namespace(keys=[]) %}
 {% macro def(var, val) -%}
 
 {% if val == True and val|string != "1" -%}
@@ -16,7 +17,7 @@
 {% if env is none -%}
 {% elif env is mapping -%}
 {% for key,val in env.items() -%}
-	{{ keys.append(key) -}}
+	{% set ns.keys = ns.keys + [key] -%}
 	{% for vsub in val|arrayitize -%}
 		{{ def(key,vsub) -}}
 	{% endfor -%}
@@ -24,12 +25,10 @@
 {% elif env is sequence and env is not string -%}
 {% for key in env -%}
 	{{ def(key, True) -}}
-	{{ keys.append(key) -}}
+	{% set ns.keys = ns.keys + [key] -%}
 {% endfor -%}
 {% endif -%}
 {% endmacro -%}
-
-{% set keys = []|unsafety -%}
 
 {{ def("DIR", DIR) -}}
 {{ def("NAME", NAME) -}}
@@ -38,6 +37,6 @@
 {{ def("REPO", REPO|default("")) -}}
 {{ def("BUILD_DIR", BUILD_DIR|default("")) -}}
 {{ def("GLOBAL_BINS_DIR", GLOBAL_BINS_DIR|default("")) -}}
-{{ mdef(ENV_PRIO|default(None)) -}}
+{{ mdef(ENV_PRIO|default(None, True)) -}}
 {{ mdef(ENV|default(None)) -}}
-{{ def("COMPFUZOR_ENVS", keys|join(",")) -}}
+{{ def("COMPFUZOR_ENVS", ns.keys|join(",")) -}}
