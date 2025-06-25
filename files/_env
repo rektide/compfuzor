@@ -29,7 +29,7 @@
 {% endif -%}
 {% endmacro -%}
 
-{% set keys = [] -%}
+{% set keys = []|unsafety -%}
 
 {{ def("DIR", DIR) -}}
 {{ def("NAME", NAME) -}}
