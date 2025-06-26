@@ -86,7 +86,7 @@
     group: "{{should_become|ternary(group|default(ansible_user_gid, true),omit)}}"
   with_items: "{{_vals.dirs|default([], true) + _vals.d|default([], true)}}"
   become: "{{should_become}}"
-  when: _vals.dirs or _vals.d
+  when: _vals.dirs is truthy or _vals.d is truthy
   vars:
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"

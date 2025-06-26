@@ -69,55 +69,55 @@
 - import_tasks: compfuzor/bins_link_global.tasks
   when: BINS is defined and not BINS_BYPASS|default(False) and not GLOBAL_BINS_BYPASS|default(False)
 - import_tasks: compfuzor/links.tasks
-  when: not LINKS_BYPASS|default(False) and LINKS|default(False)
+  when: LINKS|default(False) is truthy and LINKS_BYPASS|default(False) is falsy
 - import_tasks: compfuzor/_multi.tasks
   vars:
     multi: fs_d
     keys:
       - "D"
-  when: not FS_BYPASS|default(False)
+  when: FS_BYPASS|default(False) is falsy
 - import_tasks: compfuzor/fs_base_d.tasks
 - debug: "msg='Compfuzor: completed filesystem'"
 
 - debug: "msg=''"
 - debug: "msg='Compfuzor: EXTRAS'"
 - import_tasks: compfuzor/pg.tasks
-  when: PG|default(False)
+  when: PG|default(False) is truthy
 - import_tasks: compfuzor/debconf.tasks
-  when: not DEBCONF_BYPASS|default(False)
+  when: DEBCONF_BYPASS|default(False) is falsy
 - import_tasks: compfuzor/apt.tasks
-  when: (APT_REPO|default(APT_REPOS)|default(False) or APT_LIST_URL|default(False)) and not APT_BYPASS|default(False)
+  when: (APT_REPO|default(APT_REPOS)|default(False) is truthy or APT_LIST_URL|default(False)) is truthy and APT_BYPASS|default(False) is falsy
 - import_tasks: compfuzor/pkgs.tasks
-  when: (PKGS is defined or PKGSET is defined or PKGSETS is defined) and not PKGS_BYPASS|default(False) and not USERMODE|default(False)
+  when: (PKGS is defined or PKGSET is defined or PKGSETS is defined) and PKGS_BYPASS|default(False) is falsy and USERMODE|default(False) is falsy
 - import_tasks: compfuzor/dbconfig.tasks
-  when: DBCONFIG|default(False) and not DBCONFIG_BYPASS|default(False)
+  when: DBCONFIG|default(False) is truthy and DBCONFIG_BYPASS|default(False) is falsy
 - import_tasks: compfuzor/kernel_modules.tasks
-  when: MODULES|default(False)
+  when: MODULES|default(False) is truthy
 - import_tasks: compfuzor/bins_run.tasks
-  when: not BINS_BYPASS|default(False) and not BINS_RUN_BYPASS|default(False)
+  when: BINS_BYPASS|default(False) is falsy and BINS_RUN_BYPASS|default(False) is falsy
 - import_tasks: compfuzor/make_autoconf.tasks
-  when: MAKE_AUTOCONF|default(False)
+  when: MAKE_AUTOCONF|default(False) is truthy
 - import_tasks: compfuzor/pkgconfig.tasks
-  when: PKGCONFIG|default(False)
+  when: PKGCONFIG|default(False) is truthy
 - import_tasks: compfuzor/sysctl.tasks
-  when: SYSCTLS|default(False) or SYSCTL|default(False)
+  when: SYSCTLS|default(False) is truthy or SYSCTL|default(False) is truthy
 - import_tasks: compfuzor/bins_link.tasks
   vars:
     delay_phase: postRun
 - import_tasks: compfuzor/bins_link_global.tasks
   vars:
     delay_phase: postRun
-  when: BINS is defined and not BINS_BYPASS|default(False) and not GLOBAL_BINS_BYPASS|default(False)
+  when: BINS is defined and BINS_BYPASS|default(False) is falsy and GLOBAL_BINS_BYPASS|default(False) is falsy
 - import_tasks: compfuzor/go.tasks
-  when: REPO_GO|default(False)
+  when: REPO_GO|default(False) is truthy
 - import_tasks: compfuzor/systemd.tasks
   vars:
     become: True
-  when: not SYSTEMD_BYPASS|default(False)
+  when: SYSTEMD_BYPASS|default(False) is falsy
 - include_tasks: systemd.thunk.tasks
   vars:
     service: "{{SYSTEMD_SERVICE}}{{ '@' + item if item != '' else '' }}"
-  when: not SYSTEMD_BYPASS|default(False) and not SYSTEMD_THUNK_BYPASS|default(False) and SYSTEMD_SERVICE|default(False) and SYSTEMD_EXEC is defined
+  when: SYSTEMD_BYPASS|default(False) is falsy and not SYSTEMD_THUNK_BYPASS|default(False) and SYSTEMD_SERVICE|default(False) and SYSTEMD_EXEC is defined
   with_items: "{{SYSTEMD_INSTANCES|default([''])}}"
 
 - debug: "msg='Compfuzor: complete. Returning to main playbook.'"
