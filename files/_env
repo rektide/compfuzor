@@ -14,7 +14,7 @@
 {%- endmacro -%}
 
 {% macro mdef(env) -%}
-{% if env is none -%}
+{% if env is none -%}{{""}}
 {% elif env is mapping -%}
 {% for key,val in env.items() -%}
 	{% set ns.keys = ns.keys + [key] -%}
