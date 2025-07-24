@@ -2,7 +2,7 @@
   when: pg_pw is not defined
 - file: path="{{pg_location}}" owner="{{pg_acct}}" state="directory"
   become: True
-- postgresql_user:
+- community.postgresql.postgresql_user:
     name="{{pg_user}}"
     password="{{pg_pw}}"
     db="postgres"
@@ -10,7 +10,7 @@
     login_password="{{pg_admin_pw}}"
     login_host="{{pg_host}}"
     port="{{pg_port}}"
-#- postgresql_tablespace:
+#- community.postgresql.postgresql_tablespace:
 #    name="{{pg_ts}}"
 #    owner="{{pg_user}}"
 #    location="{{pg_location}}"
@@ -18,7 +18,7 @@
 #    login_password="{{pg_admin_pw}}"
 #    login_host="{{pg_host}}" 
 #    port="{{pg_port}}"
-- postgresql_db:
+- community.postgresql.postgresql_db:
     name="{{pg_db}}"
     owner="{{pg_user}}"
     login_user="{{pg_admin}}"
@@ -27,7 +27,7 @@
     port="{{pg_port}}"
   when: pg_ts is defined and pg_ts
 #    tablespace="{{pg_ts}}"
-- postgresql_db:
+- community.postgresql.postgresql_db:
     name="{{pg_db}}"
     owner="{{pg_user}}"
     login_user="{{pg_admin}}"
