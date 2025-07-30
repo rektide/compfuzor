@@ -1,0 +1,27 @@
+{% macro phrase(name, expression) -%}{{""-}}
+{%- for el in expression|default([])|arrayitize -%}
+{{ name }}={{ el if el != False and el != True else el|ternary('true', 'false') }}
+{% endfor -%}
+{%- endmacro -%}
+
+{%- macro phrases(name) -%}
+{% set phrs = hostvars[inventory_hostname]['SYSTEMD_PHRASES_'+name|upper]|default(vars['SYSTMED_PHRASES_'+name|upper]) -%}
+{% for phr in phrs %}
+{% for val in hostvars[inventory_hostname]['SYSTEMD_' + phr|upper|replace(' ', '_')]|default(vars['SYSTEMD_' + phr|upper|replace(' ', '_')])|default([])|arrayitize %}
+{{ phr|replace(' ', '') }}={{ val if val != True and val != False else val|ternary('true', 'false') }}
+{% endfor -%}
+{% endfor -%}
+{% endmacro -%}
+
+[Unit]
+Description=Filesystem bind - {{NAME}}
+
+[Mount]
+{{phrase('What', SYSTEMD_WHAT)}}
+{{phrase('Where', SYSTEMD_WHERE)}}
+{{phrase('Type', SYSTEMD_MOUNT_TYPE)}}
+{{phrase('Options', SYSTEMD_MOUNT_OPTIONS)}}
+
+[Install]
+{{phrase('WantedBy', SYSTEMD_WANTED_BY)}}
+{{phrase('WantedBy', EMPTY_NOPE)}}
