@@ -32,21 +32,21 @@
 
 - name: "creating unit directory" # now usually ETC but let's do it
   file:
-    path: "{{path}}"
+    path: "{{i}}"
     state: directory
   loop:
     - "{{ dest | dirname }}"
     - "{{ link | dirname }}"
   loop_control:
-    loop_var: path
-  when: unit or units
+    loop_var: i
+  when: unit is truthy or units is truthy
   #become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 - name: templating in unit
   template:
     src: "{{src}}"
     dest: "{{dest}}"
-  when: unit
+  when: unit is truthy
   #become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 - name: link target unit in etc
@@ -54,12 +54,12 @@
     src: "{{dest}}"
     dest: "{{link}}"
     state: link
-  when: unit|default(False)
+  when: unit is truthy
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 - name: enabling unit
   shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{link | basename}}"
-  when: unit and SYSTEMD_ENABLE|default(True) != False
+  when: unit is truthy and SYSTEMD_ENABLE|default(True) != False
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 
@@ -68,22 +68,24 @@
   with_items: "{{units}}"
   loop_control:
     loop_var: i
-  when: units|bool and units != False
+  when: units is truthy
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 - name: enabling units
   shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{i}}"
   with_items: "{{units}}"
-  when: units|bool and units != False
+  when: units is truthy
   loop_control:
     loop_var: i
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 - name: install systemd unit\'s .d directory
-  include_tasks: compfuzor/fs_d.tasks fs_path="{{SYSTEMD_UNIT_DIR}}/{{dest}}"
-  when: d|default(False)
-  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
+  include_tasks: compfuzor/fs_d.tasks
+  vars:
+    fs_path: "{{SYSTEMD_UNIT_DIR}}/{{dest}}"
+  when: d is truthy
+  #become: USERMODE|default(False) is falsy and SYSTEMD_USERMODE|default(False) is falsy
 - name: link systemd unit\'s .d directory to etc
   file:
   args:
     src: "{{dest}}.d"
     dest: "{{ETC}}/{{dest|basename}}.d"
-  when: d|default(False)
+  when: d is truthy

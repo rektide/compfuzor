@@ -11,10 +11,11 @@
   - socket
   - dnssd
   - mount
-  when: vars[v]|default(False) or hostvars[inventory_hostname][v]|default(False)
+  when: vars[v]|default(False) is truthy or hostvars[inventory_hostname][v]|default(False) is truthy
   vars:
     v: "SYSTEMD_{{item|upper}}"
     unit_type: "{{item}}"
+- fail: msg=end
 - set_fact:
     PREFIX_DIR: "{{_SYSTEMD_PREFIX_DIR}}"
-  when: _SYSTEMD_PREFIX_DIR|default(False)
+  when: _SYSTEMD_PREFIX_DIR|default(False) is truthy

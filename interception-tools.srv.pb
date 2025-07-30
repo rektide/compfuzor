@@ -20,4 +20,4 @@
             EVENTS:
               EV_KEY: [KEY_CAPSLOCK, KEY_ESC]
   tasks:
-  - include: tasks/compfuzor.includes type=srv
+    - import_tasks: tasks/compfuzor.includes

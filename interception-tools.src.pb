@@ -71,4 +71,4 @@
     - libudev-dev
     - libyaml-cpp-dev
   tasks:
-  - include: tasks/compfuzor.includes type=src
+  - import_tasks: tasks/compfuzor.includes
