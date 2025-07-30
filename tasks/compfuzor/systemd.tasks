@@ -15,7 +15,6 @@
   vars:
     v: "SYSTEMD_{{item|upper}}"
     unit_type: "{{item}}"
-- fail: msg=end
 - set_fact:
     PREFIX_DIR: "{{_SYSTEMD_PREFIX_DIR}}"
   when: _SYSTEMD_PREFIX_DIR|default(False) is truthy
