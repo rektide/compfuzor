@@ -46,4 +46,4 @@
       hasEnv: "{{has_env_export.stdout|default(0)|int > 0}}"
       skip: "{{ENV_IS_EXPORT|default(False)}}"
   vars:
-    _dest: "{{PREFIX_DIR}}/{{item}}.{{NAME|default(TYPE)}}"
+    _dest: "{{PREFIX_DIR}}/{{item.file}}.{{NAME|default(TYPE)}}"
