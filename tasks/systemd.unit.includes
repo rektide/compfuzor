@@ -5,9 +5,7 @@
     d: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'_D']|default(vars['SYSTEMD_'+unit_type|upper+'_D'])|default(False) }}"
     target: "{{TYPE|default(NAME)|default('.')}}"
     inst: "{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}"
-
     unitname: "{{ unitname }}"
-    unit: "{{ unit }}"
     src: "{{ src }}"
     dest: "{{ dest }}"
     link: "{{ link }}"
@@ -20,7 +18,10 @@
     unit: "{{ unitname }}{{ inst }}.{{unit_type}}"
     local_src: "files/{{unitname}}/{{unit}}"
     src: "{{ local_src if lookup('fileexists', local_src) else 'files/systemd.' + unit_type }}"
-    dest: "{{ETC}}/{{unit}}"
+    #src: "{{ 'testdata' if lookup('fileexists', local_src) is truthy else 'files/systemd.' + unit_type }}"
+    #src: "foo.fake {{unit_type|default('no-unit-type')}} {{local_src|default('no-local-src')}} {{lookup('fileexists', local_src)}}"
+    #src: "foo.fake {{unit_type|default('no-unit-type')}} {{local_src|default('no-local-src')}}"
+    dest: "{{ETC}}/{{unit|replace('/', '\/')}}"
     #dest: "{{SYSTEMD_UNIT_DIR}}/{{unit_name|default(NAME)|replace('.', '-')}}{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}.{{unit_type}}"
     link: "{{SYSTEMD_UNIT_DIR}}/{{unit}}"
 
