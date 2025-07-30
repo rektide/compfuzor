@@ -7,8 +7,7 @@ from ansible.errors import AnsibleError
 from ansible.plugins.lookup import LookupBase
 class LookupModule(LookupBase):
     def run(self, terms, varibles=None, **kwargs):
-
-	print (terms)
+        #print (terms)
 
         # FIXME: can remove once with_ special case is removed
         if isinstance(terms, list):
@@ -16,7 +15,6 @@ class LookupModule(LookupBase):
 
         results = []
         for term in terms:
-
             results.append({ "key": term, "value": terms[term] })
         print (results)
         return results

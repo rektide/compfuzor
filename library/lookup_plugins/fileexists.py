@@ -17,27 +17,28 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
+import collections.abc
 import os
-from ansible.errors import AnsibleError, AnsibleParserError
+from ansible.errors import AnsibleError
 from ansible.plugins.lookup import LookupBase
+from ansible.utils.display import Display
 
-try:
-	from __main__ import display
-except ImportError:
-	from ansible.utils.display import Display
-	display = Display()
+display = Display()
 
 class LookupModule(LookupBase):
 	def run(self, terms, variables=None, **kwargs):
-		for term in terms:
+		arr = terms if isinstance(terms, collections.abc.Sequence) and not isinstance(terms, str) else [terms]
+		display.vvvv("Fileexists test: %s" % arr)
+		for term in arr:
 			display.debug("Fileexists lookup term: %s" % term)
 			if os.path.exists(term):
-				return True
+				display.vvvv("Fileexists yes")
+				return [True]
 			## latter ansibles
 			#try:
 			#	lookupfile = self.find_file_in_search_path(variables, 'files', term)
 			#	display.vvvv(u"Fileexists lookup using %s as file" % lookupfile)
-			#	return True
+			#	return [True]
 			#except AnsibleError:
-			#	
-		return False
+			#	pass
+		return [False]

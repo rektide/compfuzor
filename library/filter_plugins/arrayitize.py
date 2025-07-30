@@ -1,6 +1,6 @@
 import collections
 import numbers
-from six import string_types
+from ansible.module_utils.six import string_types
 
 listType = type(list())
 
