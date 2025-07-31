@@ -2,7 +2,7 @@
 - hosts: all
   vars:
     TYPE: steamos-offload
-    INSTANCE: 'usr-local-src'
+    INSTANCE: 'usr-local'
     SYSTEMD_WHAT: "/home/.steamos/offload{{path}}"
     SYSTEMD_WHERE: "{{path}}"
     #SYSTEMD_WHAT: /%s
