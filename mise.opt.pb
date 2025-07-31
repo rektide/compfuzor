@@ -28,11 +28,11 @@
     BINS:
       - name: install.user.sh
         content: |
-          block-in-file -n mise -C -i {{DIR}}/etc/mise.zshrc -o "${ZSH_RC:-{{zsh_rc}}}"
-          block-in-file -n mise -C -i {{DIR}}/etc/mise.zprofile -o "${ZSH_PROFILE:-{{zsh_profile}}}"
+          block-in-file -n ${NAME:-{{NAME}}} -C -i {{DIR}}/etc/mise.zshrc -o "${ZSH_RC:-{{zsh_rc}}}"
+          block-in-file -n ${NAME:-{{NAME}}} -C -i {{DIR}}/etc/mise.zprofile -o "${ZSH_PROFILE:-{{zsh_profile}}}"
       - name: install-bash.user.sh
         content: |
-          block-in-file -n mise -C -i {{DIR}}/etc/mise.bashrc -o "${BASH_RC:-{{bash_rc}}}"
-          block-in-file -n mise -C -i {{DIR}}/etc/mise.bash_profile -o "${BASH_PROFILE:-{{bash_profile}}}"
+          block-in-file -n ${NAME:-{{NAME}}} -C -i {{DIR}}/etc/mise.bashrc -o "${BASH_RC:-{{bash_rc}}}"
+          block-in-file -n ${NAME:-{{NAME}}} -C -i {{DIR}}/etc/mise.bash_profile -o "${BASH_PROFILE:-{{bash_profile}}}"
   tasks:
     - import_tasks: tasks/compfuzor.includes
