@@ -1,4 +1,4 @@
-{% macro phrase(name, expression) -%}
+{% macro phrase(name, expression) -%}{{""-}}
 {%- for el in expression|default([])|arrayitize -%}
 {{ name }}={{ el if el != False and el != True else el|ternary('true', 'false') }}
 {% endfor -%}
