@@ -8,7 +8,7 @@
     #SYSTEMD_WHAT: /%s
     #SYSTEMD_WHERE: /home/.steamos/offload/%s
     SYSTEMD_TYPE: mount
-    SYSTEMD_MOUNT: "{{INSTANCE|replace('/', '-')}}"
+    SYSTEMD_MOUNT: "{{INSTANCE}}"
     SYSTEMD_MOUNT_TYPE: none
     SYSTEMD_MOUNT_OPTIONS: bind
     SYSTEMD_WANTED_BY: steamos-offload.target
