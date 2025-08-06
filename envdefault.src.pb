@@ -9,4 +9,4 @@
         global: True
         exists: False
   tasks:
-    - include: tasks/compfuzor.includes type=src
+    - import_tasks: tasks/compfuzor.includes
