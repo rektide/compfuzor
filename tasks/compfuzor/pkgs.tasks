@@ -12,4 +12,4 @@
     state: "{{APT_INSTALL}}"
     pkg: "{{_pkgs}}"
   become: "{{ PKG_BECOME|default(True) }}"
-  when: _pkgs|default([])|length or PKKGS|default(False)
+  when: _pkgs|default([])|length > 0 or PKGS is truthy

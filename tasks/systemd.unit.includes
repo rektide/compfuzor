@@ -77,7 +77,9 @@
   when: units is truthy
   loop_control:
     loop_var: i
-  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
+  vars:
+    do_become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
+  become: USERMODE|default(False) is falsy and SYSTEMD_USERMODE|default(False) is falsy
 - name: install systemd unit\'s .d directory
   include_tasks: compfuzor/fs_d.tasks
   vars:
