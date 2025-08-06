@@ -29,9 +29,9 @@
     group: "{{GROUP|default(omit)}}"
   with_items: "{{BINS|default([])}}"
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: (item is not mapping or (item.src|default(True) != False and item.name|default(False)) or item.src|default(False)) and (item.raw|default(False) or item.exec|default(False) or item.execs|default(False) or item.link|default(False) or item.content|default(False) or item.exists|default(False)) is falsy
+  when: (item is not mapping or (item.src|default(True) != False and item.name|default(False)) or item.src|default(False)) and (item.raw|default(False) or item.exec|default(False) or item.execs|default(False) or item.link|default(False) or item.content|default(False) and item.exists|default('')) != False
   vars:
-    _dest: "{{BINS_DIR}}/{{item.dest|default(item.name) if item is mapping else item}}"
+    _dest: "{{BINS_DIR}}/{{item.dest|default(item.name|default(item.src|basename)) if item is mapping else item}}"
 - name:  "Copy raw `BINS` into place`"
   copy:
     src: "files/{{ TYPE|default(NAME) }}/{{item.src|default(item.name) if item is mapping else item }}"
