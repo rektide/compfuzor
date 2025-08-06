@@ -10,12 +10,6 @@ Added latter, there are a host of other conventions: environment variables are a
 
 It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance. It provides a rich set of default directives which use a construct of context sensitivie settings to create ea consistend framework for emplacing software and processes.
 
-# History- CVE-2016-9587
-
-CompFuzor was built well before https://nvd.nist.gov/vuln/detail/CVE-2016-9587 , which radically reduced the expressiveness & flexibility of Ansible by making all evaluated expressions "unsafe" & unable to be further evaluated. This broke CompFuzor in a number of ways, since often a task will pull in or combine information, but Ansible now prevents iterative evaluation.
-
-For a long time, Ansible 2.1.4.0 was the most recent version of Ansible that would work. Recently the project is underway again trying to support more recent versions of Ansible.  There are certainly many kinks to be worked out, but many playbooks are once again working with a modern Ansible.
-
 # Conventions #
 
 ## Base System ##
