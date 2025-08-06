@@ -36,7 +36,7 @@
 {{ def("INSTANCE", INSTANCE|default("")) -}}
 {{ def("REPO", REPO|default("")) -}}
 {{ def("BUILD_DIR", BUILD_DIR|default("")) -}}
-{{ def("GLOBAL_BINS_DIR", GLOBAL_BINS_DIR|default("")) -}}
+{{ def("GLOBAL_BINS_DIR", _globalBins) -}}
 {{ mdef(ENV_PRIO|default(None, True)) -}}
 {{ mdef(ENV|default(None)) -}}
 {{ def("COMPFUZOR_ENVS", ns.keys|join(",")) -}}

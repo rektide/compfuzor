@@ -20,7 +20,7 @@
     LINKS:
     - src: /proc/self/mounts
       # symlinks don't work
-      dest: "{{VARS_DIR}}/{{NAME}}/overlay/etc/mtab"
+      dest: "{{VAR}}/overlay/etc/mtab"
       force: true
     ENV:
       DEBOS_SCRATCHSIZE: "{{scratchsize}}"
