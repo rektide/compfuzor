@@ -21,6 +21,13 @@
     (dpkg --print-architecture && dpkg --print-foreign-architectures) | tr "\n" ","; echo
     uuid -v4
     pwgen {{PASSWORD_LENGTH|default(20)}} -N {{PASSWORDS|default([])|length}} | tr "\n" ","; echo
+    echo $XDG_DATA_HOME
+    echo $XDG_CONFIG_HOME
+    echo $XDG_STATE_HOME
+    echo $XDG_DATA_DIRS
+    echo $XDG_CONFIG_DIRS
+    echo $XDG_CACHE_HOME
+    echo $XDG_RUNTIME_DIR
     echo last
   register: COMPFUZOR_BASE
   changed_when: False
@@ -35,6 +42,15 @@
     XDG_PUBICSHARE_DIR: "{{COMPFUZOR_BASE.stdout_lines[5]}}"
     XDG_TEMPLATES_DIR: "{{COMPFUZOR_BASE.stdout_lines[6]}}"
     XDG_VIDEOS_DIR: "{{COMPFUZOR_BASE.stdout_lines[7]}}"
+    # ref: https://wiki.archlinux.org/title/XDG_Base_Directory
+    XDG_DATA_HOME: "{{XDG_DATA_HOME|default(COMPFUZOR_BASE.stdout_lines[12]|default(HOMEDIR + '/.local/share'))}}"
+    XDG_CONFIG_HOME: "{{XDG_CONFIG_HOME|default(COMPFUZOR_BASE.stdout_lines[13]|default(HOMEDIR + '/.config'))}}"
+    XDG_STATE_HOME: "{{XDG_STATE_HOME|default(COMPFUZOR_BASE.stdout_lines[14]|default(HOMEDIR + '/.local/state'))}}"
+    XDG_DATA_DIRS: "{{XDG_DATA_DIRS|default(COMPFUZOR_BASE.stdout_lines[15]|default('/usr/local/share:/usr/share')))}}"
+    XDG_CONFIG_DIRS: "{{XDG_CONFIG_DIRS|default(COMPFUZOR_BASE.stdout_lines[16]|default('/etc/xdg'))}}"
+    XDG_CACHE_HOME: "{{XDG_CACHE_HOME|default(COMPFUZOR_BASE.stdout_lines[17]|default(HOMEDIR + '/.cache'}}"
+    XDG_RUNTIME_DIR: "{{XDG_RUNTIME_DIR|default(COMPFUZOR_BASE.stdout_lines[18]|default('/run/user/' + ansible_user_id))}}"
+
     MACHINE_ID: "{{MACHINE_ID|default(machineId)}}"
     SUBINSTANCE: "{{SUBINSTANCE|default(omit)}}"
     ARCH: "{{ARCH|default(arch)}}"

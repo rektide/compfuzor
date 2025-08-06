@@ -4,7 +4,6 @@
 - import_tasks: compfuzor/vars_type.tasks
 - import_tasks: compfuzor/vars_user.tasks
 - import_tasks: compfuzor/vars_env.tasks
-- import_tasks: compfuzor/vars_xdg.tasks
 - debug: "msg='Compfuzor: sourcing hierarchy vars'"
 - import_tasks: compfuzor/vars_fs.tasks
 - import_tasks: compfuzor/_multi.tasks
