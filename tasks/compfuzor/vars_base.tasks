@@ -19,7 +19,7 @@
     xdg-user-dir VIDEOS
     uname -r
     (dpkg --print-architecture && dpkg --print-foreign-architectures) | tr "\n" ","; echo
-    uuid -v4
+    uuidgen
     pwgen {{PASSWORD_LENGTH|default(20)}} -N {{PASSWORDS|default([])|length}} | tr "\n" ","; echo
     echo $XDG_DATA_HOME
     echo $XDG_CONFIG_HOME

@@ -4,8 +4,8 @@
     TYPE: ripgrep
     INSTANCE: main
     USERMODE: True
-    ZSHRC: "{{USERMODE|ternary(HOMEDIR + '.zshrc', '/etc/zsh/zshrc')}}"
-    BASHRC: "{{USERMODE|ternary(HOMEDIR + '.bashrc', '/etc/bash.bashrc')}}"
+    ZSHRC: "{{USERMODE|ternary(HOMEDIR + '/.zshrc', '/etc/zsh/zshrc')}}"
+    BASHRC: "{{USERMODE|ternary(HOMEDIR + '/.bashrc', '/etc/bash.bashrc')}}"
     ETC_FILES:
     - name: rg.env
       content: alias rg='rg --color never --with-filename --no-heading --line-number'
