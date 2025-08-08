@@ -17,12 +17,26 @@ return {
 		lazy = false,
 	},
 	"ojroques/nvim-osc52",
+	--{
+	--	"samjwill/nvim-unception",
+	--	lazy = false,
+	--	init = function()
+	--		--vim.g.unception_open_buffer_in_new_tab = true
+	--		vim.g.unception_enable_flavor_text = false
+	--	end,
+	--},
 	{
-		"samjwill/nvim-unception",
-		lazy = false,
-		init = function()
-			--vim.g.unception_open_buffer_in_new_tab = true
-			vim.g.unception_enable_flavor_text = false
-		end,
+		"AstroNvim/astrocore",
+		---@type AstroCoreOpts
+		opts = function(_, opts)
+			local utils = require "astrocommunity"
+			return require("astrocore").extend_tbl(opts, {
+				filetypes = {
+					extension = {
+						pb = "yaml"
+					},
+				},
+			})
+		},
 	},
 }
