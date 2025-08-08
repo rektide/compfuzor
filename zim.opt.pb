@@ -52,6 +52,7 @@
           #zmodule https://gitlab.com/Spriithy/basher.git
           #zmodule spaceship-prompt/spaceship-prompt --name spaceship --no-submodules
           zmodule sindresorhus/pure --source async.zsh --source pure.zsh
+          zmodule kiesman99/zim-zoxide
           
           # Completion
           # Additional completion definitions for Zsh.
