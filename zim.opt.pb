@@ -55,9 +55,14 @@
           #zmodule asciiship
           #zmodule https://gitlab.com/Spriithy/basher.git
           #zmodule spaceship-prompt/spaceship-prompt --name spaceship --no-submodules
-          zmodule sindresorhus/pure --source async.zsh --source pure.zsh
-          zmodule https://codeberg.org/iff/pay-respects
-
+          #zmodule sindresorhus/pure --source async.zsh --source pure.zsh
+          #zmodule https://github.com/joke/zim-oh-my-posh
+          #zmodule sorin
+          #zmodule agnoster
+          #zmodule eriner
+          zmodule minimal
+          zmodule magic-enter
+          
           # More
           zmodule exa
           zmodule fzf
@@ -77,11 +82,13 @@
           #zmodule https://github.com/lipov3cz3k/zsh-uv
           #zmodule https://github.com/MichaelAquilina/zsh-you-should-use
           #zmodule https://github.com/pressdarling/codex-zsh-plugin
+          # also needs: zstyle ':zim:plugins:alias-finder' autoload yes
           zmodule https://github.com/shanwker1223/zim-alias-finder
           zmodule https://github.com/shihanng/zim-atuin
           #zmodule https://github.com/shihanng/zim-kustomize
           #zmodule https://raw.githubusercontent.com/sheax0r/etcdctl-zsh/refs/heads/master/_etcdctl
-
+          zmodule https://codeberg.org/iff/pay-respects
+          
           # Completion
           # Additional completion definitions for Zsh.
           zmodule zsh-users/zsh-completions --fpath src

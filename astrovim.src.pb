@@ -34,6 +34,7 @@
       - tinymist
       - websocat
       - bacon
+      - fzf
     #LINKS:
     #  - src: "{{ETC}}/init.lua"
     #    dest: "{{REPO_DIR}}/lua/user/init.lua"
