@@ -13,7 +13,7 @@
     - file: env.usermode
       hasEnv: "{{has_env_export.stdout|default(0)|int > 0}}"
       exportMode: True
-      skip: "{{True if ENV_USER is falsy else False}}"
+      skip: "{{True if ENV_USER|default(False) is falsy else False}}"
       usermode: True
     - file: env.export
       hasEnv: "{{has_env_export.stdout|default(0)|int > 0}}"

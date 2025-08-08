@@ -13,12 +13,11 @@
     _dest: "{{(item|basename if item is string else item.dest)|defaultDir(SRC)}}"
 
 - name: "save '.url' file"
-  file:
+  copy:
     content: "{{_url}}"
     dest: "{{_dest}}.url"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
-    validate_certs: "{{VALIDATE_CERTS|default(true)}}"
   with_items: "{{GET_URLS|default([])|arrayitize}}"
   become: "{{_dest|dirname|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: GET_URLS|default(False) is iterable
