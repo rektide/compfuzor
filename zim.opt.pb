@@ -3,27 +3,35 @@
   vars:
     TYPE: zim
     INSTANCE: main
-    GET_URL: https://github.com/zimfw/zimfw/releases/latest/download/zimfw.zsh
-    zim_home: "$HOME/.cache/zim"
-    zim_config_file: "$HOME/.config/zsh/zimrc"
+    GET_URLS:
+      - https://github.com/zimfw/zimfw/releases/latest/download/zimfw.zsh
     ENV:
-      - zim_home
-      - zim_config_file
+      zim_home: "$HOME/.cache/zim"
+      zim_config_file: "$HOME/.config/zsh/zimrc"
     BINS:
-      - name: install.user.sh
+      - name: install-user.sh
         basedir: False
-        content: 
+        content: |
+          if [ -e $ZIM_CONFIG_FILE ]
+          then
+            echo config file already exists, skipping: $ZIM_CONFIG_FILE >&2
+          else
+            mkdir -p $(dirname $ZIM_CONFIG_FILE)
+            echo linking config: file $CONFIG_FILE
+            ln -s $DIR/etc/zimrc $ZIM_CONFIG_FILE
+          fi
+          echo adding to .zshrc: {{DIR}}/etc/zim.zsh
           block-in-file -n {{NAME}} -i {{DIR}}/etc/zim.zsh -o ${ZDOTDIR:-$HOME}/.zshrc
     ETC_FILES:
       - name: zim.zsh
         content: |
-          ZIM_CONFIG_FILE="${ZIM_CONFIG_FILE:-{{zim_config_file}}}"
-          ZIM_HOME="${ZIM_HOME:-{{zim_home}}}"
-          source ${ZIM_HOME:-{{zim_home}}}/init.zsh
+          ZIM_CONFIG_FILE="${ZIM_CONFIG_FILE:-{{ENV.zim_config_file}}}"
+          ZIM_HOME="${ZIM_HOME:-{{ENV.zim_home}}}"
           # Install missing modules and update ${ZIM_HOME}/init.zsh if missing or outdated.
           if [[ ! ${ZIM_HOME}/init.zsh -nt ${ZIM_CONFIG_FILE:-${ZDOTDIR:-${HOME}}/.zimrc} ]]; then
-            source ${ZIM_HOME}/zimfw.zsh init
+            source {{DIR}}/src/zimfw.zsh init
           fi
+          source ${ZIM_HOME:-{{ENV.zim_home}}}/init.zsh
       - name: zimrc
         content: |
           # Module
