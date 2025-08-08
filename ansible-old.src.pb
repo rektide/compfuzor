@@ -28,7 +28,7 @@
     - passlib
     - pycrypto
     python: "python2.7"
-    ENVS:
+    ENV:
       AP2_VERSION: "{{version}}"
     BINS:
     - name: install-pip.sh

@@ -4,8 +4,7 @@
     TYPE: wrpc
     INSTANCE: git
     REPO: https://github.com/bytecodealliance/wrpc
-    ENVS:
-      hi: ho
+    ENV: True
     BINS:
       - name: build.sh
         exec: |

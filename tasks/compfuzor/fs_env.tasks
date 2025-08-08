@@ -6,7 +6,7 @@
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: (item.hasEnv or ENV|default(False)) and not item.skip|default(False)
+  when: (item.hasEnv or ENV|default(False) is truthy) and not item.skip|default(False)
   loop:
     - file: env
       hasEnv: "{{has_env.stdout|default(0)|int > 0}}"
@@ -26,7 +26,7 @@
     _src: "{{_srcDefault if not item.hasEnv else _srcHas}}"
     export_mode: "{{item.exportMode|default(False)}}"
     _usermode: "{{item.usermode|default(USERMODE|default(False)) is truthy}}"
-    _globalBins: "{{_usermode|ternary(USERMODE_GLOBAL_BINS_DIR, GLOBAL_BINS_DIR + '/xyz')}}"
+    _globalBins: "{{_usermode|ternary(USERMODE_GLOBAL_BINS_DIR, GLOBAL_BINS_DIR)}}"
 
 # in case one only needs a env, and env.export is the same
 - name: link env export to env if the same
@@ -45,7 +45,7 @@
     group: "{{GROUP|default(omit)}}"
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   # might be cool to have an exists check that ignores dead symlinks
-  when: PREFIX_DIR|default(False) and (item.hasEnv or ENV|default(False)) and not item.skip|default(False) and _dest is not exists
+  when: PREFIX_DIR|default(False) and (item.hasEnv or ENV|default(False) is truthy) and not item.skip|default(False) and _dest is not exists
   loop:
     - file: env
       hasEnv: "{{has_env.stdout|default(0)|int > 0}}"

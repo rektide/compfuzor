@@ -41,7 +41,7 @@
     REPREPRO_DISTRO: main
     IMAGE: "{{VAR}}/pdebuild-cross.tgz"
 
-    ENVS:
+    ENV:
     - var
     - bins_dir
     - image
