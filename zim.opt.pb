@@ -8,6 +8,11 @@
     ENV:
       zim_home: "$HOME/.cache/zim"
       zim_config_file: "$HOME/.config/zsh/zimrc"
+    PKGS:
+      - bat
+      - eza
+      - fzf
+      - zoxide
     BINS:
       - name: install-user.sh
         basedir: False
@@ -72,6 +77,7 @@
           zmodule https://github.com/hmgle/aider-zsh-complete
           #zmodule https://github.com/jnooree/zoxide-zsh-completion
           zmodule kiesman99/zim-zoxide
+          #zmodule https://github.com/agkozak/zsh-z
           #zmodule https://github.com/joke/zim-helm
           #zmodule https://github.com/joke/zim-github-cli
           #zmodule https://github.com/joke/zim-kn
@@ -79,7 +85,7 @@
           #zmodule https://github.com/joke/zim-k9s
           #zmodule https://github.com/joke/zim-skaffold
           #zmodule https://github.com/joke/zim-yq
-          #zmodule https://github.com/lipov3cz3k/zsh-uv
+          zmodule https://github.com/lipov3cz3k/zsh-uv
           #zmodule https://github.com/MichaelAquilina/zsh-you-should-use
           #zmodule https://github.com/pressdarling/codex-zsh-plugin
           # also needs: zstyle ':zim:plugins:alias-finder' autoload yes
