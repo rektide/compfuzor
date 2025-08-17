@@ -34,5 +34,4 @@
 - import_tasks: ../apt.update.tasks
   vars:
     repo: "{{APT_SOURCELIST}}"
-  when: not APT_UPDATE_BYPASS|default(False)
-  become: True
+  when: APT_UPDATE_BYPASS is deffalsy

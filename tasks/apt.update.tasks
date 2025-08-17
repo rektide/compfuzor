@@ -1,4 +1,6 @@
 ---
 # http://askubuntu.com/questions/65245/apt-get-update-only-for-a-specific-repository
 - name: "Update repository {{repo}}"
-  shell: apt-get update -o Dir::Etc::sourcelist="sources.list.d/{{repo}}.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"
+  shell:
+    cmd: "apt-get update -o Dir::Etc::sourcelist='sources.list.d/{{repo}}.list' -o Dir::Etc::sourceparts='-' -o APT::Get::List-Cleanup='0'"
+  become: True
