@@ -119,4 +119,4 @@
   when: SYSTEMD_BYPASS|default(False) is falsy and not SYSTEMD_THUNK_BYPASS|default(False) and SYSTEMD_SERVICE|default(False) and SYSTEMD_EXEC is defined
   with_items: "{{SYSTEMD_INSTANCES|default([''])}}"
 
-- debug: "msg='Compfuzor: complete. Returning to main playbook.'"
+- debug: "msg='Compfuzor: `{{NAME}}` complete. Returning to main playbook.'"
