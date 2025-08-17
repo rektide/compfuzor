@@ -34,8 +34,8 @@
       - name: "{{_trusted}}"
         ext: "{{_gpg}}{{_armor}}"
         dir: /usr/share/keyrings
-        template: "files/apt-repos/{{_trusted}}{{_gpg}}"
-        conditional: "{{ (_trusted + _gpg) is file }}"
+        template: "files/apt-repos/{{_trusted}}.{{_gpg}}"
+        conditional: "{{ (_trusted + '.' + _gpg) is file }}"
       # alt to above, keyring via url
       - name: "{{_trusted}}"
         ext: "{{_gpg}}{{_armor}}"
