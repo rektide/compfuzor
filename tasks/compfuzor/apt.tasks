@@ -31,6 +31,12 @@
   with_items: "{{APT_INSTALLS}}"
   when: item.dir|default(False) and (ETC + '/' + item.name + _ext) is file
   become: True
+
+- name: Grant etc read permissions
+  file:
+    path: "{{ETC}}"
+    mode: o+rx
+
 - import_tasks: ../apt.update.tasks
   vars:
     repo: "{{APT_SOURCELIST}}"
