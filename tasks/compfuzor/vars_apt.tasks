@@ -40,7 +40,7 @@
       - name: "{{_trusted}}"
         ext: "{{_gpg}}{{_armor}}"
         dir: /usr/share/keyrings
-        url: "{{APT_KEYRING_URL|default('')}}"
+        url: "{{APT_KEYRING_URL|def}}"
 - action: include_defaults
   args:
     file: "vars/pkgs.yaml"

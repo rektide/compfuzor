@@ -9,27 +9,31 @@
     url: "{{item.url}}"
     dest: "{{ETC}}/{{item.name}}{{_ext}}"
   with_items: "{{APT_INSTALLS}}"
-  when: item.url|default(False)
+  when: item is having("url", "conditional")
   become: True
 - name: "Template in apt file"
   template:
     src: "files/{{item.template}}"
     dest: "{{ETC}}/{{item.name}}{{_ext}}"
   with_items: "{{APT_INSTALLS}}"
-  when: item.template|default(False) and item.conditional|default(False)
+  when: item is having("template", "conditional")
   become: True
 - name: "Dearmor apt-keys"
   shell:
     cmd: "gpg --yes --output {{APT_TRUSTED}}.gpg --dearmor {{APT_TRUSTED}}.gpg.armor"
     chdir: "{{ETC}}"
-  when: APT_DEARMOR|default(False)
+  when: APT_DEARMOR is deftruthy
+
 - name: "Link apt list and gpg"
   file:
     state: link
-    src: "{{ETC}}/{{item.name}}{{_ext}}"
-    dest: "{{item.dir}}/{{item.name}}{{_ext}}"
+    src: "{{_src}}"
+    dest: "{{item.dir}}/{{_name}}"
   with_items: "{{APT_INSTALLS}}"
-  when: item.dir|default(False) and (ETC + '/' + item.name + _ext) is file
+  when: item is having("dir") and item.conditional|def(True) and _src is file
+  vars:
+    _name: "{{item.name}}{{_ext}}"
+    _src: "{{ETC}}/{{_name}}"
   become: True
 
 - name: Grant etc read permissions
