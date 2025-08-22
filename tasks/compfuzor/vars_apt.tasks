@@ -38,9 +38,10 @@
         conditional: "{{ (_trusted + '.' + _gpg) is file }}"
       # alt to above, keyring via url
       - name: "{{_trusted}}"
-        ext: "{{_gpg}}{{_armor}}"
+        ext: "{{_gpg}}"
         dir: /usr/share/keyrings
         url: "{{APT_KEYRING_URL|def}}"
+        conditional: "{{APT_KEYRING_URL|def}}"
 - action: include_defaults
   args:
     file: "vars/pkgs.yaml"

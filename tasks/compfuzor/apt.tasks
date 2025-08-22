@@ -7,10 +7,12 @@
 - name: "Download apt urls"
   ansible.builtin.get_url:
     url: "{{item.url}}"
-    dest: "{{ETC}}/{{item.name}}{{_ext}}"
+    dest: "{{ETC}}/{{item.name}}{{_ext}}{{_armor}}"
   with_items: "{{APT_INSTALLS}}"
   when: item is having("url", "conditional")
   become: True
+  vars:
+    _armor: "{{ '.armor' if APT_DEARMOR is deftruthy else '' }}"
 - name: "Template in apt file"
   template:
     src: "files/{{item.template}}"
