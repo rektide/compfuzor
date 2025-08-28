@@ -134,7 +134,7 @@
     agentArgs: {}
     serverArgs:
     #- "--tls-san $CLUSTER_DOMAIN"
-    - "{{ '--tls-san '+extraDomains|listify|join(',') if extraDomains|default(False) else '' }}"
+    - "{{ '--tls-san '+extraDomains|listify|concat(extraIpv4Domains)|join(',') if extraDomains|default(False) else '' }}"
     - "--cluster-domain $CLUSTER_DOMAIN"
     - "--cluster-cidr $CLUSTER_CIDR"
     - "--service-cidr $SERVICE_CIDR"
