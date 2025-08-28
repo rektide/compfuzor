@@ -3,7 +3,7 @@
 - set_fact:
     _SYSTEMD_PREFIX_DIR: "{{PREFIX_DIR|default(False)}}"
     PREFIX_DIR: "%h{{ PREFIX_DIR[1:] }}"
-  when: PREFIX_DIR|default(False) and PREFIX_DIR[0] == '~'
+  when: PREFIX_DIR|truthy and PREFIX_DIR[0] == '~'
 - include_tasks: ../systemd.unit.includes
   loop:
   - service

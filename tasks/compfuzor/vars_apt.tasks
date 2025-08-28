@@ -16,17 +16,18 @@
         ext: list
         dir: /etc/apt/sources.list.d
         template: _apt.list
-        conditional: "{{APT_REPO|default(False) or APT_REPOS|default(False)}}"
+        conditional: "{{APT_REPO|truthy or APT_REPOS|truthy}}"
       # alt to above, source.list via url
       - name: "{{_sourcelist}}"
         ext: list
         dir: /etc/apt/sources.list.d
         url: "{{APT_LIST_URL|default('')}}"
+        conditional: "{{APT_LIST_URL|truthy}}"
       - name: "{{_name}}"
         dir: /etc/apt/preferences.d
         ext: "pref"
         template: _apt-pin
-        conditional: "{{APT_PIN_PRIORITY|default(False)}}"
+        conditional: "{{APT_PIN_PRIORITY|truthy}}"
       - name: "{{_trusted}}"
         ext: "gpg.params"
         template: "files/apt-repos/{{_trusted}}.gpg.params"
@@ -41,7 +42,7 @@
         ext: "{{_gpg}}"
         dir: /usr/share/keyrings
         url: "{{APT_KEYRING_URL|def}}"
-        conditional: "{{APT_KEYRING_URL|def}}"
+        conditional: "{{APT_KEYRING_URL|truthy}}"
 - action: include_defaults
   args:
     file: "vars/pkgs.yaml"
