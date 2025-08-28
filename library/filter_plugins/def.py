@@ -12,6 +12,16 @@ def un_undefine(*a):
     return a[0]
 
 
+@accept_args_markers
+def truthy(*a):
+    """Replace undefined with none"""
+    if wrapped_test_undefined(a[0]):
+        if len(a) > 1:
+            return not not a[1]
+        return False
+    return not not a[0]
+
+
 class FilterModule(object):
     def filters(self):
-        return {"def": un_undefine}
+        return {"def": un_undefine, "truthy": truthy}
