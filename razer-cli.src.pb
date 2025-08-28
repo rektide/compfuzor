@@ -8,7 +8,7 @@
       - name: build.sh
         become: true
         run: true
-        contents:
+        content: |
           python setup.py install
   tasks:
     - include: tasks/compfuzor.includes type=src

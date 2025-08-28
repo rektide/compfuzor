@@ -9,7 +9,7 @@
       - rootfs
     ETC_FILES:
       - name: userpatches-compfuzor
-        contents: |
+        content: |
           #PACKAGE_LIST_ADDITIONAL="$PACKAGE_LIST_ADDITIONAL tmux neovim pipewire pipewire-bin pipewire-v4l2 pipewire-doc pipewire-libcamera pipewire-audio-client-libraries git wireless-tools usbip btrfs-progs bluez bluez-firmware gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-libav gstreamer1.0-pipewire gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-plugin-rtsp gstreamer1.0-plugin-vaapi"
           add_packages_to_rootfs tmux neovim tmux neovim pipewire pipewire-bin pipewire-v4l2 pipewire-doc pipewire-libcamera pipewire-audio-client-libraries git wireless-tools usbip btrfs-progs bluez bluez-firmware gstreamer1.0-alsa gstreamer1.0-gl gstreamer1.0-libav gstreamer1.0-pipewire gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly
           #gstreamer1.0-plugin-rtsp gstreamer1.0-plugin-vaapi

@@ -7,7 +7,7 @@
     - name: build.sh
       basedir: True
       run: True
-      contents: |
+      content: |
         mkdir -p release
         cd release
         cmake ..
