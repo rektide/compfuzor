@@ -8,7 +8,7 @@
       - name: tool-versions
         content: |
           bun 1.2
-          go 1.24
+          go 1
     BINS:
       - name: install.sh
         content: |
@@ -19,6 +19,6 @@
         basedir: False
         global: True
         content: |
-          exec bun run packages/opencode/src/index.ts $*
+          exec bun run dev
   tasks:
     - import_tasks: tasks/compfuzor.includes
