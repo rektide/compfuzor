@@ -1,5 +1,5 @@
 return {
-  "AstroNvim.astrocommunity",
+  "AstroNvim/astrocommunity",
   { import = "astrocommunity.bars-and-lines.lualine-nvim" },
   { import = "astrocommunity.bars-and-lines.vim-illuminate" },
   --{ import = "astrocommunity.completion.avante-nvim" },
