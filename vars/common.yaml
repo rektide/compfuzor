@@ -66,7 +66,7 @@ MEDIAS_DIR: /srv/media
 SYSTEMD_SYSTEM_UNIT_DIR: /etc/systemd/system
 DIRMODE: "0770"
 FILEMODE: "0660"
-GO_DIR: "src/{{go_url|deprefix('\\w+@')|deprefix('https?://')|regex_replace('^(\\w+):', '\\1/')|trim}}"
+GO_DIR: "src/{{go_url|default('')|deprefix('\\w+@')|deprefix('https?://')|regex_replace('^(\\w+):', '\\1/')|trim}}"
 PERSIST_VARS:
   - NAME
   - INSTANCE
@@ -114,7 +114,7 @@ PERSIST_VARS:
 CA_EXPIRY: "26280h"
 HOMEDIR: "~{{USER|default(OWNER)|default(ansible_user_id)}}/"
 GIT_DIR: "{{REPO_DIR|default(DIR, true)}}"
-__DEST: "{{item.dest|default(item.name)|default(item)|defaultDir(__defaultDir|default(DIR))}}"
+__DEST: "{{item.dest|default(item.name|default(item|default(DIR)))|defaultDir(__defaultDir|default(DIR))}}"
 MULTISTRAP_COMPONENTS:
   - main
   - contrib
