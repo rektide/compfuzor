@@ -3,6 +3,7 @@
   vars_files:
     - vars/common.yaml
   vars:
+    ETC_DIR: True
     TYPE: tailscale
     INSTANCE: main
     APT_LIST_URL: "https://pkgs.tailscale.com/stable/debian/{{APT_DEFAULT_DISTRIBUTION}}.tailscale-keyring.list"
@@ -12,5 +13,4 @@
     PKGS:
      - tailscale
   tasks:
-  #- include: tasks/compfuzor/apt.tasks
-  - include: tasks/compfuzor/pkgs.tasks
+    - import_tasks: tasks/compfuzor.includes
