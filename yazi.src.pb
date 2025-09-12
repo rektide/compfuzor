@@ -7,10 +7,10 @@
     ENV: {}
     BINS:
       - name: build.sh
-        contents: |
+        content: |
           cargo build --release --locked
       - name: install.sh
-        contents: |
+        content: |
           ln -s target/release/yazi ${GLOBAL_BINS_DIR}/yazi
     PKGS:
      - ffmpeg
