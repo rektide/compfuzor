@@ -17,12 +17,17 @@
         run: True
         become: True
         content: |
-          cat $DIR/etc/pam | envsubst | sudo block-in-file -C file /etc/pam.d/pam-ssh-agent-auth
-          echo "@include pam-ssh-agent-auth" | sudo block-in-file -n "$NAME" -C file -b "^@include common-auth" /etc/pam.d/sudo
-          cat $DIR/etc/sudoers | sudo block-in-file -n "$NAME" -C file /etc/sudoers.d/$NAME
+          cat $DIR/etc/sudoers | envsubst | sudo block-in-file -n "$NAME" -C -o /etc/sudoers.d/pam-ssh-agent-auth
+          cat $DIR/etc/pam | envsubst | sudo block-in-file -n "$NAME" -C -o /etc/pam.d/pam-ssh-agent-auth
+          echo "@include pam-ssh-agent-auth" | sudo block-in-file -n "$NAME" -b "^@include common-auth" /etc/pam.d/sudo
+      - name: install-key.sh
+        basedir: False
+        content: |
+          [ -z "$1" ] && echo "missing public key" >&2 && exit 1
+          cat $1 | sudo tee /etc/ssh/sudo_authorized_keys
     ENV:
       AUTHORIZED_KEYS: "{{file}}"
-    #file: /etc/ssh/sudoers_authorized_keys
-    file: "~/.ssh/authorized_keys"
+    file: /etc/ssh/sudoers_authorized_keys
+    #file: "~/.ssh/authorized_keys"
   tasks:
-    - include: tasks/compfuzor.includes type=etc
+    - import_tasks: tasks/compfuzor.includes
