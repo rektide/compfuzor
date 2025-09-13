@@ -6,6 +6,7 @@ GLOBAL_BINS_DIR: /usr/local/bin
 SRVS_DIR: /srv
 OPTS_DIR: /opt
 ETCS_DIR: /etc/opt
+REPOS_DIR: /etc/opt
 VARS_DIR: /var/lib
 LOGS_DIR: /var/log
 SPOOLS_DIR: /var/spool
