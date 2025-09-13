@@ -13,6 +13,8 @@
         content: |
           DENO_INSTALL=$DIR sh deno-install.sh $*
           ln -sf $DIR/bin/deno ${GLOBAL_BINS_DIR}/deno
+    PKGS:
+      - unzip
     ENV:
       GLOBAL_BINS_DIR: "{{GLOBAL_BINS_DIR}}"
   tasks:
