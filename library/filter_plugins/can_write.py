@@ -13,13 +13,28 @@ NumberTypes = (int, float)
 def good(arg):
     return arg is not None and arg != ""
 
-def to_uid( arg):
-    return arg if isinstance( arg, NumberTypes) else pwd.getpwnam( arg).pw_uid
 
-def to_gid( arg):
-    return arg if isinstance( arg, NumberTypes) else grp.getgrnam( arg).gr_gid
+def to_uid(arg):
+    if isinstance(arg, NumberTypes):
+        return arg
+    try:
+        return pwd.getpwnam(arg).pw_uid
+    except:
+        pass
+    return -1
 
-def diff_user( *a, **kw):
+
+def to_gid(arg):
+    if isinstance(arg, NumberTypes):
+        return arg
+    try:
+        grp.getgrnam(arg).gr_gid
+    except:
+        pass
+    return -1
+
+
+def diff_user(*a, **kw):
     if good(a[0]) and good(a[1]):
         u_req = to_uid( a[0])
         u_cur = to_uid( a[1])
