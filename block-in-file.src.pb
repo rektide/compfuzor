@@ -16,7 +16,7 @@
           [ ! -f '.tool-versions' ] && ln -s etc/tool-versions .tool-versions
 
           echo deno install
-          mise x -- deno install
+          deno install
           echo
 
           echo deno install --global
@@ -25,9 +25,11 @@
       - name: blockinfile
         basedir: False
         content: |
-          realdir="$(pwd)"
-          cd "{{DIR}}"
-          mise x --cd "$realdir" -- deno run block-in-file $*
+          #realdir="$(pwd)"
+          #cd "{{DIR}}"
+          #mise x --cd "$realdir" -- deno run block-in-file $*
+
+          deno run {{DIR}}/block-in-file.ts $*
     ENV:
       GLOBAL_BINS_DIR: "{{GLOBAL_BINS_DIR}}"
   tasks:
