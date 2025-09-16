@@ -24,7 +24,7 @@
         basedir: False
         content: |
           [ -z "$1" ] && echo "missing public key" >&2 && exit 1
-          cat $1 | sudo tee /etc/ssh/sudo_authorized_keys
+          cat $1 | sudo tee /etc/ssh/sudoers_authorized_keys
     ENV:
       AUTHORIZED_KEYS: "{{file}}"
     file: /etc/ssh/sudoers_authorized_keys

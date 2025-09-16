@@ -22,6 +22,10 @@
     BINS:
       - name: build.sh
         content: |
-          echo hiho
+          # manually for now update PKGBUILD with replacement-build
+          # manually for now update Makefile with -Wno-incompatible-pointer-types
+          # run once with configure then comment out configure in PKGBUILD
+          # maybe don't need all these flags?
+          makepkg -e --holdver
   tasks:
     - import_tasks: tasks/compfuzor.includes
