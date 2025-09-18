@@ -29,7 +29,7 @@
         content: |
           #export $(systemctl --user show-environment|grep SSH_AUTH_SOCK)
           # semi-hardcode for speed, & maybe race-conditions?
-          export SSH_AUTH_SOCK=$XDG_RUNTIME_DIR/ssh-agent.socket
+          export SSH_AUTH_SOCK=$XDG_RUNTIME_DIR/ssh-agent.sock
     ENV:
       SSH_AUTH_SOCK: "$XDG_RUNTIME_DIR/ssh-agent.sock"
     BINS:
