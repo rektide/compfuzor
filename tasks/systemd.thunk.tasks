@@ -2,7 +2,7 @@
 # VARIABLES
 # running - todo: check /proc/whatever/cgroup/systemd
 - name: get systemd service name
-  set_fact: THUNK_SERVICE="{{service if service|default(False) and service != True else TYPE}}.service"
+  set_fact: THUNK_SERVICE="{{service if service|default(False) and service != True and service != 'True' else TYPE}}.service"
 - name: "find if service {{THUNK_SERVICE}} was running"
   shell: systemctl {{SYSTEMD_OPTS_AND_SCOPE}} is-enabled "{{THUNK_SERVICE}}" -q; echo $?
   register: SYSTEMD_WAS_ENABLED

@@ -4,26 +4,27 @@
     units: "{{ varunits }}"
     d: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'_D']|default(vars['SYSTEMD_'+unit_type|upper+'_D'])|default(False) }}"
     target: "{{TYPE|default(NAME)|default('.')}}"
-    inst: "{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}"
+    inst: "{{inst}}"
     unitname: "{{ unitname }}"
     src: "{{ src }}"
     dest: "{{ dest }}"
     link: "{{ link }}"
   vars:
     # currently no support for UNITS here
-    varunit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False) }}"
+    varunit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False)|replace('\\-', '\x2d') }}"
     varunits: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default(False) }}"
     unitname: "{{ varunit|default(NAME|default(TYPE)) if varunit != True else TYPE|default(NAME) }}"
-    inst: "{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}"
-    unit: "{{ unitname }}{{ inst }}.{{unit_type}}"
+    inst: "{{'@' if SYSTEMD_INSTANCE|def else ''}}"
+    unit: "{{(unitname + inst + '.' + unit_type)|default('replace('/', '\/')|replace('\\-', '\x2d'))}}"
+    instanced: "{{(unitname + inst + SYSTEMD_INSTANCE + '.' + unit_type)|default('replace('/', '\/')|replace('\\-', '\x2d'))}}"
+
     local_src: "files/{{unitname}}/{{unit}}"
     src: "{{ local_src if lookup('fileexists', local_src) else 'files/systemd.' + unit_type }}"
     #src: "{{ 'testdata' if lookup('fileexists', local_src) is truthy else 'files/systemd.' + unit_type }}"
     #src: "foo.fake {{unit_type|default('no-unit-type')}} {{local_src|default('no-local-src')}} {{lookup('fileexists', local_src)}}"
     #src: "foo.fake {{unit_type|default('no-unit-type')}} {{local_src|default('no-local-src')}}"
-    dest: "{{ETC}}/{{unit|replace('/', '\/')}}"
+    dest: "{{ETC}}/{{unit}}"
     #dest: "{{SYSTEMD_UNIT_DIR}}/{{unit_name|default(NAME)|replace('.', '-')}}{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}.{{unit_type}}"
-    link: "{{SYSTEMD_UNIT_DIR}}/{{unit}}"
 
 #- name: testing for local target unit
 #  local_action: shell test ! -f "files/{{target}}/{{target}}{{inst}}.{{unit_type}}"; echo $?
@@ -37,7 +38,7 @@
     state: directory
   loop:
     - "{{ dest | dirname }}"
-    - "{{ link | dirname }}"
+    - "{{ SYSTEMD_UNIT_DIR }}"
   loop_control:
     loop_var: i
   when: unit is truthy or units is truthy
@@ -53,15 +54,17 @@
 - name: link target unit in etc
   file:
     src: "{{dest}}"
-    dest: "{{link}}"
+    dest: "{{SYSTEMD_UNIT_DIR}}/{{link}}"
     state: link
   when: unit is truthy
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 - name: enabling unit
-  shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{link | basename}}"
-  when: unit is truthy and SYSTEMD_ENABLE|default(True) != False
+  shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable '{{enable_unit}}'"
+  when: unit is truthy and SYSTEMD_ENABLE|default(True) != False and (not SYSTEMD_INSTANCE|truthy or SYSTEMD_INSTANCE|truthy != True)
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
+  var:
+    enable_unit: "{{ instanced if SYSTEMD_INSTANCE|truthy else unit }}"
 
 
 - name: templating units

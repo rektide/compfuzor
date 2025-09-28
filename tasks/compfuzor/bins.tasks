@@ -6,7 +6,7 @@
     mode: 0771
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
-  become: "{{BINS_DIR|should_become(OWNER|default(), ansible_user_gid, GROUP|default(), ansible_user_gid)}}"
+  become: "{{BINS_DIR|should_become(OWNER|default(), ansible_user_gid, GROUP|default(), ansible_user_gid)|bool}}"
   when: BINS|default(False) is truthy
 - name: "Create exec/execs `BINS`"
   template:
