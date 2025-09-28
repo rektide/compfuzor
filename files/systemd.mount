@@ -15,13 +15,30 @@
 
 [Unit]
 Description=Filesystem bind - {{NAME}}
+{% for key, value in (SYSTEMD_UNITS|default({}, True)).items() -%}
+{% for vsub in value|arrayitize -%}
+{{key}}={{value}}
+{% endfor -%}
+{% endfor -%}
+{{ '\n' -}}
 
 [Mount]
 {{phrase('What', SYSTEMD_WHAT)}}
 {{phrase('Where', SYSTEMD_WHERE)}}
 {{phrase('Type', SYSTEMD_MOUNT_TYPE)}}
 {{phrase('Options', SYSTEMD_MOUNT_OPTIONS)}}
+{% for key, value in (SYSTEMD_MOUNTS|default({}, True)).items() -%}
+{% for vsub in value|arrayitize -%}
+{{key}}={{value}}
+{% endfor -%}
+{% endfor -%}
+
 
 [Install]
 {{phrase('WantedBy', SYSTEMD_WANTED_BY)}}
 {{phrase('WantedBy', EMPTY_NOPE)}}
+{% for key, value in (SYSTEMD_INSTALLS|default({}, True)).items() -%}
+{% for vsub in value|arrayitize -%}
+{{key}}={{value}}
+{% endfor -%}
+{% endfor -%}
