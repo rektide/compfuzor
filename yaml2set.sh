@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'USAGE'
+Usage: yaml2set.sh [-r ROOT] FILE [FILE...]
+Flatten YAML nested keys into --set=path=value lines.
+Options:
+  -r, --root ROOT   Optional prefix to prepend to every path (e.g. 'myapp').
+
+Notes:
+- Requires either: yq (mikefarah/yq), or python3 with PyYAML, or Ruby (with built-in YAML).
+- Arrays are represented with [index], e.g. key.list[0].item=value
+- If ROOT is provided and the top-level is an array, output looks like ROOT[0]... (no extra dot).
+USAGE
+}
+
+ROOT=""
+FILES=()
+
+# Parse args
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -r|--root)
+      [[ $# -ge 2 ]] || { echo "Missing value for $1" >&2; exit 2; }
+      ROOT="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do FILES+=("$1"); shift; done
+      break
+      ;;
+    -*)
+      echo "Unknown option: $1" >&2
+      exit 2
+      ;;
+    *)
+      FILES+=("$1")
+      shift
+      ;;
+  esac
+done
+
+[[ ${#FILES[@]} -gt 0 ]] || { echo "No input files provided." >&2; usage; exit 2; }
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+run_with_yq() {
+  local root="$1"; shift
+  local f
+  for f in "$@"; do
+    yq -r --arg root "$root" '
+      def pstr($p):
+        reduce $p[] as $x
+          (""; . + (if ($x|type) == "string"
+                    then (if . == "" then "" else "." end) + ($x|tostring)
+                    else "["+($x|tostring)+"]"
+                    end));
+      paths(scalars) as $p
+      | "--set="
+        + (if $root == "" then "" else ($root + (if ($p[0]|type) == "number" then "" else "." end)) end)
+        + (pstr($p))
+        + "="
+        + (getpath($p) | tostring)
+    ' -- "$f"
+  done
+}
+
+run_with_python() {
+  # ROOT is passed as argv[1]
+  python3 - "$ROOT" "$@" <<'PY'
+import sys
+root = sys.argv[1]
+files = sys.argv[2:]
+
+try:
+    import yaml  # PyYAML
+except Exception:
+    sys.exit(5)
+
+from typing import Any, Iterable, Tuple, Union
+
+Scalar = Union[str, int, float, bool, None]
+
+def flatten(prefix: str, obj: Any) -> Iterable[Tuple[str, Scalar]]:
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            ks = str(k)
+            if prefix and not prefix.endswith(']'):
+                newp = f"{prefix}.{ks}"
+            else:
+                newp = f"{prefix}{ks}"
+            yield from flatten(newp, v)
+    elif isinstance(obj, list):
+        for i, v in enumerate(obj):
+            newp = f"{prefix}[{i}]"
+            yield from flatten(newp, v)
+    else:
+        yield (prefix, obj)
+
+def to_str(val: Scalar) -> str:
+    if isinstance(val, bool):
+        return "true" if val else "false"
+    if val is None:
+        return "null"
+    return str(val)
+
+for f in files:
+    if f == "-":
+        data = yaml.safe_load(sys.stdin.read())
+    else:
+        with open(f, "r", encoding="utf-8") as fh:
+            data = yaml.safe_load(fh)
+    if data is None:
+        continue
+    base = root or ""
+    if isinstance(data, (dict, list)):
+        for path, val in flatten(base, data):
+            print(f"--set={path}={to_str(val)}")
+    else:
+        # Scalar at root
+        path = base or ""
+        if path:
+            print(f"--set={path}={to_str(data)}")
+PY
+}
+
+run_with_ruby() {
+  ruby - "$ROOT" "$@" <<'RUBY'
+require 'yaml'
+
+root = ARGV.shift.to_s
+def to_s(val)
+  case val
+  when true then "true"
+  when false then "false"
+  when nil then "null"
+  else val.to_s
+  end
+end
+
+def flatten(prefix, obj, &blk)
+  case obj
+  when Hash
+    obj.each do |k, v|
+      ks = k.to_s
+      newp = if prefix.nil? || prefix.empty?
+               ks
+             elsif prefix.end_with?(']')
+               prefix + ks
+             else
+               prefix + "." + ks
+             end
+      flatten(newp, v, &blk)
+    end
+  when Array
+    obj.each_with_index do |v, i|
+      newp = "#{prefix}[#{i}]"
+      flatten(newp, v, &blk)
+    end
+  else
+    yield(prefix, obj)
+  end
+end
+
+ARGV.each do |file|
+  data =
+    if file == "-"
+      YAML.safe_load($stdin.read, permitted_classes: [], aliases: true)
+    else
+      YAML.load_file(file, permitted_classes: [], aliases: true)
+    end
+  next if data.nil?
+
+  base = root.dup
+  if data.is_a?(Hash) || data.is_a?(Array)
+    flatten(base, data) do |path, val|
+      puts "--set=#{path}=#{to_s(val)}"
+    end
+  else
+    unless base.empty?
+      puts "--set=#{base}=#{to_s(data)}"
+    end
+  end
+end
+RUBY
+}
+
+# Dispatcher: prefer yq, then python+PyYAML, then ruby
+if have yq; then
+  run_with_yq "$ROOT" "${FILES[@]}"
+elif python3 -c 'import yaml' >/dev/null 2>&1; then
+  run_with_python "${FILES[@]}"
+elif have ruby; then
+  run_with_ruby "${FILES[@]}"
+else
+  echo "Error: need one of: yq (mikefarah/yq), or python3 with PyYAML, or Ruby." >&2
+  exit 1
+fi
