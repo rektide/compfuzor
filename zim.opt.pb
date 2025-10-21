@@ -98,6 +98,7 @@
           # Completion
           # Additional completion definitions for Zsh.
           zmodule zsh-users/zsh-completions --fpath src
+          zmodule rektide/zim-niri
           # Enables and configures smart and extensive tab completion.
           # completion must be sourced after all modules that add completion definitions.
           zmodule completion
