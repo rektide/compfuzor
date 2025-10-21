@@ -10,6 +10,14 @@ from ansible import errors
 #NumberTypes = (types.IntType, types.LongType, types.FloatType)
 NumberTypes = (int, float)
 
+
+# WARNING
+# THIS FILE IS BROKEN AND CANNOT REALLY BE CORRECTED WITHOUT MASSIVE EFFORT:
+# ansible filters runs on the host, not the target.
+# but we are trying to calculate permissions on the target (with os.*/pwd.*/grp.* calls). if not ran on localhost it doesnt't work!
+# (afaict, we'd have to break tasks into two: first a stats gathering on each host, then an invocation using that.)
+
+
 def good(arg):
     return arg is not None and arg != ""
 

@@ -7,11 +7,15 @@ def defaultDir(path, defaultDir=False):
     #    defaultDir = 'files/' + environment.globals["TYPE"]
 
     first = path[0]
-    if first == "/" or first == "~" or first == ".":
+    if first == "/" or first == "~":  # or (dotAbsolute and first == "."):
         return path
     else:
         if not defaultDir:
             raise "NoDefaultDir"
+        if not isinstance(defaultDir, str):
+            raise "Need string defaultDir"
+        if not isinstance(path, str):
+            raise "Need string path"
         return defaultDir + "/" + path
 
 class FilterModule(object):
