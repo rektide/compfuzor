@@ -19,8 +19,6 @@
   when: LINKS|default(False) and not LINK_BYPASS|default(False)
   with_items: "{{ LINKS|listify }}"
   vars:
-    _fsh: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper])}}"
-    _relative: "{{DIR}}/{{include}}"
-    _dir: "{{FS_CONTAINERED|default(False)|ternary(_relative, _fsh)}}"
+    _dir: "{{DIR}}"
     _src: "{{ item.src|default(item.name|default(item, true), true)|defaultDir('files/'+TYPE|default(NAME)) if not item.srcTemplate is defined else item.srcTemplate|unsafety|defaultDir('files/'+TYPE|default(NAME)) }}"
-    _dest: "{{ item.dest|default(item.name|default(item, true), true)|defaultDir(_dir) if not item.destTemplate is defined else item.destTemplate|unsafety|defaultDir(_dir) }}"
+    _dest: "{{ item.dest|default(item.name|default(item, true), true)|defaultDir(DIR) if not item.destTemplate is defined else item.destTemplate|unsafety|defaultDir(_dir) }}"
