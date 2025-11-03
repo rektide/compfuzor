@@ -1,9 +1,9 @@
 ---
-- hosts: servers
+- hosts: all
   vars:
-    TYPE: "k3s{{ is_server|ternary('-server', '-agent') }}"
+    TYPE: "k3s{{ is_agent|default(False)|ternary('-agent', '-server') }}"
     INSTANCE: "{{ DOMAIN|replace('.', '-') }}"
-    PASSWORD:
+    PASSWORDS:
     - token
     - agentToken
     PASSWORD_LENGTH: 96
@@ -23,7 +23,7 @@
       dest: "/var/lib/rancher/k3s"
     - src: "{{ETC}}"
       dest: "/etc/rancher/k3s"
-    is_server: "{{ 'servers' in group_names }}"
+    is_agent: False
 
     # unit
     SYSTEMD_UNITS:
@@ -34,9 +34,9 @@
     SYSTEMD_SERVICE: True
     SYSTEMD_EXEC:
     - "/usr/local/bin/k3s"
-    - "{{is_server|ternary('server', 'agent')}}"
-    - "{{commonArgs}}"
-    - "{{is_server|ternary(serverArgs, agentArgs)}}"
+    - "{{is_agent|ternary('agent', 'server')}}"
+    - "{{commonArgs|join(' ')}}"
+    - "{{is_agent|ternary(agentArgs, serverArgs)|join(' ')}}"
     # support added in https://github.com/rancher/k3s/pull/100 ?
     SYSTEMD_SERVICES:
       Delegate: yes
@@ -57,10 +57,10 @@
       Alias: "{{TYPE}}.service"
 
     # non k3s
-    DOMAIN: base.yoyodyne.example.net
+    DOMAIN: "{{domain|default('base.yoyodyne.example.net')}}"
     CLUSTER_DOMAIN: "cluster.{{DOMAIN}}"
     DATA: "{{VAR}}/data"
-    K3S_TOKEN_FILE: "{{ETC}}/token"
+    K3S_TOKEN_FILE: "{{ETC}}/cluster-token"
     # do not set to default, will create bad symlink
     #K3S_KUBECONFIG_OUTPUT: "{{ETC}}/k3s.yaml"
     K3S_KUBECONFIG_OUTPUT: ""
@@ -80,9 +80,9 @@
     PREFER_BUNDLED_BIN: false
 
     # k3s server
-    CLUSTER_CIDR: "10.39.0.0/16"
-    SERVICE_CIDR: "10.40.0.0/16"
-    CLUSTER_DNS: "10.40.0.2"
+    CLUSTER_CIDR: "{{cluster_cidr|default('10.39.0.0/16')}}"
+    SERVICE_CIDR: "{{service_cidr|default('10.40.0.0/16')}}"
+    CLUSTER_DNS: "{{cluster_dns|default(SERVICE_CIDR | ansible.utils.ipmath(10))}}"
     FLANNEL_BACKEND: none
     LOCAL_PROVISIONER_PATH: "{{VAR}}/local-provisioner"
     DISABLE:
@@ -126,30 +126,40 @@
 
     # TODO/fantasy: make commonEnv/serverEnv/agentEnv and something to generate EXEC from that k/v!
     commonArgs:
-    - "--data-dir $DATA"
+    - "--data-dir ${DATA}"
     - "-v $V"
-    - "{{ '--node-ip $NODE_IP' if NODE_IP|default(False) else '' }}"
-    - "{{ '--node-external-ip $NODE_EXTERNAL_IP' + NODE_EXTERNAL_IP if NODE_EXTERNAL_IP|default(False) else '' }}"
-    - "{{ '--private-registry $PRIVATE_REGISTRY' if PRIVATE_REGISTRY|default(False) else '' }}"
+    - "{{ '--node-ip ${NODE_IP}' if NODE_IP|default(False) else '' }}"
+    - "{{ '--node-external-ip ${NODE_EXTERNAL_IP}' + NODE_EXTERNAL_IP if NODE_EXTERNAL_IP|default(False) else '' }}"
+    - "{{ '--private-registry ${PRIVATE_REGISTRY}' if PRIVATE_REGISTRY|default(False) else '' }}"
     agentArgs: {}
     serverArgs:
     #- "--tls-san $CLUSTER_DOMAIN"
-    - "{{ '--tls-san '+extraDomains|listify|concat(extraIpv4Domains)|join(',') if extraDomains|default(False) else '' }}"
-    - "--cluster-domain $CLUSTER_DOMAIN"
-    - "--cluster-cidr $CLUSTER_CIDR"
-    - "--service-cidr $SERVICE_CIDR"
-    - "--cluster-dns $CLUSTER_DNS"
-    - "--flannel-backend $FLANNEL_BACKEND"
+    - "{{ '--tls-san '+extraDomains|concat(extraIpv4Domains)|join(',') if extraDomains|default(False) else '' }}"
+    - "--cluster-domain ${CLUSTER_DOMAIN}"
+    - "--cluster-cidr ${CLUSTER_CIDR}"
+    - "--service-cidr ${SERVICE_CIDR}"
+    - "--cluster-dns ${CLUSTER_DNS}"
+    - "--flannel-backend ${FLANNEL_BACKEND}"
     # etc input
     # etc output
     ##- "--write-kubeconfig {{K3S_KUBECONFIG_OUTPUT}}"
     ##- "--write-kubeconfig-mode {{K3S_KUBECONFIG_MODE}}"
-    - "--default-local-storage-path {{LOCAL_PROVISIONER_PATH}}"
-    - "{{ '--container-runtime-endpoint $CONTAINER_RUNTIME_ENDPOINT' if CONTAINER_RUNTIME_ENDPOINT|default(False) != '' else '' }}"
-    - "{{ '--etcd-snapshot-retention $ETCD_SNAPSHOT_RETENTION' if ETCD_SNAPSHOT_RETENTION|default(False) else '' }}" # at 12 hour interval
+    - "--default-local-storage-path ${LOCAL_PROVISIONER_PATH}"
+    - "{{ '--container-runtime-endpoint ${CONTAINER_RUNTIME_ENDPOINT}' if CONTAINER_RUNTIME_ENDPOINT|default(False) != '' else '' }}"
+    - "{{ '--etcd-snapshot-retention ${ETCD_SNAPSHOT_RETENTION}' if ETCD_SNAPSHOT_RETENTION|default(False) else '' }}" # at 12 hour interval
     - "--etcd-snapshot-compress"
-    - "{{ '--disable $DISABLE_LIST' if DISABLE_LIST|length > 0 else ''}}"
+    - "{{ '--disable ${DISABLE_LIST}' if DISABLE_LIST|length > 0 else ''}}"
     - "{{ '--disable-network-policy' if DISABLE is superset(['network-policy']) else '' }}"
     - "{{ '--disable-kube-proxy' if DISABLE is superset(['kube-proxy']) else '' }}"
+    - "--secrets-encryption=true"
+    - "--secrets-encryption-provider=secretbox"
   tasks:
-  - include: tasks/compfuzor.includes type=srv
+    - name: insure basic rancher directories
+      file:
+        path: "{{item}}"
+        state: directory
+      loop:
+        - /var/lib/rancher
+        - /etc/rancher
+      become: True
+    - import_tasks: tasks/compfuzor.includes

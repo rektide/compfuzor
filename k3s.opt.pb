@@ -6,6 +6,8 @@
     #INSTANCE: "{{ release }}"
     INSTANCE: main
     GET_URLS: https://github.com/k3s-io/k3s/releases/download/{{release|urlencode}}/k3s
+    PKGS:
+      - criu
     BINS:
     - link: "{{SRC}}/k3s"
       global: True
