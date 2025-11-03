@@ -20,6 +20,6 @@
           DEVICE:
             EVENTS:
               EV_KEY: [KEY_CAPSLOCK, KEY_ESC]
-            NAME: .*[Kk]eyboard.*
+            NAME: .*([Kk]eyboard|Freestyle).*
   tasks:
     - import_tasks: tasks/compfuzor.includes
