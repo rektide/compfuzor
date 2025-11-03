@@ -10,6 +10,7 @@
       - name: tool-versions
         content: |
           python 3.12
+      - name: .aider.model.settings.yml
     BINS:
       - name: build.sh
         exec: |
@@ -22,6 +23,7 @@
           exec uv run --project ${DIR} aider $*
       - name: install.sh
         exec: |
-          ln -s $(pwd)/bin/aider $GLOBAL_BINS_DIR/aider
+          ln -sv $(pwd)/bin/aider $GLOBAL_BINS_DIR/aider
+          ln -sv $(pwd)/etc/.aider.model.settings.yml $HOME
   tasks:
     - import_tasks: tasks/compfuzor.includes

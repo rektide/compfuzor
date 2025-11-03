@@ -1,0 +1,50 @@
+# $0.5/$1.9# $0.5/$1.9# $0.5/$1.9# $0.5/$1.9# $0.5/$1.9# $0.5/$1.9
+# tool calling
+- name: openrouter/z-ai/glm-4.6
+  extra_params:
+    extra_body:
+      provider:
+        quantizations: ["bf16"]
+        # Only use these providers, in this order
+        #order: ["GMICloud"]
+        #only: ["GMICloud"]
+        # Don't fall back to other providers
+        allow_fallbacks: false
+        # Skip providers that may train on inputs
+        data_collection: "deny"
+        # Only use providers supporting all parameters
+        require_parameters: true
+# $0.4/$2
+- name: openrouter/moonshotai/kimi-k2-0905
+  extra_params:
+    extra_body:
+      provider:
+        quantizations: ["fp8"]
+# $1-1.8/$5-$9/$0.1-$0.18
+- name: openrouter/qwen3-coder-plus
+# $1/$5/$0.1
+- name: openrouter/anthropic/claude-haiku-4.5
+# $0.8/$4/$0.8
+- name: openrouter/anthropic/claude-3.5-haiku
+# $3/$15
+- name: openrouter/anthropic/claude-3.7-sonnet
+- name: openrouter/anthropic/claude-3.7-sonnet:thinking
+# $3-6/$15-22/$0.3-0.6
+- name: openrouter/anthropic/claude-sonnet-4.5
+# $15/$75
+- name: openrouter/anthropic/claude-opus-4.1
+# $1.25-$2.50/$10/$0.31-0.62
+- name: gemini/gemini-2.5-pro
+- name: gemini/gemini-2.5-pro-preview-06-05
+- name: openrouter/google/gemini-2.5-pro
+# $0.2/$2.4
+- name: openrouter/qwen/qwen3-30b-a3b-thinking-2507
+# $0.27/$0.41
+- name: openrouter/deepseek/deepseek-v3.2-exp
+# $0.27/$1
+- name: openrouter/deepseek/deepseek-v3.1-terminus
+- name: deepseek/deepseek-reasoner
+# $1.25/$10/$0.125
+#- name: openai/gpt-5
+# $1.25/$10/$0.125
+- name: openrouter/openai/gpt-5-codex
