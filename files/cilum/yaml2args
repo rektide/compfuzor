@@ -7,13 +7,14 @@ Usage: yaml2set.sh [-r ROOT] FILE [FILE...]
 Flatten YAML nested keys into --set=path=value lines.
 Options:
   -r, --root ROOT   Optional prefix to prepend to every path (e.g. 'myapp').
-
-Notes:
-- Requires either: yq (mikefarah/yq), or python3 with PyYAML, or Ruby (with built-in YAML).
-- Arrays are represented with [index], e.g. key.list[0].item=value
-- If ROOT is provided and the top-level is an array, output looks like ROOT[0]... (no extra dot).
 USAGE
 }
+
+# 
+# Notes:
+#- Requires yq
+#- Arrays are represented with [index], e.g. key.list[0].item=value
+#- If ROOT is provided and the top-level is an array, output looks like ROOT[0]... (no extra dot).
 
 ROOT=""
 FILES=()
