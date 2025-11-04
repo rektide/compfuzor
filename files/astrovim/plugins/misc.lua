@@ -29,14 +29,14 @@ return {
 		"AstroNvim/astrocore",
 		---@type AstroCoreOpts
 		opts = function(_, opts)
-			local utils = require "astrocommunity"
+			local utils = require("astrocommunity")
 			return require("astrocore").extend_tbl(opts, {
 				filetypes = {
 					extension = {
-						pb = "yaml"
+						pb = "yaml",
 					},
 				},
 			})
-		},
+		end,
 	},
 }
