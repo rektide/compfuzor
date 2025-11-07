@@ -30,13 +30,14 @@
   action: include_defaults
   args:
     file: "vars/systemd.yaml"
-- name: "Defaulting SYSTEMD_SERVICE if SYSTEMD_EXEC"
+- name: "Defaulting SYSTEMD vars"
   set_fact:
   args:
-     SYSTEMD_SERVICE: "{{SYTEMD_SERVICE|default(SYSTEMD_EXEC is defined)}}"
-  when: SYSTEMD_EXEC is defined and SYSTEMD_SERVICE is not defined
-- name: "Defaulting SYSTEMD_USER"
-  set_fact:
-  args:
-    SYSTEMD_USER: "{{USER}}"
-  when: SYSTEMD_USER|default(False) == True
+    SYSTEMD_USER: "{{USER if SYSTEMD_USER|def == True else SYSTEMD_USER|default(omit)}}"
+    SYSTEMD_SERVICE: "{{serviceNameDefault}}"
+    SYSTEMD_UNITTYPES: "{{types}}"
+    ETC_DIRS: "{{ETC_DIRS|default((types|length > 0)|ternary({}, omit))}}"
+  vars:
+    types: "{{SYSTEMD_UNITTYPES_ALL|has_vars(prefix = 'SYSTEMD_', upper=True)}}"
+    serviceExec: "{{SYSTEMD_SERVICE|default(SYSTEMD_EXEC|def|ternary(True, omit))}}"
+    serviceNameDefault: "{{SYSTEMD_SERVICE|default(omit) if SYSTEMD_SERVICE|def != True else NAME}}"
