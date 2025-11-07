@@ -32,17 +32,20 @@ class TestModule(TestBase):
         inventory_hostname = all_vars.get('inventory_hostname')
         hostvars = all_vars.get('hostvars', {}).get(inventory_hostname, {})
         
-        # Combine vars and hostvars (vars takes precedence)
-        search_space = {}
-        search_space.update(hostvars)
-        search_space.update(all_vars.get('vars', {}))
+        # Look in both 'vars' and hostvars
+        # 'vars' is typically from group_vars or other variable sources
+        vars_dict = all_vars.get('vars', {})
         
         def lookup_var(name):
             # Apply prefix and suffix
             var_name = prefix + name + suffix
-            # Look in the search space
-            if var_name in search_space:
-                return search_space[var_name]
+            
+            # First check in vars
+            if var_name in vars_dict:
+                return vars_dict[var_name]
+            # Then check in hostvars
+            if var_name in hostvars:
+                return hostvars[var_name]
             return None
         
         # Handle string input
