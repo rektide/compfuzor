@@ -4,6 +4,7 @@ __metaclass__ = type
 from ansible.errors import AnsibleError
 from ansible.plugins.test import TestBase
 from ansible.utils.display import Display
+from jinja2 import pass_context
 
 display = Display()
 
@@ -15,35 +16,28 @@ class TestModule(TestBase):
             'vars_exists': self.vars_exists_test,
         }
 
-    def vars_test(self, item, prefix='', suffix=''):
+    @pass_context
+    def vars_test(self, context, item, prefix='', suffix=''):
         '''
         Look for variables in vars and hostvars[inventory_hostname]
         If item is a string, return the variable value if found
         If item is a list, filter to only values that are found
         prefix and suffix can be added to the item name
         '''
-        # Get the task variables
-        if not hasattr(self, '_templar'):
-            raise AnsibleError('Templar not available')
-        
-        # Get variables from the templar
-        all_vars = self._templar.available_variables
+        # Get variables from the context
+        all_vars = context.get('vars', {})
         
         # Get hostvars for the current host
-        inventory_hostname = all_vars.get('inventory_hostname')
-        hostvars = all_vars.get('hostvars', {}).get(inventory_hostname, {})
-        
-        # Look in both 'vars' and hostvars
-        # 'vars' is typically from group_vars or other variable sources
-        vars_dict = all_vars.get('vars', {})
+        inventory_hostname = context.get('inventory_hostname')
+        hostvars = context.get('hostvars', {}).get(inventory_hostname, {})
         
         def lookup_var(name):
             # Apply prefix and suffix
             var_name = prefix + name + suffix
             
             # First check in vars
-            if var_name in vars_dict:
-                return vars_dict[var_name]
+            if var_name in all_vars:
+                return all_vars[var_name]
             # Then check in hostvars
             if var_name in hostvars:
                 return hostvars[var_name]
@@ -64,43 +58,29 @@ class TestModule(TestBase):
                 result = lookup_var(name)
                 results.append(result is not None)
             return results
-            
-            # Or to return the values (current behavior):
-            # results = []
-            # for name in item:
-            #     result = lookup_var(name)
-            #     if result is not None:
-            #         results.append(result)
-            # return results
         
         else:
             raise AnsibleError('vars test expects a string or list, got %s' % type(item))
 
-    def vars_exists_test(self, item, prefix='', suffix=''):
+    @pass_context
+    def vars_exists_test(self, context, item, prefix='', suffix=''):
         '''
         Check if variables exist in vars and hostvars[inventory_hostname]
         Always returns a boolean, even for lists
         For lists, returns True only if ALL items are found
         prefix and suffix can be added to the item name
         '''
-        # Get the task variables
-        if not hasattr(self, '_templar'):
-            raise AnsibleError('Templar not available')
-        
-        # Get variables from the templar
-        all_vars = self._templar.available_variables
+        # Get variables from the context
+        all_vars = context.get('vars', {})
         
         # Get hostvars for the current host
-        inventory_hostname = all_vars.get('inventory_hostname')
-        hostvars = all_vars.get('hostvars', {}).get(inventory_hostname, {})
-        
-        # Look in both 'vars' and hostvars
-        vars_dict = all_vars.get('vars', {})
+        inventory_hostname = context.get('inventory_hostname')
+        hostvars = context.get('hostvars', {}).get(inventory_hostname, {})
         
         def var_exists(name):
             # Apply prefix and suffix
             var_name = prefix + name + suffix
-            return (var_name in vars_dict) or (var_name in hostvars)
+            return (var_name in all_vars) or (var_name in hostvars)
         
         # Handle string input
         if isinstance(item, str):
