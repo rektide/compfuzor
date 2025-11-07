@@ -13,9 +13,9 @@
     # currently no support for UNITS here
     varunit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False)|replace('\\-', '\x2d') }}"
     varunits: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default(False) }}"
-    unitname: "{{ varunit|default(NAME|default(TYPE)) if varunit != True else TYPE|default(NAME) }}"
+    unitname: "{{ varunit|default(NAME|default(TYPE)) if varunit != True and varunit != 'True' else TYPE|default(NAME) }}"
     inst: "{{'@' if SYSTEMD_INSTANCE|def else ''}}"
-    unit: "{{(unitname + inst + '.' + unit_type)|default('replace('/', '\/')|replace('\\-', '\x2d'))}}"
+    unit: "{{(unitname + inst + '.' + unit_type)|replace('/', '\/')|replace('\\-', '\x2d')}}"
     instanced: "{{(unitname + inst + SYSTEMD_INSTANCE + '.' + unit_type)|default('replace('/', '\/')|replace('\\-', '\x2d'))}}"
 
     local_src: "files/{{unitname}}/{{unit}}"
@@ -25,6 +25,7 @@
     #src: "foo.fake {{unit_type|default('no-unit-type')}} {{local_src|default('no-local-src')}}"
     dest: "{{ETC}}/{{unit}}"
     #dest: "{{SYSTEMD_UNIT_DIR}}/{{unit_name|default(NAME)|replace('.', '-')}}{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}.{{unit_type}}"
+    link: "{{SYSTEMD_UNIT_DIR}}/{{unit}}"
 
 #- name: testing for local target unit
 #  local_action: shell test ! -f "files/{{target}}/{{target}}{{inst}}.{{unit_type}}"; echo $?
@@ -56,14 +57,14 @@
     src: "{{dest}}"
     dest: "{{SYSTEMD_UNIT_DIR}}/{{link}}"
     state: link
-  when: unit is truthy
+  when: unit is truthy and SYSTEMD_INSTALL|default(True) is truthy
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 - name: enabling unit
   shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable '{{enable_unit}}'"
-  when: unit is truthy and SYSTEMD_ENABLE|default(True) != False and (not SYSTEMD_INSTANCE|truthy or SYSTEMD_INSTANCE|truthy != True)
+  when: unit is truthy and SYSTEMD_ENABLE|default(True) != False and (not SYSTEMD_INSTANCE|truthy or SYSTEMD_INSTANCE|truthy != True) and SYSTEMD_INSTALL|default(True) is truthy
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
-  var:
+  vars:
     enable_unit: "{{ instanced if SYSTEMD_INSTANCE|truthy else unit }}"
 
 
