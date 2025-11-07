@@ -31,16 +31,25 @@ class TestModule(TestBase):
         inventory_hostname = context.get('inventory_hostname')
         hostvars = context.get('hostvars', {}).get(inventory_hostname, {})
         
+        # Add debugging
+        display.vvv("vars_test: all_vars keys: %s" % list(all_vars.keys()))
+        display.vvv("vars_test: hostvars keys for %s: %s" % (inventory_hostname, list(hostvars.keys())))
+        display.vvv("vars_test: item: %s, prefix: '%s', suffix: '%s'" % (item, prefix, suffix))
+        
         def lookup_var(name):
             # Apply prefix and suffix
             var_name = prefix + name + suffix
+            display.vvv("vars_test: looking for variable: '%s'" % var_name)
             
             # First check in vars
             if var_name in all_vars:
+                display.vvv("vars_test: found '%s' in all_vars: %s" % (var_name, all_vars[var_name]))
                 return all_vars[var_name]
             # Then check in hostvars
             if var_name in hostvars:
+                display.vvv("vars_test: found '%s' in hostvars: %s" % (var_name, hostvars[var_name]))
                 return hostvars[var_name]
+            display.vvv("vars_test: variable '%s' not found" % var_name)
             return None
         
         # Handle string input
@@ -57,6 +66,7 @@ class TestModule(TestBase):
             for name in item:
                 result = lookup_var(name)
                 results.append(result is not None)
+            display.vvv("vars_test: list results: %s" % results)
             return results
         
         else:
@@ -77,21 +87,33 @@ class TestModule(TestBase):
         inventory_hostname = context.get('inventory_hostname')
         hostvars = context.get('hostvars', {}).get(inventory_hostname, {})
         
+        # Add debugging
+        display.vvv("vars_exists_test: all_vars keys: %s" % list(all_vars.keys()))
+        display.vvv("vars_exists_test: hostvars keys for %s: %s" % (inventory_hostname, list(hostvars.keys())))
+        display.vvv("vars_exists_test: item: %s, prefix: '%s', suffix: '%s'" % (item, prefix, suffix))
+        
         def var_exists(name):
             # Apply prefix and suffix
             var_name = prefix + name + suffix
-            return (var_name in all_vars) or (var_name in hostvars)
+            display.vvv("vars_exists_test: checking existence of variable: '%s'" % var_name)
+            exists = (var_name in all_vars) or (var_name in hostvars)
+            display.vvv("vars_exists_test: variable '%s' exists: %s" % (var_name, exists))
+            return exists
         
         # Handle string input
         if isinstance(item, str):
-            return var_exists(item)
+            result = var_exists(item)
+            display.vvv("vars_exists_test: string result: %s" % result)
+            return result
         
         # Handle list input
         elif isinstance(item, list):
             # Return True only if ALL items exist
             for name in item:
                 if not var_exists(name):
+                    display.vvv("vars_exists_test: list result: False (missing: %s)" % name)
                     return False
+            display.vvv("vars_exists_test: list result: True")
             return True
         
         else:
