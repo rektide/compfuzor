@@ -2,11 +2,11 @@
 - hosts: all
   vars:
     TYPE: claude-code
-    INSTANCE: git
-    REPO: https://github.com/anthropics/claude-code
-    BINS:
-      - name: install.sh
-        content: |
-          npm install -g
+    INSTANCE: main
+    TOOL_VERSIONS:
+      node: "{{NODE_VERSION}}"
+      pnpm: "{{PNPM_VERSION}}"
+    NPM_PACKAGE: "@anthropic-ai/claude-code"
+    NPM_PACKAGE_BIN: claude
   tasks:
     - import_tasks: tasks/compfuzor.includes
