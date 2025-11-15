@@ -7,7 +7,8 @@
     BINS:
       - name: install.sh
         content: |
-          rsync -vr $DIR/etc/{community.lua,plugins/} $DIR/repo/lua/
+          rsync -vr $DIR/etc/community.lua $DIR/repo/lua/
+          rsync -vr $DIR/etc/plugins/ $DIR/repo/lua/plugins/
       - name: install.user.sh
         exec: |
           cat $DIR/etc/zshrc | envsubst | block-in-file -n "$ASTROVIM_APPNAME" ${ZSHRC/#\~/$HOME}
