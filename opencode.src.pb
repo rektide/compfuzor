@@ -7,7 +7,7 @@
     ETC_FILES:
       - name: tool-versions
         content: |
-          bun 1.2
+          bun 1
           go 1
     BINS:
       - name: install.sh
@@ -19,6 +19,6 @@
         basedir: False
         global: True
         content: |
-          exec bun run dev
+          exec bun run --cwd $DIR dev $(pwd)
   tasks:
     - import_tasks: tasks/compfuzor.includes
