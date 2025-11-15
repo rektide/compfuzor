@@ -11,6 +11,7 @@
           cd build
           #cmake .. -GNinja -DCMAKE_C_COMPILER=gcc-11 -DCMAKE_CXX_COMPILER=g++-11
           cmake .. -GNinja -DYUZU_USE_QT_WEB_ENGINE=ON -DYUZU_USE_EXTERNAL_SDL2=OFF
+          ninja
     PKGS:
       - autoconf
       - cmake
