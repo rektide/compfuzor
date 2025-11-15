@@ -13,11 +13,13 @@
       - name: install-user.sh
         content: |
           mkdir -p $PNPM_HOME
-          block-in-file -n '{{TYPE}}' -i etc/.tool-versions $HOME/.tool-versions -C
           block-in-file -n '{{TYPE}}' -i etc/config.zsh $HOME/.zshrc
+
           if command -v mise
           then
-            (cd $HOME; mise install)
+            mise install
+            pnpm_version=$(grep pnpm .tool-versions|awk '{print $2}')
+            mise use --global pnpm@${pnpm_version}
           fi
     ENV:
       - PNPM_HOME
