@@ -34,6 +34,8 @@ return {
 				filetypes = {
 					extension = {
 						pb = "yaml",
+						includes = "yaml",
+						tasks = "yaml",
 					},
 				},
 			})
