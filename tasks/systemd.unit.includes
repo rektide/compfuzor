@@ -57,33 +57,39 @@
     src: "{{dest}}"
     dest: "{{SYSTEMD_UNIT_DIR}}/{{link}}"
     state: link
-  when: unit is truthy and SYSTEMD_INSTALL|default(True) is truthy
+  when: unit is truthy and SYSTEMD_LINK|truthy(True)
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 - name: enabling unit
   shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable '{{enable_unit}}'"
-  when: unit is truthy and SYSTEMD_ENABLE|default(True) != False and (not SYSTEMD_INSTANCE|truthy or SYSTEMD_INSTANCE|truthy != True) and SYSTEMD_INSTALL|default(True) is truthy
+  when: >
+    unit|truthy(True) and
+    SYSTEMD_LINK|truthy(True) and
+    SYSTEMD_ENABLE|truthy(True) and
+    not concrete_instance
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
   vars:
     enable_unit: "{{ instanced if SYSTEMD_INSTANCE|truthy else unit }}"
+    concrete_instance: SYSTEMD_INSTANCE|def and SYSTEMD_INSTANCE|def != True
 
-
+# older use of SYSTEMD_UNITS, for multiple units. TODO: rename.
 - name: templating units
   template: src="files/{{target}}/{{i}}" dest="{{SYSTEMD_UNIT_DIR}}/{{i}}"
   with_items: "{{units}}"
   loop_control:
     loop_var: i
-  when: units is truthy
+  when: units|def is sequence and units|def is not mapping
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 - name: enabling units
   shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{i}}"
   with_items: "{{units}}"
-  when: units is truthy
+  when: units|def is sequence and units|def is not mapping
   loop_control:
     loop_var: i
   vars:
     do_become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
   become: USERMODE|default(False) is falsy and SYSTEMD_USERMODE|default(False) is falsy
+
 - name: install systemd unit\'s .d directory
   include_tasks: compfuzor/fs_d.tasks
   vars:
