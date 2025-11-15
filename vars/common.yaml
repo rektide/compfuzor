@@ -51,6 +51,9 @@ APT_DEFAULT_MIRROR: http://deb.debian.org/debian
 APT_ARCH: amd64
 UBUNTU_DISTRIBUTION: noble
 BIND: 0.0.0.0
+NODE_VERSION: 24
+PNPM_VERSION: 10
+
 DIRSET:
   - opt
   - srv
