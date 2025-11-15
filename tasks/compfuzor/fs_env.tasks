@@ -6,7 +6,9 @@
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
-  when: (item.hasEnv or ENV|default(False) is truthy) and not item.skip|default(False)
+  when: >
+    (item.hasEnv or ENV|truthy or ENV|def == {}) and
+    not item.skip|default(False)
   loop:
     - file: env
       hasEnv: "{{has_env.stdout|default(0)|int > 0}}"
