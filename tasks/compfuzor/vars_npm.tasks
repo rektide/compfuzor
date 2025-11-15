@@ -1,0 +1,30 @@
+- name: 'Setting node/npm config'
+  set_fact:
+    TOOL_VERSIONS: "{{tool_versions|combine(TOOL_VERSIONS|default({}))}}"
+    NPM_PACKAGE_BIN: "{{npm_package_bin}}"
+    ENV: "{{env_list_combined if ENV|def is sequence and ENV|def is not mapping else env_mapping_combined}}"
+    BINS: "{{BINS|default([]) + [run_bin, download_bin]}}"
+  when: NPM_PACKAGE is deftruthy
+  vars:
+    package_parsed: "{{NPM_PACKAGE|regex_replace('(?:@\\w+/)?(\\w+)(?:@[A-Za-z0-9_.]+)?', '\\1')}}"
+    npm_package_bin: "{{NPM_PACKAGE_BIN|default(package_parsed)}}"
+    tool_versions:
+      node: "{{NODE_VERSION}}"
+      pnpm: "{{PNPM_VERSION}}"
+    env_list:
+      - NPM_PACKAGE
+    env_list_combined: "{{ENV|default([]) + env_list}}"
+    env_mapping:
+      NPM_PACKAGE: "{{NPM_PACKAGE}}"
+    env_mapping_combined: "{{env_mapping|combine(ENV|default({}))}}"
+    download_bin:
+      name: build.sh
+      content: |
+        curl $(npm view $NPM_PACKAGE dist.tarball) | tar -xz --strip-components=1
+        pnpm i
+    run_bin:
+      name: "{{npm_package_bin}}"
+      basedir: True
+      global: True
+      content: |
+        pnpm run $NPM_PACKAGE_BIN -C $*

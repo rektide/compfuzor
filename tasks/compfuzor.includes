@@ -17,8 +17,9 @@
 - import_tasks: compfuzor/vars_make_autoconf.tasks
 - import_tasks: compfuzor/vars_debconf.tasks
 - import_tasks: compfuzor/vars_pg.tasks
-- import_tasks: compfuzor/vars_env2.tasks
 - import_tasks: compfuzor/vars_repo.tasks
+- import_tasks: compfuzor/vars_npm.tasks
+- import_tasks: compfuzor/vars_tool_versions.tasks
 - debug: "msg='Compfuzor: completed vars'"
 
 - import_tasks: compfuzor/user.tasks

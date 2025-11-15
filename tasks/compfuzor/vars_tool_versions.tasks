@@ -1,0 +1,15 @@
+- name: 'Adding .tool-versions config'
+  set_fact:
+    ETC_FILES: "{{ETC_FILES|default([]) + [tool_versions]}}"
+    LINKS: "{{LINKS|default([]) + [link]}}"
+  when: TOOL_VERSIONS is deftruthy
+  vars:
+    tool_versions:
+      name: .tool-versions
+      content: |
+        {% for target, version in TOOL_VERSIONS.items() %}
+        {{ target }} {{ version }}
+        {% endfor %}
+    link: 
+      src: "{{DIR}}/etc/.tool-versions"
+      dest: ".tool-versions"
