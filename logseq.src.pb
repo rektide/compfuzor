@@ -4,16 +4,9 @@
     TYPE: logseq
     INSTANCE: git
     REPO: https://github.com/logseq/logseq
-    ETC_FILES:
-      - name: ".tool-versions"
-        format: yaml
-        content:
-          nodejs 22
-          clojure 1.11
-    LINKS:
-      - src: "{{DIR}}/etc/.tool-versions"
-        #TODO: would be nice to have FS_CONTAINER compact via an 'include: etc'
-        dest: ".tool-versions"
+    TOOL_VERSIONS:
+      nodejs: 24
+      clojure: 1.11
     BINS:
       - name: watch.sh
         exec: |
@@ -31,5 +24,6 @@
           yarn electron:dev
     PKGS:
       - rlwrap
+    SYSTEMD_SERVICES:
   tasks:
     - import_tasks: tasks/compfuzor.includes
