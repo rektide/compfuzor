@@ -5,7 +5,7 @@
     INSTANCE: git
     REPO: https://github.com/logseq/logseq
     TOOL_VERSIONS:
-      nodejs: 24
+      nodejs: True
       clojure: 1.11
     BINS:
       - name: watch.sh

@@ -5,7 +5,7 @@
     INSTANCE: git
     REPO: https://github.com/vicinaehq/vicinae
     TOOL_VERSIONS:
-      node: "{{NODE_VERSION}}"
+      nodejs: True
     PKGS:
       - build-essential
       - cmake

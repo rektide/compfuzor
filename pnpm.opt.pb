@@ -4,7 +4,7 @@
     TYPE: pnpm
     INSTANCE: main
     TOOL_VERSIONS:
-      pnpm: 10
+      pnpm: True
     ETC_FILES:
       - name: config.zsh
         content: |
