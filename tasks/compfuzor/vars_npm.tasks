@@ -9,8 +9,8 @@
     package_parsed: "{{NPM_PACKAGE|regex_replace('(?:@[\\w.-]+/)?([\\w.-]+)(?:@[\\w.-]+)?', '\\1')}}"
     npm_package_bin: "{{NPM_PACKAGE_BIN|default(package_parsed)}}"
     tool_versions:
-      node: "{{NODE_VERSION}}"
-      pnpm: "{{PNPM_VERSION}}"
+      nodejs: True
+      pnpm: True
     env_list:
       - NPM_PACKAGE
     env_list_combined: "{{ENV|default([]) + env_list}}"
