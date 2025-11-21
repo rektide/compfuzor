@@ -8,7 +8,7 @@
       name: .tool-versions
       content: |
         {% for target, version in TOOL_VERSIONS.items() %}
-        {{ target }} {{ version }}
+        {{ target }} {{ version if version != True else lookup('vars', target|upper + '_VERSION') }}
         {% endfor %}
     link: 
       src: "{{DIR}}/etc/.tool-versions"
