@@ -12,7 +12,7 @@
   template:
     dest: "{{_dest}}"
     src: "files/_bin"
-    mode: "{{item.mode|default('755')}}"
+    mode: "{{item.mode|default(BINMODE)}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{BINS|default([])}}"
@@ -27,7 +27,7 @@
   template:
     src: "files/{{TYPE|default(NAME)}}/{{item.src|default(item.name) if item is mapping else item }}"
     dest: "{{_dest}}"
-    mode: "{{item.mode|default('755')}}"
+    mode: "{{item.mode|default(BINMODE)}}"
     owner: "{{item.owner|default(OWNER)|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{BINS|default([])}}"
@@ -49,7 +49,7 @@
   copy:
     src: "files/{{ TYPE|default(NAME) }}/{{item.src|default(item.name) if item is mapping else item }}"
     dest: "{{_dest}}"
-    mode: "{{item.mode|default('755')}}"
+    mode: "{{item.mode|default(BINMODE)}}"
     owner: "{{item.owner|default(OWNER)|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{BINS|default([])}}"
