@@ -1,21 +1,20 @@
 ---
 - hosts: all
   vars:
-    TYPE: k3s-cilium
+    TYPE: cilium
     INSTANCE: main
     BINS:
       - name: install-cilium
         content: |
-          
-
+          cilium
+      - name: yaml2args
+        raw: True
     ETC_FILES:
       - name: settings.yaml
-        format: yaml
-        content:
+        yaml:
           autoDirectNodeRoutes: true
           #ipMasqAgent.enabled: true
           ipv6.enabled: true
-         
           bandwidthManager:
             enabled: true
             bbr: true
@@ -63,6 +62,13 @@
                   # - MORE
                   - NET_BIND_SERVICE
           externalEnvoyProxy: false
+          externalIPs:
+            enabled: true
+          gatewayAPI:
+            enabled: true
+            enableAlpn: true
+            hostNetwork:
+              enabled: true
           hubble:
             eventQueueSize: 4096
             metrics:
@@ -72,44 +78,65 @@
               enabled: true
             ui:
               enabled: true
-          # https://docs.cilium.io/en/latest/network/l2-announcements/
-          l2annoucements.enabled: true
-          #l2podAnnouncements.interface: 
+          identityManagementMode: operator
           # https://docs.cilium.io/en/latest/network/node-ipam/
-          gatewayAPI:
-            enabled: true
-            enableAlpn: true
-            hostNetwork:
-              enabled: true
           # https://github.com/cilium/cilium/issues/38227
-          #hostNetwork.enabled: true
+          #hostNetwork:
+          #  enabled: true
           ipam:
             mode: multi-pool
             operator:
               clusterPoolIPv4PodCIDRList: '["10.x/16]'
               clusterPoolIPv4MaskSize: 16
-          ipv4NativeRoutingCIDR:
-          ipv6NativeRoutingCIDR:
-          k8sServiceHost: 
-          k8sServicePort: 
+              autoCreateCiliumPodIPPools:
+                default:
+                  ipv4:
+                    cidrs:
+                      - 10.10.0.0/16
+                    maskSize: 27
+          #ipv4NativeRoutingCIDR:
+          #ipv6NativeRoutingCIDR:
           kubeProxyReplacement: true
           kubeProxyReplacementHealthzBindAddr: '0.0.0.0:10256'
+          k8sServiceHost: 
+          k8sServicePort: 
+          #k8sClientRateLimit:
+          #  qps:
+          #  burst: 
+          # https://docs.cilium.io/en/latest/network/l2-announcements/
           loadBalancer:
+            #acceleration: best-effort
             acceleration: native
             dsrDispatch: opt
             l7:
               backend: envoy
             mode: dsr
-          l2NeighDiscovery.enabled: true
+          l2NeighDiscovery:
+            enabled: true
+          l2annoucements:
+            # requires: --devices to be set
+            enabled: true
+            #leaseDuration: 15s
+            #leaseRenewDeadline: 5s
+            #leaseRetryPeriod: 2s
+          l2podAnnouncements:
+            enabled: true
+            #interface: 
+            #interfacePattern: '^(eno|eth)'
           maglev:
             hashSeed: ei9cYZx0ouKp2Ux0
             tableSize: 2039
+          multicast:
+            enabled: true
           nodeIPAM:
             enabled: true
           nodePort:
             #autoProtectPortRange: false
             #directRoutingDevice: eth1
             enabled: true
+            # requires: also configure api-server the same?a
+            # https://docs.cilium.io/en/stable/network/kubernetes/kubeproxy-free/#nodeport-devices-port-and-bind-settings
+            range: 20000-32767
           prometheus:
             enabled: true
           operator:
@@ -130,5 +157,6 @@
       - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.3.0/config/crd/standard/gateway.networking.k8s.io_referencegrants.yaml
       - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.3.0/config/crd/standard/gateway.networking.k8s.io_grpcroutes.yaml
       - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.3.0/config/crd/experimental/gateway.networking.k8s.io_tlsroutes.yaml
-
+  tasks:
+    - import_tasks: tasks/compfuzor.includes
 
