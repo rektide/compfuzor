@@ -30,10 +30,13 @@
       - name: build.sh
         content: |
           mkdir -p build
-          cd build
           cmake -G Ninja .. \
             -DLTO=ON
+            -DCMAKE_BUILD_TYPE=Release \
+            -DVICINAE_PROVENANCE=compfuzor \
+            -B build
+          cmake --build build
           #make release
-          make host-optimized
+          #make host-optimized
   tasks:
     - import_tasks: tasks/compfuzor.includes
