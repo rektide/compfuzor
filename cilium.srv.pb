@@ -8,6 +8,7 @@
         content: |
           cilium
       - name: yaml2args
+        src: ../yaml2args
         raw: True
     ETC_FILES:
       - name: settings.yaml
