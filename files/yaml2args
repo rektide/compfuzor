@@ -3,10 +3,11 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: yaml2set.sh [-r ROOT] FILE [FILE...]
+Usage: yaml2set.sh [-r ROOT] [--ini] FILE [FILE...]
 Flatten YAML nested keys into --set=path=value lines.
 Options:
   -r, --root ROOT   Optional prefix to prepend to every path (e.g. 'myapp').
+      --ini         Output as newline-delimited key=value pairs instead of --set=...
 USAGE
 }
 
@@ -18,6 +19,7 @@ USAGE
 
 ROOT=""
 FILES=()
+INI_MODE=false
 
 # Parse args
 while [[ $# -gt 0 ]]; do
@@ -29,6 +31,10 @@ while [[ $# -gt 0 ]]; do
     }
     ROOT="$2"
     shift 2
+    ;;
+  --ini)
+    INI_MODE=true
+    shift
     ;;
   -h | --help)
     usage
@@ -63,29 +69,43 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 run_with_yq() {
   local root="$1"
-  shift
+  local ini_mode="$2"
+  shift 2
   local f
+  local pstr_def='def pstr($p):
+  reduce $p[] as $x
+    (""; . + (if ($x|type) == "string"
+              then (if . == "" then "" else "." end) + ($x|tostring)
+              else "["+($x|tostring)+"]"
+              end));'
+  
   for f in "$@"; do
-    yq -r --arg root "$root" '
-      def pstr($p):
-        reduce $p[] as $x
-          (""; . + (if ($x|type) == "string"
-                    then (if . == "" then "" else "." end) + ($x|tostring)
-                    else "["+($x|tostring)+"]"
-                    end));
-      paths(scalars) as $p
-      | "--set="
-        + (if $root == "" then "" else ($root + (if ($p[0]|type) == "number" then "" else "." end)) end)
-        + (pstr($p))
-        + "="
-        + (getpath($p) | tostring)
-    ' -- "$f"
+    if [[ "$ini_mode" == "true" ]]; then
+      yq -r --arg root "$root" "
+        $pstr_def
+        paths(scalars) as \$p
+        | (if \$root == \"\" then \"\" else (\$root + (if (\$p[0]|type) == \"number\" then \"\" else \".\" end)) end)
+          + (pstr(\$p))
+          + \"=\"
+          + (getpath(\$p) | tostring)
+      " -- "$f"
+    else
+      yq -r --arg root "$root" "
+        $pstr_def
+        paths(scalars) as \$p
+        | \"--set=\"
+          + (if \$root == \"\" then \"\" else (\$root + (if (\$p[0]|type) == \"number\" then \"\" else \".\" end)) end)
+          + (pstr(\$p))
+          + \"=\"
+          + (getpath(\$p) | tostring)
+      " -- "$f"
+    fi
   done
 }
 
 # Dispatcher: prefer yq, then python+PyYAML, then ruby
 if have yq; then
-  run_with_yq "$ROOT" "${FILES[@]}"
+  run_with_yq "$ROOT" "$INI_MODE" "${FILES[@]}"
 else
   echo "Error: need yq." >&2
   exit 1
