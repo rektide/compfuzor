@@ -13,7 +13,7 @@
           cargo build --release
       - name: install.sh
         content: |
-          ln -sfv $(PWD)/target/release/jj $GLOBAL_BINS_DIR
+          ln -sfv "$(pwd)/target/release/jj" $GLOBAL_BINS_DIR
       - name: install-user.sh
         content: |
           cargo install --path .
