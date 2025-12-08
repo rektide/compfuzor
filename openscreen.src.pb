@@ -9,7 +9,7 @@
     - ninja-build
     - generate-ninja
     - clang-format
-    - libstdc++-9-dev
+    - libstdc++-15-dev
     ENV:
       OS_DEPOT_TOOLS: "{{depot_tools|defaultDir(SRCS_DIR)}}/"
       OS_REPO: "{{repo}}"
