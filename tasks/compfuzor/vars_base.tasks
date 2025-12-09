@@ -116,3 +116,8 @@
 #- name: "Select default username {{TYPE|default(NAME)}}"
 #  set_fact: USER="{{TYPE|default(NAME)}}"
 #  when: not USER|default(False)
+
+- name: convert LINKS dict into well specified form
+  set_fact:
+    LINKS: "{{LINKS|ansible.builtin.dict2items(key_name='dest', value_name='src')}}"
+  when: LINKS is defined and LINKS is mapping

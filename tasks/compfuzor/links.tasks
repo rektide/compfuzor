@@ -20,5 +20,12 @@
   with_items: "{{ LINKS|listify }}"
   vars:
     _dir: "{{DIR}}"
-    _src: "{{ item.src|default(item.name|default(item, true), true)|defaultDir('files/'+TYPE|default(NAME)) if not item.srcTemplate is defined else item.srcTemplate|unsafety|defaultDir('files/'+TYPE|default(NAME)) }}"
+    _srcName: "{{item.src|default(item.name|default(item, true), true)}}"
+    _isSrcAbs: "{{ _srcName[0] == '/' or _srcName == '~' }}"
+    _srcDir: "{{ _srcName|defaultDir(DIR) }}"
+    _srcCompfuzor: "{{ _srcName|defaultDir('files/'+TYPE|default(NAME)) }}"
+    _srcFile: "{{ _srcDir if _srcDir is exists else _srcCompfuzor }}"
+    _srcResolved: "{{ _srcName if _isSrcAbs else _srcFile }}"
+    _srcTemplate: "{{ item.srcTemplate|unsafety|defaultDir('files/'+TYPE|default(NAME)) if item.srcTemplate is defined else '' }}"
+    _src: "{{ _srcResolved if not _srcTemplate else _srcTemplate }}"
     _dest: "{{ item.dest|default(item.name|default(item, true), true)|defaultDir(DIR) if not item.destTemplate is defined else item.destTemplate|unsafety|defaultDir(_dir) }}"
