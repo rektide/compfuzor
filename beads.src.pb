@@ -32,6 +32,12 @@
         basedir: False
         content: |
           ln -sv "$DIR/bd" "$DIR/bins/beads-mcp" "$GLOBAL_BINS_DIR/"
+      - name: install-opencode.sh
+        basedir: False
+        content: |
+          [ -n "$TARGET" ] || TARGET="$HOME/.config/opencode"
+          mkdir -p $TARGET
+          ln -sv $DIR/etc/opencode-beads-mcp.json $TARGET/
       - name: beads-mcp
         global: True
         content: |
