@@ -4,8 +4,23 @@
     TYPE: niri
     INSTANCE: git
     REPO: https://github.com/YaLTeR/niri
-    ENV:
-      hi: ho
+    ENV: True
+    # arch recommendations
+    PKGS:
+      - alacritty
+      - fuzzel
+      # resolution switching
+      - kanshi
+      - mako
+      - swaybg
+      #- swayidle
+      - swaylock
+      - waybar
+      - xdg-desktop-portal-gtk
+      - xdg-desktop-portal-gnome
+      # and xwayland-satellite
+      - xwayland
+      #- udiskie
     BINS:
       - name: build.sh
         content: cargo build --release
@@ -13,6 +28,7 @@
         content: |
           # https://github.com/YaLTeR/niri/wiki/Packaging-niri
           ln -sfv $(pwd)/target/release/niri $GLOBAL_BINS_DIR/
+          ln -sfv $(pwd)/target/release/niri /usr/bin/niri
           ln -sfv $(pwd)/resources/niri-session $GLOBAL_BINS_DIR/
           ln -sfv $(pwd)/resources/niri.desktop /usr/share/wayland-sessions/
           ln -sfv $(pwd)/resources/niri-portals.conf /usr/share/xdg-desktop-portal/
