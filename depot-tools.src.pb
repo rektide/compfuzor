@@ -4,5 +4,11 @@
     TYPE: depot-tools
     INSTANCE: git
     REPO: https://chromium.googlesource.com/chromium/tools/depot_tools.git
+    REPO_LINK_DIR: repo-link
+    BINS:
+      - name: use.sh
+        content: |
+          export PATH=\"$DIR:$PATH\"
+          echo export PATH=\"$DIR:$PATH\"
   tasks:
-  - include: tasks/compfuzor.includes type=src
+    - import_tasks: tasks/compfuzor.includes
