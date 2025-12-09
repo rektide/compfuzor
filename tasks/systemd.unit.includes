@@ -55,7 +55,7 @@
 - name: link target unit in etc
   file:
     src: "{{dest}}"
-    dest: "{{SYSTEMD_UNIT_DIR}}/{{link}}"
+    dest: "{{link}}"
     state: link
   when: unit is truthy and SYSTEMD_LINK|truthy(True)
   become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
