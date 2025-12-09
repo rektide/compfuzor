@@ -10,6 +10,15 @@
     - generate-ninja
     - clang-format
     - libstdc++-15-dev
+    - libsdl2-compat-dev
+    - libavcodec-dev
+    - libavformat-dev
+    - libavutil-dev
+    - libswresample-dev
+    - libopus-dev
+    - libvpx-dev
+    - libaom-dev
+    - libwebkit2gtk-4.1-dev
     ENV:
       OS_DEPOT_TOOLS: "{{depot_tools|defaultDir(SRCS_DIR)}}/"
       OS_REPO: "{{repo}}"
@@ -24,10 +33,11 @@
       exec: |
         # do interactively?
         #gn args out/Default
-        mkdir -p out/debug
-         # Creates the build directory and necessary ninja files
-        gn gen out/debug
+        #mkdir -p out/debug
+        # Creates the build directory and necessary ninja files
+        #gn gen out/debug
+        gn gen --args="have_ffmpeg=true have_libsdl2=true have_libopus=true have_libvpx=true have_libaom=true" out/release
         # Builds the executable with ninja
-        ninja -C out/debug osp_demo
+        ninja -C out/release osp_demo
   tasks:
   - import_tasks: tasks/compfuzor.includes
