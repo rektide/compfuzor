@@ -67,12 +67,20 @@
             }
           }
     BINS:
-      - name: install.sh
+      - name: build.sh
+        basedir: packages/opencode
         content: |
+          # for opencode-live
           bun install --frozen-lockfile
-
+          # real build
+          bun run build
+      - name: config.sh
+        content: |
           echo combining config
           jq -s 'reduce .[] as $item ({}; . * $item)' etc/base.json etc/mcp/*json > etc/opencode.json
+      - name: install.sh
+        content: |
+          ln -sfv $(pwd)/packages/opencode/dist/opencode-linux-x64/bin/opencode $GLOBAL_BINS_DIR/
       # TODO: compfuzor helpers for installing content, automate this below
       - name: install-user.sh
         basedir: False
@@ -82,7 +90,7 @@
           [ -n "$TARGET" ] || TARGET="$HOME/.config/opencode"
           mkdir -p $(dirname $TARGET)
           ln -sv ${DIR}/etc $TARGET/
-      - name: opencode
+      - name: opencode-live
         basedir: False
         global: True
         content: |
