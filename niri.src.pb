@@ -21,6 +21,14 @@
       # and xwayland-satellite
       - xwayland
       #- udiskie
+    ETC_FILES:
+      - name: config-overlay.kdl
+        content: |
+          binds {
+            Mod+T hotkey-overlay-title="Open a Terminal: kitty" { spawn "kitty"; }
+            Mod+D hotkey-overlay-title="Run an Application: vicinae" { spawn-sh "vicinae toggle"; }
+            Alt+Grave hotkey-overlay-title="Vicinae clipboard" { spawn-sh "vicinae vicinae://extensions/vicinae/clipboard/history"; }
+          }
     BINS:
       - name: build.sh
         content: cargo build --release
