@@ -1,0 +1,26 @@
+- name: 'Build vars for a RUST build'
+  set_fact:
+    TOOL_VERSIONS: "{{ enhancedToolVersions|ansible.builtin.combine(TOOL_VERSIONS|default({})) }}"
+    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name') }}"
+  vars:
+    bins: "{{BINS|default([])}}"
+    enhancedToolVersions:
+      rust: True
+    enhancedBins:
+      - name: build.sh
+        content: |
+          if [[ -z "${RELEASE+x}" ]]; then
+              RELEASE="--release"
+          elif [[ "$RELEASE" == "debug" ]]; then
+              unset RELEASE
+          else
+              RELEASE="--$RELEASE"
+          fi
+          cargo build $RELEASE
+      - name: install.sh
+        content: |
+          ln -sfv $(pwd)/target/release/${RUST_BIN:-{{TYPE}}} $GLOBAL_BINS_DIR
+      - name: install-user.sh
+        content: |
+          cargo install --path .
+  when: "{{RUST is deftruthy}}"
