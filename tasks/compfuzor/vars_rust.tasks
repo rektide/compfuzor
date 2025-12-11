@@ -2,7 +2,10 @@
   set_fact:
     TOOL_VERSIONS: "{{ enhancedToolVersions|ansible.builtin.combine(TOOL_VERSIONS|default({})) }}"
     BINS: "{{ enhancedBins|mergeKeyed(bins, key='name') }}"
+    ENV: "{{envRustBin|concat(env) }}"
   vars:
+    env: "{{ ({}) if ENV|def(True) == True else ENV }}"
+    envRustBin: "{{ (['RUST_BIN']) if RUST_BIN is defined else ([]) }}"
     bins: "{{BINS|default([])}}"
     enhancedToolVersions:
       rust: True
@@ -19,7 +22,7 @@
           cargo build $RELEASE
       - name: install.sh
         generated: |
-          ln -sfv $(pwd)/target/release/${RUST_BIN:-{{TYPE}}} $GLOBAL_BINS_DIR
+          ln -sfv "$(pwd)/target/release/${RUST_BIN:-{{TYPE}}}" $GLOBAL_BINS_DIR/
       - name: install-user.sh
         generated: |
           cargo install --path .
