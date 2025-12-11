@@ -33,6 +33,7 @@ USERMODE_SHARES_DIR: "{{USERMODE_LOCAL_DIR}}/share"
 
 BUILD_DIR: "{{OPT}}/build"
 REPO_DIR: "{{SRC}}"
+REPO_LINK_DIR: repo
 WORKTREE_BRANCH: master
 WORKDIR_BIN: /usr/share/doc/git/contrib/workdir/git-new-workdir
 PKGCONFIG_DIR: "/usr/local/lib/pkgconfig"
