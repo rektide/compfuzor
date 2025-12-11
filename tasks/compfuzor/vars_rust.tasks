@@ -8,7 +8,7 @@
       rust: True
     enhancedBins:
       - name: build.sh
-        content: |
+        generated: |
           if [[ -z "${RELEASE+x}" ]]; then
               RELEASE="--release"
           elif [[ "$RELEASE" == "debug" ]]; then
@@ -18,9 +18,9 @@
           fi
           cargo build $RELEASE
       - name: install.sh
-        content: |
+        generated: |
           ln -sfv $(pwd)/target/release/${RUST_BIN:-{{TYPE}}} $GLOBAL_BINS_DIR
       - name: install-user.sh
-        content: |
+        generated: |
           cargo install --path .
   when: "{{RUST is deftruthy}}"
