@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+
+# mergeToml - Merge TOML files with descending priority using tomlq/jq
+# Usage: mergeToml file1.toml file2.toml file3.toml ...
+# Result: file1.toml will be overwritten with merged content
+
+set -euo pipefail
+
+if [ $# -lt 2 ]; then
+    echo "Usage: $0 <primary.toml> <secondary.toml> [additional.toml ...]"
+    echo "Primary file will be overwritten with merged result"
+    exit 1
+fi
+
+primary="$1"
+shift
+
+if [ ! -f "$primary" ]; then
+    echo "Error: Primary file '$primary' does not exist"
+    exit 1
+fi
+
+# Check for required commands
+if ! command -v tomlq >/dev/null 2>&1; then
+    echo "Error: tomlq is required but not installed. Install with: pip install yq"
+    exit 1
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
+    echo "Error: jq is required but not installed"
+    exit 1
+fi
+
+# Collect all files
+files=("$primary" "$@")
+valid_files=()
+for file in "${files[@]}"; do
+    if [ -f "$file" ]; then
+        valid_files+=("$file")
+    elif [ "$file" != "$primary" ]; then
+        echo "Warning: File '$file' does not exist, skipping"
+    fi
+done
+
+if [ ${#valid_files[@]} -eq 0 ]; then
+    echo "Error: No valid files to merge"
+    exit 1
+fi
+
+# Create temporary files
+temp_json=$(mktemp)
+temp_toml=$(mktemp)
+
+# Function to convert JSON to TOML
+json_to_toml() {
+    local json_file="$1"
+    local toml_file="$2"
+    
+    # Try Python with toml package first (most reliable)
+    if python3 -c "import toml, json" 2>/dev/null; then
+        python3 -c "
+import json
+import toml
+import sys
+
+with open('$json_file', 'r') as f:
+    data = json.load(f)
+
+with open('$toml_file', 'w') as f:
+    toml.dump(data, f)
+" 2>/dev/null && return 0
+    fi
+    
+    # Fallback: simple jq-based conversion
+    echo "# Merged TOML file" > "$toml_file"
+    echo "# Note: Install python3-toml for better nested table formatting" >> "$toml_file"
+    echo "" >> "$toml_file"
+    
+    # Simple conversion that handles flat structures
+    jq -r 'to_entries[] | "[\(.key)]", (.value | to_entries[] | "\(.key) = \(.value|@json)"), ""' "$json_file" >> "$toml_file" 2>/dev/null || true
+}
+
+# Merge files with descending priority
+# Process files in reverse order so first file (highest priority) overrides
+reverse_files=()
+for ((i=${#valid_files[@]}-1; i>=0; i--)); do
+    reverse_files+=("${valid_files[$i]}")
+done
+
+# Merge using jq's reduce function
+tomlq 'reduce inputs as $i (.; . * $i)' "${reverse_files[@]}" > "$temp_json"
+
+# Convert JSON to TOML
+if [ ! -s "$temp_json" ]; then
+    echo "Error: Merge produced empty output"
+    rm -f "$temp_json" "$temp_toml"
+    exit 1
+fi
+
+json_to_toml "$temp_json" "$temp_toml"
+
+# Check if we have valid output
+if [ ! -s "$temp_toml" ]; then
+    echo "Error: Failed to convert merged JSON to TOML"
+    rm -f "$temp_json" "$temp_toml"
+    exit 1
+fi
+
+# Overwrite primary file
+mv "$temp_toml" "$primary"
+
+# Cleanup
+rm -f "$temp_json"
+
+echo "Successfully merged files into '$primary'"

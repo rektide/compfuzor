@@ -7,6 +7,15 @@
     ENV: True
     TOOL_VERSIONS:
       rust: True
+    ETC_FILES:
+      - name: jj.conf
+        content: |
+          [fsmonitor]
+          backend = "watchman"
+          watchman.register-snapshot-trigger = true
+
+          [snapshot]
+          #auto-update-stale = true
     BINS:
       - name: build.sh
         content: |
@@ -17,5 +26,12 @@
       - name: install-user.sh
         content: |
           cargo install --path .
+      - name: install-config
+        content: |
+          TARGET=config.toml
+          [ -e config.toml ] || TARGET="$HOME/.config/jj/config.toml"
+          ./mergeToml $TARGET $(pwd)/etc/jj.conf
+      - name: 'mergeToml'
+        src: '../mergeToml'
   tasks:
     - import_tasks: tasks/compfuzor.includes
