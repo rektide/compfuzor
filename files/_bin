@@ -17,8 +17,12 @@ cd {{item.basedir}}
 cd {{DIR}}/{{item.basedir}}
 {% endif %}
 
-{{ item.content|default("")|arrayitize|join("\n") }}
-{{ item.exec|default("")|arrayitize|join("\n") }}
-{{ item.execs|default("")|arrayitize|join("\n") }}
+{{ item.early|default([])|arrayitize|join("\n") }}
+{{ item.generated|default([])|arrayitize|join("\n") if item.generatedAt|def == "early" else omit }}
+{{ item.content|default([])|arrayitize|join("\n") }}
+{{ item.exec|default([])|arrayitize|join("\n") }}
+{{ item.execs|default([])|arrayitize|join("\n") }}
+{{ item.generated|default([])|arrayitize|join("\n") if item.generatedAt|def != "early" else omit }}
+{{ item.late|default([])|arrayitize|join("\n") }}
 
 {% include "_bin.footer" %}
