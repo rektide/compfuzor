@@ -22,7 +22,8 @@
           cargo build $RELEASE
       - name: install.sh
         generated: |
-          ln -sfv "$(pwd)/target/release/${RUST_BIN:-{{TYPE}}}" $GLOBAL_BINS_DIR/
+          [ -n "$INSTALL_BIN" ] || INSTALL_BIN="${RUST_BIN:-{{TYPE}}}"
+          ln -sfv "$(pwd)/target/release/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(dirname $INSTALL_BIN)
       - name: install-user.sh
         generated: |
           cargo install --path .
