@@ -1,486 +1,486 @@
 ---
 # Packages:
 ESSENTIAL:
-- dpkg
+  - dpkg
 BASE_x86:
-- acpi-support
-- acpi-support-base
-- acpi-fakekey
-- grub-pc
-- grub-pc-bin
-- grub2-common
-- grub-common
-- os-prober
-- intel-microcode
-- amd64-microcode
+  - acpi-support
+  - acpi-support-base
+  - acpi-fakekey
+  - grub-pc
+  - grub-pc-bin
+  - grub2-common
+  - grub-common
+  - os-prober
+  - intel-microcode
+  - amd64-microcode
 BASE_amd64:
-- acpi
-- acpi-support
-- acpi-support-base
-- acpi-fakekey
-#- grub-pc
-#- grub-pc-bin
-#- grub2-common
-#- grub-common
-- os-prober
-- linux-image-amd64
-- linux-headers-amd64
-- dfu-util
-- fdutils
-- intel-microcode
-- amd64-microcode
+  - acpi
+  - acpi-support
+  - acpi-support-base
+  - acpi-fakekey
+  #- grub-pc
+  #- grub-pc-bin
+  #- grub2-common
+  #- grub-common
+  - os-prober
+  - linux-image-amd64
+  - linux-headers-amd64
+  - dfu-util
+  - fdutils
+  - intel-microcode
+  - amd64-microcode
 BASE:
-# the first segment of base is "essential" Debian packages
-- acl
-- apt
-- apt-transport-https
-- arch-test
-- attr
-- b3sum
-- base-files
-- base-passwd
-- bash
-- bsdutils
-- cifs-utils
-- coreutils
-- criu
-- dash
-- ddccontrol
-- debconf
-- debconf-utils
-#- dhcpcd5
-#- debian-archive-keyring
-- debian-keyring
-- debianutils
-- dialog
-- diffutils
-- direnv
-- dpkg
-- dpkg-source-gitarchive
-- efivar
-- libefiboot1
-- libefivar1
-- efitools
-- efibootmgr
-- libext2fs2
-- e2fsprogs
-- ethtool
-- feedbackd
-- fd-find
-- findutils
-- firmware-atheros
-- firmware-brcm80211
-- firmware-iwlwifi
-- firmware-libertas
-- firmware-linux
-- firmware-linux-free
-- firmware-linux-nonfree
-- firmware-realtek
-- firmware-ti-connectivity
-- fl-cow
-- gawk
-- gnupg
-- grep
-- gzip
-- hostname
-#- ifupdown
-- iputils-ping
-- initscripts
-- insserv
-- iproute2
-- iwd
-- i2c-tools
-- jq
-- kmod
-- libacl1
-- libapt-pkg6.0
-- libattr1
-- libblkid1
-- libbz2-1.0
-- libc-bin
-- libc6
-- libcap2
-- libcom-err2
-- libdb5.3
-- libgcc-s1
-- liblocale-gettext-perl
-- liblzma5
-- libmount1
-- libncurses5
-- libncursesw5
-- libnss-mdns
-- libpam-systemd
-- libpam-modules
-- libpam-modules-bin
-- libpam-runtime
-- libpam0g
-- libprocps8
-- libreadline8
-- libselinux1
-- libsemanage-common
-- libsemanage2
-- libsepol2
-- libslang2
-- libss2
-- libstdc++6
-- libtext-charwidth-perl
-- libtext-iconv-perl
-- libtext-wrapi18n-perl
-- libtinfo5
-- libudev1
-- libusb-0.1-4
-- libustr-1.0-1
-- libuuid1
-- locales
-- login
-- lsb-base
-- lsof
-- manpages
-- mawk
-- mime-support
-- mount
-- mtd-utils
-#- multiarch-support
-- ncurses-base
-- ncurses-term
-- ncurses-bin
-- net-tools
-- netbase
-- nvme-cli
-- passwd
-- perl-base
-- procps
-- psmisc
-#- python2.7-minimal
-#- python-pip-whl
-- python3-pytools
-- readline-common
-- resolvconf
-- ripgrep
-- fd-find
-- sed
-- sensible-utils
-- sshpass
-- sysstat
-- sysv-rc
-- sysvinit-utils
-- tar
-- tzdata
-- udev
-- util-linux
-- xz-utils
-- zstd
-- zlib1g
-# supplemental:
-- unzip
-- util-linux
-- zip
-- bzip2
-- adduser
-- traceroute
-- wpasupplicant
-- wireless-tools
-- wget
-- tinc
-- groff-base
-- vim
-- aptitude
-- uuid
-- uuid-runtime
-- usbutils
-- pciutils
-- less
-- zsh
-#- cron
-#- systemd-cron
-- dbus
-- dbus-bin
-- dbus-daemon
-- dbus-session-bus-common
-- dbus-system-bus-common
-- dbus-user-session
-#- dbus-x11
-- zip
-- unzip
-- xz-utils
-- less
-- git
-- ntpdate
-- grep
-- base-files
-- btrfs-progs
-- systemd
-- systemd-cron
-- systemd-journal-remote
-- systemd-oomd
-- systemd-sysv # special, replaces essential sysvinit
-#- systemd-timesyncd
-- chrony
-- libpam-systemd
-- libnss-systemd
-- libnss3-tools
-- libpam0g
-- libdbus-1-3
-- libcap2
-- libc6
-- policykit-1
-- pm-utils
-- iptables
-- ebtables
-- bridge-utils
-#- dhcpcd5
-- openssh-server
-- openssh-client
-- openssh-sftp-server
-#- haveged
-#- udisks2
-- dosfstools
-- xfsprogs
-- eject
-- gdisk
-- mdadm
-- cryptsetup-bin
-- rng-tools
-#- upower
-- vim-tiny
-- curl
-- patch
-- openssl
-#- fuse
-- fuse3
-#- screen
-- tmux
-- dtach
-- sudo
-- mount
-- nftables
-- xdg-user-dirs
-- accountsservice
-- iw
-- rsync
-- ecryptfs-utils
-- fzf
-- jq
-- jo
-- xattr
-- unicode-data
-- iso-codes
-- radvd
-- lvm2
-- wireless-regdb
-- j2cli
-- jc
-- console-data
-- console-data-linux
-- console-setup
-- console-setup-linux
+  # the first segment of base is "essential" Debian packages
+  - acl
+  - apt
+  - apt-transport-https
+  - arch-test
+  - attr
+  - b3sum
+  - base-files
+  - base-passwd
+  - bash
+  - bsdutils
+  - cifs-utils
+  - coreutils
+  - criu
+  - dash
+  - ddccontrol
+  - debconf
+  - debconf-utils
+  #- dhcpcd5
+  #- debian-archive-keyring
+  - debian-keyring
+  - debianutils
+  - dialog
+  - diffutils
+  - direnv
+  - dpkg
+  - dpkg-source-gitarchive
+  - efivar
+  - libefiboot1
+  - libefivar1
+  - efitools
+  - efibootmgr
+  - libext2fs2
+  - e2fsprogs
+  - ethtool
+  - feedbackd
+  - fd-find
+  - findutils
+  - firmware-atheros
+  - firmware-brcm80211
+  - firmware-iwlwifi
+  - firmware-libertas
+  - firmware-linux
+  - firmware-linux-free
+  - firmware-linux-nonfree
+  - firmware-realtek
+  - firmware-ti-connectivity
+  - fl-cow
+  - gawk
+  - gnupg
+  - grep
+  - gzip
+  - hostname
+  #- ifupdown
+  - iputils-ping
+  - initscripts
+  - insserv
+  - iproute2
+  - iwd
+  - i2c-tools
+  - jq
+  - kmod
+  - libacl1
+  - libapt-pkg6.0
+  - libattr1
+  - libblkid1
+  - libbz2-1.0
+  - libc-bin
+  - libc6
+  - libcap2
+  - libcom-err2
+  - libdb5.3
+  - libgcc-s1
+  - liblocale-gettext-perl
+  - liblzma5
+  - libmount1
+  - libncurses5
+  - libncursesw5
+  - libnss-mdns
+  - libpam-systemd
+  - libpam-modules
+  - libpam-modules-bin
+  - libpam-runtime
+  - libpam0g
+  - libprocps8
+  - libreadline8
+  - libselinux1
+  - libsemanage-common
+  - libsemanage2
+  - libsepol2
+  - libslang2
+  - libss2
+  - libstdc++6
+  - libtext-charwidth-perl
+  - libtext-iconv-perl
+  - libtext-wrapi18n-perl
+  - libtinfo5
+  - libudev1
+  - libusb-0.1-4
+  - libustr-1.0-1
+  - libuuid1
+  - locales
+  - login
+  - lsb-base
+  - lsof
+  - manpages
+  - mawk
+  - mime-support
+  - mount
+  - mtd-utils
+  #- multiarch-support
+  - ncurses-base
+  - ncurses-term
+  - ncurses-bin
+  - net-tools
+  - netbase
+  - nvme-cli
+  - passwd
+  - perl-base
+  - procps
+  - psmisc
+  #- python2.7-minimal
+  #- python-pip-whl
+  - python3-pytools
+  - readline-common
+  - resolvconf
+  - ripgrep
+  - fd-find
+  - sed
+  - sensible-utils
+  - sshpass
+  - sysstat
+  - sysv-rc
+  - sysvinit-utils
+  - tar
+  - tzdata
+  - udev
+  - util-linux
+  - xz-utils
+  - zstd
+  - zlib1g
+  # supplemental:
+  - unzip
+  - util-linux
+  - zip
+  - bzip2
+  - adduser
+  - traceroute
+  - wpasupplicant
+  - wireless-tools
+  - wget
+  - tinc
+  - groff-base
+  - vim
+  - aptitude
+  - uuid
+  - uuid-runtime
+  - usbutils
+  - pciutils
+  - less
+  - zsh
+  #- cron
+  #- systemd-cron
+  - dbus
+  - dbus-bin
+  - dbus-daemon
+  - dbus-session-bus-common
+  - dbus-system-bus-common
+  - dbus-user-session
+  #- dbus-x11
+  - zip
+  - unzip
+  - xz-utils
+  - less
+  - git
+  - ntpdate
+  - grep
+  - base-files
+  - btrfs-progs
+  - systemd
+  - systemd-cron
+  - systemd-journal-remote
+  - systemd-oomd
+  - systemd-sysv # special, replaces essential sysvinit
+  #- systemd-timesyncd
+  - chrony
+  - libpam-systemd
+  - libnss-systemd
+  - libnss3-tools
+  - libpam0g
+  - libdbus-1-3
+  - libcap2
+  - libc6
+  - policykit-1
+  - pm-utils
+  - iptables
+  - ebtables
+  - bridge-utils
+  #- dhcpcd5
+  - openssh-server
+  - openssh-client
+  - openssh-sftp-server
+  #- haveged
+  #- udisks2
+  - dosfstools
+  - xfsprogs
+  - eject
+  - gdisk
+  - mdadm
+  - cryptsetup-bin
+  - rng-tools
+  #- upower
+  - vim-tiny
+  - curl
+  - patch
+  - openssl
+  #- fuse
+  - fuse3
+  #- screen
+  - tmux
+  - dtach
+  - sudo
+  - mount
+  - nftables
+  - xdg-user-dirs
+  - accountsservice
+  - iw
+  - rsync
+  - ecryptfs-utils
+  - fzf
+  - jq
+  - jo
+  - xattr
+  - unicode-data
+  - iso-codes
+  - radvd
+  - lvm2
+  - wireless-regdb
+  - j2cli
+  - jc
+  - console-data
+  - console-data-linux
+  - console-setup
+  - console-setup-linux
 WORKSTATION:
-- dnsutils
-- dstat
-- strace
-- htop
-- rtkit
-- pwgen
-- vim
-- nano
-- elinks
-- w3m
-- units
-- openssl
-- lzma
-- openssl
-- fakeroot
-- acl
-- quota
-#- cfv
-#- dict
-#- dictd
-- usbip
-- screen
-- parted
-- util-linux
-- binfmt-support
-- pciutils
-- p7zip
-- snmp
-- socat
-- traceroute
-- whois
-- fatrace
-- powertop
-- hdparm
-- sdparm
-- ca-certificates
-- lockfile-progs
-- apt-utils
-- exfat-fuse
-- sshfs
-- s3fs
-#- tlp
-- tuned
-- tuned-ppd
-- tuned-gtk
-#- tuned-utils
-#- tuned-systemtap
-#- exiftool
-- libimage-exiftool-perl
-- libglib2.0-bin
-- flent
-- x11-xserver-utils
-- fonts-noto-color-emoji
-- fonts-stix
-- nodejs
-- npm
-- pci.ids
-- extra-xdg-menus
-- mdevctl
-- gpsd-tools
-- gpsd
-- gpsd-clients
-- gpsbabel
-- hadori
-- input-utils
-- irqbalance
-- irqtop
-#- fdupes
-- fnotifystat
-- jdupes
-- evtest
-- kacpimon
-- kbd
-- unicode-data
-- kcapi-tools
-- mmc-utils
-- smartmontools
-- spacenavd
-- spi-tools
-- u2f-host
-- u2f-server
-- libu2f-udev
-- libpam-u2f
-- pamu2fcfg
-- watchman
-- weather-util
-- weather-util-data
-- wipe
-- pv
-- bpftool
-- jc
-- jo
-- userbindmount
-- gthd
-- kitty
-- kitty-terminfo
-- bpfmon
-- edid-decode
-- cpuid
-- ethtool
-- i2c-tools
-- iw
-- edac-utils
-- libedac1
-- libsysfs2
-- cec-utils
-- ddcci-dkms
-#- acpi-call-dkms
-- libcec6
-- kcapi-tools
-- netcat-openbsd
-- linux-cpupower
-- libcpupower1
-- colord
-- ldap-utils
-- libsasl2-modules-gssapi-heimdal
-- samba-common-bin
-- samba-libs
-- smbclient
-- samba
-- heimdal-clients
-- samba-dsdb-modules
-#- samba-vfs-modules
-- python3-samba
-- ldb-tools
-- smbldap-tools
-#- winbind
-- python3-systemd
-- zram-tools
-- snapper
-- libpam-snapper
-- snapper-gui
-- libsnapper5
-- miniupnpc
-- libnfc-bin
-- neard
-- input-utils
-- kacpimon
-- bindfs
-- casync
-- libxml2-utils
-- bcachefs-tools
-#- bookworm
-- bpytop
-- crazydiskinfo
-- disk-filltest
-- fido2-tools
-- otpclient
-- otpclient-cli
-- profanity
-- userbindmount
-- zbd-utils
-#- encfs
-- brotli
-- networkd-dispatcher
-- bolt
-- neovim
-- vim-ale
-- vim-ctrlp
-- vim-gitgutter
-- universal-ctags
-- playerctl
-- iio-sensor-proxy
-- hfd-service-tools
-- hfd-service
+  - dnsutils
+  - dstat
+  - strace
+  - htop
+  - rtkit
+  - pwgen
+  - vim
+  - nano
+  - elinks
+  - w3m
+  - units
+  - openssl
+  - lzma
+  - openssl
+  - fakeroot
+  - acl
+  - quota
+  #- cfv
+  #- dict
+  #- dictd
+  - usbip
+  - screen
+  - parted
+  - util-linux
+  - binfmt-support
+  - pciutils
+  - p7zip
+  - snmp
+  - socat
+  - traceroute
+  - whois
+  - fatrace
+  - powertop
+  - hdparm
+  - sdparm
+  - ca-certificates
+  - lockfile-progs
+  - apt-utils
+  - exfat-fuse
+  - sshfs
+  - s3fs
+  #- tlp
+  - tuned
+  - tuned-ppd
+  - tuned-gtk
+  #- tuned-utils
+  #- tuned-systemtap
+  #- exiftool
+  - libimage-exiftool-perl
+  - libglib2.0-bin
+  - flent
+  - x11-xserver-utils
+  - fonts-noto-color-emoji
+  - fonts-stix
+  - nodejs
+  - npm
+  - pci.ids
+  - extra-xdg-menus
+  - mdevctl
+  - gpsd-tools
+  - gpsd
+  - gpsd-clients
+  - gpsbabel
+  - hadori
+  - input-utils
+  - irqbalance
+  - irqtop
+  #- fdupes
+  - fnotifystat
+  - jdupes
+  - evtest
+  - kacpimon
+  - kbd
+  - unicode-data
+  - kcapi-tools
+  - mmc-utils
+  - smartmontools
+  - spacenavd
+  - spi-tools
+  - u2f-host
+  - u2f-server
+  - libu2f-udev
+  - libpam-u2f
+  - pamu2fcfg
+  - watchman
+  - weather-util
+  - weather-util-data
+  - wipe
+  - pv
+  - bpftool
+  - jc
+  - jo
+  - userbindmount
+  - gthd
+  - kitty
+  - kitty-terminfo
+  - bpfmon
+  - edid-decode
+  - cpuid
+  - ethtool
+  - i2c-tools
+  - iw
+  - edac-utils
+  - libedac1
+  - libsysfs2
+  - cec-utils
+  - ddcci-dkms
+  #- acpi-call-dkms
+  - libcec6
+  - kcapi-tools
+  - netcat-openbsd
+  - linux-cpupower
+  - libcpupower1
+  - colord
+  - ldap-utils
+  - libsasl2-modules-gssapi-heimdal
+  - samba-common-bin
+  - samba-libs
+  - smbclient
+  - samba
+  - heimdal-clients
+  - samba-dsdb-modules
+  #- samba-vfs-modules
+  - python3-samba
+  - ldb-tools
+  - smbldap-tools
+  #- winbind
+  - python3-systemd
+  - zram-tools
+  - snapper
+  - libpam-snapper
+  - snapper-gui
+  - libsnapper5
+  - miniupnpc
+  - libnfc-bin
+  - neard
+  - input-utils
+  - kacpimon
+  - bindfs
+  - casync
+  - libxml2-utils
+  - bcachefs-tools
+  #- bookworm
+  - bpytop
+  - crazydiskinfo
+  - disk-filltest
+  - fido2-tools
+  - otpclient
+  - otpclient-cli
+  - profanity
+  - userbindmount
+  - zbd-utils
+  #- encfs
+  - brotli
+  - networkd-dispatcher
+  - bolt
+  - neovim
+  - vim-ale
+  - vim-ctrlp
+  - vim-gitgutter
+  - universal-ctags
+  - playerctl
+  - iio-sensor-proxy
+  - hfd-service-tools
+  - hfd-service
 WORDS:
-- an
-- aspell
-- aspell-doc
-- aspell-en
-- dico
-- dico-module-python
-- dico-module-wordnet
-- dicod
-- dict-wn
-- dict-devil
-- dict-elements
-- dict-foldoc
-- dict-gcide
-- wamerican-huge
-- wordnet
-- wordnet-base
+  - an
+  - aspell
+  - aspell-doc
+  - aspell-en
+  - dico
+  - dico-module-python
+  - dico-module-wordnet
+  - dicod
+  - dict-wn
+  - dict-devil
+  - dict-elements
+  - dict-foldoc
+  - dict-gcide
+  - wamerican-huge
+  - wordnet
+  - wordnet-base
 VIRTUALIZATION:
-#- qemu
-- qemu-efi
-- qemu-efi-aarch64
-- qemu-efi-arm
-#- qemu-kvm
-- qemu-block-extra
-- qemu-guest-agent
-- qemu-system
-- qemu-system-arm
-- qemu-system-common
-- qemu-system-data
-#- qemu-system-gui
-- qemu-system-x86
-- qemu-user
-- qemu-user-static
-#- qemu-user-binfmt
-- qemu-utils
-#- qemu-static-arm
-- libqcow-utils
-- libvirt-daemon-system
-- libvirt-daemon-driver-qemu
-- systemd-container
-- libnss-mymachines
+  #- qemu
+  - qemu-efi
+  - qemu-efi-aarch64
+  - qemu-efi-arm
+  #- qemu-kvm
+  - qemu-block-extra
+  - qemu-guest-agent
+  - qemu-system
+  - qemu-system-arm
+  - qemu-system-common
+  - qemu-system-data
+  #- qemu-system-gui
+  - qemu-system-x86
+  - qemu-user
+  - qemu-user-static
+  #- qemu-user-binfmt
+  - qemu-utils
+  #- qemu-static-arm
+  - libqcow-utils
+  - libvirt-daemon-system
+  - libvirt-daemon-driver-qemu
+  - systemd-container
+  - libnss-mymachines
 #- u-boot-qemu
 #- libvhdi-utils
 #- libvmdk-utils
@@ -489,1598 +489,1598 @@ VIRTUALIZATION:
 #- xmount
 #- vde2
 AVAHI:
-- avahi-autoipd
-- avahi-daemon
-- avahi-dnsconfd
-- avahi-utils
+  - avahi-autoipd
+  - avahi-daemon
+  - avahi-dnsconfd
+  - avahi-utils
 AVAHI_X:
 #2- avahi-discover
 WORKSTATION_X_amd64:
-- xserver-xorg-video-intel
-- xserver-xspice
+  - xserver-xorg-video-intel
+  - xserver-xspice
 WORKSTATION_X:
-- awesome
-#- ddcutil # in base
-- ddccontrol
-- gddccontrol
-- openbox
-- openbox-menu
-- tint2
-- vim-gtk
-- obconf
-- dbus-x11
-- redshift
-- redshift-gtk
-- gnome-settings-daemon
-- parcellite # clipboard manager
-- rxvt-unicode
-- stalonetray
-- x11-apps
-- x11-xfs-utils
-- x11vnc
-- xauth
-- xbase-clients
-- xinput
-- xinput-calibrator
-- xserver-xorg-input-all
-- xserver-xorg-input-synaptics
-- xserver-xorg-input-wacom
-- xserver-xorg-video-all
-- xserver-xorg-video-qxl
-- xserver-xorg-input-libinput
-#- xmonad
-- xpra
-- python3-gst-1.0
-- python3-pyinotify
-- python3-uritools
-- python3-setproctitle
-- python3-paramiko
-- python3-dns
-- python3-cpuinfo
-- xsel
-- xorg
-- xdg-utils
-- mplayer
-- totem
-- totem-plugins
-- wireshark
-- termshark
-- fonts-recommended
-- fonts-ricty-diminished
-- fonts-mplus
-- fonts-inconsolata
-- fonts-liberation2
-#- fonts-materialdesignicons-webfont
-#-fonts-mathjax
-- fonts-opensymbol
-- fonts-open-sans
-- fonts-noto-hinted
-- fonts-noto-mono
-- fonts-roboto-hinted
-- fonts-powerline
-- fonts-recommended
-- fonts-lmodern
-- fonts-terminus
-- xfonts-terminus
-- ttf-anonymous-pro
-- lightdm
-- d-feet
-- xterm
-- xtermcontrol
-- xtermset
-- xtrlock
-- xtightvncviewer
-- tigervnc-common
-- tigervnc-viewer
-- tigervnc-xorg-extension
-- xutils
-- x11-xserver-utils
-- xvfb
-- xserver-xephyr
-- xrestop
-- xdo
-- xdotool
-- xcolors
-- xclip
-- mesa-utils
-- mesa-vulkan-drivers
-- libegl1
-- libegl1-mesa
-- libgl1
-- libgl1-mesa-dri
-- libvulkan1
-- libglapi-mesa
-- libdrm2
-- libdrm-radeon1
-- libdrm-nouveau2
-- libdrm-intel1
-- libdrm-amdgpu1
-- libglx-mesa0
-- libgles1
-- libgles2
-- libglvnd0
-- libglx0
-- libglx-mesa0
-- libopengl0
-- libosmesa6
-- vulkan-tools
-- uvcdynctrl
-- guvcview
-- feh
-- drm-info
-- wpan-tools
-- ioping
-- crudini
-- bc
-- lnav
-- mtr-tiny
-- sysstat
-- isag
-#- sysdig
-- parallel
-- bashtop
-- hwinfo
-- hw-probe
-- python3-psutil
-- lm-sensors
-- smartmontools
-- libinput-tools
-- bookworm
-- mcomix
+  - awesome
+  #- ddcutil # in base
+  - ddccontrol
+  - gddccontrol
+  - openbox
+  - openbox-menu
+  - tint2
+  - vim-gtk
+  - obconf
+  - dbus-x11
+  - redshift
+  - redshift-gtk
+  - gnome-settings-daemon
+  - parcellite # clipboard manager
+  - rxvt-unicode
+  - stalonetray
+  - x11-apps
+  - x11-xfs-utils
+  - x11vnc
+  - xauth
+  - xbase-clients
+  - xinput
+  - xinput-calibrator
+  - xserver-xorg-input-all
+  - xserver-xorg-input-synaptics
+  - xserver-xorg-input-wacom
+  - xserver-xorg-video-all
+  - xserver-xorg-video-qxl
+  - xserver-xorg-input-libinput
+  #- xmonad
+  - xpra
+  - python3-gst-1.0
+  - python3-pyinotify
+  - python3-uritools
+  - python3-setproctitle
+  - python3-paramiko
+  - python3-dns
+  - python3-cpuinfo
+  - xsel
+  - xorg
+  - xdg-utils
+  - mplayer
+  - totem
+  - totem-plugins
+  - wireshark
+  - termshark
+  - fonts-recommended
+  - fonts-ricty-diminished
+  - fonts-mplus
+  - fonts-inconsolata
+  - fonts-liberation2
+  #- fonts-materialdesignicons-webfont
+  #-fonts-mathjax
+  - fonts-opensymbol
+  - fonts-open-sans
+  - fonts-noto-hinted
+  - fonts-noto-mono
+  - fonts-roboto-hinted
+  - fonts-powerline
+  - fonts-recommended
+  - fonts-lmodern
+  - fonts-terminus
+  - xfonts-terminus
+  - ttf-anonymous-pro
+  - lightdm
+  - d-feet
+  - xterm
+  - xtermcontrol
+  - xtermset
+  - xtrlock
+  - xtightvncviewer
+  - tigervnc-common
+  - tigervnc-viewer
+  - tigervnc-xorg-extension
+  - xutils
+  - x11-xserver-utils
+  - xvfb
+  - xserver-xephyr
+  - xrestop
+  - xdo
+  - xdotool
+  - xcolors
+  - xclip
+  - mesa-utils
+  - mesa-vulkan-drivers
+  - libegl1
+  - libegl1-mesa
+  - libgl1
+  - libgl1-mesa-dri
+  - libvulkan1
+  - libglapi-mesa
+  - libdrm2
+  - libdrm-radeon1
+  - libdrm-nouveau2
+  - libdrm-intel1
+  - libdrm-amdgpu1
+  - libglx-mesa0
+  - libgles1
+  - libgles2
+  - libglvnd0
+  - libglx0
+  - libglx-mesa0
+  - libopengl0
+  - libosmesa6
+  - vulkan-tools
+  - uvcdynctrl
+  - guvcview
+  - feh
+  - drm-info
+  - wpan-tools
+  - ioping
+  - crudini
+  - bc
+  - lnav
+  - mtr-tiny
+  - sysstat
+  - isag
+  #- sysdig
+  - parallel
+  - bashtop
+  - hwinfo
+  - hw-probe
+  - python3-psutil
+  - lm-sensors
+  - smartmontools
+  - libinput-tools
+  - bookworm
+  - mcomix
 #- mupdf-tools
 WORKSTATION_MEDIA:
-- gimp
-- hdrmerge
-- photoflow
-- megapixels
-- metadata-cleaner
+  - gimp
+  - hdrmerge
+  - photoflow
+  - megapixels
+  - metadata-cleaner
 WORKSTATION_KDE_BASE:
-- kde6
-- kio6
-- plasma-desktop
-- plasma-workspace
-- kde-baseapps
-- konqueror-nsplugins
-- kde-runtime
-- kwayland6-data
-#- virtuoso-minimal
-- kde-plasma-desktop
-- lightdm-kde-greeter
-- fonts-oxygen
-- xdg-desktop-portal-kde
+  - kde6
+  - kio6
+  - plasma-desktop
+  - plasma-workspace
+  - kde-baseapps
+  - konqueror-nsplugins
+  - kde-runtime
+  - kwayland6-data
+  #- virtuoso-minimal
+  - kde-plasma-desktop
+  - lightdm-kde-greeter
+  - fonts-oxygen
+  - xdg-desktop-portal-kde
 OPENCL:
-- ocl-icd-libopencl1
-- python3-pyopencl
+  - ocl-icd-libopencl1
+  - python3-pyopencl
 #- mesa-opencl-icd
 #- beignet
 #- clinfo
 #- ocl-icd-opencl-dev
 XPRA:
-- xpra
-- python3-opengl
-- python3-mako
-- python3-matplotlib
-- python3-pil.imagetk
-- python3-pytools
-#- python-avahi
-- python3-pil
-- python3-netifaces
-- python3-lzo
-- python3-lz4
-#- python-gtkglext1
-- openssh-client
-- ssh-askpass
-#- kssaskpass
-- python3-dbus
-- pulseaudio
-- pulseaudio-utils
-- pulsemixer
-- gstreamer1.0-plugins-good
-- gstreamer1.0-plugins-bad
-- gstreamer1.0-plugins-ugly
+  - xpra
+  - python3-opengl
+  - python3-mako
+  - python3-matplotlib
+  - python3-pil.imagetk
+  - python3-pytools
+  #- python-avahi
+  - python3-pil
+  - python3-netifaces
+  - python3-lzo
+  - python3-lz4
+  #- python-gtkglext1
+  - openssh-client
+  - ssh-askpass
+  #- kssaskpass
+  - python3-dbus
+  - pulseaudio
+  - pulseaudio-utils
+  - pulsemixer
+  - gstreamer1.0-plugins-good
+  - gstreamer1.0-plugins-bad
+  - gstreamer1.0-plugins-ugly
 WORKSTATION_KDE:
-- finger
-- akregator
-#- amarok
-#- amor
-- ark
-#- audex
-#- bangarang
-#- basket
-#- choqok
-- dragonplayer
-- digikam
-#- granatier
-- k3b
-- kaddressbook
-- kaddressbook-mobile
-#- kaffeine
-- kalarm
-- kalgebra
-- kalzium
-#- kamoso
-- kate
-- kcalc
-#- kjots
-#- klipper
-#- kmail
-#- kmail-mobile
-#- kmix
-#- knode
-#- kommander
-- kompare
-- konq-plugins
-- kontact
-- korganizer
-- korganizer-mobile
-#- kosd
-#- kopete
-- kpat
-#- kraft
-#- krecipes
-- krdc
-#- kredentials
-#- kremotecontrol
-- lirc
-- krename
-- krfb
-- krusader
-#- kshutdown
-#- ksnapshot
-#- ksysguard
-- ksystemlog
-- kteatime
-#- kuser
-- kwalletmanager
-- kwave
-- kwrite
-- okular
-#- okteta
-#- plasma-scriptengine-superkaramba
-- plasma-runners-addon
-- plasma-pa
-- plasma-wallpapers-addon
-- plasma-widgets-addon
-- kdeplasma-addons
-#- ktimetracker
-#- quassel-kde4
-#- rsibreak
-#- sentinella
-#- skrooge
-- smb4k
-#- soundkonverter
-#- step
-- sweeper
-- systemsettings
-#- tasks-mobile
-#- tellico
-- zanshin
-- libqt6bluetooth5-bin
-- haruna
-- polkit-kde-agent-1
-- plasma-gamemode
-- plasma-disks
-- plasma-thunderbolt
+  - finger
+  - akregator
+  #- amarok
+  #- amor
+  - ark
+  #- audex
+  #- bangarang
+  #- basket
+  #- choqok
+  - dragonplayer
+  - digikam
+  #- granatier
+  - k3b
+  - kaddressbook
+  - kaddressbook-mobile
+  #- kaffeine
+  - kalarm
+  - kalgebra
+  - kalzium
+  #- kamoso
+  - kate
+  - kcalc
+  #- kjots
+  #- klipper
+  #- kmail
+  #- kmail-mobile
+  #- kmix
+  #- knode
+  #- kommander
+  - kompare
+  - konq-plugins
+  - kontact
+  - korganizer
+  - korganizer-mobile
+  #- kosd
+  #- kopete
+  - kpat
+  #- kraft
+  #- krecipes
+  - krdc
+  #- kredentials
+  #- kremotecontrol
+  - lirc
+  - krename
+  - krfb
+  - krusader
+  #- kshutdown
+  #- ksnapshot
+  #- ksysguard
+  - ksystemlog
+  - kteatime
+  #- kuser
+  - kwalletmanager
+  - kwave
+  - kwrite
+  - okular
+  #- okteta
+  #- plasma-scriptengine-superkaramba
+  - plasma-runners-addon
+  - plasma-pa
+  - plasma-wallpapers-addon
+  - plasma-widgets-addon
+  - kdeplasma-addons
+  #- ktimetracker
+  #- quassel-kde4
+  #- rsibreak
+  #- sentinella
+  #- skrooge
+  - smb4k
+  #- soundkonverter
+  #- step
+  - sweeper
+  - systemsettings
+  #- tasks-mobile
+  #- tellico
+  - zanshin
+  - libqt6bluetooth5-bin
+  - haruna
+  - polkit-kde-agent-1
+  - plasma-gamemode
+  - plasma-disks
+  - plasma-thunderbolt
 WORKSTATION_MATE:
-- atril
-- caja
-- galculator
-- ffmpegthumbnailer
-- eom
-- engrampa
-- pluma
-- desktop-base
-- mate-applets
-- mate-applets-common
-- mate-menus
-- mate-common
-- mate-control-center
-- mate-control-center-common
-- mate-desktop
-- mate-desktop-environment
-- mate-desktop-environment-core
-- mate-desktop-environment-extras
-- mate-icon-theme
-- mate-media
-#- mate-media-gstreamer
-- mate-media-pulse
-#- mate-netbook
-- mate-indicator-applet
-- mate-netspeed
-- mate-notification-daemon
-- mate-panel
-- mate-panel-common
-- mate-polkit
-- mate-polkit-common
-- mate-power-manager
-- mate-power-manager-common
-- mate-screensaver
-- mate-screensaver-common
-- mate-sensors-applet
-- mate-session-manager
-- mate-settings-daemon
-- mate-settings-daemon-common
-#- mate-settings-daemon-gstreamer
-- mate-settings-daemon-pulse
-- mate-system-monitor
-- mate-system-monitor-common
-- mate-themes
-- mate-user-share
-- mate-utils
-- mate-utils-common
+  - atril
+  - caja
+  - galculator
+  - ffmpegthumbnailer
+  - eom
+  - engrampa
+  - pluma
+  - desktop-base
+  - mate-applets
+  - mate-applets-common
+  - mate-menus
+  - mate-common
+  - mate-control-center
+  - mate-control-center-common
+  - mate-desktop
+  - mate-desktop-environment
+  - mate-desktop-environment-core
+  - mate-desktop-environment-extras
+  - mate-icon-theme
+  - mate-media
+  #- mate-media-gstreamer
+  - mate-media-pulse
+  #- mate-netbook
+  - mate-indicator-applet
+  - mate-netspeed
+  - mate-notification-daemon
+  - mate-panel
+  - mate-panel-common
+  - mate-polkit
+  - mate-polkit-common
+  - mate-power-manager
+  - mate-power-manager-common
+  - mate-screensaver
+  - mate-screensaver-common
+  - mate-sensors-applet
+  - mate-session-manager
+  - mate-settings-daemon
+  - mate-settings-daemon-common
+  #- mate-settings-daemon-gstreamer
+  - mate-settings-daemon-pulse
+  - mate-system-monitor
+  - mate-system-monitor-common
+  - mate-themes
+  - mate-user-share
+  - mate-utils
+  - mate-utils-common
 DEVEL:
-- antlr
-- autoconf
-- automake
-- g++
-- gcc
-- make
-- pkg-config
-- gawk
-- flex
-- bison
-- libtool
-- libtool-bin
-- autopoint
-- libc-devtools
-- libltdl7
-- libltdl-dev
-- intltool
-- liblttng-ctl-dev
-- liblttng-ust-dev
-- uuid-dev
-- zlib1g-dev
-- build-essential
-- cmake
-- libncurses5-dev
-- meson
-- ninja-build
-- gperf
-- gcc
-- binutils-bpf
-- gcc-bpf
-- loggedfs
-- liburing-dev
-- binutils-multiarch
-#- ttyd
-#- bazel-bootstrap
-#- diffoscope
-#- radare2
-#- python3-jsondiff
-- disorderfs
-- pcm
-- syslinux
-- syslinux-efi
-- syslinux-utils
-- extlinux
+  - antlr
+  - autoconf
+  - automake
+  - g++
+  - gcc
+  - make
+  - pkg-config
+  - gawk
+  - flex
+  - bison
+  - libtool
+  - libtool-bin
+  - autopoint
+  - libc-devtools
+  - libltdl7
+  - libltdl-dev
+  - intltool
+  - liblttng-ctl-dev
+  - liblttng-ust-dev
+  - uuid-dev
+  - zlib1g-dev
+  - build-essential
+  - cmake
+  - libncurses5-dev
+  - meson
+  - ninja-build
+  - gperf
+  - gcc
+  - binutils-bpf
+  - gcc-bpf
+  - loggedfs
+  - liburing-dev
+  - binutils-multiarch
+  #- ttyd
+  #- bazel-bootstrap
+  #- diffoscope
+  #- radare2
+  #- python3-jsondiff
+  - disorderfs
+  - pcm
+  - syslinux
+  - syslinux-efi
+  - syslinux-utils
+  - extlinux
 DEVEL_EMBEDDED:
-- sigrok
-- sigrok-cli
-- pulseview
-- libsigrok4
-- openocd
-- libhidapi-libusb0
-- libhidapi-hidraw0
-- squashfuse
+  - sigrok
+  - sigrok-cli
+  - pulseview
+  - libsigrok4
+  - openocd
+  - libhidapi-libusb0
+  - libhidapi-hidraw0
+  - squashfuse
 DEVEL_WASM:
-- binaryen
-- emscripten
-- wabt
-RUST:
-- rust-all
-- rust
-- rust-doc
-- cargo
-- cargo-doc
-- rust-clippy
-- rust-gdb
-- rustc
-- rustfmt
-- libstd-rust-dev-wasm32
+  - binaryen
+  - emscripten
+  - wabt
+RUST_DEV:
+  - rust-all
+  - rust
+  - rust-doc
+  - cargo
+  - cargo-doc
+  - rust-clippy
+  - rust-gdb
+  - rustc
+  - rustfmt
+  - libstd-rust-dev-wasm32
 DEBDEV:
-- build-essential
-- debhelper
-- fakeroot
-- git-buildpackage
-- pbuilder
-- devscripts
-- dput-ng
-- multistrap
-- mmdebstrap
-- debos
-- ovmf
-- busybox
-- proot
-- mtd-utils
-- u-boot-tools
-- device-tree-compiler
-- multistrap
-- dpkg-cross
-- libterm-size-perl
-- libtimedate-perl
-- curl
-- wget
-- dctrl-tools
-- gnupg
-- libdistro-info-perl
-- libjson-perl
-- libparse-debcontrol-perl
-- patch
-- patchutils
-- python3-debian
-- sensible-utils
-- strace
-- unzip
-- xz-utils
-- equivs
-- apt-src
-#- debomatic
-#- debci-worker
-#- aptfs
-- apt-cacher-ng
+  - build-essential
+  - debhelper
+  - fakeroot
+  - git-buildpackage
+  - pbuilder
+  - devscripts
+  - dput-ng
+  - multistrap
+  - mmdebstrap
+  - debos
+  - ovmf
+  - busybox
+  - proot
+  - mtd-utils
+  - u-boot-tools
+  - device-tree-compiler
+  - multistrap
+  - dpkg-cross
+  - libterm-size-perl
+  - libtimedate-perl
+  - curl
+  - wget
+  - dctrl-tools
+  - gnupg
+  - libdistro-info-perl
+  - libjson-perl
+  - libparse-debcontrol-perl
+  - patch
+  - patchutils
+  - python3-debian
+  - sensible-utils
+  - strace
+  - unzip
+  - xz-utils
+  - equivs
+  - apt-src
+  #- debomatic
+  #- debci-worker
+  #- aptfs
+  - apt-cacher-ng
 AUDIO:
-- alsa-utils
-- libasound2
-- libasound2-plugins
-#- libasound2-plugin-equal
-- pulseaudio
-- libpulse0
-- liblircclient0
-- pulseaudio-module-gsettings
-#- pulseaudio-module-lirc
-#- pulseaudio-module-raop
-- pulseaudio-module-zeroconf
-- vorbis-tools
-#- earcandy
-- playerctl
-- cava
+  - alsa-utils
+  - libasound2
+  - libasound2-plugins
+  #- libasound2-plugin-equal
+  - pulseaudio
+  - libpulse0
+  - liblircclient0
+  - pulseaudio-module-gsettings
+  #- pulseaudio-module-lirc
+  #- pulseaudio-module-raop
+  - pulseaudio-module-zeroconf
+  - vorbis-tools
+  #- earcandy
+  - playerctl
+  - cava
 AUDIO_X:
-- alsa-tools-gui
-- alsamixergui
-#- pulseaudio-module-x11
-- pulseaudio-utils
-#- paman
-- paprefs
-- pavucontrol
-- pasystray
-- pavumeter
-# big, pyqt5
-- mkchromecast
-- mkchromecast-pulseaudio
-- mkchromecast-gstreamer
+  - alsa-tools-gui
+  - alsamixergui
+  #- pulseaudio-module-x11
+  - pulseaudio-utils
+  #- paman
+  - paprefs
+  - pavucontrol
+  - pasystray
+  - pavumeter
+  # big, pyqt5
+  - mkchromecast
+  - mkchromecast-pulseaudio
+  - mkchromecast-gstreamer
 MOPIDY:
-- mopidy
-- mopidy-doc
-- mopidy-alsamixer
-#- mopidy-dirble
-- mopidy-dleyna
-#- mopidy-local-sqlite
-- mopidy-mpris
-- mopidy-mpd
-- mopidy-podcast
-#- mopidy-podcast-gpodder
-- mopidy-scrobbler
-- mopidy-soundcloud
-- mopidy-tunein
-#- mopidy-youtube
-- mopidy-somafm
-- mopidy-internetarchive
-- mpdris2
-- mpd
-- ncmpc
+  - mopidy
+  - mopidy-doc
+  - mopidy-alsamixer
+  #- mopidy-dirble
+  - mopidy-dleyna
+  #- mopidy-local-sqlite
+  - mopidy-mpris
+  - mopidy-mpd
+  - mopidy-podcast
+  #- mopidy-podcast-gpodder
+  - mopidy-scrobbler
+  - mopidy-soundcloud
+  - mopidy-tunein
+  #- mopidy-youtube
+  - mopidy-somafm
+  - mopidy-internetarchive
+  - mpdris2
+  - mpd
+  - ncmpc
 BT:
-- bluez
-- bluez-firmware
-- bluez-hcidump
-- bluez-meshd
-- bluez-obexd
-- bluez-tools
-- bluetooth
-- libbluetooth3
+  - bluez
+  - bluez-firmware
+  - bluez-hcidump
+  - bluez-meshd
+  - bluez-obexd
+  - bluez-tools
+  - bluetooth
+  - libbluetooth3
 #- bluez-alsa-utils
 #- pulseaudio-module-bluetooth
 BT_X:
-- blueman
+  - blueman
 PIPEWIRE:
-- pipewire
-- pipewire-bin
-- libpipewire-0.3-0
-- libpipewire-0.3-common
-- libpipewire-0.3-modules
-- libwebrtc-audio-processing1
-- gstreamer1.0-pipewire
-- pipewire-audio-client-libraries
-- pipewire-media-session
-- pipewire-pulse
-- pipewire-tests
-- wireplumber
-#- carla
-- libspa-0.2-modules
-- libspa-0.2-bluetooth
-- libspa-0.2-jack
-- pamix
-- libsbc1
-- libldacbt-abr2
-- libldacbt-enc2
-- projectm-jack
+  - pipewire
+  - pipewire-bin
+  - libpipewire-0.3-0
+  - libpipewire-0.3-common
+  - libpipewire-0.3-modules
+  - libwebrtc-audio-processing1
+  - gstreamer1.0-pipewire
+  - pipewire-audio-client-libraries
+  - pipewire-media-session
+  - pipewire-pulse
+  - pipewire-tests
+  - wireplumber
+  #- carla
+  - libspa-0.2-modules
+  - libspa-0.2-bluetooth
+  - libspa-0.2-jack
+  - pamix
+  - libsbc1
+  - libldacbt-abr2
+  - libldacbt-enc2
+  - projectm-jack
 #- jack-mixer
 STREAMING:
-- obs-studio
-- obs-plugins
-#- obs-advanced-scene-switcher
-#- obs-advanced-scene-switcher-data
-- obs-downstream-keyer
-- obs-move-transition
-- obs-scene-collection-manager
-- obs-scene-notes-dock
-- obs-text-slideshow
-- obs-transition-table
-- obs-websocket
-- v4l2loopback-dkms
-- v4l2loopback-utils
-- xdg-desktop-portal-tests
-- ustreamer
-- v4l-utils
-- v4l2loopback-utils
-- guvcview
+  - obs-studio
+  - obs-plugins
+  #- obs-advanced-scene-switcher
+  #- obs-advanced-scene-switcher-data
+  - obs-downstream-keyer
+  - obs-move-transition
+  - obs-scene-collection-manager
+  - obs-scene-notes-dock
+  - obs-text-slideshow
+  - obs-transition-table
+  - obs-websocket
+  - v4l2loopback-dkms
+  - v4l2loopback-utils
+  - xdg-desktop-portal-tests
+  - ustreamer
+  - v4l-utils
+  - v4l2loopback-utils
+  - guvcview
 #- guacd
 #- guacamole
 RYGEL:
-- rygel
-- rygel-gst-launch
-- rygel-playbin
-- dleyna-renderer
-- dleyna-server
+  - rygel
+  - rygel-gst-launch
+  - rygel-playbin
+  - dleyna-renderer
+  - dleyna-server
 RYGEL_X:
-- rygel-preferences
+  - rygel-preferences
 LIBREOFFICE:
-- libreoffice-calc
-- libreoffice-gnome
-- libreoffice-imprss
-- libreoffice-writer
+  - libreoffice-calc
+  - libreoffice-gnome
+  - libreoffice-imprss
+  - libreoffice-writer
 EDA:
-- kicad
-- kicad-common
-- kicad-doc-en
-- geda-examples
-- geda
-- gerbv
-- gnucap
-#- gspaceui
-- gtkwave
-#- gwavea
-- linsmith
-- ngspice
-- oregano
-- pcb
-- pcb-common
+  - kicad
+  - kicad-common
+  - kicad-doc-en
+  - geda-examples
+  - geda
+  - gerbv
+  - gnucap
+  #- gspaceui
+  - gtkwave
+  #- gwavea
+  - linsmith
+  - ngspice
+  - oregano
+  - pcb
+  - pcb-common
 USERSPACE:
-- dianara
+  - dianara
 TRACKER:
-- rygel-tracker
-- rygel-miner-fs
+  - rygel-tracker
+  - rygel-miner-fs
 JACK:
-- jackd2
-#- jack-tools
-- libjack-jackd2-0
-- jack-stdio
-- jackmeter
+  - jackd2
+  #- jack-tools
+  - libjack-jackd2-0
+  - jack-stdio
+  - jackmeter
 #- pulseaudio-module-jack
 JACK_PLUGINS:
-- swh-plugins
-- cmt
+  - swh-plugins
+  - cmt
 JACK_X:
-#- jack-mixer
-- qjackctl
-#- jacktrip
-#- laditools
-#- ladish
-#- meterbridge
-#- patchage
-- jack-tools
-- timemachine
+  #- jack-mixer
+  - qjackctl
+  #- jacktrip
+  #- laditools
+  #- ladish
+  #- meterbridge
+  #- patchage
+  - jack-tools
+  - timemachine
 MEDIA:
-#- forked-daapd
-#- firefly
-#- gstreamer-tools
-- gstreamer1.0-plugins-good
-- gstreamer1.0-plugins-base-apps
-- gstreamer1.0-plugins-ugly
-- gstreamer1.0-alsa
-- gstreamer1.0-libav
-- gstreamer1.0-pulseaudio
-- gstreamer1.0-tools
-- libgstreamer1.0-0
-- libgstreamer-plugins-base1.0-0
-- libavcodec-extra
-- playerctl
-- youtube-dl
-- lame
-- opus-tools
-- vpx-tools
-- x265
-- aom-tools
-- dov4l
-- ffmpeg
-- libwebm-tools
-- libwebm1
-- webp
-- libwebp6
-- ffmpeg
-- davs2
-- libdavs2-16
-- dav1d
-- libdav1d5
-- libavif13
-- libavif-bin
-#- libgav1-0
-#- libgav1-bin
-#- libaom0
-#- aom-tools
-- libheif1
-- celluloid
+  #- forked-daapd
+  #- firefly
+  #- gstreamer-tools
+  - gstreamer1.0-plugins-good
+  - gstreamer1.0-plugins-base-apps
+  - gstreamer1.0-plugins-ugly
+  - gstreamer1.0-alsa
+  - gstreamer1.0-libav
+  - gstreamer1.0-pulseaudio
+  - gstreamer1.0-tools
+  - libgstreamer1.0-0
+  - libgstreamer-plugins-base1.0-0
+  - libavcodec-extra
+  - playerctl
+  - youtube-dl
+  - lame
+  - opus-tools
+  - vpx-tools
+  - x265
+  - aom-tools
+  - dov4l
+  - ffmpeg
+  - libwebm-tools
+  - libwebm1
+  - webp
+  - libwebp6
+  - ffmpeg
+  - davs2
+  - libdavs2-16
+  - dav1d
+  - libdav1d5
+  - libavif13
+  - libavif-bin
+  #- libgav1-0
+  #- libgav1-bin
+  #- libaom0
+  #- aom-tools
+  - libheif1
+  - celluloid
 #- deepin
 #- kylin-video
 WINE:
-- libvkd3d1
-- wine
-- libwine
-- fonts-wine
-- fonts-liberation
-- ttf-mscorefonts-installer
-- ocl-icd-libopencl
+  - libvkd3d1
+  - wine
+  - libwine
+  - fonts-wine
+  - fonts-liberation
+  - ttf-mscorefonts-installer
+  - ocl-icd-libopencl
 VLC:
-- vlc
-- vlc-bin
-- vlc-plugin-access-extra
-- vlc-plugin-bittorrent
-- vlc-plugin-jack
-- vlc-plugin-notify
-- vlc-plugin-samba
-- vlc-plugin-skins2
-- vlc-plugin-video-output
-- vlc-plugin-visualization
+  - vlc
+  - vlc-bin
+  - vlc-plugin-access-extra
+  - vlc-plugin-bittorrent
+  - vlc-plugin-jack
+  - vlc-plugin-notify
+  - vlc-plugin-samba
+  - vlc-plugin-skins2
+  - vlc-plugin-video-output
+  - vlc-plugin-visualization
 KODI:
-- kodi
-- kodi-bin
-- kodi-data
-- kodi-eventclients-zeroconf
-- kodi-inputstream-rtmp
-- kodi-repository-kodi
-- libcec6
+  - kodi
+  - kodi-bin
+  - kodi-data
+  - kodi-eventclients-zeroconf
+  - kodi-inputstream-rtmp
+  - kodi-repository-kodi
+  - libcec6
 #- libwayland-client++0
 #- libwayland-client-cursor++0
 #- libwayland-egl++0
 VAAPI:
-- gstreamer1.0-vaapi
-- libva2
-- libva-drm2
-- libva-glx2
-- libva-wayland2
-- libva-x11-2
-- libvdpau-va-gl1
-- vainfo
-- va-driver-all
-- mesa-va-drivers
-- libvdpau1
-- vdpau-driver-all
-- libvdpau-va-gl1
-- mesa-vdpau-drivers
-#- vdpau-va-driver
-- vdpauinfo
-- mesa-utils-extra
+  - gstreamer1.0-vaapi
+  - libva2
+  - libva-drm2
+  - libva-glx2
+  - libva-wayland2
+  - libva-x11-2
+  - libvdpau-va-gl1
+  - vainfo
+  - va-driver-all
+  - mesa-va-drivers
+  - libvdpau1
+  - vdpau-driver-all
+  - libvdpau-va-gl1
+  - mesa-vdpau-drivers
+  #- vdpau-va-driver
+  - vdpauinfo
+  - mesa-utils-extra
 # multimedia-audio-plugins
 VAAPI_amd64:
-- i965-va-driver-shaders
+  - i965-va-driver-shaders
 WORKSTATION_WAYLAND:
-- xwayland
-- helvum
-- libwayland-egl1-mesa
-- weston
-- sway
-- swayidle
-- swaybg
-- swaylock
-- fuzzel
-- wl-clipboard
-- wdisplays
-- wev
-- kanshi
-- drm-info
-- wlr-randr
-- wdisplays
-- wf-recorder
-#- fonts-recommended
-- foot
-- pipewire-audio-client-libraries
-- helvum
-- pipewire
-- pipewire-bin
-- gstreamer1.0-libcamera
-- libcamera0.2
-- libcamera-doc
-- libcamera-tools
-- libcamera-v4l2
-- libeis1
-- liboeffis1
-- libei1
-- libspa-0.2
-- libspa-0.2-bluetooth
-- libspa-0.2-libcamera
-- libspa-0.2-modules
-- grimshot
-- gammastep
-- squeekboard # 30MB! touchscreen keyboard
-- libwayland-bin
-- xdg-desktop-portal
-- xdg-desktop-portal-wlr
-#- xdg-desktop-portal-tests
-#- xdg-desktop-portal-gnome
-#- xdg-desktop-portal-kde
-#- gnome-shell-extension-desktop-icons
-- xdg-dbus-proxy
-- flatpak
-- grimshot
-- slurp
-- waybar
-#- wob
-#- wofi
-- imv
-- waypipe
-- wtype
-- ydotool
-- ydotoold
-- desktop-base
-- wayvnc
-- interception-tools
-- interception-tools-caps2esc
-- cec-utils
+  - xwayland
+  - helvum
+  - libwayland-egl1-mesa
+  - weston
+  - sway
+  - swayidle
+  - swaybg
+  - swaylock
+  - fuzzel
+  - wl-clipboard
+  - wdisplays
+  - wev
+  - kanshi
+  - drm-info
+  - wlr-randr
+  - wdisplays
+  - wf-recorder
+  #- fonts-recommended
+  - foot
+  - pipewire-audio-client-libraries
+  - helvum
+  - pipewire
+  - pipewire-bin
+  - gstreamer1.0-libcamera
+  - libcamera0.2
+  - libcamera-doc
+  - libcamera-tools
+  - libcamera-v4l2
+  - libeis1
+  - liboeffis1
+  - libei1
+  - libspa-0.2
+  - libspa-0.2-bluetooth
+  - libspa-0.2-libcamera
+  - libspa-0.2-modules
+  - grimshot
+  - gammastep
+  - squeekboard # 30MB! touchscreen keyboard
+  - libwayland-bin
+  - xdg-desktop-portal
+  - xdg-desktop-portal-wlr
+  #- xdg-desktop-portal-tests
+  #- xdg-desktop-portal-gnome
+  #- xdg-desktop-portal-kde
+  #- gnome-shell-extension-desktop-icons
+  - xdg-dbus-proxy
+  - flatpak
+  - grimshot
+  - slurp
+  - waybar
+  #- wob
+  #- wofi
+  - imv
+  - waypipe
+  - wtype
+  - ydotool
+  - ydotoold
+  - desktop-base
+  - wayvnc
+  - interception-tools
+  - interception-tools-caps2esc
+  - cec-utils
 WORKSTATION_GNOME:
-- accountservice
-#- bijiben - big deps
-- dino-im
-- gnome-shell
-- chrome-authenticator
-#- chrome-gnome-shell
-- gnome-bluetooth
-#- gnome-boxes
-- gnome-books
-- gnome-calls
-- gnome-calendar
-- gnome-calculator
-- gnome-clocks
-- gnome-connections
-- gnome-contacts
-- gnome-control-center
-#- gnome-core
-- gnome-docments
-- gnome-feeds
-- gnome-firmware
-#- gnome-genius
-- gnome-initial-setup
-- gnome-keyring
-- gnome-maps
-- gnome-menus
-- gnome-metronome
-- gnome-photos
-- gnome-power-manager
-- gnome-remote-desktop
-- gnome-screenshot
-- gnome-session
-- gnome-settings-daemon
-- gnome-shell-extensions
-- gnome-sound-recorder
-- gnome-sushi
-- gnome-system-monitor
-- gnome-system-tools
-- gnome-todo
-- gnome-tweaks
-- gnome-weather
-- libgsf-bin
-- megapixels
-- mutter
-- pinhole
-- realmd
-- rygel-tracker
-- simple-scan
-- xdg-user-dirs-gtk
-- xdg-desktop-portal-gnome
+  - accountservice
+  #- bijiben - big deps
+  - dino-im
+  - gnome-shell
+  - chrome-authenticator
+  #- chrome-gnome-shell
+  - gnome-bluetooth
+  #- gnome-boxes
+  - gnome-books
+  - gnome-calls
+  - gnome-calendar
+  - gnome-calculator
+  - gnome-clocks
+  - gnome-connections
+  - gnome-contacts
+  - gnome-control-center
+  #- gnome-core
+  - gnome-docments
+  - gnome-feeds
+  - gnome-firmware
+  #- gnome-genius
+  - gnome-initial-setup
+  - gnome-keyring
+  - gnome-maps
+  - gnome-menus
+  - gnome-metronome
+  - gnome-photos
+  - gnome-power-manager
+  - gnome-remote-desktop
+  - gnome-screenshot
+  - gnome-session
+  - gnome-settings-daemon
+  - gnome-shell-extensions
+  - gnome-sound-recorder
+  - gnome-sushi
+  - gnome-system-monitor
+  - gnome-system-tools
+  - gnome-todo
+  - gnome-tweaks
+  - gnome-weather
+  - libgsf-bin
+  - megapixels
+  - mutter
+  - pinhole
+  - realmd
+  - rygel-tracker
+  - simple-scan
+  - xdg-user-dirs-gtk
+  - xdg-desktop-portal-gnome
 WORKSTATION_MOBILE:
-- chatty # huge
-- lollypop
-- kgx
-- gnome-clocks
-- gnome-contacts
-- mmsd-tng
-- pinhole
-- phosh-core
-- phosh-phone
-- phosh-tablet
-- phosh-full
+  - chatty # huge
+  - lollypop
+  - kgx
+  - gnome-clocks
+  - gnome-contacts
+  - mmsd-tng
+  - pinhole
+  - phosh-core
+  - phosh-phone
+  - phosh-tablet
+  - phosh-full
 WORKSTATION_COMMS:
-- purple-lurch
-- purple-xmpp-carbons
-- purple-xmpp-http-upload
-- libpurple0
-#- chatty - big deps
-- telepathy-rakia
-- telepathy-gabble
-- telepathy-salut
-#- teleapthy-haze
-- telepathy-idle
-- telepathy-mission-control-5
-- telepathy-logger
+  - purple-lurch
+  - purple-xmpp-carbons
+  - purple-xmpp-http-upload
+  - libpurple0
+  #- chatty - big deps
+  - telepathy-rakia
+  - telepathy-gabble
+  - telepathy-salut
+  #- teleapthy-haze
+  - telepathy-idle
+  - telepathy-mission-control-5
+  - telepathy-logger
 SUGAR:
-- python3-sugar
-- python3-jarabe
-- python3-carquinyol
-- sucrose
-- sugar-browse-activity
-- sugar-calculate-activity
-- sugar-chat-activity
-- sugar-imageviewer-activity
-- sugar-jukebox-activity
-- sugar-log-activity
-- sugar-pippy-activity
-- sugar-read-activity
-- sugar-terminal-activity
-- sugar-write-activity
+  - python3-sugar
+  - python3-jarabe
+  - python3-carquinyol
+  - sucrose
+  - sugar-browse-activity
+  - sugar-calculate-activity
+  - sugar-chat-activity
+  - sugar-imageviewer-activity
+  - sugar-jukebox-activity
+  - sugar-log-activity
+  - sugar-pippy-activity
+  - sugar-read-activity
+  - sugar-terminal-activity
+  - sugar-write-activity
 MEDIA_X:
-#- tracker-gui
-- gstreamer1.0-x
-- gstreamer1.0-plugins-bad
-- gstreamer1.0-nice
-- gstreamer1.0-gl
-- gstreamer1.0-opencv
-- gstreamer1.0-pipewire
-- gstreamer1.0-plugins-rtp
-- gstreamer1.0-rtsp
-- ario
-- sonata
-- glurp
-- mpv
-- mpv-mpris
-- streamtuner2
-#- tunapie
-- gnome-mpv
+  #- tracker-gui
+  - gstreamer1.0-x
+  - gstreamer1.0-plugins-bad
+  - gstreamer1.0-nice
+  - gstreamer1.0-gl
+  - gstreamer1.0-opencv
+  - gstreamer1.0-pipewire
+  - gstreamer1.0-plugins-rtp
+  - gstreamer1.0-rtsp
+  - ario
+  - sonata
+  - glurp
+  - mpv
+  - mpv-mpris
+  - streamtuner2
+  #- tunapie
+  - gnome-mpv
 JAVA:
-- oracle-java9-installer
-- oracle-java9-unlimited-jce-policy
+  - oracle-java9-installer
+  - oracle-java9-unlimited-jce-policy
 LLVM:
-- llvm-3.8
-- llvm-3.8-doc
-- llvm-3.8-runtime
-- llvm-3.8-tools
-- clang-3.8
-- clang-3.8-doc
-- clang-format-3.8
-- clang-modernizer-3.8
-- clang-tidy-3.8
+  - llvm-3.8
+  - llvm-3.8-doc
+  - llvm-3.8-runtime
+  - llvm-3.8-tools
+  - clang-3.8
+  - clang-3.8-doc
+  - clang-format-3.8
+  - clang-modernizer-3.8
+  - clang-tidy-3.8
 DEVEL_JAVA:
-- visualvm
-- maven
+  - visualvm
+  - maven
 OBSERVABILITY:
-- prometheus
-- prometheus-alertmanager
-- prometheus-blackbox-exporter
-#- prometheus-frr-exporter
-#- prometheus-bird-exporter
-- prometheus-ipmi-exporter
-- prometheus-libvirt-exporter
-- prometheus-homeplug-exporter
-- prometheus-mailexporter
-- prometheus-node-exporter
-- prometheus-node-exporter-collectors
-- prometheus-postgres-exporter
-- prometheus-process-exporter
-- prometheus-pushgateway
-- prometheus-smokeping-prober
+  - prometheus
+  - prometheus-alertmanager
+  - prometheus-blackbox-exporter
+  #- prometheus-frr-exporter
+  #- prometheus-bird-exporter
+  - prometheus-ipmi-exporter
+  - prometheus-libvirt-exporter
+  - prometheus-homeplug-exporter
+  - prometheus-mailexporter
+  - prometheus-node-exporter
+  - prometheus-node-exporter-collectors
+  - prometheus-postgres-exporter
+  - prometheus-process-exporter
+  - prometheus-pushgateway
+  - prometheus-smokeping-prober
 #- prometheus-xmpp-alerts
 OPENSTACK_KEYSTONE:
-- keystone
-- keystone-doc
-- python-keystone
-- python-configobj
-#- dbconfig
-- dbconfig-common
-- rabbitmq-server
-- ntp
+  - keystone
+  - keystone-doc
+  - python-keystone
+  - python-configobj
+  #- dbconfig
+  - dbconfig-common
+  - rabbitmq-server
+  - ntp
 OPENSTACK_KEYSTONE_NOVA:
-- python-keystone
-- python-keystoneclient
-- python-babel
-- python-iso8601
-- python-crypto
-- python-dateutil
-- python-dogpile.cache
-- python-eventlet
-- python-greenlet
-- python-httplib2
-- python-jsonschema
-- python-lxml
-- python-memcache
-- python-migrate
-- python-mysqldb
-- python-netaddr
-- python-novaclient
-- python-oauthlib
-- python-oslo.config
-- python-oslo.messaging
-- python-pam
-- python-passlib
-- python-paste
-- python-pastedeploy
-- python-pastescript
-- python-pbr
-- python-pecan
-- python-posix-ipc
-- python-prettytable
-- python-pycadf
-- python-pysqlite2
-- python-routes
-- python-six
-- python-sqlalchemy
-- python-webob
+  - python-keystone
+  - python-keystoneclient
+  - python-babel
+  - python-iso8601
+  - python-crypto
+  - python-dateutil
+  - python-dogpile.cache
+  - python-eventlet
+  - python-greenlet
+  - python-httplib2
+  - python-jsonschema
+  - python-lxml
+  - python-memcache
+  - python-migrate
+  - python-mysqldb
+  - python-netaddr
+  - python-novaclient
+  - python-oauthlib
+  - python-oslo.config
+  - python-oslo.messaging
+  - python-pam
+  - python-passlib
+  - python-paste
+  - python-pastedeploy
+  - python-pastescript
+  - python-pbr
+  - python-pecan
+  - python-posix-ipc
+  - python-prettytable
+  - python-pycadf
+  - python-pysqlite2
+  - python-routes
+  - python-six
+  - python-sqlalchemy
+  - python-webob
 OPENSTACK_KEYSTONE_CLIENT:
-- python-keystoneclient
-- python-babel
-- python-iso8601
-- python-keyring
-- python-netaddr
-- python-oslo.config
-- python-pbr
-- python-pkg-resources
-- python-prettytable
-- python-requests
-- python-simplejson
-- python-six
-- python-stevedore
+  - python-keystoneclient
+  - python-babel
+  - python-iso8601
+  - python-keyring
+  - python-netaddr
+  - python-oslo.config
+  - python-pbr
+  - python-pkg-resources
+  - python-prettytable
+  - python-requests
+  - python-simplejson
+  - python-six
+  - python-stevedore
 CEPH:
-- btrfs-progs
-- ceph
-- ceph-common
-- ceph-fs-common
-- ceph-fuse
-- ceph-mds
-- ceph-test
-- cryptsetup
-- cryptsetup-bin
-- libaio1
-- libblkid1
-- libcephfs1
-- libfuse2
-- libleveldb1
-- librados2
-- librbd1
-- libuuid1
-- liblzo2-2
-- python3-ceph
-- rbd-fuse
-- radosgw
-- uuid-runtime
+  - btrfs-progs
+  - ceph
+  - ceph-common
+  - ceph-fs-common
+  - ceph-fuse
+  - ceph-mds
+  - ceph-test
+  - cryptsetup
+  - cryptsetup-bin
+  - libaio1
+  - libblkid1
+  - libcephfs1
+  - libfuse2
+  - libleveldb1
+  - librados2
+  - librbd1
+  - libuuid1
+  - liblzo2-2
+  - python3-ceph
+  - rbd-fuse
+  - radosgw
+  - uuid-runtime
 OPENSTACK_MASTER:
-- ceilometer-agent-central
-- ceilometer-api
-- ceilometer-collector
-- ceilometer-common
-- heat-api
-- heat-common
-- heat-engine
-- nova-api
-- nova-cert
-- nova-common
-- nova-scheduler
-- nova-conductor
-- nova-consoleauth
-- keystone
-- memcached
-- openstack-dashboard
-- openstack-pkg-tools
-- postgresql
-- python-ceilometer
-- python-ldap
-- python-heat
-- python-memcache
-- python-nova
-- python-psycopg2
-- python-quantum
-- python-sqlalchemy=0.7.9-1
-- python-sqlalchemy-ext=0.7.9-1
-- quantum-common
-- quantum-dhcp-agent
-- quantum-l3-agent
-- quantum-metadata-agent
-- quantum-plugin-openvswitch
-- quantum-plugin-openvswitch-agent
-- quantum-server
-- rabbitmq-server
+  - ceilometer-agent-central
+  - ceilometer-api
+  - ceilometer-collector
+  - ceilometer-common
+  - heat-api
+  - heat-common
+  - heat-engine
+  - nova-api
+  - nova-cert
+  - nova-common
+  - nova-scheduler
+  - nova-conductor
+  - nova-consoleauth
+  - keystone
+  - memcached
+  - openstack-dashboard
+  - openstack-pkg-tools
+  - postgresql
+  - python-ceilometer
+  - python-ldap
+  - python-heat
+  - python-memcache
+  - python-nova
+  - python-psycopg2
+  - python-quantum
+  - python-sqlalchemy=0.7.9-1
+  - python-sqlalchemy-ext=0.7.9-1
+  - quantum-common
+  - quantum-dhcp-agent
+  - quantum-l3-agent
+  - quantum-metadata-agent
+  - quantum-plugin-openvswitch
+  - quantum-plugin-openvswitch-agent
+  - quantum-server
+  - rabbitmq-server
 OPENSTACK_NODE:
-- ceilometer-agent-compute
-- nova-common
-- nova-compute
-- nova-compute-kvm
-- nova-network
-- ntp
-- openstack-pkg-tools
-- openvswitch-datapath-dkms
-- quantum-common
-- quantum-plugin-openvswitch
-- quantum-plugin-openvswitch-agent
+  - ceilometer-agent-compute
+  - nova-common
+  - nova-compute
+  - nova-compute-kvm
+  - nova-network
+  - ntp
+  - openstack-pkg-tools
+  - openvswitch-datapath-dkms
+  - quantum-common
+  - quantum-plugin-openvswitch
+  - quantum-plugin-openvswitch-agent
 ANDROID:
-- git-core
-- gnupg
-- flex
-- bison
-- gperf
-- libsdl1.2-dev
-- libesd0-dev
-- libwxgtk2.8-dev
-- squashfs-tools
-- build-essential
-- zip
-- curl
-- libncurses5-dev
-- zlib1g-dev
-- pngcrush
-- schedtool
-- libxml2
-- libxml2-utils
-- xsltproc
-- g++-multilib
-- fastboot
-- adb
-- libgradle-android-plugin-java
-- libgradle-android-plugin-java-doc
-- android-libnativehelper
-- android-libnativehelper-dev
-- gradle
-- android-sdk-helpers
-- android-sdk
-- android-sdk-build-tools
-- android-sdk-build-tools-common
-- android-sdk-common
-- android-platform-tools
-- android-platform-frameworks-native-headers
-- android-platform-libcore-headers
-- android-platform-system-core-headers
-- android-platform-tools-base
-- android-sdk-platform-tools-common
-- google-android-build-tools-installer
-- google-android-platform-24-installer
-- google-android-m2repository-installer
-- google-android-ndk-installer
-- google-android-sdk-docs-installer
-- apktool
-- apkgsigner
-- androguard
-#- fdroidserver
-#- fdroidcl
-#- gradle
-- abootimg
-- enjarify
+  - git-core
+  - gnupg
+  - flex
+  - bison
+  - gperf
+  - libsdl1.2-dev
+  - libesd0-dev
+  - libwxgtk2.8-dev
+  - squashfs-tools
+  - build-essential
+  - zip
+  - curl
+  - libncurses5-dev
+  - zlib1g-dev
+  - pngcrush
+  - schedtool
+  - libxml2
+  - libxml2-utils
+  - xsltproc
+  - g++-multilib
+  - fastboot
+  - adb
+  - libgradle-android-plugin-java
+  - libgradle-android-plugin-java-doc
+  - android-libnativehelper
+  - android-libnativehelper-dev
+  - gradle
+  - android-sdk-helpers
+  - android-sdk
+  - android-sdk-build-tools
+  - android-sdk-build-tools-common
+  - android-sdk-common
+  - android-platform-tools
+  - android-platform-frameworks-native-headers
+  - android-platform-libcore-headers
+  - android-platform-system-core-headers
+  - android-platform-tools-base
+  - android-sdk-platform-tools-common
+  - google-android-build-tools-installer
+  - google-android-platform-24-installer
+  - google-android-m2repository-installer
+  - google-android-ndk-installer
+  - google-android-sdk-docs-installer
+  - apktool
+  - apkgsigner
+  - androguard
+  #- fdroidserver
+  #- fdroidcl
+  #- gradle
+  - abootimg
+  - enjarify
 CRYPTAGENT:
-- monkeysign
+  - monkeysign
 BONUS:
-#- mumble
-#- mumble-server
-- opus-tools
-#- projectm-pulseaudio
-- projectm-jack
-- projectm-data
-- libprojectm3
-#- dpf-plugins
-#- dpf-plugins-common
-#- dpf-plugins-dssi
-#- dpf-plugins-ladspa
-#- dpf-plugins-lv2
-#- dpf-plugins-vst
-#- liquidctl
-#- openrazer-meta
-#- openrazer-driver-dkms
-#- openrazer-daemon
-#- python3-openrazer
-- ratbagd
-- libratbag-tools
-- piper
-#- s3ql
-#- btfs
-#- libtorrent-rasterbar10
-#- cryfs
-#- dislocker
-#- ffmpegfs
-- fuse-convmvfs
-- fuse-posixovl
-- fuse2fs
-- fusefat
-#- fuseiso9600
-- fusesmb
-- smbnetfs
-- gocryptfs
-- gphoto2
-- gphotofs
-- ifuse
-- jmtpfs
-- winregfs
-#- libregf-utils
-- libvshadow-utils
-- mhddfs
-- ostree
-- tmfs
-#- waydroid
-- usbtop
-- fish
-- unpaper
-- virgl-server
-- zfs-fuse
-- udftools
-- retroarch
-- retroarch-assets
-- hfsplus
-- hfsprogs
-- fatresize
-- exfatprogs
-- dosbox
-- bchunk
-- inkscape
-- thefuck
-- firefox
-- golang-cfssl
-- shotdetect
-- libevdi0
-- evdi-dkms
-- wireguard
-- wireguard-dkms
-- wireguard-tools
-- playerctl
+  #- mumble
+  #- mumble-server
+  - opus-tools
+  #- projectm-pulseaudio
+  - projectm-jack
+  - projectm-data
+  - libprojectm3
+  #- dpf-plugins
+  #- dpf-plugins-common
+  #- dpf-plugins-dssi
+  #- dpf-plugins-ladspa
+  #- dpf-plugins-lv2
+  #- dpf-plugins-vst
+  #- liquidctl
+  #- openrazer-meta
+  #- openrazer-driver-dkms
+  #- openrazer-daemon
+  #- python3-openrazer
+  - ratbagd
+  - libratbag-tools
+  - piper
+  #- s3ql
+  #- btfs
+  #- libtorrent-rasterbar10
+  #- cryfs
+  #- dislocker
+  #- ffmpegfs
+  - fuse-convmvfs
+  - fuse-posixovl
+  - fuse2fs
+  - fusefat
+  #- fuseiso9600
+  - fusesmb
+  - smbnetfs
+  - gocryptfs
+  - gphoto2
+  - gphotofs
+  - ifuse
+  - jmtpfs
+  - winregfs
+  #- libregf-utils
+  - libvshadow-utils
+  - mhddfs
+  - ostree
+  - tmfs
+  #- waydroid
+  - usbtop
+  - fish
+  - unpaper
+  - virgl-server
+  - zfs-fuse
+  - udftools
+  - retroarch
+  - retroarch-assets
+  - hfsplus
+  - hfsprogs
+  - fatresize
+  - exfatprogs
+  - dosbox
+  - bchunk
+  - inkscape
+  - thefuck
+  - firefox
+  - golang-cfssl
+  - shotdetect
+  - libevdi0
+  - evdi-dkms
+  - wireguard
+  - wireguard-dkms
+  - wireguard-tools
+  - playerctl
 #- w3-recs
 #- prosody
 GO:
-- golang
-- golang-src
-- golang-go
-- golang-doc
-- gccgo-12
-- golang-go.tools
-# go fluff
-- golang-etcd-dev
-- golang-dbus-dev
-- golang-metrics-dev
+  - golang
+  - golang-src
+  - golang-go
+  - golang-doc
+  - gccgo-12
+  - golang-go.tools
+  # go fluff
+  - golang-etcd-dev
+  - golang-dbus-dev
+  - golang-metrics-dev
 DOCKER:
-- docker.io
-- docker-clean
-- aufs-tools
-#- aufs-kdms
-- btrfs-progs
-- cgroupfs-mount
-- git
-- xz-utils
-- vim-syntax-docker
-- fuse-overlayfs
-- libdevmapper1.02.1
-- xfsprogs
-- needrestart
-- slirp4netns
+  - docker.io
+  - docker-clean
+  - aufs-tools
+  #- aufs-kdms
+  - btrfs-progs
+  - cgroupfs-mount
+  - git
+  - xz-utils
+  - vim-syntax-docker
+  - fuse-overlayfs
+  - libdevmapper1.02.1
+  - xfsprogs
+  - needrestart
+  - slirp4netns
 CONTAINER:
-- podman
-- systemd-container
-- libvirt0
-- libvirt-clients
-- libvirt-dbus
-- libvirt-daemon
-- libvirt-daemon-config-network
-- libvirt-daemon-system
-- libvirt-daemon-driver-lxc
-#- libvirt-daemon-driver-qemu
-- libvirt-daemon-driver-storage-iscsi-direct
-- libvirt-daemon-driver-storage-rbd
-#- libvirt-daemon-driver-storage-zfs
-- libvirt-daemon-driver-vbox
-- libvirt-daemon-system-systemd
-- libvirt-glib-1.0-0
-- libvirt-login-shell
-#- libvirt-sandbox-1.0-5
-- libvirt-sanlock
-- libvirt-wireshark
-- libgovirt2
-- libnss-libvirt
-- gir1.2-libosinfo-1.0
-- gir1.2-libvirt-glib-1.0
-- gir1.2-libosinfo-1.0
-- gir1.2-libvirt-sandbox-1.0
-- gir1.2-spiceclientglib-2.0
-- gir1.2-spiceclientgtk-3.0
-- gir1.2-secret-1
-#- gnome-keyring
-- virtinst
-- virt-manager
-- virt-p2v
-- virt-top
-#- virt-sandbox
-- virt-v2v
-- virt-viewer
-- virt-what
-- crun
-- buildah
-- conmon
-- podman-toolbox
-- lxc
-- libvirt-dbus
-- lxctl
-- lxc-templates
-- cloud-image-utils
-- cloud-utils
-- cloud-init
-- cloud-guest-utils
-- cloud-initramfs-growroot
-#- debian-cloud-images-packages
-#- unattended-upgrades
-- busybox-static
-- distro-info
-- lxcfs
-- libpam-cgfs
-- python3-lxc
-- containers-storage
-- fuse-overlayfs
-- fuse-posixovl
-- containernetworking-plugins
-- golang-github-containernetworking-plugin-dnsname
-- golang-github-containers-common
-- golang-github-containers-image
-- aufs-tools
-- cgroupfs-mount
-- slirp4netns
-- rootlesskit
-- bpftrace
-- bpfcc-introspection
-- bpfcc-lua
-- bpfcc-tools
-- python3-bpfcc
-- sensible-utils
-- dnsmasq-base-lua
-- dnsmasq-utils
-- dmidecode
-- mdevctl
-- parted
-- auditd
-- nfs-common
-- open-iscsi
-#- open-isns-discoveryd
-#- open-isns-server
-#- open-isns-utils
-- systemtap
-- systemtap-client
-- systemtap-common
-- systemtap-runtime
-- systemtap-server
-- dns-root-data
-- crudini
-#- libnbd-bin
-#- nbdkit
-#- nbdkit-plugin-libvirt
-#- nbdkit-plugin-guestfs
-#- xorriso
-#- jigit
-#- cdck
-- libguestfs-rescue
-- libguestfs-rsync
-- libguestfs-tools
-- libguestfs-xfs
-- python3-guestfs
-#- lua-guestfs
-- libosinfo-1.0-0
-- libosinfo-bin
-#- recap
-- scrub
-- osinfo-db
-- f2fs-tools
-- cryptsetup-bin
-- btrfs-progs
-- attr
-- acl
-- libnss-mymachines
-- criu
-- acpica-tools
-- hw-probe
-- cpuid
-- mergerfs
-- prometheus-libvirt-exporter
-- image-factory
-- ssh-askpass
-#- zfsutils
-#- zfsutils-linux
-#- apparmor
-- numad
-- numatop
-- open-infrastructure-container-tools
-- open-infrastructure-storage-tools
-- vlan
-#- collectd
-#- collectd-utils
-- schroot
-- aufs-tools
-#- aufs-dkms
-- unionfs-fuse
-- skopeo
-- virgl-server
+  - podman
+  - systemd-container
+  - libvirt0
+  - libvirt-clients
+  - libvirt-dbus
+  - libvirt-daemon
+  - libvirt-daemon-config-network
+  - libvirt-daemon-system
+  - libvirt-daemon-driver-lxc
+  #- libvirt-daemon-driver-qemu
+  - libvirt-daemon-driver-storage-iscsi-direct
+  - libvirt-daemon-driver-storage-rbd
+  #- libvirt-daemon-driver-storage-zfs
+  - libvirt-daemon-driver-vbox
+  - libvirt-daemon-system-systemd
+  - libvirt-glib-1.0-0
+  - libvirt-login-shell
+  #- libvirt-sandbox-1.0-5
+  - libvirt-sanlock
+  - libvirt-wireshark
+  - libgovirt2
+  - libnss-libvirt
+  - gir1.2-libosinfo-1.0
+  - gir1.2-libvirt-glib-1.0
+  - gir1.2-libosinfo-1.0
+  - gir1.2-libvirt-sandbox-1.0
+  - gir1.2-spiceclientglib-2.0
+  - gir1.2-spiceclientgtk-3.0
+  - gir1.2-secret-1
+  #- gnome-keyring
+  - virtinst
+  - virt-manager
+  - virt-p2v
+  - virt-top
+  #- virt-sandbox
+  - virt-v2v
+  - virt-viewer
+  - virt-what
+  - crun
+  - buildah
+  - conmon
+  - podman-toolbox
+  - lxc
+  - libvirt-dbus
+  - lxctl
+  - lxc-templates
+  - cloud-image-utils
+  - cloud-utils
+  - cloud-init
+  - cloud-guest-utils
+  - cloud-initramfs-growroot
+  #- debian-cloud-images-packages
+  #- unattended-upgrades
+  - busybox-static
+  - distro-info
+  - lxcfs
+  - libpam-cgfs
+  - python3-lxc
+  - containers-storage
+  - fuse-overlayfs
+  - fuse-posixovl
+  - containernetworking-plugins
+  - golang-github-containernetworking-plugin-dnsname
+  - golang-github-containers-common
+  - golang-github-containers-image
+  - aufs-tools
+  - cgroupfs-mount
+  - slirp4netns
+  - rootlesskit
+  - bpftrace
+  - bpfcc-introspection
+  - bpfcc-lua
+  - bpfcc-tools
+  - python3-bpfcc
+  - sensible-utils
+  - dnsmasq-base-lua
+  - dnsmasq-utils
+  - dmidecode
+  - mdevctl
+  - parted
+  - auditd
+  - nfs-common
+  - open-iscsi
+  #- open-isns-discoveryd
+  #- open-isns-server
+  #- open-isns-utils
+  - systemtap
+  - systemtap-client
+  - systemtap-common
+  - systemtap-runtime
+  - systemtap-server
+  - dns-root-data
+  - crudini
+  #- libnbd-bin
+  #- nbdkit
+  #- nbdkit-plugin-libvirt
+  #- nbdkit-plugin-guestfs
+  #- xorriso
+  #- jigit
+  #- cdck
+  - libguestfs-rescue
+  - libguestfs-rsync
+  - libguestfs-tools
+  - libguestfs-xfs
+  - python3-guestfs
+  #- lua-guestfs
+  - libosinfo-1.0-0
+  - libosinfo-bin
+  #- recap
+  - scrub
+  - osinfo-db
+  - f2fs-tools
+  - cryptsetup-bin
+  - btrfs-progs
+  - attr
+  - acl
+  - libnss-mymachines
+  - criu
+  - acpica-tools
+  - hw-probe
+  - cpuid
+  - mergerfs
+  - prometheus-libvirt-exporter
+  - image-factory
+  - ssh-askpass
+  #- zfsutils
+  #- zfsutils-linux
+  #- apparmor
+  - numad
+  - numatop
+  - open-infrastructure-container-tools
+  - open-infrastructure-storage-tools
+  - vlan
+  #- collectd
+  #- collectd-utils
+  - schroot
+  - aufs-tools
+  #- aufs-dkms
+  - unionfs-fuse
+  - skopeo
+  - virgl-server
 META:
-# mostly just taking notes here
-- bfh-base-system
-#- fbx-all
-- freedombox
-#- bfh-container-server
-#- progress-linux-base-system
-#- design-desktop
-# actually, others depend on it?
-- electronics-tasks
+  # mostly just taking notes here
+  - bfh-base-system
+  #- fbx-all
+  - freedombox
+  #- bfh-container-server
+  #- progress-linux-base-system
+  #- design-desktop
+  # actually, others depend on it?
+  - electronics-tasks
 COCKPIT:
-- cockpit
-- cockpit-bridge
-- cockpit-dashboard
-#- cockpit-docker
-- cockpit-machines
-#- cockpit-networkmanager
-# freeipa adjacent:
-#- cockpit-389-ds
-- cockpit-packagekit
-- cockpit-podman
-- cockpit-storaged
-- cockpit-system
-- cockpit-tests
+  - cockpit
+  - cockpit-bridge
+  - cockpit-dashboard
+  #- cockpit-docker
+  - cockpit-machines
+  #- cockpit-networkmanager
+  # freeipa adjacent:
+  #- cockpit-389-ds
+  - cockpit-packagekit
+  - cockpit-podman
+  - cockpit-storaged
+  - cockpit-system
+  - cockpit-tests
 UDISKS:
-- udisks
-- udisks2-bcache
-- udisks2-btrfs
-- udisks2-lvm2
-- udisks2-zram
-- libblockdev2
-- gir1.2-blockdev-2.0
-#- libblockdev-plugins-all
-- libblockdev-btrfs2
-- libblockdev-crypto2
-- libblockdev-dm2
-- libblockdev-fs2
-- libblockdev-kbd2
-- libblockdev-loop2
-- libblockdev-lvm-dbus2
-- libblockdev-mdraid2
-- libblockdev-mpath2
-#- libblockdev-nvdimm2
-- libblockdev-part-err2
-- libblockdev-part2
-- libblockdev-swap2
-- libblockdev-autils2
-- libvolume-key1
-- dmraid
+  - udisks
+  - udisks2-bcache
+  - udisks2-btrfs
+  - udisks2-lvm2
+  - udisks2-zram
+  - libblockdev2
+  - gir1.2-blockdev-2.0
+  #- libblockdev-plugins-all
+  - libblockdev-btrfs2
+  - libblockdev-crypto2
+  - libblockdev-dm2
+  - libblockdev-fs2
+  - libblockdev-kbd2
+  - libblockdev-loop2
+  - libblockdev-lvm-dbus2
+  - libblockdev-mdraid2
+  - libblockdev-mpath2
+  #- libblockdev-nvdimm2
+  - libblockdev-part-err2
+  - libblockdev-part2
+  - libblockdev-swap2
+  - libblockdev-autils2
+  - libvolume-key1
+  - dmraid
 FREEIPA:
-- freeipa-client-samba
-- samba-common-bin
-- smbclient
-- tdb-tools
-- winbind
-- freeipa-client-common
-- freeipa-common
-- freeipa-server
-- 389-ds-base
-- apache2
-- certmonger
-- chrony
-- custodia
-- gssproxy
-- krb5-admin-server
-- krb5-kdc
-- krb5-kdc-ldap
-- krb5-otp
-- krb5-pkinit
-- ldap-utils
-- libapache2-mod-auth-gssapi
-- libapache2-mod-lookup-identity
-- libapache2-mod-wsgi-py3
-- ligbssapi-krb5-2
-- libkrad0
-- libkrb5-3
-- libnss3-tools
-- libsasl2-modules-gssapi-mit
-- libsss-certmap0
-- libsss-nss-idmap0
-- libtcalloc2
-- oddjob
-- pki-ca
-- pki-kra
-- pki-server
-- python3-gssapi
-- python3-ipaserver
-- python3-ldap
-- python3-systemd
-- samba-libs
-- slapi-nis
-- sssd-dbus
-- python3-ipaclient
-- python3-ipalib
-- python3-ipaserver
-- freeipa-server-dns
-- bind9
-- bind9-lib
-- bind9-utils
-- bind-doc
-- bind9-dyndb-ldap
-- libengine-pkcs11-openssl
-- opendnssec
-- softhsm2
-- softhsm2-common
-- libsofthsm2
-- libhsm-bin
-- dnsutils
-- dns-root-data
-- freeipa-server-trust-ad
-- freeipa-tests
-- sss
+  - freeipa-client-samba
+  - samba-common-bin
+  - smbclient
+  - tdb-tools
+  - winbind
+  - freeipa-client-common
+  - freeipa-common
+  - freeipa-server
+  - 389-ds-base
+  - apache2
+  - certmonger
+  - chrony
+  - custodia
+  - gssproxy
+  - krb5-admin-server
+  - krb5-kdc
+  - krb5-kdc-ldap
+  - krb5-otp
+  - krb5-pkinit
+  - ldap-utils
+  - libapache2-mod-auth-gssapi
+  - libapache2-mod-lookup-identity
+  - libapache2-mod-wsgi-py3
+  - ligbssapi-krb5-2
+  - libkrad0
+  - libkrb5-3
+  - libnss3-tools
+  - libsasl2-modules-gssapi-mit
+  - libsss-certmap0
+  - libsss-nss-idmap0
+  - libtcalloc2
+  - oddjob
+  - pki-ca
+  - pki-kra
+  - pki-server
+  - python3-gssapi
+  - python3-ipaserver
+  - python3-ldap
+  - python3-systemd
+  - samba-libs
+  - slapi-nis
+  - sssd-dbus
+  - python3-ipaclient
+  - python3-ipalib
+  - python3-ipaserver
+  - freeipa-server-dns
+  - bind9
+  - bind9-lib
+  - bind9-utils
+  - bind-doc
+  - bind9-dyndb-ldap
+  - libengine-pkcs11-openssl
+  - opendnssec
+  - softhsm2
+  - softhsm2-common
+  - libsofthsm2
+  - libhsm-bin
+  - dnsutils
+  - dns-root-data
+  - freeipa-server-trust-ad
+  - freeipa-tests
+  - sss
 PCP:
-- cockpit-pcp
-- pcp
-- pcp-gui
-- pcp-conf
-- pcp-export-zabbix-agent
-- pcp-import-colletl2pcp
-- pcp-pmda-infiniband
-- pcp-testsuite
-- pcp-zeroconf
-- libpcp-gui2
-- libpcp-import1
-- libpcp-import-perl
-- libpcp-mmv1
-- libpcp-pmda-perl
-- libpcp-pmda3
-- libpcp-trace2
-- libpcp-web1
-- libpcp3
-- libpfm4
-- python3-pcp
-- valgrind
+  - cockpit-pcp
+  - pcp
+  - pcp-gui
+  - pcp-conf
+  - pcp-export-zabbix-agent
+  - pcp-import-colletl2pcp
+  - pcp-pmda-infiniband
+  - pcp-testsuite
+  - pcp-zeroconf
+  - libpcp-gui2
+  - libpcp-import1
+  - libpcp-import-perl
+  - libpcp-mmv1
+  - libpcp-pmda-perl
+  - libpcp-pmda3
+  - libpcp-trace2
+  - libpcp-web1
+  - libpcp3
+  - libpfm4
+  - python3-pcp
+  - valgrind
 BPF:
-- bpftrace
-- python3-bpfcc
-- libbpfcc
-- bpfcc-tools
-- bpfcc-introspection
-- bpfcc-lua
-- bpftool
-- gcc-bpf
-- binutils-bpf
-- gdb-bpf
+  - bpftrace
+  - python3-bpfcc
+  - libbpfcc
+  - bpfcc-tools
+  - bpfcc-introspection
+  - bpfcc-lua
+  - bpftool
+  - gcc-bpf
+  - binutils-bpf
+  - gdb-bpf
 INFINIBAND:
-- libibdm1
-- libibmad5
-- libopensm9
-- libosmcomp5
-- libosmvendor5
-- libumad3
-- librdmacm1
-- libibverbs1
-#- libfabric1
-#- libfabric-bin
-#- pmdk-tools
-#- librpmem1
-- libvma
-- libvma9
-- ibverbs-providers
-- rdma-core
-- ibacm
-- opensm
-- perftest
-- infiniband-diags
-- ibutils
-- libiscsi7
-- libiscsi-bin
-- tgt
+  - libibdm1
+  - libibmad5
+  - libopensm9
+  - libosmcomp5
+  - libosmvendor5
+  - libumad3
+  - librdmacm1
+  - libibverbs1
+  #- libfabric1
+  #- libfabric-bin
+  #- pmdk-tools
+  #- librpmem1
+  - libvma
+  - libvma9
+  - ibverbs-providers
+  - rdma-core
+  - ibacm
+  - opensm
+  - perftest
+  - infiniband-diags
+  - ibutils
+  - libiscsi7
+  - libiscsi-bin
+  - tgt
 POSTGRES:
-- postgresql
-- postgresql-doc
-- postgis
-- postgis-doc
-- postgresql-14-postgis-3
-- postgresql-14-postgis-3-scripts
-- pgcluu
-- postgresql-client-common
-- postgresql-doc-14
-- libpq5
-- dbconfig-common
-#- dbconfig-no-thanks
-- dbconfig-pgsql
+  - postgresql
+  - postgresql-doc
+  - postgis
+  - postgis-doc
+  - postgresql-14-postgis-3
+  - postgresql-14-postgis-3-scripts
+  - pgcluu
+  - postgresql-client-common
+  - postgresql-doc-14
+  - libpq5
+  - dbconfig-common
+  #- dbconfig-no-thanks
+  - dbconfig-pgsql
 #- postgresql-plv8
 ZFSONLINUX:
-- zfsonlinux
-- zfsutils
-- zfs-initramfs
-- zfs-module
-- zfs-dkms
+  - zfsonlinux
+  - zfsutils
+  - zfs-initramfs
+  - zfs-module
+  - zfs-dkms
 FIO:
-- libbfio1
-- python3-dfvfs
-- python3-plaso
-- libcreg-utils
-- libesedb-utils
-- libevtutils
-- libevtx-utils
-- libfsapfs-utils
-- libfsext-utils
-- libfshfs-utils
-- libfsntfs-utils
-- libfsxs-utils
-- libfvde-utils
-- libhivex-bin
-- liblnk-utils
-- libluksde-utils
-- libmsiecf-utils
-- libolecf-utils
-- libreg-utils
-- libscca-utils
-- libsigscan-utils
-- libsmdev-utils
-- libsmraw-utils
-- libvhdi-utils
-- libvmdk-utils
-- libvslvm-utils
-- libvshadow1
-- libvshadow-utils
-- python3-libvshadow
-- python3-libvmdk
-- libvmdk1
-- python3-libsmraw
-- libsmraw1
-- python3-libsigscan
-- libsigscan1
-- python3-libscca
-- libscca1
-- python3-libregf
-- libregf1
-- python3-pypff
-- libpff1
-- python3-libolecf
-- libolecf1
-- python3-libmsiecf
-- libmsiecf1
-- python3-libluksde
-- libluksde1
-- python3-liblnk
-- liblnk1
-- python3-libfvde
-- libfvde1
-- libfvde-utils
-- python3-libfsxfs
-- libfsxfs1
-- libfsxfs-utils
-- python3-libfsntfs
-- libfsntfs1
-- libfsntfs-utils
-- python3-libfshfs
-- libfshfs1
-- libfshfs-utils
-- python3-libfsext
-- libfsext1
-- libfsext-utils
-- python3-fsapfs
-- libfsapfs1
-- libfsapfs-utils
-- python3-libevtx
-- libevtx1
-- libevtx-utils
-- python3-libevt
-- libevt1
-- libevt-utils
-- python3-libesedb
-- libesedb1
-- python3-libcreg
-- libcreg1
-- ewf-tools
-- python3-libbde
-- libbde1
-- libbde-utils
-- python3-libewf
-- python-libewf
-- libewf3
-- vmfs-tools
-- vmfs6-tools
+  - libbfio1
+  - python3-dfvfs
+  - python3-plaso
+  - libcreg-utils
+  - libesedb-utils
+  - libevtutils
+  - libevtx-utils
+  - libfsapfs-utils
+  - libfsext-utils
+  - libfshfs-utils
+  - libfsntfs-utils
+  - libfsxs-utils
+  - libfvde-utils
+  - libhivex-bin
+  - liblnk-utils
+  - libluksde-utils
+  - libmsiecf-utils
+  - libolecf-utils
+  - libreg-utils
+  - libscca-utils
+  - libsigscan-utils
+  - libsmdev-utils
+  - libsmraw-utils
+  - libvhdi-utils
+  - libvmdk-utils
+  - libvslvm-utils
+  - libvshadow1
+  - libvshadow-utils
+  - python3-libvshadow
+  - python3-libvmdk
+  - libvmdk1
+  - python3-libsmraw
+  - libsmraw1
+  - python3-libsigscan
+  - libsigscan1
+  - python3-libscca
+  - libscca1
+  - python3-libregf
+  - libregf1
+  - python3-pypff
+  - libpff1
+  - python3-libolecf
+  - libolecf1
+  - python3-libmsiecf
+  - libmsiecf1
+  - python3-libluksde
+  - libluksde1
+  - python3-liblnk
+  - liblnk1
+  - python3-libfvde
+  - libfvde1
+  - libfvde-utils
+  - python3-libfsxfs
+  - libfsxfs1
+  - libfsxfs-utils
+  - python3-libfsntfs
+  - libfsntfs1
+  - libfsntfs-utils
+  - python3-libfshfs
+  - libfshfs1
+  - libfshfs-utils
+  - python3-libfsext
+  - libfsext1
+  - libfsext-utils
+  - python3-fsapfs
+  - libfsapfs1
+  - libfsapfs-utils
+  - python3-libevtx
+  - libevtx1
+  - libevtx-utils
+  - python3-libevt
+  - libevt1
+  - libevt-utils
+  - python3-libesedb
+  - libesedb1
+  - python3-libcreg
+  - libcreg1
+  - ewf-tools
+  - python3-libbde
+  - libbde1
+  - libbde-utils
+  - python3-libewf
+  - python-libewf
+  - libewf3
+  - vmfs-tools
+  - vmfs6-tools
 DIA:
-- dia
-- dia-shapes
-- dia-rib-network
+  - dia
+  - dia-shapes
+  - dia-rib-network
