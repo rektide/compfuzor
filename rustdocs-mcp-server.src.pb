@@ -60,5 +60,6 @@
         basedir: False
         content: |
           ln -sv $DIR/etc/opencode*json etc/mcp/
+          [ -e 'bin/config.sh' ] && ./bin/config.sh
   tasks:
     - import_tasks: tasks/compfuzor.includes

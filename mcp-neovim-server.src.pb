@@ -34,6 +34,7 @@
           # mcp server in opencode also will need the env vars provided here
           # and run nvim with --listen ${NVIM_LISTEN_ADDRESS} to open socket
           ln -sv $DIR/etc/opencode-mcp-neovim-server.json etc/mcp/mcp-neovim-server.json
+          [ -e 'bin/config.sh' ] && ./bin/config.sh
     ENV:
       ALLOW_SHELL_COMMANDS: "false"
       NVIM_LISTEN_ADDRESS: "${XDG_RUNTIME_DIR}/nvim.socket"

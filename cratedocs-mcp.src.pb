@@ -16,21 +16,13 @@
               }
             }
           }
-    ENV: True
+    RUST: True
+    RUST_BIN: cratedocs
     BINS:
-      - name: build.sh
-        run: True
-        content: |
-          cargo build --release
-      - name: install-user.sh
-        content: |
-          cargo install --path .
-      - name: install.sh
-        content: |
-          ln -sfv "$(pwd)/target/release/cratedocs" $GLOBAL_BINS_DIR
       - name: install-opencode.sh
         basedir: False
         content: |
           ln -sv $DIR/etc/opencode-cratedocs-mcp.json etc/mcp/cratedocs-mcp.json
+          [ -e 'bin/config.sh' ] && ./bin/config.sh
   tasks:
     - import_tasks: tasks/compfuzor.includes
