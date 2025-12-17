@@ -21,6 +21,7 @@
 - import_tasks: compfuzor/vars_npm.tasks
 - import_tasks: compfuzor/vars_tool_versions.tasks
 - import_tasks: compfuzor/vars_rust.tasks
+  when: RUST is defined
 - debug: "msg='Compfuzor: completed vars'"
 
 - import_tasks: compfuzor/user.tasks
