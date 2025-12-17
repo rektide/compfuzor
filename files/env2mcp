@@ -1,0 +1,203 @@
+#!/bin/bash
+
+# env2mcp - Convert environment variables with a given prefix to MCP JSON configuration
+# Usage: env2mcp [ENV2MCP_PREFIX_ENV] [ENV2MCP_PREFIX_JSON] [--set-json PATH=VALUE]...
+# Example: env2mcp PLAYWRIGHT mcpServers.playwright.args --set-json mcpServers.playwright.command=npx
+# If ENV2MCP_PREFIX_ENV is not provided, defaults to TYPE environment variable
+# If ENV2MCP_PREFIX_JSON is not provided, defaults to mcpServers.${MCP_NAME}.args
+
+# Parse command line arguments
+declare -a positional_args=()
+declare -a set_json_args=()
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+    --set-json)
+        if [ $# -lt 2 ]; then
+            echo "Error: --set-json requires a value in format PATH=VALUE" >&2
+            exit 1
+        fi
+        set_json_args+=("$2")
+        shift 2
+        ;;
+    *)
+        # Collect positional arguments
+        positional_args+=("$1")
+        shift
+        ;;
+    esac
+done
+
+# Extract positional arguments
+if [ ${#positional_args[@]} -ge 1 ]; then
+    ENV2MCP_PREFIX_ENV="${positional_args[0]}"
+fi
+if [ ${#positional_args[@]} -ge 2 ]; then
+    ENV2MCP_PREFIX_JSON="${positional_args[1]}"
+fi
+if [ ${#positional_args[@]} -gt 2 ]; then
+    echo "Error: Too many positional arguments" >&2
+    echo "Usage: $0 [ENV2MCP_PREFIX_ENV] [ENV2MCP_PREFIX_JSON] [--set-json PATH=VALUE]..." >&2
+    exit 1
+fi
+
+# Set ENV2MCP_PREFIX_ENV from arguments or environment variables with defaults
+if [ -z "$ENV2MCP_PREFIX_ENV" ]; then
+    ENV2MCP_PREFIX_ENV="${TYPE}"
+fi
+if [ -z "$ENV2MCP_PREFIX_ENV" ]; then
+    echo "Error: No ENV2MCP_PREFIX_ENV provided and TYPE environment variable is not set" >&2
+    exit 1
+fi
+
+# Set ENV2MCP_PREFIX_JSON from arguments or environment variables with defaults
+if [ -z "$ENV2MCP_PREFIX_JSON" ]; then
+    # Use MCP_NAME with fallback to TYPE for default JSON path
+    MCP_NAME="${MCP_NAME:-${TYPE}}"
+    MCP_NAME="${MCP_NAME%-mcp}"
+    if [ -n "$MCP_NAME" ]; then
+        ENV2MCP_PREFIX_JSON="${ENV2MCP_PREFIX_JSON:-mcp.${MCP_NAME}.command}"
+    fi
+fi
+if [ -z "$ENV2MCP_PREFIX_JSON" ]; then
+    echo "Error: MCP_NAME or TYPE environment variable not set and no ENV2MCP_PREFIX_JSON provided" >&2
+    exit 1
+fi
+
+# Create transformed version for matching environment variables (uppercase with underscores)
+ENV2MCP_PREFIX_ENV_UPPERUNDER="${ENV2MCP_PREFIX_ENV//-/_}"
+ENV2MCP_PREFIX_ENV_UPPERUNDER="${ENV2MCP_PREFIX_ENV_UPPERUNDER^^}_"
+
+# Start with template if exists, otherwise empty object
+if [ -n "$ENV2MCP_TEMPLATE" ] && [ -f "$ENV2MCP_TEMPLATE" ]; then
+    json_output=$(cat "$ENV2MCP_TEMPLATE")
+else
+    json_output="{}"
+fi
+
+# Apply --set-json arguments first (base/initial values)
+for set_json_arg in "${set_json_args[@]}"; do
+    # Split on first = to get path and value
+    path="${set_json_arg%%=*}"
+    value="${set_json_arg#*=}"
+
+    # Convert dot path to jq filter
+    # Handle special characters in path components (like $schema)
+    IFS='.' read -ra path_parts <<<"$path"
+    jq_filter=""
+    for part in "${path_parts[@]}"; do
+        # If part starts with $ or contains special characters, use array notation
+        if [[ "$part" =~ ^\$ ]] || [[ "$part" =~ [^a-zA-Z0-9_] ]]; then
+            if [ -z "$jq_filter" ]; then
+                jq_filter=".[\"$part\"]"
+            else
+                jq_filter="${jq_filter}[\"$part\"]"
+            fi
+        else
+            if [ -z "$jq_filter" ]; then
+                jq_filter=".$part"
+            else
+                jq_filter="${jq_filter}.$part"
+            fi
+        fi
+    done
+
+    # Try to parse value as JSON, otherwise treat as string
+    if echo "$value" | jq -e . >/dev/null 2>&1; then
+        # Value is valid JSON
+        json_output=$(echo "$json_output" | jq --argjson val "$value" "$jq_filter = \$val")
+    else
+        # Value is a string
+        json_output=$(echo "$json_output" | jq --arg val "$value" "$jq_filter = \$val")
+    fi
+done
+
+# Collect matching environment variables
+declare -a args_array=()
+
+# Loop through all environment variables
+while IFS='=' read -r var value; do
+    # Guard: skip if variable doesn't start with our transformed prefix
+    [[ "$var" != "${ENV2MCP_PREFIX_ENV_UPPERUNDER}"* ]] && continue
+
+    # Guard: skip empty values
+    [ -z "$value" ] && continue
+
+    # Remove prefix and convert to lowercase
+    arg_name="${var#${ENV2MCP_PREFIX_ENV_UPPERUNDER}}"
+    arg_name="${arg_name,,}"
+
+    # Convert underscores to hyphens
+    arg_name="${arg_name//_/-}"
+
+    # Add to array
+    if [ "$value" = "true" ]; then
+        # Boolean true values become just --flag
+        args_array+=("--${arg_name}")
+    else
+        args_array+=("--${arg_name}=${value}")
+    fi
+done < <(env)
+
+# Split ENV2MCP_PREFIX_JSON into parts
+IFS='.' read -ra prefix_parts <<<"$ENV2MCP_PREFIX_JSON"
+
+# Guard: warn if no matching environment variables found
+if [ ${#args_array[@]} -eq 0 ]; then
+    echo "Warning: No environment variables found with prefix ${ENV2MCP_PREFIX_ENV_UPPERUNDER%_}" >&2
+fi
+
+# Build the JSON using jq if we have arguments
+if [ ${#args_array[@]} -gt 0 ]; then
+    # Create a JSON array from the arguments
+    args_json=$(printf '%s\n' "${args_array[@]}" | jq -R . | jq -s .)
+
+    # Start with empty nested structure for the args
+    nested_args="{}"
+
+    # Build the nested JSON structure for args
+    for ((i = ${#prefix_parts[@]} - 1; i >= 0; i--)); do
+        if [ $i -eq $((${#prefix_parts[@]} - 1)) ]; then
+            # Last part gets the args array
+            nested_args=$(echo "$nested_args" | jq --arg key "${prefix_parts[$i]}" --argjson args "$args_json" '{($key): $args}')
+        else
+            # Intermediate parts wrap the existing structure
+            nested_args=$(echo "$nested_args" | jq --arg key "${prefix_parts[$i]}" '{($key): .}')
+        fi
+    done
+
+    # Merge the nested args structure with the template
+    # We need to concatenate arrays for the args field
+    # Get the existing args array from json_output if it exists
+    target_field="${prefix_parts[${#prefix_parts[@]}-1]}"
+    
+    # Build the jq path to the args field
+    jq_path=""
+    for ((i = 0; i < ${#prefix_parts[@]}; i++)); do
+        part="${prefix_parts[$i]}"
+        if [[ "$part" =~ ^\$ ]] || [[ "$part" =~ [^a-zA-Z0-9_] ]]; then
+            if [ -z "$jq_path" ]; then
+                jq_path=".[\"$part\"]"
+            else
+                jq_path="${jq_path}[\"$part\"]"
+            fi
+        else
+            if [ -z "$jq_path" ]; then
+                jq_path=".$part"
+            else
+                jq_path="${jq_path}.$part"
+            fi
+        fi
+    done
+    
+    # Get existing args array or start with empty array
+    existing_args=$(echo "$json_output" | jq -r "$jq_path // []")
+    
+    # Concatenate with new args
+    combined_args=$(echo "$existing_args" | jq --argjson new_args "$args_json" '. + $new_args')
+    
+    # Update json_output with concatenated array
+    json_output=$(echo "$json_output" | jq --argjson combined "$combined_args" "$jq_path = \$combined")
+fi
+
+echo "$json_output"

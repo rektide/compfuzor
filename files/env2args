@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# env2args - Convert environment variables with a given prefix to command-line arguments
+# Usage: env2args PREFIX
+# Example: env2args PLAYWRIGHT
+
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 PREFIX" >&2
+    echo "Example: $0 PLAYWRIGHT" >&2
+    exit 1
+fi
+
+PREFIX="$1"
+PREFIX_UPPER="${PREFIX^^}_"
+
+# Loop through all environment variables
+while IFS='=' read -r var value; do
+    # Check if variable starts with our prefix (case-insensitive)
+    if [[ "${var^^}" == "${PREFIX_UPPER}"* ]]; then
+        # Skip empty values
+        if [ -z "$value" ]; then
+            continue
+        fi
+        
+        # Remove prefix and convert to lowercase
+        arg_name="${var#${PREFIX}_}"
+        arg_name="${arg_name,,}"
+        
+        # Convert underscores to hyphens
+        arg_name="${arg_name//_/-}"
+        
+        # Output the argument
+        echo "--${arg_name}=${value}"
+    fi
+done < <(env)
