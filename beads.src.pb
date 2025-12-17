@@ -21,13 +21,14 @@
               }
             }
           }
+    ENV: True
     BINS:
       - name: build.sh
         content: |
           go build -o bd ./cmd/bd
 
           cd integrations/beads-mcp
-          uv sync
+          uv sync --frozen
       - name: install.sh
         basedir: False
         content: |
@@ -35,13 +36,12 @@
       - name: install-opencode.sh
         basedir: False
         content: |
-          [ -n "$TARGET" ] || TARGET="$HOME/.config/opencode"
-          mkdir -p $TARGET
-          ln -sv $DIR/etc/opencode-beads-mcp.json $TARGET/
+          ln -sv $DIR/etc/opencode-beads-mcp.json etc/mcp/
+          [ -e 'bin/config.sh' ] && ./bin/config.sh
       - name: beads-mcp
         global: True
         content: |
-          uv run --project "$DIR/integrations/beads-mcp" beads-mcp
+          exec uv run --frozen --project "$DIR/integrations/beads-mcp" beads-mcp
     ENV:
       BEADS_USE_DAEMON: "1"
   tasks:
