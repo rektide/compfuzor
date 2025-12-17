@@ -27,4 +27,4 @@
       - name: install-user.sh
         generated: |
           cargo install --path .
-  when: "{{RUST is deftruthy}}"
+  when: RUST is deftruthy
