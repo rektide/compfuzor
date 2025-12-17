@@ -58,7 +58,7 @@
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: ((item.src|default(True) != False and item.name|default(False)) or item.src|default(False)) and item.raw|default(False) and not item.exec|default(False) and not item.execs|default(False)
   vars:
-    _dest: "{{BINS_DIR}}/{{item.dest|default(item.name) if item is mapping else item}}"
+    _dest: "{{BINS_DIR}}/{{item.dest|default(item.name|default(item.src|basename)) if item is mapping else item}}"
 #- name: "Create exec `BINS`"
 #  file:  dest="{{BINS_DIR}}/{{item.dest|default(item.name) if item is mapping else item}}" mode={{item.mode|default(755)}}
 #  with_items: "{{BINS|default([])}}"
