@@ -113,6 +113,26 @@ def test_ansible_cmdline():
     expected = {"type": "final", "instance": "prod"}
     print(f"Expected: {expected}")
     print(f"Pass: {result == expected}")
+    
+    # Test 11: Pattern with hyphens
+    print("\nTest 11: Pattern with hyphens")
+    cmdline = 'ansible-playbook my-sample-name.src.pb --tags "deploy"'
+    result = ansible_cmdline(cmdline)
+    print(f"cmdline: {cmdline}")
+    print(f"Result: {result}")
+    expected = {"type": "my-sample-name", "instance": "src"}
+    print(f"Expected: {expected}")
+    print(f"Pass: {result == expected}")
+    
+    # Test 12: Pattern with hyphens in both type and instance
+    print("\nTest 12: Pattern with hyphens in both type and instance")
+    cmdline = 'ansible-playbook api-service.staging-env.pb'
+    result = ansible_cmdline(cmdline)
+    print(f"cmdline: {cmdline}")
+    print(f"Result: {result}")
+    expected = {"type": "api-service", "instance": "staging-env"}
+    print(f"Expected: {expected}")
+    print(f"Pass: {result == expected}")
 
 if __name__ == "__main__":
     test_ansible_cmdline()

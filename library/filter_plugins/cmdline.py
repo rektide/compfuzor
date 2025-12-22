@@ -15,7 +15,7 @@ def ansible_cmdline(cmdline):
         return {}
 
     # Pattern to match <type>.<instance>.pb
-    pattern = r"(\w+)\.(\w+)\.pb"
+    pattern = r"([\w\-]+)\.([\w\-]+)\.pb"
 
     # Split cmdline into arguments (handling quoted arguments)
     import shlex
