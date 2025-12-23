@@ -1,11 +1,12 @@
 ---
 - hosts: all
   vars:
-    TYPE: gmrender-resurrect
-    INSTANCE: git
     REPO: https://github.com/hzeller/gmrender-resurrect
-    ENV:
-      womp: womp
+    ENV: True
+    SYSTEMD_SERVICE: True
+    SYSTEMD_SERVICES:
+      ExecStart: "/usr/bin/gmediarender --logfile /dev/stdout"
+    ETC_DIR: True
     BINS:
       - name: build.sh
         exec: |
@@ -15,5 +16,8 @@
       - name: install.sh
         exec: |
           sudo make install
+      - name: install-user.sh
+        content: |
+          ln -s $(pwd)/etc/{{NAME}}.service ~/.config/systemd/user/
   tasks:
     - import_tasks: tasks/compfuzor.includes
