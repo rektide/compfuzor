@@ -12,7 +12,7 @@
       exec: cargo build --release
       run: True
     - link: ./target/release/neovide
-      phase: postRun
+      delay: postRun
       global: True
   tasks:
   - include: tasks/compfuzor.includes type=src
