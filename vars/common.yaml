@@ -1,6 +1,9 @@
 ---
 # primary directories
 NAME: "{{TYPE}}{{'-'+INSTANCE if INSTANCE is defined else ''}}"
+TYPE: "{{ (lookup('file', '/proc/self/cmdline') | regex_replace('\u0000',' ')|ansible_cmdline).type }}"
+INSTANCE_CMDLINE: "{{ (lookup('file', '/proc/self/cmdline') | regex_replace('\u0000',' ')|ansible_cmdline).instance }}"
+INSTANCE: "{{ 'git' if INSTANCE_CMDLINE|def == 'src' and REPO|def is defined else INSTANCE_CMDLINE }}"
 BINS_DIR: "{{DIR}}/bin"
 GLOBAL_BINS_DIR: /usr/local/bin
 SRVS_DIR: /srv
@@ -131,3 +134,6 @@ MULTISTRAP_COMPONENTS:
   - non-free-firmware
 
 _ext: "{{ '.' + item.ext if item.ext|default(False) else '' }}"
+
+_binsRun: "{{ BINS_BYPASS|default(False) is falsy and BINS_RUN_BYPASS|default(False) is falsy }}"
+_postRun: "{{ 'postRun' if _binsRun else 'skip' }}"
