@@ -1,5 +1,5 @@
 ---
-- name: "Compfuzor: create `BINS_DIR`"
+- name: "Compfuzor: create `BINS_DIR`{{_delayText}}"
   file:
     path: "{{BINS_DIR}}"
     state: directory
@@ -8,6 +8,8 @@
     group: "{{GROUP|default(omit)}}"
   become: "{{BINS_DIR|should_become(OWNER|default(), ansible_user_gid, GROUP|default(), ansible_user_gid)|bool}}"
   when: BINS|default(False) is truthy
+  vars:
+    _delayText: "{{ ' (' + delay_phase + ')' if delay_phase|def else ''}}"
 - name: "Create exec/execs `BINS`"
   template:
     dest: "{{_dest}}"

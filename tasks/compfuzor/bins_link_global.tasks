@@ -6,7 +6,7 @@
   with_items: "{{BINS|default([])}}"
   become: "{{GLOBAL_BINS_DIR|should_become(OWNER|default(), ansible_user_gid, GROUP|default(), ansible_user_gid)}}"
   when: item.global|default(False)
-- name: "Link `BINS` into `GLOBAL_BINS_DIR`"
+- name: "Link `BINS` into `GLOBAL_BINS_DIR`{{ _delayText }}"
   file:
     src: "{{_src|defaultDir(BINS_DIR)}}"
     dest: "{{_dest}}"
@@ -17,3 +17,4 @@
   vars:
     _src: "{{item.src|default(item.name|default(item.link, True), True)}}"
     _dest: "{{(item.global if item.global|default(False) is string else item.dest|default(item.name|default(_src|basename, True), True))|defaultDir(GLOBAL_BINS_DIR)}}"
+    _delayText: "{{ ' (' + delay_phase + ')' if delay_phase|def else ''}}"

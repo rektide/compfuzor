@@ -1,5 +1,5 @@
 ---
-- name: "Compfuzor: link `BINS`"
+- name: "Compfuzor: link `BINS`{{_delayText}}"
   file:
   args:
     src: "{{item.link|defaultDir(BINS_DIR)}}"
@@ -11,3 +11,4 @@
   vars:
     #_dest: "{{item.dest|default(item.link|basename)|default(item.name)|defaultDir(BINS_DIR)}}"
     _dest: "{{item.dest|default(item.link|basename)|defaultDir(BINS_DIR)}}"
+    _delayText: "{{ ' (phase ' + delay_phase + ')' if delay_phase|def else ''}}"
