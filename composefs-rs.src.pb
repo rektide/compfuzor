@@ -3,6 +3,9 @@
   vars:
     REPO: https://github.com/containers/composefs-rs
     RUST: True
+    PKGS:
+      - erofs-utils
+      - erofsfuse
     BINS:
       # oh no, both BINS and LINKS can do links
       - link: ../target/release/cfsctl
