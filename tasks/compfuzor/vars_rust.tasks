@@ -11,6 +11,7 @@
       rust: True
     enhancedBins:
       - name: build.sh
+        run: "{{BINS_RUN_BYPASS is not deftruthy}}"
         generated: |
           if [[ -z "${RELEASE+x}" ]]; then
               RELEASE="--release"
