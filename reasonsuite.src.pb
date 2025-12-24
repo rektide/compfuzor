@@ -2,6 +2,6 @@
 - hosts: all
   vars:
     REPO: https://github.com/henryhawke/ReasonSuite
-    NODE: True
+    NODEJS: True
   tasks:
-    import_tasks: tasks/compfuzor.includes
+    - import_tasks: tasks/compfuzor.includes
