@@ -21,6 +21,8 @@
 - import_tasks: compfuzor/vars_npm.tasks
 - import_tasks: compfuzor/vars_rust.tasks
   when: RUST is defined
+- import_tasks: compfuzor/vars_nodejs.tasks
+  when: NODEJS is defined
 - import_tasks: compfuzor/vars_tool_versions.tasks
 - debug: "msg='Compfuzor: completed vars'"
 

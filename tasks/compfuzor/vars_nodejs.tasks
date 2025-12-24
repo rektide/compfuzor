@@ -1,0 +1,21 @@
+- name: 'Build vars for a NODEJS build'
+  set_fact:
+    TOOL_VERSIONS: "{{ enhancedToolVersions|ansible.builtin.combine(TOOL_VERSIONS|default({})) }}"
+    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name') }}"
+    ENV: "{{envNodejsBin|concat(env) }}"
+  vars:
+    env: "{{ ({}) if ENV|def(True) == True else ENV }}"
+    envNodejsBin: "{{ (['NODEJS_BIN']) if NODEJS_BIN is defined else ([]) }}"
+    bins: "{{BINS|default([])}}"
+    enhancedToolVersions:
+      nodejs: True
+      typescript: True
+    enhancedBins:
+      - name: build.sh
+        run: "{{BINS_RUN_BYPASS is not deftruthy}}"
+        generated: |
+          pnpm i --frozen
+      - name: install.sh
+        generated: |
+          pnpm link -g
+  when: NODEJS is deftruthy
