@@ -17,16 +17,16 @@
       - name: deps.sh
         exec: |
           shopt -s nullglob
-          for py in /usr/lib/python3*/EXTERNALLY-MANAGED
-          do
-            sudo mv $py $py.fuckoff
-          done
-          pip3 install --upgrade jellyfin-apiclient-python python-mpv-jsonipc pypresence
-      - name: build.sh
+          uv venv
+          uv pip install -e ".[all]"
+      - name: jellyfin-mpv-shim
         basedir: repo
+        global: True
         exec: |
-          ./gen_pkg.sh
-          sudo pip3 install .
+          #source .venv/bin/activate
+          uv run python run.py
+          #./gen_pkg.sh
+          #sudo pip3 install .
   tasks:
     - import_tasks: tasks/compfuzor.includes
       vars:
