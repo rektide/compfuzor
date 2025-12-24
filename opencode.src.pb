@@ -12,10 +12,8 @@
       - agent
     ETC_FILES:
       - name: base.json
-        content: |
-          {
-            "$schema": "https://opencode.ai/config.json"
-          }
+        json:
+          "$schema": "https://opencode.ai/config.json"
       - name: agent/review.md
         content: |
           ---
@@ -53,19 +51,20 @@
           - Code examples
           - User-friendly language
       - name: mcp/context7.json
-        content: |
-          {
-            "mcp": {
-              "context7": {
-                "enabled": true,
-                "type": "remote",
-                "url": "https://context7.liam.sh/mcp",
-                "headers": {
-                  "Authorization": "Bearer {env:CONTEXT7_API_KEY}"
-                }
-              }
-            }
-          }
+        json:
+          mcp:
+            context7:
+              enabled: true,
+              type: "remote"
+              url: "https://context7.liam.sh/mcp"
+              headers:
+                Authorization: "Bearer {env:CONTEXT7_API_KEY}"
+      #- name: provider/openrouter.json
+      #  json:
+      #    provider:
+      #      openrouter:
+      #        options:
+      #          apiKEy: "{env:OPENROUTER_API_KEY}"
     BINS:
       - name: build.sh
         basedir: packages/opencode
