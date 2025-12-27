@@ -15,7 +15,7 @@
               command: ["mcp-neovim-server"]
               environment:
                 ALLOW_SHELL_COMMANDS: "${ALLOW_SHELL_COMMANDS}"
-                NVIM_SOCKET: "${NVIM_LISTEN_ADDRESS}"
+                NVIM_SOCKET_PATH: "${NVIM_SOCKET_PATH}"
     BINS:
       - name: install.sh
         content: |
@@ -32,7 +32,7 @@
           [ -e 'bin/config.sh' ] && ./bin/config.sh
     ENV:
       ALLOW_SHELL_COMMANDS: "false"
-      NVIM_LISTEN_ADDRESS: ".nvim.socket"
+      NVIM_SOCKET_PATH: ".nvim.socket"
   tasks:
     - import_tasks: tasks/compfuzor.includes
 
