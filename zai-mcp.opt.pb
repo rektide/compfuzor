@@ -39,7 +39,7 @@
             z-read:
               enabled: true
               type: "remote"
-              url: "https://api.z.ai/api/mcp/web_reader/mcp"
+              url: "https://api.z.ai/api/mcp/zread/mcp"
               headers:
                 Authorization: "Bearer ${Z_AI_API_KEY}"
     BINS:
