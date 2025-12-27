@@ -13,6 +13,9 @@
       - name: build.sh
         run: "{{BINS_RUN_BYPASS is not deftruthy}}"
         generated: |
+          if [ -f package-lock.json ] && [ ! -f pnpm-lock.yaml ]; then
+            pnpm import
+          fi
           pnpm i --frozen
       - name: install.sh
         generated: |
