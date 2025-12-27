@@ -54,6 +54,6 @@
           pnpm install -g $(cat etc/npm.txt)
     enhancedEtc:
       - name: npm.txt
-        generated: |
+        content: |
           {{REPO_NPM}}
   when: REPO_NPM is defined
