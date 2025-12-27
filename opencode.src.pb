@@ -50,15 +50,6 @@
           - Proper structure
           - Code examples
           - User-friendly language
-      - name: mcp/context7.json
-        json:
-          mcp:
-            context7:
-              enabled: true,
-              type: "remote"
-              url: "https://context7.liam.sh/mcp"
-              headers:
-                Authorization: "Bearer {env:CONTEXT7_API_KEY}"
       #- name: provider/openrouter.json
       #  json:
       #    provider:
@@ -95,7 +86,5 @@
         content: |
           # note/beware that we also are pulling in env.exports
           exec bun run --cwd $DIR dev $(pwd)
-    ENV:
-      CONTEXT7_API_KEY: example-key
   tasks:
     - import_tasks: tasks/compfuzor.includes
