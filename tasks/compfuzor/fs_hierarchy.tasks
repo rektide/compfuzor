@@ -139,7 +139,7 @@
     yaml: "{{item.yaml|to_nice_yaml if item.yaml|default(False) else ''}}"
     json: "{{item.json|to_nice_json if item.json|default(False) else '' }}"
     fileType: "{{'file' if item.raw|default(False) else 'template'}}"
-    isFile: "{{not (item.content|def or item.yaml|def or item.json or item.var|def or item.copyDir|def)}}"
+    isFile: "{{not (item.content|def or item.yaml|def or item.json|def or item.var|def or item.copyDir|def)}}"
     file: "{{lookup(fileType, item.src|default(item.name|default(item, true), true)|defaultDir(srcDir)) if isFile else '' }}"
     var: "{{hostvars[inventory_hostname][item.var]|default(vars[item.var]) if item.var|def else '' }}"
     all: "{{ content + file + var + yaml + json}}"

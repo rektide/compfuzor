@@ -9,7 +9,6 @@
     bins: "{{BINS|default([])}}"
     enhancedToolVersions:
       nodejs: True
-      typescript: True
     enhancedBins:
       - name: build.sh
         run: "{{BINS_RUN_BYPASS is not deftruthy}}"
@@ -19,3 +18,39 @@
         generated: |
           pnpm link -g
   when: NODEJS is deftruthy
+
+- name: 'Build vars for a BUN build'
+  set_fact:
+    TOOL_VERSIONS: "{{ enhancedToolVersions|ansible.builtin.combine(TOOL_VERSIONS|default({})) }}"
+    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name') }}"
+    ENV: "{{envBunBin|concat(env) }}"
+  vars:
+    env: "{{ ({}) if ENV|def(True) == True else ENV }}"
+    envBunBin: "{{ (['BUN_BIN']) if BUN_BIN is defined else ([]) }}"
+    bins: "{{BINS|default([])}}"
+    enhancedToolVersions:
+      bun: True
+    enhancedBins:
+      - name: build.sh
+        run: "{{BINS_RUN_BYPASS is not deftruthy}}"
+        generated: |
+          bun install
+      - name: install.sh
+        generated: |
+          bun link -g
+  when: BUN is deftruthy
+
+- name: 'Build vars for REPO_NPM'
+  set_fact:
+    BINS: "{{ enhancedBins|mergeKeyed(BINS|default([]), key='name') }}"
+    ETC_FILES: "{{ enhancedEtc|concat(ETC_FILES|default([])) }}"
+  vars:
+    enhancedBins:
+      - name: install.sh
+        generated: |
+          pnpm install -g $(cat etc/npm.txt)
+    enhancedEtc:
+      - name: npm.txt
+        generated: |
+          {{REPO_NPM}}
+  when: REPO_NPM is defined
