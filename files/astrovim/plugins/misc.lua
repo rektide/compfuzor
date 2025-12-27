@@ -1,5 +1,8 @@
 return {
 	{
+		"rektide/nvim-auto-listen",
+	},
+	{
 		"jauntywunderkind/nvim-random-color",
 		-- our random is best
 		priority = 100,
