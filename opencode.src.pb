@@ -68,25 +68,39 @@
           bun run build
       - name: config.sh
         content: |
-          set -e
           dir={{DIR}}
-          mkdir -p ${dir}/etc/mcp-enabled ${dir}/etc/mcp-disabled
+          mkdir -p ${dir}/etc/mcp-disabled
 
-          for json_file in ${dir}/etc/mcp/*.json; do
-            filename=$(basename "$json_file")
+          shopt -s nullglob
+          configs=(${dir}/etc/mcp/*.json)
+          disabled=(${dir}/etc/mcp-disabled/*.json)
 
-            if [ -L "${dir}/etc/mcp-disabled/$filename" ]; then
-              continue
+          jq -s 'reduce .[] as $item ({}; . * $item)' ${dir}/etc/base.json "${configs[@]}" "${disabled[@]}" > ${dir}/etc/opencode.json
+      - name: disable.sh
+        content: |
+          shopt -s nullglob
+          dir={{DIR}}
+          mkdir -p ${dir}/etc/mcp-disabled
+
+          files=()
+          for arg in "$@"; do
+            if [ -f "$arg" ]; then
+              files+=("$arg")
+            else
+              [[ "$arg" == *.json ]] || arg="$arg.json"
+              for json_file in ${dir}/etc/mcp/*.json; do
+                filename=$(basename "$json_file")
+                [[ "$filename" =~ $arg ]] && files+=("$json_file") && continue
+                [[ "${filename%.json}" =~ $arg ]] && files+=("$json_file")
+              done
             fi
-
-            if [ -L "${dir}/etc/mcp-enabled/$filename" ]; then
-              continue
-            fi
-
-            ln -sv "$json_file" "${dir}/etc/mcp-enabled/$filename"
           done
-          echo combining config
-          jq -s 'reduce .[] as $item ({}; . * $item)' etc/base.json etc/mcp-enabled/*json > etc/opencode.json
+
+          for json_file in "${files[@]}"; do
+            filename=$(basename "$json_file")
+            mcp_key=$(jq -r '.mcp | keys[0]' "$json_file")
+            echo "{\"mcp\":{\"$mcp_key\":{\"disabled\":true}}}" > "${dir}/etc/mcp-disabled/$filename"
+          done
       - name: install.sh
         content: |
           ln -sfv $(pwd)/packages/opencode/dist/opencode-linux-x64/bin/opencode $GLOBAL_BINS_DIR/
@@ -100,11 +114,6 @@
           [ -n "$TARGET" ] || TARGET="$HOME/.config/opencode"
           mkdir -p $(dirname $TARGET)
           ln -sv ${dir}/etc $TARGET/
-
-          shopt -s nullglob
-          for file in ${dir}/etc/mcp-enabled/*.json; do
-            ln -sfv "$file" "$TARGET/mcp/"
-          done
       - name: opencode-live
         basedir: False
         global: True
