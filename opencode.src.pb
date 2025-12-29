@@ -9,6 +9,8 @@
       go: 1
     ETC_DIRS:
       - mcp
+      - mcp-enabled
+      - mcp-disabled
       - agent
     ETC_FILES:
       - name: base.json
@@ -66,8 +68,25 @@
           bun run build
       - name: config.sh
         content: |
+          set -e
+          dir={{DIR}}
+          mkdir -p ${dir}/etc/mcp-enabled ${dir}/etc/mcp-disabled
+
+          for json_file in ${dir}/etc/mcp/*.json; do
+            filename=$(basename "$json_file")
+
+            if [ -L "${dir}/etc/mcp-disabled/$filename" ]; then
+              continue
+            fi
+
+            if [ -L "${dir}/etc/mcp-enabled/$filename" ]; then
+              continue
+            fi
+
+            ln -sv "$json_file" "${dir}/etc/mcp-enabled/$filename"
+          done
           echo combining config
-          jq -s 'reduce .[] as $item ({}; . * $item)' etc/base.json etc/mcp/*json > etc/opencode.json
+          jq -s 'reduce .[] as $item ({}; . * $item)' etc/base.json etc/mcp-enabled/*json > etc/opencode.json
       - name: install.sh
         content: |
           ln -sfv $(pwd)/packages/opencode/dist/opencode-linux-x64/bin/opencode $GLOBAL_BINS_DIR/
@@ -75,11 +94,17 @@
       - name: install-user.sh
         basedir: False
         content: |
+          dir={{DIR}}
           mkdir -p ~/.local/share/opencode/log
 
           [ -n "$TARGET" ] || TARGET="$HOME/.config/opencode"
           mkdir -p $(dirname $TARGET)
-          ln -sv ${DIR}/etc $TARGET/
+          ln -sv ${dir}/etc $TARGET/
+
+          shopt -s nullglob
+          for file in ${dir}/etc/mcp-enabled/*.json; do
+            ln -sfv "$file" "$TARGET/mcp/"
+          done
       - name: opencode-live
         basedir: False
         global: True
