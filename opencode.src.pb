@@ -96,23 +96,37 @@
           mkdir -p ${dir}/etc/mcp-disabled
 
           files=()
-          for arg in "$@"; do
-            if [ -f "$arg" ]; then
-              files+=("$arg")
-            else
-              [[ "$arg" == *.json ]] || arg="$arg.json"
-              for json_file in ${dir}/etc/mcp/*.json; do
-                filename=$(basename "$json_file")
-                [[ "$filename" =~ $arg ]] && files+=("$json_file") && continue
-                [[ "${filename%.json}" =~ $arg ]] && files+=("$json_file")
-              done
+          for pattern in "$@"; do
+            if [ -f "$pattern" ]; then
+              files+=("$pattern")
+              continue
             fi
+
+            orig_pattern="$pattern"
+            start_count=${#files[@]}
+
+            pattern="${pattern%.json}"
+            for json_file in ${dir}/etc/mcp/*.json; do
+              filename=$(basename "$json_file")
+              [[ "$filename" =~ $pattern ]] && files+=("$json_file") && continue
+              [[ "${filename%.json}" =~ $pattern ]] && files+=("$json_file")
+            done
+
+            [ $start_count -eq ${#files[@]} ] && echo "no match: $orig_pattern"
           done
 
           for json_file in "${files[@]}"; do
             filename=$(basename "$json_file")
+            target="${dir}/etc/mcp-disabled/$filename"
+
+            if [ -f "$target" ]; then
+              echo "skipped: $filename"
+              continue
+            fi
+
             mcp_key=$(jq -r '.mcp | keys[0]' "$json_file")
-            echo "{\"mcp\":{\"$mcp_key\":{\"disabled\":true}}}" > "${dir}/etc/mcp-disabled/$filename"
+            echo "{\"mcp\":{\"$mcp_key\":{\"enabled\":false}}}" > "$target"
+            echo "created: $filename"
           done
       - name: install.sh
         content: |
