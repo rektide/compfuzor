@@ -12,11 +12,20 @@
           cmake --build build
           sudo cmake --install build
     PKGS:
+      - qt6-base-dev
+      - qt6-declarative-dev
+      - qt6-shadertools-dev
+      - qt6-svg-plugins
+      - qt6-svg-dev
+      - qt6-wayland-private-dev
+      - spirv-tools
       - qt6-shadertools-dev
       - libcli11-dev
       - libjemalloc-dev
       - libpam0g-dev
       - libpipewire-0.3-dev
       - qml6-module-qtmultimedia
+      - libqtqmlmodels-dev 
+      - wayland-protocols
   tasks:
     - import_tasks: tasks/compfuzor.includes
