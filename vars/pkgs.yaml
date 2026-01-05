@@ -153,6 +153,7 @@ BASE:
   - psmisc
   #- python2.7-minimal
   #- python-pip-whl
+  - python-is-python3
   - python3-pytools
   - readline-common
   - resolvconf
