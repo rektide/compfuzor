@@ -1,5 +1,6 @@
 return {
   "AstroNvim/astrocommunity",
+  { import = "astrocommunity.ai.opencode-nvim" },
   { import = "astrocommunity.bars-and-lines.lualine-nvim" },
   { import = "astrocommunity.bars-and-lines.vim-illuminate" },
   --{ import = "astrocommunity.completion.avante-nvim" },
