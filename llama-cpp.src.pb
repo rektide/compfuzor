@@ -5,6 +5,11 @@
     PKGS:
       - libvulkan-dev
       - glslc
+    MODELS:
+      - model: mradermacher/Nanbeige4-3B-Base-GGUF
+        variant:
+          - q4_k_m
+      - unsloth/Devstral-Small-2-24B-Instruct-2512-GGUF:Q3_K_XL
     BINS:
       - name: build.sh
         content: |
