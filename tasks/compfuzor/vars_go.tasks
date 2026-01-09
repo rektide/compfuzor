@@ -1,0 +1,21 @@
+- name: 'Build vars for a GO build'
+  set_fact:
+    TOOL_VERSIONS: "{{ enhancedToolVersions|ansible.builtin.combine(TOOL_VERSIONS|default({})) }}"
+    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name') }}"
+    ENV: "{{envGoBin|concat(env) }}"
+  vars:
+    env: "{{ ({}) if ENV|def(True) == True else ENV }}"
+    envGoBin: "{{ (['GO_BIN']) if GO_BIN is defined else ([]) }}"
+    bins: "{{BINS|default([])}}"
+    enhancedToolVersions:
+      go: True
+    enhancedBins:
+      - name: build.sh
+        run: "{{BINS_RUN_BYPASS is not deftruthy}}"
+        generated: |
+          go build
+      - name: install.sh
+        generated: |
+          [ -n "$INSTALL_BIN" ] || INSTALL_BIN="${GO_BIN:-{{TYPE}}}"
+          ln -sfv "$(pwd)/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
+  when: GO is deftruthy

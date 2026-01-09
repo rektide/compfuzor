@@ -1,0 +1,30 @@
+- name: 'Build vars for a PYTHON build'
+  set_fact:
+    TOOL_VERSIONS: "{{ enhancedToolVersions|ansible.builtin.combine(TOOL_VERSIONS|default({})) }}"
+    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name') }}"
+    ENV: "{{envPythonBin|concat(env) }}"
+    ETC_FILES: "{{ enhancedEtc|concat(ETC_FILES|default([])) }}"
+  vars:
+    env: "{{ ({}) if ENV|def(True) == True else ENV }}"
+    envPythonBin: "{{ (['PYTHON_BIN']) if PYTHON_BIN is defined else ([]) }}"
+    bins: "{{BINS|default([])}}"
+    enhancedToolVersions:
+      python: True
+    enhancedBins:
+      - name: build.sh
+        run: "{{BINS_RUN_BYPASS is not deftruthy}}"
+        generated: |
+          uv venv
+          source ./bin/venv.source
+          {% if PIP is defined %}
+          uv pip install -r etc/pip.txt
+          {% endif %}
+      - name: venv.source
+        generated: |
+          . "$(pwd)/.venv/bin/activate"
+    enhancedEtc: "{{ enhancedEtcPip if PIP is defined else [] }}"
+    enhancedEtcPip:
+      - name: pip.txt
+        content: |
+          {{PIP|join('\n') if PIP is iterable and PIP is not string else PIP|default('')}}
+  when: PYTHON is deftruthy or PIP is defined
