@@ -1635,7 +1635,7 @@ BONUS:
   - playerctl
 #- w3-recs
 #- prosody
-GO:
+GO_DEV:
   - golang
   - golang-src
   - golang-go
