@@ -1,4 +1,4 @@
-# CompFuzor #
+# CompFuzor
 
 CF is a repository of systems configuration scripts for onlining new nodes with a variety of services.
 
@@ -10,53 +10,109 @@ Added latter, there are a host of other conventions: environment variables are a
 
 It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance. It provides a rich set of default directives which use a construct of context sensitivie settings to create ea consistend framework for emplacing software and processes.
 
-# Conventions #
+# Conventions
 
-## Base System ##
-+ systemd is the init process.
-+ dpkg/apt for package management.
+## Base System
 
-## Directories ##
-+ `/` is the main repository of playbooks.
-+ `tasks/` are subtasks used by playbooks.
-+ `tasks/compfuzor` is the main-body of compfuzor execution, run by the task `include: tasks/compfuzor.includes`
-+ `vars/` hold broad configuration data.
-+ `files/` holds files which will be sourced when running a playbook.
-+ `private/` holds sensitive data configs.
-+ `example-private/` holds dummy data to mock out it's private/ counterpart.
+- systemd is the init process.
+- dpkg/apt for package management.
 
-## Playbook Types ##
-+ `.srv.pb` are _instances_ of services, typically deploying into /srv/$TYPE-$INSTANCE. $INSTANCE defaults to main in common.vars.
-+ `.opt.pb` is there to install a software package, usually into /opt. configuration, if possible, ought be split into a `.srv.pb` playbook.
-+ `.user.pb` are intended to install into a user's own directory.
-+ `.src.pb` are compiled (generally) source packages, often outputing an associated .opt package
+## Directories
 
-## Configuration ##
-+ `vars/`, `private/`, and `example-private/` hold non-installation specific, installation specific, and examples of installation specific configuraiton data.
-+ `vars/common.vars` is a generic set of variables, for example defining paths such as opt, srv.
-+ `vars/common.user.vars` supplements/overrides `common.vars` with user-targetted script configuration: OPTS_DIR becomes ~/.local/opt, for instance.
+- `/` is the main repository of playbooks.
+- `tasks/` are subtasks used by playbooks.
+- `tasks/compfuzor` is the main-body of compfuzor execution, run by the task `include: tasks/compfuzor.includes`
+- `vars/` hold broad configuration data.
+- `files/` holds files which will be sourced when running a playbook.
+- `private/` holds sensitive data configs.
+- `example-private/` holds dummy data to mock out it's private/ counterpart.
 
-## Services ##
-+ ought be based around these variables:
-    + $TYPE, a name prefix identifying what type of service this is.
-    + $SRVS_DIR, where all services are kept, which common.vars will default to /srv
-    + $INSTANCE, defaulted to main, but overridable to create a new instance of the service.
-    + $NAME, conventionally set to $TYPE-$INSTANCE by tasks/srv.vars.tasks if none is provided (this ought be included early in most all srv scripts).
-    + $DIR, conventionally set to {{SRVS_DIR}}/{{NAME}} if none is provided, where the service instance is installed
-+ in practices, services need to declare a $TYPE and then run tasks/srv.vars.tasks, leaving most of these var configurations to be done externally.
-+ write a `systemd.unit(5)` file into $SYSTEMD_UNITS.
-+ ideally all services can be installed multiple times! make it so!
-+ `handlers.yml` ought provide a `restart $TYPE` directive that ought expect the above vars be defined.
-+ services ought have their own user & group, typically {{NAME}}. A common tasks is in the works.
-    + lordy be, here me now: all "services" are to be templates with their sudo_user injected at execution time.
-    + i have no idea right now how to pull off this execution framework.
-    + similarly, having INSTANCE baked in, not having defaults, these are major ansible warts I don't know how to factor out yet. ideas welcome.
+## Playbook Types
 
-# Miscellenary #
-+ Some vars are listed as $FOO.stdout. This ought go away pending some assistance in ansible#1730.
-+ Deal better with permissions- most scripts ought be made to operate without sudo, but do need some initialization routines to be run on their behalf. Device a clean way to separate user from server side.
+- `.srv.pb` are _instances_ of services, typically deploying into /srv/$TYPE-$INSTANCE. $INSTANCE defaults to main in common.vars.
+- `.opt.pb` is there to install a software package, usually into /opt. configuration, if possible, ought be split into a `.srv.pb` playbook.
+- `.user.pb` are intended to install into a user's own directory.
+- `.src.pb` are compiled (generally) source packages, often outputing an associated .opt package
 
-## BEASTIARY ##
+## Configuration
+
+- `vars/`, `private/`, and `example-private/` hold non-installation specific, installation specific, and examples of installation specific configuraiton data.
+- `vars/common.vars` is a generic set of variables, for example defining paths such as opt, srv.
+- `vars/common.user.vars` supplements/overrides `common.vars` with user-targetted script configuration: OPTS_DIR becomes ~/.local/opt, for instance.
+
+## Services
+
+- ought be based around these variables:
+  - $TYPE, a name prefix identifying what type of service this is.
+  - $SRVS_DIR, where all services are kept, which common.vars will default to /srv
+  - $INSTANCE, defaulted to main, but overridable to create a new instance of the service.
+  - $NAME, conventionally set to $TYPE-$INSTANCE by tasks/srv.vars.tasks if none is provided (this ought be included early in most all srv scripts).
+  - $DIR, conventionally set to {{SRVS_DIR}}/{{NAME}} if none is provided, where the service instance is installed
+- in practices, services need to declare a $TYPE and then run tasks/srv.vars.tasks, leaving most of these var configurations to be done externally.
+- write a `systemd.unit(5)` file into $SYSTEMD_UNITS.
+- ideally all services can be installed multiple times! make it so!
+- `handlers.yml` ought provide a `restart $TYPE` directive that ought expect the above vars be defined.
+- services ought have their own user & group, typically {{NAME}}. A common tasks is in the works.
+  - lordy be, here me now: all "services" are to be templates with their sudo_user injected at execution time.
+  - i have no idea right now how to pull off this execution framework.
+  - similarly, having INSTANCE baked in, not having defaults, these are major ansible warts I don't know how to factor out yet. ideas welcome.
+
+# Miscellenary
+
+- Some vars are listed as $FOO.stdout. This ought go away pending some assistance in ansible#1730.
+- Deal better with permissions- most scripts ought be made to operate without sudo, but do need some initialization routines to be run on their behalf. Device a clean way to separate user from server side.
+
+# Skipping Work
+
+CompFuzor provides several mechanisms to skip or reduce work when you don't need to run all steps, or when running steps would stomp your work. This can save time, bandwidth, or preserve local changes.
+
+## BYPASS Variables
+
+BYPASS variables allow you to skip specific stages of the playbook execution. Set any of these to `True` to skip that stage:
+
+- **`APT_BYPASS`** - Skip APT repository configuration and package installation
+- **`APT_UPDATE_BYPASS`** - Skip `apt update` operations
+- **`BINS_BYPASS`** - Skip binary file operations
+- **`BINS_RUN_BYPASS`** - Skip running binaries/build scripts
+- **`DEBCONF_BYPASS`** - Skip debconf pre-configuration
+- **`DIR_BYPASS`** - Skip directory creation and hierarchy setup
+- **`DBCONFIG_BYPASS`** - Skip database configuration
+- **`ENV_BYPASS`** - Skip environment variable setup
+- **`FS_BYPASS`** - Skip filesystem operations (files, directories)
+- **`FS_SRCS_BYPASS`** - Skip source file operations
+- **`GET_URLS_BYPASS`** - Skip downloading from URLs
+- **`GIT_BYPASS`** - Skip git repository operations
+- **`GLOBAL_BINS_BYPASS`** - Skip linking binaries to global paths
+- **`LINKS_BYPASS`** - Skip symlink creation
+- **`MODULES_BYPASS`** - Skip kernel module loading
+- **`PKGS_BYPASS`** - Skip package installation via apt
+- **`REPO_BYPASS`** - Skip all repository operations (git, svn, hg, cvs, go)
+- **`SYSTEMD_BYPASS`** - Skip systemd service operations
+- **`SYSTEMD_THUNK_BYPASS`** - Skip systemd thunk operations
+- **`TGZ_BYPASS`** - Skip tarball extraction
+- **`ZIP_BYPASS`** - Skip zip file extraction
+
+All BYPASS variables default to `False` (i.e., don't skip), so operations run unless you explicitly bypass them.
+
+## Other skips
+
+### APT_INSTALL
+
+Controls the state for apt package installations. Default is `latest` (upgrades packages), but you can set it to `present` to avoid unnecessary upgrades. This is useful when you want to avoid downloading large package updates, or if your system is not in an up to date state and you don't want to accidentally gnarl your system with an un-ideal package resolution.
+
+-- **`APT_INSTALL`**: present # Only ensure packages are installed, don't upgrade
+
+### GIT_UPDATE
+
+Controls whether git repositories are updated. By default, git operations will try to update the repository to the specified version. This is particularly useful when you have local modifications in a git checkout that you don't want to lose. To skip updates and preserve local changes:
+
+```yaml
+GIT_UPDATE: false # Don't update git repos
+```
+
+## BEASTIARY
+
+A short listing of well known variables
 
 ### DIR
 
@@ -80,7 +136,7 @@ CACHE, expiring cache files, /var/cache
 PID, process ids, /var/pid
 RUN, process's runtime data, /var/run
 
-## `Common` Mode Bits ##
+## `Common` Mode Bits
 
 `var/common.var` and `var/common.user.var` hold the main system configuration data which will guide (provide all base context for) all CompFuzor runs.
 
