@@ -13,7 +13,7 @@
       - name: build.sh
         run: "{{BINS_RUN_BYPASS is not deftruthy}}"
         generated: |
-          go build
+          go build ./...
       - name: install.sh
         generated: |
           [ -n "$INSTALL_BIN" ] || INSTALL_BIN="${GO_BIN:-{{TYPE}}}"
