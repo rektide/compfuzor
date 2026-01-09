@@ -1,17 +1,8 @@
 ---
 - hosts: all
   vars:
-    TYPE: yazi
-    INSTANCE: git
     REPO: https://github.com/sxyazi/yazi
-    ENV: {}
-    BINS:
-      - name: build.sh
-        content: |
-          cargo build --release --locked
-      - name: install.sh
-        content: |
-          ln -s target/release/yazi ${GLOBAL_BINS_DIR}/yazi
+    RUST: True
     PKGS:
      - ffmpeg
      - 7zip
