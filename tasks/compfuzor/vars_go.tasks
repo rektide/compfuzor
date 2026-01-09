@@ -1,11 +1,11 @@
 - name: 'Build vars for a GO build'
   set_fact:
     TOOL_VERSIONS: "{{ enhancedToolVersions|ansible.builtin.combine(TOOL_VERSIONS|default({})) }}"
-    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name') }}"
-    ENV: "{{envGoBin|concat(env) }}"
+    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name', concat_fields=['generated']) }}"
+    ENV: "{{envGoBin|combine(env) }}"
   vars:
     env: "{{ ({}) if ENV|def(True) == True else ENV }}"
-    envGoBin: "{{ (['GO_BIN']) if GO_BIN is defined else ([]) }}"
+    envGoBin: "{{ ({'GO_BIN': GO_BIN}) if GO_BIN is defined else ({}) }}"
     bins: "{{BINS|default([])}}"
     enhancedToolVersions:
       go: True

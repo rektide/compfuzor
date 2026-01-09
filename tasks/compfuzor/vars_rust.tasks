@@ -1,11 +1,11 @@
 - name: 'Build vars for a RUST build'
   set_fact:
     TOOL_VERSIONS: "{{ enhancedToolVersions|ansible.builtin.combine(TOOL_VERSIONS|default({})) }}"
-    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name') }}"
-    ENV: "{{envRustBin|concat(env) }}"
+    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name', concat_fields=['generated']) }}"
+    ENV: "{{envRustBin|combine(env) }}"
   vars:
     env: "{{ ({}) if ENV|def(True) == True else ENV }}"
-    envRustBin: "{{ (['RUST_BIN']) if RUST_BIN is defined else ([]) }}"
+    envRustBin: "{{ ({'RUST_BIN': RUST_BIN}) if RUST_BIN is defined else ({}) }}"
     bins: "{{BINS|default([])}}"
     enhancedToolVersions:
       rust: True

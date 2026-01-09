@@ -1,11 +1,11 @@
 - name: 'Build vars for a NODEJS build'
   set_fact:
     TOOL_VERSIONS: "{{ enhancedToolVersions|ansible.builtin.combine(TOOL_VERSIONS|default({})) }}"
-    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name') }}"
-    ENV: "{{envNodejsBin|concat(env) }}"
+    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name', concat_fields=['generated']) }}"
+    ENV: "{{envNodejsBin|combine(env) }}"
   vars:
     env: "{{ ({}) if ENV|def(True) == True else ENV }}"
-    envNodejsBin: "{{ (['NODEJS_BIN']) if NODEJS_BIN is defined else ([]) }}"
+    envNodejsBin: "{{ ({'NODEJS_BIN': NODEJS_BIN}) if NODEJS_BIN is defined else ({}) }}"
     bins: "{{BINS|default([])}}"
     enhancedToolVersions:
       nodejs: True
@@ -25,11 +25,11 @@
 - name: 'Build vars for a BUN build'
   set_fact:
     TOOL_VERSIONS: "{{ enhancedToolVersions|ansible.builtin.combine(TOOL_VERSIONS|default({})) }}"
-    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name') }}"
-    ENV: "{{envBunBin|concat(env) }}"
+    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name', concat_fields=['generated']) }}"
+    ENV: "{{envBunBin|combine(env) }}"
   vars:
     env: "{{ ({}) if ENV|def(True) == True else ENV }}"
-    envBunBin: "{{ (['BUN_BIN']) if BUN_BIN is defined else ([]) }}"
+    envBunBin: "{{ ({'BUN_BIN': BUN_BIN}) if BUN_BIN is defined else ({}) }}"
     bins: "{{BINS|default([])}}"
     enhancedToolVersions:
       bun: True
@@ -45,8 +45,8 @@
 
 - name: 'Build vars for REPO_NPM'
   set_fact:
-    BINS: "{{ enhancedBins|mergeKeyed(BINS|default([]), key='name') }}"
-    ETC_FILES: "{{ enhancedEtc|concat(ETC_FILES|default([])) }}"
+    BINS: "{{ enhancedBins|mergeKeyed(BINS|default([]), key='name', concat_fields=['generated']) }}"
+    ETC_FILES: "{{ enhancedEtc|combine(ETC_FILES|default([])) }}"
   vars:
     enhancedBins:
       - name: install.sh

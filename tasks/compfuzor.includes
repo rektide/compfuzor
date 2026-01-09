@@ -23,10 +23,10 @@
   when: RUST is defined
 - import_tasks: compfuzor/vars_nodejs.tasks
   when: NODEJS is defined or BUN is defined or REPO_NPM is defined
-- import_tasks: compfuzor/vars_go.tasks
-  when: GO is deftruthy
 - import_tasks: compfuzor/vars_python.tasks
   when: PYTHON is deftruthy or PIP is deftruthy
+- import_tasks: compfuzor/vars_go.tasks
+  when: GO is deftruthy
 - import_tasks: compfuzor/vars_tool_versions.tasks
 - debug: "msg='Compfuzor: completed vars'"
 
