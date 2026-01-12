@@ -5,7 +5,9 @@
     ENV: "{{envGoBin|combine(env) }}"
   vars:
     env: "{{ ({}) if ENV|def(True) == True else ENV }}"
-    envGoBin: "{{ ({'GO_BIN': GO_BIN}) if GO_BIN is defined else ({}) }}"
+    envGoBin:
+      GO_BIN: "{{GO_BIN|default(omit)}}"
+      GO_TARGET: "{{GO_TARGET|default('./...')}}"
     bins: "{{BINS|default([])}}"
     enhancedToolVersions:
       go: True
@@ -13,9 +15,9 @@
       - name: build.sh
         run: "{{BINS_RUN_BYPASS is not deftruthy}}"
         generated: |
-          go build ./...
+          go build -o ${GO_BIN:-$TYPE} ${GO_TARGET:-./...}
       - name: install.sh
         generated: |
-          [ -n "$INSTALL_BIN" ] || INSTALL_BIN="${GO_BIN:-{{TYPE}}}"
+          [ -n "$INSTALL_BIN" ] || INSTALL_BIN="${GO_BIN:-$TYPE}"
           ln -sfv "$(pwd)/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
   when: GO is deftruthy
