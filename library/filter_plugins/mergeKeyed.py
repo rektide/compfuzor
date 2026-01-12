@@ -1,4 +1,4 @@
-def mergeKeyed(list1, list2, key="key"):
+def mergeKeyed(list1, list2, key="key", concat_fields=None):
     """
     Merge two lists of objects by a key field.
     
@@ -10,6 +10,7 @@ def mergeKeyed(list1, list2, key="key"):
         list1: First list
         list2: Second list  
         key: The field name to use for matching (default: "key")
+        concat_fields: List of field names to concatenate instead of replace
     
     Returns:
         A merged list where objects with matching key values are combined
@@ -18,6 +19,9 @@ def mergeKeyed(list1, list2, key="key"):
         list1 = []
     if not isinstance(list2, list):
         list2 = []
+    
+    if concat_fields is None:
+        concat_fields = []
     
     # Create a dictionary to track objects by their key value
     merged_dict = {}
@@ -37,8 +41,22 @@ def mergeKeyed(list1, list2, key="key"):
         if isinstance(item, dict) and key in item:
             key_value = item[key]
             if key_value in merged_dict:
-                # Merge dictionaries, with second list values taking precedence
-                merged_dict[key_value].update(item)
+                # Merge dictionaries, with special handling for concat_fields
+                merged_item = merged_dict[key_value]
+                for field, value in item.items():
+                    if field in concat_fields and field in merged_item:
+                        # Concatenate values that are lists or strings
+                        existing = merged_item[field]
+                        if isinstance(value, list) and isinstance(existing, list):
+                            merged_item[field] = existing + value
+                        elif isinstance(value, str) and isinstance(existing, str):
+                            merged_item[field] = existing + "\n" + value
+                        else:
+                            # Fall back to replacement
+                            merged_item[field] = value
+                    else:
+                        # Second list values take precedence
+                        merged_item[field] = value
             else:
                 merged_dict[key_value] = item.copy()
         else:

@@ -109,5 +109,59 @@ def test_mergeKeyed():
     print(f"Expected: {expected}")
     print(f"Pass: {sorted(str(r) for r in result) == sorted(str(e) for e in expected)}")
 
+    # Test 8: concat_fields with strings
+    print("\nTest 8: concat_fields with strings")
+    list1 = [{"name": "build", "generated": "go build"}]
+    list2 = [{"name": "build", "generated": "make install"}]
+    result = mergeKeyed(list1, list2, key="name", concat_fields=["generated"])
+    print(f"list1: {list1}")
+    print(f"list2: {list2}")
+    print(f"Result: {result}")
+    expected = [{"name": "build", "generated": "go build\nmake install"}]
+    print(f"Expected: {expected}")
+    print(f"Pass: {result == expected}")
+
+    # Test 9: concat_fields with lists
+    print("\nTest 9: concat_fields with lists")
+    list1 = [{"name": "build", "generated": ["go build", "go test"]}]
+    list2 = [{"name": "build", "generated": ["make install"]}]
+    result = mergeKeyed(list1, list2, key="name", concat_fields=["generated"])
+    print(f"list1: {list1}")
+    print(f"list2: {list2}")
+    print(f"Result: {result}")
+    expected = [{"name": "build", "generated": ["go build", "go test", "make install"]}]
+    print(f"Expected: {expected}")
+    print(f"Pass: {result == expected}")
+
+    # Test 10: concat_fields with mismatched types
+    print("\nTest 10: concat_fields with mismatched types")
+    list1 = [{"name": "build", "generated": "go build", "other": 1}]
+    list2 = [{"name": "build", "generated": ["make install"], "other": 2}]
+    result = mergeKeyed(list1, list2, key="name", concat_fields=["generated"])
+    print(f"list1: {list1}")
+    print(f"list2: {list2}")
+    print(f"Result: {result}")
+    # Mismatched types fall back to replacement
+    expected = [{"name": "build", "generated": ["make install"], "other": 2}]
+    print(f"Expected: {expected}")
+    print(f"Pass: {result == expected}")
+
+    # Test 11: concat_fields with non-matching keys
+    print("\nTest 11: concat_fields with non-matching keys")
+    list1 = [{"name": "build", "generated": "go build"}, {"name": "test", "generated": "go test"}]
+    list2 = [{"name": "deploy", "generated": "make deploy"}]
+    result = mergeKeyed(list1, list2, key="name", concat_fields=["generated"])
+    print(f"list1: {list1}")
+    print(f"list2: {list2}")
+    print(f"Result: {result}")
+    # No merging, all items included
+    expected = [
+        {"name": "build", "generated": "go build"},
+        {"name": "test", "generated": "go test"},
+        {"name": "deploy", "generated": "make deploy"}
+    ]
+    print(f"Expected: {expected}")
+    print(f"Pass: {sorted(str(r) for r in result) == sorted(str(e) for e in expected)}")
+
 if __name__ == "__main__":
     test_mergeKeyed()
