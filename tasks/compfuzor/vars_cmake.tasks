@@ -9,7 +9,7 @@
     envCmake:
       BUILD_DIR: "{{BUILD_DIR|default('build')}}"
       CMAKE_GENERATOR: "{{CMAKE_GENERATOR|default(omit)}}"
-      CMAKE_BUILD_TYPE: "{{CMAKE_BUILD_TYPE|default(omit)}}"
+      CMAKE_BUILD_TYPE: "{{CMAKE_BUILD_TYPE|default('Release')}}"
       CMAKE_INSTALL_BIN: "{{CMAKE_INSTALL_BIN|default(omit)}}"
     bins: "{{BINS|default([])}}"
     pkgs: "{{PKGS|default([])}}"
@@ -28,7 +28,11 @@
           cmake --build $BUILD_DIR ${CMAKE_BUILD_TYPE:+--config $CMAKE_BUILD_TYPE}
       - name: install.sh
         generated: |
+          {% if CMAKE_INSTALL|def %}
+          cd build
+          cmake --install .{{ ' ' + CMAKE_INSTALL if CMAKE_INSTALL != True else ''}}
+          {% else %}
           [ -n "$INSTALL_BIN" ] || INSTALL_BIN="${CMAKE_INSTALL_BIN:-{{TYPE}}}"
           ln -sfv "$(pwd)/build/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
-          #{% if CMAKE_INSTALL|def %}cmake --install {{cmakeDir}}{% endif %}
+          {% endif %}
   when: CMAKE is deftruthy or CMAKE_ARGS is defined
