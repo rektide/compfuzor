@@ -26,6 +26,7 @@
           # https://ghostty.org/docs/help/terminfo
           # note, this only works if actively using ghostty. would like to fix?
           # and macos needs homebrew infocmp
-          infocmp -x | ssh $1 -- tic -x -
+          #infocmp -x | ssh $1 -- tic -x -
+          infocmp -x | ssh $1 'mkdir -p ~/.terminfo && tic -x -o ~/.terminfo -'
   tasks:
     - import_tasks: tasks/compfuzor.includes
