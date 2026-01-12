@@ -25,6 +25,9 @@
       #- name: plugins/dap.lua
       - name: plugins/misc.lua
       - name: plugins/mason-full.lua
+    PKGS:
+      - tree-sitter-cli
+      #- yazi
     ARCH_PKGS:
       - xsel
       - tree-sitter-cli
@@ -36,6 +39,7 @@
       - websocat
       - bacon
       - fzf
+      - yazi
     #LINKS:
     #  - src: "{{ETC}}/init.lua"
     #    dest: "{{REPO_DIR}}/lua/user/init.lua"
