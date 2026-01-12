@@ -15,6 +15,8 @@
 - import_tasks: compfuzor/vars_systemd.tasks
 - import_tasks: compfuzor/vars_src.tasks
 - import_tasks: compfuzor/vars_make_autoconf.tasks
+- import_tasks: compfuzor/vars_cmake.tasks
+  when: CMAKE is deftruthy or CMAKE_ARGS is defined
 - import_tasks: compfuzor/vars_debconf.tasks
 - import_tasks: compfuzor/vars_pg.tasks
 - import_tasks: compfuzor/vars_repo.tasks

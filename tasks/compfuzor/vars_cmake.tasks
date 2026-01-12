@@ -1,0 +1,34 @@
+- name: 'Build vars for a CMAKE build'
+  set_fact:
+    #TOOL_VERSIONS: "{{ enhancedToolVersions|ansible.builtin.combine(TOOL_VERSIONS|default({})) }}"
+    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name', concat_fields=['generated']) }}"
+    PKGS: "{{ enhancedPkgs|concat(PKGS|default([])) }}"
+    ENV: "{{envCmake|combine(env) }}"
+  vars:
+    env: "{{ ({}) if ENV|def(True) == True else ENV }}"
+    envCmake:
+      BUILD_DIR: "{{BUILD_DIR|default('build')}}"
+      CMAKE_GENERATOR: "{{CMAKE_GENERATOR|default(omit)}}"
+      CMAKE_BUILD_TYPE: "{{CMAKE_BUILD_TYPE|default(omit)}}"
+      CMAKE_INSTALL_BIN: "{{CMAKE_INSTALL_BIN|default(omit)}}"
+    bins: "{{BINS|default([])}}"
+    pkgs: "{{PKGS|default([])}}"
+    cmakeDir: "{{BUILD_DIR|default('build')}}"
+    #enhancedToolVersions:
+    #  cmake: True
+    enhancedPkgs:
+      - cmake
+      - ninja-build
+    enhancedBins:
+      - name: build.sh
+        run: "{{BINS_RUN_BYPASS is not deftruthy}}"
+        generated: |
+          mkdir -p $BUILD_DIR
+          cmake -G ${CMAKE_GENERATOR:-ninja} -B $BUILD_DIR {{CMAKE_ARGS|default('')}}
+          cmake --build $BUILD_DIR ${CMAKE_BUILD_TYPE:+--config $CMAKE_BUILD_TYPE}
+      - name: install.sh
+        generated: |
+          [ -n "$INSTALL_BIN" ] || INSTALL_BIN="${CMAKE_INSTALL_BIN:-{{TYPE}}}"
+          ln -sfv "$(pwd)/build/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
+          #{% if CMAKE_INSTALL|def %}cmake --install {{cmakeDir}}{% endif %}
+  when: CMAKE is deftruthy or CMAKE_ARGS is defined
