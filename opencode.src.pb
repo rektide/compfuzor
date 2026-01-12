@@ -142,7 +142,11 @@
           fi
 
           mkdir -p "$(dirname "$target")"
-          jq --tab --arg name "${TYPE:-$NAME}" '{"mcp": {($name): (. | .enabled = true)}}' "$mcp_file" > "$target"
+          (
+            [ -f "$src_dir/env.export" ] && source "$src_dir/env.export"
+            envsubst < "$mcp_file" | \
+              jq --tab --arg name "$dirname" '{"mcp": {($name): (. | .enabled = true)}}' > "$target"
+          )
           [ -e 'bin/config.sh' ] && ./bin/config.sh
       - name: install.sh
         content: |

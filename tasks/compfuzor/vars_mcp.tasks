@@ -1,11 +1,11 @@
 - name: 'Build vars for MCP server'
   set_fact:
-    ETC_FILES: "{{ enhancedEtc|concat(ETC_FILES|default([])) }}"
+    ETC_FILES: "{{ [mcp_file]|concat(ETC_FILES|default([])) }}"
   vars:
-    mcp_content:
-      type: local
-      command: "{{ MCP_COMMAND }}"
-    enhancedEtc:
-      - name: mcp.json
-        json: "{{ mcp_content }}"
+    mcp_file:
+      name: mcp.json
+      json:
+        type: local
+        command: "{{ MCP_COMMAND }}"
+        environment: "{{ MCP_ENV|default(omit) }}"
   when: MCP_COMMAND is defined
