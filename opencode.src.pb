@@ -81,14 +81,13 @@
           bun run build
       - name: config.sh
         content: |
-          dir={{DIR}}
-          mkdir -p ${dir}/etc/mcp-disabled
+          mkdir -p ${DIR}/etc/mcp-disabled
 
           shopt -s nullglob
-          configs=(${dir}/etc/mcp/*.json)
-          disabled=(${dir}/etc/mcp-disabled/*.json)
+          configs=(${DIR}/etc/mcp/*.json)
+          disabled=(${DIR}/etc/mcp-disabled/*.json)
 
-          jq -s 'reduce .[] as $item ({}; . * $item)' ${dir}/etc/base.json "${configs[@]}" "${disabled[@]}" > ${dir}/etc/opencode.json
+          jq -s 'reduce .[] as $item ({}; . * $item)' ${DIR}/etc/base.json "${configs[@]}" "${disabled[@]}" > ${DIR}/etc/opencode.json
       - name: disable.sh
         content: |
           shopt -s nullglob
@@ -103,7 +102,7 @@
             fi
 
             orig_pattern="$pattern"
-            start_count=${#files[@]}
+            start_count=${\#files[@]}
 
             pattern="${pattern%.json}"
             for json_file in ${dir}/etc/mcp/*.json; do
@@ -112,7 +111,7 @@
               [[ "${filename%.json}" =~ $pattern ]] && files+=("$json_file")
             done
 
-            [ $start_count -eq ${#files[@]} ] && echo "no match: $orig_pattern"
+            [ $start_count -eq ${\#files[@]} ] && echo "no match: $orig_pattern"
           done
 
           for json_file in "${files[@]}"; do
@@ -128,10 +127,26 @@
             echo "{\"mcp\":{\"$mcp_key\":{\"enabled\":false}}}" > "$target"
             echo "created: $filename"
           done
+      - name: install-mcp.sh
+        basedir: False
+        content: |
+          opencode_dir="{{DIR}}"
+          src_dir="${1:-$(pwd)}"
+          dirname=$(basename "$src_dir")
+          mcp_file="$src_dir/etc/mcp.json"
+          target="$opencode_dir/etc/mcp/$dirname.json"
+
+          if [ ! -f "$mcp_file" ]; then
+            echo "error: $mcp_file not found" >&2
+            exit 1
+          fi
+
+          mkdir -p "$(dirname "$target")"
+          jq --tab --arg name "${TYPE:-$NAME}" '{"mcp": {($name): (. | .enabled = true)}}' "$mcp_file" > "$target"
+          [ -e 'bin/config.sh' ] && ./bin/config.sh
       - name: install.sh
         content: |
           ln -sfv $(pwd)/packages/opencode/dist/opencode-linux-x64/bin/opencode $GLOBAL_BINS_DIR/
-      # TODO: compfuzor helpers for installing content, automate this below
       - name: install-user.sh
         basedir: False
         content: |
@@ -147,5 +162,6 @@
         content: |
           # note/beware that we also are pulling in env.exports
           exec bun run --cwd $DIR dev $(pwd)
+      # TODO: compfuzor helpers for installing content, automate this in install-user
   tasks:
     - import_tasks: tasks/compfuzor.includes

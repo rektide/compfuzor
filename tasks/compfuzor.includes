@@ -23,6 +23,8 @@
 - import_tasks: compfuzor/vars_npm.tasks
 - import_tasks: compfuzor/vars_rust.tasks
   when: RUST is defined
+- import_tasks: compfuzor/vars_mcp.tasks
+  when: MCP_COMMAND is defined
 - import_tasks: compfuzor/vars_nodejs.tasks
   when: NODEJS is defined or BUN is defined or REPO_NPM is defined
 - import_tasks: compfuzor/vars_python.tasks
