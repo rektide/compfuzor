@@ -22,4 +22,8 @@
       content: |
         curl $(npm view $NPM_PACKAGE dist.tarball) | tar -xz --strip-components=1
         pnpm i
+        if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
+          echo "Building package..."
+          pnpm build
+        fi
         pnpm link

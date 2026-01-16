@@ -17,6 +17,10 @@
             pnpm import
           fi
           pnpm i --frozen
+          if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
+            echo "Building package..."
+            pnpm build
+          fi
       - name: install.sh
         generated: |
           pnpm link -g

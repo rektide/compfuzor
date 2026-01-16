@@ -16,7 +16,7 @@
   vars:
     mcp_command_with_args: >-
       {%- set args = [] -%}
-      {%- for key in ENV.keys() -%}
+      {%- for key in (ENV|default({})).keys() -%}
         {%- if key.startswith('mcp_arg_') and ENV[key] | string | length > 0 -%}
           {%- set _ = args.append('--' + key.replace('mcp_arg_', '').replace('_', '-') + '=${' + key.upper() + '}') -%}
         {%- endif -%}
