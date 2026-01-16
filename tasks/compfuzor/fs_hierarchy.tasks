@@ -120,6 +120,7 @@
     mode: "{{item.mode|default(_vals.prop.mode|default(FILEMODE, true), true)}}"
     owner: "{{do_become|ternary(owner|default(ansible_user_id, true),omit)}}"
     group: "{{do_become|ternary(group|default(ansible_user_gid, true),omit)}}"
+    backup: "{{item.backup|default(FS_BACKUP|default(False))}}"
     # TODO: ansible 2.3+:
     #mode: "{{COPY_MODE|default(preserve)}}"
   loop: "{{_vals.files|default([], true)}}"
