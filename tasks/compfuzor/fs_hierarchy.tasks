@@ -127,7 +127,7 @@
   loop_control:
     index_var: idx
   become: "{{do_become}}"
-  when: not item.line|default(False)
+  when: not item.line|default(False) and (not item.once|default(False) or dest is not exists)
   vars:
     srcDir: "files/{{ TYPE|default(NAME) }}"
     #src: "{{ item.src|default(item.name|default(item, true), true)|defaultDir(srcDir) }}"
