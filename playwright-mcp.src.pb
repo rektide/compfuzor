@@ -4,84 +4,57 @@
     TYPE: playwright-mcp
     INSTANCE: git
     REPO: https://github.com/microsoft/playwright-mcp
+    MCP_COMMAND:
+      - mcp-server-playwright
     ENV:
-      opencode_mcp_file: "${DIR}/etc/mcp/opencode-playwright-mcp.json"
-      #env2mcp_prefix: playwright_mcp
-      mcp_name: "{{TYPE|regex_replace('-mcp$', '')}}"
-      playwright_mcp_allowed_hosts: ""
-      playwright_mcp_allowed_origins: ""
-      playwright_mcp_block_service_workers: ""
-      playwright_mcp_blocked_origins: ""
-      playwright_mcp_browser: "dev"
-      playwright_mcp_caps: ""
-      playwright_mcp_cdp_endpoint: ""
-      playwright_mcp_cdp_header: ""
-      playwright_mcp_console_level: "info"
-      playwright_mcp_device: ""
-      playwright_mcp_executable_path: ""
-      playwright_mcp_extension: ""
-      playwright_mcp_grant_permissions: ""
-      playwright_mcp_headless: ""
-      playwright_mcp_host: "localhost"
-      playwright_mcp_ignore_https_errors: ""
-      playwright_mcp_image_responses: ""
-      playwright_mcp_init_page: ""
-      playwright_mcp_init_script: ""
-      playwright_mcp_isolated: ""
-      playwright_mcp_no_sandbox: "true"
-      playwright_mcp_output_dir: "${DIR}/var/output"
-      playwright_mcp_port: ""
-      playwright_mcp_proxy_bypass: ""
-      playwright_mcp_proxy_server: ""
-      playwright_mcp_save_session: "true"
-      playwright_mcp_save_trace: "true"
-      #playwright_mcp_save_video: "800x600"
-      playwright_mcp_save_video: ""
-      playwright_mcp_secrets: ""
-      playwright_mcp_shared_browser_context: "true"
-      playwright_mcp_snapshot_mode: "incremental"
-      playwright_mcp_storage_state: "${DIR}/var/isolated-storage"
-      playwright_mcp_test_id_attribute: ""
-      playwright_mcp_timeout_action: "5000"
-      playwright_mcp_timeout_navigation: "60000"
-      playwright_mcp_user_agent: ""
-      playwright_mcp_user_data_dir: "${DIR}/var/profile"
-      playwright_mcp_viewport_size: "1024x1356"
-    ETC_DIRS:
-      - mcp
+      mcp_arg_allowed_hosts: ""
+      mcp_arg_allowed_origins: ""
+      mcp_arg_block_service_workers: ""
+      mcp_arg_blocked_origins: ""
+      mcp_arg_browser: "dev"
+      mcp_arg_caps: ""
+      mcp_arg_cdp_endpoint: ""
+      mcp_arg_cdp_header: ""
+      mcp_arg_console_level: "info"
+      mcp_arg_device: ""
+      mcp_arg_executable_path: ""
+      mcp_arg_extension: ""
+      mcp_arg_grant_permissions: ""
+      mcp_arg_headless: ""
+      mcp_arg_host: "localhost"
+      mcp_arg_ignore_https_errors: ""
+      mcp_arg_image_responses: ""
+      mcp_arg_init_page: ""
+      mcp_arg_init_script: ""
+      mcp_arg_isolated: ""
+      mcp_arg_no_sandbox: "true"
+      mcp_arg_output_dir: "${DIR}/var/output"
+      mcp_arg_port: ""
+      mcp_arg_proxy_bypass: ""
+      mcp_arg_proxy_server: ""
+      mcp_arg_save_session: "true"
+      mcp_arg_save_trace: "true"
+      #mcp_arg_save_video: "800x600"
+      mcp_arg_save_video: ""
+      mcp_arg_secrets: ""
+      mcp_arg_shared_browser_context: "true"
+      mcp_arg_snapshot_mode: "incremental"
+      mcp_arg_storage_state: "${DIR}/var/isolated-storage"
+      mcp_arg_test_id_attribute: ""
+      mcp_arg_timeout_action: "5000"
+      mcp_arg_timeout_navigation: "60000"
+      mcp_arg_user_agent: ""
+      mcp_arg_user_data_dir: "${DIR}/var/profile"
+      mcp_arg_viewport_size: "1024x1356"
     VAR_DIRS:
       - profile
       - output
       - isolated-storage
     LOG_DIR: True
     BINS:
-      - src: ../env2mcp
-        raw: True
       - name: install.sh
         content: |
           pnpm i
           pnpm link -g
-      - name: config.sh
-        content: |
-          echo generating mcp from template
-          $DIR/bin/env2mcp \
-            --set-json mcp.${MCP_NAME}.command='["mcp-server-playwright"]' \
-            --set-json mcp.${MCP_NAME}.enabled=true \
-            --set-json mcp.${MCP_NAME}.type=local \
-            --set-json '$schema=https://opencode.ai/config.json' \
-            > $OPENCODE_MCP_FILE
-      - name: install-opencode.sh
-        basedir: False
-        env: False
-        content: |
-          # run from opencode directory
-          $DIR/bin/config.sh
-          echo
-          echo installing
-          (
-            source $DIR/env;
-            ln -sv $OPENCODE_MCP_FILE etc/mcp/
-          )
-          [ -e 'bin/config.sh' ] && ./bin/config.sh
   tasks:
     - import_tasks: tasks/compfuzor.includes
