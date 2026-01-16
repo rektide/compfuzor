@@ -1,4 +1,16 @@
-- name: 'Build vars for MCP server'
+- name: 'Build vars for remote MCP server'
+  set_fact:
+    ETC_FILES: "{{ [mcp_file]|concat(ETC_FILES|default([])) }}"
+  vars:
+    mcp_file:
+      name: mcp.json
+      json:
+        type: remote
+        url: "{{ MCP_URL }}"
+        headers: "{{ MCP_HEADERS|default(omit) }}"
+  when: MCP_URL is defined
+
+- name: 'Build vars for local MCP server'
   set_fact:
     ETC_FILES: "{{ [mcp_file]|concat(ETC_FILES|default([])) }}"
   vars:
