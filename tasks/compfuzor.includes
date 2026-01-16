@@ -1,37 +1,58 @@
 ---
 - debug: "msg='Compfuzor: starting VARIABLES'"
 - import_tasks: compfuzor/vars_base.tasks
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_type.tasks
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_user.tasks
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_env.tasks
+  tags: ['vars', 'always']
 - debug: "msg='Compfuzor: sourcing hierarchy vars'"
 - import_tasks: compfuzor/vars_fs.tasks
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/_multi.tasks
   vars:
     multi: vars_hierarchy
     keys: False
+  tags: ['vars', 'always']
 - debug: "msg='Compfuzor: sourcing extra variables'"
 - import_tasks: compfuzor/vars_apt.tasks
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_systemd.tasks
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_src.tasks
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_make_autoconf.tasks
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_cmake.tasks
   when: CMAKE is deftruthy or CMAKE_ARGS is defined
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_debconf.tasks
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_pg.tasks
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_repo.tasks
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_npm.tasks
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_rust.tasks
   when: RUST is defined
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_mcp.tasks
-  when: MCP_COMMAND is defined
+  when: MCP_COMMAND is defined or MCP_URL is defined
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_nodejs.tasks
   when: NODEJS is defined or BUN is defined or REPO_NPM is defined
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_python.tasks
   when: PYTHON is deftruthy or PIP is deftruthy
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_go.tasks
   when: GO is deftruthy
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_tool_versions.tasks
+  tags: ['vars', 'always']
 - debug: "msg='Compfuzor: completed vars'"
 
 - import_tasks: compfuzor/user.tasks
