@@ -9,7 +9,7 @@
     ENV:
       mcp_arg_user_data_dir: "{{DIR}}/var/profile"
       mcp_arg_channel: "dev"
-      mcp_arg_log_file: "{{LOG}}/chrome-devtoosls.log"
+      mcp_arg_log_file: "{{LOG}}/chrome-devtools.log"
       mcp_arg_viewport: "1024x1356"
       mcp_arg_headless: "false"
       mcp_arg_isolated: "false"
