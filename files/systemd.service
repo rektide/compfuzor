@@ -94,11 +94,12 @@ After=network.target
 {{ '\n' -}}
 
 [Service]
-Type={{ SYSTEMD_TYPE|default("simple") }}
-
-{% if SYSTEMD_EXEC is defined -%}
-ExecStart={{ SYSTEMD_EXEC | arrayitize | join(" \\\n	") }}
+{% if (SYSTEMD_SERVICES|default({})).Type is undefined -%}
+Type={{ SYSTEMD_TYPE|default()|default("simple") }}
 {%- endif %}
+{% if SYSTEMD_EXEC is defined -%}
+ExecStart={{ SYSTEMD_EXEC | arrayitize | join(" \\\n\t") }}
+{% endif %}
 {% if SYSTEMD_CWD|default(True) %}
 WorkingDirectory={{ SYSTEMD_CWD|default(SYSTEMD_WORKING_DIRECTORY)|default(DIR)|replace('~', '%h', 1) }}
 {% endif %}
