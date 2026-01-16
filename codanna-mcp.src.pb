@@ -3,6 +3,7 @@
   vars:
     REPO: https://github.com/bartolli/codanna
     RUST: True
+    RUST_BIN: codanna
     MCP_COMMAND:
       - codanna
       - serve
