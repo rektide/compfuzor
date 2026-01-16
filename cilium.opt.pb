@@ -4,7 +4,7 @@
     TYPE: cilium
     INSTANCE: main
     # https://raw.githubusercontent.com/cilium/cilium-cli/main/stable.txt
-    version: v0.18.9
+    version: v0.19.0
     arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else '' }}{{ 'amd64' if ansible_architecture == 'x86_64' else '' }}"
     TGZ: https://github.com/cilium/cilium-cli/releases/download/{{version}}/cilium-linux-{{arch}}.tar.gz
     TGZ_STRIP_COMPONENTS: 0
