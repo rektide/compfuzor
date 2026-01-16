@@ -14,10 +14,20 @@
   set_fact:
     ETC_FILES: "{{ [mcp_file]|concat(ETC_FILES|default([])) }}"
   vars:
+    mcp_command: "{{ MCP_COMMAND }}"
+    mcp_command_with_args: >-
+      {{
+        MCP_COMMAND +
+        [
+          '--' + key.replace('mcp_arg_', '').replace('_', '-') + '=' + ENV[key]
+          for key in ENV.keys()
+          if key.startswith('mcp_arg_') and ENV[key] | string | length > 0
+        ]
+      }}
     mcp_file:
       name: mcp.json
       json:
         type: local
-        command: "{{ MCP_COMMAND }}"
+        command: "{{ mcp_command_with_args if any(key.startswith('mcp_arg_') for key in ENV.keys()) else mcp_command }}"
         environment: "{{ MCP_ENV|default(omit) }}"
   when: MCP_COMMAND is defined
