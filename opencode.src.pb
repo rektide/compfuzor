@@ -129,25 +129,6 @@
           done
       - name: install-mcp.sh
         basedir: False
-        content: |
-          opencode_dir="{{DIR}}"
-          src_dir="${1:-$(pwd)}"
-          dirname=$(basename "$src_dir")
-          mcp_file="$src_dir/etc/mcp.json"
-          target="$opencode_dir/etc/mcp/$dirname.json"
-
-          if [ ! -f "$mcp_file" ]; then
-            echo "error: $mcp_file not found" >&2
-            exit 1
-          fi
-
-          mkdir -p "$(dirname "$target")"
-          (
-            [ -f "$src_dir/env.export" ] && source "$src_dir/env.export"
-            envsubst < "$mcp_file" | \
-              jq --tab --arg name "$dirname" '{"mcp": {($name): (. | .enabled = true)}}' > "$target"
-          )
-          [ -e 'bin/config.sh' ] && ./bin/config.sh
       - name: install.sh
         content: |
           ln -sfv $(pwd)/packages/opencode/dist/opencode-linux-x64/bin/opencode $GLOBAL_BINS_DIR/
