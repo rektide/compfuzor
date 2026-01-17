@@ -20,7 +20,10 @@ source $self_dir/env.export
 
 src_dir="${1:-$(pwd)}"
 dirname=$(basename "$src_dir")
-name="${dirname%-git}"
+name="$dirname"
+for suffix in -git -main; do
+  name="${name%$suffix}"
+done
 mcp_file="$src_dir/etc/mcp.json"
 
 if [ ! -f "$mcp_file" ]; then

@@ -22,6 +22,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
 
 const selfDir = "{{DIR}}"
+const suffixesToStrip = ["-git", "-main"]
 
 interface McpConfig {
   type?: string
@@ -112,7 +113,12 @@ function main(): void {
 
   const srcDir = process.argv[2] ?? process.cwd()
   const dirName = basename(srcDir)
-  const name = dirName.replace(/-git$/, "")
+  let name = dirName
+  for (const suffix of suffixesToStrip) {
+    if (name.endsWith(suffix)) {
+      name = name.slice(0, -suffix.length)
+    }
+  }
   const mcpFile = join(srcDir, "etc", "mcp.json")
 
   if (!existsSync(mcpFile)) {
