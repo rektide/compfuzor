@@ -11,6 +11,9 @@
       - mcp
       - mcp-disabled
       - agent
+    ENV:
+      MCP_TARGET: "{{ETC}}/mcp"
+      MCP_WRAPPER: "mcp"
     ETC_FILES:
       - name: base.json
         json:
@@ -102,7 +105,7 @@
             fi
 
             orig_pattern="$pattern"
-            start_count=${\#files[@]}
+            start_count=${{ '{#}'}}files[@]}
 
             pattern="${pattern%.json}"
             for json_file in ${dir}/etc/mcp/*.json; do
@@ -111,7 +114,7 @@
               [[ "${filename%.json}" =~ $pattern ]] && files+=("$json_file")
             done
 
-            [ $start_count -eq ${\#files[@]} ] && echo "no match: $orig_pattern"
+            [ $start_count -eq ${{ '{#' }}files[@]} ] && echo "no match: $orig_pattern"
           done
 
           for json_file in "${files[@]}"; do
@@ -128,6 +131,10 @@
             echo "created: $filename"
           done
       - name: install-mcp.sh
+        src: ../install-mcp.sh
+        basedir: False
+      - name: install-mcp.ts
+        src: ../install-mcp.ts
         basedir: False
       - name: install.sh
         content: |
