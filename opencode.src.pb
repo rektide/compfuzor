@@ -14,6 +14,8 @@
     ENV:
       MCP_TARGET: "{{ETC}}/mcp"
       MCP_WRAPPER: "mcp"
+      MCP_CLIENT: True
+      MCP_CONF: opencode.json
     ETC_FILES:
       - name: base.json
         json:
@@ -82,60 +84,25 @@
           bun install --frozen-lockfile
           # real build
           bun run build
-      - name: config.sh
+      - name: install.sh
         content: |
-          mkdir -p ${DIR}/etc/mcp-disabled
-
-          shopt -s nullglob
-          configs=(${DIR}/etc/mcp/*.json)
-          disabled=(${DIR}/etc/mcp-disabled/*.json)
-
-          jq -s 'reduce .[] as $item ({}; . * $item)' ${DIR}/etc/base.json "${configs[@]}" "${disabled[@]}" > ${DIR}/etc/opencode.json
-      - name: disable.sh
+          ln -sfv $(pwd)/packages/opencode/dist/opencode-linux-x64/bin/opencode $GLOBAL_BINS_DIR/
+      - name: install-user.sh
+        basedir: False
         content: |
-          shopt -s nullglob
           dir={{DIR}}
-          mkdir -p ${dir}/etc/mcp-disabled
+          mkdir -p ~/.local/share/opencode/log
 
-          files=()
-          for pattern in "$@"; do
-            if [ -f "$pattern" ]; then
-              files+=("$pattern")
-              continue
-            fi
-
-            orig_pattern="$pattern"
-            start_count=${{ '{#}'}}files[@]}
-
-            pattern="${pattern%.json}"
-            for json_file in ${dir}/etc/mcp/*.json; do
-              filename=$(basename "$json_file")
-              [[ "$filename" =~ $pattern ]] && files+=("$json_file") && continue
-              [[ "${filename%.json}" =~ $pattern ]] && files+=("$json_file")
-            done
-
-            [ $start_count -eq ${{ '{#' }}files[@]} ] && echo "no match: $orig_pattern"
-          done
-
-          for json_file in "${files[@]}"; do
-            filename=$(basename "$json_file")
-            target="${dir}/etc/mcp-disabled/$filename"
-
-            if [ -f "$target" ]; then
-              echo "skipped: $filename"
-              continue
-            fi
-
-            mcp_key=$(jq -r '.mcp | keys[0]' "$json_file")
-            echo "{\"mcp\":{\"$mcp_key\":{\"enabled\":false}}}" > "$target"
-            echo "created: $filename"
-          done
-      - name: install-mcp.sh
-        src: ../install-mcp.sh
+          [ -n "$TARGET" ] || TARGET="$HOME/.config/opencode"
+          mkdir -p $(dirname $TARGET)
+          ln -sv ${dir}/etc $TARGET/
+      - name: opencode-live
         basedir: False
-      - name: install-mcp.ts
-        src: ../install-mcp.ts
-        basedir: False
+        global: True
+        content: |
+          # note/beware that we also are pulling in env.exports
+          exec bun run --cwd $DIR dev $(pwd)
+      # TODO: compfuzor helpers for installing content, automate this in install-user
       - name: install.sh
         content: |
           ln -sfv $(pwd)/packages/opencode/dist/opencode-linux-x64/bin/opencode $GLOBAL_BINS_DIR/
