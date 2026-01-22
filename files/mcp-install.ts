@@ -94,6 +94,17 @@ function filterEmptyArgs(config: McpConfig): McpConfig {
   return { ...config, command: filtered }
 }
 
+function simplifyFlags(config: McpConfig): McpConfig {
+  if (!Array.isArray(config.command)) return config
+
+  const simplified = config.command.map((arg) => {
+    if (arg.endsWith("=true")) return arg.slice(0, -5)
+    return arg
+  })
+
+  return { ...config, command: simplified }
+}
+
 function commandArgSplitter(config: McpConfig): McpConfig {
   if (!process.env.MCP_COMMAND_ARGS) return config
   if (!Array.isArray(config.command)) return config
@@ -148,6 +159,7 @@ function main(): void {
   let config: McpConfig = JSON.parse(substituted)
 
   config = filterEmptyArgs(config)
+  config = simplifyFlags(config)
   config = commandArgSplitter(config)
   const wrapped = wrapMcp(name, config)
 

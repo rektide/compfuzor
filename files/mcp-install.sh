@@ -48,6 +48,16 @@ filter_empty_args() {
   '
 }
 
+# Simplify --flag=true to --flag
+simplify_flags() {
+  jq '
+    if .command then
+      .command |= map(sub("=true$"; ""))
+    else .
+    end
+  '
+}
+
 # Split command array into command + args (for amp format)
 command_arg_splitter() {
   local json
@@ -97,6 +107,7 @@ wrap_mcp() {
 
   envsubst < "$mcp_file" | \
     filter_empty_args | \
+    simplify_flags | \
     command_arg_splitter | \
     wrap_mcp "$name" > "$target"
 

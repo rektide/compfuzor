@@ -13,5 +13,6 @@
       MCP_TARGET: "{{ETC}}/mcp"
       MCP_WRAPPER: "amp.mcpServers"
       MCP_COMMAND_ARGS: "1"
+      MCP_CONF: settings.json
   tasks:
     - import_tasks: tasks/compfuzor.includes
