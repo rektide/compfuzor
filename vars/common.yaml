@@ -3,7 +3,7 @@
 NAME: "{{TYPE}}{{'-'+INSTANCE if INSTANCE is defined else ''}}"
 TYPE: "{{ (lookup('file', '/proc/self/cmdline') | regex_replace('\u0000',' ')|ansible_cmdline).type }}"
 INSTANCE_CMDLINE: "{{ (lookup('file', '/proc/self/cmdline') | regex_replace('\u0000',' ')|ansible_cmdline).instance }}"
-INSTANCE: "{{ 'git' if INSTANCE_CMDLINE|def == 'src' and REPO|def is defined else INSTANCE_CMDLINE }}"
+INSTANCE: "{{ 'git' if INSTANCE_CMDLINE|def == 'src' and REPO|def is defined else 'main' }}"
 BINS_DIR: "{{DIR}}/bin"
 GLOBAL_BINS_DIR: /usr/local/bin
 SRVS_DIR: /srv
