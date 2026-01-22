@@ -123,6 +123,9 @@ while IFS='=' read -r var value; do
     # Guard: skip empty values
     [ -z "$value" ] && continue
 
+    # Guard: skip false values if MCP_ENV_SKIP_FALSE is truthy
+    [ -n "$MCP_ENV_SKIP_FALSE" ] && [ "$value" = "false" ] && continue
+
     # Remove prefix and convert to lowercase
     arg_name="${var#${ENV2MCP_PREFIX_ENV_UPPERUNDER}}"
     arg_name="${arg_name,,}"
