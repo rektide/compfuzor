@@ -55,9 +55,17 @@ function sourceEnvExport(path: string): void {
 }
 
 function envsubst(text: string): string {
-  return text.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, varName) => {
-    return process.env[varName] ?? ""
-  })
+  let prev = ""
+  let current = text
+
+  while (current !== prev) {
+    prev = current
+    current = current.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, varName) => {
+      return process.env[varName] ?? ""
+    })
+  }
+
+  return current
 }
 
 function hasEmptyVarRef(arg: string): boolean {
