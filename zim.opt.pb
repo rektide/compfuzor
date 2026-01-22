@@ -93,7 +93,7 @@
           zmodule https://github.com/shihanng/zim-atuin
           #zmodule https://github.com/shihanng/zim-kustomize
           #zmodule https://raw.githubusercontent.com/sheax0r/etcdctl-zsh/refs/heads/master/_etcdctl
-          zmodule https://codeberg.org/iff/pay-respects
+          #zmodule https://codeberg.org/iff/pay-respects
           
           # Completion
           # Additional completion definitions for Zsh.
