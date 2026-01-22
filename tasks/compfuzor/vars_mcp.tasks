@@ -29,3 +29,20 @@
         command: "{{ mcp_command_with_args }}"
         environment: "{{ MCP_ENV|default(omit) }}"
   when: MCP_COMMAND is defined
+
+- name: 'Set MCP client env variables'
+  set_fact:
+    BINS: "{{[config, disable, install]|mergeKeyed(BINS|default({}))}}"
+    ETC_DIRS: "{{etc|concat(ETC_DIRS|default([]))}}"
+  vars:
+    etc:
+      - mcp
+      - mcp-disabled
+    config:
+      src: ../mcp-config.sh
+    disable:
+      src: ../mcp-disable.sh
+    install:
+      src: ../mcp-install.ts
+      basedir: False
+  when: MCP_CLIENT is defined

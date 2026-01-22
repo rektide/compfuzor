@@ -40,7 +40,7 @@
   when: RUST is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_mcp.tasks
-  when: MCP_COMMAND is defined or MCP_URL is defined
+  when: MCP_COMMAND is defined or MCP_URL is defined or MCP_CLIENT is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_nodejs.tasks
   when: NODEJS is defined or BUN is defined or REPO_NPM is defined
