@@ -11,10 +11,10 @@
       - mcp
       - mcp-disabled
       - agent
+    MCP_CLIENT: True
     ENV:
       MCP_TARGET: "{{ETC}}/mcp"
       MCP_WRAPPER: "mcp"
-      MCP_CLIENT: True
       MCP_CONF: opencode.json
     ETC_FILES:
       - name: base.json

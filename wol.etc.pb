@@ -10,7 +10,7 @@
 
           [Link]
           WakeOnLan=magic
-    BIN:
+    BINS:
       - name: install.sh
         content: |
           sudo ln -s {{ETC}}/wol.link /etc/systemd/network/wol-{{INSTANCE}}.link

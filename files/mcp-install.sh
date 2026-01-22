@@ -79,16 +79,11 @@ command_arg_splitter() {
   '
 }
 
-# Wrap in configured format (mcp or amp.mcpServers)
+# Wrap in configured format
 wrap_mcp() {
   local name="$1"
   local wrapper="${MCP_WRAPPER:-mcp}"
-
-  if [ "$wrapper" = "amp.mcpServers" ]; then
-    jq --tab --arg name "$name" '{"amp.mcpServers": {($name): (. | .enabled = true)}}'
-  else
-    jq --tab --arg name "$name" '{"mcp": {($name): (. | .enabled = true)}}'
-  fi
+  jq --tab --arg name "$name" --arg wrapper "$wrapper" '{($wrapper): {($name): (. | .enabled = true)}}'
 }
 
 # Main
