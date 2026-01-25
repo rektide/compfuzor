@@ -5,6 +5,7 @@
     NODEJS: True
     BINS:
       - name: build.sh
+        generatedAt: skip
         content: |
           pnpm install
           pnpm ui:build
