@@ -27,7 +27,20 @@
       json:
         type: local
         command: "{{ mcp_command_with_args }}"
-        environment: "{{ MCP_ENV|default(omit) }}"
+        environment: >-
+          {%- if MCP_ENV is defined -%}
+          {%- if MCP_ENV is mapping -%}
+          {{ MCP_ENV }}
+          {%- elif MCP_ENV is sequence -%}
+          {%- set env_dict = {} -%}
+          {%- for var in MCP_ENV -%}
+          {%- set _ = env_dict.update({var: '${' + var + '}'}) -%}
+          {%- endfor -%}
+          {{ env_dict }}
+          {%- endif -%}
+          {%- else -%}
+          {{ omit }}
+          {%- endif -%}
   when: MCP_COMMAND is defined
 
 - name: 'Set MCP client env variables'
