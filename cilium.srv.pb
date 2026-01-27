@@ -6,7 +6,7 @@
     BINS:
       - name: install-cilium
         content: |
-          cilium
+          cilium install $(./bin/yaml2args etc/settings.yaml) $*
       - name: yaml2args
         src: ../yaml2args
         raw: True
@@ -14,8 +14,6 @@
       - name: settings.yaml
         yaml:
           autoDirectNodeRoutes: true
-          #ipMasqAgent.enabled: true
-          ipv6.enabled: true
           bandwidthManager:
             enabled: true
             bbr: true
@@ -54,7 +52,7 @@
             enabled: true
             log:
               accessLogBufferSize: 16384
-              format_json:
+              #format_json:
             securityContext:
               capabilities:
                 keepCapNetBindService: true
@@ -87,20 +85,23 @@
           ipam:
             mode: multi-pool
             operator:
-              clusterPoolIPv4PodCIDRList: '["10.x/16]'
-              clusterPoolIPv4MaskSize: 16
+              clusterPoolIPv4PodCIDRList: "[\"{{cluster_cidr}}\"]"
+              clusterPoolIPv4MaskSize: 27
               autoCreateCiliumPodIPPools:
                 default:
                   ipv4:
                     cidrs:
                       - 10.10.0.0/16
                     maskSize: 27
-          #ipv4NativeRoutingCIDR:
-          #ipv6NativeRoutingCIDR:
+          #ipMasqAgent.enabled: true
+          ipv4NativeRoutingCIDR: "{{ipv4Route}}"
+          ipv6NativeRoutingCIDR: "{{ipv6Route}}"
+          ipv6:
+            enabled: true
           kubeProxyReplacement: true
           kubeProxyReplacementHealthzBindAddr: '0.0.0.0:10256'
-          k8sServiceHost: 
-          k8sServicePort: 
+          k8sServiceHost: "{{ansible_play_hosts_all[0]}}"
+          k8sServicePort: "6443"
           #k8sClientRateLimit:
           #  qps:
           #  burst: 
@@ -133,11 +134,13 @@
             enabled: true
           nodePort:
             #autoProtectPortRange: false
-            #directRoutingDevice: eth1
+            autoProtectPortRange: true
+            bindProtection: true
+            #directRoutingDevice: eno1
             enabled: true
             # requires: also configure api-server the same?a
             # https://docs.cilium.io/en/stable/network/kubernetes/kubeproxy-free/#nodeport-devices-port-and-bind-settings
-            range: 20000-32767
+            range: "{{nodePort|replace('-', ',')}}"
           prometheus:
             enabled: true
           operator:
@@ -145,7 +148,8 @@
             prometheus:
               enabled: true
           routingMode: native
-          scheduling.mode: kube-scheduler
+          scheduling:
+            mode: kube-scheduler
           #sctp.enabled: true
           socketLB:
             enabled: true # ??
@@ -160,4 +164,3 @@
       - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.3.0/config/crd/experimental/gateway.networking.k8s.io_tlsroutes.yaml
   tasks:
     - import_tasks: tasks/compfuzor.includes
-

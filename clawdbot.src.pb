@@ -3,6 +3,9 @@
   vars:
     REPO: https://github.com/clawdbot/clawdbot
     NODEJS: True
+    PKGS:
+      - node-gyp
+      - node-addon-api
     BINS:
       - name: build.sh
         generatedAt: skip

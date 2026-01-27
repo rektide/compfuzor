@@ -8,17 +8,19 @@
     - agentToken
     PASSWORD_LENGTH: 96
     ETC_FILES:
-    - name: token
-      var: token
+    - name: cluster-token
+      content: "{{PASSWORD.token}}"
+      once: True
     - name: agent-token
-      var: agentToken
-    - name: config.toml.tmpl
+      content: "{{PASSWORD.agentToken}}"
+      once: True
+    #- name: config.toml.tmpl
     VAR_DIRS:
     - data/agent/etc/containerd
     - local-provisioner
     LINKS:
-    - src: "{{ETC}}/config.toml.tmpl"
-      dest: "{{VAR}}/data/agent/etc/containerd/config.toml.tmpl"
+    #- src: "{{ETC}}/config.toml.tmpl"
+    #  dest: "{{VAR}}/data/agent/etc/containerd/config.toml.tmpl"
     - src: "{{VAR}}/data"
       dest: "/var/lib/rancher/k3s"
     - src: "{{ETC}}"
@@ -32,11 +34,10 @@
       Wants: network-online.target
     # service
     SYSTEMD_SERVICE: True
-    SYSTEMD_EXEC:
+    execBase:
     - "/usr/local/bin/k3s"
     - "{{is_agent|ternary('agent', 'server')}}"
-    - "{{commonArgs|join(' ')}}"
-    - "{{is_agent|ternary(agentArgs, serverArgs)|join(' ')}}"
+    SYSTEMD_EXEC: "{{execBase|concat(commonArgs, is_agent|ternary(agentArgs, serverArgs))}}"
     # support added in https://github.com/rancher/k3s/pull/100 ?
     SYSTEMD_SERVICES:
       Delegate: yes
@@ -52,6 +53,7 @@
       TasksMax: infinity
       TimeoutStartSec: 0
       Type: notify
+      User: root
     # install
     SYSTEMD_INSTALLS:
       Alias: "{{TYPE}}.service"
@@ -65,6 +67,7 @@
     #K3S_KUBECONFIG_OUTPUT: "{{ETC}}/k3s.yaml"
     K3S_KUBECONFIG_OUTPUT: ""
     K3S_KUBECONFIG_MODE: "0640"
+    K3S_KUBECONFIG_GROUP: "adm"
     K3S_AGENT_TOKEN_FILE: "{{ETC}}/agent-token"
     K3S_CONFIG_FILE: "{{ETC}}/config.yaml"
 
@@ -101,10 +104,11 @@
       DOMAIN: "{{DOMAIN}}"
       CLUSTER_DOMAIN: "{{CLUSTER_DOMAIN}}"
       DATA: "{{DATA}}"
-      #K3S_TOKEN_FILE: "{{K3S_TOKEN_FILE}}"
-      #K3S_AGENT_TOKEN_FILE: "{{K3S_AGENT_TOKEN_FILE}}"
+      K3S_TOKEN_FILE: "{{K3S_TOKEN_FILE}}"
+      K3S_AGENT_TOKEN_FILE: "{{K3S_AGENT_TOKEN_FILE}}"
       K3S_KUBECONFIG_OUTPUT: "{{K3S_KUBECONFIG_OUTPUT}}"
       K3S_KUBECONFIG_MODE: "{{K3S_KUBECONFIG_MODE}}"
+      K3S_KUBECONFIG_GROUP: "{{K3S_KUBECONFIG_GROUP}}"
       #K3S_CONFIG_FILE: "{{K3S_CONFIG_FILE}}"
       #K3S_NODE_NAME: "{{}}"
       CLUSTER_CIDR: "{{CLUSTER_CIDR}}"
@@ -126,29 +130,33 @@
 
     # TODO/fantasy: make commonEnv/serverEnv/agentEnv and something to generate EXEC from that k/v!
     commonArgs:
-    - "--data-dir ${DATA}"
-    - "-v $V"
-    - "{{ '--node-ip ${NODE_IP}' if NODE_IP|default(False) else '' }}"
-    - "{{ '--node-external-ip ${NODE_EXTERNAL_IP}' + NODE_EXTERNAL_IP if NODE_EXTERNAL_IP|default(False) else '' }}"
-    - "{{ '--private-registry ${PRIVATE_REGISTRY}' if PRIVATE_REGISTRY|default(False) else '' }}"
+    - "--data-dir=${DATA}"
+    - "-v=${V}"
+    - "{{ '--node-ip=${NODE_IP}' if NODE_IP|default(False) else '' }}"
+    - "{{ '--node-external-ip=${NODE_EXTERNAL_IP}' + NODE_EXTERNAL_IP if NODE_EXTERNAL_IP|default(False) else '' }}"
+    - "{{ '--private-registry=${PRIVATE_REGISTRY}' if PRIVATE_REGISTRY|default(False) else '' }}"
+    - "--etcd-expose-metrics"
+    - "--etcd-snapshot-retention=120"
+    - "--service-node-port-range={{nodePort}}"
     agentArgs: {}
     serverArgs:
     #- "--tls-san $CLUSTER_DOMAIN"
-    - "{{ '--tls-san '+extraDomains|concat(extraIpv4Domains)|join(',') if extraDomains|default(False) else '' }}"
-    - "--cluster-domain ${CLUSTER_DOMAIN}"
-    - "--cluster-cidr ${CLUSTER_CIDR}"
-    - "--service-cidr ${SERVICE_CIDR}"
-    - "--cluster-dns ${CLUSTER_DNS}"
-    - "--flannel-backend ${FLANNEL_BACKEND}"
+    - "{{ '--tls-san='+extraDomains|concat(extraIpv4Domains)|join(',') if extraDomains|default(False) else '' }}"
+    - "--cluster-domain=${CLUSTER_DOMAIN}"
+    - "--cluster-cidr=${CLUSTER_CIDR}"
+    - "--service-cidr=${SERVICE_CIDR}"
+    - "--cluster-dns=${CLUSTER_DNS}"
+    - "--flannel-backend=${FLANNEL_BACKEND}"
+    - "--cluster-init"
     # etc input
     # etc output
     ##- "--write-kubeconfig {{K3S_KUBECONFIG_OUTPUT}}"
     ##- "--write-kubeconfig-mode {{K3S_KUBECONFIG_MODE}}"
-    - "--default-local-storage-path ${LOCAL_PROVISIONER_PATH}"
-    - "{{ '--container-runtime-endpoint ${CONTAINER_RUNTIME_ENDPOINT}' if CONTAINER_RUNTIME_ENDPOINT|default(False) != '' else '' }}"
-    - "{{ '--etcd-snapshot-retention ${ETCD_SNAPSHOT_RETENTION}' if ETCD_SNAPSHOT_RETENTION|default(False) else '' }}" # at 12 hour interval
+    - "--default-local-storage-path=${LOCAL_PROVISIONER_PATH}"
+    - "{{ '--container-runtime-endpoint=${CONTAINER_RUNTIME_ENDPOINT}' if CONTAINER_RUNTIME_ENDPOINT is deftruthy  else '' }}"
+    - "{{ '--etcd-snapshot-retention=${ETCD_SNAPSHOT_RETENTION}' if ETCD_SNAPSHOT_RETENTION is deftruthy else '' }}" # at 12 hour interval
     - "--etcd-snapshot-compress"
-    - "{{ '--disable ${DISABLE_LIST}' if DISABLE_LIST|length > 0 else ''}}"
+    - "{{ '--disable=${DISABLE_LIST}' if DISABLE_LIST|length > 0 else ''}}"
     - "{{ '--disable-network-policy' if DISABLE is superset(['network-policy']) else '' }}"
     - "{{ '--disable-kube-proxy' if DISABLE is superset(['kube-proxy']) else '' }}"
     - "--secrets-encryption=true"

@@ -30,9 +30,9 @@ USERMODE_VARS_DIR: "{{USERMODE_LOCAL_DIR}}/var/lib"
 USERMODE_SRCS_DIR: "{{HOMEDIR}}/src"
 USERMODE_LOGS_DIR: "{{USERMODE_VARS_DIR}}/log"
 USERMODE_SPOOLS_DIR: "{{USERMODE_VARS_DIR}}/spool"
-USERMODE_CACHES_DIR: "{{USERMODE_VARS_DIR}}/cache"
+USERMODE_CACHES_DIR: "{{HOMEDIR}}/.cache"
 USERMODE_MEDIAS_DIR: "{{USERMODE_LOCAL_DIR}}/media"
-USERMODE_SHARES_DIR: "{{USERMODE_LOCAL_DIR}}/share"
+USERMODE_SHARES_DIR: "{{USERMODE_LOCAL_DIR}}/usr/share"
 
 BUILD_DIR: "{{OPT}}/build"
 REPO_DIR: "{{SRC}}"
@@ -80,6 +80,7 @@ DIRMODE: "0770"
 FILEMODE: "0660"
 BINMODE: "0775"
 GO_DIR: "src/{{go_url|default('')|deprefix('\\w+@')|deprefix('https?://')|regex_replace('^(\\w+):', '\\1/')|trim}}"
+HASH: "#"
 PERSIST_VARS:
   - NAME
   - INSTANCE

@@ -47,35 +47,14 @@
             -DTHEROCK_BUNDLED_SQLITE3=false \
             -DTHEROCK_BUNDLED_ZLIB=false \
             -DTHEROCK_BUNDLED_ZSTD=false \
-            -DTHEROCK_ENABLE_SYSDEPS_EXPAT=ON \
-            -DTHEROCK_ENABLE_SYSDEPS_GMP=ON \
-            -DTHEROCK_ENABLE_SYSDEPS_MPFR=ON \
-            -DTHEROCK_ENABLE_SYSDEPS_NCURSES=ON \
-            -DTHEROCK_ENABLE_CORE_HIPTESTS=ON \
-            -DTHEROCK_ENABLE_AQLPROFILE_TESTS=ON \
-            -DTHEROCK_ENABLE_CORE_RUNTIME_TESTS=ON \
-            -DTHEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS=ON
-          
-          #-DTHEROCK_BUNDLE_SYSDEPS=false 
-          #-DTHEROCK_VERBOSE=true
-
-          # THEROCK_BUNDLED_BZIP2)
-          # THEROCK_BUNDLED_ELFUTILS)
-          # THEROCK_BUNDLED_GMP)
-          # THEROCK_BUNDLED_LIBBACKTRACE)
-          # THEROCK_BUNDLED_LIBCAP)
-          # THEROCK_BUNDLED_LIBDRM)
-          # THEROCK_BUNDLED_LIBLZMA)
-          # THEROCK_BUNDLED_MPFR)
-          # THEROCK_BUNDLED_NCURSES)
-          # THEROCK_BUNDLED_NUMACTL)
-          # THEROCK_BUNDLED_SQLITE3)
-          # THEROCK_BUNDLED_ZLIB)
-          # THEROCK_BUNDLED_ZSTD)
-          
-          # -DTHEROCK_BUNDLE_SYSDEPS=false
-          #-DTHEROCK_VERBOSE=true
-          
+            -DTHEROCK_ENABLE_SYSDEPS_EXPAT=false \
+            -DTHEROCK_ENABLE_SYSDEPS_GMP=false \
+            -DTHEROCK_ENABLE_SYSDEPS_MPFR=false \
+            -DTHEROCK_ENABLE_SYSDEPS_NCURSES=false \
+            -DTHEROCK_ENABLE_CORE_HIPTESTS=false \
+            -DTHEROCK_ENABLE_AQLPROFILE_TESTS=false \
+            -DTHEROCK_ENABLE_CORE_RUNTIME_TESTS=false \
+            -DTHEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS=false
       - name: build.sh
         content: |
           cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx120X-all
