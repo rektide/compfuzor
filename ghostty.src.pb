@@ -10,14 +10,17 @@
       - libhwy-dev
       - gcc-multilib
       - blueprint-compiler
-    ENV:
-      hi: ho
+      - libgtk-4-dev
+      - libgtk4-layer-shell-dev
+      - gettext
+      - libxml2-utils
+    ENV: True
     BINS:
       - name: build.sh
         exec: zig build -Doptimize=ReleaseFast
       - name: global.sh
         exec: |
-          zig build -Doptimize=ReleaseFast -p $GLOBAL_BINS_DIR/..
+          zig build -Doptimize=ReleaseFast -p $GLOBAL_BINS_DIR/.. $*
       - name: install.sh
         exec: |
           ln -s $(pwd)/zig-out/bin/ghostty ${GLOBAL_BINS_DIR}/ghostty
