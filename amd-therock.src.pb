@@ -32,10 +32,9 @@
       - name: config.sh
         content: |
           python3 ./build_tools/fetch_sources.py
-          #cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx1201
           cmake -B build -GNinja . \
             -DCMAKE_BUILD_TYPE=Release \
-            -DTHEROCK_AMDGPU_FAMILIES=gfx120X-all \
+            -DTHEROCK_AMDGPU_FAMILIES=gfx1201 \
             -DTHEROCK_BUNDLED_EXPAT=false \
             -DTHEROCK_BUNDLED_LIBBACKTRACE=false \
             -DTHEROCK_BUNDLED_LIBCAP=false \
@@ -57,7 +56,6 @@
             -DTHEROCK_ENABLE_ROCR_DEBUG_AGENT_TESTS=false
       - name: build.sh
         content: |
-          cmake -B build -GNinja . -DTHEROCK_AMDGPU_FAMILIES=gfx120X-all
           CMAKE_BUILD_PARALLEL_LEVEL=3 cmake --build build 
       - name: install-python.sh
         content: |
