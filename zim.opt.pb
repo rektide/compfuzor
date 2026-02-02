@@ -100,6 +100,7 @@
           zmodule zsh-users/zsh-completions --fpath src
           zmodule rektide/zim-niri
           zmodule rektide/zim-beads
+          zmodule rektide/zim-jaeger
           # Enables and configures smart and extensive tab completion.
           # completion must be sourced after all modules that add completion definitions.
           zmodule completion
