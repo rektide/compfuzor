@@ -1,0 +1,19 @@
+- name: 'Add get-urls.sh BIN for refreshing downloaded files'
+  set_fact:
+    BINS: "{{ enhancedBins|mergeKeyed(BINS|default([]), key='name', concat_fields=['generated']) }}"
+  vars:
+    enhancedBins:
+      - name: get-urls.sh
+        run: "{{GET_URLS_BYPASS is not deftruthy}}"
+        generated: |
+          [ -z "$DIR" ] && export DIR="{{SRC}}"
+          cd "${DIR}"
+
+          # Find and re-download from all .url files
+          for urlfile in *.url; do
+            [ -e "$urlfile" ] || continue
+            url=$(cat "$urlfile")
+            dest="${urlfile%.url}"
+            echo "Fetching: $url -> $dest"
+            curl -fsSL "$url" -o "$dest"
+          done
