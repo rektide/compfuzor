@@ -1,0 +1,65 @@
+service:
+  extensions: [jaeger_storage, jaeger_query, healthcheckv2]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [jaeger_storage_exporter]
+  telemetry:
+    resource:
+      service.name: jaeger
+    metrics:
+      level: detailed
+      readers:
+        - pull:
+              exporter:
+                prometheus:
+                  host: 0.0.0.0
+                  port: 8888
+    logs:
+      level: info
+
+extensions:
+  healthcheckv2:
+    use_v2: true
+    http:
+
+  jaeger_query:
+    storage:
+      traces: primary_store
+      traces_archive: archive_store
+    ui:
+      config_file: ./cmd/jaeger/config-ui.json
+
+  jaeger_storage:
+    backends:
+      primary_store:
+        badger:
+          directories:
+            keys: "{{SRV}}/jaeger/keys"
+            values: "{{SRV}}/jaeger/values"
+          ephemeral: false
+          ttl:
+            spans: 168h # 7 days for primary storage
+      archive_store:
+        badger:
+          directories:
+            keys: "{{SRV}}/jaeger-archive/keys"
+            values: "{{SRV}}/jaeger-archive/values"
+          ephemeral: false
+          # No TTL for indefinite retention (100 years = 876000 hours)
+          ttl:
+            spans: 876000h # 100 years
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+processors:
+  batch:
+
+exporters:
+  jaeger_storage_exporter:
+    trace_storage: primary_store

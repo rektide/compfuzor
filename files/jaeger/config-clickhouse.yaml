@@ -1,0 +1,68 @@
+service:
+  extensions: [jaeger_storage, jaeger_query, healthcheckv2]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [jaeger_storage_exporter]
+  telemetry:
+    resource:
+      service.name: jaeger
+    metrics:
+      level: detailed
+      readers:
+        - pull:
+              exporter:
+                prometheus:
+                  host: 0.0.0.0
+                  port: 8888
+    logs:
+      level: info
+
+extensions:
+  healthcheckv2:
+    use_v2: true
+    http:
+
+  jaeger_query:
+    storage:
+      traces: primary_store
+      traces_archive: archive_store
+    ui:
+      config_file: ./cmd/jaeger/config-ui.json
+
+  jaeger_storage:
+    backends:
+      primary_store:
+        clickhouse:
+          addresses:
+            - localhost:9000
+          database: jaeger
+          auth:
+            basic:
+              username: default
+              password: password
+          create_schema: true
+      archive_store:
+        clickhouse:
+          addresses:
+            - localhost:9000
+          database: jaeger_archive
+          auth:
+            basic:
+              username: default
+              password: password
+          create_schema: true
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+processors:
+  batch:
+
+exporters:
+  jaeger_storage_exporter:
+    trace_storage: primary_store
