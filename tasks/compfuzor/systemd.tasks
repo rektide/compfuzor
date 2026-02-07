@@ -6,7 +6,7 @@
   when: PREFIX_DIR|truthy and PREFIX_DIR[0] == '~'
 - include_tasks: ../systemd.unit.includes
   loop: "{{SYSTEMD_UNITTYPES_ALL}}"
-  when: vars[v]|default(False) is truthy or hostvars[inventory_hostname][v]|default(False) is truthy
+  when: vars[v] is deftruthy or hostvars[inventory_hostname][v] is deftruthy or vars[v+'S'] is deftruthy or hostvars[inventory_hostname][v+'S'] is deftruthy
   vars:
     v: "SYSTEMD_{{item|upper}}"
     unit_type: "{{item}}"
