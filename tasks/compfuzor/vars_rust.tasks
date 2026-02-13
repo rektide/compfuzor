@@ -20,7 +20,7 @@
           else
               RELEASE="--$RELEASE"
           fi
-          cargo build $RELEASE
+          cargo {{CARGO_BUILD|default('build')}} $RELEASE
       - name: install.sh
         generated: |
           [ -n "$INSTALL_BIN" ] || INSTALL_BIN="${RUST_BIN:-{{TYPE}}}"
