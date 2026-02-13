@@ -1,6 +1,12 @@
 return {
 	{
+		"rektide/project-settings-nvim",
+		dir = "/home/rektide/src/nvim-project-config",
+		dev = true,
+	},
+	{
 		"rektide/nvim-auto-listen",
+		dependencies = { "rektide/project-settings-nvim" },
 	},
 	{
 		"jauntywunderkind/nvim-random-color",
