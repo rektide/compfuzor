@@ -1,0 +1,140 @@
+diff --git a/cmake/option.cmake b/cmake/option.cmake
+index ca74cf0..42ccb4c 100644
+--- a/cmake/option.cmake
++++ b/cmake/option.cmake
+@@ -89,23 +89,29 @@ function(_detect_armv8_best)
+ endfunction()
+ 
+ function(_detect_x86_best)
+-  set(_x86_flags
+-    "graniterapids" "emeraldrapids" "sapphirerapids"
+-    "skylake-avx512" "skylake"
+-    "broadwell" "haswell" "sandybridge" "nehalem"
+-    "znver3" "znver2" "znver1"
+-  )
+-  foreach(_arch IN LISTS _x86_flags)
+-    check_c_compiler_flag("-march=${_arch}" _COMP_SUPP_${_arch})
+-    if(_COMP_SUPP_${_arch})
+-      _AppendFlags(CMAKE_C_FLAGS "-march=${_arch}")
+-      _AppendFlags(CMAKE_CXX_FLAGS "-march=${_arch}")
+-      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}" PARENT_SCOPE)
+-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" PARENT_SCOPE)
+-      return()
+-    endif()
+-  endforeach()
+-  message(WARNING "No known x86 microarchitecture flag supported; falling back to generic.")
++  # Runtime-safe default for local builds:
++  # -march=native reflects the current host CPU and avoids selecting an ISA
++  # only supported by the compiler toolchain.
++  check_c_compiler_flag("-march=native" _COMP_SUPP_NATIVE)
++  if(_COMP_SUPP_NATIVE)
++    _AppendFlags(CMAKE_C_FLAGS "-march=native")
++    _AppendFlags(CMAKE_CXX_FLAGS "-march=native")
++    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}" PARENT_SCOPE)
++    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" PARENT_SCOPE)
++    return()
++  endif()
++
++  # Conservative fallback for x86 if -march=native is unavailable.
++  check_c_compiler_flag("-march=x86-64" _COMP_SUPP_X86_64)
++  if(_COMP_SUPP_X86_64)
++    _AppendFlags(CMAKE_C_FLAGS "-march=x86-64")
++    _AppendFlags(CMAKE_CXX_FLAGS "-march=x86-64")
++    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}" PARENT_SCOPE)
++    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" PARENT_SCOPE)
++    return()
++  endif()
++
++  message(WARNING "No safe x86 -march flag supported; falling back to compiler default.")
+ endfunction()
+ 
+ if(MSVC)
+diff --git a/src/db/index/storage/wal/wal_file.h b/src/db/index/storage/wal/wal_file.h
+index f860a62..9deaa25 100644
+--- a/src/db/index/storage/wal/wal_file.h
++++ b/src/db/index/storage/wal/wal_file.h
+@@ -13,6 +13,7 @@
+ // limitations under the License.
+ #pragma once
+ 
++#include <cstdint>
+ #include <memory>
+ #include <string>
+ #include <vector>
+@@ -65,4 +66,4 @@ class WalFile {
+   virtual bool has_record() = 0;
+ };
+ 
+-};  // namespace zvec
+\ No newline at end of file
++};  // namespace zvec
+diff --git a/thirdparty/antlr/antlr4/runtime/Cpp/CMakeLists.txt b/thirdparty/antlr/antlr4/runtime/Cpp/CMakeLists.txt
+--- a/thirdparty/antlr/antlr4/runtime/Cpp/CMakeLists.txt
++++ b/thirdparty/antlr/antlr4/runtime/Cpp/CMakeLists.txt
+@@ -28,13 +28,13 @@
+ if(CMAKE_VERSION VERSION_EQUAL "3.0.0" OR
+    CMAKE_VERSION VERSION_GREATER "3.0.0")
+   CMAKE_POLICY(SET CMP0026 NEW)
+-  CMAKE_POLICY(SET CMP0054 OLD)
+-  CMAKE_POLICY(SET CMP0045 OLD)
+-  CMAKE_POLICY(SET CMP0042 OLD)
++  CMAKE_POLICY(SET CMP0054 NEW)
++  CMAKE_POLICY(SET CMP0045 NEW)
++  CMAKE_POLICY(SET CMP0042 NEW)
+ endif()
+
+ if(CMAKE_VERSION VERSION_EQUAL "3.3.0" OR
+    CMAKE_VERSION VERSION_GREATER "3.3.0")
+-  CMAKE_POLICY(SET CMP0059 OLD)
+-  CMAKE_POLICY(SET CMP0054 OLD)
++  CMAKE_POLICY(SET CMP0059 NEW)
++  CMAKE_POLICY(SET CMP0054 NEW)
+ endif()
+diff --git a/thirdparty/rocksdb/rocksdb-8.1.1/db/blob/blob_file_meta.h b/thirdparty/rocksdb/rocksdb-8.1.1/db/blob/blob_file_meta.h
+index d7c8a1243..2e47726f8 100644
+--- a/thirdparty/rocksdb/rocksdb-8.1.1/db/blob/blob_file_meta.h
++++ b/thirdparty/rocksdb/rocksdb-8.1.1/db/blob/blob_file_meta.h
+@@ -6,6 +6,7 @@
+ #pragma once
+ 
+ #include <cassert>
++#include <cstdint>
+ #include <iosfwd>
+ #include <memory>
+ #include <string>
+diff --git a/thirdparty/rocksdb/rocksdb-8.1.1/include/rocksdb/trace_record.h b/thirdparty/rocksdb/rocksdb-8.1.1/include/rocksdb/trace_record.h
+index c00f5cafb..9551ad5b7 100644
+--- a/thirdparty/rocksdb/rocksdb-8.1.1/include/rocksdb/trace_record.h
++++ b/thirdparty/rocksdb/rocksdb-8.1.1/include/rocksdb/trace_record.h
+@@ -5,6 +5,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <memory>
+ #include <string>
+ #include <vector>
+diff --git a/thirdparty/rocksdb/rocksdb-8.1.1/include/rocksdb/trace_record_result.h b/thirdparty/rocksdb/rocksdb-8.1.1/include/rocksdb/trace_record_result.h
+index 0cd0004a6..629f06710 100644
+--- a/thirdparty/rocksdb/rocksdb-8.1.1/include/rocksdb/trace_record_result.h
++++ b/thirdparty/rocksdb/rocksdb-8.1.1/include/rocksdb/trace_record_result.h
+@@ -5,6 +5,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <string>
+ #include <vector>
+ 
+diff --git a/thirdparty/rocksdb/rocksdb-8.1.1/include/rocksdb/utilities/checkpoint.h b/thirdparty/rocksdb/rocksdb-8.1.1/include/rocksdb/utilities/checkpoint.h
+index 6509f38d9..e2bdcb8f6 100644
+--- a/thirdparty/rocksdb/rocksdb-8.1.1/include/rocksdb/utilities/checkpoint.h
++++ b/thirdparty/rocksdb/rocksdb-8.1.1/include/rocksdb/utilities/checkpoint.h
+@@ -7,6 +7,7 @@
+ 
+ #pragma once
+ 
++#include <cstdint>
+ #include <string>
+ #include <vector>
+ 
