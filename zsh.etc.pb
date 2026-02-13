@@ -2,8 +2,6 @@
 - hosts: all
   gather_facts: False
   vars:
-    NAME: zsh
-    DEFAULT_SHELL: True
     SHARES_DIR: /usr/local/share
     PKGS:
       - zsh
@@ -13,10 +11,6 @@
       - z.d
       - zfunc.d
     ETC_FILES:
-      - zshenv
-      - zprofile
-      - zshrc
-      - zlogin
       - name: default-useradd-shell-rm
         dest: /etc/default/useradd
         regexp: "^SHELL=/bin/(?!zsh)"
@@ -56,23 +50,7 @@
             [ -f "$_zsh_share_conf" ] && source "$_zsh_share_conf"
           done
           unset _zsh_share_conf
-      - name: zimfw-dropins.zimfw
-        content: |
-          for _zimfw_dropin in "${ZIMFW_D_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/zim/zimfw.d}"/*.zimfw "{{DIR}}/share/"*.zimfw; do
-            [ -f "$_zimfw_dropin" ] && source "$_zimfw_dropin"
-          done
-          unset _zimfw_dropin
     SHARE_FILES:
-      - name: linkem-archive.conf
-        content: |
-          archive-linkem() {
-            local src="$1"
-            local name="${2:-$(basename "$src")}"
-            local archive_root="${ARCHIVE_ROOT:-$HOME/archive}"
-
-            mkdir -p "$archive_root"
-            ln -snfv "$src" "$archive_root/$name"
-          }
       - name: dropins.conf
         content: |
           for _zsh_dropin in "{{DIR}}/share/"*.conf; do
@@ -80,31 +58,38 @@
           done
           unset _zsh_dropin
     BINS:
-      - name: precompile-zsh
-        dest: False
-        exec: /bin/zsh -lc '. {{ETC}}/zshrc ; zcompile-all {{ETC}}/z.d {{ETC}}/zfunc.d'
+      #- name: precompile-zsh
+      #  dest: False
+      #  exec: /bin/zsh -lc '. {{ETC}}/zshrc ; zcompile-all {{ETC}}/z.d {{ETC}}/zfunc.d'
       - name: install-user.sh
         basedir: False
         content: |
-          #!/bin/zsh
-          set -eu
-
           ZSH_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/zsh"
           ZSH_CONF_D_DIR="$ZSH_CONFIG_DIR/conf.d"
           mkdir -p "$ZSH_CONF_D_DIR"
 
           block-in-file -n "{{NAME}}-share-dropins" -i "{{DIR}}/etc/share-dropins.conf" -o "$ZSH_CONF_D_DIR/{{NAME}}.conf"
           block-in-file -n "{{NAME}}-user-conf-d" -i "{{DIR}}/etc/user-conf-d.zsh" -o "${ZDOTDIR:-$HOME}/.zshrc"
+      - name: zimfw-dropins-block.sh
+        basedir: False
+        content: |
+          #!/bin/sh
+          ZIMFW_D_DIR="${1:-${ZIMFW_D_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/zim/zimfw.d}}"
+
+          for _zimfw_dropin in "$ZIMFW_D_DIR"/*.zimfw "{{DIR}}/share/"*.zimfw; do
+            [ -f "$_zimfw_dropin" ] || continue
+            printf '\n# from %s\n' "$_zimfw_dropin"
+            cat "$_zimfw_dropin"
+          done
+
+          unset _zimfw_dropin
       - name: install-zimfw.sh
         basedir: False
         content: |
-          #!/bin/zsh
-          set -eu
-
           ZIMRC="${ZIM_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zimrc}"
           ZIMFW_D_DIR="${ZIMFW_D_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/zim/zimfw.d}"
 
           mkdir -p "$(dirname "$ZIMRC")" "$ZIMFW_D_DIR"
-          block-in-file -n "{{NAME}}-zimfw-dropins" -i "{{DIR}}/etc/zimfw-dropins.zimfw" -o "$ZIMRC"
+          block-in-file -n "{{NAME}}-zimfw-dropins" -i <("{{DIR}}/bin/zimfw-dropins-block.sh" "$ZIMFW_D_DIR") -o "$ZIMRC"
   tasks:
     - import_tasks: tasks/compfuzor.includes
