@@ -4,38 +4,107 @@
   vars:
     NAME: zsh
     DEFAULT_SHELL: True
+    SHARES_DIR: /usr/local/share
     PKGS:
-    - zsh
-    - zsh-doc
+      - zsh
+      - zsh-doc
     ETC: /etc/zsh
     ETC_DIRS:
-    - z.d
-    - zfunc.d
+      - z.d
+      - zfunc.d
     ETC_FILES:
-     - zshenv
-     - zprofile
-     - zshrc
-     - zlogin
-     - zfunc.d/flatten
-     - zfunc.d/zcompile-all
-     - zfunc.d/zsource-all
-     - zfunc.d/zautoload-all
-     - z.d/handjam
-     - z.d/prompt
+      - zshenv
+      - zprofile
+      - zshrc
+      - zlogin
+      - name: default-useradd-shell-rm
+        dest: /etc/default/useradd
+        regexp: "^SHELL=/bin/(?!zsh)"
+        state: absent
+        line: SHELL=/bin/zsh
+      - name: default-useradd-shell-set
+        dest: /etc/default/useradd
+        regexp: ^SHELL=/bin/zsh$
+        line: SHELL=/bin/zsh
+      - name: adduser-default-shell-rm
+        dest: /etc/adduser.conf
+        regexp: "^DSHELL=/bin/(?!zsh)"
+        state: absent
+        line: DSHELL=/bin/zsh
+      - name: adduser-default-shell-set
+        dest: /etc/adduser.conf
+        regexp: ^DSHELL=/bin/zsh$
+        line: DSHELL=/bin/zsh
+      - zfunc.d/flatten
+      - zfunc.d/zcompile-all
+      - zfunc.d/zsource-all
+      - zfunc.d/zautoload-all
+      - z.d/handjam
+      - z.d/prompt
+      - name: user-conf-d.zsh
+        content: |
+          _user_zsh_conf_d="${XDG_CONFIG_HOME:-$HOME/.config}/zsh/conf.d"
+          if [ -d "$_user_zsh_conf_d" ]; then
+            for _user_zsh_conf in "$_user_zsh_conf_d"/*.conf; do
+              [ -f "$_user_zsh_conf" ] && source "$_user_zsh_conf"
+            done
+          fi
+          unset _user_zsh_conf _user_zsh_conf_d
+      - name: share-dropins.conf
+        content: |
+          for _zsh_share_conf in "{{DIR}}/share/"*.conf; do
+            [ -f "$_zsh_share_conf" ] && source "$_zsh_share_conf"
+          done
+          unset _zsh_share_conf
+      - name: zimfw-dropins.zimfw
+        content: |
+          for _zimfw_dropin in "${ZIMFW_D_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/zim/zimfw.d}"/*.zimfw "{{DIR}}/share/"*.zimfw; do
+            [ -f "$_zimfw_dropin" ] && source "$_zimfw_dropin"
+          done
+          unset _zimfw_dropin
+    SHARE_FILES:
+      - name: linkem-archive.conf
+        content: |
+          archive-linkem() {
+            local src="$1"
+            local name="${2:-$(basename "$src")}"
+            local archive_root="${ARCHIVE_ROOT:-$HOME/archive}"
+
+            mkdir -p "$archive_root"
+            ln -snfv "$src" "$archive_root/$name"
+          }
+      - name: dropins.conf
+        content: |
+          for _zsh_dropin in "{{DIR}}/share/"*.conf; do
+            [ -f "$_zsh_dropin" ] && source "$_zsh_dropin"
+          done
+          unset _zsh_dropin
+    BINS:
+      - name: precompile-zsh
+        dest: False
+        exec: /bin/zsh -lc '. {{ETC}}/zshrc ; zcompile-all {{ETC}}/z.d {{ETC}}/zfunc.d'
+      - name: install-user.sh
+        basedir: False
+        content: |
+          #!/bin/zsh
+          set -eu
+
+          ZSH_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/zsh"
+          ZSH_CONF_D_DIR="$ZSH_CONFIG_DIR/conf.d"
+          mkdir -p "$ZSH_CONF_D_DIR"
+
+          block-in-file -n "{{NAME}}-share-dropins" -i "{{DIR}}/etc/share-dropins.conf" -o "$ZSH_CONF_D_DIR/{{NAME}}.conf"
+          block-in-file -n "{{NAME}}-user-conf-d" -i "{{DIR}}/etc/user-conf-d.zsh" -o "${ZDOTDIR:-$HOME}/.zshrc"
+      - name: install-zimfw.sh
+        basedir: False
+        content: |
+          #!/bin/zsh
+          set -eu
+
+          ZIMRC="${ZIM_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zimrc}"
+          ZIMFW_D_DIR="${ZIMFW_D_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/zim/zimfw.d}"
+
+          mkdir -p "$(dirname "$ZIMRC")" "$ZIMFW_D_DIR"
+          block-in-file -n "{{NAME}}-zimfw-dropins" -i "{{DIR}}/etc/zimfw-dropins.zimfw" -o "$ZIMRC"
   tasks:
-  - include: tasks/compfuzor.includes
-
-  # useradd shell
-  - lineinfile: dest=/etc/default/useradd regexp="^SHELL=/bin/(?!zsh)" state=absent
-    when: DEFAULT_SHELL|default(False)
-  - lineinfile: dest=/etc/default/useradd regexp=^SHELL=/bin/zsh$ line=SHELL=/bin/zsh
-    when: DEFAULT_SHELL|default(False)
-
-  # adduser shell
-  - lineinfile: dest=/etc/adduser.conf regexp="^DSHELL=/bin/(?!zsh)" state=absent
-    when: DEFAULT_SHELL|default(False)
-  - lineinfile: dest=/etc/adduser.conf regexp=^DSHELL=/bin/zsh$ line=DSHELL=/bin/zsh
-    when: DEFAULT_SHELL|default(False)
-
-  # precompile scriptlets
-  - shell: executable=/bin/zsh . {{ETC}}/zshrc ; zcompile-all {{ETC}}/z.d {{ETC}}/zfunc.d
+    - import_tasks: tasks/compfuzor.includes
