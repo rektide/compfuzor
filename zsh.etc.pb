@@ -77,9 +77,8 @@
           ZIMFW_D_DIR="${1:-${ZIMFW_D_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/zim/zimfw.d}}"
 
           for _zimfw_dropin in "$ZIMFW_D_DIR"/*.zimfw "{{DIR}}/share/"*.zimfw; do
-            [ -f "$_zimfw_dropin" ] || continue
-            printf '\n# from %s\n' "$_zimfw_dropin"
-            cat "$_zimfw_dropin"
+            [ -d "$_zimfw_dropin" ] || continue
+            printf 'zmodule %s\n' "$_zimfw_dropin"
           done
 
           unset _zimfw_dropin
