@@ -54,13 +54,13 @@
           set -e
           
           NAME="${NAME:-{{ INSTANCE }}}"
-          SWAP_PATH="/$(echo "$NAME" | sed 's/^swap-//')"
+          export SWAP_PATH="/$(echo "$NAME" | sed 's/^swap-//')"
           
           # Build the swap file if needed
           {{ DIR }}/bin/build.sh
           
-          # Add to /etc/fstab using block-in-file
-          cat {{ DIR }}/etc/swapfile.fstab| sed "s|{{ SWAP_PATH }}|$SWAP_PATH|g" | sudo block-in-file -n "$NAME" -o /etc/fstab --evaluate
+          # Add to /etc/fstab using block-in-file (pass SWAP_PATH through sudo)
+          cat {{ DIR }}/etc/swapfile.fstab | sudo SWAP_PATH="$SWAP_PATH" block-in-file -n "$NAME" -o /etc/fstab --envsubst
           
           # Reload fstab generator to create mount units
           sudo systemctl daemon-reload
