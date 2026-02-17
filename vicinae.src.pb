@@ -35,6 +35,18 @@
       "/usr/lib/systemd/user/vicinae.service": "extra/vicinae.service"
       "/usr/share/icons/hicolor/scalable/apps/vicinae.svg": "vicinae/icons/vicinae.svg"
     ENV: True
+    ETC_FILES:
+      - name: niri-keybindings/vicinae.kdl
+        content: |
+          binds {
+            Mod+D hotkey-overlay-title="Run an Application: vicinae" { spawn-sh "vicinae toggle"; }
+            Alt+Grave hotkey-overlay-title="Vicinae clipboard" { spawn-sh "vicinae vicinae://extensions/vicinae/clipboard/history"; }
+          }
+      - name: niri-keybindings/switch-windows.kdl
+        content: |
+          binds {
+            Mod+Tab hotkey-overlay-title="Switch windows: vicinae" { spawn-sh "vicinae vicinae://extensions/vicinae/window-switcher"; }
+          }
     BINS:
       - name: build.sh
         content: |
@@ -53,5 +65,15 @@
       - name: install-user.sh
         content: |
           systemctl --user enable vicinae.service
+      - name: install-user-shortcuts.sh
+        content: |
+          set -e
+          NIRI_CONFIG=~/.config/niri/config.kdl
+          mkdir -p ~/.config/niri
+          mkdir -p ~/.config/niri/vicinae-keybindings
+          for f in {{DIR}}/etc/niri-keybindings/*.kdl; do
+            ln -sf "$f" ~/.config/niri/vicinae-keybindings/
+          done
+          echo 'globinclude vicinae-keybindings/*.kdl' | block-in-file --create=true --names=vicinae-keybindings "$NIRI_CONFIG"
   tasks:
     - import_tasks: tasks/compfuzor.includes
