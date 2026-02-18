@@ -35,6 +35,8 @@
       "/usr/lib/systemd/user/vicinae.service": "extra/vicinae.service"
       "/usr/share/icons/hicolor/scalable/apps/vicinae.svg": "vicinae/icons/vicinae.svg"
     ENV: True
+    ETC_DIRS:
+      - niri-keybindings
     ETC_FILES:
       - name: niri-keybindings/vicinae.kdl
         content: |
@@ -65,7 +67,7 @@
       - name: install-user.sh
         content: |
           systemctl --user enable vicinae.service
-      - name: install-user-shortcuts.sh
+      - name: install-niri.sh
         content: |
           set -e
           NIRI_CONFIG=~/.config/niri/config.kdl
