@@ -47,7 +47,7 @@
       - name: niri-keybindings/switch-windows.kdl
         content: |
           binds {
-            Mod+Tab hotkey-overlay-title="Switch windows: vicinae" { spawn-sh "vicinae vicinae://extensions/vicinae/windows/switch"; }
+            Mod+F hotkey-overlay-title="Switch windows: vicinae" { spawn-sh "vicinae vicinae://extensions/vicinae/wm/switch-windows"; }
           }
     BINS:
       - name: build.sh
