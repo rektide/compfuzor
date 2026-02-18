@@ -71,11 +71,10 @@
         content: |
           set -e
           NIRI_CONFIG=~/.config/niri/config.kdl
-          mkdir -p ~/.config/niri
           mkdir -p ~/.config/niri/vicinae-keybindings
           for f in {{DIR}}/etc/niri-keybindings/*.kdl; do
             ln -sf "$f" ~/.config/niri/vicinae-keybindings/
-          done
-          echo 'globinclude vicinae-keybindings/*.kdl' | block-in-file --create=true --names=vicinae-keybindings "$NIRI_CONFIG"
+            echo "include vicinae-keybindings/$(basename "$f")"
+          done | block-in-file --create=true --names=vicinae-keybindings "$NIRI_CONFIG"
   tasks:
     - import_tasks: tasks/compfuzor.includes
