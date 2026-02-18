@@ -47,7 +47,7 @@
       - name: niri-keybindings/switch-windows.kdl
         content: |
           binds {
-            Mod+Tab hotkey-overlay-title="Switch windows: vicinae" { spawn-sh "vicinae vicinae://extensions/vicinae/window-switcher"; }
+            Mod+Tab hotkey-overlay-title="Switch windows: vicinae" { spawn-sh "vicinae vicinae://extensions/vicinae/windows/switch"; }
           }
     BINS:
       - name: build.sh
@@ -75,6 +75,6 @@
           for f in {{DIR}}/etc/niri-keybindings/*.kdl; do
             ln -sf "$f" ~/.config/niri/vicinae-keybindings/
             echo "include vicinae-keybindings/$(basename "$f")"
-          done | block-in-file --create=true --names=vicinae-keybindings "$NIRI_CONFIG"
+          done | block-in-file --create=true --names=vicinae-keybindings --comment "//" $NIRI_CONFIG"
   tasks:
     - import_tasks: tasks/compfuzor.includes
