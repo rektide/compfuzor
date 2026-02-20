@@ -20,11 +20,19 @@
       - patchelf
       - cmake
       - wtype
-      #- dotool
+      - ydotool
       # tauri
       - libxdo-dev
     ENV:
       model: whisper-large
+    ETC_DIRS:
+      - niri
+    ETC_FILES:
+      - name: niri/handy.kdl
+        content: |
+          binds {
+            Mod+G hotkey-overlay-title="Toggle transcription: Handy" { spawn-sh "handy --toggle-transcription"; }
+          }
     SHARE_FILES:
       - name: parakeet.tar.gz.url
         content: https://blob.handy.computer/parakeet-v3-int8.tar.gz
@@ -38,7 +46,6 @@
       - name: install-user.sh
         content: |
           mkdir -p ~/.config/com.pais.handy/models
-
       - name: build.sh
         content: |
           bun install
@@ -51,6 +58,17 @@
           fi
 
           #bun run build
-          bun run tauri build
+          bun run tauri build --no-bundle
+      - name: install.sh
+        content: |
+          ln -sfv $(pwd)/src-tauri/target/release/handy $GLOBAL_BINS_DIR
+      - name: install-niri.sh
+        content: |
+          NIRI_CONFIG=~/.config/niri/config.kdl
+          mkdir -p ~/.config/niri/handy
+          for f in {{DIR}}/etc/niri/*.kdl; do
+            ln -sf "$f" ~/.config/niri/handy/
+            echo 'include "./handy/'"$(basename "$f")"'"'
+          done | block-in-file -n handy --comment "//" "$NIRI_CONFIG"
   tasks:
     - import_tasks: tasks/compfuzor.includes
