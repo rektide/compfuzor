@@ -10,6 +10,9 @@
   vars:
     v: "SYSTEMD_{{item|upper}}"
     unit_type: "{{item}}"
+- import_tasks: systemd.user-service.tasks
+  when: SYSTEMD_USER_SERVICE|default(False)
 - set_fact:
     PREFIX_DIR: "{{_SYSTEMD_PREFIX_DIR}}"
   when: _SYSTEMD_PREFIX_DIR|default(False) is truthy
+

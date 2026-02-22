@@ -50,17 +50,19 @@
     - SYSTEMD_SERVICE|default(False)
     - SYSTEMD_SERVICE|def != False
     - not SYSTEMD_INSTALL_BYPASS|default(False)
-    - (SYSTEMD_SCOPE|default('') == 'user' or USERMODE|default(False))
+    - (SYSTEMD_SCOPE|default('') == 'user' or USERMODE|default(False) or SYSTEMD_USER_SERVICE|default(False))
   vars:
     bins: "{{BINS|default([])}}"
     serviceName: "{{SYSTEMD_SERVICE if SYSTEMD_SERVICE|def != True else NAME}}"
     userUnitDir: "{{SYSTEMD_UNIT_DIR|default('~/.config/systemd/user')}}"
+    userServiceFile: "{{serviceName if not SYSTEMD_USER_SERVICE|default(False) else serviceName + '.user'}}"
     enhancedBins:
       - name: install-service-user.sh
         generatedAt: end
         generated: |
           SERVICE_NAME="{{serviceName}}"
-          SERVICE_SRC="$(pwd)/etc/${SERVICE_NAME}.service"
+          SERVICE_FILE="{{userServiceFile}}"
+          SERVICE_SRC="$(pwd)/etc/${SERVICE_FILE}.service"
           SERVICE_DEST="{{userUnitDir}}/${SERVICE_NAME}.service"
           
           if [ ! -f "$SERVICE_SRC" ]; then
@@ -93,4 +95,5 @@
           
           systemctl --user enable "$SERVICE_NAME"
           echo "User service ${SERVICE_NAME} installed and enabled"
+
 
