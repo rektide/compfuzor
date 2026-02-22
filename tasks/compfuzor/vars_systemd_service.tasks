@@ -20,10 +20,6 @@
         generatedAt: end
         generated: |
           SERVICE_NAME="{{serviceName}}"
-          SERVICE_SRC="$(pwd)/etc/${SERVICE_NAME}.service"
-          SERVICE_DEST="/etc/systemd/system/${SERVICE_NAME}.service"
-          SUDO="sudo"
-          SYSTEMCTL="systemctl"
           source "$(dirname "$0")/../etc/install-service.sh"
 
 - name: 'Generate systemd user service install script'
@@ -37,16 +33,13 @@
   vars:
     bins: "{{BINS|default([])}}"
     serviceName: "{{SYSTEMD_SERVICE if SYSTEMD_SERVICE|def != True else NAME}}"
-    userUnitDir: "{{SYSTEMD_UNIT_DIR|default('~/.config/systemd/user')}}"
     userServiceFile: "{{serviceName if not SYSTEMD_USER_SERVICE|default(False) else serviceName + '.user'}}"
     enhancedBins:
       - name: install-service-user.sh
         generatedAt: end
         generated: |
           SERVICE_NAME="{{serviceName}}"
-          SERVICE_SRC="$(pwd)/etc/{{userServiceFile}}.service"
-          SERVICE_DEST="{{userUnitDir}}/${SERVICE_NAME}.service"
-          SUDO=""
-          SYSTEMCTL="systemctl --user"
+          SERVICE_FILE="{{userServiceFile}}"
+          USERMODE=true
           source "$(dirname "$0")/../etc/install-service.sh"
 
