@@ -42,3 +42,55 @@
           
           sudo systemctl enable "$SERVICE_NAME"
           echo "Service ${SERVICE_NAME} installed and enabled"
+
+- name: 'Generate systemd user service install script'
+  set_fact:
+    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name', concat_fields=['generated']) }}"
+  when: 
+    - SYSTEMD_SERVICE|default(False)
+    - SYSTEMD_SERVICE|def != False
+    - not SYSTEMD_INSTALL_BYPASS|default(False)
+    - (SYSTEMD_SCOPE|default('') == 'user' or USERMODE|default(False))
+  vars:
+    bins: "{{BINS|default([])}}"
+    serviceName: "{{SYSTEMD_SERVICE if SYSTEMD_SERVICE|def != True else NAME}}"
+    userUnitDir: "{{SYSTEMD_UNIT_DIR|default('~/.config/systemd/user')}}"
+    enhancedBins:
+      - name: install-service-user.sh
+        generatedAt: end
+        generated: |
+          SERVICE_NAME="{{serviceName}}"
+          SERVICE_SRC="$(pwd)/etc/${SERVICE_NAME}.service"
+          SERVICE_DEST="{{userUnitDir}}/${SERVICE_NAME}.service"
+          
+          if [ ! -f "$SERVICE_SRC" ]; then
+            echo "Error: Service file not found: $SERVICE_SRC"
+            exit 1
+          fi
+          
+          mkdir -p "$(dirname "$SERVICE_DEST")"
+          
+          NEED_RELOAD=false
+          
+          if [ -L "$SERVICE_DEST" ]; then
+            CURRENT_TARGET=$(readlink -f "$SERVICE_DEST")
+            NEW_TARGET=$(readlink -f "$SERVICE_SRC")
+            if [ "$CURRENT_TARGET" != "$NEW_TARGET" ]; then
+              NEED_RELOAD=true
+            fi
+          elif [ -e "$SERVICE_DEST" ]; then
+            NEED_RELOAD=true
+          else
+            NEED_RELOAD=true
+          fi
+          
+          ln -sf "$SERVICE_SRC" "$SERVICE_DEST"
+          
+          if [ "$NEED_RELOAD" = true ]; then
+            echo "Service file changed, reloading systemd user daemon..."
+            systemctl --user daemon-reload
+          fi
+          
+          systemctl --user enable "$SERVICE_NAME"
+          echo "User service ${SERVICE_NAME} installed and enabled"
+
