@@ -1,0 +1,20 @@
+---
+- hosts: all
+  vars:
+    npms:
+      - "@sourcegraph/amp@latest"
+      - "@sourcegraph/amp"
+      - "amp"
+      - "@anthropic-ai/claude-code"
+    ethDevice: eno1
+    eth: "{{hostvars[inventory_hostname]['ansible_'+ethDevice]}}"
+    ipv4Route: "{{eth.ipv4.address}}/{{eth.ipv4.prefix}}"
+    ipv6Route: "{{(eth.ipv6|selectattr('scope', 'link')|first).address}}/{{(eth.ipv6|selectattr('scope', 'link')|first).prefix}}"
+  tasks:
+    - debug:
+        #msg: "{{ansible_play_hosts_all|to_nice_json}}"
+        #msg: "{{hostvars[inventory_hostname]['ansible_'+ethDevice]}}"
+        msg: "{{eth.ipv6|selectattr('scope', 'equalto', 'link')}}"
+    - debug:
+        msg: "{{item|regex_replace('(?:@[\\w.-]+/)?([\\w.-]+)(?:@[\\w.-]+)?', '\\1')}}"
+      loop: "{{npms}}"

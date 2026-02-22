@@ -1,0 +1,51 @@
+// MIT License
+// 
+// Copyright (c) 2025 Kristofer Lund
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+
+// via https://github.com/jmpaz/dotfiles/compare/48a868f2...cd4b1b49
+
+window-rule {
+      match app-id=r#"^com\.local\.ostt$"#
+      open-floating true
+      open-focused false
+      default-column-width { proportion 0.18; }
+      default-window-height { fixed 8; }
+      min-height 8
+      max-height 80
+      baba-is-float true
+      default-floating-position x=0 y=32 relative-to="bottom"
+}
+
+bind {
+      Mod+T hotkey-overlay-title="ostt" {
+            //spawn "sh" "-c" "OSTT_TRANSCRIPTION_ENDPOINT=http://localhost:9000/v1/audio/transcriptions OSTT_TRANSCRIPTION_MODEL=Systran/faster-distil-whisper-large-v3 OSTT_CLASS=com.local.ostt OSTT_LAUNCH_CMD='nixGL ghostty --window-padding-x=0 --window-padding-y=0 --class=com.local.ostt -e ostt remote' ~/.local/bin/ostt-remote.sh";
+            spawn "sh" "-c" "OSTT_TRANSCRIPTION_ENDPOINT=http://localhost:9000/v1/audio/transcriptions OSTT_TRANSCRIPTION_MODEL=Systran/faster-distil-whisper-large-v3 OSTT_CLASS=com.local.ostt OSTT_LAUNCH_CMD='x-terminal-emulator --class=com.local.ostt -e ostt remote' ~/.local/bin/ostt-remote.sh";
+      }
+      
+      Mod+Alt+T hotkey-overlay-title="ostt (type)" {
+            //spawn "sh" "-c" "OSTT_TRANSCRIPTION_ENDPOINT=http://localhost:9000/v1/audio/transcriptions OSTT_TRANSCRIPTION_MODEL=Systran/faster-distil-whisper-large-v3 OSTT_CLASS=com.local.ostt OSTT_LAUNCH_CMD='nixGL ghostty --window-padding-x=0 --window-padding-y=0 --class=com.local.ostt -e ostt remote' ~/.local/bin/ostt-remote.sh type";
+            spawn "sh" "-c" "OSTT_TRANSCRIPTION_ENDPOINT=http://localhost:9000/v1/audio/transcriptions OSTT_TRANSCRIPTION_MODEL=Systran/faster-distil-whisper-large-v3 OSTT_CLASS=com.local.ostt OSTT_LAUNCH_CMD='x-terminal-emulator --class=com.local.ostt -e ostt remote' ~/.local/bin/ostt-remote.sh type";
+      }
+      
+      Mod+Shift+T hotkey-overlay-title="ostt (cancel)" {
+            spawn "sh" "-c" "~/.local/bin/ostt-remote.sh cancel";
+      }
+}

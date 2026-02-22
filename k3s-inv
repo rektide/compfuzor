@@ -1,0 +1,51 @@
+all:
+  vars:
+    base_domain: base.voodoowarez.com
+    # not possible to reverse index ansible groups
+    cluster_names: "{{groups.all|map('extract', hostvars, 'cluster')|unique}}"
+    #cluster_name: "{{ group_names|select('in', cluster_names)|first }}"
+    domain: "{{cluster}}.{{base_domain}}"
+    # extra domains handling
+    skipIpv4:
+      - 172.17.0.1
+    extraIpv4Domains: "{{ ansible_all_ipv4_addresses | rejectAny(skipIpv4) }}"
+    extraDomains:
+      - "internal.{{domain}}"
+      #- "internal.cluster.{{cluster}}.{{base_domain}}"
+
+servers:
+  children:
+    work:
+    #nano
+    #seer
+
+work:
+  vars:
+    cluster: work
+    cluster_cidr: 10.32.0.0/16
+    service_cidr: 10.33.0.0/16
+  hosts:
+    workhorse.hosts.voodoowarez.com:
+
+nano:
+  vars:
+    cluster: nano
+    cluster_cidr: 10.34.0.0/16
+    service_cidr: 10.35.0.0/16
+  hosts:
+    nanomachine:
+    #nanoengine:
+    #  vars:
+    #    is_k3s_agent: true
+    #    host_disabled: true
+
+seer:
+  vars:
+    cluster: seer
+  :
+ 
+
+nerd:
+  vars:
+    cluster: nerd
+    cluster_cidr: 10

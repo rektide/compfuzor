@@ -1,0 +1,157 @@
+all:
+  vars:
+    base_domain: voodoowarez.com
+    # not possible to reverse index ansible groups
+    cluster_names: "{{groups.all|map('extract', hostvars, 'cluster')|unique}}"
+    #cluster_name: "{{ group_names|select('in', cluster_names)|first }}"
+    domain: "{{cluster}}.{{base_domain}}"
+    extraDomains:
+      - "internal.cluster.{{cluster}}.{{base_domain}}"
+  hosts:
+    # temporary kube cluster
+    plaskett:
+      resolves:
+        5.161.202.53:
+          - plaskett
+          - variable.voodoowarez.com
+    xp3:
+      resolves:
+        10.56.67.190:
+          - xp3.goat.voodoowarez.com
+    cohen.lan:
+      resolves:
+        10.11.14.119:
+          #cohen.cluster
+          #cohen.cluster.esb.voodoowarez.com
+          - cohen.lan
+          - cohen.night.voodoowarez.com
+        #108.48.71.95:
+          #- esb.voodoowarez.com
+    nanomachine:
+      resolves:
+        10.11.12.173:
+          - nanomachine.lan
+          - nanomachine.night.voodoowarez.com
+    fornacis:
+      resolves:
+        5.161.89.224:
+          - astro.voodoowarez.com
+          - fornacis
+    #sunstripe.lan:
+    #  resolves:
+    #    10.11.15.152:
+    #      - sunstripe.lan
+    #      - sunstripe.night.voodoowarez.com
+    #      #- sun.voodoowarez.com
+    #rhadamanthus.lan:
+    #  resolves:
+    #    10.11.15.42:
+    #      - rhadamanthus.lan
+    #      - rhadamanthus.night.voodoowarez.com
+    epicac.lan:
+      resolves:
+        10.11.12.167:
+          - epicac.lan
+          - epicac.night.voodoowarez.com
+      cluster_init: false
+    jarvis.lan:
+      server: esb.voodoowarez.com
+      resolves:
+        10.11.12.154:
+          - jarvis.lan
+          - jarvis.night.voodoowarez.com
+
+k3s:
+  children:
+    astro:
+    esb:
+    nano:
+    sun:
+    variable:
+agents:
+  hosts:
+    rhadamanthus.lan:
+    epicac.lan:
+  vars:
+    is_k3s_agent: true
+    is_k3s_server: false
+servers:
+  hosts:
+    plaskett:
+    cohen.lan:
+    jarvis.lan:
+    nanomachine:
+    fornacis:
+    sunstripe.lan:
+  vars:
+    is_k3s_agent: true
+    is_k3s_server: true
+
+# each cluster
+# prod cloud system
+astro:
+  vars:
+    cluster: astro
+    server: astro.voodoowarez.com
+    # ideally we add a dns alias for each host with 'extraDomains' too
+    extraDomains:
+      - internal.cluster.astro.voodoowarez.com
+    cluster_cidr: 10.32.0.0/16
+    service_cidr: 10.33.0.0/16
+  hosts:
+    fornacis:
+# sandbox
+variable:
+  vars:
+    cluster: variable
+    server: variable.voodoowarez.com
+    extraDomains:
+      - internal.cluster.variable.voodoowarez.com
+  hosts:
+    plaskett:
+
+# home cluster
+esb:
+  vars:
+    cluster: esb
+    server: esb.voodoowarez.com
+    extraDomains:
+      - internal.cluster.esb.voodoowarez.com
+  hosts:
+    epicac.lan:
+    jarvis.lan:
+    cohen.lan:
+    #rhadamanthus.lan:
+# nanomachine minipc
+nano:
+  vars:
+    cluster: nano
+    server: nanomachine.voodoowarez.com
+    extraDomains:
+      - internal.cluster.nano.voodoowarez.com
+  hosts:
+    nanomachine:
+# laptop
+#sun:
+#  vars:
+#    cluster: sun 
+#    server: sun.voodoowarez.com
+#    extraDomains:
+#      - internal.cluster.sun.voodoowarez.com
+#  hosts:
+#    sunstripe.lan:
+goat:
+  vars:
+    cluster: goat
+    server: goat.voodoowarez.com
+    extraDomains:
+      - internal.cluster.goat.voodoowarez.com
+  hosts:
+    xp3:
+
+hetzner:
+  hosts:
+    fornacis:
+    plaskett:
+  vars:
+    APT_DEFAULT_MIRROR: http://mirror.hetzner.com/debian/packages

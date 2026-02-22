@@ -1,11 +1,14 @@
 ---
 - hosts: all
   vars:
-    REPO: https://github.com/PaulJPhilp/EffectPatterns
-    BUN: True
+    REPO: https://github.com/OpenHands/OpenHands
+    TOOL_VERSIONS:
+      nodejs: True
+      python: True
     BINS:
       - name: build.sh
         content: |
-          bun run build
+          make build
   tasks:
     - import_tasks: tasks/compfuzor.includes
+
