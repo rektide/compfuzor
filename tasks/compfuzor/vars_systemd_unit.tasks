@@ -1,11 +1,14 @@
 ---
+- name: 'Check for systemd units defined'
+  set_fact:
+    _systemd_has_service: "{{ SYSTEMD_SERVICE|default(false) or (SYSTEMD_SERVICES|default({}))|length > 0 }}"
+    _systemd_has_socket: "{{ SYSTEMD_SOCKET|default(false) or (SYSTEMD_SOCKETS|default({}))|length > 0 }}"
+    _systemd_has_mount: "{{ SYSTEMD_MOUNT|default(false) or (SYSTEMD_MOUNTS|default({}))|length > 0 }}"
+    _systemd_has_dnssd: "{{ SYSTEMD_DNSSD|default(false) or (SYSTEMD_DNSSDS|default({}))|length > 0 }}"
+
 - name: 'Check for any systemd units defined'
   set_fact:
-    _systemd_has_units: >-
-      {{ (SYSTEMD_SERVICE|default(false) or (SYSTEMD_SERVICES|default({}))|length > 0) or
-         (SYSTEMD_SOCKET|default(false) or (SYSTEMD_SOCKETS|default({}))|length > 0) or
-         (SYSTEMD_MOUNT|default(false) or (SYSTEMD_MOUNTS|default({}))|length > 0) or
-         (SYSTEMD_DNSSD|default(false) or (SYSTEMD_DNSSDS|default({}))|length > 0) }}
+    _systemd_has_units: "{{ _systemd_has_service or _systemd_has_socket or _systemd_has_mount or _systemd_has_dnssd }}"
 
 - name: 'Add systemd install-unit script to ETC_FILES'
   set_fact:
