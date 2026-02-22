@@ -1,13 +1,11 @@
 ---
 - name: 'Check for any systemd units defined'
   set_fact:
-    _systemd_has_units: "{{ _systemd_has_units }}"
-  vars:
     _systemd_has_units: >-
-      {{ SYSTEMD_UNITTYPES_ALL | select('match', '.*') | map('regex_replace', '^(.*)$',
-        vars['SYSTEMD_' + item|upper]|default(hostvars[inventory_hostname]['SYSTEMD_' + item|upper]|default(false))|bool or
-        vars['SYSTEMD_' + item|upper + 'S']|default(hostvars[inventory_hostname]['SYSTEMD_' + item|upper + 'S']|default({}))|length > 0
-      ) | select('equalto', true) | list | length > 0 }}
+      {{ (SYSTEMD_SERVICE|default(false) or (SYSTEMD_SERVICES|default({}))|length > 0) or
+         (SYSTEMD_SOCKET|default(false) or (SYSTEMD_SOCKETS|default({}))|length > 0) or
+         (SYSTEMD_MOUNT|default(false) or (SYSTEMD_MOUNTS|default({}))|length > 0) or
+         (SYSTEMD_DNSSD|default(false) or (SYSTEMD_DNSSDS|default({}))|length > 0) }}
 
 - name: 'Add systemd install-unit script to ETC_FILES'
   set_fact:
