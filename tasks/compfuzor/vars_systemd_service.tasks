@@ -32,12 +32,11 @@
     _has_service: "{{ SYSTEMD_SERVICE|default(False) and SYSTEMD_SERVICE|def != False or (SYSTEMD_SERVICES|default({})).ExecStart is defined }}"
     bins: "{{BINS|default([])}}"
     serviceName: "{{SYSTEMD_SERVICE if SYSTEMD_SERVICE|def != True else NAME}}"
-    _use_user_suffix: "{{ SYSTEMD_DUAL|default(true) }}"
     enhancedBins:
       - name: install-service-user.sh
         generatedAt: end
         generated: |
           SERVICE_NAME="{{serviceName}}"
+          SERVICE_SUFFIX=user
           USERMODE=true
-          {% if _use_user_suffix %}SERVICE_SUFFIX=user
-          {% endif %}source "$(dirname "$0")/../etc/install-service.sh"
+          source "$(dirname "$0")/../etc/install-service.sh"

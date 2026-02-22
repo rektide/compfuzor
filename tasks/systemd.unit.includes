@@ -20,6 +20,7 @@
     unitname: "{{newDedashedFallback}}"
     unit: "{{unitname}}{{inst}}{{_unit_suffix}}.{{unit_type}}"
     _unit_suffix: "{{ '.user' if SYSTEMD_SCOPE == 'user' and unit_type == 'service' else '' }}"
+    _link_unit: "{{unitname}}{{inst}}.{{unit_type}}"
 
     # old
     # currently no support for UNITS here
@@ -38,8 +39,7 @@
     #src: "foo.fake {{unit_type|default('no-unit-type')}} {{local_src|default('no-local-src')}} {{lookup('fileexists', local_src)}}"
     #src: "foo.fake {{unit_type|default('no-unit-type')}} {{local_src|default('no-local-src')}}"
     dest: "{{ETC}}/{{unit}}"
-    #dest: "{{SYSTEMD_UNIT_DIR}}/{{unit_name|default(NAME)|replace('.', '-')}}{{'@' if SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCED)|default(False) else ''}}.{{unit_type}}"
-    link: "{{SYSTEMD_UNIT_DIR}}/{{unit}}"
+    link: "{{SYSTEMD_UNIT_DIR}}/{{_link_unit}}"
 
 #- name: testing for local target unit
 #  local_action: shell test ! -f "files/{{target}}/{{target}}{{inst}}.{{unit_type}}"; echo $?
