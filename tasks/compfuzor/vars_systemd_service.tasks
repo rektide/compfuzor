@@ -1,4 +1,13 @@
 ---
+- name: 'Add systemd install-service script to ETC_FILES'
+  set_fact:
+    ETC_FILES: "{{ enhancedEtc|concat(ETC_FILES|default([])) }}"
+  when: SYSTEMD_SERVICE|default(False) and SYSTEMD_SERVICE|def != False and not SYSTEMD_INSTALL_BYPASS|default(False)
+  vars:
+    enhancedEtc:
+      - name: install-service.sh
+        src: systemd/install-service.sh
+
 - name: 'Generate systemd service install script'
   set_fact:
     BINS: "{{ enhancedBins|mergeKeyed(bins, key='name', concat_fields=['generated']) }}"
@@ -13,35 +22,9 @@
           SERVICE_NAME="{{serviceName}}"
           SERVICE_SRC="$(pwd)/etc/${SERVICE_NAME}.service"
           SERVICE_DEST="/etc/systemd/system/${SERVICE_NAME}.service"
-          
-          if [ ! -f "$SERVICE_SRC" ]; then
-            echo "Error: Service file not found: $SERVICE_SRC"
-            exit 1
-          fi
-          
-          NEED_RELOAD=false
-          
-          if [ -L "$SERVICE_DEST" ]; then
-            CURRENT_TARGET=$(readlink -f "$SERVICE_DEST")
-            NEW_TARGET=$(readlink -f "$SERVICE_SRC")
-            if [ "$CURRENT_TARGET" != "$NEW_TARGET" ]; then
-              NEED_RELOAD=true
-            fi
-          elif [ -e "$SERVICE_DEST" ]; then
-            NEED_RELOAD=true
-          else
-            NEED_RELOAD=true
-          fi
-          
-          sudo ln -sf "$SERVICE_SRC" "$SERVICE_DEST"
-          
-          if [ "$NEED_RELOAD" = true ]; then
-            echo "Service file changed, reloading systemd daemon..."
-            sudo systemctl daemon-reload
-          fi
-          
-          sudo systemctl enable "$SERVICE_NAME"
-          echo "Service ${SERVICE_NAME} installed and enabled"
+          SUDO="sudo"
+          SYSTEMCTL="systemctl"
+          source "$(dirname "$0")/../etc/install-service.sh"
 
 - name: 'Generate systemd user service install script'
   set_fact:
@@ -61,39 +44,9 @@
         generatedAt: end
         generated: |
           SERVICE_NAME="{{serviceName}}"
-          SERVICE_FILE="{{userServiceFile}}"
-          SERVICE_SRC="$(pwd)/etc/${SERVICE_FILE}.service"
+          SERVICE_SRC="$(pwd)/etc/{{userServiceFile}}.service"
           SERVICE_DEST="{{userUnitDir}}/${SERVICE_NAME}.service"
-          
-          if [ ! -f "$SERVICE_SRC" ]; then
-            echo "Error: Service file not found: $SERVICE_SRC"
-            exit 1
-          fi
-          
-          mkdir -p "$(dirname "$SERVICE_DEST")"
-          
-          NEED_RELOAD=false
-          
-          if [ -L "$SERVICE_DEST" ]; then
-            CURRENT_TARGET=$(readlink -f "$SERVICE_DEST")
-            NEW_TARGET=$(readlink -f "$SERVICE_SRC")
-            if [ "$CURRENT_TARGET" != "$NEW_TARGET" ]; then
-              NEED_RELOAD=true
-            fi
-          elif [ -e "$SERVICE_DEST" ]; then
-            NEED_RELOAD=true
-          else
-            NEED_RELOAD=true
-          fi
-          
-          ln -sf "$SERVICE_SRC" "$SERVICE_DEST"
-          
-          if [ "$NEED_RELOAD" = true ]; then
-            echo "Service file changed, reloading systemd user daemon..."
-            systemctl --user daemon-reload
-          fi
-          
-          systemctl --user enable "$SERVICE_NAME"
-          echo "User service ${SERVICE_NAME} installed and enabled"
-
+          SUDO=""
+          SYSTEMCTL="systemctl --user"
+          source "$(dirname "$0")/../etc/install-service.sh"
 
