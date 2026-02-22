@@ -4,11 +4,13 @@ from ansible.module_utils.six import string_types
 
 listType = type(list())
 
+
 def isList(*a):
     return isinstance(a, collections.abc.Sequence) and not isinstance(a, string_types)
 
+
 def arrayitize(*a, **kw):
-    ''' Place passed in arguments into an array '''
+    """Place passed in arguments into an array"""
 
     if len(a) == 1:
         if isinstance(a[0], string_types):
@@ -16,9 +18,9 @@ def arrayitize(*a, **kw):
         if isinstance(a[0], numbers.Number):
             return [a[0]]
         elif a[0] == True:
-            return [True]
+            return []  # bare True -> empty list (flag meaning "yes create default")
         elif a[0] == False:
-            return [False]
+            return []
         elif isList(a):
             return a[0]
         elif a[0] is None:
@@ -31,10 +33,9 @@ def arrayitize(*a, **kw):
             val.append(el)
     return val
 
+
 class FilterModule(object):
-    ''' Compfuzor jinja2 filters '''
+    """Compfuzor jinja2 filters"""
 
     def filters(self):
-        return {
-            'arrayitize': arrayitize
-        }
+        return {"arrayitize": arrayitize}
