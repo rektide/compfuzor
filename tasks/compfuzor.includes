@@ -154,11 +154,10 @@
 - import_tasks: compfuzor/systemd.tasks
   vars:
     become: false
+    SYSTEMD_SCOPE: user
   when: >
     SYSTEMD_BYPASS|default(False) is falsy and
     SYSTEMD_DUAL|default(True)
-  apply:
-    SYSTEMD_SCOPE: user
 - include_tasks: systemd.thunk.tasks
   vars:
     service: "{{SYSTEMD_SERVICE}}{{ '@' + item if item != '' else '' }}"
