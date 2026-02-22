@@ -140,47 +140,49 @@ SSH agent uses `default.target` since it should be available throughout the user
 
 ## Pattern 7: Auto-Generated Install Scripts
 
-When `SYSTEMD_SERVICE` is set, compfuzor automatically generates install scripts:
+When systemd units are defined, compfuzor automatically generates install scripts:
 
-### System Service
+### System Units
 
 ```yaml
 SYSTEMD_SERVICE: True  # or service name
+# or
+SYSTEMD_MOUNT: /mnt/data  # mount point name
 ```
 
-Generates `bin/install-service.sh` that:
-- Links `etc/<name>.service` to `/etc/systemd/system/`
-- Daemon-reloads only if the service file changed
-- Enables the service
+Generates `bin/install-service.sh` or `bin/install-mount.sh` that:
+- Links `etc/<name>.<type>` to `/etc/systemd/system/`
+- Daemon-reloads only if the unit file changed
+- Enables the unit
 
-### User Service
+### User Units
 
-User service install script is generated when `SYSTEMD_SCOPE: user`, `USERMODE: True`, or `SYSTEMD_USER_SERVICE: True`:
+User unit install scripts are generated based on `SYSTEMD_USER_*_INSTALL`:
 
 ```yaml
 SYSTEMD_SERVICE: True
-SYSTEMD_SCOPE: user  # or USERMODE: True
+SYSTEMD_INSTALL: user  # or both
 ```
 
 Generates `bin/install-service-user.sh` that:
-- Links `etc/<name>.service` to `~/.config/systemd/user/`
+- Links `etc/<name>.user.<type>` to `~/.config/systemd/user/<name>.<type>`
 - Uses `systemctl --user` commands
 - No sudo required
 
-### Dual System + User Service
+### Dual System + User Units
 
-For services that need both system and user variants:
+For units that need both system and user variants:
 
 ```yaml
 SYSTEMD_SERVICE: True
-SYSTEMD_USER_SERVICE: True
+SYSTEMD_INSTALL: both
 ```
 
 Generates:
-- `etc/<name>.service` - System service template
-- `etc/<name>.user.service` - User service template (with `USERMODE=True`)
-- `bin/install-service.sh` - Installs system service
-- `bin/install-service-user.sh` - Installs user service (uses `.user.service` file)
+- `etc/<name>.<type>` - System unit template
+- `etc/<name>.user.<type>` - User unit template
+- `bin/install-<type>.sh` - Installs system unit
+- `bin/install-<type>-user.sh` - Installs user unit
 
 ### Shared Install Script
 
