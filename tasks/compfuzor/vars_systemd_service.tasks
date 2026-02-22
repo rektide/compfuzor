@@ -2,8 +2,9 @@
 - name: 'Add systemd install-service script to ETC_FILES'
   set_fact:
     ETC_FILES: "{{ enhancedEtc|concat(ETC_FILES|default([])) }}"
-  when: SYSTEMD_SERVICE|default(False) and SYSTEMD_SERVICE|def != False and not SYSTEMD_INSTALL_BYPASS|default(False)
+  when: _has_service and not SYSTEMD_INSTALL_BYPASS|default(False)
   vars:
+    _has_service: "{{ SYSTEMD_SERVICE|default(False) and SYSTEMD_SERVICE|def != False or (SYSTEMD_SERVICES|default({})).ExecStart is defined }}"
     enhancedEtc:
       - name: install-service.sh
         src: systemd/install-service.sh
@@ -11,8 +12,9 @@
 - name: 'Generate systemd service install script'
   set_fact:
     BINS: "{{ enhancedBins|mergeKeyed(bins, key='name', concat_fields=['generated']) }}"
-  when: SYSTEMD_SERVICE|default(False) and SYSTEMD_SERVICE|def != False and not SYSTEMD_INSTALL_BYPASS|default(False)
+  when: _has_service and SYSTEMD_SYSTEM_SERVICE_INSTALL|default(true) and not SYSTEMD_INSTALL_BYPASS|default(False)
   vars:
+    _has_service: "{{ SYSTEMD_SERVICE|default(False) and SYSTEMD_SERVICE|def != False or (SYSTEMD_SERVICES|default({})).ExecStart is defined }}"
     bins: "{{BINS|default([])}}"
     serviceName: "{{SYSTEMD_SERVICE if SYSTEMD_SERVICE|def != True else NAME}}"
     enhancedBins:
@@ -25,20 +27,17 @@
 - name: 'Generate systemd user service install script'
   set_fact:
     BINS: "{{ enhancedBins|mergeKeyed(bins, key='name', concat_fields=['generated']) }}"
-  when: 
-    - SYSTEMD_SERVICE|default(False)
-    - SYSTEMD_SERVICE|def != False
-    - not SYSTEMD_INSTALL_BYPASS|default(False)
-    - (SYSTEMD_SCOPE|default('') == 'user' or USERMODE|default(False) or SYSTEMD_USER_SERVICE|default(False))
+  when: _has_service and SYSTEMD_USER_SERVICE_INSTALL|default(false) and not SYSTEMD_INSTALL_BYPASS|default(False)
   vars:
+    _has_service: "{{ SYSTEMD_SERVICE|default(False) and SYSTEMD_SERVICE|def != False or (SYSTEMD_SERVICES|default({})).ExecStart is defined }}"
     bins: "{{BINS|default([])}}"
     serviceName: "{{SYSTEMD_SERVICE if SYSTEMD_SERVICE|def != True else NAME}}"
+    _use_user_suffix: "{{ SYSTEMD_DUAL|default(true) }}"
     enhancedBins:
       - name: install-service-user.sh
         generatedAt: end
         generated: |
           SERVICE_NAME="{{serviceName}}"
           USERMODE=true
-          {% if SYSTEMD_USER_SERVICE|default(False) %}SERVICE_SUFFIX=user
+          {% if _use_user_suffix %}SERVICE_SUFFIX=user
           {% endif %}source "$(dirname "$0")/../etc/install-service.sh"
-

@@ -10,12 +10,26 @@
     dest: "{{ dest }}"
     link: "{{ link }}"
   vars:
+    # remaking
+    newName: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default('')}}"
+    newFallback: "{{ explicitName|default(NAME|default(TYPE))}}"
+    # \\/ had been \/, guessing that was wrong
+    newDedash: "{{ explicitName|replace('\\-', '\x2d')|replace('/', '\\/') }}"
+    newDedasheFallback: "{{ explicitDedash|default(NAME|default(TYPE))}}"
+    
+    unitname: "{{newDedashedFallback}}"
+    unit: "{{unitname}}{{inst}}{{_unit_suffix}}.{{unit_type}}"
+    _unit_suffix: "{{ '.user' if SYSTEMD_SCOPE == 'user' and unit_type == 'service' else '' }}"
+
+    # old
     # currently no support for UNITS here
-    varunit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False)|replace('\\-', '\x2d') }}"
-    varunits: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default(False) }}"
-    unitname: "{{ varunit|default(NAME|default(TYPE)) if varunit != True and varunit != 'True' else TYPE|default(NAME) }}"
+    oldVarunit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False)|replace('\\-', '\x2d') }}"
+    oldVarunits: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default(False) }}"
+    oldUnitname: "{{ varunit|default(NAME|default(TYPE)) if varunit != True and varunit != 'True' and varunit != 'False' else NAME|default(Type) }}"
+    oldUnit: "{{(unitname + inst + '.' + unit_type)|replace('/', '\/')|replace('\\-', '\x2d')}}"
+
+
     inst: "{{'@' if SYSTEMD_INSTANCE|def else ''}}"
-    unit: "{{(unitname + inst + '.' + unit_type)|replace('/', '\/')|replace('\\-', '\x2d')}}"
     instanced: "{{(unitname + inst + SYSTEMD_INSTANCE + '.' + unit_type)|default('replace('/', '\/')|replace('\\-', '\x2d'))}}"
 
     local_src: "files/{{unitname}}/{{unit}}"
@@ -42,7 +56,8 @@
     - "{{ SYSTEMD_UNIT_DIR }}"
   loop_control:
     loop_var: i
-  when: unit is truthy or units is truthy
+  #when: unit is truthy or units is truthy
+  when: unit is truthy
   #become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
 - name: templating in unit
@@ -73,22 +88,22 @@
     concrete_instance: SYSTEMD_INSTANCE|def and SYSTEMD_INSTANCE|def != True
 
 # older use of SYSTEMD_UNITS, for multiple units. TODO: rename.
-- name: templating units
-  template: src="files/{{target}}/{{i}}" dest="{{SYSTEMD_UNIT_DIR}}/{{i}}"
-  with_items: "{{units}}"
-  loop_control:
-    loop_var: i
-  when: units|def is sequence and units|def is not mapping
-  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
-- name: enabling units
-  shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{i}}"
-  with_items: "{{units}}"
-  when: units|def is sequence and units|def is not mapping
-  loop_control:
-    loop_var: i
-  vars:
-    do_become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
-  become: USERMODE|default(False) is falsy and SYSTEMD_USERMODE|default(False) is falsy
+#- name: templating units
+#  template: src="files/{{target}}/{{i}}" dest="{{SYSTEMD_UNIT_DIR}}/{{i}}"
+#  with_items: "{{units}}"
+#  loop_control:
+#    loop_var: i
+#  when: units|def is sequence and units|def is not mapping
+#  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
+#- name: enabling units
+#  shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{i}}"
+#  with_items: "{{units}}"
+#  when: units|def is sequence and units|def is not mapping
+#  loop_control:
+#    loop_var: i
+#  vars:
+#    do_become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
+#  become: USERMODE|default(False) is falsy and SYSTEMD_USERMODE|default(False) is falsy
 
 - name: install systemd unit\'s .d directory
   include_tasks: compfuzor/fs_d.tasks

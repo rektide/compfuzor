@@ -5,6 +5,31 @@ SYSTEMD_SYSLOG_IDENTIFIER: "{{NAME}}"
 SYSTEMD_UNIT_DIR: "{{ hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_UNIT_DIR']|default(vars['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_UNIT_DIR']) }}"
 SYSTEMD_CONF_DIR: "{{ hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_CONF_DIR']|default(vars['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_CONF_DIR']) }}"
 
+# Per-scope, per-unit-type generation gates
+# These control whether to generate unit files for each scope+type combination
+SYSTEMD_DUAL: true  # Generate both system and user scope units
+SYSTEMD_SYSTEM_SERVICE: true
+SYSTEMD_SYSTEM_SOCKET: true
+SYSTEMD_SYSTEM_DNSSD: true
+SYSTEMD_SYSTEM_MOUNT: true
+
+SYSTEMD_USER_SERVICE: true
+SYSTEMD_USER_SOCKET: true
+SYSTEMD_USER_DNSSD: true
+SYSTEMD_USER_MOUNT: true
+
+# Install script generation: system | user | both | none | true | false
+# true=both, false=none. Default based on USERMODE.
+SYSTEMD_INSTALL: system
+SYSTEMD_SYSTEM_SERVICE_INSTALL: "{{ SYSTEMD_INSTALL in ['system', 'both', true] }}"
+SYSTEMD_USER_SERVICE_INSTALL: "{{ SYSTEMD_INSTALL in ['user', 'both', true] }}"
+
+# Computed gate for current scope+unit_type (used in systemd.unit.includes)
+SYSTEMD_UNIT_GATE: "{{ hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_'+unit_type|upper]|default(vars['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_'+unit_type|upper])|default(True) }}"
+
+# Service suffix for user services (.user.service)
+SYSTEMD_SERVICE_SUFFIX: "{{ '.user' if SYSTEMD_SCOPE == 'user' else '' }}"
+
 SYSTEMD_BINFMT: "{{_systemd_vars.stdout_lines[0]}}"
 SYSTEMD_CATALOG_DIR: "{{_systemd_vars.stdout_lines[1]}}"
 SYSTEMD_MODULES_LOAD_DIR: "{{_systemd_vars.stdout_lines[2]}}"
