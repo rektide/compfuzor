@@ -88,7 +88,7 @@
   become: "{{should_become}}"
   when: _subdir_items | length > 0
   vars:
-    _subdir_items: "{{ _vals.dirs|default([])|arrayitize + _vals.d|default([])|arrayitize }}"
+    _subdir_items: "{{ _vals.dirs|default([], true)|arrayitize + _vals.d|default([], true)|arrayitize }}"
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
     subdir: "{{_dir}}/{{item.name|default(item)}}" 
