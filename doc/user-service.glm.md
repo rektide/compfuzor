@@ -339,22 +339,55 @@ These often include `USERMODE: True` or target user-specific configuration direc
 
 | Variable | Effect |
 |----------|--------|
-| `SYSTEMD_SCOPE: user` | Sets systemd to user mode |
+| `SYSTEMD_DUAL` | Generate both system + user scope units (default: true) |
+| `SYSTEMD_SCOPE` | Current scope: `system` or `user` |
+| `SYSTEMD_SYSTEM_SERVICE` | Generate system .service file (default: true) |
+| `SYSTEMD_USER_SERVICE` | Generate user .service file (default: true) |
+| `SYSTEMD_INSTALL` | Install script generation: `system` \| `user` \| `both` \| `none` \| `true` \| `false` |
+| `SYSTEMD_SYSTEM_SERVICE_INSTALL` | Generate install-service.sh |
+| `SYSTEMD_USER_SERVICE_INSTALL` | Generate install-service-user.sh |
 | `SYSTEMD_UNIT_DIR` | Override service installation path |
-| `USERMODE: True` | Enables user mode + imports `common.user.yaml` |
-| `SYSTEMD_USER_SERVICE: True` | Generates `.user.service` alongside `.service` |
-| `SYSTEMD_INSTALL_BYPASS: True` | Skip generating install scripts |
+| `USERMODE: True` | Enables user mode + sets SYSTEMD_DUAL:false, SYSTEMD_INSTALL:user |
+| `SYSTEMD_INSTALL_BYPASS: True` | Skip generating all install scripts |
 | `SYSTEMD_LINK: False` | Disables automatic service linking |
 | `WantedBy: graphical-session.target` | Start with graphical session |
 | `WantedBy: default.target` | Start with user session |
 | `BindsTo: pipewire.service` | Tie lifecycle to another service |
 
+### Per-Scope Per-Unit-Type Gates
+
+| Variable | Default | Controls |
+|----------|---------|----------|
+| `SYSTEMD_SYSTEM_SERVICE` | true | Generate system .service |
+| `SYSTEMD_SYSTEM_SOCKET` | true | Generate system .socket |
+| `SYSTEMD_USER_SERVICE` | true | Generate user .user.service |
+| `SYSTEMD_USER_SOCKET` | true | Generate user .socket |
+
 ### Generated Files
 
 | Condition | Generated Files |
 |-----------|-----------------|
-| `SYSTEMD_SERVICE: True` | `bin/install-service.sh`, `etc/install-service.sh` |
-| `SYSTEMD_SCOPE: user` or `USERMODE: True` | `bin/install-service-user.sh` |
-| `SYSTEMD_USER_SERVICE: True` | `etc/<name>.user.service` |
+| `SYSTEMD_SERVICE` or `SYSTEMD_SERVICES.ExecStart` | `etc/<name>.service`, `etc/<name>.user.service` |
+| `SYSTEMD_SYSTEM_SERVICE_INSTALL` | `bin/install-service.sh` |
+| `SYSTEMD_USER_SERVICE_INSTALL` | `bin/install-service-user.sh` |
+| Service defined | `etc/install-service.sh` (shared script) |
+
+### Default Behavior
+
+When `SYSTEMD_SERVICE` or `SYSTEMD_SERVICES.ExecStart` is defined:
+
+**Default (USERMODE=false):**
+- Generates both `etc/<name>.service` and `etc/<name>.user.service`
+- Generates `bin/install-service.sh` (SYSTEMD_INSTALL=system)
+- User service file available but no install script
+
+**With USERMODE=true:**
+- Generates only `etc/<name>.service` (no .user.service, SYSTEMD_DUAL=false)
+- Generates `bin/install-service-user.sh` (SYSTEMD_INSTALL=user)
+
+**To get both install scripts:**
+```yaml
+SYSTEMD_INSTALL: both
+```
 
 
