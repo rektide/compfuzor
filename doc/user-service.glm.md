@@ -138,6 +138,65 @@ SSH agent uses `default.target` since it should be available throughout the user
 
 ---
 
+## Pattern 7: Auto-Generated Install Scripts
+
+When `SYSTEMD_SERVICE` is set, compfuzor automatically generates install scripts:
+
+### System Service
+
+```yaml
+SYSTEMD_SERVICE: True  # or service name
+```
+
+Generates `bin/install-service.sh` that:
+- Links `etc/<name>.service` to `/etc/systemd/system/`
+- Daemon-reloads only if the service file changed
+- Enables the service
+
+### User Service
+
+User service install script is generated when `SYSTEMD_SCOPE: user`, `USERMODE: True`, or `SYSTEMD_USER_SERVICE: True`:
+
+```yaml
+SYSTEMD_SERVICE: True
+SYSTEMD_SCOPE: user  # or USERMODE: True
+```
+
+Generates `bin/install-service-user.sh` that:
+- Links `etc/<name>.service` to `~/.config/systemd/user/`
+- Uses `systemctl --user` commands
+- No sudo required
+
+### Dual System + User Service
+
+For services that need both system and user variants:
+
+```yaml
+SYSTEMD_SERVICE: True
+SYSTEMD_USER_SERVICE: True
+```
+
+Generates:
+- `etc/<name>.service` - System service template
+- `etc/<name>.user.service` - User service template (with `USERMODE=True`)
+- `bin/install-service.sh` - Installs system service
+- `bin/install-service-user.sh` - Installs user service (uses `.user.service` file)
+
+### Shared Install Script
+
+Both scripts use a shared parameterized script at [`etc/install-service.sh`](../files/systemd/install-service.sh):
+
+```bash
+SERVICE_NAME="my-service"
+SERVICE_SRC="$(pwd)/etc/my-service.service"
+SERVICE_DEST="/etc/systemd/system/my-service.service"
+SUDO="sudo"                    # empty for user services
+SYSTEMCTL="systemctl"          # "systemctl --user" for user services
+source "$(dirname "$0")/../etc/install-service.sh"
+```
+
+---
+
 ## Summary Table
 
 | Pattern | Use Case | Key Variables |
@@ -258,8 +317,19 @@ These often include `USERMODE: True` or target user-specific configuration direc
 | `SYSTEMD_SCOPE: user` | Sets systemd to user mode |
 | `SYSTEMD_UNIT_DIR` | Override service installation path |
 | `USERMODE: True` | Enables user mode + imports `common.user.yaml` |
+| `SYSTEMD_USER_SERVICE: True` | Generates `.user.service` alongside `.service` |
+| `SYSTEMD_INSTALL_BYPASS: True` | Skip generating install scripts |
 | `SYSTEMD_LINK: False` | Disables automatic service linking |
 | `WantedBy: graphical-session.target` | Start with graphical session |
 | `WantedBy: default.target` | Start with user session |
 | `BindsTo: pipewire.service` | Tie lifecycle to another service |
+
+### Generated Files
+
+| Condition | Generated Files |
+|-----------|-----------------|
+| `SYSTEMD_SERVICE: True` | `bin/install-service.sh`, `etc/install-service.sh` |
+| `SYSTEMD_SCOPE: user` or `USERMODE: True` | `bin/install-service-user.sh` |
+| `SYSTEMD_USER_SERVICE: True` | `etc/<name>.user.service` |
+
 
