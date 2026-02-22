@@ -23,6 +23,12 @@ SYSTEMD_USER_MOUNT: true
 SYSTEMD_INSTALL: system
 SYSTEMD_SYSTEM_SERVICE_INSTALL: "{{ SYSTEMD_INSTALL in ['system', 'both', true] }}"
 SYSTEMD_USER_SERVICE_INSTALL: "{{ SYSTEMD_INSTALL in ['user', 'both', true] }}"
+SYSTEMD_SYSTEM_SOCKET_INSTALL: "{{ SYSTEMD_INSTALL in ['system', 'both', true] }}"
+SYSTEMD_USER_SOCKET_INSTALL: "{{ SYSTEMD_INSTALL in ['user', 'both', true] }}"
+SYSTEMD_SYSTEM_MOUNT_INSTALL: "{{ SYSTEMD_INSTALL in ['system', 'both', true] }}"
+SYSTEMD_USER_MOUNT_INSTALL: "{{ SYSTEMD_INSTALL in ['user', 'both', true] }}"
+SYSTEMD_SYSTEM_DNSSD_INSTALL: "{{ SYSTEMD_INSTALL in ['system', 'both', true] }}"
+SYSTEMD_USER_DNSSD_INSTALL: "{{ SYSTEMD_INSTALL in ['user', 'both', true] }}"
 
 # Computed gate for current scope+unit_type (used in systemd.unit.includes)
 SYSTEMD_UNIT_GATE: "{{ hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_'+unit_type|upper]|default(vars['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_'+unit_type|upper])|default(True) }}"

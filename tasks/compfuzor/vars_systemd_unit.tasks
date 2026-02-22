@@ -1,0 +1,67 @@
+---
+- name: 'Check for any systemd units defined'
+  set_fact:
+    _systemd_has_units: "{{ _systemd_has_units }}"
+  vars:
+    _systemd_has_units: >-
+      {{ SYSTEMD_UNITTYPES_ALL | select('match', '.*') | map('regex_replace', '^(.*)$',
+        vars['SYSTEMD_' + item|upper]|default(hostvars[inventory_hostname]['SYSTEMD_' + item|upper]|default(false))|bool or
+        vars['SYSTEMD_' + item|upper + 'S']|default(hostvars[inventory_hostname]['SYSTEMD_' + item|upper + 'S']|default({}))|length > 0
+      ) | select('equalto', true) | list | length > 0 }}
+
+- name: 'Add systemd install-unit script to ETC_FILES'
+  set_fact:
+    ETC_FILES: "{{ enhancedEtc|concat(ETC_FILES|default([])) }}"
+  when: _systemd_has_units and not SYSTEMD_INSTALL_BYPASS|default(False)
+  vars:
+    enhancedEtc:
+      - name: install-unit.sh
+        src: systemd/install-unit.sh
+
+- name: 'Generate systemd system install scripts'
+  set_fact:
+    BINS: "{{ BINS|default([]) + [_bin_item] }}"
+  when: _has_unit and _install and not SYSTEMD_INSTALL_BYPASS|default(False)
+  loop: "{{ SYSTEMD_UNITTYPES_ALL }}"
+  loop_control:
+    loop_var: _unit_type
+  vars:
+    _upper: "{{ _unit_type|upper }}"
+    _var: "{{ vars['SYSTEMD_' + _upper]|default(hostvars[inventory_hostname]['SYSTEMD_' + _upper]|default(false)) }}"
+    _vars: "{{ vars['SYSTEMD_' + _upper + 'S']|default(hostvars[inventory_hostname]['SYSTEMD_' + _upper + 'S']|default({})) }}"
+    _has_unit: "{{ _var|default(false) or _vars|default({})|length > 0 }}"
+    _unit_name: "{{ _var if _var | string not in ['True', 'true', True] else NAME }}"
+    _install_var: "SYSTEMD_SYSTEM_{{ _upper }}_INSTALL"
+    _install: "{{ vars[_install_var]|default(hostvars[inventory_hostname][_install_var]|default(true)) }}"
+    _bin_item:
+      name: "install-{{ _unit_type }}.sh"
+      generatedAt: end
+      generated: |
+        UNIT_NAME="{{ _unit_name }}"
+        UNIT_TYPE="{{ _unit_type }}"
+        source "$(dirname "$0")/../etc/install-unit.sh"
+
+- name: 'Generate systemd user install scripts'
+  set_fact:
+    BINS: "{{ BINS|default([]) + [_bin_item] }}"
+  when: _has_unit and _install and not SYSTEMD_INSTALL_BYPASS|default(False)
+  loop: "{{ SYSTEMD_UNITTYPES_ALL }}"
+  loop_control:
+    loop_var: _unit_type
+  vars:
+    _upper: "{{ _unit_type|upper }}"
+    _var: "{{ vars['SYSTEMD_' + _upper]|default(hostvars[inventory_hostname]['SYSTEMD_' + _upper]|default(false)) }}"
+    _vars: "{{ vars['SYSTEMD_' + _upper + 'S']|default(hostvars[inventory_hostname]['SYSTEMD_' + _upper + 'S']|default({})) }}"
+    _has_unit: "{{ _var|default(false) or _vars|default({})|length > 0 }}"
+    _unit_name: "{{ _var if _var | string not in ['True', 'true', True] else NAME }}"
+    _install_var: "SYSTEMD_USER_{{ _upper }}_INSTALL"
+    _install: "{{ vars[_install_var]|default(hostvars[inventory_hostname][_install_var]|default(false)) }}"
+    _bin_item:
+      name: "install-{{ _unit_type }}-user.sh"
+      generatedAt: end
+      generated: |
+        UNIT_NAME="{{ _unit_name }}"
+        UNIT_TYPE="{{ _unit_type }}"
+        UNIT_SUFFIX=user
+        USERMODE=true
+        source "$(dirname "$0")/../etc/install-unit.sh"
