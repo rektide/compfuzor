@@ -140,5 +140,8 @@ MULTISTRAP_COMPONENTS:
 
 _ext: "{{ '.' + item.ext if item.ext|default(False) else '' }}"
 
+FILES_BIN_HEADER: "{{ lookup('file', 'files/_bin.header') }}"
+FILES_BIN_FOOTER: "{{ lookup('file', 'files/_bin.footer') }}"
+
 _binsRun: "{{ BINS_BYPASS|default(False) is falsy and BINS_RUN_BYPASS|default(False) is falsy }}"
 _postRun: "{{ 'postRun' if _binsRun else 'skip' }}"
