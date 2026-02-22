@@ -84,10 +84,15 @@
     mode: "{{item.mode|default(_vals.prop.mode|default(DIRMODE, true), true)}}"
     owner: "{{should_become|ternary(owner|default(ansible_user_id, true),omit)}}"
     group: "{{should_become|ternary(group|default(ansible_user_gid, true),omit)}}"
-  with_items: "{{ (_vals.dirs|default([], true) if _vals.dirs is iterable and _vals.dirs is not string else []) + (_vals.d|default([], true) if _vals.d is iterable and _vals.d is not string else []) }}"
+  with_items: "{{ _dirs_items + _d_items }}"
   become: "{{should_become}}"
-  when: (_vals.dirs is iterable and _vals.dirs is not string and _vals.dirs|length > 0) or (_vals.d is iterable and _vals.d is not string and _vals.d|length > 0)
+  when: _has_subdirs
   vars:
+    _dirs_is_list: "{{ _vals.dirs is iterable and _vals.dirs is not string }}"
+    _d_is_list: "{{ _vals.d is iterable and _vals.d is not string }}"
+    _dirs_items: "{{ _vals.dirs|default([], true) if _dirs_is_list else [] }}"
+    _d_items: "{{ _vals.d|default([], true) if _d_is_list else [] }}"
+    _has_subdirs: "{{ (_dirs_is_list and _vals.dirs|length > 0) or (_d_is_list and _vals.d|length > 0) }}"
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
     subdir: "{{_dir}}/{{item.name|default(item)}}" 
