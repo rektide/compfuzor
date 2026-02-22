@@ -14,7 +14,7 @@
 {%- endmacro -%}
 
 {% macro mdef(env) -%}
-{% if env is none -%}{{""}}
+{% if env == None -%}{{""-}}
 {% elif env is mapping -%}
 {% for key,val in env.items() -%}
 	{% set ns.keys = ns.keys + [key] -%}
@@ -36,7 +36,7 @@
 {{ def("INSTANCE", INSTANCE|default("")) -}}
 {{ def("REPO", REPO|default("")) -}}
 {{ def("BUILD_DIR", BUILD_DIR|default("")) -}}
-{{ def("GLOBAL_BINS_DIR", _globalBins) -}}
+{{ def("GLOBAL_BINS_DIR", GLOBAL_BINS_DIR|default("")) -}}
 {{ mdef(ENV_PRIO|default(None, True)) -}}
 {{ mdef(ENV|default(None)) -}}
 {{ def("COMPFUZOR_ENVS", ns.keys|join(",")) -}}
