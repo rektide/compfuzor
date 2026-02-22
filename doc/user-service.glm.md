@@ -199,17 +199,12 @@ source "$(dirname "$0")/../etc/install-service.sh"
 **User service (`bin/install-service-user.sh`):**
 ```bash
 SERVICE_NAME="my-service"
+SERVICE_SUFFIX=user
 USERMODE=true
 source "$(dirname "$0")/../etc/install-service.sh"
 ```
 
-**User service with `.user.service` file:**
-```bash
-SERVICE_NAME="my-service"
-USERMODE=true
-SERVICE_SUFFIX=user
-source "$(dirname "$0")/../etc/install-service.sh"
-```
+This installs `etc/my-service.user.service` → `~/.config/systemd/user/my-service.service` (`.user` stripped from symlink)
 
 **Environment variables:**
 | Variable | Default | Description |
@@ -367,10 +362,19 @@ These often include `USERMODE: True` or target user-specific configuration direc
 
 | Condition | Generated Files |
 |-----------|-----------------|
-| `SYSTEMD_SERVICE` or `SYSTEMD_SERVICES.ExecStart` | `etc/<name>.service`, `etc/<name>.user.service` |
+| `SYSTEMD_SERVICE` or `SYSTEMD_SERVICES.ExecStart` | `etc/<name>.service` (system), `etc/<name>.user.service` (user) |
 | `SYSTEMD_SYSTEM_SERVICE_INSTALL` | `bin/install-service.sh` |
 | `SYSTEMD_USER_SERVICE_INSTALL` | `bin/install-service-user.sh` |
 | Service defined | `etc/install-service.sh` (shared script) |
+
+### File Naming Convention
+
+| Scope | etc/ filename | Symlink destination |
+|-------|---------------|---------------------|
+| System | `<name>.service` | `/etc/systemd/system/<name>.service` |
+| User | `<name>.user.service` | `~/.config/systemd/user/<name>.service` |
+
+The `.user` suffix is stripped when creating the symlink so systemd sees `foo.service` not `foo.user.service`.
 
 ### Default Behavior
 
