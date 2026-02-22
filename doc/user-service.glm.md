@@ -184,35 +184,55 @@ Generates:
 
 ### Shared Install Script
 
-Both scripts use a shared parameterized script at [`files/systemd/install-service.sh`](../files/systemd/install-service.sh):
+All unit install scripts use a shared parameterized script at [`files/systemd/install-unit.sh`](../files/systemd/install-unit.sh):
 
 **Defaults (sourced from `env.export`):**
-- `SERVICE_NAME` - defaults to `NAME` from `env.export`, else `basename $(pwd)`
-- `SERVICE_FILE` - defaults to `SERVICE_NAME` (use `SERVICE_SUFFIX=user` for `.user.service`)
+- `UNIT_NAME` - defaults to `NAME` from `env.export`, else `basename $(pwd)`
+- `UNIT_TYPE` - defaults to `service` (also: `socket`, `mount`, `dnssd`)
+- `UNIT_FILE` - defaults to `UNIT_NAME` (use `UNIT_SUFFIX=user` for `.user.*`)
 
 **System service (`bin/install-service.sh`):**
 ```bash
-SERVICE_NAME="my-service"
-source "$(dirname "$0")/../etc/install-service.sh"
+UNIT_NAME="my-service"
+UNIT_TYPE=service
+source "$(dirname "$0")/../etc/install-unit.sh"
 ```
 
 **User service (`bin/install-service-user.sh`):**
 ```bash
-SERVICE_NAME="my-service"
-SERVICE_SUFFIX=user
+UNIT_NAME="my-service"
+UNIT_TYPE=service
+UNIT_SUFFIX=user
 USERMODE=true
-source "$(dirname "$0")/../etc/install-service.sh"
+source "$(dirname "$0")/../etc/install-unit.sh"
 ```
 
 This installs `etc/my-service.user.service` → `~/.config/systemd/user/my-service.service` (`.user` stripped from symlink)
 
+**System mount (`bin/install-mount.sh`):**
+```bash
+UNIT_NAME="my-mount"
+UNIT_TYPE=mount
+source "$(dirname "$0")/../etc/install-unit.sh"
+```
+
+**User mount (`bin/install-mount-user.sh`):**
+```bash
+UNIT_NAME="my-mount"
+UNIT_TYPE=mount
+UNIT_SUFFIX=user
+USERMODE=true
+source "$(dirname "$0")/../etc/install-unit.sh"
+```
+
 **Environment variables:**
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `USERMODE` | `false` | `true` for user services |
-| `SERVICE_NAME` | `NAME` or `basename $(pwd)` | Service identifier |
-| `SERVICE_SUFFIX` | (empty) | Set to `user` for `.user.service` |
-| `SERVICE_FILE` | `SERVICE_NAME[.SUFFIX]` | Service filename without `.service` |
+| `USERMODE` | `false` | `true` for user units |
+| `UNIT_NAME` | `NAME` or `basename $(pwd)` | Unit identifier |
+| `UNIT_TYPE` | `service` | Unit type: `service`, `socket`, `mount`, `dnssd` |
+| `UNIT_SUFFIX` | (empty) | Set to `user` for `.user.*` files |
+| `UNIT_FILE` | `UNIT_NAME[.SUFFIX]` | Unit filename without `.{type}` |
 | `SUDO` | `sudo` or `false` | `false` = no sudo |
 
 ---
@@ -336,15 +356,15 @@ These often include `USERMODE: True` or target user-specific configuration direc
 |----------|--------|
 | `SYSTEMD_DUAL` | Generate both system + user scope units (default: true) |
 | `SYSTEMD_SCOPE` | Current scope: `system` or `user` |
-| `SYSTEMD_SYSTEM_SERVICE` | Generate system .service file (default: true) |
-| `SYSTEMD_USER_SERVICE` | Generate user .service file (default: true) |
+| `SYSTEMD_SYSTEM_*` | Generate system unit file for type `*` (service, socket, mount, dnssd) |
+| `SYSTEMD_USER_*` | Generate user unit file for type `*` |
 | `SYSTEMD_INSTALL` | Install script generation: `system` \| `user` \| `both` \| `none` \| `true` \| `false` |
-| `SYSTEMD_SYSTEM_SERVICE_INSTALL` | Generate install-service.sh |
-| `SYSTEMD_USER_SERVICE_INSTALL` | Generate install-service-user.sh |
-| `SYSTEMD_UNIT_DIR` | Override service installation path |
+| `SYSTEMD_SYSTEM_*_INSTALL` | Generate install script for system unit type |
+| `SYSTEMD_USER_*_INSTALL` | Generate install script for user unit type |
+| `SYSTEMD_UNIT_DIR` | Override unit installation path |
 | `USERMODE: True` | Enables user mode + sets SYSTEMD_DUAL:false, SYSTEMD_INSTALL:user |
 | `SYSTEMD_INSTALL_BYPASS: True` | Skip generating all install scripts |
-| `SYSTEMD_LINK: False` | Disables automatic service linking |
+| `SYSTEMD_LINK: False` | Disables automatic unit linking |
 | `WantedBy: graphical-session.target` | Start with graphical session |
 | `WantedBy: default.target` | Start with user session |
 | `BindsTo: pipewire.service` | Tie lifecycle to another service |
@@ -362,32 +382,36 @@ These often include `USERMODE: True` or target user-specific configuration direc
 
 | Condition | Generated Files |
 |-----------|-----------------|
-| `SYSTEMD_SERVICE` or `SYSTEMD_SERVICES.ExecStart` | `etc/<name>.service` (system), `etc/<name>.user.service` (user) |
-| `SYSTEMD_SYSTEM_SERVICE_INSTALL` | `bin/install-service.sh` |
-| `SYSTEMD_USER_SERVICE_INSTALL` | `bin/install-service-user.sh` |
-| Service defined | `etc/install-service.sh` (shared script) |
+| `SYSTEMD_SERVICE` or `SYSTEMD_SERVICES` defined | `etc/<name>.service` (system), `etc/<name>.user.service` (user) |
+| `SYSTEMD_MOUNT` or `SYSTEMD_MOUNTS` defined | `etc/<name>.mount` (system), `etc/<name>.user.mount` (user) |
+| `SYSTEMD_SOCKET` or `SYSTEMD_SOCKETS` defined | `etc/<name>.socket` (system), `etc/<name>.user.socket` (user) |
+| `SYSTEMD_SYSTEM_*_INSTALL` | `bin/install-<type>.sh` |
+| `SYSTEMD_USER_*_INSTALL` | `bin/install-<type>-user.sh` |
+| Any unit defined | `etc/install-unit.sh` (shared script) |
 
 ### File Naming Convention
 
 | Scope | etc/ filename | Symlink destination |
 |-------|---------------|---------------------|
-| System | `<name>.service` | `/etc/systemd/system/<name>.service` |
-| User | `<name>.user.service` | `~/.config/systemd/user/<name>.service` |
+| System | `<name>.<type>` | `/etc/systemd/system/<name>.<type>` |
+| User | `<name>.user.<type>` | `~/.config/systemd/user/<name>.<type>` |
 
 The `.user` suffix is stripped when creating the symlink so systemd sees `foo.service` not `foo.user.service`.
 
+Applies to all unit types: `service`, `socket`, `mount`, `dnssd`.
+
 ### Default Behavior
 
-When `SYSTEMD_SERVICE` or `SYSTEMD_SERVICES.ExecStart` is defined:
+When any systemd unit is defined (e.g., `SYSTEMD_MOUNT` or `SYSTEMD_MOUNTS.Where`):
 
 **Default (USERMODE=false):**
-- Generates both `etc/<name>.service` and `etc/<name>.user.service`
-- Generates `bin/install-service.sh` (SYSTEMD_INSTALL=system)
-- User service file available but no install script
+- Generates both `etc/<name>.<type>` and `etc/<name>.user.<type>`
+- Generates `bin/install-<type>.sh` (SYSTEMD_INSTALL=system)
+- User unit file available but no install script
 
 **With USERMODE=true:**
-- Generates only `etc/<name>.service` (no .user.service, SYSTEMD_DUAL=false)
-- Generates `bin/install-service-user.sh` (SYSTEMD_INSTALL=user)
+- Generates only `etc/<name>.<type>` (no .user variant, SYSTEMD_DUAL=false)
+- Generates `bin/install-<type>-user.sh` (SYSTEMD_INSTALL=user)
 
 **To get both install scripts:**
 ```yaml
