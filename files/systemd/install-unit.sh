@@ -9,20 +9,18 @@ set -e
 
 USERMODE="${USERMODE:-false}"
 UNIT_TYPE="${UNIT_TYPE:-service}"
+UNIT_NAME="${UNIT_NAME:-${NAME:-$(basename "$(pwd)")}}"
+UNIT_SUFFIX="${UNIT_SUFFIX:-}"
+UNIT_FILE="${UNIT_FILE:-${UNIT_NAME}${UNIT_SUFFIX:+.$UNIT_SUFFIX}}"
 
-# Support legacy SERVICE_* variables for backwards compatibility
-UNIT_NAME="${UNIT_NAME:-${SERVICE_NAME:-${NAME:-$(basename "$(pwd)")}}}"
-UNIT_SUFFIX="${UNIT_SUFFIX:-${SERVICE_SUFFIX:-}}"
-UNIT_FILE="${UNIT_FILE:-${SERVICE_FILE:-${UNIT_NAME}${UNIT_SUFFIX:+.$UNIT_SUFFIX}}}"
-
-UNIT_SRC="${UNIT_SRC:-${SERVICE_SRC:-${SCRIPT_DIR}/../etc/${UNIT_FILE}.${UNIT_TYPE}}}"
+UNIT_SRC="${UNIT_SRC:-${SCRIPT_DIR}/../etc/${UNIT_FILE}.${UNIT_TYPE}}"
 
 if [ "$USERMODE" = "true" ]; then
-  UNIT_DEST="${UNIT_DEST:-${SERVICE_DEST:-${HOME}/.config/systemd/user/${UNIT_NAME}.${UNIT_TYPE}}}"
+  UNIT_DEST="${UNIT_DEST:-${HOME}/.config/systemd/user/${UNIT_NAME}.${UNIT_TYPE}}"
   SUDO="${SUDO:-false}"
   SYSTEMCTL="${SYSTEMCTL:-systemctl --user}"
 else
-  UNIT_DEST="${UNIT_DEST:-${SERVICE_DEST:-/etc/systemd/system/${UNIT_NAME}.${UNIT_TYPE}}}"
+  UNIT_DEST="${UNIT_DEST:-/etc/systemd/system/${UNIT_NAME}.${UNIT_TYPE}}"
   SUDO="${SUDO:-sudo}"
   SYSTEMCTL="${SYSTEMCTL:-systemctl}"
 fi

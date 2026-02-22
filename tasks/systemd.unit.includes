@@ -19,7 +19,7 @@
     
     unitname: "{{newDedashedFallback}}"
     unit: "{{unitname}}{{inst}}{{_unit_suffix}}.{{unit_type}}"
-    _unit_suffix: "{{ '.user' if SYSTEMD_SCOPE == 'user' and unit_type == 'service' else '' }}"
+    _unit_suffix: "{{ '.user' if SYSTEMD_SCOPE == 'user' else '' }}"
     _link_unit: "{{unitname}}{{inst}}.{{unit_type}}"
 
     # old
