@@ -149,5 +149,117 @@ SSH agent uses `default.target` since it should be available throughout the user
 
 ---
 
-## Additional Examples
+## Pattern 5: `USERMODE: True` with Common Variables
+
+When using `USERMODE: True`, the [`vars/common.user.yaml`](../vars/common.user.yaml) file is typically imported, which automatically sets:
+
+```yaml
+USERMODE: True
+
+SYSTEMD_SCOPE: user
+SYSTEMD_UNIT_DIR: "{{XDG_CONFIG_DIR}}/systemd/user"
+```
+
+This also remaps all standard directories to user-specific locations (`BINS_DIR`, `ETCS_DIR`, `OPTS_DIR`, etc.).
+
+### Example: [`rtorrent.pb`](../rtorrent.pb)
+
+```yaml
+USERMODE: True
+# No SYSTEMD_* variables needed - common.user.yaml handles it
+
+LINKS:
+  "~/.rtorrent.rc": "{{ETC}}/rtorrent.rc"
+  "~/.torrent": "{{VAR}}"
+```
+
+rtorrent is a user-space torrent client, so `USERMODE: True` ensures everything runs under the user's context.
+
+### Example: [`google-drive-ocamlfuse.mount.pb`](../google-drive-ocamlfuse.mount.pb)
+
+```yaml
+USERMODE: True
+SYSTEMD_EXEC: google-drive-ocamlfuse -label $LABEL $MNT
+SYSTEMD_EXEC_STOP: fusermount -u $MNT
+SYSTEMD_TYPE: forking
+```
+
+Google Drive mount uses `USERMODE: True` to mount in the user's home directory.
+
+---
+
+## Pattern 6: Post-Install User Service Enablement
+
+Some services are installed system-wide but need user-level enablement. These use a separate `install-user.sh` script.
+
+### Example: [`vicinae.src.pb`](../vicinae.src.pb)
+
+```yaml
+BINS:
+  - name: install.sh
+    content: |
+      cmake --install build
+      sudo systemctl daemon-reload
+  - name: install-user.sh
+    content: |
+      systemctl --user enable vicinae.service
+```
+
+Vicinae installs to system paths but the user service needs to be enabled per-user.
+
+### Example: [`surface-dial.src.pb`](../surface-dial.src.pb)
+
+```yaml
+BINS:
+  - name: install-user.sh
+    exec: |
+      mkdir -p ~/.config/systemd/user/
+      cp ./install/surface-dial.service ~/.config/systemd/user/surface-dial.service
+      systemctl --user daemon-reload
+      systemctl --user enable surface-dial.service
+      systemctl --user start surface-dial.service
+```
+
+Surface Dial copies an upstream service file to the user systemd directory rather than generating one.
+
+### Example: [`gmrender-resurrect.src.pb`](../gmrender-resurrect.src.pb)
+
+```yaml
+SYSTEMD_SERVICE: True
+SYSTEMD_SERVICES:
+  ExecStart: "/usr/bin/gmediarender --logfile /dev/stdout"
+BINS:
+  - name: install-user.sh
+    content: |
+      ln -s $(pwd)/etc/{{NAME}}.service ~/.config/systemd/user/
+```
+
+gmediarender uses `SYSTEMD_SERVICE: True` to generate a service file, then links it manually to the user directory.
+
+---
+
+## File Naming Convention
+
+Playbooks with `.user.pb` extension typically indicate user-mode services:
+
+- [`synergy.user.pb`](../synergy.user.pb)
+- [`rygel.user.pb`](../rygel.user.pb)
+- [`kitty.user.pb`](../kitty.user.pb)
+- [`ripgrep.user.pb`](../ripgrep.user.pb)
+
+These often include `USERMODE: True` or target user-specific configuration directories.
+
+---
+
+## Quick Reference
+
+| Variable | Effect |
+|----------|--------|
+| `SYSTEMD_SCOPE: user` | Sets systemd to user mode |
+| `SYSTEMD_UNIT_DIR` | Override service installation path |
+| `USERMODE: True` | Enables user mode + imports `common.user.yaml` |
+| `SYSTEMD_LINK: False` | Disables automatic service linking |
+| `WantedBy: graphical-session.target` | Start with graphical session |
+| `WantedBy: default.target` | Start with user session |
+| `BindsTo: pipewire.service` | Tie lifecycle to another service |
 
