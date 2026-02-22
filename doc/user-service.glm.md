@@ -184,16 +184,41 @@ Generates:
 
 ### Shared Install Script
 
-Both scripts use a shared parameterized script at [`etc/install-service.sh`](../files/systemd/install-service.sh):
+Both scripts use a shared parameterized script at [`files/systemd/install-service.sh`](../files/systemd/install-service.sh):
 
+**Defaults (sourced from `env.export`):**
+- `SERVICE_NAME` - defaults to `NAME` from `env.export`, else `basename $(pwd)`
+- `SERVICE_FILE` - defaults to `SERVICE_NAME` (use `SERVICE_SUFFIX=user` for `.user.service`)
+
+**System service (`bin/install-service.sh`):**
 ```bash
 SERVICE_NAME="my-service"
-SERVICE_SRC="$(pwd)/etc/my-service.service"
-SERVICE_DEST="/etc/systemd/system/my-service.service"
-SUDO="sudo"                    # empty for user services
-SYSTEMCTL="systemctl"          # "systemctl --user" for user services
 source "$(dirname "$0")/../etc/install-service.sh"
 ```
+
+**User service (`bin/install-service-user.sh`):**
+```bash
+SERVICE_NAME="my-service"
+USERMODE=true
+source "$(dirname "$0")/../etc/install-service.sh"
+```
+
+**User service with `.user.service` file:**
+```bash
+SERVICE_NAME="my-service"
+USERMODE=true
+SERVICE_SUFFIX=user
+source "$(dirname "$0")/../etc/install-service.sh"
+```
+
+**Environment variables:**
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `USERMODE` | `false` | `true` for user services |
+| `SERVICE_NAME` | `NAME` or `basename $(pwd)` | Service identifier |
+| `SERVICE_SUFFIX` | (empty) | Set to `user` for `.user.service` |
+| `SERVICE_FILE` | `SERVICE_NAME[.SUFFIX]` | Service filename without `.service` |
+| `SUDO` | `sudo` or `false` | `false` = no sudo |
 
 ---
 
