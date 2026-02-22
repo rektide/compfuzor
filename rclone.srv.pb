@@ -11,9 +11,7 @@
     SYSTEMD_AFTER: "network-online.target"
     SYSTEMD_WANTS: "network-online.target"
     SYSTEMD_DESCRIPTION: rclone %i
-    SYSTEMD_SCOPE: user
     SYSTEMD_INSTANCES: True
-    SYSTEMD_USERMODE: "{{USERMODE|default(False)}}"
-    SYSTEMD_DEST: "{{USERMODE|ternary(SYSTEMD_USER_UNIT_DIR, omit)}}"
+    SYSTEMD_INSTALL: both
   tasks:
     - include: tasks/compfuzor.includes type=srv
