@@ -1,11 +1,17 @@
 #!/bin/bash
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# source envs, using envdefault if available to not override any variables the shell already has set
+[ -n "$ENV_BYPASS" ] || [ ! -f "$SCRIPT_DIR/../env.export" ] || source <(command -v envdefault >/dev/null && envdefault "$SCRIPT_DIR/../env.export" || cat "$SCRIPT_DIR/../env.export")
+
 set -e
 
 USERMODE="${USERMODE:-false}"
-SERVICE_NAME="${SERVICE_NAME:-$(basename "$(pwd)")}"
-SERVICE_FILE="${SERVICE_FILE:-${SERVICE_NAME}}"
+SERVICE_NAME="${SERVICE_NAME:-${NAME:-$(basename "$(pwd)")}}"
+SERVICE_SUFFIX="${SERVICE_SUFFIX:-}"
+SERVICE_FILE="${SERVICE_FILE:-${SERVICE_NAME}${SERVICE_SUFFIX:+.$SERVICE_SUFFIX}}"
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SERVICE_SRC="${SERVICE_SRC:-${SCRIPT_DIR}/../etc/${SERVICE_FILE}.service}"
 
 if [ "$USERMODE" = "true" ]; then

@@ -33,13 +33,12 @@
   vars:
     bins: "{{BINS|default([])}}"
     serviceName: "{{SYSTEMD_SERVICE if SYSTEMD_SERVICE|def != True else NAME}}"
-    userServiceFile: "{{serviceName if not SYSTEMD_USER_SERVICE|default(False) else serviceName + '.user'}}"
     enhancedBins:
       - name: install-service-user.sh
         generatedAt: end
         generated: |
           SERVICE_NAME="{{serviceName}}"
-          SERVICE_FILE="{{userServiceFile}}"
           USERMODE=true
-          source "$(dirname "$0")/../etc/install-service.sh"
+          {% if SYSTEMD_USER_SERVICE|default(False) %}SERVICE_SUFFIX=user
+          {% endif %}source "$(dirname "$0")/../etc/install-service.sh"
 
