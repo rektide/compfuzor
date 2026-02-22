@@ -21,6 +21,9 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_systemd.tasks
   tags: ['vars', 'always']
+- import_tasks: compfuzor/vars_systemd_service.tasks
+  when: SYSTEMD_SERVICE|default(False) and SYSTEMD_SERVICE|def != False
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_src.tasks
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_make_autoconf.tasks
