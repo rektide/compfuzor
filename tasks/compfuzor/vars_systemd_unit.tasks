@@ -1,66 +1,140 @@
 ---
+- name: 'Check for systemd units defined'
+  set_fact:
+    _systemd_has_service: "{{ SYSTEMD_SERVICE|default(false) or (SYSTEMD_SERVICES|default({}))|length > 0 }}"
+    _systemd_has_socket: "{{ SYSTEMD_SOCKET|default(false) or (SYSTEMD_SOCKETS|default({}))|length > 0 }}"
+    _systemd_has_mount: "{{ SYSTEMD_MOUNT|default(false) or (SYSTEMD_MOUNTS|default({}))|length > 0 }}"
+    _systemd_has_dnssd: "{{ SYSTEMD_DNSSD|default(false) or (SYSTEMD_DNSSDS|default({}))|length > 0 }}"
+
 - name: 'Check for any systemd units defined'
   set_fact:
-    _systemd_has_units: "{{ _has_service or _has_socket or _has_mount or _has_dnssd }}"
-  vars:
-    _has_service: "{{ SYSTEMD_SERVICE|default(false) or (SYSTEMD_SERVICES|default({}))|length > 0 }}"
-    _has_socket: "{{ SYSTEMD_SOCKET|default(false) or (SYSTEMD_SOCKETS|default({}))|length > 0 }}"
-    _has_mount: "{{ SYSTEMD_MOUNT|default(false) or (SYSTEMD_MOUNTS|default({}))|length > 0 }}"
-    _has_dnssd: "{{ SYSTEMD_DNSSD|default(false) or (SYSTEMD_DNSSDS|default({}))|length > 0 }}"
+    _systemd_has_units: "{{ _systemd_has_service or _systemd_has_socket or _systemd_has_mount or _systemd_has_dnssd }}"
 
-- name: 'Add systemd install-unit script to ETC_FILES'
+- name: 'Add systemd install-unit.sh script to BINS'
   set_fact:
-    ETC_FILES: "{{ enhancedEtc|concat(ETC_FILES|default([])) }}"
+    BINS: "{{ enhancedBins|concat(BINS|default([])) }}"
   when: _systemd_has_units and not SYSTEMD_INSTALL_BYPASS|default(False)
   vars:
-    enhancedEtc:
+    enhancedBins:
       - name: install-unit.sh
         src: ../systemd/install-unit.sh
 
-- name: 'Generate systemd system install scripts'
+- name: 'Generate systemd system service install script'
   set_fact:
     BINS: "{{ BINS|default([]) + [_bin_item] }}"
-  when: _has_unit and _install and not SYSTEMD_INSTALL_BYPASS|default(False)
-  loop: "{{ SYSTEMD_UNITTYPES_ALL }}"
-  loop_control:
-    loop_var: _unit_type
+  when: _systemd_has_service and SYSTEMD_SYSTEM_SERVICE_INSTALL|default(true) and not SYSTEMD_INSTALL_BYPASS|default(False)
   vars:
-    _upper: "{{ _unit_type|upper }}"
-    _var: "{{ vars['SYSTEMD_' + _upper]|default(hostvars[inventory_hostname]['SYSTEMD_' + _upper]|default(false)) }}"
-    _vars: "{{ vars['SYSTEMD_' + _upper + 'S']|default(hostvars[inventory_hostname]['SYSTEMD_' + _upper + 'S']|default({})) }}"
-    _has_unit: "{{ _var|default(false) or _vars|default({})|length > 0 }}"
-    _unit_name: "{{ _var if _var | string not in ['True', 'true', True] else NAME }}"
-    _install_var: "SYSTEMD_SYSTEM_{{ _upper }}_INSTALL"
-    _install: "{{ vars[_install_var]|default(hostvars[inventory_hostname][_install_var]|default(true)) }}"
+    _unit_name: "{{ SYSTEMD_SERVICE if SYSTEMD_SERVICE|default(false) and SYSTEMD_SERVICE not in [True, 'True'] else NAME }}"
     _bin_item:
-      name: "install-{{ _unit_type }}.sh"
+      name: install-service.sh
       generatedAt: end
       generated: |
         UNIT_NAME="{{ _unit_name }}"
-        UNIT_TYPE="{{ _unit_type }}"
+        UNIT_TYPE=service
         source "$(dirname "$0")/../etc/install-unit.sh"
 
-- name: 'Generate systemd user install scripts'
+- name: 'Generate systemd system socket install script'
   set_fact:
     BINS: "{{ BINS|default([]) + [_bin_item] }}"
-  when: _has_unit and _install and not SYSTEMD_INSTALL_BYPASS|default(False)
-  loop: "{{ SYSTEMD_UNITTYPES_ALL }}"
-  loop_control:
-    loop_var: _unit_type
+  when: _systemd_has_socket and SYSTEMD_SYSTEM_SOCKET_INSTALL|default(true) and not SYSTEMD_INSTALL_BYPASS|default(False)
   vars:
-    _upper: "{{ _unit_type|upper }}"
-    _var: "{{ vars['SYSTEMD_' + _upper]|default(hostvars[inventory_hostname]['SYSTEMD_' + _upper]|default(false)) }}"
-    _vars: "{{ vars['SYSTEMD_' + _upper + 'S']|default(hostvars[inventory_hostname]['SYSTEMD_' + _upper + 'S']|default({})) }}"
-    _has_unit: "{{ _var|default(false) or _vars|default({})|length > 0 }}"
-    _unit_name: "{{ _var if _var | string not in ['True', 'true', True] else NAME }}"
-    _install_var: "SYSTEMD_USER_{{ _upper }}_INSTALL"
-    _install: "{{ vars[_install_var]|default(hostvars[inventory_hostname][_install_var]|default(false)) }}"
+    _unit_name: "{{ SYSTEMD_SOCKET if SYSTEMD_SOCKET|default(false) and SYSTEMD_SOCKET not in [True, 'True'] else NAME }}"
     _bin_item:
-      name: "install-{{ _unit_type }}-user.sh"
+      name: install-socket.sh
       generatedAt: end
       generated: |
         UNIT_NAME="{{ _unit_name }}"
-        UNIT_TYPE="{{ _unit_type }}"
+        UNIT_TYPE=socket
+        source "$(dirname "$0")/../etc/install-unit.sh"
+
+- name: 'Generate systemd system mount install script'
+  set_fact:
+    BINS: "{{ BINS|default([]) + [_bin_item] }}"
+  when: _systemd_has_mount and SYSTEMD_SYSTEM_MOUNT_INSTALL|default(true) and not SYSTEMD_INSTALL_BYPASS|default(False)
+  vars:
+    _unit_name: "{{ SYSTEMD_MOUNT if SYSTEMD_MOUNT|default(false) and SYSTEMD_MOUNT not in [True, 'True'] else NAME }}"
+    _bin_item:
+      name: install-mount.sh
+      generatedAt: end
+      generated: |
+        UNIT_NAME="{{ _unit_name }}"
+        UNIT_TYPE=mount
+        source "$(dirname "$0")/../etc/install-unit.sh"
+
+- name: 'Generate systemd system dnssd install script'
+  set_fact:
+    BINS: "{{ BINS|default([]) + [_bin_item] }}"
+  when: _systemd_has_dnssd and SYSTEMD_SYSTEM_DNSSD_INSTALL|default(true) and not SYSTEMD_INSTALL_BYPASS|default(False)
+  vars:
+    _unit_name: "{{ SYSTEMD_DNSSD if SYSTEMD_DNSSD|default(false) and SYSTEMD_DNSSD not in [True, 'True'] else NAME }}"
+    _bin_item:
+      name: install-dnssd.sh
+      generatedAt: end
+      generated: |
+        UNIT_NAME="{{ _unit_name }}"
+        UNIT_TYPE=dnssd
+        source "$(dirname "$0")/../etc/install-unit.sh"
+
+- name: 'Generate systemd user service install script'
+  set_fact:
+    BINS: "{{ BINS|default([]) + [_bin_item] }}"
+  when: _systemd_has_service and SYSTEMD_USER_SERVICE_INSTALL|default(false) and not SYSTEMD_INSTALL_BYPASS|default(False)
+  vars:
+    _unit_name: "{{ SYSTEMD_SERVICE if SYSTEMD_SERVICE|default(false) and SYSTEMD_SERVICE not in [True, 'True'] else NAME }}"
+    _bin_item:
+      name: install-service-user.sh
+      generatedAt: end
+      generated: |
+        UNIT_NAME="{{ _unit_name }}"
+        UNIT_TYPE=service
+        UNIT_SUFFIX=user
+        USERMODE=true
+        source "$(dirname "$0")/../etc/install-unit.sh"
+
+- name: 'Generate systemd user socket install script'
+  set_fact:
+    BINS: "{{ BINS|default([]) + [_bin_item] }}"
+  when: _systemd_has_socket and SYSTEMD_USER_SOCKET_INSTALL|default(false) and not SYSTEMD_INSTALL_BYPASS|default(False)
+  vars:
+    _unit_name: "{{ SYSTEMD_SOCKET if SYSTEMD_SOCKET|default(false) and SYSTEMD_SOCKET not in [True, 'True'] else NAME }}"
+    _bin_item:
+      name: install-socket-user.sh
+      generatedAt: end
+      generated: |
+        UNIT_NAME="{{ _unit_name }}"
+        UNIT_TYPE=socket
+        UNIT_SUFFIX=user
+        USERMODE=true
+        source "$(dirname "$0")/../etc/install-unit.sh"
+
+- name: 'Generate systemd user mount install script'
+  set_fact:
+    BINS: "{{ BINS|default([]) + [_bin_item] }}"
+  when: _systemd_has_mount and SYSTEMD_USER_MOUNT_INSTALL|default(false) and not SYSTEMD_INSTALL_BYPASS|default(False)
+  vars:
+    _unit_name: "{{ SYSTEMD_MOUNT if SYSTEMD_MOUNT|default(false) and SYSTEMD_MOUNT not in [True, 'True'] else NAME }}"
+    _bin_item:
+      name: install-mount-user.sh
+      generatedAt: end
+      generated: |
+        UNIT_NAME="{{ _unit_name }}"
+        UNIT_TYPE=mount
+        UNIT_SUFFIX=user
+        USERMODE=true
+        source "$(dirname "$0")/../etc/install-unit.sh"
+
+- name: 'Generate systemd user dnssd install script'
+  set_fact:
+    BINS: "{{ BINS|default([]) + [_bin_item] }}"
+  when: _systemd_has_dnssd and SYSTEMD_USER_DNSSD_INSTALL|default(false) and not SYSTEMD_INSTALL_BYPASS|default(False)
+  vars:
+    _unit_name: "{{ SYSTEMD_DNSSD if SYSTEMD_DNSSD|default(false) and SYSTEMD_DNSSD not in [True, 'True'] else NAME }}"
+    _bin_item:
+      name: install-dnssd-user.sh
+      generatedAt: end
+      generated: |
+        UNIT_NAME="{{ _unit_name }}"
+        UNIT_TYPE=dnssd
         UNIT_SUFFIX=user
         USERMODE=true
         source "$(dirname "$0")/../etc/install-unit.sh"
