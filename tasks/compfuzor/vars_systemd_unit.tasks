@@ -15,7 +15,7 @@
   vars:
     enhancedEtc:
       - name: install-unit.sh
-        src: systemd/install-unit.sh
+        src: ../systemd/install-unit.sh
 
 - name: 'Generate systemd system install scripts'
   set_fact:
