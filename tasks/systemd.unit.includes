@@ -1,43 +1,51 @@
 - name: "Compfuzor: SYSTEMD {{unit_type}}"
   set_fact:
-    unit: "{{ varunit }}"
-    units: "{{ varunits }}"
-    d: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'_D']|default(vars['SYSTEMD_'+unit_type|upper+'_D'])|default(False) }}"
-    target: "{{TYPE|default(NAME)|default('.')}}"
-    inst: "{{inst}}"
-    unitname: "{{ unitname }}"
-    src: "{{ src }}"
-    dest: "{{ dest }}"
-    link: "{{ link }}"
+    unit: "{{ _unit }}"
+    units: "{{ _units }}"
+    d: "{{ _d }}"
+    target: "{{ _target }}"
+    inst: "{{ _inst }}"
+    unitname: "{{ _unitname }}"
+    src: "{{ _src }}"
+    dest: "{{ _dest }}"
+    link: "{{ _link }}"
+    is_usermode: "{{ _is_usermode }}"
+    instanced: "{{ _instanced }}"
   vars:
-    # remaking
-    newName: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default('')}}"
-    newFallback: "{{ newName if newName|default(false) else NAME|default(TYPE) }}"
-    newDedashedFallback: "{{ newFallback|replace('\\-', '\x2d')|replace('/', '\\/') }}"
+    # Input: get SYSTEMD_{TYPE} and SYSTEMD_{TYPE}S values
+    _systemd_type_val: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default('') }}"
+    _systemd_types_val: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default({}) }}"
     
-    unitname: "{{newDedashedFallback}}"
-    unit: "{{unitname}}{{inst}}{{_unit_suffix}}.{{unit_type}}"
-    _unit_suffix: "{{ '.user' if SYSTEMD_SCOPE == 'user' else '' }}"
-    _link_unit: "{{unitname}}{{inst}}.{{unit_type}}"
-
-    # old
-    # currently no support for UNITS here
-    oldVarunit: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default(False)|replace('\\-', '\x2d') }}"
-    oldVarunits: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(vars['SYSTEMD_'+unit_type|upper+'S'])|default(False) }}"
-    oldUnitname: "{{ varunit|default(NAME|default(TYPE)) if varunit != True and varunit != 'True' and varunit != 'False' else NAME|default(Type) }}"
-    oldUnit: "{{(unitname + inst + '.' + unit_type)|replace('/', '\/')|replace('\\-', '\x2d')}}"
-
-
-    inst: "{{'@' if SYSTEMD_INSTANCE|def else ''}}"
-    instanced: "{{(unitname + inst + SYSTEMD_INSTANCE + '.' + unit_type)|default('replace('/', '\/')|replace('\\-', '\x2d'))}}"
-
-    local_src: "files/{{unitname}}/{{unit}}"
-    src: "{{ local_src if lookup('fileexists', local_src) else 'files/systemd.' + unit_type }}"
-    #src: "{{ 'testdata' if lookup('fileexists', local_src) is truthy else 'files/systemd.' + unit_type }}"
-    #src: "foo.fake {{unit_type|default('no-unit-type')}} {{local_src|default('no-local-src')}} {{lookup('fileexists', local_src)}}"
-    #src: "foo.fake {{unit_type|default('no-unit-type')}} {{local_src|default('no-local-src')}}"
-    dest: "{{ETC}}/{{unit}}"
-    link: "{{SYSTEMD_UNIT_DIR}}/{{_link_unit}}"
+    # Compute base unit name (dedashed)
+    _raw_name: "{{ _systemd_type_val if _systemd_type_val and _systemd_type_val not in ['True', 'true', True] else NAME|default(TYPE) }}"
+    _unitname: "{{ _raw_name|replace('\\-', '\x2d')|replace('/', '\\/') }}"
+    
+    # Instance suffix for templated units
+    _inst: "{{ '@' if SYSTEMD_INSTANCE|default(false) else '' }}"
+    
+    # User suffix for user-scope units
+    _user_suffix: "{{ '.user' if SYSTEMD_SCOPE == 'user' else '' }}"
+    
+    # Full unit filename
+    _unit: "{{ _unitname }}{{ _inst }}{{ _user_suffix }}.{{ unit_type }}"
+    
+    # Link filename (strips .user suffix)
+    _link_unit: "{{ _unitname }}{{ _inst }}.{{ unit_type }}"
+    
+    # Pass-through values
+    _units: "{{ _systemd_types_val }}"
+    _d: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'_D']|default(vars['SYSTEMD_'+unit_type|upper+'_D'])|default(false) }}"
+    _target: "{{ TYPE|default(NAME)|default('.') }}"
+    
+    # Paths
+    _local_src: "files/{{ _unitname }}/{{ _unit }}"
+    _src: "{{ _local_src if lookup('fileexists', _local_src) else 'files/systemd.' + unit_type }}"
+    _dest: "{{ ETC }}/{{ _unit }}"
+    _scope: "{{ SYSTEMD_SCOPE|default('system') }}"
+    _unit_dir: "{{ SYSTEMD_USER_UNIT_DIR if _scope == 'user' else SYSTEMD_SYSTEM_UNIT_DIR }}"
+    _link: "{{ _unit_dir }}/{{ _link_unit }}"
+    _instanced: "{{ _unitname }}{{ _inst }}{{ SYSTEMD_INSTANCE|default('') }}.{{ unit_type }}"
+    _is_usermode: "{{ USERMODE|default(false) or SYSTEMD_SCOPE|default('system') == 'user' }}"
 
 #- name: testing for local target unit
 #  local_action: shell test ! -f "files/{{target}}/{{target}}{{inst}}.{{unit_type}}"; echo $?
@@ -45,73 +53,52 @@
 #  register: local_unit
 #  become: False
 
-- name: "creating unit directory" # now usually ETC but let's do it
+- name: "creating unit directory"
   file:
-    path: "{{i}}"
+    path: "{{ i }}"
     state: directory
   loop:
     - "{{ dest | dirname }}"
     - "{{ SYSTEMD_UNIT_DIR }}"
   loop_control:
     loop_var: i
-  #when: unit is truthy or units is truthy
   when: unit is truthy
-  #become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
-- name: templating in unit
+- name: "templating in unit"
   template:
-    src: "{{src}}"
-    dest: "{{dest}}"
+    src: "{{ src }}"
+    dest: "{{ dest }}"
   when: unit is truthy
-  #become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
 
-- name: link target unit in etc
+- name: "link target unit in etc"
   file:
-    src: "{{dest}}"
-    dest: "{{link}}"
+    src: "{{ dest }}"
+    dest: "{{ link }}"
     state: link
   when: unit is truthy and SYSTEMD_LINK|truthy(True)
-  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
+  become: "{{ not is_usermode }}"
 
-- name: enabling unit
-  shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable '{{enable_unit}}'"
+- name: "enabling unit"
+  shell: "systemctl --{{ SYSTEMD_SCOPE }} daemon-reload && systemctl --{{ SYSTEMD_SCOPE }} enable '{{ enable_unit }}'"
   when: >
     unit|truthy(True) and
     SYSTEMD_LINK|truthy(True) and
     SYSTEMD_ENABLE|truthy(True) and
     not concrete_instance
-  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
+  become: "{{ not is_usermode }}"
   vars:
     enable_unit: "{{ instanced if SYSTEMD_INSTANCE|truthy else unit }}"
-    concrete_instance: SYSTEMD_INSTANCE|def and SYSTEMD_INSTANCE|def != True
+    concrete_instance: "{{ SYSTEMD_INSTANCE|default(false) and SYSTEMD_INSTANCE != True }}"
 
-# older use of SYSTEMD_UNITS, for multiple units. TODO: rename.
-#- name: templating units
-#  template: src="files/{{target}}/{{i}}" dest="{{SYSTEMD_UNIT_DIR}}/{{i}}"
-#  with_items: "{{units}}"
-#  loop_control:
-#    loop_var: i
-#  when: units|def is sequence and units|def is not mapping
-#  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
-#- name: enabling units
-#  shell: "systemctl --{{SYSTEMD_SCOPE}} daemon-reload && systemctl --{{SYSTEMD_SCOPE}} enable {{i}}"
-#  with_items: "{{units}}"
-#  when: units|def is sequence and units|def is not mapping
-#  loop_control:
-#    loop_var: i
-#  vars:
-#    do_become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
-#  become: USERMODE|default(False) is falsy and SYSTEMD_USERMODE|default(False) is falsy
-
-- name: install systemd unit\'s .d directory
+- name: "install systemd unit's .d directory"
   include_tasks: compfuzor/fs_d.tasks
   vars:
-    fs_path: "{{SYSTEMD_UNIT_DIR}}/{{dest}}"
+    fs_path: "{{ SYSTEMD_UNIT_DIR }}/{{ dest }}"
   when: d is truthy
-  #become: USERMODE|default(False) is falsy and SYSTEMD_USERMODE|default(False) is falsy
-- name: link systemd unit\'s .d directory to etc
+
+- name: "link systemd unit's .d directory to etc"
   file:
-  args:
-    src: "{{dest}}.d"
-    dest: "{{ETC}}/{{dest|basename}}.d"
+    src: "{{ dest }}.d"
+    dest: "{{ ETC }}/{{ dest | basename }}.d"
   when: d is truthy
+
