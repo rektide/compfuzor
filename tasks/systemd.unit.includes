@@ -12,10 +12,8 @@
   vars:
     # remaking
     newName: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(vars['SYSTEMD_'+unit_type|upper])|default('')}}"
-    newFallback: "{{ explicitName|default(NAME|default(TYPE))}}"
-    # \\/ had been \/, guessing that was wrong
-    newDedash: "{{ explicitName|replace('\\-', '\x2d')|replace('/', '\\/') }}"
-    newDedasheFallback: "{{ explicitDedash|default(NAME|default(TYPE))}}"
+    newFallback: "{{ newName if newName|default(false) else NAME|default(TYPE) }}"
+    newDedashedFallback: "{{ newFallback|replace('\\-', '\x2d')|replace('/', '\\/') }}"
     
     unitname: "{{newDedashedFallback}}"
     unit: "{{unitname}}{{inst}}{{_unit_suffix}}.{{unit_type}}"
