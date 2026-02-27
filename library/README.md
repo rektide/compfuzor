@@ -8,8 +8,8 @@ Tests are used with `is` in Jinja/Ansible conditionals.
 
 | Name | Source | Behavior |
 | --- | --- | --- |
-| `deftruthy` | [`library/test_plugins/deftruthy.py`](/library/test_plugins/deftruthy.py) | True if value is defined and truthy. |
-| `deffalsy` | [`library/test_plugins/deftruthy.py`](/library/test_plugins/deftruthy.py) | True if value is undefined or falsy. |
+| `deftruthy` | [`library/test_plugins/deftruthy.py`](/library/test_plugins/deftruthy.py) | True if resolved value is truthy. Supports optional `(default, use_default_on_falsy=False)`. |
+| `deffalsy` | [`library/test_plugins/deftruthy.py`](/library/test_plugins/deftruthy.py) | True if resolved value is falsy. Supports optional `(default, use_default_on_falsy=False)`. |
 | `having` | [`library/test_plugins/havingattr.py`](/library/test_plugins/havingattr.py) | True if dict has all requested attributes with truthy values. |
 | `havingattr` | [`library/test_plugins/havingattr.py`](/library/test_plugins/havingattr.py) | Alias of `having`. |
 | `havingany` | [`library/test_plugins/havingattr.py`](/library/test_plugins/havingattr.py) | True if dict has any requested attribute with a truthy value. |
@@ -20,6 +20,8 @@ Tests are used with `is` in Jinja/Ansible conditionals.
 when: MY_FLAG is deftruthy
 when: MY_BYPASS is deffalsy
 when: my_dict is having('foo', 'bar')
+when: MY_FLAG is deftruthy('fallback')
+when: MY_FLAG is deftruthy('fallback', true)
 ```
 
 ## Filters

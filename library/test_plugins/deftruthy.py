@@ -5,6 +5,9 @@ from ansible.plugins.test.core import wrapped_test_undefined
 from ansible.template import accept_args_markers
 
 
+UNSET = object()
+
+
 def unwrap(value):
     """unwrap"""
     if wrapped_test_undefined(value):
@@ -15,16 +18,32 @@ def unwrap(value):
     return value
 
 
-@accept_args_markers
-def defined_and_truthy(value) -> bool:
-    """is-truthy that considers undefined to be falsy"""
-    return not not unwrap(value)
+def resolve_value(value, default=UNSET, use_default_on_falsy=False):
+    """Resolve marker/undefined values and optionally apply default fallback."""
+    is_undefined = wrapped_test_undefined(value)
+    value = unwrap(value)
+
+    if is_undefined:
+        if default is UNSET:
+            return None
+        return default
+
+    if use_default_on_falsy and default is not UNSET and not value:
+        return default
+
+    return value
 
 
 @accept_args_markers
-def falsy_or_undefined(value) -> bool:
-    """is-falsy that considers undefined to be falsy"""
-    return not unwrap(value)
+def defined_and_truthy(value, default=UNSET, use_default_on_falsy=False) -> bool:
+    """Truthy test that can fallback for undefined/falsy values."""
+    return not not resolve_value(value, default, use_default_on_falsy)
+
+
+@accept_args_markers
+def falsy_or_undefined(value, default=UNSET, use_default_on_falsy=False) -> bool:
+    """Falsy test that can fallback for undefined/falsy values."""
+    return not resolve_value(value, default, use_default_on_falsy)
 
 
 class TestModule(object):
