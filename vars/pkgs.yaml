@@ -458,6 +458,9 @@ WORDS:
   - wamerican-huge
   - wordnet
   - wordnet-base
+  # chrome uses hunspell
+  - hunspell
+  - hunspell-en
 VIRTUALIZATION:
   #- qemu
   - qemu-efi
