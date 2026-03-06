@@ -17,7 +17,12 @@ CACHES_DIR: /var/cache
 PIDS_DIR: /var/run
 RUNS_DIR: /var/run
 SRCS_DIR: /usr/local/src
+ARCHIVE_SRC: "{{HOMEDIR}}archive/{{REPO_ORG}}/{{REPO_NAME}}"
 SHARES_DIR: /usr/share
+
+# Archive download mode
+ARCHIVE_DOWNLOAD: true
+ARCHIVE_DIR: "{{HOMEDIR}}archive"
 
 USERMODE_BINS_DIR: "{{BINS_DIR}}"
 USERMODE_ETCS_DIR: "{{XDG_CONFIG_HOME}}"
