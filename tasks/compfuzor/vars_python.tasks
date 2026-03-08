@@ -13,6 +13,7 @@
     enhancedBins:
       - name: build.sh
         run: "{{BINS_RUN_BYPASS is not deftruthy}}"
+        basedir: repo
         generated: |
           uv venv
           {% if PIP is defined %}
@@ -22,6 +23,7 @@
           {% endif %}
           source ./bin/venv.source
       - name: venv.source
+        basedir: repo
         generated: |
           . "$(pwd)/.venv/bin/activate"
     enhancedEtc: "{{ enhancedEtcPip if PIP is defined else [] }}"

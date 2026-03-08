@@ -7,6 +7,8 @@
     PREPREFIX: "{{ DEST|default(NAME|default(TYPE)) }}"
     CORES: "{{ CORES|default(ansible_processor_vcpus)|default(8) }}"
     GOPATH: "{{DIR}}"
+    SRC: "{{ARCHIVE_SRC if ARCHIVE_DOWNLOAD is deftruthy and REPO is defined else SRC|default(omit)}}"
+
 - name: "set PREFIX var"
   set_fact: PREFIX="{{ ('--prefix='+(OPTS_DIR+'/' if PREPREFIX|first != '/' and PREPREFIX|first !='~' else '')+PREPREFIX) if not PREFIX|default(False) else PREFIX|default('', true) }}"
 - name: "set INSTANCE default for src type"
@@ -18,5 +20,5 @@
   when: REPOS is sequence and vars[item] is not defined and hostvars[inventory_hostname][item] is not defined and item.key|default(False)
 - name: "create src directory if get_urls"
   set_fact:
-    SRC_DIR: True
+    SRC_DIRS: True
   when: GET_URLS|default(False) and not SRC_DIR|default(False)

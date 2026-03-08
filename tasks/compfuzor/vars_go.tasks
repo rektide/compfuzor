@@ -14,9 +14,11 @@
     enhancedBins:
       - name: build.sh
         run: "{{BINS_RUN_BYPASS is not deftruthy}}"
+        basedir: repo
         generated: |
           go build -o ${GO_BIN:-$TYPE} ${GO_TARGET:-./...}
       - name: install.sh
+        basedir: repo
         generated: |
           [ -n "$INSTALL_BIN" ] || INSTALL_BIN="${GO_BIN:-$TYPE}"
           ln -sfv "$(pwd)/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)

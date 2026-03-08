@@ -12,6 +12,7 @@
     enhancedBins:
       - name: build.sh
         run: "{{BINS_RUN_BYPASS is not deftruthy}}"
+        basedir: repo
         generated: |
           if [[ -z "${RELEASE+x}" ]]; then
               RELEASE="--release"
@@ -22,10 +23,12 @@
           fi
           cargo {{CARGO_BUILD|default('build')}} $RELEASE
       - name: install.sh
+        basedir: repo
         generated: |
           [ -n "$INSTALL_BIN" ] || INSTALL_BIN="${RUST_BIN:-{{TYPE}}}"
           ln -sfv "$(pwd)/target/release/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(dirname $INSTALL_BIN)
       - name: install-user.sh
+        basedir: repo
         generated: |
           cargo install --path .
   when: RUST is deftruthy

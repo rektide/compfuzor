@@ -12,6 +12,7 @@
     enhancedBins:
       - name: build.sh
         run: "{{BINS_RUN_BYPASS is not deftruthy}}"
+        basedir: repo
         generated: |
           if [ -f package-lock.json ] && [ ! -f pnpm-lock.yaml ]; then
             pnpm import
@@ -22,6 +23,7 @@
             pnpm build
           fi
       - name: install.sh
+        basedir: repo
         generated: |
           pnpm link -g
   when: NODEJS is deftruthy
@@ -40,9 +42,11 @@
     enhancedBins:
       - name: build.sh
         run: "{{BINS_RUN_BYPASS is not deftruthy}}"
+        basedir: repo
         generated: |
           bun install
       - name: install.sh
+        basedir: repo
         generated: |
           bun link -g
   when: BUN is deftruthy

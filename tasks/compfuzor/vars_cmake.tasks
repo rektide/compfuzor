@@ -22,11 +22,13 @@
     enhancedBins:
       - name: build.sh
         run: "{{BINS_RUN_BYPASS is not deftruthy}}"
+        basedir: repo
         generated: |
           mkdir -p $BUILD_DIR
           cmake -G ${CMAKE_GENERATOR:-Ninja} -B $BUILD_DIR {{CMAKE_ARGS|default('')}}
           cmake --build $BUILD_DIR ${CMAKE_BUILD_TYPE:+--config $CMAKE_BUILD_TYPE}
       - name: install.sh
+        basedir: repo
         generated: |
           {% if CMAKE_INSTALL|def %}
           cd build
