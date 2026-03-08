@@ -1,7 +1,24 @@
 ---
 - name: build include hierarchy variable
-  set_fact: "{{include|upper}}={{ (hostvars[inventory_hostname][include|upper+'S_DIR']|default(vars[include|upper+'S_DIR'])) + '/' + NAME }}"
-  when: val is defined
+  #set_fact: "{{upper}}={{ (hostvars[inventory_hostname][include|upper+'S_DIR']|default(vars[include|upper+'S_DIR'])) + '/' + NAME }}"
+  set_fact: "{{upper}}={{ val_s_dir + '/' + NAME }}"
+  # was going to stuff ARCHIVE_DOWNLOAD options in here but it doesn't really match
+  #set_fact: "{{upper}}={{ val_dir_name|default('Z') + ':' + archive_maybe|default('Y') + ':' }}"
+  when: >
+    cur_dir is not defined and
+    s_dir is defined
   vars:
-    name: include|upper
-    val: hostvars[inventory_hostname][name]|default(vars[name]|default(omit))
+    upper: "{{include|upper}}"
+    cur_dir: "{{hostvars[inventory_hostanme][upper]|default(vars[upper])}}"
+    val_s_dir_host: "{{hostvars[inventory_hostname][upper+'S_DIR']|def('')}}"
+    val_s_dir_var: "{{vars[upper+`S_DIR`]|def('')}}"
+    val_s_dir: "{{val_s_dir_host|default(val_s_dir_var, True)}}"
+    #archive_s_dir_host: "{{hostvars[inventory_hostname]['ARCHIVE_'+upper+'S_DIR']|def('')}}"
+    #archive_s_dir_var: "{{vars['ARCHIVE_'+upper+'S_DIR']|def('')}}"
+    #archive_s_dir: "{{archive_s_dir_host|default(archive_s_dir_var)}}"
+    #archive_maybe: "{{archive_s_dir if ARCHIVE_DOWNLOAD is deftruthy else val_s_dir}}"
+    #s_dir: "{{archive_maybe|def(val_s_dir, True)}}"
+    s_dir: "{{cur_dir|default(val_s_dir)}}"
+    #val_dir_name: "{{s_dir}}/{{NAME}}"
+    #val: hostvars[inventory_hostname][name]|default(vars[name]|default(omit))
+
