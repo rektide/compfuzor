@@ -4,7 +4,7 @@
     state: directory
     owner: "{{ OWNER|default(ansible_user_id)|default(omit) }}"
     group: "{{ GROUP|default(ansible_group_id)|default(omit) }}"
-  become: "{{dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  #become: "{{dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: REPO|default(False) is truthy or REPOS|default(False) is truthy
   vars:
     dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
