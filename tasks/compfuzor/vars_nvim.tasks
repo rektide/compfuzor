@@ -1,0 +1,70 @@
+- name: 'Build vars for NVIM plugin integration'
+  set_fact:
+    ETC_FILES: "{{ enhancedEtc|concat(ETC_FILES|default([])) }}"
+    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name', concat_fields=['generated']) }}"
+  vars:
+    bins: "{{BINS|default([])}}"
+    _nvim: "{{NVIM|default({})}}"
+    _lazyList: "{{_nvim.lazy|default([])}}"
+    enhancedEtc: "{{ _ftpluginFiles + _lazyLuaFiles }}"
+    _ftpluginFiles: |
+      {% set out = [] %}
+      {% for cfg in _lazyList %}
+      {% for ft, settings in (cfg.ftplugin|default({})).items() %}
+      {% set lines = [] %}
+      {% for k, v in settings.items() %}
+      {% set _ = lines.append('setlocal ' ~ k ~ '=' ~ v) %}
+      {% endfor %}
+      {% set _ = out.append({'dest': 'ftplugin/' ~ ft ~ '.vim', 'content': lines|join('\n')}) %}
+      {% endfor %}
+      {% endfor %}
+      {{ out }}
+    _lazyLuaFiles: |
+      {% set out = [] %}
+      {% for cfg in _lazyList %}
+      {% set name = cfg.name|default(NAME) %}
+      {% if cfg.content is defined %}
+      {% set _ = out.append({'dest': name ~ '.lazy.lua', 'content': cfg.content}) %}
+      {% elif cfg.autocmds is defined or cfg.opts is defined %}
+      {% set lines = ['return {'] %}
+      {% if cfg.opts is defined %}
+      {% for k, v in cfg.opts.items() %}
+      {% set _ = lines.append('  ' ~ k ~ ' = ' ~ v ~ ',') %}
+      {% endfor %}
+      {% endif %}
+      {% if cfg.autocmds is defined %}
+      {% set _ = lines.append('  autocmds = {') %}
+      {% for acName, acDef in cfg.autocmds.items() %}
+      {% set _ = lines.append('    ' ~ acName ~ ' = {') %}
+      {% set _ = lines.append('      {') %}
+      {% set _ = lines.append('        event = "' ~ acDef.event ~ '",') %}
+      {% set _ = lines.append('        pattern = "' ~ acDef.pattern ~ '",') %}
+      {% set _ = lines.append('        callback = function()') %}
+      {% set _ = lines.append('          ' ~ acDef.callback) %}
+      {% set _ = lines.append('        end,') %}
+      {% set _ = lines.append('      },') %}
+      {% set _ = lines.append('    },') %}
+      {% endfor %}
+      {% set _ = lines.append('  },') %}
+      {% endif %}
+      {% set _ = lines.append('}') %}
+      {% set _ = out.append({'dest': name ~ '.lazy.lua', 'content': lines|join('\n')}) %}
+      {% endif %}
+      {% endfor %}
+      {{ out }}
+    enhancedBins:
+      - name: install-nvim.sh
+        generated: |
+          NVIM_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/nvim"
+          {% for cfg in _lazyList %}
+          {% set name = cfg.name|default(NAME) %}
+          {% if cfg.content is defined or cfg.autocmds is defined or cfg.opts is defined %}
+          mkdir -p "$NVIM_CONFIG/lua/plugins/{{ name }}"
+          ln -sf "$(pwd)/etc/{{ name }}.lazy.lua" "$NVIM_CONFIG/lua/plugins/{{ name }}/init.lua"
+          {% endif %}
+          {% for ft, settings in (cfg.ftplugin|default({})).items() %}
+          mkdir -p "$NVIM_CONFIG/ftplugin"
+          ln -sf "$(pwd)/etc/ftplugin/{{ ft }}.vim" "$NVIM_CONFIG/ftplugin/{{ ft }}.vim"
+          {% endfor %}
+          {% endfor %}
+  when: NVIM is defined

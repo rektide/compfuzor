@@ -55,6 +55,9 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_tool_versions.tasks
   tags: ['vars', 'always']
+- import_tasks: compfuzor/vars_nvim.tasks
+  when: NVIM is defined
+  tags: ['vars', 'always']
 - debug: "msg='Compfuzor: completed vars'"
 
 - import_tasks: compfuzor/user.tasks
