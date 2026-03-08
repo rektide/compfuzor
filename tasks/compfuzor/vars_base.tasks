@@ -106,14 +106,8 @@
   set_fact:
     REPO_ORG: "{{ REPO|default('')|regex_replace('^[^/]+//[^/]+/', '')|regex_replace('/.*$', '') }}"
     REPO_NAME: "{{ REPO|default('')|regex_replace('.*/', '')|regex_replace('\\.git$', '') }}"
-  when: REPO|default(false)
+  when: REPO|def is string
 
-- name: "Override for archive download mode"
-  set_fact:
-    REPO_DIR: "{{ARCHIVE_DIR}}/{{REPO_ORG}}/{{REPO_NAME}}"
-    SRC: "{{ARCHIVE_DIR}}/{{REPO_ORG}}/{{REPO_NAME}}"
-    DIR: "{{ARCHIVE_DIR}}/{{REPO_ORG}}/{{REPO_NAME}}"
-  when: ARCHIVE_DOWNLOAD|default(true) and REPO|default(false) and type|default('') == 'src'
 
 # vars_type does a more expanded version
 # that ideally we can reduce to a single pass run-all-found
