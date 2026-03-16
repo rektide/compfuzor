@@ -7,7 +7,7 @@
   vars:
     env: "{{ ({}) if ENV|def(True) == True else ENV }}"
     envCmake:
-      BUILD_DIR: "{{BUILD_DIR|default('build')}}"
+      BUILD_DIR: "{{_BUILD_DIR}}"
       CMAKE_GENERATOR: "{{CMAKE_GENERATOR|default(omit)}}"
       CMAKE_BUILD_TYPE: "{{CMAKE_BUILD_TYPE|default('Release')}}"
       CMAKE_INSTALL_BIN: "{{CMAKE_INSTALL_BIN|default(omit)}}"
@@ -31,7 +31,7 @@
         basedir: repo
         generated: |
           {% if CMAKE_INSTALL|def %}
-          cd build
+          cd $BUILD_DIR
           cmake --install .{{ ' ' + CMAKE_INSTALL if CMAKE_INSTALL != True else ''}}
           {% else %}
           [ -n "$INSTALL_BIN" ] || INSTALL_BIN="${CMAKE_INSTALL_BIN:-{{TYPE}}}"

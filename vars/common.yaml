@@ -39,10 +39,11 @@ USERMODE_CACHES_DIR: "{{HOMEDIR}}/.cache"
 USERMODE_MEDIAS_DIR: "{{USERMODE_LOCAL_DIR}}/media"
 USERMODE_SHARES_DIR: "{{USERMODE_LOCAL_DIR}}/usr/share"
 
-BUILD_DIR: "{{OPT}}/build"
 REPO_DIR: "{{SRC}}"
 REPO_LINK_DIR: repo
-WORKTREE_BRANCH: master
+BUILD_DIR_DIR: "{{REPO}}"
+BUILD_DIR: "{{BUILD_DIR_DIR}}/build"
+_BUILD_DIR: "{{BUILD_DIR|defaultDir(BUILD_DIR_DIR)}}"
 WORKDIR_BIN: /usr/share/doc/git/contrib/workdir/git-new-workdir
 PKGCONFIG_DIR: "/usr/local/lib/pkgconfig"
 PKGSS_DIR: "{{SRCS_DIR}}"
