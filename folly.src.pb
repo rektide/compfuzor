@@ -5,14 +5,6 @@
     CMAKE: True
     BUILD_DIR: "_build"
     CMAKE_INSTALL: True
-    BINS:
-    - name: build.sh
-      run: True
-      #generatedAt: False
-      #baseDir: repo
-      #content: |
-      #  python ./build/fbcode_builder/getdeps.py --allow-system-packages build
-    #OPT_DIR: true
     PKGS:
       - libaio-dev
       - libboost-all-dev
