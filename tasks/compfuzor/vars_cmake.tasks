@@ -24,8 +24,10 @@
         run: "{{BINS_RUN_BYPASS is not deftruthy}}"
         basedir: repo
         generated: |
-          mkdir -p $BUILD_DIR
-          cmake -G ${CMAKE_GENERATOR:-Ninja} -B $BUILD_DIR {{CMAKE_ARGS|default('')}}
+          if [ ! -d "$BUILD_DIR" ]; then
+            mkdir -p $BUILD_DIR
+            cmake -G ${CMAKE_GENERATOR:-Ninja} -B $BUILD_DIR {{CMAKE_ARGS|default('')}}
+          fi
           cmake --build $BUILD_DIR ${CMAKE_BUILD_TYPE:+--config $CMAKE_BUILD_TYPE}
       - name: install.sh
         basedir: repo
