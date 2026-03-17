@@ -7,7 +7,7 @@
   vars:
     env: "{{ ({}) if ENV|def(True) == True else ENV }}"
     envCmake:
-      BUILD_DIR: "{{_BUILD_DIR}}"
+      BUILD_DIR_CF_CM: "{{_BUILD_DIR}}"
       CMAKE_GENERATOR: "{{CMAKE_GENERATOR|default(omit)}}"
       CMAKE_BUILD_TYPE: "{{CMAKE_BUILD_TYPE|default('Release')}}"
       CMAKE_INSTALL_BIN: "{{CMAKE_INSTALL_BIN|default(omit)}}"
@@ -22,9 +22,11 @@
     enhancedBins:
       - name: build.sh
         run: "{{BINS_RUN_BYPASS is not deftruthy}}"
-        basedir: repo
+        basedir: "{{REPO_DIR}}"
         generated: |
-          if [ ! -d "$BUILD_DIR" ]; then
+          if [ -f "$BUILD_DIR/CMakeFiles/cmake.check_cache" ] || [ -f "$BUILD_DIR/build.ninja" ]; then
+            echo "Already configured, skipping cmake configure"
+          else
             mkdir -p $BUILD_DIR
             cmake -G ${CMAKE_GENERATOR:-Ninja} -B $BUILD_DIR {{CMAKE_ARGS|default('')}}
           fi
