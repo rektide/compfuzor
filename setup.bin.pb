@@ -1,3 +1,4 @@
+# training file to learn how we can see what gets set.
 ---
 - hosts: all
   tasks:
@@ -13,6 +14,7 @@
     #- copy:
     #    content: "{{hostvars}}
     #    dest: ansible-hostvars.json
+    # used to find what playbook we ran. crude/blunt option.
     - copy:
         content: "{{lookup('file', '/proc/self/cmdline') | regex_replace('\u0000',' ') }}"
         dest: ansible-cmdline

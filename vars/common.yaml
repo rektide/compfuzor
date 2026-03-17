@@ -41,7 +41,7 @@ USERMODE_SHARES_DIR: "{{USERMODE_LOCAL_DIR}}/usr/share"
 
 REPO_DIR: "{{SRC}}"
 REPO_LINK_DIR: repo
-BUILD_DIR_DIR: "{{REPO}}"
+BUILD_DIR_DIR: "{{REPO_DIR}}"
 BUILD_DIR: "{{BUILD_DIR_DIR}}/build"
 _BUILD_DIR: "{{BUILD_DIR|defaultDir(BUILD_DIR_DIR)}}"
 WORKDIR_BIN: /usr/share/doc/git/contrib/workdir/git-new-workdir
@@ -134,7 +134,7 @@ PERSIST_VARS:
   - WITH
   - ENABLE
 CA_EXPIRY: "26280h"
-HOMEDIR: "~{{USER|default(OWNER)|default(ansible_user_id)}}/"
+HOMEDIR: "/home/{{USER|default(OWNER)|default(ansible_user_id)}}/"
 GIT_DIR: "{{REPO_DIR|default(DIR, true)}}"
 __DEST: "{{item.dest|default(item.name|default(item|default(DIR)))|defaultDir(__defaultDir|default(DIR))}}"
 MULTISTRAP_COMPONENTS:

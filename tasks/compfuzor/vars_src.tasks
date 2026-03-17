@@ -11,9 +11,11 @@
 
 - name: "set PREFIX var"
   set_fact: PREFIX="{{ ('--prefix='+(OPTS_DIR+'/' if PREPREFIX|first != '/' and PREPREFIX|first !='~' else '')+PREPREFIX) if not PREFIX|default(False) else PREFIX|default('', true) }}"
+
 - name: "set INSTANCE default for src type"
   set_fact: INSTANCE=src
   when: type == "src" and not INSTANCE|default(False)
+
 - name: "repo setting"
   set_fact: "{{item.key|upper|replace('-', '_')}}_DIR={{ REPO_DIR|default(DIR, true)+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{item.key}}"
   with_items: "{{REPOS|default([])}}"

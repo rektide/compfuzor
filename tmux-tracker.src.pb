@@ -3,7 +3,8 @@
   vars:
     REPO: https://github.com/rektide/tmux-tracker
     RUST: True
+    SYSTEMD_INSTALL: false
     SYSTEMD_SERVICES:
-      Exec: tmux-tracker
+      ExecStart: tmux-tracker
   tasks:
     - import_tasks: tasks/compfuzor.includes

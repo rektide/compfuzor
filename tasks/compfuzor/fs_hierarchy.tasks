@@ -36,7 +36,6 @@
       bypass: "{{(DIR_BYPASS|default(False) or hostvars[inventory_hostname][names.bypass]|default(vars[names.bypass]|default(False))) or not (names.sDir or names.dirs or names.dir or names.files or names.d)}}"
       linkProp: "{{hostvars[inventory_hostname][names.linkProp]|default(vars[names.linkProp]|default({}))}}"
       linkBypass: "{{(DIR_LINK_BYPASS|default(False) or hostvars[inventory_hostname][names.linkBypass]|default(vars[names.linkBypass]|default(False))) or not (names.sDir or names.dirs or names.dir or names.files or names.d)}}"
-
 - name: "Test for {{_upper}} dir and link"
   stat:
     path: "{{item}}"
@@ -45,6 +44,7 @@
   with_items:
   - "{{_dir}}"
   - "{{_link}}"
+
 
 # create main directory
 - name: "Create top {{_upper}} directory"

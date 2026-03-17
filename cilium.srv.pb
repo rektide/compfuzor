@@ -39,6 +39,11 @@
           cluster:
             name: "{{cluster}}"
             id: "{{cluster_id|default(99)}}"
+          #clusterMesh:
+          #  mcsapi:
+          #    corednsAutoConfigure:
+          #      coredns:
+          #        clusterDomain: "{{CLUSTER_DOMAIN}}"
           crdWaitTimeout: 30s
           debug:
             enabled: false
@@ -60,6 +65,8 @@
                   # https://docs.cilium.io/en/stable/network/servicemesh/gateway-api/gateway-api/#bind-to-privileged-port
                   # - MORE
                   - NET_BIND_SERVICE
+                  - NET_ADMIN
+                  - BPF
           externalEnvoyProxy: false
           externalIPs:
             enabled: true
@@ -71,8 +78,19 @@
           hubble:
             eventQueueSize: 4096
             metrics:
-              enabled: '{dns,drop,tcp,flow,port-distribution,icmp,httpV2:exemplars=true;labelsContext=source_ip\,source_namespace\,source_workload\,destination_ip\,destination_namespace\,destination_workload\,traffic_direction}'
+              enabled:
+                - dns
+                - drop
+                - tcp
+                - flow
+                - flows-to-world
+                - port-distribution
+                - icmp
+                - httpV2
+                #- httpV2:exemplars=true;labelsContext=source_ip\,source_namespace\,source_workload\,destination_ip\,destination_namespace\,destination_workload\,traffic_direction
               enableOpenMetrics: true
+            peerService:
+              clusterDomain: "{{CLUSTER_DOMAIN}}"
             relay:
               enabled: true
             ui:
@@ -82,6 +100,11 @@
           # https://github.com/cilium/cilium/issues/38227
           #hostNetwork:
           #  enabled: true
+          ingressController:
+            enabled: true
+            hostNetwork:
+              enabled: true
+            loadbalancerMode: dedicated
           ipam:
             mode: multi-pool
             operator:
@@ -107,8 +130,8 @@
           #  burst: 
           # https://docs.cilium.io/en/latest/network/l2-announcements/
           loadBalancer:
-            #acceleration: best-effort
-            acceleration: native
+            acceleration: best-effort
+            #acceleration: native
             dsrDispatch: opt
             l7:
               backend: envoy
@@ -124,7 +147,8 @@
           l2podAnnouncements:
             enabled: true
             #interface: 
-            #interfacePattern: '^(eno|eth)'
+            interfacePattern: '^(eno|eth)'
+          l7Proxy: true
           maglev:
             hashSeed: ei9cYZx0ouKp2Ux0
             tableSize: 2039
@@ -148,24 +172,25 @@
             prometheus:
               enabled: true
           routingMode: native
-          #securityContext:
-          #  capabilities:
-          #    ciliumAgents:
-          #      - CHOWN
-          #      - KILL
-          #      - NET_ADMIN
-          #      - NET_RAW
-          #      - IPC_LOCK
-          #      - SYS_ADMIN
-          #      - SYS_RESOURCE
-          #      - DAC_OVERRIDE
-          #      - FOWNER
-          #      - SETGID
-          #      - SETUID
-          #    clearCiliumState:
-          #      - NET_ADMIN
-          #      - SYS_ADMIN
-          #      - SYS_RESOURCE
+          securityContext:
+            capabilities:
+              ciliumAgents:
+                - CHOWN
+                - DAC_OVERRIDE
+                - FOWNER
+                - IPC_LOCK
+                - KILL
+                - NET_ADMIN
+                - NET_BIND_SERVICE
+                - NET_RAW
+                - SETGID
+                - SETUID
+                - SYS_ADMIN
+                - SYS_RESOURCE
+              clearCiliumState:
+                - NET_ADMIN
+                - SYS_ADMIN
+                - SYS_RESOURCE
           scheduling:
             mode: kube-scheduler
           #sctp.enabled: true

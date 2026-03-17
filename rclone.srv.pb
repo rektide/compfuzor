@@ -3,8 +3,8 @@
 - hosts: all
   vars:
     TYPE: rclone
-    ETC_DIRS: True
     INSTANCE: main
+    ETC_DIRS: True
     SYSTEMD_SERVICE: rclone
     SYSTEMD_EXEC: "rclone mount --vfs-cache-mode writes --vfs-cache-max-size 100M --log-level=INFO --umask 022 --allow-other %i: %h/mnt/%i"
     SYSTEMD_EXEC_STOP: fusermount -u %h/mnt/%i
@@ -14,4 +14,4 @@
     SYSTEMD_INSTANCES: True
     SYSTEMD_INSTALL: both
   tasks:
-    - include: tasks/compfuzor.includes type=srv
+    - import_tasks: tasks/compfuzor.includes

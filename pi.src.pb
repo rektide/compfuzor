@@ -1,6 +1,6 @@
 ---
 - hosts: all
   vars:
-    REPO: https://github.com/block/goose
+    REPOS: https://github.com/badlogic/pi-mono
   tasks:
     - import_tasks: tasks/compfuzor.includes

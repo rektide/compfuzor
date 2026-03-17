@@ -1,7 +1,7 @@
 ---
 - hosts: all
   vars:
-    SYSTEMS_SERVICES:
+    SYSTEMD_SERVICES:
       ExecStart: jaeger query
     ENV:
       SPAN_STORAGE_TYPE: grpc-plugin

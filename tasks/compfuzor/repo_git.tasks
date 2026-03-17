@@ -1,3 +1,6 @@
+- debug:
+    msg: "bad {{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
+
 - name: "Compfuzor: precreate git dir"
   file:
     path: "{{dest}}"

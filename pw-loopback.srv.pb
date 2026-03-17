@@ -1,9 +1,13 @@
 ---
 - hosts: all
   vars:
-    TYPE: pw-loopback
-    INSTANCE: main
-    SYSTEMD_SERVICE: True
+    #SYSTEMD_SERVICE: True
+    args:
+      capture: "alsa_input.pci-0000_0b_00.4.analog-stereo"
+      name: "loop-{{INSTANCE}}"
+    argKeys:
+      capture: "C"
+      name: "n"
     SYSTEMD_UNIT:
       Description: Pipewire Loopback
       After: pipewire.service
@@ -11,7 +15,11 @@
     SYSTEMD_SERVICES:
       Type: simple
       SyslogIdentifier: pw-loopback
-      ExecStart: /usr/bin/pw-loopback
+      ExecStart: >-
+        /usr/bin/pw-loopback
+        {%- for key in args.keys() %}
+        -{{ argKeys[key] }} "{{ args[key] }}"
+        {%- endfor %}
     SYSTEMD_INSTALL:
       WantedBy: pipewire.service
       Alias: pw-looopback
@@ -31,6 +39,3 @@
           systemctl --user start pw-loopback.service
   tasks:
     - import_tasks: tasks/compfuzor.includes
-      
-
-

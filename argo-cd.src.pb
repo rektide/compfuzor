@@ -4,6 +4,7 @@
     REPO: https://github.com/argoproj/argo-cd
     PKGS:
       - passt
+    ENV: True
     BINS:
       - name: build.sh
         basedir: repo
@@ -17,9 +18,9 @@
           #make build-ui
           make cli-local
       - name: install.sh
-        basedir: repo
         content: |
           #make install-tools-local
-          make install-go-tools-local
+          #make install-go-tools-local
+          ln -sfv $(dir)/repo/dist/argocd $GLOBAL_BINS_DIR
   tasks:
     - import_tasks: tasks/compfuzor.includes
