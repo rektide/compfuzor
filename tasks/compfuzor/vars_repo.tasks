@@ -4,7 +4,10 @@
   when: "REPOS is defined and vars[var_name] is not defined and hostvars[inventory_hostname][var_name] is not defined"
   vars:
     var_name: "{{item|upper|replace('-', '_')}}_DIR"
-- name: "Add GOPATH to ENV"
+- name: "Add GOPATH and REPO_DIR to ENV"
   set_fact:
-    ENV: "{{ ENV|default({})|combine({'GOPATH': DIR}) }}"
-  when: (ENV is not defined or ENV["GOPATH"] is not defined) and REPO_GOGET is defined
+    ENV: "{{ ENV|default({})|combine(env_additions) }}"
+  vars:
+    gopath_env: "{{ {'GOPATH': DIR} if (ENV is not defined or ENV['GOPATH'] is not defined) and REPO_GOGET is defined else {} }}"
+    repo_dir_env: "{{ {'REPO_DIR': REPO_DIR} if REPO_DIR is defined else {} }}"
+    env_additions: "{{ gopath_env | combine(repo_dir_env) }}"
