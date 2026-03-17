@@ -11,6 +11,7 @@
     SYSTEMD_UNIT:
       Description: Pipewire Loopback
       After: pipewire.service
+      PartOf: pipewire.service
       BindsTo: pipewire.service
     SYSTEMD_SERVICES:
       Type: simple
