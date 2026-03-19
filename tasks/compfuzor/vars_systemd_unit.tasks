@@ -27,16 +27,32 @@
   set_fact:
     ETC_FILES: "{{ ETC_FILES|default([]) + [_etc_file] }}"
   when: _has_type and not SYSTEMD_INSTALL_BYPASS|default(False)
-  loop: "{{ SYSTEMD_UNITTYPES }}"
+  loop: "{{ _loop_items }}"
   vars:
-    _unit_type: "{{ item }}"
+    _is_separate: "{{ SYSTEMD_INSTALL == 'separate' }}"
+    _loop_items: >-
+      {%- if _is_separate -%}
+        {%- set items = [] -%}
+        {%- for t in SYSTEMD_UNITTYPES -%}
+          {%- set _ = items.append({'type': t, 'scope': 'system'}) -%}
+          {%- set _ = items.append({'type': t, 'scope': 'user'}) -%}
+        {%- endfor -%}
+        {{ items }}
+      {%- else -%}
+        {{ SYSTEMD_UNITTYPES | map('regex_replace', '^(.*)$', '{"type": "\\1"}') | map('from_yaml') | list }}
+      {%- endif -%}
+    _unit_type: "{{ item.type }}"
+    _unit_scope: "{{ item.scope | default(omit) }}"
+    SYSTEMD_SCOPE: "{{ _unit_scope | default(SYSTEMD_SCOPE) }}"
     _unit_name_var: "SYSTEMD_{{ _unit_type | upper }}"
     _unit_name_val: "{{ lookup('vars', _unit_name_var, default='') }}"
     _unit_name: "{{ _unit_name_val if _unit_name_val and _unit_name_val not in [True, 'True'] else NAME }}"
     _has_type: "{{ _unit_type in SYSTEMD_UNITTYPES }}"
-    _unit_filename: "{{ _unit_name }}{{ '@' if SYSTEMD_INSTANCES|default(False) else '' }}.{{ _unit_type }}"
+    _separate_suffix: "{{ '-user' if _is_separate and _unit_scope == 'user' else '' }}"
+    _unit_filename: "{{ _unit_name }}{{ _separate_suffix }}{{ '@' if SYSTEMD_INSTANCES|default(False) else '' }}.{{ _unit_type }}"
     UNIT_TYPE: "{{ _unit_type }}"
-    _raw_vars: "{{ lookup('vars', SYSTEMD_VARS_ROOT, default={}) if SYSTEMD_VARS_ROOT is defined else {} }}"
+    _raw_vars_base: "{{ lookup('vars', SYSTEMD_VARS_ROOT, default={}) if SYSTEMD_VARS_ROOT is defined else {} }}"
+    _raw_vars: "{{ _raw_vars_base | combine({'USERMODE': True}) if _is_separate and _unit_scope == 'user' else _raw_vars_base }}"
     _type_config: "{{ SYSTEMD_TYPE_CONFIG[_unit_type] }}"
     _merged_sections: >-
       {%- set merged = {} -%}
@@ -131,6 +147,7 @@
       {%- endfor -%}
       {{ result }}
     _is_user: "{{ item.scope == 'user' }}"
+    _is_separate_mode: "{{ SYSTEMD_INSTALL == 'separate' }}"
     _type_config: "{{ SYSTEMD_TYPE_CONFIG[item.type] }}"
     _dir_map: "{{ _type_config.dir_map | default('system') }}"
     _unit_name_val: "{{ lookup('vars', 'SYSTEMD_' ~ item.type | upper, default='') }}"
@@ -142,14 +159,15 @@
       {%- else -%}/etc/systemd/system{%- endif -%}
     _is_instanced: "{{ SYSTEMD_INSTANCES|default(False)|bool }}"
     _instances_list: "{{ SYSTEMD_INSTANCES if SYSTEMD_INSTANCES is sequence and SYSTEMD_INSTANCES is not string and SYSTEMD_INSTANCES is not boolean else [] }}"
-    _unit_template: "{{ _unit_name }}{{ '@' if _is_instanced else '' }}"
+    _user_suffix: "{{ '-user' if _is_separate_mode and _is_user else '' }}"
+    _unit_template: "{{ _unit_name }}{{ _user_suffix }}{{ '@' if _is_instanced else '' }}"
     _enable_targets: >-
       {%- if _is_instanced -%}
         {%- if _instances_list | length > 0 -%}
-          {%- for inst in _instances_list -%}{{ _unit_name }}@{{ inst }}{% if not loop.last %} {% endif %}{%- endfor -%}
+          {%- for inst in _instances_list -%}{{ _unit_name }}{{ _user_suffix }}@{{ inst }}{% if not loop.last %} {% endif %}{%- endfor -%}
         {%- endif -%}
       {%- else -%}
-        {{ _unit_name }}
+        {{ _unit_name }}{{ _user_suffix }}
       {%- endif -%}
     _generated: |
       UNIT_TEMPLATE="{{ _unit_template }}"

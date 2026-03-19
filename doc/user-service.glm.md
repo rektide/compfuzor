@@ -360,7 +360,7 @@ These often include `USERMODE: True` or target user-specific configuration direc
 | `SYSTEMD_SCOPE` | Current scope: `system` or `user` |
 | `SYSTEMD_SYSTEM_*` | Generate system unit file for type `*` (service, socket, mount, dnssd) |
 | `SYSTEMD_USER_*` | Generate user unit file for type `*` |
-| `SYSTEMD_INSTALL` | Install script generation: `system` \| `user` \| `both` \| `none` \| `true` \| `false` |
+| `SYSTEMD_INSTALL` | Install script generation: `system` \| `user` \| `both` \| `separate` \| `none` \| `true` \| `false` |
 | `SYSTEMD_SYSTEM_*_INSTALL` | Generate install script for system unit type |
 | `SYSTEMD_USER_*_INSTALL` | Generate install script for user unit type |
 | `SYSTEMD_UNIT_DIR` | Override unit installation path |
@@ -384,9 +384,9 @@ These often include `USERMODE: True` or target user-specific configuration direc
 
 | Condition | Generated Files |
 |-----------|-----------------|
-| `SYSTEMD_SERVICE` or `SYSTEMD_SERVICES` defined | `etc/<name>.service` (system), `etc/<name>.user.service` (user) |
-| `SYSTEMD_MOUNT` or `SYSTEMD_MOUNTS` defined | `etc/<name>.mount` (system), `etc/<name>.user.mount` (user) |
-| `SYSTEMD_SOCKET` or `SYSTEMD_SOCKETS` defined | `etc/<name>.socket` (system), `etc/<name>.user.socket` (user) |
+| `SYSTEMD_SERVICE` or `SYSTEMD_SERVICES` defined | `etc/<name>.service` (system), `etc/<name>-user.service` (user) |
+| `SYSTEMD_MOUNT` or `SYSTEMD_MOUNTS` defined | `etc/<name>.mount` (system), `etc/<name>-user.mount` (user) |
+| `SYSTEMD_SOCKET` or `SYSTEMD_SOCKETS` defined | `etc/<name>.socket` (system), `etc/<name>-user.socket` (user) |
 | `SYSTEMD_SYSTEM_*_INSTALL` | `bin/install-<type>.sh` |
 | `SYSTEMD_USER_*_INSTALL` | `bin/install-<type>-user.sh` |
 | Any unit defined | `etc/install-unit.sh` (shared script) |
@@ -407,7 +407,7 @@ Applies to all unit types: `service`, `socket`, `mount`, `dnssd`.
 When any systemd unit is defined (e.g., `SYSTEMD_MOUNT` or `SYSTEMD_MOUNTS.Where`):
 
 **Default (USERMODE=false):**
-- Generates both `etc/<name>.<type>` and `etc/<name>.user.<type>`
+- Generates both `etc/<name>.<type>` and `etc/<name>-user.<type>`
 - Generates `bin/install-<type>.sh` (SYSTEMD_INSTALL=system)
 - User unit file available but no install script
 
@@ -419,5 +419,14 @@ When any systemd unit is defined (e.g., `SYSTEMD_MOUNT` or `SYSTEMD_MOUNTS.Where
 ```yaml
 SYSTEMD_INSTALL: both
 ```
+
+**To generate separate system and user unit files:**
+```yaml
+SYSTEMD_INSTALL: separate
+```
+- Generates `etc/<name>.<type>` for system (no USERMODE)
+- Generates `etc/<name>-user.<type>` for user (with USERMODE=true set during rendering)
+- Generates both `bin/install-<type>.sh` and `bin/install-<type>-user.sh`
+- Use when SYSTEMD_SERVICES/UNITS/etc need different values per scope (e.g., different mount paths)
 
 

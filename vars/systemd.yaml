@@ -18,17 +18,18 @@ SYSTEMD_USER_SOCKET: true
 SYSTEMD_USER_DNSSD: true
 SYSTEMD_USER_MOUNT: true
 
-# Install script generation: system | user | both | none | true | false
+# Install script generation: system | user | both | separate | none | true | false
 # true=both, false=none. Default based on USERMODE.
+# separate=generate two unit files (system + user with USERMODE=true) and both install scripts
 SYSTEMD_INSTALL: system
-SYSTEMD_SYSTEM_SERVICE_INSTALL: "{{ SYSTEMD_INSTALL in ['system', 'both', true] }}"
-SYSTEMD_USER_SERVICE_INSTALL: "{{ SYSTEMD_INSTALL in ['user', 'both', true] }}"
-SYSTEMD_SYSTEM_SOCKET_INSTALL: "{{ SYSTEMD_INSTALL in ['system', 'both', true] }}"
-SYSTEMD_USER_SOCKET_INSTALL: "{{ SYSTEMD_INSTALL in ['user', 'both', true] }}"
-SYSTEMD_SYSTEM_MOUNT_INSTALL: "{{ SYSTEMD_INSTALL in ['system', 'both', true] }}"
-SYSTEMD_USER_MOUNT_INSTALL: "{{ SYSTEMD_INSTALL in ['user', 'both', true] }}"
-SYSTEMD_SYSTEM_DNSSD_INSTALL: "{{ SYSTEMD_INSTALL in ['system', 'both', true] }}"
-SYSTEMD_USER_DNSSD_INSTALL: "{{ SYSTEMD_INSTALL in ['user', 'both', true] }}"
+SYSTEMD_SYSTEM_SERVICE_INSTALL: "{{ SYSTEMD_INSTALL in ['system', 'both', 'separate', true] }}"
+SYSTEMD_USER_SERVICE_INSTALL: "{{ SYSTEMD_INSTALL in ['user', 'both', 'separate', true] }}"
+SYSTEMD_SYSTEM_SOCKET_INSTALL: "{{ SYSTEMD_INSTALL in ['system', 'both', 'separate', true] }}"
+SYSTEMD_USER_SOCKET_INSTALL: "{{ SYSTEMD_INSTALL in ['user', 'both', 'separate', true] }}"
+SYSTEMD_SYSTEM_MOUNT_INSTALL: "{{ SYSTEMD_INSTALL in ['system', 'both', 'separate', true] }}"
+SYSTEMD_USER_MOUNT_INSTALL: "{{ SYSTEMD_INSTALL in ['user', 'both', 'separate', true] }}"
+SYSTEMD_SYSTEM_DNSSD_INSTALL: "{{ SYSTEMD_INSTALL in ['system', 'both', 'separate', true] }}"
+SYSTEMD_USER_DNSSD_INSTALL: "{{ SYSTEMD_INSTALL in ['user', 'both', 'separate', true] }}"
 
 # Computed gate for current scope+unit_type (used in systemd.unit.includes)
 SYSTEMD_UNIT_GATE: "{{ hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_'+unit_type|upper]|default(vars['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_'+unit_type|upper])|default(True) }}"
