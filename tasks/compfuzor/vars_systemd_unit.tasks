@@ -90,45 +90,38 @@
 - name: 'Generate systemd install scripts'
   set_fact:
     BINS: "{{ BINS|default([]) + [_bin_item] }}"
-  when: _has_type and _install_allowed and not SYSTEMD_INSTALL_BYPASS|default(False)
-  loop: "{{ _all_specs | selectattr('type', 'in', SYSTEMD_UNITTYPES) | list }}"
+  when: 
+    - item.type in SYSTEMD_UNITTYPES
+    - not SYSTEMD_INSTALL_BYPASS|default(False)
+    - lookup('vars', 'SYSTEMD_' ~ item.scope | upper ~ '_' ~ item.type | upper ~ '_INSTALL', default=item.scope == 'system')
+  loop: "{{ _all_specs }}"
   vars:
-    _all_scopes: [system, user]
-    _all_types: "{{ SYSTEMD_TYPE_CONFIG.keys() | list }}"
-    # Build list of {type, scope} dicts from cartesian product of types x scopes
-    # Step 1: product() -> [[service, system], [service, user], [socket, system], ...]
-    # Step 2: map('zip', ['type', 'scope']) -> [[['type', 'service'], ['scope', 'system']], ...]
-    # Step 3: map('dict') -> [{type: service, scope: system}, {type: service, scope: user}, ...]
-    # Step 4: list -> final list of dicts
     _all_specs: >-
       {%- set result = [] -%}
-      {%- for t in _all_types -%}
-        {%- for s in _all_scopes -%}
+      {%- for t in SYSTEMD_TYPE_CONFIG.keys() -%}
+        {%- for s in ['system', 'user'] -%}
           {%- set _ = result.append({'type': t, 'scope': s}) -%}
         {%- endfor -%}
       {%- endfor -%}
       {{ result }}
     _is_user: "{{ item.scope == 'user' }}"
     _type_config: "{{ SYSTEMD_TYPE_CONFIG[item.type] }}"
-    _unit_name_var: "SYSTEMD_{{ item.type | upper }}"
-    _unit_name_val: "{{ lookup('vars', _unit_name_var) }}"
-    _unit_name: "{{ _unit_name_val if _unit_name_val | default(false) and _unit_name_val not in [True, 'True'] else NAME }}"
-    _has_type: "{{ item.type in SYSTEMD_UNITTYPES }}"
-    _install_var: "SYSTEMD_{{ item.scope | upper }}_{{ item.type | upper }}_INSTALL"
-    _install_allowed: "{{ lookup('vars', _install_var, default=_is_user | ternary(false, true)) }}"
     _dir_map: "{{ _type_config.dir_map | default('system') }}"
-    _script_name: "install-{{ item.type }}{{ '-user' if _is_user else '' }}.sh"
-    _base_lines:
-      - "UNIT_NAME=\"{{ _unit_name }}\""
-      - "UNIT_TYPE={{ item.type }}"
-      - "UNIT_DIR_MAP={{ _dir_map }}"
-    _user_lines:
-      - "UNIT_SUFFIX=user"
-      - "USERMODE=true"
-    _footer_line: 'source "$(dirname "$0")/../etc/install-unit.sh"'
-    _all_lines: "{{ _base_lines + (_user_lines if _is_user else []) + [_footer_line] }}"
-    _generated: "{{ _all_lines | join('\n') }}"
+    _unit_name_val: "{{ lookup('vars', 'SYSTEMD_' ~ item.type | upper, default='') }}"
+    _unit_name: "{{ _unit_name_val if _unit_name_val and _unit_name_val not in [True, 'True'] else NAME }}"
+    _unit_dir: >-
+      {%- if _dir_map == 'network' -%}/etc/systemd/network
+      {%- elif _dir_map == 'nspawn' -%}/etc/systemd/nspawn
+      {%- elif _is_user -%}${HOME}/.config/systemd/user
+      {%- else -%}/etc/systemd/system{%- endif -%}
+    _generated: |
+      UNIT_NAME="{{ _unit_name }}"
+      UNIT_TYPE={{ item.type }}
+      UNIT_DIR="{{ _unit_dir }}"
+      SYSTEMCTL="{{ 'systemctl --user' if _is_user else 'systemctl' }}"
+      SUDO_CMD="{{ '' if _is_user else 'sudo' }}"
+      source "$(dirname "$0")/../etc/install-unit.sh"
     _bin_item:
-      name: "{{ _script_name }}"
+      name: "install-{{ item.type }}{{ '-user' if _is_user else '' }}.sh"
       generatedAt: end
       generated: "{{ _generated }}"
