@@ -20,12 +20,11 @@
 {%- set _type_config = SYSTEMD_TYPE_CONFIG[UNIT_TYPE] -%}
 {%- set _var_suffix = _type_config.var_suffix -%}
 
-{%- for section in _type_config.sections -%}
-{%- if section == 'Unit' -%}
+{%- if not _type_config.no_unit|default(false) -%}
 {{ render_section('Unit', SYSTEMD_UNIT|default({})) }}
-{%- elif section == 'Install' -%}
-{{ render_section('Install', SYSTEMD_INSTALL|default({})) }}
-{%- else -%}
+{% endif -%}
+
+{%- for section in _type_config.sections -%}
 {%- set _section_var = 'SYSTEMD_' ~ _var_suffix ~ '_' ~ section | upper -%}
 {%- set _specific_section = lookup('vars', _section_var, default={}) -%}
 {%- set _main_section = lookup('vars', 'SYSTEMD_' ~ _var_suffix, default={}) -%}
@@ -34,5 +33,8 @@
 {%- elif loop.first and _main_section -%}
 {{ render_section(section, _main_section) }}
 {%- endif -%}
-{%- endif -%}
 {%- endfor -%}
+
+{%- if not _type_config.no_install|default(false) -%}
+{{ render_section('Install', SYSTEMD_INSTALL|default({})) }}
+{% endif -%}
