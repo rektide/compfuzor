@@ -41,6 +41,43 @@
       name: "{{ _unit_filename }}"
       content: "{{ lookup('template', 'files/systemd.unit') }}"
 
+- name: 'Generate systemd unit ETC_FILES from SYSTEMD_ROOTS'
+  set_fact:
+    ETC_FILES: "{{ ETC_FILES|default([]) + [_etc_file] }}"
+  when:
+    - SYSTEMD_ROOTS is defined
+    - _has_type_data
+    - not SYSTEMD_INSTALL_BYPASS|default(False)
+  loop: "{{ _root_type_pairs }}"
+  vars:
+    _root_type_pairs: >-
+      {%- set pairs = [] -%}
+      {%- for root_name in SYSTEMD_ROOTS -%}
+        {%- set root_data = lookup('vars', root_name, default={}) -%}
+        {%- for unit_type in SYSTEMD_UNITTYPES_ALL -%}
+          {%- set type_config = SYSTEMD_TYPE_CONFIG[unit_type] -%}
+          {%- set var_key = 'SYSTEMD_' ~ type_config.var_suffix -%}
+          {%- if root_data[var_key] is defined or root_data['SYSTEMD_' ~ unit_type.upper] is defined -%}
+            {%- set _ = pairs.append({'root': root_name, 'type': unit_type}) -%}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endfor -%}
+      {{ pairs }}
+    _root_name: "{{ item.root }}"
+    _root_data: "{{ lookup('vars', _root_name, default={}) }}"
+    _unit_type: "{{ item.type }}"
+    _type_config: "{{ SYSTEMD_TYPE_CONFIG[_unit_type] }}"
+    _unit_name_key: "SYSTEMD_{{ _unit_type | upper }}"
+    _unit_name_val: "{{ _root_data[_unit_name_key] | default(lookup('vars', _unit_name_key, default='')) }}"
+    _unit_name: "{{ _unit_name_val if _unit_name_val and _unit_name_val not in [True, 'True'] else NAME }}"
+    _unit_filename: "{{ _unit_name }}.{{ _unit_type }}"
+    _has_type_data: "{{ _root_data['SYSTEMD_' ~ _type_config.var_suffix] is defined or _root_data[_unit_name_key] is defined }}"
+    UNIT_TYPE: "{{ _unit_type }}"
+    UNIT_VARS: "{{ _root_data }}"
+    _etc_file:
+      name: "{{ _unit_filename }}"
+      content: "{{ lookup('template', 'files/systemd.unit') }}"
+
 - name: 'Add systemd install-unit.sh script to BINS'
   set_fact:
     BINS: "{{ enhancedBins|concat(BINS|default([])) }}"
