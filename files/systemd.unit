@@ -1,0 +1,40 @@
+{% macro phrase(name, expression) -%}{{""-}}
+{%- for el in expression|default([])|arrayitize -%}
+{{ name }}={{ el if el != False and el != True else el|ternary('true', 'false') }}
+{% endfor -%}
+{%- endmacro -%}
+
+{%- macro render_section(name, data) -%}
+[{{ name }}]
+{%- for key, value in (data|default({})).items() %}
+{%- if value is iterable and value is not string -%}
+{%- for v in value -%}
+{{ key }}={{ v }}
+{% endfor -%}
+{%- else -%}
+{{ key }}={{ value }}
+{% endif -%}
+{% endfor -%}
+{%- endmacro -%}
+
+{%- set _type_config = SYSTEMD_TYPE_CONFIG[UNIT_TYPE] -%}
+{%- set _var_suffix = _type_config.var_suffix -%}
+
+{%- if not _type_config.no_unit|default(false) -%}
+{{ render_section('Unit', SYSTEMD_UNIT|default({})) }}
+{% endif -%}
+
+{%- for section in _type_config.sections -%}
+{%- set _section_var = 'SYSTEMD_' ~ _var_suffix ~ '_' ~ section | upper -%}
+{%- set _specific_section = lookup('vars', _section_var, default={}) -%}
+{%- set _main_section = lookup('vars', 'SYSTEMD_' ~ _var_suffix, default={}) -%}
+{%- if _specific_section -%}
+{{ render_section(section, _specific_section) }}
+{%- elif loop.first and _main_section -%}
+{{ render_section(section, _main_section) }}
+{%- endif -%}
+{%- endfor -%}
+
+{%- if not _type_config.no_install|default(false) -%}
+{{ render_section('Install', SYSTEMD_INSTALL|default({})) }}
+{% endif -%}
