@@ -19,7 +19,7 @@
 
 {%- set _type_config = SYSTEMD_TYPE_CONFIG[UNIT_TYPE] -%}
 {%- set _var_suffix = _type_config.var_suffix -%}
-{%- set _root = UNIT_VARS|default(vars) -%}
+{%- set _root = UNIT_VARS|default(vars, True) -%}
 
 {%- set _unit_data = _root.SYSTEMD_UNIT if _root.SYSTEMD_UNIT is defined else SYSTEMD_UNIT|default({}) -%}
 {%- set _install_data = _root.SYSTEMD_INSTALL if _root.SYSTEMD_INSTALL is defined else SYSTEMD_INSTALL|default({}) -%}
