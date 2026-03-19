@@ -36,6 +36,7 @@
     _has_type: "{{ _unit_type in SYSTEMD_UNITTYPES }}"
     _unit_filename: "{{ _unit_name }}.{{ _unit_type }}"
     UNIT_TYPE: "{{ _unit_type }}"
+    UNIT_VARS: "{{ lookup('vars', SYSTEMD_VARS_ROOT, default=omit) if SYSTEMD_VARS_ROOT is defined else omit }}"
     _etc_file:
       name: "{{ _unit_filename }}"
       content: "{{ lookup('template', 'files/systemd.unit') }}"

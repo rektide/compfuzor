@@ -19,22 +19,27 @@
 
 {%- set _type_config = SYSTEMD_TYPE_CONFIG[UNIT_TYPE] -%}
 {%- set _var_suffix = _type_config.var_suffix -%}
+{%- set _root = UNIT_VARS|default(vars) -%}
+
+{%- set _unit_data = _root.SYSTEMD_UNIT if _root.SYSTEMD_UNIT is defined else SYSTEMD_UNIT|default({}) -%}
+{%- set _install_data = _root.SYSTEMD_INSTALL if _root.SYSTEMD_INSTALL is defined else SYSTEMD_INSTALL|default({}) -%}
+{%- set _main_section_key = 'SYSTEMD_' ~ _var_suffix -%}
+{%- set _main_section_data = _root[_main_section_key] if _root[_main_section_key] is defined else lookup('vars', _main_section_key, default={}) -%}
 
 {%- if not _type_config.no_unit|default(false) -%}
-{{ render_section('Unit', SYSTEMD_UNIT|default({})) }}
+{{ render_section('Unit', _unit_data) }}
 {% endif -%}
 
 {%- for section in _type_config.sections -%}
-{%- set _section_var = 'SYSTEMD_' ~ _var_suffix ~ '_' ~ section | upper -%}
-{%- set _specific_section = lookup('vars', _section_var, default={}) -%}
-{%- set _main_section = lookup('vars', 'SYSTEMD_' ~ _var_suffix, default={}) -%}
+{%- set _section_key = 'SYSTEMD_' ~ _var_suffix ~ '_' ~ section | upper -%}
+{%- set _specific_section = _root[_section_key] if _root[_section_key] is defined else lookup('vars', _section_key, default={}) -%}
 {%- if _specific_section -%}
 {{ render_section(section, _specific_section) }}
-{%- elif loop.first and _main_section -%}
-{{ render_section(section, _main_section) }}
+{%- elif loop.first and _main_section_data -%}
+{{ render_section(section, _main_section_data) }}
 {%- endif -%}
 {%- endfor -%}
 
 {%- if not _type_config.no_install|default(false) -%}
-{{ render_section('Install', SYSTEMD_INSTALL|default({})) }}
+{{ render_section('Install', _install_data) }}
 {% endif -%}
