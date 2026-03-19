@@ -23,6 +23,23 @@
     serviceExec: "{{SYSTEMD_SERVICE|default(SYSTEMD_EXEC|def|ternary(True, omit))}}"
     serviceNameDefault: "{{SYSTEMD_SERVICE|default(omit) if SYSTEMD_SERVICE|def != True else NAME}}"
 
+- name: 'Generate systemd unit ETC_FILES'
+  set_fact:
+    ETC_FILES: "{{ ETC_FILES|default([]) + [_etc_file] }}"
+  when: _has_type and not SYSTEMD_INSTALL_BYPASS|default(False)
+  loop: "{{ SYSTEMD_UNITTYPES }}"
+  vars:
+    _unit_type: "{{ item }}"
+    _unit_name_var: "SYSTEMD_{{ _unit_type | upper }}"
+    _unit_name_val: "{{ lookup('vars', _unit_name_var, default='') }}"
+    _unit_name: "{{ _unit_name_val if _unit_name_val and _unit_name_val not in [True, 'True'] else NAME }}"
+    _has_type: "{{ _unit_type in SYSTEMD_UNITTYPES }}"
+    _unit_filename: "{{ _unit_name }}.{{ _unit_type }}"
+    UNIT_TYPE: "{{ _unit_type }}"
+    _etc_file:
+      name: "{{ _unit_filename }}"
+      content: "{{ lookup('template', 'files/systemd.unit') }}"
+
 - name: 'Add systemd install-unit.sh script to BINS'
   set_fact:
     BINS: "{{ enhancedBins|concat(BINS|default([])) }}"
@@ -42,10 +59,24 @@
       - { type: service, scope: system }
       - { type: socket, scope: system }
       - { type: mount, scope: system }
+      - { type: timer, scope: system }
+      - { type: path, scope: system }
+      - { type: slice, scope: system }
+      - { type: scope, scope: system }
+      - { type: target, scope: system }
+      - { type: automount, scope: system }
+      - { type: swap, scope: system }
       - { type: dnssd, scope: system }
       - { type: service, scope: user }
       - { type: socket, scope: user }
       - { type: mount, scope: user }
+      - { type: timer, scope: user }
+      - { type: path, scope: user }
+      - { type: slice, scope: user }
+      - { type: scope, scope: user }
+      - { type: target, scope: user }
+      - { type: automount, scope: user }
+      - { type: swap, scope: user }
       - { type: dnssd, scope: user }
     _unit_type: "{{ item.type }}"
     _scope: "{{ item.scope }}"
