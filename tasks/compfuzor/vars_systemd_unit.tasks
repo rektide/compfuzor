@@ -57,6 +57,11 @@
   vars:
     _all_scopes: [system, user]
     _all_types: "{{ SYSTEMD_TYPE_CONFIG.keys() | list }}"
+    # Build list of {type, scope} dicts from cartesian product of types x scopes
+    # Step 1: product() -> [[service, system], [service, user], [socket, system], ...]
+    # Step 2: map('zip', ['type', 'scope']) -> [[['type', 'service'], ['scope', 'system']], ...]
+    # Step 3: map('dict') -> [{type: service, scope: system}, {type: service, scope: user}, ...]
+    # Step 4: list -> final list of dicts
     _all_specs: "{{ _all_types | product(_all_scopes) | map('zip', ['type', 'scope']) | map('dict') | list }}"
     _unit_type: "{{ item.type }}"
     _scope: "{{ item.scope }}"
