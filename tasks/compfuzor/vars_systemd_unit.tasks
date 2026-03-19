@@ -55,29 +55,9 @@
   when: _has_type and _install_allowed and not SYSTEMD_INSTALL_BYPASS|default(False)
   loop: "{{ _all_specs | selectattr('type', 'in', SYSTEMD_UNITTYPES) | list }}"
   vars:
-    _all_specs:
-      - { type: service, scope: system }
-      - { type: socket, scope: system }
-      - { type: mount, scope: system }
-      - { type: timer, scope: system }
-      - { type: path, scope: system }
-      - { type: slice, scope: system }
-      - { type: scope, scope: system }
-      - { type: target, scope: system }
-      - { type: automount, scope: system }
-      - { type: swap, scope: system }
-      - { type: dnssd, scope: system }
-      - { type: service, scope: user }
-      - { type: socket, scope: user }
-      - { type: mount, scope: user }
-      - { type: timer, scope: user }
-      - { type: path, scope: user }
-      - { type: slice, scope: user }
-      - { type: scope, scope: user }
-      - { type: target, scope: user }
-      - { type: automount, scope: user }
-      - { type: swap, scope: user }
-      - { type: dnssd, scope: user }
+    _all_scopes: [system, user]
+    _all_types: "{{ SYSTEMD_TYPE_CONFIG.keys() | list }}"
+    _all_specs: "{{ _all_types | product(_all_scopes) | map('zip', ['type', 'scope']) | map('dict') | list }}"
     _unit_type: "{{ item.type }}"
     _scope: "{{ item.scope }}"
     _is_user: "{{ _scope == 'user' }}"
