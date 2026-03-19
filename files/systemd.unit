@@ -1,15 +1,17 @@
 {% macro render_section(name, data) -%}
 [{{ name }}]
-{%- if data and data.items() | list | length > 0 -%}
-{%- for key, value in data.items() %}
+{%- if data and data.items() | list | length > 0 %}
+
+{%- for key, value in data.items() -%}
 {%- if value is iterable and value is not string -%}
-{%- for v in value -%}
+{%- for v in value %}
 {{ key }}={{ v }}
-{% endfor -%}
-{%- else -%}
+{%- endfor -%}
+{%- else %}
 {{ key }}={{ value }}
-{% endif -%}
+{%- endif -%}
 {%- endfor %}
+{%- else %}
 
 {%- endif -%}
 {%- endmacro -%}
