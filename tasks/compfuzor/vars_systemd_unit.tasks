@@ -115,12 +115,12 @@
       {%- elif _is_user -%}${HOME}/.config/systemd/user
       {%- else -%}/etc/systemd/system{%- endif -%}
     _is_instanced: "{{ SYSTEMD_INSTANCES|default(False)|bool }}"
-    _instances_list: "{{ SYSTEMD_INSTANCES|default([])|listify }}"
+    _instances_list: "{{ SYSTEMD_INSTANCES if SYSTEMD_INSTANCES is sequence and SYSTEMD_INSTANCES is not string and SYSTEMD_INSTANCES is not boolean else [] }}"
     _unit_template: "{{ _unit_name }}{{ '@' if _is_instanced else '' }}"
     _enable_targets: >-
       {%- if _is_instanced -%}
         {%- if _instances_list | length > 0 -%}
-          {{ _instances_list | map('regex_replace', '(.+)', _unit_name + '@\\1') | join(' ') }}
+          {%- for inst in _instances_list -%}{{ _unit_name }}@{{ inst }}{% if not loop.last %} {% endif %}{%- endfor -%}
         {%- endif -%}
       {%- else -%}
         {{ _unit_name }}
@@ -132,7 +132,7 @@
       UNIT_DIR="{{ _unit_dir }}"
       SYSTEMCTL="{{ 'systemctl --user' if _is_user else 'systemctl' }}"
       SUDO_CMD="{{ '' if _is_user else 'sudo' }}"
-      source "$(dirname "$0")/../etc/install-unit.sh"
+      source "$(dirname "$0")/install-unit.sh"
     _bin_item:
       name: "install-{{ item.type }}{{ '-user' if _is_user else '' }}.sh"
       generatedAt: end
