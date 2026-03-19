@@ -100,7 +100,14 @@
     # Step 2: map('zip', ['type', 'scope']) -> [[['type', 'service'], ['scope', 'system']], ...]
     # Step 3: map('dict') -> [{type: service, scope: system}, {type: service, scope: user}, ...]
     # Step 4: list -> final list of dicts
-    _all_specs: "{{ _all_types | product(_all_scopes) | map('zip', ['type', 'scope']) | map('dict') | list }}"
+    _all_specs: >-
+      {%- set result = [] -%}
+      {%- for t in _all_types -%}
+        {%- for s in _all_scopes -%}
+          {%- set _ = result.append({'type': t, 'scope': s}) -%}
+        {%- endfor -%}
+      {%- endfor -%}
+      {{ result }}
     _is_user: "{{ item.scope == 'user' }}"
     _type_config: "{{ SYSTEMD_TYPE_CONFIG[item.type] }}"
     _unit_name_var: "SYSTEMD_{{ item.type | upper }}"

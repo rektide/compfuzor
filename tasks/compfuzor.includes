@@ -139,6 +139,9 @@
   when: PKGCONFIG|default(False) is truthy
 - import_tasks: compfuzor/sysctl.tasks
   when: SYSCTLS|default(False) is truthy or SYSCTL|default(False) is truthy
+- import_tasks: compfuzor/go.tasks
+  when: REPO_GO|default(False) is truthy
+
 - import_tasks: compfuzor/bins_link.tasks
   vars:
     delay_phase: postRun
@@ -146,21 +149,19 @@
   vars:
     delay_phase: postRun
   when: BINS is defined and BINS_BYPASS|default(False) is falsy and GLOBAL_BINS_BYPASS|default(False) is falsy
-- import_tasks: compfuzor/go.tasks
-  when: REPO_GO|default(False) is truthy
 # System scope systemd units
-- import_tasks: compfuzor/systemd.tasks
-  vars:
-    become: True
-  when: SYSTEMD_BYPASS|default(False) is falsy
-# User scope systemd units (dual generation)
-- import_tasks: compfuzor/systemd.tasks
-  vars:
-    become: false
-    SYSTEMD_SCOPE: user
-  when: >
-    SYSTEMD_BYPASS|default(False) is falsy and
-    SYSTEMD_DUAL|default(True)
+#- import_tasks: compfuzor/systemd.tasks
+#  vars:
+#    become: True
+#  when: SYSTEMD_BYPASS|default(False) is falsy
+## User scope systemd units (dual generation)
+#- import_tasks: compfuzor/systemd.tasks
+#  vars:
+#    become: false
+#    SYSTEMD_SCOPE: user
+#  when: >
+#    SYSTEMD_BYPASS|default(False) is falsy and
+#    SYSTEMD_DUAL|default(True)
 - include_tasks: systemd.thunk.tasks
   vars:
     service: "{{SYSTEMD_SERVICE}}{{ '@' + item if item != '' else '' }}"

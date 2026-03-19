@@ -9,3 +9,5 @@ we also don't support enough systemd unit types at the moment. there's a SYSTEMD
 when templating, we'd like to be able to point the template at a top level variable, that everything else flows from. by default this should just be the vars object itself, all vars. but we want to be able to template a unit from, say, MOUNT and then SOCKET, with [Mount] and [Unit] and [Socket] appearing nested under there.
 
 we have a PLAN.md that has an early plan for this.
+
+one additional capability i'd like: when templating, so far we've discussed reading all values off of the top level var. i'd like to be able to template off of
