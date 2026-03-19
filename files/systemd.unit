@@ -1,24 +1,21 @@
-{% macro render_section(name, data) -%}
+{%- macro render_section(name, data) -%}
 [{{ name }}]
-{%- if data and data.items() | list | length > 0 %}
-
+{{- "" }}
+{%- if data and data.items() | list | length > 0 -%}
 {%- for key, value in data.items() -%}
 {%- if value is iterable and value is not string -%}
-{%- for v in value %}
+{%- for v in value -%}
 {{ key }}={{ v }}
 {%- endfor -%}
-{%- else %}
+{%- else -%}
 {{ key }}={{ value }}
 {%- endif -%}
-{%- endfor %}
-{%- else %}
-
+{%- endfor -%}
 {%- endif -%}
-{%- endmacro -%}
 
+{%- endmacro -%}
 {%- set _type_config = SYSTEMD_TYPE_CONFIG[UNIT_TYPE] -%}
 {%- set _root = UNIT_VARS|default(vars, True) -%}
-
 {%- for section in _type_config.sections -%}
 {%- set _section_var = 'SYSTEMD_' ~ section | upper ~ 'S' -%}
 {%- set _section_data = _root[_section_var] if _root[_section_var] is defined else lookup('vars', _section_var, default={}) -%}
