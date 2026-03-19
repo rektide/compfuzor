@@ -95,7 +95,7 @@
 - name: "Include usermode common vars"
   include_defaults: file=vars/common.user.yaml
   when: USERMODE|default(False)
-- name: "include type {{tydeftruthy(false)pe|lower}} vars"
+- name: "include type {{type|deftruthy(false)|lower}} vars"
   include_defaults:
     file: "{{item}}"
   loop:
