@@ -1,6 +1,6 @@
 {% macro render_section(name, data) -%}
-{%- if data and data.items() | list | length > 0 -%}
 [{{ name }}]
+{%- if data and data.items() | list | length > 0 -%}
 {%- for key, value in data.items() %}
 {%- if value is iterable and value is not string -%}
 {%- for v in value -%}
@@ -11,7 +11,7 @@
 {% endif -%}
 {%- endfor %}
 
-{% endif -%}
+{%- endif -%}
 {%- endmacro -%}
 
 {%- set _type_config = SYSTEMD_TYPE_CONFIG[UNIT_TYPE] -%}
