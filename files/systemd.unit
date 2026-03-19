@@ -21,8 +21,8 @@
 {%- set _var_suffix = _type_config.var_suffix -%}
 {%- set _root = UNIT_VARS|default(vars, True) -%}
 
-{%- set _unit_data = _root.SYSTEMD_UNIT if _root.SYSTEMD_UNIT is defined else SYSTEMD_UNIT|default({}) -%}
-{%- set _install_data = _root.SYSTEMD_INSTALL if _root.SYSTEMD_INSTALL is defined else SYSTEMD_INSTALL|default({}) -%}
+{%- set _unit_data = _root.SYSTEMD_UNITS if _root.SYSTEMD_UNITS is defined else SYSTEMD_UNITS|default({}) -%}
+{%- set _install_data = _root.SYSTEMD_INSTALLS if _root.SYSTEMD_INSTALLS is defined else SYSTEMD_INSTALLS|default({}) -%}
 {%- set _main_section_key = 'SYSTEMD_' ~ _var_suffix -%}
 {%- set _main_section_data = _root[_main_section_key] if _root[_main_section_key] is defined else lookup('vars', _main_section_key, default={}) -%}
 

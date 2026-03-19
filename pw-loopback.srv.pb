@@ -8,7 +8,7 @@
     argKeys:
       capture: "C"
       name: "n"
-    SYSTEMD_UNIT:
+    SYSTEMD_UNITS:
       Description: Pipewire Loopback
       After: pipewire.service
       PartOf: pipewire.service
@@ -21,7 +21,7 @@
         {%- for key in args.keys() %}
         -{{ argKeys[key] }} "{{ args[key] }}"
         {%- endfor %}
-    SYSTEMD_INSTALL:
+    SYSTEMD_INSTALLS:
       WantedBy: pipewire.service
       Alias: pw-looopback
     SYSTEMD_LINK: False

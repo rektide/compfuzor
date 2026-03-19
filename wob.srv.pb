@@ -9,7 +9,7 @@
       Wants: graphical-session.target
     SYSTEMD_SERVICES:
       ExecStart: /usr/bin/wob
-    SYSTEMD_INSTALL:
+    SYSTEMD_INSTALLS:
       WantedBy: graphical-session.target
       Alias: wob
     SYSTEMD_LINK: False
