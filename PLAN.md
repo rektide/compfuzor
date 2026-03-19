@@ -389,10 +389,30 @@ Then invoke the tasks twice with different roots:
     SYSTEMD_AUTOMOUNT: myAutoMount
 ```
 
-### Current Gap
+### Current Gap ✓ RESOLVED
 
-The current implementation in `vars_systemd_unit.tasks` does **not** loop over multiple `SYSTEMD_VARS_ROOT` values. To generate multiple units, the playbook must explicitly include the task multiple times. Future enhancement could support:
+The task now supports `SYSTEMD_ROOTS` for multiple unit definitions:
+
 ```yaml
-SYSTEMD_VARS_ROOTS: [myMount, myAutoMount]
+SYSTEMD_ROOTS: [myMount, myAutoMount]
+
+myMount:
+  SYSTEMD_MOUNT:
+    What: /dev/sda1
+    Where: /mnt/data
+  SYSTEMD_MOUNTS:
+    What: /dev/sda1
+    Where: /mnt/data
+    Type: ext4
+
+myAutoMount:
+  SYSTEMD_AUTOMOUNT: myAutoMount
+  SYSTEMD_AUTOMOUNTS:
+    Where: /mnt/data
+    TimeoutIdleSec: 300
 ```
-with a loop in the task.
+
+The task in `vars_systemd_unit.tasks`:
+- Loops over each root name in `SYSTEMD_ROOTS`
+- For each root, detects which unit types have data (`SYSTEMD_MOUNTS`, `SYSTEMD_AUTOMOUNTS`, etc.)
+- Generates ETC_FILES entries for each type found
