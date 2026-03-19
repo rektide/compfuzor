@@ -398,3 +398,15 @@ SYSTEMD_PHRASES_SERVICE:
   - File Descriptor Store Max
   - USB Function Description
   - USB Function Strings
+
+SYSTEMD_UNITS_DEFAULT:
+  Description: "{{ NAME }}"
+  DefaultDependencies: true
+
+SYSTEMD_SERVICES_DEFAULT:
+  Type: simple
+  Restart: on-failure
+  RestartSec: 5
+
+SYSTEMD_INSTALLS_DEFAULT:
+  WantedBy: "{{ 'multi-user.target' if SYSTEMD_SCOPE == 'system' else 'default.target' }}"

@@ -26,39 +26,56 @@ from ansible.errors import AnsibleError
 from ansible.module_utils.common.text.converters import to_text
 from ansible.plugins.action import ActionBase
 
+
+def _tag_strings_recursive(value):
+    """Recursively tag all strings within a data structure as trusted for templating."""
+    if isinstance(value, str):
+        return _tags.TrustedAsTemplate().tag(value)
+    elif isinstance(value, dict):
+        return {k: _tag_strings_recursive(v) for k, v in value.items()}
+    elif isinstance(value, list):
+        return [_tag_strings_recursive(item) for item in value]
+    return value
+
+
 class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
         if task_vars is None:
             task_vars = dict()
 
-
         result = super(ActionModule, self).run(tmp, task_vars)
-        file = self._task.args.get('file')
+        file = self._task.args.get("file")
 
         if self._task._role:
-            filename = self._loader.path_dwim_relative(self._task._role._role_path, 'vars', file)
+            filename = self._loader.path_dwim_relative(
+                self._task._role._role_path, "vars", file
+            )
         else:
-            filename = self._loader.path_dwim_relative(self._loader.get_basedir(), 'vars', file)
+            filename = self._loader.path_dwim_relative(
+                self._loader.get_basedir(), "vars", file
+            )
 
         if os.path.exists(filename):
             b_data, show_content = self._loader._get_file_contents(filename)
-            data = to_text(b_data, errors='surrogate_or_strict')
+            data = to_text(b_data, errors="surrogate_or_strict")
 
-            data = self._loader.load(data, file_name=filename, show_content=show_content)
+            data = self._loader.load(
+                data, file_name=filename, show_content=show_content
+            )
             if data is None:
                 data = {}
             if not isinstance(data, dict):
                 raise AnsibleError("%s must be stored as a dictionary/hash" % filename)
             data = {
-                k: _tags.TrustedAsTemplate().tag(v)
+                k: _tag_strings_recursive(v)
                 for (k, v) in data.items()
                 if k not in task_vars
             }
-            result['ansible_facts'] = _tags.TrustedAsTemplate().tag(data)
-            result['_ansible_no_log'] = not show_content
+            result["ansible_facts"] = data
+            result["_ansible_no_log"] = not show_content
             self._task.action = "include_vars"
         else:
-            result['failed'] = True
-            result['msg'] = "Source file not found."
-            result['file'] = filename or file
-        return _tags.TrustedAsTemplate().tag(result)
+            result["failed"] = True
+            result["msg"] = "Source file not found."
+            result["file"] = filename or file
+        return result

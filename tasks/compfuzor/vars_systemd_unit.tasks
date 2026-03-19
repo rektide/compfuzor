@@ -36,7 +36,21 @@
     _has_type: "{{ _unit_type in SYSTEMD_UNITTYPES }}"
     _unit_filename: "{{ _unit_name }}{{ '@' if SYSTEMD_INSTANCES|default(False) else '' }}.{{ _unit_type }}"
     UNIT_TYPE: "{{ _unit_type }}"
-    UNIT_VARS: "{{ lookup('vars', SYSTEMD_VARS_ROOT, default=omit) if SYSTEMD_VARS_ROOT is defined else omit }}"
+    _raw_vars: "{{ lookup('vars', SYSTEMD_VARS_ROOT, default={}) if SYSTEMD_VARS_ROOT is defined else {} }}"
+    _type_config: "{{ SYSTEMD_TYPE_CONFIG[_unit_type] }}"
+    _merged_sections: >-
+      {%- set merged = {} -%}
+      {%- for section_name in _type_config.sections -%}
+        {%- set section_var = 'SYSTEMD_' ~ section_name | upper ~ 'S' -%}
+        {%- set default_var = section_var ~ '_DEFAULT' -%}
+        {%- set defaults = lookup('vars', default_var, default={}) -%}
+        {%- set global_vals = lookup('vars', section_var, default={}) -%}
+        {%- set root_vals = _raw_vars.get(section_var, {}) -%}
+        {%- set user_vals = global_vals | combine(root_vals, recursive=True) -%}
+        {%- set _ = merged.update({section_var: defaults | combine(user_vals, recursive=True)}) -%}
+      {%- endfor -%}
+      {{ merged }}
+    UNIT_VARS: "{{ _raw_vars | combine(_merged_sections) }}"
     _etc_file:
       name: "{{ _unit_filename }}"
       content: "{{ lookup('template', 'files/systemd.unit') }}"
@@ -73,7 +87,19 @@
     _unit_filename: "{{ _unit_name }}{{ '@' if UNIT_VARS.SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCES|default(False)) else '' }}.{{ _unit_type }}"
     _has_type_data: "{{ _root_data['SYSTEMD_' ~ _type_config.var_suffix] is defined or _root_data[_unit_name_key] is defined }}"
     UNIT_TYPE: "{{ _unit_type }}"
-    UNIT_VARS: "{{ _root_data }}"
+    _merged_sections: >-
+      {%- set merged = {} -%}
+      {%- for section_name in _type_config.sections -%}
+        {%- set section_var = 'SYSTEMD_' ~ section_name | upper ~ 'S' -%}
+        {%- set default_var = section_var ~ '_DEFAULT' -%}
+        {%- set defaults = lookup('vars', default_var, default={}) -%}
+        {%- set global_vals = lookup('vars', section_var, default={}) -%}
+        {%- set root_vals = _root_data.get(section_var, {}) -%}
+        {%- set user_vals = global_vals | combine(root_vals, recursive=True) -%}
+        {%- set _ = merged.update({section_var: defaults | combine(user_vals, recursive=True)}) -%}
+      {%- endfor -%}
+      {{ merged }}
+    UNIT_VARS: "{{ _root_data | combine(_merged_sections) }}"
     _etc_file:
       name: "{{ _unit_filename }}"
       content: "{{ lookup('template', 'files/systemd.unit') }}"
