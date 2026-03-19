@@ -12,18 +12,40 @@ UNIT_TYPE="${UNIT_TYPE:-service}"
 UNIT_NAME="${UNIT_NAME:-${NAME:-$(basename "$(pwd)")}}"
 UNIT_SUFFIX="${UNIT_SUFFIX:-}"
 UNIT_FILE="${UNIT_FILE:-${UNIT_NAME}${UNIT_SUFFIX:+.$UNIT_SUFFIX}}"
+UNIT_DIR_MAP="${UNIT_DIR_MAP:-system}"
 
 UNIT_SRC="${UNIT_SRC:-${SCRIPT_DIR}/../etc/${UNIT_FILE}.${UNIT_TYPE}}"
 
+get_unit_dir() {
+  local dir_map="${1:-system}"
+  local scope="${2:-system}"
+  local unit_type="${3:-service}"
+  
+  case "$dir_map" in
+    network) echo "/etc/systemd/network" ;;
+    nspawn) echo "/etc/systemd/nspawn" ;;
+    system)
+      if [ "$scope" = "user" ]; then
+        echo "${HOME}/.config/systemd/user"
+      else
+        echo "/etc/systemd/system"
+      fi
+      ;;
+    *) echo "/etc/systemd/system" ;;
+  esac
+}
+
 if [ "$USERMODE" = "true" ]; then
-  UNIT_DEST="${UNIT_DEST:-${HOME}/.config/systemd/user/${UNIT_NAME}.${UNIT_TYPE}}"
+  UNIT_DIR="$(get_unit_dir "$UNIT_DIR_MAP" user "$UNIT_TYPE")"
   SUDO="${SUDO:-false}"
   SYSTEMCTL="${SYSTEMCTL:-systemctl --user}"
 else
-  UNIT_DEST="${UNIT_DEST:-/etc/systemd/system/${UNIT_NAME}.${UNIT_TYPE}}"
+  UNIT_DIR="$(get_unit_dir "$UNIT_DIR_MAP" system "$UNIT_TYPE")"
   SUDO="${SUDO:-sudo}"
   SYSTEMCTL="${SYSTEMCTL:-systemctl}"
 fi
+
+UNIT_DEST="${UNIT_DEST:-${UNIT_DIR}/${UNIT_NAME}.${UNIT_TYPE}}"
 
 if [ "$SUDO" = "false" ]; then
   SUDO_CMD=""

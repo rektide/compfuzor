@@ -102,16 +102,19 @@
     # Step 4: list -> final list of dicts
     _all_specs: "{{ _all_types | product(_all_scopes) | map('zip', ['type', 'scope']) | map('dict') | list }}"
     _is_user: "{{ item.scope == 'user' }}"
+    _type_config: "{{ SYSTEMD_TYPE_CONFIG[item.type] }}"
     _unit_name_var: "SYSTEMD_{{ item.type | upper }}"
     _unit_name_val: "{{ lookup('vars', _unit_name_var) }}"
     _unit_name: "{{ _unit_name_val if _unit_name_val | default(false) and _unit_name_val not in [True, 'True'] else NAME }}"
     _has_type: "{{ item.type in SYSTEMD_UNITTYPES }}"
     _install_var: "SYSTEMD_{{ item.scope | upper }}_{{ item.type | upper }}_INSTALL"
     _install_allowed: "{{ lookup('vars', _install_var, default=_is_user | ternary(false, true)) }}"
+    _dir_map: "{{ _type_config.dir_map | default('system') }}"
     _script_name: "install-{{ item.type }}{{ '-user' if _is_user else '' }}.sh"
     _base_lines:
       - "UNIT_NAME=\"{{ _unit_name }}\""
       - "UNIT_TYPE={{ item.type }}"
+      - "UNIT_DIR_MAP={{ _dir_map }}"
     _user_lines:
       - "UNIT_SUFFIX=user"
       - "USERMODE=true"
