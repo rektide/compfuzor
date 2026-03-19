@@ -1,14 +1,27 @@
 ---
-- name: 'Check for systemd units defined'
+- name: "Defaulting SYSTEMD vars"
   set_fact:
+  args:
+    SYSTEMD_USER: "{{USER if SYSTEMD_USER|def == True else SYSTEMD_USER|default(omit)}}"
+    SYSTEMD_SERVICE: "{{serviceNameDefault}}"
+    SYSTEMD_UNITTYPES: "{{types}}"
+    ETC_DIRS: "{{ETC_DIRS|default(_systemd_has_units|ternary([], omit))}}"
+    _systemd_has_units: "{{_systemd_has_units}}"
+  vars:
     _systemd_has_service: "{{ SYSTEMD_SERVICE|default(false) or (SYSTEMD_SERVICES|default({}))|length > 0 }}"
     _systemd_has_socket: "{{ SYSTEMD_SOCKET|default(false) or (SYSTEMD_SOCKETS|default({}))|length > 0 }}"
     _systemd_has_mount: "{{ SYSTEMD_MOUNT|default(false) or (SYSTEMD_MOUNTS|default({}))|length > 0 }}"
     _systemd_has_dnssd: "{{ SYSTEMD_DNSSD|default(false) or (SYSTEMD_DNSSDS|default({}))|length > 0 }}"
-
-- name: 'Check for any systemd units defined'
-  set_fact:
     _systemd_has_units: "{{ _systemd_has_service or _systemd_has_socket or _systemd_has_mount or _systemd_has_dnssd }}"
+    types: >-
+      {{ SYSTEMD_UNITTYPES_ALL 
+        | zip([_systemd_has_service, _systemd_has_socket, _systemd_has_mount, _systemd_has_dnssd])
+        | selectattr(1)
+        | map(attribute=0)
+        | list }}
+    #types: "{{SYSTEMD_UNITTYPES_ALL|has_vars(prefix = 'SYSTEMD_', upper=True)}}"
+    serviceExec: "{{SYSTEMD_SERVICE|default(SYSTEMD_EXEC|def|ternary(True, omit))}}"
+    serviceNameDefault: "{{SYSTEMD_SERVICE|default(omit) if SYSTEMD_SERVICE|def != True else NAME}}"
 
 - name: 'Add systemd install-unit.sh script to BINS'
   set_fact:
