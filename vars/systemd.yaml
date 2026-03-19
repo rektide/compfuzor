@@ -114,6 +114,110 @@ SYSTEMD_TYPE_CONFIG:
     var_suffix: DNSSDS
     dir_map: system
     no_unit: true
+  network:
+    sections:
+      - Match
+      - Network
+      - Address
+      - Neighbor
+      - IPv6AddressLabel
+      - Link
+      - RoutingPolicyRule
+      - NextHop
+      - QDisc
+      - NetworkEmulator
+      - TokenBucketFilter
+      - PFIFO
+      - BFIFO
+      - PFIFOFast
+      - PFIFOHeadDrop
+      - CAKE
+      - ControlledDelay
+      - DeficitRoundRobinScheduler
+      - DeficitRoundRobinSchedulerClass
+      - EnhancedTransmissionSelection
+      - FairQueueing
+      - FairQueueingControlledDelay
+      - FlowQueuePIE
+      - GenericRandomEarlyDetection
+      - HeavyHitterFilter
+      - HierarchyTokenBucket
+      - HierarchyTokenBucketClass
+      - QuickFairQueueing
+      - QuickFairQueueingClass
+      - BandMultiQueueing
+      - ClassfulMultiQueueing
+      - StochasticFairBlue
+      - StochasticFairnessQueueing
+      - TrivialLinkEqualizer
+      - PIE
+      - Route
+      - DHCPv4
+      - DHCPv6
+      - DHCPrefixDelegation
+      - DHCPServer
+      - DHCPServerStaticLease
+      - IPv6AcceptRA
+      - IPv6SendRA
+      - IPv6Prefix
+      - IPv6Pref64Prefix
+      - IPv6RoutePrefix
+      - LLDP
+      - Bridge
+      - BridgeFDB
+      - BridgeMDB
+      - BridgeVLAN
+      - CAN
+      - IPoIB
+      - SR-IOV
+    var_suffix: NETWORK
+    dir_map: network
+    no_unit: true
+    no_install: true
+  netdev:
+    sections:
+      - Match
+      - NetDev
+      - VLAN
+      - MACVLAN
+      - MACVTap
+      - IPVlan
+      - IPVTap
+      - VXLAN
+      - MACsec
+      - MACsecReceiveChannel
+      - MACsecReceiveAssociation
+      - MACsecTransmitAssociation
+      - Tunnel
+      - VTI
+      - VTI6
+      - GRE
+      - GRETAP
+      - IP6GRE
+      - IP6GRETAP
+      - L2TP
+      - L2TPSession
+      - Geneve
+      - FooOverUDP
+      - BareUDP
+      - Bond
+      - Bridge
+      - VRF
+      - VXCAN
+      - WLAN
+      - WireGuard
+      - WireGuardPeer
+      - BatmanAdvanced
+      - IPoIB
+      - Tun
+      - Tap
+      - Peer
+      - HSR
+      - Xfrm
+    var_suffix: NETDEV
+    dir_map: network
+    no_unit: true
+    no_install: true
 
 # must update vars_systemd_unit.tasks in sequence too
 SYSTEMD_UNITTYPES_ALL: "{{ SYSTEMD_TYPE_CONFIG.keys() | list }}"
