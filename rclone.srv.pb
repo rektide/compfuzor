@@ -5,12 +5,14 @@
     TYPE: rclone
     INSTANCE: main
     ETC_DIRS: True
-    SYSTEMD_SERVICE: rclone
-    SYSTEMD_EXEC: "rclone mount --vfs-cache-mode writes --vfs-cache-max-size 100M --log-level=INFO --umask 022 --allow-other %i: %h/mnt/%i"
-    SYSTEMD_EXEC_STOP: fusermount -u %h/mnt/%i
-    SYSTEMD_AFTER: "network-online.target"
-    SYSTEMD_WANTS: "network-online.target"
-    SYSTEMD_DESCRIPTION: rclone %i
+    SYSTEMD_SERVICES:
+      ExecStart: "rclone mount --vfs-cache-mode writes --vfs-cache-max-size 100M --log-level=INFO --umask 022 --allow-other %i: %h/mnt/%i"
+      ExecStop: fusermount -u %h/mnt/%i
+    SYSTEMD_UNITS:
+      After: "network-online.target"
+      Description: rclone %i
+    SYSTEMD_INSTALLS:
+      Wants: "network-online.target"
     SYSTEMD_INSTANCES: True
     SYSTEMD_INSTALL: both
   tasks:

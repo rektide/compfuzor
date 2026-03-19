@@ -34,7 +34,7 @@
     _unit_name_val: "{{ lookup('vars', _unit_name_var, default='') }}"
     _unit_name: "{{ _unit_name_val if _unit_name_val and _unit_name_val not in [True, 'True'] else NAME }}"
     _has_type: "{{ _unit_type in SYSTEMD_UNITTYPES }}"
-    _unit_filename: "{{ _unit_name }}.{{ _unit_type }}"
+    _unit_filename: "{{ _unit_name }}{{ '@' if SYSTEMD_INSTANCES|default(False) else '' }}.{{ _unit_type }}"
     UNIT_TYPE: "{{ _unit_type }}"
     UNIT_VARS: "{{ lookup('vars', SYSTEMD_VARS_ROOT, default=omit) if SYSTEMD_VARS_ROOT is defined else omit }}"
     _etc_file:
@@ -70,7 +70,7 @@
     _unit_name_key: "SYSTEMD_{{ _unit_type | upper }}"
     _unit_name_val: "{{ _root_data[_unit_name_key] | default(lookup('vars', _unit_name_key, default='')) }}"
     _unit_name: "{{ _unit_name_val if _unit_name_val and _unit_name_val not in [True, 'True'] else NAME }}"
-    _unit_filename: "{{ _unit_name }}.{{ _unit_type }}"
+    _unit_filename: "{{ _unit_name }}{{ '@' if UNIT_VARS.SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCES|default(False)) else '' }}.{{ _unit_type }}"
     _has_type_data: "{{ _root_data['SYSTEMD_' ~ _type_config.var_suffix] is defined or _root_data[_unit_name_key] is defined }}"
     UNIT_TYPE: "{{ _unit_type }}"
     UNIT_VARS: "{{ _root_data }}"
@@ -114,8 +114,20 @@
       {%- elif _dir_map == 'nspawn' -%}/etc/systemd/nspawn
       {%- elif _is_user -%}${HOME}/.config/systemd/user
       {%- else -%}/etc/systemd/system{%- endif -%}
+    _is_instanced: "{{ SYSTEMD_INSTANCES|default(False)|bool }}"
+    _instances_list: "{{ SYSTEMD_INSTANCES|default([])|listify }}"
+    _unit_template: "{{ _unit_name }}{{ '@' if _is_instanced else '' }}"
+    _enable_targets: >-
+      {%- if _is_instanced -%}
+        {%- if _instances_list | length > 0 -%}
+          {{ _instances_list | map('regex_replace', '(.+)', _unit_name + '@\\1') | join(' ') }}
+        {%- endif -%}
+      {%- else -%}
+        {{ _unit_name }}
+      {%- endif -%}
     _generated: |
-      UNIT_NAME="{{ _unit_name }}"
+      UNIT_TEMPLATE="{{ _unit_template }}"
+      UNIT_ENABLE_TARGETS="{{ _enable_targets }}"
       UNIT_TYPE={{ item.type }}
       UNIT_DIR="{{ _unit_dir }}"
       SYSTEMCTL="{{ 'systemctl --user' if _is_user else 'systemctl' }}"
