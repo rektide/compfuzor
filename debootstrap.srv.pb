@@ -4,10 +4,14 @@
     TYPE: debootstrap
     INSTANCE: main
     BINS_RUN_BYPASS: True
+    # PKGS/PKGSET/PKGSETS are debootstrap include-package config in this playbook.
+    # They are rendered to {{ETC}}/pkgs and passed through debootstrap --include.
+    # Do not install PKGS onto the host from this playbook.
     PKGS_BYPASS: True
 
     SUITE: "{{ APT_DISTRIBUTION|default(APT_DEFAULT_DISTRIBUTION, true) }}"
     DEBIAN_MIRROR_URI: "{{ APT_MIRROR|default(APT_DEFAULT_MIRROR, true) }}"
+    debootstrap_pkgs_file: "{{ETC}}/pkgs"
 
     PKGSET:
     PKGSETS:
@@ -19,6 +23,7 @@
 
     ENV:
       NEWROOT: /mnt/newroot
+      PKGS_FILE: "{{debootstrap_pkgs_file}}"
       RSYNC_DIRS: "(/bin /sbin /lib /lib64 /usr /etc /root /home /opt /var)"
       RSYNC_OPTS: "-aHAX --numeric-ids"
       SUITE: "{{ SUITE }}"
@@ -114,7 +119,7 @@
           FOREIGN="${DEBOOTSTRAP_FOREIGN:-0}"
           COPY_RESOLV="${DEBOOTSTRAP_COPY_RESOLV:-1}"
           EXTRA_OPTS="${DEBOOTSTRAP_OPTS:-}"
-          PKGS_FILE="${PKGS_FILE:-{{ETC}}/pkgs}"
+          PKGS_FILE="${PKGS_FILE:-{{debootstrap_pkgs_file}}}"
 
           COMPONENTS="$(printf '%s' "$COMPONENTS_RAW" | tr -d "[]'" | tr -d '[:space:]')"
           if [ -z "$COMPONENTS" ]; then
@@ -198,8 +203,9 @@
           mount-tmpfs 3G /mnt/newroot
           prepare-newroot /mnt/newroot oldroot
 
-          # 2) Define desired package sets in this playbook (PKGS/PKGSET/PKGSETS)
-          #    then bootstrap Debian in tmpfs (this playbook)
+          # 2) Define desired package sets in this playbook (PKGS/PKGSET/PKGSETS).
+          #    They are rendered to {{ETC}}/pkgs and consumed by debootstrap --include.
+          #    Then bootstrap Debian in tmpfs (this playbook).
           rsync-newroot /mnt/newroot
           APT_DISTRIBUTION=bookworm \
           APT_COMPONENTS=main,contrib,non-free-firmware \

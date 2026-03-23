@@ -1,4 +1,5 @@
 {% set nl = joiner('\n') -%}
+{{ nl() }}# generated from PKGS/PKGSET/PKGSETS for debootstrap --include
 {% set direct_pkgs = PKGS|default([])|arrayitize -%}
 {% if direct_pkgs|length > 0 -%}
 {{ nl() }}# PKGS: {{ direct_pkgs|join(',') }}
