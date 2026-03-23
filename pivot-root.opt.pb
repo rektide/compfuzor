@@ -1,8 +1,7 @@
 ---
 - hosts: all
   vars:
-    TYPE: pivot-root
-    INSTANCE: main
+    BINS_RUN_BYPASS: True
 
     # Default configuration
     # NEWROOT: where to mount the tmpfs and pivot to
