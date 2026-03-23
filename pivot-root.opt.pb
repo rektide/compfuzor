@@ -8,11 +8,21 @@
     # OLDROOT: where to place the old root after pivot (relative to NEWROOT)
     # TMPFS_SIZE: size of tmpfs (default 2G, can use % of RAM)
     # TMPFS_MODE: permissions for tmpfs mount
+    #
+    # Debian net installer options:
+    # NETBOOT_* variables are used by fetch-netinstaller.
     ENV:
       NEWROOT: /mnt/newroot
       OLDROOT: oldroot
       TMPFS_SIZE: 2G
       TMPFS_MODE: "0755"
+      NETBOOT_SUITE: bookworm
+      NETBOOT_ARCH: amd64
+      NETBOOT_MIRROR: https://deb.debian.org/debian
+      NETBOOT_DIR: /installer
+      NETBOOT_KERNEL: linux
+      NETBOOT_INITRD: initrd.gz
+      INSTALLER_PRESEED_URL:
 
     BINS:
       # Mount a tmpfs at the target location for the new root
@@ -143,6 +153,61 @@
 
           echo "Essential filesystems mounted"
           findmnt --target "$TARGET" --submounts
+
+      # Download Debian netinstaller kernel/initrd into NEWROOT
+      - name: fetch-netinstaller
+        run: True
+        content: |
+          # Fetch Debian installer netboot artifacts into the new root
+          #
+          # Usage: fetch-netinstaller [target] [suite] [arch]
+          #   target: new root location (default: $NEWROOT)
+          #   suite: Debian release (default: $NETBOOT_SUITE)
+          #   arch: installer arch (default: $NETBOOT_ARCH)
+
+          TARGET="${1:-${NEWROOT:-/mnt/newroot}}"
+          SUITE="${2:-${NETBOOT_SUITE:-bookworm}}"
+          ARCH="${3:-${NETBOOT_ARCH:-amd64}}"
+          MIRROR="${NETBOOT_MIRROR:-https://deb.debian.org/debian}"
+          INSTALLER_DIR="${NETBOOT_DIR:-/installer}"
+          KERNEL_NAME="${NETBOOT_KERNEL:-linux}"
+          INITRD_NAME="${NETBOOT_INITRD:-initrd.gz}"
+
+          BASE_URL="$MIRROR/dists/$SUITE/main/installer-$ARCH/current/images/netboot/debian-installer/$ARCH"
+          DEST="$TARGET$INSTALLER_DIR"
+
+          if ! command -v curl >/dev/null 2>&1; then
+            echo "Error: curl not found"
+            exit 1
+          fi
+
+          if ! mountpoint -q "$TARGET" 2>/dev/null; then
+            echo "Error: $TARGET must be a mount point"
+            echo "Run mount-tmpfs first"
+            exit 1
+          fi
+
+          mkdir -p "$DEST"
+
+          echo "Fetching netinstaller assets from:"
+          echo "  $BASE_URL"
+
+          curl -fL "$BASE_URL/$KERNEL_NAME" -o "$DEST/$KERNEL_NAME"
+          curl -fL "$BASE_URL/$INITRD_NAME" -o "$DEST/$INITRD_NAME"
+
+          APPEND="auto=true priority=critical ---"
+          if [ -n "${INSTALLER_PRESEED_URL:-}" ]; then
+            APPEND="auto=true priority=critical url=${INSTALLER_PRESEED_URL} ---"
+          fi
+
+          echo ""
+          echo "Netinstaller fetched to:"
+          echo "  $DEST/$KERNEL_NAME"
+          echo "  $DEST/$INITRD_NAME"
+          echo ""
+          echo "After pivoting into NEWROOT, boot installer with kexec:"
+          echo "  kexec -l $INSTALLER_DIR/$KERNEL_NAME --initrd=$INSTALLER_DIR/$INITRD_NAME --append=\"$APPEND\""
+          echo "  systemctl kexec   # or: kexec -e"
 
       # Perform pivot_root to switch to the new root
       - name: pivot

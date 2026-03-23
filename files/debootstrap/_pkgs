@@ -1,0 +1,12 @@
+{% set nl = joiner('\n') -%}
+{% set direct_pkgs = PKGS|default([])|arrayitize -%}
+{% if direct_pkgs|length > 0 -%}
+{{ nl() }}# PKGS: {{ direct_pkgs|join(',') }}
+{{ nl() }}{{ direct_pkgs|join(',') }}
+{% endif -%}
+{% set pkgsets = PKGSET|default([])|arrayitize + PKGSETS|default([])|arrayitize -%}
+{% for pkgset in pkgsets -%}
+{% set row = hostvars[inventory_hostname][pkgset]|default(vars[pkgset])|default([])|arrayitize -%}
+{{ nl() }}# PKGSET {{ pkgset }}: {{ row|join(',') }}
+{{ nl() }}{{ row|join(',') }}
+{% endfor -%}
