@@ -16,6 +16,8 @@
       OLDROOT: oldroot
       TMPFS_SIZE: 2G
       TMPFS_MODE: "0755"
+      RSYNC_DIRS: "(/bin /sbin /lib /lib64 /usr /etc /root /home /opt /var)"
+      RSYNC_OPTS: "-aHAX --numeric-ids"
       NETBOOT_SUITE: bookworm
       NETBOOT_ARCH: amd64
       NETBOOT_MIRROR: https://deb.debian.org/debian
@@ -99,6 +101,62 @@
 
           echo "New root prepared at $TARGET"
           echo "Old root will be at $TARGET/$OLDROOT_NAME after pivot"
+          ls -la "$TARGET/"
+
+      # Seed the tmpfs root by rsyncing selected directories
+      - name: rsync-newroot
+        run: True
+        content: |
+          # Copy a selected set of top-level directories into NEWROOT using rsync
+          #
+          # Usage: rsync-newroot [target]
+          #   target: new root location (default: $NEWROOT)
+          #
+          # Environment:
+          #   RSYNC_DIRS: zsh/bash array expression (default includes core dirs)
+          #     Example: RSYNC_DIRS='(/bin /sbin /lib /lib64 /usr /etc)'
+          #   RSYNC_OPTS: extra rsync options
+
+          TARGET="${1:-${NEWROOT:-/mnt/newroot}}"
+          ARRAY_EXPR="${RSYNC_DIRS:-(/bin /sbin /lib /lib64 /usr /etc /root /home /opt /var)}"
+          RSYNC_EXTRA_OPTS="${RSYNC_OPTS:--aHAX --numeric-ids}"
+
+          if ! command -v rsync >/dev/null 2>&1; then
+            echo "Error: rsync not found"
+            exit 1
+          fi
+
+          if ! mountpoint -q "$TARGET" 2>/dev/null; then
+            echo "Error: $TARGET must be a mount point"
+            echo "Run mount-tmpfs first"
+            exit 1
+          fi
+
+          dirs=()
+          # shellcheck disable=SC2086
+          eval "dirs=$ARRAY_EXPR"
+
+          if [ "${#dirs[@]}" -eq 0 ]; then
+            echo "Error: RSYNC_DIRS resolved to an empty array"
+            exit 1
+          fi
+
+          echo "Rsyncing into $TARGET"
+          echo "  dirs: ${dirs[*]}"
+          echo "  opts: $RSYNC_EXTRA_OPTS"
+
+          for src in "${dirs[@]}"; do
+            if [ ! -e "$src" ]; then
+              echo "  skip missing: $src"
+              continue
+            fi
+
+            echo "  rsync $src -> $TARGET/"
+            # shellcheck disable=SC2086
+            rsync $RSYNC_EXTRA_OPTS "$src" "$TARGET/"
+          done
+
+          echo "Rsync seed complete"
           ls -la "$TARGET/"
 
       # Mount essential filesystems in the new root (for chroot/pivot)
