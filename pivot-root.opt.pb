@@ -18,13 +18,16 @@
       TMPFS_MODE: "0755"
       RSYNC_DIRS: "(/bin /sbin /lib /lib64 /usr /etc /root /home /opt /var)"
       RSYNC_OPTS: "-aHAX --numeric-ids"
+      RSYNC_ESTIMATE_OPTS: "--dry-run --stats"
+      SSHD_NEW_PORT: "2222"
+      SSHD_NEW_UNIT: sshd-newport
       NETBOOT_SUITE: bookworm
       NETBOOT_ARCH: amd64
       NETBOOT_MIRROR: https://deb.debian.org/debian
       NETBOOT_DIR: /installer
       NETBOOT_KERNEL: linux
       NETBOOT_INITRD: initrd.gz
-      INSTALLER_PRESEED_URL:
+      INSTALLER_PRESEED_URL: ""
 
     BINS:
       # Mount a tmpfs at the target location for the new root
@@ -113,17 +116,26 @@
           #   target: new root location (default: $NEWROOT)
           #
           # Environment:
-          #   RSYNC_DIRS: zsh/bash array expression (default includes core dirs)
+          #   RSYNC_DIRS: zsh/bash array expression of source dirs
           #     Example: RSYNC_DIRS='(/bin /sbin /lib /lib64 /usr /etc)'
           #   RSYNC_OPTS: extra rsync options
 
           TARGET="${1:-${NEWROOT:-/mnt/newroot}}"
-          ARRAY_EXPR="${RSYNC_DIRS:-(/bin /sbin /lib /lib64 /usr /etc /root /home /opt /var)}"
-          RSYNC_EXTRA_OPTS="${RSYNC_OPTS:--aHAX --numeric-ids}"
+          ARRAY_EXPR="${RSYNC_DIRS:-}"
+          RSYNC_EXTRA_OPTS="${RSYNC_OPTS:-}"
 
           if ! command -v rsync >/dev/null 2>&1; then
             echo "Error: rsync not found"
             exit 1
+          fi
+
+          if [ -z "$ARRAY_EXPR" ]; then
+            echo "Error: RSYNC_DIRS is empty"
+            exit 1
+          fi
+
+          if [ -z "$RSYNC_EXTRA_OPTS" ]; then
+            RSYNC_EXTRA_OPTS="-aHAX --numeric-ids"
           fi
 
           if ! mountpoint -q "$TARGET" 2>/dev/null; then
@@ -158,6 +170,142 @@
 
           echo "Rsync seed complete"
           ls -la "$TARGET/"
+
+      # Estimate rsync payload size for current RSYNC_DIRS/RSYNC_OPTS
+      - name: size-estimate.src.pb
+        content: |
+          # Estimate how many bytes rsync-newroot would copy
+          #
+          # Usage: size-estimate.src.pb [target]
+          #   target: destination path for dry-run stats (default: $NEWROOT)
+          #
+          # Environment:
+          #   RSYNC_DIRS: zsh/bash array expression of source dirs
+          #   RSYNC_OPTS: base rsync options
+          #   RSYNC_ESTIMATE_OPTS: additional options (default: --dry-run --stats)
+
+          TARGET="${1:-${NEWROOT:-/mnt/newroot}}"
+          ARRAY_EXPR="${RSYNC_DIRS:-}"
+          RSYNC_EXTRA_OPTS="${RSYNC_OPTS:-}"
+          RSYNC_DRYRUN_OPTS="${RSYNC_ESTIMATE_OPTS:---dry-run --stats}"
+
+          if ! command -v rsync >/dev/null 2>&1; then
+            echo "Error: rsync not found"
+            exit 1
+          fi
+
+          if [ -z "$ARRAY_EXPR" ]; then
+            echo "Error: RSYNC_DIRS is empty"
+            exit 1
+          fi
+
+          if [ -z "$RSYNC_EXTRA_OPTS" ]; then
+            RSYNC_EXTRA_OPTS="-aHAX --numeric-ids"
+          fi
+
+          mkdir -p "$TARGET"
+
+          dirs=()
+          # shellcheck disable=SC2086
+          eval "dirs=$ARRAY_EXPR"
+
+          if [ "${#dirs[@]}" -eq 0 ]; then
+            echo "Error: RSYNC_DIRS resolved to an empty array"
+            exit 1
+          fi
+
+          total_bytes=0
+
+          echo "Estimating rsync payload"
+          echo "  target: $TARGET"
+          echo "  dirs: ${dirs[*]}"
+          echo "  opts: $RSYNC_EXTRA_OPTS $RSYNC_DRYRUN_OPTS"
+
+          for src in "${dirs[@]}"; do
+            if [ ! -e "$src" ]; then
+              echo "  skip missing: $src"
+              continue
+            fi
+
+            echo "  estimate: $src"
+            # shellcheck disable=SC2086
+            stats_out="$(rsync $RSYNC_EXTRA_OPTS $RSYNC_DRYRUN_OPTS "$src" "$TARGET/" 2>/dev/null || true)"
+
+            bytes=""
+            while IFS= read -r line; do
+              case "$line" in
+                "Total file size: "*)
+                  bytes="${line#Total file size: }"
+                  bytes="${bytes%% bytes*}"
+                  bytes="${bytes//,/}"
+                  ;;
+              esac
+            done <<EOF
+            $stats_out
+            EOF
+
+            if [ -n "$bytes" ]; then
+              echo "    total-file-size-bytes: $bytes"
+              total_bytes=$((total_bytes + bytes))
+            else
+              echo "    warning: unable to parse rsync stats for $src"
+            fi
+          done
+
+          echo ""
+          echo "Aggregate estimated payload bytes: $total_bytes"
+          if command -v numfmt >/dev/null 2>&1; then
+            echo "Aggregate estimated payload human: $(numfmt --to=iec-i --suffix=B "$total_bytes")"
+          fi
+
+      # Launch a transient sshd on a different port
+      - name: new-sshd
+        run: True
+        content: |
+          # Start a temporary second sshd instance via systemd-run
+          # using normal sshd config and only overriding port/pidfile.
+          #
+          # Usage: new-sshd [port] [unit]
+          #   port: ssh port (default: $SSHD_NEW_PORT or 2222)
+          #   unit: transient systemd unit name (default: $SSHD_NEW_UNIT)
+
+          PORT="${1:-${SSHD_NEW_PORT:-2222}}"
+          UNIT="${2:-${SSHD_NEW_UNIT:-sshd-newport}}"
+          SSHD_BIN="$(command -v sshd || true)"
+
+          if [ -z "$SSHD_BIN" ]; then
+            echo "Error: sshd not found"
+            exit 1
+          fi
+
+          if ! command -v systemd-run >/dev/null 2>&1; then
+            echo "Error: systemd-run not found"
+            exit 1
+          fi
+
+          case "$PORT" in
+            ''|*[!0-9]*) echo "Error: invalid port '$PORT'"; exit 1 ;;
+          esac
+
+          PIDFILE="/run/${UNIT}.pid"
+
+          if systemctl is-active --quiet "$UNIT"; then
+            echo "Unit $UNIT is already active"
+            systemctl status "$UNIT" --no-pager || true
+            exit 0
+          fi
+
+          echo "Starting transient sshd unit: $UNIT on port $PORT"
+          systemd-run \
+            --unit "$UNIT" \
+            --collect \
+            --property "Type=exec" \
+            "$SSHD_BIN" -D -e -f /etc/ssh/sshd_config -o "Port=$PORT" -o "PidFile=$PIDFILE"
+
+          echo "Started. Useful commands:"
+          echo "  systemctl status $UNIT"
+          echo "  systemctl stop $UNIT"
+          echo "  ssh -p $PORT <host>"
 
       # Mount essential filesystems in the new root (for chroot/pivot)
       - name: mount-essential
