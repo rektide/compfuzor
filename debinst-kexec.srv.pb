@@ -184,21 +184,18 @@
             fi
           }
 
-          append_console_list() {
-            list="${1:-}"
-            while [ -n "$list" ]; do
-              console="${list%% *}"
-              if [ "$console" = "$list" ]; then
-                list=""
-              else
-                list="${list#* }"
-                while [ "${list# }" != "$list" ]; do
-                  list="${list# }"
-                done
-              fi
+          append_kv_words() {
+            key="${1:-}"
+            list="${2:-}"
+            [ -n "$key" ] || return 0
+            [ -n "$list" ] || return 0
 
-              [ -n "$console" ] || continue
-              append_kv "console" "$console"
+            if [ -n "${ZSH_VERSION:-}" ]; then
+              emulate -L sh
+            fi
+
+            for token in $list; do
+              append_kv "$key" "$token"
             done
           }
 
@@ -243,7 +240,7 @@
           append_kv "keyboard-configuration/xkb-keymap" "${INSTALLER_KEYMAP:-}"
           append_kv "url" "${INSTALLER_PRESEED_URL:-}"
 
-          append_console_list "${INSTALLER_CONSOLES:-}"
+          append_kv_words "console" "${INSTALLER_CONSOLES:-}"
 
           if is_true "${INSTALLER_FORCE_LEGACY_IFNAMES:-0}"; then
             append_raw "net.ifnames=0"
