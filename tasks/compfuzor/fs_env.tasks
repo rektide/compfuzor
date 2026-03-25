@@ -21,7 +21,7 @@
       skip: "{{ENV_IS_EXPORT|default(False)}}"
       exportMode: True
   vars:
-    _env_requested: "{{ENV|truthy or ENV|def == {} or ENV_PRIO|truthy or ENV_PRIO|def == {}}}"
+    _env_requested: "{{ENV is defined or ENV_PRIO is defined}}"
     _dest: "{{DIR}}/{{item.file}}"
     _srcHas: "files/{{TYPE|default(NAME)}}/{{item.file}}"
     _srcDefault: "files/_env"
@@ -53,5 +53,5 @@
       hasEnv: "{{has_env_export.stdout|default(0)|int > 0}}"
       skip: "{{ENV_IS_EXPORT|default(False)}}"
   vars:
-    _env_requested: "{{ENV|truthy or ENV|def == {} or ENV_PRIO|truthy or ENV_PRIO|def == {}}}"
+    _env_requested: "{{ENV is defined or ENV_PRIO is defined}}"
     _dest: "{{PREFIX_DIR}}/{{item.file}}.{{NAME|default(TYPE)}}"

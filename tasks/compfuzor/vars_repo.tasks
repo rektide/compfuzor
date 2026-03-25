@@ -6,8 +6,9 @@
     var_name: "{{item|upper|replace('-', '_')}}_DIR"
 - name: "Add GOPATH and REPO_DIR to ENV"
   set_fact:
-    ENV: "{{ ENV|default({})|combine(env_additions) }}"
+    ENV: "{{ env_current | combine(env_additions) }}"
   vars:
-    gopath_env: "{{ {'GOPATH': DIR} if (ENV is not defined or ENV['GOPATH'] is not defined) and REPO_GOGET is defined else {} }}"
+    env_current: "{{ ENV|default({}) }}"
+    gopath_env: "{{ {'GOPATH': DIR} if REPO_GOGET is defined and 'GOPATH' not in env_current else {} }}"
     repo_dir_env: "{{ {'REPO_DIR': REPO_DIR} if REPO_DIR is defined else {} }}"
     env_additions: "{{ gopath_env | combine(repo_dir_env) }}"
