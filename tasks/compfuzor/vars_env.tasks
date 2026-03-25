@@ -14,36 +14,24 @@
   changed_when: False
   become: False
 
-# Normalize ENV and ENV_PRIO in one action for speed and consistency.
-# - list form:   [foo, bar]           -> {foo: true, bar: true}
-# - bool form:   true/false           -> {}
-# - map form:    {FOO: value}         -> unchanged
-- name: "Compfuzor: normalize ENV and ENV_PRIO"
-  set_fact:
-    ENV: "{{ _env_normalized if ENV is defined else omit }}"
-    ENV_PRIO: "{{ _env_prio_normalized if ENV_PRIO is defined else omit }}"
-  when: ENV is defined or ENV_PRIO is defined
-  failed_when: _env_invalid or _env_prio_invalid
+# ENV values are now explicit by shape:
+# - ENV and ENV_PRIO are mapping-or-boolean only
+# - ENV_LIST and ENV_PRIO_LIST are the explicit variable-name lists
+# This avoids pre-resolving mapping values during vars stage.
+- name: "Compfuzor: validate ENV input forms"
+  fail:
+    msg: "{{ _errors | join('; ') }}"
+  when: _errors | length > 0
   vars:
-    _env_invalid: "{{ ENV is defined and ENV is not mapping and not (ENV is sequence and ENV is not string) and ENV is not boolean }}"
-    _env_prio_invalid: "{{ ENV_PRIO is defined and ENV_PRIO is not mapping and not (ENV_PRIO is sequence and ENV_PRIO is not string) and ENV_PRIO is not boolean }}"
-    _env_normalized_mapping: "{{ ENV if (ENV is defined and ENV is mapping) else {} }}"
-    _env_normalized_list: >-
-      {%- set out = {} -%}
-      {%- for key in (ENV if (ENV is defined and ENV is sequence and ENV is not string) else []) -%}
-      {%- set _ = out.update({ (key|string): True }) -%}
-      {%- endfor -%}
-      {{ out }}
-    _env_normalized_boolean: "{{ {} }}"
-    _env_normalized_other: "{{ {} }}"
-    _env_normalized: "{{ _env_normalized_mapping if ENV is mapping else (_env_normalized_list if ENV is sequence and ENV is not string else (_env_normalized_boolean if ENV is boolean else _env_normalized_other)) }}"
-    _env_prio_normalized_mapping: "{{ ENV_PRIO if (ENV_PRIO is defined and ENV_PRIO is mapping) else {} }}"
-    _env_prio_normalized_list: >-
-      {%- set out = {} -%}
-      {%- for key in (ENV_PRIO if (ENV_PRIO is defined and ENV_PRIO is sequence and ENV_PRIO is not string) else []) -%}
-      {%- set _ = out.update({ (key|string): True }) -%}
-      {%- endfor -%}
-      {{ out }}
-    _env_prio_normalized_boolean: "{{ {} }}"
-    _env_prio_normalized_other: "{{ {} }}"
-    _env_prio_normalized: "{{ _env_prio_normalized_mapping if ENV_PRIO is mapping else (_env_prio_normalized_list if ENV_PRIO is sequence and ENV_PRIO is not string else (_env_prio_normalized_boolean if ENV_PRIO is boolean else _env_prio_normalized_other)) }}"
+    _env_invalid: "{{ ENV is defined and ENV is not mapping and ENV is not boolean }}"
+    _env_prio_invalid: "{{ ENV_PRIO is defined and ENV_PRIO is not mapping and ENV_PRIO is not boolean }}"
+    _env_list_invalid: "{{ ENV_LIST is defined and (ENV_LIST is string or ENV_LIST is not sequence) }}"
+    _env_prio_list_invalid: "{{ ENV_PRIO_LIST is defined and (ENV_PRIO_LIST is string or ENV_PRIO_LIST is not sequence) }}"
+    _errors: >-
+      {{
+        ([])
+        + (["ENV must be a mapping or boolean (use ENV_LIST for list-of-variable-names)"] if _env_invalid else [])
+        + (["ENV_PRIO must be a mapping or boolean (use ENV_PRIO_LIST for list-of-variable-names)"] if _env_prio_invalid else [])
+        + (["ENV_LIST must be a non-string sequence"] if _env_list_invalid else [])
+        + (["ENV_PRIO_LIST must be a non-string sequence"] if _env_prio_list_invalid else [])
+      }}

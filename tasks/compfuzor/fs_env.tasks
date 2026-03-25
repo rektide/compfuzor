@@ -7,7 +7,7 @@
     group: "{{GROUP|default(omit)}}"
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: >
-    (item.hasEnv or ENV is defined or ENV_PRIO is defined) and
+    (item.hasEnv or _env_requested) and
     not item.skip|default(False)
   loop:
     - file: env
@@ -21,9 +21,37 @@
       skip: "{{ENV_IS_EXPORT|default(False)}}"
       exportMode: True
   vars:
+    _env_missing: "__ENV_UNSET_COMPFUZOR__"
+    _env_raw_value: "{{ lookup('vars_dict', ['ENV'], default=_env_missing).ENV }}"
+    _env_raw: "{{ none if _env_raw_value == _env_missing else _env_raw_value }}"
+    _env_list_raw: "{{ lookup('vars_dict', ['ENV_LIST'], default=[]).ENV_LIST }}"
+    _env_input_mapping: "{{ _env_raw if (_env_raw is mapping) else {} }}"
+    _env_input_enabled: "{{ _env_raw is boolean and _env_raw }}"
+    _env_input_list_names: "{{ _env_list_raw|default([], true)|arrayitize }}"
+    _env_input_list_mapping: "{{ lookup('vars_dict', _env_input_list_names, default=none) if _env_input_list_names|length > 0 else {} }}"
+    _env_effective: "{{ _env_input_list_mapping|combine(_env_input_mapping) }}"
+    _env_prio_raw_value: "{{ lookup('vars_dict', ['ENV_PRIO'], default=_env_missing).ENV_PRIO }}"
+    _env_prio_raw: "{{ none if _env_prio_raw_value == _env_missing else _env_prio_raw_value }}"
+    _env_prio_list_raw: "{{ lookup('vars_dict', ['ENV_PRIO_LIST'], default=[]).ENV_PRIO_LIST }}"
+    _env_prio_input_mapping: "{{ _env_prio_raw if (_env_prio_raw is mapping) else {} }}"
+    _env_prio_input_enabled: "{{ _env_prio_raw is boolean and _env_prio_raw }}"
+    _env_prio_input_list_names: "{{ _env_prio_list_raw|default([], true)|arrayitize }}"
+    _env_prio_input_list_mapping: "{{ lookup('vars_dict', _env_prio_input_list_names, default=none) if _env_prio_input_list_names|length > 0 else {} }}"
+    _env_prio_effective: "{{ _env_prio_input_list_mapping|combine(_env_prio_input_mapping) }}"
+    _env_requested: >-
+      {{
+        (_env_raw is mapping) or
+        _env_input_enabled or
+        _env_input_list_names|length > 0 or
+        (_env_prio_raw is mapping) or
+        _env_prio_input_enabled or
+        _env_prio_input_list_names|length > 0
+      }}
     _dest: "{{DIR}}/{{item.file}}"
     _srcHas: "files/{{TYPE|default(NAME)}}/{{item.file}}"
     _src: "{{'files/_env' if not item.hasEnv else _srcHas}}"
+    ENV_RENDER: "{{ _env_effective }}"
+    ENV_PRIO_RENDER: "{{ _env_prio_effective }}"
     export_mode: "{{item.exportMode|default(False)}}"
 
 # in case one only needs a env, and env.export is the same
@@ -43,7 +71,7 @@
     group: "{{GROUP|default(omit)}}"
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   # might be cool to have an exists check that ignores dead symlinks
-  when: PREFIX_DIR|default(False) and (item.hasEnv or ENV is defined or ENV_PRIO is defined) and not item.skip|default(False) and _dest is not exists
+  when: PREFIX_DIR|default(False) and (item.hasEnv or _env_requested) and not item.skip|default(False) and _dest is not exists
   loop:
     - file: env
       hasEnv: "{{has_env.stdout|default(0)|int > 0}}"
@@ -51,4 +79,32 @@
       hasEnv: "{{has_env_export.stdout|default(0)|int > 0}}"
       skip: "{{ENV_IS_EXPORT|default(False)}}"
   vars:
+    _env_missing: "__ENV_UNSET_COMPFUZOR__"
+    _env_raw_value: "{{ lookup('vars_dict', ['ENV'], default=_env_missing).ENV }}"
+    _env_raw: "{{ none if _env_raw_value == _env_missing else _env_raw_value }}"
+    _env_list_raw: "{{ lookup('vars_dict', ['ENV_LIST'], default=[]).ENV_LIST }}"
+    _env_input_mapping: "{{ _env_raw if (_env_raw is mapping) else {} }}"
+    _env_input_enabled: "{{ _env_raw is boolean and _env_raw }}"
+    _env_input_list_names: "{{ _env_list_raw|default([], true)|arrayitize }}"
+    _env_input_list_mapping: "{{ lookup('vars_dict', _env_input_list_names, default=none) if _env_input_list_names|length > 0 else {} }}"
+    _env_effective: "{{ _env_input_list_mapping|combine(_env_input_mapping) }}"
+    _env_prio_raw_value: "{{ lookup('vars_dict', ['ENV_PRIO'], default=_env_missing).ENV_PRIO }}"
+    _env_prio_raw: "{{ none if _env_prio_raw_value == _env_missing else _env_prio_raw_value }}"
+    _env_prio_list_raw: "{{ lookup('vars_dict', ['ENV_PRIO_LIST'], default=[]).ENV_PRIO_LIST }}"
+    _env_prio_input_mapping: "{{ _env_prio_raw if (_env_prio_raw is mapping) else {} }}"
+    _env_prio_input_enabled: "{{ _env_prio_raw is boolean and _env_prio_raw }}"
+    _env_prio_input_list_names: "{{ _env_prio_list_raw|default([], true)|arrayitize }}"
+    _env_prio_input_list_mapping: "{{ lookup('vars_dict', _env_prio_input_list_names, default=none) if _env_prio_input_list_names|length > 0 else {} }}"
+    _env_prio_effective: "{{ _env_prio_input_list_mapping|combine(_env_prio_input_mapping) }}"
+    _env_requested: >-
+      {{
+        (_env_raw is mapping) or
+        _env_input_enabled or
+        _env_input_list_names|length > 0 or
+        (_env_prio_raw is mapping) or
+        _env_prio_input_enabled or
+        _env_prio_input_list_names|length > 0
+      }}
+    ENV_RENDER: "{{ _env_effective }}"
+    ENV_PRIO_RENDER: "{{ _env_prio_effective }}"
     _dest: "{{PREFIX_DIR}}/{{item.file}}.{{NAME|default(TYPE)}}"

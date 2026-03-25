@@ -2,7 +2,7 @@
   set_fact:
     TOOL_VERSIONS: "{{tool_versions|combine(TOOL_VERSIONS|default({}))}}"
     NPM_PACKAGE_BIN: "{{npm_package_bin}}"
-    ENV: "{{env_mapping|combine(ENV|default({}))}}"
+    ENV: "{{env_mapping|combine(env_current)}}"
     BINS: "{{BINS|default([]) + [download_bin]}}"
   when: NPM_PACKAGE is deftruthy
   vars:
@@ -11,6 +11,7 @@
     tool_versions:
       nodejs: True
       pnpm: True
+    env_current: "{{ ENV if (ENV is defined and ENV is mapping) else {} }}"
     env_mapping:
       NPM_PACKAGE: "{{NPM_PACKAGE}}"
     download_bin:
