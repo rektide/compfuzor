@@ -83,7 +83,15 @@
   when: DIR|default(False) is truthy or DIRS|default(False) is truthy or FILES|default(False) is truthy and DIR_BYPASS|default(False) is not truthy
 - import_tasks: compfuzor/fs_repo.tasks
 - import_tasks: compfuzor/fs_env.tasks
-  when: has_env.stdout|int != 0 or ENV|default(False) is truthy or ENV|default(False) == {} and not ENV_BYPASS|default(False)|bool
+  when: >
+    not ENV_BYPASS|default(False)|bool and
+    (
+      has_env.stdout|default(0)|int != 0 or
+      has_env_export.stdout|default(0)|int != 0 or
+      has_env_usermode.stdout|default(0)|int != 0 or
+      ENV|truthy or ENV|def == {} or
+      ENV_PRIO|truthy or ENV_PRIO|def == {}
+    )
 - import_tasks: compfuzor/_multi.tasks
   vars:
     multi: fs_hierarchy

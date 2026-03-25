@@ -8,3 +8,8 @@
   register: has_env_export
   changed_when: False
   become: False
+- name: "Compfuzor: test local for has_env_usermode variable"
+  local_action: shell test ! -e "files/{{TYPE|default(NAME)}}/env.usermode"; echo $?
+  register: has_env_usermode
+  changed_when: False
+  become: False
