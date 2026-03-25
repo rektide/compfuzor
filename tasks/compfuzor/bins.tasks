@@ -26,29 +26,33 @@
   vars:
     _dest: "{{BINS_DIR}}/{{item.dest|default(item.name)}}"
     contentful: "{{item.content|def or item.exec|def or item.execs|def or item.generated|def or item.early|def or item.late|def}}"
-- name: "Copy `BINS` into place`"
+- name: "Create wrapped src/template `BINS`"
   template:
-    src: "files/{{TYPE|default(NAME)}}/{{item.src|default(item.name) if item is mapping else item }}"
+    src: "files/_bin"
     dest: "{{_dest}}"
-    mode: "{{item.mode|default(BINMODE)}}"
-    owner: "{{item.owner|default(OWNER)|default(omit)}}"
+    mode: "{{_item.mode|default(BINMODE)}}"
+    owner: "{{_item.owner|default(OWNER)|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
-  with_items: "{{BINS|default([])}}"
-  become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  loop: "{{BINS|default([])}}"
+  loop_control:
+    loop_var: bin_item
+  become: "{{_dest|should_become(OWNER|default(), ansible_user_gid, GROUP|default(), ansible_user_gid)}}"
   when: >
-    ( item is not mapping
-      or (item.src|default(True) != False and item.name|default(False))
-      or item.src|default(False))
-    and not (
-      item.raw|default(False)
-      or item.exec|default(False)
-      or item.execs|default(False))
-    and not item.link|default(False)
-    and not contentful
-    and item.exists|default('') != False
+    _srcName|default(False) is truthy
+    and not _isRaw
+    and not _isLink
+    and not _contentful
+    and _exists
   vars:
-    _dest: "{{BINS_DIR}}/{{item.dest|default(item.name|default(item.src|basename)) if item is mapping else item}}"
-    contentful: "{{item.content|def or item.exec|def or item.execs|def or item.generated|def or item.early|def or item.late|def}}"
+    _item: "{{ bin_item if bin_item is mapping else {'name': bin_item} }}"
+    _srcName: "{{_item.src|default(_item.name|default(False))}}"
+    _srcTemplate: "files/{{TYPE|default(NAME)}}/{{_srcName}}"
+    _dest: "{{BINS_DIR}}/{{_item.dest|default(_item.name|default(_srcName|basename))}}"
+    _isRaw: "{{_item.raw|default(False)|bool}}"
+    _isLink: "{{_item.link|default(False) is truthy}}"
+    _exists: "{{_item.exists|default('') != False}}"
+    _contentful: "{{_item.content|def or _item.exec|def or _item.execs|def or _item.generated|def or _item.early|def or _item.late|def}}"
+    item: "{{_item|combine({'content': lookup('template', _srcTemplate)})}}"
 - name:  "Copy raw `BINS` into place`"
   copy:
     src: "files/{{ TYPE|default(NAME) }}/{{item.src|default(item.name) if item is mapping else item }}"

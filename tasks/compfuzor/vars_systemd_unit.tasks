@@ -39,7 +39,11 @@
         {%- endfor -%}
         {{ items }}
       {%- else -%}
-        {{ SYSTEMD_UNITTYPES | map('regex_replace', '^(.*)$', '{"type": "\\1"}') | map('from_yaml') | list }}
+        {%- set items = [] -%}
+        {%- for t in SYSTEMD_UNITTYPES -%}
+          {%- set _ = items.append({'type': t}) -%}
+        {%- endfor -%}
+        {{ items }}
       {%- endif -%}
     _unit_type: "{{ item.type }}"
     _unit_scope: "{{ item.scope | default(omit) }}"
@@ -51,7 +55,7 @@
     _separate_suffix: "{{ '-user' if _is_separate and _unit_scope == 'user' else '' }}"
     _unit_filename: "{{ _unit_name }}{{ _separate_suffix }}{{ '@' if SYSTEMD_INSTANCES|default(False) else '' }}.{{ _unit_type }}"
     UNIT_TYPE: "{{ _unit_type }}"
-    _raw_vars_base: "{{ lookup('vars', SYSTEMD_VARS_ROOT, default={}) if SYSTEMD_VARS_ROOT is defined else {} }}"
+    _raw_vars_base: "{{ (lookup('vars', SYSTEMD_VARS_ROOT, default={}) if SYSTEMD_VARS_ROOT is defined else {}) | combine({'target': target} if target is defined else {}) }}"
     _raw_vars: "{{ _raw_vars_base | combine({'USERMODE': True}) if _is_separate and _unit_scope == 'user' else _raw_vars_base }}"
     _type_config: "{{ SYSTEMD_TYPE_CONFIG[_unit_type] }}"
     _merged_sections: >-

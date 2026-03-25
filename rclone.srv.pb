@@ -4,7 +4,7 @@
   vars:
     target: "{{ '%h' if USERMODE|def else '' }}/mnt/%i'"
     SYSTEMD_SERVICES:
-      # AH! This is the gotcha. User and service probably need different values here! 
+      # AH! This is the gotcha. User and service probably need different values here!
       # We'd started having two units, one for service & one for user. And would have USERMODE set when generating the users, so we could bifurcate this
       ExecStart: "rclone mount --vfs-cache-mode writes --vfs-cache-max-size 100M --log-level=INFO --umask 022 --allow-other %i: {{target}}"
       ExecStop: fusermount -u %h/mnt/%i

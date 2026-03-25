@@ -78,8 +78,6 @@
   when: unit is truthy and SYSTEMD_LINK|truthy(True)
   become: "{{ not is_usermode }}"
 
-- fail: msg=dratzzz
-
 - name: "enabling unit"
   shell: "systemctl --{{ SYSTEMD_SCOPE }} daemon-reload && systemctl --{{ SYSTEMD_SCOPE }} enable '{{ enable_unit }}'"
   when: >

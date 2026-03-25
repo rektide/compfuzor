@@ -10,6 +10,13 @@ Added latter, there are a host of other conventions: environment variables are a
 
 It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance. It provides a rich set of default directives which use a construct of context sensitivie settings to create ea consistend framework for emplacing software and processes.
 
+# Target Requirements
+
+- Debian target generally expected
+- systemd-dev (for pkg-config configuration)
+- write permissions to: /opt /srv /usr/local/src
+- many playbook scripts use `block-in-file` (which requires node or deno)
+
 # Conventions
 
 ## Base System

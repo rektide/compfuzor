@@ -4,7 +4,7 @@
     prefix: "k3s-pure"
     TYPE: "{{prefix}}{{ is_server|ternary('', '-agent') }}"
     INSTANCE: "{{server|replace('.', '-')}}"
-    PASSWORD:
+    PASSWORDS:
       - token
     PASSWORD_LENGTH: 96
     server: k3s.example

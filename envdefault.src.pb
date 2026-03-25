@@ -5,7 +5,7 @@
     INSTANCE: git
     REPO: https://github.com/rektide/envdefault
     BINS:
-      - src: "{{DIR}}/envdefault"
+      - src: "{{DIR}}/repo/envdefault"
         global: True
         exists: False
   tasks:

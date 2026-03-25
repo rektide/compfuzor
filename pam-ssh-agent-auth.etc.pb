@@ -17,8 +17,8 @@
         run: True
         become: True
         content: |
-          cat $DIR/etc/sudoers | envsubst | sudo block-in-file -n "$NAME" -C -o /etc/sudoers.d/pam-ssh-agent-auth
-          cat $DIR/etc/pam | envsubst | sudo block-in-file -n "$NAME" -C -o /etc/pam.d/pam-ssh-agent-auth
+          cat $DIR/etc/sudoers | envsubst | sudo block-in-file -n "$NAME" -C true /etc/sudoers.d/pam-ssh-agent-auth
+          cat $DIR/etc/pam | envsubst | sudo block-in-file -n "$NAME" -C true /etc/pam.d/pam-ssh-agent-auth
           echo "@include pam-ssh-agent-auth" | sudo block-in-file -n "$NAME" -b "^@include common-auth" /etc/pam.d/sudo
       - name: install-key.sh
         basedir: False

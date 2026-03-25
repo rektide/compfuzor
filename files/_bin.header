@@ -5,37 +5,8 @@ export TIMESTAMP="$(date +%y.%m.%d-%T)"
 {% if item.env is not defined or item.env != False -%}
 # default a DIR
 [ -z "$DIR" ] && export DIR="{{DIR}}"
-# source env.export defaults without overriding variables already set in shell
-if [ -z "$ENV_BYPASS" ] && [ -f "$DIR/env.export" ]; then
-	_compfuzor_env_file="$DIR/env.export"
-	while IFS= read -r _compfuzor_line || [ -n "$_compfuzor_line" ]; do
-		case "$_compfuzor_line" in
-			""|\#*)
-				continue
-				;;
-			export[[:space:]]*)
-				_compfuzor_assign="${_compfuzor_line#export }"
-				;;
-			*)
-				_compfuzor_assign="$_compfuzor_line"
-				;;
-		esac
-
-		_compfuzor_name="${_compfuzor_assign%%=*}"
-		case "$_compfuzor_name" in
-			""|__*|[0-9]*|*[!A-Za-z0-9_]*)
-				continue
-				;;
-		esac
-
-		if eval '[ "${'"$_compfuzor_name"'+x}" = x ]'; then
-			continue
-		fi
-
-		eval "$_compfuzor_assign"
-	done < "$_compfuzor_env_file"
-	unset _compfuzor_env_file _compfuzor_line _compfuzor_assign _compfuzor_name
-fi
+# source envs, using envdefault for shell-local defaults when available
+[ -n "$ENV_BYPASS" ] || [ ! -f "$DIR/env.export" ] || { command -v envdefault >/dev/null 2>&1 && source "$(command -v envdefault)" "$DIR/env.export" >/dev/null || source "$DIR/env.export"; }
 {% endif -%}
 # V>98 triggers set -x. but save set -x state to restore later, in case being sourced.
 (( V > 98 )) && case "$-" in *x*) _BIN_SETX_STATE+=(1) ;; *) _BIN_SETX_STATE+=(0) ;; esac && set -x

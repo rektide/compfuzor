@@ -1,0 +1,12 @@
+[ERROR]: The filter plugin 'ansible.builtin.from_yaml' failed: while parsing a quoted scalar
+  in "<unicode string>", line 1, column 10
+found unknown escape character
+  in "<unicode string>", line 1, column 11
+Origin: /home/rektide/src/compfuzor/tasks/compfuzor/vars_systemd_unit.tasks:30:9
+
+28     ETC_FILES: "{{ ETC_FILES|default([]) + [_etc_file] }}"
+29   when: _has_type and not SYSTEMD_INSTALL_BYPASS|default(False)
+30   loop: "{{ _loop_items }}"
+           ^ column 9
+
+fatal: [tishtrya.hosts.voodoowarez.com]: FAILED! => {"msg": "The filter plugin 'ansible.builtin.from_yaml' failed: while parsing a quoted scalar\n  in \"<unicode string>\", line 1, column 10\nfound unknown escape character\n  in \"<unicode string>\", line 1, column 11"}

@@ -1,9 +1,9 @@
 ---
-- hosts: servers
+- hosts: all
   vars:
     TYPE: "k3s{{ is_server|ternary('-server', '-agent') }}"
     INSTANCE: "{{ DOMAIN|replace('.', '-') }}"
-    PASSWORD:
+    PASSWORDS:
     - token
     - agentToken
     PASSWORD_LENGTH: 96
@@ -31,18 +31,20 @@
       After: network-online.target
       Wants: network-online.target
     # service
-    SYSTEMD_SERVICE: True
-    SYSTEMD_EXEC:
-    - "/usr/local/bin/k3s"
-    - "{{is_server|ternary('server', 'agent')}}"
-    - "{{commonArgs}}"
-    - "{{is_server|ternary(serverArgs, agentArgs)}}"
+    #SYSTEMD_SERVICE: True
     # support added in https://github.com/rancher/k3s/pull/100 ?
-    SYSTEMD_SERVICES:
-      Delegate: yes
-      ExecStartPre:
+    _exec:
+      - "/usr/local/bin/k3s"
+      - "{{is_server|ternary('server', 'agent')}}"
+      - "{{commonArgs}}"
+      - "{{is_server|ternary(serverArgs, agentArgs)}}"
+    _execPre:
       - "-/sbin/modprobe br_netfilter"
       - "-/sbin/modprobe overlay"
+    SYSTEMD_SERVICES:
+      Delegate: yes
+      ExecStart: "{{_exec|join(' ')}}"
+      ExecStartPre: "{{_execPre|join(' ')}}"
       KillMode: process
       LimitNOFILE: 1048576
       LimitNPROC: infinity
@@ -151,8 +153,5 @@
     - "{{ '--disable $DISABLE_LIST' if DISABLE_LIST|length > 0 else ''}}"
     - "{{ '--disable-network-policy' if DISABLE is superset(['network-policy']) else '' }}"
     - "{{ '--disable-kube-proxy' if DISABLE is superset(['kube-proxy']) else '' }}"
-
   tasks:
-    - debug:
-        msg: "hi {{extraIpv4Domains}}"
-    #- include: tasks/compfuzor.includes type=srv
+    - import_tasks: tasks/compfuzor.includes

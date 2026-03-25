@@ -1,8 +1,6 @@
 ---
 - hosts: all
   vars:
-    BINS_RUN_BYPASS: True
-
     # Default configuration
     # NEWROOT: where to mount the tmpfs and pivot to
     # OLDROOT: where to place the old root after pivot (relative to NEWROOT)
@@ -32,7 +30,6 @@
     BINS:
       # Mount a tmpfs at the target location for the new root
       - name: mount-tmpfs
-        run: True
         content: |
           # Mount a tmpfs filesystem at NEWROOT
           # This will be the target for debootstrap and the new root filesystem
@@ -66,7 +63,6 @@
 
       # Prepare the new root with essential directory structure
       - name: prepare-newroot
-        run: True
         content: |
           # Prepare the new root filesystem with essential directories
           # This creates the minimal directory structure needed before debootstrap
@@ -105,10 +101,8 @@
           echo "New root prepared at $TARGET"
           echo "Old root will be at $TARGET/$OLDROOT_NAME after pivot"
           ls -la "$TARGET/"
-
       # Seed the tmpfs root by rsyncing selected directories
       - name: rsync-newroot
-        run: True
         content: |
           # Copy a selected set of top-level directories into NEWROOT using rsync
           #
@@ -148,10 +142,12 @@
           # shellcheck disable=SC2086
           eval "dirs=$ARRAY_EXPR"
 
+          {% raw %}
           if [ "${#dirs[@]}" -eq 0 ]; then
             echo "Error: RSYNC_DIRS resolved to an empty array"
             exit 1
           fi
+          {% endraw %}
 
           echo "Rsyncing into $TARGET"
           echo "  dirs: ${dirs[*]}"
@@ -170,7 +166,6 @@
 
           echo "Rsync seed complete"
           ls -la "$TARGET/"
-
       # Estimate rsync payload size for current RSYNC_DIRS/RSYNC_OPTS
       - name: size-estimate.src.pb
         content: |
@@ -209,10 +204,12 @@
           # shellcheck disable=SC2086
           eval "dirs=$ARRAY_EXPR"
 
+          {% raw %}
           if [ "${#dirs[@]}" -eq 0 ]; then
             echo "Error: RSYNC_DIRS resolved to an empty array"
             exit 1
           fi
+          {% endraw %}
 
           total_bytes=0
 
@@ -257,10 +254,8 @@
           if command -v numfmt >/dev/null 2>&1; then
             echo "Aggregate estimated payload human: $(numfmt --to=iec-i --suffix=B "$total_bytes")"
           fi
-
       # Launch a transient sshd on a different port
       - name: new-sshd
-        run: True
         content: |
           # Start a temporary second sshd instance via systemd-run
           # using normal sshd config and only overriding port/pidfile.
@@ -306,10 +301,8 @@
           echo "  systemctl status $UNIT"
           echo "  systemctl stop $UNIT"
           echo "  ssh -p $PORT <host>"
-
       # Mount essential filesystems in the new root (for chroot/pivot)
       - name: mount-essential
-        run: True
         content: |
           # Mount essential virtual filesystems in the new root
           # Required before chroot or pivot_root for a functional system
@@ -359,10 +352,8 @@
 
           echo "Essential filesystems mounted"
           findmnt --target "$TARGET" --submounts
-
       # Download Debian netinstaller kernel/initrd into NEWROOT
       - name: fetch-netinstaller
-        run: True
         content: |
           # Fetch Debian installer netboot artifacts into the new root
           #
@@ -414,10 +405,8 @@
           echo "After pivoting into NEWROOT, boot installer with kexec:"
           echo "  kexec -l $INSTALLER_DIR/$KERNEL_NAME --initrd=$INSTALLER_DIR/$INITRD_NAME --append=\"$APPEND\""
           echo "  systemctl kexec   # or: kexec -e"
-
       # Perform pivot_root to switch to the new root
       - name: pivot
-        run: True
         content: |
           # Pivot root to the new filesystem
           # This switches the root filesystem to NEWROOT and places the old root at OLDROOT
@@ -494,10 +483,8 @@
           echo "  1. Optionally unmount filesystems under /$OLDROOT_NAME"
           echo "  2. Run cleanup-oldroot to unmount old root mounts"
           echo "  3. Optionally: exec chroot / /bin/sh to get a clean shell"
-
       # Clean up old root after pivot
       - name: cleanup-oldroot
-        run: True
         content: |
           # Clean up and optionally unmount the old root filesystem after pivot
           # Run this AFTER pivot_root to free resources from the old root
@@ -550,10 +537,8 @@
             echo ""
             echo "Dry run - use --umount to actually unmount"
           fi
-
       # Undo pivot (for testing/recovery) - switch back to old root
       - name: unpivot
-        run: True
         content: |
           # Undo a pivot_root - switch back to the old root
           # This is mainly useful for testing or recovery
@@ -586,10 +571,8 @@
 
           echo "Switched back to original root"
           echo "The tmpfs root is now at /$NEWOLD"
-
       # Show current pivot status and mount information
       - name: status
-        run: True
         content: |
           # Show pivot-root status and mount information
           #
@@ -629,6 +612,5 @@
             echo "Status: NOT STARTED"
             echo "  $TARGET is not mounted"
           fi
-
   tasks:
     - import_tasks: tasks/compfuzor.includes
