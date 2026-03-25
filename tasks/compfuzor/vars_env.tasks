@@ -14,53 +14,48 @@
   changed_when: False
   become: False
 
-# Normalize ENV into a canonical mapping form early so downstream tasks can
-# consistently treat ENV like a dictionary.
-# - list form:   ENV: [foo, bar]      -> ENV: {foo: true, bar: true}
-# - bool form:   ENV: true/false      -> ENV: {}
-# - map form:    ENV: {FOO: value}    -> unchanged
-- name: "Compfuzor: reject unsupported ENV forms"
-  fail:
-    msg: "ENV must be a mapping, list, or boolean. Got {{ ENV | type_debug }}"
-  when: ENV is defined and ENV is not mapping and not (ENV is sequence and ENV is not string) and ENV is not boolean
-
-- name: "Compfuzor: normalize ENV list to mapping"
+# Normalize ENV and ENV_PRIO in one action for speed and consistency.
+# - list form:   [foo, bar]           -> {foo: true, bar: true}
+# - bool form:   true/false           -> {}
+# - map form:    {FOO: value}         -> unchanged
+- name: "Compfuzor: normalize ENV and ENV_PRIO"
   set_fact:
-    ENV: "{{ env_map }}"
-  when: ENV is defined and ENV is sequence and ENV is not string and ENV is not mapping
+    ENV: "{{ _env_normalized if ENV is defined else omit }}"
+    ENV_PRIO: "{{ _env_prio_normalized if ENV_PRIO is defined else omit }}"
+  when: ENV is defined or ENV_PRIO is defined
+  failed_when: _env_invalid or _env_prio_invalid
   vars:
-    env_map: >-
+    _env_invalid: "{{ ENV is defined and ENV is not mapping and not (ENV is sequence and ENV is not string) and ENV is not boolean }}"
+    _env_prio_invalid: "{{ ENV_PRIO is defined and ENV_PRIO is not mapping and not (ENV_PRIO is sequence and ENV_PRIO is not string) and ENV_PRIO is not boolean }}"
+    _env_normalized: >-
+      {%- if ENV is not defined -%}
+      {}
+      {%- elif ENV is mapping -%}
+      {{ ENV }}
+      {%- elif ENV is sequence and ENV is not string -%}
       {%- set out = {} -%}
       {%- for key in ENV -%}
       {%- set _ = out.update({ (key|string): True }) -%}
       {%- endfor -%}
       {{ out }}
-
-- name: "Compfuzor: normalize ENV boolean to empty mapping"
-  set_fact:
-    ENV: "{{ {} }}"
-  when: ENV is defined and ENV is boolean
-
-# ENV_PRIO follows the same normalization rules as ENV so _env rendering can
-# consume both variables with one simple code path.
-- name: "Compfuzor: reject unsupported ENV_PRIO forms"
-  fail:
-    msg: "ENV_PRIO must be a mapping, list, or boolean. Got {{ ENV_PRIO | type_debug }}"
-  when: ENV_PRIO is defined and ENV_PRIO is not mapping and not (ENV_PRIO is sequence and ENV_PRIO is not string) and ENV_PRIO is not boolean
-
-- name: "Compfuzor: normalize ENV_PRIO list to mapping"
-  set_fact:
-    ENV_PRIO: "{{ env_prio_map }}"
-  when: ENV_PRIO is defined and ENV_PRIO is sequence and ENV_PRIO is not string and ENV_PRIO is not mapping
-  vars:
-    env_prio_map: >-
+      {%- elif ENV is boolean -%}
+      {{ {} }}
+      {%- else -%}
+      {{ {} }}
+      {%- endif -%}
+    _env_prio_normalized: >-
+      {%- if ENV_PRIO is not defined -%}
+      {}
+      {%- elif ENV_PRIO is mapping -%}
+      {{ ENV_PRIO }}
+      {%- elif ENV_PRIO is sequence and ENV_PRIO is not string -%}
       {%- set out = {} -%}
       {%- for key in ENV_PRIO -%}
       {%- set _ = out.update({ (key|string): True }) -%}
       {%- endfor -%}
       {{ out }}
-
-- name: "Compfuzor: normalize ENV_PRIO boolean to empty mapping"
-  set_fact:
-    ENV_PRIO: "{{ {} }}"
-  when: ENV_PRIO is defined and ENV_PRIO is boolean
+      {%- elif ENV_PRIO is boolean -%}
+      {{ {} }}
+      {%- else -%}
+      {{ {} }}
+      {%- endif -%}
