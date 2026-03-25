@@ -27,35 +27,23 @@
   vars:
     _env_invalid: "{{ ENV is defined and ENV is not mapping and not (ENV is sequence and ENV is not string) and ENV is not boolean }}"
     _env_prio_invalid: "{{ ENV_PRIO is defined and ENV_PRIO is not mapping and not (ENV_PRIO is sequence and ENV_PRIO is not string) and ENV_PRIO is not boolean }}"
-    _env_normalized: >-
-      {%- if ENV is not defined -%}
-      {}
-      {%- elif ENV is mapping -%}
-      {{ ENV }}
-      {%- elif ENV is sequence and ENV is not string -%}
+    _env_normalized_mapping: "{{ ENV if (ENV is defined and ENV is mapping) else {} }}"
+    _env_normalized_list: >-
       {%- set out = {} -%}
-      {%- for key in ENV -%}
+      {%- for key in (ENV if (ENV is defined and ENV is sequence and ENV is not string) else []) -%}
       {%- set _ = out.update({ (key|string): True }) -%}
       {%- endfor -%}
       {{ out }}
-      {%- elif ENV is boolean -%}
-      {{ {} }}
-      {%- else -%}
-      {{ {} }}
-      {%- endif -%}
-    _env_prio_normalized: >-
-      {%- if ENV_PRIO is not defined -%}
-      {}
-      {%- elif ENV_PRIO is mapping -%}
-      {{ ENV_PRIO }}
-      {%- elif ENV_PRIO is sequence and ENV_PRIO is not string -%}
+    _env_normalized_boolean: "{{ {} }}"
+    _env_normalized_other: "{{ {} }}"
+    _env_normalized: "{{ _env_normalized_mapping if ENV is mapping else (_env_normalized_list if ENV is sequence and ENV is not string else (_env_normalized_boolean if ENV is boolean else _env_normalized_other)) }}"
+    _env_prio_normalized_mapping: "{{ ENV_PRIO if (ENV_PRIO is defined and ENV_PRIO is mapping) else {} }}"
+    _env_prio_normalized_list: >-
       {%- set out = {} -%}
-      {%- for key in ENV_PRIO -%}
+      {%- for key in (ENV_PRIO if (ENV_PRIO is defined and ENV_PRIO is sequence and ENV_PRIO is not string) else []) -%}
       {%- set _ = out.update({ (key|string): True }) -%}
       {%- endfor -%}
       {{ out }}
-      {%- elif ENV_PRIO is boolean -%}
-      {{ {} }}
-      {%- else -%}
-      {{ {} }}
-      {%- endif -%}
+    _env_prio_normalized_boolean: "{{ {} }}"
+    _env_prio_normalized_other: "{{ {} }}"
+    _env_prio_normalized: "{{ _env_prio_normalized_mapping if ENV_PRIO is mapping else (_env_prio_normalized_list if ENV_PRIO is sequence and ENV_PRIO is not string else (_env_prio_normalized_boolean if ENV_PRIO is boolean else _env_prio_normalized_other)) }}"
