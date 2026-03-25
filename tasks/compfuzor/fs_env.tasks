@@ -7,7 +7,7 @@
     group: "{{GROUP|default(omit)}}"
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   when: >
-    (item.hasEnv or _env_requested) and
+    (item.hasEnv or ENV is defined or ENV_PRIO is defined) and
     not item.skip|default(False)
   loop:
     - file: env
@@ -21,11 +21,9 @@
       skip: "{{ENV_IS_EXPORT|default(False)}}"
       exportMode: True
   vars:
-    _env_requested: "{{ENV is defined or ENV_PRIO is defined}}"
     _dest: "{{DIR}}/{{item.file}}"
     _srcHas: "files/{{TYPE|default(NAME)}}/{{item.file}}"
-    _srcDefault: "files/_env"
-    _src: "{{_srcDefault if not item.hasEnv else _srcHas}}"
+    _src: "{{'files/_env' if not item.hasEnv else _srcHas}}"
     export_mode: "{{item.exportMode|default(False)}}"
 
 # in case one only needs a env, and env.export is the same
@@ -45,7 +43,7 @@
     group: "{{GROUP|default(omit)}}"
   become: "{{_dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
   # might be cool to have an exists check that ignores dead symlinks
-  when: PREFIX_DIR|default(False) and (item.hasEnv or _env_requested) and not item.skip|default(False) and _dest is not exists
+  when: PREFIX_DIR|default(False) and (item.hasEnv or ENV is defined or ENV_PRIO is defined) and not item.skip|default(False) and _dest is not exists
   loop:
     - file: env
       hasEnv: "{{has_env.stdout|default(0)|int > 0}}"
@@ -53,5 +51,4 @@
       hasEnv: "{{has_env_export.stdout|default(0)|int > 0}}"
       skip: "{{ENV_IS_EXPORT|default(False)}}"
   vars:
-    _env_requested: "{{ENV is defined or ENV_PRIO is defined}}"
     _dest: "{{PREFIX_DIR}}/{{item.file}}.{{NAME|default(TYPE)}}"
