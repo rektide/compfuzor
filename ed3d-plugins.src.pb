@@ -46,7 +46,7 @@
       ed3d-session-reflection/skills/export-session-as-markdown,
       ed3d-session-reflection/skills/review-recent-sessions,
       ed3d-session-reflection/skills/review-session
-    ENV:
+    ENV_LIST:
       - plugins_dir
       - skills_dir
       - plugins
@@ -55,9 +55,6 @@
         basedir: False
         global: True
         content: |
-          #!/bin/bash
-          set -euo pipefail
-
           DRY_RUN="${DRY_RUN:-false}"
 
           usage() {
@@ -127,9 +124,9 @@
               [[ -n "${PLUGINS:-}" ]] && IFS=',' read -ra skills <<< "$PLUGINS"
               skills+=("$@")
 
-              [[ ${#skills[@]} -eq 0 ]] && { log "ERROR: No skills specified"; usage 1; }
+              [[ ${{'{#'}}skills[@]} -eq 0 ]] && { log "ERROR: No skills specified"; usage 1; }
 
-              log "Installing ${#skills[@]} skill(s) to $SKILLS_DIR"
+              log "Installing ${{'{#'}}skills[@]} skill(s) to $SKILLS_DIR"
 
               local failed=0
               for skill_path in "${skills[@]}"; do

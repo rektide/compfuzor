@@ -31,7 +31,7 @@
     _env_input_list_names_upper: "{{ _env_input_list_names|map('upper')|list }}"
     _env_input_list_mapping_exact: "{{ lookup('vars_dict', _env_input_list_names, default=_env_missing) if _env_input_list_names|length > 0 else {} }}"
     _env_input_list_mapping_upper: "{{ lookup('vars_dict', _env_input_list_names_upper, default=_env_missing) if _env_input_list_names_upper|length > 0 else {} }}"
-    _env_input_list_mapping: >-
+    _env_input_list_mapping_raw: >-
       {%- set out = {} -%}
       {%- for key in _env_input_list_names -%}
       {%- set exact_val = _env_input_list_mapping_exact[key] -%}
@@ -39,6 +39,13 @@
       {%- set upper_val = _env_input_list_mapping_upper[upper_key] if upper_key in _env_input_list_mapping_upper else _env_missing -%}
       {%- set final_val = exact_val if exact_val != _env_missing else (upper_val if upper_val != _env_missing else none) -%}
       {%- set _ = out.update({ key: final_val }) -%}
+      {%- endfor -%}
+      {{ out }}
+    _env_input_list_mapping: >-
+      {%- set out = {} -%}
+      {%- for key, value in _env_input_list_mapping_raw.items() -%}
+      {%- set value_rendered = (value|join(' ')) if (value is sequence and value is not string) else value -%}
+      {%- set _ = out.update({ key: value_rendered }) -%}
       {%- endfor -%}
       {{ out }}
     _env_effective: "{{ _env_input_list_mapping|combine(_env_input_mapping) }}"
@@ -51,7 +58,7 @@
     _env_prio_input_list_names_upper: "{{ _env_prio_input_list_names|map('upper')|list }}"
     _env_prio_input_list_mapping_exact: "{{ lookup('vars_dict', _env_prio_input_list_names, default=_env_missing) if _env_prio_input_list_names|length > 0 else {} }}"
     _env_prio_input_list_mapping_upper: "{{ lookup('vars_dict', _env_prio_input_list_names_upper, default=_env_missing) if _env_prio_input_list_names_upper|length > 0 else {} }}"
-    _env_prio_input_list_mapping: >-
+    _env_prio_input_list_mapping_raw: >-
       {%- set out = {} -%}
       {%- for key in _env_prio_input_list_names -%}
       {%- set exact_val = _env_prio_input_list_mapping_exact[key] -%}
@@ -59,6 +66,13 @@
       {%- set upper_val = _env_prio_input_list_mapping_upper[upper_key] if upper_key in _env_prio_input_list_mapping_upper else _env_missing -%}
       {%- set final_val = exact_val if exact_val != _env_missing else (upper_val if upper_val != _env_missing else none) -%}
       {%- set _ = out.update({ key: final_val }) -%}
+      {%- endfor -%}
+      {{ out }}
+    _env_prio_input_list_mapping: >-
+      {%- set out = {} -%}
+      {%- for key, value in _env_prio_input_list_mapping_raw.items() -%}
+      {%- set value_rendered = (value|join(' ')) if (value is sequence and value is not string) else value -%}
+      {%- set _ = out.update({ key: value_rendered }) -%}
       {%- endfor -%}
       {{ out }}
     _env_prio_effective: "{{ _env_prio_input_list_mapping|combine(_env_prio_input_mapping) }}"
@@ -71,12 +85,12 @@
         _env_prio_input_enabled or
         _env_prio_input_list_names|length > 0
       }}
-    _dest: "{{DIR}}/{{item.file}}"
     _srcHas: "files/{{TYPE|default(NAME)}}/{{item.file}}"
     _src: "{{'files/_env' if not item.hasEnv else _srcHas}}"
     ENV_RENDER: "{{ _env_effective }}"
     ENV_PRIO_RENDER: "{{ _env_prio_effective }}"
     export_mode: "{{item.exportMode|default(False)}}"
+    _dest: "{{DIR}}/{{item.file}}"
 
 # in case one only needs a env, and env.export is the same
 - name: link env export to env if the same
@@ -113,7 +127,7 @@
     _env_input_list_names_upper: "{{ _env_input_list_names|map('upper')|list }}"
     _env_input_list_mapping_exact: "{{ lookup('vars_dict', _env_input_list_names, default=_env_missing) if _env_input_list_names|length > 0 else {} }}"
     _env_input_list_mapping_upper: "{{ lookup('vars_dict', _env_input_list_names_upper, default=_env_missing) if _env_input_list_names_upper|length > 0 else {} }}"
-    _env_input_list_mapping: >-
+    _env_input_list_mapping_raw: >-
       {%- set out = {} -%}
       {%- for key in _env_input_list_names -%}
       {%- set exact_val = _env_input_list_mapping_exact[key] -%}
@@ -121,6 +135,13 @@
       {%- set upper_val = _env_input_list_mapping_upper[upper_key] if upper_key in _env_input_list_mapping_upper else _env_missing -%}
       {%- set final_val = exact_val if exact_val != _env_missing else (upper_val if upper_val != _env_missing else none) -%}
       {%- set _ = out.update({ key: final_val }) -%}
+      {%- endfor -%}
+      {{ out }}
+    _env_input_list_mapping: >-
+      {%- set out = {} -%}
+      {%- for key, value in _env_input_list_mapping_raw.items() -%}
+      {%- set value_rendered = (value|join(' ')) if (value is sequence and value is not string) else value -%}
+      {%- set _ = out.update({ key: value_rendered }) -%}
       {%- endfor -%}
       {{ out }}
     _env_effective: "{{ _env_input_list_mapping|combine(_env_input_mapping) }}"
@@ -133,7 +154,7 @@
     _env_prio_input_list_names_upper: "{{ _env_prio_input_list_names|map('upper')|list }}"
     _env_prio_input_list_mapping_exact: "{{ lookup('vars_dict', _env_prio_input_list_names, default=_env_missing) if _env_prio_input_list_names|length > 0 else {} }}"
     _env_prio_input_list_mapping_upper: "{{ lookup('vars_dict', _env_prio_input_list_names_upper, default=_env_missing) if _env_prio_input_list_names_upper|length > 0 else {} }}"
-    _env_prio_input_list_mapping: >-
+    _env_prio_input_list_mapping_raw: >-
       {%- set out = {} -%}
       {%- for key in _env_prio_input_list_names -%}
       {%- set exact_val = _env_prio_input_list_mapping_exact[key] -%}
@@ -141,6 +162,13 @@
       {%- set upper_val = _env_prio_input_list_mapping_upper[upper_key] if upper_key in _env_prio_input_list_mapping_upper else _env_missing -%}
       {%- set final_val = exact_val if exact_val != _env_missing else (upper_val if upper_val != _env_missing else none) -%}
       {%- set _ = out.update({ key: final_val }) -%}
+      {%- endfor -%}
+      {{ out }}
+    _env_prio_input_list_mapping: >-
+      {%- set out = {} -%}
+      {%- for key, value in _env_prio_input_list_mapping_raw.items() -%}
+      {%- set value_rendered = (value|join(' ')) if (value is sequence and value is not string) else value -%}
+      {%- set _ = out.update({ key: value_rendered }) -%}
       {%- endfor -%}
       {{ out }}
     _env_prio_effective: "{{ _env_prio_input_list_mapping|combine(_env_prio_input_mapping) }}"
