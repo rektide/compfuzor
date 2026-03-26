@@ -28,7 +28,19 @@
     _env_input_mapping: "{{ _env_raw if (_env_raw is mapping) else {} }}"
     _env_input_enabled: "{{ _env_raw is boolean and _env_raw }}"
     _env_input_list_names: "{{ _env_list_raw|default([], true)|arrayitize }}"
-    _env_input_list_mapping: "{{ lookup('vars_dict', _env_input_list_names, default=none) if _env_input_list_names|length > 0 else {} }}"
+    _env_input_list_names_upper: "{{ _env_input_list_names|map('upper')|list }}"
+    _env_input_list_mapping_exact: "{{ lookup('vars_dict', _env_input_list_names, default=_env_missing) if _env_input_list_names|length > 0 else {} }}"
+    _env_input_list_mapping_upper: "{{ lookup('vars_dict', _env_input_list_names_upper, default=_env_missing) if _env_input_list_names_upper|length > 0 else {} }}"
+    _env_input_list_mapping: >-
+      {%- set out = {} -%}
+      {%- for key in _env_input_list_names -%}
+      {%- set exact_val = _env_input_list_mapping_exact[key] -%}
+      {%- set upper_key = key|upper -%}
+      {%- set upper_val = _env_input_list_mapping_upper[upper_key] if upper_key in _env_input_list_mapping_upper else _env_missing -%}
+      {%- set final_val = exact_val if exact_val != _env_missing else (upper_val if upper_val != _env_missing else none) -%}
+      {%- set _ = out.update({ key: final_val }) -%}
+      {%- endfor -%}
+      {{ out }}
     _env_effective: "{{ _env_input_list_mapping|combine(_env_input_mapping) }}"
     _env_prio_raw_value: "{{ lookup('vars_dict', ['ENV_PRIO'], default=_env_missing).ENV_PRIO }}"
     _env_prio_raw: "{{ none if _env_prio_raw_value == _env_missing else _env_prio_raw_value }}"
@@ -36,7 +48,19 @@
     _env_prio_input_mapping: "{{ _env_prio_raw if (_env_prio_raw is mapping) else {} }}"
     _env_prio_input_enabled: "{{ _env_prio_raw is boolean and _env_prio_raw }}"
     _env_prio_input_list_names: "{{ _env_prio_list_raw|default([], true)|arrayitize }}"
-    _env_prio_input_list_mapping: "{{ lookup('vars_dict', _env_prio_input_list_names, default=none) if _env_prio_input_list_names|length > 0 else {} }}"
+    _env_prio_input_list_names_upper: "{{ _env_prio_input_list_names|map('upper')|list }}"
+    _env_prio_input_list_mapping_exact: "{{ lookup('vars_dict', _env_prio_input_list_names, default=_env_missing) if _env_prio_input_list_names|length > 0 else {} }}"
+    _env_prio_input_list_mapping_upper: "{{ lookup('vars_dict', _env_prio_input_list_names_upper, default=_env_missing) if _env_prio_input_list_names_upper|length > 0 else {} }}"
+    _env_prio_input_list_mapping: >-
+      {%- set out = {} -%}
+      {%- for key in _env_prio_input_list_names -%}
+      {%- set exact_val = _env_prio_input_list_mapping_exact[key] -%}
+      {%- set upper_key = key|upper -%}
+      {%- set upper_val = _env_prio_input_list_mapping_upper[upper_key] if upper_key in _env_prio_input_list_mapping_upper else _env_missing -%}
+      {%- set final_val = exact_val if exact_val != _env_missing else (upper_val if upper_val != _env_missing else none) -%}
+      {%- set _ = out.update({ key: final_val }) -%}
+      {%- endfor -%}
+      {{ out }}
     _env_prio_effective: "{{ _env_prio_input_list_mapping|combine(_env_prio_input_mapping) }}"
     _env_requested: >-
       {{
@@ -86,7 +110,19 @@
     _env_input_mapping: "{{ _env_raw if (_env_raw is mapping) else {} }}"
     _env_input_enabled: "{{ _env_raw is boolean and _env_raw }}"
     _env_input_list_names: "{{ _env_list_raw|default([], true)|arrayitize }}"
-    _env_input_list_mapping: "{{ lookup('vars_dict', _env_input_list_names, default=none) if _env_input_list_names|length > 0 else {} }}"
+    _env_input_list_names_upper: "{{ _env_input_list_names|map('upper')|list }}"
+    _env_input_list_mapping_exact: "{{ lookup('vars_dict', _env_input_list_names, default=_env_missing) if _env_input_list_names|length > 0 else {} }}"
+    _env_input_list_mapping_upper: "{{ lookup('vars_dict', _env_input_list_names_upper, default=_env_missing) if _env_input_list_names_upper|length > 0 else {} }}"
+    _env_input_list_mapping: >-
+      {%- set out = {} -%}
+      {%- for key in _env_input_list_names -%}
+      {%- set exact_val = _env_input_list_mapping_exact[key] -%}
+      {%- set upper_key = key|upper -%}
+      {%- set upper_val = _env_input_list_mapping_upper[upper_key] if upper_key in _env_input_list_mapping_upper else _env_missing -%}
+      {%- set final_val = exact_val if exact_val != _env_missing else (upper_val if upper_val != _env_missing else none) -%}
+      {%- set _ = out.update({ key: final_val }) -%}
+      {%- endfor -%}
+      {{ out }}
     _env_effective: "{{ _env_input_list_mapping|combine(_env_input_mapping) }}"
     _env_prio_raw_value: "{{ lookup('vars_dict', ['ENV_PRIO'], default=_env_missing).ENV_PRIO }}"
     _env_prio_raw: "{{ none if _env_prio_raw_value == _env_missing else _env_prio_raw_value }}"
@@ -94,7 +130,19 @@
     _env_prio_input_mapping: "{{ _env_prio_raw if (_env_prio_raw is mapping) else {} }}"
     _env_prio_input_enabled: "{{ _env_prio_raw is boolean and _env_prio_raw }}"
     _env_prio_input_list_names: "{{ _env_prio_list_raw|default([], true)|arrayitize }}"
-    _env_prio_input_list_mapping: "{{ lookup('vars_dict', _env_prio_input_list_names, default=none) if _env_prio_input_list_names|length > 0 else {} }}"
+    _env_prio_input_list_names_upper: "{{ _env_prio_input_list_names|map('upper')|list }}"
+    _env_prio_input_list_mapping_exact: "{{ lookup('vars_dict', _env_prio_input_list_names, default=_env_missing) if _env_prio_input_list_names|length > 0 else {} }}"
+    _env_prio_input_list_mapping_upper: "{{ lookup('vars_dict', _env_prio_input_list_names_upper, default=_env_missing) if _env_prio_input_list_names_upper|length > 0 else {} }}"
+    _env_prio_input_list_mapping: >-
+      {%- set out = {} -%}
+      {%- for key in _env_prio_input_list_names -%}
+      {%- set exact_val = _env_prio_input_list_mapping_exact[key] -%}
+      {%- set upper_key = key|upper -%}
+      {%- set upper_val = _env_prio_input_list_mapping_upper[upper_key] if upper_key in _env_prio_input_list_mapping_upper else _env_missing -%}
+      {%- set final_val = exact_val if exact_val != _env_missing else (upper_val if upper_val != _env_missing else none) -%}
+      {%- set _ = out.update({ key: final_val }) -%}
+      {%- endfor -%}
+      {{ out }}
     _env_prio_effective: "{{ _env_prio_input_list_mapping|combine(_env_prio_input_mapping) }}"
     _env_requested: >-
       {{
