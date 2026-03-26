@@ -3,7 +3,7 @@
   vars:
     TYPE: opencode
     INSTANCE: git
-    REPO: https://github.com/sst/opencode
+    REPO: https://github.com/anomolyco/opencode
     TOOL_VERSIONS:
       bun: 1
       go: 1
