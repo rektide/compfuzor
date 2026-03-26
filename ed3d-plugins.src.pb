@@ -91,18 +91,31 @@
 
           parse_entries() {
               local raw="$1"
-              local -n out_ref="$2"
-              local line token
+              local -n active_ref="$2"
+              local -n commented_ref="$3"
+              local line token in_comment
 
               while IFS= read -r line; do
                   line="${line#"${line%%[![:space:]]*}"}"
                   [[ -z "$line" ]] && continue
-                  [[ "$line" =~ ^# ]] && continue
+
+                  if [[ "$line" =~ ^# ]]; then
+                      line="${line#\#}"
+                      line="${line#"${line%%[![:space:]]*}"}"
+                      [[ -z "$line" ]] && continue
+                      in_comment=1
+                  else
+                      in_comment=0
+                  fi
 
                   line="${line//,/ }"
                   for token in $line; do
                       [[ "$token" =~ ^# ]] && break
-                      out_ref+=("$token")
+                      if [[ "$in_comment" -eq 1 ]]; then
+                          commented_ref+=("$token")
+                      else
+                          active_ref+=("$token")
+                      fi
                   done
               done <<< "$raw"
           }
@@ -173,46 +186,113 @@
               [[ "$installed_any" -eq 1 ]] && log "Installed agents for plugin: $plugin_root"
           }
 
+          uninstall_skill() {
+              local skill_path="$1"
+              local skill_name
+              skill_name=$(basename "$skill_path")
+              local dest_link="$SKILLS_DIR/$skill_name"
+
+              if [[ -L "$dest_link" ]]; then
+                  if [[ "$DRY_RUN" == "true" ]]; then
+                      log_dry "rm $dest_link"
+                  else
+                      rm -fv "$dest_link"
+                      log "Removed skill: $skill_name"
+                  fi
+              fi
+          }
+
+          uninstall_plugin_agents() {
+              local plugin_root="$1"
+              local src_agents_dir="$PLUGINS_DIR/$plugin_root/agents"
+
+              [[ -d "$src_agents_dir" ]] || return 0
+
+              local agent_src
+              for agent_src in "$src_agents_dir"/*.md; do
+                  [[ -e "$agent_src" ]] || continue
+
+                  local agent_file
+                  agent_file=$(basename "$agent_src")
+                  local plugin_label
+                  plugin_label="${plugin_root//\//-}"
+                  local dest_link="$AGENTS_DIR/$plugin_label--$agent_file"
+
+                  if [[ -L "$dest_link" ]]; then
+                      if [[ "$DRY_RUN" == "true" ]]; then
+                          log_dry "rm $dest_link"
+                      else
+                          rm -fv "$dest_link"
+                          log "Removed agent: $plugin_label/$agent_file"
+                      fi
+                  fi
+              done
+          }
+
           main() {
               [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]] && usage
 
-              local skills=()
-              [[ -n "${PLUGINS:-}" ]] && parse_entries "$PLUGINS" skills
-              skills+=("$@")
+              local active_skills=()
+              local commented_skills=()
+              local active_agent_plugins=()
+              local commented_agent_plugins=()
 
-              local agent_plugins=()
-              [[ -n "${AGENT_PLUGINS:-}" ]] && parse_entries "$AGENT_PLUGINS" agent_plugins
+              [[ -n "${PLUGINS:-}" ]] && parse_entries "$PLUGINS" active_skills commented_skills
+              active_skills+=("$@")
 
-              [[ ${{'{#'}}skills[@]} -eq 0 && ${{'{#'}}agent_plugins[@]} -eq 0 ]] && { log "ERROR: No skills or agent plugins specified"; usage 1; }
+              [[ -n "${AGENT_PLUGINS:-}" ]] && parse_entries "$AGENT_PLUGINS" active_agent_plugins commented_agent_plugins
+
+              [[ ${{'{#'}}active_skills[@]} -eq 0 && ${{'{#'}}active_agent_plugins[@]} -eq 0 && ${{'{#'}}commented_skills[@]} -eq 0 && ${{'{#'}}commented_agent_plugins[@]} -eq 0 ]] && { log "ERROR: No skills or agent plugins specified"; usage 1; }
 
               local failed=0
 
               if [[ "${INSTALL_SKILLS:-true}" != "false" ]]; then
-                  [[ ${{'{#'}}skills[@]} -gt 0 ]] && log "Installing ${{'{#'}}skills[@]} skill(s) to $SKILLS_DIR"
-                  for skill_path in "${skills[@]}"; do
+                  for skill_path in "${commented_skills[@]}"; do
+                      skill_path="${skill_path%/}"
+                      uninstall_skill "$skill_path" || ((failed++))
+                  done
+
+                  [[ ${{'{#'}}active_skills[@]} -gt 0 ]] && log "Installing ${{'{#'}}active_skills[@]} skill(s) to $SKILLS_DIR"
+                  for skill_path in "${active_skills[@]}"; do
                       skill_path="${skill_path%/}"
                       install_skill "$skill_path" || ((failed++))
                   done
               fi
 
               if [[ "${INSTALL_AGENTS:-true}" != "false" ]]; then
-                  declare -A plugin_roots=()
+                  declare -A active_plugin_roots=()
+                  declare -A commented_plugin_roots=()
 
                   local skill_path plugin_root
-                  for skill_path in "${skills[@]}"; do
+                  for skill_path in "${active_skills[@]}"; do
                       [[ "$skill_path" == */skills/* ]] || continue
                       plugin_root="${skill_path%%/skills/*}"
-                      [[ -n "$plugin_root" ]] && plugin_roots["$plugin_root"]=1
+                      [[ -n "$plugin_root" ]] && active_plugin_roots["$plugin_root"]=1
                   done
 
-                  for plugin_root in "${agent_plugins[@]}"; do
+                  for skill_path in "${commented_skills[@]}"; do
+                      [[ "$skill_path" == */skills/* ]] || continue
+                      plugin_root="${skill_path%%/skills/*}"
+                      [[ -n "$plugin_root" ]] && commented_plugin_roots["$plugin_root"]=1
+                  done
+
+                  for plugin_root in "${active_agent_plugins[@]}"; do
                       plugin_root="${plugin_root%/}"
-                      [[ -n "$plugin_root" ]] && plugin_roots["$plugin_root"]=1
+                      [[ -n "$plugin_root" ]] && active_plugin_roots["$plugin_root"]=1
                   done
 
-                  if [[ ${{'{#'}}plugin_roots[@]} -gt 0 ]]; then
-                      log "Installing agents from ${{'{#'}}plugin_roots[@]} plugin(s) to $AGENTS_DIR"
-                      for plugin_root in "${!plugin_roots[@]}"; do
+                  for plugin_root in "${commented_agent_plugins[@]}"; do
+                      plugin_root="${plugin_root%/}"
+                      [[ -n "$plugin_root" ]] && commented_plugin_roots["$plugin_root"]=1
+                  done
+
+                  for plugin_root in "${!commented_plugin_roots[@]}"; do
+                      uninstall_plugin_agents "$plugin_root" || ((failed++))
+                  done
+
+                  if [[ ${{'{#'}}active_plugin_roots[@]} -gt 0 ]]; then
+                      log "Installing agents from ${{'{#'}}active_plugin_roots[@]} plugin(s) to $AGENTS_DIR"
+                      for plugin_root in "${!active_plugin_roots[@]}"; do
                           install_plugin_agents "$plugin_root" || ((failed++))
                       done
                   fi
