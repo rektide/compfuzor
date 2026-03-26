@@ -11,7 +11,7 @@
       nodejs: True
     binBuild:
       - name: build.sh
-        run: "{{BINS_RUN_BYPASS is not deftruthy}}"
+        run: "{{BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy}}"
         basedir: repo
         generated: |
           if [ -f package-lock.json ] && [ ! -f pnpm-lock.yaml ]; then
@@ -24,6 +24,7 @@
           fi
     binInstall:
       - name: install.sh
+        run: "{{INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy}}"
         basedir: repo
         generated: |
           pnpm link -g
@@ -43,12 +44,13 @@
       bun: True
     binBuild:
       - name: build.sh
-        run: "{{BINS_RUN_BYPASS is not deftruthy}}"
+        run: "{{BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy}}"
         basedir: repo
         generated: |
           bun install
     binInstall:
       - name: install.sh
+        run: "{{INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy}}"
         basedir: repo
         generated: |
           bun link -g
@@ -62,6 +64,7 @@
   vars:
     binInstall:
       - name: install.sh
+        run: "{{INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy}}"
         generated: |
           pnpm install -g $(cat etc/npm.txt)
     enhancedBins: "{{ binInstall if INSTALL_BYPASS is not deftruthy else [] }}"
