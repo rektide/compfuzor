@@ -4,6 +4,7 @@
     REPO: https://github.com/ed3dai/ed3d-plugins
     PLUGINS_DIR: "{{SRC}}/plugins"
     SKILLS_DIR: "$HOME/.config/opencode/skills"
+    AGENTS_DIR: "$HOME/.config/opencode/agents"
     PLUGINS:
       - ed3d-basic-agents/skills/doing-a-simple-two-stage-fanout
       - ed3d-basic-agents/skills/using-generic-agents
@@ -49,6 +50,7 @@
     ENV_LIST:
       - plugins_dir
       - skills_dir
+      - agents_dir
       - plugins
     BINS:
       - name: install-opencode.sh
@@ -61,7 +63,7 @@
               cat <<EOF
           Usage: $(basename "$0") [OPTIONS] [SKILL_PATHS...]
 
-          Install opencode skills from ed3d-plugins to ~/.config/opencode/skills/
+          Install opencode skills and agents from ed3d-plugins.
 
           Arguments:
             SKILL_PATHS...    One or more skill paths in format: plugin-name/skills/skill-name
@@ -71,6 +73,9 @@
             PLUGINS           Newline-separated list of skill paths (lines starting with # are skipped)
             PLUGINS_DIR       Base plugins directory (default: ~/archive/ed3dai/ed3d-plugins/plugins)
             SKILLS_DIR        Target skills directory (default: ~/.config/opencode/skills)
+            AGENTS_DIR        Target agents directory (default: ~/.config/opencode/agents)
+            AGENT_PLUGINS     Optional plugin roots for agent install (newline/comma/space separated)
+            INSTALL_AGENTS    Set to "false" to skip agent installation
             DRY_RUN           If "true", only print what would be done without making changes
 
           Examples:
@@ -83,6 +88,51 @@
           log() { echo "[install-opencode] $*"; }
           log_dry() { echo "[DRY-RUN] $*"; }
 
+          parse_entries() {
+              local raw="$1"
+              local -n out_ref="$2"
+              local line token
+
+              while IFS= read -r line; do
+                  line="${line#"${line%%[![:space:]]*}"}"
+                  [[ -z "$line" ]] && continue
+                  [[ "$line" =~ ^# ]] && continue
+
+                  line="${line//,/ }"
+                  for token in $line; do
+                      [[ "$token" =~ ^# ]] && break
+                      out_ref+=("$token")
+                  done
+              done <<< "$raw"
+          }
+
+          link_path() {
+              local src_path="$1"
+              local dest_path="$2"
+              local label="$3"
+
+              if [[ -L "$dest_path" ]]; then
+                  local current_target
+                  current_target=$(readlink -f "$dest_path")
+                  local src_real
+                  src_real=$(readlink -f "$src_path")
+                  if [[ "$current_target" == "$src_real" ]]; then
+                      log "Already installed: $label"
+                      return 0
+                  fi
+                  log "Replacing: $label"
+              elif [[ -e "$dest_path" ]]; then
+                  log "ERROR: Destination exists (not symlink): $dest_path"
+                  return 1
+              fi
+
+              if [[ "$DRY_RUN" == "true" ]]; then
+                  log_dry "ln -s $src_path $dest_path"
+              else
+                  ln -sfv "$src_path" "$dest_path"
+              fi
+          }
+
           install_skill() {
               local skill_path="$1"
               local src_dir="$PLUGINS_DIR/$skill_path"
@@ -94,49 +144,76 @@
               [[ -f "$src_dir/SKILL.md" ]] || { log "ERROR: No SKILL.md in: $src_dir"; return 1; }
 
               mkdir -p "$SKILLS_DIR"
+              link_path "$src_dir" "$dest_link" "$skill_name"
+          }
 
-              if [[ -L "$dest_link" ]]; then
-                  local current_target
-                  current_target=$(readlink -f "$dest_link")
-                  local src_real
-                  src_real=$(readlink -f "$src_dir")
-                  if [[ "$current_target" == "$src_real" ]]; then
-                      log "Already installed: $skill_name"
-                      return 0
-                  fi
-                  log "Replacing: $skill_name"
-              elif [[ -e "$dest_link" ]]; then
-                  log "ERROR: Destination exists (not symlink): $dest_link"
-                  return 1
-              fi
+          install_plugin_agents() {
+              local plugin_root="$1"
+              local src_agents_dir="$PLUGINS_DIR/$plugin_root/agents"
 
-              if [[ "$DRY_RUN" == "true" ]]; then
-                  log_dry "ln -s $src_dir $dest_link"
-              else
-                  ln -sfv "$src_dir" "$dest_link"
-              fi
+              [[ -d "$src_agents_dir" ]] || return 0
+              mkdir -p "$AGENTS_DIR"
+
+              local agent_src
+              local installed_any=0
+              for agent_src in "$src_agents_dir"/*.md; do
+                  [[ -e "$agent_src" ]] || continue
+                  installed_any=1
+
+                  local agent_file
+                  agent_file=$(basename "$agent_src")
+                  local plugin_label
+                  plugin_label="${plugin_root//\//-}"
+                  local dest_link="$AGENTS_DIR/$plugin_label--$agent_file"
+
+                  link_path "$agent_src" "$dest_link" "$plugin_label/$agent_file" || return 1
+              done
+
+              [[ "$installed_any" -eq 1 ]] && log "Installed agents for plugin: $plugin_root"
           }
 
           main() {
               [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]] && usage
 
               local skills=()
-              [[ -n "${PLUGINS:-}" ]] && while IFS= read -r line; do
-                  [[ -z "$line" ]] && continue
-                  [[ "$line" =~ ^[[:space:]]*# ]] && continue
-                  skills+=("$line")
-              done <<< "$PLUGINS"
+              [[ -n "${PLUGINS:-}" ]] && parse_entries "$PLUGINS" skills
               skills+=("$@")
 
-              [[ ${{'{#'}}skills[@]} -eq 0 ]] && { log "ERROR: No skills specified"; usage 1; }
+              local agent_plugins=()
+              [[ -n "${AGENT_PLUGINS:-}" ]] && parse_entries "$AGENT_PLUGINS" agent_plugins
 
-              log "Installing ${{'{#'}}skills[@]} skill(s) to $SKILLS_DIR"
+              [[ ${{'{#'}}skills[@]} -eq 0 && ${{'{#'}}agent_plugins[@]} -eq 0 ]] && { log "ERROR: No skills or agent plugins specified"; usage 1; }
+
+              [[ ${{'{#'}}skills[@]} -gt 0 ]] && log "Installing ${{'{#'}}skills[@]} skill(s) to $SKILLS_DIR"
 
               local failed=0
               for skill_path in "${skills[@]}"; do
                   skill_path="${skill_path%/}"
                   install_skill "$skill_path" || ((failed++))
               done
+
+              if [[ "${INSTALL_AGENTS:-true}" != "false" ]]; then
+                  declare -A plugin_roots=()
+
+                  local skill_path plugin_root
+                  for skill_path in "${skills[@]}"; do
+                      [[ "$skill_path" == */skills/* ]] || continue
+                      plugin_root="${skill_path%%/skills/*}"
+                      [[ -n "$plugin_root" ]] && plugin_roots["$plugin_root"]=1
+                  done
+
+                  for plugin_root in "${agent_plugins[@]}"; do
+                      plugin_root="${plugin_root%/}"
+                      [[ -n "$plugin_root" ]] && plugin_roots["$plugin_root"]=1
+                  done
+
+                  if [[ ${{'{#'}}plugin_roots[@]} -gt 0 ]]; then
+                      log "Installing agents from ${{'{#'}}plugin_roots[@]} plugin(s) to $AGENTS_DIR"
+                      for plugin_root in "${!plugin_roots[@]}"; do
+                          install_plugin_agents "$plugin_root" || ((failed++))
+                      done
+                  fi
+              fi
 
               [[ $failed -gt 0 ]] && { log "Completed with $failed error(s)"; exit 1; }
               log "Done!"
