@@ -4,48 +4,48 @@
     REPO: https://github.com/ed3dai/ed3d-plugins
     PLUGINS_DIR: "{{SRC}}/plugins"
     SKILLS_DIR: "$HOME/.config/opencode/skills"
-    PLUGINS: >-
-      ed3d-basic-agents/skills/doing-a-simple-two-stage-fanout,
-      ed3d-basic-agents/skills/using-generic-agents,
-      ed3d-extending-claude/skills/creating-a-plugin,
-      ed3d-extending-claude/skills/creating-an-agent,
-      ed3d-extending-claude/skills/maintaining-a-marketplace,
-      ed3d-extending-claude/skills/maintaining-project-context,
-      ed3d-extending-claude/skills/prompt-security-hardening,
-      ed3d-extending-claude/skills/testing-skills-with-subagents,
-      ed3d-extending-claude/skills/writing-claude-directives,
-      ed3d-extending-claude/skills/writing-claude-md-files,
-      ed3d-extending-claude/skills/writing-skills,
-      ed3d-house-style/skills/coding-effectively,
-      ed3d-house-style/skills/defense-in-depth,
-      ed3d-house-style/skills/howto-code-in-typescript,
-      ed3d-house-style/skills/howto-develop-with-postgres,
-      ed3d-house-style/skills/howto-functional-vs-imperative,
-      ed3d-house-style/skills/programming-in-react,
-      ed3d-house-style/skills/property-based-testing,
-      ed3d-house-style/skills/writing-for-a-technical-audience,
-      ed3d-house-style/skills/writing-good-tests,
-      ed3d-plan-and-execute/skills/asking-clarifying-questions,
-      ed3d-plan-and-execute/skills/brainstorming,
-      ed3d-plan-and-execute/skills/executing-an-implementation-plan,
-      ed3d-plan-and-execute/skills/finishing-a-development-branch,
-      ed3d-plan-and-execute/skills/requesting-code-review,
-      ed3d-plan-and-execute/skills/starting-a-design-plan,
-      ed3d-plan-and-execute/skills/starting-an-implementation-plan,
-      ed3d-plan-and-execute/skills/systematic-debugging,
-      ed3d-plan-and-execute/skills/test-driven-development,
-      ed3d-plan-and-execute/skills/using-git-worktrees,
-      ed3d-plan-and-execute/skills/using-plan-and-execute,
-      ed3d-plan-and-execute/skills/verification-before-completion,
-      ed3d-plan-and-execute/skills/writing-design-plans,
-      ed3d-plan-and-execute/skills/writing-implementation-plans,
-      ed3d-playwright/skills/playwright-debugging,
-      ed3d-playwright/skills/playwright-patterns,
-      ed3d-research-agents/skills/investigating-a-codebase,
-      ed3d-research-agents/skills/researching-on-the-internet,
-      ed3d-session-reflection/skills/export-session-as-markdown,
-      ed3d-session-reflection/skills/review-recent-sessions,
-      ed3d-session-reflection/skills/review-session
+    PLUGINS:
+      - ed3d-basic-agents/skills/doing-a-simple-two-stage-fanout
+      - ed3d-basic-agents/skills/using-generic-agents
+      - ed3d-extending-claude/skills/creating-a-plugin
+      - ed3d-extending-claude/skills/creating-an-agent
+      - ed3d-extending-claude/skills/maintaining-a-marketplace
+      - ed3d-extending-claude/skills/maintaining-project-context
+      - ed3d-extending-claude/skills/prompt-security-hardening
+      - ed3d-extending-claude/skills/testing-skills-with-subagents
+      - ed3d-extending-claude/skills/writing-claude-directives
+      - ed3d-extending-claude/skills/writing-claude-md-files
+      - ed3d-extending-claude/skills/writing-skills
+      - ed3d-house-style/skills/coding-effectively
+      - ed3d-house-style/skills/defense-in-depth
+      - ed3d-house-style/skills/howto-code-in-typescript
+      - ed3d-house-style/skills/howto-develop-with-postgres
+      - ed3d-house-style/skills/howto-functional-vs-imperative
+      - ed3d-house-style/skills/programming-in-react
+      - ed3d-house-style/skills/property-based-testing
+      - ed3d-house-style/skills/writing-for-a-technical-audience
+      - ed3d-house-style/skills/writing-good-tests
+      - ed3d-plan-and-execute/skills/asking-clarifying-questions
+      - ed3d-plan-and-execute/skills/brainstorming
+      - ed3d-plan-and-execute/skills/executing-an-implementation-plan
+      - ed3d-plan-and-execute/skills/finishing-a-development-branch
+      - ed3d-plan-and-execute/skills/requesting-code-review
+      - ed3d-plan-and-execute/skills/starting-a-design-plan
+      - ed3d-plan-and-execute/skills/starting-an-implementation-plan
+      - ed3d-plan-and-execute/skills/systematic-debugging
+      - ed3d-plan-and-execute/skills/test-driven-development
+      - ed3d-plan-and-execute/skills/using-git-worktrees
+      - ed3d-plan-and-execute/skills/using-plan-and-execute
+      - ed3d-plan-and-execute/skills/verification-before-completion
+      - ed3d-plan-and-execute/skills/writing-design-plans
+      - ed3d-plan-and-execute/skills/writing-implementation-plans
+      - ed3d-playwright/skills/playwright-debugging
+      - ed3d-playwright/skills/playwright-patterns
+      - ed3d-research-agents/skills/investigating-a-codebase
+      - ed3d-research-agents/skills/researching-on-the-internet
+      - ed3d-session-reflection/skills/export-session-as-markdown
+      - ed3d-session-reflection/skills/review-recent-sessions
+      - ed3d-session-reflection/skills/review-session
     ENV_LIST:
       - plugins_dir
       - skills_dir
@@ -65,17 +65,17 @@
 
           Arguments:
             SKILL_PATHS...    One or more skill paths in format: plugin-name/skills/skill-name
-                              Can also be set via PLUGINS environment variable (comma-separated)
+                              Can also be set via PLUGINS environment variable (newline-separated)
 
           Environment:
-            PLUGINS           Comma-separated list of skill paths (alternative to positional args)
+            PLUGINS           Newline-separated list of skill paths (alternative to positional args)
             PLUGINS_DIR       Base plugins directory (default: ~/archive/ed3dai/ed3d-plugins/plugins)
             SKILLS_DIR        Target skills directory (default: ~/.config/opencode/skills)
             DRY_RUN           If "true", only print what would be done without making changes
 
           Examples:
             $(basename "$0") ed3d-research-agents/skills/investigating-a-codebase
-            PLUGINS=ed3d-house-style/skills/coding-effectively,ed3d-basic-agents/skills/using-generic-agents $(basename "$0")
+            PLUGINS=$(printf '%s\n' ed3d-house-style/skills/coding-effectively ed3d-basic-agents/skills/using-generic-agents) $(basename "$0")
           EOF
               exit "${1:-0}"
           }
@@ -121,7 +121,7 @@
               [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]] && usage
 
               local skills=()
-              [[ -n "${PLUGINS:-}" ]] && IFS=',' read -ra skills <<< "$PLUGINS"
+              [[ -n "${PLUGINS:-}" ]] && readarray -t skills <<< "$PLUGINS"
               skills+=("$@")
 
               [[ ${{'{#'}}skills[@]} -eq 0 ]] && { log "ERROR: No skills specified"; usage 1; }
