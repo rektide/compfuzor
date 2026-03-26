@@ -68,7 +68,7 @@
                               Can also be set via PLUGINS environment variable (newline-separated)
 
           Environment:
-            PLUGINS           Newline-separated list of skill paths (alternative to positional args)
+            PLUGINS           Newline-separated list of skill paths (lines starting with # are skipped)
             PLUGINS_DIR       Base plugins directory (default: ~/archive/ed3dai/ed3d-plugins/plugins)
             SKILLS_DIR        Target skills directory (default: ~/.config/opencode/skills)
             DRY_RUN           If "true", only print what would be done without making changes
@@ -121,7 +121,11 @@
               [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]] && usage
 
               local skills=()
-              [[ -n "${PLUGINS:-}" ]] && readarray -t skills <<< "$PLUGINS"
+              [[ -n "${PLUGINS:-}" ]] && while IFS= read -r line; do
+                  [[ -z "$line" ]] && continue
+                  [[ "$line" =~ ^[[:space:]]*# ]] && continue
+                  skills+=("$line")
+              done <<< "$PLUGINS"
               skills+=("$@")
 
               [[ ${{'{#'}}skills[@]} -eq 0 ]] && { log "ERROR: No skills specified"; usage 1; }
