@@ -9,7 +9,7 @@
     bins: "{{BINS|default([])}}"
     enhancedToolVersions:
       nodejs: True
-    enhancedBins:
+    binBuild:
       - name: build.sh
         run: "{{BINS_RUN_BYPASS is not deftruthy}}"
         basedir: repo
@@ -22,10 +22,12 @@
             echo "Building package..."
             pnpm build
           fi
+    binInstall:
       - name: install.sh
         basedir: repo
         generated: |
           pnpm link -g
+    enhancedBins: "{{ (binBuild if BUILD_BYPASS is not deftruthy else []) + (binInstall if INSTALL_BYPASS is not deftruthy else []) }}"
   when: NODEJS is deftruthy
 
 - name: 'Build vars for a BUN build'
@@ -39,16 +41,18 @@
     bins: "{{BINS|default([])}}"
     enhancedToolVersions:
       bun: True
-    enhancedBins:
+    binBuild:
       - name: build.sh
         run: "{{BINS_RUN_BYPASS is not deftruthy}}"
         basedir: repo
         generated: |
           bun install
+    binInstall:
       - name: install.sh
         basedir: repo
         generated: |
           bun link -g
+    enhancedBins: "{{ (binBuild if BUILD_BYPASS is not deftruthy else []) + (binInstall if INSTALL_BYPASS is not deftruthy else []) }}"
   when: BUN is deftruthy
 
 - name: 'Build vars for REPO_NPM'
@@ -56,10 +60,11 @@
     BINS: "{{ enhancedBins|mergeKeyed(BINS|default([]), key='name', concat_fields=['generated']) }}"
     ETC_FILES: "{{ enhancedEtc|combine(ETC_FILES|default([])) }}"
   vars:
-    enhancedBins:
+    binInstall:
       - name: install.sh
         generated: |
           pnpm install -g $(cat etc/npm.txt)
+    enhancedBins: "{{ binInstall if INSTALL_BYPASS is not deftruthy else [] }}"
     enhancedEtc:
       - name: npm.txt
         content: |
