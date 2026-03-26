@@ -72,7 +72,6 @@
           - User-friendly language
       - name: mcp/gsd.json
         json:
-          "$schema": "https://opencode.ai/config.json"
           permission:
             read:
               "~/.config/opencode/get-shit-done/*": "allow"
@@ -80,17 +79,14 @@
               "~/.config/opencode/get-shit-done/*": "allow"
       - name: mcp/mdns.json
         json:
-          "$schema": "https://opencode.ai/config.json"
           server:
             mdns: true
       - name: mcp/openai-codex.json
         json:
-          "$schema": "https://opencode.ai/config.json"
           plugin:
             - "opencode-openai-codex-auth"
       - name: mcp/zai-coding-plan.json
         json:
-          "$schema": "https://opencode.ai/config.json"
           provider:
             zai-coding-plan:
               options:
