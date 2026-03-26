@@ -303,5 +303,93 @@
           }
 
           main "$@"
+      - name: color-name-to-hex
+        basedir: False
+        global: True
+        content: |
+          set -euo pipefail
+
+          color_to_hex() {
+              local color_name="$1"
+              local rgb
+              rgb=$(showrgb | awk -v name="$color_name" '
+                  {
+                      cname = ""
+                      for (i = 4; i <= NF; i++) {
+                          cname = cname (i > 4 ? " " : "") $i
+                      }
+                      if (tolower(cname) == tolower(name)) {
+                          printf "%02X%02X%02X", $1, $2, $3
+                          exit
+                      }
+                  }
+              ')
+              if [[ -n "$rgb" ]]; then
+                  echo "#$rgb"
+                  return 0
+              fi
+              return 1
+          }
+
+          convert_file() {
+              local file="$1"
+              local in_frontmatter=false
+              local changed=false
+              local temp_file
+              temp_file=$(mktemp)
+
+              while IFS= read -r line || [[ -n "$line" ]]; do
+                  if [[ "$line" == "---" ]]; then
+                      if [[ "$in_frontmatter" == "false" ]]; then
+                          in_frontmatter=true
+                      else
+                          in_frontmatter=false
+                      fi
+                      echo "$line" >> "$temp_file"
+                      continue
+                  fi
+
+                  if [[ "$in_frontmatter" == "true" ]] && [[ "$line" =~ ^color:[[:space:]]+([^#[:space:]].*) ]]; then
+                      color_name="${BASH_REMATCH[1]}"
+                      hex=$(color_to_hex "$color_name")
+                      if [[ -n "$hex" ]]; then
+                          echo "color: \"$hex\"" >> "$temp_file"
+                          echo "  $file: '$color_name' -> '$hex'" >&2
+                          changed=true
+                      else
+                          echo "$line" >> "$temp_file"
+                          echo "  $file: unknown color '$color_name'" >&2
+                      fi
+                  elif [[ "$in_frontmatter" == "true" ]] && [[ "$line" =~ ^tools: ]]; then
+                      echo "  $file: removed 'tools' line" >&2
+                      changed=true
+                  else
+                      echo "$line" >> "$temp_file"
+                  fi
+              done < "$file"
+
+              if [[ "$changed" == "true" ]]; then
+                  mv "$temp_file" "$file"
+              else
+                  rm "$temp_file"
+              fi
+          }
+
+          if [[ $# -eq 0 ]]; then
+              echo "Usage: $(basename "$0") <file.md> [file2.md ...]" >&2
+              echo "       $(basename "$0") --dir <directory>" >&2
+              exit 1
+          fi
+
+          if [[ "${1:-}" == "--dir" ]]; then
+              dir="${2:-.}"
+              find "$dir" -name "*.md" -type f | while read -r file; do
+                  convert_file "$file"
+              done
+          else
+              for file in "$@"; do
+                  convert_file "$file"
+              done
+          fi
   tasks:
     - import_tasks: tasks/compfuzor.includes
