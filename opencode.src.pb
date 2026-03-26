@@ -70,6 +70,31 @@
           - Proper structure
           - Code examples
           - User-friendly language
+      - name: mcp/gsd.json
+        json:
+          "$schema": "https://opencode.ai/config.json"
+          permission:
+            read:
+              "~/.config/opencode/get-shit-done/*": "allow"
+            external_directory:
+              "~/.config/opencode/get-shit-done/*": "allow"
+      - name: mcp/mdns.json
+        json:
+          "$schema": "https://opencode.ai/config.json"
+          server:
+            mdns: true
+      - name: mcp/openai-codex.json
+        json:
+          "$schema": "https://opencode.ai/config.json"
+          plugin:
+            - "opencode-openai-codex-auth"
+      - name: mcp/zai-coding-plan.json
+        json:
+          "$schema": "https://opencode.ai/config.json"
+          provider:
+            zai-coding-plan:
+              options:
+                timeout: 600000
       #- name: provider/openrouter.json
       #  json:
       #    provider:
