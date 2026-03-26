@@ -75,6 +75,7 @@
             SKILLS_DIR        Target skills directory (default: ~/.config/opencode/skills)
             AGENTS_DIR        Target agents directory (default: ~/.config/opencode/agents)
             AGENT_PLUGINS     Optional plugin roots for agent install (newline/comma/space separated)
+            INSTALL_SKILLS    Set to "false" to skip skill installation
             INSTALL_AGENTS    Set to "false" to skip agent installation
             DRY_RUN           If "true", only print what would be done without making changes
 
@@ -184,13 +185,15 @@
 
               [[ ${{'{#'}}skills[@]} -eq 0 && ${{'{#'}}agent_plugins[@]} -eq 0 ]] && { log "ERROR: No skills or agent plugins specified"; usage 1; }
 
-              [[ ${{'{#'}}skills[@]} -gt 0 ]] && log "Installing ${{'{#'}}skills[@]} skill(s) to $SKILLS_DIR"
-
               local failed=0
-              for skill_path in "${skills[@]}"; do
-                  skill_path="${skill_path%/}"
-                  install_skill "$skill_path" || ((failed++))
-              done
+
+              if [[ "${INSTALL_SKILLS:-true}" != "false" ]]; then
+                  [[ ${{'{#'}}skills[@]} -gt 0 ]] && log "Installing ${{'{#'}}skills[@]} skill(s) to $SKILLS_DIR"
+                  for skill_path in "${skills[@]}"; do
+                      skill_path="${skill_path%/}"
+                      install_skill "$skill_path" || ((failed++))
+                  done
+              fi
 
               if [[ "${INSTALL_AGENTS:-true}" != "false" ]]; then
                   declare -A plugin_roots=()
