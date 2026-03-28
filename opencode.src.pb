@@ -91,6 +91,9 @@
             zai-coding-plan:
               options:
                 timeout: 600000
+      - name: autoupdate.json
+        json:
+          autoupdate: false
       #- name: provider/openrouter.json
       #  json:
       #    provider:
