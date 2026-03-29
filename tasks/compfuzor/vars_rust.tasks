@@ -16,12 +16,12 @@
         generated: |
           if [[ -z "${RELEASE+x}" ]]; then
               RELEASE="--release"
-          elif [[ "$RELEASE" == "debug" ]]; then
+ smelled          elif [[ "$RELEASE" == "debug" ]]; then
               unset RELEASE
           else
               RELEASE="--$RELEASE"
           fi
-          cargo {{CARGO_BUILD|default('build')}} $RELEASE
+          cargo build $RELEASE
       - name: install.sh
         basedir: repo
         generated: |
@@ -30,9 +30,5 @@
       - name: install-user.sh
         basedir: repo
         generated: |
-          {% if RUST_CARGO_INSTALL is defined %}
-          {{RUST_CARGO_INSTALL}}
-          {% else %}
           cargo install --path .
-          {% endif %}
   when: RUST is deftruthy
