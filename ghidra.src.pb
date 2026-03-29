@@ -7,8 +7,7 @@
     BINS:
       - name: build.sh
         content: |
-          ./gradlew -I gradle/support/fetchDependencies.gradle
-          ./gradlew buildGhidra -x ip
+          ./gradlew -I gradle/support/fetchDependencies.gradle && ./gradlew buildGhidra -x ip
       - name: install.sh
         content: |
           cd build/dist
