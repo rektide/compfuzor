@@ -5,6 +5,8 @@
     INSTANCE: git
     REPO: https://github.com/GStreamer/gst-plugins-rs
     RUST: True
+    CARGO_BUILD: cbuild
+    RUST_CARGO_INSTALL: "cargo cinstall --prefix=/usr --libdir /usr/lib/x86_64-linux-gnu"
     PKGS:
       - cargo-c
       - libgstreamer1.0-dev
@@ -13,13 +15,5 @@
       - libglib2.0-dev
       - libxml2-dev
       - liborc-0.4-dev
-    BINS:
-      - name: build.sh
-        content: |
-          cargo build --release
-      - name: install.sh
-        sudo: True
-        content: |
-          cargo cinstall --prefix=/usr --libdir /usr/lib/x86_64-linux-gnu
   tasks:
     - import_tasks: tasks/compfuzor.includes
