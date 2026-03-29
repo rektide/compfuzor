@@ -4,10 +4,7 @@
     TYPE: reva
     REPO: https://github.com/cyberkaida/reverse-engineering-assistant
     PYTHON: True
-    MCP_COMMAND:
-      - mcp-reva
-    MCP_ENV:
-      GHIDRA_INSTALL_DIR: "${GHIDRA_INSTALL_DIR}"
+    MCP_URL: "http://localhost:8080/mcp/message"
     ENV:
       GHIDRA_INSTALL_DIR: /opt/ghidra
     BINS:

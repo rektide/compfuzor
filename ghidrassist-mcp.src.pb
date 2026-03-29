@@ -11,6 +11,7 @@
         content: |
           gradle -PGHIDRA_INSTALL_DIR=/opt/ghidra buildExtension
       - name: install-user.sh
+        basedir: False
         content: |
           gradle -PGHIDRA_INSTALL_DIR=/opt/ghidra installExtension
   tasks:
