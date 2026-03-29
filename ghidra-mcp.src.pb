@@ -3,6 +3,7 @@
   vars:
     TYPE: ghidra-mcp
     REPO: https://github.com/bethington/ghidra-mcp
+    PYTHON: True
     MCP_COMMAND:
       - ghidra-mcp
     MCP_ENV:
@@ -15,6 +16,7 @@
       - name: ghidra-mcp
         global: True
         content: |
-          exec uv run "$DIR/bridge_mcp_ghidra.py"
+          source "$DIR/bin/venv.source"
+          exec python "$DIR/bridge_mcp_ghidra.py"
   tasks:
     - import_tasks: tasks/compfuzor.includes

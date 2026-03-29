@@ -3,6 +3,7 @@
   vars:
     TYPE: ghidramcp
     REPO: https://github.com/LaurieWired/GhidraMCP
+    PYTHON: True
     MCP_COMMAND:
       - ghidramcp
     MCP_ENV:
@@ -13,6 +14,7 @@
       - name: ghidramcp
         global: True
         content: |
-          exec uv run "$DIR/bridge_mcp_ghidra.py" --ghidra-server "${GHIDRA_SERVER_URL:-http://127.0.0.1:8080/}"
+          source "$DIR/bin/venv.source"
+          exec python "$DIR/bridge_mcp_ghidra.py" --ghidra-server "${GHIDRA_SERVER_URL:-http://127.0.0.1:8080/}"
   tasks:
     - import_tasks: tasks/compfuzor.includes
