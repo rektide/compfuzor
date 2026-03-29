@@ -4,14 +4,13 @@
     REPO: https://github.com/NationalSecurityAgency/ghidra
     PKGS:
       - default-jdk
-      - gradle
     BINS:
       - name: fetch-deps.sh
         content: |
-          gradle -I gradle/support/fetchDependencies.gradle
+          ./gradlew -I gradle/support/fetchDependencies.gradle
       - name: build.sh
         content: |
-          gradle buildGhidra -x ip
+          ./gradlew buildGhidra -x ip
       - name: install.sh
         content: |
           cd build/dist
