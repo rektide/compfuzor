@@ -5,11 +5,9 @@
     PKGS:
       - default-jdk
     BINS:
-      - name: fetch-deps.sh
-        content: |
-          ./gradlew -I gradle/support/fetchDependencies.gradle
       - name: build.sh
         content: |
+          ./gradlew -I gradle/support/fetchDependencies.gradle
           ./gradlew buildGhidra -x ip
       - name: install.sh
         content: |
