@@ -9,10 +9,13 @@
     config_bin:
       name: config.sh
       src: "../config-{{ CONFIG_MERGE | default('yaml-list') }}.sh"
+      basedir: False
     disable_bin:
       name: disable.sh
       src: ../config-disable.sh
+      basedir: False
     enable_bin:
       name: enable.sh
       src: ../config-enable.sh
+      basedir: False
   when: CONFIG_KEY is defined

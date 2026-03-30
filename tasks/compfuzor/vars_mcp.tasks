@@ -53,8 +53,10 @@
       - mcp-disabled
     config:
       src: ../mcp-config.sh
+      basedir: False
     disable:
       src: ../mcp-disable.sh
+      basedir: False
     install:
       src: ../mcp-install.ts
       basedir: False
