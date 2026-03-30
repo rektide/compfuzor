@@ -2,9 +2,9 @@
   file:
     path: "{{dest}}"
     state: directory
-    owner: "{{ OWNER|default(ansible_user_id)|default(omit) }}"
+    owner: "{{ OWNER|default(ansible_facts['user_id'])|default(omit) }}"
     group: "{{ GROUP|default(ansible_group_id)|default(omit) }}"
-  #become: "{{dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  #become: "{{dest|should_become(OWNER|default(), ansible_facts['user_id'], GROUP|default(), ansible_facts['user_gid'])}}"
   when: REPO|default(False) is truthy or REPOS|default(False) is truthy
   vars:
     dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
@@ -16,7 +16,7 @@
     depth: "{{ GIT_DEPTH|default(omit) }}"
     version: "{{ GIT_VERSION|default(omit) }}"
     update: "{{GIT_UPDATE|default(omit)}}"
-  #become: "{{dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid)}}"
+  #become: "{{dest|should_become(OWNER|default(), ansible_facts['user_id'], GROUP|default(), ansible_facts['user_gid'])}}"
   when: REPO|default(False) is truthy
   vars:
     dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
@@ -29,7 +29,7 @@
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: "{{ GIT_DEPTH|default(omit) }}"
     version: "{{ GIT_VERSION|default(omit) }}"
-  become: "{{ dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
+  become: "{{ dest|should_become(OWNER|default(), ansible_facts['user_id'], GROUP|default(), ansible_facts['user_gid']) }}"
   loop: "{{ (REPOS if REPOS|default(False) is mapping else {})|dict2items }}"
   vars:
     dest: "{{ item.key|defaultDir(REPO_DIR|default(DIR, true)) }}"
@@ -43,7 +43,7 @@
     depth: "{{ GIT_DEPTH|default(omit) }}"
     version: "{{ GIT_VERSION|default(omit) }}"
     reference: "{{ item.reference|defaultDir(SRCS_DIR) if item.reference|default(False) else omit }}"
-  become: "{{ dest|should_become(OWNER|default(), ansible_user_id, GROUP|default(), ansible_user_gid) }}"
+  become: "{{ dest|should_become(OWNER|default(), ansible_facts['user_id'], GROUP|default(), ansible_facts['user_gid']) }}"
   with_items: "{{ REPOS if REPOS|default(False) else [] }}"
   when: REPOS|default({}) is not mapping
   vars:

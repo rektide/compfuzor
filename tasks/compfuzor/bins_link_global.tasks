@@ -4,7 +4,7 @@
     path: "{{GLOBAL_BINS_DIR}}"
     state: directory
   with_items: "{{BINS|default([])}}"
-  become: "{{GLOBAL_BINS_DIR|should_become(OWNER|default(), ansible_user_gid, GROUP|default(), ansible_user_gid)}}"
+  become: "{{GLOBAL_BINS_DIR|should_become(OWNER|default(), ansible_facts['user_gid'], GROUP|default(), ansible_facts['user_gid'])}}"
   when: item.global|default(False)
 - name: "Link `BINS` into `GLOBAL_BINS_DIR`{{ _delayText }}"
   file:
@@ -12,7 +12,7 @@
     dest: "{{_dest}}"
     state: link
   with_items: "{{BINS|default([])}}"
-  become: "{{_dest|should_become(OWNER|default(), ansible_user_gid, GROUP|default(), ansible_user_gid)}}"
+  become: "{{_dest|should_become(OWNER|default(), ansible_facts['user_gid'], GROUP|default(), ansible_facts['user_gid'])}}"
   when: item.global|default(False) and item.delay|default(False) == delay_phase|default(False)
   vars:
     _src: "{{item.src|default(item.name|default(item.link, True), True)|defaultDir(DIR+'/bin')}}"
