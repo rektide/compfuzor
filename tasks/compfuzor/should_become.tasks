@@ -1,0 +1,87 @@
+---
+# usage:
+# - import_tasks: compfuzor/should_become.tasks
+#   vars:
+#     _compfuzor_should_become_path: "{{ dest_path }}"
+#     _compfuzor_should_become_owner: "{{ OWNER | default('', true) }}"
+#     _compfuzor_should_become_group: "{{ GROUP | default('', true) }}"
+# then use become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME)|bool }}"
+
+- name: "Compfuzor: assert path for should_become"
+  assert:
+    that:
+      - _compfuzor_should_become_path is defined
+      - (_compfuzor_should_become_path | string | length) > 0
+    fail_msg: "_compfuzor_should_become_path must be provided to should_become.tasks"
+
+- name: "Compfuzor: probe should_become on target"
+  command:
+    argv:
+      - "{{ ansible_python_interpreter | default('/usr/bin/python3') }}"
+      - -c
+      - |
+        import grp
+        import os
+        import pwd
+        import sys
+
+        def parse_uid(raw):
+            if raw in (None, "", "None", "none", "null"):
+                return None
+            try:
+                return int(raw)
+            except ValueError:
+                pass
+            try:
+                return pwd.getpwnam(raw).pw_uid
+            except KeyError:
+                return None
+
+        def parse_gid(raw):
+            if raw in (None, "", "None", "none", "null"):
+                return None
+            try:
+                return int(raw)
+            except ValueError:
+                pass
+            try:
+                return grp.getgrnam(raw).gr_gid
+            except KeyError:
+                return None
+
+        path = os.path.expanduser(sys.argv[1])
+        owner_uid = parse_uid(sys.argv[2])
+        group_gid = parse_gid(sys.argv[3])
+        current_uid = parse_uid(sys.argv[4])
+        current_gid = parse_gid(sys.argv[5])
+
+        check_path = path
+        while check_path and not os.path.exists(check_path):
+            parent = os.path.dirname(check_path)
+            if parent == check_path:
+                break
+            check_path = parent
+
+        if not check_path:
+            check_path = "/"
+
+        owner_mismatch = owner_uid is not None and current_uid is not None and owner_uid != current_uid
+        group_mismatch = group_gid is not None and current_gid is not None and group_gid != current_gid
+        writable = os.access(check_path, os.W_OK)
+
+        sys.stdout.write("true" if owner_mismatch or group_mismatch or not writable else "false")
+      - "{{ _compfuzor_should_become_path }}"
+      - "{{ _compfuzor_should_become_owner | default('', true) }}"
+      - "{{ _compfuzor_should_become_group | default('', true) }}"
+      - "{{ _compfuzor_should_become_user | default(_cf_user_id, true) }}"
+      - "{{ _compfuzor_should_become_gid | default(_cf_user_gid, true) }}"
+  register: _compfuzor_should_become_probe
+  changed_when: false
+  when: COMFUZOR_SHOULD_BECOME is not defined
+
+- name: "Compfuzor: set should_become facts"
+  set_fact:
+    _compfuzor_should_beccome: "{{ _compfuzor_should_become_effective | bool }}"
+    BECOME: "{{ _compfuzor_should_become_effective | bool }}"
+  vars:
+    _compfuzor_should_become_effective: "{{ COMFUZOR_SHOULD_BECOME | default(_compfuzor_should_become_probe.stdout | trim == 'true') }}"
