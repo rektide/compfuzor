@@ -28,6 +28,12 @@
     echo $XDG_CONFIG_DIRS
     echo $XDG_CACHE_HOME
     echo $XDG_RUNTIME_DIR
+    cat /etc/machine-id
+    uname -m
+    id -un
+    id -g
+    date +'%Y.%m.%dT%H:%M:%S%z'
+    nproc
     echo last
   register: COMPFUZOR_BASE
   changed_when: False
@@ -49,7 +55,7 @@
     XDG_DATA_DIRS: "{{XDG_DATA_DIRS|default(COMPFUZOR_BASE.stdout_lines[15]|default('/usr/local/share:/usr/share', True), True)}}"
     XDG_CONFIG_DIRS: "{{XDG_CONFIG_DIRS|default(COMPFUZOR_BASE.stdout_lines[16]|default('/etc/xdg', True), True)}}"
     XDG_CACHE_HOME: "{{XDG_CACHE_HOME|default(COMPFUZOR_BASE.stdout_lines[17]|default(HOMEDIR + '/.cache', True), True)}}"
-    XDG_RUNTIME_DIR: "{{XDG_RUNTIME_DIR|default(COMPFUZOR_BASE.stdout_lines[18]|default('/run/user/' + ansible_facts['user_id'], True), True)}}"
+    XDG_RUNTIME_DIR: "{{XDG_RUNTIME_DIR|default(COMPFUZOR_BASE.stdout_lines[18]|default('/run/user/' + COMPFUZOR_BASE.stdout_lines[21], True), True)}}"
 
     MACHINE_ID: "{{MACHINE_ID|default(machineId)}}"
     SUBINSTANCE: "{{SUBINSTANCE|default(omit)}}"
@@ -64,8 +70,10 @@
     TYPE: "{{TYPE|default(name_)}}"
     PREFIX_DIR: "{{prefix}}"
     DIR: "{{prefix}}/{{name_}}"
-    hostnum: "{% for i in ansible_facts['play_batch'] %}{{ loop.index0 if ansible_facts['play_batch'][loop.index0] == inventory_hostname else '' }}{% endfor %}"
+    hostnum: "{% for i in ansible_play_batch %}{{ loop.index0 if ansible_play_batch[loop.index0] == inventory_hostname else '' }}{% endfor %}"
     type: "{{type|default(typeDetect)}}"
+    _cf_user_id: "{{COMPFUZOR_BASE.stdout_lines[21]}}"
+    _cf_user_gid: "{{COMPFUZOR_BASE.stdout_lines[22]|int}}"
   changed_when: False
   failed_when: False
   vars:
@@ -73,16 +81,15 @@
     # above via https://stackoverflow.com/questions/59981172/how-to-get-the-current-file-name-in-ansible
     type_: "{{type|default(typeDetect)}}" # used to default to opt
     #machineId: "{{COMPFUZOR_BASE.stdout_lines[]}}"
-    machineId: "{{ansible_facts['machine_id']}}"
-    #arch: "{{COMPFUZOR_BASE.stdout_lines[]}}"
-    arch: "{{ansible_facts['machine']}}"
+    machineId: "{{COMPFUZOR_BASE.stdout_lines[19]|default(lookup('file', '/etc/machine-id')|trim, True)}}"
+    arch: "{{COMPFUZOR_BASE.stdout_lines[20]|default(lookup('pipe', 'uname -m'), True)}}"
     kernel: "{{COMPFUZOR_BASE.stdout_lines[8]}}"
     archs: "{{COMPFUZOR_BASE.stdout_lines[9][:-1] | split(',')}}"
     uuid: "{{UUID|default(COMPFUZOR_BASE.stdout_lines[10])}}"
     passwords: "{{COMPFUZOR_BASE.stdout_lines[11].split(',')}}"
 
     # computed
-    timestamp: "{{ansible_facts['date_time']['date'].replace('-', '.')}}T{{ansible_facts['date_time']['time']}}{{ansible_facts['date_time']['tz_offset']}}"
+    timestamp: "{{TIMESTAMP_CF|default(COMPFUZOR_BASE.stdout_lines[23])}}"
     instanceName: "{{'-' if INSTANCE else ''}}{{INSTANCE|default('')}}"
     subinstance: "{{(SUBINSTANCE if SUBINSTANCE is string else MACHINE_ID) if SUBINSTANCE|default(False) else ''}}"
     subinstanceName: "{{'-' if subinstance|default(False) else ''}}{{subinstance|default('')}}"
