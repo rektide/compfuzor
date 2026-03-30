@@ -10,5 +10,6 @@ export TIMESTAMP="$(date +%y.%m.%d-%T)"
 {% endif -%}
 # push current shell options onto stack for later restoration
 _BIN_SHELL_OPTS+=("$-")
-(( ${V:-0} > 98 )) && set -x
+_BIN_SET_OPTS+=("$(set +o)")
+(( ${V:-0} > 2 )) && set -x
 set -euo pipefail

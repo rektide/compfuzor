@@ -10,3 +10,7 @@ if (( ${#_BIN_SHELL_OPTS[@]} > 0 )); then
 	done
 	unset __saved __opt
 fi
+if (( ${#_BIN_SET_OPTS[@]} > 0 )); then
+	eval "${_BIN_SET_OPTS[-1]}"
+	_BIN_SET_OPTS=("${_BIN_SET_OPTS[@]:0:${#_BIN_SET_OPTS[@]}-1}")
+fi
