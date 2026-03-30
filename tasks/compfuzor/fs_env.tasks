@@ -5,7 +5,7 @@
     dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
-  become: "{{_dest|should_become(OWNER|default(), ansible_facts['user_id'], GROUP|default(), ansible_facts['user_gid'])}}"
+  become: "{{_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
   when: >
     (item.hasEnv or _env_requested) and
     not item.skip|default(False)
@@ -107,7 +107,7 @@
     state: link
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
-  become: "{{_dest|should_become(OWNER|default(), ansible_facts['user_id'], GROUP|default(), ansible_facts['user_gid'])}}"
+  become: "{{_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
   # might be cool to have an exists check that ignores dead symlinks
   when: PREFIX_DIR|default(False) and (item.hasEnv or _env_requested) and not item.skip|default(False) and _dest is not exists
   loop:

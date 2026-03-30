@@ -1,6 +1,6 @@
 ---
 - hosts: all
-  gather_facts: False
+  #gather_facts: False
   vars:
     SHARES_DIR: /usr/local/share
     PKGS:

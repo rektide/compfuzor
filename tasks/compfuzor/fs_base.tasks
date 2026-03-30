@@ -4,38 +4,38 @@
     path: "{{DIR}}"
     state: directory
     mode: "{{DIRMODE}}"
-    owner: "{{should_become|ternary(OWNER|default(ansible_facts['user_id']),omit)}}"
-    group: "{{should_become|ternary(GROUP|default(ansible_facts['user_gid']),omit)}}"
+    owner: "{{should_become|ternary(OWNER|default(_cf_user_id),omit)}}"
+    group: "{{should_become|ternary(GROUP|default(_cf_user_gid),omit)}}"
   become: "{{should_become}}"
   vars:
-    should_become: "{{DIR|should_become(OWNER|default(), ansible_facts['user_id'], GROUP|default(), ansible_facts['user_gid'])}}"
+    should_become: "{{DIR|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
   when: DIR|default(True) is truthy
 - name: "Creating `DIRS`"
   file:
     path: "{{_dest}}"
     state: directory
     mode: "{{DIRMODE}}"
-    owner: "{{should_become|ternary(OWNER|default(ansible_facts['user_id']),omit)}}"
-    group: "{{should_become|ternary(GROUP|default(ansible_facts['user_gid']),omit)}}"
+    owner: "{{should_become|ternary(OWNER|default(_cf_user_id),omit)}}"
+    group: "{{should_become|ternary(GROUP|default(_cf_user_gid),omit)}}"
   with_items: "{{DIRS}}"
   become: "{{should_become}}"
   when: DIRS is defined and DIRS is truthy
   vars:
     _dest: "{{item|defaultDir(DIR)}}"
-    should_become: "{{_dest|should_become(OWNER|default(), ansible_facts['user_id'], GROUP|default(), ansible_facts['user_gid'])}}"
+    should_become: "{{_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
 - name: "Creating `FILES`"
   # someone wanted a basename here but eclipse has a ../content & like yeah, that's fine. locales holds the blame. see cf0fdccf0c.
   template:
     src: "files/{{TYPE|default(NAME)}}/{{item.src|default(item.name)|default(item)}}"
     dest: "{{dest}}"
-    owner: "{{should_become|ternary(OWNER|default(ansible_facts['user_id']),omit)}}"
-    group: "{{should_become|ternary(GROUP|default(ansible_facts['user_gid']),omit)}}"
+    owner: "{{should_become|ternary(OWNER|default(_cf_user_id),omit)}}"
+    group: "{{should_become|ternary(GROUP|default(_cf_user_gid),omit)}}"
   with_items: "{{FILES}}"
   become: True
   when: FILES is defined and FILES is not mapping and item.line|default(False) is not truthy
   vars:
     dest: "{{DIR}}/{{item.dest|default(item.name)|default(item)}}"
-    should_become: "{{dest|should_become(OWNER|default(), ansible_facts['user_id'], GROUP|default(), ansible_facts['user_gid'])}}"
+    should_become: "{{dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
 - name: "Creating `FILES` mapping"
   template:
     src: "files/{{TYPE|default(NAME)}}/{{ item[1] }}"
@@ -43,11 +43,11 @@
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{FILES.items()}}"
-  become: "{{_dest|should_become(OWNER|default(), ansible_facts['user_id'], GROUP|default(), ansible_facts['user_gid'])}}"
+  become: "{{_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
   when: FILES is defined and FILES is mapping
   vars:
     _dest: "{{ DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '' }}{{item[0]}}"
-    should_become: "{{_dest|should_become(OWNER|default(), ansible_facts['user_id'], GROUP|default(), ansible_facts['user_gid'])}}"
+    should_become: "{{_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
 
 - name: "File lineinfile"
   lineinfile:
@@ -56,8 +56,8 @@
     regexp: "{{item.regexp|default('^' + item.line)}}"
     create: "{{item.create|default(True)}}"
     state: "{{item.state|default(omit)}}"
-    owner: "{{should_become|ternary(owner|default(ansible_facts['user_id'], true),omit)}}"
-    group: "{{should_become|ternary(group|default(ansible_facts['user_gid'], true),omit)}}"
+    owner: "{{should_become|ternary(owner|default(_cf_user_id, true),omit)}}"
+    group: "{{should_become|ternary(group|default(_cf_user_gid, true),omit)}}"
   with_items: "{{FILES}}"
   become: "{{should_become}}"
   when: FILES is defined and FILES is not mapping and item.line|default(False)
@@ -65,4 +65,4 @@
     owner: "{{item.owner|default(OWNER|default(none, true), true)}}"
     group: "{{item.group|default(GROUP|default(none, true), true)}}"
     dest: "{{item.name|defaultDir(DIR)}}"
-    should_become: "{{dest|should_become(owner, ansible_facts['user_id'], group, ansible_facts['user_gid'])}}"
+    should_become: "{{dest|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"

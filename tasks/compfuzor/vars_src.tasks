@@ -5,7 +5,7 @@
     WITHS: "{{ '--with-'+WITH|join(' --with-') if WITH|default(False) else '' }}" 
     ENABLES: "{{ '--enable-'+ENABLE|join(' --enable-') if ENABLE|default(False) else '' }}" 
     PREPREFIX: "{{ DEST|default(NAME|default(TYPE)) }}"
-    CORES: "{{ CORES|default(ansible_facts['processor_vcpus'])|default(8) }}"
+    CORES: "{{ CORES|default(COMPFUZOR_BASE.stdout_lines[24]|int)|default(8) }}"
     GOPATH: "{{DIR}}"
     SRC: "{{ARCHIVE_SRC if ARCHIVE_DOWNLOAD is deftruthy and REPO is defined else SRC|default(omit)}}"
 

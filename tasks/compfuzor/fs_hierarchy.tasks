@@ -52,14 +52,14 @@
     path: "{{_dir}}"
     state: directory
     mode: "{{_vals.props.mode|default(DIRMODE|default(omit, true), true)}}"
-    owner: "{{should_become|ternary(owner|default(ansible_facts['user_id'], true),omit)}}"
-    group: "{{should_become|ternary(group|default(ansible_facts['user_gid'], true),omit)}}"
+    owner: "{{should_become|ternary(owner|default(_cf_user_id, true),omit)}}"
+    group: "{{should_become|ternary(group|default(_cf_user_gid, true),omit)}}"
   become: "{{should_become}}"
   when: not _vals.bypass and not _stat.results[0].stat.exists
   vars:
     owner: "{{_vals.prop.owner|default(OWNER|default(none, true), true)}}"
     group: "{{_vals.prop.group|default(GROUP|default(none, true), true)}}"
-    should_become: "{{_dir|should_become(owner, ansible_facts['user_id'], group, ansible_facts['user_gid'])}}"
+    should_become: "{{_dir|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"
 
 # link include dir into DIR
 - name: "Link {{_upper}}"
@@ -67,14 +67,14 @@
     src: "{{_dir}}"
     dest: "{{_link}}"
     state: link
-    owner: "{{should_become|ternary(owner|default(ansible_facts['user_id'], true),omit)}}"
-    group: "{{should_become|ternary(group|default(ansible_facts['user_gid'], true),omit)}}"
+    owner: "{{should_become|ternary(owner|default(_cf_user_id, true),omit)}}"
+    group: "{{should_become|ternary(group|default(_cf_user_gid, true),omit)}}"
   become: "{{should_become}}"
   when: not _vals.linkBypass and not _stat.results[1].stat.exists
   vars:
     owner: "{{_vals.prop.owner|default(OWNER|default(none, true), true)}}"
     group: "{{_vals.prop.group|default(GROUP|default(none, true), true)}}"
-    should_become: "{{_link|should_become(owner, ansible_facts['user_id'], group, ansible_facts['user_gid'])}}"
+    should_become: "{{_link|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"
 
 # create subdirs
 - name: "Create {{_upper}} subdirs and .d dirs"
@@ -82,8 +82,8 @@
     path: "{{subdir}}"
     state: directory
     mode: "{{item.mode|default(_vals.prop.mode|default(DIRMODE, true), true)}}"
-    owner: "{{should_become|ternary(owner|default(ansible_facts['user_id'], true),omit)}}"
-    group: "{{should_become|ternary(group|default(ansible_facts['user_gid'], true),omit)}}"
+    owner: "{{should_become|ternary(owner|default(_cf_user_id, true),omit)}}"
+    group: "{{should_become|ternary(group|default(_cf_user_gid, true),omit)}}"
   with_items: "{{ _subdir_items }}"
   become: "{{should_become}}"
   when: _subdir_items | length > 0
@@ -92,7 +92,7 @@
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
     subdir: "{{_dir}}/{{item.name|default(item)}}" 
-    should_become: "{{subdir|should_become(owner, ansible_facts['user_id'], group, ansible_facts['user_gid'])}}"
+    should_become: "{{subdir|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"
 
 # include files
 - name: "Do {{_upper}} lineinfile"
@@ -102,8 +102,8 @@
     regexp: "{{item.regexp|default('^' + item.line)}}"
     create: "{{item.create|default(True)}}"
     state: "{{item.state|default(omit)}}"
-    owner: "{{should_become|ternary(owner|default(ansible_facts['user_id'], true),omit)}}"
-    group: "{{should_become|ternary(group|default(ansible_facts['user_gid'], true),omit)}}"
+    owner: "{{should_become|ternary(owner|default(_cf_user_id, true),omit)}}"
+    group: "{{should_become|ternary(group|default(_cf_user_gid, true),omit)}}"
   with_items: "{{_vals.files|default([])}}"
   become: "{{should_become}}"
   when: item.line|default(False)
@@ -111,7 +111,7 @@
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
     dest: "{{item.dest|default(item.name|default(item))|defaultDir(_dir)}}"
-    should_become: "{{dest|should_become(owner, ansible_facts['user_id'], group, ansible_facts['user_gid'])}}"
+    should_become: "{{dest|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"
 
 - name: "Create {{_upper}} files"
   copy:
@@ -119,8 +119,8 @@
     src: "{{src|default(False) if item.copyDir|default(False) == True else omit}}"
     dest: "{{dest}}"
     mode: "{{item.mode|default(_vals.prop.mode|default(FILEMODE, true), true)}}"
-    owner: "{{do_become|ternary(owner|default(ansible_facts['user_id'], true),omit)}}"
-    group: "{{do_become|ternary(group|default(ansible_facts['user_gid'], true),omit)}}"
+    owner: "{{do_become|ternary(owner|default(_cf_user_id, true),omit)}}"
+    group: "{{do_become|ternary(group|default(_cf_user_gid, true),omit)}}"
     backup: "{{item.backup|default(FS_BACKUP|default(False))}}"
     # TODO: ansible 2.3+:
     #mode: "{{COPY_MODE|default(preserve)}}"
@@ -148,7 +148,7 @@
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
     dest: "{{ item.dest|default(item.name|default(item.src|default(item, true), true), true)|defaultDir(_dir) if not item.destTemplate is defined else item.destTemplate|unsafety|defaultDir(_dir) }}"
-    do_become: "{{dest|should_become(owner, ansible_facts['user_id'], group, ansible_facts['user_gid'])}}"
+    do_become: "{{dest|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"
 
 - name: "Assemble .d directory"
   assemble:
@@ -156,13 +156,13 @@
     dest: "{{dest}}"
     backup: "{{item.backup|default(True)}}"
     mode: "{{item.mode|default(_vals.prop.mode|default(FILEMODE, true), true)}}"
-    owner: "{{dest|should_become|ternary(owner|default(ansible_facts['user_id'], true),omit)}}"
-    group: "{{dest|should_become|ternary(group|default(ansible_facts['user_gid'], true),omit)}}"
-  become: "{{dest|should_become(OWNER|default(), ansible_facts['user_id'], GROUP|default(), ansible_facts['user_gid'])}}"
+    owner: "{{dest|should_become|ternary(owner|default(_cf_user_id, true),omit)}}"
+    group: "{{dest|should_become|ternary(group|default(_cf_user_gid, true),omit)}}"
+  become: "{{dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
   when: _vals.d
   with_items: "{{_vals.d|default([], true)}}"
   vars:
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
     dest: "{{_dir}}/{{item.dest|default(item.name|default(item))}}"
-    do_become: "{{dest|should_become(owner, ansible_facts['user_id'], group, ansible_facts['user_gid'])}}"
+    do_become: "{{dest|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"

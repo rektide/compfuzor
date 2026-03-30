@@ -1,6 +1,6 @@
 - name: 'Set OWNER'
   set_fact:
-    OWNER: "{{USER|default(ansible_facts['user_id'], True)}}"
+    OWNER: "{{USER|default(_cf_user_id, True)}}"
   when: OWNER is not defined
 - name: 'Set USER as per OWNER'
   set_fact:

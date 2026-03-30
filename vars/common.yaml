@@ -134,7 +134,7 @@ PERSIST_VARS:
   - WITH
   - ENABLE
 CA_EXPIRY: "26280h"
-HOMEDIR: "/home/{{USER|default(OWNER)|default(ansible_facts['user_id'])}}/"
+HOMEDIR: "/home/{{USER|default(OWNER)|default(_cf_user_id)}}/"
 GIT_DIR: "{{REPO_DIR|default(DIR, true)}}"
 __DEST: "{{item.dest|default(item.name|default(item|default(DIR)))|defaultDir(__defaultDir|default(DIR))}}"
 MULTISTRAP_COMPONENTS:
