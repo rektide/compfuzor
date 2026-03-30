@@ -36,11 +36,7 @@
       - z.d/handjam
       - z.d/prompt
       - bin/jtc
-      - name: user-bin-path.zsh
-        content: |
-          _user_zsh_bin="${XDG_CONFIG_HOME:-$HOME/.config}/zsh/bin"
-          [ -d "$_user_zsh_bin" ] && path=( "$_user_zsh_bin" "${path[@]}" )
-          unset _user_zsh_bin
+      - z.d/user-bin-path
       - name: user-conf-d.zsh
         content: |
           _user_zsh_conf_d="${XDG_CONFIG_HOME:-$HOME/.config}/zsh/conf.d"

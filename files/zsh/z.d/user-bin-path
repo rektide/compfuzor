@@ -1,0 +1,3 @@
+_user_zsh_bin="${XDG_CONFIG_HOME:-$HOME/.config}/zsh/bin"
+[ -d "$_user_zsh_bin" ] && path=( "$_user_zsh_bin" "${path[@]}" )
+unset _user_zsh_bin
