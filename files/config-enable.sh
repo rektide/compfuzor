@@ -1,18 +1,3 @@
-#!/usr/bin/env bash
-
-# header for enable.sh binary
-
-# versioning script's output files to paths with $TIMESTAMP is appreciated & good
-export TIMESTAMP="$(date +%y.%m.%d-%T)"
-# default a DIR
-[ -z "$DIR" ] && export DIR="{{DIR}}"
-# source envs, using envdefault for shell-local defaults when available
-[ -n "$ENV_BYPASS" ] || [ ! -f "$DIR/env.export" ] || { command -v envdefault >/dev/null 2>&1 && source "$(command -v envdefault)" "$DIR/env.export" >/dev/null || source "$DIR/env.export"; }
-# push current shell options onto stack for later restoration
-_BIN_SETO_STATE+=("$(set +o)")
-(( ${V:-0} > 2 )) && set -x
-set -euo pipefail
-
 # enable.sh - Re-enable config drop-ins by moving them back to the active directory
 #
 # Accepts glob patterns. Matching files are moved from etc/${CONFIG_KEY}-disabled/
@@ -60,8 +45,3 @@ for yaml_file in "${files[@]}"; do
 done
 
 [ -f "${dir}/bin/config.sh" ] && (cd "$dir" && ./bin/config.sh)
-
-# restore saved shell options by popping stack
-(( ${#_BIN_SETO_STATE[@]} )) && { __saved="${_BIN_SETO_STATE[-1]}"; _BIN_SETO_STATE=("${_BIN_SETO_STATE[@]:0:${#_BIN_SETO_STATE[@]}-1}"); } || __saved=""
-[ -n "${__saved:-}" ] && eval "$__saved"
-unset __saved

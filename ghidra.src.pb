@@ -6,9 +6,11 @@
       - default-jdk
     BINS:
       - name: build.sh
+        basedir: repo
         content: |
           ./gradlew -I gradle/support/fetchDependencies.gradle && ./gradlew buildGhidra -x ip
       - name: install.sh
+        basedir: repo
         content: |
           cd build/dist
           zip=$(ls ghidra_*_PUBLIC_*.zip)

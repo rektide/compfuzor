@@ -1,18 +1,3 @@
-#!/usr/bin/env bash
-
-# header for config.sh binary
-
-# versioning script's output files to paths with $TIMESTAMP is appreciated & good
-export TIMESTAMP="$(date +%y.%m.%d-%T)"
-# default a DIR
-[ -z "$DIR" ] && export DIR="{{DIR}}"
-# source envs, using envdefault for shell-local defaults when available
-[ -n "$ENV_BYPASS" ] || [ ! -f "$DIR/env.export" ] || { command -v envdefault >/dev/null 2>&1 && source "$(command -v envdefault)" "$DIR/env.export" >/dev/null || source "$DIR/env.export"; }
-# push current shell options onto stack for later restoration
-_BIN_SETO_STATE+=("$(set +o)")
-(( ${V:-0} > 2 )) && set -x
-set -euo pipefail
-
 # config.sh - Assemble drop-in YAML fragments into a single config
 #
 # Gathers all *.yaml from ${CONFIG_KEY}/ and concatenates as a YAML list.
@@ -49,8 +34,3 @@ fi
 
 mv "$tmp" "${dir}/etc/${output}"
 echo "${key}: assembled ${#active[@]} fragments -> etc/${output}"
-
-# restore saved shell options by popping stack
-(( ${#_BIN_SETO_STATE[@]} )) && { __saved="${_BIN_SETO_STATE[-1]}"; _BIN_SETO_STATE=("${_BIN_SETO_STATE[@]:0:${#_BIN_SETO_STATE[@]}-1}"); } || __saved=""
-[ -n "${__saved:-}" ] && eval "$__saved"
-unset __saved

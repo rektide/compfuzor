@@ -1,17 +1,3 @@
-#!/usr/bin/env bash
-
-# header for install-mcp.sh binary
-
-# versioning script's output files to paths with $TIMESTAMP is appreciated & good
-export TIMESTAMP="$(date +%y.%m.%d-%T)"
-# default a DIR
-[ -z "$DIR" ] && export DIR="{{DIR}}"
-# source envs, using envdefaults if available to not override any variables the shell already has set
-[ -n "$ENV_BYPASS" ] || [ ! -f "$DIR/env.export" ] || source <(command -v envdefault >/dev/null && envdefault "$DIR/env.export" || cat "$DIR/env.export")
-# V>98 triggers set -x. but save set -x state to restore later, in case being sourced.
-(( V > 98 )) && case "$-" in *x*) _BIN_SETX_STATE+=(1) ;; *) _BIN_SETX_STATE+=(0) ;; esac && set -x
-set -e
-
 # config-mcp.sh - Combine all MCP server configurations into opencode's settings
 #
 # This script:
@@ -23,7 +9,7 @@ set -e
 
 shopt -s nullglob
 
-MCP_TARGET="${MCP_TARGET:-{{ETC}}/mcp}"
+MCP_TARGET="${MCP_TARGET:-{{ETC}}/mcp}}"
 DIR="{{DIR}}"
 
 configs=(${DIR}/etc/mcp/*.json)

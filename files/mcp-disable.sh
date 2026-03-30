@@ -1,15 +1,3 @@
-#!/usr/bin/env bash
-
-# header for disable.sh binary
-
-# versioning script's output files to paths with $TIMESTAMP is appreciated & good
-export TIMESTAMP="$(date +%y.%m.%d-%T)"
-# V>98 triggers set -x. but save set -x state to restore later, in case being sourced.
-(( V > 98 )) && case "$-" in *x*) _BIN_SETX_STATE+=(1) ;; *) _BIN_SETX_STATE+=(0) ;; esac && set -x
-set -e
-
-
-
 # disable.sh - Disable MCP servers by moving them to mcp-disabled directory
 #
 # This script accepts glob patterns and moves matching MCP configs to the disabled directory,
@@ -57,11 +45,3 @@ for json_file in "${files[@]}"; do
 done
 
 [ -f "$dir/bin/config.sh" ] && (cd "$dir" && ./bin/config.sh)
-
-
-
-# restore set -x/+x to what it was when we started, if we changed it
-if (( V > 98 )); then
-	(( ${_BIN_SETX_STATE[-1]} > 0 )) || set +x # restore
-	_BIN_SETX_STATE=("${_BIN_SETX_STATE[@]:1}") # pop
-fi
