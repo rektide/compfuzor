@@ -38,6 +38,12 @@
   register: COMPFUZOR_BASE
   changed_when: False
 
+- name: set compfuzor user facts
+  set_fact:
+    _cf_user_id: "{{COMPFUZOR_BASE.stdout_lines[21]}}"
+    _cf_user_gid: "{{COMPFUZOR_BASE.stdout_lines[22]|int}}"
+  changed_when: False
+
 - name: set compfuzor base facts
   set_fact:
     XDG_DESKTOP_DIR: "{{COMPFUZOR_BASE.stdout_lines[0]}}"
@@ -55,7 +61,7 @@
     XDG_DATA_DIRS: "{{XDG_DATA_DIRS|default(COMPFUZOR_BASE.stdout_lines[15]|default('/usr/local/share:/usr/share', True), True)}}"
     XDG_CONFIG_DIRS: "{{XDG_CONFIG_DIRS|default(COMPFUZOR_BASE.stdout_lines[16]|default('/etc/xdg', True), True)}}"
     XDG_CACHE_HOME: "{{XDG_CACHE_HOME|default(COMPFUZOR_BASE.stdout_lines[17]|default(HOMEDIR + '/.cache', True), True)}}"
-    XDG_RUNTIME_DIR: "{{XDG_RUNTIME_DIR|default(COMPFUZOR_BASE.stdout_lines[18]|default('/run/user/' + COMPFUZOR_BASE.stdout_lines[21], True), True)}}"
+    XDG_RUNTIME_DIR: "{{XDG_RUNTIME_DIR|default(COMPFUZOR_BASE.stdout_lines[18]|default('/run/user/' + _cf_user_id, True), True)}}"
 
     MACHINE_ID: "{{MACHINE_ID|default(machineId)}}"
     SUBINSTANCE: "{{SUBINSTANCE|default(omit)}}"
@@ -72,8 +78,6 @@
     DIR: "{{prefix}}/{{name_}}"
     hostnum: "{% for i in ansible_play_batch %}{{ loop.index0 if ansible_play_batch[loop.index0] == inventory_hostname else '' }}{% endfor %}"
     type: "{{type|default(typeDetect)}}"
-    _cf_user_id: "{{COMPFUZOR_BASE.stdout_lines[21]}}"
-    _cf_user_gid: "{{COMPFUZOR_BASE.stdout_lines[22]|int}}"
   changed_when: False
   failed_when: False
   vars:

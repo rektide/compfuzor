@@ -29,7 +29,7 @@
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: "{{ GIT_DEPTH|default(omit) }}"
     version: "{{ GIT_VERSION|default(omit) }}"
-  become: "{{ dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid) }}"
+  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
   loop: "{{ (REPOS if REPOS|default(False) is mapping else {})|dict2items }}"
   vars:
     dest: "{{ item.key|defaultDir(REPO_DIR|default(DIR, true)) }}"
@@ -43,7 +43,7 @@
     depth: "{{ GIT_DEPTH|default(omit) }}"
     version: "{{ GIT_VERSION|default(omit) }}"
     reference: "{{ item.reference|defaultDir(SRCS_DIR) if item.reference|default(False) else omit }}"
-  become: "{{ dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid) }}"
+  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
   with_items: "{{ REPOS if REPOS|default(False) else [] }}"
   when: REPOS|default({}) is not mapping
   vars:

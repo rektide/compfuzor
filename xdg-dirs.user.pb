@@ -9,7 +9,7 @@
     ENV: "{{XDG_DIRS}}"
     USERMODE: True
   tasks:
-  - include: tasks/compfuzor/vars_base.tasks
-  - include: tasks/compfuzor/vars_xdg.tasks
+  - import_tasks: tasks/compfuzor/vars_base.tasks
+  - import_tasks: tasks/compfuzor/vars_xdg.tasks
   #- set_fact: MEDIAS_DIR='${HOME}/media'
   - template: src=files/_env dest=~/.config/user-dirs.dirs

@@ -8,10 +8,11 @@
       - default-jdk
     BINS:
       - name: build.sh
+        basedir: repo
         content: |
           gradle -PGHIDRA_INSTALL_DIR=/opt/ghidra buildExtension
       - name: install-user.sh
-        basedir: False
+        basedir: repo
         content: |
           gradle -PGHIDRA_INSTALL_DIR=/opt/ghidra installExtension
   tasks:

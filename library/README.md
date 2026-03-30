@@ -31,7 +31,7 @@ Filters transform values using `|` in Jinja templates.
 | Name | Source | Behavior |
 | --- | --- | --- |
 | `arrayitize` | [`library/filter_plugins/arrayitize.py`](/library/filter_plugins/arrayitize.py) | Normalizes arguments into a list and flattens list-like inputs. |
-| `should_become` | [`library/filter_plugins/can_write.py`](/library/filter_plugins/can_write.py) | Heuristic for when privilege escalation may be needed (ownership/write checks). |
+| `should_become` | [`library/filter_plugins/can_write.py`](/library/filter_plugins/can_write.py) | Controller-side heuristic (legacy). Prefer target-side [`tasks/compfuzor/should_become.tasks`](/tasks/compfuzor/should_become.tasks) and `BECOME`/`COMFUZOR_SHOULD_BECOME`. |
 | `has_write` | [`library/filter_plugins/can_write.py`](/library/filter_plugins/can_write.py) | Checks write access for a path (controller-side filesystem check). |
 | `can_write` | [`library/filter_plugins/can_write.py`](/library/filter_plugins/can_write.py) | Checks writeability, walking to parent directories for missing paths. |
 | `diff_user` | [`library/filter_plugins/can_write.py`](/library/filter_plugins/can_write.py) | Compares requested and current user/group identity values. |

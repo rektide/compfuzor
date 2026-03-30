@@ -8,8 +8,8 @@
     LINKS:
       'user-dirs.defaults': 'env'
   tasks:
-  #- include: tasks/compfuzor.includes
-  - include: tasks/compfuzor/vars_env.tasks
+  #- import_tasks: tasks/compfuzor.includes
+  - import_tasks: tasks/compfuzor/vars_env.tasks
   - file: path="{{DIR}}/user-dirs.defaults" state=absent
-  - include: tasks/compfuzor/fs_env.tasks
-  - include: tasks/compfuzor/links.tasks
+  - import_tasks: tasks/compfuzor/fs_env.tasks
+  - import_tasks: tasks/compfuzor/links.tasks

@@ -4,7 +4,7 @@
     dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
-  become: "{{_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
+  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
   vars:
     _dest: "{{SRCS_DIR}}/{{TGZ|basename}}"
 - name: prep TGZ.url file
@@ -16,7 +16,7 @@
     dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
-  become: "{{_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
+  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
   vars:
     _dest: "{{SRCS_DIR}}/{{TGZ|basename}}.url"
 - name: extract tgz
@@ -24,6 +24,6 @@
   #unarchive: src="{{SRCS_DIR}}/{{TGZ|basename}}" dest="{{DIR}}" copy="no"
   args:
     chdir: "{{DIR}}"
-  become: "{{_tar|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
+  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_tar|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
   vars:
     _tar: "{{SRCS_DIR}}/{{TGZ|basename}}"

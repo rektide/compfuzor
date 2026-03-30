@@ -20,16 +20,22 @@
     zsh_profile: "${ZDOTDIR:-$HOME}/.zprofile"
     bash_rc: "$HOME/.bashrc"
     bash_profile: "$HOME/.bash_profile"
-    ENV:
+    mise_npm_package_manager: "${MISE_NPM_PACKAGE_MANAGER:-pnpm}"
+    ENV_LIST:
       - zsh_rc
       - zsh_profile
       - bash_rc
       - bash_profile
+      - mise_npm_package_manager
     BINS:
-      - name: install.user.sh
+      - name: install-user.sh
         content: |
           block-in-file -n ${NAME:-{{NAME}}} -C -i {{DIR}}/etc/mise.zshrc -o "${ZSH_RC:-{{zsh_rc}}}"
           block-in-file -n ${NAME:-{{NAME}}} -C -i {{DIR}}/etc/mise.zprofile -o "${ZSH_PROFILE:-{{zsh_profile}}}"
+          if command -v mise >/dev/null 2>&1
+          then
+            mise settings set npm.package_manager "${MISE_NPM_PACKAGE_MANAGER:-{{mise_npm_package_manager}}}"
+          fi
       - name: install-bash.user.sh
         content: |
           block-in-file -n ${NAME:-{{NAME}}} -C -i {{DIR}}/etc/mise.bashrc -o "${BASH_RC:-{{bash_rc}}}"
