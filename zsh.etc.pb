@@ -35,6 +35,7 @@
       - zfunc.d/zautoload-all
       - z.d/handjam
       - z.d/prompt
+      - bin/jtc
       - name: user-conf-d.zsh
         content: |
           _user_zsh_conf_d="${XDG_CONFIG_HOME:-$HOME/.config}/zsh/conf.d"
