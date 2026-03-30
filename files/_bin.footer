@@ -1,4 +1,4 @@
 # restore saved shell options by popping stack
-(( ${#_BIN_SETX_STATE[@]} )) && { __saved="${_BIN_SETX_STATE[-1]}"; _BIN_SETX_STATE=("${_BIN_SETX_STATE[@]:0:${#_BIN_SETX_STATE[@]}-1}"); } || __saved=""
+(( ${#_BIN_SETO_STATE[@]} )) && { __saved="${_BIN_SETO_STATE[-1]}"; _BIN_SETO_STATE=("${_BIN_SETO_STATE[@]:0:${#_BIN_SETO_STATE[@]}-1}"); } || __saved=""
 [ -n "${__saved:-}" ] && eval "$__saved"
 unset __saved
