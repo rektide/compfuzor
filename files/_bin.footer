@@ -1,15 +1,4 @@
-# restore saved shell options by diffing against what we pushed
-if (( ${#_BIN_SHELL_OPTS[@]} > 0 )); then
-	__saved="${_BIN_SHELL_OPTS[-1]}"
-	_BIN_SHELL_OPTS=("${_BIN_SHELL_OPTS[@]:0:${#_BIN_SHELL_OPTS[@]}-1}")
-	for __opt in $(printf '%s\n' "$-" | fold -w1); do
-		case "$__saved" in *"$__opt"*) ;; *) set +o "$__opt" ;; esac
-	done
-	for __opt in $(printf '%s\n' "$__saved" | fold -w1); do
-		case "$-" in *"$__opt"*) ;; *) set -o "$__opt" ;; esac
-	done
-	unset __saved __opt
-fi
+# restore saved shell options by popping stack
 if (( ${#_BIN_SET_OPTS[@]} > 0 )); then
 	eval "${_BIN_SET_OPTS[-1]}"
 	_BIN_SET_OPTS=("${_BIN_SET_OPTS[@]:0:${#_BIN_SET_OPTS[@]}-1}")

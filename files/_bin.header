@@ -9,7 +9,6 @@ export TIMESTAMP="$(date +%y.%m.%d-%T)"
 [ -n "$ENV_BYPASS" ] || [ ! -f "$DIR/env.export" ] || { command -v envdefault >/dev/null 2>&1 && source "$(command -v envdefault)" "$DIR/env.export" >/dev/null || source "$DIR/env.export"; }
 {% endif -%}
 # push current shell options onto stack for later restoration
-_BIN_SHELL_OPTS+=("$-")
 _BIN_SET_OPTS+=("$(set +o)")
 (( ${V:-0} > 2 )) && set -x
 set -euo pipefail
