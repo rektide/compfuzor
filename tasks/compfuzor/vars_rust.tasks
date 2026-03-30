@@ -16,7 +16,7 @@
         generated: |
           if [[ -z "${RELEASE+x}" ]]; then
               RELEASE="--release"
- smelled          elif [[ "$RELEASE" == "debug" ]]; then
+          elif [[ "$RELEASE" == "debug" ]]; then
               unset RELEASE
           else
               RELEASE="--$RELEASE"
