@@ -1,0 +1,12 @@
+#!/bin/sh
+f="${1:-.}"
+shift
+d=$(stat -c '%y' "$f" 2>/dev/null)
+d="${d%%$'\n'*}"
+ns="${d#*.}"
+ns="${ns%% *}"
+ts="${d%%.*}"
+tz="${d##* }"
+full_ts="${ts}.${ns}${tz}"
+GIT_COMMITTER_DATE="$full_ts" jj commit "$@"
+jj metaedit --author-timestamp "$full_ts"
