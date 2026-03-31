@@ -9,6 +9,10 @@
         basedir: repo
         content: |
           ./gradlew -I gradle/support/fetchDependencies.gradle && ./gradlew assembleAll -x ip
+          cd build/dist
+          latest=$(ls -d ghidra_*/ 2>/dev/null | sort | tail -1)
+          for d in ghidra_*/; do [ "$d" != "$latest" ] && rm -rf "$d"; done
+          rm -f *.zip
       - name: ghidraRun
         global: True
         content: |

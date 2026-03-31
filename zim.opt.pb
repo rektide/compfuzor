@@ -5,7 +5,6 @@
     INSTANCE: main
     CONFIG_KEY: zimfw
     CONFIG_MERGE: block-in-file
-    CONFIG_EXT: zimfw
     zim_home: "$HOME/.cache/zim"
     ENV_LIST:
       - zim_home
@@ -33,7 +32,7 @@
             source {{DIR}}/src/zimfw.zsh init
           fi
           source ${ZIM_HOME}/init.zsh
-      - name: zimfw/01-core.zimfw
+      - name: zimfw/01-core.conf
         content: |
           # Module
           # Sets sane Zsh built-in environment options.
@@ -42,10 +41,10 @@
           zmodule input
           # Utility aliases and functions. Adds colour to ls, grep and less.
           zmodule utility
-      - name: zimfw/02-mise.zimfw
+      - name: zimfw/02-mise.conf
         content: |
           zmodule https://github.com/joke/zim-mise
-      - name: zimfw/03-prompt.zimfw
+      - name: zimfw/03-prompt.conf
         content: |
           # Prompt
           ## Exposes to prompts how long the last command took to execute, used by asciiship.
@@ -65,7 +64,7 @@
           #zmodule eriner
           zmodule minimal
           zmodule magic-enter
-      - name: zimfw/04-tools.zimfw
+      - name: zimfw/04-tools.conf
         content: |
           # More
           zmodule exa
@@ -93,7 +92,7 @@
           #zmodule https://github.com/shihanng/zim-kustomize
           #zmodule https://raw.githubusercontent.com/sheax0r/etcdctl-zsh/refs/heads/master/_etcdctl
           #zmodule https://codeberg.org/iff/pay-respects
-      - name: zimfw/05-completions.zimfw
+      - name: zimfw/05-completions.conf
         content: |
           # Completion
           # Additional completion definitions for Zsh.
@@ -105,7 +104,7 @@
           # Enables and configures smart and extensive tab completion.
           # completion must be sourced after all modules that add completion definitions.
           zmodule completion
-      - name: zimfw/06-late.zimfw
+      - name: zimfw/06-late.conf
         content: |
           # Modules that must be initialized last
           # Fish-like syntax highlighting for Zsh.
