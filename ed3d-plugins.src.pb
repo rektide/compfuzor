@@ -360,8 +360,8 @@
                           echo "$line" >> "$temp_file"
                           echo "  $file: unknown color '$color_name'" >&2
                       fi
-                  elif [[ "$in_frontmatter" == "true" ]] && [[ "$line" =~ ^tools: ]]; then
-                      echo "  $file: removed 'tools' line" >&2
+                  elif [[ "$in_frontmatter" == "true" ]] && [[ "$line" =~ ^(tools|model): ]]; then
+                      echo "  $file: removed '${BASH_REMATCH[1]}' line" >&2
                       changed=true
                   else
                       echo "$line" >> "$temp_file"
