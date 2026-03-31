@@ -8,6 +8,8 @@
 
 shopt -s nullglob
 
+_len() { echo ${!*[@]}; }
+
 dir="{{DIR}}"
 key="${CONFIG_KEY:?CONFIG_KEY is required}"
 mkdir -p "${dir}/etc/${key}-disabled"
@@ -20,7 +22,7 @@ for pattern in "$@"; do
   fi
 
   orig_pattern="$pattern"
-  start_count=${#files[@]}
+  before=$(_len files)
 
   pattern="${pattern%.yaml}"
   for yaml_file in ${dir}/etc/${key}/*.yaml; do
@@ -29,7 +31,8 @@ for pattern in "$@"; do
     [[ "${filename%.yaml}" =~ $pattern ]] && files+=("$yaml_file")
   done
 
-  [ $start_count -eq ${#files[@]} ] && echo "no match: $orig_pattern"
+  after=$(_len files)
+  [ $before -eq $after ] && echo "no match: $orig_pattern"
 done
 
 for yaml_file in "${files[@]}"; do

@@ -1,16 +1,17 @@
 # enable.sh - Re-enable config drop-ins by moving them back to the active directory
 #
-# Accepts glob patterns. Matching files are moved from etc/${CONFIG_KEY}-disabled/
-# to etc/${CONFIG_KEY}/ and config.sh is re-run.
+# Accepts glob patterns. Matching files are moved from etc/${CONFIG_key}-disabled/
+# to etc/${config_key}/ and config.sh is re-run.
 #
 # ENV:
 #   CONFIG_KEY - drop-in directory name under etc/ (required)
 
 shopt -s nullglob
 
+_len() { echo ${!*[@]}; }
+
 dir="{{DIR}}"
 key="${CONFIG_KEY:?CONFIG_KEY is required}"
-
 files=()
 for pattern in "$@"; do
   if [ -f "$pattern" ]; then
@@ -19,7 +20,7 @@ for pattern in "$@"; do
   fi
 
   orig_pattern="$pattern"
-  start_count=${#files[@]}
+  before=$(_len files)
 
   pattern="${pattern%.yaml}"
   for yaml_file in ${dir}/etc/${key}-disabled/*.yaml; do
@@ -28,7 +29,8 @@ for pattern in "$@"; do
     [[ "${filename%.yaml}" =~ $pattern ]] && files+=("$yaml_file")
   done
 
-  [ $start_count -eq ${#files[@]} ] && echo "no match: $orig_pattern"
+  after=$(_len files)
+  [ $before -eq $after ] && echo "no match: $orig_pattern"
 done
 
 for yaml_file in "${files[@]}"; do

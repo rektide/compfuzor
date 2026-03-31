@@ -2,6 +2,7 @@
   set_fact:
     ETC_DIRS: "{{ config_dirs | concat(ETC_DIRS|default([])) }}"
     BINS: "{{ [config_bin, disable_bin, enable_bin] | mergeKeyed(BINS|default([])) }}"
+    ENV_LIST: "{{ ENV_LIST|default([]) + config_env_list }}"
   vars:
     config_dirs:
       - "{{ CONFIG_KEY }}"
@@ -18,4 +19,8 @@
       name: enable.sh
       src: ../config-enable.sh
       basedir: False
+    config_env_list:
+      - CONFIG_KEY
+      - CONFIG_EXT
+      - CONFIG_OUTPUT
   when: CONFIG_KEY is defined

@@ -9,12 +9,15 @@
 
 shopt -s nullglob
 
+_len() { echo ${!*[@]}; }
+
 dir="{{DIR}}"
 key="${CONFIG_KEY:?CONFIG_KEY is required}"
 output="${CONFIG_OUTPUT:-${key}.yaml}"
 active=(${dir}/etc/${key}/*.yaml)
 
-if [ ${#active[@]} -eq 0 ]; then
+count=$(_len active)
+if [ $count -eq 0 ]; then
   echo "no ${key} configs found" >&2
   exit 0
 fi
@@ -33,4 +36,4 @@ if [ -f "${dir}/etc/${output}" ] && cmp -s "$tmp" "${dir}/etc/${output}"; then
 fi
 
 mv "$tmp" "${dir}/etc/${output}"
-echo "${key}: assembled ${#active[@]} fragments -> etc/${output}"
+echo "${key}: assembled ${count} fragments -> etc/${output}"
