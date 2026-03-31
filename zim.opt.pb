@@ -3,11 +3,14 @@
   vars:
     TYPE: zim
     INSTANCE: main
+    CONFIG_KEY: zimfw
+    CONFIG_MERGE: block-in-file
+    CONFIG_EXT: zimfw
+    zim_home: "$HOME/.cache/zim"
+    ENV_LIST:
+      - zim_home
     GET_URLS:
       - https://github.com/zimfw/zimfw/releases/latest/download/zimfw.zsh
-    ENV:
-      zim_home: "$HOME/.cache/zim"
-      zim_config_file: "$HOME/.config/zsh/zimrc"
     PKGS:
       - bat
       - eza
@@ -17,27 +20,20 @@
       - name: install-user.sh
         basedir: False
         content: |
-          if [ -e $ZIM_CONFIG_FILE ]
-          then
-            echo config file already exists, skipping: $ZIM_CONFIG_FILE >&2
-          else
-            mkdir -p $(dirname $ZIM_CONFIG_FILE)
-            echo linking config: file $CONFIG_FILE
-            ln -s $DIR/etc/zimrc $ZIM_CONFIG_FILE
-          fi
-          echo adding to .zshrc: {{DIR}}/etc/zim.zsh
-          block-in-file -n {{NAME}} -i {{DIR}}/etc/zim.zsh -o ${ZDOTDIR:-$HOME}/.zshrc
+          {{DIR}}/bin/config.sh
+          block-in-file -n {{NAME}} -i {{DIR}}/etc/zim.zsh -o ${ZDOTDIR:-$HOME}/.zshrc --envsubst
     ETC_FILES:
       - name: zim.zsh
         content: |
-          ZIM_CONFIG_FILE="${ZIM_CONFIG_FILE:-{{ENV.zim_config_file}}}"
-          ZIM_HOME="${ZIM_HOME:-{{ENV.zim_home}}}"
+          # : is a no-op builtin; ${VAR:=default} sets VAR only if unset or empty
+          : ${ZIM_HOME:={{zim_home}}}
+          : ${ZIM_CONFIG_FILE:=${DIR}/etc/${CONFIG_KEY}.${CONFIG_EXT}}
           # Install missing modules and update ${ZIM_HOME}/init.zsh if missing or outdated.
-          if [[ ! ${ZIM_HOME}/init.zsh -nt ${ZIM_CONFIG_FILE:-${ZDOTDIR:-${HOME}}/.zimrc} ]]; then
+          if [[ ! ${ZIM_HOME}/init.zsh -nt ${ZIM_CONFIG_FILE} ]]; then
             source {{DIR}}/src/zimfw.zsh init
           fi
-          source ${ZIM_HOME:-{{ENV.zim_home}}}/init.zsh
-      - name: zimrc
+          source ${ZIM_HOME}/init.zsh
+      - name: zimfw/01-core.zimfw
         content: |
           # Module
           # Sets sane Zsh built-in environment options.
@@ -46,9 +42,11 @@
           zmodule input
           # Utility aliases and functions. Adds colour to ls, grep and less.
           zmodule utility
-
+      - name: zimfw/02-mise.zimfw
+        content: |
           zmodule https://github.com/joke/zim-mise
-
+      - name: zimfw/03-prompt.zimfw
+        content: |
           # Prompt
           ## Exposes to prompts how long the last command took to execute, used by asciiship.
           zmodule duration-info
@@ -67,7 +65,8 @@
           #zmodule eriner
           zmodule minimal
           zmodule magic-enter
-          
+      - name: zimfw/04-tools.zimfw
+        content: |
           # More
           zmodule exa
           zmodule fzf
@@ -94,7 +93,8 @@
           #zmodule https://github.com/shihanng/zim-kustomize
           #zmodule https://raw.githubusercontent.com/sheax0r/etcdctl-zsh/refs/heads/master/_etcdctl
           #zmodule https://codeberg.org/iff/pay-respects
-          
+      - name: zimfw/05-completions.zimfw
+        content: |
           # Completion
           # Additional completion definitions for Zsh.
           zmodule zsh-users/zsh-completions --fpath src
@@ -105,7 +105,8 @@
           # Enables and configures smart and extensive tab completion.
           # completion must be sourced after all modules that add completion definitions.
           zmodule completion
-
+      - name: zimfw/06-late.zimfw
+        content: |
           # Modules that must be initialized last
           # Fish-like syntax highlighting for Zsh.
           # zsh-users/zsh-syntax-highlighting must be sourced after completion
