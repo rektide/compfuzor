@@ -5,6 +5,8 @@
     PKGS:
       - default-jdk
       - libarchive-tools
+    ENV_LIST:
+      - opt
     BINS:
       - name: build.sh
         basedir: repo
@@ -15,14 +17,14 @@
         content: |
           cd build/dist
           zip=$(ls ghidra_*_PUBLIC_*.zip | head -1)
-          bsdtar --strip-components=1 -xf "${zip}" -C "$DIR"
+          bsdtar --strip-components=1 -xf "${zip}" -C "$OPT"
       - name: ghidraRun
         global: True
         content: |
-          exec "$DIR/ghidraRun" "$@"
+          exec "$OPT/ghidraRun" "$@"
       - name: analyzeHeadless
         global: True
         content: |
-          exec "$DIR/support/analyzeHeadless" "$@"
+          exec "$OPT/support/analyzeHeadless" "$@"
   tasks:
     - import_tasks: tasks/compfuzor.includes
