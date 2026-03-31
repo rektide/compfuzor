@@ -4,6 +4,7 @@
     REPO: https://github.com/NationalSecurityAgency/ghidra
     PKGS:
       - default-jdk
+      - libarchive-tools
     BINS:
       - name: build.sh
         basedir: repo
@@ -13,19 +14,15 @@
         basedir: repo
         content: |
           cd build/dist
-          zip=$(ls ghidra_*_PUBLIC_*.zip)
-          mkdir -p /opt/ghidra
-          rm -rf /opt/ghidra/*
-          unzip -oqd -q "${zip}" -d /opt/ghidra
-          ln -sfnv /opt/ghidra/ghidra_*/ghidraRun /opt/ghidra/ghidraRun
-          rm "${zip}"
+          zip=$(ls ghidra_*_PUBLIC_*.zip | head -1)
+          bsdtar --strip-components=1 -xf "${zip}" -C "$DIR"
       - name: ghidraRun
         global: True
         content: |
-          exec /opt/ghidra/ghidraRun "$@"
+          exec "$DIR/ghidraRun" "$@"
       - name: analyzeHeadless
         global: True
         content: |
-          exec /opt/ghidra/support/analyzeHeadless "$@"
+          exec "$DIR/support/analyzeHeadless" "$@"
   tasks:
     - import_tasks: tasks/compfuzor.includes
