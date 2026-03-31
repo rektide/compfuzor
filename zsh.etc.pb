@@ -10,6 +10,7 @@
     ETC_DIRS:
       - z.d
       - zfunc.d
+      - bin
     ETC_FILES:
       - name: default-useradd-shell-rm
         dest: /etc/default/useradd
