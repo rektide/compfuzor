@@ -30,15 +30,31 @@
     BINS:
       - name: install-user.sh
         content: |
-          block-in-file -n ${NAME:-{{NAME}}} -C -i {{DIR}}/etc/mise.zshrc -o "${ZSH_RC:-{{zsh_rc}}}"
-          block-in-file -n ${NAME:-{{NAME}}} -C -i {{DIR}}/etc/mise.zprofile -o "${ZSH_PROFILE:-{{zsh_profile}}}"
+          block-in-file \
+            -n ${NAME:-{{NAME}}} \
+            -C true \
+            -i {{DIR}}/etc/mise.zshrc \
+            -o "${ZSH_RC:-{{zsh_rc}}}"
+          block-in-file \
+            -n ${NAME:-{{NAME}}} \
+            -C true \
+            -i {{DIR}}/etc/mise.zprofile \
+            -o "${ZSH_PROFILE:-{{zsh_profile}}}"
           if command -v mise >/dev/null 2>&1
           then
             mise settings set npm.package_manager "${MISE_NPM_PACKAGE_MANAGER:-{{mise_npm_package_manager}}}"
           fi
       - name: install-bash.user.sh
         content: |
-          block-in-file -n ${NAME:-{{NAME}}} -C -i {{DIR}}/etc/mise.bashrc -o "${BASH_RC:-{{bash_rc}}}"
-          block-in-file -n ${NAME:-{{NAME}}} -C -i {{DIR}}/etc/mise.bash_profile -o "${BASH_PROFILE:-{{bash_profile}}}"
+          block-in-file \
+            -n ${NAME:-{{NAME}}} \
+            -C true \
+            -i {{DIR}}/etc/mise.bashrc \
+            -o "${BASH_RC:-{{bash_rc}}}"
+          block-in-file \
+            -n ${NAME:-{{NAME}}} \
+            -C true \
+            -i {{DIR}}/etc/mise.bash_profile \
+            -o "${BASH_PROFILE:-{{bash_profile}}}"
   tasks:
     - import_tasks: tasks/compfuzor.includes
