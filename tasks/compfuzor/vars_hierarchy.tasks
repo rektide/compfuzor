@@ -11,7 +11,7 @@
     upper: "{{include|upper}}"
     cur_dir: "{{hostvars[inventory_hostanme][upper]|default(vars[upper])}}"
     val_s_dir_host: "{{hostvars[inventory_hostname][upper+'S_DIR']|def('')}}"
-    val_s_dir_var: "{{vars[upper+`S_DIR`]|def('')}}"
+    val_s_dir_var: "{{vars[upper+'S_DIR']|def('')}}"
     val_s_dir: "{{val_s_dir_host|default(val_s_dir_var, True)}}"
     #archive_s_dir_host: "{{hostvars[inventory_hostname]['ARCHIVE_'+upper+'S_DIR']|def('')}}"
     #archive_s_dir_var: "{{vars['ARCHIVE_'+upper+'S_DIR']|def('')}}"

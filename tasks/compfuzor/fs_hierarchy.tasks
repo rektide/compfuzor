@@ -109,7 +109,7 @@
     group: "{{do_become|ternary(group|default(_cf_user_gid, true),omit)}}"
   with_items: "{{_vals.files|default([])}}"
   become: "{{do_become}}"
-  when: item.line|default(False)
+  when: item.line is deftruthy
   vars:
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
