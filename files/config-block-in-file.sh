@@ -12,7 +12,7 @@
 
 shopt -s nullglob
 
-_len() { echo ${!*[@]}; }
+_len() { echo $#; }
 
 : "${CONFIG_KEY:?CONFIG_KEY is required}"
 : "${CONFIG_OUTPUT:?CONFIG_OUTPUT is required}"
@@ -21,7 +21,7 @@ name="${NAME:-{{NAME}}}"
 
 active=("${DIR}/etc/${CONFIG_KEY}"/*.${ext})
 
-count=$(_len active)
+count=$(_len "${active[@]}")
 if [ $count -eq 0 ]; then
   echo "${CONFIG_KEY}: no configs found" >&2
   exit 0

@@ -8,7 +8,7 @@
 
 shopt -s nullglob
 
-_len() { echo ${!*[@]}; }
+_len() { echo $#; }
 
 dir="{{DIR}}"
 key="${CONFIG_KEY:?CONFIG_KEY is required}"
@@ -22,7 +22,7 @@ for pattern in "$@"; do
   fi
 
   orig_pattern="$pattern"
-  before=$(_len files)
+  before=$(_len "${files[@]}")
 
   pattern="${pattern%.yaml}"
   for yaml_file in ${dir}/etc/${key}/*.yaml; do
@@ -31,7 +31,7 @@ for pattern in "$@"; do
     [[ "${filename%.yaml}" =~ $pattern ]] && files+=("$yaml_file")
   done
 
-  after=$(_len files)
+  after=$(_len "${files[@]}")
   [ $before -eq $after ] && echo "no match: $orig_pattern"
 done
 

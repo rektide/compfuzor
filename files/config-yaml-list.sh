@@ -9,14 +9,14 @@
 
 shopt -s nullglob
 
-_len() { echo ${!*[@]}; }
+_len() { echo $#; }
 
 dir="{{DIR}}"
 key="${CONFIG_KEY:?CONFIG_KEY is required}"
 output="${CONFIG_OUTPUT:-${key}.yaml}"
 active=(${dir}/etc/${key}/*.yaml)
 
-count=$(_len active)
+count=$(_len "${active[@]}")
 if [ $count -eq 0 ]; then
   echo "no ${key} configs found" >&2
   exit 0
