@@ -20,6 +20,6 @@
       - name: install.sh
         basedir: repo
         generated: |
-          [ -n "$INSTALL_BIN" ] || INSTALL_BIN="${GO_BIN:-$TYPE}"
+          [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${GO_BIN:-$TYPE}"
           ln -sfv "$(pwd)/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
   when: GO is deftruthy

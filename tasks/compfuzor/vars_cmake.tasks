@@ -38,7 +38,7 @@
           cd $BUILD_DIR
           cmake --install .{{ ' ' + CMAKE_INSTALL if CMAKE_INSTALL != True else ''}}
           {% else %}
-          [ -n "$INSTALL_BIN" ] || INSTALL_BIN="${CMAKE_INSTALL_BIN:-{{TYPE}}}"
+          [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${CMAKE_INSTALL_BIN:-{{TYPE}}}"
           ln -sfv "$(pwd)/build/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
           {% endif %}
   when: CMAKE is deftruthy or CMAKE_ARGS is defined

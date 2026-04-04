@@ -25,7 +25,7 @@
       - name: install.sh
         basedir: repo
         generated: |
-          [ -n "$INSTALL_BIN" ] || INSTALL_BIN="${RUST_BIN:-{{TYPE}}}"
+          [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${RUST_BIN:-{{TYPE}}}"
           ln -sfv "$(pwd)/target/release/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(dirname $INSTALL_BIN)
       - name: install-user.sh
         basedir: repo
