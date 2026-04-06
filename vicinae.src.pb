@@ -41,13 +41,17 @@
     ETC_DIRS:
       - niri
     ETC_FILES:
-      - name: niri/base.kdl
+      - name: niri/keybinding-launch.kdl
         content: |
           binds {
             Mod+D hotkey-overlay-title="Run an Application: vicinae" { spawn-sh "vicinae toggle"; }
+          }
+      - name: niri/keybinding-clipboard.kdl
+        content: |
+          binds {
             Alt+Grave hotkey-overlay-title="Vicinae clipboard" { spawn-sh "vicinae vicinae://extensions/vicinae/clipboard/history"; }
           }
-      - name: niri/switch-windows.kdl
+      - name: niri/keybinding-switch-windows.kdl
         content: |
           binds {
             Mod+F hotkey-overlay-title="Switch windows: vicinae" { spawn-sh "vicinae vicinae://extensions/vicinae/wm/switch-windows"; }
@@ -73,12 +77,13 @@
         content: |
           systemctl --user enable vicinae.service
       - name: install-niri.sh
+        basedir: etc
         content: |
-          NIRI_CONFIG=~/.config/niri/config.kdl
-          mkdir -p ~/.config/niri/vicinae
+          NIRI_CONFIG_DIR="$HOME/.config/niri"
+          mkdir -p "$NIRI_CONFIG_DIR/vicinae"
           for f in {{DIR}}/etc/niri/*.kdl; do
-            ln -sf "$f" ~/.config/niri/vicinae/
+            ln -sf "$f" $NIRI_CONFIG_DIR/vicinae
             echo 'include "./vicinae/'"$(basename "$f")"'"'
-          done | block-in-file -n vicinae --comment "//" "$NIRI_CONFIG"
+          done | block-in-file -n vicinae --comment "//" "$NIRI_CONFIG_DIR/config.kdl
   tasks:
     - import_tasks: tasks/compfuzor.includes
