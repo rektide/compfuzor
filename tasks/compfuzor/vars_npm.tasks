@@ -1,3 +1,7 @@
+# Prefer source builds (NODEJS + REPO) over NPM_PACKAGE when possible.
+# Source builds give us reproducibility, offline capability, and the ability
+# to patch or pin to specific commits rather than relying on npm registry availability.
+# NPM_PACKAGE should be used only when no source repo is available.
 - name: 'Setting node/npm config'
   set_fact:
     TOOL_VERSIONS: "{{tool_versions|combine(TOOL_VERSIONS|default({}))}}"
