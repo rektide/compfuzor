@@ -27,7 +27,14 @@
         run: "{{INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy}}"
         basedir: repo
         generated: |
-          pnpm link -g
+          if [ -n "{{NODEJS_LINK_DIR|default('')}}" ]; then
+            IFS=',' read -ra _cf_link_dirs <<< "{{NODEJS_LINK_DIR}}"
+            for _cf_dir in "${_cf_link_dirs[@]}"; do
+              (cd "$_cf_dir" && pnpm link -g)
+            done
+          else
+            pnpm link -g
+          fi
     enhancedBins: "{{ (binBuild if BUILD_BYPASS is not deftruthy else []) + (binInstall if INSTALL_BYPASS is not deftruthy else []) }}"
   when: NODEJS is deftruthy
 

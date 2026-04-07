@@ -1,16 +1,9 @@
-
 ---
 - hosts: all
   vars:
     TYPE: wrangler
     REPO: https://github.com/cloudflare/workers-sdk
     NODEJS: True
-    BINS:
-      - name: build.sh
-        content: |
-          (
-            cd packages/wrangler
-            pnpm link -g
-          )
+    NODEJS_LINK_DIR: packages/wrangler
   tasks:
     - import_tasks: tasks/compfuzor.includes
