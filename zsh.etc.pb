@@ -37,6 +37,7 @@
       - z.d/handjam
       - z.d/prompt
       - bin/jtc
+      - z.d/atuin-session
       - z.d/user-bin-path
       - name: install-user-confd.zsh
         content: |

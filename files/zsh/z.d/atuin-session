@@ -1,0 +1,7 @@
+# tmux: ATUIN_SESSION=tmux-main:0.1
+# non-tmux: ATUIN_SESSION=<uuidv7> (via atuin uuid)
+if [ -n "$TMUX" ]; then
+  export ATUIN_SESSION="tmux-$(tmux display-message -p '#{session_name}:#{window_index}.#{pane_index}')"
+elif command -v atuin >/dev/null 2>&1; then
+  export ATUIN_SESSION="$(atuin uuid)"
+fi
