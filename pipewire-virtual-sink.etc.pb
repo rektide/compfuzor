@@ -18,8 +18,16 @@
               }
               stream.props = {
               }
+              # Exclude Bluetooth devices by node.name to prevent combine_sink
+              # from routing audio to them. This avoids A2DP transport failures
+              # caused by the CSR8510 adapter's firmware (missing USB completion
+              # reports) which corrupts audio for both the BT device and any
+              # linked streams. Add more bluez_output.* patterns as needed.
               stream.rules = [{
-                matches = [{ media.class = "Audio/Sink" }]
+                matches = [{
+                  media.class = "Audio/Sink"
+                  node.name = "!~bluez_output.B0_C2_C7_FA_76_D7.*"
+                }]
                 actions = { create-stream = {}}
               }]
             }
