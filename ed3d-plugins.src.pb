@@ -303,7 +303,7 @@
           }
 
           main "$@"
-      - name: color-name-to-hex
+      - name: frontmatter-simplify
         basedir: False
         global: True
         content: |
