@@ -394,28 +394,42 @@
               echo "       $(basename "$0") --dir <directory>" >&2
               echo "" >&2
               echo "Options:" >&2
-              echo "  --dry-run    Show what would change without modifying files" >&2
-              echo "  --diff       Implies --dry-run; also shows the exact lines removed/changed" >&2
+              echo "  --dry-run          Show what would change without modifying files" >&2
+              echo "  --diff             Implies --dry-run; also shows the exact lines removed/changed" >&2
+              echo "  --dir              Process all .md files under a directory" >&2
+              echo "  --no-follow        Don't follow symlinks (follows by default)" >&2
+              echo "  --pattern <regex>  Pattern to match for removal (default: '^color:|^model:|^tools:')" >&2
+              echo "  --glob <glob>      File glob to search (default: '*.md')" >&2
               echo "" >&2
               echo "Environment:" >&2
-              echo "  DRY_RUN      Set to 'true' to enable dry-run mode" >&2
+              echo "  DRY_RUN            Set to 'true' to enable dry-run mode" >&2
               exit 1
           fi
 
           args=()
           dir_mode=false
+          FOLLOW="-L"
+          RG_PATTERN='^color:|^model:|^tools:'
+          RG_GLOB='*.md'
           for arg in "$@"; do
               case "$arg" in
                   --dry-run) DRY_RUN=true ;;
                   --diff) DRY_RUN=true; SHOW_DIFF=true ;;
                   --dir) dir_mode=true ;;
+                  --no-follow) FOLLOW="" ;;
+                  --pattern)
+                      shift; RG_PATTERN="$1"
+                      ;;
+                  --glob)
+                      shift; RG_GLOB="$1"
+                      ;;
                   *) args+=("$arg") ;;
               esac
           done
 
           if [[ "$dir_mode" == "true" ]]; then
               dir="${args[0]:-.}"
-              find "$dir" -name "*.md" -type f | while read -r file; do
+              rg -S $FOLLOW -l "$RG_PATTERN" -g "$RG_GLOB" "$dir" | while read -r file; do
                   convert_file "$file"
               done
           else
