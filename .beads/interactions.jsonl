@@ -1,0 +1,1 @@
+{"id":"int-93ccb5f8","kind":"field_change","created_at":"2026-04-07T03:12:44.671862025Z","actor":"rektide de la faye","issue_id":"compfuzor-dagger-cli","extra":{"field":"status","new_value":"closed","old_value":"open","reason":"Already implemented. dagger.src.pb exists with GO: True, GO_TARGET: ./cmd/dagger, GO_BIN: dagger."}}
