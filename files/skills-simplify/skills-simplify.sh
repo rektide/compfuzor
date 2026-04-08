@@ -31,7 +31,7 @@ convert_file() {
     local temp_file
     temp_file=$(mktemp)
 
-    while IFS= read --r line || [[ -n "$line" ]]; do
+    while IFS= read -r line || [[ -n "$line" ]]; do
         if [[ "$line" == "---" ]]; then
             if [[ "$in_frontmatter" == "false" ]]; then
                 in_frontmatter=true
@@ -80,51 +80,45 @@ convert_file() {
     fi
 }
 
-if [[ $# -eq 0 ]]; then
-    echo "Usage: $(basename "$0") [OPTIONS] <file.md> [file2.md ...]" >&2
-    echo "       $(basename "$0") --dir <directory>" >&2
+FOLLOW="--follow"
+RG_PATTERN='^color:|^model:|^tools:'
+RG_GLOB='*.md'
+DIR="."
+files=()
+
+show_help() {
+    echo "Usage: $(basename "$0") [OPTIONS] [DIRECTORY]" >&2
+    echo "" >&2
+    echo "Simplify skill markdown files by converting color names to hex and removing" >&2
+    echo "model/tools fields. Defaults to current directory." >&2
     echo "" >&2
     echo "Options:" >&2
     echo "  --dry-run          Show what would change without modifying files" >&2
     echo "  --diff             Implies --dry-run; also shows the exact lines removed/changed" >&2
-    echo "  --dir              Process all matching files under a directory" >&2
     echo "  --no-follow        Don't follow symlinks (follows by default)" >&2
     echo "  --pattern <regex>  Pattern to match for removal (default: '^color:|^model:|^tools:')" >&2
     echo "  --glob <glob>      File glob to search (default: '*.md')" >&2
+    echo "  --help             Show this help message" >&2
     echo "" >&2
     echo "Environment:" >&2
     echo "  DRY_RUN            Set to 'true' to enable dry-run mode" >&2
-    exit 1
-fi
+}
 
-args=()
-dir_mode=false
-FOLLOW="--follow"
-RG_PATTERN='^color:|^model:|^tools:'
-RG_GLOB='*.md'
-for arg in "$@"; do
-    case "$arg" in
-        --dry-run) DRY_RUN=true ;;
-        --diff) DRY_RUN=true; SHOW_DIFF=true ;;
-        --dir) dir_mode=true ;;
-        --no-follow) FOLLOW="" ;;
-        --pattern)
-            shift; RG_PATTERN="$1"
-            ;;
-        --glob)
-            shift; RG_GLOB="$1"
-            ;;
-        *) args+=("$arg") ;;
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run) DRY_RUN=true; shift ;;
+        --diff) DRY_RUN=true; SHOW_DIFF=true; shift ;;
+        --no-follow) FOLLOW=""; shift ;;
+        --pattern) RG_PATTERN="$2"; shift 2 ;;
+        --glob) RG_GLOB="$2"; shift 2 ;;
+        --help|-h) show_help; exit 0 ;;
+        -*) echo "Unknown option: $1" >&2; show_help; exit 1 ;;
+        *) files+=("$1"); shift ;;
     esac
 done
 
-if [[ "$dir_mode" == "true" ]]; then
-    dir="${args[0]:-.}"
-    rg --smart-case $FOLLOW --files-with-matches --glob "$RG_GLOB" --regexp "$RG_PATTERN" "$dir" | while read --r file; do
-        convert_file "$file"
-    done
-else
-    for file in "${args[@]}"; do
-        convert_file "$file"
-    done
-fi
+DIR="${files[0]:-.}"
+
+rg --smart-case $FOLLOW --files-with-matches --glob "$RG_GLOB" --regexp "$RG_PATTERN" "$DIR" | while read -r file; do
+    convert_file "$file"
+done
