@@ -15,7 +15,7 @@
         run: "{{BINS_RUN_BYPASS is not deftruthy}}"
         basedir: repo
         generated: |
-          uv venv
+          [ -d .venv ] || uv venv
           {% if PIP is defined %}
           uv pip install -r etc/pip.txt
           {% else %}
@@ -25,7 +25,7 @@
             uv pip install -r requirements.txt
           fi
           {% endif %}
-          source ./bin/venv.source
+          source {{DIR}}/bin/venv.source
       - name: venv.source
         basedir: repo
         generated: |
