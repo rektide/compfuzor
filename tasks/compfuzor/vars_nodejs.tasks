@@ -28,7 +28,7 @@
         basedir: repo
         generated: |
           if [ -n "{{NODEJS_LINK_DIR|default('')}}" ]; then
-            IFS=',' read -ra _cf_link_dirs <<< "{{NODEJS_LINK_DIR}}"
+            IFS=',' read -ra _cf_link_dirs <<< "{{NODEJS_LINK_DIR|default('.')}}"
             for _cf_dir in "${_cf_link_dirs[@]}"; do
               (cd "$_cf_dir" && pnpm link -g)
             done
