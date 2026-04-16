@@ -3,17 +3,13 @@
   vars:
     USERMODE: True
     SYSTEMD_UNITS:
-      Description: Lock SSH agent on sleep via D-Bus PrepareForSleep
+      Description: Lock SSH agent before sleep
+      Before: sleep.target suspend.target hibernate.target hybrid-sleep.target
     SYSTEMD_SERVICES:
-      ExecStart: "{{DIR}}/bin/ssh-sleep-lock"
+      Type: oneshot
+      ExecStart: /usr/bin/ssh-add -D
       Environment: "SSH_AUTH_SOCK=%t/ssh-agent.sock"
-      RestartSec: 3
-    BINS:
-      - name: ssh-sleep-lock
-        basedir: False
-        content: |
-          dbus-monitor --system --profile "type='signal',sender='org.freedesktop.login1',interface='org.freedesktop.login1.Manager',member='PrepareForSleep'" 2>/dev/null | grep --line-buffered PrepareForSleep | while read -r _; do
-              ssh-add -D 2>/dev/null
-          done
+    SYSTEMD_INSTALLS:
+      WantedBy: sleep.target suspend.target hibernate.target hybrid-sleep.target
   tasks:
     - import_tasks: tasks/compfuzor.includes
