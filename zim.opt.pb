@@ -89,6 +89,7 @@
           # also needs: zstyle ':zim:plugins:alias-finder' autoload yes
           zmodule https://github.com/shanwker1223/zim-alias-finder
           zmodule https://github.com/shihanng/zim-atuin
+          zmodule rektide/zim-atuin-session
           #zmodule https://github.com/shihanng/zim-kustomize
           #zmodule https://raw.githubusercontent.com/sheax0r/etcdctl-zsh/refs/heads/master/_etcdctl
           #zmodule https://codeberg.org/iff/pay-respects
