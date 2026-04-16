@@ -1,4 +1,5 @@
 ---
+# See skill/systemd.md for systemd unit generation documentation
 - name: "msg='Compfuzor: sourcing systemd variables'"
   #  binfmtdir
   #  catalogdir
