@@ -47,6 +47,63 @@ Compfuzor is trying to solve a few things at once:
 Compfuzor is not mainly a templating system. It is a system for generating
 small operational programs from declarations.
 
+## Anatomy Of A Playbook
+
+Compfuzor playbooks are small, but they are not trivial. A good playbook is a
+declaration of:
+
+- identity, from the filename
+- data artifacts to generate
+- scripts the user will actually run
+- optional package, repo, service, and filesystem requirements
+
+The important thing to notice is that `BINS` is not an afterthought. `bin/` is
+often the final operational surface the user gets: the workflows the playbook
+creates.
+
+### Example: A Featureful `opt` Playbook
+
+```yaml
+---
+- hosts: all
+  vars:
+    PKGS:
+      - jq
+
+    ENV:
+      APP_CHANNEL: stable
+      APP_CONFIG_JSON: "{{ DIR }}/etc/app.json"
+
+    ETC_FILES:
+      - name: app.json
+        json:
+          channel: "${APP_CHANNEL}"
+          cache_dir: "{{ DIR }}/var/cache"
+
+    BINS:
+      - name: build.sh
+        src: ../example/build.sh
+        basedir: False
+      - name: install.sh
+        src: ../example/install.sh
+        basedir: False
+        run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+      - name: open-config.sh
+        content: |
+          ${EDITOR:-vi} "$DIR/etc/app.json"
+        basedir: False
+
+  tasks:
+    - import_tasks: tasks/compfuzor.includes
+```
+
+What is at stake in this example:
+
+- `ETC_FILES` defines durable local data under the instance
+- `ENV` publishes the shallow runtime contract
+- `BINS` defines the actual workflows the instance exposes
+- the playbook stays declarative even though the instance ends up operationally rich
+
 ## Filename As Spec
 
 Playbooks are named `<NAME>.<TYPE>.pb`.
@@ -62,7 +119,8 @@ vars.
 
 ## Instance Directory Model
 
-Each playbook gets a primary directory:
+Each playbook gets a primary directory. This is a sample shape, not a promise
+that every instance will use every subdirectory:
 
 ```text
 <DIR>/
@@ -73,19 +131,29 @@ Each playbook gets a primary directory:
   share/
 ```
 
-`env` and `env.export` are the instance identity card. Managed scripts source
-`env.export` and treat it as the canonical runtime input set.
+In practice:
+
+- `env` and `env.export` are the exported scalar runtime contract
+- `bin/` is often the main user-facing operational surface
+- `etc/` may hold structured data artifacts and rendered config outputs
+- `share/` exists when the playbook needs shared assets, but is not universal
+
+Generated scripts usually source `env.export`, but that is not the whole story:
+structured artifacts in `etc/` often contribute just as much to runtime
+behavior.
 
 Typical type base directories:
 
-| Type | Base directory |
-|---|---|
-| `etc` | `/etc/opt` |
-| `opt` | `/opt` |
-| `src` | `/usr/local/src` |
-| `srv` | `/srv` |
+| Type | System base | Usermode / XDG-ish base | Typical role |
+|---|---|---|---|
+| `etc` | `/etc/opt` | `$XDG_CONFIG_HOME` | configuration instances |
+| `opt` | `/opt` | `$XDG_DATA_HOME/../opt` | optional software installs |
+| `src` | `/usr/local/src` | `$HOME/src` | source checkouts and builds |
+| `srv` | `/srv` | `$XDG_DATA_HOME/../srv` | service instances |
 
-When `USERMODE: True`, these relocate under user/XDG-oriented paths.
+These base directories are not just path defaults. They are the spatial model
+for how compfuzor thinks about software: configuration, source, services, and
+installed software each have a different home and a different operational role.
 
 Because instance is part of the path, multiple instances of the same software
 can coexist on one machine.
@@ -104,7 +172,11 @@ Most design work happens in the variables phase. That is where base context is
 resolved and where generative subsystems (`vars_*.tasks`) translate high-level
 declarations into standard pipeline artifacts.
 
-## Core Patterns
+## How A Playbook Turns Into Work
+
+Compfuzor has a few recurring design moves. This section is not just a list of
+features; it is the grammar the system uses to turn declarations into an
+operational instance.
 
 ### Hierarchy Variables
 
@@ -116,7 +188,23 @@ Prefer hierarchy-specific variables instead of dumping everything into generic
 - `BINS` for executable helpers
 - `ETC_DIRS`, `SHARE_DIRS`, and peers for hierarchy subdirectories
 
-This keeps playbooks aligned with the instance directory model.
+This keeps playbooks aligned with the instance directory model and makes the
+resulting instance easier to inspect.
+
+### `BINS` As Workflow Surface
+
+`BINS` is a core part of the model. It is often the final user-facing interface
+that a playbook creates.
+
+Examples of what `BINS` can embody:
+
+- `build.sh`
+- `install.sh`
+- `config.sh`
+- service helpers
+- repair or migration commands
+
+Compfuzor is often generating workflows as much as files.
 
 ### ENV vs Deep Data
 
@@ -158,6 +246,19 @@ For example, a subsystem may derive from one table:
 
 This avoids parallel arrays, zip-style coupling, and duplicated selection logic.
 
+### Generative Subsystems
+
+`vars_*.tasks` files are where compfuzor grows new declarative languages.
+
+They should:
+
+- define contracts
+- normalize data once
+- derive standard artifacts
+- keep imperative logic in generated scripts or file-backed helpers
+
+That is the mechanism that lets many playbooks stay small.
+
 ## Target Requirements
 
 - Debian-like target is generally assumed
@@ -195,6 +296,8 @@ If you want to contribute or author new playbooks/subsystems, read
 [`skill/SKILL.md`](/home/rektide/src/compfuzor/skill/SKILL.md). The README is
 for orientation; the skill is the stronger authoring guide.
 
+## Bypass And Skip Controls
+
 <details>
 <summary><strong>Bypass Variables</strong></summary>
 
@@ -205,27 +308,29 @@ need to run all steps, or when running steps would stomp local work.
 
 Set any of these to `True` to skip that stage:
 
-- `APT_BYPASS`
-- `APT_UPDATE_BYPASS`
-- `BINS_BYPASS`
-- `BINS_RUN_BYPASS`
-- `DEBCONF_BYPASS`
-- `DIR_BYPASS`
-- `DBCONFIG_BYPASS`
-- `ENV_BYPASS`
-- `FS_BYPASS`
-- `FS_SRCS_BYPASS`
-- `GET_URLS_BYPASS`
-- `GIT_BYPASS`
-- `GLOBAL_BINS_BYPASS`
-- `LINKS_BYPASS`
-- `MODULES_BYPASS`
-- `PKGS_BYPASS`
-- `REPO_BYPASS`
-- `SYSTEMD_BYPASS`
-- `SYSTEMD_THUNK_BYPASS`
-- `TGZ_BYPASS`
-- `ZIP_BYPASS`
+| Variable | What it bypasses |
+|---|---|
+| `APT_BYPASS` | apt repository configuration and package installation |
+| `APT_UPDATE_BYPASS` | `apt update` work |
+| `BINS_BYPASS` | creation of managed scripts in `bin/` |
+| `BINS_RUN_BYPASS` | execution of scripts marked to run |
+| `DEBCONF_BYPASS` | debconf pre-configuration |
+| `DIR_BYPASS` | directory creation and hierarchy setup |
+| `DBCONFIG_BYPASS` | database configuration work |
+| `ENV_BYPASS` | environment file generation |
+| `FS_BYPASS` | filesystem operations broadly |
+| `FS_SRCS_BYPASS` | source file operations |
+| `GET_URLS_BYPASS` | URL download work |
+| `GIT_BYPASS` | git repository operations |
+| `GLOBAL_BINS_BYPASS` | linking binaries into global paths |
+| `LINKS_BYPASS` | symlink creation |
+| `MODULES_BYPASS` | kernel module loading work |
+| `PKGS_BYPASS` | package installation via apt |
+| `REPO_BYPASS` | repository operations broadly |
+| `SYSTEMD_BYPASS` | systemd service/unit generation and install |
+| `SYSTEMD_THUNK_BYPASS` | legacy systemd thunk operations |
+| `TGZ_BYPASS` | tarball extraction |
+| `ZIP_BYPASS` | zip extraction |
 
 All BYPASS variables default to `False`.
 
@@ -250,6 +355,8 @@ GIT_UPDATE: false
 ```
 
 </details>
+
+## Migration Guide
 
 <details>
 <summary><strong>Migration Guide</strong></summary>
@@ -295,6 +402,8 @@ Watch for these:
 
 </details>
 
+## Glossary
+
 <details>
 <summary><strong>Glossary</strong></summary>
 
@@ -327,7 +436,12 @@ Examples:
 
 ### `ENV` / `env.export`
 
-The runtime contract for generated scripts.
+The exported scalar runtime contract for generated scripts.
+
+### `ETC_FILES`
+
+Per-instance configuration and data artifacts. These may include rendered
+configs, JSON contracts, or other structured inputs that generated scripts read.
 
 ### `BINS`
 
