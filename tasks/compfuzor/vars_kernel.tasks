@@ -1,83 +1,152 @@
 ---
+# vars_kernel.tasks — generative kernel subsystem
+#
+# Processes KERNEL_MODULES and KERNEL_SYSCTL dicts into ETC_FILES, BINS, and
+# ENV_LIST.  Follows the build/install pattern: build.sh templates config from
+# env vars, install.sh symlinks into system dirs.
+#
+# Contract:
+#   KERNEL_MODULES:
+#     <module_name>:
+#       params:          # optional
+#         <key>: <value>
+#   KERNEL_SYSCTL:
+#     <sysctl.key>: <value>
+#
+# See skill/SKILL.md "Kernel subsystem" section for full docs.
+
 - name: "Compfuzor: sourcing kernel variables"
   set_fact:
-    KERNEL_MODULE_FILES: "{{ KERNEL_MODULE_FILES|default([]) + [_module_file] }}"
-    KERNEL_MODPROBE_FILES: "{{ KERNEL_MODPROBE_FILES|default([]) + [_modprobe_file] }}"
-  when: KERNEL_MODULES|default([])|length > 0
+    # ETC_FILES: modules-load, modprobe, sysctl drop-ins
+    ETC_FILES: >-
+      {{ ETC_FILES|default([]) 
+        + ([_modules_load_file] if _has_modules else [])
+        + ([_modprobe_file] if _has_modprobe else [])
+        + ([_sysctl_file] if _has_sysctl else [])
+      }}
+    # BINS: build.sh and install.sh
+    BINS: >-
+      {{ BINS|default([])
+        + ([_build_bin, _install_bin] if _has_any else [])
+      }}
+    # ENV_LIST: expose all param values so build.sh can envsubst them
+    ENV_LIST: >-
+      {{ ENV_LIST|default([])
+        + _all_env_keys
+      }}
+  when: _has_any and not KERNEL_BYPASS|default(False)
   vars:
-    _module_file:
-      name: "{{ NAME }}.conf"
-      content: "{{ KERNEL_MODULES | join('\n') }}"
-      dest_dir: /etc/modules-load.d
+    # ── detection ────────────────────────────────────────────────
+    _has_modules: "{{ KERNEL_MODULES|default({})|length > 0 }}"
+    _has_modprobe: >-
+      {{ KERNEL_MODULES|default({})|dict2items
+        | selectattr('value.params', 'defined')
+        | list|length > 0 }}
+    _has_sysctl: "{{ KERNEL_SYSCTL|default({})|length > 0 }}"
+    _has_any: "{{ _has_modules or _has_sysctl }}"
+
+    # ── modules-load.d content: just module names, one per line ──
+    _modules_load_content: "{{ KERNEL_MODULES|default({})|list|join('\n') }}"
+    _modules_load_file:
+      name: "{{ NAME }}.modules-load.conf"
+      content: "{{ _modules_load_content }}"
+
+    # ── modprobe.d content: one options line per module with params ─
+    _modprobe_lines: >-
+      {%- set lines = [] -%}
+      {%- for mod, cfg in KERNEL_MODULES|default({}).items() -%}
+        {%- if cfg.params|default({})|length > 0 -%}
+          {%- set opts = cfg.params|dict2items|map('regex_replace','^(\\w+)=(.+)$','\\1=\\2')|join(' ') -%}
+          {%- set line = 'options ' ~ mod ~ ' ' ~ cfg.params|items2dict_kv|default('') -%}
+          {%- set _ = lines.append('options ' ~ mod ~ ' ' ~ cfg.params.items()|map('join','=')|join(' ')) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ lines|join('\n') }}
     _modprobe_file:
-      name: "{{ NAME }}.conf"
-      content: "{{ KERNEL_MODPROBE_PARAMS | default('') }}"
-      dest_dir: /etc/modprobe.d
-  loop: "{{ KERNEL_MODULES | default([]) }}"
+      name: "{{ NAME }}.modprobe.conf"
+      content: "{{ _modprobe_lines }}"
 
-- name: "Generate kernel module load ETC_FILES"
-  set_fact:
-    ETC_FILES: "{{ ETC_FILES|default([]) + [item] }}"
-  when: >
-    KERNEL_MODULES|default([])|length > 0
-    and not KERNEL_MODULES_BYPASS|default(False)
-  loop: "{{ KERNEL_MODULE_FILES|default([]) }}"
-
-- name: "Generate kernel modprobe ETC_FILES"
-  set_fact:
-    ETC_FILES: "{{ ETC_FILES|default([]) + [item] }}"
-  when: >
-    KERNEL_MODPROBE|default({})|length > 0
-    and not KERNEL_MODULES_BYPASS|default(False)
-  vars:
-    _modprobe_content: |
-      {% for mod, params in KERNEL_MODPROBE.items() %}
-      options {{ mod }} {{ params }}
-      {% endfor %}
-    _modprobe_file:
-      name: "{{ NAME }}.conf"
-      content: "{{ _modprobe_content }}"
-  loop:
-    - "{{ _modprobe_file }}"
-
-- name: "Generate kernel sysctl ETC_FILES from KERNEL_SYSCTL"
-  set_fact:
-    ETC_FILES: "{{ ETC_FILES|default([]) + [_sysctl_file] }}"
-  when: >
-    KERNEL_SYSCTL|default({})|length > 0
-    and not KERNEL_SYSCTL_BYPASS|default(False)
-  vars:
+    # ── sysctl.d content: key = value lines ─────────────────────
     _sysctl_content: |
-      {% for key, val in KERNEL_SYSCTL.items() %}
+      {% for key, val in KERNEL_SYSCTL|default({}).items() %}
       {{ key }} = {{ val }}
       {% endfor %}
     _sysctl_file:
-      name: "{{ NAME }}.conf"
+      name: "{{ NAME }}.sysctl.conf"
       content: "{{ _sysctl_content }}"
-      dest_dir: /etc/sysctl.d
 
-- name: "Add kernel apply BINS when KERNEL_PARAMS defined"
-  set_fact:
-    BINS: "{{ BINS|default([]) + [_apply_bin] }}"
-  when: >
-    KERNEL_PARAMS|default({})|length > 0
-    and not KERNEL_BYPASS|default(False)
-  vars:
-    _apply_lines: |
-      {% for param_path, val in KERNEL_PARAMS.items() %}
-      echo "{{ val }}" | sudo tee "{{ param_path }}" >/dev/null
+    # ── ENV_LIST: collect all param keys as uppercase env-var names ─
+    _module_env_keys: >-
+      {%- set keys = [] -%}
+      {%- for mod, cfg in KERNEL_MODULES|default({}).items() -%}
+        {%- for pkey in cfg.params|default({}).keys() -%}
+          {%- set _ = keys.append(mod|upper ~ '_' ~ pkey|upper) -%}
+        {%- endfor -%}
+      {%- endfor -%}
+      {{ keys }}
+    _sysctl_env_keys: >-
+      {{ KERNEL_SYSCTL|default({}).keys()|map('replace','.','_')|map('upper')|list }}
+    _all_env_keys: "{{ _module_env_keys + _sysctl_env_keys }}"
+
+    # ── build.sh: template ETC files from env vars via envsubst ──
+    _build_generated: |
+      #!/bin/bash
+      source "${DIR}/env.export"
+
+      {# modules-load #}
+      {% if _has_modules %}
+      cat > "${DIR}/etc/{{ NAME }}.modules-load.conf" << 'MODLOAD'
+      {{ _modules_load_content }}
+      MODLOAD
+      {% endif %}
+
+      {# modprobe: use envsubst so params come from env #}
+      {% if _has_modprobe %}
+      cat > "${DIR}/etc/{{ NAME }}.modprobe.conf" << 'MODPROBE'
+      {% for mod, cfg in KERNEL_MODULES|default({}).items() %}
+      {% if cfg.params|default({})|length > 0 %}
+      {% for pkey, pval in cfg.params|default({}).items() %}
       {% endfor %}
-    _apply_bin:
-      name: apply-kernel.sh
-      content: "{{ _apply_lines }}"
+      options {{ mod }} {{ cfg.params.items()|map('join','=')|join(' ') }}
+      {% endif %}
+      {% endfor %}
+      MODPROBE
+      {% endif %}
 
-- name: "Compfuzor: install /etc/modules-load.d (legacy MODULES support)"
-  copy:
-    content: "{{ MODULES | join('\n') }}"
-    dest: "/etc/modules-load.d/{{ NAME }}.conf"
-  become: True
-  when: >
-    MODULES|default(False) is truthy
-    and KERNEL_MODULES|default([])|length == 0
-    and not MODULES_BYPASS|default(False)
-    and not KERNEL_MODULES_BYPASS|default(False)
+      {# sysctl: use envsubst #}
+      {% if _has_sysctl %}
+      cat > "${DIR}/etc/{{ NAME }}.sysctl.conf" << 'SYSCTL'
+      {% for key, val in KERNEL_SYSCTL|default({}).items() %}
+      {{ key }} = ${ {{ key|replace('.','_')|upper }} }
+      {% endfor %}
+      SYSCTL
+      {% endif %}
+    _build_bin:
+      name: build.sh
+      basedir: False
+      content: "{{ _build_generated }}"
+
+    # ── install.sh: symlink ETC files into system dirs ──────────
+    _install_generated: |
+      #!/bin/bash
+      source "${DIR}/env.export"
+
+      {% if _has_modules %}
+      sudo ln -sf "${DIR}/etc/{{ NAME }}.modules-load.conf" /etc/modules-load.d/{{ NAME }}.conf
+      {% endif %}
+
+      {% if _has_modprobe %}
+      sudo ln -sf "${DIR}/etc/{{ NAME }}.modprobe.conf" /etc/modprobe.d/{{ NAME }}.conf
+      {% endif %}
+
+      {% if _has_sysctl %}
+      sudo ln -sf "${DIR}/etc/{{ NAME }}.sysctl.conf" /etc/sysctl.d/{{ NAME }}.conf
+      sudo sysctl --system
+      {% endif %}
+
+      echo "Kernel config for {{ NAME }} installed."
+
+    _install_bin:
+      name: install.sh
+      basedir: False
+      content: "{{ _install_generated }}"
