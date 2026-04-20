@@ -133,6 +133,8 @@ Key variables a playbook typically sets:
 | `LINKS`        | symlinks to create (dict of dest→src)             |
 | `GET_URLS`     | URLs to download                                  |
 | `SYSTEMD_*`    | systemd unit generation vars                      |
+| `KERNEL_MODULES` | dict of kernel modules with optional params     |
+| `KERNEL_SYSCTL`  | dict of sysctl key-value pairs                   |
 
 ## Managed scripts (BINS)
 
@@ -152,6 +154,101 @@ The `basedir` field controls where the script runs. `basedir: False` means don't
 ## File lookup convention
 
 Templates in `FILES` and `<PREFIX>_FILES` are looked up from `files/<TYPE>/` by default. For string items (not dicts), the item name is both the source filename and the destination filename. Dict items can specify `name`, `src`, `dest`, `content` (inline template), `line` (lineinfile), `yaml`, `json`, or `var`.
+
+## Generative subsystems (vars_*.tasks)
+
+Generative subsystems are `vars_*.tasks` files that transform playbook declarations into pipeline artifacts (ETC_FILES, BINS, ENV_LIST, LINKS). They run in the VARIABLES phase and are the primary extension point for new subsystems.
+
+### Kernel subsystem (vars_kernel.tasks)
+
+Configures kernel modules, modprobe parameters, and sysctl via three dict variables:
+
+#### KERNEL_MODULES
+
+Dict keyed by module name. Each value is a dict with an optional `params` sub-dict:
+
+```yaml
+KERNEL_MODULES:
+  zswap:
+    params:
+      enabled: Y
+      compressor: lz4
+      zpool: z3fold
+      max_pool_percent: 20
+      accept_threshold_percent: 90
+      same_filled_pages_enabled: Y
+      exclusive_loads: Y
+  pcie_aspm:
+    params:
+      policy: powersupersave
+  i2c_dev: {}
+```
+
+From this dict, vars_kernel generates:
+
+| Output | Source | Destination |
+|---|---|---|
+| modules-load conf | Module names | `/etc/modules-load.d/{{NAME}}.conf` |
+| modprobe conf | Modules with `params` | `/etc/modprobe.d/{{NAME}}.conf` |
+
+#### KERNEL_SYSCTL
+
+Flat dict of sysctl key-value pairs. Generates a sysctl drop-in:
+
+```yaml
+KERNEL_SYSCTL:
+  vm.swappiness: 60
+  vm.max_map_count: 1048576
+```
+
+| Output | Destination |
+|---|---|
+| sysctl conf | `/etc/sysctl.d/{{NAME}}.conf` |
+
+#### Generated scripts
+
+`vars_kernel.tasks` generates `build.sh` and `install.sh`:
+
+- **`build.sh`** — Templates config files from `env.export` variables. Uses `block-in-file --envsubst` so files are data-driven: change the env, re-run build.sh, files update.
+- **`install.sh`** — Symlinks generated files from the instance's `etc/` into system directories (`/etc/modules-load.d/`, `/etc/modprobe.d/`, `/etc/sysctl.d/`).
+
+No systemd service is needed. The `install.sh` handles all deployment, and sysctl.d / modprobe.d / modules-load.d are read at boot.
+
+#### ENV_LIST
+
+`vars_kernel.tasks` populates `ENV_LIST` with all `KERNEL_MODULES` params and `KERNEL_SYSCTL` keys so the build.sh can interpolate them.
+
+### Bypass flags
+
+| Flag | Effect |
+|---|---|
+| `KERNEL_BYPASS: True` | Skip all kernel subsystem processing |
+
+## The build/install pattern
+
+A key architectural pattern for etc-type playbooks. Instead of writing static config files at playbook run time, the playbook declares data and the generative subsystem produces two scripts:
+
+1. **`build.sh`** — Reads `env.export` (or environment variables), templates config files into `{{ETC}}/`. Idempotent. Re-run after changing env vars to regenerate config.
+2. **`install.sh`** — Deploys generated files to system locations via symlinks. Idempotent.
+
+This makes playbooks data-driven: the playbook sets defaults, the user can override via env vars, and `build.sh` regenerates to match.
+
+### block-in-file and envsubst
+
+`block-in-file` is compfuzor's managed-block injection tool. Beyond dotfile injection, it has key features for the build/install pattern:
+
+- **`--envsubst`** — Passes content through `envsubst` before writing, replacing `${VAR}` references with environment variable values
+- **`-n <name>`** — Named block for idempotent updates
+- **`-o <file>`** — Target file to inject into
+- **`--envsubst` with piped content** — `echo "$TEMPLATE" | block-in-file -n myblock -o /path/to/file --envsubst`
+
+Example `build.sh` using envsubst:
+
+```bash
+cat "${DIR}/etc/zswap.conf.template" | block-in-file -n "${NAME}" -o "${DIR}/etc/zswap.conf" --envsubst
+```
+
+The template file contains `${ZSWAP_COMPRESSOR}`, `${ZSWAP_MAX_POOL_PERCENT}`, etc. These resolve from `env.export` at build time.
 
 ## Block-in-file pattern
 
