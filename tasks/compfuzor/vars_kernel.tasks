@@ -1,158 +1,258 @@
 ---
 # vars_kernel.tasks
 #
-# Generative subsystem for kernel-adjacent config.
+# Generative subsystem for kernel-adjacent configuration.
 #
-# Input contract:
+# Contract:
 #   KERNEL_MODULES:
 #     <module_name>:
-#       params:           # optional
-#         <key>: <value>
+#       load: true|false     # optional, defaults to true
+#       params:              # optional
+#         <param>: <value>
 #   KERNEL_SYSCTL:
 #     <sysctl.key>: <value>
+#   KERNEL_SYSFS:
+#     </sys/path/or/glob>: <value>
 #
-# Output pattern:
-# - ETC_FILES: static files that live in the instance etc/
-# - ENV_LIST: keys exported into env/env.export so generated scripts can rebuild
-# - BINS:
-#   - build.sh renders static config from exported env data
-#   - install.sh symlinks those rendered files into system locations
+# Output shape:
+# - template files in etc/
+# - ENV/ENV_LIST entries for rebuildable data
+# - build.sh to render final config from env.export
+# - install.sh to symlink final files into /etc and apply them immediately
 #
-# This task owns the declarative contract. It should stay light on imperative
-# behavior: build/install scripts do the deployment work, not the vars phase.
+# KERNEL_SYSFS uses systemd-tmpfiles for persistence instead of a custom
+# service. build.sh resolves globs into explicit tmpfiles write lines, and
+# install.sh runs systemd-tmpfiles immediately after installing the file.
 
-- name: "Compfuzor: sourcing kernel variables"
-  set_fact:
-    # Static config payloads rendered into the instance etc/ directory.
-    ETC_FILES: >-
-      {{ ETC_FILES|default([]) 
-        + ([_modules_load_file] if _has_modules else [])
-        + ([_modprobe_file] if _has_modprobe else [])
-        + ([_sysctl_file] if _has_sysctl else [])
-      }}
-    # Generated helper scripts following the standard build/install pattern.
-    BINS: >-
-      {{ BINS|default([])
-        + ([_build_bin, _install_bin] if _has_any else [])
-      }}
-    # Export declarative values so build.sh can re-render from env.export.
-    ENV_LIST: >-
-      {{ ENV_LIST|default([])
-        + _all_env_keys
-      }}
-  when: _has_any and not KERNEL_BYPASS|default(False)
+- name: "Compfuzor: validate kernel subsystem contract"
+  fail:
+    msg: "{{ _kernel_errors | join('; ') }}"
+  when: _kernel_errors | length > 0
   vars:
-    # ── detection ────────────────────────────────────────────────
-    _has_modules: "{{ KERNEL_MODULES|default({})|length > 0 }}"
-    _has_modprobe: >-
-      {{ KERNEL_MODULES|default({})|dict2items
-        | selectattr('value.params', 'defined')
-        | list|length > 0 }}
-    _has_sysctl: "{{ KERNEL_SYSCTL|default({})|length > 0 }}"
-    _has_any: "{{ _has_modules or _has_sysctl }}"
+    _kernel_module_items: >-
+      {{ KERNEL_MODULES|dict2items if (KERNEL_MODULES is defined and KERNEL_MODULES is mapping) else [] }}
+    _kernel_errors: >-
+      {{
+        ([])
+        + (["KERNEL_MODULES must be a mapping"] if (KERNEL_MODULES is defined and KERNEL_MODULES is not mapping) else [])
+        + (["KERNEL_SYSCTL must be a mapping"] if (KERNEL_SYSCTL is defined and KERNEL_SYSCTL is not mapping) else [])
+        + (["KERNEL_SYSFS must be a mapping"] if (KERNEL_SYSFS is defined and KERNEL_SYSFS is not mapping) else [])
+        + (["KERNEL_MODULES entries must be mappings"]
+            if ((_kernel_module_items | selectattr('value', 'mapping') | list | length) != (_kernel_module_items | length))
+            else [])
+        + (["KERNEL_MODULES.<module>.params must be a mapping when defined"]
+            if ((_kernel_module_items
+                | selectattr('value.params', 'defined')
+                | selectattr('value.params', 'mapping')
+                | list | length)
+                != (_kernel_module_items | selectattr('value.params', 'defined') | list | length))
+            else [])
+      }}
 
-    # modules-load.d is just a newline-delimited list of module names.
-    _modules_load_content: "{{ KERNEL_MODULES|default({})|list|join('\n') }}"
-    _modules_load_file:
-      name: "{{ NAME }}.modules-load.conf"
-      content: "{{ _modules_load_content }}"
+- name: "Build vars for kernel subsystem"
+  set_fact:
+    ETC_FILES: "{{ enhancedEtc | concat(ETC_FILES | default([])) }}"
+    BINS: "{{ enhancedBins | mergeKeyed(BINS | default([]), key='name', concat_fields=['generated']) }}"
+    ENV: "{{ enhancedEnv | combine(existingEnv) }}"
+    ENV_LIST: "{{ (enhancedEnv.keys() | list) | concat(ENV_LIST | default([])) | unique }}"
+  when: hasAny and not KERNEL_BYPASS | default(False)
+  vars:
+    existingEnv: "{{ ENV if ENV is mapping else {} }}"
 
-    # modprobe.d emits one "options <module> ..." line per module with params.
-    _modprobe_lines: >-
-      {%- set lines = [] -%}
-      {%- for mod, cfg in KERNEL_MODULES|default({}).items() -%}
-        {%- if cfg.params|default({})|length > 0 -%}
-          {%- set opts = cfg.params|dict2items|map('regex_replace','^(\\w+)=(.+)$','\\1=\\2')|join(' ') -%}
-          {%- set line = 'options ' ~ mod ~ ' ' ~ cfg.params|items2dict_kv|default('') -%}
-          {%- set _ = lines.append('options ' ~ mod ~ ' ' ~ cfg.params.items()|map('join','=')|join(' ')) -%}
+    hasModules: "{{ KERNEL_MODULES | default({}) | length > 0 }}"
+    hasSysctl: "{{ KERNEL_SYSCTL | default({}) | length > 0 }}"
+    hasSysfs: "{{ KERNEL_SYSFS | default({}) | length > 0 }}"
+    hasAny: "{{ hasModules or hasSysctl or hasSysfs }}"
+
+    # Modules listed here are written to modules-load.d unless explicitly opted out.
+    kernelLoadModules: >-
+      {%- set out = [] -%}
+      {%- for moduleName, moduleCfg in KERNEL_MODULES | default({}) | dictsort -%}
+        {%- if not (moduleCfg.load is defined and not moduleCfg.load) -%}
+          {%- set _ = out.append(moduleName) -%}
         {%- endif -%}
       {%- endfor -%}
-      {{ lines|join('\n') }}
-    _modprobe_file:
-      name: "{{ NAME }}.modprobe.conf"
-      content: "{{ _modprobe_lines }}"
+      {{ out }}
 
-    # sysctl.d is a flat "key = value" file.
-    _sysctl_content: |
-      {% for key, val in KERNEL_SYSCTL|default({}).items() %}
-      {{ key }} = {{ val }}
-      {% endfor %}
-    _sysctl_file:
-      name: "{{ NAME }}.sysctl.conf"
-      content: "{{ _sysctl_content }}"
-
-    # ENV_LIST mirrors the declarative inputs as shell-friendly variable names.
-    _module_env_keys: >-
-      {%- set keys = [] -%}
-      {%- for mod, cfg in KERNEL_MODULES|default({}).items() -%}
-        {%- for pkey in cfg.params|default({}).keys() -%}
-          {%- set _ = keys.append(mod|upper ~ '_' ~ pkey|upper) -%}
+    # Flatten module params into reusable records so env generation, templates,
+    # and install-time immediate writes all share the same source of truth.
+    kernelModuleParamSpecs: >-
+      {%- set out = [] -%}
+      {%- for moduleName, moduleCfg in KERNEL_MODULES | default({}) | dictsort -%}
+        {%- for paramName, paramValue in moduleCfg.params | default({}) | dictsort -%}
+          {%- set envKey = ('KERNEL_' ~ moduleName ~ '_' ~ paramName)
+            | upper
+            | regex_replace('[^A-Z0-9]+', '_')
+            | regex_replace('_+', '_') -%}
+          {%- set _ = out.append({
+            'module': moduleName,
+            'param': paramName,
+            'value': paramValue,
+            'env_key': envKey,
+            'sys_path': '/sys/module/' ~ moduleName ~ '/parameters/' ~ paramName,
+          }) -%}
         {%- endfor -%}
       {%- endfor -%}
-      {{ keys }}
-    _sysctl_env_keys: >-
-      {{ KERNEL_SYSCTL|default({}).keys()|map('replace','.','_')|map('upper')|list }}
-    _all_env_keys: "{{ _module_env_keys + _sysctl_env_keys }}"
+      {{ out }}
 
-    # build.sh rebuilds the canonical static files from env.export data.
-    _build_generated: |
-      #!/bin/bash
-      source "${DIR}/env.export"
+    kernelSysctlSpecs: >-
+      {%- set out = [] -%}
+      {%- for sysctlKey, sysctlValue in KERNEL_SYSCTL | default({}) | dictsort -%}
+        {%- set envKey = ('KERNEL_SYSCTL_' ~ sysctlKey)
+          | upper
+          | regex_replace('[^A-Z0-9]+', '_')
+          | regex_replace('_+', '_') -%}
+        {%- set _ = out.append({
+          'key': sysctlKey,
+          'value': sysctlValue,
+          'env_key': envKey,
+        }) -%}
+      {%- endfor -%}
+      {{ out }}
 
-      {# modules-load #}
-      {% if _has_modules %}
-      cat > "${DIR}/etc/{{ NAME }}.modules-load.conf" << 'MODLOAD'
-      {{ _modules_load_content }}
-      MODLOAD
+    # KERNEL_SYSFS targets may be globs. build.sh resolves them into a static
+    # tmpfiles.d payload so install.sh can persist and apply them without a
+    # dedicated systemd service.
+    kernelSysfsSpecs: >-
+      {%- set out = [] -%}
+      {%- for sysfsPath, sysfsValue in KERNEL_SYSFS | default({}) | dictsort -%}
+        {%- set envKey = ('KERNEL_SYSFS_' ~ sysfsPath)
+          | upper
+          | regex_replace('[^A-Z0-9]+', '_')
+          | regex_replace('_+', '_') -%}
+        {%- set _ = out.append({
+          'path': sysfsPath,
+          'value': sysfsValue,
+          'env_key': envKey,
+        }) -%}
+      {%- endfor -%}
+      {{ out }}
+
+    enhancedEnv: >-
+      {%- set out = {} -%}
+      {%- for spec in kernelModuleParamSpecs -%}
+        {%- set _ = out.update({ spec.env_key: spec.value }) -%}
+      {%- endfor -%}
+      {%- for spec in kernelSysctlSpecs -%}
+        {%- set _ = out.update({ spec.env_key: spec.value }) -%}
+      {%- endfor -%}
+      {%- for spec in kernelSysfsSpecs -%}
+        {%- set _ = out.update({ spec.env_key: spec.value }) -%}
+      {%- endfor -%}
+      {{ out }}
+
+    modulesLoadTemplate: "{{ kernelLoadModules | join('\n') ~ ('\n' if kernelLoadModules | length > 0 else '') }}"
+
+    modprobeTemplate: >-
+      {%- set lines = [] -%}
+      {%- for moduleName, moduleCfg in KERNEL_MODULES | default({}) | dictsort -%}
+        {%- set params = [] -%}
+        {%- for paramName, paramValue in moduleCfg.params | default({}) | dictsort -%}
+          {%- set envKey = ('KERNEL_' ~ moduleName ~ '_' ~ paramName)
+            | upper
+            | regex_replace('[^A-Z0-9]+', '_')
+            | regex_replace('_+', '_') -%}
+          {%- set _ = params.append(paramName ~ '=' ~ ('${' ~ envKey ~ '}')) -%}
+        {%- endfor -%}
+        {%- if params | length > 0 -%}
+          {%- set _ = lines.append('options ' ~ moduleName ~ ' ' ~ (params | join(' '))) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ lines | join('\n') ~ ('\n' if lines | length > 0 else '') }}
+
+    sysctlTemplate: >-
+      {%- set lines = [] -%}
+      {%- for spec in kernelSysctlSpecs -%}
+        {%- set _ = lines.append(spec.key ~ ' = ' ~ ('${' ~ spec.env_key ~ '}')) -%}
+      {%- endfor -%}
+      {{ lines | join('\n') ~ ('\n' if lines | length > 0 else '') }}
+
+    enhancedEtc: >-
+      {{
+        ([])
+        + ([{
+            'name': 'kernel.modules-load.conf.in',
+            'content': modulesLoadTemplate,
+          }] if kernelLoadModules | length > 0 else [])
+        + ([{
+            'name': 'kernel.modprobe.conf.in',
+            'content': modprobeTemplate,
+          }] if kernelModuleParamSpecs | length > 0 else [])
+        + ([{
+            'name': 'kernel.sysctl.conf.in',
+            'content': sysctlTemplate,
+          }] if kernelSysctlSpecs | length > 0 else [])
+      }}
+
+    buildGenerated: |
+      mkdir -p "$DIR/etc"
+
+      {% if kernelLoadModules | length > 0 %}
+      cp "$DIR/etc/kernel.modules-load.conf.in" "$DIR/etc/kernel.modules-load.conf"
       {% endif %}
 
-      {# modprobe: use envsubst so params come from env #}
-      {% if _has_modprobe %}
-      cat > "${DIR}/etc/{{ NAME }}.modprobe.conf" << 'MODPROBE'
-      {% for mod, cfg in KERNEL_MODULES|default({}).items() %}
-      {% if cfg.params|default({})|length > 0 %}
-      {% for pkey, pval in cfg.params|default({}).items() %}
+      {% if kernelModuleParamSpecs | length > 0 %}
+      envsubst < "$DIR/etc/kernel.modprobe.conf.in" > "$DIR/etc/kernel.modprobe.conf"
+      {% endif %}
+
+      {% if kernelSysctlSpecs | length > 0 %}
+      envsubst < "$DIR/etc/kernel.sysctl.conf.in" > "$DIR/etc/kernel.sysctl.conf"
+      {% endif %}
+
+      {% if kernelSysfsSpecs | length > 0 %}
+      : > "$DIR/etc/kernel.tmpfiles.conf"
+      {% for spec in kernelSysfsSpecs %}
+      _cf_matches=()
+      while IFS= read -r _cf_match; do
+        _cf_matches+=("$_cf_match")
+      done < <(compgen -G {{ spec.path | to_json }})
+      if [ ${#_cf_matches[@]} -eq 0 ]; then
+        printf 'No matches for KERNEL_SYSFS pattern: %s\n' {{ spec.path | to_json }} >&2
+        exit 1
+      fi
+      for _cf_path in "${_cf_matches[@]}"; do
+        printf 'w %s - - - - %s\n' "$_cf_path" "{{ '${' ~ spec.env_key ~ '}' }}" >> "$DIR/etc/kernel.tmpfiles.conf"
+      done
       {% endfor %}
-      options {{ mod }} {{ cfg.params.items()|map('join','=')|join(' ') }}
       {% endif %}
+
+    installGenerated: |
+      "$DIR/bin/build.sh"
+
+      sudo mkdir -p /etc/modules-load.d /etc/modprobe.d /etc/sysctl.d /etc/tmpfiles.d
+
+      {% if kernelLoadModules | length > 0 %}
+      sudo ln -sf "$DIR/etc/kernel.modules-load.conf" "/etc/modules-load.d/{{ NAME }}.conf"
+      while IFS= read -r _cf_module; do
+        [ -n "${_cf_module}" ] || continue
+        sudo modprobe "${_cf_module}" >/dev/null 2>&1 || true
+      done < "$DIR/etc/kernel.modules-load.conf"
+      {% endif %}
+
+      {% if kernelModuleParamSpecs | length > 0 %}
+      sudo ln -sf "$DIR/etc/kernel.modprobe.conf" "/etc/modprobe.d/{{ NAME }}.conf"
+      {% for spec in kernelModuleParamSpecs %}
+      if [ -w {{ spec.sys_path | to_json }} ]; then
+        printf '%s\n' "{{ '${' ~ spec.env_key ~ '}' }}" | sudo tee {{ spec.sys_path | to_json }} >/dev/null
+      fi
       {% endfor %}
-      MODPROBE
       {% endif %}
 
-      {# sysctl: use envsubst #}
-      {% if _has_sysctl %}
-      cat > "${DIR}/etc/{{ NAME }}.sysctl.conf" << 'SYSCTL'
-      {% for key, val in KERNEL_SYSCTL|default({}).items() %}
-      {{ key }} = ${ {{ key|replace('.','_')|upper }} }
-      {% endfor %}
-      SYSCTL
-      {% endif %}
-    _build_bin:
-      name: build.sh
-      basedir: False
-      content: "{{ _build_generated }}"
-
-    # install.sh performs the privileged deployment by symlinking into /etc.
-    _install_generated: |
-      #!/bin/bash
-      source "${DIR}/env.export"
-
-      {% if _has_modules %}
-      sudo ln -sf "${DIR}/etc/{{ NAME }}.modules-load.conf" /etc/modules-load.d/{{ NAME }}.conf
+      {% if kernelSysctlSpecs | length > 0 %}
+      sudo ln -sf "$DIR/etc/kernel.sysctl.conf" "/etc/sysctl.d/{{ NAME }}.conf"
+      sudo sysctl -p "/etc/sysctl.d/{{ NAME }}.conf"
       {% endif %}
 
-      {% if _has_modprobe %}
-      sudo ln -sf "${DIR}/etc/{{ NAME }}.modprobe.conf" /etc/modprobe.d/{{ NAME }}.conf
+      {% if kernelSysfsSpecs | length > 0 %}
+      sudo ln -sf "$DIR/etc/kernel.tmpfiles.conf" "/etc/tmpfiles.d/{{ NAME }}.conf"
+      sudo systemd-tmpfiles --create "/etc/tmpfiles.d/{{ NAME }}.conf"
       {% endif %}
 
-      {% if _has_sysctl %}
-      sudo ln -sf "${DIR}/etc/{{ NAME }}.sysctl.conf" /etc/sysctl.d/{{ NAME }}.conf
-      sudo sysctl --system
-      {% endif %}
-
-      echo "Kernel config for {{ NAME }} installed."
-
-    _install_bin:
-      name: install.sh
-      basedir: False
-      content: "{{ _install_generated }}"
+    enhancedBins:
+      - name: build.sh
+        basedir: False
+        generated: "{{ buildGenerated }}"
+      - name: install.sh
+        basedir: False
+        run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+        generated: "{{ installGenerated }}"
