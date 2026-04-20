@@ -1,152 +1,342 @@
 # CompFuzor
 
-CF is a repository of systems configuration scripts for onlining new nodes with a variety of services.
+Compfuzor is a convention-first deployment framework built on Ansible. A
+playbook is usually a thin declarative card. The shared pipeline interprets the
+card and turns it into files, directories, repositories, packages, services,
+and helper scripts.
 
-As opposed to normal Ansible where one is writing tasks, Compfuzor tries to codify many practices and tasks such that the author declares what they want (as variables). General routines handle all Compfuzor playbooks, enacting the variables for the playbook that have been defined. Thus most good Compfuzor playbooks have only a single task: `include: tasks/compfuzor.includes`.
+The filename is part of the spec.
 
-In addition, CF creates conventions for how and where files should go, with playbooks indirectly asking to place things in an extended Unix Filesystem Hierarchy like place with [common system locations](https://github.com/rektide/compfuzor/blob/master/vars/common.yaml#L5-L15) and [common user locations](https://github.com/rektide/compfuzor/blob/master/vars/common.user.yaml#L6-L15) overridable but used by default. These locations are tied to specific instances of a playbook, such that one can maintain multiple separate runs of a playbook on one machine. For instance, I use this for setting up a "3 node" etcd cluster on a laptop with no VM's or containers, but more generally this is also useful for testing things out on an alternate instance before running them on the main instance.
+## What It Is
 
-Added latter, there are a host of other conventions: environment variables are a core concept, and will automatically be used by Systemd services, another core of Compfuzor. Checking out sources a core capability. Extra contextual vars like XDG, a random PASSWORD and UUID are injected into runs.
-
-It is written primarily as Ansible scripts, dubbed "playbooks" in their parlance. It provides a rich set of default directives which use a construct of context sensitivie settings to create ea consistend framework for emplacing software and processes.
-
-# Target Requirements
-
-- Debian target generally expected
-- systemd-dev (for pkg-config configuration)
-- write permissions to: /opt /srv /usr/local/src
-- many playbook scripts use `block-in-file` (which requires node or deno)
-
-# Conventions
-
-## Base System
-
-- systemd is the init process.
-- dpkg/apt for package management.
-
-## Directories
-
-- `/` is the main repository of playbooks.
-- `tasks/` are subtasks used by playbooks.
-- `tasks/compfuzor` is the main-body of compfuzor execution, run by the task `include: tasks/compfuzor.includes`
-- `vars/` hold broad configuration data.
-- `files/` holds files which will be sourced when running a playbook.
-- `private/` holds sensitive data configs.
-- `example-private/` holds dummy data to mock out it's private/ counterpart.
-
-## Playbook Types
-
-- `.srv.pb` are _instances_ of services, typically deploying into /srv/$TYPE-$INSTANCE. $INSTANCE defaults to main in common.vars.
-- `.opt.pb` is there to install a software package, usually into /opt. configuration, if possible, ought be split into a `.srv.pb` playbook.
-- `.user.pb` are intended to install into a user's own directory.
-- `.src.pb` are compiled (generally) source packages, often outputing an associated .opt package
-
-## Configuration
-
-- `vars/`, `private/`, and `example-private/` hold non-installation specific, installation specific, and examples of installation specific configuraiton data.
-- `vars/common.vars` is a generic set of variables, for example defining paths such as opt, srv.
-- `vars/common.user.vars` supplements/overrides `common.vars` with user-targetted script configuration: OPTS_DIR becomes ~/.local/opt, for instance.
-
-## Services
-
-- ought be based around these variables:
-  - $TYPE, a name prefix identifying what type of service this is.
-  - $SRVS_DIR, where all services are kept, which common.vars will default to /srv
-  - $INSTANCE, defaulted to main, but overridable to create a new instance of the service.
-  - $NAME, conventionally set to $TYPE-$INSTANCE by tasks/srv.vars.tasks if none is provided (this ought be included early in most all srv scripts).
-  - $DIR, conventionally set to {{SRVS_DIR}}/{{NAME}} if none is provided, where the service instance is installed
-- in practices, services need to declare a $TYPE and then run tasks/srv.vars.tasks, leaving most of these var configurations to be done externally.
-- write a `systemd.unit(5)` file into $SYSTEMD_UNITS.
-- ideally all services can be installed multiple times! make it so!
-- `handlers.yml` ought provide a `restart $TYPE` directive that ought expect the above vars be defined.
-- services ought have their own user & group, typically {{NAME}}. A common tasks is in the works.
-  - lordy be, here me now: all "services" are to be templates with their sudo_user injected at execution time.
-  - i have no idea right now how to pull off this execution framework.
-  - similarly, having INSTANCE baked in, not having defaults, these are major ansible warts I don't know how to factor out yet. ideas welcome.
-
-# Miscellenary
-
-- Some vars are listed as $FOO.stdout. This ought go away pending some assistance in ansible#1730.
-- Deal better with permissions- most scripts ought be made to operate without sudo, but do need some initialization routines to be run on their behalf. Device a clean way to separate user from server side.
-
-# Skipping Work
-
-CompFuzor provides several mechanisms to skip or reduce work when you don't need to run all steps, or when running steps would stomp your work. This can save time, bandwidth, or preserve local changes.
-
-## BYPASS Variables
-
-BYPASS variables allow you to skip specific stages of the playbook execution. Set any of these to `True` to skip that stage:
-
-- **`APT_BYPASS`** - Skip APT repository configuration and package installation
-- **`APT_UPDATE_BYPASS`** - Skip `apt update` operations
-- **`BINS_BYPASS`** - Skip binary file operations
-- **`BINS_RUN_BYPASS`** - Skip running binaries/build scripts
-- **`DEBCONF_BYPASS`** - Skip debconf pre-configuration
-- **`DIR_BYPASS`** - Skip directory creation and hierarchy setup
-- **`DBCONFIG_BYPASS`** - Skip database configuration
-- **`ENV_BYPASS`** - Skip environment variable setup
-- **`FS_BYPASS`** - Skip filesystem operations (files, directories)
-- **`FS_SRCS_BYPASS`** - Skip source file operations
-- **`GET_URLS_BYPASS`** - Skip downloading from URLs
-- **`GIT_BYPASS`** - Skip git repository operations
-- **`GLOBAL_BINS_BYPASS`** - Skip linking binaries to global paths
-- **`LINKS_BYPASS`** - Skip symlink creation
-- **`MODULES_BYPASS`** - Skip kernel module loading
-- **`PKGS_BYPASS`** - Skip package installation via apt
-- **`REPO_BYPASS`** - Skip all repository operations (git, svn, hg, cvs, go)
-- **`SYSTEMD_BYPASS`** - Skip systemd service operations
-- **`SYSTEMD_THUNK_BYPASS`** - Skip systemd thunk operations
-- **`TGZ_BYPASS`** - Skip tarball extraction
-- **`ZIP_BYPASS`** - Skip zip file extraction
-
-All BYPASS variables default to `False` (i.e., don't skip), so operations run unless you explicitly bypass them.
-
-## Other skips
-
-### APT_INSTALL
-
-Controls the state for apt package installations. Default is `latest` (upgrades packages), but you can set it to `present` to avoid unnecessary upgrades. This is useful when you want to avoid downloading large package updates, or if your system is not in an up to date state and you don't want to accidentally gnarl your system with an un-ideal package resolution.
-
--- **`APT_INSTALL`**: present # Only ensure packages are installed, don't upgrade
-
-### GIT_UPDATE
-
-Controls whether git repositories are updated. By default, git operations will try to update the repository to the specified version. This is particularly useful when you have local modifications in a git checkout that you don't want to lose. To skip updates and preserve local changes:
+Normal Ansible often pushes authors toward writing task logic over and over.
+Compfuzor tries to move that repeated logic into shared machinery so that the
+playbook mostly declares intent as variables. A good playbook often looks like:
 
 ```yaml
-GIT_UPDATE: false # Don't update git repos
+---
+- hosts: all
+  vars:
+    <declarations>
+  tasks:
+    - import_tasks: tasks/compfuzor.includes
 ```
 
-## BEASTIARY
+That single import is not a shortcut around work. It is the work: a shared
+pipeline that resolves identity, layered vars, directories, files, env, repos,
+packages, bins, and other subsystems.
 
-A short listing of well known variables
+## Why It Exists
 
-### DIR
+Compfuzor is trying to solve a few things at once:
 
-Your maindir
+- stop rewriting the same operational Ansible tasks for every piece of software
+- make deployments instanceable, so `main`, `test`, `git`, and other variants can coexist
+- keep generated state inspectable in per-instance directories
+- make installation rerunnable through generated scripts like `build.sh` and `install.sh`
+- codify reusable operational patterns once, then expose them as declarative contracts
 
-### Lesser Dirs
+## Core Mental Model
 
-SRV, OPT, ETC, VAR, LOG, SPOOL, CACHE, PID, RUN, SRC, PKGS
+- A playbook should declare data, not hand-roll repeated task logic.
+- The shared pipeline in `tasks/compfuzor.includes` does the real work.
+- Reusable patterns belong in `vars_*.tasks` generative subsystems.
+- Deep structured inputs should live in machine-readable artifacts when that is the cleanest contract.
+- Generated scripts in `bin/` should own imperative construction and deployment.
 
-SRV, services dir, /srvs
-OPT, optional software packages, /opt
-ETC, configuration settings, /etc (but like the above per instance, not global)
-VAR, various settings, /var
-SRC, package for sources, /usr/local/src
+Compfuzor is not mainly a templating system. It is a system for generating
+small operational programs from declarations.
 
-### VARiants
+## Filename As Spec
 
-LOG, log directory, /var/log
-SPOOL, transient message queue dir, /var/spool
-CACHE, expiring cache files, /var/cache
-PID, process ids, /var/pid
-RUN, process's runtime data, /var/run
+Playbooks are named `<NAME>.<TYPE>.pb`.
 
-## `Common` Mode Bits
+The filename drives identity:
 
-`var/common.var` and `var/common.user.var` hold the main system configuration data which will guide (provide all base context for) all CompFuzor runs.
+- `TYPE` is the deployment category
+- `NAME` is the instance name stem
+- `INSTANCE` usually defaults to `main`, or `git` for some source-backed flows
 
-### APT_INSTALL
+Prefer letting the filename drive identity instead of restating everything in
+vars.
 
-install apt packages with this state (`latest`, `installed`, &c)
+## Instance Directory Model
+
+Each playbook gets a primary directory:
+
+```text
+<DIR>/
+  env
+  env.export
+  bin/
+  etc/
+  share/
+```
+
+`env` and `env.export` are the instance identity card. Managed scripts source
+`env.export` and treat it as the canonical runtime input set.
+
+Typical type base directories:
+
+| Type | Base directory |
+|---|---|
+| `etc` | `/etc/opt` |
+| `opt` | `/opt` |
+| `src` | `/usr/local/src` |
+| `srv` | `/srv` |
+
+When `USERMODE: True`, these relocate under user/XDG-oriented paths.
+
+Because instance is part of the path, multiple instances of the same software
+can coexist on one machine.
+
+## The Pipeline
+
+`tasks/compfuzor.includes` runs in broad phases:
+
+1. variables
+2. user and become setup
+3. repositories
+4. filesystem
+5. extras
+
+Most design work happens in the variables phase. That is where base context is
+resolved and where generative subsystems (`vars_*.tasks`) translate high-level
+declarations into standard pipeline artifacts.
+
+## Core Patterns
+
+### Hierarchy Variables
+
+Prefer hierarchy-specific variables instead of dumping everything into generic
+`FILES`.
+
+- `ETC_FILES` for config payloads
+- `SHARE_FILES` for shared assets
+- `BINS` for executable helpers
+- `ETC_DIRS`, `SHARE_DIRS`, and peers for hierarchy subdirectories
+
+This keeps playbooks aligned with the instance directory model.
+
+### ENV vs Deep Data
+
+- `ENV` is for scalar key/value runtime contract data
+- `ENV_LIST` names variables a subsystem wants exported
+- `ETC_FILES` can carry deeper structured artifacts like JSON when that is a better contract than flattening into env vars
+
+Use env for shallow knobs. Use data files for structured state.
+
+### Build / Install
+
+One of the most important compfuzor patterns:
+
+- `build.sh` constructs canonical outputs from data
+- `install.sh` deploys or applies those outputs
+
+This separation gives you an inspectable and rerunnable workflow.
+
+### File-Backed Generated Scripts
+
+Large shell bodies should not live forever inline inside `vars_*.tasks`.
+Prefer placing them under `files/<subsystem>/` and referencing them from `BINS`.
+
+That keeps the task file focused on structure and lets the script files focus on
+behavior.
+
+### Ordered Domain Tables
+
+When building a subsystem, prefer one ordered domain/spec table and derive
+multiple outputs from it.
+
+For example, a subsystem may derive from one table:
+
+- `ETC_FILES`
+- `ENV`
+- `ENV_LIST`
+- `BINS`
+- aggregate build/install orchestration
+
+This avoids parallel arrays, zip-style coupling, and duplicated selection logic.
+
+## Target Requirements
+
+- Debian-like target is generally assumed
+- systemd is assumed as init system
+- dpkg/apt is assumed for package management
+- write access is typically needed for `/opt`, `/srv`, `/usr/local/src`, and related managed paths
+- many playbook scripts use `block-in-file`, which currently expects node or deno to be available
+
+## Repository Layout
+
+- `/` contains playbooks
+- `tasks/` contains task fragments used by playbooks
+- `tasks/compfuzor/` contains the main compfuzor execution pipeline and subsystems
+- `vars/` contains broad configuration data and defaults
+- `files/` contains file-backed script and config assets used by playbooks and subsystems
+- `private/` contains sensitive local configuration
+- `example-private/` contains mock/example forms of corresponding private data
+- `skill/` contains authoring guidance for working inside compfuzor
+
+## Running And Iterating
+
+The normal loop is:
+
+1. declare intent in the playbook
+2. run the playbook
+3. inspect generated files under `DIR`
+4. rerun `build.sh` or `install.sh` as needed
+
+That rerunnable script model is deliberate. Generated scripts are not just
+implementation details; they are user-facing operational tools.
+
+## More Guidance
+
+If you want to contribute or author new playbooks/subsystems, read
+[`skill/SKILL.md`](/home/rektide/src/compfuzor/skill/SKILL.md). The README is
+for orientation; the skill is the stronger authoring guide.
+
+<details>
+<summary><strong>Bypass Variables</strong></summary>
+
+CompFuzor provides several mechanisms to skip or reduce work when you do not
+need to run all steps, or when running steps would stomp local work.
+
+### Bypass Overview
+
+Set any of these to `True` to skip that stage:
+
+- `APT_BYPASS`
+- `APT_UPDATE_BYPASS`
+- `BINS_BYPASS`
+- `BINS_RUN_BYPASS`
+- `DEBCONF_BYPASS`
+- `DIR_BYPASS`
+- `DBCONFIG_BYPASS`
+- `ENV_BYPASS`
+- `FS_BYPASS`
+- `FS_SRCS_BYPASS`
+- `GET_URLS_BYPASS`
+- `GIT_BYPASS`
+- `GLOBAL_BINS_BYPASS`
+- `LINKS_BYPASS`
+- `MODULES_BYPASS`
+- `PKGS_BYPASS`
+- `REPO_BYPASS`
+- `SYSTEMD_BYPASS`
+- `SYSTEMD_THUNK_BYPASS`
+- `TGZ_BYPASS`
+- `ZIP_BYPASS`
+
+All BYPASS variables default to `False`.
+
+### Other Skip / Safety Controls
+
+#### `APT_INSTALL`
+
+Controls the state for apt package installations. Default is often `latest`,
+but `present` can avoid unnecessary upgrades.
+
+```yaml
+APT_INSTALL: present
+```
+
+#### `GIT_UPDATE`
+
+Controls whether git repositories are updated. Useful when local modifications
+should be preserved.
+
+```yaml
+GIT_UPDATE: false
+```
+
+</details>
+
+<details>
+<summary><strong>Migration Guide</strong></summary>
+
+Many playbooks predate current conventions. When touching one, prefer to move it
+toward these patterns.
+
+### `include:` To `import_tasks:`
+
+```yaml
+# old
+- include: tasks/compfuzor.includes
+
+# current
+- import_tasks: tasks/compfuzor.includes
+```
+
+### Type In Filename, Not Task Parameters
+
+```yaml
+# old
+- import_tasks: tasks/compfuzor.includes type=src
+
+# current
+# encode type in the filename, e.g. foo.src.pb
+- import_tasks: tasks/compfuzor.includes
+```
+
+### Prefer Hierarchy Vars Over Generic Files
+
+- move generic `FILES` toward `ETC_FILES`, `SHARE_FILES`, and peers
+- move repeated shell bodies into `files/<subsystem>/`
+- move repeated task logic into `vars_*.tasks`
+
+### Staleness Signals
+
+Watch for these:
+
+- inline `BINS` content that has grown large and should be file-backed
+- hard-coded absolute paths that should use `DIR`, `NAME`, or hierarchy vars
+- repeated custom tasks across multiple playbooks
+- feature logic living in playbooks when it should be a subsystem contract
+
+</details>
+
+<details>
+<summary><strong>Glossary</strong></summary>
+
+### `DIR`
+
+The primary instance directory for a playbook.
+
+### Hierarchy Prefixes
+
+Common hierarchy roots include:
+
+- `SRV`
+- `OPT`
+- `ETC`
+- `VAR`
+- `LOG`
+- `SPOOL`
+- `CACHE`
+- `PID`
+- `RUN`
+- `SRC`
+- `SHARE`
+
+Examples:
+
+- `SRV` for service instance directories, usually rooted at `/srv`
+- `OPT` for optional software installs, usually rooted at `/opt`
+- `ETC` for per-instance configuration payloads
+- `SRC` for source checkouts, usually rooted at `/usr/local/src`
+
+### `ENV` / `env.export`
+
+The runtime contract for generated scripts.
+
+### `BINS`
+
+Managed scripts deployed into `<DIR>/bin/`, wrapped with the standard compfuzor
+script header/footer.
+
+### `vars_*.tasks`
+
+Generative subsystems that translate declarations into standard compfuzor
+artifacts.
+
+</details>
