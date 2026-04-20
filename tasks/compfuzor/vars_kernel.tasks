@@ -70,52 +70,41 @@
     kernelDomains:
       - key: modules
         enabled: "{{ KERNEL_MODULES | default({}) | length > 0 }}"
-        json_name: kernel.modules.json
         json_path: "{{ DIR }}/etc/kernel.modules.json"
         env_key: KERNEL_MODULES_JSON
         build_script: build-kernel.sh
         install_script: install-kernel.sh
-        json_content: "{{ KERNEL_MODULES | default({}) | to_nice_json }}"
+        etc_file:
+          name: kernel.modules.json
+          content: "{{ KERNEL_MODULES | default({}) | to_nice_json }}"
 
       - key: sysctl
         enabled: "{{ KERNEL_SYSCTL | default({}) | length > 0 }}"
-        json_name: kernel.sysctl.json
         json_path: "{{ DIR }}/etc/kernel.sysctl.json"
         env_key: KERNEL_SYSCTL_JSON
         build_script: build-sysctl.sh
         install_script: install-sysctl.sh
-        json_content: "{{ KERNEL_SYSCTL | default({}) | to_nice_json }}"
+        etc_file:
+          name: kernel.sysctl.json
+          content: "{{ KERNEL_SYSCTL | default({}) | to_nice_json }}"
 
       - key: sysfs
         enabled: "{{ KERNEL_SYSFS | default({}) | length > 0 }}"
-        json_name: kernel.sysfs.json
         json_path: "{{ DIR }}/etc/kernel.sysfs.json"
         env_key: KERNEL_SYSFS_JSON
         build_script: build-sysfs.sh
         install_script: install-sysfs.sh
-        json_content: "{{ KERNEL_SYSFS | default({}) | to_nice_json }}"
+        etc_file:
+          name: kernel.sysfs.json
+          content: "{{ KERNEL_SYSFS | default({}) | to_nice_json }}"
 
     # Filter the domain table once. Every assembled output uses this same list.
     activeKernelDomains: "{{ kernelDomains | selectattr('enabled', 'truthy') | list }}"
     hasAny: "{{ activeKernelDomains | length > 0 }}"
 
     # JSON is the deep data contract. The env only points scripts at those files.
-    kernelEtcFiles: >-
-      {%- set out = [] -%}
-      {%- for domain in activeKernelDomains -%}
-        {%- set _ = out.append({
-          'name': domain.json_name,
-          'content': domain.json_content,
-        }) -%}
-      {%- endfor -%}
-      {{ out }}
-
-    kernelDataEnv: >-
-      {%- set out = {} -%}
-      {%- for domain in activeKernelDomains -%}
-        {%- set _ = out.update({ domain.env_key: domain.json_path }) -%}
-      {%- endfor -%}
-      {{ out }}
+    kernelEtcFiles: "{{ activeKernelDomains | map(attribute='etc_file') | list }}"
+    kernelDataEnv: "{{ activeKernelDomains | items2dict(key_name='env_key', value_name='json_path') }}"
 
     # Aggregate build/install scripts are just orchestration loops over the
     # ordered active domain list. The actual shell bodies live in files/kernel/.
