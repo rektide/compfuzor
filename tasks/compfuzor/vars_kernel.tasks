@@ -8,6 +8,7 @@
 # - keep deep structured data in machine-readable artifacts (JSON here)
 # - generate small programs that consume those artifacts
 # - derive env/files/bins from one ordered domain table
+# - keep large script bodies in files/kernel/ so this task stays about structure
 #
 # In other words: the vars phase should describe and generate the system, not
 # directly perform the system changes itself.
@@ -75,71 +76,6 @@
         build_script: build-kernel.sh
         install_script: install-kernel.sh
         json_content: "{{ KERNEL_MODULES | default({}) | to_nice_json }}"
-        build_generated: |
-          : "${KERNEL_MODULES_JSON:?KERNEL_MODULES_JSON is required}"
-
-          # Build /etc/modules-load.d payload from modules with load != false.
-          jq -r '
-            to_entries
-            | sort_by(.key)
-            | map(select(.value.load != false) | .key)
-            | .[]
-          ' "$KERNEL_MODULES_JSON" > "$DIR/etc/kernel.modules-load.conf"
-
-          # Build /etc/modprobe.d payload from per-module params.
-          jq -r '
-            to_entries
-            | sort_by(.key)
-            | map(
-                .key as $module
-                | (.value.params // {} | to_entries | sort_by(.key)) as $params
-                | select(($params | length) > 0)
-                | "options \($module) " + ($params | map("\(.key)=\(.value|tostring)") | join(" "))
-              )
-            | .[]
-          ' "$KERNEL_MODULES_JSON" > "$DIR/etc/kernel.modprobe.conf"
-        install_generated: |
-          : "${KERNEL_MODULES_JSON:?KERNEL_MODULES_JSON is required}"
-
-          "$DIR/bin/build-kernel.sh"
-
-          sudo mkdir -p /etc/modules-load.d /etc/modprobe.d
-          sudo ln -sf "$DIR/etc/kernel.modules-load.conf" "/etc/modules-load.d/{{ NAME }}.conf"
-
-          if [ -s "$DIR/etc/kernel.modprobe.conf" ]; then
-            sudo ln -sf "$DIR/etc/kernel.modprobe.conf" "/etc/modprobe.d/{{ NAME }}.conf"
-          else
-            sudo rm -f "/etc/modprobe.d/{{ NAME }}.conf"
-          fi
-
-          # Ensure modules intended for boot-time load are also available now.
-          jq -r '
-            to_entries
-            | sort_by(.key)
-            | map(select(.value.load != false) | .key)
-            | .[]
-          ' "$KERNEL_MODULES_JSON" |
-          while IFS= read -r _cf_module; do
-            [ -n "$_cf_module" ] || continue
-            sudo modprobe "$_cf_module" >/dev/null 2>&1 || true
-          done
-
-          # Push param values immediately for modules that are already loaded.
-          jq -cr 'to_entries | sort_by(.key) | .[]' "$KERNEL_MODULES_JSON" |
-          while IFS= read -r _cf_module_entry; do
-            _cf_module="$(jq -r '.key' <<<"$_cf_module_entry")"
-
-            jq -cr '.value.params // {} | to_entries | sort_by(.key) | .[]' <<<"$_cf_module_entry" |
-            while IFS= read -r _cf_param_entry; do
-              _cf_param="$(jq -r '.key' <<<"$_cf_param_entry")"
-              _cf_value="$(jq -r '.value|tostring' <<<"$_cf_param_entry")"
-              _cf_path="/sys/module/${_cf_module}/parameters/${_cf_param}"
-
-              if [ -w "$_cf_path" ]; then
-                printf '%s\n' "$_cf_value" | sudo tee "$_cf_path" >/dev/null
-              fi
-            done
-          done
 
       - key: sysctl
         enabled: "{{ KERNEL_SYSCTL | default({}) | length > 0 }}"
@@ -149,23 +85,6 @@
         build_script: build-sysctl.sh
         install_script: install-sysctl.sh
         json_content: "{{ KERNEL_SYSCTL | default({}) | to_nice_json }}"
-        build_generated: |
-          : "${KERNEL_SYSCTL_JSON:?KERNEL_SYSCTL_JSON is required}"
-
-          jq -r '
-            to_entries
-            | sort_by(.key)
-            | map("\(.key) = \(.value|tostring)")
-            | .[]
-          ' "$KERNEL_SYSCTL_JSON" > "$DIR/etc/kernel.sysctl.conf"
-        install_generated: |
-          : "${KERNEL_SYSCTL_JSON:?KERNEL_SYSCTL_JSON is required}"
-
-          "$DIR/bin/build-sysctl.sh"
-
-          sudo mkdir -p /etc/sysctl.d
-          sudo ln -sf "$DIR/etc/kernel.sysctl.conf" "/etc/sysctl.d/{{ NAME }}.conf"
-          sudo sysctl -p "/etc/sysctl.d/{{ NAME }}.conf"
 
       - key: sysfs
         enabled: "{{ KERNEL_SYSFS | default({}) | length > 0 }}"
@@ -175,38 +94,6 @@
         build_script: build-sysfs.sh
         install_script: install-sysfs.sh
         json_content: "{{ KERNEL_SYSFS | default({}) | to_nice_json }}"
-        build_generated: |
-          : "${KERNEL_SYSFS_JSON:?KERNEL_SYSFS_JSON is required}"
-
-          : > "$DIR/etc/kernel.tmpfiles.conf"
-
-          jq -cr 'to_entries | sort_by(.key) | .[]' "$KERNEL_SYSFS_JSON" |
-          while IFS= read -r _cf_entry; do
-            _cf_pattern="$(jq -r '.key' <<<"$_cf_entry")"
-            _cf_value="$(jq -r '.value|tostring' <<<"$_cf_entry")"
-            _cf_matches=()
-
-            while IFS= read -r _cf_match; do
-              _cf_matches+=("$_cf_match")
-            done < <(compgen -G "$_cf_pattern")
-
-            if [ ${#_cf_matches[@]} -eq 0 ]; then
-              printf 'No matches for KERNEL_SYSFS pattern: %s\n' "$_cf_pattern" >&2
-              exit 1
-            fi
-
-            for _cf_path in "${_cf_matches[@]}"; do
-              printf 'w %s - - - - %s\n' "$_cf_path" "$_cf_value" >> "$DIR/etc/kernel.tmpfiles.conf"
-            done
-          done
-        install_generated: |
-          : "${KERNEL_SYSFS_JSON:?KERNEL_SYSFS_JSON is required}"
-
-          "$DIR/bin/build-sysfs.sh"
-
-          sudo mkdir -p /etc/tmpfiles.d
-          sudo ln -sf "$DIR/etc/kernel.tmpfiles.conf" "/etc/tmpfiles.d/{{ NAME }}.conf"
-          sudo systemd-tmpfiles --create "/etc/tmpfiles.d/{{ NAME }}.conf"
 
     # Filter the domain table once. Every assembled output uses this same list.
     activeKernelDomains: >-
@@ -230,28 +117,17 @@
       {%- endfor -%}
       {{ out }}
 
-    kernelEnv: >-
+    kernelDataEnv: >-
       {%- set out = {} -%}
       {%- for domain in activeKernelDomains -%}
         {%- set _ = out.update({ domain.env_key: domain.json_path }) -%}
       {%- endfor -%}
       {{ out }}
-    kernelEnvKeys: "{{ kernelEnv.keys() | list }}"
 
     # Aggregate build/install scripts are just orchestration loops over the
-    # ordered active domain list.
+    # ordered active domain list. The actual shell bodies live in files/kernel/.
     kernelBuildScriptNames: "{{ activeKernelDomains | map(attribute='build_script') | list }}"
     kernelInstallScriptNames: "{{ activeKernelDomains | map(attribute='install_script') | list }}"
-
-    buildGenerated: |
-      for _cf_script in {{ kernelBuildScriptNames | join(' ') }}; do
-        "$DIR/bin/${_cf_script}"
-      done
-
-    installGenerated: |
-      for _cf_script in {{ kernelInstallScriptNames | join(' ') }}; do
-        "$DIR/bin/${_cf_script}"
-      done
 
     # Build the final BINS list from the same active domain list.
     kernelBins: >-
@@ -259,26 +135,35 @@
       {%- for domain in activeKernelDomains -%}
         {%- set _ = out.append({
           'name': domain.build_script,
+          'src': '../kernel/' ~ domain.build_script,
           'basedir': False,
-          'generated': domain.build_generated,
         }) -%}
       {%- endfor -%}
       {%- set _ = out.append({
         'name': 'build.sh',
+        'src': '../kernel/build.sh',
         'basedir': False,
-        'generated': buildGenerated,
       }) -%}
       {%- for domain in activeKernelDomains -%}
         {%- set _ = out.append({
           'name': domain.install_script,
+          'src': '../kernel/' ~ domain.install_script,
           'basedir': False,
-          'generated': domain.install_generated,
         }) -%}
       {%- endfor -%}
       {%- set _ = out.append({
         'name': 'install.sh',
+        'src': '../kernel/install.sh',
         'basedir': False,
         'run': INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy,
-        'generated': installGenerated,
       }) -%}
       {{ out }}
+
+    # Aggregate scripts are file-backed too, so expose the loop inputs through env.
+    kernelEnv: >-
+      {{
+        kernelDataEnv
+        | combine({'KERNEL_BUILD_SCRIPTS': kernelBuildScriptNames | join(' ')})
+        | combine({'KERNEL_INSTALL_SCRIPTS': kernelInstallScriptNames | join(' ')})
+      }}
+    kernelEnvKeys: "{{ kernelEnv.keys() | list }}"
