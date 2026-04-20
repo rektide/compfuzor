@@ -1,40 +1,38 @@
 # compfuzor
 
-Compfuzor is a convention-first deployment framework built on Ansible. The
-playbook is a small declarative card. The shared pipeline interprets that card
-and turns it into files, scripts, links, packages, repos, and services.
+This document is for authoring and extending compfuzor.
 
-The filename is part of the spec.
+Use the README for orientation. Use this skill for stronger guidance about how
+to write a good playbook, how to build a good subsystem, and how to move older
+code toward the preferred current style.
 
-## Mental model
+## Non-Negotiable Mental Model
 
-- A `.pb` file should declare data, not hand-roll task logic.
-- The shared pipeline in `tasks/compfuzor.includes` does the real work.
-- Repeated behavior belongs in `vars_*.tasks`, not copied across playbooks.
-- Feature-specific details belong in code comments near the subsystem that owns
-  them, not in this skill.
+- A playbook is a declarative card, not a bespoke task program.
+- The shared pipeline in `tasks/compfuzor.includes` should do the heavy lifting.
+- Reusable behavior belongs in `vars_*.tasks` generative subsystems.
+- Deep structured inputs should stay structured when that makes the contract cleaner.
+- Generated scripts should own imperative work.
 
-This document should help with two jobs:
+If you find yourself writing lots of custom tasks in a playbook, stop and ask
+whether you are really designing a subsystem.
 
-1. authoring playbooks
-2. authoring or extending generative subsystems (`vars_*.tasks`)
-
-## Filename identity
+## Filename Is Part Of The Contract
 
 Playbooks are named `<NAME>.<TYPE>.pb`.
 
-The pipeline derives identity from that filename:
+The filename drives:
 
-- `TYPE` is the deployment category
-- `NAME` is the instance name stem
-- `INSTANCE` defaults to `main`, or `git` for source-backed playbooks in some
-  repo flows
+- `TYPE`
+- `NAME`
+- default `INSTANCE`
 
-Prefer letting the filename drive identity instead of re-stating it in vars.
+Prefer letting the filename encode identity instead of restating it in vars or
+task parameters.
 
-## Directory model
+## Instance Directory Model
 
-Each playbook gets a primary instance directory:
+Each playbook gets a primary `DIR` with a predictable structure:
 
 ```text
 <DIR>/
@@ -45,23 +43,16 @@ Each playbook gets a primary instance directory:
   share/
 ```
 
-`env` and `env.export` are the instance identity card. Generated scripts should
-source `env.export` and treat those values as the canonical runtime inputs.
+Important consequences:
 
-Common type bases:
+- the instance directory is an inspectable artifact, not a hidden implementation detail
+- generated scripts should source `env.export`
+- users should be able to rerun generated scripts safely
+- multiple instances of the same software should usually be able to coexist
 
-| Type | Base directory |
-|---|---|
-| `etc` | `/etc/opt` |
-| `opt` | `/opt` |
-| `src` | `/usr/local/src` |
-| `srv` | `/srv` |
+## Pipeline Shape
 
-When `USERMODE: True`, these relocate under XDG-oriented user directories.
-
-## Pipeline shape
-
-Every playbook should look like:
+The standard playbook body is:
 
 ```yaml
 ---
@@ -72,7 +63,7 @@ Every playbook should look like:
     - import_tasks: tasks/compfuzor.includes
 ```
 
-`tasks/compfuzor.includes` runs in broad phases:
+`tasks/compfuzor.includes` runs broad phases:
 
 1. variables
 2. user/become setup
@@ -80,160 +71,248 @@ Every playbook should look like:
 4. filesystem
 5. extras
 
-The variables phase is where most compfuzor design happens.
+Most design work happens in the variables phase.
 
-## Authoring playbooks
+## Artifact Taxonomy
 
-### Prefer declarations over tasks
+Choose the right artifact type for the shape of the problem.
 
-Start with data the pipeline already knows how to consume:
+### Hierarchy Files
 
-- `PKGS`
-- `REPO`
-- `DIRS`
-- `ETC_FILES`
-- `SHARE_FILES`
-- `BINS`
-- `ENV` / `ENV_LIST`
-- `LINKS`
-- `SYSTEMD_*`
+Use hierarchy-specific variables instead of generic `FILES` whenever possible.
 
-If a playbook mostly consists of custom tasks, that is usually a sign the logic
-should move into a subsystem.
-
-### Choose the right hierarchy
-
-Use hierarchy-specific variables instead of dumping everything into top-level
-`FILES`.
-
-- config files: `ETC_FILES`
-- shared assets: `SHARE_FILES`
-- executable helpers: `BINS`
-
-This keeps the playbook aligned with the instance directory model.
-
-### Use build/install for generated config
-
-When config should be rebuildable from data, do not hard-code the final `/etc`
-payload directly in Ansible tasks. Generate helper scripts instead:
-
-- `build.sh` renders static files into the instance `etc/`
-- `install.sh` deploys them into system locations
-
-That pattern lets users change env values, rerun `build.sh`, inspect the
-rendered output, then rerun `install.sh`.
+- `ETC_FILES` for config payloads
+- `SHARE_FILES` for shared assets
+- `BINS` for executable helpers
+- `ETC_DIRS`, `SHARE_DIRS`, and similar for hierarchy subdirectories
 
 ### ENV vs ENV_LIST
 
-- `ENV` is for concrete key/value data to write into `env` and `env.export`
-- `ENV_LIST` is for naming the keys a subsystem wants exported
+- `ENV` is for concrete scalar key/value runtime contract data
+- `ENV_LIST` names variables that should be exported
 
-If a generated script needs a value later, make that value part of the env
-contract.
+Do not flatten deep structured data into env just because env is convenient.
 
-## Generative subsystems
+### Deep Data Files
 
-`vars_*.tasks` files are compfuzor's main extension mechanism.
+When the input is genuinely structured, prefer a machine-readable artifact in
+`ETC_FILES` such as JSON or YAML.
 
-Their job is to take higher-level declarations and turn them into standard
-pipeline artifacts:
+Examples:
+
+- a domain table
+- a map of modules to params
+- a multi-part subsystem contract
+
+The point is to preserve structure instead of smearing it across parallel vars.
+
+## Data-First Generator Pattern
+
+This is the core compfuzor design language for non-trivial subsystems.
+
+### Preferred Shape
+
+1. model the subsystem as ordered declarative data
+2. derive standard artifacts from that data
+3. keep big imperative logic in generated scripts, preferably file-backed
+4. have aggregate `build.sh` / `install.sh` orchestrate narrower helpers
+
+### Ordered Domain Tables
+
+When a subsystem has multiple conceptual domains, prefer one ordered table of
+domain specs and derive from it.
+
+From one domain table, you can often derive:
 
 - `ETC_FILES`
-- `BINS`
+- `ENV`
 - `ENV_LIST`
-- `LINKS`
-- other pipeline vars that existing phases already know how to consume
+- `BINS`
+- aggregate script orchestration
 
-Think of them as generators or subsystem adapters, not feature docs.
+This is better than:
 
-### When to create a subsystem
+- parallel arrays that must stay in lockstep
+- repeated `hasFoo`, `fooFiles`, `fooBins`, `fooEnv` branches everywhere
+- zip-style coupling of related data
 
-Move logic into a `vars_*.tasks` file when all of these are true:
+### Shape Data For Filters
 
-- the pattern appears in more than one playbook, or clearly will
-- the playbook is starting to describe a reusable domain contract
-- the output can be expressed as standard pipeline artifacts
+If you want to use `map`, `selectattr`, or `items2dict`, shape the data model so
+the transform is direct.
 
-Do not create a subsystem just because one feature has a lot of knobs.
+Good pattern:
 
-### What a subsystem should do
+- each domain carries an `etc_file`
+- each domain carries a `build_bin`
+- each domain carries an `install_bin`
 
-- define a clean input contract
-- compute derived values once
-- batch output generation in as few `set_fact` actions as practical
-- emit standard artifacts instead of performing deployment directly
-- document subsystem-specific details in code comments near the implementation
+Then assembly becomes simple and obvious.
 
-### What a subsystem should avoid
+## Build / Install Pattern
 
-- scattered `set_fact` calls for each tiny output
-- baking one-off feature prose into `SKILL.md`
-- hiding imperative deploy behavior inside the vars phase
-- forcing playbooks to manually zip or correlate parallel lists of related data
-
-If two values are semantically one object, model them as one object in the
-contract.
-
-## Build/install pattern
-
-This is one of the core compfuzor patterns.
-
-The vars phase generates scripts. Those scripts own the imperative work.
+Generated scripts are first-class outputs.
 
 ### `build.sh`
 
-- reads `env.export`
-- renders canonical files into the instance directory
-- should be safe and repeatable
-- should make it easy to inspect generated output before installation
+`build.sh` should:
+
+- read env/data artifacts
+- construct canonical outputs under the instance directory
+- be safe to rerun
+- make the generated state easy to inspect before deployment
 
 ### `install.sh`
 
-- performs the privileged deployment step
-- usually symlinks or injects generated files into their real system locations
-- should also be safe and repeatable
+`install.sh` should:
 
-The point is to separate declaration, rendering, and deployment.
+- deploy or apply what `build.sh` produced
+- be safe to rerun
+- be the main user-facing operational entrypoint
 
-## `block-in-file`
+### Aggregate Build / Install
 
-`block-in-file` is a key compfuzor tool for idempotent file management.
+When a subsystem has multiple narrower helpers, `build.sh` and `install.sh`
+should usually orchestrate them rather than duplicating their logic.
 
-Useful options:
+## File-Backed Script Bodies
 
-- `-n <name>` gives the managed block a stable identity
-- `-o <file>` selects the output file
-- `--envsubst` expands `${VAR}` placeholders from the environment before write
+Large shell bodies should usually live under `files/<subsystem>/`, not inline in
+`vars_*.tasks` forever.
 
-That `--envsubst` mode is especially important for generated config. A common
-pattern is:
+Reasons:
 
-```bash
-cat "${DIR}/etc/template.conf" | block-in-file -n "${NAME}" -o "${DIR}/etc/output.conf" --envsubst
-```
+- the task file stays focused on structure and data flow
+- the shell is easier to read and test as shell
+- the boundary between declarative assembly and imperative execution stays clear
 
-This lets `build.sh` treat `env.export` as the source of truth for regeneration.
+Inline generated shell is acceptable when it is short and local. Large bodies
+should move out.
 
-## Managed scripts
+## Authoring `vars_*.tasks`
 
-Scripts in `BINS` are wrapped by compfuzor's standard header/footer. They can
-assume:
+### What A Good Subsystem Does
+
+- defines a clean declarative contract
+- computes derived values once
+- derives many outputs from a small number of well-shaped vars
+- keeps `set_fact` count low when practical
+- emits standard artifacts the pipeline already knows how to consume
+- keeps domain-specific detail near the implementation, especially in comments
+
+### What A Good Subsystem Avoids
+
+- repeated tiny `set_fact` stages for every output fragment
+- one-off prose docs for specific features inside this skill
+- hiding imperative deploy behavior directly in the vars phase
+- parallel lists that have to be kept in sync by convention
+- giant inline shell blobs when `files/<subsystem>/` would be clearer
+
+### When To Create A Subsystem
+
+Create or extend `vars_*.tasks` when:
+
+- a pattern appears in more than one playbook, or clearly will
+- the playbook is starting to encode a reusable domain contract
+- the result can be expressed as standard compfuzor artifacts
+
+Do not create a subsystem just because a single feature has many knobs.
+
+## Authoring Playbooks
+
+### Start With Existing Contracts
+
+Try these first:
+
+- `PKGS`
+- `REPO`
+- hierarchy vars like `ETC_FILES`, `SHARE_FILES`, `BINS`
+- `ENV` / `ENV_LIST`
+- existing subsystem vars such as `SYSTEMD_*`
+
+### Prefer Declarations Over Custom Tasks
+
+If a playbook is becoming mostly custom tasks, that is usually a sign the logic
+should move into shared machinery.
+
+### Keep Playbooks Thin
+
+The playbook should usually be easy to scan in one screenful. Large logic bodies
+belong in subsystems or file-backed scripts.
+
+## Managed Scripts (`BINS`)
+
+Scripts in `BINS` are wrapped by compfuzor's standard script header/footer.
+They can assume:
 
 - `DIR` is available
 - `env.export` can be sourced
-- standard shell safety flags are applied
+- shell safety flags are enabled
 
-Prefer using generated scripts for behavior the user may want to rerun later.
+Use this. Do not manually rebuild that runtime contract inside every script.
 
-## Migrations and staleness
+## `block-in-file`
 
-Many older playbooks predate the current conventions. When touching one, prefer
-to move it toward these patterns:
+`block-in-file` is one of the key compfuzor tools for managed file mutation.
 
-- `include:` to `import_tasks:`
-- filename-driven type selection instead of `type=` arguments
-- hierarchy vars instead of top-level `FILES`
-- subsystem contracts instead of repeated custom task blocks
+Useful options:
 
-When in doubt, prefer the patterns used by recently-maintained playbooks and the
-generative style used by active `vars_*.tasks`.
+- `-n <name>` for stable block identity
+- `-o <file>` for the target file
+- `--envsubst` for environment-based substitution before write
+
+This is especially useful when `build.sh` is generating material from
+`env.export`.
+
+## Migration Guidance
+
+When editing old playbooks, prefer to move them toward current conventions.
+
+### Prefer `import_tasks:`
+
+Use:
+
+```yaml
+- import_tasks: tasks/compfuzor.includes
+```
+
+not the old `include:` form.
+
+### Put Type In The Filename
+
+Prefer `foo.src.pb` over passing `type=src` into the include/import call.
+
+### Move Generic Files Into Hierarchies
+
+Prefer:
+
+- `ETC_FILES`
+- `SHARE_FILES`
+- `BINS`
+
+over broad top-level `FILES` where possible.
+
+### Extract Repeated Logic
+
+If two or three playbooks are doing the same shape of work, stop copying.
+Design the contract and move the logic into a subsystem.
+
+## Practical Smells
+
+These usually mean the design wants work:
+
+- a playbook with lots of hand-authored tasks
+- a subsystem with many near-duplicate branches
+- repeated `hasX` variables that could be replaced by one ordered data table
+- outputs assembled by custom loops when `map`/`items2dict` would work if the data were shaped better
+- env carrying data that really wants to stay structured
+
+## What To Preserve When Rewriting Old Code
+
+Even when modernizing, preserve these strengths:
+
+- inspectable instance directories
+- rerunnable generated scripts
+- instance multiplicity
+- convention-driven paths and identity
+- operational clarity over abstraction for its own sake
