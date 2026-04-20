@@ -96,14 +96,7 @@
         json_content: "{{ KERNEL_SYSFS | default({}) | to_nice_json }}"
 
     # Filter the domain table once. Every assembled output uses this same list.
-    activeKernelDomains: >-
-      {%- set out = [] -%}
-      {%- for domain in kernelDomains -%}
-        {%- if domain.enabled | bool -%}
-          {%- set _ = out.append(domain) -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {{ out }}
+    activeKernelDomains: "{{ kernelDomains | selectattr('enabled', 'truthy') | list }}"
     hasAny: "{{ activeKernelDomains | length > 0 }}"
 
     # JSON is the deep data contract. The env only points scripts at those files.
