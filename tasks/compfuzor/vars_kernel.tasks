@@ -247,48 +247,61 @@
       "$DIR/bin/install-sysfs.sh"
       {% endif %}
 
-    kernelBins: >-
+    # Define each generated bin independently. The final kernelBins list is
+    # assembled later from a list of variable names, which keeps the selection
+    # logic separate from the bin definitions themselves.
+    binBuildKernel:
+      name: build-kernel.sh
+      basedir: False
+      generated: "{{ buildKernelGenerated }}"
+    binBuildSysctl:
+      name: build-sysctl.sh
+      basedir: False
+      generated: "{{ buildSysctlGenerated }}"
+    binBuildSysfs:
+      name: build-sysfs.sh
+      basedir: False
+      generated: "{{ buildSysfsGenerated }}"
+    binBuild:
+      name: build.sh
+      basedir: False
+      generated: "{{ buildGenerated }}"
+    binInstallKernel:
+      name: install-kernel.sh
+      basedir: False
+      generated: "{{ installKernelGenerated }}"
+    binInstallSysctl:
+      name: install-sysctl.sh
+      basedir: False
+      generated: "{{ installSysctlGenerated }}"
+    binInstallSysfs:
+      name: install-sysfs.sh
+      basedir: False
+      generated: "{{ installSysfsGenerated }}"
+    binInstall:
+      name: install.sh
+      basedir: False
+      run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+      generated: "{{ installGenerated }}"
+
+    # Lazy vars let us define all candidate bins up front and only select the
+    # ones we actually want to materialize for this playbook.
+    kernelBinVarNames: >-
       {{
         ([])
-        + ([{
-            'name': 'build-kernel.sh',
-            'basedir': False,
-            'generated': buildKernelGenerated,
-          }] if hasModules else [])
-        + ([{
-            'name': 'build-sysctl.sh',
-            'basedir': False,
-            'generated': buildSysctlGenerated,
-          }] if hasSysctl else [])
-        + ([{
-            'name': 'build-sysfs.sh',
-            'basedir': False,
-            'generated': buildSysfsGenerated,
-          }] if hasSysfs else [])
-        + ([{
-            'name': 'build.sh',
-            'basedir': False,
-            'generated': buildGenerated,
-          }])
-        + ([{
-            'name': 'install-kernel.sh',
-            'basedir': False,
-            'generated': installKernelGenerated,
-          }] if hasModules else [])
-        + ([{
-            'name': 'install-sysctl.sh',
-            'basedir': False,
-            'generated': installSysctlGenerated,
-          }] if hasSysctl else [])
-        + ([{
-            'name': 'install-sysfs.sh',
-            'basedir': False,
-            'generated': installSysfsGenerated,
-          }] if hasSysfs else [])
-        + ([{
-            'name': 'install.sh',
-            'basedir': False,
-            'run': INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy,
-            'generated': installGenerated,
-          }])
+        + (['binBuildKernel'] if hasModules else [])
+        + (['binBuildSysctl'] if hasSysctl else [])
+        + (['binBuildSysfs'] if hasSysfs else [])
+        + ['binBuild']
+        + (['binInstallKernel'] if hasModules else [])
+        + (['binInstallSysctl'] if hasSysctl else [])
+        + (['binInstallSysfs'] if hasSysfs else [])
+        + ['binInstall']
       }}
+
+    kernelBins: >-
+      {%- set out = [] -%}
+      {%- for binVarName in kernelBinVarNames -%}
+        {%- set _ = out.append(vars[binVarName]) -%}
+      {%- endfor -%}
+      {{ out }}
