@@ -1,35 +1,41 @@
 ---
-# vars_kernel.tasks — generative kernel subsystem
+# vars_kernel.tasks
 #
-# Processes KERNEL_MODULES and KERNEL_SYSCTL dicts into ETC_FILES, BINS, and
-# ENV_LIST.  Follows the build/install pattern: build.sh templates config from
-# env vars, install.sh symlinks into system dirs.
+# Generative subsystem for kernel-adjacent config.
 #
-# Contract:
+# Input contract:
 #   KERNEL_MODULES:
 #     <module_name>:
-#       params:          # optional
+#       params:           # optional
 #         <key>: <value>
 #   KERNEL_SYSCTL:
 #     <sysctl.key>: <value>
 #
-# See skill/SKILL.md "Kernel subsystem" section for full docs.
+# Output pattern:
+# - ETC_FILES: static files that live in the instance etc/
+# - ENV_LIST: keys exported into env/env.export so generated scripts can rebuild
+# - BINS:
+#   - build.sh renders static config from exported env data
+#   - install.sh symlinks those rendered files into system locations
+#
+# This task owns the declarative contract. It should stay light on imperative
+# behavior: build/install scripts do the deployment work, not the vars phase.
 
 - name: "Compfuzor: sourcing kernel variables"
   set_fact:
-    # ETC_FILES: modules-load, modprobe, sysctl drop-ins
+    # Static config payloads rendered into the instance etc/ directory.
     ETC_FILES: >-
       {{ ETC_FILES|default([]) 
         + ([_modules_load_file] if _has_modules else [])
         + ([_modprobe_file] if _has_modprobe else [])
         + ([_sysctl_file] if _has_sysctl else [])
       }}
-    # BINS: build.sh and install.sh
+    # Generated helper scripts following the standard build/install pattern.
     BINS: >-
       {{ BINS|default([])
         + ([_build_bin, _install_bin] if _has_any else [])
       }}
-    # ENV_LIST: expose all param values so build.sh can envsubst them
+    # Export declarative values so build.sh can re-render from env.export.
     ENV_LIST: >-
       {{ ENV_LIST|default([])
         + _all_env_keys
@@ -45,13 +51,13 @@
     _has_sysctl: "{{ KERNEL_SYSCTL|default({})|length > 0 }}"
     _has_any: "{{ _has_modules or _has_sysctl }}"
 
-    # ── modules-load.d content: just module names, one per line ──
+    # modules-load.d is just a newline-delimited list of module names.
     _modules_load_content: "{{ KERNEL_MODULES|default({})|list|join('\n') }}"
     _modules_load_file:
       name: "{{ NAME }}.modules-load.conf"
       content: "{{ _modules_load_content }}"
 
-    # ── modprobe.d content: one options line per module with params ─
+    # modprobe.d emits one "options <module> ..." line per module with params.
     _modprobe_lines: >-
       {%- set lines = [] -%}
       {%- for mod, cfg in KERNEL_MODULES|default({}).items() -%}
@@ -66,7 +72,7 @@
       name: "{{ NAME }}.modprobe.conf"
       content: "{{ _modprobe_lines }}"
 
-    # ── sysctl.d content: key = value lines ─────────────────────
+    # sysctl.d is a flat "key = value" file.
     _sysctl_content: |
       {% for key, val in KERNEL_SYSCTL|default({}).items() %}
       {{ key }} = {{ val }}
@@ -75,7 +81,7 @@
       name: "{{ NAME }}.sysctl.conf"
       content: "{{ _sysctl_content }}"
 
-    # ── ENV_LIST: collect all param keys as uppercase env-var names ─
+    # ENV_LIST mirrors the declarative inputs as shell-friendly variable names.
     _module_env_keys: >-
       {%- set keys = [] -%}
       {%- for mod, cfg in KERNEL_MODULES|default({}).items() -%}
@@ -88,7 +94,7 @@
       {{ KERNEL_SYSCTL|default({}).keys()|map('replace','.','_')|map('upper')|list }}
     _all_env_keys: "{{ _module_env_keys + _sysctl_env_keys }}"
 
-    # ── build.sh: template ETC files from env vars via envsubst ──
+    # build.sh rebuilds the canonical static files from env.export data.
     _build_generated: |
       #!/bin/bash
       source "${DIR}/env.export"
@@ -126,7 +132,7 @@
       basedir: False
       content: "{{ _build_generated }}"
 
-    # ── install.sh: symlink ETC files into system dirs ──────────
+    # install.sh performs the privileged deployment by symlinking into /etc.
     _install_generated: |
       #!/bin/bash
       source "${DIR}/env.export"
