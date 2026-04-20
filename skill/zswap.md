@@ -83,9 +83,14 @@ Both can be used simultaneously. Zswap will cache pages headed for zram or disk-
 - Compressor backends: `CONFIG_LZ4_COMPRESS`, `CONFIG_ZSTD_COMPRESS`, etc.
 - Allocator backends: `CONFIG_Z3FOLD`, `CONFIG_ZBUD`, `CONFIG_ZSMALLOC`
 
+## Migration to vars_kernel.tasks
+
+The playbook currently uses the manual `MODULES` + `ETC_FILES` + `LINKS` pattern. As `vars_kernel.tasks` matures, the playbook can migrate to use `KERNEL_MODULES`, `KERNEL_MODPROBE`, and `KERNEL_SYSCTL` variables which auto-generate the modprobe.d, modules-load.d, and sysctl.d drop-ins without manual ETC_FILES/LINKS.
+
 ## Key files
 
 | File | Purpose |
 |---|---|
 | `zswap.etc.pb` | Playbook |
 | `skill/zswap.md` | This skill document |
+| `tasks/compfuzor/vars_kernel.tasks` | Generative kernel subsystem (future home) |
