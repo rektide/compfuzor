@@ -1,0 +1,83 @@
+---
+- name: "Compfuzor: sourcing kernel variables"
+  set_fact:
+    KERNEL_MODULE_FILES: "{{ KERNEL_MODULE_FILES|default([]) + [_module_file] }}"
+    KERNEL_MODPROBE_FILES: "{{ KERNEL_MODPROBE_FILES|default([]) + [_modprobe_file] }}"
+  when: KERNEL_MODULES|default([])|length > 0
+  vars:
+    _module_file:
+      name: "{{ NAME }}.conf"
+      content: "{{ KERNEL_MODULES | join('\n') }}"
+      dest_dir: /etc/modules-load.d
+    _modprobe_file:
+      name: "{{ NAME }}.conf"
+      content: "{{ KERNEL_MODPROBE_PARAMS | default('') }}"
+      dest_dir: /etc/modprobe.d
+  loop: "{{ KERNEL_MODULES | default([]) }}"
+
+- name: "Generate kernel module load ETC_FILES"
+  set_fact:
+    ETC_FILES: "{{ ETC_FILES|default([]) + [item] }}"
+  when: >
+    KERNEL_MODULES|default([])|length > 0
+    and not KERNEL_MODULES_BYPASS|default(False)
+  loop: "{{ KERNEL_MODULE_FILES|default([]) }}"
+
+- name: "Generate kernel modprobe ETC_FILES"
+  set_fact:
+    ETC_FILES: "{{ ETC_FILES|default([]) + [item] }}"
+  when: >
+    KERNEL_MODPROBE|default({})|length > 0
+    and not KERNEL_MODULES_BYPASS|default(False)
+  vars:
+    _modprobe_content: |
+      {% for mod, params in KERNEL_MODPROBE.items() %}
+      options {{ mod }} {{ params }}
+      {% endfor %}
+    _modprobe_file:
+      name: "{{ NAME }}.conf"
+      content: "{{ _modprobe_content }}"
+  loop:
+    - "{{ _modprobe_file }}"
+
+- name: "Generate kernel sysctl ETC_FILES from KERNEL_SYSCTL"
+  set_fact:
+    ETC_FILES: "{{ ETC_FILES|default([]) + [_sysctl_file] }}"
+  when: >
+    KERNEL_SYSCTL|default({})|length > 0
+    and not KERNEL_SYSCTL_BYPASS|default(False)
+  vars:
+    _sysctl_content: |
+      {% for key, val in KERNEL_SYSCTL.items() %}
+      {{ key }} = {{ val }}
+      {% endfor %}
+    _sysctl_file:
+      name: "{{ NAME }}.conf"
+      content: "{{ _sysctl_content }}"
+      dest_dir: /etc/sysctl.d
+
+- name: "Add kernel apply BINS when KERNEL_PARAMS defined"
+  set_fact:
+    BINS: "{{ BINS|default([]) + [_apply_bin] }}"
+  when: >
+    KERNEL_PARAMS|default({})|length > 0
+    and not KERNEL_BYPASS|default(False)
+  vars:
+    _apply_lines: |
+      {% for param_path, val in KERNEL_PARAMS.items() %}
+      echo "{{ val }}" | sudo tee "{{ param_path }}" >/dev/null
+      {% endfor %}
+    _apply_bin:
+      name: apply-kernel.sh
+      content: "{{ _apply_lines }}"
+
+- name: "Compfuzor: install /etc/modules-load.d (legacy MODULES support)"
+  copy:
+    content: "{{ MODULES | join('\n') }}"
+    dest: "/etc/modules-load.d/{{ NAME }}.conf"
+  become: True
+  when: >
+    MODULES|default(False) is truthy
+    and KERNEL_MODULES|default([])|length == 0
+    and not MODULES_BYPASS|default(False)
+    and not KERNEL_MODULES_BYPASS|default(False)
