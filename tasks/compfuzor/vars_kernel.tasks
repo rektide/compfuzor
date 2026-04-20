@@ -72,31 +72,49 @@
         enabled: "{{ KERNEL_MODULES | default({}) | length > 0 }}"
         json_path: "{{ DIR }}/etc/kernel.modules.json"
         env_key: KERNEL_MODULES_JSON
-        build_script: build-kernel.sh
-        install_script: install-kernel.sh
         etc_file:
           name: kernel.modules.json
           content: "{{ KERNEL_MODULES | default({}) | to_nice_json }}"
+        build_bin:
+          name: build-kernel.sh
+          src: ../kernel/build-kernel.sh
+          basedir: False
+        install_bin:
+          name: install-kernel.sh
+          src: ../kernel/install-kernel.sh
+          basedir: False
 
       - key: sysctl
         enabled: "{{ KERNEL_SYSCTL | default({}) | length > 0 }}"
         json_path: "{{ DIR }}/etc/kernel.sysctl.json"
         env_key: KERNEL_SYSCTL_JSON
-        build_script: build-sysctl.sh
-        install_script: install-sysctl.sh
         etc_file:
           name: kernel.sysctl.json
           content: "{{ KERNEL_SYSCTL | default({}) | to_nice_json }}"
+        build_bin:
+          name: build-sysctl.sh
+          src: ../kernel/build-sysctl.sh
+          basedir: False
+        install_bin:
+          name: install-sysctl.sh
+          src: ../kernel/install-sysctl.sh
+          basedir: False
 
       - key: sysfs
         enabled: "{{ KERNEL_SYSFS | default({}) | length > 0 }}"
         json_path: "{{ DIR }}/etc/kernel.sysfs.json"
         env_key: KERNEL_SYSFS_JSON
-        build_script: build-sysfs.sh
-        install_script: install-sysfs.sh
         etc_file:
           name: kernel.sysfs.json
           content: "{{ KERNEL_SYSFS | default({}) | to_nice_json }}"
+        build_bin:
+          name: build-sysfs.sh
+          src: ../kernel/build-sysfs.sh
+          basedir: False
+        install_bin:
+          name: install-sysfs.sh
+          src: ../kernel/install-sysfs.sh
+          basedir: False
 
     # Filter the domain table once. Every assembled output uses this same list.
     activeKernelDomains: "{{ kernelDomains | selectattr('enabled', 'truthy') | list }}"
@@ -108,38 +126,23 @@
 
     # Aggregate build/install scripts are just orchestration loops over the
     # ordered active domain list. The actual shell bodies live in files/kernel/.
-    kernelBuildScriptNames: "{{ activeKernelDomains | map(attribute='build_script') | list }}"
-    kernelInstallScriptNames: "{{ activeKernelDomains | map(attribute='install_script') | list }}"
+    kernelBuildBins: "{{ activeKernelDomains | map(attribute='build_bin') | list }}"
+    kernelInstallBins: "{{ activeKernelDomains | map(attribute='install_bin') | list }}"
+    kernelBuildScriptNames: "{{ kernelBuildBins | map(attribute='name') | list }}"
+    kernelInstallScriptNames: "{{ kernelInstallBins | map(attribute='name') | list }}"
+
+    buildAggregateBin:
+      name: build.sh
+      src: ../kernel/build.sh
+      basedir: False
+    installAggregateBin:
+      name: install.sh
+      src: ../kernel/install.sh
+      basedir: False
+      run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
 
     # Build the final BINS list from the same active domain list.
-    kernelBins: >-
-      {%- set out = [] -%}
-      {%- for domain in activeKernelDomains -%}
-        {%- set _ = out.append({
-          'name': domain.build_script,
-          'src': '../kernel/' ~ domain.build_script,
-          'basedir': False,
-        }) -%}
-      {%- endfor -%}
-      {%- set _ = out.append({
-        'name': 'build.sh',
-        'src': '../kernel/build.sh',
-        'basedir': False,
-      }) -%}
-      {%- for domain in activeKernelDomains -%}
-        {%- set _ = out.append({
-          'name': domain.install_script,
-          'src': '../kernel/' ~ domain.install_script,
-          'basedir': False,
-        }) -%}
-      {%- endfor -%}
-      {%- set _ = out.append({
-        'name': 'install.sh',
-        'src': '../kernel/install.sh',
-        'basedir': False,
-        'run': INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy,
-      }) -%}
-      {{ out }}
+    kernelBins: "{{ kernelBuildBins + [buildAggregateBin] + kernelInstallBins + [installAggregateBin] }}"
 
     # Aggregate scripts are file-backed too, so expose the loop inputs through env.
     kernelEnv: >-
