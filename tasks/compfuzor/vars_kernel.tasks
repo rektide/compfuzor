@@ -158,21 +158,25 @@
         done
       done
 
-    # Select which concrete build/install scripts exist for this playbook.
-    kernelBuildScriptNames: >-
+    # Domain script specs keep the shell body vars separate from the actual BINS
+    # mappings. We select the active domains once, then derive both the aggregate
+    # orchestration loops and the final kernelBins from the same data.
+    kernelBuildScriptSpecs: >-
       {{
         ([])
-        + (['build-kernel.sh'] if hasModules else [])
-        + (['build-sysctl.sh'] if hasSysctl else [])
-        + (['build-sysfs.sh'] if hasSysfs else [])
+        + ([{'name': 'build-kernel.sh', 'generated_var': 'buildKernelGenerated'}] if hasModules else [])
+        + ([{'name': 'build-sysctl.sh', 'generated_var': 'buildSysctlGenerated'}] if hasSysctl else [])
+        + ([{'name': 'build-sysfs.sh', 'generated_var': 'buildSysfsGenerated'}] if hasSysfs else [])
       }}
-    kernelInstallScriptNames: >-
+    kernelInstallScriptSpecs: >-
       {{
         ([])
-        + (['install-kernel.sh'] if hasModules else [])
-        + (['install-sysctl.sh'] if hasSysctl else [])
-        + (['install-sysfs.sh'] if hasSysfs else [])
+        + ([{'name': 'install-kernel.sh', 'generated_var': 'installKernelGenerated'}] if hasModules else [])
+        + ([{'name': 'install-sysctl.sh', 'generated_var': 'installSysctlGenerated'}] if hasSysctl else [])
+        + ([{'name': 'install-sysfs.sh', 'generated_var': 'installSysfsGenerated'}] if hasSysfs else [])
       }}
+    kernelBuildScriptNames: "{{ kernelBuildScriptSpecs | map(attribute='name') | list }}"
+    kernelInstallScriptNames: "{{ kernelInstallScriptSpecs | map(attribute='name') | list }}"
 
     # The aggregate build.sh just loops over the selected build helpers.
     buildGenerated: |
@@ -251,66 +255,33 @@
         "$DIR/bin/${_cf_script}"
       done
 
-    # Define each generated bin independently. The final kernelBins list is
-    # assembled later from a list of variable names, which keeps the selection
-    # logic separate from the bin definitions themselves.
-    binBuildKernel:
-      name: build-kernel.sh
-      basedir: False
-      generated: "{{ buildKernelGenerated }}"
-    binBuildSysctl:
-      name: build-sysctl.sh
-      basedir: False
-      generated: "{{ buildSysctlGenerated }}"
-    binBuildSysfs:
-      name: build-sysfs.sh
-      basedir: False
-      generated: "{{ buildSysfsGenerated }}"
-    binBuild:
-      name: build.sh
-      basedir: False
-      generated: "{{ buildGenerated }}"
-    binInstallKernel:
-      name: install-kernel.sh
-      basedir: False
-      generated: "{{ installKernelGenerated }}"
-    binInstallSysctl:
-      name: install-sysctl.sh
-      basedir: False
-      generated: "{{ installSysctlGenerated }}"
-    binInstallSysfs:
-      name: install-sysfs.sh
-      basedir: False
-      generated: "{{ installSysfsGenerated }}"
-    binInstall:
-      name: install.sh
-      basedir: False
-      run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
-      generated: "{{ installGenerated }}"
-
-    # Lazy vars let us define all candidate bins up front and only select the
-    # ones we actually want to materialize for this playbook.
-    kernelBuildBinVarNames: >-
-      {{
-        ([])
-        + (['binBuildKernel'] if hasModules else [])
-        + (['binBuildSysctl'] if hasSysctl else [])
-        + (['binBuildSysfs'] if hasSysfs else [])
-        + ['binBuild']
-      }}
-    kernelInstallBinVarNames: >-
-      {{
-        ([])
-        + (['binInstallKernel'] if hasModules else [])
-        + (['binInstallSysctl'] if hasSysctl else [])
-        + (['binInstallSysfs'] if hasSysfs else [])
-        + ['binInstall']
-      }}
-    kernelBinVarNames: "{{ kernelBuildBinVarNames + kernelInstallBinVarNames }}"
-
+    # Build the final bin mappings from the script specs rather than spelling
+    # each bin out as its own variable.
     kernelBins: >-
       {%- set out = [] -%}
-      {%- for binVarName in kernelBinVarNames -%}
-        {%- set _ = out.append(vars[binVarName]) -%}
+      {%- for spec in kernelBuildScriptSpecs -%}
+        {%- set _ = out.append({
+          'name': spec.name,
+          'basedir': False,
+          'generated': vars[spec.generated_var],
+        }) -%}
       {%- endfor -%}
+      {%- set _ = out.append({
+        'name': 'build.sh',
+        'basedir': False,
+        'generated': buildGenerated,
+      }) -%}
+      {%- for spec in kernelInstallScriptSpecs -%}
+        {%- set _ = out.append({
+          'name': spec.name,
+          'basedir': False,
+          'generated': vars[spec.generated_var],
+        }) -%}
+      {%- endfor -%}
+      {%- set _ = out.append({
+        'name': 'install.sh',
+        'basedir': False,
+        'run': INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy,
+        'generated': installGenerated,
+      }) -%}
       {{ out }}
