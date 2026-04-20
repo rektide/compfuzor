@@ -158,17 +158,27 @@
         done
       done
 
-    # The aggregate build.sh just dispatches to the narrower build steps.
+    # Select which concrete build/install scripts exist for this playbook.
+    kernelBuildScriptNames: >-
+      {{
+        ([])
+        + (['build-kernel.sh'] if hasModules else [])
+        + (['build-sysctl.sh'] if hasSysctl else [])
+        + (['build-sysfs.sh'] if hasSysfs else [])
+      }}
+    kernelInstallScriptNames: >-
+      {{
+        ([])
+        + (['install-kernel.sh'] if hasModules else [])
+        + (['install-sysctl.sh'] if hasSysctl else [])
+        + (['install-sysfs.sh'] if hasSysfs else [])
+      }}
+
+    # The aggregate build.sh just loops over the selected build helpers.
     buildGenerated: |
-      {% if hasModules %}
-      "$DIR/bin/build-kernel.sh"
-      {% endif %}
-      {% if hasSysctl %}
-      "$DIR/bin/build-sysctl.sh"
-      {% endif %}
-      {% if hasSysfs %}
-      "$DIR/bin/build-sysfs.sh"
-      {% endif %}
+      for _cf_script in {{ kernelBuildScriptNames | join(' ') }}; do
+        "$DIR/bin/${_cf_script}"
+      done
 
     # install-kernel.sh installs both modules-load.d and modprobe.d outputs,
     # then applies best-effort immediate runtime state for already-loaded modules.
@@ -237,15 +247,9 @@
 
     # The aggregate install.sh is the single public entrypoint users should run.
     installGenerated: |
-      {% if hasModules %}
-      "$DIR/bin/install-kernel.sh"
-      {% endif %}
-      {% if hasSysctl %}
-      "$DIR/bin/install-sysctl.sh"
-      {% endif %}
-      {% if hasSysfs %}
-      "$DIR/bin/install-sysfs.sh"
-      {% endif %}
+      for _cf_script in {{ kernelInstallScriptNames | join(' ') }}; do
+        "$DIR/bin/${_cf_script}"
+      done
 
     # Define each generated bin independently. The final kernelBins list is
     # assembled later from a list of variable names, which keeps the selection
@@ -286,18 +290,23 @@
 
     # Lazy vars let us define all candidate bins up front and only select the
     # ones we actually want to materialize for this playbook.
-    kernelBinVarNames: >-
+    kernelBuildBinVarNames: >-
       {{
         ([])
         + (['binBuildKernel'] if hasModules else [])
         + (['binBuildSysctl'] if hasSysctl else [])
         + (['binBuildSysfs'] if hasSysfs else [])
         + ['binBuild']
+      }}
+    kernelInstallBinVarNames: >-
+      {{
+        ([])
         + (['binInstallKernel'] if hasModules else [])
         + (['binInstallSysctl'] if hasSysctl else [])
         + (['binInstallSysfs'] if hasSysfs else [])
         + ['binInstall']
       }}
+    kernelBinVarNames: "{{ kernelBuildBinVarNames + kernelInstallBinVarNames }}"
 
     kernelBins: >-
       {%- set out = [] -%}
