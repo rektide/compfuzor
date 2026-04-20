@@ -1,98 +1,67 @@
 # compfuzor
 
-Compfuzor is a convention-based software deployment framework built on Ansible. The filename IS the spec.
+Compfuzor is a convention-first deployment framework built on Ansible. The
+playbook is a small declarative card. The shared pipeline interprets that card
+and turns it into files, scripts, links, packages, repos, and services.
 
-Each `.pb` file is a thin declarative card declaring what to deploy. A single shared pipeline (`tasks/compfuzor.includes`) interprets all playbooks through a uniform process: parse identity from the filename, resolve layered variables, provision the filesystem, install packages, deploy configs, and link binaries. There is no per-software task logic in the pipeline — only variable declarations that drive shared machinery.
+The filename is part of the spec.
 
-## The target directory
+## Mental model
 
-Every compfuzor playbook deploys to a single primary directory derived from three things: the **type** (from the filename), the **instance** (defaults to `main`, or `git` for source builds with a repo), and the **type's base directory**.
+- A `.pb` file should declare data, not hand-roll task logic.
+- The shared pipeline in `tasks/compfuzor.includes` does the real work.
+- Repeated behavior belongs in `vars_*.tasks`, not copied across playbooks.
+- Feature-specific details belong in code comments near the subsystem that owns
+  them, not in this skill.
 
-### Filename identity
+This document should help with two jobs:
 
-Playbooks are named `<NAME>.<TYPE>.pb`. The filename is parsed at runtime to set:
+1. authoring playbooks
+2. authoring or extending generative subsystems (`vars_*.tasks`)
 
-- `TYPE` — the deployment category (src, etc, opt, srv, pkg, repo)
-- `NAME` — defaults to `TYPE-INSTANCE` (e.g. `caddy-git`, `zsh-main`)
-- `INSTANCE` — defaults to `main`, or `git` when `REPO` is defined and the cmdline instance is `src`
+## Filename identity
 
-The playbook can override any of these with explicit vars, but convention is to let the filename drive.
+Playbooks are named `<NAME>.<TYPE>.pb`.
 
-### Default instance
+The pipeline derives identity from that filename:
 
-When `INSTANCE` is not explicitly set in a playbook:
+- `TYPE` is the deployment category
+- `NAME` is the instance name stem
+- `INSTANCE` defaults to `main`, or `git` for source-backed playbooks in some
+  repo flows
 
-- If a `REPO` is defined and the playbook was invoked as `type=src`, INSTANCE defaults to `git`
-- Otherwise INSTANCE defaults to `main`
+Prefer letting the filename drive identity instead of re-stating it in vars.
 
-This means `caddy.src.pb` with a `REPO` becomes `caddy-git` at `/usr/local/src/caddy-git`. An `etc` playbook like `zsh.etc.pb` becomes `zsh-main` at `/etc/opt/zsh-main`.
+## Directory model
 
-### Instance multiplicity
+Each playbook gets a primary instance directory:
 
-Because the instance is part of the directory name, you can coexist multiple deployments of the same software:
-
-- `zsh.etc.pb` → `/etc/opt/zsh-main/`
-- `zsh.etc.pb` with `INSTANCE: test` → `/etc/opt/zsh-test/`
-- `caddy.src.pb` → `/usr/local/src/caddy-git/`
-
-Each instance is a self-contained slot with its own env, bins, configs, and share data.
-
-### Standard directory layout
-
-Every instance directory has this shape:
-
-```
+```text
 <DIR>/
-  env              # key=value metadata (DIR, NAME, TYPE, INSTANCE, etc.)
-  env.export       # same, but with `export` prefix for shell sourcing
-  bin/             # managed scripts with standardized headers/footers
-  etc/             # symlink → <DIR> (for etc-type playbooks)
-  share/           # symlink → /usr/local/share/<NAME>/
+  env
+  env.export
+  bin/
+  etc/
+  share/
 ```
 
-The `env` / `env.export` files are the instance's identity card. Scripts in `bin/` source `env.export` at startup to discover their own `DIR`, `NAME`, and other runtime variables.
+`env` and `env.export` are the instance identity card. Generated scripts should
+source `env.export` and treat those values as the canonical runtime inputs.
 
-### Type base directories
+Common type bases:
 
-| Type    | Base Directory     | Example DIR                     | Purpose                            |
-|---------|--------------------|----------------------------------|------------------------------------|
-| `etc`   | `/etc/opt`         | `/etc/opt/zsh-main`             | System configuration instances     |
-| `opt`   | `/opt`             | `/opt/ripgrep-main`             | Third-party software installs      |
-| `src`   | `/usr/local/src`   | `/usr/local/src/caddy-git`      | Source checkouts & builds          |
-| `srv`   | `/srv`             | `/srv/headscale-main`           | Services / daemons                 |
-| `pkg`   | `/opt`             | `/opt/somepackage-main`         | Package-like installs              |
-| `repo`  | `/opt`             | `/opt/myrepo-main`              | Repository mirrors                 |
+| Type | Base directory |
+|---|---|
+| `etc` | `/etc/opt` |
+| `opt` | `/opt` |
+| `src` | `/usr/local/src` |
+| `srv` | `/srv` |
 
-### Hierarchy variables
+When `USERMODE: True`, these relocate under XDG-oriented user directories.
 
-For each type prefix in DIRSET (opt, srv, etc, var, log, spool, cache, src, pid, share), the pipeline looks for three variable patterns:
+## Pipeline shape
 
-- `<PREFIX>_DIR` — override the directory for this hierarchy (e.g. `SHARE_DIR`)
-- `<PREFIX>_DIRS` — list of subdirectories to create (e.g. `ETC_DIRS: [z.d, zfunc.d, bin]`)
-- `<PREFIX>_FILES` — list of files to deploy into this hierarchy (e.g. `ETC_FILES`, `SHARE_FILES`)
-- `<PREFIX>_D` — list of files to assemble from `.d` fragments
-
-These are processed by `fs_hierarchy.tasks` which creates the directory, symlinks it into the instance dir, creates subdirs, deploys files, and assembles `.d` fragments.
-
-### Usermode directories
-
-When `USERMODE: True` is set, all directory bases relocate under the user's XDG directories:
-
-| Standard Base    | Usermode Base                         |
-|------------------|---------------------------------------|
-| `/etc/opt`       | `$XDG_CONFIG_HOME`                    |
-| `/opt`           | `$XDG_DATA_HOME/../opt`               |
-| `/srv`           | `$XDG_DATA_HOME/../srv`               |
-| `/usr/local/src` | `$HOME/src`                           |
-| `/var/lib`       | `$XDG_DATA_HOME/../var/lib`           |
-| `/var/cache`     | `$HOME/.cache`                        |
-| `/usr/local/bin` | `$XDG_DATA_HOME/../bin`               |
-
-This lets the same playbook structure work for system-wide or per-user deployments.
-
-## The pipeline
-
-Every playbook follows this shape:
+Every playbook should look like:
 
 ```yaml
 ---
@@ -103,199 +72,168 @@ Every playbook follows this shape:
     - import_tasks: tasks/compfuzor.includes
 ```
 
-The `compfuzor.includes` pipeline runs in order:
+`tasks/compfuzor.includes` runs in broad phases:
 
-1. **Variables** — base, type, user, env, filesystem, then extras (apt, systemd, rust, npm, etc.)
-2. **User** — set ownership/become defaults
-3. **Repositories** — git, hg, svn, go get checkouts
-4. **Filesystem** — DIR creation, DIRS, FILES, env files, hierarchy (etc/opt/srv/...), links
-5. **Extras** — packages, bins execution, make/cmake builds, systemd units, sysctl
+1. variables
+2. user/become setup
+3. repositories
+4. filesystem
+5. extras
 
-## Playbook variable reference
+The variables phase is where most compfuzor design happens.
 
-Key variables a playbook typically sets:
+## Authoring playbooks
 
-| Variable       | Purpose                                          |
-|----------------|--------------------------------------------------|
-| `TYPE`         | Override the type inferred from filename          |
-| `INSTANCE`     | Override instance name (default: `main` or `git`) |
-| `PKGS`         | apt packages to install                           |
-| `REPO`         | git repo URL to clone                             |
-| `REPO_GO`      | go module URL to fetch                            |
-| `DIRS`         | subdirectories to create under DIR                |
-| `FILES`        | files to template from `files/<TYPE>/`            |
-| `ETC_DIRS`     | subdirs for the `etc/` hierarchy                  |
-| `ETC_FILES`    | files for the `etc/` hierarchy                    |
-| `SHARE_DIRS`   | subdirs for the `share/` hierarchy                |
-| `SHARE_FILES`  | files for the `share/` hierarchy                  |
-| `BINS`         | scripts to deploy into `bin/`                     |
-| `ENV`          | key-value pairs written to `env` / `env.export`   |
-| `LINKS`        | symlinks to create (dict of dest→src)             |
-| `GET_URLS`     | URLs to download                                  |
-| `SYSTEMD_*`    | systemd unit generation vars                      |
-| `KERNEL_MODULES` | dict of kernel modules with optional params     |
-| `KERNEL_SYSCTL`  | dict of sysctl key-value pairs                   |
+### Prefer declarations over tasks
 
-## Managed scripts (BINS)
+Start with data the pipeline already knows how to consume:
 
-Scripts declared in `BINS` are deployed to `<DIR>/bin/` with a standard header/footer that:
+- `PKGS`
+- `REPO`
+- `DIRS`
+- `ETC_FILES`
+- `SHARE_FILES`
+- `BINS`
+- `ENV` / `ENV_LIST`
+- `LINKS`
+- `SYSTEMD_*`
 
-1. Sets `TIMESTAMP`
-2. Defaults `DIR` to the playbook's DIR
-3. Sources `env.export` for runtime variable discovery
-4. Pushes shell options onto a stack, enables `set -euo pipefail`
-5. Runs the script body
-6. Restores shell options from the stack
+If a playbook mostly consists of custom tasks, that is usually a sign the logic
+should move into a subsystem.
 
-This means every managed script can rely on `DIR`, `NAME`, `TYPE`, `INSTANCE`, and any `ENV` vars being available.
+### Choose the right hierarchy
 
-The `basedir` field controls where the script runs. `basedir: False` means don't cd. `basedir: src/github.com/foo` means cd into the source tree. The `global: True` flag symlinks the script into `/usr/local/bin/`.
+Use hierarchy-specific variables instead of dumping everything into top-level
+`FILES`.
 
-## File lookup convention
+- config files: `ETC_FILES`
+- shared assets: `SHARE_FILES`
+- executable helpers: `BINS`
 
-Templates in `FILES` and `<PREFIX>_FILES` are looked up from `files/<TYPE>/` by default. For string items (not dicts), the item name is both the source filename and the destination filename. Dict items can specify `name`, `src`, `dest`, `content` (inline template), `line` (lineinfile), `yaml`, `json`, or `var`.
+This keeps the playbook aligned with the instance directory model.
 
-## Generative subsystems (vars_*.tasks)
+### Use build/install for generated config
 
-Generative subsystems are `vars_*.tasks` files that transform playbook declarations into pipeline artifacts (ETC_FILES, BINS, ENV_LIST, LINKS). They run in the VARIABLES phase and are the primary extension point for new subsystems.
+When config should be rebuildable from data, do not hard-code the final `/etc`
+payload directly in Ansible tasks. Generate helper scripts instead:
 
-### Kernel subsystem (vars_kernel.tasks)
+- `build.sh` renders static files into the instance `etc/`
+- `install.sh` deploys them into system locations
 
-Configures kernel modules, modprobe parameters, and sysctl via three dict variables:
+That pattern lets users change env values, rerun `build.sh`, inspect the
+rendered output, then rerun `install.sh`.
 
-#### KERNEL_MODULES
+### ENV vs ENV_LIST
 
-Dict keyed by module name. Each value is a dict with an optional `params` sub-dict:
+- `ENV` is for concrete key/value data to write into `env` and `env.export`
+- `ENV_LIST` is for naming the keys a subsystem wants exported
 
-```yaml
-KERNEL_MODULES:
-  zswap:
-    params:
-      enabled: Y
-      compressor: lz4
-      zpool: z3fold
-      max_pool_percent: 20
-      accept_threshold_percent: 90
-      same_filled_pages_enabled: Y
-      exclusive_loads: Y
-  pcie_aspm:
-    params:
-      policy: powersupersave
-  i2c_dev: {}
-```
+If a generated script needs a value later, make that value part of the env
+contract.
 
-From this dict, vars_kernel generates:
+## Generative subsystems
 
-| Output | Source | Destination |
-|---|---|---|
-| modules-load conf | Module names | `/etc/modules-load.d/{{NAME}}.conf` |
-| modprobe conf | Modules with `params` | `/etc/modprobe.d/{{NAME}}.conf` |
+`vars_*.tasks` files are compfuzor's main extension mechanism.
 
-#### KERNEL_SYSCTL
+Their job is to take higher-level declarations and turn them into standard
+pipeline artifacts:
 
-Flat dict of sysctl key-value pairs. Generates a sysctl drop-in:
+- `ETC_FILES`
+- `BINS`
+- `ENV_LIST`
+- `LINKS`
+- other pipeline vars that existing phases already know how to consume
 
-```yaml
-KERNEL_SYSCTL:
-  vm.swappiness: 60
-  vm.max_map_count: 1048576
-```
+Think of them as generators or subsystem adapters, not feature docs.
 
-| Output | Destination |
-|---|---|
-| sysctl conf | `/etc/sysctl.d/{{NAME}}.conf` |
+### When to create a subsystem
 
-#### Generated scripts
+Move logic into a `vars_*.tasks` file when all of these are true:
 
-`vars_kernel.tasks` generates `build.sh` and `install.sh`:
+- the pattern appears in more than one playbook, or clearly will
+- the playbook is starting to describe a reusable domain contract
+- the output can be expressed as standard pipeline artifacts
 
-- **`build.sh`** — Templates config files from `env.export` variables. Uses `block-in-file --envsubst` so files are data-driven: change the env, re-run build.sh, files update.
-- **`install.sh`** — Symlinks generated files from the instance's `etc/` into system directories (`/etc/modules-load.d/`, `/etc/modprobe.d/`, `/etc/sysctl.d/`).
+Do not create a subsystem just because one feature has a lot of knobs.
 
-No systemd service is needed. The `install.sh` handles all deployment, and sysctl.d / modprobe.d / modules-load.d are read at boot.
+### What a subsystem should do
 
-#### ENV_LIST
+- define a clean input contract
+- compute derived values once
+- batch output generation in as few `set_fact` actions as practical
+- emit standard artifacts instead of performing deployment directly
+- document subsystem-specific details in code comments near the implementation
 
-`vars_kernel.tasks` populates `ENV_LIST` with all `KERNEL_MODULES` params and `KERNEL_SYSCTL` keys so the build.sh can interpolate them.
+### What a subsystem should avoid
 
-### Bypass flags
+- scattered `set_fact` calls for each tiny output
+- baking one-off feature prose into `SKILL.md`
+- hiding imperative deploy behavior inside the vars phase
+- forcing playbooks to manually zip or correlate parallel lists of related data
 
-| Flag | Effect |
-|---|---|
-| `KERNEL_BYPASS: True` | Skip all kernel subsystem processing |
+If two values are semantically one object, model them as one object in the
+contract.
 
-## The build/install pattern
+## Build/install pattern
 
-A key architectural pattern for etc-type playbooks. Instead of writing static config files at playbook run time, the playbook declares data and the generative subsystem produces two scripts:
+This is one of the core compfuzor patterns.
 
-1. **`build.sh`** — Reads `env.export` (or environment variables), templates config files into `{{ETC}}/`. Idempotent. Re-run after changing env vars to regenerate config.
-2. **`install.sh`** — Deploys generated files to system locations via symlinks. Idempotent.
+The vars phase generates scripts. Those scripts own the imperative work.
 
-This makes playbooks data-driven: the playbook sets defaults, the user can override via env vars, and `build.sh` regenerates to match.
+### `build.sh`
 
-### block-in-file and envsubst
+- reads `env.export`
+- renders canonical files into the instance directory
+- should be safe and repeatable
+- should make it easy to inspect generated output before installation
 
-`block-in-file` is compfuzor's managed-block injection tool. Beyond dotfile injection, it has key features for the build/install pattern:
+### `install.sh`
 
-- **`--envsubst`** — Passes content through `envsubst` before writing, replacing `${VAR}` references with environment variable values
-- **`-n <name>`** — Named block for idempotent updates
-- **`-o <file>`** — Target file to inject into
-- **`--envsubst` with piped content** — `echo "$TEMPLATE" | block-in-file -n myblock -o /path/to/file --envsubst`
+- performs the privileged deployment step
+- usually symlinks or injects generated files into their real system locations
+- should also be safe and repeatable
 
-Example `build.sh` using envsubst:
+The point is to separate declaration, rendering, and deployment.
+
+## `block-in-file`
+
+`block-in-file` is a key compfuzor tool for idempotent file management.
+
+Useful options:
+
+- `-n <name>` gives the managed block a stable identity
+- `-o <file>` selects the output file
+- `--envsubst` expands `${VAR}` placeholders from the environment before write
+
+That `--envsubst` mode is especially important for generated config. A common
+pattern is:
 
 ```bash
-cat "${DIR}/etc/zswap.conf.template" | block-in-file -n "${NAME}" -o "${DIR}/etc/zswap.conf" --envsubst
+cat "${DIR}/etc/template.conf" | block-in-file -n "${NAME}" -o "${DIR}/etc/output.conf" --envsubst
 ```
 
-The template file contains `${ZSWAP_COMPRESSOR}`, `${ZSWAP_MAX_POOL_PERCENT}`, etc. These resolve from `env.export` at build time.
+This lets `build.sh` treat `env.export` as the source of truth for regeneration.
 
-## Block-in-file pattern
+## Managed scripts
 
-Compfuzor uses a `block-in-file` tool (similar to `blockinfile`) to inject managed blocks into user dotfiles. Each block has a name and is idempotent — re-running updates the block in place. This is how `install-user.sh` scripts inject sourcing into `~/.zshrc`, `~/.config/zsh/conf.d/*.conf`, etc. without overwriting existing content.
+Scripts in `BINS` are wrapped by compfuzor's standard header/footer. They can
+assume:
 
-## Necessary migrations
+- `DIR` is available
+- `env.export` can be sourced
+- standard shell safety flags are applied
 
-Approximately half the playbooks in the repo predate current conventions. When you encounter any of these patterns, the playbook needs updating:
+Prefer using generated scripts for behavior the user may want to rerun later.
 
-### `include:` → `import_tasks:`
+## Migrations and staleness
 
-```yaml
-# OBSOLETE
-tasks:
-  - include: tasks/compfuzor.includes
+Many older playbooks predate the current conventions. When touching one, prefer
+to move it toward these patterns:
 
-# CORRECT
-tasks:
-  - import_tasks: tasks/compfuzor.includes
-```
+- `include:` to `import_tasks:`
+- filename-driven type selection instead of `type=` arguments
+- hierarchy vars instead of top-level `FILES`
+- subsystem contracts instead of repeated custom task blocks
 
-`include` is the old Ansible task keyword. `import_tasks` is the modern form. Every playbook using `include:` should be migrated.
-
-### `type=` / `types=` parameter → filename encoding
-
-```yaml
-# OBSOLETE — type passed as parameter
-tasks:
-  - include: tasks/compfuzor.includes type=src
-
-# OBSOLETE — same with import_tasks
-tasks:
-  - import_tasks: tasks/compfuzor.includes type=src
-
-# CORRECT — type is encoded in the filename (e.g. caddy.src.pb)
-tasks:
-  - import_tasks: tasks/compfuzor.includes
-```
-
-The type should be part of the playbook filename (`<NAME>.<TYPE>.pb`), not a parameter. If the filename already has the type but the task still passes `type=`, remove the parameter.
-
-### Other staleness signals
-
-When editing a playbook, also watch for:
-
-- Using `FILES` at the top level when the file belongs in a hierarchy (e.g. should be `ETC_FILES` or `SHARE_FILES`)
-- Inline content in `BINS` that has grown complex enough to warrant a proper template file
-- Hardcoded paths that should use `{{DIR}}` or `{{NAME}}` template variables
-
-The convention is evolving. Prefer the patterns used in recently-edited playbooks over older ones.
+When in doubt, prefer the patterns used by recently-maintained playbooks and the
+generative style used by active `vars_*.tasks`.
