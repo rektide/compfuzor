@@ -209,20 +209,21 @@ def _dedupe_preserve(values):
     return result
 
 
-def combine_with_strategy(
+def merge_with_strategy(
     records,
     strategies,
     aggregate=None,
     include_aggregate=True,
     payload_key=None,
 ):
-    """Combine records using per-field merge strategies.
+    """Merge records using per-field merge strategies.
 
     Supported strategies:
     - append: extend list values as-is
     - append_unique: append list values, then stable-dedupe
     - dict_overlay: merge dicts where later values win
     - replace: replace with latest non-None value
+    - nested strategy map: recurse for a field using nested per-field strategies
 
     When `payload_key` is set and a record contains that key, the keyed payload
     is used. Otherwise the record itself is treated as payload.
@@ -233,6 +234,8 @@ def combine_with_strategy(
     for field, strategy in strategy_map.items():
         if strategy in {"append", "append_unique"}:
             combined[field] = []
+        elif isinstance(strategy, dict):
+            combined[field] = {}
         elif strategy == "dict_overlay":
             combined[field] = {}
         else:
@@ -269,18 +272,43 @@ def combine_with_strategy(
                 combined[field] = _as_dict(combined.get(field)) | _as_dict(value)
                 continue
 
+            if isinstance(strategy, dict):
+                combined[field] = merge_with_strategy(
+                    [combined.get(field), value],
+                    strategy,
+                    include_aggregate=False,
+                )
+                continue
+
             if strategy == "replace":
                 if value is not None:
                     combined[field] = value
                 continue
 
             raise ValueError(
-                "Unknown combine_with_strategy strategy for '{}': {}".format(
+                "Unknown merge_with_strategy strategy for '{}': {}".format(
                     field, strategy
                 )
             )
 
     return combined
+
+
+def combine_with_strategy(
+    records,
+    strategies,
+    aggregate=None,
+    include_aggregate=True,
+    payload_key=None,
+):
+    """Back-compat alias for merge_with_strategy."""
+    return merge_with_strategy(
+        records,
+        strategies,
+        aggregate=aggregate,
+        include_aggregate=include_aggregate,
+        payload_key=payload_key,
+    )
 
 
 def subsystem_rollup(children, aggregate=None, include_aggregate=True):
@@ -296,7 +324,7 @@ def subsystem_rollup(children, aggregate=None, include_aggregate=True):
     Output keys:
     - ETC_FILES, BINS, ENV, ENV_LIST, PKGS
     """
-    return combine_with_strategy(
+    return merge_with_strategy(
         children,
         {
             "ETC_FILES": "append",
@@ -432,6 +460,7 @@ class FilterModule(object):
             "subsystem_bypass_vars": subsystem_bypass_vars,
             "subsystem_bypassed": subsystem_bypassed,
             "subsystem_record": subsystem_record,
+            "merge_with_strategy": merge_with_strategy,
             "combine_with_strategy": combine_with_strategy,
             "subsystem_rollup": subsystem_rollup,
             "build_install_bins": build_install_bins,
