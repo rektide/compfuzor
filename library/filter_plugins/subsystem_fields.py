@@ -294,23 +294,6 @@ def merge_with_strategy(
     return combined
 
 
-def combine_with_strategy(
-    records,
-    strategies,
-    aggregate=None,
-    include_aggregate=True,
-    payload_key=None,
-):
-    """Back-compat alias for merge_with_strategy."""
-    return merge_with_strategy(
-        records,
-        strategies,
-        aggregate=aggregate,
-        include_aggregate=include_aggregate,
-        payload_key=payload_key,
-    )
-
-
 def subsystem_rollup(children, aggregate=None, include_aggregate=True):
     """Roll up child subsystem contrib payloads into one aggregate payload.
 
@@ -461,7 +444,6 @@ class FilterModule(object):
             "subsystem_bypassed": subsystem_bypassed,
             "subsystem_record": subsystem_record,
             "merge_with_strategy": merge_with_strategy,
-            "combine_with_strategy": combine_with_strategy,
             "subsystem_rollup": subsystem_rollup,
             "build_install_bins": build_install_bins,
         }
