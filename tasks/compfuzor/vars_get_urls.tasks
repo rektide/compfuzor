@@ -1,47 +1,28 @@
 ---
-- name: "Compfuzor: validate get_urls contract"
-  fail:
-    msg: "{{ getUrlsErrors | join('; ') }}"
-  when: getUrlsRequested and not getUrlsBypassed and getUrlsErrors | length > 0
-  vars:
-    getUrlsItems: "{{ GET_URLS | default([], true) | arrayitize }}"
-    getUrlsStringItems: "{{ getUrlsItems | select('string') | list }}"
-    getUrlsMappingItems: "{{ getUrlsItems | select('mapping') | list }}"
-    getUrlsMappingsWithUrl: "{{ getUrlsMappingItems | selectattr('url', 'defined') | list }}"
-    getUrlsInvalidTypeCount: "{{ (getUrlsItems | length) - (getUrlsStringItems | length) - (getUrlsMappingItems | length) }}"
-    getUrlsEmptyStringCount: "{{ getUrlsStringItems | select('match', '^\\s*$') | list | length }}"
-    getUrlsMissingUrlCount: "{{ getUrlsMappingItems | rejectattr('url', 'defined') | list | length }}"
-    getUrlsUrlNotStringCount: "{{ getUrlsMappingsWithUrl | rejectattr('url', 'string') | list | length }}"
-    getUrlsUrlStringBlankCount: "{{ getUrlsMappingsWithUrl | selectattr('url', 'string') | map(attribute='url') | select('match', '^\\s*$') | list | length }}"
-    getUrlsDestTypeInvalidCount: "{{ getUrlsMappingItems | selectattr('dest', 'defined') | rejectattr('dest', 'string') | list | length }}"
-    getUrlsRequested: "{{ getUrlsItems | length > 0 }}"
-    getUrlsBypassed: "{{ GET_URLS_BYPASS | default(false) | bool }}"
-    getUrlsErrors: >-
-      {{
-        ([])
-        + (['GET_URLS entries must be strings or mappings'] if getUrlsInvalidTypeCount | int > 0 else [])
-        + (['GET_URLS string entries must be non-empty'] if getUrlsEmptyStringCount | int > 0 else [])
-        + (['GET_URLS mapping entries must define a non-empty string url'] if (getUrlsMissingUrlCount | int > 0 or getUrlsUrlNotStringCount | int > 0 or getUrlsUrlStringBlankCount | int > 0) else [])
-        + (['GET_URLS mapping entry dest must be a string when defined'] if getUrlsDestTypeInvalidCount | int > 0 else [])
-      }}
+- name: "Compfuzor: evaluate get_urls contract and state"
+  block:
+    - name: "Compfuzor: fail invalid get_urls input"
+      fail:
+        msg: "{{ getUrlsErrors | join('; ') }}"
+      when: getUrlsRequested and not getUrlsBypassed and not getUrlsValid
 
-- name: "Compfuzor: build get_urls subsystem state"
-  set_fact:
-    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine(getUrlsSubsystemState, recursive=True) }}"
-  when: getUrlsRequested
+    - name: "Compfuzor: publish get_urls subsystem"
+      set_fact:
+        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'get_urls': getUrlsSubsystemState}, recursive=True) }}"
+      when: getUrlsRequested
   vars:
     getUrlsItems: "{{ GET_URLS | default([], true) | arrayitize }}"
     getUrlsStringItems: "{{ getUrlsItems | select('string') | list }}"
     getUrlsMappingItems: "{{ getUrlsItems | select('mapping') | list }}"
     getUrlsMappingsWithUrl: "{{ getUrlsMappingItems | selectattr('url', 'defined') | list }}"
+    getUrlsRequested: "{{ getUrlsItems | length > 0 }}"
+    getUrlsBypassed: "{{ GET_URLS_BYPASS | default(false) | bool }}"
     getUrlsInvalidTypeCount: "{{ (getUrlsItems | length) - (getUrlsStringItems | length) - (getUrlsMappingItems | length) }}"
     getUrlsEmptyStringCount: "{{ getUrlsStringItems | select('match', '^\\s*$') | list | length }}"
     getUrlsMissingUrlCount: "{{ getUrlsMappingItems | rejectattr('url', 'defined') | list | length }}"
     getUrlsUrlNotStringCount: "{{ getUrlsMappingsWithUrl | rejectattr('url', 'string') | list | length }}"
     getUrlsUrlStringBlankCount: "{{ getUrlsMappingsWithUrl | selectattr('url', 'string') | map(attribute='url') | select('match', '^\\s*$') | list | length }}"
     getUrlsDestTypeInvalidCount: "{{ getUrlsMappingItems | selectattr('dest', 'defined') | rejectattr('dest', 'string') | list | length }}"
-    getUrlsRequested: "{{ getUrlsItems | length > 0 }}"
-    getUrlsBypassed: "{{ GET_URLS_BYPASS | default(false) | bool }}"
     getUrlsErrors: >-
       {{
         ([])
@@ -62,53 +43,37 @@
         if not getUrlsValid else
         'requested'
       }}
-    getUrlsNorm: >-
+    getUrlsEntryDefaults: >-
+      {{
+        {'validate_certs': (VALIDATE_CERTS | default(true))}
+        | combine({'owner': OWNER} if OWNER is defined else {})
+        | combine({'group': GROUP} if GROUP is defined else {})
+      }}
+    getUrlsSpec: >-
       {%- set normalized = [] -%}
       {%- for item in getUrlsItems -%}
-        {%- if item is string -%}
-          {%- set url = item -%}
-          {%- set destName = item | basename -%}
-          {%- set entry = {
-            'url': url,
-            'dest': (destName | defaultDir(SRC)),
-            'validate_certs': (VALIDATE_CERTS | default(true))
-          } -%}
-          {%- if OWNER is defined -%}
-            {%- set _ = entry.update({'owner': OWNER}) -%}
-          {%- endif -%}
-          {%- if GROUP is defined -%}
-            {%- set _ = entry.update({'group': GROUP}) -%}
-          {%- endif -%}
-        {%- else -%}
-          {%- set url = item.url -%}
-          {%- set destName = item.dest if item.dest is defined else (url | basename) -%}
-          {%- set entry = {
-            'url': url,
-            'dest': (destName | defaultDir(SRC)),
-            'validate_certs': (item.validate_certs | default(VALIDATE_CERTS | default(true)))
-          } -%}
-          {%- if item.owner is defined -%}
-            {%- set _ = entry.update({'owner': item.owner}) -%}
-          {%- elif OWNER is defined -%}
-            {%- set _ = entry.update({'owner': OWNER}) -%}
-          {%- endif -%}
-          {%- if item.group is defined -%}
-            {%- set _ = entry.update({'group': item.group}) -%}
-          {%- elif GROUP is defined -%}
-            {%- set _ = entry.update({'group': GROUP}) -%}
-          {%- endif -%}
-        {%- endif -%}
+        {%- set row = item if item is mapping else {'url': item} -%}
+        {%- set url = row.url -%}
+        {%- set destName = row.dest if row.dest is defined else (url | basename) -%}
+        {%- set entry = getUrlsEntryDefaults
+          | combine({'url': url, 'dest': (destName | defaultDir(SRC))})
+          | combine({'validate_certs': row.validate_certs} if row.validate_certs is defined else {})
+          | combine({'owner': row.owner} if row.owner is defined else {})
+          | combine({'group': row.group} if row.group is defined else {})
+        -%}
         {%- set _ = normalized.append(entry) -%}
       {%- endfor -%}
       {{ normalized }}
-    getUrlsArtifacts: "{{ {'norm': getUrlsNorm, 'spec': getUrlsNorm} if getUrlsValid else {} }}"
-    getUrlsSubsystemBase:
-      subsystem: get_urls
-      status: "{{ getUrlsStatus }}"
-      requested: "{{ getUrlsRequested }}"
-      bypassed: "{{ getUrlsBypassed }}"
-      valid: "{{ getUrlsValid }}"
-      active: "{{ getUrlsActive }}"
-      reasons: "{{ getUrlsErrors }}"
-    getUrlsSubsystemState:
-      get_urls: "{{ getUrlsSubsystemBase | combine(getUrlsArtifacts) }}"
+    getUrlsSubsystemState: >-
+      {{
+        {
+          'subsystem': 'get_urls',
+          'status': getUrlsStatus,
+          'requested': getUrlsRequested,
+          'bypassed': getUrlsBypassed,
+          'valid': getUrlsValid,
+          'active': getUrlsActive,
+          'reasons': getUrlsErrors
+        }
+        | combine({'norm': getUrlsSpec, 'spec': getUrlsSpec} if getUrlsValid else {})
+      }}

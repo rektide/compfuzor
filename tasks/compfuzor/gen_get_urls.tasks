@@ -3,7 +3,7 @@
   set_fact:
     SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine(getUrlsSubsystemSynthesis, recursive=True) }}"
     BINS: "{{ getUrlsBins | mergeKeyed(BINS | default([]), key='name', concat_fields=['generated']) }}"
-  when: (SUBSYSTEM | default({})).get('get_urls', {}).get('active', false)
+  when: ((SUBSYSTEM | default({})).get('get_urls', {}).get('active', false) | bool)
   vars:
     getUrlsBins:
       - name: get-urls.sh

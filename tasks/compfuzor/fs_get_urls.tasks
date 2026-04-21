@@ -1,33 +1,20 @@
 - name: "get urls"
   get_url:
-    url: "{{_url}}"
-    dest: "{{_dest}}"
-    owner: "{{ _owner if _owner else omit }}"
-    group: "{{ _group if _group else omit }}"
-    validate_certs: "{{_validate_certs}}"
-  with_items: "{{ _get_urls_spec }}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|dirname|should_become(_owner|default(), _cf_user_id, _group|default(), _cf_user_gid)))|bool }}"
-  when: (SUBSYSTEM | default({})).get('get_urls', {}).get('active', false)
-  vars:
-    _get_urls_spec: "{{ (SUBSYSTEM | default({})).get('get_urls', {}).get('spec', []) }}"
-    _url: "{{ item.url }}"
-    _dest: "{{ item.dest }}"
-    _owner: "{{ item.owner | default('') }}"
-    _group: "{{ item.group | default('') }}"
-    _validate_certs: "{{ item.validate_certs | default(true) }}"
+    url: "{{ item.url }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ item.owner | default(omit) }}"
+    group: "{{ item.group | default(omit) }}"
+    validate_certs: "{{ item.validate_certs | default(true) }}"
+  with_items: "{{ (SUBSYSTEM | default({})).get('get_urls', {}).get('spec', []) }}"
+  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(item.dest|dirname|should_become(item.owner|default('', true), _cf_user_id, item.group|default('', true), _cf_user_gid)))|bool }}"
+  when: ((SUBSYSTEM | default({})).get('get_urls', {}).get('active', false) | bool)
 
 - name: "save '.url' file"
   copy:
-    content: "{{_url}}"
-    dest: "{{_dest}}.url"
-    owner: "{{ _owner if _owner else omit }}"
-    group: "{{ _group if _group else omit }}"
-  with_items: "{{ _get_urls_spec }}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|dirname|should_become(_owner|default(), _cf_user_id, _group|default(), _cf_user_gid)))|bool }}"
-  when: (SUBSYSTEM | default({})).get('get_urls', {}).get('active', false)
-  vars:
-    _get_urls_spec: "{{ (SUBSYSTEM | default({})).get('get_urls', {}).get('spec', []) }}"
-    _url: "{{ item.url }}"
-    _dest: "{{ item.dest }}"
-    _owner: "{{ item.owner | default('') }}"
-    _group: "{{ item.group | default('') }}"
+    content: "{{ item.url }}"
+    dest: "{{ item.dest }}.url"
+    owner: "{{ item.owner | default(omit) }}"
+    group: "{{ item.group | default(omit) }}"
+  with_items: "{{ (SUBSYSTEM | default({})).get('get_urls', {}).get('spec', []) }}"
+  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(item.dest|dirname|should_become(item.owner|default('', true), _cf_user_id, item.group|default('', true), _cf_user_gid)))|bool }}"
+  when: ((SUBSYSTEM | default({})).get('get_urls', {}).get('active', false) | bool)
