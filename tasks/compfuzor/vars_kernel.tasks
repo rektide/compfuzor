@@ -230,13 +230,9 @@
 
     # aggregate contrib payload for gen_kernel merge step
     rolled_children: "{{ [modprobe_state, sysctl_state, sysfs_state] | subsystem_rollup({}, false) }}"
-    child_etc: "{{ rolled_children.ETC_FILES | default([]) | arrayitize }}"
-    child_bins: "{{ rolled_children.BINS | default([]) | arrayitize }}"
-    contrib_env: "{{ all_contrib.ENV if all_active else {} }}"
-    contrib_env_list: "{{ all_contrib.ENV_LIST if all_active else [] }}"
     contrib:
-      ETC_FILES: "{{ child_etc }}"
-      BINS: "{{ child_bins + (all_contrib.BINS if all_active else []) }}"
-      ENV: "{{ contrib_env }}"
-      ENV_LIST: "{{ contrib_env_list }}"
+      ETC_FILES: "{{ rolled_children.ETC_FILES | default([]) | arrayitize }}"
+      BINS: "{{ (rolled_children.BINS | default([]) | arrayitize) + (all_contrib.BINS if all_active else []) }}"
+      ENV: "{{ all_contrib.ENV if all_active else {} }}"
+      ENV_LIST: "{{ all_contrib.ENV_LIST if all_active else [] }}"
       PKGS: "{{ ['jq'] if any_active else [] }}"
