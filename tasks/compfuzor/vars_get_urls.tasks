@@ -45,22 +45,13 @@
           'url': url,
           'dest': (destName | defaultDir(SRC)),
           'validate_certs': (row.validate_certs | default(VALIDATE_CERTS | default(true)))
-        } -%}
-        {%- set owner = row.owner if row.owner is defined else (OWNER if OWNER is defined else none) -%}
-        {%- if owner is not none -%}
-          {%- set _ = entry.update({'owner': owner}) -%}
-        {%- endif -%}
-        {%- set group = row.group if row.group is defined else (GROUP if GROUP is defined else none) -%}
-        {%- if group is not none -%}
-          {%- set _ = entry.update({'group': group}) -%}
-        {%- endif -%}
+        } | combine(row | owner_group_fields) -%}
         {%- set _ = normalized.append(entry) -%}
       {%- endfor -%}
       {{ normalized }}
     _subsystem_spec: "{{ {'spec': spec} if (spec | length > 0) else {} }}"
     subsystem: >-
       {{
-        {'subsystem': 'get_urls'}
-        | combine(_subsystem_base)
+        ('get_urls' | subsystem_base_fields)
         | combine(_subsystem_spec if _subsystem_valid else {})
       }}
