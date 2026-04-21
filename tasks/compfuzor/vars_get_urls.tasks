@@ -8,7 +8,7 @@
 
     - name: "Compfuzor: publish get_urls subsystem"
       set_fact:
-        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'get_urls': getUrlsSubsystemState}, recursive=True) }}"
+        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'get_urls': subsystem}, recursive=True) }}"
       when: getUrlsRequested
   vars:
     getUrlsItems: "{{ GET_URLS | default([], true) | arrayitize }}"
@@ -43,37 +43,37 @@
         if not getUrlsValid else
         'requested'
       }}
-    getUrlsEntryDefaults: >-
-      {{
-        {'validate_certs': (VALIDATE_CERTS | default(true))}
-        | combine({'owner': OWNER} if OWNER is defined else {})
-        | combine({'group': GROUP} if GROUP is defined else {})
-      }}
     getUrlsSpec: >-
       {%- set normalized = [] -%}
       {%- for item in getUrlsItems -%}
         {%- set row = item if item is mapping else {'url': item} -%}
         {%- set url = row.url -%}
         {%- set destName = row.dest if row.dest is defined else (url | basename) -%}
-        {%- set entry = getUrlsEntryDefaults
-          | combine({'url': url, 'dest': (destName | defaultDir(SRC))})
-          | combine({'validate_certs': row.validate_certs} if row.validate_certs is defined else {})
-          | combine({'owner': row.owner} if row.owner is defined else {})
-          | combine({'group': row.group} if row.group is defined else {})
-        -%}
+        {%- set entry = {
+          'url': url,
+          'dest': (destName | defaultDir(SRC)),
+          'validate_certs': (row.validate_certs | default(VALIDATE_CERTS | default(true)))
+        } -%}
+        {%- set owner = row.owner if row.owner is defined else (OWNER if OWNER is defined else none) -%}
+        {%- if owner is not none -%}
+          {%- set _ = entry.update({'owner': owner}) -%}
+        {%- endif -%}
+        {%- set group = row.group if row.group is defined else (GROUP if GROUP is defined else none) -%}
+        {%- if group is not none -%}
+          {%- set _ = entry.update({'group': group}) -%}
+        {%- endif -%}
         {%- set _ = normalized.append(entry) -%}
       {%- endfor -%}
       {{ normalized }}
-    getUrlsSubsystemState: >-
-      {{
-        {
-          'subsystem': 'get_urls',
-          'status': getUrlsStatus,
-          'requested': getUrlsRequested,
-          'bypassed': getUrlsBypassed,
-          'valid': getUrlsValid,
-          'active': getUrlsActive,
-          'reasons': getUrlsErrors
-        }
-        | combine({'norm': getUrlsSpec, 'spec': getUrlsSpec} if getUrlsValid else {})
-      }}
+    subsystemBase:
+      subsystem: get_urls
+      status: "{{ getUrlsStatus }}"
+      requested: "{{ getUrlsRequested }}"
+      bypassed: "{{ getUrlsBypassed }}"
+      valid: "{{ getUrlsValid }}"
+      active: "{{ getUrlsActive }}"
+      reasons: "{{ getUrlsErrors }}"
+    subsystemArtifacts:
+      norm: "{{ getUrlsSpec }}"
+      spec: "{{ getUrlsSpec }}"
+    subsystem: "{{ subsystemBase | combine(subsystemArtifacts if getUrlsValid else {}) }}"
