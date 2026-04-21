@@ -68,7 +68,7 @@
   when: NVIM is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_kernel.tasks
-  when: KERNEL_MODULES is defined or KERNEL_MODPROBE is defined or KERNEL_SYSCTL is defined or KERNEL_PARAMS is defined
+  when: KERNEL_MODULES is defined or KERNEL_MODPROBE is defined or KERNEL_SYSCTL is defined or KERNEL_SYSFS is defined or KERNEL_PARAMS is defined
   tags: ['vars', 'always']
 - debug: "msg='Compfuzor: completed vars'"
 
