@@ -100,6 +100,10 @@
         bypass_vars: true
 
     # child specs
+    modprobe_bins: "{{ 'kernel' | build_install_bins }}"
+    sysctl_bins: "{{ 'sysctl' | build_install_bins }}"
+    sysfs_bins: "{{ 'sysfs' | build_install_bins }}"
+
     modprobe_spec:
       key: modules
       json_path: "{{ DIR }}/etc/kernel.modules.json"
@@ -108,14 +112,8 @@
       etc_files:
         - name: kernel.modules.json
           content: "{{ modules | to_nice_json }}"
-      build_bins:
-        - name: build-kernel.sh
-          src: ../kernel/build-kernel.sh
-          basedir: False
-      install_bins:
-        - name: install-kernel.sh
-          src: ../kernel/install-kernel.sh
-          basedir: False
+      build_bins: "{{ modprobe_bins.build_bins }}"
+      install_bins: "{{ modprobe_bins.install_bins }}"
 
     sysctl_spec:
       key: sysctl
@@ -125,14 +123,8 @@
       etc_files:
         - name: kernel.sysctl.json
           content: "{{ sysctl | to_nice_json }}"
-      build_bins:
-        - name: build-sysctl.sh
-          src: ../kernel/build-sysctl.sh
-          basedir: False
-      install_bins:
-        - name: install-sysctl.sh
-          src: ../kernel/install-sysctl.sh
-          basedir: False
+      build_bins: "{{ sysctl_bins.build_bins }}"
+      install_bins: "{{ sysctl_bins.install_bins }}"
 
     sysfs_spec:
       key: sysfs
@@ -142,14 +134,8 @@
       etc_files:
         - name: kernel.sysfs.json
           content: "{{ sysfs | to_nice_json }}"
-      build_bins:
-        - name: build-sysfs.sh
-          src: ../kernel/build-sysfs.sh
-          basedir: False
-      install_bins:
-        - name: install-sysfs.sh
-          src: ../kernel/install-sysfs.sh
-          basedir: False
+      build_bins: "{{ sysfs_bins.build_bins }}"
+      install_bins: "{{ sysfs_bins.install_bins }}"
 
     # child contrib payloads
     modprobe_contrib:
@@ -243,8 +229,9 @@
       }}
 
     # aggregate contrib payload for gen_kernel merge step
-    child_etc: "{{ active_specs | map(attribute='etc_files') | list | sum(start=[]) | arrayitize }}"
-    child_bins: "{{ (active_specs | map(attribute='build_bins') | list | sum(start=[])) + (active_specs | map(attribute='install_bins') | list | sum(start=[])) }}"
+    rolled_children: "{{ [modprobe_state, sysctl_state, sysfs_state] | subsystem_rollup({}, false) }}"
+    child_etc: "{{ rolled_children.ETC_FILES | default([]) | arrayitize }}"
+    child_bins: "{{ rolled_children.BINS | default([]) | arrayitize }}"
     contrib_env: "{{ all_contrib.ENV if all_active else {} }}"
     contrib_env_list: "{{ all_contrib.ENV_LIST if all_active else [] }}"
     contrib:
