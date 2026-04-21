@@ -20,14 +20,6 @@ def _context_var(context, name, default=None):
     return default
 
 
-def _to_bool(value):
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes", "on"}
-    return bool(value)
-
-
 def _has_value(value):
     return value is not None and value != ""
 
@@ -51,78 +43,8 @@ def owner_group_fields(context, row, owner=None, group=None):
     return result
 
 
-@pass_context
-def subsystem_base_fields(
-    context,
-    subsystem,
-    requested=None,
-    bypassed=None,
-    valid=None,
-    errors=None,
-    status=None,
-):
-    resolved_errors = (
-        errors if errors is not None else _context_var(context, "errors", [])
-    )
-    if resolved_errors is None:
-        resolved_errors = []
-
-    resolved_requested = (
-        requested
-        if requested is not None
-        else _context_var(
-            context, "_subsystem_requested", _context_var(context, "requested", False)
-        )
-    )
-    resolved_bypassed = (
-        bypassed
-        if bypassed is not None
-        else _context_var(
-            context, "_subsystem_bypassed", _context_var(context, "bypassed", False)
-        )
-    )
-    resolved_valid = (
-        valid
-        if valid is not None
-        else _context_var(context, "_subsystem_valid", len(resolved_errors) == 0)
-    )
-
-    requested_bool = _to_bool(resolved_requested)
-    bypassed_bool = _to_bool(resolved_bypassed)
-    valid_bool = _to_bool(resolved_valid)
-    active_bool = requested_bool and (not bypassed_bool) and valid_bool
-
-    resolved_status = (
-        status if status is not None else _context_var(context, "_subsystem_status")
-    )
-    if resolved_status is None:
-        if active_bool:
-            resolved_status = "active"
-        elif bypassed_bool:
-            resolved_status = "bypassed"
-        elif not valid_bool:
-            resolved_status = "invalid"
-        else:
-            resolved_status = "requested"
-
-    result = {
-        "status": resolved_status,
-        "requested": requested_bool,
-        "bypassed": bypassed_bool,
-        "valid": valid_bool,
-        "active": active_bool,
-        "reasons": resolved_errors,
-    }
-
-    if _has_value(subsystem):
-        result["subsystem"] = subsystem
-
-    return result
-
-
 class FilterModule(object):
     def filters(self):
         return {
             "owner_group_fields": owner_group_fields,
-            "subsystem_base_fields": subsystem_base_fields,
         }
