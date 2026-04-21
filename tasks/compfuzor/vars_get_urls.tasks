@@ -3,49 +3,52 @@
   block:
     - name: "Compfuzor: fail invalid get_urls input"
       fail:
-        msg: "{{ getUrlsErrors | join('; ') }}"
-      when: getUrlsRequested and not getUrlsBypassed and not getUrlsValid
+        msg: "{{ errors | join('; ') }}"
+      when: requested and not bypassed and errors | length > 0
 
     - name: "Compfuzor: publish get_urls subsystem"
       set_fact:
         SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'get_urls': subsystem}, recursive=True) }}"
-      when: getUrlsRequested
+      when: requested
   vars:
-    getUrlsItems: "{{ GET_URLS | default([], true) | arrayitize }}"
-    getUrlsStringItems: "{{ getUrlsItems | select('string') | list }}"
-    getUrlsMappingItems: "{{ getUrlsItems | select('mapping') | list }}"
-    getUrlsMappingsWithUrl: "{{ getUrlsMappingItems | selectattr('url', 'defined') | list }}"
-    getUrlsRequested: "{{ getUrlsItems | length > 0 }}"
-    getUrlsBypassed: "{{ GET_URLS_BYPASS | default(false) | bool }}"
-    getUrlsInvalidTypeCount: "{{ (getUrlsItems | length) - (getUrlsStringItems | length) - (getUrlsMappingItems | length) }}"
-    getUrlsEmptyStringCount: "{{ getUrlsStringItems | select('match', '^\\s*$') | list | length }}"
-    getUrlsMissingUrlCount: "{{ getUrlsMappingItems | rejectattr('url', 'defined') | list | length }}"
-    getUrlsUrlNotStringCount: "{{ getUrlsMappingsWithUrl | rejectattr('url', 'string') | list | length }}"
-    getUrlsUrlStringBlankCount: "{{ getUrlsMappingsWithUrl | selectattr('url', 'string') | map(attribute='url') | select('match', '^\\s*$') | list | length }}"
-    getUrlsDestTypeInvalidCount: "{{ getUrlsMappingItems | selectattr('dest', 'defined') | rejectattr('dest', 'string') | list | length }}"
-    getUrlsErrors: >-
+    items: "{{ GET_URLS | default([], true) | arrayitize }}"
+    stringItems: "{{ items | select('string') | list }}"
+    mappingItems: "{{ items | select('mapping') | list }}"
+    mappingsWithUrl: "{{ mappingItems | selectattr('url', 'defined') | list }}"
+    requested: "{{ items | length > 0 }}"
+    bypassed: "{{ GET_URLS_BYPASS | default(false) | bool }}"
+    invalidTypeCount: "{{ (items | length) - (stringItems | length) - (mappingItems | length) }}"
+    emptyStringCount: "{{ stringItems | select('match', '^\\s*$') | list | length }}"
+    missingUrlCount: "{{ mappingItems | rejectattr('url', 'defined') | list | length }}"
+    urlNotStringCount: "{{ mappingsWithUrl | rejectattr('url', 'string') | list | length }}"
+    urlStringBlankCount: "{{ mappingsWithUrl | selectattr('url', 'string') | map(attribute='url') | select('match', '^\\s*$') | list | length }}"
+    destTypeInvalidCount: "{{ mappingItems | selectattr('dest', 'defined') | rejectattr('dest', 'string') | list | length }}"
+    errors: >-
       {{
-        ([])
-        + (['GET_URLS entries must be strings or mappings'] if getUrlsInvalidTypeCount | int > 0 else [])
-        + (['GET_URLS string entries must be non-empty'] if getUrlsEmptyStringCount | int > 0 else [])
-        + (['GET_URLS mapping entries must define a non-empty string url'] if (getUrlsMissingUrlCount | int > 0 or getUrlsUrlNotStringCount | int > 0 or getUrlsUrlStringBlankCount | int > 0) else [])
-        + (['GET_URLS mapping entry dest must be a string when defined'] if getUrlsDestTypeInvalidCount | int > 0 else [])
+        [
+          ('GET_URLS entries must be strings or mappings' if invalidTypeCount | int > 0 else none),
+          ('GET_URLS string entries must be non-empty' if emptyStringCount | int > 0 else none),
+          ('GET_URLS mapping entries must define a non-empty string url' if (missingUrlCount | int > 0 or urlNotStringCount | int > 0 or urlStringBlankCount | int > 0) else none),
+          ('GET_URLS mapping entry dest must be a string when defined' if destTypeInvalidCount | int > 0 else none)
+        ]
+        | select('truthy')
+        | list
       }}
-    getUrlsValid: "{{ getUrlsErrors | length == 0 }}"
-    getUrlsActive: "{{ getUrlsRequested and not getUrlsBypassed and getUrlsValid }}"
-    getUrlsStatus: >-
+    valid: "{{ errors | length == 0 }}"
+    active: "{{ requested and not bypassed and valid }}"
+    status: >-
       {{
         'active'
-        if getUrlsActive else
+        if active else
         'bypassed'
-        if getUrlsBypassed else
+        if bypassed else
         'invalid'
-        if not getUrlsValid else
+        if not valid else
         'requested'
       }}
-    getUrlsSpec: >-
+    spec: >-
       {%- set normalized = [] -%}
-      {%- for item in getUrlsItems -%}
+      {%- for item in items -%}
         {%- set row = item if item is mapping else {'url': item} -%}
         {%- set url = row.url -%}
         {%- set destName = row.dest if row.dest is defined else (url | basename) -%}
@@ -67,13 +70,12 @@
       {{ normalized }}
     subsystemBase:
       subsystem: get_urls
-      status: "{{ getUrlsStatus }}"
-      requested: "{{ getUrlsRequested }}"
-      bypassed: "{{ getUrlsBypassed }}"
-      valid: "{{ getUrlsValid }}"
-      active: "{{ getUrlsActive }}"
-      reasons: "{{ getUrlsErrors }}"
+      status: "{{ status }}"
+      requested: "{{ requested }}"
+      bypassed: "{{ bypassed }}"
+      valid: "{{ valid }}"
+      active: "{{ active }}"
+      reasons: "{{ errors }}"
     subsystemArtifacts:
-      norm: "{{ getUrlsSpec }}"
-      spec: "{{ getUrlsSpec }}"
-    subsystem: "{{ subsystemBase | combine(subsystemArtifacts if getUrlsValid else {}) }}"
+      spec: "{{ spec }}"
+    subsystem: "{{ subsystemBase | combine(subsystemArtifacts if valid else {}) }}"
