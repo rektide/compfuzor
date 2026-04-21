@@ -1,20 +1,27 @@
-- name: "get urls"
-  get_url:
-    url: "{{ item.url }}"
-    dest: "{{ item.dest }}"
-    owner: "{{ item.owner | default(omit) }}"
-    group: "{{ item.group | default(omit) }}"
-    validate_certs: "{{ item.validate_certs | default(true) }}"
-  with_items: "{{ (SUBSYSTEM | default({})).get('get_urls', {}).get('spec', []) }}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(item.dest|dirname|should_become(item.owner|default('', true), _cf_user_id, item.group|default('', true), _cf_user_gid)))|bool }}"
-  when: ((SUBSYSTEM | default({})).get('get_urls', {}).get('active', false) | bool)
+- name: "Compfuzor: apply url-fetch subsystem"
+  block:
+    - name: "get urls"
+      get_url:
+        url: "{{ item.url }}"
+        dest: "{{ item.dest }}"
+        owner: "{{ item.owner | default(omit) }}"
+        group: "{{ item.group | default(omit) }}"
+        validate_certs: "{{ item.validate_certs | default(true) }}"
+      with_items: "{{ _subsystem_spec }}"
+      become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(item.dest|dirname|should_become(item.owner|default('', true), _cf_user_id, item.group|default('', true), _cf_user_gid)))|bool }}"
 
-- name: "save '.url' file"
-  copy:
-    content: "{{ item.url }}"
-    dest: "{{ item.dest }}.url"
-    owner: "{{ item.owner | default(omit) }}"
-    group: "{{ item.group | default(omit) }}"
-  with_items: "{{ (SUBSYSTEM | default({})).get('get_urls', {}).get('spec', []) }}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(item.dest|dirname|should_become(item.owner|default('', true), _cf_user_id, item.group|default('', true), _cf_user_gid)))|bool }}"
-  when: ((SUBSYSTEM | default({})).get('get_urls', {}).get('active', false) | bool)
+    - name: "save '.url' file"
+      copy:
+        content: "{{ item.url }}"
+        dest: "{{ item.dest }}.url"
+        owner: "{{ item.owner | default(omit) }}"
+        group: "{{ item.group | default(omit) }}"
+      with_items: "{{ _subsystem_spec }}"
+      become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(item.dest|dirname|should_become(item.owner|default('', true), _cf_user_id, item.group|default('', true), _cf_user_gid)))|bool }}"
+  when: _subsystem_active
+  vars:
+    _subsystem_name: "{{ subsystem_name | default('get_urls') }}"
+    _subsystem_id: "{{ subsystem_id | default(_subsystem_name) }}"
+    _subsystem: "{{ (SUBSYSTEM | default({})).get(_subsystem_id, {}) }}"
+    _subsystem_spec: "{{ _subsystem.get('spec', []) }}"
+    _subsystem_active: "{{ _subsystem.get('active', false) | bool }}"
