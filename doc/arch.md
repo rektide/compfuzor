@@ -1,131 +1,309 @@
 # Compfuzor architecture
 
-This is the canonical architecture document for compfuzor.
+Compfuzor is a compile-and-apply system for host configuration.
 
-It is both an introduction and a reference. It explains why the system is
-shaped this way, what problems the shape is solving, and what contracts new
-work should follow.
+Users declare intent in playbooks. Compfuzor turns that intent into explicit
+facts, specs, and synthesized payloads. Then it applies those payloads to the
+host through repositories, filesystem changes, scripts, packages, services, and
+other domain executors.
 
-## Status
+This document explains that model from two angles at once:
 
-- This document replaces the old root-level `ARCHITECTURE.md`.
-- Supporting docs may remain temporarily while their content is absorbed or
-  retired.
-- When another doc disagrees with this one, this document wins.
+- as a mental model for someone new to the codebase
+- as a technical reference for naming, phases, contracts, and worked examples
 
-## Why this architecture exists
+If you are trying to enter quickly:
 
-Compfuzor grew by accumulating successful patterns before it had a full shared
-vocabulary for those patterns. That produced a few recurring problems:
+- start with `1. Mental model` if you need the big picture
+- start with `3. Domain lifecycle` if you are adding or refactoring a domain
+- start with `5. Prefix and facet reference` if you are naming files or facts
+- start with `6. Shared artifacts and synthesis` if you are debugging merges
+- start with `8. Worked examples` if you want a concrete pattern to copy
 
-- `vars_*.tasks` started doing several jobs at once: defaults, discovery,
-  transforms, and synthesis.
-- shared artifacts such as `BINS`, `ETC_FILES`, and `ENV` are contributed to by
-  many domains, but their merge semantics were not explicit enough.
-- `*_BYPASS` flags exist everywhere, but the project lacked one shared contract
-  for deciding whether a domain should continue executing.
-- some data names communicate semantics, while others communicate transport
-  shape, and the two got mixed together.
-- hierarchy and fanout machinery bridge compile-time facts to apply-time work,
-  but that bridge was not described as part of the architecture.
+## 1. Mental model
 
-The goal of this document is to make compfuzor legible for both humans and
-agents. A contributor should be able to answer, on first read:
+The shortest useful description of compfuzor is this:
 
-- where does this logic belong?
-- what artifact should it produce?
-- what kind of task is allowed to merge that artifact?
-- what phase is allowed to apply host-side changes?
+1. read raw playbook intent
+2. compile that intent into explicit domain contracts
+3. synthesize shared artifacts and handoff records
+4. apply those outputs to the host
 
-## Core invariant
+The central architectural seam is between compile work and apply work.
+
+- compile work decides what should happen
+- apply work makes it happen on the host
+
+That seam matters because it keeps reasoning local. A compile task should not
+silently perform host-side changes. An apply task should not have to rediscover
+or reinterpret domain intent from scratch.
+
+### The three layers
+
+Compfuzor is easiest to understand as three layers.
+
+| Layer | Responsibility | Typical outputs |
+|---|---|---|
+| input and compile | validate input, discover state, normalize values, build specs, synthesize handoffs | `norm_*`, `spec_*`, `_probe_*`, `_syn_*`, shared-artifact fragments |
+| synthesis boundary | aggregate domain contributions and resolve merge behavior | merged `BINS`, `ETC_FILES`, `ENV`, other shared artifacts |
+| apply | execute repository, filesystem, package, service, kernel, and post-run changes | host-side changes |
+
+### The core invariant
 
 Phase is when. Intent is what.
 
-- `phase` describes runtime ordering.
-- prefixes and facets describe semantic responsibility.
+- `phase` describes runtime ordering
+- prefixes and facets describe semantic responsibility
 
-Do not conflate them. The same domain can appear in multiple phases. The same
-phase can contain multiple kinds of work.
+Do not conflate them. A domain can appear in several phases. A phase can host
+several kinds of work.
 
-## Architecture at a glance
+### Vocabulary bridge
 
-The core lifecycle today is:
+Compfuzor should now speak in the following terms:
 
-`raw -> norm -> spec -> syn -> apply`
+| Use this | Instead of | Meaning |
+|---|---|---|
+| `phase` | `stage` | runtime ordering |
+| `role` | `class` | behavioral responsibility |
+| `effect` | `side-effect` | side-effect profile |
+| `form` | ad hoc envelope naming language | naming or transport shape |
 
-Complex domains may insert optional intermediate shapes such as `drv_*`,
-`out_*`, or `merge_*`, but the core path above is the default contract.
+### The architecture in one diagram
 
 ```mermaid
 flowchart LR
-  raw_input[Raw input]
+  raw[Raw playbook input]
   foundation[Compile foundation]
   discovery[Compile discovery]
-  normalize[Normalize]
-  spec[Build spec]
-  derive[Optional derive/output/merge]
-  synthesize[Synthesize handoff]
-  apply[Apply host changes]
+  transform[Compile transform]
+  synthesize[Compile synthesis]
+  repo[Repo apply]
+  fs[Filesystem apply]
+  extras[Domain extras apply]
+  post[Post-run]
 
-  raw_input --> foundation
+  raw --> foundation
   foundation --> discovery
-  foundation --> normalize
-  discovery --> normalize
-  normalize --> spec
-  spec --> derive
-  spec --> synthesize
-  derive --> synthesize
-  synthesize --> apply
+  foundation --> transform
+  discovery --> transform
+  transform --> synthesize
+  synthesize --> repo
+  synthesize --> fs
+  synthesize --> extras
+  repo --> post
+  fs --> post
+  extras --> post
 ```
 
-## Canonical terminology
+## 2. Phase architecture
 
-Use these names in new docs and new work:
+Phases explain runtime flow. They do not replace prefixes or facets; they are
+the timeline those other concepts live inside.
 
-| Legacy term | Canonical term | Meaning |
+### Top-level phases
+
+| Phase | Purpose |
+|---|---|
+| `phase:compile` | all pre-apply reasoning and artifact construction |
+| `phase:user-context` | user and execution-context setup |
+| `phase:repo-apply` | repository-side changes |
+| `phase:fs-apply` | filesystem, links, downloads, and script materialization |
+| `phase:extras-apply` | domain-specific host changes such as packages, database, kernel, sysctl |
+| `phase:post-run` | deferred cleanup, delayed links, or follow-up hooks |
+
+### Compile subphases
+
+Most architectural precision lives inside compile.
+
+| Phase | Purpose | Typical producers |
 |---|---|---|
-| `stage` | `phase` | runtime ordering |
-| `class` | `role` | behavioral responsibility |
-| `side-effect` | `effect` | side-effect profile |
-| envelope taxonomy | `record` plus `form` metadata | transport shape, not a new kind |
+| `phase:compile.foundation` | validate inputs, set defaults, compute activation | `vars_*` |
+| `phase:compile.discovery` | read host state into explicit snapshots | `probe_*` |
+| `phase:compile.transform` | normalize raw input, build explicit specs | `fn_*` |
+| `phase:compile.synthesis` | build handoff records and merge shared artifacts | `gen_*` |
 
-## Facet catalog
+### Entry and exit expectations
 
-Compfuzor entities are described with a small set of facets.
+Each phase should leave the next one with less ambiguity.
 
-| Facet | Example | Purpose | Cardinality |
-|---|---|---|---|
-| `kind` | `kind:fn` | primary semantic family | `1` |
-| `form` | `form:prefix` | naming/transport shape | `1` |
-| `record` | `record:_syn_get_urls` | optional handoff-key pattern | `0..1` |
-| `origin` | `origin:task-file` | where the entity lives | `1` |
-| `phase` | `phase:compile.transform` | when the entity is evaluated or applied | `1..n` |
-| `role` | `role:transform` | responsibility tags | `1..n` |
-| `apply` | `apply:get-urls` | target domain or artifact family | `0..n` |
-| `effect` | `effect:host.fs` | effect model rather than implementation detail | `1..n` |
-| `matcher` | `matcher:regex(^_syn_[a-z0-9_]+$)` | optional linting/review rule | `0..1` |
+| Phase | Entry expectation | Exit expectation |
+|---|---|---|
+| `compile.foundation` | raw inputs exist | defaults, validation, and activation facts exist |
+| `compile.discovery` | foundation facts exist | explicit `_probe_*` snapshots exist when needed |
+| `compile.transform` | active domains are known | `norm_*` and `spec_*` exist for active domains |
+| `compile.synthesis` | `spec_*` exists | `_syn_*` records and merged artifacts exist |
+| `*-apply` | synthesized outputs are ready | host changes are applied only for active domains |
+| `post-run` | apply phases completed | deferred work is complete |
 
-## Prefix registry
+Examples:
 
-This section is the seed naming registry for compfuzor. It is intentionally
-explicit. New work should fit this table rather than inventing a parallel
-taxonomy.
+- if `GET_URLS_ACTIVE` is true, `spec_get_urls` should exist before
+  `fs_get_urls.tasks` runs
+- if kernel synthesis is active, `_syn_kernel*` records should exist before
+  install scripts or extras apply work consume them
+
+## 3. Domain lifecycle
+
+The default lifecycle for a non-trivial domain is:
+
+`raw -> norm -> spec -> syn -> apply`
+
+This is the main architectural contract for domain work.
+
+### Core lifecycle steps
+
+| Step | Meaning | Preferred output |
+|---|---|---|
+| `raw` | user-declared or discovered input before normalization | domain input vars or `_probe_*` |
+| `norm` | normalized values with ambiguity removed | `norm_<domain>` |
+| `spec` | ordered explicit domain contract | `spec_<domain>` |
+| `syn` | apply-facing handoff and shared-artifact fragments | `_syn_<domain>` and merge payloads |
+| `apply` | concrete host-side effects | files, repos, services, packages, runtime changes |
+
+### Optional intermediate shapes
+
+Use these only when they improve clarity.
+
+| Shape | Use when |
+|---|---|
+| `drv_<domain>` | you want derivation steps visible and testable |
+| `out_<domain>` | transform logic produces a completed payload before synthesis |
+| `merge_<domain>` | synthesis wants one explicit merge-ready structure |
+| `_tmp_<domain>` | you need scratch values local to one task |
+
+### What the lifecycle is buying you
+
+This lifecycle is not ceremony. It solves real problems.
+
+- `norm_*` prevents every downstream consumer from handling raw edge cases
+- `spec_*` gives the domain one authoritative model
+- `_syn_*` makes phase boundaries explicit and reduces hidden work in apply code
+- `apply` tasks become simpler because they consume explicit contracts
+
+### The implementor recipe
+
+The normal way to author a domain is:
+
+1. validate the contract
+2. compute activation
+3. normalize input into `norm_<domain>`
+4. build one ordered `spec_<domain>`
+5. derive optional `drv_*` or `out_*` values if they clarify the transform
+6. synthesize one explicit handoff and shared-artifact fragments
+7. apply host-side changes in the appropriate apply phase
+
+One stable spec should drive the rest of the domain. That is the main design
+goal.
+
+## 4. Domain activation and control flow
+
+Activation answers one operational question cleanly: should this domain keep
+going?
+
+### Required activation facts
+
+Every domain should expose these facts.
+
+| Fact | Meaning |
+|---|---|
+| `<DOMAIN>_REQUESTED` | meaningful input exists for the domain |
+| `<DOMAIN>_BYPASSED` | the effective bypass state resolved for the domain |
+| `<DOMAIN>_VALID` | contract validation passed |
+| `<DOMAIN>_ACTIVE` | the domain should continue through transform, synthesis, and apply |
+
+The default formula is:
+
+`<DOMAIN>_ACTIVE = <DOMAIN>_REQUESTED and not <DOMAIN>_BYPASSED and <DOMAIN>_VALID`
+
+### Recommended diagnostic facts
+
+These are not mandatory, but they are strongly useful while shaping domains.
+
+| Fact | Purpose |
+|---|---|
+| `<DOMAIN>_STATUS` | maps `requested`, `bypassed`, `valid`, `active`, and `reasons` |
+| `_trace_<domain>` | lightweight lifecycle/debug snapshot |
+
+Example:
+
+```yaml
+GET_URLS_STATUS:
+  requested: true
+  bypassed: false
+  valid: true
+  active: true
+  reasons: []
+```
+
+### Mapping existing bypass flags
+
+Compfuzor already has many `*_BYPASS` flags. The activation contract does not
+replace them; it gives them one consistent meaning.
+
+| Existing flag | Suggested activation fact |
+|---|---|
+| `GET_URLS_BYPASS` | `GET_URLS_BYPASSED` |
+| `KERNEL_BYPASS` | `KERNEL_BYPASSED` |
+| `SYSTEMD_INSTALL_BYPASS` | `SYSTEMD_BYPASSED` or a narrower systemd apply gate |
+| `FS_BYPASS` | subsystem-level apply gate, not necessarily one domain fact |
+
+Important nuance:
+
+- some bypass flags are semantic-domain gates such as `GET_URLS_BYPASS`
+- some bypass flags are subsystem gates such as `FS_BYPASS` or `BINS_BYPASS`
+
+Domain activation should model semantic intent. Broader subsystem gates can
+still short-circuit large apply regions.
+
+### Failure and skip behavior
+
+The intended behavior is:
+
+- requested + not bypassed + invalid: fail in compile phase
+- bypassed: domain may still compute status, but should not continue
+- not requested: domain remains inactive without error
+
+The full policy matrix is still pending, but these are the governing cases.
+
+## 5. Prefix and facet reference
+
+This section is the naming and classification reference. Use it when you are
+creating a new file, fact, or handoff record.
+
+### Facet catalog
+
+| Facet | Example | Meaning |
+|---|---|---|
+| `kind` | `kind:fn` | primary semantic family |
+| `form` | `form:prefix` | naming or transport shape |
+| `record` | `record:_syn_get_urls` | optional record-key pattern |
+| `origin` | `origin:task-file` | where the entity lives |
+| `phase` | `phase:compile.transform` | when it runs or is consumed |
+| `role` | `role:transform` | behavioral responsibility |
+| `apply` | `apply:get-urls` | target domain or artifact family |
+| `effect` | `effect:host.fs` | effect profile |
+| `matcher` | `matcher:regex(^_syn_[a-z0-9_]+$)` | optional lint or review rule |
 
 ### File-intent prefixes
+
+These prefixes classify task files and execution helpers.
 
 | Entity pattern | Kind | Form | Role | Typical phase | Effect | Typical output |
 |---|---|---|---|---|---|---|
 | `vars_` | `kind:vars` | `form:prefix` | `role:foundation` | `compile.foundation` | `effect:none` | defaults, validation, activation facts |
-| `probe_` | `kind:probe` | `form:prefix` | `role:discovery` | `compile.discovery` | `effect:none` | `_probe_<domain>` discovery snapshot |
+| `probe_` | `kind:probe` | `form:prefix` | `role:discovery` | `compile.discovery` | `effect:none` | `_probe_<domain>` snapshots |
 | `fn_` | `kind:fn` | `form:prefix` | `role:transform` | `compile.transform` | `effect:none` | `norm_*`, `spec_*`, optional `drv_*`, `out_*` |
-| `gen_` | `kind:syn` | `form:prefix` | `role:synthesis` | `compile.synthesis` | `effect:none` | `_syn_<domain>`, explicit merge payloads |
-| `repo_` | `kind:repo` | `form:prefix` | `role:execution` | `repo-apply` | `effect:host.repo` | checked-out or updated repositories |
-| `fs_` | `kind:fs` | `form:prefix` | `role:execution` | `fs-apply` | `effect:host.fs` | files, directories, downloads, env files |
-| `bins` / `bins_*` | `kind:bins` | `form:prefix` | `role:execution` | `fs-apply` or `extras-apply` | `effect:host.fs` | managed scripts, generated helpers, install drivers |
+| `gen_` | `kind:syn` | `form:prefix` | `role:synthesis` | `compile.synthesis` | `effect:none` | `_syn_*` and explicit merge payloads |
+| `repo_` | `kind:repo` | `form:prefix` | `role:execution` | `repo-apply` | `effect:host.repo` | repository changes |
+| `fs_` | `kind:fs` | `form:prefix` | `role:execution` | `fs-apply` | `effect:host.fs` | files, links, downloads, environment files |
+| `bins` / `bins_*` | `kind:bins` | `form:prefix` | `role:execution` | `fs-apply` or `extras-apply` | `effect:host.fs` | scripts, helpers, install drivers |
 | `links` / `links_*` | `kind:links` | `form:prefix` | `role:execution` | `fs-apply` or `post-run` | `effect:host.fs` | symlinks and delayed link passes |
-| `_*.tasks` | `kind:orchestrator` | `form:internal` | `role:orchestration` | any | `effect:mixed` | fanout, dispatch, and control-flow helpers |
+| `_*.tasks` | `kind:orchestrator` | `form:internal` | `role:orchestration` | any | `effect:mixed` | fanout and control-flow helpers |
 
 ### Data-intent prefixes
+
+These prefixes classify facts and intermediate payloads.
 
 | Entity pattern | Kind | Form | Role | Effect | Purpose |
 |---|---|---|---|---|---|
@@ -140,281 +318,81 @@ taxonomy.
 
 ### Transport and handoff forms
 
+These forms describe how data moves across phase seams.
+
 | Entity pattern | Kind | Form | Role | Purpose |
 |---|---|---|---|---|
 | `_probe_<domain>` | `kind:probe` | `form:envelope` | `role:discovery` + `role:handoff` | discovery transport record |
-| `_fn_<domain>_out` | `kind:fn` | `form:envelope` | `role:transform` + `role:handoff` | legacy/special transform transport record |
+| `_fn_<domain>_out` | `kind:fn` | `form:envelope` | `role:transform` + `role:handoff` | exceptional transform transport record |
 | `_syn_<domain>` | `kind:syn` | `form:envelope` | `role:synthesis` + `role:handoff` | synthesis transport record |
 
-The important rule is this:
+The important distinction is:
 
-- prefixes such as `norm_*` and `spec_*` carry the primary semantics.
-- envelope names such as `_syn_<domain>` carry transport shape.
+- prefixes such as `spec_*` or `norm_*` communicate semantics
+- envelope names such as `_syn_<domain>` communicate transport shape
 
 That is why `_syn_<domain>` is still `kind:syn`, not a new kind.
 
-## Naming rules
+### Naming rules
 
-Use prefix-before-domain names for canonical facts and files:
+Use prefix-before-domain naming for canonical public facts and task files.
 
 - `spec_get_urls`, not `get_urls_spec`
 - `fn_get_urls.tasks`, not `get_urls.fn.tasks`
 - `gen_systemd.tasks`, not `systemd_gen.tasks`
 
-Further naming guidance:
+Further rules:
 
-- externalized facts should prefer visible prefixes such as `norm_*`, `spec_*`,
-  or `syn_*`
-- leading underscore names are for transport records or internal values
-- `_tmp_*` should not escape the producing task without a strong reason
-- `_fn_<domain>_out` is allowed for compatibility or tightly scoped
-  orchestration, but `spec_<domain>` is the preferred transform contract
+- prefer visible prefixes for externalized facts: `norm_*`, `spec_*`, `syn_*`
+- use leading underscores for transport records or internal values
+- keep `_tmp_*` local to the producing task unless there is a strong reason not to
+- allow `_fn_<domain>_out` only when it truly helps orchestration; otherwise use
+  `spec_<domain>` as the main transform contract
 
-## Phase model
+## 6. Shared artifacts and synthesis
 
-Compfuzor currently uses these top-level phases:
+Synthesis exists because many domains contribute to the same artifacts.
 
-- `phase:compile`
-- `phase:user-context`
-- `phase:repo-apply`
-- `phase:fs-apply`
-- `phase:extras-apply`
-- `phase:post-run`
-
-Nested compile phases are first-class and should be used when helpful:
-
-- `phase:compile.foundation`
-- `phase:compile.discovery`
-- `phase:compile.transform`
-- `phase:compile.synthesis`
-
-### Mapping to current include flow
-
-[`/tasks/compfuzor.includes`](/tasks/compfuzor.includes) is still the practical
-pipeline entrypoint. The phase names above describe what its regions mean.
-
-| Include region | Phase | Typical work |
-|---|---|---|
-| `vars_*`, `probe_*`, `fn_*`, `gen_*` imports | `compile.*` | validation, discovery, transforms, synthesis |
-| `user.tasks` | `user-context` | user/execution context setup |
-| `repo_*` imports | `repo-apply` | repository changes |
-| `fs_*`, `bins*`, `links*` imports | `fs-apply` | files, links, downloads, local scripts |
-| `apt`, `pkgs`, `pg`, `sysctl`, kernel executors | `extras-apply` | domain-specific apply work |
-| delayed links and thunks | `post-run` | deferred cleanup or finalization |
-
-### Entry and exit expectations
-
-These are informative guarantees now and should become stricter over time.
-
-| Phase | Entry expectation | Exit expectation |
-|---|---|---|
-| `compile.foundation` | raw inputs are available | activation facts and defaults are computed |
-| `compile.discovery` | foundation facts are available | optional `_probe_*` records exist |
-| `compile.transform` | active domains are known | `norm_*` and `spec_*` facts exist for active domains |
-| `compile.synthesis` | `spec_*` facts exist | `_syn_*` records and merge payloads are prepared |
-| `*-apply` | synthesis outputs are ready | host changes are applied only for active domains |
-| `post-run` | apply phases completed | deferred operations are complete |
-
-Example:
-
-- after `compile.transform`, `spec_get_urls` should exist if `GET_URLS_ACTIVE`
-  is true
-- after `compile.synthesis`, `_syn_kernel` or related kernel handoff records
-  should exist before kernel apply scripts run
-
-## Domain lifecycle contract
-
-The default lifecycle for a non-trivial domain is:
-
-`raw -> norm -> spec -> syn -> apply`
-
-This is the core contract. It is enough for most domains.
-
-### Core lifecycle steps
-
-| Step | Producer kind | Required output shape | Typical phase | Effect |
-|---|---|---|---|---|
-| `raw` | external input | `<DOMAIN>` input vars | `compile.foundation` entry | `none` |
-| `norm` | `kind:fn` | `norm_<domain>` | `compile.transform` | `none` |
-| `spec` | `kind:fn` | `spec_<domain>` | `compile.transform` | `none` |
-| `syn` | `kind:syn` | `_syn_<domain>` and merge payloads | `compile.synthesis` | `none` |
-| `apply` | execution kinds | host-side changes | `*-apply` | host/network |
-
-### Optional intermediate shapes
-
-Complex domains may insert additional transform outputs without changing the
-overall pattern.
-
-| Shape | When to use it |
-|---|---|
-| `drv_<domain>` | you need explicit derivation steps from a stable spec |
-| `out_<domain>` | the transform produces a completed payload before synthesis |
-| `merge_<domain>` | synthesis needs one explicit merge-ready payload |
-| `_tmp_<domain>` | purely local scratch values inside a task |
-
-### Authoring recipe
-
-The default authoring recipe for a non-trivial domain is:
-
-1. validate the contract.
-2. compute activation.
-3. normalize input into `norm_<domain>`.
-4. build one ordered `spec_<domain>`.
-5. derive optional `drv_*` or `out_*` values when needed.
-6. produce one explicit synthesis payload and `_syn_<domain>`.
-7. apply host-side changes in execution phases.
-
-The key goal is determinism. One stable spec should drive everything else.
-
-## Domain activation contract
-
-Every domain should expose one shared activation contract.
-
-Required facts:
-
-- `<DOMAIN>_REQUESTED`
-- `<DOMAIN>_BYPASSED`
-- `<DOMAIN>_VALID`
-- `<DOMAIN>_ACTIVE`
-
-Recommended diagnostic facts:
-
-- `<DOMAIN>_STATUS`
-- `_trace_<domain>`
-
-The default formula is:
-
-`<DOMAIN>_ACTIVE = <DOMAIN>_REQUESTED and not <DOMAIN>_BYPASSED and <DOMAIN>_VALID`
-
-### Meaning of each fact
-
-| Fact | Meaning |
-|---|---|
-| `<DOMAIN>_REQUESTED` | the domain has meaningful input |
-| `<DOMAIN>_BYPASSED` | the effective bypass state resolved for the domain |
-| `<DOMAIN>_VALID` | contract validation passed |
-| `<DOMAIN>_ACTIVE` | the domain should continue through transform, synthesis, and apply |
-| `<DOMAIN>_STATUS` | mapping with `requested`, `bypassed`, `valid`, `active`, `reasons` |
-| `_trace_<domain>` | optional lifecycle/debug snapshot |
-
-### Mapping existing bypass flags
-
-Existing `*_BYPASS` flags are not wasted. They map into the activation model.
-
-| Existing flag | Suggested activation fact |
-|---|---|
-| `GET_URLS_BYPASS` | `GET_URLS_BYPASSED` |
-| `KERNEL_BYPASS` | `KERNEL_BYPASSED` |
-| `SYSTEMD_INSTALL_BYPASS` | `SYSTEMD_BYPASSED` or a narrower systemd apply gate |
-| `FS_BYPASS` | subsystem-level apply gate, not necessarily a single domain fact |
-
-Important nuance:
-
-- some bypass flags are semantic-domain gates (`GET_URLS_BYPASS`)
-- some are broader subsystem gates (`FS_BYPASS`, `BINS_BYPASS`)
-
-Both are useful. Domain activation should model the semantic domain, while
-subsystem gates may still short-circuit whole apply regions.
-
-### Failure and skip behavior
-
-Current intended behavior:
-
-- if a domain is requested, not bypassed, and invalid, fail in compile phase
-- if a domain is bypassed, it may still compute status but should not continue
-- if a domain is not requested, it should remain inactive without error
-
-A full policy matrix is still pending.
-
-## Handoff records and transport forms
-
-`_syn_<domain>` is the canonical synthesis handoff form.
-
-Minimum schema:
-
-```yaml
-_syn_<domain>:
-  schema: "compfuzor.syn.v1"
-  domain: "<domain>"
-  phase: "compile.synthesis"
-  source:
-    kind: "syn"
-    producer: "gen_<domain>.tasks"
-    from_spec: "spec_<domain>"
-  apply: "<domain-or-target-family>"
-  entries: []
-  meta:
-    generated_at: "<optional timestamp>"
-    notes: []
-```
-
-Required keys:
-
-- `schema`
-- `domain`
-- `source.producer`
-- `apply`
-- `entries`
-
-### Other transport forms
-
-Compfuzor still recognizes these shapes:
-
-- `_probe_<domain>` for discovery handoff
-- `_fn_<domain>_out` for legacy or special transform handoff
-- `_syn_<domain>` for synthesis handoff
-
-But the preferred external contract is:
-
-- `norm_<domain>`
-- `spec_<domain>`
-- `_syn_<domain>`
-
-That keeps transform semantics visible and synthesis transport explicit.
-
-## Mutation authority
-
-This is the default write-authority model.
-
-| Producer kind | May write | Should not write |
-|---|---|---|
-| `vars_*` | defaults, validation results, activation/status facts | synthesized global artifacts, host changes |
-| `probe_*` | discovery records | host changes |
-| `fn_*` | `norm_*`, `spec_*`, optional `drv_*`, `out_*`, `merge_*` | global apply artifacts, host changes |
-| `gen_*` | `_syn_*`, explicit merge payloads, global artifact merges | host changes |
-| apply tasks | host changes, apply-local scratch values | compile-phase contracts such as `spec_*` |
-
-Two important rules:
-
-- prefer one explicit merge block over many tiny `set_fact` mutations
-- do not hide synthesis work inside `vars_*` unless you are in a temporary
-  migration shim
-
-## Merge policy
-
-Shared artifacts are one of the hardest parts of the system because many domains
-contribute to them.
-
-Examples:
+Common shared artifacts include:
 
 - `BINS`
 - `ENV`
 - `ETC_FILES`
 - hierarchy-scoped `*_FILES`, `*_DIRS`, `*_D`
 
-### Default precedence
+Without a synthesis layer, every domain would try to mutate these structures on
+its own terms. That makes precedence hard to reason about and apply behavior
+hard to predict.
 
-The default recommendation is:
+### Mutation authority
+
+This is the default write-authority model.
+
+| Producer kind | May write | Should not write |
+|---|---|---|
+| `vars_*` | defaults, validation, activation/status facts | synthesized global artifacts, host changes |
+| `probe_*` | discovery records | host changes |
+| `fn_*` | `norm_*`, `spec_*`, optional `drv_*`, `out_*`, `merge_*` | global apply artifacts, host changes |
+| `gen_*` | `_syn_*`, explicit merge payloads, global artifact merges | host changes |
+| apply tasks | host changes and apply-local scratch values | compile-phase contracts such as `spec_*` |
+
+Two strong rules follow from this model:
+
+- prefer one explicit merge block over many tiny `set_fact` mutations
+- do not hide synthesis work inside `vars_*`
+
+### Merge policy
+
+The default merge precedence recommendation is:
 
 `user > existing-global > synthesized`
 
-This default protects explicit user intent, avoids surprising overwrites, and
-keeps synthesized values additive by default.
+That default protects explicit user intent and keeps synthesized values
+additive unless a domain says otherwise.
 
 ### Configurable merge direction
 
-Merge behavior likely needs to be configurable per artifact family and per
-domain.
+Merge behavior likely needs to vary by domain and by artifact family.
 
 Suggested future shape:
 
@@ -428,7 +406,7 @@ MERGE_POLICY_DOMAIN:
     BINS: user-existing-syn
 ```
 
-Possible strategies:
+Possible strategies include:
 
 - `user-existing-syn`
 - `user-syn-existing`
@@ -438,17 +416,19 @@ Possible strategies:
 
 ### Shared-artifact rule
 
-For heavily shared artifacts such as `ETC_FILES`, think in two layers:
+For heavily shared artifacts such as `ETC_FILES`, treat merging as two separate
+steps:
 
 1. each active domain produces explicit contribution fragments
 2. synthesis aggregates those fragments and resolves final precedence
 
-Aggregation first, precedence second. Without that split, multi-domain merges
-become unpredictable.
+Aggregation first, precedence second. Without that split, cross-domain merges
+become opaque.
 
-## Hierarchy and fanout interaction
+### Hierarchy and fanout interaction
 
-Compfuzor's hierarchy machinery is part of the architecture, not just a helper.
+Hierarchy and fanout are part of the architecture because they are the bridge
+between compile-time contributions and apply-time materialization.
 
 Relevant files today:
 
@@ -456,16 +436,12 @@ Relevant files today:
 - [`/tasks/compfuzor/fs_hierarchy.tasks`](/tasks/compfuzor/fs_hierarchy.tasks)
 - [`/tasks/compfuzor/_multi.tasks`](/tasks/compfuzor/_multi.tasks)
 
-What they do together:
+Together they do three things:
 
-- `vars_hierarchy.tasks` resolves hierarchy roots and include-scoped base paths
-- `_multi.tasks` fans work across declared hierarchy domains or key families
-- `fs_hierarchy.tasks` materializes hierarchy declarations into files,
-  directories, links, and assembled `.d` payloads
-
-Architecturally, this means compile-phase data is often not the final output.
-Instead it becomes a contribution to a shared hierarchy artifact that is later
-applied.
+- resolve hierarchy roots and include-scoped base paths
+- fan work out across declared hierarchy families or key groups
+- materialize synthesized declarations into directories, files, links, and `.d`
+  assemblies
 
 Example bridge:
 
@@ -473,136 +449,96 @@ Example bridge:
 |---|---|---|
 | `ETC_FILES` contribution | `_multi.tasks` and hierarchy keys | concrete `/etc`-style files under instance roots |
 | `BINS` contribution | bins tasks | generated or linked scripts |
-| `*_FILES` / `*_D` | hierarchy expansion | files and assembled drop-in payloads |
+| `*_FILES` / `*_D` declarations | hierarchy expansion | files and assembled drop-in payloads |
 
-This is why hierarchy and fanout belong in the architecture model. They are the
-bridge between synthesis and apply.
+## 7. Architecture patterns
 
-## Architecture patterns for common subproblems
+These patterns are meant to be copied. They describe recurring subproblems and
+the architecture response to each one.
 
-### Pure transform domain
+### Pattern: pure transform domain
 
 Problem:
 
 - input is messy, but no discovery is required and the apply target is direct
 
-Pattern:
+Solution:
 
 - `vars_<domain>` validates and activates
 - `fn_<domain>` emits `norm_<domain>` and `spec_<domain>`
-- `gen_<domain>` creates `_syn_<domain>` only if there is a meaningful shared
-  artifact to merge
-- apply task consumes `spec_<domain>` or `_syn_<domain>`
+- `gen_<domain>` exists only if shared artifacts need synthesis
+- apply tasks consume `spec_<domain>` or `_syn_<domain>`
 
-### Discovery-first domain
+### Pattern: discovery-first domain
 
 Problem:
 
-- behavior depends on the current host state and that state should be modeled
-  explicitly before transforms
+- desired behavior depends on current host state
 
-Pattern:
+Solution:
 
 - `probe_<domain>` emits `_probe_<domain>`
 - `fn_<domain>` consumes raw input plus probe output
-- `gen_<domain>` synthesizes the final handoff
+- `gen_<domain>` synthesizes the apply-facing handoff
 
 Systemd is the clearest example of this pattern.
 
-### Shared-artifact contributor
+### Pattern: shared-artifact contributor
 
 Problem:
 
 - many domains write to the same artifact family
 
-Pattern:
+Solution:
 
 - each domain emits explicit contribution fragments
 - synthesis owns the final merge block
-- apply tasks consume the merged artifact, not ad hoc per-domain side effects
+- apply tasks consume the merged artifact rather than per-domain side effects
 
-`ETC_FILES` and `BINS` are the clearest examples here.
+`ETC_FILES` and `BINS` are the most important examples.
 
-### Mixed legacy `vars_*` subsystem
+### Pattern: mixed-responsibility task
 
 Problem:
 
-- one task mixes foundation, transform, and synthesis responsibilities
+- one task mixes foundation, transform, and synthesis work
 
-Pattern:
+Solution:
 
 1. reduce `vars_<domain>` to validation and activation
 2. extract `fn_<domain>` for `norm_*` and `spec_*`
 3. move merges into `gen_<domain>`
 4. narrow apply tasks to consumption only
 
-This is the standard decomposition path for old domains.
+This is the standard split for an overgrown domain task.
 
-## Domain seams
+## 8. Worked examples
 
-These seams are worth naming explicitly because they are recurring migration
-targets.
+The examples below show how the architecture should look in real domains.
 
-### Config
-
-Use:
-
-- `fn_config.tasks` for parameterized config assembly
-- `gen_config.tasks` for default batteries-included behavior
-
-This preserves compatibility for simple `CONFIG_KEY` use while allowing richer
-multi-config schemes.
-
-### GET_URLS
-
-Use:
-
-- `vars_get_urls.tasks` for validation and activation only
-- `fn_get_urls.tasks` for normalization and spec building
-- `gen_get_urls.tasks` for helper synthesis and artifact merges
-- `fs_get_urls.tasks` for actual downloads and `.url` sidecars
-
-### Systemd
-
-Treat probe as first-class:
-
-- `probe_systemd.tasks` for discovery snapshot
-- `fn_systemd*.tasks` for transforms as needed
-- `gen_systemd.tasks` for generated artifacts and merge payloads
-
-This removes ambiguity around old `vars_systemd` intent.
-
-### Kernel and zswap
-
-Use:
-
-- `vars_kernel.tasks` for contract checks and activation
-- `fn_kernel.tasks` for `norm_kernel_*` and `spec_kernel_*`
-- `gen_kernel.tasks` for `ETC_FILES`, `BINS`, and `_syn_kernel*`
-- bins/extras apply tasks for module, sysctl, and sysfs host changes
-
-[`/zswap.etc.pb`](/zswap.etc.pb) is a good pilot because the input is compact,
-the subsystem is still malleable, and the current task already exposes a mixed
-vars/transform/synthesis shape.
-
-## Worked examples
-
-### GET_URLS full lifecycle
+### Example: GET_URLS
 
 Current files:
 
 - [`/tasks/compfuzor/vars_get_urls.tasks`](/tasks/compfuzor/vars_get_urls.tasks)
 - [`/tasks/compfuzor/fs_get_urls.tasks`](/tasks/compfuzor/fs_get_urls.tasks)
 
-Target lifecycle:
+Target decomposition:
+
+- `vars_get_urls.tasks` for validation and activation only
+- `fn_get_urls.tasks` for normalization and spec building
+- `gen_get_urls.tasks` for helper synthesis and shared-artifact merges
+- `fs_get_urls.tasks` for downloads and `.url` sidecars
+
+Lifecycle view:
 
 | Step | Producer | Input | Output | Phase | Role | Effect |
 |---|---|---|---|---|---|---|
 | raw | playbook | `GET_URLS` | `GET_URLS` | `compile.foundation` | `foundation` | `none` |
 | norm | `fn_get_urls.tasks` | `GET_URLS` | `norm_get_urls` | `compile.transform` | `transform` | `none` |
 | spec | `fn_get_urls.tasks` | `norm_get_urls` | `spec_get_urls` | `compile.transform` | `transform` | `none` |
-| syn | `gen_get_urls.tasks` | `spec_get_urls` | `_syn_get_urls`, `BINS` merge payload | `compile.synthesis` | `synthesis` + `handoff` | `none` |
-| apply | `fs_get_urls.tasks` | `spec_get_urls` or `_syn_get_urls.entries` | downloaded files and `.url` sidecars | `fs-apply` | `execution` | `host.fs` + `network` |
+| syn | `gen_get_urls.tasks` | `spec_get_urls` | `_syn_get_urls`, `BINS` contribution | `compile.synthesis` | `synthesis` + `handoff` | `none` |
+| apply | `fs_get_urls.tasks` | `spec_get_urls` or `_syn_get_urls.entries` | downloads and `.url` sidecars | `fs-apply` | `execution` | `host.fs` + `network` |
 
 Lineage view:
 
@@ -612,7 +548,7 @@ Lineage view:
 | `gen_get_urls.tasks` | `_syn_get_urls` | `fs_get_urls.tasks` |
 | `gen_get_urls.tasks` | `BINS` contribution | bins tasks |
 
-### Kernel and zswap
+### Example: kernel and zswap
 
 Current files:
 
@@ -620,13 +556,20 @@ Current files:
 - [`/tasks/compfuzor/kernel_modules.tasks`](/tasks/compfuzor/kernel_modules.tasks)
 - [`/zswap.etc.pb`](/zswap.etc.pb)
 
-Target lifecycle:
+Target decomposition:
+
+- `vars_kernel.tasks` for contract checks and activation
+- `fn_kernel.tasks` for `norm_kernel_*` and `spec_kernel_*`
+- `gen_kernel.tasks` for kernel handoffs plus `ETC_FILES` and `BINS`
+- bins and extras apply tasks for module, sysctl, and sysfs changes
+
+Lifecycle view:
 
 | Step | Producer | Input | Output | Phase | Role | Effect |
 |---|---|---|---|---|---|---|
 | raw | playbook | `KERNEL_MODULES`, `KERNEL_SYSCTL`, `KERNEL_SYSFS` | raw kernel vars | `compile.foundation` | `foundation` | `none` |
 | norm/spec | `fn_kernel.tasks` | raw kernel vars | `norm_kernel_*`, `spec_kernel_*` | `compile.transform` | `transform` | `none` |
-| syn | `gen_kernel.tasks` | `spec_kernel_*` | `_syn_kernel*`, `ETC_FILES` payloads, `BINS` payloads | `compile.synthesis` | `synthesis` + `handoff` | `none` |
+| syn | `gen_kernel.tasks` | `spec_kernel_*` | `_syn_kernel*`, `ETC_FILES` contributions, `BINS` contributions | `compile.synthesis` | `synthesis` + `handoff` | `none` |
 | apply | bins and extras | synthesized kernel payloads | module, sysctl, and sysfs host changes | `extras-apply` | `execution` | `host.fs` + `host.kernel` |
 
 Ownership view:
@@ -635,40 +578,47 @@ Ownership view:
 |---|---|---|
 | `spec_kernel_domains` | `fn_kernel.tasks` | stable ordered domain table |
 | `_syn_kernel*` | `gen_kernel.tasks` | apply-facing transport records |
-| `ETC_FILES` kernel contributions | `gen_kernel.tasks` | shared artifact aggregation |
+| `ETC_FILES` kernel contributions | `gen_kernel.tasks` | shared-artifact aggregation |
 | `BINS` kernel contributions | `gen_kernel.tasks` | build/install script registration |
 
-## Migration method
+## 9. Domain seams worth preserving
 
-When splitting a mixed legacy domain, use this four-slice method unless there is
-a strong reason not to.
+Some domain splits are important enough to call out explicitly.
 
-1. add explicit transform output.
-2. move synthesis out of `vars_*`.
-3. narrow execution tasks to consumption only.
-4. wire include order intentionally.
+### Config
 
-This method is simple enough to repeat and strong enough to keep semantics from
-drifting.
+- `fn_config.tasks` for parameterized config assembly
+- `gen_config.tasks` for default batteries-included behavior
 
-## Migration guardrails
+This keeps simple `CONFIG_KEY` cases easy while allowing richer config models.
 
-During migration:
+### GET_URLS
 
-- preserve bypass behavior exactly on the first pass
-- do not change host-side semantics on the first pass
-- prefer one explicit merge per synthesized artifact target
-- keep fallback compatibility only as long as needed to land the split safely
-- validate the pattern in a second domain before calling it settled
+- `vars_get_urls.tasks` for validation and activation
+- `fn_get_urls.tasks` for normalization and spec building
+- `gen_get_urls.tasks` for helper synthesis and merges
+- `fs_get_urls.tasks` for actual download behavior
 
-Compfuzor does not need a heavy legacy-coexistence framework. The bias should be
-toward forward migration, but without rewriting behavior blindly.
+### Systemd
 
-## Trace and status facts
+- `probe_systemd.tasks` for discovery snapshots
+- transform tasks for unit modeling as needed
+- `gen_systemd.tasks` for generated units and merge payloads
 
-Trace facts are optional but valuable while refactoring.
+Systemd is the strongest case for treating probe as first-class.
 
-Example:
+### Kernel and zswap
+
+- `vars_kernel.tasks` for validation and activation
+- `fn_kernel.tasks` for explicit domain tables and contracts
+- `gen_kernel.tasks` for shared-artifact assembly and handoff records
+- bins and extras apply tasks for execution
+
+## 10. Trace and status facts
+
+Trace and status facts make the pipeline inspectable.
+
+Example trace fact:
 
 ```yaml
 _trace_get_urls:
@@ -684,22 +634,14 @@ _trace_get_urls:
     syn: _syn_get_urls
 ```
 
-Status facts should explain why a domain is inactive, not just whether it is.
+These facts are especially useful when a domain is present but inactive, or
+when a decomposition is in progress and you need to prove which step produced
+what.
 
-Example:
+## 11. Success criteria
 
-```yaml
-GET_URLS_STATUS:
-  requested: true
-  bypassed: false
-  valid: true
-  active: true
-  reasons: []
-```
-
-## Success criteria
-
-When this architecture is working, a contributor or agent can answer quickly:
+The architecture is doing its job when a contributor or agent can answer
+quickly:
 
 - where does this logic belong by phase and kind?
 - what artifact should this task produce?
@@ -707,11 +649,10 @@ When this architecture is working, a contributor or agent can answer quickly:
 - what phase is allowed to apply host-side changes?
 - how does this domain become active or inactive?
 
-## Pending work
+## 12. Pending work
 
-- TODO: formal failure/skip policy matrix.
-- TODO: formal verification contract for domain migrations.
-- TODO: stricter naming registry for artifact families beyond prefix seeds.
-- TODO: normative, testable phase entry and exit guarantees.
-- TODO: refine merge-policy implementation shape for per-domain and per-artifact
-  control.
+- TODO: formal failure/skip policy matrix
+- TODO: formal verification contract for domain migrations
+- TODO: stricter naming registry for artifact families beyond prefix seeds
+- TODO: normative, testable phase entry and exit guarantees
+- TODO: refine merge-policy implementation shape for per-domain and per-artifact control
