@@ -12,10 +12,10 @@
       when: _subsystem_requested
   vars:
     items: "{{ GET_URLS | default([], true) | arrayitize }}"
+    subsystem_name: get_urls
     stringItems: "{{ items | select('string') | list }}"
     mappingItems: "{{ items | select('mapping') | list }}"
     mappingsWithUrl: "{{ mappingItems | selectattr('url', 'defined') | list }}"
-    bypassed: "{{ GET_URLS_BYPASS | default(false) | bool }}"
     errorChecks:
       - msg: "GET_URLS entries must be strings or mappings"
         failed: "{{ ((items | length) - (stringItems | length) - (mappingItems | length)) | int > 0 }}"

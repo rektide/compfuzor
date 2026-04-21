@@ -157,12 +157,16 @@ _postRun: "{{ 'postRun' if _binsRun else 'skip' }}"
 # standard subsystem evaluation contract
 # data dependencies (task-local vars):
 # - items: array/list of subsystem input rows
+# - subsystem_name: subsystem id used for automatic bypass variable resolution
+# optional task-local metadata:
+# - subsystem_domain: broad domain label (for example: kernel)
+# - subsystem_bypass_vars: bypass override; true enables defaults, [true, "X"] extends defaults, ["X"] replaces defaults
 # optional overrides:
 # - requested, bypassed, valid, errorChecks
 errorChecks: []
 errors: "{{ errorChecks | selectattr('failed', 'truthy') | map(attribute='msg') | list }}"
 _subsystem_requested: "{{ requested | default((items | default([], true) | arrayitize | length > 0), true) | bool }}"
-_subsystem_bypassed: "{{ bypassed | default(false) | bool }}"
+_subsystem_bypassed: "{{ bypassed | default((subsystem_name | default('') | subsystem_bypassed(subsystem_bypass_vars | default(none, true), subsystem_domain | default(none, true))), true) | bool }}"
 _subsystem_valid: "{{ valid | default(errors | length == 0) | bool }}"
 _subsystem_active: "{{ _subsystem_requested and (not _subsystem_bypassed) and _subsystem_valid }}"
 _subsystem_status: "{{ 'active' if _subsystem_active else 'bypassed' if _subsystem_bypassed else 'invalid' if not _subsystem_valid else 'requested' }}"
