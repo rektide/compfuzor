@@ -1,0 +1,34 @@
+---
+- name: "Compfuzor: normalize get_urls subsystem inputs"
+  set_fact:
+    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine(getUrlsSubsystemTransform, recursive=True) }}"
+  when: (SUBSYSTEM | default({})).get('get_urls', {}).get('active', false)
+  vars:
+    getUrlsItems: "{{ GET_URLS | default([], true) | arrayitize }}"
+    getUrlsNorm: >-
+      {%- set normalized = [] -%}
+      {%- for item in getUrlsItems -%}
+        {%- set url = item if item is string else item.url -%}
+        {%- set dest_name = (item | basename) if item is string else (item.dest if item.dest is defined else (url | basename)) -%}
+        {%- set entry = {
+          'url': url,
+          'dest': (dest_name | defaultDir(SRC)),
+          'validate_certs': (VALIDATE_CERTS | default(true))
+        } -%}
+        {%- if item is mapping and item.owner is defined -%}
+          {%- set _ = entry.update({'owner': item.owner}) -%}
+        {%- elif OWNER is defined -%}
+          {%- set _ = entry.update({'owner': OWNER}) -%}
+        {%- endif -%}
+        {%- if item is mapping and item.group is defined -%}
+          {%- set _ = entry.update({'group': item.group}) -%}
+        {%- elif GROUP is defined -%}
+          {%- set _ = entry.update({'group': GROUP}) -%}
+        {%- endif -%}
+        {%- set _ = normalized.append(entry) -%}
+      {%- endfor -%}
+      {{ normalized }}
+    getUrlsSubsystemTransform:
+      get_urls:
+        norm: "{{ getUrlsNorm }}"
+        spec: "{{ getUrlsNorm }}"

@@ -1,19 +1,90 @@
-- name: 'Add get-urls.sh BIN for refreshing downloaded files'
+---
+- name: "Compfuzor: register get_urls subsystem type"
   set_fact:
-    BINS: "{{ enhancedBins|mergeKeyed(BINS|default([]), key='name', concat_fields=['generated']) }}"
+    SUBSYSTEM_META: "{{ (SUBSYSTEM_META | default({})) | combine(getUrlsSubsystemMeta, recursive=True) }}"
   vars:
-    enhancedBins:
-      - name: get-urls.sh
-        run: "{{GET_URLS_BYPASS is not deftruthy}}"
-        generated: |
-          [ -z "$DIR" ] && export DIR="{{SRC}}"
-          cd "${DIR}"
+    getUrlsSubsystemMeta:
+      get_urls:
+        labels:
+          apply: get-urls
+          effect:
+            - network
+            - host.fs
+        bypass_vars: true
 
-          # Find and re-download from all .url files
-          for urlfile in *.url; do
-            [ -e "$urlfile" ] || continue
-            url=$(cat "$urlfile")
-            dest="${urlfile%.url}"
-            echo "Fetching: $url -> $dest"
-            curl -fsSL "$url" -o "$dest"
-          done
+- name: "Compfuzor: validate get_urls contract"
+  fail:
+    msg: "{{ getUrlsErrors | join('; ') }}"
+  when: getUrlsRequested and not getUrlsBypassed and getUrlsErrors | length > 0
+  vars:
+    getUrlsItems: "{{ GET_URLS | default([], true) | arrayitize }}"
+    getUrlsRequested: "{{ getUrlsItems | length > 0 }}"
+    getUrlsBypassed: "{{ GET_URLS_BYPASS | default(false) | bool }}"
+    getUrlsErrors: >-
+      {%- set errors = [] -%}
+      {%- for item in getUrlsItems -%}
+        {%- if item is string -%}
+          {%- if item | trim | length == 0 -%}
+            {%- set _ = errors.append('GET_URLS string entries must be non-empty') -%}
+          {%- endif -%}
+        {%- elif item is mapping -%}
+          {%- if item.url is not defined or item.url is not string or item.url | trim | length == 0 -%}
+            {%- set _ = errors.append('GET_URLS mapping entries must define a non-empty string url') -%}
+          {%- endif -%}
+          {%- if item.dest is defined and item.dest is not string -%}
+            {%- set _ = errors.append('GET_URLS mapping entry dest must be a string when defined') -%}
+          {%- endif -%}
+        {%- else -%}
+          {%- set _ = errors.append('GET_URLS entries must be strings or mappings') -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ errors }}
+
+- name: "Compfuzor: create get_urls runtime subsystem"
+  set_fact:
+    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine(getUrlsSubsystemState, recursive=True) }}"
+  when: getUrlsRequested
+  vars:
+    getUrlsItems: "{{ GET_URLS | default([], true) | arrayitize }}"
+    getUrlsRequested: "{{ getUrlsItems | length > 0 }}"
+    getUrlsBypassed: "{{ GET_URLS_BYPASS | default(false) | bool }}"
+    getUrlsErrors: >-
+      {%- set errors = [] -%}
+      {%- for item in getUrlsItems -%}
+        {%- if item is string -%}
+          {%- if item | trim | length == 0 -%}
+            {%- set _ = errors.append('GET_URLS string entries must be non-empty') -%}
+          {%- endif -%}
+        {%- elif item is mapping -%}
+          {%- if item.url is not defined or item.url is not string or item.url | trim | length == 0 -%}
+            {%- set _ = errors.append('GET_URLS mapping entries must define a non-empty string url') -%}
+          {%- endif -%}
+          {%- if item.dest is defined and item.dest is not string -%}
+            {%- set _ = errors.append('GET_URLS mapping entry dest must be a string when defined') -%}
+          {%- endif -%}
+        {%- else -%}
+          {%- set _ = errors.append('GET_URLS entries must be strings or mappings') -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ errors }}
+    getUrlsValid: "{{ getUrlsErrors | length == 0 }}"
+    getUrlsActive: "{{ getUrlsRequested and not getUrlsBypassed and getUrlsValid }}"
+    getUrlsStatus: >-
+      {{
+        'active'
+        if getUrlsActive else
+        'bypassed'
+        if getUrlsBypassed else
+        'invalid'
+        if not getUrlsValid else
+        'requested'
+      }}
+    getUrlsSubsystemState:
+      get_urls:
+        subsystem: get_urls
+        status: "{{ getUrlsStatus }}"
+        requested: "{{ getUrlsRequested }}"
+        bypassed: "{{ getUrlsBypassed }}"
+        valid: "{{ getUrlsValid }}"
+        active: "{{ getUrlsActive }}"
+        reasons: "{{ getUrlsErrors }}"

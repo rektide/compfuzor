@@ -2,25 +2,32 @@
   get_url:
     url: "{{_url}}"
     dest: "{{_dest}}"
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
-    validate_certs: "{{VALIDATE_CERTS|default(true)}}"
-  with_items: "{{GET_URLS|default([])|arrayitize}}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|dirname|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
-  when: GET_URLS|default(False) is iterable
+    owner: "{{ _owner if _owner else omit }}"
+    group: "{{ _group if _group else omit }}"
+    validate_certs: "{{_validate_certs}}"
+  with_items: "{{ _get_urls_spec }}"
+  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|dirname|should_become(_owner|default(), _cf_user_id, _group|default(), _cf_user_gid)))|bool }}"
+  when: (SUBSYSTEM | default({})).get('get_urls', {}).get('active', false)
   vars:
-    _url: "{{item.url if item is mapping else item}}"
-    _dest: "{{(item|basename if item is string else item.dest)|defaultDir(SRC)}}"
+    _get_urls_spec: "{{ (SUBSYSTEM | default({})).get('get_urls', {}).get('spec', []) }}"
+    _url: "{{ item.url }}"
+    _dest: "{{ item.dest }}"
+    _owner: "{{ item.owner | default('') }}"
+    _group: "{{ item.group | default('') }}"
+    _validate_certs: "{{ item.validate_certs | default(true) }}"
 
 - name: "save '.url' file"
   copy:
     content: "{{_url}}"
     dest: "{{_dest}}.url"
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
-  with_items: "{{GET_URLS|default([])|arrayitize}}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|dirname|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
-  when: GET_URLS|default(False) is iterable
+    owner: "{{ _owner if _owner else omit }}"
+    group: "{{ _group if _group else omit }}"
+  with_items: "{{ _get_urls_spec }}"
+  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|dirname|should_become(_owner|default(), _cf_user_id, _group|default(), _cf_user_gid)))|bool }}"
+  when: (SUBSYSTEM | default({})).get('get_urls', {}).get('active', false)
   vars:
-    _url: "{{item.url if item is mapping else item}}"
-    _dest: "{{(item|basename if item is string else item.dest)|defaultDir(SRC)}}"
+    _get_urls_spec: "{{ (SUBSYSTEM | default({})).get('get_urls', {}).get('spec', []) }}"
+    _url: "{{ item.url }}"
+    _dest: "{{ item.dest }}"
+    _owner: "{{ item.owner | default('') }}"
+    _group: "{{ item.group | default('') }}"

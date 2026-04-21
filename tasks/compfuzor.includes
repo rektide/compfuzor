@@ -25,6 +25,15 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_src.tasks
   tags: ['vars', 'always']
+- import_tasks: compfuzor/vars_get_urls.tasks
+  when: GET_URLS is defined
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/fn_get_urls.tasks
+  when: (SUBSYSTEM | default({})).get('get_urls', {}).get('active', false)
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_get_urls.tasks
+  when: (SUBSYSTEM | default({})).get('get_urls', {}).get('active', false)
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_make_autoconf.tasks
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_cmake.tasks
@@ -115,7 +124,7 @@
 - import_tasks: compfuzor/fs_zip.tasks
   when: ZIP is defined and not ZIP_BYPASS|default(False)
 - import_tasks: compfuzor/fs_get_urls.tasks
-  when: GET_URLS is defined and not GET_URLS_BYPASS|default(False)
+  when: (SUBSYSTEM | default({})).get('get_urls', {}).get('active', false)
 - import_tasks: compfuzor/bins.tasks
   when: BINS|default(False) and not BINS_BYPASS|default(False)
 - import_tasks: compfuzor/bins_link.tasks

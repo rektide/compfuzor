@@ -1,0 +1,26 @@
+---
+- name: "Compfuzor: synthesize get_urls shared artifacts"
+  set_fact:
+    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine(getUrlsSubsystemSynthesis, recursive=True) }}"
+    BINS: "{{ getUrlsBins | mergeKeyed(BINS | default([]), key='name', concat_fields=['generated']) }}"
+  when: (SUBSYSTEM | default({})).get('get_urls', {}).get('active', false)
+  vars:
+    getUrlsBins:
+      - name: get-urls.sh
+        run: true
+        generated: |
+          [ -z "$DIR" ] && export DIR="{{SRC}}"
+          cd "${DIR}"
+
+          # Find and re-download from all .url files
+          for urlfile in *.url; do
+            [ -e "$urlfile" ] || continue
+            url=$(cat "$urlfile")
+            dest="${urlfile%.url}"
+            echo "Fetching: $url -> $dest"
+            curl -fsSL "$url" -o "$dest"
+          done
+    getUrlsSubsystemSynthesis:
+      get_urls:
+        contrib:
+          BINS: "{{ getUrlsBins }}"
