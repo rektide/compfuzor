@@ -155,9 +155,13 @@ _binsRun: "{{ BINS_BYPASS|default(False) is falsy and BINS_RUN_BYPASS|default(Fa
 _postRun: "{{ 'postRun' if _binsRun else 'skip' }}"
 
 # standard subsystem evaluation contract
+# data dependencies (task-local vars):
+# - items: array/list of subsystem input rows
+# optional overrides:
+# - requested, bypassed, valid, errorChecks
 errorChecks: []
 errors: "{{ errorChecks | selectattr('failed', 'truthy') | map(attribute='msg') | list }}"
-_subsystem_requested: "{{ requested | default(false) | bool }}"
+_subsystem_requested: "{{ requested | default((items | default([], true) | arrayitize | length > 0), true) | bool }}"
 _subsystem_bypassed: "{{ bypassed | default(false) | bool }}"
 _subsystem_valid: "{{ valid | default(errors | length == 0) | bool }}"
 _subsystem_active: "{{ _subsystem_requested and (not _subsystem_bypassed) and _subsystem_valid }}"

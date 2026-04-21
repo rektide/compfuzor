@@ -4,18 +4,17 @@
     - name: "Compfuzor: fail invalid get_urls input"
       fail:
         msg: "{{ errors | join('; ') }}"
-      when: requested and not bypassed and not _subsystem_valid
+      when: _subsystem_requested and (not _subsystem_bypassed) and (not _subsystem_valid)
 
     - name: "Compfuzor: publish get_urls subsystem"
       set_fact:
         SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'get_urls': subsystem}, recursive=True) }}"
-      when: requested
+      when: _subsystem_requested
   vars:
     items: "{{ GET_URLS | default([], true) | arrayitize }}"
     stringItems: "{{ items | select('string') | list }}"
     mappingItems: "{{ items | select('mapping') | list }}"
     mappingsWithUrl: "{{ mappingItems | selectattr('url', 'defined') | list }}"
-    requested: "{{ items | length > 0 }}"
     bypassed: "{{ GET_URLS_BYPASS | default(false) | bool }}"
     errorChecks:
       - msg: "GET_URLS entries must be strings or mappings"
