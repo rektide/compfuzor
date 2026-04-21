@@ -209,6 +209,80 @@ def _dedupe_preserve(values):
     return result
 
 
+def combine_with_strategy(
+    records,
+    strategies,
+    aggregate=None,
+    include_aggregate=True,
+    payload_key=None,
+):
+    """Combine records using per-field merge strategies.
+
+    Supported strategies:
+    - append: extend list values as-is
+    - append_unique: append list values, then stable-dedupe
+    - dict_overlay: merge dicts where later values win
+    - replace: replace with latest non-None value
+
+    When `payload_key` is set and a record contains that key, the keyed payload
+    is used. Otherwise the record itself is treated as payload.
+    """
+    strategy_map = _as_dict(strategies)
+    combined = {}
+
+    for field, strategy in strategy_map.items():
+        if strategy in {"append", "append_unique"}:
+            combined[field] = []
+        elif strategy == "dict_overlay":
+            combined[field] = {}
+        else:
+            combined[field] = None
+
+    source_records = _as_list(records)
+    if include_aggregate and isinstance(aggregate, dict):
+        source_records = source_records + [aggregate]
+
+    for record in source_records:
+        if not isinstance(record, dict):
+            continue
+
+        payload = record
+        if _has_value(payload_key):
+            payload = record.get(payload_key, record)
+
+        if not isinstance(payload, dict):
+            continue
+
+        for field, strategy in strategy_map.items():
+            value = payload.get(field)
+
+            if strategy == "append":
+                combined[field] += _as_list(value)
+                continue
+
+            if strategy == "append_unique":
+                combined[field] += _as_list(value)
+                combined[field] = _dedupe_preserve(combined[field])
+                continue
+
+            if strategy == "dict_overlay":
+                combined[field] = _as_dict(combined.get(field)) | _as_dict(value)
+                continue
+
+            if strategy == "replace":
+                if value is not None:
+                    combined[field] = value
+                continue
+
+            raise ValueError(
+                "Unknown combine_with_strategy strategy for '{}': {}".format(
+                    field, strategy
+                )
+            )
+
+    return combined
+
+
 def subsystem_rollup(children, aggregate=None, include_aggregate=True):
     """Roll up child subsystem contrib payloads into one aggregate payload.
 
@@ -222,37 +296,19 @@ def subsystem_rollup(children, aggregate=None, include_aggregate=True):
     Output keys:
     - ETC_FILES, BINS, ENV, ENV_LIST, PKGS
     """
-    rolled = {
-        "ETC_FILES": [],
-        "BINS": [],
-        "ENV": {},
-        "ENV_LIST": [],
-        "PKGS": [],
-    }
-
-    for child in _as_list(children):
-        if not isinstance(child, dict):
-            continue
-        contrib = child.get("contrib", child)
-        if not isinstance(contrib, dict):
-            continue
-
-        rolled["ETC_FILES"] += _as_list(contrib.get("ETC_FILES"))
-        rolled["BINS"] += _as_list(contrib.get("BINS"))
-        rolled["ENV"] = _as_dict(rolled.get("ENV")) | _as_dict(contrib.get("ENV"))
-        rolled["ENV_LIST"] += _as_list(contrib.get("ENV_LIST"))
-        rolled["PKGS"] += _as_list(contrib.get("PKGS"))
-
-    if include_aggregate and isinstance(aggregate, dict):
-        rolled["ETC_FILES"] += _as_list(aggregate.get("ETC_FILES"))
-        rolled["BINS"] += _as_list(aggregate.get("BINS"))
-        rolled["ENV"] = _as_dict(rolled.get("ENV")) | _as_dict(aggregate.get("ENV"))
-        rolled["ENV_LIST"] += _as_list(aggregate.get("ENV_LIST"))
-        rolled["PKGS"] += _as_list(aggregate.get("PKGS"))
-
-    rolled["ENV_LIST"] = _dedupe_preserve(rolled.get("ENV_LIST", []))
-    rolled["PKGS"] = _dedupe_preserve(rolled.get("PKGS", []))
-    return rolled
+    return combine_with_strategy(
+        children,
+        {
+            "ETC_FILES": "append",
+            "BINS": "append",
+            "ENV": "dict_overlay",
+            "ENV_LIST": "append_unique",
+            "PKGS": "append_unique",
+        },
+        aggregate=aggregate,
+        include_aggregate=include_aggregate,
+        payload_key="contrib",
+    )
 
 
 def build_install_bins(stem, basedir=False, src_root="../kernel"):
@@ -376,6 +432,7 @@ class FilterModule(object):
             "subsystem_bypass_vars": subsystem_bypass_vars,
             "subsystem_bypassed": subsystem_bypassed,
             "subsystem_record": subsystem_record,
+            "combine_with_strategy": combine_with_strategy,
             "subsystem_rollup": subsystem_rollup,
             "build_install_bins": build_install_bins,
         }
