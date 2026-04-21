@@ -1,102 +1,211 @@
-# Pipeline Stage + Intent Prefix Memo
+# Pipeline and Prefix Memo (Overhaul Draft)
 
-This memo defines the model we want compfuzor to converge on.
+This memo is the implementation-facing companion to [`/ARCHITECTURE.md`](/ARCHITECTURE.md).
 
-We separate two axes:
+It translates architecture contracts into practical authoring guidance,
+decomposition patterns, and migration direction.
 
-- pipeline stage: runtime execution order (when)
-- intent prefix: meaning and contract (what)
+## Status and role
 
-The goal is to make layer authoring legible for both humans and agents.
+- This memo is active and intended to be revised during migration work.
+- Architecture invariants stay in [`/ARCHITECTURE.md`](/ARCHITECTURE.md).
+- Domain decomposition slices live in [`/doc/prefix.codex.md`](/doc/prefix.codex.md).
 
-## Pipeline Stage Comments To Add In `tasks/compfuzor.includes`
+## Canonical terminology
 
-These are the stage comments we should add to the current include pipeline.
+Use these terms in new docs and updates:
+
+| Legacy term | Canonical term |
+|---|---|
+| `stage` | `phase` |
+| `class` | `role` |
+| `side-effect` | `effect` |
+
+Do not introduce a separate envelope taxonomy. A handoff key like
+`_syn_<domain>` is still `kind:syn` with `record` metadata.
+
+## Core dimensions
+
+Compfuzor modeling uses two dimensions:
+
+- `phase` (when work runs)
+- facets (`kind`, `record`, `origin`, `role`, `apply`, `effect`) for what it is
+
+## Phase vocabulary and mapping
+
+Current phase names:
+
+- `phase:compile`
+- `phase:user-context`
+- `phase:repo-apply`
+- `phase:fs-apply`
+- `phase:extras-apply`
+- `phase:post-run`
+
+Nested compile names are preferred when useful:
+
+- `phase:compile.foundation`
+- `phase:compile.transform`
+- `phase:compile.synthesis`
+
+Informative mapping to current include flow in
+[`/tasks/compfuzor.includes`](/tasks/compfuzor.includes):
+
+| Include region | Recommended phase label |
+|---|---|
+| vars/import pre-work | `phase:compile.*` |
+| user context import | `phase:user-context` |
+| repo imports | `phase:repo-apply` |
+| fs/bins/links imports | `phase:fs-apply` |
+| apt/pkgs/kernel/etc imports | `phase:extras-apply` |
+| delayed links/thunks | `phase:post-run` |
+
+## Domain lifecycle contract
+
+Current lifecycle contract:
+
+`raw -> norm -> spec -> syn -> apply`
+
+| Step | Producer | Required output | Phase | Effect |
+|---|---|---|---|---|
+| `raw` | playbook/input | domain input vars | `compile.foundation` entry | `none` |
+| `norm` | `fn_*` (temporary `vars_*` allowed during migration) | `norm_<domain>` | `compile.transform` | `none` |
+| `spec` | `fn_*` | `spec_<domain>` (ordered, explicit records) | `compile.transform` | `none` |
+| `syn` | `gen_*` | `_syn_<domain>` and merged artifacts | `compile.synthesis` | `none` |
+| `apply` | execution tasks (`repo_*`, `fs_*`, `bins*`, extras) | host changes | `*-apply` | host/network |
+
+Normative guidance:
+
+- Prefer `spec_<domain>` as the primary transform contract.
+- `_syn_<domain>` is synthesis handoff metadata for apply-facing payloads.
+- Direct `raw -> apply` is migration-only fallback, not target design.
+
+## Domain activation contract
+
+Each domain should compute a shared activation contract in foundation:
+
+- `<DOMAIN>_REQUESTED`
+- `<DOMAIN>_BYPASSED`
+- `<DOMAIN>_VALID`
+- `<DOMAIN>_ACTIVE`
+
+Where:
+
+`<DOMAIN>_ACTIVE = <DOMAIN>_REQUESTED and not <DOMAIN>_BYPASSED and <DOMAIN>_VALID`
+
+Optional but recommended:
+
+- `<DOMAIN>_STATUS` mapping with `requested`, `bypassed`, `valid`, `active`,
+  and `reasons`
+- `_trace_<domain>` for lifecycle observability during migration
+
+Execution rule:
+
+- Compile transform/synthesis and apply tasks should gate on `<DOMAIN>_ACTIVE`.
+
+## `_syn_<domain>` minimum handoff schema
+
+Minimum stable scaffold:
 
 ```yaml
-# STAGE 1: COMPILE CONTEXT + ARTIFACTS
-#   1A foundation (`vars_*`)
-#   1B discovery (`probe_*`, when introduced)
-#   1C transforms (`fn_*`, when introduced)
-#   1D synthesis (`gen_*`, migrated from generative `vars_*`)
-
-# STAGE 2: USER / EXECUTION CONTEXT
-
-# STAGE 3: REPOSITORY APPLY (`repo_*`)
-
-# STAGE 4: FILESYSTEM + SCRIPT APPLY (`fs_*`, `bins*`, `links*`)
-
-# STAGE 5: DOMAIN APPLY EXTRAS (`apt`, `pkgs`, `pg`, `sysctl`, etc.)
-
-# STAGE 6: POST-RUN HOOKS + THUNKS
+_syn_<domain>:
+  schema: "compfuzor.syn.v1"
+  domain: "<domain>"
+  phase: "compile.synthesis"
+  source:
+    kind: "syn"
+    producer: "gen_<domain>.tasks"
+    from_spec: "spec_<domain>"
+  apply: "<domain-or-target-family>"
+  entries: []
 ```
 
-Notes against the current file:
+Required keys:
 
-- stage 1 currently uses `vars_*` for multiple intents; we will split over time
-- stage 4 already includes bins and links apply work and should be named as such
-- stage 6 covers delayed link passes and legacy systemd thunk execution
+- `schema`
+- `domain`
+- `source.producer`
+- `apply`
+- `entries`
 
-## Intent Prefix Contract
+## Authoring and mutation guidance
 
-We use intent prefixes in multiple scopes. The table below expands canonical
-labels into explicit columns so docs and agents can parse them consistently.
+Recommended authority boundaries:
 
-Scoped label format:
+- `vars_*`: validate contract, set defaults, compute activation/status facts
+- `fn_*`: emit `norm_*` and `spec_*`, avoid host effects
+- `gen_*`: emit `_syn_*`, perform explicit merges into global artifacts
+- apply tasks: consume `spec_*`/`_syn_*`, perform host effects only
 
-- `intent:<file|data>`
-- `kind:<vars|probe|fn|syn|repo|fs|bins|links|raw|norm|spec|drv|out|merge|tmp|...>`
-- `form:<prefix|envelope|internal>`
-- `class:<foundation|discovery|transform|synthesis|execution|orchestration|...>`
-- `side-effect:<none|host|mixed>`
-- apply family: `apply:<type|none>` (for example `apply:get-urls`)
+These are recommendations; temporary migration shims are allowed.
 
-The simple name comes from `class:*`.
+## Merge policy recommendations
 
-| Entity Pattern | Intent | Kind | Form | Class | Apply | Side Effect | Section | Typical Output |
-|---|---|---|---|---|---|---|---|---|
-| `vars_` | `intent:file` | `kind:vars` | `form:prefix` | `class:foundation` | `apply:none` | `side-effect:none` | file-prefix | normalized base facts |
-| `probe_` | `intent:file` | `kind:probe` | `form:prefix` | `class:discovery` | `apply:none` | `side-effect:none` | file-prefix | `_probe_<domain>` snapshot |
-| `fn_` | `intent:file` | `kind:fn` | `form:prefix` | `class:transform` | `apply:none` | `side-effect:none` | file-prefix | reusable output bundle(s) |
-| `gen_` | `intent:file` | `kind:syn` | `form:prefix` | `class:synthesis` | `apply:none` | `side-effect:none` | file-prefix | synthesized pipeline payloads and artifact merges |
-| `repo_` | `intent:file` | `kind:repo` | `form:prefix` | `class:execution` | `apply:repo` | `side-effect:host` | file-prefix | checked-out/updated repos |
-| `fs_` | `intent:file` | `kind:fs` | `form:prefix` | `class:execution` | `apply:filesystem` | `side-effect:host` | file-prefix | files/dirs/downloads/env files |
-| `bins` / `bins_*` | `intent:file` | `kind:bins` | `form:prefix` | `class:execution` | `apply:bins` | `side-effect:host` | file-prefix | managed scripts linked/run |
-| `links` / `links_*` | `intent:file` | `kind:links` | `form:prefix` | `class:execution` | `apply:links` | `side-effect:host` | file-prefix | symlinks |
-| `_*.tasks` | `intent:file` | `kind:orchestrator` | `form:internal` | `class:orchestration` | `apply:orchestration` | `side-effect:mixed` | file-prefix | fanout/control-flow helper behavior |
-|  |  |  |  |  |  |  |  |
-| `raw_` | `intent:data` | `kind:raw` | `form:prefix` | `class:input` | `apply:none` | `side-effect:none` | data-prefix | unnormalized values |
-| `norm_` | `intent:data` | `kind:norm` | `form:prefix` | `class:normalization` | `apply:none` | `side-effect:none` | data-prefix | validated/normalized values |
-| `spec_` | `intent:data` | `kind:spec` | `form:prefix` | `class:model` | `apply:none` | `side-effect:none` | data-prefix | ordered domain table |
-| `drv_` | `intent:data` | `kind:drv` | `form:prefix` | `class:derivation` | `apply:none` | `side-effect:none` | data-prefix | intermediate computed values |
-| `out_` | `intent:data` | `kind:out` | `form:prefix` | `class:output` | `apply:none` | `side-effect:none` | data-prefix | completed transform payload |
-| `merge_` | `intent:data` | `kind:merge` | `form:prefix` | `class:synthesis-input` | `apply:none` | `side-effect:none` | data-prefix | merge-ready payload |
-| `syn_` | `intent:data` | `kind:syn` | `form:prefix` | `class:synthesis-output` | `apply:none` | `side-effect:none` | data-prefix | synthesized payload ready for pipeline merge |
-| `_tmp_` | `intent:data` | `kind:tmp` | `form:internal` | `class:scratch` | `apply:none` | `side-effect:none` | data-prefix | short-lived local values (`visibility:internal`) |
-|  |  |  |  |  |  |  |  |
-| `_probe_<domain>` | `intent:data` | `kind:probe` | `form:envelope` | `class:discovery-envelope` | `apply:<domain>` | `side-effect:none` | data-envelope | probe handoff record |
-| `_fn_<domain>_out` | `intent:data` | `kind:fn` | `form:envelope` | `class:transform-envelope` | `apply:<domain>` | `side-effect:none` | data-envelope | transform handoff record |
-| `_syn_<domain>` | `intent:data` | `kind:syn` | `form:envelope` | `class:synthesis-envelope` | `apply:<domain>` | `side-effect:none` | data-envelope | synthesis handoff record |
+Default precedence recommendation:
 
-## Preferred Authoring Flow Per Layer
+- `user > existing-global > synthesized`
 
-For non-trivial behavior:
+Rationale: preserve explicit user intent, avoid unexpected synthesis overwrite,
+and keep existing state stable unless intentionally changed.
 
-1. validate contract
-2. normalize values (`norm_*`)
-3. model with one ordered spec (`spec_*`)
-4. derive outputs (`drv_*`, `out_*`)
-5. prepare synthesis input (`merge_*`)
-6. emit synthesis payload in `gen_*` (`syn_*` / `_syn_<domain>`), then merge into canonical pipeline artifacts
-7. apply in execution stages (`repo_*`, `fs_*`, `bins*`, `links*`, extras)
+Suggested future config pattern:
 
-## Open Design Item: `fn_multi`
+```yaml
+MERGE_POLICY_DEFAULT: user-existing-syn
+MERGE_POLICY_DOMAIN:
+  get_urls:
+    BINS: user-existing-syn
+  kernel:
+    ETC_FILES: user-existing-syn
+```
 
-`fn_multi` is a nice-to-have only if it stays explicit and contract-driven.
+## Worked example: GET_URLS lifecycle
 
-Minimum bar:
+| Step | Producer | Input | Output | Phase | Role | Effect |
+|---|---|---|---|---|---|---|
+| raw | playbook | `GET_URLS` | `GET_URLS` | `compile.foundation` | `foundation` | `none` |
+| norm | `fn_get_urls.tasks` | `GET_URLS` | `norm_get_urls` | `compile.transform` | `transform` | `none` |
+| spec | `fn_get_urls.tasks` | `norm_get_urls` | `spec_get_urls` | `compile.transform` | `transform` | `none` |
+| syn | `gen_get_urls.tasks` | `spec_get_urls` | `_syn_get_urls`, `BINS` merge payload | `compile.synthesis` | `synthesis` + `handoff` | `none` |
+| apply | `fs_get_urls.tasks` | `spec_get_urls` or `_syn_get_urls.entries` | downloaded files + `.url` sidecars | `fs-apply` | `execution` | `host.fs` + `network` |
+
+## Worked example: Kernel/Zswap lifecycle
+
+| Step | Producer | Input | Output | Phase | Role | Effect |
+|---|---|---|---|---|---|---|
+| raw | playbook (`zswap.etc.pb`) | `KERNEL_MODULES`/`KERNEL_SYSCTL`/`KERNEL_SYSFS` | raw kernel vars | `compile.foundation` | `foundation` | `none` |
+| norm/spec | `fn_kernel.tasks` (target split) | raw kernel vars | `norm_kernel_*`, `spec_kernel_*` | `compile.transform` | `transform` | `none` |
+| syn | `gen_kernel.tasks` (target split) | `spec_kernel_*` | `_syn_kernel*`, merged `ETC_FILES`/`BINS` payloads | `compile.synthesis` | `synthesis` + `handoff` | `none` |
+| apply | bins/install scripts + extras | synthesized kernel payloads | module/sysctl/sysfs host changes | `extras-apply` | `execution` | `host.fs` + `host.kernel` |
+
+## Seams to retain from older intent docs
+
+These remain useful and should stay visible:
+
+- `gen_` filename prefix and `synthesis` concept are both intentional.
+- config/get_urls/systemd remain key decomposition seams.
+- `fn_multi` is allowed only when contract-driven and explicit.
+
+`fn_multi` minimum bar:
 
 - declared input schema
 - deterministic output names
 - no hidden side effects
-- wrappers allowed when generic shape hurts readability
+- domain wrappers when generic shape hurts readability
+
+## Success criteria
+
+A contributor should be able to answer quickly:
+
+- where does this logic belong by lifecycle step?
+- what artifact should this task produce?
+- what task type is allowed to merge this artifact?
+- which phase is allowed to apply host-side changes?
+
+## Pending items for the next revision
+
+- TODO: failure/skip policy matrix
+- TODO: legacy coexistence policy (migration-forward bias)
+- TODO: normative phase entry/exit guarantees
+- TODO: verification contract
+- TODO: naming registry/rules
