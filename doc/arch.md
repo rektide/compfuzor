@@ -345,8 +345,33 @@ Both are needed:
 
 ### Transport forms
 
-These are optional standalone transport shapes. They are not required just
-because a subsystem has runtime state.
+Transport forms are the secondary global naming and addressing scheme for the
+pipeline.
+
+The preferred place for runtime state is the subsystem container:
+
+- `SUBSYSTEM.<name>.probe`
+- `SUBSYSTEM.<name>.norm`
+- `SUBSYSTEM.<name>.spec`
+- `SUBSYSTEM.<name>.contrib`
+
+But some pipeline steps still need standalone globally addressable fact names.
+That usually happens when work crosses task-file boundaries through `set_fact`-
+style global keys, when fanout/orchestration helpers need stable external names,
+or when a producer and consumer are not both operating directly on the same
+subsystem object.
+
+That is what transport forms are for. They are not the primary home of meaning.
+They are the global transport and addressing layer.
+
+Use them when you need one of these properties:
+
+- a globally named handoff key
+- a stable external address for orchestration or fanout
+- a transport record that can move between files without requiring direct
+  subsystem-object access
+
+Avoid them when a direct subsystem field is sufficient.
 
 | Entity pattern | Kind | Form | Purpose |
 |---|---|---|---|
@@ -358,6 +383,15 @@ The distinction is:
 
 - prefixes describe semantics
 - envelope names describe transport shape
+
+Examples:
+
+- prefer `SUBSYSTEM.get_urls.spec` over `_fn_get_urls_out` when the producer and
+  consumer are both working inside the subsystem model
+- use `_probe_systemd` when discovery output needs a stable globally named
+  record that other task files can consume without navigating a subsystem object
+- use `_syn_<domain>` only when a standalone synthesized handoff record is more
+  useful than reading the subsystem's `contrib` or `spec` fields directly
 
 ### Naming rules
 
