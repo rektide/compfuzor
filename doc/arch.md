@@ -3,149 +3,142 @@
 Compfuzor is a compile-and-apply system for host configuration.
 
 Users declare intent in playbooks. Compfuzor compiles that intent into explicit
-domain state, explicit domain artifacts, and explicit shared-artifact
+subsystem state, explicit subsystem contracts, and explicit shared-artifact
 contributions. Then it applies the result to repositories, filesystems,
 services, packages, kernels, and other host-facing targets.
 
-This document is the architecture for that system. It should answer five core
-questions:
-
-- what are the main layers of the system?
-- how does a domain move from input to host changes?
-- where does domain state live?
-- where do shared artifacts live?
-- what naming and file conventions make the system legible?
+This document defines that model.
 
 If you are entering quickly:
 
-- read `1. System model` for the high-level picture
-- read `2. Domain model` if you are adding or reshaping a domain
-- read `3. Phases and lifecycle` if you are working on execution flow
-- read `4. Prefix and form reference` if you are naming files or facts
+- read `1. System shape` for the high-level picture
+- read `2. Subsystem model` if you are adding or reshaping a subsystem
+- read `3. Phases and lifecycle` if you are working on pipeline flow
+- read `4. Labels, prefixes, and forms` if you are naming files or facts
+- read `5. Shared artifacts and merge policy` if you are debugging synthesis
 - read `6. Worked examples` if you want a concrete pattern to copy
 
-## 1. System model
+## 1. System shape
 
-The architecture has four main layers.
+The architecture has four layers.
 
 | Layer | Purpose | Main outputs |
 |---|---|---|
-| domain registry | describe what a domain is and how it is gated | `DOMAIN_META.*` |
-| domain control and compile | validate input, compute activity, model intent | `DOMAIN.*` with `norm`, `spec`, `syn` fields by convention |
-| shared synthesis | aggregate domain contributions into shared artifacts | `BINS`, `ETC_FILES`, `ENV`, hierarchy-scoped outputs |
+| type registry | describe subsystem types and gating behavior | `SUBSYSTEM_META.*` |
+| runtime subsystem state | validate input, compute activity, build contracts | `SUBSYSTEM.*` |
+| shared synthesis | aggregate subsystem contributions into shared artifacts | `BINS`, `ETC_FILES`, `ENV`, hierarchy outputs |
 | apply | perform host-side changes | repositories, files, links, services, packages, kernel state |
 
-The most important architectural seam is between compile and apply.
+The most important seam is between compile and apply.
 
 - compile work decides what should happen
 - apply work makes it happen on the host
 
-That seam matters because it keeps reasoning local. Compile tasks should not
-quietly do host work. Apply tasks should not have to rediscover domain intent.
+Compile tasks should not quietly do host work. Apply tasks should not have to
+rediscover subsystem intent.
 
 ### Core rule
 
 Phase is when. Intent is what.
 
 - `phase` describes runtime ordering
-- prefixes, forms, and facets describe semantic responsibility
+- labels, prefixes, forms, and facets describe semantic responsibility
 
-Do not conflate them. A domain can appear in several phases. A phase can host
+Do not conflate them. A subsystem can appear in several phases. A phase can host
 several kinds of work.
 
 ### The model in one diagram
 
 ```mermaid
 flowchart LR
-  meta[DOMAIN_META]
+  meta[SUBSYSTEM_META]
   raw[Raw playbook input]
-  domain[DOMAIN runtime state]
+  subsys[SUBSYSTEM runtime state]
   shared[Shared synthesis]
   apply[Host apply]
 
-  meta --> domain
-  raw --> domain
-  domain --> shared
-  domain --> apply
+  meta --> subsys
+  raw --> subsys
+  subsys --> shared
+  subsys --> apply
   shared --> apply
 ```
 
-## 2. Domain model
+## 2. Subsystem model
 
-The architecture now centers domain state in two containers:
+The architecture centers runtime state in two containers:
 
-- `DOMAIN_META.<domain>` for static metadata
-- `DOMAIN.<domain>` for requested runtime state
+- `SUBSYSTEM_META.<id>` for subsystem type definitions
+- `SUBSYSTEM.<name>` for requested runtime subsystem instances
 
-This is the main control-plane model for the system.
+This gives the system one clear place for control-plane state and one clear
+place for runtime subsystem artifacts.
 
-### `DOMAIN_META`
+### Subsystem types: `SUBSYSTEM_META`
 
-`DOMAIN_META.<domain>` describes static facts about a domain.
+`SUBSYSTEM_META.<id>` describes a reusable subsystem type.
+
+It defines labels, effect profile, and bypass behavior. It does not hold runtime
+values.
 
 Minimum intended fields:
 
-| Field | Purpose |
-|---|---|
-| `apply` | target family or apply surface |
-| `bypass_vars` | list of bypass variables used to gate the domain |
+| Field | Category | Meaning |
+|---|---|---|
+| `labels` | metadata | classification labels for the subsystem type |
+| `bypass_vars` | metadata | bypass resolution behavior |
+
+Recommended labels:
+
+| Label | Meaning | Example |
+|---|---|---|
+| `domain` | broad family label | `kernel` |
+| `apply` | apply surface or executor family | `sysctl` |
+| `effect` | effect profile | `host.fs`, `host.kernel`, `network` |
+| `role` | optional higher-level responsibility | `orchestration`, `discovery` |
 
 Example:
 
 ```yaml
-DOMAIN_META:
+SUBSYSTEM_META:
   get_urls:
-    apply: get-urls
-    bypass_vars:
-      - GET_URLS_BYPASS
+    labels:
+      domain: fetch
+      apply: get-urls
+      effect:
+        - network
+        - host.fs
+    bypass_vars: true
 
-  kernel:
-    apply: kernel
-    bypass_vars:
-      - KERNEL_BYPASS
+  kernel_sysctl:
+    labels:
+      domain: kernel
+      apply: sysctl
+      effect:
+        - host.fs
+        - host.kernel
+    bypass_vars: true
 ```
 
-Default bypass rule:
+### Runtime instances: `SUBSYSTEM`
 
-- if `bypass_vars` is omitted, the default is `<DOMAIN>_BYPASS`
-- for `get_urls`, that means `GET_URLS_BYPASS`
-- for `kernel`, that means `KERNEL_BYPASS`
+`SUBSYSTEM.<name>` is the runtime container for a requested subsystem instance.
 
-### `DOMAIN`
+Important rules:
 
-`DOMAIN.<domain>` is the runtime container for a requested domain.
+- create `SUBSYSTEM.<name>` only if that subsystem is requested
+- absence of `SUBSYSTEM.<name>` means it was not requested
+- `SUBSYSTEM.<name>.subsystem` optionally names the subsystem type definition to
+  use from `SUBSYSTEM_META`
+- if `subsystem` is omitted, it defaults to the same name as the subsystem key
 
-Important rule:
-
-- create `DOMAIN.<domain>` only if the domain is requested
-- absence of `DOMAIN.<domain>` means the domain was not requested
-
-This makes domain presence itself meaningful and avoids cluttering runtime state
-with inactive shells.
-
-Minimum control fields:
-
-| Field | Meaning |
-|---|---|
-| `status` | short state label such as `active`, `bypassed`, `invalid` |
-| `requested` | meaningful input exists for the domain |
-| `bypassed` | effective bypass state |
-| `valid` | contract validation passed |
-| `active` | domain should continue through transform, synthesis, and apply |
-| `reasons` | optional list explaining inactive or invalid state |
-
-Recommended artifact fields by convention:
-
-| Field | Meaning |
-|---|---|
-| `norm` | normalized domain values |
-| `spec` | authoritative domain contract |
-| `syn` | synthesized apply-facing handoff |
+That lets runtime instances usually map 1:1 to their type definitions while
+leaving space for multiple instances of one subsystem type later.
 
 Example:
 
 ```yaml
-DOMAIN:
+SUBSYSTEM:
   get_urls:
     status: active
     requested: true
@@ -156,40 +149,90 @@ DOMAIN:
     spec:
       - url: https://example.invalid/file.tar.gz
         dest: /opt/file.tar.gz
+
+  downloads_for_bootstrap:
+    subsystem: get_urls
+    status: active
+    requested: true
+    bypassed: false
+    valid: true
+    active: true
+    reasons: []
+    spec:
+      - url: https://example.invalid/bootstrap.tar.gz
+        dest: /opt/bootstrap.tar.gz
 ```
 
-### Why `DOMAIN` is preferred
+### Subsystem fields
 
-Using `DOMAIN.<domain>` gives compfuzor one obvious place to look for runtime
-domain state.
+This is the main runtime field contract.
 
-Preferred runtime access looks like this:
+| Field | Category | Required | Meaning |
+|---|---|---|---|
+| `subsystem` | metadata | no | subsystem type id from `SUBSYSTEM_META`; defaults to same-name |
+| `status` | control | yes | short state label such as `active`, `bypassed`, `invalid` |
+| `requested` | control | yes | meaningful input exists for the subsystem |
+| `bypassed` | control | yes | effective bypass state |
+| `valid` | control | yes | contract validation passed |
+| `active` | control | yes | subsystem should continue through transform and apply |
+| `reasons` | control | recommended | explanations for inactive or invalid state |
+| `probe` | artifact | no | discovery snapshot or probe result |
+| `norm` | artifact | no | normalized subsystem values |
+| `spec` | artifact | recommended | primary subsystem contract |
+| `contrib` | artifact | no | contributions to shared synthesized artifacts |
+| `drv` | artifact | no | explicit derivations when useful |
+| `out` | artifact | no | completed transform payload when useful |
+| `merge` | artifact | no | one explicit merge-ready structure when useful |
 
-- `DOMAIN.get_urls.status`
-- `DOMAIN.get_urls.active`
-- `DOMAIN.kernel.bypassed`
-- `DOMAIN.kernel.spec`
+This control-vs-artifact split is intentional.
 
-### Domain helper contract
+- control fields decide whether the subsystem should continue
+- artifact fields describe what the subsystem means and what it contributes
 
-The architecture needs a helper that resolves domain gating and initializes the
-runtime container.
+### Why `spec` is primary
+
+`spec` should be the main durable contract for a subsystem.
+
+It tells you what the subsystem means after normalization and validation. In
+most cases, that is enough for apply work.
+
+`contrib` is different:
+
+- `spec` is subsystem-owned meaning
+- `contrib` is subsystem output for shared synthesis
+
+That is why `contrib` is better than a default `syn` field. It tells you exactly
+what the subsystem is contributing without implying that every subsystem needs a
+standalone synthesized handoff object.
+
+### Probe is optional
+
+`probe` is optional globally, but it is encouraged for subsystems whose behavior
+depends on current host state.
+
+Examples:
+
+- `probe_systemd` is a strong candidate
+- a pure input-to-file subsystem may not need `probe` at all
+
+### Subsystem helper contract
+
+The architecture assumes a helper that resolves control-plane state and creates
+runtime subsystem objects.
 
 That helper should:
 
-1. identify the domain id
-2. determine whether the domain is requested
-3. resolve bypass vars from `DOMAIN_META.<domain>.bypass_vars`
-4. default to `<DOMAIN>_BYPASS` if no bypass list is declared
+1. identify the subsystem instance name
+2. resolve the subsystem type id from `subsystem`, defaulting to the same name
+3. determine whether the subsystem is requested
+4. resolve effective bypass vars from `SUBSYSTEM_META.<id>.bypass_vars`
 5. compute `requested`, `bypassed`, `valid`, `active`, `status`, and `reasons`
-6. create `DOMAIN.<domain>` only if the domain is requested
-
-The helper belongs to the control-plane side of the architecture.
+6. create `SUBSYSTEM.<name>` only if requested
 
 ## 3. Phases and lifecycle
 
-Phases describe runtime ordering. Lifecycle describes how a domain moves through
-that ordering.
+Phases describe runtime ordering. Lifecycle describes how one subsystem moves
+through that ordering.
 
 ### Top-level phases
 
@@ -208,23 +251,24 @@ that ordering.
 |---|---|---|
 | `phase:compile.foundation` | validate input, set defaults, compute activity | `vars_*` |
 | `phase:compile.discovery` | read host state into explicit snapshots | `probe_*` |
-| `phase:compile.transform` | normalize input and build domain contracts | `fn_*` |
-| `phase:compile.synthesis` | build apply-facing handoffs and merge shared artifacts | `gen_*` |
+| `phase:compile.transform` | normalize input and build subsystem contracts | `fn_*` |
+| `phase:compile.synthesis` | build shared-artifact contributions and merge outputs | `gen_*` |
 
 ### Default lifecycle
 
-The default lifecycle for a non-trivial domain is:
+The default lifecycle for a non-trivial subsystem is:
 
-`raw -> norm -> spec -> syn -> apply`
+`raw -> probe? -> norm -> spec -> contrib? -> apply`
 
-In the current model, those steps normally map to `DOMAIN.<domain>` fields.
+This is the main subsystem contract.
 
 | Step | Meaning | Preferred location |
 |---|---|---|
-| `raw` | playbook input or probe snapshot before normalization | input vars or `_probe_*` |
-| `norm` | normalized values with ambiguity removed | `DOMAIN.<domain>.norm` |
-| `spec` | authoritative ordered domain contract | `DOMAIN.<domain>.spec` |
-| `syn` | apply-facing handoff and domain contribution fragments | `DOMAIN.<domain>.syn` |
+| `raw` | playbook input before normalization | input vars |
+| `probe` | optional discovery snapshot | `SUBSYSTEM.<name>.probe` |
+| `norm` | normalized values with ambiguity removed | `SUBSYSTEM.<name>.norm` |
+| `spec` | authoritative subsystem contract | `SUBSYSTEM.<name>.spec` |
+| `contrib` | optional shared-artifact contribution | `SUBSYSTEM.<name>.contrib` |
 | `apply` | concrete host-side effects | apply tasks and executors |
 
 ### Optional intermediate shapes
@@ -234,13 +278,9 @@ Use these only when they improve clarity.
 | Shape | Use when |
 |---|---|
 | `drv` | you want derivation steps visible and testable |
-| `out` | transform logic produces a completed payload before synthesis |
-| `merge` | synthesis wants one explicit merge-ready structure |
+| `out` | transform logic produces a completed payload before shared synthesis |
+| `merge` | one explicit merge-ready structure clarifies synthesis |
 | `_tmp_*` | you need scratch values local to one task |
-
-Within `DOMAIN.<domain>`, these can appear as optional fields such as `drv`,
-`out`, or `merge`. Internal `_tmp_*` values are still local scratch, not public
-domain contract.
 
 ### Entry and exit expectations
 
@@ -248,11 +288,11 @@ Each phase should reduce ambiguity for the next one.
 
 | Phase | Entry expectation | Exit expectation |
 |---|---|---|
-| `compile.foundation` | raw input exists | `DOMAIN.<domain>` exists for requested domains, with control fields populated |
-| `compile.discovery` | requested domains are known | discovery snapshots exist when required |
-| `compile.transform` | active domains are known | `DOMAIN.<domain>.norm` and `.spec` exist for active domains |
-| `compile.synthesis` | specs exist | `DOMAIN.<domain>.syn` and shared-artifact fragments exist |
-| `*-apply` | synthesized outputs are ready | host changes are applied only for active domains |
+| `compile.foundation` | raw input exists | `SUBSYSTEM.<name>` exists for requested subsystems, with control fields populated |
+| `compile.discovery` | requested subsystems are known | `probe` exists where discovery is needed |
+| `compile.transform` | active subsystems are known | `norm` and `spec` exist for active subsystems |
+| `compile.synthesis` | specs exist | `contrib` exists where shared synthesis is needed; merged shared artifacts are prepared |
+| `*-apply` | subsystem contracts and shared outputs are ready | host changes are applied only for active subsystems |
 | `post-run` | apply phases completed | deferred work is complete |
 
 ### Failure and skip behavior
@@ -260,15 +300,20 @@ Each phase should reduce ambiguity for the next one.
 Current intended behavior:
 
 - requested + not bypassed + invalid: fail in compile phase
-- bypassed: domain may still have a runtime container, but it should not continue
-- not requested: the domain has no `DOMAIN.<domain>` entry at all
+- bypassed: subsystem may still have a runtime container, but should not continue
+- not requested: the subsystem has no `SUBSYSTEM.<name>` entry at all
 
-The full policy matrix is still pending, but these are the governing cases.
+The full policy matrix is still pending.
 
-## 4. Prefix and form reference
+## 4. Labels, prefixes, and forms
 
-Prefixes still matter. They are the semantic vocabulary for the system even when
-runtime domain data is nested under `DOMAIN.<domain>`.
+The runtime container model does not replace the label and prefix system.
+
+Both are needed:
+
+- `SUBSYSTEM_META` and `SUBSYSTEM` organize runtime state
+- labels, prefixes, forms, and facets classify the producers and artifacts in
+  that state
 
 ### Facet catalog
 
@@ -276,13 +321,13 @@ runtime domain data is nested under `DOMAIN.<domain>`.
 |---|---|---|
 | `kind` | `kind:fn` | primary semantic family |
 | `form` | `form:prefix` | naming or transport shape |
-| `record` | `record:_syn_get_urls` | optional record-key pattern |
+| `record` | `record:_probe_systemd` | optional record-key pattern |
 | `origin` | `origin:task-file` | where the entity lives |
 | `phase` | `phase:compile.transform` | when it runs or is consumed |
 | `role` | `role:transform` | behavioral responsibility |
-| `apply` | `apply:get-urls` | target domain or artifact family |
+| `apply` | `apply:get-urls` | target subsystem or artifact family |
 | `effect` | `effect:host.fs` | effect profile |
-| `matcher` | `matcher:regex(^_syn_[a-z0-9_]+$)` | optional lint or review rule |
+| `matcher` | `matcher:regex(^_probe_[a-z0-9_]+$)` | optional lint or review rule |
 
 ### File-intent prefixes
 
@@ -290,152 +335,136 @@ runtime domain data is nested under `DOMAIN.<domain>`.
 |---|---|---|---|---|---|---|
 | `vars_` | `kind:vars` | `form:prefix` | `role:foundation` | `compile.foundation` | `effect:none` | validation, defaults, activity |
 | `probe_` | `kind:probe` | `form:prefix` | `role:discovery` | `compile.discovery` | `effect:none` | host-state snapshots |
-| `fn_` | `kind:fn` | `form:prefix` | `role:transform` | `compile.transform` | `effect:none` | normalization and spec building |
-| `gen_` | `kind:syn` | `form:prefix` | `role:synthesis` | `compile.synthesis` | `effect:none` | handoffs and shared-artifact merges |
+| `fn_` | `kind:fn` | `form:prefix` | `role:transform` | `compile.transform` | `effect:none` | normalization and contract building |
+| `gen_` | `kind:syn` | `form:prefix` | `role:synthesis` | `compile.synthesis` | `effect:none` | shared-artifact merges and transport records |
 | `repo_` | `kind:repo` | `form:prefix` | `role:execution` | `repo-apply` | `effect:host.repo` | repository changes |
 | `fs_` | `kind:fs` | `form:prefix` | `role:execution` | `fs-apply` | `effect:host.fs` | files, links, downloads |
 | `bins` / `bins_*` | `kind:bins` | `form:prefix` | `role:execution` | `fs-apply` or `extras-apply` | `effect:host.fs` | scripts and helpers |
 | `links` / `links_*` | `kind:links` | `form:prefix` | `role:execution` | `fs-apply` or `post-run` | `effect:host.fs` | symlink materialization |
 | `_*.tasks` | `kind:orchestrator` | `form:internal` | `role:orchestration` | any | `effect:mixed` | fanout and control-flow helpers |
 
-### Domain artifact fields
-
-Inside `DOMAIN.<domain>`, these are the main artifact kinds.
-
-| Field | Conceptual kind | Meaning |
-|---|---|---|
-| `norm` | `kind:norm` | normalized domain values |
-| `spec` | `kind:spec` | authoritative domain contract |
-| `drv` | `kind:drv` | explicit derivations |
-| `out` | `kind:out` | completed transform payload |
-| `merge` | `kind:merge` | merge-ready domain contribution |
-| `syn` | `kind:syn` | apply-facing synthesized handoff |
-
-When a standalone fact is needed outside the domain container, use the same
-prefix-before-domain convention:
-
-- `spec_get_urls`
-- `syn_kernel`
-
-But the preferred public runtime path is through `DOMAIN.<domain>`.
-
 ### Transport forms
 
-These forms describe cross-phase or cross-file transport shapes.
+These are optional standalone transport shapes. They are not required just
+because a subsystem has runtime state.
 
 | Entity pattern | Kind | Form | Purpose |
 |---|---|---|---|
 | `_probe_<domain>` | `kind:probe` | `form:envelope` | discovery transport record |
 | `_fn_<domain>_out` | `kind:fn` | `form:envelope` | transform transport record when a standalone envelope is helpful |
-| `_syn_<domain>` | `kind:syn` | `form:envelope` | synthesis transport record |
+| `_syn_<domain>` | `kind:syn` | `form:envelope` | synthesis transport record when a standalone handoff is helpful |
 
-The distinction is simple:
+The distinction is:
 
 - prefixes describe semantics
 - envelope names describe transport shape
 
 ### Naming rules
 
-Use lowercase domain ids such as `get_urls` and `kernel` inside `DOMAIN` and
-`DOMAIN_META`.
+Use lowercase ids in `SUBSYSTEM_META` and `SUBSYSTEM`.
 
 Prefer:
 
-- `DOMAIN.get_urls.spec`
-- `DOMAIN.kernel.syn`
+- `SUBSYSTEM.get_urls.spec`
+- `SUBSYSTEM.kernel_sysctl.probe`
+- `SUBSYSTEM.kernel_all.contrib`
 - `fn_get_urls.tasks`
 - `gen_systemd.tasks`
 
 Avoid:
 
-- `DOMAIN.GET_URLS`
+- `SUBSYSTEM.GET_URLS`
 - `get_urls_spec`
 - `systemd_gen.tasks`
 
-## 5. Shared artifacts and synthesis
+## 5. Shared artifacts and merge policy
 
-Per-domain state and shared pipeline outputs are different things.
+Per-subsystem state and shared pipeline outputs are different things.
 
-- `DOMAIN.<domain>` holds domain-scoped runtime state
-- shared artifacts such as `BINS` and `ETC_FILES` are cross-domain outputs
+- `SUBSYSTEM.<name>` holds subsystem-scoped runtime state
+- shared artifacts such as `BINS` and `ETC_FILES` are cross-subsystem outputs
 
-Do not force shared artifacts under one domain container. They belong to the
+Do not force shared artifacts under one subsystem container. They belong to the
 pipeline as a whole.
 
-### Why synthesis exists
+### Why shared synthesis exists
 
-Many domains contribute to the same artifact families:
+Many subsystems contribute to the same artifact families:
 
 - `BINS`
 - `ENV`
 - `ETC_FILES`
 - hierarchy-scoped `*_FILES`, `*_DIRS`, `*_D`
 
-Without a synthesis layer, each domain would mutate those structures on its own
-terms, and precedence would become hard to reason about.
+Without a synthesis layer, each subsystem would mutate those structures on its
+own terms, and precedence would become hard to reason about.
 
 ### Mutation authority
 
 | Producer kind | May write | Should not write |
 |---|---|---|
-| `vars_*` | validation and activity fields in `DOMAIN.<domain>` | shared artifact merges, host changes |
-| `probe_*` | probe snapshots and discovery fields | host changes |
-| `fn_*` | `DOMAIN.<domain>.norm/spec/drv/out/merge` | shared artifact merges, host changes |
-| `gen_*` | `DOMAIN.<domain>.syn` and shared-artifact fragments | host changes |
-| apply tasks | host changes and apply-local scratch values | compile-phase domain contracts |
+| `vars_*` | control fields and defaults in `SUBSYSTEM.<name>` | shared artifact merges, host changes |
+| `probe_*` | `probe` fields and discovery data | host changes |
+| `fn_*` | `norm`, `spec`, `drv`, `out`, `merge` in `SUBSYSTEM.<name>` | shared artifact merges, host changes |
+| `gen_*` | `contrib` fields and global shared-artifact merges | host changes |
+| apply tasks | host changes and apply-local scratch values | compile-phase subsystem contracts |
 
 Two strong rules follow:
 
 - prefer one explicit merge block over many tiny mutations
-- do not hide synthesis work inside `vars_*`
+- do not hide shared synthesis work inside `vars_*`
 
-### Merge policy
+### Merge policies
 
-Default precedence recommendation:
+Supported strategy names should be explicit and finite.
 
-`user > existing-global > synthesized`
+| Strategy | Priority order |
+|---|---|
+| `user-existing-syn` | user > existing-global > synthesized |
+| `user-syn-existing` | user > synthesized > existing-global |
+| `existing-user-syn` | existing-global > user > synthesized |
+| `syn-user-existing` | synthesized > user > existing-global |
+| `append-dedup` | append list-like values and deduplicate |
+
+Recommended default:
+
+- default strategy name: `user-existing-syn`
+- desired default priority: `user > existing-global > synthesized`
 
 That default protects explicit user intent and keeps synthesized values
-additive unless a domain says otherwise.
+additive unless a subsystem says otherwise.
 
 ### Configurable merge direction
 
-Merge behavior likely needs to vary by domain and by artifact family.
+Merge behavior likely needs to vary by subsystem type and by artifact family.
 
 Suggested future shape:
 
 ```yaml
 MERGE_POLICY_DEFAULT: user-existing-syn
-MERGE_POLICY_DOMAIN:
+MERGE_POLICY_SUBSYSTEM:
   get_urls:
     BINS: user-existing-syn
-  kernel:
+  kernel_sysctl:
     ETC_FILES: user-existing-syn
+  kernel_all:
     BINS: user-existing-syn
 ```
 
-Possible strategies include:
-
-- `user-existing-syn`
-- `user-syn-existing`
-- `existing-user-syn`
-- `syn-user-existing`
-- `append-dedup`
-
 ### Shared-artifact rule
 
-For heavily shared artifacts such as `ETC_FILES`, treat merging as two separate
-steps:
+For heavily shared artifacts such as `ETC_FILES`, treat synthesis as two
+separate steps:
 
-1. each active domain produces explicit contribution fragments
-2. synthesis aggregates those fragments and resolves final precedence
+1. each active subsystem produces explicit contribution fragments
+2. shared synthesis aggregates those fragments and resolves final precedence
 
 Aggregation first, precedence second.
 
 ### Hierarchy and fanout interaction
 
 Hierarchy and fanout are part of the architecture because they bridge compiled
-domain intent to concrete apply-time materialization.
+subsystem intent to apply-time materialization.
 
 Relevant files today:
 
@@ -452,7 +481,7 @@ Together they do three jobs:
 
 Example bridge:
 
-| Domain or synthesis output | Fanout/orchestration | Apply result |
+| Subsystem or synthesis output | Fanout/orchestration | Apply result |
 |---|---|---|
 | `ETC_FILES` contribution | `_multi.tasks` and hierarchy keys | concrete `/etc`-style files |
 | `BINS` contribution | bins tasks | generated or linked scripts |
@@ -470,13 +499,17 @@ Current files:
 Recommended shape:
 
 ```yaml
-DOMAIN_META:
+SUBSYSTEM_META:
   get_urls:
-    apply: get-urls
-    bypass_vars:
-      - GET_URLS_BYPASS
+    labels:
+      domain: fetch
+      apply: get-urls
+      effect:
+        - network
+        - host.fs
+    bypass_vars: true
 
-DOMAIN:
+SUBSYSTEM:
   get_urls:
     status: active
     requested: true
@@ -493,34 +526,29 @@ DOMAIN:
         owner: root
         group: root
         validate_certs: true
-    syn:
-      schema: compfuzor.syn.v1
-      domain: get_urls
-      apply: get-urls
-      entries:
-        - url: https://example.invalid/file.tar.gz
-          dest: /opt/file.tar.gz
+    contrib:
+      BINS:
+        - name: get-urls.sh
 ```
 
 Recommended task split:
 
-- `vars_get_urls.tasks` validates input and creates `DOMAIN.get_urls`
-- `fn_get_urls.tasks` computes `DOMAIN.get_urls.norm` and `.spec`
-- `gen_get_urls.tasks` computes `DOMAIN.get_urls.syn` and shared `BINS`
-  contribution fragments
-- `fs_get_urls.tasks` consumes `DOMAIN.get_urls.spec` or `.syn.entries`
+- `vars_get_urls.tasks` validates input and creates `SUBSYSTEM.get_urls`
+- `fn_get_urls.tasks` computes `SUBSYSTEM.get_urls.norm` and `.spec`
+- `gen_get_urls.tasks` computes `SUBSYSTEM.get_urls.contrib`
+- `fs_get_urls.tasks` consumes `SUBSYSTEM.get_urls.spec`
 
 Lifecycle view:
 
 | Step | Location | Meaning |
 |---|---|---|
 | raw | `GET_URLS` | playbook input |
-| norm | `DOMAIN.get_urls.norm` | normalized URL entries |
-| spec | `DOMAIN.get_urls.spec` | authoritative download contract |
-| syn | `DOMAIN.get_urls.syn` | apply-facing handoff and helper synthesis |
+| norm | `SUBSYSTEM.get_urls.norm` | normalized URL entries |
+| spec | `SUBSYSTEM.get_urls.spec` | authoritative download contract |
+| contrib | `SUBSYSTEM.get_urls.contrib` | helper and shared-artifact contributions |
 | apply | `fs_get_urls.tasks` | downloads and `.url` sidecars |
 
-### kernel and zswap
+### Kernel
 
 Current files:
 
@@ -528,17 +556,57 @@ Current files:
 - [`/tasks/compfuzor/kernel_modules.tasks`](/tasks/compfuzor/kernel_modules.tasks)
 - [`/zswap.etc.pb`](/zswap.etc.pb)
 
+Recommended subsystem types:
+
+- `kernel_modprobe`
+- `kernel_sysctl`
+- `kernel_sysfs`
+- `kernel_all`
+
 Recommended shape:
 
 ```yaml
-DOMAIN_META:
-  kernel:
-    apply: kernel
-    bypass_vars:
-      - KERNEL_BYPASS
+SUBSYSTEM_META:
+  kernel_modprobe:
+    labels:
+      domain: kernel
+      apply: modprobe
+      effect:
+        - host.fs
+        - host.kernel
+    bypass_vars: true
 
-DOMAIN:
-  kernel:
+  kernel_sysctl:
+    labels:
+      domain: kernel
+      apply: sysctl
+      effect:
+        - host.fs
+        - host.kernel
+    bypass_vars: true
+
+  kernel_sysfs:
+    labels:
+      domain: kernel
+      apply: sysfs
+      effect:
+        - host.fs
+        - host.kernel
+    bypass_vars: true
+
+  kernel_all:
+    labels:
+      domain: kernel
+      apply: kernel-all
+      role:
+        - orchestration
+      effect:
+        - host.fs
+        - host.kernel
+    bypass_vars: true
+
+SUBSYSTEM:
+  kernel_sysctl:
     status: active
     requested: true
     bypassed: false
@@ -546,74 +614,100 @@ DOMAIN:
     active: true
     reasons: []
     spec:
-      domains:
-        - key: modules
-          enabled: true
-          json_path: /some/path/kernel.modules.json
-        - key: sysctl
-          enabled: false
-          json_path: /some/path/kernel.sysctl.json
-    syn:
-      schema: compfuzor.syn.v1
-      domain: kernel
-      apply: kernel
-      entries: []
+      vm.swappiness: "180"
+    contrib:
+      ETC_FILES:
+        - name: kernel.sysctl.json
+
+  kernel_all:
+    status: active
+    requested: true
+    bypassed: false
+    valid: true
+    active: true
+    reasons: []
+    spec:
+      parts:
+        - kernel_modprobe
+        - kernel_sysctl
+        - kernel_sysfs
+    contrib:
+      BINS:
+        - name: build.sh
+        - name: install.sh
 ```
 
-Recommended task split:
+What this split buys you:
 
-- `vars_kernel.tasks` validates input and creates `DOMAIN.kernel`
-- `fn_kernel.tasks` computes `DOMAIN.kernel.norm` and `.spec`
-- `gen_kernel.tasks` computes `DOMAIN.kernel.syn` plus `ETC_FILES` and `BINS`
-  contribution fragments
-- bins and extras apply tasks consume those results to perform module, sysctl,
-  and sysfs changes
+- `kernel_modprobe`, `kernel_sysctl`, and `kernel_sysfs` stay clean and focused
+- `kernel_all` owns aggregate orchestration such as final `build.sh` and
+  `install.sh`
+- `domain: kernel` remains a label instead of being overloaded as the only
+  runtime object name
 
-### What the examples are showing
+## 7. Bypass resolution rules
 
-Both examples follow the same rule set:
+`bypass_vars` supports three modes.
 
-- one static registry entry in `DOMAIN_META`
-- one runtime container in `DOMAIN`
-- one clear spec owned by the domain itself
-- shared artifacts emitted as contributions, not stuffed into domain state as if
-  they belonged only to that domain
+| Value | Meaning |
+|---|---|
+| omitted | use automatic default bypass discovery |
+| `true` | use automatic default bypass discovery |
+| list of strings | use exactly those bypass vars |
+| list containing `true` | use automatic defaults plus any additional listed vars |
 
-## 7. Domain patterns worth preserving
+Automatic default discovery should include:
 
-### Config
+1. subsystem-specific bypass var derived from the subsystem type id
+2. domain-level bypass var derived from the `labels.domain` value, if present
 
-- `fn_config.tasks` for parameterized config assembly
-- `gen_config.tasks` for default batteries-included behavior
+Examples:
 
-This keeps simple config cases easy while allowing richer multi-config schemes.
+| Subsystem type | Automatic bypass vars |
+|---|---|
+| `get_urls` | `GET_URLS_BYPASS` |
+| `kernel_sysctl` with `domain: kernel` | `KERNEL_SYSCTL_BYPASS`, `KERNEL_BYPASS` |
+| `kernel_all` with `domain: kernel` | `KERNEL_ALL_BYPASS`, `KERNEL_BYPASS` |
 
-### GET_URLS
+Example of supplementation:
 
-- `vars_get_urls.tasks` for validation and activity
-- `fn_get_urls.tasks` for normalization and spec building
-- `gen_get_urls.tasks` for helper synthesis and shared-artifact contributions
-- `fs_get_urls.tasks` for actual download behavior
+```yaml
+SUBSYSTEM_META:
+  kernel_sysctl:
+    labels:
+      domain: kernel
+      apply: sysctl
+    bypass_vars:
+      - true
+      - MY_BYPASS
+```
 
-### Systemd
+Expected effective bypass sources:
 
-- `probe_systemd.tasks` for discovery snapshots
-- transform tasks for unit modeling as needed
-- `gen_systemd.tasks` for generated units and merge payloads
+- `KERNEL_SYSCTL_BYPASS`
+- `KERNEL_BYPASS`
+- `MY_BYPASS`
 
-Systemd remains the strongest case for treating probe as first-class.
+Example of full replacement:
 
-### Kernel and zswap
+```yaml
+SUBSYSTEM_META:
+  kernel_sysctl:
+    labels:
+      domain: kernel
+      apply: sysctl
+    bypass_vars:
+      - ONLY_THIS_BYPASS
+```
 
-- `vars_kernel.tasks` for validation and activity
-- `fn_kernel.tasks` for explicit domain tables and contracts
-- `gen_kernel.tasks` for shared-artifact assembly and handoff records
-- bins and extras apply tasks for execution
+Expected effective bypass source:
+
+- `ONLY_THIS_BYPASS`
 
 ## 8. Pending work
 
 - TODO: formal failure/skip policy matrix
-- TODO: formal verification contract for domain migrations
-- TODO: stricter naming registry for artifact families beyond prefix seeds
+- TODO: formal verification contract for subsystem migrations
+- TODO: stricter naming registry for artifact families beyond the current seed tables
 - TODO: normative, testable phase entry and exit guarantees
-- TODO: refine merge-policy implementation shape for per-domain and per-artifact control
+- TODO: exact `contrib` schema conventions for major shared artifact families
