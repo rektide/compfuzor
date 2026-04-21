@@ -153,3 +153,12 @@ CONFIG_OUTPUT: "${DIR}/etc/${CONFIG_KEY}.${CONFIG_EXT}"
 
 _binsRun: "{{ BINS_BYPASS|default(False) is falsy and BINS_RUN_BYPASS|default(False) is falsy }}"
 _postRun: "{{ 'postRun' if _binsRun else 'skip' }}"
+
+# standard subsystem evaluation contract
+errorChecks: []
+errors: "{{ errorChecks | selectattr('failed', 'truthy') | map(attribute='msg') | list }}"
+_subsystem_requested: "{{ requested | default(false) | bool }}"
+_subsystem_bypassed: "{{ bypassed | default(false) | bool }}"
+_subsystem_valid: "{{ valid | default(errors | length == 0) | bool }}"
+_subsystem_active: "{{ _subsystem_requested and (not _subsystem_bypassed) and _subsystem_valid }}"
+_subsystem_status: "{{ 'active' if _subsystem_active else 'bypassed' if _subsystem_bypassed else 'invalid' if not _subsystem_valid else 'requested' }}"

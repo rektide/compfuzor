@@ -4,7 +4,7 @@
     - name: "Compfuzor: fail invalid get_urls input"
       fail:
         msg: "{{ errors | join('; ') }}"
-      when: requested and not bypassed and errors | length > 0
+      when: requested and not bypassed and not _subsystem_valid
 
     - name: "Compfuzor: publish get_urls subsystem"
       set_fact:
@@ -35,25 +35,6 @@
           }}
       - msg: "GET_URLS mapping entry dest must be a string when defined"
         failed: "{{ (mappingItems | selectattr('dest', 'defined') | rejectattr('dest', 'string') | list | length) | int > 0 }}"
-    errors: >-
-      {{
-        errorChecks
-        | selectattr('failed', 'truthy')
-        | map(attribute='msg')
-        | list
-      }}
-    valid: "{{ errors | length == 0 }}"
-    active: "{{ requested and not bypassed and valid }}"
-    status: >-
-      {{
-        'active'
-        if active else
-        'bypassed'
-        if bypassed else
-        'invalid'
-        if not valid else
-        'requested'
-      }}
     spec: >-
       {%- set normalized = [] -%}
       {%- for item in items -%}
@@ -78,12 +59,12 @@
       {{ normalized }}
     subsystemBase:
       subsystem: get_urls
-      status: "{{ status }}"
-      requested: "{{ requested }}"
-      bypassed: "{{ bypassed }}"
-      valid: "{{ valid }}"
-      active: "{{ active }}"
+      status: "{{ _subsystem_status }}"
+      requested: "{{ _subsystem_requested }}"
+      bypassed: "{{ _subsystem_bypassed }}"
+      valid: "{{ _subsystem_valid }}"
+      active: "{{ _subsystem_active }}"
       reasons: "{{ errors }}"
     subsystemArtifacts:
       spec: "{{ spec }}"
-    subsystem: "{{ subsystemBase | combine(subsystemArtifacts if valid else {}) }}"
+    subsystem: "{{ subsystemBase | combine(subsystemArtifacts if _subsystem_valid else {}) }}"
