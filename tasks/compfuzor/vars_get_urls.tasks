@@ -57,7 +57,7 @@
         {%- set _ = normalized.append(entry) -%}
       {%- endfor -%}
       {{ normalized }}
-    subsystemBase:
+    _subsystem_base:
       subsystem: get_urls
       status: "{{ _subsystem_status }}"
       requested: "{{ _subsystem_requested }}"
@@ -65,6 +65,5 @@
       valid: "{{ _subsystem_valid }}"
       active: "{{ _subsystem_active }}"
       reasons: "{{ errors }}"
-    subsystemArtifacts:
-      spec: "{{ spec }}"
-    subsystem: "{{ subsystemBase | combine(subsystemArtifacts if _subsystem_valid else {}) }}"
+    _subsystem_spec: "{{ {'spec': spec} if (spec | length > 0) else {} }}"
+    subsystem: "{{ _subsystem_base | combine(_subsystem_spec if _subsystem_valid else {}) }}"
