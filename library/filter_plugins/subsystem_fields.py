@@ -179,6 +179,82 @@ def _has_payload(value):
     return True
 
 
+def _as_list(value):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    if isinstance(value, set):
+        return list(value)
+    return [value]
+
+
+def _as_dict(value):
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def _dedupe_preserve(values):
+    result = []
+    seen = set()
+    for value in values:
+        key = str(value)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(value)
+    return result
+
+
+def subsystem_rollup(children, aggregate=None, include_aggregate=True):
+    """Roll up child subsystem contrib payloads into one aggregate payload.
+
+    Inputs:
+    - children: list of subsystem state records or contrib dicts
+      - if a child has a `contrib` key, that value is used
+      - otherwise, the child itself is treated as contrib
+    - aggregate: optional all/aggregate contrib payload to overlay last
+    - include_aggregate: include `aggregate` payload when truthy
+
+    Output keys:
+    - ETC_FILES, BINS, ENV, ENV_LIST, PKGS
+    """
+    rolled = {
+        "ETC_FILES": [],
+        "BINS": [],
+        "ENV": {},
+        "ENV_LIST": [],
+        "PKGS": [],
+    }
+
+    for child in _as_list(children):
+        if not isinstance(child, dict):
+            continue
+        contrib = child.get("contrib", child)
+        if not isinstance(contrib, dict):
+            continue
+
+        rolled["ETC_FILES"] += _as_list(contrib.get("ETC_FILES"))
+        rolled["BINS"] += _as_list(contrib.get("BINS"))
+        rolled["ENV"] = _as_dict(rolled.get("ENV")) | _as_dict(contrib.get("ENV"))
+        rolled["ENV_LIST"] += _as_list(contrib.get("ENV_LIST"))
+        rolled["PKGS"] += _as_list(contrib.get("PKGS"))
+
+    if include_aggregate and isinstance(aggregate, dict):
+        rolled["ETC_FILES"] += _as_list(aggregate.get("ETC_FILES"))
+        rolled["BINS"] += _as_list(aggregate.get("BINS"))
+        rolled["ENV"] = _as_dict(rolled.get("ENV")) | _as_dict(aggregate.get("ENV"))
+        rolled["ENV_LIST"] += _as_list(aggregate.get("ENV_LIST"))
+        rolled["PKGS"] += _as_list(aggregate.get("PKGS"))
+
+    rolled["ENV_LIST"] = _dedupe_preserve(rolled.get("ENV_LIST", []))
+    rolled["PKGS"] = _dedupe_preserve(rolled.get("PKGS", []))
+    return rolled
+
+
 @pass_context
 def subsystem_record(
     context,
@@ -269,4 +345,5 @@ class FilterModule(object):
             "subsystem_bypass_vars": subsystem_bypass_vars,
             "subsystem_bypassed": subsystem_bypassed,
             "subsystem_record": subsystem_record,
+            "subsystem_rollup": subsystem_rollup,
         }
