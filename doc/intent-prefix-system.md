@@ -28,39 +28,43 @@ Do not conflate them. Stage is when. Intent is what.
 
 We use intent prefixes at two scopes.
 
-### 1) File Intent Prefixes
+Scoped labels are first-class metadata for both scopes:
 
-These classify `tasks/compfuzor/*.tasks` files.
+- `intent:<file|data>`
+- `kind:<vars|probe|fn|syn|repo|fs|bins|links|raw|norm|spec|drv|out|merge|tmp|...>`
+- `form:<prefix|envelope|internal>`
+- `class:<foundation|discovery|transform|synthesis|execution|orchestration|...>`
+- `side-effect:<none|host|mixed>`
+- `apply:<type|none>` (for example `apply:get-urls`)
 
-- `vars_` - foundational defaults and normalization
-- `probe_` - host/runtime discovery snapshots
-- `fn_` - reusable transforms (contract in, structured output out)
-- `gen_` - synthesis of pipeline artifacts (`BINS`, `ETC_FILES`, `ENV`,
-  `ENV_LIST`, `PKGS`, `LINKS`)
-- `repo_` - repository execution/apply operations
-- `fs_` - filesystem execution/apply operations
-- `bins*` - managed script install/link/run lifecycle
-- `links*` - symlink lifecycle
-- `_*.tasks` - internal orchestration helpers
+Simple labels (like `foundation` or `execution`) come from `class:*`.
 
-### 2) Data Intent Prefixes
+Prefix contracts are in one merged table with the entity pattern first.
 
-These classify facts created inside `set_fact`.
-
-- `raw_` - input as supplied
-- `norm_` - validated/normalized input
-- `spec_` - ordered declarative model/table
-- `drv_` - derived intermediate values
-- `out_` - completed transform output
-- `merge_` - prepared merge payload
-- `syn_` - synthesis output payload
-- `_tmp_` - local scratch
-
-Recommended cross-file envelope names:
-
-- probe snapshot: `_probe_<domain>`
-- function output: `_fn_<domain>_out`
-- synthesis handoff bundle: `_syn_<domain>`
+| Entity Pattern | Intent | Kind | Form | Class | Apply | Side Effect | Section | Typical Output |
+|---|---|---|---|---|---|---|---|---|
+| `vars_` | `intent:file` | `kind:vars` | `form:prefix` | `class:foundation` | `apply:none` | `side-effect:none` | file-prefix | normalized base facts |
+| `probe_` | `intent:file` | `kind:probe` | `form:prefix` | `class:discovery` | `apply:none` | `side-effect:none` | file-prefix | `_probe_<domain>` snapshot |
+| `fn_` | `intent:file` | `kind:fn` | `form:prefix` | `class:transform` | `apply:none` | `side-effect:none` | file-prefix | reusable output bundle(s) |
+| `gen_` | `intent:file` | `kind:syn` | `form:prefix` | `class:synthesis` | `apply:none` | `side-effect:none` | file-prefix | synthesized pipeline payloads and artifact merges |
+| `repo_` | `intent:file` | `kind:repo` | `form:prefix` | `class:execution` | `apply:repo` | `side-effect:host` | file-prefix | checked-out/updated repos |
+| `fs_` | `intent:file` | `kind:fs` | `form:prefix` | `class:execution` | `apply:filesystem` | `side-effect:host` | file-prefix | files/dirs/downloads/env files |
+| `bins` / `bins_*` | `intent:file` | `kind:bins` | `form:prefix` | `class:execution` | `apply:bins` | `side-effect:host` | file-prefix | managed scripts linked/run |
+| `links` / `links_*` | `intent:file` | `kind:links` | `form:prefix` | `class:execution` | `apply:links` | `side-effect:host` | file-prefix | symlinks |
+| `_*.tasks` | `intent:file` | `kind:orchestrator` | `form:internal` | `class:orchestration` | `apply:orchestration` | `side-effect:mixed` | file-prefix | fanout/control-flow helper behavior |
+|  |  |  |  |  |  |  |  |  |
+| `raw_` | `intent:data` | `kind:raw` | `form:prefix` | `class:input` | `apply:none` | `side-effect:none` | data-prefix | unnormalized values |
+| `norm_` | `intent:data` | `kind:norm` | `form:prefix` | `class:normalization` | `apply:none` | `side-effect:none` | data-prefix | validated/normalized values |
+| `spec_` | `intent:data` | `kind:spec` | `form:prefix` | `class:model` | `apply:none` | `side-effect:none` | data-prefix | ordered domain table |
+| `drv_` | `intent:data` | `kind:drv` | `form:prefix` | `class:derivation` | `apply:none` | `side-effect:none` | data-prefix | intermediate computed values |
+| `out_` | `intent:data` | `kind:out` | `form:prefix` | `class:output` | `apply:none` | `side-effect:none` | data-prefix | completed transform payload |
+| `merge_` | `intent:data` | `kind:merge` | `form:prefix` | `class:synthesis-input` | `apply:none` | `side-effect:none` | data-prefix | merge-ready payload |
+| `syn_` | `intent:data` | `kind:syn` | `form:prefix` | `class:synthesis-output` | `apply:none` | `side-effect:none` | data-prefix | synthesized payload ready for pipeline merge |
+| `_tmp_` | `intent:data` | `kind:tmp` | `form:internal` | `class:scratch` | `apply:none` | `side-effect:none` | data-prefix | short-lived local values (`visibility:internal`) |
+|  |  |  |  |  |  |  |  |  |
+| `_probe_<domain>` | `intent:data` | `kind:probe` | `form:envelope` | `class:discovery-envelope` | `apply:<domain>` | `side-effect:none` | data-envelope | probe handoff record |
+| `_fn_<domain>_out` | `intent:data` | `kind:fn` | `form:envelope` | `class:transform-envelope` | `apply:<domain>` | `side-effect:none` | data-envelope | transform handoff record |
+| `_syn_<domain>` | `intent:data` | `kind:syn` | `form:envelope` | `class:synthesis-envelope` | `apply:<domain>` | `side-effect:none` | data-envelope | synthesis handoff record |
 
 Important: the data-intent prefixes are primary semantics. Envelope naming is a
 transport shape for passing data between files.

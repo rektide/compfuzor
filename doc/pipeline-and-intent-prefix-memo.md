@@ -39,31 +39,44 @@ Notes against the current file:
 
 ## Intent Prefix Contract
 
-We use intent prefixes in multiple scopes. The `labels` column is the stable
-classification key we can reuse in docs, reviews, and agent prompts.
+We use intent prefixes in multiple scopes. The table below expands canonical
+labels into explicit columns so docs and agents can parse them consistently.
 
-| Prefix | Scope | Intent Class | Labels | Typical Output | Side Effects |
-|---|---|---|---|---|---|
-| `vars_` | file | foundation | `file, foundation, compile` | normalized base facts | no |
-| `probe_` | file | discovery | `file, discovery, compile` | `_probe_<domain>` snapshot | no |
-| `fn_` | file | transform | `file, transform, compile` | reusable output bundle(s) | no |
-| `gen_` | file | synthesis | `file, synthesis, compile` | merged pipeline artifacts | no host apply |
-| `repo_` | file | execution | `file, execution, apply, repo` | checked-out/updated repos | yes |
-| `fs_` | file | execution | `file, execution, apply, filesystem` | files/dirs/downloads/env files | yes |
-| `bins` / `bins_*` | file | execution | `file, execution, apply, bins` | managed scripts linked/run | yes |
-| `links` / `links_*` | file | execution | `file, execution, apply, links` | symlinks | yes |
-| `_*.tasks` | file | orchestration | `file, orchestration, internal` | fanout/control-flow only | depends |
-| `raw_` | data | input | `data, input` | unnormalized values | n/a |
-| `norm_` | data | normalization | `data, normalize` | validated/normalized values | n/a |
-| `spec_` | data | model | `data, spec` | ordered domain table | n/a |
-| `drv_` | data | derivation | `data, derived` | intermediate computed values | n/a |
-| `out_` | data | output | `data, output` | completed transform payload | n/a |
-| `merge_` | data | synthesis-input | `data, merge` | merge-ready payload | n/a |
-| `syn_` | data | synthesis-output | `data, synthesis` | synthesized payload ready for pipeline merge | n/a |
-| `_tmp_` | data | scratch | `data, scratch, internal` | short-lived local values | n/a |
-| `_probe_<domain>` | data | envelope | `data, envelope, discovery` | probe handoff record | n/a |
-| `_fn_<domain>_out` | data | envelope | `data, envelope, transform` | transform handoff record | n/a |
-| `_syn_<domain>` | data | envelope | `data, envelope, synthesis` | synthesis handoff record | n/a |
+Scoped label format:
+
+- `intent:<file|data>`
+- `kind:<vars|probe|fn|syn|repo|fs|bins|links|raw|norm|spec|drv|out|merge|tmp|...>`
+- `form:<prefix|envelope|internal>`
+- `class:<foundation|discovery|transform|synthesis|execution|orchestration|...>`
+- `side-effect:<none|host|mixed>`
+- apply family: `apply:<type|none>` (for example `apply:get-urls`)
+
+The simple name comes from `class:*`.
+
+| Entity Pattern | Intent | Kind | Form | Class | Apply | Side Effect | Section | Typical Output |
+|---|---|---|---|---|---|---|---|---|
+| `vars_` | `intent:file` | `kind:vars` | `form:prefix` | `class:foundation` | `apply:none` | `side-effect:none` | file-prefix | normalized base facts |
+| `probe_` | `intent:file` | `kind:probe` | `form:prefix` | `class:discovery` | `apply:none` | `side-effect:none` | file-prefix | `_probe_<domain>` snapshot |
+| `fn_` | `intent:file` | `kind:fn` | `form:prefix` | `class:transform` | `apply:none` | `side-effect:none` | file-prefix | reusable output bundle(s) |
+| `gen_` | `intent:file` | `kind:syn` | `form:prefix` | `class:synthesis` | `apply:none` | `side-effect:none` | file-prefix | synthesized pipeline payloads and artifact merges |
+| `repo_` | `intent:file` | `kind:repo` | `form:prefix` | `class:execution` | `apply:repo` | `side-effect:host` | file-prefix | checked-out/updated repos |
+| `fs_` | `intent:file` | `kind:fs` | `form:prefix` | `class:execution` | `apply:filesystem` | `side-effect:host` | file-prefix | files/dirs/downloads/env files |
+| `bins` / `bins_*` | `intent:file` | `kind:bins` | `form:prefix` | `class:execution` | `apply:bins` | `side-effect:host` | file-prefix | managed scripts linked/run |
+| `links` / `links_*` | `intent:file` | `kind:links` | `form:prefix` | `class:execution` | `apply:links` | `side-effect:host` | file-prefix | symlinks |
+| `_*.tasks` | `intent:file` | `kind:orchestrator` | `form:internal` | `class:orchestration` | `apply:orchestration` | `side-effect:mixed` | file-prefix | fanout/control-flow helper behavior |
+|  |  |  |  |  |  |  |  |
+| `raw_` | `intent:data` | `kind:raw` | `form:prefix` | `class:input` | `apply:none` | `side-effect:none` | data-prefix | unnormalized values |
+| `norm_` | `intent:data` | `kind:norm` | `form:prefix` | `class:normalization` | `apply:none` | `side-effect:none` | data-prefix | validated/normalized values |
+| `spec_` | `intent:data` | `kind:spec` | `form:prefix` | `class:model` | `apply:none` | `side-effect:none` | data-prefix | ordered domain table |
+| `drv_` | `intent:data` | `kind:drv` | `form:prefix` | `class:derivation` | `apply:none` | `side-effect:none` | data-prefix | intermediate computed values |
+| `out_` | `intent:data` | `kind:out` | `form:prefix` | `class:output` | `apply:none` | `side-effect:none` | data-prefix | completed transform payload |
+| `merge_` | `intent:data` | `kind:merge` | `form:prefix` | `class:synthesis-input` | `apply:none` | `side-effect:none` | data-prefix | merge-ready payload |
+| `syn_` | `intent:data` | `kind:syn` | `form:prefix` | `class:synthesis-output` | `apply:none` | `side-effect:none` | data-prefix | synthesized payload ready for pipeline merge |
+| `_tmp_` | `intent:data` | `kind:tmp` | `form:internal` | `class:scratch` | `apply:none` | `side-effect:none` | data-prefix | short-lived local values (`visibility:internal`) |
+|  |  |  |  |  |  |  |  |
+| `_probe_<domain>` | `intent:data` | `kind:probe` | `form:envelope` | `class:discovery-envelope` | `apply:<domain>` | `side-effect:none` | data-envelope | probe handoff record |
+| `_fn_<domain>_out` | `intent:data` | `kind:fn` | `form:envelope` | `class:transform-envelope` | `apply:<domain>` | `side-effect:none` | data-envelope | transform handoff record |
+| `_syn_<domain>` | `intent:data` | `kind:syn` | `form:envelope` | `class:synthesis-envelope` | `apply:<domain>` | `side-effect:none` | data-envelope | synthesis handoff record |
 
 ## Preferred Authoring Flow Per Layer
 
