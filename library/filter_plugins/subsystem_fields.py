@@ -58,6 +58,18 @@ def _dedupe(values):
 
 
 def _effective_bypass_vars(subsystem, bypass_vars=None, domain=None):
+    """Resolve effective bypass variable names for a subsystem.
+
+    Rules:
+    - defaults: subsystem-level + optional domain-level bypass vars
+    - bypass_vars omitted/None: use defaults
+    - bypass_vars True: use defaults
+    - bypass_vars False: disable defaults (no bypass vars)
+    - bypass_vars "true": use defaults
+    - bypass_vars "SOME_VAR": explicit replacement
+    - bypass_vars ["SOME_VAR"]: explicit replacement
+    - bypass_vars [True, "SOME_VAR"]: defaults + explicit supplement
+    """
     defaults = _dedupe(
         [
             _normalize_bypass_var_name(subsystem),
@@ -65,18 +77,29 @@ def _effective_bypass_vars(subsystem, bypass_vars=None, domain=None):
         ]
     )
 
+    # No override configured: use automatic defaults.
     if bypass_vars is None:
         return defaults
 
+    # Boolean override:
+    # - True: keep defaults
+    # - False: disable bypass resolution for this subsystem.
     if isinstance(bypass_vars, bool):
         return defaults if bypass_vars else []
 
+    # String override:
+    # - "true": keep defaults
+    # - any other string: explicit replacement with one var.
     if isinstance(bypass_vars, str):
         if bypass_vars.strip().lower() == "true":
             return defaults
         explicit_name = _normalize_bypass_var_name(bypass_vars)
         return [explicit_name] if explicit_name else []
 
+    # Sequence override:
+    # - include True (or "true") to include defaults
+    # - string tokens add explicit vars
+    # - without True, explicit list is full replacement
     if isinstance(bypass_vars, (list, tuple, set)):
         include_defaults = False
         explicit = []
@@ -99,11 +122,20 @@ def _effective_bypass_vars(subsystem, bypass_vars=None, domain=None):
         base = defaults if include_defaults else []
         return _dedupe(base + explicit)
 
+    # Unknown override type: fall back to safe defaults.
     return defaults
 
 
 @pass_context
 def owner_group_fields(context, row, owner=None, group=None):
+    """Resolve owner/group fields with row-first precedence.
+
+    Precedence:
+    1. row.owner / row.group
+    2. explicit owner/group arguments
+    3. context OWNER/GROUP vars
+    Empty values are dropped from the result.
+    """
     if not isinstance(row, dict):
         row = {}
 
@@ -123,11 +155,13 @@ def owner_group_fields(context, row, owner=None, group=None):
 
 @pass_context
 def subsystem_bypass_vars(context, subsystem, bypass_vars=None, domain=None):
+    """Return effective bypass variable names for a subsystem."""
     return _effective_bypass_vars(subsystem, bypass_vars=bypass_vars, domain=domain)
 
 
 @pass_context
 def subsystem_bypassed(context, subsystem, bypass_vars=None, domain=None):
+    """Return True if any effective bypass variable resolves truthy."""
     bypass_names = _effective_bypass_vars(
         subsystem, bypass_vars=bypass_vars, domain=domain
     )
