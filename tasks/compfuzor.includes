@@ -28,9 +28,6 @@
 - import_tasks: compfuzor/vars_get_urls.tasks
   when: GET_URLS is defined
   tags: ['vars', 'always']
-- import_tasks: compfuzor/fn_get_urls.tasks
-  when: (SUBSYSTEM | default({})).get('get_urls', {}).get('active', false)
-  tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_get_urls.tasks
   when: (SUBSYSTEM | default({})).get('get_urls', {}).get('active', false)
   tags: ['vars', 'always']
