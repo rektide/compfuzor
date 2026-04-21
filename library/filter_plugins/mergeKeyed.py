@@ -1,80 +1,22 @@
+from subsystem_fields import merge_with_strategy
+
+
 def mergeKeyed(list1, list2, key="key", concat_fields=None):
-    """
-    Merge two lists of objects by a key field.
-    
-    Concatenates the two lists together, but if any objects in both lists 
-    have a field named `key` whose value is the same, those two objects 
-    should be combined into a new merged object that is used in the list.
-    
-    Args:
-        list1: First list
-        list2: Second list  
-        key: The field name to use for matching (default: "key")
-        concat_fields: List of field names to concatenate instead of replace
-    
-    Returns:
-        A merged list where objects with matching key values are combined
-    """
-    if not isinstance(list1, list):
-        list1 = []
-    if not isinstance(list2, list):
-        list2 = []
-    
-    if concat_fields is None:
-        concat_fields = []
-    
-    # Create a dictionary to track objects by their key value
-    merged_dict = {}
-    # Track non-dictionary items for equality matching
-    non_dict_items = []
-    
-    # Process first list
-    for item in list1:
-        if isinstance(item, dict) and key in item:
-            merged_dict[item[key]] = item.copy()
-        else:
-            # Track non-dictionary items for equality matching
-            non_dict_items.append(item)
-    
-    # Process second list, merging with existing items
-    for item in list2:
-        if isinstance(item, dict) and key in item:
-            key_value = item[key]
-            if key_value in merged_dict:
-                # Merge dictionaries, with special handling for concat_fields
-                merged_item = merged_dict[key_value]
-                for field, value in item.items():
-                    if field in concat_fields and field in merged_item:
-                        # Concatenate values that are lists or strings
-                        existing = merged_item[field]
-                        if isinstance(value, list) and isinstance(existing, list):
-                            merged_item[field] = existing + value
-                        elif isinstance(value, str) and isinstance(existing, str):
-                            merged_item[field] = existing + "\n" + value
-                        else:
-                            # Fall back to replacement
-                            merged_item[field] = value
-                    else:
-                        # Second list values take precedence
-                        merged_item[field] = value
-            else:
-                merged_dict[key_value] = item.copy()
-        else:
-            # Check if this non-dictionary item exists in first list
-            if item in non_dict_items:
-                # Remove from non_dict_items since we're handling it
-                non_dict_items.remove(item)
-            # Add to result (will be appended at the end)
-            non_dict_items.append(item)
-    
-    # Convert dictionary values to list and append non-dictionary items
-    result = list(merged_dict.values()) + non_dict_items
-    
-    return result
+    """Compatibility shim implemented via merge_with_strategy."""
+    merged = merge_with_strategy(
+        [{"items": list1}, {"items": list2}],
+        {
+            "items": {
+                "op": "merge_keyed",
+                "key": key,
+                "concat_fields": concat_fields,
+            }
+        },
+        include_aggregate=False,
+    )
+    return merged.get("items", [])
 
 
 class FilterModule(object):
     def filters(self):
-        return {
-            "mergeKeyed": mergeKeyed
-        }
+        return {"mergeKeyed": mergeKeyed}

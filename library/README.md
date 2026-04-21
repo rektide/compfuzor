@@ -47,6 +47,7 @@ Filters transform values using `|` in Jinja templates.
 | `ignore_empty` | [`library/filter_plugins/ignore_empty.py`](/library/filter_plugins/ignore_empty.py) | Removes dict entries whose value is `None` or empty string. |
 | `listify` | [`library/filter_plugins/listify.py`](/library/filter_plugins/listify.py) | Converts input to list form (`dict` -> list of `{key, value}`). |
 | `concat` | [`library/filter_plugins/listify.py`](/library/filter_plugins/listify.py) | Concatenates arguments after `listify` conversion. |
+| `merge_with_strategy` | [`library/filter_plugins/subsystem_fields.py`](/library/filter_plugins/subsystem_fields.py) | Strategy-driven merger for records and payload fields; supports nested maps and operations (including `merge_keyed`). |
 | `mergeKeyed` | [`library/filter_plugins/mergeKeyed.py`](/library/filter_plugins/mergeKeyed.py) | Merges two lists of objects by key, with optional concat fields. |
 | `rejectAny` | [`library/filter_plugins/rejectAny.py`](/library/filter_plugins/rejectAny.py) | Returns elements from first iterable not present in second iterable. |
 | `unsafety` | [`library/filter_plugins/unsafety.py`](/library/filter_plugins/unsafety.py) | Marks a value as trusted template content. |

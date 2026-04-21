@@ -209,6 +209,86 @@ def _dedupe_preserve(values):
     return result
 
 
+def _merge_keyed(list1, list2, key="key", concat_fields=None):
+    """Merge two lists of objects by key, preserving mergeKeyed behavior."""
+    if not isinstance(list1, list):
+        list1 = []
+    if not isinstance(list2, list):
+        list2 = []
+
+    if concat_fields is None:
+        concat_fields = []
+
+    merged_dict = {}
+    non_dict_items = []
+
+    for item in list1:
+        if isinstance(item, dict) and key in item:
+            merged_dict[item[key]] = item.copy()
+        else:
+            non_dict_items.append(item)
+
+    for item in list2:
+        if isinstance(item, dict) and key in item:
+            key_value = item[key]
+            if key_value in merged_dict:
+                merged_item = merged_dict[key_value]
+                for field, value in item.items():
+                    if field in concat_fields and field in merged_item:
+                        existing = merged_item[field]
+                        if isinstance(value, list) and isinstance(existing, list):
+                            merged_item[field] = existing + value
+                        elif isinstance(value, str) and isinstance(existing, str):
+                            merged_item[field] = existing + "\n" + value
+                        else:
+                            merged_item[field] = value
+                    else:
+                        merged_item[field] = value
+            else:
+                merged_dict[key_value] = item.copy()
+        else:
+            if item in non_dict_items:
+                non_dict_items.remove(item)
+            non_dict_items.append(item)
+
+    return list(merged_dict.values()) + non_dict_items
+
+
+def _strategy_operation_name(strategy):
+    if isinstance(strategy, dict) and isinstance(strategy.get("op"), str):
+        return strategy.get("op")
+    return None
+
+
+def _strategy_initial_value(strategy):
+    op_name = _strategy_operation_name(strategy)
+    if op_name == "merge_keyed":
+        return []
+
+    if strategy in {"append", "append_unique"}:
+        return []
+    if strategy == "dict_overlay":
+        return {}
+    if isinstance(strategy, dict):
+        return {}
+    if strategy == "replace":
+        return None
+
+    raise ValueError("Unknown merge_with_strategy strategy: {}".format(strategy))
+
+
+def _apply_strategy_operation(existing, value, strategy):
+    op_name = _strategy_operation_name(strategy)
+    if op_name == "merge_keyed":
+        key = strategy.get("key", "key")
+        concat_fields = strategy.get("concat_fields", [])
+        return _merge_keyed(existing, value, key=key, concat_fields=concat_fields)
+
+    raise ValueError(
+        "Unknown merge_with_strategy operation strategy: {}".format(strategy)
+    )
+
+
 def merge_with_strategy(
     records,
     strategies,
@@ -224,6 +304,8 @@ def merge_with_strategy(
     - dict_overlay: merge dicts where later values win
     - replace: replace with latest non-None value
     - nested strategy map: recurse for a field using nested per-field strategies
+    - operation strategy map (dict with `op`), currently:
+      - {op: merge_keyed, key: name, concat_fields: [generated]}
 
     When `payload_key` is set and a record contains that key, the keyed payload
     is used. Otherwise the record itself is treated as payload.
@@ -232,14 +314,7 @@ def merge_with_strategy(
     combined = {}
 
     for field, strategy in strategy_map.items():
-        if strategy in {"append", "append_unique"}:
-            combined[field] = []
-        elif isinstance(strategy, dict):
-            combined[field] = {}
-        elif strategy == "dict_overlay":
-            combined[field] = {}
-        else:
-            combined[field] = None
+        combined[field] = _strategy_initial_value(strategy)
 
     source_records = _as_list(records)
     if include_aggregate and isinstance(aggregate, dict):
@@ -258,6 +333,12 @@ def merge_with_strategy(
 
         for field, strategy in strategy_map.items():
             value = payload.get(field)
+
+            if _strategy_operation_name(strategy):
+                combined[field] = _apply_strategy_operation(
+                    combined.get(field), value, strategy
+                )
+                continue
 
             if strategy == "append":
                 combined[field] += _as_list(value)
