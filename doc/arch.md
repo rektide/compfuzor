@@ -229,6 +229,41 @@ That helper should:
 5. compute `requested`, `bypassed`, `valid`, `active`, `status`, and `reasons`
 6. create `SUBSYSTEM.<name>` only if requested
 
+### Shared subsystem vars in `vars/common.yaml`
+
+Compfuzor now has a shared subsystem evaluation contract in
+[`/vars/common.yaml`](/vars/common.yaml). Subsystems can define local inputs and
+reuse these derived fields instead of re-implementing control logic every time.
+
+Common derived vars:
+
+| Var | Meaning |
+|---|---|
+| `errorChecks` | list of `{msg, failed}` checks |
+| `errors` | normalized list of failing check messages |
+| `_subsystem_requested` | request state derived from `requested` or `items` |
+| `_subsystem_bypassed` | effective bypass state from explicit override or bypass helper |
+| `_subsystem_valid` | validity from explicit override or empty `errors` |
+| `_subsystem_active` | canonical active gate (`requested and not bypassed and valid`) |
+| `_subsystem_status` | canonical status label (`active`, `bypassed`, `invalid`, `requested`) |
+| `_subsystem_base` | common base object with status/requested/bypassed/valid/active/reasons |
+
+Task-local data dependencies:
+
+| Input var | Purpose |
+|---|---|
+| `items` | subsystem input rows used for default request detection |
+| `subsystem_name` | subsystem id used for automatic bypass var resolution |
+| `subsystem_domain` (optional) | domain label used for domain-level bypass fallback |
+| `subsystem_bypass_vars` (optional) | bypass override mode (`true`, list replacement, or list supplement with `true`) |
+
+Optional explicit overrides:
+
+- `requested`
+- `bypassed`
+- `valid`
+- `errorChecks`
+
 ## 3. Phases and lifecycle
 
 Phases describe runtime ordering. Lifecycle describes how one subsystem moves
@@ -737,6 +772,20 @@ SUBSYSTEM_META:
 Expected effective bypass source:
 
 - `ONLY_THIS_BYPASS`
+
+### Implementation helper filters
+
+Current implementation uses focused filters in
+[`/library/filter_plugins/subsystem_fields.py`](/library/filter_plugins/subsystem_fields.py):
+
+- `subsystem_bypassed`: resolves effective bypass state from subsystem + domain
+  naming rules and override modes
+- `subsystem_bypass_vars`: introspection helper returning effective bypass var names
+- `owner_group_fields`: applies row-first owner/group resolution with subsystem
+  defaults
+
+Learning from the GET_URLS pilot: keep helpers narrow and explicit. Use filters
+for repeated messy logic, but keep subsystem assembly visible in task vars.
 
 ## 8. Pending work
 
