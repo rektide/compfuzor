@@ -1,5 +1,5 @@
 ---
-- name: "Compfuzor: evaluate get_urls contract and state"
+- name: "Compfuzor: transform get_urls into subsystem contract"
   block:
     - name: "Compfuzor: fail invalid get_urls input"
       fail:

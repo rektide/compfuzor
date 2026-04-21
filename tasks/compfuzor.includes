@@ -25,7 +25,7 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_src.tasks
   tags: ['vars', 'always']
-- import_tasks: compfuzor/vars_get_urls.tasks
+- import_tasks: compfuzor/fn_get_urls.tasks
   when: GET_URLS is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_get_urls.tasks
