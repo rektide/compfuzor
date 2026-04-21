@@ -264,6 +264,28 @@ Optional explicit overrides:
 - `valid`
 - `errorChecks`
 
+### Reusable apply-task contract
+
+Apply tasks that consume subsystem specs should be reusable across subsystem
+instance names.
+
+Recommended task-local vars:
+
+| Var | Meaning | Default |
+|---|---|---|
+| `subsystem_name` | logical subsystem name used by caller | task-defined |
+| `subsystem_id` | concrete key inside `SUBSYSTEM` | `subsystem_name` |
+
+Recommended resolve pattern:
+
+- `_subsystem_id = subsystem_id | default(subsystem_name)`
+- `_subsystem = SUBSYSTEM[_subsystem_id]`
+- `_subsystem_active = _subsystem.active`
+- `_subsystem_spec = _subsystem.spec`
+
+This keeps one apply task reusable for multiple subsystem instances while still
+allowing explicit overrides.
+
 ## 3. Phases and lifecycle
 
 Phases describe runtime ordering. Lifecycle describes how one subsystem moves
@@ -586,9 +608,6 @@ SUBSYSTEM:
     valid: true
     active: true
     reasons: []
-    norm:
-      - url: https://example.invalid/file.tar.gz
-        dest: /opt/file.tar.gz
     spec:
       - url: https://example.invalid/file.tar.gz
         dest: /opt/file.tar.gz
@@ -602,17 +621,16 @@ SUBSYSTEM:
 
 Recommended task split:
 
-- `vars_get_urls.tasks` validates input and creates `SUBSYSTEM.get_urls`
-- `fn_get_urls.tasks` computes `SUBSYSTEM.get_urls.norm` and `.spec`
+- `vars_get_urls.tasks` validates input and creates `SUBSYSTEM.get_urls.spec`
 - `gen_get_urls.tasks` computes `SUBSYSTEM.get_urls.contrib`
-- `fs_get_urls.tasks` consumes `SUBSYSTEM.get_urls.spec`
+- `fs_get_urls.tasks` consumes `SUBSYSTEM.<id>.spec` and supports
+  `subsystem_name`/`subsystem_id` overrides for reuse
 
 Lifecycle view:
 
 | Step | Location | Meaning |
 |---|---|---|
 | raw | `GET_URLS` | playbook input |
-| norm | `SUBSYSTEM.get_urls.norm` | normalized URL entries |
 | spec | `SUBSYSTEM.get_urls.spec` | authoritative download contract |
 | contrib | `SUBSYSTEM.get_urls.contrib` | helper and shared-artifact contributions |
 | apply | `fs_get_urls.tasks` | downloads and `.url` sidecars |
