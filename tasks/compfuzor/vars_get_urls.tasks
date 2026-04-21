@@ -17,21 +17,29 @@
     mappingsWithUrl: "{{ mappingItems | selectattr('url', 'defined') | list }}"
     requested: "{{ items | length > 0 }}"
     bypassed: "{{ GET_URLS_BYPASS | default(false) | bool }}"
-    invalidTypeCount: "{{ (items | length) - (stringItems | length) - (mappingItems | length) }}"
-    emptyStringCount: "{{ stringItems | select('match', '^\\s*$') | list | length }}"
-    missingUrlCount: "{{ mappingItems | rejectattr('url', 'defined') | list | length }}"
-    urlNotStringCount: "{{ mappingsWithUrl | rejectattr('url', 'string') | list | length }}"
-    urlStringBlankCount: "{{ mappingsWithUrl | selectattr('url', 'string') | map(attribute='url') | select('match', '^\\s*$') | list | length }}"
-    destTypeInvalidCount: "{{ mappingItems | selectattr('dest', 'defined') | rejectattr('dest', 'string') | list | length }}"
+    errorChecks:
+      - msg: "GET_URLS entries must be strings or mappings"
+        failed: "{{ ((items | length) - (stringItems | length) - (mappingItems | length)) | int > 0 }}"
+      - msg: "GET_URLS string entries must be non-empty"
+        failed: "{{ (stringItems | select('match', '^\\s*$') | list | length) | int > 0 }}"
+      - msg: "GET_URLS mapping entries must define a non-empty string url"
+        failed: >-
+          {{
+            (
+              (mappingItems | rejectattr('url', 'defined') | list | length) | int > 0
+            ) or (
+              (mappingsWithUrl | rejectattr('url', 'string') | list | length) | int > 0
+            ) or (
+              (mappingsWithUrl | selectattr('url', 'string') | map(attribute='url') | select('match', '^\\s*$') | list | length) | int > 0
+            )
+          }}
+      - msg: "GET_URLS mapping entry dest must be a string when defined"
+        failed: "{{ (mappingItems | selectattr('dest', 'defined') | rejectattr('dest', 'string') | list | length) | int > 0 }}"
     errors: >-
       {{
-        [
-          ('GET_URLS entries must be strings or mappings' if invalidTypeCount | int > 0 else none),
-          ('GET_URLS string entries must be non-empty' if emptyStringCount | int > 0 else none),
-          ('GET_URLS mapping entries must define a non-empty string url' if (missingUrlCount | int > 0 or urlNotStringCount | int > 0 or urlStringBlankCount | int > 0) else none),
-          ('GET_URLS mapping entry dest must be a string when defined' if destTypeInvalidCount | int > 0 else none)
-        ]
-        | select('truthy')
+        errorChecks
+        | selectattr('failed', 'truthy')
+        | map(attribute='msg')
         | list
       }}
     valid: "{{ errors | length == 0 }}"
