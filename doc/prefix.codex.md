@@ -1,6 +1,6 @@
 # Prefix Codex (Implementation-Forward Draft)
 
-This doc translates [`ARCHITECTURE.md`](/ARCHITECTURE.md) into concrete,
+This doc translates [`/doc/arch.md`](/doc/arch.md) into concrete,
 incremental implementation slices.
 
 It starts with one pilot domain: GET_URLS.
@@ -209,14 +209,14 @@ belongs while docs are being unified.
 
 | Document | Current role | Status | Recommendation |
 |---|---|---|---|
-| [`/ARCHITECTURE.md`](/ARCHITECTURE.md) | architecture contracts and invariants | active | keep as canonical contract source (`phase/role/effect`, activation, lifecycle) |
+| [`/doc/arch.md`](/doc/arch.md) | architecture contracts and invariants | canonical | keep as the single contract source (`phase/role/effect`, activation, lifecycle) |
 | [`/doc/prefix.codex.md`](/doc/prefix.codex.md) | implementation-forward decomposition and migration examples | active working head for migration detail | capture new decomposition experiments and table demos here |
 | [`/doc/pipeline-and-intent-prefix-memo.md`](/doc/pipeline-and-intent-prefix-memo.md) | historical memo with useful narrative and early taxonomy | needs overhaul | fold into architecture terminology and lifecycle/activation contract |
 | [`/doc/intent-prefix-system.md`](/doc/intent-prefix-system.md) | historical intent-prefix writeup | reference only | mine for ideas, but do not extend as primary source |
 
 Recommended direction for the next push:
 
-- use [`/ARCHITECTURE.md`](/ARCHITECTURE.md) for normative contracts
+- use [`/doc/arch.md`](/doc/arch.md) for normative contracts
 - use [`/doc/prefix.codex.md`](/doc/prefix.codex.md) for concrete domain plans
 - rewrite [`/doc/pipeline-and-intent-prefix-memo.md`](/doc/pipeline-and-intent-prefix-memo.md) to align with `phase/role/effect` and then either archive or replace the older intent memo
 

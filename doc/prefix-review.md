@@ -112,4 +112,4 @@ The memo is strong on lifecycle, activation, and worked examples. The gaps fall 
 - **Structural gaps**: missing the full prefix table, form dimension, probe intent, and intermediate data prefixes (drv_, out_, merge_, _tmp_)
 - **Implementation gaps**: missing decomposition seams for config/systemd, hierarchy interaction, migration guardrails, BYPASS mapping, and the reusable four-slice template
 
-Before retiring [`intent-prefix-system.md`](intent-prefix-system.md), all items in section 2 must be absorbed into [`pipeline-and-intent-prefix-memo.md`](pipeline-and-intent-prefix-memo.md) or [`ARCHITECTURE.md`](/ARCHITECTURE.md).
+Before retiring [`intent-prefix-system.md`](intent-prefix-system.md), all items in section 2 must be absorbed into [`pipeline-and-intent-prefix-memo.md`](pipeline-and-intent-prefix-memo.md) or [`/doc/arch.md`](/doc/arch.md).

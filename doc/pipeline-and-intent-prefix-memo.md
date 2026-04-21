@@ -1,14 +1,14 @@
 # Pipeline and Prefix Memo (Overhaul Draft)
 
-This memo is the implementation-facing companion to [`/ARCHITECTURE.md`](/ARCHITECTURE.md).
+This memo is a supporting migration note alongside [`/doc/arch.md`](/doc/arch.md).
 
 It translates architecture contracts into practical authoring guidance,
 decomposition patterns, and migration direction.
 
 ## Status and role
 
-- This memo is active and intended to be revised during migration work.
-- Architecture invariants stay in [`/ARCHITECTURE.md`](/ARCHITECTURE.md).
+- This memo remains useful while architecture content is being consolidated.
+- Canonical architecture invariants now live in [`/doc/arch.md`](/doc/arch.md).
 - Domain decomposition slices live in [`/doc/prefix.codex.md`](/doc/prefix.codex.md).
 
 ## Canonical terminology
