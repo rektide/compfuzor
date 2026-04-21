@@ -11,6 +11,8 @@ Reference history:
 - [`doc/intent-prefix-system.md`](/doc/intent-prefix-system.md)
 - [`tasks/compfuzor/vars_get_urls.tasks`](/tasks/compfuzor/vars_get_urls.tasks)
 - [`tasks/compfuzor/fs_get_urls.tasks`](/tasks/compfuzor/fs_get_urls.tasks)
+- [`tasks/compfuzor/vars_kernel.tasks`](/tasks/compfuzor/vars_kernel.tasks)
+- [`zswap.etc.pb`](/zswap.etc.pb)
 
 ## Why this codex exists
 
@@ -131,3 +133,71 @@ without re-arguing taxonomy each time.
 
 That is the main value of this codex: a repeatable, implementation-forward
 template grounded in real tasks.
+
+## Facet mapping for second sample decomposition (Kernel/Zswap)
+
+Pilot input shape from [`zswap.etc.pb`](/zswap.etc.pb):
+
+- `KERNEL_MODULES.zswap.params.*` supplies module parameter intent
+- same subsystem also supports `KERNEL_SYSCTL` and `KERNEL_SYSFS`
+
+| Piece | kind | origin | phase | role | apply | effect |
+|---|---|---|---|---|---|---|
+| `zswap.etc.pb` contract payload | `kind:raw` | `origin:task-file` | `phase:compile.foundation` | `role:foundation` | `apply:kernel` | `effect:none` |
+| `vars_kernel.tasks` (current mixed form) | `kind:vars` | `origin:task-file` | `phase:compile.foundation` + `phase:compile.transform` + `phase:compile.synthesis` | `role:foundation` + `role:transform` + `role:synthesis` | `apply:kernel` | `effect:none` |
+| `fn_kernel.tasks` (proposed split) | `kind:fn` | `origin:task-file` | `phase:compile.transform` | `role:transform` | `apply:kernel` | `effect:none` |
+| `gen_kernel.tasks` (proposed split) | `kind:syn` | `origin:task-file` | `phase:compile.synthesis` | `role:synthesis` | `apply:kernel` | `effect:none` |
+| `_syn_kernel` / `_syn_kernel_modules` / `_syn_kernel_sysctl` / `_syn_kernel_sysfs` (proposed records) | `kind:syn` + `record:_syn_kernel*` | `origin:fact-key` | `phase:compile.synthesis` | `role:synthesis` + `role:handoff` | `apply:kernel` | `effect:none` |
+| `bins_run.tasks` + `files/kernel/install*.sh` apply path | `kind:bins` | `origin:task-file` | `phase:extras-apply` | `role:execution` | `apply:kernel` | `effect:host.fs` + `effect:host.kernel` |
+| `kernel_modules.tasks` legacy path | `kind:fs` | `origin:task-file` | `phase:extras-apply` | `role:execution` | `apply:kernel` | `effect:host.fs` |
+
+## Concrete decomposition plan (Kernel/Zswap)
+
+### Slice 1: reduce `vars_kernel` to foundation-only
+
+Keep only contract checks and top-level defaults in
+[`tasks/compfuzor/vars_kernel.tasks`](/tasks/compfuzor/vars_kernel.tasks).
+
+Move domain-table derivation out of `vars_*` so foundation stays small and
+predictable.
+
+### Slice 2: introduce `fn_kernel.tasks` for normalized spec outputs
+
+Create explicit transform outputs:
+
+- `norm_kernel_modules`, `norm_kernel_sysctl`, `norm_kernel_sysfs`
+- `spec_kernel_domains` (ordered active domain table)
+- `spec_kernel_bins` and `spec_kernel_env` from that single table
+
+This preserves the good current design choice (one ordered domain table) while
+placing it in `kind:fn`.
+
+### Slice 3: introduce `gen_kernel.tasks` for synthesis records and merges
+
+Move artifact synthesis and merge operations here:
+
+- JSON entries for `ETC_FILES`
+- build/install script entries for `BINS`
+- env pointer facts (`KERNEL_*_JSON`, aggregate script lists)
+
+Generate `_syn_kernel*` records before merging into canonical globals, so
+execution phases can consume explicit handoff facts.
+
+### Slice 4: keep execution stable, then narrow it
+
+First pass: keep `bins_run.tasks` and existing `files/kernel/install*.sh`
+behavior unchanged.
+
+Second pass: have execution consume synthesized kernel records directly (instead
+of depending on implicit global merges only), while preserving current install
+semantics.
+
+### Slice 5: define coexistence with legacy `kernel_modules.tasks`
+
+For migration safety, document and enforce one rule:
+
+- if `_syn_kernel*` exists, prefer synthesized path
+- if absent, allow legacy `MODULES`/`kernel_modules.tasks` path
+
+Then remove the legacy path after at least one full subsystem conversion (zswap
+is the best first candidate).
