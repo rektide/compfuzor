@@ -1,0 +1,25 @@
+---
+- name: "Compfuzor: merge kernel subsystem contrib"
+  set_fact:
+    ETC_FILES: "{{ kernelEtcFiles | concat(ETC_FILES | default([])) }}"
+    BINS: "{{ kernelBins | mergeKeyed(BINS | default([]), key='name', concat_fields=['generated']) }}"
+    ENV: "{{ kernelEnv | combine(existingEnv) }}"
+    ENV_LIST: "{{ kernelEnvKeys | concat(ENV_LIST | default([])) | unique }}"
+    PKGS: "{{ kernelPkgs | concat(PKGS | default([])) | unique }}"
+  when: hasKernelContrib
+  vars:
+    existingEnv: "{{ ENV if ENV is mapping else {} }}"
+    kernelContrib: "{{ KERNEL_CONTRIB | default({}) if (KERNEL_CONTRIB is mapping) else {} }}"
+    kernelEtcFiles: "{{ kernelContrib.ETC_FILES | default([]) | arrayitize }}"
+    kernelBins: "{{ kernelContrib.BINS | default([]) | arrayitize }}"
+    kernelEnv: "{{ kernelContrib.ENV | default({}) if (kernelContrib.ENV | default({}) is mapping) else {} }}"
+    kernelEnvKeys: "{{ kernelContrib.ENV_LIST | default([]) | arrayitize }}"
+    kernelPkgs: "{{ kernelContrib.PKGS | default([]) | arrayitize }}"
+    hasKernelContrib: >-
+      {{
+        (kernelEtcFiles | length > 0)
+        or (kernelBins | length > 0)
+        or (kernelEnv | length > 0)
+        or (kernelEnvKeys | length > 0)
+        or (kernelPkgs | length > 0)
+      }}

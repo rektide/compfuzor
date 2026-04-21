@@ -1,49 +1,38 @@
 ---
-# Kernel subsystem modeling and synthesis.
+# Kernel subsystem modeling.
 #
-# This task keeps the original kernel data-driven approach while splitting it
-# into explicit subsystem state, subsystem specs, and shared contrib merges.
+# This task defines subsystem metadata, subsystem runtime state, and aggregate
+# kernel contrib payloads. It does not merge contrib into global artifacts.
 
-- name: "Compfuzor: evaluate kernel subsystem contract and state"
+- name: "Compfuzor: evaluate kernel subsystem definitions"
   block:
-    - name: "Compfuzor: fail invalid kernel subsystem input"
+    - name: "Compfuzor: fail invalid kernel input"
       fail:
-        msg: "{{ kernelErrors | join('; ') }}"
-      when: kernelAnyRequested and not kernelAllBypassed and kernelErrors | length > 0
+        msg: "{{ errors | join('; ') }}"
+      when: any_requested and (not all_bypassed) and (errors | length > 0)
 
-    - name: "Compfuzor: publish kernel subsystem state and contrib"
+    - name: "Compfuzor: publish kernel subsystem models"
       set_fact:
-        SUBSYSTEM_META: "{{ (SUBSYSTEM_META | default({})) | combine(kernelSubsystemMeta, recursive=True) }}"
-        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine(kernelSubsystemState, recursive=True) }}"
-        ETC_FILES: "{{ kernelContribEtcFiles | concat(ETC_FILES | default([])) }}"
-        BINS: "{{ kernelContribBins | mergeKeyed(BINS | default([]), key='name', concat_fields=['generated']) }}"
-        ENV: "{{ kernelContribEnv | combine(existingEnv) }}"
-        ENV_LIST: "{{ kernelContribEnvKeys | concat(ENV_LIST | default([])) | unique }}"
-        PKGS: "{{ kernelContribPkgs | concat(PKGS | default([])) | unique }}"
-      when: kernelAnyRequested
+        SUBSYSTEM_META: "{{ (SUBSYSTEM_META | default({})) | combine(meta, recursive=True) }}"
+        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine(state, recursive=True) }}"
+        KERNEL_CONTRIB: "{{ contrib }}"
+      when: any_requested
   vars:
-    # Preserve explicit playbook ENV entries.
-    existingEnv: "{{ ENV if ENV is mapping else {} }}"
+    modules: "{{ KERNEL_MODULES | default({}) if (KERNEL_MODULES is defined and KERNEL_MODULES is mapping) else {} }}"
+    sysctl: "{{ KERNEL_SYSCTL | default({}) if (KERNEL_SYSCTL is defined and KERNEL_SYSCTL is mapping) else {} }}"
+    sysfs: "{{ KERNEL_SYSFS | default({}) if (KERNEL_SYSFS is defined and KERNEL_SYSFS is mapping) else {} }}"
 
-    # Raw subsystem inputs.
-    kernelModulesRaw: "{{ KERNEL_MODULES | default({}) if (KERNEL_MODULES is defined and KERNEL_MODULES is mapping) else {} }}"
-    kernelSysctlRaw: "{{ KERNEL_SYSCTL | default({}) if (KERNEL_SYSCTL is defined and KERNEL_SYSCTL is mapping) else {} }}"
-    kernelSysfsRaw: "{{ KERNEL_SYSFS | default({}) if (KERNEL_SYSFS is defined and KERNEL_SYSFS is mapping) else {} }}"
+    modprobe_requested: "{{ modules | length > 0 }}"
+    sysctl_requested: "{{ sysctl | length > 0 }}"
+    sysfs_requested: "{{ sysfs | length > 0 }}"
+    any_requested: "{{ modprobe_requested or sysctl_requested or sysfs_requested }}"
 
-    # Requested state by subsystem.
-    kernelModprobeRequested: "{{ kernelModulesRaw | length > 0 }}"
-    kernelSysctlRequested: "{{ kernelSysctlRaw | length > 0 }}"
-    kernelSysfsRequested: "{{ kernelSysfsRaw | length > 0 }}"
-    kernelAnyRequested: "{{ kernelModprobeRequested or kernelSysctlRequested or kernelSysfsRequested }}"
+    modprobe_bypassed: "{{ 'kernel_modprobe' | subsystem_bypassed(true, 'kernel') }}"
+    sysctl_bypassed: "{{ 'kernel_sysctl' | subsystem_bypassed(true, 'kernel') }}"
+    sysfs_bypassed: "{{ 'kernel_sysfs' | subsystem_bypassed(true, 'kernel') }}"
+    all_bypassed: "{{ 'kernel_all' | subsystem_bypassed(true, 'kernel') }}"
 
-    # Effective bypass state with subsystem + domain rules.
-    kernelModprobeBypassed: "{{ 'kernel_modprobe' | subsystem_bypassed(true, 'kernel') }}"
-    kernelSysctlBypassed: "{{ 'kernel_sysctl' | subsystem_bypassed(true, 'kernel') }}"
-    kernelSysfsBypassed: "{{ 'kernel_sysfs' | subsystem_bypassed(true, 'kernel') }}"
-    kernelAllBypassed: "{{ 'kernel_all' | subsystem_bypassed(true, 'kernel') }}"
-
-    # Contract validation.
-    kernelModuleItems: "{{ KERNEL_MODULES | dict2items if (KERNEL_MODULES is defined and KERNEL_MODULES is mapping) else [] }}"
+    module_items: "{{ KERNEL_MODULES | dict2items if (KERNEL_MODULES is defined and KERNEL_MODULES is mapping) else [] }}"
     errorChecks:
       - msg: "KERNEL_MODULES must be a mapping"
         failed: "{{ KERNEL_MODULES is defined and KERNEL_MODULES is not mapping }}"
@@ -52,12 +41,12 @@
       - msg: "KERNEL_SYSFS must be a mapping"
         failed: "{{ KERNEL_SYSFS is defined and KERNEL_SYSFS is not mapping }}"
       - msg: "KERNEL_MODULES entries must be mappings"
-        failed: "{{ (kernelModuleItems | selectattr('value', 'mapping') | list | length) != (kernelModuleItems | length) }}"
+        failed: "{{ (module_items | selectattr('value', 'mapping') | list | length) != (module_items | length) }}"
       - msg: "KERNEL_MODULES.<module>.params must be a mapping when defined"
         failed: >-
           {{
             (
-              kernelModuleItems
+              module_items
               | selectattr('value.params', 'defined')
               | selectattr('value.params', 'mapping')
               | list
@@ -65,38 +54,35 @@
             )
             !=
             (
-              kernelModuleItems
+              module_items
               | selectattr('value.params', 'defined')
               | list
               | length
             )
           }}
-    kernelErrors: "{{ errorChecks | selectattr('failed', 'truthy') | map(attribute='msg') | list }}"
-    kernelValid: "{{ kernelErrors | length == 0 }}"
+    errors: "{{ errorChecks | selectattr('failed', 'truthy') | map(attribute='msg') | list }}"
+    valid: "{{ errors | length == 0 }}"
 
-    # Active state by subsystem.
-    kernelModprobeActive: "{{ kernelModprobeRequested and not kernelModprobeBypassed and kernelValid }}"
-    kernelSysctlActive: "{{ kernelSysctlRequested and not kernelSysctlBypassed and kernelValid }}"
-    kernelSysfsActive: "{{ kernelSysfsRequested and not kernelSysfsBypassed and kernelValid }}"
-    kernelAnyActive: "{{ kernelModprobeActive or kernelSysctlActive or kernelSysfsActive }}"
-    kernelAllRequested: "{{ kernelAnyRequested }}"
-    kernelAllActive: "{{ kernelAllRequested and not kernelAllBypassed and kernelValid and kernelAnyActive }}"
+    modprobe_active: "{{ modprobe_requested and (not modprobe_bypassed) and valid }}"
+    sysctl_active: "{{ sysctl_requested and (not sysctl_bypassed) and valid }}"
+    sysfs_active: "{{ sysfs_requested and (not sysfs_bypassed) and valid }}"
+    any_active: "{{ modprobe_active or sysctl_active or sysfs_active }}"
+    all_requested: "{{ any_requested }}"
+    all_active: "{{ all_requested and (not all_bypassed) and valid and any_active }}"
 
-    # Status labels.
-    kernelModprobeStatus: "{{ 'active' if kernelModprobeActive else 'bypassed' if kernelModprobeBypassed else 'invalid' if not kernelValid else 'requested' }}"
-    kernelSysctlStatus: "{{ 'active' if kernelSysctlActive else 'bypassed' if kernelSysctlBypassed else 'invalid' if not kernelValid else 'requested' }}"
-    kernelSysfsStatus: "{{ 'active' if kernelSysfsActive else 'bypassed' if kernelSysfsBypassed else 'invalid' if not kernelValid else 'requested' }}"
-    kernelAllStatus: "{{ 'active' if kernelAllActive else 'bypassed' if kernelAllBypassed else 'invalid' if not kernelValid else 'requested' }}"
+    modprobe_status: "{{ 'active' if modprobe_active else 'bypassed' if modprobe_bypassed else 'invalid' if not valid else 'requested' }}"
+    sysctl_status: "{{ 'active' if sysctl_active else 'bypassed' if sysctl_bypassed else 'invalid' if not valid else 'requested' }}"
+    sysfs_status: "{{ 'active' if sysfs_active else 'bypassed' if sysfs_bypassed else 'invalid' if not valid else 'requested' }}"
+    all_status: "{{ 'active' if all_active else 'bypassed' if all_bypassed else 'invalid' if not valid else 'requested' }}"
 
-    # Subsystem specs.
-    kernelModprobeSpec:
+    modprobe_spec:
       key: modules
       json_path: "{{ DIR }}/etc/kernel.modules.json"
       env_key: KERNEL_MODULES_JSON
-      data: "{{ kernelModulesRaw }}"
+      data: "{{ modules }}"
       etc_file:
         name: kernel.modules.json
-        content: "{{ kernelModulesRaw | to_nice_json }}"
+        content: "{{ modules | to_nice_json }}"
       build_bin:
         name: build-kernel.sh
         src: ../kernel/build-kernel.sh
@@ -106,14 +92,14 @@
         src: ../kernel/install-kernel.sh
         basedir: False
 
-    kernelSysctlSpec:
+    sysctl_spec:
       key: sysctl
       json_path: "{{ DIR }}/etc/kernel.sysctl.json"
       env_key: KERNEL_SYSCTL_JSON
-      data: "{{ kernelSysctlRaw }}"
+      data: "{{ sysctl }}"
       etc_file:
         name: kernel.sysctl.json
-        content: "{{ kernelSysctlRaw | to_nice_json }}"
+        content: "{{ sysctl | to_nice_json }}"
       build_bin:
         name: build-sysctl.sh
         src: ../kernel/build-sysctl.sh
@@ -123,14 +109,14 @@
         src: ../kernel/install-sysctl.sh
         basedir: False
 
-    kernelSysfsSpec:
+    sysfs_spec:
       key: sysfs
       json_path: "{{ DIR }}/etc/kernel.sysfs.json"
       env_key: KERNEL_SYSFS_JSON
-      data: "{{ kernelSysfsRaw }}"
+      data: "{{ sysfs }}"
       etc_file:
         name: kernel.sysfs.json
-        content: "{{ kernelSysfsRaw | to_nice_json }}"
+        content: "{{ sysfs | to_nice_json }}"
       build_bin:
         name: build-sysfs.sh
         src: ../kernel/build-sysfs.sh
@@ -140,199 +126,180 @@
         src: ../kernel/install-sysfs.sh
         basedir: False
 
-    kernelActiveSpecs: >-
+    active_specs: >-
       {{
         [
-          kernelModprobeSpec if kernelModprobeActive else none,
-          kernelSysctlSpec if kernelSysctlActive else none,
-          kernelSysfsSpec if kernelSysfsActive else none,
+          modprobe_spec if modprobe_active else none,
+          sysctl_spec if sysctl_active else none,
+          sysfs_spec if sysfs_active else none,
         ]
         | select('truthy')
         | list
       }}
+    child_build_bins: "{{ active_specs | map(attribute='build_bin') | list }}"
+    child_install_bins: "{{ active_specs | map(attribute='install_bin') | list }}"
+    build_scripts: "{{ child_build_bins | map(attribute='name') | list }}"
+    install_scripts: "{{ child_install_bins | map(attribute='name') | list }}"
+    data_env: "{{ active_specs | items2dict(key_name='env_key', value_name='json_path') }}"
 
-    kernelChildEtcFiles: "{{ kernelActiveSpecs | map(attribute='etc_file') | list }}"
-    kernelDataEnv: "{{ kernelActiveSpecs | items2dict(key_name='env_key', value_name='json_path') }}"
-    kernelChildBuildBins: "{{ kernelActiveSpecs | map(attribute='build_bin') | list }}"
-    kernelChildInstallBins: "{{ kernelActiveSpecs | map(attribute='install_bin') | list }}"
-    kernelBuildScriptNames: "{{ kernelChildBuildBins | map(attribute='name') | list }}"
-    kernelInstallScriptNames: "{{ kernelChildInstallBins | map(attribute='name') | list }}"
+    all_spec:
+      parts: "{{ active_specs | map(attribute='key') | list }}"
+      build_scripts: "{{ build_scripts }}"
+      install_scripts: "{{ install_scripts }}"
 
-    kernelBuildAggregateBin:
+    modprobe_contrib:
+      ETC_FILES: ["{{ modprobe_spec.etc_file }}"]
+      BINS: ["{{ modprobe_spec.build_bin }}", "{{ modprobe_spec.install_bin }}"]
+      ENV: {"{{ modprobe_spec.env_key }}": "{{ modprobe_spec.json_path }}"}
+      ENV_LIST: ["{{ modprobe_spec.env_key }}"]
+      PKGS: [jq]
+
+    sysctl_contrib:
+      ETC_FILES: ["{{ sysctl_spec.etc_file }}"]
+      BINS: ["{{ sysctl_spec.build_bin }}", "{{ sysctl_spec.install_bin }}"]
+      ENV: {"{{ sysctl_spec.env_key }}": "{{ sysctl_spec.json_path }}"}
+      ENV_LIST: ["{{ sysctl_spec.env_key }}"]
+      PKGS: [jq]
+
+    sysfs_contrib:
+      ETC_FILES: ["{{ sysfs_spec.etc_file }}"]
+      BINS: ["{{ sysfs_spec.build_bin }}", "{{ sysfs_spec.install_bin }}"]
+      ENV: {"{{ sysfs_spec.env_key }}": "{{ sysfs_spec.json_path }}"}
+      ENV_LIST: ["{{ sysfs_spec.env_key }}"]
+      PKGS: [jq]
+
+    build_aggregate_bin:
       name: build.sh
       src: ../kernel/build.sh
       basedir: False
-    kernelInstallAggregateBin:
+    install_aggregate_bin:
       name: install.sh
       src: ../kernel/install.sh
       basedir: False
       run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
 
-    kernelAllSpec:
-      parts: "{{ kernelActiveSpecs | map(attribute='key') | list }}"
-      build_scripts: "{{ kernelBuildScriptNames }}"
-      install_scripts: "{{ kernelInstallScriptNames }}"
+    all_contrib:
+      BINS: ["{{ build_aggregate_bin }}", "{{ install_aggregate_bin }}"]
+      ENV: >-
+        {{
+          data_env
+          | combine({'KERNEL_BUILD_SCRIPTS': build_scripts | join(' ')})
+          | combine({'KERNEL_INSTALL_SCRIPTS': install_scripts | join(' ')})
+        }}
+      ENV_LIST: "{{ (data_env.keys() | list) + ['KERNEL_BUILD_SCRIPTS', 'KERNEL_INSTALL_SCRIPTS'] }}"
+      PKGS: [jq]
 
-    kernelModprobeContrib: >-
-      {{
-        {
-          'ETC_FILES': [kernelModprobeSpec.etc_file],
-          'BINS': [kernelModprobeSpec.build_bin, kernelModprobeSpec.install_bin],
-          'ENV': {kernelModprobeSpec.env_key: kernelModprobeSpec.json_path},
-          'ENV_LIST': [kernelModprobeSpec.env_key],
-          'PKGS': ['jq']
-        }
-      }}
-    kernelSysctlContrib: >-
-      {{
-        {
-          'ETC_FILES': [kernelSysctlSpec.etc_file],
-          'BINS': [kernelSysctlSpec.build_bin, kernelSysctlSpec.install_bin],
-          'ENV': {kernelSysctlSpec.env_key: kernelSysctlSpec.json_path},
-          'ENV_LIST': [kernelSysctlSpec.env_key],
-          'PKGS': ['jq']
-        }
-      }}
-    kernelSysfsContrib: >-
-      {{
-        {
-          'ETC_FILES': [kernelSysfsSpec.etc_file],
-          'BINS': [kernelSysfsSpec.build_bin, kernelSysfsSpec.install_bin],
-          'ENV': {kernelSysfsSpec.env_key: kernelSysfsSpec.json_path},
-          'ENV_LIST': [kernelSysfsSpec.env_key],
-          'PKGS': ['jq']
-        }
-      }}
-    kernelAllContrib: >-
-      {{
-        {
-          'BINS': [kernelBuildAggregateBin, kernelInstallAggregateBin],
-          'ENV': (
-            kernelDataEnv
-            | combine({'KERNEL_BUILD_SCRIPTS': kernelBuildScriptNames | join(' ')})
-            | combine({'KERNEL_INSTALL_SCRIPTS': kernelInstallScriptNames | join(' ')})
-          ),
-          'ENV_LIST': (kernelDataEnv.keys() | list) + ['KERNEL_BUILD_SCRIPTS', 'KERNEL_INSTALL_SCRIPTS'],
-          'PKGS': ['jq']
-        }
-      }}
-
-    kernelSubsystemMeta:
+    meta:
       kernel_modprobe:
         labels:
           domain: kernel
           apply: modprobe
-          effect:
-            - host.fs
-            - host.kernel
+          effect: [host.fs, host.kernel]
         bypass_vars: true
       kernel_sysctl:
         labels:
           domain: kernel
           apply: sysctl
-          effect:
-            - host.fs
-            - host.kernel
+          effect: [host.fs, host.kernel]
         bypass_vars: true
       kernel_sysfs:
         labels:
           domain: kernel
           apply: sysfs
-          effect:
-            - host.fs
-            - host.kernel
+          effect: [host.fs, host.kernel]
         bypass_vars: true
       kernel_all:
         labels:
           domain: kernel
           apply: kernel-all
-          role:
-            - orchestration
-          effect:
-            - host.fs
-            - host.kernel
+          role: [orchestration]
+          effect: [host.fs, host.kernel]
         bypass_vars: true
 
-    kernelModprobeSubsystem: >-
+    modprobe_state: >-
       {{
         {
           'subsystem': 'kernel_modprobe',
-          'status': kernelModprobeStatus,
-          'requested': kernelModprobeRequested,
-          'bypassed': kernelModprobeBypassed,
-          'valid': kernelValid,
-          'active': kernelModprobeActive,
-          'reasons': kernelErrors,
+          'status': modprobe_status,
+          'requested': modprobe_requested,
+          'bypassed': modprobe_bypassed,
+          'valid': valid,
+          'active': modprobe_active,
+          'reasons': errors,
         }
-        | combine({'spec': kernelModprobeSpec} if kernelValid and kernelModprobeRequested else {})
-        | combine({'contrib': kernelModprobeContrib} if kernelModprobeActive else {})
+        | combine({'spec': modprobe_spec} if valid and modprobe_requested else {})
+        | combine({'contrib': modprobe_contrib} if modprobe_active else {})
       }}
-    kernelSysctlSubsystem: >-
+    sysctl_state: >-
       {{
         {
           'subsystem': 'kernel_sysctl',
-          'status': kernelSysctlStatus,
-          'requested': kernelSysctlRequested,
-          'bypassed': kernelSysctlBypassed,
-          'valid': kernelValid,
-          'active': kernelSysctlActive,
-          'reasons': kernelErrors,
+          'status': sysctl_status,
+          'requested': sysctl_requested,
+          'bypassed': sysctl_bypassed,
+          'valid': valid,
+          'active': sysctl_active,
+          'reasons': errors,
         }
-        | combine({'spec': kernelSysctlSpec} if kernelValid and kernelSysctlRequested else {})
-        | combine({'contrib': kernelSysctlContrib} if kernelSysctlActive else {})
+        | combine({'spec': sysctl_spec} if valid and sysctl_requested else {})
+        | combine({'contrib': sysctl_contrib} if sysctl_active else {})
       }}
-    kernelSysfsSubsystem: >-
+    sysfs_state: >-
       {{
         {
           'subsystem': 'kernel_sysfs',
-          'status': kernelSysfsStatus,
-          'requested': kernelSysfsRequested,
-          'bypassed': kernelSysfsBypassed,
-          'valid': kernelValid,
-          'active': kernelSysfsActive,
-          'reasons': kernelErrors,
+          'status': sysfs_status,
+          'requested': sysfs_requested,
+          'bypassed': sysfs_bypassed,
+          'valid': valid,
+          'active': sysfs_active,
+          'reasons': errors,
         }
-        | combine({'spec': kernelSysfsSpec} if kernelValid and kernelSysfsRequested else {})
-        | combine({'contrib': kernelSysfsContrib} if kernelSysfsActive else {})
+        | combine({'spec': sysfs_spec} if valid and sysfs_requested else {})
+        | combine({'contrib': sysfs_contrib} if sysfs_active else {})
       }}
-    kernelAllSubsystem: >-
+    all_state: >-
       {{
         {
           'subsystem': 'kernel_all',
-          'status': kernelAllStatus,
-          'requested': kernelAllRequested,
-          'bypassed': kernelAllBypassed,
-          'valid': kernelValid,
-          'active': kernelAllActive,
-          'reasons': kernelErrors,
+          'status': all_status,
+          'requested': all_requested,
+          'bypassed': all_bypassed,
+          'valid': valid,
+          'active': all_active,
+          'reasons': errors,
         }
-        | combine({'spec': kernelAllSpec} if kernelValid and kernelAllRequested else {})
-        | combine({'contrib': kernelAllContrib} if kernelAllActive else {})
+        | combine({'spec': all_spec} if valid and all_requested else {})
+        | combine({'contrib': all_contrib} if all_active else {})
       }}
 
-    kernelSubsystemState: >-
+    state: >-
       {{
         {}
-        | combine({'kernel_modprobe': kernelModprobeSubsystem} if kernelModprobeRequested else {})
-        | combine({'kernel_sysctl': kernelSysctlSubsystem} if kernelSysctlRequested else {})
-        | combine({'kernel_sysfs': kernelSysfsSubsystem} if kernelSysfsRequested else {})
-        | combine({'kernel_all': kernelAllSubsystem} if kernelAllRequested else {})
+        | combine({'kernel_modprobe': modprobe_state} if modprobe_requested else {})
+        | combine({'kernel_sysctl': sysctl_state} if sysctl_requested else {})
+        | combine({'kernel_sysfs': sysfs_state} if sysfs_requested else {})
+        | combine({'kernel_all': all_state} if all_requested else {})
       }}
 
-    kernelContribEtcFiles: "{{ kernelActiveSpecs | map(attribute='etc_file') | list }}"
-    kernelContribBins: >-
+    contrib_env: >-
       {{
-        kernelChildBuildBins
-        + ([kernelBuildAggregateBin] if kernelAllActive else [])
-        + kernelChildInstallBins
-        + ([kernelInstallAggregateBin] if kernelAllActive else [])
+        data_env
+        | combine({'KERNEL_BUILD_SCRIPTS': build_scripts | join(' ')})
+        | combine({'KERNEL_INSTALL_SCRIPTS': install_scripts | join(' ')})
+        if all_active else {}
       }}
-    kernelContribEnv: >-
-      {{
-        kernelDataEnv
-        | combine({'KERNEL_BUILD_SCRIPTS': kernelBuildScriptNames | join(' ')})
-        | combine({'KERNEL_INSTALL_SCRIPTS': kernelInstallScriptNames | join(' ')})
-        if kernelAllActive else {}
-      }}
-    kernelContribEnvKeys: "{{ kernelContribEnv.keys() | list }}"
-    kernelContribPkgs: "{{ ['jq'] if kernelAnyActive else [] }}"
+    contrib_env_list: "{{ contrib_env.keys() | list if (contrib_env is mapping) else [] }}"
+
+    contrib:
+      ETC_FILES: "{{ active_specs | map(attribute='etc_file') | list }}"
+      BINS: >-
+        {{
+          child_build_bins
+          + ([build_aggregate_bin] if all_active else [])
+          + child_install_bins
+          + ([install_aggregate_bin] if all_active else [])
+        }}
+      ENV: "{{ contrib_env }}"
+      ENV_LIST: "{{ contrib_env_list }}"
+      PKGS: "{{ ['jq'] if any_active else [] }}"
