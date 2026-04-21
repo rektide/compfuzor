@@ -57,6 +57,10 @@
         {%- set _ = normalized.append(entry) -%}
       {%- endfor -%}
       {{ normalized }}
-    subsystem_base: "{{ {'subsystem': 'get_urls'} | combine(_subsystem_base) }}"
     _subsystem_spec: "{{ {'spec': spec} if (spec | length > 0) else {} }}"
-    subsystem: "{{ subsystem_base | combine(_subsystem_spec if _subsystem_valid else {}) }}"
+    subsystem: >-
+      {{
+        {'subsystem': 'get_urls'}
+        | combine(_subsystem_base)
+        | combine(_subsystem_spec if _subsystem_valid else {})
+      }}
