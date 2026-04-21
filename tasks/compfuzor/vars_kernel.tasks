@@ -1,10 +1,13 @@
 ---
 # Kernel subsystem modeling only.
 #
-# This file builds:
-# - SUBSYSTEM_META entries for kernel subsystem types
-# - SUBSYSTEM runtime entries with spec/contrib
-# - KERNEL_CONTRIB aggregate payload for gen_kernel.tasks
+# Responsibilities:
+# - validate kernel input contract
+# - build SUBSYSTEM_META and SUBSYSTEM entries
+# - build KERNEL_CONTRIB aggregate payload consumed by gen_kernel.tasks
+#
+# Non-responsibilities:
+# - no direct merge into global ETC_FILES/BINS/ENV/PKGS (gen_kernel handles that)
 
 - name: "Compfuzor: evaluate kernel subsystem models"
   block:
@@ -20,10 +23,21 @@
         KERNEL_CONTRIB: "{{ contrib }}"
       when: any_requested
   vars:
-    # raw domain inputs
+    # raw subsystem inputs
     modules: "{{ KERNEL_MODULES | default({}) if (KERNEL_MODULES is defined and KERNEL_MODULES is mapping) else {} }}"
     sysctl: "{{ KERNEL_SYSCTL | default({}) if (KERNEL_SYSCTL is defined and KERNEL_SYSCTL is mapping) else {} }}"
     sysfs: "{{ KERNEL_SYSFS | default({}) if (KERNEL_SYSFS is defined and KERNEL_SYSFS is mapping) else {} }}"
+
+    # requested and bypassed flags
+    modprobe_requested: "{{ modules | length > 0 }}"
+    sysctl_requested: "{{ sysctl | length > 0 }}"
+    sysfs_requested: "{{ sysfs | length > 0 }}"
+    any_requested: "{{ modprobe_requested or sysctl_requested or sysfs_requested }}"
+
+    modprobe_bypassed: "{{ 'kernel_modprobe' | subsystem_bypassed(true, 'kernel') | bool }}"
+    sysctl_bypassed: "{{ 'kernel_sysctl' | subsystem_bypassed(true, 'kernel') | bool }}"
+    sysfs_bypassed: "{{ 'kernel_sysfs' | subsystem_bypassed(true, 'kernel') | bool }}"
+    all_bypassed: "{{ 'kernel_all' | subsystem_bypassed(true, 'kernel') | bool }}"
 
     # validation contract
     module_items: "{{ KERNEL_MODULES | dict2items if (KERNEL_MODULES is defined and KERNEL_MODULES is mapping) else [] }}"
@@ -57,7 +71,7 @@
     errors: "{{ errorChecks | selectattr('failed', 'truthy') | map(attribute='msg') | list }}"
     valid: "{{ errors | length == 0 }}"
 
-    # subsystem type definitions
+    # subsystem type metadata
     meta:
       kernel_modprobe:
         labels:
@@ -85,105 +99,102 @@
           effect: [host.fs, host.kernel]
         bypass_vars: true
 
-    # child subsystem rows
-    rows:
-      - key: modules
-        stem: kernel
-        subsystem: kernel_modprobe
-        requested: "{{ modules | length > 0 }}"
-        bypassed: "{{ 'kernel_modprobe' | subsystem_bypassed(true, 'kernel') | bool }}"
-        data: "{{ modules }}"
-      - key: sysctl
-        stem: sysctl
-        subsystem: kernel_sysctl
-        requested: "{{ sysctl | length > 0 }}"
-        bypassed: "{{ 'kernel_sysctl' | subsystem_bypassed(true, 'kernel') | bool }}"
-        data: "{{ sysctl }}"
-      - key: sysfs
-        stem: sysfs
-        subsystem: kernel_sysfs
-        requested: "{{ sysfs | length > 0 }}"
-        bypassed: "{{ 'kernel_sysfs' | subsystem_bypassed(true, 'kernel') | bool }}"
-        data: "{{ sysfs }}"
+    # child specs
+    modprobe_spec:
+      key: modules
+      json_path: "{{ DIR }}/etc/kernel.modules.json"
+      env_key: KERNEL_MODULES_JSON
+      data: "{{ modules }}"
+      etc_files:
+        - name: kernel.modules.json
+          content: "{{ modules | to_nice_json }}"
+      build_bins:
+        - name: build-kernel.sh
+          src: ../kernel/build-kernel.sh
+          basedir: False
+      install_bins:
+        - name: install-kernel.sh
+          src: ../kernel/install-kernel.sh
+          basedir: False
 
-    # requested and bypassed state
-    any_requested: "{{ rows | selectattr('requested', 'truthy') | list | length > 0 }}"
-    all_requested: "{{ any_requested }}"
-    all_bypassed: "{{ 'kernel_all' | subsystem_bypassed(true, 'kernel') | bool }}"
+    sysctl_spec:
+      key: sysctl
+      json_path: "{{ DIR }}/etc/kernel.sysctl.json"
+      env_key: KERNEL_SYSCTL_JSON
+      data: "{{ sysctl }}"
+      etc_files:
+        - name: kernel.sysctl.json
+          content: "{{ sysctl | to_nice_json }}"
+      build_bins:
+        - name: build-sysctl.sh
+          src: ../kernel/build-sysctl.sh
+          basedir: False
+      install_bins:
+        - name: install-sysctl.sh
+          src: ../kernel/install-sysctl.sh
+          basedir: False
 
-    # per-child spec, contrib, and state record
-    child_records: >-
-      {%- set out = [] -%}
-      {%- for row in rows -%}
-        {%- set env_key = 'KERNEL_' ~ (row.key | upper) ~ '_JSON' -%}
-        {%- set spec = {
-          'key': row.key,
-          'json_path': (DIR ~ '/etc/kernel.' ~ row.key ~ '.json'),
-          'env_key': env_key,
-          'data': row.data,
-          'etc_files': [
-            {
-              'name': ('kernel.' ~ row.key ~ '.json'),
-              'content': (row.data | to_nice_json)
-            }
-          ],
-          'build_bins': [
-            {
-              'name': ('build-' ~ row.stem ~ '.sh'),
-              'src': ('../kernel/build-' ~ row.stem ~ '.sh'),
-              'basedir': False
-            }
-          ],
-          'install_bins': [
-            {
-              'name': ('install-' ~ row.stem ~ '.sh'),
-              'src': ('../kernel/install-' ~ row.stem ~ '.sh'),
-              'basedir': False
-            }
-          ]
-        } -%}
-        {%- set child_contrib = {
-          'ETC_FILES': (spec.etc_files | arrayitize),
-          'BINS': (spec.build_bins | arrayitize) + (spec.install_bins | arrayitize),
-          'ENV': {spec.env_key: spec.json_path},
-          'ENV_LIST': [spec.env_key],
-          'PKGS': ['jq']
-        } -%}
-        {%- set state = row.subsystem
-          | subsystem_record(
-            (row.requested | bool),
-            (row.bypassed | bool),
-            valid,
-            errors,
-            spec,
-            child_contrib
-          )
-        -%}
-        {%- set _ = out.append({
-          'subsystem': row.subsystem,
-          'requested': (row.requested | bool),
-          'active': (state.active | default(false) | bool),
-          'spec': spec,
-          'contrib': child_contrib,
-          'state': state
-        }) -%}
-      {%- endfor -%}
-      {{ out }}
+    sysfs_spec:
+      key: sysfs
+      json_path: "{{ DIR }}/etc/kernel.sysfs.json"
+      env_key: KERNEL_SYSFS_JSON
+      data: "{{ sysfs }}"
+      etc_files:
+        - name: kernel.sysfs.json
+          content: "{{ sysfs | to_nice_json }}"
+      build_bins:
+        - name: build-sysfs.sh
+          src: ../kernel/build-sysfs.sh
+          basedir: False
+      install_bins:
+        - name: install-sysfs.sh
+          src: ../kernel/install-sysfs.sh
+          basedir: False
 
-    active_children: "{{ child_records | selectattr('active', 'truthy') | list }}"
-    any_active: "{{ active_children | length > 0 }}"
-    all_active: "{{ all_requested and (not all_bypassed) and valid and any_active }}"
+    # child contrib payloads
+    modprobe_contrib:
+      ETC_FILES: "{{ modprobe_spec.etc_files | arrayitize }}"
+      BINS: "{{ (modprobe_spec.build_bins | arrayitize) + (modprobe_spec.install_bins | arrayitize) }}"
+      ENV: {"{{ modprobe_spec.env_key }}": "{{ modprobe_spec.json_path }}"}
+      ENV_LIST: ["{{ modprobe_spec.env_key }}"]
+      PKGS: [jq]
 
-    active_specs: "{{ active_children | map(attribute='spec') | list }}"
+    sysctl_contrib:
+      ETC_FILES: "{{ sysctl_spec.etc_files | arrayitize }}"
+      BINS: "{{ (sysctl_spec.build_bins | arrayitize) + (sysctl_spec.install_bins | arrayitize) }}"
+      ENV: {"{{ sysctl_spec.env_key }}": "{{ sysctl_spec.json_path }}"}
+      ENV_LIST: ["{{ sysctl_spec.env_key }}"]
+      PKGS: [jq]
+
+    sysfs_contrib:
+      ETC_FILES: "{{ sysfs_spec.etc_files | arrayitize }}"
+      BINS: "{{ (sysfs_spec.build_bins | arrayitize) + (sysfs_spec.install_bins | arrayitize) }}"
+      ENV: {"{{ sysfs_spec.env_key }}": "{{ sysfs_spec.json_path }}"}
+      ENV_LIST: ["{{ sysfs_spec.env_key }}"]
+      PKGS: [jq]
+
+    # child state records
+    modprobe_state: "{{ 'kernel_modprobe' | subsystem_record(modprobe_requested, modprobe_bypassed, valid, errors, modprobe_spec, modprobe_contrib) }}"
+    sysctl_state: "{{ 'kernel_sysctl' | subsystem_record(sysctl_requested, sysctl_bypassed, valid, errors, sysctl_spec, sysctl_contrib) }}"
+    sysfs_state: "{{ 'kernel_sysfs' | subsystem_record(sysfs_requested, sysfs_bypassed, valid, errors, sysfs_spec, sysfs_contrib) }}"
+
+    # active child sets
+    active_specs: >-
+      {{
+        [
+          modprobe_spec if (modprobe_state.active | default(false) | bool) else none,
+          sysctl_spec if (sysctl_state.active | default(false) | bool) else none,
+          sysfs_spec if (sysfs_state.active | default(false) | bool) else none,
+        ]
+        | select('truthy')
+        | list
+      }}
+    any_active: "{{ active_specs | length > 0 }}"
+
+    # common build/install pattern for kernel_all orchestration
     build_scripts: "{{ active_specs | map(attribute='build_bins') | list | sum(start=[]) | map(attribute='name') | list }}"
     install_scripts: "{{ active_specs | map(attribute='install_bins') | list | sum(start=[]) | map(attribute='name') | list }}"
     data_env: "{{ active_specs | items2dict(key_name='env_key', value_name='json_path') }}"
-
-    # aggregate kernel_all spec + contrib
-    all_spec:
-      parts: "{{ active_specs | map(attribute='key') | list }}"
-      build_scripts: "{{ build_scripts }}"
-      install_scripts: "{{ install_scripts }}"
 
     build_aggregate_bin:
       name: build.sh
@@ -195,53 +206,45 @@
       basedir: False
       run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
 
-    all_contrib: >-
-      {{
-        {
-          'BINS': [build_aggregate_bin, install_aggregate_bin],
-          'ENV': (
-            data_env
-            | combine({'KERNEL_BUILD_SCRIPTS': build_scripts | join(' ')})
-            | combine({'KERNEL_INSTALL_SCRIPTS': install_scripts | join(' ')})
-          ),
-          'ENV_LIST': (data_env.keys() | list) + ['KERNEL_BUILD_SCRIPTS', 'KERNEL_INSTALL_SCRIPTS'],
-          'PKGS': ['jq']
-        }
-      }}
-
+    all_requested: "{{ any_requested }}"
+    all_active: "{{ all_requested and (not all_bypassed) and valid and any_active }}"
     all_status: "{{ 'active' if all_active else 'bypassed' if all_bypassed else 'invalid' if not valid else 'requested' }}"
+
+    all_spec:
+      parts: "{{ active_specs | map(attribute='key') | list }}"
+      build_scripts: "{{ build_scripts }}"
+      install_scripts: "{{ install_scripts }}"
+
+    all_contrib:
+      BINS: ["{{ build_aggregate_bin }}", "{{ install_aggregate_bin }}"]
+      ENV: >-
+        {{
+          data_env
+          | combine({'KERNEL_BUILD_SCRIPTS': build_scripts | join(' ')})
+          | combine({'KERNEL_INSTALL_SCRIPTS': install_scripts | join(' ')})
+        }}
+      ENV_LIST: "{{ (data_env.keys() | list) + ['KERNEL_BUILD_SCRIPTS', 'KERNEL_INSTALL_SCRIPTS'] }}"
+      PKGS: [jq]
+
     all_state: >-
       {{
-        ('kernel_all'
-          | subsystem_record(
-            all_requested,
-            all_bypassed,
-            valid,
-            errors,
-            all_spec,
-            all_contrib,
-            all_status
-          )
-        )
+        ('kernel_all' | subsystem_record(all_requested, all_bypassed, valid, errors, all_spec, all_contrib, all_status))
         | combine({'active': all_active})
       }}
 
     # final subsystem map
     state: >-
-      {%- set m = {} -%}
-      {%- for row in child_records -%}
-        {%- if row.requested -%}
-          {%- set _ = m.update({row.subsystem: row.state}) -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {%- if all_requested -%}
-        {%- set _ = m.update({'kernel_all': all_state}) -%}
-      {%- endif -%}
-      {{ m }}
+      {{
+        {}
+        | combine({'kernel_modprobe': modprobe_state} if modprobe_requested else {})
+        | combine({'kernel_sysctl': sysctl_state} if sysctl_requested else {})
+        | combine({'kernel_sysfs': sysfs_state} if sysfs_requested else {})
+        | combine({'kernel_all': all_state} if all_requested else {})
+      }}
 
-    # aggregate payload consumed by gen_kernel.tasks
-    child_etc: "{{ active_children | map(attribute='contrib') | map(attribute='ETC_FILES') | list | sum(start=[]) }}"
-    child_bins: "{{ active_children | map(attribute='contrib') | map(attribute='BINS') | list | sum(start=[]) }}"
+    # aggregate contrib payload for gen_kernel merge step
+    child_etc: "{{ active_specs | map(attribute='etc_files') | list | sum(start=[]) | arrayitize }}"
+    child_bins: "{{ (active_specs | map(attribute='build_bins') | list | sum(start=[])) + (active_specs | map(attribute='install_bins') | list | sum(start=[])) }}"
     contrib_env: "{{ all_contrib.ENV if all_active else {} }}"
     contrib_env_list: "{{ all_contrib.ENV_LIST if all_active else [] }}"
     contrib:
