@@ -108,7 +108,21 @@ and defers resolution to runtime.
 When the input is genuinely structured, prefer a machine-readable artifact in
 `ETC_FILES` such as JSON or YAML.
 
-Examples:
+Use `yaml:` or `json:` on the file entry instead of `content:` to let Ansible
+render structured data natively (`to_nice_yaml` / `to_nice_json`). This avoids
+formatting drift and keeps the config declarative.
+
+```yaml
+ETC_FILES:
+  - name: config.yml
+    yaml:
+      telemetry: disabled
+```
+
+Use `content:` only when the file is truly a flat string or when you need
+precise control over the output format.
+
+Examples of structured file inputs:
 
 - a domain table
 - a map of modules to params
