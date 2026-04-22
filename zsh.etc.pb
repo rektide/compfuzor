@@ -50,8 +50,8 @@
           unset _user_zsh_conf _user_zsh_conf_d
       - name: install-share-confd.conf
         content: |
-          for _zsh_share_conf in "{{DIR}}/share/"*.conf; do
-            [ -f "$_zsh_share_conf" ] && source "$_zsh_share_conf"
+          for _zsh_share_conf in "{{DIR}}/share/"*.conf(N); do
+            source "$_zsh_share_conf"
           done
           unset _zsh_share_conf
     BINS:
