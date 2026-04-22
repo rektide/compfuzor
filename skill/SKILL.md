@@ -93,6 +93,16 @@ Use hierarchy-specific variables instead of generic `FILES` whenever possible.
 
 Do not flatten deep structured data into env just because env is convenient.
 
+### `ENV: True`
+
+Setting `ENV: True` populates `env.export` with standard variables (`NAME`,
+`DIR`, and others) so generated scripts can use `$NAME` / `$DIR` shell variables
+instead of baked-in Jinja templates like `{{NAME}}`.
+
+Prefer `ENV: True` + shell variables in `BINS` scripts over Jinja expansion when
+the script sources `env.export`. This keeps scripts rerunnable outside Ansible
+and defers resolution to runtime.
+
 ### Deep Data Files
 
 When the input is genuinely structured, prefer a machine-readable artifact in
