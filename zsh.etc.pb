@@ -2,6 +2,9 @@
 - hosts: all
   #gather_facts: False
   vars:
+    # 1. System config: install zsh packages and set system default shell.
+    #    The lineinfile entries below patch /etc/default/useradd and
+    #    /etc/adduser.conf so new users get /bin/zsh.
     SHARES_DIR: /usr/local/share
     PKGS:
       - zsh
@@ -15,6 +18,9 @@
     # not /etc/zsh/, and the playbook never wired them to /etc/zsh/ either.
     # User-level init is now handled by zim (zim.opt.pb) + conf.d dropins.
     # The z.d/zfunc.d loading they attempted is superseded by zim modules.
+    # 2. Site-level zsh content: deploy z.d/, zfunc.d/, bin/ into /etc/opt/zsh-main/.
+    #    Currently unsourced at runtime -- nothing sources z.d/ or zfunc.d/.
+    #    Superseded by zim (zim.opt.pb). Retained for reference.
     ETC_DIRS:
       - z.d
       - zfunc.d
@@ -47,6 +53,10 @@
       - bin/jtc
       # atuin-session removed: superseded by rektide/zim-atuin-session zim module
       - z.d/user-bin-path
+      # 3. Per-user setup templates: these are content blocks that install-user.sh
+      #    stamps into place via block-in-file, not standalone sourced files.
+      #    install-user-confd.zsh -> injected into ~/.zshrc, sources conf.d/*.conf
+      #    install-share-confd.conf -> injected into conf.d/zsh-main.conf, sources DIR/share/*.conf
       - name: install-user-confd.zsh
         content: |
           _user_zsh_conf_d="${XDG_CONFIG_HOME:-$HOME/.config}/zsh/conf.d"
@@ -62,6 +72,9 @@
             source "$_zsh_share_conf"
           done
           unset _zsh_share_conf
+    # 4. Per-user setup: install-user.sh creates ~/.config/zsh/conf.d/ and injects
+    #    two block-in-file entries into ~/.zshrc. Runtime loading chain:
+    #      ~/.zshrc -> conf.d/*.conf -> {jj-bookhook, linkem, zsh-main -> share/*.conf}
     BINS:
       #- name: precompile-zsh
       #  dest: False
