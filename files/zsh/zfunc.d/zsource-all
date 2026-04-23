@@ -1,5 +1,5 @@
 for src in $(flatten $*)
 do
-	[[ -e src ]] || continue
+	[[ -e $src ]] || continue
 	source $src
 done
