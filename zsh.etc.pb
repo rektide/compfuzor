@@ -7,6 +7,14 @@
       - zsh
       - zsh-doc
     ETC: /etc/zsh
+    # files/zsh/zshrc and files/zsh/zshenv were templates intended to replace
+    # the Debian system /etc/zsh/{zshrc,zshenv}. They added:
+    #   zshrc: key bindings + fpath setup for zfunc.d + zsource-all for z.d
+    #   zshenv: locale exports + sourcing XDG env/env.d
+    # They were never deployed -- compfuzor's etc type puts DIR at /etc/opt/<name>
+    # not /etc/zsh/, and the playbook never wired them to /etc/zsh/ either.
+    # User-level init is now handled by zim (zim.opt.pb) + conf.d dropins.
+    # The z.d/zfunc.d loading they attempted is superseded by zim modules.
     ETC_DIRS:
       - z.d
       - zfunc.d
