@@ -45,7 +45,7 @@
       - z.d/handjam
       - z.d/prompt
       - bin/jtc
-      - z.d/atuin-session
+      # atuin-session removed: superseded by rektide/zim-atuin-session zim module
       - z.d/user-bin-path
       - name: install-user-confd.zsh
         content: |
