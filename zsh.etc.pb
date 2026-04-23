@@ -19,8 +19,8 @@
     # User-level init is now handled by zim (zim.opt.pb) + conf.d dropins.
     # The z.d/zfunc.d loading they attempted is superseded by zim modules.
     # 2. Site-level zsh content: deploy z.d/, zfunc.d/, bin/ into /etc/opt/zsh-main/.
-    #    Currently unsourced at runtime -- nothing sources z.d/ or zfunc.d/.
-    #    Superseded by zim (zim.opt.pb). Retained for reference.
+    #    The system blocks below (zshrc-site-funcs, zshrc-site-source) wire these
+    #    into /etc/zsh/zshrc so they actually get sourced at runtime.
     ETC_DIRS:
       - z.d
       - zfunc.d
@@ -53,6 +53,31 @@
       - bin/jtc
       # atuin-session removed: superseded by rektide/zim-atuin-session zim module
       - z.d/user-bin-path
+      # System /etc/zsh/ block injections: inline content blocks injected into
+      # the Debian system zsh init files via block-in-file (see install-system.sh).
+      # Each block does one thing. This replaces the old wholesale file templates.
+      - name: zshenv-locale
+        content: |
+          export LC_ALL=en_US.UTF-8
+          export LANG=en_US.UTF-8
+          export LANGUAGE=en_US.UTF-8
+      - name: zshenv-xdg
+        content: |
+          for _env in ${XDG_CONFIG_HOME:-$HOME/.config}/env{,.d}(#qN/); do
+          	source $_env
+          done
+          unset _env
+      - name: zshenv-user-bin-path
+        content: |
+          [[ -d "$HOME/.local/bin" ]] && path=("$HOME/.local/bin" $path)
+      - name: zshrc-site-funcs
+        content: |
+          fpath=({{DIR}}/zfunc.d $fpath)
+          autoload -U zautoload-all
+          zautoload-all {{DIR}}/zfunc.d
+      - name: zshrc-site-source
+        content: |
+          zsource-all {{DIR}}/z.d
       # 3. Per-user setup templates: these are content blocks that install-user.sh
       #    stamps into place via block-in-file, not standalone sourced files.
       #    install-user-confd.zsh -> injected into ~/.zshrc, sources conf.d/*.conf
@@ -76,6 +101,15 @@
     #    two block-in-file entries into ~/.zshrc. Runtime loading chain:
     #      ~/.zshrc -> conf.d/*.conf -> {jj-bookhook, linkem, zsh-main -> share/*.conf}
     BINS:
+      - name: install-system.sh
+        basedir: False
+        become: true
+        content: |
+          block-in-file -n "{{NAME}}-locale" -i "{{DIR}}/etc/zshenv-locale" -o /etc/zsh/zshenv
+          block-in-file -n "{{NAME}}-xdg" -i "{{DIR}}/etc/zshenv-xdg" -o /etc/zsh/zshenv
+          block-in-file -n "{{NAME}}-user-bin-path" -i "{{DIR}}/etc/zshenv-user-bin-path" -o /etc/zsh/zshenv
+          block-in-file -n "{{NAME}}-site-funcs" -i "{{DIR}}/etc/zshrc-site-funcs" -o /etc/zsh/zshrc
+          block-in-file -n "{{NAME}}-site-source" -i "{{DIR}}/etc/zshrc-site-source" -o /etc/zsh/zshrc
       #- name: precompile-zsh
       #  dest: False
       #  exec: /bin/zsh -lc '. {{ETC}}/zshrc ; zcompile-all {{ETC}}/z.d {{ETC}}/zfunc.d'
