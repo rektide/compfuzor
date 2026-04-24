@@ -47,7 +47,6 @@
       - zfunc.d/flatten
       - zfunc.d/zcompile-all
       - zfunc.d/zsource-all
-      - zfunc.d/zautoload-all
       - z.d/handjam
       - z.d/prompt
       - bin/jtc
@@ -69,12 +68,11 @@
           unset _env
       - name: zshenv-user-bin-path
         content: |
-          [[ -d "$HOME/.local/bin" ]] && path=("$HOME/.local/bin" $path)
+          [[ -d "$HOME/.local/bin" ]] && { path=("$HOME/.local/bin" $path); typeset -U path; }
       - name: zshrc-site-funcs
         content: |
-          fpath=({{DIR}}/zfunc.d $fpath)
-          autoload -U zautoload-all
-          zautoload-all {{DIR}}/zfunc.d
+          fpath=({{DIR}}/zfunc.d $fpath); typeset -U fpath
+          autoload -- {{DIR}}/zfunc.d/[^_]*^.zwc(.N:t)
       - name: zshrc-site-source
         content: |
           zsource-all {{DIR}}/z.d
