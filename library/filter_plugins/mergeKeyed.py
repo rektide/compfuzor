@@ -1,4 +1,4 @@
-from subsystem_fields import merge_with_strategy
+from merge_strategy import merge_with_strategy
 
 
 def mergeKeyed(list1, list2, key="key", concat_fields=None):
