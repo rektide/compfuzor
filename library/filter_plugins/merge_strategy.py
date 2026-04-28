@@ -56,6 +56,49 @@ def _strategy_operation_name(strategy):
     return None
 
 
+VALID_STRING_STRATEGIES = {"append", "append_unique", "dict_overlay", "replace"}
+VALID_OPERATION_NAMES = {"merge_keyed"}
+
+
+def _validate_strategies(strategies, path=""):
+    """Validate the entire strategy map before any record processing.
+
+    Recursively validates nested strategy maps.  Raises ValueError with
+    a field path for any unknown strategy.
+    """
+    if not isinstance(strategies, dict):
+        raise ValueError(
+            "strategy map must be a dict, got {}{}".format(
+                type(strategies).__name__,
+                " at {}".format(path) if path else "",
+            )
+        )
+
+    for field, strategy in strategies.items():
+        field_path = "{}.{}".format(path, field) if path else field
+
+        if isinstance(strategy, str):
+            if strategy not in VALID_STRING_STRATEGIES:
+                raise ValueError(
+                    "unknown strategy '{}' at '{}'".format(strategy, field_path)
+                )
+        elif isinstance(strategy, dict):
+            if "op" in strategy:
+                op_name = strategy["op"]
+                if op_name not in VALID_OPERATION_NAMES:
+                    raise ValueError(
+                        "unknown operation '{}' at '{}'".format(op_name, field_path)
+                    )
+            else:
+                _validate_strategies(strategy, path=field_path)
+        else:
+            raise ValueError(
+                "strategy must be a string or dict, got {} at '{}'".format(
+                    type(strategy).__name__, field_path
+                )
+            )
+
+
 def _strategy_initial_value(strategy):
     if isinstance(strategy, str):
         if strategy in {"append", "append_unique"}:
@@ -109,6 +152,7 @@ def merge_with_strategy(
     is used. Otherwise the record itself is treated as payload.
     """
     strategy_map = _as_dict(strategies)
+    _validate_strategies(strategy_map)
     combined = {}
 
     for field, strategy in strategy_map.items():

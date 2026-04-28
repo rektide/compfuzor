@@ -159,7 +159,97 @@ def test_unknown_strategy():
         merge_with_strategy([{"a": 1}], {"a": "bogus"})
         check("should have raised", False, True)
     except ValueError as e:
-        check("raised ValueError", "Unknown" in str(e), True)
+        check("raised ValueError", "unknown" in str(e).lower(), True)
+
+
+def test_validate_unknown_string_strategy():
+    print("\nvalidate unknown string strategy:")
+
+    try:
+        merge_with_strategy([{"a": 1}], {"a": "nope"})
+        check("should have raised", False, True)
+    except ValueError as e:
+        msg = str(e)
+        check("mentions strategy name", "nope" in msg, True)
+        check("mentions field path", "'a'" in msg, True)
+
+
+def test_validate_unknown_operation():
+    print("\nvalidate unknown operation:")
+
+    try:
+        merge_with_strategy([{"a": 1}], {"a": {"op": "bogus_op"}})
+        check("should have raised", False, True)
+    except ValueError as e:
+        msg = str(e)
+        check("mentions op name", "bogus_op" in msg, True)
+        check("mentions field path", "'a'" in msg, True)
+
+
+def test_validate_nested_unknown():
+    print("\nvalidate nested unknown strategy:")
+
+    try:
+        merge_with_strategy(
+            [{"outer": {"inner": 1}}],
+            {"outer": {"inner": "bad_strategy"}},
+        )
+        check("should have raised", False, True)
+    except ValueError as e:
+        msg = str(e)
+        check("mentions strategy name", "bad_strategy" in msg, True)
+        check("mentions nested path", "outer.inner" in msg, True)
+
+
+def test_validate_non_string_non_dict():
+    print("\nvalidate non-string non-dict strategy:")
+
+    try:
+        merge_with_strategy([{"a": 1}], {"a": 42})
+        check("should have raised", False, True)
+    except ValueError as e:
+        msg = str(e)
+        check("mentions type", "int" in msg, True)
+        check("mentions field path", "'a'" in msg, True)
+
+
+def test_validate_valid_strategies_pass():
+    print("\nvalidate valid strategies pass:")
+    try:
+        merge_with_strategy(
+            [{"a": [1]}],
+            {"a": "append"},
+        )
+        check("append accepted", True, True)
+    except ValueError:
+        check("append accepted", False, True)
+
+    try:
+        merge_with_strategy(
+            [{"a": [1, 2]}],
+            {"a": "append_unique"},
+        )
+        check("append_unique accepted", True, True)
+    except ValueError:
+        check("append_unique accepted", False, True)
+
+    try:
+        merge_with_strategy(
+            [{"a": {"x": 1}}],
+            {"a": "dict_overlay"},
+        )
+        check("dict_overlay accepted", True, True)
+    except ValueError:
+        check("dict_overlay accepted", False, True)
+
+    try:
+        merge_with_strategy(
+            [{"a": "val"}],
+            {"a": "replace"},
+        )
+        check("replace accepted", True, True)
+    except ValueError:
+        check("replace accepted", False, True)
 
 
 if __name__ == "__main__":
@@ -174,6 +264,11 @@ if __name__ == "__main__":
     test_merge_keyed_no_overlap()
     test_empty_records()
     test_unknown_strategy()
+    test_validate_unknown_string_strategy()
+    test_validate_unknown_operation()
+    test_validate_nested_unknown()
+    test_validate_non_string_non_dict()
+    test_validate_valid_strategies_pass()
 
     print("\n{} passed, {} failed".format(passed, failed))
     sys.exit(1 if failed else 0)
