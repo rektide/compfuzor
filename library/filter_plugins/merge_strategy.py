@@ -105,17 +105,15 @@ def _strategy_initial_value(strategy):
             return []
         if strategy == "dict_overlay":
             return {}
-        if strategy == "replace":
-            return None
-        raise ValueError("Unknown merge_with_strategy strategy: {}".format(strategy))
+        # strategy == "replace"
+        return None
 
     if isinstance(strategy, dict):
         op_name = _strategy_operation_name(strategy)
         if op_name in {"append_unique_by", "merge_keyed"}:
             return []
+        # nested strategy map
         return {}
-
-    raise ValueError("Unknown merge_with_strategy strategy: {}".format(strategy))
 
 
 def _apply_strategy_operation(existing, value, strategy):
@@ -169,7 +167,6 @@ def merge_with_strategy(
     strategies,
     aggregate=None,
     include_aggregate=True,
-    payload_key=None,
     payload_path=None,
 ):
     """Merge records using per-field merge strategies.
@@ -187,9 +184,6 @@ def merge_with_strategy(
     When `payload_path` is set, it is split on "." and walked into each record
     to extract the payload.  If any intermediate key is missing or the
     intermediate value is not a dict, the whole record is used as payload.
-    `payload_path` takes precedence over `payload_key` when both are provided.
-    When only `payload_key` is set and a record contains that key, the keyed
-    payload is used.  Otherwise the record itself is treated as payload.
     """
     strategy_map = _as_dict(strategies)
     _validate_strategies(strategy_map)
@@ -211,8 +205,6 @@ def merge_with_strategy(
             extracted = _extract_payload_path(record, payload_path)
             if extracted is not None:
                 payload = extracted
-        elif payload_key is not None and payload_key != "":
-            payload = record.get(payload_key, record)
 
         if not isinstance(payload, dict):
             continue

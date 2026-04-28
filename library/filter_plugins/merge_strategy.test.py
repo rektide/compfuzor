@@ -76,7 +76,7 @@ def test_nested_strategy():
 
 
 def test_payload_key():
-    print("\npayload_key extraction:")
+    print("\npayload_key extraction (via payload_path):")
     result = merge_with_strategy(
         [
             {"contrib": {"BINS": [1]}},
@@ -84,7 +84,7 @@ def test_payload_key():
             {"no_contrib": {"BINS": [99]}},
         ],
         {"BINS": "append"},
-        payload_key="contrib",
+        payload_path="contrib",
     )
     check("uses contrib payload only", result, {"BINS": [1, 2]})
 
@@ -297,19 +297,6 @@ def test_payload_path_missing_intermediate():
     )
 
 
-def test_payload_path_takes_precedence():
-    print("\npayload_path takes precedence over payload_key:")
-    result = merge_with_strategy(
-        [
-            {"contrib": {"BINS": [1]}, "deep": {"BINS": [2]}},
-            {"contrib": {"BINS": [3]}, "deep": {"BINS": [4]}},
-        ],
-        {"BINS": "append"},
-        payload_key="contrib",
-        payload_path="deep",
-    )
-    check("payload_path wins over payload_key", result, {"BINS": [2, 4]})
-
 
 def test_append_unique_by_basic_dedup():
     print("\nappend_unique_by basic dedup:")
@@ -386,7 +373,6 @@ if __name__ == "__main__":
     test_payload_path_single_level()
     test_payload_path_two_levels()
     test_payload_path_missing_intermediate()
-    test_payload_path_takes_precedence()
     test_aggregate()
     test_merge_keyed_operation()
     test_merge_keyed_no_overlap()

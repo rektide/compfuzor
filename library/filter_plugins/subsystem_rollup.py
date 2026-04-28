@@ -29,7 +29,7 @@ def subsystem_rollup(children, aggregate=None, include_aggregate=True):
         },
         aggregate=aggregate,
         include_aggregate=include_aggregate,
-        payload_key="contrib",
+        payload_path="contrib",
     )
 
 
