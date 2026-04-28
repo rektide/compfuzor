@@ -8,13 +8,10 @@
 # Non-responsibilities:
 # - no direct merge into global artifacts (gen_python handles that)
 
-- name: "Compfuzor: evaluate python subsystem"
-  block:
-    - name: "Compfuzor: publish python subsystem state"
-      set_fact:
-        TOOL_VERSIONS: "{{ enhancedToolVersions | ansible.builtin.combine(TOOL_VERSIONS | default({})) }}"
-        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'python': subsystem}, recursive=True) }}"
-      when: _requested
+- name: "Compfuzor: publish python subsystem state"
+  set_fact:
+    TOOL_VERSIONS: "{{ enhancedToolVersions | ansible.builtin.combine(TOOL_VERSIONS | default({})) }}"
+    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'python': subsystem}, recursive=True) }}"
   vars:
     _requested: "{{ PYTHON is deftruthy or PIP is defined }}"
 

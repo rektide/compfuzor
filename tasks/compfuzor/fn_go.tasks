@@ -8,13 +8,10 @@
 # Non-responsibilities:
 # - no direct merge into global artifacts (gen_go handles that)
 
-- name: "Compfuzor: evaluate go subsystem"
-  block:
-    - name: "Compfuzor: publish go subsystem state"
-      set_fact:
-        TOOL_VERSIONS: "{{ enhancedToolVersions | ansible.builtin.combine(TOOL_VERSIONS | default({})) }}"
-        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'go': subsystem}, recursive=True) }}"
-      when: _requested
+- name: "Compfuzor: publish go subsystem state"
+  set_fact:
+    TOOL_VERSIONS: "{{ enhancedToolVersions | ansible.builtin.combine(TOOL_VERSIONS | default({})) }}"
+    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'go': subsystem}, recursive=True) }}"
   vars:
     _requested: "{{ GO is deftruthy }}"
 
