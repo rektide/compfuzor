@@ -1,8 +1,8 @@
 ---
 - name: "Compfuzor: render .tool-versions into shared artifacts"
   set_fact:
-    ETC_FILES: "{{ ETC_FILES | default([]) + [tool_versions] }}"
-    LINKS: "{{ LINKS | default([]) + [link] }}"
+    ETC_FILES: "{{ ETC_FILES | concat2([tool_versions]) }}"
+    LINKS: "{{ LINKS | concat2([link]) }}"
   when: TOOL_VERSIONS is deftruthy
   vars:
     tool_versions:

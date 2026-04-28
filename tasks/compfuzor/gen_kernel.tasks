@@ -1,11 +1,11 @@
 ---
 - name: "Compfuzor: merge kernel subsystem contrib"
   set_fact:
-    ETC_FILES: "{{ merged.ETC_FILES | concat(ETC_FILES | default([])) }}"
+    ETC_FILES: "{{ merged.ETC_FILES | concat2(ETC_FILES) }}"
     BINS: "{{ merged.BINS | mergeKeyed(BINS | default([]), key='name', concat_fields=['generated']) }}"
     ENV: "{{ merged.ENV | combine(existingEnv) }}"
-    ENV_LIST: "{{ merged.ENV_LIST | concat(ENV_LIST | default([])) | unique }}"
-    PKGS: "{{ merged.PKGS | concat(PKGS | default([])) | unique }}"
+    ENV_LIST: "{{ merged.ENV_LIST | concat2(ENV_LIST, unique=True) }}"
+    PKGS: "{{ merged.PKGS | concat2(PKGS, unique=True) }}"
   when: hasKernelContrib
   vars:
     existingEnv: "{{ ENV if ENV is mapping else {} }}"
