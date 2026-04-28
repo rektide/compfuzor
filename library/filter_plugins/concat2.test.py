@@ -5,6 +5,8 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from jinja2 import Undefined
+
 from concat2 import concat2
 
 passed = 0
@@ -83,6 +85,34 @@ def test_dict_plus_list():
     check("dict wrapped + list", result, [{"key": "val"}, 1, 2])
 
 
+def _make_undefined(name="UNDEF"):
+    return Undefined(name=name)
+
+
+def test_left_undefined():
+    print("\nleft is AnsibleUndefined:")
+    result = concat2(_make_undefined("ETC_FILES"), [3, 4])
+    check("right returned as list", result, [3, 4])
+
+
+def test_right_undefined():
+    print("\nright is AnsibleUndefined:")
+    result = concat2([1, 2], _make_undefined("OTHER"))
+    check("left returned as list", result, [1, 2])
+
+
+def test_both_undefined():
+    print("\nboth AnsibleUndefined:")
+    result = concat2(_make_undefined("A"), _make_undefined("B"))
+    check("empty list", result, [])
+
+
+def test_left_undefined_unique():
+    print("\nleft AnsibleUndefined, unique=True:")
+    result = concat2(_make_undefined("X"), [2, 3, 2], unique=True)
+    check("right returned, deduped", result, [2, 3])
+
+
 if __name__ == "__main__":
     test_both_lists()
     test_left_none()
@@ -94,6 +124,10 @@ if __name__ == "__main__":
     test_unique_false_keeps_duplicates()
     test_single_plus_single()
     test_dict_plus_list()
+    test_left_undefined()
+    test_right_undefined()
+    test_both_undefined()
+    test_left_undefined_unique()
 
     print("\n{} passed, {} failed".format(passed, failed))
     sys.exit(1 if failed else 0)
