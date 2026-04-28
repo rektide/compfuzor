@@ -1,16 +1,10 @@
 ---
 - name: "Compfuzor: render .tool-versions into shared artifacts"
   set_fact:
-    ETC_FILES: "{{ ETC_FILES | concat2([tool_versions]) }}"
-    LINKS: "{{ LINKS | concat2([link]) }}"
-  when: TOOL_VERSIONS is deftruthy
+    ETC_FILES: "{{ merged.artifacts.ETC_FILES | concat2(ETC_FILES) }}"
+    LINKS: "{{ merged.artifacts.LINKS | concat2(LINKS) }}"
+  when: hasContrib
   vars:
-    tool_versions:
-      name: .tool-versions
-      content: |
-        {% for target, version in TOOL_VERSIONS.items() %}
-        {{ target }} {{ version if version != True else lookup('vars', target|upper + '_VERSION') }}
-        {% endfor %}
-    link:
-      src: "{{ DIR }}/etc/.tool-versions"
-      dest: ".tool-versions"
+    merged: "{{ [toolVersionsSubsystem] | merge_with_strategy({'artifacts': {'ETC_FILES': 'append', 'LINKS': 'append'}}, include_aggregate=false, payload_path='contrib') }}"
+    toolVersionsSubsystem: "{{ (SUBSYSTEM | default({})).tool_versions | default({}) if ((SUBSYSTEM | default({})).tool_versions | default({}) is mapping) else {} }}"
+    hasContrib: "{{ ((SUBSYSTEM | default({})).get('tool_versions', {}).get('active', false) | bool) and (merged.artifacts | default({}) | length > 0) }}"

@@ -10,7 +10,6 @@
 
 - name: "Compfuzor: publish go subsystem state"
   set_fact:
-    TOOL_VERSIONS: "{{ enhancedToolVersions | ansible.builtin.combine(TOOL_VERSIONS | default({})) }}"
     SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'go': subsystem}, recursive=True) }}"
   vars:
     _requested: "{{ GO is deftruthy }}"
@@ -32,9 +31,6 @@
       GO_TARGET: "{{ GO_TARGET | default('./...') }}"
     env_existing: "{{ {} if ENV | def(True) == True else ENV }}"
 
-    enhancedToolVersions:
-      go: true
-
     spec:
       bins: "{{ bins }}"
       env: "{{ env_go_bin | combine(env_existing) }}"
@@ -42,12 +38,9 @@
     contrib:
       BINS: "{{ bins }}"
       ENV: "{{ env_go_bin | combine(env_existing) }}"
+      tooling:
+        TOOL_VERSIONS:
+          go: true
 
-    subsystem: >-
-      {{
-        {'subsystem': 'go'}
-        | combine({'status': 'active', 'requested': true, 'bypassed': false, 'valid': true, 'active': true, 'reasons': []})
-        | combine({'spec': spec})
-        | combine({'contrib': contrib})
-      }}
+    subsystem: "{{ 'go' | subsystem_record(requested=true, valid=true, bypassed=false, errors=[], spec=spec, contrib=contrib) }}"
   when: _requested

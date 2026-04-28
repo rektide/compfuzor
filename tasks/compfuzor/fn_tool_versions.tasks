@@ -1,0 +1,26 @@
+---
+- name: "Compfuzor: build tool_versions subsystem contract"
+  set_fact:
+    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'tool_versions': subsystem}, recursive=True) }}"
+  when: requested
+  vars:
+    user_tool_versions: "{{ TOOL_VERSIONS if TOOL_VERSIONS is mapping else {} }}"
+    subsystem_values: "{{ (SUBSYSTEM | default({})) | dict2items | map(attribute='value') | list }}"
+    tooling_from_subsystems: "{{ subsystem_values | merge_with_strategy({'TOOL_VERSIONS': 'dict_overlay'}, include_aggregate=false, payload_path='contrib.tooling') }}"
+    subsystem_tool_versions: "{{ tooling_from_subsystems.TOOL_VERSIONS | default({}) }}"
+    resolved_tool_versions: "{{ subsystem_tool_versions | combine(user_tool_versions) }}"
+    requested: "{{ (resolved_tool_versions | length) > 0 }}"
+    spec:
+      TOOL_VERSIONS: "{{ resolved_tool_versions }}"
+    contrib:
+      artifacts:
+        ETC_FILES:
+          - name: .tool-versions
+            content: |
+              {% for target, version in resolved_tool_versions.items() %}
+              {{ target }} {{ version if version != True else lookup('vars', target | upper + '_VERSION') }}
+              {% endfor %}
+        LINKS:
+          - src: "{{ DIR }}/etc/.tool-versions"
+            dest: .tool-versions
+    subsystem: "{{ 'tool_versions' | subsystem_record(requested=requested, valid=true, bypassed=false, errors=[], spec=spec, contrib=contrib) }}"
