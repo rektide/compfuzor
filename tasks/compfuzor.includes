@@ -56,10 +56,16 @@
 - import_tasks: compfuzor/vars_nodejs.tasks
   when: NODEJS is defined or BUN is defined or REPO_NPM is defined
   tags: ['vars', 'always']
-- import_tasks: compfuzor/vars_python.tasks
-  when: PYTHON is deftruthy or PIP is deftruthy
+- import_tasks: compfuzor/fn_python.tasks
+  when: PYTHON is deftruthy or PIP is defined
   tags: ['vars', 'always']
-- import_tasks: compfuzor/vars_go.tasks
+- import_tasks: compfuzor/gen_python.tasks
+  when: PYTHON is deftruthy or PIP is defined
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/fn_go.tasks
+  when: GO is deftruthy
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_go.tasks
   when: GO is deftruthy
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_tool_versions.tasks

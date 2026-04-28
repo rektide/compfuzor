@@ -1,0 +1,71 @@
+---
+# Python subsystem transform.
+#
+# Responsibilities:
+# - validate PYTHON/PIP input
+# - build SUBSYSTEM.python with spec and contrib
+#
+# Non-responsibilities:
+# - no direct merge into global artifacts (gen_python handles that)
+
+- name: "Compfuzor: evaluate python subsystem"
+  block:
+    - name: "Compfuzor: publish python subsystem state"
+      set_fact:
+        TOOL_VERSIONS: "{{ enhancedToolVersions | ansible.builtin.combine(TOOL_VERSIONS | default({})) }}"
+        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'python': subsystem}, recursive=True) }}"
+      when: _requested
+  vars:
+    _requested: "{{ PYTHON is deftruthy or PIP is defined }}"
+
+    bins:
+      - name: build.sh
+        run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
+        basedir: repo
+        generated: |
+          [ -d .venv ] || uv venv
+          {% if PIP is defined %}
+          uv pip install -r etc/pip.txt
+          {% else %}
+          if [ -f pyproject.toml ] || [ -f setup.py ] || [ -f setup.cfg ]; then
+            uv pip install -e .
+          elif [ -f requirements.txt ]; then
+            uv pip install -r requirements.txt
+          fi
+          {% endif %}
+          source {{ DIR }}/bin/venv.source
+      - name: venv.source
+        basedir: repo
+        generated: |
+          . "$(pwd)/.venv/bin/activate"
+
+    env_python_bin: "{{ ({'PYTHON_BIN': PYTHON_BIN}) if PYTHON_BIN is defined else ({}) }}"
+    env_existing: "{{ {} if ENV | def(True) == True else ENV }}"
+
+    etc_pip:
+      - name: pip.txt
+        content: |
+          {{ PIP | join('\n') if PIP is iterable and PIP is not string else PIP | default('') }}
+    etc_files: "{{ etc_pip if PIP is defined else [] }}"
+
+    enhancedToolVersions:
+      python: true
+
+    spec:
+      bins: "{{ bins }}"
+      env: "{{ env_python_bin | combine(env_existing) }}"
+      etc_files: "{{ etc_files }}"
+
+    contrib:
+      BINS: "{{ bins }}"
+      ENV: "{{ env_python_bin | combine(env_existing) }}"
+      ETC_FILES: "{{ etc_files }}"
+
+    subsystem: >-
+      {{
+        {'subsystem': 'python'}
+        | combine({'status': 'active', 'requested': true, 'bypassed': false, 'valid': true, 'active': true, 'reasons': []})
+        | combine({'spec': spec})
+        | combine({'contrib': contrib})
+      }}
+  when: _requested

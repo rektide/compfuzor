@@ -1,0 +1,56 @@
+---
+# Go subsystem transform.
+#
+# Responsibilities:
+# - validate GO input
+# - build SUBSYSTEM.go with spec and contrib
+#
+# Non-responsibilities:
+# - no direct merge into global artifacts (gen_go handles that)
+
+- name: "Compfuzor: evaluate go subsystem"
+  block:
+    - name: "Compfuzor: publish go subsystem state"
+      set_fact:
+        TOOL_VERSIONS: "{{ enhancedToolVersions | ansible.builtin.combine(TOOL_VERSIONS | default({})) }}"
+        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'go': subsystem}, recursive=True) }}"
+      when: _requested
+  vars:
+    _requested: "{{ GO is deftruthy }}"
+
+    bins:
+      - name: build.sh
+        run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
+        basedir: repo
+        generated: |
+          go build -o ${GO_BIN:-$TYPE} ${GO_TARGET:-./...}
+      - name: install.sh
+        basedir: repo
+        generated: |
+          [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${GO_BIN:-$TYPE}"
+          ln -sfv "$(pwd)/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
+
+    env_go_bin:
+      GO_BIN: "{{ GO_BIN | default(omit) }}"
+      GO_TARGET: "{{ GO_TARGET | default('./...') }}"
+    env_existing: "{{ {} if ENV | def(True) == True else ENV }}"
+
+    enhancedToolVersions:
+      go: true
+
+    spec:
+      bins: "{{ bins }}"
+      env: "{{ env_go_bin | combine(env_existing) }}"
+
+    contrib:
+      BINS: "{{ bins }}"
+      ENV: "{{ env_go_bin | combine(env_existing) }}"
+
+    subsystem: >-
+      {{
+        {'subsystem': 'go'}
+        | combine({'status': 'active', 'requested': true, 'bypassed': false, 'valid': true, 'active': true, 'reasons': []})
+        | combine({'spec': spec})
+        | combine({'contrib': contrib})
+      }}
+  when: _requested

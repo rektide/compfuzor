@@ -1,0 +1,10 @@
+---
+- name: "Compfuzor: merge go subsystem contrib"
+  set_fact:
+    BINS: "{{ merged.BINS | mergeKeyed(BINS | default([]), key='name', concat_fields=['generated']) }}"
+    ENV: "{{ merged.ENV | combine(existingEnv) }}"
+  when: hasGoContrib
+  vars:
+    existingEnv: "{{ ENV if ENV is mapping else {} }}"
+    merged: "{{ (SUBSYSTEM | default({})).go.contrib | default({}) if ((SUBSYSTEM | default({})).go.contrib | default({}) is mapping) else {} }}"
+    hasGoContrib: "{{ merged | length > 0 }}"

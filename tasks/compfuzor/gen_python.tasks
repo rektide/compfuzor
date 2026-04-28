@@ -1,0 +1,11 @@
+---
+- name: "Compfuzor: merge python subsystem contrib"
+  set_fact:
+    BINS: "{{ merged.BINS | mergeKeyed(BINS | default([]), key='name', concat_fields=['generated']) }}"
+    ENV: "{{ merged.ENV | combine(existingEnv) }}"
+    ETC_FILES: "{{ merged.ETC_FILES | concat2(ETC_FILES) }}"
+  when: hasPythonContrib
+  vars:
+    existingEnv: "{{ ENV if ENV is mapping else {} }}"
+    merged: "{{ (SUBSYSTEM | default({})).python.contrib | default({}) if ((SUBSYSTEM | default({})).python.contrib | default({}) is mapping) else {} }}"
+    hasPythonContrib: "{{ merged | length > 0 }}"
