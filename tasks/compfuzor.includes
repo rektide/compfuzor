@@ -67,7 +67,7 @@
 - import_tasks: compfuzor/vars_nvim.tasks
   when: NVIM is defined
   tags: ['vars', 'always']
-- import_tasks: compfuzor/vars_kernel.tasks
+- import_tasks: compfuzor/fn_kernel.tasks
   when: KERNEL_MODULES is defined or KERNEL_MODPROBE is defined or KERNEL_SYSCTL is defined or KERNEL_SYSFS is defined or KERNEL_PARAMS is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_kernel.tasks

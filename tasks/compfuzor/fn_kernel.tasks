@@ -4,7 +4,6 @@
 # Responsibilities:
 # - validate kernel input contract
 # - build SUBSYSTEM_META and SUBSYSTEM entries
-# - build KERNEL_CONTRIB aggregate payload consumed by gen_kernel.tasks
 #
 # Non-responsibilities:
 # - no direct merge into global ETC_FILES/BINS/ENV/PKGS (gen_kernel handles that)
@@ -20,7 +19,6 @@
       set_fact:
         SUBSYSTEM_META: "{{ (SUBSYSTEM_META | default({})) | combine(meta, recursive=True) }}"
         SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine(state, recursive=True) }}"
-        KERNEL_CONTRIB: "{{ contrib }}"
       when: any_requested
   vars:
     # raw subsystem inputs

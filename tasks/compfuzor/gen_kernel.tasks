@@ -9,7 +9,7 @@
   when: hasKernelContrib
   vars:
     existingEnv: "{{ ENV if ENV is mapping else {} }}"
-    kernelContrib: "{{ KERNEL_CONTRIB | default({}) if (KERNEL_CONTRIB is mapping) else {} }}"
+    kernelContrib: "{{ (SUBSYSTEM | default({})).kernel_all.contrib | default({}) if ((SUBSYSTEM | default({})).kernel_all.contrib | default({}) is mapping) else {} }}"
     kernelEtcFiles: "{{ kernelContrib.ETC_FILES | default([]) | arrayitize }}"
     kernelBins: "{{ kernelContrib.BINS | default([]) | arrayitize }}"
     kernelEnv: "{{ kernelContrib.ENV | default({}) if (kernelContrib.ENV | default({}) is mapping) else {} }}"
