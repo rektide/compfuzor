@@ -5,6 +5,10 @@
     ENV: "{{ merged.ENV | combine(existingEnv) }}"
   when: hasGoContrib
   vars:
+    subsystems: "{{ SUBSYSTEM | default({}) }}"
+    subsystemRecord: "{{ subsystems | get('go', {}) }}"
+    contribCandidate: "{{ subsystemRecord | get('contrib', {}) }}"
+    contrib: "{{ contribCandidate if contribCandidate is mapping else {} }}"
     existingEnv: "{{ ENV if ENV is mapping else {} }}"
-    merged: "{{ (SUBSYSTEM | default({})).go.contrib | default({}) if ((SUBSYSTEM | default({})).go.contrib | default({}) is mapping) else {} }}"
+    merged: "{{ contrib }}"
     hasGoContrib: "{{ merged | length > 0 }}"

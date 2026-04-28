@@ -1,10 +1,13 @@
 ---
 - name: "Compfuzor: synthesize get_urls shared artifacts"
   set_fact:
-    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine(getUrlsSubsystemSynthesis, recursive=True) }}"
+    SUBSYSTEM: "{{ subsystems | combine(getUrlsSubsystemSynthesis, recursive=True) }}"
     BINS: "{{ mergedBins.BINS }}"
-  when: ((SUBSYSTEM | default({})).get('get_urls', {}).get('active', false) | bool)
+  when: getUrlsActive
   vars:
+    subsystems: "{{ SUBSYSTEM | default({}) }}"
+    getUrlsSubsystem: "{{ subsystems | get('get_urls', {}) }}"
+    getUrlsActive: "{{ getUrlsSubsystem | get('active', false) | bool }}"
     getUrlsBins:
       - name: get-urls.sh
         run: true

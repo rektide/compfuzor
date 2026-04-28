@@ -163,12 +163,15 @@
     sysfs_state: "{{ 'kernel_sysfs' | subsystem_record(sysfs_requested, sysfs_bypassed, valid, errors, sysfs_spec, sysfs_contrib) }}"
 
     # active child sets
+    modprobe_active: "{{ modprobe_state | get('active', false) | bool }}"
+    sysctl_active: "{{ sysctl_state | get('active', false) | bool }}"
+    sysfs_active: "{{ sysfs_state | get('active', false) | bool }}"
     active_specs: >-
       {{
         [
-          modprobe_spec if (modprobe_state.active | default(false) | bool) else none,
-          sysctl_spec if (sysctl_state.active | default(false) | bool) else none,
-          sysfs_spec if (sysfs_state.active | default(false) | bool) else none,
+          modprobe_spec if modprobe_active else none,
+          sysctl_spec if sysctl_active else none,
+          sysfs_spec if sysfs_active else none,
         ]
         | select('truthy')
         | list

@@ -6,6 +6,10 @@
     ETC_FILES: "{{ merged.ETC_FILES | concat2(ETC_FILES) }}"
   when: hasPythonContrib
   vars:
+    subsystems: "{{ SUBSYSTEM | default({}) }}"
+    subsystemRecord: "{{ subsystems | get('python', {}) }}"
+    contribCandidate: "{{ subsystemRecord | get('contrib', {}) }}"
+    contrib: "{{ contribCandidate if contribCandidate is mapping else {} }}"
     existingEnv: "{{ ENV if ENV is mapping else {} }}"
-    merged: "{{ (SUBSYSTEM | default({})).python.contrib | default({}) if ((SUBSYSTEM | default({})).python.contrib | default({}) is mapping) else {} }}"
+    merged: "{{ contrib }}"
     hasPythonContrib: "{{ merged | length > 0 }}"

@@ -5,6 +5,11 @@
     LINKS: "{{ merged.artifacts.LINKS | concat2(LINKS) }}"
   when: hasContrib
   vars:
+    subsystems: "{{ SUBSYSTEM | default({}) }}"
+    subsystemRecord: "{{ subsystems | get('tool_versions', {}) }}"
+    subsystemContribCandidate: "{{ subsystemRecord | get('contrib', {}) }}"
+    subsystemContrib: "{{ subsystemContribCandidate if subsystemContribCandidate is mapping else {} }}"
+    subsystemActive: "{{ subsystemRecord | get('active', false) | bool }}"
     merged: "{{ [toolVersionsSubsystem] | merge_with_strategy({'artifacts': {'ETC_FILES': 'append', 'LINKS': 'append'}}, include_aggregate=false, payload_path='contrib') }}"
-    toolVersionsSubsystem: "{{ (SUBSYSTEM | default({})).tool_versions | default({}) if ((SUBSYSTEM | default({})).tool_versions | default({}) is mapping) else {} }}"
-    hasContrib: "{{ ((SUBSYSTEM | default({})).get('tool_versions', {}).get('active', false) | bool) and (merged.artifacts | default({}) | length > 0) }}"
+    toolVersionsSubsystem: "{{ subsystemRecord if subsystemRecord is mapping else {} }}"
+    hasContrib: "{{ subsystemActive and (subsystemContrib | length > 0) and (merged.artifacts | default({}) | length > 0) }}"

@@ -8,6 +8,10 @@
     PKGS: "{{ merged.PKGS | concat2(PKGS, unique=True) }}"
   when: hasKernelContrib
   vars:
+    subsystems: "{{ SUBSYSTEM | default({}) }}"
+    subsystemRecord: "{{ subsystems | get('kernel_all', {}) }}"
+    contribCandidate: "{{ subsystemRecord | get('contrib', {}) }}"
+    contrib: "{{ contribCandidate if contribCandidate is mapping else {} }}"
     existingEnv: "{{ ENV if ENV is mapping else {} }}"
-    merged: "{{ (SUBSYSTEM | default({})).kernel_all.contrib | default({}) if ((SUBSYSTEM | default({})).kernel_all.contrib | default({}) is mapping) else {} }}"
+    merged: "{{ contrib }}"
     hasKernelContrib: "{{ merged | length > 0 }}"
