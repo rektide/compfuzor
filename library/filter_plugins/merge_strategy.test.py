@@ -363,6 +363,22 @@ def test_append_unique_by_three_payloads():
     )
 
 
+def test_named_profile():
+    print("\nnamed profile resolution:")
+    result = merge_with_strategy(
+        [
+            {"ETC_FILES": ["a"], "BINS": ["x"], "ENV": {"K": 1}, "ENV_LIST": ["E"], "PKGS": ["p"]},
+            {"ETC_FILES": ["b"], "BINS": ["y"], "ENV": {"K": 2}, "ENV_LIST": ["E"], "PKGS": ["p"]},
+        ],
+        "subsystem_contrib",
+    )
+    check("profile appends ETC_FILES", result["ETC_FILES"], ["a", "b"])
+    check("profile appends BINS", result["BINS"], ["x", "y"])
+    check("profile overlays ENV", result["ENV"], {"K": 2})
+    check("profile dedupes ENV_LIST", result["ENV_LIST"], ["E"])
+    check("profile dedupes PKGS", result["PKGS"], ["p"])
+
+
 if __name__ == "__main__":
     test_append()
     test_append_unique()
@@ -388,6 +404,8 @@ if __name__ == "__main__":
     test_append_unique_by_no_overlap()
     test_append_unique_by_mixed()
     test_append_unique_by_three_payloads()
+
+    test_named_profile()
 
     print("\n{} passed, {} failed".format(passed, failed))
     sys.exit(1 if failed else 0)

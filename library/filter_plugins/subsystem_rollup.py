@@ -20,13 +20,7 @@ def subsystem_rollup(children, aggregate=None, include_aggregate=True):
     """
     return merge_with_strategy(
         children,
-        {
-            "ETC_FILES": "append",
-            "BINS": "append",
-            "ENV": "dict_overlay",
-            "ENV_LIST": "append_unique",
-            "PKGS": "append_unique",
-        },
+        "subsystem_contrib",
         aggregate=aggregate,
         include_aggregate=include_aggregate,
         payload_path="contrib",

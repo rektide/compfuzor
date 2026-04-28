@@ -59,6 +59,22 @@ def _strategy_operation_name(strategy):
 VALID_STRING_STRATEGIES = {"append", "append_unique", "dict_overlay", "replace"}
 VALID_OPERATION_NAMES = {"append_unique_by", "merge_keyed"}
 
+STRATEGY_PROFILES = {
+    "subsystem_contrib": {
+        "ETC_FILES": "append",
+        "BINS": "append",
+        "ENV": "dict_overlay",
+        "ENV_LIST": "append_unique",
+        "PKGS": "append_unique",
+    },
+}
+
+
+def _resolve_strategies(strategies):
+    if isinstance(strategies, str) and strategies in STRATEGY_PROFILES:
+        return STRATEGY_PROFILES[strategies]
+    return strategies
+
 
 def _validate_strategies(strategies, path=""):
     """Validate the entire strategy map before any record processing.
@@ -180,12 +196,17 @@ def merge_with_strategy(
     - operation strategy map (dict with `op`), currently:
       - {op: merge_keyed, key: name, concat_fields: [generated]}
       - {op: append_unique_by, key: name}
+    - named profile string: use a predefined strategy map from STRATEGY_PROFILES
+
+    Available profiles:
+    - "subsystem_contrib": ETC_FILES append, BINS append, ENV dict_overlay,
+      ENV_LIST append_unique, PKGS append_unique
 
     When `payload_path` is set, it is split on "." and walked into each record
     to extract the payload.  If any intermediate key is missing or the
     intermediate value is not a dict, the whole record is used as payload.
     """
-    strategy_map = _as_dict(strategies)
+    strategy_map = _as_dict(_resolve_strategies(strategies))
     _validate_strategies(strategy_map)
     combined = {}
 
