@@ -57,7 +57,7 @@ def _strategy_operation_name(strategy):
 
 
 VALID_STRING_STRATEGIES = {"append", "append_unique", "dict_overlay", "replace"}
-VALID_OPERATION_NAMES = {"merge_keyed"}
+VALID_OPERATION_NAMES = {"append_unique_by", "merge_keyed"}
 
 
 def _validate_strategies(strategies, path=""):
@@ -111,7 +111,7 @@ def _strategy_initial_value(strategy):
 
     if isinstance(strategy, dict):
         op_name = _strategy_operation_name(strategy)
-        if op_name == "merge_keyed":
+        if op_name in {"append_unique_by", "merge_keyed"}:
             return []
         return {}
 
@@ -125,9 +125,43 @@ def _apply_strategy_operation(existing, value, strategy):
         concat_fields = strategy.get("concat_fields", [])
         return _merge_keyed(existing, value, key=key, concat_fields=concat_fields)
 
+    if op_name == "append_unique_by":
+        dedup_key = strategy.get("key", "key")
+        combined = _as_list(existing) + _as_list(value)
+        keyed = {}
+        keyed_first_index = {}
+        for i, item in enumerate(combined):
+            if isinstance(item, dict) and dedup_key in item:
+                key_val = item[dedup_key]
+                keyed[key_val] = item
+                if key_val not in keyed_first_index:
+                    keyed_first_index[key_val] = i
+        seen_keys = set()
+        result = []
+        for i, item in enumerate(combined):
+            if isinstance(item, dict) and dedup_key in item:
+                key_val = item[dedup_key]
+                if i == keyed_first_index[key_val]:
+                    result.append(keyed[key_val])
+            else:
+                result.append(item)
+        return result
+
     raise ValueError(
         "Unknown merge_with_strategy operation strategy: {}".format(strategy)
     )
+
+
+def _extract_payload_path(record, path):
+    """Walk a dot-separated path into a dict.  Returns None on any failure."""
+    if not isinstance(record, dict):
+        return None
+    current = record
+    for part in path.split("."):
+        if not isinstance(current, dict) or part not in current:
+            return None
+        current = current[part]
+    return current
 
 
 def merge_with_strategy(
@@ -136,6 +170,7 @@ def merge_with_strategy(
     aggregate=None,
     include_aggregate=True,
     payload_key=None,
+    payload_path=None,
 ):
     """Merge records using per-field merge strategies.
 
@@ -147,9 +182,14 @@ def merge_with_strategy(
     - nested strategy map: recurse for a field using nested per-field strategies
     - operation strategy map (dict with `op`), currently:
       - {op: merge_keyed, key: name, concat_fields: [generated]}
+      - {op: append_unique_by, key: name}
 
-    When `payload_key` is set and a record contains that key, the keyed payload
-    is used. Otherwise the record itself is treated as payload.
+    When `payload_path` is set, it is split on "." and walked into each record
+    to extract the payload.  If any intermediate key is missing or the
+    intermediate value is not a dict, the whole record is used as payload.
+    `payload_path` takes precedence over `payload_key` when both are provided.
+    When only `payload_key` is set and a record contains that key, the keyed
+    payload is used.  Otherwise the record itself is treated as payload.
     """
     strategy_map = _as_dict(strategies)
     _validate_strategies(strategy_map)
@@ -167,7 +207,11 @@ def merge_with_strategy(
             continue
 
         payload = record
-        if payload_key is not None and payload_key != "":
+        if payload_path is not None and payload_path != "":
+            extracted = _extract_payload_path(record, payload_path)
+            if extracted is not None:
+                payload = extracted
+        elif payload_key is not None and payload_key != "":
             payload = record.get(payload_key, record)
 
         if not isinstance(payload, dict):

@@ -252,6 +252,130 @@ def test_validate_valid_strategies_pass():
         check("replace accepted", False, True)
 
 
+def test_payload_path_single_level():
+    print("\npayload_path single level (equivalent to payload_key):")
+    result = merge_with_strategy(
+        [
+            {"contrib": {"BINS": [1]}},
+            {"contrib": {"BINS": [2]}},
+            {"no_contrib": {"BINS": [99]}},
+        ],
+        {"BINS": "append"},
+        payload_path="contrib",
+    )
+    check("uses contrib payload only", result, {"BINS": [1, 2]})
+
+
+def test_payload_path_two_levels():
+    print("\npayload_path two levels deep:")
+    result = merge_with_strategy(
+        [
+            {"contrib": {"artifacts": {"BINS": [1]}}},
+            {"contrib": {"artifacts": {"BINS": [2]}}},
+            {"contrib": {"other": {"BINS": [99]}}},
+        ],
+        {"BINS": "append"},
+        payload_path="contrib.artifacts",
+    )
+    check("uses contrib.artifacts payload", result, {"BINS": [1, 2]})
+
+
+def test_payload_path_missing_intermediate():
+    print("\npayload_path missing intermediate key falls back:")
+    result = merge_with_strategy(
+        [
+            {"contrib": {"artifacts": {"BINS": [1]}}},
+            {"BINS": [99]},
+        ],
+        {"BINS": "append"},
+        payload_path="contrib.artifacts",
+    )
+    check(
+        "missing intermediate falls back to whole record",
+        result,
+        {"BINS": [1, 99]},
+    )
+
+
+def test_payload_path_takes_precedence():
+    print("\npayload_path takes precedence over payload_key:")
+    result = merge_with_strategy(
+        [
+            {"contrib": {"BINS": [1]}, "deep": {"BINS": [2]}},
+            {"contrib": {"BINS": [3]}, "deep": {"BINS": [4]}},
+        ],
+        {"BINS": "append"},
+        payload_key="contrib",
+        payload_path="deep",
+    )
+    check("payload_path wins over payload_key", result, {"BINS": [2, 4]})
+
+
+def test_append_unique_by_basic_dedup():
+    print("\nappend_unique_by basic dedup:")
+    result = merge_with_strategy(
+        [
+            {"items": [{"name": "build.sh", "cmd": "echo one"}]},
+            {"items": [{"name": "build.sh", "cmd": "echo two"}]},
+        ],
+        {"items": {"op": "append_unique_by", "key": "name"}},
+    )
+    check(
+        "second record with same key wins",
+        result,
+        {"items": [{"name": "build.sh", "cmd": "echo two"}]},
+    )
+
+
+def test_append_unique_by_no_overlap():
+    print("\nappend_unique_by no overlap:")
+    result = merge_with_strategy(
+        [
+            {"items": [{"name": "build.sh"}]},
+            {"items": [{"name": "install.sh"}]},
+        ],
+        {"items": {"op": "append_unique_by", "key": "name"}},
+    )
+    check(
+        "both entries kept",
+        result,
+        {"items": [{"name": "build.sh"}, {"name": "install.sh"}]},
+    )
+
+
+def test_append_unique_by_mixed():
+    print("\nappend_unique_by mixed keyed and non-dict:")
+    result = merge_with_strategy(
+        [
+            {"items": ["plain_string", {"name": "build.sh", "cmd": "one"}]},
+            {"items": [42, {"name": "build.sh", "cmd": "two"}]},
+        ],
+        {"items": {"op": "append_unique_by", "key": "name"}},
+    )
+    check(
+        "non-dict items kept, keyed deduped",
+        result,
+        {"items": ["plain_string", {"name": "build.sh", "cmd": "two"}, 42]},
+    )
+
+
+def test_append_unique_by_three_payloads():
+    print("\nappend_unique_by three payloads:")
+    result = merge_with_strategy(
+        [
+            {"items": [{"name": "a", "v": 1}, {"name": "b", "v": 2}]},
+            {"items": [{"name": "a", "v": 10}, {"name": "c", "v": 3}]},
+            {"items": [{"name": "b", "v": 20}, {"name": "d", "v": 4}]},
+        ],
+        {"items": {"op": "append_unique_by", "key": "name"}},
+    )
+    check(
+        "last occurrence wins across three payloads",
+        result,
+        {"items": [{"name": "a", "v": 10}, {"name": "b", "v": 20}, {"name": "c", "v": 3}, {"name": "d", "v": 4}]},
+    )
+
+
 if __name__ == "__main__":
     test_append()
     test_append_unique()
@@ -259,6 +383,10 @@ if __name__ == "__main__":
     test_replace()
     test_nested_strategy()
     test_payload_key()
+    test_payload_path_single_level()
+    test_payload_path_two_levels()
+    test_payload_path_missing_intermediate()
+    test_payload_path_takes_precedence()
     test_aggregate()
     test_merge_keyed_operation()
     test_merge_keyed_no_overlap()
@@ -269,6 +397,11 @@ if __name__ == "__main__":
     test_validate_nested_unknown()
     test_validate_non_string_non_dict()
     test_validate_valid_strategies_pass()
+
+    test_append_unique_by_basic_dedup()
+    test_append_unique_by_no_overlap()
+    test_append_unique_by_mixed()
+    test_append_unique_by_three_payloads()
 
     print("\n{} passed, {} failed".format(passed, failed))
     sys.exit(1 if failed else 0)
