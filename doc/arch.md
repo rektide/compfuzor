@@ -306,10 +306,31 @@ through that ordering.
 
 | Phase | Purpose | Typical producers |
 |---|---|---|
-| `phase:compile.foundation` | validate input, set defaults, compute activity | `vars_*` |
+| `phase:compile.foundation` | static defaults, metadata setup, baseline activity scaffolding | `vars_*` (legacy), `fn_*` (preferred) |
 | `phase:compile.discovery` | read host state into explicit snapshots | `probe_*` |
 | `phase:compile.transform` | normalize input and build subsystem contracts | `fn_*` |
 | `phase:compile.synthesis` | build shared-artifact contributions and merge outputs | `gen_*` |
+
+`vars_*` is a historical prefix. It is now compatibility-oriented and should
+not be used for new subsystem work. Prefer explicit operation prefixes:
+
+- `fn_*` for expression-based contract transforms
+- `gen_*` for shared synthesis and default instantiation
+
+### `fn_*` and `gen_*` contract
+
+Compfuzor does not define functions in a language-runtime sense. The closest
+equivalent is expression contracts in task vars/Jinja that are evaluated from
+inputs.
+
+That yields a practical split:
+
+- `fn_*`: define and evaluate reusable transform expressions into subsystem
+  contracts (`norm`, `spec`, optional `contrib`)
+- `gen_*`: instantiate and aggregate those contracts into predictable shared
+  pipeline outputs (`BINS`, `ETC_FILES`, `ENV`, `TOOL_VERSIONS`, and peers)
+
+`gen_*` is not "more transform". It is the default concretization layer.
 
 ### Default lifecycle
 
@@ -390,10 +411,10 @@ Both are needed:
 
 | Entity pattern | Kind | Form | Role | Typical phase | Effect | Purpose |
 |---|---|---|---|---|---|---|
-| `vars_` | `kind:vars` | `form:prefix` | `role:foundation` | `compile.foundation` | `effect:none` | validation, defaults, activity |
+| `vars_` | `kind:legacy` | `form:prefix` | `role:compat-wrapper` | `compile.foundation` | `effect:none` | transitional wrapper that imports `fn_`/`gen_` tasks |
 | `probe_` | `kind:probe` | `form:prefix` | `role:discovery` | `compile.discovery` | `effect:none` | host-state snapshots |
 | `fn_` | `kind:fn` | `form:prefix` | `role:transform` | `compile.transform` | `effect:none` | normalization and contract building |
-| `gen_` | `kind:syn` | `form:prefix` | `role:synthesis` | `compile.synthesis` | `effect:none` | shared-artifact merges and transport records |
+| `gen_` | `kind:syn` | `form:prefix` | `role:synthesis` | `compile.synthesis` | `effect:none` | shared-artifact instantiation, aggregation, and merge application |
 | `repo_` | `kind:repo` | `form:prefix` | `role:execution` | `repo-apply` | `effect:host.repo` | repository changes |
 | `fs_` | `kind:fs` | `form:prefix` | `role:execution` | `fs-apply` | `effect:host.fs` | files, links, downloads |
 | `bins` / `bins_*` | `kind:bins` | `form:prefix` | `role:execution` | `fs-apply` or `extras-apply` | `effect:host.fs` | scripts and helpers |
@@ -494,7 +515,7 @@ own terms, and precedence would become hard to reason about.
 
 | Producer kind | May write | Should not write |
 |---|---|---|
-| `vars_*` | control fields and defaults in `SUBSYSTEM.<name>` | shared artifact merges, host changes |
+| `vars_*` (legacy) | compatibility wrappers only | net-new compile logic, shared artifact merges, host changes |
 | `probe_*` | `probe` fields and discovery data | host changes |
 | `fn_*` | `norm`, `spec`, `drv`, `out`, `merge` in `SUBSYSTEM.<name>` | shared artifact merges, host changes |
 | `gen_*` | `contrib` fields and global shared-artifact merges | host changes |
@@ -503,7 +524,7 @@ own terms, and precedence would become hard to reason about.
 Two strong rules follow:
 
 - prefer one explicit merge block over many tiny mutations
-- do not hide shared synthesis work inside `vars_*`
+- do not hide shared synthesis work inside `vars_*` or `fn_*`
 
 ### Merge policies
 
@@ -584,7 +605,9 @@ Example bridge:
 
 Current files:
 
-- [`/tasks/compfuzor/vars_get_urls.tasks`](/tasks/compfuzor/vars_get_urls.tasks)
+- [`/tasks/compfuzor/vars_get_urls.tasks`](/tasks/compfuzor/vars_get_urls.tasks) (legacy wrapper name)
+- `fn_get_urls.tasks` (target name)
+- [`/tasks/compfuzor/gen_get_urls.tasks`](/tasks/compfuzor/gen_get_urls.tasks)
 - [`/tasks/compfuzor/fs_get_urls.tasks`](/tasks/compfuzor/fs_get_urls.tasks)
 
 Recommended shape:
@@ -621,7 +644,7 @@ SUBSYSTEM:
 
 Recommended task split:
 
-- `vars_get_urls.tasks` validates input and creates `SUBSYSTEM.get_urls.spec`
+- `fn_get_urls.tasks` validates input and creates `SUBSYSTEM.get_urls.spec`
 - `gen_get_urls.tasks` computes `SUBSYSTEM.get_urls.contrib`
 - `fs_get_urls.tasks` consumes `SUBSYSTEM.<id>.spec` and supports
   `subsystem_name`/`subsystem_id` overrides for reuse
@@ -639,7 +662,9 @@ Lifecycle view:
 
 Current files:
 
-- [`/tasks/compfuzor/vars_kernel.tasks`](/tasks/compfuzor/vars_kernel.tasks)
+- [`/tasks/compfuzor/vars_kernel.tasks`](/tasks/compfuzor/vars_kernel.tasks) (legacy wrapper name)
+- `fn_kernel.tasks` (target name)
+- [`/tasks/compfuzor/gen_kernel.tasks`](/tasks/compfuzor/gen_kernel.tasks)
 - [`/tasks/compfuzor/kernel_modules.tasks`](/tasks/compfuzor/kernel_modules.tasks)
 - [`/zswap.etc.pb`](/zswap.etc.pb)
 
@@ -731,6 +756,55 @@ What this split buys you:
   `install.sh`
 - `domain: kernel` remains a label instead of being overloaded as the only
   runtime object name
+
+### Toolchain and `.tool-versions`
+
+Current file:
+
+- [`/tasks/compfuzor/vars_tool_versions.tasks`](/tasks/compfuzor/vars_tool_versions.tasks)
+
+Target decomposition:
+
+- `fn_python.tasks` and `fn_go.tasks` publish subsystem-level tooling intent in
+  `SUBSYSTEM.<id>.contrib.tooling.TOOL_VERSIONS`
+- `fn_tool_versions.tasks` resolves user-provided and subsystem-provided tool
+  version intent into a single contract record (for example:
+  `SUBSYSTEM.tool_versions.spec`)
+- `gen_tool_versions.tasks` renders that contract into shared artifacts
+  (`ETC_FILES`/`LINKS`) and applies merge policy once, centrally
+
+Recommended shape:
+
+```yaml
+SUBSYSTEM:
+  python:
+    contrib:
+      tooling:
+        TOOL_VERSIONS:
+          python: true
+
+  go:
+    contrib:
+      tooling:
+        TOOL_VERSIONS:
+          go: true
+
+  tool_versions:
+    spec:
+      TOOL_VERSIONS:
+        python: 3
+        go: 1
+    contrib:
+      artifacts:
+        ETC_FILES:
+          - name: .tool-versions
+        LINKS:
+          - src: "{{ DIR }}/etc/.tool-versions"
+            dest: .tool-versions
+```
+
+This removes hidden synthesis from `vars_tool_versions.tasks` and makes
+tool-version rendering a normal `fn_*` + `gen_*` pipeline segment.
 
 ## 7. Bypass resolution rules
 
