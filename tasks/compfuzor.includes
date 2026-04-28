@@ -62,7 +62,7 @@
 - import_tasks: compfuzor/vars_go.tasks
   when: GO is deftruthy
   tags: ['vars', 'always']
-- import_tasks: compfuzor/vars_tool_versions.tasks
+- import_tasks: compfuzor/gen_tool_versions.tasks
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_nvim.tasks
   when: NVIM is defined

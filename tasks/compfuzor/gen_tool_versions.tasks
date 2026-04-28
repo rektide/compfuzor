@@ -1,7 +1,8 @@
-- name: 'Adding .tool-versions config'
+---
+- name: "Compfuzor: render .tool-versions into shared artifacts"
   set_fact:
-    ETC_FILES: "{{ETC_FILES|default([]) + [tool_versions]}}"
-    LINKS: "{{LINKS|default([]) + [link]}}"
+    ETC_FILES: "{{ ETC_FILES | default([]) + [tool_versions] }}"
+    LINKS: "{{ LINKS | default([]) + [link] }}"
   when: TOOL_VERSIONS is deftruthy
   vars:
     tool_versions:
@@ -10,6 +11,6 @@
         {% for target, version in TOOL_VERSIONS.items() %}
         {{ target }} {{ version if version != True else lookup('vars', target|upper + '_VERSION') }}
         {% endfor %}
-    link: 
-      src: "{{DIR}}/etc/.tool-versions"
+    link:
+      src: "{{ DIR }}/etc/.tool-versions"
       dest: ".tool-versions"
