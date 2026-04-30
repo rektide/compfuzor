@@ -1,19 +1,18 @@
 ---
-# Go subsystem transform.
-#
-# Responsibilities:
-# - validate GO input
-# - build SUBSYSTEM.go with spec and contrib
-#
-# Non-responsibilities:
-# - no direct merge into global artifacts (gen_go handles that)
+- name: "Compfuzor: transform go into subsystem contract"
+  block:
+    - name: "Compfuzor: fail invalid go input"
+      fail:
+        msg: "{{ errors | join('; ') }}"
+      when: _subsystem_requested and (not _subsystem_bypassed) and (not _subsystem_valid)
 
-- name: "Compfuzor: publish go subsystem state"
-  set_fact:
-    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'go': subsystem}, recursive=True) }}"
+    - name: "Compfuzor: publish go subsystem"
+      set_fact:
+        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'go': subsystem}, recursive=True) }}"
+      when: _subsystem_requested
   vars:
-    _requested: "{{ GO is deftruthy }}"
-
+    subsystem_name: go
+    requested: "{{ GO is deftruthy }}"
     bins:
       - name: build.sh
         run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
@@ -42,5 +41,4 @@
         TOOL_VERSIONS:
           go: true
 
-    subsystem: "{{ 'go' | subsystem_record(requested=true, valid=true, bypassed=false, errors=[], spec=spec, contrib=contrib) }}"
-  when: _requested
+    subsystem: "{{ 'go' | subsystem_record(spec=spec, contrib=contrib) }}"
