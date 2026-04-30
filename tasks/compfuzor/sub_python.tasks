@@ -1,18 +1,18 @@
 ---
-# Python subsystem transform.
-#
-# Responsibilities:
-# - validate PYTHON/PIP input
-# - build SUBSYSTEM.python with spec and contrib
-#
-# Non-responsibilities:
-# - no direct merge into global artifacts (gen_python handles that)
+- name: "Compfuzor: define python subsystem"
+  block:
+    - name: "Compfuzor: fail invalid python input"
+      fail:
+        msg: "{{ errors | join('; ') }}"
+      when: _subsystem_requested and (not _subsystem_bypassed) and (not _subsystem_valid)
 
-- name: "Compfuzor: publish python subsystem state"
-  set_fact:
-    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'python': subsystem}, recursive=True) }}"
+    - name: "Compfuzor: publish python subsystem"
+      set_fact:
+        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'python': subsystem}, recursive=True) }}"
+      when: _subsystem_requested
   vars:
-    _requested: "{{ PYTHON is deftruthy or PIP is defined }}"
+    subsystem_name: python
+    requested: "{{ PYTHON is deftruthy or PIP is defined }}"
 
     bins:
       - name: build.sh
@@ -57,5 +57,4 @@
         TOOL_VERSIONS:
           python: true
 
-    subsystem: "{{ 'python' | subsystem_record(requested=true, valid=true, bypassed=false, errors=[], spec=spec, contrib=contrib) }}"
-  when: _requested
+    subsystem: "{{ 'python' | subsystem_record(spec=spec, contrib=contrib) }}"
