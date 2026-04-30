@@ -170,12 +170,13 @@ prefix conventions (`fn_`/`gen_`/`fs_`), and worked examples.
 ## Test suite
 
 ```sh
-python library/filter_plugins/merge_strategy.test.py   # 36 tests
-python library/filter_plugins/mergeKeyed.test.py       # 11 tests
-python library/filter_plugins/subsystem_rollup.test.py  #  9 tests
-python library/filter_plugins/subsystem_bypass.test.py  # 18 tests
-python library/filter_plugins/subsystem_record.test.py  # 27 tests
-python library/filter_plugins/concat2.test.py           # 10 tests
+python tests/filter_plugins/merge_strategy.test.py   # 36 tests
+python tests/filter_plugins/mergeKeyed.test.py       # 11 tests
+python tests/filter_plugins/subsystem_rollup.test.py  #  9 tests
+python tests/filter_plugins/subsystem_bypass.test.py  # 18 tests
+python tests/filter_plugins/subsystem_record.test.py  # 27 tests
+python tests/filter_plugins/concat2.test.py           # 14 tests
+python tests/filter_plugins/get.test.py                #  9 tests
+python tests/filter_plugins/cmdline.test.py            # 12 tests
+python tests/lookup_plugins/subsys.test.py             #  8 tests
 ```
-
-111 tests total across 6 files.

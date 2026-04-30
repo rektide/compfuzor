@@ -5,7 +5,7 @@ import sys
 import os
 
 # Add current directory to path to import the filter
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'library', 'filter_plugins'))
 
 from cmdline import ansible_cmdline
 
