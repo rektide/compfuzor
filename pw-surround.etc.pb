@@ -46,6 +46,7 @@
     ENV:
       #ETC: "{{ETC}}"
       APP: pipewire
+
       # Mixing defaults — exported to env.export and available at runtime.
       # The surround-51-gen.js script reads these as PW_SURROUND_* env vars.
       # CLI args override env vars, env vars override these defaults.
