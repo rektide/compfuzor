@@ -10,6 +10,8 @@ DOCUMENTATION = """
       - Optional C(name=) provides an alias label in the returned envelope.
       - Optional C(get=) returns one path from the envelope using shared get-path semantics.
       - Optional C(default=) is used when C(get=) path resolution fails.
+      - Optional C(bypass=) accepts a string or list of extra bypass variable names to check.
+      - Optional C(domain=) enables domain-level bypass via C(<DOMAIN>_BYPASS).
     options:
       _terms:
         description:
@@ -32,6 +34,13 @@ DOCUMENTATION = """
       default:
         description:
           - Optional fallback when C(get=) path is missing.
+      bypass:
+        description:
+          - Optional string or list of extra bypass variable names to check in addition
+            to the automatic C(<SUBSYSTEM>_BYPASS) variable.
+      domain:
+        description:
+          - Optional domain label enabling C(<DOMAIN>_BYPASS) as an additional bypass source.
 """
 
 EXAMPLES = """
@@ -85,6 +94,23 @@ def _to_bool(value):
     return bool(value)
 
 
+def _resolve_bypass(variables, subsystem_id, domain=None, extra_bypass=None):
+    bypass_vars = [subsystem_id.upper() + "_BYPASS"]
+    if domain and isinstance(domain, str) and domain.strip():
+        bypass_vars.append(domain.strip().upper().replace("-", "_") + "_BYPASS")
+    if extra_bypass:
+        if isinstance(extra_bypass, str):
+            bypass_vars.append(extra_bypass)
+        elif isinstance(extra_bypass, (list, tuple)):
+            bypass_vars.extend(v for v in extra_bypass if isinstance(v, str))
+    for var_name in bypass_vars:
+        val = variables.get(var_name)
+        if val is not None and not wrapped_test_undefined(val):
+            if _to_bool(val):
+                return True
+    return False
+
+
 def _compute_state(record):
     if not isinstance(record, dict):
         return "absent"
@@ -108,7 +134,7 @@ def _compute_state(record):
     return "absent"
 
 
-def _build_envelope(subsystems, subsystem_id, name=None):
+def _build_envelope(subsystems, subsystem_id, name=None, variables=None, domain=None, extra_bypass=None):
     subsystems_map = subsystems if isinstance(subsystems, dict) else {}
     record = subsystems_map.get(subsystem_id)
     record = record if isinstance(record, dict) else {}
@@ -118,6 +144,13 @@ def _build_envelope(subsystems, subsystem_id, name=None):
     active = _to_bool(record.get("active", state == "active"))
     requested = _to_bool(record.get("requested", found and state != "absent"))
     bypassed = _to_bool(record.get("bypassed", state == "bypassed"))
+
+    if variables is not None:
+        var_bypassed = _resolve_bypass(variables, subsystem_id, domain=domain, extra_bypass=extra_bypass)
+        bypassed = bypassed or var_bypassed
+        active = requested and (not bypassed)
+        state = "bypassed" if (requested and bypassed) else ("active" if active else state)
+
     valid = _to_bool(record.get("valid", state not in {"invalid", "absent"}))
     reasons = record.get("reasons", [])
     if reasons is None:
@@ -182,8 +215,17 @@ class LookupModule(LookupBase):
         name = kwargs.get("name")
         get_expr = kwargs.get("get")
         default = kwargs.get("default")
+        domain = kwargs.get("domain")
+        extra_bypass = kwargs.get("bypass")
 
-        envelope = _build_envelope(variables.get("SUBSYSTEM", {}), subsystem_id, name=name)
+        envelope = _build_envelope(
+            variables.get("SUBSYSTEM", {}),
+            subsystem_id,
+            name=name,
+            variables=variables,
+            domain=domain,
+            extra_bypass=extra_bypass,
+        )
 
         if get_expr is not None:
             resolved = get_path(envelope, get_expr, default=default)
