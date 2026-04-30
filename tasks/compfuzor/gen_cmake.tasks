@@ -1,12 +1,14 @@
 ---
-- name: "Compfuzor: merge cmake subsystem contrib"
+- name: "Compfuzor: synthesize cmake subsystem artifacts"
   set_fact:
-    BINS: "{{ contrib.BINS | mergeKeyed(BINS | default([]), key='name', concat_fields=['generated']) }}"
-    PKGS: "{{ contrib.PKGS | concat2(PKGS) }}"
-    ENV: "{{ contrib.ENV | combine(existingEnv) }}"
-  when: hasContrib
+    BINS: "{{ merged.BINS }}"
+    PKGS: "{{ lookup('subsys', id='cmake', get='contrib.PKGS', default=[]) | concat2(PKGS) }}"
+    ENV: "{{ lookup('subsys', id='cmake', get='contrib.ENV') | combine(existingEnv) }}"
+  when: lookup('subsys', id='cmake', get='active', default=false) | bool
   vars:
-    record: "{{ (SUBSYSTEM | default({})) | get('cmake', {}) }}"
-    contrib: "{{ record | get('contrib', {}) if (record | get('contrib', {}) is mapping) else {} }}"
     existingEnv: "{{ ENV if ENV is mapping else {} }}"
-    hasContrib: "{{ contrib | length > 0 }}"
+    merged: >-
+      {{ [
+        {'BINS': BINS | default([])},
+        {'BINS': lookup('subsys', id='cmake', get='contrib.BINS', default=[])}
+      ] | merge_with_strategy({'BINS': {'op': 'merge_keyed', 'key': 'name', 'concat_fields': ['generated']}}, include_aggregate=false) }}
