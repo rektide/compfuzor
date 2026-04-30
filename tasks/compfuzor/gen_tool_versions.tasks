@@ -1,34 +1,23 @@
 ---
 - name: "Compfuzor: synthesize tool_versions subsystem artifacts"
-  block:
-    - name: "Aggregate TOOL_VERSIONS from active subsystems"
-      set_fact:
-        _tv_from_subsystems: >-
-          {{ (SUBSYSTEM | dict2items
-            | selectattr('value.active', 'equalto', true)
-            | rejectattr('key', 'equalto', 'tool_versions')
-            | map(attribute='value') | list)
-            | merge_with_strategy({'TOOL_VERSIONS': 'dict_overlay'},
-              include_aggregate=false, payload_path='contrib') }}
-
-    - name: "Merge subsystem defaults with user TOOL_VERSIONS"
-      set_fact:
-        _tv_merged: >-
-          {{ _tv_from_subsystems.TOOL_VERSIONS | default({})
-            | combine(TOOL_VERSIONS | default({})) }}
-
-    - name: "Render .tool-versions content"
-      set_fact:
-        _tool_versions_content: |
-          {% for target, version in _tv_merged.items() %}
-          {{ target }} {{ version if version != True else lookup('vars', target | upper + '_VERSION') }}
-          {% endfor %}
-
-    - name: "Merge tool_versions artifacts into globals"
-      set_fact:
-        ETC_FILES: "{{ [{'name': '.tool-versions', 'content': _tool_versions_content}] | concat2(ETC_FILES) }}"
-        LINKS: "{{ [{'src': DIR + '/etc/.tool-versions', 'dest': '.tool-versions'}] | concat2(LINKS) }}"
-
+  set_fact:
+    ETC_FILES: "{{ [{'name': '.tool-versions', 'content': _tv_content}] | concat2(ETC_FILES) }}"
+    LINKS: "{{ [{'src': DIR + '/etc/.tool-versions', 'dest': '.tool-versions'}] | concat2(LINKS) }}"
+  vars:
+    _tv_subsystems: >-
+      {{ (SUBSYSTEM | dict2items
+        | selectattr('value.active', 'equalto', true)
+        | rejectattr('key', 'equalto', 'tool_versions')
+        | map(attribute='value') | list)
+        | merge_with_strategy({'TOOL_VERSIONS': 'dict_overlay'},
+          include_aggregate=false, payload_path='contrib') }}
+    _tv_merged: >-
+      {{ _tv_subsystems.TOOL_VERSIONS | default({})
+        | combine(TOOL_VERSIONS | default({})) }}
+    _tv_content: |
+      {% for target, version in _tv_merged.items() %}
+      {{ target }} {{ version if version != True else lookup('vars', target | upper + '_VERSION') }}
+      {% endfor %}
   when: >-
     TOOL_VERSIONS is defined or
     (SUBSYSTEM | dict2items
