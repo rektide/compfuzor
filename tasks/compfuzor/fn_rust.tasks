@@ -1,17 +1,18 @@
 ---
-# Rust subsystem transform.
-#
-# Responsibilities:
-# - validate RUST input
-# - build SUBSYSTEM.rust with spec and contrib
-#
-# Non-responsibilities:
-# - no direct merge into global artifacts (gen_rust handles that)
+- name: "Compfuzor: transform rust into subsystem contract"
+  block:
+    - name: "Compfuzor: fail invalid rust input"
+      fail:
+        msg: "{{ errors | join('; ') }}"
+      when: _subsystem_requested and (not _subsystem_bypassed) and (not _subsystem_valid)
 
-- name: "Compfuzor: publish rust subsystem state"
-  set_fact:
-    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'rust': subsystem}, recursive=True) }}"
+    - name: "Compfuzor: publish rust subsystem"
+      set_fact:
+        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'rust': subsystem}, recursive=True) }}"
+      when: _subsystem_requested
   vars:
+    subsystem_name: rust
+    requested: "{{ RUST is deftruthy }}"
     bins:
       - name: build.sh
         run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
@@ -29,7 +30,7 @@
         basedir: repo
         generated: |
           [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${RUST_BIN:-{{ TYPE }}}"
-          ln -sfv "$(pwd)/target/release/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(dirname $INSTALL_BIN)
+          ln -sfv "$(pwd)/target/release/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
       - name: install-user.sh
         basedir: repo
         generated: |
@@ -49,5 +50,4 @@
         TOOL_VERSIONS:
           rust: true
 
-    subsystem: "{{ 'rust' | subsystem_record(requested=true, valid=true, bypassed=false, errors=[], spec=spec, contrib=contrib) }}"
-  when: RUST is deftruthy
+    subsystem: "{{ 'rust' | subsystem_record(spec=spec, contrib=contrib) }}"

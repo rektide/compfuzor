@@ -1,11 +1,13 @@
 ---
-- name: "Compfuzor: merge rust subsystem contrib"
+- name: "Compfuzor: synthesize rust subsystem artifacts"
   set_fact:
-    BINS: "{{ contrib.BINS | mergeKeyed(BINS | default([]), key='name', concat_fields=['generated']) }}"
-    ENV: "{{ contrib.ENV | combine(existingEnv) }}"
-  when: hasContrib
+    BINS: "{{ merged.BINS }}"
+    ENV: "{{ lookup('subsys', id='rust', get='contrib.ENV') | combine(existingEnv) }}"
+  when: lookup('subsys', id='rust', get='active', default=false) | bool
   vars:
-    record: "{{ (SUBSYSTEM | default({})) | get('rust', {}) }}"
-    contrib: "{{ record | get('contrib', {}) if (record | get('contrib', {}) is mapping) else {} }}"
     existingEnv: "{{ ENV if ENV is mapping else {} }}"
-    hasContrib: "{{ contrib | length > 0 }}"
+    merged: >-
+      {{ [
+        {'BINS': BINS | default([])},
+        {'BINS': lookup('subsys', id='rust', get='contrib.BINS', default=[])}
+      ] | merge_with_strategy({'BINS': {'op': 'merge_keyed', 'key': 'name', 'concat_fields': ['generated']}}, include_aggregate=false) }}
