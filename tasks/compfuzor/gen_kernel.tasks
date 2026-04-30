@@ -1,17 +1,16 @@
 ---
-- name: "Compfuzor: merge kernel subsystem contrib"
+- name: "Compfuzor: synthesize kernel subsystem artifacts"
   set_fact:
-    ETC_FILES: "{{ merged.ETC_FILES | concat2(ETC_FILES) }}"
-    BINS: "{{ merged.BINS | mergeKeyed(BINS | default([]), key='name', concat_fields=['generated']) }}"
-    ENV: "{{ merged.ENV | combine(existingEnv) }}"
-    ENV_LIST: "{{ merged.ENV_LIST | concat2(ENV_LIST, unique=True) }}"
-    PKGS: "{{ merged.PKGS | concat2(PKGS, unique=True) }}"
-  when: hasKernelContrib
+    ETC_FILES: "{{ lookup('subsys', id='kernel_all', get='contrib.ETC_FILES', default=[]) | concat2(ETC_FILES) }}"
+    BINS: "{{ merged.BINS }}"
+    ENV: "{{ lookup('subsys', id='kernel_all', get='contrib.ENV') | combine(existingEnv) }}"
+    ENV_LIST: "{{ lookup('subsys', id='kernel_all', get='contrib.ENV_LIST', default=[]) | concat2(ENV_LIST, unique=True) }}"
+    PKGS: "{{ lookup('subsys', id='kernel_all', get='contrib.PKGS', default=[]) | concat2(PKGS, unique=True) }}"
+  when: lookup('subsys', id='kernel_all', get='active', default=false) | bool
   vars:
-    subsystems: "{{ SUBSYSTEM | default({}) }}"
-    subsystemRecord: "{{ subsystems | get('kernel_all', {}) }}"
-    contribCandidate: "{{ subsystemRecord | get('contrib', {}) }}"
-    contrib: "{{ contribCandidate if contribCandidate is mapping else {} }}"
     existingEnv: "{{ ENV if ENV is mapping else {} }}"
-    merged: "{{ contrib }}"
-    hasKernelContrib: "{{ merged | length > 0 }}"
+    merged: >-
+      {{ [
+        {'BINS': BINS | default([])},
+        {'BINS': lookup('subsys', id='kernel_all', get='contrib.BINS', default=[])}
+      ] | merge_with_strategy({'BINS': {'op': 'merge_keyed', 'key': 'name', 'concat_fields': ['generated']}}, include_aggregate=false) }}
