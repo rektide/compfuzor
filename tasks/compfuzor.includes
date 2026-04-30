@@ -49,9 +49,6 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_npm.tasks
   tags: ['vars', 'always']
-- import_tasks: compfuzor/sub_rust.tasks
-  when: RUST is defined
-  tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_rust.tasks
   when: RUST is defined
   tags: ['vars', 'always']
@@ -90,8 +87,6 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_go.tasks
   when: GO is deftruthy
-  tags: ['vars', 'always']
-- import_tasks: compfuzor/sub_tool_versions.tasks
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_tool_versions.tasks
   tags: ['vars', 'always']

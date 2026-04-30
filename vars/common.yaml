@@ -177,3 +177,37 @@ _subsystem_base:
   valid: "{{ _subsystem_valid }}"
   active: "{{ _subsystem_active }}"
   reasons: "{{ errors }}"
+
+SUBSYSTEM:
+  rust:
+    requested: "{{ RUST is deftruthy }}"
+    bypassed: "{{ 'rust' | subsystem_bypassed() }}"
+    valid: true
+    active: "{{ RUST is deftruthy and not ('rust' | subsystem_bypassed()) }}"
+    contrib:
+      BINS:
+        - name: build.sh
+          run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
+          basedir: repo
+          generated: |
+            if [[ -z "${RELEASE+x}" ]]; then
+                RELEASE="--release"
+            elif [[ "$RELEASE" == "debug" ]]; then
+                unset RELEASE
+            else
+                RELEASE="--$RELEASE"
+            fi
+            cargo build $RELEASE
+        - name: install.sh
+          basedir: repo
+          generated: |
+            [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${RUST_BIN:-{{ TYPE }}}"
+            ln -sfv "$(pwd)/target/release/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
+        - name: install-user.sh
+          basedir: repo
+          generated: |
+            cargo install --path .
+      ENV: "{{ ({'RUST_BIN': RUST_BIN}) if RUST_BIN is defined else ({}) }}"
+      TOOL_VERSIONS:
+        rust: true
+
