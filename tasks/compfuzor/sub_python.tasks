@@ -53,8 +53,7 @@
       BINS: "{{ bins }}"
       ENV: "{{ env_python_bin | combine(env_existing) }}"
       ETC_FILES: "{{ etc_files }}"
-      tooling:
-        TOOL_VERSIONS:
-          python: true
+      TOOL_VERSIONS:
+        python: true
 
     subsystem: "{{ 'python' | subsystem_record(spec=spec, contrib=contrib) }}"

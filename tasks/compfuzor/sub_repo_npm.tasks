@@ -32,9 +32,8 @@
     contrib:
       BINS: "{{ bins }}"
       ETC_FILES: "{{ etc_files }}"
-      tooling:
-        TOOL_VERSIONS:
-          nodejs: true
-          pnpm: true
+      TOOL_VERSIONS:
+        nodejs: true
+        pnpm: true
 
     subsystem: "{{ 'repo_npm' | subsystem_record(spec=spec, contrib=contrib) }}"

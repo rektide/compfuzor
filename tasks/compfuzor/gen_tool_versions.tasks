@@ -13,14 +13,16 @@
           include_aggregate=false, payload_path='contrib') }}
     _tv_merged: >-
       {{ _tv_subsystems.TOOL_VERSIONS | default({})
-        | combine(TOOL_VERSIONS | default({})) }}
+        | combine(_tv_user) }}
+    _tv_user: "{{ TOOL_VERSIONS if TOOL_VERSIONS is mapping else {} }}"
     _tv_content: |
       {% for target, version in _tv_merged.items() %}
       {{ target }} {{ version if version != True else lookup('vars', target | upper + '_VERSION') }}
       {% endfor %}
   when: >-
-    TOOL_VERSIONS is defined or
+    (TOOL_VERSIONS is mapping and TOOL_VERSIONS | length > 0) or
     (SUBSYSTEM | dict2items
+      | selectattr('value.active', 'equalto', true)
       | selectattr('value.contrib.TOOL_VERSIONS', 'defined')
       | rejectattr('key', 'equalto', 'tool_versions')
       | list | length > 0)

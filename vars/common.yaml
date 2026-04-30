@@ -179,6 +179,75 @@ _subsystem_base:
   reasons: "{{ errors }}"
 
 SUBSYSTEM:
+  go:
+    requested: "{{ GO is deftruthy }}"
+    bypassed: "{{ 'go' | subsystem_bypassed() }}"
+    valid: true
+    active: "{{ GO is deftruthy and not ('go' | subsystem_bypassed()) }}"
+    contrib:
+      BINS:
+        - name: build.sh
+          run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
+          basedir: repo
+          generated: |
+            go build -o ${GO_BIN:-$TYPE} ${GO_TARGET:-./...}
+        - name: install.sh
+          basedir: repo
+          generated: |
+            [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${GO_BIN:-$TYPE}"
+            ln -sfv "$(pwd)/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
+      ENV:
+        GO_BIN: "{{ GO_BIN | default(omit) }}"
+        GO_TARGET: "{{ GO_TARGET | default('./...') }}"
+      TOOL_VERSIONS:
+        go: true
+
+  nodejs:
+    requested: "{{ NODEJS is deftruthy }}"
+    bypassed: "{{ 'nodejs' | subsystem_bypassed() }}"
+    valid: true
+    active: "{{ NODEJS is deftruthy and not ('nodejs' | subsystem_bypassed()) }}"
+    contrib:
+      BINS: "{{ (_nodejs_build_bins if BUILD_BYPASS is not deftruthy else []) + (_nodejs_install_bins if INSTALL_BYPASS is not deftruthy else []) }}"
+      ENV: "{{ ({'NODEJS_BIN': NODEJS_BIN}) if NODEJS_BIN is defined else ({}) }}"
+      TOOL_VERSIONS:
+        nodejs: true
+
+  bun:
+    requested: "{{ BUN is deftruthy }}"
+    bypassed: "{{ 'bun' | subsystem_bypassed() }}"
+    valid: true
+    active: "{{ BUN is deftruthy and not ('bun' | subsystem_bypassed()) }}"
+    contrib:
+      BINS: "{{ (_bun_build_bins if BUILD_BYPASS is not deftruthy else []) + (_bun_install_bins if INSTALL_BYPASS is not deftruthy else []) }}"
+      ENV: "{{ ({'BUN_BIN': BUN_BIN}) if BUN_BIN is defined else ({}) }}"
+      TOOL_VERSIONS:
+        bun: true
+
+  npm:
+    requested: "{{ NPM_PACKAGE is deftruthy }}"
+    bypassed: "{{ 'npm' | subsystem_bypassed() }}"
+    valid: true
+    active: "{{ NPM_PACKAGE is deftruthy and not ('npm' | subsystem_bypassed()) }}"
+    spec:
+      npm_package_bin: "{{ NPM_PACKAGE_BIN | default((NPM_PACKAGE | default('')) | regex_replace('(?:@[\\w.-]+/)?([\\w.-]+)(?:@[\\w.-]+)?', '\\1')) }}"
+    contrib:
+      BINS:
+        - name: build.sh
+          generated: |
+            curl $(npm view $NPM_PACKAGE dist.tarball) | tar -xz --strip-components=1
+            pnpm i
+            if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
+              echo "Building package..."
+              pnpm build
+            fi
+            pnpm link
+      ENV:
+        NPM_PACKAGE: "{{ NPM_PACKAGE | default(omit) }}"
+      TOOL_VERSIONS:
+        nodejs: true
+        pnpm: true
+
   rust:
     requested: "{{ RUST is deftruthy }}"
     bypassed: "{{ 'rust' | subsystem_bypassed() }}"
@@ -211,3 +280,42 @@ SUBSYSTEM:
       TOOL_VERSIONS:
         rust: true
 
+_nodejs_build_bins:
+  - name: build.sh
+    run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+    basedir: repo
+    generated: |
+      if [ -f package-lock.json ] && [ ! -f pnpm-lock.yaml ]; then
+        pnpm import
+      fi
+      pnpm i --frozen
+      if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
+        echo "Building package..."
+        pnpm build
+      fi
+_nodejs_install_bins:
+  - name: install.sh
+    run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+    basedir: repo
+    generated: |
+      if [ -n "{{ NODEJS_LINK_DIR | default('') }}" ]; then
+        IFS=',' read -ra _cf_link_dirs <<< "{{ NODEJS_LINK_DIR | default('.') }}"
+        for _cf_dir in "${_cf_link_dirs[@]}"; do
+          (cd "$_cf_dir" && pnpm link -g)
+        done
+      else
+        pnpm link -g
+      fi
+
+_bun_build_bins:
+  - name: build.sh
+    run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+    basedir: repo
+    generated: |
+      bun install
+_bun_install_bins:
+  - name: install.sh
+    run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+    basedir: repo
+    generated: |
+      bun link -g

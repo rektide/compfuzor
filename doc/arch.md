@@ -766,7 +766,7 @@ Current file:
 Target decomposition:
 
 - `fn_python.tasks` and `fn_go.tasks` publish subsystem-level tooling intent in
-  `SUBSYSTEM.<id>.contrib.tooling.TOOL_VERSIONS`
+  `SUBSYSTEM.<id>.contrib.TOOL_VERSIONS`
 - `fn_tool_versions.tasks` resolves user-provided and subsystem-provided tool
   version intent into a single contract record (for example:
   `SUBSYSTEM.tool_versions.spec`)
@@ -779,15 +779,13 @@ Recommended shape:
 SUBSYSTEM:
   python:
     contrib:
-      tooling:
-        TOOL_VERSIONS:
-          python: true
+      TOOL_VERSIONS:
+        python: true
 
   go:
     contrib:
-      tooling:
-        TOOL_VERSIONS:
-          go: true
+      TOOL_VERSIONS:
+        go: true
 
   tool_versions:
     spec:
