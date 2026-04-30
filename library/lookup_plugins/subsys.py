@@ -14,10 +14,14 @@ DOCUMENTATION = """
       _terms:
         description:
           - Exactly one subsystem id to resolve.
+          - May be empty when C(fallback_id) is provided.
         required: true
       name:
         description:
           - Optional alias/logical name for caller-facing labeling.
+      fallback_id:
+        description:
+          - Optional fallback subsystem id used when the positional id is empty/undefined.
       get:
         description:
           - Optional dotted path to read from the computed envelope.
@@ -38,6 +42,10 @@ EXAMPLES = """
 - name: Resolve with alias name
   ansible.builtin.set_fact:
     download_subsys: "{{ lookup('subsys', 'get_urls', name='downloads') }}"
+
+- name: Resolve using fallback subsystem id
+  ansible.builtin.set_fact:
+    active_downloads: "{{ lookup('subsys', subsystem_id, name=subsystem_name, fallback_id='get_urls', get='active') }}"
 """
 
 RETURN = """
@@ -53,6 +61,7 @@ import sys
 from ansible.errors import AnsibleError, AnsibleTypeError
 from ansible.module_utils.datatag import native_type_name
 from ansible.plugins.lookup import LookupBase
+from ansible.plugins.test.core import wrapped_test_undefined
 
 
 _FILTER_DIR = os.path.abspath(
@@ -143,12 +152,26 @@ class LookupModule(LookupBase):
             )
 
         subsystem_id = terms[0]
+        fallback_id = kwargs.get("fallback_id")
+
+        if wrapped_test_undefined(subsystem_id) or subsystem_id is None:
+            subsystem_id = fallback_id
+
+        if isinstance(subsystem_id, str) and subsystem_id.strip() == "":
+            subsystem_id = fallback_id
+
         if not isinstance(subsystem_id, str):
             raise AnsibleTypeError(
                 "subsystem id must be {} not {}".format(
                     native_type_name(str), native_type_name(subsystem_id)
                 ),
                 obj=subsystem_id,
+            )
+
+        subsystem_id = subsystem_id.strip()
+        if not subsystem_id:
+            raise AnsibleError(
+                "lookup('subsys', ...) requires a non-empty subsystem id or fallback_id"
             )
 
         name = kwargs.get("name")
