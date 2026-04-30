@@ -1,11 +1,6 @@
 ---
-- name: "Compfuzor: render .tool-versions into shared artifacts"
+- name: "Compfuzor: synthesize tool_versions subsystem artifacts"
   set_fact:
-    ETC_FILES: "{{ contrib.artifacts.ETC_FILES | concat2(ETC_FILES) }}"
-    LINKS: "{{ contrib.artifacts.LINKS | concat2(LINKS) }}"
-  when: hasContrib
-  vars:
-    record: "{{ (SUBSYSTEM | default({})) | get('tool_versions', {}) }}"
-    active: "{{ record | get('active', false) | bool }}"
-    contrib: "{{ record | get('contrib', {}) if (record | get('contrib', {}) is mapping) else {} }}"
-    hasContrib: "{{ active and (contrib | length > 0) and (contrib.artifacts | default({}) | length > 0) }}"
+    ETC_FILES: "{{ lookup('subsys', id='tool_versions', get='contrib.artifacts.ETC_FILES', default=[]) | concat2(ETC_FILES) }}"
+    LINKS: "{{ lookup('subsys', id='tool_versions', get='contrib.artifacts.LINKS', default=[]) | concat2(LINKS) }}"
+  when: lookup('subsys', id='tool_versions', get='active', default=false) | bool
