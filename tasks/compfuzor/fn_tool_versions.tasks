@@ -4,7 +4,7 @@
     SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'tool_versions': subsystem}, recursive=True) }}"
   when: requested
   vars:
-    user_tool_versions: "{{ TOOL_VERSIONS if TOOL_VERSIONS is mapping else {} }}"
+    user_tool_versions: "{{ TOOL_VERSIONS if (TOOL_VERSIONS is defined and TOOL_VERSIONS is mapping) else {} }}"
     subsystem_values: "{{ (SUBSYSTEM | default({})) | dict2items | map(attribute='value') | list }}"
     tooling_from_subsystems: "{{ subsystem_values | merge_with_strategy({'TOOL_VERSIONS': 'dict_overlay'}, include_aggregate=false, payload_path='contrib.tooling') }}"
     subsystem_tool_versions: "{{ tooling_from_subsystems.TOOL_VERSIONS | default({}) }}"
