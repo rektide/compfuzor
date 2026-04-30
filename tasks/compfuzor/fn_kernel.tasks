@@ -7,6 +7,13 @@
 #
 # Non-responsibilities:
 # - no direct merge into global ETC_FILES/BINS/ENV/PKGS (gen_kernel handles that)
+#
+# Kernel execution model notes:
+# - build-* scripts render local artifacts under $DIR/etc
+# - install-* scripts only install/symlink persistent config under /etc
+# - apply-* scripts perform live host mutation (modprobe, sysctl load, tmpfiles)
+# - detect-builtin.sh + install-kernel-cmdline.sh handle built-in kernel module
+#   params where /etc/modprobe.d options are ineffective
 
 - name: "Compfuzor: evaluate kernel subsystem models"
   block:
@@ -106,6 +113,7 @@
       key: modules
       json_path: "{{ DIR }}/etc/kernel.modules.json"
       env_key: KERNEL_MODULES_JSON
+      apply_bin: apply-kernel.sh
       data: "{{ modules }}"
       etc_files:
         - name: kernel.modules.json
@@ -117,6 +125,7 @@
       key: sysctl
       json_path: "{{ DIR }}/etc/kernel.sysctl.json"
       env_key: KERNEL_SYSCTL_JSON
+      apply_bin: apply-sysctl.sh
       data: "{{ sysctl }}"
       etc_files:
         - name: kernel.sysctl.json
@@ -128,6 +137,7 @@
       key: sysfs
       json_path: "{{ DIR }}/etc/kernel.sysfs.json"
       env_key: KERNEL_SYSFS_JSON
+      apply_bin: apply-sysfs.sh
       data: "{{ sysfs }}"
       etc_files:
         - name: kernel.sysfs.json
@@ -138,21 +148,21 @@
     # child contrib payloads
     modprobe_contrib:
       ETC_FILES: "{{ modprobe_spec.etc_files | arrayitize }}"
-      BINS: "{{ (modprobe_spec.build_bins | arrayitize) + (modprobe_spec.install_bins | arrayitize) }}"
+      BINS: "{{ (modprobe_spec.build_bins | arrayitize) + (modprobe_spec.install_bins | arrayitize) + [{'name': modprobe_spec.apply_bin, 'src': '../kernel/' ~ modprobe_spec.apply_bin, 'basedir': false}] }}"
       ENV: {"{{ modprobe_spec.env_key }}": "{{ modprobe_spec.json_path }}"}
       ENV_LIST: ["{{ modprobe_spec.env_key }}"]
       PKGS: [jq]
 
     sysctl_contrib:
       ETC_FILES: "{{ sysctl_spec.etc_files | arrayitize }}"
-      BINS: "{{ (sysctl_spec.build_bins | arrayitize) + (sysctl_spec.install_bins | arrayitize) }}"
+      BINS: "{{ (sysctl_spec.build_bins | arrayitize) + (sysctl_spec.install_bins | arrayitize) + [{'name': sysctl_spec.apply_bin, 'src': '../kernel/' ~ sysctl_spec.apply_bin, 'basedir': false}] }}"
       ENV: {"{{ sysctl_spec.env_key }}": "{{ sysctl_spec.json_path }}"}
       ENV_LIST: ["{{ sysctl_spec.env_key }}"]
       PKGS: [jq]
 
     sysfs_contrib:
       ETC_FILES: "{{ sysfs_spec.etc_files | arrayitize }}"
-      BINS: "{{ (sysfs_spec.build_bins | arrayitize) + (sysfs_spec.install_bins | arrayitize) }}"
+      BINS: "{{ (sysfs_spec.build_bins | arrayitize) + (sysfs_spec.install_bins | arrayitize) + [{'name': sysfs_spec.apply_bin, 'src': '../kernel/' ~ sysfs_spec.apply_bin, 'basedir': false}] }}"
       ENV: {"{{ sysfs_spec.env_key }}": "{{ sysfs_spec.json_path }}"}
       ENV_LIST: ["{{ sysfs_spec.env_key }}"]
       PKGS: [jq]
@@ -178,9 +188,10 @@
       }}
     any_active: "{{ active_specs | length > 0 }}"
 
-    # common build/install pattern for kernel_all orchestration
+    # common build/install/apply pattern for kernel_all orchestration
     build_scripts: "{{ active_specs | map(attribute='build_bins') | list | sum(start=[]) | map(attribute='name') | list }}"
     install_scripts: "{{ active_specs | map(attribute='install_bins') | list | sum(start=[]) | map(attribute='name') | list }}"
+    apply_scripts: "{{ active_specs | map(attribute='apply_bin') | list }}"
     data_env: "{{ active_specs | items2dict(key_name='env_key', value_name='json_path') }}"
 
     build_aggregate_bin:
@@ -192,6 +203,11 @@
       src: ../kernel/install.sh
       basedir: False
       run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+    apply_aggregate_bin:
+      name: apply.sh
+      src: ../kernel/apply.sh
+      basedir: False
+      run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
 
     all_requested: "{{ any_requested }}"
     all_active: "{{ all_requested and (not all_bypassed) and valid and any_active }}"
@@ -201,16 +217,23 @@
       parts: "{{ active_specs | map(attribute='key') | list }}"
       build_scripts: "{{ build_scripts }}"
       install_scripts: "{{ install_scripts }}"
+      apply_scripts: "{{ apply_scripts }}"
 
     all_contrib:
-      BINS: ["{{ build_aggregate_bin }}", "{{ install_aggregate_bin }}"]
+      # Aggregate helpers exported by kernel_all:
+      # - build.sh/install.sh/apply.sh orchestrate active child scripts
+      # - detect-builtin.sh and install-kernel-cmdline.sh support builtin module
+      #   install path for kernel params persistence
+      BINS: ["{{ build_aggregate_bin }}", "{{ install_aggregate_bin }}", "{{ apply_aggregate_bin }}", {'name': 'detect-builtin.sh', 'src': '../kernel/detect-builtin.sh', 'basedir': False}, {'name': 'install-kernel-cmdline.sh', 'src': '../kernel/install-kernel-cmdline.sh', 'basedir': False}]
       ENV: >-
         {{
           data_env
           | combine({'KERNEL_BUILD_SCRIPTS': build_scripts | join(' ')})
           | combine({'KERNEL_INSTALL_SCRIPTS': install_scripts | join(' ')})
+          # apply.sh consumes KERNEL_APPLY_SCRIPTS as a script-name list.
+          | combine({'KERNEL_APPLY_SCRIPTS': apply_scripts | join(' ')})
         }}
-      ENV_LIST: "{{ (data_env.keys() | list) + ['KERNEL_BUILD_SCRIPTS', 'KERNEL_INSTALL_SCRIPTS'] }}"
+      ENV_LIST: "{{ (data_env.keys() | list) + ['KERNEL_BUILD_SCRIPTS', 'KERNEL_INSTALL_SCRIPTS', 'KERNEL_APPLY_SCRIPTS'] }}"
       PKGS: [jq]
 
     all_state: >-
