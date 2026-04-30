@@ -42,16 +42,16 @@ def test_missing_record():
     check("alias name kept", env["name"], "kernel-main")
 
 
-def test_status_backcompat():
-    print("\nstatus backcompat:")
-    env = _build_envelope({"go": {"status": "bypassed", "requested": True, "bypassed": True}}, "go")
-    check("state from status", env["state"], "bypassed")
+def test_state_from_booleans():
+    print("\nstate from booleans:")
+    env = _build_envelope({"go": {"requested": True, "bypassed": True}}, "go")
+    check("state bypassed", env["state"], "bypassed")
     check("bypassed true", env["bypassed"], True)
 
 
 if __name__ == "__main__":
     test_active_record()
     test_missing_record()
-    test_status_backcompat()
+    test_state_from_booleans()
     print("\n{} passed, {} failed".format(passed, failed))
     sys.exit(1 if failed else 0)

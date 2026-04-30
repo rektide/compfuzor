@@ -80,11 +80,6 @@ def _compute_state(record):
     if isinstance(state, str) and state.strip():
         return state.strip()
 
-    # Backward compatibility while migrating from status->state.
-    status = record.get("status")
-    if isinstance(status, str) and status.strip():
-        return status.strip()
-
     requested = _to_bool(record.get("requested", False))
     bypassed = _to_bool(record.get("bypassed", False))
     valid = _to_bool(record.get("valid", True))
