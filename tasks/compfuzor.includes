@@ -62,10 +62,22 @@
   when: CONFIG_KEY is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/sub_nodejs.tasks
-  when: NODEJS is defined or BUN is defined or REPO_NPM is defined
+  when: NODEJS is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_nodejs.tasks
-  when: NODEJS is defined or BUN is defined or REPO_NPM is defined
+  when: NODEJS is defined
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/sub_bun.tasks
+  when: BUN is defined
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_bun.tasks
+  when: BUN is defined
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/sub_repo_npm.tasks
+  when: REPO_NPM is defined
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_repo_npm.tasks
+  when: REPO_NPM is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/sub_python.tasks
   when: PYTHON is deftruthy or PIP is defined
