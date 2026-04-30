@@ -1,0 +1,69 @@
+#!/bin/bash
+# surround-51-activate — Generate, install, and wire a surround 5.1 pipewire config.
+#
+# Wraps surround-51-gen (config generation) and surround-51-wire (port routing).
+# All --front-mix, --center-mix, etc. flags are passed through to surround-51-gen.
+#
+# Usage:
+#   surround-51-activate [GEN_OPTIONS...] --install    Generate, install, restart, wire
+#   surround-51-activate --off                         Remove config and restart
+#   surround-51-activate [GEN_OPTIONS...]              Generate config only (no install)
+
+set -euo pipefail
+
+CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/pipewire/pipewire.conf.d"
+BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if [ "$#" -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+  echo "Usage: $(basename "$0") [GEN_OPTIONS...] [--install] [--off]"
+  echo ""
+  echo "Generate and optionally install a surround 5.1 pipewire filter-chain config."
+  echo "All generator options (--front-mix, --center-mix, etc.) pass through to surround-51-gen."
+  echo ""
+  echo "Additional flags:"
+  echo "  --install    Write config, restart pipewire, and wire ports"
+  echo "  --off        Remove config and restart pipewire"
+  echo ""
+  echo "Generator help:"
+  "$BIN_DIR/surround-51-gen.js" --help
+  exit 0
+fi
+
+INSTALL=false
+OFF=false
+GEN_ARGS=()
+
+# Separate our flags from generator flags
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --install) INSTALL=true; shift ;;
+    --off) OFF=true; shift ;;
+    # Generator flags that take a value — consume next arg
+    --front-mix|--center-mix|--highpass|--sub-lfe|--sub-main|--sub-center)
+      GEN_ARGS+=("$1" "$2"); shift 2 ;;
+    *) GEN_ARGS+=("$1"); shift ;;
+  esac
+done
+
+if $OFF; then
+  rm -f "$CONF_DIR/surround-51.conf"
+  echo "Surround 5.1 disabled. Restarting PipeWire..."
+  systemctl --user restart pipewire pipewire-pulse wireplumber 2>/dev/null || true
+  exit 0
+fi
+
+mkdir -p "$CONF_DIR"
+echo "Generating surround 5.1 config..."
+"$BIN_DIR/surround-51-gen.js" "${GEN_ARGS[@]}" > "$CONF_DIR/surround-51.conf"
+
+if $INSTALL; then
+  echo "Restarting PipeWire..."
+  systemctl --user restart pipewire pipewire-pulse wireplumber 2>/dev/null || true
+  echo "Waiting for PipeWire to stabilize..."
+  sleep 2
+  echo "Wiring output ports to hardware..."
+  "$BIN_DIR/surround-51-wire"
+else
+  echo "Config written to $CONF_DIR/surround-51.conf"
+  echo "Run with --install to restart pipewire and wire ports."
+fi

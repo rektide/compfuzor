@@ -1,0 +1,70 @@
+#!/bin/bash
+# surround-51-wire — Route surround_51_output ports to hardware devices via pw-link.
+#
+# After the filter-chain creates the 6-channel virtual sink, PipeWire auto-connects
+# the playback output to hardware devices. This script disconnects those auto-links
+# and creates explicit per-channel routing to the correct physical speakers.
+#
+# Device node names are Jinja-rendered from playbook ENV vars at build time.
+# If running standalone without compfuzor, the defaults below match the current hardware.
+
+# Hardware device PipeWire node names (Jinja-rendered, fallback to defaults)
+MPOW="${PW_SURROUND_DEVICE_MPOW:-{{PW_SURROUND_DEVICE_MPOW}}}"
+FIIO="${PW_SURROUND_DEVICE_FIIO:-{{PW_SURROUND_DEVICE_FIIO}}}"
+XFI="${PW_SURROUND_DEVICE_XFI:-{{PW_SURROUND_DEVICE_XFI}}}"
+
+# Wait for the surround_51_output node to appear after pipewire restart
+for i in $(seq 1 30); do
+  if pw-link -o 2>/dev/null | grep -q "surround_51_output:"; then
+    break
+  fi
+  sleep 0.5
+done
+
+if ! pw-link -o 2>/dev/null | grep -q "surround_51_output:"; then
+  echo "Error: surround_51_output node not found after waiting" >&2
+  exit 1
+fi
+
+SRC="surround_51_output"
+
+# Disconnect all auto-linked connections from our output to any hardware device.
+# Without this, PipeWire sends FL/FR to every device by default.
+for dev in "$MPOW" "$FIIO" "$XFI"; do
+  for ch in FL FR FC LFE RL RR; do
+    pw-link -d "${SRC}:output_${ch}" "${dev}:playback_FL" 2>/dev/null || true
+    pw-link -d "${SRC}:output_${ch}" "${dev}:playback_FR" 2>/dev/null || true
+  done
+done
+
+# Physical speaker mapping:
+#
+#   Mpow HC5 (Kali Audio monitors via LP-UNF USB adapter)
+#     Left channel  = Rear Left speaker
+#     Right channel = Front Left speaker (receives mixed FL + center)
+#
+#   FiiO E10 (WEILIANG 24BIT USB DAC)
+#     Left channel  = Front Right speaker (receives mixed FR + center)
+#     Right channel = Rear Right speaker
+#
+#   SB X-Fi Surround 5.1 Pro
+#     Both channels = Subwoofer (the device's own crossover handles filtering)
+
+# Mpow HC5: L=rear-left, R=front-left
+pw-link "${SRC}:output_FL" "${MPOW}:playback_FR"
+pw-link "${SRC}:output_RL" "${MPOW}:playback_FL"
+
+# FiiO E10: L=front-right, R=rear-right
+pw-link "${SRC}:output_FR" "${FIIO}:playback_FL"
+pw-link "${SRC}:output_RR" "${FIIO}:playback_FR"
+
+# SB X-Fi: subwoofer on both channels (mono)
+pw-link "${SRC}:output_LFE" "${XFI}:playback_FL"
+pw-link "${SRC}:output_LFE" "${XFI}:playback_FR"
+
+echo "Surround 5.1 wiring complete."
+echo "  FL+center -> Mpow R  (front left speaker)"
+echo "  FR+center -> FiiO L  (front right speaker)"
+echo "  RL        -> Mpow L  (rear left speaker)"
+echo "  RR        -> FiiO R  (rear right speaker)"
+echo "  sub mix   -> SB X-Fi (subwoofer)"
