@@ -4,22 +4,20 @@
     - name: "Compfuzor: fail invalid tool_versions input"
       fail:
         msg: "{{ errors | join('; ') }}"
-      when: _subsystem_requested and (not _subsystem_bypassed) and (not _subsystem_valid)
+      when: requested and errors | length > 0
 
     - name: "Compfuzor: publish tool_versions subsystem"
       set_fact:
-        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'tool_versions': subsystem}, recursive=True) }}"
-      when: _subsystem_requested
+        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'tool_versions': record}, recursive=True) }}"
+      when: requested
   vars:
-    subsystem_name: tool_versions
     user_tool_versions: "{{ TOOL_VERSIONS if (TOOL_VERSIONS is defined and TOOL_VERSIONS is mapping) else {} }}"
-    subsystem_values: "{{ (SUBSYSTEM | default({})) | dict2items | map(attribute='value') | list }}"
-    tooling_from_subsystems: "{{ subsystem_values | merge_with_strategy({'TOOL_VERSIONS': 'dict_overlay'}, include_aggregate=false, payload_path='contrib.tooling') }}"
+    active_subsystems: "{{ (SUBSYSTEM | default({})) | dict2items | selectattr('value.active', 'equalto', true) | map(attribute='value') | list }}"
+    tooling_from_subsystems: "{{ active_subsystems | merge_with_strategy({'TOOL_VERSIONS': 'dict_overlay'}, include_aggregate=false, payload_path='contrib') }}"
     subsystem_tool_versions: "{{ tooling_from_subsystems.TOOL_VERSIONS | default({}) }}"
     resolved_tool_versions: "{{ subsystem_tool_versions | combine(user_tool_versions) }}"
     requested: "{{ (resolved_tool_versions | length) > 0 }}"
-    spec:
-      TOOL_VERSIONS: "{{ resolved_tool_versions }}"
+    errors: []
     contrib:
       artifacts:
         ETC_FILES:
@@ -31,4 +29,11 @@
         LINKS:
           - src: "{{ DIR }}/etc/.tool-versions"
             dest: .tool-versions
-    subsystem: "{{ 'tool_versions' | subsystem_record(spec=spec, contrib=contrib) }}"
+    record:
+      status: "{{ 'active' if requested else 'absent' }}"
+      requested: "{{ requested }}"
+      bypassed: false
+      valid: "{{ errors | length == 0 }}"
+      active: "{{ requested }}"
+      reasons: "{{ errors }}"
+      contrib: "{{ contrib if requested else {} }}"
