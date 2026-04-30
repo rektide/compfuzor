@@ -14,13 +14,22 @@
     _tv_merged: >-
       {{ _tv_subsystems.TOOL_VERSIONS | default({})
         | combine(_tv_user) }}
-    _tv_user: "{{ TOOL_VERSIONS if TOOL_VERSIONS is mapping else {} }}"
+    _tv_user_raw: "{{ TOOL_VERSIONS | default({}) }}"
+    _tv_user_mapping: "{{ _tv_user_raw if _tv_user_raw is mapping else {} }}"
+    _tv_user_list: "{{ _tv_user_raw if (_tv_user_raw is sequence and _tv_user_raw is not string and _tv_user_raw is not mapping) else [] }}"
+    _tv_user_list_mapping: >-
+      {%- set out = {} -%}
+      {%- for target in _tv_user_list if target is string -%}
+      {%- set _ = out.update({target: true}) -%}
+      {%- endfor -%}
+      {{ out }}
+    _tv_user: "{{ _tv_user_list_mapping | combine(_tv_user_mapping) }}"
     _tv_content: |
       {% for target, version in _tv_merged.items() %}
       {{ target }} {{ version if version != True else lookup('vars', target | upper + '_VERSION') }}
       {% endfor %}
   when: >-
-    (TOOL_VERSIONS is mapping and TOOL_VERSIONS | length > 0) or
+    (_tv_user | length > 0) or
     (SUBSYSTEM | dict2items
       | selectattr('value.active', 'equalto', true)
       | selectattr('value.contrib.TOOL_VERSIONS', 'defined')

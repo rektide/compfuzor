@@ -772,6 +772,9 @@ Target decomposition:
   `SUBSYSTEM.tool_versions.spec`)
 - `gen_tool_versions.tasks` renders that contract into shared artifacts
   (`ETC_FILES`/`LINKS`) and applies merge policy once, centrally
+- user-provided `TOOL_VERSIONS` may be a mapping of explicit versions or a list
+  of tool names, where each listed tool resolves through the matching
+  `<TOOL>_VERSION` variable
 
 Recommended shape:
 
