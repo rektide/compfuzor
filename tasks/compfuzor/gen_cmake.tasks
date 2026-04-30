@@ -1,0 +1,12 @@
+---
+- name: "Compfuzor: merge cmake subsystem contrib"
+  set_fact:
+    BINS: "{{ contrib.BINS | mergeKeyed(BINS | default([]), key='name', concat_fields=['generated']) }}"
+    PKGS: "{{ contrib.PKGS | concat2(PKGS) }}"
+    ENV: "{{ contrib.ENV | combine(existingEnv) }}"
+  when: hasContrib
+  vars:
+    record: "{{ (SUBSYSTEM | default({})) | get('cmake', {}) }}"
+    contrib: "{{ record | get('contrib', {}) if (record | get('contrib', {}) is mapping) else {} }}"
+    existingEnv: "{{ ENV if ENV is mapping else {} }}"
+    hasContrib: "{{ contrib | length > 0 }}"

@@ -1,0 +1,42 @@
+---
+# NPM package subsystem transform.
+#
+# Downloads and builds an npm package from the registry.
+# Prefer source builds (NODEJS + REPO) over NPM_PACKAGE when possible.
+
+- name: "Compfuzor: publish npm subsystem state"
+  set_fact:
+    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'npm': subsystem}, recursive=True) }}"
+  vars:
+    package_parsed: "{{ NPM_PACKAGE | regex_replace('(?:@[\\w.-]+/)?([\\w.-]+)(?:@[\\w.-]+)?', '\\1') }}"
+    npm_package_bin: "{{ NPM_PACKAGE_BIN | default(package_parsed) }}"
+
+    bins:
+      - name: build.sh
+        content: |
+          curl $(npm view $NPM_PACKAGE dist.tarball) | tar -xz --strip-components=1
+          pnpm i
+          if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
+            echo "Building package..."
+            pnpm build
+          fi
+          pnpm link
+
+    env_mapping:
+      NPM_PACKAGE: "{{ NPM_PACKAGE }}"
+
+    spec:
+      bins: "{{ bins }}"
+      env: "{{ env_mapping }}"
+      npm_package_bin: "{{ npm_package_bin }}"
+
+    contrib:
+      BINS: "{{ bins }}"
+      ENV: "{{ env_mapping }}"
+      tooling:
+        TOOL_VERSIONS:
+          nodejs: true
+          pnpm: true
+
+    subsystem: "{{ 'npm' | subsystem_record(requested=true, valid=true, bypassed=false, errors=[], spec=spec, contrib=contrib) }}"
+  when: NPM_PACKAGE is deftruthy

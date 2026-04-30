@@ -10,13 +10,8 @@ def _is_undefined(value):
     return wrapped_test_undefined(value)
 
 
-@accept_args_markers
-def get(value, path, default=None):
-    """Safely traverse a dotted path through dict/list values.
-
-    Returns `default` when any path segment is missing, types mismatch,
-    or an Ansible undefined marker is encountered.
-    """
+def get_path(value, path, default=None):
+    """Shared implementation for safe dotted-path traversal."""
     if _is_undefined(value):
         return default
 
@@ -57,8 +52,19 @@ def get(value, path, default=None):
     return current
 
 
+@accept_args_markers
+def get(value, path, default=None):
+    """Safely traverse a dotted path through dict/list values.
+
+    Returns `default` when any path segment is missing, types mismatch,
+    or an Ansible undefined marker is encountered.
+    """
+    return get_path(value, path, default=default)
+
+
 class FilterModule(object):
     def filters(self):
         return {
             "get": get,
+            "get_path": get_path,
         }

@@ -33,8 +33,11 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_make_autoconf.tasks
   tags: ['vars', 'always']
-- import_tasks: compfuzor/vars_cmake.tasks
-  when: CMAKE is deftruthy or CMAKE_ARGS is defined
+- import_tasks: compfuzor/fn_cmake.tasks
+  when: CMAKE is deftruthy or CMAKE_ARGS is defined or CMAKE_BUILDS is defined
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_cmake.tasks
+  when: CMAKE is deftruthy or CMAKE_ARGS is defined or CMAKE_BUILDS is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_debconf.tasks
   tags: ['vars', 'always']
@@ -42,9 +45,14 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_repo.tasks
   tags: ['vars', 'always']
-- import_tasks: compfuzor/vars_npm.tasks
+- import_tasks: compfuzor/fn_npm.tasks
   tags: ['vars', 'always']
-- import_tasks: compfuzor/vars_rust.tasks
+- import_tasks: compfuzor/gen_npm.tasks
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/fn_rust.tasks
+  when: RUST is defined
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_rust.tasks
   when: RUST is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_mcp.tasks
@@ -53,7 +61,10 @@
 - import_tasks: compfuzor/vars_config.tasks
   when: CONFIG_KEY is defined
   tags: ['vars', 'always']
-- import_tasks: compfuzor/vars_nodejs.tasks
+- import_tasks: compfuzor/fn_nodejs.tasks
+  when: NODEJS is defined or BUN is defined or REPO_NPM is defined
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_nodejs.tasks
   when: NODEJS is defined or BUN is defined or REPO_NPM is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/fn_python.tasks

@@ -1,0 +1,12 @@
+---
+- name: "Compfuzor: merge npm subsystem contrib"
+  set_fact:
+    BINS: "{{ contrib.BINS | mergeKeyed(BINS | default([]), key='name', concat_fields=['generated']) }}"
+    ENV: "{{ contrib.ENV | combine(existingEnv) }}"
+    NPM_PACKAGE_BIN: "{{ record | get('spec', {}) | get('npm_package_bin', NPM_PACKAGE_BIN | default(omit)) }}"
+  when: hasContrib
+  vars:
+    record: "{{ (SUBSYSTEM | default({})) | get('npm', {}) }}"
+    contrib: "{{ record | get('contrib', {}) if (record | get('contrib', {}) is mapping) else {} }}"
+    existingEnv: "{{ ENV if ENV is mapping else {} }}"
+    hasContrib: "{{ contrib | length > 0 }}"

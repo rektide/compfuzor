@@ -1,0 +1,132 @@
+---
+# Nodejs subsystem transform.
+#
+# Handles three mutually-exclusive modes: NODEJS, BUN, REPO_NPM.
+# Each mode produces its own bins, env, and tooling contrib.
+
+- name: "Compfuzor: publish nodejs subsystem state (nodejs mode)"
+  set_fact:
+    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'nodejs': subsystem}, recursive=True) }}"
+  vars:
+    binBuild:
+      - name: build.sh
+        run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+        basedir: repo
+        generated: |
+          if [ -f package-lock.json ] && [ ! -f pnpm-lock.yaml ]; then
+            pnpm import
+          fi
+          pnpm i --frozen
+          if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
+            echo "Building package..."
+            pnpm build
+          fi
+    binInstall:
+      - name: install.sh
+        run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+        basedir: repo
+        generated: |
+          if [ -n "{{ NODEJS_LINK_DIR | default('') }}" ]; then
+            IFS=',' read -ra _cf_link_dirs <<< "{{ NODEJS_LINK_DIR | default('.') }}"
+            for _cf_dir in "${_cf_link_dirs[@]}"; do
+              (cd "$_cf_dir" && pnpm link -g)
+            done
+          else
+            pnpm link -g
+          fi
+    bins: "{{ (binBuild if BUILD_BYPASS is not deftruthy else []) + (binInstall if INSTALL_BYPASS is not deftruthy else []) }}"
+
+    env_nodejs_bin: "{{ ({'NODEJS_BIN': NODEJS_BIN}) if NODEJS_BIN is defined else ({}) }}"
+    env_existing: "{{ {} if ENV | def(True) == True else ENV }}"
+
+    spec:
+      bins: "{{ bins }}"
+      env: "{{ env_nodejs_bin | combine(env_existing) }}"
+
+    contrib:
+      BINS: "{{ bins }}"
+      ENV: "{{ env_nodejs_bin | combine(env_existing) }}"
+      tooling:
+        TOOL_VERSIONS:
+          nodejs: true
+
+    subsystem: "{{ 'nodejs' | subsystem_record(requested=true, valid=true, bypassed=false, errors=[], spec=spec, contrib=contrib) }}"
+  when: NODEJS is deftruthy
+
+- name: "Compfuzor: publish nodejs subsystem state (bun mode)"
+  set_fact:
+    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'nodejs': subsystem}, recursive=True) }}"
+  vars:
+    binBuild:
+      - name: build.sh
+        run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+        basedir: repo
+        generated: |
+          bun install
+    binInstall:
+      - name: install.sh
+        run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+        basedir: repo
+        generated: |
+          bun link -g
+    bins: "{{ (binBuild if BUILD_BYPASS is not deftruthy else []) + (binInstall if INSTALL_BYPASS is not deftruthy else []) }}"
+
+    env_bun_bin: "{{ ({'BUN_BIN': BUN_BIN}) if BUN_BIN is defined else ({}) }}"
+    env_existing: "{{ {} if ENV | def(True) == True else ENV }}"
+
+    spec:
+      bins: "{{ bins }}"
+      env: "{{ env_bun_bin | combine(env_existing) }}"
+
+    contrib:
+      BINS: "{{ bins }}"
+      ENV: "{{ env_bun_bin | combine(env_existing) }}"
+      tooling:
+        TOOL_VERSIONS:
+          bun: true
+
+    subsystem: "{{ 'nodejs' | subsystem_record(requested=true, valid=true, bypassed=false, errors=[], spec=spec, contrib=contrib) }}"
+  when: BUN is deftruthy
+
+- name: "Compfuzor: publish nodejs subsystem state (repo_npm mode)"
+  set_fact:
+    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'nodejs': subsystem}, recursive=True) }}"
+  vars:
+    package_parsed: "{{ NPM_PACKAGE | regex_replace('(?:@[\\w.-]+/)?([\\w.-]+)(?:@[\\w.-]+)?', '\\1') }}"
+    npm_package_bin: "{{ NPM_PACKAGE_BIN | default(package_parsed) }}"
+
+    bins:
+      - name: build.sh
+        content: |
+          curl $(npm view $NPM_PACKAGE dist.tarball) | tar -xz --strip-components=1
+          pnpm i
+          if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
+            echo "Building package..."
+            pnpm build
+          fi
+          pnpm link
+
+    env_mapping:
+      NPM_PACKAGE: "{{ NPM_PACKAGE }}"
+
+    etc_files:
+      - name: npm.txt
+        content: |
+          {{ REPO_NPM }}
+
+    spec:
+      bins: "{{ bins }}"
+      env: "{{ env_mapping }}"
+      npm_package_bin: "{{ npm_package_bin }}"
+
+    contrib:
+      BINS: "{{ bins }}"
+      ENV: "{{ env_mapping }}"
+      ETC_FILES: "{{ etc_files }}"
+      tooling:
+        TOOL_VERSIONS:
+          nodejs: true
+          pnpm: true
+
+    subsystem: "{{ 'nodejs' | subsystem_record(requested=true, valid=true, bypassed=false, errors=[], spec=spec, contrib=contrib) }}"
+  when: REPO_NPM is defined

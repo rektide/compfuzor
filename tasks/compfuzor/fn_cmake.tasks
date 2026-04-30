@@ -1,0 +1,119 @@
+---
+# Cmake subsystem transform.
+#
+# Responsibilities:
+# - validate CMAKE/CMAKE_ARGS/CMAKE_BUILDS input
+# - build SUBSYSTEM.cmake with spec and contrib
+#
+# Non-responsibilities:
+# - no direct merge into global artifacts (gen_cmake handles that)
+
+- name: "Compfuzor: publish cmake subsystem state"
+  set_fact:
+    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'cmake': subsystem}, recursive=True) }}"
+  vars:
+    cmake_source_default: "{{ CMAKE_SOURCE_DIR | default('.') }}"
+    cmake_builds_raw: "{{ CMAKE_BUILDS | default([]) | arrayitize }}"
+    default_cmake_build:
+      name: default
+      build_dir: "{{ _BUILD_DIR }}"
+      source_dir: "{{ cmake_source_default }}"
+      generator: "{{ CMAKE_GENERATOR | default('Ninja') }}"
+      args: "{{ CMAKE_ARGS | default('') }}"
+      build_type: "{{ CMAKE_BUILD_TYPE | default('Release') }}"
+      configure_always: "{{ CMAKE_CONFIGURE_ALWAYS | default(False) }}"
+      install: "{{ CMAKE_INSTALL is defined }}"
+    cmake_builds: "{{ cmake_builds_raw if cmake_builds_raw | length > 0 else [default_cmake_build] }}"
+    cmake_install_args_global: >-
+      {{
+        CMAKE_INSTALL | arrayitize | join(' ')
+        if (CMAKE_INSTALL is defined and CMAKE_INSTALL != True)
+        else ''
+      }}
+
+    env_cmake:
+      BUILD_DIR_CF_CM: "{{ _BUILD_DIR }}"
+      CMAKE_GENERATOR: "{{ CMAKE_GENERATOR | default(omit) }}"
+      CMAKE_BUILD_TYPE: "{{ CMAKE_BUILD_TYPE | default('Release') }}"
+      CMAKE_INSTALL_BIN: "{{ CMAKE_INSTALL_BIN | default(omit) }}"
+    env_existing: "{{ {} if ENV | def(True) == True else ENV }}"
+
+    bins:
+      - name: build.sh
+        run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
+        basedir: "{{ REPO_DIR }}"
+        generated: |
+          {% for cmakeBuild in cmake_builds %}
+          {% set generator = cmakeBuild.generator | default(CMAKE_GENERATOR | default('Ninja')) %}
+          {% set configureArgs = cmakeBuild.args | default(CMAKE_ARGS | default([])) | arrayitize | join(' ') %}
+          {% set buildTarget = cmakeBuild.build_target | default(CMAKE_BUILD_TARGET | default(False)) %}
+          {% set buildType = cmakeBuild.build_type | default(CMAKE_BUILD_TYPE | default(False)) %}
+          {% set buildArgs = cmakeBuild.build_args | default(CMAKE_BUILD_ARGS | default([])) | arrayitize | join(' ') %}
+          echo "CMake build: {{ cmakeBuild.name | default('default') }}"
+
+          BUILD_DIR="{{ cmakeBuild.build_dir | default(_BUILD_DIR) }}"
+          SOURCE_DIR="{{ cmakeBuild.source_dir | default(cmake_source_default) }}"
+          CONFIGURE_STATE="$BUILD_DIR/.compfuzor-cmake-configure.txt"
+          CONFIGURE_STATE_NEXT="$BUILD_DIR/.compfuzor-cmake-configure.next.txt"
+          SHOULD_CONFIGURE=0
+
+          mkdir -p "$BUILD_DIR"
+
+          cat > "$CONFIGURE_STATE_NEXT" <<'EOF'
+          generator={{ generator }}
+          source_dir={{ cmakeBuild.source_dir | default(cmake_source_default) }}
+          args:
+          {{ configureArgs | trim }}
+          EOF
+
+          {% if cmakeBuild.configure_always | default(CMAKE_CONFIGURE_ALWAYS | default(False)) | bool %}
+          SHOULD_CONFIGURE=1
+          {% else %}
+          if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
+            SHOULD_CONFIGURE=1
+          elif [ ! -f "$CONFIGURE_STATE" ]; then
+            mv "$CONFIGURE_STATE_NEXT" "$CONFIGURE_STATE"
+          elif cmp -s "$CONFIGURE_STATE" "$CONFIGURE_STATE_NEXT"; then
+            rm -f "$CONFIGURE_STATE_NEXT"
+          else
+            SHOULD_CONFIGURE=1
+          fi
+          {% endif %}
+
+          if [ "$SHOULD_CONFIGURE" -eq 1 ]; then
+            cmake -G "{{ generator }}" -B "$BUILD_DIR" -S "$SOURCE_DIR" {{ configureArgs }}
+            mv "$CONFIGURE_STATE_NEXT" "$CONFIGURE_STATE"
+          else
+            echo "Already configured, skipping configure for $BUILD_DIR"
+          fi
+
+          cmake --build "$BUILD_DIR"{% if buildTarget %} --target {{ buildTarget }}{% endif %}{% if buildType %} --config {{ buildType }}{% endif %}{% if buildArgs %} {{ buildArgs }}{% endif %}
+          {% endfor %}
+      - name: install.sh
+        basedir: repo
+        generated: |
+          {% if CMAKE_INSTALL is defined %}
+          {% for cmakeBuild in cmake_builds if cmakeBuild.install | default(True) %}
+          {% set installArgs = cmakeBuild.install_args | default([]) | arrayitize | join(' ') %}
+          cmake --install "{{ cmakeBuild.build_dir | default(_BUILD_DIR) }}"{{ ' ' + cmake_install_args_global if cmake_install_args_global else '' }}{{ ' ' + installArgs if installArgs else '' }}
+          {% endfor %}
+          {% else %}
+          [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${CMAKE_INSTALL_BIN:-{{ TYPE }}}"
+          ln -sfv "$(pwd)/{{ cmake_builds[0].build_dir | default('build') }}/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
+          {% endif %}
+
+    pkgs:
+      - cmake
+      - ninja-build
+
+    spec:
+      bins: "{{ bins }}"
+      env: "{{ env_cmake | combine(env_existing) }}"
+
+    contrib:
+      BINS: "{{ bins }}"
+      PKGS: "{{ pkgs }}"
+      ENV: "{{ env_cmake | combine(env_existing) }}"
+
+    subsystem: "{{ 'cmake' | subsystem_record(requested=true, valid=true, bypassed=false, errors=[], spec=spec, contrib=contrib) }}"
+  when: CMAKE is deftruthy or CMAKE_ARGS is defined or CMAKE_BUILDS is defined
