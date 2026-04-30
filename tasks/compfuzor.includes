@@ -29,7 +29,7 @@
   when: GET_URLS is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_get_urls.tasks
-  when: ((SUBSYSTEM | default({})).get('get_urls', {}).get('active', false) | bool)
+  when: lookup('subsys', 'get_urls', get='active', default=false) | bool
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_make_autoconf.tasks
   tags: ['vars', 'always']
@@ -143,7 +143,7 @@
 - import_tasks: compfuzor/fs_zip.tasks
   when: ZIP is defined and not ZIP_BYPASS|default(False)
 - import_tasks: compfuzor/fs_get_urls.tasks
-  when: ((SUBSYSTEM | default({})).get('get_urls', {}).get('active', false) | bool)
+  when: lookup('subsys', 'get_urls', get='active', default=false) | bool
 - import_tasks: compfuzor/bins.tasks
   when: BINS|default(False) and not BINS_BYPASS|default(False)
 - import_tasks: compfuzor/bins_link.tasks
