@@ -1,13 +1,18 @@
 ---
-# NPM package subsystem transform.
-#
-# Downloads and builds an npm package from the registry.
-# Prefer source builds (NODEJS + REPO) over NPM_PACKAGE when possible.
+- name: "Compfuzor: define npm subsystem"
+  block:
+    - name: "Compfuzor: fail invalid npm input"
+      fail:
+        msg: "{{ errors | join('; ') }}"
+      when: _subsystem_requested and (not _subsystem_bypassed) and (not _subsystem_valid)
 
-- name: "Compfuzor: publish npm subsystem state"
-  set_fact:
-    SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'npm': subsystem}, recursive=True) }}"
+    - name: "Compfuzor: publish npm subsystem"
+      set_fact:
+        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'npm': subsystem}, recursive=True) }}"
+      when: _subsystem_requested
   vars:
+    subsystem_name: npm
+    requested: "{{ NPM_PACKAGE is deftruthy }}"
     package_parsed: "{{ NPM_PACKAGE | regex_replace('(?:@[\\w.-]+/)?([\\w.-]+)(?:@[\\w.-]+)?', '\\1') }}"
     npm_package_bin: "{{ NPM_PACKAGE_BIN | default(package_parsed) }}"
 
@@ -38,5 +43,4 @@
           nodejs: true
           pnpm: true
 
-    subsystem: "{{ 'npm' | subsystem_record(requested=true, valid=true, bypassed=false, errors=[], spec=spec, contrib=contrib) }}"
-  when: NPM_PACKAGE is deftruthy
+    subsystem: "{{ 'npm' | subsystem_record(spec=spec, contrib=contrib) }}"
