@@ -1,15 +1,12 @@
 ---
 - name: "Compfuzor: merge python subsystem contrib"
   set_fact:
-    BINS: "{{ merged.BINS | mergeKeyed(BINS | default([]), key='name', concat_fields=['generated']) }}"
-    ENV: "{{ merged.ENV | combine(existingEnv) }}"
-    ETC_FILES: "{{ merged.ETC_FILES | concat2(ETC_FILES) }}"
-  when: hasPythonContrib
+    BINS: "{{ contrib.BINS | mergeKeyed(BINS | default([]), key='name', concat_fields=['generated']) }}"
+    ENV: "{{ contrib.ENV | combine(existingEnv) }}"
+    ETC_FILES: "{{ contrib.ETC_FILES | concat2(ETC_FILES) }}"
+  when: hasContrib
   vars:
-    subsystems: "{{ SUBSYSTEM | default({}) }}"
-    subsystemRecord: "{{ subsystems | get('python', {}) }}"
-    contribCandidate: "{{ subsystemRecord | get('contrib', {}) }}"
-    contrib: "{{ contribCandidate if contribCandidate is mapping else {} }}"
+    record: "{{ (SUBSYSTEM | default({})) | get('python', {}) }}"
+    contrib: "{{ record | get('contrib', {}) if (record | get('contrib', {}) is mapping) else {} }}"
     existingEnv: "{{ ENV if ENV is mapping else {} }}"
-    merged: "{{ contrib }}"
-    hasPythonContrib: "{{ merged | length > 0 }}"
+    hasContrib: "{{ contrib | length > 0 }}"
