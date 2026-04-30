@@ -13,9 +13,13 @@ DOCUMENTATION = """
     options:
       _terms:
         description:
-          - Exactly one subsystem id to resolve.
-          - May be empty when C(fallback_id) is provided.
-        required: true
+          - Positional terms are not supported.
+          - Use C(id=...) and optional C(fallback_id=...) instead.
+        required: false
+      id:
+        description:
+          - Optional keyword subsystem id to resolve.
+          - Preferred over positional terms for explicit calls.
       name:
         description:
           - Optional alias/logical name for caller-facing labeling.
@@ -33,19 +37,19 @@ DOCUMENTATION = """
 EXAMPLES = """
 - name: Resolve whole subsystem envelope
   ansible.builtin.set_fact:
-    get_urls_subsys: "{{ lookup('subsys', 'get_urls') }}"
+    get_urls_subsys: "{{ lookup('subsys', id='get_urls') }}"
 
 - name: Resolve one field from subsystem
   ansible.builtin.set_fact:
-    get_urls_active: "{{ lookup('subsys', 'get_urls', get='active', default=false) }}"
+    get_urls_active: "{{ lookup('subsys', id='get_urls', get='active', default=false) }}"
 
 - name: Resolve with alias name
   ansible.builtin.set_fact:
-    download_subsys: "{{ lookup('subsys', 'get_urls', name='downloads') }}"
+    download_subsys: "{{ lookup('subsys', id='get_urls', name='downloads') }}"
 
 - name: Resolve using fallback subsystem id
   ansible.builtin.set_fact:
-    active_downloads: "{{ lookup('subsys', subsystem_id, name=subsystem_name, fallback_id='get_urls', get='active') }}"
+    active_downloads: "{{ lookup('subsys', id=subsystem_id, name=subsystem_name, fallback_id='get_urls', get='active') }}"
 """
 
 RETURN = """
@@ -146,12 +150,13 @@ class LookupModule(LookupBase):
     def run(self, terms, variables=None, **kwargs):
         variables = variables or {}
 
-        if len(terms) != 1:
+        if len(terms) > 0:
             raise AnsibleError(
-                "lookup('subsys', ...) expects exactly one positional subsystem id"
+                "lookup('subsys', ...) does not support positional ids; use id=..."
             )
 
-        subsystem_id = terms[0]
+        keyword_id = kwargs.get("id")
+        subsystem_id = keyword_id
         fallback_id = kwargs.get("fallback_id")
 
         if wrapped_test_undefined(subsystem_id) or subsystem_id is None:

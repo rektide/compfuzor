@@ -3,7 +3,7 @@
   set_fact:
     SUBSYSTEM: "{{ subsystems | combine(getUrlsSubsystemSynthesis, recursive=True) }}"
     BINS: "{{ mergedBins.BINS }}"
-  when: lookup('subsys', 'get_urls', get='active', default=false) | bool
+  when: lookup('subsys', id='get_urls', get='active', default=false) | bool
   vars:
     subsystems: "{{ SUBSYSTEM | default({}) }}"
     getUrlsBins:

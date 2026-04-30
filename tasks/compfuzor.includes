@@ -25,15 +25,15 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_src.tasks
   tags: ['vars', 'always']
-- import_tasks: compfuzor/fn_get_urls.tasks
+- import_tasks: compfuzor/sub_get_urls.tasks
   when: GET_URLS is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_get_urls.tasks
-  when: lookup('subsys', 'get_urls', get='active', default=false) | bool
+  when: lookup('subsys', id='get_urls', get='active', default=false) | bool
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_make_autoconf.tasks
   tags: ['vars', 'always']
-- import_tasks: compfuzor/fn_cmake.tasks
+- import_tasks: compfuzor/sub_cmake.tasks
   when: CMAKE is deftruthy or CMAKE_ARGS is defined or CMAKE_BUILDS is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_cmake.tasks
@@ -45,11 +45,11 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_repo.tasks
   tags: ['vars', 'always']
-- import_tasks: compfuzor/fn_npm.tasks
+- import_tasks: compfuzor/sub_npm.tasks
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_npm.tasks
   tags: ['vars', 'always']
-- import_tasks: compfuzor/fn_rust.tasks
+- import_tasks: compfuzor/sub_rust.tasks
   when: RUST is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_rust.tasks
@@ -61,32 +61,32 @@
 - import_tasks: compfuzor/vars_config.tasks
   when: CONFIG_KEY is defined
   tags: ['vars', 'always']
-- import_tasks: compfuzor/fn_nodejs.tasks
+- import_tasks: compfuzor/sub_nodejs.tasks
   when: NODEJS is defined or BUN is defined or REPO_NPM is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_nodejs.tasks
   when: NODEJS is defined or BUN is defined or REPO_NPM is defined
   tags: ['vars', 'always']
-- import_tasks: compfuzor/fn_python.tasks
+- import_tasks: compfuzor/sub_python.tasks
   when: PYTHON is deftruthy or PIP is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_python.tasks
   when: PYTHON is deftruthy or PIP is defined
   tags: ['vars', 'always']
-- import_tasks: compfuzor/fn_go.tasks
+- import_tasks: compfuzor/sub_go.tasks
   when: GO is deftruthy
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_go.tasks
   when: GO is deftruthy
   tags: ['vars', 'always']
-- import_tasks: compfuzor/fn_tool_versions.tasks
+- import_tasks: compfuzor/sub_tool_versions.tasks
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_tool_versions.tasks
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_nvim.tasks
   when: NVIM is defined
   tags: ['vars', 'always']
-- import_tasks: compfuzor/fn_kernel.tasks
+- import_tasks: compfuzor/sub_kernel.tasks
   when: KERNEL_MODULES is defined or KERNEL_MODPROBE is defined or KERNEL_SYSCTL is defined or KERNEL_SYSFS is defined or KERNEL_PARAMS is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_kernel.tasks
@@ -143,7 +143,7 @@
 - import_tasks: compfuzor/fs_zip.tasks
   when: ZIP is defined and not ZIP_BYPASS|default(False)
 - import_tasks: compfuzor/fs_get_urls.tasks
-  when: lookup('subsys', 'get_urls', get='active', default=false) | bool
+  when: lookup('subsys', id='get_urls', get='active', default=false) | bool
 - import_tasks: compfuzor/bins.tasks
   when: BINS|default(False) and not BINS_BYPASS|default(False)
 - import_tasks: compfuzor/bins_link.tasks
