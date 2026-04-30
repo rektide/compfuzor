@@ -45,8 +45,6 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_repo.tasks
   tags: ['vars', 'always']
-- import_tasks: compfuzor/sub_npm.tasks
-  tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_npm.tasks
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_rust.tasks
@@ -58,14 +56,8 @@
 - import_tasks: compfuzor/vars_config.tasks
   when: CONFIG_KEY is defined
   tags: ['vars', 'always']
-- import_tasks: compfuzor/sub_nodejs.tasks
-  when: NODEJS is defined
-  tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_nodejs.tasks
   when: NODEJS is defined
-  tags: ['vars', 'always']
-- import_tasks: compfuzor/sub_bun.tasks
-  when: BUN is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_bun.tasks
   when: BUN is defined
@@ -81,9 +73,6 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_python.tasks
   when: PYTHON is deftruthy or PIP is defined
-  tags: ['vars', 'always']
-- import_tasks: compfuzor/sub_go.tasks
-  when: GO is deftruthy
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_go.tasks
   when: GO is deftruthy
