@@ -5,13 +5,13 @@
 # the playback output to hardware devices. This script disconnects those auto-links
 # and creates explicit per-channel routing to the correct physical speakers.
 #
-# Device node names are Jinja-rendered from playbook ENV vars at build time.
-# If running standalone without compfuzor, the defaults below match the current hardware.
+# Device node names are resolved at runtime: env var > Jinja-rendered playbook default.
 
-# Hardware device PipeWire node names (Jinja-rendered, fallback to defaults)
-MPOW="${PW_SURROUND_DEVICE_MPOW:-{{PW_SURROUND_DEVICE_MPOW}}}"
-FIIO="${PW_SURROUND_DEVICE_FIIO:-{{PW_SURROUND_DEVICE_FIIO}}}"
-XFI="${PW_SURROUND_DEVICE_XFI:-{{PW_SURROUND_DEVICE_XFI}}}"
+# Hardware device PipeWire node names
+# Priority: runtime env var > Jinja-rendered playbook default
+DEV_L="${PW_SURROUND_DEVICE_L:-{{PW_SURROUND_DEVICE_L}}}"
+DEV_R="${PW_SURROUND_DEVICE_R:-{{PW_SURROUND_DEVICE_R}}}"
+DEV_SUB="${PW_SURROUND_DEVICE_SUB:-{{PW_SURROUND_DEVICE_SUB}}}"
 
 # Wait for the surround_51_output node to appear after pipewire restart
 for i in $(seq 1 30); do
@@ -30,7 +30,7 @@ SRC="surround_51_output"
 
 # Disconnect all auto-linked connections from our output to any hardware device.
 # Without this, PipeWire sends FL/FR to every device by default.
-for dev in "$MPOW" "$FIIO" "$XFI"; do
+for dev in "$DEV_L" "$DEV_R" "$DEV_SUB"; do
   for ch in FL FR FC LFE RL RR; do
     pw-link -d "${SRC}:output_${ch}" "${dev}:playback_FL" 2>/dev/null || true
     pw-link -d "${SRC}:output_${ch}" "${dev}:playback_FR" 2>/dev/null || true
@@ -50,21 +50,21 @@ done
 #   SB X-Fi Surround 5.1 Pro
 #     Both channels = Subwoofer (the device's own crossover handles filtering)
 
-# Mpow HC5: L=rear-left, R=front-left
-pw-link "${SRC}:output_FL" "${MPOW}:playback_FR"
-pw-link "${SRC}:output_RL" "${MPOW}:playback_FL"
+# DEV_L: left-front + left-rear (L channel = rear left, R channel = front left)
+pw-link "${SRC}:output_FL" "${DEV_L}:playback_FR"
+pw-link "${SRC}:output_RL" "${DEV_L}:playback_FL"
 
-# FiiO E10: L=front-right, R=rear-right
-pw-link "${SRC}:output_FR" "${FIIO}:playback_FL"
-pw-link "${SRC}:output_RR" "${FIIO}:playback_FR"
+# DEV_R: right-front + right-rear (L channel = front right, R channel = rear right)
+pw-link "${SRC}:output_FR" "${DEV_R}:playback_FL"
+pw-link "${SRC}:output_RR" "${DEV_R}:playback_FR"
 
-# SB X-Fi: subwoofer on both channels (mono)
-pw-link "${SRC}:output_LFE" "${XFI}:playback_FL"
-pw-link "${SRC}:output_LFE" "${XFI}:playback_FR"
+# DEV_SUB: subwoofer on both channels (mono)
+pw-link "${SRC}:output_LFE" "${DEV_SUB}:playback_FL"
+pw-link "${SRC}:output_LFE" "${DEV_SUB}:playback_FR"
 
 echo "Surround 5.1 wiring complete."
-echo "  FL+center -> Mpow R  (front left speaker)"
-echo "  FR+center -> FiiO L  (front right speaker)"
-echo "  RL        -> Mpow L  (rear left speaker)"
-echo "  RR        -> FiiO R  (rear right speaker)"
-echo "  sub mix   -> SB X-Fi (subwoofer)"
+echo "  FL+center -> ${DEV_L}:R (front left speaker)"
+echo "  FR+center -> ${DEV_R}:L (front right speaker)"
+echo "  RL        -> ${DEV_L}:L (rear left speaker)"
+echo "  RR        -> ${DEV_R}:R (rear right speaker)"
+echo "  sub mix   -> ${DEV_SUB}   (subwoofer)"

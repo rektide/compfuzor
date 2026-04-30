@@ -34,10 +34,10 @@
     PW_SURROUND_SUB_CENTER: "0.0"
 
     # PipeWire device node names for the hardware routing script.
-    # These are Jinja-rendered into surround-51-wire at build time.
-    PW_SURROUND_DEVICE_MPOW: "alsa_output.usb-QTIL_LP-UNF_ABCDEF0123456789-00.analog-stereo"
-    PW_SURROUND_DEVICE_FIIO: "alsa_output.usb-WEIL_WEILIANG_24BIT_USB-01.analog-stereo"
-    PW_SURROUND_DEVICE_XFI: "alsa_output.usb-Creative_Technology_Ltd_SB_X-Fi_Surround_5.1_Pro_00000658-00.analog-stereo"
+    # Runtime env var PW_SURROUND_DEVICE_L/R/SUB overrides these Jinja-rendered defaults.
+    PW_SURROUND_DEVICE_L: "alsa_output.usb-QTIL_LP-UNF_ABCDEF0123456789-00.analog-stereo"
+    PW_SURROUND_DEVICE_R: "alsa_output.usb-WEIL_WEILIANG_24BIT_USB-01.analog-stereo"
+    PW_SURROUND_DEVICE_SUB: "alsa_output.usb-Creative_Technology_Ltd_SB_X-Fi_Surround_5.1_Pro_00000658-00.analog-stereo"
 
     BINS:
       # Config generator — produces pipewire filter-chain JSON to stdout.
@@ -57,7 +57,7 @@
 
       # Port wiring — uses pw-link to disconnect auto-links and route each
       # virtual sink output channel to the correct physical device channel.
-      # Device names are Jinja-rendered from PW_SURROUND_DEVICE_* vars above.
+      # Device names: runtime PW_SURROUND_DEVICE_L/R/SUB env var > Jinja default.
       - name: surround-51-wire
         src: surround-51-wire
         no_header: true
