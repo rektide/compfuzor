@@ -9,9 +9,10 @@
 #   surround-51-wire     Route virtual sink ports to physical hardware via pw-link
 #
 # Hardware layout:
-#   Mpow HC5 (LP-UNF USB) L=rear-left  R=front-left
-#   FiiO E10 (WEILIANG)   L=front-right R=rear-right
-#   SB X-Fi Surround 5.1  both channels = subwoofer (has its own crossover)
+#   BS5P-ARC (or Mpow HC5 fallback) L=rear-left  R=front-left
+#   FiiO E10 (WEILIANG)             L=front-right R=rear-right
+#   Dell AC511 Sound Bar            both channels = center
+#   SB X-Fi Surround 5.1            both channels = subwoofer (has its own crossover)
 #
 # The filter-chain mixing matrix:
 #   Front speakers:  frontMix*FL/FR + centerMix*FC
@@ -38,7 +39,8 @@
 
       # Port wiring — uses pw-link to disconnect auto-links and route each
       # virtual sink output channel to the correct physical device channel.
-      # Device names: runtime PW_SURROUND_DEVICE_L/R/SUB env var > Jinja default.
+      # Device lists: comma-separated for fallback, first available wins.
+      # Priority: runtime PW_SURROUND_DEVICE_L/R/C/SUB env var > Jinja default.
       - name: surround-51-wire
         src: surround-51-wire
         no_header: true
@@ -58,9 +60,11 @@
       PW_SURROUND_SUB_CENTER: "0.0"
 
       # PipeWire device node names for the hardware routing script.
-      # Runtime env var PW_SURROUND_DEVICE_L/R/SUB overrides these Jinja-rendered defaults.
-      PW_SURROUND_DEVICE_L: "alsa_output.usb-QTIL_LP-UNF_ABCDEF0123456789-00.analog-stereo"
+      # Comma-separated lists: first available sink wins (fallback chain).
+      # Priority: runtime PW_SURROUND_DEVICE_* env var > Jinja-rendered default.
+      PW_SURROUND_DEVICE_L: "alsa_output.usb-Generic_BS5P-ARC_20170726905955-00.analog-stereo,alsa_output.usb-QTIL_LP-UNF_ABCDEF0123456789-00.analog-stereo"
       PW_SURROUND_DEVICE_R: "alsa_output.usb-WEIL_WEILIANG_24BIT_USB-01.analog-stereo"
+      PW_SURROUND_DEVICE_C: "alsa_output.usb-Dell_Dell_AC511_USB_SoundBar-00.analog-stereo"
       PW_SURROUND_DEVICE_SUB: "alsa_output.usb-Creative_Technology_Ltd_SB_X-Fi_Surround_5.1_Pro_00000658-00.analog-stereo"
   tasks:
     - import_tasks: tasks/compfuzor.includes

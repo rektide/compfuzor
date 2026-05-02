@@ -5,13 +5,34 @@
 # the playback output to hardware devices. This script disconnects those auto-links
 # and creates explicit per-channel routing to the correct physical speakers.
 #
-# Device node names are resolved at runtime: env var > Jinja-rendered playbook default.
+# Device resolution: runtime env var > Jinja-rendered playbook default.
+# Each PW_SURROUND_DEVICE_* var accepts a comma-separated list of PipeWire node names.
+# The first device that exists as a running sink is used (fallback chain).
 
-# Hardware device PipeWire node names
-# Priority: runtime env var > Jinja-rendered playbook default
-DEV_L="${PW_SURROUND_DEVICE_L:-{{PW_SURROUND_DEVICE_L}}}"
-DEV_R="${PW_SURROUND_DEVICE_R:-{{PW_SURROUND_DEVICE_R}}}"
-DEV_SUB="${PW_SURROUND_DEVICE_SUB:-{{PW_SURROUND_DEVICE_SUB}}}"
+# Resolve a comma-separated device list to the first available PipeWire sink.
+# Usage: resolve_device "device1,device2,device3"
+resolve_device() {
+  local candidates="$1"
+  local IFS=','
+  for dev in $candidates; do
+    # Strip whitespace
+    dev="$(echo "$dev" | xargs)"
+    [ -z "$dev" ] && continue
+    # Check if the device sink exists in pw-link input ports
+    if pw-link -i 2>/dev/null | grep -q "${dev}:playback_FL"; then
+      echo "$dev"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Device lists — comma-separated for fallback.
+# Priority: runtime env var > Jinja-rendered playbook default.
+DEV_L_CANDIDATES="${PW_SURROUND_DEVICE_L:-{{PW_SURROUND_DEVICE_L}}}"
+DEV_R_CANDIDATES="${PW_SURROUND_DEVICE_R:-{{PW_SURROUND_DEVICE_R}}}"
+DEV_C_CANDIDATES="${PW_SURROUND_DEVICE_C:-{{PW_SURROUND_DEVICE_C}}}"
+DEV_SUB_CANDIDATES="${PW_SURROUND_DEVICE_SUB:-{{PW_SURROUND_DEVICE_SUB}}}"
 
 # Wait for the surround_51_output node to appear after pipewire restart
 for i in $(seq 1 30); do
@@ -28,43 +49,58 @@ fi
 
 SRC="surround_51_output"
 
-# Disconnect all auto-linked connections from our output to any hardware device.
+# Resolve each device from its candidate list
+DEV_L="$(resolve_device "$DEV_L_CANDIDATES")" || { echo "Warning: no left device found from: $DEV_L_CANDIDATES" >&2; DEV_L=""; }
+DEV_R="$(resolve_device "$DEV_R_CANDIDATES")" || { echo "Warning: no right device found from: $DEV_R_CANDIDATES" >&2; DEV_R=""; }
+DEV_C="$(resolve_device "$DEV_C_CANDIDATES")" || { echo "Info: no center device found from: $DEV_C_CANDIDATES (center will only be mixed into fronts)" >&2; DEV_C=""; }
+DEV_SUB="$(resolve_device "$DEV_SUB_CANDIDATES")" || { echo "Warning: no sub device found from: $DEV_SUB_CANDIDATES" >&2; DEV_SUB=""; }
+
+# Disconnect all auto-linked connections from our output to any resolved hardware device.
 # Without this, PipeWire sends FL/FR to every device by default.
-for dev in "$DEV_L" "$DEV_R" "$DEV_SUB"; do
+for dev in "$DEV_L" "$DEV_R" "$DEV_C" "$DEV_SUB"; do
+  [ -z "$dev" ] && continue
   for ch in FL FR FC LFE RL RR; do
     pw-link -d "${SRC}:output_${ch}" "${dev}:playback_FL" 2>/dev/null || true
     pw-link -d "${SRC}:output_${ch}" "${dev}:playback_FR" 2>/dev/null || true
   done
 done
 
-# Physical speaker mapping:
-#
-#   Mpow HC5 (Kali Audio monitors via LP-UNF USB adapter)
-#     Left channel  = Rear Left speaker
-#     Right channel = Front Left speaker (receives mixed FL + center)
-#
-#   FiiO E10 (WEILIANG 24BIT USB DAC)
-#     Left channel  = Front Right speaker (receives mixed FR + center)
-#     Right channel = Rear Right speaker
-#
-#   SB X-Fi Surround 5.1 Pro
-#     Both channels = Subwoofer (the device's own crossover handles filtering)
+# Wire resolved devices
+WIRED=""
 
 # DEV_L: left-front + left-rear (L channel = rear left, R channel = front left)
-pw-link "${SRC}:output_FL" "${DEV_L}:playback_FR"
-pw-link "${SRC}:output_RL" "${DEV_L}:playback_FL"
+if [ -n "$DEV_L" ]; then
+  pw-link "${SRC}:output_FL" "${DEV_L}:playback_FR"
+  pw-link "${SRC}:output_RL" "${DEV_L}:playback_FL"
+  WIRED="${WIRED}  FL+center -> ${DEV_L}:R (front left speaker)
+  RL        -> ${DEV_L}:L (rear left speaker)
+"
+fi
 
 # DEV_R: right-front + right-rear (L channel = front right, R channel = rear right)
-pw-link "${SRC}:output_FR" "${DEV_R}:playback_FL"
-pw-link "${SRC}:output_RR" "${DEV_R}:playback_FR"
+if [ -n "$DEV_R" ]; then
+  pw-link "${SRC}:output_FR" "${DEV_R}:playback_FL"
+  pw-link "${SRC}:output_RR" "${DEV_R}:playback_FR"
+  WIRED="${WIRED}  FR+center -> ${DEV_R}:L (front right speaker)
+  RR        -> ${DEV_R}:R (rear right speaker)
+"
+fi
+
+# DEV_C: center channel (mono — both channels get the same FC output)
+if [ -n "$DEV_C" ]; then
+  pw-link "${SRC}:output_FC" "${DEV_C}:playback_FL"
+  pw-link "${SRC}:output_FC" "${DEV_C}:playback_FR"
+  WIRED="${WIRED}  center    -> ${DEV_C}   (center speaker)
+"
+fi
 
 # DEV_SUB: subwoofer on both channels (mono)
-pw-link "${SRC}:output_LFE" "${DEV_SUB}:playback_FL"
-pw-link "${SRC}:output_LFE" "${DEV_SUB}:playback_FR"
+if [ -n "$DEV_SUB" ]; then
+  pw-link "${SRC}:output_LFE" "${DEV_SUB}:playback_FL"
+  pw-link "${SRC}:output_LFE" "${DEV_SUB}:playback_FR"
+  WIRED="${WIRED}  sub mix   -> ${DEV_SUB}   (subwoofer)
+"
+fi
 
 echo "Surround 5.1 wiring complete."
-echo "  FL+center -> ${DEV_L}:R (front left speaker)"
-echo "  FR+center -> ${DEV_R}:L (front right speaker)"
-echo "  RL        -> ${DEV_L}:L (rear left speaker)"
-echo "  RR        -> ${DEV_R}:R (rear right speaker)"
-echo "  sub mix   -> ${DEV_SUB}   (subwoofer)"
+echo -n "$WIRED"

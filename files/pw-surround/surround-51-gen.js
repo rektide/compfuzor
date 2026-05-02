@@ -56,20 +56,22 @@ Options (cli > env var > default):
   --sub-center <gain>  Center channel gain mixed into subwoofer
                         env: PW_SURROUND_SUB_CENTER default: ${defaults.subCenter}
 
-Hardware routing (configured via surround-51-wire):
-  Mpow HC5  L = rear left    R = front left   (FL + centerMix*FC)
-  FiiO E10  L = front right  R = rear right   (FR + centerMix*FC)
-  SB X-Fi   L+R = subwoofer                    (subLFE*LFE + subMain*(FL+FR) + subCenter*FC)
+Hardware routing (configured via surround-51-wire, comma-separated fallback):
+  PW_SURROUND_DEVICE_L   Left front+rear speakers
+  PW_SURROUND_DEVICE_R   Right front+rear speakers
+  PW_SURROUND_DEVICE_C   Center speaker (gets raw FC, also mixed into fronts at centerMix)
+  PW_SURROUND_DEVICE_SUB Subwoofer
 
 Filter graph signal flow:
-  copy_FL ──→ mix_front_L (frontMix)  ──→ [hp_front_L?] ──→ output FL
+  copy_FL ──→ mix_front_L (frontMix)  ──→ [hp_front_L?] ──→ output FL → DEV_L:R
   copy_FC ──→ mix_front_L (centerMix) ─╮
-  copy_FR ──→ mix_front_R (frontMix)  ──→ [hp_front_R?] ──→ output FR
+  copy_FR ──→ mix_front_R (frontMix)  ──→ [hp_front_R?] ──→ output FR → DEV_R:L
   copy_FC2 ─→ mix_front_R (centerMix) ─╯
-  copy_RL  ──→ [hp_rear_L?] ──────────────→ output RL
-  copy_RR  ──→ [hp_rear_R?] ──────────────→ output RR
+  copy_RL  ──→ [hp_rear_L?] ──────────────→ output RL → DEV_L:L
+  copy_RR  ──→ [hp_rear_R?] ──────────────→ output RR → DEV_R:R
+  copy_FC  ─────────────────────────────────→ output FC → DEV_C (raw center)
   copy_FL ──→ mix_sub (subMain)   ─╮
-  copy_FR ──→ mix_sub (subMain)   ─┤──→ output LFE
+  copy_FR ──→ mix_sub (subMain)   ─┤──→ output LFE → DEV_SUB
   copy_FC ──→ mix_sub (subCenter) ─┤
   copy_LFE ─→ mix_sub (subLFE)    ─╯
 
