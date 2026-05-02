@@ -142,7 +142,16 @@ def _resolve_requested(variables, subsystem_id):
     return _to_bool(val)
 
 
-def _build_envelope(subsystems, subsystem_id, name=None, variables=None, domain=None, extra_bypass=None):
+def _template_value(value, templar=None):
+    if templar is None or not isinstance(value, str):
+        return value
+    try:
+        return templar.template(value)
+    except Exception:
+        return value
+
+
+def _build_envelope(subsystems, subsystem_id, name=None, variables=None, domain=None, extra_bypass=None, templar=None):
     subsystems_map = subsystems if isinstance(subsystems, dict) else {}
     record = subsystems_map.get(subsystem_id)
     record = record if isinstance(record, dict) else {}
@@ -150,7 +159,7 @@ def _build_envelope(subsystems, subsystem_id, name=None, variables=None, domain=
 
     explicit_requested = record.get("requested")
     if explicit_requested is not None:
-        requested = _to_bool(explicit_requested)
+        requested = _to_bool(_template_value(explicit_requested, templar))
     elif variables is not None:
         requested = _resolve_requested(variables, subsystem_id)
     else:
@@ -160,7 +169,7 @@ def _build_envelope(subsystems, subsystem_id, name=None, variables=None, domain=
     if variables is not None:
         bypassed = _resolve_bypass(variables, subsystem_id, domain=domain, extra_bypass=extra_bypass)
 
-    valid = _to_bool(record.get("valid", True))
+    valid = _to_bool(_template_value(record.get("valid", True), templar))
 
     active = requested and (not bypassed) and valid
     if active:
@@ -247,6 +256,7 @@ class LookupModule(LookupBase):
             variables=variables,
             domain=domain,
             extra_bypass=extra_bypass,
+            templar=self._templar,
         )
 
         if get_expr is not None:
