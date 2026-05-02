@@ -1,0 +1,12 @@
+---
+- name: "Compfuzor: synthesize desktop subsystem artifacts"
+  set_fact:
+    BINS: "{{ merged.BINS }}"
+    PKGS: "{{ lookup('subsys', id='desktop', get='contrib.PKGS', default=[]) | concat2(PKGS) }}"
+  when: lookup('subsys', id='desktop', get='active', default=false) | bool
+  vars:
+    merged: >-
+      {{ [
+        {'BINS': BINS | default([])},
+        {'BINS': lookup('subsys', id='desktop', get='contrib.BINS', default=[])}
+      ] | merge_with_strategy({'BINS': {'op': 'merge_keyed', 'key': 'name', 'concat_fields': ['generated']}}, include_aggregate=false) }}

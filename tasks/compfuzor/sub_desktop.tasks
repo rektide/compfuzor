@@ -1,0 +1,56 @@
+---
+- name: "Compfuzor: transform DESKTOP into subsystem contract"
+  block:
+    - name: "Compfuzor: fail invalid DESKTOP input"
+      fail:
+        msg: "{{ errors | join('; ') }}"
+      when: _subsystem_requested and (not _subsystem_bypassed) and (errors | length > 0)
+
+    - name: "Compfuzor: publish desktop subsystem"
+      set_fact:
+        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'desktop': subsystem}, recursive=True) }}"
+      when: _subsystem_requested
+  vars:
+    items: "{{ DESKTOP | default([], true) | arrayitize }}"
+    mappingItems: "{{ items | select('mapping') | list }}"
+    errorChecks:
+      - msg: "DESKTOP entries must be mappings"
+        failed: "{{ (items | length) != (mappingItems | length) }}"
+      - msg: "DESKTOP entries must define desktop_file"
+        failed: "{{ (mappingItems | rejectattr('desktop_file', 'defined') | list | length) > 0 }}"
+    errors: "{{ errorChecks | selectattr('failed', 'truthy') | map(attribute='msg') | list }}"
+    valid: "{{ errors | length == 0 }}"
+    _subsystem_requested: "{{ items | length > 0 }}"
+    _subsystem_bypassed: "{{ lookup('subsys', id='desktop', get='bypassed', default=False) | bool }}"
+    spec: "{{ mappingItems }}"
+    _install_script: |
+      {% for entry in mappingItems %}
+      {% set df = entry.desktop_file %}
+      {% set exec_val = entry.exec | default('') %}
+      {% set icon_val = entry.icon | default('') %}
+      {% set set_path = entry.path | default(false) | bool %}
+      mkdir -p $HOME/.local/share/applications
+      desktop-file-install \
+        --dir="$HOME/.local/share/applications" \
+      {%- if exec_val %}
+        --set-key=Exec --set-value="{{ exec_val }}" \
+      {%- endif %}
+      {%- if icon_val %}
+        --set-key=Icon --set-value="$REPO_DIR/{{ icon_val }}" \
+      {%- endif %}
+      {%- if set_path %}
+        --set-key=Path --set-value="$REPO_DIR" \
+      {%- endif %}
+        "$REPO_DIR/{{ df }}"
+      {% endfor %}
+    contrib:
+      BINS:
+        - name: install-desktop.sh
+          exec: "{{ _install_script }}"
+      PKGS:
+        - desktop-file-utils
+    subsystem:
+      valid: "{{ valid }}"
+      reasons: "{{ errors }}"
+      spec: "{{ spec if (valid and _subsystem_requested) else [] }}"
+      contrib: "{{ contrib if (valid and _subsystem_requested and not _subsystem_bypassed) else {} }}"
