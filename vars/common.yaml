@@ -277,6 +277,11 @@ SUBSYSTEM:
         nodejs: true
         pnpm: true
 
+  desktop:
+    requested: "{{ DESKTOP is defined }}"
+    contrib:
+      PKGS: [desktop-file-utils]
+
 _nodejs_build_bins:
   - name: build.sh
     run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"

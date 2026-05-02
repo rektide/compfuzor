@@ -43,14 +43,11 @@
       {%- endif %}
         "$REPO_DIR/{{ df }}"
       {% endfor %}
-    contrib:
-      BINS:
-        - name: install-desktop.sh
-          exec: "{{ _install_script }}"
-      PKGS:
-        - desktop-file-utils
     subsystem:
       valid: "{{ valid }}"
       reasons: "{{ errors }}"
       spec: "{{ spec if (valid and _subsystem_requested) else [] }}"
-      contrib: "{{ contrib if (valid and _subsystem_requested and not _subsystem_bypassed) else {} }}"
+      contrib:
+        BINS:
+          - name: install-desktop.sh
+            exec: "{{ _install_script }}"
