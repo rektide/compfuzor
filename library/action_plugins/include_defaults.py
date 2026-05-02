@@ -22,31 +22,19 @@ __metaclass__ = type
 import os
 
 from ansible._internal._datatag import _tags
-from ansible.errors import AnsibleError, AnsibleUndefinedVariable
+from ansible.errors import AnsibleError
 from ansible.module_utils.common.text.converters import to_text
 from ansible.plugins.action import ActionBase
 
 
 def _tag_strings_recursive(value):
+    """Recursively tag all strings within a data structure as trusted for templating."""
     if isinstance(value, str):
         return _tags.TrustedAsTemplate().tag(value)
     elif isinstance(value, dict):
         return {k: _tag_strings_recursive(v) for k, v in value.items()}
     elif isinstance(value, list):
         return [_tag_strings_recursive(item) for item in value]
-    return value
-
-
-def _template_recursive(value, templar):
-    if isinstance(value, str):
-        try:
-            return templar.template(value)
-        except (AnsibleUndefinedVariable, Exception):
-            return value
-    elif isinstance(value, dict):
-        return {k: _template_recursive(v, templar) for k, v in value.items()}
-    elif isinstance(value, list):
-        return [_template_recursive(item, templar) for item in value]
     return value
 
 
@@ -79,7 +67,7 @@ class ActionModule(ActionBase):
             if not isinstance(data, dict):
                 raise AnsibleError("%s must be stored as a dictionary/hash" % filename)
             data = {
-                k: _template_recursive(_tag_strings_recursive(v), self._templar)
+                k: _tag_strings_recursive(v)
                 for (k, v) in data.items()
                 if k not in task_vars
             }
