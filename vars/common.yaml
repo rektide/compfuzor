@@ -280,6 +280,7 @@ SUBSYSTEM:
   desktop:
     requested: "{{ DESKTOP is defined }}"
     contrib:
+      BINS: "{{ _desktop_bins }}"
       PKGS: [desktop-file-utils]
 
 _nodejs_build_bins:
@@ -440,3 +441,27 @@ _repo_npm_bins:
     run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
     generated: |
       pnpm install -g $(cat etc/npm.txt)
+
+_desktop_items: "{{ DESKTOP | default([], true) | arrayitize }}"
+_desktop_bins:
+  - name: install-desktop.sh
+    generated: |
+      {% for entry in _desktop_items %}
+      {% set df = entry.desktop_file %}
+      {% set exec_val = entry.exec | default('') %}
+      {% set icon_val = entry.icon | default('') %}
+      {% set set_path = entry.path | default(false) | bool %}
+      mkdir -p $HOME/.local/share/applications
+      desktop-file-install \
+        --dir="$HOME/.local/share/applications" \
+      {%- if exec_val %}
+        --set-key=Exec --set-value="{{ exec_val }}" \
+      {%- endif %}
+      {%- if icon_val %}
+        --set-key=Icon --set-value="$REPO_DIR/{{ icon_val }}" \
+      {%- endif %}
+      {%- if set_path %}
+        --set-key=Path --set-value="$REPO_DIR" \
+      {%- endif %}
+        "$REPO_DIR/{{ df }}"
+      {% endfor %}
