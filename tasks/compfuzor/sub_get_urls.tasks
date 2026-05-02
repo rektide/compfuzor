@@ -48,5 +48,7 @@
         {%- set _ = normalized.append(entry) -%}
       {%- endfor -%}
       {{ normalized }}
-    _subsystem_spec: "{{ {'spec': spec} if (spec | length > 0) else {} }}"
-    subsystem: "{{ 'get_urls' | subsystem_record(spec=(spec if _subsystem_valid else none)) }}"
+    subsystem:
+      valid: "{{ _subsystem_valid }}"
+      reasons: "{{ errors }}"
+      spec: "{{ spec if (_subsystem_valid and _subsystem_requested and (spec | length > 0)) else [] }}"

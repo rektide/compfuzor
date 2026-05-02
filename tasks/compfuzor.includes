@@ -33,9 +33,6 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_make_autoconf.tasks
   tags: ['vars', 'always']
-- import_tasks: compfuzor/sub_cmake.tasks
-  when: CMAKE is deftruthy or CMAKE_ARGS is defined or CMAKE_BUILDS is defined
-  tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_cmake.tasks
   when: CMAKE is deftruthy or CMAKE_ARGS is defined or CMAKE_BUILDS is defined
   tags: ['vars', 'always']
@@ -62,14 +59,8 @@
 - import_tasks: compfuzor/gen_bun.tasks
   when: BUN is defined
   tags: ['vars', 'always']
-- import_tasks: compfuzor/sub_repo_npm.tasks
-  when: REPO_NPM is defined
-  tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_repo_npm.tasks
   when: REPO_NPM is defined
-  tags: ['vars', 'always']
-- import_tasks: compfuzor/sub_python.tasks
-  when: PYTHON is deftruthy or PIP is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_python.tasks
   when: PYTHON is deftruthy or PIP is defined

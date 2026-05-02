@@ -134,24 +134,46 @@ def _compute_state(record):
     return "absent"
 
 
+def _resolve_requested(variables, subsystem_id):
+    var_name = subsystem_id.upper().replace("-", "_")
+    val = variables.get(var_name)
+    if val is None or wrapped_test_undefined(val):
+        return False
+    return _to_bool(val)
+
+
 def _build_envelope(subsystems, subsystem_id, name=None, variables=None, domain=None, extra_bypass=None):
     subsystems_map = subsystems if isinstance(subsystems, dict) else {}
     record = subsystems_map.get(subsystem_id)
     record = record if isinstance(record, dict) else {}
     found = bool(record)
 
-    state = _compute_state(record)
-    active = _to_bool(record.get("active", state == "active"))
-    requested = _to_bool(record.get("requested", found and state != "absent"))
-    bypassed = _to_bool(record.get("bypassed", state == "bypassed"))
+    explicit_requested = record.get("requested")
+    if explicit_requested is not None:
+        requested = _to_bool(explicit_requested)
+    elif variables is not None:
+        requested = _resolve_requested(variables, subsystem_id)
+    else:
+        requested = found
 
+    bypassed = False
     if variables is not None:
-        var_bypassed = _resolve_bypass(variables, subsystem_id, domain=domain, extra_bypass=extra_bypass)
-        bypassed = bypassed or var_bypassed
-        active = requested and (not bypassed)
-        state = "bypassed" if (requested and bypassed) else ("active" if active else state)
+        bypassed = _resolve_bypass(variables, subsystem_id, domain=domain, extra_bypass=extra_bypass)
 
-    valid = _to_bool(record.get("valid", state not in {"invalid", "absent"}))
+    valid = _to_bool(record.get("valid", True))
+
+    active = requested and (not bypassed) and valid
+    if active:
+        state = "active"
+    elif requested and bypassed:
+        state = "bypassed"
+    elif requested and not valid:
+        state = "invalid"
+    elif requested:
+        state = "requested"
+    else:
+        state = "absent"
+
     reasons = record.get("reasons", [])
     if reasons is None:
         reasons = []

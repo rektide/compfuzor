@@ -68,9 +68,7 @@ def _as_list(value):
         return []
     if isinstance(value, list):
         return value
-    if isinstance(value, tuple):
-        return list(value)
-    if isinstance(value, set):
+    if isinstance(value, (tuple, set)):
         return list(value)
     return [value]
 

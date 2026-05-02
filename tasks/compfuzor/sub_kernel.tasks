@@ -39,10 +39,10 @@
     sysfs_requested: "{{ sysfs | length > 0 }}"
     any_requested: "{{ modprobe_requested or sysctl_requested or sysfs_requested }}"
 
-    modprobe_bypassed: "{{ 'kernel_modprobe' | subsystem_bypassed(true, 'kernel') | bool }}"
-    sysctl_bypassed: "{{ 'kernel_sysctl' | subsystem_bypassed(true, 'kernel') | bool }}"
-    sysfs_bypassed: "{{ 'kernel_sysfs' | subsystem_bypassed(true, 'kernel') | bool }}"
-    all_bypassed: "{{ 'kernel_all' | subsystem_bypassed(true, 'kernel') | bool }}"
+    modprobe_bypassed: "{{ lookup('subsys', id='kernel_modprobe', domain='kernel', get='bypassed', default=False) | bool }}"
+    sysctl_bypassed: "{{ lookup('subsys', id='kernel_sysctl', domain='kernel', get='bypassed', default=False) | bool }}"
+    sysfs_bypassed: "{{ lookup('subsys', id='kernel_sysfs', domain='kernel', get='bypassed', default=False) | bool }}"
+    all_bypassed: "{{ lookup('subsys', id='kernel_all', domain='kernel', get='bypassed', default=False) | bool }}"
 
     # validation contract
     module_items: "{{ KERNEL_MODULES | dict2items if (KERNEL_MODULES is defined and KERNEL_MODULES is mapping) else [] }}"
@@ -167,10 +167,25 @@
       ENV_LIST: ["{{ sysfs_spec.env_key }}"]
       PKGS: [jq]
 
-    # child state records
-    modprobe_state: "{{ 'kernel_modprobe' | subsystem_record(modprobe_requested, modprobe_bypassed, valid, errors, modprobe_spec, modprobe_contrib) }}"
-    sysctl_state: "{{ 'kernel_sysctl' | subsystem_record(sysctl_requested, sysctl_bypassed, valid, errors, sysctl_spec, sysctl_contrib) }}"
-    sysfs_state: "{{ 'kernel_sysfs' | subsystem_record(sysfs_requested, sysfs_bypassed, valid, errors, sysfs_spec, sysfs_contrib) }}"
+    # child state records — minimal, lookup derives active/bypassed/state
+    modprobe_state:
+      requested: "{{ modprobe_requested }}"
+      valid: "{{ valid }}"
+      reasons: "{{ errors }}"
+      spec: "{{ modprobe_spec if (modprobe_requested and valid) else [] }}"
+      contrib: "{{ modprobe_contrib if (modprobe_requested and not modprobe_bypassed and valid) else {} }}"
+    sysctl_state:
+      requested: "{{ sysctl_requested }}"
+      valid: "{{ valid }}"
+      reasons: "{{ errors }}"
+      spec: "{{ sysctl_spec if (sysctl_requested and valid) else [] }}"
+      contrib: "{{ sysctl_contrib if (sysctl_requested and not sysctl_bypassed and valid) else {} }}"
+    sysfs_state:
+      requested: "{{ sysfs_requested }}"
+      valid: "{{ valid }}"
+      reasons: "{{ errors }}"
+      spec: "{{ sysfs_spec if (sysfs_requested and valid) else [] }}"
+      contrib: "{{ sysfs_contrib if (sysfs_requested and not sysfs_bypassed and valid) else {} }}"
 
     # active child sets
     modprobe_active: "{{ modprobe_state | get('active', false) | bool }}"
@@ -236,11 +251,14 @@
       ENV_LIST: "{{ (data_env.keys() | list) + ['KERNEL_BUILD_SCRIPTS', 'KERNEL_INSTALL_SCRIPTS', 'KERNEL_APPLY_SCRIPTS'] }}"
       PKGS: [jq]
 
-    all_state: >-
-      {{
-        ('kernel_all' | subsystem_record(all_requested, all_bypassed, valid, errors, all_spec, all_contrib, all_status))
-        | combine({'active': all_active})
-      }}
+    all_state:
+      requested: "{{ all_requested }}"
+      bypassed: "{{ all_bypassed }}"
+      valid: "{{ valid }}"
+      reasons: "{{ errors }}"
+      active: "{{ all_active }}"
+      spec: "{{ all_spec if (all_requested and valid) else [] }}"
+      contrib: "{{ all_contrib if all_active else {} }}"
 
     # final subsystem map
     state: >-
