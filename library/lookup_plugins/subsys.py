@@ -111,29 +111,6 @@ def _resolve_bypass(variables, subsystem_id, domain=None, extra_bypass=None):
     return False
 
 
-def _compute_state(record):
-    if not isinstance(record, dict):
-        return "absent"
-
-    state = record.get("state")
-    if isinstance(state, str) and state.strip():
-        return state.strip()
-
-    requested = _to_bool(record.get("requested", False))
-    bypassed = _to_bool(record.get("bypassed", False))
-    valid = _to_bool(record.get("valid", True))
-
-    if requested and (not bypassed) and valid:
-        return "active"
-    if requested and bypassed:
-        return "bypassed"
-    if requested and (not valid):
-        return "invalid"
-    if requested:
-        return "requested"
-    return "absent"
-
-
 def _resolve_requested(variables, subsystem_id):
     var_name = subsystem_id.upper().replace("-", "_")
     val = variables.get(var_name)
@@ -165,9 +142,10 @@ def _build_envelope(subsystems, subsystem_id, name=None, variables=None, domain=
     else:
         requested = found
 
-    bypassed = False
+    explicit_bypassed = record.get("bypassed")
+    bypassed = _to_bool(_template_value(explicit_bypassed, templar)) if explicit_bypassed is not None else False
     if variables is not None:
-        bypassed = _resolve_bypass(variables, subsystem_id, domain=domain, extra_bypass=extra_bypass)
+        bypassed = bypassed or _resolve_bypass(variables, subsystem_id, domain=domain, extra_bypass=extra_bypass)
 
     valid = _to_bool(_template_value(record.get("valid", True), templar))
 
