@@ -2,6 +2,13 @@ from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
+import os
+import sys
+
+_PLUGIN_DIR = os.path.abspath(os.path.dirname(__file__))
+if _PLUGIN_DIR not in sys.path:
+    sys.path.insert(0, _PLUGIN_DIR)
+
 from _subsystem_utils import _as_list, _as_dict, _dedupe_preserve
 
 
