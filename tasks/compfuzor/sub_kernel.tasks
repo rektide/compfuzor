@@ -188,9 +188,9 @@
       contrib: "{{ sysfs_contrib if (sysfs_requested and not sysfs_bypassed and valid) else {} }}"
 
     # active child sets
-    modprobe_active: "{{ modprobe_state | get('active', false) | bool }}"
-    sysctl_active: "{{ sysctl_state | get('active', false) | bool }}"
-    sysfs_active: "{{ sysfs_state | get('active', false) | bool }}"
+    modprobe_active: "{{ modprobe_requested and not modprobe_bypassed and valid }}"
+    sysctl_active: "{{ sysctl_requested and not sysctl_bypassed and valid }}"
+    sysfs_active: "{{ sysfs_requested and not sysfs_bypassed and valid }}"
     active_specs: >-
       {{
         [
