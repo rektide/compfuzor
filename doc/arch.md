@@ -306,31 +306,35 @@ through that ordering.
 
 | Phase | Purpose | Typical producers |
 |---|---|---|
-| `phase:compile.foundation` | static defaults, metadata setup, baseline activity scaffolding | `vars_*` (legacy), `fn_*` (preferred) |
+| `phase:compile.foundation` | static defaults, metadata setup, baseline activity scaffolding | `vars_*` (legacy), `sub_*` |
 | `phase:compile.discovery` | read host state into explicit snapshots | `probe_*` |
-| `phase:compile.transform` | normalize input and build subsystem contracts | `fn_*` |
+| `phase:compile.transform` | normalize input and build subsystem contracts | `sub_*` |
 | `phase:compile.synthesis` | build shared-artifact contributions and merge outputs | `gen_*` |
 
 `vars_*` is a historical prefix. It is now compatibility-oriented and should
 not be used for new subsystem work. Prefer explicit operation prefixes:
 
-- `fn_*` for expression-based contract transforms
+- `sub_*` for subsystem record construction
 - `gen_*` for shared synthesis and default instantiation
 
-### `fn_*` and `gen_*` contract
+### `sub_*` and `gen_*` contract
 
-Compfuzor does not define functions in a language-runtime sense. The closest
-equivalent is expression contracts in task vars/Jinja that are evaluated from
-inputs.
+Compfuzor does not define functions in a language-runtime sense. Earlier drafts
+used `fn_*` for expression-based transforms, but the current task shape is more
+specific: these files build subsystem records. Use `sub_*` for that work.
 
 That yields a practical split:
 
-- `fn_*`: define and evaluate reusable transform expressions into subsystem
-  contracts (`norm`, `spec`, optional `contrib`)
+- `sub_*`: validate input, normalize values, and publish `SUBSYSTEM.<id>` records
+  with control fields plus `norm`, `spec`, and optional `contrib`
 - `gen_*`: instantiate and aggregate those contracts into predictable shared
   pipeline outputs (`BINS`, `ETC_FILES`, `ENV`, `TOOL_VERSIONS`, and peers)
 
 `gen_*` is not "more transform". It is the default concretization layer.
+
+Good `sub_*` files are boring. They gather input, compute a clear contract, and
+publish exactly one subsystem record. Avoid deep path lookups and shared global
+artifact merges in `sub_*`; those belong in `gen_*`.
 
 ### Default lifecycle
 
@@ -411,9 +415,9 @@ Both are needed:
 
 | Entity pattern | Kind | Form | Role | Typical phase | Effect | Purpose |
 |---|---|---|---|---|---|---|
-| `vars_` | `kind:legacy` | `form:prefix` | `role:compat-wrapper` | `compile.foundation` | `effect:none` | transitional wrapper that imports `fn_`/`gen_` tasks |
+| `vars_` | `kind:legacy` | `form:prefix` | `role:compat-wrapper` | `compile.foundation` | `effect:none` | transitional wrapper that imports `sub_`/`gen_` tasks |
 | `probe_` | `kind:probe` | `form:prefix` | `role:discovery` | `compile.discovery` | `effect:none` | host-state snapshots |
-| `fn_` | `kind:fn` | `form:prefix` | `role:transform` | `compile.transform` | `effect:none` | normalization and contract building |
+| `sub_` | `kind:subsystem` | `form:prefix` | `role:transform` | `compile.transform` | `effect:none` | subsystem validation, normalization, and record construction |
 | `gen_` | `kind:syn` | `form:prefix` | `role:synthesis` | `compile.synthesis` | `effect:none` | shared-artifact instantiation, aggregation, and merge application |
 | `repo_` | `kind:repo` | `form:prefix` | `role:execution` | `repo-apply` | `effect:host.repo` | repository changes |
 | `fs_` | `kind:fs` | `form:prefix` | `role:execution` | `fs-apply` | `effect:host.fs` | files, links, downloads |
@@ -454,7 +458,7 @@ Avoid them when a direct subsystem field is sufficient.
 | Entity pattern | Kind | Form | Purpose |
 |---|---|---|---|
 | `_probe_<domain>` | `kind:probe` | `form:envelope` | discovery transport record |
-| `_fn_<domain>_out` | `kind:fn` | `form:envelope` | transform transport record when a standalone envelope is helpful |
+| `_sub_<domain>_out` | `kind:subsystem` | `form:envelope` | subsystem transform transport record when a standalone envelope is helpful |
 | `_syn_<domain>` | `kind:syn` | `form:envelope` | synthesis transport record when a standalone handoff is helpful |
 
 The distinction is:
@@ -464,7 +468,7 @@ The distinction is:
 
 Examples:
 
-- prefer `SUBSYSTEM.get_urls.spec` over `_fn_get_urls_out` when the producer and
+- prefer `SUBSYSTEM.get_urls.spec` over `_sub_get_urls_out` when the producer and
   consumer are both working inside the subsystem model
 - use `_probe_systemd` when discovery output needs a stable globally named
   record that other task files can consume without navigating a subsystem object
@@ -480,7 +484,7 @@ Prefer:
 - `SUBSYSTEM.get_urls.spec`
 - `SUBSYSTEM.kernel_sysctl.probe`
 - `SUBSYSTEM.kernel_all.contrib`
-- `fn_get_urls.tasks`
+- `sub_get_urls.tasks`
 - `gen_systemd.tasks`
 
 Avoid:
@@ -517,14 +521,43 @@ own terms, and precedence would become hard to reason about.
 |---|---|---|
 | `vars_*` (legacy) | compatibility wrappers only | net-new compile logic, shared artifact merges, host changes |
 | `probe_*` | `probe` fields and discovery data | host changes |
-| `fn_*` | `norm`, `spec`, `drv`, `out`, `merge` in `SUBSYSTEM.<name>` | shared artifact merges, host changes |
+| `sub_*` | control fields, `norm`, `spec`, `drv`, `out`, and optional `contrib` in `SUBSYSTEM.<name>` | shared artifact merges, host changes |
 | `gen_*` | `contrib` fields and global shared-artifact merges | host changes |
 | apply tasks | host changes and apply-local scratch values | compile-phase subsystem contracts |
 
 Two strong rules follow:
 
 - prefer one explicit merge block over many tiny mutations
-- do not hide shared synthesis work inside `vars_*` or `fn_*`
+- do not hide shared synthesis work inside `vars_*` or `sub_*`
+
+### Practical synthesis shape
+
+`gen_*` files should read like a short recipe:
+
+1. resolve the relevant subsystem envelope with `lookup('subsys', ...)`
+2. decide whether the subsystem is active
+3. render any default artifacts owned by synthesis
+4. merge those artifacts into shared globals once
+
+Prefer readable local names over nested expressions. This is better:
+
+```yaml
+vars:
+  tool_versions: "{{ lookup('subsys', id='tool_versions') }}"
+  spec: "{{ tool_versions.spec | default({}) }}"
+```
+
+Than this:
+
+```yaml
+vars:
+  spec: "{{ (SUBSYSTEM | default({})).get('tool_versions', {}).get('spec', {}) }}"
+```
+
+If a `gen_*` task needs wrapper records such as `{'BINS': existing}` only to call
+a merge helper, that usually means the merge helper is too low-level for the call
+site. Prefer a named strategy profile or a small domain helper instead of making
+task files carry merge mechanics.
 
 ### Merge policies
 
@@ -537,6 +570,29 @@ Supported strategy names should be explicit and finite.
 | `existing-user-syn` | existing-global > user > synthesized |
 | `syn-user-existing` | synthesized > user > existing-global |
 | `append-dedup` | append list-like values and deduplicate |
+
+Current implementation also has strategy profiles in
+[`/library/filter_plugins/merge_strategy.py`](/library/filter_plugins/merge_strategy.py).
+Profiles are named merge maps for common artifact families. Use them when a
+strategy literal would distract from the task's intent.
+
+Useful current profiles:
+
+| Profile | Purpose |
+|---|---|
+| `subsystem_contrib` | roll up child contrib payloads (`ETC_FILES`, `BINS`, `ENV`, `ENV_LIST`, `PKGS`) |
+| `subsystem_artifacts` | merge nested `contrib.artifacts` payloads (`ETC_FILES`, `LINKS`) |
+
+Strong candidate profile:
+
+| Profile | Purpose |
+|---|---|
+| `bins_generated` | merge `BINS` by `name` while concatenating `generated` scripts |
+
+`BINS` is special because multiple subsystems commonly contribute to the same
+script name (`build.sh`, `install.sh`). Appending the list is not enough. The
+usual behavior should be a keyed merge by `name`, with `generated` concatenated
+in producer order.
 
 Recommended default:
 
@@ -573,6 +629,29 @@ separate steps:
 
 Aggregation first, precedence second.
 
+### Helper shape for common merges
+
+There are two reasonable ways to make common merges readable:
+
+1. named strategy profile
+2. thin domain helper
+
+A named strategy profile keeps everything inside `merge_with_strategy`:
+
+```yaml
+merged: "{{ records | merge_with_strategy('bins_generated', include_aggregate=false) }}"
+```
+
+A thin helper makes the common case read better at the call site:
+
+```yaml
+BINS: "{{ BINS | merge_bins(lookup('subsys', id='python', get='contrib.BINS', default=[])) }}"
+```
+
+Prefer the profile when the task is already merging record-shaped payloads.
+Prefer the helper when the task has two plain lists and wrapper records would be
+created only to satisfy `merge_with_strategy`.
+
 ### Hierarchy and fanout interaction
 
 Hierarchy and fanout are part of the architecture because they bridge compiled
@@ -605,8 +684,7 @@ Example bridge:
 
 Current files:
 
-- [`/tasks/compfuzor/vars_get_urls.tasks`](/tasks/compfuzor/vars_get_urls.tasks) (legacy wrapper name)
-- `fn_get_urls.tasks` (target name)
+- [`/tasks/compfuzor/sub_get_urls.tasks`](/tasks/compfuzor/sub_get_urls.tasks)
 - [`/tasks/compfuzor/gen_get_urls.tasks`](/tasks/compfuzor/gen_get_urls.tasks)
 - [`/tasks/compfuzor/fs_get_urls.tasks`](/tasks/compfuzor/fs_get_urls.tasks)
 
@@ -644,7 +722,7 @@ SUBSYSTEM:
 
 Recommended task split:
 
-- `fn_get_urls.tasks` validates input and creates `SUBSYSTEM.get_urls.spec`
+- `sub_get_urls.tasks` validates input and creates `SUBSYSTEM.get_urls.spec`
 - `gen_get_urls.tasks` computes `SUBSYSTEM.get_urls.contrib`
 - `fs_get_urls.tasks` consumes `SUBSYSTEM.<id>.spec` and supports
   `subsystem_name`/`subsystem_id` overrides for reuse
@@ -662,8 +740,7 @@ Lifecycle view:
 
 Current files:
 
-- [`/tasks/compfuzor/vars_kernel.tasks`](/tasks/compfuzor/vars_kernel.tasks) (legacy wrapper name)
-- `fn_kernel.tasks` (target name)
+- [`/tasks/compfuzor/sub_kernel.tasks`](/tasks/compfuzor/sub_kernel.tasks)
 - [`/tasks/compfuzor/gen_kernel.tasks`](/tasks/compfuzor/gen_kernel.tasks)
 - [`/tasks/compfuzor/kernel_modules.tasks`](/tasks/compfuzor/kernel_modules.tasks)
 - [`/zswap.etc.pb`](/zswap.etc.pb)
@@ -765,9 +842,9 @@ Current file:
 
 Target decomposition:
 
-- `fn_python.tasks` and `fn_go.tasks` publish subsystem-level tooling intent in
-  `SUBSYSTEM.<id>.contrib.TOOL_VERSIONS`
-- `fn_tool_versions.tasks` resolves user-provided and subsystem-provided tool
+- `sub_python.tasks` and `sub_go.tasks` publish subsystem-level tooling intent in
+  `SUBSYSTEM.<id>.contrib.tooling.TOOL_VERSIONS`
+- `sub_tool_versions.tasks` resolves user-provided and subsystem-provided tool
   version intent into a single contract record (for example:
   `SUBSYSTEM.tool_versions.spec`)
 - `gen_tool_versions.tasks` renders that contract into shared artifacts
@@ -782,13 +859,15 @@ Recommended shape:
 SUBSYSTEM:
   python:
     contrib:
-      TOOL_VERSIONS:
-        python: true
+      tooling:
+        TOOL_VERSIONS:
+          python: true
 
   go:
     contrib:
-      TOOL_VERSIONS:
-        go: true
+      tooling:
+        TOOL_VERSIONS:
+          go: true
 
   tool_versions:
     spec:
@@ -805,7 +884,11 @@ SUBSYSTEM:
 ```
 
 This removes hidden synthesis from `vars_tool_versions.tasks` and makes
-tool-version rendering a normal `fn_*` + `gen_*` pipeline segment.
+tool-version rendering a normal `sub_*` + `gen_*` pipeline segment.
+
+`sub_tool_versions.tasks` should eventually publish only the resolved version
+contract. Rendering `.tool-versions` content is synthesis work and fits better in
+`gen_tool_versions.tasks`.
 
 ## 7. Bypass resolution rules
 
@@ -868,14 +951,21 @@ Expected effective bypass source:
 
 ### Implementation helper filters
 
-Current implementation uses focused filters in
-[`/library/filter_plugins/subsystem_fields.py`](/library/filter_plugins/subsystem_fields.py):
+Current implementation uses focused helpers in filter and lookup plugins:
 
 - `subsystem_bypassed`: resolves effective bypass state from subsystem + domain
   naming rules and override modes
 - `subsystem_bypass_vars`: introspection helper returning effective bypass var names
 - `owner_group_fields`: applies row-first owner/group resolution with subsystem
   defaults
+- `subsystem_record`: creates consistent subsystem state records
+- `subsystem_rollup`: rolls child subsystem contrib payloads into one aggregate
+- `merge_with_strategy`: merges records with explicit per-field strategies and
+  named profiles
+- `concat2`: undefined-safe list concatenation
+- `get` / `get_path`: safe dotted-path traversal
+- `lookup('subsys', ...)`: resolves normalized subsystem envelopes from
+  `SUBSYSTEM`
 
 Learning from the GET_URLS pilot: keep helpers narrow and explicit. Use filters
 for repeated messy logic, but keep subsystem assembly visible in task vars.
