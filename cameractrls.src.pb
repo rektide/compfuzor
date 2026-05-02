@@ -9,6 +9,11 @@
       - gir1.2-gtk-4.0
       - libsdl2-2.0-0
       - libturbojpeg0
+    DESKTOP:
+      - desktop_file: pkg/hu.irl.cameractrls.desktop
+        exec: cameractrlsgtk.py
+        icon: pkg/hu.irl.cameractrls.svg
+        path: true
     BINS:
       - name: build.sh
         exec: |
