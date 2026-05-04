@@ -1,13 +1,8 @@
 ---
 - name: "Compfuzor: synthesize bun subsystem artifacts"
   set_fact:
-    BINS: "{{ merged.BINS }}"
+    BINS: "{{ [BINS | default([]), lookup('subsys', id='bun', get='contrib.BINS', default=[])] | merge_with_strategy('bins_generated', into='BINS') }}"
     ENV: "{{ lookup('subsys', id='bun', get='contrib.ENV') | combine(existingEnv) }}"
   when: lookup('subsys', id='bun', get='active', default=false) | bool
   vars:
     existingEnv: "{{ ENV if ENV is mapping else {} }}"
-    merged: >-
-      {{ [
-        {'BINS': BINS | default([])},
-        {'BINS': lookup('subsys', id='bun', get='contrib.BINS', default=[])}
-      ] | merge_with_strategy({'BINS': {'op': 'merge_keyed', 'key': 'name', 'concat_fields': ['generated']}}, include_aggregate=false) }}

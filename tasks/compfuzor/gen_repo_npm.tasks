@@ -1,12 +1,6 @@
 ---
 - name: "Compfuzor: synthesize repo_npm subsystem artifacts"
   set_fact:
-    BINS: "{{ merged.BINS }}"
+    BINS: "{{ [BINS | default([]), lookup('subsys', id='repo_npm', get='contrib.BINS', default=[])] | merge_with_strategy('bins_generated', into='BINS') }}"
     ETC_FILES: "{{ lookup('subsys', id='repo_npm', get='contrib.ETC_FILES', default=[]) | concat2(ETC_FILES) }}"
   when: lookup('subsys', id='repo_npm', get='active', default=false) | bool
-  vars:
-    merged: >-
-      {{ [
-        {'BINS': BINS | default([])},
-        {'BINS': lookup('subsys', id='repo_npm', get='contrib.BINS', default=[])}
-      ] | merge_with_strategy({'BINS': {'op': 'merge_keyed', 'key': 'name', 'concat_fields': ['generated']}}, include_aggregate=false) }}

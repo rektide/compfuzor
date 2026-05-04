@@ -1,14 +1,9 @@
 ---
 - name: "Compfuzor: synthesize python subsystem artifacts"
   set_fact:
-    BINS: "{{ merged.BINS }}"
+    BINS: "{{ [BINS | default([]), lookup('subsys', id='python', get='contrib.BINS', default=[])] | merge_with_strategy('bins_generated', into='BINS') }}"
     ENV: "{{ lookup('subsys', id='python', get='contrib.ENV') | combine(existingEnv) }}"
     ETC_FILES: "{{ lookup('subsys', id='python', get='contrib.ETC_FILES', default=[]) | concat2(ETC_FILES) }}"
   when: lookup('subsys', id='python', get='active', default=false) | bool
   vars:
     existingEnv: "{{ ENV if ENV is mapping else {} }}"
-    merged: >-
-      {{ [
-        {'BINS': BINS | default([])},
-        {'BINS': lookup('subsys', id='python', get='contrib.BINS', default=[])}
-      ] | merge_with_strategy({'BINS': {'op': 'merge_keyed', 'key': 'name', 'concat_fields': ['generated']}}, include_aggregate=false) }}

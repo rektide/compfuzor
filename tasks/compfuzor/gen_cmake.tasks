@@ -1,14 +1,9 @@
 ---
 - name: "Compfuzor: synthesize cmake subsystem artifacts"
   set_fact:
-    BINS: "{{ merged.BINS }}"
+    BINS: "{{ [BINS | default([]), lookup('subsys', id='cmake', get='contrib.BINS', default=[])] | merge_with_strategy('bins_generated', into='BINS') }}"
     PKGS: "{{ lookup('subsys', id='cmake', get='contrib.PKGS', default=[]) | concat2(PKGS) }}"
     ENV: "{{ lookup('subsys', id='cmake', get='contrib.ENV') | combine(existingEnv) }}"
   when: lookup('subsys', id='cmake', get='active', default=false) | bool
   vars:
     existingEnv: "{{ ENV if ENV is mapping else {} }}"
-    merged: >-
-      {{ [
-        {'BINS': BINS | default([])},
-        {'BINS': lookup('subsys', id='cmake', get='contrib.BINS', default=[])}
-      ] | merge_with_strategy({'BINS': {'op': 'merge_keyed', 'key': 'name', 'concat_fields': ['generated']}}, include_aggregate=false) }}
