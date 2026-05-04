@@ -147,6 +147,65 @@ def test_merge_keyed_no_overlap():
     )
 
 
+def test_into_multiple_payloads():
+    print("\ninto multiple payloads:")
+    result = merge_with_strategy(
+        [[{"name": "build.sh", "generated": "echo one"}], [{"name": "build.sh", "generated": "echo two"}]],
+        {"BINS": {"op": "merge_keyed", "key": "name", "concat_fields": ["generated"]}},
+        into="BINS",
+    )
+    check(
+        "wraps each input payload and returns into field",
+        result,
+        [{"name": "build.sh", "generated": "echo one\necho two"}],
+    )
+
+
+def test_into_single_payload():
+    print("\ninto single payload:")
+    result = merge_with_strategy(
+        [{"name": "build.sh"}, {"name": "install.sh"}],
+        {"BINS": {"op": "merge_keyed", "key": "name"}},
+        into="BINS",
+        single=True,
+    )
+    check(
+        "single treats list as one payload",
+        result,
+        [{"name": "build.sh"}, {"name": "install.sh"}],
+    )
+
+
+def test_into_get_path_starts_from_into_field():
+    print("\ninto get path:")
+    result = merge_with_strategy(
+        [[{"name": "build.sh"}]],
+        {"BINS": {"op": "merge_keyed", "key": "name"}},
+        into="BINS",
+        get="0.name",
+    )
+    check("get starts from into field", result, "build.sh")
+
+
+def test_get_path_without_into_starts_from_root():
+    print("\nroot get path:")
+    result = merge_with_strategy(
+        [{"outer": {"items": ["a"]}}, {"outer": {"items": ["b"]}}],
+        {"outer": {"items": "append"}},
+        get="outer.items",
+    )
+    check("get starts from root without into", result, ["a", "b"])
+
+
+def test_into_unknown_strategy_field():
+    print("\ninto unknown field raises:")
+    try:
+        merge_with_strategy([[]], {"items": "append"}, into="BINS")
+        check("should have raised", False, True)
+    except ValueError as e:
+        check("mentions into field", "BINS" in str(e), True)
+
+
 def test_empty_records():
     print("\nempty records:")
     result = merge_with_strategy([], {"a": "append"})
@@ -392,6 +451,11 @@ if __name__ == "__main__":
     test_aggregate()
     test_merge_keyed_operation()
     test_merge_keyed_no_overlap()
+    test_into_multiple_payloads()
+    test_into_single_payload()
+    test_into_get_path_starts_from_into_field()
+    test_get_path_without_into_starts_from_root()
+    test_into_unknown_strategy_field()
     test_empty_records()
     test_unknown_strategy()
     test_validate_unknown_string_strategy()

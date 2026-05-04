@@ -10,6 +10,7 @@ if _PLUGIN_DIR not in sys.path:
     sys.path.insert(0, _PLUGIN_DIR)
 
 from _subsystem_utils import _as_list, _as_dict, _dedupe_preserve
+from get import get_path
 
 
 def _merge_keyed(list1, list2, key="key", concat_fields=None):
@@ -195,6 +196,9 @@ def merge_with_strategy(
     aggregate=None,
     include_aggregate=True,
     payload_path=None,
+    into=None,
+    single=False,
+    get=None,
 ):
     """Merge records using per-field merge strategies.
 
@@ -208,6 +212,10 @@ def merge_with_strategy(
       - {op: merge_keyed, key: name, concat_fields: [generated]}
       - {op: append_unique_by, key: name}
     - named profile string: use a predefined strategy map from STRATEGY_PROFILES
+    - into: wrap input payloads into one strategy field before merging
+    - single: with into, treat the whole input as one payload instead of multiple
+    - get: extract a dotted path from the merged result; with into, extraction
+      starts at the into field value
 
     Available profiles:
     - "subsystem_contrib": ETC_FILES append, BINS append, ENV dict_overlay,
@@ -225,9 +233,19 @@ def merge_with_strategy(
     for field, strategy in strategy_map.items():
         combined[field] = _strategy_initial_value(strategy)
 
-    source_records = _as_list(records)
+    if into is not None and str(into).strip() != "":
+        into_field = str(into).strip()
+        if into_field not in strategy_map:
+            raise ValueError("into field '{}' is not present in strategy map".format(into_field))
+        source_records = [records] if single else _as_list(records)
+        source_records = [{into_field: record} for record in source_records]
+    else:
+        into_field = None
+        source_records = _as_list(records)
+
     if include_aggregate and isinstance(aggregate, dict):
-        source_records = source_records + [aggregate]
+        aggregate_record = {into_field: aggregate} if into_field else aggregate
+        source_records = source_records + [aggregate_record]
 
     for record in source_records:
         if not isinstance(record, dict):
@@ -283,7 +301,15 @@ def merge_with_strategy(
                 )
             )
 
-    return combined
+    if into_field:
+        result = combined.get(into_field, _strategy_initial_value(strategy_map[into_field]))
+    else:
+        result = combined
+
+    if get is not None:
+        return get_path(result, get)
+
+    return result
 
 
 class FilterModule(object):
