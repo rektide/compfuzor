@@ -438,6 +438,20 @@ def test_named_profile():
     check("profile dedupes PKGS", result["PKGS"], ["p"])
 
 
+def test_bins_generated_profile():
+    print("\nbins_generated profile:")
+    result = merge_with_strategy(
+        [[{"name": "build.sh", "generated": "echo one"}], [{"name": "build.sh", "generated": "echo two"}]],
+        "bins_generated",
+        into="BINS",
+    )
+    check(
+        "profile merges bins by name and concats generated",
+        result,
+        [{"name": "build.sh", "generated": "echo one\necho two"}],
+    )
+
+
 if __name__ == "__main__":
     test_append()
     test_append_unique()
@@ -470,6 +484,7 @@ if __name__ == "__main__":
     test_append_unique_by_three_payloads()
 
     test_named_profile()
+    test_bins_generated_profile()
 
     print("\n{} passed, {} failed".format(passed, failed))
     sys.exit(1 if failed else 0)

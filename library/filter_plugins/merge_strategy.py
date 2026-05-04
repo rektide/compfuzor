@@ -79,6 +79,13 @@ STRATEGY_PROFILES = {
         "ETC_FILES": "append",
         "LINKS": "append",
     },
+    "bins_generated": {
+        "BINS": {
+            "op": "merge_keyed",
+            "key": "name",
+            "concat_fields": ["generated"],
+        },
+    },
 }
 
 
@@ -221,6 +228,7 @@ def merge_with_strategy(
     - "subsystem_contrib": ETC_FILES append, BINS append, ENV dict_overlay,
       ENV_LIST append_unique, PKGS append_unique
     - "subsystem_artifacts": ETC_FILES append, LINKS append
+    - "bins_generated": BINS merge_keyed by name, generated concat
 
     When `payload_path` is set, it is split on "." and walked into each record
     to extract the payload.  If any intermediate key is missing or the
