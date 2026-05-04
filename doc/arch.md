@@ -977,3 +977,36 @@ for repeated messy logic, but keep subsystem assembly visible in task vars.
 - TODO: stricter naming registry for artifact families beyond the current seed tables
 - TODO: normative, testable phase entry and exit guarantees
 - TODO: exact `contrib` schema conventions for major shared artifact families
+
+# Design memo: merge shape and subsystem boundaries (2026-05-04)
+
+The subsystem refactor is new enough that breaking changes are acceptable when
+they make the model easier to understand. Optimize for a small set of clear
+concepts rather than compatibility with transitional helpers.
+
+Current direction:
+
+- `sub_*` builds subsystem records.
+- `gen_*` synthesizes shared artifacts.
+- `merge_map` should merge record-shaped maps with per-key strategies.
+- `merge_list` should merge direct list payloads such as `BINS`.
+- `aggregate` / `include_aggregate` should not be part of the clean merge API;
+  callers should build the list of records they want merged explicitly.
+- Keep computation unpacked. Pack only at boundaries.
+
+The last rule matters most. During computation, prefer named artifact vars such
+as `kernel_all_bins`, `kernel_all_env`, and `child_contrib` over generic packed
+objects such as `all_contrib`. The final subsystem record can still publish one
+`contrib` object, but intermediate task logic should stay readable and local.
+
+For `BINS`, preserving `mergeKeyed` behavior is required: overlapping entries
+with the same `name` should merge into one record, and `generated` script content
+should concatenate in producer order. A direct list merge profile such as
+`bins_generated` should express this without wrapping values in temporary
+`{'BINS': ...}` maps.
+
+Kernel should keep `kernel_all` as a normal subsystem when useful, but aggregation
+should be explicit. Individual child specs can be instantiated first, child
+contrib can be rolled up with `merge_map`, and `kernel_all` can publish its final
+`spec` and `contrib` from clearly named artifact vars. It should not rely on a
+special aggregate mode hidden inside the merge helper.
