@@ -8,6 +8,7 @@ import sys
 from ansible.module_utils._internal._datatag import AnsibleTagHelper
 from ansible.plugins.test.core import wrapped_test_undefined
 from ansible.template import accept_args_markers
+from jinja2 import pass_context
 
 _PLUGIN_DIR = os.path.abspath(os.path.dirname(__file__))
 if _PLUGIN_DIR not in sys.path:
@@ -55,6 +56,28 @@ def _raw_copy_template_data(value):
 
 def _is_nothing(value):
     return value is None or wrapped_test_undefined(value)
+
+
+def _dict_get_raw(mapping, key, default=None):
+    if not isinstance(mapping, dict):
+        return default
+    try:
+        return dict.__getitem__(mapping, key)
+    except KeyError:
+        return default
+
+
+def _context_var_raw(context, name, default=None):
+    variables = context.get("vars", {})
+    return _dict_get_raw(variables, name, default=default)
+
+
+def _truthy(value):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
 
 
 def _resolve_list_strategy(strategy):
@@ -208,8 +231,54 @@ def merge_list(values, strategy="append", single=False, get=None):
         return get_path(result, get)
     return result
 
+
+@pass_context
+@accept_args_markers
+def merge_list_subsys(
+    context,
+    current,
+    subsystem_id=None,
+    path="contrib.BINS",
+    strategy="bins_generated",
+    default=None,
+    single=False,
+    get=None,
+    id=None,
+    fallback_id=None,
+    active=True,
+    active_path="active",
+):
+    """Merge a current list with one list value from SUBSYSTEM.
+
+    SUBSYSTEM is read through a raw-copy boundary so lazy template strings remain
+    tagged and unevaluated during the merge.
+    """
+    current = _raw_copy_template_data(current)
+    subsystem_id = _raw_copy_template_data(subsystem_id)
+    id = _raw_copy_template_data(id)
+    fallback_id = _raw_copy_template_data(fallback_id)
+    path = _raw_copy_template_data(path)
+    default = [] if default is None else _raw_copy_template_data(default)
+    active = _raw_copy_template_data(active)
+    active_path = _raw_copy_template_data(active_path)
+
+    resolved_id = id if not _is_nothing(id) else subsystem_id
+    if _is_nothing(resolved_id) or str(resolved_id).strip() == "":
+        resolved_id = fallback_id
+
+    incoming = default
+    if not (_is_nothing(resolved_id) or str(resolved_id).strip() == ""):
+        subsystems = _raw_copy_template_data(_context_var_raw(context, "SUBSYSTEM", {}))
+        record = _dict_get_raw(subsystems, str(resolved_id).strip(), {})
+        if (not active) or _truthy(get_path(record, active_path, default=False)):
+            incoming = get_path(record, path, default=default)
+
+    return merge_list([current, incoming], strategy=strategy, single=single, get=get)
+
+
 class FilterModule(object):
     def filters(self):
         return {
             "merge_list": merge_list,
+            "merge_list_subsys": merge_list_subsys,
         }

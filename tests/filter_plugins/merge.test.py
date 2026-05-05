@@ -15,7 +15,7 @@ sys.path.insert(
 from ansible._internal._datatag import _tags
 from ansible.module_utils._internal._datatag import AnsibleTagHelper
 
-from merge import merge_list
+from merge import merge_list, merge_list_subsys
 
 passed = 0
 failed = 0
@@ -138,6 +138,20 @@ class FakeLazyList(list):
         return [item for item in list.__iter__(self)]
 
 
+class FakeLazyDict(dict):
+    def __getitem__(self, key):
+        raise AssertionError("lazy dict rendered")
+
+    def get(self, key, default=None):
+        raise AssertionError("lazy dict rendered")
+
+    def items(self):
+        raise AssertionError("lazy dict rendered")
+
+    def _non_lazy_copy(self):
+        return {key: value for key, value in dict.items(self)}
+
+
 def test_non_lazy_copy_boundary():
     print("\nmerge_list raw-copy boundary:")
     result = merge_list(FakeLazyList([["a"], ["b"]]))
@@ -153,6 +167,98 @@ def test_unknown_strategy_raises():
         check("mentions unknown strategy", "bogus" in str(e), True)
 
 
+def test_merge_list_subsys_default_bins():
+    print("\nmerge_list_subsys default bins:")
+    context = {
+        "vars": {
+            "SUBSYSTEM": {
+                "python": {
+                    "active": True,
+                    "contrib": {
+                        "BINS": [
+                            {"name": "build.sh", "generated": "echo python"}
+                        ]
+                    },
+                }
+            }
+        }
+    }
+    result = merge_list_subsys(
+        context,
+        [{"name": "build.sh", "generated": "echo base"}],
+        "python",
+    )
+    check(
+        "merges active subsystem bins",
+        result,
+        [{"name": "build.sh", "generated": "echo base\necho python"}],
+    )
+
+
+def test_merge_list_subsys_inactive_skips():
+    print("\nmerge_list_subsys inactive:")
+    context = {
+        "vars": {
+            "SUBSYSTEM": {
+                "python": {
+                    "active": False,
+                    "contrib": {"BINS": [{"name": "build.sh", "generated": "nope"}]},
+                }
+            }
+        }
+    }
+    result = merge_list_subsys(
+        context,
+        [{"name": "build.sh", "generated": "echo base"}],
+        "python",
+    )
+    check(
+        "skips inactive subsystem by default",
+        result,
+        [{"name": "build.sh", "generated": "echo base"}],
+    )
+
+
+def test_merge_list_subsys_fallback_and_get():
+    print("\nmerge_list_subsys fallback and get:")
+    context = {
+        "vars": {
+            "SUBSYSTEM": {
+                "fallback": {
+                    "active": True,
+                    "contrib": {"BINS": [{"name": "install.sh"}]},
+                }
+            }
+        }
+    }
+    result = merge_list_subsys(
+        context,
+        [],
+        id="",
+        fallback_id="fallback",
+        get="0.name",
+    )
+    check("uses fallback id and extracts result path", result, "install.sh")
+
+
+def test_merge_list_subsys_raw_copy_boundary():
+    print("\nmerge_list_subsys raw-copy boundary:")
+    context = {
+        "vars": {
+            "SUBSYSTEM": FakeLazyDict(
+                {
+                    "python": {
+                        "active": True,
+                        "contrib": {"BINS": [{"name": "build.sh"}]},
+                    }
+                }
+            )
+        }
+    }
+    result = merge_list_subsys(context, [], "python")
+    check("uses _non_lazy_copy for SUBSYSTEM", result, [{"name": "build.sh"}])
+
+
 if __name__ == "__main__":
     test_append()
     test_append_unique()
@@ -164,6 +270,10 @@ if __name__ == "__main__":
     test_concat_preserves_template_tags()
     test_non_lazy_copy_boundary()
     test_unknown_strategy_raises()
+    test_merge_list_subsys_default_bins()
+    test_merge_list_subsys_inactive_skips()
+    test_merge_list_subsys_fallback_and_get()
+    test_merge_list_subsys_raw_copy_boundary()
 
     print("\n{} passed, {} failed".format(passed, failed))
     sys.exit(1 if failed else 0)
