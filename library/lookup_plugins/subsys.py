@@ -84,6 +84,7 @@ if _FILTER_DIR not in sys.path:
     sys.path.insert(0, _FILTER_DIR)
 
 from get import get_path  # noqa: E402
+from merge import _raw_copy_template_data, _dict_get_raw, _is_nothing, _truthy  # noqa: E402
 
 
 def _to_bool(value):
@@ -130,24 +131,24 @@ def _template_value(value, templar=None):
 
 def _build_envelope(subsystems, subsystem_id, name=None, variables=None, domain=None, extra_bypass=None, templar=None):
     subsystems_map = subsystems if isinstance(subsystems, dict) else {}
-    record = subsystems_map.get(subsystem_id)
-    record = record if isinstance(record, dict) else {}
+    record = _dict_get_raw(subsystems_map, subsystem_id, {})
+    record = _raw_copy_template_data(record) if isinstance(record, dict) and record else {}
     found = bool(record)
 
     explicit_requested = record.get("requested")
     if explicit_requested is not None:
-        requested = _to_bool(_template_value(explicit_requested, templar))
+        requested = _truthy(_template_value(explicit_requested, templar))
     elif variables is not None:
         requested = _resolve_requested(variables, subsystem_id)
     else:
         requested = found
 
     explicit_bypassed = record.get("bypassed")
-    bypassed = _to_bool(_template_value(explicit_bypassed, templar)) if explicit_bypassed is not None else False
+    bypassed = _truthy(_template_value(explicit_bypassed, templar)) if explicit_bypassed is not None else False
     if variables is not None:
         bypassed = bypassed or _resolve_bypass(variables, subsystem_id, domain=domain, extra_bypass=extra_bypass)
 
-    valid = _to_bool(_template_value(record.get("valid", True), templar))
+    valid = _truthy(_template_value(record.get("valid", True), templar))
 
     active = requested and (not bypassed) and valid
     if active:
@@ -161,14 +162,14 @@ def _build_envelope(subsystems, subsystem_id, name=None, variables=None, domain=
     else:
         state = "absent"
 
-    reasons = record.get("reasons", [])
+    reasons = _raw_copy_template_data(record.get("reasons", []))
     if reasons is None:
         reasons = []
 
-    spec = record.get("spec")
+    spec = _raw_copy_template_data(record.get("spec"))
     if spec is None:
         spec = []
-    contrib = record.get("contrib")
+    contrib = _raw_copy_template_data(record.get("contrib"))
     if not isinstance(contrib, dict):
         contrib = {}
 
@@ -228,7 +229,7 @@ class LookupModule(LookupBase):
         extra_bypass = kwargs.get("bypass")
 
         envelope = _build_envelope(
-            variables.get("SUBSYSTEM", {}),
+            _raw_copy_template_data(variables.get("SUBSYSTEM", {})),
             subsystem_id,
             name=name,
             variables=variables,
@@ -239,6 +240,6 @@ class LookupModule(LookupBase):
 
         if get_expr is not None:
             resolved = get_path(envelope, get_expr, default=default)
-            return [self._templar._engine.template(resolved)]
+            return [resolved]
 
-        return [self._templar._engine.template(envelope)]
+        return [envelope]
