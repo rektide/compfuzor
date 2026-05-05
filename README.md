@@ -42,22 +42,7 @@ records | merge_with_strategy("subsystem_contrib", payload_path="contrib")
 `payload_path` walks a dot-separated path (e.g. `"contrib.artifacts"`) to
 extract the working payload from each record.
 
-**Used in:** [`subsystem_rollup.py`](library/filter_plugins/subsystem_rollup.py),
-[`mergeKeyed.py`](library/filter_plugins/mergeKeyed.py) (compat shim),
-[`fn_kernel.tasks`](tasks/compfuzor/fn_kernel.tasks)
-
----
-
-### `subsystem_rollup` — [`subsystem_rollup.py`](library/filter_plugins/subsystem_rollup.py)
-
-Thin wrapper over `merge_with_strategy` with the `"subsystem_contrib"` profile
-and `payload_path="contrib"`.
-
-```yaml
-[modprobe_state, sysctl_state, sysfs_state] | subsystem_rollup({}, false)
-```
-
-**Used in:** [`fn_kernel.tasks`](tasks/compfuzor/fn_kernel.tasks)
+**Used in:** [`mergeKeyed.py`](library/filter_plugins/mergeKeyed.py) (compat shim)
 
 ---
 
@@ -77,7 +62,7 @@ appropriate.
 
 ---
 
-### `build_install_bins` — [`subsystem_record.py`](library/filter_plugins/subsystem_record.py)
+### `build_install_bins` — [`build_install_bins.py`](library/filter_plugins/build_install_bins.py)
 
 Returns standard `build_bins` / `install_bins` entries for a stem name.
 
@@ -172,7 +157,6 @@ prefix conventions (`fn_`/`gen_`/`fs_`), and worked examples.
 ```sh
 python tests/filter_plugins/merge_strategy.test.py   # 36 tests
 python tests/filter_plugins/mergeKeyed.test.py       # 11 tests
-python tests/filter_plugins/subsystem_rollup.test.py  #  9 tests
 python tests/filter_plugins/subsystem_bypass.test.py  # 18 tests
 python tests/filter_plugins/subsystem_record.test.py  # 27 tests
 python tests/filter_plugins/concat2.test.py           # 14 tests

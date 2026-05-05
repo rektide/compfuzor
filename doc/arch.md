@@ -959,9 +959,10 @@ Current implementation uses focused helpers in filter and lookup plugins:
 - `owner_group_fields`: applies row-first owner/group resolution with subsystem
   defaults
 - `subsystem_record`: creates consistent subsystem state records
-- `subsystem_rollup`: rolls child subsystem contrib payloads into one aggregate
-- `merge_with_strategy`: merges records with explicit per-field strategies and
-  named profiles
+- `merge_list` / `merge_dict`: merge direct list and dict payloads without
+  forcing temporary wrapper records
+- `lookup('merge_subsys', ...)`: merges one subsystem contrib artifact into the
+  matching global artifact through a raw-copy boundary
 - `concat2`: undefined-safe list concatenation
 - `get` / `get_path`: safe dotted-path traversal
 - `lookup('subsys', ...)`: resolves normalized subsystem envelopes from

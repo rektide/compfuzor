@@ -48,10 +48,10 @@ Filters transform values using `|` in Jinja templates.
 | `listify` | [`library/filter_plugins/listify.py`](/library/filter_plugins/listify.py) | Converts input to list form (`dict` -> list of `{key, value}`). |
 | `concat` | [`library/filter_plugins/listify.py`](/library/filter_plugins/listify.py) | Concatenates arguments after `listify` conversion. |
 | `merge_with_strategy` | [`library/filter_plugins/merge_strategy.py`](/library/filter_plugins/merge_strategy.py) | Strategy-driven merger for records and payload fields; supports nested maps and operations (including `merge_keyed`). |
+| `merge_list` / `merge_dict` | [`library/filter_plugins/merge.py`](/library/filter_plugins/merge.py) | Merge direct list/dict payloads through a template-safe raw-copy boundary. |
 | `mergeKeyed` | [`library/filter_plugins/mergeKeyed.py`](/library/filter_plugins/mergeKeyed.py) | Merges two lists of objects by key, with optional concat fields. (compatibility shim over `merge_with_strategy`) |
-| `subsystem_rollup` | [`library/filter_plugins/subsystem_rollup.py`](/library/filter_plugins/subsystem_rollup.py) | Rolls up child subsystem contrib payloads into one aggregate. |
 | `subsystem_record` | [`library/filter_plugins/subsystem_record.py`](/library/filter_plugins/subsystem_record.py) | Builds a subsystem runtime record with computed defaults. |
-| `build_install_bins` | [`library/filter_plugins/subsystem_record.py`](/library/filter_plugins/subsystem_record.py) | Returns standard build/install bin entries for a stem. |
+| `build_install_bins` | [`library/filter_plugins/build_install_bins.py`](/library/filter_plugins/build_install_bins.py) | Returns standard build/install bin entries for a stem. |
 | `owner_group_fields` | [`library/filter_plugins/subsystem_bypass.py`](/library/filter_plugins/subsystem_bypass.py) | Resolves owner/group fields with row-first precedence. |
 | `subsystem_bypassed` | [`library/filter_plugins/subsystem_bypass.py`](/library/filter_plugins/subsystem_bypass.py) | Returns True if any effective bypass variable resolves truthy. |
 | `subsystem_bypass_vars` | [`library/filter_plugins/subsystem_bypass.py`](/library/filter_plugins/subsystem_bypass.py) | Returns effective bypass variable names for a subsystem. |

@@ -210,9 +210,10 @@ If any is truthy, `bypassed` is `true`.
 |------|---------|
 | [`vars/common.yaml`](/vars/common.yaml) | Static `SUBSYSTEM` defs, helper vars, generic eval contract |
 | [`library/lookup_plugins/subsys.py`](/library/lookup_plugins/subsys.py) | Lookup: resolves envelope from SUBSYSTEM + env vars |
+| [`library/lookup_plugins/merge_subsys.py`](/library/lookup_plugins/merge_subsys.py) | Lookup: merges subsystem contrib artifacts into globals |
+| [`library/filter_plugins/merge.py`](/library/filter_plugins/merge.py) | Direct list/dict merge helpers used by merge_subsys |
 | [`library/filter_plugins/subsystem_bypass.py`](/library/filter_plugins/subsystem_bypass.py) | `owner_group_fields` filter (used by get_urls) |
 | [`library/filter_plugins/build_install_bins.py`](/library/filter_plugins/build_install_bins.py) | `build_install_bins` filter (used by kernel) |
-| [`library/filter_plugins/subsystem_rollup.py`](/library/filter_plugins/subsystem_rollup.py) | `subsystem_rollup` filter (used by kernel) |
 | [`library/filter_plugins/_subsystem_utils.py`](/library/filter_plugins/_subsystem_utils.py) | Shared helpers for concat2, merge_strategy, subsystem_bypass |
 | [`tasks/compfuzor/sub_get_urls.tasks`](/tasks/compfuzor/sub_get_urls.tasks) | Validates and publishes get_urls subsystem |
 | [`tasks/compfuzor/sub_kernel.tasks`](/tasks/compfuzor/sub_kernel.tasks) | Validates and publishes kernel subsystems |
