@@ -3,8 +3,8 @@
   args:
     _dir: "{{include|upper+'S_DIR'}}"
     _d: "{{include|upper+'_D'}}"
-    _files: "{{vars[include|upper+'_D']|default([])}}"
-    _path: "{{fs_path|default(hostvars[inventory_hostname][include|upper])|default(vars[include|upper])}}"
+    _files: "{{lookup('vars', include|upper+'_D', default=[])}}"
+    _path: "{{fs_path|default(hostvars[inventory_hostname][include|upper])|default(lookup('vars', include|upper))}}"
     _go: True
 - name: "Check for .d stuff to do"
   set_fact: _go=""
@@ -18,7 +18,7 @@
     group: "{{GROUP|default(omit)}}"
   with_items: "{{_files}}"
   become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dirpath|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
-  when: (not not _go) and vars[_d]|default(False)
+  when: (not not _go) and lookup('vars', _d, default=False)
 - name: Copy pre-assembed target into backup and link backup into .d if no backup exists
   shell: "test ! -f {{_path}}/{{item}}.orig -f {{_path}}/{{item}} && mv {{_path}}/{{item}} {{_path}}/{{item}}.orig && ln -s {{_path}}/{{item}}.orig {{_path}}/{{item}}.d/20-$(basename {{item}}); echo $?"
   with_items: "{{_files}}"

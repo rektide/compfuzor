@@ -13,7 +13,7 @@
         - stat:
             exists: False
   vars:
-    fsh: "{{hostvars[inventory_hostname][include|upper]|default(vars[include|upper])}}"
+    fsh: "{{hostvars[inventory_hostname][include|upper]|default(lookup('vars', include|upper))}}"
     relative: "{{DIR}}/{{include}}"
     upper: "{{include|upper}}"
     names:
@@ -27,15 +27,15 @@
       linkProp: "{{upper}}_LINK_PROP"
       linkBypass: "{{upper}}_LINK_BYPASS"
     vals:
-      sDir: "{{hostvars[inventory_hostname][names.sDir]|default(vars[names.sDir]|default(False))}}"
-      dirs: "{{hostvars[inventory_hostname][names.dirs]|default(vars[names.dirs]|default(False))}}"
-      dir: "{{hostvars[inventory_hostname][names.dir]|default(vars[names.dir]|default(False))}}"
-      d: "{{hostvars[inventory_hostname][names.d]|default(vars[names.d]|default(False))}}"
-      files: "{{hostvars[inventory_hostname][names.files]|default(vars[names.files]|default(False))}}"
-      prop: "{{hostvars[inventory_hostname][names.prop]|default(vars[names.prop]|default({}))}}"
-      bypass: "{{(DIR_BYPASS|default(False) or hostvars[inventory_hostname][names.bypass]|default(vars[names.bypass]|default(False))) or not (names.sDir or names.dirs or names.dir or names.files or names.d)}}"
-      linkProp: "{{hostvars[inventory_hostname][names.linkProp]|default(vars[names.linkProp]|default({}))}}"
-      linkBypass: "{{(DIR_LINK_BYPASS|default(False) or hostvars[inventory_hostname][names.linkBypass]|default(vars[names.linkBypass]|default(False))) or not (names.sDir or names.dirs or names.dir or names.files or names.d)}}"
+      sDir: "{{hostvars[inventory_hostname][names.sDir]|default(lookup('vars', names.sDir, default=False))}}"
+      dirs: "{{hostvars[inventory_hostname][names.dirs]|default(lookup('vars', names.dirs, default=False))}}"
+      dir: "{{hostvars[inventory_hostname][names.dir]|default(lookup('vars', names.dir, default=False))}}"
+      d: "{{hostvars[inventory_hostname][names.d]|default(lookup('vars', names.d, default=False))}}"
+      files: "{{hostvars[inventory_hostname][names.files]|default(lookup('vars', names.files, default=False))}}"
+      prop: "{{hostvars[inventory_hostname][names.prop]|default(lookup('vars', names.prop, default={}))}}"
+      bypass: "{{(DIR_BYPASS|default(False) or hostvars[inventory_hostname][names.bypass]|default(lookup('vars', names.bypass, default=False))) or not (names.sDir or names.dirs or names.dir or names.files or names.d)}}"
+      linkProp: "{{hostvars[inventory_hostname][names.linkProp]|default(lookup('vars', names.linkProp, default={}))}}"
+      linkBypass: "{{(DIR_LINK_BYPASS|default(False) or hostvars[inventory_hostname][names.linkBypass]|default(lookup('vars', names.linkBypass, default=False))) or not (names.sDir or names.dirs or names.dir or names.files or names.d)}}"
 - name: "Test for {{_upper}} dir and link"
   stat:
     path: "{{item}}"
@@ -147,7 +147,7 @@
     fileType: "{{'file' if item.raw|default(False) else 'template'}}"
     isFile: "{{not (item.content|def or item.yaml|def or item.json|def or item.var|def or item.copyDir|def)}}"
     file: "{{lookup(fileType, item.src|default(item.name|default(item, true), true)|defaultDir(srcDir)) if isFile else '' }}"
-    var: "{{hostvars[inventory_hostname][item.var]|default(vars[item.var]) if item.var|def else '' }}"
+    var: "{{hostvars[inventory_hostname][item.var]|default(lookup('vars', item.var)) if item.var|def else '' }}"
     all: "{{ content + file + var + yaml + json}}"
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"

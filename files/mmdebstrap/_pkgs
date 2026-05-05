@@ -1,5 +1,5 @@
 {% set sep=joiner('\n') -%}
 {% for s in mmpkgset -%}
-{{sep()}}{{vars[s]|default(hostvars[inventory_hostname][s])|join(',')}}
+{{sep()}}{{lookup('vars', s, default=hostvars[inventory_hostname][s])|join(',')}}
 {%- endfor -%}
 linux-image-{{arch}},linux-headers-{{arch}}

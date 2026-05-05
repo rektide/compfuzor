@@ -5,9 +5,9 @@
 {%- endmacro -%}
 
 {%- macro phrases(name) -%}
-{% set phrs = hostvars[inventory_hostname]['SYSTEMD_PHRASES_'+name|upper]|default(vars['SYSTMED_PHRASES_'+name|upper]) -%}
+{% set phrs = hostvars[inventory_hostname]['SYSTEMD_PHRASES_'+name|upper]|default(lookup('vars', 'SYSTMED_PHRASES_'+name|upper)) -%}
 {% for phr in phrs %}
-{% for val in hostvars[inventory_hostname]['SYSTEMD_' + phr|upper|replace(' ', '_')]|default(vars['SYSTEMD_' + phr|upper|replace(' ', '_')])|default([])|arrayitize %}
+{% for val in hostvars[inventory_hostname]['SYSTEMD_' + phr|upper|replace(' ', '_')]|default(lookup('vars', 'SYSTEMD_' + phr|upper|replace(' ', '_'), default=[]))|arrayitize %}
 {{ phr|replace(' ', '') }}={{ val if val != True and val != False else val|ternary('true', 'false') }}
 {% endfor -%}
 {% endfor -%}
