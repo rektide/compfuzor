@@ -9,7 +9,7 @@
         params:
           enabled: Y
           compressor: lz4
-          zpool: z3fold
+          zpool: zsmalloc
           max_pool_percent: "20"
           accept_threshold_percent: "90"
           same_filled_pages_enabled: Y
