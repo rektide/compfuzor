@@ -14,6 +14,7 @@ if _PLUGIN_DIR not in sys.path:
     sys.path.insert(0, _PLUGIN_DIR)
 
 from _subsystem_utils import _as_list, _dedupe_preserve  # noqa: E402
+from get import get_path  # noqa: E402
 
 
 LIST_STRATEGY_PROFILES = {
@@ -183,7 +184,7 @@ def _merge_list_values(values, strategy):
 
 
 @accept_args_markers
-def merge_list(values, strategy="append", single=False):
+def merge_list(values, strategy="append", single=False, get=None):
     """Merge direct list payloads with one list strategy.
 
     Default input shape is multiple payloads: [existing_list, incoming_list].
@@ -191,6 +192,7 @@ def merge_list(values, strategy="append", single=False):
     """
     values = _raw_copy_template_data(values)
     strategy = _raw_copy_template_data(_resolve_list_strategy(strategy))
+    get = _raw_copy_template_data(get)
     _validate_list_strategy(strategy)
 
     if _is_nothing(values):
@@ -201,8 +203,10 @@ def merge_list(values, strategy="append", single=False):
         payloads = _as_list(values)
 
     payloads = [value for value in payloads if not _is_nothing(value)]
-    return _merge_list_values(payloads, strategy)
-
+    result = _merge_list_values(payloads, strategy)
+    if get is not None:
+        return get_path(result, get)
+    return result
 
 class FilterModule(object):
     def filters(self):

@@ -55,6 +55,16 @@ def test_single_payload():
     )
 
 
+def test_get_path():
+    print("\nmerge_list get:")
+    result = merge_list(
+        [[{"name": "build.sh"}], [{"name": "install.sh"}]],
+        "bins_generated",
+        get="1.name",
+    )
+    check("extracts path from merged list", result, "install.sh")
+
+
 def test_undefined_is_empty():
     print("\nmerge_list undefined:")
     result = merge_list([Undefined(name="missing"), ["x"]])
@@ -147,6 +157,7 @@ if __name__ == "__main__":
     test_append()
     test_append_unique()
     test_single_payload()
+    test_get_path()
     test_undefined_is_empty()
     test_bins_generated_profile()
     test_append_unique_by()
