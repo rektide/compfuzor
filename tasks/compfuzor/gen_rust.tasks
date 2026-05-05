@@ -1,7 +1,7 @@
 ---
 - name: "Compfuzor: synthesize rust subsystem artifacts"
   set_fact:
-    BINS: "{{ [BINS | default([]), lookup('subsys', id='rust', get='contrib.BINS', default=[])] | merge_with_strategy('bins_generated', into='BINS') }}"
+    BINS: "{{ BINS | merge_list_subsys('rust') }}"
     ENV: "{{ lookup('subsys', id='rust', get='contrib.ENV', default={}) | combine(existingEnv) }}"
   when: lookup('subsys', id='rust', get='active', default=false) | bool
   vars:

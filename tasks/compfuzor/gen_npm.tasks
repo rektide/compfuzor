@@ -1,7 +1,7 @@
 ---
 - name: "Compfuzor: synthesize npm subsystem artifacts"
   set_fact:
-    BINS: "{{ [BINS | default([]), lookup('subsys', id='npm', get='contrib.BINS', default=[])] | merge_with_strategy('bins_generated', into='BINS') }}"
+    BINS: "{{ BINS | merge_list_subsys('npm') }}"
     ENV: "{{ lookup('subsys', id='npm', get='contrib.ENV') | combine(existingEnv) }}"
     NPM_PACKAGE_BIN: "{{ lookup('subsys', id='npm', get='spec.npm_package_bin', default=NPM_PACKAGE_BIN | default(omit)) }}"
   when: lookup('subsys', id='npm', get='active', default=false) | bool

@@ -10,8 +10,8 @@
 
 - name: "Compfuzor: synthesize tool_versions subsystem artifacts"
   set_fact:
-    ETC_FILES: "{{ [{'name': '.tool-versions', 'content': _tv_content}] | concat2(ETC_FILES) }}"
-    LINKS: "{{ [{'src': DIR + '/etc/.tool-versions', 'dest': '.tool-versions'}] | concat2(LINKS) }}"
+    ETC_FILES: "{{ [[{'name': '.tool-versions', 'content': _tv_content}], ETC_FILES | default([])] | merge_list('append') }}"
+    LINKS: "{{ [[{'src': DIR + '/etc/.tool-versions', 'dest': '.tool-versions'}], LINKS | default([])] | merge_list('append') }}"
   vars:
     _tv_merged: >-
       {{ _tv_subsystems.TOOL_VERSIONS | default({})
