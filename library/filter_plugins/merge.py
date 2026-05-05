@@ -31,7 +31,17 @@ VALID_LIST_OPERATIONS = {"append_unique_by", "merge_keyed"}
 
 
 def _raw_copy_template_data(value):
-    """Copy lazy Ansible containers without rendering tagged template strings."""
+    """Copy lazy Ansible containers without rendering tagged template strings.
+
+    Args:
+        value: Any value passed from Ansible/Jinja. Lazy containers are copied
+            through their modern `_non_lazy_copy()` hook before normal Python
+            traversal happens.
+
+    Returns:
+        A plain Python container tree where tagged strings remain tagged and
+        unevaluated.
+    """
     if _is_nothing(value):
         return value
 
@@ -59,6 +69,16 @@ def _is_nothing(value):
 
 
 def _dict_get_raw(mapping, key, default=None):
+    """Read one dict key without calling lazy container accessors.
+
+    Args:
+        mapping: Candidate dictionary.
+        key: Key to read.
+        default: Value returned when `mapping` is not a dict or the key is absent.
+
+    Returns:
+        The raw dict value or `default`.
+    """
     if not isinstance(mapping, dict):
         return default
     try:
@@ -68,6 +88,16 @@ def _dict_get_raw(mapping, key, default=None):
 
 
 def _context_var_raw(context, name, default=None):
+    """Read one variable from a Jinja context without rendering sibling values.
+
+    Args:
+        context: Jinja pass_context object.
+        name: Variable name to read from `context['vars']`.
+        default: Value returned when the variable is absent.
+
+    Returns:
+        The raw variable value or `default`.
+    """
     variables = context.get("vars", {})
     return _dict_get_raw(variables, name, default=default)
 
@@ -106,6 +136,16 @@ def _validate_list_strategy(strategy):
 
 
 def _concat_strings_preserving_tags(left, right):
+    """Concatenate two strings while preserving Ansible datatags.
+
+    Args:
+        left: Existing string value.
+        right: Incoming string value.
+
+    Returns:
+        Newline-joined string with tags copied from both inputs where Ansible
+        considers propagation safe.
+    """
     combined = str(left) + "\n" + str(right)
     combined = AnsibleTagHelper.tag_copy(left, combined)
     combined = AnsibleTagHelper.tag_copy(right, combined)
@@ -113,6 +153,19 @@ def _concat_strings_preserving_tags(left, right):
 
 
 def _merge_keyed(left, right, key="key", concat_fields=None):
+    """Merge two lists of dict records by a key field.
+
+    Args:
+        left: Existing list payload.
+        right: Incoming list payload.
+        key: Dict key used to identify overlapping records.
+        concat_fields: Field names whose values should concatenate when records
+            overlap. String concatenation preserves Ansible datatags.
+
+    Returns:
+        A merged list. For overlapping dict records, the incoming record wins
+        except for fields listed in `concat_fields`.
+    """
     if concat_fields is None:
         concat_fields = []
 
@@ -154,6 +207,16 @@ def _merge_keyed(left, right, key="key", concat_fields=None):
 
 
 def _append_unique_by(lists, key="key"):
+    """Append list payloads and keep the last dict for each key value.
+
+    Args:
+        lists: Sequence of list-like payloads.
+        key: Dict key used to identify duplicates.
+
+    Returns:
+        A list preserving first key position while using the last matching dict
+        value for each key.
+    """
     combined = []
     for value in lists:
         combined += _as_list(value)
@@ -180,6 +243,15 @@ def _append_unique_by(lists, key="key"):
 
 
 def _merge_list_values(values, strategy):
+    """Merge already-normalized list payloads with a validated strategy.
+
+    Args:
+        values: List of list-like payloads to merge.
+        strategy: Resolved list strategy string or operation dict.
+
+    Returns:
+        The merged list payload.
+    """
     if isinstance(strategy, str):
         combined = []
         for value in values:
@@ -210,8 +282,19 @@ def _merge_list_values(values, strategy):
 def merge_list(values, strategy="append", single=False, get=None):
     """Merge direct list payloads with one list strategy.
 
-    Default input shape is multiple payloads: [existing_list, incoming_list].
-    Use single=True when the input value itself is one list payload.
+    Args:
+        values: List of payloads to merge. By default this is treated as multiple
+            list payloads, for example `[existing_bins, incoming_bins]`.
+        strategy: Strategy name or operation dict. Supported strings are
+            `append`, `append_unique`, and named profiles such as
+            `bins_generated`. Supported operation dicts use `op: merge_keyed` or
+            `op: append_unique_by`.
+        single: Treat `values` itself as one list payload instead of a list of
+            payloads.
+        get: Optional dotted path to extract from the merged result.
+
+    Returns:
+        The merged list, or the value at `get` when provided.
     """
     values = _raw_copy_template_data(values)
     strategy = _raw_copy_template_data(_resolve_list_strategy(strategy))
@@ -252,6 +335,25 @@ def merge_list_subsys(
 
     SUBSYSTEM is read through a raw-copy boundary so lazy template strings remain
     tagged and unevaluated during the merge.
+
+    Args:
+        context: Jinja context supplied by `pass_context`.
+        current: Existing list payload, usually a global artifact such as `BINS`.
+        subsystem_id: Positional subsystem id. Ignored when `id` is provided.
+        path: Dotted path inside the subsystem record to merge from. Defaults to
+            `contrib.BINS`.
+        strategy: Strategy name or operation dict passed to `merge_list`.
+        default: Incoming payload used when the subsystem/path is absent or
+            inactive. Defaults to an empty list.
+        single: Forwarded to `merge_list`.
+        get: Optional dotted path to extract from the merged result.
+        id: Keyword subsystem id. Preferred when call sites need explicit naming.
+        fallback_id: Subsystem id used when `id`/`subsystem_id` is absent or empty.
+        active: When truthy, merge only if the subsystem's `active_path` is truthy.
+        active_path: Dotted path used for active gating. Defaults to `active`.
+
+    Returns:
+        The merged list, or the value at `get` when provided.
     """
     current = _raw_copy_template_data(current)
     subsystem_id = _raw_copy_template_data(subsystem_id)
