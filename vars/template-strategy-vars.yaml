@@ -1,0 +1,44 @@
+---
+CONTRIB_A:
+  ENV:
+    FROM_A: "{{ UNDEFINED_ENV_A }}"
+  PKGS:
+    - "pkg-a"
+    - "{{ UNDEFINED_PKG_A }}"
+  BINS:
+    - name: tool
+      generated: "echo {{ UNDEFINED_GENERATED_A }}"
+      deps:
+        - "{{ UNDEFINED_DEP_A }}"
+  NESTED:
+    ETC_FILES:
+      - name: a.conf
+        content: "{{ UNDEFINED_CONF_A }}"
+CONTRIB_B:
+  ENV:
+    FROM_B: "{{ UNDEFINED_ENV_B }}"
+  PKGS:
+    - "pkg-b"
+    - "{{ UNDEFINED_PKG_B }}"
+  BINS:
+    - name: tool
+      generated: "echo {{ UNDEFINED_GENERATED_B }}"
+      deps:
+        - "{{ UNDEFINED_DEP_B }}"
+    - name: second
+      generated: "echo second"
+  NESTED:
+    ETC_FILES:
+      - name: b.conf
+        content: "{{ UNDEFINED_CONF_B }}"
+STRATEGIES:
+  ENV: dict_overlay
+  PKGS: append_unique
+  BINS:
+    op: merge_keyed
+    key: name
+    concat_fields:
+      - generated
+      - deps
+  NESTED:
+    ETC_FILES: append

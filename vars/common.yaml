@@ -206,7 +206,7 @@ SUBSYSTEM:
               pnpm build
             fi
         - name: install.sh
-          run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+          #run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
             if [ -n "{{ NODEJS_LINK_DIR | default('') }}" ]; then
@@ -494,11 +494,11 @@ _kernel_modprobe_bins:
   - name: install-kernel.sh
     src: ../kernel/install-kernel.sh
     basedir: false
-    run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+    #run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
   - name: apply-kernel.sh
     src: ../kernel/apply-kernel.sh
     basedir: false
-    run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+    #run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
   - name: detect-builtin.sh
     src: ../kernel/detect-builtin.sh
     basedir: false
@@ -512,11 +512,11 @@ _kernel_sysctl_bins:
   - name: install-sysctl.sh
     src: ../kernel/install-sysctl.sh
     basedir: false
-    run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+    #run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
   - name: apply-sysctl.sh
     src: ../kernel/apply-sysctl.sh
     basedir: false
-    run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+    #run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
 _kernel_sysfs_bins:
   - name: build-sysfs.sh
     src: ../kernel/build-sysfs.sh
@@ -524,8 +524,8 @@ _kernel_sysfs_bins:
   - name: install-sysfs.sh
     src: ../kernel/install-sysfs.sh
     basedir: false
-    run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+    #run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
   - name: apply-sysfs.sh
     src: ../kernel/apply-sysfs.sh
     basedir: false
-    run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+    #run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"

@@ -1,0 +1,21 @@
+---
+BASE:
+  safe: "base safe"
+  nested:
+    keep: "{{ UNDEFINED_BASE_KEEP }}"
+    list:
+      - name: base
+        value: "{{ UNDEFINED_BASE_LIST_VALUE }}"
+  items:
+    - name: base-only
+      content: "{{ UNDEFINED_BASE_CONTENT }}"
+PATCH:
+  nested:
+    added: "{{ UNDEFINED_PATCH_ADDED }}"
+    list:
+      - name: patch
+        value: "{{ UNDEFINED_PATCH_LIST_VALUE }}"
+  items:
+    - name: patch-only
+      content: "{{ UNDEFINED_PATCH_CONTENT }}"
+  literal: "patch literal"
