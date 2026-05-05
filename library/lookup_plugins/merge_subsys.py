@@ -59,9 +59,9 @@ EXAMPLES = """
   ansible.builtin.set_fact:
     BINS: "{{ lookup('merge_subsys', id='python', contrib='BINS') }}"
 
-- name: Merge kernel package contributions
+- name: Merge sysctl package contributions
   ansible.builtin.set_fact:
-    PKGS: "{{ lookup('merge_subsys', id='kernel_all', contrib='PKGS') }}"
+    PKGS: "{{ lookup('merge_subsys', id='kernel_sysctl', contrib='PKGS') }}"
 
 - name: Merge python environment
   ansible.builtin.set_fact:

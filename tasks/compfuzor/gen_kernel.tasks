@@ -1,9 +1,53 @@
 ---
-- name: "Compfuzor: synthesize kernel subsystem artifacts"
+- name: "Compfuzor: fail invalid kernel input"
+  fail:
+    msg: "{{ _kernel_errors | join('; ') }}"
+  when: _kernel_any_input and (KERNEL_BYPASS is not deftruthy) and (_kernel_errors | length > 0)
+  vars:
+    _kernel_module_items: "{{ KERNEL_MODULES | dict2items if (KERNEL_MODULES is defined and KERNEL_MODULES is mapping) else [] }}"
+    _kernel_error_checks:
+      - msg: "KERNEL_MODULES must be a mapping"
+        failed: "{{ KERNEL_MODULES is defined and KERNEL_MODULES is not mapping }}"
+      - msg: "KERNEL_SYSCTL must be a mapping"
+        failed: "{{ KERNEL_SYSCTL is defined and KERNEL_SYSCTL is not mapping }}"
+      - msg: "KERNEL_SYSFS must be a mapping"
+        failed: "{{ KERNEL_SYSFS is defined and KERNEL_SYSFS is not mapping }}"
+      - msg: "KERNEL_MODULES entries must be mappings"
+        failed: "{{ (_kernel_module_items | selectattr('value', 'mapping') | list | length) != (_kernel_module_items | length) }}"
+      - msg: "KERNEL_MODULES.<module>.params must be a mapping when defined"
+        failed: >-
+          {{
+            (
+              _kernel_module_items
+              | selectattr('value.params', 'defined')
+              | selectattr('value.params', 'mapping')
+              | list
+              | length
+            )
+            !=
+            (
+              _kernel_module_items
+              | selectattr('value.params', 'defined')
+              | list
+              | length
+            )
+          }}
+    _kernel_errors: "{{ _kernel_error_checks | selectattr('failed', 'truthy') | map(attribute='msg') | list }}"
+    _kernel_any_input: "{{ KERNEL_MODULES is defined or KERNEL_SYSCTL is defined or KERNEL_SYSFS is defined }}"
+
+- name: "Compfuzor: synthesize kernel leaf subsystem artifacts"
   set_fact:
-    ETC_FILES: "{{ lookup('merge_subsys', id='kernel_all', contrib='ETC_FILES') }}"
-    BINS: "{{ lookup('merge_subsys', id='kernel_all', contrib='BINS') }}"
-    ENV: "{{ lookup('merge_subsys', id='kernel_all', contrib='ENV') }}"
-    ENV_LIST: "{{ lookup('merge_subsys', id='kernel_all', contrib='ENV_LIST') }}"
-    PKGS: "{{ lookup('merge_subsys', id='kernel_all', contrib='PKGS') }}"
-  when: lookup('subsys', id='kernel_all', get='active', default=false) | bool
+    ETC_FILES: "{{ [ETC_FILES | default([]), _kernel_modprobe_contrib.ETC_FILES | default([]), _kernel_sysctl_contrib.ETC_FILES | default([]), _kernel_sysfs_contrib.ETC_FILES | default([])] | merge_list('append') }}"
+    BINS: "{{ [BINS | default([]), _kernel_modprobe_contrib.BINS | default([]), _kernel_sysctl_contrib.BINS | default([]), _kernel_sysfs_contrib.BINS | default([])] | merge_list('bins_generated') }}"
+    ENV: "{{ [_kernel_modprobe_contrib.ENV | default({}), _kernel_sysctl_contrib.ENV | default({}), _kernel_sysfs_contrib.ENV | default({}), ENV | default({})] | merge_dict('overlay') }}"
+    ENV_LIST: "{{ [ENV_LIST | default([]), _kernel_modprobe_contrib.ENV_LIST | default([]), _kernel_sysctl_contrib.ENV_LIST | default([]), _kernel_sysfs_contrib.ENV_LIST | default([])] | merge_list('append_unique') }}"
+    PKGS: "{{ [PKGS | default([]), _kernel_modprobe_contrib.PKGS | default([]), _kernel_sysctl_contrib.PKGS | default([]), _kernel_sysfs_contrib.PKGS | default([])] | merge_list('append_unique') }}"
+  when: _kernel_any_active
+  vars:
+    _kernel_modprobe_active: "{{ lookup('subsys', id='kernel_modprobe', domain='kernel', get='active', default=false) | bool }}"
+    _kernel_sysctl_active: "{{ lookup('subsys', id='kernel_sysctl', domain='kernel', get='active', default=false) | bool }}"
+    _kernel_sysfs_active: "{{ lookup('subsys', id='kernel_sysfs', domain='kernel', get='active', default=false) | bool }}"
+    _kernel_any_active: "{{ _kernel_modprobe_active or _kernel_sysctl_active or _kernel_sysfs_active }}"
+    _kernel_modprobe_contrib: "{{ lookup('subsys', id='kernel_modprobe', domain='kernel', get='contrib', default={}) if _kernel_modprobe_active else {} }}"
+    _kernel_sysctl_contrib: "{{ lookup('subsys', id='kernel_sysctl', domain='kernel', get='contrib', default={}) if _kernel_sysctl_active else {} }}"
+    _kernel_sysfs_contrib: "{{ lookup('subsys', id='kernel_sysfs', domain='kernel', get='contrib', default={}) if _kernel_sysfs_active else {} }}"

@@ -283,6 +283,36 @@ SUBSYSTEM:
       BINS: "{{ _desktop_bins }}"
       PKGS: [desktop-file-utils]
 
+  kernel_modprobe:
+    requested: "{{ KERNEL_MODULES is defined and KERNEL_MODULES is mapping and (KERNEL_MODULES | length > 0) }}"
+    contrib:
+      ETC_FILES: "{{ _kernel_modprobe_etc_files }}"
+      BINS: "{{ _kernel_modprobe_bins }}"
+      ENV:
+        KERNEL_MODULES_JSON: "{{ DIR }}/etc/kernel.modules.json"
+      ENV_LIST: [KERNEL_MODULES_JSON]
+      PKGS: [jq]
+
+  kernel_sysctl:
+    requested: "{{ KERNEL_SYSCTL is defined and KERNEL_SYSCTL is mapping and (KERNEL_SYSCTL | length > 0) }}"
+    contrib:
+      ETC_FILES: "{{ _kernel_sysctl_etc_files }}"
+      BINS: "{{ _kernel_sysctl_bins }}"
+      ENV:
+        KERNEL_SYSCTL_JSON: "{{ DIR }}/etc/kernel.sysctl.json"
+      ENV_LIST: [KERNEL_SYSCTL_JSON]
+      PKGS: [jq]
+
+  kernel_sysfs:
+    requested: "{{ KERNEL_SYSFS is defined and KERNEL_SYSFS is mapping and (KERNEL_SYSFS | length > 0) }}"
+    contrib:
+      ETC_FILES: "{{ _kernel_sysfs_etc_files }}"
+      BINS: "{{ _kernel_sysfs_bins }}"
+      ENV:
+        KERNEL_SYSFS_JSON: "{{ DIR }}/etc/kernel.sysfs.json"
+      ENV_LIST: [KERNEL_SYSFS_JSON]
+      PKGS: [jq]
+
 _nodejs_build_bins:
   - name: build.sh
     run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
@@ -431,7 +461,6 @@ _python_bins:
     generated: |
       . "$(pwd)/.venv/bin/activate"
 _python_etc_files: "{{ [{'name': 'pip.txt', 'content': (PIP | join('\\n') if PIP is iterable and PIP is not string else PIP | default(''))}] if PIP is defined else [] }}"
-
 _repo_npm_etc_files:
   - name: npm.txt
     content: |
@@ -465,3 +494,60 @@ _desktop_bins:
       {%- endif %}
         "$REPO_DIR/{{ df }}"
       {% endfor %}
+
+_kernel_modules: "{{ KERNEL_MODULES | default({}) if (KERNEL_MODULES is defined and KERNEL_MODULES is mapping) else {} }}"
+_kernel_sysctl: "{{ KERNEL_SYSCTL | default({}) if (KERNEL_SYSCTL is defined and KERNEL_SYSCTL is mapping) else {} }}"
+_kernel_sysfs: "{{ KERNEL_SYSFS | default({}) if (KERNEL_SYSFS is defined and KERNEL_SYSFS is mapping) else {} }}"
+
+_kernel_modprobe_etc_files:
+  - name: kernel.modules.json
+    content: "{{ _kernel_modules | to_nice_json }}"
+_kernel_sysctl_etc_files:
+  - name: kernel.sysctl.json
+    content: "{{ _kernel_sysctl | to_nice_json }}"
+_kernel_sysfs_etc_files:
+  - name: kernel.sysfs.json
+    content: "{{ _kernel_sysfs | to_nice_json }}"
+
+_kernel_modprobe_bins:
+  - name: build-kernel.sh
+    src: ../kernel/build-kernel.sh
+    basedir: false
+  - name: install-kernel.sh
+    src: ../kernel/install-kernel.sh
+    basedir: false
+    run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+  - name: apply-kernel.sh
+    src: ../kernel/apply-kernel.sh
+    basedir: false
+    run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+  - name: detect-builtin.sh
+    src: ../kernel/detect-builtin.sh
+    basedir: false
+  - name: install-kernel-cmdline.sh
+    src: ../kernel/install-kernel-cmdline.sh
+    basedir: false
+_kernel_sysctl_bins:
+  - name: build-sysctl.sh
+    src: ../kernel/build-sysctl.sh
+    basedir: false
+  - name: install-sysctl.sh
+    src: ../kernel/install-sysctl.sh
+    basedir: false
+    run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+  - name: apply-sysctl.sh
+    src: ../kernel/apply-sysctl.sh
+    basedir: false
+    run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+_kernel_sysfs_bins:
+  - name: build-sysfs.sh
+    src: ../kernel/build-sysfs.sh
+    basedir: false
+  - name: install-sysfs.sh
+    src: ../kernel/install-sysfs.sh
+    basedir: false
+    run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+  - name: apply-sysfs.sh
+    src: ../kernel/apply-sysfs.sh
+    basedir: false
+    run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
