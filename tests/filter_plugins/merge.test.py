@@ -15,7 +15,7 @@ sys.path.insert(
 from ansible._internal._datatag import _tags
 from ansible.module_utils._internal._datatag import AnsibleTagHelper
 
-from merge import merge_list, merge_list_subsys
+from merge import merge_dict, merge_dict_subsys, merge_list, merge_list_subsys
 
 passed = 0
 failed = 0
@@ -167,6 +167,31 @@ def test_unknown_strategy_raises():
         check("mentions unknown strategy", "bogus" in str(e), True)
 
 
+def test_merge_dict_overlay():
+    print("\nmerge_dict overlay:")
+    result = merge_dict([{"PATH": "/a", "KEEP": "old"}, {"PATH": "/b"}])
+    check("later dict wins", result, {"PATH": "/b", "KEEP": "old"})
+
+
+def test_merge_dict_single_and_get():
+    print("\nmerge_dict single and get:")
+    result = merge_dict({"ENV": {"PATH": "/a"}}, single=True, get="ENV.PATH")
+    check("single treats dict as one payload and extracts path", result, "/a")
+
+
+def test_merge_dict_undefined_is_empty():
+    print("\nmerge_dict undefined:")
+    result = merge_dict([Undefined(name="missing"), {"PATH": "/a"}])
+    check("undefined payload ignored", result, {"PATH": "/a"})
+    check("undefined input is empty", merge_dict(Undefined(name="missing")), {})
+
+
+def test_merge_dict_raw_copy_boundary():
+    print("\nmerge_dict raw-copy boundary:")
+    result = merge_dict(FakeLazyList([{"A": 1}, {"B": 2}]))
+    check("uses _non_lazy_copy before iterating", result, {"A": 1, "B": 2})
+
+
 def test_merge_list_subsys_default_bins():
     print("\nmerge_list_subsys default bins:")
     context = {
@@ -259,6 +284,81 @@ def test_merge_list_subsys_raw_copy_boundary():
     check("uses _non_lazy_copy for SUBSYSTEM", result, [{"name": "build.sh"}])
 
 
+def test_merge_dict_subsys_default_env_current_wins():
+    print("\nmerge_dict_subsys default env:")
+    context = {
+        "vars": {
+            "SUBSYSTEM": {
+                "python": {
+                    "active": True,
+                    "contrib": {"ENV": {"PATH": "/sub", "PYTHON_BIN": "python"}},
+                }
+            }
+        }
+    }
+    result = merge_dict_subsys(context, {"PATH": "/current"}, "python")
+    check(
+        "current/global env wins by default",
+        result,
+        {"PATH": "/current", "PYTHON_BIN": "python"},
+    )
+
+
+def test_merge_dict_subsys_incoming_can_win():
+    print("\nmerge_dict_subsys incoming wins:")
+    context = {
+        "vars": {
+            "SUBSYSTEM": {
+                "python": {
+                    "active": True,
+                    "contrib": {"ENV": {"PATH": "/sub"}},
+                }
+            }
+        }
+    }
+    result = merge_dict_subsys(
+        context,
+        {"PATH": "/current"},
+        "python",
+        current_wins=False,
+    )
+    check("subsystem env wins when requested", result, {"PATH": "/sub"})
+
+
+def test_merge_dict_subsys_inactive_skips():
+    print("\nmerge_dict_subsys inactive:")
+    context = {
+        "vars": {
+            "SUBSYSTEM": {
+                "python": {
+                    "active": False,
+                    "contrib": {"ENV": {"PATH": "/sub"}},
+                }
+            }
+        }
+    }
+    result = merge_dict_subsys(context, {"PATH": "/current"}, "python")
+    check("skips inactive subsystem by default", result, {"PATH": "/current"})
+
+
+def test_merge_dict_subsys_raw_copy_boundary():
+    print("\nmerge_dict_subsys raw-copy boundary:")
+    context = {
+        "vars": {
+            "SUBSYSTEM": FakeLazyDict(
+                {
+                    "python": {
+                        "active": True,
+                        "contrib": {"ENV": {"PYTHON_BIN": "python"}},
+                    }
+                }
+            )
+        }
+    }
+    result = merge_dict_subsys(context, {}, "python")
+    check("uses _non_lazy_copy for SUBSYSTEM", result, {"PYTHON_BIN": "python"})
+
+
 if __name__ == "__main__":
     test_append()
     test_append_unique()
@@ -270,10 +370,18 @@ if __name__ == "__main__":
     test_concat_preserves_template_tags()
     test_non_lazy_copy_boundary()
     test_unknown_strategy_raises()
+    test_merge_dict_overlay()
+    test_merge_dict_single_and_get()
+    test_merge_dict_undefined_is_empty()
+    test_merge_dict_raw_copy_boundary()
     test_merge_list_subsys_default_bins()
     test_merge_list_subsys_inactive_skips()
     test_merge_list_subsys_fallback_and_get()
     test_merge_list_subsys_raw_copy_boundary()
+    test_merge_dict_subsys_default_env_current_wins()
+    test_merge_dict_subsys_incoming_can_win()
+    test_merge_dict_subsys_inactive_skips()
+    test_merge_dict_subsys_raw_copy_boundary()
 
     print("\n{} passed, {} failed".format(passed, failed))
     sys.exit(1 if failed else 0)

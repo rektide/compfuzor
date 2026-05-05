@@ -14,7 +14,7 @@ _PLUGIN_DIR = os.path.abspath(os.path.dirname(__file__))
 if _PLUGIN_DIR not in sys.path:
     sys.path.insert(0, _PLUGIN_DIR)
 
-from _subsystem_utils import _as_list, _dedupe_preserve  # noqa: E402
+from _subsystem_utils import _as_dict, _as_list, _dedupe_preserve  # noqa: E402
 from get import get_path  # noqa: E402
 
 
@@ -26,8 +26,13 @@ LIST_STRATEGY_PROFILES = {
     },
 }
 
+DICT_STRATEGY_PROFILES = {
+    "env_overlay": "overlay",
+}
+
 VALID_LIST_STRATEGIES = {"append", "append_unique"}
 VALID_LIST_OPERATIONS = {"append_unique_by", "merge_keyed"}
+VALID_DICT_STRATEGIES = {"overlay", "dict_overlay"}
 
 
 def _raw_copy_template_data(value):
@@ -116,6 +121,12 @@ def _resolve_list_strategy(strategy):
     return strategy
 
 
+def _resolve_dict_strategy(strategy):
+    if isinstance(strategy, str) and strategy in DICT_STRATEGY_PROFILES:
+        return DICT_STRATEGY_PROFILES[strategy]
+    return strategy
+
+
 def _validate_list_strategy(strategy):
     if isinstance(strategy, str):
         if strategy not in VALID_LIST_STRATEGIES:
@@ -132,6 +143,17 @@ def _validate_list_strategy(strategy):
         "merge_list strategy must be a string or dict, got {}".format(
             type(strategy).__name__
         )
+    )
+
+
+def _validate_dict_strategy(strategy):
+    if isinstance(strategy, str):
+        if strategy not in VALID_DICT_STRATEGIES:
+            raise ValueError("unknown merge_dict strategy '{}'".format(strategy))
+        return
+
+    raise ValueError(
+        "merge_dict strategy must be a string, got {}".format(type(strategy).__name__)
     )
 
 
@@ -278,6 +300,26 @@ def _merge_list_values(values, strategy):
     raise ValueError("unknown merge_list operation '{}'".format(op_name))
 
 
+def _merge_dict_values(values, strategy):
+    """Merge already-normalized dict payloads with a validated strategy.
+
+    Args:
+        values: List of dict-like payloads to merge.
+        strategy: Resolved dict strategy string. `overlay` and `dict_overlay`
+            both mean later payloads win key conflicts.
+
+    Returns:
+        The merged dict payload.
+    """
+    if strategy in {"overlay", "dict_overlay"}:
+        result = {}
+        for value in values:
+            result = result | _as_dict(value)
+        return result
+
+    raise ValueError("unknown merge_dict strategy '{}'".format(strategy))
+
+
 @accept_args_markers
 def merge_list(values, strategy="append", single=False, get=None):
     """Merge direct list payloads with one list strategy.
@@ -310,6 +352,42 @@ def merge_list(values, strategy="append", single=False, get=None):
 
     payloads = [value for value in payloads if not _is_nothing(value)]
     result = _merge_list_values(payloads, strategy)
+    if get is not None:
+        return get_path(result, get)
+    return result
+
+
+@accept_args_markers
+def merge_dict(values, strategy="overlay", single=False, get=None):
+    """Merge direct dict payloads with one dict strategy.
+
+    Args:
+        values: Dict payloads to merge. By default this is treated as multiple
+            payloads, for example `[subsystem_env, existing_env]`.
+        strategy: Strategy name. Supported strings are `overlay`, `dict_overlay`,
+            and named profiles such as `env_overlay`. Overlay strategies merge
+            left-to-right, so later payloads win key conflicts.
+        single: Treat `values` itself as one dict payload instead of a list of
+            payloads.
+        get: Optional dotted path to extract from the merged result.
+
+    Returns:
+        The merged dict, or the value at `get` when provided.
+    """
+    values = _raw_copy_template_data(values)
+    strategy = _raw_copy_template_data(_resolve_dict_strategy(strategy))
+    get = _raw_copy_template_data(get)
+    _validate_dict_strategy(strategy)
+
+    if _is_nothing(values):
+        payloads = []
+    elif single:
+        payloads = [values]
+    else:
+        payloads = _as_list(values)
+
+    payloads = [value for value in payloads if not _is_nothing(value)]
+    result = _merge_dict_values(payloads, strategy)
     if get is not None:
         return get_path(result, get)
     return result
@@ -378,9 +456,79 @@ def merge_list_subsys(
     return merge_list([current, incoming], strategy=strategy, single=single, get=get)
 
 
+@pass_context
+@accept_args_markers
+def merge_dict_subsys(
+    context,
+    current,
+    subsystem_id=None,
+    path="contrib.ENV",
+    strategy="env_overlay",
+    default=None,
+    single=False,
+    get=None,
+    id=None,
+    fallback_id=None,
+    active=True,
+    active_path="active",
+    current_wins=True,
+):
+    """Merge a current dict with one dict value from SUBSYSTEM.
+
+    SUBSYSTEM is read through a raw-copy boundary so lazy template strings remain
+    tagged and unevaluated during the merge.
+
+    Args:
+        context: Jinja context supplied by `pass_context`.
+        current: Existing dict payload, usually a global artifact such as `ENV`.
+        subsystem_id: Positional subsystem id. Ignored when `id` is provided.
+        path: Dotted path inside the subsystem record to merge from. Defaults to
+            `contrib.ENV`.
+        strategy: Strategy name passed to `merge_dict`.
+        default: Incoming payload used when the subsystem/path is absent or
+            inactive. Defaults to an empty dict.
+        single: Forwarded to `merge_dict`.
+        get: Optional dotted path to extract from the merged result.
+        id: Keyword subsystem id. Preferred when call sites need explicit naming.
+        fallback_id: Subsystem id used when `id`/`subsystem_id` is absent or empty.
+        active: When truthy, merge only if the subsystem's `active_path` is truthy.
+        active_path: Dotted path used for active gating. Defaults to `active`.
+        current_wins: When truthy, current/global values override subsystem
+            values. This preserves existing ENV synthesis behavior.
+
+    Returns:
+        The merged dict, or the value at `get` when provided.
+    """
+    current = _raw_copy_template_data(current)
+    subsystem_id = _raw_copy_template_data(subsystem_id)
+    id = _raw_copy_template_data(id)
+    fallback_id = _raw_copy_template_data(fallback_id)
+    path = _raw_copy_template_data(path)
+    default = {} if default is None else _raw_copy_template_data(default)
+    active = _raw_copy_template_data(active)
+    active_path = _raw_copy_template_data(active_path)
+    current_wins = _raw_copy_template_data(current_wins)
+
+    resolved_id = id if not _is_nothing(id) else subsystem_id
+    if _is_nothing(resolved_id) or str(resolved_id).strip() == "":
+        resolved_id = fallback_id
+
+    incoming = default
+    if not (_is_nothing(resolved_id) or str(resolved_id).strip() == ""):
+        subsystems = _raw_copy_template_data(_context_var_raw(context, "SUBSYSTEM", {}))
+        record = _dict_get_raw(subsystems, str(resolved_id).strip(), {})
+        if (not active) or _truthy(get_path(record, active_path, default=False)):
+            incoming = get_path(record, path, default=default)
+
+    payloads = [incoming, current] if _truthy(current_wins) else [current, incoming]
+    return merge_dict(payloads, strategy=strategy, single=single, get=get)
+
+
 class FilterModule(object):
     def filters(self):
         return {
+            "merge_dict": merge_dict,
+            "merge_dict_subsys": merge_dict_subsys,
             "merge_list": merge_list,
             "merge_list_subsys": merge_list_subsys,
         }
