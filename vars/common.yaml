@@ -192,14 +192,48 @@ SUBSYSTEM:
 
   nodejs:
     contrib:
-      BINS: "{{ (_nodejs_build_bins if BUILD_BYPASS is not deftruthy else []) + (_nodejs_install_bins if INSTALL_BYPASS is not deftruthy else []) }}"
+      BINS:
+        - name: build.sh
+          run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+          basedir: repo
+          generated: |
+            if [ -f package-lock.json ] && [ ! -f pnpm-lock.yaml ]; then
+              pnpm import
+            fi
+            pnpm i --frozen
+            if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
+              echo "Building package..."
+              pnpm build
+            fi
+        - name: install.sh
+          run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+          basedir: repo
+          generated: |
+            if [ -n "{{ NODEJS_LINK_DIR | default('') }}" ]; then
+              IFS=',' read -ra _cf_link_dirs <<< "{{ NODEJS_LINK_DIR | default('.') }}"
+              for _cf_dir in "${_cf_link_dirs[@]}"; do
+                (cd "$_cf_dir" && pnpm link -g)
+              done
+            else
+              pnpm link -g
+            fi
       ENV: "{{ ({'NODEJS_BIN': NODEJS_BIN}) if NODEJS_BIN is defined else ({}) }}"
       TOOL_VERSIONS:
         nodejs: true
 
   bun:
     contrib:
-      BINS: "{{ (_bun_build_bins if BUILD_BYPASS is not deftruthy else []) + (_bun_install_bins if INSTALL_BYPASS is not deftruthy else []) }}"
+      BINS:
+        - name: build.sh
+          run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+          basedir: repo
+          generated: |
+            bun install
+        - name: install.sh
+          run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+          basedir: repo
+          generated: |
+            bun link -g
       ENV: "{{ ({'BUN_BIN': BUN_BIN}) if BUN_BIN is defined else ({}) }}"
       TOOL_VERSIONS:
         bun: true
@@ -262,17 +296,43 @@ SUBSYSTEM:
   python:
     requested: "{{ PYTHON is deftruthy or PIP is defined }}"
     contrib:
-      BINS: "{{ _python_bins }}"
+      BINS:
+        - name: build.sh
+          run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
+          basedir: repo
+          generated: |
+            [ -d .venv ] || uv venv
+            {% if PIP is defined %}
+            uv pip install -r etc/pip.txt
+            {% else %}
+            if [ -f pyproject.toml ] || [ -f setup.py ] || [ -f setup.cfg ]; then
+              uv pip install -e .
+            elif [ -f requirements.txt ]; then
+              uv pip install -r requirements.txt
+            fi
+            {% endif %}
+            source {{ DIR }}/bin/venv.source
+        - name: venv.source
+          basedir: repo
+          generated: |
+            . "$(pwd)/.venv/bin/activate"
       ENV: "{{ ({'PYTHON_BIN': PYTHON_BIN}) if PYTHON_BIN is defined else ({}) | combine({} if ENV | def(True) == True else ENV) }}"
-      ETC_FILES: "{{ _python_etc_files }}"
+      ETC_FILES: "{{ [{'name': 'pip.txt', 'content': (PIP | join('\\n') if PIP is iterable and PIP is not string else PIP | default(''))}] if PIP is defined else [] }}"
       TOOL_VERSIONS:
         python: true
 
   repo_npm:
     requested: "{{ REPO_NPM is defined }}"
     contrib:
-      BINS: "{{ _repo_npm_bins }}"
-      ETC_FILES: "{{ _repo_npm_etc_files }}"
+      BINS:
+        - name: install.sh
+          run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+          generated: |
+            pnpm install -g $(cat etc/npm.txt)
+      ETC_FILES:
+        - name: npm.txt
+          content: |
+            {{ REPO_NPM }}
       TOOL_VERSIONS:
         nodejs: true
         pnpm: true
@@ -280,13 +340,36 @@ SUBSYSTEM:
   desktop:
     requested: "{{ DESKTOP is defined }}"
     contrib:
-      BINS: "{{ _desktop_bins }}"
+      BINS:
+        - name: install-desktop.sh
+          generated: |
+            {% for entry in (DESKTOP | default([], true) | arrayitize) %}
+            {% set df = entry.desktop_file %}
+            {% set exec_val = entry.exec | default('') %}
+            {% set icon_val = entry.icon | default('') %}
+            {% set set_path = entry.path | default(false) | bool %}
+            mkdir -p $HOME/.local/share/applications
+            desktop-file-install \
+              --dir="$HOME/.local/share/applications" \
+            {%- if exec_val %}
+              --set-key=Exec --set-value="{{ exec_val }}" \
+            {%- endif %}
+            {%- if icon_val %}
+              --set-key=Icon --set-value="$REPO_DIR/{{ icon_val }}" \
+            {%- endif %}
+            {%- if set_path %}
+              --set-key=Path --set-value="$REPO_DIR" \
+            {%- endif %}
+              "$REPO_DIR/{{ df }}"
+            {% endfor %}
       PKGS: [desktop-file-utils]
 
   kernel_modprobe:
     requested: "{{ KERNEL_MODULES is defined and KERNEL_MODULES is mapping and (KERNEL_MODULES | length > 0) }}"
     contrib:
-      ETC_FILES: "{{ _kernel_modprobe_etc_files }}"
+      ETC_FILES:
+        - name: kernel.modules.json
+          content: "{{ (KERNEL_MODULES | default({}) if (KERNEL_MODULES is defined and KERNEL_MODULES is mapping) else {}) | to_nice_json }}"
       BINS: "{{ _kernel_modprobe_bins }}"
       ENV:
         KERNEL_MODULES_JSON: "{{ DIR }}/etc/kernel.modules.json"
@@ -296,7 +379,9 @@ SUBSYSTEM:
   kernel_sysctl:
     requested: "{{ KERNEL_SYSCTL is defined and KERNEL_SYSCTL is mapping and (KERNEL_SYSCTL | length > 0) }}"
     contrib:
-      ETC_FILES: "{{ _kernel_sysctl_etc_files }}"
+      ETC_FILES:
+        - name: kernel.sysctl.json
+          content: "{{ (KERNEL_SYSCTL | default({}) if (KERNEL_SYSCTL is defined and KERNEL_SYSCTL is mapping) else {}) | to_nice_json }}"
       BINS: "{{ _kernel_sysctl_bins }}"
       ENV:
         KERNEL_SYSCTL_JSON: "{{ DIR }}/etc/kernel.sysctl.json"
@@ -306,52 +391,14 @@ SUBSYSTEM:
   kernel_sysfs:
     requested: "{{ KERNEL_SYSFS is defined and KERNEL_SYSFS is mapping and (KERNEL_SYSFS | length > 0) }}"
     contrib:
-      ETC_FILES: "{{ _kernel_sysfs_etc_files }}"
+      ETC_FILES:
+        - name: kernel.sysfs.json
+          content: "{{ (KERNEL_SYSFS | default({}) if (KERNEL_SYSFS is defined and KERNEL_SYSFS is mapping) else {}) | to_nice_json }}"
       BINS: "{{ _kernel_sysfs_bins }}"
       ENV:
         KERNEL_SYSFS_JSON: "{{ DIR }}/etc/kernel.sysfs.json"
       ENV_LIST: [KERNEL_SYSFS_JSON]
       PKGS: [jq]
-
-_nodejs_build_bins:
-  - name: build.sh
-    run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
-    basedir: repo
-    generated: |
-      if [ -f package-lock.json ] && [ ! -f pnpm-lock.yaml ]; then
-        pnpm import
-      fi
-      pnpm i --frozen
-      if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
-        echo "Building package..."
-        pnpm build
-      fi
-_nodejs_install_bins:
-  - name: install.sh
-    run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
-    basedir: repo
-    generated: |
-      if [ -n "{{ NODEJS_LINK_DIR | default('') }}" ]; then
-        IFS=',' read -ra _cf_link_dirs <<< "{{ NODEJS_LINK_DIR | default('.') }}"
-        for _cf_dir in "${_cf_link_dirs[@]}"; do
-          (cd "$_cf_dir" && pnpm link -g)
-        done
-      else
-        pnpm link -g
-      fi
-
-_bun_build_bins:
-  - name: build.sh
-    run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
-    basedir: repo
-    generated: |
-      bun install
-_bun_install_bins:
-  - name: install.sh
-    run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
-    basedir: repo
-    generated: |
-      bun link -g
 
 _cmake_source_default: "{{ CMAKE_SOURCE_DIR | default('.') }}"
 _cmake_builds_raw: "{{ CMAKE_BUILDS | default([]) | arrayitize }}"
@@ -439,75 +486,6 @@ _cmake_bins:
       [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${CMAKE_INSTALL_BIN:-{{ TYPE }}}"
       ln -sfv "$(pwd)/{{ _cmake_builds[0].build_dir | default('build') }}/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
       {% endif %}
-
-_python_bins:
-  - name: build.sh
-    run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
-    basedir: repo
-    generated: |
-      [ -d .venv ] || uv venv
-      {% if PIP is defined %}
-      uv pip install -r etc/pip.txt
-      {% else %}
-      if [ -f pyproject.toml ] || [ -f setup.py ] || [ -f setup.cfg ]; then
-        uv pip install -e .
-      elif [ -f requirements.txt ]; then
-        uv pip install -r requirements.txt
-      fi
-      {% endif %}
-      source {{ DIR }}/bin/venv.source
-  - name: venv.source
-    basedir: repo
-    generated: |
-      . "$(pwd)/.venv/bin/activate"
-_python_etc_files: "{{ [{'name': 'pip.txt', 'content': (PIP | join('\\n') if PIP is iterable and PIP is not string else PIP | default(''))}] if PIP is defined else [] }}"
-_repo_npm_etc_files:
-  - name: npm.txt
-    content: |
-      {{ REPO_NPM }}
-_repo_npm_bins:
-  - name: install.sh
-    run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
-    generated: |
-      pnpm install -g $(cat etc/npm.txt)
-
-_desktop_items: "{{ DESKTOP | default([], true) | arrayitize }}"
-_desktop_bins:
-  - name: install-desktop.sh
-    generated: |
-      {% for entry in _desktop_items %}
-      {% set df = entry.desktop_file %}
-      {% set exec_val = entry.exec | default('') %}
-      {% set icon_val = entry.icon | default('') %}
-      {% set set_path = entry.path | default(false) | bool %}
-      mkdir -p $HOME/.local/share/applications
-      desktop-file-install \
-        --dir="$HOME/.local/share/applications" \
-      {%- if exec_val %}
-        --set-key=Exec --set-value="{{ exec_val }}" \
-      {%- endif %}
-      {%- if icon_val %}
-        --set-key=Icon --set-value="$REPO_DIR/{{ icon_val }}" \
-      {%- endif %}
-      {%- if set_path %}
-        --set-key=Path --set-value="$REPO_DIR" \
-      {%- endif %}
-        "$REPO_DIR/{{ df }}"
-      {% endfor %}
-
-_kernel_modules: "{{ KERNEL_MODULES | default({}) if (KERNEL_MODULES is defined and KERNEL_MODULES is mapping) else {} }}"
-_kernel_sysctl: "{{ KERNEL_SYSCTL | default({}) if (KERNEL_SYSCTL is defined and KERNEL_SYSCTL is mapping) else {} }}"
-_kernel_sysfs: "{{ KERNEL_SYSFS | default({}) if (KERNEL_SYSFS is defined and KERNEL_SYSFS is mapping) else {} }}"
-
-_kernel_modprobe_etc_files:
-  - name: kernel.modules.json
-    content: "{{ _kernel_modules | to_nice_json }}"
-_kernel_sysctl_etc_files:
-  - name: kernel.sysctl.json
-    content: "{{ _kernel_sysctl | to_nice_json }}"
-_kernel_sysfs_etc_files:
-  - name: kernel.sysfs.json
-    content: "{{ _kernel_sysfs | to_nice_json }}"
 
 _kernel_modprobe_bins:
   - name: build-kernel.sh
