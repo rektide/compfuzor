@@ -40,11 +40,14 @@
         {%- set row = item if item is mapping else {'url': item} -%}
         {%- set url = row.url -%}
         {%- set destName = row.dest if row.dest is defined else (url | basename) -%}
+        {%- set og = {} -%}
+        {%- if row.owner is defined and row.owner -%}{%- set _ = og.update({'owner': row.owner}) -%}{%- endif -%}
+        {%- if row.group is defined and row.group -%}{%- set _ = og.update({'group': row.group}) -%}{%- endif -%}
         {%- set entry = {
           'url': url,
           'dest': (destName | defaultDir(SRC)),
           'validate_certs': (row.validate_certs | default(VALIDATE_CERTS | default(true)))
-        } | combine(row | owner_group_fields) -%}
+        } | combine(og) -%}
         {%- set _ = normalized.append(entry) -%}
       {%- endfor -%}
       {{ normalized }}

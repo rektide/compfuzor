@@ -14,8 +14,35 @@ _PLUGIN_DIR = os.path.abspath(os.path.dirname(__file__))
 if _PLUGIN_DIR not in sys.path:
     sys.path.insert(0, _PLUGIN_DIR)
 
-from _subsystem_utils import _as_dict, _as_list, _dedupe_preserve  # noqa: E402
 from get import get_path  # noqa: E402
+
+
+def _as_list(value):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, (tuple, set)):
+        return list(value)
+    return [value]
+
+
+def _as_dict(value):
+    if isinstance(value, dict):
+        return value
+    return {}
+
+
+def _dedupe_preserve(values):
+    result = []
+    seen = set()
+    for value in values:
+        key = str(value)
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(value)
+    return result
 
 
 LIST_STRATEGY_PROFILES = {
