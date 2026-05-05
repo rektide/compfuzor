@@ -369,7 +369,7 @@ SUBSYSTEM:
     contrib:
       ETC_FILES:
         - name: kernel.modules.json
-          content: "{{ (KERNEL_MODULES | default({}) if (KERNEL_MODULES is defined and KERNEL_MODULES is mapping) else {}) | to_nice_json }}"
+          content: "{{ KERNEL_MODULES | to_nice_json }}"
       BINS: "{{ _kernel_modprobe_bins }}"
       ENV:
         KERNEL_MODULES_JSON: "{{ DIR }}/etc/kernel.modules.json"
@@ -381,7 +381,7 @@ SUBSYSTEM:
     contrib:
       ETC_FILES:
         - name: kernel.sysctl.json
-          content: "{{ (KERNEL_SYSCTL | default({}) if (KERNEL_SYSCTL is defined and KERNEL_SYSCTL is mapping) else {}) | to_nice_json }}"
+          content: "{{ KERNEL_SYSCTL | to_nice_json }}"
       BINS: "{{ _kernel_sysctl_bins }}"
       ENV:
         KERNEL_SYSCTL_JSON: "{{ DIR }}/etc/kernel.sysctl.json"
@@ -393,7 +393,7 @@ SUBSYSTEM:
     contrib:
       ETC_FILES:
         - name: kernel.sysfs.json
-          content: "{{ (KERNEL_SYSFS | default({}) if (KERNEL_SYSFS is defined and KERNEL_SYSFS is mapping) else {}) | to_nice_json }}"
+          content: "{{ KERNEL_SYSFS | to_nice_json }}"
       BINS: "{{ _kernel_sysfs_bins }}"
       ENV:
         KERNEL_SYSFS_JSON: "{{ DIR }}/etc/kernel.sysfs.json"
