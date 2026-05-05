@@ -9,8 +9,8 @@
     s_dir is defined
   vars:
     upper: "{{include|upper}}"
-    cur_dir: "{{hostvars[inventory_hostanme][upper]|default(lookup('vars', upper))}}"
-    val_s_dir_host: "{{hostvars[inventory_hostname][upper+'S_DIR']|def('')}}"
+    cur_dir: "{{lookup('vars', upper)}}"
+    val_s_dir_host: "{{lookup('vars', upper+'S_DIR', default='')}}"
     val_s_dir_var: "{{lookup('vars', upper+'S_DIR', default='')}}"
     val_s_dir: "{{val_s_dir_host|default(val_s_dir_var, True)}}"
     #archive_s_dir_host: "{{hostvars[inventory_hostname]['ARCHIVE_'+upper+'S_DIR']|def('')}}"

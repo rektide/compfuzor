@@ -13,8 +13,8 @@
     instanced: "{{ _instanced }}"
   vars:
     # Input: get SYSTEMD_{TYPE} and SYSTEMD_{TYPE}S values
-    _systemd_type_val: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper]|default(lookup('vars', 'SYSTEMD_'+unit_type|upper, default='')) }}"
-    _systemd_types_val: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'S']|default(lookup('vars', 'SYSTEMD_'+unit_type|upper+'S', default={})) }}"
+    _systemd_type_val: "{{ lookup('vars', 'SYSTEMD_'+unit_type|upper, default='') }}"
+    _systemd_types_val: "{{ lookup('vars', 'SYSTEMD_'+unit_type|upper+'S', default={}) }}"
     
     # Compute base unit name (dedashed)
     _raw_name: "{{ _systemd_type_val if _systemd_type_val and _systemd_type_val not in ['True', 'true', True] else NAME|default(TYPE) }}"
@@ -34,7 +34,7 @@
     
     # Pass-through values
     _units: "{{ _systemd_types_val }}"
-    _d: "{{ hostvars[inventory_hostname]['SYSTEMD_'+unit_type|upper+'_D']|default(lookup('vars', 'SYSTEMD_'+unit_type|upper+'_D', default=false)) }}"
+    _d: "{{ lookup('vars', 'SYSTEMD_'+unit_type|upper+'_D', default=false) }}"
     _target: "{{ TYPE|default(NAME)|default('.') }}"
     
     # Paths

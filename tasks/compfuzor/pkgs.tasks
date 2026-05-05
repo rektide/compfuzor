@@ -6,7 +6,7 @@
     _pkgs: "{{ _pkgs|default(PKGS|default([])) + (_pkgset if item != '' else []) }}"
   loop: "{{ [''] + PKGSET|default([])|arrayitize + PKGSETS|default([]) }}"
   vars:
-    _pkgset: "{{ hostvars[inventory_hostname][item]|default(lookup('vars', item)) }}"
+    _pkgset: "{{ lookup('vars', item, default=[]) }}"
 - name: install pkgs
   apt:
     state: "{{APT_INSTALL}}"

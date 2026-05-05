@@ -7,7 +7,7 @@
 
 {% macro runOptions(name) -%}
 {% for opt in lookup('vars', "SYSTEMD_NETDEV_"+ name|upper) -%}
-{% set vals= lookup('vars', "SYSTEMD_NETDEV_"+opt|upper, default=hostvars[inventory_hostname]["SYSTEMD_NETDEV_"+opt|upper]|default(False)) -%} 
+{% set vals= lookup('vars', "SYSTEMD_NETDEV_"+opt|upper, default=False) -%}
 {% for val in vals|arrayitize -%}
 {{key}}={{val}}
 {% endfor -%}

@@ -2,7 +2,7 @@
 {% macro def(var, val) -%}
 
 {% if val == True and val|string != "1" -%}
-	{% set finalVal = hostvars[inventory_hostname][var]|default(lookup('vars', var, default=None))|trim -%}
+	{% set finalVal = lookup('vars', var, default=None)|trim -%}
 {% else -%}
 	{% set finalVal = val -%}
 {% endif -%}

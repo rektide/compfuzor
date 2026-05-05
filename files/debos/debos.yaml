@@ -8,7 +8,7 @@
 {{ pkgsetYaml(pkgs) }}
 {% for ps in pkgsets -%}
 # {{ ps }}
-{{ pkgsetYaml(lookup('vars', ps, default=hostvars[inventory_hostname][ps])) }}
+{{ pkgsetYaml(lookup('vars', ps, default=[])) }}
 {% endfor -%}
 {%- endmacro -%}
 

@@ -7,7 +7,7 @@ set -e
 {% if item.comments is defined %}#{{item.comments}}{% endif %}
 
 {% for var in item.vars|default([]) %}
-export {{var}}="{{ '${' }}{{ var }}-{{ hostvars[inventory_hostname][var]|default(lookup('vars', var)) }}{{ '}'}}"
+export {{var}}="{{ '${' }}{{ var }}-{{ lookup('vars', var) }}{{ '}'}}"
 {% endfor %}
 {% if item.basedir|default(True) == True %}
 cd "${DIR}"

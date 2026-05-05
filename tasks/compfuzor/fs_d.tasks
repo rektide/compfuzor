@@ -4,7 +4,7 @@
     _dir: "{{include|upper+'S_DIR'}}"
     _d: "{{include|upper+'_D'}}"
     _files: "{{lookup('vars', include|upper+'_D', default=[])}}"
-    _path: "{{fs_path|default(hostvars[inventory_hostname][include|upper])|default(lookup('vars', include|upper))}}"
+    _path: "{{fs_path|default(lookup('vars', include|upper))}}"
     _go: True
 - name: "Check for .d stuff to do"
   set_fact: _go=""

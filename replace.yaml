@@ -7,7 +7,7 @@
       - "amp"
       - "@anthropic-ai/claude-code"
     ethDevice: eno1
-    eth: "{{hostvars[inventory_hostname]['ansible_'+ethDevice]}}"
+    eth: "{{lookup('vars', 'ansible_'+ethDevice)}}"
     ipv4Route: "{{eth.ipv4.address}}/{{eth.ipv4.prefix}}"
     ipv6Route: "{{(eth.ipv6|selectattr('scope', 'link')|first).address}}/{{(eth.ipv6|selectattr('scope', 'link')|first).prefix}}"
   tasks:

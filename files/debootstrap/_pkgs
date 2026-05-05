@@ -7,7 +7,7 @@
 {% endif -%}
 {% set pkgsets = PKGSET|default([])|arrayitize + PKGSETS|default([])|arrayitize -%}
 {% for pkgset in pkgsets -%}
-{% set row = hostvars[inventory_hostname][pkgset]|default(lookup('vars', pkgset, default=[]))|arrayitize -%}
+{% set row = lookup('vars', pkgset, default=[])|arrayitize -%}
 {{ nl() }}# PKGSET {{ pkgset }}: {{ row|join(',') }}
 {{ nl() }}{{ row|join(',') }}
 {% endfor -%}

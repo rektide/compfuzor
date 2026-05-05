@@ -2,8 +2,8 @@ SYSTEMD_OPTS: ""
 SYSTEMD_OPTS_AND_SCOPE: "--{{SYSTEMD_SCOPE}} {{SYSTEMD_OPTS}}"
 SYSTEMD_SCOPE: system
 SYSTEMD_SYSLOG_IDENTIFIER: "{{NAME}}"
-SYSTEMD_UNIT_DIR: "{{ hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_UNIT_DIR']|default(lookup('vars', 'SYSTEMD_'+SYSTEMD_SCOPE|upper+'_UNIT_DIR')) }}"
-SYSTEMD_CONF_DIR: "{{ hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_CONF_DIR']|default(lookup('vars', 'SYSTEMD_'+SYSTEMD_SCOPE|upper+'_CONF_DIR')) }}"
+SYSTEMD_UNIT_DIR: "{{ lookup('vars', 'SYSTEMD_'+SYSTEMD_SCOPE|upper+'_UNIT_DIR') }}"
+SYSTEMD_CONF_DIR: "{{ lookup('vars', 'SYSTEMD_'+SYSTEMD_SCOPE|upper+'_CONF_DIR') }}"
 
 # Per-scope, per-unit-type generation gates
 # These control whether to generate unit files for each scope+type combination
@@ -32,7 +32,7 @@ SYSTEMD_SYSTEM_DNSSD_INSTALL: "{{ SYSTEMD_INSTALL in ['system', 'both', 'separat
 SYSTEMD_USER_DNSSD_INSTALL: "{{ SYSTEMD_INSTALL in ['user', 'both', 'separate', true] }}"
 
 # Computed gate for current scope+unit_type (used in systemd.unit.includes)
-SYSTEMD_UNIT_GATE: "{{ hostvars[inventory_hostname]['SYSTEMD_'+SYSTEMD_SCOPE|upper+'_'+unit_type|upper]|default(lookup('vars', 'SYSTEMD_'+SYSTEMD_SCOPE|upper+'_'+unit_type|upper, default=True)) }}"
+SYSTEMD_UNIT_GATE: "{{ lookup('vars', 'SYSTEMD_'+SYSTEMD_SCOPE|upper+'_'+unit_type|upper, default=True) }}"
 
 # Service suffix for user services (.user.service)
 SYSTEMD_SERVICE_SUFFIX: "{{ '.user' if SYSTEMD_SCOPE == 'user' else '' }}"
