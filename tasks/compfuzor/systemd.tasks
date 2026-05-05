@@ -7,7 +7,7 @@
 - include_tasks: ../systemd.unit.includes
   loop: "{{SYSTEMD_UNITTYPES_ALL}}"
   when: >
-    (vars[v] is deftruthy or vars[v+'S'] is deftruthy) and
+    (lookup('deftruthy', v, v+'S', truthy=true)) and
     (lookup('vars', 'SYSTEMD_'+SYSTEMD_SCOPE|upper+'_'+unit_type|upper, default=True))
   vars:
     v: "SYSTEMD_{{item|upper}}"
