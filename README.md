@@ -75,46 +75,6 @@ Returns standard `build_bins` / `install_bins` entries for a stem name.
 
 ---
 
-### `subsystem_bypassed` / `subsystem_bypass_vars` — [`subsystem_bypass.py`](library/filter_plugins/subsystem_bypass.py)
-
-Resolves effective bypass state from subsystem + domain naming rules.
-Supports auto-defaults, explicit replacement, and supplement modes.
-
-```yaml
-"kernel_sysctl" | subsystem_bypassed(true, "kernel")
-```
-
-**Used in:** [`fn_kernel.tasks`](tasks/compfuzor/fn_kernel.tasks)
-
----
-
-### `owner_group_fields` — [`subsystem_bypass.py`](library/filter_plugins/subsystem_bypass.py)
-
-Row-first owner/group resolution with context fallback.
-
-```yaml
-row | owner_group_fields
-```
-
-**Used in:** [`fn_get_urls.tasks`](tasks/compfuzor/fn_get_urls.tasks)
-
----
-
-### `concat2` — [`concat2.py`](library/filter_plugins/concat2.py)
-
-Concatenation that tolerates `undefined`/`None` on either side. Optional
-`unique=True` for order-preserving dedup.
-
-```yaml
-ETC_FILES | concat2(new_items)
-ENV_LIST | concat2(new_keys, unique=True)
-```
-
-**Used in:** [`gen_kernel.tasks`](tasks/compfuzor/gen_kernel.tasks),
-[`gen_tool_versions.tasks`](tasks/compfuzor/gen_tool_versions.tasks)
-
----
-
 ### `mergeKeyed` — [`mergeKeyed.py`](library/filter_plugins/mergeKeyed.py)
 
 Compatibility shim over `merge_with_strategy`'s `merge_keyed` operation.
@@ -155,11 +115,10 @@ prefix conventions (`fn_`/`gen_`/`fs_`), and worked examples.
 ## Test suite
 
 ```sh
-python tests/filter_plugins/merge_strategy.test.py   # 36 tests
+python tests/filter_plugins/merge_strategy.test.py   # 42 tests
 python tests/filter_plugins/mergeKeyed.test.py       # 11 tests
-python tests/filter_plugins/subsystem_bypass.test.py  # 18 tests
+python tests/filter_plugins/merge.test.py             # 25 tests
 python tests/filter_plugins/subsystem_record.test.py  # 27 tests
-python tests/filter_plugins/concat2.test.py           # 14 tests
 python tests/filter_plugins/get.test.py                #  9 tests
 python tests/filter_plugins/cmdline.test.py            # 12 tests
 python tests/lookup_plugins/subsys.test.py             #  8 tests

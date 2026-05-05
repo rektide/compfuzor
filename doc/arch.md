@@ -953,17 +953,11 @@ Expected effective bypass source:
 
 Current implementation uses focused helpers in filter and lookup plugins:
 
-- `subsystem_bypassed`: resolves effective bypass state from subsystem + domain
-  naming rules and override modes
-- `subsystem_bypass_vars`: introspection helper returning effective bypass var names
-- `owner_group_fields`: applies row-first owner/group resolution with subsystem
-  defaults
 - `subsystem_record`: creates consistent subsystem state records
 - `merge_list` / `merge_dict`: merge direct list and dict payloads without
   forcing temporary wrapper records
 - `lookup('merge_subsys', ...)`: merges one subsystem contrib artifact into the
   matching global artifact through a raw-copy boundary
-- `concat2`: undefined-safe list concatenation
 - `get` / `get_path`: safe dotted-path traversal
 - `lookup('subsys', ...)`: resolves normalized subsystem envelopes from
   `SUBSYSTEM`

@@ -52,9 +52,6 @@ Filters transform values using `|` in Jinja templates.
 | `mergeKeyed` | [`library/filter_plugins/mergeKeyed.py`](/library/filter_plugins/mergeKeyed.py) | Merges two lists of objects by key, with optional concat fields. (compatibility shim over `merge_with_strategy`) |
 | `subsystem_record` | [`library/filter_plugins/subsystem_record.py`](/library/filter_plugins/subsystem_record.py) | Builds a subsystem runtime record with computed defaults. |
 | `build_install_bins` | [`library/filter_plugins/build_install_bins.py`](/library/filter_plugins/build_install_bins.py) | Returns standard build/install bin entries for a stem. |
-| `owner_group_fields` | [`library/filter_plugins/subsystem_bypass.py`](/library/filter_plugins/subsystem_bypass.py) | Resolves owner/group fields with row-first precedence. |
-| `subsystem_bypassed` | [`library/filter_plugins/subsystem_bypass.py`](/library/filter_plugins/subsystem_bypass.py) | Returns True if any effective bypass variable resolves truthy. |
-| `subsystem_bypass_vars` | [`library/filter_plugins/subsystem_bypass.py`](/library/filter_plugins/subsystem_bypass.py) | Returns effective bypass variable names for a subsystem. |
 | `rejectAny` | [`library/filter_plugins/rejectAny.py`](/library/filter_plugins/rejectAny.py) | Returns elements from first iterable not present in second iterable. |
 | `unsafety` | [`library/filter_plugins/unsafety.py`](/library/filter_plugins/unsafety.py) | Marks a value as trusted template content. |
 | `has_var` | [`library/filter_plugins/vars.py`](/library/filter_plugins/vars.py) | Looks up one or more variable names in `vars`/`hostvars`. |
