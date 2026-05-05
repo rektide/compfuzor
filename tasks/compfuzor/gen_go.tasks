@@ -1,6 +1,6 @@
 ---
 - name: "Compfuzor: synthesize go subsystem artifacts"
   set_fact:
-    BINS: "{{ BINS | merge_list_subsys('go') }}"
-    ENV: "{{ ENV | merge_dict_subsys('go') }}"
+    BINS: "{{ lookup('merge_subsys', id='go', contrib='BINS') }}"
+    ENV: "{{ lookup('merge_subsys', id='go', contrib='ENV') }}"
   when: lookup('subsys', id='go', get='active', default=false) | bool

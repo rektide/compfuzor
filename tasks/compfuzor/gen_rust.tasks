@@ -1,6 +1,6 @@
 ---
 - name: "Compfuzor: synthesize rust subsystem artifacts"
   set_fact:
-    BINS: "{{ BINS | merge_list_subsys('rust') }}"
-    ENV: "{{ ENV | merge_dict_subsys('rust') }}"
+    BINS: "{{ lookup('merge_subsys', id='rust', contrib='BINS') }}"
+    ENV: "{{ lookup('merge_subsys', id='rust', contrib='ENV') }}"
   when: lookup('subsys', id='rust', get='active', default=false) | bool

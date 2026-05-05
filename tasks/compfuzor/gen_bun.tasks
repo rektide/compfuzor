@@ -1,6 +1,6 @@
 ---
 - name: "Compfuzor: synthesize bun subsystem artifacts"
   set_fact:
-    BINS: "{{ BINS | merge_list_subsys('bun') }}"
-    ENV: "{{ ENV | merge_dict_subsys('bun') }}"
+    BINS: "{{ lookup('merge_subsys', id='bun', contrib='BINS') }}"
+    ENV: "{{ lookup('merge_subsys', id='bun', contrib='ENV') }}"
   when: lookup('subsys', id='bun', get='active', default=false) | bool

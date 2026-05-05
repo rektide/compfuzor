@@ -1,7 +1,7 @@
 ---
 - name: "Compfuzor: synthesize cmake subsystem artifacts"
   set_fact:
-    BINS: "{{ BINS | merge_list_subsys('cmake') }}"
-    PKGS: "{{ PKGS | merge_list_subsys('cmake', path='contrib.PKGS', strategy='append') }}"
-    ENV: "{{ ENV | merge_dict_subsys('cmake') }}"
+    BINS: "{{ lookup('merge_subsys', id='cmake', contrib='BINS') }}"
+    PKGS: "{{ lookup('merge_subsys', id='cmake', contrib='PKGS', strategy='append') }}"
+    ENV: "{{ lookup('merge_subsys', id='cmake', contrib='ENV') }}"
   when: lookup('subsys', id='cmake', get='active', default=false) | bool

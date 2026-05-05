@@ -1,6 +1,6 @@
 ---
 - name: "Compfuzor: synthesize nodejs subsystem artifacts"
   set_fact:
-    BINS: "{{ BINS | merge_list_subsys('nodejs') }}"
-    ENV: "{{ ENV | merge_dict_subsys('nodejs') }}"
+    BINS: "{{ lookup('merge_subsys', id='nodejs', contrib='BINS') }}"
+    ENV: "{{ lookup('merge_subsys', id='nodejs', contrib='ENV') }}"
   when: lookup('subsys', id='nodejs', get='active', default=false) | bool

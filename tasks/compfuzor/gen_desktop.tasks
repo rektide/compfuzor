@@ -1,6 +1,6 @@
 ---
 - name: "Compfuzor: synthesize desktop subsystem artifacts"
   set_fact:
-    BINS: "{{ BINS | merge_list_subsys('desktop') }}"
-    PKGS: "{{ PKGS | merge_list_subsys('desktop', path='contrib.PKGS', strategy='append') }}"
+    BINS: "{{ lookup('merge_subsys', id='desktop', contrib='BINS') }}"
+    PKGS: "{{ lookup('merge_subsys', id='desktop', contrib='PKGS', strategy='append') }}"
   when: lookup('subsys', id='desktop', get='active', default=false) | bool

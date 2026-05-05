@@ -1,7 +1,7 @@
 ---
 - name: "Compfuzor: synthesize python subsystem artifacts"
   set_fact:
-    BINS: "{{ BINS | merge_list_subsys('python') }}"
-    ENV: "{{ ENV | merge_dict_subsys('python') }}"
-    ETC_FILES: "{{ ETC_FILES | merge_list_subsys('python', path='contrib.ETC_FILES', strategy='append') }}"
+    BINS: "{{ lookup('merge_subsys', id='python', contrib='BINS') }}"
+    ENV: "{{ lookup('merge_subsys', id='python', contrib='ENV') }}"
+    ETC_FILES: "{{ lookup('merge_subsys', id='python', contrib='ETC_FILES') }}"
   when: lookup('subsys', id='python', get='active', default=false) | bool

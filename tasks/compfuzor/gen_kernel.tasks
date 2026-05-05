@@ -1,9 +1,9 @@
 ---
 - name: "Compfuzor: synthesize kernel subsystem artifacts"
   set_fact:
-    ETC_FILES: "{{ ETC_FILES | merge_list_subsys('kernel_all', path='contrib.ETC_FILES', strategy='append') }}"
-    BINS: "{{ BINS | merge_list_subsys('kernel_all') }}"
-    ENV: "{{ ENV | merge_dict_subsys('kernel_all') }}"
-    ENV_LIST: "{{ ENV_LIST | merge_list_subsys('kernel_all', path='contrib.ENV_LIST', strategy='append_unique') }}"
-    PKGS: "{{ PKGS | merge_list_subsys('kernel_all', path='contrib.PKGS', strategy='append_unique') }}"
+    ETC_FILES: "{{ lookup('merge_subsys', id='kernel_all', contrib='ETC_FILES') }}"
+    BINS: "{{ lookup('merge_subsys', id='kernel_all', contrib='BINS') }}"
+    ENV: "{{ lookup('merge_subsys', id='kernel_all', contrib='ENV') }}"
+    ENV_LIST: "{{ lookup('merge_subsys', id='kernel_all', contrib='ENV_LIST') }}"
+    PKGS: "{{ lookup('merge_subsys', id='kernel_all', contrib='PKGS') }}"
   when: lookup('subsys', id='kernel_all', get='active', default=false) | bool
