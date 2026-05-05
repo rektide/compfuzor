@@ -10,9 +10,10 @@ DOCUMENTATION = """
       - Optional C(get=) extracts one path from the subsystem record. State paths
         (active, bypassed, requested, valid) are computed from the record and
         variables. Data paths (contrib, spec, or any dotted path) are extracted
-        from a raw-copied record so tagged template strings remain unevaluated.
+        from the record with tagged template leaf strings resolved through the
+        templar so no TrustedAsTemplate tags survive into the output.
       - Without C(get=), returns a minimal envelope with computed state and
-        raw-copied data fields.
+        leaf-resolved data fields.
     options:
       id:
         description: Subsystem id to resolve.
@@ -24,7 +25,7 @@ DOCUMENTATION = """
       get:
         description: Dotted path to extract. State paths (active, bypassed,
           requested, valid) are computed. All other paths extract from the
-          raw-copied record.
+          record with tagged leaf strings resolved.
       default:
         description: Fallback when get path resolution fails.
       bypass:
@@ -73,6 +74,33 @@ from merge import _raw_copy_template_data, _dict_get_raw, _is_nothing, _truthy  
 
 
 _STATE_PATHS = frozenset({"active", "bypassed", "requested", "valid"})
+
+
+def _is_tagged_template(value):
+    try:
+        from ansible.module_utils._internal._datatag import _AnsibleTaggedStr
+        return isinstance(value, _AnsibleTaggedStr)
+    except ImportError:
+        return False
+
+
+def _resolve_leaf_strings(value, templar):
+    """Walk a data tree and resolve tagged template leaf strings.
+
+    Container structure (dicts, lists) is preserved as-is. Only leaf strings
+    carrying the TrustedAsTemplate tag are resolved through the templar.
+    Non-tagged strings and non-string values pass through unchanged.
+
+    This does NOT modify the underlying SUBSYSTEM fact — it operates on the
+    already raw-copied output.
+    """
+    if isinstance(value, dict):
+        return {k: _resolve_leaf_strings(v, templar) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_resolve_leaf_strings(item, templar) for item in value]
+    if isinstance(value, str) and _is_tagged_template(value):
+        return _template_value(value, templar)
+    return value
 
 
 def _resolve_record(variables, subsystem_id):
@@ -209,7 +237,8 @@ class LookupModule(LookupBase):
             if get_expr == "valid":
                 return [_compute_valid(record, self._templar)]
 
-            return [get_path(record, get_expr, default=default)]
+            resolved = get_path(record, get_expr, default=default)
+            return [_resolve_leaf_strings(resolved, self._templar)]
 
         requested = _compute_requested(record, variables, subsystem_id, self._templar)
         bypassed = _compute_bypassed(record, variables, subsystem_id, domain, extra_bypass, self._templar)
@@ -225,6 +254,6 @@ class LookupModule(LookupBase):
             "requested": requested,
             "bypassed": bypassed,
             "valid": valid,
-            "spec": _raw_copy_template_data(record.get("spec", [])),
-            "contrib": _raw_copy_template_data(record.get("contrib", {})),
+            "spec": _resolve_leaf_strings(record.get("spec", []), self._templar),
+            "contrib": _resolve_leaf_strings(record.get("contrib", {}), self._templar),
         }]
