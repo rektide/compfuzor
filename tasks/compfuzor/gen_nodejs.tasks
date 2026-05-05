@@ -2,7 +2,5 @@
 - name: "Compfuzor: synthesize nodejs subsystem artifacts"
   set_fact:
     BINS: "{{ BINS | merge_list_subsys('nodejs') }}"
-    ENV: "{{ lookup('subsys', id='nodejs', get='contrib.ENV') | combine(existingEnv) }}"
+    ENV: "{{ ENV | merge_dict_subsys('nodejs') }}"
   when: lookup('subsys', id='nodejs', get='active', default=false) | bool
-  vars:
-    existingEnv: "{{ ENV if ENV is mapping else {} }}"

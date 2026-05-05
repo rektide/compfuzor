@@ -3,7 +3,5 @@
   set_fact:
     BINS: "{{ BINS | merge_list_subsys('cmake') }}"
     PKGS: "{{ PKGS | merge_list_subsys('cmake', path='contrib.PKGS', strategy='append') }}"
-    ENV: "{{ lookup('subsys', id='cmake', get='contrib.ENV') | combine(existingEnv) }}"
+    ENV: "{{ ENV | merge_dict_subsys('cmake') }}"
   when: lookup('subsys', id='cmake', get='active', default=false) | bool
-  vars:
-    existingEnv: "{{ ENV if ENV is mapping else {} }}"

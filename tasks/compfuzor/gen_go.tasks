@@ -2,7 +2,5 @@
 - name: "Compfuzor: synthesize go subsystem artifacts"
   set_fact:
     BINS: "{{ BINS | merge_list_subsys('go') }}"
-    ENV: "{{ lookup('subsys', id='go', get='contrib.ENV') | combine(existingEnv) }}"
+    ENV: "{{ ENV | merge_dict_subsys('go') }}"
   when: lookup('subsys', id='go', get='active', default=false) | bool
-  vars:
-    existingEnv: "{{ ENV if ENV is mapping else {} }}"
