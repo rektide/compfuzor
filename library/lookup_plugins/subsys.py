@@ -3,68 +3,54 @@ from __future__ import annotations
 DOCUMENTATION = """
     name: subsys
     author: compfuzor
-    short_description: Resolve one subsystem envelope from SUBSYSTEM
+    short_description: Resolve one subsystem from SUBSYSTEM
     description:
-      - Looks up one subsystem by id from C(SUBSYSTEM) and returns a normalized envelope.
-      - Accepts exactly one positional term (the subsystem id).
-      - Optional C(name=) provides an alias label in the returned envelope.
-      - Optional C(get=) returns one path from the envelope using shared get-path semantics.
-      - Optional C(default=) is used when C(get=) path resolution fails.
-      - Optional C(bypass=) accepts a string or list of extra bypass variable names to check.
-      - Optional C(domain=) enables domain-level bypass via C(<DOMAIN>_BYPASS).
+      - Looks up one subsystem by id from C(SUBSYSTEM) and returns the requested
+        value or a minimal envelope.
+      - Optional C(get=) extracts one path from the subsystem record. State paths
+        (active, bypassed, requested, valid) are computed from the record and
+        variables. Data paths (contrib, spec, or any dotted path) are extracted
+        from a raw-copied record so tagged template strings remain unevaluated.
+      - Without C(get=), returns a minimal envelope with computed state and
+        raw-copied data fields.
     options:
-      _terms:
-        description:
-          - Positional terms are not supported.
-          - Use C(id=...) and optional C(fallback_id=...) instead.
-        required: false
       id:
-        description:
-          - Optional keyword subsystem id to resolve.
-          - Preferred over positional terms for explicit calls.
+        description: Subsystem id to resolve.
+        required: true
       name:
-        description:
-          - Optional alias/logical name for caller-facing labeling.
+        description: Alias label included in envelope output.
       fallback_id:
-        description:
-          - Optional fallback subsystem id used when the positional id is empty/undefined.
+        description: Subsystem id used when id is absent or empty.
       get:
-        description:
-          - Optional dotted path to read from the computed envelope.
+        description: Dotted path to extract. State paths (active, bypassed,
+          requested, valid) are computed. All other paths extract from the
+          raw-copied record.
       default:
-        description:
-          - Optional fallback when C(get=) path is missing.
+        description: Fallback when get path resolution fails.
       bypass:
-        description:
-          - Optional string or list of extra bypass variable names to check in addition
-            to the automatic C(<SUBSYSTEM>_BYPASS) variable.
+        description: Extra bypass variable names (string or list).
       domain:
-        description:
-          - Optional domain label enabling C(<DOMAIN>_BYPASS) as an additional bypass source.
+        description: Domain label enabling DOMAIN_BYPASS as bypass source.
 """
 
 EXAMPLES = """
-- name: Resolve whole subsystem envelope
-  ansible.builtin.set_fact:
-    get_urls_subsys: "{{ lookup('subsys', id='get_urls') }}"
+- name: Gate on subsystem active state
+  debug:
+    msg: kernel_modprobe is active
+  when: lookup('subsys', id='kernel_modprobe', domain='kernel', get='active', default=false) | bool
 
-- name: Resolve one field from subsystem
-  ansible.builtin.set_fact:
-    get_urls_active: "{{ lookup('subsys', id='get_urls', get='active', default=false) }}"
+- name: Extract subsystem contrib
+  set_fact:
+    contrib: "{{ lookup('subsys', id='kernel_modprobe', domain='kernel', get='contrib', default={}) }}"
 
-- name: Resolve with alias name
-  ansible.builtin.set_fact:
-    download_subsys: "{{ lookup('subsys', id='get_urls', name='downloads') }}"
-
-- name: Resolve using fallback subsystem id
-  ansible.builtin.set_fact:
-    active_downloads: "{{ lookup('subsys', id=subsystem_id, name=subsystem_name, fallback_id='get_urls', get='active') }}"
+- name: Get full envelope
+  set_fact:
+    envelope: "{{ lookup('subsys', id='kernel_modprobe', domain='kernel') }}"
 """
 
 RETURN = """
 _value:
-  description:
-    - A normalized subsystem envelope or one extracted field when C(get=) is provided.
+  description: Requested path value or minimal envelope.
   type: raw
 """
 
@@ -76,7 +62,6 @@ from ansible.module_utils.datatag import native_type_name
 from ansible.plugins.lookup import LookupBase
 from ansible.plugins.test.core import wrapped_test_undefined
 
-
 _FILTER_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "filter_plugins")
 )
@@ -87,12 +72,41 @@ from get import get_path  # noqa: E402
 from merge import _raw_copy_template_data, _dict_get_raw, _is_nothing, _truthy  # noqa: E402
 
 
-def _to_bool(value):
-    if isinstance(value, bool):
+_STATE_PATHS = frozenset({"active", "bypassed", "requested", "valid"})
+
+
+def _resolve_record(variables, subsystem_id):
+    subsystems = _raw_copy_template_data(variables.get("SUBSYSTEM", {}))
+    record = _dict_get_raw(subsystems, subsystem_id, {})
+    if isinstance(record, dict) and record:
+        return _raw_copy_template_data(record)
+    return {}
+
+
+def _template_value(value, templar=None):
+    if templar is None or not isinstance(value, str):
         return value
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes", "on"}
-    return bool(value)
+    try:
+        return templar.template(value)
+    except Exception:
+        return value
+
+
+def _resolve_requested_from_vars(variables, subsystem_id):
+    var_name = subsystem_id.upper().replace("-", "_")
+    val = variables.get(var_name)
+    if val is None or wrapped_test_undefined(val):
+        return False
+    return _truthy(val)
+
+
+def _compute_requested(record, variables, subsystem_id, templar):
+    explicit = record.get("requested")
+    if explicit is not None:
+        return _truthy(_template_value(explicit, templar))
+    if variables is not None:
+        return _resolve_requested_from_vars(variables, subsystem_id)
+    return bool(record)
 
 
 def _resolve_bypass(variables, subsystem_id, domain=None, extra_bypass=None):
@@ -107,86 +121,33 @@ def _resolve_bypass(variables, subsystem_id, domain=None, extra_bypass=None):
     for var_name in bypass_vars:
         val = variables.get(var_name)
         if val is not None and not wrapped_test_undefined(val):
-            if _to_bool(val):
+            if _truthy(val):
                 return True
     return False
 
 
-def _resolve_requested(variables, subsystem_id):
-    var_name = subsystem_id.upper().replace("-", "_")
-    val = variables.get(var_name)
-    if val is None or wrapped_test_undefined(val):
-        return False
-    return _to_bool(val)
-
-
-def _template_value(value, templar=None):
-    if templar is None or not isinstance(value, str):
-        return value
-    try:
-        return templar.template(value)
-    except Exception:
-        return value
-
-
-def _build_envelope(subsystems, subsystem_id, name=None, variables=None, domain=None, extra_bypass=None, templar=None):
-    subsystems_map = subsystems if isinstance(subsystems, dict) else {}
-    record = _dict_get_raw(subsystems_map, subsystem_id, {})
-    record = _raw_copy_template_data(record) if isinstance(record, dict) and record else {}
-    found = bool(record)
-
-    explicit_requested = record.get("requested")
-    if explicit_requested is not None:
-        requested = _truthy(_template_value(explicit_requested, templar))
-    elif variables is not None:
-        requested = _resolve_requested(variables, subsystem_id)
-    else:
-        requested = found
-
-    explicit_bypassed = record.get("bypassed")
-    bypassed = _truthy(_template_value(explicit_bypassed, templar)) if explicit_bypassed is not None else False
+def _compute_bypassed(record, variables, subsystem_id, domain=None, extra_bypass=None, templar=None):
+    explicit = record.get("bypassed")
+    bypassed = _truthy(_template_value(explicit, templar)) if explicit is not None else False
     if variables is not None:
         bypassed = bypassed or _resolve_bypass(variables, subsystem_id, domain=domain, extra_bypass=extra_bypass)
+    return bypassed
 
-    valid = _truthy(_template_value(record.get("valid", True), templar))
 
-    active = requested and (not bypassed) and valid
-    if active:
-        state = "active"
-    elif requested and bypassed:
-        state = "bypassed"
-    elif requested and not valid:
-        state = "invalid"
-    elif requested:
-        state = "requested"
-    else:
-        state = "absent"
+def _compute_valid(record, templar):
+    return _truthy(_template_value(record.get("valid", True), templar))
 
-    reasons = _raw_copy_template_data(record.get("reasons", []))
-    if reasons is None:
-        reasons = []
 
-    spec = _raw_copy_template_data(record.get("spec"))
-    if spec is None:
-        spec = []
-    contrib = _raw_copy_template_data(record.get("contrib"))
-    if not isinstance(contrib, dict):
-        contrib = {}
-
-    return {
-        "id": subsystem_id,
-        "name": name if isinstance(name, str) and name.strip() else subsystem_id,
-        "found": found,
-        "record": record,
-        "state": state,
-        "active": active,
-        "requested": requested,
-        "bypassed": bypassed,
-        "valid": valid,
-        "reasons": reasons,
-        "spec": spec,
-        "contrib": contrib,
-    }
+def _compute_state(requested, bypassed, valid):
+    if requested and not bypassed and valid:
+        return "active"
+    if requested and bypassed:
+        return "bypassed"
+    if requested and not valid:
+        return "invalid"
+    if requested:
+        return "requested"
+    return "absent"
 
 
 class LookupModule(LookupBase):
@@ -228,18 +189,42 @@ class LookupModule(LookupBase):
         domain = kwargs.get("domain")
         extra_bypass = kwargs.get("bypass")
 
-        envelope = _build_envelope(
-            _raw_copy_template_data(variables.get("SUBSYSTEM", {})),
-            subsystem_id,
-            name=name,
-            variables=variables,
-            domain=domain,
-            extra_bypass=extra_bypass,
-            templar=self._templar,
-        )
+        record = _resolve_record(variables, subsystem_id)
 
         if get_expr is not None:
-            resolved = get_path(envelope, get_expr, default=default)
-            return [resolved]
+            get_expr = str(get_expr)
 
-        return [envelope]
+            if get_expr == "active":
+                r = _compute_requested(record, variables, subsystem_id, self._templar)
+                b = _compute_bypassed(record, variables, subsystem_id, domain, extra_bypass, self._templar)
+                v = _compute_valid(record, self._templar)
+                return [r and not b and v]
+
+            if get_expr == "bypassed":
+                return [_compute_bypassed(record, variables, subsystem_id, domain, extra_bypass, self._templar)]
+
+            if get_expr == "requested":
+                return [_compute_requested(record, variables, subsystem_id, self._templar)]
+
+            if get_expr == "valid":
+                return [_compute_valid(record, self._templar)]
+
+            return [get_path(record, get_expr, default=default)]
+
+        requested = _compute_requested(record, variables, subsystem_id, self._templar)
+        bypassed = _compute_bypassed(record, variables, subsystem_id, domain, extra_bypass, self._templar)
+        valid = _compute_valid(record, self._templar)
+        active = requested and not bypassed and valid
+
+        return [{
+            "id": subsystem_id,
+            "name": name if isinstance(name, str) and name.strip() else subsystem_id,
+            "record": record,
+            "state": _compute_state(requested, bypassed, valid),
+            "active": active,
+            "requested": requested,
+            "bypassed": bypassed,
+            "valid": valid,
+            "spec": _raw_copy_template_data(record.get("spec", [])),
+            "contrib": _raw_copy_template_data(record.get("contrib", {})),
+        }]
