@@ -1,9 +1,6 @@
 ---
 - hosts: all
   vars:
-    TYPE: zswap
-    INSTANCE: main
-
     KERNEL_MODULES:
       zswap:
         params:
@@ -14,6 +11,5 @@
           accept_threshold_percent: "90"
           same_filled_pages_enabled: Y
           exclusive_loads: Y
-
   tasks:
     - import_tasks: tasks/compfuzor.includes
