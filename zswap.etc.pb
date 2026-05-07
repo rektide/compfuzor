@@ -11,5 +11,6 @@
           accept_threshold_percent: "90"
           same_filled_pages_enabled: Y
           exclusive_loads: Y
+          shrinker_enabled: Y
   tasks:
     - import_tasks: tasks/compfuzor.includes
