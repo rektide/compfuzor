@@ -1,11 +1,11 @@
 - name: "Compfuzor: add go repo"
   set_fact:
     REPOS: "{{ REPOS|default({})|combine(repo) }}"
-    goRepos: "{{ goRepos|default('') }} {{GO_DIR}}"
+    goRepos: "{{ goRepos|default('') }} {{GOPATH_DIR}}"
   loop: "{{ REPO_GO|default([])|arrayitize }}"
   vars:
     go_url: "{{item}}"
-    repo: "{ '{{GO_DIR}}': '{{item}}' }"
+    repo: "{ '{{GOPATH_DIR}}': '{{item}}' }"
   when: REPO_GO|default(False)
 - name: 'add ENV gopath, BIN build.sh and LINKS repo/bin'
   set_fact:

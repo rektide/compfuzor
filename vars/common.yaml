@@ -87,7 +87,7 @@ SYSTEMD_SYSTEM_UNIT_DIR: /etc/systemd/system
 DIRMODE: "0770"
 FILEMODE: "0660"
 BINMODE: "0775"
-GO_DIR: "src/{{go_url|default('')|deprefix('\\w+@')|deprefix('https?://')|regex_replace('^(\\w+):', '\\1/')|trim}}"
+GOPATH_DIR: "src/{{go_url|default('')|deprefix('\\w+@')|deprefix('https?://')|regex_replace('^(\\w+):', '\\1/')|trim}}"
 HASH: "#"
 PERSIST_VARS:
   - NAME
