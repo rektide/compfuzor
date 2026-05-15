@@ -67,8 +67,9 @@ def _raw_copy_template_data(value):
 
     Args:
         value: Any value passed from Ansible/Jinja. Lazy containers are copied
-            through their modern `_non_lazy_copy()` hook before normal Python
-            traversal happens.
+            through their modern ``_non_lazy_copy()`` hook before normal Python
+            traversal happens.  ``_LazyValue`` instances are unwrapped via their
+            ``.value`` property.
 
     Returns:
         A plain Python container tree where tagged strings remain tagged and
@@ -80,6 +81,13 @@ def _raw_copy_template_data(value):
     non_lazy_copy = getattr(value, "_non_lazy_copy", None)
     if callable(non_lazy_copy):
         return _raw_copy_template_data(non_lazy_copy())
+
+    try:
+        from ansible._internal._templating._lazy_containers import _LazyValue
+        if isinstance(value, _LazyValue):
+            return _raw_copy_template_data(value.value)
+    except ImportError:
+        pass
 
     if isinstance(value, dict):
         return {
@@ -551,6 +559,51 @@ def merge_dict_subsys(
     return merge_dict(payloads, strategy=strategy, single=single, get=get)
 
 
+@pass_context
+@accept_args_markers
+def subsys_publish(context, entry, subsystem_id=None, id=None):
+    """Merge a new subsystem entry into SUBSYSTEM using raw-copy semantics.
+
+    Reads the current SUBSYSTEM fact through a raw-copy boundary so tagged
+    template strings in unrelated subsystem entries are NOT resolved during
+    the combine. The new entry is also raw-copied before merging.
+
+    Args:
+        context: Jinja context supplied by ``pass_context``.
+        entry: Dict payload for the subsystem entry (e.g. ``{'contrib': ...}``).
+        subsystem_id: Positional subsystem key name.
+        id: Keyword subsystem key name. Preferred over ``subsystem_id``.
+
+    Returns:
+        The updated SUBSYSTEM dict with the new entry merged in.
+    """
+    key = id if not _is_nothing(id) else subsystem_id
+    if _is_nothing(key) or not isinstance(key, str) or not key.strip():
+        raise AnsibleError("subsys_publish requires a non-empty subsystem id")
+    key = key.strip()
+
+    existing = _raw_copy_template_data(_context_var_raw(context, "SUBSYSTEM", {}))
+    entry = _raw_copy_template_data(entry)
+
+    if key not in existing:
+        existing[key] = {}
+    if isinstance(existing[key], dict) and isinstance(entry, dict):
+        existing[key] = _deep_merge_dicts(existing[key], entry)
+    else:
+        existing[key] = entry
+    return existing
+
+
+def _deep_merge_dicts(base, overlay):
+    result = dict(base)
+    for k, v in overlay.items():
+        if k in result and isinstance(result[k], dict) and isinstance(v, dict):
+            result[k] = _deep_merge_dicts(result[k], v)
+        else:
+            result[k] = v
+    return result
+
+
 class FilterModule(object):
     def filters(self):
         return {
@@ -558,4 +611,5 @@ class FilterModule(object):
             "merge_dict_subsys": merge_dict_subsys,
             "merge_list": merge_list,
             "merge_list_subsys": merge_list_subsys,
+            "subsys_publish": subsys_publish,
         }

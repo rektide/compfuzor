@@ -8,7 +8,7 @@
 
     - name: "Compfuzor: publish get_urls subsystem"
       set_fact:
-        SUBSYSTEM: "{{ (SUBSYSTEM | default({})) | combine({'get_urls': subsystem}, recursive=True) }}"
+        SUBSYSTEM: "{{ subsystem | subsys_publish(id='get_urls') }}"
       when: _subsystem_requested
   vars:
     items: "{{ GET_URLS | default([], true) | arrayitize }}"

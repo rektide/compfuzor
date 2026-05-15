@@ -7,7 +7,7 @@
         owner: "{{ item.owner | default(omit) }}"
         group: "{{ item.group | default(omit) }}"
         validate_certs: "{{ item.validate_certs | default(true) }}"
-      with_items: "{{ lookup('subsys', id=subsystem_id, name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='spec') }}"
+      with_items: "{{ lookup('subsys', id=subsystem_id | default('get_urls'), name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='spec') }}"
       become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(item.dest|dirname|should_become(item.owner|default('', true), _cf_user_id, item.group|default('', true), _cf_user_gid)))|bool }}"
 
     - name: "save '.url' file"
@@ -16,6 +16,6 @@
         dest: "{{ item.dest }}.url"
         owner: "{{ item.owner | default(omit) }}"
         group: "{{ item.group | default(omit) }}"
-      with_items: "{{ lookup('subsys', id=subsystem_id, name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='spec') }}"
+      with_items: "{{ lookup('subsys', id=subsystem_id | default('get_urls'), name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='spec') }}"
       become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(item.dest|dirname|should_become(item.owner|default('', true), _cf_user_id, item.group|default('', true), _cf_user_gid)))|bool }}"
-  when: lookup('subsys', id=subsystem_id, name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='active')
+  when: lookup('subsys', id=subsystem_id | default('get_urls'), name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='active')
