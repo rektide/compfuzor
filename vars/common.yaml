@@ -170,7 +170,41 @@ _subsystem_bypassed: "{{ bypassed | default(lookup('subsys', id=subsystem_name |
 _subsystem_valid: "{{ valid | default(errors | length == 0) | bool }}"
 _subsystem_active: "{{ _subsystem_requested and (not _subsystem_bypassed) and _subsystem_valid }}"
 
+
 SUBSYSTEM:
+  get_urls:
+    requested: "{{ GET_URLS is defined and (GET_URLS | length > 0) }}"
+    spec: >-
+      {%- set _items = GET_URLS | default([], true) | arrayitize -%}
+      {%- set normalized = [] -%}
+      {%- for item in _items -%}
+        {%- set row = item if item is mapping else {'url': item} -%}
+        {%- set url = row.url -%}
+        {%- set destName = row.dest if row.dest is defined else (url | basename) -%}
+        {%- set og = {} -%}
+        {%- if row.owner is defined and row.owner -%}{%- set _ = og.update({'owner': row.owner}) -%}{%- endif -%}
+        {%- if row.group is defined and row.group -%}{%- set _ = og.update({'group': row.group}) -%}{%- endif -%}
+        {%- set entry = {'url': url, 'dest': (destName | defaultDir(SRC)), 'validate_certs': (row.validate_certs | default(VALIDATE_CERTS | default(true)))} | combine(og) -%}
+        {%- set _ = normalized.append(entry) -%}
+      {%- endfor -%}
+      {{ normalized }}
+    contrib:
+      BINS:
+        - name: get-urls.sh
+          run: true
+          generated: |
+            [ -z "$DIR" ] && export DIR="{{SRC}}"
+            cd "${DIR}"
+
+            # Find and re-download from all .url files
+            for urlfile in *.url; do
+              [ -e "$urlfile" ] || continue
+              url=$(cat "$urlfile")
+              dest="${urlfile%.url}"
+              echo "Fetching: $url -> $dest"
+              curl -fsSL "$url" -o "$dest"
+            done
+
   go:
     contrib:
       BINS:

@@ -1,26 +1,7 @@
 ---
-- name: "Compfuzor: synthesize get_urls shared artifacts"
+- name: "Compfuzor: synthesize get_urls artifacts"
   set_fact:
-    SUBSYSTEM: "{{ getUrlsSubsystemSynthesis | subsys_publish(id='get_urls') }}"
-    BINS: "{{ [BINS | default([]), getUrlsBins] | merge_list('bins_generated') }}"
+    BINS: "{{ [BINS | default([]), _get_urls_contrib.BINS | default([])] | merge_list('bins_generated') }}"
   when: lookup('subsys', id='get_urls', get='active', default=false) | bool
   vars:
-    getUrlsBins:
-      - name: get-urls.sh
-        run: true
-        generated: |
-          [ -z "$DIR" ] && export DIR="{{SRC}}"
-          cd "${DIR}"
-
-          # Find and re-download from all .url files
-          for urlfile in *.url; do
-            [ -e "$urlfile" ] || continue
-            url=$(cat "$urlfile")
-            dest="${urlfile%.url}"
-            echo "Fetching: $url -> $dest"
-            curl -fsSL "$url" -o "$dest"
-          done
-    getUrlsSubsystemSynthesis:
-      get_urls:
-        contrib:
-          BINS: "{{ getUrlsBins }}"
+    _get_urls_contrib: "{{ lookup('subsys', id='get_urls', get='contrib', default={}) }}"

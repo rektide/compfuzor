@@ -1,15 +1,8 @@
 ---
-- name: "Compfuzor: transform get_urls into subsystem contract"
-  block:
-    - name: "Compfuzor: fail invalid get_urls input"
-      fail:
-        msg: "{{ errors | join('; ') }}"
-      when: _subsystem_requested and (not _subsystem_bypassed) and (not _subsystem_valid)
-
-    - name: "Compfuzor: publish get_urls subsystem"
-      set_fact:
-        SUBSYSTEM: "{{ subsystem | subsys_publish(id='get_urls') }}"
-      when: _subsystem_requested
+- name: "Compfuzor: validate get_urls input"
+  fail:
+    msg: "{{ errors | join('; ') }}"
+  when: _subsystem_requested and (not _subsystem_bypassed) and (not _subsystem_valid)
   vars:
     items: "{{ GET_URLS | default([], true) | arrayitize }}"
     subsystem_name: get_urls
@@ -34,24 +27,3 @@
           }}
       - msg: "GET_URLS mapping entry dest must be a string when defined"
         failed: "{{ (mappingItems | selectattr('dest', 'defined') | rejectattr('dest', 'string') | list | length) | int > 0 }}"
-    spec: >-
-      {%- set normalized = [] -%}
-      {%- for item in items -%}
-        {%- set row = item if item is mapping else {'url': item} -%}
-        {%- set url = row.url -%}
-        {%- set destName = row.dest if row.dest is defined else (url | basename) -%}
-        {%- set og = {} -%}
-        {%- if row.owner is defined and row.owner -%}{%- set _ = og.update({'owner': row.owner}) -%}{%- endif -%}
-        {%- if row.group is defined and row.group -%}{%- set _ = og.update({'group': row.group}) -%}{%- endif -%}
-        {%- set entry = {
-          'url': url,
-          'dest': (destName | defaultDir(SRC)),
-          'validate_certs': (row.validate_certs | default(VALIDATE_CERTS | default(true)))
-        } | combine(og) -%}
-        {%- set _ = normalized.append(entry) -%}
-      {%- endfor -%}
-      {{ normalized }}
-    subsystem:
-      valid: "{{ _subsystem_valid }}"
-      reasons: "{{ errors }}"
-      spec: "{{ spec if (_subsystem_valid and _subsystem_requested and (spec | length > 0)) else [] }}"
