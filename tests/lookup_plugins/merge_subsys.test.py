@@ -208,6 +208,21 @@ def test_lookup_run_returns_templated_result_list():
     check("returns one lookup result", result, [{"PATH": "/current", "PYTHON_BIN": "python"}])
 
 
+def test_etc_dirs_append_defaults():
+    print("\nmerge_subsys ETC_DIRS defaults:")
+    variables = {
+        "ETC_DIRS": ["/etc/base"],
+        "SUBSYSTEM": {
+            "config": {
+                "active": True,
+                "contrib": {"ETC_DIRS": ["myconf", "myconf-disabled"]},
+            }
+        },
+    }
+    result = merge_subsys_value(variables, "config", "ETC_DIRS")
+    check("appends ETC_DIRS after current", result, ["/etc/base", "myconf", "myconf-disabled"])
+
+
 def test_lookup_run_rejects_positional_terms():
     print("\nmerge_subsys lookup positional terms:")
     lookup = LookupModule()
@@ -228,6 +243,7 @@ if __name__ == "__main__":
     test_pkgs_append_unique_defaults()
     test_current_and_path_overrides()
     test_raw_copy_boundary_for_variables()
+    test_etc_dirs_append_defaults()
     test_lookup_run_returns_templated_result_list()
     test_lookup_run_rejects_positional_terms()
     print("\n{} passed, {} failed".format(passed, failed))

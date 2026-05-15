@@ -129,6 +129,12 @@ ARTIFACT_DEFAULTS = {
         "default": [],
         "current_first": True,
     },
+    "ETC_DIRS": {
+        "kind": "list",
+        "strategy": "append",
+        "default": [],
+        "current_first": True,
+    },
     "ENV": {
         "kind": "dict",
         "strategy": "env_overlay",
