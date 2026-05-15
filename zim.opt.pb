@@ -19,16 +19,16 @@
       - name: install-user.sh
         basedir: False
         content: |
-          if [[ -f "{{DIR}}/etc/zimrc.conf" ]]
+          if [[ -f "${CONFIG_OUTPUT}" ]]
           then
-            echo "using existing zimrc file (config.sh to rebuild)"
+            echo "using existing zimrc (config.sh to rebuild)"
           else
             echo running config.sh to generate zimrc
             {{DIR}}/bin/config.sh
             echo
           fi
           echo installing zshrc config
-          block-in-file -n {{NAME}} -i {{DIR}}/etc/zim.zsh -o ${ZDOTDIR:-$HOME}/.zshrc --envsubst
+          block-in-file -n {{NAME}} -i {{DIR}}/etc/zim.zsh -o ${ZDOTDIR:-$HOME}/.zshrc
           echo symlinking zimrc
           ln -sfv {{DIR}}/etc/zimrc.conf $HOME/.config/zsh/zimrc
           
@@ -37,9 +37,9 @@
         content: |
           # : is a no-op builtin; ${VAR:=default} sets VAR only if unset or empty
           : ${ZIM_HOME:={{zim_home}}}
-          : ${ZIM_CONFIG_FILE:=${DIR}/etc/${CONFIG_KEY}.${CONFIG_EXT}}
+          : ${ZIM_CONFIG_FILE:={{DIR}}/etc/{{CONFIG_KEY}}.{{CONFIG_EXT}}}
           # Install missing modules and update ${ZIM_HOME}/init.zsh if missing or outdated.
-          if [[ ! ${ZIM_HOME}/init.zsh -nt ${ZIM_CONFIG_FILE} ]]; then
+          if [[ ! "${ZIM_HOME}/init.zsh" -nt "${ZIM_CONFIG_FILE}" ]]; then
             source {{DIR}}/src/zimfw.zsh init
           fi
           source ${ZIM_HOME}/init.zsh
