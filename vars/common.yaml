@@ -175,7 +175,7 @@ SUBSYSTEM:
   get_urls:
     requested: "{{ GET_URLS | deflengthy }}"
     spec: >-
-      {%- set _items = GET_URLS | default([], true) | arrayitize -%}
+      {%- set _items = GET_URLS | arrayitize -%}
       {%- set normalized = [] -%}
       {%- for item in _items -%}
         {%- set row = item if item is mapping else {'url': item} -%}
@@ -377,7 +377,7 @@ SUBSYSTEM:
       BINS:
         - name: install-desktop.sh
           generated: |
-            {% for entry in (DESKTOP | default([], true) | arrayitize) %}
+            {% for entry in (DESKTOP | arrayitize) %}
             {% set df = entry.desktop_file %}
             {% set exec_val = entry.exec | default('') %}
             {% set icon_val = entry.icon | default('') %}
@@ -435,7 +435,7 @@ SUBSYSTEM:
       PKGS: [jq]
 
 _cmake_source_default: "{{ CMAKE_SOURCE_DIR | default('.') }}"
-_cmake_builds_raw: "{{ CMAKE_BUILDS | default([]) | arrayitize }}"
+_cmake_builds_raw: "{{ CMAKE_BUILDS | arrayitize }}"
 _cmake_default_build:
   name: default
   build_dir: "{{ _BUILD_DIR }}"
