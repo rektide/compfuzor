@@ -399,7 +399,7 @@ SUBSYSTEM:
       PKGS: [desktop-file-utils]
 
   kernel_modprobe:
-    requested: "{{ KERNEL_MODULES is mapping and KERNEL_MODULES | deflengthy }}"
+    requested: "{{ KERNEL_MODULES is defmapping and KERNEL_MODULES | deflengthy }}"
     contrib:
       ETC_FILES:
         - name: kernel.modules.json
@@ -411,7 +411,7 @@ SUBSYSTEM:
       PKGS: [jq]
 
   kernel_sysctl:
-    requested: "{{ KERNEL_SYSCTL is mapping and KERNEL_SYSCTL | deflengthy }}"
+    requested: "{{ KERNEL_SYSCTL is defmapping and KERNEL_SYSCTL | deflengthy }}"
     contrib:
       ETC_FILES:
         - name: kernel.sysctl.json
@@ -423,7 +423,7 @@ SUBSYSTEM:
       PKGS: [jq]
 
   kernel_sysfs:
-    requested: "{{ KERNEL_SYSFS is mapping and KERNEL_SYSFS | deflengthy }}"
+    requested: "{{ KERNEL_SYSFS is defmapping and KERNEL_SYSFS | deflengthy }}"
     contrib:
       ETC_FILES:
         - name: kernel.sysfs.json
