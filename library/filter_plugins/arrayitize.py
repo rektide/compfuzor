@@ -1,6 +1,9 @@
 import collections.abc
 import numbers
+
 from ansible.module_utils.six import string_types
+from ansible.plugins.test.core import wrapped_test_undefined
+from ansible.template import accept_args_markers
 
 
 def isList(value):
@@ -21,8 +24,12 @@ def _normalize_single(value):
     return [value]
 
 
+@accept_args_markers
 def arrayitize(*a, **kw):
     """Place passed in arguments into an array"""
+
+    if len(a) == 1 and wrapped_test_undefined(a[0]):
+        return []
 
     if len(a) == 1:
         return _normalize_single(a[0])
