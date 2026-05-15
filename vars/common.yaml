@@ -398,6 +398,24 @@ SUBSYSTEM:
             {% endfor %}
       PKGS: [desktop-file-utils]
 
+  config:
+    requested: "{{ CONFIG_KEY is defined }}"
+    contrib:
+      ETC_DIRS:
+        - "{{ CONFIG_KEY }}"
+        - "{{ CONFIG_KEY }}-disabled"
+      BINS:
+        - name: config.sh
+          src: "../config-{{ CONFIG_MERGE | default('yaml-list') }}.sh"
+          basedir: False
+        - name: disable.sh
+          src: ../config-disable.sh
+          basedir: False
+        - name: enable.sh
+          src: ../config-enable.sh
+          basedir: False
+      ENV_LIST: [CONFIG_KEY, CONFIG_EXT, CONFIG_OUTPUT]
+
   kernel_modprobe:
     requested: "{{ KERNEL_MODULES is defmapping and KERNEL_MODULES | deflengthy }}"
     contrib:
