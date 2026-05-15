@@ -19,8 +19,19 @@
       - name: install-user.sh
         basedir: False
         content: |
-          {{DIR}}/bin/config.sh
+          if [[ -f "{{DIR}}/etc/zimrc.conf" ]]
+          then
+            echo "using existing zimrc file (config.sh to rebuild)"
+          else
+            echo running config.sh to generate zimrc
+            {{DIR}}/bin/config.sh
+            echo
+          fi
+          echo installing zshrc config
           block-in-file -n {{NAME}} -i {{DIR}}/etc/zim.zsh -o ${ZDOTDIR:-$HOME}/.zshrc --envsubst
+          echo symlinking zimrc
+          ln -sfv {{DIR}}/etc/zimrc.conf $HOME/.config/zsh/zimrc
+          
     ETC_FILES:
       - name: zim.zsh
         content: |
