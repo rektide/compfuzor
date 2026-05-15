@@ -47,7 +47,7 @@
     group: "{{GROUP|default(omit)}}"
   with_items: "{{FILES.items()}}"
   become: "{{do_become}}"
-  when: FILES is mapping
+  when: FILES is defmapping
   vars:
     _dest: "{{ DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '' }}{{item[0]}}"
     should_become: "{{_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
