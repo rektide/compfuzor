@@ -132,9 +132,9 @@
 - import_tasks: compfuzor/fs_get_urls.tasks
   when: lookup('subsys', id='get_urls', get='active', default=false) | bool
 - import_tasks: compfuzor/bins.tasks
-  when: BINS|default(False) and not BINS_BYPASS|default(False)
+  when: BINS is deflengthy and not BINS_BYPASS|default(False)
 - import_tasks: compfuzor/bins_link.tasks
-  when: BINS|default(False) and not BINS_BYPASS|default(False)
+  when: BINS is deflengthy and not BINS_BYPASS|default(False)
 - import_tasks: compfuzor/bins_link_global.tasks
   when: BINS is defined and not BINS_BYPASS|default(False) and not GLOBAL_BINS_BYPASS|default(False)
 - import_tasks: compfuzor/links.tasks
