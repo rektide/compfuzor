@@ -96,6 +96,7 @@
     DISABLE_NETWORK_POLICY: "{{ DISABLE|default([], true)|intersect(['network-policy'])|length() == 0}}"
     DISABLE_KUBE_PROXY:     "{{ DISABLE|default([], true)|intersect(['kube-proxy']    )|length() == 1}}"
     ETCD_SNAPSHOT_RETENTION: 28
+    KUBELET_ARGS: ""
 
     # k3s agent
 
@@ -125,6 +126,7 @@
       ETCD_SNAPSHOT_RETENTION: "{{ETCD_SNAPSHOT_RETENTION}}"
       SNAPSHOTTER: "{{SNAPSHOTTER}}"
       DISABLE_LIST: "{{DISABLE_LIST}}"
+      KUBELET_ARGS: "{{KUBELET_ARGS}}"
 
     # TODO/fantasy: make commonEnv/serverEnv/agentEnv and something to generate EXEC from that k/v!
     commonArgs:
@@ -133,6 +135,7 @@
     - "{{ '--node-ip $NODE_IP' if NODE_IP|default(False) else '' }}"
     - "{{ '--node-external-ip $NODE_EXTERNAL_IP' + NODE_EXTERNAL_IP if NODE_EXTERNAL_IP|default(False) else '' }}"
     - "{{ '--private-registry $PRIVATE_REGISTRY' if PRIVATE_REGISTRY|default(False) else '' }}"
+    - "{{ '--kubelet-arg $KUBELET_ARGS' if KUBELET_ARGS else '' }}"
     agentArgs: {}
     serverArgs:
     #- "--tls-san $CLUSTER_DOMAIN"
