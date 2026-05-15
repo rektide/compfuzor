@@ -25,7 +25,7 @@
     login_password="{{pg_admin_pw}}"
     login_host="{{pg_host}}" 
     port="{{pg_port}}"
-  when: pg_ts is defined and pg_ts
+  when: pg_ts is deftruthy
 #    tablespace="{{pg_ts}}"
 - community.postgresql.postgresql_db:
     name="{{pg_db}}"
@@ -34,4 +34,4 @@
     login_password="{{pg_admin_pw}}"
     login_host="{{pg_host}}" 
     port="{{pg_port}}"
-  when: pg_ts is not defined or not pg_ts
+  when: pg_ts is not deftruthy

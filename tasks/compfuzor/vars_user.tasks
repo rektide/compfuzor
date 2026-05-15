@@ -5,7 +5,7 @@
 - name: 'Set USER as per OWNER'
   set_fact:
     USER: "{{OWNER|default(TYPE|default(NAME), True)}}"
-  when: OWNER is defined and OWNER|bool and USER is not defined
+  when: OWNER is deftruthy and USER is not defined
 - name: 'Set default USER'
   set_fact:
     USER: "{{ TYPE if TYPE is defined else NAME }}"

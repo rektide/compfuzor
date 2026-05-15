@@ -4,7 +4,7 @@
     msg: "{{ _kernel_errors | join('; ') }}"
   when: _kernel_any_input and (KERNEL_BYPASS is not deftruthy) and (_kernel_errors | length > 0)
   vars:
-    _kernel_module_items: "{{ KERNEL_MODULES | dict2items if (KERNEL_MODULES is defined and KERNEL_MODULES is mapping) else [] }}"
+    _kernel_module_items: "{{ KERNEL_MODULES | dict2items if KERNEL_MODULES is mapping else [] }}"
     _kernel_error_checks:
       - msg: "KERNEL_MODULES must be a mapping"
         failed: "{{ KERNEL_MODULES is defined and KERNEL_MODULES is not mapping }}"
