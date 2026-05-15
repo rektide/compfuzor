@@ -56,29 +56,28 @@ def _iter_var_names(terms):
             yield term
 
 
+def resolve_dict(terms, variables, default=None):
+    resolved = {}
+    for term in _iter_var_names(terms):
+        if not isinstance(term, str):
+            raise AnsibleTypeError(
+                f"Variable name must be {native_type_name(str)!r} not {native_type_name(term)!r}.",
+                obj=term,
+            )
+        try:
+            value = variables[term]
+        except KeyError:
+            if default is None:
+                value = _jinja_bits._undef(f"No variable named {term!r} was found.")
+            else:
+                value = default
+        resolved[term] = value
+    return resolved
+
+
 class LookupModule(LookupBase):
     def run(self, terms, variables=None, **kwargs):
         variables = variables or {}
         self.set_options(var_options=variables, direct=kwargs)
-
-        default = self.get_option("default")
-        resolved = {}
-
-        for term in _iter_var_names(terms):
-            if not isinstance(term, str):
-                raise AnsibleTypeError(
-                    f"Variable name must be {native_type_name(str)!r} not {native_type_name(term)!r}.",
-                    obj=term,
-                )
-
-            try:
-                value = variables[term]
-            except KeyError:
-                if default is None:
-                    value = _jinja_bits._undef(f"No variable named {term!r} was found.")
-                else:
-                    value = default
-
-            resolved[term] = value
-
+        resolved = resolve_dict(terms, variables, default=self.get_option("default"))
         return [self._templar._engine.template(resolved)]
