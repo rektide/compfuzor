@@ -4,7 +4,7 @@
     # first iteration loads in PKGS, next add each PKGSET.
     # this could be turned into two passes for clarity but this ought be faster
     _pkgs: "{{ _pkgs|default(PKGS|default([])) + (_pkgset if item != '' else []) }}"
-  loop: "{{ [''] + PKGSET|default([])|arrayitize + PKGSETS|default([]) }}"
+  loop: "{{ [''] + PKGSET|arrayitize + PKGSETS|default([]) }}"
   vars:
     _pkgset: "{{ lookup('vars', item, default=[]) }}"
 - name: install pkgs

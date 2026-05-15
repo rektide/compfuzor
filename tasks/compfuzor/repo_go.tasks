@@ -2,7 +2,7 @@
   set_fact:
     REPOS: "{{ REPOS|default({})|combine(repo) }}"
     goRepos: "{{ goRepos|default('') }} {{GOPATH_DIR}}"
-  loop: "{{ REPO_GO|default([])|arrayitize }}"
+  loop: "{{ REPO_GO|arrayitize }}"
   vars:
     go_url: "{{item}}"
     repo: "{ '{{GOPATH_DIR}}': '{{item}}' }"

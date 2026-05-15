@@ -4,7 +4,7 @@
     msg: "{{ errors | join('; ') }}"
   when: _subsystem_requested and (not _subsystem_bypassed) and (not _subsystem_valid)
   vars:
-    items: "{{ GET_URLS | default([], true) | arrayitize }}"
+    items: "{{ GET_URLS | arrayitize }}"
     subsystem_name: get_urls
     stringItems: "{{ items | select('string') | list }}"
     mappingItems: "{{ items | select('mapping') | list }}"
