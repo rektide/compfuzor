@@ -1,0 +1,7 @@
+---
+- name: "Compfuzor: synthesize config subsystem artifacts"
+  set_fact:
+    ETC_DIRS: "{{ lookup('merge_subsys', id='config', contrib='ETC_DIRS') }}"
+    BINS: "{{ lookup('merge_subsys', id='config', contrib='BINS') }}"
+    ENV_LIST: "{{ lookup('merge_subsys', id='config', contrib='ENV_LIST') }}"
+  when: lookup('subsys', id='config', get='active', default=false) | bool
