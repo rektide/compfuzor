@@ -22,6 +22,21 @@ def truthy(*a):
     return not not a[0]
 
 
+@accept_args_markers
+def lengthy(*a):
+    """True if value is list-like with length > 0"""
+    value = a[0]
+    if wrapped_test_undefined(value):
+        if len(a) > 1:
+            value = a[1]
+        else:
+            return False
+    try:
+        return len(value) > 0
+    except TypeError:
+        return False
+
+
 class FilterModule(object):
     def filters(self):
-        return {"def": un_undefine, "truthy": truthy}
+        return {"def": un_undefine, "truthy": truthy, "deflengthy": lengthy}
