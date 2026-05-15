@@ -513,7 +513,7 @@ _cmake_bins:
     generated: |
       {% if CMAKE_INSTALL is defined %}
       {% for cmakeBuild in _cmake_builds if cmakeBuild.install | default(True) %}
-      {% set installArgs = cmakeBuild.install_args | default([]) | arrayitize | join(' ') %}
+      {% set installArgs = cmakeBuild.install_args | arrayitize | join(' ') %}
       cmake --install "{{ cmakeBuild.build_dir | default(_BUILD_DIR) }}"{{ ' ' + _cmake_install_args_global if _cmake_install_args_global else '' }}{{ ' ' + installArgs if installArgs else '' }}
       {% endfor %}
       {% else %}
