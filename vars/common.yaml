@@ -165,7 +165,7 @@ _postRun: "{{ 'postRun' if _binsRun else 'skip' }}"
 # - requested, bypassed, valid, errorChecks
 errorChecks: []
 errors: "{{ errorChecks | selectattr('failed', 'truthy') | map(attribute='msg') | list }}"
-_subsystem_requested: "{{ requested | default((items | default([], true) | arrayitize | length > 0), true) | bool }}"
+_subsystem_requested: "{{ requested | default(items | arrayitize | deflengthy, true) }}"
 _subsystem_bypassed: "{{ bypassed | default(lookup('subsys', id=subsystem_name | default(''), domain=subsystem_domain | default(none), bypass=subsystem_bypass_vars | default(none), get='bypassed', default=False), true) | bool }}"
 _subsystem_valid: "{{ valid | default(errors | length == 0) | bool }}"
 _subsystem_active: "{{ _subsystem_requested and (not _subsystem_bypassed) and _subsystem_valid }}"
