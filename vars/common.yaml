@@ -173,7 +173,7 @@ _subsystem_active: "{{ _subsystem_requested and (not _subsystem_bypassed) and _s
 
 SUBSYSTEM:
   get_urls:
-    requested: "{{ GET_URLS is defined and (GET_URLS | length > 0) }}"
+    requested: "{{ GET_URLS | deflengthy }}"
     spec: >-
       {%- set _items = GET_URLS | default([], true) | arrayitize -%}
       {%- set normalized = [] -%}
@@ -399,7 +399,7 @@ SUBSYSTEM:
       PKGS: [desktop-file-utils]
 
   kernel_modprobe:
-    requested: "{{ KERNEL_MODULES is defined and KERNEL_MODULES is mapping and (KERNEL_MODULES | length > 0) }}"
+    requested: "{{ KERNEL_MODULES is mapping and KERNEL_MODULES | deflengthy }}"
     contrib:
       ETC_FILES:
         - name: kernel.modules.json
@@ -411,7 +411,7 @@ SUBSYSTEM:
       PKGS: [jq]
 
   kernel_sysctl:
-    requested: "{{ KERNEL_SYSCTL is defined and KERNEL_SYSCTL is mapping and (KERNEL_SYSCTL | length > 0) }}"
+    requested: "{{ KERNEL_SYSCTL is mapping and KERNEL_SYSCTL | deflengthy }}"
     contrib:
       ETC_FILES:
         - name: kernel.sysctl.json
@@ -423,7 +423,7 @@ SUBSYSTEM:
       PKGS: [jq]
 
   kernel_sysfs:
-    requested: "{{ KERNEL_SYSFS is defined and KERNEL_SYSFS is mapping and (KERNEL_SYSFS | length > 0) }}"
+    requested: "{{ KERNEL_SYSFS is mapping and KERNEL_SYSFS | deflengthy }}"
     contrib:
       ETC_FILES:
         - name: kernel.sysfs.json
@@ -445,7 +445,7 @@ _cmake_default_build:
   build_type: "{{ CMAKE_BUILD_TYPE | default('Release') }}"
   configure_always: "{{ CMAKE_CONFIGURE_ALWAYS | default(False) }}"
   install: "{{ CMAKE_INSTALL is defined }}"
-_cmake_builds: "{{ _cmake_builds_raw if _cmake_builds_raw | length > 0 else [_cmake_default_build] }}"
+_cmake_builds: "{{ _cmake_builds_raw if _cmake_builds_raw | deflengthy else [_cmake_default_build] }}"
 _cmake_install_args_global: >-
   {{
     CMAKE_INSTALL | arrayitize | join(' ')
