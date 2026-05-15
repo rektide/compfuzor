@@ -113,6 +113,8 @@
           zmodule rektide/zim-beads
           zmodule rektide/zim-jaeger
           zmodule rektide/zim-timoni
+          zmodule rektide/zim-opencode
+          zmodule rektide/zim-atuin
           # Enables and configures smart and extensive tab completion.
           # completion must be sourced after all modules that add completion definitions.
           zmodule completion
