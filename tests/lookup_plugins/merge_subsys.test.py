@@ -60,7 +60,7 @@ def test_bins_defaults_merge_current_then_subsystem():
         "BINS": [{"name": "build.sh", "generated": "echo base"}],
         "SUBSYSTEM": {
             "python": {
-                "active": True,
+                "requested": True,
                 "contrib": {"BINS": [{"name": "build.sh", "generated": "echo python"}]},
             }
         },
@@ -79,7 +79,7 @@ def test_inactive_subsystem_skips_incoming_payload():
         "PKGS": ["base"],
         "SUBSYSTEM": {
             "go": {
-                "active": False,
+                "requested": False,
                 "contrib": {"PKGS": ["go"]},
             }
         },
@@ -93,7 +93,7 @@ def test_fallback_id_and_get_path():
     variables = {
         "SUBSYSTEM": {
             "fallback": {
-                "active": True,
+                "requested": True,
                 "contrib": {"LINKS": [{"name": "tool"}]},
             }
         },
@@ -108,7 +108,7 @@ def test_env_current_wins_by_default():
         "ENV": {"PATH": "/current"},
         "SUBSYSTEM": {
             "python": {
-                "active": True,
+                "requested": True,
                 "contrib": {"ENV": {"PATH": "/sub", "PYTHON_BIN": "python"}},
             }
         },
@@ -127,7 +127,7 @@ def test_env_incoming_can_win():
         "ENV": {"PATH": "/current"},
         "SUBSYSTEM": {
             "python": {
-                "active": True,
+                "requested": True,
                 "contrib": {"ENV": {"PATH": "/sub"}},
             }
         },
@@ -142,7 +142,7 @@ def test_pkgs_append_unique_defaults():
         "PKGS": ["curl", "git"],
         "SUBSYSTEM": {
             "go": {
-                "active": True,
+                "requested": True,
                 "contrib": {"PKGS": ["git", "golang"]},
             }
         },
@@ -157,7 +157,7 @@ def test_current_and_path_overrides():
         "GLOBAL_LINKS": [{"name": "base"}],
         "SUBSYSTEM": {
             "tools": {
-                "active": True,
+                "requested": True,
                 "custom": {"links": [{"name": "sub"}]},
             }
         },
@@ -180,7 +180,7 @@ def test_raw_copy_boundary_for_variables():
             "SUBSYSTEM": FakeLazyDict(
                 {
                     "python": {
-                        "active": True,
+                        "requested": True,
                         "contrib": {"BINS": [{"name": "build.sh"}]},
                     }
                 }
@@ -199,7 +199,7 @@ def test_lookup_run_returns_templated_result_list():
         "ENV": {"PATH": "/current"},
         "SUBSYSTEM": {
             "python": {
-                "active": True,
+                "requested": True,
                 "contrib": {"ENV": {"PYTHON_BIN": "python"}},
             }
         },
@@ -214,13 +214,43 @@ def test_etc_dirs_append_defaults():
         "ETC_DIRS": ["/etc/base"],
         "SUBSYSTEM": {
             "config": {
-                "active": True,
+                "requested": True,
                 "contrib": {"ETC_DIRS": ["myconf", "myconf-disabled"]},
             }
         },
     }
     result = merge_subsys_value(variables, "config", "ETC_DIRS")
     check("appends ETC_DIRS after current", result, ["/etc/base", "myconf", "myconf-disabled"])
+
+
+def test_requested_from_variable():
+    print("\nmerge_subsys requested from variable:")
+    variables = {
+        "RUST": True,
+        "BINS": [],
+        "SUBSYSTEM": {
+            "rust": {
+                "contrib": {"BINS": [{"name": "build.sh"}, {"name": "install.sh"}]},
+            }
+        },
+    }
+    result = merge_subsys_value(variables, "rust", "BINS")
+    check("resolves active from variable when no requested field", result, [{"name": "build.sh"}, {"name": "install.sh"}])
+
+
+def test_explicit_active_path_still_works():
+    print("\nmerge_subsys explicit active_path:")
+    variables = {
+        "BINS": [],
+        "SUBSYSTEM": {
+            "custom": {
+                "my_active_flag": True,
+                "contrib": {"BINS": [{"name": "run.sh"}]},
+            }
+        },
+    }
+    result = merge_subsys_value(variables, "custom", "BINS", active_path="my_active_flag")
+    check("reads custom active_path from record", result, [{"name": "run.sh"}])
 
 
 def test_lookup_run_rejects_positional_terms():
@@ -244,6 +274,8 @@ if __name__ == "__main__":
     test_current_and_path_overrides()
     test_raw_copy_boundary_for_variables()
     test_etc_dirs_append_defaults()
+    test_requested_from_variable()
+    test_explicit_active_path_still_works()
     test_lookup_run_returns_templated_result_list()
     test_lookup_run_rejects_positional_terms()
     print("\n{} passed, {} failed".format(passed, failed))

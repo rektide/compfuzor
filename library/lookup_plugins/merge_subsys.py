@@ -97,6 +97,16 @@ from merge import (  # noqa: E402
     merge_list,
 )
 
+_LOOKUP_DIR = os.path.abspath(os.path.dirname(__file__))
+if _LOOKUP_DIR not in sys.path:
+    sys.path.insert(0, _LOOKUP_DIR)
+
+from subsys import (  # noqa: E402
+    _compute_bypassed,
+    _compute_requested,
+    _compute_valid,
+)
+
 
 ARTIFACT_DEFAULTS = {
     "BINS": {
@@ -211,16 +221,22 @@ def merge_subsys_value(variables, subsystem_id, contrib, **kwargs):
         strategy = defaults["strategy"]
 
     active = _resolve_bool_option(kwargs.get("active"), True)
-    active_path = kwargs.get("active_path")
-    if wrapped_test_undefined(active_path) or active_path is None or _is_empty_text(active_path):
-        active_path = "active"
+    explicit_active_path = kwargs.get("active_path")
+    has_active_path = not (wrapped_test_undefined(explicit_active_path) or explicit_active_path is None or _is_empty_text(explicit_active_path))
 
     current = _dict_get_raw(variables, current_name, defaults["default"])
     subsystems = _dict_get_raw(variables, "SUBSYSTEM", {})
     record = _dict_get_raw(subsystems, subsystem_id, {})
 
     incoming = default
-    if (not active) or _truthy(get_path(record, active_path, default=False)):
+    if has_active_path:
+        is_active = _truthy(get_path(record, explicit_active_path, default=False))
+    else:
+        requested = _compute_requested(record, variables, subsystem_id, None)
+        bypassed = _compute_bypassed(record, variables, subsystem_id)
+        valid = _compute_valid(record, None)
+        is_active = requested and not bypassed and valid
+    if (not active) or is_active:
         incoming = get_path(record, path, default=default)
 
     if defaults["kind"] == "list":
