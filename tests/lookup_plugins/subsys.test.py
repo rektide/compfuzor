@@ -6,10 +6,10 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'library', 'lookup_plugins'))
 
 from subsys import (
-    _resolve_bypass,
-    _resolve_record,
     _compute_state,
 )
+
+from merge import _raw_copy_template_data, _dict_get_raw
 
 passed = 0
 failed = 0
@@ -27,11 +27,20 @@ def check(name, actual, expected):
         print("    expected: {}".format(expected))
 
 
+def _st(record, subsystem_id, variables=None, domain=None, extra_bypass=None):
+    variables = variables or {}
+    variables_with_subsystem = dict(variables)
+    variables_with_subsystem["SUBSYSTEM"] = {}
+    return _compute_state(record, variables_with_subsystem, subsystem_id, domain=domain, extra_bypass=extra_bypass)
+
+
 def _build_minimal_envelope(subsystems, subsystem_id, variables=None, domain=None, extra_bypass=None, name=None, templar=None):
     variables = variables or {}
     variables_with_subsystem = dict(variables)
     variables_with_subsystem["SUBSYSTEM"] = subsystems
-    record = _resolve_record(variables_with_subsystem, subsystem_id)
+    record = _raw_copy_template_data(_dict_get_raw(_raw_copy_template_data(subsystems), subsystem_id, {}))
+    if not (isinstance(record, dict) and record):
+        record = {}
     st = _compute_state(record, variables_with_subsystem, subsystem_id, domain=domain, extra_bypass=extra_bypass, templar=templar)
     return {
         "id": subsystem_id,
@@ -67,32 +76,32 @@ def test_status_from_booleans():
     check("bypassed true", env["bypassed"], True)
 
 
-def test_resolve_bypass_subsystem_var():
-    print("\nresolve_bypass: subsystem var")
-    check("GO_BYPASS true", _resolve_bypass({"GO_BYPASS": True}, "go"), True)
-    check("GO_BYPASS false", _resolve_bypass({"GO_BYPASS": False}, "go"), False)
-    check("GO_BYPASS absent", _resolve_bypass({}, "go"), False)
+def test_bypass_subsystem_var():
+    print("\nbypass: subsystem var")
+    check("GO_BYPASS true", _st({"requested": True}, "go", variables={"GO_BYPASS": True})["bypassed"], True)
+    check("GO_BYPASS false", _st({"requested": True}, "go", variables={"GO_BYPASS": False})["bypassed"], False)
+    check("GO_BYPASS absent", _st({"requested": True}, "go")["bypassed"], False)
 
 
-def test_resolve_bypass_domain_var():
-    print("\nresolve_bypass: domain var")
-    check("KERNEL_BYPASS true", _resolve_bypass({"KERNEL_BYPASS": True}, "kernel_sysctl", domain="kernel"), True)
-    check("KERNEL_BYPASS false", _resolve_bypass({"KERNEL_BYPASS": False}, "kernel_sysctl", domain="kernel"), False)
-    check("no domain", _resolve_bypass({}, "kernel_sysctl"), False)
+def test_bypass_domain_var():
+    print("\nbypass: domain var")
+    check("KERNEL_BYPASS true", _st({"requested": True}, "kernel_sysctl", variables={"KERNEL_BYPASS": True}, domain="kernel")["bypassed"], True)
+    check("KERNEL_BYPASS false", _st({"requested": True}, "kernel_sysctl", variables={"KERNEL_BYPASS": False}, domain="kernel")["bypassed"], False)
+    check("no domain", _st({"requested": True}, "kernel_sysctl")["bypassed"], False)
 
 
-def test_resolve_bypass_extra():
-    print("\nresolve_bypass: extra bypass vars")
-    check("extra string true", _resolve_bypass({"BINS_RUN_BYPASS": True}, "go", extra_bypass="BINS_RUN_BYPASS"), True)
-    check("extra string false", _resolve_bypass({"BINS_RUN_BYPASS": False}, "go", extra_bypass="BINS_RUN_BYPASS"), False)
-    check("extra list true", _resolve_bypass({"MY_VAR": True}, "go", extra_bypass=["MY_VAR", "OTHER"]), True)
-    check("extra absent", _resolve_bypass({}, "go", extra_bypass="MISSING_VAR"), False)
+def test_bypass_extra():
+    print("\nbypass: extra bypass vars")
+    check("extra string true", _st({"requested": True}, "go", variables={"BINS_RUN_BYPASS": True}, extra_bypass="BINS_RUN_BYPASS")["bypassed"], True)
+    check("extra string false", _st({"requested": True}, "go", variables={"BINS_RUN_BYPASS": False}, extra_bypass="BINS_RUN_BYPASS")["bypassed"], False)
+    check("extra list true", _st({"requested": True}, "go", variables={"MY_VAR": True}, extra_bypass=["MY_VAR", "OTHER"])["bypassed"], True)
+    check("extra absent", _st({"requested": True}, "go", extra_bypass="MISSING_VAR")["bypassed"], False)
 
 
-def test_resolve_bypass_combined():
-    print("\nresolve_bypass: combined sources")
-    check("subsystem + domain", _resolve_bypass({"KERNEL_BYPASS": True}, "kernel_sysctl", domain="kernel"), True)
-    check("subsystem overrides domain false", _resolve_bypass({"KERNEL_SYSCTL_BYPASS": True, "KERNEL_BYPASS": False}, "kernel_sysctl", domain="kernel"), True)
+def test_bypass_combined():
+    print("\nbypass: combined sources")
+    check("subsystem + domain", _st({"requested": True}, "kernel_sysctl", variables={"KERNEL_BYPASS": True}, domain="kernel")["bypassed"], True)
+    check("subsystem overrides domain false", _st({"requested": True}, "kernel_sysctl", variables={"KERNEL_SYSCTL_BYPASS": True, "KERNEL_BYPASS": False}, domain="kernel")["bypassed"], True)
 
 
 def test_envelope_with_variables_bypass():
@@ -131,9 +140,7 @@ def test_envelope_without_variables():
 
 def test_compute_state_active():
     print("\n_compute_state: active from record booleans")
-    record = {"requested": True, "valid": True}
-    variables = {"SUBSYSTEM": {"go": record}}
-    st = _compute_state(record, variables, "go")
+    st = _st({"requested": True, "valid": True}, "go")
     check("active", st["active"], True)
     check("requested", st["requested"], True)
     check("valid", st["valid"], True)
@@ -141,9 +148,7 @@ def test_compute_state_active():
 
 def test_compute_state_bypassed_from_env_var():
     print("\n_compute_state: bypassed from env var")
-    record = {"requested": True, "valid": True}
-    variables = {"SUBSYSTEM": {"go": record}, "GO_BYPASS": True}
-    st = _compute_state(record, variables, "go")
+    st = _st({"requested": True, "valid": True}, "go", variables={"GO_BYPASS": True})
     check("bypassed", st["bypassed"], True)
     check("active", st["active"], False)
 
@@ -166,10 +171,10 @@ if __name__ == "__main__":
     test_active_record()
     test_missing_record()
     test_status_from_booleans()
-    test_resolve_bypass_subsystem_var()
-    test_resolve_bypass_domain_var()
-    test_resolve_bypass_extra()
-    test_resolve_bypass_combined()
+    test_bypass_subsystem_var()
+    test_bypass_domain_var()
+    test_bypass_extra()
+    test_bypass_combined()
     test_envelope_with_variables_bypass()
     test_envelope_with_domain_bypass()
     test_envelope_without_variables()
