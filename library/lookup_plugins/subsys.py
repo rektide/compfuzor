@@ -236,17 +236,8 @@ class LookupModule(LookupBase):
         if get_expr is not None:
             get_expr = str(get_expr)
 
-            if get_expr == "active":
-                return [_compute_state(record, variables, subsystem_id, domain, extra_bypass, self._templar)["active"]]
-
-            if get_expr == "bypassed":
-                return [_compute_bypassed(record, variables, subsystem_id, domain, extra_bypass, self._templar)]
-
-            if get_expr == "requested":
-                return [_compute_requested(record, variables, subsystem_id, self._templar)]
-
-            if get_expr == "valid":
-                return [_compute_valid(record, self._templar)]
+            if get_expr in ("active", "bypassed", "requested", "valid"):
+                return [_compute_state(record, variables, subsystem_id, domain, extra_bypass, self._templar)[get_expr]]
 
             resolved = get_path(record, get_expr, default=default)
             return [_resolve_leaf_strings(resolved, self._templar)]

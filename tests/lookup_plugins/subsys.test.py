@@ -8,10 +8,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'
 from subsys import (
     _resolve_bypass,
     _resolve_record,
-    _compute_requested,
-    _compute_bypassed,
-    _compute_valid,
-    _classify_status,
     _compute_state,
 )
 
@@ -51,7 +47,7 @@ def test_active_record():
         {"get_urls": {"requested": True, "valid": True, "contrib": {"BINS": []}}},
         "get_urls",
     )
-    check("state active", env["status"], "active")
+    check("status active", env["status"], "active")
     check("active true", env["active"], True)
     check("name defaults to id", env["name"], "get_urls")
 
@@ -60,14 +56,14 @@ def test_missing_record():
     print("\nmissing record:")
     env = _build_minimal_envelope({}, "kernel", name="kernel-main")
     check("record empty", env["record"], {})
-    check("state absent", env["status"], "absent")
+    check("status absent", env["status"], "absent")
     check("alias name kept", env["name"], "kernel-main")
 
 
-def test_state_from_booleans():
-    print("\nstate from booleans:")
+def test_status_from_booleans():
+    print("\nstatus from booleans:")
     env = _build_minimal_envelope({"go": {"requested": True, "bypassed": True}}, "go")
-    check("state bypassed", env["status"], "bypassed")
+    check("status bypassed", env["status"], "bypassed")
     check("bypassed true", env["bypassed"], True)
 
 
@@ -108,7 +104,7 @@ def test_envelope_with_variables_bypass():
     )
     check("bypassed from var", env["bypassed"], True)
     check("active false when bypassed", env["active"], False)
-    check("state bypassed", env["status"], "bypassed")
+    check("status bypassed", env["status"], "bypassed")
 
 
 def test_envelope_with_domain_bypass():
@@ -120,7 +116,7 @@ def test_envelope_with_domain_bypass():
         domain="kernel",
     )
     check("domain bypass", env["bypassed"], True)
-    check("state bypassed", env["status"], "bypassed")
+    check("status bypassed", env["status"], "bypassed")
 
 
 def test_envelope_without_variables():
@@ -133,32 +129,43 @@ def test_envelope_without_variables():
     check("active", env["active"], True)
 
 
-def test_fast_path_active():
-    print("\nfast path: active computation")
+def test_compute_state_active():
+    print("\n_compute_state: active from record booleans")
     record = {"requested": True, "valid": True}
     variables = {"SUBSYSTEM": {"go": record}}
-    r = _compute_requested(record, variables, "go", None)
-    b = _compute_bypassed(record, variables, "go", None, None, None)
-    v = _compute_valid(record, None)
-    check("active from record booleans", r and not b and v, True)
-
-    record2 = {"requested": True, "valid": True}
-    variables2 = {"SUBSYSTEM": {"go": record2}, "GO_BYPASS": True}
-    b2 = _compute_bypassed(record2, variables2, "go", None, None, None)
-    check("bypassed from env var", b2, True)
+    st = _compute_state(record, variables, "go")
+    check("active", st["active"], True)
+    check("requested", st["requested"], True)
+    check("valid", st["valid"], True)
 
 
-def test_fast_path_valid_default():
-    print("\nfast path: valid defaults to True")
-    check("valid when absent", _compute_valid({}, None), True)
-    check("valid when true", _compute_valid({"valid": True}, None), True)
-    check("invalid when false", _compute_valid({"valid": False}, None), False)
+def test_compute_state_bypassed_from_env_var():
+    print("\n_compute_state: bypassed from env var")
+    record = {"requested": True, "valid": True}
+    variables = {"SUBSYSTEM": {"go": record}, "GO_BYPASS": True}
+    st = _compute_state(record, variables, "go")
+    check("bypassed", st["bypassed"], True)
+    check("active", st["active"], False)
+
+
+def test_compute_state_valid_defaults():
+    print("\n_compute_state: valid defaults")
+    check("valid when absent", _compute_state({}, {}, "x")["valid"], True)
+    check("valid when true", _compute_state({"valid": True}, {}, "x")["valid"], True)
+    check("invalid when false", _compute_state({"valid": False}, {}, "x")["valid"], False)
+
+
+def test_compute_state_requested_from_variable():
+    print("\n_compute_state: requested from variable")
+    st = _compute_state({}, {"RUST": True}, "rust")
+    check("requested from RUST var", st["requested"], True)
+    check("active", st["active"], True)
 
 
 if __name__ == "__main__":
     test_active_record()
     test_missing_record()
-    test_state_from_booleans()
+    test_status_from_booleans()
     test_resolve_bypass_subsystem_var()
     test_resolve_bypass_domain_var()
     test_resolve_bypass_extra()
@@ -166,7 +173,9 @@ if __name__ == "__main__":
     test_envelope_with_variables_bypass()
     test_envelope_with_domain_bypass()
     test_envelope_without_variables()
-    test_fast_path_active()
-    test_fast_path_valid_default()
+    test_compute_state_active()
+    test_compute_state_bypassed_from_env_var()
+    test_compute_state_valid_defaults()
+    test_compute_state_requested_from_variable()
     print("\n{} passed, {} failed".format(passed, failed))
     sys.exit(1 if failed else 0)
