@@ -16,10 +16,10 @@ This had three problems:
 
 The refactor consolidates everything into two places:
 
-- **`vars/common.yaml`** — static `SUBSYSTEM` definitions containing only data (`contrib`, optionally `spec` and `requested`).
-- **`library/lookup_plugins/subsys.py`** — the `subsys` lookup that reads from `SUBSYSTEM` and derives the full state envelope (`requested`, `bypassed`, `active`, `valid`, `state`) at query time.
+- **[`vars/common.yaml`](../vars/common.yaml#L174-L583)** — static `SUBSYSTEM` definitions containing only data (`contrib`, optionally `spec` and `requested`).
+- **[`library/lookup_plugins/subsys.py`](../library/lookup_plugins/subsys.py#L205-L281)** — the `subsys` lookup that reads from `SUBSYSTEM` and derives the full state envelope (`requested`, `bypassed`, `active`, `valid`, `status`) at query time.
 
-The `subsystem_bypassed` and `subsystem_record` filter plugins are gone. The `sub_*` tasks for Go, Node.js, Bun, npm, Rust, CMake, Python, and repo_npm are gone — their data lives in `common.yaml`. Only `sub_get_urls` and `sub_kernel` remain as tasks because they have runtime validation or multi-child orchestration that can't be expressed statically.
+The `subsystem_bypassed` and `subsystem_record` filter plugins are gone. The old `sub_*` tasks for Go, Node.js, Bun, npm, Rust, CMake, Python, and repo_npm are gone because their data lives in [`common.yaml`](../vars/common.yaml#L174-L583). Runtime validation still uses task files where needed. For example, [`sub_get_urls.tasks`](../tasks/compfuzor/sub_get_urls.tasks#L1-L29) validates `GET_URLS`, while [`gen_kernel.tasks`](../tasks/compfuzor/gen_kernel.tasks#L1-L53) handles kernel validation and multi-child merging.
 
 ## The rule
 
@@ -30,7 +30,7 @@ A subsystem is **active** when:
 
 Some subsystems override `requested` with a Jinja expression (e.g. cmake checks `CMAKE or CMAKE_ARGS or CMAKE_BUILDS`). The lookup reads `record.get("requested")` first and falls back to checking the env var.
 
-`valid` defaults to `true`. The `sub_get_urls` and `sub_kernel` tasks publish `valid: false` with `reasons` when validation fails.
+`valid` defaults to `true`. A static subsystem can set `valid` and `reasons`, but most current validation tasks fail fast before generation. The state computation path is in [`subsys.py`](../library/lookup_plugins/subsys.py#L118-L201).
 
 ## Static definitions in `vars/common.yaml`
 
@@ -65,7 +65,7 @@ The `subsys` lookup derives everything else when queried:
 - `bypassed`: from `<NAME|upper>_BYPASS`, optionally `<DOMAIN>_BYPASS` or extra vars
 - `valid`: from the record's `valid` field, defaulting to `true`
 - `active`: `requested and not bypassed and valid`
-- `state`: one of `active`, `bypassed`, `invalid`, `requested`, `absent`
+- `status`: one of `active`, `bypassed`, `invalid`, `requested`, `absent`
 
 ## Reading subsystem state with `lookup('subsys')`
 
@@ -83,13 +83,11 @@ Returns:
 ```yaml
 id: go
 name: go
-found: true
-state: active
+status: active
 active: true
 requested: true
 bypassed: false
 valid: true
-reasons: []
 spec: []
 contrib:
   BINS: [...]
@@ -131,34 +129,118 @@ with_items: "{{ lookup('subsys', id=subsystem_id, fallback_id='get_urls', get='s
 
 ## The `gen_*.tasks` pattern
 
-Each subsystem has a `gen_*.tasks` file that merges the subsystem's `contrib` into the host's `BINS`, `ENV`, `PKGS`, etc. The pattern is consistent:
+Each subsystem has a `gen_*.tasks` file that merges the subsystem's `contrib` into the host's `BINS`, `ENV`, `PKGS`, etc. Use `merge_subsys` for the common case. It reads `SUBSYSTEM.<id>.contrib.<artifact>`, merges it with the current global artifact, and skips inactive subsystems by default. The implementation and supported artifact defaults live in [`merge_subsys.py`](../library/lookup_plugins/merge_subsys.py#L109-L152).
+
+The usual pattern is short:
 
 ```yaml
 - name: "Compfuzor: synthesize go subsystem artifacts"
   set_fact:
-    BINS: "{{ merged.BINS }}"
-    ENV: "{{ lookup('subsys', id='go', get='contrib.ENV') | combine(existingEnv) }}"
+    BINS: "{{ lookup('merge_subsys', id='go', contrib='BINS') }}"
+    ENV: "{{ lookup('merge_subsys', id='go', contrib='ENV') }}"
   when: lookup('subsys', id='go', get='active', default=false) | bool
-  vars:
-    existingEnv: "{{ ENV if ENV is mapping else {} }}"
-    merged: >-
-      {{ [
-        {'BINS': BINS | default([])},
-        {'BINS': lookup('subsys', id='go', get='contrib.BINS', default=[])}
-      ] | merge_with_strategy({'BINS': {'op': 'merge_keyed', 'key': 'name', 'concat_fields': ['generated']}}, include_aggregate=false) }}
 ```
+
+That is the full [`gen_go.tasks`](../tasks/compfuzor/gen_go.tasks#L1-L6) file. [`gen_rust.tasks`](../tasks/compfuzor/gen_rust.tasks#L1-L6), [`gen_nodejs.tasks`](../tasks/compfuzor/gen_nodejs.tasks#L1-L6), and [`gen_bun.tasks`](../tasks/compfuzor/gen_bun.tasks#L1-L6) use the same shape.
+
+Use direct `merge_list` or `merge_dict` calls only when the subsystem needs custom behavior that `merge_subsys` does not expose. For example, [`gen_get_urls.tasks`](../tasks/compfuzor/gen_get_urls.tasks#L1-L7) merges only `BINS` from a local `_get_urls_contrib` value.
 
 The `when` guard reads `active` from the lookup. If the subsystem isn't active, nothing happens.
 
-## When you still need a `sub_*` task
+## Worked example: `go`
 
-Two cases require a task file:
+The `go` subsystem is a good minimal model because it has static data only. It does not need runtime validation or a `sub_go.tasks` file.
 
-1. **Runtime validation.** `sub_get_urls` validates that URL entries are well-formed strings or mappings with a `url` key. It publishes `valid` and `reasons` into the `SUBSYSTEM` record, and the lookup respects those fields.
+### User input
 
-2. **Multi-child orchestration.** `sub_kernel` manages four subsystems (`kernel_modprobe`, `kernel_sysctl`, `kernel_sysfs`, `kernel_all`) with shared validation, aggregate bins/env, and a rollup of child contrib payloads.
+A playbook activates the subsystem by setting the trigger variable:
 
-In both cases, the task publishes a minimal record into `SUBSYSTEM` via `set_fact`:
+```yaml
+GO: true
+```
+
+Because `go` does not define a custom `requested` expression, the `subsys` lookup falls back to the `GO` variable. If `GO_BYPASS` is truthy, the subsystem is requested but inactive.
+
+### Static subsystem data
+
+The static definition lives under `SUBSYSTEM.go` in [`vars/common.yaml`](../vars/common.yaml#L208-L225):
+
+```yaml
+go:
+  contrib:
+    BINS:
+      - name: build.sh
+        run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
+        basedir: repo
+        generated: |
+          go build -o ${GO_BIN:-$TYPE} ${GO_TARGET:-./...}
+      - name: install.sh
+        basedir: repo
+        generated: |
+          [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${GO_BIN:-$TYPE}"
+          ln -sfv "$(pwd)/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
+    ENV:
+      GO_BIN: "{{ GO_BIN | default(omit) }}"
+      GO_TARGET: "{{ GO_TARGET | default('./...') }}"
+    TOOL_VERSIONS:
+      go: true
+```
+
+This contributes two generated scripts, two environment defaults, and a `.tool-versions` entry. The `TOOL_VERSIONS` contribution is collected separately by [`gen_tool_versions.tasks`](../tasks/compfuzor/gen_tool_versions.tasks#L1-L35); it is not a `merge_subsys` artifact.
+
+### Merge task
+
+[`gen_go.tasks`](../tasks/compfuzor/gen_go.tasks#L1-L6) merges the active contribution into global facts:
+
+```yaml
+- name: "Compfuzor: synthesize go subsystem artifacts"
+  set_fact:
+    BINS: "{{ lookup('merge_subsys', id='go', contrib='BINS') }}"
+    ENV: "{{ lookup('merge_subsys', id='go', contrib='ENV') }}"
+  when: lookup('subsys', id='go', get='active', default=false) | bool
+```
+
+After this task runs, normal filesystem tasks create the bin files. `bins.tasks` sends contentful BINS through the [`files/_bin`](../files/_bin#L1-L32) template, as shown in [`bins.tasks`](../tasks/compfuzor/bins.tasks#L13-L28). That wrapper adds the shebang, shell options, env loading, default working directory, and the `generated` body.
+
+### Include point
+
+The include belongs in the variables phase because it only synthesizes facts. The existing import is in [`tasks/compfuzor.includes`](../tasks/compfuzor.includes#L67-L69):
+
+```yaml
+- import_tasks: compfuzor/gen_go.tasks
+  when: GO is deftruthy
+  tags: ['vars', 'always']
+```
+
+Subsystems that only add `BINS`, `ENV`, `PKGS`, `ETC_FILES`, or `TOOL_VERSIONS` usually belong in this phase. If a subsystem must inspect a checked-out repository, put that work after the repository phase instead. The git checkout happens in [`tasks/compfuzor.includes`](../tasks/compfuzor.includes#L85-L95), while bin files are materialized later in the filesystem phase at [`tasks/compfuzor.includes`](../tasks/compfuzor.includes#L100-L138).
+
+## Contrib artifacts and merge behavior
+
+`merge_subsys` supports these contrib artifacts by default. The source of truth is [`ARTIFACT_DEFAULTS`](../library/lookup_plugins/merge_subsys.py#L109-L152).
+
+| Artifact | Kind | Default merge | Practical effect |
+|----------|------|---------------|------------------|
+| `BINS` | list | `bins_generated` | Merge entries by `name`; concatenate overlapping `generated` fields. |
+| `ETC_FILES` | list | `append` | Current entries come first, subsystem entries append. |
+| `LINKS` | list | `append` | Current entries come first, subsystem entries append. |
+| `PKGS` | list | `append_unique` | Append subsystem packages and remove exact duplicates while preserving order. |
+| `ENV_LIST` | list | `append_unique` | Append env names and remove exact duplicates while preserving order. |
+| `ETC_DIRS` | list | `append` | Current entries come first, subsystem entries append. |
+| `ENV` | dict | `env_overlay` with current wins | Subsystem defaults are added, but explicit playbook `ENV` values override them. |
+
+`BINS` uses the named `bins_generated` profile from [`merge.py`](../library/filter_plugins/merge.py#L48-L54). That profile maps to `merge_keyed` by `name` and concatenates `generated`. The keyed merge behavior is implemented in [`merge.py`](../library/filter_plugins/merge.py#L212-L263). Generic list and dict merge behavior is in [`merge.py`](../library/filter_plugins/merge.py#L302-L353).
+
+Use direct `merge_list` or `merge_dict` only when you need behavior outside this table.
+
+## When you still need task logic
+
+Most subsystems should be static data plus a small `gen_*.tasks` merge file. Add task logic only when data alone is not enough.
+
+1. **Runtime validation.** [`sub_get_urls.tasks`](../tasks/compfuzor/sub_get_urls.tasks#L1-L29) validates that URL entries are strings or mappings with a non-empty `url`. It fails before `gen_get_urls.tasks` runs.
+
+2. **Multi-child orchestration or custom merging.** [`gen_kernel.tasks`](../tasks/compfuzor/gen_kernel.tasks#L1-L53) validates shared kernel inputs, checks three child subsystem states, and merges their `BINS`, `ENV`, `ENV_LIST`, `ETC_FILES`, and `PKGS` contributions together.
+
+If future task logic needs to affect `subsys` state instead of failing fast, publish a minimal record into `SUBSYSTEM` before the relevant `gen_*.tasks` import:
 
 ```yaml
 subsystem:
@@ -167,11 +249,11 @@ subsystem:
   spec: "{{ spec if (_subsystem_valid and _subsystem_requested) else [] }}"
 ```
 
-The lookup wraps it with the full envelope on read.
+The lookup wraps that record with the full envelope on read.
 
 ## The generic eval contract
 
-`vars/common.yaml` defines control-flow variables used by the remaining `sub_*` tasks:
+`vars/common.yaml` defines control-flow variables used by validation and custom orchestration tasks:
 
 ```yaml
 errorChecks: []
@@ -196,23 +278,24 @@ If any is truthy, `bypassed` is `true`.
 
 ## Adding a new subsystem
 
-1. Add an entry to `SUBSYSTEM` in [`vars/common.yaml`](/vars/common.yaml). Set `requested` only if the trigger logic differs from `<NAME> is truthy`. Put contrib data under `contrib`.
+1. Add an entry to `SUBSYSTEM` in [`vars/common.yaml`](../vars/common.yaml#L174-L583). Set `requested` only if the trigger logic differs from `<NAME> is truthy`. Put contrib data under `contrib`.
 
 2. Create a `gen_<name>.tasks` file following the pattern above — read from `lookup('subsys', id='<name>')`, guard with `get='active'`.
 
-3. Add the `gen_*.tasks` import to [`tasks/compfuzor.includes`](/tasks/compfuzor.includes) with a `when:` guard matching the trigger condition.
+3. Add the `gen_*.tasks` import to [`tasks/compfuzor.includes`](../tasks/compfuzor.includes#L24-L80) with a `when:` guard matching the trigger condition. Put fact-only generation in the variables phase. Put work that depends on a checked-out repo after the repository phase at [`tasks/compfuzor.includes`](../tasks/compfuzor.includes#L85-L95).
 
-4. If you need validation, create a `sub_<name>.tasks` that publishes a minimal record into `SUBSYSTEM` before the `gen_*.tasks` import.
+4. If you need validation, add a task before generation. Prefer failing fast for invalid input, like [`sub_get_urls.tasks`](../tasks/compfuzor/sub_get_urls.tasks#L1-L29). If validation state must be visible through `lookup('subsys')`, publish a minimal record into `SUBSYSTEM` before the `gen_*.tasks` import.
 
 ## File map
 
 | File | Purpose |
 |------|---------|
-| [`vars/common.yaml`](/vars/common.yaml) | Static `SUBSYSTEM` defs, helper vars, generic eval contract |
-| [`library/lookup_plugins/subsys.py`](/library/lookup_plugins/subsys.py) | Lookup: resolves envelope from SUBSYSTEM + env vars |
-| [`library/lookup_plugins/merge_subsys.py`](/library/lookup_plugins/merge_subsys.py) | Lookup: merges subsystem contrib artifacts into globals |
-| [`library/filter_plugins/merge.py`](/library/filter_plugins/merge.py) | Direct list/dict merge helpers and raw-copy primitives |
-| [`library/filter_plugins/build_install_bins.py`](/library/filter_plugins/build_install_bins.py) | `build_install_bins` filter (used by kernel) |
-| [`tasks/compfuzor/sub_get_urls.tasks`](/tasks/compfuzor/sub_get_urls.tasks) | Validates and publishes get_urls subsystem |
-| [`tasks/compfuzor/sub_kernel.tasks`](/tasks/compfuzor/sub_kernel.tasks) | Validates and publishes kernel subsystems |
-| [`tasks/compfuzor/gen_*.tasks`](/tasks/compfuzor/) | Merge subsystem contrib into host facts |
+| [`vars/common.yaml`](../vars/common.yaml#L174-L583) | Static `SUBSYSTEM` defs, helper vars, generic eval contract |
+| [`library/lookup_plugins/subsys.py`](../library/lookup_plugins/subsys.py#L205-L281) | Lookup: resolves envelope from SUBSYSTEM + env vars |
+| [`library/lookup_plugins/merge_subsys.py`](../library/lookup_plugins/merge_subsys.py#L109-L152) | Lookup: merges subsystem contrib artifacts into globals |
+| [`library/filter_plugins/merge.py`](../library/filter_plugins/merge.py#L48-L58) | Direct list/dict merge helpers and named merge profiles |
+| [`library/filter_plugins/build_install_bins.py`](../library/filter_plugins/build_install_bins.py#L6-L41) | `build_install_bins` filter (used by kernel) |
+| [`tasks/compfuzor/sub_get_urls.tasks`](../tasks/compfuzor/sub_get_urls.tasks#L1-L29) | Validates `GET_URLS` before generation |
+| [`tasks/compfuzor/gen_kernel.tasks`](../tasks/compfuzor/gen_kernel.tasks#L1-L53) | Validates and merges kernel child subsystems |
+| [`tasks/compfuzor/gen_go.tasks`](../tasks/compfuzor/gen_go.tasks#L1-L6) | Minimal `gen_*.tasks` example using `merge_subsys` |
+| [`tasks/compfuzor/gen_get_urls.tasks`](../tasks/compfuzor/gen_get_urls.tasks#L1-L7) | Custom merge example using `merge_list` |
