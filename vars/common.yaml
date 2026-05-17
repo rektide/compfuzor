@@ -402,36 +402,64 @@ SUBSYSTEM:
     requested: "{{ PR_PATCHES is defined and PR_PATCHES | length > 0 }}"
     spec: "{{ _pr_patches_spec }}"
     contrib:
+      ETC_FILES:
+        - name: patches.json
+          content: "{{ _pr_patches_spec | to_nice_json }}"
       BINS:
         - name: download-patches.sh
           generated: |
             PATCHES_DIR="${DIR}/patches"
             mkdir -p "$PATCHES_DIR"
 
-            _download_patch() {
-              local index="$1"
-              local url="$2"
-              local slug="$3"
-              local patch_file="$PATCHES_DIR/$(printf '%04d' "$index")-${slug}.patch"
-              if [ -f "$patch_file" ]; then
-                echo "Already downloaded: $patch_file"
+            _download_one() {
+              local index="$1" url="$2" slug="$3" patch_file="$4"
+              local dest="$PATCHES_DIR/$patch_file"
+
+              if [ -f "$dest" ]; then
+                echo "Already downloaded: $dest"
                 return 0
               fi
+
               echo "Downloading patch $index ($slug)..."
-              curl -fsSL "${url}.patch" -o "$patch_file"
+              curl -fsSL "${url}.patch" -o "$dest" || { echo "failed to download patch $index" >&2; return 1; }
+
+              local pr_num
+              pr_num=$(echo "$url" | grep -oP '/pull/\K\d+')
+              if [ -n "$pr_num" ]; then
+                local api_url
+                api_url=$(echo "$url" | sed -E 's|^(https://github\.com)/([^/]+)/([^/]+)/pull/([0-9]+).*|\1/api/repos/\2/\3/pulls/\4|')
+                if [ -n "$api_url" ]; then
+                  curl -fsSL "$api_url" -o "${dest%.patch}.pr.json" 2>/dev/null \
+                    || echo "could not fetch PR metadata for $slug (non-terminal)" >&2
+                fi
+              fi
             }
 
+            if [ ! -f "$PATCHES_JSON" ]; then
+              echo "patches.json not found at $PATCHES_JSON" >&2
+              exit 1
+            fi
+
             if [ -n "${1:-}" ]; then
-              case "$1" in
-            {% for p in _pr_patches_spec %}
-                {{ p.index }}) _download_patch {{ p.index }} '{{ p.url }}' '{{ p.slug }}' ;;
-            {% endfor %}
-                *) echo "Unknown patch index: $1. Valid: {% for p in _pr_patches_spec %}{{ p.index }}{% if not loop.last %}, {% endif %}{% endfor %}" >&2; exit 1 ;;
-              esac
+              entry=$(jq -c --argjson idx "$1" '.[] | select(.index == $idx)' "$PATCHES_JSON")
+              if [ -z "$entry" ]; then
+                max=$(jq '.[-1].index' "$PATCHES_JSON")
+                echo "Unknown patch index: $1. Valid: 1-$max" >&2
+                exit 1
+              fi
+              _download_one \
+                "$(echo "$entry" | jq -r '.index')" \
+                "$(echo "$entry" | jq -r '.url')" \
+                "$(echo "$entry" | jq -r '.slug')" \
+                "$(echo "$entry" | jq -r '.patch_file')"
             else
-            {% for p in _pr_patches_spec %}
-              _download_patch {{ p.index }} '{{ p.url }}' '{{ p.slug }}'
-            {% endfor %}
+              while IFS= read -r entry; do
+                _download_one \
+                  "$(echo "$entry" | jq -r '.index')" \
+                  "$(echo "$entry" | jq -r '.url')" \
+                  "$(echo "$entry" | jq -r '.slug')" \
+                  "$(echo "$entry" | jq -r '.patch_file')"
+              done < <(jq -c '.[]' "$PATCHES_JSON")
             fi
         - name: apply-patches.sh
           basedir: repo
@@ -459,6 +487,9 @@ SUBSYSTEM:
               }
             done
             echo "All ${#patches[@]} patch(es) applied successfully."
+      ENV:
+        PATCHES_JSON: "{{ DIR }}/etc/patches.json"
+      ENV_LIST: [PATCHES_JSON]
 
   config:
     requested: "{{ CONFIG_KEY is defined }}"

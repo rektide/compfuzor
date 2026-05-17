@@ -272,6 +272,8 @@ They can assume:
 - `DIR` is available
 - `env.export` can be sourced
 - shell safety flags are enabled
+- `jq` is available on the host
+- `block-in-file` is available on the host
 
 Use this. Do not manually rebuild that runtime contract inside every script.
 
