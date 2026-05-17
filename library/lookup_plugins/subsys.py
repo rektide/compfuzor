@@ -166,7 +166,7 @@ def _compute_valid(record, templar):
     return _truthy(_template_value(record.get("valid", True), templar))
 
 
-def _compute_state(requested, bypassed, valid):
+def _classify_status(requested, bypassed, valid):
     if requested and not bypassed and valid:
         return "active"
     if requested and bypassed:
@@ -176,6 +176,20 @@ def _compute_state(requested, bypassed, valid):
     if requested:
         return "requested"
     return "absent"
+
+
+def _compute_state(record, variables, subsystem_id, domain=None, extra_bypass=None, templar=None):
+    requested = _compute_requested(record, variables, subsystem_id, templar)
+    bypassed = _compute_bypassed(record, variables, subsystem_id, domain, extra_bypass, templar)
+    valid = _compute_valid(record, templar)
+    active = requested and not bypassed and valid
+    return {
+        "active": active,
+        "requested": requested,
+        "bypassed": bypassed,
+        "valid": valid,
+        "status": _classify_status(requested, bypassed, valid),
+    }
 
 
 class LookupModule(LookupBase):
@@ -223,10 +237,7 @@ class LookupModule(LookupBase):
             get_expr = str(get_expr)
 
             if get_expr == "active":
-                r = _compute_requested(record, variables, subsystem_id, self._templar)
-                b = _compute_bypassed(record, variables, subsystem_id, domain, extra_bypass, self._templar)
-                v = _compute_valid(record, self._templar)
-                return [r and not b and v]
+                return [_compute_state(record, variables, subsystem_id, domain, extra_bypass, self._templar)["active"]]
 
             if get_expr == "bypassed":
                 return [_compute_bypassed(record, variables, subsystem_id, domain, extra_bypass, self._templar)]
@@ -240,20 +251,13 @@ class LookupModule(LookupBase):
             resolved = get_path(record, get_expr, default=default)
             return [_resolve_leaf_strings(resolved, self._templar)]
 
-        requested = _compute_requested(record, variables, subsystem_id, self._templar)
-        bypassed = _compute_bypassed(record, variables, subsystem_id, domain, extra_bypass, self._templar)
-        valid = _compute_valid(record, self._templar)
-        active = requested and not bypassed and valid
+        st = _compute_state(record, variables, subsystem_id, domain, extra_bypass, self._templar)
 
         return [{
             "id": subsystem_id,
             "name": name if isinstance(name, str) and name.strip() else subsystem_id,
             "record": record,
-            "state": _compute_state(requested, bypassed, valid),
-            "active": active,
-            "requested": requested,
-            "bypassed": bypassed,
-            "valid": valid,
+            **st,
             "spec": _resolve_leaf_strings(record.get("spec", []), self._templar),
             "contrib": _resolve_leaf_strings(record.get("contrib", {}), self._templar),
         }]

@@ -11,6 +11,7 @@ from subsys import (
     _compute_requested,
     _compute_bypassed,
     _compute_valid,
+    _classify_status,
     _compute_state,
 )
 
@@ -35,19 +36,12 @@ def _build_minimal_envelope(subsystems, subsystem_id, variables=None, domain=Non
     variables_with_subsystem = dict(variables)
     variables_with_subsystem["SUBSYSTEM"] = subsystems
     record = _resolve_record(variables_with_subsystem, subsystem_id)
-    requested = _compute_requested(record, variables_with_subsystem, subsystem_id, templar)
-    bypassed = _compute_bypassed(record, variables_with_subsystem, subsystem_id, domain=domain, extra_bypass=extra_bypass, templar=templar)
-    valid = _compute_valid(record, templar)
-    active = requested and not bypassed and valid
+    st = _compute_state(record, variables_with_subsystem, subsystem_id, domain=domain, extra_bypass=extra_bypass, templar=templar)
     return {
         "id": subsystem_id,
         "name": name if isinstance(name, str) and name.strip() else subsystem_id,
         "record": record,
-        "state": _compute_state(requested, bypassed, valid),
-        "active": active,
-        "requested": requested,
-        "bypassed": bypassed,
-        "valid": valid,
+        **st,
     }
 
 
@@ -57,7 +51,7 @@ def test_active_record():
         {"get_urls": {"requested": True, "valid": True, "contrib": {"BINS": []}}},
         "get_urls",
     )
-    check("state active", env["state"], "active")
+    check("state active", env["status"], "active")
     check("active true", env["active"], True)
     check("name defaults to id", env["name"], "get_urls")
 
@@ -66,14 +60,14 @@ def test_missing_record():
     print("\nmissing record:")
     env = _build_minimal_envelope({}, "kernel", name="kernel-main")
     check("record empty", env["record"], {})
-    check("state absent", env["state"], "absent")
+    check("state absent", env["status"], "absent")
     check("alias name kept", env["name"], "kernel-main")
 
 
 def test_state_from_booleans():
     print("\nstate from booleans:")
     env = _build_minimal_envelope({"go": {"requested": True, "bypassed": True}}, "go")
-    check("state bypassed", env["state"], "bypassed")
+    check("state bypassed", env["status"], "bypassed")
     check("bypassed true", env["bypassed"], True)
 
 
@@ -114,7 +108,7 @@ def test_envelope_with_variables_bypass():
     )
     check("bypassed from var", env["bypassed"], True)
     check("active false when bypassed", env["active"], False)
-    check("state bypassed", env["state"], "bypassed")
+    check("state bypassed", env["status"], "bypassed")
 
 
 def test_envelope_with_domain_bypass():
@@ -126,7 +120,7 @@ def test_envelope_with_domain_bypass():
         domain="kernel",
     )
     check("domain bypass", env["bypassed"], True)
-    check("state bypassed", env["state"], "bypassed")
+    check("state bypassed", env["status"], "bypassed")
 
 
 def test_envelope_without_variables():

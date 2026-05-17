@@ -102,9 +102,7 @@ if _LOOKUP_DIR not in sys.path:
     sys.path.insert(0, _LOOKUP_DIR)
 
 from subsys import (  # noqa: E402
-    _compute_bypassed,
-    _compute_requested,
-    _compute_valid,
+    _compute_state,
 )
 
 
@@ -232,10 +230,7 @@ def merge_subsys_value(variables, subsystem_id, contrib, **kwargs):
     if has_active_path:
         is_active = _truthy(get_path(record, explicit_active_path, default=False))
     else:
-        requested = _compute_requested(record, variables, subsystem_id, None)
-        bypassed = _compute_bypassed(record, variables, subsystem_id)
-        valid = _compute_valid(record, None)
-        is_active = requested and not bypassed and valid
+        is_active = _compute_state(record, variables, subsystem_id)["active"]
     if (not active) or is_active:
         incoming = get_path(record, path, default=default)
 
