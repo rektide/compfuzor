@@ -286,6 +286,115 @@ If any is truthy, `bypassed` is `true`.
 
 4. If you need validation, add a task before generation. Prefer failing fast for invalid input, like [`sub_get_urls.tasks`](../tasks/compfuzor/sub_get_urls.tasks#L1-L29). If validation state must be visible through `lookup('subsys')`, publish a minimal record into `SUBSYSTEM` before the `gen_*.tasks` import.
 
+### Minimal template
+
+Use this shape for subsystems that only add files, bins, packages, links, or environment defaults:
+
+```yaml
+# vars/common.yaml
+SUBSYSTEM:
+  example:
+    requested: "{{ EXAMPLE is deftruthy or EXAMPLE_ITEMS is defined }}"
+    spec: >-
+      {%- set normalized = [] -%}
+      {%- for raw in EXAMPLE_ITEMS | default([]) | arrayitize -%}
+        {%- set row = raw if raw is mapping else {'value': raw} -%}
+        {%- set _ = normalized.append(row) -%}
+      {%- endfor -%}
+      {{ normalized }}
+    contrib:
+      BINS:
+        - name: example.sh
+          basedir: repo
+          generated: |
+            echo "example subsystem"
+      ENV:
+        EXAMPLE_VALUE: "{{ EXAMPLE_VALUE | default(omit) }}"
+      PKGS: []
+```
+
+```yaml
+# tasks/compfuzor/gen_example.tasks
+---
+- name: "Compfuzor: synthesize example subsystem artifacts"
+  set_fact:
+    BINS: "{{ lookup('merge_subsys', id='example', contrib='BINS') }}"
+    ENV: "{{ lookup('merge_subsys', id='example', contrib='ENV') }}"
+    PKGS: "{{ lookup('merge_subsys', id='example', contrib='PKGS') }}"
+  when: lookup('subsys', id='example', get='active', default=false) | bool
+```
+
+Then import it from [`tasks/compfuzor.includes`](../tasks/compfuzor.includes#L24-L80):
+
+```yaml
+- import_tasks: compfuzor/gen_example.tasks
+  when: EXAMPLE is deftruthy or EXAMPLE_ITEMS is defined
+  tags: ['vars', 'always']
+```
+
+Keep the `gen_*.tasks` file boring. It should usually merge facts and nothing else.
+
+### Generated script conventions
+
+Generated `BINS` go through [`files/_bin`](../files/_bin#L1-L32). That wrapper already adds the shebang, `set -euo pipefail`, env loading, default `cd`, verbose tracing via `V`, and shell-option restoration. Generated bodies should focus on the subsystem work.
+
+Common fields:
+
+| Field | Use |
+|-------|-----|
+| `name` | Output filename under `BINS_DIR`. Also the merge key for `BINS`. |
+| `generated` | Shell body generated from Jinja. Prefer this for subsystem-created scripts. |
+| `content` | Literal shell body from a playbook. Useful for hand-written per-playbook bins. |
+| `src` | Template or raw file from `files/<type>/...`. Use when the script is large or shared. |
+| `basedir: repo` | Run from the checked-out repository via `cd {{ DIR }}/repo`. |
+| `basedir: false` | Do not emit an automatic `cd`. Use this for scripts that manage paths explicitly. |
+| `run: true` | Run the generated script during `bins_run.tasks`. Use sparingly. |
+| `env: false` | Skip sourcing env files in the wrapper. Rarely needed. |
+
+For scripts that operate on a checked-out repository, prefer `basedir: repo`. For scripts that download or prepare inputs outside the repo, use the default `$DIR` or set a specific `basedir`.
+
+### Normalizing `spec`
+
+Use `spec` when the playbook input can be shorthand. Normalize early so generated scripts can iterate one predictable shape.
+
+For list input that accepts strings or mappings:
+
+```yaml
+spec: >-
+  {%- set normalized = [] -%}
+  {%- for raw in PR_PATCHES | default([]) | arrayitize -%}
+    {%- set row = raw if raw is mapping else {'url': raw} -%}
+    {%- set index = loop.index -%}
+    {%- set _ = normalized.append({
+      'index': index,
+      'url': row.url,
+      'name': row.name | default(row.url | basename),
+    }) -%}
+  {%- endfor -%}
+  {{ normalized }}
+```
+
+Read the normalized value with:
+
+```yaml
+patch_specs: "{{ lookup('subsys', id='patches', get='spec', default=[]) }}"
+```
+
+Do validation in a task file if invalid input should produce a clear Ansible error. Static `spec` normalization is enough when missing fields will fail clearly in the generated script.
+
+### Verification checks
+
+Subsystem changes should verify the lookup behavior and at least one generated playbook path.
+
+Useful checks:
+
+```bash
+pytest tests/lookup_plugins/subsys.test.py tests/lookup_plugins/merge_subsys.test.py
+ansible-playbook handy.src.pb --syntax-check
+```
+
+When a subsystem adds a generated script, also inspect the rendered bin in the target directory or run the playbook against a safe target with `--check` if the tasks support check mode. If the subsystem depends on a checked-out repo, verify both a fresh checkout path and a rerun path.
+
 ## File map
 
 | File | Purpose |
