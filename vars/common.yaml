@@ -398,6 +398,68 @@ SUBSYSTEM:
             {% endfor %}
       PKGS: [desktop-file-utils]
 
+  patches:
+    requested: "{{ PR_PATCHES is defined and PR_PATCHES | length > 0 }}"
+    spec: "{{ _pr_patches_spec }}"
+    contrib:
+      BINS:
+        - name: download-patches.sh
+          generated: |
+            PATCHES_DIR="${DIR}/patches"
+            mkdir -p "$PATCHES_DIR"
+
+            _download_patch() {
+              local index="$1"
+              local url="$2"
+              local slug="$3"
+              local patch_file="$PATCHES_DIR/$(printf '%04d' "$index")-${slug}.patch"
+              if [ -f "$patch_file" ]; then
+                echo "Already downloaded: $patch_file"
+                return 0
+              fi
+              echo "Downloading patch $index ($slug)..."
+              curl -fsSL "${url}.patch" -o "$patch_file"
+            }
+
+            if [ -n "${1:-}" ]; then
+              case "$1" in
+            {% for p in _pr_patches_spec %}
+                {{ p.index }}) _download_patch {{ p.index }} '{{ p.url }}' '{{ p.slug }}' ;;
+            {% endfor %}
+                *) echo "Unknown patch index: $1. Valid: {% for p in _pr_patches_spec %}{{ p.index }}{% if not loop.last %}, {% endif %}{% endfor %}" >&2; exit 1 ;;
+              esac
+            else
+            {% for p in _pr_patches_spec %}
+              _download_patch {{ p.index }} '{{ p.url }}' '{{ p.slug }}'
+            {% endfor %}
+            fi
+        - name: apply-patches.sh
+          basedir: repo
+          generated: |
+            PATCHES_DIR="${DIR}/patches"
+
+            if [ ! -d "$PATCHES_DIR" ]; then
+              echo "No patches directory found. Run download-patches.sh first."
+              exit 1
+            fi
+
+            shopt -s nullglob
+            patches=("$PATCHES_DIR"/*.patch)
+            if [ ${#patches[@]} -eq 0 ]; then
+              echo "No patches found in $PATCHES_DIR"
+              exit 0
+            fi
+
+            for patch_file in "${patches[@]}"; do
+              echo "Applying $(basename "$patch_file")..."
+              git am "$patch_file" || {
+                echo "Failed to apply $(basename "$patch_file"). Aborting."
+                git am --abort 2>/dev/null
+                exit 1
+              }
+            done
+            echo "All ${#patches[@]} patch(es) applied successfully."
+
   config:
     requested: "{{ CONFIG_KEY is defined }}"
     contrib:
@@ -451,6 +513,18 @@ SUBSYSTEM:
         KERNEL_SYSFS_JSON: "{{ DIR }}/etc/kernel.sysfs.json"
       ENV_LIST: [KERNEL_SYSFS_JSON]
       PKGS: [jq]
+
+_pr_patches_raw: "{{ PR_PATCHES | default([]) | arrayitize }}"
+_pr_patches_spec: >-
+  {%- set normalized = [] -%}
+  {%- for entry in _pr_patches_raw -%}
+    {%- set row = entry if entry is mapping else {'url': entry} -%}
+    {%- set url = row.url -%}
+    {%- set pr_num = url | regex_replace('.*/pull/(\\d+)$', '\\1') -%}
+    {%- set slug = row.name | default(pr_num) -%}
+    {%- set _ = normalized.append({'index': loop.index, 'url': url, 'slug': slug, 'pr_num': pr_num}) -%}
+  {%- endfor -%}
+  {{ normalized }}
 
 _cmake_source_default: "{{ CMAKE_SOURCE_DIR | default('.') }}"
 _cmake_builds_raw: "{{ CMAKE_BUILDS | arrayitize }}"

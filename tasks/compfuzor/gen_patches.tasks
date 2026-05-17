@@ -1,0 +1,5 @@
+---
+- name: "Compfuzor: synthesize patches subsystem artifacts"
+  set_fact:
+    BINS: "{{ lookup('merge_subsys', id='patches', contrib='BINS') }}"
+  when: lookup('subsys', id='patches', get='active', default=false) | bool

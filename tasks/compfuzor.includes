@@ -78,6 +78,9 @@
 - import_tasks: compfuzor/gen_desktop.tasks
   when: DESKTOP is defined
   tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_patches.tasks
+  when: PR_PATCHES is defined
+  tags: ['vars', 'always']
 - debug: "msg='Compfuzor: completed vars'"
 
 - import_tasks: compfuzor/user.tasks
