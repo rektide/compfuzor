@@ -2,6 +2,8 @@
 - hosts: all
   vars:
     REPO: https://github.com/cjpais/Handy
+    PR_PATCHES:
+      - https://github.com/cjpais/Handy/pull/1337
     TOOL_VERSIONS:
       bun: True
       rust: True
