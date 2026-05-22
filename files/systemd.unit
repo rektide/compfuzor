@@ -2,7 +2,8 @@
 [{{ name }}]
 {% if data and data.items() | list | length > 0 -%}
 {% for key, value in data.items() -%}
-{% if value is iterable and value is not string -%}
+{% if value is sameas false -%}
+{% elif value is iterable and value is not string -%}
 {% for v in value -%}
 {{ key }}={{ v }}
 {% endfor -%}
