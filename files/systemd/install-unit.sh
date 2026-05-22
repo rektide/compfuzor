@@ -16,7 +16,21 @@ if [ -z "$UNIT_ENABLE_TARGETS" ]; then
   exit 0
 fi
 
+_bypass_start=false
+_pass_through=()
+for arg in "$@"; do
+  if [ "$arg" = "--bypass-start" ]; then
+    _bypass_start=true
+  else
+    _pass_through+=("$arg")
+  fi
+done
+
 for target in $UNIT_ENABLE_TARGETS; do
-  $SUDO_CMD $SYSTEMCTL enable "$target"
+  if [ "$_bypass_start" = true ] || [ -n "$SYSTEMD_BYPASS_START" ]; then
+    $SUDO_CMD $SYSTEMCTL enable "${_pass_through[@]+"${_pass_through[@]}"}" "$target"
+  else
+    $SUDO_CMD $SYSTEMCTL enable --now "${_pass_through[@]+"${_pass_through[@]}"}" "$target"
+  fi
   echo "Unit ${target}.${UNIT_TYPE} enabled"
 done

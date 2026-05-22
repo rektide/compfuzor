@@ -404,10 +404,11 @@ SYSTEMD_UNITS_DEFAULT:
   Description: "{{ NAME }}"
   DefaultDependencies: true
 
-SYSTEMD_SERVICES_DEFAULT:
-  Type: simple
-  Restart: on-failure
-  RestartSec: 5
+SYSTEMD_SERVICES_DEFAULT: >-
+  {{ {'Type': 'simple', 'Restart': 'on-failure', 'RestartSec': 5}
+     | combine({'EnvironmentFile': '-' ~ DIR ~ '/env.export'}
+       if (DIR is defined and ((ENV is defined and (ENV is mapping or (ENV is boolean and ENV))) or ENV_LIST is defined))
+       else {}) }}
 
 SYSTEMD_INSTALLS_DEFAULT:
   WantedBy: "{{ 'multi-user.target' if SYSTEMD_SCOPE == 'system' else 'default.target' }}"
