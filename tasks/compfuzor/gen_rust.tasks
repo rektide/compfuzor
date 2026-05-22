@@ -3,4 +3,6 @@
   set_fact:
     BINS: "{{ lookup('merge_subsys', id='rust', contrib='BINS') }}"
     ENV: "{{ lookup('merge_subsys', id='rust', contrib='ENV') }}"
+    PKGS: "{{ lookup('merge_subsys', id='rust', contrib='PKGS', strategy='append') }}"
+    TOOL_VERSIONS: "{{ lookup('merge_subsys', id='rust', contrib='TOOL_VERSIONS') }}"
   when: lookup('subsys', id='rust', get='active', default=false) | bool

@@ -69,6 +69,8 @@ GO_VERSION: 1
 RUST_VERSION: 1
 PYTHON_VERSION: 3
 YARN_VERSION: 4
+BAZEL_VERSION: 8
+FLATC_VERSION: 25
 
 DIRSET:
   - opt
@@ -299,26 +301,50 @@ SUBSYSTEM:
           run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
-            if [[ -z "${RELEASE+x}" ]]; then
-                RELEASE="--release"
+            if [[ -n "${RUST_PROFILE:-}" ]]; then
+                PROFILE="--profile ${RUST_PROFILE}"
+            elif [[ -z "${RELEASE+x}" ]]; then
+                PROFILE="--release"
             elif [[ "$RELEASE" == "debug" ]]; then
-                unset RELEASE
+                PROFILE=""
             else
-                RELEASE="--$RELEASE"
+                PROFILE="--${RELEASE}"
             fi
-            cargo build $RELEASE
+            [[ -n "${RUST_PKG:-}" ]] && PKG_FLAG="-p ${RUST_PKG}"
+            [[ -n "${RUST_FEATURES:-}" ]] && FEATURES_FLAG="--features ${RUST_FEATURES}"
+            cargo build ${PROFILE} ${PKG_FLAG:-} ${FEATURES_FLAG:-} ${RUST_CARGO_ARGS:-}
         - name: install.sh
           basedir: repo
           generated: |
             [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${RUST_BIN:-{{ TYPE }}}"
-            ln -sfv "$(pwd)/target/release/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
+            if [[ -n "${RUST_PROFILE:-}" ]]; then
+                _target_dir="target/${RUST_PROFILE}"
+            elif [[ -z "${RELEASE+x}" ]] || [[ "${RELEASE:-}" != "debug" ]]; then
+                _target_dir="target/release"
+            else
+                _target_dir="target/debug"
+            fi
+            ln -sfv "$(pwd)/${_target_dir}/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
         - name: install-user.sh
           basedir: repo
           generated: |
             cargo install --path .
-      ENV: "{{ ({'RUST_BIN': RUST_BIN}) if RUST_BIN is defined else ({}) }}"
+      ENV: >-
+        {{ ({'RUST_BIN': RUST_BIN}) if RUST_BIN is defined else {} }}
+        | combine({'RUST_PKG': RUST_PKG} if RUST_PKG is defined else {})
+        | combine({'RUST_FEATURES': RUST_FEATURES} if RUST_FEATURES is defined else {})
+        | combine({'RUST_PROFILE': RUST_PROFILE} if RUST_PROFILE is defined else {})
+        | combine({'RUST_CARGO_ARGS': RUST_CARGO_ARGS} if RUST_CARGO_ARGS is defined else {})
+      PKGS: "{{ RUST_PKGS | default([]) }}"
       TOOL_VERSIONS:
         rust: true
+
+  bazel:
+    requested: "{{ BAZEL is deftruthy }}"
+    contrib:
+      BINS: "{{ _bazel_bins }}"
+      TOOL_VERSIONS:
+        bazel: true
 
   cmake:
     requested: "{{ CMAKE is deftruthy or CMAKE_ARGS is defined or CMAKE_BUILDS is defined }}"
@@ -556,6 +582,27 @@ _pr_patches_spec: >-
     {%- set _ = normalized.append({'index': loop.index, 'url': url, 'slug': slug, 'pr_num': pr_num}) -%}
   {%- endfor -%}
   {{ normalized }}
+
+_bazel_target: "{{ BAZEL_TARGET | default('//...') }}"
+_bazel_bins:
+  - name: build.sh
+    run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
+    basedir: repo
+    generated: |
+      bazel build {{ _bazel_target }}
+  - name: install.sh
+    basedir: repo
+    generated: |
+      {% if BAZEL_INSTALL_TARGETS is defined %}
+      {% for target in BAZEL_INSTALL_TARGETS %}
+      bin_path="$(bazel info bazel-bin)/{{ target }}"
+      ln -sfv "$bin_path" $GLOBAL_BINS_DIR/$(basename "$bin_path")
+      {% endfor %}
+      {% else %}
+      [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${BAZEL_BIN:-{{ TYPE }}}"
+      bin_path="$(bazel info bazel-bin)/${INSTALL_BIN}"
+      ln -sfv "$bin_path" $GLOBAL_BINS_DIR/$(basename "$bin_path")
+      {% endif %}
 
 _cmake_source_default: "{{ CMAKE_SOURCE_DIR | default('.') }}"
 _cmake_builds_raw: "{{ CMAKE_BUILDS | arrayitize }}"
