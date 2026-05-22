@@ -61,5 +61,5 @@ done
 
 if [[ "$_mode" == "install" && ${#_missing[@]} -gt 0 ]]; then
     echo "# installing ${#_missing[@]} missing package(s)"
-    sudo apt-get install -y "${_missing[@]}"
+    sudo aptitude install -y "${_missing[@]}"
 fi
