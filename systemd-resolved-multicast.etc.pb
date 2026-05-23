@@ -6,7 +6,7 @@
     ETC_FILES:
       - name: resolved-multicast.conf.d
         content: |
-          [Resolved]
+          [Resolve]
           MulticastDNS=yes
       - name: 50-multicast.network
         content: |
