@@ -186,7 +186,7 @@ def _resolve_bool_option(value, default):
     return _truthy(value)
 
 
-def merge_subsys_value(variables, subsystem_id, contrib, **kwargs):
+def merge_subsys_value(variables, subsystem_id, contrib, templar=None, **kwargs):
     """Merge one subsystem contrib artifact with its current global artifact.
 
     Args:
@@ -230,7 +230,7 @@ def merge_subsys_value(variables, subsystem_id, contrib, **kwargs):
     if has_active_path:
         is_active = _truthy(get_path(record, explicit_active_path, default=False))
     else:
-        is_active = _compute_state(record, variables, subsystem_id)["active"]
+        is_active = _compute_state(record, variables, subsystem_id, templar=templar)["active"]
     if (not active) or is_active:
         incoming = get_path(record, path, default=default)
 
@@ -267,6 +267,7 @@ class LookupModule(LookupBase):
             variables,
             kwargs.get("id"),
             kwargs.get("contrib"),
+            templar=self._templar,
             fallback_id=kwargs.get("fallback_id"),
             path=kwargs.get("path"),
             current=kwargs.get("current"),
