@@ -1,19 +1,9 @@
 - hosts: all
   vars:
-    TYPE: flatbuffers
-    INSTANCE: git
     REPO: https://github.com/google/flatbuffers
-    PKGS:
-    - bazel
-    BINS:
-    - name: build.sh
-      run: True
-      basedir: True
-      content: |
-        #bazel build :all
-        mkdir -p release
-        cd release
-        cmake -G "Unix Makefiles" ..
-        make
+    BAZEL: True
+    BAZEL_TARGET: "//:flatc"
+    BAZEL_INSTALL_TARGETS:
+    - ":flatc"
   tasks:
-  - include: tasks/compfuzor.includes type=src
+    - import_tasks: tasks/compfuzor.includes type=src

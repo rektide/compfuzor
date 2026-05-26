@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-_invoke=$(basename "$(readlink -f "$0" 2>/dev/null || echo "$0")")
+_invoke=$(basename "$0")
 _mode=check
 [[ "$_invoke" == *install* ]] && _mode=install
 
@@ -47,15 +47,17 @@ for pb in "${pbs[@]}"; do
     [[ -z "$pkgs" ]] && continue
 
     echo "# $(basename "$pb")"
-    {
-        while IFS= read -r pkg; do
-            version=$(_status_of "$pkg")
-            if [[ "$_mode" == "install" && "$version" == "<none>" ]]; then
-                _missing+=("$pkg")
-            fi
-            echo "$pkg"$'\t'"$version"
-        done <<< "$pkgs"
-    } | column -s $'\t' -t "${column_args[@]}"
+
+    rows=()
+    while IFS= read -r pkg; do
+        version=$(_status_of "$pkg")
+        if [[ "$_mode" == "install" && "$version" == "<none>" ]]; then
+            _missing+=("$pkg")
+        fi
+        rows+=("$pkg"$'\t'"$version")
+    done <<< "$pkgs"
+
+    printf '%s\n' "${rows[@]}" | column -s $'\t' -t "${column_args[@]}"
     echo
 done
 
