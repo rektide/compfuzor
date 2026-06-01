@@ -11,6 +11,7 @@ sys.path.insert(
 )
 
 from ansible.errors import AnsibleError
+from ansible._internal._datatag import _tags
 
 from merge_subsys import LookupModule, merge_subsys_value
 
@@ -45,13 +46,19 @@ class FakeLazyDict(dict):
 
 
 class FakeTemplateEngine:
+    def __init__(self, values=None):
+        self.values = values or {}
+
     def template(self, value):
-        return value
+        return self.values.get(str(value), value)
 
 
 class FakeTemplar:
-    def __init__(self):
-        self._engine = FakeTemplateEngine()
+    def __init__(self, values=None):
+        self._engine = FakeTemplateEngine(values)
+
+    def template(self, value):
+        return self._engine.template(value)
 
 
 def test_bins_defaults_merge_current_then_subsystem():
@@ -149,6 +156,23 @@ def test_pkgs_append_unique_defaults():
     }
     result = merge_subsys_value(variables, "go", "PKGS")
     check("dedupes packages preserving order", result, ["curl", "git", "golang"])
+
+
+def test_whole_artifact_template_resolves_before_list_merge():
+    print("\nmerge_subsys whole-artifact template:")
+    tagged_pkgs = _tags.TrustedAsTemplate().tag("{{ RUST_PKGS | default([]) }}")
+    variables = {
+        "PKGS": ["base"],
+        "SUBSYSTEM": {
+            "rust": {
+                "requested": True,
+                "contrib": {"PKGS": tagged_pkgs},
+            }
+        },
+    }
+    templar = FakeTemplar({"{{ RUST_PKGS | default([]) }}": []})
+    result = merge_subsys_value(variables, "rust", "PKGS", templar=templar)
+    check("does not append rendered empty list as package", result, ["base"])
 
 
 def test_tool_versions_overlay_defaults():
@@ -286,6 +310,7 @@ if __name__ == "__main__":
     test_env_current_wins_by_default()
     test_env_incoming_can_win()
     test_pkgs_append_unique_defaults()
+    test_whole_artifact_template_resolves_before_list_merge()
     test_tool_versions_overlay_defaults()
     test_current_and_path_overrides()
     test_raw_copy_boundary_for_variables()

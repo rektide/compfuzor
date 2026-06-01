@@ -103,6 +103,8 @@ if _LOOKUP_DIR not in sys.path:
 
 from subsys import (  # noqa: E402
     _compute_state,
+    _is_tagged_template,
+    _template_value,
 )
 
 
@@ -239,6 +241,8 @@ def merge_subsys_value(variables, subsystem_id, contrib, templar=None, **kwargs)
         is_active = _compute_state(record, variables, subsystem_id, templar=templar)["active"]
     if (not active) or is_active:
         incoming = get_path(record, path, default=default)
+        if _is_tagged_template(incoming):
+            incoming = _template_value(incoming, templar)
 
     if defaults["kind"] == "list":
         current_first = _resolve_bool_option(
