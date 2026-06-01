@@ -3,4 +3,5 @@
   set_fact:
     BINS: "{{ lookup('merge_subsys', id='repo_npm', contrib='BINS') }}"
     ETC_FILES: "{{ lookup('merge_subsys', id='repo_npm', contrib='ETC_FILES') }}"
+    TOOL_VERSIONS: "{{ lookup('merge_subsys', id='repo_npm', contrib='TOOL_VERSIONS') }}"
   when: lookup('subsys', id='repo_npm', get='active', default=false) | bool

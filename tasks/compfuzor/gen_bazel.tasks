@@ -2,4 +2,5 @@
 - name: "Compfuzor: synthesize bazel subsystem artifacts"
   set_fact:
     BINS: "{{ lookup('merge_subsys', id='bazel', contrib='BINS') }}"
+    TOOL_VERSIONS: "{{ lookup('merge_subsys', id='bazel', contrib='TOOL_VERSIONS') }}"
   when: lookup('subsys', id='bazel', get='active', default=false) | bool

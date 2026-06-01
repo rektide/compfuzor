@@ -186,6 +186,18 @@ def test_merge_dict_undefined_is_empty():
     check("undefined input is empty", merge_dict(Undefined(name="missing")), {})
 
 
+def test_merge_dict_tool_versions_overlay():
+    print("\nmerge_dict tool_versions_overlay:")
+    result = merge_dict(
+        [
+            ["rust", "nodejs"],
+            {"rust": "1.88", "pnpm": True},
+        ],
+        "tool_versions_overlay",
+    )
+    check("normalizes list and overlays mapping", result, {"rust": "1.88", "nodejs": True, "pnpm": True})
+
+
 def test_merge_dict_raw_copy_boundary():
     print("\nmerge_dict raw-copy boundary:")
     result = merge_dict(FakeLazyList([{"A": 1}, {"B": 2}]))
@@ -373,6 +385,7 @@ if __name__ == "__main__":
     test_merge_dict_overlay()
     test_merge_dict_single_and_get()
     test_merge_dict_undefined_is_empty()
+    test_merge_dict_tool_versions_overlay()
     test_merge_dict_raw_copy_boundary()
     test_merge_list_subsys_default_bins()
     test_merge_list_subsys_inactive_skips()

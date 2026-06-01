@@ -151,6 +151,21 @@ def test_pkgs_append_unique_defaults():
     check("dedupes packages preserving order", result, ["curl", "git", "golang"])
 
 
+def test_tool_versions_overlay_defaults():
+    print("\nmerge_subsys TOOL_VERSIONS defaults:")
+    variables = {
+        "TOOL_VERSIONS": [{"rust": "1.90"}, "nodejs"],
+        "SUBSYSTEM": {
+            "rust": {
+                "requested": True,
+                "contrib": {"TOOL_VERSIONS": {"rust": True, "pnpm": True}},
+            }
+        },
+    }
+    result = merge_subsys_value(variables, "rust", "TOOL_VERSIONS")
+    check("normalizes and preserves current overrides", result, {"rust": "1.90", "pnpm": True, "nodejs": True})
+
+
 def test_current_and_path_overrides():
     print("\nmerge_subsys overrides:")
     variables = {
@@ -271,6 +286,7 @@ if __name__ == "__main__":
     test_env_current_wins_by_default()
     test_env_incoming_can_win()
     test_pkgs_append_unique_defaults()
+    test_tool_versions_overlay_defaults()
     test_current_and_path_overrides()
     test_raw_copy_boundary_for_variables()
     test_etc_dirs_append_defaults()

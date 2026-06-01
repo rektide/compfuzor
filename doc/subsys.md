@@ -1,6 +1,6 @@
 # Subsystem architecture
 
-Compfuzor models each build/runtime tool as a **subsystem**: Go, Rust, Node.js, Bun, npm, CMake, Python, and kernel configuration. Each subsystem has a name, a set of environment variables that activate or bypass it, and a `contrib` payload (BINS, ENV, PKGS, ETC_FILES, TOOL_VERSIONS) that gets merged into the host config when active.
+Compfuzor models each build/runtime tool as a **subsystem**: Go, Rust, Node.js, Bun, npm, CMake, Python, and kernel configuration. Each subsystem has a name, a set of environment variables that activate or bypass it, and a `contrib` payload (`BINS`, `ENV`, `PKGS`, `ETC_FILES`, `TOOL_VERSIONS`, etc.) that gets merged into the host config when active.
 
 ## What changed and why
 
@@ -138,10 +138,11 @@ The usual pattern is short:
   set_fact:
     BINS: "{{ lookup('merge_subsys', id='go', contrib='BINS') }}"
     ENV: "{{ lookup('merge_subsys', id='go', contrib='ENV') }}"
+    TOOL_VERSIONS: "{{ lookup('merge_subsys', id='go', contrib='TOOL_VERSIONS') }}"
   when: lookup('subsys', id='go', get='active', default=false) | bool
 ```
 
-That is the full [`gen_go.tasks`](../tasks/compfuzor/gen_go.tasks#L1-L6) file. [`gen_rust.tasks`](../tasks/compfuzor/gen_rust.tasks#L1-L6), [`gen_nodejs.tasks`](../tasks/compfuzor/gen_nodejs.tasks#L1-L6), and [`gen_bun.tasks`](../tasks/compfuzor/gen_bun.tasks#L1-L6) use the same shape.
+That is the full [`gen_go.tasks`](../tasks/compfuzor/gen_go.tasks#L1-L7) file. [`gen_nodejs.tasks`](../tasks/compfuzor/gen_nodejs.tasks#L1-L7) and [`gen_bun.tasks`](../tasks/compfuzor/gen_bun.tasks#L1-L7) use the same shape; [`gen_rust.tasks`](../tasks/compfuzor/gen_rust.tasks#L1-L8) also merges `PKGS`.
 
 Use direct `merge_list` or `merge_dict` calls only when the subsystem needs custom behavior that `merge_subsys` does not expose. For example, [`gen_get_urls.tasks`](../tasks/compfuzor/gen_get_urls.tasks#L1-L7) merges only `BINS` from a local `_get_urls_contrib` value.
 
@@ -186,17 +187,18 @@ go:
       go: true
 ```
 
-This contributes two generated scripts, two environment defaults, and a `.tool-versions` entry. The `TOOL_VERSIONS` contribution is collected separately by [`gen_tool_versions.tasks`](../tasks/compfuzor/gen_tool_versions.tasks#L1-L35); it is not a `merge_subsys` artifact.
+This contributes two generated scripts, two environment defaults, and a `.tool-versions` entry. `TOOL_VERSIONS` is merged into the global `TOOL_VERSIONS` fact by `merge_subsys`; [`gen_tool_versions.tasks`](../tasks/compfuzor/gen_tool_versions.tasks#L1-L13) only renders that final fact into `.tool-versions` artifacts.
 
 ### Merge task
 
-[`gen_go.tasks`](../tasks/compfuzor/gen_go.tasks#L1-L6) merges the active contribution into global facts:
+[`gen_go.tasks`](../tasks/compfuzor/gen_go.tasks#L1-L7) merges the active contribution into global facts:
 
 ```yaml
 - name: "Compfuzor: synthesize go subsystem artifacts"
   set_fact:
     BINS: "{{ lookup('merge_subsys', id='go', contrib='BINS') }}"
     ENV: "{{ lookup('merge_subsys', id='go', contrib='ENV') }}"
+    TOOL_VERSIONS: "{{ lookup('merge_subsys', id='go', contrib='TOOL_VERSIONS') }}"
   when: lookup('subsys', id='go', get='active', default=false) | bool
 ```
 
@@ -227,8 +229,11 @@ Subsystems that only add `BINS`, `ENV`, `PKGS`, `ETC_FILES`, or `TOOL_VERSIONS` 
 | `ENV_LIST` | list | `append_unique` | Append env names and remove exact duplicates while preserving order. |
 | `ETC_DIRS` | list | `append` | Current entries come first, subsystem entries append. |
 | `ENV` | dict | `env_overlay` with current wins | Subsystem defaults are added, but explicit playbook `ENV` values override them. |
+| `TOOL_VERSIONS` | dict/list shorthand | `tool_versions_overlay` with current wins | Subsystem tool defaults are added; user mappings or list shorthand override them. |
 
 `BINS` uses the named `bins_generated` profile from [`merge.py`](../library/filter_plugins/merge.py#L48-L54). That profile maps to `merge_keyed` by `name` and concatenates `generated`. The keyed merge behavior is implemented in [`merge.py`](../library/filter_plugins/merge.py#L212-L263). Generic list and dict merge behavior is in [`merge.py`](../library/filter_plugins/merge.py#L302-L353).
+
+`TOOL_VERSIONS` uses the `tool_versions_overlay` dict strategy. It normalizes mappings and list shorthand through [`dictify`](../library/filter_plugins/dictify.py#L1-L53): mappings pass through, lists of strings become `{tool: true}`, lists of mappings overlay, and scalar values fail fast.
 
 Use direct `merge_list` or `merge_dict` only when you need behavior outside this table.
 
@@ -403,8 +408,9 @@ When a subsystem adds a generated script, also inspect the rendered bin in the t
 | [`library/lookup_plugins/subsys.py`](../library/lookup_plugins/subsys.py#L205-L281) | Lookup: resolves envelope from SUBSYSTEM + env vars |
 | [`library/lookup_plugins/merge_subsys.py`](../library/lookup_plugins/merge_subsys.py#L109-L152) | Lookup: merges subsystem contrib artifacts into globals |
 | [`library/filter_plugins/merge.py`](../library/filter_plugins/merge.py#L48-L58) | Direct list/dict merge helpers and named merge profiles |
+| [`library/filter_plugins/dictify.py`](../library/filter_plugins/dictify.py#L1-L53) | Strict mapping/list-shorthand normalization for dict-like inputs |
 | [`library/filter_plugins/build_install_bins.py`](../library/filter_plugins/build_install_bins.py#L6-L41) | `build_install_bins` filter (used by kernel) |
 | [`tasks/compfuzor/sub_get_urls.tasks`](../tasks/compfuzor/sub_get_urls.tasks#L1-L29) | Validates `GET_URLS` before generation |
 | [`tasks/compfuzor/gen_kernel.tasks`](../tasks/compfuzor/gen_kernel.tasks#L1-L53) | Validates and merges kernel child subsystems |
-| [`tasks/compfuzor/gen_go.tasks`](../tasks/compfuzor/gen_go.tasks#L1-L6) | Minimal `gen_*.tasks` example using `merge_subsys` |
+| [`tasks/compfuzor/gen_go.tasks`](../tasks/compfuzor/gen_go.tasks#L1-L7) | Minimal `gen_*.tasks` example using `merge_subsys` |
 | [`tasks/compfuzor/gen_get_urls.tasks`](../tasks/compfuzor/gen_get_urls.tasks#L1-L7) | Custom merge example using `merge_list` |

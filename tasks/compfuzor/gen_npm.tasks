@@ -3,5 +3,6 @@
   set_fact:
     BINS: "{{ lookup('merge_subsys', id='npm', contrib='BINS') }}"
     ENV: "{{ lookup('merge_subsys', id='npm', contrib='ENV') }}"
+    TOOL_VERSIONS: "{{ lookup('merge_subsys', id='npm', contrib='TOOL_VERSIONS') }}"
     NPM_PACKAGE_BIN: "{{ lookup('subsys', id='npm', get='spec.npm_package_bin', default=NPM_PACKAGE_BIN | default(omit)) }}"
   when: lookup('subsys', id='npm', get='active', default=false) | bool

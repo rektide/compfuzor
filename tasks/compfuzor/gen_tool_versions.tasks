@@ -1,35 +1,12 @@
 ---
-- name: "Compfuzor: gather active tool versions from subsystems"
-  set_fact:
-    _tv_subsystems: >-
-      {{ _tv_subsystems | default({}) | combine(
-          lookup('subsys', id=item, get='contrib', default={})
-        ) }}
-  when: lookup('subsys', id=item, get='active', default=false) | bool
-  loop: "{{ SUBSYSTEM.keys() | reject('equalto', 'tool_versions') | list }}"
-
 - name: "Compfuzor: synthesize tool_versions subsystem artifacts"
   set_fact:
-    ETC_FILES: "{{ [[{'name': '.tool-versions', 'content': _tv_content}], ETC_FILES | default([])] | merge_list('append') }}"
-    LINKS: "{{ [[{'src': DIR + '/etc/.tool-versions', 'dest': '.tool-versions'}], LINKS | default([])] | merge_list('append') }}"
+    ETC_FILES: "{{ [[{'name': '.tool-versions', 'content': _tv_content}], ETC_FILES] | merge_list('append') }}"
+    LINKS: "{{ [[{'src': DIR + '/etc/.tool-versions', 'dest': '.tool-versions'}], LINKS] | merge_list('append') }}"
   vars:
-    _tv_merged: >-
-      {{ _tv_subsystems.TOOL_VERSIONS | default({})
-        | combine(_tv_user) }}
-    _tv_user_raw: "{{ TOOL_VERSIONS | default({}) }}"
-    _tv_user_mapping: "{{ _tv_user_raw if _tv_user_raw is mapping else {} }}"
-    _tv_user_list: "{{ _tv_user_raw if (_tv_user_raw is sequence and _tv_user_raw is not string and _tv_user_raw is not mapping) else [] }}"
-    _tv_user_list_mapping: >-
-      {%- set out = {} -%}
-      {%- for target in _tv_user_list if target is string -%}
-      {%- set _ = out.update({target: true}) -%}
-      {%- endfor -%}
-      {{ out }}
-    _tv_user: "{{ _tv_user_list_mapping | combine(_tv_user_mapping) }}"
+    _tv_versions: "{{ [TOOL_VERSIONS] | merge_dict('tool_versions_overlay') }}"
     _tv_content: |
-      {% for target, version in _tv_merged.items() %}
+      {% for target, version in _tv_versions.items() %}
       {{ target }} {{ version if version != True else lookup('vars', target | upper + '_VERSION') }}
       {% endfor %}
-  when: >-
-    (_tv_user | length > 0) or
-    (_tv_subsystems.TOOL_VERSIONS | default({}) | length > 0)
+  when: _tv_versions is deflengthy

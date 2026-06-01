@@ -4,4 +4,5 @@
     BINS: "{{ lookup('merge_subsys', id='python', contrib='BINS') }}"
     ENV: "{{ lookup('merge_subsys', id='python', contrib='ENV') }}"
     ETC_FILES: "{{ lookup('merge_subsys', id='python', contrib='ETC_FILES') }}"
+    TOOL_VERSIONS: "{{ lookup('merge_subsys', id='python', contrib='TOOL_VERSIONS') }}"
   when: lookup('subsys', id='python', get='active', default=false) | bool

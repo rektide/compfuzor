@@ -3,4 +3,5 @@
   set_fact:
     BINS: "{{ lookup('merge_subsys', id='nodejs', contrib='BINS') }}"
     ENV: "{{ lookup('merge_subsys', id='nodejs', contrib='ENV') }}"
+    TOOL_VERSIONS: "{{ lookup('merge_subsys', id='nodejs', contrib='TOOL_VERSIONS') }}"
   when: lookup('subsys', id='nodejs', get='active', default=false) | bool

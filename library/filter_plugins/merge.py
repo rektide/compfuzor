@@ -15,6 +15,7 @@ if _PLUGIN_DIR not in sys.path:
     sys.path.insert(0, _PLUGIN_DIR)
 
 from get import get_path  # noqa: E402
+from dictify import dictify  # noqa: E402
 
 
 def _as_list(value):
@@ -55,11 +56,12 @@ LIST_STRATEGY_PROFILES = {
 
 DICT_STRATEGY_PROFILES = {
     "env_overlay": "overlay",
+    "tool_versions_overlay": "tool_versions_overlay",
 }
 
 VALID_LIST_STRATEGIES = {"append", "append_unique"}
 VALID_LIST_OPERATIONS = {"append_unique_by", "merge_keyed"}
-VALID_DICT_STRATEGIES = {"overlay", "dict_overlay"}
+VALID_DICT_STRATEGIES = {"overlay", "dict_overlay", "tool_versions_overlay"}
 
 
 def _raw_copy_template_data(value):
@@ -350,6 +352,12 @@ def _merge_dict_values(values, strategy):
         result = {}
         for value in values:
             result = result | _as_dict(value)
+        return result
+
+    if strategy == "tool_versions_overlay":
+        result = {}
+        for value in values:
+            result = result | dictify(value)
         return result
 
     raise ValueError("unknown merge_dict strategy '{}'".format(strategy))

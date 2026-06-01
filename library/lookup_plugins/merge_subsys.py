@@ -22,7 +22,7 @@ DOCUMENTATION = """
           - Subsystem id used when C(id) is absent or empty.
       contrib:
         description:
-          - Artifact key under C(contrib), such as C(BINS), C(ENV), C(ETC_FILES), C(PKGS), C(ENV_LIST), or C(LINKS).
+          - Artifact key under C(contrib), such as C(BINS), C(ENV), C(ETC_FILES), C(PKGS), C(ENV_LIST), C(LINKS), or C(TOOL_VERSIONS).
       path:
         description:
           - Optional dotted path override for the incoming subsystem payload.
@@ -146,6 +146,12 @@ ARTIFACT_DEFAULTS = {
     "ENV": {
         "kind": "dict",
         "strategy": "env_overlay",
+        "default": {},
+        "current_wins": True,
+    },
+    "TOOL_VERSIONS": {
+        "kind": "dict",
+        "strategy": "tool_versions_overlay",
         "default": {},
         "current_wins": True,
     },
