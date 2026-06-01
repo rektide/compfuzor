@@ -43,6 +43,7 @@
             source {{DIR}}/src/zimfw.zsh init
           fi
           source ${ZIM_HOME}/init.zsh
+          export ZSH_AUTOSUGGEST_MANUAL_REBIND=1
       - name: zimfw/01-core.conf
         content: |
           # Module
@@ -52,10 +53,9 @@
           zmodule input
           # Utility aliases and functions. Adds colour to ls, grep and less.
           zmodule utility
-      - name: zimfw/02-mise.conf
-        content: |
+          # included early so other tools can benefit
           zmodule https://github.com/joke/zim-mise
-      - name: zimfw/03-prompt.conf
+      - name: zimfw/02-prompt.conf
         content: |
           # Prompt
           ## Exposes to prompts how long the last command took to execute, used by asciiship.
@@ -70,12 +70,14 @@
           #zmodule spaceship-prompt/spaceship-prompt --name spaceship --no-submodules
           #zmodule sindresorhus/pure --source async.zsh --source pure.zsh
           #zmodule https://github.com/joke/zim-oh-my-posh
+          #zmodule https://github.com/joke/zim-starship
           #zmodule sorin
           #zmodule agnoster
           #zmodule eriner
           zmodule minimal
-          zmodule magic-enter
-      - name: zimfw/04-tools.conf
+          #zmodule https://codeberg.org/iff/pay-respects
+          #zmodule magic-enter
+      - name: zimfw/03-tools.conf
         content: |
           # More
           zmodule exa
@@ -83,49 +85,60 @@
           zmodule git
           zmodule k
           zmodule termtitle
-          zmodule https://github.com/hmgle/aider-zsh-complete
+          #zmodule https://github.com/hmgle/aider-zsh-complete
           #zmodule https://github.com/jnooree/zoxide-zsh-completion
           zmodule kiesman99/zim-zoxide
           #zmodule https://github.com/agkozak/zsh-z
-          #zmodule https://github.com/joke/zim-helm
-          #zmodule https://github.com/joke/zim-github-cli
+          #zmodule https://github.com/joke/zim-chezmoi
+          zmodule https://github.com/joke/zim-github-cli
+          #zmodule https://github.com/joke/zim-gopass
+          zmodule https://github.com/joke/zim-helm
+          #zmodule https://github.com/joke/zim-istioctl
           #zmodule https://github.com/joke/zim-kn
           zmodule https://github.com/joke/zim-kubectl
           #zmodule https://github.com/joke/zim-k9s
+          # mise included above to be early
+          #zmodule https://github.com/joke/zim-mise
           #zmodule https://github.com/joke/zim-skaffold
+          #zmodule https://github.com/joke/zim-steampipe
           #zmodule https://github.com/joke/zim-yq
           zmodule https://github.com/lipov3cz3k/zsh-uv
           #zmodule https://github.com/MichaelAquilina/zsh-you-should-use
           #zmodule https://github.com/pressdarling/codex-zsh-plugin
           # also needs: zstyle ':zim:plugins:alias-finder' autoload yes
-          zmodule https://github.com/shanwker1223/zim-alias-finder
-          zmodule https://github.com/shihanng/zim-atuin
-          zmodule rektide/zim-atuin-session
+          #zmodule https://github.com/shanwker1223/zim-alias-finder
           #zmodule https://github.com/shihanng/zim-kustomize
           #zmodule https://raw.githubusercontent.com/sheax0r/etcdctl-zsh/refs/heads/master/_etcdctl
-          #zmodule https://codeberg.org/iff/pay-respects
-      - name: zimfw/05-completions.conf
-        content: |
-          # Completion
-          # Additional completion definitions for Zsh.
-          zmodule zsh-users/zsh-completions --fpath src
-          zmodule rektide/zim-niri
+          zmodule https://github.com/shihanng/zim-atuin
+
+          zmodule rektide/zim-atuin-session
           zmodule rektide/zim-beads
           zmodule rektide/zim-jaeger
-          zmodule rektide/zim-timoni
+          zmodule rektide/zim-jujutsu
+          zmodule rektide/zim-niri
           zmodule rektide/zim-opencode
-          zmodule rektide/zim-atuin
-          # Enables and configures smart and extensive tab completion.
-          # completion must be sourced after all modules that add completion definitions.
+          zmodule rektide/zim-timoni
+          zmodule rektide/zim-tgo
+      - name: zimfw/04-completion.conf
+        content: |
+          # Additional completion definitions for Zsh.
+          zmodule zsh-users/zsh-completions --fpath src
+          # Enables and configures smart and extensive tab completion, must be sourced
+          # after all modules that add completion definitions.
           zmodule completion
-      - name: zimfw/06-late.conf
+      - name: zimfw/05-late.conf
         content: |
           # Modules that must be initialized last
-          # Fish-like syntax highlighting for Zsh.
-          # zsh-users/zsh-syntax-highlighting must be sourced after completion
+
+          # Fish-like syntax highlighting for Zsh, must be sourced after completion.
           zmodule zsh-users/zsh-syntax-highlighting
-          # Fish-like autosuggestions for Zsh.
+          # Fish-like history search for Zsh, must be sourced after
+          # zsh-users/zsh-syntax-highlighting.
+          #zmodule zsh-users/zsh-history-substring-search
+          # Fish-like autosuggestions for Zsh. Add the following to your ~/.zshrc to boost
+          # performance: ZSH_AUTOSUGGEST_MANUAL_REBIND=1
           zmodule zsh-users/zsh-autosuggestions
+
           zmodule https://github.com/lukechilds/zsh-better-npm-completion
     ARCH_PKGS:
       - bat
