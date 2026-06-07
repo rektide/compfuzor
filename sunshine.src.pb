@@ -4,32 +4,28 @@
     TYPE: sunshine
     INSTANCE: git
     REPO: https://github.com/LizardByte/Sunshine
+    CMAKE: True
+    CMAKE_ARGS: '-DSUNSHINE_ENABLE_CUDA=OFF'
     MODULES:
       - uinput
     BINS:
-      - name: build.sh
-        exec: |
-          mkdir -p build
-          cd build
-          cmake ..
-          make
       - name: install.sh
-        basedir: build
+        basedir: repo/build
+        generatedAt: False
         exec: |
+          sudo setcap cap_sys_admin,cap_sys_nice+p sunshine
           # -E so my asdf works
-          for f in sunshine*dirty
-          do
-            sudo setcap 'cap_sys_admin+p' $f
-          done
-          sudo -E make install
-          for f in /usr/local/bin/sunshine*dirty
-          do
-            sudo setcap 'cap_sys_admin+p' $f
-          done
-          # linking seems not to work maybe??
-          sudo cp ../etc/sunshine-udev.rule /etc/udev/rules.d/80-sunshine-udev.rules
+          #sudo -E make install
+          #ln -sfv $(pwd) $GLOBAL_BINS_DIR
+          sudo ninja install
+          # linking rules seems not to work, copy
+          sudo cp ../src_assets/linux/misc/60-sunshine.rules /etc/udev/rules.d/60-sunshine.rules
           #sudo udevadm control --reload-rules
           #sudo udevadm trigger
+      - name: apply-udev.sh
+        content: |
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger
       - name: install.user.sh
         basedir: True
         exec: |
@@ -53,7 +49,7 @@
       - libcurl4-openssl-dev
       - libevdev-dev
       - libminiupnpc-dev
-      - libmfx-dev
+      - libmfx-gen-dev
       - libnotify-dev
       - libnuma-dev
       - libopus-dev
@@ -65,5 +61,5 @@
       - nodejs
       - npm
   tasks:
-    - include: tasks/compfuzor.includes type=src
+    - import_tasks: tasks/compfuzor.includes
 
