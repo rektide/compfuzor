@@ -8,10 +8,12 @@
         content: |
           # List of plugins (install by running `ahiru-tpm install`)
           set -g @plugin 'tmux-plugins/tmux-sensible'
+          set -g @plugin 'tmux-plugins/tmux-yank'
+          set -g @plugin 'rektide/tpm-desktop-vars'
       - name: ahiru-run.conf
         content: |
           # Initialize Ahiru-TPM (keep this line at the very bottom of tmux.conf)
-          run 'ahiru-tpm init'
+          run -b 'ahiru-tpm init'
     BINS:
       - name: install-user.sh
         basedir: False
