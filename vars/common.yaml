@@ -316,7 +316,6 @@ SUBSYSTEM:
         - name: install.sh
           basedir: repo
           generated: |
-            [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${RUST_BIN:-{{ TYPE }}}"
             if [[ -n "${RUST_PROFILE:-}" ]]; then
                 _target_dir="target/${RUST_PROFILE}"
             elif [[ -z "${RELEASE+x}" ]] || [[ "${RELEASE:-}" != "debug" ]]; then
@@ -324,7 +323,14 @@ SUBSYSTEM:
             else
                 _target_dir="target/debug"
             fi
-            ln -sfv "$(pwd)/${_target_dir}/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
+            if [[ "${RUST_ALL:-}" == "true" ]]; then
+                for _bin in $(cargo metadata --format-version 1 --no-deps 2>/dev/null | jq -r '[ .packages[] | .targets[] | select(.kind[] | . == "bin") | .name ] | unique[]'); do
+                    ln -sfv "$(pwd)/${_target_dir}/${_bin}" "${GLOBAL_BINS_DIR}/${_bin}"
+                done
+            else
+                [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${RUST_BIN:-{{ TYPE }}}"
+                ln -sfv "$(pwd)/${_target_dir}/${INSTALL_BIN}" "${GLOBAL_BINS_DIR}/$(basename "${INSTALL_BIN}")"
+            fi
         - name: install-user.sh
           basedir: repo
           generated: |
@@ -335,6 +341,7 @@ SUBSYSTEM:
         | combine({'RUST_FEATURES': RUST_FEATURES} if RUST_FEATURES is defined else {})
         | combine({'RUST_PROFILE': RUST_PROFILE} if RUST_PROFILE is defined else {})
         | combine({'RUST_CARGO_ARGS': RUST_CARGO_ARGS} if RUST_CARGO_ARGS is defined else {})
+        | combine({'RUST_ALL': RUST_ALL} if RUST_ALL is defined else {})
       PKGS: "{{ RUST_PKGS | default([]) }}"
       TOOL_VERSIONS:
         rust: true
