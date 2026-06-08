@@ -2,7 +2,9 @@
 - hosts: all
   vars:
     README: |
-      pstore/ramoops — captures kernel oops/panic logs in reserved RAM that survive reboot.
+      # pstore/ramoops
+
+      > Captures kernel oops/panic logs in reserved RAM that survive reboot.
 
       Requires only the `ramoops` module (CONFIG_PSTORE_RAM).
 
