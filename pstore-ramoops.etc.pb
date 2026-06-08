@@ -1,4 +1,20 @@
 ---
+# pstore/ramoops — captures kernel oops/panic logs in reserved RAM that survive reboot.
+#
+# Requires only the `ramoops` module (CONFIG_PSTORE_RAM).
+#
+# PSTORE_CONSOLE, PSTORE_PMSG, and PSTORE_FTRACE are compile-time kernel
+# options (not modules). If your kernel was built without them, the
+# console_size, pmsg_size, and ftrace_size params are accepted but those
+# buffers will never be written to. On such kernels only oops/panic dmesg
+# capture works — which is the critical part.
+#
+# Check your kernel config:
+#   grep -E 'PSTORE_RAM|PSTORE_CONSOLE|PSTORE_PMSG|PSTORE_FTRACE' /boot/config-$(uname -r)
+#
+# You must also reserve physical memory for ramoops. Add to your kernel
+# cmdline:  memmap=256K$0x...  (address of your choosing). The ramoops
+# module will claim this region via mem_size.
 - hosts: all
   vars:
     KERNEL_MODULES:
