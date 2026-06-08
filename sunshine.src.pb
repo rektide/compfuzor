@@ -9,6 +9,7 @@
     MODULES:
       - uinput
     BINS:
+      # TODO: a cmake that uses ninja for build would be nice
       - name: install.sh
         basedir: repo/build
         generatedAt: False
