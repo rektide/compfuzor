@@ -3,7 +3,6 @@
   vars:
     REPO: https://github.com/panproto/panproto
     RUST: True
-    RUST_PKG: panproto-cli
-    RUST_BIN: schema
+    RUST_ALL: True
   tasks:
     - import_tasks: tasks/compfuzor.includes
