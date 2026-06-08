@@ -119,6 +119,7 @@
           zmodule rektide/zim-opencode
           zmodule rektide/zim-timoni
           zmodule rektide/zim-tgo
+          zmodule rektide/zim-systemd-envvar
       - name: zimfw/04-completion.conf
         content: |
           # Additional completion definitions for Zsh.
