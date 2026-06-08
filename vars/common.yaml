@@ -571,6 +571,14 @@ SUBSYSTEM:
       ENV_LIST: [KERNEL_SYSFS_JSON]
       PKGS: [jq]
 
+  readme:
+    requested: "{{ README is defined }}"
+    contrib:
+      ETC_FILES:
+        - name: README.md
+          destTemplate: "{{DIR}}/README.md"
+          content: "{{ README }}"
+
 _pr_patches_raw: "{{ PR_PATCHES | default([]) | arrayitize }}"
 _pr_patches_spec: >-
   {%- set normalized = [] -%}

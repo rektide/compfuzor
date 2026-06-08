@@ -1,0 +1,5 @@
+---
+- name: "Compfuzor: synthesize readme subsystem artifacts"
+  set_fact:
+    ETC_FILES: "{{ lookup('merge_subsys', id='readme', contrib='ETC_FILES') }}"
+  when: lookup('subsys', id='readme', get='active', default=false) | bool
