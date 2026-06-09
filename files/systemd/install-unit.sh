@@ -2,7 +2,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-[ -n "$ENV_BYPASS" ] || [ ! -f "$SCRIPT_DIR/../env.export" ] || source <(command -v envdefault >/dev/null && envdefault "$SCRIPT_DIR/../env.export" || cat "$SCRIPT_DIR/../env.export")
+[ -n "${ENV_BYPASS:-}" ] || [ ! -f "$SCRIPT_DIR/../env.export" ] || source <(command -v envdefault >/dev/null && envdefault "$SCRIPT_DIR/../env.export" || cat "$SCRIPT_DIR/../env.export")
 
 UNIT_SRC="${UNIT_SRC:-$SCRIPT_DIR/../etc/${UNIT_TEMPLATE}.${UNIT_TYPE}}"
 UNIT_DEST="${UNIT_DEST:-$UNIT_DIR/${UNIT_TEMPLATE}.${UNIT_TYPE}}"
@@ -27,7 +27,7 @@ for arg in "$@"; do
 done
 
 for target in $UNIT_ENABLE_TARGETS; do
-  if [ "$_bypass_start" = true ] || [ -n "$SYSTEMD_BYPASS_START" ]; then
+  if [ "$_bypass_start" = true ] || [ -n "${SYSTEMD_BYPASS_START:-}" ]; then
     $SUDO_CMD $SYSTEMCTL enable "${_pass_through[@]+"${_pass_through[@]}"}" "$target"
   else
     $SUDO_CMD $SYSTEMCTL enable --now "${_pass_through[@]+"${_pass_through[@]}"}" "$target"

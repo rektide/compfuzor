@@ -4,7 +4,7 @@ set -e
 [ -z "$1" ] && echo "Specify a disk" && exit 1 
 DEV=$1
 [ ! -b "$DEV" ] && echo "dev '$DEV' not a device" >&2 && exit 1
-[ -n "$ENV_BYPASS" ] || source $(command -v envdefault || true) {{DIR}}/env.export >/dev/null
+[ -n "${ENV_BYPASS:-}" ] || source $(command -v envdefault || true) {{DIR}}/env.export >/dev/null
 
 # do mount
 

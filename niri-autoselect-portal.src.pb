@@ -12,10 +12,10 @@
     SYSTEMD_USERMODE: True
     SYSTEMD_UNITS:
       PartOf: graphical-session.target
-    SYSTEMD_EXEC: /usr/local/bin/niri-autoselect-portal
     SYSTEMD_SERVICES:
       Type: dbus
       BusName: org.freedesktop.impl.portal.desktop.niri-autoselect
+      ExecStart: /usr/local/bin/niri-autoselect-portal
     SYSTEMD_INSTALLS:
       WantedBy: niri.service
     SYSTEMD_LINK: False
