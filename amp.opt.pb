@@ -1,7 +1,7 @@
 ---
 - hosts: all
   vars:
-    NPM_PACKAGE: '@sourcegraph/amp@latest'
+    NPM: '@sourcegraph/amp@latest'
     ETC_DIRS:
       - mcp
     ETC_FILES:

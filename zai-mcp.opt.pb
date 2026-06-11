@@ -1,7 +1,7 @@
 ---
 - hosts: all
   vars:
-    REPO_NPM: '@z_ai/mcp-server'
+    NPM: '@z_ai/mcp-server'
     ETC_DIRS:
       - mcp
     ETC_FILES:
