@@ -274,26 +274,21 @@ SUBSYSTEM:
       TOOL_VERSIONS:
         bun: true
 
-  # Source-build a single npm package (NPM_PACKAGE).
-  # Downloads the tarball, runs pnpm i / build / link.
-  # For global-install of pre-built packages by name, see repo_npm.
+  # Unified npm subsystem.
+  # Default mode: global install — pnpm install -g for each package in NPM.
+  # Source mode (NPM_SRC=true): download tarball, pnpm i / build / link a single package.
+  # NPM can be a single package string or a list. Source mode requires a single package.
+  # NPM_PACKAGE_BIN overrides the derived binary name in source mode.
   npm:
-    requested: "{{ NPM is defined or NPM_PACKAGE is defined }}"
     spec:
-      npm_package_bin: "{{ NPM_PACKAGE_BIN | default((NPM_PACKAGE | default('')) | regex_replace('(?:@[\\w.-]+/)?([\\w.-]+)(?:@[\\w.-]+)?', '\\1')) }}"
+      npm_package_bin: "{{ NPM_PACKAGE_BIN | default((NPM | default('') if NPM is string else (NPM | default([]) | first | default(''))) | regex_replace('(?:@[\\w.-]+/)?([\\w.-]+)(?:@[\\w.-]+)?', '\\1')) }}"
+      npm_packages: "{{ NPM if NPM is string else (NPM | default([])) }}"
+      npm_src: "{{ NPM_SRC | default(false) | bool }}"
     contrib:
-      BINS:
-        - name: build.sh
-          generated: |
-            curl $(npm view $NPM_PACKAGE dist.tarball) | tar -xz --strip-components=1
-            pnpm i
-            if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
-              echo "Building package..."
-              pnpm build
-            fi
-            pnpm link
+      BINS: "{{ _npm_src_bins if (NPM_SRC | default(false) | bool) else _npm_install_bins }}"
+      ETC_FILES: "{{ [] if (NPM_SRC | default(false) | bool) else _npm_install_etc }}"
       ENV:
-        NPM_PACKAGE: "{{ NPM_PACKAGE | default(omit) }}"
+        NPM_PACKAGE: "{{ NPM if NPM is string else (NPM | default(omit)) }}"
       TOOL_VERSIONS:
         nodejs: true
         pnpm: true
@@ -392,24 +387,6 @@ SUBSYSTEM:
       TOOL_VERSIONS:
         python: true
 
-  # Global-install pre-built npm packages by name (REPO_NPM).
-  # Writes package names to etc/npm.txt and runs pnpm install -g.
-  # Auto-runs (run: true). For source-building a single package, see npm.
-  repo_npm:
-    requested: "{{ REPO_NPM is defined }}"
-    contrib:
-      BINS:
-        - name: install.sh
-          run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
-          generated: |
-            pnpm install -g $(cat etc/npm.txt)
-      ETC_FILES:
-        - name: npm.txt
-          content: |
-            {{ REPO_NPM }}
-      TOOL_VERSIONS:
-        nodejs: true
-        pnpm: true
 
   desktop:
     requested: "{{ DESKTOP is defined }}"
@@ -604,6 +581,28 @@ _pr_patches_spec: >-
     {%- set _ = normalized.append({'index': loop.index, 'url': url, 'slug': slug, 'pr_num': pr_num}) -%}
   {%- endfor -%}
   {{ normalized }}
+
+_npm_src_bins:
+  - name: build.sh
+    generated: |
+      curl $(npm view $NPM_PACKAGE dist.tarball) | tar -xz --strip-components=1
+      pnpm i
+      if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
+        echo "Building package..."
+        pnpm build
+      fi
+      pnpm link
+
+_npm_install_bins:
+  - name: install.sh
+    run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+    generated: |
+      pnpm install -g $(cat etc/npm.txt)
+
+_npm_install_etc:
+  - name: npm.txt
+    content: |
+      {{ NPM | arrayitize | join('\n') }}
 
 _bazel_target: "{{ BAZEL_TARGET | default('//...') }}"
 _bazel_bins:
