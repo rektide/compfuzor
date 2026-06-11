@@ -43,6 +43,7 @@
 - import_tasks: compfuzor/vars_repo.tasks
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_npm.tasks
+  when: NPM is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_rust.tasks
   when: RUST is defined
@@ -57,9 +58,6 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_bun.tasks
   when: BUN is defined
-  tags: ['vars', 'always']
-- import_tasks: compfuzor/gen_repo_npm.tasks
-  when: REPO_NPM is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_python.tasks
   when: PYTHON is deftruthy or PIP is defined

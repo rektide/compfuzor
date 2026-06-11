@@ -19,7 +19,7 @@ The refactor consolidates everything into two places:
 - **[`vars/common.yaml`](../vars/common.yaml#L174-L583)** — static `SUBSYSTEM` definitions containing only data (`contrib`, optionally `spec` and `requested`).
 - **[`library/lookup_plugins/subsys.py`](../library/lookup_plugins/subsys.py#L205-L281)** — the `subsys` lookup that reads from `SUBSYSTEM` and derives the full state envelope (`requested`, `bypassed`, `active`, `valid`, `status`) at query time.
 
-The `subsystem_bypassed` and `subsystem_record` filter plugins are gone. The old `sub_*` tasks for Go, Node.js, Bun, npm, Rust, CMake, Python, and repo_npm are gone because their data lives in [`common.yaml`](../vars/common.yaml#L174-L583). Runtime validation still uses task files where needed. For example, [`sub_get_urls.tasks`](../tasks/compfuzor/sub_get_urls.tasks#L1-L29) validates `GET_URLS`, while [`gen_kernel.tasks`](../tasks/compfuzor/gen_kernel.tasks#L1-L53) handles kernel validation and multi-child merging.
+The `subsystem_bypassed` and `subsystem_record` filter plugins are gone. The old `sub_*` tasks for Go, Node.js, Bun, npm, Rust, CMake, and Python are gone because their data lives in [`common.yaml`](../vars/common.yaml#L174-L583). The former `repo_npm` subsystem was merged into `npm` with an `NPM_SRC` mode bit. Runtime validation still uses task files where needed. For example, [`sub_get_urls.tasks`](../tasks/compfuzor/sub_get_urls.tasks#L1-L29) validates `GET_URLS`, while [`gen_kernel.tasks`](../tasks/compfuzor/gen_kernel.tasks#L1-L53) handles kernel validation and multi-child merging.
 
 ## The rule
 
