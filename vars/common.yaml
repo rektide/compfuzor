@@ -274,7 +274,11 @@ SUBSYSTEM:
       TOOL_VERSIONS:
         bun: true
 
+  # Source-build a single npm package (NPM_PACKAGE).
+  # Downloads the tarball, runs pnpm i / build / link.
+  # For global-install of pre-built packages by name, see repo_npm.
   npm:
+    requested: "{{ NPM is defined or NPM_PACKAGE is defined }}"
     spec:
       npm_package_bin: "{{ NPM_PACKAGE_BIN | default((NPM_PACKAGE | default('')) | regex_replace('(?:@[\\w.-]+/)?([\\w.-]+)(?:@[\\w.-]+)?', '\\1')) }}"
     contrib:
@@ -388,6 +392,9 @@ SUBSYSTEM:
       TOOL_VERSIONS:
         python: true
 
+  # Global-install pre-built npm packages by name (REPO_NPM).
+  # Writes package names to etc/npm.txt and runs pnpm install -g.
+  # Auto-runs (run: true). For source-building a single package, see npm.
   repo_npm:
     requested: "{{ REPO_NPM is defined }}"
     contrib:
