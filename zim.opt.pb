@@ -115,6 +115,7 @@
           zmodule rektide/zim-beads
           zmodule rektide/zim-jaeger
           zmodule rektide/zim-jujutsu
+          zmodule rektide/zim-mosh
           zmodule rektide/zim-niri
           zmodule rektide/zim-opencode
           zmodule rektide/zim-timoni
