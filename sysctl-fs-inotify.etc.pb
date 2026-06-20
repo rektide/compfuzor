@@ -15,7 +15,7 @@
 - hosts: all
   vars:
     TYPE: fs-inotify
-    SYSCTL:
+    KERNEL_SYSCTL:
       fs.inotify.max_user_watches: 1048576
       fs.inotify.max_user_instances: 8192
     BINS:
