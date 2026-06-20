@@ -742,6 +742,9 @@ _kernel_sysctl_bins:
     src: ../kernel/apply-sysctl.sh
     basedir: false
     #run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
+  - name: status-sysctl.ts
+    src: ../kernel/status-sysctl.ts
+    raw: True
 _kernel_sysfs_bins:
   - name: build-sysfs.sh
     src: ../kernel/build-sysfs.sh
