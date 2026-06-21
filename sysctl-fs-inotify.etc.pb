@@ -23,12 +23,10 @@
       fs.inotify.max_user_instances: 8192   # default 1024
       fs.inotify.max_queued_events: 16384   # default 16384
     BINS:
-      # Installed as `inotify-status` (not status.sh) to avoid colliding
-      # with k3s-server's status.sh in GLOBAL_BINS_DIR. Read-only: reports
-      # per-user inotify watch/instance usage and top consumers; --sudo
-      # for system-wide.
-      - name: inotify-status
-        src: status.sh
-        raw: True
+      # usage.sh: read-only per-user inotify watch/instance consumption report
+      # (top consumers); --sudo for system-wide. Distinct from status-sysctl.ts,
+      # which reports sysctl drift.
+      - name: usage.sh
+        basedir: false
   tasks:
     - import_tasks: tasks/compfuzor.includes

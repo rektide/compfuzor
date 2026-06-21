@@ -1,6 +1,11 @@
-#!/usr/bin/env bash
-# inotify usage report: kernel limits, per-user consumption, and the top
-# consumers holding watches. Read-only.
+# usage.sh — inotify usage report: kernel limits, per-user consumption, and the
+# top consumers holding watches. Read-only.
+#
+# This is a compfuzor _bin body: files/_bin supplies the shebang,
+# `set -euo pipefail`, env loading, and option restoration, so this file has
+# no shebang of its own. The body is rendered as a Jinja template, so the
+# bash array-length idiom in pid_inotify escapes its leading brace
+# (dollar-brace-hash) so Jinja does not read it as a comment delimiter.
 #
 # Without flags it reports the CURRENT USER only -- no privileges needed,
 # since you can read your own processes' /proc/<pid>/fdinfo. Pass --sudo
@@ -10,15 +15,18 @@
 # watch/instance counts. A WATCH ~= one watched inode (~1KB of kernel
 # RAM, non-swappable); an INSTANCE is one inotify_init() fd that holds
 # many watches. The limit that actually binds in practice is watches.
-#
-# Usage:
-#   status.sh                  # current user (color if tty)
-#   status.sh --no-color       # plain output, for piping/logs
-#   status.sh --sudo           # system-wide: all users + total
-#   status.sh --sudo --user X  # focus on user X (needs sudo if not you)
-#   status.sh -h | --help
 
-set -euo pipefail
+usage() {
+  cat >&2 <<'EOF'
+usage: usage.sh [--no-color] [--sudo] [--user USER] [-h]
+  Report inotify watch/instance consumption for the current user, or
+  system-wide with --sudo. Read-only.
+    --no-color   plain output (auto-detected otherwise)
+    --sudo       elevate to enumerate every user + system totals
+    --user USER  focus on USER (needs --sudo if not you)
+    -h, --help   show this help
+EOF
+}
 
 USE_SUDO=0
 FOCUS_USER=""
@@ -30,7 +38,7 @@ while [ $# -gt 0 ]; do
     --sudo)     USE_SUDO=1; shift;;
     --user)     FOCUS_USER="${2:?--user needs a username}"; shift 2;;
     --user=*)   FOCUS_USER="${1#--user=}"; shift;;
-    -h|--help)  awk 'NR>=2{if($0~/^#/){sub(/^# ?/,"");print}else exit}' "$0"; exit 0;;
+    -h|--help)  usage; exit 0;;
     *) echo "unknown argument: $1 (try --help)" >&2; exit 2;;
   esac
 done
@@ -93,8 +101,8 @@ pid_inotify() {
     tgt="$($SUDO readlink "$fddir/$base" 2>/dev/null || true)"
     case "$tgt" in anon_inode:inotify*) ino+=("$base");; esac
   done < <(ls -1 "$fddir" 2>/dev/null)
-  [ "${#ino[@]}" -gt 0 ] || { echo "0 0"; return; }
-  local fdinfo_files=() f watches instances=${#ino[@]}
+  [ "${{ "{" }}#ino[@]}" -gt 0 ] || { echo "0 0"; return; }
+  local fdinfo_files=() f watches instances=${{ "{" }}#ino[@]}
   for f in "${ino[@]}"; do fdinfo_files+=("/proc/$pid/fdinfo/$f"); done
   watches="$($SUDO awk '/^inotify wd:/{c++} END{print c+0}' "${fdinfo_files[@]}" 2>/dev/null || echo 0)"
   echo "${watches:-0} ${instances}"
