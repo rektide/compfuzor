@@ -113,6 +113,7 @@
 
           zmodule rektide/zim-atuin-session
           zmodule rektide/zim-beads
+          zmodule rektide/zim-claude
           zmodule rektide/zim-jaeger
           zmodule rektide/zim-jujutsu
           zmodule rektide/zim-mosh
