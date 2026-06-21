@@ -1,5 +1,5 @@
-# usage.sh — inotify usage report: kernel limits, per-user consumption, and the
-# top consumers holding watches. Read-only.
+# usage.sh — inotify usage report: per-user watch/instance consumption and the
+# top (or bottom) consumers holding watches. Read-only.
 #
 # This is a compfuzor _bin body: files/_bin supplies the shebang,
 # `set -euo pipefail`, env loading, and option restoration, so this file has
@@ -18,12 +18,14 @@
 
 usage() {
   cat >&2 <<'EOF'
-usage: usage.sh [--no-color] [--sudo] [--user USER] [-h]
+usage: usage.sh [--no-color] [--sudo] [--user USER] [-n N] [--bottom] [-h]
   Report inotify watch/instance consumption for the current user, or
   system-wide with --sudo. Read-only.
     --no-color   plain output (auto-detected otherwise)
     --sudo       elevate to enumerate every user + system totals
     --user USER  focus on USER (needs --sudo if not you)
+    -n N         number of consumers to list (default 5)
+    --bottom     list LOW-watch consumers first (surfaces stalled processes)
     -h, --help   show this help
 EOF
 }
@@ -31,6 +33,8 @@ EOF
 USE_SUDO=0
 FOCUS_USER=""
 COLOR="${COLOR:-auto}"
+TOP_N=5
+SORTFLAGS="-rn"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -38,6 +42,8 @@ while [ $# -gt 0 ]; do
     --sudo)     USE_SUDO=1; shift;;
     --user)     FOCUS_USER="${2:?--user needs a username}"; shift 2;;
     --user=*)   FOCUS_USER="${1#--user=}"; shift;;
+    -n)         TOP_N="${2:?-n needs a number}"; shift 2;;
+    --bottom)   SORTFLAGS="-n"; shift;;
     -h|--help)  usage; exit 0;;
     *) echo "unknown argument: $1 (try --help)" >&2; exit 2;;
   esac
@@ -61,7 +67,6 @@ SUDO=""
 MY_UID="$(id -u)"
 MAX_WATCHES="$(cat /proc/sys/fs/inotify/max_user_watches 2>/dev/null || echo 0)"
 MAX_INSTANCES="$(cat /proc/sys/fs/inotify/max_user_instances 2>/dev/null || echo 0)"
-MAX_EVENTS="$(cat /proc/sys/fs/inotify/max_queued_events 2>/dev/null || echo 0)"
 
 FOCUS_UID=""
 if [ -n "$FOCUS_USER" ]; then
@@ -126,15 +131,6 @@ gather() {
   done
 }
 
-# ---- limits
-hr "inotify limits (kernel sysctl)"
-printf '  %-28s %s\n' "fs.inotify.max_user_watches:"   "$MAX_WATCHES"
-printf '  %-28s %s\n' "fs.inotify.max_user_instances:" "$MAX_INSTANCES"
-printf '  %-28s %s\n' "fs.inotify.max_queued_events:"  "$MAX_EVENTS"
-if [ "$USE_SUDO" != 1 ] && [ -z "$FOCUS_UID" ]; then
-  printf '  %s(scoped to you; pass --sudo for all users + system total)%s\n' "$DIM" "$RST"
-fi
-
 DATA="$(gather || true)"
 
 if [ -z "$DATA" ]; then
@@ -166,11 +162,12 @@ else
   printf '  instances: %s\n' "$(ratio "$i" "$MAX_INSTANCES")"
 fi
 
-# ---- top 5 consumers
+# ---- top/bottom N consumers
 scope="you"; [ "$USE_SUDO" = 1 ] && scope="system"; [ -n "$FOCUS_UID" ] && scope="$(uid_name "$FOCUS_UID")"
-hr "top consumers by watches (scope: $scope)"
+dir="top"; [ "$SORTFLAGS" = "-n" ] && dir="bottom"
+hr "${dir} ${TOP_N} consumers by watches (scope: $scope)"
 printf '  %9s %5s %-9s %-18s %s\n' "WATCHES" "INST" "PID" "COMMAND" "CWD (what's watched)"
-printf '%s' "$DATA" | sort -k3 -rn | head -5 | while read -r pid uid w i; do
+printf '%s' "$DATA" | sort -k3 "$SORTFLAGS" | head -n "$TOP_N" | while read -r pid uid w i; do
   comm="$(cat "/proc/$pid/comm" 2>/dev/null || $SUDO cat "/proc/$pid/comm" 2>/dev/null || echo "?")"
   cwd="$($SUDO readlink "/proc/$pid/cwd" 2>/dev/null || readlink "/proc/$pid/cwd" 2>/dev/null || echo "?")"
   printf '  %9d %5d %-9s %-18s %s\n' "$w" "$i" "$pid" "${comm:0:18}" "$cwd"
