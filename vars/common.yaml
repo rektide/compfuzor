@@ -570,6 +570,17 @@ SUBSYSTEM:
           destTemplate: "{{DIR}}/README.md"
           content: "{{ README }}"
 
+  status:
+    # requested when dir dumps are declared, or any subsystem contributed a
+    # reporter to STATUSES (gen_kernel appends status-sysctl.ts /
+    # status-modules.ts / status-sysfs.ts for active kernel leaves).
+    requested: "{{ (STATUS_DIRS is deftruthy) or (STATUS_DIRS_SUDO is deftruthy) or ((STATUSES | default([])) | length > 0) }}"
+    contrib:
+      BINS: "{{ [ {'name': 'status.sh', 'src': '../status/status.sh', 'basedir': false} ] + ([ {'name': 'status-dirs.sh', 'src': '../status/status-dirs.sh', 'basedir': false} ] if (STATUS_DIRS is deftruthy or STATUS_DIRS_SUDO is deftruthy) else []) }}"
+      ENV:
+        STATUS_DIRS: "{{ STATUS_DIRS | default([]) | arrayitize | join(':') }}"
+        STATUS_DIRS_SUDO: "{{ STATUS_DIRS_SUDO | default([]) | arrayitize | join(':') }}"
+
 _pr_patches_raw: "{{ PR_PATCHES | default([]) | arrayitize }}"
 _pr_patches_spec: >-
   {%- set normalized = [] -%}
@@ -730,6 +741,9 @@ _kernel_modprobe_bins:
   - name: install-kernel-cmdline.sh
     src: ../kernel/install-kernel-cmdline.sh
     basedir: false
+  - name: status-modules.ts
+    src: ../kernel/status-modules.ts
+    raw: True
 _kernel_sysctl_bins:
   - name: build-sysctl.sh
     src: ../kernel/build-sysctl.sh

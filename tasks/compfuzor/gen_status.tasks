@@ -1,0 +1,22 @@
+---
+# gen_status.tasks -- assemble the STATUSES reporter list and merge the status
+# subsystem's contrib (the status.sh orchestrator + the status-dirs.sh builtin +
+# ENV that propagates STATUS_DIRS / STATUS_DIRS_SUDO colon-joined to bins).
+#
+# Runs after gen_kernel, which appends the kernel reporters (status-sysctl.ts /
+# status-modules.ts / status-sysfs.ts) to STATUSES for active leaves. This file
+# appends status-dirs.sh when STATUS_DIRS / STATUS_DIRS_SUDO are declared, then
+# merges contrib only when the status subsystem is active. status.sh bakes the
+# final STATUSES list in at render time.
+
+- name: "Compfuzor: register status-dirs reporter"
+  set_fact:
+    STATUSES: "{{ (STATUSES | default([])) + (['status-dirs.sh'] if (STATUS_DIRS is deftruthy or STATUS_DIRS_SUDO is deftruthy) else []) }}"
+
+- name: "Compfuzor: synthesize status artifacts"
+  set_fact:
+    BINS: "{{ [BINS | default([]), _status_contrib.BINS | default([])] | merge_list('bins_generated') }}"
+    ENV: "{{ [_status_contrib.ENV | default({}), ENV | default({})] | merge_dict('overlay') }}"
+  when: lookup('subsys', id='status', get='active', default=false) | bool
+  vars:
+    _status_contrib: "{{ lookup('subsys', id='status', get='contrib', default={}) }}"

@@ -42,8 +42,11 @@
     ENV: "{{ [_kernel_modprobe_contrib.ENV | default({}), _kernel_sysctl_contrib.ENV | default({}), _kernel_sysfs_contrib.ENV | default({}), ENV | default({})] | merge_dict('overlay') }}"
     ENV_LIST: "{{ [ENV_LIST | default([]), _kernel_modprobe_contrib.ENV_LIST | default([]), _kernel_sysctl_contrib.ENV_LIST | default([]), _kernel_sysfs_contrib.ENV_LIST | default([])] | merge_list('append_unique') }}"
     PKGS: "{{ [PKGS | default([]), _kernel_modprobe_contrib.PKGS | default([]), _kernel_sysctl_contrib.PKGS | default([]), _kernel_sysfs_contrib.PKGS | default([])] | merge_list('append_unique') }}"
+    STATUSES: "{{ (STATUSES | default([])) + _kernel_status_reporters }}"
   when: _kernel_any_active
   vars:
+    # ordered kernel reporters, contributed to STATUSES for status.sh
+    _kernel_status_reporters: "{{ (['status-sysctl.ts'] if _kernel_sysctl_active else []) + (['status-modules.ts'] if _kernel_modprobe_active else []) + (['status-sysfs.ts'] if _kernel_sysfs_active else []) }}"
     _kernel_modprobe_active: "{{ lookup('subsys', id='kernel_modprobe', domain='kernel', get='active', default=false) | bool }}"
     _kernel_sysctl_active: "{{ lookup('subsys', id='kernel_sysctl', domain='kernel', get='active', default=false) | bool }}"
     _kernel_sysfs_active: "{{ lookup('subsys', id='kernel_sysfs', domain='kernel', get='active', default=false) | bool }}"
