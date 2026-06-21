@@ -21,7 +21,8 @@
 #
 # Output: TSV `dir\tkey\tvalue` by default (with header); --json emits one
 # object {dir,key,value} per line (JSON Lines); --json-array emits a single
-# JSON array. Values have a single trailing newline trimmed.
+# JSON array. A single trailing newline is trimmed; internal newlines (e.g.
+# pstore record dumps) are escaped as \n in TSV and kept raw for JSON.
 #
 # Exit: 0 if anything was printed, 1 if nothing found, 2 usage error.
 
@@ -61,8 +62,9 @@ EOF
   esac
 done
 
-# dump each directory: list (root-visible if sudo), cat each regular file
-LINES=()
+# dump each directory into parallel arrays (values may be multi-line, e.g.
+# pstore record dumps); list root-visible entries when sudo, cat each file
+D_O=(); K_O=(); V_O=()
 for i in "${!DIRS[@]}"; do
   dir="${DIRS[$i]}"
   USE_SUDO="${SUDO_FLAG[$i]}"
@@ -73,25 +75,31 @@ for i in "${!DIRS[@]}"; do
     run test -f "$dir/$f" 2>/dev/null || continue        # skip subdirs
     val=$(run cat "$dir/$f" 2>/dev/null) || val="<error>" # some sysfs files EIO on read
     val="${val%$'\n'}"                                    # trim one trailing newline
-    LINES+=("$dir"$'\t'"$f"$'\t'"$val")
+    D_O+=("$dir"); K_O+=("$f"); V_O+=("$val")
   done <<< "$entries"
 done
 
 # nothing found at all -> fail
-if [ "${#LINES[@]}" -eq 0 ]; then
+if [ "${{ "{" }}#D_O[@]}" -eq 0 ]; then
   exit 1
 fi
 
 case "$FORMAT" in
   tsv)
+    # escape internal newlines so each row stays a single line; JSON modes
+    # pass the raw value to jq (which escapes properly)
     printf 'dir\tkey\tvalue\n'
-    printf '%s\n' "${LINES[@]}" ;;
+    for i in "${!D_O[@]}"; do
+      printf '%s\t%s\t%s\n' "${D_O[$i]}" "${K_O[$i]}" "${V_O[$i]//$'\n'/\\n}"
+    done ;;
   jsonl)
-    printf '%s\n' "${LINES[@]}" \
-      | while IFS=$'\t' read -r d k v; do jq -cn --arg d "$d" --arg k "$k" --arg v "$v" '{dir:$d,key:$k,value:$v}'; done ;;
+    for i in "${!D_O[@]}"; do
+      jq -cn --arg d "${D_O[$i]}" --arg k "${K_O[$i]}" --arg v "${V_O[$i]}" '{dir:$d,key:$k,value:$v}'
+    done ;;
   array)
-    printf '%s\n' "${LINES[@]}" \
-      | jq -Rn '[inputs | split("\t") | {dir:.[0], key:.[1], value:.[2]}]' ;;
+    for i in "${!D_O[@]}"; do
+      jq -cn --arg d "${D_O[$i]}" --arg k "${K_O[$i]}" --arg v "${V_O[$i]}" '{dir:$d,key:$k,value:$v}'
+    done | jq -s '.' ;;
 esac
 
 exit 0
