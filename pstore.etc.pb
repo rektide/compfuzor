@@ -30,38 +30,12 @@
           ftrace_size: 0x10000
           pmsg_size: 0x10000
           ecc: 0
-    BINS:
-      - name: status.sh
-        basedir: False
-        content: |
-          show_dir() {
-            local dir="$1" title="$2"
-            echo "=== $title ==="
-            for f in "$dir"/*; do
-              echo "$(basename "$f"): $(cat "$f")"
-            done
-          }
-
-          PARAMS_DIR="/sys/module/ramoops/parameters"
-          PSTORE_DIR="/sys/fs/pstore"
-
-          if [ -d "$PARAMS_DIR" ]; then
-            show_dir "$PARAMS_DIR" "ramoops parameters"
-          else
-            echo "=== ramoops module not loaded ==="
-          fi
-          echo
-
-          if [ -d "$PSTORE_DIR" ] && [ "$(ls -A "$PSTORE_DIR" 2>/dev/null)" ]; then
-            echo "=== pstore records ==="
-            for f in "$PSTORE_DIR"/*; do
-              [ -f "$f" ] || continue
-              echo "--- $(basename "$f") ---"
-              cat "$f"
-              echo
-            done
-          else
-            echo "=== no pstore records ==="
-          fi
+    # /sys/fs/pstore records, surfaced by the generic status-dirs.sh reporter
+    # (file contents; multi-line record dumps are newline-escaped in TSV and
+    # preserved in JSON). ramoops params come from status-modules.ts via
+    # KERNEL_MODULES above. The status subsystem generates status.sh, which
+    # runs both reporters.
+    STATUS_DIRS:
+      - /sys/fs/pstore
   tasks:
     - import_tasks: tasks/compfuzor.includes
