@@ -311,7 +311,14 @@ SUBSYSTEM:
             fi
             [[ -n "${RUST_PKG:-}" ]] && PKG_FLAG="-p ${RUST_PKG}"
             [[ -n "${RUST_FEATURES:-}" ]] && FEATURES_FLAG="--features ${RUST_FEATURES}"
-            cargo build ${PROFILE} ${PKG_FLAG:-} ${FEATURES_FLAG:-} ${RUST_CARGO_ARGS:-}
+            if [[ -z "${RUST_LOCKED+x}" ]]; then
+                [ -f Cargo.lock ] && LOCKED_FLAG="--locked" || LOCKED_FLAG=""
+            elif [[ "${RUST_LOCKED}" == "true" ]]; then
+                LOCKED_FLAG="--locked"
+            else
+                LOCKED_FLAG=""
+            fi
+            cargo build ${PROFILE} ${PKG_FLAG:-} ${FEATURES_FLAG:-} ${LOCKED_FLAG:-} ${RUST_CARGO_ARGS:-}
         - name: install.sh
           basedir: repo
           generated: |
@@ -333,7 +340,14 @@ SUBSYSTEM:
         - name: install-user.sh
           basedir: repo
           generated: |
-            cargo install --path .
+            if [[ -z "${RUST_LOCKED+x}" ]]; then
+                [ -f Cargo.lock ] && LOCKED_FLAG="--locked" || LOCKED_FLAG=""
+            elif [[ "${RUST_LOCKED}" == "true" ]]; then
+                LOCKED_FLAG="--locked"
+            else
+                LOCKED_FLAG=""
+            fi
+            cargo install ${LOCKED_FLAG:-} --path .
       ENV: >-
         {{ ({'RUST_BIN': RUST_BIN}) if RUST_BIN is defined else {} }}
         | combine({'RUST_PKG': RUST_PKG} if RUST_PKG is defined else {})
@@ -341,6 +355,7 @@ SUBSYSTEM:
         | combine({'RUST_PROFILE': RUST_PROFILE} if RUST_PROFILE is defined else {})
         | combine({'RUST_CARGO_ARGS': RUST_CARGO_ARGS} if RUST_CARGO_ARGS is defined else {})
         | combine({'RUST_ALL': RUST_ALL} if RUST_ALL is defined else {})
+        | combine({'RUST_LOCKED': RUST_LOCKED} if RUST_LOCKED is defined else {})
       PKGS: "{{ RUST_PKGS | default([]) }}"
       TOOL_VERSIONS:
         rust: true
