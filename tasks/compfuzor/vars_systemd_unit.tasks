@@ -124,6 +124,65 @@
       name: "{{ _unit_filename }}"
       content: "{{ lookup('template', 'files/systemd.unit') }}"
 
+- name: 'Normalize SYSTEMD_DROPIN(S) into _dropin_entries'
+  set_fact:
+    _dropin_entries: >-
+      {%- set entries = [] -%}
+      {%- if SYSTEMD_DROPIN is defined -%}
+        {%- set _ = entries.append({'key': NAME, 'spec': SYSTEMD_DROPIN}) -%}
+      {%- elif SYSTEMD_DROPINS is defined -%}
+        {%- if SYSTEMD_DROPINS is mapping -%}
+          {%- for k, v in SYSTEMD_DROPINS.items() -%}
+            {%- set _ = entries.append({'key': k, 'spec': v}) -%}
+          {%- endfor -%}
+        {%- else -%}
+          {%- for v in SYSTEMD_DROPINS -%}
+            {%- set _ = entries.append({'key': v.name | default(NAME), 'spec': v}) -%}
+          {%- endfor -%}
+        {%- endif -%}
+      {%- endif -%}
+      {{ entries }}
+
+- name: 'Validate systemd drop-in targets'
+  fail:
+    msg: "SYSTEMD drop-in target '{{ _target }}' has unknown type '{{ _unit_type }}' (not in SYSTEMD_TYPE_CONFIG). Set target to a unit name with a known extension (e.g. '{{ _name_guess }}.service')."
+  when:
+    - _dropin_entries | length > 0
+    - _unit_type not in SYSTEMD_UNITTYPES_ALL
+  loop: "{{ _dropin_entries }}"
+  vars:
+    _spec: "{{ item.spec }}"
+    _target: "{{ _spec.target | default(NAME ~ '.service') }}"
+    _unit_type: "{{ _target.split('.')[-1] }}"
+    _name_guess: "{{ _target.split('.')[0] }}"
+
+- name: 'Generate systemd drop-in ETC_FILES'
+  set_fact:
+    ETC_FILES: "{{ ETC_FILES|default([]) + [_etc_file] }}"
+  when:
+    - _dropin_entries | length > 0
+    - not SYSTEMD_INSTALL_BYPASS|default(False)
+  loop: "{{ _dropin_entries }}"
+  vars:
+    _spec: "{{ item.spec }}"
+    _target: "{{ _spec.target | default(NAME ~ '.service') }}"
+    _unit_type: "{{ _target.split('.')[-1] }}"
+    _name: "{{ _spec.name | default(item.key) }}"
+    _etc_rel: "{{ _target }}.d/{{ _name }}.conf"
+    _type_config: "{{ SYSTEMD_TYPE_CONFIG[_unit_type] }}"
+    UNIT_TYPE: "{{ _unit_type }}"
+    _merged_sections: >-
+      {%- set merged = {} -%}
+      {%- for section_name in _type_config.sections -%}
+        {%- set section_var = 'SYSTEMD_' ~ section_name | upper ~ 'S' -%}
+        {%- set _ = merged.update({section_var: _spec[section_var] | default({})}) -%}
+      {%- endfor -%}
+      {{ merged }}
+    UNIT_VARS: "{{ _merged_sections }}"
+    _etc_file:
+      name: "{{ _etc_rel }}"
+      content: "{{ lookup('template', 'files/systemd.unit') }}"
+
 - name: 'Add systemd install-unit.sh script to BINS'
   set_fact:
     BINS: "{{ enhancedBins|concat(BINS|default([])) }}"
