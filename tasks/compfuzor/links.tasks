@@ -1,4 +1,11 @@
 ---
+# NOTE: LINKS creates symlinks inline during the ansible run. This is generally
+# NOT the preferred pattern in compfuzor. The idiomatic approach is to generate
+# an install.sh script (a BINS entry) that performs the linking as a standalone
+# tool the user runs, so ansible's role stays limited to generating content
+# under {{DIR}} and the system-mutating work (symlinking into /etc, mkdir of
+# target dirs, daemon-reload, enable/start) lives in generated scripts. Prefer
+# install.sh over LINKS for new playbooks.
 #- name: "Test for parent directories for LINKS"
 #  stat:
 #    path: "{{_parent}}"
