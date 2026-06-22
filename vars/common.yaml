@@ -347,7 +347,18 @@ SUBSYSTEM:
             else
                 LOCKED_FLAG=""
             fi
-            cargo install ${LOCKED_FLAG:-} --path .
+            if grep -q '^\[workspace\]' Cargo.toml 2>/dev/null && ! grep -q '^\[package\]' Cargo.toml 2>/dev/null; then
+                if [[ -n "${RUST_PKG:-}" ]]; then
+                    _manifest=$(cargo metadata --format-version 1 --no-deps 2>/dev/null | jq -r --arg pkg "${RUST_PKG}" '.packages[] | select(.name == $pkg) | .manifest_path')
+                    cargo install ${LOCKED_FLAG:-} --path "$(dirname "$_manifest")"
+                else
+                    for _manifest in $(cargo metadata --format-version 1 --no-deps 2>/dev/null | jq -r '[ .packages[] | . as $pkg | .targets[] | select(.kind[] | . == "bin") | $pkg.manifest_path ] | unique[]'); do
+                        cargo install ${LOCKED_FLAG:-} --path "$(dirname "$_manifest")"
+                    done
+                fi
+            else
+                cargo install ${LOCKED_FLAG:-} --path .
+            fi
       ENV: >-
         {{ ({'RUST_BIN': RUST_BIN}) if RUST_BIN is defined else {} }}
         | combine({'RUST_PKG': RUST_PKG} if RUST_PKG is defined else {})
