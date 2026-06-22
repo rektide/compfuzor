@@ -1,4 +1,27 @@
 ---
+# ============================================================================
+# BACKTRACK NOTE: the modern alternative to this whole playbook is
+# systemd-repart's BlockDeviceReplace= (systemd v261+, in Debian sid today).
+#
+# This tmpfs + pivot_root approach CANNOT free the live root device on a
+# systemd host: pivot_root only rearranges the mount tree, so PID 1 and every
+# running daemon keep the original device pinned -> you can never reformat it.
+# It remains useful for chroot staging / testing, not for in-place reformat.
+#
+# BlockDeviceReplace= solves the real problem. Point it at the mountpoint of a
+# running, SINGLE-DEVICE btrfs (e.g. BlockDeviceReplace=/) that lives on a
+# volatile/RAM-backed device. systemd-repart creates the target GPT partition,
+# then calls the kernel BTRFS_IOC_DEV_REPLACE ioctl (== `btrfs replace`) to
+# live-copy all blocks onto it and atomically swap the device-id while mounted,
+# then btrfs_resize_max grows it to fill. No reboot. Reverts on failure.
+#   - btrfs only, single-device only, ONLINE only (--offline=yes refused)
+#   - cannot combine with Format=/CopyBlocks=/CopyFiles= (the fs move IS the
+#     population); DefaultSubvolume= needs --offline=yes, so set the default
+#     subvolume separately (btrfs subvolume set-default) in the online flow.
+#   - mechanism: src/repart/repart.c btrfs_replace(); man repart.d(5).
+#
+# Evaluate / build this out in: pivot-bdr.srv.pb
+# ============================================================================
 - hosts: all
   vars:
     # Default configuration
