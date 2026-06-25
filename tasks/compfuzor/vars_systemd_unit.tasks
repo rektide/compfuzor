@@ -183,6 +183,31 @@
       name: "{{ _etc_rel }}"
       content: "{{ lookup('template', 'files/systemd.unit') }}"
 
+- name: 'Generate systemd drop-in install script'
+  set_fact:
+    BINS: "{{ BINS|default([]) + [_bin_item] }}"
+  when:
+    - _dropin_entries | length > 0
+    - not SYSTEMD_INSTALL_BYPASS|default(False)
+  vars:
+    _dropin_rows: >-
+      {%- set rows = [] -%}
+      {%- for entry in _dropin_entries -%}
+        {%- set spec = entry.spec -%}
+        {%- set target = spec.target | default(NAME ~ '.service') -%}
+        {%- set name = spec.name | default(entry.key) -%}
+        {%- set scope = spec.scope | default(SYSTEMD_SCOPE | default('system')) -%}
+        {%- set unit_dir = '${HOME}/.config/systemd/user' if scope == 'user' else '/etc/systemd/system' -%}
+        {%- set systemctl = 'systemctl --user' if scope == 'user' else 'systemctl' -%}
+        {%- set sudo_cmd = '-' if scope == 'user' else 'sudo' -%}
+        {%- set _ = rows.append('  "' ~ name ~ '|' ~ target ~ '|' ~ unit_dir ~ '|' ~ systemctl ~ '|' ~ sudo_cmd ~ '"') -%}
+      {%- endfor -%}
+      {{ rows | join('\n') }}
+    _bin_item:
+      name: install-dropin.sh
+      no_header: true
+      generated: "{{ lookup('template', 'files/systemd/install-dropin.sh') }}"
+
 - name: 'Add systemd install-unit.sh script to BINS'
   set_fact:
     BINS: "{{ enhancedBins|concat(BINS|default([])) }}"
