@@ -86,8 +86,12 @@
           zmodule k
           zmodule termtitle
           #zmodule https://github.com/hmgle/aider-zsh-complete
+          # replaced by rektide/zim-zoxide (cached init + completions, no cd override)
           #zmodule https://github.com/jnooree/zoxide-zsh-completion
-          zmodule kiesman99/zim-zoxide
+          #zmodule kiesman99/zim-zoxide  (renamed -> vietz-dev)
+          #zmodule vietz-dev/zim-zoxide
+          #zmodule antoineco/zim-zoxide
+          zmodule rektide/zim-zoxide
           #zmodule https://github.com/agkozak/zsh-z
           #zmodule https://github.com/joke/zim-chezmoi
           zmodule https://github.com/joke/zim-github-cli
