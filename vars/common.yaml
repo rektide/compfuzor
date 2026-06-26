@@ -237,9 +237,19 @@ SUBSYSTEM:
               pnpm import
             fi
             pnpm i --frozen
-            if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
-              echo "Building package..."
-              pnpm build
+            IFS=',' read -ra _cf_build_scripts <<< "${NODEJS_BUILD_SCRIPTS:-build}"
+            for _cf_script in "${_cf_build_scripts[@]}"; do
+              if jq -e ".scripts.${_cf_script}" package.json > /dev/null 2>&1; then
+                echo "Building via ${_cf_script}..."
+                pnpm run "${_cf_script}"
+              fi
+            done
+            if [ -n "${NODEJS_BUILD_COMMANDS:-}" ]; then
+              IFS=',' read -ra _cf_build_commands <<< "${NODEJS_BUILD_COMMANDS:-}"
+              for _cf_cmd in "${_cf_build_commands[@]}"; do
+                echo "Running ${_cf_cmd}..."
+                ${_cf_cmd}
+              done
             fi
         - name: install.sh
           #run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
@@ -253,7 +263,29 @@ SUBSYSTEM:
             else
               pnpm link -g
             fi
-      ENV: "{{ ({'NODEJS_BIN': NODEJS_BIN}) if NODEJS_BIN is defined else ({}) }}"
+            if [ -n "${NODEJS_PRUNE_SCRIPTS:-}" ]; then
+              IFS=',' read -ra _cf_prune_scripts <<< "${NODEJS_PRUNE_SCRIPTS:-}"
+              for _cf_script in "${_cf_prune_scripts[@]}"; do
+                pnpm run "${_cf_script}"
+              done
+            elif [ -n "${NODEJS_PRUNE_COMMANDS:-}" ]; then
+              IFS=',' read -ra _cf_prune_commands <<< "${NODEJS_PRUNE_COMMANDS:-}"
+              for _cf_cmd in "${_cf_prune_commands[@]}"; do
+                ${_cf_cmd}
+              done
+            elif [ "${NODEJS_PRUNE:-}" = "true" ]; then
+              pnpm prune --prod
+            fi
+      ENV: >-
+        {{ ({'NODEJS_BIN': NODEJS_BIN}) if NODEJS_BIN is defined else ({}) }}
+        | combine({'NODEJS_BUILD_SCRIPTS': _nodejs_build_scripts | join(',')}) if _nodejs_build_scripts | length > 0 else ({})
+        | combine({'NODEJS_BUILD_COMMANDS': _nodejs_build_commands | join(',')}) if _nodejs_build_commands | length > 0 else ({})
+        | combine({'NODEJS_PRUNE': NODEJS_PRUNE | string | lower} if NODEJS_PRUNE is defined else {})
+        | combine({'NODEJS_PRUNE_SCRIPTS': _nodejs_prune_scripts | join(',')}) if _nodejs_prune_scripts | length > 0 else ({})
+        | combine({'NODEJS_PRUNE_COMMANDS': _nodejs_prune_commands | join(',')}) if _nodejs_prune_commands | length > 0 else ({})
+      PKGS:
+        - build-essential
+        - python3
       TOOL_VERSIONS:
         nodejs: true
 
@@ -619,14 +651,29 @@ _pr_patches_spec: >-
   {%- endfor -%}
   {{ normalized }}
 
+_nodejs_build_scripts: "{{ (NODEJS_BUILD_SCRIPTS | default(NODEJS_BUILD_SCRIPT | default([]))) | arrayitize }}"
+_nodejs_build_commands: "{{ (NODEJS_BUILD_COMMANDS | default(NODEJS_BUILD_COMMAND | default([]))) | arrayitize }}"
+_nodejs_prune_scripts: "{{ (NODEJS_PRUNE_SCRIPTS | default(NODEJS_PRUNE_SCRIPT | default([]))) | arrayitize }}"
+_nodejs_prune_commands: "{{ (NODEJS_PRUNE_COMMANDS | default(NODEJS_PRUNE_COMMAND | default([]))) | arrayitize }}"
+
 _npm_src_bins:
   - name: build.sh
     generated: |
       curl $(npm view $NPM_PACKAGE dist.tarball) | tar -xz --strip-components=1
       pnpm i
-      if jq -e '.scripts.build' package.json > /dev/null 2>&1; then
-        echo "Building package..."
-        pnpm build
+      IFS=',' read -ra _cf_build_scripts <<< "${NODEJS_BUILD_SCRIPTS:-build}"
+      for _cf_script in "${_cf_build_scripts[@]}"; do
+        if jq -e ".scripts.${_cf_script}" package.json > /dev/null 2>&1; then
+          echo "Building via ${_cf_script}..."
+          pnpm run "${_cf_script}"
+        fi
+      done
+      if [ -n "${NODEJS_BUILD_COMMANDS:-}" ]; then
+        IFS=',' read -ra _cf_build_commands <<< "${NODEJS_BUILD_COMMANDS:-}"
+        for _cf_cmd in "${_cf_build_commands[@]}"; do
+          echo "Running ${_cf_cmd}..."
+          ${_cf_cmd}
+        done
       fi
       pnpm link
 
