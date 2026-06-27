@@ -9,34 +9,37 @@
       hostname: "{{hostname|default('debos')}}"
       user: "{{user|default(ansible_user_id)}}"
       password: "{{password|default('CHANGE_OR_ELSE')}}"
-    PKGSETS:
+    MKOSI_PKGS: []
+    MKOSI_PKGSETS:
       - BASE
+      # TODO: eventually support "BASE_{{ARCH}}" parametric pkgsets so the
+      # amd64/arm64-specific sets resolve automatically from ARCH.
       - BASE_amd64
-      - WORKSTATION
-      - VIRTUALIZATION
-      - WORKSTATION_X
-      - OPENCL
-      - XPRA
-      - DEVEL
-      - DEBDEV
-      - AUDIO
-      - AUDIO_X
-      - BT
-      - BT_X
-      - RYGEL
-      - RYGEL_X
-      - USERSPACE
-      - JACK
-      - JACK_X
-      - MEDIA
-      - VAAPI
-      - VAAPI_amd64
-      - WORKSTATION_WAYLAND
-      - MEDIA_X
-      - POSTGRES
-      - CONTAINER
-      - BONUS
-      - WORDS
+      # - WORKSTATION
+      # - VIRTUALIZATION
+      # - WORKSTATION_X
+      # - OPENCL
+      # - XPRA
+      # - DEVEL
+      # - DEBDEV
+      # - AUDIO
+      # - AUDIO_X
+      # - BT
+      # - BT_X
+      # - RYGEL
+      # - RYGEL_X
+      # - USERSPACE
+      # - JACK
+      # - JACK_X
+      # - MEDIA
+      # - VAAPI
+      # - VAAPI_amd64
+      # - WORKSTATION_WAYLAND
+      # - MEDIA_X
+      # - POSTGRES
+      # - CONTAINER
+      # - BONUS
+      # - WORDS
     mmpkgs: "{{ lookup('template', '../files/_pkgs') }}"
     ETC_FILES:
       - name: pkgs.txt

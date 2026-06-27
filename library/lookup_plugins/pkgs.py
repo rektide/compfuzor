@@ -64,16 +64,41 @@ def _as_list(value):
     return [value]
 
 
+def _context_var(variables, name):
+    """Resolve a context var with TYPE-prefix precedence.
+
+    Tries C(<TYPE>_<NAME>) first (for example C(MKOSI_PKGS) when C(TYPE=mkosi))
+    so each playbook can namespace its package lists without polluting the
+    framework-global C(PKGS)/C(PKGSETS) that compfuzor/pkgs.tasks consumes.
+    Falls back to the bare C(NAME) when the prefixed var is unset.
+    """
+    type_name = variables.get("TYPE")
+    if isinstance(type_name, str) and type_name:
+        prefixed = "{}_{}".format(type_name.upper(), name)
+        if prefixed in variables:
+            value = variables[prefixed]
+            if not (value is None or wrapped_test_undefined(value)):
+                return value
+    return variables.get(name)
+
+
 def resolve_pkgs(variables, pkgs=None, pkgset=None, pkgsets=None):
     """Combine direct C(pkgs) with packages resolved from C(pkgset)/C(pkgsets) names.
 
-    Each argument falls back to the matching compfuzor context variable
-    (C(PKGS), C(PKGSET), C(PKGSETS)) when C(None).
+    Each argument falls back to the matching compfuzor context variable when
+    C(None). Resolution order: C(<TYPE>_PKGS)-style prefix wins over the bare
+    C(PKGS)/C(PKGSET)/C(PKGSETS), so per-playbook namespacing stays out of the
+    framework-global namespace.
+
+    Null-tolerant throughout: an empty list, an absent key, an explicit C(None),
+    or a fully empty context all yield C([]). A playbook can therefore leave
+    C(MKOSI_PKGS) unset (or set it to C([])) and the result is still the flat
+    list of packages pulled from whatever C(MKOSI_PKGSETS) names resolve.
     """
     variables = variables or {}
-    direct = _as_list(pkgs if pkgs is not None else variables.get("PKGS"))
-    names = _as_list(pkgset if pkgset is not None else variables.get("PKGSET"))
-    names += _as_list(pkgsets if pkgsets is not None else variables.get("PKGSETS"))
+    direct = _as_list(pkgs if pkgs is not None else _context_var(variables, "PKGS"))
+    names = _as_list(pkgset if pkgset is not None else _context_var(variables, "PKGSET"))
+    names += _as_list(pkgsets if pkgsets is not None else _context_var(variables, "PKGSETS"))
 
     result = list(direct)
     for name in names:
