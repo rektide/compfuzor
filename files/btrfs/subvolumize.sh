@@ -16,7 +16,7 @@ then
 fi
 
 # Dry-run safety-check
-for v in ${SUBVOLMES[@]}
+for v in ${BTRFS_SUBVOLUMES[@]}
 do
 	if [ -e "$v" ]
 	then
@@ -54,5 +54,6 @@ do
 	mkdir -p $(dirname $v)
 	btrfs subvolume create $v
 
-	[ "$bak" != 0 ] && mv $v.bak/* $v/ && rm -r $v.bak
+	# copy contents including dotfiles (the /. form), then drop the backup
+	[ "$bak" != 0 ] && cp -a "$v.bak/." "$v/" && rm -rf "$v.bak"
 done
