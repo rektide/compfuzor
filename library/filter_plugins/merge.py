@@ -401,12 +401,17 @@ def merge_list(values, strategy="append", single=False, get=None):
 
 
 @accept_args_markers
-def merge_dict(values, strategy="overlay", single=False, get=None):
+def merge_dict(values=None, *extra, strategy="overlay", single=False, get=None):
     """Merge direct dict payloads with one dict strategy.
 
     Args:
-        values: Dict payloads to merge. By default this is treated as multiple
-            payloads, for example `[subsystem_env, existing_env]`.
+        values: Dict payloads to merge. Can be a single dict, a list of
+            dicts, or None. By default a list is treated as multiple
+            payloads, for example ``[subsystem_env, existing_env]``.
+        *extra: Additional dict payloads (variadic). None/undefined values
+            are skipped. A string first extra arg is treated as the
+            strategy for backward compatibility with
+            ``merge_dict(values, 'strategy')``.
         strategy: Strategy name. Supported strings are `overlay`, `dict_overlay`,
             and named profiles such as `env_overlay`. Overlay strategies merge
             left-to-right, so later payloads win key conflicts.
@@ -417,17 +422,35 @@ def merge_dict(values, strategy="overlay", single=False, get=None):
     Returns:
         The merged dict, or the value at `get` when provided.
     """
+    # Backward compat: existing callers pass strategy as 2nd positional:
+    #   [d1, d2] | merge_dict('overlay')
+    # Variadic callers pass dicts:
+    #   ENV | merge_dict(d1, d2, d3)
+    if extra and isinstance(extra[0], str):
+        strategy = extra[0]
+        extra = extra[1:]
+
     values = _raw_copy_template_data(values)
+    extra = [_raw_copy_template_data(e) for e in extra]
     strategy = _raw_copy_template_data(_resolve_dict_strategy(strategy))
     get = _raw_copy_template_data(get)
     _validate_dict_strategy(strategy)
 
     if _is_nothing(values):
         payloads = []
-    elif single:
+    elif single and not extra:
         payloads = [values]
     else:
         payloads = _as_list(values)
+
+    # Flatten variadic args — each can be a dict or a list of dicts
+    for arg in extra:
+        if _is_nothing(arg):
+            continue
+        if isinstance(arg, list):
+            payloads.extend(arg)
+        elif isinstance(arg, dict):
+            payloads.append(arg)
 
     payloads = [value for value in payloads if not _is_nothing(value)]
     result = _merge_dict_values(payloads, strategy)

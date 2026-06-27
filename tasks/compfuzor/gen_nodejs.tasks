@@ -1,6 +1,6 @@
 ---
 # TODO: there has to be a better way to combine/synth these down
-# than per-key ternary conditionals. combine2 skips None/empty/undefined
+# than per-key ternary conditionals. merge_dict skips None/undefined
 # so each entry is either a dict or None — no null-check boilerplate.
 - name: "Compfuzor: synthesize nodejs subsystem artifacts"
   set_fact:
@@ -12,13 +12,11 @@
 - name: "Compfuzor: set nodejs build/prune env"
   set_fact:
     ENV: >-
-      {{
-        ENV | combine2(
-          {'NODEJS_BUILD_SCRIPTS': _nodejs_build_scripts | join(',')} if _nodejs_build_scripts | length > 0 else None,
-          {'NODEJS_BUILD_COMMANDS': _nodejs_build_commands | join(',')} if _nodejs_build_commands | length > 0 else None,
-          {'NODEJS_PRUNE': NODEJS_PRUNE | string | lower} if NODEJS_PRUNE is defined else None,
-          {'NODEJS_PRUNE_SCRIPTS': _nodejs_prune_scripts | join(',')} if _nodejs_prune_scripts | length > 0 else None,
-          {'NODEJS_PRUNE_COMMANDS': _nodejs_prune_commands | join(',')} if _nodejs_prune_commands | length > 0 else None
-        )
-      }}
+      {{ ENV | merge_dict(
+        {'NODEJS_BUILD_SCRIPTS': _nodejs_build_scripts | join(',')} if _nodejs_build_scripts | length > 0 else None,
+        {'NODEJS_BUILD_COMMANDS': _nodejs_build_commands | join(',')} if _nodejs_build_commands | length > 0 else None,
+        {'NODEJS_PRUNE': NODEJS_PRUNE | string | lower} if NODEJS_PRUNE is defined else None,
+        {'NODEJS_PRUNE_SCRIPTS': _nodejs_prune_scripts | join(',')} if _nodejs_prune_scripts | length > 0 else None,
+        {'NODEJS_PRUNE_COMMANDS': _nodejs_prune_commands | join(',')} if _nodejs_prune_commands | length > 0 else None
+      ) }}
   when: lookup('subsys', id='nodejs', get='active', default=false) | bool
