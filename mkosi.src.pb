@@ -9,7 +9,7 @@
       hostname: "{{hostname|default('debos')}}"
       user: "{{user|default(ansible_user_id)}}"
       password: "{{password|default('CHANGE_OR_ELSE')}}"
-    MKOSI_PKGSETS:
+    PKGSETS:
       - BASE
       - BASE_amd64
       - WORKSTATION
@@ -37,14 +37,10 @@
       - CONTAINER
       - BONUS
       - WORDS
+    mmpkgs: "{{ lookup('template', '../files/_pkgs') }}"
     ETC_FILES:
       - name: pkgs.txt
-        content: |
-          {% set sep=joiner('\n') -%}
-          {% for s in mmpkgset -%}
-          {{sep()}}{{vars[s]|default(hostvars[inventory_hostname][s])|join(',')}}
-          {%- endfor -%}
-          linux-image-{{arch}},linux-headers-{{arch}}
+        content: "{{mmpkgs}}"
     BINS:
       - name: build-debian.sh
         exec: |

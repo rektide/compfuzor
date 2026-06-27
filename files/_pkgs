@@ -1,0 +1,2 @@
+{{ lookup('pkgs') | join('\n') }}
+{% if arch %}linux-image-{{arch}},linux-headers-{{arch}}{% endif %}

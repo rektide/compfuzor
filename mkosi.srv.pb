@@ -8,7 +8,7 @@
       hostname: "{{hostname|default('debos')}}"
       user: "{{user|default(ansible_user_id)}}"
       password: "{{password|default('CHANGE_OR_ELSE')}}"
-    MKOSI_PKGSETS:
+    PKGSETS:
       - BASE
       - BASE_amd64
       - WORKSTATION
@@ -36,14 +36,10 @@
       - CONTAINER
       - BONUS
       - WORDS
+    mmpkgs: "{{ lookup('template', '../files/_pkgs') }}"
     ETC_FILES:
       - name: pkgs.txt
-        content: |
-          {% set sep=joiner('\n') -%}
-          {% for s in mmpkgset -%}
-          {{sep()}}{{vars[s]|default(hostvars[inventory_hostname][s])|join(',')}}
-          {%- endfor -%}
-          linux-image-{{arch}},linux-headers-{{arch}}
+        content: "{{mmpkgs}}"
       - name: mkosi.conf.d/pkgs.conf
 
       - name: mkosi.postinst
@@ -77,6 +73,13 @@
           BaseTrees=%O/base
       - name: mkosi.images/base/mkosi.conf
         content: |
+          [Config]
+          MinimumVersion=26~devel
+          # If you enable Profiles= here, [Config] MUST stay above [Distribution]
+          # in any mkosi.local.conf — particleos issue #88 spent days on a profile
+          # whose [Match] was silently skipped because [Distribution] came first.
+          #Profiles=obs-repos
+
           [Build]
           ToolsTree=default
           History=yes
