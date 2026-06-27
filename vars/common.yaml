@@ -276,13 +276,7 @@ SUBSYSTEM:
             elif [ "${NODEJS_PRUNE:-}" = "true" ]; then
               pnpm prune --prod
             fi
-      ENV: >-
-        {{ ({'NODEJS_BIN': NODEJS_BIN}) if NODEJS_BIN is defined else ({}) }}
-        | combine({'NODEJS_BUILD_SCRIPTS': _nodejs_build_scripts | join(',')} if _nodejs_build_scripts | length > 0 else {})
-        | combine({'NODEJS_BUILD_COMMANDS': _nodejs_build_commands | join(',')} if _nodejs_build_commands | length > 0 else {})
-        | combine({'NODEJS_PRUNE': NODEJS_PRUNE | string | lower} if NODEJS_PRUNE is defined else {})
-        | combine({'NODEJS_PRUNE_SCRIPTS': _nodejs_prune_scripts | join(',')} if _nodejs_prune_scripts | length > 0 else {})
-        | combine({'NODEJS_PRUNE_COMMANDS': _nodejs_prune_commands | join(',')} if _nodejs_prune_commands | length > 0 else {})
+      ENV: "{{ ({'NODEJS_BIN': NODEJS_BIN}) if NODEJS_BIN is defined else ({}) }}"
       PKGS:
         - build-essential
         - python3
