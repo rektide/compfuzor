@@ -4,7 +4,7 @@
     ETC_FILES: "{{ [[{'name': '.tool-versions', 'content': _tv_content}], ETC_FILES] | merge_list('append') }}"
     LINKS: "{{ [[{'src': DIR + '/etc/.tool-versions', 'dest': '.tool-versions'}], LINKS] | merge_list('append') }}"
   vars:
-    _tv_versions: "{{ [TOOL_VERSIONS] | merge_dict('tool_versions_overlay') }}"
+    _tv_versions: "{{ TOOL_VERSIONS | merge_dict(strategy='tool_versions_overlay') }}"
     _tv_content: |
       {% for target, version in _tv_versions.items() %}
       {{ target }} {{ version if version != True else lookup('vars', target | upper + '_VERSION') }}

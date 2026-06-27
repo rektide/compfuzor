@@ -39,7 +39,7 @@
   set_fact:
     ETC_FILES: "{{ [ETC_FILES | default([]), _kernel_modprobe_contrib.ETC_FILES | default([]), _kernel_sysctl_contrib.ETC_FILES | default([]), _kernel_sysfs_contrib.ETC_FILES | default([])] | merge_list('append') }}"
     BINS: "{{ [BINS | default([]), _kernel_modprobe_contrib.BINS | default([]), _kernel_sysctl_contrib.BINS | default([]), _kernel_sysfs_contrib.BINS | default([])] | merge_list('bins_generated') }}"
-    ENV: "{{ [_kernel_modprobe_contrib.ENV | default({}), _kernel_sysctl_contrib.ENV | default({}), _kernel_sysfs_contrib.ENV | default({}), ENV | default({})] | merge_dict('overlay') }}"
+    ENV: "{{ _kernel_modprobe_contrib.ENV | merge_dict(_kernel_sysctl_contrib.ENV, _kernel_sysfs_contrib.ENV, ENV, skip='all') }}"
     ENV_LIST: "{{ [ENV_LIST | default([]), _kernel_modprobe_contrib.ENV_LIST | default([]), _kernel_sysctl_contrib.ENV_LIST | default([]), _kernel_sysfs_contrib.ENV_LIST | default([])] | merge_list('append_unique') }}"
     PKGS: "{{ [PKGS | default([]), _kernel_modprobe_contrib.PKGS | default([]), _kernel_sysctl_contrib.PKGS | default([]), _kernel_sysfs_contrib.PKGS | default([])] | merge_list('append_unique') }}"
     STATUSES: "{{ (STATUSES | default([])) + _kernel_status_reporters }}"
