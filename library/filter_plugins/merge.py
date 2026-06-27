@@ -110,6 +110,51 @@ def _is_nothing(value):
     return value is None or wrapped_test_undefined(value)
 
 
+_SKIP_CHECKS = {
+    "none": lambda v: v is None,
+    "undefined": lambda v: wrapped_test_undefined(v),
+    "false": lambda v: v is False,
+    "empty": lambda v: isinstance(v, (dict, list, str, tuple)) and len(v) == 0,
+}
+
+_SKIP_ALL = frozenset(_SKIP_CHECKS)
+_SKIP_DEFAULT = frozenset({"none", "undefined"})
+
+
+def _parse_skip(skip):
+    """Parse skip option into a frozenset of check-function names.
+
+    Accepts:
+        - False / None / "" — skip nothing
+        - True / "all"      — skip all skipable types
+        - "none,false"      — comma-separated type names
+        - ["none", "false"] — list of type names
+    """
+    if skip is False or skip is None or skip == "":
+        return frozenset()
+    if skip is True:
+        return _SKIP_ALL
+    if isinstance(skip, str):
+        if skip == "all":
+            return _SKIP_ALL
+        names = frozenset(s.strip() for s in skip.split(",") if s.strip())
+    else:
+        names = frozenset(skip)
+    unknown = names - _SKIP_ALL
+    if unknown:
+        raise ValueError(
+            "unknown skip type(s): {}. Valid: {}".format(
+                ", ".join(sorted(unknown)), ", ".join(sorted(_SKIP_ALL))
+            )
+        )
+    return names
+
+
+def _should_skip(value, skip_names):
+    """True if value matches any active skip check."""
+    return any(_SKIP_CHECKS[name](value) for name in skip_names)
+
+
 def _dict_get_raw(mapping, key, default=None):
     """Read one dict key without calling lazy container accessors.
 
@@ -401,16 +446,17 @@ def merge_list(values, strategy="append", single=False, get=None):
 
 
 @accept_args_markers
-def merge_dict(values=None, *extra, strategy="overlay", single=False, get=None):
+def merge_dict(values=None, *extra, strategy="overlay", single=False, get=None,
+               skip="none,undefined"):
     """Merge direct dict payloads with one dict strategy.
 
     Args:
         values: Dict payloads to merge. Can be a single dict, a list of
             dicts, or None. By default a list is treated as multiple
             payloads, for example ``[subsystem_env, existing_env]``.
-        *extra: Additional dict payloads (variadic). None/undefined values
-            are skipped. A string first extra arg is treated as the
-            strategy for backward compatibility with
+        *extra: Additional dict payloads (variadic). Values matching the
+            skip criteria are filtered. A string first extra arg is
+            consumed as the strategy for backward compatibility with
             ``merge_dict(values, 'strategy')``.
         strategy: Strategy name. Supported strings are `overlay`, `dict_overlay`,
             and named profiles such as `env_overlay`. Overlay strategies merge
@@ -418,6 +464,11 @@ def merge_dict(values=None, *extra, strategy="overlay", single=False, get=None):
         single: Treat `values` itself as one dict payload instead of a list of
             payloads.
         get: Optional dotted path to extract from the merged result.
+        skip: Control which payloads are filtered out before merging.
+            Accepts a comma-separated string (``"none,false"``), a list
+            (``["none", "false"]``), ``"all"``, or ``False`` to disable
+            skipping. Valid type names: none, undefined, false, empty.
+            Default: ``"none,undefined"``.
 
     Returns:
         The merged dict, or the value at `get` when provided.
@@ -430,29 +481,30 @@ def merge_dict(values=None, *extra, strategy="overlay", single=False, get=None):
         strategy = extra[0]
         extra = extra[1:]
 
+    skip_names = _parse_skip(skip)
     values = _raw_copy_template_data(values)
     extra = [_raw_copy_template_data(e) for e in extra]
     strategy = _raw_copy_template_data(_resolve_dict_strategy(strategy))
     get = _raw_copy_template_data(get)
     _validate_dict_strategy(strategy)
 
-    if _is_nothing(values):
+    if _should_skip(values, skip_names):
         payloads = []
-    elif single and not extra:
+    elif single:
         payloads = [values]
     else:
         payloads = _as_list(values)
 
     # Flatten variadic args — each can be a dict or a list of dicts
     for arg in extra:
-        if _is_nothing(arg):
+        if _should_skip(arg, skip_names):
             continue
         if isinstance(arg, list):
             payloads.extend(arg)
         elif isinstance(arg, dict):
             payloads.append(arg)
 
-    payloads = [value for value in payloads if not _is_nothing(value)]
+    payloads = [value for value in payloads if not _should_skip(value, skip_names)]
     result = _merge_dict_values(payloads, strategy)
     if get is not None:
         return get_path(result, get)
