@@ -77,6 +77,13 @@
               "~/.config/opencode/get-shit-done/*": "allow"
             external_directory:
               "~/.config/opencode/get-shit-done/*": "allow"
+      - name: mcp/permission.json
+        json:
+          permission:
+            "*": "allow"
+            external_directory:
+              "*": "allow"
+            doom_loop: "allow"
       - name: mcp/mdns.json
         json:
           server:
