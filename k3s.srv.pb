@@ -43,7 +43,10 @@
       - "-/sbin/modprobe overlay"
     SYSTEMD_SERVICES:
       Delegate: yes
-      ExecStart: "{{_exec|join(' ')}}"
+      # Servers wrap k3s through bin/launch.sh, which detects node-IP drift
+      # (DHCP changes across reboots) and runs --cluster-reset --cluster-reset-keep-control-plane-members
+      # before exec'ing k3s. Agents don't run etcd, so no drift risk.
+      ExecStart: "{{ (BINS_DIR + '/launch.sh ') if is_server else '' }}{{_exec|join(' ')}}"
       ExecStartPre: "{{_execPre|join(' ')}}"
       KillMode: process
       LimitNOFILE: 1048576
@@ -57,6 +60,22 @@
     # install
     SYSTEMD_INSTALLS:
       Alias: "{{TYPE}}.service"
+
+    # Server-only toolkit. launch.sh wraps ExecStart for drift detection;
+    # status.sh is a read-only diagnostic; recover.sh is manual cluster-reset
+    # for the current broken state (launch.sh handles future drift).
+    # Deployed raw from files/k3s-server/ to {{BINS_DIR}}/.
+    server_bins:
+      - name: launch.sh
+        src: launch.sh
+        raw: True
+      - name: status.sh
+        src: status.sh
+        raw: True
+      - name: recover.sh
+        src: recover.sh
+        raw: True
+    BINS: "{{ server_bins if is_server else [] }}"
 
     # non k3s
     DOMAIN: base.yoyodyne.example.net
@@ -96,6 +115,10 @@
     DISABLE_NETWORK_POLICY: "{{ DISABLE|default([], true)|intersect(['network-policy'])|length() == 0}}"
     DISABLE_KUBE_PROXY:     "{{ DISABLE|default([], true)|intersect(['kube-proxy']    )|length() == 1}}"
     ETCD_SNAPSHOT_RETENTION: 28
+    # Kubelet eviction thresholds; empty string disables. Single-arg form
+    # uses k3s/kubelet's default soft+hard parsing. Example below matches the
+    # production workhorse-voodoowarez-com deployment.
+    # Example: "eviction-hard=nodefs.available<25Gi,imagefs.available<25Gi"
     KUBELET_ARGS: ""
 
     # k3s agent
@@ -121,7 +144,7 @@
       V: "{{V|default(2)}}"
       # common
       NODE_IP: "{{NODE_IP|default('', true)}}"
-      NODE_EXTERANL_IP: "{{NODE_EXTERNAL_IP|default('', true)}}"
+      NODE_EXTERNAL_IP: "{{NODE_EXTERNAL_IP|default('', true)}}"
       # server
       ETCD_SNAPSHOT_RETENTION: "{{ETCD_SNAPSHOT_RETENTION}}"
       SNAPSHOTTER: "{{SNAPSHOTTER}}"
