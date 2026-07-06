@@ -1,7 +1,7 @@
 ---
 - hosts: all
   vars:
-    REPO: https://github.com/badlogic/pi-mono
-    NODEJS: True
+    REPO: https://github.com/NousResearch/hermes-agent
+    PYTHON: True
   tasks:
     - import_tasks: tasks/compfuzor.includes
