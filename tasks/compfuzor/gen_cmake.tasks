@@ -4,4 +4,5 @@
     BINS: "{{ lookup('merge_subsys', id='cmake', contrib='BINS') }}"
     PKGS: "{{ lookup('merge_subsys', id='cmake', contrib='PKGS', strategy='append') }}"
     ENV: "{{ lookup('merge_subsys', id='cmake', contrib='ENV') }}"
+    ENV_PRIO: "{{ lookup('merge_subsys', id='cmake', contrib='ENV_PRIO') }}"
   when: lookup('subsys', id='cmake', get='active', default=false) | bool

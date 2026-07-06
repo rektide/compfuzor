@@ -151,6 +151,12 @@ ARTIFACT_DEFAULTS = {
         "default": {},
         "current_wins": True,
     },
+    "ENV_PRIO": {
+        "kind": "dict",
+        "strategy": "env_overlay",
+        "default": {},
+        "current_wins": True,
+    },
     "TOOL_VERSIONS": {
         "kind": "dict",
         "strategy": "tool_versions_overlay",
