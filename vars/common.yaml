@@ -747,6 +747,8 @@ _cmake_install_prefix_arg: >-
   -DCMAKE_INSTALL_PREFIX={{ CMAKE_INSTALL_PREFIX }}
   {%- endif -%}
   {%- endif -%}
+_cmake_policy_version_arg: >-
+  {{ '' if (CMAKE_POLICY_VERSION_MINIMUM | default('3.5') | string | lower in ['false', '0', 'no', 'none', '']) else '-DCMAKE_POLICY_VERSION_MINIMUM=' ~ (CMAKE_POLICY_VERSION_MINIMUM | default('3.5')) }}
 _cmake_env_base:
   BUILD_DIR_CF_CM: "{{ _BUILD_DIR }}"
   CMAKE_GENERATOR: "{{ CMAKE_GENERATOR | default(omit) }}"
@@ -787,7 +789,10 @@ _cmake_bins:
       if [ ! -f "$BUILD_DIR/CMakeCache.txt" ]; then
         SHOULD_CONFIGURE=1
       elif [ ! -f "$CONFIGURE_STATE" ]; then
-        mv "$CONFIGURE_STATE_NEXT" "$CONFIGURE_STATE"
+        # cache exists but no compfuzor state -> a prior configure was incomplete
+        # (e.g. cmake failed); clear stale artifacts so configure starts fresh
+        rm -rf "$BUILD_DIR/CMakeCache.txt" "$BUILD_DIR/CMakeFiles"
+        SHOULD_CONFIGURE=1
       elif cmp -s "$CONFIGURE_STATE" "$CONFIGURE_STATE_NEXT"; then
         rm -f "$CONFIGURE_STATE_NEXT"
       else
@@ -796,7 +801,7 @@ _cmake_bins:
       {% endif %}
 
       if [ "$SHOULD_CONFIGURE" -eq 1 ]; then
-        cmake -G "{{ generator }}" -B "$BUILD_DIR" -S "$SOURCE_DIR" {{ [_cmake_dep_args, _cmake_install_prefix_arg, configureArgs] | select('ne', '') | join(' ') }}
+        cmake -G "{{ generator }}" -B "$BUILD_DIR" -S "$SOURCE_DIR" {{ [_cmake_dep_args, _cmake_install_prefix_arg, _cmake_policy_version_arg, configureArgs] | select('ne', '') | join(' ') }}
         mv "$CONFIGURE_STATE_NEXT" "$CONFIGURE_STATE"
       else
         echo "Already configured, skipping configure for $BUILD_DIR"
