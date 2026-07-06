@@ -748,7 +748,7 @@ _cmake_install_prefix_arg: >-
   {%- endif -%}
   {%- endif -%}
 _cmake_policy_version_arg: >-
-  {{ '' if (CMAKE_POLICY_VERSION_MINIMUM | default('3.5') | string | lower in ['false', '0', 'no', 'none', '']) else '-DCMAKE_POLICY_VERSION_MINIMUM=' ~ (CMAKE_POLICY_VERSION_MINIMUM | default('3.5')) }}
+  {{ '' if (CMAKE_POLICY_VERSION_MINIMUM | default('3.10') | string | lower in ['false', '0', 'no', 'none', '']) else '-DCMAKE_POLICY_VERSION_MINIMUM=' ~ (CMAKE_POLICY_VERSION_MINIMUM | default('3.10')) }}
 _cmake_env_base:
   BUILD_DIR_CF_CM: "{{ _BUILD_DIR }}"
   CMAKE_GENERATOR: "{{ CMAKE_GENERATOR | default(omit) }}"
