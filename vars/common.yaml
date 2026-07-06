@@ -740,7 +740,13 @@ _cmake_dep_args: >-
   {%- endfor -%}
   {{ args | join(' ') }}
 _cmake_install_prefix_arg: >-
-  {{ '-DCMAKE_INSTALL_PREFIX=' ~ (DIR if (CMAKE_INSTALL_PREFIX | string | lower in ['true', '1']) else CMAKE_INSTALL_PREFIX) if CMAKE_INSTALL_PREFIX is defined else '' }}
+  {%- if CMAKE_INSTALL_PREFIX is defined -%}
+  {%- if CMAKE_INSTALL_PREFIX | string | lower in ['true', '1'] -%}
+  -DCMAKE_INSTALL_PREFIX="${DIR}"
+  {%- else -%}
+  -DCMAKE_INSTALL_PREFIX={{ CMAKE_INSTALL_PREFIX }}
+  {%- endif -%}
+  {%- endif -%}
 _cmake_env_base:
   BUILD_DIR_CF_CM: "{{ _BUILD_DIR }}"
   CMAKE_GENERATOR: "{{ CMAKE_GENERATOR | default(omit) }}"
