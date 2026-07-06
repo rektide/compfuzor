@@ -63,7 +63,7 @@ UBUNTU_DISTRIBUTION: noble
 TMUX_CONF_D_DIR: conf.d
 BIND: 0.0.0.0
 NODEJS_VERSION: 25
-PNPM_VERSION: 10
+PNPM_VERSION: 11
 BUN_VERSION: 1
 GO_VERSION: 1
 RUST_VERSION: 1
@@ -172,7 +172,6 @@ _subsystem_bypassed: "{{ bypassed | default(lookup('subsys', id=subsystem_name |
 _subsystem_valid: "{{ valid | default(errors | length == 0) | bool }}"
 _subsystem_active: "{{ _subsystem_requested and (not _subsystem_bypassed) and _subsystem_valid }}"
 
-
 SUBSYSTEM:
   get_urls:
     requested: "{{ GET_URLS | deflengthy }}"
@@ -236,7 +235,7 @@ SUBSYSTEM:
             if [ -f package-lock.json ] && [ ! -f pnpm-lock.yaml ]; then
               pnpm import
             fi
-            pnpm i --frozen
+            pnpm i --frozen-lockfile
             IFS=',' read -ra _cf_build_scripts <<< "${NODEJS_BUILD_SCRIPTS:-build}"
             for _cf_script in "${_cf_build_scripts[@]}"; do
               if jq -e ".scripts.${_cf_script}" package.json > /dev/null 2>&1; then
@@ -438,7 +437,6 @@ SUBSYSTEM:
       ETC_FILES: "{{ [{'name': 'pip.txt', 'content': (PIP | join('\\n') if PIP is iterable and PIP is not string else PIP | default(''))}] if PIP is defined else [] }}"
       TOOL_VERSIONS:
         python: true
-
 
   desktop:
     requested: "{{ DESKTOP is defined }}"
@@ -675,7 +673,7 @@ _npm_install_bins:
   - name: install.sh
     run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
     generated: |
-      pnpm install -g $(cat etc/npm.txt)
+      pnpm install -g{% set _ab = NPM_ALLOW_BUILD | default(False) %}{% if _ab %}{% for _pkg in ((NPM | arrayitize) if (_ab | type_debug == 'bool') else (_ab | arrayitize)) %} --allow-build={{ _pkg }}{% endfor %}{% endif %} $(cat etc/npm.txt) $*
 
 _npm_install_etc:
   - name: npm.txt
