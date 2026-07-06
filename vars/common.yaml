@@ -411,6 +411,11 @@ SUBSYSTEM:
       ENV: "{{ _cmake_env }}"
       ENV_PRIO: "{{ _cmake_deps_env_prio }}"
 
+  make:
+    requested: "{{ MAKE is deftruthy }}"
+    contrib:
+      BINS: "{{ _make_bins }}"
+
   python:
     requested: "{{ PYTHON is deftruthy or PIP is defined }}"
     contrib:
@@ -821,6 +826,21 @@ _cmake_bins:
       [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${CMAKE_INSTALL_BIN:-{{ TYPE }}}"
       ln -sfv "$(pwd)/{{ _cmake_builds[0].build_dir | default('build') }}/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
       {% endif %}
+
+_make_bins:
+  - name: build.sh
+    run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
+    basedir: "{{ REPO_DIR }}"
+    generated: |
+      mkdir -p "{{ _BUILD_DIR }}"
+      cd "{{ _BUILD_DIR }}"
+      "{{ SRC }}"/configure --prefix="${DIR}" {{ CONF_OPTIONS|default('') }}
+      make -j{{ CORES|default(8) }} {{ MAKE_TARGET|default('') }}
+  - name: install.sh
+    basedir: "{{ REPO_DIR }}"
+    generated: |
+      cd "{{ _BUILD_DIR }}"
+      make install
 
 _kernel_modprobe_bins:
   - name: build-kernel.sh

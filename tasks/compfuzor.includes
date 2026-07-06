@@ -36,6 +36,9 @@
 - import_tasks: compfuzor/gen_cmake.tasks
   when: CMAKE is deftruthy or CMAKE_ARGS is defined or CMAKE_BUILDS is defined
   tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_make.tasks
+  when: MAKE is deftruthy
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_debconf.tasks
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_pg.tasks
