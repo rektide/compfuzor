@@ -8,6 +8,7 @@
     CMAKE_DEPS:
       folly: "{{OPTS_DIR}}/folly-{{INSTANCE|default('git')}}"
     PKGS:
+    - libboost-all-dev
     - googletest
     - libgtest-dev
     - libgoogle-glog-dev
