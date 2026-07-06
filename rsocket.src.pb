@@ -5,6 +5,10 @@
     CMAKE: True
     CMAKE_INSTALL: True
     CMAKE_INSTALL_PREFIX: True
+    CMAKE_ARGS:
+      - "-DBUILD_TESTS=OFF"
+      - "-DBUILD_BENCHMARKS=OFF"
+      - "-DBUILD_EXAMPLES=OFF"
     CMAKE_DEPS:
       folly: "{{OPTS_DIR}}/folly-{{INSTANCE|default('git')}}"
     PKGS:
