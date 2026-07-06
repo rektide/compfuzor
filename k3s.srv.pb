@@ -24,16 +24,13 @@
     - src: "{{ETC}}"
       dest: "/etc/rancher/k3s"
     is_server: "{{ 'servers' in group_names }}"
-    # TODO(multi-server): this playbook currently only supports single-server
-    #   embedded-etcd clusters. To support HA control planes:
-    #   - introduce K3S_BOOTSTRAP var (default: groups[cluster]|sort|first)
-    #     to designate which host runs --cluster-init on first bringup.
-    #   - joining servers need `--server <peer-url>` (currently absent from
-    #     serverArgs below) and must NOT receive --cluster-init.
-    #   - K3S_URL below defaults to inventory_hostname (self), which is wrong
-    #     for joining servers; it should default to the bootstrap server.
-    #   - reset.sh already refuses on multi-server (etcd member count >1);
-    #     no launcher drift-reset to gate anymore (launch.sh was deleted).
+    # Multi-server topology. K3S_BOOTSTRAP designates which host runs
+    # --cluster-init on first bringup. Defaults to first sorted host in the
+    # cluster group; override via -e K3S_BOOTSTRAP=<hostname>. Joining servers
+    # get --server $K3S_URL instead of --cluster-init.
+    _bootstrap_host: "{{ K3S_BOOTSTRAP | default(groups[cluster]|default([inventory_hostname])|sort|first, true) }}"
+    is_bootstrap: "{{ inventory_hostname == _bootstrap_host }}"
+    is_multiserver: "{{ (groups[cluster]|default([inventory_hostname])|length) > 1 }}"
 
     # unit
     SYSTEMD_UNITS:
@@ -99,6 +96,7 @@
     NODE_NAME: false
     PRIVATE_REGISTRY: false
     K3S_URL: ""
+    K3S_BOOTSTRAP: false
     SNAPSHOTTER: btrfs
     RESOLV_CONF: false
     PREFER_BUNDLED_BIN: false
@@ -143,7 +141,7 @@
       LOCAL_PROVISIONER_PATH: "{{LOCAL_PROVISIONER_PATH}}"
       CONTAINER_RUNTIME_ENDPOINT: "{{CONTAINER_RUNTIME_ENDPOINT|default('', true)}}"
       PRIVATE_REGISTRY: "{{PRIVATE_REGISTRY|default('', true)}}"
-      K3S_URL: "{{'https://' + K3S_URL|default(inventory_hostname + ':6443', true) if K3S_URL is not search('https://') else K3S_URL}}"
+      K3S_URL: "{{'https://' + K3S_URL|default(_bootstrap_host + ':6443', true) if K3S_URL is not search('https://') else K3S_URL}}"
       V: "{{V|default(2)}}"
       # common
       NODE_IP: "{{NODE_IP|default('', true)}}"
@@ -153,6 +151,7 @@
       SNAPSHOTTER: "{{SNAPSHOTTER}}"
       DISABLE_LIST: "{{DISABLE_LIST}}"
       KUBELET_ARGS: "{{KUBELET_ARGS}}"
+      K3S_MULTISERVER: "{{ '1' if is_multiserver else '0' }}"
 
     # TODO/fantasy: make commonEnv/serverEnv/agentEnv and something to generate EXEC from that k/v!
     commonArgs:
@@ -163,14 +162,9 @@
     - "{{ '--private-registry $PRIVATE_REGISTRY' if PRIVATE_REGISTRY|default(False) else '' }}"
     - "{{ '--kubelet-arg $KUBELET_ARGS' if KUBELET_ARGS else '' }}"
     agentArgs: {}
-    # TODO(multi-server): serverArgs needs a conditional `--server $K3S_URL`
-    #   for non-bootstrap servers (joining an existing cluster), and
-    #   --cluster-init below would need to become conditional on is_bootstrap.
-    #   Currently --cluster-init is always passed (safe for single-server:
-    #   k3s ignores it once etcd data exists). Without --server, a second
-    #   server would silently fork a new cluster.
     serverArgs:
-    - "--cluster-init"
+    # bootstrap server initializes the cluster; joiners contact it via --server.
+    - "{{ '--cluster-init' if is_bootstrap else '--server $K3S_URL' }}"
     #- "--tls-san $CLUSTER_DOMAIN"
     - "{{ '--tls-san '+extraDomains|listify|concat(extraIpv4Domains)|join(',') if extraDomains|default(False) else '' }}"
     - "--cluster-domain $CLUSTER_DOMAIN"
