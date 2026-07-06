@@ -5,11 +5,11 @@
     CMAKE: True
     CMAKE_INSTALL: True
     CMAKE_DEPS:
-      folly: "{{OPTS_DIR}}/folly-{{INSTANCE|default('-git')}}"
-      fizz: "{{OPTS_DIR}}/fizz-{{INSTANCE|default('-git')}}"
-      rsocket: "{{OPTS_DIR}}/rsocket-{{INSTANCE|default('-git')}}"
-      wangle: "{{OPTS_DIR}}/wangle-{{INSTANCE|default('-git')}}"
-      yarpl: "{{OPTS_DIR}}/yarpl-{{INSTANCE|default('-git')}}"
+      folly: "{{OPTS_DIR}}/folly-{{INSTANCE|default('git')}}"
+      fizz: "{{OPTS_DIR}}/fizz-{{INSTANCE|default('git')}}"
+      rsocket: "{{OPTS_DIR}}/rsocket-{{INSTANCE|default('git')}}"
+      wangle: "{{OPTS_DIR}}/wangle-{{INSTANCE|default('git')}}"
+      yarpl: "{{OPTS_DIR}}/yarpl-{{INSTANCE|default('git')}}"
     PKGS:
     - flex
     - bison
