@@ -4,6 +4,7 @@
     REPO: https://github.com/facebook/folly
     CMAKE: True
     CMAKE_INSTALL: True
+    CMAKE_INSTALL_PREFIX: True
     PKGS:
       - libaio-dev
       - libboost-all-dev

@@ -4,9 +4,10 @@
     REPO: https://github.com/facebook/wangle
     CMAKE: True
     CMAKE_INSTALL: True
+    CMAKE_INSTALL_PREFIX: True
     CMAKE_DEPS:
-      folly: "{{OPTS_DIR}}/folly-{{INSTANCE|default('git')}}"
-      fizz: "{{OPTS_DIR}}/fizz-{{INSTANCE|default('git')}}"
+      folly: "{{OPTS_DIR}}/folly"
+      fizz: "{{OPTS_DIR}}/fizz"
     PKGS:
     - libevent-dev
     - libgoogle-glog-dev

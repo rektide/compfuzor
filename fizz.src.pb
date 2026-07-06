@@ -4,8 +4,9 @@
     REPO: https://github.com/facebookincubator/fizz
     CMAKE: True
     CMAKE_INSTALL: True
+    CMAKE_INSTALL_PREFIX: True
     CMAKE_DEPS:
-      folly: "{{OPTS_DIR}}/folly-{{INSTANCE|default('git')}}"
+      folly: "{{OPTS_DIR}}/folly"
     PKGS:
     - libevent-dev
     - libdouble-conversion-dev

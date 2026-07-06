@@ -4,8 +4,9 @@
     REPO: https://github.com/rsocket/rsocket-cpp
     CMAKE: True
     CMAKE_INSTALL: True
+    CMAKE_INSTALL_PREFIX: True
     CMAKE_DEPS:
-      folly: "{{OPTS_DIR}}/folly-{{INSTANCE|default('git')}}"
+      folly: "{{OPTS_DIR}}/folly"
     PKGS:
     - googletest
     - libgtest-dev
