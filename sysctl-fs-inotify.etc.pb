@@ -21,7 +21,7 @@
     KERNEL_SYSCTL:
       fs.inotify.max_user_watches: 1048576  # default 65536
       fs.inotify.max_user_instances: 8192   # default 1024
-      fs.inotify.max_queued_events: 16384   # default 16384
+      fs.inotify.max_queued_events: 65536 # default 16384
     BINS:
       # usage.sh: read-only per-user inotify watch/instance consumption report
       # (top consumers); --sudo for system-wide. Distinct from status-sysctl.ts,
