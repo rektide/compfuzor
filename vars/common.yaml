@@ -409,6 +409,7 @@ SUBSYSTEM:
       BINS: "{{ _cmake_bins }}"
       PKGS: [cmake, ninja-build]
       ENV: "{{ _cmake_env }}"
+      ENV_PRIO: "{{ _cmake_deps_env_prio }}"
 
   python:
     requested: "{{ PYTHON is deftruthy or PIP is defined }}"
@@ -719,11 +720,31 @@ _cmake_install_args_global: >-
     if (CMAKE_INSTALL is defined and CMAKE_INSTALL != True)
     else ''
   }}
-_cmake_env:
+_cmake_libdir: "{{ CMAKE_LIBDIR | default('/usr/local/lib/cmake') }}"
+_cmake_deps_env_prio: >-
+  {%- set out = {} -%}
+  {%- for dep, path in (CMAKE_DEPS | default({})).items() -%}
+  {%- set _ = out.update({ (dep | upper) ~ '_DIR': path }) -%}
+  {%- endfor -%}
+  {{ out }}
+_cmake_deps_env: >-
+  {%- set out = {} -%}
+  {%- for dep, path in (CMAKE_DEPS | default({})).items() -%}
+  {%- set _ = out.update({ (dep | upper) ~ '_CMAKE': '${' ~ (dep | upper) ~ '_DIR}' ~ _cmake_libdir ~ '/' ~ dep }) -%}
+  {%- endfor -%}
+  {{ out }}
+_cmake_dep_args: >-
+  {%- set args = [] -%}
+  {%- for dep in (CMAKE_DEPS | default({})) -%}
+  {%- set _ = args.append('-D' ~ dep ~ '_DIR="${' ~ (dep | upper) ~ '_CMAKE}"') -%}
+  {%- endfor -%}
+  {{ args | join(' ') }}
+_cmake_env_base:
   BUILD_DIR_CF_CM: "{{ _BUILD_DIR }}"
   CMAKE_GENERATOR: "{{ CMAKE_GENERATOR | default(omit) }}"
   CMAKE_BUILD_TYPE: "{{ CMAKE_BUILD_TYPE | default('Release') }}"
   CMAKE_INSTALL_BIN: "{{ CMAKE_INSTALL_BIN | default(omit) }}"
+_cmake_env: "{{ _cmake_env_base | combine(_cmake_deps_env) }}"
 _cmake_bins:
   - name: build.sh
     run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
@@ -767,7 +788,7 @@ _cmake_bins:
       {% endif %}
 
       if [ "$SHOULD_CONFIGURE" -eq 1 ]; then
-        cmake -G "{{ generator }}" -B "$BUILD_DIR" -S "$SOURCE_DIR" {{ configureArgs }}
+        cmake -G "{{ generator }}" -B "$BUILD_DIR" -S "$SOURCE_DIR" {{ [_cmake_dep_args, configureArgs] | select('ne', '') | join(' ') }}
         mv "$CONFIGURE_STATE_NEXT" "$CONFIGURE_STATE"
       else
         echo "Already configured, skipping configure for $BUILD_DIR"
