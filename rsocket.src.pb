@@ -6,7 +6,7 @@
     CMAKE_INSTALL: True
     CMAKE_INSTALL_PREFIX: True
     CMAKE_DEPS:
-      folly: "{{OPTS_DIR}}/folly"
+      folly: "{{OPTS_DIR}}/folly-{{INSTANCE|default('git')}}"
     PKGS:
     - googletest
     - libgtest-dev

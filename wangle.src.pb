@@ -6,8 +6,8 @@
     CMAKE_INSTALL: True
     CMAKE_INSTALL_PREFIX: True
     CMAKE_DEPS:
-      folly: "{{OPTS_DIR}}/folly"
-      fizz: "{{OPTS_DIR}}/fizz"
+      folly: "{{OPTS_DIR}}/folly-{{INSTANCE|default('git')}}"
+      fizz: "{{OPTS_DIR}}/fizz-{{INSTANCE|default('git')}}"
     PKGS:
     - libevent-dev
     - libgoogle-glog-dev
