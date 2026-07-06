@@ -26,17 +26,14 @@
     is_server: "{{ 'servers' in group_names }}"
     # TODO(multi-server): this playbook currently only supports single-server
     #   embedded-etcd clusters. To support HA control planes:
-    #   - distinguish bootstrap server from joining servers (e.g. by inventory
-    #     order: groups['servers']|sort|first is bootstrap, the rest join).
+    #   - introduce K3S_BOOTSTRAP var (default: groups[cluster]|sort|first)
+    #     to designate which host runs --cluster-init on first bringup.
     #   - joining servers need `--server <peer-url>` (currently absent from
-    #     serverArgs below) and must NOT receive --cluster-init (the empty-etcd
-    #     branch in launch.sh:9 would otherwise fork a second cluster).
+    #     serverArgs below) and must NOT receive --cluster-init.
     #   - K3S_URL below defaults to inventory_hostname (self), which is wrong
-    #     for joining servers; it must point at an existing server peer.
-    #   - launch.sh's --cluster-reset-on-drift MUST be gated off for
-    #     multi-server (cluster-reset = etcd --force-new-cluster severs the
-    #     node from its peers). Plan: write K3S_MULTISERVER env var here from
-    #     groups['servers']|length and have launch.sh skip the reset branch.
+    #     for joining servers; it should default to the bootstrap server.
+    #   - reset.sh already refuses on multi-server (etcd member count >1);
+    #     no launcher drift-reset to gate anymore (launch.sh was deleted).
 
     # unit
     SYSTEMD_UNITS:
@@ -56,13 +53,7 @@
       - "-/sbin/modprobe overlay"
     SYSTEMD_SERVICES:
       Delegate: yes
-      # Servers wrap k3s through bin/launch.sh, which detects node-IP drift
-      # (DHCP changes across reboots) and runs --cluster-reset before exec'ing
-      # k3s. cluster-reset is etcd's --force-new-cluster: it preserves local
-      # data but resets membership to a single member -- so launch.sh is
-      # SINGLE-SERVER ONLY. On multi-server it would sever the cluster.
-      # Agents don't run etcd, so no drift risk.
-      ExecStart: "{{ (BINS_DIR + '/launch.sh ') if is_server else '' }}{{_exec|join(' ')}}"
+      ExecStart: "{{_exec|join(' ')}}"
       ExecStartPre: "{{_execPre|join(' ')}}"
       KillMode: process
       LimitNOFILE: 1048576
@@ -77,19 +68,15 @@
     SYSTEMD_INSTALLS:
       Alias: "{{TYPE}}.service"
 
-    # Server-only toolkit. launch.sh wraps ExecStart for drift detection;
-    # status.sh is a read-only diagnostic; recover.sh is manual cluster-reset
-    # for the current broken state (launch.sh handles future drift).
-    # Deployed raw from files/k3s-server/ to {{BINS_DIR}}/.
+    # Server-only toolkit. reset.sh is manual cluster-reset for single-server
+    # IP-drift recovery (refuses on multi-server); status.sh is a read-only
+    # diagnostic. Deployed raw from files/k3s-server/ to {{BINS_DIR}}/.
     server_bins:
-      - name: launch.sh
-        src: launch.sh
-        raw: True
       - name: status.sh
         src: status.sh
         raw: True
-      - name: recover.sh
-        src: recover.sh
+      - name: reset.sh
+        src: reset.sh
         raw: True
     BINS: "{{ server_bins if is_server else [] }}"
 
@@ -176,13 +163,14 @@
     - "{{ '--private-registry $PRIVATE_REGISTRY' if PRIVATE_REGISTRY|default(False) else '' }}"
     - "{{ '--kubelet-arg $KUBELET_ARGS' if KUBELET_ARGS else '' }}"
     agentArgs: {}
-    # TODO(multi-server): serverArgs needs a conditional `--server $JOIN_URL`
-    #   for non-bootstrap servers (joining an existing cluster). The bootstrap
-    #   server uses --cluster-init (added by launch.sh when etcd data is empty)
-    #   but joining servers must NOT receive --cluster-init and MUST receive
-    #   --server pointing at an existing peer. Currently absent; without it a
-    #   second server would silently fork a new cluster via --cluster-init.
+    # TODO(multi-server): serverArgs needs a conditional `--server $K3S_URL`
+    #   for non-bootstrap servers (joining an existing cluster), and
+    #   --cluster-init below would need to become conditional on is_bootstrap.
+    #   Currently --cluster-init is always passed (safe for single-server:
+    #   k3s ignores it once etcd data exists). Without --server, a second
+    #   server would silently fork a new cluster.
     serverArgs:
+    - "--cluster-init"
     #- "--tls-san $CLUSTER_DOMAIN"
     - "{{ '--tls-san '+extraDomains|listify|concat(extraIpv4Domains)|join(',') if extraDomains|default(False) else '' }}"
     - "--cluster-domain $CLUSTER_DOMAIN"

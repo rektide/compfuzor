@@ -11,7 +11,6 @@ set -euo pipefail
 
 INSTANCE_DIR="/srv/k3s-server-workhorse-voodoowarez-com"
 ENV_FILE="${INSTANCE_DIR}/env"
-STATE_FILE="${INSTANCE_DIR}/var/drift.state"
 K3S_BIN="/usr/local/bin/k3s"
 
 [ -r "$ENV_FILE" ] && . "$ENV_FILE"
@@ -41,20 +40,6 @@ current_ip="$(ip -4 route get 1.1.1.1 2>/dev/null \
   | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}' || true)"
 printf 'current (default-route src): %s\n' "${current_ip:-<undetectable>}"
 
-last_ip="(none)"
-[ -r "$STATE_FILE" ] && last_ip="$(tr -d '[:space:]' < "$STATE_FILE")"
-printf 'last-known (%s): %s\n' "$STATE_FILE" "$last_ip"
-
-if [ -n "$current_ip" ] && [ "$last_ip" != "(none)" ]; then
-  if [ "$current_ip" = "$last_ip" ]; then
-    printf 'drift:    %sno%s\n' "$GRN" "$RST"
-  else
-    printf 'drift:    %sYES (%s -> %s); launch.sh will reset on next start%s\n' "$RED" "$last_ip" "$current_ip" "$RST"
-  fi
-elif [ -z "$last_ip" ] || [ "$last_ip" = "(none)" ]; then
-  printf 'drift:    %sunknown (no baseline; launch.sh will seed on first run)%s\n' "$YLW" "$RST"
-fi
-
 printf '\ndefault route:\n'
 ip -4 route show default 2>/dev/null | sed 's/^/  /'
 
@@ -67,16 +52,24 @@ sudo ss -ltnp 2>/dev/null | grep -E ':(2379|2380|6443|10250)\b' | sed 's/^/  /' 
 hr "etcd member list (registered peer URLs)"
 ETCD_TLS_DIR="$DATA/server/tls/etcd"
 if sudo test -r "$ETCD_TLS_DIR/server-client.crt" 2>/dev/null; then
-  sudo /usr/bin/etcdctl \
+  member_output="$(sudo /usr/bin/etcdctl \
     --endpoints=https://127.0.0.1:2379 \
     --cacert="$ETCD_TLS_DIR/server-ca.crt" \
     --cert="$ETCD_TLS_DIR/server-client.crt" \
     --key="$ETCD_TLS_DIR/server-client.key" \
-    member list 2>&1 | sed 's/^/  /' || true
+    member list 2>&1 || true)"
+  echo "$member_output" | sed 's/^/  /'
+  member_count="$(echo "$member_output" | grep -c '^' || true)"
   echo
-  echo "  note: 'member update' won't work in the drift-broken state -- the"
-  echo "  registered peer is unreachable so raft has no leader to commit. Use"
-  echo "  bin/recover.sh to rewrite via --cluster-reset (single-server only)."
+  if [ "${member_count:-0}" -gt 1 ]; then
+    printf '  %sMULTI-SERVER: %s members. reset.sh will refuse.%s\n' "$YLW" "$member_count" "$RST"
+  elif [ -n "$current_ip" ]; then
+    if echo "$member_output" | grep -q "=https://${current_ip}:2380"; then
+      printf '  %speer URL matches current IP%s\n' "$GRN" "$RST"
+    else
+      printf '  %sDRIFT: current IP %s not in peer URLs; reset.sh can fix%s\n' "$RED" "$current_ip" "$RST"
+    fi
+  fi
 else
   echo "  (cannot read $ETCD_TLS_DIR; sudo needed, or k3s not yet started)"
 fi
@@ -85,11 +78,6 @@ fi
 hr "etcd snapshots (latest 5)"
 sudo "$K3S_BIN" etcd-snapshot list --data-dir="$DATA" 2>/dev/null | tail -5 | sed 's/^/  /' \
   || echo "  (k3s etcd-snapshot list failed)"
-
-# --- drift/reset events
-hr "recent k3s-launcher events (last 10)"
-journalctl -t k3s-launcher --no-pager -n 10 2>&1 \
-  | tail -10 | sed 's/^/  /' || true
 
 # --- the actual failure signature
 hr "recent 'not a member of the etcd cluster' (last 3, 24h)"
