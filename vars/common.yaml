@@ -720,7 +720,7 @@ _cmake_install_args_global: >-
     if (CMAKE_INSTALL is defined and CMAKE_INSTALL != True)
     else ''
   }}
-_cmake_libdir: "{{ CMAKE_LIBDIR | default('/usr/local/lib/cmake') }}"
+_cmake_libdir: "{{ CMAKE_LIBDIR | default('/lib/cmake') }}"
 _cmake_deps_env_prio: >-
   {%- set out = {} -%}
   {%- for dep, path in (CMAKE_DEPS | default({})).items() -%}
@@ -739,6 +739,8 @@ _cmake_dep_args: >-
   {%- set _ = args.append('-D' ~ dep ~ '_DIR="${' ~ (dep | upper) ~ '_CMAKE}"') -%}
   {%- endfor -%}
   {{ args | join(' ') }}
+_cmake_install_prefix_arg: >-
+  {{ '-DCMAKE_INSTALL_PREFIX=' ~ (DIR if (CMAKE_INSTALL_PREFIX | string | lower in ['true', '1']) else CMAKE_INSTALL_PREFIX) if CMAKE_INSTALL_PREFIX is defined else '' }}
 _cmake_env_base:
   BUILD_DIR_CF_CM: "{{ _BUILD_DIR }}"
   CMAKE_GENERATOR: "{{ CMAKE_GENERATOR | default(omit) }}"
@@ -788,7 +790,7 @@ _cmake_bins:
       {% endif %}
 
       if [ "$SHOULD_CONFIGURE" -eq 1 ]; then
-        cmake -G "{{ generator }}" -B "$BUILD_DIR" -S "$SOURCE_DIR" {{ [_cmake_dep_args, configureArgs] | select('ne', '') | join(' ') }}
+        cmake -G "{{ generator }}" -B "$BUILD_DIR" -S "$SOURCE_DIR" {{ [_cmake_dep_args, _cmake_install_prefix_arg, configureArgs] | select('ne', '') | join(' ') }}
         mv "$CONFIGURE_STATE_NEXT" "$CONFIGURE_STATE"
       else
         echo "Already configured, skipping configure for $BUILD_DIR"
