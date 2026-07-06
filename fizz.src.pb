@@ -1,26 +1,11 @@
 ---
 - hosts: all
   vars:
-    TYPE: fizz
-    INSTANCE: git 
     REPO: https://github.com/facebookincubator/fizz
-    BINS:
-    - name: build.sh
-      basedir: fizz
-      content: |
-        mkdir -p build_
-        cd build_
-        folly_DIR="${FOLLY_CMAKE}" \
-          cmake ..
-        make -j $(nproc)
-        make install DESTDIR=${INSTALL_DIR}
-    ENV_PRIO:
-      LIBDIR: "/usr/local/lib/cmake/"
-      FOLLY_DIR: "{{OPTS_DIR}}/folly-{{INSTANCE|default('-git')}}"
-    ENV:
-      FOLLY_CMAKE: "${FOLLY_DIR}${LIBDIR}folly"
-      INSTALL_DIR: "{{OPT}}"
-    OPT_DIR: true
+    CMAKE: True
+    CMAKE_INSTALL: True
+    CMAKE_DEPS:
+      folly: "{{OPTS_DIR}}/folly-{{INSTANCE|default('-git')}}"
     PKGS:
     - libevent-dev
     - libdouble-conversion-dev
@@ -35,4 +20,4 @@
     - libsodium-dev
 
   tasks:
-  - include: tasks/compfuzor.includes type=src
+    - import_tasks: tasks/compfuzor.includes

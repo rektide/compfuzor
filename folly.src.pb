@@ -3,7 +3,6 @@
   vars:
     REPO: https://github.com/facebook/folly
     CMAKE: True
-    BUILD_DIR: "_build"
     CMAKE_INSTALL: True
     PKGS:
       - libaio-dev
