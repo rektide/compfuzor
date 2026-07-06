@@ -9,9 +9,9 @@
     PASSWORD_LENGTH: 96
     ETC_FILES:
     - name: token
-      var: token
+      content: "{{PASSWORD.token}}"
     - name: agent-token
-      var: agentToken
+      content: "{{PASSWORD.agentToken}}"
     - name: config.toml.tmpl
     VAR_DIRS:
     - data/agent/etc/containerd
