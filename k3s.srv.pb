@@ -31,6 +31,8 @@
     _bootstrap_host: "{{ K3S_BOOTSTRAP | default(groups[cluster]|default([inventory_hostname])|sort|first, true) }}"
     is_bootstrap: "{{ inventory_hostname == _bootstrap_host }}"
     is_multiserver: "{{ (groups[cluster]|default([inventory_hostname])|length) > 1 }}"
+    # all hostnames in the cluster group (for tls-san aggregation across peers)
+    _cluster_hosts: "{{ groups[cluster] | default([inventory_hostname]) }}"
 
     # unit
     SYSTEMD_UNITS:
@@ -166,7 +168,7 @@
     # bootstrap server initializes the cluster; joiners contact it via --server.
     - "{{ '--cluster-init' if is_bootstrap else '--server $K3S_URL' }}"
     #- "--tls-san $CLUSTER_DOMAIN"
-    - "{{ '--tls-san '+extraDomains|listify|concat(extraIpv4Domains)|join(',') if extraDomains|default(False) else '' }}"
+    - "{{ '--tls-san '+extraDomains|listify|concat(_cluster_hosts, extraIpv4Domains)|unique|join(',') if extraDomains|default(False) else '' }}"
     - "--cluster-domain $CLUSTER_DOMAIN"
     - "--cluster-cidr $CLUSTER_CIDR"
     - "--service-cidr $SERVICE_CIDR"
