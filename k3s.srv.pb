@@ -7,6 +7,7 @@
     - token
     - agentToken
     PASSWORD_LENGTH: 96
+    PASSWORDS_FILES: true
     ETC_FILES:
     - name: token
       content: "{{PASSWORD.token}}"

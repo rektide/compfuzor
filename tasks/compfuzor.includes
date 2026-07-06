@@ -17,6 +17,9 @@
     keys: False
   tags: ['vars', 'always']
 - debug: "msg='Compfuzor: sourcing extra variables'"
+- import_tasks: compfuzor/gen_passwords.tasks
+  when: PASSWORDS is defined
+  tags: ['password', 'vars', 'always']
 - import_tasks: compfuzor/vars_apt.tasks
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_systemd.tasks

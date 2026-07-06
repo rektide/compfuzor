@@ -20,7 +20,6 @@
     uname -r
     (dpkg --print-architecture && dpkg --print-foreign-architectures) | tr "\n" ","; echo
     uuidgen
-    pwgen {{PASSWORD_LENGTH|default(20)}} -N {{PASSWORDS|default([])|length}} | tr "\n" ","; echo
     echo $XDG_DATA_HOME
     echo $XDG_CONFIG_HOME
     echo $XDG_STATE_HOME
@@ -40,8 +39,8 @@
 
 - name: set compfuzor user facts
   set_fact:
-    _cf_user_id: "{{COMPFUZOR_BASE.stdout_lines[21]}}"
-    _cf_user_gid: "{{COMPFUZOR_BASE.stdout_lines[22]|int}}"
+    _cf_user_id: "{{COMPFUZOR_BASE.stdout_lines[20]}}"
+    _cf_user_gid: "{{COMPFUZOR_BASE.stdout_lines[21]|int}}"
   changed_when: False
 
 - name: set compfuzor base facts
@@ -55,13 +54,13 @@
     XDG_TEMPLATES_DIR: "{{COMPFUZOR_BASE.stdout_lines[6]}}"
     XDG_VIDEOS_DIR: "{{COMPFUZOR_BASE.stdout_lines[7]}}"
     # ref: https://wiki.archlinux.org/title/XDG_Base_Directory
-    XDG_DATA_HOME: "{{XDG_DATA_HOME|default(COMPFUZOR_BASE.stdout_lines[12]|default(HOMEDIR + '/.local/share', True), True)}}"
-    XDG_CONFIG_HOME: "{{XDG_CONFIG_HOME|default(COMPFUZOR_BASE.stdout_lines[13]|default(HOMEDIR + '/.config', True), True)}}"
-    XDG_STATE_HOME: "{{XDG_STATE_HOME|default(COMPFUZOR_BASE.stdout_lines[14]|default(HOMEDIR + '/.local/state', True), True)}}"
-    XDG_DATA_DIRS: "{{XDG_DATA_DIRS|default(COMPFUZOR_BASE.stdout_lines[15]|default('/usr/local/share:/usr/share', True), True)}}"
-    XDG_CONFIG_DIRS: "{{XDG_CONFIG_DIRS|default(COMPFUZOR_BASE.stdout_lines[16]|default('/etc/xdg', True), True)}}"
-    XDG_CACHE_HOME: "{{XDG_CACHE_HOME|default(COMPFUZOR_BASE.stdout_lines[17]|default(HOMEDIR + '/.cache', True), True)}}"
-    XDG_RUNTIME_DIR: "{{XDG_RUNTIME_DIR|default(COMPFUZOR_BASE.stdout_lines[18]|default('/run/user/' + _cf_user_id, True), True)}}"
+    XDG_DATA_HOME: "{{XDG_DATA_HOME|default(COMPFUZOR_BASE.stdout_lines[11]|default(HOMEDIR + '/.local/share', True), True)}}"
+    XDG_CONFIG_HOME: "{{XDG_CONFIG_HOME|default(COMPFUZOR_BASE.stdout_lines[12]|default(HOMEDIR + '/.config', True), True)}}"
+    XDG_STATE_HOME: "{{XDG_STATE_HOME|default(COMPFUZOR_BASE.stdout_lines[13]|default(HOMEDIR + '/.local/state', True), True)}}"
+    XDG_DATA_DIRS: "{{XDG_DATA_DIRS|default(COMPFUZOR_BASE.stdout_lines[14]|default('/usr/local/share:/usr/share', True), True)}}"
+    XDG_CONFIG_DIRS: "{{XDG_CONFIG_DIRS|default(COMPFUZOR_BASE.stdout_lines[15]|default('/etc/xdg', True), True)}}"
+    XDG_CACHE_HOME: "{{XDG_CACHE_HOME|default(COMPFUZOR_BASE.stdout_lines[16]|default(HOMEDIR + '/.cache', True), True)}}"
+    XDG_RUNTIME_DIR: "{{XDG_RUNTIME_DIR|default(COMPFUZOR_BASE.stdout_lines[17]|default('/run/user/' + _cf_user_id, True), True)}}"
 
     MACHINE_ID: "{{MACHINE_ID|default(machineId)}}"
     SUBINSTANCE: "{{SUBINSTANCE|default(omit)}}"
@@ -70,7 +69,6 @@
     ARCHS: "{{ARCHS|default(archs)}}"
     KERNEL_RELEASE: "{{KERNEL_RELEASE|default(kernel)}}"
     UUID: "{{uuid}}"
-    PASSWORD: "{{dict(PASSWORDS | default([]) | zip(passwords) | list) | combine(PASSWORD|default({}))}}"
     TIMESTAMP_CF: "{{TIMESTAMP_CF|default(timestamp)}}"
     NAME: "{{name_}}"
     TYPE: "{{TYPE|default(name_)}}"
@@ -85,15 +83,14 @@
     # above via https://stackoverflow.com/questions/59981172/how-to-get-the-current-file-name-in-ansible
     type_: "{{type|default(typeDetect)}}" # used to default to opt
     #machineId: "{{COMPFUZOR_BASE.stdout_lines[]}}"
-    machineId: "{{COMPFUZOR_BASE.stdout_lines[19]|default(lookup('file', '/etc/machine-id')|trim, True)}}"
-    arch: "{{COMPFUZOR_BASE.stdout_lines[20]|default(lookup('pipe', 'uname -m'), True)}}"
+    machineId: "{{COMPFUZOR_BASE.stdout_lines[18]|default(lookup('file', '/etc/machine-id')|trim, True)}}"
+    arch: "{{COMPFUZOR_BASE.stdout_lines[19]|default(lookup('pipe', 'uname -m'), True)}}"
     kernel: "{{COMPFUZOR_BASE.stdout_lines[8]}}"
     archs: "{{COMPFUZOR_BASE.stdout_lines[9][:-1] | split(',')}}"
     uuid: "{{UUID|default(COMPFUZOR_BASE.stdout_lines[10])}}"
-    passwords: "{{COMPFUZOR_BASE.stdout_lines[11].split(',')}}"
 
     # computed
-    timestamp: "{{TIMESTAMP_CF|default(COMPFUZOR_BASE.stdout_lines[23])}}"
+    timestamp: "{{TIMESTAMP_CF|default(COMPFUZOR_BASE.stdout_lines[22])}}"
     instanceName: "{{'-' if INSTANCE else ''}}{{INSTANCE|default('')}}"
     subinstance: "{{(SUBINSTANCE if SUBINSTANCE is string else MACHINE_ID) if SUBINSTANCE|default(False) else ''}}"
     subinstanceName: "{{'-' if subinstance|default(False) else ''}}{{subinstance|default('')}}"
