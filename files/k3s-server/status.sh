@@ -76,7 +76,7 @@ if sudo test -r "$ETCD_TLS_DIR/server-client.crt" 2>/dev/null; then
   echo
   echo "  note: 'member update' won't work in the drift-broken state -- the"
   echo "  registered peer is unreachable so raft has no leader to commit. Use"
-  echo "  bin/recover.sh to rewrite via --cluster-reset."
+  echo "  bin/recover.sh to rewrite via --cluster-reset (single-server only)."
 else
   echo "  (cannot read $ETCD_TLS_DIR; sudo needed, or k3s not yet started)"
 fi

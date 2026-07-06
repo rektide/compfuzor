@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 # Manual one-shot recovery from etcd member peer-URL drift.
 #
-# Runs `k3s server --cluster-reset --cluster-reset-keep-control-plane-members`
-# at the current node IP, then seeds the drift.state file used by launch.sh.
+# Runs `k3s server --cluster-reset` at the current node IP, then seeds the
+# drift.state file used by launch.sh.
+#
+# !!! SINGLE-SERVER EMBEDDED-ETCD CLUSTERS ONLY !!!
+# cluster-reset is etcd's --force-new-cluster: it preserves the local data
+# dir but resets cluster membership to a single member. On multi-server it
+# severs this node from its peers (each peer must then be wiped at db/ and
+# re-joined). For multi-server drift, use `etcdctl member remove`/`member add`
+# against a healthy peer instead.
 #
 # Use this when k3s is failing to start with:
 #   "Failed to test etcd connection: this server is a not a member of the etcd
@@ -49,8 +56,8 @@ echo
 if [ "${1:-}" != "--yes" ]; then
   echo "About to:"
   echo "  1. stop k3s-server.service (if running)"
-  echo "  2. run k3s --cluster-reset --cluster-reset-keep-control-plane-members"
-  echo "     (re-registers etcd member at $current_ip, preserves data)"
+  echo "  2. run k3s --cluster-reset"
+  echo "     (re-registers etcd member at $current_ip, preserves data; SINGLE-SERVER ONLY)"
   echo "  3. write $current_ip to $STATE_FILE"
   echo
   printf "Press Ctrl-C to abort, Enter to continue: "
@@ -60,10 +67,9 @@ fi
 echo "==> stopping k3s-server.service"
 sudo systemctl stop k3s-server.service 2>/dev/null || true
 
-echo "==> running cluster-reset --cluster-reset-keep-control-plane-members"
+echo "==> running cluster-reset"
 sudo "$K3S_BIN" server \
   --cluster-reset \
-  --cluster-reset-keep-control-plane-members \
   --data-dir="$DATA" \
   --node-ip="$current_ip"
 

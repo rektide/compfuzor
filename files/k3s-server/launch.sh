@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 # Drift-detecting pass-through launcher for k3s server.
 #
+# !!! SINGLE-SERVER EMBEDDED-ETCD CLUSTERS ONLY !!!
+#
+# This launcher is gated on the assumption that the local node is the SOLE
+# member of the etcd cluster. On multi-server clusters it must NOT run: the
+# --cluster-reset it triggers on drift is etcd's --force-new-cluster, which
+# severs this node from its peers and orphans them (each peer must then be
+# wiped at db/ and re-joined). There is currently no automatic topology
+# detection; see TODO below.
+#
 # Usage in unit:
 #   ExecStart=/srv/k3s-server-workhorse-voodoowarez-com/bin/launch.sh \
 #     /usr/local/bin/k3s server [steady-state-args...]
@@ -11,8 +20,10 @@
 #   - Detect the current node IP (IPv4 src of the default route, the same
 #     algorithm kubelet uses when --node-ip is unset) and log it.
 #   - Compare against the baseline in $STATE_FILE; on drift, run a one-shot
-#     `k3s server --cluster-reset --cluster-reset-keep-control-plane-members`
-#     at the new IP to rewrite the etcd member peer URL (preserves data).
+#     `k3s server --cluster-reset` at the new IP. cluster-reset is etcd's
+#     --force-new-cluster: it PRESERVES the local data dir but resets cluster
+#     membership to a single member and rewrites the peer URL to the new IP.
+#     On single-server this is exactly the desired peer-URL rewrite.
 #   - Decide bootstrap: if the etcd data dir is empty AND no snapshots exist,
 #     append --cluster-init. Otherwise do not.
 #   - Append --node-ip=<current> so k3s's notion of node IP matches what we
@@ -21,6 +32,15 @@
 #
 # Only node-IP drift triggers a reset. Other failure modes are left to the
 # operator (use bin/recover.sh for manual cluster-reset).
+#
+# TODO(multi-server): before this launcher is safe on HA control planes, it
+#   needs a topology signal (e.g. K3S_MULTISERVER env var written by the
+#   playbook from groups['servers']|length). When multi-server is detected,
+#   the drift branch MUST be skipped -- multi-server IP drift is an operator
+#   event handled via `etcdctl member remove`/`member add`, never via
+#   --cluster-reset (which would fork the cluster). Static addressing for
+#   control-plane nodes is the actual mitigation; this launcher is the
+#   single-server escape hatch.
 #
 # Drift/reset events are tagged "k3s-launcher" in the journal:
 #   journalctl -t k3s-launcher
@@ -65,10 +85,9 @@ elif [ "$last_ip" = "(none)" ]; then
   log "no baseline; seeding with '$current_ip' (no reset)"
 elif [ "$current_ip" != "$last_ip" ]; then
   warn "DRIFT: node IP changed: '$last_ip' -> '$current_ip'"
-  warn "running k3s --cluster-reset --cluster-reset-keep-control-plane-members to rewrite etcd member peer URL"
+  warn "running k3s --cluster-reset to rewrite etcd member peer URL (single-server only)"
   if "$K3S_BIN" server \
       --cluster-reset \
-      --cluster-reset-keep-control-plane-members \
       --data-dir="$DATA" \
       --node-ip="$current_ip" >/dev/null 2>&1 ; then
     log "cluster-reset OK; etcd member peer URL rewritten to '$current_ip'"

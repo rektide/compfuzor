@@ -24,6 +24,19 @@
     - src: "{{ETC}}"
       dest: "/etc/rancher/k3s"
     is_server: "{{ 'servers' in group_names }}"
+    # TODO(multi-server): this playbook currently only supports single-server
+    #   embedded-etcd clusters. To support HA control planes:
+    #   - distinguish bootstrap server from joining servers (e.g. by inventory
+    #     order: groups['servers']|sort|first is bootstrap, the rest join).
+    #   - joining servers need `--server <peer-url>` (currently absent from
+    #     serverArgs below) and must NOT receive --cluster-init (the empty-etcd
+    #     branch in launch.sh:9 would otherwise fork a second cluster).
+    #   - K3S_URL below defaults to inventory_hostname (self), which is wrong
+    #     for joining servers; it must point at an existing server peer.
+    #   - launch.sh's --cluster-reset-on-drift MUST be gated off for
+    #     multi-server (cluster-reset = etcd --force-new-cluster severs the
+    #     node from its peers). Plan: write K3S_MULTISERVER env var here from
+    #     groups['servers']|length and have launch.sh skip the reset branch.
 
     # unit
     SYSTEMD_UNITS:
@@ -44,8 +57,11 @@
     SYSTEMD_SERVICES:
       Delegate: yes
       # Servers wrap k3s through bin/launch.sh, which detects node-IP drift
-      # (DHCP changes across reboots) and runs --cluster-reset --cluster-reset-keep-control-plane-members
-      # before exec'ing k3s. Agents don't run etcd, so no drift risk.
+      # (DHCP changes across reboots) and runs --cluster-reset before exec'ing
+      # k3s. cluster-reset is etcd's --force-new-cluster: it preserves local
+      # data but resets membership to a single member -- so launch.sh is
+      # SINGLE-SERVER ONLY. On multi-server it would sever the cluster.
+      # Agents don't run etcd, so no drift risk.
       ExecStart: "{{ (BINS_DIR + '/launch.sh ') if is_server else '' }}{{_exec|join(' ')}}"
       ExecStartPre: "{{_execPre|join(' ')}}"
       KillMode: process
@@ -160,6 +176,12 @@
     - "{{ '--private-registry $PRIVATE_REGISTRY' if PRIVATE_REGISTRY|default(False) else '' }}"
     - "{{ '--kubelet-arg $KUBELET_ARGS' if KUBELET_ARGS else '' }}"
     agentArgs: {}
+    # TODO(multi-server): serverArgs needs a conditional `--server $JOIN_URL`
+    #   for non-bootstrap servers (joining an existing cluster). The bootstrap
+    #   server uses --cluster-init (added by launch.sh when etcd data is empty)
+    #   but joining servers must NOT receive --cluster-init and MUST receive
+    #   --server pointing at an existing peer. Currently absent; without it a
+    #   second server would silently fork a new cluster via --cluster-init.
     serverArgs:
     #- "--tls-san $CLUSTER_DOMAIN"
     - "{{ '--tls-san '+extraDomains|listify|concat(extraIpv4Domains)|join(',') if extraDomains|default(False) else '' }}"
