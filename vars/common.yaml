@@ -8,6 +8,7 @@ BINS_DIR: "{{DIR}}/bin"
 GLOBAL_BINS_DIR: /usr/local/bin
 SRVS_DIR: /srv
 OPTS_DIR: /opt
+OPT: "{{OPTS_DIR}}/{{NAME}}"
 ETCS_DIR: /etc/opt
 REPOS_DIR: /etc/opt
 VARS_DIR: /var/lib
