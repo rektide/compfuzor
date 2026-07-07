@@ -1,8 +1,6 @@
 ---
 - hosts: all
   vars:
-    TYPE: mkosi
-    INSTANCE: main
     ENV:
       scratchsize: "{{scratchsize|default()}}"
       hostname: "{{hostname|default('debos')}}"

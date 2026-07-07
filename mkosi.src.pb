@@ -1,11 +1,10 @@
 ---
 - hosts: all
   vars:
-    TYPE: mkosi
-    INSTANCE: git
     REPO: https://github.com/systemd/mkosi
     ENV:
       scratchsize: "{{scratchsize|default()}}"
+      INSTANCE: git
       hostname: "{{hostname|default('debos')}}"
       user: "{{user|default(ansible_user_id)}}"
       password: "{{password|default('CHANGE_OR_ELSE')}}"
@@ -40,10 +39,9 @@
       # - CONTAINER
       # - BONUS
       # - WORDS
-    mmpkgs: "{{ lookup('template', '../files/_pkgs') }}"
     ETC_FILES:
       - name: pkgs.txt
-        content: "{{mmpkgs}}"
+        content: "{{ lookup('template', '../../files/_pkgs') }}"
     BINS:
       - name: build-debian.sh
         exec: |
@@ -57,10 +55,10 @@
             --release trixie \
             --format disk \
             --checksum \
-            --root-password $PASSWORD
+            --root-password $PASSWORD \
             --include mkosi-vm \
-            --package $(commaSep etc/pkgs.txt)
-            --repository-key-fetch yes
+            --package $(commaSep etc/pkgs.txt) \
+            --repository-key-fetch yes \
             --output var/image.raw
       - name: run-nspawn.sh
         exec: |
@@ -69,9 +67,5 @@
       - debootstrap
       - debian-archive-keyring
       - apt
-
-
-
-
   tasks:
     - import_tasks: tasks/compfuzor.includes
