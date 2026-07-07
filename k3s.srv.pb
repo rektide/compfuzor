@@ -1,7 +1,7 @@
 ---
 - hosts: all
   vars:
-    TYPE: "k3s{{ is_server|ternary('-server', '-agent') }}"
+    TYPE: "k3s{{ is_control_plane|ternary('-server', '-agent') }}"
     INSTANCE: "{{ DOMAIN|replace('.', '-') }}"
     PASSWORDS:
     - token
@@ -24,7 +24,15 @@
       dest: "/var/lib/rancher/k3s"
     - src: "{{ETC}}"
       dest: "/etc/rancher/k3s"
-    is_server: "{{ 'servers' in group_names }}"
+    # Role derivation: kubelet and control_plane are per-host inventory vars.
+    # If neither is set, both default true (full k3s server). If either is
+    # set, the other defaults false. This allows:
+    #   (nothing)            → control_plane + kubelet (full server)
+    #   kubelet: true        → agent only (k3s agent)
+    #   control_plane: true  → agentless server (k3s server --disable-agent)
+    _role_set: "{{ kubelet is defined or control_plane is defined }}"
+    is_kubelet: "{{ kubelet | default(not _role_set | bool) | bool }}"
+    is_control_plane: "{{ control_plane | default(not _role_set | bool) | bool }}"
     # Multi-server topology. K3S_BOOTSTRAP designates which host runs
     # --cluster-init on first bringup. Defaults to first sorted host in the
     # cluster group; override via -e K3S_BOOTSTRAP=<hostname>. Joining servers
@@ -45,9 +53,9 @@
     # support added in https://github.com/rancher/k3s/pull/100 ?
     _exec:
       - "/usr/local/bin/k3s"
-      - "{{is_server|ternary('server', 'agent')}}"
+      - "{{is_control_plane|ternary('server', 'agent')}}"
       - "{{commonArgs}}"
-      - "{{is_server|ternary(serverArgs, agentArgs)}}"
+      - "{{is_control_plane|ternary(serverArgs, agentArgs)}}"
     _execPre:
       - "-/sbin/modprobe br_netfilter"
       - "-/sbin/modprobe overlay"
@@ -68,9 +76,10 @@
     SYSTEMD_INSTALLS:
       Alias: "{{TYPE}}.service"
 
-    # Server-only toolkit. reset.sh is manual cluster-reset for single-server
-    # IP-drift recovery (refuses on multi-server); status.sh is a read-only
-    # diagnostic. Deployed raw from files/k3s-server/ to {{BINS_DIR}}/.
+    # Control-plane-only toolkit. reset.sh is manual cluster-reset for
+    # single-server IP-drift recovery (refuses on multi-server); status.sh
+    # is a read-only diagnostic. Deployed raw from files/k3s-server/ to
+    # {{BINS_DIR}}/.
     server_bins:
       - name: status.sh
         src: status.sh
@@ -78,7 +87,7 @@
       - name: reset.sh
         src: reset.sh
         raw: True
-    BINS: "{{ server_bins if is_server else [] }}"
+    BINS: "{{ server_bins if is_control_plane else [] }}"
 
     # non k3s
     DOMAIN: "{{domain|default('base.yoyodyne.example.net')}}"
@@ -168,6 +177,7 @@
     serverArgs:
     # bootstrap server initializes the cluster; joiners contact it via --server.
     - "{{ '--cluster-init' if is_bootstrap else '--server $K3S_URL' }}"
+    - "{{ '--disable-agent' if not is_kubelet else '' }}"
     #- "--tls-san $CLUSTER_DOMAIN"
     - "{{ '--tls-san '+extraDomains|listify|concat(_cluster_hosts, extraIpv4Domains)|unique|join(',') if extraDomains|default(False) else '' }}"
     - "--cluster-domain $CLUSTER_DOMAIN"
