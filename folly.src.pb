@@ -5,7 +5,14 @@
     CMAKE: True
     CMAKE_INSTALL: True
     CMAKE_INSTALL_PREFIX: True
+    # Point FindLibUring.cmake (find_path/find_library) at the source-built
+    # liburing under {{OPTS_DIR}}/liburing-{{INSTANCE}}, whose bundled
+    # io_uring.h carries the zcrx UAPI folly HEAD needs. The Debian
+    # liburing-dev package's header lacks it.
+    CMAKE_ARGS:
+      - "-DCMAKE_PREFIX_PATH={{OPTS_DIR}}/liburing-{{INSTANCE|default('git')}}"
     PKGS:
+      # also needs liburing.src.pb
       - libaio-dev
       - libboost-all-dev
       - libclang-dev
