@@ -1,4 +1,6 @@
 # restore saved shell options by popping stack
+# silence xtrace first so the eval below never traces itself
+{ set +x; } 2>/dev/null
 (( ${{'{#'}}_BIN_SETO_STATE[@]} )) && { __saved="${_BIN_SETO_STATE[-1]}"; _BIN_SETO_STATE=("${_BIN_SETO_STATE[@]:0:${{'{#'}}_BIN_SETO_STATE[@]}-1}"); } || __saved=""
 [ -n "${__saved:-}" ] && eval "$__saved"
 unset __saved
