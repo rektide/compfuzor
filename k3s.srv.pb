@@ -81,7 +81,7 @@
     BINS: "{{ server_bins if is_server else [] }}"
 
     # non k3s
-    DOMAIN: base.yoyodyne.example.net
+    DOMAIN: "{{domain|default('base.yoyodyne.example.net')}}"
     CLUSTER_DOMAIN: "cluster.{{DOMAIN}}"
     DATA: "{{VAR}}/data"
     K3S_TOKEN_FILE: "{{ETC}}/token"
