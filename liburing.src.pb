@@ -8,6 +8,7 @@
     # HEAD needs, while upstream liburing's bundled copy carries it.
     # folly points at this install via CMAKE_PREFIX_PATH.
     MAKE: True
+    MAKE_INSTALL_PREFIX: True
     # liburing's default `make` builds src + tests + examples; the `library`
     # target builds only liburing itself, which is all a dep consumer needs.
     MAKE_TARGET: library

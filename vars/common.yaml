@@ -827,28 +827,39 @@ _cmake_bins:
       ln -sfv "$(pwd)/{{ _cmake_builds[0].build_dir | default('build') }}/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
       {% endif %}
 
+_make_prefix_arg: >-
+  {%- if MAKE_INSTALL_PREFIX is defined -%}
+  {%- if MAKE_INSTALL_PREFIX | string | lower in ['true', '1'] -%}
+  --prefix="${DIR}"
+  {%- else -%}
+  --prefix={{ MAKE_INSTALL_PREFIX }}
+  {%- endif -%}
+  {%- endif -%}
+_make_destdir_arg: >-
+  {%- if MAKE_DESTDIR is defined -%}
+  {%- if MAKE_DESTDIR | string | lower in ['true', '1'] -%}
+  DESTDIR="${DIR}/var/dest"
+  {%- else -%}
+  DESTDIR={{ MAKE_DESTDIR }}
+  {%- endif -%}
+  {%- endif -%}
 _make_bins:
   - name: build.sh
     run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
     basedir: "{{ REPO_DIR }}"
     generated: |
-      {% if MAKE_AUTOCONF is deftruthy %}
-      if [ -f ./autogen.sh ]; then NOCONFIGURE=1 sh ./autogen.sh
-      elif [ -f ./configure.ac ]; then autoreconf -fi; fi
-      {% else %}
       if [ ! -f ./configure ]; then
         if [ -f ./autogen.sh ]; then NOCONFIGURE=1 sh ./autogen.sh
         elif [ -f ./configure.ac ]; then autoreconf -fi; fi
       fi
-      {% endif %}
       if [ -f ./configure ]; then
-        ./configure --prefix="${DIR}" {{ MAKE_CONF_OPTIONS|default('') }}
+        ./configure {{ _make_prefix_arg }} {{ MAKE_CONF_OPTIONS|default('') }}
       fi
-      make -j"$(nproc)" {{ MAKE_TARGET|default('') }}
+      make -j"$(nproc)" {{ MAKE_TARGET|default([])|listify|join(' ') }}
   - name: install.sh
     basedir: "{{ REPO_DIR }}"
     generated: |
-      make {{ MAKE_INSTALL_TARGET|default('install') }}{{ ' DESTDIR=' ~ MAKE_DESTDIR if MAKE_DESTDIR is defined else '' }}
+      make {{ MAKE_INSTALL_TARGET|default('install') }} {{ _make_destdir_arg }}
 
 _kernel_modprobe_bins:
   - name: build-kernel.sh
