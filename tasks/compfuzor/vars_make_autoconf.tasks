@@ -1,2 +1,0 @@
-- set_fact: OPT_DIR=True
-  when: MAKE_AUTOCONF|default(False) and OPT_DIR is not defined

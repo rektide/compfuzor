@@ -412,7 +412,7 @@ SUBSYSTEM:
       ENV_PRIO: "{{ _cmake_deps_env_prio }}"
 
   make:
-    requested: "{{ MAKE is deftruthy }}"
+    requested: "{{ MAKE is deftruthy or MAKE_AUTOCONF is deftruthy }}"
     contrib:
       BINS: "{{ _make_bins }}"
 
@@ -832,15 +832,23 @@ _make_bins:
     run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
     basedir: "{{ REPO_DIR }}"
     generated: |
-      mkdir -p "{{ _BUILD_DIR }}"
-      cd "{{ _BUILD_DIR }}"
-      "{{ SRC }}"/configure --prefix="${DIR}" {{ CONF_OPTIONS|default('') }}
+      {% if MAKE_AUTOCONF is deftruthy %}
+      if [ -f ./autogen.sh ]; then NOCONFIGURE=1 sh ./autogen.sh
+      elif [ -f ./configure.ac ]; then autoreconf -fi; fi
+      {% else %}
+      if [ ! -f ./configure ]; then
+        if [ -f ./autogen.sh ]; then NOCONFIGURE=1 sh ./autogen.sh
+        elif [ -f ./configure.ac ]; then autoreconf -fi; fi
+      fi
+      {% endif %}
+      if [ -f ./configure ]; then
+        ./configure --prefix="${DIR}" {{ MAKE_CONF_OPTIONS|default('') }}
+      fi
       make -j"$(nproc)" {{ MAKE_TARGET|default('') }}
   - name: install.sh
     basedir: "{{ REPO_DIR }}"
     generated: |
-      cd "{{ _BUILD_DIR }}"
-      make install
+      make {{ MAKE_INSTALL_TARGET|default('install') }}{{ ' DESTDIR=' ~ MAKE_DESTDIR if MAKE_DESTDIR is defined else '' }}
 
 _kernel_modprobe_bins:
   - name: build-kernel.sh

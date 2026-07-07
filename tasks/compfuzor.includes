@@ -34,13 +34,11 @@
 - import_tasks: compfuzor/gen_get_urls.tasks
   when: lookup('subsys', id='get_urls', get='active', default=false) | bool
   tags: ['vars', 'always']
-- import_tasks: compfuzor/vars_make_autoconf.tasks
-  tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_cmake.tasks
   when: CMAKE is deftruthy or CMAKE_ARGS is defined or CMAKE_BUILDS is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_make.tasks
-  when: MAKE is deftruthy
+  when: MAKE is deftruthy or MAKE_AUTOCONF is deftruthy
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_debconf.tasks
   tags: ['vars', 'always']
@@ -178,8 +176,6 @@
   when: MODULES|default(False) is truthy
 - import_tasks: compfuzor/bins_run.tasks
   when: BINS_BYPASS|default(False) is falsy and BINS_RUN_BYPASS|default(False) is falsy
-- import_tasks: compfuzor/make_autoconf.tasks
-  when: MAKE_AUTOCONF|default(False) is truthy
 - import_tasks: compfuzor/pkgconfig.tasks
   when: PKGCONFIG|default(False) is truthy
 - import_tasks: compfuzor/sysctl.tasks
