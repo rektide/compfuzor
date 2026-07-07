@@ -835,7 +835,7 @@ _make_bins:
       mkdir -p "{{ _BUILD_DIR }}"
       cd "{{ _BUILD_DIR }}"
       "{{ SRC }}"/configure --prefix="${DIR}" {{ CONF_OPTIONS|default('') }}
-      make -j{{ CORES|default(8) }} {{ MAKE_TARGET|default('') }}
+      make -j"$(nproc)" {{ MAKE_TARGET|default('') }}
   - name: install.sh
     basedir: "{{ REPO_DIR }}"
     generated: |
