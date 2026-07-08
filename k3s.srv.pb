@@ -56,13 +56,12 @@
       - "{{is_control_plane|ternary('server', 'agent')}}"
       - "{{commonArgs}}"
       - "{{is_control_plane|ternary(serverArgs, agentArgs)}}"
-    _execPre:
-      - "-/sbin/modprobe br_netfilter"
-      - "-/sbin/modprobe overlay"
     SYSTEMD_SERVICES:
       Delegate: yes
       ExecStart: "{{_exec|join(' ')}}"
-      ExecStartPre: "{{_execPre|join(' ')}}"
+      ExecStartPre:
+        - "-/sbin/modprobe br_netfilter"
+        - "-/sbin/modprobe overlay"
       KillMode: process
       LimitNOFILE: 1048576
       LimitNPROC: infinity
