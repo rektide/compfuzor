@@ -78,6 +78,24 @@ sudo "$K3S_BIN" server \
   --data-dir="$DATA" \
   --node-ip="$current_ip"
 
+# --- move cred files aside to prevent "newer than datastore" fatal ---
+# cluster-reset touches server/cred/* files, giving them a newer mtime than
+# the datastore. k3s refuses to start ("could cause a cluster outage").
+# Move them aside; k3s recreates them from the datastore on next start.
+cred_dir="$DATA/server/cred"
+if [ -d "$cred_dir" ]; then
+  ts="$(date +%Y%m%d%H%M%S)"
+  moved=0
+  for f in "$cred_dir"/*; do
+    [ -f "$f" ] || continue
+    sudo mv "$f" "${f}.bak.${ts}"
+    moved=$((moved + 1))
+  done
+  if [ "$moved" -gt 0 ]; then
+    echo "==> moved $moved cred file(s) to .bak.${ts}"
+  fi
+fi
+
 echo
 echo "Done. Start k3s with:"
 echo "  sudo systemctl start k3s-server.service"
