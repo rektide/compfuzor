@@ -54,8 +54,8 @@
     _exec:
       - "/usr/local/bin/k3s"
       - "{{is_control_plane|ternary('server', 'agent')}}"
-      - "{{commonArgs}}"
-      - "{{is_control_plane|ternary(serverArgs, agentArgs)}}"
+      - "{{commonArgs|reject('eq', '')|join(' ')}}"
+      - "{{(is_control_plane|ternary(serverArgs, agentArgs))|reject('eq', '')|join(' ')}}"
     SYSTEMD_SERVICES:
       Delegate: yes
       ExecStart: "{{_exec|join(' ')}}"
@@ -191,7 +191,7 @@
     ##- "--write-kubeconfig {{K3S_KUBECONFIG_OUTPUT}}"
     ##- "--write-kubeconfig-mode {{K3S_KUBECONFIG_MODE}}"
     - "--default-local-storage-path {{LOCAL_PROVISIONER_PATH}}"
-    - "{{ '--container-runtime-endpoint $CONTAINER_RUNTIME_ENDPOINT' if CONTAINER_RUNTIME_ENDPOINT|default(False) != '' else '' }}"
+    - "{{ '--container-runtime-endpoint $CONTAINER_RUNTIME_ENDPOINT' if CONTAINER_RUNTIME_ENDPOINT|default(False) else '' }}"
     - "{{ '--etcd-snapshot-retention $ETCD_SNAPSHOT_RETENTION' if ETCD_SNAPSHOT_RETENTION|default(False) else '' }}" # at 12 hour interval
     - "--etcd-snapshot-compress"
     - "--secrets-encryption"
