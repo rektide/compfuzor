@@ -151,7 +151,13 @@
       LOCAL_PROVISIONER_PATH: "{{LOCAL_PROVISIONER_PATH}}"
       CONTAINER_RUNTIME_ENDPOINT: "{{CONTAINER_RUNTIME_ENDPOINT|default('', true)}}"
       PRIVATE_REGISTRY: "{{PRIVATE_REGISTRY|default('', true)}}"
-      K3S_URL: "{{'https://' + K3S_URL|default(_bootstrap_host + ':6443', true) if K3S_URL is not search('https://') else K3S_URL}}"
+      K3S_URL: >-
+        {%- if is_bootstrap -%}
+        {%- elif K3S_URL is search('https://') -%}
+        {{ K3S_URL }}
+        {%- else -%}
+        https://{{ K3S_URL|default(_bootstrap_host + ':6443', true) }}
+        {%- endif -%}
       V: "{{V|default(2)}}"
       # common
       NODE_IP: "{{NODE_IP|default('', true)}}"
