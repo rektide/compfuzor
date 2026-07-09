@@ -9,7 +9,6 @@
     - name: agentToken
       format: 'echo "$(pwgen -As 6 1).$(pwgen -As 16 1)"'
     PASSWORDS_FILES: true
-    PASSWORDS_DIR: "{{ETC}}/secrets"
     ETC_FILES:
     - name: config.toml.tmpl
     VAR_DIRS:

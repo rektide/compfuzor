@@ -19,6 +19,7 @@ RUNS_DIR: /var/run
 SRCS_DIR: /usr/local/src
 ARCHIVE_SRC: "{{HOMEDIR}}archive/{{REPO_ORG}}/{{REPO_NAME}}"
 SHARES_DIR: /usr/share
+PASSWORDS_DIR: "{{ETC}}/secrets"
 
 # Archive download mode
 ARCHIVE_DOWNLOAD: true
