@@ -9,11 +9,8 @@
     - name: agentToken
       format: 'echo "$(pwgen -As 6 1).$(pwgen -As 16 1)"'
     PASSWORDS_FILES: true
+    PASSWORDS_DIR: "{{ETC}}/secrets"
     ETC_FILES:
-    - name: token
-      content: "{{PASSWORD.token}}"
-    - name: agent-token
-      content: "{{PASSWORD.agentToken}}"
     - name: config.toml.tmpl
     VAR_DIRS:
     - data/agent/etc/containerd
@@ -93,12 +90,12 @@
     DOMAIN: "{{domain|default('base.yoyodyne.example.net')}}"
     CLUSTER_DOMAIN: "cluster.{{DOMAIN}}"
     DATA: "{{VAR}}/data"
-    K3S_TOKEN_FILE: "{{ETC}}/token"
+    K3S_TOKEN_FILE: "{{PASSWORDS_DIR}}/token"
     # do not set to default, will create bad symlink
     #K3S_KUBECONFIG_OUTPUT: "{{ETC}}/k3s.yaml"
     K3S_KUBECONFIG_OUTPUT: ""
     K3S_KUBECONFIG_MODE: "0640"
-    K3S_AGENT_TOKEN_FILE: "{{ETC}}/agent-token"
+    K3S_AGENT_TOKEN_FILE: "{{PASSWORDS_DIR}}/agentToken"
     K3S_CONFIG_FILE: "{{ETC}}/config.yaml"
 
     # k3s common
