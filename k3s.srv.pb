@@ -127,6 +127,8 @@
     DISABLE_NETWORK_POLICY: "{{ DISABLE|default([], true)|intersect(['network-policy'])|length() == 0}}"
     DISABLE_KUBE_PROXY:     "{{ DISABLE|default([], true)|intersect(['kube-proxy']    )|length() == 1}}"
     ETCD_SNAPSHOT_RETENTION: 28
+    SECRETS_ENCRYPTION: true
+    SECRETS_ENCRYPTION_PROVIDER: secretbox
     # Kubelet eviction thresholds; empty string disables. Single-arg form
     # uses k3s/kubelet's default soft+hard parsing. Example below matches the
     # production workhorse-voodoowarez-com deployment.
@@ -192,6 +194,8 @@
     - "{{ '--container-runtime-endpoint $CONTAINER_RUNTIME_ENDPOINT' if CONTAINER_RUNTIME_ENDPOINT|default(False) != '' else '' }}"
     - "{{ '--etcd-snapshot-retention $ETCD_SNAPSHOT_RETENTION' if ETCD_SNAPSHOT_RETENTION|default(False) else '' }}" # at 12 hour interval
     - "--etcd-snapshot-compress"
+    - "--secrets-encryption"
+    - "--secrets-encryption-provider {{SECRETS_ENCRYPTION_PROVIDER}}"
     - "{{ '--disable $DISABLE_LIST' if DISABLE_LIST|length > 0 else ''}}"
     - "{{ '--disable-network-policy' if DISABLE is superset(['network-policy']) else '' }}"
     - "{{ '--disable-kube-proxy' if DISABLE is superset(['kube-proxy']) else '' }}"
