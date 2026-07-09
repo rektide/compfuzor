@@ -82,17 +82,22 @@ sudo "$K3S_BIN" server \
 # cluster-reset touches server/cred/* files, giving them a newer mtime than
 # the datastore. k3s refuses to start ("could cause a cluster outage").
 # Move them aside; k3s recreates them from the datastore on next start.
+# DO NOT move encryption files — losing the encryption key makes all
+# encrypted secrets permanently unreadable.
 cred_dir="$DATA/server/cred"
 if [ -d "$cred_dir" ]; then
   ts="$(date +%Y%m%d%H%M%S)"
   moved=0
   for f in "$cred_dir"/*; do
     [ -f "$f" ] || continue
+    case "$(basename "$f")" in
+      encryption-config.json|encryption-state.json) continue ;;
+    esac
     sudo mv "$f" "${f}.bak.${ts}"
     moved=$((moved + 1))
   done
   if [ "$moved" -gt 0 ]; then
-    echo "==> moved $moved cred file(s) to .bak.${ts}"
+    echo "==> moved $moved cred file(s) to .bak.${ts} (encryption files preserved)"
   fi
 fi
 
