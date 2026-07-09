@@ -4,9 +4,10 @@
     TYPE: "k3s{{ is_control_plane|ternary('-server', '-agent') }}"
     INSTANCE: "{{ DOMAIN|replace('.', '-') }}"
     PASSWORDS:
-    - token
-    - agentToken
-    PASSWORD_LENGTH: 96
+    - name: token
+      format: 'echo "$(pwgen -As 6 1).$(pwgen -As 16 1)"'
+    - name: agentToken
+      format: 'echo "$(pwgen -As 6 1).$(pwgen -As 16 1)"'
     PASSWORDS_FILES: true
     ETC_FILES:
     - name: token
@@ -141,8 +142,8 @@
       DOMAIN: "{{DOMAIN}}"
       CLUSTER_DOMAIN: "{{CLUSTER_DOMAIN}}"
       DATA: "{{DATA}}"
-      #K3S_TOKEN_FILE: "{{K3S_TOKEN_FILE}}"
-      #K3S_AGENT_TOKEN_FILE: "{{K3S_AGENT_TOKEN_FILE}}"
+      K3S_TOKEN_FILE: "{{K3S_TOKEN_FILE}}"
+      K3S_AGENT_TOKEN_FILE: "{{K3S_AGENT_TOKEN_FILE}}"
       K3S_KUBECONFIG_OUTPUT: "{{K3S_KUBECONFIG_OUTPUT}}"
       K3S_KUBECONFIG_MODE: "{{K3S_KUBECONFIG_MODE}}"
       #K3S_CONFIG_FILE: "{{K3S_CONFIG_FILE}}"
