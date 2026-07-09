@@ -5,9 +5,9 @@
     INSTANCE: "{{ DOMAIN|replace('.', '-') }}"
     PASSWORDS:
     - name: token
-      format: 'echo "$(pwgen -As 6 1).$(pwgen -As 16 1)"'
+      format: 'pwgen -s 32 1'
     - name: agentToken
-      format: 'echo "$(pwgen -As 6 1).$(pwgen -As 16 1)"'
+      format: 'pwgen -s 32 1'
     PASSWORDS_FILES: true
     ETC_FILES:
     - name: config.toml.tmpl
