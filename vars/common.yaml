@@ -619,6 +619,23 @@ SUBSYSTEM:
       ENV_LIST: [KERNEL_SYSFS_JSON]
       PKGS: [jq]
 
+  kernel_params:
+    # Raw kernel cmdline tokens that don't fit the <module>.<param>=<value>
+    # shape KERNEL_MODULES uses (e.g. memmap=256K$0x100000000, nospectre_v2,
+    # rootflags=...). install-kernel-params.sh writes them to /etc/kernel/cmdline
+    # idempotently: key=value tokens are replaced by key prefix, flag-style
+    # tokens (no =) are added once.
+    requested: "{{ KERNEL_PARAMS is defmapping and KERNEL_PARAMS | deflengthy }}"
+    contrib:
+      ETC_FILES:
+        - name: kernel.params.json
+          content: "{{ KERNEL_PARAMS | to_nice_json }}"
+      BINS: "{{ _kernel_params_bins }}"
+      ENV:
+        KERNEL_PARAMS_JSON: "{{ DIR }}/etc/kernel.params.json"
+      ENV_LIST: [KERNEL_PARAMS_JSON]
+      PKGS: [jq]
+
   readme:
     requested: "{{ README is defined }}"
     contrib:
@@ -883,6 +900,10 @@ _kernel_modprobe_bins:
   - name: status-modules.ts
     src: ../kernel/status-modules.ts
     raw: True
+_kernel_params_bins:
+  - name: install-kernel-params.sh
+    src: ../kernel/install-kernel-params.sh
+    basedir: false
 _kernel_sysctl_bins:
   - name: build-sysctl.sh
     src: ../kernel/build-sysctl.sh

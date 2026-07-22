@@ -9,11 +9,20 @@ sudo mkdir -p /etc/modules-load.d /etc/modprobe.d
 sudo ln -sf "$DIR/etc/kernel.modules-load.conf" "/etc/modules-load.d/{{ NAME }}.conf"
 
 # Determine which persistence mechanism we need.
-# If any requested module is built in, modprobe options will not apply for that
-# module at boot; in that case we use kernel cmdline persistence.
+# - If any requested module is built in, modprobe options will not apply for that
+#   module at boot; in that case we use kernel cmdline persistence.
+# - If any requested module has force_cmdline: true, the playbook author has
+#   declared that modprobe.d timing is wrong for this module (e.g. it loads
+#   from initramfs before /etc/modprobe.d is parsed, or its params are read at
+#   kernel init). Force the cmdline path regardless of builtin detection.
 _cf_kernel_mode=""
-while IFS= read -r _cf_module; do
-  [ -n "$_cf_module" ] || continue
+while IFS= read -r _cf_entry; do
+  _cf_module="$(jq -r '.key' <<<"$_cf_entry")"
+  _cf_force="$(jq -r '.value.force_cmdline // false' <<<"$_cf_entry")"
+  if [ "$_cf_force" = "true" ]; then
+    _cf_kernel_mode="builtin"
+    break
+  fi
   _cf_detected="$($DIR/bin/detect-builtin.sh "$_cf_module" || true)"
   if [ "$_cf_detected" = "builtin" ]; then
     _cf_kernel_mode="builtin"
@@ -22,7 +31,7 @@ while IFS= read -r _cf_module; do
   if [ "$_cf_detected" = "module" ] && [ -z "$_cf_kernel_mode" ]; then
     _cf_kernel_mode="module"
   fi
-done < <(jq -r 'to_entries | sort_by(.key) | .[].key' "$KERNEL_MODULES_JSON")
+done < <(jq -c 'to_entries | sort_by(.key) | .[]' "$KERNEL_MODULES_JSON")
 
 if [ "$_cf_kernel_mode" = "builtin" ]; then
   printf 'kernel install path: builtin, using /etc/kernel/cmdline\n'

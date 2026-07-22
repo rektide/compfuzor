@@ -9,20 +9,21 @@
       ## Three pieces, all required
 
       Ramoops silently fails if any one of these is missing. The original
-      version of this playbook only did piece #2, which is why pstore never
-      actually captured anything.
+      version of this playbook only did piece #2 and never captured anything.
 
       1. **Reserved physical RAM** via `memmap=` on the kernel cmdline. The
          region is excluded from normal kernel allocation and survives reboot.
          Without this, ramoops has nothing stable to write to across reset.
+         Expressed here as a raw kernel token via `KERNEL_PARAMS` (compfuzor's
+         mechanism for cmdline tokens that don't fit `<module>.<param>=<value>`
+         shape); `install-kernel-params.sh` writes them to `/etc/kernel/cmdline`.
 
       2. **ramoops module params** (`mem_address`, `mem_size`, …) pointing at
          that reservation. On a modular kernel, ramoops loads from initramfs
          before `/etc/modprobe.d/` is parsed, so these MUST reach it via the
-         kernel cmdline as `ramoops.<param>=<value>` tokens. `setup.sh` calls
-         `install-kernel-cmdline.sh` directly to write them there, bypassing
-         the framework's built-in-vs-module detection in `install-kernel.sh`
-         (which would otherwise route modular ramoops to modprobe.d only).
+         kernel cmdline. The `force_cmdline: True` flag on each entry tells
+         `install-kernel.sh` to use the cmdline path (not modprobe.d)
+         regardless of built-in detection.
 
       3. **`pstore.backend=ramoops`** plus **blacklist efi_pstore**. pstore
          permits exactly one backend; `efi_pstore` autoprobes very early via
@@ -73,12 +74,20 @@
     RAMOOPS_MEM_ADDRESS: "0x100000000"
     RAMOOPS_MEM_SIZE: "0x40000"  # 256 KB
 
-    # ramoops + pstore.backend flow through compfuzor's kernel_modprobe
-    # subsystem, which makes install-kernel-cmdline.sh available. setup.sh
-    # invokes it to write these as <module>.<param>=<value> tokens on the
-    # kernel cmdline (the form ramoops actually reads at probe time).
+    # Raw kernel cmdline tokens that don't fit the <module>.<param> shape.
+    # install-kernel-params.sh writes these to /etc/kernel/cmdline
+    # idempotently (replace by key prefix, append if absent).
+    KERNEL_PARAMS:
+      - "memmap={{RAMOOPS_MEM_SIZE}}${{RAMOOPS_MEM_ADDRESS}}"
+
+    # force_cmdline: True on each entry forces install-kernel.sh to emit
+    # these on /etc/kernel/cmdline (as <module>.<param>=<value> tokens) even
+    # though ramoops and pstore are modular — modprobe.d is too late for
+    # them, since ramoops loads from initramfs and pstore.backend is read
+    # at kernel init.
     KERNEL_MODULES:
       ramoops:
+        force_cmdline: True
         params:
           mem_address: "{{RAMOOPS_MEM_ADDRESS}}"
           mem_size: "{{RAMOOPS_MEM_SIZE}}"
@@ -88,6 +97,7 @@
           pmsg_size: 0x10000
           ecc: 0
       pstore:
+        force_cmdline: True
         params:
           backend: ramoops
 
@@ -114,11 +124,10 @@
       - src: "{{ETC}}/blacklist-efi-pstore.conf"
         dest: "/etc/modprobe.d/blacklist-efi-pstore.conf"
 
-    # oneshot setup: push KERNEL_MODULES params to /etc/kernel/cmdline (calling
-    # install-kernel-cmdline.sh directly, NOT install-kernel.sh — the latter
-    # would route modular ramoops to /etc/modprobe.d only, which doesn't apply
-    # during initramfs-load), then add the raw memmap= reservation token that
-    # the framework's <module>.<param> generator cannot express.
+    # setup.sh just calls the framework tools — no bespoke memmap handler,
+    # no install-kernel-cmdline.sh bypass. install-kernel.sh picks cmdline
+    # mode via the force_cmdline flag; install-kernel-params.sh adds the
+    # raw memmap= token from KERNEL_PARAMS.
     SYSTEMD_SERVICE: True
     SYSTEMD_TYPE: oneshot
     SYSTEMD_EXEC: "{{DIR}}/bin/setup.sh"
@@ -127,39 +136,9 @@
         content: |
           #!/bin/sh
           set -eu
-
-          # 1. Push KERNEL_MODULES into /etc/kernel/cmdline as
-          #    <module>.<param>=<value> tokens. Idempotent (script replaces
-          #    existing same-key tokens in place, appends new ones).
-          "$DIR/bin/install-kernel-cmdline.sh"
-
-          # 2. Add the raw memmap= reservation. install-kernel-cmdline.sh only
-          #    handles <module>.<param>=<value> tokens, so memmap= needs its
-          #    own idempotent append.
-          _cmdline_file=/etc/kernel/cmdline
-          _token='memmap={{RAMOOPS_MEM_SIZE}}${{RAMOOPS_MEM_ADDRESS}}'
-
-          sudo mkdir -p "$(dirname "$_cmdline_file")"
-          sudo touch "$_cmdline_file"
-          _existing="$(sudo cat "$_cmdline_file")"
-
-          # Idempotent: if our exact token is already present, nothing to do.
-          for _tok in $_existing; do
-            [ "$_tok" = "$_token" ] && exit 0
-          done
-
-          # Refuse to clobber a different memmap= pointing at our address
-          # (likely a size change — needs human eyes).
-          if printf '%s\n' "$_existing" | grep -Eq "memmap=[^[:space:]]+[\\\$]{{RAMOOPS_MEM_ADDRESS}}"; then
-            echo "pstore: a different memmap= token exists for {{RAMOOPS_MEM_ADDRESS}} in $_cmdline_file; fix manually" >&2
-            exit 1
-          fi
-
-          # Append, normalize whitespace.
-          _updated="$(printf '%s %s' "$_existing" "$_token" | tr -s '[:space:]' ' ' | sed -E 's/^ //; s/ $//')"
-          printf '%s\n' "$_updated" | sudo tee "$_cmdline_file" >/dev/null
-
-          echo "pstore: wrote $_token to $_cmdline_file"
+          "$DIR/bin/install-kernel.sh"
+          "$DIR/bin/install-kernel-params.sh"
+          echo "pstore: wrote module params + memmap= to /etc/kernel/cmdline"
           echo "pstore: run 'sudo kernel-install' for the current kernel, or reboot, to propagate to BLS entries"
 
     # /sys/fs/pstore records, surfaced by the generic status-dirs.sh reporter.
