@@ -85,6 +85,8 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_status.tasks
   tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_bins.tasks
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_desktop.tasks
   when: DESKTOP is defined
   tags: ['vars', 'always']

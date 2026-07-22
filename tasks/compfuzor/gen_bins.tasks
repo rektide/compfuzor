@@ -1,0 +1,5 @@
+---
+- name: "Compfuzor: synthesize bin action compositors"
+  set_fact:
+    BINS: "{{ [BINS | default([]), BINS | bin_composers] | merge_list('bins_generated') }}"
+  when: BINS | bin_composers | length > 0
