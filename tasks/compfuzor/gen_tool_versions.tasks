@@ -4,9 +4,20 @@
     ETC_FILES: "{{ [[{'name': '.tool-versions', 'content': _tv_content}], ETC_FILES] | merge_list('append') }}"
     LINKS: "{{ [[{'src': DIR + '/etc/.tool-versions', 'dest': '.tool-versions'}], LINKS] | merge_list('append') }}"
   vars:
-    _tv_versions: "{{ TOOL_VERSIONS | merge_dict(strategy='tool_versions_overlay') }}"
     _tv_content: |
-      {% for target, version in _tv_versions.items() %}
+      {% for target, version in (TOOL_VERSIONS | merge_dict(strategy='tool_versions_overlay', single=true)).items() %}
       {{ target }} {{ version if version != True else lookup('vars', target | upper + '_VERSION') }}
       {% endfor %}
-  when: _tv_versions is deflengthy
+  when: TOOL_VERSIONS | merge_dict(strategy='tool_versions_overlay', single=true) is deflengthy
+
+- name: "Compfuzor: synthesize mise_versions subsystem artifacts"
+  set_fact:
+    ETC_FILES: "{{ [[{'name': 'mise.toml', 'content': _mise_content}], ETC_FILES] | merge_list('append') }}"
+    LINKS: "{{ [[{'src': DIR + '/etc/mise.toml', 'dest': 'mise.toml'}], LINKS] | merge_list('append') }}"
+  vars:
+    _mise_content: |
+      [tools]
+      {% for target, version in (MISE_VERSIONS | merge_dict(strategy='tool_versions_overlay', single=true)).items() %}
+      {{ target }} = {{ (version if version != True else lookup('vars', target | upper + '_VERSION')) | to_json }}
+      {% endfor %}
+  when: MISE_VERSIONS | merge_dict(strategy='tool_versions_overlay', single=true) is deflengthy
