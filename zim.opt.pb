@@ -6,8 +6,10 @@
     CONFIG_KEY: zimfw
     CONFIG_MERGE: block-in-file
     zim_home: "$HOME/.cache/zim"
+    zim_config_link: "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/{{CONFIG_KEY}}.{{CONFIG_EXT}}"
     ENV_LIST:
       - zim_home
+      - zim_config_link
     GET_URLS:
       - https://github.com/zimfw/zimfw/releases/latest/download/zimfw.zsh
     PKGS:
@@ -30,8 +32,40 @@
           echo installing zshrc config
           block-in-file -n {{NAME}} -i {{DIR}}/etc/zim.zsh -o ${ZDOTDIR:-$HOME}/.zshrc
           echo symlinking zimrc
-          ln -sfv {{DIR}}/etc/zimrc.conf $HOME/.config/zsh/zimrc
-          
+          mkdir -p "$(dirname "${ZIM_CONFIG_LINK:-{{zim_config_link}}}")"
+          ln -sfv "${CONFIG_OUTPUT}" "${ZIM_CONFIG_LINK:-{{zim_config_link}}}"
+      - name: status.sh
+        basedir: False
+        content: |
+          status=0
+          config_link="${ZIM_CONFIG_LINK:-{{zim_config_link}}}"
+          zshrc="${ZDOTDIR:-$HOME}/.zshrc"
+          marker="{{NAME}}"
+
+          if [ ! -f "$CONFIG_OUTPUT" ]; then
+            echo "drift: generated Zim config is missing: $CONFIG_OUTPUT"
+            status=1
+          elif [ ! -L "$config_link" ]; then
+            echo "drift: Zim config link is missing: $config_link"
+            status=1
+          elif [ "$(readlink -f "$config_link")" != "$(readlink -f "$CONFIG_OUTPUT")" ]; then
+            echo "drift: $config_link does not link to $CONFIG_OUTPUT"
+            status=1
+          fi
+
+          if [ ! -f "$zshrc" ]; then
+            echo "drift: zshrc is missing: $zshrc"
+            status=1
+          else
+            expected="$(cat "{{DIR}}/etc/zim.zsh")"
+            actual="$(sed -n "/^# ${marker} start$/,/^# ${marker} end$/p" "$zshrc" | sed '1d;$d')"
+            if [ "$actual" != "$expected" ]; then
+              echo "drift: Zim block in $zshrc differs from {{DIR}}/etc/zim.zsh"
+              status=1
+            fi
+          fi
+
+          exit "$status"
     ETC_FILES:
       - name: zim.zsh
         content: |
