@@ -14,7 +14,12 @@
   set_fact:
     ETC_FILES: "{{ [[{'name': 'mise.toml', 'content': _mise_content}], ETC_FILES] | merge_list('append') }}"
     LINKS: "{{ [[{'src': DIR + '/etc/mise.toml', 'dest': 'mise.toml'}], LINKS] | merge_list('append') }}"
+    BINS: "{{ [BINS | default([]), _mise_bins] | merge_list('bins_generated') }}"
   vars:
+    _mise_bins:
+      - name: install.sh
+        early: |
+          mise install
     _mise_content: |
       [tools]
       {% for target, version in (MISE_VERSIONS | merge_dict(strategy='tool_versions_overlay', single=true)).items() %}

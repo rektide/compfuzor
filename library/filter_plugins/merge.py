@@ -50,7 +50,7 @@ LIST_STRATEGY_PROFILES = {
     "bins_generated": {
         "op": "merge_keyed",
         "key": "name",
-        "concat_fields": ["generated", "run_all"],
+        "concat_fields": ["early", "generated", "run_all"],
     },
 }
 
