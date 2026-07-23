@@ -25,6 +25,9 @@ cd {{DIR}}/{{item.basedir}}
 {{ item.exec|default([])|arrayitize|join("\n") }}
 {{ item.execs|default([], True)|arrayitize|join("\n") }}
 {{ item.generated|default([], True)|arrayitize|join("\n") if item.generatedAt|def("end") == "end" else omit }}
+{% for run_bin in item.run_all|default([])|arrayitize %}
+"$DIR/bin/{{ run_bin }}" "$@"
+{% endfor %}
 {{ item.late|default([])|arrayitize|join("\n") }}
 {% if not item.no_header|default(False) %}
 

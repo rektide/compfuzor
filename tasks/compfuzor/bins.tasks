@@ -25,7 +25,7 @@
     and item.dest|default(item.name|default(False)) is truthy
   vars:
     _dest: "{{BINS_DIR}}/{{item.dest|default(item.name)}}"
-    contentful: "{{item.content|def or item.exec|def or item.execs|def or item.generated|def or item.early|def or item.late|def}}"
+    contentful: "{{item.content|def or item.exec|def or item.execs|def or item.generated|def or item.run_all|def or item.early|def or item.late|def}}"
 - name: "Create wrapped src/template `BINS`"
   template:
     src: "files/_bin"
@@ -51,7 +51,7 @@
     _isRaw: "{{_item.raw|default(False)|bool}}"
     _isLink: "{{_item.link|default(False) is truthy}}"
     _exists: "{{_item.exists|default('') != False}}"
-    _contentful: "{{_item.content|def or _item.exec|def or _item.execs|def or _item.generated|def or _item.early|def or _item.late|def}}"
+    _contentful: "{{_item.content|def or _item.exec|def or _item.execs|def or _item.generated|def or _item.run_all|def or _item.early|def or _item.late|def}}"
     item: "{{_item|combine({'content': lookup('template', _srcTemplate)})}}"
 - name:  "Copy raw `BINS` into place`"
   copy:

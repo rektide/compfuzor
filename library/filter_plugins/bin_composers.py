@@ -37,6 +37,8 @@ def bin_composers(bins):
     ``build*.sh`` and ``install*.sh`` are action scripts. An explicit ``scope``
     may be a string or list; one compositor is emitted for every declared scope.
     ``install-user.sh`` and ``install-*.user.sh`` infer the ``user`` scope.
+    Compositors retain the canonical action filename and append child names through
+    the shared ``run_all`` bin field.
     """
     groups = {}
     for item in _arrayitize(bins):
@@ -69,13 +71,15 @@ def bin_composers(bins):
     compositors = []
     for (action, scope), members in groups.items():
         scope_suffix = "" if scope is None else f"-{scope}"
-        name = f"{action}{scope_suffix}-all.sh"
-        generated = "\n".join(f'"$DIR/bin/{member}" "$@"' for member in members)
+        name = f"{action}{scope_suffix}.sh"
+        run_all = [member for member in members if member != name]
+        if not run_all:
+            continue
         compositor = {
             "name": name,
             "action": action,
             "generated_by": "gen_bins",
-            "generated": generated,
+            "run_all": run_all,
         }
         if scope is not None:
             compositor["scope"] = [scope]

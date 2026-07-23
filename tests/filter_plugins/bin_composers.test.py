@@ -26,18 +26,16 @@ def test_composes_unscoped_actions():
         result,
         [
             {
-                "name": "build-all.sh",
+                "name": "build.sh",
                 "action": "build",
                 "generated_by": "gen_bins",
-                "generated": (
-                    '"$DIR/bin/build.sh" "$@"\n"$DIR/bin/build-kernel.sh" "$@"'
-                ),
+                "run_all": ["build-kernel.sh"],
             },
             {
-                "name": "install-all.sh",
+                "name": "install.sh",
                 "action": "install",
                 "generated_by": "gen_bins",
-                "generated": '"$DIR/bin/install-kernel.sh" "$@"',
+                "run_all": ["install-kernel.sh"],
             },
         ],
     )
@@ -48,6 +46,7 @@ def test_composes_explicit_and_filename_user_scopes():
         [
             {"name": "install-user.sh"},
             {"name": "install-shell.sh", "scope": ["user", "shell"]},
+            {"name": "install-shell-extra.sh", "scope": "shell"},
             {"name": "install-bash.user.sh", "scope": "user"},
         ]
     )
@@ -56,21 +55,17 @@ def test_composes_explicit_and_filename_user_scopes():
         result,
         [
             {
-                "name": "install-user-all.sh",
+                "name": "install-user.sh",
                 "action": "install",
                 "generated_by": "gen_bins",
-                "generated": (
-                    '"$DIR/bin/install-user.sh" "$@"\n'
-                    '"$DIR/bin/install-shell.sh" "$@"\n'
-                    '"$DIR/bin/install-bash.user.sh" "$@"'
-                ),
+                "run_all": ["install-shell.sh", "install-bash.user.sh"],
                 "scope": ["user"],
             },
             {
-                "name": "install-shell-all.sh",
+                "name": "install-shell.sh",
                 "action": "install",
                 "generated_by": "gen_bins",
-                "generated": '"$DIR/bin/install-shell.sh" "$@"',
+                "run_all": ["install-shell-extra.sh"],
                 "scope": ["shell"],
             },
         ],
@@ -86,8 +81,8 @@ def test_excludes_generated_compositors():
     )
     check(
         "excludes generated compositors",
-        result[0]["generated"],
-        '"$DIR/bin/build.sh" "$@"',
+        result,
+        [],
     )
 
 
@@ -106,12 +101,12 @@ def test_explicit_scope_classifies_systemd_install():
             },
         ]
     )
-    user = [c for c in result if c["name"] == "install-user-all.sh"]
-    check("emits install-user-all compositor", len(user), 1)
+    user = [c for c in result if c["name"] == "install-user.sh"]
+    check("emits install-user compositor", len(user), 1)
     check(
         "systemd user-scope install joins user compositor",
-        user[0]["generated"],
-        '"$DIR/bin/install-user.sh" "$@"\n"$DIR/bin/install-service-user.sh" "$@"',
+        user[0]["run_all"],
+        ["install-service-user.sh"],
     )
     check("user compositor carries scope", user[0].get("scope"), ["user"])
 
@@ -121,14 +116,20 @@ def test_compose_false_excludes_library_scripts():
     result = bin_composers(
         [
             {"name": "install-user.sh"},
-            {"name": "install-unit.sh", "src": "../systemd/install-unit.sh", "compose": False},
+            {
+                "name": "install-unit.sh",
+                "src": "../systemd/install-unit.sh",
+                "compose": False,
+            },
         ]
     )
     names = [c["name"] for c in result]
-    check("no unscoped install-all compositor", "install-all.sh" not in names, True)
-    check("install-unit.sh excluded from user compositor", "install-user-all.sh" in names, True)
-    user = [c for c in result if c["name"] == "install-user-all.sh"][0]
-    check("user compositor only has install-user.sh", user["generated"], '"$DIR/bin/install-user.sh" "$@"')
+    check("no unscoped install compositor", "install.sh" not in names, True)
+    check(
+        "install-unit.sh excluded from user compositor",
+        "install-user.sh" not in names,
+        True,
+    )
 
 
 if __name__ == "__main__":
