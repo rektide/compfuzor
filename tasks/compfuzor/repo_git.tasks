@@ -21,6 +21,22 @@
   vars:
     dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
 
+- name: "Compfuzor: colocate jj on cloned git repo"
+  shell: |
+    command -v jj >/dev/null 2>&1 || exit 0
+    jj git init
+    jj commit -m "{{ JJ_COMMIT_MSG|default('compfuzor: jj init') }}"
+  args:
+    chdir: "{{ dest }}"
+    creates: "{{ dest }}/.jj"
+  when: >
+    REPO|default(False) is truthy
+    and not GIT_BYPASS|default(False)
+    and not REPO_BYPASS|default(False)
+    and not JJ_BYPASS|default(False)
+  vars:
+    dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
+
 - name: "fetch git repositories dict"
   git:
     repo: "{{ item.value }}"
@@ -31,6 +47,22 @@
     version: "{{ GIT_VERSION|default(omit) }}"
   become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
   loop: "{{ (REPOS if REPOS|default(False) is mapping else {})|dict2items }}"
+  vars:
+    dest: "{{ item.key|defaultDir(REPO_DIR|default(DIR, true)) }}"
+
+- name: "colocate jj on cloned git repositories dict"
+  shell: |
+    command -v jj >/dev/null 2>&1 || exit 0
+    jj git init
+    jj commit -m "{{ JJ_COMMIT_MSG|default('compfuzor: jj init') }}"
+  args:
+    chdir: "{{ dest }}"
+    creates: "{{ dest }}/.jj"
+  loop: "{{ (REPOS if REPOS|default(False) is mapping else {})|dict2items }}"
+  when: >
+    not GIT_BYPASS|default(False)
+    and not REPO_BYPASS|default(False)
+    and not JJ_BYPASS|default(False)
   vars:
     dest: "{{ item.key|defaultDir(REPO_DIR|default(DIR, true)) }}"
 
@@ -46,5 +78,22 @@
   become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
   with_items: "{{ REPOS if REPOS|default(False) else [] }}"
   when: REPOS|default({}) is not mapping
+  vars:
+    dest: "{{ REPO_DIR }}/{{item.repo|default(item)|basename|regex_replace('\\.git$', '') }}"
+
+- name: "colocate jj on cloned git repositories list"
+  shell: |
+    command -v jj >/dev/null 2>&1 || exit 0
+    jj git init
+    jj commit -m "{{ JJ_COMMIT_MSG|default('compfuzor: jj init') }}"
+  args:
+    chdir: "{{ dest }}"
+    creates: "{{ dest }}/.jj"
+  with_items: "{{ REPOS if REPOS|default(False) else [] }}"
+  when: >
+    REPOS|default({}) is not mapping
+    and not GIT_BYPASS|default(False)
+    and not REPO_BYPASS|default(False)
+    and not JJ_BYPASS|default(False)
   vars:
     dest: "{{ REPO_DIR }}/{{item.repo|default(item)|basename|regex_replace('\\.git$', '') }}"
