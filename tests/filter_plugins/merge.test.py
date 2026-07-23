@@ -198,6 +198,22 @@ def test_merge_dict_tool_versions_overlay():
     check("normalizes list and overlays mapping", result, {"rust": "1.88", "nodejs": True, "pnpm": True})
 
 
+def test_merge_dict_tool_versions_mise_union():
+    print("\nmerge_dict tool_versions mise-mode union:")
+    result = merge_dict(
+        [
+            {"python": True, "go": True},
+            {"uv": "latest", "python": "3.11"},
+        ],
+        "tool_versions_overlay",
+    )
+    check(
+        "union of subsystem defaults + mise overrides, mise wins",
+        result,
+        {"go": True, "uv": "latest", "python": "3.11"},
+    )
+
+
 def test_merge_dict_raw_copy_boundary():
     print("\nmerge_dict raw-copy boundary:")
     result = merge_dict(FakeLazyList([{"A": 1}, {"B": 2}]))
@@ -386,6 +402,7 @@ if __name__ == "__main__":
     test_merge_dict_single_and_get()
     test_merge_dict_undefined_is_empty()
     test_merge_dict_tool_versions_overlay()
+    test_merge_dict_tool_versions_mise_union()
     test_merge_dict_raw_copy_boundary()
     test_merge_list_subsys_default_bins()
     test_merge_list_subsys_inactive_skips()

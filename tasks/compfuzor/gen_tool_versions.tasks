@@ -1,14 +1,21 @@
 ---
+- name: "Compfuzor: normalize version-manager inputs"
+  set_fact:
+    _tool_versions: "{{ TOOL_VERSIONS | default({}) | merge_dict(strategy='tool_versions_overlay', single=true) }}"
+    _mise_versions: "{{ MISE_VERSIONS | default({}) | merge_dict(strategy='tool_versions_overlay', single=true) }}"
+
 - name: "Compfuzor: synthesize tool_versions subsystem artifacts"
   set_fact:
     ETC_FILES: "{{ [[{'name': '.tool-versions', 'content': _tv_content}], ETC_FILES] | merge_list('append') }}"
     LINKS: "{{ [[{'src': DIR + '/etc/.tool-versions', 'dest': '.tool-versions'}], LINKS] | merge_list('append') }}"
   vars:
     _tv_content: |
-      {% for target, version in (TOOL_VERSIONS | merge_dict(strategy='tool_versions_overlay', single=true)).items() %}
+      {% for target, version in _tool_versions.items() %}
       {{ target }} {{ version if version != True else lookup('vars', target | upper + '_VERSION') }}
       {% endfor %}
-  when: TOOL_VERSIONS | merge_dict(strategy='tool_versions_overlay', single=true) is deflengthy
+  when:
+    - _tool_versions is deflengthy
+    - _mise_versions is not deflengthy
 
 - name: "Compfuzor: synthesize mise_versions subsystem artifacts"
   set_fact:
@@ -20,9 +27,10 @@
       - name: install.sh
         early: |
           mise install
+    _mise_tools: "{{ [_tool_versions, _mise_versions] | merge_dict(strategy='tool_versions_overlay') }}"
     _mise_content: |
       [tools]
-      {% for target, version in (MISE_VERSIONS | merge_dict(strategy='tool_versions_overlay', single=true)).items() %}
-      {{ target }} = {{ (version if version != True else lookup('vars', target | upper + '_VERSION')) | to_json }}
+      {% for target, version in _mise_tools.items() %}
+      {{ target }} = {{ (version if version != True else (lookup('vars', target | upper + '_VERSION') | default('latest'))) | to_json }}
       {% endfor %}
-  when: MISE_VERSIONS | merge_dict(strategy='tool_versions_overlay', single=true) is deflengthy
+  when: _mise_versions is deflengthy

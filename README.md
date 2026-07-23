@@ -117,7 +117,7 @@ prefix conventions (`fn_`/`gen_`/`fs_`), and worked examples.
 ```sh
 python tests/filter_plugins/merge_strategy.test.py   # 42 tests
 python tests/filter_plugins/mergeKeyed.test.py       # 11 tests
-python tests/filter_plugins/merge.test.py             # 25 tests
+python tests/filter_plugins/merge.test.py             # 27 tests
 python tests/filter_plugins/subsystem_record.test.py  # 27 tests
 python tests/filter_plugins/get.test.py                #  9 tests
 python tests/filter_plugins/cmdline.test.py            # 12 tests

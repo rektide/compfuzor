@@ -187,7 +187,16 @@ go:
       go: true
 ```
 
-This contributes two generated scripts, two environment defaults, and a `.tool-versions` entry. `TOOL_VERSIONS` is merged into the global `TOOL_VERSIONS` fact by `merge_subsys`; [`gen_tool_versions.tasks`](../tasks/compfuzor/gen_tool_versions.tasks#L1-L13) only renders that final fact into `.tool-versions` artifacts.
+This contributes two generated scripts, two environment defaults, and a `.tool-versions` entry. `TOOL_VERSIONS` is merged into the global `TOOL_VERSIONS` fact by `merge_subsys`; [`gen_tool_versions.tasks`](../tasks/compfuzor/gen_tool_versions.tasks#L1-L36) renders that final fact into version-manager artifacts.
+
+#### Version-manager mode (`MISE_VERSIONS`)
+
+`TOOL_VERSIONS` and `MISE_VERSIONS` share one data shape (`{tool: version}`) and one merge strategy (`tool_versions_overlay`); only the output file differs. The presence of `MISE_VERSIONS` is the signal that a playbook is mise-managed:
+
+- **No `MISE_VERSIONS`** (legacy): `TOOL_VERSIONS` renders to `.tool-versions` (asdf syntax).
+- **`MISE_VERSIONS` set** (mise mode): the union of `TOOL_VERSIONS` and `MISE_VERSIONS` renders to `mise.toml` only; no `.tool-versions` is emitted. Subsystem tool requirements (e.g. `python: true` from the python subsystem) are therefore routed into `mise.toml`.
+
+`MISE_VERSIONS` entries win over `TOOL_VERSIONS` defaults on key conflicts (playbook explicit > subsystem default). In the mise renderer, a `true` version with no matching `<TOOL>_VERSION` variable resolves to `"latest"` rather than rendering empty. The legacy `.tool-versions` renderer is unchanged.
 
 ### Merge task
 
