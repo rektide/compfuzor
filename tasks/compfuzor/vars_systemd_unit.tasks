@@ -269,3 +269,4 @@
       name: "install-{{ item.type }}{{ '-user' if _is_user else '' }}.sh"
       generatedAt: end
       generated: "{{ _generated }}"
+      scope: "{{ ['user'] if _is_user else [] }}"

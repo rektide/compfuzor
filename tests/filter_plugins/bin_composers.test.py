@@ -91,7 +91,33 @@ def test_excludes_generated_compositors():
     )
 
 
+def test_explicit_scope_classifies_systemd_install():
+    # Mirrors what vars_systemd_unit.tasks emits: install-service-user.sh with
+    # an explicit user scope (filename alone would not match install-user/.user).
+    # Note: subsystem-generated bins carry `generated` content but NO
+    # `generated_by: gen_bins` marker (that marks gen_bins' own compositor output).
+    result = bin_composers(
+        [
+            {"name": "install-user.sh"},
+            {
+                "name": "install-service-user.sh",
+                "scope": ["user"],
+                "generated": 'echo hi',
+            },
+        ]
+    )
+    user = [c for c in result if c["name"] == "install-user-all.sh"]
+    check("emits install-user-all compositor", len(user), 1)
+    check(
+        "systemd user-scope install joins user compositor",
+        user[0]["generated"],
+        '"$DIR/bin/install-user.sh" "$@"\n"$DIR/bin/install-service-user.sh" "$@"',
+    )
+    check("user compositor carries scope", user[0].get("scope"), ["user"])
+
+
 if __name__ == "__main__":
     test_composes_unscoped_actions()
     test_composes_explicit_and_filename_user_scopes()
     test_excludes_generated_compositors()
+    test_explicit_scope_classifies_systemd_install()
