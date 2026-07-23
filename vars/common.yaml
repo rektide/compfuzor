@@ -210,14 +210,20 @@ SUBSYSTEM:
   go:
     contrib:
       BINS:
-        - name: build.sh
+        - name: build-go.sh
           run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
+            {% for _c in (GO_COMMENT | default([]) | arrayitize) %}
+            # {{ _c }}
+            {% endfor %}
             go build -o ${GO_BIN:-$TYPE} ${GO_TARGET:-./...}
-        - name: install.sh
+        - name: install-go.sh
           basedir: repo
           generated: |
+            {% for _c in (GO_COMMENT_INSTALL | default([]) | arrayitize) %}
+            # {{ _c }}
+            {% endfor %}
             [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${GO_BIN:-$TYPE}"
             ln -sfv "$(pwd)/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
       ENV:
@@ -229,10 +235,13 @@ SUBSYSTEM:
   nodejs:
     contrib:
       BINS:
-        - name: build.sh
+        - name: build-nodejs.sh
           run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
+            {% for _c in (NODEJS_COMMENT | default([]) | arrayitize) %}
+            # {{ _c }}
+            {% endfor %}
             if [ -f package-lock.json ] && [ ! -f pnpm-lock.yaml ]; then
               pnpm import
             fi
@@ -251,10 +260,13 @@ SUBSYSTEM:
                 ${_cf_cmd}
               done
             fi
-        - name: install.sh
+        - name: install-nodejs.sh
           #run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
+            {% for _c in (NODEJS_COMMENT_INSTALL | default([]) | arrayitize) %}
+            # {{ _c }}
+            {% endfor %}
             if [ -n "{{ NODEJS_LINK_DIR | default('') }}" ]; then
               IFS=',' read -ra _cf_link_dirs <<< "{{ NODEJS_LINK_DIR | default('.') }}"
               for _cf_dir in "${_cf_link_dirs[@]}"; do
@@ -286,15 +298,21 @@ SUBSYSTEM:
   bun:
     contrib:
       BINS:
-        - name: build.sh
+        - name: build-bun.sh
           run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
+            {% for _c in (BUN_COMMENT | default([]) | arrayitize) %}
+            # {{ _c }}
+            {% endfor %}
             bun install
-        - name: install.sh
+        - name: install-bun.sh
           run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
+            {% for _c in (BUN_COMMENT_INSTALL | default([]) | arrayitize) %}
+            # {{ _c }}
+            {% endfor %}
             bun link -g
       ENV: "{{ ({'BUN_BIN': BUN_BIN}) if BUN_BIN is defined else ({}) }}"
       TOOL_VERSIONS:
@@ -427,10 +445,13 @@ SUBSYSTEM:
     requested: "{{ PYTHON is deftruthy or PIP is defined }}"
     contrib:
       BINS:
-        - name: build.sh
+        - name: build-python.sh
           run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
+            {% for _c in (PYTHON_COMMENT | default([]) | arrayitize) %}
+            # {{ _c }}
+            {% endfor %}
             {% if PYTHON_BUILD_COMMAND is defined %}
             {{ PYTHON_BUILD_COMMAND }}
             {% else %}
@@ -686,8 +707,11 @@ _nodejs_prune_scripts: "{{ (NODEJS_PRUNE_SCRIPTS | default(NODEJS_PRUNE_SCRIPT |
 _nodejs_prune_commands: "{{ (NODEJS_PRUNE_COMMANDS | default(NODEJS_PRUNE_COMMAND | default([]))) | arrayitize }}"
 
 _npm_src_bins:
-  - name: build.sh
+  - name: build-npm.sh
     generated: |
+      {% for _c in (NPM_COMMENT | default([]) | arrayitize) %}
+      # {{ _c }}
+      {% endfor %}
       curl $(npm view $NPM_PACKAGE dist.tarball) | tar -xz --strip-components=1
       pnpm i
       IFS=',' read -ra _cf_build_scripts <<< "${NODEJS_BUILD_SCRIPTS:-build}"
@@ -707,9 +731,12 @@ _npm_src_bins:
       pnpm link
 
 _npm_install_bins:
-  - name: install.sh
+  - name: install-npm.sh
     run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
     generated: |
+      {% for _c in (NPM_COMMENT_INSTALL | default([]) | arrayitize) %}
+      # {{ _c }}
+      {% endfor %}
       pnpm install -g{% set _ab = NPM_ALLOW_BUILD | default(False) %}{% if _ab %}{% for _pkg in ((NPM | arrayitize) if (_ab | type_debug == 'bool') else (_ab | arrayitize)) %} --allow-build={{ _pkg }}{% endfor %}{% endif %} $(cat etc/npm.txt) $*
 
 _npm_install_etc:
@@ -719,14 +746,20 @@ _npm_install_etc:
 
 _bazel_target: "{{ BAZEL_TARGET | default('//...') }}"
 _bazel_bins:
-  - name: build.sh
+  - name: build-bazel.sh
     run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
     basedir: repo
     generated: |
+      {% for _c in (BAZEL_COMMENT | default([]) | arrayitize) %}
+      # {{ _c }}
+      {% endfor %}
       bazel build {{ _bazel_target }}
-  - name: install.sh
+  - name: install-bazel.sh
     basedir: repo
     generated: |
+      {% for _c in (BAZEL_COMMENT_INSTALL | default([]) | arrayitize) %}
+      # {{ _c }}
+      {% endfor %}
       {% if BAZEL_INSTALL_TARGETS is defined %}
       {% for target in BAZEL_INSTALL_TARGETS %}
       bin_path="$(bazel info bazel-bin)/{{ target }}"
@@ -792,10 +825,13 @@ _cmake_env_base:
   CMAKE_INSTALL_BIN: "{{ CMAKE_INSTALL_BIN | default(omit) }}"
 _cmake_env: "{{ _cmake_env_base | combine(_cmake_deps_env) }}"
 _cmake_bins:
-  - name: build.sh
+  - name: build-cmake.sh
     run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
     basedir: "{{ REPO_DIR }}"
     generated: |
+      {% for _c in (CMAKE_COMMENT | default([]) | arrayitize) %}
+      # {{ _c }}
+      {% endfor %}
       {% for cmakeBuild in _cmake_builds %}
       {% set generator = cmakeBuild.generator | default(CMAKE_GENERATOR | default('Ninja')) %}
       {% set configureArgs = cmakeBuild.args | default(CMAKE_ARGS | default([])) | arrayitize | join(' ') %}
@@ -845,9 +881,12 @@ _cmake_bins:
 
       cmake --build "$BUILD_DIR"{% if buildTarget %} --target {{ buildTarget }}{% endif %}{% if buildType %} --config {{ buildType }}{% endif %}{% if buildArgs %} {{ buildArgs }}{% endif %}
       {% endfor %}
-  - name: install.sh
+  - name: install-cmake.sh
     basedir: repo
     generated: |
+      {% for _c in (CMAKE_COMMENT_INSTALL | default([]) | arrayitize) %}
+      # {{ _c }}
+      {% endfor %}
       {% if CMAKE_INSTALL is defined %}
       {% for cmakeBuild in _cmake_builds if cmakeBuild.install | default(True) %}
       {% set installArgs = cmakeBuild.install_args | arrayitize | join(' ') %}
@@ -875,10 +914,13 @@ _make_destdir_arg: >-
   {%- endif -%}
   {%- endif -%}
 _make_bins:
-  - name: build.sh
+  - name: build-make.sh
     run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
     basedir: "{{ REPO_DIR }}"
     generated: |
+      {% for _c in (MAKE_COMMENT | default([]) | arrayitize) %}
+      # {{ _c }}
+      {% endfor %}
       if [ ! -f ./configure ]; then
         if [ -f ./autogen.sh ]; then NOCONFIGURE=1 sh ./autogen.sh
         elif [ -f ./configure.ac ]; then autoreconf -fi; fi
@@ -887,9 +929,12 @@ _make_bins:
         ./configure {{ _make_prefix_arg }} {{ MAKE_CONF_OPTIONS|default('') }}
       fi
       make -j"$(nproc)" {{ MAKE_TARGET|default([])|listify|join(' ') }}
-  - name: install.sh
+  - name: install-make.sh
     basedir: "{{ REPO_DIR }}"
     generated: |
+      {% for _c in (MAKE_COMMENT_INSTALL | default([]) | arrayitize) %}
+      # {{ _c }}
+      {% endfor %}
       make {{ MAKE_INSTALL_TARGET|default('install') }} {{ _make_destdir_arg }}
 
 _kernel_modprobe_bins:
