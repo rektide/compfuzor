@@ -52,7 +52,7 @@ if [ "$CHECK" -eq 1 ]; then
   cp "$CONFIG_OUTPUT" "$tmp"
   for f in "${active[@]}"; do
     stem=$(basename "$f" ".${ext}")
-    block-in-file -n "${name}-${CONFIG_KEY}-${stem}" -i "$f" -o "$tmp"
+    block-in-file -n "${name}-${CONFIG_KEY}-${stem}" -i "$f" -o "$tmp" >/dev/null
   done
   if cmp -s "$tmp" "$CONFIG_OUTPUT"; then
     exit 0
