@@ -659,7 +659,7 @@ SUBSYSTEM:
     # rootflags=...). install-kernel-params.sh writes them to /etc/kernel/cmdline
     # idempotently: key=value tokens are replaced by key prefix, flag-style
     # tokens (no =) are added once.
-    requested: "{{ KERNEL_PARAMS is defmapping and KERNEL_PARAMS | deflengthy }}"
+    requested: "{{ KERNEL_PARAMS is sequence and KERNEL_PARAMS | deflengthy }}"
     contrib:
       ETC_FILES:
         - name: kernel.params.json

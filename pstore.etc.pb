@@ -126,8 +126,9 @@
 
     # Applying is done via the auto-generated compositor:
     #   sudo "$DIR/bin/install.sh"
-    # which runs install-kernel.sh (module params via force_cmdline) and
-    # install-kernel-cmdline.sh (the raw memmap= token from KERNEL_PARAMS).
+    # which runs install-kernel.sh (module params via force_cmdline),
+    # install-kernel-cmdline.sh (<module>.<param>=<value> tokens), and
+    # install-kernel-params.sh (the raw memmap= token from KERNEL_PARAMS).
     # No SYSTEMD service: pstore only writes /etc/kernel/cmdline; a reboot or
     # `sudo kernel-install` propagates it to BLS entries.
 
