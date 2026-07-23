@@ -15,13 +15,26 @@
 # install-kernel*.sh steps, then runs status.sh for post-install drift.
 
 if [ "${KERNEL_INSTALL:-0}" = "1" ]; then
-  kernel-install add "$(uname -r)" "/lib/modules/$(uname -r)/vmlinuz"
+  _bls_kv="$(uname -r)"
+  # Locate the kernel image. systemd's default (/usr/lib/modules/$kv/vmlinuz)
+  # rarely exists on Debian/custom kernels -- the image usually lives at
+  # /boot/vmlinuz-$kv. KERNEL_IMAGE overrides everything for odd layouts.
+  _bls_kimg=""
+  for _bls_cand in "${KERNEL_IMAGE:-}" "/boot/vmlinuz-$_bls_kv" "/usr/lib/modules/$_bls_kv/vmlinuz" "/lib/modules/$_bls_kv/vmlinuz"; do
+    [ -n "$_bls_cand" ] && [ -f "$_bls_cand" ] && { _bls_kimg="$_bls_cand"; break; }
+  done
+  if [ -z "$_bls_kimg" ]; then
+    echo "${NAME}: KERNEL_INSTALL=1 but no kernel image for $_bls_kv." >&2
+    echo "  looked in /boot/vmlinuz-$_bls_kv, /usr/lib/modules/$_bls_kv/vmlinuz, /lib/modules/$_bls_kv/vmlinuz." >&2
+    echo "  set KERNEL_IMAGE=/path/to/vmlinuz to override." >&2
+  else
+    kernel-install add "$_bls_kv" "$_bls_kimg"
+  fi
 else
   echo "${NAME}: KERNEL_INSTALL not set -- skipping BLS regen." >&2
   echo "  /etc/kernel/cmdline was updated but BLS entries were NOT;" >&2
   echo "  changes won't take effect until the next kernel-install or reboot." >&2
-  echo "  set KERNEL_INSTALL=1, or run:" >&2
-  echo "    sudo kernel-install add \"$(uname -r)\" \"/lib/modules/$(uname -r)/vmlinuz\"" >&2
+  echo "  re-run with: sudo KERNEL_INSTALL=1 \"$DIR/bin/install.sh\"" >&2
 fi
 
 # status: report drift now that install has applied.
