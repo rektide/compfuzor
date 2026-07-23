@@ -47,6 +47,15 @@ ansible-playbook -i 'localhost,' -c local <name>.pb \
 
 ## Where output lands
 
-`DIR` is derived from the playbook's type suffix: `/etc/opt/<NAME>` (`.etc.pb`),
-`/opt/<NAME>` (`.opt.pb`), `/srv/<NAME>` (`.srv.pb`). Under it: `bin/` (generated
-scripts), `etc/` (config, symlink to the dir), `env`, `README.md`.
+`DIR` = `{{<TYPE>S_DIR}}/{{NAME}}`, set by `vars/types/<type>.yaml` (bases in
+`vars/common.yaml`). `NAME` defaults to `TYPE[-INSTANCE][-SUBINSTANCE]`.
+
+| Suffix | Base dir |
+|---|---|
+| `.src.pb` | `/usr/local/src` (SRCS_DIR) |
+| `.opt.pb` `.pkg.pb` `.repo.pb` | `/opt` (OPTS_DIR) |
+| `.etc.pb` | `/etc/opt` (ETCS_DIR) |
+| `.srv.pb` | `/srv` (SRVS_DIR) |
+
+Under DIR: `bin/` (scripts), `etc/` (config, symlink to ETCS_DIR/NAME), `env`,
+`env.export`, `README.md`.
