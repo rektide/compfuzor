@@ -16,11 +16,25 @@
       - name: mise.bash_profile
         content: |
           eval "$(mise activate bash --shims)"
+      - name: mise-user-env.service
+        content: |
+          [Unit]
+          Description=Push mise environment into the systemd user manager
+          Before=default.target
+
+          [Service]
+          Type=oneshot
+          WorkingDirectory=%h
+          ExecStart="{{DIR}}/bin/mise-systemd-env.sh"{% if mise_user_env_path|default(False)|bool %} --path{% endif %}
+
+          [Install]
+          WantedBy=default.target
     zsh_rc: "${ZDOTDIR:-$HOME}/.zshrc"
     zsh_profile: "${ZDOTDIR:-$HOME}/.zprofile"
     bash_rc: "$HOME/.bashrc"
     bash_profile: "$HOME/.bash_profile"
     mise_npm_package_manager: "${MISE_NPM_PACKAGE_MANAGER:-pnpm}"
+    mise_user_env_path: False
     ENV_LIST:
       - zsh_rc
       - zsh_profile
@@ -56,5 +70,40 @@
             -C true \
             -i {{DIR}}/etc/mise.bash_profile \
             -o "${BASH_PROFILE:-{{bash_profile}}}"
+      - name: mise-systemd-env.sh
+        basedir: False
+        content: |
+          if ! command -v mise >/dev/null 2>&1; then
+            echo "mise-systemd-env: mise is not on PATH" >&2
+            exit 1
+          fi
+          if ! command -v jq >/dev/null 2>&1; then
+            echo "mise-systemd-env: jq is required but not on PATH" >&2
+            exit 1
+          fi
+          INCLUDE_PATH=0
+          if [ "${1:-}" = "--path" ]; then
+            INCLUDE_PATH=1
+            shift
+          fi
+          if [ "$INCLUDE_PATH" -eq 1 ]; then
+            _filter='to_entries[] | "\(.key)=\(.value)"'
+          else
+            _filter='to_entries[] | select(.key != "PATH") | "\(.key)=\(.value)"'
+          fi
+          mapfile -t _vars < <(cd "$HOME" && mise env -J | jq -r "$_filter")
+          if [ "${#_vars[@]}" -eq 0 ]; then
+            echo "mise-systemd-env: mise reported no environment variables" >&2
+            exit 0
+          fi
+          systemctl --user set-environment "${_vars[@]}"
+          echo "mise-systemd-env: pushed ${#_vars[@]} variable(s)$([ "$INCLUDE_PATH" -eq 1 ] && echo " (incl PATH)")"
+      - name: install-user-env.sh
+        content: |
+          SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
+          mkdir -p "$SYSTEMD_USER_DIR"
+          ln -sfv "$DIR/etc/mise-user-env.service" "$SYSTEMD_USER_DIR/mise-user-env.service"
+          systemctl --user daemon-reload
+          systemctl --user enable --now mise-user-env.service
   tasks:
     - import_tasks: tasks/compfuzor.includes
