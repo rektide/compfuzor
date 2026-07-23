@@ -1,18 +1,13 @@
 ---
 - hosts: all
   vars:
-    TYPE: lact
-    INSTANCE: git
     REPO: https://github.com/ilya-zlobintsev/LACT
-    ENV: true
+    RUST: True
+    # RUST_PKG: lact  # build only the `lact` binary instead of the whole workspace (skips lact-gui/GTK)
     PKGS:
       - ocl-icd-opencl-dev
-    BINS:
-      - name: build.sh
-        content: |
-          cargo build --release
-      - name: install.sh
-        content: |
-          ln -s target/release/lact ${GLOBAL_BINS_DIR}/
+    SYSTEMD_SERVICES:
+      ExecStart: lact daemon
+      Nice: -10
   tasks:
     - import_tasks: tasks/compfuzor.includes
