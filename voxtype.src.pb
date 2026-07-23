@@ -1,7 +1,7 @@
 ---
 - hosts: all
   vars:
-    SYSTEMD_SERVICES:
-      ExecStart: lact daemon
+    REPO: https://github.com/peteonrails/voxtype
+    RUST: True
   tasks:
     - import_tasks: tasks/compfuzor.includes
