@@ -11,6 +11,7 @@
     src: "{{_src|defaultDir(BINS_DIR)}}"
     dest: "{{_dest}}"
     state: link
+    force: "{{ item.force|default(False) }}"
   with_items: "{{BINS|default([])}}"
   become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
   when: item.global|default(False) and item.delay|default(False) == delay_phase|default(False)
