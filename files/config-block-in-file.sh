@@ -5,6 +5,9 @@
 #
 # Disabled items are excluded (they live in etc/${CONFIG_KEY}-disabled/).
 #
+# --check applies all blocks to a temp copy of CONFIG_OUTPUT and compares:
+# exits 0 if identical, 1 if drifted (prints a diff unless -q).
+#
 # ENV:
 #   CONFIG_KEY     - drop-in directory name under etc/ (required)
 #   CONFIG_OUTPUT  - target file to insert blocks into (required)
@@ -13,6 +16,16 @@
 shopt -s nullglob
 
 _len() { echo $#; }
+
+CHECK=0
+QUIET=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --check) CHECK=1; shift ;;
+    -q|--quiet) QUIET=1; shift ;;
+    *) shift ;;
+  esac
+done
 
 : "${CONFIG_KEY:?CONFIG_KEY is required}"
 : "${CONFIG_OUTPUT:?CONFIG_OUTPUT is required}"
@@ -25,6 +38,29 @@ count=$(_len "${active[@]}")
 if [ $count -eq 0 ]; then
   echo "${CONFIG_KEY}: no configs found" >&2
   exit 0
+fi
+
+if [ "$CHECK" -eq 1 ]; then
+  if [ ! -f "$CONFIG_OUTPUT" ]; then
+    if [ "$QUIET" -eq 0 ]; then
+      echo "${CONFIG_KEY}: drift: missing ${CONFIG_OUTPUT}" >&2
+    fi
+    exit 1
+  fi
+  tmp=$(mktemp)
+  trap "rm -f $tmp" EXIT
+  cp "$CONFIG_OUTPUT" "$tmp"
+  for f in "${active[@]}"; do
+    stem=$(basename "$f" ".${ext}")
+    block-in-file -n "${name}-${CONFIG_KEY}-${stem}" -i "$f" -o "$tmp"
+  done
+  if cmp -s "$tmp" "$CONFIG_OUTPUT"; then
+    exit 0
+  fi
+  if [ "$QUIET" -eq 0 ]; then
+    diff -u "$CONFIG_OUTPUT" "$tmp" || true
+  fi
+  exit 1
 fi
 
 mkdir -p "$(dirname "$CONFIG_OUTPUT")"
