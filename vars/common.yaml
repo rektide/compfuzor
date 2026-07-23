@@ -471,7 +471,7 @@ SUBSYSTEM:
           basedir: repo
           generated: |
             . "$(pwd)/.venv/bin/activate"
-      ENV: "{{ ({'PYTHON_BIN': PYTHON_BIN}) if PYTHON_BIN is defined else ({}) | combine({} if ENV | def(True) == True else ENV) }}"
+      ENV: "{{ (({'PYTHON_BIN': PYTHON_BIN}) if PYTHON_BIN is defined else {}) | combine({} if ENV | def(True) == True else ENV) }}"
       ETC_FILES: "{{ [{'name': 'pip.txt', 'content': (PIP | join('\\n') if PIP is iterable and PIP is not string else PIP | default(''))}] if PIP is defined else [] }}"
       TOOL_VERSIONS:
         python: true
