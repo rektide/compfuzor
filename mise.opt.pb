@@ -3,6 +3,17 @@
   vars:
     TYPE: mise
     INSTANCE: main
+    SYSTEMD_SERVICE: mise-user-env
+    SYSTEMD_SCOPE: user
+    SYSTEMD_INSTALL: user
+    SYSTEMD_UNITS:
+      Before: default.target
+    SYSTEMD_SERVICES:
+      Type: oneshot
+      WorkingDirectory: "%h"
+      ExecStart: "{{DIR}}/bin/mise-systemd-env.sh{{ ' --path' if mise_user_env_path|default(False)|bool else '' }}"
+    SYSTEMD_INSTALLS:
+      WantedBy: default.target
     ETC_FILES:
       - name: mise.zshrc
         content: |
@@ -16,19 +27,6 @@
       - name: mise.bash_profile
         content: |
           eval "$(mise activate bash --shims)"
-      - name: mise-user-env.service
-        content: |
-          [Unit]
-          Description=Push mise environment into the systemd user manager
-          Before=default.target
-
-          [Service]
-          Type=oneshot
-          WorkingDirectory=%h
-          ExecStart="{{DIR}}/bin/mise-systemd-env.sh"{% if mise_user_env_path|default(False)|bool %} --path{% endif %}
-
-          [Install]
-          WantedBy=default.target
     zsh_rc: "${ZDOTDIR:-$HOME}/.zshrc"
     zsh_profile: "${ZDOTDIR:-$HOME}/.zprofile"
     bash_rc: "$HOME/.bashrc"
@@ -98,12 +96,5 @@
           fi
           systemctl --user set-environment "${_vars[@]}"
           echo "mise-systemd-env: pushed ${#_vars[@]} variable(s)$([ "$INCLUDE_PATH" -eq 1 ] && echo " (incl PATH)")"
-      - name: install-user-env.sh
-        content: |
-          SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
-          mkdir -p "$SYSTEMD_USER_DIR"
-          ln -sfv "$DIR/etc/mise-user-env.service" "$SYSTEMD_USER_DIR/mise-user-env.service"
-          systemctl --user daemon-reload
-          systemctl --user enable --now mise-user-env.service
   tasks:
     - import_tasks: tasks/compfuzor.includes
