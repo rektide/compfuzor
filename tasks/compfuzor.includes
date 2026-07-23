@@ -57,6 +57,9 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_config.tasks
   tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_zim.tasks
+  when: ZIM_MODULE is defined or ZIM_MODULES is defined or ZIM_HOST is defined
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_nodejs.tasks
   when: NODEJS is defined
   tags: ['vars', 'always']

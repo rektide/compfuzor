@@ -5,6 +5,7 @@
     INSTANCE: main
     CONFIG_KEY: zimfw
     CONFIG_MERGE: block-in-file
+    ZIM_HOST: true
     zim_home: "$HOME/.cache/zim"
     zim_config_link: "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/{{CONFIG_KEY}}.{{CONFIG_EXT}}"
     ENV_LIST:
@@ -17,10 +18,214 @@
       - eza
       - fzf
       - zoxide
+    # Zim module declaration. gen_zim renders one fragment per module under
+    # etc/zim/ (etc/zim-disabled/ for enabled:false); install-zim.sh promotes
+    # them into etc/zimfw/ and config.sh (block-in-file) assembles zimfw.conf
+    # in sorted filename order. `phase` is a name (core/prompt/tools/
+    # completion/late) or a number 00-99 for fine placement between bands.
+    ZIM_MODULES:
+      # --- core (20) ---
+      - source: environment
+        phase: core
+        comment: Sets sane Zsh built-in environment options.
+      - source: input
+        phase: core
+        comment: Applies correct bindkeys for input events.
+      - source: utility
+        phase: core
+        comment: Utility aliases and functions. Adds colour to ls, grep and less.
+      - source: https://github.com/joke/zim-mise
+        phase: core
+        comment: included early so other tools can benefit
+
+      # --- prompt (40) ---
+      - source: duration-info
+        phase: prompt
+        comment: Exposes to prompts how long the last command took to execute.
+      - source: git-info
+        phase: prompt
+        comment: Exposes git repository status information to prompts.
+      - source: prompt-pwd
+        phase: prompt
+      - source: minimal
+        phase: prompt
+        comment: A heavily reduced, ASCII-only version of the Spaceship and Starship prompts.
+      - source: asciiship
+        phase: prompt
+        enabled: false
+      - source: https://gitlab.com/Spriithy/basher.git
+        phase: prompt
+        enabled: false
+      - source: spaceship-prompt/spaceship-prompt
+        phase: prompt
+        args: --name spaceship --no-submodules
+        enabled: false
+      - source: sindresorhus/pure
+        phase: prompt
+        args: --source async.zsh --source pure.zsh
+        enabled: false
+      - source: https://github.com/joke/zim-oh-my-posh
+        phase: prompt
+        enabled: false
+      - source: https://github.com/joke/zim-starship
+        phase: prompt
+        enabled: false
+      - source: sorin
+        phase: prompt
+        enabled: false
+      - source: agnoster
+        phase: prompt
+        enabled: false
+      - source: eriner
+        phase: prompt
+        enabled: false
+      - source: https://codeberg.org/iff/pay-respects
+        phase: prompt
+        enabled: false
+      - source: magic-enter
+        phase: prompt
+        enabled: false
+
+      # --- tools (55) ---
+      - source: exa
+        phase: tools
+      - source: fzf
+        phase: tools
+      - source: git
+        phase: tools
+      - source: k
+        phase: tools
+      - source: termtitle
+        phase: tools
+      - source: rektide/zim-zoxide
+        phase: tools
+        comment: cached init + completions, no cd override
+      - source: https://github.com/joke/zim-github-cli
+        phase: tools
+      - source: https://github.com/joke/zim-helm
+        phase: tools
+      - source: https://github.com/joke/zim-kubectl
+        phase: tools
+      - source: https://github.com/lipov3cz3k/zsh-uv
+        phase: tools
+      - source: https://github.com/shihanng/zim-atuin
+        phase: tools
+      - source: rektide/zim-atuin-session
+        phase: tools
+      - source: rektide/zim-beads
+        phase: tools
+      - source: rektide/zim-claude
+        phase: tools
+      - source: rektide/zim-jaeger
+        phase: tools
+      - source: rektide/zim-jujutsu
+        phase: tools
+      - source: rektide/zim-mosh
+        phase: tools
+      - source: rektide/zim-niri
+        phase: tools
+      - source: rektide/zim-opencode
+        phase: tools
+      - source: rektide/zim-timoni
+        phase: tools
+      - source: rektide/zim-tgo
+        phase: tools
+      - source: rektide/zim-systemd-envvar
+        phase: tools
+      # disabled tool alternatives, preserved for inspection / recovery
+      - source: https://github.com/hmgle/aider-zsh-complete
+        phase: tools
+        enabled: false
+      - source: https://github.com/jnooree/zoxide-zsh-completion
+        phase: tools
+        enabled: false
+        comment: replaced by rektide/zim-zoxide
+      - source: kiesman99/zim-zoxide
+        phase: tools
+        enabled: false
+        description: kiesman99
+        comment: renamed -> vietz-dev
+      - source: vietz-dev/zim-zoxide
+        phase: tools
+        enabled: false
+        description: vietz-dev
+      - source: antoineco/zim-zoxide
+        phase: tools
+        enabled: false
+        description: antoineco
+      - source: https://github.com/joke/zim-chezmoi
+        phase: tools
+        enabled: false
+      - source: https://github.com/joke/zim-gopass
+        phase: tools
+        enabled: false
+      - source: https://github.com/joke/zim-istioctl
+        phase: tools
+        enabled: false
+      - source: https://github.com/joke/zim-kn
+        phase: tools
+        enabled: false
+      - source: https://github.com/joke/zim-k9s
+        phase: tools
+        enabled: false
+      - source: https://github.com/joke/zim-mise
+        phase: tools
+        enabled: false
+        comment: mise included above to be early
+      - source: https://github.com/joke/zim-skaffold
+        phase: tools
+        enabled: false
+      - source: https://github.com/joke/zim-steampipe
+        phase: tools
+        enabled: false
+      - source: https://github.com/joke/zim-yq
+        phase: tools
+        enabled: false
+      - source: https://github.com/MichaelAquilina/zsh-you-should-use
+        phase: tools
+        enabled: false
+      - source: https://github.com/pressdarling/codex-zsh-plugin
+        phase: tools
+        enabled: false
+      - source: https://github.com/shanwker1223/zim-alias-finder
+        phase: tools
+        enabled: false
+        comment: "also needs: zstyle ':zim:plugins:alias-finder' autoload yes"
+      - source: https://github.com/shihanng/zim-kustomize
+        phase: tools
+        enabled: false
+      - source: https://raw.githubusercontent.com/sheax0r/etcdctl-zsh/refs/heads/master/_etcdctl
+        phase: tools
+        enabled: false
+
+      # --- completion (70) ---
+      - source: zsh-users/zsh-completions
+        phase: completion
+        args: --fpath src
+        comment: Additional completion definitions for Zsh.
+      - source: completion
+        phase: completion
+        comment: Enables smart tab completion; must be sourced after all modules that add completion definitions.
+
+      # --- late (85) ---
+      - source: zsh-users/zsh-syntax-highlighting
+        phase: late
+        comment: Fish-like syntax highlighting; must be sourced after completion.
+      - source: zsh-users/zsh-autosuggestions
+        phase: late
+        comment: Fish-like autosuggestions. Set ZSH_AUTOSUGGEST_MANUAL_REBIND=1 for performance.
+      - source: https://github.com/lukechilds/zsh-better-npm-completion
+        phase: late
+      - source: zsh-users/zsh-history-substring-search
+        phase: late
+        enabled: false
+        comment: must be sourced after zsh-syntax-highlighting
     BINS:
       - name: install-user.sh
         basedir: False
         content: |
+          echo promoting zim fragments
+          {{DIR}}/bin/install-zim.sh {{DIR}}
           if [[ -f "${CONFIG_OUTPUT}" ]]
           then
             echo "using existing zimrc (config.sh to rebuild)"
@@ -78,109 +283,6 @@
           fi
           source ${ZIM_HOME}/init.zsh
           export ZSH_AUTOSUGGEST_MANUAL_REBIND=1
-      - name: zimfw/01-core.conf
-        content: |
-          # Module
-          # Sets sane Zsh built-in environment options.
-          zmodule environment
-          # Applies correct bindkeys for input events.
-          zmodule input
-          # Utility aliases and functions. Adds colour to ls, grep and less.
-          zmodule utility
-          # included early so other tools can benefit
-          zmodule https://github.com/joke/zim-mise
-      - name: zimfw/02-prompt.conf
-        content: |
-          # Prompt
-          ## Exposes to prompts how long the last command took to execute, used by asciiship.
-          zmodule duration-info
-          zmodule git-info
-          zmodule prompt-pwd
-          ## Exposes git repository status information to prompts, used by asciiship.
-          #zmodule git-info
-          ## A heavily reduced, ASCII-only version of the Spaceship and Starship prompts.
-          #zmodule asciiship
-          #zmodule https://gitlab.com/Spriithy/basher.git
-          #zmodule spaceship-prompt/spaceship-prompt --name spaceship --no-submodules
-          #zmodule sindresorhus/pure --source async.zsh --source pure.zsh
-          #zmodule https://github.com/joke/zim-oh-my-posh
-          #zmodule https://github.com/joke/zim-starship
-          #zmodule sorin
-          #zmodule agnoster
-          #zmodule eriner
-          zmodule minimal
-          #zmodule https://codeberg.org/iff/pay-respects
-          #zmodule magic-enter
-      - name: zimfw/03-tools.conf
-        content: |
-          # More
-          zmodule exa
-          zmodule fzf
-          zmodule git
-          zmodule k
-          zmodule termtitle
-          #zmodule https://github.com/hmgle/aider-zsh-complete
-          # replaced by rektide/zim-zoxide (cached init + completions, no cd override)
-          #zmodule https://github.com/jnooree/zoxide-zsh-completion
-          #zmodule kiesman99/zim-zoxide  (renamed -> vietz-dev)
-          #zmodule vietz-dev/zim-zoxide
-          #zmodule antoineco/zim-zoxide
-          zmodule rektide/zim-zoxide
-          #zmodule https://github.com/agkozak/zsh-z
-          #zmodule https://github.com/joke/zim-chezmoi
-          zmodule https://github.com/joke/zim-github-cli
-          #zmodule https://github.com/joke/zim-gopass
-          zmodule https://github.com/joke/zim-helm
-          #zmodule https://github.com/joke/zim-istioctl
-          #zmodule https://github.com/joke/zim-kn
-          zmodule https://github.com/joke/zim-kubectl
-          #zmodule https://github.com/joke/zim-k9s
-          # mise included above to be early
-          #zmodule https://github.com/joke/zim-mise
-          #zmodule https://github.com/joke/zim-skaffold
-          #zmodule https://github.com/joke/zim-steampipe
-          #zmodule https://github.com/joke/zim-yq
-          zmodule https://github.com/lipov3cz3k/zsh-uv
-          #zmodule https://github.com/MichaelAquilina/zsh-you-should-use
-          #zmodule https://github.com/pressdarling/codex-zsh-plugin
-          # also needs: zstyle ':zim:plugins:alias-finder' autoload yes
-          #zmodule https://github.com/shanwker1223/zim-alias-finder
-          #zmodule https://github.com/shihanng/zim-kustomize
-          #zmodule https://raw.githubusercontent.com/sheax0r/etcdctl-zsh/refs/heads/master/_etcdctl
-          zmodule https://github.com/shihanng/zim-atuin
-
-          zmodule rektide/zim-atuin-session
-          zmodule rektide/zim-beads
-          zmodule rektide/zim-claude
-          zmodule rektide/zim-jaeger
-          zmodule rektide/zim-jujutsu
-          zmodule rektide/zim-mosh
-          zmodule rektide/zim-niri
-          zmodule rektide/zim-opencode
-          zmodule rektide/zim-timoni
-          zmodule rektide/zim-tgo
-          zmodule rektide/zim-systemd-envvar
-      - name: zimfw/04-completion.conf
-        content: |
-          # Additional completion definitions for Zsh.
-          zmodule zsh-users/zsh-completions --fpath src
-          # Enables and configures smart and extensive tab completion, must be sourced
-          # after all modules that add completion definitions.
-          zmodule completion
-      - name: zimfw/05-late.conf
-        content: |
-          # Modules that must be initialized last
-
-          # Fish-like syntax highlighting for Zsh, must be sourced after completion.
-          zmodule zsh-users/zsh-syntax-highlighting
-          # Fish-like history search for Zsh, must be sourced after
-          # zsh-users/zsh-syntax-highlighting.
-          #zmodule zsh-users/zsh-history-substring-search
-          # Fish-like autosuggestions for Zsh. Add the following to your ~/.zshrc to boost
-          # performance: ZSH_AUTOSUGGEST_MANUAL_REBIND=1
-          zmodule zsh-users/zsh-autosuggestions
-
-          zmodule https://github.com/lukechilds/zsh-better-npm-completion
     ARCH_PKGS:
       - bat
       - ripgrep
