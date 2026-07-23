@@ -3,8 +3,9 @@
 # Gathers all *.yaml from ${CONFIG_KEY}/ and concatenates as a YAML list.
 # Disabled items are excluded (they live in ${CONFIG_KEY}-disabled/).
 #
-# --check compares the assembled output against ${CONFIG_OUTPUT} without
-# writing: exits 0 if identical, 1 if drifted (prints a diff unless -q).
+# By default (write mode) the assembled output replaces ${CONFIG_OUTPUT}:
+# silently when nothing changed, printing a diff when it does.
+# --check compares without writing: exits 0 clean / 1 drift (diff unless -q).
 #
 # ENV:
 #   CONFIG_KEY     - drop-in directory name under etc/ (required)
@@ -35,35 +36,45 @@ if [ $count -eq 0 ]; then
   exit 0
 fi
 
+# build desired output
 tmp=$(mktemp)
 trap "rm -f $tmp" EXIT
-
 for f in "${active[@]}"; do
   cat "$f"
   echo
 done > "$tmp"
 
-if [ "$CHECK" -eq 1 ]; then
-  if [ ! -f "$CONFIG_OUTPUT" ]; then
-    if [ "$QUIET" -eq 0 ]; then
-      echo "${key}: drift: missing ${CONFIG_OUTPUT}" >&2
-    fi
-    exit 1
+# drift = desired differs from current (or current missing)
+drift=0
+if [ ! -f "$CONFIG_OUTPUT" ]; then
+  drift=1
+elif ! cmp -s "$tmp" "$CONFIG_OUTPUT"; then
+  drift=1
+fi
+
+show_diff() {
+  if [ -f "$CONFIG_OUTPUT" ]; then
+    diff -u "$CONFIG_OUTPUT" "$tmp" || true
+  else
+    cat "$tmp"
   fi
-  if cmp -s "$tmp" "$CONFIG_OUTPUT"; then
+}
+
+if [ "$CHECK" -eq 1 ]; then
+  if [ $drift -eq 0 ]; then
     exit 0
   fi
   if [ "$QUIET" -eq 0 ]; then
-    diff -u "$CONFIG_OUTPUT" "$tmp" || true
+    show_diff
   fi
   exit 1
 fi
 
-mkdir -p "$(dirname "$CONFIG_OUTPUT")"
-if [ -f "$CONFIG_OUTPUT" ] && cmp -s "$tmp" "$CONFIG_OUTPUT"; then
-  echo "${key}: no changes"
+# write mode: silent on no change, diff + write on change
+if [ $drift -eq 0 ]; then
   exit 0
 fi
-
+show_diff
+mkdir -p "$(dirname "$CONFIG_OUTPUT")"
 mv "$tmp" "$CONFIG_OUTPUT"
 echo "${key}: assembled ${count} fragments -> ${CONFIG_OUTPUT}"

@@ -5,8 +5,9 @@
 #
 # Disabled items are excluded (they live in etc/${CONFIG_KEY}-disabled/).
 #
-# --check applies all blocks to a temp copy of CONFIG_OUTPUT and compares:
-# exits 0 if identical, 1 if drifted (prints a diff unless -q).
+# By default (write mode) blocks are applied to ${CONFIG_OUTPUT}: silently
+# when nothing changed, printing a diff when they do. --check compares
+# without writing: exits 0 clean / 1 drift (diff unless -q).
 #
 # ENV:
 #   CONFIG_KEY     - drop-in directory name under etc/ (required)
@@ -40,35 +41,52 @@ if [ $count -eq 0 ]; then
   exit 0
 fi
 
-if [ "$CHECK" -eq 1 ]; then
-  if [ ! -f "$CONFIG_OUTPUT" ]; then
-    if [ "$QUIET" -eq 0 ]; then
-      echo "${CONFIG_KEY}: drift: missing ${CONFIG_OUTPUT}" >&2
-    fi
-    exit 1
-  fi
-  tmp=$(mktemp)
-  trap "rm -f $tmp" EXIT
+# build desired output: seed from current, apply all blocks
+tmp=$(mktemp)
+trap "rm -f $tmp" EXIT
+if [ -f "$CONFIG_OUTPUT" ]; then
   cp "$CONFIG_OUTPUT" "$tmp"
-  for f in "${active[@]}"; do
-    stem=$(basename "$f" ".${ext}")
-    block-in-file -n "${name}-${CONFIG_KEY}-${stem}" -i "$f" -o "$tmp" >/dev/null
-  done
-  if cmp -s "$tmp" "$CONFIG_OUTPUT"; then
+fi
+for f in "${active[@]}"; do
+  stem=$(basename "$f" ".${ext}")
+  block-in-file -n "${name}-${CONFIG_KEY}-${stem}" -i "$f" -o "$tmp" >/dev/null
+done
+
+# drift = desired differs from current (or current missing)
+drift=0
+if [ ! -f "$CONFIG_OUTPUT" ]; then
+  drift=1
+elif ! cmp -s "$tmp" "$CONFIG_OUTPUT"; then
+  drift=1
+fi
+
+show_diff() {
+  if [ -f "$CONFIG_OUTPUT" ]; then
+    diff -u "$CONFIG_OUTPUT" "$tmp" || true
+  else
+    cat "$tmp"
+  fi
+}
+
+if [ "$CHECK" -eq 1 ]; then
+  if [ $drift -eq 0 ]; then
     exit 0
   fi
   if [ "$QUIET" -eq 0 ]; then
-    diff -u "$CONFIG_OUTPUT" "$tmp" || true
+    show_diff
   fi
   exit 1
 fi
 
+# write mode: silent on no change, diff + write on change
+if [ $drift -eq 0 ]; then
+  exit 0
+fi
+show_diff
 mkdir -p "$(dirname "$CONFIG_OUTPUT")"
 touch "$CONFIG_OUTPUT"
-
 for f in "${active[@]}"; do
   stem=$(basename "$f" ".${ext}")
   block-in-file -n "${name}-${CONFIG_KEY}-${stem}" -i "$f" -o "$CONFIG_OUTPUT"
 done
-
 echo "${CONFIG_KEY}: assembled ${count} drop-in blocks -> ${CONFIG_OUTPUT}"
