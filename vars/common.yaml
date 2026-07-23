@@ -410,13 +410,13 @@ SUBSYSTEM:
                 cargo install ${LOCKED_FLAG:-} --path .
             fi
       ENV: >-
-        {{ ({'RUST_BIN': RUST_BIN}) if RUST_BIN is defined else {} }}
+        {{ (({'RUST_BIN': RUST_BIN}) if RUST_BIN is defined else {})
         | combine({'RUST_PKG': RUST_PKG} if RUST_PKG is defined else {})
         | combine({'RUST_FEATURES': RUST_FEATURES} if RUST_FEATURES is defined else {})
         | combine({'RUST_PROFILE': RUST_PROFILE} if RUST_PROFILE is defined else {})
         | combine({'RUST_CARGO_ARGS': RUST_CARGO_ARGS} if RUST_CARGO_ARGS is defined else {})
         | combine({'RUST_ALL': RUST_ALL} if RUST_ALL is defined else {})
-        | combine({'RUST_LOCKED': RUST_LOCKED} if RUST_LOCKED is defined else {})
+        | combine({'RUST_LOCKED': RUST_LOCKED} if RUST_LOCKED is defined else {}) }}
       PKGS: "{{ RUST_PKGS | default([]) }}"
       TOOL_VERSIONS:
         rust: true
