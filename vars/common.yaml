@@ -973,6 +973,9 @@ _kernel_params_bins:
   - name: install-kernel-params.sh
     src: ../kernel/install-kernel-params.sh
     basedir: false
+  - name: status-cmdline.ts
+    src: ../kernel/status-cmdline.ts
+    raw: True
 _kernel_bls_bins:
   - name: install-kernel-bls.sh
     src: ../kernel/install-kernel-bls.sh
