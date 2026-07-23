@@ -326,6 +326,9 @@ SUBSYSTEM:
           run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
+            {% for _c in (RUST_COMMENT | default([]) | arrayitize) %}
+            # {{ _c }}
+            {% endfor %}
             if [[ -n "${RUST_PROFILE:-}" ]]; then
                 PROFILE="--profile ${RUST_PROFILE}"
             elif [[ -z "${RELEASE+x}" ]]; then
@@ -348,6 +351,9 @@ SUBSYSTEM:
         - name: install-rust.sh
           basedir: repo
           generated: |
+            {% for _c in (RUST_COMMENT_INSTALL | default([]) | arrayitize) %}
+            # {{ _c }}
+            {% endfor %}
             if [[ -n "${RUST_PROFILE:-}" ]]; then
                 _target_dir="target/${RUST_PROFILE}"
             elif [[ -z "${RELEASE+x}" ]] || [[ "${RELEASE:-}" != "debug" ]]; then
