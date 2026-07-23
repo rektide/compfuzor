@@ -322,7 +322,7 @@ SUBSYSTEM:
   rust:
     contrib:
       BINS:
-        - name: build.sh
+        - name: build-rust.sh
           run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
@@ -345,7 +345,7 @@ SUBSYSTEM:
                 LOCKED_FLAG=""
             fi
             cargo build ${PROFILE} ${PKG_FLAG:-} ${FEATURES_FLAG:-} ${LOCKED_FLAG:-} ${RUST_CARGO_ARGS:-}
-        - name: install.sh
+        - name: install-rust.sh
           basedir: repo
           generated: |
             if [[ -n "${RUST_PROFILE:-}" ]]; then
@@ -363,7 +363,7 @@ SUBSYSTEM:
                 [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${RUST_BIN:-{{ TYPE }}}"
                 ln -sfv "$(pwd)/${_target_dir}/${INSTALL_BIN}" "${GLOBAL_BINS_DIR}/$(basename "${INSTALL_BIN}")"
             fi
-        - name: install-user.sh
+        - name: install-rust.user.sh
           basedir: repo
           generated: |
             if [[ -z "${RUST_LOCKED+x}" ]]; then
