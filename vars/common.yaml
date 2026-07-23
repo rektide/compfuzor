@@ -581,6 +581,9 @@ SUBSYSTEM:
         - name: enable.sh
           src: ../config-enable.sh
           basedir: False
+        - name: status-config.sh
+          src: ../status/status-config.sh
+          basedir: False
       ENV_LIST: [CONFIG_KEY, CONFIG_EXT, CONFIG_OUTPUT]
 
   kernel_modprobe:
