@@ -25,10 +25,23 @@ cd {{DIR}}/{{item.basedir}}
 {{ item.exec|default([])|arrayitize|join("\n") }}
 {{ item.execs|default([], True)|arrayitize|join("\n") }}
 {{ item.generated|default([], True)|arrayitize|join("\n") if item.generatedAt|def("end") == "end" else omit }}
-{% for run_bin in item.run_all|default([])|arrayitize %}
+{% set _cf_run_all = item.run_all|default([])|arrayitize %}
+{% if _cf_run_all|length > 0 %}
+if [ -z "${COMPFUZOR_QUIET:-}" ] && { [ -z "${V+x}" ] || [ "$V" != 0 ]; }; then
+  _cf_loud=1
+else
+  _cf_loud=0
+fi
+{% for run_bin in _cf_run_all %}
+if [ "$_cf_loud" = 1 ]; then printf '+ %s\n' '{{ run_bin }}'; fi
 "$DIR/bin/{{ run_bin }}" "$@"
 {% endfor %}
+if [ "$_cf_loud" = 1 ]; then printf 'complete\n'; fi
+{% endif %}
 {{ item.late|default([])|arrayitize|join("\n") }}
+{% if item.kernel|default(False) %}
+{% include "_bin.kernel-install" %}
+{% endif %}
 {% if not item.no_header|default(False) %}
 
 {% include "_bin.footer" %}
