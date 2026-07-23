@@ -425,6 +425,9 @@ SUBSYSTEM:
           run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
+            {% if PYTHON_BUILD_COMMAND is defined %}
+            {{ PYTHON_BUILD_COMMAND }}
+            {% else %}
             [ -d .venv ] || uv venv
             {% if PIP is defined %}
             uv pip install -r etc/pip.txt
@@ -436,6 +439,7 @@ SUBSYSTEM:
             fi
             {% endif %}
             source {{ DIR }}/bin/venv.source
+            {% endif %}
         - name: venv.source
           basedir: repo
           generated: |

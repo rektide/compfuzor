@@ -6,3 +6,9 @@
     ETC_FILES: "{{ lookup('merge_subsys', id='python', contrib='ETC_FILES') }}"
     TOOL_VERSIONS: "{{ lookup('merge_subsys', id='python', contrib='TOOL_VERSIONS') }}"
   when: lookup('subsys', id='python', get='active', default=false) | bool
+
+- name: "Compfuzor: expose python console scripts"
+  set_fact:
+    BINS: "{{ [BINS | default([]), [{'name': item, 'src': DIR + '/.venv/bin/' + item, 'global': true, 'exists': false}] ] | merge_list('bins_generated') }}"
+  loop: "{{ PYTHON_CONSOLE_SCRIPTS | default([]) | arrayitize }}"
+  when: lookup('subsys', id='python', get='active', default=false) | bool
