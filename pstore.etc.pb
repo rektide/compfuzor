@@ -44,8 +44,8 @@
 
       ## Apply and verify
 
-      After running this playbook, run `sudo "$DIR/bin/setup.sh"` (or rely on
-      the oneshot systemd unit). Then on the next boot:
+      After running this playbook, run `sudo "$DIR/bin/install.sh"`. Then on
+      the next boot:
 
           cat /proc/cmdline                          # memmap=, ramoops.*, pstore.backend=
           ls /sys/module/ramoops/parameters/         # populated
@@ -124,22 +124,12 @@
       - src: "{{ETC}}/blacklist-efi-pstore.conf"
         dest: "/etc/modprobe.d/blacklist-efi-pstore.conf"
 
-    # setup.sh just calls the framework tools — no bespoke memmap handler,
-    # no install-kernel-cmdline.sh bypass. install-kernel.sh picks cmdline
-    # mode via the force_cmdline flag; install-kernel-params.sh adds the
-    # raw memmap= token from KERNEL_PARAMS.
-    SYSTEMD_SERVICE: True
-    SYSTEMD_TYPE: oneshot
-    SYSTEMD_EXEC: "{{DIR}}/bin/setup.sh"
-    BINS:
-      - name: setup.sh
-        content: |
-          #!/bin/sh
-          set -eu
-          "$DIR/bin/install-kernel.sh"
-          "$DIR/bin/install-kernel-params.sh"
-          echo "pstore: wrote module params + memmap= to /etc/kernel/cmdline"
-          echo "pstore: run 'sudo kernel-install' for the current kernel, or reboot, to propagate to BLS entries"
+    # Applying is done via the auto-generated compositor:
+    #   sudo "$DIR/bin/install.sh"
+    # which runs install-kernel.sh (module params via force_cmdline) and
+    # install-kernel-cmdline.sh (the raw memmap= token from KERNEL_PARAMS).
+    # No SYSTEMD service: pstore only writes /etc/kernel/cmdline; a reboot or
+    # `sudo kernel-install` propagates it to BLS entries.
 
     # /sys/fs/pstore records, surfaced by the generic status-dirs.sh reporter.
     # Should be empty in steady state; non-empty after a crash.
