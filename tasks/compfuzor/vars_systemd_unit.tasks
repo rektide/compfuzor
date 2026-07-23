@@ -216,6 +216,7 @@
     enhancedBins:
       - name: install-unit.sh
         src: ../systemd/install-unit.sh
+        compose: False
 
 - name: 'Generate systemd install scripts'
   set_fact:

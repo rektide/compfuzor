@@ -116,8 +116,24 @@ def test_explicit_scope_classifies_systemd_install():
     check("user compositor carries scope", user[0].get("scope"), ["user"])
 
 
+def test_compose_false_excludes_library_scripts():
+    # install-unit.sh is a library sourced by per-type scripts, not an action.
+    result = bin_composers(
+        [
+            {"name": "install-user.sh"},
+            {"name": "install-unit.sh", "src": "../systemd/install-unit.sh", "compose": False},
+        ]
+    )
+    names = [c["name"] for c in result]
+    check("no unscoped install-all compositor", "install-all.sh" not in names, True)
+    check("install-unit.sh excluded from user compositor", "install-user-all.sh" in names, True)
+    user = [c for c in result if c["name"] == "install-user-all.sh"][0]
+    check("user compositor only has install-user.sh", user["generated"], '"$DIR/bin/install-user.sh" "$@"')
+
+
 if __name__ == "__main__":
     test_composes_unscoped_actions()
     test_composes_explicit_and_filename_user_scopes()
     test_excludes_generated_compositors()
     test_explicit_scope_classifies_systemd_install()
+    test_compose_false_excludes_library_scripts()

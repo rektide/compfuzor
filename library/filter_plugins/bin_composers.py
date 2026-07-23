@@ -43,6 +43,7 @@ def bin_composers(bins):
         if (
             not isinstance(item, collections.abc.Mapping)
             or item.get("generated_by") == "gen_bins"
+            or item.get("compose", True) is False
         ):
             continue
 
