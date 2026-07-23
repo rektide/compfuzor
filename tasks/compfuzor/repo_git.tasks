@@ -8,92 +8,69 @@
   when: REPO|default(False) is truthy or REPOS|default(False) is truthy
   vars:
     dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
-- name: "Compfuzor: fetch git repository"
-  git:
-    repo: "{{REPO}}"
-    dest: "{{ dest }}"
-    accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
-    depth: "{{ GIT_DEPTH|default(omit) }}"
-    version: "{{ GIT_VERSION|default(omit) }}"
-    update: "{{GIT_UPDATE|default(omit)}}"
-  #become: "{{dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
+
+- name: "Compfuzor: normalize REPO into git_repos"
+  set_fact:
+    git_repos: "{{ git_repos|default([]) + [entry] }}"
+  vars:
+    entry:
+      repo: "{{ REPO }}"
+      dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
+      become: false
   when: REPO|default(False) is truthy
-  vars:
-    dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
 
-- name: "Compfuzor: colocate jj on cloned git repo"
-  shell: |
-    command -v jj >/dev/null 2>&1 || exit 0
-    jj git init
-    jj commit -m "{{ JJ_COMMIT_MSG|default('compfuzor: jj init') }}"
-  args:
-    chdir: "{{ dest }}"
-    creates: "{{ dest }}/.jj"
-  when: >
-    REPO|default(False) is truthy
-    and not GIT_BYPASS|default(False)
-    and not REPO_BYPASS|default(False)
-    and not JJ_BYPASS|default(False)
-  vars:
-    dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
-
-- name: "fetch git repositories dict"
-  git:
-    repo: "{{ item.value }}"
-    dest: "{{ dest }}"
-    track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
-    accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
-    depth: "{{ GIT_DEPTH|default(omit) }}"
-    version: "{{ GIT_VERSION|default(omit) }}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
-  loop: "{{ (REPOS if REPOS|default(False) is mapping else {})|dict2items }}"
+- name: "Compfuzor: normalize REPOS mapping into git_repos"
+  set_fact:
+    git_repos: "{{ git_repos|default([]) + [entry] }}"
   vars:
     dest: "{{ item.key|defaultDir(REPO_DIR|default(DIR, true)) }}"
-
-- name: "colocate jj on cloned git repositories dict"
-  shell: |
-    command -v jj >/dev/null 2>&1 || exit 0
-    jj git init
-    jj commit -m "{{ JJ_COMMIT_MSG|default('compfuzor: jj init') }}"
-  args:
-    chdir: "{{ dest }}"
-    creates: "{{ dest }}/.jj"
+    entry:
+      repo: "{{ item.value }}"
+      dest: "{{ dest }}"
+      become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
   loop: "{{ (REPOS if REPOS|default(False) is mapping else {})|dict2items }}"
-  when: >
-    not GIT_BYPASS|default(False)
-    and not REPO_BYPASS|default(False)
-    and not JJ_BYPASS|default(False)
-  vars:
-    dest: "{{ item.key|defaultDir(REPO_DIR|default(DIR, true)) }}"
 
-- name: "fetching git repositories list"
-  git:
-    repo: "{{ item.repo|default(item) }}"
-    dest: "{{ dest }}"
-    track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
-    accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
-    depth: "{{ GIT_DEPTH|default(omit) }}"
-    version: "{{ GIT_VERSION|default(omit) }}"
-    reference: "{{ item.reference|defaultDir(SRCS_DIR) if item.reference|default(False) else omit }}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
-  with_items: "{{ REPOS if REPOS|default(False) else [] }}"
+- name: "Compfuzor: normalize REPOS list into git_repos"
+  set_fact:
+    git_repos: "{{ git_repos|default([]) + [entry] }}"
+  vars:
+    dest: "{{ REPO_DIR }}/{{ item.repo|default(item)|basename|regex_replace('\\.git$', '') }}"
+    entry:
+      repo: "{{ item.repo|default(item) }}"
+      dest: "{{ dest }}"
+      reference: "{{ item.reference|default('') }}"
+      become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
+  with_items: "{{ REPOS if (REPOS|default(False) and REPOS is not mapping) else [] }}"
   when: REPOS|default({}) is not mapping
-  vars:
-    dest: "{{ REPO_DIR }}/{{item.repo|default(item)|basename|regex_replace('\\.git$', '') }}"
 
-- name: "colocate jj on cloned git repositories list"
+- name: "Compfuzor: fetch git repositories"
+  git:
+    repo: "{{ item.repo }}"
+    dest: "{{ item.dest }}"
+    track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
+    accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
+    depth: "{{ GIT_DEPTH|default(omit) }}"
+    version: "{{ GIT_VERSION|default(omit) }}"
+    update: "{{ GIT_UPDATE|default(omit) }}"
+    reference: "{{ item.reference|defaultDir(SRCS_DIR) if item.reference|default(False) else omit }}"
+  become: "{{ item.become|default(false)|bool }}"
+  loop: "{{ git_repos|default([]) }}"
+  when: >
+    git_repos|default([])|length > 0
+    and not GIT_BYPASS|default(False)
+    and not REPO_BYPASS|default(False)
+
+- name: "Compfuzor: colocate jj on cloned git repositories"
   shell: |
     command -v jj >/dev/null 2>&1 || exit 0
     jj git init
     jj commit -m "{{ JJ_COMMIT_MSG|default('compfuzor: jj init') }}"
   args:
-    chdir: "{{ dest }}"
-    creates: "{{ dest }}/.jj"
-  with_items: "{{ REPOS if REPOS|default(False) else [] }}"
+    chdir: "{{ item.dest }}"
+    creates: "{{ item.dest }}/.jj"
+  loop: "{{ git_repos|default([]) }}"
   when: >
-    REPOS|default({}) is not mapping
+    git_repos|default([])|length > 0
     and not GIT_BYPASS|default(False)
     and not REPO_BYPASS|default(False)
     and not JJ_BYPASS|default(False)
-  vars:
-    dest: "{{ REPO_DIR }}/{{item.repo|default(item)|basename|regex_replace('\\.git$', '') }}"
