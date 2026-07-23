@@ -39,9 +39,6 @@ if [ "$_cf_loud" = 1 ]; then printf '+ %s\n' '{{ run_bin }}'; fi
 if [ "$_cf_loud" = 1 ]; then printf 'complete\n'; fi
 {% endif %}
 {{ item.late|default([])|arrayitize|join("\n") }}
-{% if item.kernel|default(False) %}
-{% include "_bin.kernel-install" %}
-{% endif %}
 {% if not item.no_header|default(False) %}
 
 {% include "_bin.footer" %}

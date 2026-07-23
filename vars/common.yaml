@@ -670,6 +670,17 @@ SUBSYSTEM:
       ENV_LIST: [KERNEL_PARAMS_JSON]
       PKGS: [jq]
 
+  kernel_bls:
+    # Regenerate systemd-boot BLS entries after the cmdline-writing kernel
+    # subsys (kernel_modprobe / kernel_params) update /etc/kernel/cmdline.
+    # Active exactly when either of those is, since either writes the cmdline
+    # that kernel-install propagates to the ESP. install-kernel-bls.sh runs last
+    # (see _kernel_bls_bins + gen_kernel merge order) and is gated at runtime by
+    # KERNEL_INSTALL (default off -> warn) so the cmdline->BLS gap is visible.
+    requested: "{{ (KERNEL_MODULES is defmapping and KERNEL_MODULES | deflengthy) or (KERNEL_PARAMS is sequence and KERNEL_PARAMS | deflengthy) }}"
+    contrib:
+      BINS: "{{ _kernel_bls_bins }}"
+
   readme:
     requested: "{{ README is defined }}"
     contrib:
@@ -961,6 +972,10 @@ _kernel_modprobe_bins:
 _kernel_params_bins:
   - name: install-kernel-params.sh
     src: ../kernel/install-kernel-params.sh
+    basedir: false
+_kernel_bls_bins:
+  - name: install-kernel-bls.sh
+    src: ../kernel/install-kernel-bls.sh
     basedir: false
 _kernel_sysctl_bins:
   - name: build-sysctl.sh

@@ -36,7 +36,6 @@ def test_composes_unscoped_actions():
                 "action": "install",
                 "generated_by": "gen_bins",
                 "run_all": ["install-kernel.sh"],
-                "kernel": True,
             },
         ],
     )

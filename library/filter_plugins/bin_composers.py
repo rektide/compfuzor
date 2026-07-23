@@ -83,12 +83,6 @@ def bin_composers(bins):
         }
         if scope is not None:
             compositor["scope"] = [scope]
-        # Mark install compositors that own kernel-cmdline scripts so the
-        # _bin template can append the gated kernel-install + status step.
-        if action == "install" and any(
-            member.startswith("install-kernel") for member in run_all
-        ):
-            compositor["kernel"] = True
         compositors.append(compositor)
 
     return compositors
