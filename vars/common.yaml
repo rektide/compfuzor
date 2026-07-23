@@ -977,6 +977,9 @@ _kernel_bls_bins:
   - name: install-kernel-bls.sh
     src: ../kernel/install-kernel-bls.sh
     basedir: false
+  - name: status-ramoops.sh
+    src: ../kernel/status-ramoops.sh
+    basedir: false
 _kernel_sysctl_bins:
   - name: build-sysctl.sh
     src: ../kernel/build-sysctl.sh

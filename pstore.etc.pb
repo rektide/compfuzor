@@ -52,6 +52,38 @@
           journalctl -k | grep pstore                # 'Registered ramoops' (no 'already in use')
           ls /sys/fs/pstore/                         # empty until a crash
 
+      ## Crash-testing
+
+      Once ramoops is winning (verified above), crash-test it. Enable SysRq
+      (the default mask usually lacks the crash bit), trigger a fault, then read
+      the capture on the next boot from `/sys/fs/pstore`.
+
+          echo 1 | sudo tee /proc/sys/kernel/sysrq     # enable all SysRq
+
+      | Method | Trigger                                  | Reproduces         | Captured? | Why                                        |
+      |--------|------------------------------------------|--------------------|-----------|--------------------------------------------|
+      | A      | `echo c > /proc/sysrq-trigger`           | clean panic + trace| yes       | panic notifier flushes dmesg               |
+      | B      | `echo b > /proc/sysrq-trigger`           | instant reset      | no        | no panic; `PSTORE_CONSOLE` is off          |
+      | C      | hold power button / yank power           | abrupt power loss  | no        | no panic path                              |
+      | D      | LKDTM `LOOP` (needs `CONFIG_LKDTM=m`)    | hard lockup->panic | yes       | watchdog fires a panic, then captured      |
+
+      Method A is the smoke test that proves the pipeline. `echo c` usually
+      *hangs* at the panic (`kernel.panic` defaults to 0) -- hold the power
+      button to reset; ramoops already flushed the record at panic time. On the
+      next boot, read and clear:
+
+          sudo ls /sys/fs/pstore/                      # expect dmesg-ramoops-*
+          sudo cat /sys/fs/pstore/dmesg-*              # the panic/oops trace
+          sudo rm /sys/fs/pstore/*                     # reset for the next test
+
+      B and C (the abrupt-death case ramoops exists for) won't capture with the
+      current kernel: only `PSTORE_RAM` is on, so capture is panic-triggered.
+      To cover power-loss / hard-reset, rebuild with `CONFIG_PSTORE_CONSOLE=y`
+      (continuously mirrors the console to ramoops) or `CONFIG_LKDTM=m`
+      (method D, which panics via the watchdog).
+
+          grep -E 'PSTORE_RAM|PSTORE_CONSOLE|PSTORE_PMSG|PSTORE_FTRACE|LKDTM' /boot/config-$(uname -r)
+
       ## Why this exists at all
 
       `efi_pstore` writes crash records to EFI variables. It works for *clean*
