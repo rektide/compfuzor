@@ -97,7 +97,7 @@ wins on key conflicts.
 
 The [`bin_composers`](../library/filter_plugins/bin_composers.py) filter:
 
-1. Scans `BINS` for entries matching `build*.sh` or `install*.sh`.
+1. Scans `BINS` for entries matching `build*.sh`, `install*.sh`, or `apply*.sh`.
 2. Groups by action (`build` or `install`) and scope.
 3. For each group, emits a compositor that retains the canonical name
    (`build.sh`, `install.sh`, `install-user.sh`).

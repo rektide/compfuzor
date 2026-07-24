@@ -64,8 +64,8 @@ The `bins_generated` profile merges `BINS` by `name` and concatenates `early`,
 ### `bin_composers` — [`bin_composers.py`](library/filter_plugins/bin_composers.py)
 
 Builds action compositor bins from explicitly named bin scripts. Recognizes
-`build*.sh` and `install*.sh` filenames, groups by action and scope, and emits
-canonical entry-point scripts that retain the base action name.
+`build*.sh`, `install*.sh`, and `apply*.sh` filenames, groups by action and
+scope, and emits canonical entry-point scripts that retain the base action name.
 
 ```yaml
 BINS: "{{ BINS | bin_composers }}"
