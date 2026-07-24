@@ -19,8 +19,23 @@
           [org/gnome/desktop/session]
           idle-delay = uint32 0
     BINS:
-      - name: install-dconf.sh
+      - name: build-link.sh
         content: |
+          if [ -n "${COMPFUZOR_LINK_BYPASS:-}" ]; then
+            if [ -z "${COMPFUZOR_QUIET:-}" ] && { [ -z "${V+x}" ] || [ "$V" != 0 ]; }; then
+              echo "link: COMPFUZOR_LINK_BYPASS set, skipping build" >&2
+            fi
+            exit 0
+          fi
+          test -f "$DIR/etc/no-suspend.conf"
+      - name: install-link.sh
+        content: |
+          if [ -n "${COMPFUZOR_LINK_BYPASS:-}" ]; then
+            if [ -z "${COMPFUZOR_QUIET:-}" ] && { [ -z "${V+x}" ] || [ "$V" != 0 ]; }; then
+              echo "link: COMPFUZOR_LINK_BYPASS set, skipping deploy" >&2
+            fi
+            exit 0
+          fi
           sudo crudini --merge "$DEST" < "$DIR/etc/no-suspend.conf"
           sudo systemctl reload gdm
   tasks:
