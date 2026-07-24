@@ -1,6 +1,9 @@
 ---
 - hosts: all
   vars:
+    TOOL_VERSIONS:
+      nodejs: True
+
     README: |
       # pstore/ramoops
 
@@ -54,11 +57,20 @@
 
       ## Crash-testing
 
-      Once ramoops is winning (verified above), crash-test it. Enable SysRq
-      (the default mask usually lacks the crash bit), trigger a fault, then read
-      the capture on the next boot from `/sys/fs/pstore`.
+      Once ramoops is winning (verified above), crash-test it. Two prerequisites
+      make this safe and hands-off:
 
-          echo 1 | sudo tee /proc/sys/kernel/sysrq     # enable all SysRq
+      1. **`kernel.panic` > 0** -- declared below via `KERNEL_SYSCTL`, so it is
+         persisted (`install-sysctl.sh`), applied live (`apply-sysctl.sh`), and
+         drift-checked (`status-sysctl.ts`). With the default `0` a panic *hangs
+         forever* and you must hold the power button to recover; with it set, the
+         kernel auto-reboots after N seconds, so the test is unattended and
+         ramoops (which flushes at panic time) still captures.
+      2. **SysRq enabled** (the default mask usually lacks the crash bit):
+
+             echo 1 | sudo tee /proc/sys/kernel/sysrq
+
+      Then trigger a fault and read the capture on the next boot:
 
       | Method | Trigger                                  | Reproduces         | Captured? | Why                                        |
       |--------|------------------------------------------|--------------------|-----------|--------------------------------------------|
@@ -67,14 +79,15 @@
       | C      | hold power button / yank power           | abrupt power loss  | no        | no panic path                              |
       | D      | LKDTM `LOOP` (needs `CONFIG_LKDTM=m`)    | hard lockup->panic | yes       | watchdog fires a panic, then captured      |
 
-      Method A is the smoke test that proves the pipeline. `echo c` usually
-      *hangs* at the panic (`kernel.panic` defaults to 0) -- hold the power
-      button to reset; ramoops already flushed the record at panic time. On the
-      next boot, read and clear:
+      Method A is the smoke test that proves the pipeline:
 
-          sudo ls /sys/fs/pstore/                      # expect dmesg-ramoops-*
-          sudo cat /sys/fs/pstore/dmesg-*              # the panic/oops trace
-          sudo rm /sys/fs/pstore/*                     # reset for the next test
+          echo c | sudo tee /proc/sysrq-trigger     # panic; kernel.panic reboots it
+
+      With `kernel.panic` set this self-reboots (no power button). On the next
+      boot, read and clear the capture:
+
+          sudo "$DIR/bin/pstore-dump.sh"            # pretty-print dmesg-ramoops-*
+          sudo rm /sys/fs/pstore/*                  # reset for the next test
 
       B and C (the abrupt-death case ramoops exists for) won't capture with the
       current kernel: only `PSTORE_RAM` is on, so capture is panic-triggered.
@@ -143,6 +156,17 @@
     MODULES:
       - ramoops
 
+    # kernel.panic: seconds before auto-reboot on panic (0 = hang forever).
+    # Declared (not optional) for two reasons: (1) crash-testing -- with 0 an
+    # `echo c` panic hangs and you must power-cycle; with >0 the box self-reboots
+    # unattended and ramoops still flushes at panic time. (2) drift visibility --
+    # declaring it makes status-sysctl.ts flag a regression to 0. install-sysctl.sh
+    # persists it to /etc/sysctl.d; apply-sysctl.sh sets it live. A boot-floor
+    # cmdline token (`panic=N` via KERNEL_PARAMS) is a redundant option if you
+    # want it set before any apply runs; sysctl alone is enough here.
+    KERNEL_SYSCTL:
+      kernel.panic: 10
+
     # Blacklist efi_pstore so it cannot grab pstore's only backend slot
     # before ramoops probes. pstore.backend=ramoops above is the primary
     # mechanism; this is belt-and-suspenders against future module-load
@@ -164,13 +188,15 @@
     # Applying is done via the auto-generated compositor:
     #   sudo "$DIR/bin/install.sh"
     # which runs install-kernel.sh (module params via force_cmdline),
-    # install-kernel-cmdline.sh (<module>.<param>=<value> tokens), and
-    # install-kernel-params.sh (the raw memmap= token from KERNEL_PARAMS).
-    # No SYSTEMD service: pstore only writes /etc/kernel/cmdline; a reboot or
-    # `sudo kernel-install` propagates it to BLS entries.
+    # install-kernel-cmdline.sh (<module>.<param>=<value> tokens),
+    # install-kernel-params.sh (the raw memmap= token from KERNEL_PARAMS), and
+    # install-sysctl.sh (kernel.panic -> /etc/sysctl.d).
+    # No SYSTEMD service: pstore only writes /etc/kernel/cmdline + a sysctl drop;
+    # a reboot or `sudo kernel-install` propagates cmdline to BLS entries.
 
-    # /sys/fs/pstore records, surfaced by the generic status-dirs.sh reporter.
-    # Should be empty in steady state; non-empty after a crash.
+    # /sys/fs/pstore records, surfaced by the generic status-dirs.sh reporter
+    # (and by pstore-dump.sh, the focused human-readable readout). Should be
+    # empty in steady state; non-empty after a crash.
     STATUS_DIRS:
       - /sys/fs/pstore
   tasks:

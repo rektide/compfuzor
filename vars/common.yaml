@@ -638,6 +638,16 @@ SUBSYSTEM:
       ENV_LIST: [KERNEL_MODULES_JSON]
       PKGS: [jq]
 
+  # kernel_sysctl -- manages sysctls declared via KERNEL_SYSCTL (mapping of full
+  # dotted path -> value). build-sysctl.sh emits "<key> = <value>" to
+  # /etc/sysctl.d/<NAME>.conf; apply-sysctl.sh sets them live; status-sysctl.ts
+  # reports drift. Common guest: `kernel.panic` (panic->reboot timeout) -- declare
+  # it wherever crash-testability matters (pstore/ramoops, kdump) so a panic
+  # auto-reboots instead of hanging, and so status flags a regression to 0. Some
+  # sysctls (kernel.panic included) also accept a cmdline token (`panic=N`) via
+  # KERNEL_PARAMS as a boot-floor; prefer KERNEL_SYSCTL for live tunability +
+  # drift reporting, and add the cmdline token only if you want it set before any
+  # apply runs.
   kernel_sysctl:
     requested: "{{ KERNEL_SYSCTL is defmapping and KERNEL_SYSCTL | deflengthy }}"
     contrib:
@@ -991,6 +1001,9 @@ _kernel_bls_bins:
     basedir: false
   - name: status-ramoops.sh
     src: ../kernel/status-ramoops.sh
+    basedir: false
+  - name: pstore-dump.sh
+    src: ../kernel/pstore-dump.sh
     basedir: false
 _kernel_sysctl_bins:
   - name: build-sysctl.sh
