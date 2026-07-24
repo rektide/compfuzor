@@ -53,7 +53,7 @@ def test_string_entry_uses_default_phase():
     check(
         "renders under etc/zim with weight 40",
         out,
-        [{"name": "etc/zim/40-minimal.conf", "content": "zmodule minimal\n"}],
+        [{"name": "zim/40-minimal.conf", "content": "zmodule minimal\n"}],
     )
 
 
@@ -63,7 +63,7 @@ def test_numeric_phase_name():
     check(
         "numeric phase used directly, 2-digit padded",
         out[0]["name"],
-        "etc/zim/55-fzf.conf",
+        "zim/55-fzf.conf",
     )
 
 
@@ -81,14 +81,14 @@ def test_phase_name_maps_to_number():
         check(
             "{} -> {:02d}".format(name, num),
             out[0]["name"],
-            "etc/zim/{:02d}-x.conf".format(num),
+            "zim/{:02d}-x.conf".format(num),
         )
 
 
 def test_entry_phase_overrides_default():
     print("\nentry phase overrides default:")
     out = zim_fragment([{"source": "git", "phase": "tools"}], phase="prompt")
-    check("uses entry phase 55", out[0]["name"], "etc/zim/55-git.conf")
+    check("uses entry phase 55", out[0]["name"], "zim/55-git.conf")
 
 
 def test_owner_repo_slug():
@@ -97,7 +97,7 @@ def test_owner_repo_slug():
     check(
         "takes last path segment",
         out[0]["name"],
-        "etc/zim/70-zsh-completions.conf",
+        "zim/70-zsh-completions.conf",
     )
 
 
@@ -106,7 +106,7 @@ def test_url_slug():
     out = zim_fragment(
         [{"source": "https://github.com/joke/zim-mise", "phase": "core"}]
     )
-    check("strips scheme + .git", out[0]["name"], "etc/zim/20-zim-mise.conf")
+    check("strips scheme + .git", out[0]["name"], "zim/20-zim-mise.conf")
 
 
 def test_url_with_git_suffix():
@@ -114,7 +114,7 @@ def test_url_with_git_suffix():
     out = zim_fragment(
         [{"source": "https://gitlab.com/Spriithy/basher.git", "phase": "prompt"}]
     )
-    check("strips .git", out[0]["name"], "etc/zim/40-basher.conf")
+    check("strips .git", out[0]["name"], "zim/40-basher.conf")
 
 
 def test_args_string():
@@ -188,13 +188,13 @@ def test_description_in_filename():
             }
         ]
     )
-    check("description appended", out[0]["name"], "etc/zim/55-fzf-alt.conf")
+    check("description appended", out[0]["name"], "zim/55-fzf-alt.conf")
 
 
 def test_explicit_name():
     print("\nexplicit name slug:")
     out = zim_fragment([{"source": "x", "phase": "core", "name": "custom"}])
-    check("uses explicit name", out[0]["name"], "etc/zim/20-custom.conf")
+    check("uses explicit name", out[0]["name"], "zim/20-custom.conf")
 
 
 def test_disabled_routes_to_disabled_dir():
@@ -203,9 +203,9 @@ def test_disabled_routes_to_disabled_dir():
         [{"source": "history-substring-search", "phase": "late", "enabled": False}]
     )
     check(
-        "lands in etc/zim-disabled/",
+        "lands in zim-disabled/",
         out[0]["name"],
-        "etc/zim-disabled/85-history-substring-search.conf",
+        "zim-disabled/85-history-substring-search.conf",
     )
 
 
@@ -213,7 +213,7 @@ def test_single_mapping_input():
     print("\nsingle mapping (not a list):")
     out = zim_fragment({"source": "minimal", "phase": "prompt"})
     check("accepted as one entry", len(out), 1)
-    check("correct file", out[0]["name"], "etc/zim/40-minimal.conf")
+    check("correct file", out[0]["name"], "zim/40-minimal.conf")
 
 
 def test_empty_and_undefined():
@@ -236,9 +236,9 @@ def test_multiple_entries_order_preserved():
         "names preserve declaration order",
         [r["name"] for r in out],
         [
-            "etc/zim/20-environment.conf",
-            "etc/zim/20-input.conf",
-            "etc/zim/40-minimal.conf",
+            "zim/20-environment.conf",
+            "zim/20-input.conf",
+            "zim/40-minimal.conf",
         ],
     )
 
@@ -297,7 +297,7 @@ def test_headroom_numeric():
     check(
         "pre-core and post-late headroom",
         [r["name"] for r in out],
-        ["etc/zim/05-early.conf", "etc/zim/99-last.conf"],
+        ["zim/05-early.conf", "zim/99-last.conf"],
     )
 
 

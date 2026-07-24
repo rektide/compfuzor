@@ -2,10 +2,12 @@
 # gen_zim.tasks -- zim host/contributor synthesis (MCP-style).
 #
 # Contributor branch: a playbook declaring ZIM_MODULE / ZIM_MODULES renders one
-# fragment file per module under etc/zim/ (or etc/zim-disabled/ for enabled:false)
-# via the zim_fragment filter. Filenames carry a phase number so sorted glob
-# order across independent contributors yields deterministic load order at
-# assembly time.
+# fragment file per module under zim/ (or zim-disabled/ for enabled:false)
+# via the zim_fragment filter. Fragment names are relative to the ETC dir (the
+# ETC_FILES writer base), so they land at ETC/zim -- which is what
+# install-zim.sh globs via DIR/etc/zim (DIR/etc symlinks to ETC). Filenames
+# carry a phase number so sorted glob order across independent contributors
+# yields deterministic load order at assembly time.
 #
 # Host branch: a playbook marked ZIM_HOST provides the install-zim.sh bridge
 # (contributors invoke it to symlink their fragments into the host's

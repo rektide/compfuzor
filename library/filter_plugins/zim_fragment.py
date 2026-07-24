@@ -192,6 +192,11 @@ def zim_fragment(modules, phase=None):
     is a default phase (number or name) applied to entries without one.
 
     Returns a list of ``{name, content}`` records shaped as ETC_FILES entries.
+
+    The ``name`` is relative to the ETC dir (the ETC_FILES writer base), so it
+    is ``zim/<file>`` / ``zim-disabled/<file>`` -- NOT ``etc/zim/...``. The
+    latter would double up to ``ETC/etc/zim`` and miss ``install-zim.sh``'s
+    ``DIR/etc/zim`` glob (DIR/etc is a symlink to ETC).
     """
     if modules is None or wrapped_test_undefined(modules):
         return []
@@ -211,7 +216,7 @@ def zim_fragment(modules, phase=None):
     for entry in items:
         norm = _normalize_entry(entry, phase)
         fn = _filename(norm["num"], norm["name"], norm["description"])
-        rel_dir = "etc/zim-disabled/" if not norm["enabled"] else "etc/zim/"
+        rel_dir = "zim-disabled/" if not norm["enabled"] else "zim/"
         results.append(
             {
                 "name": rel_dir + fn,
