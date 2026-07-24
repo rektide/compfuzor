@@ -17,26 +17,37 @@
 //                                 (`options <mod> k=v ...`, module mode) and
 //                                 /etc/kernel/cmdline (`mod.param=v`, builtin
 //                                 mode). An explicit FILE is parsed as modprobe
-//                                 `options` format instead. Missing => install
+//                                 `options` format instead. <unset> => install
 //                                 advised; not an error.
 //   --kernel            LIVE      /sys/module/<mod>/parameters/<param>, enumerated
 //                                 per declared module (the broad keys+values
-//                                 view). Never defines the module scope.
+//                                 view -- every param the module exposes, so
+//                                 defaults we don't set are visible). An
+//                                 unreadable value (e.g. 0400 root-only) is
+//                                 <unset>. Never defines the module scope.
 //
 //   --json              one JSON object per row (JSON Lines).
 //   --json-array        all rows as a single JSON array.
-//   -q                  one-word synopsis (OK/DRIFT); -qq = fully silent.
+//   -q                  one-word synopsis (OK/UNSET/DRIFT); -qq = fully silent.
 //   -h, --help          help.
 //
 // $DIR from env or this script's own location; NAME = basename($DIR).
-// Exit: 0 no drift, 1 drift, 2 usage/source error.
+// Exit: 0 no drift, 1 drift, 2 usage/source error. A param renders <unset> when a
+// source has no value for it (we don't declare it, or a live sysfs file is
+// unreadable). UNSET rows are visible but not drift -- re-run as root to verify
+// unreadable live values.
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { basename, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 type Source = "compfuzor" | "system" | "kernel";
-const MISSING = "<missing>";
+// <unset>: this source's empty value -- it contributes nothing for a param. Used
+// when WE don't declare it (our column is empty) or when a live sysfs value can't
+// be read (e.g. a 0400 root-only file). A row is only DRIFT when readable values
+// disagree; a param we don't manage, or one we can't verify live, is UNSET --
+// visible (so you can see what the kernel sets) but not drift.
+const UNSET = "<unset>";
 const ALL: Source[] = ["compfuzor", "system", "kernel"];
 
 const DIR = process.env.DIR ?? dirname(dirname(fileURLToPath(import.meta.url)));
@@ -50,12 +61,12 @@ const DEFAULTS: Record<Source, string> = {
 function usage(): void {
   console.error(`usage: status-modules.ts [--json | --json-array] [-q] [--compfuzor [FILE]] [--system [FILE]] [--kernel] [-h]
   --compfuzor [FILE]  desired: module params from playbook JSON (defines module scope)
-  --system [FILE]     deployed: /etc/modprobe.d + /etc/kernel/cmdline merged (missing => install advised)
-  --kernel            live: /sys/module/<mod>/parameters/* (enumerated per declared module)
+  --system [FILE]     deployed: /etc/modprobe.d + /etc/kernel/cmdline merged (<unset> => install advised)
+  --kernel            live: /sys/module/<mod>/parameters/* (all params per declared module; unreadable -> <unset>)
   --json              one JSON object per row (JSON Lines)
   --json-array        all rows as a single JSON array
-  -q                  one-word synopsis (OK/DRIFT); -qq = silent
-  exit: 0 in-sync / 1 drift / 2 error`);
+  -q                  one-word synopsis (OK/UNSET/DRIFT); -qq = silent
+  exit: 0 in-sync / 1 drift / 2 error (UNSET = unverified live value, not drift)`);
 }
 
 type Format = "tsv" | "jsonl" | "array";
@@ -160,8 +171,10 @@ function loadSystem(file: string | undefined, name: string, modules: Set<string>
 }
 
 // live: enumerate /sys/module/<declared_mod>/parameters/* -> module.param.
-// A module that is not loaded (no parameters dir) simply contributes nothing;
-// its declared params render <missing> downstream.
+// A module that is not loaded (no readable parameters dir) contributes nothing;
+// its declared params render <unset> downstream. A param whose value can't be
+// read (e.g. a 0400 root-only sysfs file) is also recorded as <unset>, so every
+// param the module exposes stays visible -- including defaults we don't set.
 function loadKernel(modules: Iterable<string>): Map<string, string> {
   const out = new Map<string, string>();
   for (const mod of modules) {
@@ -169,7 +182,11 @@ function loadKernel(modules: Iterable<string>): Map<string, string> {
     let files: string[];
     try { files = readdirSync(pdir); } catch { continue; }
     for (const param of files) {
-      try { out.set(`${mod}.${param}`, readFileSync(`${pdir}/${param}`, "utf8").trim()); } catch { /* unreadable */ }
+      try {
+        out.set(`${mod}.${param}`, readFileSync(`${pdir}/${param}`, "utf8").trim());
+      } catch {
+        out.set(`${mod}.${param}`, UNSET);
+      }
     }
   }
   return out;
@@ -215,18 +232,65 @@ if (keys.size === 0) {
 
 const maps: Record<Source, Map<string, string>> = { compfuzor: compfuzorMap, system: systemMap, kernel: kernelMap };
 
+// Canonical comparison form. Integers (decimal or 0x hex, optional sign) collapse
+// to a decimal string so a playbook's hex literal compares equal to the kernel's
+// decimal sysfs rendering (e.g. 0x100000000 == 4294967296, 0x40000 == 262144).
+// Display still uses the raw value; this is for the status decision only.
+// Sentinels and non-numeric strings compare as their trimmed raw form.
+function compareKey(v: string): string {
+  if (v === UNSET) return v;
+  const s = v.trim();
+  if (/^-?0x[0-9a-fA-F]+$/i.test(s) || /^-?\d+$/.test(s)) {
+    try { return BigInt(s).toString(10); } catch { return s; }
+  }
+  return s;
+}
+
 let drift = false;
+let unsetCount = 0;
 const rows = [...keys].sort().map((k) => {
-  const vals = order.map((src) => maps[src].get(k) ?? MISSING);
-  const status = vals.every((v) => v === vals[0]) ? "OK" : "DRIFT";
-  if (status === "DRIFT") drift = true;
+  const vals = order.map((src) => maps[src].get(k) ?? UNSET);
+  const cmp = vals.map(compareKey);
+  const cfIdx = order.indexOf("compfuzor");
+  const cfSet = cfIdx >= 0 && vals[cfIdx] !== UNSET;
+
+  let status: string;
+  if (!cfSet) {
+    // We don't manage this param (compfuzor doesn't declare it) -- e.g. a module
+    // default the kernel exposes. Show it so you can see what the kernel sets,
+    // but it isn't drift: we never claimed to set it.
+    status = "UNSET";
+    unsetCount++;
+  } else if (cmp.every((v) => v === cmp[0])) {
+    status = "OK";
+  } else {
+    const real = cmp.filter((v) => v !== UNSET);
+    const realAgree = real.length > 0 && real.every((v) => v === real[0]);
+    if (!realAgree) {
+      status = "DRIFT";
+      drift = true;
+    } else {
+      // Readable values agree, but some source is <unset>. If that source is the
+      // deployed (system) side, we declared it but never installed it -> DRIFT.
+      // If only the live (kernel) side is unset (e.g. an unreadable 0400 sysfs
+      // file), it is unverified, not wrong -> UNSET.
+      const sysIdx = order.indexOf("system");
+      if (sysIdx >= 0 && cmp[sysIdx] === UNSET) {
+        status = "DRIFT";
+        drift = true;
+      } else {
+        status = "UNSET";
+        unsetCount++;
+      }
+    }
+  }
   const row: Record<string, string> = { key: k, status };
   order.forEach((s, idx) => { row[s] = vals[idx]; });
   return row;
 });
 
 if (quiet === 1) {
-  console.log(drift ? "DRIFT" : "OK");
+  console.log(drift ? "DRIFT" : unsetCount > 0 ? "UNSET" : "OK");
 } else if (quiet >= 2) {
   // fully silent
 } else if (format === "jsonl") {
