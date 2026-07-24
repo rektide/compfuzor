@@ -3,24 +3,25 @@
   vars:
     TYPE: gdm-no-suspend
     INSTANCE: main
+    PKGS:
+      - crudini
     ENV:
-      dest: /etc/dconf/db/gdm.d/00-no-suspend
+      dest: /etc/gdm3/greeter.dconf-defaults
     ETC_FILES:
-      - name: 00-no-suspend
+      - name: no-suspend.conf
         content: |
           [org/gnome/settings-daemon/plugins/power]
-          sleep-inactive-ac-type='nothing'
-          sleep-inactive-battery-type='nothing'
-          sleep-inactive-ac-timeout=0
-          sleep-inactive-battery-timeout=0
+          sleep-inactive-ac-type = 'nothing'
+          sleep-inactive-battery-type = 'nothing'
+          sleep-inactive-ac-timeout = 0
+          sleep-inactive-battery-timeout = 0
 
           [org/gnome/desktop/session]
-          idle-delay=uint32 0
+          idle-delay = uint32 0
     BINS:
       - name: install-dconf.sh
         content: |
-          sudo mkdir -p "$(dirname "$DEST")"
-          sudo ln -sfv "$DIR/etc/00-no-suspend" "$DEST"
-          sudo dconf update
+          sudo crudini --merge "$DEST" < "$DIR/etc/no-suspend.conf"
+          sudo systemctl reload gdm
   tasks:
     - import_tasks: tasks/compfuzor.includes
