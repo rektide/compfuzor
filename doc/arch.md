@@ -583,16 +583,21 @@ Useful current profiles:
 | `subsystem_contrib` | roll up child contrib payloads (`ETC_FILES`, `BINS`, `ENV`, `ENV_LIST`, `PKGS`) |
 | `subsystem_artifacts` | merge nested `contrib.artifacts` payloads (`ETC_FILES`, `LINKS`) |
 
-Strong candidate profile:
+Current profile:
 
 | Profile | Purpose |
 |---|---|
-| `bins_generated` | merge `BINS` by `name` while concatenating `generated` scripts |
+| `bins_generated` | merge `BINS` by `name` while concatenating `early`, `generated`, and `run_all` fields |
 
 `BINS` is special because multiple subsystems commonly contribute to the same
 script name (`build.sh`, `install.sh`). Appending the list is not enough. The
-usual behavior should be a keyed merge by `name`, with `generated` concatenated
-in producer order.
+usual behavior is a keyed merge by `name`, with `early`, `generated`, and
+`run_all` concatenated in producer order.
+
+`early` holds pre-build hooks (e.g. `mise install`). `generated` is the
+script body. `run_all` lists child scripts to invoke after the body. The
+`gen_bins` synthesis phase composes these automatically; see
+[`doc/subsys.md`](subsys.md) for the full composition model.
 
 Recommended default:
 
