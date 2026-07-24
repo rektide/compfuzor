@@ -20,8 +20,23 @@ sudo touch "$_cf_cmdline_file"
 _cf_existing="$(sudo cat "$_cf_cmdline_file")"
 _cf_updated="$_cf_existing"
 
-while IFS= read -r _cf_line; do
+# KERNEL_PARAMS_JSON entries are either strings (collapse by key, the default)
+# or objects {token, dup: true} (allow-duplicates: idempotent at the token level
+# so multiple same-key tokens with distinct values coexist, e.g.
+# console=ttyS0 + console=tty0). Normalize to "<token>\t<dup>" pairs.
+while IFS=$'\t' read -r _cf_line _cf_dup; do
   [ -n "$_cf_line" ] || continue
+
+  if [ "$_cf_dup" = "true" ]; then
+    # allow-duplicates: add this exact token only if absent (token-level
+    # idempotency). Does NOT collapse by key -- siblings with the same key stay.
+    _cf_present=0
+    for _cf_tok in $_cf_updated; do
+      [ "$_cf_tok" = "$_cf_line" ] && { _cf_present=1; break; }
+    done
+    [ "$_cf_present" = "0" ] && _cf_updated="${_cf_updated:+${_cf_updated} }${_cf_line}"
+    continue
+  fi
 
   case "$_cf_line" in
     *=*)
@@ -37,7 +52,7 @@ while IFS= read -r _cf_line; do
       ;;
   esac
   _cf_updated="${_cf_updated:+${_cf_updated} }${_cf_line}"
-done < <(jq -r '.[]' "$KERNEL_PARAMS_JSON")
+done < <(jq -r '.[] | (if type == "string" then {token: ., dup: false} else . end) | select(.token and (.token | type == "string")) | "\(.token)\t\(.dup // false)"' "$KERNEL_PARAMS_JSON")
 
 _cf_updated="$(printf '%s\n' "$_cf_updated" | tr -s '[:space:]' ' ' | sed -E 's/^ //; s/ $//')"
 

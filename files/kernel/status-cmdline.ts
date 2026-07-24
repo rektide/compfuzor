@@ -70,15 +70,19 @@ const DEFAULTS: Record<Source, string> = {
 /**
  * Result of parsing one cmdline source.
  *
- * @property map   key -> value. For `key=value` tokens the value follows the
- *                 first `=`; for flag tokens (no `=`) key == value == the token.
- *                 When a key repeats, the LAST value wins here.
- * @property dups  keys that appeared more than once in this source, surfaced so
- *                 the row formatter can annotate them "[DUP]" and force DRIFT.
+ * @property map        key -> value. For `key=value` tokens the value follows the
+ *                      first `=`; for flag tokens (no `=`) key == value == the token.
+ *                      When a key repeats, the LAST value wins here.
+ * @property dups       keys that appeared more than once in this source, surfaced so
+ *                      the row formatter can annotate them "[DUP]" and force DRIFT.
+ * @property dupAllowed keys declared `dup:true` (compfuzor source only). For those
+ *                      keys duplication is legitimate, so the row formatter suppresses
+ *                      the "[DUP]" annotation. Always empty for system/kernel.
  */
 interface Parsed {
   map: Map<string, string>;
   dups: Set<string>;
+  dupAllowed: Set<string>;
 }
 
 /**
@@ -157,7 +161,7 @@ function parseArgs(argv: string[]): Opts {
 }
 
 /** Empty {@link Parsed}, returned for sources whose file is absent. */
-const EMPTY: Parsed = { map: new Map(), dups: new Set() };
+const EMPTY: Parsed = { map: new Map(), dups: new Set(), dupAllowed: new Set() };
 
 /**
  * Split a cmdline-style string into a {@link Parsed}. Keys are the part before
@@ -180,14 +184,16 @@ function tokenize(s: string): Parsed {
     if (map.has(key)) dups.add(key);
     map.set(key, val);
   }
-  return { map, dups };
+  return { map, dups, dupAllowed: new Set() };
 }
-
 /**
- * Load the DESIRED tokens from `file` (KERNEL_PARAMS_JSON): a JSON array of
- * token strings. This source defines the report scope (we only emit rows for
- * declared keys). Tracks repeated keys into `dups` so they can be flagged.
- * Exits with status 2 if the file is missing or not a JSON array.
+ * Load the DESIRED tokens from `file` (KERNEL_PARAMS_JSON): a JSON array whose
+ * entries are either strings (`"memmap=..."`, collapsed by key) or objects
+ * `{ token, dup: true }` (allow-duplicates mode). This source defines the report
+ * scope (rows are emitted only for declared keys). Tracks repeated keys into
+ * `dups` and `dup:true` keys into `dupAllowed` so the formatter can suppress the
+ * "[DUP]" annotation for legitimate multi-value keys (e.g. `console=`). Exits
+ * with status 2 if the file is missing or not a JSON array.
  */
 function loadCompfuzor(file: string): Parsed {
   if (!file || !existsSync(file)) {
@@ -201,16 +207,22 @@ function loadCompfuzor(file: string): Parsed {
   }
   const map = new Map<string, string>();
   const dups = new Set<string>();
-  for (const tok of arr as (string | number | boolean)[]) {
-    const s = String(tok);
+  const dupAllowed = new Set<string>();
+  for (const entry of arr as unknown[]) {
+    const obj =
+      typeof entry === "string"
+        ? { token: entry, dup: false }
+        : (entry as { token?: unknown; dup?: unknown });
+    const s = typeof obj.token === "string" ? obj.token : "";
     if (!s) continue;
     const eq = s.indexOf("=");
     const key = eq > 0 ? s.slice(0, eq) : s;
     const val = eq > 0 ? s.slice(eq + 1) : s;
     if (map.has(key)) dups.add(key);
     map.set(key, val);
+    if (obj.dup === true) dupAllowed.add(key);
   }
-  return { map, dups };
+  return { map, dups, dupAllowed };
 }
 
 /**
@@ -258,7 +270,10 @@ let drift = false;
 const rows = [...keys].sort().map((k) => {
   const vals = order.map((src) => {
     const v = parsed[src].map.get(k) ?? MISSING;
-    return parsed[src].dups.has(k) ? `${v} [DUP]` : v;
+    // Duplicates only flag DRIFT for keys NOT declared dup:true -- legitimate
+    // multi-value keys (console=ttyS0 + console=tty0) are allowed to repeat.
+    const dupFlagged = parsed[src].dups.has(k) && !compfuzor.dupAllowed.has(k);
+    return dupFlagged ? `${v} [DUP]` : v;
   });
   const status = vals.every((v) => v === vals[0]) ? "OK" : "DRIFT";
   if (status === "DRIFT") drift = true;
