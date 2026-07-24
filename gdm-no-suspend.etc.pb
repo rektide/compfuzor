@@ -7,6 +7,12 @@
       - crudini
     ENV:
       dest: /etc/gdm3/greeter.dconf-defaults
+      # gen_link transport: clobber via cp instead of merge (destructive on a
+      # shared conffile — loses Debian's defaults). Opt-in, not default.
+      # link_copy: true
+      # gen_link phase: route the deploy into build-link.sh instead of
+      # install-link.sh (compile-time; gen_link would emit the body there).
+      # link_phase: build
     ETC_FILES:
       - name: no-suspend.conf
         content: |
