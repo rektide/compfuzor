@@ -36,7 +36,11 @@
             fi
             exit 0
           fi
-          sudo crudini --merge "$DEST" < "$DIR/etc/no-suspend.conf"
+          if [ -n "${LINK_COPY:-}" ]; then
+            sudo cp -fv "$DIR/etc/no-suspend.conf" "$DEST"
+          else
+            sudo crudini --merge "$DEST" < "$DIR/etc/no-suspend.conf"
+          fi
           sudo systemctl reload gdm
   tasks:
     - import_tasks: tasks/compfuzor.includes
