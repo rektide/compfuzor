@@ -132,9 +132,52 @@ def test_compose_false_excludes_library_scripts():
     )
 
 
+def test_composes_apply_actions():
+    result = bin_composers(
+        [
+            {"name": "apply-kernel.sh"},
+            {"name": "apply-sysctl.sh"},
+            {"name": "apply-sysfs.sh"},
+        ]
+    )
+    check(
+        "composes apply actions",
+        result,
+        [
+            {
+                "name": "apply.sh",
+                "action": "apply",
+                "generated_by": "gen_bins",
+                "run_all": ["apply-kernel.sh", "apply-sysctl.sh", "apply-sysfs.sh"],
+            },
+        ],
+    )
+
+
+def test_build_install_apply_coexist():
+    result = bin_composers(
+        [
+            {"name": "build-kernel.sh"},
+            {"name": "install-kernel.sh"},
+            {"name": "apply-kernel.sh"},
+            {"name": "apply-patches.sh"},
+        ]
+    )
+    names = [c["name"] for c in result]
+    check("three action compositors", names, ["build.sh", "install.sh", "apply.sh"])
+    apply_c = [c for c in result if c["name"] == "apply.sh"][0]
+    check(
+        "apply compositor aggregates all apply scripts",
+        apply_c["run_all"],
+        ["apply-kernel.sh", "apply-patches.sh"],
+    )
+
+
 if __name__ == "__main__":
     test_composes_unscoped_actions()
     test_composes_explicit_and_filename_user_scopes()
     test_excludes_generated_compositors()
     test_explicit_scope_classifies_systemd_install()
     test_compose_false_excludes_library_scripts()
+    test_composes_apply_actions()
+    test_build_install_apply_coexist()

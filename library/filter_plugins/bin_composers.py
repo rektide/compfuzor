@@ -9,7 +9,7 @@ from ansible.template import accept_args_markers
 
 
 _ACTION_PATTERN = re.compile(
-    r"^(?P<action>build|install)"
+    r"^(?P<action>build|install|apply)"
     r"(?P<suffix>-[A-Za-z0-9][A-Za-z0-9_-]*)?"
     r"(?P<user>\.user)?\.sh$"
 )
@@ -34,11 +34,11 @@ def _arrayitize(value):
 def bin_composers(bins):
     """Build action compositor bins from explicitly named bin scripts.
 
-    ``build*.sh`` and ``install*.sh`` are action scripts. An explicit ``scope``
-    may be a string or list; one compositor is emitted for every declared scope.
-    ``install-user.sh`` and ``install-*.user.sh`` infer the ``user`` scope.
-    Compositors retain the canonical action filename and append child names through
-    the shared ``run_all`` bin field.
+    ``build*.sh``, ``install*.sh``, and ``apply*.sh`` are action scripts. An
+    explicit ``scope`` may be a string or list; one compositor is emitted for
+    every declared scope. ``install-user.sh`` and ``install-*.user.sh`` infer
+    the ``user`` scope. Compositors retain the canonical action filename and
+    append child names through the shared ``run_all`` bin field.
     """
     groups = {}
     for item in _arrayitize(bins):

@@ -482,6 +482,9 @@ SUBSYSTEM:
       BINS:
         - name: install-desktop.sh
           generated: |
+            {% for _c in (DESKTOP_COMMENT | default([]) | arrayitize) %}
+            # {{ _c }}
+            {% endfor %}
             {% for entry in (DESKTOP | arrayitize) %}
             {% set df = entry.desktop_file %}
             {% set exec_val = entry.exec | default('') %}
@@ -513,6 +516,9 @@ SUBSYSTEM:
       BINS:
         - name: download-patches.sh
           generated: |
+            {% for _c in (PATCHES_COMMENT | default([]) | arrayitize) %}
+            # {{ _c }}
+            {% endfor %}
             PATCHES_DIR="${DIR}/patches"
             mkdir -p "$PATCHES_DIR"
 
@@ -569,6 +575,9 @@ SUBSYSTEM:
         - name: apply-patches.sh
           basedir: repo
           generated: |
+            {% for _c in (PATCHES_COMMENT_APPLY | default([]) | arrayitize) %}
+            # {{ _c }}
+            {% endfor %}
             PATCHES_DIR="${DIR}/patches"
 
             if [ ! -d "$PATCHES_DIR" ]; then
