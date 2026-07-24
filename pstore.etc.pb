@@ -100,6 +100,11 @@
 
           grep -E 'PSTORE_RAM|PSTORE_CONSOLE|PSTORE_PMSG|PSTORE_FTRACE' /boot/config-$(uname -r)
 
+    # pstore ships no systemd service -- opt out explicitly (SYSTEMD_BYPASS
+    # alone only skips the thunk, not unit generation).
+    SYSTEMD_INSTALL_BYPASS: True
+    SYSTEMD_THUNK_BYPASS: True
+
     # Physical address reserved for ramoops. Default works on any x86_64 with
     # ≥ 8 GB RAM (4 GB boundary, above BIOS MMIO holes). Override per-host
     # via -e RAMOOPS_MEM_ADDRESS=0x... for unusual layouts.
