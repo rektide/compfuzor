@@ -15,11 +15,10 @@ while IFS= read -r _cf_line; do
   [ -n "$_cf_line" ] || continue
 
   _cf_key="${_cf_line%%=*}"
-  if printf '%s\n' "$_cf_updated" | grep -Eq "(^|[[:space:]])${_cf_key}="; then
-    _cf_updated="$(printf '%s\n' "$_cf_updated" | sed -E "s#(^|[[:space:]])${_cf_key}=[^[:space:]]*#\\1${_cf_line}#")"
-  else
-    _cf_updated="${_cf_updated} ${_cf_line}"
-  fi
+  # Collapse to a single copy: strip EVERY existing occurrence of this key so
+  # stale duplicates can't survive a re-run, then append the desired value once.
+  _cf_updated="$(printf '%s\n' "$_cf_updated" | sed -E "s#(^|[[:space:]])${_cf_key}=[^[:space:]]*##g" | tr -s ' ' | sed -E 's/^ //; s/ $//')"
+  _cf_updated="${_cf_updated:+${_cf_updated} }${_cf_line}"
 done < <(
   jq -r '
     to_entries

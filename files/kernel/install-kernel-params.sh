@@ -25,23 +25,18 @@ while IFS= read -r _cf_line; do
 
   case "$_cf_line" in
     *=*)
-      # key=value form: replace by key prefix, or append.
+      # key=value form: collapse -- strip every existing occurrence of this key
+      # so stale duplicates can't survive, then append the desired value once.
       _cf_key="${_cf_line%%=*}"
-      if printf '%s\n' "$_cf_updated" | grep -Eq "(^|[[:space:]])${_cf_key}="; then
-        _cf_updated="$(printf '%s\n' "$_cf_updated" | sed -E "s#(^|[[:space:]])${_cf_key}=[^[:space:]]*#\\1${_cf_line}#")"
-      else
-        _cf_updated="${_cf_updated} ${_cf_line}"
-      fi
+      _cf_updated="$(printf '%s\n' "$_cf_updated" | sed -E "s#(^|[[:space:]])${_cf_key}=[^[:space:]]*##g" | tr -s ' ' | sed -E 's/^ //; s/ $//')"
       ;;
     *)
-      # flag form: idempotent add (compare token-by-token to avoid glob surprises).
-      _cf_present=0
-      for _cf_tok in $_cf_updated; do
-        [ "$_cf_tok" = "$_cf_line" ] && _cf_present=1
-      done
-      [ "$_cf_present" = "0" ] && _cf_updated="${_cf_updated} ${_cf_line}"
+      # flag form: collapse -- drop every existing copy of this exact flag, then
+      # append once.
+      _cf_updated="$(printf '%s\n' "$_cf_updated" | tr ' ' '\n' | grep -vx -- "$_cf_line" | paste -sd ' ' -)"
       ;;
   esac
+  _cf_updated="${_cf_updated:+${_cf_updated} }${_cf_line}"
 done < <(jq -r '.[]' "$KERNEL_PARAMS_JSON")
 
 _cf_updated="$(printf '%s\n' "$_cf_updated" | tr -s '[:space:]' ' ' | sed -E 's/^ //; s/ $//')"
