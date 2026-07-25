@@ -120,9 +120,12 @@ The [`bin_composers`](../library/filter_plugins/bin_composers.py) filter:
 
 ### Scope
 
-`scope` accepts a string or list. An entry with `scope: [user, shell]`
-participates in both scoped compositors. `install-user.sh` and
-`install-*.user.sh` infer the `user` scope from the filename.
+`scope` accepts a string or list; an entry with `scope: [user, shell]`
+participates in both scoped compositors (one entry-point per scope). `install-user.sh`
+and any `install-user-*.sh` (e.g. `install-user-zimfw.sh`, `install-service-user.sh`)
+infer the `user` scope from the filename; `install-*.user.sh` does too. This is how
+user-scope subsystems (zim, user systemd services) contribute their own install step
+without a system-scope script that would need root.
 
 ```yaml
 BINS:

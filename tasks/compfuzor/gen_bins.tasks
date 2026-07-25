@@ -5,6 +5,13 @@
 # bypassed, the script should echo a stderr warning UNLESS a quiet mode is set
 # (COMPFUZOR_QUIET, or V=0 — the same loud/quiet gate used by files/_bin). See
 # gdm-no-suspend.etc.pb's build-link.sh/install-link.sh for the reference shape.
+#
+# Rendered env-setting snippets (e.g. a zim module exporting a socket path)
+# should default to NOT stomping an existing value, and only force-overwrite when
+# COMPFUZOR_ENV_OVERWRITE is set. Pattern:
+#   if [ -z "${VAR:-}" ] || [ -n "${COMPFUZOR_ENV_OVERWRITE:-}" ]; then export VAR=...; fi
+# This lets an outer session or the systemd user manager (SYSTEMD_ENV) win unless
+# the operator explicitly opts into the generated value.
 - name: "Compfuzor: synthesize bin action compositors"
   set_fact:
     BINS: "{{ [BINS | default([]), BINS | bin_composers] | merge_list('bins_generated') }}"
