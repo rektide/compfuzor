@@ -119,6 +119,10 @@ def _normalize_entry(entry, default_phase):
     if not source:
         raise AnsibleFilterError("zim module source must be non-empty")
 
+    # A local-file module: source is a repo .zsh rendered as a local zimfw
+    # module (zmodule <abspath>). Triggered by a .zsh extension or `file: true`.
+    is_file = bool(entry.get("file")) or source.endswith(".zsh")
+
     num = _resolve_phase(entry.get("phase"), default_phase)
     if num is None:
         raise AnsibleFilterError(
@@ -127,7 +131,12 @@ def _normalize_entry(entry, default_phase):
             )
         )
 
-    name = str(entry.get("name") or _slug(source)).strip()
+    name = str(entry.get("name") or "").strip()
+    if not name:
+        slug = _slug(source)
+        if is_file and slug.endswith(".zsh"):
+            slug = slug[: -len(".zsh")]
+        name = slug
     if not name:
         raise AnsibleFilterError(
             "zim module {!r} resolves to an empty filename slug".format(source)
@@ -152,6 +161,7 @@ def _normalize_entry(entry, default_phase):
         "args": entry.get("args"),
         "comment": entry.get("comment"),
         "enabled": enabled,
+        "is_file": is_file,
     }
 
 
@@ -178,24 +188,31 @@ def _body(source, args, comment):
 
 
 @accept_args_markers
-def zim_fragment(modules, phase=None):
+def zim_fragment(modules, phase=None, etc=None):
     """Render zim module declarations into drop-in fragment files.
 
-    Each entry becomes one fragment file under ``etc/zim/`` (or
-    ``etc/zim-disabled/`` when ``enabled: false``). Filenames are
-    ``<num>-<name>[-<description>].conf`` where ``<num>`` is the resolved
-    phase number, so lexical sort across contributors yields deterministic
-    load order. The existing block-in-file config assembler globs these in
-    sorted order to build the final zimfw config.
+    Each entry becomes one fragment file under ``zim/`` (or ``zim-disabled/``
+    when ``enabled: false``). Filenames are ``<num>-<name>[-<description>].conf``
+    where ``<num>`` is the resolved phase number, so lexical sort across
+    contributors yields deterministic load order. The block-in-file config
+    assembler globs these in sorted order to build the final zimfw config.
 
     ``modules`` may be a single string/mapping or a list of them. ``phase``
     is a default phase (number or name) applied to entries without one.
 
-    Returns a list of ``{name, content}`` records shaped as ETC_FILES entries.
+    ``etc`` is the contributor's ETC dir. When set, a local-file entry (source
+    ending in ``.zsh`` or ``file: true``) renders as a *local* zimfw module: the
+    declaration points at ``<etc>/zim-modules/<name>`` (an absolute path, which
+    zimfw loads as an already-installed module), and a second record
+    ``zim-modules/<name>/init.zsh`` is emitted with ``src`` set so the ETC_FILES
+    writer renders the source file there.
 
-    The ``name`` is relative to the ETC dir (the ETC_FILES writer base), so it
-    is ``zim/<file>`` / ``zim-disabled/<file>`` -- NOT ``etc/zim/...``. The
-    latter would double up to ``ETC/etc/zim`` and miss ``install-zim.sh``'s
+    Returns a list of ``{name, content}`` records shaped as ETC_FILES entries
+    (file modules additionally emit a ``{name, src}`` init.zsh record).
+
+    ``name`` is relative to the ETC dir (the ETC_FILES writer base), so it is
+    ``zim/<file>`` / ``zim-disabled/<file>`` -- NOT ``etc/zim/...``. The latter
+    would double up to ``ETC/etc/zim`` and miss ``install-zim.sh``'s
     ``DIR/etc/zim`` glob (DIR/etc is a symlink to ETC).
     """
     if modules is None or wrapped_test_undefined(modules):
@@ -217,12 +234,24 @@ def zim_fragment(modules, phase=None):
         norm = _normalize_entry(entry, phase)
         fn = _filename(norm["num"], norm["name"], norm["description"])
         rel_dir = "zim-disabled/" if not norm["enabled"] else "zim/"
-        results.append(
-            {
-                "name": rel_dir + fn,
-                "content": _body(norm["source"], norm["args"], norm["comment"]),
-            }
-        )
+        if norm["is_file"]:
+            # local zimfw module: zmodule points at the rendered module dir.
+            module_path = (
+                "{}/zim-modules/{}".format(etc, norm["name"]) if etc else norm["name"]
+            )
+            body = _body(module_path, norm["args"], norm["comment"])
+        else:
+            body = _body(norm["source"], norm["args"], norm["comment"])
+        results.append({"name": rel_dir + fn, "content": body})
+        # file modules: render the source script as the module's init.zsh
+        # (only active modules need a script on disk).
+        if norm["is_file"] and norm["enabled"]:
+            results.append(
+                {
+                    "name": "zim-modules/{}/init.zsh".format(norm["name"]),
+                    "src": norm["source"],
+                }
+            )
     return results
 
 

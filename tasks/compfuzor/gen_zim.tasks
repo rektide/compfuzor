@@ -9,6 +9,17 @@
 # carry a phase number so sorted glob order across independent contributors
 # yields deterministic load order at assembly time.
 #
+# A module whose source is a local .zsh file (or `file: true`) is rendered as a
+# LOCAL zimfw module: the source script becomes zim-modules/<name>/init.zsh and
+# the declaration's `zmodule` points at that absolute path (zimfw loads it as an
+# already-installed module). This is how compfuzor ships in-repo zsh scripts as
+# zimfw-loadable modules without a separate git repo.
+#
+# Every contributor also gets an auto-generated install-user-zimfw.sh (user
+# scope -- the `install-user-` prefix is what gen_bins keys on) that promotes
+# its zim/ fragments into the zim host assembly dir, so a contributor only
+# declares ZIM_MODULES and otherwise does nothing install-shaped itself.
+#
 # Host branch: a playbook marked ZIM_HOST provides the install-zim.sh bridge
 # (contributors invoke it to symlink their fragments into the host's
 # etc/zimfw/) and exports ZIM_TARGET / ZIM_TARGET_DISABLED so contributors can
@@ -18,14 +29,67 @@
 - name: "Compfuzor: render zim contributor fragments"
   set_fact:
     ETC_FILES: "{{ (ETC_FILES | default([])) + _zim_fragments }}"
-    ETC_DIRS: "{{ (ETC_DIRS | default([])) + ['zim', 'zim-disabled'] }}"
+    ETC_DIRS: "{{ (ETC_DIRS | default([])) + ['zim', 'zim-disabled'] + _zim_module_dirs }}"
   when:
     - (ZIM_MODULE is defined or ZIM_MODULES is defined)
     - ZIM_BYPASS | default(False) is not deftruthy
   vars:
     _zim_modules: "{{ ([ZIM_MODULE] if ZIM_MODULE is defined else []) + (ZIM_MODULES | default([])) }}"
     _zim_phase: "{{ ZIM_PHASE if ZIM_PHASE is defined else none }}"
-    _zim_fragments: "{{ _zim_modules | zim_fragment(phase=_zim_phase) }}"
+    _zim_fragments: "{{ _zim_modules | zim_fragment(phase=_zim_phase, etc=ETC) }}"
+    # local-file modules emit a zim-modules/<name>/init.zsh record (carrying
+    # `src`); create each <name> dir so the ETC_FILES writer can land it.
+    _zim_module_dirs: >-
+      {{ _zim_fragments
+        | selectattr('src', 'defined')
+        | map(attribute='name')
+        | map('regex_replace', '/init\.zsh$', '')
+        | list }}
+
+- name: "Compfuzor: generate contributor install-user-zimfw.sh"
+  set_fact:
+    BINS: "{{ (BINS | default([])) + [_zimfw_install_bin] }}"
+  when:
+    - (ZIM_MODULE is defined or ZIM_MODULES is defined)
+    - ZIM_HOST is not defined
+    - ZIM_BYPASS | default(False) is not deftruthy
+  vars:
+    _zimfw_install_bin:
+      name: install-user-zimfw.sh
+      scope: [user]
+      basedir: False
+      content: |
+        if [ -n "${ZIM_BYPASS:-}" ]; then
+          if [ -z "${COMPFUZOR_QUIET:-}" ] && { [ -z "${V+x}" ] || [ "$V" != 0 ]; }; then
+            echo "zim: ZIM_BYPASS set, skipping {{NAME}} fragment promotion" >&2
+          fi
+          exit 0
+        fi
+        host="${ZIM_HOST_DIR:-/opt/zim-main}"
+        if [ -x "$host/bin/install-zim.sh" ]; then
+          "$host/bin/install-zim.sh" "{{DIR}}"
+        else
+          if [ -z "${COMPFUZOR_QUIET:-}" ] && { [ -z "${V+x}" ] || [ "$V" != 0 ]; }; then
+            echo "zim: host not found at $host (set ZIM_HOST_DIR); skipping {{NAME}} fragment promotion" >&2
+          fi
+        fi
+
+- name: "Compfuzor: synthesize zim host artifacts"
+  set_fact:
+    BINS: "{{ [BINS | default([]), _zim_host_bins] | merge_list('bins_generated') }}"
+    ENV: "{{ _zim_host_env | merge_dict(ENV | default({}), skip='all') }}"
+    ENV_LIST: "{{ (ENV_LIST | default([])) + ['ZIM_TARGET', 'ZIM_TARGET_DISABLED'] }}"
+  when:
+    - ZIM_HOST is defined
+    - ZIM_BYPASS | default(False) is not deftruthy
+  vars:
+    _zim_host_bins:
+      - name: install-zim.sh
+        src: ../install-zim.sh
+        basedir: False
+    _zim_host_env:
+      ZIM_TARGET: "{{ ETC }}/zimfw"
+      ZIM_TARGET_DISABLED: "{{ ETC }}/zimfw-disabled"
 
 - name: "Compfuzor: synthesize zim host artifacts"
   set_fact:

@@ -301,6 +301,33 @@ def test_headroom_numeric():
     )
 
 
+def test_local_file_source_renders_local_module():
+    print("\nlocal .zsh source -> local zimfw module:")
+    out = zim_fragment(
+        [{"source": "watchman-env.zsh", "phase": "tools"}], etc="/etc/opt/watchman-main"
+    )
+    check("declaration points at rendered module dir", out[0]["name"], "zim/55-watchman-env.conf")
+    check(
+        "zmodule uses absolute module path",
+        out[0]["content"],
+        "zmodule /etc/opt/watchman-main/zim-modules/watchman-env\n",
+    )
+    check("init.zsh record emitted with src", out[1], {"name": "zim-modules/watchman-env/init.zsh", "src": "watchman-env.zsh"})
+
+
+def test_local_file_explicit_flag():
+    print("\nfile: true forces local-file interpretation:")
+    out = zim_fragment([{"source": "myscript", "file": True, "phase": "tools"}], etc="/e")
+    check("slug kept (no .zsh to strip)", out[0]["name"], "zim/55-myscript.conf")
+    check("zmodule path", out[0]["content"], "zmodule /e/zim-modules/myscript\n")
+
+
+def test_local_file_without_etc_falls_back():
+    print("\nlocal file without etc:")
+    out = zim_fragment([{"source": "x.zsh", "phase": "core"}])
+    check("falls back to bare slug", out[0]["content"], "zmodule x\n")
+
+
 if __name__ == "__main__":
     test_string_entry_uses_default_phase()
     test_numeric_phase_name()
@@ -325,5 +352,8 @@ if __name__ == "__main__":
     test_missing_source_rejected()
     test_bool_phase_rejected()
     test_headroom_numeric()
+    test_local_file_source_renders_local_module()
+    test_local_file_explicit_flag()
+    test_local_file_without_etc_falls_back()
     print("\n{} passed, {} failed".format(passed, failed))
     sys.exit(1 if failed else 0)
