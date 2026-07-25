@@ -46,7 +46,11 @@
   vars:
     _item: "{{ bin_item if bin_item is mapping else {'name': bin_item} }}"
     _srcName: "{{_item.src|default(_item.name|default(False))}}"
-    _srcTemplate: "files/{{TYPE|default(NAME)}}/{{_srcName}}"
+    # `../` in a bin src escapes files/<TYPE>/ (shared scripts like
+    # systemd/install-unit.sh live under files/systemd/, reached via
+    # `../systemd/...`); resolve those directly under files/ so they work even
+    # when the playbook has no files/<TYPE>/ dir.
+    _srcTemplate: "{{ ('files/' ~ _srcName[3:]) if (_srcName is string and _srcName.startswith('../')) else ('files/' ~ (TYPE|default(NAME)) ~ '/' ~ _srcName) }}"
     _dest: "{{BINS_DIR}}/{{_item.dest|default(_item.name|default(_srcName|basename))}}"
     _isRaw: "{{_item.raw|default(False)|bool}}"
     _isLink: "{{_item.link|default(False) is truthy}}"
@@ -55,7 +59,8 @@
     item: "{{_item|combine({'content': lookup('template', _srcTemplate)})}}"
 - name:  "Copy raw `BINS` into place`"
   copy:
-    src: "files/{{ TYPE|default(NAME) }}/{{item.src|default(item.name) if item is mapping else item }}"
+    src: >-
+      {% set s = item.src|default(item.name) if item is mapping else item %}{{ ('files/' ~ s[3:]) if (s is string and s.startswith('../')) else ('files/' ~ (TYPE|default(NAME)) ~ '/' ~ s) }}
     dest: "{{_dest}}"
     mode: "{{item.mode|default(BINMODE)}}"
     owner: "{{item.owner|default(OWNER)|default(omit)}}"
