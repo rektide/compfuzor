@@ -328,6 +328,48 @@ def test_local_file_without_etc_falls_back():
     check("falls back to bare slug", out[0]["content"], "zmodule x\n")
 
 
+def test_env_module_renders_generated_script():
+    print("\nenv module -> generated init.zsh:")
+    out = zim_fragment(
+        [{"name": "watchman-env", "phase": "tools", "env": {"WATCHMAN_SOCK": "/path/sock"}}],
+        etc="/etc/opt/watchman-main",
+    )
+    check("declaration points at module dir", out[0]["name"], "zim/55-watchman-env.conf")
+    check("zmodule abspath", out[0]["content"], "zmodule /etc/opt/watchman-main/zim-modules/watchman-env\n")
+    check("init.zsh carries generated content (not src)", "content" in out[1] and "src" not in out[1], True)
+    check("guard line present", 'if [ -z "${WATCHMAN_SOCK:-}" ] || [ -n "${COMPFUZOR_ENV_OVERWRITE:-}" ]; then' in out[1]["content"], True)
+    check("export line present", '  export WATCHMAN_SOCK="/path/sock"' in out[1]["content"], True)
+
+
+def test_env_module_multi_var_order_preserved():
+    print("\nenv module multiple vars, declared order:")
+    out = zim_fragment(
+        [{"name": "m", "phase": "core", "env": {"AAA": "1", "BBB": "2", "CCC": "3"}}],
+        etc="/e",
+    )
+    body = out[1]["content"]
+    check("AAA before BBB", body.index("export AAA") < body.index("export BBB"), True)
+    check("BBB before CCC", body.index("export BBB") < body.index("export CCC"), True)
+
+
+def test_env_module_requires_name():
+    print("\nenv module without name:")
+    check_raises(
+        "missing name rejected",
+        lambda: zim_fragment([{"phase": "core", "env": {"X": "1"}}]),
+        "name",
+    )
+
+
+def test_env_and_source_mutually_exclusive():
+    print("\nenv + source rejected:")
+    check_raises(
+        "both present rejected",
+        lambda: zim_fragment([{"source": "x", "phase": "core", "env": {"X": "1"}}]),
+        "both",
+    )
+
+
 if __name__ == "__main__":
     test_string_entry_uses_default_phase()
     test_numeric_phase_name()
@@ -355,5 +397,9 @@ if __name__ == "__main__":
     test_local_file_source_renders_local_module()
     test_local_file_explicit_flag()
     test_local_file_without_etc_falls_back()
+    test_env_module_renders_generated_script()
+    test_env_module_multi_var_order_preserved()
+    test_env_module_requires_name()
+    test_env_and_source_mutually_exclusive()
     print("\n{} passed, {} failed".format(passed, failed))
     sys.exit(1 if failed else 0)
