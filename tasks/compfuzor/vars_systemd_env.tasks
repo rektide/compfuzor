@@ -1,0 +1,79 @@
+---
+# vars_systemd_env.tasks -- publish env vars to the systemd manager.
+#
+# A playbook declares SYSTEMD_ENV (mapping of VAR -> value) to have its service
+# publish those vars to its systemd manager on start and clear them on stop:
+#
+#   user scope (USERMODE): ExecStartPost runs
+#       dbus-update-activation-environment --systemd VAR=val ...
+#     (propagates to both the D-Bus activation env and the user systemd
+#     manager, so graphical/D-Bus-launched apps and other user units inherit it)
+#   system scope:          ExecStartPost runs
+#       systemctl set-environment VAR=val ...
+#
+# Both scopes also `systemctl [--user] set-environment` explicitly so the value
+# is visible to `systemctl [--user] show-environment` (the discovery path the
+# rektide/zim-systemd-envvar zsh module and ssh-agent.srv.pb rely on). ExecStop
+# unsets everything for symmetry.
+#
+# Mechanically this injects ExecStartPost / ExecStop into SYSTEMD_SERVICES so
+# files/systemd.unit (whose `section` macro fans list values into multiple
+# directive lines) renders them. It therefore MUST run before
+# vars_systemd_unit.tasks freezes the unit ETC_FILES -- hence the vars-phase
+# import ordering in tasks/compfuzor.includes.
+#
+# Generalizes the ad-hoc pattern in ssh-agent.srv.pb and mise.opt.pb.
+#
+# Bypass: SYSTEMD_ENV_BYPASS=True
+
+- name: "Compfuzor: validate SYSTEMD_ENV input form"
+  fail:
+    msg: "SYSTEMD_ENV must be a mapping of VAR -> value (got {{ SYSTEMD_ENV | type_debug }})"
+  when:
+    - SYSTEMD_ENV is defined
+    - not SYSTEMD_ENV_BYPASS|default(False)|bool
+    - SYSTEMD_ENV is not mapping
+
+- name: "Compfuzor: publish SYSTEMD_ENV into SYSTEMD_SERVICES"
+  set_fact:
+    SYSTEMD_SERVICES: "{{ _published }}"
+  when:
+    - SYSTEMD_ENV is defined
+    - SYSTEMD_ENV is mapping
+    - SYSTEMD_ENV | length > 0
+    - not SYSTEMD_ENV_BYPASS|default(False)|bool
+  vars:
+    _usermode: "{{ USERMODE|default(False)|bool }}"
+    _setenv_bin: "{{ '/usr/bin/systemctl --user' if _usermode else '/usr/bin/systemctl' }}"
+    _dbus_bin: "/usr/bin/dbus-update-activation-environment"
+    _assigns: >-
+      {%- set out = [] -%}
+      {%- for k, v in SYSTEMD_ENV.items() -%}
+      {%- set _ = out.append(k ~ '=' ~ v) -%}
+      {%- endfor -%}
+      {{ out }}
+    _clears: >-
+      {%- set out = [] -%}
+      {%- for k in SYSTEMD_ENV.keys() -%}
+      {%- set _ = out.append(k ~ '=') -%}
+      {%- endfor -%}
+      {{ out }}
+    _names: "{{ SYSTEMD_ENV.keys() | list }}"
+    _startpost: >-
+      {%- set out = [] -%}
+      {%- if _usermode -%}
+      {%- set _ = out.append(_dbus_bin ~ ' --systemd ' ~ (_assigns | join(' '))) -%}
+      {%- endif -%}
+      {%- set _ = out.append(_setenv_bin ~ ' set-environment ' ~ (_assigns | join(' '))) -%}
+      {{ out }}
+    _stop: >-
+      {%- set out = [] -%}
+      {%- if _usermode -%}
+      {%- set _ = out.append(_dbus_bin ~ ' ' ~ (_clears | join(' '))) -%}
+      {%- endif -%}
+      {%- set _ = out.append(_setenv_bin ~ ' unset-environment ' ~ (_names | join(' '))) -%}
+      {{ out }}
+    _existing_services: "{{ (SYSTEMD_SERVICES | default({})) if (SYSTEMD_SERVICES is defined and SYSTEMD_SERVICES is mapping) else {} }}"
+    _existing_startpost: "{{ _existing_services.ExecStartPost | default([]) | arrayitize }}"
+    _existing_stop: "{{ _existing_services.ExecStop | default([]) | arrayitize }}"
+    _published: "{{ _existing_services | combine({'ExecStartPost': (_existing_startpost + _startpost), 'ExecStop': (_existing_stop + _stop)}) }}"

@@ -230,6 +230,36 @@ SYSTEMD_INSTALLS:
 | `SYSTEMD_BYPASS: True` | Skip all systemd processing |
 | `SYSTEMD_INSTALL_BYPASS: True` | Skip ETC_FILES generation and install scripts |
 | `SYSTEMD_THUNK_BYPASS: True` | Skip the legacy `systemd.thunk.tasks` enable/restart |
+| `SYSTEMD_ENV_BYPASS: True` | Skip the `SYSTEMD_ENV` manager-publishing injection |
+
+## Publishing env vars to the manager (`SYSTEMD_ENV`)
+
+A service often needs to expose a value to *other* processes, not just its own
+unit environment — e.g. a socket path that shells and D-Bus-launched apps must
+discover (watchman's `$WATCHMAN_SOCK`, ssh-agent's `SSH_AUTH_SOCK`). Declare:
+
+```yaml
+SYSTEMD_ENV:
+  WATCHMAN_SOCK: "{{VAR}}/sock"
+```
+
+`vars_systemd_env.tasks` (vars phase, before unit generation) injects
+`ExecStartPost` / `ExecStop` into `SYSTEMD_SERVICES` so the running service:
+
+- **start** — `systemctl [--user] set-environment VAR=val ...`; in user scope
+  also `dbus-update-activation-environment --systemd VAR=val ...` (propagates to
+  the D-Bus activation environment so graphical apps inherit it).
+- **stop** — `systemctl [--user] unset-environment VAR ...`.
+
+Consumers then read it via `systemctl [--user] show-environment` (the path the
+`rektide/zim-systemd-envvar` zsh module and `ssh-agent.srv.pb` use). This
+generalizes the ad-hoc `ExecStartPost` patterns previously hand-written in
+`ssh-agent.srv.pb` and `mise.opt.pb`.
+
+> **Scope semantics.** `SYSTEMD_ENV` is *manager-wide* publishing. For vars
+> that should only be in the service's *own* environment, use `ENV` instead
+> (which renders `env.export` + the unit's `EnvironmentFile`). `SYSTEMD_ENV` is
+> for values other processes need to discover at runtime.
 
 ## Key files
 
