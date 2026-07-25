@@ -1,5 +1,17 @@
 - debug: "msg='Compfuzor: source base variables'"
 
+- name: "Include usermode common vars (first, to win over system defaults)"
+  # Load BEFORE common.yaml so user-mode dir overrides (SRVS_DIR/VARS_DIR/
+  # ETCS_DIR/...) are the FIRST writer. include_defaults only sets UNDEFINED
+  # vars, so this gives user paths priority over common.yaml's /srv, /var/lib,
+  # /etc/opt -- while still respecting anything the playbook itself set
+  # (playbook vars are already in task_vars and are never overwritten). Values
+  # are lazy templates (SRVS_DIR -> USERMODE_SRVS_DIR -> HOMEDIR) that resolve
+  # when DIR/ETC are computed below, after common.yaml has run.
+  include_defaults:
+    file: vars/common.user.yaml
+  when: USERMODE|default(False)
+
 - name: "include common vars"
   include_defaults:
     file: vars/common.yaml
@@ -100,24 +112,6 @@
     prefix: "{{PREFIX_DIR|default(prefixDir|default(prefixType, true), true)}}"
     dir: "{{DIR|default(prefix + '/' + name_)}}"
 
-- name: "Include usermode common vars (override system dirs)"
-  # include_defaults (used above) only sets UNDEFINED vars; common.yaml already
-  # set SRVS_DIR/VARS_DIR/ETCS_DIR/etc. to system paths, so loading
-  # common.user.yaml via include_defaults left them as /srv, /var/lib, /etc/opt
-  # -- only the SYSTEMD_* flags (absent from common.yaml) ever flipped. Use
-  # include_vars so the user-mode dir overrides actually win.
-  include_vars: file=vars/common.user.yaml
-  when: USERMODE|default(False)
-
-- name: "Recompute PREFIX_DIR/DIR after usermode dir override"
-  # DIR was eagerly computed at the base-facts step from the pre-override
-  # SRVS_DIR=/srv and frozen as a fact, so the type-vars loop (include_defaults)
-  # never refreshes it. Recompute both from the now-flipped type dir so DIR
-  # lands under ~/.local/... (matches the vars/types/<type>.yaml DIR formula).
-  set_fact:
-    PREFIX_DIR: "{{ lookup('vars', (type|upper) ~ 'S_DIR', default='') }}"
-    DIR: "{{ lookup('vars', (type|upper) ~ 'S_DIR', default='') }}/{{NAME}}"
-  when: USERMODE|default(False)
 - name: "include type {{type|default('[none]')|lower}} vars"
   include_defaults:
     file: "{{item}}"
