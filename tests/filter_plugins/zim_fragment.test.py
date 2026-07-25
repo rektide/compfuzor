@@ -337,7 +337,10 @@ def test_env_module_renders_generated_script():
     check("declaration points at module dir", out[0]["name"], "zim/55-watchman-env.conf")
     check("zmodule abspath", out[0]["content"], "zmodule /etc/opt/watchman-main/zim-modules/watchman-env\n")
     check("init.zsh carries generated content (not src)", "content" in out[1] and "src" not in out[1], True)
-    check("guard line present", 'if [ -z "${WATCHMAN_SOCK:-}" ] || [ -n "${COMPFUZOR_ENV_OVERWRITE:-}" ]; then' in out[1]["content"], True)
+    check("overwrite helper defined", "_compfuzor_env_overwrite()" in out[1]["content"], True)
+    check("all-tokens guard present", "1|TRUE|YES|Y|'*'" in out[1]["content"], True)
+    check("comma-split + glob match present", 'case "${(U)1}" in $~p) return 0' in out[1]["content"], True)
+    check("per-var guard calls helper", "if [ -z \"${WATCHMAN_SOCK:-}\" ] || _compfuzor_env_overwrite WATCHMAN_SOCK; then" in out[1]["content"], True)
     check("export line present", '  export WATCHMAN_SOCK="/path/sock"' in out[1]["content"], True)
 
 
