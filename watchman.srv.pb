@@ -39,16 +39,15 @@
       Restart: always
       RestartSec: "2s"
 
-    # Interactive shells: files/watchman/watchman-env.zsh ships as a LOCAL
-    # zimfw module (source is a .zsh -> gen_zim renders it under
-    # zim-modules/watchman-env/init.zsh and emits a `zmodule <abspath>`
-    # declaration). It exports WATCHMAN_SOCK, defaulting to NOT stomping an
-    # existing value (COMPFUZOR_ENV_OVERWRITE=1 forces it). gen_zim also
-    # generates install-user-zimfw.sh to promote the declaration into the zim
-    # host, so this playbook declares no install scripts of its own.
+    # Interactive shells: an `env` zim module exports WATCHMAN_SOCK at shell
+    # startup. gen_zim generates zim-modules/watchman-env/init.zsh from the
+    # mapping (one don't-stomp-per-var guard; COMPFUZOR_ENV_OVERWRITE=1 forces)
+    # and a `zmodule <abspath>` declaration, plus install-user-zimfw.sh to
+    # promote it into the zim host. No bespoke script, no block-in-file.
     ZIM_MODULES:
-      - source: watchman-env.zsh
+      - name: watchman-env
         phase: tools
-        comment: export WATCHMAN_SOCK at shell startup (don't stomp unless COMPFUZOR_ENV_OVERWRITE)
+        env:
+          WATCHMAN_SOCK: "{{VAR}}/sock"
   tasks:
     - import_tasks: tasks/compfuzor.includes
