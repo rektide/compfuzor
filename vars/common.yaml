@@ -17,13 +17,13 @@ CACHES_DIR: /var/cache
 PIDS_DIR: /var/run
 RUNS_DIR: /var/run
 SRCS_DIR: /usr/local/src
-ARCHIVE_SRC: "{{HOMEDIR}}archive/{{REPO_ORG}}/{{REPO_NAME}}"
+ARCHIVE_SRC: "{{HOMEDIR}}/archive/{{REPO_ORG}}/{{REPO_NAME}}"
 SHARES_DIR: /usr/share
 PASSWORDS_DIR: "{{ETC}}/secrets"
 
 # Archive download mode
 ARCHIVE_DOWNLOAD: true
-ARCHIVE_DIR: "{{HOMEDIR}}archive"
+ARCHIVE_DIR: "{{HOMEDIR}}/archive"
 
 USERMODE_BINS_DIR: "{{BINS_DIR}}"
 USERMODE_ETCS_DIR: "{{XDG_CONFIG_HOME}}"
@@ -137,7 +137,7 @@ PERSIST_VARS:
   - WITH
   - ENABLE
 CA_EXPIRY: "26280h"
-HOMEDIR: "/home/{{USER|default(OWNER)|default(_cf_user_id)}}/"
+HOMEDIR: "/home/{{USER|default(OWNER)|default(_cf_user_id)}}"
 GIT_DIR: "{{REPO_DIR|default(DIR, true)}}"
 __DEST: "{{item.dest|default(item.name|default(item|default(DIR)))|defaultDir(__defaultDir|default(DIR))}}"
 MULTISTRAP_COMPONENTS:

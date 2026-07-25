@@ -100,8 +100,23 @@
     prefix: "{{PREFIX_DIR|default(prefixDir|default(prefixType, true), true)}}"
     dir: "{{DIR|default(prefix + '/' + name_)}}"
 
-- name: "Include usermode common vars"
-  include_defaults: file=vars/common.user.yaml
+- name: "Include usermode common vars (override system dirs)"
+  # include_defaults (used above) only sets UNDEFINED vars; common.yaml already
+  # set SRVS_DIR/VARS_DIR/ETCS_DIR/etc. to system paths, so loading
+  # common.user.yaml via include_defaults left them as /srv, /var/lib, /etc/opt
+  # -- only the SYSTEMD_* flags (absent from common.yaml) ever flipped. Use
+  # include_vars so the user-mode dir overrides actually win.
+  include_vars: file=vars/common.user.yaml
+  when: USERMODE|default(False)
+
+- name: "Recompute PREFIX_DIR/DIR after usermode dir override"
+  # DIR was eagerly computed at the base-facts step from the pre-override
+  # SRVS_DIR=/srv and frozen as a fact, so the type-vars loop (include_defaults)
+  # never refreshes it. Recompute both from the now-flipped type dir so DIR
+  # lands under ~/.local/... (matches the vars/types/<type>.yaml DIR formula).
+  set_fact:
+    PREFIX_DIR: "{{ lookup('vars', (type|upper) ~ 'S_DIR', default='') }}"
+    DIR: "{{ lookup('vars', (type|upper) ~ 'S_DIR', default='') }}/{{NAME}}"
   when: USERMODE|default(False)
 - name: "include type {{type|default('[none]')|lower}} vars"
   include_defaults:

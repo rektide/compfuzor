@@ -1,7 +1,8 @@
 ---
 USERMODE: True
 
-BINS_DIR: "{{USERMODE_BINS_DIR}}"
+# BINS_DIR is NOT overridden here: {{DIR}}/bin already flips with DIR, and
+# overriding it (USERMODE_BINS_DIR -> BINS_DIR, common.yaml) is circular.
 GLOBAL_BINS_DIR: "{{USERMODE_GLOBAL_BINS_DIR}}"
 ETCS_DIR: "{{USERMODE_ETCS_DIR}}"
 OPTS_DIR: "{{USERMODE_OPTS_DIR}}"
