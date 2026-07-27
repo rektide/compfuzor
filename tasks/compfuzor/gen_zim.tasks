@@ -65,6 +65,10 @@
           fi
           exit 0
         fi
+        # TODO: hardcoded -- /opt/zim-main is where zim.opt.pb lives on this box
+        # (OPTS_DIR/zim-main). There is no host-discovery mechanism yet, so a
+        # non-default zim host location must export ZIM_HOST_DIR. Consider a
+        # ZIM_HOST (host-mark) registry or a well-known symlink to resolve this.
         host="${ZIM_HOST_DIR:-/opt/zim-main}"
         if [ -x "$host/bin/install-zim.sh" ]; then
           "$host/bin/install-zim.sh" "{{DIR}}"
