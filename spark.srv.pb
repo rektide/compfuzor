@@ -7,7 +7,11 @@
     SYSTEMD_SERVICE: True
     SYSTEMD_EXEC: "{{DIR}}/bin/start-all.sh"
     SYSTEMD_TYPE: forking
-    SYSTEMD_ENV:
+    # Per-service config -> env.export + the unit's EnvironmentFile
+    # (SYSTEMD_SERVICES_DEFAULT injects EnvironmentFile=-{{DIR}}/env when ENV is
+    # set). SYSTEMD_ENV now means manager-wide publishing (the systemd-env
+    # subsystem), which is wrong for per-service spark config.
+    ENV:
       SPARK_MASTER_WEBUI_PORT: 11010
       SPARK_WORKER_CORES: 2
       SPARK_WORKER_WEBUI_PORT: 11011
@@ -21,8 +25,10 @@
     slaves:
     - localhost
   tasks:
-  - include: tasks/compfuzor.includes type="srv"
-  - include: tasks/linkdir.includes from="{{OPTS_DIR}}/{{opt_origin}}"
+  - import_tasks: tasks/compfuzor.includes
+  - import_tasks: tasks/linkdir.includes
+    vars:
+      from: "{{OPTS_DIR}}/{{opt_origin}}"
 
   - shell: chdir="{{DIR}}" mv conf/* etc
   - file: path="{{DIR}}/conf" state=absent

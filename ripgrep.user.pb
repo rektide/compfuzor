@@ -17,4 +17,6 @@
       bashrc: "{{BASHRC}}"
       zshrc: "{{ZSHRC}}"
   tasks:
-  - include: tasks/compfuzor.includes type=etc
+  - import_tasks: tasks/compfuzor.includes
+    vars:
+      type: etc
