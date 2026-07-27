@@ -719,6 +719,16 @@ SUBSYSTEM:
         STATUS_DIRS: "{{ STATUS_DIRS | default([]) | arrayitize | join(':') }}"
         STATUS_DIRS_SUDO: "{{ STATUS_DIRS_SUDO | default([]) | arrayitize | join(':') }}"
 
+  # Vars-phase subsystem (NOT a gen_* one): a service declares SYSTEMD_ENV
+  # (mapping of VAR -> value) to publish those vars to the systemd manager on
+  # start and clear them on stop. vars_systemd_env.tasks injects
+  # ExecStartPost/ExecStop into SYSTEMD_SERVICES, so it MUST run before
+  # vars_systemd_unit.tasks freezes the unit ETC_FILES -- which the gen_* phase
+  # comes too late for. Registered here purely for active/bypass/status parity
+  # (lookup('subsys', id='systemd_env')); bypass via SYSTEMD_ENV_BYPASS.
+  systemd_env:
+    requested: "{{ SYSTEMD_ENV is mapping and (SYSTEMD_ENV | length > 0) }}"
+
 _pr_patches_raw: "{{ PR_PATCHES | default([]) | arrayitize }}"
 _pr_patches_spec: >-
   {%- set normalized = [] -%}

@@ -24,24 +24,21 @@
 #
 # Generalizes the ad-hoc pattern in ssh-agent.srv.pb and mise.opt.pb.
 #
-# Bypass: SYSTEMD_ENV_BYPASS=True
+# Registered subsystem (vars/common.yaml SUBSYSTEM.systemd_env) queried for
+# active/bypass/status via lookup('subsys', id='systemd_env'). Bypass: SYSTEMD_ENV_BYPASS=True.
 
 - name: "Compfuzor: validate SYSTEMD_ENV input form"
   fail:
     msg: "SYSTEMD_ENV must be a mapping of VAR -> value (got {{ SYSTEMD_ENV | type_debug }})"
   when:
     - SYSTEMD_ENV is defined
-    - not SYSTEMD_ENV_BYPASS|default(False)|bool
+    - not (lookup('subsys', id='systemd_env', get='bypassed', default=False) | bool)
     - SYSTEMD_ENV is not mapping
 
 - name: "Compfuzor: publish SYSTEMD_ENV into SYSTEMD_SERVICES"
   set_fact:
     SYSTEMD_SERVICES: "{{ _published }}"
-  when:
-    - SYSTEMD_ENV is defined
-    - SYSTEMD_ENV is mapping
-    - SYSTEMD_ENV | length > 0
-    - not SYSTEMD_ENV_BYPASS|default(False)|bool
+  when: lookup('subsys', id='systemd_env', get='active', default=False) | bool
   vars:
     _usermode: "{{ USERMODE|default(False)|bool }}"
     _setenv_bin: "{{ '/usr/bin/systemctl --user' if _usermode else '/usr/bin/systemctl' }}"
