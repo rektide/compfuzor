@@ -58,13 +58,8 @@
       name: install-user-zimfw.sh
       scope: [user]
       basedir: False
+      bypass: ZIM
       content: |
-        if [ -n "${ZIM_BYPASS:-}" ]; then
-          if [ -z "${COMPFUZOR_QUIET:-}" ] && { [ -z "${V+x}" ] || [ "$V" != 0 ]; }; then
-            echo "zim: ZIM_BYPASS set, skipping {{NAME}} fragment promotion" >&2
-          fi
-          exit 0
-        fi
         # TODO: hardcoded -- /opt/zim-main is where zim.opt.pb lives on this box
         # (OPTS_DIR/zim-main). There is no host-discovery mechanism yet, so a
         # non-default zim host location must export ZIM_HOST_DIR. Consider a
@@ -73,9 +68,7 @@
         if [ -x "$host/bin/install-zim.sh" ]; then
           "$host/bin/install-zim.sh" "{{DIR}}"
         else
-          if [ -z "${COMPFUZOR_QUIET:-}" ] && { [ -z "${V+x}" ] || [ "$V" != 0 ]; }; then
-            echo "zim: host not found at $host (set ZIM_HOST_DIR); skipping {{NAME}} fragment promotion" >&2
-          fi
+          _cf_report_skip "install-user-zimfw.sh" "zim: host not found at $host (set ZIM_HOST_DIR)"
         fi
 
 - name: "Compfuzor: synthesize zim host artifacts"
