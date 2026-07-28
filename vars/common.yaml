@@ -211,6 +211,7 @@ SUBSYSTEM:
     contrib:
       BINS:
         - name: build-go.sh
+          bypass: ['BUILD', 'GO']
           run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
@@ -219,6 +220,7 @@ SUBSYSTEM:
             {% endfor %}
             go build -o ${GO_BIN:-$TYPE} ${GO_TARGET:-./...}
         - name: install-go.sh
+          bypass: ['LINK', 'GO']
           basedir: repo
           generated: |
             {% for _c in (GO_COMMENT_INSTALL | default([]) | arrayitize) %}
@@ -236,6 +238,7 @@ SUBSYSTEM:
     contrib:
       BINS:
         - name: build-nodejs.sh
+          bypass: ['BUILD', 'NODEJS']
           run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
@@ -261,6 +264,7 @@ SUBSYSTEM:
               done
             fi
         - name: install-nodejs.sh
+          bypass: ['LINK', 'NODEJS']
           #run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
@@ -299,6 +303,7 @@ SUBSYSTEM:
     contrib:
       BINS:
         - name: build-bun.sh
+          bypass: ['BUILD', 'BUN']
           run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
@@ -307,6 +312,7 @@ SUBSYSTEM:
             {% endfor %}
             bun install
         - name: install-bun.sh
+          bypass: ['LINK', 'BUN']
           run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
@@ -341,6 +347,7 @@ SUBSYSTEM:
     contrib:
       BINS:
         - name: build-rust.sh
+          bypass: ['BUILD', 'RUST']
           run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
@@ -367,6 +374,7 @@ SUBSYSTEM:
             fi
             cargo build ${PROFILE} ${PKG_FLAG:-} ${FEATURES_FLAG:-} ${LOCKED_FLAG:-} ${RUST_CARGO_ARGS:-}
         - name: install-rust.sh
+          bypass: ['LINK', 'RUST']
           basedir: repo
           generated: |
             {% for _c in (RUST_COMMENT_INSTALL | default([]) | arrayitize) %}
@@ -388,6 +396,7 @@ SUBSYSTEM:
                 ln -sfv "$(pwd)/${_target_dir}/${INSTALL_BIN}" "${GLOBAL_BINS_DIR}/$(basename "${INSTALL_BIN}")"
             fi
         - name: install-rust.user.sh
+          bypass: ['LINK', 'RUST']
           basedir: repo
           generated: |
             if [[ -z "${RUST_LOCKED+x}" ]]; then
@@ -446,6 +455,7 @@ SUBSYSTEM:
     contrib:
       BINS:
         - name: build-python.sh
+          bypass: ['BUILD', 'PYTHON']
           run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
@@ -787,6 +797,7 @@ _npm_install_etc:
 _bazel_target: "{{ BAZEL_TARGET | default('//...') }}"
 _bazel_bins:
   - name: build-bazel.sh
+    bypass: ['BUILD', 'BAZEL']
     run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
     basedir: repo
     generated: |
@@ -795,6 +806,7 @@ _bazel_bins:
       {% endfor %}
       bazel build {{ _bazel_target }}
   - name: install-bazel.sh
+    bypass: ['LINK', 'BAZEL']
     basedir: repo
     generated: |
       {% for _c in (BAZEL_COMMENT_INSTALL | default([]) | arrayitize) %}
@@ -866,6 +878,7 @@ _cmake_env_base:
 _cmake_env: "{{ _cmake_env_base | combine(_cmake_deps_env) }}"
 _cmake_bins:
   - name: build-cmake.sh
+    bypass: ['BUILD', 'CMAKE']
     run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
     basedir: "{{ REPO_DIR }}"
     generated: |
@@ -922,6 +935,7 @@ _cmake_bins:
       cmake --build "$BUILD_DIR"{% if buildTarget %} --target {{ buildTarget }}{% endif %}{% if buildType %} --config {{ buildType }}{% endif %}{% if buildArgs %} {{ buildArgs }}{% endif %}
       {% endfor %}
   - name: install-cmake.sh
+    bypass: ['LINK', 'CMAKE']
     basedir: repo
     generated: |
       {% for _c in (CMAKE_COMMENT_INSTALL | default([]) | arrayitize) %}
@@ -955,6 +969,7 @@ _make_destdir_arg: >-
   {%- endif -%}
 _make_bins:
   - name: build-make.sh
+    bypass: ['BUILD', 'MAKE']
     run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
     basedir: "{{ REPO_DIR }}"
     generated: |
@@ -970,6 +985,7 @@ _make_bins:
       fi
       make -j"$(nproc)" {{ MAKE_TARGET|default([])|listify|join(' ') }}
   - name: install-make.sh
+    bypass: ['LINK', 'MAKE']
     basedir: "{{ REPO_DIR }}"
     generated: |
       {% for _c in (MAKE_COMMENT_INSTALL | default([]) | arrayitize) %}
