@@ -48,18 +48,19 @@
           # btrfs rootdir recommended!
 
           commaSep(){
-            sed -E ':a;N;$!ba;s/\s+/ /g' $1
+            paste -sd, "$1"
           }
           mkosi \
             --distribution debian \
             --release trixie \
             --format disk \
             --checksum \
-            --root-password $PASSWORD \
+            --root-password "$PASSWORD" \
             --include mkosi-vm \
-            --package $(commaSep etc/pkgs.txt) \
+            --package "$(commaSep etc/pkgs.txt)" \
             --repository-key-fetch yes \
-            --output var/image.raw
+            --output image.raw \
+            "$@"
       - name: run-nspawn.sh
         exec: |
           systemd-nspawn --boot --image image.raw
