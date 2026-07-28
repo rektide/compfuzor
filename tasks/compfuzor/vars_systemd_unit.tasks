@@ -268,6 +268,7 @@
       source "$(dirname "$0")/install-unit.sh"
     _bin_item:
       name: "install-{{ item.type }}{{ '-user' if _is_user else '' }}.sh"
+      bypass: "{{ ['LINK', 'SYSTEMD', 'USER_SYSTEMD'] if _is_user else ['LINK', 'SYSTEMD'] }}"
       generatedAt: end
       generated: "{{ _generated }}"
       scope: "{{ ['user'] if _is_user else [] }}"
