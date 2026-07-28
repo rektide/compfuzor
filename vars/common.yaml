@@ -995,13 +995,16 @@ _make_bins:
 
 _kernel_modprobe_bins:
   - name: build-kernel.sh
+    bypass: ['BUILD', 'KERNEL']
     src: ../kernel/build-kernel.sh
     basedir: false
   - name: install-kernel.sh
+    bypass: ['LINK', 'KERNEL']
     src: ../kernel/install-kernel.sh
     basedir: false
     #run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
   - name: apply-kernel.sh
+    bypass: ['APPLY', 'KERNEL']
     src: ../kernel/apply-kernel.sh
     basedir: false
     #run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
@@ -1009,6 +1012,7 @@ _kernel_modprobe_bins:
     src: ../kernel/detect-builtin.sh
     basedir: false
   - name: install-kernel-cmdline.sh
+    bypass: ['LINK', 'KERNEL']
     src: ../kernel/install-kernel-cmdline.sh
     basedir: false
   - name: status-modules.ts
@@ -1016,6 +1020,7 @@ _kernel_modprobe_bins:
     raw: True
 _kernel_params_bins:
   - name: install-kernel-params.sh
+    bypass: ['LINK', 'KERNEL']
     src: ../kernel/install-kernel-params.sh
     basedir: false
   - name: status-cmdline.ts
@@ -1023,6 +1028,7 @@ _kernel_params_bins:
     raw: True
 _kernel_bls_bins:
   - name: install-kernel-bls.sh
+    bypass: ['LINK', 'KERNEL']
     src: ../kernel/install-kernel-bls.sh
     basedir: false
   - name: status-ramoops.sh
@@ -1033,13 +1039,16 @@ _kernel_bls_bins:
     basedir: false
 _kernel_sysctl_bins:
   - name: build-sysctl.sh
+    bypass: ['BUILD', 'KERNEL']
     src: ../kernel/build-sysctl.sh
     basedir: false
   - name: install-sysctl.sh
+    bypass: ['LINK', 'KERNEL']
     src: ../kernel/install-sysctl.sh
     basedir: false
     #run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
   - name: apply-sysctl.sh
+    bypass: ['APPLY', 'KERNEL']
     src: ../kernel/apply-sysctl.sh
     basedir: false
     #run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
@@ -1048,13 +1057,16 @@ _kernel_sysctl_bins:
     raw: True
 _kernel_sysfs_bins:
   - name: build-sysfs.sh
+    bypass: ['BUILD', 'KERNEL']
     src: ../kernel/build-sysfs.sh
     basedir: false
   - name: install-sysfs.sh
+    bypass: ['LINK', 'KERNEL']
     src: ../kernel/install-sysfs.sh
     basedir: false
     #run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
   - name: apply-sysfs.sh
+    bypass: ['APPLY', 'KERNEL']
     src: ../kernel/apply-sysfs.sh
     basedir: false
     #run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
