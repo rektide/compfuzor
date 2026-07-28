@@ -25,6 +25,18 @@ cd {{DIR}}/{{item.basedir}}
 {% endif %}
 
 {% endif %}
+{% if item.bypass is defined and not item.no_header|default(False) %}
+{% set _cf_bypass = item.bypass if item.bypass is iterable and item.bypass is not string else [item.bypass] %}
+_cf_action_init "{{ item.name }}" "running"
+{% for _cf_entry in _cf_bypass %}
+{% if ':' in _cf_entry %}
+{% set _cf_parts = _cf_entry.split(':') %}
+if ! reason="$(_cf_run_guard 3 _cf_guard_bypass_unit "{{ _cf_parts[0] }}" "{{ _cf_parts[1] }}" "running")"; then _cf_report_skip "{{ item.name }}" "$reason"; _cf_action_end; exit 0; fi
+{% else %}
+if ! reason="$(_cf_run_guard 3 _cf_guard_bypass "{{ _cf_entry }}" "running")"; then _cf_report_skip "{{ item.name }}" "$reason"; _cf_action_end; exit 0; fi
+{% endif %}
+{% endfor %}
+{% endif %}
 {{ item.early|default([])|arrayitize|join("\n") }}
 {{ item.generated|default([], True)|arrayitize|join("\n") if item.generatedAt|def == "early" else omit }}
 {{ item.content|default([])|arrayitize|join("\n") }}
@@ -40,6 +52,9 @@ if [ "$_cf_loud" = 1 ]; then printf '+ %s\n' '{{ run_bin }}'; fi
 if [ "$_cf_loud" = 1 ]; then printf 'complete\n'; fi
 {% endif %}
 {{ item.late|default([])|arrayitize|join("\n") }}
+{% if item.bypass is defined and not item.no_header|default(False) %}
+_cf_action_end
+{% endif %}
 {% if not item.no_header|default(False) %}
 
 {% include "_bin.footer" %}
