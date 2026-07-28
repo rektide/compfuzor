@@ -26,22 +26,12 @@
           idle-delay = uint32 0
     BINS:
       - name: build-link.sh
+        bypass: LINK
         content: |
-          if [ -n "${COMPFUZOR_LINK_BYPASS:-}" ]; then
-            if [ -z "${COMPFUZOR_QUIET:-}" ] && { [ -z "${V+x}" ] || [ "$V" != 0 ]; }; then
-              echo "link: COMPFUZOR_LINK_BYPASS set, skipping build" >&2
-            fi
-            exit 0
-          fi
           test -f "$DIR/etc/no-suspend.conf"
       - name: install-link.sh
+        bypass: LINK
         content: |
-          if [ -n "${COMPFUZOR_LINK_BYPASS:-}" ]; then
-            if [ -z "${COMPFUZOR_QUIET:-}" ] && { [ -z "${V+x}" ] || [ "$V" != 0 ]; }; then
-              echo "link: COMPFUZOR_LINK_BYPASS set, skipping deploy" >&2
-            fi
-            exit 0
-          fi
           if [ -n "${LINK_COPY:-}" ]; then
             sudo cp -fv "$DIR/etc/no-suspend.conf" "$DEST"
           else
