@@ -1,7 +1,8 @@
 ---
 - hosts: all
   vars:
-    REPO: https://codeberg.org/x3ro/ahiru-tpm
+    #REPO: https://codeberg.org/x3ro/ahiru-tpm
+    REPO: https://github.com/x3rAx/ahiru-tpm
     RUST: True
     ETC_FILES:
       - name: ahiru-plugins.conf
@@ -19,6 +20,11 @@
           # tmux-resurrect + tmux-continuum configuration.
           # continuum still auto-saves on the interval below so snapshots exist
           # for manual restore; only auto-restore-on-server-start is disabled.
+          #
+          # Hotkeys (tmux-resurrect defaults):
+          #   prefix + Ctrl-s   save the current tmux environment now
+          #   prefix + Ctrl-r   restore the last saved environment
+          # (prefix + Ctrl-r is the manual alternative to restore-session.sh)
           set -g @continuum-restore 'off'
           set -g @continuum-save-interval '15'
           set -g @resurrect-capture-pane-contents 'on'
@@ -41,7 +47,7 @@
             TMUX_CONF=~/.tmux.conf
           fi
           block-in-file -n "${NAME:-{{NAME}}}-plugins" -i ${DIR}/etc/ahiru-plugins.conf -o "$TMUX_CONF"
-          block-in-file -n "${NAME:-{{NAME}}}-resurrect" -i ${DIR}/etc/ahiru-resurrect.conf -o "$TMUX_CONF"
+          block-in-file -n "${NAME:-{{NAME}}}-resurrect" -i ${DIR}/etc/ahiru-resurrect.conf -o "$TMUX_CONF" --after "^# ${NAME:-{{NAME}}}-plugins end"
           block-in-file -n "${NAME:-{{NAME}}}-run" -i ${DIR}/etc/ahiru-run.conf -o "$TMUX_CONF" --after EOF
       - name: restore-session.sh
         basedir: False
@@ -53,7 +59,7 @@
             echo "restore-session.sh: must be run from inside a tmux session" >&2
             exit 1
           fi
-          _PLUGIN_DIR="${TMUX_PLUGIN_MANAGER_PATH:-$HOME/.tmux/plugins}"
+          _PLUGIN_DIR="${TMUX_PLUGIN_MANAGER_PATH:-${XDG_DATA_HOME:-$HOME/.local/share}/tmux/plugins}"
           RESTORE_SCRIPT="$_PLUGIN_DIR/tmux-resurrect/scripts/restore.sh"
           if [ ! -f "$RESTORE_SCRIPT" ]; then
             echo "restore-session.sh: tmux-resurrect restore script not found:" >&2
