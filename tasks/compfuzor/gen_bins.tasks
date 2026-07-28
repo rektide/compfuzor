@@ -1,14 +1,9 @@
 ---
-# Convention: action scripts (build-*.sh, install-*.sh) that this composes should
-# honor a per-concern _BYPASS env (e.g. COMPFUZOR_LINK_BYPASS, SYSTEMD_BYPASS_START)
-# so operators can disable one deploy concern without editing the playbook. When
-# bypassed, the script should echo a stderr warning UNLESS a quiet mode is set
-# (COMPFUZOR_QUIET, or V=0 — the same loud/quiet gate used by files/_bin). See
-# gdm-no-suspend.etc.pb's build-link.sh/install-link.sh for the reference shape.
+# Action script conventions (bypass, guards, progress reporting):
+# see doc/subsys.md § Action runner.
 #
-# Rendered env-setting snippets (e.g. a zim env module exporting a socket path)
-# should default to NOT stomping an existing value, and only force-overwrite when
-# COMPFUZOR_ENV_OVERWRITE is set. The spec is:
+# Rendered env-setting snippets should default to NOT stomping an existing
+# value, and only force-overwrite when COMPFUZOR_ENV_OVERWRITE is set. The spec is:
 #   1/true/y/yes/* (case-insensitive)        -> overwrite ALL vars
 #   otherwise: comma-separated glob patterns  -> overwrite only matching var names
 #                                                  (e.g. WATCHMAN_*,SSH_AUTH_SOCK)

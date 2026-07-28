@@ -1,0 +1,38 @@
+{# _cf_action macro: wraps a {% call %} block with progress reporting + guards. #}
+{# See doc/subsys.md § Action runner for the full specification. #}
+{#
+ # Parameters:
+ #   name    — action name (typically {{NAME}})
+ #   verb    — what the action does (e.g. "rebuild kernel")
+ #   bypass  — scalar or list: 'KERNEL' | ['ENV', 'ENV:ZIMFW']
+ #               entries with ':' split into concern:unit for per-unit bypass
+ #   guards  — list of shell commands evaluated as guards
+ #   mode    — bitfield: 0x1=non-zero exit, 0x2=stderr, 0x4=stdout. Default 0x3.
+ #
+ # Usage:
+ #   {% from "_cf_action" import cf_action %}
+ #   {% call cf_action(name='build-kernel', verb='rebuild kernel', bypass=['KERNEL']) %}
+ #   make -C "${KERNEL_SRC}" modules_install
+ #   {% endcall %}
+ #
+ # Shell primitives (_cf_action_init, _cf_action_end, _cf_report_skip,
+ # _cf_run_guard, _cf_guard_bypass, _cf_guard_bypass_unit) are defined in
+ # files/_bin.header and available in every non-no_header rendered script.
+ #}
+{% macro cf_action(name, verb='running', bypass=[], guards=[], mode=3) %}
+{% set _entries = bypass if bypass is iterable and bypass is not string else [bypass] %}
+_cf_action_init "{{ name }}" "{{ verb }}"
+{% for entry in _entries %}
+{% if ':' in entry %}
+{% set _p = entry.split(':') %}
+if ! reason="$(_cf_run_guard {{ mode }} _cf_guard_bypass_unit "{{ _p[0] }}" "{{ _p[1] }}" "{{ verb }}")"; then _cf_report_skip "{{ name }}" "$reason"; _cf_action_end; exit 0; fi
+{% else %}
+if ! reason="$(_cf_run_guard {{ mode }} _cf_guard_bypass "{{ entry }}" "{{ verb }}")"; then _cf_report_skip "{{ name }}" "$reason"; _cf_action_end; exit 0; fi
+{% endif %}
+{% endfor %}
+{% for g in guards %}
+if ! reason="$(_cf_run_guard {{ mode }} {{ g }})"; then _cf_report_skip "{{ name }}" "$reason"; _cf_action_end; exit 0; fi
+{% endfor %}
+{% if caller is defined %}{{ caller() }}{% endif %}
+_cf_action_end
+{% endmacro %}

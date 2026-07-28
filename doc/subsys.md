@@ -90,6 +90,116 @@ and concatenates these fields across overlapping entries:
 Non-concat fields follow standard `merge_keyed` behavior: the incoming record
 wins on key conflicts.
 
+## Action runner: `_cf_action`
+
+Every rendered action script (`build*.sh`, `install*.sh`, `apply*.sh`) follows
+the same four-phase shape: announce, evaluate guards, run body, announce
+completion. The `_cf_action` runner provides one composition point for all four,
+replacing ad-hoc bypass checks and inline progress reporting.
+
+### Shell primitives
+
+Defined in [`files/_bin.header`](../files/_bin.header); available in every
+non-`no_header` rendered script. The loud/quiet gate (`_cf_loud`, set at the top
+of [`files/_bin`](../files/_bin)) controls all progress output — loud unless
+`COMPFUZOR_QUIET` is set or `V=0`.
+
+| Primitive | Purpose |
+|---|---|
+| `_cf_action_init <name> <verb>` | Print `+ name: verb` to stderr if loud |
+| `_cf_action_end` | Print `complete` to stderr if loud |
+| `_cf_report_skip <name> <reason>` | Print `skipped name: reason` to stderr if loud |
+| `_cf_run_guard <mode> <argv...>` | Core evaluator — silent = proceed, output = skip |
+| `_cf_guard_bypass <concern> [verb]` | Guard: skip if `COMPFUZOR_<CONCERN>_BYPASS` set |
+| `_cf_guard_bypass_unit <concern> <unit> [verb]` | Guard: skip if `COMPFUZOR_<CONCERN>_<UNIT>_BYPASS` set |
+
+### Guard mode bitfield
+
+`_cf_run_guard` evaluates a command and decides pass/fail based on a mode
+bitfield. Silent (no output + exit 0) = proceed. Anything else = skip, and the
+first matching output becomes the skip reason.
+
+| Bit | Signal | Reason captured |
+|---|---|---|
+| `0x1` | non-zero exit | `exit <N>` |
+| `0x2` | non-empty stderr | stderr content |
+| `0x4` | non-empty stdout | stdout content |
+
+Priority on match: stdout (`0x4`) → stderr (`0x2`) → exit (`0x1`). The macro
+default is `0x3` (exit + stderr) so bypass guards (which write reasons to
+stderr) report their full message, while plain Unix commands (e.g.
+`command -v gcc`) fail via exit code.
+
+Any command can be a guard. `command -v gcc` with mode `0x1` skips when the
+binary is missing. `ls /opt/populated/` with mode `0x4` skips when the directory
+has contents (idempotent guard). A command that warns on stderr with mode `0x2`
+is a warn-and-skip guard.
+
+### Three entry points
+
+| Audience | Entry point | Shape |
+|---|---|---|
+| Playbook author writing shell | `bypass:` BINS field | Scalar or list; `files/_bin` wraps the body |
+| Subsystem author writing Jinja | `{% call cf_action(...) %}` macro | [`files/_cf_action`](../files/_cf_action) |
+| Subsystem needing custom guards | macro's `guards=[...]` param | Any shell command, evaluated per mode |
+
+### The `cf_action` macro
+
+[`files/_cf_action`](../files/_cf_action) exports a Jinja macro for subsystem
+templates:
+
+```jinja
+{% from "_cf_action" import cf_action %}
+{% call cf_action(name='build-kernel', verb='rebuild kernel',
+                  bypass=['KERNEL'], guards=['command -v gcc']) %}
+make -C "${KERNEL_SRC}" modules_install
+{% endcall %}
+```
+
+Renders to:
+
+```sh
+_cf_action_init "build-kernel" "rebuild kernel"
+if ! reason="$(_cf_run_guard 3 _cf_guard_bypass "KERNEL" "rebuild kernel")"; then _cf_report_skip "build-kernel" "$reason"; _cf_action_end; exit 0; fi
+if ! reason="$(_cf_run_guard 3 command -v gcc)"; then _cf_report_skip "build-kernel" "$reason"; _cf_action_end; exit 0; fi
+make -C "${KERNEL_SRC}" modules_install
+_cf_action_end
+```
+
+### Bypass naming convention
+
+Two layers, two namespaces:
+
+| Layer | Where it gates | Namespace | Examples |
+|---|---|---|---|
+| Playbook (Ansible task) | `when:` clauses on tasks | bare `<C>_BYPASS` | `PKGS_BYPASS`, `MODULES_BYPASS`, `SYSTEMD_INSTALL_BYPASS` |
+| Action script (rendered shell) | `_cf_guard_bypass` calls | `COMPFUZOR_<C>_BYPASS` | `COMPFUZOR_KERNEL_BYPASS`, `COMPFUZOR_ZIM_BYPASS`, `COMPFUZOR_LINK_BYPASS` |
+
+The `COMPFUZOR_` prefix separates the shell layer from the Ansible task layer
+so the two compose without collision — a playbook can set `KERNEL_BYPASS` to
+skip task-level work and `COMPFUZOR_KERNEL_BYPASS` to skip the generated build
+script independently.
+
+### Hierarchical (per-unit) bypass
+
+Some concerns have a general bypass and per-unit overrides (e.g. env). List
+entries with `:` split into concern:unit:
+
+```yaml
+bypass: ['ENV', 'ENV:ZIMFW']
+```
+
+Emits `_cf_guard_bypass ENV` + `_cf_guard_bypass_unit ENV ZIMFW`. Either firing
+skips the action. Declared per-child on the BINS entry, so the compositor
+inherits each child's bypasses naturally — `bin_composers` stays out of it.
+
+### The `bypass:` BINS field
+
+Scalar or list; when set, [`files/_bin`](../files/_bin) wraps the rendered body
+in a `cf_action` call. This is the declarative shorthand for the 80% case.
+Subsystems needing custom bypass logic (e.g. gen_zim's host-not-found fallback)
+omit the field and call the primitives directly in `content:`.
+
 ## gen_bins: action composition
 
 [`gen_bins.tasks`](../tasks/compfuzor/gen_bins.tasks) runs after all subsystem

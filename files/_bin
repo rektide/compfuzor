@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
 
+if [ -z "${COMPFUZOR_QUIET:-}" ] && { [ -z "${V+x}" ] || [ "$V" != 0 ]; }; then
+  _cf_loud=1
+else
+  _cf_loud=0
+fi
+
 {% if not item.no_header|default(False) %}
 {% include "_bin.header" %}
 
@@ -27,11 +33,6 @@ cd {{DIR}}/{{item.basedir}}
 {{ item.generated|default([], True)|arrayitize|join("\n") if item.generatedAt|def("end") == "end" else omit }}
 {% set _cf_run_all = item.run_all|default([])|arrayitize %}
 {% if _cf_run_all|length > 0 %}
-if [ -z "${COMPFUZOR_QUIET:-}" ] && { [ -z "${V+x}" ] || [ "$V" != 0 ]; }; then
-  _cf_loud=1
-else
-  _cf_loud=0
-fi
 {% for run_bin in _cf_run_all %}
 if [ "$_cf_loud" = 1 ]; then printf '+ %s\n' '{{ run_bin }}'; fi
 "$DIR/bin/{{ run_bin }}" "$@"
