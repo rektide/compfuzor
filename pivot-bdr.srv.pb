@@ -228,32 +228,12 @@
           echo "formatted $TARGET from $DEFS"
 
       # De-identify a clone (e.g. after btrfs send|receive of an image).
+      # Now a raw copy of the canonical files/mkosi/identity.sh (whose default
+      # --first-boot mode == the old clone-reset.sh behavior, plus --generate for
+      # block UUID regen). Single source of truth lives in files/mkosi/.
       - name: clone-reset.sh
-        content: |
-          # Make a cloned rootfs unique on first boot.
-          #
-          # WHY machine-id is fiddly (the "delete didn't always work" memory):
-          #   systemd regenerates /etc/machine-id only when it is EMPTY or the
-          #   literal "uninitialized\n" -- not when absent. A missing file can
-          #   wedge early boot, and a baked-in id (initrd/UKI) or a stale
-          #   /var/lib/dbus/machine-id keeps the old identity. So: truncate to
-          #   empty (don't delete) and clear the dbus id + ssh host keys too.
-          #
-          # Usage: clone-reset.sh [rootdir]   (default /)
-          set -eu
-          R="${1:-/}"
-
-          : > "$R/etc/machine-id"                      # empty -> regenerate
-          rm -f "$R/var/lib/dbus/machine-id"           # dbus id (often a symlink)
-          rm -f "$R"/etc/ssh/ssh_host_*                # regenerate host keys
-          rm -f "$R"/etc/cloud/cloud-init.disabled 2>/dev/null || true
-
-          # Mark a first boot so systemd-firstboot / ConditionFirstBoot fire.
-          if [ "$R" = "/" ] && command -v systemd-firstboot >/dev/null 2>&1; then
-            systemd-firstboot --reset || true
-          fi
-          echo "clone-reset: machine-id/dbus/ssh host keys cleared under $R"
-          echo "they regenerate on next boot; verify with: systemd-id128 machine-id"
+        src: ../mkosi/identity.sh
+        raw: true
 
   tasks:
     - import_tasks: tasks/compfuzor.includes
