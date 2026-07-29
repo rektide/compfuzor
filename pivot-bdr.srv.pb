@@ -6,7 +6,7 @@
 #         Every BIN here is destructive or near it; read before running.
 #
 # THE IDEA (the no-reboot, systemd-native replacement for pivot-root.opt.pb):
-#   1. Build a modest Debian *btrfs* image (mkosi.srv.pb) — single-device.
+#   1. Build a modest Debian *btrfs* image (mkosi.src.pb) — single-device.
 #   2. kexec into it so the running OS root is a btrfs on a VOLATILE block
 #      device (RAM: zram/brd, or the kexec'd installer's in-memory device).
 #   3. systemd-repart writes a fresh GPT onto the real disk and uses

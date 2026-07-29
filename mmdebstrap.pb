@@ -5,7 +5,7 @@
     INSTANCE: main
     arch: amd64
     # TODO: migrate to the shared files/_pkgs template (which uses the
-    # pkgs lookup and the framework's PKGSETS var) like mkosi.srv.pb does.
+    # pkgs lookup and the framework's PKGSETS var) like mkosi.src.pb does.
     # Left as-is for now to avoid entangling changes.
     mmpkgset:
     - BASE
