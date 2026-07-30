@@ -39,9 +39,70 @@
       # - CONTAINER
       # - BONUS
       # - WORDS
+    ETC_DIRS:
+      - mkosi.images/vps-seed
+      - mkosi.images/oci
     ETC_FILES:
       - name: pkgs.txt
         content: "{{ lookup('template', '../../files/_pkgs') }}"
+      # --- config-driven multi-build (mkosi.conf + mkosi.images/) ---
+      # Main config: universal settings (Distribution/Release/Repositories and
+      # Output*/Cache* are main-image-only). Format=none = no main artifact;
+      # the deliverables are the subimages selected by Dependencies=.
+      - name: mkosi.conf
+        content: |
+          [Distribution]
+          Distribution=debian
+          Release=trixie
+          Repositories=main,contrib,non-free,non-free-firmware
+
+          [Build]
+          CacheDirectory={{DIR}}/var/cache
+          PackageCacheDirectory={{DIR}}/var/package-cache
+
+          [Config]
+          # Build only these subimages by default. `image.sh <variant>` overrides
+          # via mkosi --dependency to build just one.
+          Dependencies=vps-seed,oci
+
+          [Output]
+          Format=none
+          OutputDirectory={{DIR}}/var/output
+      # vps-seed: bootable cpio initrd for a constrained BIOS/MBR VPS.
+      - name: mkosi.images/vps-seed/mkosi.conf
+        content: |
+          # Includes the mkosi-initrd builtin (init + module assembly) AND the fs
+          # formatting tools the mkosi-initrd *wrapper* can't take as packages.
+          # NOTE: this does NOT inject the running host's kernel modules (the
+          # vps-seed.sh wrapper does, via --extra-tree). For a host-tailored
+          # initrd for THIS box, use bin/vps-seed.sh instead.
+          [Include]
+          Include=mkosi-initrd
+
+          [Output]
+          Format=cpio
+          Output=vps-seed
+          # xz = widest old-kernel compat (needs CONFIG_RD_XZ). Level 6 = mid-high,
+          # sane memory (9 is ridiculous). BIOS/MBR VPS kernels predate zstd often.
+          CompressOutput=xz
+          CompressLevel=6
+          # zstd alternative (mid-high; needs kernel >= 5.1 / CONFIG_RD_ZSTD):
+          #CompressOutput=zstd
+          #CompressLevel=15
+
+          [Content]
+          Packages=
+                  e2fsprogs
+                  btrfs-progs
+                  xfsprogs
+                  dosfstools
+                  util-linux
+      # oci: the base Debian rootfs as an OCI container image.
+      - name: mkosi.images/oci/mkosi.conf
+        content: |
+          [Output]
+          Format=oci
+          Output=mkosi-oci
     BINS:
       - name: build-debian.sh
         exec: |
@@ -66,20 +127,29 @@
           systemd-nspawn --boot --image image.raw "$@"
       - name: vps-seed.sh
         exec: |
-          # vps-seed: a bootable initrd/seed for a constrained BIOS/MBR VPS.
-          # Wraps mkosi-initrd (builds an initrd for the running kernel).
-          # mkosi-initrd does NOT accept extra packages, so this ships fs
-          # *kernel modules* (mount ext4/xfs/btrfs) but NOT the mkfs.* tools;
-          # a vps-seed with formatting tools needs the full mkosi cpio subimage
-          # (mkosi.images/vps-seed/) — coming with the mkosi.conf restructuring.
-          # Target is BIOS/MBR (no GPT/ESP); prefer systemd-boot in life but
-          # this VPS is MBR-only. $1 = output name (default vps-seed), rest
+          # vps-seed: a HOST-TAILORED bootable initrd for a constrained BIOS/MBR VPS.
+          # Wraps mkosi-initrd, which injects THIS box's kernel modules + firmware
+          # (so the result boots on this kernel). mkosi-initrd does NOT accept extra
+          # packages, so this ships fs *kernel modules* (mount ext4/xfs/btrfs) but
+          # NOT the mkfs.* formatting tools. For an initrd WITH formatting tools
+          # (generic, not host-tailored), build the mkosi.images/vps-seed/ subimage
+          # via `image.sh vps-seed`. $1 = output name (default vps-seed), rest
           # passed through to mkosi-initrd, e.g.:
           #   vps-seed.sh myseed --profile network,lvm --kernel-version $(uname -r)
           NAME="${1:-vps-seed}"; shift || true
           OUTDIR="${VPS_SEED_OUTDIR:-${DIR}/var/output}"
           mkdir -p "$OUTDIR"
           mkosi-initrd --format cpio --output "$NAME" --output-dir "$OUTDIR" "$@"
+      - name: image.sh
+        basedir: etc
+        exec: |
+          # image.sh [variant] — build the mkosi.conf graph from etc/.
+          # No arg: build the subimages listed in mkosi.conf [Config] Dependencies=.
+          # With a variant: build just that mkosi.images/<variant>/ via
+          # mkosi --dependency. Examples: image.sh vps-seed ; image.sh oci
+          mkdir -p "{{DIR}}/var/output" "{{DIR}}/var/cache" "{{DIR}}/var/package-cache"
+          if [ -n "${1:-}" ]; then set -- --dependency "$1"; fi
+          mkosi -B -f "$@"
       - name: identity.sh
         src: identity.sh
         raw: true
@@ -96,11 +166,35 @@
 
       | bin | what it does |
       |---|---|
-      | `build.sh` | builds `image.raw` (Debian trixie disk + mkosi-vm builtin) from `etc/pkgs.txt` |
+      | `build.sh` | legacy: builds `image.raw` (Debian trixie disk + mkosi-vm) from `etc/pkgs.txt` via CLI |
       | `run-nspawn.sh` | boots `image.raw` in systemd-nspawn |
-      | `vps-seed.sh [name] [mkosi-initrd opts…]` | builds a BIOS/MBR VPS initrd (cpio). **Ships fs kernel modules only — not mkfs.\* tools** (mkosi-initrd can't take extra pkgs; the full formatting-capable seed is the coming `mkosi.images/vps-seed/` subimage) |
+      | `image.sh [variant]` | **config-driven multi-build** — builds the `etc/mkosi.conf` graph; `image.sh vps-seed` / `oci` builds one subimage via `mkosi --dependency` |
+      | `vps-seed.sh [name] [mkosi-initrd opts…]` | HOST-tailored initrd (cpio) for this box's kernel via `mkosi-initrd`. Ships fs *kernel modules* (mount ext4/xfs/btrfs) but NOT mkfs.\* tools |
       | `identity.sh` | (re)provision system/disk identity for clone-ready images — see below |
       | `debian-pkgs.sh essential\|recommends\|suggests\|all [pkgs…]` | screen Debian package tiers to stdout for review |
+
+      ## config-driven multi-build (`etc/mkosi.conf` + `etc/mkosi.images/`)
+
+      `image.sh` drives the mkosi config tree in `etc/`:
+
+      - `etc/mkosi.conf` — main config: universal settings (Distribution/Release/
+        Repositories, Output\*/Cache\* dirs → `var/`). `Format=none` (no main
+        artifact); `Dependencies=vps-seed,oci` selects which subimages build.
+      - `mkosi.images/vps-seed/` — bootable cpio initrd (`Include=mkosi-initrd`
+        + ext4/xfs/btrfs/dos formatting tools). xz level 6 (commented zstd 15).
+        **Generic** — does NOT inject host kernel modules; for a host-tailored
+        initrd use `vps-seed.sh`.
+      - `mkosi.images/oci/` — base Debian rootfs as an OCI container image.
+
+      To add a build: drop another `mkosi.images/<name>/mkosi.conf`. Build one
+      with `image.sh <name>` (no bin edit needed).
+
+      ## mkosi output formats
+
+      `Format=` one of: `directory` (plain tree, fastest to inspect/diff),
+      `tar`, `cpio` (initrd), `disk` (GPT block image), `uki` (unified kernel
+      image), `esp` (ESP-only disk), `oci` (OCI container image), `sysext`,
+      `confext`, `portable`, `addon`, `none` (build-only, no output).
 
       ## cloning & system identity
 
@@ -142,8 +236,7 @@
       ## see also
 
       `particleos.src.pb` — a full ParticleOS immutable image (repo + `mkosi
-      -B -f`), the reference for the mkosi.conf/`mkosi.images/` layout this
-      playbook will grow into.
+      -B -f`), a reference for the `mkosi.conf`/`mkosi.images/` layout.
     ARCH_PKGS:
       - debootstrap
       - debian-archive-keyring
