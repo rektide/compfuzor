@@ -107,9 +107,10 @@
       # Sample subimage that consumes the compfuzor PKGSETS list.
       # This is the config-driven replacement for build-debian.sh's
       # --package "$(commaSep etc/pkgs.txt)": the same lookup('pkgs') that
-      # renders etc/pkgs.txt is rendered straight into Packages= (comma-separated,
-      # which mkosi accepts). Toggle sets via MKOSI_PKGSETS at the top of the
-      # playbook; this image picks them up with no bin edit. Not in the default
+      # renders etc/pkgs.txt is rendered into Packages= per-pkgset. mkosi merges
+      # multiple Packages= lines, so we emit one commented line per set for
+      # easy review. Toggle sets via MKOSI_PKGSETS at the top of the playbook;
+      # this image picks them up with no bin edit. Not in the default
       # Dependencies= (heavy) — build with: image.sh disk
       - name: mkosi.images/disk/mkosi.conf
         content: |
@@ -117,7 +118,9 @@
           Format=disk
           Output=mkosi-disk
           [Content]
-          Packages={{ (lookup('pkgs') | unique) | join(',') }}
+          {% for setname in MKOSI_PKGSETS %}# {{ setname }} ({{ lookup('pkgs', setname) | length }})
+          Packages={{ (lookup('pkgs', setname) | unique) | join(',') }}
+          {% endfor %}
     BINS:
       - name: build-debian.sh
         exec: |
@@ -213,16 +216,20 @@
       ## wiring PKGSETS into a subimage
 
       The compfuzor package-list machinery (`MKOSI_PKGSETS` → `lookup('pkgs')`
-      → the same list that renders `etc/pkgs.txt`) can be rendered straight into
-      a subimage's `Packages=`. Because the `content:` blocks are Jinja-rendered:
+      → the same list that renders `etc/pkgs.txt`) renders into a subimage's
+      `Packages=`. mkosi **merges multiple `Packages=` lines**, so we emit one
+      commented line per pkgset for easy review:
 
           [Content]
-          Packages={{ (lookup('pkgs') | unique) | join(',') }}
+          {% for setname in MKOSI_PKGSETS %}# {{ setname }} ({{ lookup('pkgs', setname) | length }})
+          Packages={{ (lookup('pkgs', setname) | unique) | join(',') }}
+          {% endfor %}
 
-      Toggle which sets resolve via `MKOSI_PKGSETS` at the top of this playbook
-      (currently `BASE, BASE_amd64` = 238 pkgs; uncomment the rest for a ~1000-pkg
-      workstation image). Use this for full disk/workstation subimages — keep
-      initrd/oci subimages lean with explicit `Packages=`.
+      (`lookup('pkgs', setname)` resolves just that one set.) Toggle which sets
+      resolve via `MKOSI_PKGSETS` at the top of the playbook (currently `BASE,
+      BASE_amd64` = 238 pkgs; uncomment the rest for a ~1000-pkg workstation
+      image). Use this for full disk/workstation subimages — keep initrd/oci
+      subimages lean with explicit `Packages=`.
 
       ## mkosi output formats
 
