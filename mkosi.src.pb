@@ -42,6 +42,7 @@
     ETC_DIRS:
       - mkosi.images/vps-seed
       - mkosi.images/oci
+      - mkosi.images/disk
     ETC_FILES:
       - name: pkgs.txt
         content: "{{ lookup('template', '../../files/_pkgs') }}"
@@ -103,6 +104,20 @@
           [Output]
           Format=oci
           Output=mkosi-oci
+      # Sample subimage that consumes the compfuzor PKGSETS list.
+      # This is the config-driven replacement for build-debian.sh's
+      # --package "$(commaSep etc/pkgs.txt)": the same lookup('pkgs') that
+      # renders etc/pkgs.txt is rendered straight into Packages= (comma-separated,
+      # which mkosi accepts). Toggle sets via MKOSI_PKGSETS at the top of the
+      # playbook; this image picks them up with no bin edit. Not in the default
+      # Dependencies= (heavy) — build with: image.sh disk
+      - name: mkosi.images/disk/mkosi.conf
+        content: |
+          [Output]
+          Format=disk
+          Output=mkosi-disk
+          [Content]
+          Packages={{ (lookup('pkgs') | unique) | join(',') }}
     BINS:
       - name: build-debian.sh
         exec: |
@@ -185,9 +200,29 @@
         **Generic** — does NOT inject host kernel modules; for a host-tailored
         initrd use `vps-seed.sh`.
       - `mkosi.images/oci/` — base Debian rootfs as an OCI container image.
+      - `mkosi.images/disk/` — **sample** full disk image that consumes the
+        compfuzor `PKGSETS` list (not in default `Dependencies=`; build with
+        `image.sh disk`). See "wiring PKGSETS into a subimage" below.
 
       To add a build: drop another `mkosi.images/<name>/mkosi.conf`. Build one
-      with `image.sh <name>` (no bin edit needed).
+      with `image.sh <name>` (no bin edit needed). Note: mkosi's `--dependency`
+      **appends** to the main's `Dependencies=` rather than replacing it, so
+      `image.sh disk` builds disk *plus* the default lean set (vps-seed, oci);
+      to isolate one, comment the main's `Dependencies=` line.
+
+      ## wiring PKGSETS into a subimage
+
+      The compfuzor package-list machinery (`MKOSI_PKGSETS` → `lookup('pkgs')`
+      → the same list that renders `etc/pkgs.txt`) can be rendered straight into
+      a subimage's `Packages=`. Because the `content:` blocks are Jinja-rendered:
+
+          [Content]
+          Packages={{ (lookup('pkgs') | unique) | join(',') }}
+
+      Toggle which sets resolve via `MKOSI_PKGSETS` at the top of this playbook
+      (currently `BASE, BASE_amd64` = 238 pkgs; uncomment the rest for a ~1000-pkg
+      workstation image). Use this for full disk/workstation subimages — keep
+      initrd/oci subimages lean with explicit `Packages=`.
 
       ## mkosi output formats
 
