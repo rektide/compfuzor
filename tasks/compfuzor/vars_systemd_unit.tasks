@@ -211,7 +211,7 @@
 - name: 'Add systemd install-unit.sh script to BINS'
   set_fact:
     BINS: "{{ enhancedBins|concat(BINS|default([])) }}"
-  when: _systemd_has_units and not SYSTEMD_INSTALL_BYPASS|default(False)
+  when: (_systemd_has_units or (SYSTEMD_ROOTS|default([])|length > 0)) and not SYSTEMD_INSTALL_BYPASS|default(False)
   vars:
     enhancedBins:
       - name: install-unit.sh
@@ -221,42 +221,70 @@
 - name: 'Generate systemd install scripts'
   set_fact:
     BINS: "{{ BINS|default([]) + [_bin_item] }}"
-  when: 
-    - item.type in SYSTEMD_UNITTYPES
+  when:
     - not SYSTEMD_INSTALL_BYPASS|default(False)
-    - lookup('vars', 'SYSTEMD_' ~ item.scope | upper ~ '_' ~ item.type | upper ~ '_INSTALL', default=item.scope == 'system')
-  loop: "{{ _all_specs }}"
+  loop: "{{ _systemd_install_specs }}"
   vars:
-    _all_specs: >-
-      {%- set result = [] -%}
-      {%- for t in SYSTEMD_TYPE_CONFIG.keys() -%}
-        {%- for s in ['system', 'user'] -%}
-          {%- set _ = result.append({'type': t, 'scope': s}) -%}
+    # Unified install-spec list: one entry per (unit, scope) from BOTH top-level
+    # units and SYSTEMD_ROOTS, already gated by SYSTEMD_<SCOPE>_<TYPE>_INSTALL.
+    # Each spec: {name, type, scope, enable, start, instanced, instances}.
+    # enable/start resolve root -> top-level -> default(true).
+    _systemd_install_specs: >-
+      {%- set specs = [] -%}
+      {# top-level units (SYSTEMD_SERVICE/SYSTEMD_SOCKET/...) #}
+      {%- for t in (SYSTEMD_UNITTYPES | default([])) -%}
+        {%- set nm_raw = lookup('vars', 'SYSTEMD_' ~ t | upper, default='') -%}
+        {%- set nm = nm_raw if (nm_raw and nm_raw not in [True, 'True']) else NAME -%}
+        {%- set inst = SYSTEMD_INSTANCES | default(False) -%}
+        {%- set _ = specs.append({'name': nm, 'type': t, 'enable': (SYSTEMD_ENABLE | default(True)) | bool, 'start': (SYSTEMD_START | default(True)) | bool, 'instanced': inst | bool, 'instances': (inst if (inst is sequence and inst is not string and inst is not boolean) else [])}) -%}
+      {%- endfor -%}
+      {# SYSTEMD_ROOTS units #}
+      {%- for root_name in (SYSTEMD_ROOTS | default([])) -%}
+        {%- set rd = lookup('vars', root_name, default={}) -%}
+        {%- for t in SYSTEMD_TYPE_CONFIG.keys() -%}
+          {%- set tc = SYSTEMD_TYPE_CONFIG[t] -%}
+          {%- set vk = 'SYSTEMD_' ~ tc.var_suffix -%}
+          {%- if rd[vk] is defined or rd['SYSTEMD_' ~ (t | upper)] is defined -%}
+            {%- set nm_raw = rd['SYSTEMD_' ~ (t | upper)] | default('') -%}
+            {%- set nm = nm_raw if (nm_raw and nm_raw not in [True, 'True']) else NAME -%}
+            {%- set inst = rd.SYSTEMD_INSTANCES | default(SYSTEMD_INSTANCES | default(False)) -%}
+            {%- set _ = specs.append({'name': nm, 'type': t, 'enable': (rd.SYSTEMD_ENABLE | default(SYSTEMD_ENABLE | default(True))) | bool, 'start': (rd.SYSTEMD_START | default(SYSTEMD_START | default(True))) | bool, 'instanced': inst | bool, 'instances': (inst if (inst is sequence and inst is not string and inst is not boolean) else [])}) -%}
+          {%- endif -%}
         {%- endfor -%}
       {%- endfor -%}
-      {{ result }}
+      {# expand each unit x [system,user], gated by per-scope-type install flags #}
+      {%- set out = [] -%}
+      {%- for s in specs -%}
+        {%- for scope in ['system', 'user'] -%}
+          {%- if lookup('vars', 'SYSTEMD_' ~ (scope | upper) ~ '_' ~ (s.type | upper) ~ '_INSTALL', default=(scope == 'system')) -%}
+            {%- set _ = out.append(s | combine({'scope': scope})) -%}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endfor -%}
+      {{ out }}
     _is_user: "{{ item.scope == 'user' }}"
     _is_separate_mode: "{{ SYSTEMD_INSTALL == 'separate' }}"
     _type_config: "{{ SYSTEMD_TYPE_CONFIG[item.type] }}"
     _dir_map: "{{ _type_config.dir_map | default('system') }}"
-    _unit_name_val: "{{ lookup('vars', 'SYSTEMD_' ~ item.type | upper, default='') }}"
-    _unit_name: "{{ _unit_name_val if _unit_name_val and _unit_name_val not in [True, 'True'] else NAME }}"
     _unit_dir: >-
       {%- if _dir_map == 'network' -%}/etc/systemd/network
       {%- elif _dir_map == 'nspawn' -%}/etc/systemd/nspawn
       {%- elif _is_user -%}${HOME}/.config/systemd/user
       {%- else -%}/etc/systemd/system{%- endif -%}
-    _is_instanced: "{{ SYSTEMD_INSTANCES|default(False)|bool }}"
-    _instances_list: "{{ SYSTEMD_INSTANCES if SYSTEMD_INSTANCES is sequence and SYSTEMD_INSTANCES is not string and SYSTEMD_INSTANCES is not boolean else [] }}"
+    _unit_name: "{{ item.name }}"
+    # The unit FILE basename gets -user only in separate mode (distinct files).
     _user_suffix: "{{ '-user' if _is_separate_mode and _is_user else '' }}"
-    _unit_template: "{{ _unit_name }}{{ _user_suffix }}{{ '@' if _is_instanced else '' }}"
+    _unit_template: "{{ _unit_name }}{{ _user_suffix }}{{ '@' if item.instanced else '' }}"
+    # enable=false -> empty targets -> install-unit.sh links only (no enable).
+    # start=false -> pass --skip-start -> enable without --now.
     _enable_targets: >-
-      {%- if _is_instanced -%}
-        {%- if _instances_list | length > 0 -%}
-          {%- for inst in _instances_list -%}{{ _unit_name }}{{ _user_suffix }}@{{ inst }}{% if not loop.last %} {% endif %}{%- endfor -%}
+      {%- if not item.enable -%}
+      {%- elif item.instanced -%}
+        {%- if item.instances | length > 0 -%}
+          {%- for inst in item.instances -%}{{ item.name }}{{ _user_suffix }}@{{ inst }}{% if not loop.last %} {% endif %}{%- endfor -%}
         {%- endif -%}
       {%- else -%}
-        {{ _unit_name }}{{ _user_suffix }}
+        {{ item.name }}{{ _user_suffix }}
       {%- endif -%}
     _generated: |
       UNIT_TEMPLATE="{{ _unit_template }}"
@@ -265,9 +293,12 @@
       UNIT_DIR="{{ _unit_dir }}"
       SYSTEMCTL="{{ 'systemctl --user' if _is_user else 'systemctl' }}"
       SUDO_CMD="{{ '' if _is_user else 'sudo' }}"
-      source "$(dirname "$0")/install-unit.sh"
+      source "$(dirname "$0")/install-unit.sh"{{ ' --skip-start' if not item.start else '' }}
+    # Filename: install-<type>[-<unitname>][-user].sh
+    #   -<unitname> included iff unitname != NAME (keeps the common case stable)
+    #   -user included for user scope (matches legacy convention)
     _bin_item:
-      name: "install-{{ item.type }}{{ '-user' if _is_user else '' }}.sh"
+      name: "install-{{ item.type }}{{ '-' ~ item.name if item.name != NAME else '' }}{{ '-user' if _is_user else '' }}.sh"
       bypass: "{{ ['LINK', 'SYSTEMD', 'USER_SYSTEMD'] if _is_user else ['LINK', 'SYSTEMD'] }}"
       generatedAt: end
       generated: "{{ _generated }}"

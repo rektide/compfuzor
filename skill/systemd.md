@@ -128,17 +128,70 @@ SYSTEMD_INSTALL: user
 
 ## Install scripts
 
-`vars_systemd_unit.tasks` auto-generates install scripts in `bin/`:
+`vars_systemd_unit.tasks` auto-generates install scripts in `bin/`, driven by a
+single unified spec list built from **both** top-level units and `SYSTEMD_ROOTS`:
 
 | Script | When generated |
 |---|---|
-| `install-unit.sh` | Always, when any units detected. Shared helper. |
-| `install-service.sh` | System-scope service unit |
-| `install-service-user.sh` | User-scope service unit |
-| `install-socket.sh` / `install-socket-user.sh` | Socket units |
-| etc. | One per unit type per scope |
+| `install-unit.sh` | Always, when any units detected (top-level or ROOTS). Shared helper. |
+| `install-<type>[-<unit>][-user].sh` | One per unit per scope |
 
-`install-unit.sh` sources `env.export`, symlinks the unit file, runs `daemon-reload`, and enables the unit.
+`install-unit.sh` sources `env.export`, symlinks the unit file, runs
+`daemon-reload`, and enables the unit.
+
+### Install-script naming
+
+```
+install-<type>[-<unitname>][-user].sh
+```
+
+- `-<unitname>` is included **iff** the unit name differs from `{{NAME}}` — so
+  the common top-level case (unit == NAME) keeps the legacy `install-service.sh`
+  name, while `SYSTEMD_ROOTS` units (which carry explicit names) get the
+  collision-safe `install-service-atuin-daemon.sh` form.
+- `-user` marks a user-scope installer (the unit *file* only gains a `-user`
+  suffix in `separate` install mode, where system and user files coexist).
+
+### Enable vs start (`SYSTEMD_ENABLE` / `SYSTEMD_START`)
+
+Every install spec resolves two booleans (root-level → top-level → default
+`true`) that map onto `install-unit.sh`'s existing switches:
+
+| `SYSTEMD_ENABLE` | `SYSTEMD_START` | install script behavior |
+|---|---|---|
+| `false` | — | `UNIT_ENABLE_TARGETS=""` → **link only** (no enable) |
+| `true` | `false` | enable, no `--now` (starts on next boot) |
+| `true` | `true` (default) | `enable --now` |
+
+Use `SYSTEMD_ENABLE: false` on a unit you want present but not autostarted —
+most commonly a **socket-activated service** (enable the `.socket`, link-only the
+`.service` so it activates on demand).
+
+## Socket activation recipe
+
+A socket + its on-demand service are two units with **distinct** `[Unit]`/`[Install]`
+sections, so define them via `SYSTEMD_ROOTS` (top-level shares those sections and
+cannot represent the pair):
+
+```yaml
+SYSTEMD_ROOTS: [mySock, mySvc]
+mySock:
+  SYSTEMD_SOCKET: my-daemon
+  SYSTEMD_SOCKETS: {ListenStream: "%t/my-daemon.sock"}
+  SYSTEMD_INSTALLS: {WantedBy: sockets.target}
+mySvc:
+  SYSTEMD_SERVICE: my-daemon
+  SYSTEMD_ENABLE: false          # link only — the socket activates it
+  SYSTEMD_UNITS:
+    Requires: my-daemon.socket
+    After: my-daemon.socket
+  SYSTEMD_SERVICES:
+    ExecStart: /usr/local/bin/my-daemon
+```
+
+This generates `my-daemon.socket` + `my-daemon.service`, plus
+`install-socket-my-daemon-user.sh` (enables+starts the socket) and
+`install-service-my-daemon-user.sh` (links the service only).
 
 ## Unit naming
 
@@ -176,6 +229,11 @@ myAutoMount:
     Where: /mnt/data
     TimeoutIdleSec: 300
 ```
+
+Each root may also carry `SYSTEMD_ENABLE`, `SYSTEMD_START`, and
+`SYSTEMD_INSTANCES` (overriding the top-level values). `SYSTEMD_ROOTS` units now
+generate install scripts just like top-level units (see [Install scripts](#install-scripts)
+and the [Socket activation recipe](#socket-activation-recipe)).
 
 ## Systemd targets and hooks
 

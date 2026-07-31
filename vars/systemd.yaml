@@ -22,6 +22,13 @@ SYSTEMD_USER_MOUNT: true
 # true=both, false=none. Default based on USERMODE.
 # separate=generate two unit files (system + user with USERMODE=true) and both install scripts
 SYSTEMD_INSTALL: system
+# Whether generated install scripts enable their unit (enable --now). Set false
+# per-root (or top-level) for units that should only be linked, e.g. a
+# socket-activated service (enable the .socket, link-only the .service).
+SYSTEMD_ENABLE: true
+# Whether the install script also starts the unit now (enable --now vs enable).
+# Set false to enable for boot without starting immediately.
+SYSTEMD_START: true
 SYSTEMD_SYSTEM_SERVICE_INSTALL: "{{ SYSTEMD_INSTALL in ['system', 'both', 'separate', true] }}"
 SYSTEMD_USER_SERVICE_INSTALL: "{{ SYSTEMD_INSTALL in ['user', 'both', 'separate', true] }}"
 SYSTEMD_SYSTEM_SOCKET_INSTALL: "{{ SYSTEMD_INSTALL in ['system', 'both', 'separate', true] }}"
