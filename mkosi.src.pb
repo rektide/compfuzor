@@ -84,7 +84,8 @@
       # mkosi.repart/ is per-image and NOT inherited by subimages, so it lives
       # INSIDE the disk subimage's dir. It REPLACES mkosi's built-in partition
       # defs entirely (no merge), so we provide the full layout: ESP + a btrfs
-      # root whose OS rootfs lives in SUBVOLUME @ (not top-level subvolid 5),
+      # root whose OS rootfs lives in SUBVOLUME root/a-%a, e.g. root/a-x86-64
+      # (not top-level subvolid 5),
       # with @ as the default subvol. Mirrors mkosi's defaults (00-esp/10-root)
       # + systemd's TEST-58-REPART.sh subvol pattern. Add 05-bios.conf for BIOS.
       - name: mkosi.images/disk/mkosi.repart/00-esp.conf
@@ -111,10 +112,14 @@
           Type=root
           Format=btrfs
           CopyFiles=/
-          MakeDirectories=/@
-          Subvolumes=/@
-          DefaultSubvolume=/@
-          MountPoint=/:"subvol=@,compress=zstd:1,noatime,lazytime"
+          # OS rootfs lives in subvol root/a-%a (e.g. root/a-x86-64), NOT the
+          # top-level (subvolid 5). The root/ container + a-/b- naming leaves
+          # room for an A/B subvol pair (flip default subvol or boot subvol= to
+          # switch). %a is repart's build-arch specifier.
+          MakeDirectories=/root/a-%a
+          Subvolumes=/root/a-%a
+          DefaultSubvolume=/root/a-%a
+          MountPoint=/:"subvol=root/a-%a,compress=zstd:1,noatime,lazytime"
       # vps-seed: bootable cpio initrd for a constrained BIOS/MBR VPS.
       - name: mkosi.images/vps-seed/mkosi.conf
         content: |
@@ -251,9 +256,11 @@
         initrd use `vps-seed.sh`.
       - `mkosi.images/oci/` — base Debian rootfs as an OCI container image.
       - `mkosi.images/disk/` — **sample** full disk image that consumes the
-        compfuzor `PKGSETS` list. `Bootable=yes`, and its `mkosi.repart/` makes
-        the root a **btrfs with the OS in subvol `@`** (not top-level subvolid 5),
-        `@` set as the default subvol (so a bare mount resolves to it). Not in
+        compfuzor `PKGSETS` list.         `Bootable=yes`, and its `mkosi.repart/` makes
+        the root a **btrfs with the OS in subvol `root/a-%a`** (e.g.
+        `root/a-x86-64`, not top-level subvolid 5), set as the default subvol so
+        a bare mount resolves to it. The `root/` + `a-`/`b-` naming leaves room
+        for an A/B subvol pair. Not in
         default `Dependencies=` (heavy) — build with `image.sh disk`. See
         "wiring PKGSETS into a subimage" below.
 
