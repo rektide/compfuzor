@@ -2,6 +2,9 @@
 - hosts: all
   vars:
     REPO: https://github.com/systemd/mkosi
+    # ESP size for the disk subimage's 00-esp.conf (repart SizeMinBytes=SizeMaxBytes,
+    # fixed so it doesn't auto-grow). Too-small ESP is a recurring pain point.
+    ESP_SIZE: "384M"
     ENV:
       scratchsize: "{{scratchsize|default()}}"
       INSTANCE: git
@@ -86,8 +89,8 @@
           Format=vfat
           CopyFiles=/boot:/
           CopyFiles=/efi:/
-          SizeMinBytes=512M
-          SizeMaxBytes=512M
+          SizeMinBytes={{ESP_SIZE}}
+          SizeMaxBytes={{ESP_SIZE}}
       - name: mkosi.images/disk/mkosi.repart/10-root.conf
         content: |
           [Partition]
