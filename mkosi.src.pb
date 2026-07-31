@@ -43,6 +43,7 @@
       - mkosi.images/vps-seed
       - mkosi.images/oci
       - mkosi.images/disk
+      - mkosi.images/disk/mkosi.repart
     ETC_FILES:
       - name: pkgs.txt
         content: "{{ lookup('template', '../../files/_pkgs') }}"
@@ -60,6 +61,9 @@
           [Build]
           CacheDirectory={{DIR}}/var/cache
           PackageCacheDirectory={{DIR}}/var/package-cache
+          # btrfs subvolumes (Subvolumes=/DefaultSubvolume= in mkosi.repart/)
+          # cannot be created without loopback devices, so build online.
+          RepartOffline=no
 
           [Config]
           # Build only these subimages by default. `image.sh <variant>` overrides
@@ -69,6 +73,31 @@
           [Output]
           Format=none
           OutputDirectory={{DIR}}/var/output
+      # mkosi.repart/ is per-image and NOT inherited by subimages, so it lives
+      # INSIDE the disk subimage's dir. It REPLACES mkosi's built-in partition
+      # defs entirely (no merge), so we provide the full layout: ESP + a btrfs
+      # root whose OS rootfs lives in SUBVOLUME @ (not top-level subvolid 5),
+      # with @ as the default subvol. Mirrors mkosi's defaults (00-esp/10-root)
+      # + systemd's TEST-58-REPART.sh subvol pattern. Add 05-bios.conf for BIOS.
+      - name: mkosi.images/disk/mkosi.repart/00-esp.conf
+        content: |
+          [Partition]
+          Type=esp
+          Format=vfat
+          CopyFiles=/boot:/
+          CopyFiles=/efi:/
+          SizeMinBytes=512M
+          SizeMaxBytes=512M
+      - name: mkosi.images/disk/mkosi.repart/10-root.conf
+        content: |
+          [Partition]
+          Type=root
+          Format=btrfs
+          CopyFiles=/
+          MakeDirectories=/@
+          Subvolumes=/@
+          DefaultSubvolume=/@
+          MountPoint=/:"subvol=@,compress=zstd:1,noatime,lazytime"
       # vps-seed: bootable cpio initrd for a constrained BIOS/MBR VPS.
       - name: mkosi.images/vps-seed/mkosi.conf
         content: |
@@ -118,6 +147,7 @@
           Format=disk
           Output=mkosi-disk
           [Content]
+          Bootable=yes
           {% for setname in MKOSI_PKGSETS %}# {{ setname }} ({{ lookup('pkgs', setname) | length }})
           Packages={{ (lookup('pkgs', setname) | unique) | join(',') }}
           {% endfor %}
@@ -204,8 +234,11 @@
         initrd use `vps-seed.sh`.
       - `mkosi.images/oci/` — base Debian rootfs as an OCI container image.
       - `mkosi.images/disk/` — **sample** full disk image that consumes the
-        compfuzor `PKGSETS` list (not in default `Dependencies=`; build with
-        `image.sh disk`). See "wiring PKGSETS into a subimage" below.
+        compfuzor `PKGSETS` list. `Bootable=yes`, and its `mkosi.repart/` makes
+        the root a **btrfs with the OS in subvol `@`** (not top-level subvolid 5),
+        `@` set as the default subvol (so a bare mount resolves to it). Not in
+        default `Dependencies=` (heavy) — build with `image.sh disk`. See
+        "wiring PKGSETS into a subimage" below.
 
       To add a build: drop another `mkosi.images/<name>/mkosi.conf`. Build one
       with `image.sh <name>` (no bin edit needed). Note: mkosi's `--dependency`
