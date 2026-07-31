@@ -5,6 +5,11 @@
     # ESP size for the disk subimage's 00-esp.conf (repart SizeMinBytes=SizeMaxBytes,
     # fixed so it doesn't auto-grow). Too-small ESP is a recurring pain point.
     ESP_SIZE: "384M"
+    # Swap partition size (06-swap.conf). Fixed (min==max): swap sits BEFORE root
+    # so root can stay last and grow to fill the disk (repart won't move swap to
+    # grow it later). Sized >= RAM for hibernate; Type=swap auto-activates +
+    # auto-resume via systemd-gpt-auto-generator.
+    SWAP_SIZE: "24G"
     ENV:
       scratchsize: "{{scratchsize|default()}}"
       INSTANCE: git
@@ -91,6 +96,15 @@
           CopyFiles=/efi:/
           SizeMinBytes={{ESP_SIZE}}
           SizeMaxBytes={{ESP_SIZE}}
+      # Swap — fixed size, BEFORE root (06 < 10) so root stays last/growable.
+      # Type=swap is a systemd discoverable GPT type: auto-activated + hibernate
+      # resume set up by systemd-gpt-auto-generator, no fstab needed.
+      - name: mkosi.images/disk/mkosi.repart/06-swap.conf
+        content: |
+          [Partition]
+          Type=swap
+          SizeMinBytes={{SWAP_SIZE}}
+          SizeMaxBytes={{SWAP_SIZE}}
       - name: mkosi.images/disk/mkosi.repart/10-root.conf
         content: |
           [Partition]
