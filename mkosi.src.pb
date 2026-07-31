@@ -119,7 +119,7 @@
           MakeDirectories=/root/a-%a
           Subvolumes=/root/a-%a
           DefaultSubvolume=/root/a-%a
-          MountPoint=/:"subvol=root/a-%a,compress=zstd:1,noatime,lazytime"
+          MountPoint=/:"subvol=root/a-%a,compress=zstd:3,noatime,lazytime"
       # vps-seed: bootable cpio initrd for a constrained BIOS/MBR VPS.
       - name: mkosi.images/vps-seed/mkosi.conf
         content: |
