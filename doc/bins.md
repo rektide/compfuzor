@@ -1,233 +1,144 @@
 # Bin compositors and composers
 
-> Status: **proposal** for a compositor *hierarchy* (the `group` axis). The
-> current flat model is fully described in [`doc/subsys.md`](subsys.md) §
-> "gen_bins: action composition" and "Action runner"; this doc extends it and
-> should be read alongside that one.
+> The action-runner primitives and the current flat composition model are
+> documented in [`doc/subsys.md`](subsys.md) § "gen_bins: action composition"
+> and "Action runner". This doc specifies the **compositor hierarchy** (the
+> `subsystem` field) and should be read alongside that one.
 
-This document specifies how action scripts (`build*.sh`, `install*.sh`,
-`apply*.sh`) are assembled into runnable **compositors**, what the current
-capabilities are, and the proposed extension that lets a whole subsystem's
-scripts be addressed and run as a unit.
+This document describes how action scripts (`build*.sh`, `install*.sh`,
+`apply*.sh`, …) are assembled into runnable **compositors**, and the two-tier
+hierarchy that lets a whole subsystem's scripts be addressed and run as a unit.
 
 ## The three layers
 
 | Layer | Example | Produced by |
 |---|---|---|
 | **Leaf** | `install-socket-atuin-daemon-user.sh` | a subsystem or playbook (`BINS`) |
-| **Compositor** | `install-systemd.sh` | [`bin_composers`](/library/filter_plugins/bin_composers.py) |
-| **Top** | `install.sh` | `bin_composers` |
+| **Subsystem compositor** | `install-systemd-user.sh` | [`bin_composers`](/library/filter_plugins/bin_composers.py) |
+| **Scope compositor (top)** | `install-user.sh` | `bin_composers` |
 
 A *leaf* does one concrete thing. A *compositor* is a generated script whose
-body is a sequence of child invocations (`"$DIR/bin/<child>" "$@"`). The *top*
-is the compositor a user runs to do everything. Every leaf and compositor also
-inherits the shared action-runner primitives from [`files/_bin.header`](/files/_bin.header)
-(`_cf_action_init`, `_cf_run_guard`, `_cf_guard_bypass`, …).
+body is a sequence of child invocations (`"$DIR/bin/<child>" "$@"`). Every leaf
+and compositor inherits the shared action-runner primitives from
+[`files/_bin.header`](/files/_bin.header) (`_cf_action_init`, `_cf_run_guard`,
+`_cf_guard_bypass`, …). Compositors are **manual entry points** — they are never
+auto-run; [`bins_run`](/tasks/compfuzor/bins_run.tasks) only fires on leaves
+with `run: true`. So the hierarchy only organizes how a human invokes things; it
+does not change what auto-runs during a playbook.
 
-## Current capabilities (flat: action × scope)
+## Actions
 
-[`bin_composers`](/library/filter_plugins/bin_composers.py) groups leaves by
-**(action, scope)** and emits one compositor per non-empty group:
+The set of recognized actions is data, in `BIN_ACTIONS` at the top of
+[`bin_composers.py`](/library/filter_plugins/bin_composers.py) (currently
+`build`, `install`, `apply`). The composer is driven off that list, so adding an
+action (e.g. `status`) is a one-line change. `bin_composers(bins, actions=…)`
+also accepts an override list for ad-hoc use.
 
-- action ∈ {`build`, `install`, `apply`}
-- scope ∈ {none (system), `user`} — inferred from the `scope` field, or from a
-  name starting `install-user` / matching `*.user.sh`
+## The `subsystem` field
 
-So today you get `build.sh`, `install.sh`, `install-user.sh`, `apply.sh`, …,
-each with a `run_all` of its leaves. See [`doc/subsys.md`](subsys.md) §
-"gen_bins: action composition" for the full rules.
+A bin declares its grouping via `subsystem`:
 
-There is also a separate, complementary idiom — the **helper-sourcing** leaf:
-the systemd per-unit installers set env vars (`UNIT_TEMPLATE`, …) and `source`
-a shared [`install-unit.sh`](/files/systemd/install-unit.sh). That is leaf-level
-reuse, not composition; it is unaffected by this proposal.
-
-## The gap
-
-The flat model has **no domain tier**. The systemd installers
-(`install-socket-…`, `install-service-…`), the rust build/install, the config
-merge — all land directly in `install.sh` / `install-user.sh` as an undifferentiated
-list. You cannot say "re-run just the systemd tier," nor can you see systemd as
-a unit in the install tree. With multi-unit subsystems (e.g. the socket+service
-pair from `SYSTEMD_ROOTS`), the flat list gets noisy and opaque.
-
-## Proposal: a `group` axis (compositor hierarchy)
-
-Add a second grouping dimension — **group** — so a set of related leaves gets
-its own compositor, and the top chains those group compositors.
-
-### Data model
-
-A `BINS` entry gains an optional `group`:
-
-```yaml
-BINS:
-  - name: install-socket-atuin-daemon-user.sh
-    scope: [user]
-    group: systemd          # explicit
-  - name: install-rust.sh
-    # group auto-tagged from its subsystem → "rust"
-```
-
-Resolution:
-
-| Source | group value |
+| Source | value |
 |---|---|
-| subsystem-contributed bin (`SUBSYSTEM.<id>.contrib.BINS`) | the subsystem id (`systemd`, `rust`, `npm`, …) — **automatic** |
-| hand-written bin with `group: foo` | `foo` |
-| hand-written bin with no `group` | none (ungrouped) |
+| subsystem-generated bin | the subsystem id, auto-set at generation/contrib time (e.g. systemd installers → `systemd`) |
+| hand-written bin, `subsystem: myapp` | `myapp` — joins `<action>-myapp[-user].sh` |
+| hand-written bin, no field (or `subsystem: False`) | ungrouped — direct child of the scope compositor |
 
-Auto-tagging subsystem bins is what makes the pattern broadly usable: every
-subsystem gets an `install-<subsystem>.sh` for free, with no playbook changes.
+`subsystem` is the only grouping axis; it reuses the established "subsystem"
+vocabulary rather than introducing a new concept. A bin belongs to exactly one
+subsystem. There is **deliberately no special handling** for edge cases like the
+subsystem id equaling the action (`status-status.sh` is silly but valid).
 
-### Group-primary chaining (the chosen axis)
-
-**Decision: `install.sh` chains the `group` axis.** For each group, `bin_composers`
-emits an `install-<group>.sh` compositor; `install.sh`'s `run_all` is the set of
-group compositors plus any ungrouped leaves:
+## Hierarchy
 
 ```
-install.sh
-├─ install-systemd.sh          (group compositor)
+install.sh / install-user.sh            (scope entry points — the top)
+├─ install-systemd-user.sh              (subsystem compositor, ≥2 leaves)
 │   ├─ install-socket-atuin-daemon-user.sh
 │   └─ install-service-atuin-daemon-user.sh
-├─ install-rust.sh             (group compositor)
-│   └─ install-rust.sh / install-rust.user.sh …
-└─ install-atuin-config.sh     (ungrouped leaf)
+└─ install-app-config.sh                (ungrouped — direct child)
 ```
 
-The **scope** axis (`install-user.sh`) is preserved as an *addressable
-alternative entry point*, not chained by `install.sh`.
+- **Scope is the top entry point.** `<action>.sh` (system) and
+  `<action>-user.sh` (user) are always emitted when an action has leaves. To
+  install everything, run both (as today).
+- **Subsystems nest within a scope — nothing spans scopes.** A subsystem
+  compositor is `<action>-<subsystem>[-user].sh`; there is no cross-scope
+  spanner. If a subsystem has leaves in both scopes, you get two compositors
+  (`install-systemd.sh` and `install-systemd-user.sh`).
+- **The scope compositor references subsystem compositors**, not their leaves
+  directly: its `run_all` is the set of subsystem compositors for that action +
+  scope, plus any ungrouped leaves. So each leaf is reached through exactly one
+  path.
 
-### The no-double-exec discipline
+### When a subsystem compositor is emitted
 
-Two axes over the same leaves is a lattice, not a tree — a naive materialization
-double-runs leaves. The rule that keeps it safe:
+Only when a subsystem contributes **≥2 leaves** to a given (action, scope). A
+single-leaf subsystem emits no compositor — its lone leaf stays a direct child
+of the scope compositor (this is also what avoids a leaf wrapping itself:
+`build-rust.sh` is the leaf; there is no `build-rust` wrapper around it).
 
-> **`install.sh` chains exactly one partition (by group). Every other
-> compositor is an alternative entry point that also forms a clean partition.**
-> Within any single run of any single compositor, each leaf is invoked exactly
-> once.
-
-So:
-
-- `install.sh` → group compositors + ungrouped leaves (partition by group).
-- `install-user.sh` → the user-scope slice of every group + ungrouped user
-  leaves (partition by group within user scope).
-- `install-<group>.sh` → all of that group's leaves (partition by scope within
-  the group, when it spans scopes).
-
-Each is a clean partition; none is nested inside another in the canonical run.
-Running two of them manually may re-run shared leaves (acceptable: link/enable
-ops are idempotent), but the canonical `install.sh` never double-runs.
-
-### Naming rules (adaptive, collision-free)
-
-| Group's leaves | Compositors emitted |
-|---|---|
-| one scope only | `install-<group>.sh` (= that scope's leaves) |
-| both scopes | `install-<group>.sh` (spanner) + `install-<group>-system.sh` + `install-<group>-user.sh` |
-
-`install-<group>.sh` therefore always means *"the whole group"* — whether the
-group is single-scope (the bare name *is* the group) or multi-scope (the bare
-name is the spanner over the two explicit-scope children). No name collision,
-because the `-system`/`-user` children appear only when both scopes exist.
-
-Scope-spanner names: `install-user.sh` (all user, across groups) and a new
-`install-system.sh` (all system, across groups) for symmetry.
-
-### Worked example — atuin (all user-scope)
+### Naming
 
 ```
-install.sh
-├─ install-systemd.sh
+<action>(-<subsystem>)?(-user)?.sh
+```
+
+System scope is bare (no suffix); user scope is `-user` — matching the existing
+`install-service.sh` / `install-service-user.sh` convention. The action is the
+first dash-segment; the subsystem comes from the `subsystem` field, **not** from
+the name.
+
+## Worked example — atuin
+
+All user-scope. The systemd socket+service installers are tagged
+`subsystem: systemd` by [`vars_systemd_unit.tasks`](/tasks/compfuzor/vars_systemd_unit.tasks);
+the `[daemon]` config merger is a hand-written, ungrouped bin.
+
+```
+install-user.sh
+├─ install-systemd-user.sh
 │   ├─ install-socket-atuin-daemon-user.sh   (enable+start)
 │   └─ install-service-atuin-daemon-user.sh  (link only, SYSTEMD_ENABLE=false)
-└─ install-atuin-config.sh                    (merge [daemon] config — ungrouped)
+└─ install-atuin-config.sh                    (merge [daemon] config)
 ```
 
-Addressable pieces: `install.sh` (all) · `install-systemd.sh` (the systemd
-tier) · `install-user.sh` (== `install.sh` here, since everything is user) ·
-each leaf. No `install-systemd-user.sh` is emitted — the group is single-scope,
-so `install-systemd.sh` already is the user-scope systemd piece.
+Addressable pieces: `install-user.sh` (all user-scope) ·
+`install-systemd-user.sh` (just the systemd tier — re-link units without
+re-running the rust build) · each leaf directly.
 
-### Worked example — a group spanning both scopes
+## Backward compatibility
 
-A `networkd` subsystem contributing system + user units:
+**Additive.** With no `subsystem` fields set, `bin_composers` output is
+byte-identical to the previous flat model: `<action>.sh` / `<action>-user.sh`
+with flat `run_all`. Existing playbooks are unaffected. A subsystem gains the
+mid-tier only when its generator tags `subsystem:` on its bins (systemd does
+this as of this change; others opt in the same way).
 
+## Making a subsystem grouping-ready
+
+Tag the bins at the point they're generated/contributed:
+
+```yaml
+# in the generator (e.g. vars_systemd_unit.tasks), on each install _bin_item:
+subsystem: systemd
 ```
-install.sh
-├─ install-networkd.sh                        (spanner)
-│   ├─ install-networkd-system.sh
-│   │   └─ install-network-config.sh          (system)
-│   └─ install-networkd-user.sh
-│       └─ install-network-user-config.sh     (user)
-└─ …
-```
 
-Here you can run `install-networkd.sh` (both scopes), or just
-`install-networkd-user.sh`, or `install-user.sh` (user slice across *all*
-groups, including this one).
-
-### Execution-model change (open)
-
-Today `install.sh` and `install-user.sh` are co-equal compositors that the
-action runner invokes separately (system vs user). Under group-primary,
-`install.sh` becomes the **single top that runs everything once**; the scope
-spanners become manual entry points. Open question for implementation:
-
-- Does the action runner invoke only `install.sh`, with `install-user.sh` /
-  `install-system.sh` reserved for manual/surgical use? (Implies `install.sh`
-  must cover both scopes.)
-- Or keep co-equal invocation but make the partitions non-overlapping by
-  construction?
-
-### Backward compatibility
-
-**Additive.** When no leaf declares (or inherits) a `group`, `bin_composers`
-output is byte-identical to today: `install.sh` / `install-user.sh` with flat
-`run_all`. Existing playbooks are unaffected. Only subsystem-contributed and
-explicitly-grouped bins gain the mid-tier.
-
-## `bin_composers` changes (sketch)
-
-1. Accept/derive a `group` on each leaf (subsystem auto-tag at contribution time
-   in `vars/common.yaml` `SUBSYSTEM` merge, or in `gen_bins.tasks`).
-2. Add group to the grouping key: `(action, group, scope)`.
-3. Emit:
-   - per `(action, group, scope)` → `install-<group>[-<scope>].sh` (adaptive
-     per the naming table).
-   - per `(action, group)` spanner when the group is multi-scope.
-   - per `(action, scope)` spanner (`install-user.sh`, `install-system.sh`).
-4. Chain `install.sh` over group compositors + ungrouped leaves; do **not** nest
-   scope spanners under it.
-5. Preserve the `compose: false` exclusion (library scripts like
-   `install-unit.sh`).
-
-## Open decisions
-
-1. **Execution model** (above): single-top `install.sh` vs co-equal non-overlapping.
-2. **Auto-tag site**: tag subsystem bins with `group = subsystem id` at contrib
-   merge (`SUBSYSTEM` in [`vars/common.yaml`](/vars/common.yaml)) or in
-   [`gen_bins.tasks`](/tasks/compfuzor/gen_bins.tasks)? Either keeps it off the
-   playbook author's plate.
-3. **Spanner emission threshold**: emit a spanner only when a group has ≥1 leaf
-   in each of two scopes (proposed), or always?
-4. **Ungrouped naming**: keep ungrouped leaves as direct children of `install.sh`,
-   or give them an implicit `app`/`misc` group?
+That's the whole opt-in. Any generator that wants its leaves grouped under
+`<action>-<subsystem>[-user].sh` sets `subsystem: <id>` on them; single-leaf
+generators need not bother (no compositor would be emitted anyway).
 
 ## References
 
 - [`doc/subsys.md`](subsys.md) — action runner (`_cf_action`), `gen_bins`
   composition, scope, execution order.
 - [`library/filter_plugins/bin_composers.py`](/library/filter_plugins/bin_composers.py)
-  — the composer filter this proposal extends.
+  — the composer; `BIN_ACTIONS` is the data-driven action list.
+- [`tasks/compfuzor/gen_bins.tasks`](/tasks/compfuzor/gen_bins.tasks) — calls
+  `bin_composers` and merges the compositors back into `BINS`.
+- [`tasks/compfuzor/bins_run.tasks`](/tasks/compfuzor/bins_run.tasks) — auto-runs
+  only `run: true` leaves (compositors are manual).
 - [`files/_bin.header`](/files/_bin.header) — shared leaf material injected into
   every bin.
-- [`files/systemd/install-unit.sh`](/files/systemd/install-unit.sh) — the
-  helper-sourcing leaf pattern.
 - [`tasks/compfuzor/vars_systemd_unit.tasks`](/tasks/compfuzor/vars_systemd_unit.tasks)
-  — where `SYSTEMD_ROOTS` installers are generated (the multi-unit case that
-  motivated this).
-- [`library/filter_plugins/INDEX.md`](/library/filter_plugins/INDEX.md) — filter
-  reference, including `bin_composers`.
+  — where `SYSTEMD_ROOTS` installers are tagged `subsystem: systemd`.

@@ -173,6 +173,71 @@ def test_build_install_apply_coexist():
     )
 
 
+def test_subsystem_groups_into_subcompositor():
+    # Two systemd installers (user scope) + an ungrouped config installer:
+    # the systemd pair rolls up under install-systemd-user.sh, which the
+    # install-user.sh scope compositor invokes; the config bin stays direct.
+    result = bin_composers(
+        [
+            {"name": "install-socket-daemon-user.sh", "scope": ["user"], "subsystem": "systemd"},
+            {"name": "install-service-daemon-user.sh", "scope": ["user"], "subsystem": "systemd"},
+            {"name": "install-app-config.sh", "scope": ["user"]},
+        ]
+    )
+    by_name = {c["name"]: c for c in result}
+    check(
+        "emits systemd subsystem compositor",
+        sorted(by_name),
+        ["install-systemd-user.sh", "install-user.sh"],
+    )
+    check(
+        "subsystem compositor holds the systemd pair",
+        by_name["install-systemd-user.sh"]["run_all"],
+        ["install-socket-daemon-user.sh", "install-service-daemon-user.sh"],
+    )
+    check(
+        "subsystem compositor carries user scope",
+        by_name["install-systemd-user.sh"]["scope"],
+        ["user"],
+    )
+    check(
+        "scope compositor nests subsystem compositor + ungrouped leaf",
+        by_name["install-user.sh"]["run_all"],
+        ["install-systemd-user.sh", "install-app-config.sh"],
+    )
+
+
+def test_subsystem_single_leaf_stays_direct():
+    # A subsystem with only one leaf in an action/scope emits no compositor;
+    # the leaf stays a direct child of the scope compositor (no self-wrapper).
+    result = bin_composers(
+        [
+            {"name": "install-rust.sh", "subsystem": "rust"},
+            {"name": "install-extra.sh"},
+        ]
+    )
+    names = [c["name"] for c in result]
+    check("no single-leaf subsystem compositor", names, ["install.sh"])
+    check(
+        "lone subsystem leaf stays direct child",
+        result[0]["run_all"],
+        ["install-rust.sh", "install-extra.sh"],
+    )
+
+
+def test_actions_override():
+    # The action set is data-driven: passing actions= extends recognition.
+    result = bin_composers(
+        [{"name": "status-sysctl.sh"}, {"name": "status-modules.sh"}],
+        actions=["status"],
+    )
+    check(
+        "custom action composes",
+        [c["name"] for c in result],
+        ["status.sh"],
+    )
+
+
 if __name__ == "__main__":
     test_composes_unscoped_actions()
     test_composes_explicit_and_filename_user_scopes()
@@ -181,3 +246,6 @@ if __name__ == "__main__":
     test_compose_false_excludes_library_scripts()
     test_composes_apply_actions()
     test_build_install_apply_coexist()
+    test_subsystem_groups_into_subcompositor()
+    test_subsystem_single_leaf_stays_direct()
+    test_actions_override()
