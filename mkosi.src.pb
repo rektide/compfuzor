@@ -122,10 +122,14 @@
           DefaultSubvolume=/root/a-%a
           MountPoint=/:"subvol=root/a-%a,compress=zstd:3,noatime,lazytime"
       # Copy useful scripts INTO the disk image via mkosi.extra/ (overlaid on
-      # the rootfs). identity.sh belongs on a clone-ready image — add more
-      # scripts here as mkosi.extra/<path> entries.
+      # the rootfs). identity.sh + networkd-static.sh are the clone-readiness
+      # and static-networking tools a VPS needs on PATH. Add more as
+      # mkosi.extra/<path> entries.
       - name: mkosi.images/disk/mkosi.extra/usr/local/bin/identity.sh
         content: "{{ lookup('file', '../../files/mkosi/identity.sh') }}"
+        mode: "0755"
+      - name: mkosi.images/disk/mkosi.extra/usr/local/bin/networkd-static.sh
+        content: "{{ lookup('file', '../../files/mkosi/networkd-static.sh') }}"
         mode: "0755"
       # vps-seed: bootable cpio initrd for a constrained BIOS/MBR VPS.
       - name: mkosi.images/vps-seed/mkosi.conf
