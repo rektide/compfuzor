@@ -132,15 +132,58 @@
       WantedBy: multi-user.target
 
     README: |
-      apt-cacher-rs -- a caching HTTP proxy for apt/deb repositories; the
-      memory-safe Rust successor to apt-cacher-ng. Built from source
-      ({{REPO}}) and run as a system service on :3142.
+      # apt-cacher-rs
 
-      Clients: install `etc/30proxy` as `/etc/apt/apt.conf.d/30proxy`
-      (edit the host if this runs on another machine).
-      Web UI + recent logs: http://<host>:3142/  and  /logs
+      A caching HTTP proxy for apt/deb repositories — the memory-safe Rust
+      successor to apt-cacher-ng. Built from source ({{REPO}}) and run as a
+      hardened, non-root system service on port 3142.
 
-      Config: `etc/apt-cacher-rs.conf`.  Cache: `{{CACHE}}`.  DB: `{{VAR}}`.
+      ## Run / iterate
+
+          # full install (needs passwordless sudo for the user task + /usr/local/bin)
+          ansible-playbook -i 'localhost,' -c local {{NAME}}.src.pb
+
+          # iterate without side effects (no apt, no clone, no build, no enable)
+          ansible-playbook -i 'localhost,' -c local {{NAME}}.src.pb \
+            -e PKGS_BYPASS=True -e APT_BYPASS=True -e REPO_BYPASS=True \
+            -e BINS_RUN_BYPASS=True -e SYSTEMD_THUNK_BYPASS=True
+
+      Build requirement: Rust >= 1.85 (Cargo.toml `edition = "2024"`).
+
+      ## Point apt clients at the proxy
+
+      On any host that should use the cache (including this one, once the
+      service is up):
+
+          # echo 'Acquire::http::Proxy "http://<this-host>:3142/";' \
+          #   > /etc/apt/apt.conf.d/30proxy
+
+      A ready-made snippet is at `{{DIR}}/etc/30proxy` (bound to 127.0.0.1 —
+      edit the host for remote clients). HTTPS upstreams are fetched over TLS
+      by the proxy (`https_upgrade_mode`, default 'Auto'), so clients may keep
+      plain http:// source URLs and still get cached, verified packages.
+
+      ## Locations
+
+      | what        | where                                            |
+      |------------|--------------------------------------------------|
+      | binary     | /usr/local/bin/apt-cacher-rs (real file, not symlink) |
+      | config     | {{ETC}}/apt-cacher-rs.conf                       |
+      | cache      | {{CACHE}} (systemd CacheDirectory, auto-chowned) |
+      | database   | {{VAR}}/apt-cacher-rs.db (systemd StateDirectory)|
+      | service    | {{NAME}}.service (system scope)                  |
+      | daemon user| apt-cacher-rs (system user, nologin)             |
+      | web UI     | http://<host>:3142/   (and /logs)                |
+
+      ## Tuning
+
+      Edit `{{ETC}}/apt-cacher-rs.conf` and `systemctl restart {{NAME}}`.
+      Notable knobs: `disk_quota` (hard cap; reference-based pruning reclaims
+      packages absent from the current Release set independently), `allowed_mirrors`
+      (empty by default in upstream — this playbook seeds Debian/Ubuntu/LLVM),
+      `allowed_proxy_clients` / `allowed_webif_clients` (client ACLs). Full
+      option reference: `debian/apt-cacher-rs.conf` in the source tree, or
+      `man apt-cacher-rs(8)`.
   tasks:
     - name: Create apt-cacher-rs system user/group
       user:
