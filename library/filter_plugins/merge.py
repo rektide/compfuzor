@@ -409,7 +409,7 @@ def _merge_dict_values(values, strategy):
 
 
 @accept_args_markers
-def merge_list(values, strategy="append", single=False, get=None):
+def merge_list(values, strategy="append", single=False, get=None, skip="none,undefined"):
     """Merge direct list payloads with one list strategy.
 
     Args:
@@ -422,6 +422,12 @@ def merge_list(values, strategy="append", single=False, get=None):
         single: Treat `values` itself as one list payload instead of a list of
             payloads.
         get: Optional dotted path to extract from the merged result.
+        skip: Control which payloads are filtered out before merging. Accepts a
+            comma-separated string (`"none,false"`), a list (`["none", "false"]`),
+            `"all"`, or `False` to disable skipping. Valid type names: none,
+            undefined, false, empty. Default: `"none,undefined"` (mirrors
+            `merge_dict`). Use `"false,none,undefined"` when a payload of `False`
+            should suppress that layer (the helpers/base_helpers convention).
 
     Returns:
         The merged list, or the value at `get` when provided.
@@ -429,16 +435,17 @@ def merge_list(values, strategy="append", single=False, get=None):
     values = _raw_copy_template_data(values)
     strategy = _raw_copy_template_data(_resolve_list_strategy(strategy))
     get = _raw_copy_template_data(get)
+    skip_names = _parse_skip(skip)
     _validate_list_strategy(strategy)
 
-    if _is_nothing(values):
+    if _should_skip(values, skip_names):
         payloads = []
     elif single:
         payloads = [values]
     else:
         payloads = _as_list(values)
 
-    payloads = [value for value in payloads if not _is_nothing(value)]
+    payloads = [value for value in payloads if not _should_skip(value, skip_names)]
     result = _merge_list_values(payloads, strategy)
     if get is not None:
         return get_path(result, get)

@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 import collections.abc
+import os
+import sys
 
 from ansible.template import accept_args_markers
+
+_PLUGIN_DIR = os.path.abspath(os.path.dirname(__file__))
+if _PLUGIN_DIR not in sys.path:
+    sys.path.insert(0, _PLUGIN_DIR)
+
+from merge import merge_list  # noqa: E402
 
 
 # Canonical emission order for bin helpers. Prologues emit in this order;
@@ -23,78 +31,62 @@ HELPERS_DESCRIPTIONS: dict[str, str] = {
 
 DEFAULT_HELPERS: tuple[str, ...] = ("env", "setopts", "loud")
 
-
-def _as_list(value):
-    """Coerce a helper-field value to a list of names, or None when the field
-    is absent/False/True (i.e. contributes no names). A scalar string becomes
-    a single-element list, matching the arrayitize idiom used elsewhere."""
-    if value is None or value is False or value is True:
-        return None
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, collections.abc.Sequence):
-        return list(value)
-    return None
+# Layers that are False / None / undefined contribute nothing. This is the
+# `base_helpers: False` suppression convention, expressed as a merge_list skip.
+_HELPER_SKIP = "false,none,undefined"
 
 
 @accept_args_markers
 def resolve_helpers(item, default_helpers=None):
     """Resolve the ordered list of helpers a bin should receive.
 
-    Three layers, unioned (never overwritten):
+    Three layers, unioned (never overwritten) via ``merge_list(append_unique)``:
 
     * ``default_helpers`` (or ``DEFAULT_HELPERS``) — the global baseline.
-    * ``item.base_helpers`` — the subsystem's contribution for this bin type.
-      ``False`` suppresses this layer; a list/scalar merges in.
+    * ``item.base_helpers`` — the subsystem's contribution. ``False`` (or
+      absent) suppresses this layer; a list/scalar merges in.
     * ``item.helpers`` — the author's add-on. ``False`` is the nuclear opt-out
-      (no helpers at all, = legacy ``no_header``); a list/scalar merges in.
+      (no helpers at all = legacy ``no_header``); a list/scalar merges in.
 
     Then implications:
 
     * ``item.bypass`` set (and not False) implies ``report`` + ``guard``.
     * ``report`` present implies ``loud`` (report funcs read ``_cf_loud``).
 
-    Finally reorders to canonical ``HELPERS`` order (deduped).
+    Finally reordered to canonical ``HELPERS`` order (deduped by merge_list).
     ``item.no_header`` true is treated as the nuclear opt-out for back-compat.
     """
-    if default_helpers is None:
-        default_helpers = list(DEFAULT_HELPERS)
-    else:
-        default_helpers = _as_list(default_helpers) or []
-
     if not isinstance(item, collections.abc.Mapping):
-        return [h for h in HELPERS if h in default_helpers]
+        union = merge_list(
+            [default_helpers if default_helpers is not None else DEFAULT_HELPERS],
+            strategy="append_unique",
+            skip=_HELPER_SKIP,
+        )
+        return [h for h in HELPERS if h in union]
 
     # Nuclear opt-out: helpers: False, or legacy no_header: true.
     if item.get("helpers") is False or item.get("no_header") is True:
         return []
 
-    resolved: list[str] = []
-
-    def add(names):
-        for n in names:
-            if n in HELPERS and n not in resolved:
-                resolved.append(n)
-
-    add(default_helpers)
-
-    base = item.get("base_helpers")
-    if base is not False and base is not None:
-        add(_as_list(base) or [])
-
-    author = item.get("helpers")
-    if author is not False and author is not None:
-        add(_as_list(author) or [])
-
-    # Implications: bypass behavior needs report + guard; report needs loud.
+    layers = [
+        default_helpers if default_helpers is not None else DEFAULT_HELPERS,
+        item.get("base_helpers"),
+        item.get("helpers"),
+    ]
+    # Implication: bypass behavior needs report + guard. Added as its own layer
+    # so merge_list dedupes it alongside the rest.
     bypass = item.get("bypass")
     if bypass is not False and bypass is not None:
-        add(["report", "guard"])
-    if "report" in resolved:
-        add(["loud"])
+        layers.append(["report", "guard"])
 
-    # Canonical order, deduped.
-    return [h for h in HELPERS if h in resolved]
+    union = merge_list(layers, strategy="append_unique", skip=_HELPER_SKIP)
+
+    # Implication: report funcs read _cf_loud, so report pulls in loud.
+    if "report" in union and "loud" not in union:
+        union = list(union) + ["loud"]
+
+    # Canonical order, filtered to the registry.
+    return [h for h in HELPERS if h in union]
 
 
 def helper_comment(name):

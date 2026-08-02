@@ -72,6 +72,43 @@ def test_undefined_is_empty():
     check("undefined input is empty", merge_list(Undefined(name="missing")), [])
 
 
+def test_skip():
+    print("\nmerge_list skip:")
+    # Default skip (none,undefined): None/Undefined dropped, False kept as a
+    # literal element (backward compat).
+    check(
+        "default skip keeps False literal",
+        merge_list([["a"], False, None, ["b"]], "append_unique"),
+        ["a", False, "b"],
+    )
+    # skip="false": False payload now suppresses that layer entirely (the
+    # helpers base_helpers convention).
+    check(
+        "skip false suppresses False layer",
+        merge_list([["a", "b"], False, ["b", "c"]], "append_unique", skip="false"),
+        ["a", "b", "c"],
+    )
+    # skip="all": False/None/empty all drop out.
+    check(
+        "skip all drops false none empty",
+        merge_list([["a"], False, None, [], ["b"]], "append_unique", skip="all"),
+        ["a", "b"],
+    )
+    # skip=False disables pre-filtering — False stays a literal element (it
+    # would be suppressed by skip="false").
+    check(
+        "skip False keeps False literal",
+        merge_list([["a"], False], "append_unique", skip=False),
+        ["a", False],
+    )
+    # skip list form.
+    check(
+        "skip as list",
+        merge_list([["a"], False, ["b"]], "append_unique", skip=["false"]),
+        ["a", "b"],
+    )
+
+
 def test_bins_generated_profile():
     print("\nmerge_list bins_generated:")
     result = merge_list(
@@ -393,6 +430,7 @@ if __name__ == "__main__":
     test_single_payload()
     test_get_path()
     test_undefined_is_empty()
+    test_skip()
     test_bins_generated_profile()
     test_append_unique_by()
     test_concat_preserves_template_tags()
