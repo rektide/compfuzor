@@ -109,6 +109,62 @@ def test_skip():
     )
 
 
+def test_variadic():
+    print("\nmerge_list variadic (arrayitize pre-pass):")
+    # Variadic payloads — each extra is a payload; lists spread.
+    check(
+        "variadic spreads list payloads",
+        merge_list(["a"], ["b"], ["c", "d"], strategy="append"),
+        ["a", "b", "c", "d"],
+    )
+    # A non-string scalar payload wraps to a single element (strings are
+    # ambiguous with strategy names — see constraint below).
+    check(
+        "variadic wraps non-string scalar",
+        merge_list([1], 2, [3], strategy="append"),
+        [1, 2, 3],
+    )
+    # append_unique dedupes across variadic payloads.
+    check(
+        "variadic append_unique dedupes",
+        merge_list(["a", "b"], ["b", "c"], strategy="append_unique"),
+        ["a", "b", "c"],
+    )
+    # Constraint: a bare string payload is consumed as the strategy — wrap it.
+    check(
+        "string payload must be wrapped",
+        merge_list(["a"], ["report"], strategy="append_unique"),
+        ["a", "report"],
+    )
+    # Back-compat: a leading string extra is consumed as the strategy.
+    check(
+        "leading string extra is strategy",
+        merge_list([["a"], ["b"]], "append_unique"),
+        ["a", "b"],
+    )
+    # Back-compat: a leading {op: ...} dict extra is the strategy spec.
+    check(
+        "leading op-dict extra is strategy",
+        merge_list(
+            [[{"name": "a", "v": 1}], [{"name": "a", "v": 2}]],
+            {"op": "append_unique_by", "key": "name"},
+        ),
+        [{"name": "a", "v": 2}],
+    )
+    # False/None variadic layers are skipped.
+    check(
+        "variadic false layer skipped",
+        merge_list(["a"], False, None, ["b"], strategy="append_unique", skip="false,none,undefined"),
+        ["a", "b"],
+    )
+    # merge_dict variadic: each extra dict is a payload.
+    check(
+        "merge_dict variadic dicts",
+        merge_dict({"a": 1}, {"b": 2}, {"a": 9, "c": 3}),
+        {"a": 9, "b": 2, "c": 3},
+    )
+
+
 def test_bins_generated_profile():
     print("\nmerge_list bins_generated:")
     result = merge_list(
@@ -431,6 +487,7 @@ if __name__ == "__main__":
     test_get_path()
     test_undefined_is_empty()
     test_skip()
+    test_variadic()
     test_bins_generated_profile()
     test_append_unique_by()
     test_concat_preserves_template_tags()

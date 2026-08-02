@@ -408,13 +408,62 @@ def _merge_dict_values(values, strategy):
     raise ValueError("unknown merge_dict strategy '{}'".format(strategy))
 
 
+def _positional_strategy(arg):
+    """True if a leading positional extra should be consumed as the strategy
+    (back-compat with ``merge_list(values, strategy)`` and
+    ``merge_dict(values, 'overlay')``). A string is always treated as a
+    strategy name; a dict carrying ``op`` is a merge_list strategy spec (a
+    payload record never has ``op``). Note: a bare string *payload* is
+    therefore ambiguous — wrap string payloads in a list."""
+    if isinstance(arg, str):
+        return True
+    if isinstance(arg, dict) and "op" in arg:
+        return True
+    return False
+
+
+def _collect_payloads(values=None, extra=(), single=False, skip_names=frozenset()):
+    """Arrayitize-as-pre-pass: normalize variadic inputs into a flat list of
+    payloads, applying skip filtering at both the source and element level.
+
+    The shared collection step for ``merge_list`` and ``merge_dict`` (the
+    variadic / arrayitize capability). A list/tuple/set source spreads (its
+    elements become individual payloads, each skip-filtered); any other source
+    (scalar, dict, string) is one payload. ``single`` treats ``values`` itself
+    as one payload instead of spreading it.
+    """
+    payloads = []
+    if not _should_skip(values, skip_names):
+        if single or not isinstance(values, (list, tuple, set)):
+            payloads.append(values)
+        else:
+            for el in values:
+                if not _should_skip(el, skip_names):
+                    payloads.append(el)
+    for arg in extra:
+        if _should_skip(arg, skip_names):
+            continue
+        if isinstance(arg, (list, tuple, set)):
+            for el in arg:
+                if not _should_skip(el, skip_names):
+                    payloads.append(el)
+        else:
+            payloads.append(arg)
+    return payloads
+
+
 @accept_args_markers
-def merge_list(values, strategy="append", single=False, get=None, skip="none,undefined"):
+def merge_list(values=None, *extra, strategy="append", single=False, get=None, skip="none,undefined"):
     """Merge direct list payloads with one list strategy.
 
     Args:
-        values: List of payloads to merge. By default this is treated as multiple
-            list payloads, for example `[existing_bins, incoming_bins]`.
+        values: First payload (or list of payloads). By default a list is
+            treated as multiple payloads, for example `[existing_bins,
+            incoming_bins]`.
+        *extra: Additional payloads (variadic — the arrayitize capability).
+            Each extra is a payload; a list/tuple/set spreads, a scalar wraps.
+            A leading string extra is consumed as the strategy for backward
+            compatibility with `X | merge_list('append_unique')`.
         strategy: Strategy name or operation dict. Supported strings are
             `append`, `append_unique`, and named profiles such as
             `bins_generated`. Supported operation dicts use `op: merge_keyed` or
@@ -432,20 +481,25 @@ def merge_list(values, strategy="append", single=False, get=None, skip="none,und
     Returns:
         The merged list, or the value at `get` when provided.
     """
+    # Backward compat: existing callers pass strategy as 2nd positional:
+    #   X | merge_list('append_unique')      # string name
+    #   merge_list(values, {op: ...})        # strategy dict
+    # Variadic callers pass payloads:
+    #   merge_list(default, base, author, strategy='append_unique')
+    # A bare string payload is ambiguous with a string strategy — wrap string
+    # payloads in a list.
+    if extra and _positional_strategy(extra[0]):
+        strategy = extra[0]
+        extra = extra[1:]
+
     values = _raw_copy_template_data(values)
+    extra = tuple(_raw_copy_template_data(e) for e in extra)
     strategy = _raw_copy_template_data(_resolve_list_strategy(strategy))
     get = _raw_copy_template_data(get)
     skip_names = _parse_skip(skip)
     _validate_list_strategy(strategy)
 
-    if _should_skip(values, skip_names):
-        payloads = []
-    elif single:
-        payloads = [values]
-    else:
-        payloads = _as_list(values)
-
-    payloads = [value for value in payloads if not _should_skip(value, skip_names)]
+    payloads = _collect_payloads(values, extra, single=single, skip_names=skip_names)
     result = _merge_list_values(payloads, strategy)
     if get is not None:
         return get_path(result, get)
@@ -484,34 +538,18 @@ def merge_dict(values=None, *extra, strategy="overlay", single=False, get=None,
     #   [d1, d2] | merge_dict('overlay')
     # Variadic callers pass dicts:
     #   ENV | merge_dict(d1, d2, d3)
-    if extra and isinstance(extra[0], str):
+    if extra and _positional_strategy(extra[0]):
         strategy = extra[0]
         extra = extra[1:]
 
     skip_names = _parse_skip(skip)
     values = _raw_copy_template_data(values)
-    extra = [_raw_copy_template_data(e) for e in extra]
+    extra = tuple(_raw_copy_template_data(e) for e in extra)
     strategy = _raw_copy_template_data(_resolve_dict_strategy(strategy))
     get = _raw_copy_template_data(get)
     _validate_dict_strategy(strategy)
 
-    if _should_skip(values, skip_names):
-        payloads = []
-    elif single:
-        payloads = [values]
-    else:
-        payloads = _as_list(values)
-
-    # Flatten variadic args — each can be a dict or a list of dicts
-    for arg in extra:
-        if _should_skip(arg, skip_names):
-            continue
-        if isinstance(arg, list):
-            payloads.extend(arg)
-        elif isinstance(arg, dict):
-            payloads.append(arg)
-
-    payloads = [value for value in payloads if not _should_skip(value, skip_names)]
+    payloads = _collect_payloads(values, extra, single=single, skip_names=skip_names)
     result = _merge_dict_values(payloads, strategy)
     if get is not None:
         return get_path(result, get)
