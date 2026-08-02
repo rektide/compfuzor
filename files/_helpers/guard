@@ -1,0 +1,37 @@
+_cf_run_guard() {
+  local mode="$1"; shift
+  local _cf_rg_out _cf_rg_err _cf_rg_rc=0 _cf_rg_reason=""
+  _cf_rg_out="$(mktemp)" ; _cf_rg_err="$(mktemp)"
+  "$@" >"$_cf_rg_out" 2>"$_cf_rg_err" || _cf_rg_rc=$?
+  if [ $((mode & 0x4)) -ne 0 ] && [ -s "$_cf_rg_out" ]; then
+    _cf_rg_reason="$(cat "$_cf_rg_out")"
+  elif [ $((mode & 0x2)) -ne 0 ] && [ -s "$_cf_rg_err" ]; then
+    _cf_rg_reason="$(cat "$_cf_rg_err")"
+  elif [ $((mode & 0x1)) -ne 0 ] && [ "$_cf_rg_rc" -ne 0 ]; then
+    _cf_rg_reason="exit $_cf_rg_rc"
+  fi
+  rm -f "$_cf_rg_out" "$_cf_rg_err"
+  if [ -n "$_cf_rg_reason" ]; then
+    printf '%s' "$_cf_rg_reason"
+    return 1
+  fi
+  return 0
+}
+_cf_guard_bypass() {
+  local concern="$1" verb="${2:-running}"
+  local var="COMPFUZOR_${concern}_BYPASS"
+  if [ -n "${!var:-}" ]; then
+    printf '%s: %s set, %s\n' "$(printf '%s' "$concern" | tr 'A-Z' 'a-z')" "$var" "$verb" >&2
+    return 1
+  fi
+  return 0
+}
+_cf_guard_bypass_unit() {
+  local concern="$1" unit="$2" verb="${3:-running}"
+  local var="COMPFUZOR_${concern}_${unit}_BYPASS"
+  if [ -n "${!var:-}" ]; then
+    printf '%s: %s set, %s\n' "$(printf '%s' "$concern" | tr 'A-Z' 'a-z')" "$var" "$verb" >&2
+    return 1
+  fi
+  return 0
+}

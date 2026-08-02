@@ -1,0 +1,4 @@
+{% if item.env is not defined or item.env != False -%}
+[ -z "$DIR" ] && export DIR="{{DIR}}"
+[ -n "${ENV_BYPASS:-}" ] || [ ! -f "$DIR/env.export" ] || { command -v envdefault >/dev/null 2>&1 && source "$(command -v envdefault)" "$DIR/env.export" >/dev/null || source "$DIR/env.export"; }
+{% endif -%}

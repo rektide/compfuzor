@@ -1,0 +1,6 @@
+if [ -z "${COMPFUZOR_QUIET:-}" ] && { [ -z "${V+x}" ] || [ "$V" != 0 ]; }; then
+  _cf_loud=1
+else
+  _cf_loud=0
+fi
+(( ${V:-0} > 2 )) && set -x

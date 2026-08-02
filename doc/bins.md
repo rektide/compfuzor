@@ -19,11 +19,11 @@ hierarchy that lets a whole subsystem's scripts be addressed and run as a unit.
 
 A *leaf* does one concrete thing. A *compositor* is a generated script whose
 body is a sequence of child invocations (`"$DIR/bin/<child>" "$@"`). Every leaf
-and compositor inherits the shared action-runner primitives from
-[`files/_bin.header`](/files/_bin.header) (`_cf_action_init`, `_cf_run_guard`,
-`_cf_guard_bypass`, …). Compositors are **manual entry points** — they are never
-auto-run; [`bins_run`](/tasks/compfuzor/bins_run.tasks) only fires on leaves
-with `run: true`. So the hierarchy only organizes how a human invokes things; it
+and compositor is wrapped by [`files/_bin`](/files/_bin), which pulls in only
+the **helpers** each bin actually needs (see *Helpers* below). Compositors are
+**manual entry points** — they are never auto-run;
+[`bins_run`](/tasks/compfuzor/bins_run.tasks) only fires on leaves with
+`run: true`. So the hierarchy only organizes how a human invokes things; it
 does not change what auto-runs during a playbook.
 
 ## Actions
@@ -128,6 +128,56 @@ That's the whole opt-in. Any generator that wants its leaves grouped under
 `<action>-<subsystem>[-user].sh` sets `subsystem: <id>` on them; single-leaf
 generators need not bother (no compositor would be emitted anyway).
 
+## Helpers
+
+[`files/_bin`](/files/_bin) wraps every bin with **helpers** — named,
+independently-toggleable template sections. A bin gets only the helpers it
+needs, so a plain `exec` bin no longer carries ~50 lines of unused action-runner
+primitives.
+
+The five helpers, emitted in this canonical order:
+
+| helper | what it provides |
+|---|---|
+| `env` | default `$DIR` and source `env.export` |
+| `setopts` | `set -euo pipefail` + nullglob, with save/restore around the body |
+| `loud` | the `_cf_loud` progress gate + `set -x` at `V>2` |
+| `report` | `_cf_action_init` / `_cf_action_end` / `_cf_report_skip` |
+| `guard` | `_cf_run_guard` / `_cf_guard_bypass` / `_cf_guard_bypass_unit` |
+
+### Three-layer merge
+
+Resolved helpers = a **union** across three layers (never overwritten):
+
+| layer | field | scope |
+|---|---|---|
+| global default | `DEFAULT_HELPERS` (var, default `[env, setopts, loud]`) | all bins |
+| subsystem base | `base_helpers` (per-bin) | this bin type |
+| author add-on | `helpers` (per-bin) | this bin |
+
+`base_helpers: False` suppresses the subsystem layer; `helpers: False` is the
+**nuclear opt-out** (no helpers at all = the legacy `no_header: true`). Both
+fields accept a scalar or list (the `arrayitize` idiom).
+
+### Implications
+
+The resolver adds helpers required by declared behavior, after the union:
+
+- `bypass:` set → adds `report` + `guard` (the bypass block calls into both).
+- `report` present → adds `loud` (the report funcs read `_cf_loud`).
+
+So a bin with `bypass: KERNEL` gets all five helpers automatically — no need to
+also write `helpers:`. See [`library/filter_plugins/helpers.py`](/library/filter_plugins/helpers.py)
+(`resolve_helpers`) for the implementation.
+
+### Declaring needs at the source
+
+Subsystems that generate bins tag them with `base_helpers:` so the need travels
+with the bin. `bin_composers` tags generated compositors `base_helpers: [env,
+setopts, loud]` (compositors use `_cf_loud` for their inline `printf`, never the
+report/guard primitives), which keeps them correct even if `DEFAULT_HELPERS` is
+narrowed.
+
 ## References
 
 - [`doc/subsys.md`](subsys.md) — action runner (`_cf_action`), `gen_bins`
@@ -138,7 +188,11 @@ generators need not bother (no compositor would be emitted anyway).
   `bin_composers` and merges the compositors back into `BINS`.
 - [`tasks/compfuzor/bins_run.tasks`](/tasks/compfuzor/bins_run.tasks) — auto-runs
   only `run: true` leaves (compositors are manual).
-- [`files/_bin.header`](/files/_bin.header) — shared leaf material injected into
-  every bin.
+- [`files/_bin`](/files/_bin) — bin template: resolves helpers, emits their
+  prologues/epilogues, then the body.
+- [`files/_helpers/`](/files/_helpers) — the per-helper bodies (`env`,
+  `setopts`, `loud`, `report`, `guard` + `setopts.footer`).
+- [`library/filter_plugins/helpers.py`](/library/filter_plugins/helpers.py) —
+  `resolve_helpers` (three-layer merge + implications) and `helper_comment`.
 - [`tasks/compfuzor/vars_systemd_unit.tasks`](/tasks/compfuzor/vars_systemd_unit.tasks)
   — where `SYSTEMD_ROOTS` installers are tagged `subsystem: systemd`.

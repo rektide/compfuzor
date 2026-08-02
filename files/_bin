@@ -1,20 +1,19 @@
 #!/bin/bash
-set -e
+{% set _helpers = item | resolve_helpers(DEFAULT_HELPERS | default(['env','setopts','loud'])) %}
+{% set _nuclear = _helpers | length == 0 %}
+{% for _h in _helpers %}
+{{ _h | helper_comment }}
+{% include "_helpers/" ~ _h %}
 
-if [ -z "${COMPFUZOR_QUIET:-}" ] && { [ -z "${V+x}" ] || [ "$V" != 0 ]; }; then
-  _cf_loud=1
-else
-  _cf_loud=0
-fi
-
-{% if not item.no_header|default(False) %}
-{% include "_bin.header" %}
+{% endfor %}
+{% if not _nuclear %}
 
 {% if item.comments is defined %}#{{item.comments}}{% endif %}
 
 {% for var in item.vars|default([]) %}
 export {{var}}="{{ '${' }}{{ var }}-{{ lookup('vars', var) }}{{ '}'}}"
 {% endfor %}
+{% if 'env' in _helpers %}
 {% if item.basedir|default(True) == True %}
 cd "${DIR}"
 {% elif item.basedir|default(True) == False %}
@@ -23,9 +22,10 @@ cd {{item.basedir}}
 {% else %}
 cd {{DIR}}/{{item.basedir}}
 {% endif %}
+{% endif %}
 
 {% endif %}
-{% if item.bypass is defined and not item.no_header|default(False) %}
+{% if item.bypass is defined and not _nuclear %}
 {% set _cf_bypass = item.bypass if item.bypass is iterable and item.bypass is not string else [item.bypass] %}
 _cf_action_init "{{ item.name }}" "running"
 {% for _cf_entry in _cf_bypass %}
@@ -52,10 +52,10 @@ if [ "$_cf_loud" = 1 ]; then printf '+ %s\n' '{{ run_bin }}'; fi
 if [ "$_cf_loud" = 1 ]; then printf 'complete\n'; fi
 {% endif %}
 {{ item.late|default([])|arrayitize|join("\n") }}
-{% if item.bypass is defined and not item.no_header|default(False) %}
+{% if item.bypass is defined and not _nuclear %}
 _cf_action_end
 {% endif %}
-{% if not item.no_header|default(False) %}
-
-{% include "_bin.footer" %}
-{% endif %}
+{% for _h in _helpers | reverse %}
+{% set _epi = "_helpers/" ~ _h ~ ".footer" %}
+{% include _epi ignore missing %}
+{% endfor %}

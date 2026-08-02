@@ -99,10 +99,12 @@ replacing ad-hoc bypass checks and inline progress reporting.
 
 ### Shell primitives
 
-Defined in [`files/_bin.header`](../files/_bin.header); available in every
-non-`no_header` rendered script. The loud/quiet gate (`_cf_loud`, set at the top
-of [`files/_bin`](../files/_bin)) controls all progress output — loud unless
-`COMPFUZOR_QUIET` is set or `V=0`.
+Provided by the **`report` and `guard` helpers** (see
+[`files/_helpers/`](../files/_helpers)); pulled into any bin that sets `bypass:`
+(the bypass behavior implies `report` + `guard`), or any bin that declares
+`helpers: [report, guard]`. The loud/quiet gate (`_cf_loud`, from the `loud`
+helper, emitted near the top of [`files/_bin`](../files/_bin)) controls all
+progress output — loud unless `COMPFUZOR_QUIET` is set or `V=0`.
 
 | Primitive | Purpose |
 |---|---|
@@ -389,4 +391,6 @@ Common bin fields:
 | [`tasks/compfuzor/gen_tool_versions.tasks`](../tasks/compfuzor/gen_tool_versions.tasks) | `.tool-versions` and `mise.toml` rendering |
 | [`tasks/compfuzor/gen_python.tasks`](../tasks/compfuzor/gen_python.tasks) | Python subsystem + console scripts |
 | [`tasks/compfuzor/gen_kernel.tasks`](../tasks/compfuzor/gen_kernel.tasks) | Kernel validation and multi-child merging |
-| [`files/_bin`](../files/_bin) | Bin template: shebang, env, early/generated/run_all/late |
+| [`files/_bin`](../files/_bin) | Bin template: resolves helpers, emits prologues/epilogues, then body |
+| [`files/_helpers/`](../files/_helpers) | Per-helper bodies (`env`, `setopts`, `loud`, `report`, `guard`) |
+| [`library/filter_plugins/helpers.py`](../library/filter_plugins/helpers.py) | `resolve_helpers` (three-layer merge + implications), `helper_comment` |

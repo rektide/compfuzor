@@ -148,8 +148,10 @@ MULTISTRAP_COMPONENTS:
 
 _ext: "{{ '.' + item.ext if item.ext|default(False) else '' }}"
 
-FILES_BIN_HEADER: "{{ lookup('file', 'files/_bin.header') }}"
-FILES_BIN_FOOTER: "{{ lookup('file', 'files/_bin.footer') }}"
+# Default bin helpers — the baseline floor merged into every non-nuclear bin.
+# Per-bin layers (base_helpers, helpers) union on top; see files/_bin and
+# library/filter_plugins/helpers.py.
+DEFAULT_HELPERS: ['env', 'setopts', 'loud']
 
 CONFIG_EXT: conf
 CONFIG_OUTPUT: "${DIR}/etc/${CONFIG_KEY}.${CONFIG_EXT}"

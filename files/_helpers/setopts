@@ -1,0 +1,3 @@
+_BIN_SETO_STATE+=("$(set +o; shopt -p)")
+set -euo pipefail
+shopt -s nullglob

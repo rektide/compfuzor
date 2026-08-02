@@ -132,6 +132,11 @@ def bin_composers(bins, actions=None):
             "generated_by": "gen_bins",
             "run_all": [m for m in members if m != comp_name],
             "scope": [scope] if scope else [],
+            # Compositors reference $DIR (env) and _cf_loud (loud) in their
+            # run_all block, and want strict mode + restore (setopts); they
+            # never call the _cf_action_*/guard primitives. Declare the need
+            # so they stay correct even if DEFAULT_HELPERS is narrowed.
+            "base_helpers": ["env", "setopts", "loud"],
         }
 
     # Build scope compositors in BINS order. Each claimed leaf contributes its
@@ -162,6 +167,7 @@ def bin_composers(bins, actions=None):
             "action": action,
             "generated_by": "gen_bins",
             "run_all": run_all,
+            "base_helpers": ["env", "setopts", "loud"],
         }
         if scope:
             compositor["scope"] = [scope]

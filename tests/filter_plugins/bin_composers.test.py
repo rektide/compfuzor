@@ -30,12 +30,14 @@ def test_composes_unscoped_actions():
                 "action": "build",
                 "generated_by": "gen_bins",
                 "run_all": ["build-kernel.sh"],
+                "base_helpers": ["env", "setopts", "loud"],
             },
             {
                 "name": "install.sh",
                 "action": "install",
                 "generated_by": "gen_bins",
                 "run_all": ["install-kernel.sh"],
+                "base_helpers": ["env", "setopts", "loud"],
             },
         ],
     )
@@ -60,6 +62,7 @@ def test_composes_explicit_and_filename_user_scopes():
                 "generated_by": "gen_bins",
                 "run_all": ["install-shell.sh", "install-bash.user.sh"],
                 "scope": ["user"],
+                "base_helpers": ["env", "setopts", "loud"],
             },
             {
                 "name": "install-shell.sh",
@@ -67,6 +70,7 @@ def test_composes_explicit_and_filename_user_scopes():
                 "generated_by": "gen_bins",
                 "run_all": ["install-shell-extra.sh"],
                 "scope": ["shell"],
+                "base_helpers": ["env", "setopts", "loud"],
             },
         ],
     )
@@ -149,6 +153,7 @@ def test_composes_apply_actions():
                 "action": "apply",
                 "generated_by": "gen_bins",
                 "run_all": ["apply-kernel.sh", "apply-sysctl.sh", "apply-sysfs.sh"],
+                "base_helpers": ["env", "setopts", "loud"],
             },
         ],
     )

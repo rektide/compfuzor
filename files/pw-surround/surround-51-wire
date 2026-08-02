@@ -8,6 +8,7 @@
 # Device resolution: runtime env var > Jinja-rendered playbook default.
 # Each PW_SURROUND_DEVICE_* var accepts a comma-separated list of PipeWire node names.
 # The first device that exists as a running sink is used (fallback chain).
+set -euo pipefail
 
 # Resolve a comma-separated device list to the first available PipeWire sink.
 # Usage: resolve_device "device1,device2,device3"
