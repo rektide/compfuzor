@@ -624,13 +624,13 @@ SUBSYSTEM:
         - "{{ CONFIG_KEY }}"
         - "{{ CONFIG_KEY }}-disabled"
       BINS:
-        - name: config.sh
+        - name: "config-{{ CONFIG_KEY }}.sh"
           src: "../config-{{ CONFIG_MERGE | default('yaml-list') }}.sh"
           basedir: False
-        - name: disable.sh
+        - name: "disable-{{ CONFIG_KEY }}.sh"
           src: ../config-disable.sh
           basedir: False
-        - name: enable.sh
+        - name: "enable-{{ CONFIG_KEY }}.sh"
           src: ../config-enable.sh
           basedir: False
         - name: status-config.sh

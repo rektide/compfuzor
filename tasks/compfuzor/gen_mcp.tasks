@@ -1,0 +1,67 @@
+---
+- name: 'Build vars for remote MCP server'
+  set_fact:
+    ETC_FILES: "{{ [mcp_file]|concat(ETC_FILES|default([])) }}"
+  vars:
+    mcp_file:
+      name: mcp.json
+      json:
+        type: remote
+        url: "{{ MCP_URL }}"
+        headers: "{{ MCP_HEADERS|default(omit) }}"
+  when: MCP_URL is defined
+
+- name: 'Build vars for local MCP server'
+  set_fact:
+    ETC_FILES: "{{ [mcp_file]|concat(ETC_FILES|default([])) }}"
+  vars:
+    mcp_command_with_args: >-
+      {%- set args = [] -%}
+      {%- for key in (ENV|default({})).keys() -%}
+        {%- if key.startswith('mcp_arg_') and ENV[key] | string | length > 0 -%}
+          {%- set _ = args.append('--' + key.replace('mcp_arg_', '').replace('_', '-') + '=${' + key.upper() + '}') -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{- MCP_COMMAND + args }}
+    mcp_file:
+      name: mcp.json
+      json:
+        type: local
+        command: "{{ mcp_command_with_args }}"
+        environment: >-
+          {%- if MCP_ENV is defined -%}
+          {%- if MCP_ENV is mapping -%}
+          {{ MCP_ENV }}
+          {%- elif MCP_ENV is sequence -%}
+          {%- set env_dict = {} -%}
+          {%- for var in MCP_ENV -%}
+          {%- set _ = env_dict.update({var: '${' + var + '}'}) -%}
+          {%- endfor -%}
+          {{ env_dict }}
+          {%- endif -%}
+          {%- else -%}
+          {{ omit }}
+          {%- endif -%}
+  when: MCP_COMMAND is defined
+
+- name: 'Contribute MCP-specific BINS (override disabler + installer)'
+  set_fact:
+    BINS: "{{ BINS | merge_list('bins_generated', [disable, install]) }}"
+  vars:
+    disable:
+      name: mcp-disable.sh
+      src: ../mcp-disable.sh
+      basedir: False
+    install:
+      name: mcp-install.ts
+      src: ../mcp-install.ts
+      basedir: False
+  when: MCP_CLIENT is defined
+
+- name: "Compfuzor: delegate config management to gen_config"
+  import_tasks: gen_config.tasks
+  vars:
+    CONFIG_KEY: mcp
+    CONFIG_MERGE: json-merge
+    CONFIG_EXT: json
+  when: MCP_CLIENT is defined
