@@ -52,12 +52,15 @@
       - mcp
       - mcp-disabled
     config:
+      name: mcp-config.sh
       src: ../mcp-config.sh
       basedir: False
     disable:
+      name: mcp-disable.sh
       src: ../mcp-disable.sh
       basedir: False
     install:
+      name: mcp-install.ts
       src: ../mcp-install.ts
       basedir: False
   when: MCP_CLIENT is defined
