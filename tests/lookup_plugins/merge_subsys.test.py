@@ -13,7 +13,7 @@ sys.path.insert(
 from ansible.errors import AnsibleError
 from ansible._internal._datatag import _tags
 
-from merge_subsys import LookupModule, merge_subsys_value
+from merge_subsys import ARTIFACT_DEFAULTS, LookupModule, merge_subsys_value
 
 passed = 0
 failed = 0
@@ -29,6 +29,23 @@ def check(name, actual, expected):
         print("  FAIL: {}".format(name))
         print("    actual:   {}".format(actual))
         print("    expected: {}".format(expected))
+
+
+def check_raises(name, fn, text):
+    global passed, failed
+    try:
+        fn()
+    except AnsibleError as error:
+        if text in str(error):
+            passed += 1
+            print("  PASS: {}".format(name))
+        else:
+            failed += 1
+            print("  FAIL: {}".format(name))
+            print("    error: {}".format(error))
+    else:
+        failed += 1
+        print("  FAIL: {} (did not raise)".format(name))
 
 
 class FakeLazyDict(dict):
@@ -77,6 +94,15 @@ def test_bins_defaults_merge_current_then_subsystem():
         "uses BINS defaults",
         result,
         [{"name": "build.sh", "generated": "echo base\necho python"}],
+    )
+
+
+def test_artifact_defaults_reference_only_preset_and_order():
+    print("\nmerge_subsys artifact policy:")
+    check(
+        "uses only preset and order metadata",
+        {artifact: set(policy) for artifact, policy in ARTIFACT_DEFAULTS.items()},
+        {artifact: {"preset", "order"} for artifact in ARTIFACT_DEFAULTS},
     )
 
 
@@ -139,8 +165,28 @@ def test_env_incoming_can_win():
             }
         },
     }
-    result = merge_subsys_value(variables, "python", "ENV", current_wins=False)
+    result = merge_subsys_value(variables, "python", "ENV", order="current-first")
     check("subsystem env can override current env", result, {"PATH": "/sub"})
+
+
+def test_preset_override_and_order_validation():
+    print("\nmerge_subsys overrides:")
+    variables = {
+        "PKGS": ["git"],
+        "SUBSYSTEM": {
+            "go": {"requested": True, "contrib": {"PKGS": ["git"]}},
+        },
+    }
+    check(
+        "preset override changes append_unique to append",
+        merge_subsys_value(variables, "go", "PKGS", preset="append"),
+        ["git", "git"],
+    )
+    check_raises(
+        "rejects invalid order",
+        lambda: merge_subsys_value(variables, "go", "PKGS", order="later"),
+        "order must be one of",
+    )
 
 
 def test_pkgs_append_unique_defaults():
@@ -305,10 +351,12 @@ def test_lookup_run_rejects_positional_terms():
 
 if __name__ == "__main__":
     test_bins_defaults_merge_current_then_subsystem()
+    test_artifact_defaults_reference_only_preset_and_order()
     test_inactive_subsystem_skips_incoming_payload()
     test_fallback_id_and_get_path()
     test_env_current_wins_by_default()
     test_env_incoming_can_win()
+    test_preset_override_and_order_validation()
     test_pkgs_append_unique_defaults()
     test_whole_artifact_template_resolves_before_list_merge()
     test_tool_versions_overlay_defaults()

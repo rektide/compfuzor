@@ -6,7 +6,7 @@ DOCUMENTATION = """
     short_description: Merge one subsystem contrib artifact into its global artifact
     description:
       - Reads C(SUBSYSTEM.<id>.contrib.<contrib>) and the matching current global artifact.
-      - Dispatches to the merge helpers in C(library/filter_plugins/merge.py).
+      - Dispatches to named value presets in C(library/filter_plugins/merge_pipeline.py).
       - Reads variables through raw-copy helpers so tagged template strings are not rendered during merge.
     options:
       _terms:
@@ -31,9 +31,9 @@ DOCUMENTATION = """
         description:
           - Optional current/global variable name.
           - Defaults to the C(contrib) value.
-      strategy:
+      preset:
         description:
-          - Optional merge strategy override.
+          - Optional value preset override.
       default:
         description:
           - Optional missing incoming payload default.
@@ -43,12 +43,10 @@ DOCUMENTATION = """
       active_path:
         description:
           - Dotted path used for active gating. Defaults to C(active).
-      current_wins:
+      order:
         description:
-          - Dict artifacts only. When truthy, current/global values override incoming subsystem values.
-      current_first:
-        description:
-          - List artifacts only. When truthy, current/global list payload is merged before incoming subsystem payload.
+          - C(current-first) or C(incoming-first). Controls layer order before
+            the artifact's preset runs.
       get:
         description:
           - Optional dotted path to extract from the merged result.
@@ -93,9 +91,8 @@ from merge import (  # noqa: E402
     _dict_get_raw,
     _raw_copy_template_data,
     _truthy,
-    merge_dict,
-    merge_list,
 )
+from merge_pipeline import run_value_preset, value_preset_metadata  # noqa: E402
 
 _LOOKUP_DIR = os.path.abspath(os.path.dirname(__file__))
 if _LOOKUP_DIR not in sys.path:
@@ -110,60 +107,44 @@ from subsys import (  # noqa: E402
 
 ARTIFACT_DEFAULTS = {
     "BINS": {
-        "kind": "list",
-        "strategy": "bins_generated",
-        "default": [],
-        "current_first": True,
+        "preset": "bins_generated",
+        "order": "current-first",
     },
     "ETC_FILES": {
-        "kind": "list",
-        "strategy": "append",
-        "default": [],
-        "current_first": True,
+        "preset": "append",
+        "order": "current-first",
     },
     "LINKS": {
-        "kind": "list",
-        "strategy": "append",
-        "default": [],
-        "current_first": True,
+        "preset": "append",
+        "order": "current-first",
     },
     "PKGS": {
-        "kind": "list",
-        "strategy": "append_unique",
-        "default": [],
-        "current_first": True,
+        "preset": "append_unique",
+        "order": "current-first",
     },
     "ENV_LIST": {
-        "kind": "list",
-        "strategy": "append_unique",
-        "default": [],
-        "current_first": True,
+        "preset": "append_unique",
+        "order": "current-first",
     },
     "ETC_DIRS": {
-        "kind": "list",
-        "strategy": "append",
-        "default": [],
-        "current_first": True,
+        "preset": "append",
+        "order": "current-first",
     },
     "ENV": {
-        "kind": "dict",
-        "strategy": "env_overlay",
-        "default": {},
-        "current_wins": True,
+        "preset": "overlay",
+        "order": "incoming-first",
     },
     "ENV_PRIO": {
-        "kind": "dict",
-        "strategy": "env_overlay",
-        "default": {},
-        "current_wins": True,
+        "preset": "overlay",
+        "order": "incoming-first",
     },
     "TOOL_VERSIONS": {
-        "kind": "dict",
-        "strategy": "tool_versions_overlay",
-        "default": {},
-        "current_wins": True,
+        "preset": "tool_versions_overlay",
+        "order": "incoming-first",
     },
 }
+
+_VALID_ORDERS = {"current-first", "incoming-first"}
 
 
 def _is_empty_text(value):
@@ -200,6 +181,18 @@ def _resolve_bool_option(value, default):
     return _truthy(value)
 
 
+def _resolve_order(value, default):
+    if wrapped_test_undefined(value) or value is None:
+        return default
+    if not isinstance(value, str) or value not in _VALID_ORDERS:
+        raise AnsibleError(
+            "merge_subsys order must be one of: {}".format(
+                ", ".join(sorted(_VALID_ORDERS))
+            )
+        )
+    return value
+
+
 def merge_subsys_value(variables, subsystem_id, contrib, templar=None, **kwargs):
     """Merge one subsystem contrib artifact with its current global artifact.
 
@@ -224,19 +217,22 @@ def merge_subsys_value(variables, subsystem_id, contrib, templar=None, **kwargs)
     if wrapped_test_undefined(current_name) or current_name is None or _is_empty_text(current_name):
         current_name = artifact
 
+    preset = kwargs.get("preset")
+    if wrapped_test_undefined(preset) or preset is None:
+        preset = defaults["preset"]
+    metadata = value_preset_metadata(preset)
+
     default = kwargs.get("default")
     if wrapped_test_undefined(default) or default is None:
-        default = defaults["default"]
+        default = metadata["identity"]
 
-    strategy = kwargs.get("strategy")
-    if wrapped_test_undefined(strategy) or strategy is None:
-        strategy = defaults["strategy"]
+    order = _resolve_order(kwargs.get("order"), defaults["order"])
 
     active = _resolve_bool_option(kwargs.get("active"), True)
     explicit_active_path = kwargs.get("active_path")
     has_active_path = not (wrapped_test_undefined(explicit_active_path) or explicit_active_path is None or _is_empty_text(explicit_active_path))
 
-    current = _dict_get_raw(variables, current_name, defaults["default"])
+    current = _dict_get_raw(variables, current_name, metadata["identity"])
     subsystems = _dict_get_raw(variables, "SUBSYSTEM", {})
     record = _dict_get_raw(subsystems, subsystem_id, {})
 
@@ -250,25 +246,11 @@ def merge_subsys_value(variables, subsystem_id, contrib, templar=None, **kwargs)
         if _is_tagged_template(incoming):
             incoming = _template_value(incoming, templar)
 
-    if defaults["kind"] == "list":
-        current_first = _resolve_bool_option(
-            kwargs.get("current_first"), defaults.get("current_first", True)
-        )
-        payloads = [current, incoming] if current_first else [incoming, current]
-        result = merge_list(payloads, strategy=strategy)
-    elif defaults["kind"] == "dict":
-        current_wins = _resolve_bool_option(
-            kwargs.get("current_wins"), defaults.get("current_wins", True)
-        )
-        payloads = [incoming, current] if current_wins else [current, incoming]
-        result = merge_dict(payloads, strategy=strategy)
-    else:
-        raise AnsibleError("unsupported merge_subsys artifact kind '{}'".format(defaults["kind"]))
-
     get_expr = kwargs.get("get")
-    if not (wrapped_test_undefined(get_expr) or get_expr is None):
-        return get_path(result, get_expr)
-    return result
+    if wrapped_test_undefined(get_expr):
+        get_expr = None
+    payloads = [current, incoming] if order == "current-first" else [incoming, current]
+    return run_value_preset(payloads, preset=preset, get=get_expr)
 
 
 class LookupModule(LookupBase):
@@ -287,12 +269,11 @@ class LookupModule(LookupBase):
             fallback_id=kwargs.get("fallback_id"),
             path=kwargs.get("path"),
             current=kwargs.get("current"),
-            strategy=kwargs.get("strategy"),
+            preset=kwargs.get("preset"),
             default=kwargs.get("default"),
             active=kwargs.get("active"),
             active_path=kwargs.get("active_path"),
-            current_wins=kwargs.get("current_wins"),
-            current_first=kwargs.get("current_first"),
+            order=kwargs.get("order"),
             get=kwargs.get("get"),
         )
         return [self._templar._engine.template(result)]

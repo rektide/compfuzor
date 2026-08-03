@@ -43,6 +43,7 @@ __all__ = [
     "merge_list",
     "normalize",
     "run_value_preset",
+    "value_preset_metadata",
 ]
 
 _PLUGIN_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -619,18 +620,21 @@ VALUE_PRESETS = {
         "combine": {"name": "concat"},
         "refines": (),
         "result_kind": "list",
+        "identity": [],
     },
     "append_unique": {
         "normalizer": {"name": "list"},
         "combine": {"name": "concat"},
         "refines": ({"name": "dedupe"},),
         "result_kind": "list",
+        "identity": [],
     },
     "append_unique_by": {
         "normalizer": {"name": "list"},
         "combine": {"name": "concat"},
         "refines": ({"name": "dedupe_by", "options": {"key": "key"}, "configurable": ("key",)},),
         "result_kind": "list-record",
+        "identity": [],
     },
     "merge_keyed": {
         "normalizer": {"name": "list"},
@@ -641,6 +645,7 @@ VALUE_PRESETS = {
         },
         "refines": (),
         "result_kind": "list-record",
+        "identity": [],
     },
     "bins_generated": {
         "normalizer": {"name": "list"},
@@ -653,24 +658,28 @@ VALUE_PRESETS = {
         },
         "refines": (),
         "result_kind": "list-record",
+        "identity": [],
     },
     "overlay": {
         "normalizer": {"name": "mapping"},
         "combine": {"name": "union"},
         "refines": (),
         "result_kind": "mapping",
+        "identity": {},
     },
     "tool_versions_overlay": {
         "normalizer": {"name": "mapping", "options": {"shorthand": True}},
         "combine": {"name": "union"},
         "refines": (),
         "result_kind": "mapping",
+        "identity": {},
     },
     "replace": {
         "normalizer": {"name": "identity"},
         "combine": {"name": "replace"},
         "refines": (),
         "result_kind": "any",
+        "identity": None,
     },
     "helpers": {
         "normalizer": {"name": "list"},
@@ -684,6 +693,7 @@ VALUE_PRESETS = {
             },
         ),
         "result_kind": "list",
+        "identity": [],
     },
 }
 
@@ -746,6 +756,35 @@ def _resolve_preset(preset):
         "combine": combine,
         "refines": refines,
         "result_kind": definition["result_kind"],
+    }
+
+
+def value_preset_metadata(preset):
+    """Return a preset's result kind and a fresh combine identity.
+
+    Lookup policies use this instead of restating whether an artifact is a list
+    or mapping and what it should contribute when absent.
+
+    Args:
+        preset: Registered preset name or an allowed configuration mapping.
+
+    Returns:
+        A dictionary with the resolved preset ``name``, ``result_kind``, and a
+        fresh ``identity`` value.
+
+    Raises:
+        AnsibleFilterError: If the preset is invalid.
+    """
+    resolved = _resolve_preset(preset)
+    identity = VALUE_PRESETS[resolved["name"]]["identity"]
+    if isinstance(identity, list):
+        identity = list(identity)
+    elif isinstance(identity, dict):
+        identity = dict(identity)
+    return {
+        "name": resolved["name"],
+        "result_kind": resolved["result_kind"],
+        "identity": identity,
     }
 
 
