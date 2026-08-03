@@ -43,5 +43,3 @@
       (edit the host for remote clients). Web UI: http://<host>:3142/acng-report.html
   tasks:
   - import_tasks: tasks/compfuzor.includes
-    vars:
-      type: srv
