@@ -35,7 +35,7 @@
       # full activate, or just generate config without installing.
       - name: surround-51-activate
         src: surround-51-activate
-        no_header: true
+        helpers: false
 
       # Port wiring — uses pw-link to disconnect auto-links and route each
       # virtual sink output channel to the correct physical device channel.
@@ -43,7 +43,7 @@
       # Priority: runtime PW_SURROUND_DEVICE_L/R/C/SUB env var > Jinja default.
       - name: surround-51-wire
         src: surround-51-wire
-        no_header: true
+        helpers: false
 
     ENV:
       #ETC: "{{ETC}}"

@@ -1,6 +1,13 @@
 #!/bin/bash
-{% set _helpers = item | resolve_helpers(DEFAULT_HELPERS | default(['env','setopts','loud'])) %}
-{% set _nuclear = _helpers | length == 0 %}
+{% set _item_helpers = item.helpers | default(none) %}
+{% set _nuclear = _item_helpers is sameas false %}
+{% set _helper_layers = [
+  DEFAULT_HELPERS | default(['env', 'setopts', 'loud']),
+  item.base_helpers | default(none),
+  ['report', 'guard'] if item.bypass is defined and item.bypass is not sameas false else none,
+  _item_helpers,
+] %}
+{% set _helpers = [] if _nuclear else _helper_layers | resolve_helpers %}
 {% for _h in _helpers %}
 {{ _h | helper_comment }}
 {% include "_helpers/" ~ _h %}
@@ -25,7 +32,7 @@ cd {{DIR}}/{{item.basedir}}
 {% endif %}
 
 {% endif %}
-{% if item.bypass is defined and not _nuclear %}
+{% if item.bypass is defined and item.bypass is not sameas false and not _nuclear %}
 {% set _cf_bypass = item.bypass if item.bypass is iterable and item.bypass is not string else [item.bypass] %}
 _cf_action_init "{{ item.name }}" "running"
 {% for _cf_entry in _cf_bypass %}

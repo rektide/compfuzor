@@ -205,7 +205,7 @@
       {{ rows | join('\n') }}
     _bin_item:
       name: install-dropin.sh
-      no_header: true
+      helpers: false
       generated: "{{ lookup('template', 'files/systemd/install-dropin.sh') }}"
 
 - name: 'Add systemd install-unit.sh script to BINS'
