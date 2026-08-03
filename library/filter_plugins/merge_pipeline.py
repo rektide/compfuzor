@@ -858,18 +858,39 @@ def _merge_with_kind(layers, preset, skip_layers, get, allowed_kinds, operation)
     )
 
 
-@accept_args_markers
-def merge_list(
-    layers, *, preset="append", skip_layers=_DEFAULT_SKIP_LAYERS, get=None
-):
-    """Merge explicit layers through a list-producing value preset.
+def _coerce_layers(layers):
+    """Normalize variadic positional args into a tuple of layers.
 
-    Accepted result kinds are ``list`` and ``list-record``. The function does
-    not accept positional presets, variadic layers, ``strategy``, or ``single``;
-    construct the ordered layer list before calling it.
+    When exactly one positional argument is a list or tuple, it is treated as
+    a list of layers (the common pipe form ``[a, b] | merge_list(...)``).
+    Otherwise each positional argument is one layer. The data boundary is
+    crossed before inspection so lazy containers are not rendered.
+    """
+    layers = raw_copy_template_data(layers)
+    if len(layers) == 1 and isinstance(layers[0], (list, tuple)):
+        return tuple(layers[0])
+    return tuple(layers)
+
+
+@accept_args_markers
+def merge_list(*layers, preset="append", skip_layers=_DEFAULT_SKIP_LAYERS, get=None):
+    """Merge layers through a list-producing value preset.
+
+    Each positional argument is one layer. A piped value is the first layer.
+    When a single list is passed (or piped), it is treated as a list of layers.
+
+        {{ BINS | merge_list(incoming, preset='append') }}
+        {{ merge_list(current, incoming, preset='append') }}
+        {{ [current, incoming] | merge_list(preset='append') }}
+
+    Accepted result kinds are ``list`` and ``list-record``. The preset is
+    always keyword-only — positional strategies are rejected. Absent layers
+    (``None``, Ansible undefined) are skipped by the default collection
+    predicates, so ``default()`` is not needed.
 
     Args:
-        layers: Explicit ordered list or tuple of raw layers.
+        *layers: Ordered raw contribution layers. Each argument is one layer.
+            A single list argument is spread into its elements.
         preset: List-producing preset name or allowed configuration mapping.
         skip_layers: Top-level collection predicates.
         get: Optional dotted path extracted from the final result.
@@ -882,7 +903,7 @@ def merge_list(
             result.
     """
     return _merge_with_kind(
-        layers,
+        _coerce_layers(layers),
         preset,
         skip_layers,
         get,
@@ -892,17 +913,22 @@ def merge_list(
 
 
 @accept_args_markers
-def merge_dict(
-    layers, *, preset="overlay", skip_layers=_DEFAULT_SKIP_LAYERS, get=None
-):
-    """Merge explicit layers through a mapping-producing value preset.
+def merge_dict(*layers, preset="overlay", skip_layers=_DEFAULT_SKIP_LAYERS, get=None):
+    """Merge layers through a mapping-producing value preset.
+
+    Each positional argument is one layer. A piped value is the first layer.
+    When a single list is passed (or piped), it is treated as a list of layers.
+
+        {{ ENV | merge_dict(incoming, preset='overlay') }}
+        {{ merge_dict(current, incoming, preset='overlay') }}
 
     ``overlay`` uses strict mapping normalization, while
-    ``tool_versions_overlay`` enables string-and-mapping shorthand. Like
-    ``merge_list``, callers must prepare explicit layers and use ``preset=``.
+    ``tool_versions_overlay`` enables string-and-mapping shorthand. The preset
+    is always keyword-only. Absent layers are skipped by default.
 
     Args:
-        layers: Explicit ordered list or tuple of raw layers.
+        *layers: Ordered raw contribution layers. Each argument is one layer.
+            A single list argument is spread into its elements.
         preset: Mapping-producing preset name or allowed configuration mapping.
         skip_layers: Top-level collection predicates.
         get: Optional dotted path extracted from the final result.
@@ -915,7 +941,7 @@ def merge_dict(
             result.
     """
     return _merge_with_kind(
-        layers,
+        _coerce_layers(layers),
         preset,
         skip_layers,
         get,

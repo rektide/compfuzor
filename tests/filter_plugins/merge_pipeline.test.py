@@ -350,9 +350,9 @@ def test_presets_and_extract():
         "requires a list",
     )
     check_raises(
-        "merge_dict rejects a positional preset",
+        "merge_dict treats positional string as a layer not a preset",
         lambda: merge_dict([{"A": 1}], "overlay"),
-        "positional",
+        "mapping",
     )
     check_raises(
         "merge_list rejects legacy strategy keyword",
