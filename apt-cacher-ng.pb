@@ -1,32 +1,47 @@
 ---
-# apt-cacher-ng -- legacy C++ apt caching proxy (distro package).
-#
-# Superseded by apt-cacher-rs.src.pb (the active Rust successor; apt-cacher-rs
-# even declares `Conflicts: apt-cacher, apt-cacher-ng` in its packaging). Kept
-# here as the quick "install the distro package" path for releases that still
-# ship it -- apt-cacher-ng was dropped from Debian around trixie.
-#
-# Hand-rolled rather than via compfuzor.includes: the hyphenated bare filename
-# defeats compfuzor's filename-suffix type detection (vars_base.tasks:94 would
-# parse the type as "ng"), and the package ships its own apt-cacher-ng.service
-# so the systemd-generation subsystem does not apply. For a from-source,
-# compfuzor-subsystem-managed cache, use apt-cacher-rs.src.pb.
-#
-# Clients (including this host, once the service is up) -- port 3142, same as
-# apt-cacher-rs, so the snippet is identical:
-#   echo 'Acquire::http::Proxy "http://<host>:3142/";' \
-#     > /etc/apt/apt.conf.d/30proxy
 - hosts: all
-  become: true
-  tasks:
-    - name: Install apt-cacher-ng
-      apt:
-        name: apt-cacher-ng
-        state: latest
-        update_cache: true
+  vars:
+    TYPE: apt-cacher-ng
+    INSTANCE: main
 
-    - name: Enable and start apt-cacher-ng
-      service:
-        name: apt-cacher-ng
-        state: started
-        enabled: true
+    # Legacy C++ apt caching proxy (distro package). Superseded by
+    # apt-cacher-rs.src.pb; kept here for releases that still ship the package
+    # (apt-cacher-ng was dropped from Debian around trixie). The package
+    # provides and enables its own apt-cacher-ng.service, so this playbook only
+    # installs it via the PKGS subsystem and drops client/README artifacts --
+    # no SYSTEMD_* (we do not generate a unit over the package's own).
+    PKGS:
+      - apt-cacher-ng
+
+    ETC_FILES:
+      - name: 30proxy
+        content: |
+          # Client snippet -- install on apt clients (including this host, once
+          # the service is up) to route through the proxy:
+          #   cp {{DIR}}/etc/30proxy /etc/apt/apt.conf.d/30proxy
+          # Edit the host below for remote clients. Port 3142 is identical to
+          # apt-cacher-rs, so the snippet is interchangeable.
+          Acquire::http::Proxy "http://127.0.0.1:3142/";
+
+    README: |
+      # apt-cacher-ng
+
+      The legacy C++ apt caching proxy, installed from the distro package.
+      Superseded by apt-cacher-rs.src.pb (the active Rust successor); kept for
+      releases that still ship apt-cacher-ng (it was dropped from Debian around
+      trixie).
+
+      The package provides and enables its own `apt-cacher-ng.service` on
+      port 3142. Config lives with the package at `/etc/apt-cacher-ng/acng.conf`
+      (not under this DIR); this playbook only installs it and drops a client
+      snippet + this README.
+
+      ## Point apt clients at the proxy
+
+          # cp {{DIR}}/etc/30proxy /etc/apt/apt.conf.d/30proxy
+
+      (edit the host for remote clients). Web UI: http://<host>:3142/acng-report.html
+  tasks:
+  - import_tasks: tasks/compfuzor.includes
+    vars:
+      type: srv
