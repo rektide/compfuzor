@@ -302,6 +302,8 @@ def _parse_skip_layers(skip_layers):
     ):
         _error("skip_layers must be a list, tuple, or set of skip predicates")
     names = frozenset(skip_layers)
+    if "all" in names:
+        return frozenset(_SKIP_CHECKS)
     unknown = names - frozenset(_SKIP_CHECKS)
     if unknown:
         _error(

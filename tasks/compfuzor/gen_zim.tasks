@@ -74,7 +74,7 @@
 - name: "Compfuzor: synthesize zim host artifacts"
   set_fact:
     BINS: "{{ BINS | merge_list(_zim_host_bins, preset='bins_generated') }}"
-    ENV: "{{ _zim_host_env | merge_dict(ENV, preset='overlay', skip_layers=['none', 'undefined', 'false', 'empty']) }}"
+    ENV: "{{ _zim_host_env | merge_dict(ENV, preset='overlay', skip_layers=['all']) }}"
     ENV_LIST: "{{ (ENV_LIST | default([])) + ['ZIM_TARGET', 'ZIM_TARGET_DISABLED'] }}"
   when:
     - ZIM_HOST is defined
@@ -91,7 +91,7 @@
 - name: "Compfuzor: synthesize zim host artifacts"
   set_fact:
     BINS: "{{ BINS | merge_list(_zim_host_bins, preset='bins_generated') }}"
-    ENV: "{{ _zim_host_env | merge_dict(ENV, preset='overlay', skip_layers=['none', 'undefined', 'false', 'empty']) }}"
+    ENV: "{{ _zim_host_env | merge_dict(ENV, preset='overlay', skip_layers=['all']) }}"
     ENV_LIST: "{{ (ENV_LIST | default([])) + ['ZIM_TARGET', 'ZIM_TARGET_DISABLED'] }}"
   when:
     - ZIM_HOST is defined

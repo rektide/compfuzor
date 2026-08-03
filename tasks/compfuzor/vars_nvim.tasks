@@ -2,15 +2,15 @@
   set_fact:
     ETC_FILES: "{{ enhancedEtc|concat(ETC_FILES|default([])) }}"
     BINS: "{{ enhancedBins | merge_list(_bins, preset={'name': 'merge_keyed', 'key': 'name', 'concat_fields': ['generated']}) }}"
-    _lazyList: "{{_lazyList}}"
+    _nvim_plugins: "{{_nvim_plugins}}"
   vars:
     _bins: "{{BINS}}"
     _nvim: "{{NVIM|default({})}}"
-    _lazyList: "{{_nvim.lazy|default([])}}"
+    _nvim_plugins: "{{_nvim.lazy|default([])}}"
     enhancedEtc: "{{ _ftpluginFiles + _lazyLuaFiles }}"
     _ftpluginFiles: |
       {% set out = [] %}
-      {% for cfg in _lazyList %}
+      {% for cfg in _nvim_plugins %}
       {% for ft, settings in (cfg.ftplugin|default({})).items() %}
       {% set lines = [] %}
       {% for k, v in settings.items() %}
@@ -22,7 +22,7 @@
       {{ out }}
     _lazyLuaFiles: |
       {% set out = [] %}
-      {% for cfg in _lazyList %}
+      {% for cfg in _nvim_plugins %}
       {% set name = cfg.name|default(NAME) %}
       {% if cfg.content is defined %}
       {% set _ = out.append({'dest': name ~ '.lazy.lua', 'content': cfg.content}) %}
@@ -57,7 +57,7 @@
       - name: install-nvim.sh
         generated: |
           NVIM_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/nvim"
-          {% for cfg in _lazyList %}
+          {% for cfg in _nvim_plugins %}
           {% set name = cfg.name|default(NAME) %}
           {% if cfg.content is defined or cfg.autocmds is defined or cfg.opts is defined %}
           mkdir -p "$NVIM_CONFIG/lua/plugins/{{ name }}"
