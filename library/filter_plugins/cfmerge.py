@@ -1,4 +1,4 @@
-"""Fixed merge pipeline for Compfuzor values.
+"""Compfuzor merge module — fixed pipeline for list, dict, and field merges.
 
 The pipeline always executes ``collect -> normalize -> combine -> refine ->
 extract``. A value preset fixes one normalizer, one combine, and its ordered
@@ -1031,7 +1031,7 @@ def merge_fields(records, *, profile, get=None):
 
 
 class FilterModule(object):
-    """Expose staged pipeline filters to Ansible's filter-plugin loader.
+    """Expose cfmerge filters to Ansible's filter-plugin loader.
 
     ``normalize`` and ``merge_fields`` have no legacy name collision. The
     canonical list and mapping merge filters are intentionally withheld until
