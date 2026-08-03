@@ -156,10 +156,8 @@ def test_combines_and_refines():
     check(
         "keyed fold preserves first key position and concatenates fields",
         merge_list(
-            [
-                [{"name": "build", "generated": "one"}, {"name": "install"}],
-                [{"name": "build", "generated": "two", "value": 2}],
-            ],
+            [{"name": "build", "generated": "one"}, {"name": "install"}],
+            [{"name": "build", "generated": "two", "value": 2}],
             preset={"name": "merge_keyed", "key": "name", "concat_fields": ["generated"]},
         ),
         [
@@ -169,13 +167,14 @@ def test_combines_and_refines():
     )
     check(
         "keyed fold keeps the last non-keyed occurrence",
-        merge_list([["first", "last"], ["first"]], preset="merge_keyed"),
+        merge_list(["first", "last"], ["first"], preset="merge_keyed"),
         ["last", "first"],
     )
     check(
         "dedupe uses Python equality for unhashable values",
         merge_list(
-            [[{"a": 1, "b": 2}, {"b": 2, "a": 1}], [1, True]],
+            [{"a": 1, "b": 2}, {"b": 2, "a": 1}],
+            [1, True],
             preset="append_unique",
         ),
         [{"a": 1, "b": 2}, 1],
@@ -183,14 +182,15 @@ def test_combines_and_refines():
     check(
         "dedupe_by retains first key position and last record",
         merge_list(
-            [[{"name": "a", "value": 1}, {"name": "b"}], [{"name": "a", "value": 2}]],
+            [{"name": "a", "value": 1}, {"name": "b"}],
+            [{"name": "a", "value": 2}],
             preset={"name": "append_unique_by", "key": "name"},
         ),
         [{"name": "a", "value": 2}, {"name": "b"}],
     )
     check(
         "implicate closes transitively and canonicalizes helper order",
-        merge_list([["report", "guard"]], preset="helpers"),
+        merge_list(["report", "guard"], preset="helpers"),
         ["loud", "report", "guard"],
     )
     check(
@@ -227,7 +227,8 @@ def test_fixed_stage_contracts():
     left = _tags.TrustedAsTemplate().tag("{{ LEFT }}")
     right = _tags.TrustedAsTemplate().tag("{{ RIGHT }}")
     tagged = merge_list(
-        [[{"name": "build", "generated": left}], [{"name": "build", "generated": right}]],
+        [{"name": "build", "generated": left}],
+        [{"name": "build", "generated": right}],
         preset="bins_generated",
     )[0]["generated"]
     check("keyed fold preserves template text", tagged, "{{ LEFT }}\n{{ RIGHT }}")
@@ -257,7 +258,7 @@ def test_fixed_stage_contracts():
     check(
         "helper layers suppress top-level False only",
         merge_list(
-            [["env"], False, ["report", "guard"]],
+            ["env"], False, ["report", "guard"],
             preset="helpers",
             skip_layers=("none", "undefined", "false"),
         ),
@@ -294,12 +295,12 @@ def test_lazy_template_data_boundary():
     )
     check(
         "merge_list copies lazy layers before normalization",
-        merge_list(FakeLazyList([["base"], ["incoming"]]), preset="append"),
+        merge_list(FakeLazyList(["base", "incoming"]), preset="append"),
         ["base", "incoming"],
     )
     check(
         "merge_dict copies lazy layers before normalization",
-        merge_dict(FakeLazyList([{"BASE": 1}, {"INCOMING": 2}]), preset="overlay"),
+        merge_dict(FakeLazyDict({"BASE": 1}), FakeLazyDict({"INCOMING": 2}), preset="overlay"),
         {"BASE": 1, "INCOMING": 2},
     )
     check(
@@ -322,7 +323,8 @@ def test_presets_and_extract():
     check(
         "bins_generated is configured once",
         merge_list(
-            [[{"name": "build", "early": "a"}], [{"name": "build", "early": "b"}]],
+            [{"name": "build", "early": "a"}],
+            [{"name": "build", "early": "b"}],
             preset="bins_generated",
         ),
         [{"name": "build", "early": "a\nb"}],
@@ -330,7 +332,7 @@ def test_presets_and_extract():
     check(
         "tool versions maps shorthand before union",
         merge_dict(
-            [["rust", "node"], {"rust": "1.90"}], preset="tool_versions_overlay"
+            ["rust", "node"], {"rust": "1.90"}, preset="tool_versions_overlay"
         ),
         {"rust": "1.90", "node": True},
     )
@@ -341,27 +343,27 @@ def test_presets_and_extract():
     )
     check(
         "extract follows the completed pipeline",
-        merge_list([[{"name": "build"}]], preset="merge_keyed", get="0.name"),
+        merge_list([{"name": "build"}], preset="merge_keyed", get="0.name"),
         "build",
     )
     check_raises(
         "merge_list rejects a mapping preset",
-        lambda: merge_list([{"A": 1}], preset="overlay"),
+        lambda: merge_list({"A": 1}, preset="overlay"),
         "requires a list",
     )
     check_raises(
         "merge_dict treats positional string as a layer not a preset",
-        lambda: merge_dict([{"A": 1}], "overlay"),
+        lambda: merge_dict({"A": 1}, "overlay"),
         "mapping",
     )
     check_raises(
         "merge_list rejects legacy strategy keyword",
-        lambda: merge_list([["a"]], strategy="append"),
+        lambda: merge_list(["a"], strategy="append"),
         "strategy",
     )
     check_raises(
         "merge_list rejects legacy single keyword",
-        lambda: merge_list([["a"]], single=True),
+        lambda: merge_list(["a"], single=True),
         "single",
     )
 
