@@ -694,7 +694,7 @@ SUBSYSTEM:
     contrib:
       ETC_FILES:
         - name: kernel.params.json
-          content: "{{ KERNEL_PARAMS | to_nice_json }}"
+          content: "{{ KERNEL_PARAMS | default([]) | to_nice_json }}"
       BINS: "{{ _kernel_params_bins }}"
       ENV:
         KERNEL_PARAMS_JSON: "{{ DIR }}/etc/kernel.params.json"
