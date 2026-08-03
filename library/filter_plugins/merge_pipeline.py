@@ -326,6 +326,9 @@ def collect(layers, skip_layers=_DEFAULT_SKIP_LAYERS):
 
     Args:
         layers: Explicit ordered list or tuple of whole contribution layers.
+            When the entire input is ``None`` or Ansible undefined, ``collect``
+            returns an empty list, letting the rest of the pipeline produce the
+            preset identity.
         skip_layers: Names of predicates to apply: ``none``, ``undefined``,
             ``false``, and/or ``empty``. The default skips ``none`` and
             ``undefined`` only. Strings are deliberately rejected so callers
@@ -335,10 +338,12 @@ def collect(layers, skip_layers=_DEFAULT_SKIP_LAYERS):
         A new list of surviving raw layers in their original order.
 
     Raises:
-        AnsibleFilterError: If layers are not explicit, or predicate names are
-            invalid.
+        AnsibleFilterError: If layers are not explicit (and not absent), or
+            predicate names are invalid.
     """
     layers = raw_copy_template_data(layers)
+    if _is_absent(layers):
+        return []
     skip_layers = raw_copy_template_data(skip_layers)
     surviving = []
     skip_names = _parse_skip_layers(skip_layers)

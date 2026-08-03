@@ -90,6 +90,16 @@ def test_collect():
         [["kept"]],
     )
     check(
+        "treats absent top-level input as no layers",
+        collect(Undefined(name="entire_missing")),
+        [],
+    )
+    check(
+        "treats None top-level input as no layers",
+        collect(None),
+        [],
+    )
+    check(
         "suppresses only top-level False when enabled",
         collect([False, [False], ["loud"]], skip_layers=("false",)),
         [[False], ["loud"]],
