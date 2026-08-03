@@ -32,6 +32,12 @@
     # directive). The user/group itself is created by the pre-task.
     SYSTEMD_USER: apt-cacher-rs
 
+    # All daemon state lives under {{VAR}} (== StateDirectory below, which
+    # systemd chowns to the apt-cacher-rs user on start): the SQLite metadata
+    # DB directly, and the .deb cache under a declared cache/ subdir.
+    VAR_DIRS:
+      - cache
+
     ETC_FILES:
       - name: apt-cacher-rs.conf
         content: |
@@ -45,10 +51,10 @@
           # https_upgrade_mode (default 'Auto') fetches from upstream over TLS,
           # so clients may keep plain http:// URLs and still benefit from cache.
 
-          # State lives in the systemd-managed, auto-chowned dirs below
-          # (== compfuzor {{CACHE}} / {{VAR}} -- see the unit's CacheDirectory/
-          # StateDirectory, which systemd chowns to the daemon user on start).
-          cache_directory = '{{CACHE}}'
+          # All daemon state under {{VAR}} (== the unit's StateDirectory, which
+          # systemd chowns to the apt-cacher-rs user on start): SQLite metadata
+          # DB directly, .deb cache under the cache/ subdir declared via VAR_DIRS.
+          cache_directory = '{{VAR}}/cache'
           database_path   = '{{VAR}}/apt-cacher-rs.db'
 
           # Reference-based pruning reclaims packages absent from the current
@@ -102,9 +108,9 @@
       ExecStart: "{{GLOBAL_BINS_DIR}}/apt-cacher-rs --config-file {{ETC}}/apt-cacher-rs.conf --skip-log-timestamp"
       Restart: on-failure
       RestartSec: "3"
-      # Relative names -> systemd creates + chowns /var/lib/<NAME> and
-      # /var/cache/<NAME> to SYSTEMD_USER/Group on start (== {{VAR}} / {{CACHE}}).
-      CacheDirectory: "{{NAME}}"
+      # {{VAR}} (== {{NAME}} under /var/lib): systemd creates + chowns it to
+      # SYSTEMD_USER/Group on start. Holds the DB and the cache/ subdir
+      # (declared to compfuzor via VAR_DIRS above).
       StateDirectory: "{{NAME}}"
       LimitNOFILE: "16384"
       # Hardening, ported from the upstream debian/apt-cacher-rs.service.
@@ -165,15 +171,16 @@
 
       ## Locations
 
-      | what        | where                                            |
-      |------------|--------------------------------------------------|
-      | binary     | /usr/local/bin/apt-cacher-rs (real file, not symlink) |
-      | config     | {{ETC}}/apt-cacher-rs.conf                       |
-      | cache      | {{CACHE}} (systemd CacheDirectory, auto-chowned) |
-      | database   | {{VAR}}/apt-cacher-rs.db (systemd StateDirectory)|
-      | service    | {{NAME}}.service (system scope)                  |
-      | daemon user| apt-cacher-rs (system user, nologin)             |
-      | web UI     | http://<host>:3142/   (and /logs)                |
+      | what        | where                                                |
+      |------------|------------------------------------------------------|
+      | binary     | /usr/local/bin/apt-cacher-rs (real file, not symlink)|
+      | config     | {{ETC}}/apt-cacher-rs.conf                           |
+      | state (VAR)| {{VAR}} (systemd StateDirectory, auto-chowned)       |
+      | cache      | {{VAR}}/cache (declared via VAR_DIRS)                |
+      | database   | {{VAR}}/apt-cacher-rs.db                             |
+      | service    | {{NAME}}.service (system scope)                      |
+      | daemon user| apt-cacher-rs (system user, nologin)                 |
+      | web UI     | http://<host>:3142/   (and /logs)                    |
 
       ## Tuning
 
