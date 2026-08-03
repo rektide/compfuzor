@@ -16,6 +16,7 @@ if _PLUGIN_DIR not in sys.path:
 
 from get import get_path  # noqa: E402
 from dictify import dictify  # noqa: E402
+from template_data import raw_copy_template_data as _raw_copy_template_data  # noqa: E402
 
 
 def _as_list(value):
@@ -62,48 +63,6 @@ DICT_STRATEGY_PROFILES = {
 VALID_LIST_STRATEGIES = {"append", "append_unique"}
 VALID_LIST_OPERATIONS = {"append_unique_by", "merge_keyed"}
 VALID_DICT_STRATEGIES = {"overlay", "dict_overlay", "tool_versions_overlay"}
-
-
-def _raw_copy_template_data(value):
-    """Copy lazy Ansible containers without rendering tagged template strings.
-
-    Args:
-        value: Any value passed from Ansible/Jinja. Lazy containers are copied
-            through their modern ``_non_lazy_copy()`` hook before normal Python
-            traversal happens.  ``_LazyValue`` instances are unwrapped via their
-            ``.value`` property.
-
-    Returns:
-        A plain Python container tree where tagged strings remain tagged and
-        unevaluated.
-    """
-    if _is_nothing(value):
-        return value
-
-    non_lazy_copy = getattr(value, "_non_lazy_copy", None)
-    if callable(non_lazy_copy):
-        return _raw_copy_template_data(non_lazy_copy())
-
-    try:
-        from ansible._internal._templating._lazy_containers import _LazyValue
-        if isinstance(value, _LazyValue):
-            return _raw_copy_template_data(value.value)
-    except ImportError:
-        pass
-
-    if isinstance(value, dict):
-        return {
-            _raw_copy_template_data(k): _raw_copy_template_data(v)
-            for k, v in dict.items(value)
-        }
-
-    if isinstance(value, list):
-        return [_raw_copy_template_data(item) for item in list.__iter__(value)]
-
-    if isinstance(value, tuple):
-        return tuple(_raw_copy_template_data(item) for item in tuple.__iter__(value))
-
-    return value
 
 
 def _is_nothing(value):

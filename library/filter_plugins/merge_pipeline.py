@@ -5,6 +5,10 @@ extract``. A value preset fixes one normalizer, one combine, and its ordered
 refines, so callers select documented behavior rather than composing arbitrary
 transforms.
 
+Before a public stage inspects a value, it crosses the shared non-rendering
+template-data boundary. Lazy Ansible containers become ordinary containers,
+while tagged template strings remain unevaluated for the later rendering phase.
+
 Public Python API:
     ``normalize`` converts one raw value to a registered shape.
     ``collect`` applies top-level layer admission rules.
@@ -46,6 +50,7 @@ if _PLUGIN_DIR not in sys.path:
     sys.path.insert(0, _PLUGIN_DIR)
 
 from get import get_path  # noqa: E402
+from template_data import raw_copy_template_data  # noqa: E402
 
 
 def _error(message):
@@ -252,6 +257,9 @@ def normalize(value, *, to="list", **options):
         key_name="dest", value_name="src")`` returns a destination/source
         item record.
     """
+    value = raw_copy_template_data(value)
+    to = raw_copy_template_data(to)
+    options = raw_copy_template_data(options)
     if not isinstance(to, str) or to not in NORMALIZERS:
         _error(
             "unknown normalizer {!r}; expected one of: {}".format(
@@ -311,6 +319,10 @@ def collect(layers, skip_layers=_DEFAULT_SKIP_LAYERS):
     ``false`` predicate suppresses a layer equal to ``False`` but preserves
     ``[False]`` and ``["env", False]`` as data for the normalizer.
 
+    The input first crosses the non-rendering template-data boundary. That
+    materializes lazy containers safely; it is not semantic inspection of the
+    layer contents.
+
     Args:
         layers: Explicit ordered list or tuple of whole contribution layers.
         skip_layers: Names of predicates to apply: ``none``, ``undefined``,
@@ -325,6 +337,8 @@ def collect(layers, skip_layers=_DEFAULT_SKIP_LAYERS):
         AnsibleFilterError: If layers are not explicit, or predicate names are
             invalid.
     """
+    layers = raw_copy_template_data(layers)
+    skip_layers = raw_copy_template_data(skip_layers)
     surviving = []
     skip_names = _parse_skip_layers(skip_layers)
     for layer in _require_layers(layers):
@@ -680,6 +694,7 @@ def _resolve_preset(preset):
     The returned nested dictionaries are copies, ensuring per-call configured
     options never mutate ``VALUE_PRESETS``.
     """
+    preset = raw_copy_template_data(preset)
     if isinstance(preset, str):
         name = preset
         supplied_options = {}
@@ -734,6 +749,23 @@ def _resolve_preset(preset):
     }
 
 
+def _run_resolved_value_preset(layers, resolved, skip_layers, get):
+    """Execute a resolved preset without reinterpreting its configuration."""
+    surviving = collect(layers, skip_layers=skip_layers)
+    normalizer = resolved["normalizer"]
+    normalized = [
+        NORMALIZERS[normalizer["name"]](layer, **normalizer["options"])
+        for layer in surviving
+    ]
+    combine = resolved["combine"]
+    result = COMBINES[combine["name"]](normalized, **combine["options"])
+    for refine in resolved["refines"]:
+        result = REFINES[refine["name"]](result, **refine["options"])
+    if get is not None:
+        return get_path(result, raw_copy_template_data(get))
+    return result
+
+
 def run_value_preset(
     layers, *, preset, skip_layers=_DEFAULT_SKIP_LAYERS, get=None
 ):
@@ -761,20 +793,9 @@ def run_value_preset(
         AnsibleFilterError: If layers, preset configuration, stage inputs, or
             extraction options are invalid.
     """
-    resolved = _resolve_preset(preset)
-    surviving = collect(layers, skip_layers=skip_layers)
-    normalizer = resolved["normalizer"]
-    normalized = [
-        NORMALIZERS[normalizer["name"]](layer, **normalizer["options"])
-        for layer in surviving
-    ]
-    combine = resolved["combine"]
-    result = COMBINES[combine["name"]](normalized, **combine["options"])
-    for refine in resolved["refines"]:
-        result = REFINES[refine["name"]](result, **refine["options"])
-    if get is not None:
-        return get_path(result, get)
-    return result
+    return _run_resolved_value_preset(
+        layers, _resolve_preset(preset), skip_layers, get
+    )
 
 
 def _merge_with_kind(layers, preset, skip_layers, get, allowed_kinds, operation):
@@ -788,8 +809,8 @@ def _merge_with_kind(layers, preset, skip_layers, get, allowed_kinds, operation)
                 resolved["result_kind"],
             )
         )
-    return run_value_preset(
-        layers, preset=preset, skip_layers=skip_layers, get=get
+    return _run_resolved_value_preset(
+        layers, resolved, skip_layers, get
     )
 
 
@@ -944,6 +965,9 @@ def merge_fields(records, *, profile, get=None):
         ``{"artifacts": {"fields": {"LINKS": {"preset": "append"}}}}``
         recursively appends ``artifacts.LINKS`` contributions.
     """
+    records = raw_copy_template_data(records)
+    profile = raw_copy_template_data(profile)
+    get = raw_copy_template_data(get)
     _require_layers(records, name="records")
     for record in records:
         if not isinstance(record, collections.abc.Mapping):

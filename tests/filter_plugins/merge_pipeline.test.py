@@ -13,8 +13,11 @@ sys.path.insert(
 )
 
 from ansible.errors import AnsibleFilterError
+from ansible._internal._datatag import _tags
+from ansible.module_utils._internal._datatag import AnsibleTagHelper
 
 from merge_pipeline import (
+    COMBINES,
     REFINES,
     collect,
     merge_dict,
@@ -26,6 +29,28 @@ from merge_pipeline import (
 
 passed = 0
 failed = 0
+
+
+class FakeLazyList(list):
+    def __iter__(self):
+        raise AssertionError("lazy list rendered")
+
+    def _non_lazy_copy(self):
+        return [item for item in list.__iter__(self)]
+
+
+class FakeLazyDict(dict):
+    def __getitem__(self, key):
+        raise AssertionError("lazy dict rendered")
+
+    def get(self, key, default=None):
+        raise AssertionError("lazy dict rendered")
+
+    def items(self):
+        raise AssertionError("lazy dict rendered")
+
+    def _non_lazy_copy(self):
+        return {key: value for key, value in dict.items(self)}
 
 
 def check(name, actual, expected):
@@ -170,6 +195,118 @@ def test_combines_and_refines():
     )
 
 
+def test_fixed_stage_contracts():
+    print("\nfixed-stage contracts:")
+    check("identity preserves None", normalize(None, to="identity"), None)
+    check("mapping converts False to empty", normalize(False, to="mapping"), {})
+    check("items converts False to empty", normalize(False, to="items"), [])
+    check("concat has an empty identity", COMBINES["concat"]([]), [])
+    check("union has an empty identity", COMBINES["union"]([]), {})
+    check("replace has an empty identity", COMBINES["replace"]([]), None)
+    check_raises(
+        "concat rejects unnormalized mappings",
+        lambda: COMBINES["concat"]([{"not": "a list"}]),
+        "normalized list",
+    )
+    check_raises(
+        "union rejects unnormalized lists",
+        lambda: COMBINES["union"]([["not a mapping"]]),
+        "normalized mapping",
+    )
+
+    left = _tags.TrustedAsTemplate().tag("{{ LEFT }}")
+    right = _tags.TrustedAsTemplate().tag("{{ RIGHT }}")
+    tagged = merge_list(
+        [[{"name": "build", "generated": left}], [{"name": "build", "generated": right}]],
+        preset="bins_generated",
+    )[0]["generated"]
+    check("keyed fold preserves template text", tagged, "{{ LEFT }}\n{{ RIGHT }}")
+    check(
+        "keyed fold preserves template tags",
+        _tags.TrustedAsTemplate() in AnsibleTagHelper.tags(tagged),
+        True,
+    )
+    check(
+        "canonicalize retains unknowns when requested",
+        REFINES["canonicalize"](
+            ["unknown", "guard", "env"],
+            registry=("env", "guard"),
+            drop_unknown=False,
+        ),
+        ["env", "guard", "unknown"],
+    )
+    check(
+        "canonicalize drops unknowns when requested",
+        REFINES["canonicalize"](
+            ["unknown", "guard", "env"],
+            registry=("env", "guard"),
+            drop_unknown=True,
+        ),
+        ["env", "guard"],
+    )
+    check(
+        "helper layers suppress top-level False only",
+        merge_list(
+            [["env"], False, ["report", "guard"]],
+            preset="helpers",
+            skip_layers=("none", "undefined", "false"),
+        ),
+        ["env", "loud", "report", "guard"],
+    )
+    check_raises(
+        "configured presets reject operation envelopes",
+        lambda: merge_list([["a"]], preset={"op": "merge_keyed"}),
+        "unknown value preset",
+    )
+    check_raises(
+        "merge_list rejects the legacy skip keyword",
+        lambda: merge_list([["a"]], skip="all"),
+        "skip",
+    )
+    check_raises(
+        "merge_fields rejects aggregate preparation",
+        lambda: merge_fields([], profile={}, aggregate={}),
+        "aggregate",
+    )
+
+
+def test_lazy_template_data_boundary():
+    print("\nlazy template data boundary:")
+    check(
+        "collect copies lazy layer lists before iteration",
+        collect(FakeLazyList([["base"], ["incoming"]])),
+        [["base"], ["incoming"]],
+    )
+    check(
+        "normalize copies lazy mappings before access",
+        normalize(FakeLazyDict({"rust": "1.90"}), to="mapping"),
+        {"rust": "1.90"},
+    )
+    check(
+        "merge_list copies lazy layers before normalization",
+        merge_list(FakeLazyList([["base"], ["incoming"]]), preset="append"),
+        ["base", "incoming"],
+    )
+    check(
+        "merge_dict copies lazy layers before normalization",
+        merge_dict(FakeLazyList([{"BASE": 1}, {"INCOMING": 2}]), preset="overlay"),
+        {"BASE": 1, "INCOMING": 2},
+    )
+    check(
+        "merge_fields copies lazy records before field access",
+        merge_fields(
+            FakeLazyList(
+                [
+                    FakeLazyDict({"ENV": {"PATH": "/base"}}),
+                    FakeLazyDict({"ENV": {"HOME": "/home/user"}}),
+                ]
+            ),
+            profile=FakeLazyDict({"ENV": {"preset": "overlay"}}),
+        ),
+        {"ENV": {"PATH": "/base", "HOME": "/home/user"}},
+    )
+
+
 def test_presets_and_extract():
     print("\npresets:")
     check(
@@ -264,6 +401,8 @@ if __name__ == "__main__":
     test_collect()
     test_normalizers()
     test_combines_and_refines()
+    test_fixed_stage_contracts()
+    test_lazy_template_data_boundary()
     test_presets_and_extract()
     test_field_profiles()
     print("\n{} passed, {} failed".format(passed, failed))
