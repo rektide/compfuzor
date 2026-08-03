@@ -1,35 +1,47 @@
 #!/bin/bash
-# networkd-static.sh — generate a static systemd-networkd .network file.
+# networkd-static.sh — generate systemd-networkd .network files.
 #
-# WHY this exists: when you kexec into a rescue / initramfs environment to
-# reformat a remote single-disk box, the rescue env MUST come up on the SAME
-# IP so you can SSH back in. systemd-networkd with a deterministic static
-# config is the most reliable way to guarantee that. This renders a .network
-# file from a profile/env, or snapshots a live interface — IPv4 AND IPv6.
+# WHY this exists: deterministic networkd config — no DHCP dependency where you
+# don't want one, and a way to reproduce a box's networking elsewhere. This is
+# a GENERIC tool with several uses: configure an installed system, migrate a
+# Debian ifupdown box to networkd, bake output into an initrd/UKI, or snapshot
+# a live interface to reproduce it statically (the rescue/kexec "same IP" case
+# is just one instance). Emits .network files — IPv4 AND IPv6.
 #
 # (networkd is the daemon; networkctl is just the status query tool. Files
 # written here are consumed by systemd-networkd.service.)
 #
 # MODES
-#   RENDER  (default)   emit from --file profile / env / positional iface
-#   GATHER  (--gather)  read a running interface and reproduce it statically
-#                       (the pre-kexec snapshot)
+#   RENDER           (default) emit from --file profile / env / positional iface
+#   GATHER  (--gather)         read a live interface and reproduce it statically
+#   FROM-INTERFACES (--from-interfaces [PATH])
+#                              parse a Debian ifupdown /etc/network/interfaces
+#                              (or PATH), detect dhcp vs static per iface, and
+#                              emit one .network per iface (DHCP= where ifupdown
+#                              said dhcp, static Address=/Gateway=/DNS= otherwise).
 #
-# INPUT (render): --file <profile> > env vars > positional iface, in that order;
+# INPUT (render): --file profile > env vars > positional iface, in that order;
 # CLI flags -o/-p always win. Profile = key=value lines (IFACE=/ADDRESS=/...),
 # same shape as debinst-kexec's etc/<host>.env files.
 #
 # USAGE
-#   networkd-static.sh --file nasu.net.env                  # render from profile
-#   IFACE=eth0 ADDRESS=10.0.0.5 NETMASK=255.255.255.0 \
-#     GATEWAY=10.0.0.1 networkd-static.sh                   # render from env
+#   # render from a profile
+#   networkd-static.sh --file nasu.net.env
+#   # render from env
+#   IFACE=eth0 ADDRESS=10.0.0.5 NETMASK=255.255.255.0 GATEWAY=10.0.0.1 networkd-static.sh
+#   # snapshot a live interface
 #   networkd-static.sh --gather --predict-name -o /mnt/rescue/etc/systemd/network
+#   # migrate a Debian ifupdown box to networkd
+#   networkd-static.sh --from-interfaces -o /etc/systemd/network
+#   networkd-static.sh --from-interfaces /path/to/interfaces -o /tmp/net
 #
 # RENDER env (v4):  IFACE ADDRESS [PREFIX|NETMASK] GATEWAY DNS
 # RENDER env (v6):  ADDRESS6 [PREFIX6] GATEWAY6 DNS6        (PREFIX6 default 64)
 # GATHER env:       (none; reads the live iface)
+# FROM-INTERFACES:  PATH (default /etc/network/interfaces)
 #
 # OPTIONS
+#   --from-interfaces [PATH]  parse Debian ifupdown interfaces file (multi-iface)
 #   --file PATH         source a profile file first (render data)
 #   --gather            introspect a live interface (default is render)
 #   --predict-name      ask udev (net_id builtin) what systemd would name the
@@ -40,20 +52,22 @@
 #   -p/--priority  N    default 10 (lower sorts earlier)
 #
 # OUTPUT
-#   stdout: the path of the .network file written (for $(...) use).
-#   stderr: a single JSON status object at the end (ok/mode/iface/addrs/gateway/
+#   stdout: the path of each .network file written (one per line; for $(...) use).
+#   stderr: a single JSON status object at the end (ok/mode/iface(s)/addrs/gateway/
 #           dns/routes/problems). Soft failures collect in "problems" and do NOT
 #           stop the run.
 #
 #   <OUTDIR>/<PRIORITY>-<iface>.network  (iface = predicted name if --predict-name)
-#   ONE FILE IS ENOUGH for basic static: [Match] Name= + [Network] Address=
-#   (v4+v6)/Gateway=(v4+v6)/DNS=/DHCP=no/LinkLocalAddressing=ipv6, plus one
-#   [Route] per non-default static route. .link (device naming) and .netdev
-#   (bridges/bonds/vlans) are NOT emitted. (For NIC-rename resilience without
-#   --predict-name, hand-edit [Match] to MACAddress=<hwaddr>.)
+#   [Match] Name= + [Network] Address= (v4+v6)/Gateway=(v4+v6)/DNS=/DHCP=<mode>/
+#   LinkLocalAddressing=ipv6, plus one [Route] per non-default static route.
+#   DHCP=<no|ipv4|ipv6|yes>: render/gather always DHCP=no (static); from-interfaces
+#   sets it per-iface from the ifupdown method. .link/.netdev (bridges/bonds/vlans)
+#   are NOT emitted. (For NIC-rename resilience without --predict-name, hand-edit
+#   [Match] to MACAddress=<hwaddr>.)
 #
-# DNS: if none is resolved/given, falls back to OpenDNS + Google hardcodes
-# (208.67.222.222 208.67.220.220 8.8.8.8 8.8.4.4).
+# DNS: if none is resolved/given, render/gather fall back to OpenDNS + Google
+# hardcodes (208.67.222.222 208.67.220.220 8.8.8.8 8.8.4.4). from-interfaces does
+# NOT add fallback DNS (respects exactly what interfaces said, including none).
 #
 # Host deps: iproute2 (ip) for gather; udevadm for --predict-name; coreutils.
 
@@ -106,20 +120,59 @@ predict_udev_name() {
   return 1
 }
 
+# --- the .network writer (shared by all modes) -------------------------------
+# Uses globals: IFACE_MATCH, NAME_SOURCE, MODE, ADDRS[], ADDRS6[], GATEWAY,
+# GATEWAY6, ROUTES[], ROUTES6[], DNS[], DHCP_MODE, OUTDIR, PRIORITY.
+# Writes <OUTDIR>/<PRIORITY>-<IFACE_MATCH>.network and echoes its path.
+emit_network() {
+  local have_v6=0 file
+  if [ "${#ADDRS6[@]}" -gt 0 ] || [ -n "$GATEWAY6" ]; then have_v6=1; fi
+  mkdir -p "$OUTDIR"
+  file="$OUTDIR/${PRIORITY}-${IFACE_MATCH}.network"
+  {
+    printf '# generated by networkd-static.sh (%s, name=%s) on %s\n' "$MODE" "$NAME_SOURCE" "$(date -u +%FT%TZ 2>/dev/null || date)"
+    printf '[Match]\nName=%s\n\n' "$IFACE_MATCH"
+    printf '[Network]\n'
+    local a ns rt
+    for a in "${ADDRS[@]}";  do printf 'Address=%s\n' "$a"; done
+    if [ "${#ADDRS6[@]}" -gt 0 ]; then for a in "${ADDRS6[@]}"; do printf 'Address=%s\n' "$a"; done; fi
+    if [ -n "$GATEWAY"  ]; then printf 'Gateway=%s\n' "$GATEWAY";  fi
+    if [ -n "$GATEWAY6" ]; then printf 'Gateway=%s\n' "$GATEWAY6"; fi
+    if [ "${#DNS[@]}" -gt 0 ]; then for ns in "${DNS[@]}"; do printf 'DNS=%s\n' "$ns"; done; fi
+    printf 'DHCP=%s\n' "$DHCP_MODE"
+    if [ "$have_v6" = 1 ]; then
+      printf '# static ipv6 present -> disable RA/DHCPv6 for determinism\nIPv6AcceptRA=no\n'
+    fi
+    printf '# keep ipv6 link-local (needed for ND); drop v4 link-local\nLinkLocalAddressing=ipv6\n'
+    if [ "${#ROUTES[@]}"  -gt 0 ]; then
+      for rt in "${ROUTES[@]}"; do
+        printf '\n[Route]\nDestination=%s\nGateway=%s\n' "${rt%% *}" "${rt#* }"
+      done
+    fi
+    if [ "${#ROUTES6[@]}" -gt 0 ]; then
+      for rt in "${ROUTES6[@]}"; do
+        printf '\n[Route]\nDestination=%s\nGateway=%s\n' "${rt%% *}" "${rt#* }"
+      done
+    fi
+  } > "$file"
+  echo "$file"
+}
+
 # --- arg parse ---------------------------------------------------------------
 MODE=render
-CLI_IFACE=""; CLI_OUTDIR=""; CLI_PRIORITY=""; FILE_ARG=""; PREDICT=0
+CLI_IFACE=""; CLI_OUTDIR=""; CLI_PRIORITY=""; FILE_ARG=""; FROM_FILE=""; PREDICT=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --render)        MODE=render ;;
-    --gather)        MODE=gather ;;
-    --predict-name)  PREDICT=1 ;;
-    --file)          FILE_ARG="${2:?--file needs a PATH}"; shift ;;
-    -o|--output-dir) CLI_OUTDIR="${2:?--output-dir needs a DIR}"; shift ;;
-    -p|--priority)   CLI_PRIORITY="${2:?--priority needs a NUM}"; shift ;;
-    -h|--help)       sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 0 ;;
-    -*)              die "unknown option: $1 (try --help)" ;;
+    --from-interfaces)          MODE=from-interfaces; [ "${2:-}" != "" ] && ! [[ "$2" =~ ^- ]] && { FROM_FILE="$2"; shift; } ;;
+    --render)                   MODE=render ;;
+    --gather)                   MODE=gather ;;
+    --predict-name)             PREDICT=1 ;;
+    --file)                     FILE_ARG="${2:?--file needs a PATH}"; shift ;;
+    -o|--output-dir)            CLI_OUTDIR="${2:?--output-dir needs a DIR}"; shift ;;
+    -p|--priority)              CLI_PRIORITY="${2:?--priority needs a NUM}"; shift ;;
+    -h|--help)                  sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 0 ;;
+    -*)                         die "unknown option: $1 (try --help)" ;;
     *)
       [ -z "$CLI_IFACE" ] || die "unexpected arg: $1 (iface already set to $CLI_IFACE)"
       CLI_IFACE="$1" ;;
@@ -127,6 +180,126 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+# OUTDIR/PRIORITY resolve once (used by every mode).
+OUTDIR="${CLI_OUTDIR:-${OUTDIR:-/etc/systemd/network}}"
+PRIORITY="${CLI_PRIORITY:-${PRIORITY:-10}}"
+DHCP_MODE="${DHCP_MODE:-no}"
+
+# ===========================================================================
+# MODE: from-interfaces  — parse Debian ifupdown, emit one .network per iface
+# ===========================================================================
+run_from_interfaces() {
+  local file="${FROM_FILE:-/etc/network/interfaces}"
+  [ -f "$file" ] || die "from-interfaces: file not found: $file"
+
+  # per-iface accumulators (associative, keyed by iface name)
+  declare -A v4m v6m v4a v4n v6a v4g v6g dns
+  local order=()   # iface names in first-seen order
+  local cur="" fam=""
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%%#*}"            # strip "#" comments
+    set -- $line                  # word-split (drops leading/trailing ws)
+    [ $# -eq 0 ] && continue
+    case "$1" in
+      iface)
+        cur="$2"; fam="$3"; local m="${4:-none}"
+        # skip loopback + unknown families
+        if [ "$m" = "loopback" ] || ! [[ "$fam" =~ ^(inet|inet6)$ ]]; then cur=""; continue; fi
+        case "$fam" in
+          inet)  v4m[$cur]="$m" ;;
+          inet6) v6m[$cur]="$m" ;;
+        esac
+        # ordered unique append
+        local _seen=0 x; for x in "${order[@]+"${order[@]}"}"; do [ "$x" = "$cur" ] && _seen=1; done
+        [ $_seen = 0 ] && order+=("$cur")
+        ;;
+      address)
+        [ -n "$cur" ] || continue
+        case "$fam" in
+          inet)  v4a[$cur]="${v4a[$cur]:+${v4a[$cur]} }$2" ;;
+          inet6) v6a[$cur]="${v6a[$cur]:+${v6a[$cur]} }$2" ;;
+        esac ;;
+      netmask)
+        [ -n "$cur" ] && [ "$fam" = inet ] && v4n[$cur]="$2" ;;
+      gateway)
+        [ -n "$cur" ] || continue
+        case "$fam" in
+          inet)  v4g[$cur]="$2" ;;
+          inet6) v6g[$cur]="$2" ;;
+        esac ;;
+      dns-nameservers)
+        [ -n "$cur" ] && dns[$cur]="${dns[$cur]:+${dns[$cur]} }${*:2}" ;;
+      auto|allow-*|no-auto|source|source-directory|mapping|vlan-*|bond-*|bridge*) : ;;  # ignored
+    esac
+  done < "$file"
+
+  [ "${#order[@]}" -gt 0 ] || die "from-interfaces: no iface stanzas found in $file"
+
+  NAME_SOURCE="from-interfaces"
+  IFACE_KERNEL=""
+  local written=() ifc a pfx
+  for ifc in "${order[@]}"; do
+    # reset per-iface globals consumed by emit_network
+    IFACE="$ifc"; IFACE_MATCH="$ifc"
+    ADDRS=(); ADDRS6=(); GATEWAY=""; GATEWAY6=""; ROUTES=(); ROUTES6=(); DNS=()
+    DNS_SOURCE="from-interfaces"
+
+    # DHCP= combines v4/v6 method (dhcp on each family)
+    local v4d=0 v6d=0
+    [ "${v4m[$ifc]:-}" = "dhcp" ] && v4d=1
+    [ "${v6m[$ifc]:-}" = "dhcp" ] && v6d=1
+    if   [ $v4d = 1 ] && [ $v6d = 1 ]; then DHCP_MODE=yes
+    elif [ $v4d = 1 ]; then DHCP_MODE=ipv4
+    elif [ $v6d = 1 ]; then DHCP_MODE=ipv6
+    else DHCP_MODE=no
+    fi
+
+    # static v4: address(es) + optional netmask->prefix (address may already be CIDR)
+    if [ -n "${v4a[$ifc]:-}" ]; then
+      for a in ${v4a[$ifc]}; do
+        case "$a" in
+          */*) ADDRS+=("$a") ;;
+          *)   pfx=32; [ -n "${v4n[$ifc]:-}" ] && pfx="$(netmask_to_prefix "${v4n[$ifc]}")"
+               ADDRS+=("$a/$pfx") ;;
+        esac
+      done
+    fi
+    [ -n "${v4g[$ifc]:-}" ] && GATEWAY="${v4g[$ifc]}"
+
+    # static v6: address (assume CIDR, default /64)
+    if [ -n "${v6a[$ifc]:-}" ]; then
+      for a in ${v6a[$ifc]}; do
+        case "$a" in */*) ADDRS6+=("$a") ;; *) ADDRS6+=("$a/64") ;; esac
+      done
+    fi
+    [ -n "${v6g[$ifc]:-}" ] && GATEWAY6="${v6g[$ifc]}"
+
+    if [ -n "${dns[$ifc]:-}" ]; then read -r -a DNS <<<"${dns[$ifc]}"; fi
+
+    emit_network && written+=("$ifc")
+  done
+
+  # stderr: summary JSON
+  {
+    printf '{'
+    printf '"ok":%s,' "$([ ${#written[@]} -gt 0 ] && echo true || echo false)"
+    printf '"mode":%s,' "$(json_str "$MODE")"
+    printf '"source":%s,' "$(json_str "$file")"
+    printf '"ifaces":%s,' "$(json_arr "${written[@]}")"
+    printf '"problems":%s' "$(json_arr "${PROBLEMS[@]}")"
+    printf '}\n'
+  } >&2
+  exit 0
+}
+
+if [ "$MODE" = "from-interfaces" ]; then
+  run_from_interfaces
+fi
+
+# ===========================================================================
+# MODE: render / gather (single iface)
+# ===========================================================================
 # source profile (debinst-kexec-style) before resolving: --file > env > default;
 # CLI flags (-o/-p/positional) still win (captured above, applied below).
 if [ -n "$FILE_ARG" ]; then
@@ -141,8 +314,6 @@ if [ -n "$FILE_ARG" ]; then
   . "$FILE_ARG"
 fi
 
-OUTDIR="${CLI_OUTDIR:-${OUTDIR:-/etc/systemd/network}}"
-PRIORITY="${CLI_PRIORITY:-${PRIORITY:-10}}"
 IFACE="${CLI_IFACE:-${IFACE:-}}"
 DNS_ENV="${DNS:-}"; DNS6_ENV="${DNS6:-}"
 
@@ -234,41 +405,7 @@ if [ "${#DNS[@]}" -eq 0 ]; then
 fi
 
 # --- render the .network file ------------------------------------------------
-HAVE_V6=0
-if [ "${#ADDRS6[@]}" -gt 0 ] || [ -n "$GATEWAY6" ]; then HAVE_V6=1; fi
-
-mkdir -p "$OUTDIR"
-FILE="$OUTDIR/${PRIORITY}-${IFACE_MATCH}.network"
-{
-  printf '# generated by networkd-static.sh (%s, name=%s) on %s\n' "$MODE" "$NAME_SOURCE" "$(date -u +%FT%TZ 2>/dev/null || date)"
-  printf '[Match]\nName=%s\n\n' "$IFACE_MATCH"
-  printf '[Network]\n'
-  for a in "${ADDRS[@]}";  do printf 'Address=%s\n' "$a"; done
-  if [ "${#ADDRS6[@]}" -gt 0 ]; then for a in "${ADDRS6[@]}"; do printf 'Address=%s\n' "$a"; done; fi
-  if [ -n "$GATEWAY"  ]; then printf 'Gateway=%s\n' "$GATEWAY";  fi
-  if [ -n "$GATEWAY6" ]; then printf 'Gateway=%s\n' "$GATEWAY6"; fi
-  if [ "${#DNS[@]}" -gt 0 ]; then for ns in "${DNS[@]}"; do printf 'DNS=%s\n' "$ns"; done; fi
-  printf 'DHCP=no\n'
-  if [ "$HAVE_V6" = 1 ]; then
-    printf '# static ipv6 present -> disable RA/DHCPv6 for determinism\nIPv6AcceptRA=no\n'
-  fi
-  printf '# keep ipv6 link-local (needed for ND); drop v4 link-local\nLinkLocalAddressing=ipv6\n'
-  if [ "${#ROUTES[@]}"  -gt 0 ]; then
-    for rt in "${ROUTES[@]}"; do
-      dst="${rt%% *}"; via="${rt#* }"
-      printf '\n[Route]\nDestination=%s\nGateway=%s\n' "$dst" "$via"
-    done
-  fi
-  if [ "${#ROUTES6[@]}" -gt 0 ]; then
-    for rt in "${ROUTES6[@]}"; do
-      dst="${rt%% *}"; via="${rt#* }"
-      printf '\n[Route]\nDestination=%s\nGateway=%s\n' "$dst" "$via"
-    done
-  fi
-} > "$FILE"
-
-# --- stdout: file path (for $(...)) ------------------------------------------
-echo "$FILE"
+emit_network >/dev/null
 
 # --- stderr: single JSON status blob -----------------------------------------
 {
@@ -287,7 +424,7 @@ echo "$FILE"
   printf '"routes6":%s,' "$(json_arr "${ROUTES6[@]}")"
   printf '"dns":%s,' "$(json_arr "${DNS[@]}")"
   printf '"dns_source":%s,' "$(json_str "$DNS_SOURCE")"
-  printf '"output":%s,' "$(json_str "$FILE")"
+  printf '"output":%s,' "$(json_str "$OUTDIR/${PRIORITY}-${IFACE_MATCH}.network")"
   printf '"problems":%s' "$(json_arr "${PROBLEMS[@]}")"
   printf '}\n'
 } >&2
