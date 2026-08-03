@@ -16,9 +16,8 @@ Public Python API:
     ``merge_list`` and ``merge_dict`` constrain presets by result kind.
     ``merge_fields`` applies recursively nested field profiles.
 
-The ``normalize`` and ``merge_fields`` functions are Ansible filters now.
-``merge_list`` and ``merge_dict`` are the target Python API; their filter names
-remain owned by the legacy implementation until call sites have migrated.
+The ``normalize``, ``merge_list``, ``merge_dict``, and ``merge_fields``
+functions are all Ansible filters.
 """
 
 from __future__ import absolute_import, division, print_function
@@ -1031,17 +1030,12 @@ def merge_fields(records, *, profile, get=None):
 
 
 class FilterModule(object):
-    """Expose cfmerge filters to Ansible's filter-plugin loader.
-
-    ``normalize`` and ``merge_fields`` have no legacy name collision. The
-    canonical list and mapping merge filters are intentionally withheld until
-    the repository-wide caller migration can replace the legacy registration.
-    """
+    """Expose cfmerge filters to Ansible's filter-plugin loader."""
 
     def filters(self):
-        # merge_list and merge_dict keep their existing registrations until the
-        # repository-wide caller migration switches the public merge surface.
         return {
             "normalize": normalize,
+            "merge_list": merge_list,
+            "merge_dict": merge_dict,
             "merge_fields": merge_fields,
         }

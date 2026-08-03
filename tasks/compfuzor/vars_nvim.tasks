@@ -1,9 +1,10 @@
 - name: 'Build vars for NVIM plugin integration'
   set_fact:
     ETC_FILES: "{{ enhancedEtc|concat(ETC_FILES|default([])) }}"
-    BINS: "{{ enhancedBins|mergeKeyed(bins, key='name', concat_fields=['generated']) }}"
+    BINS: "{{ enhancedBins | merge_list(_bins, preset={'name': 'merge_keyed', 'key': 'name', 'concat_fields': ['generated']}) }}"
+    _lazyList: "{{_lazyList}}"
   vars:
-    bins: "{{BINS|default([])}}"
+    _bins: "{{BINS}}"
     _nvim: "{{NVIM|default({})}}"
     _lazyList: "{{_nvim.lazy|default([])}}"
     enhancedEtc: "{{ _ftpluginFiles + _lazyLuaFiles }}"

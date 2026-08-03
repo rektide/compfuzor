@@ -46,7 +46,7 @@
 
 - name: 'Contribute MCP-specific BINS (override disabler + installer)'
   set_fact:
-    BINS: "{{ BINS | merge_list('bins_generated', [disable, install]) }}"
+    BINS: "{{ BINS | merge_list(disable, install, preset='bins_generated') }}"
   vars:
     disable:
       name: mcp-disable.sh

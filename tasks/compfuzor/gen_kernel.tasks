@@ -39,16 +39,16 @@
 
 - name: "Compfuzor: synthesize kernel leaf subsystem artifacts"
   set_fact:
-    ETC_FILES: "{{ [ETC_FILES | default([]), _kernel_modprobe_contrib.ETC_FILES | default([]), _kernel_sysctl_contrib.ETC_FILES | default([]), _kernel_sysfs_contrib.ETC_FILES | default([]), _kernel_params_contrib.ETC_FILES | default([]), _kernel_bls_contrib.ETC_FILES | default([])] | merge_list('append') }}"
+    ETC_FILES: "{{ ETC_FILES | merge_list(_kernel_modprobe_contrib.ETC_FILES, _kernel_sysctl_contrib.ETC_FILES, _kernel_sysfs_contrib.ETC_FILES, _kernel_params_contrib.ETC_FILES, _kernel_bls_contrib.ETC_FILES, preset='append') }}"
     # gen_bins.tasks runs after this synthesis and composes these build-* and
     # install-* scripts into generic action entry points. Each contributed bin
     # is tagged `subsystem: kernel` so >=2 leaves in an action roll up into a
     # <action>-kernel.sh compositor (build-kernel.sh / install-kernel.sh /
     # apply-kernel.sh) rather than flattening into the top action compositor.
-    BINS: "{{ [BINS | default([]), _kernel_modprobe_contrib.BINS | default([]) | map('combine', {'subsystem': 'kernel'}) | list, _kernel_sysctl_contrib.BINS | default([]) | map('combine', {'subsystem': 'kernel'}) | list, _kernel_sysfs_contrib.BINS | default([]) | map('combine', {'subsystem': 'kernel'}) | list, _kernel_params_contrib.BINS | default([]) | map('combine', {'subsystem': 'kernel'}) | list, _kernel_bls_contrib.BINS | default([]) | map('combine', {'subsystem': 'kernel'}) | list] | merge_list('bins_generated') }}"
-    ENV: "{{ _kernel_modprobe_contrib.ENV | merge_dict(_kernel_sysctl_contrib.ENV, _kernel_sysfs_contrib.ENV, _kernel_params_contrib.ENV, _kernel_bls_contrib.ENV, ENV, skip='all') }}"
-    ENV_LIST: "{{ [ENV_LIST | default([]), _kernel_modprobe_contrib.ENV_LIST | default([]), _kernel_sysctl_contrib.ENV_LIST | default([]), _kernel_sysfs_contrib.ENV_LIST | default([]), _kernel_params_contrib.ENV_LIST | default([]), _kernel_bls_contrib.ENV_LIST | default([])] | merge_list('append_unique') }}"
-    PKGS: "{{ [PKGS | default([]), _kernel_modprobe_contrib.PKGS | default([]), _kernel_sysctl_contrib.PKGS | default([]), _kernel_sysfs_contrib.PKGS | default([]), _kernel_params_contrib.PKGS | default([]), _kernel_bls_contrib.PKGS | default([])] | merge_list('append_unique') }}"
+    BINS: "{{ BINS | merge_list(_kernel_modprobe_contrib.BINS | default([]) | map('combine', {'subsystem': 'kernel'}) | list, _kernel_sysctl_contrib.BINS | default([]) | map('combine', {'subsystem': 'kernel'}) | list, _kernel_sysfs_contrib.BINS | default([]) | map('combine', {'subsystem': 'kernel'}) | list, _kernel_params_contrib.BINS | default([]) | map('combine', {'subsystem': 'kernel'}) | list, _kernel_bls_contrib.BINS | default([]) | map('combine', {'subsystem': 'kernel'}) | list, preset='bins_generated') }}"
+    ENV: "{{ _kernel_modprobe_contrib.ENV | merge_dict(_kernel_sysctl_contrib.ENV, _kernel_sysfs_contrib.ENV, _kernel_params_contrib.ENV, _kernel_bls_contrib.ENV, ENV, preset='overlay', skip_layers=['none', 'undefined', 'false', 'empty']) }}"
+    ENV_LIST: "{{ ENV_LIST | merge_list(_kernel_modprobe_contrib.ENV_LIST, _kernel_sysctl_contrib.ENV_LIST, _kernel_sysfs_contrib.ENV_LIST, _kernel_params_contrib.ENV_LIST, _kernel_bls_contrib.ENV_LIST, preset='append_unique') }}"
+    PKGS: "{{ PKGS | merge_list(_kernel_modprobe_contrib.PKGS, _kernel_sysctl_contrib.PKGS, _kernel_sysfs_contrib.PKGS, _kernel_params_contrib.PKGS, _kernel_bls_contrib.PKGS, preset='append_unique') }}"
     STATUSES: "{{ (STATUSES | default([])) + _kernel_status_reporters }}"
   when: _kernel_any_active
   vars:

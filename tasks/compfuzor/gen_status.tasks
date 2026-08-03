@@ -15,8 +15,8 @@
 
 - name: "Compfuzor: synthesize status artifacts"
   set_fact:
-    BINS: "{{ [BINS | default([]), _status_contrib.BINS | default([])] | merge_list('bins_generated') }}"
-    ENV: "{{ _status_contrib.ENV | merge_dict(ENV, skip='all') }}"
+    BINS: "{{ BINS | merge_list(_status_contrib.BINS, preset='bins_generated') }}"
+    ENV: "{{ _status_contrib.ENV | merge_dict(ENV, preset='overlay', skip_layers=['none', 'undefined', 'false', 'empty']) }}"
   when: lookup('subsys', id='status', get='active', default=false) | bool
   vars:
     _status_contrib: "{{ lookup('subsys', id='status', get='contrib', default={}) }}"

@@ -1,13 +1,13 @@
 ---
 - name: "Compfuzor: normalize version-manager inputs"
   set_fact:
-    _tool_versions: "{{ TOOL_VERSIONS | default({}) | merge_dict(strategy='tool_versions_overlay', single=true) }}"
-    _mise_versions: "{{ MISE_VERSIONS | default({}) | merge_dict(strategy='tool_versions_overlay', single=true) }}"
+    _tool_versions: "{{ TOOL_VERSIONS | merge_dict(preset='tool_versions_overlay') }}"
+    _mise_versions: "{{ MISE_VERSIONS | merge_dict(preset='tool_versions_overlay') }}"
 
 - name: "Compfuzor: synthesize tool_versions subsystem artifacts"
   set_fact:
-    ETC_FILES: "{{ [[{'name': '.tool-versions', 'content': _tv_content}], ETC_FILES] | merge_list('append') }}"
-    LINKS: "{{ [[{'src': DIR + '/etc/.tool-versions', 'dest': '.tool-versions'}], LINKS] | merge_list('append') }}"
+    ETC_FILES: "{{ [{'name': '.tool-versions', 'content': _tv_content}] | merge_list(ETC_FILES, preset='append') }}"
+    LINKS: "{{ [{'src': DIR + '/etc/.tool-versions', 'dest': '.tool-versions'}] | merge_list(LINKS, preset='append') }}"
   vars:
     _tv_content: |
       {% for target, version in _tool_versions.items() %}
@@ -19,15 +19,15 @@
 
 - name: "Compfuzor: synthesize mise_versions subsystem artifacts"
   set_fact:
-    ETC_FILES: "{{ [[{'name': 'mise.toml', 'content': _mise_content}], ETC_FILES] | merge_list('append') }}"
-    LINKS: "{{ [[{'src': DIR + '/etc/mise.toml', 'dest': 'mise.toml'}], LINKS] | merge_list('append') }}"
-    BINS: "{{ [BINS | default([]), _mise_bins] | merge_list('bins_generated') }}"
+    ETC_FILES: "{{ [{'name': 'mise.toml', 'content': _mise_content}] | merge_list(ETC_FILES, preset='append') }}"
+    LINKS: "{{ [{'src': DIR + '/etc/mise.toml', 'dest': 'mise.toml'}] | merge_list(LINKS, preset='append') }}"
+    BINS: "{{ BINS | merge_list(_mise_bins, preset='bins_generated') }}"
   vars:
     _mise_bins:
       - name: install.sh
         early: |
           mise install
-    _mise_tools: "{{ [_tool_versions, _mise_versions] | merge_dict(strategy='tool_versions_overlay') }}"
+    _mise_tools: "{{ _tool_versions | merge_dict(_mise_versions, preset='tool_versions_overlay') }}"
     _mise_content: |
       [tools]
       {% for target, version in _mise_tools.items() %}

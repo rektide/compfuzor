@@ -694,9 +694,7 @@ def _deep_merge_dicts(base, overlay):
 class FilterModule(object):
     def filters(self):
         return {
-            "merge_dict": merge_dict,
             "merge_dict_subsys": merge_dict_subsys,
-            "merge_list": merge_list,
             "merge_list_subsys": merge_list_subsys,
             "subsys_publish": subsys_publish,
         }
