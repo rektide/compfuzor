@@ -9,7 +9,7 @@ _PLUGIN_DIR = os.path.abspath(os.path.dirname(__file__))
 if _PLUGIN_DIR not in sys.path:
     sys.path.insert(0, _PLUGIN_DIR)
 
-from merge_pipeline import run_value_preset  # noqa: E402
+from cfmerge import run_value_preset  # noqa: E402
 
 # Hardcoded one-line descriptions, emitted as `# <name> helper: <description>`
 # before each inclusion by files/_bin.

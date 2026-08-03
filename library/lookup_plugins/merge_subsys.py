@@ -6,7 +6,7 @@ DOCUMENTATION = """
     short_description: Merge one subsystem contrib artifact into its global artifact
     description:
       - Reads C(SUBSYSTEM.<id>.contrib.<contrib>) and the matching current global artifact.
-      - Dispatches to named value presets in C(library/filter_plugins/merge_pipeline.py).
+      - Dispatches to named value presets in C(library/filter_plugins/cfmerge.py).
       - Reads variables through raw-copy helpers so tagged template strings are not rendered during merge.
     options:
       _terms:
@@ -92,7 +92,7 @@ from merge import (  # noqa: E402
     _raw_copy_template_data,
     _truthy,
 )
-from merge_pipeline import run_value_preset, value_preset_metadata  # noqa: E402
+from cfmerge import run_value_preset, value_preset_metadata  # noqa: E402
 
 _LOOKUP_DIR = os.path.abspath(os.path.dirname(__file__))
 if _LOOKUP_DIR not in sys.path:

@@ -16,7 +16,7 @@ from ansible.errors import AnsibleFilterError
 from ansible._internal._datatag import _tags
 from ansible.module_utils._internal._datatag import AnsibleTagHelper
 
-from merge_pipeline import (
+from cfmerge import (
     COMBINES,
     REFINES,
     collect,
