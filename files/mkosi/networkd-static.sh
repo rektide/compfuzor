@@ -158,6 +158,44 @@ emit_network() {
   echo "$file"
 }
 
+# Emit the per-IFACE JSON status blob to stderr (shared by render/gather).
+emit_status() {
+  {
+    printf '{'
+    printf '"ok":%s,' "$([ "${#PROBLEMS[@]}" -eq 0 ] && echo true || echo false)"
+    printf '"mode":%s,' "$(json_str "$MODE")"
+    printf '"iface_requested":%s,' "$(json_opt "${IFACE:-}")"
+    printf '"iface_kernel":%s,' "$(json_opt "$IFACE_KERNEL")"
+    printf '"iface_match":%s,' "$(json_str "$IFACE_MATCH")"
+    printf '"name_source":%s,' "$(json_str "$NAME_SOURCE")"
+    printf '"addrs4":%s,' "$(json_arr "${ADDRS[@]}")"
+    printf '"gateway4":%s,' "$(json_opt "$GATEWAY")"
+    printf '"addrs6":%s,' "$(json_arr "${ADDRS6[@]}")"
+    printf '"gateway6":%s,' "$(json_opt "$GATEWAY6")"
+    printf '"routes4":%s,' "$(json_arr "${ROUTES[@]}")"
+    printf '"routes6":%s,' "$(json_arr "${ROUTES6[@]}")"
+    printf '"dns":%s,' "$(json_arr "${DNS[@]}")"
+    printf '"dns_source":%s,' "$(json_str "$DNS_SOURCE")"
+    printf '"output":%s,' "$(json_str "$OUTDIR/${PRIORITY}-${IFACE_MATCH}.network")"
+    printf '"problems":%s' "$(json_arr "${PROBLEMS[@]}")"
+    printf '}\n'
+  } >&2
+}
+
+# Apply --predict-name to the resolved kernel iface (soft): ask udev net_id
+# what it would name IFACE_KERNEL afresh and use that for [Match] Name= + file.
+resolve_predict_name() {
+  if [ "$PREDICT" = 1 ]; then
+    if [ -z "$IFACE_KERNEL" ]; then
+      PROBLEMS+=("predict-name: no iface to probe; skipped")
+    elif predicted="$(predict_udev_name "$IFACE_KERNEL")" && [ -n "$predicted" ]; then
+      IFACE_MATCH="$predicted"; NAME_SOURCE="udev(net_id)"
+    else
+      PROBLEMS+=("predict-name: udevadm net_id unavailable or no predictable name for '$IFACE_KERNEL'; kept it")
+    fi
+  fi
+}
+
 # --- arg parse ---------------------------------------------------------------
 MODE=render
 CLI_IFACE=""; CLI_OUTDIR=""; CLI_PRIORITY=""; FILE_ARG=""; FROM_FILE=""; PREDICT=0
@@ -293,88 +331,76 @@ run_from_interfaces() {
   exit 0
 }
 
-if [ "$MODE" = "from-interfaces" ]; then
-  run_from_interfaces
-fi
-
 # ===========================================================================
-# MODE: render / gather (single iface)
+# MODE: render — build .network from --file profile / env (single iface)
 # ===========================================================================
-# source profile (debinst-kexec-style) before resolving: --file > env > default;
-# CLI flags (-o/-p/positional) still win (captured above, applied below).
-if [ -n "$FILE_ARG" ]; then
-  [ -f "$FILE_ARG" ] || die "--file not found: $FILE_ARG"
-  # validate in a subshell first so a broken profile becomes a JSON error
-  # instead of an uncaught abort. (Values with spaces MUST be quoted, e.g.
-  # DNS="a b" — same shell-sourceable shape as debinst-kexec's profiles.)
-  if ! ( set -e; . "$FILE_ARG" ) >/dev/null 2>&1; then
-    die "--file '$FILE_ARG' failed to source (check shell syntax; quote multi-word values)"
+run_render() {
+  local pfx
+  # source profile (debinst-kexec-style): --file > env > default; -o/-p captured above.
+  if [ -n "$FILE_ARG" ]; then
+    [ -f "$FILE_ARG" ] || die "--file not found: $FILE_ARG"
+    # validate in a subshell so a broken profile becomes a JSON error instead of
+    # an uncaught abort. Multi-word values MUST be quoted (e.g. DNS="a b").
+    if ! ( set -e; . "$FILE_ARG" ) >/dev/null 2>&1; then
+      die "--file '$FILE_ARG' failed to source (check shell syntax; quote multi-word values)"
+    fi
+    # shellcheck source=/dev/null
+    . "$FILE_ARG"
   fi
-  # shellcheck source=/dev/null
-  . "$FILE_ARG"
-fi
+  IFACE="${CLI_IFACE:-${IFACE:-}}"
+  [ -n "$IFACE" ] || die "render needs IFACE= (the [Match] Name=)"
+  [ -n "${ADDRESS:-}${ADDRESS6:-}" ] || die "render needs ADDRESS (v4) and/or ADDRESS6 (v6); both unset"
+  IFACE_KERNEL="$IFACE"; IFACE_MATCH="$IFACE"; NAME_SOURCE="given"
+  ADDRS=(); ADDRS6=(); GATEWAY="${GATEWAY:-}"; GATEWAY6="${GATEWAY6:-}"; ROUTES=(); ROUTES6=(); DNS=(); DNS_SOURCE=""
+  if [ -n "${ADDRESS:-}" ]; then
+    if   [ -n "${PREFIX:-}" ];  then pfx="$PREFIX"
+    elif [ -n "${NETMASK:-}" ]; then pfx="$(netmask_to_prefix "$NETMASK")"
+    else pfx=32; fi
+    ADDRS+=("$ADDRESS/$pfx")
+  fi
+  if [ -n "${ADDRESS6:-}" ]; then ADDRS6+=("$ADDRESS6/${PREFIX6:-64}"); fi
+  if [ -n "${DNS:-}" ];  then read -r -a DNS <<<"$DNS";  DNS_SOURCE="given"; fi
+  if [ -n "${DNS6:-}" ]; then read -r -a _d6 <<<"$DNS6"; DNS+=("${_d6[@]}"); DNS_SOURCE="given"; fi
+  resolve_predict_name
+  if [ "${#DNS[@]}" -eq 0 ]; then DNS=("${FALLBACK_DNS[@]}"); DNS_SOURCE="fallback(opendns+google)"; fi
+  emit_network >/dev/null
+  emit_status
+}
 
-IFACE="${CLI_IFACE:-${IFACE:-}}"
-DNS_ENV="${DNS:-}"; DNS6_ENV="${DNS6:-}"
-
-# capture env scalars BEFORE array shadowing below
-ADDRS=();  ADDRS6=()
-GATEWAY="${GATEWAY:-}"; GATEWAY6="${GATEWAY6:-}"
-ROUTES=(); ROUTES6=()
-DNS=(); DNS_SOURCE=""
-
-# --- resolve the kernel iface name (gather may auto-detect) ------------------
-IFACE_KERNEL="${IFACE:-}"
-NAME_SOURCE="given"
-if [ "$MODE" = gather ]; then
+# ===========================================================================
+# MODE: gather — snapshot a live interface to a static .network (single iface)
+# ===========================================================================
+run_gather() {
   command -v ip >/dev/null 2>&1 || die "iproute2 'ip' not found (use render mode)"
+  IFACE="${CLI_IFACE:-${IFACE:-}}"
+  IFACE_KERNEL="$IFACE"; IFACE_MATCH="$IFACE"; NAME_SOURCE="given"
   if [ -z "$IFACE_KERNEL" ]; then
+    # auto-detect from the default route (sed form, then awk fallback)
     IFACE_KERNEL="$(ip -o -4 route show default 2>/dev/null | sed -n 's/.* via \([^ ]*\) dev \([^ ]*\).*/\2/p' | head -1)"
-    # the dev-based form is more reliable; fall back to the simple field
     if [ -z "$IFACE_KERNEL" ]; then
       IFACE_KERNEL="$(ip -o -4 route show default 2>/dev/null | awk '{for(i=1;i<=NF;i++)if($i=="dev"){print $(i+1);exit}}')"
     fi
     [ -n "$IFACE_KERNEL" ] || die "could not determine iface (no default route); pass an iface name"
-    NAME_SOURCE="kernel-default-route"
+    NAME_SOURCE="kernel-default-route"; IFACE_MATCH="$IFACE_KERNEL"
   fi
-fi
-IFACE_MATCH="$IFACE_KERNEL"
-
-# --- predict name (soft) -----------------------------------------------------
-if [ "$PREDICT" = 1 ]; then
-  if [ -z "$IFACE_KERNEL" ]; then
-    PROBLEMS+=("predict-name: no iface to probe; skipped")
-  elif predicted="$(predict_udev_name "$IFACE_KERNEL")" && [ -n "$predicted" ]; then
-    IFACE_MATCH="$predicted"; NAME_SOURCE="udev(net_id)"
-  else
-    PROBLEMS+=("predict-name: udevadm net_id unavailable or no predictable name for '$IFACE_KERNEL'; kept it")
-  fi
-fi
-
-# --- gather / render data ----------------------------------------------------
-if [ "$MODE" = gather ]; then
-  while read -r a; do
-    case "$a" in "" | 127.*) continue ;; esac
-    ADDRS+=("$a")
-  done < <(ip -o -4 addr show dev "$IFACE_KERNEL" 2>/dev/null | awk '{print $4}')
+  ADDRS=(); ADDRS6=(); GATEWAY=""; GATEWAY6=""; ROUTES=(); ROUTES6=(); DNS=(); DNS_SOURCE=""
+  local a line dst via r
+  while read -r a; do case "$a" in "" | 127.*) continue ;; esac; ADDRS+=("$a"); done \
+    < <(ip -o -4 addr show dev "$IFACE_KERNEL" 2>/dev/null | awk '{print $4}')
   [ "${#ADDRS[@]}" -gt 0 ] || die "no IPv4 address on $IFACE_KERNEL"
   GATEWAY="$(ip -o -4 route show default dev "$IFACE_KERNEL" 2>/dev/null | sed -n 's/.* via \([^ ]*\).*/\1/p' | head -1)"
   while read -r line; do
     case "$line" in "" | default*) continue ;; *" via "*) ;; *) continue ;; esac
-    dst="${line%% *}"
-    via="$(printf '%s' "$line" | sed -n 's/.* via \([^ ]*\).*/\1/p')"
+    dst="${line%% *}"; via="$(printf '%s' "$line" | sed -n 's/.* via \([^ ]*\).*/\1/p')"
     [ -n "$dst" ] && [ -n "$via" ] && ROUTES+=("$dst $via")
   done < <(ip -o -4 route show dev "$IFACE_KERNEL" 2>/dev/null)
   # v6: keep global addresses (drop fe80::/64 link-local); gateway often is fe80::
-  while read -r a; do
-    case "$a" in "" | fe80::* | ::1/*) continue ;; esac
-    ADDRS6+=("$a")
-  done < <(ip -o -6 addr show dev "$IFACE_KERNEL" 2>/dev/null | awk '{print $4}')
+  while read -r a; do case "$a" in "" | fe80::* | ::1/*) continue ;; esac; ADDRS6+=("$a"); done \
+    < <(ip -o -6 addr show dev "$IFACE_KERNEL" 2>/dev/null | awk '{print $4}')
   GATEWAY6="$(ip -o -6 route show default dev "$IFACE_KERNEL" 2>/dev/null | sed -n 's/.* via \([^ ]*\).*/\1/p' | head -1)"
   while read -r line; do
     case "$line" in "" | default*) continue ;; *" via "*) ;; *) continue ;; esac
-    dst="${line%% *}"
-    via="$(printf '%s' "$line" | sed -n 's/.* via \([^ ]*\).*/\1/p')"
+    dst="${line%% *}"; via="$(printf '%s' "$line" | sed -n 's/.* via \([^ ]*\).*/\1/p')"
     [ -n "$dst" ] && [ -n "$via" ] && ROUTES6+=("$dst $via")
   done < <(ip -o -6 route show dev "$IFACE_KERNEL" 2>/dev/null)
   for r in /etc/resolv.conf /run/systemd/resolve/resolv.conf; do
@@ -383,48 +409,17 @@ if [ "$MODE" = gather ]; then
       < <(awk '/^nameserver[[:space:]]/ {print $2}' "$r" | grep -v '^127\.')
     if [ "${#DNS[@]}" -gt 0 ]; then DNS_SOURCE="gathered"; break; fi
   done
-else
-  [ -n "$IFACE" ] || die "render needs IFACE= (the [Match] Name=)"
-  [ -n "${ADDRESS:-}${ADDRESS6:-}" ] || die "render needs ADDRESS (v4) and/or ADDRESS6 (v6); both unset"
-  if [ -n "${ADDRESS:-}" ]; then
-    if   [ -n "${PREFIX:-}" ];  then pfx="$PREFIX"
-    elif [ -n "${NETMASK:-}" ]; then pfx="$(netmask_to_prefix "$NETMASK")"
-    else pfx=32; fi
-    ADDRS+=("$ADDRESS/$pfx")
-  fi
-  if [ -n "${ADDRESS6:-}" ]; then ADDRS6+=("$ADDRESS6/${PREFIX6:-64}"); fi
-  if [ -n "$DNS_ENV" ];  then read -r -a DNS <<<"$DNS_ENV";  DNS_SOURCE="given"; fi
-  if [ -n "$DNS6_ENV" ]; then
-    read -r -a _d6 <<<"$DNS6_ENV"; DNS+=("${_d6[@]}"); DNS_SOURCE="given"
-  fi
-fi
+  resolve_predict_name
+  if [ "${#DNS[@]}" -eq 0 ]; then DNS=("${FALLBACK_DNS[@]}"); DNS_SOURCE="fallback(opendns+google)"; fi
+  emit_network >/dev/null
+  emit_status
+}
 
-# --- DNS fallback (soft) -----------------------------------------------------
-if [ "${#DNS[@]}" -eq 0 ]; then
-  DNS=("${FALLBACK_DNS[@]}"); DNS_SOURCE="fallback(opendns+google)"
-fi
-
-# --- render the .network file ------------------------------------------------
-emit_network >/dev/null
-
-# --- stderr: single JSON status blob -----------------------------------------
-{
-  printf '{'
-  printf '"ok":%s,' "$([ "${#PROBLEMS[@]}" -eq 0 ] && echo true || echo false)"
-  printf '"mode":%s,' "$(json_str "$MODE")"
-  printf '"iface_requested":%s,' "$(json_opt "${IFACE:-}")"
-  printf '"iface_kernel":%s,' "$(json_opt "$IFACE_KERNEL")"
-  printf '"iface_match":%s,' "$(json_str "$IFACE_MATCH")"
-  printf '"name_source":%s,' "$(json_str "$NAME_SOURCE")"
-  printf '"addrs4":%s,' "$(json_arr "${ADDRS[@]}")"
-  printf '"gateway4":%s,' "$(json_opt "$GATEWAY")"
-  printf '"addrs6":%s,' "$(json_arr "${ADDRS6[@]}")"
-  printf '"gateway6":%s,' "$(json_opt "$GATEWAY6")"
-  printf '"routes4":%s,' "$(json_arr "${ROUTES[@]}")"
-  printf '"routes6":%s,' "$(json_arr "${ROUTES6[@]}")"
-  printf '"dns":%s,' "$(json_arr "${DNS[@]}")"
-  printf '"dns_source":%s,' "$(json_str "$DNS_SOURCE")"
-  printf '"output":%s,' "$(json_str "$OUTDIR/${PRIORITY}-${IFACE_MATCH}.network")"
-  printf '"problems":%s' "$(json_arr "${PROBLEMS[@]}")"
-  printf '}\n'
-} >&2
+# ===========================================================================
+# dispatch
+# ===========================================================================
+case "$MODE" in
+  from-interfaces) run_from_interfaces ;;   # exits with its own summary
+  gather)          run_gather ;;
+  render|*)        run_render ;;
+esac
