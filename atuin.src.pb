@@ -34,7 +34,10 @@
     ETC_FILES:
       - name: daemon.conf
         content: |
-          [daemon]
+          # Keys land inside the stock [daemon] section that atuin's
+          # default-config ships. Keep this fragment header-less so the
+          # block-in-file `after:^\[daemon\]` anchor doesn't produce a
+          # duplicate [daemon] header (TOML rejects duplicate tables).
           enabled = true
           # systemd manages lifecycle via the socket unit, so the CLI must not
           # autostart/double-manage it (the two are incompatible).
@@ -50,12 +53,22 @@
         content: |
           set -e
           mkdir -p ~/.config/atuin
-          # Inject the [daemon] block idempotently (appends at EOF, managed by
-          # the named block so re-runs update it in place; creates the file on
-          # a fresh machine).
+          CFG=~/.config/atuin/config.toml
+          # Seed from atuin's stock template if missing/empty, so the
+          # [daemon] section header (and other defaults) exist for our
+          # block to anchor against. Without this, the after-regex has
+          # nothing to match and the keys would orphan at EOF with no
+          # enclosing section.
+          if [ ! -s "$CFG" ]; then
+            atuin default-config > "$CFG"
+          fi
+          # Inject the [daemon] keys idempotently, anchored to the stock
+          # section header so they fall UNDER [daemon] rather than being
+          # appended at EOF (which previously created a duplicate table
+          # and broke atuin's TOML parser).
           block-in-file -n atuin-daemon \
             -i "{{DIR}}/etc/daemon.conf" \
-            -o ~/.config/atuin/config.toml \
-            -a EOF -C file
+            -o "$CFG" \
+            -a '^\[daemon\]' -C file
   tasks:
     - import_tasks: tasks/compfuzor.includes
