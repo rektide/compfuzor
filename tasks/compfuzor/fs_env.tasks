@@ -8,14 +8,14 @@
   become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
   when: >
     (item.hasEnv or _env_requested) and
-    not item.skip|default(False)
+    item.skip is deffalsy
   loop:
     - file: env
       hasEnv: "{{has_env.stdout|default(0)|int > 0}}"
     - file: env.usermode
       hasEnv: "{{has_env_usermode.stdout|default(0)|int > 0}}"
       exportMode: True
-      skip: "{{ENV_USER|default(False) is falsy}}"
+      skip: "{{ENV_USER is deffalsy}}"
     - file: env.export
       hasEnv: "{{has_env_export.stdout|default(0)|int > 0}}"
       skip: "{{ENV_IS_EXPORT|default(False)}}"
@@ -98,7 +98,7 @@
     src: "{{DIR}}/env"
     dest: "{{DIR}}/env.export"
     state: link
-  when: ENV_IS_EXPORT|default(False)
+  when: ENV_IS_EXPORT is deftruthy
 
 - name: link env.`NAME` into PREFIX_DIR, if not existing
   file:
@@ -109,7 +109,7 @@
     group: "{{GROUP|default(omit)}}"
   become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
   # might be cool to have an exists check that ignores dead symlinks
-  when: PREFIX_DIR|default(False) and (item.hasEnv or _env_requested) and not item.skip|default(False) and _dest is not exists
+  when: PREFIX_DIR is deftruthy and (item.hasEnv or _env_requested) and item.skip is deffalsy and _dest is not exists
   loop:
     - file: env
       hasEnv: "{{has_env.stdout|default(0)|int > 0}}"
