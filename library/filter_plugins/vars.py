@@ -33,8 +33,11 @@ class FilterModule(object):
         If item is a list, filter to only values that are found
         prefix and suffix can be added to the item name
         """
-        # Get variables from the context
-        all_vars = context.get("vars", {})
+        # Get the full local templating scope via get_all() (the modern,
+        # non-deprecated path). context.get("vars", {}) used the internal
+        # "vars" dictionary which is removed in ansible-core 2.24.
+        get_all = getattr(context, "get_all", None)
+        all_vars = (get_all() if callable(get_all) else context.vars) or {}
 
         # Get hostvars for the current host
         inventory_hostname = context.get("inventory_hostname")
