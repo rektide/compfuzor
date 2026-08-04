@@ -11,6 +11,10 @@
 # case (we emit .tool-versions, repo has mise.toml, or vice versa) is left
 # intentionally unhandled/undefined.
 #
+# Set TOOL_VERSIONS_LINK_BYPASS=True to skip emitting the repo-root link
+# entirely (the DIR/.tool-versions link is unaffected). Use this when the repo
+# owns its own version config and you don't want compfuzor touching it.
+#
 # Ansible templating note: dicts/lists must be built INSIDE jinja expressions
 # so referenced vars resolve at template time. Defining them as YAML literals
 # in `vars:` leaves nested "{{ ... }}" strings raw, which then fail later
@@ -34,10 +38,11 @@
     _tv_active: "{{ _tool_versions is deflengthy and _mise_versions is not deflengthy }}"
     _mise_active: "{{ _mise_versions is deflengthy }}"
     _has_repo: "{{ (REPO_DIR | default('')) and (REPO_DIR is directory) }}"
+    _link_repo: "{{ _has_repo and not (TOOL_VERSIONS_LINK_BYPASS|default(False)|bool) }}"
     _tv_path: "{{ DIR + '/etc/.tool-versions' }}"
     _tv_links: >-
       {{ [{'src': _tv_path, 'dest': '.tool-versions'}] +
-         ([{'src': _tv_path, 'dest': REPO_DIR + '/.tool-versions'}] if _has_repo else []) }}
+         ([{'src': _tv_path, 'dest': REPO_DIR + '/.tool-versions'}] if _link_repo else []) }}
     _tv_content: |
       {% for target, version in _tool_versions.items() %}
       {{ target }} {{ version if version != True else lookup('vars', target | upper + '_VERSION') }}
@@ -45,7 +50,7 @@
     _mise_path: "{{ DIR + '/etc/mise.toml' }}"
     _mise_links: >-
       {{ [{'src': _mise_path, 'dest': 'mise.toml'}] +
-         ([{'src': _mise_path, 'dest': REPO_DIR + '/mise.toml'}] if _has_repo else []) }}
+         ([{'src': _mise_path, 'dest': REPO_DIR + '/mise.toml'}] if _link_repo else []) }}
     _mise_tools: "{{ _tool_versions | merge_dict(_mise_versions, preset='tool_versions_overlay') }}"
     _mise_content: |
       [tools]
