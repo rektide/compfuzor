@@ -4,8 +4,10 @@
     path: "{{GLOBAL_BINS_DIR}}"
     state: directory
   with_items: "{{ BINS|normalize(to='list') }}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(GLOBAL_BINS_DIR|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
+  become: "{{ _become.become }}"
   when: item.global is deftruthy
+  vars:
+    _become: "{{ GLOBAL_BINS_DIR|become_calc }}"
 - name: "Link `BINS` into `GLOBAL_BINS_DIR`{{ _delayText }}"
   file:
     src: "{{_src|defaultDir(BINS_DIR)}}"
@@ -13,9 +15,10 @@
     state: link
     force: "{{ item.force|default(False) }}"
   with_items: "{{ BINS|normalize(to='list') }}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
+  become: "{{ _become.become }}"
   when: item.global is deftruthy and item.delay|default(False) == delay_phase|default(False)
   vars:
     _src: "{{item.src|def(item.name, item.link, falsy=True)|defaultDir(DIR+'/bin')}}"
     _dest: "{{(item.global if item.global is deftruthy and item.global is string else item.dest|def(item.name, _src|basename, falsy=True))|defaultDir(GLOBAL_BINS_DIR)}}"
     _delayText: "{{ ' (' + delay_phase + ')' if delay_phase|def else ''}}"
+    _become: "{{ _dest|become_calc }}"
