@@ -10,5 +10,4 @@
   vars:
     env_current: "{{ ENV if ENV is defmapping else {} }}"
     gopath_env: "{{ {'GOPATH': DIR} if REPO_GOGET is defined and 'GOPATH' not in env_current else {} }}"
-    repo_dir_env: "{{ {'REPO_DIR': REPO_DIR} if REPO_DIR is defined else {} }}"
-    env_additions: "{{ gopath_env | combine(repo_dir_env) }}"
+    env_additions: "{{ gopath_env | combine_iff({'REPO_DIR': REPO_DIR}) }}"
