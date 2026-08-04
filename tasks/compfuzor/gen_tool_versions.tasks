@@ -15,23 +15,30 @@
 # entirely (the DIR/.tool-versions link is unaffected). Use this when the repo
 # owns its own version config and you don't want compfuzor touching it.
 #
-# Ansible templating note: dicts/lists must be built INSIDE jinja expressions
-# so referenced vars resolve at template time. Defining them as YAML literals
-# in `vars:` leaves nested "{{ ... }}" strings raw, which then fail later
-# (e.g. during fs_hierarchy) when the task-local vars are out of scope.
+# Artifact lists (_tv_etc, _tv_links, _mise_etc, _mise_links, _mise_bins) are
+# defined as YAML literals under `vars:` and rendered through
+# merge_list(resolve=True). This keeps the dict construction in YAML (readable,
+# diffs cleanly) while ensuring template strings inside -- which reference
+# task-local vars like _tv_path / _tool_versions -- are rendered at THIS task's
+# scope before being stored as facts. Without resolve=, ansible leaves nested
+# template strings raw and re-renders them later when the task-local vars are
+# out of scope (e.g. inside fs_hierarchy), producing '_tool_versions is
+# undefined'.
 - name: "Compfuzor: synthesize version-manager artifacts"
   set_fact:
     ETC_FILES: >-
       {{ (
-        ([{'name': '.tool-versions', 'content': _tv_content}] if _tv_active else []) +
-        ([{'name': 'mise.toml', 'content': _mise_content}] if _mise_active else [])
-      ) | merge_list(ETC_FILES, preset='append') }}
+        (_tv_etc if _tv_active else []) +
+        (_mise_etc if _mise_active else [])
+      ) | merge_list(ETC_FILES, preset='append', resolve=True) }}
     LINKS: >-
       {{ (
         (_tv_links if _tv_active else []) +
         (_mise_links if _mise_active else [])
-      ) | merge_list(LINKS, preset='append') }}
-    BINS: "{{ (_mise_bins if _mise_active else []) | merge_list(BINS, preset='bins_generated') }}"
+      ) | merge_list(LINKS, preset='append', resolve=True) }}
+    BINS: >-
+      {{ (_mise_bins if _mise_active else [])
+         | merge_list(BINS, preset='bins_generated', resolve=True) }}
   vars:
     _tool_versions: "{{ TOOL_VERSIONS | merge_dict(preset='tool_versions_overlay') }}"
     _mise_versions: "{{ MISE_VERSIONS | merge_dict(preset='tool_versions_overlay') }}"
@@ -40,23 +47,35 @@
     _has_repo: "{{ (REPO_DIR | default('')) and (REPO_DIR is directory) }}"
     _link_repo: "{{ _has_repo and not (TOOL_VERSIONS_LINK_BYPASS|default(False)|bool) }}"
     _tv_path: "{{ DIR + '/etc/.tool-versions' }}"
-    _tv_links: >-
-      {{ [{'src': _tv_path, 'dest': '.tool-versions'}] +
-         ([{'src': _tv_path, 'dest': REPO_DIR + '/.tool-versions'}] if _link_repo else []) }}
-    _tv_content: |
-      {% for target, version in _tool_versions.items() %}
-      {{ target }} {{ version if version != True else lookup('vars', target | upper + '_VERSION') }}
-      {% endfor %}
+    _tv_base_link:
+      src: "{{ _tv_path }}"
+      dest: ".tool-versions"
+    _tv_repo_link:
+      src: "{{ _tv_path }}"
+      dest: "{{ REPO_DIR }}/.tool-versions"
+    _tv_links: "{{ [_tv_base_link] + ([_tv_repo_link] if _link_repo else []) }}"
+    _tv_etc:
+      - name: ".tool-versions"
+        content: |
+          {% for target, version in _tool_versions.items() %}
+          {{ target }} {{ version if version != True else lookup('vars', target | upper + '_VERSION') }}
+          {% endfor %}
     _mise_path: "{{ DIR + '/etc/mise.toml' }}"
-    _mise_links: >-
-      {{ [{'src': _mise_path, 'dest': 'mise.toml'}] +
-         ([{'src': _mise_path, 'dest': REPO_DIR + '/mise.toml'}] if _link_repo else []) }}
+    _mise_base_link:
+      src: "{{ _mise_path }}"
+      dest: "mise.toml"
+    _mise_repo_link:
+      src: "{{ _mise_path }}"
+      dest: "{{ REPO_DIR }}/mise.toml"
+    _mise_links: "{{ [_mise_base_link] + ([_mise_repo_link] if _link_repo else []) }}"
     _mise_tools: "{{ _tool_versions | merge_dict(_mise_versions, preset='tool_versions_overlay') }}"
-    _mise_content: |
-      [tools]
-      {% for target, version in _mise_tools.items() %}
-      {{ target }} = {{ (version if version != True else (lookup('vars', target | upper + '_VERSION') | default('latest'))) | to_json }}
-      {% endfor %}
+    _mise_etc:
+      - name: "mise.toml"
+        content: |
+          [tools]
+          {% for target, version in _mise_tools.items() %}
+          {{ target }} = {{ (version if version != True else (lookup('vars', target | upper + '_VERSION') | default('latest'))) | to_json }}
+          {% endfor %}
     _mise_bins:
       - name: install.sh
         early: |
