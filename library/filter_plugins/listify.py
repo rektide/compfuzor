@@ -1,3 +1,8 @@
+"""PARTIALLY DEPRECATED: ``concat`` is dead (all callers migrated to
+``merge_list``). ``listify`` has 3 remaining callers — migrate them to
+``normalize(to='list')`` or ``normalize(to='items')``, then delete this
+module.
+"""
 import collections
 import numbers
 

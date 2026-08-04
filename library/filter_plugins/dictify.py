@@ -1,3 +1,6 @@
+"""DEPRECATED: No live callers. Only imported by the deprecated ``merge.py``.
+Replacement: ``normalize(to='mapping', shorthand=True)`` in ``cfmerge.py``.
+"""
 from __future__ import annotations
 
 import collections.abc
