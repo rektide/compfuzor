@@ -8,10 +8,10 @@
     ETC_DIRS: "{{ETC_DIRS|default(_systemd_has_units|ternary([], omit))}}"
     _systemd_has_units: "{{_systemd_has_units}}"
   vars:
-    _systemd_has_service: "{{ SYSTEMD_SERVICE|default(false) or (SYSTEMD_SERVICES|default({}))|length > 0 }}"
-    _systemd_has_socket: "{{ SYSTEMD_SOCKET|default(false) or (SYSTEMD_SOCKETS|default({}))|length > 0 }}"
-    _systemd_has_mount: "{{ SYSTEMD_MOUNT|default(false) or (SYSTEMD_MOUNTS|default({}))|length > 0 }}"
-    _systemd_has_dnssd: "{{ SYSTEMD_DNSSD|default(false) or (SYSTEMD_DNSSDS|default({}))|length > 0 }}"
+    _systemd_has_service: "{{ SYSTEMD_SERVICE is deftruthy or (SYSTEMD_SERVICES|default({}))|length > 0 }}"
+    _systemd_has_socket: "{{ SYSTEMD_SOCKET is deftruthy or (SYSTEMD_SOCKETS|default({}))|length > 0 }}"
+    _systemd_has_mount: "{{ SYSTEMD_MOUNT is deftruthy or (SYSTEMD_MOUNTS|default({}))|length > 0 }}"
+    _systemd_has_dnssd: "{{ SYSTEMD_DNSSD is deftruthy or (SYSTEMD_DNSSDS|default({}))|length > 0 }}"
     _systemd_has_units: "{{ _systemd_has_service or _systemd_has_socket or _systemd_has_mount or _systemd_has_dnssd }}"
     types: >-
       {{ SYSTEMD_UNITTYPES_ALL 
@@ -25,7 +25,7 @@
 - name: 'Generate systemd unit ETC_FILES'
   set_fact:
     ETC_FILES: "{{ ETC_FILES | merge_list(_etc_file, preset='append', resolve=True) }}"
-  when: _has_type and not SYSTEMD_INSTALL_BYPASS|default(False)
+  when: _has_type and SYSTEMD_INSTALL_BYPASS is deffalsy
   loop: "{{ _loop_items }}"
   vars:
     _is_separate: "{{ SYSTEMD_INSTALL == 'separate' }}"
@@ -52,7 +52,7 @@
     _unit_name: "{{ _unit_name_val if _unit_name_val and _unit_name_val not in [True, 'True'] else NAME }}"
     _has_type: "{{ _unit_type in SYSTEMD_UNITTYPES }}"
     _separate_suffix: "{{ '-user' if _is_separate and _unit_scope == 'user' else '' }}"
-    _unit_filename: "{{ _unit_name }}{{ _separate_suffix }}{{ '@' if SYSTEMD_INSTANCES|default(False) else '' }}.{{ _unit_type }}"
+    _unit_filename: "{{ _unit_name }}{{ _separate_suffix }}{{ '@' if SYSTEMD_INSTANCES is deftruthy else '' }}.{{ _unit_type }}"
     UNIT_TYPE: "{{ _unit_type }}"
     _raw_vars_base: "{{ (lookup('vars', SYSTEMD_VARS_ROOT, default={}) if SYSTEMD_VARS_ROOT is defined else {}) | combine({'target': target} if target is defined else {}) }}"
     _raw_vars: "{{ _raw_vars_base | combine({'USERMODE': True}) if _is_separate and _unit_scope == 'user' else _raw_vars_base }}"
@@ -80,7 +80,7 @@
   when:
     - SYSTEMD_ROOTS is defined
     - _has_type_data
-    - not SYSTEMD_INSTALL_BYPASS|default(False)
+    - SYSTEMD_INSTALL_BYPASS is deffalsy
   loop: "{{ _root_type_pairs }}"
   vars:
     _root_type_pairs: >-
@@ -160,7 +160,7 @@
     ETC_FILES: "{{ ETC_FILES | merge_list(_etc_file, preset='append', resolve=True) }}"
   when:
     - _dropin_entries | length > 0
-    - not SYSTEMD_INSTALL_BYPASS|default(False)
+    - SYSTEMD_INSTALL_BYPASS is deffalsy
   loop: "{{ _dropin_entries }}"
   vars:
     _spec: "{{ item.spec }}"
@@ -187,7 +187,7 @@
     BINS: "{{ BINS | merge_list(_bin_item, preset='bins_generated') }}"
   when:
     - _dropin_entries | length > 0
-    - not SYSTEMD_INSTALL_BYPASS|default(False)
+    - SYSTEMD_INSTALL_BYPASS is deffalsy
   vars:
     _dropin_rows: >-
       {%- set rows = [] -%}
@@ -210,7 +210,7 @@
 - name: 'Add systemd install-unit.sh script to BINS'
   set_fact:
     BINS: "{{ enhancedBins | merge_list(BINS, preset='bins_generated') }}"
-  when: (_systemd_has_units or SYSTEMD_ROOTS is deflengthy) and not SYSTEMD_INSTALL_BYPASS|default(False)
+  when: (_systemd_has_units or SYSTEMD_ROOTS is deflengthy) and SYSTEMD_INSTALL_BYPASS is deffalsy
   vars:
     enhancedBins:
       - name: install-unit.sh
@@ -221,7 +221,7 @@
   set_fact:
     BINS: "{{ BINS | merge_list(_bin_item, preset='bins_generated', resolve=True) }}"
   when:
-    - not SYSTEMD_INSTALL_BYPASS|default(False)
+    - SYSTEMD_INSTALL_BYPASS is deffalsy
   loop: "{{ _systemd_install_specs }}"
   vars:
     # Unified install-spec list: one entry per (unit, scope) from BOTH top-level
