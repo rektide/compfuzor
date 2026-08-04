@@ -94,7 +94,7 @@ Filters that absorb undefined/missing values so a pipeline doesn't abort.
 
 | Filter | Signature | Purpose | Undefined/None | Source |
 |---|---|---|---|---|
-| `def` | `(value, fallback?)` | Replace undefined with `None`, or with `fallback` when given. | **tolerates undefined → `None`** (or the 2nd arg). | [`def.py:6`](/library/filter_plugins/def.py) |
+| `def` | `(*values)` | First non-undefined argument, else `None`. Generalizes the old binary `def(X, Y)` — a literal final fallback (`def(X, Y, 'default')`) works because literals are always defined. | **tolerates undefined → `None`** when all args are undefined. | [`def.py:6`](/library/filter_plugins/def.py) |
 | `truthy` | `(value, fallback?)` | Coerce to a real boolean; undefined → `False` (or `bool(fallback)`). | **tolerates undefined → `False`**. | [`def.py:16`](/library/filter_plugins/def.py) |
 | `deflengthy` | `(value, fallback?)` | True iff value is list-like with `len > 0`; undefined → `False`. | **tolerates undefined → `False`**. | [`def.py:26`](/library/filter_plugins/def.py) |
 | `get` | `(value, path, default=None)` | Safe dotted-path traversal through dicts/lists; missing segment, type mismatch, or undefined → `default`. | **tolerates undefined → `default`**. | [`get.py:56`](/library/filter_plugins/get.py) |
@@ -104,6 +104,7 @@ Filters that absorb undefined/missing values so a pipeline doesn't abort.
 
 ```jinja
 {{ maybe_undef | def([]) }}            {# -> [] #}
+{{ X | def(Y, 'literal fallback') }}   {# first defined of X, Y, or 'literal fallback' #}
 {{ maybe_undef | truthy }}             {# -> false #}
 {{ record | get("a.b.c", "fallback") }}
 ```
