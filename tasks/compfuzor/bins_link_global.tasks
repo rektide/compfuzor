@@ -3,7 +3,7 @@
   file:
     path: "{{GLOBAL_BINS_DIR}}"
     state: directory
-  with_items: "{{BINS|default([])}}"
+  with_items: "{{ BINS|normalize(to='list') }}"
   become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(GLOBAL_BINS_DIR|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
   when: item.global|default(False)
 - name: "Link `BINS` into `GLOBAL_BINS_DIR`{{ _delayText }}"
@@ -12,7 +12,7 @@
     dest: "{{_dest}}"
     state: link
     force: "{{ item.force|default(False) }}"
-  with_items: "{{BINS|default([])}}"
+  with_items: "{{ BINS|normalize(to='list') }}"
   become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
   when: item.global|default(False) and item.delay|default(False) == delay_phase|default(False)
   vars:
