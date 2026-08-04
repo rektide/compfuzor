@@ -107,7 +107,7 @@
     state: "{{item.state|default(omit)}}"
     owner: "{{do_become|ternary(owner|default(_cf_user_id, true),omit)}}"
     group: "{{do_become|ternary(group|default(_cf_user_gid, true),omit)}}"
-  with_items: "{{_vals.files|default([])}}"
+  with_items: "{{ _vals.files|normalize(to='list') }}"
   become: "{{do_become}}"
   when: item.line is deftruthy
   vars:
@@ -128,7 +128,7 @@
     backup: "{{item.backup|default(FS_BACKUP|default(False))}}"
     # TODO: ansible 2.3+:
     #mode: "{{COPY_MODE|default(preserve)}}"
-  loop: "{{_vals.files|default([], true)}}"
+  loop: "{{ _vals.files|normalize(to='list') }}"
   loop_control:
     index_var: idx
   become: "{{do_become}}"
@@ -165,7 +165,7 @@
     group: "{{do_become|ternary(group|default(_cf_user_gid, true),omit)}}"
   become: "{{do_become}}"
   when: _vals.d
-  with_items: "{{_vals.d|default([], true)}}"
+  with_items: "{{ _vals.d|normalize(to='list') }}"
   vars:
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
