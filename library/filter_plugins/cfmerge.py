@@ -18,9 +18,11 @@ Ansible filters exposed:
     ``join2``         — coerce to list and join into a string, dropping booleans.
 
 Related modules:
-    ``template_data`` — raw data-access helpers shared across plugins.
-    ``when``          — conditional inclusion filters (``when``, ``whenAnd``).
-    ``each``          — record-list transformation filter (``tag_each``).
+    ``template_data``   -- raw data-access helpers shared across plugins.
+    ``template_render`` -- recursive template-string rendering (``resolve``
+                           filter); consumed here via ``merge_list(resolve=True)``.
+    ``when``            -- conditional inclusion filters (``when``, ``whenAnd``).
+    ``each``            -- record-list transformation filter (``tag_each``).
 """
 
 from __future__ import absolute_import, division, print_function
@@ -55,29 +57,7 @@ if _PLUGIN_DIR not in sys.path:
 
 from get import get_path  # noqa: E402
 from template_data import raw_copy_template_data  # noqa: E402
-
-
-def _resolve_templates(context, value):
-    """Recursively render Jinja template strings using the evaluation context.
-
-    Strings containing ``{{`` are rendered via the Jinja environment with the
-    current variable scope (including loop variables). Non-strings and strings
-    without template markers pass through unchanged.
-    """
-    if isinstance(value, str) and "{{" in value:
-        variables = context.get("vars", {})
-        if variables:
-            try:
-                return context.environment.from_string(value).render(**variables)
-            except Exception:
-                return value
-    if isinstance(value, dict):
-        return {k: _resolve_templates(context, v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_resolve_templates(context, v) for v in value]
-    if isinstance(value, tuple):
-        return tuple(_resolve_templates(context, v) for v in value)
-    return value
+from template_render import render_templates  # noqa: E402
 
 
 def _error(message):
@@ -904,7 +884,8 @@ def merge_list(context, *layers, preset="append", skip_layers=_DEFAULT_SKIP_LAYE
     When ``resolve=True``, template strings inside layers are rendered using
     the current variable scope before entering the pipeline. Use this when
     layers contain templates referencing task-local variables (loop vars,
-    task vars) that won't be in scope during later rendering.
+    task vars) that won't be in scope during later rendering. Equivalent to
+    piping each layer through the ``resolve`` filter (see ``template_render``).
 
     Args:
         *layers: Ordered raw contribution layers. Each argument is one layer.
@@ -921,7 +902,7 @@ def merge_list(context, *layers, preset="append", skip_layers=_DEFAULT_SKIP_LAYE
             result.
     """
     if resolve:
-        layers = tuple(_resolve_templates(context, layer) for layer in layers)
+        layers = tuple(render_templates(context, layer) for layer in layers)
     return _merge_with_kind(
         layers,
         preset,

@@ -94,6 +94,34 @@ Filters that absorb undefined/missing values so a pipeline doesn't abort.
 
 ---
 
+## Templates / Rendering
+
+| Filter | Signature | Purpose | Undefined/None | Source |
+|---|---|---|---|---|
+| `resolve` | `(value)` *(context-injected)* | Recursively render Jinja template strings inside a value using the current variable scope. Walks dicts/lists/tuples; strings containing `{{` are rendered, everything else passes through. Render errors fall through to the original value. | **tolerates undefined** -- a missing var inside a template string leaves that string unchanged rather than raising. | [`template_render.py:35`](/library/filter_plugins/template_render.py) |
+
+**Examples**
+
+```jinja
+# Render template strings inside a YAML-literal dict before it leaves
+# task scope (so the stored fact doesn't carry task-local refs):
+_inline_etc:
+  - name: "foo"
+    content: "{{ _local_var }}"
+ETC_FILES: "{{ _inline_etc | resolve | merge_list(ETC_FILES, preset='append') }}"
+
+# Same effect via merge_list's resolve= kwarg:
+BINS: "{{ BINS | merge_list(_item, preset='bins_generated', resolve=True) }}"
+```
+
+Use `resolve` when a value carries template strings referencing variables
+(task-local vars, loop vars) that won't be in scope during later rendering
+passes — e.g. when a dict literal defined under `vars:` would otherwise be
+stored raw in a fact and re-rendered downstream (commonly inside
+`fs_hierarchy`) where the task-local vars are gone.
+
+---
+
 ## Paths / Strings / Regex
 
 | Filter | Signature | Purpose | Undefined/None | Source |
@@ -233,6 +261,7 @@ operand leaks through unchanged.
 | [`merge_strategy.py`](/library/filter_plugins/merge_strategy.py) | `merge_with_strategy` |
 | [`passthrough_inspect.py`](/library/filter_plugins/passthrough_inspect.py) | `passthrough_inspect`, `materialize_dict`, `count_templates`, `merge_preserving` |
 | [`rejectAny.py`](/library/filter_plugins/rejectAny.py) | `rejectAny` |
+| [`template_render.py`](/library/filter_plugins/template_render.py) | `resolve` |
 | [`unsafety.py`](/library/filter_plugins/unsafety.py) | `unsafety` |
 | [`vars.py`](/library/filter_plugins/vars.py) | `has_var`, `has_vars` |
 | [`zim_fragment.py`](/library/filter_plugins/zim_fragment.py) | `zim_fragment` |
