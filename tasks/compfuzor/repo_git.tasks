@@ -5,7 +5,7 @@
     owner: "{{ OWNER|def(_cf_user_id, omit) }}"
     group: "{{ GROUP|def(ansible_group_id, omit) }}"
   #become: "{{dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
-  when: REPO|default(False) is truthy or REPOS|default(False) is truthy
+  when: REPO is deftruthy or REPOS is deftruthy
   vars:
     dest: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
 
@@ -17,16 +17,16 @@
     repos_base: "{{ REPO_DIR|default(DIR, true) }}"
     git_repos_rendered: |
       {%- set ns = namespace(items=[]) -%}
-      {%- if REPO|default(False) is truthy -%}
+      {%- if REPO is deftruthy -%}
       {%-   set _ = ns.items.append({'repo': REPO, 'dest': base_dest, 'become': false}) -%}
       {%- endif -%}
-      {%- if REPOS|default(False) is mapping -%}
+      {%- if REPOS is defmapping -%}
       {%-   for it in (REPOS | normalize(to='items')) -%}
       {%-     set d = it.key | defaultDir(repos_base) -%}
       {%-     set _ = ns.items.append({'repo': it.value, 'dest': d, 'become': COMFUZOR_SHOULD_BECOME|default(BECOME|default(d|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool}) -%}
       {%-   endfor -%}
       {%- endif -%}
-      {%- if REPOS|default(False) and (REPOS is not mapping) -%}
+      {%- if REPOS is deftruthy and (REPOS is not mapping) -%}
       {%-   for it in REPOS -%}
       {%-     set url = it.repo | default(it) -%}
       {%-     set d = repos_base ~ '/' ~ (url | basename | regex_replace('\.git$', '')) -%}
@@ -44,13 +44,13 @@
     depth: "{{ GIT_DEPTH|default(omit) }}"
     version: "{{ GIT_VERSION|default(omit) }}"
     update: "{{ GIT_UPDATE|default(omit) }}"
-    reference: "{{ item.reference|defaultDir(SRCS_DIR) if item.reference|default(False) else omit }}"
+    reference: "{{ item.reference|defaultDir(SRCS_DIR) if item.reference is deftruthy else omit }}"
   become: "{{ item.become|default(false)|bool }}"
   loop: "{{ git_repos|normalize(to='list') }}"
   when: >
     git_repos is deflengthy
-    and not GIT_BYPASS|default(False)
-    and not REPO_BYPASS|default(False)
+    and GIT_BYPASS is deffalsy
+    and REPO_BYPASS is deffalsy
 
 - name: "Compfuzor: colocate jj on cloned git repositories"
   shell: |
@@ -63,6 +63,6 @@
   loop: "{{ git_repos|normalize(to='list') }}"
   when: >
     git_repos is deflengthy
-    and not GIT_BYPASS|default(False)
-    and not REPO_BYPASS|default(False)
-    and not JJ_BYPASS|default(False)
+    and GIT_BYPASS is deffalsy
+    and REPO_BYPASS is deffalsy
+    and JJ_BYPASS is deffalsy
