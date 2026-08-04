@@ -1,36 +1,59 @@
 ---
-- name: "Compfuzor: normalize version-manager inputs"
+# Single-pass synthesis of version-manager artifacts.
+#
+# asdf/mise call getcwd(), which resolves through the DIR/repo symlink to
+# the *physical* archive path and then walks ancestors. So DIR/.tool-versions
+# is invisible from inside the repo. When a checkout actually exists at
+# REPO_DIR, also link .tool-versions/mise.toml into the repo root.
+#
+# `force` stays at the LINKS default (false): a real file already in the repo
+# is NOT clobbered -- ansible fails loudly rather than stomping. The cross-file
+# case (we emit .tool-versions, repo has mise.toml, or vice versa) is left
+# intentionally unhandled/undefined.
+#
+# Ansible templating note: dicts/lists must be built INSIDE jinja expressions
+# so referenced vars resolve at template time. Defining them as YAML literals
+# in `vars:` leaves nested "{{ ... }}" strings raw, which then fail later
+# (e.g. during fs_hierarchy) when the task-local vars are out of scope.
+- name: "Compfuzor: synthesize version-manager artifacts"
   set_fact:
+    ETC_FILES: >-
+      {{ (
+        ([{'name': '.tool-versions', 'content': _tv_content}] if _tv_active else []) +
+        ([{'name': 'mise.toml', 'content': _mise_content}] if _mise_active else [])
+      ) | merge_list(ETC_FILES, preset='append') }}
+    LINKS: >-
+      {{ (
+        (_tv_links if _tv_active else []) +
+        (_mise_links if _mise_active else [])
+      ) | merge_list(LINKS, preset='append') }}
+    BINS: "{{ (_mise_bins if _mise_active else []) | merge_list(BINS, preset='bins_generated') }}"
+  vars:
     _tool_versions: "{{ TOOL_VERSIONS | merge_dict(preset='tool_versions_overlay') }}"
     _mise_versions: "{{ MISE_VERSIONS | merge_dict(preset='tool_versions_overlay') }}"
-
-- name: "Compfuzor: synthesize tool_versions subsystem artifacts"
-  set_fact:
-    ETC_FILES: "{{ [{'name': '.tool-versions', 'content': _tv_content}] | merge_list(ETC_FILES, preset='append') }}"
-    LINKS: "{{ [{'src': DIR + '/etc/.tool-versions', 'dest': '.tool-versions'}] | merge_list(LINKS, preset='append') }}"
-  vars:
+    _tv_active: "{{ _tool_versions is deflengthy and _mise_versions is not deflengthy }}"
+    _mise_active: "{{ _mise_versions is deflengthy }}"
+    _has_repo: "{{ (REPO_DIR | default('')) and (REPO_DIR is directory) }}"
+    _tv_path: "{{ DIR + '/etc/.tool-versions' }}"
+    _tv_links: >-
+      {{ [{'src': _tv_path, 'dest': '.tool-versions'}] +
+         ([{'src': _tv_path, 'dest': REPO_DIR + '/.tool-versions'}] if _has_repo else []) }}
     _tv_content: |
       {% for target, version in _tool_versions.items() %}
       {{ target }} {{ version if version != True else lookup('vars', target | upper + '_VERSION') }}
       {% endfor %}
-  when:
-    - _tool_versions is deflengthy
-    - _mise_versions is not deflengthy
-
-- name: "Compfuzor: synthesize mise_versions subsystem artifacts"
-  set_fact:
-    ETC_FILES: "{{ [{'name': 'mise.toml', 'content': _mise_content}] | merge_list(ETC_FILES, preset='append') }}"
-    LINKS: "{{ [{'src': DIR + '/etc/mise.toml', 'dest': 'mise.toml'}] | merge_list(LINKS, preset='append') }}"
-    BINS: "{{ BINS | merge_list(_mise_bins, preset='bins_generated') }}"
-  vars:
-    _mise_bins:
-      - name: install.sh
-        early: |
-          mise install
+    _mise_path: "{{ DIR + '/etc/mise.toml' }}"
+    _mise_links: >-
+      {{ [{'src': _mise_path, 'dest': 'mise.toml'}] +
+         ([{'src': _mise_path, 'dest': REPO_DIR + '/mise.toml'}] if _has_repo else []) }}
     _mise_tools: "{{ _tool_versions | merge_dict(_mise_versions, preset='tool_versions_overlay') }}"
     _mise_content: |
       [tools]
       {% for target, version in _mise_tools.items() %}
       {{ target }} = {{ (version if version != True else (lookup('vars', target | upper + '_VERSION') | default('latest'))) | to_json }}
       {% endfor %}
-  when: _mise_versions is deflengthy
+    _mise_bins:
+      - name: install.sh
+        early: |
+          mise install
+  when: _tv_active or _mise_active
