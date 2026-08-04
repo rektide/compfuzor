@@ -8,7 +8,9 @@
         group: "{{ item.group | default(omit) }}"
         validate_certs: "{{ item.validate_certs | default(true) }}"
       with_items: "{{ lookup('subsys', id=subsystem_id | default('get_urls'), name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='spec') }}"
-      become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(item.dest|dirname|should_become(item.owner|default('', true), _cf_user_id, item.group|default('', true), _cf_user_gid)))|bool }}"
+      become: "{{ _become.become }}"
+      vars:
+        _become: "{{ item.dest|dirname|become_calc(owner=item.owner, group=item.group) }}"
 
     - name: "save '.url' file"
       copy:
@@ -17,5 +19,7 @@
         owner: "{{ item.owner | default(omit) }}"
         group: "{{ item.group | default(omit) }}"
       with_items: "{{ lookup('subsys', id=subsystem_id | default('get_urls'), name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='spec') }}"
-      become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(item.dest|dirname|should_become(item.owner|default('', true), _cf_user_id, item.group|default('', true), _cf_user_gid)))|bool }}"
+      become: "{{ _become.become }}"
+      vars:
+        _become: "{{ item.dest|dirname|become_calc(owner=item.owner, group=item.group) }}"
   when: lookup('subsys', id=subsystem_id | default('get_urls'), name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='active')
