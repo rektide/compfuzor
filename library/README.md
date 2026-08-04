@@ -146,14 +146,12 @@ stored raw in a fact and re-rendered downstream (commonly inside
 | `deprefix` | `(path, prefixRegex)` | Strip a leading `^prefixRegex` match from `path`; unchanged if no match. | Raises on undefined — no guards; `re.search` on `path`. | [`deprefix.py:3`](/library/filter_plugins/deprefix.py) |
 | `depostfix` | `(path, prefixRegex)` | Strip a trailing `prefixRegex$` match. *(Note: keeps `+1` char — likely a bug, see below.)* | Raises on undefined. | [`deprefix.py:10`](/library/filter_plugins/deprefix.py) |
 | `deregex` | `(path, regex)` | Return the substring of `path` matching `regex`. | Raises on undefined. | [`deprefix.py:17`](/library/filter_plugins/deprefix.py) |
-| `defaultDir` | `(path, defaultDir=False)` | Prefix `path` with `defaultDir/` unless it is already absolute (`/` or `~`). | Raises on undefined/missing `defaultDir` for relative paths (`raise "NoDefaultDir"`). | [`defaultDir.py:5`](/library/filter_plugins/defaultDir.py) |
+| `defaultDir` | `(path, defaultDir=False)` | Prefix `path` with `defaultDir/` unless it is already absolute (`/` or `~`). Undefined/`None` path returns `defaultDir` unchanged. | **tolerates undefined path → `defaultDir`**; raises `AnsibleError` (not `raise "str"`) on non-string args or relative path with no base. | [`defaultDir.py:5`](/library/filter_plugins/defaultDir.py) |
 
 > **Heads-up on `depostfix`** ([`deprefix.py:14`](/library/filter_plugins/deprefix.py)): it
 > returns `path[:searchLen]` where `searchLen = len(match) + 1`, which **keeps one
 > extra character** and drops nothing from the tail. This looks like an off-by-one
-> bug compared to `deprefix`; verify before relying on it.
-
----
+> bug compared to `deprefix`; verify before relying on it.---
 
 ## Filesystem / Permissions
 
