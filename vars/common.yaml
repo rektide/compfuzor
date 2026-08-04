@@ -727,8 +727,8 @@ SUBSYSTEM:
     contrib:
       BINS: "{{ [ {'name': 'status.sh', 'src': '../status/status.sh', 'basedir': false} ] + ([ {'name': 'status-dirs.sh', 'src': '../status/status-dirs.sh', 'basedir': false} ] if (STATUS_DIRS is deftruthy or STATUS_DIRS_SUDO is deftruthy) else []) }}"
       ENV:
-        STATUS_DIRS: "{{ STATUS_DIRS | default([]) | arrayitize | join(':') }}"
-        STATUS_DIRS_SUDO: "{{ STATUS_DIRS_SUDO | default([]) | arrayitize | join(':') }}"
+        STATUS_DIRS: "{{ STATUS_DIRS | join2(':') }}"
+        STATUS_DIRS_SUDO: "{{ STATUS_DIRS_SUDO | join2(':') }}"
 
   # Vars-phase subsystem (NOT a gen_* one): a service declares SYSTEMD_ENV
   # (mapping of VAR -> value) to publish those vars to the systemd manager on
@@ -793,7 +793,7 @@ _npm_install_bins:
 _npm_install_etc:
   - name: npm.txt
     content: |
-      {{ NPM | arrayitize | join('\n') }}
+      {{ NPM | join2('\n') }}
 
 _bazel_target: "{{ BAZEL_TARGET | default('//...') }}"
 _bazel_bins:
@@ -837,11 +837,7 @@ _cmake_default_build:
   install: "{{ CMAKE_INSTALL is defined }}"
 _cmake_builds: "{{ _cmake_builds_raw if _cmake_builds_raw | deflengthy else [_cmake_default_build] }}"
 _cmake_install_args_global: >-
-  {{
-    CMAKE_INSTALL | arrayitize | join(' ')
-    if (CMAKE_INSTALL is defined and CMAKE_INSTALL != True)
-    else ''
-  }}
+  {{ CMAKE_INSTALL | join2(' ') }}
 _cmake_libdir: "{{ CMAKE_LIBDIR | default('/lib/cmake') }}"
 _cmake_deps_env_prio: >-
   {%- set out = {} -%}
@@ -888,10 +884,10 @@ _cmake_bins:
       {% endfor %}
       {% for cmakeBuild in _cmake_builds %}
       {% set generator = cmakeBuild.generator | default(CMAKE_GENERATOR | default('Ninja')) %}
-      {% set configureArgs = cmakeBuild.args | default(CMAKE_ARGS | default([])) | arrayitize | join(' ') %}
+      {% set configureArgs = cmakeBuild.args | default(CMAKE_ARGS) | join2(' ') %}
       {% set buildTarget = cmakeBuild.build_target | default(CMAKE_BUILD_TARGET | default(False)) %}
       {% set buildType = cmakeBuild.build_type | default(CMAKE_BUILD_TYPE | default(False)) %}
-      {% set buildArgs = cmakeBuild.build_args | default(CMAKE_BUILD_ARGS | default([])) | arrayitize | join(' ') %}
+      {% set buildArgs = cmakeBuild.build_args | default(CMAKE_BUILD_ARGS) | join2(' ') %}
       echo "CMake build: {{ cmakeBuild.name | default('default') }}"
 
       BUILD_DIR="{{ cmakeBuild.build_dir | default(_BUILD_DIR) }}"
@@ -944,7 +940,7 @@ _cmake_bins:
       {% endfor %}
       {% if CMAKE_INSTALL is defined %}
       {% for cmakeBuild in _cmake_builds if cmakeBuild.install | default(True) %}
-      {% set installArgs = cmakeBuild.install_args | arrayitize | join(' ') %}
+      {% set installArgs = cmakeBuild.install_args | join2(' ') %}
       cmake --install "{{ cmakeBuild.build_dir | default(_BUILD_DIR) }}"{{ ' ' + _cmake_install_args_global if _cmake_install_args_global else '' }}{{ ' ' + installArgs if installArgs else '' }}
       {% endfor %}
       {% else %}
