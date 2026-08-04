@@ -10,52 +10,32 @@
 # Binary comes from watchman.src.pb (getdeps build → /usr/local/bin/watchman).
 #
 # ROOT GUARD (ticket compfuzor-watchman-service scope item 2):
-# The bare `watchman` client (no $WATCHMAN_SOCK) connects to a compile-time-
-# default socket and will happily `watch-project` any path. If that path is a
-# huge tree (e.g. ~/src with ~17k subdirs / 170+ project roots / 1M+ inotify
-# watches), watchman enters poison state and jj — which uses watchman as its
-# fsmonitor backend — hangs on every status/commit. The original ticket
-# hypothesis was that ~/src being a .git+.jj repo caused watchman to climb;
-# that turns out to no longer be the case (~/src is no longer a VCS repo as
-# of 2026-07), but the broader footgun remains: `watch-project ~/src` just
-# watches ~/src directly and crawls it.
+# A bare `watchman watch-project ~/src` (or any huge tree) exhausts inotify
+# watches → poison state → jj (which uses watchman as fsmonitor) hangs on every
+# status/commit. The durable fix is a global root_files guard in the daemon's
+# config: with `enforce_root_files: true` + `root_files: [".git",".hg",".jj"]`,
+# watchman walks UP from the requested path to the nearest dir containing a
+# marker, refusing if none exists. So `watch-project ~/src/<repo>` resolves to
+# <repo> (has .git); `watch-project ~/src` is refused outright.
 #
-# The durable fix is a global root_files guard:
-#   { "root_files": [".git",".hg",".jj"], "enforce_root_files": true,
-#     "ignore_dirs": [<build trees>] }
-# With `enforce_root_files: true`, watchman walks UP from the requested path
-# to the nearest dir containing a root_files marker, refusing if none exists.
-# So `watch-project ~/src/<repo>` resolves to <repo> (which has .git/.jj);
-# `watch-project ~/src` is refused outright (no marker in ~/src, ~, or /).
+# HOW THE CONFIG REACHES THE DAEMON (fully user-mode, no /etc writes):
+# Watchman reads `$WATCHMAN_CONFIG_FILE` (WatchmanConfig.cpp:28, overrides the
+# compile-time `/etc/watchman.json`). We emit the config at {{ETC}}/watchman.json
+# and set the env var on the unit. No sudo.
 #
-# HOW THE CONFIG IS OWNED, FULLY USER-MODE:
-# Watchman reads its global config from `$WATCHMAN_CONFIG_FILE` (verified in
-# WatchmanConfig.cpp:28 + website/docs/config.md:20); the binary's only other
-# global path is the compile-time `/etc/watchman.json`, which we deliberately
-# do NOT touch. We emit the config as an ETC artifact at {{ETC}}/watchman.json
-# (visible at ~/.config/watchman-main/watchman.json via the etc symlink) and
-# publish `WATCHMAN_CONFIG_FILE` to:
-#   - the unit's own Environment        (the managed daemon reads it at startup)
-#   - SYSTEMD_ENV → user manager + D-Bus (other user units + D-Bus-launched apps)
-#   - the watchman-env zim module        (interactive shells)
-# Together with $WATCHMAN_SOCK (same three channels), this guarantees any
-# watchman invocation in our user session — managed daemon, D-Bus app, or
-# shell command — talks to our daemon under our config. No ad-hoc unguarded
-# daemons, no /etc writes, no sudo. Bypass: -e ROOT_GUARD_BYPASS=True.
-#
-# KNOWN LIMITATION (as of watchman HEAD 54602bcad, ver 20260708):
-# The daemon reads $WATCHMAN_CONFIG_FILE and parses the JSON (verified via
-# strace: openat + read of our config file succeed; invalid JSON surfaces a
-# parse error in journald). BUT cfg_get_json("enforce_root_files") returns
-# nullopt at runtime — a wrong-type value ("not_a_bool") does NOT trigger
-# the logf(FATAL) guard in cfg_compute_root_files (WatchmanConfig.cpp:233),
-# and watch-project /tmp succeeds despite no root marker up the tree. The
-# keys are not reaching configState.global_cfg for reasons not yet
-# identified (the call chain parse_cmdline → cfg_load_global_config_file →
-# loadSystemConfig looks correct in source). The guard config is emitted
-# correctly and will take effect once the daemon-side bug is resolved;
-# meanwhile the SYSTEMD_ENV + ZIM_MODULES wiring still ensures all clients
-# route to this managed daemon. Tracked in compfuzor-watchman-service.
+# CLI→DAEMON ROUTING (the subtle part — was a multi-hour misdiagnosis):
+# The C++ `watchman` CLI **ignores `$WATCHMAN_SOCK`** — only python/node/rust
+# clients honor it (Connect.cpp:24, sockname.cpp:25, UserDir.cpp:195). The CLI
+# computes its socket from the compile-time `WATCHMAN_STATE_DIR` macro:
+# `<STATE_DIR>/<username>-state/sock`. If that socket has no listener, the CLI
+# auto-spawns a fresh ad-hoc daemon (main.cpp:955) that inherits the CLI's env
+# (which, for non-interactive contexts, lacks `WATCHMAN_CONFIG_FILE` → no guard).
+# Rather than rebuild (a getdeps dependency nightmare), we **symlink the CLI's
+# compile-time default `<user>-state` path to our managed {{VAR}} dir**. Then
+# every bare `watchman` invocation connects through the symlink to our managed
+# daemon, which has the guard loaded. Single daemon, no spawn, no env gymnastics.
+# The SYSTEMD_ENV / ZIM_MODULES wiring below is belt-and-suspenders for
+# python/node/rust clients (which DO honor $WATCHMAN_SOCK).
 - hosts: all
   vars:
     TYPE: watchman
@@ -66,13 +46,19 @@
       - name: state
         content: "{}"
 
-    # Publish watchman discovery vars to the systemd user manager (and D-Bus
-    # activation env) so other user services and D-Bus-launched apps find the
-    # socket AND inherit the config-file path without `watchman get-sockname`.
-    #   WATCHMAN_SOCK         → https://facebook.github.io/watchman/docs/socket-interface
-    #   WATCHMAN_CONFIG_FILE  → WatchmanConfig.cpp:28 (overrides /etc/watchman.json)
-    # See tasks/compfuzor/vars_systemd_env.tasks: SYSTEMD_ENV -> ExecStartPost
-    # `systemctl --user set-environment` + `dbus-update-activation-environment`.
+    # Watchman refuses to use a state dir that's group/other-writable (security
+    # check: "the permissions on <dir> allow others to write to it"). Enforce
+    # 0700 on {{VAR}} to satisfy this.
+    VAR_MODE: "0700"
+
+    # The compile-time WATCHMAN_STATE_DIR that `watchman.src.pb`'s getdeps build
+    # baked into the binary (see scratch/build/watchman/watchman/config.h).
+    # The bare CLI computes its default socket as
+    # <WATCHMAN_DEFAULT_STATE_DIR>/<username>-state/sock. We symlink that path
+    # to {{VAR}} below so the CLI connects to our daemon. Override here if the
+    # binary is rebuilt with a different -DWATCHMAN_STATE_DIR.
+    WATCHMAN_DEFAULT_STATE_DIR: /usr/local/src/watchman-git/watchman/var/run/watchman
+
     SYSTEMD_ENV:
       WATCHMAN_SOCK: "{{VAR}}/sock"
       WATCHMAN_CONFIG_FILE: "{{ETC}}/watchman.json"
@@ -84,12 +70,6 @@
       Restart: always
       RestartSec: "2s"
 
-    # Interactive shells: an `env` zim module exports WATCHMAN_SOCK and
-    # WATCHMAN_CONFIG_FILE at shell startup. gen_zim generates
-    # zim-modules/watchman-env/init.zsh from the mapping (one
-    # don't-stomp-per-var guard; COMPFUZOR_ENV_OVERWRITE=1 forces) and a
-    # `zmodule <abspath>` declaration, plus install-user-zimfw.sh to promote
-    # it into the zim host. No bespoke script, no block-in-file.
     ZIM_MODULES:
       - name: watchman-env
         phase: tools
@@ -97,16 +77,6 @@
           WATCHMAN_SOCK: "{{VAR}}/sock"
           WATCHMAN_CONFIG_FILE: "{{ETC}}/watchman.json"
 
-    # Root guard config — see header. Emitted at {{ETC}}/watchman.json and
-    # read by the daemon via $WATCHMAN_CONFIG_FILE. Restart the service to
-    # pick up changes (watchman reads global config only at startup; existing
-    # roots are NOT re-validated, only new watch-project calls are gated).
-    # Note: `root_files` + `enforce_root_files` are global-scope (read from
-    # the global config); `ignore_dirs` is local-scope (per-root) per the
-    # config.md scoping table — kept here for documentation and any future
-    # watchman version that honors it globally, but the runtime effect today
-    # is that build trees are NOT globally ignored. Compile-time `ignore_vcs`
-    # defaults still skip .git/.hg/.jj during crawl.
     ROOT_GUARD:
       root_files: [".git", ".hg", ".jj"]
       enforce_root_files: true
@@ -134,6 +104,28 @@
         content: "{{ROOT_GUARD | to_nice_json}}\n"
         mode: "0644"
       when: not ROOT_GUARD_BYPASS|default(False)
+      notify: restart watchman-main
+
+    - name: "Watchman CLI routing: get current username for <user>-state path"
+      command: id -un
+      register: _watchman_user
+      changed_when: false
+      when: not WATCHMAN_CLI_SYMLINK_BYPASS|default(False)
+
+    - name: "Watchman CLI routing: ensure compile-time state dir parent exists"
+      file:
+        path: "{{WATCHMAN_DEFAULT_STATE_DIR}}"
+        state: directory
+        mode: "0755"
+      when: not WATCHMAN_CLI_SYMLINK_BYPASS|default(False)
+
+    - name: "Watchman CLI routing: symlink CLI default <user>-state → {{VAR}}"
+      file:
+        src: "{{VAR}}"
+        dest: "{{WATCHMAN_DEFAULT_STATE_DIR}}/{{_watchman_user.stdout}}-state"
+        state: link
+        force: true
+      when: not WATCHMAN_CLI_SYMLINK_BYPASS|default(False)
       notify: restart watchman-main
   handlers:
     - name: restart watchman-main
