@@ -7,6 +7,8 @@
 {% for v in value -%}
 {{ key }}={{ v }}
 {% endfor -%}
+{% elif value is string and '\n' in value -%}
+{{ key }}={{ value.split('\n') | join(' \\\n\t') }}
 {% else -%}
 {{ key }}={{ value }}
 {% endif -%}
