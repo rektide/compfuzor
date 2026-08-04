@@ -23,14 +23,14 @@
       {%- if REPOS is defmapping -%}
       {%-   for it in (REPOS | normalize(to='items')) -%}
       {%-     set d = it.key | defaultDir(repos_base) -%}
-      {%-     set _ = ns.items.append({'repo': it.value, 'dest': d, 'become': COMFUZOR_SHOULD_BECOME|default(BECOME|default(d|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool}) -%}
+      {%-     set _ = ns.items.append({'repo': it.value, 'dest': d, 'become': (d|become_calc).become}) -%}
       {%-   endfor -%}
       {%- endif -%}
       {%- if REPOS is deftruthy and (REPOS is not mapping) -%}
       {%-   for it in REPOS -%}
       {%-     set url = it.repo | default(it) -%}
       {%-     set d = repos_base ~ '/' ~ (url | basename | regex_replace('\.git$', '')) -%}
-      {%-     set _ = ns.items.append({'repo': url, 'dest': d, 'reference': it.reference | default(''), 'become': COMFUZOR_SHOULD_BECOME|default(BECOME|default(d|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool}) -%}
+      {%-     set _ = ns.items.append({'repo': url, 'dest': d, 'reference': it.reference | default(''), 'become': (d|become_calc).become}) -%}
       {%-   endfor -%}
       {%- endif -%}
       {{ ns.items | to_json }}
