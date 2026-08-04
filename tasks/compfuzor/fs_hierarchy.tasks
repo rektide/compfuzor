@@ -93,7 +93,7 @@
     _subdir_items: "{{ _vals.dirs|normalize(to='list') + _vals.d|normalize(to='list') }}"
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
-    subdir: "{{_dir}}/{{item.name|default(item)}}" 
+    subdir: "{{_dir}}/{{item.name|def(item)}}" 
     should_become: "{{subdir|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"
     do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
 
@@ -113,7 +113,7 @@
   vars:
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
-    dest: "{{item.dest|default(item.name|default(item))|defaultDir(_dir)}}"
+    dest: "{{item.dest|def(item.name, item)|defaultDir(_dir)}}"
     should_become: "{{dest|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"
     do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
 
@@ -169,6 +169,6 @@
   vars:
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
-    dest: "{{_dir}}/{{item.dest|default(item.name|default(item))}}"
+    dest: "{{_dir}}/{{item.dest|def(item.name, item)}}"
     should_become: "{{dest|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"
     do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
