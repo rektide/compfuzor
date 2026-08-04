@@ -106,22 +106,22 @@
 - debug: "msg=''"
 - debug: "msg='Compfuzor: REPOSITORIES'"
 - import_tasks: compfuzor/repo_go.tasks
-  when: REPO_GO|default(False) and not REPO_BYPASS|default(False)
+  when: REPO_GO is deftruthy and REPO_BYPASS is deffalsy
 - import_tasks: compfuzor/repo_git.tasks
-  when: (REPO is defined or REPOS is defined or REPO_WORKTREE is defined) and not GIT_BYPASS|default(False) and not REPO_BYPASS|default(False)
+  when: (REPO is defined or REPOS is defined or REPO_WORKTREE is defined) and GIT_BYPASS is deffalsy and REPO_BYPASS is deffalsy
 - import_tasks: compfuzor/repo_cvs.tasks
-  when: CVS_REPO is defined and not REPO_BYPASS|default(False)
+  when: CVS_REPO is defined and REPO_BYPASS is deffalsy
 - import_tasks: compfuzor/repo_svn.tasks
-  when: SVN_REPO is defined and not REPO_BYPASS|default(False)
+  when: SVN_REPO is defined and REPO_BYPASS is deffalsy
 - import_tasks: compfuzor/repo_hg.tasks
-  when: HG_REPO is defined and not HG_RAW|default(False) and not REPO_BYPASS|default(False)
+  when: HG_REPO is defined and HG_RAW is deffalsy and REPO_BYPASS is deffalsy
 - import_tasks: compfuzor/repo_hg_raw.tasks
-  when: HG_REPO is defined and HG_RAW|default(False) and not REPO_BYPASS|default(False)
+  when: HG_REPO is defined and HG_RAW is deftruthy and REPO_BYPASS is deffalsy
 
 - debug: "msg=''"
 - debug: "msg='Compfuzor: FILESYSTEM'"
 - import_tasks: compfuzor/fs_base.tasks
-  when: DIR|default(False) is truthy or DIRS|default(False) is truthy or FILES|default(False) is truthy and DIR_BYPASS|default(False) is not truthy
+  when: DIR is deftruthy or DIRS is deftruthy or FILES is deftruthy and DIR_BYPASS is deffalsy
 - import_tasks: compfuzor/fs_repo.tasks
 - import_tasks: compfuzor/fs_env.tasks
   when: >
@@ -142,54 +142,54 @@
       - "DIRS"
       - "DIR"
       - "FILES"
-  when: not FS_BYPASS|default(False)
+  when: FS_BYPASS is deffalsy
 - import_tasks: compfuzor/fs_srcs_too.tasks
-  when: type == "src" and not FS_SRCS_BYPASS|default(False)
+  when: type == "src" and FS_SRCS_BYPASS is deffalsy
 - import_tasks: compfuzor/fs_tgz.tasks
-  when: TGZ is defined and not TGZ_BYPASS|default(False)
+  when: TGZ is defined and TGZ_BYPASS is deffalsy
 - import_tasks: compfuzor/fs_zip.tasks
-  when: ZIP is defined and not ZIP_BYPASS|default(False)
+  when: ZIP is defined and ZIP_BYPASS is deffalsy
 - import_tasks: compfuzor/fs_get_urls.tasks
   when: lookup('subsys', id='get_urls', get='active', default=false) | bool
 - import_tasks: compfuzor/bins.tasks
-  when: BINS is deflengthy and not BINS_BYPASS|default(False)
+  when: BINS is deflengthy and BINS_BYPASS is deffalsy
 - import_tasks: compfuzor/bins_link.tasks
-  when: BINS is deflengthy and not BINS_BYPASS|default(False)
+  when: BINS is deflengthy and BINS_BYPASS is deffalsy
 - import_tasks: compfuzor/bins_link_global.tasks
-  when: BINS is defined and not BINS_BYPASS|default(False) and not GLOBAL_BINS_BYPASS|default(False)
+  when: BINS is defined and BINS_BYPASS is deffalsy and GLOBAL_BINS_BYPASS is deffalsy
 - import_tasks: compfuzor/links.tasks
-  when: LINKS|default(False) is truthy and LINKS_BYPASS|default(False) is falsy
+  when: LINKS is deftruthy and LINKS_BYPASS is deffalsy
 - import_tasks: compfuzor/_multi.tasks
   vars:
     multi: fs_d
     keys:
       - "D"
-  when: FS_BYPASS|default(False) is falsy
+  when: FS_BYPASS is deffalsy
 - import_tasks: compfuzor/fs_base_d.tasks
 - debug: "msg='Compfuzor: completed filesystem'"
 
 - debug: "msg=''"
 - debug: "msg='Compfuzor: EXTRAS'"
 - import_tasks: compfuzor/pg.tasks
-  when: PG|default(False) is truthy
+  when: PG is deftruthy
 - import_tasks: compfuzor/debconf.tasks
-  when: DEBCONF_BYPASS|default(False) is falsy
+  when: DEBCONF_BYPASS is deffalsy
 - import_tasks: compfuzor/apt.tasks
-  when: (APT_REPO|default(APT_REPOS)|default(False) is truthy or APT_LIST_URL|default(False)) is truthy and APT_BYPASS|default(False) is falsy
+  when: (APT_REPO|default(APT_REPOS) is deftruthy or APT_LIST_URL is deftruthy) and APT_BYPASS is deffalsy
 - import_tasks: compfuzor/pkgs.tasks
-  when: (PKGS is defined or PKGSET is defined or PKGSETS is defined) and PKGS_BYPASS|default(False) is falsy and USERMODE|default(False) is falsy
+  when: (PKGS is defined or PKGSET is defined or PKGSETS is defined) and PKGS_BYPASS is deffalsy and USERMODE is deffalsy
 - import_tasks: compfuzor/dbconfig.tasks
-  when: DBCONFIG|default(False) is truthy and DBCONFIG_BYPASS|default(False) is falsy
+  when: DBCONFIG is deftruthy and DBCONFIG_BYPASS is deffalsy
 - import_tasks: compfuzor/kernel_modules.tasks
-  when: MODULES|default(False) is truthy
+  when: MODULES is deftruthy
 - import_tasks: compfuzor/bins_run.tasks
-  when: BINS_BYPASS|default(False) is falsy and BINS_RUN_BYPASS|default(False) is falsy
+  when: BINS_BYPASS is deffalsy and BINS_RUN_BYPASS is deffalsy
 - import_tasks: compfuzor/pkgconfig.tasks
-  when: PKGCONFIG|default(False) is truthy
+  when: PKGCONFIG is deftruthy
 - import_tasks: compfuzor/sysctl.tasks
-  when: SYSCTLS|default(False) is truthy or SYSCTL|default(False) is truthy
+  when: SYSCTLS is deftruthy or SYSCTL is deftruthy
 - import_tasks: compfuzor/go.tasks
-  when: REPO_GO|default(False) is truthy
+  when: REPO_GO is deftruthy
 
 - import_tasks: compfuzor/bins_link.tasks
   vars:
@@ -197,7 +197,7 @@
 - import_tasks: compfuzor/bins_link_global.tasks
   vars:
     delay_phase: postRun
-  when: BINS is defined and BINS_BYPASS|default(False) is falsy and GLOBAL_BINS_BYPASS|default(False) is falsy
+  when: BINS is defined and BINS_BYPASS is deffalsy and GLOBAL_BINS_BYPASS is deffalsy
 # System scope systemd units
 #- import_tasks: compfuzor/systemd.tasks
 #  vars:
@@ -214,7 +214,7 @@
 - include_tasks: systemd.thunk.tasks
   vars:
     service: "{{SYSTEMD_SERVICE}}{{ '@' + item if item != '' else '' }}"
-  when: SYSTEMD_BYPASS|default(False) is falsy and not SYSTEMD_THUNK_BYPASS|default(False) and SYSTEMD_SERVICE|default(False) and SYSTEMD_EXEC is defined
+  when: SYSTEMD_BYPASS is deffalsy and SYSTEMD_THUNK_BYPASS is deffalsy and SYSTEMD_SERVICE is deftruthy and SYSTEMD_EXEC is defined
   with_items: "{{SYSTEMD_INSTANCES|default([''])}}"
 
 - debug: "msg='Compfuzor: `{{NAME}}` complete. Returning to main playbook.'"
