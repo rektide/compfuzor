@@ -1,6 +1,6 @@
 - name: "Compfuzor: add go repo"
   set_fact:
-    REPOS: "{{ REPOS|default({})|combine(repo) }}"
+    REPOS: "{{ REPOS|merge_dict(repo) }}"
     goRepos: "{{ goRepos|default('') }} {{GOPATH_DIR}}"
   loop: "{{ REPO_GO|normalize(to='list') }}"
   vars:

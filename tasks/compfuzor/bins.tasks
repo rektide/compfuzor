@@ -45,7 +45,7 @@
     and _exists
   vars:
     _item: "{{ bin_item if bin_item is mapping else {'name': bin_item} }}"
-    _srcName: "{{_item.src|default(_item.name|default(False))}}"
+    _srcName: "{{_item.src|def(_item.name, False)}}"
     # `../` in a bin src escapes files/<TYPE>/ (shared scripts like
     # systemd/install-unit.sh live under files/systemd/, reached via
     # `../systemd/...`); resolve those directly under files/ so they work even

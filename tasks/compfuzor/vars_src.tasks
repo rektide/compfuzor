@@ -4,7 +4,7 @@
   args:
     WITHS: "{{ '--with-'+WITH|join(' --with-') if WITH is deftruthy else '' }}"
     ENABLES: "{{ '--enable-'+ENABLE|join(' --enable-') if ENABLE is deftruthy else '' }}"
-    PREPREFIX: "{{ DEST|default(NAME|default(TYPE)) }}"
+    PREPREFIX: "{{ DEST|def(NAME, TYPE) }}"
     CORES: "{{ CORES|default(COMPFUZOR_BASE.stdout_lines[24]|int)|default(8) }}"
     GOPATH: "{{DIR}}"
     SRC: "{{ARCHIVE_SRC if ARCHIVE_DOWNLOAD is deftruthy and REPO is defined else SRC|default(omit)}}"

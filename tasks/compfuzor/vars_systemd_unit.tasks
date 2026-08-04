@@ -8,10 +8,10 @@
     ETC_DIRS: "{{ETC_DIRS|default(_systemd_has_units|ternary([], omit))}}"
     _systemd_has_units: "{{_systemd_has_units}}"
   vars:
-    _systemd_has_service: "{{ SYSTEMD_SERVICE is deftruthy or (SYSTEMD_SERVICES|default({}))|length > 0 }}"
-    _systemd_has_socket: "{{ SYSTEMD_SOCKET is deftruthy or (SYSTEMD_SOCKETS|default({}))|length > 0 }}"
-    _systemd_has_mount: "{{ SYSTEMD_MOUNT is deftruthy or (SYSTEMD_MOUNTS|default({}))|length > 0 }}"
-    _systemd_has_dnssd: "{{ SYSTEMD_DNSSD is deftruthy or (SYSTEMD_DNSSDS|default({}))|length > 0 }}"
+    _systemd_has_service: "{{ SYSTEMD_SERVICE is deftruthy or SYSTEMD_SERVICES is deflengthy }}"
+    _systemd_has_socket: "{{ SYSTEMD_SOCKET is deftruthy or SYSTEMD_SOCKETS is deflengthy }}"
+    _systemd_has_mount: "{{ SYSTEMD_MOUNT is deftruthy or SYSTEMD_MOUNTS is deflengthy }}"
+    _systemd_has_dnssd: "{{ SYSTEMD_DNSSD is deftruthy or SYSTEMD_DNSSDS is deflengthy }}"
     _systemd_has_units: "{{ _systemd_has_service or _systemd_has_socket or _systemd_has_mount or _systemd_has_dnssd }}"
     types: >-
       {{ SYSTEMD_UNITTYPES_ALL 
@@ -103,7 +103,7 @@
     _unit_name_key: "SYSTEMD_{{ _unit_type | upper }}"
     _unit_name_val: "{{ _root_data[_unit_name_key] | default(lookup('vars', _unit_name_key, default='')) }}"
     _unit_name: "{{ _unit_name_val if _unit_name_val and _unit_name_val not in [True, 'True'] else NAME }}"
-    _unit_filename: "{{ _unit_name }}{{ '@' if UNIT_VARS.SYSTEMD_INSTANCES|default(SYSTEMD_INSTANCES|default(False)) else '' }}.{{ _unit_type }}"
+    _unit_filename: "{{ _unit_name }}{{ '@' if UNIT_VARS.SYSTEMD_INSTANCES|def(SYSTEMD_INSTANCES, False) else '' }}.{{ _unit_type }}"
     _has_type_data: "{{ _root_data['SYSTEMD_' ~ _type_config.var_suffix] is defined or _root_data[_unit_name_key] is defined }}"
     UNIT_TYPE: "{{ _unit_type }}"
     _merged_sections: >-
@@ -246,8 +246,8 @@
           {%- if rd[vk] is defined or rd['SYSTEMD_' ~ (t | upper)] is defined -%}
             {%- set nm_raw = rd['SYSTEMD_' ~ (t | upper)] | default('') -%}
             {%- set nm = nm_raw if (nm_raw and nm_raw not in [True, 'True']) else NAME -%}
-            {%- set inst = rd.SYSTEMD_INSTANCES | default(SYSTEMD_INSTANCES | default(False)) -%}
-            {%- set _ = specs.append({'name': nm, 'type': t, 'enable': (rd.SYSTEMD_ENABLE | default(SYSTEMD_ENABLE | default(True))) | bool, 'start': (rd.SYSTEMD_START | default(SYSTEMD_START | default(True))) | bool, 'instanced': inst | bool, 'instances': (inst if (inst is sequence and inst is not string and inst is not boolean) else [])}) -%}
+        {%- set inst = rd.SYSTEMD_INSTANCES | def(SYSTEMD_INSTANCES, False) -%}
+        {%- set _ = specs.append({'name': nm, 'type': t, 'enable': (rd.SYSTEMD_ENABLE | def(SYSTEMD_ENABLE, True)) | bool, 'start': (rd.SYSTEMD_START | def(SYSTEMD_START, True)) | bool, 'instanced': inst | bool, 'instances': (inst if (inst is sequence and inst is not string and inst is not boolean) else [])}) -%}
           {%- endif -%}
         {%- endfor -%}
       {%- endfor -%}

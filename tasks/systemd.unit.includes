@@ -45,7 +45,7 @@
     _unit_dir: "{{ SYSTEMD_USER_UNIT_DIR if _scope == 'user' else SYSTEMD_SYSTEM_UNIT_DIR }}"
     _link: "{{ _unit_dir }}/{{ _link_unit }}"
     _instanced: "{{ _unitname }}{{ _inst }}{{ SYSTEMD_INSTANCE|default('') }}.{{ unit_type }}"
-    _is_usermode: "{{ USERMODE|default(false) or SYSTEMD_SCOPE|default('system') == 'user' }}"
+    _is_usermode: "{{ USERMODE is deftruthy or SYSTEMD_SCOPE|def('system') == 'user' }}"
 
 #- name: testing for local target unit
 #  local_action: shell test ! -f "files/{{target}}/{{target}}{{inst}}.{{unit_type}}"; echo $?
