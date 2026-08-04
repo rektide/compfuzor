@@ -9,7 +9,7 @@
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(OPT|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
-  when: DIR != OPT and not OPT_DIR|default(False)
+  when: DIR != OPT and OPT_DIR is deffalsy
 - name: "insure OPT dir"
   file:
     path: "{{OPT}}"
@@ -17,7 +17,7 @@
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(OPT|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
-  when: DIR != OPT and OPT_DIR|default(False)
+  when: DIR != OPT and OPT_DIR is deftruthy
 - name: "link source DIR into OPT/src"
   file:
     src: "{{DIR}}"
@@ -26,6 +26,6 @@
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
-  when: DIR != OPT and OPT_DIR|default(False)
+  when: DIR != OPT and OPT_DIR is deftruthy
   vars:
     _dest: "{{OPT}}/src"

@@ -2,7 +2,7 @@
 # VARIABLES
 # running - todo: check /proc/whatever/cgroup/systemd
 - name: get systemd service name
-  set_fact: THUNK_SERVICE="{{service if service|default(False) and service != True and service != 'True' else TYPE}}.service"
+  set_fact: THUNK_SERVICE="{{service if service is deftruthy and service != True and service != 'True' else TYPE}}.service"
 - name: "find if service {{THUNK_SERVICE}} was running"
   shell: systemctl {{SYSTEMD_OPTS_AND_SCOPE}} is-enabled "{{THUNK_SERVICE}}" -q; echo $?
   register: SYSTEMD_WAS_ENABLED
@@ -14,15 +14,15 @@
 # RELOAD DAEMON
 - name: "reload systemd daemon"
   shell: systemctl {{SYSTEMD_OPTS_AND_SCOPE}} daemon-reload
-  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
+  become: "{{USERMODE is deffalsy and SYSTEMD_USERMODE is deffalsy}}"
 # ENABLE
 - name: "enable systemd {{THUNK_SERVICE}} service"
   shell: "systemctl {{SYSTEMD_OPTS_AND_SCOPE}} enable {{THUNK_SERVICE}}  -fq; echo $?"
-  when: SYSTEMD_RUN|default(True)
+  when: SYSTEMD_RUN is deftruthy(True)
   register: SYSTEMD_ENABLE_OK
-  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
+  become: "{{USERMODE is deffalsy and SYSTEMD_USERMODE is deffalsy}}"
 # RELOAD OR RESTART IF RUNNING
 - name: "restart {{THUNK_SERVICE}} service"
   shell: "systemctl {{SYSTEMD_OPTS_AND_SCOPE}} restart {{THUNK_SERVICE}}"
-  when: SYSTEMD_RUN|default(True)
-  become: "{{not USERMODE|default(False) and not SYSTEMD_USERMODE|default(False)}}"
+  when: SYSTEMD_RUN is deftruthy(True)
+  become: "{{USERMODE is deffalsy and SYSTEMD_USERMODE is deffalsy}}"
