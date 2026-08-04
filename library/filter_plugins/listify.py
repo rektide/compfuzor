@@ -1,7 +1,10 @@
-"""PARTIALLY DEPRECATED: ``concat`` is dead (all callers migrated to
-``merge_list``). ``listify`` has 3 remaining callers — migrate them to
-``normalize(to='list')`` or ``normalize(to='items')``, then delete this
-module.
+"""DEPRECATED: Legacy listify and concat filters — all callers migrated.
+
+``concat`` was migrated to ``merge_list``. ``listify`` callers have been
+migrated to ``normalize(to='list')``, ``normalize(to='items')``, or
+``join2``. Neither filter has live callers.
+
+This module can be deleted once the migration has soaked.
 """
 import collections
 import numbers
