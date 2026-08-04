@@ -4,54 +4,50 @@
     path: "{{DIR}}"
     state: directory
     mode: "{{DIRMODE}}"
-    owner: "{{do_become|ternary(OWNER|default(_cf_user_id),omit)}}"
-    group: "{{do_become|ternary(GROUP|default(_cf_user_gid),omit)}}"
-  become: "{{do_become}}"
+    owner: "{{ _become.owner }}"
+    group: "{{ _become.group }}"
+  become: "{{ _become.become }}"
   vars:
-    should_become: "{{DIR|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
-    do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
+    _become: "{{ DIR|become_calc }}"
   when: DIR is deftruthy(True)
 - name: "Creating `DIRS`"
   file:
     path: "{{_dest}}"
     state: directory
     mode: "{{DIRMODE}}"
-    owner: "{{do_become|ternary(OWNER|default(_cf_user_id),omit)}}"
-    group: "{{do_become|ternary(GROUP|default(_cf_user_gid),omit)}}"
+    owner: "{{ _become.owner }}"
+    group: "{{ _become.group }}"
   with_items: "{{DIRS}}"
-  become: "{{do_become}}"
+  become: "{{ _become.become }}"
   when: DIRS is deftruthy
   vars:
     _dest: "{{item|defaultDir(DIR)}}"
-    should_become: "{{_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
-    do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
+    _become: "{{ _dest|become_calc }}"
 - name: "Creating `FILES`"
   # someone wanted a basename here but eclipse has a ../content & like yeah, that's fine. locales holds the blame. see cf0fdccf0c.
   template:
     src: "files/{{TYPE}}/{{item.src|def(item.name, item)}}"
     dest: "{{dest}}"
-    owner: "{{do_become|ternary(OWNER|default(_cf_user_id),omit)}}"
-    group: "{{do_become|ternary(GROUP|default(_cf_user_gid),omit)}}"
+    owner: "{{ _become.owner }}"
+    group: "{{ _become.group }}"
   with_items: "{{FILES}}"
-  become: "{{do_become}}"
+  become: "{{ _become.become }}"
   when: FILES is defined and FILES is not mapping and item.line is deffalsy
   vars:
     dest: "{{DIR}}/{{item.dest|def(item.name, item)}}"
-    should_become: "{{dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
-    do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
+    _become: "{{ dest|become_calc }}"
 - name: "Creating `FILES` mapping"
   template:
     src: "files/{{TYPE}}/{{ item[1] }}"
     dest: "{{_dest}}"
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
+    owner: "{{OWNER|def(omit)}}"
+    group: "{{GROUP|def(omit)}}"
   with_items: "{{FILES.items()}}"
-  become: "{{do_become}}"
+  become: "{{ _become.become }}"
   when: FILES is defmapping
   vars:
     _dest: "{{ DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '' }}{{item[0]}}"
-    should_become: "{{_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
-    do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
+    _become: "{{ _dest|become_calc }}"
 
 - name: "File lineinfile"
   lineinfile:
@@ -60,14 +56,11 @@
     regexp: "{{item.regexp|default('^' + item.line)}}"
     create: "{{item.create|default(True)}}"
     state: "{{item.state|default(omit)}}"
-    owner: "{{do_become|ternary(owner|default(_cf_user_id, true),omit)}}"
-    group: "{{do_become|ternary(group|default(_cf_user_gid, true),omit)}}"
+    owner: "{{ _become.owner }}"
+    group: "{{ _become.group }}"
   with_items: "{{FILES}}"
-  become: "{{do_become}}"
+  become: "{{ _become.become }}"
   when: FILES is defined and FILES is not mapping and item.line is deftruthy
   vars:
-    owner: "{{item.owner|default(OWNER|default(none, true), true)}}"
-    group: "{{item.group|default(GROUP|default(none, true), true)}}"
     dest: "{{item.name|defaultDir(DIR)}}"
-    should_become: "{{dest|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"
-    do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
+    _become: "{{ dest|become_calc(owner=item.owner|def(OWNER, falsy=True), group=item.group|def(GROUP, falsy=True)) }}"
