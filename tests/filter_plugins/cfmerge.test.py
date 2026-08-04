@@ -26,8 +26,9 @@ from cfmerge import (
     merge_list,
     normalize,
     run_value_preset,
-    tag_each,
 )
+from each import tag_each
+from when import when, whenAnd
 
 passed = 0
 failed = 0
@@ -487,6 +488,65 @@ def test_combine_iff():
         {"x": "real"})
 
 
+def test_when():
+    print("\nwhen (or):")
+    check("returns value when any condition truthy",
+        when("v", True, False),
+        "v")
+    check("returns value when one of many truthy",
+        when("v", False, False, True, False),
+        "v")
+    check("returns else_value when all falsy",
+        when("v", False, False, else_value="else"),
+        "else")
+    check("returns None when all falsy and no else_value",
+        when("v", False, False),
+        None)
+    check("treats undefined condition as falsy",
+        when("v", Undefined(name="x"), False),
+        None)
+    check("returns value when undefined alongside a truthy condition",
+        when("v", Undefined(name="x"), True),
+        "v")
+    check("no conditions returns else_value",
+        when("v", else_value="else"),
+        "else")
+    check("empty string condition is falsy",
+        when("v", "", else_value="else"),
+        "else")
+    check("non-empty string condition is truthy",
+        when("v", "yes"),
+        "v")
+    check("zero condition is falsy",
+        when("v", 0, else_value="else"),
+        "else")
+
+
+def test_when_and():
+    print("\nwhenAnd (and):")
+    check("returns value when all conditions truthy",
+        whenAnd("v", True, True),
+        "v")
+    check("returns else_value when any falsy",
+        whenAnd("v", True, False, else_value="else"),
+        "else")
+    check("returns None when any falsy and no else_value",
+        whenAnd("v", True, False),
+        None)
+    check("treats undefined condition as falsy",
+        whenAnd("v", True, Undefined(name="x")),
+        None)
+    check("no conditions returns else_value (conservative)",
+        whenAnd("v", else_value="else"),
+        "else")
+    check("single truthy condition",
+        whenAnd("v", True),
+        "v")
+    check("single falsy condition",
+        whenAnd("v", False, else_value="else"),
+        "else")
+
+
 if __name__ == "__main__":
     test_collect()
     test_normalizers()
@@ -497,5 +557,7 @@ if __name__ == "__main__":
     test_field_profiles()
     test_tag_each()
     test_combine_iff()
+    test_when()
+    test_when_and()
     print("\n{} passed, {} failed".format(passed, failed))
     sys.exit(1 if failed else 0)

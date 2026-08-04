@@ -1,4 +1,15 @@
 ---
+# gen_mcp.tasks — MCP server configuration and client tooling.
+#
+# The config subsystem (gen_config.tasks) provides generic config management:
+# config merger (config-mcp.sh), generic disable/enable, status, and ETC_DIRS.
+# This file delegates to it with CONFIG_KEY=mcp, CONFIG_MERGE=json-merge.
+#
+# What MCP contributes itself:
+#   - mcp.json ETC_FILES (server config, from MCP_URL or MCP_COMMAND)
+#   - mcp-disable.sh (JSON override wrappers — MCP-specific, not generic disable)
+#   - mcp-install.ts (MCP server installer)
+
 - name: 'Build vars for remote MCP server'
   set_fact:
     ETC_FILES: "{{ [mcp_file] | merge_list(ETC_FILES, preset='append') }}"

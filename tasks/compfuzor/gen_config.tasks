@@ -1,4 +1,19 @@
 ---
+# gen_config.tasks — generic config subsystem artifact synthesis.
+#
+# Merges the 'config' subsystem's contrib (defined in vars/common.yaml) into
+# the global BINS/ETC_DIRS/ENV_LIST/STATUSES artifacts. The config subsystem
+# provides config-<KEY>.sh, disable-<KEY>.sh, enable-<KEY>.sh, and
+# status-config.sh scripts, parameterized by CONFIG_KEY/CONFIG_MERGE/CONFIG_EXT.
+#
+# Can be imported with scoped vars to run for different config keys:
+#   import_tasks: gen_config.tasks
+#   vars:
+#     CONFIG_KEY: mcp
+#     CONFIG_MERGE: json-merge
+#     CONFIG_EXT: json
+# See gen_mcp.tasks for a working example.
+
 - name: "Compfuzor: synthesize config subsystem artifacts"
   set_fact:
     ETC_DIRS: "{{ lookup('merge_subsys', id='config', contrib='ETC_DIRS') }}"

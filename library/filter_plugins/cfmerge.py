@@ -9,15 +9,17 @@ Before a public stage inspects a value, it crosses the shared non-rendering
 template-data boundary. Lazy Ansible containers become ordinary containers,
 while tagged template strings remain unevaluated for the later rendering phase.
 
-Public Python API:
-    ``normalize`` converts one raw value to a registered shape.
-    ``collect`` applies top-level layer admission rules.
-    ``run_value_preset`` executes the full pipeline for any value preset.
-    ``merge_list`` and ``merge_dict`` constrain presets by result kind.
-    ``merge_fields`` applies recursively nested field profiles.
+Ansible filters exposed:
+    ``normalize``     — convert one raw value to a registered shape.
+    ``merge_list``    — merge variadic layers through a list-producing preset.
+    ``merge_dict``    — merge variadic layers through a mapping-producing preset.
+    ``merge_fields``  — merge records using a recursively nested field profile.
+    ``combine_iff``   — like Ansible's ``combine`` but skips undefined values.
 
-The ``normalize``, ``merge_list``, ``merge_dict``, and ``merge_fields``
-functions are all Ansible filters.
+Related modules:
+    ``template_data`` — raw data-access helpers shared across plugins.
+    ``when``          — conditional inclusion filters (``when``, ``whenAnd``).
+    ``each``          — record-list transformation filter (``tag_each``).
 """
 
 from __future__ import absolute_import, division, print_function
@@ -1032,47 +1034,15 @@ def merge_fields(records, *, profile, get=None):
 
 
 @accept_args_markers
-def tag_each(records, tag=None, **fields):
-    """Overlay fields onto every mapping record in a list.
-
-    Non-mapping items are preserved unchanged. This is a convenience for
-    tagging lists of records (e.g. BINS) with a common field without the
-    ``map('combine', {...}) | list`` verbosity.
-
-    Args:
-        records: List of records. Mappings get the overlay; others pass
-            through. Undefined/None returns an empty list.
-        tag: Optional mapping of fields to overlay (alternative to kwargs
-            when field names conflict with Python identifiers).
-        **fields: Fields to add or override on each mapping record.
-            Undefined field values are skipped.
-
-    Returns:
-        A new list with overlaid records.
-    """
-    records = raw_copy_template_data(records)
-    if _is_absent(records):
-        return []
-    if isinstance(records, collections.abc.Mapping):
-        records = [records]
-    elif not isinstance(records, list):
-        _error("tag_each expects a list of records; got {}".format(type(records).__name__))
-    fields = raw_copy_template_data(fields)
-    if tag is not None:
-        tag = raw_copy_template_data(tag)
-        if isinstance(tag, collections.abc.Mapping):
-            fields = {**tag, **fields}
-    fields = {k: v for k, v in fields.items() if not _is_undefined(v)}
-    return [dict(record, **fields) if isinstance(record, collections.abc.Mapping) else record for record in records]
-
-
-@accept_args_markers
 def combine_iff(base, *overlays):
     """Like Ansible's ``combine``, but silently skips undefined values.
 
     Undefined overlays, non-mapping overlays, and undefined values within
     mapping overlays are all skipped. This eliminates the
     ``({'k': v} if v is defined else {}) | combine(...)`` boilerplate.
+
+        {{ {} | combine_iff({'BIN': RUST_BIN, 'PKG': RUST_PKG}) }}
+        {{ ENV | combine_iff({'X': conditional_var}, ENV if ENV is mapping) }}
 
     Args:
         base: Base mapping (or undefined/None for empty).
@@ -1103,6 +1073,5 @@ class FilterModule(object):
             "merge_list": merge_list,
             "merge_dict": merge_dict,
             "merge_fields": merge_fields,
-            "tag_each": tag_each,
             "combine_iff": combine_iff,
         }

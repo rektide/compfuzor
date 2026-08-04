@@ -1,3 +1,13 @@
+"""Bin helper resolution for compfuzor.
+
+``resolve_helpers`` runs caller-prepared helper layers through the cfmerge
+``helpers`` preset (concat, dedupe, implicate, canonicalize). The caller
+(``files/_bin``) owns bypass and nuclear (``helpers: false``) policy; this
+filter only applies the central fixed preset.
+
+``helper_comment`` formats the ``# <name> helper: <description>`` line
+emitted before each helper inclusion in generated bin scripts.
+"""
 from __future__ import annotations
 
 import os
