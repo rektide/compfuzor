@@ -148,6 +148,87 @@ def test_deflengthy_none():
     check("deflengthy(None) -> False (None has no len)", lengthy(None), False)
 
 
+# ---------------------------------------------------------------------------
+# def — falsy=True mode (matches default(X, true))
+# ---------------------------------------------------------------------------
+
+def test_falsy_true_skips_empty_string():
+    check("def('', 'fb', falsy=True) -> 'fb'", un_undefine("", "fb", falsy=True), "fb")
+
+
+def test_falsy_true_skips_none():
+    check("def(None, 'fb', falsy=True) -> 'fb'", un_undefine(None, "fb", falsy=True), "fb")
+
+
+def test_falsy_true_skips_false_and_zero():
+    check("def(False, 'fb', falsy=True) -> 'fb'", un_undefine(False, "fb", falsy=True), "fb")
+    check("def(0, 'fb', falsy=True) -> 'fb'", un_undefine(0, "fb", falsy=True), "fb")
+
+
+def test_falsy_true_skips_empty_collections():
+    check("def([], 'fb', falsy=True) -> 'fb'", un_undefine([], "fb", falsy=True), "fb")
+    check("def({}, 'fb', falsy=True) -> 'fb'", un_undefine({}, "fb", falsy=True), "fb")
+
+
+def test_falsy_true_skips_undefined():
+    check("def(UNDEF, 'fb', falsy=True) -> 'fb'", un_undefine(UNDEF, "fb", falsy=True), "fb")
+
+
+def test_falsy_true_keeps_truthy_values():
+    check("def('x', 'fb', falsy=True) -> 'x'", un_undefine("x", "fb", falsy=True), "x")
+    check("def(1, 'fb', falsy=True) -> 1", un_undefine(1, "fb", falsy=True), 1)
+    check("def([1], 'fb', falsy=True) -> [1]", un_undefine([1], "fb", falsy=True), [1])
+
+
+def test_falsy_true_walks_multiple_args():
+    """The XDG-chain pattern: var -> register -> literal."""
+    check(
+        "def('', '', '/home/x', falsy=True) -> '/home/x'",
+        un_undefine("", "", "/home/x", falsy=True),
+        "/home/x",
+    )
+    check(
+        "def('', '/srv/reg', '/home/x', falsy=True) -> '/srv/reg'",
+        un_undefine("", "/srv/reg", "/home/x", falsy=True),
+        "/srv/reg",
+    )
+
+
+def test_falsy_true_all_skipped_returns_none():
+    check("def('', None, False, falsy=True) -> None", un_undefine("", None, False, falsy=True), None)
+
+
+def test_falsy_true_no_args_returns_none():
+    check("def(falsy=True) -> None", un_undefine(falsy=True), None)
+
+
+# ---------------------------------------------------------------------------
+# def — falsy=[...] custom skip-list mode
+# ---------------------------------------------------------------------------
+
+def test_falsy_list_skips_listed_values():
+    check("def('', 'fb', falsy=[None, '']) -> 'fb'", un_undefine("", "fb", falsy=[None, ""]), "fb")
+    check("def(None, 'fb', falsy=[None, '']) -> 'fb'", un_undefine(None, "fb", falsy=[None, ""]), "fb")
+
+
+def test_falsy_list_keeps_zero_and_false():
+    """Custom list lets callers skip None/'' without losing 0/False."""
+    check("def(0, 'fb', falsy=[None, '']) -> 0", un_undefine(0, "fb", falsy=[None, ""]), 0)
+    check("def(False, 'fb', falsy=[None, '']) -> False", un_undefine(False, "fb", falsy=[None, ""]), False)
+
+
+def test_falsy_list_skips_undefined():
+    check("def(UNDEF, 'fb', falsy=[None, '']) -> 'fb'", un_undefine(UNDEF, "fb", falsy=[None, ""]), "fb")
+
+
+def test_falsy_list_walks_multiple():
+    check(
+        "def('', '', '/lit', falsy=[None, '']) -> '/lit'",
+        un_undefine("", "", "/lit", falsy=[None, ""]),
+        "/lit",
+    )
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for t in tests:

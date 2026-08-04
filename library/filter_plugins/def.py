@@ -3,16 +3,25 @@ from ansible.template import accept_args_markers
 
 
 @accept_args_markers
-def un_undefine(*a):
-    """First non-undefined argument, else None.
+def un_undefine(*a, **kwargs):
+    """First argument passing the skip filter, else None.
 
-    Generalizes the old binary ``def(X, Y)``. Walks ``a`` left-to-right and
-    returns the first value that is not an Ansible-undefined marker; if every
-    argument is undefined (or no arguments were given), returns None. A
-    literal final fallback (``def(X, Y, 'default')``) works because literals
-    are always defined.
+    Walks ``a`` left-to-right and returns the first value that is not
+    skipped; returns None if every argument is skipped or no arguments were
+    given. A literal final fallback (``def(X, Y, 'default')``) works because
+    literals are always defined.
 
-    Backward compatibility:
+    ``falsy`` keyword controls what counts as "skipped":
+
+    - ``falsy=False`` (default) — skip only Ansible-undefined markers.
+      Matches ``X|default(Y)``.
+    - ``falsy=True`` — skip undefined AND Python-falsy values (None, ``''``,
+      ``0``, ``False``, ``[]``, ``{}``). Matches ``X|default(Y, true)``.
+    - ``falsy=[None, '']`` — skip undefined AND any value equal to an entry
+      in the list. For when you want empty-string-skip but need to keep
+      ``0`` or ``False``.
+
+    Backward compatibility (``falsy=False``, the default):
 
     - ``def(X)`` (1 arg): unchanged. X defined -> X; X undefined -> None.
     - ``def(X, Y)`` (2 args): X defined -> X; X undefined & Y defined -> Y;
@@ -20,8 +29,23 @@ def un_undefine(*a):
       marker in the both-undefined case; this is a strict improvement.)
     - ``def(X, Y, Z, ...)`` (3+ args): new capability.
     """
+    falsy = kwargs.get("falsy", False)
+
+    if falsy is True:
+        def should_skip(v):
+            return wrapped_test_undefined(v) or not v
+    elif falsy:
+        falsy_list = list(falsy)
+        def should_skip(v):
+            if wrapped_test_undefined(v):
+                return True
+            return any(v == f for f in falsy_list)
+    else:
+        def should_skip(v):
+            return wrapped_test_undefined(v)
+
     for candidate in a:
-        if not wrapped_test_undefined(candidate):
+        if not should_skip(candidate):
             return candidate
     return None
 
