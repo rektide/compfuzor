@@ -6,9 +6,10 @@
     dest: "{{_dest}}"
     state: link
   with_items: "{{ BINS|normalize(to='list') }}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
+  become: "{{ _become.become }}"
   when: item is mapping and item.link is deftruthy and item.delay|default(False) == delay_phase|default(False)
   vars:
     #_dest: "{{item.dest|default(item.link|basename)|default(item.name)|defaultDir(BINS_DIR)}}"
     _dest: "{{item.dest|def(item.link|basename)|defaultDir(BINS_DIR)}}"
     _delayText: "{{ ' (phase ' + delay_phase + ')' if delay_phase|def else ''}}"
+    _become: "{{ _dest|become_calc }}"
