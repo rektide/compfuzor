@@ -21,6 +21,7 @@ from cfmerge import (
     REFINES,
     collect,
     combine_iff,
+    join2,
     merge_dict,
     merge_fields,
     merge_list as _merge_list,
@@ -552,6 +553,52 @@ def test_when_and():
         "else")
 
 
+def test_join2():
+    print("\njoin2:")
+    check("joins a list with separator",
+        join2(["a", "b", "c"], ":"),
+        "a:b:c")
+    check("default separator is empty string",
+        join2(["a", "b"]),
+        "ab")
+    check("single string is one item, not char-iterated",
+        join2("foo", ":"),
+        "foo")
+    check("bare True drops to empty",
+        join2(True, ":"),
+        "")
+    check("bare False drops to empty",
+        join2(False, ":"),
+        "")
+    check("None drops to empty",
+        join2(None, ":"),
+        "")
+    check("undefined drops to empty",
+        join2(Undefined(name="missing"), ":"),
+        "")
+    check("empty list joins to empty string",
+        join2([], ":"),
+        "")
+    check("True inside list is dropped",
+        join2([True, "x"], ":"),
+        "x")
+    check("False inside list is dropped",
+        join2(["x", False, "y"], ":"),
+        "x:y")
+    check("booleans only join to empty",
+        join2([True, False], ":"),
+        "")
+    check("numbers are preserved as text",
+        join2([1, 2, 3], ":"),
+        "1:2:3")
+    check("0 is preserved (not dropped like False)",
+        join2([0], ":"),
+        "0")
+    check("multi-char separator (line-continuation style)",
+        join2(["foo", "bar"], " \\\n\t"),
+        "foo \\\n\tbar")
+
+
 if __name__ == "__main__":
     test_collect()
     test_normalizers()
@@ -562,6 +609,7 @@ if __name__ == "__main__":
     test_field_profiles()
     test_tag_each()
     test_combine_iff()
+    test_join2()
     test_when()
     test_when_and()
     print("\n{} passed, {} failed".format(passed, failed))

@@ -15,6 +15,7 @@ Ansible filters exposed:
     ``merge_dict``    — merge variadic layers through a mapping-producing preset.
     ``merge_fields``  — merge records using a recursively nested field profile.
     ``combine_iff``   — like Ansible's ``combine`` but skips undefined values.
+    ``join2``         — coerce to list and join into a string, dropping booleans.
 
 Related modules:
     ``template_data`` — raw data-access helpers shared across plugins.
@@ -1097,6 +1098,37 @@ def combine_iff(base, *overlays):
     return result
 
 
+@accept_args_markers
+def join2(value, separator=""):
+    """Coerce a value to a list and join it into a string, dropping booleans.
+
+    Composes ``normalize(to='list')`` with a join, specialized for
+    text-rendering contexts — shell body, PATH entries, command arguments.
+    Boolean ``True``/``False`` originate from YAML enable-flags rather than
+    renderable text, so they are dropped before joining; every other item is
+    stringified.
+
+    ``None``, undefined, and empty inputs join to the empty string, so no
+    ``default([])`` preamble is needed and a bare string is never
+    character-iterated.
+
+        {{ STATUS_DIRS | join2(':') }}
+        {{ item.exec | join2("\n") }}
+
+    Args:
+        value: One raw value. Accepts the same shapes as ``normalize(to='list')``:
+            ``None``, undefined, ``False``, scalars, strings, mappings, and
+            sequences.
+        separator: String inserted between items. Defaults to the empty string.
+
+    Returns:
+        A string.
+    """
+    value = raw_copy_template_data(value)
+    items = _normalize_list(value)
+    return separator.join(str(item) for item in items if not isinstance(item, bool))
+
+
 class FilterModule(object):
     """Expose cfmerge filters to Ansible's filter-plugin loader."""
 
@@ -1107,4 +1139,5 @@ class FilterModule(object):
             "merge_dict": merge_dict,
             "merge_fields": merge_fields,
             "combine_iff": combine_iff,
+            "join2": join2,
         }
