@@ -7,7 +7,7 @@
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"
   become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(BINS_DIR|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
-  when: BINS|default(False) is truthy
+  when: BINS is deftruthy
   vars:
     _delayText: "{{ ' (' + delay_phase + ')' if delay_phase|def else ''}}"
 - name: "Create exec/execs `BINS`"
@@ -38,7 +38,7 @@
     loop_var: bin_item
   become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
   when: >
-    _srcName|default(False) is truthy
+    _srcName is deftruthy
     and not _isRaw
     and not _isLink
     and not _contentful
@@ -53,7 +53,7 @@
     _srcTemplate: "{{ ('files/' ~ _srcName[3:]) if (_srcName is string and _srcName.startswith('../')) else ('files/' ~ (TYPE|default(NAME)) ~ '/' ~ _srcName) }}"
     _dest: "{{BINS_DIR}}/{{_item.dest|default(_item.name|default(_srcName|basename))}}"
     _isRaw: "{{_item.raw|default(False)|bool}}"
-    _isLink: "{{_item.link|default(False) is truthy}}"
+    _isLink: "{{_item.link is deftruthy}}"
     _exists: "{{_item.exists|default('') != False}}"
     _contentful: "{{_item.content|def or _item.exec|def or _item.execs|def or _item.generated|def or _item.run_all|def or _item.early|def or _item.late|def}}"
     item: "{{_item|combine({'content': lookup('template', _srcTemplate)})}}"
@@ -67,7 +67,7 @@
     group: "{{GROUP|default(omit)}}"
   with_items: "{{ BINS|normalize(to='list') }}"
   become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
-  when: ((item.src|default(True) != False and item.name|default(False)) or item.src|default(False)) and item.raw|default(False) and not item.exec|default(False) and not item.execs|default(False)
+  when: ((item.src|default(True) != False and item.name is deftruthy) or item.src is deftruthy) and item.raw is deftruthy and item.exec is deffalsy and item.execs is deffalsy
   vars:
     _dest: "{{BINS_DIR}}/{{item.dest|def(item.name, item.src|basename) if item is mapping else item}}"
 #- name: "Create exec `BINS`"
