@@ -4,27 +4,29 @@
     path: "{{BINS_DIR}}"
     state: directory
     mode: 0771
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(BINS_DIR|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
+    owner: "{{OWNER|def(omit)}}"
+    group: "{{GROUP|def(omit)}}"
+  become: "{{ _become.become }}"
   when: BINS is deftruthy
   vars:
     _delayText: "{{ ' (' + delay_phase + ')' if delay_phase|def else ''}}"
+    _become: "{{ BINS_DIR|become_calc }}"
 - name: "Create exec/execs `BINS`"
   template:
     dest: "{{_dest}}"
     src: "files/_bin"
     mode: "{{item.mode|default(BINMODE)}}"
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
+    owner: "{{OWNER|def(omit)}}"
+    group: "{{GROUP|def(omit)}}"
   with_items: "{{ BINS|normalize(to='list') }}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
+  become: "{{ _become.become }}"
   when: >
     item is mapping
     and contentful is truthy
     and item.dest|def(item.name, False) is truthy
   vars:
     _dest: "{{BINS_DIR}}/{{item.dest|def(item.name)}}"
+    _become: "{{ _dest|become_calc }}"
     contentful: "{{item.content|def or item.exec|def or item.execs|def or item.generated|def or item.run_all|def or item.early|def or item.late|def}}"
 - name: "Create wrapped src/template `BINS`"
   template:
@@ -32,11 +34,11 @@
     dest: "{{_dest}}"
     mode: "{{_item.mode|default(BINMODE)}}"
     owner: "{{_item.owner|def(OWNER, omit)}}"
-    group: "{{GROUP|default(omit)}}"
+    group: "{{GROUP|def(omit)}}"
   loop: "{{ BINS|normalize(to='list') }}"
   loop_control:
     loop_var: bin_item
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
+  become: "{{ _become.become }}"
   when: >
     _srcName is deftruthy
     and not _isRaw
@@ -56,6 +58,7 @@
     _isLink: "{{_item.link is deftruthy}}"
     _exists: "{{_item.exists|default('') != False}}"
     _contentful: "{{_item.content|def or _item.exec|def or _item.execs|def or _item.generated|def or _item.run_all|def or _item.early|def or _item.late|def}}"
+    _become: "{{ _dest|become_calc }}"
     item: "{{_item|combine({'content': lookup('template', _srcTemplate)})}}"
 - name:  "Copy raw `BINS` into place`"
   copy:
@@ -64,12 +67,13 @@
     dest: "{{_dest}}"
     mode: "{{item.mode|default(BINMODE)}}"
     owner: "{{item.owner|def(OWNER, omit)}}"
-    group: "{{GROUP|default(omit)}}"
+    group: "{{GROUP|def(omit)}}"
   with_items: "{{ BINS|normalize(to='list') }}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
+  become: "{{ _become.become }}"
   when: ((item.src|default(True) != False and item.name is deftruthy) or item.src is deftruthy) and item.raw is deftruthy and item.exec is deffalsy and item.execs is deffalsy
   vars:
     _dest: "{{BINS_DIR}}/{{item.dest|def(item.name, item.src|basename) if item is mapping else item}}"
+    _become: "{{ _dest|become_calc }}"
 #- name: "Create exec `BINS`"
 #  file:  dest="{{BINS_DIR}}/{{item.dest|default(item.name) if item is mapping else item}}" mode={{item.mode|default(755)}}
 #  with_items: "{{BINS|default([])}}"
