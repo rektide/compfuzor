@@ -99,7 +99,6 @@ Filters that absorb undefined/missing values so a pipeline doesn't abort.
 | `deflengthy` | `(value, fallback?)` | True iff value is list-like with `len > 0`; undefined → `False`. | **tolerates undefined → `False`**. | [`def.py:26`](/library/filter_plugins/def.py) |
 | `get` | `(value, path, default=None)` | Safe dotted-path traversal through dicts/lists; missing segment, type mismatch, or undefined → `default`. | **tolerates undefined → `default`**. | [`get.py:56`](/library/filter_plugins/get.py) |
 | `get_path` | `(value, path, default=None)` | Shared traversal implementation (also exposed directly). | **tolerates undefined → `default`**. | [`get.py:13`](/library/filter_plugins/get.py) |
-| `has_var` / `has_vars` | `(item, prefix="", suffix="", returnLookedup=None, upper=False, lower=False)` *(context-injected)* | Look up a var (string) or filter a list of names against `vars` + `hostvars`, with prefix/suffix and case folding. | Returns `False`/missing rather than raising when a var is absent; raises `AnsibleError` if `item` is neither str nor list. | [`vars.py:20`](/library/filter_plugins/vars.py) |
 
 **Examples**
 
@@ -107,7 +106,6 @@ Filters that absorb undefined/missing values so a pipeline doesn't abort.
 {{ maybe_undef | def([]) }}            {# -> [] #}
 {{ maybe_undef | truthy }}             {# -> false #}
 {{ record | get("a.b.c", "fallback") }}
-{{ "FOO" | has_var(prefix="CFG_") }}
 ```
 
 ---
@@ -218,6 +216,7 @@ replacements listed below.
 | `merge_with_strategy` | Per-field strategy merger | `merge_list`/`merge_dict` with presets | [`merge_strategy.py`](/library/filter_plugins/merge_strategy.py) |
 | `mergeKeyed` | Merge two lists by key | `merge_list` with `merge_keyed` preset | [`mergeKeyed.py`](/library/filter_plugins/mergeKeyed.py) |
 | `merge_list_subsys` / `merge_dict_subsys` / `subsys_publish` | Subsystem-scoped merge/publish | `merge_list`/`merge_dict` (direct calls) | [`merge.py`](/library/filter_plugins/merge.py) |
+| `has_var` / `has_vars` | Look up a var (string) or filter a list of names with prefix/suffix/case-folding | `lookup('vars', NAME, default=...)` (single) or `lookup('vars_dict', [NAMES], default=...)` (multi); for name transformation, compose `| map('regex_replace', ...) | map('upper')` first | [`vars.py`](/library/filter_plugins/vars.py) |
 
 ---
 
@@ -242,7 +241,7 @@ replacements listed below.
 | [`passthrough_inspect.py`](/library/filter_plugins/passthrough_inspect.py) | `passthrough_inspect`, `materialize_dict`, `count_templates`, `merge_preserving` | active |
 | [`rejectAny.py`](/library/filter_plugins/rejectAny.py) | `rejectAny` | active |
 | [`unsafety.py`](/library/filter_plugins/unsafety.py) | `unsafety` | active |
-| [`vars.py`](/library/filter_plugins/vars.py) | `has_var`, `has_vars` | active |
+| [`vars.py`](/library/filter_plugins/vars.py) | `has_var`, `has_vars` | **deprecated** |
 | [`zim_fragment.py`](/library/filter_plugins/zim_fragment.py) | `zim_fragment` | active |
 | [`arrayitize.py`](/library/filter_plugins/arrayitize.py) | `arrayitize` | **deprecated** |
 | [`listify.py`](/library/filter_plugins/listify.py) | `listify`, `concat` | **deprecated** |

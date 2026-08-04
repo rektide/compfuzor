@@ -1,3 +1,29 @@
+"""DEPRECATED: ``has_var`` / ``has_vars`` — no live callers remain.
+
+All dynamic-var work has moved to standard Ansible lookups:
+
+- ``lookup('vars', NAME, default=...)`` — single-var lookup with a default
+  (41 sites in ``tasks/``). Replaces string-mode ``has_var``.
+- ``lookup('vars_dict', [NAMES], default=...)`` — multi-var lookup returning
+  a dict (19 sites). Replaces list-mode ``has_vars(returnLookedup=True)``.
+- ``query('varnames', REGEX)`` — find var names matching a pattern.
+
+The one original caller — ``SYSTEMD_UNITTYPES_ALL|has_vars(prefix='SYSTEMD_',
+upper=True)`` in ``tasks/compfuzor/vars_systemd_unit.tasks`` — was replaced
+by the explicit ``_systemd_has_service`` / ``_systemd_has_socket`` / ...
+flags composed with ``zip`` + ``selectattr``. That pattern (declare the
+flags, then filter) reads better than name-template + filter, and it's what
+unblocked removing this filter.
+
+The unique capability ``has_vars`` offered was name transformation
+(``prefix`` / ``suffix`` / ``upper`` / ``lower``) before lookup. Any future
+caller needing that can compose ``| map('regex_replace', ...) | map('upper')``
+with ``lookup('vars_dict', ...)``.
+
+This module can be deleted once the deprecation has soaked. The probe at
+``.test-agent/become-calc/vars-probe.pb`` exercises every code path for the
+soak period.
+"""
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type

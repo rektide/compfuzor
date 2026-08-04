@@ -19,7 +19,6 @@
         | selectattr(1)
         | map(attribute=0)
         | list }}
-    #types: "{{SYSTEMD_UNITTYPES_ALL|has_vars(prefix = 'SYSTEMD_', upper=True)}}"
     serviceExec: "{{SYSTEMD_SERVICE|default(SYSTEMD_EXEC|def|ternary(True, omit))}}"
     serviceNameDefault: "{{SYSTEMD_SERVICE|default(omit) if SYSTEMD_SERVICE|def != True else NAME}}"
 
