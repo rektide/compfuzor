@@ -27,7 +27,7 @@
   with_items: "{{ LINKS|normalize(to='list') }}"
   vars:
     _dir: "{{DIR}}"
-    _srcName: "{{item.src|default(item.name|default(item, true), true)}}"
+    _srcName: "{{item.src|def(item.name, item, falsy=True)}}"
     _isSrcAbs: "{{ _srcName[0] == '/' or _srcName == '~' }}"
     _srcDir: "{{ _srcName|defaultDir(DIR) }}"
     _srcCompfuzor: "{{ _srcName|defaultDir('files/'+TYPE|default(NAME)) }}"
@@ -35,4 +35,4 @@
     _srcResolved: "{{ _srcName if _isSrcAbs else _srcFile }}"
     _srcTemplate: "{{ item.srcTemplate|unsafety|defaultDir('files/'+TYPE|default(NAME)) if item.srcTemplate is defined else '' }}"
     _src: "{{ _srcResolved if not _srcTemplate else _srcTemplate }}"
-    _dest: "{{ item.dest|default(item.name|default(item, true), true)|defaultDir(DIR) if not item.destTemplate is defined else item.destTemplate|unsafety|defaultDir(_dir) }}"
+    _dest: "{{ item.dest|def(item.name, item, falsy=True)|defaultDir(DIR) if not item.destTemplate is defined else item.destTemplate|unsafety|defaultDir(_dir) }}"

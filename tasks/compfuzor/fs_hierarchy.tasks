@@ -51,7 +51,7 @@
   file:
     path: "{{_dir}}"
     state: directory
-    mode: "{{_vals.props.mode|default(DIRMODE|default(omit, true), true)}}"
+    mode: "{{_vals.props.mode|def(DIRMODE, omit, falsy=True)}}"
     owner: "{{do_become|ternary(owner|default(_cf_user_id, true),omit)}}"
     group: "{{do_become|ternary(group|default(_cf_user_gid, true),omit)}}"
   become: "{{do_become}}"
@@ -83,7 +83,7 @@
   file:
     path: "{{subdir}}"
     state: directory
-    mode: "{{item.mode|default(_vals.prop.mode|default(DIRMODE, true), true)}}"
+    mode: "{{item.mode|def(_vals.prop.mode, DIRMODE, falsy=True)}}"
     owner: "{{do_become|ternary(owner|default(_cf_user_id, true),omit)}}"
     group: "{{do_become|ternary(group|default(_cf_user_gid, true),omit)}}"
   with_items: "{{ _subdir_items }}"
@@ -122,7 +122,7 @@
     content: "{{all if item.copyDir is deffalsy  else omit}}"
     src: "{{src|default(False) if item.copyDir|default(False) == True else omit}}"
     dest: "{{dest}}"
-    mode: "{{item.mode|default(_vals.prop.mode|default(FILEMODE, true), true)}}"
+    mode: "{{item.mode|def(_vals.prop.mode, FILEMODE, falsy=True)}}"
     owner: "{{do_become|ternary(owner|default(_cf_user_id, true),omit)}}"
     group: "{{do_become|ternary(group|default(_cf_user_gid, true),omit)}}"
     backup: "{{item.backup|def(FS_BACKUP, False)}}"
@@ -136,7 +136,7 @@
   vars:
     srcDir: "files/{{ TYPE|default(NAME) }}"
     #src: "{{ item.src|default(item.name|default(item, true), true)|defaultDir(srcDir) }}"
-    src: "{{ item.src|default(item.name|default(item, true), true)|defaultDir('files/'+TYPE|default(NAME)) if not item.srcTemplate is defined else item.srcTemplate|unsafety|defaultDir('files/'+TYPE|default(NAME)) }}"
+    src: "{{ item.src|def(item.name, item, falsy=True)|defaultDir('files/'+TYPE|default(NAME)) if not item.srcTemplate is defined else item.srcTemplate|unsafety|defaultDir('files/'+TYPE|default(NAME)) }}"
     files: "{{include|upper}}_FILES"
     # unsafe because _vals.files is looked up?
     #content: "{{lookup('templateVar', item.content)}}"
@@ -146,12 +146,12 @@
     json: "{{item.json|to_nice_json if item.json is deftruthy else '' }}"
     fileType: "{{'file' if item.raw is deftruthy else 'template'}}"
     isFile: "{{not (item.content|def or item.yaml|def or item.json|def or item.var|def or item.copyDir|def)}}"
-    file: "{{lookup(fileType, item.src|default(item.name|default(item, true), true)|defaultDir(srcDir)) if isFile else '' }}"
+    file: "{{lookup(fileType, item.src|def(item.name, item, falsy=True)|defaultDir(srcDir)) if isFile else '' }}"
     var: "{{lookup('vars', item.var) if item.var|def else '' }}"
     all: "{{ content + file + var + yaml + json}}"
     owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
     group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
-    dest: "{{ item.dest|default(item.name|default(item.src|default(item, true), true), true)|defaultDir(_dir) if not item.destTemplate is defined else item.destTemplate|unsafety|defaultDir(_dir) }}"
+    dest: "{{ item.dest|def(item.name, item.src, item, falsy=True)|defaultDir(_dir) if not item.destTemplate is defined else item.destTemplate|unsafety|defaultDir(_dir) }}"
     should_become: "{{dest|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"
     do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
 
@@ -160,7 +160,7 @@
     src: "{{dest}}.d"
     dest: "{{dest}}"
     backup: "{{item.backup|default(True)}}"
-    mode: "{{item.mode|default(_vals.prop.mode|default(FILEMODE, true), true)}}"
+    mode: "{{item.mode|def(_vals.prop.mode, FILEMODE, falsy=True)}}"
     owner: "{{do_become|ternary(owner|default(_cf_user_id, true),omit)}}"
     group: "{{do_become|ternary(group|default(_cf_user_gid, true),omit)}}"
   become: "{{do_become}}"

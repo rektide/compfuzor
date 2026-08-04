@@ -13,5 +13,5 @@
     pg_ts="{{pg_tablespace|default(NAME)}}"
     pg_db="{{pg_db|default(NAME)}}"
     pg_port="{{pg_port|default(5432)}}"
-    pg_location="{{pg_location|default(VAR+'/db', true)}}"
+    pg_location="{{pg_location|def(VAR+'/db', falsy=True)}}"
     pg_acct="{{pg_acct|default('postgres')}}"

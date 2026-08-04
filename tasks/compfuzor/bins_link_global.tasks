@@ -16,6 +16,6 @@
   become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
   when: item.global is deftruthy and item.delay|default(False) == delay_phase|default(False)
   vars:
-    _src: "{{item.src|default(item.name|default(item.link, True), True)|defaultDir(DIR+'/bin')}}"
-    _dest: "{{(item.global if item.global|default(False) is string else item.dest|default(item.name|default(_src|basename, True), True))|defaultDir(GLOBAL_BINS_DIR)}}"
+    _src: "{{item.src|def(item.name, item.link, falsy=True)|defaultDir(DIR+'/bin')}}"
+    _dest: "{{(item.global if item.global is deftruthy and item.global is string else item.dest|def(item.name, _src|basename, falsy=True))|defaultDir(GLOBAL_BINS_DIR)}}"
     _delayText: "{{ ' (' + delay_phase + ')' if delay_phase|def else ''}}"

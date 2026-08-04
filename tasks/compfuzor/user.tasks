@@ -3,4 +3,4 @@
     name: "{{ USER }}"
     system: "{{ USERMODE is deffalsy }}"
   become: True
-  when: USER|default(False, True)
+  when: USER is deftruthy

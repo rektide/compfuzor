@@ -1,5 +1,5 @@
 ---
 - name: "Compfuzor: create directory for cvs import"
-  file: path="{{REPO_DIR|default(DIR, true)}}" state=directory
+  file: path="{{REPO_DIR|def(DIR, falsy=True)}}" state=directory
 - name: "Fetch cvs repository as git with cvsimport"
-  shell: chdir="{{REPO_DIR|default(DIR, true)}}" git cvsimport -d "{{CVS_REPO}}" -C . -r cvs -k "{{CVS_MODULE}}"
+  shell: chdir="{{REPO_DIR|def(DIR, falsy=True)}}" git cvsimport -d "{{CVS_REPO}}" -C . -r cvs -k "{{CVS_MODULE}}"
