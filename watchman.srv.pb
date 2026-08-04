@@ -21,7 +21,8 @@
 # HOW THE CONFIG REACHES THE DAEMON (fully user-mode, no /etc writes):
 # Watchman reads `$WATCHMAN_CONFIG_FILE` (WatchmanConfig.cpp:28, overrides the
 # compile-time `/etc/watchman.json`). We emit the config at {{ETC}}/watchman.json
-# (via ETC_FILES) and set the env var on the unit. No sudo.
+# (via ETC_FILES json:) and pass the path to the daemon via ENV: →
+# EnvironmentFile (the compfuzor-native way to give a unit its own env vars).
 #
 # CLI→DAEMON ROUTING — install-cli-symlink.sh (auto-included in install-user.sh):
 # The C++ `watchman` CLI **ignores `$WATCHMAN_SOCK`** — only python/node/rust
@@ -34,14 +35,13 @@
 # **symlinks the CLI's compile-time default `<user>-state` path to our managed
 # {{VAR}} dir**. Then every bare `watchman` invocation connects through the
 # symlink to our managed daemon, which has the guard loaded. Single daemon, no
-# spawn, no env gymnastics. The SYSTEMD_ENV / ZIM_MODULES wiring below is
-# belt-and-suspenders for python/node/rust clients (which DO honor $WATCHMAN_SOCK).
+# spawn, no env gymnastics.
 #
 # install-user.sh flow (auto-composed by bin_composers):
-#   1. install-systemd-user.sh  — link unit, daemon-reload, enable --now
-#   2. install-user-zimfw.sh    — promote zim module into the zim host
-#   3. install-cli-symlink.sh   — symlink CLI default <user>-state → {{VAR}},
+#   1. install-cli-symlink.sh   — symlink CLI default <user>-state → {{VAR}},
 #                                 chmod 0700 on {{VAR}} (watchman security check)
+#   2. install-systemd-user.sh  — link unit, daemon-reload, enable --now
+#   3. install-user-zimfw.sh    — promote zim module into the zim host
 - hosts: all
   vars:
     TYPE: watchman
@@ -60,17 +60,19 @@
     # with a different -DWATCHMAN_STATE_DIR.
     WATCHMAN_DEFAULT_STATE_DIR: /usr/local/src/watchman-git/watchman/var/run/watchman
 
-    SYSTEMD_ENV:
-      WATCHMAN_SOCK: "{{VAR}}/sock"
+    # Daemon env → env.export + EnvironmentFile (the compfuzor-native way).
+    # WATCHMAN_CONFIG_FILE tells the daemon where to find our root guard config.
+    ENV:
       WATCHMAN_CONFIG_FILE: "{{ETC}}/watchman.json"
 
     SYSTEMD_SERVICES:
       ExecStart: "watchman --persistent --foreground --statefile={{VAR}}/state --pidfile={{VAR}}/pid --sockname={{VAR}}/sock --logfile={{VAR}}/log"
-      Environment:
-        - "WATCHMAN_CONFIG_FILE={{ETC}}/watchman.json"
       Restart: always
       RestartSec: "2s"
 
+    # Interactive shells: an `env` zim module exports WATCHMAN_SOCK and
+    # WATCHMAN_CONFIG_FILE for python/node/rust clients (which DO honor
+    # $WATCHMAN_SOCK, unlike the C++ CLI). The symlink handles the C++ CLI.
     ZIM_MODULES:
       - name: watchman-env
         phase: tools
@@ -78,32 +80,29 @@
           WATCHMAN_SOCK: "{{VAR}}/sock"
           WATCHMAN_CONFIG_FILE: "{{ETC}}/watchman.json"
 
-    # Global root_files guard config. Emitted by ETC_FILES to {{ETC}}/watchman.json,
-    # read by the daemon via $WATCHMAN_CONFIG_FILE at startup. Restart the service
-    # to pick up changes (existing roots are NOT re-validated; only new
-    # watch-project calls are gated).
-    ROOT_GUARD:
-      root_files: [".git", ".hg", ".jj"]
-      enforce_root_files: true
-      ignore_dirs:
-        - node_modules
-        - target
-        - .build
-        - build
-        - dist
-        - ".next"
-        - ".cache"
-        - ".turbo"
-        - ".venv"
-        - venv
-        - __pycache__
-        - ".tox"
-        - ".mypy_cache"
-        - ".pytest_cache"
-
     ETC_FILES:
+      # Global root_files guard. Read by the daemon via $WATCHMAN_CONFIG_FILE
+      # at startup. Restart the service to pick up changes (existing roots are
+      # NOT re-validated; only new watch-project calls are gated).
       - name: watchman.json
-        content: "{{ROOT_GUARD | to_nice_json}}\n"
+        json:
+          root_files: [".git", ".hg", ".jj"]
+          enforce_root_files: true
+          ignore_dirs:
+            - node_modules
+            - target
+            - .build
+            - build
+            - dist
+            - ".next"
+            - ".cache"
+            - ".turbo"
+            - ".venv"
+            - venv
+            - __pycache__
+            - ".tox"
+            - ".mypy_cache"
+            - ".pytest_cache"
 
     # Ungrouped install leaf (scope: user, no subsystem) → auto-included as a
     # direct child of install-user.sh by bin_composers. Runs after the systemd
