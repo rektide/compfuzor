@@ -2,8 +2,8 @@
   file:
     path: "{{dest}}"
     state: directory
-    owner: "{{ OWNER|default(_cf_user_id)|default(omit) }}"
-    group: "{{ GROUP|default(ansible_group_id)|default(omit) }}"
+    owner: "{{ OWNER|def(_cf_user_id, omit) }}"
+    group: "{{ GROUP|def(ansible_group_id, omit) }}"
   #become: "{{dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
   when: REPO|default(False) is truthy or REPOS|default(False) is truthy
   vars:

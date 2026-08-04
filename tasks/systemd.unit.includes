@@ -35,7 +35,7 @@
     # Pass-through values
     _units: "{{ _systemd_types_val }}"
     _d: "{{ lookup('vars', 'SYSTEMD_'+unit_type|upper+'_D', default=false) }}"
-    _target: "{{ TYPE|default(NAME)|default('.') }}"
+    _target: "{{ TYPE|def(NAME, '.') }}"
     
     # Paths
     _local_src: "files/{{ _unitname }}/{{ _unit }}"

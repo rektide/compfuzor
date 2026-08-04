@@ -31,7 +31,7 @@
     src: "files/_bin"
     dest: "{{_dest}}"
     mode: "{{_item.mode|default(BINMODE)}}"
-    owner: "{{_item.owner|default(OWNER)|default(omit)}}"
+    owner: "{{_item.owner|def(OWNER, omit)}}"
     group: "{{GROUP|default(omit)}}"
   loop: "{{BINS|default([])}}"
   loop_control:
@@ -63,7 +63,7 @@
       {% set s = item.src|default(item.name) if item is mapping else item %}{{ ('files/' ~ s[3:]) if (s is string and s.startswith('../')) else ('files/' ~ (TYPE|default(NAME)) ~ '/' ~ s) }}
     dest: "{{_dest}}"
     mode: "{{item.mode|default(BINMODE)}}"
-    owner: "{{item.owner|default(OWNER)|default(omit)}}"
+    owner: "{{item.owner|def(OWNER, omit)}}"
     group: "{{GROUP|default(omit)}}"
   with_items: "{{BINS|default([])}}"
   become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"

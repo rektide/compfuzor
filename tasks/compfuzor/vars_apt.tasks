@@ -1,8 +1,8 @@
 - name: "Compfuzor: source apt variables"
   set_fact:
   vars:
-    _sourcelist: "{{APT_SOURCELIST|default(TYPE)|default(NAME)}}"
-    _trusted: "{{APT_TRUSTED|default(TYPE)|default(NAME)}}"
+    _sourcelist: "{{APT_SOURCELIST|def(TYPE, NAME)}}"
+    _trusted: "{{APT_TRUSTED|def(TYPE, NAME)}}"
     _arch: "{{APT_ARCH|default(ARCH)}}"
     _name: "{{TYPE|default(NAME)}}"
     _gpg: "{{APT_GPG_EXT|default('gpg')}}"
