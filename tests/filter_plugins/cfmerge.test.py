@@ -23,10 +23,15 @@ from cfmerge import (
     combine_iff,
     merge_dict,
     merge_fields,
-    merge_list,
+    merge_list as _merge_list,
     normalize,
     run_value_preset,
 )
+
+
+def merge_list(*layers, **kwargs):
+    """Test wrapper — passes None as the Jinja context (resolve=False only)."""
+    return _merge_list(None, *layers, **kwargs)
 from each import tag_each
 from when import when, whenAnd
 

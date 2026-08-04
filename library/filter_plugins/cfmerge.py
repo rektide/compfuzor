@@ -32,6 +32,7 @@ from ansible.errors import AnsibleFilterError
 from ansible.module_utils._internal._datatag import AnsibleTagHelper
 from ansible.plugins.test.core import wrapped_test_undefined
 from ansible.template import accept_args_markers
+from jinja2 import pass_context
 
 __all__ = [
     "COMBINES",
@@ -53,6 +54,29 @@ if _PLUGIN_DIR not in sys.path:
 
 from get import get_path  # noqa: E402
 from template_data import raw_copy_template_data  # noqa: E402
+
+
+def _resolve_templates(context, value):
+    """Recursively render Jinja template strings using the evaluation context.
+
+    Strings containing ``{{`` are rendered via the Jinja environment with the
+    current variable scope (including loop variables). Non-strings and strings
+    without template markers pass through unchanged.
+    """
+    if isinstance(value, str) and "{{" in value:
+        variables = context.get("vars", {})
+        if variables:
+            try:
+                return context.environment.from_string(value).render(**variables)
+            except Exception:
+                return value
+    if isinstance(value, dict):
+        return {k: _resolve_templates(context, v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_resolve_templates(context, v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_resolve_templates(context, v) for v in value)
+    return value
 
 
 def _error(message):
@@ -861,25 +885,32 @@ def _merge_with_kind(layers, preset, skip_layers, get, allowed_kinds, operation)
     )
 
 
+@pass_context
 @accept_args_markers
-def merge_list(*layers, preset="append", skip_layers=_DEFAULT_SKIP_LAYERS, get=None):
+def merge_list(context, *layers, preset="append", skip_layers=_DEFAULT_SKIP_LAYERS, get=None, resolve=False):
     """Merge layers through a list-producing value preset.
 
     Each positional argument is one layer. A piped value is the first layer.
 
         {{ BINS | merge_list(incoming, preset='append') }}
-        {{ merge_list(current, incoming, preset='append') }}
+        {{ BINS | merge_list(_item, preset='bins_generated', resolve=True) }}
 
     Accepted result kinds are ``list`` and ``list-record``. The preset is
     always keyword-only — positional strategies are rejected. Absent layers
     (``None``, Ansible undefined) are skipped by the default collection
     predicates, so ``default()`` is not needed.
 
+    When ``resolve=True``, template strings inside layers are rendered using
+    the current variable scope before entering the pipeline. Use this when
+    layers contain templates referencing task-local variables (loop vars,
+    task vars) that won't be in scope during later rendering.
+
     Args:
         *layers: Ordered raw contribution layers. Each argument is one layer.
         preset: List-producing preset name or allowed configuration mapping.
         skip_layers: Top-level collection predicates.
         get: Optional dotted path extracted from the final result.
+        resolve: Render template strings in layers before processing.
 
     Returns:
         A list result or an extracted value.
@@ -888,6 +919,8 @@ def merge_list(*layers, preset="append", skip_layers=_DEFAULT_SKIP_LAYERS, get=N
         AnsibleFilterError: If the preset is invalid or produces a non-list
             result.
     """
+    if resolve:
+        layers = tuple(_resolve_templates(context, layer) for layer in layers)
     return _merge_with_kind(
         layers,
         preset,
@@ -1042,7 +1075,7 @@ def combine_iff(base, *overlays):
     ``({'k': v} if v is defined else {}) | combine(...)`` boilerplate.
 
         {{ {} | combine_iff({'BIN': RUST_BIN, 'PKG': RUST_PKG}) }}
-        {{ ENV | combine_iff({'X': conditional_var}, ENV if ENV is mapping) }}
+        {{ base_env | combine_iff({'X': conditional_var}, extra_env) }}
 
     Args:
         base: Base mapping (or undefined/None for empty).
