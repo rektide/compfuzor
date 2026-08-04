@@ -7,8 +7,8 @@ should_become probe), owner/group resolution precedence (arg → scope OWNER/GRO
 → _cf_user_id/_cf_user_gid), and Omit-on-false-become behavior.
 
 The Ansible @pass_context wrapper is exercised via a fake context that mimics
-how Ansible exposes task vars under the literal key "vars" (same pattern used
-by library/filter_plugins/vars.py).
+how Ansible exposes task vars through ``context.get_all()`` (the modern,
+non-deprecated path).
 """
 import os
 import sys
