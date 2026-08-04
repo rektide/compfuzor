@@ -46,9 +46,9 @@
     update: "{{ GIT_UPDATE|default(omit) }}"
     reference: "{{ item.reference|defaultDir(SRCS_DIR) if item.reference|default(False) else omit }}"
   become: "{{ item.become|default(false)|bool }}"
-  loop: "{{ git_repos|default([]) }}"
+  loop: "{{ git_repos|normalize(to='list') }}"
   when: >
-    git_repos|default([])|length > 0
+    git_repos is deflengthy
     and not GIT_BYPASS|default(False)
     and not REPO_BYPASS|default(False)
 
@@ -60,9 +60,9 @@
   args:
     chdir: "{{ item.dest }}"
     creates: "{{ item.dest }}/.jj"
-  loop: "{{ git_repos|default([]) }}"
+  loop: "{{ git_repos|normalize(to='list') }}"
   when: >
-    git_repos|default([])|length > 0
+    git_repos is deflengthy
     and not GIT_BYPASS|default(False)
     and not REPO_BYPASS|default(False)
     and not JJ_BYPASS|default(False)
