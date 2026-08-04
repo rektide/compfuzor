@@ -33,14 +33,14 @@
       d: "{{lookup('vars', names.d, default=False)}}"
       files: "{{lookup('vars', names.files, default=False)}}"
       prop: "{{lookup('vars', names.prop, default={})}}"
-      bypass: "{{(DIR_BYPASS|default(False) or lookup('vars', names.bypass, default=False)) or not (names.sDir or names.dirs or names.dir or names.files or names.d)}}"
+      bypass: "{{(DIR_BYPASS is deftruthy or lookup('vars', names.bypass, default=False)) or not (names.sDir or names.dirs or names.dir or names.files or names.d)}}"
       linkProp: "{{lookup('vars', names.linkProp, default={})}}"
-      linkBypass: "{{(DIR_LINK_BYPASS|default(False) or lookup('vars', names.linkBypass, default=False)) or not (names.sDir or names.dirs or names.dir or names.files or names.d)}}"
+      linkBypass: "{{(DIR_LINK_BYPASS is deftruthy or lookup('vars', names.linkBypass, default=False)) or not (names.sDir or names.dirs or names.dir or names.files or names.d)}}"
 - name: "Test for {{_upper}} dir and link"
   stat:
     path: "{{item}}"
   register: _stat
-  when: not FS_DIR_TOP_PROPER|default(False)
+  when: FS_DIR_TOP_PROPER is deffalsy
   with_items:
   - "{{_dir}}"
   - "{{_link}}"
@@ -119,7 +119,7 @@
 
 - name: "Create {{_upper}} files"
   copy:
-    content: "{{all if not item.copyDir|default(False)  else omit}}"
+    content: "{{all if item.copyDir is deffalsy  else omit}}"
     src: "{{src|default(False) if item.copyDir|default(False) == True else omit}}"
     dest: "{{dest}}"
     mode: "{{item.mode|default(_vals.prop.mode|default(FILEMODE, true), true)}}"
@@ -132,7 +132,7 @@
   loop_control:
     index_var: idx
   become: "{{do_become}}"
-  when: not item.line|default(False) and (not item.once|default(False) or dest is not exists)
+  when: item.line is deffalsy and (item.once is deffalsy or dest is not exists)
   vars:
     srcDir: "files/{{ TYPE|default(NAME) }}"
     #src: "{{ item.src|default(item.name|default(item, true), true)|defaultDir(srcDir) }}"
@@ -142,9 +142,9 @@
     #content: "{{lookup('templateVar', item.content)}}"
     #content: "{{lookup('templateVar', (hostvars[inventory_hostname][files]|default(vars[files]|default(False)))[idx].content) if item.content|default(False) else ''}}"
     content: "{{item.content|def('')|unsafety }}"
-    yaml: "{{item.yaml|to_nice_yaml if item.yaml|default(False) else ''}}"
-    json: "{{item.json|to_nice_json if item.json|default(False) else '' }}"
-    fileType: "{{'file' if item.raw|default(False) else 'template'}}"
+    yaml: "{{item.yaml|to_nice_yaml if item.yaml is deftruthy else ''}}"
+    json: "{{item.json|to_nice_json if item.json is deftruthy else '' }}"
+    fileType: "{{'file' if item.raw is deftruthy else 'template'}}"
     isFile: "{{not (item.content|def or item.yaml|def or item.json|def or item.var|def or item.copyDir|def)}}"
     file: "{{lookup(fileType, item.src|default(item.name|default(item, true), true)|defaultDir(srcDir)) if isFile else '' }}"
     var: "{{lookup('vars', item.var) if item.var|def else '' }}"
