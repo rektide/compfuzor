@@ -980,7 +980,7 @@ _make_bins:
       if [ -f ./configure ]; then
         ./configure {{ _make_prefix_arg }} {{ MAKE_CONF_OPTIONS|default('') }}
       fi
-      make -j"$(nproc)" {{ MAKE_TARGET|default([])|listify|join(' ') }}
+      make -j"$(nproc)" {{ MAKE_TARGET|join2(' ') }}
   - name: install-make.sh
     bypass: ['LINK', 'MAKE']
     basedir: "{{ REPO_DIR }}"
