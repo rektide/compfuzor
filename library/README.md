@@ -44,52 +44,45 @@ when: KERNEL_MODULES is defmapping
 
 ---
 
-## Filters
+## Shape conversion & rendering
 
 | Filter | Signature | Purpose | Undefined/None | Source |
 |---|---|---|---|---|
-| `arrayitize` | `(*values)` | Wrap one or more args into a flat list; scalars → `[scalar]`, lists/tuples extended, `None`/bool/undefined dropped. | **tolerates undefined → `[]`** (single undefined arg returns `[]`; bool/None also collapse). | [`arrayitize.py:28`](/library/filter_plugins/arrayitize.py) |
-| `listify` | `(value)` | Normalize a single value into a list; dict → `[{key,value}]` list, tuple → list, falsy → `[]`, scalar → `[scalar]`. | Raises on undefined — no `wrapped_test_undefined` guard, no `@accept_args_markers`. `None`/falsy → `[]` by `if not a[0]`, but a strict-undefined *reference* raises at the call site. | [`listify.py:5`](/library/filter_plugins/listify.py) |
-| `concat` | `(*values)` | Variadic concatenation — runs each arg through `listify` and joins the results. | Raises on undefined — inherits `listify`'s behavior; each operand must be defined. | [`listify.py:17`](/library/filter_plugins/listify.py) |
-| `rejectAny` | `(list, excluded)` | Generator filtering `list`, dropping any element present in `excluded`. | Raises on undefined — no guards; `a[0]`/`a[1]` must both be defined. | [`rejectAny.py:1`](/library/filter_plugins/rejectAny.py) |
+| `normalize` | `(value, *, to='list', **options)` | Convert one raw value to a registered shape: `list` (scalar → `[x]`, undefined/False → `[]`), `mapping` (with optional `shorthand=True`), `items` (dict → `[{key_name, value_name}]`), or `identity`. | **tolerates undefined → `[]`** (list), `{}` (mapping), `[]` (items). `False` → empty. `True` is kept as `[True]`. | [`cfmerge.py`](/library/filter_plugins/cfmerge.py) |
+| `join2` | `(value, separator='')` | Coerce to list and join into a string, dropping boolean sentinels. Composes `normalize(to='list')` + join — no `default([])` needed, bare strings not character-iterated. | **tolerates undefined → `''`**. `True`/`False` dropped. | [`cfmerge.py`](/library/filter_plugins/cfmerge.py) |
+| `rejectAny` | `(list, excluded)` | Filter `list`, dropping elements present in `excluded`. | Raises on undefined — no guards. | [`rejectAny.py`](/library/filter_plugins/rejectAny.py) |
 
 **Examples**
 
 ```jinja
-{{ "x" | arrayitize }}                 {# -> ["x"] #}
-{{ undef_var | arrayitize }}           {# -> []  (tolerates undefined) #}
-{{ [1,2] | concat([3], 4) }}           {# -> [1,2,3,4] #}
-{{ [1,2,3,4] | rejectAny([2,4]) }}     {# -> [1,3] #}
+{{ FOO | normalize(to='list') }}              {# undefined -> [], "x" -> ["x"], [1,2] -> [1,2] #}
+{{ STATUS_DIRS | join2(':') }}                {# undefined -> "", ["a","b"] -> "a:b", True -> "" #}
+{{ LINKS | normalize(to='items', key_name='dest', value_name='src') }}
+{{ [1,2,3,4] | rejectAny([2,4]) }}            {# -> [1,3] #}
 ```
 
 ---
 
-## Dicts / Merging
+## Merging
 
-The merge family is split across [`merge.py`](/library/filter_plugins/merge.py)
-(the direct/subsys mergers), [`merge_strategy.py`](/library/filter_plugins/merge_strategy.py)
-(the strategy-driven record merger), and [`mergeKeyed.py`](/library/filter_plugins/mergeKeyed.py)
-(a compat shim).
+The merge family lives in [`cfmerge.py`](/library/filter_plugins/cfmerge.py) — a
+fixed pipeline (collect → normalize → combine → refine → extract) selected by
+preset name. Each positional arg is one layer; `preset=` is always keyword-only.
 
 | Filter | Signature | Purpose | Undefined/None | Source |
 |---|---|---|---|---|
-| `dictify` | `(value)` | Normalize a mapping or list-shorthand into a dict: mapping passes through; list entries become `name: true` or overlay in. | **tolerates undefined/None → `{}`** (explicit `wrapped_test_undefined`). | [`dictify.py:18`](/library/filter_plugins/dictify.py) |
-| `merge_list` | `(values, strategy="append", single=False, get=None)` | Merge direct list payloads with one list strategy (`append`, `append_unique`, or an op-dict/profile like `bins_generated`). | **tolerates undefined/None → `[]`** (`_is_nothing` filters each payload). | [`merge.py:412`](/library/filter_plugins/merge.py) |
-| `merge_dict` | `(values=None, *extra, strategy="overlay", single=False, get=None, skip="none,undefined")` | Merge direct dict payloads left-to-right (later wins). Variadic extra dicts supported. `skip` controls which payloads are dropped. | **tolerates undefined/None → `{}`** (default `skip="none,undefined"` drops them before merging). | [`merge.py:449`](/library/filter_plugins/merge.py) |
-| `merge_list_subsys` | `(current, subsystem_id=None, path="contrib.BINS", strategy="bins_generated", default=None, single=False, get=None, id=None, fallback_id=None, active=True, active_path="active")` *(context-injected)* | Merge `current` with one list value pulled from the `SUBSYSTEM` fact at `path`, gated by `active`. | **tolerates undefined/None** — undefined id/current handled via `_is_nothing`; missing subsystem → uses `default`. | [`merge.py:516`](/library/filter_plugins/merge.py) |
-| `merge_dict_subsys` | `(current, subsystem_id=None, path="contrib.ENV", strategy="env_overlay", default=None, single=False, get=None, id=None, fallback_id=None, active=True, active_path="active", current_wins=True)` *(context-injected)* | Merge `current` with one dict value from `SUBSYSTEM`; `current_wins=True` puts current last so it overrides subsystem values. | **tolerates undefined/None** — same as `merge_list_subsys`. | [`merge.py:579`](/library/filter_plugins/merge.py) |
-| `subsys_publish` | `(entry, subsystem_id=None, id=None)` *(context-injected)* | Deep-merge a new `entry` into `SUBSYSTEM[key]`, reading the fact through a raw-copy boundary so unrelated tagged strings stay unevaluated. | Raises on undefined — requires a non-empty `id`/`subsystem_id` (`AnsibleError` otherwise); undefined `entry` would propagate. | [`merge.py:647`](/library/filter_plugins/merge.py) |
-| `merge_with_strategy` | `(records, strategies, aggregate=None, include_aggregate=True, payload_path=None, into=None, single=False, get=None)` | Per-field strategy merger over many records. Strategies: `append`, `append_unique`, `dict_overlay`, `replace`, nested maps, op-dicts (`merge_keyed`, `append_unique_by`), or named profiles. | Tolerates `None` (`_as_list`/`_as_dict` → `[]`/`{}`); **no `@accept_args_markers` and no undefined check** — a top-level undefined *reference* raises at the call site. | [`merge_strategy.py:200`](/library/filter_plugins/merge_strategy.py) |
-| `mergeKeyed` | `(list1, list2, key="key", concat_fields=None)` | Compat shim — merges two lists of dicts by `key` via `merge_with_strategy` with `{op: merge_keyed}`. | Tolerates `None` operands (shim normalizes via `merge_with_strategy`); no explicit undefined guard. | [`mergeKeyed.py:11`](/library/filter_plugins/mergeKeyed.py) |
-| `ignore_empty` | `(obj)` | Strip keys whose value is `None` or `''` from a dict. | Raises on undefined — calls `o.items()` with no guard; input must be a defined mapping. | [`ignore_empty.py:1`](/library/filter_plugins/ignore_empty.py) |
+| `merge_list` | `(*layers, preset='append', skip_layers=..., get=None, resolve=False)` | Merge variadic list layers through a preset (`append`, `bins_generated`, etc.). `skip_layers=['all']` suppresses all four predicates. | **tolerates undefined/None** — skipped by default (`skip_layers=('none','undefined')`). | [`cfmerge.py`](/library/filter_plugins/cfmerge.py) |
+| `merge_dict` | `(*layers, preset='overlay', skip_layers=..., get=None)` | Merge variadic mapping layers through a preset (`overlay`, `tool_versions_overlay`). Later layers win. | **tolerates undefined/None** — same skip behavior. | [`cfmerge.py`](/library/filter_plugins/cfmerge.py) |
+| `merge_fields` | `(records, *, profile, get=None)` | Merge records using a recursively nested field profile. | **tolerates undefined/None** — absent records skipped. | [`cfmerge.py`](/library/filter_plugins/cfmerge.py) |
+| `combine_iff` | `(base, *overlays)` | Like Ansible's `combine` but silently skips undefined values. Eliminates `({'k': v} if v is defined else {}) | combine(...)` boilerplate. | **tolerates undefined** — undefined overlays and values skipped. | [`cfmerge.py`](/library/filter_plugins/cfmerge.py) |
+| `ignore_empty` | `(obj)` | Strip keys whose value is `None` or `''` from a dict. | Raises on undefined — input must be a defined mapping. | [`ignore_empty.py`](/library/filter_plugins/ignore_empty.py) |
 
 **Examples**
 
 ```jinja
-{{ [existing, incoming] | merge_list("bins_generated") }}
-{{ [defaults, overrides] | merge_dict("env_overlay") }}
-{{ ENV | merge_dict_subsys("watchman") }}
-{{ records | merge_with_strategy("subsystem_contrib", payload_path="contrib") }}
+{{ BINS | merge_list(_item, preset='bins_generated') }}
+{{ ENV | merge_dict(_overlay, preset='overlay') }}
+{{ {} | combine_iff({'BIN': RUST_BIN, 'PKG': RUST_PKG}) }}
 {{ {"a":1,"b":null,"c":""} | ignore_empty }}   {# -> {"a":1} #}
 ```
 
@@ -188,6 +181,7 @@ stored raw in a fact and re-rendered downstream (commonly inside
 | Filter | Signature | Purpose | Undefined/None | Source |
 |---|---|---|---|---|
 | `ansible_cmdline` | `(cmdline)` | Parse `/proc/cmdline`-style string; return `{type, instance}` from the first `<type>.<instance>.pb` token, else `{}`. | **tolerates empty/falsy → `{}`** (`if not cmdline: return {}`); no undefined guard. | [`cmdline.py:4`](/library/filter_plugins/cmdline.py) |
+| `tag_each` | `(records, subsystem=None, tag=None, **fields)` | Overlay fields onto every mapping record in a list (e.g. stamp `subsystem='kernel'` onto each BINS entry). | **tolerates undefined → `[]`**; non-mapping items preserved unchanged. | [`each.py`](/library/filter_plugins/each.py) |
 | `build_install_bins` | `(stem, basedir=False, src_root="../kernel")` | Emit standard `{build_bins, install_bins}` entries for a stem (e.g. `sysctl` → `build-sysctl.sh` / `install-sysctl.sh`). | Empty/whitespace stem → `{build_bins:[], install_bins:[]}`; no undefined guard. | [`build_install_bins.py:6`](/library/filter_plugins/build_install_bins.py) |
 | `bin_composers` | `(bins)` | Group `build*.sh` / `install*.sh` / `apply*.sh` bin entries by action and scope, emitting compositor bins with a `run_all` of children. Honors `scope`, `install-*.user.sh`, `compose: false`. | **tolerates undefined/None/bool → `[]`** (uses a local `_arrayitize` that drops undefined/None/bool). | [`bin_composers.py:34`](/library/filter_plugins/bin_composers.py) |
 | `zim_fragment` | `(modules, phase=None, etc=None)` | Render zim module declarations into `zim/<num>-<name>.conf` fragment records (git / file / env kinds). | **tolerates undefined/None `modules` → `[]`** (`wrapped_test_undefined`). | [`zim_fragment.py:251`](/library/filter_plugins/zim_fragment.py) |
@@ -210,29 +204,50 @@ debugging, not production pipelines.
 
 ---
 
+## Deprecated
+
+These filters have no live callers and are retained for soak time. Use the
+replacements listed below.
+
+| Filter | Was | Use instead | Source |
+|---|---|---|---|
+| `arrayitize` | Coerce to list, dropping `True`/`False`/`None` | `normalize(to='list')` (iteration) or `join2` (text rendering) | [`arrayitize.py`](/library/filter_plugins/arrayitize.py) |
+| `listify` | Coerce to list / dict→items | `normalize(to='list')` or `normalize(to='items')` | [`listify.py`](/library/filter_plugins/listify.py) |
+| `concat` | Variadic list concatenation | `merge_list` | [`listify.py`](/library/filter_plugins/listify.py) |
+| `dictify` | Normalize to mapping | `normalize(to='mapping')` | [`dictify.py`](/library/filter_plugins/dictify.py) |
+| `merge_with_strategy` | Per-field strategy merger | `merge_list`/`merge_dict` with presets | [`merge_strategy.py`](/library/filter_plugins/merge_strategy.py) |
+| `mergeKeyed` | Merge two lists by key | `merge_list` with `merge_keyed` preset | [`mergeKeyed.py`](/library/filter_plugins/mergeKeyed.py) |
+| `merge_list_subsys` / `merge_dict_subsys` / `subsys_publish` | Subsystem-scoped merge/publish | `merge_list`/`merge_dict` (direct calls) | [`merge.py`](/library/filter_plugins/merge.py) |
+
+---
+
 ## Module map
 
-| File | Registered filters |
-|---|---|
-| [`arrayitize.py`](/library/filter_plugins/arrayitize.py) | `arrayitize` |
-| [`bin_composers.py`](/library/filter_plugins/bin_composers.py) | `bin_composers` |
-| [`build_install_bins.py`](/library/filter_plugins/build_install_bins.py) | `build_install_bins` |
-| [`can_write.py`](/library/filter_plugins/can_write.py) | `can_write`, `has_write`, `should_become`, `diff_user`, `to_uid`, `to_gid` |
-| [`cmdline.py`](/library/filter_plugins/cmdline.py) | `ansible_cmdline` |
-| [`def.py`](/library/filter_plugins/def.py) | `def`, `truthy`, `deflengthy` |
-| [`defaultDir.py`](/library/filter_plugins/defaultDir.py) | `defaultDir` |
-| [`deprefix.py`](/library/filter_plugins/deprefix.py) | `deprefix`, `depostfix`, `deregex` |
-| [`dictify.py`](/library/filter_plugins/dictify.py) | `dictify` |
-| [`get.py`](/library/filter_plugins/get.py) | `get`, `get_path` |
-| [`ignore_empty.py`](/library/filter_plugins/ignore_empty.py) | `ignore_empty` |
-| [`listify.py`](/library/filter_plugins/listify.py) | `listify`, `concat` |
-| [`merge.py`](/library/filter_plugins/merge.py) | `merge_dict`, `merge_dict_subsys`, `merge_list`, `merge_list_subsys`, `subsys_publish` |
-| [`mergeKeyed.py`](/library/filter_plugins/mergeKeyed.py) | `mergeKeyed` |
-| [`merge_strategy.py`](/library/filter_plugins/merge_strategy.py) | `merge_with_strategy` |
-| [`passthrough_inspect.py`](/library/filter_plugins/passthrough_inspect.py) | `passthrough_inspect`, `materialize_dict`, `count_templates`, `merge_preserving` |
-| [`rejectAny.py`](/library/filter_plugins/rejectAny.py) | `rejectAny` |
-| [`template_render.py`](/library/filter_plugins/template_render.py) | `resolve` |
-| [`unsafety.py`](/library/filter_plugins/unsafety.py) | `unsafety` |
-| [`vars.py`](/library/filter_plugins/vars.py) | `has_var`, `has_vars` |
-| [`zim_fragment.py`](/library/filter_plugins/zim_fragment.py) | `zim_fragment` |
+| File | Registered filters | Status |
+|---|---|---|
+| [`cfmerge.py`](/library/filter_plugins/cfmerge.py) | `normalize`, `merge_list`, `merge_dict`, `merge_fields`, `combine_iff`, `join2` | active |
+| [`each.py`](/library/filter_plugins/each.py) | `tag_each` | active |
+| [`when.py`](/library/filter_plugins/when.py) | `when`, `whenAnd` | active |
+| [`template_render.py`](/library/filter_plugins/template_render.py) | `resolve` | active |
+| [`template_data.py`](/library/filter_plugins/template_data.py) | *(internal — raw data-access helpers)* | active |
+| [`bin_composers.py`](/library/filter_plugins/bin_composers.py) | `bin_composers` | active |
+| [`build_install_bins.py`](/library/filter_plugins/build_install_bins.py) | `build_install_bins` | active |
+| [`can_write.py`](/library/filter_plugins/can_write.py) | `can_write`, `has_write`, `should_become`, `diff_user`, `to_uid`, `to_gid` | active |
+| [`cmdline.py`](/library/filter_plugins/cmdline.py) | `ansible_cmdline` | active |
+| [`def.py`](/library/filter_plugins/def.py) | `def`, `truthy`, `deflengthy` | active |
+| [`defaultDir.py`](/library/filter_plugins/defaultDir.py) | `defaultDir` | active |
+| [`deprefix.py`](/library/filter_plugins/deprefix.py) | `deprefix`, `depostfix`, `deregex` | active |
+| [`get.py`](/library/filter_plugins/get.py) | `get`, `get_path` | active |
+| [`ignore_empty.py`](/library/filter_plugins/ignore_empty.py) | `ignore_empty` | active |
+| [`passthrough_inspect.py`](/library/filter_plugins/passthrough_inspect.py) | `passthrough_inspect`, `materialize_dict`, `count_templates`, `merge_preserving` | active |
+| [`rejectAny.py`](/library/filter_plugins/rejectAny.py) | `rejectAny` | active |
+| [`unsafety.py`](/library/filter_plugins/unsafety.py) | `unsafety` | active |
+| [`vars.py`](/library/filter_plugins/vars.py) | `has_var`, `has_vars` | active |
+| [`zim_fragment.py`](/library/filter_plugins/zim_fragment.py) | `zim_fragment` | active |
+| [`arrayitize.py`](/library/filter_plugins/arrayitize.py) | `arrayitize` | **deprecated** |
+| [`listify.py`](/library/filter_plugins/listify.py) | `listify`, `concat` | **deprecated** |
+| [`dictify.py`](/library/filter_plugins/dictify.py) | `dictify` | **deprecated** |
+| [`merge.py`](/library/filter_plugins/merge.py) | `merge_list_subsys`, `merge_dict_subsys`, `subsys_publish` | **deprecated** |
+| [`mergeKeyed.py`](/library/filter_plugins/mergeKeyed.py) | `mergeKeyed` | **deprecated** |
+| [`merge_strategy.py`](/library/filter_plugins/merge_strategy.py) | `merge_with_strategy` | **deprecated** |
 
