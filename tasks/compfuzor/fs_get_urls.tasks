@@ -10,7 +10,7 @@
       with_items: "{{ lookup('subsys', id=subsystem_id | default('get_urls'), name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='spec') }}"
       become: "{{ _become.become }}"
       vars:
-        _become: "{{ item.dest|dirname|become_calc(owner=item.owner, group=item.group) }}"
+        _become: "{{ item.dest|dirname|become_calc(owner=item.owner|def(OWNER, falsy=True), group=item.group|def(GROUP, falsy=True)) }}"
 
     - name: "save '.url' file"
       copy:
@@ -21,5 +21,5 @@
       with_items: "{{ lookup('subsys', id=subsystem_id | default('get_urls'), name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='spec') }}"
       become: "{{ _become.become }}"
       vars:
-        _become: "{{ item.dest|dirname|become_calc(owner=item.owner, group=item.group) }}"
+        _become: "{{ item.dest|dirname|become_calc(owner=item.owner|def(OWNER, falsy=True), group=item.group|def(GROUP, falsy=True)) }}"
   when: lookup('subsys', id=subsystem_id | default('get_urls'), name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='active')
