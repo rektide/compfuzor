@@ -1031,6 +1031,69 @@ def merge_fields(records, *, profile, get=None):
     return result
 
 
+@accept_args_markers
+def tag_each(records, tag=None, **fields):
+    """Overlay fields onto every mapping record in a list.
+
+    Non-mapping items are preserved unchanged. This is a convenience for
+    tagging lists of records (e.g. BINS) with a common field without the
+    ``map('combine', {...}) | list`` verbosity.
+
+    Args:
+        records: List of records. Mappings get the overlay; others pass
+            through. Undefined/None returns an empty list.
+        tag: Optional mapping of fields to overlay (alternative to kwargs
+            when field names conflict with Python identifiers).
+        **fields: Fields to add or override on each mapping record.
+            Undefined field values are skipped.
+
+    Returns:
+        A new list with overlaid records.
+    """
+    records = raw_copy_template_data(records)
+    if _is_absent(records):
+        return []
+    if isinstance(records, collections.abc.Mapping):
+        records = [records]
+    elif not isinstance(records, list):
+        _error("tag_each expects a list of records; got {}".format(type(records).__name__))
+    fields = raw_copy_template_data(fields)
+    if tag is not None:
+        tag = raw_copy_template_data(tag)
+        if isinstance(tag, collections.abc.Mapping):
+            fields = {**tag, **fields}
+    fields = {k: v for k, v in fields.items() if not _is_undefined(v)}
+    return [dict(record, **fields) if isinstance(record, collections.abc.Mapping) else record for record in records]
+
+
+@accept_args_markers
+def combine_iff(base, *overlays):
+    """Like Ansible's ``combine``, but silently skips undefined values.
+
+    Undefined overlays, non-mapping overlays, and undefined values within
+    mapping overlays are all skipped. This eliminates the
+    ``({'k': v} if v is defined else {}) | combine(...)`` boilerplate.
+
+    Args:
+        base: Base mapping (or undefined/None for empty).
+        *overlays: Mapping overlays. Undefined or non-mapping overlays are
+            skipped. Undefined values within a mapping overlay are skipped.
+
+    Returns:
+        A new merged mapping.
+    """
+    base = raw_copy_template_data(base)
+    overlays = raw_copy_template_data(overlays)
+    result = dict(base) if isinstance(base, collections.abc.Mapping) else {}
+    for overlay in overlays:
+        if _is_undefined(overlay) or not isinstance(overlay, collections.abc.Mapping):
+            continue
+        for key, value in overlay.items():
+            if not _is_undefined(value):
+                result[key] = value
+    return result
+
+
 class FilterModule(object):
     """Expose cfmerge filters to Ansible's filter-plugin loader."""
 
@@ -1040,4 +1103,6 @@ class FilterModule(object):
             "merge_list": merge_list,
             "merge_dict": merge_dict,
             "merge_fields": merge_fields,
+            "tag_each": tag_each,
+            "combine_iff": combine_iff,
         }

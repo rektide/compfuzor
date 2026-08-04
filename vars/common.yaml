@@ -421,13 +421,12 @@ SUBSYSTEM:
                 cargo install ${LOCKED_FLAG:-} --path .
             fi
       ENV: >-
-        {{ (({'RUST_BIN': RUST_BIN}) if RUST_BIN is defined else {})
-        | combine({'RUST_PKG': RUST_PKG} if RUST_PKG is defined else {})
-        | combine({'RUST_FEATURES': RUST_FEATURES} if RUST_FEATURES is defined else {})
-        | combine({'RUST_PROFILE': RUST_PROFILE} if RUST_PROFILE is defined else {})
-        | combine({'RUST_CARGO_ARGS': RUST_CARGO_ARGS} if RUST_CARGO_ARGS is defined else {})
-        | combine({'RUST_ALL': RUST_ALL} if RUST_ALL is defined else {})
-        | combine({'RUST_LOCKED': RUST_LOCKED} if RUST_LOCKED is defined else {}) }}
+        {{ {} | combine_iff({
+          'RUST_BIN': RUST_BIN, 'RUST_PKG': RUST_PKG,
+          'RUST_FEATURES': RUST_FEATURES, 'RUST_PROFILE': RUST_PROFILE,
+          'RUST_CARGO_ARGS': RUST_CARGO_ARGS, 'RUST_ALL': RUST_ALL,
+          'RUST_LOCKED': RUST_LOCKED
+        }) }}
       PKGS: "{{ RUST_PKGS | default([]) }}"
       TOOL_VERSIONS:
         rust: true
@@ -483,7 +482,7 @@ SUBSYSTEM:
           basedir: repo
           generated: |
             . "$(pwd)/.venv/bin/activate"
-      ENV: "{{ (({'PYTHON_BIN': PYTHON_BIN}) if PYTHON_BIN is defined else {}) | combine({} if ENV | def(True) == True else ENV) }}"
+      ENV: "{{ {} | combine_iff({'PYTHON_BIN': PYTHON_BIN}, ENV) }}"
       ETC_FILES: "{{ [{'name': 'pip.txt', 'content': (PIP | join('\\n') if PIP is iterable and PIP is not string else PIP | default(''))}] if PIP is defined else [] }}"
       TOOL_VERSIONS:
         python: true

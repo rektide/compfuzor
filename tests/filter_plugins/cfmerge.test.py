@@ -20,11 +20,13 @@ from cfmerge import (
     COMBINES,
     REFINES,
     collect,
+    combine_iff,
     merge_dict,
     merge_fields,
     merge_list,
     normalize,
     run_value_preset,
+    tag_each,
 )
 
 passed = 0
@@ -409,6 +411,82 @@ def test_field_profiles():
     )
 
 
+def test_tag_each():
+    print("\ntag_each:")
+    check("tags all records in a list",
+        tag_each([{"name": "a"}, {"name": "b"}], subsystem="kernel"),
+        [{"name": "a", "subsystem": "kernel"}, {"name": "b", "subsystem": "kernel"}])
+    check("preserves non-mapping items",
+        tag_each([{"name": "a"}, "bare-string"], subsystem="kernel"),
+        [{"name": "a", "subsystem": "kernel"}, "bare-string"])
+    check("absent input returns empty list",
+        tag_each(Undefined(name="missing")),
+        [])
+    check("None input returns empty list",
+        tag_each(None),
+        [])
+    check("single dict wraps to one-element list",
+        tag_each({"name": "a"}, subsystem="kernel"),
+        [{"name": "a", "subsystem": "kernel"}])
+    check("multiple fields",
+        tag_each([{"name": "a"}], subsystem="kernel", scope="user"),
+        [{"name": "a", "subsystem": "kernel", "scope": "user"}])
+    check("tag kwarg as alternative to **fields",
+        tag_each([{"name": "a"}], tag={"subsystem": "kernel"}),
+        [{"name": "a", "subsystem": "kernel"}])
+    check("rejects string input (not char-iterated)",
+        True,
+        True)
+    try:
+        tag_each("not-a-list", subsystem="x")
+        check("string input raises", False, True)
+    except Exception:
+        check("string input raises", True, True)
+    check("skips undefined field values",
+        tag_each([{"name": "a"}], good="yes", bad=Undefined(name="bad")),
+        [{"name": "a", "good": "yes"}])
+
+
+def test_combine_iff():
+    print("\ncombine_iff:")
+    check("merges defined values",
+        combine_iff({"a": 1}, {"b": 2}),
+        {"a": 1, "b": 2})
+    check("skips undefined values in overlay",
+        combine_iff({"a": 1}, {"b": 2, "c": Undefined(name="c")}),
+        {"a": 1, "b": 2})
+    check("skips entire undefined overlay",
+        combine_iff({"a": 1}, Undefined(name="overlay")),
+        {"a": 1})
+    check("skips non-mapping overlay (None, bool, list)",
+        combine_iff({"a": 1}, None, True, ["not", "a", "dict"]),
+        {"a": 1})
+    check("undefined base returns only defined overlays",
+        combine_iff(Undefined(name="base"), {"a": 1}),
+        {"a": 1})
+    check("None base returns only defined overlays",
+        combine_iff(None, {"a": 1}),
+        {"a": 1})
+    check("False value is kept (not undefined)",
+        combine_iff({}, {"flag": False}),
+        {"flag": False})
+    check("zero value is kept (not undefined)",
+        combine_iff({}, {"count": 0}),
+        {"count": 0})
+    check("multiple overlays merge left to right",
+        combine_iff({}, {"a": 1}, {"b": 2}, {"a": 3}),
+        {"a": 3, "b": 2})
+    check("empty base with single overlay",
+        combine_iff({}, {"a": 1, "b": 2}),
+        {"a": 1, "b": 2})
+    check("later overlay wins on key conflict",
+        combine_iff({"x": "base"}, {"x": "overlay"}),
+        {"x": "overlay"})
+    check("undefined value overridden by later defined value",
+        combine_iff({"x": Undefined(name="x")}, {"x": "real"}),
+        {"x": "real"})
+
+
 if __name__ == "__main__":
     test_collect()
     test_normalizers()
@@ -417,5 +495,7 @@ if __name__ == "__main__":
     test_lazy_template_data_boundary()
     test_presets_and_extract()
     test_field_profiles()
+    test_tag_each()
+    test_combine_iff()
     print("\n{} passed, {} failed".format(passed, failed))
     sys.exit(1 if failed else 0)
