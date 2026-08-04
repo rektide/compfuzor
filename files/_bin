@@ -50,7 +50,7 @@ if ! reason="$(_cf_run_guard 3 _cf_guard_bypass "{{ _cf_entry }}" "running")"; t
 {{ item.exec|join2("\n") }}
 {{ item.execs|join2("\n") }}
 {{ item.generated|join2("\n") if item.generatedAt|def("end") == "end" else omit }}
-{% set _cf_run_all = item.run_all|default([])|arrayitize %}
+{% set _cf_run_all = item.run_all|normalize(to='list') %}
 {% if _cf_run_all|length > 0 %}
 {% for run_bin in _cf_run_all %}
 if [ "$_cf_loud" = 1 ]; then printf '+ %s\n' '{{ run_bin }}'; fi

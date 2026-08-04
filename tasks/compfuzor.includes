@@ -132,8 +132,8 @@
       has_env_usermode.stdout|default(0)|int != 0 or
       (ENV is defined and (ENV is mapping or (ENV is boolean and ENV))) or
       (ENV_PRIO is defined and (ENV_PRIO is mapping or (ENV_PRIO is boolean and ENV_PRIO))) or
-      ENV_LIST|default([], true)|arrayitize|length > 0 or
-      ENV_PRIO_LIST|default([], true)|arrayitize|length > 0
+      ENV_LIST|default([], true)|normalize(to='list')|length > 0 or
+      ENV_PRIO_LIST|default([], true)|normalize(to='list')|length > 0
     )
 - import_tasks: compfuzor/_multi.tasks
   vars:

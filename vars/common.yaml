@@ -179,7 +179,7 @@ SUBSYSTEM:
   get_urls:
     requested: "{{ GET_URLS | deflengthy }}"
     spec: >-
-      {%- set _items = GET_URLS | arrayitize -%}
+      {%- set _items = GET_URLS | normalize(to='list') -%}
       {%- set normalized = [] -%}
       {%- for item in _items -%}
         {%- set row = item if item is mapping else {'url': item} -%}
@@ -217,7 +217,7 @@ SUBSYSTEM:
           run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
-            {% for _c in (GO_COMMENT | default([]) | arrayitize) %}
+            {% for _c in (GO_COMMENT | normalize(to='list')) %}
             # {{ _c }}
             {% endfor %}
             go build -o ${GO_BIN:-$TYPE} ${GO_TARGET:-./...}
@@ -225,7 +225,7 @@ SUBSYSTEM:
           bypass: ['LINK', 'GO']
           basedir: repo
           generated: |
-            {% for _c in (GO_COMMENT_INSTALL | default([]) | arrayitize) %}
+            {% for _c in (GO_COMMENT_INSTALL | normalize(to='list')) %}
             # {{ _c }}
             {% endfor %}
             [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${GO_BIN:-$TYPE}"
@@ -244,7 +244,7 @@ SUBSYSTEM:
           run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
-            {% for _c in (NODEJS_COMMENT | default([]) | arrayitize) %}
+            {% for _c in (NODEJS_COMMENT | normalize(to='list')) %}
             # {{ _c }}
             {% endfor %}
             if [ -f package-lock.json ] && [ ! -f pnpm-lock.yaml ]; then
@@ -270,7 +270,7 @@ SUBSYSTEM:
           #run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
-            {% for _c in (NODEJS_COMMENT_INSTALL | default([]) | arrayitize) %}
+            {% for _c in (NODEJS_COMMENT_INSTALL | normalize(to='list')) %}
             # {{ _c }}
             {% endfor %}
             if [ -n "{{ NODEJS_LINK_DIR | default('') }}" ]; then
@@ -309,7 +309,7 @@ SUBSYSTEM:
           run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
-            {% for _c in (BUN_COMMENT | default([]) | arrayitize) %}
+            {% for _c in (BUN_COMMENT | normalize(to='list')) %}
             # {{ _c }}
             {% endfor %}
             bun install
@@ -318,7 +318,7 @@ SUBSYSTEM:
           run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
-            {% for _c in (BUN_COMMENT_INSTALL | default([]) | arrayitize) %}
+            {% for _c in (BUN_COMMENT_INSTALL | normalize(to='list')) %}
             # {{ _c }}
             {% endfor %}
             bun link -g
@@ -353,7 +353,7 @@ SUBSYSTEM:
           run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
-            {% for _c in (RUST_COMMENT | default([]) | arrayitize) %}
+            {% for _c in (RUST_COMMENT | normalize(to='list')) %}
             # {{ _c }}
             {% endfor %}
             if [[ -n "${RUST_PROFILE:-}" ]]; then
@@ -379,7 +379,7 @@ SUBSYSTEM:
           bypass: ['LINK', 'RUST']
           basedir: repo
           generated: |
-            {% for _c in (RUST_COMMENT_INSTALL | default([]) | arrayitize) %}
+            {% for _c in (RUST_COMMENT_INSTALL | normalize(to='list')) %}
             # {{ _c }}
             {% endfor %}
             if [[ -n "${RUST_PROFILE:-}" ]]; then
@@ -460,7 +460,7 @@ SUBSYSTEM:
           run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
-            {% for _c in (PYTHON_COMMENT | default([]) | arrayitize) %}
+            {% for _c in (PYTHON_COMMENT | normalize(to='list')) %}
             # {{ _c }}
             {% endfor %}
             {% if PYTHON_BUILD_COMMAND is defined %}
@@ -493,10 +493,10 @@ SUBSYSTEM:
       BINS:
         - name: install-desktop.sh
           generated: |
-            {% for _c in (DESKTOP_COMMENT | default([]) | arrayitize) %}
+            {% for _c in (DESKTOP_COMMENT | normalize(to='list')) %}
             # {{ _c }}
             {% endfor %}
-            {% for entry in (DESKTOP | arrayitize) %}
+            {% for entry in (DESKTOP | normalize(to='list')) %}
             {% set df = entry.desktop_file %}
             {% set exec_val = entry.exec | default('') %}
             {% set icon_val = entry.icon | default('') %}
@@ -527,7 +527,7 @@ SUBSYSTEM:
       BINS:
         - name: download-patches.sh
           generated: |
-            {% for _c in (PATCHES_COMMENT | default([]) | arrayitize) %}
+            {% for _c in (PATCHES_COMMENT | normalize(to='list')) %}
             # {{ _c }}
             {% endfor %}
             PATCHES_DIR="${DIR}/patches"
@@ -586,7 +586,7 @@ SUBSYSTEM:
         - name: apply-patches.sh
           basedir: repo
           generated: |
-            {% for _c in (PATCHES_COMMENT_APPLY | default([]) | arrayitize) %}
+            {% for _c in (PATCHES_COMMENT_APPLY | normalize(to='list')) %}
             # {{ _c }}
             {% endfor %}
             PATCHES_DIR="${DIR}/patches"
@@ -740,7 +740,7 @@ SUBSYSTEM:
   systemd_env:
     requested: "{{ SYSTEMD_ENV is mapping and (SYSTEMD_ENV | length > 0) }}"
 
-_pr_patches_raw: "{{ PR_PATCHES | default([]) | arrayitize }}"
+_pr_patches_raw: "{{ PR_PATCHES | normalize(to='list') }}"
 _pr_patches_spec: >-
   {%- set normalized = [] -%}
   {%- for entry in _pr_patches_raw -%}
@@ -752,15 +752,15 @@ _pr_patches_spec: >-
   {%- endfor -%}
   {{ normalized }}
 
-_nodejs_build_scripts: "{{ (NODEJS_BUILD_SCRIPTS | default(NODEJS_BUILD_SCRIPT | default([]))) | arrayitize }}"
-_nodejs_build_commands: "{{ (NODEJS_BUILD_COMMANDS | default(NODEJS_BUILD_COMMAND | default([]))) | arrayitize }}"
-_nodejs_prune_scripts: "{{ (NODEJS_PRUNE_SCRIPTS | default(NODEJS_PRUNE_SCRIPT | default([]))) | arrayitize }}"
-_nodejs_prune_commands: "{{ (NODEJS_PRUNE_COMMANDS | default(NODEJS_PRUNE_COMMAND | default([]))) | arrayitize }}"
+_nodejs_build_scripts: "{{ (NODEJS_BUILD_SCRIPTS | default(NODEJS_BUILD_SCRIPT)) | normalize(to='list') }}"
+_nodejs_build_commands: "{{ (NODEJS_BUILD_COMMANDS | default(NODEJS_BUILD_COMMAND)) | normalize(to='list') }}"
+_nodejs_prune_scripts: "{{ (NODEJS_PRUNE_SCRIPTS | default(NODEJS_PRUNE_SCRIPT)) | normalize(to='list') }}"
+_nodejs_prune_commands: "{{ (NODEJS_PRUNE_COMMANDS | default(NODEJS_PRUNE_COMMAND)) | normalize(to='list') }}"
 
 _npm_src_bins:
   - name: build-npm.sh
     generated: |
-      {% for _c in (NPM_COMMENT | default([]) | arrayitize) %}
+      {% for _c in (NPM_COMMENT | normalize(to='list')) %}
       # {{ _c }}
       {% endfor %}
       curl $(npm view $NPM_PACKAGE dist.tarball) | tar -xz --strip-components=1
@@ -785,10 +785,10 @@ _npm_install_bins:
   - name: install-npm.sh
     run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
     generated: |
-      {% for _c in (NPM_COMMENT_INSTALL | default([]) | arrayitize) %}
+      {% for _c in (NPM_COMMENT_INSTALL | normalize(to='list')) %}
       # {{ _c }}
       {% endfor %}
-      pnpm install -g{% set _ab = NPM_ALLOW_BUILD | default(False) %}{% if _ab %}{% for _pkg in ((NPM | arrayitize) if (_ab | type_debug == 'bool') else (_ab | arrayitize)) %} --allow-build={{ _pkg }}{% endfor %}{% endif %} $(cat etc/npm.txt) $*
+      pnpm install -g{% set _ab = NPM_ALLOW_BUILD | default(False) %}{% if _ab %}{% for _pkg in ((NPM | normalize(to='list')) if (_ab | type_debug == 'bool') else (_ab | normalize(to='list'))) %} --allow-build={{ _pkg }}{% endfor %}{% endif %} $(cat etc/npm.txt) $*
 
 _npm_install_etc:
   - name: npm.txt
@@ -802,7 +802,7 @@ _bazel_bins:
     run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
     basedir: repo
     generated: |
-      {% for _c in (BAZEL_COMMENT | default([]) | arrayitize) %}
+      {% for _c in (BAZEL_COMMENT | normalize(to='list')) %}
       # {{ _c }}
       {% endfor %}
       bazel build {{ _bazel_target }}
@@ -810,7 +810,7 @@ _bazel_bins:
     bypass: ['LINK', 'BAZEL']
     basedir: repo
     generated: |
-      {% for _c in (BAZEL_COMMENT_INSTALL | default([]) | arrayitize) %}
+      {% for _c in (BAZEL_COMMENT_INSTALL | normalize(to='list')) %}
       # {{ _c }}
       {% endfor %}
       {% if BAZEL_INSTALL_TARGETS is defined %}
@@ -825,7 +825,7 @@ _bazel_bins:
       {% endif %}
 
 _cmake_source_default: "{{ CMAKE_SOURCE_DIR | default('.') }}"
-_cmake_builds_raw: "{{ CMAKE_BUILDS | arrayitize }}"
+_cmake_builds_raw: "{{ CMAKE_BUILDS | normalize(to='list') }}"
 _cmake_default_build:
   name: default
   build_dir: "{{ _BUILD_DIR }}"
@@ -879,7 +879,7 @@ _cmake_bins:
     run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
     basedir: "{{ REPO_DIR }}"
     generated: |
-      {% for _c in (CMAKE_COMMENT | default([]) | arrayitize) %}
+      {% for _c in (CMAKE_COMMENT | normalize(to='list')) %}
       # {{ _c }}
       {% endfor %}
       {% for cmakeBuild in _cmake_builds %}
@@ -935,7 +935,7 @@ _cmake_bins:
     bypass: ['LINK', 'CMAKE']
     basedir: repo
     generated: |
-      {% for _c in (CMAKE_COMMENT_INSTALL | default([]) | arrayitize) %}
+      {% for _c in (CMAKE_COMMENT_INSTALL | normalize(to='list')) %}
       # {{ _c }}
       {% endfor %}
       {% if CMAKE_INSTALL is defined %}
@@ -970,7 +970,7 @@ _make_bins:
     run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
     basedir: "{{ REPO_DIR }}"
     generated: |
-      {% for _c in (MAKE_COMMENT | default([]) | arrayitize) %}
+      {% for _c in (MAKE_COMMENT | normalize(to='list')) %}
       # {{ _c }}
       {% endfor %}
       if [ ! -f ./configure ]; then
@@ -985,7 +985,7 @@ _make_bins:
     bypass: ['LINK', 'MAKE']
     basedir: "{{ REPO_DIR }}"
     generated: |
-      {% for _c in (MAKE_COMMENT_INSTALL | default([]) | arrayitize) %}
+      {% for _c in (MAKE_COMMENT_INSTALL | normalize(to='list')) %}
       # {{ _c }}
       {% endfor %}
       make {{ MAKE_INSTALL_TARGET|default('install') }} {{ _make_destdir_arg }}

@@ -71,6 +71,6 @@
       {%- set _ = out.append(_setenv_bin ~ ' unset-environment ' ~ (_names | join(' '))) -%}
       {{ out }}
     _existing_services: "{{ (SYSTEMD_SERVICES | default({})) if (SYSTEMD_SERVICES is defined and SYSTEMD_SERVICES is mapping) else {} }}"
-    _existing_startpost: "{{ _existing_services.ExecStartPost | default([]) | arrayitize }}"
-    _existing_stop: "{{ _existing_services.ExecStop | default([]) | arrayitize }}"
+    _existing_startpost: "{{ _existing_services.ExecStartPost | normalize(to='list') }}"
+    _existing_stop: "{{ _existing_services.ExecStop | normalize(to='list') }}"
     _published: "{{ _existing_services | combine({'ExecStartPost': (_existing_startpost + _startpost), 'ExecStop': (_existing_stop + _stop)}) }}"

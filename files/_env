@@ -18,7 +18,7 @@
 {% elif env is mapping -%}
 {% for key,val in env.items() -%}
 	{% set ns.keys = ns.keys + [key] -%}
-	{% for vsub in val|arrayitize -%}
+	{% for vsub in val|normalize(to='list') -%}
 		{{ def(key,vsub) -}}
 	{% endfor -%}
 {% endfor -%}

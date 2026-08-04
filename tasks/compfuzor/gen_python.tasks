@@ -10,7 +10,7 @@
 - name: "Compfuzor: expose python console scripts"
   set_fact:
     BINS: "{{ BINS | merge_list(_console_script, preset='bins_generated') }}"
-  loop: "{{ PYTHON_CONSOLE_SCRIPTS | default([]) | arrayitize }}"
+  loop: "{{ PYTHON_CONSOLE_SCRIPTS | normalize(to='list') }}"
   when: lookup('subsys', id='python', get='active', default=false) | bool
   vars:
     _console_script:
