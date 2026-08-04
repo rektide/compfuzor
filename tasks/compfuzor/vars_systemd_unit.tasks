@@ -210,7 +210,7 @@
 - name: 'Add systemd install-unit.sh script to BINS'
   set_fact:
     BINS: "{{ enhancedBins | merge_list(BINS, preset='bins_generated') }}"
-  when: (_systemd_has_units or (SYSTEMD_ROOTS|default([])|length > 0)) and not SYSTEMD_INSTALL_BYPASS|default(False)
+  when: (_systemd_has_units or SYSTEMD_ROOTS is deflengthy) and not SYSTEMD_INSTALL_BYPASS|default(False)
   vars:
     enhancedBins:
       - name: install-unit.sh
@@ -231,14 +231,14 @@
     _systemd_install_specs: >-
       {%- set specs = [] -%}
       {# top-level units (SYSTEMD_SERVICE/SYSTEMD_SOCKET/...) #}
-      {%- for t in (SYSTEMD_UNITTYPES | default([])) -%}
+      {%- for t in (SYSTEMD_UNITTYPES | normalize(to='list')) -%}
         {%- set nm_raw = lookup('vars', 'SYSTEMD_' ~ t | upper, default='') -%}
         {%- set nm = nm_raw if (nm_raw and nm_raw not in [True, 'True']) else NAME -%}
         {%- set inst = SYSTEMD_INSTANCES | default(False) -%}
         {%- set _ = specs.append({'name': nm, 'type': t, 'enable': (SYSTEMD_ENABLE | default(True)) | bool, 'start': (SYSTEMD_START | default(True)) | bool, 'instanced': inst | bool, 'instances': (inst if (inst is sequence and inst is not string and inst is not boolean) else [])}) -%}
       {%- endfor -%}
       {# SYSTEMD_ROOTS units #}
-      {%- for root_name in (SYSTEMD_ROOTS | default([])) -%}
+      {%- for root_name in (SYSTEMD_ROOTS | normalize(to='list')) -%}
         {%- set rd = lookup('vars', root_name, default={}) -%}
         {%- for t in SYSTEMD_TYPE_CONFIG.keys() -%}
           {%- set tc = SYSTEMD_TYPE_CONFIG[t] -%}
