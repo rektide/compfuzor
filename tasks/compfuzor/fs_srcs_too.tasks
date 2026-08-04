@@ -6,26 +6,31 @@
     src: "{{OPT_SRCS_DIR|default(DIR)}}"
     dest: "{{OPT}}"
     state: link
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(OPT|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
+    owner: "{{OWNER|def(omit)}}"
+    group: "{{GROUP|def(omit)}}"
+  become: "{{ _become.become }}"
   when: DIR != OPT and OPT_DIR is deffalsy
+  vars:
+    _become: "{{ OPT|become_calc }}"
 - name: "insure OPT dir"
   file:
     path: "{{OPT}}"
     state: directory
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(OPT|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
+    owner: "{{OWNER|def(omit)}}"
+    group: "{{GROUP|def(omit)}}"
+  become: "{{ _become.become }}"
   when: DIR != OPT and OPT_DIR is deftruthy
+  vars:
+    _become: "{{ OPT|become_calc }}"
 - name: "link source DIR into OPT/src"
   file:
     src: "{{DIR}}"
     dest: "{{_dest}}"
     state: link
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_gid, GROUP|default(), _cf_user_gid)))|bool }}"
+    owner: "{{OWNER|def(omit)}}"
+    group: "{{GROUP|def(omit)}}"
+  become: "{{ _become.become }}"
   when: DIR != OPT and OPT_DIR is deftruthy
   vars:
     _dest: "{{OPT}}/src"
+    _become: "{{ _dest|become_calc }}"
