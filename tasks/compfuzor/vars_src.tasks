@@ -2,25 +2,25 @@
 - name: "Compfuzor: source source variables"
   set_fact: 
   args:
-    WITHS: "{{ '--with-'+WITH|join(' --with-') if WITH|default(False) else '' }}" 
-    ENABLES: "{{ '--enable-'+ENABLE|join(' --enable-') if ENABLE|default(False) else '' }}" 
+    WITHS: "{{ '--with-'+WITH|join(' --with-') if WITH is deftruthy else '' }}"
+    ENABLES: "{{ '--enable-'+ENABLE|join(' --enable-') if ENABLE is deftruthy else '' }}"
     PREPREFIX: "{{ DEST|default(NAME|default(TYPE)) }}"
     CORES: "{{ CORES|default(COMPFUZOR_BASE.stdout_lines[24]|int)|default(8) }}"
     GOPATH: "{{DIR}}"
     SRC: "{{ARCHIVE_SRC if ARCHIVE_DOWNLOAD is deftruthy and REPO is defined else SRC|default(omit)}}"
 
 - name: "set PREFIX var"
-  set_fact: PREFIX="{{ ('--prefix='+(OPTS_DIR+'/' if PREPREFIX|first != '/' and PREPREFIX|first !='~' else '')+PREPREFIX) if not PREFIX|default(False) else PREFIX|default('', true) }}"
+  set_fact: PREFIX="{{ ('--prefix='+(OPTS_DIR+'/' if PREPREFIX|first != '/' and PREPREFIX|first !='~' else '')+PREPREFIX) if PREFIX is deffalsy else PREFIX|default('', true) }}"
 
 - name: "set INSTANCE default for src type"
   set_fact: INSTANCE=src
-  when: type == "src" and not INSTANCE|default(False)
+  when: type == "src" and INSTANCE is deffalsy
 
 - name: "repo setting"
   set_fact: "{{item.key|upper|replace('-', '_')}}_DIR={{ REPO_DIR|default(DIR, true)+'/' if item.key|first != '/' and item.key|first != '~' else '' }}{{item.key}}"
   with_items: "{{ REPOS|normalize(to='list') }}"
-  when: REPOS is sequence and not lookup('deftruthy', item) and item.key|default(False)
+  when: REPOS is sequence and not lookup('deftruthy', item) and item.key is deftruthy
 - name: "create src directory if get_urls"
   set_fact:
     SRC_DIRS: True
-  when: GET_URLS|default(False) and not SRC_DIR|default(False)
+  when: GET_URLS is deftruthy and SRC_DIR is deffalsy

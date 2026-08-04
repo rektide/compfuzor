@@ -1,6 +1,6 @@
 - name: "Creating user: {{ USER }}"
   user:
     name: "{{ USER }}"
-    system: "{{ not USERMODE|default(False) }}"
+    system: "{{ USERMODE is deffalsy }}"
   become: True
   when: USER|default(False, True)

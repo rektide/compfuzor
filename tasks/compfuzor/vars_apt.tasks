@@ -6,7 +6,7 @@
     _arch: "{{APT_ARCH|default(ARCH)}}"
     _name: "{{TYPE|default(NAME)}}"
     _gpg: "{{APT_GPG_EXT|default('gpg')}}"
-    _armor: "{{'.armor' if APT_DEARMOR|default(False) else ''}}"
+    _armor: "{{'.armor' if APT_DEARMOR is deftruthy else ''}}"
   args:
     APT_SOURCELIST: "{{_sourcelist}}"
     APT_TRUSTED: "{{_trusted}}"

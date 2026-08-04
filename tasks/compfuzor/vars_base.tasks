@@ -10,7 +10,7 @@
   # when DIR/ETC are computed below, after common.yaml has run.
   include_defaults:
     file: vars/common.user.yaml
-  when: USERMODE|default(False)
+  when: USERMODE is deftruthy
 
 - name: "include common vars"
   include_defaults:
@@ -104,8 +104,8 @@
     # computed
     timestamp: "{{TIMESTAMP_CF|default(COMPFUZOR_BASE.stdout_lines[22])}}"
     instanceName: "{{'-' if INSTANCE else ''}}{{INSTANCE|default('')}}"
-    subinstance: "{{(SUBINSTANCE if SUBINSTANCE is string else MACHINE_ID) if SUBINSTANCE|default(False) else ''}}"
-    subinstanceName: "{{'-' if subinstance|default(False) else ''}}{{subinstance|default('')}}"
+    subinstance: "{{(SUBINSTANCE if SUBINSTANCE is string else MACHINE_ID) if SUBINSTANCE is deftruthy else ''}}"
+    subinstanceName: "{{'-' if subinstance is deftruthy else ''}}{{subinstance|default('')}}"
     name_: "{{NAME|default(TYPE + instanceName + subinstanceName)}}"
     prefixType: "{{lookup('vars', type_|upper+'S_DIR', default='')}}"
     prefixDir: "{{DIR|default()|dirname}}"

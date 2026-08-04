@@ -6,7 +6,7 @@
   vars:
     go_url: "{{item}}"
     repo: "{ '{{GOPATH_DIR}}': '{{item}}' }"
-  when: REPO_GO|default(False)
+  when: REPO_GO is deftruthy
 - name: 'add ENV gopath, BIN build.sh and LINKS repo/bin'
   set_fact:
     BINS: "{{ BINS | merge_list(goBins, preset='bins_generated') }}"

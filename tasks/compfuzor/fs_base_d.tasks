@@ -4,4 +4,4 @@
     dest: "{{item}}"
     owner: "{{OWNER|default(omit)}}"
   with_items: FILES_D
-  when: FILES_D|default(False)
+  when: FILES_D is deftruthy

@@ -32,7 +32,7 @@
     ETC_DIRS: "{{ ETC_DIRS | merge_list(['zim', 'zim-disabled'], _zim_module_dirs, preset='append') }}"
   when:
     - (ZIM_MODULE is defined or ZIM_MODULES is defined)
-    - ZIM_BYPASS | default(False) is not deftruthy
+    - ZIM_BYPASS is deffalsy
   vars:
     _zim_modules: "{{ ([ZIM_MODULE] if ZIM_MODULE is defined else []) + (ZIM_MODULES | default([])) }}"
     _zim_phase: "{{ ZIM_PHASE if ZIM_PHASE is defined else none }}"
@@ -52,7 +52,7 @@
   when:
     - (ZIM_MODULE is defined or ZIM_MODULES is defined)
     - ZIM_HOST is not defined
-    - ZIM_BYPASS | default(False) is not deftruthy
+    - ZIM_BYPASS is deffalsy
   vars:
     _zimfw_install_bin:
       name: install-user-zimfw.sh
@@ -78,7 +78,7 @@
     ENV_LIST: "{{ (ENV_LIST | default([])) + ['ZIM_TARGET', 'ZIM_TARGET_DISABLED'] }}"
   when:
     - ZIM_HOST is defined
-    - ZIM_BYPASS | default(False) is not deftruthy
+    - ZIM_BYPASS is deffalsy
   vars:
     _zim_host_bins:
       - name: install-zim.sh
@@ -95,7 +95,7 @@
     ENV_LIST: "{{ (ENV_LIST | default([])) + ['ZIM_TARGET', 'ZIM_TARGET_DISABLED'] }}"
   when:
     - ZIM_HOST is defined
-    - ZIM_BYPASS | default(False) is not deftruthy
+    - ZIM_BYPASS is deffalsy
   vars:
     _zim_host_bins:
       - name: install-zim.sh

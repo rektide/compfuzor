@@ -10,7 +10,7 @@
   vars:
     should_become: "{{DIR|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
     do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
-  when: DIR|default(True) is truthy
+  when: DIR is deftruthy(True)
 - name: "Creating `DIRS`"
   file:
     path: "{{_dest}}"
@@ -34,7 +34,7 @@
     group: "{{do_become|ternary(GROUP|default(_cf_user_gid),omit)}}"
   with_items: "{{FILES}}"
   become: "{{do_become}}"
-  when: FILES is defined and FILES is not mapping and item.line|default(False) is not truthy
+  when: FILES is defined and FILES is not mapping and item.line is deffalsy
   vars:
     dest: "{{DIR}}/{{item.dest|def(item.name, item)}}"
     should_become: "{{dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)}}"
@@ -64,7 +64,7 @@
     group: "{{do_become|ternary(group|default(_cf_user_gid, true),omit)}}"
   with_items: "{{FILES}}"
   become: "{{do_become}}"
-  when: FILES is defined and FILES is not mapping and item.line|default(False)
+  when: FILES is defined and FILES is not mapping and item.line is deftruthy
   vars:
     owner: "{{item.owner|default(OWNER|default(none, true), true)}}"
     group: "{{item.group|default(GROUP|default(none, true), true)}}"
