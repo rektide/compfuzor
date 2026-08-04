@@ -52,15 +52,12 @@
     path: "{{_dir}}"
     state: directory
     mode: "{{_vals.props.mode|def(DIRMODE, omit, falsy=True)}}"
-    owner: "{{do_become|ternary(owner|default(_cf_user_id, true),omit)}}"
-    group: "{{do_become|ternary(group|default(_cf_user_gid, true),omit)}}"
-  become: "{{do_become}}"
+    owner: "{{ _become.owner }}"
+    group: "{{ _become.group }}"
+  become: "{{ _become.become }}"
   when: not _vals.bypass and not _stat.results[0].stat.exists
   vars:
-    owner: "{{_vals.prop.owner|default(OWNER|default(none, true), true)}}"
-    group: "{{_vals.prop.group|default(GROUP|default(none, true), true)}}"
-    should_become: "{{_dir|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"
-    do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
+    _become: "{{ _dir|become_calc(owner=_vals.prop.owner|def(OWNER, falsy=True), group=_vals.prop.group|def(GROUP, falsy=True)) }}"
 
 # link include dir into DIR
 - name: "Link {{_upper}}"
@@ -68,15 +65,12 @@
     src: "{{_dir}}"
     dest: "{{_link}}"
     state: link
-    owner: "{{do_become|ternary(owner|default(_cf_user_id, true),omit)}}"
-    group: "{{do_become|ternary(group|default(_cf_user_gid, true),omit)}}"
-  become: "{{do_become}}"
+    owner: "{{ _become.owner }}"
+    group: "{{ _become.group }}"
+  become: "{{ _become.become }}"
   when: not _vals.linkBypass and not _stat.results[1].stat.exists
   vars:
-    owner: "{{_vals.prop.owner|default(OWNER|default(none, true), true)}}"
-    group: "{{_vals.prop.group|default(GROUP|default(none, true), true)}}"
-    should_become: "{{_link|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"
-    do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
+    _become: "{{ _link|become_calc(owner=_vals.prop.owner|def(OWNER, falsy=True), group=_vals.prop.group|def(GROUP, falsy=True)) }}"
 
 # create subdirs
 - name: "Create {{_upper}} subdirs and .d dirs"
@@ -84,18 +78,15 @@
     path: "{{subdir}}"
     state: directory
     mode: "{{item.mode|def(_vals.prop.mode, DIRMODE, falsy=True)}}"
-    owner: "{{do_become|ternary(owner|default(_cf_user_id, true),omit)}}"
-    group: "{{do_become|ternary(group|default(_cf_user_gid, true),omit)}}"
+    owner: "{{ _become.owner }}"
+    group: "{{ _become.group }}"
   with_items: "{{ _subdir_items }}"
-  become: "{{do_become}}"
+  become: "{{ _become.become }}"
   when: _subdir_items | length > 0
   vars:
     _subdir_items: "{{ _vals.dirs|normalize(to='list') + _vals.d|normalize(to='list') }}"
-    owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
-    group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
     subdir: "{{_dir}}/{{item.name|def(item)}}" 
-    should_become: "{{subdir|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"
-    do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
+    _become: "{{ subdir|become_calc(owner=item.owner|def(_vals.prop.owner, OWNER, falsy=True), group=item.group|def(_vals.prop.group, GROUP, falsy=True)) }}"
 
 # include files
 - name: "Do {{_upper}} lineinfile"
@@ -105,17 +96,14 @@
     regexp: "{{item.regexp|default('^' + item.line)}}"
     create: "{{item.create|default(True)}}"
     state: "{{item.state|default(omit)}}"
-    owner: "{{do_become|ternary(owner|default(_cf_user_id, true),omit)}}"
-    group: "{{do_become|ternary(group|default(_cf_user_gid, true),omit)}}"
+    owner: "{{ _become.owner }}"
+    group: "{{ _become.group }}"
   with_items: "{{ _vals.files|normalize(to='list') }}"
-  become: "{{do_become}}"
+  become: "{{ _become.become }}"
   when: item.line is deftruthy
   vars:
-    owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
-    group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
     dest: "{{item.dest|def(item.name, item)|defaultDir(_dir)}}"
-    should_become: "{{dest|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"
-    do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
+    _become: "{{ dest|become_calc(owner=item.owner|def(_vals.prop.owner, OWNER, falsy=True), group=item.group|def(_vals.prop.group, GROUP, falsy=True)) }}"
 
 - name: "Create {{_upper}} files"
   copy:
@@ -123,24 +111,20 @@
     src: "{{src|default(False) if item.copyDir|default(False) == True else omit}}"
     dest: "{{dest}}"
     mode: "{{item.mode|def(_vals.prop.mode, FILEMODE, falsy=True)}}"
-    owner: "{{do_become|ternary(owner|default(_cf_user_id, true),omit)}}"
-    group: "{{do_become|ternary(group|default(_cf_user_gid, true),omit)}}"
+    owner: "{{ _become.owner }}"
+    group: "{{ _become.group }}"
     backup: "{{item.backup|def(FS_BACKUP, False)}}"
     # TODO: ansible 2.3+:
     #mode: "{{COPY_MODE|default(preserve)}}"
   loop: "{{ _vals.files|normalize(to='list') }}"
   loop_control:
     index_var: idx
-  become: "{{do_become}}"
+  become: "{{ _become.become }}"
   when: item.line is deffalsy and (item.once is deffalsy or dest is not exists)
   vars:
     srcDir: "files/{{ TYPE }}"
-    #src: "{{ item.src|default(item.name|default(item, true), true)|defaultDir(srcDir) }}"
     src: "{{ item.src|def(item.name, item, falsy=True)|defaultDir('files/'+TYPE) if not item.srcTemplate is defined else item.srcTemplate|unsafety|defaultDir('files/'+TYPE) }}"
     files: "{{include|upper}}_FILES"
-    # unsafe because _vals.files is looked up?
-    #content: "{{lookup('templateVar', item.content)}}"
-    #content: "{{lookup('templateVar', (hostvars[inventory_hostname][files]|default(vars[files]|default(False)))[idx].content) if item.content|default(False) else ''}}"
     content: "{{item.content|def('')|unsafety }}"
     yaml: "{{item.yaml|to_nice_yaml if item.yaml is deftruthy else ''}}"
     json: "{{item.json|to_nice_json if item.json is deftruthy else '' }}"
@@ -149,11 +133,8 @@
     file: "{{lookup(fileType, item.src|def(item.name, item, falsy=True)|defaultDir(srcDir)) if isFile else '' }}"
     var: "{{lookup('vars', item.var) if item.var|def else '' }}"
     all: "{{ content + file + var + yaml + json}}"
-    owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
-    group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
     dest: "{{ item.dest|def(item.name, item.src, item, falsy=True)|defaultDir(_dir) if not item.destTemplate is defined else item.destTemplate|unsafety|defaultDir(_dir) }}"
-    should_become: "{{dest|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"
-    do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
+    _become: "{{ dest|become_calc(owner=item.owner|def(_vals.prop.owner, OWNER, falsy=True), group=item.group|def(_vals.prop.group, GROUP, falsy=True)) }}"
 
 - name: "Assemble .d directory"
   assemble:
@@ -161,14 +142,11 @@
     dest: "{{dest}}"
     backup: "{{item.backup|default(True)}}"
     mode: "{{item.mode|def(_vals.prop.mode, FILEMODE, falsy=True)}}"
-    owner: "{{do_become|ternary(owner|default(_cf_user_id, true),omit)}}"
-    group: "{{do_become|ternary(group|default(_cf_user_gid, true),omit)}}"
-  become: "{{do_become}}"
+    owner: "{{ _become.owner }}"
+    group: "{{ _become.group }}"
+  become: "{{ _become.become }}"
   when: _vals.d
   with_items: "{{ _vals.d|normalize(to='list') }}"
   vars:
-    owner: "{{item.owner|default(_vals.prop.owner|default(OWNER|default(none, true), true), true)}}"
-    group: "{{item.group|default(_vals.prop.group|default(GROUP|default(none, true), true), true)}}"
     dest: "{{_dir}}/{{item.dest|def(item.name, item)}}"
-    should_become: "{{dest|should_become(owner, _cf_user_id, group, _cf_user_gid)}}"
-    do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
+    _become: "{{ dest|become_calc(owner=item.owner|def(_vals.prop.owner, OWNER, falsy=True), group=item.group|def(_vals.prop.group, GROUP, falsy=True)) }}"
