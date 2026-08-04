@@ -70,7 +70,7 @@ if _FILTER_DIR not in sys.path:
     sys.path.insert(0, _FILTER_DIR)
 
 from get import get_path  # noqa: E402
-from merge import _raw_copy_template_data, _dict_get_raw, _is_nothing, _truthy  # noqa: E402
+from template_data import raw_copy_template_data as _raw_copy_template_data, dict_get_raw as _dict_get_raw, is_nothing as _is_nothing, truthy as _truthy  # noqa: E402
 
 
 # Recognized get= paths that compute derived state rather than reading record data

@@ -1,3 +1,11 @@
+"""DEPRECATED: Legacy merge_with_strategy filter — unused, to be removed.
+
+No live callers remain. The ``merge_fields`` filter in ``cfmerge.py`` with
+explicit field profiles is the replacement.
+
+This module imports ``_as_list``, ``_as_dict``, and ``_dedupe_preserve`` from
+``merge.py``. Both modules can be deleted together once confirmed dead.
+"""
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type

@@ -4,5 +4,5 @@
     ETC_DIRS: "{{ lookup('merge_subsys', id='config', contrib='ETC_DIRS') }}"
     BINS: "{{ lookup('merge_subsys', id='config', contrib='BINS') }}"
     ENV_LIST: "{{ lookup('merge_subsys', id='config', contrib='ENV_LIST') }}"
-    STATUSES: "{{ (STATUSES | default([])) + ['status-config.sh'] }}"
+    STATUSES: "{{ STATUSES | merge_list(['status-config.sh'], preset='append') }}"
   when: lookup('subsys', id='config', get='active', default=false) | bool

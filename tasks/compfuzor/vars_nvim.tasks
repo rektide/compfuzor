@@ -1,6 +1,6 @@
 - name: 'Build vars for NVIM plugin integration'
   set_fact:
-    ETC_FILES: "{{ enhancedEtc|concat(ETC_FILES|default([])) }}"
+    ETC_FILES: "{{ enhancedEtc | merge_list(ETC_FILES, preset='append') }}"
     BINS: "{{ enhancedBins | merge_list(_bins, preset={'name': 'merge_keyed', 'key': 'name', 'concat_fields': ['generated']}) }}"
     _nvim_plugins: "{{_nvim_plugins}}"
   vars:

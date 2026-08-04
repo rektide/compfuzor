@@ -87,11 +87,7 @@ if _FILTER_DIR not in sys.path:
     sys.path.insert(0, _FILTER_DIR)
 
 from get import get_path  # noqa: E402
-from merge import (  # noqa: E402
-    _dict_get_raw,
-    _raw_copy_template_data,
-    _truthy,
-)
+from template_data import dict_get_raw as _dict_get_raw, raw_copy_template_data as _raw_copy_template_data, truthy as _truthy  # noqa: E402
 from cfmerge import run_value_preset, value_preset_metadata  # noqa: E402
 
 _LOOKUP_DIR = os.path.abspath(os.path.dirname(__file__))

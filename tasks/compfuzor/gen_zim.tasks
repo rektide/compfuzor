@@ -28,8 +28,8 @@
 
 - name: "Compfuzor: render zim contributor fragments"
   set_fact:
-    ETC_FILES: "{{ (ETC_FILES | default([])) + _zim_fragments }}"
-    ETC_DIRS: "{{ (ETC_DIRS | default([])) + ['zim', 'zim-disabled'] + _zim_module_dirs }}"
+    ETC_FILES: "{{ ETC_FILES | merge_list(_zim_fragments, preset='append') }}"
+    ETC_DIRS: "{{ ETC_DIRS | merge_list(['zim', 'zim-disabled'], _zim_module_dirs, preset='append') }}"
   when:
     - (ZIM_MODULE is defined or ZIM_MODULES is defined)
     - ZIM_BYPASS | default(False) is not deftruthy
@@ -48,7 +48,7 @@
 
 - name: "Compfuzor: generate contributor install-user-zimfw.sh"
   set_fact:
-    BINS: "{{ (BINS | default([])) + [_zimfw_install_bin] }}"
+    BINS: "{{ BINS | merge_list(_zimfw_install_bin, preset='bins_generated') }}"
   when:
     - (ZIM_MODULE is defined or ZIM_MODULES is defined)
     - ZIM_HOST is not defined

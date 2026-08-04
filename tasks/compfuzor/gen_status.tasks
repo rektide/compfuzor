@@ -11,7 +11,7 @@
 
 - name: "Compfuzor: register status-dirs reporter"
   set_fact:
-    STATUSES: "{{ (STATUSES | default([])) + (['status-dirs.sh'] if (STATUS_DIRS is deftruthy or STATUS_DIRS_SUDO is deftruthy) else []) }}"
+    STATUSES: "{{ STATUSES | merge_list(['status-dirs.sh'] if (STATUS_DIRS is deftruthy or STATUS_DIRS_SUDO is deftruthy) else [], preset='append') }}"
 
 - name: "Compfuzor: synthesize status artifacts"
   set_fact:

@@ -3,13 +3,17 @@
 Merge and lookup code use this boundary before inspecting container shape. It
 unwraps Ansible lazy containers through their non-rendering hooks while keeping
 data tags on template strings intact for later evaluation.
+
+Additional raw data-access helpers (dict_get_raw, is_nothing, truthy) are
+provided for modules that need to read Ansible values without triggering
+template resolution.
 """
 
 from __future__ import absolute_import, division, print_function
 
 from ansible.plugins.test.core import wrapped_test_undefined
 
-__all__ = ["raw_copy_template_data"]
+__all__ = ["raw_copy_template_data", "dict_get_raw", "is_nothing", "truthy"]
 
 
 def raw_copy_template_data(value):
@@ -49,6 +53,40 @@ def raw_copy_template_data(value):
     if isinstance(value, tuple):
         return tuple(raw_copy_template_data(item) for item in tuple.__iter__(value))
     return value
+
+
+def dict_get_raw(mapping, key, default=None):
+    """Read one dict key without calling lazy container accessors.
+
+    Args:
+        mapping: Candidate dictionary.
+        key: Key to read.
+        default: Value returned when ``mapping`` is not a dict or the key
+            is absent.
+
+    Returns:
+        The raw dict value or ``default``.
+    """
+    if not isinstance(mapping, dict):
+        return default
+    try:
+        return dict.__getitem__(mapping, key)
+    except KeyError:
+        return default
+
+
+def is_nothing(value):
+    """True when value is None or Ansible undefined."""
+    return value is None or wrapped_test_undefined(value)
+
+
+def truthy(value):
+    """Convert Ansible values to bool (strings checked as non-empty)."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return bool(value.strip())
+    return bool(value)
 
 
 class FilterModule(object):

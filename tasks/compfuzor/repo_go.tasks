@@ -9,8 +9,8 @@
   when: REPO_GO|default(False)
 - name: 'add ENV gopath, BIN build.sh and LINKS repo/bin'
   set_fact:
-    BINS: "{{ BINS|default([]) + goBins }}"
-    ENV: "{{ ENV|default({})|combine(goEnvs) }}"
+    BINS: "{{ BINS | merge_list(goBins, preset='bins_generated') }}"
+    ENV: "{{ ENV | merge_dict(goEnvs, preset='overlay') }}"
     LINKS: "{{ LINKS|default({})|combine({\"{{REPO_DIR}}/bin\": \"{{BINS_DIR}}\"}) }}"
   vars:
     goBins: [{

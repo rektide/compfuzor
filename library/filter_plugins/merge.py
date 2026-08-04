@@ -1,3 +1,20 @@
+"""DEPRECATED: Legacy merge filters — unused, to be removed.
+
+The public ``merge_list`` and ``merge_dict`` filter names now resolve to
+``cfmerge.py`` (the fixed pipeline). This module still provides
+``merge_list_subsys``, ``merge_dict_subsys``, and ``subsys_publish`` filter
+registrations, but none have live callers.
+
+``merge_strategy.py`` imports ``_as_list``, ``_as_dict``, and
+``_dedupe_preserve`` from here; those are also dead code once
+``merge_strategy.py`` and ``mergeKeyed.py`` are deleted.
+
+Shared helpers (``dict_get_raw``, ``is_nothing``, ``truthy``,
+``raw_copy_template_data``) have been moved to ``template_data.py``.
+Live modules (``merge_subsys.py``, ``subsys.py``) now import from there.
+
+This module can be deleted once ``merge_strategy.py`` is confirmed dead.
+"""
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type

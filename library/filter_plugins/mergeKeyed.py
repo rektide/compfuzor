@@ -1,3 +1,11 @@
+"""DEPRECATED: Legacy mergeKeyed filter — unused, to be removed.
+
+No live callers remain. The ``merge_list`` filter in ``cfmerge.py`` with a
+configured ``merge_keyed`` preset is the replacement.
+
+This module imports from ``merge_strategy.py`` which imports from ``merge.py``.
+All three can be deleted together once confirmed dead.
+"""
 import os
 import sys
 
