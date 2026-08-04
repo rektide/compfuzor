@@ -14,11 +14,13 @@
     path: "{{_dirpath}}/{{item}}.d"
     state: directory
     mode: "{{mode|default(770)}}"
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
+    owner: "{{OWNER|def(omit)}}"
+    group: "{{GROUP|def(omit)}}"
   with_items: "{{_files}}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dirpath|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
+  become: "{{ _become.become }}"
   when: (not not _go) and lookup('vars', _d, default=False)
+  vars:
+    _become: "{{ _dirpath|become_calc }}"
 - name: Copy pre-assembed target into backup and link backup into .d if no backup exists
   shell: "test ! -f {{_path}}/{{item}}.orig -f {{_path}}/{{item}} && mv {{_path}}/{{item}} {{_path}}/{{item}}.orig && ln -s {{_path}}/{{item}}.orig {{_path}}/{{item}}.d/20-$(basename {{item}}); echo $?"
   with_items: "{{_files}}"
@@ -27,13 +29,14 @@
   assemble:
     src: "{{_path}}/{{item}}.d"
     dest: "{{_dest}}"
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
+    owner: "{{OWNER|def(omit)}}"
+    group: "{{GROUP|def(omit)}}"
   when: not not _go
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
+  become: "{{ _become.become }}"
   with_items: "{{_files}}"
   vars:
     _dest: "{{_path}}/{{item}}"
+    _become: "{{ _dest|become_calc }}"
 - name: "Insure we have a backup file so as to prevent the baked assembly from being assembled"
   shell: touch {{_path}}/{{item}}.orig
   when: not not _go
