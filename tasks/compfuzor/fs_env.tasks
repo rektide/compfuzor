@@ -3,9 +3,9 @@
   template:
     src: "{{_src}}"
     dest: "{{_dest}}"
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
+    owner: "{{OWNER|def(omit)}}"
+    group: "{{GROUP|def(omit)}}"
+  become: "{{ _become.become }}"
   when: >
     (item.hasEnv or _env_requested) and
     item.skip is deffalsy
@@ -91,6 +91,7 @@
     ENV_PRIO_RENDER: "{{ _env_prio_effective }}"
     export_mode: "{{item.exportMode|default(False)}}"
     _dest: "{{DIR}}/{{item.file}}"
+    _become: "{{ _dest|become_calc }}"
 
 # in case one only needs a env, and env.export is the same
 - name: link env export to env if the same
@@ -105,9 +106,9 @@
     src: "{{DIR}}/{{item.file}}"
     dest: "{{_dest}}"
     state: link
-    owner: "{{OWNER|default(omit)}}"
-    group: "{{GROUP|default(omit)}}"
-  become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(_dest|should_become(OWNER|default(), _cf_user_id, GROUP|default(), _cf_user_gid)))|bool }}"
+    owner: "{{OWNER|def(omit)}}"
+    group: "{{GROUP|def(omit)}}"
+  become: "{{ _become.become }}"
   # might be cool to have an exists check that ignores dead symlinks
   when: PREFIX_DIR is deftruthy and (item.hasEnv or _env_requested) and item.skip is deffalsy and _dest is not exists
   loop:
@@ -184,3 +185,4 @@
     ENV_RENDER: "{{ _env_effective }}"
     ENV_PRIO_RENDER: "{{ _env_prio_effective }}"
     _dest: "{{PREFIX_DIR}}/{{item.file}}.{{NAME|default(TYPE)}}"
+    _become: "{{ _dest|become_calc }}"
