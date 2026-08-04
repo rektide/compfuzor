@@ -5,7 +5,7 @@
 # contributes kernel.sysctl.json plus build/install/apply-sysctl.sh.
 # See tasks/compfuzor/gen_kernel.tasks and zswap.etc.pb for an example.
 - file: path="{{SYSCTL_DIR}}" state=directory
-- template: src="files/{{TYPE|default(NAME)}}/{{item}}" dest="{{SYSCTL_DIR}}/{{item}}"
+- template: src="files/{{TYPE}}/{{item}}" dest="{{SYSCTL_DIR}}/{{item}}"
   with_items: SYSCTLS
   when: SYSCTLS is deftruthy
 - file: src="{{SYSCTL_DIR}}/{{item}}" dest="/etc/sysctl.d/{{item}}" state=link

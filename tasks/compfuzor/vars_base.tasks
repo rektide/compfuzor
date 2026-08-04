@@ -137,8 +137,8 @@
 #  - "examples-private/{{TYPE}}.yaml"
 #  - "vars/empty.yaml"
 
-#- name: "Select default username {{TYPE|default(NAME)}}"
-#  set_fact: USER="{{TYPE|default(NAME)}}"
+#- name: "Select default username {{TYPE}}"
+#  set_fact: USER="{{TYPE}}"
 #  when: not USER|default(False)
 
 - name: convert LINKS dict into well specified form

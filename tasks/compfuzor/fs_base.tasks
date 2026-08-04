@@ -28,7 +28,7 @@
 - name: "Creating `FILES`"
   # someone wanted a basename here but eclipse has a ../content & like yeah, that's fine. locales holds the blame. see cf0fdccf0c.
   template:
-    src: "files/{{TYPE|default(NAME)}}/{{item.src|def(item.name, item)}}"
+    src: "files/{{TYPE}}/{{item.src|def(item.name, item)}}"
     dest: "{{dest}}"
     owner: "{{do_become|ternary(OWNER|default(_cf_user_id),omit)}}"
     group: "{{do_become|ternary(GROUP|default(_cf_user_gid),omit)}}"
@@ -41,7 +41,7 @@
     do_become: "{{ COMFUZOR_SHOULD_BECOME|default(BECOME|default(should_become))|bool }}"
 - name: "Creating `FILES` mapping"
   template:
-    src: "files/{{TYPE|default(NAME)}}/{{ item[1] }}"
+    src: "files/{{TYPE}}/{{ item[1] }}"
     dest: "{{_dest}}"
     owner: "{{OWNER|default(omit)}}"
     group: "{{GROUP|default(omit)}}"

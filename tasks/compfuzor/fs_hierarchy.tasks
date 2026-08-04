@@ -134,9 +134,9 @@
   become: "{{do_become}}"
   when: item.line is deffalsy and (item.once is deffalsy or dest is not exists)
   vars:
-    srcDir: "files/{{ TYPE|default(NAME) }}"
+    srcDir: "files/{{ TYPE }}"
     #src: "{{ item.src|default(item.name|default(item, true), true)|defaultDir(srcDir) }}"
-    src: "{{ item.src|def(item.name, item, falsy=True)|defaultDir('files/'+TYPE|default(NAME)) if not item.srcTemplate is defined else item.srcTemplate|unsafety|defaultDir('files/'+TYPE|default(NAME)) }}"
+    src: "{{ item.src|def(item.name, item, falsy=True)|defaultDir('files/'+TYPE) if not item.srcTemplate is defined else item.srcTemplate|unsafety|defaultDir('files/'+TYPE) }}"
     files: "{{include|upper}}_FILES"
     # unsafe because _vals.files is looked up?
     #content: "{{lookup('templateVar', item.content)}}"

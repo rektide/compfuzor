@@ -1,15 +1,15 @@
 - name: "Compfuzor: test local for has_env variable"
-  local_action: shell test ! -e "files/{{TYPE|default(NAME)}}/env"; echo $?
+  local_action: shell test ! -e "files/{{TYPE}}/env"; echo $?
   register: has_env
   changed_when: False
   become: False
 - name: "Compfuzor: test local for has_env_export variable"
-  local_action: shell test ! -e "files/{{TYPE|default(NAME)}}/env.export"; echo $?
+  local_action: shell test ! -e "files/{{TYPE}}/env.export"; echo $?
   register: has_env_export
   changed_when: False
   become: False
 - name: "Compfuzor: test local for has_env_usermode variable"
-  local_action: shell test ! -e "files/{{TYPE|default(NAME)}}/env.usermode"; echo $?
+  local_action: shell test ! -e "files/{{TYPE}}/env.usermode"; echo $?
   register: has_env_usermode
   changed_when: False
   become: False

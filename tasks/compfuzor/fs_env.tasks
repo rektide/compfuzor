@@ -85,7 +85,7 @@
         _env_prio_input_enabled or
         _env_prio_input_list_names|length > 0
       }}
-    _srcHas: "files/{{TYPE|default(NAME)}}/{{item.file}}"
+    _srcHas: "files/{{TYPE}}/{{item.file}}"
     _src: "{{'files/_env' if not item.hasEnv else _srcHas}}"
     ENV_RENDER: "{{ _env_effective }}"
     ENV_PRIO_RENDER: "{{ _env_prio_effective }}"

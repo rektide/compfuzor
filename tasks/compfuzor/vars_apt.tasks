@@ -4,7 +4,7 @@
     _sourcelist: "{{APT_SOURCELIST|def(TYPE, NAME)}}"
     _trusted: "{{APT_TRUSTED|def(TYPE, NAME)}}"
     _arch: "{{APT_ARCH|default(ARCH)}}"
-    _name: "{{TYPE|default(NAME)}}"
+    _name: "{{TYPE}}"
     _gpg: "{{APT_GPG_EXT|default('gpg')}}"
     _armor: "{{'.armor' if APT_DEARMOR is deftruthy else ''}}"
   args:

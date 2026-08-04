@@ -4,7 +4,7 @@
   when: OWNER is not defined
 - name: 'Set USER as per OWNER'
   set_fact:
-    USER: "{{OWNER|default(TYPE|default(NAME), True)}}"
+    USER: "{{OWNER|default(TYPE, True)}}"
   when: OWNER is defined and OWNER|bool and USER is not defined
 - name: 'Set default USER'
   set_fact:
