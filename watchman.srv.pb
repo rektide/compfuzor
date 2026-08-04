@@ -60,9 +60,12 @@
     # with a different -DWATCHMAN_STATE_DIR.
     WATCHMAN_DEFAULT_STATE_DIR: /usr/local/src/watchman-git/watchman/var/run/watchman
 
-    # Daemon env → env.export + EnvironmentFile (the compfuzor-native way).
-    # WATCHMAN_CONFIG_FILE tells the daemon where to find our root guard config.
+    # env.export + EnvironmentFile (the compfuzor-native way). Sourced by BINS
+    # scripts and loaded into the unit's own env.
+    #   WATCHMAN_CONFIG_FILE → where the daemon finds the root guard config
+    #   WATCHMAN_SOCK        → socket path for clients/scripts that source this
     ENV:
+      WATCHMAN_SOCK: "{{VAR}}/sock"
       WATCHMAN_CONFIG_FILE: "{{ETC}}/watchman.json"
 
     SYSTEMD_SERVICES:
