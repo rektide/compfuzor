@@ -54,6 +54,9 @@ def render_bins(output: Path, playbook: Path) -> None:
           helpers: false
           bypass: LINK
           content: echo nuclear
+        - name: loud-state.sh
+          basedir: false
+          content: printf '%s\\n' "$_cf_loud"
 """,
         encoding="utf-8",
     )
@@ -94,6 +97,7 @@ def test_rendered_helpers() -> None:
             "bypass-list-unit.sh",
             "bypass-false.sh",
             "helpers-false.sh",
+            "loud-state.sh",
         }:
             raise AssertionError(f"unexpected rendered scripts: {sorted(scripts)}")
 
@@ -131,6 +135,37 @@ def test_rendered_helpers() -> None:
         reject(nuclear, "_cf_action_init", "helpers false")
         reject(nuclear, "_cf_action_end", "helpers false")
         require(nuclear, "echo nuclear", "helpers false content")
+
+        loud_state = output / "loud-state.sh"
+        loud_cases = (
+            ({}, "1", False, "unset V is loud"),
+            ({"V": ""}, "1", False, "empty V is loud"),
+            ({"V": "0"}, "0", False, "V=0 is quiet"),
+            ({"V": "1"}, "1", False, "V=1 is loud"),
+            ({"V": "3"}, "1", True, "V>2 enables xtrace"),
+            ({"COMPFUZOR_QUIET": "1", "V": "1"}, "0", False, "quiet override wins"),
+        )
+        for overrides, expected, traces, label in loud_cases:
+            env = os.environ.copy()
+            env.pop("COMPFUZOR_QUIET", None)
+            env.pop("V", None)
+            env.update(overrides)
+            result = subprocess.run(
+                [str(loud_state)],
+                check=True,
+                text=True,
+                capture_output=True,
+                env=env,
+            )
+            if result.stdout.strip() != expected:
+                raise AssertionError(
+                    f"{label}: expected {expected!r}, got {result.stdout.strip()!r}"
+                )
+            if traces != bool(result.stderr.strip()):
+                raise AssertionError(
+                    f"{label}: expected xtrace={traces}, got stderr={result.stderr!r}"
+                )
+            print(f"ok: {label}")
 
         for name, script in scripts.items():
             path = output / name
