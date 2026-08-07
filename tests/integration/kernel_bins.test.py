@@ -139,6 +139,21 @@ def test_production_kernel_hierarchy() -> None:
                 ],
             },
         )
+        complete_by_name = {item["name"]: item for item in complete}
+        for leaf, origin in (
+            ("build-kernel-modprobe.sh", "kernel_modprobe"),
+            ("build-kernel-sysctl.sh", "kernel_sysctl"),
+            ("build-kernel-sysfs.sh", "kernel_sysfs"),
+            ("install-kernel-params.sh", "kernel_params"),
+            ("install-kernel-bls.sh", "kernel_bls"),
+        ):
+            item = complete_by_name[leaf]
+            if item.get("origin_subsystems") != [origin]:
+                raise AssertionError(f"{leaf}: wrong origin metadata: {item!r}")
+            if item.get("bypass_scopes") != ["kernel"]:
+                raise AssertionError(f"{leaf}: wrong broad scope metadata: {item!r}")
+            if item.get("subsystem") != "kernel":
+                raise AssertionError(f"{leaf}: compositor grouping changed: {item!r}")
 
         sysctl_only = generate_kernel_bins(
             temporary / "sysctl-only",

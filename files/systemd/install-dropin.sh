@@ -79,7 +79,8 @@ for _row in "${DROPINS[@]}"; do
   _src="$SCRIPT_DIR/../etc/${_target}.d/${_name}.conf"
   _dest="${_unit_dir}/${_target}.d/${_name}.conf"
 
-  if [ "$_bypass_link" = true ] || [ -n "${SYSTEMD_BYPASS_LINK:-}" ]; then
+  # SYSTEMD_BYPASS_LINK remains a temporary soak alias for generated artifacts.
+  if [ "$_bypass_link" = true ] || [ -n "${COMPFUZOR_SYSTEMD_LINK_BYPASS:-}" ] || [ -n "${SYSTEMD_BYPASS_LINK:-}" ]; then
     echo "Bypassed linking ${_dest}"
     continue
   fi

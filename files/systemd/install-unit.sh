@@ -32,7 +32,8 @@ done
 UNIT_SRC="${UNIT_SRC:-$SCRIPT_DIR/../etc/${UNIT_TEMPLATE}.${UNIT_TYPE}}"
 UNIT_DEST="${UNIT_DEST:-$UNIT_DIR/${UNIT_TEMPLATE}.${UNIT_TYPE}}"
 
-if [ "$_bypass_link" = true ] || [ -n "${SYSTEMD_BYPASS_LINK:-}" ]; then
+# SYSTEMD_BYPASS_* remains a temporary soak alias for generated artifacts.
+if [ "$_bypass_link" = true ] || [ -n "${COMPFUZOR_SYSTEMD_LINK_BYPASS:-}" ] || [ -n "${SYSTEMD_BYPASS_LINK:-}" ]; then
   echo "Bypassed linking ${UNIT_DEST}"
 else
   mkdir -p "$(dirname "$UNIT_DEST")"
@@ -51,13 +52,13 @@ if [ -z "$UNIT_ENABLE_TARGETS" ]; then
   exit 0
 fi
 
-if [ "$_bypass_enable" = true ] || [ -n "${SYSTEMD_BYPASS_ENABLE:-}" ]; then
+if [ "$_bypass_enable" = true ] || [ -n "${COMPFUZOR_SYSTEMD_ENABLE_BYPASS:-}" ] || [ -n "${SYSTEMD_BYPASS_ENABLE:-}" ]; then
   echo "Bypassed enabling ${UNIT_TEMPLATE}.${UNIT_TYPE}"
   exit 0
 fi
 
 for target in $UNIT_ENABLE_TARGETS; do
-  if [ "$_bypass_start" = true ] || [ -n "${SYSTEMD_BYPASS_START:-}" ]; then
+  if [ "$_bypass_start" = true ] || [ -n "${COMPFUZOR_SYSTEMD_START_BYPASS:-}" ] || [ -n "${SYSTEMD_BYPASS_START:-}" ]; then
     $SUDO_CMD $SYSTEMCTL enable "${_pass_through[@]+"${_pass_through[@]}"}" "$target"
   else
     $SUDO_CMD $SYSTEMCTL enable --now "${_pass_through[@]+"${_pass_through[@]}"}" "$target"

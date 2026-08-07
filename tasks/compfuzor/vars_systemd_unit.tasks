@@ -184,7 +184,7 @@
 
 - name: 'Generate systemd drop-in install script'
   set_fact:
-    BINS: "{{ BINS | merge_list(_bin_item, preset='bins_generated') }}"
+    BINS: "{{ BINS | merge_list([_bin_item] | annotate_bins('systemd'), preset='bins_generated') }}"
   when:
     - _dropin_entries | length > 0
     - SYSTEMD_INSTALL_BYPASS is deffalsy
@@ -216,10 +216,13 @@
       - name: install-unit.sh
         src: ../systemd/install-unit.sh
         compose: False
+        bypass: false
+        origin_subsystems: [systemd]
+        bypass_scopes: [systemd]
 
 - name: 'Generate systemd install scripts'
   set_fact:
-    BINS: "{{ BINS | merge_list(_bin_item, preset='bins_generated', resolve=True) }}"
+    BINS: "{{ BINS | merge_list([_bin_item] | annotate_bins('systemd'), preset='bins_generated', resolve=True) }}"
   when:
     - SYSTEMD_INSTALL_BYPASS is deffalsy
   loop: "{{ _systemd_install_specs }}"

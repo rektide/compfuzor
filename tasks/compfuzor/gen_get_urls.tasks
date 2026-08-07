@@ -1,7 +1,5 @@
 ---
 - name: "Compfuzor: synthesize get_urls artifacts"
   set_fact:
-    BINS: "{{ BINS | merge_list(_get_urls_contrib.BINS, preset='bins_generated') }}"
+    BINS: "{{ lookup('merge_subsys', id='get_urls', contrib='BINS') }}"
   when: lookup('subsys', id='get_urls', get='active', default=false) | bool
-  vars:
-    _get_urls_contrib: "{{ lookup('subsys', id='get_urls', get='contrib', default={}) }}"

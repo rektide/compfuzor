@@ -51,11 +51,13 @@
     STATUSES: "{{ STATUSES | merge_list(_kernel_status_reporters, preset='append') }}"
   when: _kernel_any_active
   vars:
-    _kernel_tagged_bins: "{{ [
-        _kernel_modprobe_contrib.BINS, _kernel_sysctl_contrib.BINS,
-        _kernel_sysfs_contrib.BINS, _kernel_params_contrib.BINS,
-        _kernel_bls_contrib.BINS
-      ] | select('defined') | flatten | tag_each(subsystem='kernel') }}"
+    _kernel_tagged_bins: "{{
+        (_kernel_modprobe_contrib.BINS | default([]) | annotate_bins('kernel_modprobe', 'kernel', subsystem='kernel'))
+        + (_kernel_sysctl_contrib.BINS | default([]) | annotate_bins('kernel_sysctl', 'kernel', subsystem='kernel'))
+        + (_kernel_sysfs_contrib.BINS | default([]) | annotate_bins('kernel_sysfs', 'kernel', subsystem='kernel'))
+        + (_kernel_params_contrib.BINS | default([]) | annotate_bins('kernel_params', 'kernel', subsystem='kernel'))
+        + (_kernel_bls_contrib.BINS | default([]) | annotate_bins('kernel_bls', 'kernel', subsystem='kernel'))
+      }}"
     # ordered kernel reporters, contributed to STATUSES for status.sh
     _kernel_status_reporters: "{{ (['status-sysctl.ts'] if _kernel_sysctl_active else []) + (['status-modules.ts'] if _kernel_modprobe_active else []) + (['status-sysfs.ts'] if _kernel_sysfs_active else []) + (['status-cmdline.ts'] if _kernel_params_active else []) + (['status-ramoops.sh'] if _kernel_bls_active else []) }}"
     _kernel_modprobe_active: "{{ lookup('subsys', id='kernel_modprobe', domain='kernel', get='active', default=false) | bool }}"

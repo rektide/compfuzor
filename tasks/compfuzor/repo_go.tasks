@@ -9,7 +9,7 @@
   when: REPO_GO is deftruthy
 - name: 'add ENV gopath, BIN build.sh and LINKS repo/bin'
   set_fact:
-    BINS: "{{ BINS | merge_list(goBins, preset='bins_generated') }}"
+    BINS: "{{ BINS | merge_list(goBins | annotate_bins('go'), preset='bins_generated') }}"
     ENV: "{{ ENV | merge_dict(goEnvs, preset='overlay') }}"
     LINKS: "{{ LINKS|default({})|combine({\"{{REPO_DIR}}/bin\": \"{{BINS_DIR}}\"}) }}"
   vars:
