@@ -66,6 +66,10 @@ def test_canonical_body_disarm_is_local_to_compositor_body() -> None:
         origin_subsystems: [install-child]
         bypass_scopes: [install-child]
         content: echo annotated-child
+      - name: apply.sh
+        origin_subsystems: [metadata-only]
+        bypass_scopes: [metadata-only]
+        bypass: APPLY
       - name: apply-child.sh
         content: echo pure-child
   tasks:

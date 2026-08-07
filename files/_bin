@@ -5,10 +5,11 @@
 {% set _is_compositor = item.generated_by | default('') == 'gen_bins' and _cf_run_all | length > 0 %}
 {% set _has_own_body = item.early is defined or item.generated is defined or item.content is defined or item.exec is defined or item.execs is defined or item.late is defined %}
 {% set _fallback_type = TYPE | default(none) if not _is_compositor or _has_own_body else none %}
+{% set _resolver_bypass = false if _is_compositor and not _has_own_body else item.bypass | default(none) %}
 {% set _disarm = item.name | resolve_bin_disarm(
   item.origin_subsystems | default(none),
   item.bypass_scopes | default(none),
-  item.bypass | default(none),
+  _resolver_bypass,
   _fallback_type,
 ) %}
 {% set _active_bypass = _disarm.entries | length > 0 and not _nuclear %}
