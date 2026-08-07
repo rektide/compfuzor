@@ -192,6 +192,21 @@
       option reference: `debian/apt-cacher-rs.conf` in the source tree, or
       `man apt-cacher-rs(8)`.
   tasks:
+    # PRAXIS VIOLATION -- compfuzor's model is that *files we build* do the
+    # work (scripts under bin/, generated units, configs); this inline `user:`
+    # task is a direct host action and the one place this playbook breaks that
+    # rule. It exists because apt-cacher-rs refuses to run as root and needs a
+    # stable named owner for its persistent cache. DynamicUser= was considered
+    # (it auto-chowns StateDirectory to a transient UID), but a long-lived,
+    # inspectable cache wants files owned by a real named user.
+    #
+    # TODO: a gen_user subsystem should own this. The file-first, systemd-native
+    # mechanism is a sysusers.d/{{NAME}}.conf fragment -- systemd-sysusers reads
+    # it and creates the user idempotently, which is exactly our "files do the
+    # things" praxis (a generated artifact, not an ansible action). gen_user
+    # would emit that fragment + a BINS to install it and run systemd-sysusers,
+    # replacing this task. Until then this is the shortcut -- and it's also the
+    # only thing forcing sudo before the build.
     - name: Create apt-cacher-rs system user/group
       user:
         name: apt-cacher-rs
