@@ -77,6 +77,14 @@ def generate_kernel_bins(temporary: Path, scenario: dict[str, object]) -> list[d
 
 def require_hierarchy(bins: list[dict], expected: dict[str, list[str]]) -> None:
     by_name = {item["name"]: item for item in bins}
+    for item in bins:
+        source = item.get("src")
+        if source:
+            source_path = ROOT / "files" / source.removeprefix("../")
+            if not source_path.is_file():
+                raise AssertionError(
+                    f"{item['name']}: configured source does not exist: {source}"
+                )
     for parent, children in expected.items():
         if parent not in by_name:
             raise AssertionError(f"missing compositor {parent!r}: {sorted(by_name)}")

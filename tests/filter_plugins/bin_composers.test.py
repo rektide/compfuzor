@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
 
-from pathlib import Path
 import sys
-
-import yaml
 
 sys.path.insert(0, "library/filter_plugins")
 
 from bin_composers import bin_composers  # noqa: E402
-
-
-ROOT = Path(__file__).resolve().parents[2]
 
 
 def check(label, actual, expected):
@@ -310,87 +304,6 @@ def test_kernel_leaf_names_create_pure_subsystem_compositors():
     )
 
 
-def test_configured_kernel_bins_match_hierarchy():
-    variables = yaml.safe_load((ROOT / "vars" / "common.yaml").read_text())
-    configured = []
-    for variable in (
-        "_kernel_modprobe_bins",
-        "_kernel_sysctl_bins",
-        "_kernel_sysfs_bins",
-        "_kernel_params_bins",
-        "_kernel_bls_bins",
-    ):
-        for item in variables[variable]:
-            item = dict(item)
-            source = item.get("src")
-            if source:
-                source_path = ROOT / "files" / source.removeprefix("../")
-                check(f"configured source exists: {source}", source_path.is_file(), True)
-            item["subsystem"] = "kernel"
-            configured.append(item)
-
-    by_name = {
-        compositor["name"]: compositor for compositor in bin_composers(configured)
-    }
-    check(
-        "configured kernel build hierarchy",
-        by_name["build-kernel.sh"]["run_all"],
-        [
-            "build-kernel-modprobe.sh",
-            "build-kernel-sysctl.sh",
-            "build-kernel-sysfs.sh",
-        ],
-    )
-    check(
-        "configured kernel install hierarchy",
-        by_name["install-kernel.sh"]["run_all"],
-        [
-            "install-kernel-modprobe.sh",
-            "install-kernel-sysctl.sh",
-            "install-kernel-sysfs.sh",
-            "install-kernel-params.sh",
-            "install-kernel-bls.sh",
-        ],
-    )
-    check(
-        "configured kernel apply hierarchy",
-        by_name["apply-kernel.sh"]["run_all"],
-        [
-            "apply-kernel-modprobe.sh",
-            "apply-kernel-sysctl.sh",
-            "apply-kernel-sysfs.sh",
-        ],
-    )
-    check(
-        "conditional cmdline helper is not composed",
-        "install-kernel-cmdline.sh" in by_name["install-kernel.sh"]["run_all"],
-        False,
-    )
-
-    sysctl_only = [
-        item
-        for item in configured
-        if item["name"]
-        in {
-            "build-kernel-sysctl.sh",
-            "install-kernel-sysctl.sh",
-            "apply-kernel-sysctl.sh",
-        }
-    ]
-    sysctl_by_name = {
-        compositor["name"]: compositor
-        for compositor in bin_composers(sysctl_only)
-    }
-    check(
-        "single active kernel unit retains subsystem hierarchy",
-        [
-            sysctl_by_name["build.sh"]["run_all"],
-            sysctl_by_name["build-kernel.sh"]["run_all"],
-        ],
-        [["build-kernel.sh"], ["build-kernel-sysctl.sh"]],
-    )
-
-
 def test_subsystem_single_leaf_keeps_compositor():
     result = bin_composers(
         [
@@ -417,7 +330,27 @@ def test_rejects_reserved_subsystem_compositor_name():
         lambda: bin_composers(
             [{"name": "build-kernel.sh", "subsystem": "kernel"}]
         ),
-        "reserved compositor name",
+        "reserved subsystem compositor name",
+    )
+    check_raises(
+        "rejects untagged reserved compositor collision",
+        lambda: bin_composers(
+            [
+                {"name": "build-kernel.sh"},
+                {"name": "build-kernel-sysctl.sh", "subsystem": "kernel"},
+            ]
+        ),
+        "reserved subsystem compositor name",
+    )
+    check_raises(
+        "rejects non-composing reserved compositor collision",
+        lambda: bin_composers(
+            [
+                {"name": "build-kernel.sh", "compose": False},
+                {"name": "build-kernel-sysctl.sh", "subsystem": "kernel"},
+            ]
+        ),
+        "reserved subsystem compositor name",
     )
 
 
@@ -444,7 +377,6 @@ if __name__ == "__main__":
     test_build_install_apply_coexist()
     test_subsystem_groups_into_subcompositor()
     test_kernel_leaf_names_create_pure_subsystem_compositors()
-    test_configured_kernel_bins_match_hierarchy()
     test_subsystem_single_leaf_keeps_compositor()
     test_rejects_reserved_subsystem_compositor_name()
     test_actions_override()

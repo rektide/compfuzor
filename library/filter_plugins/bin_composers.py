@@ -77,14 +77,14 @@ def bin_composers(bins, actions=None):
     else:
         action_re = _ACTION_RE
 
-    # Collect action leaves with resolved (action, subsystem, scopes).
+    # Collect every authored action name for reservation checks, then retain
+    # composing leaves with resolved (action, subsystem, scopes).
+    authored_names: dict[tuple, set[str]] = {}
     leaves = []
     for item in _arrayitize(bins):
-        if (
-            not isinstance(item, collections.abc.Mapping)
-            or item.get("generated_by") == "gen_bins"
-            or item.get("compose", True) is False
-        ):
+        if not isinstance(item, collections.abc.Mapping) or item.get(
+            "generated_by"
+        ) == "gen_bins":
             continue
         name = item.get("name")
         if not isinstance(name, string_types):
@@ -98,11 +98,18 @@ def bin_composers(bins, actions=None):
         ):
             scopes.append("user")
         scopes = list(dict.fromkeys(str(s) for s in scopes))
+        scopes = scopes or [None]
+        for scope in scopes:
+            authored_names.setdefault((match.group("action"), scope), set()).add(
+                name
+            )
+        if item.get("compose", True) is False:
+            continue
         leaves.append(
             {
                 "name": name,
                 "action": match.group("action"),
-                "scopes": scopes or [None],
+                "scopes": scopes,
                 "subsystem": _resolve_subsystem(item.get("subsystem")),
             }
         )
@@ -127,9 +134,9 @@ def bin_composers(bins, actions=None):
         comp_name = "{}-{}{}.sh".format(
             action, subsystem, f"-{scope}" if scope else ""
         )
-        if comp_name in members:
+        if comp_name in authored_names[(action, scope)]:
             raise AnsibleFilterError(
-                "subsystem leaf {!r} uses its reserved compositor name".format(
+                "authored bin {!r} uses a reserved subsystem compositor name".format(
                     comp_name
                 )
             )

@@ -53,7 +53,7 @@ subsystem id equaling the action (`status-status.sh` is silly but valid).
 
 ```
 install.sh / install-user.sh            (scope entry points — the top)
-├─ install-systemd-user.sh              (subsystem compositor, ≥2 leaves)
+├─ install-systemd-user.sh              (subsystem compositor)
 │   ├─ install-socket-atuin-daemon-user.sh
 │   └─ install-service-atuin-daemon-user.sh
 └─ install-app-config.sh                (ungrouped — direct child)
