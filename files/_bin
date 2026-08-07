@@ -1,7 +1,10 @@
 #!/bin/bash
 {% set _item_helpers = item.helpers | default(none) %}
 {% set _nuclear = _item_helpers is sameas false %}
-{% set _fallback_type = none if item.generated_by | default('') == 'gen_bins' else TYPE | default(none) %}
+{% set _cf_run_all = item.run_all|normalize(to='list') %}
+{% set _is_compositor = item.generated_by | default('') == 'gen_bins' and _cf_run_all | length > 0 %}
+{% set _has_own_body = item.early is defined or item.generated is defined or item.content is defined or item.exec is defined or item.execs is defined or item.late is defined %}
+{% set _fallback_type = TYPE | default(none) if not _is_compositor or _has_own_body else none %}
 {% set _disarm = item.name | resolve_bin_disarm(
   item.origin_subsystems | default(none),
   item.bypass_scopes | default(none),
@@ -9,6 +12,7 @@
   _fallback_type,
 ) %}
 {% set _active_bypass = _disarm.entries | length > 0 and not _nuclear %}
+{% set _body_local_bypass = _active_bypass and _is_compositor and _has_own_body %}
 {% set _cf_verb = item.verb | default(_disarm.verb) %}
 {% set _helper_layers = [
   DEFAULT_HELPERS | default(['env', 'setopts', 'loud']),
@@ -43,14 +47,29 @@ cd {{DIR}}/{{item.basedir}}
 {% endif %}
 {% if _active_bypass %}
 _cf_action_init "{{ _disarm.name }}" "{{ _cf_verb }}" "{{ _disarm.report_labels }}"
+{% if _body_local_bypass %}
+_cf_body_run=1
+_cf_body_completed=0
+{% endif %}
 {% for _cf_entry in _disarm.entries %}
 {% if ':' in _cf_entry %}
 {% set _cf_parts = _cf_entry.split(':', 1) %}
-if ! reason="$(_cf_run_guard 3 _cf_guard_bypass_unit "{{ _cf_parts[0] }}" "{{ _cf_parts[1] }}" "{{ _cf_verb }}")"; then _cf_report_skip "{{ _disarm.name }}" "$reason" "{{ _disarm.report_labels }}"; _cf_action_end; exit 0; fi
+{% if _body_local_bypass %}
+if [ "$_cf_body_run" = 1 ] && ! reason="$(_cf_run_guard 3 _cf_guard_bypass_unit "{{ _cf_parts[0] }}" "{{ _cf_parts[1] }}" "{{ _cf_verb }}")"; then _cf_report_skip "{{ _disarm.name }}" "$reason" "{{ _disarm.report_labels }}"; _cf_body_run=0; fi
 {% else %}
-if ! reason="$(_cf_run_guard 3 _cf_guard_bypass "{{ _cf_entry }}" "{{ _cf_verb }}")"; then _cf_report_skip "{{ _disarm.name }}" "$reason" "{{ _disarm.report_labels }}"; _cf_action_end; exit 0; fi
+if ! reason="$(_cf_run_guard 3 _cf_guard_bypass_unit "{{ _cf_parts[0] }}" "{{ _cf_parts[1] }}" "{{ _cf_verb }}")"; then _cf_report_skip "{{ _disarm.name }}" "$reason" "{{ _disarm.report_labels }}"; exit 0; fi
+{% endif %}
+{% else %}
+{% if _body_local_bypass %}
+if [ "$_cf_body_run" = 1 ] && ! reason="$(_cf_run_guard 3 _cf_guard_bypass "{{ _cf_entry }}" "{{ _cf_verb }}")"; then _cf_report_skip "{{ _disarm.name }}" "$reason" "{{ _disarm.report_labels }}"; _cf_body_run=0; fi
+{% else %}
+if ! reason="$(_cf_run_guard 3 _cf_guard_bypass "{{ _cf_entry }}" "{{ _cf_verb }}")"; then _cf_report_skip "{{ _disarm.name }}" "$reason" "{{ _disarm.report_labels }}"; exit 0; fi
+{% endif %}
 {% endif %}
 {% endfor %}
+{% if _body_local_bypass %}
+if [ "$_cf_body_run" = 1 ]; then
+{% endif %}
 {% endif %}
 {{ item.early|join2("\n") }}
 {{ item.generated|join2("\n") if item.generatedAt|def == "early" else omit }}
@@ -58,16 +77,27 @@ if ! reason="$(_cf_run_guard 3 _cf_guard_bypass "{{ _cf_entry }}" "{{ _cf_verb }
 {{ item.exec|join2("\n") }}
 {{ item.execs|join2("\n") }}
 {{ item.generated|join2("\n") if item.generatedAt|def("end") == "end" else omit }}
-{% set _cf_run_all = item.run_all|normalize(to='list') %}
+{% if _body_local_bypass %}
+{{ item.late|join2("\n") }}
+_cf_action_end
+_cf_body_completed=1
+fi
+{% endif %}
 {% if _cf_run_all|length > 0 %}
 {% for run_bin in _cf_run_all %}
 if [ "$_cf_loud" = 1 ]; then printf '+ %s\n' '{{ run_bin }}'; fi
 "$DIR/bin/{{ run_bin }}" "$@"
 {% endfor %}
+{% if _body_local_bypass %}
+if [ "$_cf_body_completed" = 0 ] && [ "$_cf_loud" = 1 ]; then printf 'complete\n'; fi
+{% else %}
 if [ "$_cf_loud" = 1 ]; then printf 'complete\n'; fi
 {% endif %}
+{% endif %}
+{% if not _body_local_bypass %}
 {{ item.late|join2("\n") }}
-{% if _active_bypass %}
+{% endif %}
+{% if _active_bypass and not _body_local_bypass %}
 _cf_action_end
 {% endif %}
 {% for _h in _helpers | reverse %}

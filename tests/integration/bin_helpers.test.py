@@ -165,6 +165,11 @@ def test_rendered_helpers() -> None:
             '_cf_guard_bypass_unit "DIRECT_TOOLS" "APPLY_NETWORK" "apply network"',
             "TYPE fallback action",
         )
+        require(
+            fallback,
+            '_cf_action_init "apply-network.sh" "apply network" "direct-tools"',
+            "TYPE fallback report label",
+        )
 
         bypass_false = scripts["bypass-false.sh"]
         for helper in ("env", "setopts", "loud"):
@@ -212,6 +217,25 @@ def test_rendered_helpers() -> None:
             raise AssertionError(f"bypassed body executed: {skipped.stdout!r}")
         require(skipped.stderr, "skipped build-go.sh:", "automatic skip report")
         require(skipped.stderr, "(go)", "automatic skip labels")
+
+        fallback_env = os.environ.copy()
+        fallback_env["COMPFUZOR_DIRECT_TOOLS_APPLY_NETWORK_BYPASS"] = "1"
+        fallback_skipped = subprocess.run(
+            [str(output / "apply-network.sh")],
+            check=True,
+            text=True,
+            capture_output=True,
+            env=fallback_env,
+        )
+        if fallback_skipped.stdout:
+            raise AssertionError(
+                f"TYPE-fallback bypassed body executed: {fallback_skipped.stdout!r}"
+            )
+        require(
+            fallback_skipped.stderr,
+            "(direct-tools)",
+            "TYPE fallback executed report label",
+        )
 
         loud_state = output / "loud-state.sh"
         loud_cases = (

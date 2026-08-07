@@ -176,8 +176,12 @@ def resolve_bin_disarm(
         }
 
     scopes = _normalize_string_list(bypass_scopes, "bypass_scopes")
+    fallback_labels = []
     if not scopes and isinstance(name, str) and name.endswith(".sh"):
-        scopes = _normalize_string_list(fallback_type, "fallback_type")
+        fallback_labels = _stable_dedupe(
+            _normalize_string_list(fallback_type, "fallback_type")
+        )
+        scopes = fallback_labels
     canonical_scopes = _stable_dedupe(
         scope for scope in (_canonical_scope(value) for value in scopes) if scope
     )
@@ -203,13 +207,14 @@ def resolve_bin_disarm(
     ]
     entries = _stable_dedupe(automatic + explicit)
     verb = " ".join(token.lower() for token in action_tokens) or "running"
+    report_labels = origins or fallback_labels
     return {
         "name": actual_name,
         "entries": entries,
         "action": action,
         "verb": verb,
         "subsystems": origins,
-        "report_labels": ", ".join(origins),
+        "report_labels": ", ".join(report_labels),
     }
 
 

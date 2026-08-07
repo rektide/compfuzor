@@ -70,6 +70,8 @@ def test_explicit_extension_false_and_fallback():
         fallback["entries"],
         ["HOST_TOOLS", "HOST_TOOLS:APPLY_NETWORK"],
     )
+    check("TYPE fallback supplies report label", fallback["report_labels"], "host-tools")
+    check("TYPE fallback does not invent provenance", fallback["subsystems"], [])
     check(
         "TYPE fallback does not apply to non-shell records",
         resolve_bin_disarm("venv.source", fallback_type="python")["entries"],
