@@ -79,7 +79,7 @@ def bin_composers(bins, actions=None):
 
     # Collect every authored action name for reservation checks, then retain
     # composing leaves with resolved (action, subsystem, scopes).
-    authored_names: dict[tuple, set[str]] = {}
+    authored_names: set[str] = set()
     leaves = []
     for item in _arrayitize(bins):
         if not isinstance(item, collections.abc.Mapping) or item.get(
@@ -99,10 +99,7 @@ def bin_composers(bins, actions=None):
             scopes.append("user")
         scopes = list(dict.fromkeys(str(s) for s in scopes))
         scopes = scopes or [None]
-        for scope in scopes:
-            authored_names.setdefault((match.group("action"), scope), set()).add(
-                name
-            )
+        authored_names.add(name)
         if item.get("compose", True) is False:
             continue
         leaves.append(
@@ -134,7 +131,7 @@ def bin_composers(bins, actions=None):
         comp_name = "{}-{}{}.sh".format(
             action, subsystem, f"-{scope}" if scope else ""
         )
-        if comp_name in authored_names[(action, scope)]:
+        if comp_name in authored_names:
             raise AnsibleFilterError(
                 "authored bin {!r} uses a reserved subsystem compositor name".format(
                     comp_name

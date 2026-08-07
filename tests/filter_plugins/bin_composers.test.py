@@ -352,6 +352,20 @@ def test_rejects_reserved_subsystem_compositor_name():
         ),
         "reserved subsystem compositor name",
     )
+    check_raises(
+        "rejects reserved compositor collision across scopes",
+        lambda: bin_composers(
+            [
+                {"name": "install-systemd-user.sh", "compose": False},
+                {
+                    "name": "install-service-app-user.sh",
+                    "scope": "user",
+                    "subsystem": "systemd",
+                },
+            ]
+        ),
+        "reserved subsystem compositor name",
+    )
 
 
 def test_actions_override():

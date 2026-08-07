@@ -302,6 +302,6 @@
       generatedAt: end
       generated: "{{ _generated }}"
       scope: "{{ ['user'] if _is_user else [] }}"
-      # Group these installers under the systemd subsystem compositor
-      # (install-systemd[-user].sh) when >=2 are present.
+      # Group these installers under the stable systemd subsystem compositor
+      # (install-systemd[-user].sh), including single-leaf configurations.
       subsystem: systemd
