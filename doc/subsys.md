@@ -92,6 +92,10 @@ and concatenates these fields across overlapping entries:
 Non-concat fields follow standard `merge_keyed` behavior: the incoming record
 wins on key conflicts.
 
+NVIM uses a deliberately narrower configured keyed merge: `generated`,
+`origin_subsystems`, and `bypass_scopes` concatenate, while executable ordering
+fields `early` and `run_all` remain later-wins.
+
 ## Automatic bin disarm
 
 `merge_subsys` automatically annotates active incoming BINS. No routine
@@ -100,6 +104,11 @@ wins on key conflicts.
 1. explicit `domain=` passed to `merge_subsys`;
 2. `SUBSYSTEM.<id>.domain`;
 3. the subsystem ID.
+
+The resolved domain also participates in the standard subsystem active-state
+calculation. Consequently `<DOMAIN>_BYPASS` suppresses an incoming
+`merge_subsys` contribution as well as naming its broad rendered guard. Calls
+with an explicit `active_path` retain that authored activation rule.
 
 `origin_subsystems` always records the subsystem ID. The independent
 `subsystem` BINS field still controls compositor grouping and is never used as
@@ -119,9 +128,14 @@ already represented by the broad scope when deriving the nested action:
 Explicit `bypass` scalar/list entries extend automatic entries, preserving
 useful global phase guards. `bypass: false` disables both automatic and explicit
 outer guards. `helpers: false` remains nuclear and emits no helpers or wrapper.
-For direct unannotated `.sh` records, TYPE is the fallback broad scope. Generated
-compositors receive no TYPE fallback; children guard themselves. Sourced/library
-scripts must use `bypass: false` when an outer guard's `exit 0` would be unsafe.
+For direct unannotated `.sh` records, TYPE is the fallback broad scope and raw
+report label; it does not populate `origin_subsystems`. Pure generated
+compositors receive no TYPE fallback. A generated canonical compositor merged
+with an authored body may use that body's provenance/scope or TYPE fallback,
+but its guards are body-local: a skipped body reports and continues to
+`run_all`; a successful body reports completion before children run. Child
+metadata is never aggregated into the parent. Sourced/library scripts must use
+`bypass: false` when an outer guard's `exit 0` would be unsafe.
 
 Normal `_bin` reporting is:
 
@@ -131,7 +145,8 @@ Normal `_bin` reporting is:
 
 Parentheses are omitted without labels. Derived verbs are canonical action
 tokens lowercased and space-separated. Init and skip reports carry the same
-actual filename and labels.
+actual filename and labels. A direct TYPE-fallback script reports the raw TYPE
+label, for example `apply-network.sh: apply network (direct-tools)`.
 
 ## Action runner: `_cf_action`
 
@@ -258,6 +273,12 @@ Systemd's internal phases remain separate from outer automatic
 | enable | `COMPFUZOR_SYSTEMD_ENABLE_BYPASS` | `SYSTEMD_BYPASS_ENABLE` |
 | start | `COMPFUZOR_SYSTEMD_START_BYPASS` | `SYSTEMD_BYPASS_START` |
 
+`install-dropin.sh` is intentionally nuclear (`helpers: false`), so it cannot
+receive the outer helper wrapper. It enforces `COMPFUZOR_SYSTEMD_BYPASS` and
+its derived nested action variable
+`COMPFUZOR_SYSTEMD_INSTALL_DROPIN_BYPASS` internally before evaluating LINK or
+the temporary `SYSTEMD_BYPASS_LINK` alias.
+
 ## gen_bins: action composition
 
 [`gen_bins.tasks`](../tasks/compfuzor/gen_bins.tasks) runs after all subsystem
@@ -271,6 +292,12 @@ The [`bin_composers`](../library/filter_plugins/bin_composers.py) filter:
    (`build.sh`, `install.sh`, `install-user.sh`).
 4. The compositor's `run_all` lists child scripts to invoke after the base
    script's own content.
+
+If the canonical name already has authored body fields (`early`, `generated`,
+`content`, `exec`, `execs`, or `late`), the generated compositor keyed-merges
+with that record. `_bin` guards those fields as one local body and always leaves
+the generated `run_all` children runnable. A pure generated compositor has only
+`run_all` and remains unguarded.
 
 ```yaml
 # Input BINS (both tagged subsystem: kernel):

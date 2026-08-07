@@ -14,7 +14,9 @@ independent concern.
 - `merge_subsys` annotates active incoming BINS with `origin_subsystems` and
   `bypass_scopes` before `bins_generated` merging.
 - Scope precedence is explicit `domain=` > subsystem record `domain` >
-  subsystem ID. Origin is always the subsystem ID.
+  subsystem ID. Origin is always the subsystem ID. The resolved domain is also
+  passed through standard subsystem-state evaluation, so `<DOMAIN>_BYPASS`
+  suppresses the incoming contribution.
 - `bins_generated` concatenates both metadata lists in contribution order.
   [`resolve_bin_disarm`](/library/filter_plugins/bin_disarm.py) stable-dedupes
   them at render time.
@@ -22,23 +24,33 @@ independent concern.
   nested `SCOPE:ACTION` guards. Existing explicit `bypass` entries extend that
   policy; `bypass: false` disables outer guards and `helpers: false` remains the
   nuclear wrapper opt-out.
-- Direct, unannotated `.sh` records fall back to `TYPE`. Generated compositors
-  do not use that fallback and continue to run children, which guard themselves.
+- Direct, unannotated `.sh` records fall back to `TYPE`, including the report
+  label without inventing provenance. Pure generated compositors do not use
+  that fallback. If a generated canonical compositor merges with an authored
+  body, the body's guards are local: a skip suppresses that body but still runs
+  `run_all`; a successful body completes before children run.
 - Reports use the actual script filename, a derived or authored verb, and
   stable subsystem labels: `build-go.sh: build (go)`.
 - Manual aggregators cover kernel leaf origins with broad `kernel`, generated
   systemd records, MCP, config's `CONFIG_KEY` domain, get-urls/status,
   Python console records, zim, NVIM, and the Go repo helper.
+- NVIM keeps executable concatenation narrow (`generated` only; `early` and
+  `run_all` remain later-wins) while concatenating both disarm metadata lists.
 - The sourced systemd `install-unit.sh` record explicitly uses `bypass: false`.
 - Systemd phase controls use `COMPFUZOR_SYSTEMD_LINK_BYPASS`,
   `COMPFUZOR_SYSTEMD_ENABLE_BYPASS`, and
   `COMPFUZOR_SYSTEMD_START_BYPASS`. The old `SYSTEMD_BYPASS_*` variables remain
   documented temporary soak aliases for already-generated artifacts.
+- Nuclear `install-dropin.sh` retains `helpers: false` and enforces
+  `COMPFUZOR_SYSTEMD_BYPASS` plus
+  `COMPFUZOR_SYSTEMD_INSTALL_DROPIN_BYPASS` internally before its LINK phase.
 
 ## Deliberate boundaries
 
 - `subsystem` still controls compositor grouping only. It is not provenance.
 - Compositors do not aggregate child guard metadata.
+- Canonical body/compositor collisions use only the canonical body's own
+  metadata, explicit bypass, or TYPE fallback; child policy remains in children.
 - `run_all`, `base_helpers`, and [`files/_helpers/env`](/files/_helpers/env) are
   unchanged.
 - Public `bypass` remains an ordinary later-defined BINS field rather than a
@@ -64,6 +76,7 @@ independent concern.
 
 The current suite covers canonicalization, scope precedence, lazy values,
 same-name metadata concatenation, later-wins `bypass`, compositor isolation,
-real-Ansible rendering and execution, false/nuclear opt-outs, unit guards,
-explicit macro labels, systemd canonical names and aliases, kernel hierarchy,
-and the existing lazy keyed-BINS/NVIM acceptance.
+canonical-body local skips with continuing children, real-Ansible rendering and
+execution, fallback labels, false/nuclear opt-outs, unit guards, explicit macro
+labels, behavioral systemd broad/nested/canonical/alias checks, kernel
+hierarchy, and the lazy keyed-BINS/NVIM narrow-executable acceptance.

@@ -65,6 +65,7 @@ current behavior.
 | 2026-08-04 to 2026-08-07 | The null/default cleanup used the undefined-tolerant filters to remove redundant Jinja defaults and clarify flag handling. | The inventory served its migration purpose; its original counts are no longer current. |
 | 2026-08-07 | The last `listify | concat` caller moved to variadic `merge_list`; alternate legacy plugins/tests were disabled for soak; `_bin` bypass closing was fixed; real-Ansible helper and lazy keyed-BINS acceptances were added; the root README and full-suite guidance were refreshed. | The agreed merge/helper implementation closure is complete. |
 | 2026-08-07 | Automatic BINS disarm metadata was added at the active `merge_subsys` boundary, mergeable provenance/scope fields joined `bins_generated`, and `_bin` gained one canonical resolver for automatic plus explicit policy. Manual aggregators and systemd phase aliases were reconciled. | Standard subsystem actions now receive broad and nested guards without routine scope authoring; reports identify the actual script and contributing subsystems. |
+| 2026-08-07 | Independent review hardened canonical body/compositor collisions, TYPE fallback labels, NVIM metadata concatenation, domain-state gating, and nuclear systemd drop-in behavior. | Canonical body skips no longer suppress compositor children; pure compositors remain unguarded; systemd phase and internal exceptions are behaviorally tested. |
 
 ## Accepted API Drift
 
@@ -109,22 +110,28 @@ documentation cleanup explicitly promotes or supersedes them.
 - Same-name keyed BINS collisions preserve tagged generated templates until
   final Ansible rendering and concatenate body plus disarm metadata in layer
   order. Public `bypass` remains ordinary later-wins data.
-- NVIM deliberately uses a configured narrow keyed merge: only `generated`
-  concatenates; later `early` and `run_all` values replace earlier values.
+- NVIM deliberately uses a configured narrow keyed merge: `generated` and the
+  two disarm metadata lists concatenate; later `early` and `run_all` values
+  replace earlier values.
 - [`merge_subsys.py`](/library/lookup_plugins/merge_subsys.py) annotates active
   incoming BINS with origin and broad scope before cfmerge. Scope precedence is
-  explicit domain, record domain, then subsystem ID.
+  explicit domain, record domain, then subsystem ID. The resolved domain also
+  participates in active-state bypass evaluation.
 - [`bin_disarm.py`](/library/filter_plugins/bin_disarm.py) owns annotation,
   action canonicalization, stable metadata deduplication, effective guard
   entries, derived verbs, and report labels.
 - [`files/_bin`](/files/_bin) invokes that resolver once. Effective entries
   control helper inclusion, guard opening, and action closing; `bypass: false`
   suppresses outer policy and `helpers: false` remains nuclear.
-- Generated compositors remain unguarded parents and do not aggregate child
-  metadata. `run_all`, `base_helpers`, and the env helper are unchanged.
+- Pure generated compositors remain unguarded parents and never aggregate child
+  metadata. A canonical compositor merged with an authored body guards only
+  that body; skipped bodies continue to `run_all`. `run_all`, `base_helpers`,
+  and the env helper are unchanged.
 - Systemd's canonical internal phase variables are
   `COMPFUZOR_SYSTEMD_{LINK,ENABLE,START}_BYPASS`; old
   `SYSTEMD_BYPASS_*` spellings remain temporary soak aliases.
+- Nuclear systemd `install-dropin.sh` enforces the automatic broad and nested
+  action variables internally before its LINK phase.
 - Deprecated implementations are retained for soak as
   `library/filter_plugins/*.py.deprecated`. Ansible scans `*.py`, so the
   superficially attractive `merge.deprecated.py` form would still be loaded.
@@ -142,13 +149,14 @@ Evidence collected on 2026-08-07:
 | Full documented suite | The root README command runs `tests/filter_plugins/*.test.py`, `tests/lookup_plugins/*.test.py`, and `tests/integration/*.test.py`; it completed successfully and did not select disabled obsolete tests. |
 | Fixed pipeline | `python tests/filter_plugins/cfmerge.test.py` passed 109 assertions, including provenance concatenation, later-wins bypass, template-tag, and lazy-container cases. |
 | Lookup helper import | `python tests/lookup_plugins/subsys.test.py` passed 37 assertions using `template_data` directly. |
-| Automatic disarm unit/lookup | `bin_disarm.test.py` covered canonicalization, scope subtraction, extension, false, TYPE fallback, annotation, and errors; `merge_subsys.test.py` passed 22 assertions including domain precedence and lazy incoming BINS. |
+| Automatic disarm unit/lookup | `bin_disarm.test.py` covered canonicalization, scope subtraction, extension, false, TYPE fallback labels without provenance mutation, annotation, and errors; `merge_subsys.test.py` passed 23 assertions including domain bypass gating and lazy incoming BINS. |
 | `_bin` integration | `tests/integration/bin_helpers.test.py` rendered and syntax-checked eight scripts through real Ansible, then executed safe automatic run/skip paths. It covered actual filenames, derived/authored verbs, labels, automatic broad/action guards, explicit global/unit extensions, TYPE fallback, `bypass: false`, `helpers: false`, and explicit macro labels. |
+| Canonical compositor collision | `bin_compositor_disarm.test.py` ran the full composer, keyed merge, render, and execution path for direct and annotated canonical bodies plus a pure compositor; body skips continued to children. |
 | Keyed BINS render/diff self-check | `tests/integration/cfmerge_bins.test.py` merged two same-name lazy generated templates before their variables existed, then verified final contribution order and completed `bash -n`. |
-| NVIM negative assertion | The same real-Ansible test proved only `generated` concatenates while `early` and `run_all` are replaced by the later record. |
+| NVIM narrow assertion | The same real-Ansible test proved `generated` and disarm metadata concatenate while `early` and `run_all` are replaced by the later record. |
 | Deprecated discovery | `ansible-doc -t filter arrayitize` reported that the filter was not found after the `.py.deprecated` rename. |
 | Playbook syntax | `k3s.srv.pb`, `pstore.etc.pb`, `github-mcp.src.pb`, and `zim.opt.pb` passed `ansible-playbook --syntax-check`. |
-| Systemd phases | Both systemd install scripts passed `bash -n`; canonical and temporary alias link bypasses were executed safely, and enable/start names were checked. |
+| Systemd phases | Safe temporary fixtures behaviorally exercised canonical and temporary alias LINK, ENABLE, and START, plus the nuclear drop-in's broad/nested/LINK controls; no host paths or services were touched. |
 | Root documentation | [`README.md`](/README.md) now presents `cfmerge`, active helper/composer concepts, disabled soak paths, and the full suite instead of legacy APIs/tests. |
 | Patch hygiene | Focused and final `git diff --check` checks completed without errors. |
 
