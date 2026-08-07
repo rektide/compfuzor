@@ -7,67 +7,52 @@ filesystems, services, packages, and kernel state.
 
 ## Filter plugins
 
-### `merge_with_strategy` — [`merge_strategy.py`](library/filter_plugins/merge_strategy.py)
+The authoritative plugin catalog, signatures, undefined-value behavior, and
+deprecation status live in [`library/README.md`](/library/README.md). This
+section highlights the merge and bin-generation interfaces used by playbooks.
 
-Strategy-driven record merger. The core synthesis engine.
+### `cfmerge`
 
-```yaml
-# inline strategy map
-records | merge_with_strategy(
-  {"BINS": "append", "ENV": "dict_overlay"},
-  payload_path="contrib"
-)
+[`cfmerge.py`](/library/filter_plugins/cfmerge.py) owns the public merge API.
+Layers are variadic and `preset=` is keyword-only:
 
-# named profile
-records | merge_with_strategy("subsystem_contrib", payload_path="contrib")
+```jinja2
+{{ existing | merge_list(incoming, preset='bins_generated') }}
+{{ defaults | merge_dict(overrides, preset='overlay') }}
+{{ records | merge_fields(profile={
+  'BINS': {'preset': 'bins_generated'},
+  'ENV': {'preset': 'overlay'},
+}) }}
 ```
 
-**String strategies:** `append`, `append_unique`, `dict_overlay`, `replace`
+The filter input is the first layer and positional arguments are later layers.
+Common list presets include `append`, `append_unique`, `merge_keyed`, and
+`bins_generated`; common mapping presets include `overlay` and
+`tool_versions_overlay`. `bins_generated` merges BINS by `name` and
+concatenates `early`, `generated`, and `run_all` across collisions.
 
-**Operation strategies** (dict with `op` key):
+Related active filters include:
 
-| op | purpose |
+| Filter | Purpose |
 |---|---|
-| `merge_keyed` | merge lists of dicts by key, with `concat_fields` for string/list field joining |
-| `append_unique_by` | append + deduplicate by a dict key (last wins, first-seen position) |
+| `normalize` | Convert one value to the registered `list`, `mapping`, `items`, or `identity` shape. |
+| `combine_iff` | Overlay mappings while skipping undefined overlays and values. |
+| `join2` | Normalize and join text contributions without iterating strings as characters. |
 
-**Named profiles:**
+### Bin helpers and composers
 
-| Profile | Fields |
-|---|---|
-| `subsystem_contrib` | ETC_FILES append, BINS append, ENV dict_overlay, ENV_LIST append_unique, PKGS append_unique |
-| `subsystem_artifacts` | ETC_FILES append, LINKS append |
+[`files/_bin`](/files/_bin) selects composable `env`, `setopts`, `loud`,
+`report`, and `guard` helpers. `DEFAULT_HELPERS` supplies the global baseline;
+per-bin `base_helpers` and `helpers` add layers, while `helpers: false` is the
+nuclear opt-out. [`resolve_helpers`](/library/filter_plugins/helpers.py)
+deduplicates dependencies and emits helpers in canonical order.
 
----
+[`bin_composers`](/library/filter_plugins/bin_composers.py) builds action
+compositor bins from explicitly named scripts. It recognizes `build*.sh`,
+`install*.sh`, and `apply*.sh`, groups by action, scope, and subsystem, and
+emits canonical entry points whose `run_all` lists invoke child scripts.
 
-### `merge_list` / `merge_dict` — [`merge.py`](library/filter_plugins/merge.py)
-
-Direct list and dict merging without wrapper records.
-
-```yaml
-# list merge with named strategy
-BINS: "{{ [existing, incoming] | merge_list('bins_generated') }}"
-
-# dict merge
-ENV: "{{ [defaults, overrides] | merge_dict('env_overlay') }}"
-```
-
-**List strategies:** `append`, `append_unique`, plus operation dicts (`merge_keyed`, `append_unique_by`)
-
-**Dict strategies:** `overlay`, `dict_overlay`, `tool_versions_overlay`
-
-The `bins_generated` profile merges `BINS` by `name` and concatenates `early`,
-`generated`, and `run_all` fields across overlapping entries.
-
----
-
-### `bin_composers` — [`bin_composers.py`](library/filter_plugins/bin_composers.py)
-
-Builds action compositor bins from explicitly named bin scripts. Recognizes
-`build*.sh`, `install*.sh`, and `apply*.sh` filenames, groups by action and
-scope, and emits canonical entry-point scripts that retain the base action name.
-
-```yaml
+```jinja2
 BINS: "{{ BINS | bin_composers }}"
 # build.sh + build-kernel.sh -> build.sh with run_all: [build-kernel.sh]
 # install.sh + install-user.sh -> install.sh + install-user.sh (scoped)
@@ -76,19 +61,24 @@ BINS: "{{ BINS | bin_composers }}"
 Set `compose: false` on a bin to exclude it from composition (e.g. library
 scripts sourced by other scripts like `install-unit.sh`).
 
----
-
 ### Other filters
 
 | Filter | File | Purpose |
 |---|---|---|
-| `dictify` | [`dictify.py`](library/filter_plugins/dictify.py) | Normalize mappings and list-shorthand into a mapping |
-| `arrayitize` | [`arrayitize.py`](library/filter_plugins/arrayitize.py) | Place arguments into an array |
-| `build_install_bins` | [`build_install_bins.py`](library/filter_plugins/build_install_bins.py) | Standard build/install bin entries for a stem name |
-| `mergeKeyed` | [`mergeKeyed.py`](library/filter_plugins/mergeKeyed.py) | Compat shim over `merge_keyed` operation |
-| `zim_fragment` | [`zim_fragment.py`](library/filter_plugins/zim_fragment.py) | Render zim module declarations as zmodule lines |
-| `cmdline` | [`cmdline.py`](library/filter_plugins/cmdline.py) | Parse ansible-playbook command lines |
-| `get` | [`get.py`](library/filter_plugins/get.py) | Safe dotted-path traversal |
+| `build_install_bins` | [`build_install_bins.py`](/library/filter_plugins/build_install_bins.py) | Standard build/install bin entries for a stem name |
+| `zim_fragment` | [`zim_fragment.py`](/library/filter_plugins/zim_fragment.py) | Render zim module declarations as zmodule lines |
+| `ansible_cmdline` | [`cmdline.py`](/library/filter_plugins/cmdline.py) | Parse ansible-playbook command lines |
+| `get`, `get_path` | [`get.py`](/library/filter_plugins/get.py) | Safe dotted-path traversal |
+
+### Deprecated soak
+
+The retired implementations remain available for inspection but are disabled
+under Ansible's `*.py` discovery: [`merge.py.deprecated`](/library/filter_plugins/merge.py.deprecated),
+[`merge_strategy.py.deprecated`](/library/filter_plugins/merge_strategy.py.deprecated),
+[`mergeKeyed.py.deprecated`](/library/filter_plugins/mergeKeyed.py.deprecated),
+[`arrayitize.py.deprecated`](/library/filter_plugins/arrayitize.py.deprecated),
+[`listify.py.deprecated`](/library/filter_plugins/listify.py.deprecated), and
+[`dictify.py.deprecated`](/library/filter_plugins/dictify.py.deprecated).
 
 ## Architecture contract
 
@@ -131,16 +121,14 @@ Console scripts are linked with `force: true` so they may be dangling until
 ## Test suite
 
 ```sh
-python tests/filter_plugins/bin_composers.test.py     #  5 tests
-python tests/filter_plugins/merge_strategy.test.py     # 42 tests
-python tests/filter_plugins/mergeKeyed.test.py         # 11 tests
-python tests/filter_plugins/merge.test.py              # 27 tests
-python tests/filter_plugins/dictify.test.py            # 10 tests
-python tests/filter_plugins/zim_fragment.test.py       #  8 tests
-python tests/filter_plugins/subsystem_record.test.py   # 27 tests
-python tests/filter_plugins/get.test.py                #  9 tests
-python tests/filter_plugins/cmdline.test.py            # 12 tests
-python tests/filter_plugins/vars.test.py               #  7 tests
-python tests/lookup_plugins/subsys.test.py             #  8 tests
-python tests/lookup_plugins/merge_subsys.test.py       # 11 tests
+for test in \
+  tests/filter_plugins/*.test.py \
+  tests/lookup_plugins/*.test.py \
+  tests/integration/*.test.py
+do
+  python "$test" || exit 1
+done
 ```
+
+The integration scripts invoke real Ansible renders and syntax-check generated
+bin scripts, covering helper selection and lazy same-name BINS collisions.

@@ -61,9 +61,9 @@ current behavior.
 | 2026-07-28 | `bypass:` became a BINS record field. | Bin templates could request scalar or unit-qualified bypass guards. |
 | 2026-08-02 | The bin-helper design decomposed the monolithic header into `env`, `setopts`, `loud`, `report`, and `guard`; implementation and helper merge delegation followed. | Helper selection became layered and canonical while `files/_bin` retained field policy. |
 | 2026-08-02 to 2026-08-03 | The merge-star design/review/synthesis wave converged on `collect -> normalize -> combine -> refine -> extract`, explicit presets, tag-preserving keyed folds, and a non-rendering lazy-data boundary. | The migration contract and risky callers were identified before activation. |
-| 2026-08-03 | The implementation became `cfmerge.py`; public filter registration cut over, callers migrated, lazy template data was preserved, and `normalize`, `join2`, `combine_iff`, and rendering support were completed. | `cfmerge` became the only active merge family. |
+| 2026-08-03 | The implementation became `cfmerge.py`; public filter registration cut over, callers migrated, lazy template data was preserved, and `normalize`, `join2`, `combine_iff`, and rendering support were completed. | `cfmerge` became the public merge owner, while alternate legacy filter modules remained discoverable for soak. |
 | 2026-08-04 to 2026-08-07 | The null/default cleanup used the undefined-tolerant filters to remove redundant Jinja defaults and clarify flag handling. | The inventory served its migration purpose; its original counts are no longer current. |
-| 2026-08-07 | The last `listify | concat` caller moved to variadic `merge_list`; deprecated plugins/tests were disabled for soak; `_bin` bypass closing was fixed; real-Ansible helper and lazy keyed-BINS acceptances were added. | The agreed merge/helper implementation closure is complete. |
+| 2026-08-07 | The last `listify | concat` caller moved to variadic `merge_list`; alternate legacy plugins/tests were disabled for soak; `_bin` bypass closing was fixed; real-Ansible helper and lazy keyed-BINS acceptances were added; the root README and full-suite guidance were refreshed. | The agreed merge/helper implementation closure is complete. |
 
 ## Accepted API Drift
 
@@ -125,7 +125,7 @@ Evidence collected on 2026-08-07:
 
 | Check | Evidence |
 |---|---|
-| Active test discovery | `for test in tests/filter_plugins/*.test.py tests/lookup_plugins/*.test.py; do python "$test"; done` completed successfully; disabled obsolete tests were not selected. |
+| Full documented suite | The root README command runs `tests/filter_plugins/*.test.py`, `tests/lookup_plugins/*.test.py`, and `tests/integration/*.test.py`; it completed successfully and did not select disabled obsolete tests. |
 | Fixed pipeline | `python tests/filter_plugins/cfmerge.test.py` passed 108 assertions, including template-tag and lazy-container cases. |
 | Lookup helper import | `python tests/lookup_plugins/subsys.test.py` passed 37 assertions using `template_data` directly. |
 | `_bin` integration | `tests/integration/bin_helpers.test.py` rendered plain, scalar bypass, list/unit bypass, `bypass: false`, and `helpers: false` records through real Ansible; all five scripts passed `bash -n`. |
@@ -133,6 +133,7 @@ Evidence collected on 2026-08-07:
 | NVIM negative assertion | The same real-Ansible test proved only `generated` concatenates while `early` and `run_all` are replaced by the later record. |
 | Deprecated discovery | `ansible-doc -t filter arrayitize` reported that the filter was not found after the `.py.deprecated` rename. |
 | Playbook syntax | `ansible-playbook k3s.srv.pb --syntax-check` succeeded after the final caller migration. |
+| Root documentation | [`README.md`](/README.md) now presents `cfmerge`, active helper/composer concepts, disabled soak paths, and the full suite instead of legacy APIs/tests. |
 | Patch hygiene | Focused and final `git diff --check` checks completed without errors. |
 
 ## Explicit Decisions
@@ -154,6 +155,10 @@ Evidence collected on 2026-08-07:
   cleanup after confidence in downstream/private consumers.
 - Decide env-helper behavior separately, with its own contract and rendered-bin
   coverage.
+- Clean up stale legacy merge/helper claims in [`doc/arch.md`](/doc/arch.md),
+  [`doc/subsys.md`](/doc/subsys.md), and [`doc/bins.md`](/doc/bins.md). They
+  still mention retired APIs or compatibility terminology and were deliberately
+  not rewritten in this documentation follow-up.
 - Review this history by `stale_after`; update it sooner if the public cfmerge
   signature, helper ownership, or soak policy changes.
 
