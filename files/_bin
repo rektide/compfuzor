@@ -1,10 +1,11 @@
 #!/bin/bash
 {% set _item_helpers = item.helpers | default(none) %}
 {% set _nuclear = _item_helpers is sameas false %}
+{% set _active_bypass = item.bypass is defined and item.bypass is not sameas false and not _nuclear %}
 {% set _helper_layers = [
   DEFAULT_HELPERS | default(['env', 'setopts', 'loud']),
   item.base_helpers | default(none),
-  ['report', 'guard'] if item.bypass is defined and item.bypass is not sameas false else none,
+  ['report', 'guard'] if _active_bypass else none,
   _item_helpers,
 ] %}
 {% set _helpers = [] if _nuclear else _helper_layers | resolve_helpers %}
@@ -32,7 +33,7 @@ cd {{DIR}}/{{item.basedir}}
 {% endif %}
 
 {% endif %}
-{% if item.bypass is defined and item.bypass is not sameas false and not _nuclear %}
+{% if _active_bypass %}
 {% set _cf_bypass = item.bypass if item.bypass is iterable and item.bypass is not string else [item.bypass] %}
 _cf_action_init "{{ item.name }}" "running"
 {% for _cf_entry in _cf_bypass %}
@@ -59,7 +60,7 @@ if [ "$_cf_loud" = 1 ]; then printf '+ %s\n' '{{ run_bin }}'; fi
 if [ "$_cf_loud" = 1 ]; then printf 'complete\n'; fi
 {% endif %}
 {{ item.late|join2("\n") }}
-{% if item.bypass is defined and not _nuclear %}
+{% if _active_bypass %}
 _cf_action_end
 {% endif %}
 {% for _h in _helpers | reverse %}
