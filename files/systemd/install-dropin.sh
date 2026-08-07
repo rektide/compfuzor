@@ -33,6 +33,15 @@ for arg in "$@"; do
   esac
 done
 
+if [ -n "${COMPFUZOR_SYSTEMD_BYPASS:-}" ]; then
+  echo "Bypassed installing systemd drop-ins: COMPFUZOR_SYSTEMD_BYPASS set"
+  exit 0
+fi
+if [ -n "${COMPFUZOR_SYSTEMD_INSTALL_DROPIN_BYPASS:-}" ]; then
+  echo "Bypassed installing systemd drop-ins: COMPFUZOR_SYSTEMD_INSTALL_DROPIN_BYPASS set"
+  exit 0
+fi
+
 matches_dropin() {
   local name="$1"
   local target="$2"
