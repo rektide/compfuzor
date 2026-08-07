@@ -401,6 +401,17 @@ def test_bins_domain_precedence_and_non_bins_unchanged():
         ["procps"],
     )
 
+    bypassed = {
+        **variables,
+        "KERNEL_BYPASS": True,
+        "BINS": [{"name": "base.sh"}],
+    }
+    check(
+        "resolved domain bypass gates incoming contribution",
+        merge_subsys_value(bypassed, "kernel_sysctl", "BINS"),
+        [{"name": "base.sh"}],
+    )
+
 
 def test_lookup_run_rejects_positional_terms():
     print("\nmerge_subsys lookup positional terms:")

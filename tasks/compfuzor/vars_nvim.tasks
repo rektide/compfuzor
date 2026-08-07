@@ -4,9 +4,9 @@
 # Generates lazy.nvim config (ftplugin files, lazy lua modules) and an
 # install-nvim.sh script that symlinks them into the user's nvim config.
 #
-# BINS merge uses a configured merge_keyed preset with narrow
-# concat_fields=['generated'] — only the generated script concatenates
-# on name collision, not early/run_all (unlike bins_generated).
+# BINS merge uses a configured merge_keyed preset with narrow executable
+# concatenation: generated joins, while early/run_all remain later-wins.
+# Disarm provenance/scope metadata still concatenates across contributors.
 #
 # _nvim_plugins is promoted to a fact so it survives for lazy template
 # rendering (the pipeline preserves template strings in generated: fields).
@@ -14,7 +14,7 @@
 - name: 'Build vars for NVIM plugin integration'
   set_fact:
     ETC_FILES: "{{ enhancedEtc | merge_list(ETC_FILES, preset='append') }}"
-    BINS: "{{ (enhancedBins | annotate_bins('nvim')) | merge_list(_bins, preset={'name': 'merge_keyed', 'key': 'name', 'concat_fields': ['generated']}) }}"
+    BINS: "{{ (enhancedBins | annotate_bins('nvim')) | merge_list(_bins, preset={'name': 'merge_keyed', 'key': 'name', 'concat_fields': ['generated', 'origin_subsystems', 'bypass_scopes']}) }}"
     _nvim_plugins: "{{_nvim_plugins}}"
   vars:
     _bins: "{{BINS}}"

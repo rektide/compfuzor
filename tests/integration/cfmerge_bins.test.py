@@ -51,18 +51,22 @@ def test_lazy_keyed_bins_render() -> None:
 
     - name: Exercise the NVIM narrow keyed merge
       ansible.builtin.set_fact:
-        nvim_bins: "{{{{ nvim_left | merge_list(nvim_right, preset={{'name': 'merge_keyed', 'key': 'name', 'concat_fields': ['generated']}}) }}}}"
+        nvim_bins: "{{{{ nvim_left | merge_list(nvim_right, preset={{'name': 'merge_keyed', 'key': 'name', 'concat_fields': ['generated', 'origin_subsystems', 'bypass_scopes']}}) }}}}"
       vars:
         nvim_left:
           - name: install-nvim.sh
             early: early-left
             generated: generated-left
             run_all: [left.sh]
+            origin_subsystems: [nvim]
+            bypass_scopes: [nvim]
         nvim_right:
           - name: install-nvim.sh
             early: early-right
             generated: generated-right
             run_all: [right.sh]
+            origin_subsystems: [existing]
+            bypass_scopes: [editor]
 
     - name: Assert NVIM concatenates generated only
       ansible.builtin.assert:
@@ -71,6 +75,8 @@ def test_lazy_keyed_bins_render() -> None:
           - nvim_bins[0].generated == 'generated-left\\ngenerated-right'
           - nvim_bins[0].early == 'early-right'
           - nvim_bins[0].run_all == ['right.sh']
+          - nvim_bins[0].origin_subsystems == ['nvim', 'existing']
+          - nvim_bins[0].bypass_scopes == ['nvim', 'editor']
 """,
             encoding="utf-8",
         )
@@ -110,7 +116,7 @@ def test_lazy_keyed_bins_render() -> None:
 
         subprocess.run(["bash", "-n", str(output)], check=True)
         print("ok: lazy same-name BINS merge rendered both contributions in order")
-        print("ok: NVIM narrow merge concatenated generated only")
+        print("ok: NVIM kept executable merge narrow while unioning disarm metadata")
 
 
 if __name__ == "__main__":

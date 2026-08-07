@@ -253,12 +253,19 @@ def merge_subsys_value(variables, subsystem_id, contrib, templar=None, **kwargs)
     current = _dict_get_raw(variables, current_name, metadata["identity"])
     subsystems = _dict_get_raw(variables, "SUBSYSTEM", {})
     record = _dict_get_raw(subsystems, subsystem_id, {})
+    domain = _resolve_domain(kwargs.get("domain"), record, subsystem_id)
 
     incoming = default
     if has_active_path:
         is_active = _truthy(get_path(record, explicit_active_path, default=False))
     else:
-        is_active = _compute_state(record, variables, subsystem_id, templar=templar)["active"]
+        is_active = _compute_state(
+            record,
+            variables,
+            subsystem_id,
+            domain=domain,
+            templar=templar,
+        )["active"]
     if (not active) or is_active:
         incoming = get_path(record, path, default=default)
         if _is_tagged_template(incoming):
@@ -267,7 +274,7 @@ def merge_subsys_value(variables, subsystem_id, contrib, templar=None, **kwargs)
             incoming = annotate_bins(
                 incoming,
                 origin_subsystem=subsystem_id,
-                bypass_scope=_resolve_domain(kwargs.get("domain"), record, subsystem_id),
+                bypass_scope=domain,
             )
 
     get_expr = kwargs.get("get")
