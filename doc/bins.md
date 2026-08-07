@@ -13,7 +13,7 @@ hierarchy that lets a whole subsystem's scripts be addressed and run as a unit.
 
 | Layer | Example | Produced by |
 |---|---|---|
-| **Leaf** | `install-socket-atuin-daemon-user.sh` | a subsystem or playbook (`BINS`) |
+| **Leaf** | `build-kernel-sysctl.sh` | a subsystem or playbook (`BINS`) |
 | **Subsystem compositor** | `install-systemd-user.sh` | [`bin_composers`](/library/filter_plugins/bin_composers.py) |
 | **Scope compositor (top)** | `install-user.sh` | `bin_composers` |
 
@@ -81,13 +81,34 @@ of the scope compositor (this is also what avoids a leaf wrapping itself:
 ### Naming
 
 ```
-<action>(-<subsystem>)?(-user)?.sh
+scope compositor:     <action>[-<scope>].sh
+subsystem compositor: <action>-<subsystem>[-<scope>].sh
+subsystem leaf:       <action>-<subsystem>-<unit>[-<scope>].sh
 ```
 
 System scope is bare (no suffix); user scope is `-user` — matching the existing
 `install-service.sh` / `install-service-user.sh` convention. The action is the
-first dash-segment; the subsystem comes from the `subsystem` field, **not** from
-the name.
+first dash-segment. The composer reads grouping from the `subsystem` field,
+**not** from the name; explicit domain-qualified leaf names make the generated
+call graph visible to humans and reserve `<action>-<subsystem>.sh` for a pure
+compositor.
+
+For example, kernel leaves are named `build-kernel-modprobe.sh`,
+`build-kernel-sysctl.sh`, and `build-kernel-sysfs.sh`. When at least two are
+active, `bin_composers` generates the parent:
+
+```
+build.sh
+└─ build-kernel.sh
+   ├─ build-kernel-modprobe.sh
+   ├─ build-kernel-sysctl.sh
+   └─ build-kernel-sysfs.sh
+```
+
+Do not author a subsystem leaf using its reserved compositor name. In
+particular, a kernel unit must not be named `build-kernel.sh`,
+`install-kernel.sh`, or `apply-kernel.sh`; those names represent the whole
+kernel subsystem when generated.
 
 ## Worked example — atuin
 
