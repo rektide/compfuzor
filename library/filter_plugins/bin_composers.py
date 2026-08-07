@@ -3,6 +3,7 @@ from __future__ import annotations
 import collections.abc
 import re
 
+from ansible.errors import AnsibleFilterError
 from ansible.module_utils.six import string_types
 from ansible.plugins.test.core import wrapped_test_undefined
 from ansible.template import accept_args_markers
@@ -54,9 +55,9 @@ def bin_composers(bins, actions=None):
     * **Scope compositor** — the top entry point: ``<action>.sh`` (system) or
       ``<action>-user.sh`` (user). Always emitted when an action has leaves.
     * **Subsystem compositor** — ``<action>-<subsystem>[-user].sh``, emitted
-      only when a subsystem contributes >=2 leaves to that (action, scope).
-      The scope compositor invokes the subsystem compositor instead of those
-      leaves directly.
+      whenever a subsystem contributes a leaf to that (action, scope). The
+      scope compositor invokes the subsystem compositor instead of those leaves
+      directly.
 
     A bin declares its grouping via the ``subsystem`` field (auto-set by
     subsystem generators at contrib time, overridable by hand). Ungrouped bins
@@ -114,23 +115,29 @@ def bin_composers(bins, actions=None):
                 (lf["action"], lf["subsystem"], scope), []
             ).append(lf["name"])
 
-    # Emit subsystem compositors for groups with >=2 leaves and a real
-    # subsystem. Leaves so claimed are pulled out of the scope compositor.
+    # Emit subsystem compositors for every real subsystem. Leaves so claimed
+    # are pulled out of the scope compositor.
     claimed: set[tuple] = set()
     subsystem_compositors: dict[tuple, dict] = {}
     for (action, subsystem, scope), members in sub_buckets.items():
-        if subsystem is None or len(members) < 2:
+        if subsystem is None:
             continue
         for mem in members:
             claimed.add((mem, scope))
         comp_name = "{}-{}{}.sh".format(
             action, subsystem, f"-{scope}" if scope else ""
         )
+        if comp_name in members:
+            raise AnsibleFilterError(
+                "subsystem leaf {!r} uses its reserved compositor name".format(
+                    comp_name
+                )
+            )
         subsystem_compositors[(action, subsystem, scope)] = {
             "name": comp_name,
             "action": action,
             "generated_by": "gen_bins",
-            "run_all": [m for m in members if m != comp_name],
+            "run_all": list(members),
             "scope": [scope] if scope else [],
             # Compositors reference $DIR (env) and _cf_loud (loud) in their
             # run_all block, and want strict mode + restore (setopts); they

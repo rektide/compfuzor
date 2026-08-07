@@ -73,10 +73,11 @@ install.sh / install-user.sh            (scope entry points — the top)
 
 ### When a subsystem compositor is emitted
 
-Only when a subsystem contributes **≥2 leaves** to a given (action, scope). A
-single-leaf subsystem emits no compositor — its lone leaf stays a direct child
-of the scope compositor (this is also what avoids a leaf wrapping itself:
-`build-rust.sh` is the leaf; there is no `build-rust` wrapper around it).
+Whenever a subsystem contributes at least one leaf to a given (action, scope).
+This keeps the addressable hierarchy stable as units activate and deactivate:
+`build.sh` always reaches a tagged kernel leaf through `build-kernel.sh`.
+Leaves may not use their reserved `<action>-<subsystem>[-<scope>].sh` compositor
+name; `bin_composers` rejects that collision.
 
 ### Naming
 
@@ -94,8 +95,8 @@ call graph visible to humans and reserve `<action>-<subsystem>.sh` for a pure
 compositor.
 
 For example, kernel leaves are named `build-kernel-modprobe.sh`,
-`build-kernel-sysctl.sh`, and `build-kernel-sysfs.sh`. When at least two are
-active, `bin_composers` generates the parent:
+`build-kernel-sysctl.sh`, and `build-kernel-sysfs.sh`. When any are active,
+`bin_composers` generates the parent:
 
 ```
 build.sh
@@ -146,8 +147,8 @@ subsystem: systemd
 ```
 
 That's the whole opt-in. Any generator that wants its leaves grouped under
-`<action>-<subsystem>[-user].sh` sets `subsystem: <id>` on them; single-leaf
-generators need not bother (no compositor would be emitted anyway).
+`<action>-<subsystem>[-user].sh` sets `subsystem: <id>` on them. The compositor
+is emitted even for one leaf, keeping the subsystem entry point stable.
 
 ## Helpers
 

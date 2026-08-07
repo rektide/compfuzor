@@ -19,6 +19,19 @@ def check(label, actual, expected):
     print(f"ok: {label}")
 
 
+def check_raises(label, operation, expected):
+    try:
+        operation()
+    except Exception as error:
+        if expected not in str(error):
+            raise AssertionError(
+                f"{label}: expected error containing {expected!r}, got {error!r}"
+            ) from error
+        print(f"ok: {label}")
+        return
+    raise AssertionError(f"{label}: expected an exception")
+
+
 def test_composes_unscoped_actions():
     result = bin_composers(
         [
@@ -354,22 +367,57 @@ def test_configured_kernel_bins_match_hierarchy():
         False,
     )
 
+    sysctl_only = [
+        item
+        for item in configured
+        if item["name"]
+        in {
+            "build-kernel-sysctl.sh",
+            "install-kernel-sysctl.sh",
+            "apply-kernel-sysctl.sh",
+        }
+    ]
+    sysctl_by_name = {
+        compositor["name"]: compositor
+        for compositor in bin_composers(sysctl_only)
+    }
+    check(
+        "single active kernel unit retains subsystem hierarchy",
+        [
+            sysctl_by_name["build.sh"]["run_all"],
+            sysctl_by_name["build-kernel.sh"]["run_all"],
+        ],
+        [["build-kernel.sh"], ["build-kernel-sysctl.sh"]],
+    )
 
-def test_subsystem_single_leaf_stays_direct():
-    # A subsystem with only one leaf in an action/scope emits no compositor;
-    # the leaf stays a direct child of the scope compositor (no self-wrapper).
+
+def test_subsystem_single_leaf_keeps_compositor():
     result = bin_composers(
         [
-            {"name": "install-rust.sh", "subsystem": "rust"},
+            {"name": "install-rust-toolchain.sh", "subsystem": "rust"},
             {"name": "install-extra.sh"},
         ]
     )
-    names = [c["name"] for c in result]
-    check("no single-leaf subsystem compositor", names, ["install.sh"])
+    by_name = {compositor["name"]: compositor for compositor in result}
     check(
-        "lone subsystem leaf stays direct child",
-        result[0]["run_all"],
+        "single-leaf subsystem keeps compositor",
+        by_name["install-rust.sh"]["run_all"],
+        ["install-rust-toolchain.sh"],
+    )
+    check(
+        "scope references single-leaf subsystem compositor",
+        by_name["install.sh"]["run_all"],
         ["install-rust.sh", "install-extra.sh"],
+    )
+
+
+def test_rejects_reserved_subsystem_compositor_name():
+    check_raises(
+        "rejects reserved subsystem compositor name",
+        lambda: bin_composers(
+            [{"name": "build-kernel.sh", "subsystem": "kernel"}]
+        ),
+        "reserved compositor name",
     )
 
 
@@ -397,5 +445,6 @@ if __name__ == "__main__":
     test_subsystem_groups_into_subcompositor()
     test_kernel_leaf_names_create_pure_subsystem_compositors()
     test_configured_kernel_bins_match_hierarchy()
-    test_subsystem_single_leaf_stays_direct()
+    test_subsystem_single_leaf_keeps_compositor()
+    test_rejects_reserved_subsystem_compositor_name()
     test_actions_override()

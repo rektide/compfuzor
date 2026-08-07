@@ -219,7 +219,9 @@ The [`bin_composers`](../library/filter_plugins/bin_composers.py) filter:
 ```yaml
 # Input BINS (both tagged subsystem: kernel):
 - name: build-kernel-modprobe.sh
+  subsystem: kernel
 - name: build-kernel-sysctl.sh
+  subsystem: kernel
 
 # After gen_bins:
 - name: build-kernel.sh

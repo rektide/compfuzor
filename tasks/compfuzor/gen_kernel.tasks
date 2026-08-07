@@ -40,9 +40,9 @@
 - name: "Compfuzor: synthesize kernel leaf subsystem artifacts"
   set_fact:
     ETC_FILES: "{{ ETC_FILES | merge_list(_kernel_modprobe_contrib.ETC_FILES, _kernel_sysctl_contrib.ETC_FILES, _kernel_sysfs_contrib.ETC_FILES, _kernel_params_contrib.ETC_FILES, _kernel_bls_contrib.ETC_FILES, preset='append') }}"
-    # Each contributed bin is tagged `subsystem: kernel` so >=2 leaves in an
-    # action roll up into a pure <action>-kernel.sh compositor rather than
-    # flattening into the top action compositor. Concrete leaves use
+    # Each contributed bin is tagged `subsystem: kernel` so every active action
+    # routes through a pure <action>-kernel.sh compositor rather than flattening
+    # into the top action compositor. Concrete leaves use
     # <action>-kernel-<unit>.sh names, so they never collide with the parent.
     BINS: "{{ BINS | merge_list(_kernel_tagged_bins, preset='bins_generated') }}"
     ENV: "{{ _kernel_modprobe_contrib.ENV | merge_dict(_kernel_sysctl_contrib.ENV, _kernel_sysfs_contrib.ENV, _kernel_params_contrib.ENV, _kernel_bls_contrib.ENV, ENV, preset='overlay', skip_layers=['all']) }}"
