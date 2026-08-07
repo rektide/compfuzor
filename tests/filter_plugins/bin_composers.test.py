@@ -381,6 +381,30 @@ def test_actions_override():
     )
 
 
+def test_disarm_metadata_does_not_affect_grouping_or_compositors():
+    result = bin_composers(
+        [
+            {
+                "name": "build-go-app.sh",
+                "subsystem": "go",
+                "origin_subsystems": ["go", "generator"],
+                "bypass_scopes": ["go"],
+            }
+        ]
+    )
+    check(
+        "provenance does not create extra groups",
+        [item["name"] for item in result],
+        ["build-go.sh", "build.sh"],
+    )
+    for item in result:
+        check(
+            f"{item['name']} does not aggregate child disarm metadata",
+            any(field in item for field in ("origin_subsystems", "bypass_scopes", "bypass")),
+            False,
+        )
+
+
 if __name__ == "__main__":
     test_composes_unscoped_actions()
     test_composes_explicit_and_filename_user_scopes()
@@ -394,3 +418,4 @@ if __name__ == "__main__":
     test_subsystem_single_leaf_keeps_compositor()
     test_rejects_reserved_subsystem_compositor_name()
     test_actions_override()
+    test_disarm_metadata_does_not_affect_grouping_or_compositors()

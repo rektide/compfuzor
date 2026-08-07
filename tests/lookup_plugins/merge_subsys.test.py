@@ -62,6 +62,14 @@ class FakeLazyDict(dict):
         return {key: value for key, value in dict.items(self)}
 
 
+class FakeLazyList(list):
+    def __iter__(self):
+        raise AssertionError("lazy list rendered")
+
+    def _non_lazy_copy(self):
+        return [item for item in list.__iter__(self)]
+
+
 class FakeTemplateEngine:
     def __init__(self, values=None):
         self.values = values or {}
@@ -93,7 +101,12 @@ def test_bins_defaults_merge_current_then_subsystem():
     check(
         "uses BINS defaults",
         result,
-        [{"name": "build.sh", "generated": "echo base\necho python"}],
+        [{
+            "name": "build.sh",
+            "generated": "echo base\necho python",
+            "origin_subsystems": ["python"],
+            "bypass_scopes": ["python"],
+        }],
     )
 
 
@@ -273,7 +286,11 @@ def test_raw_copy_boundary_for_variables():
         }
     )
     result = merge_subsys_value(variables, "python", "BINS")
-    check("uses _non_lazy_copy for variables", result, [{"name": "build.sh"}])
+    check("uses _non_lazy_copy for variables", result, [{
+        "name": "build.sh",
+        "origin_subsystems": ["python"],
+        "bypass_scopes": ["python"],
+    }])
 
 
 def test_lookup_run_returns_templated_result_list():
@@ -320,7 +337,10 @@ def test_requested_from_variable():
         },
     }
     result = merge_subsys_value(variables, "rust", "BINS")
-    check("resolves active from variable when no requested field", result, [{"name": "build.sh"}, {"name": "install.sh"}])
+    check("resolves active from variable when no requested field", result, [
+        {"name": "build.sh", "origin_subsystems": ["rust"], "bypass_scopes": ["rust"]},
+        {"name": "install.sh", "origin_subsystems": ["rust"], "bypass_scopes": ["rust"]},
+    ])
 
 
 def test_explicit_active_path_still_works():
@@ -335,7 +355,51 @@ def test_explicit_active_path_still_works():
         },
     }
     result = merge_subsys_value(variables, "custom", "BINS", active_path="my_active_flag")
-    check("reads custom active_path from record", result, [{"name": "run.sh"}])
+    check("reads custom active_path from record", result, [{
+        "name": "run.sh",
+        "origin_subsystems": ["custom"],
+        "bypass_scopes": ["custom"],
+    }])
+
+
+def test_bins_domain_precedence_and_non_bins_unchanged():
+    print("\nmerge_subsys BINS domain precedence:")
+    variables = {
+        "BINS": [],
+        "PKGS": [],
+        "SUBSYSTEM": {
+            "kernel_sysctl": {
+                "requested": True,
+                "domain": "kernel",
+                "contrib": {
+                    "BINS": FakeLazyList([{"name": "apply-kernel-sysctl.sh"}]),
+                    "PKGS": ["procps"],
+                },
+            }
+        },
+    }
+    check(
+        "record domain beats subsystem id",
+        merge_subsys_value(variables, "kernel_sysctl", "BINS")[0]["bypass_scopes"],
+        ["kernel"],
+    )
+    check(
+        "explicit domain beats record domain",
+        merge_subsys_value(
+            variables, "kernel_sysctl", "BINS", domain="host_kernel"
+        )[0]["bypass_scopes"],
+        ["host_kernel"],
+    )
+    check(
+        "origin remains subsystem id",
+        merge_subsys_value(variables, "kernel_sysctl", "BINS")[0]["origin_subsystems"],
+        ["kernel_sysctl"],
+    )
+    check(
+        "non-BINS artifacts receive no metadata",
+        merge_subsys_value(variables, "kernel_sysctl", "PKGS"),
+        ["procps"],
+    )
 
 
 def test_lookup_run_rejects_positional_terms():
@@ -365,6 +429,7 @@ if __name__ == "__main__":
     test_etc_dirs_append_defaults()
     test_requested_from_variable()
     test_explicit_active_path_still_works()
+    test_bins_domain_precedence_and_non_bins_unchanged()
     test_lookup_run_returns_templated_result_list()
     test_lookup_run_rejects_positional_terms()
     print("\n{} passed, {} failed".format(passed, failed))

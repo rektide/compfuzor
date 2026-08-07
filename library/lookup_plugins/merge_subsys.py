@@ -47,9 +47,13 @@ DOCUMENTATION = """
         description:
           - C(current-first) or C(incoming-first). Controls layer order before
             the artifact's preset runs.
-      get:
+       get:
         description:
-          - Optional dotted path to extract from the merged result.
+           - Optional dotted path to extract from the merged result.
+      domain:
+        description:
+          - Optional broad disarm scope for incoming BINS records.
+          - Precedence is this option, the subsystem record C(domain), then C(id).
 """
 
 EXAMPLES = """
@@ -89,6 +93,7 @@ if _FILTER_DIR not in sys.path:
 from get import get_path  # noqa: E402
 from template_data import dict_get_raw as _dict_get_raw, raw_copy_template_data as _raw_copy_template_data, truthy as _truthy  # noqa: E402
 from cfmerge import run_value_preset, value_preset_metadata  # noqa: E402
+from bin_disarm import annotate_bins  # noqa: E402
 
 _LOOKUP_DIR = os.path.abspath(os.path.dirname(__file__))
 if _LOOKUP_DIR not in sys.path:
@@ -189,6 +194,23 @@ def _resolve_order(value, default):
     return value
 
 
+def _resolve_domain(explicit_domain, record, subsystem_id):
+    if not (
+        wrapped_test_undefined(explicit_domain)
+        or explicit_domain is None
+        or _is_empty_text(explicit_domain)
+    ):
+        return explicit_domain
+    record_domain = get_path(record, "domain", default=None)
+    if not (
+        wrapped_test_undefined(record_domain)
+        or record_domain is None
+        or _is_empty_text(record_domain)
+    ):
+        return record_domain
+    return subsystem_id
+
+
 def merge_subsys_value(variables, subsystem_id, contrib, templar=None, **kwargs):
     """Merge one subsystem contrib artifact with its current global artifact.
 
@@ -241,6 +263,12 @@ def merge_subsys_value(variables, subsystem_id, contrib, templar=None, **kwargs)
         incoming = get_path(record, path, default=default)
         if _is_tagged_template(incoming):
             incoming = _template_value(incoming, templar)
+        if artifact == "BINS":
+            incoming = annotate_bins(
+                incoming,
+                origin_subsystem=subsystem_id,
+                bypass_scope=_resolve_domain(kwargs.get("domain"), record, subsystem_id),
+            )
 
     get_expr = kwargs.get("get")
     if wrapped_test_undefined(get_expr):
@@ -271,5 +299,6 @@ class LookupModule(LookupBase):
             active_path=kwargs.get("active_path"),
             order=kwargs.get("order"),
             get=kwargs.get("get"),
+            domain=kwargs.get("domain"),
         )
         return [self._templar._engine.template(result)]

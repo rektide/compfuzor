@@ -1,11 +1,19 @@
 _cf_action_init() {
-  local name="$1" verb="${2:-running}"
-  [ "$_cf_loud" = 1 ] && printf '+ %s: %s\n' "$name" "$verb" >&2 || true
+  local name="$1" verb="${2:-running}" labels="${3:-}"
+  if [ "$_cf_loud" = 1 ]; then
+    printf '+ %s: %s' "$name" "$verb" >&2
+    [ -z "$labels" ] || printf ' (%s)' "$labels" >&2
+    printf '\n' >&2
+  fi
 }
 _cf_action_end() {
   [ "$_cf_loud" = 1 ] && printf 'complete\n' >&2 || true
 }
 _cf_report_skip() {
-  local name="$1" reason="$2"
-  [ "$_cf_loud" = 1 ] && printf 'skipped %s: %s\n' "$name" "$reason" >&2 || true
+  local name="$1" reason="$2" labels="${3:-}"
+  if [ "$_cf_loud" = 1 ]; then
+    printf 'skipped %s: %s' "$name" "$reason" >&2
+    [ -z "$labels" ] || printf ' (%s)' "$labels" >&2
+    printf '\n' >&2
+  fi
 }

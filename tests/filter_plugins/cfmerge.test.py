@@ -339,6 +339,30 @@ def test_presets_and_extract():
         [{"name": "build", "early": "a\nb"}],
     )
     check(
+        "bins provenance concatenates while bypass remains later-wins",
+        merge_list(
+            [{
+                "name": "build.sh",
+                "origin_subsystems": ["base"],
+                "bypass_scopes": ["base"],
+                "bypass": ["BUILD"],
+            }],
+            [{
+                "name": "build.sh",
+                "origin_subsystems": ["go"],
+                "bypass_scopes": ["go"],
+                "bypass": ["LINK"],
+            }],
+            preset="bins_generated",
+        ),
+        [{
+            "name": "build.sh",
+            "origin_subsystems": ["base", "go"],
+            "bypass_scopes": ["base", "go"],
+            "bypass": ["LINK"],
+        }],
+    )
+    check(
         "tool versions maps shorthand before union",
         merge_dict(
             ["rust", "node"], {"rust": "1.90"}, preset="tool_versions_overlay"

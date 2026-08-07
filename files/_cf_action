@@ -8,6 +8,7 @@
  #               entries with ':' split into concern:unit for per-unit bypass
  #   guards  — list of shell commands evaluated as guards
  #   mode    — bitfield: 0x1=non-zero exit, 0x2=stderr, 0x4=stdout. Default 0x3.
+ #   subsystems — optional subsystem/report labels (scalar or list)
  #
  # Usage:
  #   {% from "_cf_action" import cf_action %}
@@ -21,19 +22,21 @@
  # that sets `bypass:` (the bypass behavior implies report+guard). A bin that
  # invokes this macro without `bypass:` must declare `helpers: [report, guard]`.
  #}
-{% macro cf_action(name, verb='running', bypass=[], guards=[], mode=3) %}
+{% macro cf_action(name, verb='running', bypass=[], guards=[], mode=3, subsystems=[]) %}
 {% set _entries = bypass if bypass is iterable and bypass is not string else [bypass] %}
-_cf_action_init "{{ name }}" "{{ verb }}"
+{% set _subsystems = subsystems if subsystems is iterable and subsystems is not string else [subsystems] %}
+{% set _labels = _subsystems | reject('equalto', none) | join(', ') %}
+_cf_action_init "{{ name }}" "{{ verb }}" "{{ _labels }}"
 {% for entry in _entries %}
 {% if ':' in entry %}
 {% set _p = entry.split(':') %}
-if ! reason="$(_cf_run_guard {{ mode }} _cf_guard_bypass_unit "{{ _p[0] }}" "{{ _p[1] }}" "{{ verb }}")"; then _cf_report_skip "{{ name }}" "$reason"; _cf_action_end; exit 0; fi
+if ! reason="$(_cf_run_guard {{ mode }} _cf_guard_bypass_unit "{{ _p[0] }}" "{{ _p[1] }}" "{{ verb }}")"; then _cf_report_skip "{{ name }}" "$reason" "{{ _labels }}"; _cf_action_end; exit 0; fi
 {% else %}
-if ! reason="$(_cf_run_guard {{ mode }} _cf_guard_bypass "{{ entry }}" "{{ verb }}")"; then _cf_report_skip "{{ name }}" "$reason"; _cf_action_end; exit 0; fi
+if ! reason="$(_cf_run_guard {{ mode }} _cf_guard_bypass "{{ entry }}" "{{ verb }}")"; then _cf_report_skip "{{ name }}" "$reason" "{{ _labels }}"; _cf_action_end; exit 0; fi
 {% endif %}
 {% endfor %}
 {% for g in guards %}
-if ! reason="$(_cf_run_guard {{ mode }} {{ g }})"; then _cf_report_skip "{{ name }}" "$reason"; _cf_action_end; exit 0; fi
+if ! reason="$(_cf_run_guard {{ mode }} {{ g }})"; then _cf_report_skip "{{ name }}" "$reason" "{{ _labels }}"; _cf_action_end; exit 0; fi
 {% endfor %}
 {% if caller is defined %}{{ caller() }}{% endif %}
 _cf_action_end

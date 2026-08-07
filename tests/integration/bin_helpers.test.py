@@ -23,12 +23,14 @@ def reject(text: str, fragment: str, label: str) -> None:
 
 
 def render_bins(output: Path, playbook: Path) -> None:
+    (playbook.parent / "_cf_action").symlink_to(ROOT / "files" / "_cf_action")
     playbook.write_text(
         f"""---
 - hosts: all
   gather_facts: false
   vars:
     DIR: {str(output.parent)!r}
+    TYPE: direct-tools
   tasks:
     - ansible.builtin.file:
         path: {str(output)!r}
@@ -39,24 +41,45 @@ def render_bins(output: Path, playbook: Path) -> None:
         dest: '{str(output)}/{{{{ item.name }}}}'
         mode: "0755"
       loop:
-        - name: plain.sh
-          content: echo plain
-        - name: bypass-scalar.sh
-          bypass: LINK
-          content: echo scalar
+        - name: build-go.sh
+          origin_subsystems: [go]
+          bypass_scopes: [go]
+          content: echo automatic
+        - name: install-rust.user.sh
+          origin_subsystems: [rust, shared]
+          bypass_scopes: [rust]
+          verb: install selected tools
+          content: echo qualified
         - name: bypass-list-unit.sh
+          origin_subsystems: [go]
+          bypass_scopes: [go]
           bypass: [BUILD, "LINK:SERVICE"]
           content: echo list-unit
+        - name: apply-network.sh
+          content: echo fallback
         - name: bypass-false.sh
+          origin_subsystems: [go]
+          bypass_scopes: [go]
           bypass: false
           content: echo false
         - name: helpers-false.sh
           helpers: false
-          bypass: LINK
+          origin_subsystems: [go]
+          bypass_scopes: [go]
           content: echo nuclear
         - name: loud-state.sh
           basedir: false
+          bypass: false
           content: printf '%s\\n' "$_cf_loud"
+        - name: macro.sh
+          basedir: false
+          bypass: false
+          helpers: [report, guard]
+          content: |
+            {{% from "_cf_action" import cf_action %}}
+            {{% call cf_action(name='macro.sh', verb='exercise macro', bypass='MACRO', subsystems=['manual']) %}}
+            echo macro
+            {{% endcall %}}
 """,
         encoding="utf-8",
     )
@@ -92,34 +115,55 @@ def test_rendered_helpers() -> None:
 
         scripts = {path.name: path.read_text(encoding="utf-8") for path in output.iterdir()}
         if set(scripts) != {
-            "plain.sh",
-            "bypass-scalar.sh",
+            "build-go.sh",
+            "install-rust.user.sh",
             "bypass-list-unit.sh",
+            "apply-network.sh",
             "bypass-false.sh",
             "helpers-false.sh",
             "loud-state.sh",
+            "macro.sh",
         }:
             raise AssertionError(f"unexpected rendered scripts: {sorted(scripts)}")
 
-        plain = scripts["plain.sh"]
-        for helper in ("env", "setopts", "loud"):
-            require(plain, f"# {helper} helper:", "plain defaults")
-        reject(plain, "# report helper:", "plain defaults")
-        reject(plain, "_cf_action_init", "plain defaults")
+        automatic = scripts["build-go.sh"]
+        require(automatic, "# report helper:", "automatic bypass")
+        require(automatic, "# guard helper:", "automatic bypass")
+        require(automatic, '_cf_guard_bypass "GO" "build"', "automatic broad")
+        require(
+            automatic,
+            '_cf_guard_bypass_unit "GO" "BUILD" "build"',
+            "automatic nested action",
+        )
+        require(
+            automatic,
+            '_cf_action_init "build-go.sh" "build" "go"',
+            "actual filename and report",
+        )
+        require(automatic, "\n_cf_action_end\n", "automatic bypass")
 
-        scalar = scripts["bypass-scalar.sh"]
-        require(scalar, "# report helper:", "scalar bypass")
-        require(scalar, "# guard helper:", "scalar bypass")
-        require(scalar, '_cf_guard_bypass "LINK" "running"', "scalar bypass")
-        require(scalar, '_cf_action_init "bypass-scalar.sh" "running"', "scalar bypass")
-        require(scalar, "\n_cf_action_end\n", "scalar bypass")
+        qualified = scripts["install-rust.user.sh"]
+        require(
+            qualified,
+            '_cf_action_init "install-rust.user.sh" "install selected tools" "rust, shared"',
+            "qualified actual filename, explicit verb, and labels",
+        )
 
         list_unit = scripts["bypass-list-unit.sh"]
-        require(list_unit, '_cf_guard_bypass "BUILD" "running"', "list bypass")
+        require(list_unit, '_cf_guard_bypass "GO" "bypass list unit"', "automatic extension")
+        require(list_unit, '_cf_guard_bypass "BUILD" "bypass list unit"', "global phase guard")
         require(
             list_unit,
-            '_cf_guard_bypass_unit "LINK" "SERVICE" "running"',
+            '_cf_guard_bypass_unit "LINK" "SERVICE" "bypass list unit"',
             "unit bypass",
+        )
+
+        fallback = scripts["apply-network.sh"]
+        require(fallback, '_cf_guard_bypass "DIRECT_TOOLS" "apply network"', "TYPE fallback broad")
+        require(
+            fallback,
+            '_cf_guard_bypass_unit "DIRECT_TOOLS" "APPLY_NETWORK" "apply network"',
+            "TYPE fallback action",
         )
 
         bypass_false = scripts["bypass-false.sh"]
@@ -135,6 +179,39 @@ def test_rendered_helpers() -> None:
         reject(nuclear, "_cf_action_init", "helpers false")
         reject(nuclear, "_cf_action_end", "helpers false")
         require(nuclear, "echo nuclear", "helpers false content")
+
+        macro = scripts["macro.sh"]
+        require(
+            macro,
+            '_cf_action_init "macro.sh" "exercise macro" "manual"',
+            "explicit macro report labels",
+        )
+        require(
+            macro,
+            '_cf_guard_bypass "MACRO" "exercise macro"',
+            "explicit macro guard remains authored",
+        )
+
+        automatic_path = output / "build-go.sh"
+        run = subprocess.run(
+            [str(automatic_path)], check=True, text=True, capture_output=True
+        )
+        if run.stdout.strip() != "automatic":
+            raise AssertionError(f"automatic run body missing: {run!r}")
+        require(run.stderr, "+ build-go.sh: build (go)", "automatic loud report")
+        skipped_env = os.environ.copy()
+        skipped_env["COMPFUZOR_GO_BYPASS"] = "1"
+        skipped = subprocess.run(
+            [str(automatic_path)],
+            check=True,
+            text=True,
+            capture_output=True,
+            env=skipped_env,
+        )
+        if skipped.stdout:
+            raise AssertionError(f"bypassed body executed: {skipped.stdout!r}")
+        require(skipped.stderr, "skipped build-go.sh:", "automatic skip report")
+        require(skipped.stderr, "(go)", "automatic skip labels")
 
         loud_state = output / "loud-state.sh"
         loud_cases = (

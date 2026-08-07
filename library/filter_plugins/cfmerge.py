@@ -666,7 +666,13 @@ VALUE_PRESETS = {
             "name": "keyed_fold",
             "options": {
                 "key": "name",
-                "concat_fields": ("early", "generated", "run_all"),
+                "concat_fields": (
+                    "early",
+                    "generated",
+                    "run_all",
+                    "origin_subsystems",
+                    "bypass_scopes",
+                ),
             },
         },
         "refines": (),

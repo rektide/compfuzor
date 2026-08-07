@@ -1,7 +1,15 @@
 #!/bin/bash
 {% set _item_helpers = item.helpers | default(none) %}
 {% set _nuclear = _item_helpers is sameas false %}
-{% set _active_bypass = item.bypass is defined and item.bypass is not sameas false and not _nuclear %}
+{% set _fallback_type = none if item.generated_by | default('') == 'gen_bins' else TYPE | default(none) %}
+{% set _disarm = item.name | resolve_bin_disarm(
+  item.origin_subsystems | default(none),
+  item.bypass_scopes | default(none),
+  item.bypass | default(none),
+  _fallback_type,
+) %}
+{% set _active_bypass = _disarm.entries | length > 0 and not _nuclear %}
+{% set _cf_verb = item.verb | default(_disarm.verb) %}
 {% set _helper_layers = [
   DEFAULT_HELPERS | default(['env', 'setopts', 'loud']),
   item.base_helpers | default(none),
@@ -34,14 +42,13 @@ cd {{DIR}}/{{item.basedir}}
 
 {% endif %}
 {% if _active_bypass %}
-{% set _cf_bypass = item.bypass if item.bypass is iterable and item.bypass is not string else [item.bypass] %}
-_cf_action_init "{{ item.name }}" "running"
-{% for _cf_entry in _cf_bypass %}
+_cf_action_init "{{ _disarm.name }}" "{{ _cf_verb }}" "{{ _disarm.report_labels }}"
+{% for _cf_entry in _disarm.entries %}
 {% if ':' in _cf_entry %}
-{% set _cf_parts = _cf_entry.split(':') %}
-if ! reason="$(_cf_run_guard 3 _cf_guard_bypass_unit "{{ _cf_parts[0] }}" "{{ _cf_parts[1] }}" "running")"; then _cf_report_skip "{{ item.name }}" "$reason"; _cf_action_end; exit 0; fi
+{% set _cf_parts = _cf_entry.split(':', 1) %}
+if ! reason="$(_cf_run_guard 3 _cf_guard_bypass_unit "{{ _cf_parts[0] }}" "{{ _cf_parts[1] }}" "{{ _cf_verb }}")"; then _cf_report_skip "{{ _disarm.name }}" "$reason" "{{ _disarm.report_labels }}"; _cf_action_end; exit 0; fi
 {% else %}
-if ! reason="$(_cf_run_guard 3 _cf_guard_bypass "{{ _cf_entry }}" "running")"; then _cf_report_skip "{{ item.name }}" "$reason"; _cf_action_end; exit 0; fi
+if ! reason="$(_cf_run_guard 3 _cf_guard_bypass "{{ _cf_entry }}" "{{ _cf_verb }}")"; then _cf_report_skip "{{ _disarm.name }}" "$reason" "{{ _disarm.report_labels }}"; _cf_action_end; exit 0; fi
 {% endif %}
 {% endfor %}
 {% endif %}
