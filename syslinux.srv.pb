@@ -73,7 +73,7 @@
 
           findmnt "$SYSLINUX_MNT_BOOT"
 
-      - name: install-kernel.sh
+      - name: install-syslinux-kernel.sh
         content: |
           "{{BINS_DIR}}/mount-boot.sh"
 
@@ -122,7 +122,7 @@
 
       - name: install-all.sh
         content: |
-          "{{BINS_DIR}}/install-kernel.sh"
+          "{{BINS_DIR}}/install-syslinux-kernel.sh"
           "{{BINS_DIR}}/install-bios.sh"
           "{{BINS_DIR}}/install-mbr.sh"
 
