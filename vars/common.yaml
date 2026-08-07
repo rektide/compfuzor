@@ -650,8 +650,8 @@ SUBSYSTEM:
       PKGS: [jq]
 
   # kernel_sysctl -- manages sysctls declared via KERNEL_SYSCTL (mapping of full
-  # dotted path -> value). build-sysctl.sh emits "<key> = <value>" to
-  # /etc/sysctl.d/<NAME>.conf; apply-sysctl.sh sets them live; status-sysctl.ts
+  # dotted path -> value). build-kernel-sysctl.sh emits "<key> = <value>" to
+  # /etc/sysctl.d/<NAME>.conf; apply-kernel-sysctl.sh sets them live; status-sysctl.ts
   # reports drift. Common guest: `kernel.panic` (panic->reboot timeout) -- declare
   # it wherever crash-testability matters (pstore/ramoops, kdump) so a panic
   # auto-reboots instead of hanging, and so status flags a regression to 0. Some
@@ -991,18 +991,18 @@ _make_bins:
       make {{ MAKE_INSTALL_TARGET|default('install') }} {{ _make_destdir_arg }}
 
 _kernel_modprobe_bins:
-  - name: build-kernel.sh
+  - name: build-kernel-modprobe.sh
     bypass: ['BUILD', 'KERNEL']
-    src: ../kernel/build-kernel.sh
+    src: ../kernel/build-kernel-modprobe.sh
     basedir: false
-  - name: install-kernel.sh
+  - name: install-kernel-modprobe.sh
     bypass: ['LINK', 'KERNEL']
-    src: ../kernel/install-kernel.sh
+    src: ../kernel/install-kernel-modprobe.sh
     basedir: false
     #run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
-  - name: apply-kernel.sh
+  - name: apply-kernel-modprobe.sh
     bypass: ['APPLY', 'KERNEL']
-    src: ../kernel/apply-kernel.sh
+    src: ../kernel/apply-kernel-modprobe.sh
     basedir: false
     #run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
   - name: detect-builtin.sh
@@ -1012,6 +1012,7 @@ _kernel_modprobe_bins:
     bypass: ['LINK', 'KERNEL']
     src: ../kernel/install-kernel-cmdline.sh
     basedir: false
+    compose: false
   - name: status-modules.ts
     src: ../kernel/status-modules.ts
     raw: True
@@ -1035,35 +1036,35 @@ _kernel_bls_bins:
     src: ../kernel/pstore-dump.sh
     basedir: false
 _kernel_sysctl_bins:
-  - name: build-sysctl.sh
+  - name: build-kernel-sysctl.sh
     bypass: ['BUILD', 'KERNEL']
-    src: ../kernel/build-sysctl.sh
+    src: ../kernel/build-kernel-sysctl.sh
     basedir: false
-  - name: install-sysctl.sh
+  - name: install-kernel-sysctl.sh
     bypass: ['LINK', 'KERNEL']
-    src: ../kernel/install-sysctl.sh
+    src: ../kernel/install-kernel-sysctl.sh
     basedir: false
     #run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
-  - name: apply-sysctl.sh
+  - name: apply-kernel-sysctl.sh
     bypass: ['APPLY', 'KERNEL']
-    src: ../kernel/apply-sysctl.sh
+    src: ../kernel/apply-kernel-sysctl.sh
     basedir: false
     #run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
   - name: status-sysctl.ts
     src: ../kernel/status-sysctl.ts
     raw: True
 _kernel_sysfs_bins:
-  - name: build-sysfs.sh
+  - name: build-kernel-sysfs.sh
     bypass: ['BUILD', 'KERNEL']
-    src: ../kernel/build-sysfs.sh
+    src: ../kernel/build-kernel-sysfs.sh
     basedir: false
-  - name: install-sysfs.sh
+  - name: install-kernel-sysfs.sh
     bypass: ['LINK', 'KERNEL']
-    src: ../kernel/install-sysfs.sh
+    src: ../kernel/install-kernel-sysfs.sh
     basedir: false
     #run: "{{ INSTALL_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
-  - name: apply-sysfs.sh
+  - name: apply-kernel-sysfs.sh
     bypass: ['APPLY', 'KERNEL']
-    src: ../kernel/apply-sysfs.sh
+    src: ../kernel/apply-kernel-sysfs.sh
     basedir: false
     #run: "{{ APPLY_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
