@@ -183,7 +183,7 @@
     - "{{ '--cluster-init' if is_bootstrap else '--server $K3S_URL' }}"
     - "{{ '--disable-agent' if not is_kubelet else '' }}"
     #- "--tls-san $CLUSTER_DOMAIN"
-    - "{{ '--tls-san '+extraDomains|listify|concat(_cluster_hosts, extraIpv4Domains)|unique|join(',') if extraDomains|default(False) else '' }}"
+    - "{{ '--tls-san ' ~ (extraDomains | merge_list(_cluster_hosts, extraIpv4Domains, preset='append') | unique | join(',')) if extraDomains|default(False) else '' }}"
     - "--cluster-domain $CLUSTER_DOMAIN"
     - "--cluster-cidr $CLUSTER_CIDR"
     - "--service-cidr $SERVICE_CIDR"

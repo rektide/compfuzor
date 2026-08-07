@@ -205,18 +205,21 @@ debugging, not production pipelines.
 
 ## Deprecated
 
-These filters have no live callers and are retained for soak time. Use the
-replacements listed below.
+These filters have no live callers and are retained for soak time, but are
+inactive. Their sources use the `.py.deprecated` suffix because Ansible's
+plugin loader discovers `*.py`; a name such as `merge.deprecated.py` would
+still load. Obsolete tests similarly use `.test.py.deprecated`, outside the
+normal `tests/filter_plugins/*.test.py` test glob. Use the replacements below.
 
 | Filter | Was | Use instead | Source |
 |---|---|---|---|
-| `arrayitize` | Coerce to list, dropping `True`/`False`/`None` | `normalize(to='list')` (iteration) or `join2` (text rendering) | [`arrayitize.py`](/library/filter_plugins/arrayitize.py) |
-| `listify` | Coerce to list / dict→items | `normalize(to='list')` or `normalize(to='items')` | [`listify.py`](/library/filter_plugins/listify.py) |
-| `concat` | Variadic list concatenation | `merge_list` | [`listify.py`](/library/filter_plugins/listify.py) |
-| `dictify` | Normalize to mapping | `normalize(to='mapping')` | [`dictify.py`](/library/filter_plugins/dictify.py) |
-| `merge_with_strategy` | Per-field strategy merger | `merge_list`/`merge_dict` with presets | [`merge_strategy.py`](/library/filter_plugins/merge_strategy.py) |
-| `mergeKeyed` | Merge two lists by key | `merge_list` with `merge_keyed` preset | [`mergeKeyed.py`](/library/filter_plugins/mergeKeyed.py) |
-| `merge_list_subsys` / `merge_dict_subsys` / `subsys_publish` | Subsystem-scoped merge/publish | `merge_list`/`merge_dict` (direct calls) | [`merge.py`](/library/filter_plugins/merge.py) |
+| `arrayitize` | Coerce to list, dropping `True`/`False`/`None` | `normalize(to='list')` (iteration) or `join2` (text rendering) | [`arrayitize.py.deprecated`](/library/filter_plugins/arrayitize.py.deprecated) |
+| `listify` | Coerce to list / dict→items | `normalize(to='list')` or `normalize(to='items')` | [`listify.py.deprecated`](/library/filter_plugins/listify.py.deprecated) |
+| `concat` | Variadic list concatenation | `merge_list` | [`listify.py.deprecated`](/library/filter_plugins/listify.py.deprecated) |
+| `dictify` | Normalize to mapping | `normalize(to='mapping')` | [`dictify.py.deprecated`](/library/filter_plugins/dictify.py.deprecated) |
+| `merge_with_strategy` | Per-field strategy merger | `merge_list`/`merge_dict` with presets | [`merge_strategy.py.deprecated`](/library/filter_plugins/merge_strategy.py.deprecated) |
+| `mergeKeyed` | Merge two lists by key | `merge_list` with `merge_keyed` preset | [`mergeKeyed.py.deprecated`](/library/filter_plugins/mergeKeyed.py.deprecated) |
+| `merge_list_subsys` / `merge_dict_subsys` / `subsys_publish` | Subsystem-scoped merge/publish | `merge_list`/`merge_dict` (direct calls) | [`merge.py.deprecated`](/library/filter_plugins/merge.py.deprecated) |
 
 ---
 
@@ -242,10 +245,9 @@ replacements listed below.
 | [`rejectAny.py`](/library/filter_plugins/rejectAny.py) | `rejectAny` | active |
 | [`unsafety.py`](/library/filter_plugins/unsafety.py) | `unsafety` | active |
 | [`zim_fragment.py`](/library/filter_plugins/zim_fragment.py) | `zim_fragment` | active |
-| [`arrayitize.py`](/library/filter_plugins/arrayitize.py) | `arrayitize` | **deprecated** |
-| [`listify.py`](/library/filter_plugins/listify.py) | `listify`, `concat` | **deprecated** |
-| [`dictify.py`](/library/filter_plugins/dictify.py) | `dictify` | **deprecated** |
-| [`merge.py`](/library/filter_plugins/merge.py) | `merge_list_subsys`, `merge_dict_subsys`, `subsys_publish` | **deprecated** |
-| [`mergeKeyed.py`](/library/filter_plugins/mergeKeyed.py) | `mergeKeyed` | **deprecated** |
-| [`merge_strategy.py`](/library/filter_plugins/merge_strategy.py) | `merge_with_strategy` | **deprecated** |
-
+| [`arrayitize.py.deprecated`](/library/filter_plugins/arrayitize.py.deprecated) | `arrayitize` | **deprecated, disabled** |
+| [`listify.py.deprecated`](/library/filter_plugins/listify.py.deprecated) | `listify`, `concat` | **deprecated, disabled** |
+| [`dictify.py.deprecated`](/library/filter_plugins/dictify.py.deprecated) | `dictify` | **deprecated, disabled** |
+| [`merge.py.deprecated`](/library/filter_plugins/merge.py.deprecated) | `merge_list_subsys`, `merge_dict_subsys`, `subsys_publish` | **deprecated, disabled** |
+| [`mergeKeyed.py.deprecated`](/library/filter_plugins/mergeKeyed.py.deprecated) | `mergeKeyed` | **deprecated, disabled** |
+| [`merge_strategy.py.deprecated`](/library/filter_plugins/merge_strategy.py.deprecated) | `merge_with_strategy` | **deprecated, disabled** |

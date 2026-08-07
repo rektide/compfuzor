@@ -4,12 +4,16 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'library', 'lookup_plugins'))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'library', 'filter_plugins'))
 
 from subsys import (
     _compute_state,
 )
 
-from merge import _raw_copy_template_data, _dict_get_raw
+from template_data import (
+    dict_get_raw as _dict_get_raw,
+    raw_copy_template_data as _raw_copy_template_data,
+)
 
 passed = 0
 failed = 0
