@@ -212,6 +212,85 @@ def test_subsystem_groups_into_subcompositor():
     )
 
 
+def test_kernel_leaf_names_create_pure_subsystem_compositors():
+    leaves = [
+        {"name": "build-kernel-modprobe.sh", "subsystem": "kernel"},
+        {"name": "install-kernel-modprobe.sh", "subsystem": "kernel"},
+        {"name": "apply-kernel-modprobe.sh", "subsystem": "kernel"},
+        {
+            "name": "install-kernel-cmdline.sh",
+            "subsystem": "kernel",
+            "compose": False,
+        },
+        {"name": "build-kernel-sysctl.sh", "subsystem": "kernel"},
+        {"name": "install-kernel-sysctl.sh", "subsystem": "kernel"},
+        {"name": "apply-kernel-sysctl.sh", "subsystem": "kernel"},
+        {"name": "build-kernel-sysfs.sh", "subsystem": "kernel"},
+        {"name": "install-kernel-sysfs.sh", "subsystem": "kernel"},
+        {"name": "apply-kernel-sysfs.sh", "subsystem": "kernel"},
+        {"name": "install-kernel-params.sh", "subsystem": "kernel"},
+        {"name": "install-kernel-bls.sh", "subsystem": "kernel"},
+    ]
+
+    result = bin_composers(leaves)
+    by_name = {compositor["name"]: compositor for compositor in result}
+    check(
+        "kernel hierarchy emits pure subsystem and scope compositors",
+        list(by_name),
+        [
+            "build-kernel.sh",
+            "install-kernel.sh",
+            "apply-kernel.sh",
+            "build.sh",
+            "install.sh",
+            "apply.sh",
+        ],
+    )
+    check(
+        "kernel build compositor owns qualified leaves",
+        by_name["build-kernel.sh"]["run_all"],
+        [
+            "build-kernel-modprobe.sh",
+            "build-kernel-sysctl.sh",
+            "build-kernel-sysfs.sh",
+        ],
+    )
+    check(
+        "kernel install compositor owns qualified leaves in contribution order",
+        by_name["install-kernel.sh"]["run_all"],
+        [
+            "install-kernel-modprobe.sh",
+            "install-kernel-sysctl.sh",
+            "install-kernel-sysfs.sh",
+            "install-kernel-params.sh",
+            "install-kernel-bls.sh",
+        ],
+    )
+    check(
+        "kernel apply compositor owns qualified leaves",
+        by_name["apply-kernel.sh"]["run_all"],
+        [
+            "apply-kernel-modprobe.sh",
+            "apply-kernel-sysctl.sh",
+            "apply-kernel-sysfs.sh",
+        ],
+    )
+    check(
+        "scope compositors call only kernel compositors",
+        [
+            by_name["build.sh"]["run_all"],
+            by_name["install.sh"]["run_all"],
+            by_name["apply.sh"]["run_all"],
+        ],
+        [["build-kernel.sh"], ["install-kernel.sh"], ["apply-kernel.sh"]],
+    )
+    check(
+        "reserved compositor names are not authored leaves",
+        any(leaf["name"] in by_name for leaf in leaves),
+        False,
+    )
+
+
 def test_subsystem_single_leaf_stays_direct():
     # A subsystem with only one leaf in an action/scope emits no compositor;
     # the leaf stays a direct child of the scope compositor (no self-wrapper).
@@ -252,5 +331,6 @@ if __name__ == "__main__":
     test_composes_apply_actions()
     test_build_install_apply_coexist()
     test_subsystem_groups_into_subcompositor()
+    test_kernel_leaf_names_create_pure_subsystem_compositors()
     test_subsystem_single_leaf_stays_direct()
     test_actions_override()
