@@ -2,8 +2,8 @@
 - name: "Create {{include|upper}} directories & files, source temporary facts"
   set_fact:
   args:
-    _dir: "{{FS_CONTAINERED|default(False)|ternary(relative, fsh)}}"
-    _link: "{{FS_CONTAINERED|default(False)|ternary(fsh, relative)}}"
+    _dir: "{{FS_CONTAINERED|truthy|ternary(relative, fsh)}}"
+    _link: "{{FS_CONTAINERED|truthy|ternary(fsh, relative)}}"
     _upper: "{{upper}}"
     _vals: "{{vals}}"
     _stat:

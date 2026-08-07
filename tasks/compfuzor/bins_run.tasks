@@ -1,6 +1,6 @@
 ---
 - name: "Compfuzor: run all `BINS` that have an `args` or `run`"
-  shell: "chdir={{ DIR+'/' if item.pwd|default('/')|truncate(1, 1, end='') != '/' else ''  }}{{item.pwd|default(DIR)}} {{ (item.exec|default('') if not item.dest|default(item.name)|default(False) else BINS_DIR+'/'+item.dest|default(item.name)) }}{{ ' '+item.args if item.args is deftruthy else '' }}"
-  when: "item.args is deftruthy or item.run is deftruthy or item.become is deftruthy or (item.exec is deftruthy and not item.dest|default(item.name|default(False)))"
+  shell: "chdir={{ DIR+'/' if item.pwd|def('/')|truncate(1, 1, end='') != '/' else ''  }}{{item.pwd|def(DIR)}} {{ (item.exec|def('') if not item.dest|def(item.name, False) else BINS_DIR+'/'+item.dest|def(item.name)) }}{{ ' '+item.args if item.args is deftruthy else '' }}"
+  when: "item.args is deftruthy or item.run is deftruthy or item.become is deftruthy or (item.exec is deftruthy and not item.dest|def(item.name, False))"
   with_items: "{{ BINS|normalize(to='list') }}"
-  become: "{{ item.become|default(item.sudo) if item.become|default(item.sudo)|default(False) else False }}"
+  become: "{{ item.become|def(item.sudo) if item.become|def(item.sudo, False) else False }}"
