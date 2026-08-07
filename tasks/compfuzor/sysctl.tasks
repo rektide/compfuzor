@@ -2,7 +2,7 @@
 # /etc/sysctl.d/81-*.conf directly via lineinfile/template links.
 # New playbooks should use the gen_kernel subsystem instead: set
 # KERNEL_SYSCTL (a mapping) to activate the kernel_sysctl leaf, which
-# contributes kernel.sysctl.json plus build/install/apply-sysctl.sh.
+# contributes kernel.sysctl.json plus build/install/apply-kernel-sysctl.sh.
 # See tasks/compfuzor/gen_kernel.tasks and zswap.etc.pb for an example.
 - file: path="{{SYSCTL_DIR}}" state=directory
 - template: src="files/{{TYPE}}/{{item}}" dest="{{SYSCTL_DIR}}/{{item}}"

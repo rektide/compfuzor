@@ -25,13 +25,13 @@ def check(name, actual, expected):
 
 def test_build_install_bins_normal():
     print("\nbuild_install_bins: normal stem")
-    result = build_install_bins("sysctl")
+    result = build_install_bins("kernel-sysctl")
     expected = {
         "build_bins": [
-            {"name": "build-sysctl.sh", "src": "../kernel/build-sysctl.sh", "basedir": False}
+            {"name": "build-kernel-sysctl.sh", "src": "../kernel/build-kernel-sysctl.sh", "basedir": False}
         ],
         "install_bins": [
-            {"name": "install-sysctl.sh", "src": "../kernel/install-sysctl.sh", "basedir": False}
+            {"name": "install-kernel-sysctl.sh", "src": "../kernel/install-kernel-sysctl.sh", "basedir": False}
         ],
     }
     check("normal stem produces correct entries", result, expected)
@@ -45,7 +45,7 @@ def test_build_install_bins_empty():
 
 def test_build_install_bins_basedir():
     print("\nbuild_install_bins: basedir=True")
-    result = build_install_bins("kernel", basedir=True)
+    result = build_install_bins("kernel-modprobe", basedir=True)
     check(
         "basedir flag forwarded",
         result["build_bins"][0]["basedir"],

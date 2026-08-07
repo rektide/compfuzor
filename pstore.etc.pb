@@ -25,7 +25,7 @@
          that reservation. On a modular kernel, ramoops loads from initramfs
          before `/etc/modprobe.d/` is parsed, so these MUST reach it via the
          kernel cmdline. The `force_cmdline: True` flag on each entry tells
-         `install-kernel.sh` to use the cmdline path (not modprobe.d)
+         `install-kernel-modprobe.sh` to use the cmdline path (not modprobe.d)
          regardless of built-in detection.
 
       3. **`pstore.backend=ramoops`** plus **blacklist efi_pstore**. pstore
@@ -61,7 +61,8 @@
       make this safe and hands-off:
 
       1. **`kernel.panic` > 0** -- declared below via `KERNEL_SYSCTL`, so it is
-         persisted (`install-sysctl.sh`), applied live (`apply-sysctl.sh`), and
+         persisted (`install-kernel-sysctl.sh`), applied live
+         (`apply-kernel-sysctl.sh`), and
          drift-checked (`status-sysctl.ts`). With the default `0` a panic *hangs
          forever* and you must hold the power button to recover; with it set, the
          kernel auto-reboots after N seconds, so the test is unattended and
@@ -130,7 +131,7 @@
     KERNEL_PARAMS:
       - "memmap={{RAMOOPS_MEM_SIZE}}${{RAMOOPS_MEM_ADDRESS}}"
 
-    # force_cmdline: True on each entry forces install-kernel.sh to emit
+    # force_cmdline: True on each entry forces install-kernel-modprobe.sh to emit
     # these on /etc/kernel/cmdline (as <module>.<param>=<value> tokens) even
     # though ramoops and pstore are modular — modprobe.d is too late for
     # them, since ramoops loads from initramfs and pstore.backend is read
@@ -160,8 +161,9 @@
     # Declared (not optional) for two reasons: (1) crash-testing -- with 0 an
     # `echo c` panic hangs and you must power-cycle; with >0 the box self-reboots
     # unattended and ramoops still flushes at panic time. (2) drift visibility --
-    # declaring it makes status-sysctl.ts flag a regression to 0. install-sysctl.sh
-    # persists it to /etc/sysctl.d; apply-sysctl.sh sets it live. A boot-floor
+    # declaring it makes status-sysctl.ts flag a regression to 0.
+    # install-kernel-sysctl.sh persists it to /etc/sysctl.d;
+    # apply-kernel-sysctl.sh sets it live. A boot-floor
     # cmdline token (`panic=N` via KERNEL_PARAMS) is a redundant option if you
     # want it set before any apply runs; sysctl alone is enough here.
     KERNEL_SYSCTL:
@@ -187,10 +189,10 @@
 
     # Applying is done via the auto-generated compositor:
     #   sudo "$DIR/bin/install.sh"
-    # which runs install-kernel.sh (module params via force_cmdline),
-    # install-kernel-cmdline.sh (<module>.<param>=<value> tokens),
-    # install-kernel-params.sh (the raw memmap= token from KERNEL_PARAMS), and
-    # install-sysctl.sh (kernel.panic -> /etc/sysctl.d).
+    # which runs the pure install-kernel.sh compositor. Its children include
+    # install-kernel-modprobe.sh (conditionally invokes install-kernel-cmdline.sh
+    # for force_cmdline module params), install-kernel-params.sh (the raw
+    # memmap= token), and install-kernel-sysctl.sh (kernel.panic persistence).
     # No SYSTEMD service: pstore only writes /etc/kernel/cmdline + a sysctl drop;
     # a reboot or `sudo kernel-install` propagates cmdline to BLS entries.
 

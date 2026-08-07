@@ -8,7 +8,7 @@
 //   --compfuzor [FILE]  DESIRED   rebuilt from the playbook JSON ($KERNEL_SYSCTL_JSON).
 //                                 Defines the key set together with --system.
 //   --system [FILE]     DEPLOYED  system-installed conf (/etc/sysctl.d/<NAME>.conf),
-//                                 where install-sysctl.sh links it. NAME = basename($DIR).
+//                                 where install-kernel-sysctl.sh links it. NAME = basename($DIR).
 //                                 Missing file => every value <missing> ("install
 //                                 advised"); not an error.
 //   --kernel            LIVE      current values via `sysctl -n`; per-key lookup.
@@ -32,7 +32,7 @@ const ALL: Source[] = ["compfuzor", "system", "kernel"];
 // $DIR is the project root (e.g. /etc/opt/fs-inotify-main). Prefer the env
 // (set when run via a wrapped bin); otherwise derive it from this script's
 // own location ($DIR/bin/status-sysctl.ts), so it works with no env wrapper.
-// NAME is the project name; install-sysctl.sh installs to /etc/sysctl.d/<NAME>.conf.
+// NAME is the project name; install-kernel-sysctl.sh installs the system file.
 const DIR = process.env.DIR ?? dirname(dirname(fileURLToPath(import.meta.url)));
 const NAME = process.env.NAME ?? basename(DIR);
 const DEFAULTS: Record<Source, string> = {

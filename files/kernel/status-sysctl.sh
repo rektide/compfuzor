@@ -10,7 +10,7 @@
 # It compares three representations of your sysctl intent and flags desync:
 #
 #   --compfuzor [F]  DESIRED   values freshly compiled from the playbook JSON
-#                              (what build-sysctl.sh *would* write). Source of
+#                              (what build-kernel-sysctl.sh *would* write). Source of
 #                              truth and preferred key-of-record.
 #                              Default F: $KERNEL_SYSCTL_JSON.
 #   --system [F]     DEPLOYED  the on-disk built conf. A missing file reads as
@@ -38,7 +38,7 @@
 # With no source flags, all three sources are compared (default = "all"), and
 # the status is printed — so a bare `status-sysctl.sh` is the show-all report.
 #
-# The DESIRED projection mirrors build-sysctl.sh; keep the two in sync so
+# The DESIRED projection mirrors build-kernel-sysctl.sh; keep the two in sync so
 # DESIRED always equals what build emits.
 
 # --- short help ------------------------------------------------------------
@@ -107,7 +107,7 @@ fi
 declare -A v_cf v_sys v_kr
 
 # DESIRED: compiled straight from the JSON. Unreadable/missing is a hard
-# error (source of truth). jq projection == build-sysctl.sh, tab-separated.
+# error (source of truth). Projection matches build-kernel-sysctl.sh.
 if [ "$want_cf" -eq 1 ]; then
   [ -n "$json_file" ] || die "--compfuzor needs KERNEL_SYSCTL_JSON or a FILE argument"
   [ -r "$json_file" ] || die "cannot read json: $json_file"

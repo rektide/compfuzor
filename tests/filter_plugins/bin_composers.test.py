@@ -17,8 +17,8 @@ def test_composes_unscoped_actions():
     result = bin_composers(
         [
             {"name": "build.sh"},
-            {"name": "build-kernel.sh"},
-            {"name": "install-kernel.sh"},
+            {"name": "build-app.sh"},
+            {"name": "install-app.sh"},
         ]
     )
     check(
@@ -29,14 +29,14 @@ def test_composes_unscoped_actions():
                 "name": "build.sh",
                 "action": "build",
                 "generated_by": "gen_bins",
-                "run_all": ["build-kernel.sh"],
+                "run_all": ["build-app.sh"],
                 "base_helpers": ["env", "setopts", "loud"],
             },
             {
                 "name": "install.sh",
                 "action": "install",
                 "generated_by": "gen_bins",
-                "run_all": ["install-kernel.sh"],
+                "run_all": ["install-app.sh"],
                 "base_helpers": ["env", "setopts", "loud"],
             },
         ],
@@ -139,9 +139,9 @@ def test_compose_false_excludes_library_scripts():
 def test_composes_apply_actions():
     result = bin_composers(
         [
-            {"name": "apply-kernel.sh"},
-            {"name": "apply-sysctl.sh"},
-            {"name": "apply-sysfs.sh"},
+            {"name": "apply-cache.sh"},
+            {"name": "apply-network.sh"},
+            {"name": "apply-storage.sh"},
         ]
     )
     check(
@@ -152,7 +152,7 @@ def test_composes_apply_actions():
                 "name": "apply.sh",
                 "action": "apply",
                 "generated_by": "gen_bins",
-                "run_all": ["apply-kernel.sh", "apply-sysctl.sh", "apply-sysfs.sh"],
+                "run_all": ["apply-cache.sh", "apply-network.sh", "apply-storage.sh"],
                 "base_helpers": ["env", "setopts", "loud"],
             },
         ],
@@ -162,9 +162,9 @@ def test_composes_apply_actions():
 def test_build_install_apply_coexist():
     result = bin_composers(
         [
-            {"name": "build-kernel.sh"},
-            {"name": "install-kernel.sh"},
-            {"name": "apply-kernel.sh"},
+            {"name": "build-project.sh"},
+            {"name": "install-project.sh"},
+            {"name": "apply-project.sh"},
             {"name": "apply-patches.sh"},
         ]
     )
@@ -174,7 +174,7 @@ def test_build_install_apply_coexist():
     check(
         "apply compositor aggregates all apply scripts",
         apply_c["run_all"],
-        ["apply-kernel.sh", "apply-patches.sh"],
+        ["apply-project.sh", "apply-patches.sh"],
     )
 
 

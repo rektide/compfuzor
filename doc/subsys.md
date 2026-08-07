@@ -217,17 +217,15 @@ The [`bin_composers`](../library/filter_plugins/bin_composers.py) filter:
    script's own content.
 
 ```yaml
-# Input BINS:
-- name: build.sh          # user's base build script
-  content: make install
-- name: build-kernel.sh   # child contributed by kernel subsystem
-  generated: ...
+# Input BINS (both tagged subsystem: kernel):
+- name: build-kernel-modprobe.sh
+- name: build-kernel-sysctl.sh
 
-# After gen_bins, build.sh becomes:
-# name: build.sh
-# content: make install
-# run_all: [build-kernel.sh]
-# The rendered script runs `make install`, then invokes build-kernel.sh.
+# After gen_bins:
+- name: build-kernel.sh
+  run_all: [build-kernel-modprobe.sh, build-kernel-sysctl.sh]
+- name: build.sh
+  run_all: [build-kernel.sh]
 ```
 
 ### Scope

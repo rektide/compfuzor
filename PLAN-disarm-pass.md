@@ -57,7 +57,7 @@ Survey of contributors (from [`doc/subsys.md`](doc/subsys.md) file map + grep):
 | `gen_zim` | `install-user-zimfw.sh` | yes (inline) |
 | `gen_link` prototype (gdm-no-suspend) | `build-link.sh`, `install-link.sh` | yes (inline) |
 | `gen_go` / `gen_nodejs` / `gen_bun` / `gen_rust` / `gen_python` / `gen_npm` / `gen_bazel` / `gen_cmake` / `gen_make` | `build-<lang>.sh`, `install-<lang>.sh` | **no** |
-| `gen_kernel` (modprobe/sysctl/sysfs/params/bls) | `build-kernel.sh`, `install-kernel.sh`, `apply-kernel.sh`, `build-sysctl.sh`, … | **no** |
+| `gen_kernel` (modprobe/sysctl/sysfs/params/bls) | `build-kernel-modprobe.sh`, `install-kernel-sysctl.sh`, `apply-kernel-sysfs.sh`, … | **partially migrated; inventory pending** |
 | `vars_systemd_unit` | `install-service*.sh`, `install-socket*.sh`, `install-unit.sh`, `install-dropin.sh` | **divergent vocab** (see below) |
 | playbook-authored `content:` BINS | across the tree | **mostly no** |
 
@@ -146,9 +146,9 @@ all kernel action scripts, plus the leaf concern for granularity:
 
 | Leaf | Scripts | `bypass:` |
 |---|---|---|
-| `_kernel_modprobe_bins` | `build-kernel.sh`, `install-kernel.sh`, `apply-kernel.sh`, `install-kernel-cmdline.sh` | `['KERNEL', 'KERNEL_MODPROBE']` |
-| `_kernel_sysctl_bins` | `build-sysctl.sh`, `install-sysctl.sh`, `apply-sysctl.sh` | `['KERNEL', 'KERNEL_SYSCTL']` |
-| `_kernel_sysfs_bins` | `build-sysfs.sh`, `install-sysfs.sh`, `apply-sysfs.sh` | `['KERNEL', 'KERNEL_SYSFS']` |
+| `_kernel_modprobe_bins` | `build-kernel-modprobe.sh`, `install-kernel-modprobe.sh`, `apply-kernel-modprobe.sh`, `install-kernel-cmdline.sh` | `['KERNEL', 'KERNEL_MODPROBE']` |
+| `_kernel_sysctl_bins` | `build-kernel-sysctl.sh`, `install-kernel-sysctl.sh`, `apply-kernel-sysctl.sh` | `['KERNEL', 'KERNEL_SYSCTL']` |
+| `_kernel_sysfs_bins` | `build-kernel-sysfs.sh`, `install-kernel-sysfs.sh`, `apply-kernel-sysfs.sh` | `['KERNEL', 'KERNEL_SYSFS']` |
 | `_kernel_params_bins` | `install-kernel-params.sh` | `['KERNEL', 'KERNEL_PARAMS']` |
 | `_kernel_bls_bins` | `install-kernel-bls.sh` | `['KERNEL', 'KERNEL_BLS']` |
 

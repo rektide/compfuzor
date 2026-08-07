@@ -7,10 +7,10 @@ def build_install_bins(stem, basedir=False, src_root="../kernel"):
     """Return standard build/install bin entries for a stem.
 
     Example:
-    - stem: "sysctl"
-      -> build-sysctl.sh / install-sysctl.sh
-    - stem: "kernel"
-      -> build-kernel.sh / install-kernel.sh
+    - stem: "kernel-sysctl"
+      -> build-kernel-sysctl.sh / install-kernel-sysctl.sh
+    - stem: "kernel-modprobe"
+      -> build-kernel-modprobe.sh / install-kernel-modprobe.sh
     """
     stem_text = str(stem).strip()
     if not stem_text:

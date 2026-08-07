@@ -54,7 +54,7 @@ emits canonical entry points whose `run_all` lists invoke child scripts.
 
 ```jinja2
 BINS: "{{ BINS | bin_composers }}"
-# build.sh + build-kernel.sh -> build.sh with run_all: [build-kernel.sh]
+# build-kernel-{modprobe,sysctl}.sh -> build-kernel.sh -> build.sh
 # install.sh + install-user.sh -> install.sh + install-user.sh (scoped)
 ```
 
