@@ -75,6 +75,8 @@ preset name. Each positional arg is one layer; `preset=` is always keyword-only.
 | `merge_dict` | `(*layers, preset='overlay', skip_layers=..., get=None)` | Merge variadic mapping layers through a preset (`overlay`, `tool_versions_overlay`). Later layers win. | **tolerates undefined/None** — same skip behavior. | [`cfmerge.py`](/library/filter_plugins/cfmerge.py) |
 | `merge_fields` | `(records, *, profile, get=None)` | Merge records using a recursively nested field profile. | **tolerates undefined/None** — absent records skipped. | [`cfmerge.py`](/library/filter_plugins/cfmerge.py) |
 | `combine_iff` | `(base, *overlays)` | Like Ansible's `combine` but silently skips undefined values. Eliminates `({'k': v} if v is defined else {}) | combine(...)` boilerplate. | **tolerates undefined** — undefined overlays and values skipped. | [`cfmerge.py`](/library/filter_plugins/cfmerge.py) |
+| `annotate_bins` | `(records, origin_subsystem, bypass_scope=None, subsystem=None)` | Add mergeable disarm provenance/scope metadata to manual BINS aggregations. | **tolerates undefined/None** — returns `[]`. | [`bin_disarm.py`](/library/filter_plugins/bin_disarm.py) |
+| `resolve_bin_disarm` | `(name, origin_subsystems=None, bypass_scopes=None, bypass=None, fallback_type=None)` | Resolve canonical action, effective guards, derived verb, and report labels. | Optional metadata may be undefined/None; unusable shapes raise. | [`bin_disarm.py`](/library/filter_plugins/bin_disarm.py) |
 | `ignore_empty` | `(obj)` | Strip keys whose value is `None` or `''` from a dict. | Raises on undefined — input must be a defined mapping. | [`ignore_empty.py`](/library/filter_plugins/ignore_empty.py) |
 
 **Examples**
@@ -228,6 +230,7 @@ normal `tests/filter_plugins/*.test.py` test glob. Use the replacements below.
 | File | Registered filters | Status |
 |---|---|---|
 | [`cfmerge.py`](/library/filter_plugins/cfmerge.py) | `normalize`, `merge_list`, `merge_dict`, `merge_fields`, `combine_iff`, `join2` | active |
+| [`bin_disarm.py`](/library/filter_plugins/bin_disarm.py) | `annotate_bins`, `canonical_bin_action`, `resolve_bin_disarm` | active |
 | [`each.py`](/library/filter_plugins/each.py) | `tag_each` | active |
 | [`when.py`](/library/filter_plugins/when.py) | `when`, `whenAnd` | active |
 | [`template_render.py`](/library/filter_plugins/template_render.py) | `resolve` | active |

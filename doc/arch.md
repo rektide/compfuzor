@@ -587,12 +587,13 @@ Current profile:
 
 | Profile | Purpose |
 |---|---|
-| `bins_generated` | merge `BINS` by `name` while concatenating `early`, `generated`, and `run_all` fields |
+| `bins_generated` | merge `BINS` by `name` while concatenating body fields and automatic disarm metadata |
 
 `BINS` is special because multiple subsystems commonly contribute to the same
 script name (`build.sh`, `install.sh`). Appending the list is not enough. The
-usual behavior is a keyed merge by `name`, with `early`, `generated`, and
-`run_all` concatenated in producer order.
+usual behavior is a keyed merge by `name`, with `early`, `generated`,
+`run_all`, `origin_subsystems`, and `bypass_scopes` concatenated in producer
+order.
 
 `early` holds pre-build hooks (e.g. `mise install`). `generated` is the
 script body. `run_all` lists child scripts to invoke after the body. The

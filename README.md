@@ -29,7 +29,8 @@ The filter input is the first layer and positional arguments are later layers.
 Common list presets include `append`, `append_unique`, `merge_keyed`, and
 `bins_generated`; common mapping presets include `overlay` and
 `tool_versions_overlay`. `bins_generated` merges BINS by `name` and
-concatenates `early`, `generated`, and `run_all` across collisions.
+concatenates `early`, `generated`, `run_all`, `origin_subsystems`, and
+`bypass_scopes` across collisions.
 
 Related active filters include:
 
@@ -46,6 +47,11 @@ Related active filters include:
 per-bin `base_helpers` and `helpers` add layers, while `helpers: false` is the
 nuclear opt-out. [`resolve_helpers`](/library/filter_plugins/helpers.py)
 deduplicates dependencies and emits helpers in canonical order.
+
+[`resolve_bin_disarm`](/library/filter_plugins/bin_disarm.py) derives broad and
+nested action guards from mergeable subsystem metadata. Explicit `bypass`
+extends automatic policy, `bypass: false` disables it, and direct `.sh` records
+fall back to TYPE. Generated compositors remain unguarded parent runners.
 
 [`bin_composers`](/library/filter_plugins/bin_composers.py) builds action
 compositor bins from explicitly named scripts. It recognizes `build*.sh`,

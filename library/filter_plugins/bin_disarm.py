@@ -186,7 +186,9 @@ def resolve_bin_disarm(
         token for scope in canonical_scopes for token in scope.split("_") if token
     }
     action_tokens = [
-        token for token in canonical_name.split("_") if token and token not in scope_tokens
+        token
+        for token in canonical_name.split("_")
+        if token and token not in scope_tokens
     ]
     action = "_".join(action_tokens)
 

@@ -77,8 +77,8 @@ into host globals (`BINS`, `ENV`, `PKGS`, etc.) via `merge_subsys`.
 
 ## BINS merge behavior
 
-`BINS` uses the `bins_generated` merge profile from
-[`merge.py`](../library/filter_plugins/merge.py). It merges entries by `name`
+`BINS` uses the `bins_generated` merge preset from
+[`cfmerge.py`](../library/filter_plugins/cfmerge.py). It merges entries by `name`
 and concatenates these fields across overlapping entries:
 
 | Concat field | Rendered by | Purpose |
@@ -86,9 +86,52 @@ and concatenates these fields across overlapping entries:
 | `early` | [`files/_bin`](../files/_bin) before generated content | Pre-build hooks (e.g. `mise install`) |
 | `generated` | [`files/_bin`](../files/_bin) main body | The script's primary work |
 | `run_all` | [`files/_bin`](../files/_bin) after generated content | Child script invocations |
+| `origin_subsystems` | disarm resolver/reporting | Contributing subsystem IDs |
+| `bypass_scopes` | disarm resolver/guards | Broad shell guard concerns |
 
 Non-concat fields follow standard `merge_keyed` behavior: the incoming record
 wins on key conflicts.
+
+## Automatic bin disarm
+
+`merge_subsys` automatically annotates active incoming BINS. No routine
+`bypass_scope` field is authored on subsystem records. Scope precedence is:
+
+1. explicit `domain=` passed to `merge_subsys`;
+2. `SUBSYSTEM.<id>.domain`;
+3. the subsystem ID.
+
+`origin_subsystems` always records the subsystem ID. The independent
+`subsystem` BINS field still controls compositor grouping and is never used as
+provenance.
+
+[`resolve_bin_disarm`](../library/filter_plugins/bin_disarm.py) canonicalizes
+the actual script basename by removing final `.sh` and an earlier dot qualifier,
+replacing non-alphanumeric runs with `_`, and uppercasing. It removes tokens
+already represented by the broad scope when deriving the nested action:
+
+| Input | Scope | Action | Automatic entries |
+|---|---|---|---|
+| `build-go.sh` | `GO` | `BUILD` | `GO`, `GO:BUILD` |
+| `install-kernel-cmdline.sh` | `KERNEL` | `INSTALL_CMDLINE` | `KERNEL`, `KERNEL:INSTALL_CMDLINE` |
+| `install-rust.user.sh` | `RUST` | `INSTALL` | `RUST`, `RUST:INSTALL` |
+
+Explicit `bypass` scalar/list entries extend automatic entries, preserving
+useful global phase guards. `bypass: false` disables both automatic and explicit
+outer guards. `helpers: false` remains nuclear and emits no helpers or wrapper.
+For direct unannotated `.sh` records, TYPE is the fallback broad scope. Generated
+compositors receive no TYPE fallback; children guard themselves. Sourced/library
+scripts must use `bypass: false` when an outer guard's `exit 0` would be unsafe.
+
+Normal `_bin` reporting is:
+
+```text
++ <actual-script-name>: <derived-or-item.verb> (<origin subsystem labels>)
+```
+
+Parentheses are omitted without labels. Derived verbs are canonical action
+tokens lowercased and space-separated. Init and skip reports carry the same
+actual filename and labels.
 
 ## Action runner: `_cf_action`
 
@@ -100,17 +143,17 @@ replacing ad-hoc bypass checks and inline progress reporting.
 ### Shell primitives
 
 Provided by the **`report` and `guard` helpers** (see
-[`files/_helpers/`](../files/_helpers)); pulled into any bin that sets `bypass:`
-(the bypass behavior implies `report` + `guard`), or any bin that declares
+[`files/_helpers/`](../files/_helpers)); pulled into any bin with effective
+automatic or explicit guards, or any bin that declares
 `helpers: [report, guard]`. The loud/quiet gate (`_cf_loud`, from the `loud`
 helper, emitted near the top of [`files/_bin`](../files/_bin)) controls all
 progress output — loud unless `COMPFUZOR_QUIET` is set or `V=0`.
 
 | Primitive | Purpose |
 |---|---|
-| `_cf_action_init <name> <verb>` | Print `+ name: verb` to stderr if loud |
+| `_cf_action_init <name> <verb> [labels]` | Print `+ name: verb (labels)` to stderr if loud |
 | `_cf_action_end` | Print `complete` to stderr if loud |
-| `_cf_report_skip <name> <reason>` | Print `skipped name: reason` to stderr if loud |
+| `_cf_report_skip <name> <reason> [labels]` | Print `skipped name: reason (labels)` to stderr if loud |
 | `_cf_run_guard <mode> <argv...>` | Core evaluator — silent = proceed, output = skip |
 | `_cf_guard_bypass <concern> [verb]` | Guard: skip if `COMPFUZOR_<CONCERN>_BYPASS` set |
 | `_cf_guard_bypass_unit <concern> <unit> [verb]` | Guard: skip if `COMPFUZOR_<CONCERN>_<UNIT>_BYPASS` set |
@@ -141,7 +184,8 @@ is a warn-and-skip guard.
 
 | Audience | Entry point | Shape |
 |---|---|---|
-| Playbook author writing shell | `bypass:` BINS field | Scalar or list; `files/_bin` wraps the body |
+| Standard subsystem BINS | automatic merge metadata | Broad and nested guards derived by `files/_bin` |
+| Playbook author extending policy | `bypass:` BINS field | Scalar or list; extends automatic entries |
 | Subsystem author writing Jinja | `{% call cf_action(...) %}` macro | [`files/_cf_action`](../files/_cf_action) |
 | Subsystem needing custom guards | macro's `guards=[...]` param | Any shell command, evaluated per mode |
 
@@ -153,7 +197,8 @@ templates:
 ```jinja
 {% from "_cf_action" import cf_action %}
 {% call cf_action(name='build-kernel', verb='rebuild kernel',
-                  bypass=['KERNEL'], guards=['command -v gcc']) %}
+                  bypass=['KERNEL'], guards=['command -v gcc'],
+                  subsystems=['kernel']) %}
 make -C "${KERNEL_SRC}" modules_install
 {% endcall %}
 ```
@@ -161,9 +206,9 @@ make -C "${KERNEL_SRC}" modules_install
 Renders to:
 
 ```sh
-_cf_action_init "build-kernel" "rebuild kernel"
-if ! reason="$(_cf_run_guard 3 _cf_guard_bypass "KERNEL" "rebuild kernel")"; then _cf_report_skip "build-kernel" "$reason"; _cf_action_end; exit 0; fi
-if ! reason="$(_cf_run_guard 3 command -v gcc)"; then _cf_report_skip "build-kernel" "$reason"; _cf_action_end; exit 0; fi
+_cf_action_init "build-kernel" "rebuild kernel" "kernel"
+if ! reason="$(_cf_run_guard 3 _cf_guard_bypass "KERNEL" "rebuild kernel")"; then _cf_report_skip "build-kernel" "$reason" "kernel"; _cf_action_end; exit 0; fi
+if ! reason="$(_cf_run_guard 3 command -v gcc)"; then _cf_report_skip "build-kernel" "$reason" "kernel"; _cf_action_end; exit 0; fi
 make -C "${KERNEL_SRC}" modules_install
 _cf_action_end
 ```
@@ -192,15 +237,26 @@ bypass: ['ENV', 'ENV:ZIMFW']
 ```
 
 Emits `_cf_guard_bypass ENV` + `_cf_guard_bypass_unit ENV ZIMFW`. Either firing
-skips the action. Declared per-child on the BINS entry, so the compositor
-inherits each child's bypasses naturally — `bin_composers` stays out of it.
+skips the action. Policy resolves per child, so compositors invoke children
+without aggregating their bypasses — `bin_composers` stays out of it.
 
 ### The `bypass:` BINS field
 
-Scalar or list; when set, [`files/_bin`](../files/_bin) wraps the rendered body
-in a `cf_action` call. This is the declarative shorthand for the 80% case.
-Subsystems needing custom bypass logic (e.g. gen_zim's host-not-found fallback)
-omit the field and call the primitives directly in `content:`.
+Scalar or list; entries extend automatic scope/action guards. The field remains
+ordinary later-defined merge semantics, not a `bins_generated` concat field.
+Set it to false for a sourced/library script that must not receive an outer
+wrapper. Subsystems needing custom guards can still call `_cf_action` directly.
+
+### Systemd phase controls
+
+Systemd's internal phases remain separate from outer automatic
+`SYSTEMD`/`SYSTEMD:<ACTION>` guards:
+
+| Phase | Canonical shell variable | Temporary soak alias |
+|---|---|---|
+| link | `COMPFUZOR_SYSTEMD_LINK_BYPASS` | `SYSTEMD_BYPASS_LINK` |
+| enable | `COMPFUZOR_SYSTEMD_ENABLE_BYPASS` | `SYSTEMD_BYPASS_ENABLE` |
+| start | `COMPFUZOR_SYSTEMD_START_BYPASS` | `SYSTEMD_BYPASS_START` |
 
 ## gen_bins: action composition
 
@@ -322,7 +378,7 @@ is [`ARTIFACT_DEFAULTS`](../library/lookup_plugins/merge_subsys.py#L109-L166).
 
 | Artifact | Kind | Default merge | Practical effect |
 |----------|------|---------------|------------------|
-| `BINS` | list | `bins_generated` | Merge by `name`; concatenate `early`, `generated`, `run_all` |
+| `BINS` | list | `bins_generated` | Merge by `name`; concatenate body fields plus disarm metadata |
 | `ETC_FILES` | list | `append` | Current entries first, subsystem entries append |
 | `LINKS` | list | `append` | Current entries first, subsystem entries append |
 | `PKGS` | list | `append_unique` | Append and deduplicate preserving order |
@@ -375,6 +431,11 @@ Common bin fields:
 | `force: true` | Create link even if source doesn't exist yet |
 | `scope` | String or list; used by gen_bins for scoped compositors |
 | `compose: false` | Exclude from gen_bins action composition |
+| `origin_subsystems` | Mergeable report provenance; normally automatic |
+| `bypass_scopes` | Mergeable broad guard scopes; normally automatic |
+| `bypass` | Explicit guard extension; `false` disables the outer wrapper |
+| `verb` | Override the report verb derived from the canonical action |
+| `subsystem` | Compositor grouping only; never disarm provenance |
 
 ## File map
 
@@ -383,7 +444,8 @@ Common bin fields:
 | [`vars/common.yaml`](../vars/common.yaml) | Static `SUBSYSTEM` defs, helper vars |
 | [`library/lookup_plugins/subsys.py`](../library/lookup_plugins/subsys.py) | Lookup: resolves envelope from SUBSYSTEM + env vars |
 | [`library/lookup_plugins/merge_subsys.py`](../library/lookup_plugins/merge_subsys.py) | Lookup: merges contrib artifacts into globals |
-| [`library/filter_plugins/merge.py`](../library/filter_plugins/merge.py) | List/dict merge helpers and named profiles |
+| [`library/filter_plugins/cfmerge.py`](../library/filter_plugins/cfmerge.py) | List/dict merge helpers and named presets |
+| [`library/filter_plugins/bin_disarm.py`](../library/filter_plugins/bin_disarm.py) | BINS annotation, canonicalization, guard/report resolution |
 | [`library/filter_plugins/bin_composers.py`](../library/filter_plugins/bin_composers.py) | Action compositor synthesis from bin filenames |
 | [`library/filter_plugins/dictify.py`](../library/filter_plugins/dictify.py) | Mapping/list-shorthand normalization |
 | [`library/filter_plugins/zim_fragment.py`](../library/filter_plugins/zim_fragment.py) | Zim module line rendering |
