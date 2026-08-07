@@ -34,6 +34,12 @@
          the choice on the cmdline; the modprobe blacklist stops efi_pstore
          from even loading — belt and suspenders.
 
+      4. **A non-empty dmesg region.** Ramoops subtracts `console_size`,
+         `ftrace_size`, and `pmsg_size` from `mem_size` before dividing the
+         remainder into `record_size` crash records. The remainder must be at
+         least one record. `status-ramoops.sh` checks this arithmetic because
+         the backend can register successfully with zero dmesg records.
+
       ## Address selection (RAMOOPS_MEM_ADDRESS)
 
       Default `0x100000000` (start of the 4 GB boundary) works on any x86_64
@@ -53,12 +59,13 @@
           cat /proc/cmdline                          # memmap=, ramoops.*, pstore.backend=
           ls /sys/module/ramoops/parameters/         # populated
           journalctl -k | grep pstore                # 'Registered ramoops' (no 'already in use')
+          sudo "$DIR/bin/status-ramoops.sh"           # registration and dmesg layout are usable
           ls /sys/fs/pstore/                         # empty until a crash
 
       ## Crash-testing
 
       Once ramoops is winning (verified above), crash-test it. Two prerequisites
-      make this safe and hands-off:
+      make this hands-off:
 
       1. **`kernel.panic` > 0** -- declared below via `KERNEL_SYSCTL`, so it is
          persisted (`install-kernel-sysctl.sh`), applied live
@@ -67,28 +74,41 @@
          forever* and you must hold the power button to recover; with it set, the
          kernel auto-reboots after N seconds, so the test is unattended and
          ramoops (which flushes at panic time) still captures.
-      2. **SysRq enabled** (the default mask usually lacks the crash bit):
+      2. **At least one dmesg record** -- `status-ramoops.sh` must report a
+         positive dmesg byte and record count. Registration alone does not
+         prove this.
 
-             echo 1 | sudo tee /proc/sys/kernel/sysrq
+      Writing `/proc/sysrq-trigger` as root is always allowed; `kernel.sysrq`
+      only controls keyboard-triggered SysRq. Do not broaden that mask just for
+      this test.
 
       Then trigger a fault and read the capture on the next boot:
 
       | Method | Trigger                                  | Reproduces         | Captured? | Why                                        |
       |--------|------------------------------------------|--------------------|-----------|--------------------------------------------|
-      | A      | `echo c > /proc/sysrq-trigger`           | clean panic + trace| yes       | panic notifier flushes dmesg               |
-      | B      | `echo b > /proc/sysrq-trigger`           | instant reset      | no        | no panic; `PSTORE_CONSOLE` is off          |
-      | C      | hold power button / yank power           | abrupt power loss  | no        | no panic path                              |
-      | D      | LKDTM `LOOP` (needs `CONFIG_LKDTM=m`)    | hard lockup->panic | yes       | watchdog fires a panic, then captured      |
+      | A      | `echo c > /proc/sysrq-trigger`           | clean panic + trace| yes       | panic kmsg dumper writes the dmesg record  |
+      | B      | `echo b > /proc/sysrq-trigger`           | instant reset      | console only | requires `CONFIG_PSTORE_CONSOLE=y`         |
+      | C      | hold power button / yank power           | abrupt power loss  | console only | requires continuously written console data |
+      | D      | LKDTM `LOOP`                             | hard lockup        | conditional | also needs NMI watchdog + hardlockup panic |
 
-      Method A is the smoke test that proves the pipeline:
+      Method A is the recommended first smoke test. It proves panic capture,
+      persistence, reboot, and recovery; it does not reproduce the original
+      crash trigger. Sync first to reduce unrelated filesystem recovery:
 
-          echo c | sudo tee /proc/sysrq-trigger     # panic; kernel.panic reboots it
+          sudo "$DIR/bin/status-ramoops.sh"
+          sudo sync
+          sudo sh -c 'echo c > /proc/sysrq-trigger' # panic; kernel.panic reboots it
 
       With `kernel.panic` set this self-reboots (no power button). On the next
       boot, read and clear the capture:
 
-          sudo "$DIR/bin/pstore-dump.sh"            # pretty-print dmesg-ramoops-*
-          sudo rm /sys/fs/pstore/*                  # reset for the next test
+          journalctl -b -u systemd-pstore --no-pager # confirm early-boot archival
+          sudo "$DIR/bin/pstore-dump.sh"             # live and archived records
+
+      `systemd-pstore` normally moves records from `/sys/fs/pstore` into
+      `/var/lib/systemd/pstore` and unlinks the originals early during boot.
+      An empty live directory after boot therefore does not prove capture
+      failed; use the readout above.
 
       B and C (the abrupt-death case ramoops exists for) won't capture with the
       current kernel: only `PSTORE_RAM` is on, so capture is panic-triggered.
@@ -109,8 +129,9 @@
       `PSTORE_CONSOLE`, `PSTORE_PMSG`, and `PSTORE_FTRACE` are compile-time
       kernel options (not modules). If your kernel was built without them, the
       `console_size`, `pmsg_size`, and `ftrace_size` params below are accepted
-      but those buffers will never be written to. Oops/panic dmesg capture
-      (the critical part) works regardless.
+      and reserved but those buffers will never be written to. Their sizes are
+      still subtracted from the dmesg budget, so the total reservation must
+      explicitly leave room for panic/oops records.
 
           grep -E 'PSTORE_RAM|PSTORE_CONSOLE|PSTORE_PMSG|PSTORE_FTRACE' /boot/config-$(uname -r)
 
@@ -123,7 +144,9 @@
     # ≥ 8 GB RAM (4 GB boundary, above BIOS MMIO holes). Override per-host
     # via -e RAMOOPS_MEM_ADDRESS=0x... for unusual layouts.
     RAMOOPS_MEM_ADDRESS: "0x100000000"
-    RAMOOPS_MEM_SIZE: "0x40000"  # 256 KB
+    # 512 KB total: 256 KB dmesg + 128 KB console + 64 KB ftrace + 64 KB pmsg.
+    # With 16 KB records, the dmesg region retains sixteen crashes.
+    RAMOOPS_MEM_SIZE: "0x80000"
 
     # Raw kernel cmdline tokens that don't fit the <module>.<param> shape.
     # install-kernel-params.sh writes these to /etc/kernel/cmdline

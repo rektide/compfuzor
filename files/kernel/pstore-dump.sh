@@ -12,7 +12,9 @@
 # focused readout for "what did we capture?".
 #
 # /sys/fs/pstore is root-only (drwxr-x---); reads use sudo when not root.
-# Override the directory with PSTORE_DIR=...
+# systemd-pstore normally moves records to /var/lib/systemd/pstore during early
+# boot, so both locations are inspected. Override them with PSTORE_DIR and
+# PSTORE_ARCHIVE_DIR.
 #
 # This is a compfuzor _bin body: files/_bin supplies the shebang,
 # `set -euo pipefail`, env loading, and option restoration.
@@ -21,43 +23,55 @@
 # captured), 2 on usage/read error.
 
 PSTORE_DIR="${PSTORE_DIR:-/sys/fs/pstore}"
+PSTORE_ARCHIVE_DIR="${PSTORE_ARCHIVE_DIR:-/var/lib/systemd/pstore}"
 
-# /sys/fs/pstore is drwxr-x--- root root; mirror status-dirs.sh's sudo-vs-user
-# split so this works whether or not you remembered to sudo.
-if [ "$(id -u)" -eq 0 ]; then
-  _cat() { cat "$1"; }
-  _ls() { ls -1 "$1"; }
-else
-  _cat() { sudo cat "$1"; }
-  _ls() { sudo ls -1 "$1"; }
-fi
+# Prefer an unprivileged read for test fixtures and permissive installations,
+# then fall back to sudo for the normal root-only pstore locations.
+_cat() { cat "$1" 2>/dev/null || sudo cat "$1"; }
+_find_live() {
+  find "$PSTORE_DIR" -maxdepth 1 -type f -print 2>/dev/null \
+    || sudo find "$PSTORE_DIR" -maxdepth 1 -type f -print
+}
+_find_archive() {
+  find "$PSTORE_ARCHIVE_DIR" -type f -print 2>/dev/null \
+    || sudo find "$PSTORE_ARCHIVE_DIR" -type f -print
+}
 
-if ! _entries="$(_ls "$PSTORE_DIR" 2>/dev/null)"; then
+if ! _live="$(_find_live 2>/dev/null)"; then
   printf 'pstore-dump.sh: cannot read %s (run as root?)\n' "$PSTORE_DIR" >&2
   exit 2
 fi
+_archive=""
+if [ -d "$PSTORE_ARCHIVE_DIR" ]; then
+  if ! _archive="$(_find_archive 2>/dev/null)"; then
+    printf 'pstore-dump.sh: cannot read %s (run as root?)\n' "$PSTORE_ARCHIVE_DIR" >&2
+    exit 2
+  fi
+fi
+_entries="$(printf '%s\n%s\n' "$_live" "$_archive" | grep -v '^$' || true)"
 
-# count non-blank lines (ls -1 gives one entry per line)
+# Count non-blank paths from the live and archived stores.
 _n=$(printf '%s\n' "$_entries" | grep -c . || true)
 if [ "$_n" -eq 0 ]; then
-  printf '%s: empty -- no crash records (healthy steady state)\n' "$PSTORE_DIR"
+  printf 'no crash records in %s or %s\n' "$PSTORE_DIR" "$PSTORE_ARCHIVE_DIR"
   exit 0
 fi
 
-printf '=== %s: %s record(s) ===\n\n' "$PSTORE_DIR" "$_n"
+printf '=== pstore: %s live/archived record(s) ===\n\n' "$_n"
 
 printf '%s\n' "$_entries" | while IFS= read -r _f; do
   [ -n "$_f" ] || continue
   # filename shape: <type>-<backend>-<id>  (dmesg-ramoops-0, pmsg-ramoops-0, ...)
-  _type="${_f%%-*}"
+  _name="${_f##*/}"
+  _type="${_name%%-*}"
   printf '%s\n' "--- $_f ---"
   printf 'type: %s\n' "$_type"
   printf '%s\n' '----'
   # contents may look like garbage if the kernel was built with PSTORE_COMPRESS;
   # default ramoops dmesg records are plain text.
-  _cat "$PSTORE_DIR/$_f" 2>/dev/null || printf '(unreadable)\n'
+  _cat "$_f" 2>/dev/null || printf '(unreadable)\n'
   printf '%s\n' ''
 done
 
-printf 'clear with: sudo rm %s/*\n' "$PSTORE_DIR"
+printf 'live records can be cleared with: sudo rm %s/*\n' "$PSTORE_DIR"
 exit 1
