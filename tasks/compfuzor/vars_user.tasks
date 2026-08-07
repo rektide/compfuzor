@@ -1,12 +1,12 @@
 - name: 'Set OWNER'
   set_fact:
-    OWNER: "{{USER|default(_cf_user_id, True)}}"
+    OWNER: "{{USER|def(_cf_user_id, falsy=True)}}"
   when: OWNER is not defined
 - name: 'Set USER as per OWNER'
   set_fact:
-    USER: "{{OWNER|default(TYPE, True)}}"
+    USER: "{{OWNER|def(TYPE, falsy=True)}}"
   when: OWNER is defined and OWNER|bool and USER is not defined
 - name: 'Set default USER'
   set_fact:
-    USER: "{{ TYPE if TYPE is defined else NAME }}"
+    USER: "{{ TYPE }}"
   when: OWNER|default(False) == True or OWNER|default(False) == "True"

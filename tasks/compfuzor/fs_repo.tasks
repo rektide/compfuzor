@@ -1,14 +1,14 @@
 ---
 - name: "Compfuzor: repo symlink"
   file:
-    src: "{{ GIT_DIR|default(REPO_DIR, true)|default(DIR, true) }}"
+    src: "{{ GIT_DIR|def(REPO_DIR, DIR, falsy=True) }}"
     dest: "{{DIR}}/{{REPO_LINK_DIR}}"
     state: link
     owner: "{{OWNER|default(omit)}}"
   when: REPO is defined or REPOS is defined
 - name: "other repo symlinks"
   file:
-    src: "{{ REPO_DIR|default(DIR, true) }}"
+    src: "{{ REPO_DIR|def(DIR, falsy=True) }}"
     dest: "{{DIR}}/{{REPO_LINK_DIR}}"
     state: link
     owner: "{{OWNER|default(omit)}}"

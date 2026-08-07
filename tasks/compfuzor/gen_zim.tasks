@@ -34,8 +34,8 @@
     - (ZIM_MODULE is defined or ZIM_MODULES is defined)
     - ZIM_BYPASS is deffalsy
   vars:
-    _zim_modules: "{{ ([ZIM_MODULE] if ZIM_MODULE is defined else []) + (ZIM_MODULES | default([])) }}"
-    _zim_phase: "{{ ZIM_PHASE if ZIM_PHASE is defined else none }}"
+    _zim_modules: "{{ ZIM_MODULE|normalize(to='list') + ZIM_MODULES|normalize(to='list') }}"
+    _zim_phase: "{{ ZIM_PHASE|def }}"
     _zim_fragments: "{{ _zim_modules | zim_fragment(phase=_zim_phase, etc=ETC) }}"
     # local modules (file or env) emit a zim-modules/<name>/init.zsh record;
     # create each <name> dir so the ETC_FILES writer can land it.
@@ -75,7 +75,7 @@
   set_fact:
     BINS: "{{ BINS | merge_list(_zim_host_bins, preset='bins_generated') }}"
     ENV: "{{ _zim_host_env | merge_dict(ENV, preset='overlay', skip_layers=['all']) }}"
-    ENV_LIST: "{{ (ENV_LIST | default([])) + ['ZIM_TARGET', 'ZIM_TARGET_DISABLED'] }}"
+    ENV_LIST: "{{ ENV_LIST|normalize(to='list') + ['ZIM_TARGET', 'ZIM_TARGET_DISABLED'] }}"
   when:
     - ZIM_HOST is defined
     - ZIM_BYPASS is deffalsy
@@ -92,7 +92,7 @@
   set_fact:
     BINS: "{{ BINS | merge_list(_zim_host_bins, preset='bins_generated') }}"
     ENV: "{{ _zim_host_env | merge_dict(ENV, preset='overlay', skip_layers=['all']) }}"
-    ENV_LIST: "{{ (ENV_LIST | default([])) + ['ZIM_TARGET', 'ZIM_TARGET_DISABLED'] }}"
+    ENV_LIST: "{{ ENV_LIST|normalize(to='list') + ['ZIM_TARGET', 'ZIM_TARGET_DISABLED'] }}"
   when:
     - ZIM_HOST is defined
     - ZIM_BYPASS is deffalsy
