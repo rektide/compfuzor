@@ -16,7 +16,10 @@ DUMP = ROOT / "files/pstore/pstore-dump.sh"
 
 def run_status(
     cmdline: str,
-    klog: str = "pstore: Registered ramoops as persistent store backend",
+    klog: str = (
+        "BIOS-e820: [mem 0x0000000100000000-0x000000103f37ffff] usable\n"
+        "pstore: Registered ramoops as persistent store backend"
+    ),
 ) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["RAMOOPS_CMDLINE"] = cmdline
@@ -70,6 +73,12 @@ def test_layout_requires_original_firmware_ram() -> None:
     )
     if mmio.returncode != 1 or "outside original BIOS-e820" not in mmio.stdout:
         raise AssertionError(f"unsafe firmware range passed:\n{mmio.stdout}{mmio.stderr}")
+
+    unverifiable = run_status(cmdline, registration)
+    if unverifiable.returncode != 1 or "BIOS-e820 usable ranges absent" not in unverifiable.stdout:
+        raise AssertionError(
+            f"unverifiable firmware range passed:\n{unverifiable.stdout}{unverifiable.stderr}"
+        )
 
 
 def test_dump_reads_live_and_archive() -> None:

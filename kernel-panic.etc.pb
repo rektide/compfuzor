@@ -62,9 +62,9 @@
       during panic. These often expose storage deadlocks, allocation
       failures, and the CPUs participating in a lock cycle. Risk: extra output
       lengthens panic processing and can push the original fault out of a small
-      log. The pstore policy therefore retains a 3 MiB printk tail instead of the
-      old 10 KiB tail. Do not add console replay by default; replaying the entire
-      printk ring can flood a slow console during an already-fragile panic.
+      log. The pstore policy therefore retains one multi-megabyte ramoops record
+      instead of the old 16 KiB record. Do not add console replay by default;
+      replaying the entire printk ring can flood a slow console during panic.
 
       ## Deliberately inactive settings
 

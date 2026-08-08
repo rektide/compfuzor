@@ -74,31 +74,39 @@ fi
 # memmap=$ reservations are trusted by the kernel, even if the selected range
 # was MMIO in the firmware map. Validate against the original BIOS E820 lines,
 # not /proc/iomem (which already reflects the user-modified map).
-if ((_layout_complete)) && _address="$(_uint "$(_cmdline_param ramoops.mem_address)")" \
-  && ((_mem > 0)) && [ -n "$_klog" ]; then
-  _region_end=$((_address + _mem - 1))
-  _e820_re='BIOS-e820: \[mem 0x([0-9a-fA-F]+)-0x([0-9a-fA-F]+)\] usable'
-  _saw_e820=0
-  _inside_e820=0
-  while IFS= read -r _line; do
-    if [[ "$_line" =~ $_e820_re ]]; then
-      _saw_e820=1
-      _e820_start=$((16#${BASH_REMATCH[1]}))
-      _e820_end=$((16#${BASH_REMATCH[2]}))
-      if ((_address >= _e820_start && _region_end <= _e820_end)); then
-        _inside_e820=1
-        break
-      fi
-    fi
-  done <<<"$_klog"
-
-  if ((_inside_e820)); then
-    _say firmware "OK: ramoops reservation lies inside original BIOS-e820 usable RAM"
-  elif ((_saw_e820)); then
-    _say firmware "DRIFT: ramoops reservation is outside original BIOS-e820 usable RAM"
+if ((_layout_complete)); then
+  if ! _address="$(_uint "$(_cmdline_param ramoops.mem_address)")"; then
+    _say firmware "DRIFT: ramoops.mem_address is missing or invalid"
+    _drift=1
+  elif [ -z "$_klog" ]; then
+    _say firmware "DRIFT: cannot verify original BIOS-e820 map without kernel journal"
     _drift=1
   else
-    _say firmware "n/a: original BIOS-e820 usable ranges not present in kernel journal"
+    _region_end=$((_address + _mem - 1))
+    _e820_re='BIOS-e820: \[mem 0x([0-9a-fA-F]+)-0x([0-9a-fA-F]+)\] usable'
+    _saw_e820=0
+    _inside_e820=0
+    while IFS= read -r _line; do
+      if [[ "$_line" =~ $_e820_re ]]; then
+        _saw_e820=1
+        _e820_start=$((16#${BASH_REMATCH[1]}))
+        _e820_end=$((16#${BASH_REMATCH[2]}))
+        if ((_address >= _e820_start && _region_end <= _e820_end)); then
+          _inside_e820=1
+          break
+        fi
+      fi
+    done <<<"$_klog"
+
+    if ((_inside_e820)); then
+      _say firmware "OK: ramoops reservation lies inside original BIOS-e820 usable RAM"
+    elif ((_saw_e820)); then
+      _say firmware "DRIFT: ramoops reservation is outside original BIOS-e820 usable RAM"
+      _drift=1
+    else
+      _say firmware "DRIFT: original BIOS-e820 usable ranges absent from kernel journal"
+      _drift=1
+    fi
   fi
 fi
 

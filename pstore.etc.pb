@@ -53,18 +53,18 @@
 
       ## Record size and kmsg bytes
 
-      `ramoops.record_size` is the physical size used to count dmesg zones. It
-      does not say how much kernel log pstore asks to save. `pstore.kmsg_bytes`
-      limits the stored dmesg output accumulated for each oops or panic. Without
-      compression this closely limits the printk tail; with deflate it is charged
-      against compressed output and can represent a larger uncompressed tail.
-      The old values created sixteen 16 KiB zones but budgeted only 10 KiB. That
-      preserved many tiny incidents while commonly omitting the lead-up.
+      `ramoops.record_size` sets the physical dmesg zone. Pstore fills one
+      backend-sized part before checking `pstore.kmsg_bytes`; compression can
+      make that part represent more uncompressed printk text than the physical
+      zone. Ramoops accepts only part 1, so a conventional multi-megabyte
+      `kmsg_bytes` budget can make pstore attempt a second part that ramoops
+      rejects during panic.
 
-      This layout instead creates three deep zones and gives each incident a
-      3 MiB stored-output budget. Deflate can encode more than 3 MiB of ordinary
-      printk text; incompressible output still fits safely. A 4 MiB physical
-      zone leaves room for the persistent RAM header and Reed-Solomon ECC.
+      `pstore.kmsg_bytes=1` is therefore an intentional one-part sentinel, not a
+      one-byte capture limit. The first iteration still fills the effective
+      4 MiB zone. Deflate can encode roughly 5.9 MiB of ordinary printk text in
+      that zone; incompressible output retains about 3.5 MiB after headers and
+      ECC. The sentinel stops before an unsupported second ramoops part.
       `log_buf_len=8M` ensures the source printk ring is itself large enough;
       pstore cannot retain history that printk has already overwritten.
 
@@ -125,10 +125,11 @@
       first. EFI variables remain useful elsewhere, but their small size and
       firmware write path are less dependable for this machine's crash problem.
 
-      `pstore.kmsg_bytes=3145728` gives one incident a 3 MiB stored-output
-      budget. Compression can represent a larger uncompressed printk tail.
-      Values larger than the effective zone waste work and are truncated; values
-      much smaller than the zone discard useful lead-up even though RAM is free.
+      `pstore.kmsg_bytes=1` forces pstore to stop after the first fully populated
+      backend part. This counterintuitive value works because pstore tests the
+      budget between parts, not before filling part 1. It avoids a guaranteed
+      rejected part 2 while preserving the maximum evidence that one ramoops
+      zone can hold.
 
       `log_buf_len=8M` expands the live printk ring. The cost is 8 MiB of normal
       kernel memory, not persistent RAM. This gives pstore and kdump a longer
@@ -207,7 +208,7 @@
         force_cmdline: True
         params:
           backend: ramoops
-          kmsg_bytes: 3145728
+          kmsg_bytes: 1
 
     # Compatibility for modular distro kernels. modprobe treats a built-in
     # ramoops as already satisfied in the intended config-debian-plus kernel.
