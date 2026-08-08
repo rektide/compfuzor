@@ -59,6 +59,14 @@
       ExecStartPre:
         - "-/sbin/modprobe br_netfilter"
         - "-/sbin/modprobe overlay"
+      # Kubelet forces kernel.panic_on_oops=1 at startup. Its
+      # --protect-kernel-defaults option only turns that rewrite into a fatal
+      # mismatch; it does not preserve a local value of 0. Leave this disabled
+      # while collecting the next ramoops capture. Afterwards, uncomment it to
+      # restore oops-without-panic after k3s reaches READY=1. kernel.panic=10 is
+      # intentionally retained for genuine panics and manual ramoops tests.
+      # ExecStartPost:
+      #   - "/usr/sbin/sysctl -w kernel.panic_on_oops=0"
       KillMode: process
       LimitNOFILE: 1048576
       LimitNPROC: infinity
