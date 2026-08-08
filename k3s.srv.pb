@@ -65,6 +65,9 @@
       # while collecting the next ramoops capture. Afterwards, uncomment it to
       # restore oops-without-panic after k3s reaches READY=1. kernel.panic=10 is
       # intentionally retained for genuine panics and manual ramoops tests.
+      # Compfuzor will then emit ExecStartPost= into the generated k3s systemd
+      # unit. Systemd runs it as root after READY=1 on every service start,
+      # changing the live sysctl only; it does not persist the value across boot.
       # ExecStartPost:
       #   - "/usr/sbin/sysctl -w kernel.panic_on_oops=0"
       KillMode: process
