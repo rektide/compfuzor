@@ -34,7 +34,7 @@
       - source: utility
         phase: core
         comment: Utility aliases and functions. Adds colour to ls, grep and less.
-      - source: https://github.com/joke/zim-mise
+      - source: https://github.com/rektide/zim-mise
         phase: core
         comment: included early so other tools can benefit
 
