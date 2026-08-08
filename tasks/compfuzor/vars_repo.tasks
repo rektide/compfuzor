@@ -4,6 +4,81 @@
   when: "REPOS is defined and not lookup('deftruthy', var_name)"
   vars:
     var_name: "{{item|upper|replace('-', '_')}}_DIR"
+- name: "Compfuzor: clear generated tool-version links before repo update"
+  block:
+    - name: "Compfuzor: detect modified tool-version links"
+      command:
+        argv:
+          - git
+          - status
+          - --porcelain=v1
+          - --untracked-files=all
+          - --
+          - .tool-versions
+          - mise.toml
+      args:
+        chdir: "{{ REPO_DIR }}"
+      check_mode: false
+      changed_when: false
+      register: _tool_version_repo_status
+
+    # Do not follow or remove repository-owned files or unrelated symlinks.
+    - name: "Compfuzor: inspect modified tool-version links"
+      stat:
+        path: "{{ item.dest }}"
+        follow: false
+        get_attributes: false
+        get_checksum: false
+        get_mime: false
+      loop: "{{ _tool_version_repo_links }}"
+      loop_control:
+        label: "{{ item.dest }}"
+      when:
+        - _tool_version_repo_status.stdout is deftruthy
+        - item.name in _tool_version_repo_status.stdout
+      register: _tool_version_repo_stats
+
+    - name: "Compfuzor: remove modified generated tool-version links"
+      file:
+        path: "{{ item.item.dest }}"
+        state: absent
+      loop: "{{ _tool_version_repo_stats.results }}"
+      loop_control:
+        label: "{{ item.item.dest }}"
+      when:
+        - item.stat.islnk|default(false)|bool
+        - item.stat.lnk_target|default('') == item.item.src
+
+    - name: "Compfuzor: revert generated tool-version links in the git index"
+      command:
+        argv:
+          - git
+          - reset
+          - --quiet
+          - --
+          - "{{ item.item.name }}"
+      args:
+        chdir: "{{ REPO_DIR }}"
+      loop: "{{ _tool_version_repo_stats.results }}"
+      loop_control:
+        label: "{{ item.item.dest }}"
+      when:
+        - item.stat.islnk|default(false)|bool
+        - item.stat.lnk_target|default('') == item.item.src
+  vars:
+    _tool_version_repo_links:
+      - name: .tool-versions
+        src: "{{ DIR }}/etc/.tool-versions"
+        dest: "{{ REPO_DIR }}/.tool-versions"
+      - name: mise.toml
+        src: "{{ DIR }}/etc/mise.toml"
+        dest: "{{ REPO_DIR }}/mise.toml"
+  when:
+    - REPO_DIR is directory
+    - (REPO_DIR + '/.git') is exists
+    - GIT_UPDATE|default(true)|bool
+    - GIT_BYPASS is deffalsy
+    - REPO_BYPASS is deffalsy
 - name: "Add GOPATH and REPO_DIR to ENV"
   set_fact:
     ENV: "{{ env_current | combine(env_additions) }}"
