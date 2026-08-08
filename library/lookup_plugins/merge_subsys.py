@@ -47,7 +47,7 @@ DOCUMENTATION = """
         description:
           - C(current-first) or C(incoming-first). Controls layer order before
             the artifact's preset runs.
-       get:
+      get:
         description:
            - Optional dotted path to extract from the merged result.
       domain:
