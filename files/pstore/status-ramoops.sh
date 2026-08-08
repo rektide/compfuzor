@@ -12,6 +12,7 @@
 # status.sh reporter conventions: exit 0 clean, 1 drift, 2 not-applicable.
 
 _drift=0
+_layout_complete=0
 _say() { printf '%-12s %s\n' "$1" "$2"; }
 
 # Ramoops can register with no dmesg records when optional regions consume the
@@ -44,6 +45,7 @@ if _mem="$(_uint "$(_cmdline_param ramoops.mem_size)")" \
   && _ftrace="$(_uint "$(_cmdline_param ramoops.ftrace_size)")" \
   && _pmsg="$(_uint "$(_cmdline_param ramoops.pmsg_size)")"; then
   _optional=$((_console + _ftrace + _pmsg))
+  _layout_complete=1
   if ((_record == 0)); then
     _say layout "DRIFT: ramoops.record_size is zero"; _drift=1
   elif ((_mem < _optional)); then
@@ -67,6 +69,37 @@ elif command -v journalctl >/dev/null 2>&1; then
   _klog="$(journalctl -k --no-pager 2>/dev/null || true)"
 else
   _klog=""
+fi
+
+# memmap=$ reservations are trusted by the kernel, even if the selected range
+# was MMIO in the firmware map. Validate against the original BIOS E820 lines,
+# not /proc/iomem (which already reflects the user-modified map).
+if ((_layout_complete)) && _address="$(_uint "$(_cmdline_param ramoops.mem_address)")" \
+  && ((_mem > 0)) && [ -n "$_klog" ]; then
+  _region_end=$((_address + _mem - 1))
+  _e820_re='BIOS-e820: \[mem 0x([0-9a-fA-F]+)-0x([0-9a-fA-F]+)\] usable'
+  _saw_e820=0
+  _inside_e820=0
+  while IFS= read -r _line; do
+    if [[ "$_line" =~ $_e820_re ]]; then
+      _saw_e820=1
+      _e820_start=$((16#${BASH_REMATCH[1]}))
+      _e820_end=$((16#${BASH_REMATCH[2]}))
+      if ((_address >= _e820_start && _region_end <= _e820_end)); then
+        _inside_e820=1
+        break
+      fi
+    fi
+  done <<<"$_klog"
+
+  if ((_inside_e820)); then
+    _say firmware "OK: ramoops reservation lies inside original BIOS-e820 usable RAM"
+  elif ((_saw_e820)); then
+    _say firmware "DRIFT: ramoops reservation is outside original BIOS-e820 usable RAM"
+    _drift=1
+  else
+    _say firmware "n/a: original BIOS-e820 usable ranges not present in kernel journal"
+  fi
 fi
 
 if [ -n "$_klog" ]; then

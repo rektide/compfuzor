@@ -7,134 +7,154 @@
     README: |
       # pstore/ramoops
 
-      > Captures kernel oops/panic logs in reserved RAM that survives reboot.
+      > Retains compact crash evidence in reserved RAM across a warm reset.
 
-      ## Three pieces, all required
+      Ramoops complements, but does not replace, kdump. Ramoops is small and
+      resilient enough to retain text from failures where a crash kernel cannot
+      start. Kdump can preserve the failed kernel's complete memory image when
+      its more complex transition succeeds. See `kernel-panic-main/README.md`
+      for panic conversion and kdump policy.
 
-      Ramoops silently fails if any one of these is missing. The original
-      version of this playbook only did piece #2 and never captured anything.
+      Ordinary DRAM does not survive actual power removal. Ramoops helps with
+      kernel-triggered reboot, hardware watchdog reset, firmware warm reset, and
+      some reset-button paths. It cannot promise evidence after unplugging power.
 
-      1. **Reserved physical RAM** via `memmap=` on the kernel cmdline. The
-         region is excluded from normal kernel allocation and survives reboot.
-         Without this, ramoops has nothing stable to write to across reset.
-         Expressed here as a raw kernel token via `KERNEL_PARAMS` (compfuzor's
-         mechanism for cmdline tokens that don't fit `<module>.<param>=<value>`
-         shape); `install-kernel-params.sh` writes them to `/etc/kernel/cmdline`.
+      ## Kernel requirements
 
-      2. **ramoops module params** (`mem_address`, `mem_size`, …) pointing at
-         that reservation. On a modular kernel, ramoops loads from initramfs
-         before `/etc/modprobe.d/` is parsed, so these MUST reach it via the
-         kernel cmdline. The `force_cmdline: True` flag on each entry tells
-         `install-kernel-modprobe.sh` to use the cmdline path (not modprobe.d)
-         regardless of built-in detection.
+      The intended kernel has these options:
 
-      3. **`pstore.backend=ramoops`** plus **blacklist efi_pstore**. pstore
-         permits exactly one backend; `efi_pstore` autoprobes very early via
-         systemd's module autoload and wins the slot. `pstore.backend=` pins
-         the choice on the cmdline; the modprobe blacklist stops efi_pstore
-         from even loading — belt and suspenders.
+          CONFIG_PSTORE=y
+          CONFIG_PSTORE_COMPRESS=y
+          CONFIG_PSTORE_RAM=y
+          CONFIG_PSTORE_CONSOLE=y
+          CONFIG_PSTORE_FTRACE=y
+          CONFIG_PSTORE_PMSG=y
 
-      4. **A non-empty dmesg region.** Ramoops subtracts `console_size`,
-         `ftrace_size`, and `pmsg_size` from `mem_size` before dividing the
-         remainder into `record_size` crash records. The remainder must be at
-         least one record. `status-ramoops.sh` checks this arithmetic because
-         the backend can register successfully with zero dmesg records.
+      `PSTORE_RAM=y` registers ramoops during kernel initialization instead of
+      waiting for an initramfs module. The other three options are compile-time
+      frontends. Ramoops accepts their region sizes even when they are disabled,
+      but the unwired regions never receive data.
 
-      ## Address selection (RAMOOPS_MEM_ADDRESS)
+      ## Evidence allocation
 
-      Default `0x100000000` (start of the 4 GB boundary) works on any x86_64
-      host with ≥ 8 GB RAM: above the BIOS MMIO holes (which all live under
-      4 GB), inside the first chunk of upper RAM, and stable across kernels.
-      Override per-host for unusual e820 layouts or smaller boxes.
+      The 16 MiB reservation is intentionally weighted toward automatic kernel
+      evidence rather than divided evenly:
 
-      Verify the address is in usable RAM:
+      | Evidence | Allocation | Retention | Value |
+      |---|---:|---|---|
+      | dmesg | 12 MiB | three physical zones, about 4 MiB each | panic/oops snapshots; highest-value automatic evidence |
+      | console | 2 MiB | one continuously overwritten ring | messages already printed before a hang, reset, or early kdump transition |
+      | ftrace | 1 MiB | dormant until `record_ftrace` is enabled | last function calls during a targeted hang investigation |
+      | pmsg | 1 MiB | userspace-written circular breadcrumbs | useful only when a deliberate `/dev/pmsg0` producer exists |
 
-          sudo awk '/System RAM/{print}' /proc/iomem
+      Ramoops subtracts the console, ftrace, and pmsg allocations from
+      `mem_size`; the remainder becomes dmesg zones. `status-ramoops.sh` checks
+      this arithmetic because a backend can register with zero dmesg zones.
+
+      ## Record size and kmsg bytes
+
+      `ramoops.record_size` is the physical size used to count dmesg zones. It
+      does not say how much kernel log pstore asks to save. `pstore.kmsg_bytes`
+      limits the stored dmesg output accumulated for each oops or panic. Without
+      compression this closely limits the printk tail; with deflate it is charged
+      against compressed output and can represent a larger uncompressed tail.
+      The old values created sixteen 16 KiB zones but budgeted only 10 KiB. That
+      preserved many tiny incidents while commonly omitting the lead-up.
+
+      This layout instead creates three deep zones and gives each incident a
+      3 MiB stored-output budget. Deflate can encode more than 3 MiB of ordinary
+      printk text; incompressible output still fits safely. A 4 MiB physical
+      zone leaves room for the persistent RAM header and Reed-Solomon ECC.
+      `log_buf_len=8M` ensures the source printk ring is itself large enough;
+      pstore cannot retain history that printk has already overwritten.
+
+      More zones retain more separate oopses from the current boot. Larger zones
+      retain more context for each one. Three zones cover a common sequence of
+      an initial oops, a follow-on failure, and a final panic without reducing
+      each artifact to a few lines.
+
+      ## Parameter reference
+
+      `memmap=0x1000000$0x100000000` reserves 16 MiB beginning at the 4 GiB
+      boundary before the normal page allocator starts. Risk: a fixed address
+      must remain ordinary System RAM and must not overlap firmware or device
+      mappings. This address was verified against this host's original BIOS E820
+      map. It is not a portable default: re-check the pre-`memmap` `BIOS-e820`
+      lines in the kernel journal after hardware or firmware changes because
+      `/proc/iomem` shows the already-modified map. `status-ramoops.sh` performs
+      this post-boot firmware-map check and reports drift if the range is unsafe.
+
+      `ramoops.mem_address=0x100000000` identifies the same physical start to
+      ramoops. It must exactly match the address in `memmap=`.
+
+      `ramoops.mem_size=0x1000000` gives ramoops the complete 16 MiB reservation.
+      It must exactly match the size in `memmap=`. The cost is permanently
+      removing 16 MiB from the system's 64 GiB of allocatable memory.
+
+      `ramoops.record_size=0x400000` targets 4 MiB dmesg zones. Ramoops rounds
+      non-power-of-two values down; power-of-two values avoid surprising layout.
+
+      `ramoops.console_size=0x200000` continuously retains the final 2 MiB of
+      kernel console output. This is the most useful ramoops stream when a hang
+      or successful kdump prevents the final panic-time dmesg callback.
+
+      `ramoops.ftrace_size=0x100000` reserves 1 MiB so persistent tracing can be
+      enabled without another reboot. Recording remains off until explicitly
+      enabled through debugfs. Persistent function tracing perturbs every traced
+      call, so it is an investigation mode rather than a permanent default.
+
+      `ramoops.pmsg_size=0x100000` reserves 1 MiB for `/dev/pmsg0`. Pmsg does not
+      automatically copy the journal or application logs: it stores only what a
+      userspace writer deliberately sends. Writers must be rate-limited and must
+      not persist credentials or document contents into this cross-reboot ring.
+
+      `ramoops.max_reason=2` captures both panics and oopses. Panic-only mode can
+      miss the first corruption report that later caused the fatal crash.
+
+      `ramoops.ecc=16` selects 16-byte Reed-Solomon ECC. The kernel also accepts
+      `1` as shorthand for 16, but using the effective value keeps sysfs drift
+      checks stable. ECC reduces usable bytes in each zone but can repair limited
+      corruption after a watchdog reset. It cannot recover powered-off DRAM.
+
+      `ramoops.mem_type=0` uses the default write-combined mapping. The cached
+      and noncached alternatives have platform-specific atomicity constraints;
+      there is no measured reason to take that risk here.
+
+      `pstore.backend=ramoops` pins the one permitted pstore backend. The
+      `efi_pstore` blacklist is a second defense against EFI claiming that slot
+      first. EFI variables remain useful elsewhere, but their small size and
+      firmware write path are less dependable for this machine's crash problem.
+
+      `pstore.kmsg_bytes=3145728` gives one incident a 3 MiB stored-output
+      budget. Compression can represent a larger uncompressed printk tail.
+      Values larger than the effective zone waste work and are truncated; values
+      much smaller than the zone discard useful lead-up even though RAM is free.
+
+      `log_buf_len=8M` expands the live printk ring. The cost is 8 MiB of normal
+      kernel memory, not persistent RAM. This gives pstore and kdump a longer
+      chronology before a noisy driver floods the ring.
 
       ## Apply and verify
 
-      After running this playbook, run `sudo "$DIR/bin/install.sh"`. Then on
-      the next boot:
+      After running this playbook, run `sudo "$DIR/bin/install.sh"`. The next
+      boot should show the 16 MiB reservation and a clean ramoops registration:
 
-          cat /proc/cmdline                          # memmap=, ramoops.*, pstore.backend=
-          ls /sys/module/ramoops/parameters/         # populated
-          journalctl -k | grep pstore                # 'Registered ramoops' (no 'already in use')
-          sudo "$DIR/bin/status-ramoops.sh"           # registration and dmesg layout are usable
-          ls /sys/fs/pstore/                         # empty until a crash
-
-      ## Crash-testing
-
-      Once ramoops is winning (verified above), crash-test it. Two prerequisites
-      make this hands-off:
-
-      1. **`kernel.panic` > 0** -- declared below via `KERNEL_SYSCTL`, so it is
-         persisted (`install-kernel-sysctl.sh`), applied live
-         (`apply-kernel-sysctl.sh`), and
-         drift-checked (`status-sysctl.ts`). With the default `0` a panic *hangs
-         forever* and you must hold the power button to recover; with it set, the
-         kernel auto-reboots after N seconds, so the test is unattended and
-         ramoops (which flushes at panic time) still captures.
-      2. **At least one dmesg record** -- `status-ramoops.sh` must report a
-         positive dmesg byte and record count. Registration alone does not
-         prove this.
-
-      Writing `/proc/sysrq-trigger` as root is always allowed; `kernel.sysrq`
-      only controls keyboard-triggered SysRq. Do not broaden that mask just for
-      this test.
-
-      Then trigger a fault and read the capture on the next boot:
-
-      | Method | Trigger                                  | Reproduces         | Captured? | Why                                        |
-      |--------|------------------------------------------|--------------------|-----------|--------------------------------------------|
-      | A      | `echo c > /proc/sysrq-trigger`           | clean panic + trace| yes       | panic kmsg dumper writes the dmesg record  |
-      | B      | `echo b > /proc/sysrq-trigger`           | instant reset      | console only | requires `CONFIG_PSTORE_CONSOLE=y`         |
-      | C      | hold power button / yank power           | abrupt power loss  | console only | requires continuously written console data |
-      | D      | LKDTM `LOOP`                             | hard lockup        | conditional | also needs NMI watchdog + hardlockup panic |
-
-      Method A is the recommended first smoke test. It proves panic capture,
-      persistence, reboot, and recovery; it does not reproduce the original
-      crash trigger. Sync first to reduce unrelated filesystem recovery:
-
+          cat /proc/cmdline
+          journalctl -k | grep -E 'pstore|ramoops'
           sudo "$DIR/bin/status-ramoops.sh"
-          sudo sync
-          sudo sh -c 'echo c > /proc/sysrq-trigger' # panic; kernel.panic reboots it
-
-      With `kernel.panic` set this self-reboots (no power button). On the next
-      boot, read the capture:
-
-          journalctl -b -u systemd-pstore --no-pager # confirm early-boot archival
-          sudo "$DIR/bin/pstore-dump.sh"             # live and archived records
-
-      `systemd-pstore` normally moves records from `/sys/fs/pstore` into
-      `/var/lib/systemd/pstore` and unlinks the originals early during boot.
-      An empty live directory after boot therefore does not prove capture
-      failed; use the readout above.
-
-      B and C (the abrupt-death case ramoops exists for) won't capture with the
-      current kernel: only `PSTORE_RAM` is on, so capture is panic-triggered.
-      To cover power-loss / hard-reset, rebuild with `CONFIG_PSTORE_CONSOLE=y`
-      (continuously mirrors the console to ramoops) or `CONFIG_LKDTM=m`
-      (method D, additionally requiring the NMI watchdog and
-      `kernel.hardlockup_panic=1` to turn the lockup into a panic).
-
-          grep -E 'PSTORE_RAM|PSTORE_CONSOLE|PSTORE_PMSG|PSTORE_FTRACE|LKDTM' /boot/config-$(uname -r)
-
-      ## Why this exists at all
-
-      `efi_pstore` writes crash records to EFI variables. It works for *clean*
-      panics but is unreliable for hard resets, OOM-kill cascades, or any fault
-      where the firmware doesn't get a clean write window to EFI vars — exactly
-      the cases you most want captured. Ramoops writes to reserved RAM that the
-      firmware doesn't touch on reset, so it survives those scenarios.
-
-      `PSTORE_CONSOLE`, `PSTORE_PMSG`, and `PSTORE_FTRACE` are compile-time
-      kernel options (not modules). If your kernel was built without them, the
-      `console_size`, `pmsg_size`, and `ftrace_size` params below are accepted
-      and reserved but those buffers will never be written to. Their sizes are
-      still subtracted from the dmesg budget, so the total reservation must
-      explicitly leave room for panic/oops records.
-
           grep -E 'PSTORE_RAM|PSTORE_CONSOLE|PSTORE_PMSG|PSTORE_FTRACE' /boot/config-$(uname -r)
+
+      `systemd-pstore` normally archives records under
+      `/var/lib/systemd/pstore` and removes the live copies early in boot. An
+      empty `/sys/fs/pstore` therefore does not prove capture failed:
+
+          journalctl -b -u systemd-pstore --no-pager
+          sudo "$DIR/bin/pstore-dump.sh"
+
+      For a controlled end-to-end test, first verify `kernel.panic` is nonzero,
+      sync filesystems, and use SysRq-c in a maintenance window. LKDTM provides
+      more destructive and pathological test cases; it is documented by the
+      kernel-panic playbook and is not needed for the first smoke test.
 
     # pstore ships no systemd service -- opt out explicitly (SYSTEMD_BYPASS
     # alone only skips the thunk, not unit generation).
@@ -151,57 +171,48 @@
         src: pstore-dump.sh
         basedir: false
 
-    # Physical address reserved for ramoops. Default works on any x86_64 with
-    # ≥ 8 GB RAM (4 GB boundary, above BIOS MMIO holes). Override per-host
+    # Physical address reserved for ramoops. Default works on this x86_64 host
+    # (4 GB boundary, above BIOS MMIO holes). Override per-host
     # via -e RAMOOPS_MEM_ADDRESS=0x... for unusual layouts.
     RAMOOPS_MEM_ADDRESS: "0x100000000"
-    # 512 KB total: 256 KB dmesg + 128 KB console + 64 KB ftrace + 64 KB pmsg.
-    # With 16 KB records, the dmesg region retains sixteen crashes.
-    RAMOOPS_MEM_SIZE: "0x80000"
+    # 16 MiB total: 12 MiB dmesg + 2 MiB console + 1 MiB ftrace + 1 MiB pmsg.
+    # Three 4 MiB dmesg zones retain deep context for up to three incidents.
+    RAMOOPS_MEM_SIZE: "0x1000000"
 
     # Raw kernel cmdline tokens that don't fit the <module>.<param> shape.
     # install-kernel-params.sh writes these to /etc/kernel/cmdline
     # idempotently (replace by key prefix, append if absent).
     KERNEL_PARAMS:
       - "memmap={{RAMOOPS_MEM_SIZE}}${{RAMOOPS_MEM_ADDRESS}}"
+      - "log_buf_len=8M"
 
     # force_cmdline: True on each entry forces install-kernel-modprobe.sh to emit
-    # these on /etc/kernel/cmdline (as <module>.<param>=<value> tokens) even
-    # though ramoops and pstore are modular — modprobe.d is too late for
-    # them, since ramoops loads from initramfs and pstore.backend is read
-    # at kernel init.
+    # these on /etc/kernel/cmdline (as <module>.<param>=<value> tokens). This is
+    # required for the intended built-in ramoops and remains correct on modular
+    # distro kernels whose initramfs can load ramoops before root modprobe.d.
     KERNEL_MODULES:
       ramoops:
         force_cmdline: True
         params:
           mem_address: "{{RAMOOPS_MEM_ADDRESS}}"
           mem_size: "{{RAMOOPS_MEM_SIZE}}"
-          record_size: 0x4000
-          console_size: 0x20000
-          ftrace_size: 0x10000
-          pmsg_size: 0x10000
-          ecc: 0
+          record_size: 0x400000
+          console_size: 0x200000
+          ftrace_size: 0x100000
+          pmsg_size: 0x100000
+          max_reason: 2
+          ecc: 16
+          mem_type: 0
       pstore:
         force_cmdline: True
         params:
           backend: ramoops
+          kmsg_bytes: 3145728
 
-    # Ensure ramoops is loaded at boot. It's modular on most kernels and the
-    # pstore backend slot only gets taken when the module actually registers.
+    # Compatibility for modular distro kernels. modprobe treats a built-in
+    # ramoops as already satisfied in the intended config-debian-plus kernel.
     MODULES:
       - ramoops
-
-    # kernel.panic: seconds before auto-reboot on panic (0 = hang forever).
-    # Declared (not optional) for two reasons: (1) crash-testing -- with 0 an
-    # `echo c` panic hangs and you must power-cycle; with >0 the box self-reboots
-    # unattended and ramoops still flushes at panic time. (2) drift visibility --
-    # declaring it makes status-sysctl.ts flag a regression to 0.
-    # install-kernel-sysctl.sh persists it to /etc/sysctl.d;
-    # apply-kernel-sysctl.sh sets it live. A boot-floor
-    # cmdline token (`panic=N` via KERNEL_PARAMS) is a redundant option if you
-    # want it set before any apply runs; sysctl alone is enough here.
-    KERNEL_SYSCTL:
-      kernel.panic: 10
 
     # Blacklist efi_pstore so it cannot grab pstore's only backend slot
     # before ramoops probes. pstore.backend=ramoops above is the primary
@@ -226,9 +237,10 @@
     # which runs the pure install-kernel.sh compositor. Its children include
     # install-kernel-modprobe.sh (conditionally invokes install-kernel-cmdline.sh
     # for force_cmdline module params), install-kernel-params.sh (the raw
-    # memmap= token), and install-kernel-sysctl.sh (kernel.panic persistence).
-    # No SYSTEMD service: pstore only writes /etc/kernel/cmdline + a sysctl drop;
-    # a reboot or `sudo kernel-install` propagates cmdline to BLS entries.
+    # memmap= and log_buf_len= tokens). Panic policy is intentionally owned by
+    # kernel-panic.etc.pb so storage layout and crash conversion do not conflict.
+    # No SYSTEMD service: pstore writes kernel cmdline state and an efi_pstore
+    # blacklist; a reboot or `sudo kernel-install` propagates cmdline to BLS.
 
     # /sys/fs/pstore records, surfaced by the generic status-dirs.sh reporter
     # (and by pstore-dump.sh, the focused human-readable readout). Should be
