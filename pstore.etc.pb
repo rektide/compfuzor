@@ -100,7 +100,7 @@
           sudo sh -c 'echo c > /proc/sysrq-trigger' # panic; kernel.panic reboots it
 
       With `kernel.panic` set this self-reboots (no power button). On the next
-      boot, read and clear the capture:
+      boot, read the capture:
 
           journalctl -b -u systemd-pstore --no-pager # confirm early-boot archival
           sudo "$DIR/bin/pstore-dump.sh"             # live and archived records
@@ -114,7 +114,8 @@
       current kernel: only `PSTORE_RAM` is on, so capture is panic-triggered.
       To cover power-loss / hard-reset, rebuild with `CONFIG_PSTORE_CONSOLE=y`
       (continuously mirrors the console to ramoops) or `CONFIG_LKDTM=m`
-      (method D, which panics via the watchdog).
+      (method D, additionally requiring the NMI watchdog and
+      `kernel.hardlockup_panic=1` to turn the lockup into a panic).
 
           grep -E 'PSTORE_RAM|PSTORE_CONSOLE|PSTORE_PMSG|PSTORE_FTRACE|LKDTM' /boot/config-$(uname -r)
 
