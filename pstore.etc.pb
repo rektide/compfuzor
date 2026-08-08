@@ -135,6 +135,21 @@
       kernel memory, not persistent RAM. This gives pstore and kdump a longer
       chronology before a noisy driver floods the ring.
 
+      ## Operational helpers
+
+      This playbook owns two focused commands in addition to Compfuzor's generic
+      generated status machinery. `status-ramoops.sh` checks the conditions that
+      parameter comparison alone cannot prove: the effective allocation leaves
+      at least one dmesg zone, the reservation lies inside the original BIOS E820
+      usable-RAM map, and ramoops registered without another backend first
+      claiming pstore. It reports `DRIFT` and exits nonzero when any safety or
+      registration check fails.
+
+      `dump-pstore.sh` reads both the live `/sys/fs/pstore` mount and records that
+      `systemd-pstore` archived under `/var/lib/systemd/pstore`. It exits zero
+      when both are empty and one when crash evidence is present, making records
+      visible to status-oriented automation without deleting them.
+
       ## Apply and verify
 
       After running this playbook, run `sudo "$DIR/bin/install.sh"`. The next
@@ -150,7 +165,7 @@
       empty `/sys/fs/pstore` therefore does not prove capture failed:
 
           journalctl -b -u systemd-pstore --no-pager
-          sudo "$DIR/bin/pstore-dump.sh"
+          sudo "$DIR/bin/dump-pstore.sh"
 
       For a controlled end-to-end test, first verify `kernel.panic` is nonzero,
       sync filesystems, and use SysRq-c in a maintenance window. LKDTM provides
@@ -168,8 +183,8 @@
       - name: status-ramoops.sh
         src: status-ramoops.sh
         basedir: false
-      - name: pstore-dump.sh
-        src: pstore-dump.sh
+      - name: dump-pstore.sh
+        src: dump-pstore.sh
         basedir: false
 
     # Physical address reserved for ramoops. Default works on this x86_64 host
@@ -244,7 +259,7 @@
     # blacklist; a reboot or `sudo kernel-install` propagates cmdline to BLS.
 
     # /sys/fs/pstore records, surfaced by the generic status-dirs.sh reporter
-    # (and by pstore-dump.sh, the focused human-readable readout). Should be
+    # (and by dump-pstore.sh, the focused human-readable readout). Should be
     # empty in steady state; non-empty after a crash.
     STATUS_DIRS:
       - /sys/fs/pstore

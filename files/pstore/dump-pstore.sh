@@ -1,4 +1,4 @@
-# pstore-dump.sh -- pretty-print crash records captured by the pstore backend.
+# dump-pstore.sh -- pretty-print crash records captured by the pstore backend.
 #
 # After a panic/oops the active pstore backend (ramoops here) flushes the trace to
 # /sys/fs/pstore as <type>-<backend>-<N> files (dmesg-ramoops-0, pmsg-ramoops-0,
@@ -38,13 +38,13 @@ _find_archive() {
 }
 
 if ! _live="$(_find_live 2>/dev/null)"; then
-  printf 'pstore-dump.sh: cannot read %s (run as root?)\n' "$PSTORE_DIR" >&2
+  printf 'dump-pstore.sh: cannot read %s (run as root?)\n' "$PSTORE_DIR" >&2
   exit 2
 fi
 _archive=""
 if [ -d "$PSTORE_ARCHIVE_DIR" ]; then
   if ! _archive="$(_find_archive 2>/dev/null)"; then
-    printf 'pstore-dump.sh: cannot read %s (run as root?)\n' "$PSTORE_ARCHIVE_DIR" >&2
+    printf 'dump-pstore.sh: cannot read %s (run as root?)\n' "$PSTORE_ARCHIVE_DIR" >&2
     exit 2
   fi
 fi

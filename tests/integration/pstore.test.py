@@ -11,7 +11,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 STATUS = ROOT / "files/pstore/status-ramoops.sh"
-DUMP = ROOT / "files/pstore/pstore-dump.sh"
+DUMP = ROOT / "files/pstore/dump-pstore.sh"
 
 
 def run_status(
@@ -81,7 +81,7 @@ def test_layout_requires_original_firmware_ram() -> None:
         )
 
 
-def test_dump_reads_live_and_archive() -> None:
+def test_dump_pstore_reads_live_and_archive() -> None:
     with tempfile.TemporaryDirectory(prefix="compfuzor-pstore-") as temporary:
         root = Path(temporary)
         live = root / "live"
@@ -114,5 +114,5 @@ def test_dump_reads_live_and_archive() -> None:
 if __name__ == "__main__":
     test_layout_requires_dmesg_record()
     test_layout_requires_original_firmware_ram()
-    test_dump_reads_live_and_archive()
+    test_dump_pstore_reads_live_and_archive()
     print("ok: pstore layout and record recovery")
