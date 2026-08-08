@@ -10,8 +10,8 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
-STATUS = ROOT / "files/kernel/status-ramoops.sh"
-DUMP = ROOT / "files/kernel/pstore-dump.sh"
+STATUS = ROOT / "files/pstore/status-ramoops.sh"
+DUMP = ROOT / "files/pstore/pstore-dump.sh"
 
 
 def run_status(cmdline: str) -> subprocess.CompletedProcess[str]:

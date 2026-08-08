@@ -141,6 +141,16 @@
     SYSTEMD_INSTALL_BYPASS: True
     SYSTEMD_THUNK_BYPASS: True
 
+    # Pstore-specific commands belong to this playbook's generated bin dir,
+    # not to the generic kernel/BLS subsystem used by unrelated playbooks.
+    BINS:
+      - name: status-ramoops.sh
+        src: status-ramoops.sh
+        basedir: false
+      - name: pstore-dump.sh
+        src: pstore-dump.sh
+        basedir: false
+
     # Physical address reserved for ramoops. Default works on any x86_64 with
     # ≥ 8 GB RAM (4 GB boundary, above BIOS MMIO holes). Override per-host
     # via -e RAMOOPS_MEM_ADDRESS=0x... for unusual layouts.

@@ -1029,12 +1029,6 @@ _kernel_bls_bins:
     bypass: ['LINK', 'KERNEL']
     src: ../kernel/install-kernel-bls.sh
     basedir: false
-  - name: status-ramoops.sh
-    src: ../kernel/status-ramoops.sh
-    basedir: false
-  - name: pstore-dump.sh
-    src: ../kernel/pstore-dump.sh
-    basedir: false
 _kernel_sysctl_bins:
   - name: build-kernel-sysctl.sh
     bypass: ['BUILD', 'KERNEL']
