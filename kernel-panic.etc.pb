@@ -110,52 +110,14 @@
       instead reserves a persistent ftrace region that is explicitly activated
       only for targeted hang reproduction.
 
-      ## Kdump and crashkernel
+      ## Kdump ownership
 
-      Kdump is a separate capture layer atop the same panic trigger, not another
-      pstore backend. The production kernel reserves a private memory range with
-      `crashkernel=`, preloads a small capture kernel there using kexec, and jumps
-      to it after panic. The capture kernel exposes the failed kernel's memory as
-      `/proc/vmcore`; `makedumpfile` can then filter and write it to durable
-      storage. A vmcore can reveal tasks, registers, locks, allocations, device
-      state, and corrupted objects that a text log cannot.
-
-      The kernel config already contains the important support: `KEXEC`,
-      `KEXEC_FILE`, `CRASH_DUMP`, `PROC_VMCORE`, `RELOCATABLE`, debug information,
-      kallsyms, and the ORC unwinder. That capability is dormant until all of the
-      following exist:
-
-      1. A boot reservation such as `crashkernel=512M`.
-      2. A capture kernel and initramfs successfully loaded after every boot.
-      3. A dump service such as Debian's `kdump-tools` plus `makedumpfile`.
-      4. A destination the capture initramfs can access, including an explicit
-         plan for encrypted storage.
-      5. Matching unstripped `vmlinux`, modules, config, and source retained for
-         every production kernel so the vmcore can be symbolized.
-
-      `crashkernel=512M` is documented below but intentionally commented out.
-      Reserving it now would permanently remove 512 MiB from normal use while no
-      installed capture service consumes it. Once kdump is configured, 512 MiB
-      is a sensible starting reservation for this 64 GiB x86-64 workstation;
-      validate that the actual capture kernel loads and boots, then increase the
-      reservation only if that measured environment requires it.
-
-      The reservation stores the capture kernel and initramfs, not the vmcore.
-      The dump destination must potentially handle a substantial fraction of
-      64 GiB. `makedumpfile -l -d 31` normally removes free and cache pages and
-      compresses what remains, but filtering is not a guaranteed maximum size.
-
-      Default panic ordering enters kdump before panic notifiers and the final
-      pstore dmesg callback. This maximizes the chance that the less-corrupted
-      kernel can transition successfully. `CONFIG_PSTORE_CONSOLE=y` remains
-      valuable because it writes continuously and retains text printed before
-      that jump. Leave `crash_kexec_post_notifiers` unset: moving kdump later can
-      improve the final ramoops dmesg but lets fragile panic notifiers prevent
-      the much richer vmcore.
-
-      After enabling kdump, treat `/sys/kernel/kexec/crash_loaded` equal to `1`
-      as a required health check. A zero means the full-memory capture layer is
-      absent even though `crashkernel=` may still be wasting reserved memory.
+      Kdump is a separate kernel-memory vmcore capture layer, not another pstore backend.
+      Its reservation, Debian packages, capture-kernel lifecycle, dump storage,
+      panic ordering, validation, and confidentiality risks are owned and
+      documented by `crashkernel.etc.pb`. Debian's kdump loader independently
+      enforces `kernel.panic_on_oops=1` when armed; that agrees with this policy.
+      Otherwise this playbook decides which failures become capturable panics.
 
       ## Hardware watchdog
 
@@ -202,10 +164,6 @@
       - "nmi_watchdog=panic,1"
       - "softlockup_panic=1"
       - "panic_sys_info=mem,all_bt,blocked_tasks"
-
-      # Awareness-only until kdump-tools, a tested capture initramfs, and a dump
-      # destination are configured. Enabling this alone only wastes 512 MiB.
-      # - "crashkernel=512M"
 
       # Keep kdump's safer default ordering. Running panic notifiers before the
       # crash-kexec jump can prevent the richer vmcore from being captured.

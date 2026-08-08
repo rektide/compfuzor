@@ -13,7 +13,7 @@
       resilient enough to retain text from failures where a crash kernel cannot
       start. Kdump can preserve the failed kernel's complete memory image when
       its more complex transition succeeds. See `kernel-panic-main/README.md`
-      for panic conversion and kdump policy.
+      for panic conversion and `crashkernel-main/README.md` for kdump policy.
 
       Ordinary DRAM does not survive actual power removal. Ramoops helps with
       kernel-triggered reboot, hardware watchdog reset, firmware warm reset, and
