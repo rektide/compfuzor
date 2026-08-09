@@ -7,7 +7,7 @@
     # atuin's Cargo.toml declares rust-version = "1.97.0"; pin to match so
     # asdf/mise doesn't float below MSRV chasing the global RUST_VERSION: 1.
     TOOL_VERSIONS:
-      rust: "1.97"
+      rust: "1.97.0"
     SYSTEMD_SCOPE: user
     SYSTEMD_INSTALL: user
     SYSTEMD_ROOTS: [atuinSocket, atuinService]
