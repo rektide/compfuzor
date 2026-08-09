@@ -7,6 +7,7 @@
     TOOL_VERSIONS:
       bun: 1
       go: 1
+    BACKUP_TARGET: /mnt/fu/backup/opencode-2026-5
     ETC_DIRS:
       - mcp
       - mcp-disabled
@@ -153,5 +154,7 @@
           # note/beware that we also are pulling in env.exports
           exec bun run --cwd $DIR dev $(pwd)
       # TODO: compfuzor helpers for installing content, automate this in install-user
+      - name: backup.sh
+        basedir: False
   tasks:
     - import_tasks: tasks/compfuzor.includes
