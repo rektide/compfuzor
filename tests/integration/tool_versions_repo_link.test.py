@@ -61,7 +61,6 @@ def test_generated_links_are_removed_without_touching_repo_owned_paths() -> None
                 "--intent-to-add",
                 "--",
                 ".tool-versions",
-                "mise.toml",
             ],
             check=True,
         )

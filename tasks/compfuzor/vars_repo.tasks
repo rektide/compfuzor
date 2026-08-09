@@ -5,77 +5,29 @@
   vars:
     var_name: "{{item|upper|replace('-', '_')}}_DIR"
 - name: "Compfuzor: clear generated tool-version links before repo update"
-  block:
-    - name: "Compfuzor: detect modified tool-version links"
-      command:
-        argv:
-          - git
-          - status
-          - --porcelain=v1
-          - --untracked-files=all
-          - --
-          - .tool-versions
-          - mise.toml
-      args:
-        chdir: "{{ REPO_DIR }}"
-      check_mode: false
-      changed_when: false
-      register: _tool_version_repo_status
-
-    # Do not follow or remove repository-owned files or unrelated symlinks.
-    - name: "Compfuzor: inspect modified tool-version links"
-      stat:
-        path: "{{ item.dest }}"
-        follow: false
-        get_attributes: false
-        get_checksum: false
-        get_mime: false
-      loop: "{{ _tool_version_repo_links }}"
-      loop_control:
-        label: "{{ item.dest }}"
-      when:
-        - _tool_version_repo_status.stdout is deftruthy
-        - item.name in _tool_version_repo_status.stdout
-      register: _tool_version_repo_stats
-
-    - name: "Compfuzor: remove modified generated tool-version links"
-      file:
-        path: "{{ item.item.dest }}"
-        state: absent
-      loop: "{{ _tool_version_repo_stats.results }}"
-      loop_control:
-        label: "{{ item.item.dest }}"
-      when:
-        - item.stat.islnk|default(false)|bool
-        - item.stat.lnk_target|default('') == item.item.src
-
-    - name: "Compfuzor: revert generated tool-version links in the git index"
-      command:
-        argv:
-          - git
-          - reset
-          - --quiet
-          - --
-          - "{{ item.item.name }}"
-      args:
-        chdir: "{{ REPO_DIR }}"
-      loop: "{{ _tool_version_repo_stats.results }}"
-      loop_control:
-        label: "{{ item.item.dest }}"
-      when:
-        - item.stat.islnk|default(false)|bool
-        - item.stat.lnk_target|default('') == item.item.src
-  vars:
-    _tool_version_repo_links:
-      - name: .tool-versions
-        src: "{{ DIR }}/etc/.tool-versions"
-        dest: "{{ REPO_DIR }}/.tool-versions"
-      - name: mise.toml
-        src: "{{ DIR }}/etc/mise.toml"
-        dest: "{{ REPO_DIR }}/mise.toml"
+  shell: |
+    set -eu
+    generated_dir={{ (DIR + '/etc')|quote }}
+    for name in .tool-versions mise.toml; do
+      [ -L "$name" ] || continue
+      [ "$(readlink -- "$name")" = "$generated_dir/$name" ] || continue
+      [ -n "$(git status --porcelain=v1 --untracked-files=all -- "$name")" ] || continue
+      if git cat-file -e "HEAD:$name" 2>/dev/null; then
+        git restore --source=HEAD --staged --worktree -- "$name"
+      else
+        git reset --quiet -- "$name"
+        rm -- "$name"
+      fi
+      printf 'changed:%s\n' "$name"
+    done
+  args:
+    chdir: "{{ REPO_DIR }}"
+  register: _tool_version_repo_cleanup
+  changed_when: "'changed:' in _tool_version_repo_cleanup.stdout"
   when:
     - REPO_DIR is directory
     - (REPO_DIR + '/.git') is exists
+    - (REPO_DIR + '/.tool-versions') is link or (REPO_DIR + '/mise.toml') is link
     - GIT_UPDATE|default(true)|bool
     - GIT_BYPASS is deffalsy
     - REPO_BYPASS is deffalsy
