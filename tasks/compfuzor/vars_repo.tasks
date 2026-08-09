@@ -4,30 +4,19 @@
   when: "REPOS is defined and not lookup('deftruthy', var_name)"
   vars:
     var_name: "{{item|upper|replace('-', '_')}}_DIR"
-- name: "Compfuzor: clear generated tool-version links before repo update"
+- name: "Compfuzor: clear tool-version symlinks before repo update"
   shell: |
-    set -eu
-    generated_dir={{ (DIR + '/etc')|quote }}
-    for name in .tool-versions mise.toml; do
-      [ -L "$name" ] || continue
-      [ "$(readlink -- "$name")" = "$generated_dir/$name" ] || continue
-      [ -n "$(git status --porcelain=v1 --untracked-files=all -- "$name")" ] || continue
-      if git cat-file -e "HEAD:$name" 2>/dev/null; then
-        git restore --source=HEAD --staged --worktree -- "$name"
-      else
-        git reset --quiet -- "$name"
-        rm -- "$name"
-      fi
-      printf 'changed:%s\n' "$name"
-    done
+    git reset --quiet -- {{ item|quote }}
+    rm -f -- {{ item|quote }}
   args:
     chdir: "{{ REPO_DIR }}"
-  register: _tool_version_repo_cleanup
-  changed_when: "'changed:' in _tool_version_repo_cleanup.stdout"
+  loop:
+    - .tool-versions
+    - mise.toml
   when:
     - REPO_DIR is directory
     - (REPO_DIR + '/.git') is exists
-    - (REPO_DIR + '/.tool-versions') is link or (REPO_DIR + '/mise.toml') is link
+    - (REPO_DIR + '/' + item) is link
     - GIT_UPDATE|default(true)|bool
     - GIT_BYPASS is deffalsy
     - REPO_BYPASS is deffalsy
