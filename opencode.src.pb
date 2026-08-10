@@ -12,6 +12,7 @@
       - mcp
       - mcp-disabled
       - agent
+      - etc_d
     MCP_CLIENT: True
     ENV:
       MCP_TARGET: "{{ETC}}/mcp"
@@ -21,6 +22,11 @@
       - name: base.json
         json:
           "$schema": "https://opencode.ai/config.json"
+      - name: etc_d/keybind-tabs.json
+        json:
+          keybinds:
+            session_tab_previous: ctrl+h
+            session_tab_next: ctrl+l
       - name: agent/mcp-gathering.md
         content: |
           ---
