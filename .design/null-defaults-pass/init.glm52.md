@@ -394,15 +394,34 @@ correct for dynamic var lookup. Modernization candidates:
 
 Three concrete pieces of work, in dependency order.
 
-### C1 — Variadic `def` (library) ⭐⭐⭐
+### C1 — Variadic `def` (library) ⭐⭐⭐ ✓ DONE
 
 Upgrade [`def.py:6`](/library/filter_plugins/def.py) `un_undefine` to walk
 positional arguments and return the first non-undefined one. See P5 for the
 implementation sketch and backward-compat analysis (short version: 1- and
 2-arg behavior preserved; 2-arg-both-undefined case is a latent-bug fix).
 
-**Unblocks**: P5 (24 fallthrough chains), P9 (24 item-shape chains). No new
-filter registered — just a generalized existing one.
+**Status**: shipped + 18 unit tests. Also enhanced with `falsy=` parameter
+(see C1b below).
+
+### C1b — `def(falsy=)` parameter (library) ⭐⭐⭐
+
+Extends variadic `def` to also skip falsy values, matching the
+`default(X, true)` semantic that `def` alone can't replicate:
+
+- `def(X, Y)` — first non-undefined (existing)
+- `def(X, Y, falsy=True)` — first non-undefined AND Python-truthy. Matches
+  `X|default(Y, true)`: None, `''`, `0`, `False`, `[]`, `{}` all skip.
+- `def(X, Y, falsy=[None, ''])` — first non-undefined AND not in the
+  caller-supplied skip list. For when you want to skip empty strings but
+  keep `0` or `False`.
+
+Unblocks the `default(X, true)` family: XDG register chains, empty-string
+guards, and any other "default on falsy too" site that's not owner/group
+(P7+P8 handles those via become_calc).
+
+**Unblocks**: XDG chains in `vars_base.tasks:69-75`, and ~15 other
+`default(X, true)` sites across tasks/.
 
 ### C2 — `defaultDir` tolerates undefined (library) ⭐
 
