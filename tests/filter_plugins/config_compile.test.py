@@ -72,6 +72,7 @@ def fixture():
                 "main": {
                     "output": "policy.conf",
                     "processor": "concat",
+                    "validate": "test -s \"$CONFIG_CANDIDATE\"",
                     "inputs": [{"dropins": "policy"}],
                 }
             },
@@ -110,6 +111,11 @@ def test_compile():
         "independent config output",
         plan["spec"]["configs"]["policy"]["assemblies"]["main"]["output"],
         "/srv/app/etc/policy.conf",
+    )
+    check(
+        "candidate validation",
+        plan["spec"]["configs"]["policy"]["assemblies"]["main"]["validate"],
+        'test -s "$CONFIG_CANDIDATE"',
     )
 
     names = [item["name"] for item in plan["bins"]]
@@ -153,6 +159,14 @@ def test_validation():
         "unknown drop-in",
         lambda: compile_config(dropins, configs),
         "unknown drop-in 'missing'",
+    )
+
+    dropins, configs = fixture()
+    dropins["app-core"]["path"] = "~/core.d"
+    check_raises(
+        "unexpanded tilde path",
+        lambda: compile_config(dropins, configs),
+        "must not use an unexpanded '~' path",
     )
 
 

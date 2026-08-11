@@ -36,6 +36,8 @@ fi
 drift=0
 declare -A candidates
 temps=()
+pending_sources=()
+pending_outputs=()
 cleanup() { for file in "${temps[@]}"; do rm -f "$file"; done; }
 trap cleanup EXIT
 for instance in "${instances[@]}"; do
@@ -43,6 +45,7 @@ for instance in "${instances[@]}"; do
   for assembly in "${assemblies[@]}"; do
     output=$(jq -r --arg instance "$instance" --arg assembly "$assembly" '.configs[$instance].assemblies[$assembly].output' "$spec")
     processor=$(jq -r --arg instance "$instance" --arg assembly "$assembly" '.configs[$instance].assemblies[$assembly].processor' "$spec")
+    validate=$(jq -r --arg instance "$instance" --arg assembly "$assembly" '.configs[$instance].assemblies[$assembly].validate // empty' "$spec")
     files=()
 
     while IFS=$'\t' read -r kind value fallback; do
@@ -90,6 +93,11 @@ for instance in "${instances[@]}"; do
         ;;
     esac
 
+    if [ -n "$validate" ] && ! CONFIG_CANDIDATE="$tmp" bash -c "$validate"; then
+      printf '%s.%s: candidate validation failed\n' "$instance" "$assembly" >&2
+      exit 1
+    fi
+
     if [ -f "$output" ] && cmp -s "$tmp" "$output"; then
       rm -f "$tmp"
       candidates["${instance}.${assembly}"]="$output"
@@ -106,10 +114,18 @@ for instance in "${instances[@]}"; do
       continue
     fi
 
-    mv "$tmp" "$output"
-    candidates["${instance}.${assembly}"]="$output"
-    printf '%s.%s: assembled -> %s\n' "$instance" "$assembly" "$output"
+    candidates["${instance}.${assembly}"]="$tmp"
+    temps+=("$tmp")
+    pending_sources+=("$tmp")
+    pending_outputs+=("$output")
   done
 done
+
+if [ "$check" = 0 ]; then
+  for index in "${!pending_sources[@]}"; do
+    mv "${pending_sources[$index]}" "${pending_outputs[$index]}"
+    printf 'assembled -> %s\n' "${pending_outputs[$index]}"
+  done
+fi
 
 exit "$drift"

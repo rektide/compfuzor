@@ -91,6 +91,7 @@ def test_config_graph() -> None:
           main:
             output: policy.conf
             processor: concat
+            validate: 'grep -q "^policy=true$" "$CONFIG_CANDIDATE"'
             inputs: [{{dropins: policy}}]
   tasks:
     - import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'sub_config.tasks')!r}
@@ -141,6 +142,14 @@ def test_config_graph() -> None:
 
         core = payload / "etc" / "core.d" / "10-core.json"
         core.write_text('{"core": false}\n', encoding="utf-8")
+        policy_fragment = payload / "etc" / "policy.d" / "10-policy.conf"
+        policy_fragment.write_text("policy=false\n", encoding="utf-8")
+        invalid = run([str(payload / "bin" / "config.sh")], cwd=payload, check=False)
+        assert invalid.returncode == 1
+        assert json.loads((payload / "etc" / "app.json").read_text(encoding="utf-8"))["core"] is True
+        assert (payload / "etc" / "policy.conf").read_text(encoding="utf-8") == "policy=true\n"
+        policy_fragment.write_text("policy=true\n", encoding="utf-8")
+
         direct_status = run([str(payload / "bin" / "config-app.sh"), "--check", "-q"], cwd=payload, check=False)
         assert direct_status.returncode == 1, (direct_status.returncode, direct_status.stdout, direct_status.stderr)
         status = run([str(payload / "bin" / "status-config-app.sh"), "-q"], cwd=payload, check=False)
@@ -152,12 +161,23 @@ def test_config_graph() -> None:
         )
         assert json.loads((payload / "etc" / "app.json").read_text(encoding="utf-8"))["core"] is True
 
-        run([str(payload / "bin" / "disable-app.sh"), "app-core:10-core"], cwd=payload)
+        duplicate = payload / "etc" / "mcp" / "10-core.json"
+        duplicate.write_text("{}\n", encoding="utf-8")
+        ambiguous = run([str(payload / "bin" / "disable-app.sh"), "10-core"], cwd=payload, check=False)
+        assert ambiguous.returncode == 1
+        assert core.is_file() and duplicate.is_file()
+        duplicate.unlink()
+
+        run(
+            [str(payload / "bin" / "disable-app.sh"), "app-core:10-core", "app-core:10-core"],
+            cwd=payload,
+        )
         assert (payload / "etc" / "core.d" / "10-core.json.disabled").is_file()
         app = json.loads((payload / "etc" / "app.json").read_text(encoding="utf-8"))
         assert app == {"base": True, "mcp": {"server": {"enabled": True}}}
 
-        run([str(payload / "bin" / "enable-app.sh"), "app-core:10-core"], cwd=payload)
+        disabled_core = payload / "etc" / "core.d" / "10-core.json.disabled"
+        run([str(payload / "bin" / "enable-app.sh"), str(disabled_core)], cwd=payload)
         assert core.is_file()
 
 

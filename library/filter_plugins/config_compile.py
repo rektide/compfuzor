@@ -37,8 +37,10 @@ def _identifier(value, label):
 def _path(root, value, label):
     if not isinstance(value, str) or not value:
         _error("{} must be a non-empty path".format(label))
-    if value.startswith(("/", "~")):
-        return posixpath.normpath(value) if value.startswith("/") else value
+    if value.startswith("~"):
+        _error("{} must not use an unexpanded '~' path".format(label))
+    if value.startswith("/"):
+        return posixpath.normpath(value)
     if not isinstance(root, str) or not root:
         _error("{} requires a root for relative path {!r}".format(label, value))
     return posixpath.normpath(posixpath.join(root, value))
@@ -175,6 +177,9 @@ def compile_config(dropins, configs):
             processor = assembly_raw.get("processor")
             if processor not in _PROCESSORS:
                 _error("unsupported processor {!r}".format(processor))
+            validate = assembly_raw.get("validate")
+            if validate is not None and (not isinstance(validate, str) or not validate):
+                _error("assembly validate must be a non-empty command")
 
             inputs = []
             for index, item in enumerate(
@@ -203,6 +208,7 @@ def compile_config(dropins, configs):
                 "output": output,
                 "processor": processor,
                 "inputs": inputs,
+                "validate": validate,
             }
 
         order = _topological_order(assemblies, config_id)
