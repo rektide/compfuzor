@@ -5,9 +5,24 @@
     BUN: True
     MCP_CLIENT: True
     ENV:
+      MCP_TARGET: "{{ ETC }}/mcp"
       MCP_COMMAND_ARGS: "1"
-      MCP_CONF: mcp_servers.json
       MCP_WRAPPER: mcpServers
+    DROPINS:
+      mcp-cli-servers:
+        root: "{{ ETC }}"
+        path: mcp
+        include: "*.json"
+        disabled_suffix: .disabled
+    CONFIGS:
+      mcp-cli:
+        root: "{{ ETC }}"
+        assemblies:
+          main:
+            output: mcp_servers.json
+            processor: json-deep-merge
+            inputs:
+              - dropins: mcp-cli-servers
     BINS:
       - name: build.sh
         content: |
@@ -18,6 +33,6 @@
       - name: install-user.sh
         content: |
           mkdir -p ~/.config/mcp
-          ln -s $(pwd)/etc/${MCP_CONF} ~/.config/mcp/mcp_servers.json
+          ln -s $(pwd)/etc/mcp_servers.json ~/.config/mcp/mcp_servers.json
   tasks:
     - import_tasks: tasks/compfuzor.includes

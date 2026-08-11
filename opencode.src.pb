@@ -9,24 +9,74 @@
       go: 1
     BACKUP_TARGET: /mnt/fu/backup/opencode-2026-5
     ETC_DIRS:
-      - mcp
-      - mcp-disabled
       - agent
-      - etc_d
     MCP_CLIENT: True
     ENV:
       MCP_TARGET: "{{ETC}}/mcp"
       MCP_WRAPPER: "mcp"
-      MCP_CONF: opencode.json
+    DROPINS:
+      opencode-core:
+        root: "{{ ETC }}"
+        path: etc_d
+        include: "*.json"
+        disabled_suffix: .disabled
+        files:
+          - name: keybind-tabs.json
+            json:
+              keybinds:
+                session_tab_previous: ctrl+h
+                session_tab_next: ctrl+l
+          - name: gsd.json
+            json:
+              permission:
+                read:
+                  "~/.config/opencode/get-shit-done/*": "allow"
+                external_directory:
+                  "~/.config/opencode/get-shit-done/*": "allow"
+          - name: permission.json
+            json:
+              permission:
+                "*": "allow"
+                external_directory:
+                  "*": "allow"
+                doom_loop: "allow"
+          - name: mdns.json
+            json:
+              server:
+                mdns: true
+          - name: openai-codex.json
+            json:
+              plugin:
+                - "opencode-openai-codex-auth"
+          - name: zai-coding-plan.json
+            json:
+              provider:
+                zai-coding-plan:
+                  options:
+                    timeout: 600000
+          - name: autoupdate.json
+            json:
+              autoupdate: false
+      opencode-mcp:
+        root: "{{ ETC }}"
+        path: mcp
+        include: "*.json"
+        disabled_suffix: .disabled
+    CONFIGS:
+      opencode:
+        root: "{{ ETC }}"
+        assemblies:
+          main:
+            output: opencode.json
+            processor: json-deep-merge
+            inputs:
+              - file: base.json
+              - dropins: opencode-core
+              - dropins: opencode-mcp
     ETC_FILES:
       - name: base.json
         json:
           "$schema": "https://opencode.ai/config.json"
-      - name: etc_d/keybind-tabs.json
-        json:
-          keybinds:
-            session_tab_previous: ctrl+h
-            session_tab_next: ctrl+l
       - name: agent/mcp-gathering.md
         content: |
           ---
@@ -77,37 +127,6 @@
           - Proper structure
           - Code examples
           - User-friendly language
-      - name: mcp/gsd.json
-        json:
-          permission:
-            read:
-              "~/.config/opencode/get-shit-done/*": "allow"
-            external_directory:
-              "~/.config/opencode/get-shit-done/*": "allow"
-      - name: mcp/permission.json
-        json:
-          permission:
-            "*": "allow"
-            external_directory:
-              "*": "allow"
-            doom_loop: "allow"
-      - name: mcp/mdns.json
-        json:
-          server:
-            mdns: true
-      - name: mcp/openai-codex.json
-        json:
-          plugin:
-            - "opencode-openai-codex-auth"
-      - name: mcp/zai-coding-plan.json
-        json:
-          provider:
-            zai-coding-plan:
-              options:
-                timeout: 600000
-      - name: autoupdate.json
-        json:
-          autoupdate: false
       #- name: provider/openrouter.json
       #  json:
       #    provider:

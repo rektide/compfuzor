@@ -1,13 +1,11 @@
 ---
 # gen_mcp.tasks — MCP server configuration and client tooling.
 #
-# The config subsystem (gen_config.tasks) provides generic config management:
-# config merger (config-mcp.sh), generic disable/enable, status, and ETC_DIRS.
-# This file delegates to it with CONFIG_KEY=mcp, CONFIG_MERGE=json-merge.
+# MCP clients declare DROPINS/CONFIGS; the central config synthesis pass provides
+# their merger, generic toggles, status, and apply ordering.
 #
 # What MCP contributes itself:
 #   - mcp.json ETC_FILES (server config, from MCP_URL or MCP_COMMAND)
-#   - mcp-disable.sh (JSON override wrappers — MCP-specific, not generic disable)
 #   - mcp-install.ts (MCP server installer)
 
 - name: 'Build vars for remote MCP server'
@@ -55,24 +53,12 @@
           {%- endif -%}
   when: MCP_COMMAND is defined
 
-- name: 'Contribute MCP-specific BINS (override disabler + installer)'
+- name: 'Contribute MCP installer'
   set_fact:
-    BINS: "{{ BINS | merge_list([disable, install] | annotate_bins('mcp'), preset='bins_generated') }}"
+    BINS: "{{ BINS | merge_list([install] | annotate_bins('mcp'), preset='bins_generated') }}"
   vars:
-    disable:
-      name: mcp-disable.sh
-      src: ../mcp-disable.sh
-      basedir: False
     install:
       name: mcp-install.ts
       src: ../mcp-install.ts
       basedir: False
-  when: MCP_CLIENT is defined
-
-- name: "Compfuzor: delegate config management to gen_config"
-  import_tasks: gen_config.tasks
-  vars:
-    CONFIG_KEY: mcp
-    CONFIG_MERGE: json-merge
-    CONFIG_EXT: json
   when: MCP_CLIENT is defined

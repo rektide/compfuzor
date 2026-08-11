@@ -121,9 +121,15 @@ function commandArgSplitter(config: McpConfig): McpConfig {
 
 function wrapMcp(name: string, config: McpConfig): Record<string, unknown> {
   const wrapper = process.env.MCP_WRAPPER ?? "mcp"
-  const wrapped = { ...config, enabled: true }
-
-  return { [wrapper]: { [name]: wrapped } }
+  const result: Record<string, unknown> = {}
+  let cursor = result
+  for (const part of wrapper.split(".")) {
+    const next: Record<string, unknown> = {}
+    cursor[part] = next
+    cursor = next
+  }
+  cursor[name] = { ...config, enabled: true }
+  return result
 }
 
 function main(): void {
@@ -150,8 +156,13 @@ function main(): void {
 
   const targetDir = process.env.MCP_TARGET ?? join(selfDir, "etc", "mcp")
   const target = join(targetDir, `${name}.json`)
+  const disabledTarget = `${target}.disabled`
 
   mkdirSync(targetDir, { recursive: true })
+  if (existsSync(disabledTarget)) {
+    console.error(`error: ${disabledTarget} exists; enable it before reinstalling`)
+    process.exit(1)
+  }
 
   // Read and process
   const raw = readFileSync(mcpFile, "utf-8")
@@ -166,7 +177,7 @@ function main(): void {
   writeFileSync(target, JSON.stringify(wrapped, null, "\t") + "\n")
   console.log(`installed: ${target}`)
 
-  // Run config.sh if exists
+  // Rebuild all config instances so downstream assemblies remain current.
   const configSh = join(selfDir, "bin", "config.sh")
   if (existsSync(configSh)) {
     execSync("./bin/config.sh", { cwd: selfDir, stdio: "inherit" })
