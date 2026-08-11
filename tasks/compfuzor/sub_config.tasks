@@ -1,0 +1,5 @@
+---
+- name: "Compfuzor: compile drop-in and config declarations"
+  set_fact:
+    _config_plan: "{{ DROPINS | default({}) | config_compile(CONFIGS | default({})) }}"
+  when: DROPINS is defined or CONFIGS is defined

@@ -87,7 +87,13 @@ def test_compile():
     check(
         "drop-in directories",
         plan["dirs"],
-        ["/srv/app/etc/core.d", "/srv/app/etc/mcp", "/srv/app/etc/policy.d"],
+        [
+            "/srv/app/etc/core.d",
+            "/srv/app/etc/mcp",
+            "/srv/app/etc/policy.d",
+            "/srv/app/etc/generated",
+            "/srv/app/etc",
+        ],
     )
     check(
         "drop-in file destination",
@@ -112,6 +118,7 @@ def test_compile():
         names,
         [
             "config.sh",
+            "config-toggle.sh",
             "config-app.sh",
             "disable-app.sh",
             "enable-app.sh",

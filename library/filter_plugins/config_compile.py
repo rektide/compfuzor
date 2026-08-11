@@ -13,7 +13,7 @@ from template_data import raw_copy_template_data
 
 
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
-_PROCESSORS = {"concat", "json-deep-merge", "block-in-file"}
+_PROCESSORS = {"concat", "json-deep-merge"}
 
 
 def _error(message):
@@ -133,7 +133,13 @@ def compile_config(dropins, configs):
             "src": "../config-run.sh",
             "basedir": False,
             "run": True,
-        }
+            "requires_fs": True,
+        },
+        {
+            "name": "config-toggle.sh",
+            "src": "../config-toggle.sh",
+            "basedir": False,
+        },
     ] if configs else []
     statuses = []
 
@@ -162,6 +168,9 @@ def compile_config(dropins, configs):
             if owner is not None:
                 _error("output {!r} is claimed by {} and {}".format(output, owner, config_id + "." + assembly_id))
             output_owners[output] = config_id + "." + assembly_id
+            output_dir = posixpath.dirname(output)
+            if output_dir and output_dir not in dirs:
+                dirs.append(output_dir)
 
             processor = assembly_raw.get("processor")
             if processor not in _PROCESSORS:
@@ -219,19 +228,16 @@ def compile_config(dropins, configs):
             for action in ("disable", "enable"):
                 bins.append({
                     "name": "{}-{}.sh".format(action, config_id),
-                    "src": "../config-toggle.sh",
                     "basedir": False,
-                    "early": [
-                        "export CONFIG_INSTANCE={}".format(config_id),
-                        "export CONFIG_ACTION={}".format(action),
-                    ],
+                    "content": 'exec "$DIR/bin/config-toggle.sh" {} {} "$@"'.format(
+                        action, config_id
+                    ),
                 })
         status_name = "status-config-{}.sh".format(config_id)
         bins.append({
             "name": status_name,
-            "src": "../status/status-config-graph.sh",
             "basedir": False,
-            "early": ["export CONFIG_INSTANCE={}".format(config_id)],
+            "content": 'exec "$DIR/bin/config-{}.sh" --check "$@"'.format(config_id),
         })
         statuses.append(status_name)
 

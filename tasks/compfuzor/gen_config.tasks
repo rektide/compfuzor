@@ -14,10 +14,23 @@
 #     CONFIG_EXT: json
 # See gen_mcp.tasks for a working example.
 
-- name: "Compfuzor: synthesize config subsystem artifacts"
+- name: "Compfuzor: synthesize compiled config artifacts"
+  set_fact:
+    DIRS: "{{ DIRS | merge_list(_config_plan.dirs, preset='append_unique') }}"
+    ETC_FILES: "{{ ETC_FILES | merge_list(_config_plan.files, [spec_file], preset='append') }}"
+    BINS: "{{ BINS | merge_list(_config_plan.bins | annotate_bins('config'), preset='bins_generated') }}"
+    STATUSES: "{{ STATUSES | merge_list(_config_plan.statuses, preset='append_unique') }}"
+    PKGS: "{{ PKGS | merge_list(['jq'], preset='append_unique') }}"
+  vars:
+    spec_file:
+      name: config.spec.json
+      json: "{{ _config_plan.spec }}"
+  when: _config_plan is defined
+
+- name: "Compfuzor: synthesize legacy config subsystem artifacts"
   set_fact:
     ETC_DIRS: "{{ lookup('merge_subsys', id='config', contrib='ETC_DIRS') }}"
     BINS: "{{ lookup('merge_subsys', id='config', domain=CONFIG_KEY, contrib='BINS') }}"
     ENV_LIST: "{{ lookup('merge_subsys', id='config', contrib='ENV_LIST') }}"
     STATUSES: "{{ STATUSES | merge_list(['status-config.sh'], preset='append') }}"
-  when: lookup('subsys', id='config', get='active', default=false) | bool
+  when: _config_plan is not defined and lookup('subsys', id='config', get='active', default=false) | bool
