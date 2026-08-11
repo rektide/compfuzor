@@ -698,6 +698,45 @@ client config can combine its own fragments with MCP fragments, while a nested
 configuration such as Prometheus can route several source sets through an
 explicit assembly graph.
 
+The public declarations are `DROPINS` and `CONFIGS`:
+
+```yaml
+DROPINS:
+  app-core:
+    root: "{{ ETC }}"
+    path: config.d
+    include: "*.json"
+    disabled_suffix: .disabled
+    files:
+      - name: 10-core.json
+        json: {feature: true}
+
+CONFIGS:
+  app:
+    root: "{{ ETC }}"
+    assemblies:
+      main:
+        output: app.json
+        processor: json-deep-merge
+        inputs:
+          - file: base.json
+          - dropins: app-core
+        validate: 'jq -e . "$CONFIG_CANDIDATE" >/dev/null'
+```
+
+Each config instance contains an assembly DAG. Inputs are ordered and typed as
+`file`, `dropins`, or same-instance `artifact` references. The compiler rejects
+unknown references, cycles, duplicate outputs, unsupported processors, and
+unexpanded `~` paths. Supported processors are currently `concat` and
+`json-deep-merge`.
+
+The runtime builds and validates every candidate before replacing any output.
+Validation commands receive the candidate path in `CONFIG_CANDIDATE`. Status
+commands run the same graph in check mode, including candidate propagation
+through nested artifacts. Mutable sets use `<file>.disabled`; generated toggle
+commands reject ambiguous selectors and rebuild their instance once after all
+renames succeed.
+
 The legacy hierarchy `*_D` variables violate this seam by making filesystem
 tasks infer both a fragment directory and an assembly operation from one path.
 Treat them as migration inputs only. Net-new drop-in work should describe
