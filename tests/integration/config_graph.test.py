@@ -48,7 +48,7 @@ def test_config_graph() -> None:
     PKGS: []
     DROPINS:
       app-core:
-        root: {str(payload / 'etc')!r}
+        root: "{{{{ ETC }}}}"
         path: core.d
         include: '*.json'
         disabled_suffix: .disabled
@@ -56,7 +56,7 @@ def test_config_graph() -> None:
           - name: 10-core.json
             json: {{core: true}}
       app-mcp:
-        root: {str(payload / 'etc')!r}
+        root: "{{{{ ETC }}}}"
         path: mcp
         include: '*.json'
         disabled_suffix: .disabled
@@ -64,7 +64,7 @@ def test_config_graph() -> None:
           - name: 10-server.json
             json: {{mcp: {{server: {{enabled: true}}}}}}
       policy:
-        root: {str(payload / 'etc')!r}
+        root: "{{{{ ETC }}}}"
         path: policy.d
         include: '*.conf'
         files:
@@ -72,7 +72,7 @@ def test_config_graph() -> None:
             content: "policy=true\\n"
     CONFIGS:
       app:
-        root: {str(payload / 'etc')!r}
+        root: "{{{{ ETC }}}}"
         assemblies:
           mcp:
             output: generated/mcp.json
@@ -86,7 +86,7 @@ def test_config_graph() -> None:
               - dropins: app-core
               - artifact: mcp
       policy:
-        root: {str(payload / 'etc')!r}
+        root: "{{{{ ETC }}}}"
         assemblies:
           main:
             output: policy.conf
