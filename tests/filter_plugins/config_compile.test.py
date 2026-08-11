@@ -169,6 +169,14 @@ def test_validation():
         "must not use an unexpanded '~' path",
     )
 
+    dropins, configs = fixture()
+    configs["app"]["root"] = "~/.config/app"
+    check_raises(
+        "unexpanded tilde root",
+        lambda: compile_config(dropins, configs),
+        "root must not use an unexpanded '~' path",
+    )
+
 
 if __name__ == "__main__":
     test_compile()

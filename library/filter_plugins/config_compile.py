@@ -37,6 +37,8 @@ def _identifier(value, label):
 def _path(root, value, label):
     if not isinstance(value, str) or not value:
         _error("{} must be a non-empty path".format(label))
+    if isinstance(root, str) and root.startswith("~"):
+        _error("{} root must not use an unexpanded '~' path".format(label))
     if value.startswith("~"):
         _error("{} must not use an unexpanded '~' path".format(label))
     if value.startswith("/"):

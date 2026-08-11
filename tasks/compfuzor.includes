@@ -123,7 +123,9 @@
 - debug: "msg=''"
 - debug: "msg='Compfuzor: FILESYSTEM'"
 - import_tasks: compfuzor/fs_base.tasks
-  when: DIR is deftruthy or DIRS is deftruthy or FILES is deftruthy and DIR_BYPASS is deffalsy
+  when: >
+    (DIR is deftruthy or DIRS is deftruthy or FILES is deftruthy) and
+    DIR_BYPASS is deffalsy and FS_BYPASS is deffalsy
 - import_tasks: compfuzor/fs_repo.tasks
 - import_tasks: compfuzor/fs_env.tasks
   when: >
@@ -144,7 +146,7 @@
       - "DIRS"
       - "DIR"
       - "FILES"
-  when: FS_BYPASS is deffalsy
+  when: FS_BYPASS is deffalsy and DIR_BYPASS is deffalsy
 - import_tasks: compfuzor/fs_srcs_too.tasks
   when: type == "src" and FS_SRCS_BYPASS is deffalsy
 - import_tasks: compfuzor/fs_tgz.tasks
@@ -166,8 +168,9 @@
     multi: fs_d
     keys:
       - "D"
-  when: FS_BYPASS is deffalsy
+  when: FS_BYPASS is deffalsy and DIR_BYPASS is deffalsy
 - import_tasks: compfuzor/fs_base_d.tasks
+  when: FS_BYPASS is deffalsy and DIR_BYPASS is deffalsy
 - debug: "msg='Compfuzor: completed filesystem'"
 
 - debug: "msg=''"

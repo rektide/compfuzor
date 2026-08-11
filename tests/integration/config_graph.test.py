@@ -140,6 +140,16 @@ def test_config_graph() -> None:
         assert app == {"base": True, "core": True, "mcp": {"server": {"enabled": True}}}
         assert (payload / "etc" / "policy.conf").read_text(encoding="utf-8") == "policy=true\n"
 
+        app_output = payload / "etc" / "app.json"
+        saved_app = payload / "etc" / "app.saved.json"
+        app_output.rename(saved_app)
+        app_output.mkdir()
+        invalid_output = run([str(payload / "bin" / "config-app.sh")], cwd=payload, check=False)
+        assert invalid_output.returncode == 1
+        assert app_output.is_dir()
+        app_output.rmdir()
+        saved_app.rename(app_output)
+
         core = payload / "etc" / "core.d" / "10-core.json"
         core.write_text('{"core": false}\n', encoding="utf-8")
         policy_fragment = payload / "etc" / "policy.d" / "10-policy.conf"

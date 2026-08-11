@@ -122,10 +122,40 @@ for instance in "${instances[@]}"; do
 done
 
 if [ "$check" = 0 ]; then
-  for index in "${!pending_sources[@]}"; do
-    mv "${pending_sources[$index]}" "${pending_outputs[$index]}"
-    printf 'assembled -> %s\n' "${pending_outputs[$index]}"
+  backups=()
+  for output in "${pending_outputs[@]}"; do
+    if [ -e "$output" ] && [ ! -f "$output" ]; then
+      printf 'config output is not a regular file: %s\n' "$output" >&2
+      exit 1
+    fi
   done
+
+  for index in "${!pending_sources[@]}"; do
+    output=${pending_outputs[$index]}
+    backup=""
+    if [ -e "$output" ]; then
+      backup=$(mktemp "$(dirname "$output")/.config-backup.XXXXXX")
+      rm -f "$backup"
+      if ! mv "$output" "$backup"; then
+        for ((rollback=index - 1; rollback >= 0; rollback--)); do
+          rm -f "${pending_outputs[$rollback]}"
+          [ -z "${backups[$rollback]}" ] || mv "${backups[$rollback]}" "${pending_outputs[$rollback]}"
+        done
+        exit 1
+      fi
+    fi
+    backups[$index]="$backup"
+    if ! mv "${pending_sources[$index]}" "$output"; then
+      [ -z "$backup" ] || mv "$backup" "$output"
+      for ((rollback=index - 1; rollback >= 0; rollback--)); do
+        rm -f "${pending_outputs[$rollback]}"
+        [ -z "${backups[$rollback]}" ] || mv "${backups[$rollback]}" "${pending_outputs[$rollback]}"
+      done
+      exit 1
+    fi
+    printf 'assembled -> %s\n' "$output"
+  done
+  for backup in "${backups[@]}"; do [ -z "$backup" ] || rm -f "$backup"; done
 fi
 
 exit "$drift"
