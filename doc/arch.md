@@ -673,8 +673,37 @@ Together they do three jobs:
 
 - resolve hierarchy roots and base paths
 - fan work out across hierarchy families or key groups
-- materialize synthesized declarations into directories, files, links, and `.d`
-  assemblies
+- materialize synthesized declarations into directories, files, and links
+
+### Config assembly and filesystem effects
+
+Config owns assembly intent and ordering; filesystem tasks own directory and
+file effects.
+
+This is a strict seam:
+
+- drop-in producers declare named source sets and their fragment files
+- config synthesis selects processors, ordered inputs, outputs, dependency
+  ordering, toggle behavior, status, and rebuild commands
+- hierarchy synthesis turns source sets into ordinary directory and file
+  artifacts
+- filesystem apply tasks create those directories and files without receiving
+  processor names or dependency graphs
+- config apply runs only after its source files and generated commands have
+  been materialized
+
+Keeping assembly policy out of filesystem tasks lets several subsystems
+contribute drop-ins independently of the final output that consumes them. A
+client config can combine its own fragments with MCP fragments, while a nested
+configuration such as Prometheus can route several source sets through an
+explicit assembly graph.
+
+The legacy hierarchy `*_D` variables violate this seam by making filesystem
+tasks infer both a fragment directory and an assembly operation from one path.
+Treat them as migration inputs only. Net-new drop-in work should describe
+filesystem source sets separately from config assembly intent; once the small
+legacy consumer set has migrated, direct `_D` assembly belongs outside
+`fs_hierarchy`.
 
 Example bridge:
 
@@ -682,7 +711,8 @@ Example bridge:
 |---|---|---|
 | `ETC_FILES` contribution | `_multi.tasks` and hierarchy keys | concrete `/etc`-style files |
 | `BINS` contribution | bins tasks | generated or linked scripts |
-| hierarchy file declarations | hierarchy expansion | files and assembled drop-ins |
+| named drop-in declarations | hierarchy expansion | fragment directories and files |
+| config assembly declarations | config generation and ordered apply | assembled config outputs |
 
 ## 6. Worked examples
 

@@ -94,6 +94,11 @@ prefix conventions, and worked examples.
 See [`doc/subsys.md`](doc/subsys.md) for the subsystem contrib pattern,
 `gen_*.tasks` conventions, and how to add a new subsystem.
 
+The config/filesystem seam is defined under
+[`Config assembly and filesystem effects`](doc/arch.md#config-assembly-and-filesystem-effects):
+config owns assembly intent and ordering, while filesystem tasks own directory
+and file effects.
+
 ## Task file prefixes
 
 | Prefix | Phase | Purpose |
