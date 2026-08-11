@@ -261,6 +261,30 @@ def compile_config(dropins, configs):
     }
 
 
+@accept_args_markers
+def publish_config(subsystems, compiled):
+    """Publish compiled config state without templating unrelated subsystems."""
+    subsystems = _mapping(raw_copy_template_data(subsystems), "SUBSYSTEM")
+    compiled = _mapping(raw_copy_template_data(compiled), "compiled config")
+    current = _mapping(subsystems.get("config"), "SUBSYSTEM.config")
+    spec = _mapping(compiled.get("spec"), "compiled config spec")
+    contrib = {
+        "DIRS": list(compiled.get("dirs", [])),
+        "ETC_FILES": list(compiled.get("files", [])) + [
+            {"name": "config.spec.json", "json": spec}
+        ],
+        "BINS": list(compiled.get("bins", [])),
+        "STATUSES": list(compiled.get("statuses", [])),
+        "PKGS": ["jq"],
+    }
+    current.update({"requested": True, "spec": spec, "contrib": contrib})
+    subsystems["config"] = current
+    return subsystems
+
+
 class FilterModule(object):
     def filters(self):
-        return {"config_compile": compile_config}
+        return {
+            "config_compile": compile_config,
+            "config_publish": publish_config,
+        }

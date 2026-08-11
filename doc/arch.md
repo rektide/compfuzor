@@ -724,6 +724,11 @@ CONFIGS:
         validate: 'jq -e . "$CONFIG_CANDIDATE" >/dev/null'
 ```
 
+Compilation publishes durable runtime state at `SUBSYSTEM.config`: `spec`
+contains the normalized drop-ins and config assembly graphs, while `contrib`
+contains the shared `DIRS`, `ETC_FILES`, `BINS`, `STATUSES`, and `PKGS`
+artifacts consumed by config generation.
+
 Each config instance contains an assembly DAG. Inputs are ordered and typed as
 `file`, `dropins`, or same-instance `artifact` references. The compiler rejects
 unknown references, cycles, duplicate outputs, unsupported processors, and

@@ -16,16 +16,12 @@
 
 - name: "Compfuzor: synthesize compiled config artifacts"
   set_fact:
-    DIRS: "{{ DIRS | merge_list(_config_plan.dirs, preset='append_unique') }}"
-    ETC_FILES: "{{ ETC_FILES | merge_list(_config_plan.files, [spec_file], preset='append') }}"
-    BINS: "{{ BINS | merge_list(_config_plan.bins | annotate_bins('config'), preset='bins_generated') }}"
-    STATUSES: "{{ STATUSES | merge_list(_config_plan.statuses, preset='append_unique') }}"
-    PKGS: "{{ PKGS | merge_list(['jq'], preset='append_unique') }}"
-  vars:
-    spec_file:
-      name: config.spec.json
-      json: "{{ _config_plan.spec }}"
-  when: _config_plan is defined
+    DIRS: "{{ DIRS | merge_list(SUBSYSTEM.config.contrib.DIRS, preset='append_unique') }}"
+    ETC_FILES: "{{ ETC_FILES | merge_list(SUBSYSTEM.config.contrib.ETC_FILES, preset='append') }}"
+    BINS: "{{ BINS | merge_list(SUBSYSTEM.config.contrib.BINS | annotate_bins('config'), preset='bins_generated') }}"
+    STATUSES: "{{ STATUSES | merge_list(SUBSYSTEM.config.contrib.STATUSES, preset='append_unique') }}"
+    PKGS: "{{ PKGS | merge_list(SUBSYSTEM.config.contrib.PKGS, preset='append_unique') }}"
+  when: DROPINS is defined or CONFIGS is defined
 
 - name: "Compfuzor: synthesize legacy config subsystem artifacts"
   set_fact:
@@ -33,4 +29,6 @@
     BINS: "{{ lookup('merge_subsys', id='config', domain=CONFIG_KEY, contrib='BINS') }}"
     ENV_LIST: "{{ lookup('merge_subsys', id='config', contrib='ENV_LIST') }}"
     STATUSES: "{{ STATUSES | merge_list(['status-config.sh'], preset='append') }}"
-  when: _config_plan is not defined and lookup('subsys', id='config', get='active', default=false) | bool
+  when:
+    - DROPINS is not defined and CONFIGS is not defined
+    - lookup('subsys', id='config', get='active', default=false) | bool

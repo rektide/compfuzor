@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, "library/filter_plugins")
 
 from ansible.errors import AnsibleFilterError
-from config_compile import compile_config
+from config_compile import compile_config, publish_config
 
 
 def check(label, actual, expected):
@@ -134,6 +134,24 @@ def test_compile():
         ],
     )
     check("status names", plan["statuses"], ["status-config-app.sh", "status-config-policy.sh"])
+
+    subsystems = {
+        "config": {"existing": "preserved"},
+        "other": {"spec": "{{ undefined_until_other_subsystem_runs }}"},
+    }
+    published = publish_config(subsystems, plan)
+    check("unrelated subsystem preserved", published["other"], subsystems["other"])
+    check("existing config state preserved", published["config"]["existing"], "preserved")
+    check("normalized spec published", published["config"]["spec"], plan["spec"])
+    check("config dirs contributed", published["config"]["contrib"]["DIRS"], plan["dirs"])
+    check(
+        "config spec file contributed",
+        published["config"]["contrib"]["ETC_FILES"][-1],
+        {"name": "config.spec.json", "json": plan["spec"]},
+    )
+    check("config bins contributed", published["config"]["contrib"]["BINS"], plan["bins"])
+    check("config statuses contributed", published["config"]["contrib"]["STATUSES"], plan["statuses"])
+    check("config packages contributed", published["config"]["contrib"]["PKGS"], ["jq"])
 
 
 def test_validation():

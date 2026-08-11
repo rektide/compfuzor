@@ -94,30 +94,34 @@ def test_config_graph() -> None:
             validate: 'grep -q "^policy=true$" "$CONFIG_CANDIDATE"'
             inputs: [{{dropins: policy}}]
   tasks:
+    - set_fact:
+        SUBSYSTEM:
+          sentinel:
+            spec: preserved
     - import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'sub_config.tasks')!r}
     - import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_config.tasks')!r}
     - file:
         path: "{{{{ item }}}}"
         state: directory
         mode: '0770'
-      loop: "{{{{ _config_plan.dirs + [ETC, BINS_DIR] }}}}"
+      loop: "{{{{ SUBSYSTEM.config.contrib.DIRS + [ETC, BINS_DIR] }}}}"
     - copy:
         dest: "{{{{ item.dest }}}}"
         content: "{{{{ item.json | to_nice_json if item.json is defined else item.content }}}}"
         mode: '0660'
-      loop: "{{{{ _config_plan.files }}}}"
+      loop: "{{{{ SUBSYSTEM.config.contrib.ETC_FILES | selectattr('dest', 'defined') }}}}"
     - copy:
         dest: "{{{{ ETC }}}}/base.json"
         content: '{{"base": true}}'
         mode: '0660'
     - copy:
         dest: "{{{{ ETC }}}}/config.spec.json"
-        content: "{{{{ _config_plan.spec | to_nice_json }}}}"
+        content: "{{{{ SUBSYSTEM.config.spec | to_nice_json }}}}"
         mode: '0660'
     - import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'bins.tasks')!r}
     - copy:
         dest: {str(output)!r}
-        content: "{{{{ {{'bins': BINS | map(attribute='name') | list, 'statuses': STATUSES}} | to_nice_json }}}}"
+        content: "{{{{ {{'bins': BINS | map(attribute='name') | list, 'statuses': STATUSES, 'pkgs': PKGS, 'config_state': SUBSYSTEM.config, 'sentinel': SUBSYSTEM.sentinel}} | to_nice_json }}}}"
         mode: '0600'
 """,
             encoding="utf-8",
@@ -132,8 +136,18 @@ def test_config_graph() -> None:
 
         plan = json.loads(output.read_text(encoding="utf-8"))
         assert plan["statuses"] == ["status-config-app.sh", "status-config-policy.sh"]
+        assert plan["pkgs"] == ["jq"]
         assert "disable-app.sh" in plan["bins"]
         assert "disable-policy.sh" not in plan["bins"]
+        config_state = plan["config_state"]
+        assert plan["sentinel"]["spec"] == "preserved"
+        assert set(config_state["spec"]) == {"dropins", "configs"}
+        assert config_state["spec"]["configs"]["app"]["order"] == ["mcp", "main"]
+        assert config_state["contrib"]["DIRS"]
+        assert any(item.get("name") == "config.spec.json" for item in config_state["contrib"]["ETC_FILES"])
+        assert any(item["name"] == "config-app.sh" for item in config_state["contrib"]["BINS"])
+        assert config_state["contrib"]["STATUSES"] == plan["statuses"]
+        assert config_state["contrib"]["PKGS"] == plan["pkgs"]
 
         run([str(payload / "bin" / "config.sh")], cwd=payload)
         app = json.loads((payload / "etc" / "app.json").read_text(encoding="utf-8"))

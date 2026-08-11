@@ -1,7 +1,9 @@
 ---
 - name: "Compfuzor: compile drop-in and config declarations"
   set_fact:
-    _config_plan: >-
+    SUBSYSTEM: "{{ SUBSYSTEM | config_publish(compiled) }}"
+  vars:
+    compiled: >-
       {{ DROPINS | default({}) | resolve |
          config_compile(CONFIGS | default({}) | resolve) }}
   when: DROPINS is defined or CONFIGS is defined
