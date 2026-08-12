@@ -5,7 +5,6 @@
     _dirs: ""
     _base: ""
     _files: ""
-    _d: ""
     _bypass: ""
     _link_bypass: ""
     _dirpath: ""
@@ -13,4 +12,3 @@
     _has_dirpath:
       stat:
         exists: False
-

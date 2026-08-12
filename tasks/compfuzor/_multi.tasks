@@ -7,6 +7,6 @@
   vars:
     include: "{{fs_hierarchy_loop}}"
     upper: "{{fs_hierarchy_loop|upper}}"
-    bypass: "{{lookup('vars', upper + '_BYPASS', default=False) or lookup('vars', upper + '_D_BYPASS', default=False)}}"
+    bypass: "{{lookup('vars', upper + '_BYPASS', default=False)}}"
     regex: "^{{upper}}_({{keys|def('', falsy=True)|join('|')}})$"
     matches: "{{keys is falsy or query('varnames', regex)|length > 0}}"

@@ -6,10 +6,6 @@
     SYSTEMD_EXEC: "{{prometheus_dir}}/prometheus -config.file={{ETC}}/prometheus.yml $ARGS"
     ENV:
       ARGS: ""
-    ETC_D:
-    - prometheus.yml.d/rules
-    - prometheus.yml.d/scrapes
-    - prometheus.yml
     ETC_FILES:
     - prometheus.yml.d/00-global
     - prometheus.yml.d/rules.d/00-rules
@@ -29,5 +25,4 @@
   - set_fact: yaml_indent=2 yaml_special=item
   - template: src="files/_yaml" dest="{{ETC}}/prometheus.yml.d/scrapes.d/50-{{item.job_name}}"
     with_items: "{{scrape_configs}}"
-  - include: tasks/compfuzor/fs_d.tasks include=etc
   - include: tasks/systemd.thunk.tasks service="{{SYSTEMD_SERVICE}}"

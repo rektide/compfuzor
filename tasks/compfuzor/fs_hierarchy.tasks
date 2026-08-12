@@ -21,7 +21,6 @@
       dirs: "{{upper}}_DIRS"
       dir: "{{upper}}_DIR"
       files: "{{upper}}_FILES"
-      d: "{{upper}}_D"
       prop: "{{upper}}_PROP"
       bypass: "{{upper}}_BYPASS"
       linkProp: "{{upper}}_LINK_PROP"
@@ -30,12 +29,11 @@
       sDir: "{{lookup('vars', names.sDir, default=False)}}"
       dirs: "{{lookup('vars', names.dirs, default=False)}}"
       dir: "{{lookup('vars', names.dir, default=False)}}"
-      d: "{{lookup('vars', names.d, default=False)}}"
       files: "{{lookup('vars', names.files, default=False)}}"
       prop: "{{lookup('vars', names.prop, default={})}}"
-      bypass: "{{(DIR_BYPASS is deftruthy or lookup('vars', names.bypass, default=False)) or not (names.sDir or names.dirs or names.dir or names.files or names.d)}}"
+      bypass: "{{(DIR_BYPASS is deftruthy or lookup('vars', names.bypass, default=False)) or not (names.sDir or names.dirs or names.dir or names.files)}}"
       linkProp: "{{lookup('vars', names.linkProp, default={})}}"
-      linkBypass: "{{(DIR_LINK_BYPASS is deftruthy or lookup('vars', names.linkBypass, default=False)) or not (names.sDir or names.dirs or names.dir or names.files or names.d)}}"
+      linkBypass: "{{(DIR_LINK_BYPASS is deftruthy or lookup('vars', names.linkBypass, default=False)) or not (names.sDir or names.dirs or names.dir or names.files)}}"
 - name: "Test for {{_upper}} dir and link"
   stat:
     path: "{{item}}"
@@ -73,7 +71,7 @@
     _become: "{{ _link|become_calc(owner=_vals.prop.owner|def(OWNER, falsy=True), group=_vals.prop.group|def(GROUP, falsy=True)) }}"
 
 # create subdirs
-- name: "Create {{_upper}} subdirs and .d dirs"
+- name: "Create {{_upper}} subdirs"
   file:
     path: "{{subdir}}"
     state: directory
@@ -84,7 +82,7 @@
   become: "{{ _become.become }}"
   when: _subdir_items | length > 0
   vars:
-    _subdir_items: "{{ _vals.dirs|normalize(to='list') + _vals.d|normalize(to='list') }}"
+    _subdir_items: "{{ _vals.dirs|normalize(to='list') }}"
     subdir: "{{_dir}}/{{item.name|def(item)}}" 
     _become: "{{ subdir|become_calc(owner=item.owner|def(_vals.prop.owner, OWNER, falsy=True), group=item.group|def(_vals.prop.group, GROUP, falsy=True)) }}"
 
@@ -134,19 +132,4 @@
     var: "{{lookup('vars', item.var) if item.var|def else '' }}"
     all: "{{ content + file + var + yaml + json}}"
     dest: "{{ item.dest|def(item.name, item.src, item, falsy=True)|defaultDir(_dir) if not item.destTemplate is defined else item.destTemplate|unsafety|defaultDir(_dir) }}"
-    _become: "{{ dest|become_calc(owner=item.owner|def(_vals.prop.owner, OWNER, falsy=True), group=item.group|def(_vals.prop.group, GROUP, falsy=True)) }}"
-
-- name: "Assemble .d directory"
-  assemble:
-    src: "{{dest}}.d"
-    dest: "{{dest}}"
-    backup: "{{item.backup|default(True)}}"
-    mode: "{{item.mode|def(_vals.prop.mode, FILEMODE, falsy=True)}}"
-    owner: "{{ _become.owner }}"
-    group: "{{ _become.group }}"
-  become: "{{ _become.become }}"
-  when: _vals.d
-  with_items: "{{ _vals.d|normalize(to='list') }}"
-  vars:
-    dest: "{{_dir}}/{{item.dest|def(item.name, item)}}"
     _become: "{{ dest|become_calc(owner=item.owner|def(_vals.prop.owner, OWNER, falsy=True), group=item.group|def(_vals.prop.group, GROUP, falsy=True)) }}"

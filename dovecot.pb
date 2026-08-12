@@ -18,13 +18,27 @@
     #- dspam-webfrontend
     ETC_FILES:
     - dovecot.conf
-    - conf.d/11-master-lmtp.conf
     - conf.d/11-options.conf
     ETC_DIRS:
     - conf.d
     - private
-    ETC_D:
-    - conf.d/11-master-lmtp.conf
+    DROPINS:
+      dovecot-master-lmtp:
+        root: "{{ETC}}"
+        path: conf.d/11-master-lmtp.conf.d
+        include: "*"
+        files:
+        - name: 20-11-master-lmtp.conf
+          src: conf.d/11-master-lmtp.conf
+    CONFIGS:
+      dovecot:
+        root: "{{ETC}}"
+        assemblies:
+          master-lmtp:
+            output: conf.d/11-master-lmtp.conf
+            processor: concat
+            inputs:
+            - dropins: dovecot-master-lmtp
     #RUN_DIR: True
     SYSTEMD_SERVICE: True
     confd: /etc/dovecot/conf.d

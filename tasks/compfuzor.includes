@@ -163,14 +163,6 @@
   when: BINS is defined and BINS_BYPASS is deffalsy and GLOBAL_BINS_BYPASS is deffalsy
 - import_tasks: compfuzor/links.tasks
   when: LINKS is deftruthy and LINKS_BYPASS is deffalsy
-- import_tasks: compfuzor/_multi.tasks
-  vars:
-    multi: fs_d
-    keys:
-      - "D"
-  when: FS_BYPASS is deffalsy and DIR_BYPASS is deffalsy
-- import_tasks: compfuzor/fs_base_d.tasks
-  when: FS_BYPASS is deffalsy and DIR_BYPASS is deffalsy
 - debug: "msg='Compfuzor: completed filesystem'"
 
 - debug: "msg=''"

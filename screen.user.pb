@@ -4,10 +4,22 @@
   vars:
     NAME: screen
     DIR: "~"
-    ETC: "~/.screenrc.d"
+    ETC: "{{HOMEDIR}}/.screenrc.d"
     ETC_FILES:
     - "utf8"
-    FILES_D:
-    - "~/.screenrc"
+    DROPINS:
+      screen:
+        root: "{{HOMEDIR}}"
+        path: .screenrc.d
+        include: "*"
+    CONFIGS:
+      screen:
+        root: "{{HOMEDIR}}"
+        assemblies:
+          main:
+            output: .screenrc
+            processor: concat
+            inputs:
+            - dropins: screen
   tasks:
   - include: tasks/compfuzor.includes
