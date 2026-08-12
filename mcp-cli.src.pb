@@ -3,11 +3,10 @@
   vars:
     REPO: https://github.com/philschmid/mcp-cli
     BUN: True
-    MCP_CLIENT: True
-    ENV:
-      MCP_TARGET: "{{ ETC }}/mcp"
-      MCP_COMMAND_ARGS: "1"
-      MCP_WRAPPER: mcpServers
+    MCP_CLIENT:
+      dropins: mcp-cli-servers
+      wrapper: mcpServers
+      command_args: true
     DROPINS:
       mcp-cli-servers:
         root: "{{ ETC }}"

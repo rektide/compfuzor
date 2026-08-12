@@ -2,11 +2,10 @@
 - hosts: all
   vars:
     NPM: '@sourcegraph/amp@latest'
-    MCP_CLIENT: True
-    ENV:
-      MCP_TARGET: "{{ETC}}/mcp"
-      MCP_WRAPPER: "amp.mcpServers"
-      MCP_COMMAND_ARGS: "1"
+    MCP_CLIENT:
+      dropins: amp-mcp
+      wrapper: amp.mcpServers
+      command_args: true
     DROPINS:
       amp-core:
         root: "{{ ETC }}"

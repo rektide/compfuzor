@@ -10,10 +10,9 @@
     BACKUP_TARGET: /mnt/fu/backup/opencode-2026-5
     ETC_DIRS:
       - agent
-    MCP_CLIENT: True
-    ENV:
-      MCP_TARGET: "{{ETC}}/mcp"
-      MCP_WRAPPER: "mcp"
+    MCP_CLIENT:
+      dropins: opencode-mcp
+      wrapper: mcp
     DROPINS:
       opencode-core:
         root: "{{ ETC }}"

@@ -6,7 +6,7 @@
 #
 # What MCP contributes itself:
 #   - mcp.json ETC_FILES (server config, from MCP_URL or MCP_COMMAND)
-#   - mcp-install.ts (MCP server installer)
+#   - mcp-dropin.ts (thin transform over named DROPINS lifecycle)
 
 - name: 'Build vars for remote MCP server'
   set_fact:
@@ -53,12 +53,30 @@
           {%- endif -%}
   when: MCP_COMMAND is defined
 
-- name: 'Contribute MCP installer'
+- name: 'Validate MCP drop-in helper request'
+  assert:
+    that:
+      - MCP_CLIENT is mapping
+      - MCP_CLIENT.dropins is string
+      - MCP_CLIENT.wrapper is string
+    fail_msg: 'MCP_CLIENT requires string dropins and wrapper fields'
+  when: MCP_CLIENT is defined
+
+- name: 'Contribute MCP drop-in helper'
   set_fact:
-    BINS: "{{ BINS | merge_list([install] | annotate_bins('mcp'), preset='bins_generated') }}"
+    BINS: "{{ BINS | merge_list([helper, implementation] | annotate_bins('mcp'), preset='bins_generated') }}"
   vars:
-    install:
-      name: mcp-install.ts
-      src: ../mcp-install.ts
+    helper:
+      name: mcp-dropin.ts
+      basedir: False
+      content: >-
+        exec "$DIR/bin/mcp-dropin-core.ts"
+        {{ MCP_CLIENT.dropins | quote }}
+        {{ MCP_CLIENT.wrapper | quote }}
+        {{ (MCP_CLIENT.command_args | default(false) | bool) | ternary('true', 'false') }}
+        "$@"
+    implementation:
+      name: mcp-dropin-core.ts
+      src: ../mcp-dropin.ts
       basedir: False
   when: MCP_CLIENT is defined

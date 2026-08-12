@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise MCP fragment installation for nested wrappers and disabled state."""
+"""Exercise the thin MCP adapter over generic DROPINS lifecycle."""
 
 from __future__ import annotations
 
@@ -30,12 +30,17 @@ def test_mcp_install() -> None:
         (host / "bin").mkdir(parents=True)
         (source / "etc").mkdir(parents=True)
 
-        rendered = (ROOT / "files" / "mcp-install.ts").read_text(encoding="utf-8")
-        installer = host / "bin" / "mcp-install.ts"
-        installer.write_text(rendered.replace("{{DIR}}", str(host)), encoding="utf-8")
-        installer.chmod(0o770)
-        (host / "env.export").write_text(
-            f'export MCP_TARGET="{target}"\nexport MCP_WRAPPER="amp.mcpServers"\n',
+        rendered = (ROOT / "files" / "mcp-dropin.ts").read_text(encoding="utf-8")
+        adapter = host / "bin" / "mcp-dropin.ts"
+        adapter.write_text(rendered.replace("{{DIR}}", str(host)), encoding="utf-8")
+        adapter.chmod(0o770)
+        manager_rendered = (ROOT / "files" / "dropin-manage.ts").read_text(encoding="utf-8")
+        manager = host / "bin" / "dropin-manage.ts"
+        manager.write_text(manager_rendered.replace("{{DIR}}", str(host)), encoding="utf-8")
+        manager.chmod(0o770)
+        (host / "etc").mkdir(exist_ok=True)
+        (host / "etc" / "config.spec.json").write_text(
+            json.dumps({"dropins": {"amp-mcp": {"path": str(target), "include": "*.json", "disabled_suffix": ".disabled"}}}),
             encoding="utf-8",
         )
         (host / "bin" / "config.sh").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
@@ -45,7 +50,7 @@ def test_mcp_install() -> None:
             encoding="utf-8",
         )
 
-        run([str(installer), str(source)])
+        run([str(adapter), "amp-mcp", "amp.mcpServers", "true", str(source)])
         fragment = target / "example.json"
         assert json.loads(fragment.read_text(encoding="utf-8")) == {
             "amp": {
@@ -61,12 +66,15 @@ def test_mcp_install() -> None:
 
         disabled = fragment.with_suffix(".json.disabled")
         fragment.rename(disabled)
-        reinstall = run([str(installer), str(source)], check=False)
-        assert reinstall.returncode == 1
-        assert str(disabled) in reinstall.stderr
+        (source / "etc" / "mcp.json").write_text(
+            json.dumps({"type": "remote", "url": "https://example.test/new"}), encoding="utf-8"
+        )
+        reinstall = run([str(adapter), "amp-mcp", "amp.mcpServers", "true", str(source)], check=False)
+        assert reinstall.returncode == 0
         assert not fragment.exists()
+        assert "https://example.test/new" in disabled.read_text(encoding="utf-8")
 
 
 if __name__ == "__main__":
     test_mcp_install()
-    print("ok: MCP installer integration")
+    print("ok: MCP drop-in adapter integration")

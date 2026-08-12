@@ -769,6 +769,11 @@ operations rebuild config and roll the fragment mutation back if rebuilding
 fails. Domain helpers may transform their own records before delegating to this
 generic lifecycle command, but do not own destination paths or assembly.
 
+MCP uses that extension point narrowly. Server packages may emit a portable
+`etc/mcp.json`; a client-generated `mcp-dropin.ts` wraps that record for the
+client and delegates `put` to `dropin-manage.ts`. MCP does not create drop-in
+directories, track disabled state, merge output, or invoke config directly.
+
 The legacy hierarchy `*_D` variables violate this seam by making filesystem
 tasks infer both a fragment directory and an assembly operation from one path.
 Treat them as migration inputs only. Net-new drop-in work should describe
