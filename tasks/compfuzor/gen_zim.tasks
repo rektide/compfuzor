@@ -23,8 +23,8 @@
 # Host branch: a playbook marked ZIM_HOST provides the install-zim.sh bridge
 # (contributors invoke it to symlink their fragments into the host's
 # etc/zimfw/) and exports ZIM_TARGET / ZIM_TARGET_DISABLED so contributors can
-# resolve them via env.export. The host still uses the generic config subsystem
-# (CONFIG_KEY: zimfw + CONFIG_MERGE: block-in-file) to assemble etc/zimfw.conf.
+# resolve them via env.export. The host declares a named zimfw DROPINS set and a
+# block-in-file CONFIGS assembly for etc/zimfw.conf.
 
 - name: "Compfuzor: render zim contributor fragments"
   set_fact:

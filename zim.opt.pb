@@ -3,14 +3,33 @@
   vars:
     TYPE: zim
     INSTANCE: main
-    CONFIG_KEY: zimfw
-    CONFIG_MERGE: block-in-file
     ZIM_HOST: true
     zim_home: "$HOME/.cache/zim"
-    zim_config_link: "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/{{CONFIG_KEY}}.{{CONFIG_EXT}}"
+    zim_config_link: "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zimfw.conf"
+    DROPINS:
+      zimfw:
+        root: "{{ ETC }}"
+        path: zimfw
+        include: "*.conf"
+        disabled_suffix: .disabled
+    CONFIGS:
+      zim:
+        root: "{{ ETC }}"
+        assemblies:
+          main:
+            output: zimfw.conf
+            processor: block-in-file
+            block:
+              namespace: zim/main
+              anchor: eof:100
+            inputs:
+              - dropins: zimfw
+    ENV:
+      ZIM_CONFIG_FILE: "{{ ETC }}/zimfw.conf"
     ENV_LIST:
       - zim_home
       - zim_config_link
+      - ZIM_CONFIG_FILE
     GET_URLS:
       - https://github.com/zimfw/zimfw/releases/latest/download/zimfw.zsh
     PKGS:
@@ -226,7 +245,7 @@
         content: |
           echo promoting zim fragments
           {{DIR}}/bin/install-zim.sh {{DIR}}
-          if [[ -f "${CONFIG_OUTPUT}" ]]
+          if [[ -f "${ZIM_CONFIG_FILE}" ]]
           then
             echo "using existing zimrc (config.sh to rebuild)"
           else
@@ -238,7 +257,7 @@
           block-in-file -n {{NAME}} -i {{DIR}}/etc/zim.zsh -o ${ZDOTDIR:-$HOME}/.zshrc
           echo symlinking zimrc
           mkdir -p "$(dirname "${ZIM_CONFIG_LINK:-{{zim_config_link}}}")"
-          ln -sfv "${CONFIG_OUTPUT}" "${ZIM_CONFIG_LINK:-{{zim_config_link}}}"
+          ln -sfv "${ZIM_CONFIG_FILE}" "${ZIM_CONFIG_LINK:-{{zim_config_link}}}"
       - name: status.sh
         basedir: False
         content: |
@@ -247,14 +266,14 @@
           zshrc="${ZDOTDIR:-$HOME}/.zshrc"
           marker="{{NAME}}"
 
-          if [ ! -f "$CONFIG_OUTPUT" ]; then
-            echo "drift: generated Zim config is missing: $CONFIG_OUTPUT"
+          if [ ! -f "$ZIM_CONFIG_FILE" ]; then
+            echo "drift: generated Zim config is missing: $ZIM_CONFIG_FILE"
             status=1
           elif [ ! -L "$config_link" ]; then
             echo "drift: Zim config link is missing: $config_link"
             status=1
-          elif [ "$(readlink -f "$config_link")" != "$(readlink -f "$CONFIG_OUTPUT")" ]; then
-            echo "drift: $config_link does not link to $CONFIG_OUTPUT"
+          elif [ "$(readlink -f "$config_link")" != "$(readlink -f "$ZIM_CONFIG_FILE")" ]; then
+            echo "drift: $config_link does not link to $ZIM_CONFIG_FILE"
             status=1
           fi
 
@@ -276,7 +295,7 @@
         content: |
           # : is a no-op builtin; ${VAR:=default} sets VAR only if unset or empty
           : ${ZIM_HOME:={{zim_home}}}
-          : ${ZIM_CONFIG_FILE:={{DIR}}/etc/{{CONFIG_KEY}}.{{CONFIG_EXT}}}
+          : ${ZIM_CONFIG_FILE:={{ETC}}/zimfw.conf}
           # Install missing modules and update ${ZIM_HOME}/init.zsh if missing or outdated.
           if [[ ! "${ZIM_HOME}/init.zsh" -nt "${ZIM_CONFIG_FILE}" ]]; then
             source {{DIR}}/src/zimfw.zsh init

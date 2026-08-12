@@ -6,7 +6,7 @@
 # assembly directory (etc/zimfw/ by default) so the generic block-in-file
 # config assembler picks them up in sorted filename order. Symlinks (not
 # copies) keep the contributor as source-of-truth, so a re-rendered fragment
-# updates the host automatically and status-config.sh --check detects drift.
+# updates the host automatically and status-config-zim.sh detects drift.
 #
 # Environment (sourced from the host's env.export):
 #   ZIM_TARGET          - host active dir    (default: $DIR/etc/zimfw)
