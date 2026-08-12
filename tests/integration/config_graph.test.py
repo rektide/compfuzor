@@ -220,12 +220,12 @@ output.write_text(text)
         assert (payload / "etc" / "policy.conf").read_text(encoding="utf-8") == "policy=true\n"
         shell_text = shellrc.read_text(encoding="utf-8")
         assert "unmanaged\n" in shell_text and "foreign\n" in shell_text and "obsolete" not in shell_text
-        assert shell_text.index("test.shell/shell/10-first") < shell_text.index("test.shell/shell/20-second")
+        assert shell_text.index("test.shell/shell/0/10-first.conf") < shell_text.index("test.shell/shell/0/20-second.conf")
         second = payload / "etc" / "shell.d" / "20-second.conf"
         second.rename(second.with_suffix(".conf.disabled"))
         run([str(payload / "bin" / "config.sh"), "shell/main"], cwd=payload, env=runtime_env)
         shell_text = shellrc.read_text(encoding="utf-8")
-        assert "test.shell/shell/20-second" not in shell_text
+        assert "test.shell/shell/0/20-second.conf" not in shell_text
         assert "unmanaged\n" in shell_text and "foreign\n" in shell_text
 
         (payload / "etc" / "policy.conf").unlink()

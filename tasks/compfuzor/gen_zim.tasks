@@ -75,7 +75,7 @@
   set_fact:
     BINS: "{{ BINS | merge_list(_zim_host_bins | annotate_bins('zim'), preset='bins_generated') }}"
     ENV: "{{ _zim_host_env | merge_dict(ENV, preset='overlay', skip_layers=['all']) }}"
-    ENV_LIST: "{{ ENV_LIST|normalize(to='list') + ['ZIM_TARGET', 'ZIM_TARGET_DISABLED'] }}"
+    ENV_LIST: "{{ ENV_LIST|normalize(to='list') + ['ZIM_TARGET'] }}"
   when:
     - ZIM_HOST is defined
     - ZIM_BYPASS is deffalsy
@@ -86,13 +86,12 @@
         basedir: False
     _zim_host_env:
       ZIM_TARGET: "{{ ETC }}/zimfw"
-      ZIM_TARGET_DISABLED: "{{ ETC }}/zimfw-disabled"
 
 - name: "Compfuzor: synthesize zim host artifacts"
   set_fact:
     BINS: "{{ BINS | merge_list(_zim_host_bins | annotate_bins('zim'), preset='bins_generated') }}"
     ENV: "{{ _zim_host_env | merge_dict(ENV, preset='overlay', skip_layers=['all']) }}"
-    ENV_LIST: "{{ ENV_LIST|normalize(to='list') + ['ZIM_TARGET', 'ZIM_TARGET_DISABLED'] }}"
+    ENV_LIST: "{{ ENV_LIST|normalize(to='list') + ['ZIM_TARGET'] }}"
   when:
     - ZIM_HOST is defined
     - ZIM_BYPASS is deffalsy
@@ -103,4 +102,3 @@
         basedir: False
     _zim_host_env:
       ZIM_TARGET: "{{ ETC }}/zimfw"
-      ZIM_TARGET_DISABLED: "{{ ETC }}/zimfw-disabled"

@@ -10,7 +10,6 @@
 #
 # Environment (sourced from the host's env.export):
 #   ZIM_TARGET          - host active dir    (default: $DIR/etc/zimfw)
-#   ZIM_TARGET_DISABLED - host disabled dir  (default: ${ZIM_TARGET}-disabled)
 #
 # Usage: install-zim.sh [source_dir]   # source_dir defaults to $PWD
 
@@ -21,9 +20,8 @@ self_dir="{{DIR}}"
 
 src_dir="${1:-$(pwd)}"
 active="${ZIM_TARGET:-$self_dir/etc/zimfw}"
-disabled="${ZIM_TARGET_DISABLED:-${active}-disabled}"
 
-mkdir -p "$active" "$disabled"
+mkdir -p "$active"
 
 count=0
 shopt -s nullglob
@@ -32,7 +30,7 @@ for f in "$src_dir"/etc/zim/*.conf; do
   count=$((count + 1))
 done
 for f in "$src_dir"/etc/zim-disabled/*.conf; do
-  ln -sfv "$f" "$disabled/$(basename "$f")"
+  ln -sfv "$f" "$active/$(basename "$f").disabled"
   count=$((count + 1))
 done
 

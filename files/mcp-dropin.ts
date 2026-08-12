@@ -29,9 +29,18 @@ function envsubst(text: string): string {
   return text
 }
 
+function referencesEmptyVariable(value: string): boolean {
+  for (const match of value.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)) {
+    if (!process.env[match[1]]) return true
+  }
+  return false
+}
+
 function transform(name: string, config: Record<string, unknown>, wrapper: string, splitArgs: boolean): object {
   if (Array.isArray(config.command)) {
-    const command = config.command.map((argument: string) => argument.endsWith("=true") ? argument.slice(0, -5) : argument)
+    const command = config.command
+      .filter((argument: string) => !referencesEmptyVariable(argument))
+      .map((argument: string) => argument.endsWith("=true") ? argument.slice(0, -5) : argument)
     if (splitArgs) {
       const [executable, ...args] = command
       config.command = executable
@@ -65,7 +74,8 @@ async function main(): Promise<void> {
   if (!(await exists(mcpFile))) throw new Error(`${mcpFile} not found`)
   await sourceEnv(join(sourceDir, "env.export"))
   let name = basename(sourceDir).replace(/-(git|main)$/, "")
-  const config = JSON.parse(envsubst(await readFile(mcpFile, "utf-8")))
+  const rawConfig = JSON.parse(await readFile(mcpFile, "utf-8"))
+  const config = JSON.parse(envsubst(JSON.stringify(rawConfig)))
   const directory = await mkdtemp(join(tmpdir(), "compfuzor-mcp-"))
   const fragment = join(directory, `${name}.json`)
   try {

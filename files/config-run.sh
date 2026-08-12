@@ -78,22 +78,24 @@ for instance in "${instances[@]}"; do
     input_manifest="$transaction/inputs"
     : > "$input_manifest"
 
+    input_index=0
     while IFS=$'\t' read -r kind value fallback block; do
       case "$kind" in
-        file) printf 'file\tfile/%s\t%s\t%s\n' "$(basename "$value")" "$value" "$block" >> "$input_manifest" ;;
+        file) printf 'file\tfile/%s/%s\t%s\t%s\n' "$input_index" "$(basename "$value")" "$value" "$block" >> "$input_manifest" ;;
         artifact)
           candidate_key="${instance}.${value}"
-          printf 'artifact\tartifact/%s\t%s\t%s\n' "$value" "${candidates[$candidate_key]:-$fallback}" "$block" >> "$input_manifest"
+          printf 'artifact\tartifact/%s/%s\t%s\t%s\n' "$input_index" "$value" "${candidates[$candidate_key]:-$fallback}" "$block" >> "$input_manifest"
           ;;
         dropins)
           dropin_path=$(jq -r --arg name "$value" '.dropins[$name].path' "$spec")
           include=$(jq -r --arg name "$value" '.dropins[$name].include' "$spec")
           while IFS= read -r -d '' file; do
-            stem=$(basename "$file"); stem=${stem%.*}
-            printf 'dropins\t%s/%s\t%s\t%s\n' "$value" "$stem" "$file" "$block" >> "$input_manifest"
+            filename=$(basename "$file")
+            printf 'dropins\t%s/%s/%s\t%s\t%s\n' "$value" "$input_index" "$filename" "$file" "$block" >> "$input_manifest"
           done < <(find "$dropin_path" -maxdepth 1 -type f -name "$include" -print0 | sort -z)
           ;;
       esac
+      input_index=$((input_index + 1))
     done < <(jq -r --arg i "$instance" --arg a "$assembly" '
       .configs[$i].assemblies[$a].inputs[] |
       (.block // {} | tojson) as $block |
@@ -106,8 +108,11 @@ for instance in "${instances[@]}"; do
     tmp=$(mktemp "$(dirname "$output")/.config-candidate.XXXXXX")
     leaf="$DIR/bin/internal/config/$instance/$assembly"
     [ -x "$leaf" ] || { printf 'missing config leaf: %s\n' "$leaf" >&2; exit 2; }
-    CONFIG_TRANSACTION="$transaction" CONFIG_CANDIDATE="$tmp" CONFIG_INPUTS_FILE="$input_manifest" \
-      "$leaf" --instance "$instance" --assembly "$assembly"
+    if ! CONFIG_TRANSACTION="$transaction" CONFIG_CANDIDATE="$tmp" CONFIG_INPUTS_FILE="$input_manifest" \
+      "$leaf" --instance "$instance" --assembly "$assembly"; then
+      printf '%s/%s: processor failed\n' "$instance" "$assembly" >&2
+      exit 1
+    fi
 
     if [ -n "$validate" ] && ! CONFIG_CANDIDATE="$tmp" bash -c "$validate"; then
       printf '%s/%s: candidate validation failed\n' "$instance" "$assembly" >&2; exit 1

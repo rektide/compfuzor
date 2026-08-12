@@ -22,6 +22,8 @@
             block:
               namespace: zim/main
               anchor: eof:100
+              remove_match:
+                - '^zim-main-zimfw-'
             inputs:
               - dropins: zimfw
     ENV:

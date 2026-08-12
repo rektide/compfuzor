@@ -58,12 +58,20 @@ def _sequence(value, label):
 def _block(value, label, inherited=None, allow_namespace=True):
     block = dict(inherited or {})
     local = _mapping(value, label)
-    unknown = set(local) - set(_PLACEMENTS) - {"namespace"}
+    unknown = set(local) - set(_PLACEMENTS) - {"namespace", "remove_match"}
     if unknown:
         _error("{} has unknown settings: {}".format(label, ", ".join(sorted(unknown))))
     if not allow_namespace and "namespace" in local:
         _error("{}.namespace is assembly-owned".format(label))
+    if not allow_namespace and "remove_match" in local:
+        _error("{}.remove_match is assembly-owned".format(label))
     for key, setting in local.items():
+        if key == "remove_match":
+            patterns = _sequence(setting, "{}.remove_match".format(label))
+            if any(not isinstance(pattern, str) or not pattern for pattern in patterns):
+                _error("{}.remove_match entries must be non-empty strings".format(label))
+            block[key] = patterns
+            continue
         if not isinstance(setting, str) or not setting:
             _error("{}.{} must be a non-empty string".format(label, key))
         block[key] = setting

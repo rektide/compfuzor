@@ -48,6 +48,9 @@ case "$processor" in
       exit 2
     fi
     rm -f "$removal_error"
+    while IFS= read -r pattern; do
+      "$command" --remove-match "$pattern" -o "$CONFIG_CANDIDATE"
+    done < <(jq -r --arg i "$instance" --arg a "$assembly" '.configs[$i].assemblies[$a].block.remove_match[]?' "$spec")
     while IFS=$'\t' read -r _kind identity path block; do
       args=(-n "$namespace/$identity" -i "$path" -o "$CONFIG_CANDIDATE")
       for placement in before after anchor; do
