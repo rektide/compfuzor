@@ -1,10 +1,9 @@
 #!/bin/bash
-# Build, validate, and atomically commit compiled config assembly graphs.
+# Build, validate, and atomically commit compiled configs.
 
 spec="$DIR/etc/config.spec.json"
 check=0
 quiet=0
-instance=""
 target=""
 list=0
 
@@ -13,11 +12,11 @@ while [ "$#" -gt 0 ]; do
     --check) check=1 ;;
     --list) list=1 ;;
     -q|--quiet) quiet=1 ;;
-    --target) shift; target="${1:?--target requires instance/assembly}" ;;
+    --target) shift; target="${1:?--target requires a config name}" ;;
     -*) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
     *)
-      [ -z "$instance" ] && [ -z "$target" ] || { printf 'unexpected argument: %s\n' "$1" >&2; exit 2; }
-      if [[ "$1" == */* ]]; then target="$1"; else instance="$1"; fi
+      [ -z "$target" ] || { printf 'unexpected argument: %s\n' "$1" >&2; exit 2; }
+      target="$1"
       ;;
   esac
   shift
@@ -25,26 +24,17 @@ done
 
 [ -f "$spec" ] || { printf 'missing config spec: %s\n' "$spec" >&2; exit 2; }
 if [ "$list" = 1 ]; then
-  [ -z "$instance" ] && [ -z "$target" ] || { printf '--list does not accept a target\n' >&2; exit 2; }
-  jq -r '.configs | to_entries[] as $config | $config.value.order[] | "\($config.key)/\(.)"' "$spec"
+  [ -z "$target" ] || { printf '--list does not accept a target\n' >&2; exit 2; }
+  jq -r '.configs | keys[]' "$spec"
   exit
 fi
 if [ -n "$target" ]; then
-  [ -z "$instance" ] || { printf 'instance and --target are mutually exclusive\n' >&2; exit 2; }
-  instance=${target%%/*}
-  target_assembly=${target#*/}
-  [ "$instance" != "$target" ] && [ -n "$target_assembly" ] || {
-    printf 'target must be instance/assembly: %s\n' "$target" >&2; exit 2;
+  jq -e --arg target "$target" '.configs[$target]' "$spec" >/dev/null || {
+    printf 'unknown config: %s\n' "$target" >&2; exit 2;
   }
-fi
-
-if [ -n "$instance" ]; then
-  jq -e --arg instance "$instance" '.configs[$instance]' "$spec" >/dev/null || {
-    printf 'unknown config instance: %s\n' "$instance" >&2; exit 2;
-  }
-  instances=("$instance")
+  configs=("$target")
 else
-  mapfile -t instances < <(jq -r '.configs | to_entries[] | select(.value.apply) | .key' "$spec")
+  mapfile -t configs < <(jq -r '.configs | to_entries[] | select(.value.apply) | .key' "$spec")
 fi
 
 transaction=$(mktemp -d)
@@ -52,75 +42,51 @@ temps=()
 cleanup() { rm -rf "$transaction"; for file in "${temps[@]}"; do rm -f "$file"; done; }
 trap cleanup EXIT
 drift=0
-declare -A candidates
 pending_sources=()
 pending_outputs=()
 
-for instance in "${instances[@]}"; do
-  if [ -n "$target" ]; then
-    jq -e --arg i "$instance" --arg a "$target_assembly" '.configs[$i].assemblies[$a]' "$spec" >/dev/null || {
-      printf 'unknown config assembly: %s\n' "$target" >&2; exit 2;
-    }
-    mapfile -t assemblies < <(jq -r --arg i "$instance" --arg target "$target_assembly" '
-      .configs[$i] as $config |
-      def dependencies($name):
-        $name, ($config.assemblies[$name].inputs[]? | select(has("artifact")) | .artifact | dependencies(.));
-      [dependencies($target)] | unique as $needed |
-      $config.order[] | select(. as $name | $needed | index($name))
-    ' "$spec")
-  else
-    mapfile -t assemblies < <(jq -r --arg instance "$instance" '.configs[$instance].order[]' "$spec")
-  fi
-
-  for assembly in "${assemblies[@]}"; do
-    output=$(jq -r --arg i "$instance" --arg a "$assembly" '.configs[$i].assemblies[$a].output' "$spec")
-    validate=$(jq -r --arg i "$instance" --arg a "$assembly" '.configs[$i].assemblies[$a].validate // empty' "$spec")
+for config in "${configs[@]}"; do
+    output=$(jq -r --arg config "$config" '.configs[$config].output' "$spec")
+    validate=$(jq -r --arg config "$config" '.configs[$config].validate // empty' "$spec")
     input_manifest="$transaction/inputs"
     : > "$input_manifest"
 
     input_index=0
-    while IFS=$'\t' read -r kind value fallback block; do
+    while IFS=$'\t' read -r kind value pattern block; do
       case "$kind" in
         file) printf 'file\tfile/%s/%s\t%s\t%s\n' "$input_index" "$(basename "$value")" "$value" "$block" >> "$input_manifest" ;;
-        artifact)
-          candidate_key="${instance}.${value}"
-          printf 'artifact\tartifact/%s/%s\t%s\t%s\n' "$input_index" "$value" "${candidates[$candidate_key]:-$fallback}" "$block" >> "$input_manifest"
-          ;;
-        dropins)
-          dropin_path=$(jq -r --arg name "$value" '.dropins[$name].path' "$spec")
-          include=$(jq -r --arg name "$value" '.dropins[$name].include' "$spec")
+        glob)
           while IFS= read -r -d '' file; do
             filename=$(basename "$file")
-            printf 'dropins\t%s/%s/%s\t%s\t%s\n' "$value" "$input_index" "$filename" "$file" "$block" >> "$input_manifest"
-          done < <(find "$dropin_path" -maxdepth 1 -type f -name "$include" -print0 | sort -z)
+            printf 'glob\t%s/%s/%s\t%s\t%s\n' "$(basename "$value")" "$input_index" "$filename" "$file" "$block" >> "$input_manifest"
+          done < <(find "$value" -maxdepth 1 -type f -name "$pattern" -print0 | sort -z)
           ;;
       esac
       input_index=$((input_index + 1))
-    done < <(jq -r --arg i "$instance" --arg a "$assembly" '
-      .configs[$i].assemblies[$a].inputs[] |
+    done < <(jq -r --arg config "$config" '
+      .configs[$config].inputs[] |
       (.block // {} | tojson) as $block |
       if has("file") then ["file", .file, "", $block]
-      elif has("dropins") then ["dropins", .dropins, "", $block]
-      else ["artifact", .artifact, .path, $block]
+      else ["glob", .directory, .pattern, $block]
       end | @tsv
     ' "$spec")
 
     tmp=$(mktemp "$(dirname "$output")/.config-candidate.XXXXXX")
-    leaf="$DIR/bin/internal/config/$instance/$assembly"
+    leaf="$DIR/bin/internal/config/$config"
     [ -x "$leaf" ] || { printf 'missing config leaf: %s\n' "$leaf" >&2; exit 2; }
     if ! CONFIG_TRANSACTION="$transaction" CONFIG_CANDIDATE="$tmp" CONFIG_INPUTS_FILE="$input_manifest" \
-      "$leaf" --instance "$instance" --assembly "$assembly"; then
-      printf '%s/%s: processor failed\n' "$instance" "$assembly" >&2
+      "$leaf" --config "$config"; then
+      printf '%s: processor failed\n' "$config" >&2
       exit 1
     fi
 
     if [ -n "$validate" ] && ! CONFIG_CANDIDATE="$tmp" bash -c "$validate"; then
-      printf '%s/%s: candidate validation failed\n' "$instance" "$assembly" >&2; exit 1
+      printf '%s: candidate validation failed\n' "$config" >&2; exit 1
     fi
     if [ -f "$output" ] && cmp -s "$tmp" "$output"; then
-      rm -f "$tmp"; candidates["${instance}.${assembly}"]="$output"; continue
+      rm -f "$tmp"; continue
     fi
-    candidates["${instance}.${assembly}"]="$tmp"; temps+=("$tmp")
+    temps+=("$tmp")
     if [ "$check" = 1 ]; then
       drift=1
       if [ "$quiet" = 0 ]; then
@@ -129,7 +95,6 @@ for instance in "${instances[@]}"; do
     else
       pending_sources+=("$tmp"); pending_outputs+=("$output")
     fi
-  done
 done
 
 if [ "$check" = 0 ]; then

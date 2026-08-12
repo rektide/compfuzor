@@ -19,26 +19,17 @@
     ETC_FILES:
     - dovecot.conf
     - conf.d/11-options.conf
+    - name: conf.d/11-master-lmtp.conf.d/20-11-master-lmtp.conf
+      src: conf.d/11-master-lmtp.conf
     ETC_DIRS:
     - conf.d
+    - conf.d/11-master-lmtp.conf.d
     - private
-    DROPINS:
-      dovecot-master-lmtp:
-        root: "{{ETC}}"
-        path: conf.d/11-master-lmtp.conf.d
-        include: "*"
-        files:
-        - name: 20-11-master-lmtp.conf
-          src: conf.d/11-master-lmtp.conf
     CONFIGS:
-      dovecot:
-        root: "{{ETC}}"
-        assemblies:
-          master-lmtp:
-            output: conf.d/11-master-lmtp.conf
-            processor: concat
-            inputs:
-            - dropins: dovecot-master-lmtp
+      conf.d/11-master-lmtp.conf:
+        name: dovecot-master-lmtp
+        processor: concat
+        disabled_suffix: false
     #RUN_DIR: True
     SYSTEMD_SERVICE: True
     confd: /etc/dovecot/conf.d

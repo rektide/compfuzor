@@ -13,27 +13,18 @@
     SYSTEMD_ENVIRONMENT:
     - "PATH={{ INTERCEPTION_TOOLS }}:/usr/bin:/bin"
     SYSTEMD_NICE: -18
-    DROPINS:
-      interception:
-        root: "{{ ETC }}"
-        path: interception
-        include: "*.yaml"
-        files:
-          - name: caps2esc.yaml
-            content: |
-              - JOB: "intercept -g $DEVNODE | caps2esc | uinput -d $DEVNODE"
-                DEVICE:
-                  EVENTS:
-                    EV_KEY: [KEY_CAPSLOCK, KEY_ESC]
-                  NAME: .*([Kk]eyboard|Freestyle).*
+    ETC_DIRS:
+      - interception.yaml.d
+    ETC_FILES:
+      - name: interception.yaml.d/caps2esc.yaml
+        content: |
+          - JOB: "intercept -g $DEVNODE | caps2esc | uinput -d $DEVNODE"
+            DEVICE:
+              EVENTS:
+                EV_KEY: [KEY_CAPSLOCK, KEY_ESC]
+              NAME: .*([Kk]eyboard|Freestyle).*
     CONFIGS:
-      interception:
-        root: "{{ ETC }}"
-        assemblies:
-          main:
-            output: interception.yaml
-            processor: concat
-            inputs:
-              - dropins: interception
+      interception.yaml:
+        processor: concat
   tasks:
     - import_tasks: tasks/compfuzor.includes

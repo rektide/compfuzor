@@ -5,24 +5,21 @@ processor=${1:?processor identity is required}; shift
 spec="$DIR/etc/config.spec.json"
 : "${CONFIG_TRANSACTION:?config processors are internal; use config.sh [--list | instance/assembly]}"
 
-instance=""; assembly=""
+config=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --instance) shift; instance=${1:?--instance requires a value} ;;
-    --assembly) shift; assembly=${1:?--assembly requires a value} ;;
+    --config) shift; config=${1:?--config requires a value} ;;
     -*) printf 'unknown processor option: %s\n' "$1" >&2; exit 2 ;;
     *) printf 'unexpected processor argument: %s\n' "$1" >&2; exit 2 ;;
   esac
   shift
 done
 
-[ -n "$instance" ] && [ -n "$assembly" ] || {
-  printf 'transactional leaf invocation requires explicit --instance and --assembly\n' >&2; exit 2;
-}
+[ -n "$config" ] || { printf 'transactional leaf invocation requires --config\n' >&2; exit 2; }
 : "${CONFIG_CANDIDATE:?CONFIG_CANDIDATE is required}"
 : "${CONFIG_INPUTS_FILE:?CONFIG_INPUTS_FILE is required}"
-expected=$(jq -r --arg i "$instance" --arg a "$assembly" '.configs[$i].assemblies[$a].processor // empty' "$spec")
-[ "$expected" = "$processor" ] || { printf '%s/%s does not use processor %s\n' "$instance" "$assembly" "$processor" >&2; exit 2; }
+expected=$(jq -r --arg config "$config" '.configs[$config].processor // empty' "$spec")
+[ "$expected" = "$processor" ] || { printf '%s does not use processor %s\n' "$config" "$processor" >&2; exit 2; }
 
 case "$processor" in
   concat)
@@ -35,8 +32,8 @@ case "$processor" in
     if [ "${{ '{#' }}files[@]}" -eq 0 ]; then printf '{}\n' > "$CONFIG_CANDIDATE"; else jq -s 'reduce .[] as $item ({}; . * $item)' "${files[@]}" > "$CONFIG_CANDIDATE"; fi
     ;;
   block-in-file)
-    output=$(jq -r --arg i "$instance" --arg a "$assembly" '.configs[$i].assemblies[$a].output' "$spec")
-    namespace=$(jq -r --arg i "$instance" --arg a "$assembly" '.configs[$i].assemblies[$a].block.namespace' "$spec")
+    output=$(jq -r --arg config "$config" '.configs[$config].output' "$spec")
+    namespace=$(jq -r --arg config "$config" '.configs[$config].block.namespace' "$spec")
     if [ -f "$output" ]; then cp "$output" "$CONFIG_CANDIDATE"; else : > "$CONFIG_CANDIDATE"; fi
     command=${CONFIG_BLOCK_IN_FILE:-block-in-file}
     escaped=$(printf '%s' "$namespace" | sed 's/[][\\.^$*+?(){}|]/\\&/g')
@@ -50,7 +47,7 @@ case "$processor" in
     rm -f "$removal_error"
     while IFS= read -r pattern; do
       "$command" --remove-match "$pattern" -o "$CONFIG_CANDIDATE"
-    done < <(jq -r --arg i "$instance" --arg a "$assembly" '.configs[$i].assemblies[$a].block.remove_match[]?' "$spec")
+    done < <(jq -r --arg config "$config" '.configs[$config].block.remove_match[]?' "$spec")
     while IFS=$'\t' read -r _kind identity path block; do
       args=(-n "$namespace/$identity" -i "$path" -o "$CONFIG_CANDIDATE")
       for placement in before after anchor; do

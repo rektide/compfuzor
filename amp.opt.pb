@@ -3,33 +3,25 @@
   vars:
     NPM: '@sourcegraph/amp@latest'
     MCP_CLIENT:
-      dropins: amp-mcp
+      remote: mcp
       wrapper: amp.mcpServers
       command_args: true
-    DROPINS:
-      amp-core:
-        root: "{{ ETC }}"
-        path: config.d
-        include: "*.json"
-        disabled_suffix: .disabled
-        files:
-          - name: base.json
-            json:
-              "amp.dangerouslyAllowAll": true
-      amp-mcp:
-        root: "{{ ETC }}"
-        path: mcp
-        include: "*.json"
-        disabled_suffix: .disabled
+    ETC_DIRS:
+      - config.d
+      - mcp
+    ETC_FILES:
+      - name: config.d/base.json
+        json:
+          "amp.dangerouslyAllowAll": true
     CONFIGS:
-      amp:
-        root: "{{ ETC }}"
-        assemblies:
-          main:
-            output: settings.json
-            processor: json-deep-merge
-            inputs:
-              - dropins: amp-core
-              - dropins: amp-mcp
+      settings.json:
+        name: amp
+        processor: json-deep-merge
+        inputs:
+          - glob: config.d/*.json
+            name: amp-core
+          - glob: mcp/*.json
+            name: mcp
+            remote: true
   tasks:
     - import_tasks: tasks/compfuzor.includes

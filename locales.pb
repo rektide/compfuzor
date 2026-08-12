@@ -8,20 +8,13 @@
     FILES:
     - 00-INDEX
     - utf8
-    DROPINS:
-      locales:
-        root: /etc
-        path: locale.gen.d
-        include: "*"
     CONFIGS:
-      locales:
-        root: /etc
-        assemblies:
-          main:
-            output: locale.gen
-            processor: concat
-            inputs:
-            - dropins: locales
+      locale.gen:
+        dir: /etc
+        processor: concat
+        disabled_suffix: false
+        inputs:
+          - glob: locale.gen.d/*
   tasks:
   - include: tasks/compfuzor.includes
   - shell: locale-gen

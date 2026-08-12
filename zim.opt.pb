@@ -6,26 +6,14 @@
     ZIM_HOST: true
     zim_home: "$HOME/.cache/zim"
     zim_config_link: "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zimfw.conf"
-    DROPINS:
-      zimfw:
-        root: "{{ ETC }}"
-        path: zimfw
-        include: "*.conf"
-        disabled_suffix: .disabled
     CONFIGS:
-      zim:
-        root: "{{ ETC }}"
-        assemblies:
-          main:
-            output: zimfw.conf
-            processor: block-in-file
-            block:
-              namespace: zim/main
-              anchor: eof:100
-              remove_match:
-                - '^zim-main-zimfw-'
-            inputs:
-              - dropins: zimfw
+      zimfw.conf:
+        processor: block-in-file
+        remote: true
+        block:
+          remove_match:
+            - '^zim-main-zimfw-'
+            - '^zim/main/'
     ENV:
       ZIM_CONFIG_FILE: "{{ ETC }}/zimfw.conf"
     ENV_LIST:
@@ -41,7 +29,7 @@
       - zoxide
     # Zim module declaration. gen_zim renders one fragment per module under
     # etc/zim/ (etc/zim-disabled/ for enabled:false); install-zim.sh promotes
-    # them into etc/zimfw/ and config.sh (block-in-file) assembles zimfw.conf
+    # them into etc/zimfw.conf.d/ and config.sh assembles zimfw.conf
     # in sorted filename order. `phase` is a name (core/prompt/tools/
     # completion/late) or a number 00-99 for fine placement between bands.
     ZIM_MODULES:

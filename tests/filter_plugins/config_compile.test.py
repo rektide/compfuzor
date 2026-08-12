@@ -26,221 +26,79 @@ def check_raises(label, callback, expected):
 
 
 def fixture():
-    dropins = {
-        "app-core": {
-            "root": "/srv/app/etc",
-            "path": "core.d",
-            "include": "*.json",
-            "disabled_suffix": ".disabled",
-            "files": [{"name": "10-core.json", "json": {"core": True}}],
+    return {
+        "opencode.json": {
+            "processor": "json-deep-merge",
+            "inputs": [
+                {"file": "base.json"},
+                {"glob": "core/*.json", "name": "core"},
+                {"glob": "mcp/*.json", "name": "mcp", "remote": True},
+            ],
         },
-        "app-mcp": {
-            "root": "/srv/app/etc",
-            "path": "mcp",
-            "include": "*.json",
-            "disabled_suffix": ".disabled",
+        "zimfw.conf": {
+            "processor": "block-in-file",
+            "remote": True,
+            "block": {"after": "EOF", "remove_match": ["^legacy-zim-"]},
         },
-        "policy": {
-            "root": "/srv/app/etc",
-            "path": "policy.d",
-            "include": "*.conf",
-        },
-    }
-    configs = {
-        "app": {
-            "root": "/srv/app/etc",
-            "assemblies": {
-                "mcp": {
-                    "output": "generated/mcp.json",
-                    "processor": "json-deep-merge",
-                    "inputs": [{"dropins": "app-mcp"}],
-                },
-                "main": {
-                    "output": "app.json",
-                    "processor": "json-deep-merge",
-                    "inputs": [
-                        {"file": "base.json"},
-                        {"dropins": "app-core"},
-                        {"artifact": "mcp"},
-                    ],
-                },
-            },
-        },
-        "shell": {
-            "root": "/srv/app/etc",
-            "assemblies": {
-                "main": {
-                    "output": "shellrc",
-                    "processor": "block-in-file",
-                    "block": {"after": "HEADER", "namespace": "managed/shell"},
-                    "inputs": [{"dropins": "policy", "block": {"after": "LOCAL"}}],
-                }
-            },
-        },
-        "policy": {
-            "root": "/srv/app/etc",
-            "assemblies": {
-                "main": {
-                    "output": "policy.conf",
-                    "processor": "concat",
-                    "validate": "test -s \"$CONFIG_CANDIDATE\"",
-                    "inputs": [{"dropins": "policy"}],
-                }
-            },
+        "policy.conf": {
+            "processor": "concat",
+            "disabled_suffix": False,
+            "validate": 'test -s "$CONFIG_CANDIDATE"',
+            "inputs": [{"glob": "policy.d/*.conf"}],
         },
     }
-    return dropins, configs
 
 
 def test_compile():
-    dropins, configs = fixture()
-    plan = compile_config(dropins, configs)
+    plan = compile_config(fixture(), "/srv/app/etc", "/srv/app/bin", ".disabled")
+    configs = plan["spec"]["configs"]
 
-    check(
-        "drop-in directories",
-        plan["dirs"],
-        [
-            "/srv/app/etc/core.d",
-            "/srv/app/etc/mcp",
-            "/srv/app/etc/policy.d",
-            "/srv/app/etc/generated",
-            "/srv/app/etc",
-        ],
-    )
-    check(
-        "drop-in file destination",
-        plan["files"][0]["dest"],
-        "/srv/app/etc/core.d/10-core.json",
-    )
-    check("stable assembly order", plan["spec"]["configs"]["app"]["order"], ["mcp", "main"])
-    check(
-        "artifact resolves to output",
-        plan["spec"]["configs"]["app"]["assemblies"]["main"]["inputs"][2],
-        {"artifact": "mcp", "path": "/srv/app/etc/generated/mcp.json"},
-    )
-    check(
-        "independent config output",
-        plan["spec"]["configs"]["policy"]["assemblies"]["main"]["output"],
-        "/srv/app/etc/policy.conf",
-    )
-    check(
-        "candidate validation",
-        plan["spec"]["configs"]["policy"]["assemblies"]["main"]["validate"],
-        'test -s "$CONFIG_CANDIDATE"',
-    )
+    check("config names", list(configs), ["opencode", "zimfw", "policy"])
+    check("filename output", configs["opencode"]["output"], "/srv/app/etc/opencode.json")
+    check("file canonicalization", configs["opencode"]["inputs"][0]["file"], "/srv/app/etc/base.json")
+    check("glob canonicalization", configs["opencode"]["inputs"][1]["glob"], "/srv/app/etc/core/*.json")
+    check("common disabled suffix", configs["opencode"]["inputs"][1]["disabled_suffix"], ".disabled")
+    check("inferred glob", configs["zimfw"]["inputs"][0]["glob"], "/srv/app/etc/zimfw.conf.d/*.conf")
+    check("derived namespace", configs["zimfw"]["block"]["namespace"], "zimfw")
+    check("config remote chooses first glob", configs["zimfw"]["inputs"][0]["remote"], True)
+    check("remote registry", plan["spec"]["remotes"]["zimfw.conf.d"]["config"], "zimfw")
+    check("disabled suffix false", configs["policy"]["inputs"][0]["disabled_suffix"], None)
+    check("candidate validation", configs["policy"]["validate"], 'test -s "$CONFIG_CANDIDATE"')
 
-    names = [item["name"] if "name" in item else item["dest"] for item in plan["bins"]]
-    check(
-        "generated command names",
-        names,
-        [
-            "config.sh",
-            "config-toggle.sh",
-            "config-processor.sh",
-            "dropin-manage.ts",
-            "processors/block-in-file",
-            "processors/concat",
-            "processors/json-deep-merge",
-            "internal/config/app/mcp",
-            "internal/config/app/main",
-            "config-app.sh",
-            "disable-app.sh",
-            "enable-app.sh",
-            "status-config-app.sh",
-            "internal/config/shell/main",
-            "config-shell.sh",
-            "status-config-shell.sh",
-            "internal/config/policy/main",
-            "config-policy.sh",
-            "status-config-policy.sh",
-        ],
-    )
-    check("status names", plan["statuses"], ["status-config-app.sh", "status-config-shell.sh", "status-config-policy.sh"])
-    check(
-        "leaf shares processor command",
-        next(item for item in plan["bins"] if item.get("dest") == "internal/config/app/main")["link"],
-        "processors/json-deep-merge",
-    )
-    check(
-        "block input inheritance",
-        plan["spec"]["configs"]["shell"]["assemblies"]["main"]["inputs"][0]["block"],
-        {"after": "LOCAL", "namespace": "managed/shell"},
-    )
+    names = [item["name"] for item in plan["bins"]]
+    check("flat leaf exists", "internal/config/opencode" in names, True)
+    check("config command exists", "config-opencode.sh" in names, True)
+    check("input toggle exists", "disable-mcp.sh" in names, True)
+    check("immutable toggle absent", "disable-policy.d.sh" in names, False)
+    leaf = next(item for item in plan["bins"] if item["name"] == "internal/config/opencode")
+    check("leaf shares processor", leaf["link"], "processors/json-deep-merge")
 
-    subsystems = {
-        "config": {"existing": "preserved"},
-        "other": {"spec": "{{ undefined_until_other_subsystem_runs }}"},
-    }
-    published = publish_config(subsystems, plan)
-    check("unrelated subsystem preserved", published["other"], subsystems["other"])
-    check("existing config state preserved", published["config"]["existing"], "preserved")
+    published = publish_config({"other": {"spec": "preserved"}}, plan)
+    check("unrelated subsystem preserved", published["other"]["spec"], "preserved")
     check("normalized spec published", published["config"]["spec"], plan["spec"])
-    check("config dirs contributed", published["config"]["contrib"]["DIRS"], plan["dirs"])
-    check(
-        "config spec file contributed",
-        published["config"]["contrib"]["ETC_FILES"][-1],
-        {"name": "config.spec.json", "json": plan["spec"]},
-    )
-    check("config bins contributed", published["config"]["contrib"]["BINS"], plan["bins"])
-    check("config statuses contributed", published["config"]["contrib"]["STATUSES"], plan["statuses"])
-    check("config packages contributed", published["config"]["contrib"]["PKGS"], ["jq"])
+    check("spec file contributed", published["config"]["contrib"]["ETC_FILES"][-1]["name"], "config.spec.json")
 
 
 def test_validation():
-    dropins, configs = fixture()
-    configs["app"]["assemblies"]["mcp"]["inputs"] = [{"artifact": "missing"}]
     check_raises(
-        "unknown artifact",
-        lambda: compile_config(dropins, configs),
-        "unknown artifact 'missing'",
+        "removed artifact input",
+        lambda: compile_config({"x.conf": {"processor": "concat", "inputs": [{"artifact": "y"}]}}, "/etc"),
+        "exactly one file or glob",
     )
-
-    dropins, configs = fixture()
-    configs["app"]["assemblies"]["mcp"]["inputs"] = [{"artifact": "main"}]
     check_raises(
-        "assembly cycle",
-        lambda: compile_config(dropins, configs),
-        "cycle",
+        "removed anchor setting",
+        lambda: compile_config({"x.conf": {"processor": "block-in-file", "block": {"anchor": "eof:100"}}}, "/etc"),
+        "unknown settings: anchor",
     )
-
-    dropins, configs = fixture()
-    configs["app"]["assemblies"]["main"]["inputs"][1] = {"dropins": "missing"}
     check_raises(
-        "unknown drop-in",
-        lambda: compile_config(dropins, configs),
-        "unknown drop-in 'missing'",
+        "placement conflict",
+        lambda: compile_config({"x.conf": {"processor": "block-in-file", "block": {"before": "BOF", "after": "EOF"}}}, "/etc"),
+        "conflicting placement",
     )
-
-    dropins, configs = fixture()
-    dropins["app-core"]["path"] = "~/core.d"
     check_raises(
-        "unexpanded tilde path",
-        lambda: compile_config(dropins, configs),
-        "must not use an unexpanded '~' path",
-    )
-
-    dropins, configs = fixture()
-    configs["app"]["root"] = "~/.config/app"
-    check_raises(
-        "unexpanded tilde root",
-        lambda: compile_config(dropins, configs),
-        "root must not use an unexpanded '~' path",
-    )
-
-    dropins, configs = fixture()
-    configs["shell"]["assemblies"]["main"]["inputs"][0]["block"] = {"before": "LOCAL"}
-    check_raises(
-        "placement conflict after inheritance",
-        lambda: compile_config(dropins, configs),
-        "conflicting placement settings",
-    )
-
-    dropins, configs = fixture()
-    configs["shell"]["assemblies"]["main"]["inputs"][0]["block"] = {"namespace": "stolen"}
-    check_raises(
-        "input namespace rejected",
-        lambda: compile_config(dropins, configs),
-        "namespace is assembly-owned",
+        "duplicate derived name",
+        lambda: compile_config({"a/x.conf": {"processor": "concat"}, "b/x.conf": {"processor": "concat"}}, "/etc"),
+        "duplicate config name",
     )
 
 

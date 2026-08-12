@@ -57,9 +57,9 @@
   assert:
     that:
       - MCP_CLIENT is mapping
-      - MCP_CLIENT.dropins is string
+      - MCP_CLIENT.remote is string
       - MCP_CLIENT.wrapper is string
-    fail_msg: 'MCP_CLIENT requires string dropins and wrapper fields'
+    fail_msg: 'MCP_CLIENT requires string remote and wrapper fields'
   when: MCP_CLIENT is defined
 
 - name: 'Contribute MCP drop-in helper'
@@ -71,7 +71,7 @@
       basedir: False
       content: >-
         exec "$DIR/bin/mcp-dropin-core.ts"
-        {{ MCP_CLIENT.dropins | quote }}
+        {{ MCP_CLIENT.remote | quote }}
         {{ MCP_CLIENT.wrapper | quote }}
         {{ (MCP_CLIENT.command_args | default(false) | bool) | ternary('true', 'false') }}
         "$@"

@@ -152,6 +152,7 @@ _ext: "{{ '.' + item.ext if item.ext|default(False) else '' }}"
 # Per-bin layers (base_helpers, helpers) union on top; see files/_bin and
 # library/filter_plugins/helpers.py.
 DEFAULT_HELPERS: ['env', 'setopts', 'loud']
+CONFIG_DISABLED_SUFFIX: .disabled
 
 _binsRun: "{{ BINS_BYPASS|default(False) is falsy and BINS_RUN_BYPASS|default(False) is falsy }}"
 _postRun: "{{ 'postRun' if _binsRun else 'skip' }}"

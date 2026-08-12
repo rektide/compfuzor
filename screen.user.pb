@@ -7,19 +7,13 @@
     ETC: "{{HOMEDIR}}/.screenrc.d"
     ETC_FILES:
     - "utf8"
-    DROPINS:
-      screen:
-        root: "{{HOMEDIR}}"
-        path: .screenrc.d
-        include: "*"
     CONFIGS:
-      screen:
-        root: "{{HOMEDIR}}"
-        assemblies:
-          main:
-            output: .screenrc
-            processor: concat
-            inputs:
-            - dropins: screen
+      .screenrc:
+        dir: "{{HOMEDIR}}"
+        name: screen
+        processor: concat
+        disabled_suffix: false
+        inputs:
+          - glob: .screenrc.d/*
   tasks:
   - include: tasks/compfuzor.includes

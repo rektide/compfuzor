@@ -677,78 +677,60 @@ Together they do three jobs:
 
 ### Config assembly and filesystem effects
 
-Config owns assembly intent and ordering; filesystem tasks own directory and
-file effects.
+Config owns assembly intent; filesystem tasks own directory and file effects.
 
 This is a strict seam:
 
-- drop-in producers declare named source sets and their fragment files
-- config synthesis selects processors, ordered inputs, outputs, dependency
-  ordering, toggle behavior, status, and rebuild commands
-- hierarchy synthesis turns source sets into ordinary directory and file
-  artifacts
+- `ETC_DIRS` and `ETC_FILES` declare directories and locally authored fragments
+- config synthesis selects processors, ordered file/glob inputs, outputs,
+  mutable-input behavior, status, and rebuild commands
 - filesystem apply tasks create those directories and files without receiving
   processor names or dependency graphs
 - config apply runs only after its source files and generated commands have
   been materialized
 
-Keeping assembly policy out of filesystem tasks lets several subsystems
-contribute drop-ins independently of the final output that consumes them. A
-client config can combine its own fragments with MCP fragments, while a nested
-configuration such as Prometheus can route several source sets through an
-explicit assembly graph.
+Keeping assembly policy out of filesystem tasks lets local files and externally
+linked files coexist in one glob without teaching filesystem tasks how their
+contents are assembled.
 
-The public declarations are `DROPINS` and `CONFIGS`:
+`CONFIGS` is filename-keyed. Relative outputs and inputs resolve under `ETC`;
+an explicit `dir` changes that base:
 
 ```yaml
-DROPINS:
-  app-core:
-    root: "{{ ETC }}"
-    path: config.d
-    include: "*.json"
-    disabled_suffix: .disabled
-    files:
-      - name: 10-core.json
-        json: {feature: true}
-
 CONFIGS:
-  app:
-    root: "{{ ETC }}"
-    assemblies:
-      main:
-        output: app.json
-        processor: json-deep-merge
-        inputs:
-          - file: base.json
-          - dropins: app-core
-        validate: 'jq -e . "$CONFIG_CANDIDATE" >/dev/null'
+  app.json:
+    processor: json-deep-merge
+    inputs:
+      - file: base.json
+      - glob: app.json.d/*.json
+    validate: 'jq -e . "$CONFIG_CANDIDATE" >/dev/null'
 ```
 
+The config name defaults to the output basename minus its final extension, so
+`foo/app.json` produces `app`. `name` overrides the default. If `inputs` is
+omitted, the compiler infers `<output>.d/*.<extension>`; `zimfw.conf` therefore
+consumes `zimfw.conf.d/*.conf`.
+
 Compilation publishes durable runtime state at `SUBSYSTEM.config`: `spec`
-contains the normalized drop-ins and config assembly graphs, while `contrib`
+contains normalized configs and remote-input targets, while `contrib`
 contains the shared `DIRS`, `ETC_FILES`, `BINS`, `STATUSES`, and `PKGS`
 artifacts consumed by config generation.
 
-Each config instance contains an assembly DAG. Inputs are ordered and typed as
-`file`, `dropins`, or same-instance `artifact` references. The compiler rejects
-unknown references, cycles, duplicate outputs, unsupported processors, and
-unexpanded `~` paths. Supported processors are `concat`, `json-deep-merge`, and
-`block-in-file`.
+Inputs are ordered `file` or `glob` records. Globs inherit
+`CONFIG_DISABLED_SUFFIX` (`.disabled` by default); config-level
+`disabled_suffix` changes that default and an input may override it. Supported
+processors are `concat`, `json-deep-merge`, and `block-in-file`.
 
 Processors are shared internal commands under `bin/processors/`. User discovery
-and targeted execution belong to the graph orchestrator: `config.sh --list`
-prints every `<instance>/<assembly>` key, and `config.sh instance/assembly`
-executes that assembly with its transitive dependencies. The compiler creates an internal leaf
-symlink for every assembly at `bin/internal/config/<instance>/<assembly>`.
-Only the graph orchestrator invokes leaves, passing explicit identity and
-transaction paths. A targeted invocation executes only the selected assembly
-and its transitive dependencies in stable topological order.
+and targeted execution belong to the config orchestrator: `config.sh --list`
+prints config names and `config.sh <name>` rebuilds one config. The compiler
+creates one internal leaf symlink at `bin/internal/config/<name>`. Only the
+orchestrator invokes leaves, passing explicit identity and transaction paths.
 
-`block-in-file` assemblies use a `block:` mapping. Placement keys are `before`,
-`after`, and `anchor`; after assembly defaults and an input-local override are
-combined, at most one may be set. Overrides are per input, not per fragment.
-Namespace is assembly-owned, cannot be input-overridden, and defaults to
-`<instance>/<assembly>`. Block names append drop-in identity and fragment stem.
+`block-in-file` configs use a `block:` mapping. Placement keys are `before` and
+`after`; after config defaults and an input-local override are combined, at most
+one may be set. Namespace is the config name. Block names append glob identity
+and filename.
 Before deterministic reinsertion, the processor uses the current
 `block-in-file --remove-match` interface with an anchored, regex-escaped
 assembly namespace. This removes stale owned blocks while preserving unmanaged
@@ -757,29 +739,18 @@ missing CLI support is reported clearly.
 
 The runtime builds and validates every candidate before replacing any output.
 Validation commands receive the candidate path in `CONFIG_CANDIDATE`. Status
-commands run the same graph in check mode, including candidate propagation
-through nested artifacts. Mutable sets use `<file>.disabled`; generated toggle
-commands reject ambiguous selectors and rebuild their instance once after all
-renames succeed.
+commands run the same config in check mode. Mutable globs use
+`<file>.disabled`; generated input-specific toggle commands rebuild their config
+after all renames succeed.
 
-Cross-package producers manage fragments through `dropin-manage.ts`, naming the
-target `DROPINS` set rather than its path. `put` atomically creates or updates a
-fragment while preserving active/disabled state; `remove` is idempotent. Both
-operations rebuild config and roll the fragment mutation back if rebuilding
-fails. Domain helpers may transform their own records before delegating to this
-generic lifecycle command, but do not own destination paths or assembly.
+`remote: true` exposes symlink lifecycle operations for a glob. On a config it
+selects the first glob input; on an input it selects that glob explicitly.
+Local files may coexist with remote symlinks. Remote tools are consumer-owned,
+mutate only local links and enabled/disabled link names, then invoke the normal
+config rebuild.
 
-MCP uses that extension point narrowly. Server packages may emit a portable
-`etc/mcp.json`; a client-generated `mcp-dropin.ts` wraps that record for the
-client and delegates `put` to `dropin-manage.ts`. MCP does not create drop-in
-directories, track disabled state, merge output, or invoke config directly.
-
-The legacy hierarchy `*_D` variables violate this seam by making filesystem
+The removed hierarchy `*_D` variables violated this seam by making filesystem
 tasks infer both a fragment directory and an assembly operation from one path.
-Treat them as migration inputs only. Net-new drop-in work should describe
-filesystem source sets separately from config assembly intent; once the small
-legacy consumer set has migrated, direct `_D` assembly belongs outside
-`fs_hierarchy`.
 
 Example bridge:
 
@@ -787,7 +758,6 @@ Example bridge:
 |---|---|---|
 | `ETC_FILES` contribution | `_multi.tasks` and hierarchy keys | concrete `/etc`-style files |
 | `BINS` contribution | bins tasks | generated or linked scripts |
-| named drop-in declarations | hierarchy expansion | fragment directories and files |
 | config assembly declarations | config generation and ordered apply | assembled config outputs |
 
 ## 6. Worked examples

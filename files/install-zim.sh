@@ -19,7 +19,7 @@ self_dir="{{DIR}}"
 [ -f "$self_dir/env.export" ] && source "$self_dir/env.export"
 
 src_dir="${1:-$(pwd)}"
-active="${ZIM_TARGET:-$self_dir/etc/zimfw}"
+active="${ZIM_TARGET:-$self_dir/etc/zimfw.conf.d}"
 
 mkdir -p "$active"
 

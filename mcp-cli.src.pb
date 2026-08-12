@@ -4,24 +4,19 @@
     REPO: https://github.com/philschmid/mcp-cli
     BUN: True
     MCP_CLIENT:
-      dropins: mcp-cli-servers
+      remote: mcp
       wrapper: mcpServers
       command_args: true
-    DROPINS:
-      mcp-cli-servers:
-        root: "{{ ETC }}"
-        path: mcp
-        include: "*.json"
-        disabled_suffix: .disabled
+    ETC_DIRS:
+      - mcp
     CONFIGS:
-      mcp-cli:
-        root: "{{ ETC }}"
-        assemblies:
-          main:
-            output: mcp_servers.json
-            processor: json-deep-merge
-            inputs:
-              - dropins: mcp-cli-servers
+      mcp_servers.json:
+        name: mcp-cli
+        processor: json-deep-merge
+        inputs:
+          - glob: mcp/*.json
+            name: mcp
+            remote: true
     BINS:
       - name: build.sh
         content: |

@@ -1,9 +1,10 @@
 # Toggle compiled drop-in fragments with a .disabled-style suffix.
 
 CONFIG_ACTION=${1:?config action is required}
-CONFIG_INSTANCE=${2:?config instance is required}
-shift 2
-[ "$#" -gt 0 ] || { printf 'usage: %s [dropin:]pattern [...]\n' "$0" >&2; exit 2; }
+CONFIG_NAME=${2:?config name is required}
+INPUT_NAME=${3:?input name is required}
+shift 3
+[ "$#" -gt 0 ] || { printf 'usage: %s pattern [...]\n' "$0" >&2; exit 2; }
 
 spec="$DIR/etc/config.spec.json"
 [ -f "$spec" ] || { printf 'missing config spec: %s\n' "$spec" >&2; exit 2; }
@@ -14,20 +15,10 @@ declare -A seen_sources
 declare -A seen_targets
 errors=0
 for selector in "$@"; do
-  selected=""
   pattern="$selector"
-  if [[ "$selector" == *:* ]]; then
-    selected=${selector%%:*}
-    pattern=${selector#*:}
-  fi
   matched=0
-  matched_dropin=""
 
-  while IFS= read -r dropin; do
-    [ -z "$selected" ] || [ "$selected" = "$dropin" ] || continue
-    path=$(jq -r --arg name "$dropin" '.dropins[$name].path' "$spec")
-    include=$(jq -r --arg name "$dropin" '.dropins[$name].include' "$spec")
-    suffix=$(jq -r --arg name "$dropin" '.dropins[$name].disabled_suffix // empty' "$spec")
+  while IFS=$'\t' read -r path include suffix; do
     [ -n "$suffix" ] || continue
 
     search="$include"
@@ -38,12 +29,6 @@ for selector in "$@"; do
       stem=${active_name%.*}
       if [[ "$file" != "$pattern" && "$file" != "$path/$pattern" && "$active_name" != $pattern && "$stem" != $pattern ]]; then continue; fi
       if [ "$CONFIG_ACTION" = disable ]; then target="${file}${suffix}"; else target=${file%"$suffix"}; fi
-      if [ -z "$selected" ] && [ -n "$matched_dropin" ] && [ "$matched_dropin" != "$dropin" ]; then
-        printf 'ambiguous selector across %s and %s: %s\n' "$matched_dropin" "$dropin" "$selector" >&2
-        errors=1
-        continue
-      fi
-      matched_dropin="$dropin"
       if [ -n "${seen_sources[$file]:-}" ]; then
         matched=1
         continue
@@ -59,7 +44,10 @@ for selector in "$@"; do
       targets+=("$target")
       matched=1
     done < <(find "$path" -maxdepth 1 -type f -name "$search" -print0 | sort -z)
-  done < <(jq -r --arg instance "$CONFIG_INSTANCE" '.configs[$instance].dropins[]' "$spec")
+  done < <(jq -r --arg config "$CONFIG_NAME" --arg input "$INPUT_NAME" '
+    .configs[$config].inputs[] | select(.glob and .name == $input) |
+    [.directory, .pattern, (.disabled_suffix // "")] | @tsv
+  ' "$spec")
 
   if [ "$matched" != 1 ]; then
     printf 'no match: %s\n' "$selector" >&2
@@ -82,4 +70,4 @@ for index in "${!sources[@]}"; do
   printf '%s: %s -> %s\n' "$CONFIG_ACTION" "${sources[$index]}" "${targets[$index]}"
 done
 
-exec "$DIR/bin/config-${CONFIG_INSTANCE}.sh"
+exec "$DIR/bin/config-${CONFIG_NAME}.sh"

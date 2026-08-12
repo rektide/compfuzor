@@ -8,74 +8,63 @@
       bun: 1
       go: 1
     BACKUP_TARGET: /mnt/fu/backup/opencode-2026-5
+    MCP_CLIENT:
+      remote: mcp
+      wrapper: mcp
     ETC_DIRS:
       - agent
-    MCP_CLIENT:
-      dropins: opencode-mcp
-      wrapper: mcp
-    DROPINS:
-      opencode-core:
-        root: "{{ ETC }}"
-        path: etc_d
-        include: "*.json"
-        disabled_suffix: .disabled
-        files:
-          - name: keybind-tabs.json
-            json:
-              keybinds:
-                session_tab_previous: ctrl+h
-                session_tab_next: ctrl+l
-          - name: gsd.json
-            json:
-              permission:
-                read:
-                  "~/.config/opencode/get-shit-done/*": "allow"
-                external_directory:
-                  "~/.config/opencode/get-shit-done/*": "allow"
-          - name: permission.json
-            json:
-              permission:
-                "*": "allow"
-                external_directory:
-                  "*": "allow"
-                doom_loop: "allow"
-          - name: mdns.json
-            json:
-              server:
-                mdns: true
-          - name: openai-codex.json
-            json:
-              plugin:
-                - "opencode-openai-codex-auth"
-          - name: zai-coding-plan.json
-            json:
-              provider:
-                zai-coding-plan:
-                  options:
-                    timeout: 600000
-          - name: autoupdate.json
-            json:
-              autoupdate: false
-      opencode-mcp:
-        root: "{{ ETC }}"
-        path: mcp
-        include: "*.json"
-        disabled_suffix: .disabled
+      - etc_d
+      - mcp
     CONFIGS:
-      opencode:
-        root: "{{ ETC }}"
-        assemblies:
-          main:
-            output: opencode.json
-            processor: json-deep-merge
-            inputs:
-              - file: base.json
-              - dropins: opencode-core
-              - dropins: opencode-mcp
+      opencode.json:
+        processor: json-deep-merge
+        inputs:
+          - file: base.json
+          - glob: etc_d/*.json
+            name: opencode-core
+          - glob: mcp/*.json
+            name: mcp
+            remote: true
     ETC_FILES:
       - name: base.json
         json:
           "$schema": "https://opencode.ai/config.json"
+      - name: etc_d/keybind-tabs.json
+        json:
+          keybinds:
+            session_tab_previous: ctrl+h
+            session_tab_next: ctrl+l
+      - name: etc_d/gsd.json
+        json:
+          permission:
+            read:
+              "~/.config/opencode/get-shit-done/*": "allow"
+            external_directory:
+              "~/.config/opencode/get-shit-done/*": "allow"
+      - name: etc_d/permission.json
+        json:
+          permission:
+            "*": "allow"
+            external_directory:
+              "*": "allow"
+            doom_loop: "allow"
+      - name: etc_d/mdns.json
+        json:
+          server:
+            mdns: true
+      - name: etc_d/openai-codex.json
+        json:
+          plugin:
+            - "opencode-openai-codex-auth"
+      - name: etc_d/zai-coding-plan.json
+        json:
+          provider:
+            zai-coding-plan:
+              options:
+                timeout: 600000
+      - name: etc_d/autoupdate.json
+        json:
+          autoupdate: false
       - name: agent/mcp-gathering.md
         content: |
           ---

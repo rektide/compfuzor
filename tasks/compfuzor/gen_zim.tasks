@@ -22,7 +22,7 @@
 #
 # Host branch: a playbook marked ZIM_HOST provides the install-zim.sh bridge
 # (contributors invoke it to symlink their fragments into the host's
-# etc/zimfw/) and exports ZIM_TARGET / ZIM_TARGET_DISABLED so contributors can
+# etc/zimfw.conf.d/) and exports ZIM_TARGET so contributors can
 # resolve them via env.export. The host declares a named zimfw DROPINS set and a
 # block-in-file CONFIGS assembly for etc/zimfw.conf.
 
@@ -85,7 +85,7 @@
         src: ../install-zim.sh
         basedir: False
     _zim_host_env:
-      ZIM_TARGET: "{{ ETC }}/zimfw"
+      ZIM_TARGET: "{{ ETC }}/zimfw.conf.d"
 
 - name: "Compfuzor: synthesize zim host artifacts"
   set_fact:
@@ -101,4 +101,4 @@
         src: ../install-zim.sh
         basedir: False
     _zim_host_env:
-      ZIM_TARGET: "{{ ETC }}/zimfw"
+      ZIM_TARGET: "{{ ETC }}/zimfw.conf.d"

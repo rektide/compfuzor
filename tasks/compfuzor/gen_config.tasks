@@ -10,4 +10,4 @@
     BINS: "{{ BINS | merge_list(SUBSYSTEM.config.contrib.BINS | annotate_bins('config'), preset='bins_generated') }}"
     STATUSES: "{{ STATUSES | merge_list(SUBSYSTEM.config.contrib.STATUSES, preset='append_unique') }}"
     PKGS: "{{ PKGS | merge_list(SUBSYSTEM.config.contrib.PKGS, preset='append_unique') }}"
-  when: DROPINS is defined or CONFIGS is defined
+  when: CONFIGS is defined
