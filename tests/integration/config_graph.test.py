@@ -194,9 +194,16 @@ output.write_text(text)
         leaf = payload / "bin" / "internal" / "config" / "app" / "main"
         assert leaf.is_symlink()
         assert os.readlink(leaf) == str(payload / "bin" / "processors" / "json-deep-merge")
-        listed = run([str(payload / "bin" / "processors" / "json-deep-merge"), "--list"], cwd=payload)
+        listed = run([str(payload / "bin" / "config.sh"), "--list"], cwd=payload)
         listed_keys = [line for line in listed.stdout.splitlines() if "/" in line and not line.startswith("+")]
-        assert listed_keys == ["app/main", "app/mcp"], (listed.stdout, listed.stderr)
+        assert listed_keys == ["app/mcp", "app/main", "policy/main", "shell/main"], (listed.stdout, listed.stderr)
+        processor_user_call = run(
+            [str(payload / "bin" / "processors" / "json-deep-merge"), "--list"],
+            cwd=payload,
+            check=False,
+        )
+        assert processor_user_call.returncode != 0
+        assert "processors are internal" in processor_user_call.stderr
 
         shellrc = payload / "etc" / "shellrc"
         shellrc.write_text(
@@ -216,7 +223,7 @@ output.write_text(text)
         assert shell_text.index("test.shell/shell/10-first") < shell_text.index("test.shell/shell/20-second")
         second = payload / "etc" / "shell.d" / "20-second.conf"
         second.rename(second.with_suffix(".conf.disabled"))
-        run([str(payload / "bin" / "processors" / "block-in-file"), "shell/main"], cwd=payload, env=runtime_env)
+        run([str(payload / "bin" / "config.sh"), "shell/main"], cwd=payload, env=runtime_env)
         shell_text = shellrc.read_text(encoding="utf-8")
         assert "test.shell/shell/20-second" not in shell_text
         assert "unmanaged\n" in shell_text and "foreign\n" in shell_text
@@ -225,7 +232,7 @@ output.write_text(text)
         (payload / "etc" / "mcp" / "10-server.json").write_text(
             '{"mcp": {"server": {"targeted": true}}}\n', encoding="utf-8"
         )
-        run([str(payload / "bin" / "processors" / "json-deep-merge"), "app/main"], cwd=payload)
+        run([str(payload / "bin" / "config.sh"), "app/main"], cwd=payload)
         assert not (payload / "etc" / "policy.conf").exists()
         assert json.loads((payload / "etc" / "app.json").read_text())["mcp"]["server"]["targeted"] is True
         (payload / "etc" / "mcp" / "10-server.json").write_text(

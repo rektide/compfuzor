@@ -735,9 +735,10 @@ unknown references, cycles, duplicate outputs, unsupported processors, and
 unexpanded `~` paths. Supported processors are `concat`, `json-deep-merge`, and
 `block-in-file`.
 
-Processors are shared commands under `bin/processors/`. Each supports `--list`,
-which prints executable keys as `<instance>/<assembly>`, and accepts one such
-key to delegate through `config.sh`. The compiler creates an internal leaf
+Processors are shared internal commands under `bin/processors/`. User discovery
+and targeted execution belong to the graph orchestrator: `config.sh --list`
+prints every `<instance>/<assembly>` key, and `config.sh instance/assembly`
+executes that assembly with its transitive dependencies. The compiler creates an internal leaf
 symlink for every assembly at `bin/internal/config/<instance>/<assembly>`.
 Only the graph orchestrator invokes leaves, passing explicit identity and
 transaction paths. A targeted invocation executes only the selected assembly

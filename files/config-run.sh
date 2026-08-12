@@ -6,22 +6,29 @@ check=0
 quiet=0
 instance=""
 target=""
+list=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --check) check=1 ;;
+    --list) list=1 ;;
     -q|--quiet) quiet=1 ;;
     --target) shift; target="${1:?--target requires instance/assembly}" ;;
     -*) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
     *)
-      [ -z "$instance" ] || { printf 'unexpected argument: %s\n' "$1" >&2; exit 2; }
-      instance="$1"
+      [ -z "$instance" ] && [ -z "$target" ] || { printf 'unexpected argument: %s\n' "$1" >&2; exit 2; }
+      if [[ "$1" == */* ]]; then target="$1"; else instance="$1"; fi
       ;;
   esac
   shift
 done
 
 [ -f "$spec" ] || { printf 'missing config spec: %s\n' "$spec" >&2; exit 2; }
+if [ "$list" = 1 ]; then
+  [ -z "$instance" ] && [ -z "$target" ] || { printf '--list does not accept a target\n' >&2; exit 2; }
+  jq -r '.configs | to_entries[] as $config | $config.value.order[] | "\($config.key)/\(.)"' "$spec"
+  exit
+fi
 if [ -n "$target" ]; then
   [ -z "$instance" ] || { printf 'instance and --target are mutually exclusive\n' >&2; exit 2; }
   instance=${target%%/*}

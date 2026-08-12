@@ -1,35 +1,22 @@
 #!/bin/bash
-# Shared config leaf protocol and processor implementations.
+# Internal config leaf protocol and shared processor implementations.
 
 processor=${1:?processor identity is required}; shift
 spec="$DIR/etc/config.spec.json"
+: "${CONFIG_TRANSACTION:?config processors are internal; use config.sh [--list | instance/assembly]}"
 
-if [ "${1:-}" = --list ]; then
-  jq -r --arg processor "$processor" '
-    .configs | to_entries[] as $config |
-    $config.value.assemblies | to_entries[] |
-    select(.value.processor == $processor) |
-    "\($config.key)/\(.key)"
-  ' "$spec"
-  exit
-fi
-
-instance=""; assembly=""; key=""
+instance=""; assembly=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --instance) shift; instance=${1:?--instance requires a value} ;;
     --assembly) shift; assembly=${1:?--assembly requires a value} ;;
     -*) printf 'unknown processor option: %s\n' "$1" >&2; exit 2 ;;
-    *) [ -z "$key" ] || { printf 'unexpected argument: %s\n' "$1" >&2; exit 2; }; key=$1 ;;
+    *) printf 'unexpected processor argument: %s\n' "$1" >&2; exit 2 ;;
   esac
   shift
 done
 
-if [ -z "${CONFIG_TRANSACTION:-}" ]; then
-  [ -n "$key" ] || { printf 'usage: %s --list | <instance>/<assembly>\n' "$processor" >&2; exit 2; }
-  exec "$DIR/bin/config.sh" --target "$key"
-fi
-[ -z "$key" ] && [ -n "$instance" ] && [ -n "$assembly" ] || {
+[ -n "$instance" ] && [ -n "$assembly" ] || {
   printf 'transactional leaf invocation requires explicit --instance and --assembly\n' >&2; exit 2;
 }
 : "${CONFIG_CANDIDATE:?CONFIG_CANDIDATE is required}"
