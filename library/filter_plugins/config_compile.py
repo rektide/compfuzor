@@ -168,6 +168,11 @@ def compile_config(dropins, configs, bins_dir=None):
             "src": "../config-processor.sh",
             "basedir": False,
         },
+        {
+            "name": "dropin-manage.ts",
+            "src": "../dropin-manage.ts",
+            "basedir": False,
+        },
     ] if configs else []
     bin_dirs = ["processors", "internal/config"] if configs else []
     if configs:

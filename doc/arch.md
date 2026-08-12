@@ -762,6 +762,13 @@ through nested artifacts. Mutable sets use `<file>.disabled`; generated toggle
 commands reject ambiguous selectors and rebuild their instance once after all
 renames succeed.
 
+Cross-package producers manage fragments through `dropin-manage.ts`, naming the
+target `DROPINS` set rather than its path. `put` atomically creates or updates a
+fragment while preserving active/disabled state; `remove` is idempotent. Both
+operations rebuild config and roll the fragment mutation back if rebuilding
+fails. Domain helpers may transform their own records before delegating to this
+generic lifecycle command, but do not own destination paths or assembly.
+
 The legacy hierarchy `*_D` variables violate this seam by making filesystem
 tasks infer both a fragment directory and an assembly operation from one path.
 Treat them as migration inputs only. Net-new drop-in work should describe

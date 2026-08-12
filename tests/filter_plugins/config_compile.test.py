@@ -137,6 +137,7 @@ def test_compile():
             "config.sh",
             "config-toggle.sh",
             "config-processor.sh",
+            "dropin-manage.ts",
             "processors/block-in-file",
             "processors/concat",
             "processors/json-deep-merge",
