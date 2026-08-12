@@ -732,8 +732,27 @@ artifacts consumed by config generation.
 Each config instance contains an assembly DAG. Inputs are ordered and typed as
 `file`, `dropins`, or same-instance `artifact` references. The compiler rejects
 unknown references, cycles, duplicate outputs, unsupported processors, and
-unexpanded `~` paths. Supported processors are currently `concat` and
-`json-deep-merge`.
+unexpanded `~` paths. Supported processors are `concat`, `json-deep-merge`, and
+`block-in-file`.
+
+Processors are shared commands under `bin/processors/`. Each supports `--list`,
+which prints executable keys as `<instance>/<assembly>`, and accepts one such
+key to delegate through `config.sh`. The compiler creates an internal leaf
+symlink for every assembly at `bin/internal/config/<instance>/<assembly>`.
+Only the graph orchestrator invokes leaves, passing explicit identity and
+transaction paths. A targeted invocation executes only the selected assembly
+and its transitive dependencies in stable topological order.
+
+`block-in-file` assemblies use a `block:` mapping. Placement keys are `before`,
+`after`, and `anchor`; after assembly defaults and an input-local override are
+combined, at most one may be set. Overrides are per input, not per fragment.
+Namespace is assembly-owned, cannot be input-overridden, and defaults to
+`<instance>/<assembly>`. Block names append drop-in identity and fragment stem.
+Before deterministic reinsertion, the processor uses the current
+`block-in-file --remove-match` interface with an anchored, regex-escaped
+assembly namespace. This removes stale owned blocks while preserving unmanaged
+content and other namespaces. Cleanup and insertion mutate only the candidate;
+missing CLI support is reported clearly.
 
 The runtime builds and validates every candidate before replacing any output.
 Validation commands receive the candidate path in `CONFIG_CANDIDATE`. Status

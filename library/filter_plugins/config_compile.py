@@ -13,7 +13,8 @@ from template_data import raw_copy_template_data
 
 
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
-_PROCESSORS = {"concat", "json-deep-merge"}
+_PROCESSORS = {"concat", "json-deep-merge", "block-in-file"}
+_PLACEMENTS = ("before", "after", "anchor")
 
 
 def _error(message):
@@ -54,6 +55,24 @@ def _sequence(value, label):
     return list(value)
 
 
+def _block(value, label, inherited=None, allow_namespace=True):
+    block = dict(inherited or {})
+    local = _mapping(value, label)
+    unknown = set(local) - set(_PLACEMENTS) - {"namespace"}
+    if unknown:
+        _error("{} has unknown settings: {}".format(label, ", ".join(sorted(unknown))))
+    if not allow_namespace and "namespace" in local:
+        _error("{}.namespace is assembly-owned".format(label))
+    for key, setting in local.items():
+        if not isinstance(setting, str) or not setting:
+            _error("{}.{} must be a non-empty string".format(label, key))
+        block[key] = setting
+    placements = [key for key in _PLACEMENTS if key in block]
+    if len(placements) > 1:
+        _error("{} has conflicting placement settings: {}".format(label, ", ".join(placements)))
+    return block
+
+
 def _topological_order(assemblies, config_id):
     dependencies = {}
     for assembly_id, assembly in assemblies.items():
@@ -91,7 +110,7 @@ def _topological_order(assemblies, config_id):
 
 
 @accept_args_markers
-def compile_config(dropins, configs):
+def compile_config(dropins, configs, bins_dir=None):
     """Return normalized config spec plus filesystem/bin/status contributions."""
     dropins = _mapping(raw_copy_template_data(dropins), "DROPINS")
     configs = _mapping(raw_copy_template_data(configs), "CONFIGS")
@@ -144,7 +163,21 @@ def compile_config(dropins, configs):
             "src": "../config-toggle.sh",
             "basedir": False,
         },
+        {
+            "name": "config-processor.sh",
+            "src": "../config-processor.sh",
+            "basedir": False,
+        },
     ] if configs else []
+    bin_dirs = ["processors", "internal/config"] if configs else []
+    if configs:
+        for processor in sorted(_PROCESSORS):
+            bins.append({
+                "name": "processors/{}".format(processor),
+                "basedir": False,
+                "helpers": ["env"],
+                "content": 'exec "$DIR/bin/config-processor.sh" {} "$@"'.format(processor),
+            })
     statuses = []
 
     for config_id, raw in configs.items():
@@ -182,6 +215,15 @@ def compile_config(dropins, configs):
             validate = assembly_raw.get("validate")
             if validate is not None and (not isinstance(validate, str) or not validate):
                 _error("assembly validate must be a non-empty command")
+            assembly_block = None
+            if processor == "block-in-file":
+                assembly_block = _block(
+                    assembly_raw.get("block"),
+                    "CONFIGS.{}.assemblies.{}.block".format(config_id, assembly_id),
+                )
+                assembly_block.setdefault("namespace", "{}/{}".format(config_id, assembly_id))
+            elif "block" in assembly_raw:
+                _error("assembly block settings require the block-in-file processor")
 
             inputs = []
             for index, item in enumerate(
@@ -190,21 +232,38 @@ def compile_config(dropins, configs):
                     "CONFIGS.{}.assemblies.{}.inputs".format(config_id, assembly_id),
                 )
             ):
-                if not isinstance(item, collections.abc.Mapping) or len(item) != 1:
+                if not isinstance(item, collections.abc.Mapping):
                     _error("config inputs must contain exactly one typed reference")
-                kind, value = next(iter(item.items()))
+                item = dict(item)
+                typed = [(key, value) for key, value in item.items() if key != "block"]
+                if len(typed) != 1:
+                    _error("config inputs must contain exactly one typed reference")
+                kind, value = typed[0]
+                normalized = {}
                 if kind == "file":
-                    inputs.append({"file": _path(root, value, "config file input")})
+                    normalized = {"file": _path(root, value, "config file input")}
                 elif kind == "dropins":
                     if value not in normalized_dropins:
                         _error("config {!r} references unknown drop-in {!r}".format(config_id, value))
-                    inputs.append({"dropins": value})
+                    normalized = {"dropins": value}
                     if value not in referenced_dropins:
                         referenced_dropins.append(value)
                 elif kind == "artifact":
-                    inputs.append({"artifact": value})
+                    normalized = {"artifact": value}
                 else:
                     _error("unknown config input type {!r}".format(kind))
+                if processor == "block-in-file":
+                    normalized["block"] = _block(
+                        item.get("block"),
+                        "CONFIGS.{}.assemblies.{}.inputs[{}].block".format(
+                            config_id, assembly_id, index
+                        ),
+                        inherited=assembly_block,
+                        allow_namespace=False,
+                    )
+                elif "block" in item:
+                    _error("input block settings require the block-in-file processor")
+                inputs.append(normalized)
 
             assemblies[assembly_id] = {
                 "output": output,
@@ -212,6 +271,18 @@ def compile_config(dropins, configs):
                 "inputs": inputs,
                 "validate": validate,
             }
+            if assembly_block is not None:
+                assemblies[assembly_id]["block"] = assembly_block
+
+            leaf_dir = "internal/config/{}/{}".format(config_id, assembly_id)
+            parent_dir = posixpath.dirname(leaf_dir)
+            if parent_dir not in bin_dirs:
+                bin_dirs.append(parent_dir)
+            bins.append({
+                "name": leaf_dir,
+                "dest": leaf_dir,
+                "link": "processors/{}".format(processor),
+            })
 
         order = _topological_order(assemblies, config_id)
         for assembly in assemblies.values():
@@ -248,6 +319,12 @@ def compile_config(dropins, configs):
             "content": 'exec "$DIR/bin/config-{}.sh" --check "$@"'.format(config_id),
         })
         statuses.append(status_name)
+
+    if bins_dir is not None:
+        for path in bin_dirs:
+            directory = _path(bins_dir, path, "config internal bin directory")
+            if directory not in dirs:
+                dirs.append(directory)
 
     return {
         "dirs": dirs,

@@ -66,6 +66,17 @@ def fixture():
                 },
             },
         },
+        "shell": {
+            "root": "/srv/app/etc",
+            "assemblies": {
+                "main": {
+                    "output": "shellrc",
+                    "processor": "block-in-file",
+                    "block": {"after": "HEADER", "namespace": "managed/shell"},
+                    "inputs": [{"dropins": "policy", "block": {"after": "LOCAL"}}],
+                }
+            },
+        },
         "policy": {
             "root": "/srv/app/etc",
             "assemblies": {
@@ -118,22 +129,42 @@ def test_compile():
         'test -s "$CONFIG_CANDIDATE"',
     )
 
-    names = [item["name"] for item in plan["bins"]]
+    names = [item["name"] if "name" in item else item["dest"] for item in plan["bins"]]
     check(
         "generated command names",
         names,
         [
             "config.sh",
             "config-toggle.sh",
+            "config-processor.sh",
+            "processors/block-in-file",
+            "processors/concat",
+            "processors/json-deep-merge",
+            "internal/config/app/mcp",
+            "internal/config/app/main",
             "config-app.sh",
             "disable-app.sh",
             "enable-app.sh",
             "status-config-app.sh",
+            "internal/config/shell/main",
+            "config-shell.sh",
+            "status-config-shell.sh",
+            "internal/config/policy/main",
             "config-policy.sh",
             "status-config-policy.sh",
         ],
     )
-    check("status names", plan["statuses"], ["status-config-app.sh", "status-config-policy.sh"])
+    check("status names", plan["statuses"], ["status-config-app.sh", "status-config-shell.sh", "status-config-policy.sh"])
+    check(
+        "leaf shares processor command",
+        next(item for item in plan["bins"] if item.get("dest") == "internal/config/app/main")["link"],
+        "processors/json-deep-merge",
+    )
+    check(
+        "block input inheritance",
+        plan["spec"]["configs"]["shell"]["assemblies"]["main"]["inputs"][0]["block"],
+        {"after": "LOCAL", "namespace": "managed/shell"},
+    )
 
     subsystems = {
         "config": {"existing": "preserved"},
@@ -193,6 +224,22 @@ def test_validation():
         "unexpanded tilde root",
         lambda: compile_config(dropins, configs),
         "root must not use an unexpanded '~' path",
+    )
+
+    dropins, configs = fixture()
+    configs["shell"]["assemblies"]["main"]["inputs"][0]["block"] = {"before": "LOCAL"}
+    check_raises(
+        "placement conflict after inheritance",
+        lambda: compile_config(dropins, configs),
+        "conflicting placement settings",
+    )
+
+    dropins, configs = fixture()
+    configs["shell"]["assemblies"]["main"]["inputs"][0]["block"] = {"namespace": "stolen"}
+    check_raises(
+        "input namespace rejected",
+        lambda: compile_config(dropins, configs),
+        "namespace is assembly-owned",
     )
 
 

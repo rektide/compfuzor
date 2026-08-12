@@ -13,8 +13,8 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def run(command: list[str], *, cwd: Path, check: bool = True) -> subprocess.CompletedProcess:
-    result = subprocess.run(command, cwd=cwd, check=False, text=True, capture_output=True)
+def run(command: list[str], *, cwd: Path, check: bool = True, env=None) -> subprocess.CompletedProcess:
+    result = subprocess.run(command, cwd=cwd, check=False, text=True, capture_output=True, env=env)
     if check and result.returncode:
         raise AssertionError(
             f"command failed ({result.returncode}): {' '.join(command)}\n{result.stdout}\n{result.stderr}"
@@ -28,6 +28,29 @@ def test_config_graph() -> None:
         payload = temporary / "payload"
         output = temporary / "plan.json"
         playbook = temporary / "generate.pb"
+        block_fixture = temporary / "block-in-file"
+        block_fixture.write_text(
+            """#!/usr/bin/env python3
+import argparse, re
+from pathlib import Path
+p = argparse.ArgumentParser()
+p.add_argument("-n", "--name"); p.add_argument("-i", "--input")
+p.add_argument("-o", "--output", required=True); p.add_argument("--remove-match")
+p.add_argument("--before"); p.add_argument("--after"); p.add_argument("--anchor")
+a = p.parse_args(); output = Path(a.output)
+text = output.read_text() if output.exists() else ""
+blocks = re.compile(r"^# (.+) start\\n.*?^# \\1 end\\n?", re.MULTILINE | re.DOTALL)
+if a.remove_match:
+    owned = re.compile(a.remove_match)
+    text = blocks.sub(lambda m: "" if owned.search(m.group(1)) else m.group(0), text)
+else:
+    block = f"# {a.name} start\\n{Path(a.input).read_text()}# {a.name} end\\n"
+    text = block + text if a.anchor and a.anchor.startswith("bof") else text + block
+output.write_text(text)
+""",
+            encoding="utf-8",
+        )
+        block_fixture.chmod(0o755)
         (temporary / "files").symlink_to(ROOT / "files", target_is_directory=True)
         playbook.write_text(
             f"""---
@@ -70,6 +93,16 @@ def test_config_graph() -> None:
         files:
           - name: 10-policy.conf
             content: "policy=true\\n"
+      shell:
+        root: "{{{{ ETC }}}}"
+        path: shell.d
+        include: '*.conf'
+        disabled_suffix: .disabled
+        files:
+          - name: 20-second.conf
+            content: "second\\n"
+          - name: 10-first.conf
+            content: "first\\n"
     CONFIGS:
       app:
         root: "{{{{ ETC }}}}"
@@ -93,6 +126,14 @@ def test_config_graph() -> None:
             processor: concat
             validate: 'grep -q "^policy=true$" "$CONFIG_CANDIDATE"'
             inputs: [{{dropins: policy}}]
+      shell:
+        root: "{{{{ ETC }}}}"
+        assemblies:
+          main:
+            output: shellrc
+            processor: block-in-file
+            block: {{namespace: test.shell, anchor: 'eof:100'}}
+            inputs: [{{dropins: shell}}]
   tasks:
     - set_fact:
         SUBSYSTEM:
@@ -119,6 +160,7 @@ def test_config_graph() -> None:
         content: "{{{{ SUBSYSTEM.config.spec | to_nice_json }}}}"
         mode: '0660'
     - import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'bins.tasks')!r}
+    - import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'bins_link.tasks')!r}
     - copy:
         dest: {str(output)!r}
         content: "{{{{ {{'bins': BINS | map(attribute='name') | list, 'statuses': STATUSES, 'pkgs': PKGS, 'config_state': SUBSYSTEM.config, 'sentinel': SUBSYSTEM.sentinel}} | to_nice_json }}}}"
@@ -135,7 +177,7 @@ def test_config_graph() -> None:
         )
 
         plan = json.loads(output.read_text(encoding="utf-8"))
-        assert plan["statuses"] == ["status-config-app.sh", "status-config-policy.sh"]
+        assert plan["statuses"] == ["status-config-app.sh", "status-config-policy.sh", "status-config-shell.sh"]
         assert plan["pkgs"] == ["jq"]
         assert "disable-app.sh" in plan["bins"]
         assert "disable-policy.sh" not in plan["bins"]
@@ -149,10 +191,47 @@ def test_config_graph() -> None:
         assert config_state["contrib"]["STATUSES"] == plan["statuses"]
         assert config_state["contrib"]["PKGS"] == plan["pkgs"]
 
-        run([str(payload / "bin" / "config.sh")], cwd=payload)
+        leaf = payload / "bin" / "internal" / "config" / "app" / "main"
+        assert leaf.is_symlink()
+        assert os.readlink(leaf) == str(payload / "bin" / "processors" / "json-deep-merge")
+        listed = run([str(payload / "bin" / "processors" / "json-deep-merge"), "--list"], cwd=payload)
+        listed_keys = [line for line in listed.stdout.splitlines() if "/" in line and not line.startswith("+")]
+        assert listed_keys == ["app/main", "app/mcp"], (listed.stdout, listed.stderr)
+
+        shellrc = payload / "etc" / "shellrc"
+        shellrc.write_text(
+            "unmanaged\n# foreign/block start\nforeign\n# foreign/block end\n"
+            "# test.shell/shell/obsolete start\nstale\n# test.shell/shell/obsolete end\n",
+            encoding="utf-8",
+        )
+        runtime_env = os.environ.copy()
+        runtime_env["CONFIG_BLOCK_IN_FILE"] = str(block_fixture)
+
+        run([str(payload / "bin" / "config.sh")], cwd=payload, env=runtime_env)
         app = json.loads((payload / "etc" / "app.json").read_text(encoding="utf-8"))
         assert app == {"base": True, "core": True, "mcp": {"server": {"enabled": True}}}
         assert (payload / "etc" / "policy.conf").read_text(encoding="utf-8") == "policy=true\n"
+        shell_text = shellrc.read_text(encoding="utf-8")
+        assert "unmanaged\n" in shell_text and "foreign\n" in shell_text and "obsolete" not in shell_text
+        assert shell_text.index("test.shell/shell/10-first") < shell_text.index("test.shell/shell/20-second")
+        second = payload / "etc" / "shell.d" / "20-second.conf"
+        second.rename(second.with_suffix(".conf.disabled"))
+        run([str(payload / "bin" / "processors" / "block-in-file"), "shell/main"], cwd=payload, env=runtime_env)
+        shell_text = shellrc.read_text(encoding="utf-8")
+        assert "test.shell/shell/20-second" not in shell_text
+        assert "unmanaged\n" in shell_text and "foreign\n" in shell_text
+
+        (payload / "etc" / "policy.conf").unlink()
+        (payload / "etc" / "mcp" / "10-server.json").write_text(
+            '{"mcp": {"server": {"targeted": true}}}\n', encoding="utf-8"
+        )
+        run([str(payload / "bin" / "processors" / "json-deep-merge"), "app/main"], cwd=payload)
+        assert not (payload / "etc" / "policy.conf").exists()
+        assert json.loads((payload / "etc" / "app.json").read_text())["mcp"]["server"]["targeted"] is True
+        (payload / "etc" / "mcp" / "10-server.json").write_text(
+            '{"mcp": {"server": {"enabled": true}}}\n', encoding="utf-8"
+        )
+        run([str(payload / "bin" / "config-policy.sh")], cwd=payload)
 
         app_output = payload / "etc" / "app.json"
         saved_app = payload / "etc" / "app.saved.json"
@@ -168,7 +247,7 @@ def test_config_graph() -> None:
         core.write_text('{"core": false}\n', encoding="utf-8")
         policy_fragment = payload / "etc" / "policy.d" / "10-policy.conf"
         policy_fragment.write_text("policy=false\n", encoding="utf-8")
-        invalid = run([str(payload / "bin" / "config.sh")], cwd=payload, check=False)
+        invalid = run([str(payload / "bin" / "config.sh")], cwd=payload, check=False, env=runtime_env)
         assert invalid.returncode == 1
         assert json.loads((payload / "etc" / "app.json").read_text(encoding="utf-8"))["core"] is True
         assert (payload / "etc" / "policy.conf").read_text(encoding="utf-8") == "policy=true\n"
