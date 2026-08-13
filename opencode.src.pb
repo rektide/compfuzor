@@ -9,6 +9,10 @@
       bun: 1
       go: 1
     BACKUP_TARGET: /mnt/fu/backup/opencode-2026-5
+    ENV:
+      OPENCODE_SERVICE_HOSTNAME: 0.0.0.0
+      OPENCODE_SERVICE_PORT: 49374
+      OPENCODE_SERVICE_URL: http://127.0.0.1:49374
     SYSTEMD_SERVICE: opencode
     SYSTEMD_SCOPE: user
     SYSTEMD_INSTALL: user
@@ -24,7 +28,7 @@
       # projects, tools, and /tmp. Generic filesystem/process sandboxing would
       # silently break its core job, so harden lifecycle rather than access.
       Type: exec
-      ExecStart: "{{GLOBAL_BINS_DIR}}/opencode2 serve --service --hostname 0.0.0.0 --port 49374"
+      ExecStart: "{{GLOBAL_BINS_DIR}}/opencode2 serve --service --hostname ${OPENCODE_SERVICE_HOSTNAME} --port ${OPENCODE_SERVICE_PORT}"
       WorkingDirectory: "%h"
       Restart: on-failure
       RestartSec: 1
