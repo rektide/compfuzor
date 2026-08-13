@@ -57,6 +57,11 @@ The smallest coherent first deployment is:
    for remote clients until native DNS-SD browsing and credential storage exist.
 6. Offer loopback mode by changing the bind address to `127.0.0.1`; do not
    publish DNS-SD in that mode.
+7. Set `OPENCODE_PRINT_LOGS=1` so OpenCode's structured Effect logs reach
+   journald as well as its append-only log file.
+8. Export native OTLP/HTTP logs and traces when a collector is available, while
+   monitoring the systemd cgroup separately for CPU, memory, tasks, pressure,
+   OOM events, and restarts.
 
 This deployment can be produced by Compfuzor before OpenCode gains native
 systemd installation or DNS-SD browsing. It does not by itself solve remote
@@ -150,12 +155,96 @@ opencode2 service get password
 Changing one of these values stops the current service. The ordinary managed
 default remains loopback unless OpenCode code or configuration changes it.
 
+### Logs, traces, and metrics
+
+[`packages/util/src/observability.ts`](https://github.com/anomalyco/opencode/blob/dev/packages/util/src/observability.ts)
+and
+[`packages/util/src/observability/otlp.ts`](https://github.com/anomalyco/opencode/blob/dev/packages/util/src/observability/otlp.ts)
+provide native OpenTelemetry export for **logs and traces**, but not metrics.
+The CLI installs this observability layer around `serve` as well as ordinary
+commands.
+
+When `OTEL_EXPORTER_OTLP_ENDPOINT` is set to an OTLP/HTTP base URL such as
+`http://127.0.0.1:4318`, OpenCode posts to:
+
+```text
+<endpoint>/v1/logs
+<endpoint>/v1/traces
+```
+
+`OTEL_EXPORTER_OTLP_HEADERS` supplies comma-separated `key=value` headers, and
+`OTEL_RESOURCE_ATTRIBUTES` adds URI-decoded resource attributes. OpenCode's
+resource already includes `service.name=opencode`, its version and release
+channel, a client name, and a per-process run ID used for both `opencode.run`
+and `service.instance.id`. Signal-specific endpoint variables, sampler
+settings, an OTLP metrics exporter, and a Prometheus `/metrics` endpoint are not
+implemented.
+
+The trace graph is useful rather than merely nominal. Effect HTTP request spans
+are complemented by named spans around server startup, Session draining,
+logical LLM steps, physical model calls, prompt admission, history and
+instruction loading, compaction, configuration discovery, plugin activation,
+snapshots, and other core work. OpenCode honors inbound trace context but
+deliberately prevents unrelated requests from inheriting the process-lifetime
+startup span.
+
+OpenCode always appends structured `key=value` logs to its XDG data log file,
+normally:
+
+```text
+~/.local/share/opencode/log/opencode.log
+```
+
+Those Effect logs do not reach stderr by default. The systemd deployment must
+set `OPENCODE_PRINT_LOGS=1` for journald to receive them. This duplicates logs;
+it does not disable the OpenCode file. OpenCode does not rotate that file, so
+Compfuzor should either configure retention or explicitly rely on an external
+rotation policy. `OPENCODE_LOG_LEVEL` accepts `DEBUG`, `INFO`, `WARN`, and
+`ERROR`, with `INFO` as the default. Continuous DEBUG should not be the default.
+
+If OTLP initialization fails, OpenCode falls back to local file logging rather
+than failing the server. Collector health therefore needs independent
+monitoring. The CLI startup log also records command-line arguments, so secrets
+must not be placed in `ExecStart` arguments and telemetry access/retention must
+be treated as sensitive.
+
+### Health and readiness semantics
+
+The authenticated `GET /api/health` endpoint is available before full
+application initialization and expresses lifecycle state through HTTP status:
+
+| Server state | HTTP status | Additional behavior |
+|---|---|---|
+| ready | `200` | application routes are installed |
+| starting | `503` | `Retry-After: 1` |
+| stopping | `503` | `Retry-After: 1` |
+| managed boot failed | `500` | process remains alive for diagnosis |
+
+The JSON body remains `{ "healthy": true, "version": "...", "pid": ... }`
+for all four states. A probe must evaluate status, timeout, latency, PID, and
+optionally version; checking the `healthy` field alone produces a false
+positive. The endpoint requires the Basic Auth password in the private mode-0600
+registration file.
+
+A strict monitor should probe the registered URL directly. Invoking
+`opencode2 api get /api/health` is convenient for a human acceptance check, but
+the CLI may start a detached managed server when it cannot discover a healthy
+compatible one. Monitoring must not mutate the lifecycle it is measuring.
+
+Managed boot failure is especially important under systemd: OpenCode records
+the failed state and intentionally stays alive, so `Restart=on-failure` does
+not fire. The deployment therefore needs a readiness alert. Any automated
+readiness-triggered restart must have backoff and a retry limit so deterministic
+configuration or database failures do not create a restart storm.
+
 ## Confirmed Compfuzor behavior
 
-[`/opencode.src.pb`](/opencode.src.pb) presently builds and configures the V1
-OpenCode package path. Its `etc_d/mdns.json` contains the V1
-`server.mdns: true` setting. That setting is useful historical intent but is
-not evidence of V2 support and should not be copied into a V2 design.
+[`/opencode.src.pb`](/opencode.src.pb) now checks out the V2 branch, builds the
+V2 CLI, emits a user-scoped `opencode.service`, and routes shell clients through
+the explicit managed-service URL. The generated service takes its hostname,
+port, and URL from the playbook environment file. This supersedes the earlier
+V1 `server.mdns: true` configuration path; that historical setting is not
+evidence of native V2 mDNS support.
 
 Compfuzor already has generic systemd unit generation:
 
@@ -201,7 +290,9 @@ without an active login session.
 
 ## Baseline systemd shape
 
-The following is a design sketch, not yet a generated Compfuzor artifact:
+The current playbook already generates this basic user-service shape. The
+following expands it with the logging and optional OTLP contract that the
+deployment should preserve:
 
 ```ini
 [Unit]
@@ -210,10 +301,18 @@ Wants=network-online.target
 After=network-online.target
 
 [Service]
-Type=simple
+Type=exec
 ExecStart=%h/.local/bin/opencode2 serve --service --hostname 0.0.0.0 --port 49374
 Restart=on-failure
 RestartSec=2
+TimeoutStopSec=30
+KillMode=control-group
+Environment=OPENCODE_PRINT_LOGS=1
+Environment=OPENCODE_LOG_LEVEL=INFO
+
+# Optional when a local OTLP/HTTP collector is installed.
+Environment=OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318
+Environment=OTEL_RESOURCE_ATTRIBUTES=host.name=workstation,service.namespace=development
 
 [Install]
 WantedBy=default.target
@@ -224,12 +323,77 @@ Properties worth preserving in the final generated unit:
 - `ExecStart` uses an absolute, stable executable path.
 - No password is placed in the unit or process arguments. OpenCode loads its
   persisted private service configuration.
+- In generated Compfuzor output, deployment-specific OpenCode and OTEL values
+  should live in the existing private environment file rather than being
+  repeated as literal unit properties. The inline `Environment` entries above
+  only make the required runtime contract visible in this sketch.
+- `OPENCODE_PRINT_LOGS=1` makes the structured application log visible through
+  `journalctl --user -u opencode.service` while retaining OpenCode's own file.
 - `Restart=on-failure` avoids immediately undoing a deliberate graceful stop.
+- `Restart=on-failure` handles process crashes and OOM-induced unit failures,
+  but not OpenCode's alive-but-failed boot state; readiness monitoring remains
+  mandatory.
 - The port is fixed when DNS-SD is generated statically. Dynamic port `0` is
   incompatible with a static `.dnssd` record unless publication is updated
   after binding.
 - The default working directory is the user's home, matching existing
   `serve --service` behavior.
+
+Do not use `Type=notify`, `WatchdogSec`, or socket activation: OpenCode does not
+implement `sd_notify`, watchdog heartbeats, or inherited systemd sockets.
+Resource controls such as `MemoryHigh`, `MemoryMax`, `TasksMax`, and `OOMPolicy`
+are valuable containment, but their values must come from observed representative
+workloads. OpenCode launches tools and language services, so aggressive process,
+filesystem, home-directory, syscall, or network sandboxing can silently break
+its core purpose.
+
+## Operational monitoring baseline
+
+Native traces explain what work ran; they do not warn that the process is close
+to exhausting a machine. The first Compfuzor deployment should combine three
+independent surfaces:
+
+| Surface | Answers | Collection path |
+|---|---|---|
+| OpenCode logs | What failed and in which process run? | journald, local file, optional OTLP logs |
+| OpenCode traces | Which request, Session step, model call, or subsystem was slow? | OTLP/HTTP collector and trace backend |
+| systemd/cgroup metrics | Is the process exhausting CPU, memory, tasks, or the host? | systemd/cgroup v2 plus host metrics exporter |
+
+Immediate operator commands include:
+
+```sh
+journalctl --user -u opencode.service -f
+systemctl --user show opencode.service \
+  -p ActiveState -p SubState -p MainPID -p NRestarts \
+  -p MemoryCurrent -p MemoryPeak -p CPUUsageNSec -p TasksCurrent
+systemd-cgtop --user
+```
+
+Property availability varies by systemd version. On cgroup v2, the unit's
+`memory.current`, `memory.events`, `memory.pressure`, `cpu.stat`,
+`cpu.pressure`, `pids.current`, and `pids.events` provide the underlying
+evidence. Export these with an existing infrastructure agent,
+`systemd_exporter`/`node_exporter`, or an OpenTelemetry Collector host metrics
+pipeline. A generic host metrics receiver may not attribute every measurement
+to the OpenCode unit, so unit/cgroup labels must be verified before alerts rely
+on them.
+
+Initial alerts should cover:
+
+- unit inactive/failed or a rising restart count;
+- authenticated health non-200 after a startup grace period;
+- health timeout or sharply rising probe latency;
+- sustained CPU or PSI pressure;
+- memory growth and `memory.events` increments for `high`, `oom`, or
+  `oom_kill`;
+- process/task count approaching its limit;
+- missing OTLP telemetry or collector export failures;
+- unexpected OpenCode log-file growth;
+- rising trace error rate or p95/p99 request, Session, and model-call latency.
+
+Correlate incidents using systemd timestamps, the PID in the registration and
+health response, the log `run` field, and OTEL `service.instance.id`. The last
+two are the same per-process OpenCode run ID and change on restart.
 
 The local-only variant changes only the bind address and disables publication:
 
@@ -517,6 +681,7 @@ The first implementation should avoid conflating these independently useful
 changes:
 
 - systemd process installation and ownership;
+- logs, traces, health probing, and cgroup monitoring;
 - server bind defaults and interface selection;
 - DNS-SD publication;
 - DNS-SD browsing and selection UX;
@@ -533,10 +698,15 @@ product-wide default with evidence.
 
 ### 1. Prototype the deployment in Compfuzor
 
-- Add a V2-specific service definition rather than extending the current V1
-  `opencode.src.pb` assumptions invisibly.
-- Generate a user service with a fixed port and explicit wildcard or loopback
-  bind mode.
+- Continue using the V2-specific user service now present in `opencode.src.pb`.
+- Verify its fixed port and explicit wildcard or loopback bind mode on the
+  target host.
+- Put `OPENCODE_PRINT_LOGS=1` in the generated service environment and verify
+  that structured `role=server` records reach journald.
+- Make OTLP/HTTP endpoint, headers, and resource attributes optional deployment
+  inputs rather than hard-coding a backend.
+- Establish cgroup resource dashboards/alerts before selecting hard memory and
+  task limits.
 - Generate/install `.dnssd` only in network mode.
 - Ensure `systemd-resolved` mDNS and the desired network links are enabled.
 - Document linger, firewall, password retrieval, and explicit client use.
@@ -545,7 +715,9 @@ Acceptance checks:
 
 ```sh
 systemctl --user status opencode.service
+journalctl --user -u opencode.service --since=-5min
 opencode2 api get /api/health
+systemctl --user show opencode.service -p MainPID -p NRestarts -p MemoryCurrent -p CPUUsageNSec -p TasksCurrent
 opencode2 pair
 resolvectl service _opencode._tcp local
 OPENCODE_PASSWORD=... opencode2 --server http://host.local:49374
@@ -562,6 +734,10 @@ Avahi tools are installed.
   systemd ownership.
 - Verify graceful stop, crash restart, version upgrade, stale registration,
   and concurrent client startup.
+- Verify that an alive process returning health status 500 raises an alert even
+  though systemd still reports the unit active.
+- Verify collector outage does not prevent startup and is independently
+  observable.
 - Keep the private registration-file format and permissions unchanged unless a
   concrete migration requires otherwise.
 
@@ -598,7 +774,15 @@ At minimum, exercise:
 - wildcard, specific-interface, IPv4 loopback, and IPv6 loopback binding;
 - mDNS enabled and disabled, including a host without systemd-resolved;
 - service process healthy, starting, failed, stopped, and stale-advertised;
+- health probes inspect status rather than the constant `healthy: true` body and
+  do not trigger detached service auto-start;
 - systemd crash restart versus deliberate stop;
+- managed boot failure that remains alive and therefore does not trigger
+  `Restart=on-failure`;
+- journald capture with `OPENCODE_PRINT_LOGS=1`, local log growth/rotation, and
+  bounded DEBUG logging;
+- OTLP collector available, unavailable at boot, and unavailable after startup;
+- CPU saturation, rising memory, task growth, pressure, and cgroup OOM events;
 - client auto-start while the systemd unit is disabled or stopped;
 - version match and mismatch between client and discovered server;
 - missing, wrong, rotated, and revoked credentials;
@@ -608,7 +792,7 @@ At minimum, exercise:
 - firewall blocking the TCP port while mDNS remains visible;
 - malicious TXT values, oversized records, unknown keys, and a spoofed server;
 - no credential or sensitive path appearing in DNS packets, journal output, or
-  process arguments.
+  process arguments, and appropriate access/retention for sensitive telemetry.
 
 ## Open decisions
 
@@ -630,6 +814,10 @@ At minimum, exercise:
 9. Should a static `.dnssd` advertisement remain active while the user service
    is stopped, or must publication follow health?
 10. Which non-Linux publishers and browsers are required for the initial scope?
+11. Which OTLP backend and host/unit metrics exporter should Compfuzor deploy,
+    and what retention policy applies to potentially sensitive traces and logs?
+12. What representative workload establishes `MemoryHigh`, `MemoryMax`, and
+    `TasksMax` without turning ordinary tool execution into false OOM failures?
 
 ## Recommended near-term decision
 
@@ -648,9 +836,10 @@ backend and diagnostic reference.
 
 ## Cross-references
 
-- [`/opencode.src.pb`](/opencode.src.pb) is the existing Compfuzor OpenCode
-  checkout/configuration path. It records earlier V1 mDNS intent but needs an
-  explicit V2 migration decision.
+- [`/opencode.src.pb`](/opencode.src.pb) is the active V2 checkout,
+  configuration, environment-file, and user-service generation path. The
+  observability requirements in this design should land there rather than in a
+  parallel installer.
 - [`/.design/config-mcp/init.0.md`](/.design/config-mcp/init.0.md) scopes the
   current OpenCode configuration assembly work. Service management should not
   accidentally reintroduce competing writers for `opencode.json`.
