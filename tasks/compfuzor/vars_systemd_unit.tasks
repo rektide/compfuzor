@@ -222,7 +222,10 @@
 
 - name: 'Generate systemd install scripts'
   set_fact:
-    BINS: "{{ BINS | merge_list([_bin_item] | annotate_bins('systemd'), preset='bins_generated', resolve=True) }}"
+    # Resolve loop-local item/scope references before annotate_bins copies the
+    # record; otherwise Ansible can retain them and fail in a later merge after
+    # this loop's `item` has left scope.
+    BINS: "{{ BINS | merge_list(([_bin_item] | resolve) | annotate_bins('systemd'), preset='bins_generated') }}"
   when:
     - SYSTEMD_INSTALL_BYPASS is deffalsy
   loop: "{{ _systemd_install_specs }}"
