@@ -45,6 +45,10 @@
       TimeoutStopSec: 30
       TimeoutStopFailureMode: kill
       KillMode: control-group
+      # OpenCode is control-plane infrastructure for active agent work. Exclude
+      # it from systemd-oomd's user-slice candidates rather than merely ranking
+      # it last; kernel OOM kills still fail and restart the whole unit.
+      ManagedOOMPreference: omit
       OOMPolicy: stop
       MemoryAccounting: true
       TasksAccounting: true
@@ -96,6 +100,15 @@
       OpenCode. Its growth requires an external retention policy. The wildcard
       HTTP bind also exposes Basic Auth without transport encryption; constrain
       it to trusted interfaces/networks or put it behind an encrypted tunnel.
+
+      `ManagedOOMPreference=omit` excludes this unit from systemd-oomd memory
+      pressure selection inside the monitored user-manager cgroup. It does not
+      override the kernel OOM killer. An unprivileged user manager cannot lower
+      `OOMScoreAdjust` below its inherited value; kernel-level priority would
+      require a deliberate privileged policy for `user@.service` or a system
+      service deployment. If the kernel still OOM-kills a unit process,
+      `OOMPolicy=stop` makes the unit fail coherently and `Restart=on-failure`
+      recovers it with bounded backoff.
     MCP_CLIENT:
       remote: mcp
       wrapper: mcp
