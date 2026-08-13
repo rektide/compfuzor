@@ -3,11 +3,45 @@
   vars:
     TYPE: opencode
     INSTANCE: git
-    REPO: https://github.com/anomolyco/opencode
+    REPO: https://github.com/anomalyco/opencode
+    GIT_VERSION: v2
     TOOL_VERSIONS:
       bun: 1
       go: 1
     BACKUP_TARGET: /mnt/fu/backup/opencode-2026-5
+    SYSTEMD_SERVICE: opencode
+    SYSTEMD_SCOPE: user
+    SYSTEMD_INSTALL: user
+    SYSTEMD_UNITS:
+      Description: OpenCode V2 background server
+      Documentation: https://opencode.ai/docs/
+      Wants: network-online.target
+      After: network-online.target
+      StartLimitIntervalSec: 60
+      StartLimitBurst: 5
+    SYSTEMD_SERVICES:
+      # OpenCode is an execution environment and needs the user's normal home,
+      # projects, tools, and /tmp. Generic filesystem/process sandboxing would
+      # silently break its core job, so harden lifecycle rather than access.
+      Type: exec
+      ExecStart: "{{GLOBAL_BINS_DIR}}/opencode2 serve --service --hostname 0.0.0.0 --port 49374"
+      WorkingDirectory: "%h"
+      Restart: on-failure
+      RestartSec: 1
+      RestartSteps: 5
+      RestartMaxDelaySec: 30
+      TimeoutStopSec: 30
+      TimeoutStopFailureMode: kill
+      OOMPolicy: continue
+      LimitNOFILE: 1048576
+      SyslogIdentifier: opencode
+    SYSTEMD_INSTALLS:
+      WantedBy: default.target
+    ZIM_MODULES:
+      - name: opencode-service
+        source: opencode-service.zsh
+        phase: tools
+        comment: Route both OpenCode command names through the managed V2 server.
     MCP_CLIENT:
       remote: mcp
       wrapper: mcp
@@ -48,10 +82,6 @@
             external_directory:
               "*": "allow"
             doom_loop: "allow"
-      - name: etc_d/mdns.json
-        json:
-          server:
-            mdns: true
       - name: etc_d/openai-codex.json
         json:
           plugin:
@@ -123,34 +153,13 @@
       #          apiKEy: "{env:OPENROUTER_API_KEY}"
     BINS:
       - name: build.sh
-        basedir: packages/opencode
+        basedir: False
         content: |
-          # for opencode-live
           bun install --frozen-lockfile
-          # real build
-          bun run build
+          bun run --cwd packages/cli build --single
       - name: install.sh
         content: |
-          ln -sfv $(pwd)/packages/opencode/dist/opencode-linux-x64/bin/opencode $GLOBAL_BINS_DIR/
-      - name: install-user.sh
-        basedir: False
-        content: |
-          dir={{DIR}}
-          mkdir -p ~/.local/share/opencode/log
-
-          [ -n "$TARGET" ] || TARGET="$HOME/.config/opencode"
-          mkdir -p $(dirname $TARGET)
-          ln -sv ${dir}/etc $TARGET/
-      - name: opencode-live
-        basedir: False
-        global: True
-        content: |
-          # note/beware that we also are pulling in env.exports
-          exec bun run --cwd $DIR dev $(pwd)
-      # TODO: compfuzor helpers for installing content, automate this in install-user
-      - name: install.sh
-        content: |
-          ln -sfv $(pwd)/packages/opencode/dist/opencode-linux-x64/bin/opencode $GLOBAL_BINS_DIR/
+          ln -sfv $(pwd)/packages/cli/dist/cli-linux-x64/bin/opencode2 $GLOBAL_BINS_DIR/
       - name: install-user.sh
         basedir: False
         content: |
