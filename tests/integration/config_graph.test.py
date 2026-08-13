@@ -119,6 +119,9 @@ output.write_text(text)
         assert plan["spec"]["remotes"]["shell.conf.d"]["config"] == "shell"
         assert "disable-mcp.sh" in plan["bins"]
         assert "disable-shell.conf.d.sh" in plan["bins"]
+        assert "config-remote.ts" in plan["bins"]
+        assert "config-remote-mcp.ts" in plan["bins"]
+        assert "config-remote-shell.conf.d.ts" in plan["bins"]
 
         (payload / "etc" / "base.json").write_text('{"base": true}\n')
         (payload / "etc" / "core" / "10-core.json").write_text('{"core": true}\n')

@@ -721,6 +721,13 @@ Inputs are ordered `file` or `glob` records. Globs inherit
 `disabled_suffix` changes that default and an input may override it. Supported
 processors are `concat`, `json-deep-merge`, and `block-in-file`.
 
+A glob marked `remote: true` is exposed by name through `config-remote.ts`; a
+config-level `remote: true` exposes its first glob. The tool resolves destination
+directories from `config.spec.json`, links external files without copying them,
+and provides `list`, `put` (`link`), `status`, `enable`, `disable`, and `remove`.
+Mutations refuse regular destination files, preserve disabled state, rebuild only
+the owning config, and roll the symlink change back when that rebuild fails.
+
 Processors are shared internal commands under `bin/processors/`. User discovery
 and targeted execution belong to the config orchestrator: `config.sh --list`
 prints config names and `config.sh <name>` rebuilds one config. The compiler
@@ -747,7 +754,31 @@ after all renames succeed.
 selects the first glob input; on an input it selects that glob explicitly.
 Local files may coexist with remote symlinks. Remote tools are consumer-owned,
 mutate only local links and enabled/disabled link names, then invoke the normal
-config rebuild.
+targeted config rebuild. Compilation emits the single `config-remote.ts` tool
+only when at least one remote target exists.
+
+For example, the Zim consumer's inferred `zimfw.conf.d/*.conf` input is named
+`zimfw.conf.d`. A producer keeps its fragment durable and asks the consumer to
+link it; disabling changes only the consumer link name:
+
+```sh
+/opt/zim-main/bin/config-remote.ts put zimfw.conf.d \
+  /opt/producer/etc/zim/55-example.conf
+/opt/zim-main/bin/config-remote.ts disable zimfw.conf.d 55-example.conf
+```
+
+MCP uses the same seam after transformation. The producer's `mcp.json` is
+transformed to a durable `etc/mcp-remote/<server>.json`; the MCP adapter then
+calls the selected client's lifecycle tool, for example:
+
+```sh
+/opt/amp/bin/config-remote.ts put mcp \
+  /usr/local/src/example-mcp/etc/mcp-remote/example-mcp.json example-mcp.json
+```
+
+Remote operations never copy, rename, or edit producer files. Link updates
+retain disabled state, conflicting active and disabled links are rejected, and
+a failed rebuild rolls the local symlink mutation back.
 
 The removed hierarchy `*_D` variables violated this seam by making filesystem
 tasks infer both a fragment directory and an assembly operation from one path.

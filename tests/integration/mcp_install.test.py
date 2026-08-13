@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the thin MCP adapter over generic DROPINS lifecycle."""
+"""Exercise durable MCP transformation over consumer remote lifecycle."""
 
 from __future__ import annotations
 
@@ -34,13 +34,16 @@ def test_mcp_install() -> None:
         adapter = host / "bin" / "mcp-dropin.ts"
         adapter.write_text(rendered.replace("{{DIR}}", str(host)), encoding="utf-8")
         adapter.chmod(0o770)
-        manager_rendered = (ROOT / "files" / "dropin-manage.ts").read_text(encoding="utf-8")
-        manager = host / "bin" / "dropin-manage.ts"
+        manager_rendered = (ROOT / "files" / "config-remote.ts").read_text(encoding="utf-8")
+        manager = host / "bin" / "config-remote.ts"
         manager.write_text(manager_rendered.replace("{{DIR}}", str(host)), encoding="utf-8")
         manager.chmod(0o770)
+        wrapper = host / "bin" / "config-remote-amp-mcp.ts"
+        wrapper.write_text(f'#!/bin/sh\naction="$1"; shift\nexec "{manager}" "$action" amp-mcp "$@"\n', encoding="utf-8")
+        wrapper.chmod(0o770)
         (host / "etc").mkdir(exist_ok=True)
         (host / "etc" / "config.spec.json").write_text(
-            json.dumps({"dropins": {"amp-mcp": {"path": str(target), "include": "*.json", "disabled_suffix": ".disabled"}}}),
+            json.dumps({"remotes": {"amp-mcp": {"config": "amp", "directory": str(target), "pattern": "*.json", "disabled_suffix": ".disabled"}}}),
             encoding="utf-8",
         )
         (host / "bin" / "config.sh").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
@@ -52,6 +55,8 @@ def test_mcp_install() -> None:
 
         run([str(adapter), "amp-mcp", "amp.mcpServers", "true", str(source)])
         fragment = target / "example.json"
+        durable = source / "etc" / "mcp-remote" / "example.json"
+        assert fragment.is_symlink() and fragment.resolve() == durable
         assert json.loads(fragment.read_text(encoding="utf-8")) == {
             "amp": {
                 "mcpServers": {
@@ -73,6 +78,7 @@ def test_mcp_install() -> None:
         assert reinstall.returncode == 0
         assert not fragment.exists()
         assert "https://example.test/new" in disabled.read_text(encoding="utf-8")
+        assert disabled.is_symlink() and disabled.resolve() == durable
 
 
 if __name__ == "__main__":

@@ -28,8 +28,8 @@
       - fzf
       - zoxide
     # Zim module declaration. gen_zim renders one fragment per module under
-    # etc/zim/ (etc/zim-disabled/ for enabled:false); install-zim.sh promotes
-    # them into etc/zimfw.conf.d/ and config.sh assembles zimfw.conf
+    # etc/zim/ (etc/zim-disabled/ for enabled:false); install-zim.sh delegates
+    # them to config-remote-zimfw.conf.d.ts and config.sh assembles zimfw.conf
     # in sorted filename order. `phase` is a name (core/prompt/tools/
     # completion/late) or a number 00-99 for fine placement between bands.
     ZIM_MODULES:

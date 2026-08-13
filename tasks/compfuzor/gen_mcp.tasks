@@ -1,12 +1,12 @@
 ---
 # gen_mcp.tasks — MCP server configuration and client tooling.
 #
-# MCP clients declare DROPINS/CONFIGS; the central config synthesis pass provides
+# MCP clients declare CONFIGS; the central config synthesis pass provides
 # their merger, generic toggles, status, and apply ordering.
 #
 # What MCP contributes itself:
 #   - mcp.json ETC_FILES (server config, from MCP_URL or MCP_COMMAND)
-#   - mcp-dropin.ts (thin transform over named DROPINS lifecycle)
+#   - mcp-dropin.ts (thin transform delegated to a named remote lifecycle tool)
 
 - name: 'Build vars for remote MCP server'
   set_fact:

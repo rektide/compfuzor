@@ -239,6 +239,15 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled"):
         bins.append({"name": status, "basedir": False, "content": 'exec "$DIR/bin/config-{}.sh" --check "$@"'.format(name)})
         statuses.append(status)
 
+    if remotes:
+        bins.append({"name": "config-remote.ts", "src": "../config-remote.ts", "basedir": False})
+        for target_name in sorted(remotes):
+            bins.append({
+                "name": "config-remote-{}.ts".format(target_name),
+                "basedir": False,
+                "content": 'action="$1"; shift; exec "$DIR/bin/config-remote.ts" "$action" {} "$@"'.format(target_name),
+            })
+
     if configs and bins_dir is not None:
         for path in ("processors", "internal/config"):
             directory = _path(bins_dir, path, "config bin directory")

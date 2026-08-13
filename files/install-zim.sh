@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install-zim.sh - promote a contributor's zim fragments into the host target.
+# install-zim.sh - delegate contributor zim fragments to the host remote tool.
 #
 # Contributors render module fragments under etc/zim/ (and etc/zim-disabled/
 # for enabled:false entries). This script symlinks them into the host's
@@ -8,30 +8,26 @@
 # copies) keep the contributor as source-of-truth, so a re-rendered fragment
 # updates the host automatically and status-config-zim.sh detects drift.
 #
-# Environment (sourced from the host's env.export):
-#   ZIM_TARGET          - host active dir    (default: $DIR/etc/zimfw)
-#
 # Usage: install-zim.sh [source_dir]   # source_dir defaults to $PWD
 
 set -e
 
 self_dir="{{DIR}}"
-[ -f "$self_dir/env.export" ] && source "$self_dir/env.export"
 
 src_dir="${1:-$(pwd)}"
-active="${ZIM_TARGET:-$self_dir/etc/zimfw.conf.d}"
-
-mkdir -p "$active"
+remote="$self_dir/bin/config-remote-zimfw.conf.d.ts"
 
 count=0
 shopt -s nullglob
 for f in "$src_dir"/etc/zim/*.conf; do
-  ln -sfv "$f" "$active/$(basename "$f")"
+  "$remote" link "$f"
   count=$((count + 1))
 done
 for f in "$src_dir"/etc/zim-disabled/*.conf; do
-  ln -sfv "$f" "$active/$(basename "$f").disabled"
+  name="$(basename "$f")"
+  "$remote" link "$f" "$name"
+  "$remote" disable "$name"
   count=$((count + 1))
 done
 
-echo "install-zim: promoted $count fragment(s) -> $active"
+echo "install-zim: delegated $count fragment(s) to zimfw.conf.d"

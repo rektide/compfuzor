@@ -3,9 +3,9 @@
 #
 # Contributor branch: a playbook declaring ZIM_MODULE / ZIM_MODULES renders one
 # fragment file per module under zim/ (or zim-disabled/ for enabled:false)
-# via the zim_fragment filter. Fragment names are relative to the ETC dir (the
-# ETC_FILES writer base), so they land at ETC/zim -- which is what
-# install-zim.sh globs via DIR/etc/zim (DIR/etc symlinks to ETC). Filenames
+# via the zim_fragment filter. Fragment names are relative to the ETC dir. The
+# host bridge delegates each durable source to config-remote-zimfw.conf.d.ts.
+# Filenames
 # carry a phase number so sorted glob order across independent contributors
 # yields deterministic load order at assembly time.
 #
@@ -20,11 +20,8 @@
 # its zim/ fragments into the zim host assembly dir, so a contributor only
 # declares ZIM_MODULES and otherwise does nothing install-shaped itself.
 #
-# Host branch: a playbook marked ZIM_HOST provides the install-zim.sh bridge
-# (contributors invoke it to symlink their fragments into the host's
-# etc/zimfw.conf.d/) and exports ZIM_TARGET so contributors can
-# resolve them via env.export. The host declares a named zimfw DROPINS set and a
-# block-in-file CONFIGS assembly for etc/zimfw.conf.
+# Host branch: a playbook marked ZIM_HOST provides the install-zim.sh bridge.
+# The host's CONFIGS declaration owns the remote target and lifecycle tooling.
 
 - name: "Compfuzor: render zim contributor fragments"
   set_fact:
@@ -74,8 +71,6 @@
 - name: "Compfuzor: synthesize zim host artifacts"
   set_fact:
     BINS: "{{ BINS | merge_list(_zim_host_bins | annotate_bins('zim'), preset='bins_generated') }}"
-    ENV: "{{ _zim_host_env | merge_dict(ENV, preset='overlay', skip_layers=['all']) }}"
-    ENV_LIST: "{{ ENV_LIST|normalize(to='list') + ['ZIM_TARGET'] }}"
   when:
     - ZIM_HOST is defined
     - ZIM_BYPASS is deffalsy
@@ -84,21 +79,3 @@
       - name: install-zim.sh
         src: ../install-zim.sh
         basedir: False
-    _zim_host_env:
-      ZIM_TARGET: "{{ ETC }}/zimfw.conf.d"
-
-- name: "Compfuzor: synthesize zim host artifacts"
-  set_fact:
-    BINS: "{{ BINS | merge_list(_zim_host_bins | annotate_bins('zim'), preset='bins_generated') }}"
-    ENV: "{{ _zim_host_env | merge_dict(ENV, preset='overlay', skip_layers=['all']) }}"
-    ENV_LIST: "{{ ENV_LIST|normalize(to='list') + ['ZIM_TARGET'] }}"
-  when:
-    - ZIM_HOST is defined
-    - ZIM_BYPASS is deffalsy
-  vars:
-    _zim_host_bins:
-      - name: install-zim.sh
-        src: ../install-zim.sh
-        basedir: False
-    _zim_host_env:
-      ZIM_TARGET: "{{ ETC }}/zimfw.conf.d"

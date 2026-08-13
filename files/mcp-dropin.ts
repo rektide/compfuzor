@@ -1,9 +1,8 @@
 #!/usr/bin/env node
-/** Transform a portable MCP record, then delegate its lifecycle to DROPINS. */
+/** Transform a portable MCP record into a durable producer source, then delegate. */
 
 import { spawn } from "node:child_process"
-import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
+import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
 import { basename, join } from "node:path"
 
 const selfDir = "{{DIR}}"
@@ -60,15 +59,15 @@ function transform(name: string, config: Record<string, unknown>, wrapper: strin
 
 async function delegate(setName: string, source: string, name: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(join(selfDir, "bin", "dropin-manage.ts"), ["put", setName, source, name], { cwd: selfDir, stdio: "inherit" })
+    const child = spawn(join(selfDir, "bin", `config-remote-${setName}.ts`), ["put", source, name], { cwd: selfDir, stdio: "inherit" })
     child.once("error", reject)
-    child.once("exit", (code, signal) => code === 0 ? resolve() : reject(new Error(`drop-in manager failed: ${signal ?? code}`)))
+    child.once("exit", (code, signal) => code === 0 ? resolve() : reject(new Error(`config remote failed: ${signal ?? code}`)))
   })
 }
 
 async function main(): Promise<void> {
   const [setName, wrapper, splitArgs, sourceArg] = process.argv.slice(2)
-  if (!setName || !wrapper) throw new Error("usage: mcp-dropin.ts <dropins> <wrapper> <command-args> [source-dir]")
+  if (!setName || !wrapper) throw new Error("usage: mcp-dropin.ts <remote> <wrapper> <command-args> [source-dir]")
   const sourceDir = sourceArg ?? process.cwd()
   const mcpFile = join(sourceDir, "etc", "mcp.json")
   if (!(await exists(mcpFile))) throw new Error(`${mcpFile} not found`)
@@ -76,13 +75,26 @@ async function main(): Promise<void> {
   let name = basename(sourceDir).replace(/-(git|main)$/, "")
   const rawConfig = JSON.parse(await readFile(mcpFile, "utf-8"))
   const config = JSON.parse(envsubst(JSON.stringify(rawConfig)))
-  const directory = await mkdtemp(join(tmpdir(), "compfuzor-mcp-"))
+  const directory = join(sourceDir, "etc", "mcp-remote")
   const fragment = join(directory, `${name}.json`)
+  const temporary = join(directory, `.${name}.json.tmp-${process.pid}`)
+  await mkdir(directory, { recursive: true })
+  const previous = await readFile(fragment).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return undefined
+    throw error
+  })
   try {
-    await writeFile(fragment, `${JSON.stringify(transform(name, config, wrapper, splitArgs === "true"), null, "\t")}\n`)
+    await writeFile(temporary, `${JSON.stringify(transform(name, config, wrapper, splitArgs === "true"), null, "\t")}\n`)
+    await rename(temporary, fragment)
     await delegate(setName, fragment, `${name}.json`)
-  } finally {
-    await rm(directory, { recursive: true, force: true })
+  } catch (error) {
+    await rm(temporary, { force: true })
+    if (previous === undefined) await rm(fragment, { force: true })
+    else {
+      await writeFile(temporary, previous)
+      await rename(temporary, fragment)
+    }
+    throw error
   }
 }
 
