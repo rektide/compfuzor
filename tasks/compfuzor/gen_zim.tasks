@@ -4,7 +4,7 @@
 # Contributor branch: a playbook declaring ZIM_MODULE / ZIM_MODULES renders one
 # fragment file per module under zim/ (or zim-disabled/ for enabled:false)
 # via the zim_fragment filter. Fragment names are relative to the ETC dir. The
-# host bridge delegates each durable source to config-remote-zimfw.conf.d.ts.
+# host bridge delegates each durable source to config-remote.ts.
 # Filenames
 # carry a phase number so sorted glob order across independent contributors
 # yields deterministic load order at assembly time.

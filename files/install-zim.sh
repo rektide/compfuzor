@@ -15,18 +15,18 @@ set -e
 self_dir="{{DIR}}"
 
 src_dir="${1:-$(pwd)}"
-remote="$self_dir/bin/config-remote-zimfw.conf.d.ts"
+remote="$self_dir/bin/config-remote.ts"
 
 count=0
 shopt -s nullglob
 for f in "$src_dir"/etc/zim/*.conf; do
-  "$remote" link "$f"
+  "$remote" link zimfw.conf.d "$f"
   count=$((count + 1))
 done
 for f in "$src_dir"/etc/zim-disabled/*.conf; do
   name="$(basename "$f")"
-  "$remote" link "$f" "$name"
-  "$remote" disable "$name"
+  "$remote" link zimfw.conf.d "$f" "$name"
+  "$remote" disable zimfw.conf.d "$name"
   count=$((count + 1))
 done
 

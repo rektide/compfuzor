@@ -30,9 +30,6 @@ def test_zim_remote() -> None:
         manager = host / "bin" / "config-remote.ts"
         manager.write_text((ROOT / "files" / "config-remote.ts").read_text().replace("{{DIR}}", str(host)))
         manager.chmod(0o770)
-        wrapper = host / "bin" / "config-remote-zimfw.conf.d.ts"
-        wrapper.write_text(f'#!/bin/sh\naction="$1"; shift\nexec "{manager}" "$action" zimfw.conf.d "$@"\n')
-        wrapper.chmod(0o770)
         installer = host / "bin" / "install-zim.sh"
         installer.write_text((ROOT / "files" / "install-zim.sh").read_text().replace("{{DIR}}", str(host)))
         installer.chmod(0o770)
