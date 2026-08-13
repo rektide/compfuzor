@@ -10,9 +10,17 @@
       go: 1
     BACKUP_TARGET: /mnt/fu/backup/opencode-2026-5
     ENV:
+      OPENCODE_PRINT_LOGS: 1
+      OPENCODE_LOG_LEVEL: INFO
       OPENCODE_SERVICE_HOSTNAME: 0.0.0.0
       OPENCODE_SERVICE_PORT: 49374
       OPENCODE_SERVICE_URL: http://127.0.0.1:49374
+    # Optional deployment inputs. Define these as Ansible variables to enable
+    # OpenCode's native OTLP/HTTP logs and traces without hard-coding a backend.
+    ENV_LIST:
+      - OTEL_EXPORTER_OTLP_ENDPOINT
+      - OTEL_EXPORTER_OTLP_HEADERS
+      - OTEL_RESOURCE_ATTRIBUTES
     SYSTEMD_SERVICE: opencode
     SYSTEMD_SCOPE: user
     SYSTEMD_INSTALL: user
@@ -36,16 +44,58 @@
       RestartMaxDelaySec: 30
       TimeoutStopSec: 30
       TimeoutStopFailureMode: kill
-      OOMPolicy: continue
+      KillMode: control-group
+      OOMPolicy: stop
+      MemoryAccounting: true
+      TasksAccounting: true
+      IPAccounting: true
       LimitNOFILE: 1048576
+      StandardOutput: journal
+      StandardError: journal
       SyslogIdentifier: opencode
     SYSTEMD_INSTALLS:
       WantedBy: default.target
     ZIM_MODULES:
+      - name: opencode-service-env
+        phase: tools
+        env:
+          OPENCODE_SERVICE_URL: http://127.0.0.1:49374
+        comment: Publish the local managed-service endpoint to shell clients.
       - name: opencode-service
         source: opencode-service.zsh
         phase: tools
         comment: Route both OpenCode command names through the managed V2 server.
+    README: |
+      # OpenCode V2 service
+
+      OpenCode runs as the `opencode.service` systemd user unit on
+      `${OPENCODE_SERVICE_HOSTNAME}:${OPENCODE_SERVICE_PORT}`. Structured logs
+      are duplicated to journald and OpenCode's append-only XDG data log.
+
+      ## Operations
+
+          systemctl --user status opencode.service
+          journalctl --user -u opencode.service -f
+          systemctl --user show opencode.service \
+            -p ActiveState -p SubState -p MainPID -p NRestarts \
+            -p MemoryCurrent -p MemoryPeak -p CPUUsageNSec -p TasksCurrent
+          opencode2 api get /api/health
+          opencode2 pair
+
+      The health probe must return HTTP 200. Its JSON `healthy` field remains
+      true while the server is starting, stopping, or in managed boot failure.
+      Do not build monitoring around the field alone, and do not probe through
+      a client path that can auto-start a detached server.
+
+      Set `OTEL_EXPORTER_OTLP_ENDPOINT` (and optionally
+      `OTEL_EXPORTER_OTLP_HEADERS` / `OTEL_RESOURCE_ATTRIBUTES`) as Ansible
+      variables to export logs and traces over OTLP/HTTP. Collector failure does
+      not fail OpenCode, so monitor the collector independently.
+
+      The local log under `~/.local/share/opencode/log/` is not rotated by
+      OpenCode. Its growth requires an external retention policy. The wildcard
+      HTTP bind also exposes Basic Auth without transport encryption; constrain
+      it to trusted interfaces/networks or put it behind an encrypted tunnel.
     MCP_CLIENT:
       remote: mcp
       wrapper: mcp
