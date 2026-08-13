@@ -59,7 +59,7 @@ function transform(name: string, config: Record<string, unknown>, wrapper: strin
 
 async function delegate(setName: string, source: string, name: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(join(selfDir, "bin", `config-remote-${setName}.ts`), ["put", source, name], { cwd: selfDir, stdio: "inherit" })
+    const child = spawn(join(selfDir, "bin", "config-remote.ts"), ["put", setName, source, name], { cwd: selfDir, stdio: "inherit" })
     child.once("error", reject)
     child.once("exit", (code, signal) => code === 0 ? resolve() : reject(new Error(`config remote failed: ${signal ?? code}`)))
   })

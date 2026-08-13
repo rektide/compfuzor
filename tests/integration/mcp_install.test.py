@@ -38,9 +38,6 @@ def test_mcp_install() -> None:
         manager = host / "bin" / "config-remote.ts"
         manager.write_text(manager_rendered.replace("{{DIR}}", str(host)), encoding="utf-8")
         manager.chmod(0o770)
-        wrapper = host / "bin" / "config-remote-amp-mcp.ts"
-        wrapper.write_text(f'#!/bin/sh\naction="$1"; shift\nexec "{manager}" "$action" amp-mcp "$@"\n', encoding="utf-8")
-        wrapper.chmod(0o770)
         (host / "etc").mkdir(exist_ok=True)
         (host / "etc" / "config.spec.json").write_text(
             json.dumps({"remotes": {"amp-mcp": {"config": "amp", "directory": str(target), "pattern": "*.json", "disabled_suffix": ".disabled"}}}),
