@@ -49,6 +49,13 @@
       # it from systemd-oomd's user-slice candidates rather than merely ranking
       # it last; kernel OOM kills still fail and restart the whole unit.
       ManagedOOMPreference: omit
+      # A value such as -900 would strongly protect against the kernel OOM
+      # killer, but an unprivileged user manager cannot lower oom_score_adj
+      # below its own inherited value. On this host systemd accepted -900 but
+      # the process remained at 100, so leave this disabled rather than imply
+      # protection that is not effective. It requires privileged policy on
+      # user@.service or moving this workload to a system service.
+      # OOMScoreAdjust: -900
       OOMPolicy: stop
       MemoryAccounting: true
       TasksAccounting: true
