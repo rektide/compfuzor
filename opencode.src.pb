@@ -3,8 +3,10 @@
   vars:
     TYPE: opencode
     INSTANCE: git
-    REPO: https://github.com/anomalyco/opencode
-    GIT_VERSION: v2
+    #REPO: https://github.com/anomalyco/opencode
+    #GIT_VERSION: v2
+    REPO: https://github.com/rektide/opencode
+    GIT_VERSION: working
     TOOL_VERSIONS:
       bun: 1
       go: 1
