@@ -34,7 +34,8 @@
         content: |
           sudo udevadm control --reload-rules
           sudo udevadm trigger
-      - name: install.user.sh
+      - name: install-user.sh
+        replaces: [install.user.sh]
         basedir: True
         exec: |
           mkdir -p ~/.config/sunshine

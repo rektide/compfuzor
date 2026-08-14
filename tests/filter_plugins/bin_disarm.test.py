@@ -20,7 +20,9 @@ def check(label, actual, expected):
 
 def test_canonicalization():
     check("basename and final shell suffix", canonical_bin_action("a/build-go.sh"), "BUILD_GO")
-    check("dot qualifier", canonical_bin_action("install-rust.user.sh"), "INSTALL_RUST")
+    check("user scope suffix", canonical_bin_action("install-rust-user.sh"), "INSTALL_RUST")
+    check("user scope prefix", canonical_bin_action("install-user-zimfw.sh"), "INSTALL_ZIMFW")
+    check("legacy dot qualifier", canonical_bin_action("install-rust.user.sh"), "INSTALL_RUST")
     check(
         "earlier dot qualifier wins",
         canonical_bin_action("my-script-example.foo-bar.sh"),

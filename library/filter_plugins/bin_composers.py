@@ -63,9 +63,10 @@ def bin_composers(bins, actions=None):
     subsystem generators at contrib time, overridable by hand). Ungrouped bins
     (``subsystem`` absent/False) stay direct children of the scope compositor.
 
-    ``scope`` accepts a string or list; ``install-user.sh`` and
-    ``install-*.user.sh`` infer the ``user`` scope. ``compose: false`` and
-    already-generated compositors (``generated_by: gen_bins``) are excluded.
+    ``scope`` accepts a string or list; install scripts ending in ``-user.sh``
+    infer the ``user`` scope. The legacy ``.user.sh`` suffix remains accepted.
+    ``compose: false`` and already-generated compositors
+    (``generated_by: gen_bins``) are excluded.
     """
     if actions:
         _actions = tuple(actions)
@@ -94,7 +95,9 @@ def bin_composers(bins, actions=None):
             continue
         scopes = _arrayitize(item.get("scope"))
         if match.group("action") == "install" and (
-            name.startswith("install-user") or match.group("user")
+            name.startswith("install-user")
+            or name.endswith("-user.sh")
+            or match.group("user")
         ):
             scopes.append("user")
         scopes = list(dict.fromkeys(str(s) for s in scopes))

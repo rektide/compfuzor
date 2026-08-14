@@ -4,7 +4,8 @@
     TYPE: asdf-yarn
     INSTANCE: main
     BINS:
-      - name: install.user.sh
+      - name: install-user.sh
+        replaces: [install.user.sh]
         exec: |
           asdf plugin-add yarn
           asdf install yarn latest
@@ -12,4 +13,6 @@
             asdf global yarn latest
           fi
   tasks:
-    - include: tasks/compfuzor.includes type=opt
+    - import_tasks: tasks/compfuzor.includes
+      vars:
+        type: opt

@@ -60,7 +60,12 @@ def canonical_bin_action(name):
     if stem.endswith(".sh"):
         stem = stem[:-3]
     stem = stem.split(".", 1)[0]
-    return "_".join(_canonical_tokens(stem))
+    tokens = _canonical_tokens(stem)
+    if tokens and tokens[-1] == "USER":
+        tokens.pop()
+    if len(tokens) > 1 and tokens[:2] == ["INSTALL", "USER"]:
+        del tokens[1]
+    return "_".join(tokens)
 
 
 def _normalize_string_list(value, field):

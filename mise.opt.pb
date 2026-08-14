@@ -62,7 +62,7 @@
           #     (generated when zim-mise's Linux branch has run)
           #   * check fpath for the `_mise` completion in an interactive zsh
           # Also honor an explicit MISE_SKIP_ZSH_RC=1 override. Bash has no
-          # equivalent framework loader, so install-bash.user.sh is unaffected.
+          # equivalent framework loader, so install-bash-user.sh is unaffected.
           block-in-file \
             -n ${NAME:-{{NAME}}} \
             -C true \
@@ -77,7 +77,8 @@
           then
             mise settings set npm.package_manager "${MISE_NPM_PACKAGE_MANAGER:-{{mise_npm_package_manager}}}"
           fi
-      - name: install-bash.user.sh
+      - name: install-bash-user.sh
+        replaces: [install-bash.user.sh]
         content: |
           block-in-file \
             -n ${NAME:-{{NAME}}} \

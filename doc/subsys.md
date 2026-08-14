@@ -123,7 +123,7 @@ already represented by the broad scope when deriving the nested action:
 |---|---|---|---|
 | `build-go.sh` | `GO` | `BUILD` | `GO`, `GO:BUILD` |
 | `install-kernel-cmdline.sh` | `KERNEL` | `INSTALL_CMDLINE` | `KERNEL`, `KERNEL:INSTALL_CMDLINE` |
-| `install-rust.user.sh` | `RUST` | `INSTALL` | `RUST`, `RUST:INSTALL` |
+| `install-rust-user.sh` | `RUST` | `INSTALL` | `RUST`, `RUST:INSTALL` |
 
 Explicit `bypass` scalar/list entries extend automatic entries, preserving
 useful global phase guards. `bypass: false` disables both automatic and explicit
@@ -318,7 +318,8 @@ the generated `run_all` children runnable. A pure generated compositor has only
 `scope` accepts a string or list; an entry with `scope: [user, shell]`
 participates in both scoped compositors (one entry-point per scope). `install-user.sh`
 and any `install-user-*.sh` (e.g. `install-user-zimfw.sh`, `install-service-user.sh`)
-infer the `user` scope from the filename; `install-*.user.sh` does too. This is how
+infer the `user` scope from the filename; qualified `install-*-user.sh` names do
+too. The old `install-*.user.sh` spelling remains accepted for compatibility. This is how
 user-scope subsystems (zim, user systemd services) contribute their own install step
 without a system-scope script that would need root.
 
@@ -446,6 +447,7 @@ Common bin fields:
 | Field | Use |
 |-------|-----|
 | `name` | Output filename under `BINS_DIR`. Also the merge key. |
+| `replaces` | Old output filename(s) to remove before rendering this bin |
 | `generated` | Shell body generated from Jinja |
 | `content` | Literal shell body from a playbook |
 | `run_all` | List of child bin names to invoke after this script's body |

@@ -45,7 +45,7 @@ def render_bins(output: Path, playbook: Path) -> None:
           origin_subsystems: [go]
           bypass_scopes: [go]
           content: echo automatic
-        - name: install-rust.user.sh
+        - name: install-rust-user.sh
           origin_subsystems: [rust, shared]
           bypass_scopes: [rust]
           verb: install selected tools
@@ -116,7 +116,7 @@ def test_rendered_helpers() -> None:
         scripts = {path.name: path.read_text(encoding="utf-8") for path in output.iterdir()}
         if set(scripts) != {
             "build-go.sh",
-            "install-rust.user.sh",
+            "install-rust-user.sh",
             "bypass-list-unit.sh",
             "apply-network.sh",
             "bypass-false.sh",
@@ -142,10 +142,10 @@ def test_rendered_helpers() -> None:
         )
         require(automatic, "\n_cf_action_end\n", "automatic bypass")
 
-        qualified = scripts["install-rust.user.sh"]
+        qualified = scripts["install-rust-user.sh"]
         require(
             qualified,
-            '_cf_action_init "install-rust.user.sh" "install selected tools" "rust, shared"',
+            '_cf_action_init "install-rust-user.sh" "install selected tools" "rust, shared"',
             "qualified actual filename, explicit verb, and labels",
         )
 

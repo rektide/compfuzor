@@ -4,7 +4,8 @@
     TYPE: asdf-pnpm
     INSTANCE: main
     BINS:
-      - name: install.user.sh
+      - name: install-user.sh
+        replaces: [install.user.sh]
         exec: |
           asdf plugin-add pnpm
           asdf install pnpm latest
@@ -12,4 +13,6 @@
             asdf global pnpm latest
           fi
   tasks:
-    - include: tasks/compfuzor.includes type=opt
+    - import_tasks: tasks/compfuzor.includes
+      vars:
+        type: opt

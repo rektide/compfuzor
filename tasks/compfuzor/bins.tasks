@@ -11,6 +11,14 @@
   vars:
     _delayText: "{{ ' (' + delay_phase + ')' if delay_phase|def else ''}}"
     _become: "{{ BINS_DIR|become_calc }}"
+- name: "Remove filenames replaced by `BINS`"
+  file:
+    path: "{{ BINS_DIR }}/{{ item.1 }}"
+    state: absent
+  loop: "{{ (BINS|normalize(to='list')|select('mapping'))|subelements('replaces', skip_missing=True) }}"
+  become: "{{ _become.become }}"
+  vars:
+    _become: "{{ (BINS_DIR ~ '/' ~ item.1)|become_calc }}"
 - name: "Create exec/execs `BINS`"
   template:
     dest: "{{_dest}}"

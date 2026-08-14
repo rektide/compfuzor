@@ -62,7 +62,8 @@ def test_composes_explicit_and_filename_user_scopes():
             {"name": "install-user.sh"},
             {"name": "install-shell.sh", "scope": ["user", "shell"]},
             {"name": "install-shell-extra.sh", "scope": "shell"},
-            {"name": "install-bash.user.sh", "scope": "user"},
+            {"name": "install-bash-user.sh"},
+            {"name": "install-user-zimfw.sh"},
         ]
     )
     check(
@@ -73,7 +74,11 @@ def test_composes_explicit_and_filename_user_scopes():
                 "name": "install-user.sh",
                 "action": "install",
                 "generated_by": "gen_bins",
-                "run_all": ["install-shell.sh", "install-bash.user.sh"],
+                "run_all": [
+                    "install-shell.sh",
+                    "install-bash-user.sh",
+                    "install-user-zimfw.sh",
+                ],
                 "scope": ["user"],
                 "base_helpers": ["env", "setopts", "loud"],
             },
