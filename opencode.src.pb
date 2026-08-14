@@ -93,6 +93,22 @@
           opencode2 api get /api/health
           opencode2 pair
 
+      ## Temporary native-library cleanup
+
+      OpenCode's compiled native dependencies can leave byte-identical hidden
+      shared libraries in `/tmp`. The cleanup utility recognizes only the two
+      investigated OpenTUI/FFF size and SHA-256 pairs. It never traverses
+      `/tmp/opencode` and defaults to a 24-hour dry run:
+
+          {{DIR}}/bin/cleanup.sh
+          {{DIR}}/bin/cleanup.sh --min-age 72h
+          {{DIR}}/bin/cleanup.sh --apply
+          {{DIR}}/bin/cleanup.sh --apply --require-no-opencode
+
+      Files mapped or held open by any process are excluded. New dependency
+      versions will fail the content allowlist until they are investigated and
+      explicitly added.
+
       The health probe must return HTTP 200. Its JSON `healthy` field remains
       true while the server is starting, stopping, or in managed boot failure.
       Do not build monitoring around the field alone, and do not probe through
@@ -250,6 +266,8 @@
           # note/beware that we also are pulling in env.exports
           exec bun run --cwd $DIR dev $(pwd)
       # TODO: compfuzor helpers for installing content, automate this in install-user
+      - name: cleanup.sh
+        basedir: False
       - name: backup.sh
         basedir: False
   tasks:
