@@ -5,7 +5,6 @@
     INSTANCE: main
     BINS:
       - name: install-user.sh
-        replaces: [install.user.sh]
         exec: |
           asdf plugin-add yarn
           asdf install yarn latest

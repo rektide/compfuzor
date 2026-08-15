@@ -78,7 +78,6 @@
             mise settings set npm.package_manager "${MISE_NPM_PACKAGE_MANAGER:-{{mise_npm_package_manager}}}"
           fi
       - name: install-bash-user.sh
-        replaces: [install-bash.user.sh]
         content: |
           block-in-file \
             -n ${NAME:-{{NAME}}} \

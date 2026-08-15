@@ -447,7 +447,6 @@ Common bin fields:
 | Field | Use |
 |-------|-----|
 | `name` | Output filename under `BINS_DIR`. Also the merge key. |
-| `replaces` | Old output filename(s) to remove before rendering this bin |
 | `generated` | Shell body generated from Jinja |
 | `content` | Literal shell body from a playbook |
 | `run_all` | List of child bin names to invoke after this script's body |

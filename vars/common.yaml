@@ -396,7 +396,6 @@ SUBSYSTEM:
                 ln -sfv "$(pwd)/${_target_dir}/${INSTALL_BIN}" "${GLOBAL_BINS_DIR}/$(basename "${INSTALL_BIN}")"
             fi
         - name: install-rust-user.sh
-          replaces: [install-rust.user.sh]
           bypass: ['LINK', 'RUST']
           basedir: repo
           generated: |
