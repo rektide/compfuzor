@@ -45,9 +45,12 @@
     # BDR_SUBVOLS = every subvolume to create on the root btrfs.
     # BDR_SUBVOL_DEFAULT = which of them is mounted as / (must be in the list).
     BDR_ARCH: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] | default(ansible_architecture) }}"
-    BDR_DATE: "{{ lookup('pipe', 'date +%Y%m%d') }}"
+    # Run-time date: the profile ships with a @DATE@ token; the bins stamp it
+    # when formatting (env BDR_DATE, else `date +%Y%m%d` at run time), so a
+    # rendered playbook never carries a stale date stamp.
+    BDR_DATE_TOKEN: "@DATE@"
     BDR_SUBVOLS:
-      - "/os/superbfowle/{{ BDR_ARCH }}/{{ BDR_DATE }}"   # dated OS slot = default
+      - "/os/superbfowle/{{ BDR_ARCH }}/{{ BDR_DATE_TOKEN }}"   # dated OS slot = default
       - /home
     BDR_SUBVOL_DEFAULT: "{{ BDR_SUBVOLS | first }}"
 
@@ -64,9 +67,12 @@
       # Profile definition dirs (staged under {{ETC}}).
       BDR_SIMPLE_DEFS: "{{ETC}}/btrfs-simple.d"
       BDR_BDR_DEFS: "{{ETC}}/btrfs-bdr.d"
-      # Subvolume layout (rendered from BDR_SUBVOLS / BDR_SUBVOL_DEFAULT above).
+      # Subvolume layout (rendered from BDR_SUBVOLS / BDR_SUBVOL_DEFAULT above;
+      # BDR_DEFAULT_SUBVOL carries the @DATE@ token — bins stamp it at run time).
       BDR_DEFAULT_SUBVOL: "{{ BDR_SUBVOL_DEFAULT }}"
       BDR_SUBVOLUMES: "{{ BDR_SUBVOLS | join(' ') }}"
+      BDR_ARCH: "{{ BDR_ARCH }}"
+      BDR_DATE_TOKEN: "{{ BDR_DATE_TOKEN }}"
       BDR_SWAP_SIZE: 4G
 
     ETC_DIRS:
@@ -174,7 +180,14 @@
           set -eu
           DISK="${1:-${BDR_DISK:-/dev/vda}}"
           DEFS="${BDR_BDR_DEFS:-{{ETC}}/btrfs-bdr.d}"
+          TOKEN="${BDR_DATE_TOKEN:-@DATE@}"
           DEFAULT_SUBVOL="${BDR_DEFAULT_SUBVOL:-{{ BDR_SUBVOL_DEFAULT }}}"
+          # stamp the run-time date into any tokened template
+          if case "$DEFAULT_SUBVOL" in *"$TOKEN"*) true ;; *) false ;; esac; then
+            DATE="${BDR_DATE:-$(date +%Y%m%d)}"
+            case "$DATE" in '' | *[!0-9]*) echo "Error: bad BDR_DATE '$DATE' (want YYYYMMDD)" >&2; exit 1 ;; esac
+            DEFAULT_SUBVOL="${DEFAULT_SUBVOL//$TOKEN/$DATE}"
+          fi
           SRC="${BDR_SOURCE_MOUNT:-/}"
 
           "{{BINS_DIR}}/bdr-preflight.sh"
@@ -196,12 +209,23 @@
             "$DISK"
 
           # Online BDR can't set the default subvolume; do it now.
-          # (Assumes the dated OS slot exists in the migrated fs; skip
-          # set-default if the source image used a different layout.)
+          # The dated OS slot in the migrated fs was stamped when the source
+          # image was formatted — which may be a different date than today.
+          # So: prefer the (stamped) $DEFAULT_SUBVOL; if absent, fall back to
+          # the newest subvol under its parent; if none, skip set-default.
           if ! btrfs subvolume show "$SRC/$DEFAULT_SUBVOL" >/dev/null 2>&1; then
-            echo "note: $DEFAULT_SUBVOL subvol not present; skipping set-default"
-          else
-            id="$(btrfs subvolume list "$SRC" | awk -v s="$DEFAULT_SUBVOL" '$NF==s{print $2}')"
+            PARENT="$(dirname "$DEFAULT_SUBVOL")"
+            found="$(btrfs subvolume list --sort=-ogen "$SRC" 2>/dev/null | awk -v p="${PARENT#/}/" 'index($NF, p"/")==1{print $NF; exit}')"
+            if [ -n "$found" ]; then
+              echo "note: $DEFAULT_SUBVOL absent; defaulting to newest slot /$found"
+              DEFAULT_SUBVOL="/$found"
+            else
+              echo "note: no OS slot under $PARENT; skipping set-default"
+              DEFAULT_SUBVOL=""
+            fi
+          fi
+          if [ -n "$DEFAULT_SUBVOL" ]; then
+            id="$(btrfs subvolume list "$SRC" | awk -v s="${DEFAULT_SUBVOL#/}" '$NF==s{print $2}')"
             [ -n "$id" ] && btrfs subvolume set-default "$id" "$SRC"
           fi
 
@@ -229,17 +253,28 @@
           # Use for mkosi-style images or rescue-env formatting (NOT for the
           # running root; that is bdr-migrate.sh).
           #
-          # Usage: bdr-format.sh <disk-or-image>
+          # Usage: bdr-format.sh <disk-or-image>       (env: BDR_DATE=YYYYMMDD)
           set -eu
           TARGET="${1:?usage: bdr-format.sh <disk-or-image>}"
           DEFS="${BDR_SIMPLE_DEFS:-{{ETC}}/btrfs-simple.d}"
+          TOKEN="${BDR_DATE_TOKEN:-@DATE@}"
+          DATE="${BDR_DATE:-$(date +%Y%m%d)}"
+          case "$DATE" in '' | *[!0-9]*) echo "Error: bad BDR_DATE '$DATE' (want YYYYMMDD)" >&2; exit 1 ;; esac
+
+          RUNDEFS="$(mktemp -d /tmp/bdr-defs.XXXXXX)"
+          trap 'rm -rf "$RUNDEFS"' EXIT
+          for f in "$DEFS"/*.conf; do
+            sed "s|$TOKEN|$DATE|g" "$f" > "$RUNDEFS/$(basename "$f")"
+          done
+          echo "date stamp: $DATE  default subvol: $(awk -F= '/^DefaultSubvolume/{print $2; exit}' "$RUNDEFS"/50-root.conf)"
+
           systemd-repart \
-            --definitions="$DEFS" \
+            --definitions="$RUNDEFS" \
             --offline=yes \
             --empty=force \
             --dry-run=no \
             "$TARGET"
-          echo "formatted $TARGET from $DEFS"
+          echo "formatted $TARGET from $DEFS (date stamp $DATE)"
 
       # De-identify a clone (e.g. after btrfs send|receive of an image).
       # Now a raw copy of the canonical files/mkosi/identity.sh (whose default
