@@ -1,11 +1,6 @@
 set -euo pipefail
 shopt -s nullglob
 
-readonly OPENTUI_SIZE=13745312
-readonly OPENTUI_SHA256=ce73133a58d35e35610ef53353ddeeeb93fb29505dde0cf1854ce25facee241d
-readonly FFF_SIZE=12559952
-readonly FFF_SHA256=745e5a94424e3d9893eaea5f471846f1e4e4baa5dad1a5af47acaeea09bae
-
 script_name=${0##*/}
 tmp_dir=${TMPDIR:-/tmp}
 min_age=24h
@@ -26,8 +21,8 @@ Options:
       --tmp-dir DIR           Inspect DIR instead of TMPDIR or /tmp (testing).
   -h, --help                  Show this help.
 
-Eligibility requires an exact known filename shape, byte size, SHA-256 digest,
-owner, link count, age, and inactive status. /tmp/opencode is never traversed.
+Eligibility requires an exact known filename shape, ELF identity, owner, link
+count, age, and inactive status. /tmp/opencode is never traversed.
 EOF
 }
 
@@ -64,6 +59,33 @@ human_bytes() {
 snapshot() {
   # Include nanosecond mtime/ctime text in the identity used for race checks.
   stat -c '%d|%i|%u|%h|%s|%Y|%b|%y|%z' -- "$1" 2>/dev/null
+}
+
+classify_library() {
+  local path=$1
+  local name=${path##*/}
+  local header metadata
+
+  header=$(readelf --file-header --wide -- "$path" 2>/dev/null) || return 1
+  grep -Eq 'Type:[[:space:]]+DYN[[:space:]]' <<<"$header" || return 1
+
+  case $name in
+    *-00000000.so)
+      metadata=$(readelf --dynamic --wide -- "$path" 2>/dev/null) || return 1
+      grep -Fq 'Library soname: [libopentui.so]' <<<"$metadata" || return 1
+      printf 'opentui\n'
+      ;;
+    *-00000002.so)
+      metadata=$(readelf --dyn-syms --wide -- "$path" 2>/dev/null) || return 1
+      grep -Eq '[[:space:]]fff_search_directories$' <<<"$metadata" || return 1
+      grep -Eq '[[:space:]]fff_free_result$' <<<"$metadata" || return 1
+      grep -Eq '[[:space:]]fff_file_item_get_file_name$' <<<"$metadata" || return 1
+      printf 'fff\n'
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 declare -A active_paths=()
@@ -134,6 +156,9 @@ while (($#)); do
 done
 
 min_age_seconds=$(parse_duration "$min_age")
+for command_name in awk date find id pgrep readelf realpath rm stat; do
+  command -v "$command_name" >/dev/null 2>&1 || fail "required command not found: $command_name"
+done
 [[ -d $tmp_dir ]] || fail "temporary directory does not exist: $tmp_dir"
 tmp_dir=$(realpath -e -- "$tmp_dir")
 [[ $tmp_dir != / ]] || fail 'refusing to inspect the filesystem root'
@@ -166,7 +191,7 @@ while IFS= read -r -d '' path; do
 
   [[ ! -L $path ]] || { ((skipped_identity += 1)); continue; }
   before=$(snapshot "$path") || { ((skipped_changed += 1)); continue; }
-  IFS='|' read -r _ inode owner links size mtime blocks _ _ <<<"$before"
+  IFS='|' read -r _ inode owner links _ mtime blocks _ _ <<<"$before"
 
   if [[ $owner != "$uid" || $links != 1 ]]; then
     ((skipped_identity += 1))
@@ -176,25 +201,18 @@ while IFS= read -r -d '' path; do
     ((skipped_young += 1))
     continue
   fi
-  case $size in
-    "$OPENTUI_SIZE") expected_hash=$OPENTUI_SHA256 ;;
-    "$FFF_SIZE") expected_hash=$FFF_SHA256 ;;
-    *) ((skipped_content += 1)); continue ;;
-  esac
   if [[ -n ${active_paths[$path]+x} ]]; then
     ((skipped_active += 1))
     continue
   fi
 
-  hash_line=$(sha256sum -- "$path") || { ((skipped_changed += 1)); continue; }
-  hash=${hash_line%% *}
-  if [[ $hash != "$expected_hash" ]]; then
+  if ! library=$(classify_library "$path"); then
     ((skipped_content += 1))
-    printf 'skip content mismatch: %q\n' "$path" >&2
+    printf 'skip unrecognized library: %q\n' "$path" >&2
     continue
   fi
-  after_hash=$(snapshot "$path") || { ((skipped_changed += 1)); continue; }
-  if [[ $after_hash != "$before" ]]; then
+  after_inspection=$(snapshot "$path") || { ((skipped_changed += 1)); continue; }
+  if [[ $after_inspection != "$before" ]]; then
     ((skipped_changed += 1))
     continue
   fi
@@ -204,8 +222,8 @@ while IFS= read -r -d '' path; do
   ((eligible_bytes += allocated))
 
   if ((!apply)); then
-    printf 'eligible age=%ss allocated=%s inode=%s path=%q\n' \
-      "$((now - mtime))" "$(human_bytes "$allocated")" "$inode" "$path"
+    printf 'eligible library=%s age=%ss allocated=%s inode=%s path=%q\n' \
+      "$library" "$((now - mtime))" "$(human_bytes "$allocated")" "$inode" "$path"
     continue
   fi
 
@@ -225,8 +243,8 @@ while IFS= read -r -d '' path; do
   if rm -- "$path"; then
     ((deleted += 1))
     ((deleted_bytes += allocated))
-    printf 'deleted allocated=%s inode=%s path=%q\n' \
-      "$(human_bytes "$allocated")" "$inode" "$path"
+    printf 'deleted library=%s allocated=%s inode=%s path=%q\n' \
+      "$library" "$(human_bytes "$allocated")" "$inode" "$path"
   else
     ((skipped_changed += 1))
   fi

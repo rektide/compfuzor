@@ -11,6 +11,8 @@
     #GIT_VERSION: v2
     REPO: https://github.com/rektide/opencode
     GIT_VERSION: working
+    PKGS:
+      - binutils
     BACKUP_TARGET: /mnt/fu/backup/opencode-2026-5
     ENV:
       OPENCODE_PRINT_LOGS: 1
@@ -99,9 +101,10 @@
       ## Temporary native-library cleanup
 
       OpenCode's compiled native dependencies can leave byte-identical hidden
-      shared libraries in `/tmp`. The cleanup utility recognizes only the two
-      investigated OpenTUI/FFF size and SHA-256 pairs. It never traverses
-      `/tmp/opencode` and defaults to a 24-hour dry run:
+      shared libraries in `/tmp`. The cleanup utility recognizes OpenTUI by its
+      ELF SONAME and FFF by its exported API symbols, under their strict Bun
+      extraction filename slots. It never traverses `/tmp/opencode` and
+      defaults to a 24-hour dry run:
 
           {{DIR}}/bin/cleanup.sh
           {{DIR}}/bin/cleanup.sh --min-age 72h
@@ -109,8 +112,8 @@
           {{DIR}}/bin/cleanup.sh --apply --require-no-opencode
 
       Files mapped or held open by any process are excluded. New dependency
-      versions will fail the content allowlist until they are investigated and
-      explicitly added.
+      builds remain eligible as their bytes and sizes change, while unrelated
+      randomized shared libraries fail the semantic ELF identity checks.
 
       The health probe must return HTTP 200. Its JSON `healthy` field remains
       true while the server is starting, stopping, or in managed boot failure.
