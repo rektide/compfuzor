@@ -4,9 +4,9 @@
     TYPE: opencode
     INSTANCE: git
     BUN: True
-    BUN_BINS_BYPASS: True
+    BUN_BINS: False
     NODEJS: True
-    NODEJS_BINS_BYPASS: True
+    NODEJS_BINS: False
     #REPO: https://github.com/anomalyco/opencode
     #GIT_VERSION: v2
     REPO: https://github.com/rektide/opencode

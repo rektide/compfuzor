@@ -137,10 +137,10 @@ def test_bins_tombstone_survives_subsystem_merge():
     )
 
 
-def test_artifact_bypass_suppresses_only_selected_contribution():
-    print("\nmerge_subsys artifact bypass:")
+def test_artifact_switch_suppresses_only_selected_contribution():
+    print("\nmerge_subsys artifact switch:")
     variables = {
-        "NODEJS_BINS_BYPASS": True,
+        "NODEJS_BINS": False,
         "BINS": [{"name": "custom-build.sh"}],
         "SUBSYSTEM": {
             "nodejs": {
@@ -161,6 +161,19 @@ def test_artifact_bypass_suppresses_only_selected_contribution():
         "keeps other subsystem contributions active",
         merge_subsys_value(variables, "nodejs", "TOOL_VERSIONS"),
         {"nodejs": True},
+    )
+    variables["NODEJS_BINS"] = []
+    check(
+        "only explicit boolean false suppresses a contribution",
+        merge_subsys_value(variables, "nodejs", "BINS"),
+        [
+            {"name": "custom-build.sh"},
+            {
+                "name": "build-nodejs.sh",
+                "origin_subsystems": ["nodejs"],
+                "bypass_scopes": ["nodejs"],
+            },
+        ],
     )
 
 
@@ -481,7 +494,7 @@ def test_lookup_run_rejects_positional_terms():
 if __name__ == "__main__":
     test_bins_defaults_merge_current_then_subsystem()
     test_bins_tombstone_survives_subsystem_merge()
-    test_artifact_bypass_suppresses_only_selected_contribution()
+    test_artifact_switch_suppresses_only_selected_contribution()
     test_artifact_defaults_reference_only_preset_and_order()
     test_inactive_subsystem_skips_incoming_payload()
     test_fallback_id_and_get_path()
