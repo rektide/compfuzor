@@ -261,7 +261,8 @@
           DATE="${BDR_DATE:-$(date +%Y%m%d)}"
           case "$DATE" in '' | *[!0-9]*) echo "Error: bad BDR_DATE '$DATE' (want YYYYMMDD)" >&2; exit 1 ;; esac
 
-          RUNDEFS="$(mktemp -d /tmp/bdr-defs.XXXXXX)"
+          mkdir -p "{{DIR}}/var/tmp"
+          RUNDEFS="$(mktemp -d "{{DIR}}/var/tmp/bdr-defs.XXXXXX")"
           trap 'rm -rf "$RUNDEFS"' EXIT
           for f in "$DEFS"/*.conf; do
             sed "s|$TOKEN|$DATE|g" "$f" > "$RUNDEFS/$(basename "$f")"

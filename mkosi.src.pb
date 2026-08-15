@@ -241,8 +241,8 @@
           # Absolute Output*/Cache* paths in mkosi.conf survive the copy.
           DATE="${MKOSI_DATE:-$(date +%Y%m%d)}"
           case "$DATE" in '' | *[!0-9]*) echo "Error: bad MKOSI_DATE '$DATE' (want YYYYMMDD)" >&2; exit 1 ;; esac
-          mkdir -p "{{DIR}}/var/output" "{{DIR}}/var/cache" "{{DIR}}/var/package-cache"
-          BUILD="$(mktemp -d /tmp/mkosi-cfg.XXXXXX)"
+          mkdir -p "{{DIR}}/var/output" "{{DIR}}/var/cache" "{{DIR}}/var/package-cache" "{{DIR}}/var/tmp"
+          BUILD="$(mktemp -d "{{DIR}}/var/tmp/mkosi-cfg.XXXXXX")"
           trap 'rm -rf "$BUILD"' EXIT
           cp -r etc/mkosi.conf etc/mkosi.images "$BUILD"/
           grep -rl '@DATE@' "$BUILD" | xargs -r sed -i "s|@DATE@|$DATE|g"
