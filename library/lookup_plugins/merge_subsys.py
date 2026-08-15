@@ -8,6 +8,7 @@ DOCUMENTATION = """
       - Reads C(SUBSYSTEM.<id>.contrib.<contrib>) and the matching current global artifact.
       - Dispatches to named value presets in C(library/filter_plugins/cfmerge.py).
       - Reads variables through raw-copy helpers so tagged template strings are not rendered during merge.
+      - C(<SUBSYSTEM>_<CONTRIB>_BYPASS) suppresses only the selected incoming artifact.
     options:
       _terms:
         description:
@@ -254,6 +255,12 @@ def merge_subsys_value(variables, subsystem_id, contrib, templar=None, **kwargs)
     subsystems = _dict_get_raw(variables, "SUBSYSTEM", {})
     record = _dict_get_raw(subsystems, subsystem_id, {})
     domain = _resolve_domain(kwargs.get("domain"), record, subsystem_id)
+    artifact_bypass_name = "{}_{}_BYPASS".format(
+        subsystem_id.upper().replace("-", "_"), artifact.upper().replace("-", "_")
+    )
+    artifact_bypassed = _truthy(
+        _dict_get_raw(variables, artifact_bypass_name, False)
+    )
 
     incoming = default
     if has_active_path:
@@ -266,7 +273,7 @@ def merge_subsys_value(variables, subsystem_id, contrib, templar=None, **kwargs)
             domain=domain,
             templar=templar,
         )["active"]
-    if (not active) or is_active:
+    if ((not active) or is_active) and not artifact_bypassed:
         incoming = get_path(record, path, default=default)
         if _is_tagged_template(incoming):
             incoming = _template_value(incoming, templar)

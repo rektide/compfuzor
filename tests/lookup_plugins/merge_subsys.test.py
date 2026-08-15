@@ -137,6 +137,33 @@ def test_bins_tombstone_survives_subsystem_merge():
     )
 
 
+def test_artifact_bypass_suppresses_only_selected_contribution():
+    print("\nmerge_subsys artifact bypass:")
+    variables = {
+        "NODEJS_BINS_BYPASS": True,
+        "BINS": [{"name": "custom-build.sh"}],
+        "SUBSYSTEM": {
+            "nodejs": {
+                "requested": True,
+                "contrib": {
+                    "BINS": [{"name": "build-nodejs.sh"}],
+                    "TOOL_VERSIONS": {"nodejs": True},
+                },
+            }
+        },
+    }
+    check(
+        "suppresses matching BINS contribution",
+        merge_subsys_value(variables, "nodejs", "BINS"),
+        [{"name": "custom-build.sh"}],
+    )
+    check(
+        "keeps other subsystem contributions active",
+        merge_subsys_value(variables, "nodejs", "TOOL_VERSIONS"),
+        {"nodejs": True},
+    )
+
+
 def test_artifact_defaults_reference_only_preset_and_order():
     print("\nmerge_subsys artifact policy:")
     check(
@@ -454,6 +481,7 @@ def test_lookup_run_rejects_positional_terms():
 if __name__ == "__main__":
     test_bins_defaults_merge_current_then_subsystem()
     test_bins_tombstone_survives_subsystem_merge()
+    test_artifact_bypass_suppresses_only_selected_contribution()
     test_artifact_defaults_reference_only_preset_and_order()
     test_inactive_subsystem_skips_incoming_payload()
     test_fallback_id_and_get_path()

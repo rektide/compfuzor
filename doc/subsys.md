@@ -107,6 +107,18 @@ compositors are generated, and removes any previously rendered file. Other
 contributions from the subsystem remain active. Target the contributed leaf
 name (`build-nodejs.sh`), not its action compositor (`build.sh`).
 
+To decline an entire artifact from one subsystem, set
+`<SUBSYSTEM>_<CONTRIB>_BYPASS`:
+
+```yaml
+NODEJS: true
+NODEJS_BINS_BYPASS: true
+```
+
+The Node.js subsystem remains active and still contributes `TOOL_VERSIONS`,
+`ENV`, and `PKGS`; only its `BINS` payload is omitted. Use an item tombstone
+instead when only selected entries should be absent.
+
 NVIM uses a deliberately narrower configured keyed merge: `generated`,
 `origin_subsystems`, and `bypass_scopes` concatenate, while executable ordering
 fields `early` and `run_all` remain later-wins.
