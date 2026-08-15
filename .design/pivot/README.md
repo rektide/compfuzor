@@ -12,6 +12,22 @@ The history has three broad eras:
 
 The session set was found with `cotail search` queries for `pivot-root`, `pivot_root`, debootstrap, kexec, tmpfs, and BDR, restricted to `/home/rektide/src/compfuzor`. Session metadata and persisted parent IDs came from `cotail get-session -s <id> --json`. The long descriptions below were reconstructed from the session text, the current playbooks, and repository history.
 
+## Session index
+
+All nine sessions were run against the same working directory, `/home/rektide/src/compfuzor`.
+
+| Session ID | Slug | Title | Directory | Created |
+|---|---|---|---|---|
+| `ses_3b1fcfa61ffeODwMCB5eng6Uc8` | `swift-falcon` | Pivot-root with tmpfs mount and debootstrap workflow | `/home/rektide/src/compfuzor` | 2026-02-11 |
+| `ses_3b1fcdf6cffexYeUfQpGiS07l8` | `neon-orchid` | Explore codebase structure (@explore subagent) | `/home/rektide/src/compfuzor` | 2026-02-11 |
+| `ses_2e37636bcffetblvJp35Any5Lm` | `lucky-forest` | Debootstrap and Debian netinst pivot-root options | `/home/rektide/src/compfuzor` | 2026-03-23 |
+| `ses_2e1aa70daffeAh0wJbWAIH4Ec0` | `nimble-sailor` | Debootstrap and Debian netinst pivot-root options (fork #1) | `/home/rektide/src/compfuzor` | 2026-03-24 |
+| `ses_2e1a92917ffe5mSK8MNatACS8H` | `misty-cabin` | Debootstrap and Debian netinst pivot-root options (fork #2) | `/home/rektide/src/compfuzor` | 2026-03-24 |
+| `ses_2e1a565beffehpFvaFhJTWpwSR` | `neon-harbor` | Debootstrap and Debian netinst pivot-root options (fork #3) | `/home/rektide/src/compfuzor` | 2026-03-24 |
+| `ses_2e15056d2ffel2Yt3bQrgquF35` | `stellar-lagoon` | Ansible _bin.header interpolation test case | `/home/rektide/src/compfuzor` | 2026-03-24 |
+| `ses_2e117c231ffeId2rhhku5qmkbE` | `nimble-tiger` | Fixing missing comment tag in pivot-root.opt.pb | `/home/rektide/src/compfuzor` | 2026-03-24 |
+| `ses_0505d03c8ffeOwgLUw165ZgMDJ` | `brave-star` | BDR playbook review & usage walkthrough | `/home/rektide/src/compfuzor` | 2026-07-29 |
+
 There is an important evidence limitation: only the February exploration subagent retains an explicit `parentId`. The March sessions titled `(fork #1)`, `(fork #2)`, and `(fork #3)` all currently report `parentId: null`. Their relationship is nevertheless strongly supported by their titles, nearly identical inherited opening prompt, overlapping transcript material, timestamps, and edits to the same files. The graph therefore distinguishes **persisted parent edges** from **inferred continuation or side-quest edges**.
 
 ## Session graph
