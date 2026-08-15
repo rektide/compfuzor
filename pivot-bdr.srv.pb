@@ -38,6 +38,19 @@
     INSTANCE: main
     BINS_RUN_BYPASS: True
 
+    # --- subvolume layout -----------------------------------------------------
+    # Dated OS-slot scheme: the default subvol is a dated path under
+    # /os/superbfowle/<arch>/, so a future install creates a NEW dated subvol
+    # and flips the default (rollback = set-default back to the previous date).
+    # BDR_SUBVOLS = every subvolume to create on the root btrfs.
+    # BDR_SUBVOL_DEFAULT = which of them is mounted as / (must be in the list).
+    BDR_ARCH: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] | default(ansible_architecture) }}"
+    BDR_DATE: "{{ lookup('pipe', 'date +%Y%m%d') }}"
+    BDR_SUBVOLS:
+      - "/os/superbfowle/{{ BDR_ARCH }}/{{ BDR_DATE }}"   # dated OS slot = default
+      - /home
+    BDR_SUBVOL_DEFAULT: "{{ BDR_SUBVOLS | first }}"
+
     PKGS:
       - systemd        # >=261 for BlockDeviceReplace=
       - btrfs-progs    # >=6.12 for DefaultSubvolume= (offline profile)
@@ -51,8 +64,9 @@
       # Profile definition dirs (staged under {{ETC}}).
       BDR_SIMPLE_DEFS: "{{ETC}}/btrfs-simple.d"
       BDR_BDR_DEFS: "{{ETC}}/btrfs-bdr.d"
-      # Subvolume layout.
-      BDR_DEFAULT_SUBVOL: "@"
+      # Subvolume layout (rendered from BDR_SUBVOLS / BDR_SUBVOL_DEFAULT above).
+      BDR_DEFAULT_SUBVOL: "{{ BDR_SUBVOL_DEFAULT }}"
+      BDR_SUBVOLUMES: "{{ BDR_SUBVOLS | join(' ') }}"
       BDR_SWAP_SIZE: 4G
 
     ETC_DIRS:
@@ -72,15 +86,15 @@
 
       - name: btrfs-simple.d/50-root.conf
         content: |
-          # btrfs root with @ / @home subvolumes, @ as default.
+          # btrfs root with dated OS-slot subvolumes; default = BDR_SUBVOL_DEFAULT.
           # No SizeMaxBytes -> grows by weight to fill everything the swap
           # partition (fixed, below) does not claim.
           [Partition]
           Type=root
           Format=btrfs
           Label=root
-          Subvolumes=/@ /@home
-          DefaultSubvolume=/@
+          Subvolumes={{ BDR_SUBVOLS | join(' ') }}
+          DefaultSubvolume={{ BDR_SUBVOL_DEFAULT }}
           GrowFileSystem=yes
           SizeMinBytes=8G
 
@@ -160,7 +174,7 @@
           set -eu
           DISK="${1:-${BDR_DISK:-/dev/vda}}"
           DEFS="${BDR_BDR_DEFS:-{{ETC}}/btrfs-bdr.d}"
-          DEFAULT_SUBVOL="${BDR_DEFAULT_SUBVOL:-@}"
+          DEFAULT_SUBVOL="${BDR_DEFAULT_SUBVOL:-{{ BDR_SUBVOL_DEFAULT }}}"
           SRC="${BDR_SOURCE_MOUNT:-/}"
 
           "{{BINS_DIR}}/bdr-preflight.sh"
@@ -182,8 +196,8 @@
             "$DISK"
 
           # Online BDR can't set the default subvolume; do it now.
-          # (Assumes @ exists in the migrated fs; create if the source image
-          # didn't already use an @ layout.)
+          # (Assumes the dated OS slot exists in the migrated fs; skip
+          # set-default if the source image used a different layout.)
           if ! btrfs subvolume show "$SRC/$DEFAULT_SUBVOL" >/dev/null 2>&1; then
             echo "note: $DEFAULT_SUBVOL subvol not present; skipping set-default"
           else
