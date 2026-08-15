@@ -4,15 +4,13 @@
     TYPE: opencode
     INSTANCE: git
     BUN: True
+    BUN_BINS_BYPASS: True
     NODEJS: True
+    NODEJS_BINS_BYPASS: True
     #REPO: https://github.com/anomalyco/opencode
     #GIT_VERSION: v2
     REPO: https://github.com/rektide/opencode
     GIT_VERSION: working
-    TOOL_VERSIONS:
-      bun: 1
-      go: 1
-      nodejs: 26.6.0
     BACKUP_TARGET: /mnt/fu/backup/opencode-2026-5
     ENV:
       OPENCODE_PRINT_LOGS: 1
@@ -247,15 +245,6 @@
       #        options:
       #          apiKEy: "{env:OPENROUTER_API_KEY}"
     BINS:
-      # Keep Bun/Node tool provisioning while replacing their generic recipes.
-      - name: build-bun.sh
-        state: absent
-      - name: install-bun.sh
-        state: absent
-      - name: build-nodejs.sh
-        state: absent
-      - name: install-nodejs.sh
-        state: absent
       - name: build.sh
         basedir: False
         content: |
