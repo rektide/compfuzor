@@ -117,8 +117,10 @@
           # top-level (subvolid 5). The root/ container + a-/b- naming leaves
           # room for an A/B subvol pair (flip default subvol or boot subvol= to
           # switch). %a is repart's build-arch specifier.
+          # /home/superbfowle/@DATE@ is a dated home slot stamped at BUILD time
+          # by bin/image.sh (env MKOSI_DATE) — repart has no date specifier.
           MakeDirectories=/root/a-%a
-          Subvolumes=/root/a-%a
+          Subvolumes=/root/a-%a /home/superbfowle/@DATE@
           DefaultSubvolume=/root/a-%a
           MountPoint=/:"subvol=root/a-%a,compress=zstd:3,noatime,lazytime"
       # Copy useful scripts INTO the disk image via mkosi.extra/ (overlaid on
@@ -232,9 +234,21 @@
           # No arg: build the subimages listed in mkosi.conf [Config] Dependencies=.
           # With a variant: build just that mkosi.images/<variant>/ via
           # mkosi --dependency. Examples: image.sh vps-seed ; image.sh oci
+          #
+          # @DATE@ tokens in the config tree (e.g. the dated home subvol) are
+          # stamped HERE at build time (env MKOSI_DATE=YYYYMMDD, else today)
+          # into a temp copy of the tree — etc/ stays tokenized, never stale.
+          # Absolute Output*/Cache* paths in mkosi.conf survive the copy.
+          DATE="${MKOSI_DATE:-$(date +%Y%m%d)}"
+          case "$DATE" in '' | *[!0-9]*) echo "Error: bad MKOSI_DATE '$DATE' (want YYYYMMDD)" >&2; exit 1 ;; esac
           mkdir -p "{{DIR}}/var/output" "{{DIR}}/var/cache" "{{DIR}}/var/package-cache"
+          BUILD="$(mktemp -d /tmp/mkosi-cfg.XXXXXX)"
+          trap 'rm -rf "$BUILD"' EXIT
+          cp -r etc/mkosi.conf etc/mkosi.images "$BUILD"/
+          grep -rl '@DATE@' "$BUILD" | xargs -r sed -i "s|@DATE@|$DATE|g"
+          echo "date stamp: $DATE"
           if [ -n "${1:-}" ]; then set -- --dependency "$1"; fi
-          mkosi -B -f "$@"
+          mkosi -B -f -C "$BUILD" "$@"
       - name: identity.sh
         src: identity.sh
         raw: true

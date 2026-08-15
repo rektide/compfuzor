@@ -51,7 +51,7 @@
     BDR_DATE_TOKEN: "@DATE@"
     BDR_SUBVOLS:
       - "/os/superbfowle/{{ BDR_ARCH }}/{{ BDR_DATE_TOKEN }}"   # dated OS slot = default
-      - /home
+      - "/home/superbfowle/{{ BDR_DATE_TOKEN }}"                # dated home slot (mirrors mkosi's disk image)
     BDR_SUBVOL_DEFAULT: "{{ BDR_SUBVOLS | first }}"
 
     PKGS:
