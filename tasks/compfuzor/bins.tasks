@@ -11,6 +11,16 @@
   vars:
     _delayText: "{{ ' (' + delay_phase + ')' if delay_phase|def else ''}}"
     _become: "{{ BINS_DIR|become_calc }}"
+- name: "Remove absent `BINS`"
+  file:
+    path: "{{_dest}}"
+    state: absent
+  with_items: "{{ BINS_ABSENT | default([]) | normalize(to='list') }}"
+  become: "{{ _become.become }}"
+  when: item is mapping and item.dest|def(item.name, False) is truthy
+  vars:
+    _dest: "{{BINS_DIR}}/{{item.dest|def(item.name)}}"
+    _become: "{{ _dest|become_calc }}"
 - name: "Create exec/execs `BINS`"
   template:
     dest: "{{_dest}}"

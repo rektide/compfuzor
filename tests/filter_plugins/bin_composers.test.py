@@ -4,7 +4,7 @@ import sys
 
 sys.path.insert(0, "library/filter_plugins")
 
-from bin_composers import bin_composers  # noqa: E402
+from bin_composers import bin_composers, partition_bin_states  # noqa: E402
 
 
 def check(label, actual, expected):
@@ -105,6 +105,26 @@ def test_excludes_generated_compositors():
         "excludes generated compositors",
         result,
         [],
+    )
+
+
+def test_absent_bins_are_partitioned_and_not_composed():
+    bins = [
+        {"name": "build-nodejs.sh", "state": "absent"},
+        {"name": "install-live.sh"},
+    ]
+    check(
+        "partitions absent tombstones",
+        partition_bin_states(bins),
+        {
+            "present": [{"name": "install-live.sh"}],
+            "absent": [{"name": "build-nodejs.sh", "state": "absent"}],
+        },
+    )
+    check(
+        "absent build leaf creates no compositor",
+        [item["name"] for item in bin_composers(bins)],
+        ["install.sh"],
     )
 
 
@@ -414,6 +434,7 @@ if __name__ == "__main__":
     test_composes_unscoped_actions()
     test_composes_explicit_and_filename_user_scopes()
     test_excludes_generated_compositors()
+    test_absent_bins_are_partitioned_and_not_composed()
     test_explicit_scope_classifies_systemd_install()
     test_compose_false_excludes_library_scripts()
     test_composes_apply_actions()

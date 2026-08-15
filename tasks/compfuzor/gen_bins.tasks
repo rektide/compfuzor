@@ -14,3 +14,12 @@
   set_fact:
     BINS: "{{ BINS | merge_list(BINS | bin_composers, preset='bins_generated') }}"
   when: BINS | bin_composers | length > 0
+
+- name: "Compfuzor: resolve absent bin tombstones"
+  set_fact:
+    _bins_by_state: "{{ BINS | partition_bin_states }}"
+
+- name: "Compfuzor: publish materialized and absent bins"
+  set_fact:
+    BINS: "{{ _bins_by_state.present }}"
+    BINS_ABSENT: "{{ _bins_by_state.absent }}"

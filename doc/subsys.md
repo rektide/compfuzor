@@ -92,6 +92,21 @@ and concatenates these fields across overlapping entries:
 Non-concat fields follow standard `merge_keyed` behavior: the incoming record
 wins on key conflicts.
 
+An authored BINS entry can tombstone a keyed subsystem contribution with
+`state: absent`:
+
+```yaml
+NODEJS: true
+BINS:
+  - name: build-nodejs.sh
+    state: absent
+```
+
+The tombstone survives the subsystem merge, is excluded before action
+compositors are generated, and removes any previously rendered file. Other
+contributions from the subsystem remain active. Target the contributed leaf
+name (`build-nodejs.sh`), not its action compositor (`build.sh`).
+
 NVIM uses a deliberately narrower configured keyed merge: `generated`,
 `origin_subsystems`, and `bypass_scopes` concatenate, while executable ordering
 fields `early` and `run_all` remain later-wins.

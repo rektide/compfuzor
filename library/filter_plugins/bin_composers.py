@@ -46,6 +46,22 @@ def _resolve_subsystem(value):
 
 
 @accept_args_markers
+def partition_bin_states(bins):
+    """Separate absent BINS tombstones from entries that should materialize."""
+    present = []
+    absent = []
+    for item in _arrayitize(bins):
+        target = (
+            absent
+            if isinstance(item, collections.abc.Mapping)
+            and item.get("state") == "absent"
+            else present
+        )
+        target.append(item)
+    return {"present": present, "absent": absent}
+
+
+@accept_args_markers
 def bin_composers(bins, actions=None):
     """Build action compositors from explicitly named bin scripts.
 
@@ -83,9 +99,11 @@ def bin_composers(bins, actions=None):
     authored_names: set[str] = set()
     leaves = []
     for item in _arrayitize(bins):
-        if not isinstance(item, collections.abc.Mapping) or item.get(
-            "generated_by"
-        ) == "gen_bins":
+        if (
+            not isinstance(item, collections.abc.Mapping)
+            or item.get("state") == "absent"
+            or item.get("generated_by") == "gen_bins"
+        ):
             continue
         name = item.get("name")
         if not isinstance(name, string_types):
@@ -192,4 +210,7 @@ def bin_composers(bins, actions=None):
 
 class FilterModule(object):
     def filters(self):
-        return {"bin_composers": bin_composers}
+        return {
+            "bin_composers": bin_composers,
+            "partition_bin_states": partition_bin_states,
+        }

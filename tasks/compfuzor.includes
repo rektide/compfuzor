@@ -156,7 +156,7 @@
 - import_tasks: compfuzor/fs_get_urls.tasks
   when: lookup('subsys', id='get_urls', get='active', default=false) | bool
 - import_tasks: compfuzor/bins.tasks
-  when: BINS is deflengthy and BINS_BYPASS is deffalsy
+  when: (BINS is deflengthy or BINS_ABSENT is deflengthy) and BINS_BYPASS is deffalsy
 - import_tasks: compfuzor/bins_link.tasks
   when: BINS is deflengthy and BINS_BYPASS is deffalsy
 - import_tasks: compfuzor/bins_link_global.tasks
