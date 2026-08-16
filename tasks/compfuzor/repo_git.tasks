@@ -1,3 +1,12 @@
+# Repository remote model:
+#   REPO: canonical URL, implicitly named origin
+#   GIT_REMOTES: optional {remote_name: URL} additions/overrides
+#   GIT_VERSION: ordinary Git revision, or jj-style rev@remote when that remote
+#                is declared (e.g. working@rektide)
+#   GIT_REMOTE: explicit selected remote for an ordinary GIT_VERSION
+# The selected remote drives clone/update/checkout. Supplemental remotes are
+# configured and fetched before jj initialization so their remote bookmarks are
+# available in colocated repositories.
 - name: "Compfuzor: precreate git dir"
   file:
     path: "{{dest}}"
@@ -18,31 +27,106 @@
     git_repos_rendered: |
       {%- set ns = namespace(items=[]) -%}
       {%- if REPO is deftruthy -%}
-      {%-   set _ = ns.items.append({'repo': REPO, 'dest': base_dest, 'become': false}) -%}
+      {%-   set remotes = {'origin': REPO} -%}
+      {%-   if GIT_REMOTES is defmapping -%}
+      {%-     set _ = remotes.update(GIT_REMOTES) -%}
+      {%-   endif -%}
+      {%-   set raw_version = GIT_VERSION | default('HEAD') | string -%}
+      {%-   set version_parts = raw_version.rsplit('@', 1) -%}
+      {%-   set selected_remote = GIT_REMOTE | default('origin') -%}
+      {%-   set selected_version = raw_version -%}
+      {# Interpret rev@remote only when the suffix names a declared remote. #}
+      {%-   if version_parts | length == 2 and version_parts[1] in remotes -%}
+      {%-     set selected_version = version_parts[0] -%}
+      {%-     set selected_remote = version_parts[1] -%}
+      {%-   endif -%}
+      {%-   set selected_repo = remotes[selected_remote] if selected_remote in remotes else REPO -%}
+      {%-   if selected_remote not in remotes -%}
+      {%-     set _ = remotes.update({selected_remote: selected_repo}) -%}
+      {%-   endif -%}
+      {%-   set _ = ns.items.append({
+              'repo': selected_repo,
+              'dest': base_dest,
+              'become': false,
+              'remote': selected_remote,
+              'version': selected_version,
+              'remotes': remotes
+            }) -%}
       {%- endif -%}
       {%- if REPOS is defmapping -%}
       {%-   for it in (REPOS | normalize(to='items')) -%}
       {%-     set d = it.key | defaultDir(repos_base) -%}
-      {%-     set _ = ns.items.append({'repo': it.value, 'dest': d, 'become': (d|become_calc).become}) -%}
+      {%-     set remote = GIT_REMOTE | default('origin') -%}
+      {%-     set _ = ns.items.append({'repo': it.value, 'dest': d, 'become': (d|become_calc).become, 'remote': remote, 'version': GIT_VERSION | default('HEAD'), 'remotes': {remote: it.value}}) -%}
       {%-   endfor -%}
       {%- endif -%}
       {%- if REPOS is deftruthy and (REPOS is not mapping) -%}
       {%-   for it in REPOS -%}
       {%-     set url = it.repo | default(it) -%}
       {%-     set d = repos_base ~ '/' ~ (url | basename | regex_replace('\.git$', '')) -%}
-      {%-     set _ = ns.items.append({'repo': url, 'dest': d, 'reference': it.reference | default(''), 'become': (d|become_calc).become}) -%}
+      {%-     set remote = it.remote | default(GIT_REMOTE | default('origin')) -%}
+      {%-     set _ = ns.items.append({'repo': url, 'dest': d, 'reference': it.reference | default(''), 'become': (d|become_calc).become, 'remote': remote, 'version': it.version | default(GIT_VERSION | default('HEAD')), 'remotes': it.remotes | default({remote: url})}) -%}
       {%-   endfor -%}
       {%- endif -%}
       {{ ns.items | to_json }}
+
+- name: "Compfuzor: normalize git remotes into git_remote_specs"
+  set_fact:
+    git_remote_specs: "{{ git_remote_specs_rendered | from_json }}"
+  vars:
+    git_remote_specs_rendered: |
+      {%- set ns = namespace(items=[]) -%}
+      {%- for repo in (git_repos | normalize(to='list')) -%}
+      {%-   for remote_name, remote_url in repo.remotes.items() -%}
+      {%-     set _ = ns.items.append({
+              'dest': repo.dest,
+              'name': remote_name,
+              'url': remote_url,
+              'selected': remote_name == repo.remote,
+              'become': repo.become | default(false)
+            }) -%}
+      {%-   endfor -%}
+      {%- endfor -%}
+      {{ ns.items | to_json }}
+
+- name: "Compfuzor: validate git remote names and URLs"
+  assert:
+    that:
+      - item.name is match('^[A-Za-z0-9][A-Za-z0-9._-]*$')
+      - item.url is string
+      - item.url | length > 0
+    fail_msg: "Invalid git remote declaration: {{ item }}"
+  loop: "{{ git_remote_specs | normalize(to='list') }}"
+
+# Existing checkouts need the selected remote before ansible.builtin.git can
+# fetch from it. New clones receive the selected name through remote= below.
+- name: "Compfuzor: ensure selected remote exists on existing git repositories"
+  shell: |
+    if git remote get-url "$CF_GIT_REMOTE" >/dev/null 2>&1; then
+      exit 0
+    fi
+    git remote add "$CF_GIT_REMOTE" "$CF_GIT_URL"
+    printf 'changed\n'
+  args:
+    chdir: "{{ item.dest }}"
+  environment:
+    CF_GIT_REMOTE: "{{ item.remote }}"
+    CF_GIT_URL: "{{ item.repo }}"
+  register: git_selected_remote_config
+  changed_when: git_selected_remote_config.stdout == 'changed'
+  become: "{{ item.become | default(false) | bool }}"
+  loop: "{{ git_repos | normalize(to='list') }}"
+  when: (item.dest + '/.git') is exists
 
 - name: "Compfuzor: fetch git repositories"
   git:
     repo: "{{ item.repo }}"
     dest: "{{ item.dest }}"
+    remote: "{{ item.remote }}"
     track_submodules: "{{ GIT_SUBMODULES|default(False) }}"
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: "{{ GIT_DEPTH|default(omit) }}"
-    version: "{{ GIT_VERSION|default(omit) }}"
+    version: "{{ item.version }}"
     update: "{{ GIT_UPDATE|default(omit) }}"
     reference: "{{ item.reference|defaultDir(SRCS_DIR) if item.reference is deftruthy else omit }}"
   become: "{{ item.become|default(false)|bool }}"
@@ -51,6 +135,45 @@
     git_repos is deflengthy
     and GIT_BYPASS is deffalsy
     and REPO_BYPASS is deffalsy
+
+- name: "Compfuzor: configure supplemental git remotes"
+  shell: |
+    current=$(git remote get-url "$CF_GIT_REMOTE" 2>/dev/null || true)
+    if [ "$current" = "$CF_GIT_URL" ]; then
+      exit 0
+    elif [ -n "$current" ]; then
+      git remote set-url "$CF_GIT_REMOTE" "$CF_GIT_URL"
+    else
+      git remote add "$CF_GIT_REMOTE" "$CF_GIT_URL"
+    fi
+    printf 'changed\n'
+  args:
+    chdir: "{{ item.dest }}"
+  environment:
+    CF_GIT_REMOTE: "{{ item.name }}"
+    CF_GIT_URL: "{{ item.url }}"
+  register: git_remote_config
+  changed_when: git_remote_config.stdout == 'changed'
+  become: "{{ item.become | default(false) | bool }}"
+  loop: "{{ git_remote_specs | normalize(to='list') }}"
+  when: not item.selected
+
+- name: "Compfuzor: fetch supplemental git remotes"
+  shell: >-
+    git fetch --prune --tags
+    {{ '--depth ' ~ (GIT_DEPTH | quote) if GIT_DEPTH is defined else '' }}
+    "$CF_GIT_REMOTE"
+  args:
+    chdir: "{{ item.dest }}"
+  environment:
+    CF_GIT_REMOTE: "{{ item.name }}"
+  register: git_supplemental_fetch
+  changed_when: git_supplemental_fetch.stdout is deftruthy or git_supplemental_fetch.stderr is deftruthy
+  become: "{{ item.become | default(false) | bool }}"
+  loop: "{{ git_remote_specs | normalize(to='list') }}"
+  when:
+    - not item.selected
+    - GIT_UPDATE | default(true) | bool
 
 - name: "Compfuzor: colocate jj on cloned git repositories"
   shell: |

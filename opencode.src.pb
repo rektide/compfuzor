@@ -7,10 +7,12 @@
     BUN_BINS: False
     NODEJS: True
     NODEJS_BINS: False
-    #REPO: https://github.com/anomalyco/opencode
-    #GIT_VERSION: v2
-    REPO: https://github.com/rektide/opencode
-    GIT_VERSION: working
+    REPO: https://github.com/anomalyco/opencode
+    GIT_REMOTES:
+      rektide: https://github.com/rektide/opencode
+    # jj-style remote bookmark selector; repo_git resolves this as the working
+    # branch fetched from the rektide remote while retaining upstream as origin.
+    GIT_VERSION: working@rektide
     PKGS:
       - binutils
     BACKUP_TARGET: /mnt/fu/backup/opencode-2026-5
