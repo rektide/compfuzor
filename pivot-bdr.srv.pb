@@ -42,8 +42,9 @@
     # Dated OS-slot scheme: the default subvol is a dated path under
     # /os/superbfowle/<arch>/, so a future install creates a NEW dated subvol
     # and flips the default (rollback = set-default back to the previous date).
-    # BDR_SUBVOLS = every subvolume to create on the root btrfs.
-    # BDR_SUBVOL_DEFAULT = which of them is mounted as / (must be in the list).
+    # The layout itself is declared in ONE place: the canonical repart profiles
+    # under files/repart/defs/ (tokenized @ARCH@/@DATE@/@SWAP@), staged into
+    # {{ETC}} below by lookup and stamped at run time by stamp.sh.
     BDR_OS_PREFIX: "/os/superbfowle"
     BDR_HOME_PREFIX: "/home/superbfowle"
     BDR_ARCH: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] | default(ansible_architecture) }}"
@@ -51,10 +52,7 @@
     # when formatting (env BDR_DATE, else `date +%Y%m%d` at run time), so a
     # rendered playbook never carries a stale date stamp.
     BDR_DATE_TOKEN: "@DATE@"
-    BDR_SUBVOLS:
-      - "{{ BDR_OS_PREFIX }}/{{ BDR_ARCH }}/{{ BDR_DATE_TOKEN }}"   # dated OS slot = default
-      - "{{ BDR_HOME_PREFIX }}/{{ BDR_DATE_TOKEN }}"                # dated home slot (mirrors mkosi's disk image)
-    BDR_SUBVOL_DEFAULT: "{{ BDR_SUBVOLS | first }}"
+    BDR_DEFAULT_SUBVOL: "{{ BDR_OS_PREFIX }}/{{ BDR_ARCH }}/{{ BDR_DATE_TOKEN }}"
 
     PKGS:
       - systemd        # >=261 for BlockDeviceReplace=
@@ -66,101 +64,32 @@
       BDR_DISK: /dev/vda
       # Mountpoint of the running, single-device, volatile btrfs root.
       BDR_SOURCE_MOUNT: /
-      # Profile definition dirs (staged under {{ETC}}).
-      BDR_SIMPLE_DEFS: "{{ETC}}/btrfs-simple.d"
-      BDR_BDR_DEFS: "{{ETC}}/btrfs-bdr.d"
-      # Subvolume layout (rendered from BDR_SUBVOLS / BDR_SUBVOL_DEFAULT above;
-      # BDR_DEFAULT_SUBVOL carries the @DATE@ token — bins stamp it at run time).
-      BDR_DEFAULT_SUBVOL: "{{ BDR_SUBVOL_DEFAULT }}"
-      BDR_SUBVOLUMES: "{{ BDR_SUBVOLS | join(' ') }}"
+      # Subvolume layout (BDR_DEFAULT_SUBVOL carries the @DATE@ token —
+      # bdr-migrate stamps it at run time for its slot.sh set-default).
+      BDR_DEFAULT_SUBVOL: "{{ BDR_DEFAULT_SUBVOL }}"
       BDR_ARCH: "{{ BDR_ARCH }}"
       BDR_DATE_TOKEN: "{{ BDR_DATE_TOKEN }}"
       BDR_OS_PREFIX: "{{ BDR_OS_PREFIX }}"
       BDR_HOME_PREFIX: "{{ BDR_HOME_PREFIX }}"
       BDR_SWAP_SIZE: 4G
-
-    ETC_DIRS:
-      - btrfs-simple.d
-      - btrfs-bdr.d
-
-    ETC_FILES:
-      # ---- offline, from-scratch full-disk format profile -----------------
-      - name: btrfs-simple.d/00-grub.conf
-        content: |
-          # 1MiB BIOS Boot Partition: grub embeds core.img here (no filesystem).
-          [Partition]
-          Type=21686148-6449-6E6F-744E-656564454649
-          Label=grub-bios
-          SizeMinBytes=1M
-          SizeMaxBytes=1M
-
-      - name: btrfs-simple.d/50-root.conf
-        content: |
-          # btrfs root with dated OS-slot subvolumes; default = BDR_SUBVOL_DEFAULT.
-          # No SizeMaxBytes -> grows by weight to fill everything the swap
-          # partition (fixed, below) does not claim.
-          [Partition]
-          Type=root
-          Format=btrfs
-          Label=root
-          Subvolumes={{ BDR_SUBVOLS | join(' ') }}
-          DefaultSubvolume={{ BDR_SUBVOL_DEFAULT }}
-          GrowFileSystem=yes
-          SizeMinBytes=8G
-
-      - name: btrfs-simple.d/90-swap.conf
-        content: |
-          # Fixed 4G swap, placed last (filename sort = on-disk order).
-          [Partition]
-          Type=swap
-          Format=swap
-          Label=swap
-          SizeMinBytes=4G
-          SizeMaxBytes=4G
-
-      # ---- online BlockDeviceReplace= migrate profile ---------------------
-      - name: btrfs-bdr.d/00-grub.conf
-        content: |
-          [Partition]
-          Type=21686148-6449-6E6F-744E-656564454649
-          Label=grub-bios
-          SizeMinBytes=1M
-          SizeMaxBytes=1M
-
-      - name: btrfs-bdr.d/50-root.conf
-        content: |
-          # Root is NOT formatted here: the running btrfs at BlockDeviceReplace=
-          # is live-migrated onto this partition via `btrfs replace`. repart
-          # grows it to fill afterwards. Default subvolume is set post-migrate
-          # by the bin (DefaultSubvolume= would require --offline=yes).
-          [Partition]
-          Type=root
-          Label=root
-          BlockDeviceReplace=/
-          SizeMinBytes=8G
-
-      - name: btrfs-bdr.d/90-swap.conf
-        content: |
-          [Partition]
-          Type=swap
-          Format=swap
-          Label=swap
-          SizeMinBytes=4G
-          SizeMaxBytes=4G
+      # Shared repart toolkit instance (repart.opt.pb owns scripts AND defs).
+      # pivot-bdr embeds NOTHING repart-related — it points here. Install it
+      # with: ansible-playbook -i 'localhost,' -c local repart.opt.pb
+      REPART_DIR: /opt/repart-main
 
     BINS:
-      # repart kit (files/repart/) — shared mechanics, also embedded by
-      # mkosi.src.pb, installable standalone via repart-kit.opt.pb. These are
-      # the canonical verbs; the bdr-* bins below are thin pivot-specific glue.
+      # tombstones: kit bins from the embed era — now owned by $REPART_DIR
+      # (repart.opt.pb). Declared absent so older renders get cleaned up.
       - name: stamp.sh
-        src: ../repart/stamp.sh
-        raw: true
+        state: absent
       - name: repart.sh
-        src: ../repart/repart.sh
-        raw: true
+        state: absent
       - name: slot.sh
-        src: ../repart/slot.sh
-        raw: true
+        state: absent
+
+      # NOTE: no repart scripts or defs are embedded here — they live in the
+      # shared instance at $REPART_DIR (default /opt/repart-main, see ENV).
+      # The bdr-* bins below are thin BDR-specific glue over that kit.
 
       # Pre-flight: verify the source root is migratable by BDR.
       - name: bdr-preflight.sh
@@ -168,6 +97,11 @@
           # Confirm the running root is a single-device btrfs (BDR requires it)
           # and that repart is new enough.
           SRC="${BDR_SOURCE_MOUNT:-/}"
+          REPART="${REPART_DIR:-/opt/repart-main}"
+          [ -x "$REPART/bin/repart.sh" ] || {
+            echo "Error: repart toolkit missing at $REPART (run repart.opt.pb)" >&2
+            exit 1
+          }
 
           if ! stat -f -c %T "$SRC" | grep -q btrfs; then
             echo "Error: $SRC is not btrfs (BlockDeviceReplace= is btrfs-only)" >&2
@@ -180,10 +114,7 @@
             exit 1
           fi
 
-          if ! "{{BINS_DIR}}/repart.sh" check; then
-            echo "Error: systemd-repart missing/old (need v261+ for BDR)" >&2
-            exit 1
-          fi
+          "$REPART/bin/repart.sh" check
           echo "preflight OK: $SRC is single-device btrfs, repart present"
           echo "source device: $(btrfs filesystem show "$SRC" | awk '/devid/{print $NF}')"
 
@@ -196,9 +127,9 @@
           # Usage: bdr-migrate.sh [disk]
           set -eu
           DISK="${1:-${BDR_DISK:-/dev/vda}}"
-          DEFS="${BDR_BDR_DEFS:-{{ETC}}/btrfs-bdr.d}"
+          REPART="${REPART_DIR:-/opt/repart-main}"
           TOKEN="${BDR_DATE_TOKEN:-@DATE@}"
-          DEFAULT_SUBVOL="${BDR_DEFAULT_SUBVOL:-{{ BDR_SUBVOL_DEFAULT }}}"
+          DEFAULT_SUBVOL="${BDR_DEFAULT_SUBVOL:-/os/superbfowle/@DATE@}"
           # stamp the run-time date into any tokened template
           if case "$DEFAULT_SUBVOL" in *"$TOKEN"*) true ;; *) false ;; esac; then
             DATE="${BDR_DATE:-$(date +%Y%m%d)}"
@@ -209,26 +140,28 @@
 
           "{{BINS_DIR}}/bdr-preflight.sh"
 
+          # repart.sh owns defs+flavor composition, stamping, and flags.
+          # bdr flavor = universal layout with BlockDeviceReplace=/ root.
+          export REPART_SCRATCH="{{DIR}}/var/tmp"
+          export REPART_ARCH="${BDR_ARCH:-}"
+          export REPART_SED="s|@SWAP@|${BDR_SWAP_SIZE:-4G}|g"
           export REPART_OS_PREFIX="${BDR_OS_PREFIX:-/os/superbfowle}"
 
           echo "=== DRY RUN first (no changes) ==="
-          "{{BINS_DIR}}/repart.sh" dry-run "$DISK" "$DEFS"
+          "$REPART/bin/repart.sh" dry-run "$DISK" --flavor bdr
 
           echo ""
           echo "!!! About to WIPE $DISK and migrate $SRC onto it. !!!"
           echo "Set BDR_CONFIRM=yes to proceed."
           [ "${BDR_CONFIRM:-no}" = "yes" ] || { echo "aborted (no confirm)"; exit 1; }
           export REPART_CONFIRM=yes
-
-          # --empty=force (fresh GPT), online (no --offline). repart.sh owns
-          # the flag combo.
-          "{{BINS_DIR}}/repart.sh" migrate "$DISK" "$DEFS"
+          "$REPART/bin/repart.sh" migrate "$DISK" --flavor bdr
 
           # Online BDR can't set the default subvolume; slot.sh does it:
           # the (stamped) $DEFAULT_SUBVOL if present, else newest slot under
           # the os prefix, else a soft skip.
-          if ! "{{BINS_DIR}}/slot.sh" default "$SRC" "$DEFAULT_SUBVOL" 2>/dev/null; then
-            "{{BINS_DIR}}/slot.sh" default "$SRC" \
+          if ! "$REPART/bin/slot.sh" default "$SRC" "$DEFAULT_SUBVOL" 2>/dev/null; then
+            "$REPART/bin/slot.sh" default "$SRC" \
               || echo "note: no OS slot under $REPART_OS_PREFIX; skipping set-default"
           fi
 
@@ -259,16 +192,14 @@
           # Usage: bdr-format.sh <disk-or-image>       (env: BDR_DATE=YYYYMMDD)
           set -eu
           TARGET="${1:?usage: bdr-format.sh <disk-or-image>}"
-          DEFS="${BDR_SIMPLE_DEFS:-{{ETC}}/btrfs-simple.d}"
-          # kit verbs: stamp.sh copies+stamps the defs into on-disk scratch
-          # (never /tmp), repart.sh runs the offline destructive format.
+          REPART="${REPART_DIR:-/opt/repart-main}"
+          # repart.sh composes the universal layout + format flavor (fresh
+          # btrfs, dated slots) and stamps @DATE@/@ARCH@/@SWAP@ at run time.
           export REPART_SCRATCH="{{DIR}}/var/tmp"
           export REPART_DATE="${BDR_DATE:-}"
-          RUNDEFS="$("{{BINS_DIR}}/stamp.sh" "$DEFS")"
-          trap 'rm -rf "$RUNDEFS"' EXIT
-          echo "default subvol: $(awk -F= '/^DefaultSubvolume/{print $2; exit}' "$RUNDEFS"/btrfs-simple.d/50-root.conf 2>/dev/null || echo '?')"
-
-          "{{BINS_DIR}}/repart.sh" format "$TARGET" "$RUNDEFS/btrfs-simple.d"
+          export REPART_ARCH="${BDR_ARCH:-}"
+          export REPART_SED="s|@SWAP@|${BDR_SWAP_SIZE:-4G}|g"
+          "$REPART/bin/repart.sh" format "$TARGET" --flavor format
 
       # De-identify a clone (e.g. after btrfs send|receive of an image).
       # Now a raw copy of the canonical files/mkosi/identity.sh (whose default

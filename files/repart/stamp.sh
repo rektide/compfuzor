@@ -19,8 +19,14 @@
 #   dirs would collide — callers keep them distinct).
 #
 # ENV
-#   REPART_DATE    stamp (default: today, YYYYMMDD; validated digits-only)
-#   REPART_TOKEN   token to replace (default: @DATE@)
+#   REPART_DATE    @DATE@ stamp (default: today, YYYYMMDD; digits-only checked)
+#   REPART_ARCH    @ARCH@ stamp (default: uname -m mapped x86_64->amd64,
+#                  aarch64->arm64; set explicitly when the target's arch
+#                  differs from the host running the stamp)
+#   REPART_TOKEN   token to replace instead of @DATE@ (rare)
+#   REPART_SED     extra sed expression(s) applied to every file after token
+#                  stamping — the extension point for profile-specific tokens,
+#                  e.g. REPART_SED='s|@SWAP@|4G|g'
 #   REPART_SCRATCH scratch base (default: /var/tmp — on-disk, NOT tmpfs)
 #
 # Host deps: coreutils, sed, grep. No compfuzor assumptions.
@@ -34,6 +40,7 @@ note() { printf 'stamp: %s\n' "$*" >&2; }
 
 DATE="${REPART_DATE:-$(date +%Y%m%d)}"
 TOKEN="${REPART_TOKEN:-@DATE@}"
+ARCH="${REPART_ARCH:-$(case "$(uname -m)" in x86_64) echo amd64 ;; aarch64) echo arm64 ;; *) uname -m ;; esac)}"
 SCRATCH="${REPART_SCRATCH:-/var/tmp}"
 
 case "$DATE" in '' | *[!0-9]*) die "bad REPART_DATE '$DATE' (want YYYYMMDD)" ;; esac
@@ -49,12 +56,17 @@ for src in "$@"; do
   cp -r "$src" "$DEST/$(basename "$src")"
 done
 
-# stamp only files that carry the token (grep -lI skips binaries)
-hit="$(grep -rl "$TOKEN" "$DEST" 2>/dev/null || true)"
+# stamp only files that carry the tokens (grep -lI skips binaries)
+hit="$(grep -rlI -e "$TOKEN" -e '@ARCH@' "$DEST" 2>/dev/null || true)"
 if [ -n "$hit" ]; then
   # shellcheck disable=SC2086
-  printf '%s\n' "$hit" | xargs sed -i "s|$TOKEN|$DATE|g"
+  printf '%s\n' "$hit" | xargs sed -i -e "s|$TOKEN|$DATE|g" -e "s|@ARCH@|$ARCH|g"
+fi
+
+# caller extension point: extra sed expressions over every file
+if [ -n "${REPART_SED:-}" ]; then
+  find "$DEST" -type f -exec sed -i "$REPART_SED" {} +
 fi
 
 printf '%s\n' "$DEST"
-note "stamped $DATE into $(echo "$hit" | wc -l) file(s) under $DEST"
+note "stamped $DATE/$ARCH into $(echo "$hit" | wc -l) file(s) under $DEST${REPART_SED:+ (+REPART_SED)}"

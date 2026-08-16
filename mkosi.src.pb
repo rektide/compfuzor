@@ -53,6 +53,9 @@
       - mkosi.images/disk
       - mkosi.images/disk/mkosi.repart
       - mkosi.images/disk/mkosi.extra/usr/local/bin
+      - mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/universal.d
+      - mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/format.d
+      - mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/bdr.d
     ETC_FILES:
       - name: pkgs.txt
         content: "{{ lookup('template', '../../files/_pkgs') }}"
@@ -142,6 +145,20 @@
       - name: mkosi.images/disk/mkosi.extra/usr/local/bin/slot.sh
         content: "{{ lookup('file', '../../files/repart/slot.sh') }}"
         mode: "0755"
+      # ... and the canonical defs, so a spawned instance can compose/stamp
+      # its own repart runs (repart.sh's burned-copy lookup finds these).
+      - name: mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/universal.d/00-grub.conf
+        content: "{{ lookup('file', '../../files/repart/defs/universal.d/00-grub.conf') }}"
+      - name: mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/universal.d/10-esp.conf
+        content: "{{ lookup('file', '../../files/repart/defs/universal.d/10-esp.conf') }}"
+      - name: mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/universal.d/20-swap.conf
+        content: "{{ lookup('file', '../../files/repart/defs/universal.d/20-swap.conf') }}"
+      - name: mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/universal.d/50-root.conf
+        content: "{{ lookup('file', '../../files/repart/defs/universal.d/50-root.conf') }}"
+      - name: mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/format.d/50-root.conf
+        content: "{{ lookup('file', '../../files/repart/defs/format.d/50-root.conf') }}"
+      - name: mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/bdr.d/50-root.conf
+        content: "{{ lookup('file', '../../files/repart/defs/bdr.d/50-root.conf') }}"
       - name: mkosi.images/disk/mkosi.extra/usr/local/bin/networkd-static.sh
         content: "{{ lookup('file', '../../files/mkosi/networkd-static.sh') }}"
         mode: "0755"
@@ -264,8 +281,13 @@
           DATE="${MKOSI_DATE:-}"
           case "$DATE" in *[!0-9]*) echo "Error: bad MKOSI_DATE '$DATE' (want YYYYMMDD)" >&2; exit 1 ;; esac
           mkdir -p "{{DIR}}/var/output" "{{DIR}}/var/cache" "{{DIR}}/var/package-cache" "{{DIR}}/var/tmp"
+          # prefer the shared repart instance; fall back to this checkout's
+          # embedded kit so mkosi-git also works standalone
+          REPART="${REPART_DIR:-/opt/repart-main}"
+          if [ -x "$REPART/bin/stamp.sh" ]; then STAMP="$REPART/bin/stamp.sh"
+          else STAMP="{{BINS_DIR}}/stamp.sh"; fi
           export REPART_DATE="$DATE" REPART_SCRATCH="{{DIR}}/var/tmp"
-          BUILD="$("{{BINS_DIR}}/stamp.sh" etc/mkosi.conf etc/mkosi.images)"
+          BUILD="$("$STAMP" etc/mkosi.conf etc/mkosi.images)"
           trap 'rm -rf "$BUILD"' EXIT
           echo "date stamp: ${MKOSI_DATE:-today}"
           if [ -n "${1:-}" ]; then set -- --dependency "$1"; fi
