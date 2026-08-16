@@ -2,13 +2,13 @@
 - hosts: all
   vars:
     REPO: https://github.com/systemd/mkosi
-    # ESP size for the disk subimage's 00-esp.conf (repart SizeMinBytes=SizeMaxBytes,
-    # fixed so it doesn't auto-grow). Too-small ESP is a recurring pain point.
-    ESP_SIZE: "384M"
-    # Swap partition size (06-swap.conf). Fixed (min==max): swap sits BEFORE root
-    # so root can stay last and grow to fill the disk (repart won't move swap to
-    # grow it later). Sized >= RAM for hibernate; Type=swap auto-activates +
-    # auto-resume via systemd-gpt-auto-generator.
+    # Swap size for mkosi.repart/20-swap.conf's @SWAP@ token (stamped at build
+    # by image.sh). Fixed min==max: swap sits BEFORE root so root stays last
+    # and grows to fill (repart won't move swap to grow it later). Sized >=
+    # RAM for hibernate; Type=swap auto-activates + auto-resume via
+    # systemd-gpt-auto-generator. ESP size lives in the kit
+    # (files/repart/defs/universal.d/10-esp.conf, 384M) — override via
+    # REPART_SED if ever needed.
     SWAP_SIZE: "24G"
     ENV:
       scratchsize: "{{scratchsize|default()}}"
@@ -87,38 +87,30 @@
           OutputDirectory={{DIR}}/var/output
       # mkosi.repart/ is per-image and NOT inherited by subimages, so it lives
       # INSIDE the disk subimage's dir. It REPLACES mkosi's built-in partition
-      # defs entirely (no merge), so we provide the full layout: ESP + swap +
-      # a btrfs root using the UNIVERSAL subvolume scheme from the repart kit
-      # (10-root.conf embeds files/repart/defs/format.d/50-root.conf verbatim
-      # and adds only mkosi's CopyFiles/MountPoint): OS slot
-      # /os/superbfowle/<arch>/<yyyymmdd> (default) + /home/superbfowle/<date>,
-      # NOT top-level subvolid 5. @ARCH@/@DATE@ stamped at build by image.sh.
-      - name: mkosi.images/disk/mkosi.repart/00-esp.conf
+      # defs entirely (no merge). The layout is the kit's universal.d + the
+      # format.d root, embedded VERBATIM under kit filenames (00-grub 10-esp
+      # 20-swap 50-root = the universal layout) with only mkosi's build-time
+      # population appended (CopyFiles/MountPoint). Do not fork the partition
+      # or subvolume layout here — edit files/repart/defs/ instead.
+      # @ARCH@/@DATE@/@SWAP@ are stamped at build by image.sh (stamp.sh).
+      - name: mkosi.images/disk/mkosi.repart/00-grub.conf
+        content: "{{ lookup('file', '../../files/repart/defs/universal.d/00-grub.conf') }}"
+      - name: mkosi.images/disk/mkosi.repart/10-esp.conf
         content: |
-          [Partition]
-          Type=esp
-          Format=vfat
+          {{ lookup('file', '../../files/repart/defs/universal.d/10-esp.conf') }}
+          # mkosi build-time population: UKI/kernel artifacts from the image
+          # tree's /boot and /efi land in the ESP (kit's is blank — a fresh
+          # format has nothing to copy).
           CopyFiles=/boot:/
           CopyFiles=/efi:/
-          SizeMinBytes={{ESP_SIZE}}
-          SizeMaxBytes={{ESP_SIZE}}
-      # Swap — fixed size, BEFORE root (06 < 10) so root stays last/growable.
-      # Type=swap is a systemd discoverable GPT type: auto-activated + hibernate
-      # resume set up by systemd-gpt-auto-generator, no fstab needed.
-      - name: mkosi.images/disk/mkosi.repart/06-swap.conf
-        content: |
-          [Partition]
-          Type=swap
-          SizeMinBytes={{SWAP_SIZE}}
-          SizeMaxBytes={{SWAP_SIZE}}
-      - name: mkosi.images/disk/mkosi.repart/10-root.conf
+      - name: mkosi.images/disk/mkosi.repart/20-swap.conf
+        content: "{{ lookup('file', '../../files/repart/defs/universal.d/20-swap.conf') }}"
+      - name: mkosi.images/disk/mkosi.repart/50-root.conf
         content: |
           {{ lookup('file', '../../files/repart/defs/format.d/50-root.conf') }}
-          # mkosi additions to the kit's canonical format-flavor root (above):
-          # the built rootfs is copied into the DEFAULT subvolume (the dated OS
-          # slot), and MountPoint= tells mkosi where the root lives for
-          # nspawn/testing. Same subvolumes on ALL systems — do not fork the
-          # layout here; edit files/repart/defs/format.d/50-root.conf instead.
+          # mkosi build-time population: the built rootfs is copied into the
+          # DEFAULT subvolume (the dated OS slot); MountPoint= tells mkosi
+          # where the root lives (nspawn/testing).
           CopyFiles=/
           MountPoint=/:"subvol=os/superbfowle/@ARCH@/@DATE@,compress=zstd:3,noatime,lazytime"
       # Copy useful scripts INTO the disk image via mkosi.extra/ (overlaid on
@@ -282,6 +274,7 @@
           if [ -x "$REPART/bin/stamp.sh" ]; then STAMP="$REPART/bin/stamp.sh"
           else STAMP="{{BINS_DIR}}/stamp.sh"; fi
           export REPART_DATE="$DATE" REPART_SCRATCH="{{DIR}}/var/tmp"
+          export REPART_SED="s|@SWAP@|{{SWAP_SIZE}}|g"
           BUILD="$("$STAMP" etc/mkosi.conf etc/mkosi.images)"
           trap 'rm -rf "$BUILD"' EXIT
           echo "date stamp: ${MKOSI_DATE:-today}"
@@ -298,6 +291,16 @@
 
       Installs the **mkosi** image builder (from git) and provides bins to build
       Debian disk images, a BIOS/MBR VPS initrd seed, and clone-identity tooling.
+
+      ## quick start
+
+          ansible-playbook -i 'localhost,' -c local mkosi.src.pb
+          cd /usr/local/src/mkosi-git
+          bin/image.sh                          # build default subimages (vps-seed, oci)
+          bin/image.sh disk                     # full disk image, universal layout
+          MKOSI_DATE=20260901 bin/image.sh disk # explicit slot date
+          bin/vps-seed.sh myseed                # host-tailored initrd (this kernel)
+          bin/identity.sh --first-boot /mnt     # de-identify a mounted clone
 
       ## bins (`bin/`)
 

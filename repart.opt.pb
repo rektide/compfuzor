@@ -51,6 +51,20 @@
       this instance via `REPART_DIR=/opt/repart-main` (default) — they do NOT
       embed scripts or defs.
 
+      ## quick start
+
+          ansible-playbook -i 'localhost,' -c local repart.opt.pb
+          R=/opt/repart-main
+          $R/bin/repart.sh check                       # systemd-repart >= 261?
+          $R/bin/repart.sh dry-run /dev/sda            # preview, no changes
+          sudo $R/bin/repart.sh format /dev/sda        # WIPE + universal layout
+          sudo mount /dev/sda4 /mnt && $R/bin/slot.sh verify /mnt
+
+          # swap size is a token; stamp it per run:
+          sudo REPART_SED='s|@SWAP@|8G|g' $R/bin/repart.sh format /dev/sda
+
+      ## detailed guide
+
       | path | what |
       |---|---|
       | `bin/stamp.sh <src>...` | copy to on-disk scratch (never tmpfs) + stamp `@DATE@`/`@ARCH@` (+ `REPART_SED`, e.g. `@SWAP@`); echoes scratch dir |

@@ -215,6 +215,83 @@
         src: ../mkosi/identity.sh
         raw: true
 
+    README: |
+      # pivot-bdr-main
+
+      In-place disk migration via systemd-repart **BlockDeviceReplace=** (BDR):
+      live-migrate a running single-device btrfs root onto a freshly-GPT'd
+      disk (no reboot; reverts to the source device on failure). Partition
+      mechanics come from the shared repart toolkit — run **repart.opt.pb
+      first** so `/opt/repart-main` exists (bins point there via REPART_DIR).
+
+      ## quick start
+
+          # once: shared toolkit + this subsystem
+          ansible-playbook -i 'localhost,' -c local repart.opt.pb
+          ansible-playbook -i 'localhost,' -c local pivot-bdr.srv.pb
+          . /srv/pivot-bdr-main/env.export
+
+          # rehearse on an image file (zero risk)
+          truncate -s 16G /var/tmp/rehearsal.img
+          /srv/pivot-bdr-main/bin/bdr-format.sh /var/tmp/rehearsal.img
+          loop=$(sudo losetup -fP --show /var/tmp/rehearsal.img)
+          sudo btrfs subvolume list "$loop"       # dated OS + home slots
+          sudo btrfs subvolume get-default "$loop"
+          sudo losetup -d "$loop"
+
+          # real target (WIPES IT)
+          sudo /srv/pivot-bdr-main/bin/bdr-format.sh /dev/sda
+          sudo mount /dev/sda4 /mnt               # root = last partition
+          /opt/repart-main/bin/slot.sh verify /mnt
+
+      ## detailed guide
+
+      ### two paths
+
+      - **bdr-format.sh** — offline, from-scratch: the universal layout (1M
+        bios_grub, 384M ESP, fixed @SWAP@ swap, root LAST so later disk growth
+        lands on it) + format flavor (btrfs with
+        `/os/superbfowle/<arch>/<yyyymmdd>` default slot +
+        `/home/superbfowle/<yyyymmdd>` home slot). For blank disks, images,
+        rescue-env formatting. Needs nothing running.
+      - **bdr-migrate.sh** — online BDR: the RUNNING root (a single-device
+        btrfs on a VOLATILE device — zram/brd/kexec'd initrd root) is copied
+        block-by-block onto the target via `btrfs replace`; the device-id is
+        swapped atomically while mounted, then the fs is grown. To GET such a
+        root on a single-disk VPS, kexec a rescue initrd first (see mkosi-git
+        `vps-seed` / `debinst-kexec`).
+
+      ### bins (`bin/`)
+
+      | bin | what |
+      |---|---|
+      | `bdr-preflight.sh` | source is btrfs? single-device? repart >= 261? toolkit present? |
+      | `bdr-format.sh <disk\|image>` | offline format (toolkit compose+stamp+run) |
+      | `bdr-migrate.sh [disk]` | dry-run → `BDR_CONFIRM=yes` → online migrate → set default slot |
+      | `bdr-grub.sh [disk]` | `grub-install` BIOS/GPT into the bios_grub partition |
+      | `clone-reset.sh` | `identity.sh --first-boot` (de-identify a clone) |
+
+      ### env (`env.export`)
+
+      `BDR_DISK` target; `BDR_SOURCE_MOUNT` running btrfs root (default /);
+      `BDR_DATE` slot stamp (default today); `BDR_ARCH`; `BDR_DEFAULT_SUBVOL`;
+      `BDR_OS_PREFIX`/`BDR_HOME_PREFIX`; `BDR_SWAP_SIZE` (default 4G);
+      `REPART_DIR` (default /opt/repart-main).
+
+      ### slots & rollback
+
+      Every system carries the same subvolumes — the layout is declared in ONE
+      place (repo `files/repart/defs/format.d/50-root.conf`). New install =
+      new dated slot; rollback = `slot.sh flip <yyyymmdd>`; inventory =
+      `slot.sh list|verify`. Slots are never auto-deleted.
+
+      ### mechanism constraints (repart.c)
+
+      btrfs-only, single-device-only, ONLINE-only; `BlockDeviceReplace=` is
+      incompatible with `Format=`/`CopyBlocks=`/`CopyFiles=` (the fs move IS
+      the population); `DefaultSubvolume=` needs `--offline` — the opposite of
+      BDR — so bdr-migrate sets the default subvolume via slot.sh afterwards.
+
   tasks:
     - import_tasks: tasks/compfuzor.includes
       vars:
