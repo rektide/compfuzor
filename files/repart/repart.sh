@@ -38,8 +38,10 @@
 # ENV
 #   REPART_DEFS / REPART_FLAVOR / REPART_CONFIRM    (above)
 #   REPART_SCRATCH  compose+stamp base (default /var/tmp, NOT tmpfs)
+#   REPART_SWAP     @SWAP@ stamp (default 4G) — direct runs always resolve it
 #   REPART_DATE / REPART_ARCH / REPART_SED          (stamp.sh: @DATE@ @ARCH@,
-#                   plus extra seds — consumers set e.g. REPART_SED='s|@SWAP@|4G|g')
+#                   plus extra seds — PREPENDED before the default swap sed,
+#                   so an explicit REPART_SED wins on any token it covers)
 #   REPART_COMPOSE_ONLY=yes  stop after compose+stamp; print the final defs dir
 #                            (testing/debugging — no repart invocation)
 #
@@ -100,8 +102,12 @@ resolve_flavor() {
   printf '%s' "$d"
 }
 
-# compose <defs> <flavor|none> -> echoes the STAMPED defs dir
-# (sets COMPOSED_DIR/STAMPED_DIR globals for the caller's cleanup trap)
+# compose <defs> <flavor|none> — sets FINAL/COMPOSED_DIR/STAMPED_DIR in the
+# CURRENT shell (no $() capture: command substitution is a subshell and these
+# must reach the caller's cleanup trap).
+# Also defaults the @SWAP@ stamp (REPART_SWAP, default 4G) so direct runs
+# never hand repart an unstamped token; an explicit REPART_SED wins because
+# it is prepended (sed consumes matches: first expression to match wins).
 compose() {
   local defs="$1" flavor="$2" scratch
   scratch="${REPART_SCRATCH:-/var/tmp}"
@@ -112,8 +118,9 @@ compose() {
     cp -r "$flavor"/. "$COMPOSED_DIR"/        # same-named files replace wholesale
   fi
   ls "$COMPOSED_DIR"/*.conf >/dev/null 2>&1 || die "composed defs have no *.conf (defs=$defs flavor=$flavor)"
+  export REPART_SED="${REPART_SED:+$REPART_SED;}s|@SWAP@|${REPART_SWAP:-4G}|g"
   STAMPED_DIR="$(REPART_SCRATCH="$scratch" "$(stamp_bin)" "$COMPOSED_DIR")"
-  printf '%s' "$STAMPED_DIR/$(basename "$COMPOSED_DIR")"
+  FINAL="$STAMPED_DIR/$(basename "$COMPOSED_DIR")"
 }
 
 MODE="${1:-}"; shift || true
@@ -141,9 +148,13 @@ DEFS="${DEFS_ARG:-$(resolve_defs)}"
 [ -d "$DEFS" ] || die "defs dir not found: $DEFS"
 FLAVOR="$(resolve_flavor "$FLAVOR_ARG" "$DEFS" "$MODE")"
 
-FINAL="$(compose "$DEFS" "$FLAVOR")"
+compose "$DEFS" "$FLAVOR"
 note "defs: $DEFS + flavor: $FLAVOR -> $FINAL"
-if [ "${REPART_COMPOSE_ONLY:-no}" = "yes" ]; then printf '%s\n' "$FINAL"; exit 0; fi
+if [ "${REPART_COMPOSE_ONLY:-no}" = "yes" ]; then
+  printf '%s\n' "$FINAL"
+  rm -rf "$COMPOSED_DIR"    # the stamped copy (FINAL) is self-contained
+  exit 0
+fi
 trap 'rm -rf "$COMPOSED_DIR" "$STAMPED_DIR"' EXIT
 
 do_check

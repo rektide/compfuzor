@@ -60,8 +60,8 @@
           sudo $R/bin/repart.sh format /dev/sda        # WIPE + universal layout
           sudo mount /dev/sda4 /mnt && $R/bin/slot.sh verify /mnt
 
-          # swap size is a token; stamp it per run:
-          sudo REPART_SED='s|@SWAP@|8G|g' $R/bin/repart.sh format /dev/sda
+          # swap size is a token; default resolves to 4G, override per run:
+          sudo REPART_SWAP=8G $R/bin/repart.sh format /dev/sda
 
       ## detailed guide
 

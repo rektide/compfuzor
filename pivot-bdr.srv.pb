@@ -144,7 +144,7 @@
           # bdr flavor = universal layout with BlockDeviceReplace=/ root.
           export REPART_SCRATCH="{{DIR}}/var/tmp"
           export REPART_ARCH="${BDR_ARCH:-}"
-          export REPART_SED="s|@SWAP@|${BDR_SWAP_SIZE:-4G}|g"
+          export REPART_SWAP="${BDR_SWAP_SIZE:-4G}"
           export REPART_OS_PREFIX="${BDR_OS_PREFIX:-/os/superbfowle}"
 
           echo "=== DRY RUN first (no changes) ==="
@@ -204,7 +204,7 @@
           export REPART_SCRATCH="{{DIR}}/var/tmp"
           export REPART_DATE="${BDR_DATE:-}"
           export REPART_ARCH="${BDR_ARCH:-}"
-          export REPART_SED="s|@SWAP@|${BDR_SWAP_SIZE:-4G}|g"
+          export REPART_SWAP="${BDR_SWAP_SIZE:-4G}"
           "$REPART/bin/repart.sh" format "$TARGET" --flavor format
 
       # De-identify a clone (e.g. after btrfs send|receive of an image).

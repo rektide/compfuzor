@@ -274,7 +274,7 @@
           if [ -x "$REPART/bin/stamp.sh" ]; then STAMP="$REPART/bin/stamp.sh"
           else STAMP="{{BINS_DIR}}/stamp.sh"; fi
           export REPART_DATE="$DATE" REPART_SCRATCH="{{DIR}}/var/tmp"
-          export REPART_SED="s|@SWAP@|{{SWAP_SIZE}}|g"
+          export REPART_SWAP="{{SWAP_SIZE}}"
           BUILD="$("$STAMP" etc/mkosi.conf etc/mkosi.images)"
           trap 'rm -rf "$BUILD"' EXIT
           echo "date stamp: ${MKOSI_DATE:-today}"
