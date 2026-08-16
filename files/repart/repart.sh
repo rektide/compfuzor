@@ -14,6 +14,9 @@
 # USAGE
 #   repart.sh check
 #   repart.sh dry-run <target> [--defs DIR] [--flavor DIR|NAME|none] [-- repart-args]
+#                       # preview EXACTLY what format/migrate will do
+#                       # (--empty=force + --dry-run=yes): the full wipe plan,
+#                       # zero writes (checksum-verified in development)
 #   repart.sh format  <target> [flags]    # --offline=yes --empty=force   DESTRUCTIVE
 #   repart.sh migrate <target> [flags]    # online BlockDeviceReplace=    DESTRUCTIVE
 #                                         #   requires REPART_CONFIRM=yes
@@ -160,7 +163,11 @@ trap 'rm -rf "$COMPOSED_DIR" "$STAMPED_DIR"' EXIT
 do_check
 case "$MODE" in
   dry-run)
-    systemd-repart --definitions="$FINAL" --dry-run=yes "${EXTRA[@]}" "$TARGET"
+    # --empty=force MIRRORS format/migrate so the preview shows the real WIPE
+    # plan (without it repart refuses non-GPT targets: "no GPT disk label,
+    # not repartitioning" — a preview of nothing). Still zero writes:
+    # --dry-run=yes gates every write path in repart.
+    systemd-repart --definitions="$FINAL" --dry-run=yes --empty=force "${EXTRA[@]}" "$TARGET"
     ;;
   format)
     note "WIPING partition table on $TARGET (offline format from $FINAL)"

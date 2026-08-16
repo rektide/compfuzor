@@ -56,7 +56,7 @@
           ansible-playbook -i 'localhost,' -c local repart.opt.pb
           R=/opt/repart-main
           $R/bin/repart.sh check                       # systemd-repart >= 261?
-          $R/bin/repart.sh dry-run /dev/sda            # preview, no changes
+          $R/bin/repart.sh dry-run /dev/sda            # preview the WIPE plan, no writes
           sudo $R/bin/repart.sh format /dev/sda        # WIPE + universal layout
           sudo mount /dev/sda4 /mnt && $R/bin/slot.sh verify /mnt
 
