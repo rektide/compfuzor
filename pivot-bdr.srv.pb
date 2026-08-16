@@ -44,14 +44,16 @@
     # and flips the default (rollback = set-default back to the previous date).
     # BDR_SUBVOLS = every subvolume to create on the root btrfs.
     # BDR_SUBVOL_DEFAULT = which of them is mounted as / (must be in the list).
+    BDR_OS_PREFIX: "/os/superbfowle"
+    BDR_HOME_PREFIX: "/home/superbfowle"
     BDR_ARCH: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] | default(ansible_architecture) }}"
     # Run-time date: the profile ships with a @DATE@ token; the bins stamp it
     # when formatting (env BDR_DATE, else `date +%Y%m%d` at run time), so a
     # rendered playbook never carries a stale date stamp.
     BDR_DATE_TOKEN: "@DATE@"
     BDR_SUBVOLS:
-      - "/os/superbfowle/{{ BDR_ARCH }}/{{ BDR_DATE_TOKEN }}"   # dated OS slot = default
-      - "/home/superbfowle/{{ BDR_DATE_TOKEN }}"                # dated home slot (mirrors mkosi's disk image)
+      - "{{ BDR_OS_PREFIX }}/{{ BDR_ARCH }}/{{ BDR_DATE_TOKEN }}"   # dated OS slot = default
+      - "{{ BDR_HOME_PREFIX }}/{{ BDR_DATE_TOKEN }}"                # dated home slot (mirrors mkosi's disk image)
     BDR_SUBVOL_DEFAULT: "{{ BDR_SUBVOLS | first }}"
 
     PKGS:
@@ -73,6 +75,8 @@
       BDR_SUBVOLUMES: "{{ BDR_SUBVOLS | join(' ') }}"
       BDR_ARCH: "{{ BDR_ARCH }}"
       BDR_DATE_TOKEN: "{{ BDR_DATE_TOKEN }}"
+      BDR_OS_PREFIX: "{{ BDR_OS_PREFIX }}"
+      BDR_HOME_PREFIX: "{{ BDR_HOME_PREFIX }}"
       BDR_SWAP_SIZE: 4G
 
     ETC_DIRS:
@@ -145,6 +149,19 @@
           SizeMaxBytes=4G
 
     BINS:
+      # repart kit (files/repart/) — shared mechanics, also embedded by
+      # mkosi.src.pb, installable standalone via repart-kit.opt.pb. These are
+      # the canonical verbs; the bdr-* bins below are thin pivot-specific glue.
+      - name: stamp.sh
+        src: ../repart/stamp.sh
+        raw: true
+      - name: repart.sh
+        src: ../repart/repart.sh
+        raw: true
+      - name: slot.sh
+        src: ../repart/slot.sh
+        raw: true
+
       # Pre-flight: verify the source root is migratable by BDR.
       - name: bdr-preflight.sh
         content: |
@@ -163,7 +180,7 @@
             exit 1
           fi
 
-          if ! systemd-repart --help 2>&1 | grep -q -- '--definitions'; then
+          if ! "{{BINS_DIR}}/repart.sh" check; then
             echo "Error: systemd-repart missing/old (need v261+ for BDR)" >&2
             exit 1
           fi
@@ -192,41 +209,27 @@
 
           "{{BINS_DIR}}/bdr-preflight.sh"
 
+          export REPART_OS_PREFIX="${BDR_OS_PREFIX:-/os/superbfowle}"
+
           echo "=== DRY RUN first (no changes) ==="
-          systemd-repart --definitions="$DEFS" --dry-run=yes "$DISK"
+          "{{BINS_DIR}}/repart.sh" dry-run "$DISK" "$DEFS"
 
           echo ""
           echo "!!! About to WIPE $DISK and migrate $SRC onto it. !!!"
           echo "Set BDR_CONFIRM=yes to proceed."
           [ "${BDR_CONFIRM:-no}" = "yes" ] || { echo "aborted (no confirm)"; exit 1; }
+          export REPART_CONFIRM=yes
 
-          # --empty=force: create a brand new GPT, discarding the existing
-          # (ext4) table. --dry-run=no: actually do it. Online (no --offline).
-          systemd-repart \
-            --definitions="$DEFS" \
-            --empty=force \
-            --dry-run=no \
-            "$DISK"
+          # --empty=force (fresh GPT), online (no --offline). repart.sh owns
+          # the flag combo.
+          "{{BINS_DIR}}/repart.sh" migrate "$DISK" "$DEFS"
 
-          # Online BDR can't set the default subvolume; do it now.
-          # The dated OS slot in the migrated fs was stamped when the source
-          # image was formatted — which may be a different date than today.
-          # So: prefer the (stamped) $DEFAULT_SUBVOL; if absent, fall back to
-          # the newest subvol under its parent; if none, skip set-default.
-          if ! btrfs subvolume show "$SRC/$DEFAULT_SUBVOL" >/dev/null 2>&1; then
-            PARENT="$(dirname "$DEFAULT_SUBVOL")"
-            found="$(btrfs subvolume list --sort=-ogen "$SRC" 2>/dev/null | awk -v p="${PARENT#/}/" 'index($NF, p"/")==1{print $NF; exit}')"
-            if [ -n "$found" ]; then
-              echo "note: $DEFAULT_SUBVOL absent; defaulting to newest slot /$found"
-              DEFAULT_SUBVOL="/$found"
-            else
-              echo "note: no OS slot under $PARENT; skipping set-default"
-              DEFAULT_SUBVOL=""
-            fi
-          fi
-          if [ -n "$DEFAULT_SUBVOL" ]; then
-            id="$(btrfs subvolume list "$SRC" | awk -v s="${DEFAULT_SUBVOL#/}" '$NF==s{print $2}')"
-            [ -n "$id" ] && btrfs subvolume set-default "$id" "$SRC"
+          # Online BDR can't set the default subvolume; slot.sh does it:
+          # the (stamped) $DEFAULT_SUBVOL if present, else newest slot under
+          # the os prefix, else a soft skip.
+          if ! "{{BINS_DIR}}/slot.sh" default "$SRC" "$DEFAULT_SUBVOL" 2>/dev/null; then
+            "{{BINS_DIR}}/slot.sh" default "$SRC" \
+              || echo "note: no OS slot under $REPART_OS_PREFIX; skipping set-default"
           fi
 
           echo "Migration done. Root now lives on $DISK. Install grub next:"
@@ -257,25 +260,15 @@
           set -eu
           TARGET="${1:?usage: bdr-format.sh <disk-or-image>}"
           DEFS="${BDR_SIMPLE_DEFS:-{{ETC}}/btrfs-simple.d}"
-          TOKEN="${BDR_DATE_TOKEN:-@DATE@}"
-          DATE="${BDR_DATE:-$(date +%Y%m%d)}"
-          case "$DATE" in '' | *[!0-9]*) echo "Error: bad BDR_DATE '$DATE' (want YYYYMMDD)" >&2; exit 1 ;; esac
-
-          mkdir -p "{{DIR}}/var/tmp"
-          RUNDEFS="$(mktemp -d "{{DIR}}/var/tmp/bdr-defs.XXXXXX")"
+          # kit verbs: stamp.sh copies+stamps the defs into on-disk scratch
+          # (never /tmp), repart.sh runs the offline destructive format.
+          export REPART_SCRATCH="{{DIR}}/var/tmp"
+          export REPART_DATE="${BDR_DATE:-}"
+          RUNDEFS="$("{{BINS_DIR}}/stamp.sh" "$DEFS")"
           trap 'rm -rf "$RUNDEFS"' EXIT
-          for f in "$DEFS"/*.conf; do
-            sed "s|$TOKEN|$DATE|g" "$f" > "$RUNDEFS/$(basename "$f")"
-          done
-          echo "date stamp: $DATE  default subvol: $(awk -F= '/^DefaultSubvolume/{print $2; exit}' "$RUNDEFS"/50-root.conf)"
+          echo "default subvol: $(awk -F= '/^DefaultSubvolume/{print $2; exit}' "$RUNDEFS"/btrfs-simple.d/50-root.conf 2>/dev/null || echo '?')"
 
-          systemd-repart \
-            --definitions="$RUNDEFS" \
-            --offline=yes \
-            --empty=force \
-            --dry-run=no \
-            "$TARGET"
-          echo "formatted $TARGET from $DEFS (date stamp $DATE)"
+          "{{BINS_DIR}}/repart.sh" format "$TARGET" "$RUNDEFS/btrfs-simple.d"
 
       # De-identify a clone (e.g. after btrfs send|receive of an image).
       # Now a raw copy of the canonical files/mkosi/identity.sh (whose default

@@ -131,6 +131,17 @@
       - name: mkosi.images/disk/mkosi.extra/usr/local/bin/identity.sh
         content: "{{ lookup('file', '../../files/mkosi/identity.sh') }}"
         mode: "0755"
+      # repart kit burned into the image: a spawned instance can stamp its own
+      # next slot, flip defaults, and re-run repart without the playbook.
+      - name: mkosi.images/disk/mkosi.extra/usr/local/bin/stamp.sh
+        content: "{{ lookup('file', '../../files/repart/stamp.sh') }}"
+        mode: "0755"
+      - name: mkosi.images/disk/mkosi.extra/usr/local/bin/repart.sh
+        content: "{{ lookup('file', '../../files/repart/repart.sh') }}"
+        mode: "0755"
+      - name: mkosi.images/disk/mkosi.extra/usr/local/bin/slot.sh
+        content: "{{ lookup('file', '../../files/repart/slot.sh') }}"
+        mode: "0755"
       - name: mkosi.images/disk/mkosi.extra/usr/local/bin/networkd-static.sh
         content: "{{ lookup('file', '../../files/mkosi/networkd-static.sh') }}"
         mode: "0755"
@@ -191,6 +202,17 @@
           Packages={{ (lookup('pkgs', setname) | unique) | join(',') }}
           {% endfor %}
     BINS:
+      # repart kit (files/repart/) — shared mechanics (also embedded by
+      # pivot-bdr.srv.pb / repart-kit.opt.pb). image.sh calls stamp.sh.
+      - name: stamp.sh
+        src: ../repart/stamp.sh
+        raw: true
+      - name: repart.sh
+        src: ../repart/repart.sh
+        raw: true
+      - name: slot.sh
+        src: ../repart/slot.sh
+        raw: true
       - name: build-debian.sh
         exec: |
           # btrfs rootdir recommended!
@@ -236,17 +258,16 @@
           # mkosi --dependency. Examples: image.sh vps-seed ; image.sh oci
           #
           # @DATE@ tokens in the config tree (e.g. the dated home subvol) are
-          # stamped HERE at build time (env MKOSI_DATE=YYYYMMDD, else today)
-          # into a temp copy of the tree — etc/ stays tokenized, never stale.
-          # Absolute Output*/Cache* paths in mkosi.conf survive the copy.
-          DATE="${MKOSI_DATE:-$(date +%Y%m%d)}"
-          case "$DATE" in '' | *[!0-9]*) echo "Error: bad MKOSI_DATE '$DATE' (want YYYYMMDD)" >&2; exit 1 ;; esac
+          # stamped at BUILD time by the repart kit's stamp.sh (env
+          # MKOSI_DATE=YYYYMMDD, else today) into an on-disk scratch copy
+          # (DIR/var/tmp — never tmpfs); etc/ stays tokenized, never stale.
+          DATE="${MKOSI_DATE:-}"
+          case "$DATE" in *[!0-9]*) echo "Error: bad MKOSI_DATE '$DATE' (want YYYYMMDD)" >&2; exit 1 ;; esac
           mkdir -p "{{DIR}}/var/output" "{{DIR}}/var/cache" "{{DIR}}/var/package-cache" "{{DIR}}/var/tmp"
-          BUILD="$(mktemp -d "{{DIR}}/var/tmp/mkosi-cfg.XXXXXX")"
+          export REPART_DATE="$DATE" REPART_SCRATCH="{{DIR}}/var/tmp"
+          BUILD="$("{{BINS_DIR}}/stamp.sh" etc/mkosi.conf etc/mkosi.images)"
           trap 'rm -rf "$BUILD"' EXIT
-          cp -r etc/mkosi.conf etc/mkosi.images "$BUILD"/
-          grep -rl '@DATE@' "$BUILD" | xargs -r sed -i "s|@DATE@|$DATE|g"
-          echo "date stamp: $DATE"
+          echo "date stamp: ${MKOSI_DATE:-today}"
           if [ -n "${1:-}" ]; then set -- --dependency "$1"; fi
           mkosi -B -f -C "$BUILD" "$@"
       - name: identity.sh
