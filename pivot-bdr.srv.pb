@@ -129,7 +129,7 @@
           DISK="${1:-${BDR_DISK:-/dev/vda}}"
           REPART="${REPART_DIR:-/opt/repart-main}"
           TOKEN="${BDR_DATE_TOKEN:-@DATE@}"
-          DEFAULT_SUBVOL="${BDR_DEFAULT_SUBVOL:-/os/superbfowle/@DATE@}"
+          DEFAULT_SUBVOL="${BDR_DEFAULT_SUBVOL:-}"
           # stamp the run-time date into any tokened template
           if case "$DEFAULT_SUBVOL" in *"$TOKEN"*) true ;; *) false ;; esac; then
             DATE="${BDR_DATE:-$(date +%Y%m%d)}"
@@ -158,12 +158,18 @@
           "$REPART/bin/repart.sh" migrate "$DISK" --flavor bdr
 
           # Online BDR can't set the default subvolume; slot.sh does it:
-          # the (stamped) $DEFAULT_SUBVOL if present, else newest slot under
-          # the os prefix, else a soft skip.
-          if ! "$REPART/bin/slot.sh" default "$SRC" "$DEFAULT_SUBVOL" 2>/dev/null; then
-            "$REPART/bin/slot.sh" default "$SRC" \
-              || echo "note: no OS slot under $REPART_OS_PREFIX; skipping set-default"
-          fi
+          # the (stamped) $DEFAULT_SUBVOL if set+present, else newest slot
+          # under the os prefix, else a soft skip. Empty/absent DEFAULT_SUBVOL
+          # goes straight to newest — slot.sh owns the scheme.
+          set +e
+          "$REPART/bin/slot.sh" default "$SRC" "$DEFAULT_SUBVOL" >/dev/null 2>&1
+          rc=$?
+          set -e
+          case $rc in
+            0) : ;;
+            *) "$REPART/bin/slot.sh" default "$SRC" \
+                 || echo "note: no OS slot under $REPART_OS_PREFIX; skipping set-default" ;;
+          esac
 
           echo "Migration done. Root now lives on $DISK. Install grub next:"
           echo "  bdr-grub.sh $DISK"

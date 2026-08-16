@@ -87,11 +87,12 @@
           OutputDirectory={{DIR}}/var/output
       # mkosi.repart/ is per-image and NOT inherited by subimages, so it lives
       # INSIDE the disk subimage's dir. It REPLACES mkosi's built-in partition
-      # defs entirely (no merge), so we provide the full layout: ESP + a btrfs
-      # root whose OS rootfs lives in SUBVOLUME root/a-%a, e.g. root/a-x86-64
-      # (not top-level subvolid 5),
-      # with @ as the default subvol. Mirrors mkosi's defaults (00-esp/10-root)
-      # + systemd's TEST-58-REPART.sh subvol pattern. Add 05-bios.conf for BIOS.
+      # defs entirely (no merge), so we provide the full layout: ESP + swap +
+      # a btrfs root using the UNIVERSAL subvolume scheme from the repart kit
+      # (10-root.conf embeds files/repart/defs/format.d/50-root.conf verbatim
+      # and adds only mkosi's CopyFiles/MountPoint): OS slot
+      # /os/superbfowle/<arch>/<yyyymmdd> (default) + /home/superbfowle/<date>,
+      # NOT top-level subvolid 5. @ARCH@/@DATE@ stamped at build by image.sh.
       - name: mkosi.images/disk/mkosi.repart/00-esp.conf
         content: |
           [Partition]
@@ -112,20 +113,14 @@
           SizeMaxBytes={{SWAP_SIZE}}
       - name: mkosi.images/disk/mkosi.repart/10-root.conf
         content: |
-          [Partition]
-          Type=root
-          Format=btrfs
+          {{ lookup('file', '../../files/repart/defs/format.d/50-root.conf') }}
+          # mkosi additions to the kit's canonical format-flavor root (above):
+          # the built rootfs is copied into the DEFAULT subvolume (the dated OS
+          # slot), and MountPoint= tells mkosi where the root lives for
+          # nspawn/testing. Same subvolumes on ALL systems — do not fork the
+          # layout here; edit files/repart/defs/format.d/50-root.conf instead.
           CopyFiles=/
-          # OS rootfs lives in subvol root/a-%a (e.g. root/a-x86-64), NOT the
-          # top-level (subvolid 5). The root/ container + a-/b- naming leaves
-          # room for an A/B subvol pair (flip default subvol or boot subvol= to
-          # switch). %a is repart's build-arch specifier.
-          # /home/superbfowle/@DATE@ is a dated home slot stamped at BUILD time
-          # by bin/image.sh (env MKOSI_DATE) — repart has no date specifier.
-          MakeDirectories=/root/a-%a
-          Subvolumes=/root/a-%a /home/superbfowle/@DATE@
-          DefaultSubvolume=/root/a-%a
-          MountPoint=/:"subvol=root/a-%a,compress=zstd:3,noatime,lazytime"
+          MountPoint=/:"subvol=os/superbfowle/@ARCH@/@DATE@,compress=zstd:3,noatime,lazytime"
       # Copy useful scripts INTO the disk image via mkosi.extra/ (overlaid on
       # the rootfs). identity.sh (clone-identity), networkd-static.sh (networkd
       # config: render/gather/from-interfaces), and initrd-rewrite.sh (crack open
@@ -328,11 +323,13 @@
         initrd use `vps-seed.sh`.
       - `mkosi.images/oci/` — base Debian rootfs as an OCI container image.
       - `mkosi.images/disk/` — **sample** full disk image that consumes the
-        compfuzor `PKGSETS` list.         `Bootable=yes`, and its `mkosi.repart/` makes
-        the root a **btrfs with the OS in subvol `root/a-%a`** (e.g.
-        `root/a-x86-64`, not top-level subvolid 5), set as the default subvol so
-        a bare mount resolves to it. The `root/` + `a-`/`b-` naming leaves room
-        for an A/B subvol pair. Not in
+        compfuzor `PKGSETS` list. `Bootable=yes`, and its `mkosi.repart/` makes
+        the root a **btrfs on the universal kit scheme**: OS in subvol
+        `/os/superbfowle/<arch>/<yyyymmdd>` (the default subvol; not
+        top-level subvolid 5) plus a dated `/home/superbfowle/<yyyymmdd>`
+        home slot. 10-root.conf embeds files/repart/defs/format.d/50-root.conf
+        verbatim and adds only CopyFiles/MountPoint — the subvolume layout is
+        declared in ONE place. Not in
         default `Dependencies=` (heavy) — build with `image.sh disk`. See
         "wiring PKGSETS into a subimage" below.
 
