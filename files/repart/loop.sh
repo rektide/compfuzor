@@ -26,7 +26,10 @@
 #                                   #   if all existing are used. Default
 #                                   #   PARTNO = root partition (last); bare
 #                                   #   btrfs mount = DefaultSubvolume = the
-#                                   #   dated OS slot; --subvol picks another.
+#                                   #   dated OS slot; --subvol picks another
+#                                   #   — compose facts: --subvol "$(slot.sh os
+#                                   #   20250101)". A bare btrfs mount also
+#                                   #   PRINTS the default subvol it landed on.
 #                                   #   Prints MNT.
 #   loop.sh umount MNT|IMG          # unmount submounts deepest-first, then
 #                                   #   detach loops that became mount-free
@@ -141,7 +144,7 @@ do_mount() {  # IMG [MNT|auto] [PARTNO] [--subvol S] [--ro]
     mnt="$(pick_mnt)"
     note "auto mountpoint: $mnt (first empty unmounted $LOOP_MNT_BASE/loop*)"
   fi
-  local loop dev opts
+  local loop dev opts fstype
   loop="$(attach "$img")"
   if [ -n "$part" ]; then
     dev="$(lsblk -nrpo NAME,TYPE "$loop" | awk -v p="p$part\$" '$2=="part" && $1 ~ p {print $1; exit}')"
@@ -149,16 +152,23 @@ do_mount() {  # IMG [MNT|auto] [PARTNO] [--subvol S] [--ro]
   else
     dev="$(rootdev_of "$loop")"
   fi
+  fstype="$(lsblk -nrpo FSTYPE "$dev" | head -1)"
   opts="defaults"
-  if [ "$(lsblk -nrpo FSTYPE "$dev" | head -1)" = btrfs ]; then
+  if [ "$fstype" = btrfs ]; then
     [ -n "$subvol" ] && opts="subvol=$subvol$ro"
   else
     [ -n "$subvol" ] && note "note: $dev is not btrfs; --subvol ignored"
   fi
   [ -n "$ro" ] && [ "$opts" = defaults ] && opts="defaults$ro"
   mkdir -p "$mnt"
-  mount -t "$(lsblk -nrpo FSTYPE "$dev" | head -1)" -o "$opts" "$dev" "$mnt"
+  mount -t "$fstype" -o "$opts" "$dev" "$mnt"
   note "mounted $dev at $mnt (opts: $opts)"
+  # surface the fact a bare btrfs mount relies on: the default-subvol pointer
+  # (slot.sh current is the queryable form; slot.sh os computes today's slot)
+  if [ "$fstype" = btrfs ] && [ -z "$subvol" ]; then
+    p="$(btrfs subvolume get-default "$mnt" 2>/dev/null | sed -n 's/.* path //p')"
+    if [ -n "$p" ]; then note "default subvol: /$p"; else note "default subvol: / (top level)"; fi
+  fi
   printf '%s\n' "$mnt"
 }
 

@@ -9,12 +9,25 @@
 # Part of the repart kit (files/repart/) — see stamp.sh for the sharing story.
 #
 # USAGE
-#   slot.sh paths [date]           # print the scheme's paths for a date
+#   FACTS (pure scheme calculations, no fs needed; single-line stdout, $()-safe)
+#   slot.sh os [date]              # OS slot path for date (default today)
+#   slot.sh home [date]            # home slot path for date
+#   slot.sh arch                   # resolved arch (REPART_ARCH or uname -m)
+#   slot.sh date                   # resolved date stamp (REPART_DATE or today)
+#   slot.sh scheme                 # all facts as key=value lines
+#   slot.sh current <mnt>          # live fs: path of the CURRENT default subvol
+#
+#   LIFECYCLE
+#   slot.sh paths [date]           # human pair view: os=... home=...
 #   slot.sh list <mnt>             # list dated slots (os + home)
 #   slot.sh default <mnt> [path]   # set default subvol: exact path, or (no
 #                                  #   arg) newest slot under the os prefix
 #   slot.sh flip <mnt> <date|path> # switch default to another dated slot
 #   slot.sh verify <mnt>           # show default subvol + slot inventory
+#
+# Compose with loop.sh for explicit slot control, e.g.:
+#   loop.sh mount IMG --subvol "$(slot.sh os 20250101)"   # mount an old slot
+# (a BARE btrfs mount lands on the default subvol = current OS slot)
 #
 #   <path> args accept leading slash or not; <date> is YYYYMMDD.
 #
@@ -69,6 +82,26 @@ set_default() {  # $1=mnt $2=slot-path(absolute)
 
 CMD="${1:-}"; shift || true
 case "$CMD" in
+  os|home)
+    D="${1:-$DATE_DEFAULT}"
+    case "$D" in [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;; *) die "bad date '$D' (want YYYYMMDD)" ;; esac
+    if [ "$CMD" = os ]; then slot_of_date "$D"; else printf '%s/%s\n' "$HOME_PREFIX" "$D"; fi
+    ;;
+  arch)   printf '%s\n' "$ARCH" ;;
+  date)   printf '%s\n' "$DATE_DEFAULT" ;;
+  scheme)
+    printf 'os_prefix=%s\n'   "$OS_PREFIX"
+    printf 'home_prefix=%s\n' "$HOME_PREFIX"
+    printf 'arch=%s\n'        "$ARCH"
+    printf 'date=%s\n'        "$DATE_DEFAULT"
+    printf 'os=%s\n'         "$(slot_of_date "$DATE_DEFAULT")"
+    printf 'home=%s/%s\n'     "$HOME_PREFIX" "$DATE_DEFAULT"
+    ;;
+  current)
+    [ $# -ge 1 ] || usage; M="$1"; need_mnt "$M"
+    p="$(btrfs subvolume get-default "$M" 2>/dev/null | sed -n 's/.* path //p')"
+    if [ -n "$p" ]; then printf '/%s\n' "$p"; else printf '/\n'; fi   # / = top level
+    ;;
   paths)
     D="${1:-$DATE_DEFAULT}"
     case "$D" in [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;; *) die "bad date '$D' (want YYYYMMDD)" ;; esac
@@ -104,5 +137,5 @@ case "$CMD" in
     echo "slots:"; { slots_under "$M" "$OS_PREFIX"; slots_under "$M" "$HOME_PREFIX"; } | sed 's/^/  /'
     ;;
   -h|--help) usage 0 ;;
-  *) die "unknown command: ${CMD:-<none>} (paths|list|default|flip|verify)" ;;
+  *) die "unknown command: ${CMD:-<none>} (os|home|arch|date|scheme|current|paths|list|default|flip|verify)" ;;
 esac
