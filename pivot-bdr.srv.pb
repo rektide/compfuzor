@@ -10,7 +10,7 @@
 #   2. kexec into it so the running OS root is a btrfs on a VOLATILE block
 #      device (RAM: zram/brd, or the kexec'd installer's in-memory device).
 #   3. systemd-repart writes a fresh GPT onto the real disk and uses
-#      BlockDeviceReplace=/ to LIVE-MIGRATE the running btrfs root onto it via
+#      BlockDeviceReplace=<source mount> to live-migrate the btrfs root via
 #      the kernel BTRFS_IOC_DEV_REPLACE ioctl (== `btrfs replace`): every block
 #      is copied and the device-id is atomically swapped while mounted, then
 #      grown to fill. No reboot. Reverts to the source device on failure.
@@ -24,10 +24,8 @@
 #   - DefaultSubvolume= needs --offline=yes (btrfs-progs >=6.12), i.e. the
 #     OPPOSITE of BDR -> in the online flow set the default subvol by hand
 #
-# Two repart profiles ship here because offline-format and online-BDR cannot
-# share a root definition:
-#   btrfs-simple.d/  offline, from-scratch format (Format=btrfs + subvols)
-#   btrfs-bdr.d/     online migrate (root uses BlockDeviceReplace=/ )
+# Canonical `format.d` and `bdr.d` overlays cannot share a root definition:
+# format is offline and creates btrfs; BDR is online and renders its source.
 #
 # No bios_grub type alias exists; we use the raw BIOS Boot Partition GUID
 # 21686148-6449-6E6F-744E-656564454649 for grub's 1MiB embed area.
@@ -44,7 +42,7 @@
     # and flips the default (rollback = set-default back to the previous date).
     # The layout itself is declared in ONE place: the canonical repart profiles
     # under files/repart/defs/ (tokenized @ARCH@/@DATE@/@SWAP@), staged into
-    # {{ETC}} below by lookup and stamped at run time by stamp.sh.
+    # repart.opt.pb and rendered at run time by `repart profile render`.
     BDR_OS_PREFIX: "/os/superbfowle"
     BDR_HOME_PREFIX: "/home/superbfowle"
     BDR_ARCH: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] | default(ansible_architecture) }}"
@@ -78,8 +76,7 @@
       REPART_DIR: /opt/repart-main
 
     BINS:
-      # tombstones: kit bins from the embed era — now owned by $REPART_DIR
-      # (repart.opt.pb). Declared absent so older renders get cleaned up.
+      # Old embedded public bins are tombstoned; repart.opt.pb owns one CLI.
       - name: stamp.sh
         state: absent
       - name: repart.sh
@@ -98,7 +95,7 @@
           # and that repart is new enough.
           SRC="${BDR_SOURCE_MOUNT:-/}"
           REPART="${REPART_DIR:-/opt/repart-main}"
-          [ -x "$REPART/bin/repart.sh" ] || {
+          [ -x "$REPART/bin/repart" ] || {
             echo "Error: repart toolkit missing at $REPART (run repart.opt.pb)" >&2
             exit 1
           }
@@ -114,8 +111,9 @@
             exit 1
           fi
 
-          "$REPART/bin/repart.sh" check
-          echo "preflight OK: $SRC is single-device btrfs, repart present"
+          ver="$(systemd-repart --version | awk 'NR==1{print $2}')"
+          [ "$ver" -ge 261 ] || { echo "Error: systemd-repart $ver < 261" >&2; exit 1; }
+          echo "preflight OK: $SRC is single-device btrfs, repart $ver present" >&2
           echo "source device: $(btrfs filesystem show "$SRC" | awk '/devid/{print $NF}')"
 
       # The migration itself. DESTROYS everything on $BDR_DISK.
@@ -140,34 +138,27 @@
 
           "{{BINS_DIR}}/bdr-preflight.sh"
 
-          # repart.sh owns defs+flavor composition, stamping, and flags.
-          # bdr flavor = universal layout with BlockDeviceReplace=/ root.
           export REPART_SCRATCH="{{DIR}}/var/tmp"
-          export REPART_ARCH="${BDR_ARCH:-}"
-          export REPART_SWAP="${BDR_SWAP_SIZE:-4G}"
           export REPART_OS_PREFIX="${BDR_OS_PREFIX:-/os/superbfowle}"
-
-          echo "=== DRY RUN first (no changes) ==="
-          "$REPART/bin/repart.sh" dry-run "$DISK" --flavor bdr
-
-          echo ""
-          echo "!!! About to WIPE $DISK and migrate $SRC onto it. !!!"
-          echo "Set BDR_CONFIRM=yes to proceed."
-          [ "${BDR_CONFIRM:-no}" = "yes" ] || { echo "aborted (no confirm)"; exit 1; }
-          export REPART_CONFIRM=yes
-          "$REPART/bin/repart.sh" migrate "$DISK" --flavor bdr
+          args=(disk plan migrate "$DISK" --source "$SRC" --swap "${BDR_SWAP_SIZE:-4G}")
+          [ -z "${BDR_ARCH:-}" ] || args+=(--arch "$BDR_ARCH")
+          [ -z "${BDR_DATE:-}" ] || args+=(--date "$BDR_DATE")
+          PLAN="$("$REPART/bin/repart" "${args[@]}")"
+          echo "plan retained at $PLAN" >&2
+          [ "${BDR_CONFIRM:-no}" = "yes" ] || { echo "Set BDR_CONFIRM=yes to apply $PLAN" >&2; exit 1; }
+          "$REPART/bin/repart" disk apply "$PLAN" --confirm "$DISK"
 
           # Online BDR can't set the default subvolume; slot.sh does it:
           # the (stamped) $DEFAULT_SUBVOL if set+present, else newest slot
           # under the os prefix, else a soft skip. Empty/absent DEFAULT_SUBVOL
           # goes straight to newest — slot.sh owns the scheme.
           set +e
-          "$REPART/bin/slot.sh" default "$SRC" "$DEFAULT_SUBVOL" >/dev/null 2>&1
+          "$REPART/bin/repart" slot set "$SRC" "$DEFAULT_SUBVOL" >/dev/null 2>&1
           rc=$?
           set -e
           case $rc in
             0) : ;;
-            *) "$REPART/bin/slot.sh" default "$SRC" \
+            *) "$REPART/bin/repart" slot set "$SRC" latest \
                  || echo "note: no OS slot under $REPART_OS_PREFIX; skipping set-default" ;;
           esac
 
@@ -188,7 +179,7 @@
           update-grub
           echo "grub installed to $DISK (BIOS/GPT)"
 
-      # Offline path: format a fresh disk OR image file from btrfs-simple.d.
+      # Offline path: format a fresh disk OR image file from format.d.
       - name: bdr-format.sh
         content: |
           # Lay down grub-bios + btrfs(@/@home) + swap on an empty target.
@@ -199,13 +190,13 @@
           set -eu
           TARGET="${1:?usage: bdr-format.sh <disk-or-image>}"
           REPART="${REPART_DIR:-/opt/repart-main}"
-          # repart.sh composes the universal layout + format flavor (fresh
-          # btrfs, dated slots) and stamps @DATE@/@ARCH@/@SWAP@ at run time.
           export REPART_SCRATCH="{{DIR}}/var/tmp"
-          export REPART_DATE="${BDR_DATE:-}"
-          export REPART_ARCH="${BDR_ARCH:-}"
-          export REPART_SWAP="${BDR_SWAP_SIZE:-4G}"
-          "$REPART/bin/repart.sh" format "$TARGET" --flavor format
+          args=(disk plan format "$TARGET" --swap "${BDR_SWAP_SIZE:-4G}")
+          [ -z "${BDR_ARCH:-}" ] || args+=(--arch "$BDR_ARCH")
+          [ -z "${BDR_DATE:-}" ] || args+=(--date "$BDR_DATE")
+          PLAN="$("$REPART/bin/repart" "${args[@]}")"
+          echo "plan retained at $PLAN" >&2
+          "$REPART/bin/repart" disk apply "$PLAN" --confirm "$TARGET"
 
       # De-identify a clone (e.g. after btrfs send|receive of an image).
       # Now a raw copy of the canonical files/mkosi/identity.sh (whose default
@@ -226,62 +217,31 @@
 
       ## quick start
 
-          # once: shared toolkit + this subsystem
           ansible-playbook -i 'localhost,' -c local repart.opt.pb
           ansible-playbook -i 'localhost,' -c local pivot-bdr.srv.pb
           . /srv/pivot-bdr-main/env.export
 
-          # rehearse on an image file (zero risk) — loop.sh picks a free
-          # /mnt/loop* scratch mountpoint (never /mnt itself)
           truncate -s 16G /var/tmp/rehearsal.img
           /srv/pivot-bdr-main/bin/bdr-format.sh /var/tmp/rehearsal.img
-          m=$(sudo /opt/repart-main/bin/loop.sh mount /var/tmp/rehearsal.img)
-          sudo /opt/repart-main/bin/slot.sh verify "$m"
-          sudo /opt/repart-main/bin/loop.sh umount "$m"
+          sudo /opt/repart-main/bin/repart image with /var/tmp/rehearsal.img -- \
+            /opt/repart-main/bin/repart slot show "$REPART_MOUNT"
 
-          # real target (WIPES IT)
-          sudo /srv/pivot-bdr-main/bin/bdr-format.sh /dev/sda
-          sudo mount /dev/sda4 /mnt               # root = last partition
-          /opt/repart-main/bin/slot.sh verify /mnt
+          # Live migration plans first; confirmation applies that exact plan.
+          BDR_CONFIRM=yes sudo -E /srv/pivot-bdr-main/bin/bdr-migrate.sh /dev/sda
 
-      ## detailed guide
-
-      ### the flow, stage by stage
-
-      A format run is THREE independent, re-runnable steps — know where you
-      are and nothing below is scary:
-
-          [1] repart.sh dry-run /dev/sda   # preview the wipe plan (no writes)
-          [2] repart.sh format /dev/sda    # GPT + esp + swap + btrfs w/ slots
-          [3] mount + slot.sh verify       # see the slots, set/flip defaults
-
-      `bdr-format.sh` just runs [2] with pivot env (swap size etc.); each
-      stage prints its own prefix (`stamp:` / `repart:` / repart's log). A
-      failed stage leaves a clean re-runnable state: format wipes the table
-      again, slot.sh flips are idempotent.
-
-      ### two paths
-
-      - **bdr-format.sh** — offline, from-scratch: the universal layout (1M
-        bios_grub, 384M ESP, fixed @SWAP@ swap, root LAST so later disk growth
-        lands on it) + format flavor (btrfs with
-        `/os/superbfowle/<arch>/<yyyymmdd>` default slot +
-        `/home/superbfowle/<yyyymmdd>` home slot). For blank disks, images,
-        rescue-env formatting. Needs nothing running.
-      - **bdr-migrate.sh** — online BDR: the RUNNING root (a single-device
-        btrfs on a VOLATILE device — zram/brd/kexec'd initrd root) is copied
-        block-by-block onto the target via `btrfs replace`; the device-id is
-        swapped atomically while mounted, then the fs is grown. To GET such a
-        root on a single-disk VPS, kexec a rescue initrd first (see mkosi-git
-        `vps-seed` / `debinst-kexec`).
+      `bdr-format.sh` creates and immediately applies a persisted offline format
+      plan. `bdr-migrate.sh` validates the running source, persists an online BDR
+      plan with `BlockDeviceReplace=` rendered to that source mount, and applies
+      it only with `BDR_CONFIRM=yes`. Both print plan locations to stderr; plans
+      remain under `REPART_SCRATCH` for audit.
 
       ### bins (`bin/`)
 
       | bin | what |
       |---|---|
       | `bdr-preflight.sh` | source is btrfs? single-device? repart >= 261? toolkit present? |
-      | `bdr-format.sh <disk\|image>` | offline format (toolkit compose+stamp+run) |
-      | `bdr-migrate.sh [disk]` | dry-run → `BDR_CONFIRM=yes` → online migrate → set default slot |
+      | `bdr-format.sh <disk\|image>` | plan + apply canonical offline format |
+      | `bdr-migrate.sh [disk]` | plan + confirmed online migration + set default slot |
       | `bdr-grub.sh [disk]` | `grub-install` BIOS/GPT into the bios_grub partition |
       | `clone-reset.sh` | `identity.sh --first-boot` (de-identify a clone) |
 
@@ -292,19 +252,16 @@
       `BDR_OS_PREFIX`/`BDR_HOME_PREFIX`; `BDR_SWAP_SIZE` (default 4G);
       `REPART_DIR` (default /opt/repart-main).
 
-      ### slots & rollback
-
-      Every system carries the same subvolumes — the layout is declared in ONE
-      place (repo `files/repart/defs/format.d/50-root.conf`). New install =
-      new dated slot; rollback = `slot.sh flip <yyyymmdd>`; inventory =
-      `slot.sh list|verify`. Slots are never auto-deleted.
+      Slot inspection is `repart slot show MOUNT`; switching is
+      `repart slot set MOUNT DATE|PATH|latest`. Data is stdout and mutation
+      narration is stderr.
 
       ### mechanism constraints (repart.c)
 
       btrfs-only, single-device-only, ONLINE-only; `BlockDeviceReplace=` is
       incompatible with `Format=`/`CopyBlocks=`/`CopyFiles=` (the fs move IS
       the population); `DefaultSubvolume=` needs `--offline` — the opposite of
-      BDR — so bdr-migrate sets the default subvolume via slot.sh afterwards.
+      BDR — so bdr-migrate sets the default subvolume through `repart slot set`.
 
   tasks:
     - import_tasks: tasks/compfuzor.includes

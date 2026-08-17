@@ -1,0 +1,18 @@
+#!/bin/bash
+set -euo pipefail
+
+die() { printf 'repart: error: %s\n' "$*" >&2; exit 2; }
+
+namespace="${1:-}"
+[ -n "$namespace" ] || die "usage: repart {profile|disk|image|slot} ..."
+shift
+case "$namespace" in
+  profile|disk|image|slot) ;;
+  *) die "unknown namespace: $namespace" ;;
+esac
+
+self="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+libexec="${REPART_LIBEXEC:-$self/../libexec/repart}"
+helper="$libexec/$namespace.sh"
+[ -x "$helper" ] || die "private helper not installed: $helper"
+exec "$helper" "$@"

@@ -53,9 +53,11 @@
       - mkosi.images/disk
       - mkosi.images/disk/mkosi.repart
       - mkosi.images/disk/mkosi.extra/usr/local/bin
-      - mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/universal.d
-      - mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/format.d
-      - mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/bdr.d
+      - mkosi.images/disk/mkosi.extra/opt/repart-main/bin
+      - mkosi.images/disk/mkosi.extra/opt/repart-main/libexec/repart
+      - mkosi.images/disk/mkosi.extra/opt/repart-main/etc/defs/universal.d
+      - mkosi.images/disk/mkosi.extra/opt/repart-main/etc/defs/format.d
+      - mkosi.images/disk/mkosi.extra/opt/repart-main/etc/defs/bdr.d
     ETC_FILES:
       - name: pkgs.txt
         content: "{{ lookup('template', '../../files/_pkgs') }}"
@@ -92,7 +94,7 @@
       # 20-swap 50-root = the universal layout) with only mkosi's build-time
       # population appended (CopyFiles/MountPoint). Do not fork the partition
       # or subvolume layout here — edit files/repart/defs/ instead.
-      # @ARCH@/@DATE@/@SWAP@ are stamped at build by image.sh (stamp.sh).
+      # @ARCH@/@DATE@/@SWAP@ are rendered at build by `repart profile render`.
       - name: mkosi.images/disk/mkosi.repart/00-grub.conf
         content: "{{ lookup('file', '../../files/repart/defs/universal.d/00-grub.conf') }}"
       - name: mkosi.images/disk/mkosi.repart/10-esp.conf
@@ -121,36 +123,33 @@
       - name: mkosi.images/disk/mkosi.extra/usr/local/bin/identity.sh
         content: "{{ lookup('file', '../../files/mkosi/identity.sh') }}"
         mode: "0755"
-      # repart kit burned into the image: a spawned instance can stamp its own
-      # next slot, flip defaults, and re-run repart without the playbook.
-      - name: mkosi.images/disk/mkosi.extra/usr/local/bin/stamp.sh
-        content: "{{ lookup('file', '../../files/repart/stamp.sh') }}"
+      # Burn the same one-public-bin layout used by repart.opt.pb into images.
+      - name: mkosi.images/disk/mkosi.extra/opt/repart-main/bin/repart
+        content: "{{ lookup('file', '../../files/repart/repart') }}"
         mode: "0755"
-      - name: mkosi.images/disk/mkosi.extra/usr/local/bin/compose.sh
-        content: "{{ lookup('file', '../../files/repart/compose.sh') }}"
+      - name: mkosi.images/disk/mkosi.extra/opt/repart-main/libexec/repart/profile.sh
+        content: "{{ lookup('file', '../../files/repart/libexec/profile.sh') }}"
         mode: "0755"
-      - name: mkosi.images/disk/mkosi.extra/usr/local/bin/repart.sh
-        content: "{{ lookup('file', '../../files/repart/repart.sh') }}"
+      - name: mkosi.images/disk/mkosi.extra/opt/repart-main/libexec/repart/disk.sh
+        content: "{{ lookup('file', '../../files/repart/libexec/disk.sh') }}"
         mode: "0755"
-      - name: mkosi.images/disk/mkosi.extra/usr/local/bin/loop.sh
-        content: "{{ lookup('file', '../../files/repart/loop.sh') }}"
+      - name: mkosi.images/disk/mkosi.extra/opt/repart-main/libexec/repart/image.sh
+        content: "{{ lookup('file', '../../files/repart/libexec/image.sh') }}"
         mode: "0755"
-      - name: mkosi.images/disk/mkosi.extra/usr/local/bin/slot.sh
-        content: "{{ lookup('file', '../../files/repart/slot.sh') }}"
+      - name: mkosi.images/disk/mkosi.extra/opt/repart-main/libexec/repart/slot.sh
+        content: "{{ lookup('file', '../../files/repart/libexec/slot.sh') }}"
         mode: "0755"
-      # ... and the canonical defs, so a spawned instance can compose/stamp
-      # its own repart runs (repart.sh's burned-copy lookup finds these).
-      - name: mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/universal.d/00-grub.conf
+      - name: mkosi.images/disk/mkosi.extra/opt/repart-main/etc/defs/universal.d/00-grub.conf
         content: "{{ lookup('file', '../../files/repart/defs/universal.d/00-grub.conf') }}"
-      - name: mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/universal.d/10-esp.conf
+      - name: mkosi.images/disk/mkosi.extra/opt/repart-main/etc/defs/universal.d/10-esp.conf
         content: "{{ lookup('file', '../../files/repart/defs/universal.d/10-esp.conf') }}"
-      - name: mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/universal.d/20-swap.conf
+      - name: mkosi.images/disk/mkosi.extra/opt/repart-main/etc/defs/universal.d/20-swap.conf
         content: "{{ lookup('file', '../../files/repart/defs/universal.d/20-swap.conf') }}"
-      - name: mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/universal.d/50-root.conf
+      - name: mkosi.images/disk/mkosi.extra/opt/repart-main/etc/defs/universal.d/50-root.conf
         content: "{{ lookup('file', '../../files/repart/defs/universal.d/50-root.conf') }}"
-      - name: mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/format.d/50-root.conf
+      - name: mkosi.images/disk/mkosi.extra/opt/repart-main/etc/defs/format.d/50-root.conf
         content: "{{ lookup('file', '../../files/repart/defs/format.d/50-root.conf') }}"
-      - name: mkosi.images/disk/mkosi.extra/usr/local/share/repart-defs/bdr.d/50-root.conf
+      - name: mkosi.images/disk/mkosi.extra/opt/repart-main/etc/defs/bdr.d/50-root.conf
         content: "{{ lookup('file', '../../files/repart/defs/bdr.d/50-root.conf') }}"
       - name: mkosi.images/disk/mkosi.extra/usr/local/bin/networkd-static.sh
         content: "{{ lookup('file', '../../files/mkosi/networkd-static.sh') }}"
@@ -212,17 +211,6 @@
           Packages={{ (lookup('pkgs', setname) | unique) | join(',') }}
           {% endfor %}
     BINS:
-      # repart kit (files/repart/) — shared mechanics (also embedded by
-      # pivot-bdr.srv.pb / repart-kit.opt.pb). image.sh calls stamp.sh.
-      - name: stamp.sh
-        src: ../repart/stamp.sh
-        raw: true
-      - name: repart.sh
-        src: ../repart/repart.sh
-        raw: true
-      - name: slot.sh
-        src: ../repart/slot.sh
-        raw: true
       - name: build-debian.sh
         exec: |
           # btrfs rootdir recommended!
@@ -268,22 +256,21 @@
           # mkosi --dependency. Examples: image.sh vps-seed ; image.sh oci
           #
           # @DATE@ tokens in the config tree (e.g. the dated home subvol) are
-          # stamped at BUILD time by the repart kit's stamp.sh (env
+          # rendered at BUILD time by `repart profile render` (env
           # MKOSI_DATE=YYYYMMDD, else today) into an on-disk scratch copy
           # (DIR/var/tmp — never tmpfs); etc/ stays tokenized, never stale.
           DATE="${MKOSI_DATE:-}"
           case "$DATE" in *[!0-9]*) echo "Error: bad MKOSI_DATE '$DATE' (want YYYYMMDD)" >&2; exit 1 ;; esac
           mkdir -p "{{DIR}}/var/output" "{{DIR}}/var/cache" "{{DIR}}/var/package-cache" "{{DIR}}/var/tmp"
-          # prefer the shared repart instance; fall back to this checkout's
-          # embedded kit so mkosi-git also works standalone
+          # Render the whole mkosi tree through the public repart seam. This
+          # resolves DATE, ARCH, and SWAP before mkosi sees any configuration.
           REPART="${REPART_DIR:-/opt/repart-main}"
-          if [ -x "$REPART/bin/stamp.sh" ]; then STAMP="$REPART/bin/stamp.sh"
-          else STAMP="{{BINS_DIR}}/stamp.sh"; fi
-          export REPART_DATE="$DATE" REPART_SCRATCH="{{DIR}}/var/tmp"
-          export REPART_SWAP="{{SWAP_SIZE}}"
-          BUILD="$("$STAMP" etc/mkosi.conf etc/mkosi.images)"
+          [ -x "$REPART/bin/repart" ] || { echo "Error: install repart.opt.pb first" >&2; exit 1; }
+          args=(profile render --base etc --swap "{{SWAP_SIZE}}")
+          [ -z "$DATE" ] || args+=(--date "$DATE")
+          BUILD="$(REPART_SCRATCH="{{DIR}}/var/tmp" "$REPART/bin/repart" "${args[@]}")"
           trap 'rm -rf "$BUILD"' EXIT
-          echo "date stamp: ${MKOSI_DATE:-today}"
+          echo "date stamp: ${MKOSI_DATE:-today}" >&2
           if [ -n "${1:-}" ]; then set -- --dependency "$1"; fi
           mkosi -B -f -C "$BUILD" "$@"
       - name: identity.sh
