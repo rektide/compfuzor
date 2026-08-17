@@ -126,6 +126,22 @@ compose() {
   FINAL="$STAMPED_DIR/$(basename "$COMPOSED_DIR")"
 }
 
+# Print a compact plan header BEFORE handing off, so repart's verbose output
+# has a frame: what's being done, per-partition sizes from the COMPOSED defs,
+# the default subvol, and that repart's own log follows.
+banner() {  # $1=mode $2=target
+  local f type size
+  printf '== repart %s: %s\n' "$1" "$2"
+  for f in "$FINAL"/*.conf; do
+    type="$(awk -F= '/^Type=/{print $2; exit}' "$f")"
+    case "$type" in 21686148-*) type=bios-grub ;; esac
+    size="$(awk -F= '/^SizeMinBytes=/{print $2; exit}' "$f")"
+    printf '   %-14s %-28s min %s\n' "$(basename "$f" .conf)" "$type" "${size:--}"
+  done
+  awk -F= '/^DefaultSubvolume=/{printf "   %-14s %s\n", "default-subvol", $2; exit}' "$FINAL/50-root.conf" 2>/dev/null
+  printf '   (systemd-repart output follows; scratch %s auto-removed)\n' "$(basename "$STAMPED_DIR")"
+}
+
 MODE="${1:-}"; shift || true
 TARGET=""; DEFS_ARG=""; FLAVOR_ARG=""; EXTRA=()
 case "$MODE" in
@@ -161,6 +177,7 @@ fi
 trap 'rm -rf "$COMPOSED_DIR" "$STAMPED_DIR"' EXIT
 
 do_check
+banner "$MODE" "$TARGET"
 case "$MODE" in
   dry-run)
     # --empty=force MIRRORS format/migrate so the preview shows the real WIPE

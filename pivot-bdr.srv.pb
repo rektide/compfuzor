@@ -246,6 +246,20 @@
 
       ## detailed guide
 
+      ### the flow, stage by stage
+
+      A format run is THREE independent, re-runnable steps — know where you
+      are and nothing below is scary:
+
+          [1] repart.sh dry-run /dev/sda   # preview the wipe plan (no writes)
+          [2] repart.sh format /dev/sda    # GPT + esp + swap + btrfs w/ slots
+          [3] mount + slot.sh verify       # see the slots, set/flip defaults
+
+      `bdr-format.sh` just runs [2] with pivot env (swap size etc.); each
+      stage prints its own prefix (`stamp:` / `repart:` / repart's log). A
+      failed stage leaves a clean re-runnable state: format wipes the table
+      again, slot.sh flips are idempotent.
+
       ### two paths
 
       - **bdr-format.sh** — offline, from-scratch: the universal layout (1M

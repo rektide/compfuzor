@@ -65,6 +65,24 @@
 
       ## detailed guide
 
+      ### the flow, stage by stage
+
+      One invocation = three visible stages, each printed with its own prefix:
+
+      1. **`stamp:`** — compose universal.d + flavor overlay into on-disk
+         scratch (`/var/tmp/stamp.XXXX`) and stamp `@DATE@`/`@ARCH@`/`@SWAP@`
+         at run time. Scratch is auto-removed.
+      2. **`repart:`** — version gate + a plan header (per-partition sizes,
+         default subvol) framing what follows.
+      3. **systemd-repart** — its own log: the plan table, then (for real
+         runs) wipe → esp vfat → swap → root btrfs (+ subvolumes via
+         `MakeDirectories=`+`Subvolumes=` pairing) → grow.
+
+      Nothing else runs. `dry-run` previews exactly the destructive modes'
+      wipe plan (zero writes, checksum-verified); `format`/`migrate` are
+      independently re-runnable (a failed format leaves a wipe-able disk,
+      not a mystery).
+
       | path | what |
       |---|---|
       | `bin/stamp.sh <src>...` | copy to on-disk scratch (never tmpfs) + stamp `@DATE@`/`@ARCH@` (+ `REPART_SED`, e.g. `@SWAP@`); echoes scratch dir |
