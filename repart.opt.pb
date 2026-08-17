@@ -20,8 +20,14 @@
       - name: stamp.sh
         src: ../repart/stamp.sh
         raw: true
+      - name: compose.sh
+        src: ../repart/compose.sh
+        raw: true
       - name: repart.sh
         src: ../repart/repart.sh
+        raw: true
+      - name: loop.sh
+        src: ../repart/loop.sh
         raw: true
       - name: slot.sh
         src: ../repart/slot.sh
@@ -67,26 +73,28 @@
 
       ### the flow, stage by stage
 
-      One invocation = three visible stages, each printed with its own prefix:
+      Five small tools, each independently runnable — step through by hand:
 
-      1. **`stamp:`** — compose universal.d + flavor overlay into on-disk
-         scratch (`/var/tmp/stamp.XXXX`) and stamp `@DATE@`/`@ARCH@`/`@SWAP@`
-         at run time. Scratch is auto-removed.
-      2. **`repart:`** — version gate + a plan header (per-partition sizes,
-         default subvol) framing what follows.
-      3. **systemd-repart** — its own log: the plan table, then (for real
-         runs) wipe → esp vfat → swap → root btrfs (+ subvolumes via
-         `MakeDirectories=`+`Subvolumes=` pairing) → grow.
+          compose.sh                      # defs+flavor+stamp -> scratch defs dir
+          repart.sh dry-run|format|migrate # run systemd-repart (calls compose.sh)
+          loop.sh mount IMG /mnt           # losetup+mount the result (images)
+          slot.sh verify /mnt              # inspect dated subvolume slots
+          loop.sh umount /mnt              # unmount + detach
 
-      Nothing else runs. `dry-run` previews exactly the destructive modes'
-      wipe plan (zero writes, checksum-verified); `format`/`migrate` are
-      independently re-runnable (a failed format leaves a wipe-able disk,
-      not a mystery).
+      One `repart.sh` invocation = three visible stages, each with its own
+      prefix: **`compose:`** (defs+flavor+tokens into on-disk scratch,
+      auto-removed) → **`repart:`** (version gate + plan banner) →
+      **systemd-repart's own log** (plan table, then wipe → esp → swap →
+      root btrfs + subvolumes → grow). `dry-run` previews exactly the
+      destructive modes' wipe plan (zero writes); `format`/`migrate` are
+      independently re-runnable.
 
       | path | what |
       |---|---|
       | `bin/stamp.sh <src>...` | copy to on-disk scratch (never tmpfs) + stamp `@DATE@`/`@ARCH@` (+ `REPART_SED`, e.g. `@SWAP@`); echoes scratch dir |
-      | `bin/repart.sh check\|dry-run\|format\|migrate <target>` | compose defs+flavor -> stamp -> run systemd-repart (v261+ gate); `format`/`migrate` destructive, `migrate` needs `REPART_CONFIRM=yes`; `REPART_COMPOSE_ONLY=yes` prints the composed defs and exits |
+      | `bin/compose.sh [--flavor NAME]` | resolve defs + overlay flavor + stamp; prints the runnable defs dir (pre-stamp copy removed; caller removes its parent) |
+      | `bin/repart.sh check\|dry-run\|format\|migrate <target>` | thin wrapper: v261+ gate, flag table, plan banner; `format`/`migrate` destructive, `migrate` needs `REPART_CONFIRM=yes` |
+      | `bin/loop.sh attach\|detach\|rootdev\|mount\|umount\|status` | losetup+mount lifecycle for image files; root partition auto-detected (root is LAST in the universal layout); bare btrfs mount = the default subvol = the dated OS slot |
       | `bin/slot.sh paths\|list\|default\|flip\|verify` | dated OS/home slot lifecycle on a mounted btrfs; `flip` is the A/B rollback verb |
       | `etc/defs/universal.d/` | universal GPT layout: 1M bios_grub (BIOS grub embed; harmless on UEFI), 384M ESP (harmless on BIOS), fixed `@SWAP@` swap, root last (grows; disk-growth tail lands on root) |
       | `etc/defs/format.d/`, `etc/defs/bdr.d/` | root flavors, overlaying `50-root.conf` wholesale — fresh btrfs slots vs online BDR are mechanically exclusive |

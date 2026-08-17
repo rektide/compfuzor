@@ -126,8 +126,14 @@
       - name: mkosi.images/disk/mkosi.extra/usr/local/bin/stamp.sh
         content: "{{ lookup('file', '../../files/repart/stamp.sh') }}"
         mode: "0755"
+      - name: mkosi.images/disk/mkosi.extra/usr/local/bin/compose.sh
+        content: "{{ lookup('file', '../../files/repart/compose.sh') }}"
+        mode: "0755"
       - name: mkosi.images/disk/mkosi.extra/usr/local/bin/repart.sh
         content: "{{ lookup('file', '../../files/repart/repart.sh') }}"
+        mode: "0755"
+      - name: mkosi.images/disk/mkosi.extra/usr/local/bin/loop.sh
+        content: "{{ lookup('file', '../../files/repart/loop.sh') }}"
         mode: "0755"
       - name: mkosi.images/disk/mkosi.extra/usr/local/bin/slot.sh
         content: "{{ lookup('file', '../../files/repart/slot.sh') }}"

@@ -231,13 +231,12 @@
           ansible-playbook -i 'localhost,' -c local pivot-bdr.srv.pb
           . /srv/pivot-bdr-main/env.export
 
-          # rehearse on an image file (zero risk)
+          # rehearse on an image file (zero risk) — loop.sh does the losetup dance
           truncate -s 16G /var/tmp/rehearsal.img
           /srv/pivot-bdr-main/bin/bdr-format.sh /var/tmp/rehearsal.img
-          loop=$(sudo losetup -fP --show /var/tmp/rehearsal.img)
-          sudo btrfs subvolume list "$loop"       # dated OS + home slots
-          sudo btrfs subvolume get-default "$loop"
-          sudo losetup -d "$loop"
+          sudo /opt/repart-main/bin/loop.sh mount /var/tmp/rehearsal.img /mnt
+          sudo /opt/repart-main/bin/slot.sh verify /mnt
+          sudo /opt/repart-main/bin/loop.sh umount /mnt
 
           # real target (WIPES IT)
           sudo /srv/pivot-bdr-main/bin/bdr-format.sh /dev/sda

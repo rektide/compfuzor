@@ -1,54 +1,26 @@
 #!/bin/bash
-# repart.sh — compose + stamp repart definitions, then drive systemd-repart.
+# repart.sh — drive systemd-repart with the right flags, nothing else.
 #
-# WHY: partition definitions are shared (universal layout + flavor overlays
-# in defs/), tokens (@DATE@/@ARCH@/@SWAP@) must be stamped at RUN time, and
-# the offline-format / online-migrate flag combos are easy to get wrong.
-# This wrapper owns all three: compose (defs + flavor overlay) -> stamp
-# (stamp.sh; on-disk scratch, never tmpfs /tmp) -> run (v261+ gated).
-#
-# Part of the repart kit (files/repart/) — installed as /opt/repart-main by
-# repart.opt.pb, pointed at by pivot-bdr/mkosi via REPART_DIR, and burned
-# into images (scripts to /usr/local/bin, defs to /usr/local/share/repart-defs).
+# A deliberately THIN front door: defs/flavor/stamping lives in compose.sh,
+# loopback in loop.sh, subvolumes in slot.sh. This wrapper adds only what is
+# repart-specific: the v261+ gate, the mode→flag table, and a plan banner.
+# Stepping by hand: compose.sh → systemd-repart → loop.sh → slot.sh.
 #
 # USAGE
 #   repart.sh check
 #   repart.sh dry-run <target> [--defs DIR] [--flavor DIR|NAME|none] [-- repart-args]
-#                       # preview EXACTLY what format/migrate will do
-#                       # (--empty=force + --dry-run=yes): the full wipe plan,
-#                       # zero writes (checksum-verified in development)
 #   repart.sh format  <target> [flags]    # --offline=yes --empty=force   DESTRUCTIVE
 #   repart.sh migrate <target> [flags]    # online BlockDeviceReplace=    DESTRUCTIVE
 #                                         #   requires REPART_CONFIRM=yes
 #
-#   <target>  disk (/dev/sda) or image file (repart loop-attaches files)
+#   <target>  disk (/dev/sda) or image file (for images see loop.sh afterwards)
+#   dry-run previews EXACTLY what format/migrate do (--empty=force too) with
+#   zero writes (repart gates every write path on --dry-run=yes).
 #
-# DEFS/FLAVOR RESOLUTION
-#   defs:   $REPART_DEFS, else probed in order:
-#             <script>/../etc/defs/universal.d        (installed: /opt/repart-main)
-#             <script>/../share/repart-defs/universal.d (burned image, relative)
-#             <script>/defs/universal.d               (repo checkout)
-#             /usr/local/share/repart-defs/universal.d  (burned image, absolute)
-#   flavor: --flavor DIR (as-is) | NAME (resolved to <defs>/../NAME.d) | none
-#           default: format -> format.d ; migrate -> bdr.d ;
-#                    dry-run -> $REPART_FLAVOR or format.d
-#           The flavor OVERLAYS defs: same-named files replace wholesale
-#           (only 50-root.conf differs between flavors today).
+# ENV: everything compose.sh takes (REPART_DEFS/FLAVOR/SCRATCH/SWAP/SED/DATE/
+# ARCH) plus REPART_CONFIRM for migrate.
 #
-# UNIVERSAL LAYOUT (defs/universal.d): 1M bios_grub, 384M ESP, fixed @SWAP@
-# swap, root LAST (grows; on later disk-growth the tail lands on root).
-#
-# ENV
-#   REPART_DEFS / REPART_FLAVOR / REPART_CONFIRM    (above)
-#   REPART_SCRATCH  compose+stamp base (default /var/tmp, NOT tmpfs)
-#   REPART_SWAP     @SWAP@ stamp (default 4G) — direct runs always resolve it
-#   REPART_DATE / REPART_ARCH / REPART_SED          (stamp.sh: @DATE@ @ARCH@,
-#                   plus extra seds — PREPENDED before the default swap sed,
-#                   so an explicit REPART_SED wins on any token it covers)
-#   REPART_COMPOSE_ONLY=yes  stop after compose+stamp; print the final defs dir
-#                            (testing/debugging — no repart invocation)
-#
-# Host deps: systemd-repart, coreutils, awk; stamp.sh as sibling or on PATH.
+# Host deps: systemd-repart; compose.sh as sibling or on PATH.
 
 set -euo pipefail
 
@@ -57,7 +29,14 @@ note() { printf 'repart: %s\n' "$*" >&2; }
 usage(){ sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//' >&2; exit "${1:-2}"; }
 
 MIN_VER=261   # BlockDeviceReplace= floor
-SELF="$(cd "$(dirname "$0")" && pwd)"
+
+compose_bin() {
+  local self; self="$(cd "$(dirname "$0")" && pwd)"
+  if [ -x "$self/compose.sh" ]; then printf '%s' "$self/compose.sh"
+  elif command -v compose.sh >/dev/null 2>&1; then command -v compose.sh
+  else die "compose.sh not found (sibling of $0 or on PATH)"
+  fi
+}
 
 version_of() { systemd-repart --version 2>/dev/null | awk 'NR==1{print $2}'; }
 do_check() {
@@ -68,82 +47,22 @@ do_check() {
   note "systemd-repart $ver >= $MIN_VER OK"
 }
 
-stamp_bin() {
-  if [ -x "$SELF/stamp.sh" ]; then printf '%s' "$SELF/stamp.sh"
-  elif command -v stamp.sh >/dev/null 2>&1; then command -v stamp.sh
-  else die "stamp.sh not found (sibling of $0 or on PATH)"
-  fi
-}
-
-resolve_defs() {
-  local d="${REPART_DEFS:-}"
-  if [ -z "$d" ]; then
-    for c in "$SELF/../etc/defs/universal.d" "$SELF/../share/repart-defs/universal.d" "$SELF/defs/universal.d" "/usr/local/share/repart-defs/universal.d"; do
-      [ -d "$c" ] && { d="$c"; break; }
-    done
-  fi
-  [ -n "$d" ] && [ -d "$d" ] || die "no defs dir (set REPART_DEFS or install repart.opt.pb / burn repart-defs)"
-  printf '%s' "$d"
-}
-
-# resolve_flavor <flavor-arg|auto> <defs> <mode> -> flavor dir or 'none'
-resolve_flavor() {
-  local arg="$1" defs="$2" mode="$3" d
-  if [ "$arg" = none ]; then printf none; return 0; fi
-  if [ -z "$arg" ]; then
-    case "$mode" in
-      migrate) arg=bdr ;;
-      format)  arg=format ;;
-      dry-run) arg="${REPART_FLAVOR:-format}" ;;
-    esac
-  fi
-  case "$arg" in
-    /*|.?/*) d="$arg" ;;                     # explicit path
-    *)       d="$(dirname "$defs")/$arg.d" ;; # NAME -> sibling dir
-  esac
-  [ -d "$d" ] || die "flavor dir not found: $d"
-  printf '%s' "$d"
-}
-
-# compose <defs> <flavor|none> — sets FINAL/COMPOSED_DIR/STAMPED_DIR in the
-# CURRENT shell (no $() capture: command substitution is a subshell and these
-# must reach the caller's cleanup trap).
-# Also defaults the @SWAP@ stamp (REPART_SWAP, default 4G) so direct runs
-# never hand repart an unstamped token; an explicit REPART_SED wins because
-# it is prepended (sed consumes matches: first expression to match wins).
-compose() {
-  local defs="$1" flavor="$2" scratch
-  scratch="${REPART_SCRATCH:-/var/tmp}"
-  mkdir -p "$scratch"
-  COMPOSED_DIR="$(mktemp -d "$scratch/compose.XXXXXX")"
-  cp -r "$defs"/. "$COMPOSED_DIR"/
-  if [ "$flavor" != none ]; then
-    cp -r "$flavor"/. "$COMPOSED_DIR"/        # same-named files replace wholesale
-  fi
-  ls "$COMPOSED_DIR"/*.conf >/dev/null 2>&1 || die "composed defs have no *.conf (defs=$defs flavor=$flavor)"
-  export REPART_SED="${REPART_SED:+$REPART_SED;}s|@SWAP@|${REPART_SWAP:-4G}|g"
-  STAMPED_DIR="$(REPART_SCRATCH="$scratch" "$(stamp_bin)" "$COMPOSED_DIR")"
-  FINAL="$STAMPED_DIR/$(basename "$COMPOSED_DIR")"
-}
-
-# Print a compact plan header BEFORE handing off, so repart's verbose output
-# has a frame: what's being done, per-partition sizes from the COMPOSED defs,
-# the default subvol, and that repart's own log follows.
-banner() {  # $1=mode $2=target
+# Compact plan banner so repart's own verbose output has a frame.
+banner() {  # $1=mode $2=target $3=final-defs
   local f type size
   printf '== repart %s: %s\n' "$1" "$2"
-  for f in "$FINAL"/*.conf; do
+  for f in "$3"/*.conf; do
     type="$(awk -F= '/^Type=/{print $2; exit}' "$f")"
     case "$type" in 21686148-*) type=bios-grub ;; esac
     size="$(awk -F= '/^SizeMinBytes=/{print $2; exit}' "$f")"
     printf '   %-14s %-28s min %s\n' "$(basename "$f" .conf)" "$type" "${size:--}"
   done
-  awk -F= '/^DefaultSubvolume=/{printf "   %-14s %s\n", "default-subvol", $2; exit}' "$FINAL/50-root.conf" 2>/dev/null
-  printf '   (systemd-repart output follows; scratch %s auto-removed)\n' "$(basename "$STAMPED_DIR")"
+  awk -F= '/^DefaultSubvolume=/{printf "   %-14s %s\n", "default-subvol", $2; exit}' "$3/50-root.conf" 2>/dev/null
+  printf '   (systemd-repart output follows; scratch auto-removed on exit)\n'
 }
 
 MODE="${1:-}"; shift || true
-TARGET=""; DEFS_ARG=""; FLAVOR_ARG=""; EXTRA=()
+TARGET=""; DEFS_ARG=""; FLAVOR_ARG=""; REXTRA=()   # REXTRA: raw passthrough to systemd-repart
 case "$MODE" in
   check) do_check; exit 0 ;;
   dry-run|format|migrate) ;;
@@ -151,50 +70,43 @@ case "$MODE" in
   *) die "unknown mode: ${MODE:-<none>} (check|dry-run|format|migrate)" ;;
 esac
 
-# parse: first positional = target; --defs/--flavor take values; '--' then raw passthrough
 while [ $# -gt 0 ]; do
   case "$1" in
     --defs)    DEFS_ARG="${2:?--defs needs a DIR}"; shift 2 ;;
     --flavor)  FLAVOR_ARG="${2:?--flavor needs DIR|NAME|none}"; shift 2 ;;
-    --)        shift; EXTRA+=("$@"); break ;;
-    -*)        EXTRA+=("$1"); shift ;;
+    --)        shift; REXTRA+=("$@"); break ;;
+    -*)        REXTRA+=("$1"); shift ;;
     *)         [ -z "$TARGET" ] || die "unexpected second target: $1"; TARGET="$1"; shift ;;
   esac
 done
 [ -n "$TARGET" ] || die "$MODE needs a <target> (disk or image file)"
 
-DEFS="${DEFS_ARG:-$(resolve_defs)}"
-[ -d "$DEFS" ] || die "defs dir not found: $DEFS"
-FLAVOR="$(resolve_flavor "$FLAVOR_ARG" "$DEFS" "$MODE")"
+# mode default flavor (compose.sh defaults to format; migrate is the exception)
+FLAVOR="$FLAVOR_ARG"
+if [ -z "$FLAVOR" ] && [ "$MODE" = migrate ]; then FLAVOR=bdr; fi
 
-compose "$DEFS" "$FLAVOR"
-note "defs: $DEFS + flavor: $FLAVOR -> $FINAL"
-if [ "${REPART_COMPOSE_ONLY:-no}" = "yes" ]; then
-  printf '%s\n' "$FINAL"
-  rm -rf "$COMPOSED_DIR"    # the stamped copy (FINAL) is self-contained
-  exit 0
-fi
-trap 'rm -rf "$COMPOSED_DIR" "$STAMPED_DIR"' EXIT
-
+CARGS=()
+[ -n "$DEFS_ARG" ]  && CARGS+=(--defs "$DEFS_ARG")
+[ -n "$FLAVOR" ]    && CARGS+=(--flavor "$FLAVOR")
+FINAL="$("$(compose_bin)" ${CARGS[@]+"${CARGS[@]}"})" || die "compose failed"
+trap 'rm -rf "$(dirname "$FINAL")"' EXIT
 do_check
-banner "$MODE" "$TARGET"
+banner "$MODE" "$TARGET" "$FINAL"
 case "$MODE" in
   dry-run)
     # --empty=force MIRRORS format/migrate so the preview shows the real WIPE
-    # plan (without it repart refuses non-GPT targets: "no GPT disk label,
-    # not repartitioning" — a preview of nothing). Still zero writes:
-    # --dry-run=yes gates every write path in repart.
-    systemd-repart --definitions="$FINAL" --dry-run=yes --empty=force "${EXTRA[@]}" "$TARGET"
+    # plan (zero writes: --dry-run=yes gates every write path in repart).
+    systemd-repart --definitions="$FINAL" --dry-run=yes --empty=force "${REXTRA[@]}" "$TARGET"
     ;;
   format)
     note "WIPING partition table on $TARGET (offline format from $FINAL)"
-    systemd-repart --definitions="$FINAL" --offline=yes --empty=force --dry-run=no "${EXTRA[@]}" "$TARGET"
-    note "formatted $TARGET"
+    systemd-repart --definitions="$FINAL" --offline=yes --empty=force --dry-run=no "${REXTRA[@]}" "$TARGET"
+    note "formatted $TARGET (next: loop.sh mount for images, slot.sh verify)"
     ;;
   migrate)
     [ "${REPART_CONFIRM:-no}" = "yes" ] || die "migrate is destructive; set REPART_CONFIRM=yes"
     note "WIPING $TARGET and live-migrating via BlockDeviceReplace= (online)"
-    systemd-repart --definitions="$FINAL" --empty=force --dry-run=no "${EXTRA[@]}" "$TARGET"
-    note "migration done: root now lives on $TARGET"
+    systemd-repart --definitions="$FINAL" --empty=force --dry-run=no "${REXTRA[@]}" "$TARGET"
+    note "migration done: root now lives on $TARGET (next: slot.sh default)"
     ;;
 esac
