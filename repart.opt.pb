@@ -75,11 +75,12 @@
 
       Five small tools, each independently runnable — step through by hand:
 
-          compose.sh                      # defs+flavor+stamp -> scratch defs dir
+          compose.sh                       # defs+flavor+stamp -> scratch defs dir
           repart.sh dry-run|format|migrate # run systemd-repart (calls compose.sh)
-          loop.sh mount IMG /mnt           # losetup+mount the result (images)
-          slot.sh verify /mnt              # inspect dated subvolume slots
-          loop.sh umount /mnt              # unmount + detach
+          m=$(sudo loop.sh mount IMG)      # losetup+mount; auto-picks the first
+                                         #   empty unmounted /mnt/loop* (prints it)
+          sudo slot.sh verify "$m"         # inspect dated subvolume slots
+          sudo loop.sh umount "$m"         # unmount + detach
 
       One `repart.sh` invocation = three visible stages, each with its own
       prefix: **`compose:`** (defs+flavor+tokens into on-disk scratch,
@@ -94,7 +95,7 @@
       | `bin/stamp.sh <src>...` | copy to on-disk scratch (never tmpfs) + stamp `@DATE@`/`@ARCH@` (+ `REPART_SED`, e.g. `@SWAP@`); echoes scratch dir |
       | `bin/compose.sh [--flavor NAME]` | resolve defs + overlay flavor + stamp; prints the runnable defs dir (pre-stamp copy removed; caller removes its parent) |
       | `bin/repart.sh check\|dry-run\|format\|migrate <target>` | thin wrapper: v261+ gate, flag table, plan banner; `format`/`migrate` destructive, `migrate` needs `REPART_CONFIRM=yes` |
-      | `bin/loop.sh attach\|detach\|rootdev\|mount\|umount\|status` | losetup+mount lifecycle for image files; root partition auto-detected (root is LAST in the universal layout); bare btrfs mount = the default subvol = the dated OS slot |
+      | `bin/loop.sh attach\|detach\|rootdev\|mount\|umount\|status` | losetup+mount lifecycle for image files; root partition auto-detected (root is LAST in the universal layout); MNT omitted/auto = first lexically-unused **empty unmounted** `/mnt/loop*` (never `/mnt` itself — that shadows its submounts; `LOOP_MNT_BASE` to relocate); bare btrfs mount = the default subvol = the dated OS slot |
       | `bin/slot.sh paths\|list\|default\|flip\|verify` | dated OS/home slot lifecycle on a mounted btrfs; `flip` is the A/B rollback verb |
       | `etc/defs/universal.d/` | universal GPT layout: 1M bios_grub (BIOS grub embed; harmless on UEFI), 384M ESP (harmless on BIOS), fixed `@SWAP@` swap, root last (grows; disk-growth tail lands on root) |
       | `etc/defs/format.d/`, `etc/defs/bdr.d/` | root flavors, overlaying `50-root.conf` wholesale — fresh btrfs slots vs online BDR are mechanically exclusive |

@@ -17,14 +17,24 @@
 #   loop.sh detach IMG|LOOPDEV|all  # refuses while partitions are mounted
 #   loop.sh rootdev IMG             # prints root partition dev (or whole loop
 #                                   #   if the image has no partition table)
-#   loop.sh mount IMG MNT [PARTNO] [--subvol S] [--ro]
-#                                   # attach + mount (default: root partition;
-#                                   #   bare btrfs mount = DefaultSubvolume = the
-#                                   #   dated OS slot; --subvol to pick another);
-#                                   #   prints MNT
+#   loop.sh mount IMG [MNT|auto] [PARTNO] [--subvol S] [--ro]
+#                                   # attach + mount. MNT omitted or 'auto' =
+#                                   #   first lexically-unused EMPTY
+#                                   #   $LOOP_MNT_BASE/loop* dir (never /mnt
+#                                   #   itself — mounting there shadows its
+#                                   #   submounts); next free name is created
+#                                   #   if all existing are used. Default
+#                                   #   PARTNO = root partition (last); bare
+#                                   #   btrfs mount = DefaultSubvolume = the
+#                                   #   dated OS slot; --subvol picks another.
+#                                   #   Prints MNT.
 #   loop.sh umount MNT|IMG          # unmount submounts deepest-first, then
 #                                   #   detach loops that became mount-free
 #   loop.sh status                  # every loop device + back-file + mounts
+#
+# ENV
+#   LOOP_MNT_BASE  auto-mount base (default /mnt); candidates are its loop*
+#                  dirs in glob (lexical) order
 #
 # Host deps: util-linux (losetup, findmnt, lsblk), coreutils. Run with sudo.
 
@@ -35,6 +45,31 @@ note() { printf 'loop: %s\n' "$*" >&2; }
 usage(){ sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//' >&2; exit "${1:-2}"; }
 
 need_root() { [ "$(id -u)" = 0 ] || die "needs root (run with sudo)"; }
+
+LOOP_MNT_BASE="${LOOP_MNT_BASE:-/mnt}"
+
+# First lexically-unused $LOOP_MNT_BASE/loop* dir (glob order = lexical):
+# must be a directory, NOT a mountpoint, and EMPTY — both checks matter: an
+# unmounted-but-nonempty dir holds data a mount would shadow; a mounted dir
+# is in use. If none qualifies, create the next free name (loop, loop0, ...).
+pick_mnt() {
+  local d
+  for d in "$LOOP_MNT_BASE"/loop*/; do
+    [ -d "$d" ] || continue
+    d="${d%/}"
+    if [ -z "$(findmnt -n "$d" 2>/dev/null)" ] && [ -z "$(ls -A "$d" 2>/dev/null)" ]; then
+      printf '%s' "$d"; return 0
+    fi
+  done
+  if [ ! -e "$LOOP_MNT_BASE/loop" ]; then d="$LOOP_MNT_BASE/loop"
+  else
+    local n=0
+    while [ -e "$LOOP_MNT_BASE/loop$n" ]; do n=$((n+1)); done
+    d="$LOOP_MNT_BASE/loop$n"
+  fi
+  mkdir -p "$d"
+  printf '%s' "$d"
+}
 
 # loops backing an image (possibly several; prints NAME column)
 loops_of_img() { losetup -j "$1" -O NAME -n 2>/dev/null; }
@@ -90,17 +125,22 @@ rootdev_of() {  # $1=loopdev -> root partition (last) or the loop itself
   if [ -n "$last" ]; then printf '%s' "$last"; else printf '%s' "$1"; fi
 }
 
-do_mount() {  # IMG MNT [PARTNO] [--subvol S] [--ro]
-  local img="$1" mnt="$2"; shift 2
-  local part="" subvol="" ro=""
+do_mount() {  # IMG [MNT|auto] [PARTNO] [--subvol S] [--ro]
+  local img="$1"; shift
+  local mnt="" part="" subvol="" ro=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --subvol) subvol="${2:?--subvol needs a SUBVOL}"; shift 2 ;;
       --ro) ro=",ro"; shift ;;
       [0-9]*) part="$1"; shift ;;
-      *) die "unknown mount option: $1" ;;
+      -*) die "unknown mount option: $1" ;;
+      *) [ -z "$mnt" ] || die "unexpected extra arg: $1"; mnt="$1"; shift ;;
     esac
   done
+  if [ -z "$mnt" ] || [ "$mnt" = auto ]; then
+    mnt="$(pick_mnt)"
+    note "auto mountpoint: $mnt (first empty unmounted $LOOP_MNT_BASE/loop*)"
+  fi
   local loop dev opts
   loop="$(attach "$img")"
   if [ -n "$part" ]; then
@@ -163,7 +203,7 @@ case "$CMD" in
     need_root
     [ $# -ge 1 ] || usage
     loop="$(attach "$1")"; rootdev_of "$loop" ;;
-  mount)  [ $# -ge 2 ] || usage; do_mount "$@" ;;
+  mount)  [ $# -ge 1 ] || usage; do_mount "$@" ;;
   umount) [ $# -ge 1 ] || usage; do_umount "$1" ;;
   status) do_status ;;
   -h|--help) usage 0 ;;
