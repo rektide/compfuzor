@@ -21,6 +21,25 @@
     # 2. Site-level zsh content: deploy z.d/, zfunc.d/, bin/ into /etc/opt/zsh-main/.
     #    The system blocks below (zshrc-site-funcs, zshrc-site-source) wire these
     #    into /etc/zsh/zshrc so they actually get sourced at runtime.
+    #    handjam + prompt moved to ZIM_MODULES below (declarative kinds);
+    #    z.d/ keeps only user-bin-path (dir-conditional PATH logic, not
+    #    expressible as a mapping kind).
+    ZIM_MODULES:
+      - name: handjam
+        phase: tools
+        aliases:
+          Grep: grep
+          cd..: cd ..
+        comment: handjam aliases (was z.d/handjam site drop-in)
+      - name: zsh-prompt
+        phase: core
+        env:
+          # default PROMPT floor, set before prompt modules (zim `minimal`
+          # overrides it); don't-stomp means a user-set prompt wins. YAML
+          # double-quoted \n keeps the multi-line shape, %D{z} avoids the
+          # {%z} jinja conflict ({% starts a jinja tag).
+          PROMPT: "\n   %! %D %* %D{z}\n   %m:%~/"
+        comment: default prompt (was z.d/prompt site drop-in)
     ETC_DIRS:
       - z.d
       - zfunc.d
@@ -47,8 +66,7 @@
       - zfunc.d/flatten
       - zfunc.d/zcompile-all
       - zfunc.d/zsource-all
-      - z.d/handjam
-      - z.d/prompt
+      # handjam -> ZIM_MODULES aliases kind; prompt -> ZIM_MODULES env kind
       - bin/jtc
       # atuin-session removed: superseded by rektide/zim-atuin-session zim module
       - z.d/user-bin-path
@@ -120,5 +138,5 @@
 
           block-in-file -n "{{NAME}}-share-dropins" -i "{{DIR}}/etc/share-dropins.conf" -o "$ZSH_CONF_D_DIR/{{NAME}}.conf"
           block-in-file -n "{{NAME}}-user-conf-d" -i "{{DIR}}/etc/user-conf-d.zsh" -o "${ZDOTDIR:-$HOME}/.zshrc"
-   tasks:
+  tasks:
     - import_tasks: tasks/compfuzor.includes

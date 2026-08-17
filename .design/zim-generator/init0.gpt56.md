@@ -193,3 +193,22 @@ every shell/service. The underlying weakness to address: prefer
 publish on any channel. git.etc.pb's `git-env` module is the pattern
 forward: small, named, purpose-scoped env modules — never the whole ENV map.
 
+## Consumers (landed)
+
+- **git.etc.pb `git-helpers`** — `functions:` kind: git_branch/addTngl/pushIt
+  bodies declared inline; the three files/git/*.zsh are deleted. Together
+  with `git-env` (env kind) this pb now has no shell files at all.
+- **zsh.etc.pb `handjam`** — `aliases:` kind (was the z.d/handjam site
+  drop-in: `Grep`, `cd..`).
+- **zsh.etc.pb `zsh-prompt`** — env kind PROMPT floor (was z.d/prompt).
+  Lesson learned for env values: playbook var strings inside ZIM_MODULES
+  mappings reach the filter UNtemplated (same lazy-template caveat as
+  gen_tool_versions' `resolve=True`), so env values must avoid jinja
+  metacharacters — use `%D{z}` rather than `%D{%z}`, and YAML double-quoted
+  `\n` rather than block scalars when leading spaces matter (block-scalar
+  indent detection strips them).
+- z.d/ keeps only user-bin-path (dir-conditional PATH logic — not
+  expressible as a mapping kind). `completions:` still has no in-tree
+  consumer; first tool that ships a `_*` completion file should take it.
+
+

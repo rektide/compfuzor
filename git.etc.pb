@@ -3,12 +3,9 @@
   vars:
     TYPE: git
     INSTANCE: main
-    # zsh delivery is via zimfw modules (gen_zim): each .zsh under files/git/
-    # becomes a local zim module (ETC/zim-modules/<name>/init.zsh + a zmodule
-    # declaration fragment), auto-installed by install-user-zimfw.sh into the
-    # zim host assembly. The old route -- SHARE_FILES + install-user.sh
-    # symlinking into ~/.config/zsh/{{NAME}}/ -- was dangling: nothing sourced
-    # that dir (the zsh.etc.pb conf.d chain covers conf.d/*.conf only).
+    # zsh delivery is via zimfw modules (gen_zim): git-env uses the env kind,
+    # git-helpers the functions kind (bodies declared inline -- no files/
+    # needed). install-user-zimfw.sh auto-promotes fragments to the zim host.
     ZIM_MODULES:
       - name: git-env
         phase: tools
@@ -16,15 +13,26 @@
           B: main
           BOOKMARK: main
         comment: default bookmark for pushIt et al (stomp-guarded)
-      - source: git_branch.zsh
+      - name: git-helpers
         phase: tools
-        comment: git_branch() helper
-      - source: addTngl.zsh
-        phase: tools
-        comment: add tangled.sh remote to a jj repo
-      - source: pushIt.zsh
-        phase: tools
-        comment: push bookmark to all remotes
+        functions:
+          git_branch: |
+            ref=$(git symbolic-ref HEAD 2>/dev/null | cut -d'/' -f3)
+            echo $ref
+          addTngl: |
+            jj git remote add tngl "tngl:jauntywk.bsky.social/${DIR:-$(basename "$(pwd)")}"
+            jj bookmark track main --remote=tngl
+          pushIt: |
+            jj bookmark set $B -r @- --allow-backwards
+
+            jj git remote list | awk '{print $1}' | grep -q "tngl" && jj git push -b $B --remote tngl &
+            jj git remote list | awk '{print $1}' | grep -q "rektide" && jj git push -b $B --remote rektide &
+            jj git remote list | awk '{print $1}' | grep -q "github" && jj git push -b $B --remote github &
+
+            if ! (jj git remote list | awk '{print $1}' | grep -q "rektide\|github") || ! jj git remote list | grep "^origin" | grep -q "github\.com"; then
+              jj git push -b $B &
+            fi
+        comment: jj/git push helpers
     BINS:
       - name: cleanup-old-install.sh
         scope: [user]
