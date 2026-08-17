@@ -57,11 +57,25 @@
       basedir: False
       bypass: ZIM
       content: |
-        # TODO: hardcoded -- /opt/zim-main is where zim.opt.pb lives on this box
-        # (OPTS_DIR/zim-main). There is no host-discovery mechanism yet, so a
-        # non-default zim host location must export ZIM_HOST_DIR. Consider a
-        # ZIM_HOST (host-mark) registry or a well-known symlink to resolve this.
-        host="${ZIM_HOST_DIR:-/opt/zim-main}"
+        # Host discovery: ZIM_HOST_DIR wins; otherwise resolve through the zim
+        # config link (~/.config/zsh/zimfw.conf -> <host>/[etc/]zimfw.conf),
+        # which every zim host install creates -- the link IS the registry.
+        # Final fallback /opt/zim-main (OPTS_DIR default location).
+        host="${ZIM_HOST_DIR:-}"
+        if [ -z "$host" ]; then
+          _conf="${ZIM_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zimfw.conf}"
+          _real=$(readlink -f "$_conf" 2>/dev/null || true)
+          if [ -n "$_real" ]; then
+            _etc_dir="${_real%/zimfw.conf}"
+            for _cand in "${_real%/etc/zimfw.conf}" "$_etc_dir" "/opt/$(basename "$_etc_dir")"; do
+              if [ "$_cand" != "$_real" ] && [ -x "$_cand/bin/install-zim.sh" ]; then
+                host="$_cand"
+                break
+              fi
+            done
+          fi
+        fi
+        host="${host:-/opt/zim-main}"
         if [ -x "$host/bin/install-zim.sh" ]; then
           "$host/bin/install-zim.sh" "{{DIR}}"
         else

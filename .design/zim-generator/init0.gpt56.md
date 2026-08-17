@@ -156,3 +156,40 @@ shell-facing functionality to each channel."
   BINS_SHELL/zshenv non-interactive channel.
 - [`/doc/subsys.md`](/doc/subsys.md) — subsystem evaluation contract the
   generator plugs into.
+
+# Addendum: init0 decisions and ENV namespacing (2026-08-17)
+
+Post-wave review picked: **A (declarative kinds)** now, **D (host registry)**
+now, **mise de-dup** now; **C dropped** — host `status.sh` drift detection
+already covers the preview need, so a separate `zim-gen.sh` adds nothing.
+**B (channels fan-out) deferred** with a design constraint captured below.
+
+Implemented with this addendum:
+
+- `zim_fragment` grows generated kinds **`aliases`** (mapping → `alias`
+  lines, single-quote escaped), **`functions`** (mapping → definitions), and
+  additive **`completions`** (list of filenames → `zim-modules/<name>/functions/`
+  + `fpath` entry; rides along with any local kind or stands alone; a file
+  module with completions gets a wrapper init.zsh sourcing `body.zsh`).
+  Body kinds (`env`/`source`/`aliases`/`functions`) are mutually exclusive.
+  67 filter tests pass (`tests/filter_plugins/zim_fragment.test.py`).
+- Host discovery (gen_zim.tasks) resolves `ZIM_HOST_DIR` → the zim config
+  link (`~/.config/zsh/zimfw.conf` → `<host>/zimfw.conf`, including the
+  `/etc/opt/<name>` etc-symlink layout via `/opt/<name>` candidate) →
+  `/opt/zim-main` fallback. The config link is the registry.
+- mise de-dup: `install-user.sh` skips the `mise.zshrc` add when
+  `MISE_SKIP_ZSH_RC=1`, a `zmodule … zim-mise` line is present in the
+  assembled zimfw config, or zim-mise's cached activation marker exists.
+  zshenv shims remain unconditional (non-interactive floor).
+
+## ENV namespacing constraint for channels (user directive)
+
+When B lands, channel fan-out must be **explicit per declaration**, not a
+blanket include of a pb's ENV: compfuzor ENVs are a shared generic namespace
+(`B`, `BOOKMARK`, `DIR`, …) and blanket fan-out would export collisions into
+every shell/service. The underlying weakness to address: prefer
+`<TYPE>`-prefixed explicit names (e.g. `GIT_BOOKMARK`) and indirect
+`<TYPE>_DIR` lookup over bare generic keys, so per-pb args are safe to
+publish on any channel. git.etc.pb's `git-env` module is the pattern
+forward: small, named, purpose-scoped env modules — never the whole ENV map.
+

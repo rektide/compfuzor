@@ -115,15 +115,47 @@ def _normalize_entry(entry, default_phase):
 
     has_env = "env" in entry and not wrapped_test_undefined(entry["env"])
     has_source = "source" in entry
-    if has_env and has_source:
+    has_aliases = "aliases" in entry and not wrapped_test_undefined(entry["aliases"])
+    has_functions = "functions" in entry and not wrapped_test_undefined(entry["functions"])
+    has_completions = "completions" in entry and not wrapped_test_undefined(
+        entry["completions"]
+    )
+    body_kinds = sum(
+        1 for flag in (has_env, has_source, has_aliases, has_functions) if flag
+    )
+    if body_kinds > 1:
         raise AnsibleFilterError(
-            "zim module entry cannot have both 'env' and 'source'"
+            "zim module entry can have only one of 'env', 'source', 'aliases', 'functions'"
         )
-    if not has_env and not has_source:
-        raise AnsibleFilterError("zim module entry requires 'source' or 'env'")
+    if body_kinds == 0 and not has_completions:
+        raise AnsibleFilterError(
+            "zim module entry requires one of 'source', 'env', 'aliases', "
+            "'functions', or 'completions'"
+        )
+    if not has_completions:
+        pass
+    elif isinstance(entry["completions"], str) or not isinstance(
+        entry["completions"], collections.abc.Sequence
+    ):
+        raise AnsibleFilterError(
+            "zim module 'completions' must be a list of completion filenames"
+        )
+    elif not list(entry["completions"]):
+        raise AnsibleFilterError("zim module 'completions' list is empty")
+    elif any(
+        not isinstance(c, str) or not c.strip() or "/" in c
+        for c in entry["completions"]
+    ):
+        raise AnsibleFilterError(
+            "zim module 'completions' entries must be plain filenames (no '/')"
+        )
 
-    # kind: env (generated env-setting script) | file (local .zsh) | git (cloned)
+    # kind: env/aliases/functions (generated init.zsh) | file (local .zsh) |
+    # git (cloned). 'completions' may ride along with any local kind (adds an
+    # fpath dir); alone it is a pure-completion module.
     env_map = None
+    alias_map = None
+    func_map = None
     source = ""
     if has_env:
         env_map = entry["env"]
@@ -134,13 +166,33 @@ def _normalize_entry(entry, default_phase):
         if not env_map:
             raise AnsibleFilterError("zim module 'env' mapping is empty")
         kind = "env"
-    else:
+    elif has_aliases:
+        alias_map = entry["aliases"]
+        if not isinstance(alias_map, collections.abc.Mapping):
+            raise AnsibleFilterError(
+                "zim module 'aliases' must be a mapping of alias -> expansion"
+            )
+        if not alias_map:
+            raise AnsibleFilterError("zim module 'aliases' mapping is empty")
+        kind = "aliases"
+    elif has_functions:
+        func_map = entry["functions"]
+        if not isinstance(func_map, collections.abc.Mapping):
+            raise AnsibleFilterError(
+                "zim module 'functions' must be a mapping of name -> body"
+            )
+        if not func_map:
+            raise AnsibleFilterError("zim module 'functions' mapping is empty")
+        kind = "functions"
+    elif has_source:
         source = str(entry["source"]).strip()
         if not source:
             raise AnsibleFilterError("zim module source must be non-empty")
         # A local-file module: source is a repo .zsh rendered as a local zimfw
         # module (zmodule <abspath>). Triggered by a .zsh extension or file: true.
         kind = "file" if (bool(entry.get("file")) or source.endswith(".zsh")) else "git"
+    else:
+        kind = "completions"
 
     num = _resolve_phase(entry.get("phase"), default_phase)
     if num is None:
@@ -157,10 +209,14 @@ def _normalize_entry(entry, default_phase):
             slug = slug[: -len(".zsh")]
         name = slug
     if not name:
+        if kind in ("env", "aliases", "functions", "completions"):
+            raise AnsibleFilterError(
+                "zim module requires 'name' ({} modules have no source to derive one)".format(
+                    kind
+                )
+            )
         raise AnsibleFilterError(
-            "zim module requires 'name' (env modules have no source to derive one)"
-            if kind == "env"
-            else "zim module {!r} resolves to an empty filename slug".format(source)
+            "zim module {!r} resolves to an empty filename slug".format(source)
         )
 
     description = entry.get("description")
@@ -178,6 +234,9 @@ def _normalize_entry(entry, default_phase):
         "kind": kind,
         "source": source,
         "env": env_map,
+        "aliases": alias_map,
+        "functions": func_map,
+        "completions": list(entry["completions"]) if has_completions else [],
         "num": num,
         "name": name,
         "description": description,
@@ -247,6 +306,33 @@ def _env_body(env_map, comment):
     return "\n".join(lines) + "\n"
 
 
+def _alias_body(alias_map, comment):
+    """Render an aliases module's init.zsh: one `alias` line per entry."""
+    lines = _comment_lines(comment)
+    lines.append("# Auto-generated by compfuzor zim (aliases module).")
+    for alias, expansion in alias_map.items():
+        quoted = str(expansion).replace("'", "'\\''")
+        lines.append("alias {}='{}'".format(alias, quoted))
+    return "\n".join(lines) + "\n"
+
+
+def _functions_body(func_map, comment):
+    """Render a functions module's init.zsh: one function definition per entry."""
+    lines = _comment_lines(comment)
+    lines.append("# Auto-generated by compfuzor zim (functions module).")
+    for fname, body in func_map.items():
+        lines.append("{}() {{".format(fname))
+        for bl in str(body).splitlines():
+            lines.append("  " + bl if bl.strip() else bl)
+        lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+def _fpath_line():
+    """fpath entry for a module's bundled completions (relative to init.zsh)."""
+    return "fpath=(${0:h}/functions $fpath)"
+
+
 @accept_args_markers
 def zim_fragment(modules, phase=None, etc=None):
     """Render zim module declarations into drop-in fragment files.
@@ -268,6 +354,13 @@ def zim_fragment(modules, phase=None, etc=None):
     init.zsh carries ``src`` resolved from files/<TYPE>/; and an **env** module
     (``env`` mapping of VAR -> value) -- init.zsh carries generated ``content``
     with one don't-stomp-per-var guard (COMPFUZOR_ENV_OVERWRITE forces).
+    Additional generated kinds: **aliases** (mapping alias -> expansion, one
+    ``alias`` line each), **functions** (mapping name -> body, one definition
+    each), and **completions** (list of completion filenames, resolved from
+    files/<TYPE>/ into ``zim-modules/<name>/functions/`` with an fpath entry;
+    may ride along with any local kind, or stand alone as a pure-completion
+    module). A file module with completions gets a generated init.zsh that
+    fpath-prepends and sources the original as ``body.zsh``.
 
     Returns a list of ``{name, content}`` records shaped as ETC_FILES entries
     (file modules additionally emit a ``{name, src}`` init.zsh record).
@@ -296,7 +389,8 @@ def zim_fragment(modules, phase=None, etc=None):
         norm = _normalize_entry(entry, phase)
         fn = _filename(norm["num"], norm["name"], norm["description"])
         rel_dir = "zim-disabled/" if not norm["enabled"] else "zim/"
-        if norm["kind"] in ("env", "file"):
+        local_kinds = ("env", "aliases", "functions", "completions", "file")
+        if norm["kind"] in local_kinds:
             # local zimfw module: zmodule points at the rendered module dir.
             module_path = (
                 "{}/zim-modules/{}".format(etc, norm["name"]) if etc else norm["name"]
@@ -308,16 +402,61 @@ def zim_fragment(modules, phase=None, etc=None):
                 }
             )
             # render the module script; only active modules need one on disk.
-            # env -> generated content; file -> src resolved from files/<TYPE>/.
+            # generated kinds -> content; file -> src resolved from files/<TYPE>/
+            # (wrapped in a sourcing init.zsh when completions ride along).
+            # completions -> per-file src records under functions/ + an fpath
+            # entry in init.zsh.
             if norm["enabled"]:
-                module_file = {
-                    "name": "zim-modules/{}/init.zsh".format(norm["name"]),
-                }
+                completions = norm["completions"]
                 if norm["kind"] == "env":
-                    module_file["content"] = _env_body(norm["env"], norm["comment"])
+                    init_lines = [_env_body(norm["env"], norm["comment"]).rstrip("\n")]
+                elif norm["kind"] == "aliases":
+                    init_lines = [
+                        _alias_body(norm["aliases"], norm["comment"]).rstrip("\n")
+                    ]
+                elif norm["kind"] == "functions":
+                    init_lines = [
+                        _functions_body(norm["functions"], norm["comment"]).rstrip("\n")
+                    ]
+                elif completions:
+                    init_lines = []
                 else:
-                    module_file["src"] = norm["source"]
-                results.append(module_file)
+                    init_lines = None
+                if init_lines is None:
+                    # file kind, no completions: init.zsh IS the source file
+                    results.append(
+                        {
+                            "name": "zim-modules/{}/init.zsh".format(norm["name"]),
+                            "src": norm["source"],
+                        }
+                    )
+                else:
+                    if completions:
+                        init_lines.insert(0, _fpath_line())
+                    if norm["kind"] == "file":
+                        init_lines.append("source ${0:h}/body.zsh")
+                    results.append(
+                        {
+                            "name": "zim-modules/{}/init.zsh".format(norm["name"]),
+                            "content": "\n".join(init_lines) + "\n",
+                        }
+                    )
+                    if norm["kind"] == "file":
+                        results.append(
+                            {
+                                "name": "zim-modules/{}/body.zsh".format(norm["name"]),
+                                "src": norm["source"],
+                            }
+                        )
+                    for comp in completions:
+                        results.append(
+                            {
+                                "name": "zim-modules/{}/functions/{}".format(
+                                    norm["name"], comp
+                                ),
+                                "src": comp,
+                            }
+                        )
         else:
             results.append(
                 {

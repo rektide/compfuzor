@@ -21,10 +21,9 @@
     #     tools resolve in non-interactive contexts. `--shims` skips the prompt
     #     hooks, making it safe outside interactive shells.
     #   * ~/.zshrc keeps plain `mise activate zsh` for interactive hook-env
-    #     updates. The `zim-mise` zimfw module (joke/zim-mise) already does
-    #     this during zim init on Linux, so on zim boxes the zshrc add is
-    #     redundant (see TODO in install-user.sh) but harmless: shims in
-    #     zshenv + a later interactive activate is mise's documented combo.
+    #     updates. install-user.sh SKIPS this add on zim boxes (zim-mise module
+    #     detection, see there); shims in zshenv + a later interactive activate
+    #     is mise's documented combo.
     # The old ~/.zprofile `--shims` block was dropped: login shells source
     # zshenv first, so it added nothing beyond the zshenv shims.
     # Bash has no framework loader, so the bash blocks are still wanted.
@@ -56,30 +55,46 @@
     BINS:
       - name: install-user.sh
         content: |
-          # NOTE: the zshenv add below is what makes mise-managed tools visible
-          # to NON-interactive zsh (ansible BINS via BINS_SHELL, `zsh -c`, ssh)
-          # through shims; it is unconditional. The zshrc add only enables
-          # interactive hook-env; on zim-using boxes the `zim-mise` zimfw module
-          # already does that during zim init, so the zshrc add is redundant
-          # there.
-          # TODO(install-user): detect an active zim/zim-mise loader and skip
-          # the zsh_rc injection when present. Detection options:
-          #   * grep `zmodule .*zim-mise` in ${ZIM_CONFIG_FILE:-/opt/zim-main/etc/zimfw.conf}
-          #   * test -f ~/.cache/zim/modules/zim-mise/mise-activate.zsh
-          #     (generated when zim-mise's Linux branch has run)
-          #   * check fpath for the `_mise` completion in an interactive zsh
-          # Also honor an explicit MISE_SKIP_ZSH_RC=1 override. Bash has no
-          # equivalent framework loader, so install-bash-user.sh is unaffected.
+          # The zshenv add below is unconditional: it is the non-interactive
+          # floor (`zsh -c`, ssh commands, ansible BINS via BINS_SHELL) and
+          # shim-based, so no prompt hooks are involved.
+          # The zshrc add only enables interactive hook-env. On zim-using
+          # boxes the `zim-mise` module (enabled at core phase in zim.opt.pb)
+          # already runs cached `mise activate zsh` + hook-env + completions
+          # during zim init, so the zshrc add is skipped there. Detection:
+          #   1. MISE_SKIP_ZSH_RC=1 -- explicit override
+          #   2. a `zmodule ... zim-mise` line in the assembled zimfw config
+          #      (ZIM_CONFIG_FILE, default the ~/.config/zsh/zimfw.conf link)
+          #   3. zim-mise's cached activation marker under ZIM_HOME (proof the
+          #      module has actually run)
+          # Bash has no equivalent framework loader, so install-bash-user.sh
+          # is unaffected.
           block-in-file \
             -n ${NAME:-{{NAME}}} \
             -C true \
             -i {{DIR}}/etc/mise.zshenv \
             -o "${ZSH_ENV:-{{zsh_env}}}"
-          block-in-file \
-            -n ${NAME:-{{NAME}}} \
-            -C true \
-            -i {{DIR}}/etc/mise.zshrc \
-            -o "${ZSH_RC:-{{zsh_rc}}}"
+
+          _skip_zshrc=0
+          if [ "${MISE_SKIP_ZSH_RC:-}" = "1" ]; then
+            _skip_zshrc=1
+          else
+            _conf="${ZIM_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zimfw.conf}"
+            if [ -f "$_conf" ] && grep -Eq '^[[:space:]]*zmodule .*zim-mise' "$_conf"; then
+              _skip_zshrc=1
+            elif [ -f "${ZIM_HOME:-$HOME/.cache/zim}/modules/zim-mise/mise-activate.zsh" ]; then
+              _skip_zshrc=1
+            fi
+          fi
+          if [ "$_skip_zshrc" = "1" ]; then
+            echo "mise: skipping zshrc activate (zim-mise detected or MISE_SKIP_ZSH_RC=1)"
+          else
+            block-in-file \
+              -n ${NAME:-{{NAME}}} \
+              -C true \
+              -i {{DIR}}/etc/mise.zshrc \
+              -o "${ZSH_RC:-{{zsh_rc}}}"
+          fi
           if command -v mise >/dev/null 2>&1
           then
             mise settings set npm.package_manager "${MISE_NPM_PACKAGE_MANAGER:-{{mise_npm_package_manager}}}"
