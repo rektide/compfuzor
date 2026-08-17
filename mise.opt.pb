@@ -14,49 +14,56 @@
       ExecStart: "{{DIR}}/bin/mise-systemd-env.sh{{ ' --path' if mise_user_env_path|default(False)|bool else '' }}"
     SYSTEMD_INSTALLS:
       WantedBy: default.target
-    # NOTE: the shell-rc activation blocks below (mise.zshrc/mise.zprofile/
-    # mise.bashrc/mise.bash_profile) DUPLICATE a shell-framework's own mise
-    # loader. The `zim-mise` zimfw module (joke/zim-mise) already runs
-    # `mise activate zsh` + hook-env + completions during zim init on Linux,
-    # so on zim-using boxes injecting these into ~/.zshenv/~/.zprofile means
-    # mise is activated 3x (zshenv, zprofile, zim-mise). install-user.sh should
-    # detect an active zim/zim-mise loader and skip the block-in-file adds in
-    # that case (see TODO in install-user.sh). Bash has no equivalent framework
-    # loader, so the bash blocks are still wanted there.
+    # NOTE: zsh coverage is two-tier, matching mise's own recommendation:
+    #   * ~/.zshenv gets `mise activate zsh --shims`. zshenv is sourced by
+    #     EVERY zsh -- interactive or not (`zsh -c`, ssh commands, compfuzor
+    #     bins run via BINS_SHELL=/bin/zsh in bins_run.tasks) -- so mise-managed
+    #     tools resolve in non-interactive contexts. `--shims` skips the prompt
+    #     hooks, making it safe outside interactive shells.
+    #   * ~/.zshrc keeps plain `mise activate zsh` for interactive hook-env
+    #     updates. The `zim-mise` zimfw module (joke/zim-mise) already does
+    #     this during zim init on Linux, so on zim boxes the zshrc add is
+    #     redundant (see TODO in install-user.sh) but harmless: shims in
+    #     zshenv + a later interactive activate is mise's documented combo.
+    # The old ~/.zprofile `--shims` block was dropped: login shells source
+    # zshenv first, so it added nothing beyond the zshenv shims.
+    # Bash has no framework loader, so the bash blocks are still wanted.
     ETC_FILES:
+      - name: mise.zshenv
+        content: |
+          eval "$(mise activate zsh --shims)"
       - name: mise.zshrc
         content: |
           eval "$(mise activate zsh)"
-      - name: mise.zprofile
-        content: |
-          eval "$(mise activate zsh --shims)"
       - name: mise.bashrc
         content: |
           eval "$(mise activate bash)"
       - name: mise.bash_profile
         content: |
           eval "$(mise activate bash --shims)"
+    zsh_env: "${ZDOTDIR:-$HOME}/.zshenv"
     zsh_rc: "${ZDOTDIR:-$HOME}/.zshrc"
-    zsh_profile: "${ZDOTDIR:-$HOME}/.zprofile"
     bash_rc: "$HOME/.bashrc"
     bash_profile: "$HOME/.bash_profile"
     mise_npm_package_manager: "${MISE_NPM_PACKAGE_MANAGER:-pnpm}"
     mise_user_env_path: False
     ENV_LIST:
+      - zsh_env
       - zsh_rc
-      - zsh_profile
       - bash_rc
       - bash_profile
       - mise_npm_package_manager
     BINS:
       - name: install-user.sh
         content: |
-          # NOTE: the block-in-file adds below inject `mise activate zsh` into
-          # ~/.zshrc and ~/.zprofile. On zim-using boxes the `zim-mise` zimfw
-          # module already activates mise during zim init, so these adds are
-          # redundant there (triple activation: zshenv, zprofile, zim-mise).
+          # NOTE: the zshenv add below is what makes mise-managed tools visible
+          # to NON-interactive zsh (ansible BINS via BINS_SHELL, `zsh -c`, ssh)
+          # through shims; it is unconditional. The zshrc add only enables
+          # interactive hook-env; on zim-using boxes the `zim-mise` zimfw module
+          # already does that during zim init, so the zshrc add is redundant
+          # there.
           # TODO(install-user): detect an active zim/zim-mise loader and skip
-          # the zsh_rc/zsh_profile injection when present. Detection options:
+          # the zsh_rc injection when present. Detection options:
           #   * grep `zmodule .*zim-mise` in ${ZIM_CONFIG_FILE:-/opt/zim-main/etc/zimfw.conf}
           #   * test -f ~/.cache/zim/modules/zim-mise/mise-activate.zsh
           #     (generated when zim-mise's Linux branch has run)
@@ -66,13 +73,13 @@
           block-in-file \
             -n ${NAME:-{{NAME}}} \
             -C true \
-            -i {{DIR}}/etc/mise.zshrc \
-            -o "${ZSH_RC:-{{zsh_rc}}}"
+            -i {{DIR}}/etc/mise.zshenv \
+            -o "${ZSH_ENV:-{{zsh_env}}}"
           block-in-file \
             -n ${NAME:-{{NAME}}} \
             -C true \
-            -i {{DIR}}/etc/mise.zprofile \
-            -o "${ZSH_PROFILE:-{{zsh_profile}}}"
+            -i {{DIR}}/etc/mise.zshrc \
+            -o "${ZSH_RC:-{{zsh_rc}}}"
           if command -v mise >/dev/null 2>&1
           then
             mise settings set npm.package_manager "${MISE_NPM_PACKAGE_MANAGER:-{{mise_npm_package_manager}}}"

@@ -1,6 +1,15 @@
 ---
+# BINS_SHELL (default /bin/zsh): the wrapper shell for `shell:` invocations.
+# zsh sources ~/.zshenv (and /etc/zsh/zshenv) even non-interactively, so
+# per-user environment -- notably `mise activate --shims` from mise.opt.pb --
+# reaches bins without pretending to be an interactive/login shell. The bins
+# themselves are `#!/bin/bash` (files/_bin) and inherit the resolved PATH.
+# Set BINS_SHELL=/bin/sh to restore the old bare-POSIX behavior.
 - name: "Compfuzor: run all `BINS` that have an `args` or `run`"
-  shell: "chdir={{ DIR+'/' if item.pwd|def('/')|truncate(1, 1, end='') != '/' else ''  }}{{item.pwd|def(DIR)}} {{ (item.exec|def('') if not item.dest|def(item.name, False) else BINS_DIR+'/'+item.dest|def(item.name)) }}{{ ' '+item.args if item.args is deftruthy else '' }}"
+  shell:
+    chdir: "{{ DIR+'/' if item.pwd|def('/')|truncate(1, 1, end='') != '/' else '' }}{{ item.pwd|def(DIR) }}"
+    cmd: "{{ (item.exec|def('') if not item.dest|def(item.name, False) else BINS_DIR+'/'+item.dest|def(item.name)) }}{{ ' '+item.args if item.args is deftruthy else '' }}"
+    executable: "{{ BINS_SHELL|default('/bin/zsh') }}"
   when: >
     (item.requires_fs is deffalsy or (FS_BYPASS is deffalsy and DIR_BYPASS is deffalsy)) and
     (item.args is deftruthy or item.run is deftruthy or item.become is deftruthy or
