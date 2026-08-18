@@ -4,26 +4,12 @@
     TYPE: repart
     INSTANCE: main
     DIRS:
-      - libexec/repart
+      - var
+    PKGS:
+      - nodejs
     BINS:
       - name: repart
-        src: ../repart/repart
-        raw: true
-      - name: profile.sh
-        dest: ../libexec/repart/profile.sh
-        src: ../repart/libexec/profile.sh
-        raw: true
-      - name: disk.sh
-        dest: ../libexec/repart/disk.sh
-        src: ../repart/libexec/disk.sh
-        raw: true
-      - name: image.sh
-        dest: ../libexec/repart/image.sh
-        src: ../repart/libexec/image.sh
-        raw: true
-      - name: slot.sh
-        dest: ../libexec/repart/slot.sh
-        src: ../repart/libexec/slot.sh
+        src: ../repart/repart.ts
         raw: true
     BINS_ABSENT:
       - name: stamp.sh
@@ -51,8 +37,9 @@
     README: |
       # repart-main
 
-      One public `repart` CLI backed by four private namespace helpers and the
-      canonical partition definitions.
+      One TypeScript `repart` CLI for rendering profiles, safely planning disk
+      changes, working inside images, and selecting dated btrfs boot slots.
+      The playbook installs Node.js, the CLI runtime, alongside the toolkit.
 
       ## quick start
 
@@ -63,24 +50,39 @@
           sudo $R image with image.raw -- \
             sh -c '/opt/repart-main/bin/repart slot show "$REPART_MOUNT"'
 
-      ## dependency graph
+      Start with `repart --help`. Every namespace and operation also supports
+      `--help`, including `repart disk plan --help`; the CLI documents options,
+      defaults, safety checks, ownership, and examples where they are needed.
+
+      ## command model
 
       ```mermaid
       graph LR
-        disk[disk] --> profile[profile]
-        image[image]
-        slot[slot]
+        plan[disk plan] --> profile[profile render]
+        apply[disk apply] --> plan
+        image[image with]
+        slot[slot path/show/set]
       ```
 
-      `profile`, `image`, and `slot` are independent; only `disk` calls another
-      module (`profile`). Helpers under `libexec/repart/` are private.
+      `disk plan` renders the same profile model exposed by `profile render`.
+      `image` and `slot` are independent tools for inspecting the result.
+
+      ## durable state
+
+      Rendered profiles and reviewed plans live under `/opt/repart-main/var`,
+      never `/var/tmp`. A plan defaults to a descriptive name such as
+      `format-disk.img-20260818T120000Z`; use `--name NAME` when another process
+      needs a predictable path. These artifacts remain until explicitly removed.
+      The caller may `rm -rf` a rendered profile or plan after it is no longer
+      needed. Image mountpoints also live under `var`, but are private resources
+      that `image with` always unmounts and removes.
 
       ## stdout and ownership
 
       | command | stdout contract | ownership |
       |---|---|---|
-      | `profile render` | final absolute rendered tree path only | caller owns and removes the tree; `--preserve RELPATH` copies an opaque subtree without resolving its deferred tokens |
-      | `disk plan format\|migrate` | persistent absolute plan path only | caller owns; apply retains it for audit |
+      | `profile render` | final absolute rendered tree path only | durable under `DIR/var`; caller removes it explicitly; `--preserve RELPATH` leaves an opaque subtree tokenized |
+      | `disk plan format\|migrate` | persistent absolute plan path only | durable under `DIR/var`; apply retains it for audit |
       | `disk apply` | no data | plan remains caller-owned |
       | `image with` | child stdout only | command owns and always cleans its new loop and private mountpoint |
       | `slot path\|show` | path or stable TSV data only | no temporary resources |
@@ -91,12 +93,21 @@
       revalidates its fingerprint, rejects mounted targets, and executes the
       persisted arguments with only `--dry-run=yes` changed to `--dry-run=no`.
 
-      `disk plan format` always uses the canonical universal + format definitions
-      and `--offline=yes`. `disk plan migrate` uses universal + BDR definitions,
+      ### What each plan contains
+
+      A plan directory contains rendered `definitions/`, the allowlisted repart
+      `arguments`, target metadata in `plan`, and a `digest` over all reviewed
+      inputs. Planning records the canonical target and a device/table
+      fingerprint. Applying verifies the digest and fingerprint, requires the
+      same canonical target via `--confirm`, rejects mounted devices and
+      partitions, and changes only `--dry-run=yes` to `--dry-run=no`.
+
+      `disk plan format` combines universal + format definitions and forces
+      `--offline=yes`. `disk plan migrate` combines universal + BDR definitions,
       renders `BlockDeviceReplace=` from the canonical source mount, and requires
-      systemd-repart 261+ with a single-device btrfs source. Profile defaults are
-      today, mapped host architecture, 4G swap, and the same OS/home prefixes
-      consumed by `slot` (`REPART_OS_PREFIX`, `REPART_HOME_PREFIX`).
+      systemd-repart 261+ with single-device btrfs. Profile defaults are today,
+      mapped host architecture, 4G swap, and the OS/home prefixes shared with
+      `slot` (`REPART_OS_PREFIX`, `REPART_HOME_PREFIX`).
   tasks:
     - import_tasks: tasks/compfuzor.includes
       vars:

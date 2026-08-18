@@ -18,18 +18,14 @@ ROOT = Path(__file__).resolve().parents[2]
 def install(tmp_path: Path) -> tuple[Path, dict[str, str], Path]:
     prefix = tmp_path / "repart-main"
     (prefix / "bin").mkdir(parents=True)
-    (prefix / "libexec/repart").mkdir(parents=True)
     (prefix / "etc").mkdir()
-    shutil.copy2(ROOT / "files/repart/repart", prefix / "bin/repart")
-    shutil.copytree(ROOT / "files/repart/libexec", prefix / "libexec/repart", dirs_exist_ok=True)
+    shutil.copy2(ROOT / "files/repart/repart.ts", prefix / "bin/repart")
     shutil.copytree(ROOT / "files/repart/defs", prefix / "etc/defs")
-    for script in [prefix / "bin/repart", *(prefix / "libexec/repart").glob("*.sh")]:
-        script.chmod(0o755)
+    (prefix / "bin/repart").chmod(0o755)
     mock_bin = tmp_path / "mock-bin"
     mock_bin.mkdir()
     env = os.environ.copy()
     env["PATH"] = f"{mock_bin}:{env['PATH']}"
-    env["REPART_SCRATCH"] = str(tmp_path / "scratch")
     return prefix / "bin/repart", env, mock_bin
 
 
@@ -41,6 +37,17 @@ def mock(mock_bin: Path, name: str, body: str) -> None:
 
 def run(cli: Path, env: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run([cli, *args], env=env, text=True, capture_output=True, check=False)
+
+
+def test_help_explains_commands_and_durable_state(install) -> None:
+    cli, env, _ = install
+    top = run(cli, env, "--help")
+    assert top.returncode == 0
+    assert "disk plan" in top.stdout
+    plan = run(cli, env, "disk", "plan", "--help")
+    assert plan.returncode == 0
+    assert "DIR/var/<name>" in plan.stdout
+    assert "Raw systemd-repart arguments are intentionally forbidden" in plan.stdout
 
 
 def test_profile_render_overlays_tokens_and_stdout(install, tmp_path: Path) -> None:
@@ -92,14 +99,20 @@ def test_profile_preserves_deferred_token_subtree(install, tmp_path: Path) -> No
 def test_format_plan_and_apply_preserve_exact_arguments(install, tmp_path: Path) -> None:
     cli, env, mock_bin = install
     log = tmp_path / "repart.log"; env["MOCK_LOG"] = str(log)
-    mock(mock_bin, "systemd-repart", "printf '%s\\n' \"$*\" >>\"$MOCK_LOG\"")
+    mock(mock_bin, "systemd-repart", "printf '%s\\n' \"$*\" >>\"$MOCK_LOG\"; printf 'repart output\\n'")
     mock(mock_bin, "lsblk", "printf '%s\\n' \"${@: -1}\"")
     mock(mock_bin, "findmnt", "exit 1")
     target = tmp_path / "disk.img"; target.write_bytes(b"disk")
 
-    planned = run(cli, env, "disk", "plan", "format", str(target), "--date", "20260817")
+    planned = run(
+        cli, env, "disk", "plan", "format", str(target),
+        "--date", "20260817", "--name", "format-test",
+    )
     assert planned.returncode == 0, planned.stderr
+    assert "repart output" in planned.stderr
     plan = Path(planned.stdout.strip())
+    assert plan.parent == cli.parent.parent / "var"
+    assert plan.name == "format-test"
     assert planned.stdout == f"{plan}\n"
     assert (plan / "arguments").read_text().splitlines() == [
         "--offline=yes", "--empty=force", "--dry-run=yes"
@@ -109,6 +122,7 @@ def test_format_plan_and_apply_preserve_exact_arguments(install, tmp_path: Path)
     applied = run(cli, env, "disk", "apply", str(plan), "--confirm", str(target))
     assert applied.returncode == 0, applied.stderr
     assert applied.stdout == ""
+    assert "repart output" in applied.stderr
     calls = log.read_text().splitlines()
     assert "--offline=yes --empty=force --dry-run=yes" in calls[0]
     assert "--offline=yes --empty=force --dry-run=no" in calls[1]
