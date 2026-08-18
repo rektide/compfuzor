@@ -54,7 +54,7 @@
       - mkosi.images/disk/mkosi.repart
       - mkosi.images/disk/mkosi.extra/usr/local/bin
       - mkosi.images/disk/mkosi.extra/opt/repart-main/bin
-      - mkosi.images/disk/mkosi.extra/opt/repart-main/libexec/repart
+      - mkosi.images/disk/mkosi.extra/opt/repart-main/var
       - mkosi.images/disk/mkosi.extra/opt/repart-main/etc/defs/universal.d
       - mkosi.images/disk/mkosi.extra/opt/repart-main/etc/defs/format.d
       - mkosi.images/disk/mkosi.extra/opt/repart-main/etc/defs/bdr.d
@@ -125,19 +125,7 @@
         mode: "0755"
       # Burn the same one-public-bin layout used by repart.opt.pb into images.
       - name: mkosi.images/disk/mkosi.extra/opt/repart-main/bin/repart
-        content: "{{ lookup('file', '../../files/repart/repart') }}"
-        mode: "0755"
-      - name: mkosi.images/disk/mkosi.extra/opt/repart-main/libexec/repart/profile.sh
-        content: "{{ lookup('file', '../../files/repart/libexec/profile.sh') }}"
-        mode: "0755"
-      - name: mkosi.images/disk/mkosi.extra/opt/repart-main/libexec/repart/disk.sh
-        content: "{{ lookup('file', '../../files/repart/libexec/disk.sh') }}"
-        mode: "0755"
-      - name: mkosi.images/disk/mkosi.extra/opt/repart-main/libexec/repart/image.sh
-        content: "{{ lookup('file', '../../files/repart/libexec/image.sh') }}"
-        mode: "0755"
-      - name: mkosi.images/disk/mkosi.extra/opt/repart-main/libexec/repart/slot.sh
-        content: "{{ lookup('file', '../../files/repart/libexec/slot.sh') }}"
+        content: "{{ lookup('file', '../../files/repart/repart.ts') }}"
         mode: "0755"
       - name: mkosi.images/disk/mkosi.extra/opt/repart-main/etc/defs/universal.d/00-grub.conf
         content: "{{ lookup('file', '../../files/repart/defs/universal.d/00-grub.conf') }}"
@@ -207,6 +195,8 @@
           Output=mkosi-disk
           [Content]
           Bootable=yes
+          # Runtime for the embedded /opt/repart-main/bin/repart TypeScript CLI.
+          Packages=nodejs
           {% for setname in MKOSI_PKGSETS %}# {{ setname }} ({{ lookup('pkgs', setname) | length }})
           Packages={{ (lookup('pkgs', setname) | unique) | join(',') }}
           {% endfor %}
@@ -258,7 +248,7 @@
           # @DATE@ tokens in the config tree (e.g. the dated home subvol) are
           # rendered at BUILD time by `repart profile render` (env
           # MKOSI_DATE=YYYYMMDD, else today) into an on-disk scratch copy
-          # (DIR/var/tmp — never tmpfs); etc/ stays tokenized, never stale.
+          # (/opt/repart-main/var — never tmpfs); etc/ stays tokenized, never stale.
           DATE="${MKOSI_DATE:-}"
           case "$DATE" in *[!0-9]*) echo "Error: bad MKOSI_DATE '$DATE' (want YYYYMMDD)" >&2; exit 1 ;; esac
           mkdir -p "{{DIR}}/var/output" "{{DIR}}/var/cache" "{{DIR}}/var/package-cache" "{{DIR}}/var/tmp"
@@ -271,7 +261,7 @@
           args=(profile render --base etc --swap "{{SWAP_SIZE}}" \
             --preserve mkosi.images/disk/mkosi.extra/opt/repart-main)
           [ -z "$DATE" ] || args+=(--date "$DATE")
-          BUILD="$(REPART_SCRATCH="{{DIR}}/var/tmp" "$REPART/bin/repart" "${args[@]}")"
+          BUILD="$("$REPART/bin/repart" "${args[@]}")"
           trap 'rm -rf "$BUILD"' EXIT
           echo "date stamp: ${MKOSI_DATE:-today}" >&2
           if [ -n "${1:-}" ]; then set -- --dependency "$1"; fi

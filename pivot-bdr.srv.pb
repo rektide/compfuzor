@@ -138,7 +138,6 @@
 
           "{{BINS_DIR}}/bdr-preflight.sh"
 
-          export REPART_SCRATCH="{{DIR}}/var/tmp"
           export REPART_OS_PREFIX="${BDR_OS_PREFIX:-/os/superbfowle}"
           export REPART_HOME_PREFIX="${BDR_HOME_PREFIX:-/home/superbfowle}"
           args=(disk plan migrate "$DISK" --source "$SRC" --swap "${BDR_SWAP_SIZE:-4G}")
@@ -191,7 +190,6 @@
           set -eu
           TARGET="${1:?usage: bdr-format.sh <disk-or-image>}"
           REPART="${REPART_DIR:-/opt/repart-main}"
-          export REPART_SCRATCH="{{DIR}}/var/tmp"
           export REPART_OS_PREFIX="${BDR_OS_PREFIX:-/os/superbfowle}"
           export REPART_HOME_PREFIX="${BDR_HOME_PREFIX:-/home/superbfowle}"
           args=(disk plan format "$TARGET" --swap "${BDR_SWAP_SIZE:-4G}")
@@ -236,8 +234,8 @@
 
       Both wrappers persist and preview a plan before applying it. Application
       requires `BDR_CONFIRM` to equal the target argument, binding ambient
-      confirmation to one disk or image. Plans remain under `REPART_SCRATCH`
-      for audit.
+      confirmation to one disk or image. Plans remain under
+      `/opt/repart-main/var` (or `$REPART_DIR/var`) for audit.
 
       ### bins (`bin/`)
 
