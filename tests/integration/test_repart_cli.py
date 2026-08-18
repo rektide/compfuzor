@@ -96,6 +96,19 @@ def test_profile_preserves_deferred_token_subtree(install, tmp_path: Path) -> No
     assert (tree / "guest-toolkit/defs/bdr.conf").read_text() == "BlockDeviceReplace=@SOURCE@\n"
 
 
+def test_profile_preserves_relative_symlinks_as_durable_links(install, tmp_path: Path) -> None:
+    cli, env, _ = install
+    base = tmp_path / "base"; base.mkdir()
+    (base / "target.conf").write_text("Date=@DATE@\n")
+    (base / "linked.conf").symlink_to("target.conf")
+    rendered = run(cli, env, "profile", "render", "--base", str(base), "--date", "20260817")
+    assert rendered.returncode == 0, rendered.stderr
+    tree = Path(rendered.stdout.strip())
+    shutil.rmtree(base)
+    assert os.readlink(tree / "linked.conf") == "target.conf"
+    assert (tree / "linked.conf").read_text() == "Date=20260817\n"
+
+
 def test_format_plan_and_apply_preserve_exact_arguments(install, tmp_path: Path) -> None:
     cli, env, mock_bin = install
     log = tmp_path / "repart.log"; env["MOCK_LOG"] = str(log)
@@ -142,6 +155,19 @@ def test_disk_apply_rejects_modified_plan(install, tmp_path: Path) -> None:
     applied = run(cli, env, "disk", "apply", str(plan), "--confirm", str(target))
     assert applied.returncode != 0
     assert "plan contents changed" in applied.stderr
+
+
+def test_disk_apply_fails_closed_when_mount_check_errors(install, tmp_path: Path) -> None:
+    cli, env, mock_bin = install
+    mock(mock_bin, "systemd-repart", "exit 0")
+    mock(mock_bin, "lsblk", "printf '%s\n' \"${@: -1}\"")
+    mock(mock_bin, "findmnt", "exit 2")
+    target = tmp_path / "disk.img"; target.write_bytes(b"disk")
+    planned = run(cli, env, "disk", "plan", "format", str(target), "--date", "20260817")
+    assert planned.returncode == 0, planned.stderr
+    applied = run(cli, env, "disk", "apply", planned.stdout.strip(), "--confirm", str(target))
+    assert applied.returncode != 0
+    assert "findmnt could not determine mount state" in applied.stderr
 
 
 def test_migrate_checks_source_and_renders_bdr_token(install, tmp_path: Path) -> None:

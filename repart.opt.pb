@@ -6,7 +6,11 @@
     DIRS:
       - var
     PKGS:
+      - btrfs-progs
+      - fdisk
       - nodejs
+      - systemd
+      - util-linux
     BINS:
       - name: repart
         src: ../repart/repart.ts
@@ -71,7 +75,7 @@
 
       Rendered profiles and reviewed plans live under `/opt/repart-main/var`,
       never `/var/tmp`. A plan defaults to a descriptive name such as
-      `format-disk.img-20260818T120000Z`; use `--name NAME` when another process
+      `format-disk.img-20260818T120000000Z-Ab3xYz`; use `--name NAME` when another process
       needs a predictable path. These artifacts remain until explicitly removed.
       The caller may `rm -rf` a rendered profile or plan after it is no longer
       needed. Image mountpoints also live under `var`, but are private resources

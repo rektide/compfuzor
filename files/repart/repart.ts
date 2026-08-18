@@ -13,6 +13,7 @@ const {
   mkdir,
   mkdtemp,
   readFile,
+  readlink,
   readdir,
   realpath,
   rename,
@@ -54,7 +55,7 @@ Options:
   --arch ARCH         ARCH token (default: mapped host architecture)
   --swap SIZE         SWAP token (default: 4G)
   --set NAME=VALUE    Define or override a token; repeatable
-  --name NAME         State directory name (default: profile-<timestamp>)
+  --name NAME         State directory name (default: unique profile-* name)
   -h, --help          Show this help
 
 Built-in tokens: DATE, ARCH, SWAP, OS_PREFIX, HOME_PREFIX.
@@ -88,7 +89,7 @@ Options:
   --arch ARCH         Profile ARCH token
   --swap SIZE         Profile SWAP token
   --set NAME=VALUE    Define a profile token; repeatable
-  --name NAME         Plan directory name (default: <operation>-<target>-<time>)
+  --name NAME         Plan directory name (default: <operation>-<target>-<time>-<id>)
   -h, --help          Show this help
 
 Raw systemd-repart arguments are intentionally forbidden.`
@@ -146,11 +147,11 @@ function mappedArch() {
 
 function today() {
   const date = new Date()
-  return `${date.getUTCFullYear()}${String(date.getUTCMonth() + 1).padStart(2, "0")}${String(date.getUTCDate()).padStart(2, "0")}`
+  return `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`
 }
 
 function timestamp() {
-  return new Date().toISOString().replaceAll(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")
+  return new Date().toISOString().replaceAll(/[-:.]/g, "")
 }
 
 function validDate(value) {
@@ -288,8 +289,9 @@ async function renderProfile(args, { ownedByPlan = false } = {}) {
 
   const tree = await createState(values.name, ownedByPlan ? "definitions-" : "profile-")
   try {
-    await cp(base, tree, { recursive: true, force: true })
-    for (const overlay of overlays) await cp(overlay, tree, { recursive: true, force: true })
+    const copyOptions = { recursive: true, force: true, verbatimSymlinks: true }
+    await cp(base, tree, copyOptions)
+    for (const overlay of overlays) await cp(overlay, tree, copyOptions)
     const unresolved = []
     for (const file of await filesBelow(tree)) {
       if (isPreserved(file, tree, preserves)) continue
@@ -309,7 +311,7 @@ async function renderProfile(args, { ownedByPlan = false } = {}) {
     await rm(tree, { recursive: true, force: true })
     throw error
   }
-  note("profile", `rendered profile at ${tree}; remove explicitly when no longer needed`)
+  if (!ownedByPlan) note("profile", `rendered profile at ${tree}; remove explicitly when no longer needed`)
   return tree
 }
 
@@ -321,8 +323,12 @@ async function commandOutput(command, args, allowFailure = false) {
 async function fingerprint(target) {
   const info = await lstat(target, { bigint: true })
   const identity = `mode=${info.mode}|dev=${info.dev}|inode=${info.ino}|rdev=${info.rdev}|size=${info.size}`
-  const block = await commandOutput("lsblk", ["-dnro", "MAJ:MIN,SIZE,SERIAL,WWN,MODEL", target], true)
-  const table = await commandOutput("sfdisk", ["--dump", target], true)
+  const blockResult = await run("lsblk", ["-dnro", "MAJ:MIN,SIZE,SERIAL,WWN,MODEL", target], { allowFailure: true })
+  if (info.isBlockDevice() && blockResult.status !== 0) fail(`lsblk could not fingerprint block target ${target}`)
+  const block = blockResult.stdout.trim()
+  const tableResult = await run("sfdisk", ["--dump", target], { allowFailure: true })
+  if (tableResult.status === 127) fail("sfdisk is required to fingerprint disk partition tables")
+  const table = tableResult.stdout.trim()
   const tableHash = createHash("sha256").update(table).digest("hex")
   return `${identity}|block=${block}|table=${tableHash}`
 }
@@ -330,7 +336,18 @@ async function fingerprint(target) {
 async function planDigest(plan) {
   // Hash names as well as bytes so adding, removing, renaming, or editing any
   // reviewed input invalidates the plan before a destructive apply.
-  const files = [join(plan, "plan"), join(plan, "arguments"), ...(await filesBelow(join(plan, "definitions")))]
+  const definitions = join(plan, "definitions")
+  const files = [join(plan, "plan"), join(plan, "arguments"), ...(await filesBelow(definitions))]
+  // Repart may follow links after preview. Refuse them rather than claiming a
+  // plan is immutable while an external link target can still change.
+  async function rejectSymlinks(path) {
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      const child = join(path, entry.name)
+      if (entry.isSymbolicLink()) fail(`plan definitions may not contain symlinks: ${relative(definitions, child)} -> ${await readlink(child)}`)
+      if (entry.isDirectory()) await rejectSymlinks(child)
+    }
+  }
+  await rejectSymlinks(definitions)
   const hash = createHash("sha256")
   for (const file of files.sort()) hash.update(relative(plan, file)).update("\0").update(await readFile(file)).update("\0")
   return hash.digest("hex")
@@ -398,7 +415,7 @@ async function diskPlan(args) {
   for (const value of values.set || []) renderArgs.push("--set", value)
   if (source) renderArgs.push("--set", `SOURCE=${source}`)
 
-  const plan = await createState(values.name || defaultPlanName(operation, target), "plan-")
+  const plan = await createState(values.name, `${defaultPlanName(operation, target)}-`)
   let definitions
   try {
     definitions = await renderProfile(renderArgs, { ownedByPlan: true })
@@ -428,14 +445,22 @@ async function diskPlan(args) {
 async function rejectMounted(target) {
   const devices = [target]
   if ((await lstat(target)).isFile()) {
-    const loops = await commandOutput("losetup", ["-j", target, "-O", "NAME", "-n"], true)
-    devices.push(...loops.split("\n").filter(Boolean))
+    const loops = await run("losetup", ["-j", target, "-O", "NAME", "-n"], { allowFailure: true })
+    if (loops.status !== 0) fail(`losetup could not inspect image target ${target}`)
+    devices.push(...loops.stdout.trim().split("\n").filter(Boolean))
   }
   for (const rootDevice of devices) {
-    const listed = await commandOutput("lsblk", ["-nrpo", "NAME", rootDevice], true)
-    for (const device of listed.split("\n").filter(Boolean).length ? listed.split("\n").filter(Boolean) : [rootDevice]) {
+    let discovered = [rootDevice]
+    if (!(await lstat(rootDevice)).isFile()) {
+      const listed = await run("lsblk", ["-nrpo", "NAME", rootDevice], { allowFailure: true })
+      if (listed.status !== 0) fail(`lsblk could not inspect target partitions for ${rootDevice}`)
+      discovered = listed.stdout.trim().split("\n").filter(Boolean)
+      if (!discovered.length) fail(`lsblk returned no target devices for ${rootDevice}`)
+    }
+    for (const device of discovered) {
       const result = await run("findmnt", ["-rn", "-S", device], { allowFailure: true })
       if (result.status === 0) fail(`target or target partition is mounted: ${device}`)
+      if (result.status !== 1) fail(`findmnt could not determine mount state for ${device} (status ${result.status})`)
     }
   }
 }
@@ -551,15 +576,28 @@ async function imageCommand(args) {
     const result = await run(executable, childArgs, { env, stdio: "inherit", allowFailure: true })
     if (result.status !== 0) process.exitCode = result.status || interrupted || 1
   } finally {
+    let cleanupError
     if (mountpoint) {
-      const mounted = await run("findmnt", ["-rn", mountpoint], { allowFailure: true })
-      if (mounted.status === 0) await run("umount", ["-R", mountpoint])
+      try {
+        const mounted = await run("findmnt", ["-rn", mountpoint], { allowFailure: true })
+        if (mounted.status === 0) await run("umount", ["-R", mountpoint])
+        else if (mounted.status !== 1) fail(`findmnt could not determine mount state for ${mountpoint}`)
+      } catch (error) {
+        cleanupError = error
+      }
       await rmdir(mountpoint).catch(() => {})
     }
-    if (loop) await run("losetup", ["-d", loop])
+    if (loop) {
+      try {
+        await run("losetup", ["-d", loop])
+      } catch (error) {
+        cleanupError ||= error
+      }
+    }
     process.off("SIGINT", onInterrupt)
     process.off("SIGTERM", onTerminate)
     if (interrupted) process.exitCode = interrupted
+    if (cleanupError) throw cleanupError
   }
 }
 
