@@ -84,13 +84,27 @@
       ## environment
 
       One precedence rule: flag > `REPART_*` variable > built-in default.
-      `REPART_BASE`, `REPART_OVERLAY` (comma-separated), `REPART_PRESERVE`
-      (comma-separated), `REPART_DATE`, `REPART_ARCH`, `REPART_SWAP` (built-in
-      default 16G), `REPART_SET` (comma-separated NAME=VALUE), `REPART_NAME`,
-      `REPART_SOURCE`, `REPART_CONFIRM`, `REPART_PARTITION`, `REPART_SUBVOL`,
-      `REPART_READ_ONLY` (truthy), `REPART_HOME` (truthy), plus the slot scheme
-      prefixes `REPART_OS_PREFIX` and `REPART_HOME_PREFIX`. Positional arguments
-      (targets, plans, mounts, commands) always stay explicit.
+
+      | flag | variable | meaning |
+      |---|---|---|
+      | `--base` | `REPART_BASE` | profile base tree |
+      | `--overlay` | `REPART_OVERLAY` (comma-separated) | overlay tree, later wins |
+      | `--preserve` | `REPART_PRESERVE` (comma-separated) | leave subtree tokenized |
+      | `--date` | `REPART_DATE` | DATE token (default: today) |
+      | `--arch` | `REPART_ARCH` | ARCH token (default: mapped host arch) |
+      | `--swap` | `REPART_SWAP` | SWAP token (default: 16G) |
+      | `--set` | `REPART_SET` (comma-separated) | extra token NAME=VALUE |
+      | `--name` | `REPART_NAME` | state directory name |
+      | `--source` | `REPART_SOURCE` | migrate source mount |
+      | `--confirm` | `REPART_CONFIRM` | apply confirmation target |
+      | `--partition` | `REPART_PARTITION` | image partition number |
+      | `--subvol` | `REPART_SUBVOL` | image subvolume |
+      | `--read-only` | `REPART_READ_ONLY` (truthy) | read-only mount |
+      | `path --home` | `REPART_HOME` (truthy) | home slot prefix |
+      | — | `REPART_OS_PREFIX` / `REPART_HOME_PREFIX` | slot scheme prefixes (default `/os/superbfowle`, `/home/superbfowle`) |
+
+      Positional arguments (targets, plans, mounts, commands) always stay
+      explicit.
 
       ## stdout and ownership
 

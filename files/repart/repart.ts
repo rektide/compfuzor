@@ -38,8 +38,8 @@ Commands:
   slot show        List known OS and home slots
   slot set         Select the default OS slot
 
-Every option also reads a REPART_* environment variable when its flag is
-absent; each command's --help documents its variables. Flags always win.
+Every option pairs with a REPART_* environment variable, shown beside it in
+each command's --help; flags always win.
 
 Run "repart <command> --help" or "repart <command> <subcommand> --help"
 for command options, behavior, and examples.`
@@ -50,25 +50,24 @@ Copy a base tree, overlay later trees, and replace @UPPERCASE@ tokens. The
 rendered tree is durable state under DIR/var and its path is printed to stdout.
 Remove it explicitly when it is no longer useful.
 
-Options:
-  --base DIR          Base tree (required)
+Options (flag wins over its REPART_* variable):
+  --base DIR          Base tree (required) [REPART_BASE]
   --overlay DIR       Overlay tree; repeatable, later files win
+                      [REPART_OVERLAY: comma-separated]
   --preserve PATH     Do not resolve tokens beneath this relative path
-  --date YYYYMMDD     DATE token (default: today)
-  --arch ARCH         ARCH token (default: mapped host architecture)
-  --swap SIZE         SWAP token (default: 16G)
+                      [REPART_PRESERVE: comma-separated]
+  --date YYYYMMDD     DATE token (default: today) [REPART_DATE]
+  --arch ARCH         ARCH token (default: mapped host architecture) [REPART_ARCH]
+  --swap SIZE         SWAP token (default: 16G) [REPART_SWAP]
   --set NAME=VALUE    Define or override a token; repeatable
+                      [REPART_SET: comma-separated NAME=VALUE]
   --name NAME         State directory name (default: unique profile-* name)
+                      [REPART_NAME]
   -h, --help          Show this help
 
-Built-in tokens: DATE, ARCH, SWAP, OS_PREFIX, HOME_PREFIX.
-
-Environment (used only when the flag is absent):
-  REPART_BASE, REPART_DATE, REPART_ARCH, REPART_SWAP, REPART_NAME
-  REPART_OVERLAY, REPART_PRESERVE, REPART_SET
-      Comma-separated lists; values containing commas need the flags.
-  REPART_OS_PREFIX, REPART_HOME_PREFIX
-      Slot scheme prefixes (default /os/superbfowle, /home/superbfowle).
+Built-in tokens: DATE, ARCH, SWAP, OS_PREFIX, HOME_PREFIX. The prefix tokens
+have no flag: REPART_OS_PREFIX (default /os/superbfowle) and
+REPART_HOME_PREFIX (default /home/superbfowle).
 
 Example:
   repart profile render --base etc --overlay local --set CHANNEL=stable`
@@ -91,23 +90,23 @@ const DISK_PLAN_HELP = `Usage: repart disk plan <format|migrate> TARGET [options
 Persist a reviewed plan under DIR/var/<name>. Planning always invokes
 systemd-repart with --dry-run=yes; apply changes only that flag to no.
 
-Options:
+Options (flag wins over its REPART_* variable):
   --source MOUNT      Single-device btrfs source (migrate only, required)
-  --base DIR          Replace the canonical universal profile base
+                      [REPART_SOURCE]
+  --base DIR          Replace the canonical universal profile base [REPART_BASE]
   --overlay DIR       Add a profile overlay; repeatable
-  --date YYYYMMDD     Profile DATE token
-  --arch ARCH         Profile ARCH token
-  --swap SIZE         Profile SWAP token (default: 16G)
+                      [REPART_OVERLAY: comma-separated]
+  --date YYYYMMDD     Profile DATE token [REPART_DATE]
+  --arch ARCH         Profile ARCH token [REPART_ARCH]
+  --swap SIZE         Profile SWAP token (default: 16G) [REPART_SWAP]
   --set NAME=VALUE    Define a profile token; repeatable
-  --name NAME         Plan directory name (default: <operation>-<target>-<time>-<id>)
+                      [REPART_SET: comma-separated NAME=VALUE]
+  --name NAME         Plan directory name
+                      (default: <operation>-<target>-<time>-<id>) [REPART_NAME]
   -h, --help          Show this help
 
-Environment (used only when the flag is absent):
-  REPART_SOURCE, REPART_BASE, REPART_DATE, REPART_ARCH, REPART_SWAP,
-  REPART_NAME, and comma-separated REPART_OVERLAY / REPART_SET.
-  TARGET itself must always be given explicitly.
-
-Raw systemd-repart arguments are intentionally forbidden.`
+TARGET itself must always be given explicitly. Raw systemd-repart arguments
+are intentionally forbidden.`
 
 const DISK_APPLY_HELP = `Usage: repart disk apply PLAN --confirm TARGET
 
@@ -115,8 +114,11 @@ Apply a persisted plan only after its definitions, arguments, target path, and
 target fingerprint have been revalidated. The plan remains in DIR/var for
 audit or explicit removal.
 
-Environment (used only when the flag is absent):
-  REPART_CONFIRM    Same matching rule as --confirm TARGET`
+Options (flag wins over its REPART_* variable):
+  --confirm TARGET    Must equal the planned target [REPART_CONFIRM]
+  -h, --help          Show this help
+
+PLAN and its target stay positional and explicit.`
 
 const IMAGE_HELP = `Usage: repart image with IMAGE [options] [-- COMMAND...]
 
@@ -125,17 +127,15 @@ DIR/var mountpoint, and run COMMAND with REPART_IMAGE, REPART_LOOP,
 REPART_DEVICE, and REPART_MOUNT exported. Unlike profiles and plans, the mount
 directory and loop device are always cleaned up when the command exits.
 
-Options:
+Options (flag wins over its REPART_* variable):
   --partition NUMBER  Mount this partition instead of discovering root
-  --subvol PATH       Mount this btrfs subvolume
-  --read-only         Mount read-only
+                      [REPART_PARTITION]
+  --subvol PATH       Mount this btrfs subvolume [REPART_SUBVOL]
+  --read-only         Mount read-only [REPART_READ_ONLY: truthy]
   -h, --help          Show this help
 
-Environment (used only when the flag is absent):
-  REPART_PARTITION, REPART_SUBVOL,
-  REPART_READ_ONLY    Truthy: 1, true, yes, y, or on.
-
-If COMMAND is omitted, the user's shell is started.`
+IMAGE stays positional and explicit. If COMMAND is omitted, the user's shell
+is started.`
 
 const SLOT_HELP = `Usage: repart slot <path|show|set> ...
 
@@ -146,11 +146,11 @@ Commands:
   show MOUNT                     Print stable TSV slot data
   set MOUNT <YYYYMMDD|PATH|latest>  Set the default OS subvolume
 
-Environment:
+Variables (no flag counterpart):
   REPART_ARCH        Architecture segment of OS slot paths (default: mapped
                      host architecture)
   REPART_DATE        Default date for "path" (default: today)
-  REPART_HOME        Truthy (1/true/yes/y/on) selects the home prefix
+  REPART_HOME        Truthy (1/true/yes/y/on); same as path's --home
   REPART_OS_PREFIX, REPART_HOME_PREFIX
                      Slot scheme prefixes (default /os/superbfowle,
                      /home/superbfowle)`

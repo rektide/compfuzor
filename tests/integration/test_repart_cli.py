@@ -47,7 +47,7 @@ def test_help_explains_commands_and_durable_state(install) -> None:
     plan = run(cli, env, "disk", "plan", "--help")
     assert plan.returncode == 0
     assert "DIR/var/<name>" in plan.stdout
-    assert "Raw systemd-repart arguments are intentionally forbidden" in plan.stdout
+    assert "intentionally forbidden" in plan.stdout
 
 
 def test_profile_render_overlays_tokens_and_stdout(install, tmp_path: Path) -> None:
