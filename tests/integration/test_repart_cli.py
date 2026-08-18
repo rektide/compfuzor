@@ -109,6 +109,55 @@ def test_profile_preserves_relative_symlinks_as_durable_links(install, tmp_path:
     assert (tree / "linked.conf").read_text() == "Date=20260817\n"
 
 
+def test_swap_defaults_to_16g(install, tmp_path: Path) -> None:
+    cli, env, _ = install
+    base = tmp_path / "base"; base.mkdir()
+    (base / "mkosi.conf").write_text("swap=@SWAP@\n")
+    rendered = run(cli, env, "profile", "render", "--base", str(base), "--date", "20260817")
+    assert rendered.returncode == 0, rendered.stderr
+    tree = Path(rendered.stdout.strip())
+    assert (tree / "mkosi.conf").read_text() == "swap=16G\n"
+
+
+def test_environment_falls_back_and_flags_override(install, tmp_path: Path) -> None:
+    cli, env, _ = install
+    base = tmp_path / "base"; base.mkdir()
+    (base / "mkosi.conf").write_text("date=@DATE@ thing=@THING@\n")
+    env["REPART_DATE"] = "20260101"
+    env["REPART_SET"] = "THING=from-env"
+    rendered = run(cli, env, "profile", "render", "--base", str(base), "--date", "20260817")
+    assert rendered.returncode == 0, rendered.stderr
+    tree = Path(rendered.stdout.strip())
+    assert (tree / "mkosi.conf").read_text() == "date=20260817 thing=from-env\n"
+
+
+def test_environment_supplies_base_swap_and_name(install, tmp_path: Path) -> None:
+    cli, env, _ = install
+    base = tmp_path / "base"; base.mkdir()
+    (base / "conf").write_text("swap=@SWAP@\n")
+    env["REPART_BASE"] = str(base)
+    env["REPART_SWAP"] = "8G"
+    env["REPART_NAME"] = "env-profile"
+    rendered = run(cli, env, "profile", "render", "--date", "20260817")
+    assert rendered.returncode == 0, rendered.stderr
+    tree = Path(rendered.stdout.strip())
+    assert tree.name == "env-profile"
+    assert (tree / "conf").read_text() == "swap=8G\n"
+
+
+def test_help_documents_environment_variables(install) -> None:
+    cli, env, _ = install
+    top = run(cli, env, "--help")
+    assert "REPART_*" in top.stdout
+    profile = run(cli, env, "profile", "--help")
+    assert "REPART_SWAP" in profile.stdout
+    assert "REPART_OVERLAY" in profile.stdout
+    apply_help = run(cli, env, "disk", "apply", "--help")
+    assert "REPART_CONFIRM" in apply_help.stdout
+    image_help = run(cli, env, "image", "--help")
+    assert "REPART_READ_ONLY" in image_help.stdout
+
+
 def test_format_plan_and_apply_preserve_exact_arguments(install, tmp_path: Path) -> None:
     cli, env, mock_bin = install
     log = tmp_path / "repart.log"; env["MOCK_LOG"] = str(log)

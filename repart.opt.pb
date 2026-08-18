@@ -81,6 +81,17 @@
       needed. Image mountpoints also live under `var`, but are private resources
       that `image with` always unmounts and removes.
 
+      ## environment
+
+      One precedence rule: flag > `REPART_*` variable > built-in default.
+      `REPART_BASE`, `REPART_OVERLAY` (comma-separated), `REPART_PRESERVE`
+      (comma-separated), `REPART_DATE`, `REPART_ARCH`, `REPART_SWAP` (built-in
+      default 16G), `REPART_SET` (comma-separated NAME=VALUE), `REPART_NAME`,
+      `REPART_SOURCE`, `REPART_CONFIRM`, `REPART_PARTITION`, `REPART_SUBVOL`,
+      `REPART_READ_ONLY` (truthy), `REPART_HOME` (truthy), plus the slot scheme
+      prefixes `REPART_OS_PREFIX` and `REPART_HOME_PREFIX`. Positional arguments
+      (targets, plans, mounts, commands) always stay explicit.
+
       ## stdout and ownership
 
       | command | stdout contract | ownership |
@@ -110,7 +121,7 @@
       `--offline=yes`. `disk plan migrate` combines universal + BDR definitions,
       renders `BlockDeviceReplace=` from the canonical source mount, and requires
       systemd-repart 261+ with single-device btrfs. Profile defaults are today,
-      mapped host architecture, 4G swap, and the OS/home prefixes shared with
+      mapped host architecture, 16G swap, and the OS/home prefixes shared with
       `slot` (`REPART_OS_PREFIX`, `REPART_HOME_PREFIX`).
   tasks:
     - import_tasks: tasks/compfuzor.includes

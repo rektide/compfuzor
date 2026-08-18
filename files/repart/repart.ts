@@ -38,6 +38,9 @@ Commands:
   slot show        List known OS and home slots
   slot set         Select the default OS slot
 
+Every option also reads a REPART_* environment variable when its flag is
+absent; each command's --help documents its variables. Flags always win.
+
 Run "repart <command> --help" or "repart <command> <subcommand> --help"
 for command options, behavior, and examples.`
 
@@ -53,12 +56,19 @@ Options:
   --preserve PATH     Do not resolve tokens beneath this relative path
   --date YYYYMMDD     DATE token (default: today)
   --arch ARCH         ARCH token (default: mapped host architecture)
-  --swap SIZE         SWAP token (default: 4G)
+  --swap SIZE         SWAP token (default: 16G)
   --set NAME=VALUE    Define or override a token; repeatable
   --name NAME         State directory name (default: unique profile-* name)
   -h, --help          Show this help
 
 Built-in tokens: DATE, ARCH, SWAP, OS_PREFIX, HOME_PREFIX.
+
+Environment (used only when the flag is absent):
+  REPART_BASE, REPART_DATE, REPART_ARCH, REPART_SWAP, REPART_NAME
+  REPART_OVERLAY, REPART_PRESERVE, REPART_SET
+      Comma-separated lists; values containing commas need the flags.
+  REPART_OS_PREFIX, REPART_HOME_PREFIX
+      Slot scheme prefixes (default /os/superbfowle, /home/superbfowle).
 
 Example:
   repart profile render --base etc --overlay local --set CHANNEL=stable`
@@ -87,10 +97,15 @@ Options:
   --overlay DIR       Add a profile overlay; repeatable
   --date YYYYMMDD     Profile DATE token
   --arch ARCH         Profile ARCH token
-  --swap SIZE         Profile SWAP token
+  --swap SIZE         Profile SWAP token (default: 16G)
   --set NAME=VALUE    Define a profile token; repeatable
   --name NAME         Plan directory name (default: <operation>-<target>-<time>-<id>)
   -h, --help          Show this help
+
+Environment (used only when the flag is absent):
+  REPART_SOURCE, REPART_BASE, REPART_DATE, REPART_ARCH, REPART_SWAP,
+  REPART_NAME, and comma-separated REPART_OVERLAY / REPART_SET.
+  TARGET itself must always be given explicitly.
 
 Raw systemd-repart arguments are intentionally forbidden.`
 
@@ -98,7 +113,10 @@ const DISK_APPLY_HELP = `Usage: repart disk apply PLAN --confirm TARGET
 
 Apply a persisted plan only after its definitions, arguments, target path, and
 target fingerprint have been revalidated. The plan remains in DIR/var for
-audit or explicit removal.`
+audit or explicit removal.
+
+Environment (used only when the flag is absent):
+  REPART_CONFIRM    Same matching rule as --confirm TARGET`
 
 const IMAGE_HELP = `Usage: repart image with IMAGE [options] [-- COMMAND...]
 
@@ -113,6 +131,10 @@ Options:
   --read-only         Mount read-only
   -h, --help          Show this help
 
+Environment (used only when the flag is absent):
+  REPART_PARTITION, REPART_SUBVOL,
+  REPART_READ_ONLY    Truthy: 1, true, yes, y, or on.
+
 If COMMAND is omitted, the user's shell is started.`
 
 const SLOT_HELP = `Usage: repart slot <path|show|set> ...
@@ -122,7 +144,16 @@ Manage dated btrfs subvolumes beneath REPART_OS_PREFIX and REPART_HOME_PREFIX.
 Commands:
   path [--home] [YYYYMMDD]       Print a canonical slot path
   show MOUNT                     Print stable TSV slot data
-  set MOUNT <YYYYMMDD|PATH|latest>  Set the default OS subvolume`
+  set MOUNT <YYYYMMDD|PATH|latest>  Set the default OS subvolume
+
+Environment:
+  REPART_ARCH        Architecture segment of OS slot paths (default: mapped
+                     host architecture)
+  REPART_DATE        Default date for "path" (default: today)
+  REPART_HOME        Truthy (1/true/yes/y/on) selects the home prefix
+  REPART_OS_PREFIX, REPART_HOME_PREFIX
+                     Slot scheme prefixes (default /os/superbfowle,
+                     /home/superbfowle)`
 
 class CliError extends Error {}
 
@@ -140,9 +171,12 @@ function note(scope, message) {
   console.error(`repart ${scope}: ${message}`)
 }
 
-function mappedArch() {
-  const value = process.env.REPART_ARCH || hostArch()
+function mappedArch(value) {
   return value === "x64" || value === "x86_64" ? "amd64" : value === "aarch64" ? "arm64" : value
+}
+
+function slotArch() {
+  return mappedArch(process.env.REPART_ARCH || hostArch())
 }
 
 function today() {
@@ -187,6 +221,23 @@ function parsed(args, options) {
   } catch (error) {
     fail(error.message)
   }
+}
+
+function envName(option) {
+  return `REPART_${option.replaceAll("-", "_").toUpperCase()}`
+}
+
+// One precedence rule everywhere: flag > REPART_* variable > built-in default.
+function setting(values, option, { list = false } = {}) {
+  if (values[option] !== undefined) return values[option]
+  const raw = process.env[envName(option)]
+  if (raw === undefined || raw === "") return list ? [] : undefined
+  return list ? raw.split(",").map((item) => item.trim()).filter(Boolean) : raw
+}
+
+function settingBool(values, option) {
+  if (values[option] !== undefined) return values[option]
+  return /^(1|true|yes|y|on)$/i.test(process.env[envName(option)] || "")
 }
 
 async function run(command, args, { allowFailure = false, env, stdio = "pipe" } = {}) {
@@ -260,12 +311,12 @@ async function renderProfile(args, { ownedByPlan = false } = {}) {
     return undefined
   }
   if (positionals.length) fail(`unexpected profile argument: ${positionals[0]}`)
-  if (!values.base) fail("--base must name a directory")
-
-  const base = await directory(values.base, "base")
+  const baseSetting = setting(values, "base")
+  if (!baseSetting) fail("--base must name a directory (or set REPART_BASE)")
+  const base = await directory(baseSetting, "base")
   const overlays = []
-  for (const overlay of values.overlay || []) overlays.push(await directory(overlay, "overlay"))
-  const preserves = (values.preserve || []).map((path) => {
+  for (const overlay of setting(values, "overlay", { list: true })) overlays.push(await directory(overlay, "overlay"))
+  const preserves = setting(values, "preserve", { list: true }).map((path) => {
     const normalized = path.replace(/^\.\//, "")
     if (!normalized || isAbsolute(normalized) || normalized.split(/[\\/]/).includes("..")) {
       fail(`--preserve must stay beneath the rendered tree: ${path}`)
@@ -273,13 +324,13 @@ async function renderProfile(args, { ownedByPlan = false } = {}) {
     return normalized
   })
   const tokens = new Map([
-    ["DATE", validDate(values.date || today())],
-    ["ARCH", values.arch || mappedArch()],
-    ["SWAP", values.swap || "4G"],
+    ["DATE", validDate(setting(values, "date") || today())],
+    ["ARCH", mappedArch(setting(values, "arch") || hostArch())],
+    ["SWAP", setting(values, "swap") || "16G"],
     ["OS_PREFIX", process.env.REPART_OS_PREFIX || "/os/superbfowle"],
     ["HOME_PREFIX", process.env.REPART_HOME_PREFIX || "/home/superbfowle"],
   ])
-  for (const pair of values.set || []) {
+  for (const pair of setting(values, "set", { list: true })) {
     const separator = pair.indexOf("=")
     const name = pair.slice(0, separator)
     if (separator < 1) fail("--set needs NAME=VALUE")
@@ -287,7 +338,7 @@ async function renderProfile(args, { ownedByPlan = false } = {}) {
     tokens.set(name, pair.slice(separator + 1))
   }
 
-  const tree = await createState(values.name, ownedByPlan ? "definitions-" : "profile-")
+  const tree = await createState(setting(values, "name"), ownedByPlan ? "definitions-" : "profile-")
   try {
     const copyOptions = { recursive: true, force: true, verbatimSymlinks: true }
     await cp(base, tree, copyOptions)
@@ -397,25 +448,26 @@ async function diskPlan(args) {
   if (positionals.length !== 1) fail(`${operation} needs exactly one TARGET`)
   const target = await existing(positionals[0], "target")
   let source = ""
-  if (values.source) {
+  const sourceSetting = setting(values, "source")
+  if (sourceSetting) {
     if (operation !== "migrate") fail("--source is only valid for migrate")
-    source = await directory(values.source, "migration source")
+    source = await directory(sourceSetting, "migration source")
   }
   if (operation === "migrate") {
     if (!source) fail("migrate requires --source MOUNT")
     await checkMigrateSource(source)
   }
 
-  const base = values.base || await definitionDirectory("universal.d")
+  const base = setting(values, "base") || await definitionDirectory("universal.d")
   const flavor = await definitionDirectory(operation === "migrate" ? "bdr.d" : "format.d")
   const renderArgs = ["--base", base]
-  for (const overlay of values.overlay || []) renderArgs.push("--overlay", overlay)
+  for (const overlay of setting(values, "overlay", { list: true })) renderArgs.push("--overlay", overlay)
   renderArgs.push("--overlay", flavor)
-  for (const key of ["date", "arch", "swap"]) if (values[key]) renderArgs.push(`--${key}`, values[key])
-  for (const value of values.set || []) renderArgs.push("--set", value)
+  for (const key of ["date", "arch", "swap"]) if (setting(values, key)) renderArgs.push(`--${key}`, setting(values, key))
+  for (const value of setting(values, "set", { list: true })) renderArgs.push("--set", value)
   if (source) renderArgs.push("--set", `SOURCE=${source}`)
 
-  const plan = await createState(values.name, `${defaultPlanName(operation, target)}-`)
+  const plan = await createState(setting(values, "name"), `${defaultPlanName(operation, target)}-`)
   let definitions
   try {
     definitions = await renderProfile(renderArgs, { ownedByPlan: true })
@@ -474,9 +526,9 @@ async function diskApply(args) {
     console.log(DISK_APPLY_HELP)
     return
   }
-  if (positionals.length !== 1 || !values.confirm) fail("usage: repart disk apply PLAN --confirm TARGET")
+  if (positionals.length !== 1 || !setting(values, "confirm")) fail("usage: repart disk apply PLAN --confirm TARGET")
   const plan = await directory(positionals[0], "plan")
-  const confirmed = await existing(values.confirm, "confirmation target")
+  const confirmed = await existing(setting(values, "confirm"), "confirmation target")
   for (const path of ["plan", "arguments", "digest"]) await existing(join(plan, path), `plan ${path}`)
   await directory(join(plan, "definitions"), "plan definitions")
   if (await planDigest(plan) !== (await readFile(join(plan, "digest"), "utf8")).trim()) {
@@ -534,7 +586,10 @@ async function imageCommand(args) {
   if (positionals.length !== 1) fail("image with needs exactly one IMAGE")
   const image = await existing(positionals[0], "image")
   if (!(await lstat(image)).isFile()) fail(`not an image file: ${image}`)
-  if (values.partition && !/^\d+$/.test(values.partition)) fail(`invalid partition number: ${values.partition}`)
+  const partition = setting(values, "partition")
+  const subvol = setting(values, "subvol")
+  const readOnly = settingBool(values, "read-only")
+  if (partition && !/^\d+$/.test(partition)) fail(`invalid partition number: ${partition}`)
 
   let loop
   let mountpoint
@@ -547,9 +602,9 @@ async function imageCommand(args) {
     loop = await commandOutput("losetup", ["-fP", "--show", image])
     note("image", `attached owned loop ${loop}`)
     let device
-    if (values.partition) {
+    if (partition) {
       const rows = (await commandOutput("lsblk", ["-nrpo", "NAME,TYPE", loop])).split("\n")
-      const suffix = new RegExp(`p?${values.partition}$`)
+      const suffix = new RegExp(`p?${partition}$`)
       device = rows.map((line) => line.trim().split(/\s+/)).find(([name, type]) => type === "part" && suffix.test(name))?.[0]
     } else {
       const rows = (await commandOutput("lsblk", ["-nrpo", "NAME,PARTTYPE,TYPE", loop])).split("\n")
@@ -567,7 +622,7 @@ async function imageCommand(args) {
     }
     if (!device) fail("partition not found")
     mountpoint = await createState(undefined, "mount-")
-    const mountOptions = [values.subvol ? `subvol=${values.subvol}` : "", values["read-only"] ? "ro" : ""].filter(Boolean)
+    const mountOptions = [subvol ? `subvol=${subvol}` : "", readOnly ? "ro" : ""].filter(Boolean)
     await run("mount", [...(mountOptions.length ? ["-o", mountOptions.join(",")] : []), device, mountpoint])
     note("image", `mounted ${device} at private mountpoint ${mountpoint}`)
     const env = { ...process.env, REPART_IMAGE: image, REPART_LOOP: loop, REPART_DEVICE: device, REPART_MOUNT: mountpoint }
@@ -604,7 +659,7 @@ async function imageCommand(args) {
 function slotPath(kind, date) {
   const osPrefix = process.env.REPART_OS_PREFIX || "/os/superbfowle"
   const homePrefix = process.env.REPART_HOME_PREFIX || "/home/superbfowle"
-  return kind === "home" ? `${homePrefix}/${date}` : `${osPrefix}/${mappedArch()}/${date}`
+  return kind === "home" ? `${homePrefix}/${date}` : `${osPrefix}/${slotArch()}/${date}`
 }
 
 async function listSubvolumes(mountpoint) {
@@ -616,7 +671,7 @@ async function listSubvolumes(mountpoint) {
 }
 
 async function knownSlots(mountpoint) {
-  const osBase = `${(process.env.REPART_OS_PREFIX || "/os/superbfowle").replace(/^\//, "")}/${mappedArch()}/`
+  const osBase = `${(process.env.REPART_OS_PREFIX || "/os/superbfowle").replace(/^\//, "")}/${slotArch()}/`
   const homeBase = `${(process.env.REPART_HOME_PREFIX || "/home/superbfowle").replace(/^\//, "")}/`
   const volumes = await listSubvolumes(mountpoint)
   return volumes.flatMap(({ id, path }) => {
@@ -637,7 +692,8 @@ async function slotCommand(args) {
     })
     if (values.help) return console.log(`${SLOT_HELP}\n\npath defaults to today's OS slot; --home selects the home prefix.`)
     if (positionals.length > 1) fail("path accepts at most one date")
-    return console.log(slotPath(values.home ? "home" : "os", validDate(positionals[0] || today())))
+    const kind = values.home || settingBool(values, "home") ? "home" : "os"
+    return console.log(slotPath(kind, validDate(positionals[0] || process.env.REPART_DATE || today())))
   }
   if (command !== "show" && command !== "set") fail(`unknown slot command: ${command}`)
   const { values, positionals } = parsed(args, { help: { type: "boolean", short: "h" } })

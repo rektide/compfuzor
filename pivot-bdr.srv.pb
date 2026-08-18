@@ -69,7 +69,7 @@
       BDR_DATE_TOKEN: "{{ BDR_DATE_TOKEN }}"
       BDR_OS_PREFIX: "{{ BDR_OS_PREFIX }}"
       BDR_HOME_PREFIX: "{{ BDR_HOME_PREFIX }}"
-      BDR_SWAP_SIZE: 4G
+      BDR_SWAP_SIZE: 16G
       # Shared repart toolkit instance (repart.opt.pb owns scripts AND defs).
       # pivot-bdr embeds NOTHING repart-related — it points here. Install it
       # with: ansible-playbook -i 'localhost,' -c local repart.opt.pb
@@ -120,7 +120,7 @@
       - name: bdr-migrate.sh
         content: |
           # Live-migrate the running btrfs root onto $BDR_DISK with a fresh GPT
-          # (grub-bios + root + 4G swap), no reboot.
+          # (grub-bios + root + 16G swap), no reboot.
           #
           # Usage: bdr-migrate.sh [disk]
           set -eu
@@ -140,7 +140,7 @@
 
           export REPART_OS_PREFIX="${BDR_OS_PREFIX:-/os/superbfowle}"
           export REPART_HOME_PREFIX="${BDR_HOME_PREFIX:-/home/superbfowle}"
-          args=(disk plan migrate "$DISK" --source "$SRC" --swap "${BDR_SWAP_SIZE:-4G}")
+          args=(disk plan migrate "$DISK" --source "$SRC" --swap "${BDR_SWAP_SIZE:-16G}")
           [ -z "${BDR_ARCH:-}" ] || args+=(--arch "$BDR_ARCH")
           [ -z "${BDR_DATE:-}" ] || args+=(--date "$BDR_DATE")
           PLAN="$("$REPART/bin/repart" "${args[@]}")"
@@ -192,7 +192,7 @@
           REPART="${REPART_DIR:-/opt/repart-main}"
           export REPART_OS_PREFIX="${BDR_OS_PREFIX:-/os/superbfowle}"
           export REPART_HOME_PREFIX="${BDR_HOME_PREFIX:-/home/superbfowle}"
-          args=(disk plan format "$TARGET" --swap "${BDR_SWAP_SIZE:-4G}")
+          args=(disk plan format "$TARGET" --swap "${BDR_SWAP_SIZE:-16G}")
           [ -z "${BDR_ARCH:-}" ] || args+=(--arch "$BDR_ARCH")
           [ -z "${BDR_DATE:-}" ] || args+=(--date "$BDR_DATE")
           PLAN="$("$REPART/bin/repart" "${args[@]}")"
@@ -251,7 +251,7 @@
 
       `BDR_DISK` target; `BDR_SOURCE_MOUNT` running btrfs root (default /);
       `BDR_DATE` slot stamp (default today); `BDR_ARCH`; `BDR_DEFAULT_SUBVOL`;
-      `BDR_OS_PREFIX`/`BDR_HOME_PREFIX`; `BDR_SWAP_SIZE` (default 4G);
+      `BDR_OS_PREFIX`/`BDR_HOME_PREFIX`; `BDR_SWAP_SIZE` (default 16G);
       `REPART_DIR` (default /opt/repart-main).
 
       Slot inspection is `repart slot show MOUNT`; switching is
