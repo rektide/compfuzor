@@ -19,9 +19,10 @@ while [ $# -gt 0 ]; do
 done
 
 loop=""; mountpoint=""
+# shellcheck disable=SC2317  # invoked by the EXIT trap below
 cleanup() {
   status=$?
-  if [ -n "$mountpoint" ] && findmnt -rn "$mountpoint" >/dev/null 2>&1; then umount "$mountpoint" || status=$?; fi
+  if [ -n "$mountpoint" ] && findmnt -rn "$mountpoint" >/dev/null 2>&1; then umount -R "$mountpoint" || status=$?; fi
   [ -z "$mountpoint" ] || rmdir "$mountpoint" 2>/dev/null || true
   if [ -n "$loop" ]; then losetup -d "$loop" || status=$?; fi
   exit "$status"

@@ -11,7 +11,15 @@ canonical() { realpath -e -- "$1" 2>/dev/null || die "target does not exist: $1"
 fingerprint() {
   identity="$(stat -Lc '%F|dev=%d|inode=%i|rdev=%t:%T|size=%s' -- "$1")"
   block="$(lsblk -dnro MAJ:MIN,SIZE,SERIAL,WWN,MODEL "$1" 2>/dev/null || true)"
-  printf '%s|block=%s\n' "$identity" "$block"
+  table="$(sfdisk --dump "$1" 2>/dev/null | sha256sum | awk '{print $1}')"
+  printf '%s|block=%s|table=%s\n' "$identity" "$block" "$table"
+}
+plan_digest() {
+  (cd "$1" && {
+    sha256sum plan arguments
+    while IFS= read -r -d '' file; do sha256sum "$file"; done \
+      < <(find definitions -type f -print0 | sort -z)
+  } | sha256sum | awk '{print $1}')
 }
 version() { systemd-repart --version 2>/dev/null | awk 'NR==1 { print $2 }'; }
 check_migrate_source() {
@@ -55,7 +63,7 @@ case "$command" in
     base="$root/etc/defs/universal.d"; flavor="$root/etc/defs/$flavor_name.d"
     # Source-tree execution uses files/repart/defs; installed execution uses etc/defs.
     if [ ! -d "$base" ]; then base="$self/../defs/universal.d"; flavor="$self/../defs/$flavor_name.d"; fi
-    [ -d "$base" ] && [ -d "$flavor" ] || die "canonical $operation definitions are not installed"
+    if [ ! -d "$base" ] || [ ! -d "$flavor" ]; then die "canonical $operation definitions are not installed"; fi
     render_args=(render --base "$base")
     # User overlays refine the base but the operation flavor is always final.
     for ((i=0; i<${#profile_args[@]}; i+=2)); do
@@ -76,6 +84,7 @@ case "$command" in
     } >"$plan/plan"
     if [ "$operation" = format ]; then printf '%s\n' --offline=yes --empty=force --dry-run=yes >"$plan/arguments";
     else printf '%s\n' --empty=force --dry-run=yes >"$plan/arguments"; fi
+    plan_digest "$plan" >"$plan/digest"
     mapfile -t args <"$plan/arguments"
     note "dry-run $operation plan for $target"
     systemd-repart --definitions="$plan/definitions" "${args[@]}" "$target" >&2
@@ -85,17 +94,26 @@ case "$command" in
     printf '%s\n' "$plan"
     ;;
   apply)
-    [ $# -ge 3 ] && [ "$2" = --confirm ] || die "usage: repart disk apply PLAN --confirm TARGET"
+    if [ $# -lt 3 ] || [ "$2" != --confirm ]; then die "usage: repart disk apply PLAN --confirm TARGET"; fi
     plan="$(realpath -e "$1")"; confirmed="$(canonical "$3")"; [ $# -eq 3 ] || die "unexpected apply arguments"
-    [ -f "$plan/plan" ] && [ -d "$plan/definitions" ] && [ -f "$plan/arguments" ] || die "invalid plan directory: $plan"
+    if [ ! -f "$plan/plan" ] || [ ! -d "$plan/definitions" ] || [ ! -f "$plan/arguments" ] || [ ! -f "$plan/digest" ]; then
+      die "invalid plan directory: $plan"
+    fi
+    [ "$(plan_digest "$plan")" = "$(cat "$plan/digest")" ] || die "plan contents changed after preview"
     operation=""; target=""; source=""; saved_fingerprint=""
     while IFS='=' read -r key value; do case "$key" in operation) operation="$value" ;; target) target="$value" ;; source) source="$value" ;; fingerprint) saved_fingerprint="$value" ;; esac; done <"$plan/plan"
+    case "$operation" in
+      format) expected=(--offline=yes --empty=force --dry-run=yes) ;;
+      migrate) expected=(--empty=force --dry-run=yes) ;;
+      *) die "invalid planned operation: $operation" ;;
+    esac
+    mapfile -t args <"$plan/arguments"
+    [ "${args[*]}" = "${expected[*]}" ] || die "plan contains invalid repart arguments"
     [ "$confirmed" = "$target" ] || die "confirmation target differs from planned target ($confirmed != $target)"
     [ "$(fingerprint "$target")" = "$saved_fingerprint" ] || die "target identity/fingerprint changed since planning"
     reject_mounted "$target"
     [ "$operation" != migrate ] || check_migrate_source "$source"
-    mapfile -t args <"$plan/arguments"
-    for i in "${!args[@]}"; do [ "${args[$i]}" != --dry-run=yes ] || args[$i]=--dry-run=no; done
+    for i in "${!args[@]}"; do [ "${args[i]}" != --dry-run=yes ] || args[i]=--dry-run=no; done
     note "applying persisted $operation plan to $target; plan retained at $plan"
     systemd-repart --definitions="$plan/definitions" "${args[@]}" "$target" >&2
     ;;

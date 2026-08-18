@@ -266,7 +266,10 @@
           # resolves DATE, ARCH, and SWAP before mkosi sees any configuration.
           REPART="${REPART_DIR:-/opt/repart-main}"
           [ -x "$REPART/bin/repart" ] || { echo "Error: install repart.opt.pb first" >&2; exit 1; }
-          args=(profile render --base etc --swap "{{SWAP_SIZE}}")
+          # The toolkit copied into the guest is an opaque payload: preserve
+          # its tokens so the spawned machine renders its own future profiles.
+          args=(profile render --base etc --swap "{{SWAP_SIZE}}" \
+            --preserve mkosi.images/disk/mkosi.extra/opt/repart-main)
           [ -z "$DATE" ] || args+=(--date "$DATE")
           BUILD="$(REPART_SCRATCH="{{DIR}}/var/tmp" "$REPART/bin/repart" "${args[@]}")"
           trap 'rm -rf "$BUILD"' EXIT

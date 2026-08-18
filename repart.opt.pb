@@ -79,7 +79,7 @@
 
       | command | stdout contract | ownership |
       |---|---|---|
-      | `profile render` | final absolute rendered tree path only | caller owns and removes the tree |
+      | `profile render` | final absolute rendered tree path only | caller owns and removes the tree; `--preserve RELPATH` copies an opaque subtree without resolving its deferred tokens |
       | `disk plan format\|migrate` | persistent absolute plan path only | caller owns; apply retains it for audit |
       | `disk apply` | no data | plan remains caller-owned |
       | `image with` | child stdout only | command owns and always cleans its new loop and private mountpoint |
@@ -95,7 +95,8 @@
       and `--offline=yes`. `disk plan migrate` uses universal + BDR definitions,
       renders `BlockDeviceReplace=` from the canonical source mount, and requires
       systemd-repart 261+ with a single-device btrfs source. Profile defaults are
-      today, mapped host architecture, and 4G swap.
+      today, mapped host architecture, 4G swap, and the same OS/home prefixes
+      consumed by `slot` (`REPART_OS_PREFIX`, `REPART_HOME_PREFIX`).
   tasks:
     - import_tasks: tasks/compfuzor.includes
       vars:

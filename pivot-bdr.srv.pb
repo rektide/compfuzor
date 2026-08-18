@@ -62,8 +62,8 @@
       BDR_DISK: /dev/vda
       # Mountpoint of the running, single-device, volatile btrfs root.
       BDR_SOURCE_MOUNT: /
-      # Subvolume layout (BDR_DEFAULT_SUBVOL carries the @DATE@ token —
-      # bdr-migrate stamps it at run time for its slot.sh set-default).
+      # Subvolume layout (BDR_DEFAULT_SUBVOL carries the @DATE@ token;
+      # bdr-migrate resolves it before calling `repart slot set`).
       BDR_DEFAULT_SUBVOL: "{{ BDR_DEFAULT_SUBVOL }}"
       BDR_ARCH: "{{ BDR_ARCH }}"
       BDR_DATE_TOKEN: "{{ BDR_DATE_TOKEN }}"
@@ -140,18 +140,19 @@
 
           export REPART_SCRATCH="{{DIR}}/var/tmp"
           export REPART_OS_PREFIX="${BDR_OS_PREFIX:-/os/superbfowle}"
+          export REPART_HOME_PREFIX="${BDR_HOME_PREFIX:-/home/superbfowle}"
           args=(disk plan migrate "$DISK" --source "$SRC" --swap "${BDR_SWAP_SIZE:-4G}")
           [ -z "${BDR_ARCH:-}" ] || args+=(--arch "$BDR_ARCH")
           [ -z "${BDR_DATE:-}" ] || args+=(--date "$BDR_DATE")
           PLAN="$("$REPART/bin/repart" "${args[@]}")"
           echo "plan retained at $PLAN" >&2
-          [ "${BDR_CONFIRM:-no}" = "yes" ] || { echo "Set BDR_CONFIRM=yes to apply $PLAN" >&2; exit 1; }
+          [ "${BDR_CONFIRM:-}" = "$DISK" ] || { echo "Set BDR_CONFIRM=$DISK to apply $PLAN" >&2; exit 1; }
           "$REPART/bin/repart" disk apply "$PLAN" --confirm "$DISK"
 
-          # Online BDR can't set the default subvolume; slot.sh does it:
+          # Online BDR can't set the default subvolume; the slot module does it:
           # the (stamped) $DEFAULT_SUBVOL if set+present, else newest slot
           # under the os prefix, else a soft skip. Empty/absent DEFAULT_SUBVOL
-          # goes straight to newest — slot.sh owns the scheme.
+          # goes straight to newest — the slot module owns the scheme.
           set +e
           "$REPART/bin/repart" slot set "$SRC" "$DEFAULT_SUBVOL" >/dev/null 2>&1
           rc=$?
@@ -191,11 +192,14 @@
           TARGET="${1:?usage: bdr-format.sh <disk-or-image>}"
           REPART="${REPART_DIR:-/opt/repart-main}"
           export REPART_SCRATCH="{{DIR}}/var/tmp"
+          export REPART_OS_PREFIX="${BDR_OS_PREFIX:-/os/superbfowle}"
+          export REPART_HOME_PREFIX="${BDR_HOME_PREFIX:-/home/superbfowle}"
           args=(disk plan format "$TARGET" --swap "${BDR_SWAP_SIZE:-4G}")
           [ -z "${BDR_ARCH:-}" ] || args+=(--arch "$BDR_ARCH")
           [ -z "${BDR_DATE:-}" ] || args+=(--date "$BDR_DATE")
           PLAN="$("$REPART/bin/repart" "${args[@]}")"
           echo "plan retained at $PLAN" >&2
+          [ "${BDR_CONFIRM:-}" = "$TARGET" ] || { echo "Set BDR_CONFIRM=$TARGET to apply $PLAN" >&2; exit 1; }
           "$REPART/bin/repart" disk apply "$PLAN" --confirm "$TARGET"
 
       # De-identify a clone (e.g. after btrfs send|receive of an image).
@@ -222,18 +226,18 @@
           . /srv/pivot-bdr-main/env.export
 
           truncate -s 16G /var/tmp/rehearsal.img
-          /srv/pivot-bdr-main/bin/bdr-format.sh /var/tmp/rehearsal.img
+          BDR_CONFIRM=/var/tmp/rehearsal.img \
+            /srv/pivot-bdr-main/bin/bdr-format.sh /var/tmp/rehearsal.img
           sudo /opt/repart-main/bin/repart image with /var/tmp/rehearsal.img -- \
-            /opt/repart-main/bin/repart slot show "$REPART_MOUNT"
+            sh -c '/opt/repart-main/bin/repart slot show "$REPART_MOUNT"'
 
           # Live migration plans first; confirmation applies that exact plan.
-          BDR_CONFIRM=yes sudo -E /srv/pivot-bdr-main/bin/bdr-migrate.sh /dev/sda
+          BDR_CONFIRM=/dev/sda sudo -E /srv/pivot-bdr-main/bin/bdr-migrate.sh /dev/sda
 
-      `bdr-format.sh` creates and immediately applies a persisted offline format
-      plan. `bdr-migrate.sh` validates the running source, persists an online BDR
-      plan with `BlockDeviceReplace=` rendered to that source mount, and applies
-      it only with `BDR_CONFIRM=yes`. Both print plan locations to stderr; plans
-      remain under `REPART_SCRATCH` for audit.
+      Both wrappers persist and preview a plan before applying it. Application
+      requires `BDR_CONFIRM` to equal the target argument, binding ambient
+      confirmation to one disk or image. Plans remain under `REPART_SCRATCH`
+      for audit.
 
       ### bins (`bin/`)
 
