@@ -28,10 +28,42 @@
     ETC_FILES: "{{ ETC_FILES | merge_list(_zim_fragments, preset='append') }}"
     ETC_DIRS: "{{ ETC_DIRS | merge_list(['zim', 'zim-disabled'], _zim_module_dirs, preset='append') }}"
   when:
-    - (ZIM_MODULE is defined or ZIM_MODULES is defined)
+    - (ZIM_MODULE is defined or ZIM_MODULES is defined or ZIM_ENV is deflengthy)
     - ZIM_BYPASS is deffalsy
   vars:
-    _zim_modules: "{{ ZIM_MODULE|normalize(to='list') + ZIM_MODULES|normalize(to='list') }}"
+    # ZIM_ENV: promote selected ENV vars into an auto-generated env module.
+    # Projection source is the same effective mapping fs_env.tasks renders
+    # into env.export -- (ENV_LIST-resolved union ENV) overridden by
+    # (ENV_PRIO_LIST-resolved union ENV_PRIO) -- filtered to the named keys.
+    # Selective by design: the generic ENV floor (DIR/NAME/TYPE/...) stays
+    # env.export-only; only explicitly named keys reach shells. `resolve`
+    # renders value template strings at THIS task's scope, dodging the
+    # lazy-template trap documented in .design/zim-generator/init0.gpt56.md.
+    _zim_env_keys: "{{ ZIM_ENV|normalize(to='list')|map('upper')|list }}"
+    _zim_env_list_names: "{{ (ENV_LIST|default([]))|normalize(to='list') }}"
+    _zim_env_prio_list_names: "{{ (ENV_PRIO_LIST|default([]))|normalize(to='list') }}"
+    _zim_env_lookup: "{{ lookup('vars_dict', _zim_env_list_names|map('upper')|list, default=_zim_env_missing) if _zim_env_list_names|length > 0 else {} }}"
+    _zim_env_prio_lookup: "{{ lookup('vars_dict', _zim_env_prio_list_names|map('upper')|list, default=_zim_env_missing) if _zim_env_prio_list_names|length > 0 else {} }}"
+    _zim_env_missing: "__MISSING_COMPFUZOR__"
+    _zim_env_effective: >-
+      {{ _zim_env_lookup
+         | combine(ENV if ENV is mapping else {})
+         | combine(_zim_env_prio_lookup)
+         | combine(ENV_PRIO if ENV_PRIO is defined and ENV_PRIO is mapping else {}) }}
+    _zim_env_projection: >-
+      {{ _zim_env_effective | dict2items
+         | selectattr('key', 'in', _zim_env_keys)
+         | items2dict
+         | resolve }}
+    _zim_env_module:
+      name: "{{ ZIM_ENV_NAME|default(NAME ~ '-env') }}"
+      phase: "{{ ZIM_ENV_PHASE|default('tools') }}"
+      env: "{{ _zim_env_projection }}"
+      comment: "{{ 'promoted from ENV via ZIM_ENV: ' ~ _zim_env_keys|join(',') }}"
+    _zim_modules: >-
+      {{ ZIM_MODULE|normalize(to='list')
+         + ZIM_MODULES|normalize(to='list')
+         + ([_zim_env_module] if ZIM_ENV is deflengthy else []) }}
     _zim_phase: "{{ ZIM_PHASE|def }}"
     _zim_fragments: "{{ _zim_modules | zim_fragment(phase=_zim_phase, etc=ETC) }}"
     # local modules (file or env) emit a zim-modules/<name>/init.zsh record;
@@ -43,11 +75,35 @@
         | map('regex_replace', '/init\.zsh$', '')
         | list }}
 
+- name: "Compfuzor: ZIM_ENV keys must exist in the effective env"
+  fail:
+    msg: >-
+      ZIM_ENV names keys absent from the effective ENV mapping (ENV/ENV_LIST
+      overridden by ENV_PRIO/ENV_PRIO_LIST): {{ _zim_env_missing_keys | join(', ') }}.
+      Fix the ZIM_ENV list or define the vars.
+  when:
+    - ZIM_ENV is deflengthy
+    - ZIM_BYPASS is deffalsy
+    - _zim_env_missing_keys|length > 0
+  vars:
+    _zim_env_keys: "{{ ZIM_ENV|normalize(to='list')|map('upper')|list }}"
+    _zim_env_missing_keys: "{{ _zim_env_keys | difference(_zim_env_effective.keys()|list) }}"
+    _zim_env_list_names: "{{ (ENV_LIST|default([]))|normalize(to='list') }}"
+    _zim_env_prio_list_names: "{{ (ENV_PRIO_LIST|default([]))|normalize(to='list') }}"
+    _zim_env_missing: "__MISSING_COMPFUZOR__"
+    _zim_env_lookup: "{{ lookup('vars_dict', _zim_env_list_names|map('upper')|list, default=_zim_env_missing) if _zim_env_list_names|length > 0 else {} }}"
+    _zim_env_prio_lookup: "{{ lookup('vars_dict', _zim_env_prio_list_names|map('upper')|list, default=_zim_env_missing) if _zim_env_prio_list_names|length > 0 else {} }}"
+    _zim_env_effective: >-
+      {{ _zim_env_lookup
+         | combine(ENV if ENV is mapping else {})
+         | combine(_zim_env_prio_lookup)
+         | combine(ENV_PRIO if ENV_PRIO is defined and ENV_PRIO is mapping else {}) }}
+
 - name: "Compfuzor: generate contributor install-user-zimfw.sh"
   set_fact:
     BINS: "{{ BINS | merge_list(_zimfw_install_bin | annotate_bins('zim'), preset='bins_generated') }}"
   when:
-    - (ZIM_MODULE is defined or ZIM_MODULES is defined)
+    - (ZIM_MODULE is defined or ZIM_MODULES is defined or ZIM_ENV is deflengthy)
     - ZIM_HOST is not defined
     - ZIM_BYPASS is deffalsy
   vars:

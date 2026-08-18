@@ -73,15 +73,13 @@
       Restart: always
       RestartSec: "2s"
 
-    # Interactive shells: an `env` zim module exports WATCHMAN_SOCK and
-    # WATCHMAN_CONFIG_FILE for python/node/rust clients (which DO honor
-    # $WATCHMAN_SOCK, unlike the C++ CLI). The symlink handles the C++ CLI.
-    ZIM_MODULES:
-      - name: watchman-env
-        phase: tools
-        env:
-          WATCHMAN_SOCK: "{{VAR}}/sock"
-          WATCHMAN_CONFIG_FILE: "{{ETC}}/watchman.json"
+    # Interactive shells: ZIM_ENV promotes the two client-facing ENV vars
+    # into an auto-generated env module (don't-stomp, COMPFUZOR_ENV_OVERWRITE
+    # forces) -- python/node/rust clients honor $WATCHMAN_SOCK, unlike the
+    # C++ CLI (handled by the install-cli-symlink.sh shim).
+    ZIM_ENV:
+      - WATCHMAN_SOCK
+      - WATCHMAN_CONFIG_FILE
 
     ETC_FILES:
       # Global root_files guard. Read by the daemon via $WATCHMAN_CONFIG_FILE

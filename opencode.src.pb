@@ -73,12 +73,9 @@
       SyslogIdentifier: opencode
     SYSTEMD_INSTALLS:
       WantedBy: default.target
+    ZIM_ENV:
+      - OPENCODE_SERVICE_URL
     ZIM_MODULES:
-      - name: opencode-service-env
-        phase: tools
-        env:
-          OPENCODE_SERVICE_URL: http://127.0.0.1:49374
-        comment: Publish the local managed-service endpoint to shell clients.
       - name: opencode-service
         source: opencode-service.zsh
         phase: tools
