@@ -161,6 +161,7 @@
 - name: "Compfuzor: fetch supplemental git remotes"
   shell: >-
     git fetch --prune --tags
+    {{ '--force' if GIT_FORCE is deftruthy else '' }}
     {{ '--depth ' ~ (GIT_DEPTH | quote) if GIT_DEPTH is defined else '' }}
     "$CF_GIT_REMOTE"
   args:
