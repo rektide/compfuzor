@@ -250,7 +250,7 @@
       #          apiKEy: "{env:OPENROUTER_API_KEY}"
     BINS:
       - name: build.sh
-        basedir: False
+        basedir: repo
         content: |
           # Baked into the binaries via packages/script. Unset, the build falls
           # back to `git branch --show-current`, which is empty in a jj
@@ -262,6 +262,7 @@
           bun run --cwd packages/cli build -- --single --skip-install
           bun run --cwd packages/cli build:node -- --single --skip-install
       - name: install.sh
+        basedir: repo
         content: |
           ln -sfv $(pwd)/packages/cli/dist/cli-linux-x64/bin/opencode2 $GLOBAL_BINS_DIR/
           ln -sfv $(pwd)/packages/cli/dist/cli-node-linux-x64/bin/opencode2-node $GLOBAL_BINS_DIR/
@@ -279,7 +280,7 @@
         global: True
         content: |
           # note/beware that we also are pulling in env.exports
-          exec bun run --cwd $DIR dev $(pwd)
+          exec bun run --cwd "{{DIR}}" dev $(pwd)
       # TODO: compfuzor helpers for installing content, automate this in install-user
       - name: cleanup.sh
         basedir: False
