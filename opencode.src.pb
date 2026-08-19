@@ -13,6 +13,8 @@
     # jj-style remote bookmark selector; repo_git resolves this as the working
     # branch fetched from the rektide remote while retaining upstream as origin.
     GIT_VERSION: working@rektide
+    # origin's rolling 'latest' tag drifts from the local fossil; allow clobber.
+    GIT_FORCE: True
     PKGS:
       - binutils
     BACKUP_TARGET: /mnt/fu/backup/opencode-2026-5
@@ -250,6 +252,12 @@
       - name: build.sh
         basedir: False
         content: |
+          # Baked into the binaries via packages/script. Unset, the build falls
+          # back to `git branch --show-current`, which is empty in a jj
+          # workspace and would otherwise name the channel after the branch.
+          # local keeps service-local.json, port 0xc0df, opencode-local.db,
+          # inline sourcemaps, and disables the self-updater.
+          export OPENCODE_CHANNEL=local
           bun install --frozen-lockfile
           bun run --cwd packages/cli build -- --single --skip-install
           bun run --cwd packages/cli build:node -- --single --skip-install
