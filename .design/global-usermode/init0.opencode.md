@@ -147,3 +147,27 @@ the runtime-per-user variant below.
 - [`.design/opencode/service.md`](/doc/../.design/opencode/service.md) —
   linger discussion (user services surviving logout), prerequisite for the
   hybrid's activation model.
+
+# addendum: the fsh lookup plugin exists now
+
+The "missing vocabulary" gap above is closed by
+[`library/lookup_plugins/fsh.py`](/library/lookup_plugins/fsh.py):
+
+- `lookup('fsh', 'var')` — deploy-mode base (follows the USERMODE flip).
+- `lookup('fsh', 'var', user=True)` — USERMODE family, resolved for the
+  deploying user.
+- `USER_FSH` top-level var (or the reserved `_fsh_user` that unit
+  generation sets for user-scope `separate` iterations) flips the source to
+  the `%h`/`%t` specifier family — exactly the "flips the source if set"
+  semantics. `USER_FSH_DIRS` overrides the table per-kind.
+- `name=True` appends `NAME`, preferring frozen hierarchy vars (`VAR`,
+  `ETC`, ...) — the "implicit vars" integration.
+
+One SYSTEMD_SERVICES block now bifurcates correctly under
+`SYSTEMD_INSTALL: separate` (verified end-to-end: system unit renders
+absolute deploy paths, user unit renders `%h/.local/...` and `%t/...`),
+which un-breaks the rclone-style pattern and gives the watchman hybrid its
+path vocabulary. The remaining known gaps from the assessment: user-bin
+namespacing (cross-playbook `install-cli-symlink.sh` collisions) and the
+user-scope `[Install]` default (`WantedBy=multi-user.target` should be
+`default.target` under user scope).
