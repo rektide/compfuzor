@@ -50,7 +50,7 @@
   file:
     path: "{{_dir}}"
     state: directory
-    mode: "{{_vals.props.mode|def(DIRMODE, omit, falsy=True)}}"
+    mode: "{{_vals.prop.mode|def(DIRMODE, omit, falsy=True)}}"
     owner: "{{ _become.owner }}"
     group: "{{ _become.group }}"
   become: "{{ _become.become }}"
