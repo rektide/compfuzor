@@ -68,7 +68,7 @@ flowchart LR
   explicit["top-level LINKS"] --> links["compile_links<br/>validate and merge"]
   artifacts --> annotations["artifact link: / links:"]
   annotations --> links
-  links --> manifest["versioned etc/links.json"]
+  links --> manifest["versioned DIR/links.json"]
   links --> consumers["scoped manager leaves"]
   manifest --> manager["one link manager"]
   consumers --> manager
@@ -493,7 +493,9 @@ user:   lookup('fsh', kind, user=True, name=True,
 
 ### Manifest
 
-Generate `{{ DIR }}/etc/links.json` as a versioned plan:
+Generate `{{ DIR }}/links.json` as a versioned plan. The plan describes the
+deployment itself rather than configuration consumed by the deployed program,
+so it belongs at the deployment root instead of under `etc/`:
 
 ```json
 {
