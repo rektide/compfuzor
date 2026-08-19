@@ -27,6 +27,45 @@ keep hitting:
    e.g. `link:` / `link: user` fields that *generate* the LINKS entry, the
    way `destTemplate` and friends already extend file entries.
 
+## the what-for (driver)
+
+Compfuzor's hybrid story splits **deploy** (global artifacts, once, sudo)
+from **activate** (per-user / per-host, no sudo). Each artifact type needs
+a deferred, per-scope, composable form to ride that split:
+
+- paths → fsh lookup (`home='%h'` for units, `'${HOME}'` for shells)
+- env vars → env.export + ZIM_ENV modules (sourced per-user)
+- **links → still deploy-time-only side effects** ← this quest
+
+That's why watchman's config-override farm had to be bespoke shell
+(`install-user-etc.sh`): there is no generic way to say "at activation
+time, link this, don't stomp what's there." The quest closes the third
+face of the user-surface triangle.
+
+Recorded link data also buys things execution-time links structurally
+cannot:
+
+- **verifiability** — declarative records are diffable: a generic drift
+  reporter (replacing watchman's hand-rolled `cli-route`/`config-link`
+  checks) and a collision audit ("who links into `~/.local/bin`?" — the
+  cross-playbook `install-cli-symlink.sh` collision is this gap in the
+  wild)
+- **reversal** — teardown that removes what we created and preserves user
+  overrides; unrecorded links cannot be cleanly uninstalled
+- **don't-stomp as one policy** — "existing file = user override, leave
+  it" is the same policy as ZIM_ENV's don't-stomp +
+  `COMPFUZOR_ENV_OVERWRITE` escape hatch; links should share the named
+  policy, not re-implement it per script
+- **house-pattern alignment** — kernel sysctl already records data
+  (`kernel.sysctl.json` in ETC_FILES) and applies it at runtime
+  (`install-kernel-sysctl.sh`); links are the same shape and should not
+  invent a new one
+
+Consumers beyond watchman: desktop entries
+(`~/.local/share/applications`), CLI shims (`~/.local/bin`), config
+override farms, unit links. All are "user surface" materializations that
+today require bespoke install scripts.
+
 ## the quest
 
 Design both, together, because they share a backbone:
@@ -64,16 +103,23 @@ Design both, together, because they share a backbone:
 > Investigate compfuzor's LINKS pipeline end to end: normalization in
 > vars_base.tasks, execution in the fs tasks and compfuzor.includes,
 > LINKS_BYPASS semantics, and how BINS gain scope + composition
-> (bin_composers.py, gen_bins.tasks). Then propose a design where (a)
-> LINKS are recorded as data and materialized by a composed
-> `install-links.sh` at install time (system and user scopes), and (b)
-> file entries (ETC_FILES/VAR_FILES/BINS) can declare `link:`/`link:
-> user` fields that generate LINKS entries, mirroring destTemplate.
-> Identify shared vocabulary with the fsh lookup's home=/runtime=
-> parameters and how a generated link target like
-> `~/.config/watchman-main/watchman.json` would be expressed for both
-> system and user scope without per-user templating. Note general health
-> issues found along the way.
+> (bin_composers.py, gen_bins.tasks). Context: the driver is the
+> deploy/activate split — paths got fsh (home='%h'/'${HOME}'), env got
+> env.export/zim, links are the last artifact type without a deferred
+> per-scope form. Then propose a design where (a) LINKS are recorded as
+> data (kernel.sysctl.json + install-kernel-sysctl.sh is the house
+> precedent) and materialized by a composed, scope-aware install-links.sh
+> at activation time (into install.sh and install-user.sh), with
+> don't-stomp override semantics shared with ZIM_ENV's policy and an
+> overwrite escape hatch; (b) file entries (ETC_FILES/VAR_FILES/BINS) can
+> declare `link:`/`link: user` fields that generate LINKS entries,
+> mirroring destTemplate; (c) the records feed a generic drift/collision
+> reporter and enable clean teardown. Identify shared vocabulary with the
+> fsh lookup's home=/runtime= parameters (how a target like
+> `~/.config/watchman-main/watchman.json` is expressed for both scopes
+> without per-user templating) and how watchman's bespoke
+> install-user-etc.sh farm becomes the first generic consumer. Note
+> general health issues found along the way.
 
 ## vectors from the user
 
