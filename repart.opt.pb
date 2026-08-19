@@ -41,24 +41,98 @@
     README: |
       # repart-main
 
-      One TypeScript `repart` CLI for rendering profiles, safely planning disk
-      changes, working inside images, and selecting dated btrfs boot slots.
-      The playbook installs Node.js, the CLI runtime, alongside the toolkit.
+      `repart` builds a specific kind of machine: a disk whose root filesystem
+      is a rack of dated, bootable OS snapshots you can switch between. This
+      playbook installs the one CLI that creates that disk and navigates it.
+      It is TypeScript; the playbook installs Node.js alongside it.
+
+      ## the machine this manages
+
+      Picture the target disk:
+
+          GPT partition table
+          ├── bios grub or ESP
+          ├── swap (fixed size, before root so root stays last and growable)
+          └── btrfs
+              ├── os/superbfowle/amd64/20260817   <- a complete bootable OS
+              ├── os/superbfowle/amd64/20260824   <- newer build, also bootable
+              └── home/superbfowle/20260824       <- matching home directories
+
+      The dated directories are btrfs subvolumes called **slots**. Which slot
+      boots is a single btrfs property (the default subvolume), so switching —
+      or rolling back to an older date — is instant and atomic. The toolkit's
+      four namespaces each work on one part of this picture:
+
+      | namespace | works on | commands |
+      |---|---|---|
+      | `profile` | tokenized config trees | `render` |
+      | `disk` | the real disk: layout creation | `plan format\|migrate`, `apply` |
+      | `image` | disk image *files* | `with` |
+      | `slot` | the dated subvolumes | `path`, `show`, `set` |
+
+      ## the core rule: plan, then apply
+
+      Disk changes are always two steps, never one:
+
+          $R disk plan format /dev/sda                  # touches nothing
+          $R disk apply "$plan" --confirm /dev/sda      # does the damage
+
+      `plan` renders the partition definitions, dry-runs systemd-repart,
+      and persists a **plan directory**: the rendered definitions, the exact
+      arguments, and a fingerprint of the target disk. `apply` re-verifies
+      every piece and refuses to run if anything drifted.
+
+      Why the ceremony? Because the persisted arguments include
+      `--empty=force` — wipe. Think "review the diff, then commit", except
+      the commit destroys a disk unless you name the same device twice and
+      nothing about that device changed in between.
+
+      ## why the commands are so long
+
+      `repart disk plan format /dev/sda` is four decisions in a row:
+
+      | word | decides |
+      |---|---|
+      | `repart` | the toolkit |
+      | `disk` | the world: a real disk (vs `profile` config, `image` files, `slot` subvolumes) |
+      | `plan` | the action: preview and persist (vs `apply`: execute) |
+      | `format` | the variant: fresh offline layout (vs `migrate`: move a live btrfs root) |
+
+      Each word is a real fork in the road, which is why the name is long.
+      It is also the whole depth: nothing further hides below `format`.
 
       ## quick start
 
           ansible-playbook -i 'localhost,' -c local repart.opt.pb
           R=/opt/repart-main/bin/repart
+          $R --help
           plan=$($R disk plan format /dev/sda --swap 8G)
           sudo $R disk apply "$plan" --confirm /dev/sda
           sudo $R image with image.raw -- \
             sh -c '/opt/repart-main/bin/repart slot show "$REPART_MOUNT"'
 
-      Start with `repart --help`. Every namespace and operation also supports
-      `--help`, including `repart disk plan --help`; the CLI documents options,
-      defaults, safety checks, ownership, and examples where they are needed.
+      Every namespace and operation answers `--help`, down to
+      `repart disk plan --help`, with options, defaults, env vars, and
+      examples inline.
 
-      ## command model
+      ## the other three namespaces in one breath
+
+      `profile render --base DIR` copies a tree, overlays later trees on top,
+      and stamps `@TOKEN@`s (`@DATE@`, `@ARCH@`, `@SWAP@`, `@OS_PREFIX@`,
+      `@HOME_PREFIX@`, plus your own via `--set`), failing if any token
+      survives unresolved. `disk plan` runs this same renderer over the
+      canonical definitions in `etc/defs/` before previewing — the mermaid
+      below is the entire internal call graph.
+
+      `image with IMAGE -- CMD` attaches an image file to its own new loop
+      device, finds the root partition (GPT root UUID, label fallback, or
+      `--partition N`), mounts it privately, runs CMD with `REPART_IMAGE`,
+      `REPART_LOOP`, `REPART_DEVICE`, `REPART_MOUNT` exported, then always
+      unmounts and detaches — on success, failure, or Ctrl-C.
+
+      `slot path 20260824` prints where a slot lives; `slot show MOUNT`
+      lists slots as TSV with the default marked; `slot set MOUNT 20260817`
+      changes which one boots.
 
       ```mermaid
       graph LR
@@ -68,20 +142,30 @@
         slot[slot path/show/set]
       ```
 
-      `disk plan` renders the same profile model exposed by `profile render`.
-      `image` and `slot` are independent tools for inspecting the result.
-
       ## durable state
 
       Rendered profiles and reviewed plans live under `/opt/repart-main/var`,
-      never `/var/tmp`. A plan defaults to a descriptive name such as
-      `format-disk.img-20260818T120000000Z-Ab3xYz`; use `--name NAME` when another process
-      needs a predictable path. These artifacts remain until explicitly removed.
-      The caller may `rm -rf` a rendered profile or plan after it is no longer
-      needed. Image mountpoints also live under `var`, but are private resources
-      that `image with` always unmounts and removes.
+      never `/var/tmp`, and remain until explicitly removed — a plan you
+      previewed last week is still there to audit or apply. Default names are
+      descriptive (`format-disk.img-20260818T120000000Z-Ab3xYz`); pass
+      `--name NAME` when another process needs a predictable path. Image
+      mountpoints also live under `var`, but those are private resources
+      `image with` always unmounts and removes itself.
 
-      ## environment
+      ## reference: stdout and ownership
+
+      | command | stdout contract | ownership |
+      |---|---|---|
+      | `profile render` | final absolute rendered tree path only | durable under `DIR/var`; caller removes it explicitly; `--preserve RELPATH` leaves an opaque subtree tokenized |
+      | `disk plan format\|migrate` | persistent absolute plan path only | durable under `DIR/var`; apply retains it for audit |
+      | `disk apply` | no data | plan remains caller-owned |
+      | `image with` | child stdout only | command owns and always cleans its new loop and private mountpoint |
+      | `slot path\|show` | path or stable TSV data only | no temporary resources |
+      | `slot set` | no data | mutation narration is stderr only |
+
+      All diagnostics, dry-run output, and mutation narration go to stderr.
+
+      ## reference: environment
 
       One precedence rule: flag > `REPART_*` variable > built-in default.
 
@@ -106,37 +190,22 @@
       Positional arguments (targets, plans, mounts, commands) always stay
       explicit.
 
-      ## stdout and ownership
+      ## reference: what apply enforces
 
-      | command | stdout contract | ownership |
-      |---|---|---|
-      | `profile render` | final absolute rendered tree path only | durable under `DIR/var`; caller removes it explicitly; `--preserve RELPATH` leaves an opaque subtree tokenized |
-      | `disk plan format\|migrate` | persistent absolute plan path only | durable under `DIR/var`; apply retains it for audit |
-      | `disk apply` | no data | plan remains caller-owned |
-      | `image with` | child stdout only | command owns and always cleans its new loop and private mountpoint |
-      | `slot path\|show` | path or stable TSV data only | no temporary resources |
-      | `slot set` | no data | mutation narration is stderr only |
-
-      All diagnostics, dry-run output, and mutation narration go to stderr.
-      Disk apply accepts no raw repart arguments, confirms the canonical target,
-      revalidates its fingerprint, rejects mounted targets, and executes the
-      persisted arguments with only `--dry-run=yes` changed to `--dry-run=no`.
-
-      ### What each plan contains
-
-      A plan directory contains rendered `definitions/`, the allowlisted repart
-      `arguments`, target metadata in `plan`, and a `digest` over all reviewed
-      inputs. Planning records the canonical target and a device/table
-      fingerprint. Applying verifies the digest and fingerprint, requires the
-      same canonical target via `--confirm`, rejects mounted devices and
-      partitions, and changes only `--dry-run=yes` to `--dry-run=no`.
+      A plan directory contains rendered `definitions/`, the allowlisted
+      repart `arguments`, target metadata in `plan`, and a `digest` over all
+      reviewed inputs. Applying verifies the digest and the target
+      fingerprint, requires the same canonical target via `--confirm`,
+      rejects mounted devices and partitions, accepts no raw repart
+      arguments, and executes the persisted arguments with only
+      `--dry-run=yes` changed to `--dry-run=no`.
 
       `disk plan format` combines universal + format definitions and forces
-      `--offline=yes`. `disk plan migrate` combines universal + BDR definitions,
-      renders `BlockDeviceReplace=` from the canonical source mount, and requires
-      systemd-repart 261+ with single-device btrfs. Profile defaults are today,
-      mapped host architecture, 16G swap, and the OS/home prefixes shared with
-      `slot` (`REPART_OS_PREFIX`, `REPART_HOME_PREFIX`).
+      `--offline=yes`. `disk plan migrate` combines universal + BDR
+      definitions, renders `BlockDeviceReplace=` from the canonical source
+      mount, and requires systemd-repart 261+ with single-device btrfs.
+      Profile defaults are today, mapped host architecture, 16G swap, and
+      the OS/home prefixes shared with `slot`.
   tasks:
     - import_tasks: tasks/compfuzor.includes
       vars:

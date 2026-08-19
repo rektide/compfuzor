@@ -38,6 +38,9 @@ Commands:
   slot show        List known OS and home slots
   slot set         Select the default OS slot
 
+Disk changes are always two steps: "disk plan" previews and persists a plan
+that touches nothing; "disk apply" later executes it after re-verification.
+
 Every option pairs with a REPART_* environment variable, shown beside it in
 each command's --help; flags always win.
 
