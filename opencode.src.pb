@@ -14,7 +14,7 @@
     # branch fetched from the rektide remote while retaining upstream as origin.
     GIT_VERSION: working@rektide
     # origin's rolling 'latest' tag drifts from the local fossil; allow clobber.
-    GIT_FORCE: True
+    #GIT_FORCE: True
     PKGS:
       - binutils
     BACKUP_TARGET: /mnt/fu/backup/opencode-2026-5
