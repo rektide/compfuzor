@@ -94,13 +94,37 @@ vars must live in `Environment=` lines, not the env file.
 - What stays per-user on disk: only `~/.local/var/lib/watchman-main/` (state,
   sock, pid, log) and the `<user>-state` CLI symlink.
 
+## user-path-variable precedent (already loaded, both)
+
+Two existing families do dual-scope paths, both always loaded:
+
+- `USERMODE_*_DIR` (`vars/common.yaml:28-42`): `USERMODE_SRVS_DIR`,
+  `USERMODE_VARS_DIR`, `USERMODE_ETCS_DIR`, ... defined unconditionally
+  alongside the system dirs; `vars/common.user.yaml` flips the base names
+  onto them under USERMODE. Load mechanics are include_defaults-only-sets-
+  undefined (`tasks/compfuzor/vars_base.tasks:3-13`), so playbook vars win
+  and both families always coexist.
+- systemd scope family (`vars/systemd.yaml:56-65`): `SYSTEMD_SYSTEM_UNIT_DIR`
+  and `SYSTEMD_USER_UNIT_DIR` (+CONF/PRESET dirs, from pkg-config) defined
+  side by side; the scope selector `SYSTEMD_UNIT_DIR: lookup('vars',
+  'SYSTEMD_'+SYSTEMD_SCOPE|upper+'_UNIT_DIR')` (`vars/systemd.yaml:5`) picks
+  at use. The cleanest dual-scope pattern in the repo.
+
+Crucial distinction: both precedents hold absolute paths **resolved for the
+deploying actor** (USERMODE_VARS_DIR → `/home/rektide/.local/var/lib`) —
+correct for full-USERMODE where deployer == service user, wrong for the
+global hybrid where any user activates later. The missing family member is
+the runtime-per-user variant below.
+
 ## systemic improvements (if compfuzor wants to "handle it well")
 
-- A user-relative path vocabulary: e.g. `VAR_USER: "%h/.local/var/lib/{{NAME}}"`
-  / `ETC_USER: ...`, emitted when generating user-scope units in system
-  deploys — static strings, expansion stays systemd's job. This is the
-  minimal fix that makes `separate`'s original bifurcation intent real
-  without any per-user templating.
+- A user-relative path vocabulary following the existing parallel-family
+  shape: e.g. `VARS_USER_DIR: "%h/.local/var/lib"` (specifier-valued, NOT
+  resolved-home-valued) alongside `USERMODE_VARS_DIR`, consumed by unit
+  generation when emitting user-scope units in system deploys — static
+  strings, expansion stays systemd's job. This is the minimal fix that
+  makes `separate`'s original bifurcation intent real without any per-user
+  templating.
 - Or: deprecate `separate` in favor of explicit dual specs
   (`SYSTEMD_SERVICES` vs `SYSTEMD_SERVICES_USER`) and fix the user-scope
   `[Install]` defaults.
