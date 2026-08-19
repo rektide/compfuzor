@@ -92,6 +92,7 @@
     # ~/.config/watchman-main/watchman.json symlink (override point).
     ETC_FILES:
       - name: watchman.json
+        link: user
         json:
           root_files: [".git", ".hg", ".jj"]
           enforce_root_files: true
@@ -168,25 +169,5 @@
           chmod 0700 "$_vdir"
           rm -rf "$_user_state"
           ln -sfnv "$_vdir" "$_user_state"
-      - name: install-user-etc.sh
-        scope: user
-        content: |
-          # Overridable symlink farm: ~/.config/watchman-main/<file> → global
-          # {{ETC}}/<file> when absent. An existing non-symlink file (or a
-          # foreign symlink) is a user override — left untouched.
-          _uetc="${HOME}/.config/watchman-main"
-          _getc="{{ETC}}"
-          mkdir -p "$_uetc"
-          for _f in watchman.json; do
-            if [ -e "$_uetc/$_f" ] || [ -L "$_uetc/$_f" ]; then
-              if [ "$(readlink -m "$_uetc/$_f" 2>/dev/null)" = "$(readlink -m "$_getc/$_f" 2>/dev/null)" ]; then
-                echo "user-etc: $_uetc/$_f -> $_getc/$_f (up to date)"
-              else
-                echo "user-etc: keeping existing $_uetc/$_f (override)"
-              fi
-            else
-              ln -snv "$_getc/$_f" "$_uetc/$_f"
-            fi
-          done
   tasks:
     - import_tasks: tasks/compfuzor.includes

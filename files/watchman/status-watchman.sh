@@ -9,9 +9,8 @@
 #     as a different sockname / a dead service with a live pidfile;
 #   - the CLI-routing symlink is intact: bare `watchman` lands on the
 #     managed daemon instead of auto-spawning an unguarded one;
-#   - the config symlink farm is intact: ~/.config/watchman-main/
-#     watchman.json resolves (through the global symlink or a user
-#     override) to a parseable guard config;
+#   - the resolved config is a parseable guard config; generic link status
+#     separately reports whether the default config link is managed;
 #   - the root guard is in effect: every watched root carries a VCS marker
 #     (.git/.hg/.jj) and still exists on disk;
 #   - the guard is not inverted: ~ and ~/archive stay marker-free (a .git/.jj
@@ -32,7 +31,6 @@
 
 _vdir="${HOME}/.local/var/lib/watchman-main"
 _uetc="${HOME}/.config/watchman-main"
-_getc="{{ETC}}"
 _sock="$_vdir/sock"
 _pidfile="$_vdir/pid"
 _statefile="$_vdir/state"
@@ -68,22 +66,6 @@ if [ -L "$_cli_state" ] && [ "$(readlink -m "$_cli_state")" = "$(readlink -m "$_
   _say cli-route "OK: $_cli_state -> $_vdir"
 else
   _say cli-route "DRIFT: $_cli_state is not a symlink to $_vdir -- bare CLI would spawn an unguarded daemon"
-  _drift=1
-fi
-
-# --- config symlink farm ----------------------------------------------------
-if [ -e "$_cfg" ] || [ -L "$_cfg" ]; then
-  _cfg_target="$(readlink -m "$_cfg" 2>/dev/null)"
-  if [ "$_cfg_target" = "$(readlink -m "$_getc/watchman.json" 2>/dev/null)" ]; then
-    _say config-link "OK: $_cfg -> global (managed)"
-  elif [ -e "$_cfg_target" ]; then
-    _say config-link "OK: $_cfg -> $_cfg_target (user override)"
-  else
-    _say config-link "DRIFT: $_cfg is a dangling link to $_cfg_target"
-    _drift=1
-  fi
-else
-  _say config-link "DRIFT: $_cfg missing -- run install-user-etc.sh"
   _drift=1
 fi
 
