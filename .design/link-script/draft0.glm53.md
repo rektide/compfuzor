@@ -4,7 +4,7 @@ title: link-script draft0 — deferred LINKS + per-entry link fields # display n
 description: Initial design draft for recording LINKS as data materialized by composed install-links scripts, plus per-entry link fields on file entries
 tags: [compfuzor, design, links, bins, fsh, usermode]
 status: draft
-generated: { by: llm:glm5t, at: 2026-08-19 }
+generated: { by: llm:glm53, at: 2026-08-19 }
 sources:
   - id: prompt0
     resource: /home/rektide/src/compfuzor/.design/link-script/prompt0.md
@@ -300,7 +300,7 @@ flowchart TD
 
 ## research prompt (next wave)
 
-> Read `.design/link-script/draft0.glm5t.md` and pressure-test D1–D6
+> Read `.design/link-script/draft0.glm53.md` and pressure-test D1–D6
 > against the tree: does `bin_composers` actually claim
 > `install-links-user.sh` into `install-user.sh` without a subsystem tag;
 > does the fsh `home='${HOME}'` output survive `merge_subsys` templating
