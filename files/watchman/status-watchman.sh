@@ -1,13 +1,17 @@
 # status-watchman.sh -- watchman daemon stats + health, via the watchman CLI.
 #
-# Everything here needs watchman-domain knowledge that no generic reporter
-# covers (status-dirs.sh only dumps directories):
+# Hybrid deploy: paths are per-user (${HOME} literals, expanded at runtime);
+# global artifacts live in /srv and /etc/opt. Everything here needs
+# watchman-domain knowledge that no generic reporter covers:
 #   - the daemon answers on the MANAGED socket and is the daemon our unit
 #     started: `get-sockname` echoes the --sockname the unit passed, so an
 #     ad-hoc daemon (spawned by a bare CLI without the guard config) shows
 #     as a different sockname / a dead service with a live pidfile;
 #   - the CLI-routing symlink is intact: bare `watchman` lands on the
 #     managed daemon instead of auto-spawning an unguarded one;
+#   - the config symlink farm is intact: ~/.config/watchman-main/
+#     watchman.json resolves (through the global symlink or a user
+#     override) to a parseable guard config;
 #   - the root guard is in effect: every watched root carries a VCS marker
 #     (.git/.hg/.jj) and still exists on disk;
 #   - the guard is not inverted: ~ and ~/archive stay marker-free (a .git/.jj
@@ -16,8 +20,8 @@
 #     before any client could auto-spawn an unguarded daemon;
 #   - the daemon's own inotify pressure vs fs.inotify.max_user_watches --
 #     the exhaustion vector that poisons state and hangs jj (fsmonitor);
-#   - state/log artifact sizes (the ad-hoc daemon this playbook replaced
-#     grew a 2 GiB unrotated log nobody was watching) and log poison lines.
+#   - state/log artifact sizes (no rotation in this build; takeover.sh
+#     trims at each start).
 #
 # All CLI probes use --no-spawn --no-local so a dead daemon is REPORTED,
 # never resurrected as a side effect of checking.
@@ -26,12 +30,15 @@
 # Test seams: WATCHMAN_BIN, WATCHMAN_UNIT, WATCHMAN_ROOT_FILES (space-sep),
 # WATCHMAN_STATUS_TIMEOUT (secs).
 
-_sock="{{VAR}}/sock"
-_pidfile="{{VAR}}/pid"
-_statefile="{{VAR}}/state"
-_logfile="{{VAR}}/log"
+_vdir="${HOME}/.local/var/lib/watchman-main"
+_uetc="${HOME}/.config/watchman-main"
+_getc="{{ETC}}"
+_sock="$_vdir/sock"
+_pidfile="$_vdir/pid"
+_statefile="$_vdir/state"
+_logfile="$_vdir/log"
 _cli_state="{{WATCHMAN_DEFAULT_STATE_DIR}}/$(id -un)-state"
-_cfg="${WATCHMAN_CONFIG_FILE:-{{ETC}}/watchman.json}"
+_cfg="${WATCHMAN_CONFIG_FILE:-$_uetc/watchman.json}"
 _wmbin="${WATCHMAN_BIN:-watchman}"
 _unit="${WATCHMAN_UNIT:-{{NAME}}.service}"
 _markers="${WATCHMAN_ROOT_FILES:-.git .hg .jj}"
@@ -57,10 +64,26 @@ else
 fi
 
 # --- CLI routing symlink ----------------------------------------------------
-if [ -L "$_cli_state" ] && [ "$(readlink -m "$_cli_state")" = "$(readlink -m "{{VAR}}")" ]; then
-  _say cli-route "OK: $_cli_state -> {{VAR}}"
+if [ -L "$_cli_state" ] && [ "$(readlink -m "$_cli_state")" = "$(readlink -m "$_vdir")" ]; then
+  _say cli-route "OK: $_cli_state -> $_vdir"
 else
-  _say cli-route "DRIFT: $_cli_state is not a symlink to {{VAR}} -- bare CLI would spawn an unguarded daemon"
+  _say cli-route "DRIFT: $_cli_state is not a symlink to $_vdir -- bare CLI would spawn an unguarded daemon"
+  _drift=1
+fi
+
+# --- config symlink farm ----------------------------------------------------
+if [ -e "$_cfg" ] || [ -L "$_cfg" ]; then
+  _cfg_target="$(readlink -m "$_cfg" 2>/dev/null)"
+  if [ "$_cfg_target" = "$(readlink -m "$_getc/watchman.json" 2>/dev/null)" ]; then
+    _say config-link "OK: $_cfg -> global (managed)"
+  elif [ -e "$_cfg_target" ]; then
+    _say config-link "OK: $_cfg -> $_cfg_target (user override)"
+  else
+    _say config-link "DRIFT: $_cfg is a dangling link to $_cfg_target"
+    _drift=1
+  fi
+else
+  _say config-link "DRIFT: $_cfg missing -- run install-user-etc.sh"
   _drift=1
 fi
 

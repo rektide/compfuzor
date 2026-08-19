@@ -1,129 +1,96 @@
 ---
-# Watchman file-watcher as a managed **user** systemd service.
+# Watchman file-watcher as a **user** systemd service, deployed **globally**.
 #
-# WHY A USER SERVICE: watchman is inherently per-user (state dir keyed by
-# username, per-user inotify watch limits). The previous system-unit form here
-# was never the unit actually running — the auto-started ad-hoc daemon from
-# /usr/local/src/watchman-git was. This makes `systemctl --user status watchman`
-# the source of truth: known state/log/socket/pid, restartable, journalable.
+# HYBRID DEPLOY (global artifacts, per-user service): compfuzor's fsh lookup
+# makes this work without any per-user templating. Artifacts live once in
+# system dirs (/srv, /etc/opt); every user who wants watchman activates it
+# themselves by running {{BINS_DIR}}/install-user.sh (no sudo). Per-user
+# paths in the unit are %h specifiers systemd expands at unit-load; shell
+# scripts use ${HOME} literals expanded at runtime.
+#
+# OVERRIDABLE SYMLINK FARM: the daemon's config resolves through the USER's
+# ~/.config/watchman-main/watchman.json, which defaults to a symlink to the
+# global {{ETC}}/watchman.json. Delete the symlink, write your own file —
+# you've overridden just that piece; everything else stays managed.
 #
 # Binary comes from watchman.src.pb (getdeps build → /usr/local/bin/watchman).
 #
-# ROOT GUARD (ticket compfuzor-watchman-service):
-# A bare `watchman watch-project ~/src` (or any huge tree) exhausts inotify
-# watches → poison state → jj (which uses watchman as fsmonitor) hangs on every
-# status/commit. The durable fix is a global root_files guard: with
-# `enforce_root_files: true` + `root_files: [".git",".hg",".jj"]`, watchman
-# walks UP from the requested path to the nearest dir containing a marker,
-# refusing if none exists. So `watch-project ~/src/<repo>` resolves to <repo>
-# (has .git); `watch-project ~/src` is refused outright.
+# ROOT GUARD: a bare `watchman watch-project ~/src` (or any huge tree)
+# exhausts inotify watches → poison state → jj (fsmonitor) hangs. The global
+# config arms `enforce_root_files` with markers [.git .hg .jj]: watchman
+# walks UP from the requested path to the nearest marker, refusing if none.
+# `watch-project ~/src/<repo>` resolves to <repo>; bare ~, ~/archive, ~/src
+# are refused (they hold no markers — the guard-inversion status check
+# drifts if that ever changes, e.g. a dotfiles `git init ~`).
 #
-# HOW THE CONFIG REACHES THE DAEMON (fully user-mode, no /etc writes):
-# Watchman reads `$WATCHMAN_CONFIG_FILE` (WatchmanConfig.cpp:28, overrides the
-# compile-time `/etc/watchman.json`). We emit the config at {{ETC}}/watchman.json
-# (via ETC_FILES json:) and pass the path to the daemon via ENV: →
-# EnvironmentFile (the compfuzor-native way to give a unit its own env vars).
+# CLI→DAEMON ROUTING — install-cli-symlink.sh: the C++ `watchman` CLI
+# ignores $WATCHMAN_SOCK (only python/node/rust clients honor it) and
+# computes its socket from the compile-time WATCHMAN_STATE_DIR macro:
+# <STATE_DIR>/<username>-state/sock. install-cli-symlink.sh symlinks that
+# path to the USER's var dir, so bare CLI invocations land on the managed
+# daemon instead of auto-spawning an unconfigured one.
 #
-# CLI→DAEMON ROUTING — install-cli-symlink.sh (auto-included in install-user.sh):
-# The C++ `watchman` CLI **ignores `$WATCHMAN_SOCK`** — only python/node/rust
-# clients honor it (Connect.cpp:24, sockname.cpp:25, UserDir.cpp:195). The CLI
-# computes its socket from the compile-time `WATCHMAN_STATE_DIR` macro:
-# `<STATE_DIR>/<username>-state/sock`. If that socket has no listener, the CLI
-# auto-spawns a fresh ad-hoc daemon (main.cpp:955) that inherits the CLI's env
-# (which, for non-interactive contexts, lacks `WATCHMAN_CONFIG_FILE` → no guard).
-# Rather than rebuild (a getdeps dependency nightmare), install-cli-symlink.sh
-# **symlinks the CLI's compile-time default `<user>-state` path to our managed
-# {{VAR}} dir**. Then every bare `watchman` invocation connects through the
-# symlink to our managed daemon, which has the guard loaded. Single daemon, no
-# spawn, no env gymnastics.
+# ORPHAN TAKEOVER — ExecStartPre takeover.sh: if the unit's daemon dies and
+# a client's bare `watchman` auto-spawns a replacement (which takes the
+# pidfile/socket through the symlink with no guard config and no fd
+# headroom), the unit crash-loops on the pidfile flock. takeover.sh checks
+# the flock pre-start: free → exit; held → shutdown-server the foreign
+# daemon (state-preserving) and wait. Also trims an overgrown log (this
+# build has no max_log rotation; --logfile=/dev/stdout aborts it).
 #
-# ORPHAN TAKEOVER — ExecStartPre takeover.sh: the symlink routes CLI traffic to
-# our managed paths, but if the unit's daemon ever dies while a client runs a
-# bare `watchman` (e.g. get-sockname at session start), the CLI auto-spawns a
-# replacement daemon that takes the pidfile/socket/state through the symlink —
-# with NO guard config and NO fd headroom. The unit then crash-loops on
-# "Failed to lock pidfile: process N owns it" (observed: 1600+ restarts over
-# ~36h, unguarded daemon serving jj/opencode the whole time, 2 GiB log).
-# takeover.sh checks the pidfile flock pre-start: free → instant exit; held →
-# shutdown-server the foreign daemon (preserves watched-root state) and wait.
+# FD LIMIT: one inotify fd per watched dir plus several fds per root during
+# crawl; hundreds of roots EMFILE the user-manager default 1024 → segv
+# loop. LimitNOFILE matches the login-session hard limit.
 #
-# FD LIMIT + LOG — this daemon holds one inotify fd per watched dir and
-# several fds per root during crawl; with hundreds of roots the user-manager
-# default (1024) EMFILEs the initial crawl → poison/segv loop (observed: state
-# file destroyed). LimitNOFILE matches the login-session hard limit. This
-# build has no max_log rotation and --logfile=/dev/stderr aborts it, so the
-# log is a plain file: takeover.sh trims it pre-start (>64MiB → keep 4MiB
-# tail) and status-watchman.sh drifts if it passes 256MiB between restarts.
-#
-# GUARD INVERSION — the root guard refuses ~, ~/archive, ~/src only because
-# those dirs contain no .git/.hg/.jj; a `git init ~` (dotfiles!) would invert
-# it and resolve every watch to ~. status-watchman.sh checks ~ and ~/archive
-# stay marker-free (watchman has no deny-list config; marker-freeness IS the
-# denial). Requires user linger so the unit (and guard daemon) runs from boot,
-# before any client could auto-spawn a foreign daemon.
-#
-# install-user.sh flow (auto-composed by bin_composers):
-#   1. install-cli-symlink.sh   — symlink CLI default <user>-state → {{VAR}},
-#                                 chmod 0700 on {{VAR}} (watchman security check)
-#   2. install-systemd-user.sh  — link unit, daemon-reload, enable --now
-#   3. install-user-zimfw.sh    — promote zim module into the zim host
+# ENV SPLIT (two expansion worlds): EnvironmentFile contents are NOT
+# expanded by systemd ($HOME stays literal) while shells expand ${HOME}
+# when sourcing env.export. So env.export carries ${HOME} literals for
+# shell clients, and the unit carries Environment= lines with %h for the
+# daemon (Environment= wins over EnvironmentFile).
 - hosts: all
   vars:
     TYPE: watchman
-    USERMODE: True
 
-    VAR_DIR: True
-    VAR_FILES:
-      - name: state
-        content: "{}"
+    # per-user paths for unit directives (%h, systemd expands at load)
+    UNIT_VAR: "{{ lookup('fsh', 'var', user=True, name=True, home='%h') }}"
+    UNIT_ETC_FILE: "{{ lookup('fsh', 'etc', user=True, name=True, home='%h') }}/watchman.json"
+    # per-user paths for shell artifacts (${HOME}, shell expands at runtime)
+    SHELL_VAR: "{{ lookup('fsh', 'var', user=True, name=True, home='${HOME}') }}"
+    SHELL_ETC_FILE: "{{ lookup('fsh', 'etc', user=True, name=True, home='${HOME}') }}/watchman.json"
 
-    # The compile-time WATCHMAN_STATE_DIR that watchman.src.pb's getdeps build
-    # baked into the binary (see scratch/build/watchman/watchman/config.h).
-    # The bare CLI computes its default socket as
-    # <WATCHMAN_DEFAULT_STATE_DIR>/<username>-state/sock. install-cli-symlink.sh
-    # symlinks that path to {{VAR}}. Override here if the binary is rebuilt
-    # with a different -DWATCHMAN_STATE_DIR.
-    WATCHMAN_DEFAULT_STATE_DIR: /usr/local/src/watchman-git/watchman/var/run/watchman
+    SYSTEMD_SCOPE: user
+    SYSTEMD_INSTALL: user
 
-    # env.export + EnvironmentFile (the compfuzor-native way). Sourced by BINS
-    # scripts and loaded into the unit's own env.
-    #   WATCHMAN_CONFIG_FILE → where the daemon finds the root guard config
-    #   WATCHMAN_SOCK        → socket path for clients/scripts that source this
+    # ${HOME} literals for shell-side consumers (BINS scripts via envdefault,
+    # interactive shells via the zim module). The daemon gets the same vars
+    # as %h Environment= lines below, which override the EnvironmentFile.
     ENV:
-      WATCHMAN_SOCK: "{{VAR}}/sock"
-      WATCHMAN_CONFIG_FILE: "{{ETC}}/watchman.json"
+      WATCHMAN_SOCK: "{{SHELL_VAR}}/sock"
+      WATCHMAN_CONFIG_FILE: "{{SHELL_ETC_FILE}}"
 
     SYSTEMD_SERVICES:
-      # --logfile is explicit (not omitted): this build derives the default
-      # log from the sockname dir anyway, has NO max_log rotation (Logging.cpp),
-      # and --logfile=/dev/stderr aborts the daemon (folly crash) — journald
-      # is not reachable. takeover.sh trims the log pre-start instead.
-      ExecStart: "watchman --persistent --foreground --statefile={{VAR}}/state --pidfile={{VAR}}/pid --sockname={{VAR}}/sock --logfile={{VAR}}/log"
+      ExecStart: "watchman --persistent --foreground --statefile={{UNIT_VAR}}/state --pidfile={{UNIT_VAR}}/pid --sockname={{UNIT_VAR}}/sock --logfile={{UNIT_VAR}}/log"
       ExecStartPre: "{{BINS_DIR}}/takeover.sh"
-      # hundreds of watched roots × per-root fds + one inotify fd per watched
-      # dir: the user-manager default 1024 EMFILEs the initial crawl → segv loop
+      Environment:
+        - "WATCHMAN_SOCK={{UNIT_VAR}}/sock"
+        - "WATCHMAN_CONFIG_FILE={{UNIT_ETC_FILE}}"
       LimitNOFILE: 524288
       Restart: always
       RestartSec: "2s"
 
-    # Interactive shells: ZIM_ENV promotes the two client-facing ENV vars
-    # into an auto-generated env module (don't-stomp, COMPFUZOR_ENV_OVERWRITE
-    # forces) -- python/node/rust clients honor $WATCHMAN_SOCK, unlike the
-    # C++ CLI (handled by the install-cli-symlink.sh shim).
+    # Interactive shells: ZIM_ENV promotes the two client-facing vars into
+    # an env module (don't-stomp) -- python/node/rust clients honor
+    # $WATCHMAN_SOCK, unlike the C++ CLI (handled by the CLI-routing symlink).
     ZIM_ENV:
       - WATCHMAN_SOCK
       - WATCHMAN_CONFIG_FILE
 
-    # Register the reporter with the status subsystem → activates it (its
-    # status.sh orchestrator is contributed) and bakes status-watchman.sh
-    # into status.sh's ordered REPORTERS list.
     STATUSES:
       - status-watchman.sh
 
+    # Global, user-agnostic guard config. Read via the USER's
+    # ~/.config/watchman-main/watchman.json symlink (override point).
     ETC_FILES:
-      # Global root_files guard. Read by the daemon via $WATCHMAN_CONFIG_FILE
-      # at startup. Restart the service to pick up changes (existing roots are
-      # NOT re-validated; only new watch-project calls are gated).
       - name: watchman.json
         json:
           root_files: [".git", ".hg", ".jj"]
@@ -144,34 +111,29 @@
             - ".mypy_cache"
             - ".pytest_cache"
 
-    # Ungrouped install leaf (scope: user, no subsystem) → auto-included as a
-    # direct child of install-user.sh by bin_composers. Runs after the systemd
-    # unit is linked and the zim module is promoted.
+    # The compile-time WATCHMAN_STATE_DIR that watchman.src.pb's getdeps
+    # build baked into the binary. The bare CLI computes its default socket
+    # as <WATCHMAN_DEFAULT_STATE_DIR>/<username>-state/sock.
+    WATCHMAN_DEFAULT_STATE_DIR: /usr/local/src/watchman-git/watchman/var/run/watchman
+
     BINS:
       - name: status-watchman.sh
         # stats/health via the watchman CLI: managed-socket identity, unit
         # vs pidfile, CLI-routing symlink, root-guard enforcement, guard
-        # inversion (~ marker-free), linger, inotify pressure, state size,
-        # journald log-health. STATUSES wires it into status.sh.
+        # inversion (~ marker-free), config symlink farm, linger, inotify
+        # pressure, state/log sizes.
         basedir: false
       - name: takeover.sh
         # ExecStartPre: if a foreign (CLI-auto-spawned, unguarded) daemon
         # holds the pidfile flock, shutdown-server it and wait for the lock;
-        # free lock → instant exit. Also trims an overgrown log (no max_log
-        # in this build). See "ORPHAN TAKEOVER" in the header.
+        # free lock → instant exit. Trims >64MiB logs. Paths are ${HOME}
+        # literals expanded at runtime.
         basedir: false
         content: |
           #!/bin/sh
-          # Pre-start orphan takeover + log trim for {{NAME}}. Fast path:
-          # nothing holds the pidfile flock → exit 0 immediately. Slow path:
-          # a foreign daemon (auto-spawned by a bare CLI, no guard config)
-          # owns the lock → ask it to shut down cleanly (preserves
-          # watched-root state and drops idle watches) and wait up to ~10s.
-          # If it refuses, fail the start so systemd surfaces it instead of
-          # crash-looping. Finally: this build has no max_log rotation, so
-          # trim the log if it outgrew 64MiB (keep a 4MiB tail).
-          _pidfile="{{VAR}}/pid"
-          _logfile="{{VAR}}/log"
+          _vdir="${HOME}/.local/var/lib/watchman-main"
+          _pidfile="$_vdir/pid"
+          _logfile="$_vdir/log"
           if [ -f "$_logfile" ]; then
             _size=$(stat -c %s "$_logfile" 2>/dev/null || echo 0)
             if [ "$_size" -gt 67108864 ]; then
@@ -184,7 +146,7 @@
           flock -n 9 && exit 0
           _owner="$(tr -dc '0-9' <"$_pidfile" 2>/dev/null || true)"
           echo "takeover: pidfile lock held${_owner:+ by pid $_owner}; requesting shutdown-server" >&2
-          watchman --no-spawn --no-local --sockname="{{VAR}}/sock" shutdown-server >/dev/null 2>&1 || true
+          watchman --no-spawn --no-local --sockname="$_vdir/sock" shutdown-server >/dev/null 2>&1 || true
           _i=0
           while [ "$_i" -lt 50 ]; do
             flock -n 9 && exit 0
@@ -197,17 +159,34 @@
         scope: user
         content: |
           # Symlink the bare `watchman` CLI's compile-time default <user>-state
-          # path to our managed {{VAR}} dir. The C++ CLI ignores $WATCHMAN_SOCK
-          # (only python/node/rust clients honor it) and computes its socket as
-          # <WATCHMAN_DEFAULT_STATE_DIR>/<username>-state/sock. Without this
-          # symlink it auto-spawns an ad-hoc daemon with no guard config.
-          # Also enforce 0700 on {{VAR}} — watchman refuses group/other-writable
-          # state dirs ("the permissions on <dir> allow others to write to it").
+          # path to THIS user's var dir, and create that var dir (0700 —
+          # watchman refuses group/other-writable state dirs).
           _state_dir="{{WATCHMAN_DEFAULT_STATE_DIR}}"
           _user_state="$_state_dir/$(id -un)-state"
-          mkdir -p "$_state_dir"
-          chmod 0700 "{{VAR}}"
+          _vdir="${HOME}/.local/var/lib/watchman-main"
+          mkdir -p "$_state_dir" "$_vdir"
+          chmod 0700 "$_vdir"
           rm -rf "$_user_state"
-          ln -sfv "{{VAR}}" "$_user_state"
+          ln -sfnv "$_vdir" "$_user_state"
+      - name: install-user-etc.sh
+        scope: user
+        content: |
+          # Overridable symlink farm: ~/.config/watchman-main/<file> → global
+          # {{ETC}}/<file> when absent. An existing non-symlink file (or a
+          # foreign symlink) is a user override — left untouched.
+          _uetc="${HOME}/.config/watchman-main"
+          _getc="{{ETC}}"
+          mkdir -p "$_uetc"
+          for _f in watchman.json; do
+            if [ -e "$_uetc/$_f" ] || [ -L "$_uetc/$_f" ]; then
+              if [ "$(readlink -m "$_uetc/$_f" 2>/dev/null)" = "$(readlink -m "$_getc/$_f" 2>/dev/null)" ]; then
+                echo "user-etc: $_uetc/$_f -> $_getc/$_f (up to date)"
+              else
+                echo "user-etc: keeping existing $_uetc/$_f (override)"
+              fi
+            else
+              ln -snv "$_getc/$_f" "$_uetc/$_f"
+            fi
+          done
   tasks:
     - import_tasks: tasks/compfuzor.includes
