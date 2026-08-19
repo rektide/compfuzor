@@ -52,8 +52,8 @@
 # default (1024) EMFILEs the initial crawl → poison/segv loop (observed: state
 # file destroyed). LimitNOFILE matches the login-session hard limit. This
 # build has no max_log rotation and --logfile=/dev/stderr aborts it, so the
-# log is a plain file: takeover.sh trims it pre-start (>512MiB → keep 4MiB
-# tail) and status-watchman.sh drifts if it passes 1GiB between restarts.
+# log is a plain file: takeover.sh trims it pre-start (>64MiB → keep 4MiB
+# tail) and status-watchman.sh drifts if it passes 256MiB between restarts.
 #
 # GUARD INVERSION — the root guard refuses ~, ~/archive, ~/src only because
 # those dirs contain no .git/.hg/.jj; a `git init ~` (dotfiles!) would invert
@@ -169,12 +169,12 @@
           # watched-root state and drops idle watches) and wait up to ~10s.
           # If it refuses, fail the start so systemd surfaces it instead of
           # crash-looping. Finally: this build has no max_log rotation, so
-          # trim the log if it outgrew 512MiB (keep a 4MiB tail).
+          # trim the log if it outgrew 64MiB (keep a 4MiB tail).
           _pidfile="{{VAR}}/pid"
           _logfile="{{VAR}}/log"
           if [ -f "$_logfile" ]; then
             _size=$(stat -c %s "$_logfile" 2>/dev/null || echo 0)
-            if [ "$_size" -gt 536870912 ]; then
+            if [ "$_size" -gt 67108864 ]; then
               echo "takeover: log is ${_size} bytes; trimming to 4MiB tail" >&2
               tail -c 4194304 "$_logfile" >"$_logfile.trim" 2>/dev/null && mv -f "$_logfile.trim" "$_logfile"
             fi

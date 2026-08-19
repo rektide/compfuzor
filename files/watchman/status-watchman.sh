@@ -203,13 +203,13 @@ fi
 
 # --- artifacts + log health --------------------------------------------------
 # This build has no max_log rotation; takeover.sh trims at each start, so
-# only sustained growth between restarts can pass the 1GiB drift threshold.
+# only sustained growth between restarts can pass the 256MiB drift threshold.
 _art="state $(_hum "$(stat -c %s "$_statefile" 2>/dev/null || echo 0)")"
 if [ -f "$_logfile" ]; then
   _logsize="$(stat -c %s "$_logfile")"
   _art="$_art, log $(_hum "$_logsize")"
-  if [ "$_logsize" -gt 1073741824 ]; then
-    _say artifacts "DRIFT: $_art -- exceeds 1GiB (no rotation; truncate + restart)"
+  if [ "$_logsize" -gt 268435456 ]; then
+    _say artifacts "DRIFT: $_art -- exceeds 256MiB (no rotation; truncate + restart)"
     _drift=1
   else
     _say artifacts "OK: $_art"
