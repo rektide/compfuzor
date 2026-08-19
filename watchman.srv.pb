@@ -37,6 +37,31 @@
 # symlink to our managed daemon, which has the guard loaded. Single daemon, no
 # spawn, no env gymnastics.
 #
+# ORPHAN TAKEOVER — ExecStartPre takeover.sh: the symlink routes CLI traffic to
+# our managed paths, but if the unit's daemon ever dies while a client runs a
+# bare `watchman` (e.g. get-sockname at session start), the CLI auto-spawns a
+# replacement daemon that takes the pidfile/socket/state through the symlink —
+# with NO guard config and NO fd headroom. The unit then crash-loops on
+# "Failed to lock pidfile: process N owns it" (observed: 1600+ restarts over
+# ~36h, unguarded daemon serving jj/opencode the whole time, 2 GiB log).
+# takeover.sh checks the pidfile flock pre-start: free → instant exit; held →
+# shutdown-server the foreign daemon (preserves watched-root state) and wait.
+#
+# FD LIMIT + LOG — this daemon holds one inotify fd per watched dir and
+# several fds per root during crawl; with hundreds of roots the user-manager
+# default (1024) EMFILEs the initial crawl → poison/segv loop (observed: state
+# file destroyed). LimitNOFILE matches the login-session hard limit. This
+# build has no max_log rotation and --logfile=/dev/stderr aborts it, so the
+# log is a plain file: takeover.sh trims it pre-start (>512MiB → keep 4MiB
+# tail) and status-watchman.sh drifts if it passes 1GiB between restarts.
+#
+# GUARD INVERSION — the root guard refuses ~, ~/archive, ~/src only because
+# those dirs contain no .git/.hg/.jj; a `git init ~` (dotfiles!) would invert
+# it and resolve every watch to ~. status-watchman.sh checks ~ and ~/archive
+# stay marker-free (watchman has no deny-list config; marker-freeness IS the
+# denial). Requires user linger so the unit (and guard daemon) runs from boot,
+# before any client could auto-spawn a foreign daemon.
+#
 # install-user.sh flow (auto-composed by bin_composers):
 #   1. install-cli-symlink.sh   — symlink CLI default <user>-state → {{VAR}},
 #                                 chmod 0700 on {{VAR}} (watchman security check)
@@ -69,7 +94,15 @@
       WATCHMAN_CONFIG_FILE: "{{ETC}}/watchman.json"
 
     SYSTEMD_SERVICES:
+      # --logfile is explicit (not omitted): this build derives the default
+      # log from the sockname dir anyway, has NO max_log rotation (Logging.cpp),
+      # and --logfile=/dev/stderr aborts the daemon (folly crash) — journald
+      # is not reachable. takeover.sh trims the log pre-start instead.
       ExecStart: "watchman --persistent --foreground --statefile={{VAR}}/state --pidfile={{VAR}}/pid --sockname={{VAR}}/sock --logfile={{VAR}}/log"
+      ExecStartPre: "{{BINS_DIR}}/takeover.sh"
+      # hundreds of watched roots × per-root fds + one inotify fd per watched
+      # dir: the user-manager default 1024 EMFILEs the initial crawl → segv loop
+      LimitNOFILE: 524288
       Restart: always
       RestartSec: "2s"
 
@@ -80,6 +113,12 @@
     ZIM_ENV:
       - WATCHMAN_SOCK
       - WATCHMAN_CONFIG_FILE
+
+    # Register the reporter with the status subsystem → activates it (its
+    # status.sh orchestrator is contributed) and bakes status-watchman.sh
+    # into status.sh's ordered REPORTERS list.
+    STATUSES:
+      - status-watchman.sh
 
     ETC_FILES:
       # Global root_files guard. Read by the daemon via $WATCHMAN_CONFIG_FILE
@@ -109,6 +148,51 @@
     # direct child of install-user.sh by bin_composers. Runs after the systemd
     # unit is linked and the zim module is promoted.
     BINS:
+      - name: status-watchman.sh
+        # stats/health via the watchman CLI: managed-socket identity, unit
+        # vs pidfile, CLI-routing symlink, root-guard enforcement, guard
+        # inversion (~ marker-free), linger, inotify pressure, state size,
+        # journald log-health. STATUSES wires it into status.sh.
+        basedir: false
+      - name: takeover.sh
+        # ExecStartPre: if a foreign (CLI-auto-spawned, unguarded) daemon
+        # holds the pidfile flock, shutdown-server it and wait for the lock;
+        # free lock → instant exit. Also trims an overgrown log (no max_log
+        # in this build). See "ORPHAN TAKEOVER" in the header.
+        basedir: false
+        content: |
+          #!/bin/sh
+          # Pre-start orphan takeover + log trim for {{NAME}}. Fast path:
+          # nothing holds the pidfile flock → exit 0 immediately. Slow path:
+          # a foreign daemon (auto-spawned by a bare CLI, no guard config)
+          # owns the lock → ask it to shut down cleanly (preserves
+          # watched-root state and drops idle watches) and wait up to ~10s.
+          # If it refuses, fail the start so systemd surfaces it instead of
+          # crash-looping. Finally: this build has no max_log rotation, so
+          # trim the log if it outgrew 512MiB (keep a 4MiB tail).
+          _pidfile="{{VAR}}/pid"
+          _logfile="{{VAR}}/log"
+          if [ -f "$_logfile" ]; then
+            _size=$(stat -c %s "$_logfile" 2>/dev/null || echo 0)
+            if [ "$_size" -gt 536870912 ]; then
+              echo "takeover: log is ${_size} bytes; trimming to 4MiB tail" >&2
+              tail -c 4194304 "$_logfile" >"$_logfile.trim" 2>/dev/null && mv -f "$_logfile.trim" "$_logfile"
+            fi
+          fi
+          [ -f "$_pidfile" ] || exit 0
+          exec 9<>"$_pidfile" || exit 0
+          flock -n 9 && exit 0
+          _owner="$(tr -dc '0-9' <"$_pidfile" 2>/dev/null || true)"
+          echo "takeover: pidfile lock held${_owner:+ by pid $_owner}; requesting shutdown-server" >&2
+          watchman --no-spawn --no-local --sockname="{{VAR}}/sock" shutdown-server >/dev/null 2>&1 || true
+          _i=0
+          while [ "$_i" -lt 50 ]; do
+            flock -n 9 && exit 0
+            sleep 0.2
+            _i=$((_i + 1))
+          done
+          echo "takeover: pidfile lock still held after 10s; failing start" >&2
+          exit 1
       - name: install-cli-symlink.sh
         scope: user
         content: |
