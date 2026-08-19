@@ -15,13 +15,13 @@
     - build
     VAR_FILES:
     - src: overlay
-      destTemplate: "{{VAR}}"
+      dest: "{{VAR}}"
       copyDir: true
     LINKS:
     - src: /proc/self/mounts
-      # symlinks don't work
+      # Replace the image's generated mtab with the conventional mounts link.
       dest: "{{VAR}}/overlay/etc/mtab"
-      force: true
+      policy: replace
     ENV:
       DEBOS_SCRATCHSIZE: "{{scratchsize}}"
     BINS:

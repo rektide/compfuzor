@@ -1,0 +1,86 @@
+---
+- name: "Compfuzor: compile deferred link plan"
+  set_fact:
+    _LINK_PLAN: "{{ LINKS | default([]) | compile_links(_ARTIFACTS, DIR, NAME, _link_fsh_roots) }}"
+  vars:
+    _link_fsh_roots:
+      system:
+        opt: "{{ lookup('fsh', 'opt', name=True) }}"
+        srv: "{{ lookup('fsh', 'srv', name=True) }}"
+        etc: "{{ lookup('fsh', 'etc', name=True) }}"
+        var: "{{ lookup('fsh', 'var', name=True) }}"
+        log: "{{ lookup('fsh', 'log', name=True) }}"
+        spool: "{{ lookup('fsh', 'spool', name=True) }}"
+        cache: "{{ lookup('fsh', 'cache', name=True) }}"
+        src: "{{ lookup('fsh', 'src', name=True) }}"
+        pid: "{{ lookup('fsh', 'pid', name=True) }}"
+        share: "{{ lookup('fsh', 'share', name=True) }}"
+      user:
+        opt: "{{ lookup('fsh', 'opt', user=True, name=True, home='${HOME}', runtime='${XDG_RUNTIME_DIR}') }}"
+        srv: "{{ lookup('fsh', 'srv', user=True, name=True, home='${HOME}', runtime='${XDG_RUNTIME_DIR}') }}"
+        etc: "{{ lookup('fsh', 'etc', user=True, name=True, home='${HOME}', runtime='${XDG_RUNTIME_DIR}') }}"
+        var: "{{ lookup('fsh', 'var', user=True, name=True, home='${HOME}', runtime='${XDG_RUNTIME_DIR}') }}"
+        log: "{{ lookup('fsh', 'log', user=True, name=True, home='${HOME}', runtime='${XDG_RUNTIME_DIR}') }}"
+        spool: "{{ lookup('fsh', 'spool', user=True, name=True, home='${HOME}', runtime='${XDG_RUNTIME_DIR}') }}"
+        cache: "{{ lookup('fsh', 'cache', user=True, name=True, home='${HOME}', runtime='${XDG_RUNTIME_DIR}') }}"
+        src: "{{ lookup('fsh', 'src', user=True, name=True, home='${HOME}', runtime='${XDG_RUNTIME_DIR}') }}"
+        pid: "{{ lookup('fsh', 'pid', user=True, name=True, home='${HOME}', runtime='${XDG_RUNTIME_DIR}') }}"
+        share: "{{ lookup('fsh', 'share', user=True, name=True, home='${HOME}', runtime='${XDG_RUNTIME_DIR}') }}"
+
+- name: "Compfuzor: contribute deferred link consumers"
+  set_fact:
+    BINS: "{{ BINS | merge_list(_link_bins, preset='bins_generated') }}"
+    STATUSES: "{{ STATUSES | merge_list(['status-links.sh'], preset='append') }}"
+    ENV: "{{ ENV | merge_dict({'LINKS_JSON': DIR + '/links.json'}, preset='overlay') }}"
+    ENV_LIST: "{{ ENV_LIST | merge_list(['LINKS_JSON'], preset='append') }}"
+  when: _LINK_PLAN.links | length > 0
+  vars:
+    _link_system: "{{ _LINK_PLAN.links | selectattr('scope', 'equalto', 'system') | list | length > 0 }}"
+    _link_user: "{{ _LINK_PLAN.links | selectattr('scope', 'equalto', 'user') | list | length > 0 }}"
+    _link_bins: >-
+      {{
+        [
+          {
+            'name': 'links.ts',
+            'src': '../links/links.ts',
+            'raw': True,
+            'compose': False,
+          },
+          {
+            'name': 'status-links.sh',
+            'content': 'exec "$DIR/bin/links.ts" status "$@"',
+            'basedir': False,
+            'compose': False,
+          },
+          {
+            'name': 'remove-link-records.sh',
+            'content': 'exec "$DIR/bin/links.ts" remove --scope system "$@"',
+            'basedir': False,
+            'compose': False,
+            'bypass': 'LINK',
+          },
+          {
+            'name': 'remove-link-records-user.sh',
+            'content': 'exec "$DIR/bin/links.ts" remove --scope user "$@"',
+            'basedir': False,
+            'compose': False,
+            'scope': 'user',
+            'bypass': 'LINK',
+          },
+        ]
+        + ([{
+          'name': 'install-link-records.sh',
+          'content': 'exec "$DIR/bin/links.ts" apply --scope system "$@"',
+          'basedir': False,
+          'subsystem': 'links',
+          'bypass': 'LINK',
+        }] if _link_system else [])
+        + ([{
+          'name': 'install-link-records-user.sh',
+          'content': 'exec "$DIR/bin/links.ts" apply --scope user "$@"',
+          'basedir': False,
+          'subsystem': 'links',
+          'scope': 'user',
+          'bypass': 'LINK',
+        }] if _link_user else [])
+      }}

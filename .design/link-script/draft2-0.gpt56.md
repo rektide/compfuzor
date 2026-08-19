@@ -950,8 +950,8 @@ model defined here.
   consolidated.
 - [`/tasks/compfuzor/fs_base.tasks`](/tasks/compfuzor/fs_base.tasks) contains
   the current generic FILES special cases being replaced.
-- [`/tasks/compfuzor/links.tasks`](/tasks/compfuzor/links.tasks) is the inline
-  execution path retired by this design.
+- The former `tasks/compfuzor/links.tasks` was the inline execution path
+  retired by this design and removed by its implementation.
 - [`/.design/global-usermode/init0.opencode.md`](/.design/global-usermode/init0.opencode.md)
   establishes the deploy/activate identity split and `%h` versus `${HOME}`
   consumer distinction.

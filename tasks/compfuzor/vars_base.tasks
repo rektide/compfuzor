@@ -140,8 +140,3 @@
 #- name: "Select default username {{TYPE}}"
 #  set_fact: USER="{{TYPE}}"
 #  when: not USER|default(False)
-
-- name: convert LINKS dict into well specified form
-  set_fact:
-    LINKS: "{{LINKS|normalize(to='items', key_name='dest', value_name='src')}}"
-  when: LINKS is defmapping

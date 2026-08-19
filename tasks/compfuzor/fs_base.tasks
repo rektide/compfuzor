@@ -27,40 +27,32 @@
   # someone wanted a basename here but eclipse has a ../content & like yeah, that's fine. locales holds the blame. see cf0fdccf0c.
   template:
     src: "files/{{TYPE}}/{{item.src|def(item.name, item)}}"
-    dest: "{{dest}}"
+    dest: "{{artifact.resolved_dest}}"
     owner: "{{ _become.owner }}"
     group: "{{ _become.group }}"
-  with_items: "{{FILES}}"
+  loop: "{{ _ARTIFACTS.families.FILES.entries }}"
+  loop_control:
+    loop_var: artifact
   become: "{{ _become.become }}"
-  when: FILES is defined and FILES is not mapping and item.line is deffalsy
+  when: item.line is deffalsy
   vars:
-    dest: "{{DIR}}/{{item.dest|def(item.name, item)}}"
-    _become: "{{ dest|become_calc }}"
-- name: "Creating `FILES` mapping"
-  template:
-    src: "files/{{TYPE}}/{{ item[1] }}"
-    dest: "{{_dest}}"
-    owner: "{{OWNER|def(omit)}}"
-    group: "{{GROUP|def(omit)}}"
-  with_items: "{{FILES.items()}}"
-  become: "{{ _become.become }}"
-  when: FILES is defmapping
-  vars:
-    _dest: "{{ DIR+'/' if item[0]|first != '/' and item[0]|first != '~' else '' }}{{item[0]}}"
-    _become: "{{ _dest|become_calc }}"
+    item: "{{ artifact.item }}"
+    _become: "{{ artifact.resolved_dest|become_calc }}"
 
 - name: "File lineinfile"
   lineinfile:
-    dest: "{{dest}}"
+    dest: "{{artifact.resolved_dest}}"
     line: "{{item.line}}"
     regexp: "{{item.regexp|default('^' + item.line)}}"
     create: "{{item.create|default(True)}}"
     state: "{{item.state|default(omit)}}"
     owner: "{{ _become.owner }}"
     group: "{{ _become.group }}"
-  with_items: "{{FILES}}"
+  loop: "{{ _ARTIFACTS.families.FILES.entries }}"
+  loop_control:
+    loop_var: artifact
   become: "{{ _become.become }}"
-  when: FILES is defined and FILES is not mapping and item.line is deftruthy
+  when: item.line is deftruthy
   vars:
-    dest: "{{item.name|defaultDir(DIR)}}"
-    _become: "{{ dest|become_calc(owner=item.owner|def(OWNER, falsy=True), group=item.group|def(GROUP, falsy=True)) }}"
+    item: "{{ artifact.item }}"
+    _become: "{{ artifact.resolved_dest|become_calc(owner=item.owner|def(OWNER, falsy=True), group=item.group|def(GROUP, falsy=True)) }}"

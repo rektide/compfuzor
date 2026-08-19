@@ -4,11 +4,9 @@
     TYPE: udev-rule
     INSTANCE: main
     ETC_FILES:
-      - destTemplate: '80-{{NAME}}.rules'
+      - dest: '80-{{NAME}}.rules'
         src: rules
-    LINKS:
-      - srcTemplate: "{{ETC}}/80-{{NAME}}.rules"
-        destTemplate: "/etc/udev/rules.d/80-{{NAME}}.rules"
+        link: "/etc/udev/rules.d/80-{{NAME}}.rules"
     # TODO: ENV/ENVS
     action: change
     subsystem: usb
@@ -25,4 +23,4 @@
       #  group: video
       #  mode: "0660"
   tasks:
-    - include: tasks/compfuzor.includes
+    - import_tasks: tasks/compfuzor.includes

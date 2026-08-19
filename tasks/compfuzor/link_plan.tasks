@@ -1,0 +1,23 @@
+---
+- name: "Compfuzor: ensure deferred link plan directory"
+  file:
+    path: "{{ DIR }}"
+    state: directory
+    mode: "{{ DIRMODE }}"
+    owner: "{{ _become.owner }}"
+    group: "{{ _become.group }}"
+  become: "{{ _become.become }}"
+  vars:
+    _become: "{{ DIR | become_calc }}"
+
+- name: "Compfuzor: write deferred link plan"
+  copy:
+    content: "{{ _LINK_PLAN | to_nice_json }}"
+    dest: "{{ DIR }}/links.json"
+    mode: "{{ FILEMODE }}"
+    owner: "{{ _become.owner }}"
+    group: "{{ _become.group }}"
+  become: "{{ _become.become }}"
+  vars:
+    _become: "{{ (DIR + '/links.json') | become_calc }}"
+  when: _LINK_PLAN is defined

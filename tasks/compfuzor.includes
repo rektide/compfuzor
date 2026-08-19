@@ -9,8 +9,6 @@
 - import_tasks: compfuzor/vars_env.tasks
   tags: ['vars', 'always']
 - debug: "msg='Compfuzor: sourcing hierarchy vars'"
-- import_tasks: compfuzor/vars_fs.tasks
-  tags: ['vars', 'always']
 - import_tasks: compfuzor/_multi.tasks
   vars:
     multi: vars_hierarchy
@@ -91,15 +89,22 @@
 - import_tasks: compfuzor/gen_kernel.tasks
   when: KERNEL_MODULES is defined or KERNEL_MODPROBE is defined or KERNEL_SYSCTL is defined or KERNEL_SYSFS is defined or KERNEL_PARAMS is defined
   tags: ['vars', 'always']
-- import_tasks: compfuzor/gen_status.tasks
-  tags: ['vars', 'always']
-- import_tasks: compfuzor/gen_bins.tasks
-  tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_desktop.tasks
   when: DESKTOP is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_patches.tasks
   when: PR_PATCHES is defined
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/compile_artifacts.tasks
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_links.tasks
+  when: >
+    LINKS_BYPASS is deffalsy and
+    (LINKS is deftruthy or _ARTIFACTS | artifacts_have_links)
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_status.tasks
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_bins.tasks
   tags: ['vars', 'always']
 - debug: "msg='Compfuzor: completed vars'"
 
@@ -126,6 +131,8 @@
   when: >
     (DIR is deftruthy or DIRS is deftruthy or FILES is deftruthy) and
     DIR_BYPASS is deffalsy and FS_BYPASS is deffalsy
+- import_tasks: compfuzor/link_plan.tasks
+  when: _LINK_PLAN is defined and _LINK_PLAN.links | length > 0
 - import_tasks: compfuzor/fs_repo.tasks
 - import_tasks: compfuzor/fs_env.tasks
   when: >
@@ -161,8 +168,6 @@
   when: BINS is deflengthy and BINS_BYPASS is deffalsy
 - import_tasks: compfuzor/bins_link_global.tasks
   when: BINS is defined and BINS_BYPASS is deffalsy and GLOBAL_BINS_BYPASS is deffalsy
-- import_tasks: compfuzor/links.tasks
-  when: LINKS is deftruthy and LINKS_BYPASS is deffalsy
 - debug: "msg='Compfuzor: completed filesystem'"
 
 - debug: "msg=''"

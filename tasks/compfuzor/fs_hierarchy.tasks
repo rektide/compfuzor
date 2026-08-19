@@ -2,8 +2,8 @@
 - name: "Create {{include|upper}} directories & files, source temporary facts"
   set_fact:
   args:
-    _dir: "{{FS_CONTAINERED|truthy|ternary(relative, fsh)}}"
-    _link: "{{FS_CONTAINERED|truthy|ternary(fsh, relative)}}"
+    _dir: "{{_compiled_family.materialized_root}}"
+    _link: "{{_compiled_family.exposure_root}}"
     _upper: "{{upper}}"
     _vals: "{{vals}}"
     _stat:
@@ -15,6 +15,7 @@
   vars:
     fsh: "{{lookup('vars', include|upper)}}"
     relative: "{{DIR}}/{{include}}"
+    _compiled_family: "{{ _ARTIFACTS.families[(include|upper) + '_FILES'] }}"
     upper: "{{include|upper}}"
     names:
       sDir: "{{upper}}S_DIR"
@@ -29,7 +30,7 @@
       sDir: "{{lookup('vars', names.sDir, default=False)}}"
       dirs: "{{lookup('vars', names.dirs, default=False)}}"
       dir: "{{lookup('vars', names.dir, default=False)}}"
-      files: "{{lookup('vars', names.files, default=False)}}"
+      files: "{{ _compiled_family.entries }}"
       prop: "{{lookup('vars', names.prop, default={})}}"
       bypass: "{{(DIR_BYPASS is deftruthy or lookup('vars', names.bypass, default=False)) or not (names.sDir or names.dirs or names.dir or names.files)}}"
       linkProp: "{{lookup('vars', names.linkProp, default={})}}"
@@ -89,19 +90,21 @@
 # include files
 - name: "Do {{_upper}} lineinfile"
   lineinfile:
-    dest: "{{dest}}"
+    dest: "{{artifact.resolved_dest}}"
     line: "{{item.line}}"
     regexp: "{{item.regexp|default('^' + item.line)}}"
     create: "{{item.create|default(True)}}"
     state: "{{item.state|default(omit)}}"
     owner: "{{ _become.owner }}"
     group: "{{ _become.group }}"
-  with_items: "{{ _vals.files|normalize(to='list') }}"
+  loop: "{{ _vals.files }}"
+  loop_control:
+    loop_var: artifact
   become: "{{ _become.become }}"
   when: item.line is deftruthy
   vars:
-    dest: "{{item.dest|def(item.name, item)|defaultDir(_dir)}}"
-    _become: "{{ dest|become_calc(owner=item.owner|def(_vals.prop.owner, OWNER, falsy=True), group=item.group|def(_vals.prop.group, GROUP, falsy=True)) }}"
+    item: "{{ artifact.item }}"
+    _become: "{{ artifact.resolved_dest|become_calc(owner=item.owner|def(_vals.prop.owner, OWNER, falsy=True), group=item.group|def(_vals.prop.group, GROUP, falsy=True)) }}"
 
 - name: "Create {{_upper}} files"
   copy:
@@ -114,12 +117,14 @@
     backup: "{{item.backup|def(FS_BACKUP, False)}}"
     # TODO: ansible 2.3+:
     #mode: "{{COPY_MODE|default(preserve)}}"
-  loop: "{{ _vals.files|normalize(to='list') }}"
+  loop: "{{ _vals.files }}"
   loop_control:
+    loop_var: artifact
     index_var: idx
   become: "{{ _become.become }}"
   when: item.line is deffalsy and (item.once is deffalsy or dest is not exists)
   vars:
+    item: "{{ artifact.item }}"
     srcDir: "files/{{ TYPE }}"
     src: "{{ item.src|def(item.name, item, falsy=True)|defaultDir('files/'+TYPE) if not item.srcTemplate is defined else item.srcTemplate|unsafety|defaultDir('files/'+TYPE) }}"
     files: "{{include|upper}}_FILES"
@@ -131,5 +136,5 @@
     file: "{{lookup(fileType, item.src|def(item.name, item, falsy=True)|defaultDir(srcDir)) if isFile else '' }}"
     var: "{{lookup('vars', item.var) if item.var|def else '' }}"
     all: "{{ content + file + var + yaml + json}}"
-    dest: "{{ item.dest|def(item.name, item.src, item, falsy=True)|defaultDir(_dir) if not item.destTemplate is defined else item.destTemplate|unsafety|defaultDir(_dir) }}"
-    _become: "{{ dest|become_calc(owner=item.owner|def(_vals.prop.owner, OWNER, falsy=True), group=item.group|def(_vals.prop.group, GROUP, falsy=True)) }}"
+    dest: "{{ artifact.resolved_dest }}"
+    _become: "{{ artifact.resolved_dest|become_calc(owner=item.owner|def(_vals.prop.owner, OWNER, falsy=True), group=item.group|def(_vals.prop.group, GROUP, falsy=True)) }}"

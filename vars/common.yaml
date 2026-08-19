@@ -124,7 +124,7 @@ PERSIST_VARS:
   - RUN_BYPASS
   - SHARE_BYPASS
   - LINKS
-  - LINK_BYPASS
+  - LINKS_BYPASS
   - PKGS
   - PKGSET
   - PKGSETS
@@ -139,7 +139,6 @@ PERSIST_VARS:
 CA_EXPIRY: "26280h"
 HOMEDIR: "/home/{{USER|default(OWNER)|default(_cf_user_id)}}"
 GIT_DIR: "{{REPO_DIR|default(DIR, true)}}"
-__DEST: "{{item.dest|default(item.name|default(item|default(DIR)))|defaultDir(__defaultDir|default(DIR))}}"
 MULTISTRAP_COMPONENTS:
   - main
   - contrib
@@ -693,7 +692,7 @@ SUBSYSTEM:
     contrib:
       ETC_FILES:
         - name: README.md
-          destTemplate: "{{DIR}}/README.md"
+          dest: "{{DIR}}/README.md"
           content: "{{ README }}"
 
   status:
