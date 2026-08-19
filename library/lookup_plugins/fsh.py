@@ -94,15 +94,7 @@ _raw:
 
 from ansible.errors import AnsibleError
 from ansible.plugins.lookup import LookupBase
-
-try:
-    # ansible-core >= 2.19 trust model: only tagged template strings are
-    # evaluated; tag our spec templates (they are plugin-authored constants
-    # or USER_FSH_DIRS values, i.e. trusted sources).
-    from ansible.template import trust_as_template as _trust_as_template
-except ImportError:  # pragma: no cover - older ansible-core
-    def _trust_as_template(value):
-        return value
+from ansible.template import trust_as_template as _trust_as_template
 
 # kind -> columns
 #   sys:    deploy-mode base variable (VARS_DIR and friends)
