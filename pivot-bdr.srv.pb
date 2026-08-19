@@ -37,20 +37,20 @@
     BINS_RUN_BYPASS: True
 
     # --- subvolume layout -----------------------------------------------------
-    # Dated OS-slot scheme: the default subvol is a dated path under
-    # /os/superbfowle/<arch>/, so a future install creates a NEW dated subvol
-    # and flips the default (rollback = set-default back to the previous date).
-    # The layout itself is declared in ONE place: the canonical repart profiles
-    # under files/repart/defs/ (tokenized @ARCH@/@DATE@/@SWAP@), staged into
-    # repart.opt.pb and rendered at run time by `repart profile render`.
-    BDR_OS_PREFIX: "/os/superbfowle"
-    BDR_HOME_PREFIX: "/home/superbfowle"
+    # Dated subvolume scheme: the default subvol is a dated path under
+    # /root/superbfowle/<arch>/, so a future install creates a NEW dated
+    # subvol and flips the default (rollback = set-default back to the
+    # previous date). The layout itself is declared in ONE place: the
+    # canonical repart definitions under files/repart/defs/ (tokenized
+    # @ARCH@/@DATE@/@SWAP@), staged into repart.opt.pb and rendered at run
+    # time by `repart render`.
+    BDR_FLAVOR: superbfowle
     BDR_ARCH: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_architecture] | default(ansible_architecture) }}"
     # Run-time date: the profile ships with a @DATE@ token; the bins stamp it
     # when formatting (env BDR_DATE, else `date +%Y%m%d` at run time), so a
     # rendered playbook never carries a stale date stamp.
     BDR_DATE_TOKEN: "@DATE@"
-    BDR_DEFAULT_SUBVOL: "{{ BDR_OS_PREFIX }}/{{ BDR_ARCH }}/{{ BDR_DATE_TOKEN }}"
+    BDR_DEFAULT_SUBVOL: "/root/{{ BDR_FLAVOR }}/{{ BDR_ARCH }}/{{ BDR_DATE_TOKEN }}"
 
     PKGS:
       - systemd        # >=261 for BlockDeviceReplace=
@@ -63,12 +63,11 @@
       # Mountpoint of the running, single-device, volatile btrfs root.
       BDR_SOURCE_MOUNT: /
       # Subvolume layout (BDR_DEFAULT_SUBVOL carries the @DATE@ token;
-      # bdr-migrate resolves it before calling `repart slot set`).
+      # bdr-migrate resolves it before calling `repart btrfs-default`).
       BDR_DEFAULT_SUBVOL: "{{ BDR_DEFAULT_SUBVOL }}"
       BDR_ARCH: "{{ BDR_ARCH }}"
       BDR_DATE_TOKEN: "{{ BDR_DATE_TOKEN }}"
-      BDR_OS_PREFIX: "{{ BDR_OS_PREFIX }}"
-      BDR_HOME_PREFIX: "{{ BDR_HOME_PREFIX }}"
+      BDR_FLAVOR: "{{ BDR_FLAVOR }}"
       BDR_SWAP_SIZE: 16G
       # Shared repart toolkit instance (repart.opt.pb owns scripts AND defs).
       # pivot-bdr embeds NOTHING repart-related — it points here. Install it
@@ -138,28 +137,27 @@
 
           "{{BINS_DIR}}/bdr-preflight.sh"
 
-          export REPART_OS_PREFIX="${BDR_OS_PREFIX:-/os/superbfowle}"
-          export REPART_HOME_PREFIX="${BDR_HOME_PREFIX:-/home/superbfowle}"
-          args=(disk plan migrate "$DISK" --source "$SRC" --swap "${BDR_SWAP_SIZE:-16G}")
+          export REPART_FLAVOR="${BDR_FLAVOR:-superbfowle}"
+          args=(pivot "$DISK" --source "$SRC" --swap "${BDR_SWAP_SIZE:-16G}")
           [ -z "${BDR_ARCH:-}" ] || args+=(--arch "$BDR_ARCH")
           [ -z "${BDR_DATE:-}" ] || args+=(--date "$BDR_DATE")
-          PLAN="$("$REPART/bin/repart" "${args[@]}")"
-          echo "plan retained at $PLAN" >&2
-          [ "${BDR_CONFIRM:-}" = "$DISK" ] || { echo "Set BDR_CONFIRM=$DISK to apply $PLAN" >&2; exit 1; }
-          "$REPART/bin/repart" disk apply "$PLAN" --confirm "$DISK"
+          DRAFT="$("$REPART/bin/repart" "${args[@]}")"
+          echo "draft retained at $DRAFT" >&2
+          [ "${BDR_CONFIRM:-}" = "$DISK" ] || { echo "Set BDR_CONFIRM=$DISK to write $DRAFT" >&2; exit 1; }
+          "$REPART/bin/repart" write "$DRAFT" --confirm "$DISK"
 
-          # Online BDR can't set the default subvolume; the slot module does it:
-          # the (stamped) $DEFAULT_SUBVOL if set+present, else newest slot
-          # under the os prefix, else a soft skip. Empty/absent DEFAULT_SUBVOL
-          # goes straight to newest — the slot module owns the scheme.
+          # Online BDR can't set the default subvolume; btrfs-default does it:
+          # the (stamped) $DEFAULT_SUBVOL if set+present, else newest subvol
+          # under the root base, else a soft skip. Empty/absent DEFAULT_SUBVOL
+          # goes straight to newest — the toolkit owns the scheme.
           set +e
-          "$REPART/bin/repart" slot set "$SRC" "$DEFAULT_SUBVOL" >/dev/null 2>&1
+          "$REPART/bin/repart" btrfs-default "$SRC" "$DEFAULT_SUBVOL" >/dev/null 2>&1
           rc=$?
           set -e
           case $rc in
             0) : ;;
-            *) "$REPART/bin/repart" slot set "$SRC" latest \
-                 || echo "note: no OS slot under $REPART_OS_PREFIX; skipping set-default" ;;
+            *) "$REPART/bin/repart" btrfs-default "$SRC" latest \
+                 || echo "note: no root-base subvol for flavor ${BDR_FLAVOR:-superbfowle}; skipping set-default" ;;
           esac
 
           echo "Migration done. Root now lives on $DISK. Install grub next:"
@@ -190,15 +188,14 @@
           set -eu
           TARGET="${1:?usage: bdr-format.sh <disk-or-image>}"
           REPART="${REPART_DIR:-/opt/repart-main}"
-          export REPART_OS_PREFIX="${BDR_OS_PREFIX:-/os/superbfowle}"
-          export REPART_HOME_PREFIX="${BDR_HOME_PREFIX:-/home/superbfowle}"
-          args=(disk plan format "$TARGET" --swap "${BDR_SWAP_SIZE:-16G}")
+          export REPART_FLAVOR="${BDR_FLAVOR:-superbfowle}"
+          args=(format "$TARGET" --swap "${BDR_SWAP_SIZE:-16G}")
           [ -z "${BDR_ARCH:-}" ] || args+=(--arch "$BDR_ARCH")
           [ -z "${BDR_DATE:-}" ] || args+=(--date "$BDR_DATE")
-          PLAN="$("$REPART/bin/repart" "${args[@]}")"
-          echo "plan retained at $PLAN" >&2
-          [ "${BDR_CONFIRM:-}" = "$TARGET" ] || { echo "Set BDR_CONFIRM=$TARGET to apply $PLAN" >&2; exit 1; }
-          "$REPART/bin/repart" disk apply "$PLAN" --confirm "$TARGET"
+          DRAFT="$("$REPART/bin/repart" "${args[@]}")"
+          echo "draft retained at $DRAFT" >&2
+          [ "${BDR_CONFIRM:-}" = "$TARGET" ] || { echo "Set BDR_CONFIRM=$TARGET to write $DRAFT" >&2; exit 1; }
+          "$REPART/bin/repart" write "$DRAFT" --confirm "$TARGET"
 
       # De-identify a clone (e.g. after btrfs send|receive of an image).
       # Now a raw copy of the canonical files/mkosi/identity.sh (whose default
@@ -226,15 +223,16 @@
           truncate -s 16G /var/tmp/rehearsal.img
           BDR_CONFIRM=/var/tmp/rehearsal.img \
             /srv/pivot-bdr-main/bin/bdr-format.sh /var/tmp/rehearsal.img
-          sudo /opt/repart-main/bin/repart image with /var/tmp/rehearsal.img -- \
-            sh -c '/opt/repart-main/bin/repart slot show "$REPART_MOUNT"'
+          mnt=$(/opt/repart-main/bin/repart loop-mount /var/tmp/rehearsal.img)
+          /opt/repart-main/bin/repart btrfs-subvols "$mnt"
+          /opt/repart-main/bin/repart loop-unmount "$mnt"
 
-          # Live migration plans first; confirmation applies that exact plan.
+          # Live migration drafts first; confirmation writes that exact draft.
           BDR_CONFIRM=/dev/sda sudo -E /srv/pivot-bdr-main/bin/bdr-migrate.sh /dev/sda
 
-      Both wrappers persist and preview a plan before applying it. Application
+      Both wrappers preview and persist a draft before writing it. Writing
       requires `BDR_CONFIRM` to equal the target argument, binding ambient
-      confirmation to one disk or image. Plans remain under
+      confirmation to one disk or image. Drafts remain under
       `/opt/repart-main/var` (or `$REPART_DIR/var`) for audit.
 
       ### bins (`bin/`)
@@ -242,28 +240,29 @@
       | bin | what |
       |---|---|
       | `bdr-preflight.sh` | source is btrfs? single-device? repart >= 261? toolkit present? |
-      | `bdr-format.sh <disk\|image>` | plan + apply canonical offline format |
-      | `bdr-migrate.sh [disk]` | plan + confirmed online migration + set default slot |
+      | `bdr-format.sh <disk\|image>` | draft + write canonical offline format |
+      | `bdr-migrate.sh [disk]` | draft + confirmed online migration + set default subvol |
       | `bdr-grub.sh [disk]` | `grub-install` BIOS/GPT into the bios_grub partition |
       | `clone-reset.sh` | `identity.sh --first-boot` (de-identify a clone) |
 
       ### env (`env.export`)
 
       `BDR_DISK` target; `BDR_SOURCE_MOUNT` running btrfs root (default /);
-      `BDR_DATE` slot stamp (default today); `BDR_ARCH`; `BDR_DEFAULT_SUBVOL`;
-      `BDR_OS_PREFIX`/`BDR_HOME_PREFIX`; `BDR_SWAP_SIZE` (default 16G);
+      `BDR_DATE` subvol stamp (default today); `BDR_ARCH`; `BDR_DEFAULT_SUBVOL`;
+      `BDR_FLAVOR` (default superbfowle); `BDR_SWAP_SIZE` (default 16G);
       `REPART_DIR` (default /opt/repart-main).
 
-      Slot inspection is `repart slot show MOUNT`; switching is
-      `repart slot set MOUNT DATE|PATH|latest`. Data is stdout and mutation
-      narration is stderr.
+      Subvol inspection is `repart btrfs-subvols MOUNT`; switching the boot
+      default is `repart btrfs-default MOUNT DATE|PATH|latest`. Data is
+      stdout and mutation narration is stderr.
 
       ### mechanism constraints (repart.c)
 
       btrfs-only, single-device-only, ONLINE-only; `BlockDeviceReplace=` is
       incompatible with `Format=`/`CopyBlocks=`/`CopyFiles=` (the fs move IS
       the population); `DefaultSubvolume=` needs `--offline` — the opposite of
-      BDR — so bdr-migrate sets the default subvolume through `repart slot set`.
+      BDR — so bdr-migrate sets the default subvolume through
+      `repart btrfs-default`.
 
   tasks:
     - import_tasks: tasks/compfuzor.includes

@@ -94,7 +94,7 @@
       # 20-swap 50-root = the universal layout) with only mkosi's build-time
       # population appended (CopyFiles/MountPoint). Do not fork the partition
       # or subvolume layout here — edit files/repart/defs/ instead.
-      # @ARCH@/@DATE@/@SWAP@ are rendered at build by `repart profile render`.
+      # @ARCH@/@DATE@/@SWAP@ are rendered at build by `repart render`.
       - name: mkosi.images/disk/mkosi.repart/00-grub.conf
         content: "{{ lookup('file', '../../files/repart/defs/universal.d/00-grub.conf') }}"
       - name: mkosi.images/disk/mkosi.repart/10-esp.conf
@@ -114,7 +114,7 @@
           # DEFAULT subvolume (the dated OS slot); MountPoint= tells mkosi
           # where the root lives (nspawn/testing).
           CopyFiles=/
-          MountPoint=/:"subvol=os/superbfowle/@ARCH@/@DATE@,compress=zstd:3,noatime,lazytime"
+          MountPoint=/:"subvol=root/superbfowle/@ARCH@/@DATE@,compress=zstd:3,noatime,lazytime"
       # Copy useful scripts INTO the disk image via mkosi.extra/ (overlaid on
       # the rootfs). identity.sh (clone-identity), networkd-static.sh (networkd
       # config: render/gather/from-interfaces), and initrd-rewrite.sh (crack open
@@ -246,7 +246,7 @@
           # mkosi --dependency. Examples: image.sh vps-seed ; image.sh oci
           #
           # @DATE@ tokens in the config tree (e.g. the dated home subvol) are
-          # rendered at BUILD time by `repart profile render` (env
+          # rendered at BUILD time by `repart render` (env
           # MKOSI_DATE=YYYYMMDD, else today) into an on-disk scratch copy
           # (/opt/repart-main/var — never tmpfs); etc/ stays tokenized, never stale.
           DATE="${MKOSI_DATE:-}"
@@ -257,8 +257,8 @@
           REPART="${REPART_DIR:-/opt/repart-main}"
           [ -x "$REPART/bin/repart" ] || { echo "Error: install repart.opt.pb first" >&2; exit 1; }
           # The toolkit copied into the guest is an opaque payload: preserve
-          # its tokens so the spawned machine renders its own future profiles.
-          args=(profile render --base etc --swap "{{SWAP_SIZE}}" \
+          # its tokens so the spawned machine renders its own future trees.
+          args=(render --from etc --swap "{{SWAP_SIZE}}" \
             --preserve mkosi.images/disk/mkosi.extra/opt/repart-main)
           [ -z "$DATE" ] || args+=(--date "$DATE")
           BUILD="$("$REPART/bin/repart" "${args[@]}")"
@@ -314,9 +314,9 @@
       - `mkosi.images/disk/` — **sample** full disk image that consumes the
         compfuzor `PKGSETS` list. `Bootable=yes`, and its `mkosi.repart/` makes
         the root a **btrfs on the universal kit scheme**: OS in subvol
-        `/os/superbfowle/<arch>/<yyyymmdd>` (the default subvol; not
+        `/root/superbfowle/<arch>/<yyyymmdd>` (the default subvol; not
         top-level subvolid 5) plus a dated `/home/superbfowle/<yyyymmdd>`
-        home slot. 10-root.conf embeds files/repart/defs/format.d/50-root.conf
+        home subvol. 10-root.conf embeds files/repart/defs/format.d/50-root.conf
         verbatim and adds only CopyFiles/MountPoint — the subvolume layout is
         declared in ONE place. Not in
         default `Dependencies=` (heavy) — build with `image.sh disk`. See
