@@ -2,10 +2,10 @@
 type: Design
 title: Deferred scoped link installation
 description: Design for compiling LINKS and file-entry link shorthand into scoped install scripts
-resource: https://github.com/rektide/compfuzor/blob/main/.design/link-script/draft0.opencode.md
+resource: https://github.com/rektide/compfuzor/blob/main/.design/link-script/draft0.gpt56s.md
 tags: [compfuzor, links, bins, filesystem, systemd]
 status: draft
-generated: { by: agent:opencode, at: 2026-08-19 }
+generated: { by: agent:gpt56s, at: 2026-08-19 }
 verified: { by: unverified }
 stale_after: 2026-11-19
 sources:
