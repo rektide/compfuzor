@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import re
 import sys
 
 sys.path.insert(
@@ -50,10 +51,21 @@ def check_raises(name, fn, text):
 class FakeTemplateEngine:
     def __init__(self, values=None):
         self.values = values or {}
-        self.available_variables = None
+        self.available_variables = {}
 
     def template(self, value):
-        return self.values.get(str(value), value)
+        if not isinstance(value, str):
+            return value
+        if value in self.values:
+            return self.values[value]
+
+        def sub(match):
+            key = match.group(1).strip()
+            if key in self.available_variables:
+                return str(self.available_variables[key])
+            return match.group(0)
+
+        return re.sub(r"\{\{\s*(\w+)\s*\}\}", sub, value)
 
 
 def run_fsh(variables, terms, **kwargs):
@@ -73,126 +85,169 @@ BASE = {
     "PIDS_DIR": "/var/run",
     "BINS_DIR": "/srv/watchman-main/bin",
     "HOMEDIR": "/home/rektide",
+    "XDG_RUNTIME_DIR": "/run/user/1000",
     "NAME": "watchman-main",
     "USERMODE_VARS_DIR": "{{HOMEDIR}}/.local/var/lib",
     "USERMODE_ETCS_DIR": "{{HOMEDIR}}/.config",
     "VAR": "/var/lib/watchman-main",
-    "ETC": "/etc/opt/watchman-main",
 }
-
-TPL = {
-    "{{HOMEDIR}}/.local/var/lib": "/home/rektide/.local/var/lib",
-    "{{HOMEDIR}}/.config": "/home/rektide/.config",
-    "{{HOMEDIR}}": "/home/rektide",
-    "NAME": "watchman-main",
-}
-
-V = dict(BASE)
-T = dict(TPL)
-
-
-def with_vars(**extra):
-    merged = dict(BASE)
-    merged.update(extra)
-    return merged
-
 
 print("fsh lookup: plain (deploy-mode) resolution")
-check("var", one(V, "var"), "/var/lib")
-check("etc alias plural", one(V, "etcs"), "/etc/opt")
-check("var name=True prefers frozen VAR", one(V, "var", name=True), "/var/lib/watchman-main")
-check("srv name=True computes when SRV unfrozen", one(V, "srv", name=True), "/srv/watchman-main")
+check("var", one(BASE, "var"), "/var/lib")
+check("etc alias plural", one(BASE, "etcs"), "/etc/opt")
+check("var name=True prefers frozen VAR", one(BASE, "var", name=True), "/var/lib/watchman-main")
+check("srv name=True computes when SRV unfrozen", one(BASE, "srv", name=True), "/srv/watchman-main")
 
-print("fsh lookup: user=True (resolved for deploying user)")
+print("fsh lookup: user=True resolved (USERMODE family parity)")
 check(
-    "var user=True returns USERMODE var (untemplated)",
-    run_fsh(V, "var", user=True)[0],
-    "{{HOMEDIR}}/.local/var/lib",
-)
-lookup = LookupModule()
-lookup._templar = FakeTemplateEngine(T)
-check(
-    "var user=True templated",
-    lookup.run("var", V, user=True)[0],
+    "var user=True resolves USERMODE var",
+    one(BASE, "var", user=True),
     "/home/rektide/.local/var/lib",
 )
-lookup._templar = FakeTemplateEngine(T)
 check(
     "var user=True name=True",
-    lookup.run("var", V, user=True, name=True)[0],
+    one(BASE, "var", user=True, name=True),
     "/home/rektide/.local/var/lib/watchman-main",
 )
-
-print("fsh lookup: USER_FSH flip (specifier source)")
-lookup._templar = FakeTemplateEngine(T)
 check(
-    "var name=True under USER_FSH",
-    lookup.run("var", with_vars(USER_FSH=True), name=True)[0],
+    "pid user=True resolves XDG_RUNTIME_DIR (no USERMODE pid var)",
+    one(BASE, "pid", user=True, name=True),
+    "/run/user/1000/watchman-main",
+)
+
+print("fsh lookup: home=/runtime= parameters (un-resolved, composable)")
+check(
+    "var user=True home=%h",
+    one(BASE, "var", user=True, name=True, home="%h"),
     "%h/.local/var/lib/watchman-main",
 )
 check(
-    "pid name=True under USER_FSH",
-    lookup.run("pid", with_vars(USER_FSH=True), name=True)[0],
+    "var user=True home=${HOME} (shell runtime expansion)",
+    one(BASE, "var", user=True, name=True, home="${HOME}"),
+    "${HOME}/.local/var/lib/watchman-main",
+)
+check(
+    "etc user=True home=%h",
+    one(BASE, "etc", user=True, name=True, home="%h"),
+    "%h/.config/watchman-main",
+)
+check(
+    "pid user=True runtime=%t",
+    one(BASE, "pid", user=True, name=True, runtime="%t"),
     "%t/watchman-main",
 )
 check(
-    "bins under USER_FSH falls back to system dir",
-    lookup.run("bins", with_vars(USER_FSH=True))[0],
-    "/srv/watchman-main/bin",
+    "pid user=True runtime=${XDG_RUNTIME_DIR}",
+    one(BASE, "pid", user=True, name=True, runtime="${XDG_RUNTIME_DIR}"),
+    "${XDG_RUNTIME_DIR}/watchman-main",
 )
 check(
-    "global-bins under USER_FSH",
-    lookup.run("global-bins", with_vars(USER_FSH=True))[0],
+    "home= parameterizes even without USERMODE parity (spool)",
+    one(BASE, "spool", user=True, home="%h"),
+    "%h/.local/var/spool",
+)
+check(
+    "global-bins user=True home=%h",
+    one(BASE, "global-bins", user=True, home="%h"),
     "%h/.local/bin",
 )
 check(
-    "_fsh_user reserved flip",
-    lookup.run("var", with_vars(_fsh_user=True), name=True)[0],
+    "bins has no user form: falls back to deploy-mode base",
+    one(BASE, "bins", user=True, home="%h"),
+    "/srv/watchman-main/bin",
+)
+
+print("fsh lookup: USER_FSH flip")
+check(
+    "USER_FSH string flips + supplies home",
+    one(dict(BASE, USER_FSH="%h"), "var", name=True),
     "%h/.local/var/lib/watchman-main",
 )
 check(
-    "_fsh_user truthy string flip",
-    lookup.run("var", with_vars(_fsh_user="True"), name=True)[0],
-    "%h/.local/var/lib/watchman-main",
+    "USER_FSH=${HOME} flips for shell-side use",
+    one(dict(BASE, USER_FSH="${HOME}"), "var", name=True),
+    "${HOME}/.local/var/lib/watchman-main",
 )
 check(
-    "USER_FSH_DIRS override",
-    lookup.run("var", with_vars(USER_FSH=True, USER_FSH_DIRS={"var": "%h/state"}))[0],
-    "%h/state",
+    "USER_FSH mapping home/runtime",
+    one(dict(BASE, USER_FSH={"home": "${HOME}", "runtime": "${XDG_RUNTIME_DIR}"}), "pid", name=True),
+    "${XDG_RUNTIME_DIR}/watchman-main",
 )
 check(
-    "USER_FSH mapping itself overrides",
-    lookup.run("var", with_vars(USER_FSH={"var": "%h/custom-var"}))[0],
-    "%h/custom-var",
+    "truthy bool USER_FSH flips with resolved home",
+    one(dict(BASE, USER_FSH=True), "var", name=True),
+    "/home/rektide/.local/var/lib/watchman-main",
 )
 check(
     "falsy USER_FSH does not flip",
-    lookup.run("var", with_vars(USER_FSH=False), name=True)[0],
+    one(dict(BASE, USER_FSH=False), "var", name=True),
     "/var/lib/watchman-main",
+)
+
+print("fsh lookup: USER_FSH_DIRS template overrides")
+check(
+    "override template may reference {{fsh_home}}",
+    one(dict(BASE, USER_FSH_DIRS={"var": "{{fsh_home}}/state"}), "var", user=True, home="%h"),
+    "%h/state",
+)
+check(
+    "USER_FSH mapping dirs table",
+    one(dict(BASE, USER_FSH={"home": "%h", "dirs": {"var": "{{fsh_home}}/custom"}}), "var", name=True),
+    "%h/custom/watchman-main",
+)
+
+print("fsh lookup: reserved _fsh_* loop variables")
+check(
+    "_fsh_user=True + _fsh_home=%h (separate-mode user iteration)",
+    one(dict(BASE, _fsh_user=True, _fsh_home="%h", _fsh_runtime="%t"), "var", user=True, name=True),
+    "%h/.local/var/lib/watchman-main",
+)
+check(
+    "_fsh_user=False forces system hierarchy over user=True (system iteration)",
+    one(dict(BASE, _fsh_user=False, _fsh_home="", _fsh_runtime=""), "var", user=True, name=True),
+    "/var/lib/watchman-main",
+)
+check(
+    "lazy template _fsh_user string renders",
+    one(dict(BASE, flipvar=True, _fsh_user="{{ flipvar }}", _fsh_home="%h"), "var", name=True),
+    "%h/.local/var/lib/watchman-main",
 )
 
 print("fsh lookup: multi-term")
 check(
     "multi-term order",
-    run_fsh(V, ["var", "etc"], user=False),
+    run_fsh(BASE, ["var", "etc"], user=False),
     ["/var/lib", "/etc/opt"],
 )
 
 print("fsh lookup: errors")
 check_raises(
     "unknown kind",
-    lambda: one(V, "bogus"),
+    lambda: one(BASE, "bogus"),
     "unknown kind 'bogus'",
 )
 check_raises(
     "name=True without NAME",
-    lambda: one({k: v for k, v in V.items() if k not in ("NAME", "VAR")}, "var", name=True),
+    lambda: one({k: v for k, v in BASE.items() if k not in ("NAME", "VAR")}, "var", name=True),
     "NAME is not defined",
 )
 check_raises(
     "system dir var missing",
     lambda: one({"NAME": "x"}, "var"),
     "'VARS_DIR' is not defined",
+)
+_no_runtime = {k: v for k, v in BASE.items() if k != "XDG_RUNTIME_DIR"}
+check_raises(
+    "runtime kind without any runtime source",
+    lambda: one(_no_runtime, "pid", user=True),
+    "needs a runtime dir",
+)
+_no_home = {k: v for k, v in BASE.items() if k != "HOMEDIR"}
+_no_home.pop("USERMODE_VARS_DIR")
+check_raises(
+    "home kind without any home source",
+    lambda: one(_no_home, "var", user=True),
+    "needs a home",
 )
 
 print("")

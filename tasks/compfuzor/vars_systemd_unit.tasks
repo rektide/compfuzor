@@ -48,9 +48,12 @@
     _unit_scope: "{{ item.scope | default(omit) }}"
     SYSTEMD_SCOPE: "{{ _unit_scope | default(SYSTEMD_SCOPE) }}"
     # user-scope iterations of separate renders get user-relative paths: the
-    # fsh lookup flips to the %h/%t specifier family (systemd expands them at
-    # unit-load time), so one SYSTEMD_SERVICES block serves both units.
+    # fsh lookup flips to the user hierarchy with %h/%t home/runtime (systemd
+    # expands them at unit-load time), so one SYSTEMD_SERVICES block serves
+    # both units. system-scope iterations force the deploy-mode hierarchy.
     _fsh_user: "{{ _is_separate and _unit_scope == 'user' }}"
+    _fsh_home: "{{ '%h' if _is_separate and _unit_scope == 'user' else '' }}"
+    _fsh_runtime: "{{ '%t' if _is_separate and _unit_scope == 'user' else '' }}"
     _unit_name_var: "SYSTEMD_{{ _unit_type | upper }}"
     _unit_name_val: "{{ lookup('vars', _unit_name_var, default='') }}"
     _unit_name: "{{ _unit_name_val if _unit_name_val and _unit_name_val not in [True, 'True'] else NAME }}"

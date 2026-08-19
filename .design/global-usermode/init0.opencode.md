@@ -151,23 +151,35 @@ the runtime-per-user variant below.
 # addendum: the fsh lookup plugin exists now
 
 The "missing vocabulary" gap above is closed by
-[`library/lookup_plugins/fsh.py`](/library/lookup_plugins/fsh.py):
+[`library/lookup_plugins/fsh.py`](/library/lookup_plugins/fsh.py). It is a
+composition tool, not a systemd helper: the user hierarchy is a table of
+*templates* (`{{fsh_home}}/.local/var/lib`, `{{fsh_runtime}}`, ...) rendered
+by the templar against a caller-controlled context:
 
 - `lookup('fsh', 'var')` — deploy-mode base (follows the USERMODE flip).
-- `lookup('fsh', 'var', user=True)` — USERMODE family, resolved for the
-  deploying user.
-- `USER_FSH` top-level var (or the reserved `_fsh_user` that unit
-  generation sets for user-scope `separate` iterations) flips the source to
-  the `%h`/`%t` specifier family — exactly the "flips the source if set"
-  semantics. `USER_FSH_DIRS` overrides the table per-kind.
+- `lookup('fsh', 'var', user=True)` — user hierarchy resolved for the
+  deploying user (USERMODE family parity when defined).
+- `home=`/`runtime=` parameters substitute into the templates un-resolved:
+  `home='%h'` for systemd unit directives, the literal `home='${HOME}'` for
+  shell scripts / env files the shell expands at runtime,
+  `runtime='%t'` / `'${XDG_RUNTIME_DIR}'` for pid/run kinds.
+- `USER_FSH` top-level var flips the source when truthy; a string value
+  supplies `home=` (`USER_FSH: '%h'` or `'${HOME}'`), a mapping may supply
+  `home`/`runtime`/`dirs`. `USER_FSH_DIRS` overrides per-kind templates,
+  which may themselves reference `{{fsh_home}}`/`{{fsh_runtime}}`.
 - `name=True` appends `NAME`, preferring frozen hierarchy vars (`VAR`,
-  `ETC`, ...) — the "implicit vars" integration.
+  `ETC`, ...) in plain mode — the "implicit vars" integration.
 
-One SYSTEMD_SERVICES block now bifurcates correctly under
-`SYSTEMD_INSTALL: separate` (verified end-to-end: system unit renders
-absolute deploy paths, user unit renders `%h/.local/...` and `%t/...`),
-which un-breaks the rclone-style pattern and gives the watchman hybrid its
-path vocabulary. The remaining known gaps from the assessment: user-bin
-namespacing (cross-playbook `install-cli-symlink.sh` collisions) and the
-user-scope `[Install]` default (`WantedBy=multi-user.target` should be
+One SYSTEMD_SERVICES block bifurcates under `SYSTEMD_INSTALL: separate`
+(the unit generation loop injects `_fsh_user`/`_fsh_home: '%h'`/
+`_fsh_runtime: '%t'` for user-scope iterations and `_fsh_user: False` for
+system-scope ones), verified end-to-end. Implementation notes for the
+curious: lookups receive lazy template strings for task vars (templated
+before truthiness), and ansible-core ≥2.19's trust model silently ignores
+untrusted template strings — spec templates must be tagged with
+`trust_as_template` before `Templar.template` will evaluate them.
+
+Remaining known gaps from the assessment: user-bin namespacing
+(cross-playbook `install-cli-symlink.sh` collisions) and the user-scope
+`[Install]` default (`WantedBy=multi-user.target` should be
 `default.target` under user scope).
