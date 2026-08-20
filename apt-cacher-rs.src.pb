@@ -30,10 +30,13 @@
       - libsqlite3-dev
       - ca-certificates
 
-    # Dedicated daemon user/group (created by the pre-task below). The unit's
-    # User=/Group= are set directly in SYSTEMD_SERVICES (compfuzor's
-    # SYSTEMD_USER var only normalises a run-as hint, it does not emit the
-    # directive).
+    # Dedicated daemon user/group, declaratively: SYSTEMD_SYSUSER derives a
+    # sysusers.d/{{NAME}}.conf fragment from User=/Group= below;
+    # install-sysusers.sh links it into /etc/sysusers.d and runs
+    # systemd-sysusers at install phase (idempotent, auto-run). The unit's
+    # User=/Group= remain the single declaration. Design:
+    # .design/gen-user/init.md (beads: compfuzor-gen-user).
+    SYSTEMD_SYSUSER: True
     SYSTEMD_USER: apt-cacher-rs
 
     # The daemon must be able to read its config: ETC defaults to DIRMODE
@@ -142,7 +145,8 @@
 
       ## Run / iterate
 
-          # full install (needs passwordless sudo for the user task + /usr/local/bin)
+          # full install (needs passwordless sudo at install phase: /usr/local/bin
+          # copy, sysusers fragment, unit linking -- never before the build)
           ansible-playbook -i 'localhost,' -c local {{NAME}}.src.pb
 
           # iterate without side effects (no apt, no clone, no build, no enable)
@@ -189,26 +193,8 @@
       option reference: `debian/apt-cacher-rs.conf` in the source tree, or
       `man apt-cacher-rs(8)`.
   tasks:
-    # PRAXIS VIOLATION -- compfuzor's model is that *files we build* do the
-    # work (scripts under bin/, generated units, configs); this inline `user:`
-    # task is a direct host action and the one place this playbook breaks that
-    # rule. It exists because apt-cacher-rs refuses to run as root and needs a
-    # stable named owner for its persistent cache. DynamicUser= was considered
-    # (it auto-chowns StateDirectory to a transient UID), but a long-lived,
-    # inspectable cache wants files owned by a real named user.
-    #
-    # TODO(compfuzor-gen-user): gen_user/sysusers subsystem design lives at
-    # .design/gen-user/init.0.gpt56t.md (beads: compfuzor-gen-user). It emits
-    # a sysusers.d/{{NAME}}.conf fragment + a BINS to install it and run
-    # systemd-sysusers, replacing this task. Until then this is the shortcut
-    # -- and it's also the only thing forcing sudo before the build.
-    - name: Create apt-cacher-rs system user/group
-      user:
-        name: apt-cacher-rs
-        group: apt-cacher-rs
-        system: true
-        create_home: false
-        home: /nonexistent
-        shell: /usr/sbin/nologin
-      become: true
+    # Daemon identity is fully declarative now (SYSTEMD_SYSUSER above); no
+    # inline `user:` praxis violation remains. Sudo is needed only at install
+    # phase: the /usr/local/bin copy (RUST_COPY), the sysusers fragment, and
+    # unit linking.
     - import_tasks: tasks/compfuzor.includes
