@@ -41,11 +41,13 @@
     _local_src: "files/{{ _unitname }}/{{ _unit }}"
     _src: "{{ _local_src if lookup('fileexists', _local_src) else 'files/systemd.' + unit_type }}"
     _dest: "{{ ETC }}/{{ _unit }}"
-    _scope: "{{ SYSTEMD_SCOPE|default('system') }}"
+    # Boolean default: an '' leaking in (omit's string form) would otherwise
+    # compare != 'user' and silently pick the system unit dir.
+    _scope: "{{ SYSTEMD_SCOPE|default('system', true) }}"
     _unit_dir: "{{ SYSTEMD_USER_UNIT_DIR if _scope == 'user' else SYSTEMD_SYSTEM_UNIT_DIR }}"
     _link: "{{ _unit_dir }}/{{ _link_unit }}"
     _instanced: "{{ _unitname }}{{ _inst }}{{ SYSTEMD_INSTANCE|default('') }}.{{ unit_type }}"
-    _is_usermode: "{{ USERMODE is deftruthy or SYSTEMD_SCOPE|def('system') == 'user' }}"
+    _is_usermode: "{{ USERMODE is deftruthy or SYSTEMD_SCOPE|def('system', falsy=true) == 'user' }}"
 
 #- name: testing for local target unit
 #  local_action: shell test ! -f "files/{{target}}/{{target}}{{inst}}.{{unit_type}}"; echo $?
