@@ -14,6 +14,14 @@ from ansible.template import accept_args_markers
 # `bin_composers(bins, actions=None)` also accepts an override list.
 BIN_ACTIONS: tuple[str, ...] = ("build", "install", "apply")
 
+# Ordered scheduling lanes for compositor `run_all`. Leaves sort by lane
+# (stable: within a lane, BINS list order decides); an untagged bin is
+# `main`, so all-untagged configurations render exactly as before. A
+# subsystem compositor takes the earliest lane of its leaves.
+BIN_PHASES: tuple[str, ...] = ("identity", "main", "units", "records")
+
+_PHASE_INDEX = {p: i for i, p in enumerate(BIN_PHASES)}
+
 _ACTION_RE = re.compile(
     r"^(?P<action>" + "|".join(BIN_ACTIONS) + r")"
     r"(?P<suffix>-[A-Za-z0-9][A-Za-z0-9_-]*)?"
@@ -43,6 +51,22 @@ def _resolve_subsystem(value):
     if value is False or value is None or value == "":
         return None
     return str(value)
+
+
+def _resolve_phase(item):
+    """A bin's `phase:` lane. Missing/None/False/empty means `main`;
+    anything not in BIN_PHASES is an error (typos must fail loud, not
+    silently render as main)."""
+    phase = item.get("phase")
+    if phase is None or phase is False or phase == "":
+        return "main"
+    if phase not in _PHASE_INDEX:
+        raise AnsibleFilterError(
+            "bin {!r} has unknown phase {!r}; expected one of {}".format(
+                item.get("name"), phase, "/".join(BIN_PHASES)
+            )
+        )
+    return phase
 
 
 @accept_args_markers
@@ -83,6 +107,14 @@ def bin_composers(bins, actions=None):
     infer the ``user`` scope. The legacy ``.user.sh`` suffix remains accepted.
     ``compose: false`` and already-generated compositors
     (``generated_by: gen_bins``) are excluded.
+
+    ``phase`` is a scheduling lane from ``BIN_PHASES`` (default ``main``):
+    leaves are stably sorted by lane before compositor assembly, so
+    ``identity`` (account creation) precedes ``main`` (artifact installs),
+    ``units`` (enable/start), and ``records`` (bookkeeping). A subsystem
+    compositor lands in the earliest lane of its leaves. Lanes exist so
+    ordering constraints live on the bin record rather than in task-file
+    geography or merge-call flags; untagged configurations are unaffected.
     """
     if actions:
         _actions = tuple(actions)
@@ -129,8 +161,15 @@ def bin_composers(bins, actions=None):
                 "action": match.group("action"),
                 "scopes": scopes,
                 "subsystem": _resolve_subsystem(item.get("subsystem")),
+                "phase": _resolve_phase(item),
             }
         )
+
+    # Lane schedule: stable sort leaves by phase (BINS order within a lane).
+    # This drives both subsystem-compositor run_all and scope-compositor
+    # run_all, so `identity` leaves (sysusers) precede `main` artifact
+    # installs, which precede `units` (enable/start), then `records`.
+    leaves.sort(key=lambda lf: _PHASE_INDEX[lf["phase"]])
 
     # Bucket every (leaf, scope) by (action, subsystem, scope).
     sub_buckets: dict[tuple, list[str]] = {}

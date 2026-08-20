@@ -430,6 +430,85 @@ def test_disarm_metadata_does_not_affect_grouping_or_compositors():
         )
 
 
+def test_phase_lanes_order_compositor_run_all():
+    # Simulation of the apt-cacher-rs shape: systemd install bins arrive in
+    # BINS first (vars phase), rust + sysusers later (gen phase). Lanes must
+    # schedule identity -> main -> units regardless of arrival order.
+    result = bin_composers(
+        [
+            {"name": "install-service.sh", "subsystem": "systemd", "phase": "units"},
+            {"name": "install-rust.sh"},
+            {"name": "install-sysusers.sh", "phase": "identity"},
+        ]
+    )
+    by_name = {item["name"]: item for item in result}
+    check(
+        "identity precedes main precedes units",
+        by_name["install.sh"]["run_all"],
+        ["install-sysusers.sh", "install-rust.sh", "install-systemd.sh"],
+    )
+
+
+def test_phase_records_sinks_last():
+    result = bin_composers(
+        [
+            {"name": "install-link-records.sh", "subsystem": "links", "phase": "records"},
+            {"name": "install-service.sh", "subsystem": "systemd", "phase": "units"},
+        ]
+    )
+    by_name = {item["name"]: item for item in result}
+    check(
+        "records after units",
+        by_name["install.sh"]["run_all"],
+        ["install-systemd.sh", "install-links.sh"],
+    )
+
+
+def test_phase_stable_within_lane():
+    result = bin_composers(
+        [
+            {"name": "install-b.sh"},
+            {"name": "install-a.sh"},
+            {"name": "install-c.sh", "phase": "identity"},
+        ]
+    )
+    by_name = {item["name"]: item for item in result}
+    check(
+        "within-lane order follows BINS order",
+        by_name["install.sh"]["run_all"],
+        ["install-c.sh", "install-b.sh", "install-a.sh"],
+    )
+
+
+def test_phase_compositor_takes_earliest_leaf_lane():
+    result = bin_composers(
+        [
+            {"name": "install-a.sh", "subsystem": "hybrid", "phase": "records"},
+            {"name": "install-b.sh", "subsystem": "hybrid", "phase": "identity"},
+            {"name": "install-c.sh"},
+        ]
+    )
+    by_name = {item["name"]: item for item in result}
+    check(
+        "subsystem compositor lands in earliest leaf lane",
+        by_name["install.sh"]["run_all"],
+        ["install-hybrid.sh", "install-c.sh"],
+    )
+    check(
+        "compositor members ordered by lane",
+        by_name["install-hybrid.sh"]["run_all"],
+        ["install-b.sh", "install-a.sh"],
+    )
+
+
+def test_unknown_phase_raises():
+    check_raises(
+        "unknown phase fails loud",
+        lambda: bin_composers([{"name": "install-x.sh", "phase": "before-everything"}]),
+        "unknown phase",
+    )
+
+
 if __name__ == "__main__":
     test_composes_unscoped_actions()
     test_composes_explicit_and_filename_user_scopes()
@@ -445,3 +524,8 @@ if __name__ == "__main__":
     test_rejects_reserved_subsystem_compositor_name()
     test_actions_override()
     test_disarm_metadata_does_not_affect_grouping_or_compositors()
+    test_phase_lanes_order_compositor_run_all()
+    test_phase_records_sinks_last()
+    test_phase_stable_within_lane()
+    test_phase_compositor_takes_earliest_leaf_lane()
+    test_unknown_phase_raises()
