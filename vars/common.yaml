@@ -392,8 +392,12 @@ SUBSYSTEM:
             # default symlink resolves through DIR (DIRMODE 0770) and the
             # source checkout (repo symlink, often ~/archive), which a daemon
             # under ProtectHome=yes with its own user cannot traverse.
-            # (",," lowercases: env.export renders YAML booleans as "True".)
-            if [[ "${RUST_COPY,,}" == "true" ]]; then
+            # (_copy/_all default-empty first: the setopts helper enables
+            # nounset, and bare ${VAR,,} aborts on unexported vars; ",,"
+            # then lowercases -- env.export renders YAML booleans as "True".)
+            _copy="${RUST_COPY:-}"
+            _all="${RUST_ALL:-}"
+            if [[ "${_copy,,}" == "true" ]]; then
                 _cf_rust_install() {
                     # --remove-destination: a previous symlink install would
                     # otherwise write *through* the link into target/
@@ -404,7 +408,7 @@ SUBSYSTEM:
             else
                 _cf_rust_install() { ln -sfv "$1" "$2"; }
             fi
-            if [[ "${RUST_ALL,,}" == "true" ]]; then
+            if [[ "${_all,,}" == "true" ]]; then
                 for _bin in $(cargo metadata --format-version 1 --no-deps 2>/dev/null | jq -r '[ .packages[] | .targets[] | select(.kind[] | . == "bin") | .name ] | unique[]'); do
                     _cf_rust_install "$(pwd)/${_target_dir}/${_bin}" "${GLOBAL_BINS_DIR}/${_bin}"
                 done
