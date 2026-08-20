@@ -736,13 +736,13 @@ SUBSYSTEM:
           mode: "0644"
           content: "{{ _sysusers_specs | sysusers_render }}"
       BINS:
-        # Auto-run (unlike kernel apply bins): opted-in identity must exist
-        # before any unit start, and creation is idempotent. BINS_RUN_BYPASS
-        # skips it for iteration.
+        # Not auto-run (matches install-service.sh / other install bins):
+        # bins_run skips it; `sudo bash bin/install.sh` invokes it via the
+        # identity lane, keeping privileged steps out of the ansible pass.
+        # Creation is idempotent, so compositor re-runs are cheap.
         - name: install-sysusers.sh
           bypass: ["LINK", "SYSUSERS"]
           phase: identity
-          run: true
           generated: |
             SYSUSERSDIR="{{SYSUSERSDIR}}"
             SUDO_CMD="sudo"

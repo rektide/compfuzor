@@ -145,9 +145,14 @@
 
       ## Run / iterate
 
-          # full install (needs passwordless sudo at install phase: /usr/local/bin
-          # copy, sysusers fragment, unit linking -- never before the build)
+          # render + build (no sudo on this host: /usr/local/src, /etc/opt and
+          # /usr/local/bin are adm-writable; nothing privileged runs here --
+          # install bins are skipped by bins_run per repo convention)
           ansible-playbook -i 'localhost,' -c local {{NAME}}.src.pb
+
+          # privileged install, in lane order: sysusers (identity) -> binary
+          # -> unit link + enable --now (system) -> link records
+          sudo bash {{DIR}}/bin/install.sh
 
           # iterate without side effects (no apt, no clone, no build, no enable)
           ansible-playbook -i 'localhost,' -c local {{NAME}}.src.pb \
