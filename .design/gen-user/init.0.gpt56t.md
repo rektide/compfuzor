@@ -88,12 +88,85 @@ USERMODE-inert, bypass-aligned, sudo only at install phase.*
 {{DIR}}/etc/sysusers.d/{{NAME}}.conf     (ETC_DIRS: [sysusers.d])
 ```
 
-**Fragment line forms:**
+Each playbook owns one fragment file named for `{{NAME}}` — the *file* is
+`apt-cacher-rs-git.conf`, the *user* named inside comes from the spec. A
+fragment is usually **one line**. sysusers.d lines come in three kinds:
+
+| kind | grammar | example |
+|---|---|---|
+| user | `u <name> <id\|-> ["<comment>"] [<home>] [<shell>]` | `u apt-cacher-rs - "apt-cacher-rs daemon" /nonexistent /usr/sbin/nologin` |
+| group | `g <name> <id\|->` | `g media -` |
+| member | `m <user> <group>` | `m apt-cacher-rs media` |
+
+### Is `SYSTEMD_SYSUSER` alone enough?
+
+**Yes, for the common case** — one daemon user, same-name primary group, no
+memberships. That's apt-cacher-rs, and most daemon playbooks:
+
+```yaml
+# apt-cacher-rs.src.pb -- everything the author writes
+SYSTEMD_SERVICES:
+  User: apt-cacher-rs          # ← the single declaration
+  Group: apt-cacher-rs
+SYSTEMD_SYSUSER: True          # ← opt in to fragment generation
+```
+
+Generated fragment — one line:
 
 ```
-u apt-cacher-rs - "apt-cacher-rs daemon" /nonexistent /usr/sbin/nologin
+u apt-cacher-rs - "apt-cacher-rs-git daemon" /nonexistent /usr/sbin/nologin
+```
+
+`SYSUSERS:` specs exist for identity **a unit cannot express**. Derivation
+reads only `User=`/`Group=` — deliberately *not* `SupplementaryGroups=`,
+which typically names pre-existing system groups (`render`, `video`) that we
+must never claim to create. The escapes:
+
+1. **Membership** — the daemon user (or a human) joins a shared group.
+2. **Unit-less identity** — a group that exists for permissions (mounts,
+   media libraries) with no daemon behind it.
+3. **Attribute overrides** — real home dir, different shell, pinned UID.
+
+### `SYSUSERS:` forms → fragment lines
+
+String entries are users with defaults; mappings override or select a
+non-user kind:
+
+```yaml
+SYSUSERS:
+  - sonarr                              # u sonarr - "sonarr" ...
+  - { name: media, kind: group }        # g media -
+  - { name: sonarr, member: media }     # m sonarr media
+  - name: gitea                         # attribute overrides
+    comment: Gitea daemon
+    home: /var/lib/gitea
+    shell: /bin/bash
+```
+
+→ one fragment, emitted in dependency-safe order (groups, then users, then
+memberships) regardless of authoring order:
+
+```
 g media -
-m rektide media
+u sonarr - "sonarr" /nonexistent /usr/sbin/nologin
+u gitea - "Gitea daemon" /var/lib/gitea /bin/bash
+m sonarr media
+```
+
+Tiers combine — apt-cacher-rs with the daemon user derived *and* added to a
+shared media group:
+
+```yaml
+SYSTEMD_SYSUSER: True
+SYSUSERS:
+  - { name: media, kind: group }
+  - { name: apt-cacher-rs, member: media }
+```
+
+```
+g media -
+u apt-cacher-rs - "apt-cacher-rs-git daemon" /nonexistent /usr/sbin/nologin
+m apt-cacher-rs media
 ```
 
 **Install bin** — `install-sysusers.sh`, structurally a copy of
@@ -109,9 +182,9 @@ m rektide media
 
 ## Var model
 
-`SYSUSERS:` — list; string shorthand (`apt-cacher-rs`) expands to the default
-u-spec; mapping form overrides `{name, comment, home, shell, kind:
-user|group|member, group}`.
+`SYSUSERS:` — list of specs; the YAML forms and their fragment output are
+worked under [Mechanism](#mechanism) above. The gen task normalizes entries
+and emits lines in dependency-safe order: `g`, then `u`, then `m`.
 
 Name rationale: `SYSUSERS`, not `USERS`/`USER` (collides with deploy-ownership
 vars) and not `GEN_USERS` (subsystem vars are mechanism-named: `PKGS`,
@@ -125,6 +198,9 @@ vars) and not `GEN_USERS` (subsystem vars are mechanism-named: `PKGS`,
 - name from `SYSTEMD_SERVICES.User` (non-root string; root/absent → no-op)
 - `Group=` differing from `User=` adds a `g` line
 - comment: `{{NAME}} daemon`
+- derivation boundary: `User=`/`Group=` only. `SupplementaryGroups=` is never
+  read — memberships referencing shared groups are authored explicitly via
+  `SYSUSERS:` (see [Mechanism](#mechanism))
 
 The unit remains the single declaration; the fragment is derived. No new
 collision: `SYSTEMD_SYSUSER` is unused today.
@@ -173,8 +249,10 @@ UID pinning.
 3. Should the `SYSTEMD_USER` run-as *hint* var be retired in favor of
    `SYSTEMD_SYSUSER` + `User=`? It never emitted the directive anyway;
    cleanup candidate.
-4. `g`-before-`u` ordering inside a fragment when a user's primary group is a
-   named group (sysusers requires the group to exist first).
+4. Primary group named differently from the user: needs a `g` line ordered
+   before the `u` line. The g→u→m emission normalization covers ordering;
+   decide whether a `group:` override on a user spec auto-emits the `g` line
+   or asserts one was declared.
 5. Bake `SYSUSERSDIR` at generation time vs export via `env.export` (units
    bake `UNIT_DIR`; follow that precedent).
 
