@@ -4,8 +4,9 @@ title: gen_user — declarative daemon identity via sysusers.d
 description: Subsystem design for file-first daemon user/group creation, replacing inline `user:` pre-tasks.
 resource: /.design/gen-user/init.0.gpt56t.md
 tags: [compfuzor, sysusers, systemd, identity, subsystem]
-status: draft
+status: stable
 generated: { by: model:gpt56t, at: 2026-08-20T00:00:00Z }
+verified: { by: model:gpt56t, at: 2026-08-20T00:00:00Z }
 stale_after: 2026-10-01
 sources:
   - id: motivating-case
@@ -333,3 +334,55 @@ UID pinning.
 - [`/tasks/compfuzor/vars_systemd.tasks`](/tasks/compfuzor/vars_systemd.tasks)
   and [`/files/systemd/install-unit.sh`](/files/systemd/install-unit.sh) — the
   two existing mechanics this design composes rather than reinvents.
+
+# Addendum: implementation (2026-08-20)
+
+Implemented as the `sysusers` subsystem (beads: `compfuzor-gen-user`).
+
+- [`library/filter_plugins/sysusers.py`](/library/filter_plugins/sysusers.py) —
+  `sysusers_render` filter; unit-tested in
+  [`tests/filter_plugins/sysusers.test.py`](/tests/filter_plugins/sysusers.test.py).
+- [`vars/common.yaml`](/vars/common.yaml) — `SUBSYSTEM.sysusers` contrib
+  (`ETC_DIRS`/`ETC_FILES`/`BINS`) + `SYSUSERSDIR: /etc/sysusers.d` default.
+- [`tasks/compfuzor/gen_sysusers.tasks`](/tasks/compfuzor/gen_sysusers.tasks) —
+  derivation + merges; included from
+  [`tasks/compfuzor.includes`](/tasks/compfuzor.includes).
+- [`apt-cacher-rs.src.pb`](/apt-cacher-rs.src.pb) migrated to
+  `SYSTEMD_SYSUSER: True`; the inline `user:` pre-task is gone.
+
+## Resolved during implementation
+
+**Open question 5 (sysusers semantics) — answered empirically** via
+`systemd-sysusers --root=<fixture>`:
+
+- Identical duplicate declarations across files: **silent**, earliest
+  filename applies.
+- *Conflicting* duplicates (different id/gecos/home/shell): logged
+  (`Conflict with earlier configuration for …, ignoring line`), earliest
+  filename wins, exit code stays 0.
+- Duplicate `m` lines across files: **silent**, membership recorded once.
+- `m`-implicit creation allocates from the **system** UID/GID range
+  (top-down: 999, 998…), with `/:/usr/sbin/nologin` defaults.
+- Convergence: a consumer's implicit `media` (GID 999) is silently adopted
+  by a later real `g media -` declaration — no conflict, no churn. Run
+  order between identity manifest and consumers truly does not matter.
+
+**Compositor ordering** — the flagged risk was real: `install-sysusers.sh`
+initially landed *after* `install-systemd.sh` in `install.sh`'s `run_all`
+(BINS list order; the `generatedAt: end` field on systemd install bins is
+inert metadata nothing reads). Fixed by merging the sysusers BINS contrib
+with `order='incoming-first'`, i.e. prepended — identity before unit
+enable/start, and before everything else in `install.sh`.
+
+**Open question 6** — resolved per the `UNIT_DIR` precedent: `SYSUSERSDIR`
+is baked into the generated bin (overridable at playbook level as an
+extra-var, since it is a plain var).
+
+## Remaining open
+
+Questions 1–4 stand as written (per-NAME fragment naming is what shipped;
+link-default with `--copy`/`SYSUSERS_COPY` opt-out shipped; `SYSTEMD_USER`
+hint retirement and differently-named primary groups are future cleanup).
+The `identity.pb` manifest playbook is deliberately not shipped — nothing
+on this host declares a shared group yet; it becomes worth writing the
+moment one does.
