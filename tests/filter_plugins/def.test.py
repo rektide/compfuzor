@@ -244,33 +244,62 @@ def test_omit_is_truthy_so_default_cannot_catch_it():
     check("bool(OMIT) is True (sentinel is truthy)", bool(OMIT), True)
 
 
-def test_omit_passes_through_by_default():
-    """def(X, omit) is the conditionally-present-param idiom; default
-    behavior must keep returning the sentinel."""
+def test_mid_chain_omit_skipped_by_default():
+    """A sentinel anywhere before the final argument is a leak by
+    construction (fallback terminators are definitionally last), and
+    skip_omit=True is now the default -- the SYSTEMD_SCOPE shadow class
+    needs no opt-in anymore."""
     result = un_undefine(OMIT, "y")
+    check("def(OMIT, 'y') -> 'y' (mid-chain leak skipped)", result, "y")
+
+
+def test_final_omit_passes_through_by_default():
+    """def(X, omit) is the conditionally-present-param idiom; omit as the
+    FINAL argument of a multi-arg chain is a deliberate terminator and
+    must keep returning the sentinel without opt-in."""
+    result = un_undefine(UNDEF, OMIT)
     assert result is OMIT, f"expected the omit sentinel, got {result!r}"
-    print("ok: def(OMIT, 'y') -> OMIT (sentinel preserved by default)")
+    print("ok: def(UNDEF, OMIT) -> OMIT (terminator preserved by default)")
 
 
-def test_skip_omit_skips_the_sentinel():
-    result = un_undefine(OMIT, "y", skip_omit=True)
-    check("def(OMIT, 'y', skip_omit=True) -> 'y'", result, "y")
+def test_final_omit_terminator_survives_falsy():
+    """falsy=True composes with the terminator: skip the falsy junk, fall
+    through to the sentinel, strip the module param."""
+    result = un_undefine(UNDEF, "", OMIT, falsy=True)
+    assert result is OMIT, f"expected the omit sentinel, got {result!r}"
+    print("ok: def(UNDEF, '', OMIT, falsy=True) -> OMIT")
+
+
+def test_single_arg_leaked_omit_skips_to_none():
+    """A lone leaked sentinel is not a terminator (nobody writes the
+    literal def(omit)); it coalesces to None like undefined."""
+    result = un_undefine(OMIT)
+    check("def(OMIT) -> None (single-arg leak skipped)", result, None)
+
+
+def test_skip_omit_false_restores_passthrough():
+    """The escape hatch: skip_omit=False is the old default -- the sentinel
+    passes through everywhere, mid-chain included."""
+    result = un_undefine(OMIT, "y", skip_omit=False)
+    assert result is OMIT, f"expected the omit sentinel, got {result!r}"
+    print("ok: def(OMIT, 'y', skip_omit=False) -> OMIT")
 
 
 def test_skip_omit_falsy_true_still_does_not_skip_sentinel():
-    """falsy=True matches default(x, true), which does not skip omit;
-    only skip_omit does."""
-    result = un_undefine(OMIT, "y", falsy=True)
+    """falsy=True matches default(x, true), which does not skip omit on
+    its own; with skip_omit now default-on this needs the escape hatch to
+    demonstrate."""
+    result = un_undefine(OMIT, "y", falsy=True, skip_omit=False)
     assert result is OMIT, f"expected the omit sentinel, got {result!r}"
-    print("ok: def(OMIT, 'y', falsy=True) -> OMIT (only skip_omit catches it)")
+    print("ok: def(OMIT, 'y', falsy=True, skip_omit=False) -> OMIT")
 
 
-def test_skip_omit_composes_with_falsy():
-    """The scope-selection shape: undefined, omit, '' and None all coalesce
-    onto the playbook value."""
+def test_leak_coalesces_onto_fallback_without_opt_in():
+    """The scope-selection shape: undefined, leaked omit, '' and None all
+    coalesce onto the playbook value -- no explicit skip_omit needed."""
     check(
-        "def(UNDEF, OMIT, '', None, 'user', skip_omit=True, falsy=True) -> 'user'",
-        un_undefine(UNDEF, OMIT, "", None, "user", skip_omit=True, falsy=True),
+        "def(UNDEF, OMIT, '', None, 'user', falsy=True) -> 'user'",
+        un_undefine(UNDEF, OMIT, "", None, "user", falsy=True),
         "user",
     )
 

@@ -25,13 +25,20 @@ def un_undefine(*a, **kwargs):
       in the list. For when you want empty-string-skip but need to keep
       ``0`` or ``False``.
 
-    ``skip_omit=True`` additionally skips the omit sentinel wherever it
-    appears in the chain, composable with every ``falsy`` mode. Off by
-    default because ``def(X, omit)`` is the established idiom for
-    conditionally-present module params (``owner|def(OWNER, omit)``).
-    The sentinel is truthy, so omit flows through ``default()``,
-    ``default(x, true)`` and ``falsy=True`` alike; only skip_omit catches
-    it at the source, before it renders as ''.
+    ``skip_omit`` (default ``True``) treats the omit sentinel like an
+    undefined value wherever it appears mid-chain -- the sentinel leaking
+    out of a nested lookup/default is the SYSTEMD_SCOPE shadow bug class,
+    and skipping it is what "omit" means almost everywhere. The sentinel is
+    truthy, so it flows through ``default()``, ``default(x, true)`` and
+    ``falsy=True`` alike; only skip_omit catches it at the source, before
+    it renders as garbage. One deliberate exception: ``omit`` as the FINAL
+    argument of a multi-argument chain passes through, preserving the
+    conditionally-present module-param idiom (``owner|def(OWNER, omit)``) —
+    a fallback terminator is definitionally last, so a sentinel anywhere
+    earlier is a leak by construction, while ``def(X, omit)`` stays the way
+    to say "strip the param when nothing matched". ``skip_omit=False``
+    restores full pass-through everywhere (the old default), for the rare
+    caller that wants to treat a real sentinel as an ordinary value.
 
     ``enum=['a', 'b']`` validates the chosen (non-skipped) value and raises
     AnsibleFilterError when it is not a member. For enum-like selection
@@ -48,7 +55,7 @@ def un_undefine(*a, **kwargs):
     - ``def(X, Y, Z, ...)`` (3+ args): new capability.
     """
     falsy = kwargs.get("falsy", False)
-    skip_omit = kwargs.get("skip_omit", False)
+    skip_omit = kwargs.get("skip_omit", True)
     enum = kwargs.get("enum")
 
     if falsy is True:
@@ -64,19 +71,28 @@ def un_undefine(*a, **kwargs):
         def should_skip(v):
             return wrapped_test_undefined(v)
 
+    # The module-param terminator: omit as the FINAL argument of a
+    # multi-argument chain is deliberate ("strip the param when nothing
+    # matched"), so it is returned unvalidated rather than skipped; a
+    # sentinel anywhere earlier is a leak and is skipped (skip_omit).
+    terminator = a and len(a) > 1 and is_omit(a[-1])
+    walk = a[:-1] if (skip_omit and terminator) else a
+
     if skip_omit:
         _plain_skip = should_skip
 
         def should_skip(v):  # noqa: F811 — deliberate layered closure
             return is_omit(v) or _plain_skip(v)
 
-    for candidate in a:
+    for candidate in walk:
         if not should_skip(candidate):
             if enum is not None and candidate not in enum:
                 raise AnsibleFilterError(
                     "def: value {0!r} is not one of enum {1!r}".format(candidate, list(enum))
                 )
             return candidate
+    if terminator:
+        return a[-1]
     return None
 
 
