@@ -23,8 +23,9 @@
     # Instance suffix for templated units
     _inst: "{{ '@' if SYSTEMD_INSTANCE|default(false) else '' }}"
     
-    # User suffix for user-scope units
-    _user_suffix: "{{ '.user' if SYSTEMD_SCOPE == 'user' else '' }}"
+    # User suffix for user-scope units (via the validated _scope: a raw
+    # SYSTEMD_SCOPE compare would silently miss on a typo'd/leaked value)
+    _user_suffix: "{{ '.user' if _scope == 'user' else '' }}"
     
     # Full unit filename
     _unit: "{{ _unitname }}{{ _inst }}{{ _user_suffix }}.{{ unit_type }}"

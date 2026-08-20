@@ -28,7 +28,9 @@
   when: _has_type and SYSTEMD_INSTALL_BYPASS is deffalsy
   loop: "{{ _loop_items }}"
   vars:
-    _is_separate: "{{ SYSTEMD_INSTALL == 'separate' }}"
+    # SYSTEMD_INSTALL_VALID: enum-validated (see vars/systemd.yaml); a typo
+    # would silently drop separate-mode dual rendering.
+    _is_separate: "{{ SYSTEMD_INSTALL_VALID == 'separate' }}"
     _loop_items: >-
       {%- if _is_separate -%}
         {%- set items = [] -%}
@@ -283,7 +285,9 @@
       {%- endfor -%}
       {{ out }}
     _is_user: "{{ item.scope == 'user' }}"
-    _is_separate_mode: "{{ SYSTEMD_INSTALL == 'separate' }}"
+    # SYSTEMD_INSTALL_VALID: enum-validated (see vars/systemd.yaml); a typo
+    # would silently render single-mode instead of separate dual files.
+    _is_separate_mode: "{{ SYSTEMD_INSTALL_VALID == 'separate' }}"
     _type_config: "{{ SYSTEMD_TYPE_CONFIG[item.type] }}"
     _dir_map: "{{ _type_config.dir_map | default('system') }}"
     _unit_dir: >-
