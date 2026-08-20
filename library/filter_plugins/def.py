@@ -2,16 +2,8 @@ from ansible.errors import AnsibleFilterError
 from ansible.plugins.test.core import wrapped_test_undefined
 from ansible.template import accept_args_markers
 
-# The omit sentinel: a truthy singleton class object, so neither plain
-# default() nor the boolean default() form (nor falsy=True here) skips it --
-# it flows through and later renders as '' (or strips the module param).
-# ansible-core 2.21 exposes it as ansible._internal._templating._utils.Omit;
-# there is no stable public import, so degrade to a never-matching
-# placeholder on older cores rather than crash.
-try:
-    from ansible._internal._templating._utils import Omit as _OMIT
-except ImportError:  # pragma: no cover - ansible-core version dependent
-    _OMIT = None
+from template_data import is_omit
+
 
 
 @accept_args_markers
@@ -72,11 +64,11 @@ def un_undefine(*a, **kwargs):
         def should_skip(v):
             return wrapped_test_undefined(v)
 
-    if skip_omit and _OMIT is not None:
+    if skip_omit:
         _plain_skip = should_skip
 
         def should_skip(v):  # noqa: F811 — deliberate layered closure
-            return v is _OMIT or _plain_skip(v)
+            return is_omit(v) or _plain_skip(v)
 
     for candidate in a:
         if not should_skip(candidate):

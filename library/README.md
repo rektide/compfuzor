@@ -49,7 +49,7 @@ when: KERNEL_MODULES is defmapping
 | Filter | Signature | Purpose | Undefined/None | Source |
 |---|---|---|---|---|
 | `normalize` | `(value, *, to='list', **options)` | Convert one raw value to a registered shape: `list` (scalar → `[x]`, undefined/False → `[]`), `mapping` (with optional `shorthand=True`), `items` (dict → `[{key_name, value_name}]`), or `identity`. | **tolerates undefined → `[]`** (list), `{}` (mapping), `[]` (items). `False` → empty. `True` is kept as `[True]`. | [`cfmerge.py`](/library/filter_plugins/cfmerge.py) |
-| `join2` | `(value, separator=None, *, prefix=None)` | Coerce to list and join into a string, dropping boolean sentinels — no `default([])` needed, bare strings not char-iterated. With `prefix=` (named only) switches to line mode: each line prefixed (empty lines → bare prefix), separator defaults to `\n` — the comment-rendering form. | **tolerates undefined → `''`**. `True`/`False` dropped. | [`cfmerge.py`](/library/filter_plugins/cfmerge.py) |
+| `join2` | `(value, separator=None, *, prefix=None)` | Coerce to list and join into a string, dropping boolean sentinels — no `default([])` needed, bare strings not char-iterated. With `prefix=` (named only) switches to line mode: each line prefixed (empty lines → bare prefix), separator defaults to `\n` — the comment-rendering form. | **tolerates undefined → `''`**. `True`/`False`/omit dropped. | [`cfmerge.py`](/library/filter_plugins/cfmerge.py) |
 | `rejectAny` | `(list, excluded)` | Filter `list`, dropping elements present in `excluded`. | Raises on undefined — no guards. | [`rejectAny.py`](/library/filter_plugins/rejectAny.py) |
 
 **Examples**

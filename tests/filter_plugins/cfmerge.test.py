@@ -675,6 +675,30 @@ def test_join2_lines():
         "positional argument")
 
 
+def test_join2_omit():
+    print("\njoin2 omit sentinel:")
+    try:
+        from ansible._internal._templating._utils import Omit
+    except ImportError:
+        print("  SKIP: Omit unavailable on this ansible-core")
+        return
+    check("top-level omit drops to empty (classic)",
+        join2(Omit, ":"),
+        "")
+    check("top-level omit drops to empty (prefix mode)",
+        join2(Omit, prefix="# "),
+        "")
+    check("omit inside list is dropped, siblings kept",
+        join2(["/usr/bin", Omit, "/bin"], ":"),
+        "/usr/bin:/bin")
+    check("omit-only list drops to empty",
+        join2([Omit, Omit], ":"),
+        "")
+    check("omit in prefix mode never renders <<Omit>>",
+        join2(["real comment", Omit], prefix="# "),
+        "# real comment")
+
+
 if __name__ == "__main__":
     test_collect()
     test_normalizers()
@@ -687,6 +711,7 @@ if __name__ == "__main__":
     test_combine_iff()
     test_join2()
     test_join2_lines()
+    test_join2_omit()
     test_when()
     test_when_and()
     print("\n{} passed, {} failed".format(passed, failed))

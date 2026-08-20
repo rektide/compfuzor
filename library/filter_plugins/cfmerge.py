@@ -56,7 +56,7 @@ if _PLUGIN_DIR not in sys.path:
     sys.path.insert(0, _PLUGIN_DIR)
 
 from get import get_path  # noqa: E402
-from template_data import raw_copy_template_data  # noqa: E402
+from template_data import is_omit, raw_copy_template_data  # noqa: E402
 from template_render import render_templates  # noqa: E402
 
 
@@ -1097,7 +1097,10 @@ def join2(value, separator=None, *, prefix=None):
 
     ``None``, undefined, and empty inputs join to the empty string, so no
     ``default([])`` preamble is needed and a bare string is never
-    character-iterated.
+    character-iterated. The omit sentinel is dropped like the booleans: this
+    is a terminal text filter, so nothing downstream can strip the module
+    param it stands for, and stringifying it would only render ``<<Omit>>``
+    garbage.
 
         {{ STATUS_DIRS | join2(':') }}
         {{ item.exec | join2("\\n") }}
@@ -1126,7 +1129,7 @@ def join2(value, separator=None, *, prefix=None):
         A string.
     """
     value = raw_copy_template_data(value)
-    kept = [item for item in _normalize_list(value) if not isinstance(item, bool)]
+    kept = [item for item in _normalize_list(value) if not isinstance(item, bool) and not is_omit(item)]
     if prefix is None:
         if separator is None:
             separator = ""

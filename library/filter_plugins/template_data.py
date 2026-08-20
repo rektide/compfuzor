@@ -13,7 +13,31 @@ from __future__ import absolute_import, division, print_function
 
 from ansible.plugins.test.core import wrapped_test_undefined
 
-__all__ = ["raw_copy_template_data", "dict_get_raw", "is_nothing", "truthy"]
+__all__ = ["raw_copy_template_data", "dict_get_raw", "is_nothing", "truthy", "is_omit"]
+
+# The omit sentinel: a truthy singleton class object, so neither plain
+# default() nor the boolean default() form (nor falsy=... filters) skips it --
+# it flows through and later renders as '<<Omit>>' garbage once any filter
+# stringifies it. ansible-core 2.21 exposes it as
+# ansible._internal._templating._utils.Omit (the _templaring spelling that
+# used to live in def.py was a typo the guarded import silently swallowed,
+# so skip_omit never matched anything); there is no stable public import,
+# so degrade to a never-matching check on older cores rather than crash.
+try:
+    from ansible._internal._templating._utils import Omit as _OMIT
+except ImportError:  # pragma: no cover - ansible-core version dependent
+    _OMIT = None
+
+
+def is_omit(value):
+    """True when value is Ansible's omit sentinel.
+
+    Text-rendering filters (join2 and friends) drop it: they are terminal,
+    so no downstream module-param stripping can consume the sentinel and
+    stringifying it only produces garbage. Selection filters (``def`` with
+    ``skip_omit=True``) use the same check at the source.
+    """
+    return _OMIT is not None and value is _OMIT
 
 
 def raw_copy_template_data(value):
