@@ -51,9 +51,11 @@
     # var of that name shadows the playbook value, and since `omit` counts
     # as defined, `default(SYSTEMD_SCOPE)` cannot fall back -- the shadow
     # rendered as omit and forced the system hierarchy for plain
-    # SYSTEMD_SCOPE: user playbooks. The boolean default form coalesces the
-    # normalized '' (omit's string form) onto SYSTEMD_SCOPE.
-    _scope: "{{ _unit_scope | default(SYSTEMD_SCOPE, true) }}"
+    # SYSTEMD_SCOPE: user playbooks. The def form skips undefined, the omit
+    # sentinel, and falsy ('' is omit's string form), and validates the
+    # result against the scope enum -- a leak or typo now fails the render
+    # loudly instead of silently missing every == 'user' branch.
+    _scope: "{{ item.scope | def(SYSTEMD_SCOPE, skip_omit=True, falsy=True, enum=['system', 'user']) }}"
     # user-scope renders always get user-relative paths via the fsh lookup
     # (%h/%t, systemd expands at unit-load time): user units are per-user by
     # definition. system-scope renders force the deploy-mode hierarchy.
@@ -208,7 +210,7 @@
         {%- set spec = entry.spec -%}
         {%- set target = spec.target | default(NAME ~ '.service') -%}
         {%- set name = spec.name | default(entry.key) -%}
-        {%- set scope = spec.scope | default(SYSTEMD_SCOPE | default('system'), true) -%}
+        {%- set scope = spec.scope | def(SYSTEMD_SCOPE, 'system', skip_omit=True, falsy=True, enum=['system', 'user']) -%}
         {%- set unit_dir = '${HOME}/.config/systemd/user' if scope == 'user' else '/etc/systemd/system' -%}
         {%- set systemctl = 'systemctl --user' if scope == 'user' else 'systemctl' -%}
         {%- set sudo_cmd = '-' if scope == 'user' else 'sudo' -%}

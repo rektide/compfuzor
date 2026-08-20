@@ -229,6 +229,112 @@ def test_falsy_list_walks_multiple():
     )
 
 
+# ---------------------------------------------------------------------------
+# def — skip_omit mode (the SYSTEMD_SCOPE shadow bug class)
+# ---------------------------------------------------------------------------
+
+from ansible._internal._templating._utils import Omit as OMIT  # noqa: E402
+
+from ansible.errors import AnsibleFilterError  # noqa: E402
+
+
+def test_omit_is_truthy_so_default_cannot_catch_it():
+    """The premise: the sentinel is truthy, so falsy=True alone must NOT
+    skip it -- that is why skip_omit exists as a separate axis."""
+    check("bool(OMIT) is True (sentinel is truthy)", bool(OMIT), True)
+
+
+def test_omit_passes_through_by_default():
+    """def(X, omit) is the conditionally-present-param idiom; default
+    behavior must keep returning the sentinel."""
+    result = un_undefine(OMIT, "y")
+    assert result is OMIT, f"expected the omit sentinel, got {result!r}"
+    print("ok: def(OMIT, 'y') -> OMIT (sentinel preserved by default)")
+
+
+def test_skip_omit_skips_the_sentinel():
+    result = un_undefine(OMIT, "y", skip_omit=True)
+    check("def(OMIT, 'y', skip_omit=True) -> 'y'", result, "y")
+
+
+def test_skip_omit_falsy_true_still_does_not_skip_sentinel():
+    """falsy=True matches default(x, true), which does not skip omit;
+    only skip_omit does."""
+    result = un_undefine(OMIT, "y", falsy=True)
+    assert result is OMIT, f"expected the omit sentinel, got {result!r}"
+    print("ok: def(OMIT, 'y', falsy=True) -> OMIT (only skip_omit catches it)")
+
+
+def test_skip_omit_composes_with_falsy():
+    """The scope-selection shape: undefined, omit, '' and None all coalesce
+    onto the playbook value."""
+    check(
+        "def(UNDEF, OMIT, '', None, 'user', skip_omit=True, falsy=True) -> 'user'",
+        un_undefine(UNDEF, OMIT, "", None, "user", skip_omit=True, falsy=True),
+        "user",
+    )
+
+
+def test_skip_omit_keeps_real_values():
+    check("def('system', 'user', skip_omit=True) -> 'system'", un_undefine("system", "user", skip_omit=True), "system")
+
+
+# ---------------------------------------------------------------------------
+# def — enum validation
+# ---------------------------------------------------------------------------
+
+def test_enum_passes_members():
+    check(
+        "def('user', 'system', enum=['system','user']) -> 'user'",
+        un_undefine("user", "system", enum=["system", "user"]),
+        "user",
+    )
+
+
+def test_enum_rejects_non_member():
+    """The ''-leak shape: a shadowed var renders as '' and silently misses
+    every == 'user' branch; enum turns that into a loud failure."""
+    try:
+        un_undefine("", "system", enum=["system", "user"])
+    except AnsibleFilterError as e:
+        assert "enum" in str(e)
+        print(f"ok: def('', 'system', enum=[...]) raises: {e}")
+    else:
+        raise AssertionError("expected AnsibleFilterError for non-member ''")
+
+
+def test_enum_validates_only_chosen_value():
+    """Skipped candidates (undefined, falsy under falsy=True) never reach
+    the enum check -- validation constrains real values, not skips."""
+    check(
+        "def(UNDEF, 'system', enum=['system','user']) -> 'system'",
+        un_undefine(UNDEF, "system", enum=["system", "user"]),
+        "system",
+    )
+    check(
+        "def('', 'system', falsy=True, enum=['system','user']) -> 'system'",
+        un_undefine("", "system", falsy=True, enum=["system", "user"]),
+        "system",
+    )
+
+
+def test_enum_all_skipped_returns_none_unvalidated():
+    check(
+        "def(UNDEF, UNDEF, enum=['system','user']) -> None",
+        un_undefine(UNDEF, UNDEF, enum=["system", "user"]),
+        None,
+    )
+
+
+def test_enum_composes_with_skip_omit():
+    """The full scope-selection expression used in vars_systemd_unit.tasks."""
+    check(
+        "def(OMIT, 'user', skip_omit=True, enum=['system','user']) -> 'user'",
+        un_undefine(OMIT, "user", skip_omit=True, enum=["system", "user"]),
+        "user",
+    )
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for t in tests:
