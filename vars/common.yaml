@@ -11,6 +11,7 @@ OPTS_DIR: /opt
 ETCS_DIR: /etc/opt
 REPOS_DIR: /etc/opt
 VARS_DIR: /var/lib
+SYSUSERSDIR: /etc/sysusers.d
 LOGS_DIR: /var/log
 SPOOLS_DIR: /var/spool
 CACHES_DIR: /var/cache
@@ -732,6 +733,50 @@ SUBSYSTEM:
   # (lookup('subsys', id='systemd_env')); bypass via SYSTEMD_ENV_BYPASS.
   systemd_env:
     requested: "{{ SYSTEMD_ENV is mapping and (SYSTEMD_ENV | length > 0) }}"
+
+  # sysusers -- declarative daemon identity via sysusers.d(5) fragments.
+  # Design: .design/gen-user/init.md (beads: compfuzor-gen-user). `u`/`g`
+  # lines declare a name (exactly one declarer per name -- duplicates warn
+  # per sysusers.d(5), earliest filename wins); `m` lines consume a name
+  # (implicit creation makes consumers standalone-safe, so run order never
+  # matters). SYSTEMD_SYSUSER: True derives a `u` line from
+  # SYSTEMD_SERVICES.User= in gen_sysusers.tasks -- a generator switch, not a
+  # declaration (absent = the name belongs to a package or someone else).
+  # Inert under USERMODE: user-scope units never need system accounts.
+  # Bypass: SYSUSERS_BYPASS skips the whole subsystem.
+  sysusers:
+    requested: "{{ SYSUSERS is deftruthy or SYSTEMD_SYSUSER is deftruthy }}"
+    contrib:
+      ETC_DIRS:
+        - sysusers.d
+      ETC_FILES:
+        - name: sysusers.d/{{NAME}}.conf
+          mode: "0644"
+          content: "{{ _sysusers_specs | sysusers_render }}"
+      BINS:
+        # Auto-run (unlike kernel apply bins): opted-in identity must exist
+        # before any unit start, and creation is idempotent. BINS_RUN_BYPASS
+        # skips it for iteration.
+        - name: install-sysusers.sh
+          bypass: ['LINK', 'SYSUSERS']
+          run: true
+          generated: |
+            SYSUSERSDIR="{{SYSUSERSDIR}}"
+            SUDO_CMD="sudo"
+            _src="${DIR}/etc/sysusers.d/{{NAME}}.conf"
+            _dest="${SYSUSERSDIR}/{{NAME}}.conf"
+            if [ ! -f "$_src" ]; then
+                echo "sysusers: missing staged fragment: ${_src}" >&2
+                exit 1
+            fi
+            if [ "${1:-}" = "--copy" ] || [ -n "${SYSUSERS_COPY:-}" ]; then
+                $SUDO_CMD cp --remove-destination -f "$_src" "$_dest"
+            else
+                $SUDO_CMD ln -sfn "$_src" "$_dest"
+            fi
+            # Path argument with a slash: this fragment only, not the whole
+            # directory search. Idempotent; skips names that already exist.
+            $SUDO_CMD systemd-sysusers "$_dest"
 
 _pr_patches_raw: "{{ PR_PATCHES | normalize(to='list') }}"
 _pr_patches_spec: >-

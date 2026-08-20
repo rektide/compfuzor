@@ -1,0 +1,65 @@
+---
+# gen_sysusers -- declarative daemon identity via sysusers.d(5).
+# Design: .design/gen-user/init.md (beads: compfuzor-gen-user).
+#
+# SYSUSERS specs render into one fragment per playbook
+# (DIR/etc/sysusers.d/NAME.conf, dependency-safe g/u/m order -- see the
+# sysusers_render filter). install-sysusers.sh links it into SYSUSERSDIR and
+# runs systemd-sysusers, so the account exists before any unit enable/start
+# resolves User=/Group= or StateDirectory chowns anything.
+#
+# Declaration semantics: `u`/`g` declare a name (one declarer per name --
+# shared groups live in an identity manifest playbook); `m` consumes one
+# (implicit creation converges standalone installs). Derived entries are
+# PREPENDED so authored specs override them by name (sysusers_render:
+# later same-name spec wins outright).
+#
+# Inert under USERMODE (explicit SYSUSERS there earns a warning, not an
+# error -- user-scope playbooks may carry the var for symmetric authoring).
+- name: "Compfuzor: derive sysusers specs (SYSTEMD_SERVICES.User= + authored)"
+  set_fact:
+    _sysusers_specs: "{{ _sysusers_derived + (SYSUSERS | default([]) | normalize(to='list')) }}"
+  vars:
+    _svc: "{{ SYSTEMD_SERVICES | default({}) }}"
+    _user: "{{ _svc.User | default('') }}"
+    _group: "{{ _svc.Group | default('') }}"
+    # SYSTEMD_SYSUSER is a generator switch: derive a u line for the unit's
+    # run-as user (root/absent -> nothing; a differing Group= needs a g line
+    # first). It declares no identity itself.
+    _sysusers_derived: >-
+      {{ ([{'name': _group, 'kind': 'group'}] if (_group and _group != _user) else [])
+       + ([{'name': _user, 'comment': NAME ~ ' daemon'}]
+          if (SYSTEMD_SYSUSER is deftruthy and _user and _user != 'root') else []) }}
+
+- name: "Compfuzor: fail when SYSTEMD_SYSUSER has no User= to derive from"
+  fail:
+    msg: >-
+      SYSTEMD_SYSUSER is set but SYSTEMD_SERVICES.User is absent/root, and no
+      SYSUSERS specs are authored -- nothing to declare. Point User= at the
+      daemon account or drop SYSTEMD_SYSUSER.
+  when:
+    - USERMODE | default(False) | bool == False
+    - SYSTEMD_SYSUSER is deftruthy
+    - SYSUSERS is deffalsy
+    - _sysusers_specs | length == 0
+
+- name: "Compfuzor: warn when sysusers is inert under USERMODE"
+  debug:
+    msg: "sysusers: USERMODE never needs system accounts; SYSUSERS/SYSTEMD_SYSUSER ignored."
+  when:
+    - USERMODE | default(False) | bool
+    - SYSUSERS is deftruthy or SYSTEMD_SYSUSER is deftruthy
+
+- name: "Compfuzor: synthesize sysusers subsystem artifacts"
+  set_fact:
+    ETC_DIRS: "{{ lookup('merge_subsys', id='sysusers', contrib='ETC_DIRS') }}"
+    ETC_FILES: "{{ lookup('merge_subsys', id='sysusers', contrib='ETC_FILES') }}"
+    # incoming-first: prepend the install bin so the compositor orders it
+    # BEFORE the systemd install bins already in BINS (vars-phase appends).
+    # Identity must exist before unit enable/start resolves User=/Group= or
+    # StateDirectory chowns anything. (generatedAt on those bins is inert
+    # metadata; compositor run_all order follows BINS list order.)
+    BINS: "{{ lookup('merge_subsys', id='sysusers', contrib='BINS', order='incoming-first') }}"
+  when: _sysusers_active
+  vars:
+    _sysusers_active: "{{ lookup('subsys', id='sysusers', get='active', default=false) | bool and not (USERMODE | default(False) | bool) }}"
