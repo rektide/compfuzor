@@ -215,13 +215,13 @@ SUBSYSTEM:
           run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
-            {{ GO_COMMENT | linesout }}
+            {{ GO_COMMENT | join2(prefix='# ') }}
             go build -o ${GO_BIN:-$TYPE} ${GO_TARGET:-./...}
         - name: install-go.sh
           bypass: ["LINK", "GO"]
           basedir: repo
           generated: |
-            {{ GO_COMMENT_INSTALL | linesout }}
+            {{ GO_COMMENT_INSTALL | join2(prefix='# ') }}
             [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${GO_BIN:-$TYPE}"
             ln -sfv "$(pwd)/${INSTALL_BIN}" $GLOBAL_BINS_DIR/$(basename $INSTALL_BIN)
       ENV:
@@ -238,7 +238,7 @@ SUBSYSTEM:
           run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
-            {{ NODEJS_COMMENT | linesout }}
+            {{ NODEJS_COMMENT | join2(prefix='# ') }}
             if [ -f package-lock.json ] && [ ! -f pnpm-lock.yaml ]; then
               pnpm import
             fi
@@ -262,7 +262,7 @@ SUBSYSTEM:
           #run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
-            {{ NODEJS_COMMENT_INSTALL | linesout }}
+            {{ NODEJS_COMMENT_INSTALL | join2(prefix='# ') }}
             if [ -n "{{ NODEJS_LINK_DIR | default('') }}" ]; then
               IFS=',' read -ra _cf_link_dirs <<< "{{ NODEJS_LINK_DIR | default('.') }}"
               for _cf_dir in "${_cf_link_dirs[@]}"; do
@@ -299,14 +299,14 @@ SUBSYSTEM:
           run: "{{ BUILD_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
-            {{ BUN_COMMENT | linesout }}
+            {{ BUN_COMMENT | join2(prefix='# ') }}
             bun install
         - name: install-bun.sh
           bypass: ["LINK", "BUN"]
           run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
-            {{ BUN_COMMENT_INSTALL | linesout }}
+            {{ BUN_COMMENT_INSTALL | join2(prefix='# ') }}
             bun link -g
       ENV: "{{ ({'BUN_BIN': BUN_BIN}) if BUN_BIN is defined else ({}) }}"
       TOOL_VERSIONS:
@@ -339,7 +339,7 @@ SUBSYSTEM:
           run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
-            {{ RUST_COMMENT | linesout }}
+            {{ RUST_COMMENT | join2(prefix='# ') }}
             # Symlink the .tool-version/mise.toml before build, so we get the right version.
             "$DIR/bin/links.ts" apply --scope system --id '*/.tool-versions,*/mise.toml' -q
             if [[ -n "${RUST_PROFILE:-}" ]]; then
@@ -365,7 +365,7 @@ SUBSYSTEM:
           bypass: ["LINK", "RUST"]
           basedir: repo
           generated: |
-            {{ RUST_COMMENT_INSTALL | linesout }}
+            {{ RUST_COMMENT_INSTALL | join2(prefix='# ') }}
             if [[ -n "${RUST_PROFILE:-}" ]]; then
                 _target_dir="target/${RUST_PROFILE}"
             elif [[ -z "${RELEASE+x}" ]] || [[ "${RELEASE:-}" != "debug" ]]; then
@@ -465,7 +465,7 @@ SUBSYSTEM:
           run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
           basedir: repo
           generated: |
-            {{ PYTHON_COMMENT | linesout }}
+            {{ PYTHON_COMMENT | join2(prefix='# ') }}
             {% if PYTHON_BUILD_COMMAND is defined %}
             {{ PYTHON_BUILD_COMMAND }}
             {% else %}
@@ -496,7 +496,7 @@ SUBSYSTEM:
       BINS:
         - name: install-desktop.sh
           generated: |
-            {{ DESKTOP_COMMENT | linesout }}
+            {{ DESKTOP_COMMENT | join2(prefix='# ') }}
             {% for entry in (DESKTOP | normalize(to='list')) %}
             {% set df = entry.desktop_file %}
             {% set exec_val = entry.exec | default('') %}
@@ -528,7 +528,7 @@ SUBSYSTEM:
       BINS:
         - name: download-patches.sh
           generated: |
-            {{ PATCHES_COMMENT | linesout }}
+            {{ PATCHES_COMMENT | join2(prefix='# ') }}
             PATCHES_DIR="${DIR}/patches"
             mkdir -p "$PATCHES_DIR"
 
@@ -585,7 +585,7 @@ SUBSYSTEM:
         - name: apply-patches.sh
           basedir: repo
           generated: |
-            {{ PATCHES_COMMENT_APPLY | linesout }}
+            {{ PATCHES_COMMENT_APPLY | join2(prefix='# ') }}
             PATCHES_DIR="${DIR}/patches"
 
             if [ ! -d "$PATCHES_DIR" ]; then
@@ -781,7 +781,7 @@ _nodejs_prune_commands: "{{ (NODEJS_PRUNE_COMMANDS | default(NODEJS_PRUNE_COMMAN
 _npm_src_bins:
   - name: build-npm.sh
     generated: |
-      {{ NPM_COMMENT | linesout }}
+      {{ NPM_COMMENT | join2(prefix='# ') }}
       curl $(npm view $NPM_PACKAGE dist.tarball) | tar -xz --strip-components=1
       pnpm i
       IFS=',' read -ra _cf_build_scripts <<< "${NODEJS_BUILD_SCRIPTS:-build}"
@@ -804,7 +804,7 @@ _npm_install_bins:
   - name: install-npm.sh
     run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
     generated: |
-      {{ NPM_COMMENT_INSTALL | linesout }}
+      {{ NPM_COMMENT_INSTALL | join2(prefix='# ') }}
       pnpm install -g{% set _ab = NPM_ALLOW_BUILD | default(False) %}{% if _ab %}{% for _pkg in ((NPM | normalize(to='list')) if (_ab | type_debug == 'bool') else (_ab | normalize(to='list'))) %} --allow-build={{ _pkg }}{% endfor %}{% endif %} $(cat etc/npm.txt) $*
 
 _npm_install_etc:
@@ -819,13 +819,13 @@ _bazel_bins:
     run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
     basedir: repo
     generated: |
-      {{ BAZEL_COMMENT | linesout }}
+      {{ BAZEL_COMMENT | join2(prefix='# ') }}
       bazel build {{ _bazel_target }}
   - name: install-bazel.sh
     bypass: ["LINK", "BAZEL"]
     basedir: repo
     generated: |
-      {{ BAZEL_COMMENT_INSTALL | linesout }}
+      {{ BAZEL_COMMENT_INSTALL | join2(prefix='# ') }}
       {% if BAZEL_INSTALL_TARGETS is defined %}
       {% for target in BAZEL_INSTALL_TARGETS %}
       bin_path="$(bazel info bazel-bin)/{{ target }}"
@@ -892,7 +892,7 @@ _cmake_bins:
     run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
     basedir: "{{ REPO_DIR }}"
     generated: |
-      {{ CMAKE_COMMENT | linesout }}
+      {{ CMAKE_COMMENT | join2(prefix='# ') }}
       {% for cmakeBuild in _cmake_builds %}
       {% set generator = cmakeBuild.generator | default(CMAKE_GENERATOR | default('Ninja')) %}
       {% set configureArgs = cmakeBuild.args | default(CMAKE_ARGS) | join2(' ') %}
@@ -946,7 +946,7 @@ _cmake_bins:
     bypass: ["LINK", "CMAKE"]
     basedir: repo
     generated: |
-      {{ CMAKE_COMMENT_INSTALL | linesout }}
+      {{ CMAKE_COMMENT_INSTALL | join2(prefix='# ') }}
       {% if CMAKE_INSTALL is defined %}
       {% for cmakeBuild in _cmake_builds if cmakeBuild.install | default(True) %}
       {% set installArgs = cmakeBuild.install_args | join2(' ') %}
@@ -979,7 +979,7 @@ _make_bins:
     run: "{{ BINS_RUN_BYPASS is not deftruthy }}"
     basedir: "{{ REPO_DIR }}"
     generated: |
-      {{ MAKE_COMMENT | linesout }}
+      {{ MAKE_COMMENT | join2(prefix='# ') }}
       if [ ! -f ./configure ]; then
         if [ -f ./autogen.sh ]; then NOCONFIGURE=1 sh ./autogen.sh
         elif [ -f ./configure.ac ]; then autoreconf -fi; fi
@@ -992,7 +992,7 @@ _make_bins:
     bypass: ["LINK", "MAKE"]
     basedir: "{{ REPO_DIR }}"
     generated: |
-      {{ MAKE_COMMENT_INSTALL | linesout }}
+      {{ MAKE_COMMENT_INSTALL | join2(prefix='# ') }}
       make {{ MAKE_INSTALL_TARGET|default('install') }} {{ _make_destdir_arg }}
 
 _kernel_modprobe_bins:

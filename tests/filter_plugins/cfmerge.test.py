@@ -22,7 +22,6 @@ from cfmerge import (
     collect,
     combine_iff,
     join2,
-    linesout,
     merge_dict,
     merge_fields,
     merge_list as _merge_list,
@@ -627,46 +626,52 @@ def test_join2():
         "foo \\\n\tbar")
 
 
-def test_linesout():
-    print("\nlinesout:")
-    check("prefixes each line, default # ",
-        linesout(["one", "two"]),
+def test_join2_lines():
+    print("\njoin2 prefix mode:")
+    check("prefixes each line, default separator \\n",
+        join2(["one", "two"], prefix="# "),
         "# one\n# two")
     check("bare string is one prefixed line, not char-iterated",
-        linesout("solo"),
+        join2("solo", prefix="# "),
         "# solo")
-    check("custom prefix (named)",
-        linesout(["a", "b"], prefix="// "),
+    check("custom prefix",
+        join2(["a", "b"], prefix="// "),
         "// a\n// b")
-    check("custom separator (named)",
-        linesout(["a", "b"], separator=" | "),
+    check("explicit separator overrides the \\n default",
+        join2(["a", "b"], " | ", prefix="# "),
         "# a | # b")
     check("multi-line item is prefixed line by line",
-        linesout(["head\ntail"]),
+        join2(["head\ntail"], prefix="# "),
         "# head\n# tail")
     check("blank interior line renders bare prefix, no trailing space",
-        linesout(["a\n\nb"]),
+        join2(["a\n\nb"], prefix="# "),
         "# a\n#\n# b")
     check("undefined drops to empty",
-        linesout(Undefined(name="missing")),
+        join2(Undefined(name="missing"), prefix="# "),
         "")
     check("None drops to empty",
-        linesout(None),
+        join2(None, prefix="# "),
         "")
     check("empty list drops to empty",
-        linesout([]),
+        join2([], prefix="# "),
         "")
     check("empty string item contributes nothing",
-        linesout([""]),
+        join2([""], prefix="# "),
         "")
     check("True inside list is dropped",
-        linesout([True, "x"]),
+        join2([True, "x"], prefix="# "),
         "# x")
     check("booleans only render to empty",
-        linesout(True),
+        join2(True, prefix="# "),
         "")
-    check_raises("prefix/separator are keyword-only",
-        lambda: linesout(["a"], "// "),
+    check("no prefix keeps classic join (separator positional)",
+        join2(["a", "b"], ":"),
+        "a:b")
+    check("no prefix and no separator is empty-string join",
+        join2(["a", "b"]),
+        "ab")
+    check_raises("prefix is keyword-only",
+        lambda: join2(["a"], "# ", "x"),
         "positional argument")
 
 
@@ -681,7 +686,7 @@ if __name__ == "__main__":
     test_tag_each()
     test_combine_iff()
     test_join2()
-    test_linesout()
+    test_join2_lines()
     test_when()
     test_when_and()
     print("\n{} passed, {} failed".format(passed, failed))
