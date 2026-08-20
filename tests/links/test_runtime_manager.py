@@ -55,6 +55,27 @@ def test_apply_status_expansion_and_relative_target(env: dict[str, str], tmp_pat
     assert {row["status"] for row in json.loads(status.stdout)} == {"MANAGED"}
 
 
+def test_id_filter_selects_record_slice(env: dict[str, str], tmp_path: Path) -> None:
+    # --id globs operate on record ids (scope:dest) alongside --scope, so a
+    # caller can apply one slice of a plan (build-rust applies just the
+    # version-manager links). No match is a clean no-op, not an error.
+    source = tmp_path / "source"; source.write_text("managed")
+    manifest = tmp_path / "links.json"
+    write_manifest(manifest, [
+        record("user:/repo/a/.tool-versions", str(source), str(tmp_path / "a" / ".tool-versions")),
+        record("user:/repo/a/mise.toml", str(source), str(tmp_path / "a" / "mise.toml")),
+        record("user:/repo/a/bin/tool", str(source), str(tmp_path / "a" / "bin" / "tool")),
+    ])
+    applied = run(env, "apply", str(manifest), "--id", "*/.tool-versions,*/mise.toml", "--json-array")
+    assert applied.returncode == 0, applied.stderr
+    rows = json.loads(applied.stdout)
+    assert {row["id"] for row in rows} == {"user:/repo/a/.tool-versions", "user:/repo/a/mise.toml"}
+    assert not (tmp_path / "a" / "bin").exists()
+    unmatched = run(env, "status", str(manifest), "--id", "nomatch-*")
+    assert unmatched.returncode == 0, unmatched.stderr
+    assert unmatched.stdout.strip().endswith("action")  # header only, no rows
+
+
 def test_preserve_replace_overwrite_and_directory_safety(env: dict[str, str], tmp_path: Path) -> None:
     source = tmp_path / "source"; source.write_text("managed")
     preserved = tmp_path / "preserved"; preserved.write_text("foreign")

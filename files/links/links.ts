@@ -10,7 +10,6 @@ type Policy = "preserve" | "fail" | "replace";
 type State = "present" | "absent";
 type Format = "human" | "jsonl" | "array";
 type Status = "MANAGED" | "MISSING" | "OVERRIDE" | "CONFLICT" | "SOURCE_MISSING" | "INVALID";
-
 interface LinkRecord {
   id: string;
   scope: Scope;
@@ -47,6 +46,7 @@ interface Row {
 interface Options {
   command: Command;
   scope?: Scope;
+  id?: string[];
   format: Format;
   quiet: number;
   paths: string[];
@@ -61,6 +61,9 @@ performed; only leading ~, \${HOME}, and \${XDG_RUNTIME_DIR} are recognized.
 
 Options:
   --scope system|user  Operate on one activation scope
+  --id <globs>         Comma-separated glob patterns on record ids
+                       (scope:dest); operate on the matching slice only.
+                       * and ? match, * crosses / (e.g. '*/.tool-versions').
   --json               Emit one JSON object per row
   --json-array         Emit one JSON array
   -q, -qq              Synopsis only, or no output
@@ -76,6 +79,7 @@ function fail(message: string): never {
 function parseArgs(argv: string[]): Options {
   let command: Command | undefined;
   let scope: Scope | undefined;
+  let id: string[] | undefined;
   let format: Format = "human";
   let quiet = 0;
   const paths: string[] = [];
@@ -95,6 +99,10 @@ function parseArgs(argv: string[]): Options {
       const value = argv[++i];
       if (value !== "system" && value !== "user") fail("--scope must be system or user");
       scope = value;
+    } else if (arg === "--id") {
+      const value = argv[++i];
+      if (!value) fail("--id requires a comma-separated glob list");
+      id = (id ?? []).concat(value.split(",").map((part) => part.trim()).filter(Boolean));
     } else if (!command && ["apply", "status", "audit", "remove"].includes(arg)) {
       command = arg as Command;
     } else if (arg.startsWith("-")) {
@@ -106,7 +114,7 @@ function parseArgs(argv: string[]): Options {
   if (!command) fail("expected apply, status, audit, or remove");
   if (command !== "audit" && paths.length > 1) fail(`${command} accepts at most one manifest`);
   if (paths.length === 0) paths.push(join(DIR, "links.json"));
-  return { command, scope, format, quiet, paths };
+  return { command, scope, id, format, quiet, paths };
 }
 
 function object(value: unknown, description: string): Record<string, unknown> {
@@ -195,13 +203,18 @@ function expandPath(value: string, base: string): string {
   return normalize(isAbsolute(expanded) ? expanded : resolve(base, expanded));
 }
 
-function resolveRecords(path: string, manifest: Manifest, scope?: Scope): { records: ResolvedRecord[]; invalid: Row[] } {
+function idMatches(idPatterns: string[] | undefined, id: string): boolean {
+  if (!idPatterns || idPatterns.length === 0) return true;
+  return idPatterns.some((pattern) => globMatches(pattern, id));
+}
+
+function resolveRecords(path: string, manifest: Manifest, scope?: Scope, idPatterns?: string[]): { records: ResolvedRecord[]; invalid: Row[] } {
   const baseValue = manifest.deployment?.dir ?? dirname(resolve(path));
   const base = expandPath(baseValue, dirname(resolve(path)));
   const claims = new Map<string, ResolvedRecord>();
   const records: ResolvedRecord[] = [];
   const invalid: Row[] = [];
-  for (const record of manifest.links.filter((entry) => !scope || entry.scope === scope)) {
+  for (const record of manifest.links.filter((entry) => (!scope || entry.scope === scope) && idMatches(idPatterns, entry.id))) {
     try {
       const resolved: ResolvedRecord = {
         ...record,
@@ -332,12 +345,12 @@ async function removeRecord(record: ResolvedRecord): Promise<Row> {
   return removeManaged(record, "removed");
 }
 
-async function audit(paths: string[], scope?: Scope): Promise<Row[]> {
+async function audit(paths: string[], scope?: Scope, idPatterns?: string[]): Promise<Row[]> {
   const records: ResolvedRecord[] = [];
   const invalid: Row[] = [];
   for (const input of paths) {
     const loaded = await loadManifest(input);
-    const resolved = resolveRecords(loaded.path, loaded.manifest, scope);
+    const resolved = resolveRecords(loaded.path, loaded.manifest, scope, idPatterns);
     records.push(...resolved.records.filter((record) => record.state === "present"));
     invalid.push(...resolved.invalid);
   }
@@ -382,10 +395,10 @@ async function main(): Promise<number> {
   if (["1", "true", "y", "yes"].includes(process.env.COMPFUZOR_LINK_BYPASS?.trim().toLowerCase() ?? "")) return 0;
   let rows: Row[];
   if (options.command === "audit") {
-    rows = await audit(options.paths, options.scope);
+    rows = await audit(options.paths, options.scope, options.id);
   } else {
     const loaded = await loadManifest(options.paths[0]);
-    const resolved = resolveRecords(loaded.path, loaded.manifest, options.scope);
+    const resolved = resolveRecords(loaded.path, loaded.manifest, options.scope, options.id);
     const operation = options.command === "apply" ? apply : options.command === "remove" ? removeRecord : classify;
     rows = [...resolved.invalid];
     // Mutation is all-or-nothing with respect to plan validity.
