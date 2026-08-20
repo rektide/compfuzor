@@ -197,13 +197,11 @@
     # (it auto-chowns StateDirectory to a transient UID), but a long-lived,
     # inspectable cache wants files owned by a real named user.
     #
-    # TODO: a gen_user subsystem should own this. The file-first, systemd-native
-    # mechanism is a sysusers.d/{{NAME}}.conf fragment -- systemd-sysusers reads
-    # it and creates the user idempotently, which is exactly our "files do the
-    # things" praxis (a generated artifact, not an ansible action). gen_user
-    # would emit that fragment + a BINS to install it and run systemd-sysusers,
-    # replacing this task. Until then this is the shortcut -- and it's also the
-    # only thing forcing sudo before the build.
+    # TODO(compfuzor-gen-user): gen_user/sysusers subsystem design lives at
+    # .design/gen-user/init.0.gpt56t.md (beads: compfuzor-gen-user). It emits
+    # a sysusers.d/{{NAME}}.conf fragment + a BINS to install it and run
+    # systemd-sysusers, replacing this task. Until then this is the shortcut
+    # -- and it's also the only thing forcing sudo before the build.
     - name: Create apt-cacher-rs system user/group
       user:
         name: apt-cacher-rs
