@@ -759,6 +759,7 @@ SUBSYSTEM:
         # skips it for iteration.
         - name: install-sysusers.sh
           bypass: ['LINK', 'SYSUSERS']
+          phase: identity
           run: true
           generated: |
             SYSUSERSDIR="{{SYSUSERSDIR}}"

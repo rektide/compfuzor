@@ -370,9 +370,14 @@ Implemented as the `sysusers` subsystem (beads: `compfuzor-gen-user`).
 **Compositor ordering** — the flagged risk was real: `install-sysusers.sh`
 initially landed *after* `install-systemd.sh` in `install.sh`'s `run_all`
 (BINS list order; the `generatedAt: end` field on systemd install bins is
-inert metadata nothing reads). Fixed by merging the sysusers BINS contrib
-with `order='incoming-first'`, i.e. prepended — identity before unit
-enable/start, and before everything else in `install.sh`.
+inert metadata nothing reads). First fixed with a one-off
+`order='incoming-first'` merge; then generalized into **phase lanes**
+(`BIN_PHASES` in [`bin_composers`](/library/filter_plugins/bin_composers.py)):
+`identity`/`main`/`units`/`records`, stable-sorted, untagged = `main`. The
+`order=` flag is gone; sysusers tags `identity`, systemd install bins tag
+`units`, links tag `records`. This also fixed a pre-existing wart the one-off
+missed: artifact installs (rust) previously landed *after* unit enable/start,
+so fresh installs crashlooped until `Restart=on-failure` rescued them.
 
 **Open question 6** — resolved per the `UNIT_DIR` precedent: `SYSUSERSDIR`
 is baked into the generated bin (overridable at playbook level as an

@@ -320,6 +320,10 @@
     _bin_item:
       name: "install-{{ item.type }}{{ '-' ~ item.name if item.name != NAME else '' }}{{ '-user' if _is_user else '' }}.sh"
       bypass: "{{ ['LINK', 'SYSTEMD', 'USER_SYSTEMD'] if _is_user else ['LINK', 'SYSTEMD'] }}"
+      # units lane: enable/start must follow artifact installs (a unit whose
+      # ExecStart binary has not landed would crashloop on fresh installs)
+      # and identity creation (sysusers), via the bin_composers lane sort.
+      phase: units
       generatedAt: end
       generated: "{{ _generated }}"
       scope: "{{ ['user'] if _is_user else [] }}"

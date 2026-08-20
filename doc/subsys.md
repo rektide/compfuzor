@@ -321,6 +321,29 @@ The [`bin_composers`](../library/filter_plugins/bin_composers.py) filter:
 4. The compositor's `run_all` lists child scripts to invoke after the base
    script's own content.
 
+### Phase lanes
+
+`run_all` order follows **scheduling lanes**, not BINS arrival order. A bin
+record's `phase:` field is one of `identity` / `main` / `units` / `records`
+(untagged = `main`); children are stably sorted by lane, so BINS order still
+decides within a lane, and a subsystem compositor lands in the earliest lane
+of its leaves. Unknown phase values fail generation.
+
+| lane | semantics | who tags it |
+|---|---|---|
+| `identity` | accounts/groups must exist before anything runs as/creates them | sysusers |
+| `main` | default: build outputs, artifact installs, config assembly | everyone untagged |
+| `units` | unit link + enable/start — needs the artifacts and identity in place | systemd |
+| `records` | bookkeeping applied last (links.json records) | links |
+
+The invariant the lanes encode: identity → artifacts → enable/start → records.
+Before lanes, this ordering was accidental (BINS list order = task-file
+geography), which worked only while nobody looked — units enabled before their
+ExecStart binary landed crashlooped on fresh installs until Restart rescued
+them. Ordering constraints live on the bin record now, not in includes order
+or merge-call flags; `generatedAt: end` on systemd install bins is legacy
+metadata nothing reads.
+
 If the canonical name already has authored body fields (`early`, `generated`,
 `content`, `exec`, `execs`, or `late`), the generated compositor keyed-merges
 with that record. `_bin` guards those fields as one local body and always leaves

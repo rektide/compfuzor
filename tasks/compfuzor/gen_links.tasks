@@ -74,6 +74,7 @@
           'basedir': False,
           'subsystem': 'links',
           'bypass': 'LINK',
+          'phase': 'records',
         }] if _link_system else [])
         + ([{
           'name': 'install-link-records-user.sh',
@@ -82,5 +83,6 @@
           'subsystem': 'links',
           'scope': 'user',
           'bypass': 'LINK',
+          'phase': 'records',
         }] if _link_user else [])
       }}
