@@ -26,6 +26,9 @@ sources:
   - id: systemd-exec
     resource: man:systemd.exec(5)
     title: StateDirectory recursive chown semantics
+  - id: sysusers-d
+    resource: man:sysusers.d(5)
+    title: Cross-file duplicate-warning and m-line implicit-creation semantics
 ---
 
 # gen_user: declarative daemon identity
@@ -71,7 +74,9 @@ USERMODE-inert, bypass-aligned, sudo only at install phase.*
 3. Single declaration source for unit-run-as users: `SYSTEMD_SERVICES.User=`
    stays authoritative; the fragment is derived, so no drift.
 4. Identity beyond units: group-only (`g`) and membership (`m`) specs (e.g.
-   shared `media`/`render` groups).
+   shared `media` groups) — including cross-playbook sharing with no
+   duplicate-declaration warnings (see
+   [Cross-playbook shared identity](#cross-playbook-shared-identity-the-media-case)).
 5. Sudo only where it already lives: the install phase (unit linking,
    `GLOBAL_BINS_DIR` writes). Build stays sudoless.
 6. `USERMODE`: inert — user-scope units never need system users.
@@ -133,9 +138,9 @@ String entries are users with defaults; mappings override or select a
 non-user kind:
 
 ```yaml
+# sonarr.src.pb -- a daemon consumer
 SYSUSERS:
   - sonarr                              # u sonarr - "sonarr" ...
-  - { name: media, kind: group }        # g media -
   - { name: sonarr, member: media }     # m sonarr media
   - name: gitea                         # attribute overrides
     comment: Gitea daemon
@@ -147,24 +152,69 @@ SYSUSERS:
 memberships) regardless of authoring order:
 
 ```
-g media -
 u sonarr - "sonarr" /nonexistent /usr/sbin/nologin
 u gitea - "Gitea daemon" /var/lib/gitea /bin/bash
 m sonarr media
 ```
 
+Note the consumer does **not** declare `g media -` — see
+[Cross-playbook shared identity](#cross-playbook-shared-identity-the-media-case).
+
+### Cross-playbook shared identity (the `media` case)
+
+`sysusers.d(5)` defines the two semantics that make sharing work:
+
+- **Duplicate declarations warn.** All fragments are sorted by filename; for
+  the same user/group name the lexicographically earliest file's entry wins
+  and every later entry for that name "will be logged as warnings" — on every
+  sysusers run. So *a name is `u`/`g`-declared in exactly one fragment.*
+- **`m` lines implicitly create** their user/group if missing ("If the user
+  or group do not exist yet, they will be implicitly created"). So
+  memberships *consume* a name without declaring it, and run order does not
+  matter: a consumer on a fresh host implicitly materializes `media`; the
+  owning declaration later finds it existing and skips silently (warnings
+  are per duplicate *declaration*, not per existing group).
+
+Ownership model:
+
+| line | role | multiplicity |
+|---|---|---|
+| `u` / `g` | **declare** (own) a name | exactly one declarer |
+| `m` | **consume** a name | anywhere it's needed |
+
+Shared groups and human memberships live in one dedicated identity manifest
+playbook — the same host-manifest shape as `pkgs-base.pb` / `apt-repos.pb` /
+`sudo.pb`:
+
+```yaml
+# identity.pb -- the one declarer for shared names (host-specific)
+SYSUSERS:
+  - { name: media, kind: group }
+  - { name: render, kind: group }      # only if not package-provided
+  - { name: rektide, member: media }   # humans join here
+```
+
+```yaml
+# sonarr.src.pb, jellyfin.srv.pb, ... -- consumers
+SYSUSERS:
+  - sonarr
+  - { name: sonarr, member: media }
+```
+
+Standalone-consumer installs converge (implicit `m` creation), and removing
+a consumer never touches the shared group — removal stays nobody's job, per
+requirement 8.
+
 Tiers combine — apt-cacher-rs with the daemon user derived *and* added to a
-shared media group:
+shared group:
 
 ```yaml
 SYSTEMD_SYSUSER: True
 SYSUSERS:
-  - { name: media, kind: group }
   - { name: apt-cacher-rs, member: media }
 ```
 
 ```
-g media -
 u apt-cacher-rs - "apt-cacher-rs-git daemon" /nonexistent /usr/sbin/nologin
 m apt-cacher-rs media
 ```
@@ -253,7 +303,16 @@ UID pinning.
    before the `u` line. The g→u→m emission normalization covers ordering;
    decide whether a `group:` override on a user spec auto-emits the `g` line
    or asserts one was declared.
-5. Bake `SYSUSERSDIR` at generation time vs export via `env.export` (units
+5. **Verify-at-implementation** (via `systemd-sysusers --root=<fixture>`
+   offline runs, which the tool supports natively):
+   - duplicate `m sonarr media` lines across two fragments — warned or
+     silently idempotent?
+   - `m`-implicit group creation: does it allocate from the *system* GID
+     range (so it converges with a later `g media -`)?
+   - exact warning text/volume for duplicate `g` declarations, to calibrate
+     whether a gen-time lint ("name `X` declared in two fragments") is worth
+     adding on top of the one-declarer convention.
+6. Bake `SYSUSERSDIR` at generation time vs export via `env.export` (units
    bake `UNIT_DIR`; follow that precedent).
 
 ## Cross-references
