@@ -19,10 +19,10 @@ __all__ = ["raw_copy_template_data", "dict_get_raw", "is_nothing", "truthy", "is
 # default() nor the boolean default() form (nor falsy=... filters) skips it --
 # it flows through and later renders as '<<Omit>>' garbage once any filter
 # stringifies it. ansible-core 2.21 exposes it as
-# ansible._internal._templating._utils.Omit (the _templaring spelling that
-# used to live in def.py was a typo the guarded import silently swallowed,
-# so skip_omit never matched anything); there is no stable public import,
-# so degrade to a never-matching check on older cores rather than crash.
+# ansible._internal._templating._utils.Omit. def.py previously carried the
+# same working guarded import; this module centralizes detection so selection
+# and terminal text filters agree. There is no stable public import, so
+# degrade to a never-matching check on older cores rather than crash.
 try:
     from ansible._internal._templating._utils import Omit as _OMIT
 except ImportError:  # pragma: no cover - ansible-core version dependent

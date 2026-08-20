@@ -165,3 +165,29 @@ legal values, which is the point of the enum.
 - [`/tests/filter_plugins/def.test.py`](/tests/filter_plugins/def.test.py) — standalone test script (`python3 tests/filter_plugins/def.test.py`).
 - [`/tasks/compfuzor/vars_systemd_unit.tasks`](/tasks/compfuzor/vars_systemd_unit.tasks), [`/tasks/systemd.unit.includes`](/tasks/systemd.unit.includes), [`/vars/systemd.yaml`](/vars/systemd.yaml) — canonical usage and the sites fixed here.
 - [`/library/filter_plugins/artifact_links.py`](/library/filter_plugins/artifact_links.py) — the Python-side reference for loud scope validation.
+
+# Addendum: post-audit review (2026-08-20)
+
+Two audit conclusions were corrected after independent review:
+
+1. The known behavior change at lines 133-139 was not accepted. CLI
+   extra-vars arrive as strings, and `-e SYSTEMD_INSTALL=false` is a
+   documented no-install spelling, not a typo. `vars/systemd.yaml` now
+   normalizes string `true` / `false` to booleans before enum validation;
+   `seperate` and other genuine non-members still fail loudly. The standalone
+   integration test `tests/integration/systemd_install_valid.test.py` covers
+   both accepted string booleans, named modes, and a typo.
+2. The later `template_data.py` comment claiming a `_templaring` typo had made
+   `skip_omit` ineffective was historically incorrect. Every committed
+   `def.py` revision used the valid
+   `ansible._internal._templating._utils` import, and live probes before the
+   centralization exercised `skip_omit` successfully. The centralization was
+   still useful so `def` and terminal text filters share sentinel identity;
+   it did not repair a committed failure.
+
+The audit's 25-site MUST-FLOW classification remains valid. The subsequent
+default-on `skip_omit` change is assessed separately: its final-argument
+terminator preserves current module-param call sites, but the positional rule
+cannot distinguish literal `omit` from a dynamic final fallback that leaked
+the sentinel. That ambiguity should be resolved explicitly rather than hidden
+behind an unqualified backward-compatibility claim.

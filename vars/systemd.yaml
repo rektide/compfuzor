@@ -22,11 +22,18 @@ SYSTEMD_USER_MOUNT: true
 # true=both, false=none. Default based on USERMODE.
 # separate=generate two unit files (system + user with USERMODE=true) and both install scripts
 SYSTEMD_INSTALL: system
+# Extra-vars from `-e SYSTEMD_INSTALL=false` arrive as strings. Normalize the
+# two documented boolean spellings before enum validation; rejecting them
+# would turn an established no-install/dual-install override into a trap.
+_SYSTEMD_INSTALL_NORMALIZED: >-
+  {{ SYSTEMD_INSTALL | bool
+     if SYSTEMD_INSTALL is string and (SYSTEMD_INSTALL | lower) in ['true', 'false']
+     else SYSTEMD_INSTALL }}
 # Validated SYSTEMD_INSTALL consumed by the gates below: a typo'd playbook
 # value ('seperate') would otherwise silently miss every gate and install
-# nothing; enum= turns it into a loud render-time failure. true/false stay
-# legal authored values, so no falsy coalescing here.
-SYSTEMD_INSTALL_VALID: "{{ SYSTEMD_INSTALL|def('system', enum=['system', 'user', 'both', 'separate', 'none', true, false]) }}"
+# nothing; enum= turns it into a loud render-time failure. YAML booleans and
+# their CLI string spellings stay legal authored values.
+SYSTEMD_INSTALL_VALID: "{{ _SYSTEMD_INSTALL_NORMALIZED|def('system', enum=['system', 'user', 'both', 'separate', 'none', true, false]) }}"
 # Whether generated install scripts enable their unit (enable --now). Set false
 # per-root (or top-level) for units that should only be linked, e.g. a
 # socket-activated service (enable the .socket, link-only the .service).
