@@ -11,10 +11,14 @@
 #     managed daemon instead of auto-spawning an unguarded one;
 #   - the resolved config is a parseable guard config; generic link status
 #     separately reports whether the default config link is managed;
-#   - the root guard is in effect: every watched root carries a VCS marker
-#     (.git/.hg/.jj) and still exists on disk;
+#   - the root guard is in effect: every watched root carries a root_files
+#     marker (derived from the deployed config) and still exists on disk;
 #   - the guard is not inverted: ~ and ~/archive stay marker-free (a .git/.jj
 #     in ~ -- e.g. dotfiles -- would make every watch resolve to ~);
+#   - guard refusals in the log window, informational: the daemon logs every
+#     refused watch (send_error_response, with client pid + requested path);
+#     the refused client only sees a JSON error -- and the CLI exits 0 on it
+#     -- so background services retry silently. guard-refusals.sh aggregates;
 #   - user linger is on, so the unit (and its guard config) runs from boot,
 #     before any client could auto-spawn an unguarded daemon;
 #   - the daemon's own inotify pressure vs fs.inotify.max_user_watches --
@@ -39,7 +43,6 @@ _cli_state="{{WATCHMAN_DEFAULT_STATE_DIR}}/$(id -un)-state"
 _cfg="${WATCHMAN_CONFIG_FILE:-$_uetc/watchman.json}"
 _wmbin="${WATCHMAN_BIN:-watchman}"
 _unit="${WATCHMAN_UNIT:-{{NAME}}.service}"
-_markers="${WATCHMAN_ROOT_FILES:-.git .hg .jj}"
 
 _drift=0
 _ipc_ok=0
@@ -60,6 +63,15 @@ if [ -r "$_cfg" ] && _guard="$(jq -c '{enforce_root_files, root_files}' "$_cfg" 
 else
   _say config "DRIFT: $_cfg missing or unreadable"; _drift=1
 fi
+
+# Markers: the WATCHMAN_ROOT_FILES seam wins; else derive from the deployed
+# config, mirroring the daemon (cfg_compute_root_files prepends
+# .watchmanconfig, which is always honored even when not listed).
+_markers="${WATCHMAN_ROOT_FILES:-}"
+if [ -z "$_markers" ] && [ -r "$_cfg" ]; then
+  _markers="$(jq -r '(.root_files // [".git", ".hg", ".jj", ".watch"]) + [".watchmanconfig"] | join(" ")' "$_cfg" 2>/dev/null || true)"
+fi
+: "${_markers:=.git .hg .jj .watch .watchmanconfig}"
 
 # --- CLI routing symlink ----------------------------------------------------
 if [ -L "$_cli_state" ] && [ "$(readlink -m "$_cli_state")" = "$(readlink -m "$_vdir")" ]; then
@@ -225,6 +237,19 @@ if [ -f "$_logfile" ]; then
     _drift=1
   else
     _say log-health "OK: no poison/ENOSPC lines in last 20000 log lines"
+  fi
+  # --- guard refusals (informational, not drift) -----------------------------
+  # Both refusal paths log the same signature text: watch-project walks UP
+  # for a marker ("resolve_projpath: None of the files listed..."); plain
+  # watch checks the dir itself ("Your watchman administrator... None of
+  # the files listed..."). Window = since the last takeover.sh trim/restart.
+  _refus="$(grep -ac 'None of the files listed in global config root_files' "$_logfile" 2>/dev/null || true)"
+  if [ "${_refus:-0}" -gt 0 ]; then
+    _top="$(grep -a 'None of the files listed in global config root_files' "$_logfile" \
+      | sed -E 's/.*send_error_response: (\[[^]]*\]).*/\1/' | sort | uniq -c | sort -rn | head -1)"
+    _say guard-hits "info: ${_refus} refusal(s) in log window; top: $(printf '%s' "$_top" | sed -E 's/^ *([0-9]+) /\1x /') (see guard-refusals.sh)"
+  else
+    _say guard-hits "OK: no guard refusals in log window"
   fi
 else
   _say artifacts "OK: $_art (no log yet)"

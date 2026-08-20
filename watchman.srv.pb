@@ -17,11 +17,15 @@
 #
 # ROOT GUARD: a bare `watchman watch-project ~/src` (or any huge tree)
 # exhausts inotify watches → poison state → jj (fsmonitor) hangs. The global
-# config arms `enforce_root_files` with markers [.git .hg .jj]: watchman
-# walks UP from the requested path to the nearest marker, refusing if none.
-# `watch-project ~/src/<repo>` resolves to <repo>; bare ~, ~/archive, ~/src
-# are refused (they hold no markers — the guard-inversion status check
-# drifts if that ever changes, e.g. a dotfiles `git init ~`).
+# config arms `enforce_root_files` with markers [.git .hg .jj .watch]:
+# watchman walks UP from the requested path to the nearest marker, refusing
+# if none. `watch-project ~/src/<repo>` resolves to <repo>; bare ~,
+# ~/archive, ~/src are refused (they hold no markers — the guard-inversion
+# status check drifts if that ever changes, e.g. a dotfiles `git init ~`).
+# Refusals are logged by the daemon (send_error_response lines with the
+# client pid and requested path); status-watchman.sh surfaces an
+# informational count and guard-refusals.sh aggregates them.
+# `.watch` is the escape hatch for deliberately watching a non-VCS dir.
 #
 # CLI→DAEMON ROUTING — install-cli-symlink.sh: the C++ `watchman` CLI
 # ignores $WATCHMAN_SOCK (only python/node/rust clients honor it) and
@@ -94,7 +98,11 @@
       - name: watchman.json
         link: user
         json:
-          root_files: [".git", ".hg", ".jj"]
+          # .watch is the manual escape hatch: `touch <dir>/.watch` makes a
+          # non-VCS dir watchable. Everything else must carry a real VCS dir.
+          # The daemon also always honors .watchmanconfig (prepended
+          # internally, no need to list it).
+          root_files: [".git", ".hg", ".jj", ".watch"]
           enforce_root_files: true
           ignore_dirs:
             - node_modules
@@ -122,7 +130,14 @@
         # stats/health via the watchman CLI: managed-socket identity, unit
         # vs pidfile, CLI-routing symlink, root-guard enforcement, guard
         # inversion (~ marker-free), config symlink farm, linger, inotify
-        # pressure, state/log sizes.
+        # pressure, state/log sizes, guard-refusal count (informational).
+        basedir: false
+      - name: guard-refusals.sh
+        # Dig into root_files guard refusals: parses the daemon log's
+        # send_error_response lines into time/client-pid/comm/command/path
+        # aggregations. The refused client sees only a JSON error (and the
+        # CLI exits 0 on it), so offenders retry silently; this names them.
+        # Paths are ${HOME} literals expanded at runtime.
         basedir: false
       - name: takeover.sh
         # ExecStartPre: if a foreign (CLI-auto-spawned, unguarded) daemon
