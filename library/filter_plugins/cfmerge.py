@@ -1116,6 +1116,45 @@ def join2(value, separator=""):
     return separator.join(str(item) for item in items if not isinstance(item, bool))
 
 
+@accept_args_markers
+def linesout(value, *, prefix="# ", separator="\n"):
+    """Coerce a value to a list of lines and render each with a prefix.
+
+    The comment-rendering sibling of ``join2``: same normalization (dropping
+    boolean sentinels, never character-iterating a bare string), but each
+    item is split into lines and every line is prefixed. This replaces the
+    three-line ``{% for %}`` comment loop scattered through the language
+    subsystem templates:
+
+        {{ RUST_COMMENT | linesout }}
+        {{ GO_COMMENT_INSTALL | linesout(prefix="// ") }}
+
+    Empty lines render as the bare prefix (``#``, not ``# ``), matching
+    ``zim_fragment._comment_lines``. Multi-line items are prefixed line by
+    line. ``None``, undefined, and empty inputs render to the empty string
+    (when the expression sits on its own template line, that leaves one
+    blank line -- harmless in generated shell).
+
+    Args:
+        value: One raw value. Accepts the same shapes as ``normalize(to='list')``.
+        prefix: Prepended to every non-empty line. Defaults to ``"# "``.
+            Keyword-only: callers must name it.
+        separator: String inserted between rendered lines. Defaults to ``"\\n"``.
+            Keyword-only: callers must name it.
+
+    Returns:
+        A string.
+    """
+    value = raw_copy_template_data(value)
+    lines = []
+    for item in _normalize_list(value):
+        if isinstance(item, bool):
+            continue
+        for line in str(item).splitlines():
+            lines.append(prefix + line if line else prefix.rstrip())
+    return separator.join(lines)
+
+
 class FilterModule(object):
     """Expose cfmerge filters to Ansible's filter-plugin loader."""
 
@@ -1127,4 +1166,5 @@ class FilterModule(object):
             "merge_fields": merge_fields,
             "combine_iff": combine_iff,
             "join2": join2,
+            "linesout": linesout,
         }

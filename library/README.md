@@ -50,6 +50,7 @@ when: KERNEL_MODULES is defmapping
 |---|---|---|---|---|
 | `normalize` | `(value, *, to='list', **options)` | Convert one raw value to a registered shape: `list` (scalar → `[x]`, undefined/False → `[]`), `mapping` (with optional `shorthand=True`), `items` (dict → `[{key_name, value_name}]`), or `identity`. | **tolerates undefined → `[]`** (list), `{}` (mapping), `[]` (items). `False` → empty. `True` is kept as `[True]`. | [`cfmerge.py`](/library/filter_plugins/cfmerge.py) |
 | `join2` | `(value, separator='')` | Coerce to list and join into a string, dropping boolean sentinels. Composes `normalize(to='list')` + join — no `default([])` needed, bare strings not character-iterated. | **tolerates undefined → `''`**. `True`/`False` dropped. | [`cfmerge.py`](/library/filter_plugins/cfmerge.py) |
+| `linesout` | `(value, prefix='# ', separator='\n')` | Coerce to list and render each line with a prefix — `join2`'s comment-rendering sibling. Replaces the three-line `{% for %}` comment loop in subsystem templates; empty lines render the bare prefix (`#`). | **tolerates undefined → `''`**. `True`/`False` dropped. | [`cfmerge.py`](/library/filter_plugins/cfmerge.py) |
 | `rejectAny` | `(list, excluded)` | Filter `list`, dropping elements present in `excluded`. | Raises on undefined — no guards. | [`rejectAny.py`](/library/filter_plugins/rejectAny.py) |
 
 **Examples**
@@ -57,6 +58,8 @@ when: KERNEL_MODULES is defmapping
 ```jinja
 {{ FOO | normalize(to='list') }}              {# undefined -> [], "x" -> ["x"], [1,2] -> [1,2] #}
 {{ STATUS_DIRS | join2(':') }}                {# undefined -> "", ["a","b"] -> "a:b", True -> "" #}
+{{ RUST_COMMENT | linesout }}                       {# undefined -> "", ["a","b"] -> "# a\n# b" #}
+{{ GO_COMMENT_INSTALL | linesout(prefix='// ') }}   {# named params only; per line #}
 {{ LINKS | normalize(to='items', key_name='dest', value_name='src') }}
 {{ [1,2,3,4] | rejectAny([2,4]) }}            {# -> [1,3] #}
 ```
@@ -230,7 +233,7 @@ normal `tests/filter_plugins/*.test.py` test glob. Use the replacements below.
 
 | File | Registered filters | Status |
 |---|---|---|
-| [`cfmerge.py`](/library/filter_plugins/cfmerge.py) | `normalize`, `merge_list`, `merge_dict`, `merge_fields`, `combine_iff`, `join2` | active |
+| [`cfmerge.py`](/library/filter_plugins/cfmerge.py) | `normalize`, `merge_list`, `merge_dict`, `merge_fields`, `combine_iff`, `join2`, `linesout` | active |
 | [`bin_disarm.py`](/library/filter_plugins/bin_disarm.py) | `annotate_bins`, `canonical_bin_action`, `resolve_bin_disarm` | active |
 | [`each.py`](/library/filter_plugins/each.py) | `tag_each` | active |
 | [`when.py`](/library/filter_plugins/when.py) | `when`, `whenAnd` | active |

@@ -22,6 +22,7 @@ from cfmerge import (
     collect,
     combine_iff,
     join2,
+    linesout,
     merge_dict,
     merge_fields,
     merge_list as _merge_list,
@@ -612,6 +613,9 @@ def test_join2():
     check("booleans only join to empty",
         join2([True, False], ":"),
         "")
+    check("mapping stringifies as one item",
+        join2({"a": 1}, ":"),
+        "{'a': 1}")
     check("numbers are preserved as text",
         join2([1, 2, 3], ":"),
         "1:2:3")
@@ -621,6 +625,49 @@ def test_join2():
     check("multi-char separator (line-continuation style)",
         join2(["foo", "bar"], " \\\n\t"),
         "foo \\\n\tbar")
+
+
+def test_linesout():
+    print("\nlinesout:")
+    check("prefixes each line, default # ",
+        linesout(["one", "two"]),
+        "# one\n# two")
+    check("bare string is one prefixed line, not char-iterated",
+        linesout("solo"),
+        "# solo")
+    check("custom prefix (named)",
+        linesout(["a", "b"], prefix="// "),
+        "// a\n// b")
+    check("custom separator (named)",
+        linesout(["a", "b"], separator=" | "),
+        "# a | # b")
+    check("multi-line item is prefixed line by line",
+        linesout(["head\ntail"]),
+        "# head\n# tail")
+    check("blank interior line renders bare prefix, no trailing space",
+        linesout(["a\n\nb"]),
+        "# a\n#\n# b")
+    check("undefined drops to empty",
+        linesout(Undefined(name="missing")),
+        "")
+    check("None drops to empty",
+        linesout(None),
+        "")
+    check("empty list drops to empty",
+        linesout([]),
+        "")
+    check("empty string item contributes nothing",
+        linesout([""]),
+        "")
+    check("True inside list is dropped",
+        linesout([True, "x"]),
+        "# x")
+    check("booleans only render to empty",
+        linesout(True),
+        "")
+    check_raises("prefix/separator are keyword-only",
+        lambda: linesout(["a"], "// "),
+        "positional argument")
 
 
 if __name__ == "__main__":
@@ -634,6 +681,7 @@ if __name__ == "__main__":
     test_tag_each()
     test_combine_iff()
     test_join2()
+    test_linesout()
     test_when()
     test_when_and()
     print("\n{} passed, {} failed".format(passed, failed))
