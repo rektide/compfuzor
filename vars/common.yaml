@@ -386,13 +386,30 @@ SUBSYSTEM:
             else
                 _target_dir="target/debug"
             fi
-            if [[ "${RUST_ALL:-}" == "true" ]]; then
+            # RUST_COPY=true installs real files (cp + chmod 0755) instead of
+            # symlinks. Needed when the consumer is a non-root daemon: the
+            # default symlink resolves through DIR (DIRMODE 0770) and the
+            # source checkout (repo symlink, often ~/archive), which a daemon
+            # under ProtectHome=yes with its own user cannot traverse.
+            # (",," lowercases: env.export renders YAML booleans as "True".)
+            if [[ "${RUST_COPY,,}" == "true" ]]; then
+                _cf_rust_install() {
+                    # --remove-destination: a previous symlink install would
+                    # otherwise write *through* the link into target/
+                    cp -f --remove-destination "$1" "$2"
+                    chmod 0755 "$2"
+                    printf 'copied %s -> %s\n' "$1" "$2"
+                }
+            else
+                _cf_rust_install() { ln -sfv "$1" "$2"; }
+            fi
+            if [[ "${RUST_ALL,,}" == "true" ]]; then
                 for _bin in $(cargo metadata --format-version 1 --no-deps 2>/dev/null | jq -r '[ .packages[] | .targets[] | select(.kind[] | . == "bin") | .name ] | unique[]'); do
-                    ln -sfv "$(pwd)/${_target_dir}/${_bin}" "${GLOBAL_BINS_DIR}/${_bin}"
+                    _cf_rust_install "$(pwd)/${_target_dir}/${_bin}" "${GLOBAL_BINS_DIR}/${_bin}"
                 done
             else
                 [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${RUST_BIN:-{{ TYPE }}}"
-                ln -sfv "$(pwd)/${_target_dir}/${INSTALL_BIN}" "${GLOBAL_BINS_DIR}/$(basename "${INSTALL_BIN}")"
+                _cf_rust_install "$(pwd)/${_target_dir}/${INSTALL_BIN}" "${GLOBAL_BINS_DIR}/$(basename "${INSTALL_BIN}")"
             fi
         - name: install-rust-user.sh
           bypass: ['LINK', 'RUST']
@@ -422,7 +439,7 @@ SUBSYSTEM:
           'RUST_BIN': RUST_BIN, 'RUST_PKG': RUST_PKG,
           'RUST_FEATURES': RUST_FEATURES, 'RUST_PROFILE': RUST_PROFILE,
           'RUST_CARGO_ARGS': RUST_CARGO_ARGS, 'RUST_ALL': RUST_ALL,
-          'RUST_LOCKED': RUST_LOCKED
+          'RUST_LOCKED': RUST_LOCKED, 'RUST_COPY': RUST_COPY
         }) }}
       PKGS: "{{ RUST_PKGS | default([]) }}"
       TOOL_VERSIONS:
