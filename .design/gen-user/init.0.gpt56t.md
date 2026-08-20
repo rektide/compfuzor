@@ -242,6 +242,13 @@ vars) and not `GEN_USERS` (subsystem vars are mechanism-named: `PKGS`,
 
 ## Systemd derivation (opt-in)
 
+`SYSTEMD_SYSUSER: True` is only a **generator switch**: "also emit a `u` line
+for the name in `User=`." It declares no identity itself — the declaration
+remains the unit's `SYSTEMD_SERVICES.User:` line. A flag is needed rather
+than automatic derivation because the same `User=` directive also appears in
+playbooks whose user belongs to a package (`User: nginx`, `User: postgres`);
+the flag says "this name is mine to create," absence says "someone else's."
+
 `SYSTEMD_SYSUSER: True` on a playbook → the systemd subsystem contributes a
 `SYSUSERS` entry via its contrib:
 
