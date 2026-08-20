@@ -354,20 +354,18 @@ SUBSYSTEM:
             {% for _c in (RUST_COMMENT | normalize(to='list')) %}
             # {{ _c }}
             {% endfor %}
-            # Toolchain selection is repo-owned: rust-toolchain.toml (or the
-            # managed .tool-versions for mise) governs. A stray
-            # RUSTUP_TOOLCHAIN from the calling environment (e.g. a global
-            # mise rust pin exporting its toolchain) would override the
-            # repo pin and break MSRV-gated builds, so drop it.
-            unset RUSTUP_TOOLCHAIN
-            # Repo updates wipe the repo-root .tool-versions/mise.toml links
-            # (git reset + rm, so git doesn't trip over them); the link plan
-            # normally restores them at install time, but builds run first.
-            # Apply just the version-manager slice of the existing plan now
-            # (no-op when this playbook has no links bin).
-            if [ -x "$DIR/bin/links.ts" ]; then
-              "$DIR/bin/links.ts" apply --scope system --id '*/.tool-versions,*/mise.toml' -q
-            fi
+            # Toolchain selection belongs to the tool manager, not to the
+            # build script: mise exports RUSTUP_TOOLCHAIN from the repo's
+            # version pin, so never unset or override it here. The build's
+            # one job is making the pin VISIBLE: repo updates wipe the
+            # repo-root .tool-versions/mise.toml links (git reset + rm, so
+            # git doesn't trip over them) and the link plan normally
+            # restores them at install time, which is after builds run.
+            # Apply the version-manager slice of the plan up front --
+            # unconditionally: links.ts is expected to exist for a rust
+            # playbook (a rust deploy without a link plan is a
+            # misconfiguration; fail loudly rather than build blind).
+            "$DIR/bin/links.ts" apply --scope system --id '*/.tool-versions,*/mise.toml' -q
             if [[ -n "${RUST_PROFILE:-}" ]]; then
                 PROFILE="--profile ${RUST_PROFILE}"
             elif [[ -z "${RELEASE+x}" ]]; then
