@@ -410,15 +410,15 @@ const HUMAN_STATUS: Record<Status, string> = {
   INVALID: "invalid",
 };
 
-/** One human line: verdict, the link as it stands (dest -> actual), and the
- * wanted side only when the two differ. Mutating verbs replace the verdict
- * (created/replaced/removed read better than ok+action). */
+/** One human line: verdict, the actual entry at dest, and the wanted side
+ * only when the two differ. Mutating verbs replace the verdict
+ * (created/replaced/removed read better than ok+action). TSV: every field
+ * tab-separated, no arrow decoration. */
 function humanLine(row: Row): string {
   const label = row.action ?? HUMAN_STATUS[row.status] ?? row.status;
-  let link = row.dest;
-  if (row.entry === "symlink" && row.target !== undefined) link += ` -> ${row.target}`;
-  else if (row.entry === "file" || row.entry === "directory" || row.entry === "special") link += ` (${row.entry})`;
-  const parts = [label, link];
+  const parts = [label, row.dest];
+  if (row.entry === "symlink" && row.target !== undefined) parts.push(row.target);
+  else if (row.entry === "file" || row.entry === "directory" || row.entry === "special") parts.push(`(${row.entry})`);
   if (row.src && row.target !== row.src) {
     const missing = row.status === "SOURCE_MISSING" ? " (missing)" : "";
     parts.push(`wanted ${row.src}${missing}`);

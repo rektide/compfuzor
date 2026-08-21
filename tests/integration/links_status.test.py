@@ -97,17 +97,17 @@ def test_human_lines_show_both_sides() -> None:
         check("manifest exit reflects drift (MISSING+CONFLICT present)", result.returncode, 1)
         check("header is status/link", lines[0], "status\tlink")
 
-        rows = {line.split("\t")[1].split(" ")[0]: line for line in lines[1:]}
+        rows = {line.split("\t")[1]: line for line in lines[1:]}
         by_name = {Path(k).name: v for k, v in rows.items()}
 
-        check_contains("managed shows both sides in one arrow", by_name["managed.conf"], f"ok\t{managed_dest} -> {plan_src}")
+        check("managed line is verdict/dest/target TSV", by_name["managed.conf"], f"ok\t{managed_dest}\t{plan_src}")
         check_absent("managed does not repeat wanted", by_name["managed.conf"], "wanted")
-        check_contains(
-            "override shows actual target and wanted src",
+        check(
+            "override line is verdict/dest/actual-target/wanted TSV",
             by_name["foreign.conf"],
-            f"override\t{foreign_dest} -> {other}\twanted {plan_src}",
+            f"override\t{foreign_dest}\t{other}\twanted {plan_src}",
         )
-        check_contains("conflict names the squatter kind", by_name["fail.conf"], f"conflict\t{fail_dest} (file)")
+        check("conflict squatter is its own column", by_name["fail.conf"].split("\t")[:3], ["conflict", str(fail_dest), "(file)"])
         check_contains("conflict carries policy note", by_name["fail.conf"], "(fail policy)")
         check_contains("missing shows wanted side", by_name["missing.conf"], f"missing\t{missing_dest}\twanted {plan_src}")
 
@@ -150,10 +150,10 @@ def test_apply_verbs_read_as_verbs() -> None:
         manifest = write_manifest(root, [record("new.conf", plan_src)])
         result = run(["apply", str(manifest)])
         check("apply exit ok", result.returncode, 0)
-        check_contains("created verb leads the line", result.stdout, f"created\t{root / 'new.conf'} -> {plan_src}")
+        check_contains("created verb leads the line", result.stdout, f"created\t{root / 'new.conf'}\t{plan_src}")
 
         again = run(["apply", str(manifest)])
-        check_contains("second apply is unchanged", again.stdout, f"unchanged\t{root / 'new.conf'} -> {plan_src}")
+        check_contains("second apply is unchanged", again.stdout, f"unchanged\t{root / 'new.conf'}\t{plan_src}")
 
 
 def test_absent_and_directory() -> None:
@@ -177,10 +177,10 @@ def test_absent_and_directory() -> None:
             ],
         )
         result = run(["status", str(manifest)])
-        lines = {Path(line.split("\t")[1].split(" ")[0]).name: line for line in result.stdout.splitlines()[1:]}
-        check_contains("absent violation names actual target", lines["stale.conf"], f"conflict\t{stale} -> {plan_src}")
+        lines = {Path(line.split("\t")[1]).name: line for line in result.stdout.splitlines()[1:]}
+        check_contains("absent violation names actual target", lines["stale.conf"], f"conflict\t{stale}\t{plan_src}")
         check_contains("absent note", lines["stale.conf"], "(should be absent)")
-        check_contains("directory occupier named", lines["dirdest"], f"conflict\t{dir_dest} (directory)")
+        check("directory occupier is its own column", lines["dirdest"].split("\t")[:3], ["conflict", str(dir_dest), "(directory)"])
         check_contains("never-replaced note", lines["dirdest"], "(never replaced)")
 
 
