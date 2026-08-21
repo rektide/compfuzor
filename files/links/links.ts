@@ -416,10 +416,11 @@ function humanLineLabel(row: Row): string {
   return row.action ?? HUMAN_STATUS[row.status] ?? row.status;
 }
 
-/** Wanted column: the plan src, only when it differs from what's there. */
-function wanted(row: Row, suffix: string): string {
+/** src column: the plan's src (what the link should point at), only when
+ * it differs from the actual target. */
+function srcCell(row: Row, suffix: string): string {
   if (!row.src || row.target === row.src) return "";
-  return `wanted ${row.src}${suffix}`;
+  return `${row.src}${suffix}`;
 }
 
 function output(rows: Row[], options: Options): void {
@@ -433,7 +434,7 @@ function output(rows: Row[], options: Options): void {
   } else if (options.format === "array") {
     console.log(JSON.stringify(rows, null, 2));
   } else {
-    console.log("status\tdest\tactual\twanted\tnote");
+    console.log("status\tdest\tactual\tsrc\tnote");
     for (const row of rows) {
       const missing = row.status === "SOURCE_MISSING" ? " (missing)" : "";
       const note = row.detail && row.detail !== "src missing" ? `(${row.detail})` : "";
@@ -442,7 +443,7 @@ function output(rows: Row[], options: Options): void {
         : row.entry === "file" || row.entry === "directory" || row.entry === "special"
           ? `(${row.entry})`
           : "";
-      console.log([humanLineLabel(row), row.dest, actual, wanted(row, missing), note].join("\t"));
+      console.log([humanLineLabel(row), row.dest, actual, srcCell(row, missing), note].map((cell) => (cell === "" ? "\"\"" : cell)).join("\t"));
     }
   }
 }

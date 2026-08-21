@@ -95,21 +95,21 @@ def test_human_lines_show_both_sides() -> None:
         result = run(["status", str(manifest)])
         lines = result.stdout.splitlines()
         check("manifest exit reflects drift (MISSING+CONFLICT present)", result.returncode, 1)
-        check("header names all five columns", lines[0], "status\tdest\tactual\twanted\tnote")
+        check("header names all five columns", lines[0], "status\tdest\tactual\tsrc\tnote")
 
         rows = {line.split("\t")[1]: line for line in lines[1:]}
         by_name = {Path(k).name: v for k, v in rows.items()}
 
-        check("managed line fills all five columns", by_name["managed.conf"], f"ok\t{managed_dest}\t{plan_src}\t\t")
+        check("managed line fills all five columns", by_name["managed.conf"], f'ok\t{managed_dest}\t{plan_src}\t""\t""')
         check_absent("managed does not repeat wanted", by_name["managed.conf"], "wanted")
         check(
             "override line: actual target and wanted in their columns",
             by_name["foreign.conf"],
-            f"override\t{foreign_dest}\t{other}\twanted {plan_src}\t",
+            f'override\t{foreign_dest}\t{other}\t{plan_src}\t""',
         )
-        check("conflict row columns", by_name["fail.conf"].split("\t"), ["conflict", str(fail_dest), "(file)", f"wanted {plan_src}", "(fail policy)"])
+        check("conflict row columns", by_name["fail.conf"].split("\t"), ["conflict", str(fail_dest), "(file)", plan_src, "(fail policy)"])
         check_contains("conflict carries policy note", by_name["fail.conf"], "(fail policy)")
-        check("missing row: empty actual, wanted in its column", by_name["missing.conf"].split("\t"), ["missing", str(missing_dest), "", f"wanted {plan_src}", ""])
+        check("missing row: empty actual, wanted in its column", by_name["missing.conf"].split("\t"), ["missing", str(missing_dest), "\"\"", plan_src, "\"\""])
 
         check_absent("no id column remains", result.stdout, "system:")
         check_absent("no scope column remains", result.stdout, "\tsystem\t")
@@ -178,9 +178,9 @@ def test_absent_and_directory() -> None:
         )
         result = run(["status", str(manifest)])
         lines = {Path(line.split("\t")[1]).name: line for line in result.stdout.splitlines()[1:]}
-        check("absent violation row columns", lines["stale.conf"].split("\t"), ["conflict", str(stale), plan_src, "", "(should be absent)"])
+        check("absent violation row columns", lines["stale.conf"].split("\t"), ["conflict", str(stale), plan_src, "\"\"", "(should be absent)"])
         check_contains("absent note", lines["stale.conf"], "(should be absent)")
-        check("directory occupier columns", lines["dirdest"].split("\t"), ["conflict", str(dir_dest), "(directory)", f"wanted {plan_src}", "(never replaced)"])
+        check("directory occupier columns", lines["dirdest"].split("\t"), ["conflict", str(dir_dest), "(directory)", plan_src, "(never replaced)"])
         check_contains("never-replaced note", lines["dirdest"], "(never replaced)")
 
 
