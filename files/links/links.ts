@@ -410,21 +410,16 @@ const HUMAN_STATUS: Record<Status, string> = {
   INVALID: "invalid",
 };
 
-/** One human line: verdict, the actual entry at dest, and the wanted side
- * only when the two differ. Mutating verbs replace the verdict
- * (created/replaced/removed read better than ok+action). TSV: every field
- * tab-separated, no arrow decoration. */
-function humanLine(row: Row): string {
-  const label = row.action ?? HUMAN_STATUS[row.status] ?? row.status;
-  const parts = [label, row.dest];
-  if (row.entry === "symlink" && row.target !== undefined) parts.push(row.target);
-  else if (row.entry === "file" || row.entry === "directory" || row.entry === "special") parts.push(`(${row.entry})`);
-  if (row.src && row.target !== row.src) {
-    const missing = row.status === "SOURCE_MISSING" ? " (missing)" : "";
-    parts.push(`wanted ${row.src}${missing}`);
-  }
-  if (row.detail && row.detail !== "src missing") parts.push(`(${row.detail})`);
-  return parts.join("\t");
+/** Verdict column: mutating verbs (created/replaced/removed) read better
+ * than ok+action, so the verb replaces the status word for those rows. */
+function humanLineLabel(row: Row): string {
+  return row.action ?? HUMAN_STATUS[row.status] ?? row.status;
+}
+
+/** Wanted column: the plan src, only when it differs from what's there. */
+function wanted(row: Row, suffix: string): string {
+  if (!row.src || row.target === row.src) return "";
+  return `wanted ${row.src}${suffix}`;
 }
 
 function output(rows: Row[], options: Options): void {
@@ -438,8 +433,17 @@ function output(rows: Row[], options: Options): void {
   } else if (options.format === "array") {
     console.log(JSON.stringify(rows, null, 2));
   } else {
-    console.log("status\tlink");
-    for (const row of rows) console.log(humanLine(row));
+    console.log("status\tdest\tactual\twanted\tnote");
+    for (const row of rows) {
+      const missing = row.status === "SOURCE_MISSING" ? " (missing)" : "";
+      const note = row.detail && row.detail !== "src missing" ? `(${row.detail})` : "";
+      const actual = row.entry === "symlink" && row.target !== undefined
+        ? row.target
+        : row.entry === "file" || row.entry === "directory" || row.entry === "special"
+          ? `(${row.entry})`
+          : "";
+      console.log([humanLineLabel(row), row.dest, actual, wanted(row, missing), note].join("\t"));
+    }
   }
 }
 

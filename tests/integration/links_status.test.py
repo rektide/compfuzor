@@ -95,25 +95,25 @@ def test_human_lines_show_both_sides() -> None:
         result = run(["status", str(manifest)])
         lines = result.stdout.splitlines()
         check("manifest exit reflects drift (MISSING+CONFLICT present)", result.returncode, 1)
-        check("header is status/link", lines[0], "status\tlink")
+        check("header names all five columns", lines[0], "status\tdest\tactual\twanted\tnote")
 
         rows = {line.split("\t")[1]: line for line in lines[1:]}
         by_name = {Path(k).name: v for k, v in rows.items()}
 
-        check("managed line is verdict/dest/target TSV", by_name["managed.conf"], f"ok\t{managed_dest}\t{plan_src}")
+        check("managed line fills all five columns", by_name["managed.conf"], f"ok\t{managed_dest}\t{plan_src}\t\t")
         check_absent("managed does not repeat wanted", by_name["managed.conf"], "wanted")
         check(
-            "override line is verdict/dest/actual-target/wanted TSV",
+            "override line: actual target and wanted in their columns",
             by_name["foreign.conf"],
-            f"override\t{foreign_dest}\t{other}\twanted {plan_src}",
+            f"override\t{foreign_dest}\t{other}\twanted {plan_src}\t",
         )
-        check("conflict squatter is its own column", by_name["fail.conf"].split("\t")[:3], ["conflict", str(fail_dest), "(file)"])
+        check("conflict row columns", by_name["fail.conf"].split("\t"), ["conflict", str(fail_dest), "(file)", f"wanted {plan_src}", "(fail policy)"])
         check_contains("conflict carries policy note", by_name["fail.conf"], "(fail policy)")
-        check_contains("missing shows wanted side", by_name["missing.conf"], f"missing\t{missing_dest}\twanted {plan_src}")
+        check("missing row: empty actual, wanted in its column", by_name["missing.conf"].split("\t"), ["missing", str(missing_dest), "", f"wanted {plan_src}", ""])
 
         check_absent("no id column remains", result.stdout, "system:")
         check_absent("no scope column remains", result.stdout, "\tsystem\t")
-        check_absent("no empty action columns", result.stdout, "\t\t")
+        check("every row has all five columns", {len(line.split("\t")) for line in result.stdout.splitlines()}, {5})
 
 
 def test_json_carries_structured_reality() -> None:
@@ -178,9 +178,9 @@ def test_absent_and_directory() -> None:
         )
         result = run(["status", str(manifest)])
         lines = {Path(line.split("\t")[1]).name: line for line in result.stdout.splitlines()[1:]}
-        check_contains("absent violation names actual target", lines["stale.conf"], f"conflict\t{stale}\t{plan_src}")
+        check("absent violation row columns", lines["stale.conf"].split("\t"), ["conflict", str(stale), plan_src, "", "(should be absent)"])
         check_contains("absent note", lines["stale.conf"], "(should be absent)")
-        check("directory occupier is its own column", lines["dirdest"].split("\t")[:3], ["conflict", str(dir_dest), "(directory)"])
+        check("directory occupier columns", lines["dirdest"].split("\t"), ["conflict", str(dir_dest), "(directory)", f"wanted {plan_src}", "(never replaced)"])
         check_contains("never-replaced note", lines["dirdest"], "(never replaced)")
 
 
