@@ -222,12 +222,116 @@ def test_apply_routes_mutations_through_sudo() -> None:
         check("dest is now a symlink to src", str(os.readlink(dest)), plan_src)
 
 
+def make_sudo_shim(root: Path) -> Path:
+    """PATH shim that logs each sudo invocation and execs its arguments."""
+    shim_dir = root / "shim"
+    shim_dir.mkdir(exist_ok=True)
+    log = root / "sudo.log"
+    (shim_dir / "sudo").write_text(
+        "#!/bin/sh\n"
+        f'printf \'"%s"\\n\' "$@" >> {log}\n'
+        'exec "$@"\n',
+        encoding="utf-8",
+    )
+    (shim_dir / "sudo").chmod(0o755)
+    return log
+
+
+def shim_env(log_dir: Path) -> dict[str, str]:
+    return {"PATH": f"{log_dir / 'shim'}:{os.environ['PATH']}"}
+
+
+def test_sudo_routing() -> None:
+    """auto routes per record: writable dests direct, unwritable via sudo."""
+    # writable dest, auto: no sudo invocation at all
+    with tempfile.TemporaryDirectory(prefix="compfuzor-links-sudo-") as tmp:
+        root = Path(tmp).resolve()
+        log = make_sudo_shim(root)
+        src = root / "src"
+        src.mkdir()
+        (src / "app.conf").write_text("managed\n", encoding="utf-8")
+        plan_src = str(src / "app.conf")
+        manifest = write_manifest(root, [record("dest.conf", plan_src)])
+
+        result = run(["apply", "--sudo", "auto", str(manifest)], env={**shim_env(root), "COMPFUZOR_LINKS_SUDO": "auto"})
+        check("auto+writable exits ok", result.returncode, 0)
+        check("auto+writable creates the link directly", str(os.readlink(root / "dest.conf")), plan_src)
+        sudo_calls = log.read_text(encoding="utf-8").strip() if log.exists() else ""
+        check("auto+writable never calls sudo", sudo_calls, "")
+        check_absent("auto+writable has no via-sudo note", result.stdout, "via sudo")
+
+    # unwritable parent dir, auto: routing escalates (the shim is not root,
+    # so the actual ln fails -- what is asserted is the delegation itself)
+    with tempfile.TemporaryDirectory(prefix="compfuzor-links-sudo-") as tmp:
+        root = Path(tmp).resolve()
+        log = make_sudo_shim(root)
+        src = root / "src"
+        src.mkdir()
+        (src / "app.conf").write_text("managed\n", encoding="utf-8")
+        plan_src = str(src / "app.conf")
+        locked = root / "locked"
+        locked.mkdir()
+        locked.chmod(0o555)
+        manifest = write_manifest(root, [record("locked/dest.conf", plan_src)])
+
+        result = run(["apply", str(manifest)], env=shim_env(root))
+        locked.chmod(0o755)  # let TemporaryDirectory clean up
+        check("auto+unwritable probes and delegates (shim ln attempted)", "ln" in log.read_text(encoding="utf-8"), True)
+        check("auto+unwritable fails without real root", result.returncode, 2)
+
+    # bare --sudo means always: even writable dests route through sudo,
+    # the mutation succeeds via the shim, and the row is marked
+    with tempfile.TemporaryDirectory(prefix="compfuzor-links-sudo-") as tmp:
+        root = Path(tmp).resolve()
+        log = make_sudo_shim(root)
+        src = root / "src"
+        src.mkdir()
+        (src / "app.conf").write_text("managed\n", encoding="utf-8")
+        plan_src = str(src / "app.conf")
+        dest = root / "dest.conf"
+        dest.write_text("squatter\n", encoding="utf-8")
+        manifest = write_manifest(root, [record("dest.conf", plan_src, policy="replace")])
+
+        result = run(["apply", "--sudo", str(manifest)], env=shim_env(root))
+        check("bare --sudo exits ok", result.returncode, 0)
+        check("bare --sudo routes rm+ln through sudo", "rm" in log.read_text(encoding="utf-8") and "ln" in log.read_text(encoding="utf-8"), True)
+        check("bare --sudo creates the link", str(os.readlink(dest)), plan_src)
+        check_contains("sudo-mutated row is marked", result.stdout, "via sudo")
+
+    # env=never + unwritable dest: fail loud, never consult sudo
+    with tempfile.TemporaryDirectory(prefix="compfuzor-links-sudo-") as tmp:
+        root = Path(tmp).resolve()
+        log = make_sudo_shim(root)
+        src = root / "src"
+        src.mkdir()
+        (src / "app.conf").write_text("managed\n", encoding="utf-8")
+        plan_src = str(src / "app.conf")
+        locked = root / "locked"
+        locked.mkdir()
+        locked.chmod(0o555)
+        manifest = write_manifest(root, [record("locked/dest.conf", plan_src)])
+
+        result = run(["apply", str(manifest)], env={**shim_env(root), "COMPFUZOR_LINKS_SUDO": "never"})
+        locked.chmod(0o755)
+        check("never+unwritable fails", result.returncode > 0, True)
+        sudo_calls = log.read_text(encoding="utf-8").strip() if log.exists() else ""
+        check("never+unwritable never consults sudo", sudo_calls, "")
+
+    # invalid mode value: usage error
+    with tempfile.TemporaryDirectory(prefix="compfuzor-links-sudo-") as tmp:
+        root = Path(tmp).resolve()
+        manifest = write_manifest(root, [record("dest.conf", "/nowhere/x")])
+        result = run(["status", str(manifest)], env={"COMPFUZOR_LINKS_SUDO": "wut"})
+        check("invalid COMPFUZOR_LINKS_SUDO is exit 2", result.returncode, 2)
+
+
 def main() -> None:
     test_human_lines_show_both_sides()
     test_json_carries_structured_reality()
     test_apply_verbs_read_as_verbs()
     test_absent_and_directory()
     test_apply_routes_mutations_through_sudo()
+    test_sudo_routing()
     print("all links human-output checks passed")
 
 

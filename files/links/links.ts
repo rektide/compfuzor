@@ -1,7 +1,7 @@
 #!/usr/bin/env -S node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
 
 import { execFile } from "node:child_process";
-import { lstat, mkdir, readFile, readlink, rm, symlink } from "node:fs/promises";
+import { access, constants as fsConstants, lstat, mkdir, readFile, readlink, rm, symlink } from "node:fs/promises";
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -55,29 +55,79 @@ interface Options {
   format: Format;
   quiet: number;
   paths: string[];
+  sudo?: string;
 }
 
 const DIR = process.env.DIR ?? dirname(dirname(fileURLToPath(import.meta.url)));
 const _execFile = promisify(execFile);
-// COMPFUZOR_LINKS_SUDO=1 routes mutations through sudo, so privileged
-// system-scope destinations (unit dirs, sysusers.d) are owned by the same
-// link semantics as everything else. Reads never need it.
-const SUDO_MUTATIONS = ["1", "true", "y", "yes"].includes(
-  (process.env.COMPFUZOR_LINKS_SUDO ?? "").trim().toLowerCase(),
-);
 
-async function mkdirP(path: string): Promise<void> {
-  if (SUDO_MUTATIONS) await _execFile("sudo", ["mkdir", "-p", "--", path]);
+type SudoMode = "never" | "auto" | "always";
+
+// Privilege routing for mutations (reads never need it). Selected by --sudo
+// or COMPFUZOR_LINKS_SUDO:
+//   auto (default) -- probe per record whether the dest is writable and
+//                     escalate only unwritable ones through sudo
+//   always         -- route every mutation through sudo
+//   never          -- stay unprivileged; EACCES fails loud
+let SUDO_MODE: SudoMode = "auto";
+
+function _sudoWord(value: string): SudoMode | undefined {
+  const raw = value.trim().toLowerCase();
+  if (raw === "auto") return "auto";
+  if (["always", "1", "true", "y", "yes"].includes(raw)) return "always";
+  if (["never", "0", "false", "n", "no"].includes(raw)) return "never";
+  return undefined;
+}
+
+function resolveSudoMode(flagValue: string | undefined): SudoMode {
+  if (flagValue !== undefined) {
+    const mode = _sudoWord(flagValue);
+    if (!mode) fail(`--sudo expects auto, always, or never (got ${flagValue})`);
+    return mode;
+  }
+  const envValue = process.env.COMPFUZOR_LINKS_SUDO;
+  if (envValue === undefined || envValue.trim() === "") return "auto";
+  const mode = _sudoWord(envValue);
+  if (!mode) fail(`COMPFUZOR_LINKS_SUDO must be auto, always, or never (got ${envValue})`);
+  return mode;
+}
+
+async function destWritable(destPath: string): Promise<boolean> {
+  let dir = dirname(destPath);
+  for (;;) {
+    try {
+      await access(dir, fsConstants.W_OK | fsConstants.X_OK);
+      return true;
+    } catch (error) {
+      // walk up to the nearest existing ancestor: that is the directory
+      // mkdir -p would have to create (and remove/replace) under
+      if ((error as NodeJS.ErrnoException).code === "ENOENT" && dirname(dir) !== dir) {
+        dir = dirname(dir);
+        continue;
+      }
+      return false;
+    }
+  }
+}
+
+async function needsSudo(destPath: string): Promise<boolean> {
+  if (SUDO_MODE === "always") return true;
+  if (SUDO_MODE === "never") return false;
+  return !(await destWritable(destPath));
+}
+
+async function mkdirP(path: string, sudo: boolean): Promise<void> {
+  if (sudo) await _execFile("sudo", ["mkdir", "-p", "--", path]);
   else await mkdir(path, { recursive: true });
 }
 
-async function linkAt(src: string, dest: string): Promise<void> {
-  if (SUDO_MUTATIONS) await _execFile("sudo", ["ln", "-s", "--", src, dest]);
+async function linkAt(src: string, dest: string, sudo: boolean): Promise<void> {
+  if (sudo) await _execFile("sudo", ["ln", "-s", "--", src, dest]);
   else await symlink(src, dest);
 }
 
-async function rmLink(path: string): Promise<void> {
-  if (SUDO_MUTATIONS) await _execFile("sudo", ["rm", "-f", "--", path]);
+async function rmLink(path: string, sudo: boolean): Promise<void> {
+  if (sudo) await _execFile("sudo", ["rm", "-f", "--", path]);
   else await rm(path);
 }
 
@@ -94,13 +144,19 @@ Options:
                        * and ? match, * crosses / (e.g. '*/.tool-versions').
   --json               Emit one JSON object per row
   --json-array         Emit one JSON array
+  --sudo [auto|always|never]
+                       Mutation privilege routing: auto (the default) probes
+                       each dest and escalates only unwritable records through
+                       sudo; always routes all mutations through sudo; never
+                       stays unprivileged. Bare --sudo means always. Overrides
+                       COMPFUZOR_LINKS_SUDO.
   -q, -qq              Synopsis only, or no output
   -h, --help           Show this help
 
 audit accepts multiple manifests. A directory argument means its links.json.
 Environment:
-  COMPFUZOR_LINKS_SUDO=1   Route mkdir/ln/rm mutations through sudo, for
-                           privileged system-scope destinations.
+  COMPFUZOR_LINKS_SUDO  auto (default) | always | 1/true/yes | never | 0/false/no
+                        Same routing as --sudo, when the flag is absent.
   COMPFUZOR_LINK_BYPASS     1/true/y/yes exits 0 without doing anything.
 Exit: 0 success/in-sync, 1 drift or policy conflict, 2 usage/source error.`;
 
@@ -114,6 +170,7 @@ function parseArgs(argv: string[]): Options {
   let id: string[] | undefined;
   let format: Format = "human";
   let quiet = 0;
+  let sudo: string | undefined;
   const paths: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -131,6 +188,14 @@ function parseArgs(argv: string[]): Options {
       const value = argv[++i];
       if (value !== "system" && value !== "user") fail("--scope must be system or user");
       scope = value;
+    } else if (arg === "--sudo") {
+      const next = argv[i + 1];
+      if (next !== undefined && _sudoWord(next) !== undefined) {
+        sudo = next;
+        i++;
+      } else {
+        sudo = "always";
+      }
     } else if (arg === "--id") {
       const value = argv[++i];
       if (!value) fail("--id requires a comma-separated glob list");
@@ -146,7 +211,7 @@ function parseArgs(argv: string[]): Options {
   if (!command) fail("expected apply, status, audit, or remove");
   if (command !== "audit" && paths.length > 1) fail(`${command} accepts at most one manifest`);
   if (paths.length === 0) paths.push(join(DIR, "links.json"));
-  return { command, scope, id, format, quiet, paths };
+  return { command, scope, id, format, quiet, paths, sudo };
 }
 
 function object(value: unknown, description: string): Record<string, unknown> {
@@ -362,6 +427,7 @@ function overwriteSelected(id: string): boolean {
 }
 
 async function removeManaged(record: ResolvedRecord, action: string): Promise<Row> {
+  const sudo = await needsSudo(record.destPath);
   const dest = await destination(record);
   const common = {
     id: record.id,
@@ -373,8 +439,8 @@ async function removeManaged(record: ResolvedRecord, action: string): Promise<Ro
     target: targetOf(dest),
   };
   if (dest.kind === "managed") {
-    await rmLink(record.destPath);
-    return { ...common, status: "MANAGED", action };
+    await rmLink(record.destPath, sudo);
+    return { ...common, status: "MANAGED", action, detail: sudo ? "via sudo" : undefined };
   }
   if (dest.kind === "missing") return { ...common, status: "MANAGED", action: "unchanged", detail: "already absent" };
   return { ...common, status: "OVERRIDE", action: "preserved" };
@@ -382,20 +448,21 @@ async function removeManaged(record: ResolvedRecord, action: string): Promise<Ro
 
 async function apply(record: ResolvedRecord): Promise<Row> {
   if (record.state === "absent") return removeManaged(record, "removed");
+  const sudo = await needsSudo(record.destPath);
   let row = await classify(record);
   if (row.status === "SOURCE_MISSING") return row;
   const dest = await destination(record);
   if (dest.kind === "missing") {
-    await mkdirP(dirname(record.destPath));
-    await linkAt(record.srcPath, record.destPath);
-    return { ...row, status: "MANAGED", action: "created", entry: "symlink", target: record.srcPath };
+    await mkdirP(dirname(record.destPath), sudo);
+    await linkAt(record.srcPath, record.destPath, sudo);
+    return { ...row, status: "MANAGED", action: "created", entry: "symlink", target: record.srcPath, detail: sudo ? "via sudo" : undefined };
   }
   if (dest.kind === "managed") return { ...row, action: "unchanged" };
   const replace = record.policy === "replace" || (record.policy === "preserve" && overwriteSelected(record.id));
   if (!replace || (dest.kind !== "foreign")) return { ...row, action: "preserved" };
-  await rmLink(record.destPath);
-  await linkAt(record.srcPath, record.destPath);
-  row = { ...row, status: "MANAGED", action: "replaced", entry: "symlink", target: record.srcPath };
+  await rmLink(record.destPath, sudo);
+  await linkAt(record.srcPath, record.destPath, sudo);
+  row = { ...row, status: "MANAGED", action: "replaced", entry: "symlink", target: record.srcPath, detail: sudo ? "via sudo" : undefined };
   return row;
 }
 
@@ -479,6 +546,7 @@ function output(rows: Row[], options: Options): void {
 
 async function main(): Promise<number> {
   const options = parseArgs(process.argv.slice(2));
+  SUDO_MODE = resolveSudoMode(options.sudo);
   if (["1", "true", "y", "yes"].includes(process.env.COMPFUZOR_LINK_BYPASS?.trim().toLowerCase() ?? "")) return 0;
   let rows: Row[];
   if (options.command === "audit") {

@@ -442,10 +442,13 @@ not hand-roll `ln -sf` — they delegate:
   fragment — both `policy: replace` (matching the old `ln -sf` squatter
   behavior). User-scope unit records keep `${HOME}` literal, as a runtime
   root links.ts expands at apply time.
-- Privileged system-scope dests (`/etc/systemd/system`, `/etc/sysusers.d`)
-  use `COMPFUZOR_LINKS_SUDO=1`, which routes links.ts mutations through
-  sudo. The records lane itself stays unprivileged: identity/units lanes
-  have already created those links by the time it runs (no-op `unchanged`).
+- Privilege routing is per record: the default **auto** mode probes whether a
+  dest is writable and escalates only unwritable records through sudo
+  (`--sudo` or `COMPFUZOR_LINKS_SUDO` select `auto`/`always`/`never`;
+  mutated-via-sudo rows are marked `(via sudo)`). Install bins rely on the
+  default — no env tending, no scope branching: user-scope dests mutate
+  directly, `/etc/...` dests escalate. `never` keeps plain `links.ts apply`
+  strictly unprivileged for let-it-fail contexts.
 - With `LINKS_BYPASS` (no links.ts rendered), install bins fall back to a
   direct `ln -sf`.
 

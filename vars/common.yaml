@@ -766,8 +766,9 @@ SUBSYSTEM:
             elif [ -x "${DIR}/bin/links.ts" ]; then
                 # Link creation delegated to links.ts (the LINKS subsystem
                 # owns every managed symlink; this fragment's record is in
-                # DIR/links.json). Privileged mutation mode for /etc/sysusers.d.
-                COMPFUZOR_LINKS_SUDO=1 "${DIR}/bin/links.ts" apply --scope system --id "system:$_dest"
+                # DIR/links.json). Auto privilege routing escalates the
+                # unwritable /etc/sysusers.d dest through sudo on its own.
+                "${DIR}/bin/links.ts" apply --id "system:$_dest"
             else
                 $SUDO_CMD ln -sfn "$_src" "$_dest"
             fi

@@ -321,7 +321,6 @@
       UNIT_ENABLE_TARGETS="{{ _enable_targets }}"
       UNIT_TYPE={{ item.type }}
       UNIT_DIR="{{ _unit_dir }}"
-      UNIT_SCOPE={{ item.scope }}
       # Matches this unit's LINKS record id; ${HOME} stays literal for user
       # scope (single quotes), where it is a runtime root.
       UNIT_LINK_ID='{{ item.scope }}:{{ _unit_dir }}/{{ _unit_template }}.{{ item.type }}'

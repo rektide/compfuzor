@@ -45,12 +45,10 @@ else
     # managed symlink, and this unit's record is in DIR/links.json (policy
     # replace, matching the old ln -sf). UNIT_LINK_ID is baked at generation
     # and matches the record id; ${HOME} stays literal for user scope.
-    # System-scope dests need the privileged mutation mode.
-    if [ "${UNIT_SCOPE:-system}" = "system" ]; then
-      COMPFUZOR_LINKS_SUDO=1 "$(dirname "$0")/links.ts" apply --scope system --id "$UNIT_LINK_ID"
-    else
-      "$(dirname "$0")/links.ts" apply --scope "$UNIT_SCOPE" --id "$UNIT_LINK_ID"
-    fi
+    # Privilege routing is automatic: the default auto mode probes the dest
+    # per record and escalates only unwritable ones through sudo, so
+    # user-scope dests mutate directly.
+    "$(dirname "$0")/links.ts" apply --id "$UNIT_LINK_ID"
   else
     # No links.ts (LINKS_BYPASS, or a deployment predating the LINKS
     # subsystem): fall back to a direct link.
