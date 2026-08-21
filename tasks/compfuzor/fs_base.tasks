@@ -10,49 +10,6 @@
   vars:
     _become: "{{ DIR|become_calc }}"
   when: DIR is deftruthy(True)
-- name: "Creating `DIRS`"
-  file:
-    path: "{{_dest}}"
-    state: directory
-    mode: "{{DIRMODE}}"
-    owner: "{{ _become.owner }}"
-    group: "{{ _become.group }}"
-  with_items: "{{DIRS}}"
-  become: "{{ _become.become }}"
-  when: DIRS is deftruthy
-  vars:
-    _dest: "{{item|defaultDir(DIR)}}"
-    _become: "{{ _dest|become_calc }}"
-- name: "Creating `FILES`"
-  # someone wanted a basename here but eclipse has a ../content & like yeah, that's fine. locales holds the blame. see cf0fdccf0c.
-  template:
-    src: "files/{{TYPE}}/{{item.src|def(item.name, item)}}"
-    dest: "{{artifact.resolved_dest}}"
-    owner: "{{ _become.owner }}"
-    group: "{{ _become.group }}"
-  loop: "{{ _ARTIFACTS.families.FILES.entries }}"
-  loop_control:
-    loop_var: artifact
-  become: "{{ _become.become }}"
-  when: item.line is deffalsy
-  vars:
-    item: "{{ artifact.item }}"
-    _become: "{{ artifact.resolved_dest|become_calc }}"
-
-- name: "File lineinfile"
-  lineinfile:
-    dest: "{{artifact.resolved_dest}}"
-    line: "{{item.line}}"
-    regexp: "{{item.regexp|default('^' + item.line)}}"
-    create: "{{item.create|default(True)}}"
-    state: "{{item.state|default(omit)}}"
-    owner: "{{ _become.owner }}"
-    group: "{{ _become.group }}"
-  loop: "{{ _ARTIFACTS.families.FILES.entries }}"
-  loop_control:
-    loop_var: artifact
-  become: "{{ _become.become }}"
-  when: item.line is deftruthy
-  vars:
-    item: "{{ artifact.item }}"
-    _become: "{{ artifact.resolved_dest|become_calc(owner=item.owner|def(OWNER, falsy=True), group=item.group|def(GROUP, falsy=True)) }}"
+# DIRS and FILES no longer have bespoke tasks here: they materialize through
+# fs_hierarchy as the DIR-rooted pseudo-family (see compfuzor.includes), the
+# same writer and policy as ETC_FILES and friends.
