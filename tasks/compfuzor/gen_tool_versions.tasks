@@ -1,10 +1,17 @@
 ---
 # Single-pass synthesis of version-manager artifacts.
 #
-# asdf/mise call getcwd(), which resolves through the DIR/repo symlink to
-# the *physical* archive path and then walks ancestors. So DIR/.tool-versions
-# is invisible from inside the repo. When a checkout actually exists at
-# REPO_DIR, also link .tool-versions/mise.toml into the repo root.
+# The version file (.tool-versions / mise.toml) is a REAL file directly in
+# DIR -- not under DIR/etc, and no DIR-level symlink. The only link is the
+# repo-root one: asdf/mise call getcwd(), which resolves through the DIR/repo
+# symlink to the *physical* archive path and then walks ancestors, so
+# DIR/.tool-versions is invisible from inside the repo. When a checkout
+# actually exists at REPO_DIR, link the repo root at DIR's real file.
+#
+# Emission uses an ETC_FILES entry with an absolute dest override (the same
+# trick as readme's README.md): the FILES family writes via template src,
+# not inline content, so ETC_FILES-with-dest is how a DIR-rooted generated
+# file is expressed today.
 #
 # `force` stays at the LINKS default (false): a real file already in the repo
 # is NOT clobbered -- ansible fails loudly rather than stomping. The cross-file
@@ -12,8 +19,8 @@
 # intentionally unhandled/undefined.
 #
 # Set TOOL_VERSIONS_LINK_BYPASS=True to skip emitting the repo-root link
-# entirely (the DIR/.tool-versions link is unaffected). Use this when the repo
-# owns its own version config and you don't want compfuzor touching it.
+# entirely (the DIR file is unaffected). Use this when the repo owns its own
+# version config and you don't want compfuzor touching it.
 #
 # Artifact lists (_tv_etc, _tv_links, _mise_etc, _mise_links, _mise_bins) are
 # defined as YAML literals under `vars:` and rendered through
@@ -46,31 +53,27 @@
     _mise_active: "{{ _mise_versions is deflengthy }}"
     _has_repo: "{{ (REPO_DIR | default('')) and (REPO_DIR is directory) }}"
     _link_repo: "{{ _has_repo and not (TOOL_VERSIONS_LINK_BYPASS|default(False)|bool) }}"
-    _tv_path: "{{ DIR + '/etc/.tool-versions' }}"
-    _tv_base_link:
-      src: "{{ _tv_path }}"
-      dest: ".tool-versions"
+    _tv_path: "{{ DIR + '/.tool-versions' }}"
     _tv_repo_link:
       src: "{{ _tv_path }}"
       dest: "{{ REPO_DIR }}/.tool-versions"
-    _tv_links: "{{ [_tv_base_link] + ([_tv_repo_link] if _link_repo else []) }}"
+    _tv_links: "{{ [_tv_repo_link] if _link_repo else [] }}"
     _tv_etc:
       - name: ".tool-versions"
+        dest: "{{ _tv_path }}"
         content: |
           {% for target, version in _tool_versions.items() %}
           {{ target }} {{ version if version != True else lookup('vars', target | upper + '_VERSION') }}
           {% endfor %}
-    _mise_path: "{{ DIR + '/etc/mise.toml' }}"
-    _mise_base_link:
-      src: "{{ _mise_path }}"
-      dest: "mise.toml"
+    _mise_path: "{{ DIR + '/mise.toml' }}"
     _mise_repo_link:
       src: "{{ _mise_path }}"
       dest: "{{ REPO_DIR }}/mise.toml"
-    _mise_links: "{{ [_mise_base_link] + ([_mise_repo_link] if _link_repo else []) }}"
+    _mise_links: "{{ [_mise_repo_link] if _link_repo else [] }}"
     _mise_tools: "{{ _tool_versions | merge_dict(_mise_versions, preset='tool_versions_overlay') }}"
     _mise_etc:
       - name: "mise.toml"
+        dest: "{{ _mise_path }}"
         content: |
           [tools]
           {% for target, version in _mise_tools.items() %}

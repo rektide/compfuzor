@@ -990,10 +990,13 @@ SUBSYSTEM:
     contrib:
       artifacts:
         ETC_FILES:
+          # dest override lands the file directly in DIR (readme trick);
+          # no DIR-level symlink, no copy under DIR/etc
           - name: .tool-versions
+            dest: "{{ DIR }}/.tool-versions"
         LINKS:
-          - src: "{{ DIR }}/etc/.tool-versions"
-            dest: .tool-versions
+          - src: "{{ DIR }}/.tool-versions"
+            dest: "{{ REPO_DIR }}/.tool-versions"
 ```
 
 This removes hidden synthesis from `vars_tool_versions.tasks` and makes
