@@ -36,11 +36,25 @@ UNIT_DEST="${UNIT_DEST:-$UNIT_DIR/${UNIT_TEMPLATE}.${UNIT_TYPE}}"
 if [ "$_bypass_link" = true ] || [ -n "${COMPFUZOR_SYSTEMD_LINK_BYPASS:-}" ] || [ -n "${SYSTEMD_BYPASS_LINK:-}" ]; then
   echo "Bypassed linking ${UNIT_DEST}"
 else
-  mkdir -p "$(dirname "$UNIT_DEST")"
   if [ "$_copy" = true ] || [ -n "${SYSTEMD_COPY:-}" ] || [ -n "${SYSTEMD_INSTALL_COPY:-}" ]; then
+    $SUDO_CMD mkdir -p "$(dirname "$UNIT_DEST")"
     $SUDO_CMD cp --remove-destination -f "$UNIT_SRC" "$UNIT_DEST"
     echo "Copied ${UNIT_SRC} -> ${UNIT_DEST}"
+  elif [ -x "$(dirname "$0")/links.ts" ]; then
+    # Link creation is delegated to links.ts: the LINKS subsystem owns every
+    # managed symlink, and this unit's record is in DIR/links.json (policy
+    # replace, matching the old ln -sf). UNIT_LINK_ID is baked at generation
+    # and matches the record id; ${HOME} stays literal for user scope.
+    # System-scope dests need the privileged mutation mode.
+    if [ "${UNIT_SCOPE:-system}" = "system" ]; then
+      COMPFUZOR_LINKS_SUDO=1 "$(dirname "$0")/links.ts" apply --scope system --id "$UNIT_LINK_ID"
+    else
+      "$(dirname "$0")/links.ts" apply --scope "$UNIT_SCOPE" --id "$UNIT_LINK_ID"
+    fi
   else
+    # No links.ts (LINKS_BYPASS, or a deployment predating the LINKS
+    # subsystem): fall back to a direct link.
+    mkdir -p "$(dirname "$UNIT_DEST")"
     $SUDO_CMD ln -sf "$UNIT_SRC" "$UNIT_DEST"
     echo "Linked ${UNIT_SRC} -> ${UNIT_DEST}"
   fi

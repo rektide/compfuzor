@@ -54,6 +54,7 @@
   set_fact:
     ETC_DIRS: "{{ lookup('merge_subsys', id='sysusers', contrib='ETC_DIRS') }}"
     ETC_FILES: "{{ lookup('merge_subsys', id='sysusers', contrib='ETC_FILES') }}"
+    LINKS: "{{ lookup('merge_subsys', id='sysusers', contrib='LINKS') }}"
     # The install bin carries `phase: identity`, so the compositor schedules
     # it ahead of everything (artifact installs, unit enable/start) via the
     # bin_composers lane sort -- no merge-order coupling.

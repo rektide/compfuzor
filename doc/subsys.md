@@ -419,9 +419,40 @@ When `MISE_VERSIONS` is set, no `.tool-versions` is emitted. Subsystem tool
 contributions (e.g. `python: true` from the python subsystem) are routed into
 `mise.toml` automatically.
 
+The version file is a real file directly in `DIR` (no `DIR/etc` copy, no
+DIR-level symlink); the only link is the repo-root one, pointing at DIR's
+file, because asdf/mise resolve `getcwd()` through the physical checkout and
+walk ancestors from there.
+
 The mise renderer also contributes an `early` hook (`mise install`) to the
 generated `install.sh`, so declared tools are installed before install scripts
 run.
+
+## Managed-link ownership (links.ts)
+
+Every managed symlink belongs to the LINKS subsystem:
+[`links.ts`](../files/links/links.ts) is the only thing that creates, replaces,
+or removes them, driven by the records in `DIR/links.json`. Install bins do
+not hand-roll `ln -sf` — they delegate:
+
+- `install-unit.sh` applies the unit's record (`UNIT_LINK_ID`, baked at
+  generation) before `daemon-reload`/enable; `install-sysusers.sh` applies the
+  fragment's record before running `systemd-sysusers`.
+- Systemd contributes one record per installable unit, sysusers one per
+  fragment — both `policy: replace` (matching the old `ln -sf` squatter
+  behavior). User-scope unit records keep `${HOME}` literal, as a runtime
+  root links.ts expands at apply time.
+- Privileged system-scope dests (`/etc/systemd/system`, `/etc/sysusers.d`)
+  use `COMPFUZOR_LINKS_SUDO=1`, which routes links.ts mutations through
+  sudo. The records lane itself stays unprivileged: identity/units lanes
+  have already created those links by the time it runs (no-op `unchanged`).
+- With `LINKS_BYPASS` (no links.ts rendered), install bins fall back to a
+  direct `ln -sf`.
+
+What the records buy: `status` reports drift (a package overwriting a unit
+with a real file is a `conflict` row, not silence), `audit` cross-checks
+deployments claiming the same system path, and `remove` uninstalls links
+with everything else.
 
 ## Python subsystem extensions
 

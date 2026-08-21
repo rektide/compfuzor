@@ -237,21 +237,16 @@
         origin_subsystems: [systemd]
         bypass_scopes: [systemd]
 
-- name: 'Generate systemd install scripts'
+- name: 'Compile systemd install specs'
   set_fact:
-    # Resolve loop-local item/scope references before annotate_bins copies the
-    # record; otherwise Ansible can retain them and fail in a later merge after
-    # this loop's `item` has left scope.
-    BINS: "{{ BINS | merge_list(([_bin_item] | resolve) | annotate_bins('systemd'), preset='bins_generated') }}"
-  when:
-    - SYSTEMD_INSTALL_BYPASS is deffalsy
-  loop: "{{ _systemd_install_specs }}"
+    _systemd_install_specs: >-
+      {{ _systemd_install_specs_rendered }}
   vars:
     # Unified install-spec list: one entry per (unit, scope) from BOTH top-level
     # units and SYSTEMD_ROOTS, already gated by SYSTEMD_<SCOPE>_<TYPE>_INSTALL.
     # Each spec: {name, type, scope, enable, start, instanced, instances}.
     # enable/start resolve root -> top-level -> default(true).
-    _systemd_install_specs: >-
+    _systemd_install_specs_rendered: >-
       {%- set specs = [] -%}
       {# top-level units (SYSTEMD_SERVICE/SYSTEMD_SOCKET/...) #}
       {%- for t in (SYSTEMD_UNITTYPES | normalize(to='list')) -%}
@@ -284,6 +279,17 @@
         {%- endfor -%}
       {%- endfor -%}
       {{ out }}
+
+- name: 'Generate systemd install scripts'
+  set_fact:
+    # Resolve loop-local item/scope references before annotate_bins copies the
+    # record; otherwise Ansible can retain them and fail in a later merge after
+    # this loop's `item` has left scope.
+    BINS: "{{ BINS | merge_list(([_bin_item] | resolve) | annotate_bins('systemd'), preset='bins_generated') }}"
+  when:
+    - SYSTEMD_INSTALL_BYPASS is deffalsy
+  loop: "{{ _systemd_install_specs }}"
+  vars:
     _is_user: "{{ item.scope == 'user' }}"
     # SYSTEMD_INSTALL_VALID: enum-validated (see vars/systemd.yaml); a typo
     # would silently render single-mode instead of separate dual files.
@@ -315,6 +321,10 @@
       UNIT_ENABLE_TARGETS="{{ _enable_targets }}"
       UNIT_TYPE={{ item.type }}
       UNIT_DIR="{{ _unit_dir }}"
+      UNIT_SCOPE={{ item.scope }}
+      # Matches this unit's LINKS record id; ${HOME} stays literal for user
+      # scope (single quotes), where it is a runtime root.
+      UNIT_LINK_ID='{{ item.scope }}:{{ _unit_dir }}/{{ _unit_template }}.{{ item.type }}'
       SYSTEMCTL="{{ 'systemctl --user' if _is_user else 'systemctl' }}"
       SUDO_CMD="{{ '' if _is_user else 'sudo' }}"
       source "$(dirname "$0")/install-unit.sh"{{ ' --skip-start' if not item.start else '' }}
@@ -334,3 +344,34 @@
       # Group these installers under the stable systemd subsystem compositor
       # (install-systemd[-user].sh), including single-leaf configurations.
       subsystem: systemd
+
+- name: 'Contribute systemd unit link records'
+  set_fact:
+    # Each installable unit gets a LINKS record so links.ts owns the unit-dir
+    # symlink: status reports drift (a package overwriting our unit), audit
+    # cross-checks deployments claiming the same unit path, remove uninstalls.
+    # install-unit.sh applies the record (UNIT_LINK_ID) before enable; the
+    # records lane afterwards sees it managed. Policy replace matches the old
+    # ln -sf (a foreign squatter is replaced, not preserved). ${HOME} stays
+    # literal for user scope -- a runtime root links.ts expands.
+    LINKS: "{{ (LINKS | default([])) | merge_list(_systemd_unit_link_records, preset='append', resolve=True) }}"
+  when: SYSTEMD_INSTALL_BYPASS is deffalsy
+  vars:
+    _systemd_unit_link_records: >-
+      {%- set records = [] -%}
+      {%- for s in _systemd_install_specs -%}
+        {%- set tc = SYSTEMD_TYPE_CONFIG[s.type] -%}
+        {%- set dir_map = tc.dir_map | default('system') -%}
+        {%- set udir = '/etc/systemd/network' if dir_map == 'network' else (
+                       '/etc/systemd/nspawn' if dir_map == 'nspawn' else (
+                       '${HOME}/.config/systemd/user' if s.scope == 'user' else '/etc/systemd/system')) -%}
+        {%- set suffix = '-user' if (SYSTEMD_INSTALL_VALID == 'separate' and s.scope == 'user') else '' -%}
+        {%- set tpl = s.name ~ suffix ~ ('@' if s.instanced else '') -%}
+        {%- set _ = records.append({
+                'src': ETC ~ '/' ~ tpl ~ '.' ~ s.type,
+                'dest': udir ~ '/' ~ tpl ~ '.' ~ s.type,
+                'scope': s.scope,
+                'policy': 'replace',
+              }) -%}
+      {%- endfor -%}
+      {{ records }}

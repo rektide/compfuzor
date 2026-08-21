@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -31,12 +32,13 @@ def check_absent(label: str, haystack: str, needle: str) -> None:
     print(f"ok: {label}")
 
 
-def run(args: list[str]) -> subprocess.CompletedProcess[str]:
+def run(args: list[str], env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["node", str(LINKS_TS), *args],
         capture_output=True,
         text=True,
         check=False,
+        env={**os.environ, **(env or {})},
     )
 
 
@@ -184,11 +186,48 @@ def test_absent_and_directory() -> None:
         check_contains("never-replaced note", lines["dirdest"], "(never replaced)")
 
 
+def test_apply_routes_mutations_through_sudo() -> None:
+    """COMPFUZOR_LINKS_SUDO=1 must create links via the sudo shell-out path.
+
+    A PATH-shim `sudo` that just execs its arguments exercises the execFile
+    branch without needing root.
+    """
+    with tempfile.TemporaryDirectory(prefix="compfuzor-links-sudo-") as tmp:
+        root = Path(tmp).resolve()
+        shim_dir = root / "shim"
+        shim_dir.mkdir()
+        (shim_dir / "sudo").write_text('#!/bin/sh\nexec "$@"\n', encoding="utf-8")
+        (shim_dir / "sudo").chmod(0o755)
+
+        src = root / "src"
+        src.mkdir()
+        (src / "app.conf").write_text("managed\n", encoding="utf-8")
+        plan_src = str(src / "app.conf")
+
+        # pre-existing foreign squatter, policy replace: the sudo path must
+        # rm it and link over it
+        dest = root / "dest.conf"
+        dest.write_text("squatter\n", encoding="utf-8")
+
+        manifest = write_manifest(root, [record("dest.conf", plan_src, policy="replace")])
+        result = run(
+            ["apply", str(manifest)],
+            env={
+                "COMPFUZOR_LINKS_SUDO": "1",
+                "PATH": f"{shim_dir}:{os.environ['PATH']}",
+            },
+        )
+        check("sudo-path apply exits ok", result.returncode, 0)
+        check_contains("sudo-path reports replaced", result.stdout, "replaced")
+        check("dest is now a symlink to src", str(os.readlink(dest)), plan_src)
+
+
 def main() -> None:
     test_human_lines_show_both_sides()
     test_json_carries_structured_reality()
     test_apply_verbs_read_as_verbs()
     test_absent_and_directory()
+    test_apply_routes_mutations_through_sudo()
     print("all links human-output checks passed")
 
 

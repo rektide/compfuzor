@@ -729,6 +729,15 @@ SUBSYSTEM:
   sysusers:
     requested: "{{ SYSUSERS is deftruthy or SYSTEMD_SYSUSER is deftruthy }}"
     contrib:
+      LINKS:
+        # links.ts owns the /etc/sysusers.d symlink (policy replace, matching
+        # the old ln -sfn): status reports drift, audit cross-checks, remove
+        # uninstalls. install-sysusers.sh applies this record before running
+        # systemd-sysusers.
+        - src: "{{ETC}}/sysusers.d/{{NAME}}.conf"
+          dest: "{{SYSUSERSDIR}}/{{NAME}}.conf"
+          scope: system
+          policy: replace
       ETC_DIRS:
         - sysusers.d
       ETC_FILES:
@@ -754,6 +763,11 @@ SUBSYSTEM:
             fi
             if [ "${1:-}" = "--copy" ] || [ -n "${SYSUSERS_COPY:-}" ]; then
                 $SUDO_CMD cp --remove-destination -f "$_src" "$_dest"
+            elif [ -x "${DIR}/bin/links.ts" ]; then
+                # Link creation delegated to links.ts (the LINKS subsystem
+                # owns every managed symlink; this fragment's record is in
+                # DIR/links.json). Privileged mutation mode for /etc/sysusers.d.
+                COMPFUZOR_LINKS_SUDO=1 "${DIR}/bin/links.ts" apply --scope system --id "system:$_dest"
             else
                 $SUDO_CMD ln -sfn "$_src" "$_dest"
             fi

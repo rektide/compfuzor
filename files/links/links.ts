@@ -1,8 +1,10 @@
 #!/usr/bin/env -S node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
 
+import { execFile } from "node:child_process";
 import { lstat, mkdir, readFile, readlink, rm, symlink } from "node:fs/promises";
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 type Command = "apply" | "status" | "audit" | "remove";
 type Scope = "system" | "user";
@@ -56,6 +58,29 @@ interface Options {
 }
 
 const DIR = process.env.DIR ?? dirname(dirname(fileURLToPath(import.meta.url)));
+const _execFile = promisify(execFile);
+// COMPFUZOR_LINKS_SUDO=1 routes mutations through sudo, so privileged
+// system-scope destinations (unit dirs, sysusers.d) are owned by the same
+// link semantics as everything else. Reads never need it.
+const SUDO_MUTATIONS = ["1", "true", "y", "yes"].includes(
+  (process.env.COMPFUZOR_LINKS_SUDO ?? "").trim().toLowerCase(),
+);
+
+async function mkdirP(path: string): Promise<void> {
+  if (SUDO_MUTATIONS) await _execFile("sudo", ["mkdir", "-p", "--", path]);
+  else await mkdir(path, { recursive: true });
+}
+
+async function linkAt(src: string, dest: string): Promise<void> {
+  if (SUDO_MUTATIONS) await _execFile("sudo", ["ln", "-s", "--", src, dest]);
+  else await symlink(src, dest);
+}
+
+async function rmLink(path: string): Promise<void> {
+  if (SUDO_MUTATIONS) await _execFile("sudo", ["rm", "-f", "--", path]);
+  else await rm(path);
+}
+
 const HELP = `Usage: links <apply|status|audit|remove> [MANIFEST ...] [options]
 
 Manage the version 1 link plan at DIR/links.json. Relative plan paths are
@@ -73,6 +98,10 @@ Options:
   -h, --help           Show this help
 
 audit accepts multiple manifests. A directory argument means its links.json.
+Environment:
+  COMPFUZOR_LINKS_SUDO=1   Route mkdir/ln/rm mutations through sudo, for
+                           privileged system-scope destinations.
+  COMPFUZOR_LINK_BYPASS     1/true/y/yes exits 0 without doing anything.
 Exit: 0 success/in-sync, 1 drift or policy conflict, 2 usage/source error.`;
 
 function fail(message: string): never {
@@ -344,7 +373,7 @@ async function removeManaged(record: ResolvedRecord, action: string): Promise<Ro
     target: targetOf(dest),
   };
   if (dest.kind === "managed") {
-    await rm(record.destPath);
+    await rmLink(record.destPath);
     return { ...common, status: "MANAGED", action };
   }
   if (dest.kind === "missing") return { ...common, status: "MANAGED", action: "unchanged", detail: "already absent" };
@@ -357,15 +386,15 @@ async function apply(record: ResolvedRecord): Promise<Row> {
   if (row.status === "SOURCE_MISSING") return row;
   const dest = await destination(record);
   if (dest.kind === "missing") {
-    await mkdir(dirname(record.destPath), { recursive: true });
-    await symlink(record.srcPath, record.destPath);
+    await mkdirP(dirname(record.destPath));
+    await linkAt(record.srcPath, record.destPath);
     return { ...row, status: "MANAGED", action: "created", entry: "symlink", target: record.srcPath };
   }
   if (dest.kind === "managed") return { ...row, action: "unchanged" };
   const replace = record.policy === "replace" || (record.policy === "preserve" && overwriteSelected(record.id));
   if (!replace || (dest.kind !== "foreign")) return { ...row, action: "preserved" };
-  await rm(record.destPath);
-  await symlink(record.srcPath, record.destPath);
+  await rmLink(record.destPath);
+  await linkAt(record.srcPath, record.destPath);
   row = { ...row, status: "MANAGED", action: "replaced", entry: "symlink", target: record.srcPath };
   return row;
 }
