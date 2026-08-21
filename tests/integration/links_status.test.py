@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 
-"""Direct CLI tests for links.ts status: every row reports what actually sits at dest."""
+"""Direct CLI tests for links.ts status human output: verdict + both sides of each link."""
 
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -26,13 +25,18 @@ def check_contains(label: str, haystack: str, needle: str) -> None:
     print(f"ok: {label}")
 
 
-def run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+def check_absent(label: str, haystack: str, needle: str) -> None:
+    if needle in haystack:
+        raise AssertionError(f"{label}: {needle!r} unexpectedly found in {haystack!r}")
+    print(f"ok: {label}")
+
+
+def run(args: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["node", str(LINKS_TS), *args],
         capture_output=True,
         text=True,
         check=False,
-        **kwargs,  # type: ignore[arg-type]
     )
 
 
@@ -45,18 +49,18 @@ def write_manifest(root: Path, records: list[dict]) -> Path:
     return manifest
 
 
-def record(dest: str, src: str, policy: str = "preserve") -> dict:
+def record(dest: str, src: str, policy: str = "preserve", state: str = "present") -> dict:
     return {
         "id": f"system:{dest}",
         "scope": "system",
         "src": src,
         "dest": dest,
         "policy": policy,
-        "state": "present",
+        "state": state,
     }
 
 
-def test_status_reports_actual() -> None:
+def test_human_lines_show_both_sides() -> None:
     with tempfile.TemporaryDirectory(prefix="compfuzor-links-status-") as tmp:
         root = Path(tmp).resolve()
         src = root / "src"
@@ -64,22 +68,18 @@ def test_status_reports_actual() -> None:
         (src / "app.conf").write_text("managed\n", encoding="utf-8")
         plan_src = str(src / "app.conf")
 
-        # foreign symlink pointing somewhere else entirely
         other = root / "other" / "app.conf"
         other.parent.mkdir()
         other.write_text("other\n", encoding="utf-8")
         foreign_dest = root / "foreign.conf"
         foreign_dest.symlink_to(other)
 
-        # managed symlink -> plan src
         managed_dest = root / "managed.conf"
         managed_dest.symlink_to(src / "app.conf")
 
-        # regular file squatting on dest with fail policy
         fail_dest = root / "fail.conf"
         fail_dest.write_text("squatter\n", encoding="utf-8")
 
-        # no entry at all
         missing_dest = root / "missing.conf"
 
         manifest = write_manifest(
@@ -92,43 +92,31 @@ def test_status_reports_actual() -> None:
             ],
         )
 
-        result = run(["status", "--json", str(manifest)])
-        rows = [json.loads(line) for line in result.stdout.splitlines()]
-        by_dest = {Path(row["dest"]).name: row for row in rows}
-
+        result = run(["status", str(manifest)])
+        lines = result.stdout.splitlines()
         check("manifest exit reflects drift (MISSING+CONFLICT present)", result.returncode, 1)
-        check("foreign is OVERRIDE", by_dest["foreign.conf"]["status"], "OVERRIDE")
-        check_contains(
-            "foreign detail shows the actual target",
-            by_dest["foreign.conf"]["detail"],
-            f"symlink -> {other}",
-        )
-        check("managed is MANAGED", by_dest["managed.conf"]["status"], "MANAGED")
-        check(
-            "managed detail is the readlink truth",
-            by_dest["managed.conf"]["detail"],
-            f"symlink -> {plan_src}",
-        )
-        check("fail-policy squatter is CONFLICT", by_dest["fail.conf"]["status"], "CONFLICT")
-        check_contains(
-            "conflict detail says what actually sits there",
-            by_dest["fail.conf"]["detail"],
-            "regular file",
-        )
-        check("missing is MISSING", by_dest["missing.conf"]["status"], "MISSING")
-        check("missing detail names the void", by_dest["missing.conf"]["detail"], "no entry")
+        check("header is status/link", lines[0], "status\tlink")
 
-        human = run(["status", str(manifest)])
-        header = human.stdout.splitlines()[0]
-        check_contains("human header has detail column", header, "detail")
+        rows = {line.split("\t")[1].split(" ")[0]: line for line in lines[1:]}
+        by_name = {Path(k).name: v for k, v in rows.items()}
+
+        check_contains("managed shows both sides in one arrow", by_name["managed.conf"], f"ok\t{managed_dest} -> {plan_src}")
+        check_absent("managed does not repeat wanted", by_name["managed.conf"], "wanted")
         check_contains(
-            "human line prints the actual foreign target",
-            human.stdout,
-            f"symlink -> {other}",
+            "override shows actual target and wanted src",
+            by_name["foreign.conf"],
+            f"override\t{foreign_dest} -> {other}\twanted {plan_src}",
         )
+        check_contains("conflict names the squatter kind", by_name["fail.conf"], f"conflict\t{fail_dest} (file)")
+        check_contains("conflict carries policy note", by_name["fail.conf"], "(fail policy)")
+        check_contains("missing shows wanted side", by_name["missing.conf"], f"missing\t{missing_dest}\twanted {plan_src}")
+
+        check_absent("no id column remains", result.stdout, "system:")
+        check_absent("no scope column remains", result.stdout, "\tsystem\t")
+        check_absent("no empty action columns", result.stdout, "\t\t")
 
 
-def test_status_absent_and_directory() -> None:
+def test_json_carries_structured_reality() -> None:
     with tempfile.TemporaryDirectory(prefix="compfuzor-links-status-") as tmp:
         root = Path(tmp).resolve()
         src = root / "src"
@@ -136,39 +124,72 @@ def test_status_absent_and_directory() -> None:
         (src / "app.conf").write_text("managed\n", encoding="utf-8")
         plan_src = str(src / "app.conf")
 
-        # state absent, but a managed link exists (ours, must go)
-        should_be_absent = root / "stale.conf"
-        should_be_absent.symlink_to(src / "app.conf")
+        other = root / "other" / "app.conf"
+        other.parent.mkdir()
+        other.write_text("other\n", encoding="utf-8")
+        foreign_dest = root / "foreign.conf"
+        foreign_dest.symlink_to(other)
 
-        # directory occupying a present-record dest
+        manifest = write_manifest(root, [record("foreign.conf", plan_src)])
+        result = run(["status", "--json", str(manifest)])
+        row = json.loads(result.stdout.splitlines()[0])
+        check("json keeps machine status", row["status"], "OVERRIDE")
+        check("json entry is symlink", row["entry"], "symlink")
+        check("json target is the actual readlink", row["target"], str(other))
+        check("json keeps id for glob/audit use", row["id"], "system:foreign.conf")
+
+
+def test_apply_verbs_read_as_verbs() -> None:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-links-status-") as tmp:
+        root = Path(tmp).resolve()
+        src = root / "src"
+        src.mkdir()
+        (src / "app.conf").write_text("managed\n", encoding="utf-8")
+        plan_src = str(src / "app.conf")
+
+        manifest = write_manifest(root, [record("new.conf", plan_src)])
+        result = run(["apply", str(manifest)])
+        check("apply exit ok", result.returncode, 0)
+        check_contains("created verb leads the line", result.stdout, f"created\t{root / 'new.conf'} -> {plan_src}")
+
+        again = run(["apply", str(manifest)])
+        check_contains("second apply is unchanged", again.stdout, f"unchanged\t{root / 'new.conf'} -> {plan_src}")
+
+
+def test_absent_and_directory() -> None:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-links-status-") as tmp:
+        root = Path(tmp).resolve()
+        src = root / "src"
+        src.mkdir()
+        (src / "app.conf").write_text("managed\n", encoding="utf-8")
+        plan_src = str(src / "app.conf")
+
+        stale = root / "stale.conf"
+        stale.symlink_to(src / "app.conf")
         dir_dest = root / "dirdest"
         dir_dest.mkdir()
 
         manifest = write_manifest(
             root,
             [
-                {**record("stale.conf", plan_src), "state": "absent"},
+                record("stale.conf", plan_src, state="absent"),
                 record("dirdest", plan_src, policy="fail"),
             ],
         )
-        result = run(["status", "--json", str(manifest)])
-        rows = [json.loads(line) for line in result.stdout.splitlines()]
-        by_dest = {Path(row["dest"]).name: row for row in rows}
-
-        check("absent-state violation is CONFLICT", by_dest["stale.conf"]["status"], "CONFLICT")
-        check_contains(
-            "absent conflict shows what it actually is",
-            by_dest["stale.conf"]["detail"],
-            f"symlink -> {plan_src}",
-        )
-        check("directory occupier is CONFLICT", by_dest["dirdest"]["status"], "CONFLICT")
-        check_contains("directory conflict names the directory", by_dest["dirdest"]["detail"], "directory")
+        result = run(["status", str(manifest)])
+        lines = {Path(line.split("\t")[1].split(" ")[0]).name: line for line in result.stdout.splitlines()[1:]}
+        check_contains("absent violation names actual target", lines["stale.conf"], f"conflict\t{stale} -> {plan_src}")
+        check_contains("absent note", lines["stale.conf"], "(should be absent)")
+        check_contains("directory occupier named", lines["dirdest"], f"conflict\t{dir_dest} (directory)")
+        check_contains("never-replaced note", lines["dirdest"], "(never replaced)")
 
 
 def main() -> None:
-    test_status_reports_actual()
-    test_status_absent_and_directory()
-    print("all links status-actual checks passed")
+    test_human_lines_show_both_sides()
+    test_json_carries_structured_reality()
+    test_apply_verbs_read_as_verbs()
+    test_absent_and_directory()
+    print("all links human-output checks passed")
 
 
 if __name__ == "__main__":

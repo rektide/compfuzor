@@ -38,6 +38,9 @@ interface Row {
   status: Status;
   src: string;
   dest: string;
+  /** What actually sits at dest: entry kind + readlink target when a symlink. */
+  entry?: "symlink" | "file" | "directory" | "special" | "missing";
+  target?: string;
   action?: string;
   detail?: string;
   manifest?: string;
@@ -272,30 +275,40 @@ async function destination(record: ResolvedRecord): Promise<{ kind: "missing" | 
   return { kind: targetPath === record.srcPath ? "managed" : "foreign", target };
 }
 
-/** What actually sits at dest, from the lstat/readlink truth (never the plan). */
-function actualDetail(dest: Awaited<ReturnType<typeof destination>>): string {
-  if (dest.target !== undefined) return `symlink -> ${dest.target}`;
-  switch (dest.kind) {
-    case "missing": return "no entry";
-    case "directory": return "directory";
-    case "foreign": return "regular file";
-    default: return "special file";
-  }
+/** Actual entry kind at dest, from lstat/readlink truth (never the plan). */
+function entryOf(dest: Awaited<ReturnType<typeof destination>>): Row["entry"] {
+  if (dest.kind === "missing") return "missing";
+  if (dest.target !== undefined) return "symlink";
+  if (dest.kind === "directory") return "directory";
+  return dest.kind === "foreign" ? "file" : "special";
+}
+
+/** Actual readlink target, when dest is a symlink. */
+function targetOf(dest: Awaited<ReturnType<typeof destination>>): string | undefined {
+  return dest.target;
 }
 
 async function classify(record: ResolvedRecord): Promise<Row> {
   const dest = await destination(record);
-  const common = { id: record.id, scope: record.scope, src: record.srcPath, dest: record.destPath, manifest: record.manifest };
+  const common = {
+    id: record.id,
+    scope: record.scope,
+    src: record.srcPath,
+    dest: record.destPath,
+    manifest: record.manifest,
+    entry: entryOf(dest),
+    target: targetOf(dest),
+  };
   if (record.state === "absent") {
     if (dest.kind === "missing") return { ...common, status: "MANAGED", detail: "absent as requested" };
-    if (dest.kind === "managed") return { ...common, status: "CONFLICT", detail: `managed link should be absent; actually ${actualDetail(dest)}` };
-    return { ...common, status: "OVERRIDE", detail: `foreign destination preserved; actually ${actualDetail(dest)}` };
+    if (dest.kind === "managed") return { ...common, status: "CONFLICT", detail: "should be absent" };
+    return { ...common, status: "OVERRIDE" };
   }
-  if (!(await exists(record.srcPath))) return { ...common, status: "SOURCE_MISSING", detail: `source ${record.srcPath} missing; dest is ${actualDetail(dest)}` };
-  if (dest.kind === "missing") return { ...common, status: "MISSING", detail: "no entry" };
-  if (dest.kind === "managed") return { ...common, status: "MANAGED", detail: actualDetail(dest) };
-  if (record.policy === "preserve") return { ...common, status: "OVERRIDE", detail: `preserved; actually ${actualDetail(dest)}` };
-  return { ...common, status: "CONFLICT", detail: `${record.policy} policy conflict; actually ${actualDetail(dest)}` };
+  if (!(await exists(record.srcPath))) return { ...common, status: "SOURCE_MISSING", detail: "src missing" };
+  if (dest.kind === "missing") return { ...common, status: "MISSING" };
+  if (dest.kind === "managed") return { ...common, status: "MANAGED" };
+  if (record.policy === "preserve") return { ...common, status: "OVERRIDE" };
+  return { ...common, status: "CONFLICT", detail: dest.kind === "directory" ? "never replaced" : `${record.policy} policy` };
 }
 
 function globMatches(pattern: string, value: string): boolean {
@@ -324,13 +337,15 @@ async function removeManaged(record: ResolvedRecord, action: string): Promise<Ro
     src: record.srcPath,
     dest: record.destPath,
     manifest: record.manifest,
+    entry: entryOf(dest),
+    target: targetOf(dest),
   };
   if (dest.kind === "managed") {
     await rm(record.destPath);
     return { ...common, status: "MANAGED", action };
   }
   if (dest.kind === "missing") return { ...common, status: "MANAGED", action: "unchanged", detail: "already absent" };
-  return { ...common, status: "OVERRIDE", action: "preserved", detail: `preserved; actually ${actualDetail(dest)}` };
+  return { ...common, status: "OVERRIDE", action: "preserved" };
 }
 
 async function apply(record: ResolvedRecord): Promise<Row> {
@@ -341,14 +356,14 @@ async function apply(record: ResolvedRecord): Promise<Row> {
   if (dest.kind === "missing") {
     await mkdir(dirname(record.destPath), { recursive: true });
     await symlink(record.srcPath, record.destPath);
-    return { ...row, status: "MANAGED", action: "created" };
+    return { ...row, status: "MANAGED", action: "created", entry: "symlink", target: record.srcPath };
   }
   if (dest.kind === "managed") return { ...row, action: "unchanged" };
   const replace = record.policy === "replace" || (record.policy === "preserve" && overwriteSelected(record.id));
   if (!replace || (dest.kind !== "foreign")) return { ...row, action: "preserved" };
   await rm(record.destPath);
   await symlink(record.srcPath, record.destPath);
-  row = { ...row, status: "MANAGED", action: "replaced" };
+  row = { ...row, status: "MANAGED", action: "replaced", entry: "symlink", target: record.srcPath };
   return row;
 }
 
@@ -385,6 +400,33 @@ async function audit(paths: string[], scope?: Scope, idPatterns?: string[]): Pro
   }));
 }
 
+/** Plain words for the human table; machine statuses stay unchanged. */
+const HUMAN_STATUS: Record<Status, string> = {
+  MANAGED: "ok",
+  OVERRIDE: "override",
+  MISSING: "missing",
+  CONFLICT: "conflict",
+  SOURCE_MISSING: "no-source",
+  INVALID: "invalid",
+};
+
+/** One human line: verdict, the link as it stands (dest -> actual), and the
+ * wanted side only when the two differ. Mutating verbs replace the verdict
+ * (created/replaced/removed read better than ok+action). */
+function humanLine(row: Row): string {
+  const label = row.action ?? HUMAN_STATUS[row.status] ?? row.status;
+  let link = row.dest;
+  if (row.entry === "symlink" && row.target !== undefined) link += ` -> ${row.target}`;
+  else if (row.entry === "file" || row.entry === "directory" || row.entry === "special") link += ` (${row.entry})`;
+  const parts = [label, link];
+  if (row.src && row.target !== row.src) {
+    const missing = row.status === "SOURCE_MISSING" ? " (missing)" : "";
+    parts.push(`wanted ${row.src}${missing}`);
+  }
+  if (row.detail && row.detail !== "src missing") parts.push(`(${row.detail})`);
+  return parts.join("\t");
+}
+
 function output(rows: Row[], options: Options): void {
   if (options.quiet >= 2) return;
   const sourceError = rows.some((row) => row.status === "SOURCE_MISSING" || row.status === "INVALID");
@@ -396,8 +438,8 @@ function output(rows: Row[], options: Options): void {
   } else if (options.format === "array") {
     console.log(JSON.stringify(rows, null, 2));
   } else {
-    console.log("status\tscope\tid\tdestination\taction\tdetail");
-    for (const row of rows) console.log([row.status, row.scope, row.id, row.dest, row.action ?? "", row.detail ?? ""].join("\t"));
+    console.log("status\tlink");
+    for (const row of rows) console.log(humanLine(row));
   }
 }
 
