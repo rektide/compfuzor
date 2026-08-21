@@ -272,19 +272,30 @@ async function destination(record: ResolvedRecord): Promise<{ kind: "missing" | 
   return { kind: targetPath === record.srcPath ? "managed" : "foreign", target };
 }
 
+/** What actually sits at dest, from the lstat/readlink truth (never the plan). */
+function actualDetail(dest: Awaited<ReturnType<typeof destination>>): string {
+  if (dest.target !== undefined) return `symlink -> ${dest.target}`;
+  switch (dest.kind) {
+    case "missing": return "no entry";
+    case "directory": return "directory";
+    case "foreign": return "regular file";
+    default: return "special file";
+  }
+}
+
 async function classify(record: ResolvedRecord): Promise<Row> {
   const dest = await destination(record);
   const common = { id: record.id, scope: record.scope, src: record.srcPath, dest: record.destPath, manifest: record.manifest };
   if (record.state === "absent") {
     if (dest.kind === "missing") return { ...common, status: "MANAGED", detail: "absent as requested" };
-    if (dest.kind === "managed") return { ...common, status: "CONFLICT", detail: "managed link should be absent" };
-    return { ...common, status: "OVERRIDE", detail: "foreign destination preserved" };
+    if (dest.kind === "managed") return { ...common, status: "CONFLICT", detail: `managed link should be absent; actually ${actualDetail(dest)}` };
+    return { ...common, status: "OVERRIDE", detail: `foreign destination preserved; actually ${actualDetail(dest)}` };
   }
-  if (!(await exists(record.srcPath))) return { ...common, status: "SOURCE_MISSING" };
-  if (dest.kind === "missing") return { ...common, status: "MISSING" };
-  if (dest.kind === "managed") return { ...common, status: "MANAGED" };
-  if (record.policy === "preserve") return { ...common, status: "OVERRIDE", detail: `${dest.kind} preserved` };
-  return { ...common, status: "CONFLICT", detail: dest.kind === "directory" ? "directories are never replaced" : `${record.policy} policy conflict` };
+  if (!(await exists(record.srcPath))) return { ...common, status: "SOURCE_MISSING", detail: `source ${record.srcPath} missing; dest is ${actualDetail(dest)}` };
+  if (dest.kind === "missing") return { ...common, status: "MISSING", detail: "no entry" };
+  if (dest.kind === "managed") return { ...common, status: "MANAGED", detail: actualDetail(dest) };
+  if (record.policy === "preserve") return { ...common, status: "OVERRIDE", detail: `preserved; actually ${actualDetail(dest)}` };
+  return { ...common, status: "CONFLICT", detail: `${record.policy} policy conflict; actually ${actualDetail(dest)}` };
 }
 
 function globMatches(pattern: string, value: string): boolean {
@@ -319,7 +330,7 @@ async function removeManaged(record: ResolvedRecord, action: string): Promise<Ro
     return { ...common, status: "MANAGED", action };
   }
   if (dest.kind === "missing") return { ...common, status: "MANAGED", action: "unchanged", detail: "already absent" };
-  return { ...common, status: "OVERRIDE", action: "preserved", detail: "foreign destination preserved" };
+  return { ...common, status: "OVERRIDE", action: "preserved", detail: `preserved; actually ${actualDetail(dest)}` };
 }
 
 async function apply(record: ResolvedRecord): Promise<Row> {
@@ -385,8 +396,8 @@ function output(rows: Row[], options: Options): void {
   } else if (options.format === "array") {
     console.log(JSON.stringify(rows, null, 2));
   } else {
-    console.log("status\tscope\tid\tdestination\taction");
-    for (const row of rows) console.log([row.status, row.scope, row.id, row.dest, row.action ?? ""].join("\t"));
+    console.log("status\tscope\tid\tdestination\taction\tdetail");
+    for (const row of rows) console.log([row.status, row.scope, row.id, row.dest, row.action ?? "", row.detail ?? ""].join("\t"));
   }
 }
 
