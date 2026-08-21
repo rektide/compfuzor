@@ -293,7 +293,10 @@ async function classify(record: ResolvedRecord): Promise<Row> {
   const common = {
     id: record.id,
     scope: record.scope,
-    src: record.srcPath,
+    // src is the plan's wanted target: genuinely empty for state:absent
+    // records (the plan wants nothing at dest). Never suppressed when it
+    // matches actual -- a visible match is the whole point of the ok verdict.
+    src: record.state === "absent" ? "" : record.srcPath,
     dest: record.destPath,
     manifest: record.manifest,
     entry: entryOf(dest),
@@ -334,7 +337,7 @@ async function removeManaged(record: ResolvedRecord, action: string): Promise<Ro
   const common = {
     id: record.id,
     scope: record.scope,
-    src: record.srcPath,
+    src: record.state === "absent" ? "" : record.srcPath,
     dest: record.destPath,
     manifest: record.manifest,
     entry: entryOf(dest),
@@ -416,11 +419,9 @@ function humanLineLabel(row: Row): string {
   return row.action ?? HUMAN_STATUS[row.status] ?? row.status;
 }
 
-/** src column: the plan's src (what the link should point at), only when
- * it differs from the actual target. */
-function srcCell(row: Row, suffix: string): string {
-  if (!row.src || row.target === row.src) return "";
-  return `${row.src}${suffix}`;
+/** src column: the plan's src (what the link should point at). */
+function srcCell(row: Row): string {
+  return row.src ?? "";
 }
 
 function output(rows: Row[], options: Options): void {
@@ -434,16 +435,15 @@ function output(rows: Row[], options: Options): void {
   } else if (options.format === "array") {
     console.log(JSON.stringify(rows, null, 2));
   } else {
-    console.log("status\tdest\tactual\tsrc\tnote");
+    console.log("status\tdest\tsrc\tactual\tnote");
     for (const row of rows) {
-      const missing = row.status === "SOURCE_MISSING" ? " (missing)" : "";
-      const note = row.detail && row.detail !== "src missing" ? `(${row.detail})` : "";
+      const note = row.detail ? `(${row.detail})` : "";
       const actual = row.entry === "symlink" && row.target !== undefined
         ? row.target
         : row.entry === "file" || row.entry === "directory" || row.entry === "special"
           ? `(${row.entry})`
           : "";
-      console.log([humanLineLabel(row), row.dest, actual, srcCell(row, missing), note].map((cell) => (cell === "" ? "\"\"" : cell)).join("\t"));
+      console.log([humanLineLabel(row), row.dest, srcCell(row), actual, note].map((cell) => (cell === "" ? "\"\"" : cell)).join("\t"));
     }
   }
 }
