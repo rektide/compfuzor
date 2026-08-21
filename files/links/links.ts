@@ -531,8 +531,15 @@ function output(rows: Row[], options: Options): void {
   } else if (options.format === "array") {
     console.log(JSON.stringify(rows, null, 2));
   } else {
+    // apply/remove: only changed or problem rows are worth reporting; a
+    // satisfied manifest prints nothing at all (the bin wrapper's "complete"
+    // is the feedback). status/audit keep the full table.
+    const visible = options.command === "apply" || options.command === "remove"
+      ? rows.filter((row) => row.action !== "unchanged")
+      : rows;
+    if (visible.length === 0) return;
     console.log("status\tdest\tsrc\tactual\tnote");
-    for (const row of rows) {
+    for (const row of visible) {
       const note = row.detail ? `(${row.detail})` : "";
       const actual = row.entry === "symlink" && row.target !== undefined
         ? row.target

@@ -155,7 +155,8 @@ def test_apply_verbs_read_as_verbs() -> None:
         check_contains("created verb leads the line", result.stdout, f"created\t{root / 'new.conf'}\t{plan_src}")
 
         again = run(["apply", str(manifest)])
-        check_contains("second apply is unchanged", again.stdout, f"unchanged\t{root / 'new.conf'}\t{plan_src}")
+        check("satisfied apply is silent", again.stdout, "")
+        check("satisfied apply still exits 0", again.returncode, 0)
 
 
 def test_absent_and_directory() -> None:
