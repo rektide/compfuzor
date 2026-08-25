@@ -13,6 +13,9 @@
     # jj-style remote bookmark selector; repo_git resolves this as the working
     # branch fetched from the rektide remote while retaining upstream as origin.
     GIT_VERSION: working@rektide
+    # Deployment uses the locally composed jj workspace. The remote working
+    # bookmark is only a snapshot and may lag the accepted local composition.
+    OPENCODE_WORKING_DIR: "{{ ansible_user_dir }}/src/opencode-working"
     # origin's rolling 'latest' tag drifts from the local fossil; allow clobber.
     #GIT_FORCE: True
     PKGS:
@@ -250,8 +253,9 @@
       #          apiKEy: "{env:OPENROUTER_API_KEY}"
     BINS:
       - name: build.sh
-        basedir: repo
+        basedir: False
         content: |
+          cd "{{OPENCODE_WORKING_DIR}}"
           # Baked into the binaries via packages/script. Unset, the build falls
           # back to `git branch --show-current`, which is empty in a jj
           # workspace and would otherwise name the channel after the branch.
@@ -262,8 +266,9 @@
           bun run --cwd packages/cli build -- --single --skip-install
           bun run --cwd packages/cli build:node -- --single --skip-install
       - name: install.sh
-        basedir: repo
+        basedir: False
         content: |
+          cd "{{OPENCODE_WORKING_DIR}}"
           ln -sfv $(pwd)/packages/cli/dist/cli-linux-x64/bin/opencode2 $GLOBAL_BINS_DIR/
           ln -sfv $(pwd)/packages/cli/dist/cli-node-linux-x64/bin/opencode2-node $GLOBAL_BINS_DIR/
       - name: install-user.sh
