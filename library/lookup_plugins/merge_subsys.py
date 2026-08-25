@@ -124,6 +124,10 @@ ARTIFACT_DEFAULTS = {
         "preset": "append_unique",
         "order": "current-first",
     },
+    "STATUSES": {
+        "preset": "append_unique",
+        "order": "current-first",
+    },
     "ENV_LIST": {
         "preset": "append_unique",
         "order": "current-first",

@@ -130,12 +130,10 @@
     SYSTEMD_INSTALLS:
       WantedBy: multi-user.target
 
-    # All daemon state lives under {{VAR}} (== StateDirectory above, which
-    # systemd chowns to the apt-cacher-rs user on start): the SQLite metadata
-    # DB directly, and the .deb cache under a declared cache/ subdir.
-    VAR_DIRS:
-      - cache
-
+    # No VAR_DIRS: the unit's StateDirectory= plus the daemon's own
+    # cache_directory/database_path mkdirs own the var tree. Declaring
+    # VAR_DIRS here would fight systemd's chown (post-deploy, the dir is
+    # apt-cacher-rs-owned and re-renders would demand sudo to "create" it).
     README: |
       # apt-cacher-rs
 
@@ -182,7 +180,7 @@
       | build bins | {{DIR}}/bin (build.sh / install.sh compositors)      |
       | config     | {{ETC}}/apt-cacher-rs.conf (0644)                    |
       | state (VAR)| {{VAR}} (systemd StateDirectory, auto-chowned)       |
-      | cache      | {{VAR}}/cache (declared via VAR_DIRS)                |
+      | cache      | {{VAR}}/cache (daemon mkdirs, StateDirectory chowns)   |
       | database   | {{VAR}}/apt-cacher-rs.db                             |
       | service    | {{NAME}}.service (system scope)                      |
       | daemon user| apt-cacher-rs (system user, nologin)                 |
