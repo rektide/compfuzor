@@ -45,17 +45,18 @@ def run_unit(
     variable: str,
     *,
     enable_targets: str,
+    unit_type: str = "service",
 ) -> tuple[subprocess.CompletedProcess, list[str], Path]:
     command, log = fake_systemctl(temporary)
-    source = temporary / "test.service"
+    source = temporary / f"test.{unit_type}"
     source.write_text("[Service]\nExecStart=/bin/true\n", encoding="utf-8")
-    destination = temporary / "units/test.service"
+    destination = temporary / f"units/test.{unit_type}"
     env = clean_env()
     env.update(
         {
             variable: "1",
             "UNIT_TEMPLATE": "test",
-            "UNIT_TYPE": "service",
+            "UNIT_TYPE": unit_type,
             "UNIT_DIR": str(destination.parent),
             "UNIT_SRC": str(source),
             "UNIT_DEST": str(destination),
@@ -128,10 +129,19 @@ def test_systemd_phase_names_and_aliases() -> None:
             case = temporary / variable.lower()
             case.mkdir()
             _, calls, _ = run_unit(case, variable, enable_targets="test")
-            if calls != ["daemon-reload", "enable test"]:
+            if calls != ["daemon-reload", "enable test.service"]:
                 raise AssertionError(
                     f"{variable} did not enable without --now: {calls!r}"
                 )
+
+        # enable targets carry the unit type suffix (a bare name would make
+        # systemctl default to .service, enabling the wrong unit for
+        # socket/timer/... installs).
+        socket_case = temporary / "sockettype"
+        socket_case.mkdir()
+        _, calls, _ = run_unit(socket_case, "COMPFUZOR_SYSTEMD_START_BYPASS", enable_targets="test", unit_type="socket")
+        if calls != ["daemon-reload", "enable test.socket"]:
+            raise AssertionError(f"socket unit enable lost its suffix: {calls!r}")
 
         dropin_case = temporary / "dropin"
         dropin_case.mkdir()

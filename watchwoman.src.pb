@@ -1,12 +1,11 @@
 ---
 # Watchwoman -- radiosilence/watchwoman, a wire-compatible watchman
-# replacement, built from our fork (rektide/watchwoman, `systemd` branch)
-# whose service-manager support this deploy is built around:
+# replacement, built from our fork (rektide/watchwoman, `systemd` branch):
 #
 #   socket-activation  daemon/activation.rs adopts systemd's LISTEN_FDS
-#                      listener (verified bound AF_UNIX SOCK_STREAM) and
-#                      never unlinks the socket file while activated — the
-#                      socket unit owns it for its whole life
+#                      listener and never unlinks the socket file while
+#                      activated — the socket unit owns it for its whole
+#                      life
 #   sd-notify          daemon reports READY/STOPPING → Type=notify;
 #                      SIGTERM/SIGINT drain through the same graceful path
 #                      as shutdown-server
@@ -17,20 +16,26 @@
 #                      client routing needs NO env vars, NO zim env module,
 #                      NO CLI-routing symlink. The whole
 #                      install-cli-symlink/takeover apparatus of
-#                      watchman.srv.pb is structurally gone here: the socket
+#                      watchman.srv.pb is structurally gone: the socket
 #                      unit owns the bind from boot (linger), and a bare CLI
-#                      only ever auto-spawns a rival past a STOPPED or
-#                      DEAFENED socket unit (daemon-reload on a running
-#                      socket closes its fds) — exactly the states
-#                      status-watchwoman.sh reports as drift, and the one
-#                      activate-user.sh rebinds away.
+#                      only ever spawns a rival past a STOPPED or DEAFENED
+#                      socket unit — which status-watchwoman.sh reports and
+#                      activate-user.sh's restart heals.
+#
+# SINGLE STACK: this deploy assumes the C++ watchman playbook is retired
+# (or about to be). RUST_ALL links all six workspace bins, including the
+# `watchman` argv[0] alias — installing this IS the cutover; remove the
+# old watchman.src.pb/srv.pb artifacts when you run install.sh.
 #
 # HYBRID DEPLOY (global build + artifacts, per-user units): ansible clones
 # the fork under /usr/local/src, the rust subsystem builds it, units render
-# as ETC_FILES; each user activates with {{BINS_DIR}}/activate-user.sh (no
-# sudo): links both units and enables ONLY the socket (sockets.target). The
-# service is link-only and starts on the first connection; an idle service
-# is normal. systemd auto-creates the socket's parent dirs (DirectoryMode).
+# as ETC_FILES; each user activates with {{BINS_DIR}}/activate-user.sh:
+# links both units, enables ONLY the socket (sockets.target; the service
+# stays link-only so BOOT stays lazy — daemon on first connection), lays
+# the per-user compat socket symlink, then restarts socket+service so the
+# daemon is up and verified right away. The restart is cheap (idle: ~50ms)
+# and heals every weird state (deaf socket from a unit-file unlink during
+# daemon-reload, stale fd, orphan daemon) in one stroke.
 #
 # DELTAS vs the C++ watchman playbook, surfaced by status-watchwoman.sh:
 #   - NO root guard — watchwoman has no enforce_root_files and no global
@@ -45,16 +50,6 @@
 #     triggers), so abandoned watches don't accumulate.
 #   - no statefile/pidfile/logfile — zero on-disk state modulo trigger
 #     persistence under the socket dir; tracing goes to the journal.
-#
-# CUTOVER (deliberate, manual): the workspace also builds a `watchman`
-# argv[0] alias binary, but RUST_BIN pins the default install to the
-# `watchwoman` name so coexistence with the C++ deployment is safe. When
-# retiring C++ watchman run {{BINS_DIR}}/take-watchman-name.sh: it flips
-# /usr/local/bin/watchman to this build (refusing to shadow a foreign
-# watchman) and lays the compat symlink at upstream's default socket
-# location (/usr/local/var/run/watchman/<user>-state/sock) for clients
-# that hardcode it instead of asking the binary (get-sockname) or
-# honoring $WATCHMAN_SOCK. See README for the full sequence.
 #
 # Do NOT run `watchwoman install-unit` alongside this deploy: it writes
 # REAL unit files over compfuzor's managed symlinks (`watchwoman
@@ -73,11 +68,9 @@
     GIT_VERSION: systemd@rektide
 
     RUST: True
-    # NOT RUST_ALL: the workspace's other bins include the `watchman`
-    # argv[0] alias, and linking it IS the cutover — keep it off the
-    # default install path (see take-watchman-name.sh). Companions land
-    # via install-companions.sh.
-    RUST_BIN: watchwoman
+    # All six bins: watchwoman + the `watchman` argv[0] alias + companions
+    # (watchmanctl, watchman-wait, watchman-make, watchman-diag).
+    RUST_ALL: True
     # MSRV is 1.88; pinned (like atuin) so mise doesn't float below it.
     TOOL_VERSIONS:
       rust: "1.97.0"
@@ -90,6 +83,12 @@
     # if that unit isn't linked yet.
     SYSTEMD_ROOTS: [watchwomanService, watchwomanSocket]
 
+    # Upstream watchman's compile-time-default socket location (default
+    # configure prefix): some clients hardcode it instead of asking the
+    # binary (get-sockname) or honoring $WATCHMAN_SOCK. activate-user.sh
+    # symlinks <root>/<user>-state/sock to the zeroconf socket there.
+    WATCHWOMAN_COMPAT_ROOT: /usr/local/var/run/watchman
+
     watchwomanSocket:
       SYSTEMD_SOCKET: watchwoman
       SYSTEMD_UNITS:
@@ -97,10 +96,12 @@
         Documentation: https://github.com/radiosilence/watchwoman
       SYSTEMD_SOCKETS:
         # Zeroconf contract with the CLI's sock::resolve: %h/%u expand at
-        # unit-load, per user, no per-user templating (XDG_STATE_HOME must
-        # stay unset or default — status-watchwoman.sh checks the
-        # agreement via get-sockname). systemd creates the parent dirs
-        # (DirectoryMode); 0700 keeps per-user state private.
+        # unit-load, per user, no per-user templating — the username is
+        # part of the path contract on BOTH sides (upstream watchman's
+        # <user>-state layout and watchwoman's sock::resolve agree on it).
+        # XDG_STATE_HOME must stay unset or default; status-watchwoman.sh
+        # checks the agreement via get-sockname. systemd creates the
+        # parent dirs (DirectoryMode); 0700 keeps per-user state private.
         ListenStream: "%h/.local/state/watchman/%u-state/sock"
         SocketMode: "0600"
         DirectoryMode: "0700"
@@ -109,8 +110,8 @@
 
     watchwomanService:
       SYSTEMD_SERVICE: watchwoman
-      # Socket-activated: link-only. The socket unit starts this on the
-      # first connection; an idle service is normal (status reports it).
+      # Socket-activated: link-only. BOOT stays lazy (daemon on first
+      # connection); activation restarts it up immediately instead.
       SYSTEMD_ENABLE: false
       SYSTEMD_UNITS:
         Description: "Watchwoman file watching daemon (watchman-compatible)"
@@ -156,16 +157,21 @@
       - status-watchwoman.sh
 
     BINS:
+      # Tombstones: bins retired with the dual-support design.
+      - name: install-companions.sh
+        state: absent
+      - name: take-watchman-name.sh
+        state: absent
       - name: status-watchwoman.sh
         # Drift reporter (also registered in STATUSES so status.sh runs it).
         basedir: false
       - name: activate-user.sh
         # Per-user activation WITHOUT install-user.sh's rust leaf: that
         # leaf cargo-installs every workspace bin into ~/.cargo/bin —
-        # including the `watchman` alias, which sits EARLIER in PATH than
-        # /usr/local/bin and would make activation the cutover. The hybrid
-        # deploy takes its binary from the global install (install.sh);
-        # only the units are per-user.
+        # which sits EARLIER in PATH than /usr/local/bin and would leave a
+        # stale shadow copy of `watchman` there after every rebuild. This
+        # deploy's binary comes from the global install; only the units
+        # and per-user symlinks are per-user.
         scope: user
         basedir: false
         content: |
@@ -174,65 +180,34 @@
           ./install-systemd-user.sh
           ./install-links-user.sh
           # `enable` on a socket unit implicitly enables the service it
-          # activates (default.target.wants) — that makes the daemon EAGER
-          # at login. Remove just that symlink: the service stays linked,
-          # socket-activated, and starts on the first connection instead.
+          # activates (default.target.wants) — that would make the daemon
+          # EAGER at boot. Remove just that symlink: the service stays
+          # linked and the SOCKET activates it on first connection.
           # (NOT `systemctl disable`: on linked units it also unlinks the
-          # unit file itself.)
+          # unit file itself — and a unit file that vanishes while the
+          # unit runs is exactly what daemon-reload-deafens a socket on.)
           rm -f "${HOME}/.config/systemd/user/default.target.wants/watchwoman.service"
-          # The unit installers' daemon-reloads deafen an ALREADY-running
-          # socket ("unit configuration changed while running; no socket
-          # file descriptors are open"): systemd closes the fds and won't
-          # rebind without a restart. A deaf socket + idle service is the
-          # one window where a bare CLI auto-spawns an ORPHAN daemon that
-          # steals the path. Rebind unless the service is already serving
-          # (its adopted listener keeps the path alive by itself).
-          if ! systemctl --user is-active --quiet watchwoman.service; then
-            systemctl --user restart watchwoman.socket
+          # Compat: symlink upstream watchman's default socket location to
+          # the zeroconf socket, for clients that hardcode the path (the
+          # kernel resolves the symlink at connect; activation still
+          # triggers). The root dir is system territory — best-effort with
+          # a warning when sudo can't run (non-interactive shells): the
+          # units below still come up; re-run interactively to lay compat.
+          _compat_root="{{WATCHWOMAN_COMPAT_ROOT}}"
+          if [ -d "$_compat_root" ] || { sudo mkdir -p "$_compat_root" && sudo chmod 1777 "$_compat_root"; }; then
+            _compat_dir="$_compat_root/$(id -un)-state"
+            mkdir -p "$_compat_dir"
+            ln -sfnv "${HOME}/.local/state/watchman/$(id -un)-state/sock" "$_compat_dir/sock"
+          else
+            echo "activate-user: warning: cannot create $_compat_root (needs root); skipping compat symlink" >&2
           fi
-          echo "activate-user: socket enabled; service link-only (starts on first connect)"
-      - name: install-companions.sh
-        # install-rust.sh links only RUST_BIN (watchwoman); these four
-        # watchwoman-named tools have no C++ namesake on this host, so
-        # they're safe to install during coexistence.
-        basedir: repo
-        content: |
-          for _bin in watchmanctl watchman-wait watchman-make watchman-diag; do
-            ln -sfv "$(pwd)/target/release/${_bin}" "${GLOBAL_BINS_DIR}/${_bin}"
-          done
-      - name: take-watchman-name.sh
-        # CUTOVER TOOL (manual, one deliberate command): flip the classic
-        # `watchman` name to this build and lay the compat socket symlink
-        # at upstream watchman's compile-time default location for clients
-        # that hardcode it. Run AFTER retiring the C++ deployment.
-        basedir: false
-        content: |
-          set -e
-          _target="{{REPO_DIR}}/target/release/watchman"
-          [ -x "$_target" ] || { echo "take-watchman-name: $_target missing; build first" >&2; exit 1; }
-          if command -v watchman >/dev/null 2>&1; then
-            _current="$(readlink -f "$(command -v watchman)" 2>/dev/null || true)"
-            if [ "$_current" != "$(readlink -f "$_target")" ]; then
-              echo "take-watchman-name: $(command -v watchman) -> $_current" >&2
-              echo "take-watchman-name: refusing to shadow a foreign watchman; retire it first (this is the cutover, not an overwrite)" >&2
-              exit 1
-            fi
-          fi
-          ln -sfv "$_target" "${GLOBAL_BINS_DIR}/watchman"
-          # Compat: upstream watchman (default configure prefix) computes
-          # /usr/local/var/run/watchman/<user>-state/sock; symlink it to
-          # the zeroconf socket so hardcoded-path clients land on the
-          # activated daemon too (kernel resolves the symlink at connect,
-          # activation still triggers).
-          _compat_root="${WATCHWOMAN_COMPAT_ROOT:-/usr/local/var/run/watchman}"
-          if [ ! -d "$_compat_root" ]; then
-            sudo mkdir -p "$_compat_root"
-            sudo chmod 1777 "$_compat_root"
-          fi
-          _compat_dir="$_compat_root/$(id -un)-state"
-          mkdir -p "$_compat_dir"
-          ln -sfnv "${HOME}/.local/state/watchman/$(id -un)-state/sock" "$_compat_dir/sock"
-          echo "take-watchman-name: verify with: watchman version && watchman watch-list"
+          # Restart heals everything: a socket deafened by a unit-file
+          # unlink + daemon-reload (routine daemon-reloads are safe; only
+          # a vanished unit file closes the fds — see the header), a
+          # stale fd, a CLI-spawned orphan on the path. Existing clients
+          # just reconnect. Idle cost: ~50ms.
+          systemctl --user restart watchwoman.socket watchwoman.service
+          echo "activate-user: socket enabled; service restarted and listening"
       - name: init-watchmanconfig.sh
         # watchwoman's only ignore mechanism is the per-root
         # .watchmanconfig (no global config file); this seeds one with
@@ -259,11 +234,10 @@
       # Watchwoman
 
       A drop-in, wire-compatible replacement for Facebook watchman, built
-      from rektide/watchwoman's `systemd` branch. Six binaries ship in the
-      workspace; the default install links `watchwoman` plus the four
-      companions (`watchmanctl`, `watchman-wait`, `watchman-make`,
-      `watchman-diag`) — the `watchman` argv[0] alias is the cutover, see
-      below.
+      from rektide/watchwoman's `systemd` branch. install.sh links all six
+      workspace bins: `watchwoman` (the argv[0] alias — this deploy owns
+      the classic name), `watchmanctl`, `watchman-wait`, `watchman-make`,
+      `watchman-diag`.
 
       ## Service
 
@@ -275,16 +249,16 @@
           watchwoman.service  Type=notify, link-only; systemd starts it on
                               the first connection and restarts it
                               (Restart=on-failure) if it dies. An idle
-                              service is NORMAL.
+                              service is NORMAL (after boot, before any
+                              client connects).
 
-      Per-user activation (no sudo):
+      Per-user activation (units, compat symlink, restart):
 
           {{BINS_DIR}}/activate-user.sh
 
-      (Not install-user.sh: its rust leaf cargo-installs the whole
-      workspace — including the `watchman` alias — into ~/.cargo/bin,
-      which shadows /usr/local/bin and would make activation the
-      cutover.)
+      (Not install-user.sh: its rust leaf cargo-installs the workspace
+      into ~/.cargo/bin, which shadows /usr/local/bin with a stale copy
+      after every rebuild.)
 
       Because the socket unit owns the bind from boot (linger must be on),
       there is no takeover dance and no CLI-routing symlink: a bare client
@@ -296,7 +270,7 @@
           journalctl --user -t watchwoman -f
           watchwoman status            # uptime, RSS, per-root health, reaps
           watchwoman status --json     # scripting
-          watchwoman watch-list
+          watchman watch-list
           {{BINS_DIR}}/status-watchwoman.sh   # drift report (units, rival
                                               # daemons, root health)
 
@@ -309,30 +283,26 @@
       The file doubles as a watch-project root marker, so dropping one in
       a non-VCS dir also makes it watchable (the old `.watch` hatch).
 
-      ## Cutover from C++ watchman
-
-      The transition is deliberate and manual. Sequence:
-
-          # 1. retire the C++ deploy (its playbook, its units, its env):
-          systemctl --user disable --now watchman-main.service
-          #    ... and remove the watchman.src.pb install symlink
-          # 2. flip the name + lay the compat socket symlink:
-          {{BINS_DIR}}/take-watchman-name.sh
-          # 3. restart long-running clients (opencode etc.) so they rebind
-
-      take-watchman-name.sh refuses to shadow a foreign watchman, creates
-      /usr/local/var/run/watchman (1777) if missing, and symlinks
-      <user>-state/sock there to the zeroconf socket for clients that
-      hardcode upstream's default path.
-
       ## Notes
 
+      - Cutover from C++ watchman: retire the old playbook's artifacts
+        (watchman-main units, /usr/local/bin/watchman link), then run
+        this playbook's install.sh — it links the `watchman` name here.
+        Restart long-running clients (opencode etc.) so they rebind.
       - Do not run `watchwoman install-unit`: it writes real unit files
         over compfuzor's managed symlinks. (`watchwoman uninstall-unit`
         reverts if that already happened.)
       - XDG_STATE_HOME must stay unset (or point at ~/.local/state) for
         the zeroconf contract between the socket unit and bare CLIs to
         hold; status-watchwoman.sh checks it via get-sockname.
+      - Compat: activate-user.sh symlinks
+        {{WATCHWOMAN_COMPAT_ROOT}}/<user>-state/sock to the zeroconf
+        socket for clients that hardcode upstream's default path.
+      - daemon-reload is safe on a running socket (even with unit content
+        changes); the socket only goes deaf if its unit FILE vanishes
+        while running (e.g. `systemctl disable` on a linked unit). If
+        that happens: re-run activate-user.sh, or
+        `systemctl --user restart watchwoman.socket watchwoman.service`.
       - Daemon state is zero-on-disk except trigger persistence under
         ~/.local/state/watchman/<user>-state/roots/. Logs are in the
         journal (identifier `watchwoman`).

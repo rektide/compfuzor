@@ -70,10 +70,18 @@ if [ "$_bypass_enable" = true ] || [ -n "${COMPFUZOR_SYSTEMD_ENABLE_BYPASS:-}" ]
 fi
 
 for target in $UNIT_ENABLE_TARGETS; do
+  # Always enable a fully-typed unit name: a bare name makes systemctl
+  # default to .service, which enables the WRONG unit for socket/timer/
+  # ... installs (and fails outright when that service isn't linked).
+  # Hand-authored callers that already carry the suffix are passed through.
+  case "$target" in
+    *.${UNIT_TYPE}) unit_ref="$target" ;;
+    *) unit_ref="${target}.${UNIT_TYPE}" ;;
+  esac
   if [ "$_bypass_start" = true ] || [ -n "${COMPFUZOR_SYSTEMD_START_BYPASS:-}" ] || [ -n "${SYSTEMD_BYPASS_START:-}" ]; then
-    $SUDO_CMD $SYSTEMCTL enable "${_pass_through[@]+"${_pass_through[@]}"}" "${target}.${UNIT_TYPE}"
+    $SUDO_CMD $SYSTEMCTL enable "${_pass_through[@]+"${_pass_through[@]}"}" "$unit_ref"
   else
-    $SUDO_CMD $SYSTEMCTL enable --now "${_pass_through[@]+"${_pass_through[@]}"}" "${target}.${UNIT_TYPE}"
+    $SUDO_CMD $SYSTEMCTL enable --now "${_pass_through[@]+"${_pass_through[@]}"}" "$unit_ref"
   fi
-  echo "Unit ${target}.${UNIT_TYPE} enabled"
+  echo "Unit ${unit_ref} enabled"
 done

@@ -19,15 +19,15 @@
 #   - no rival daemon: a socket file while the units are inactive, or a
 #     foreground-daemon process outside the unit, is a CLI-spawned
 #     squatter holding the name systemd should own;
+#   - the classic-watchman compat symlink (upstream's default socket
+#     location) points at the zeroconf socket;
 #   - roots health via `status --json`: dead/missing roots as drift,
 #     plus marker-less roots informational (watchwoman has NO
 #     enforce_root_files guard — watch-project falls back to the path
 #     itself, so a bare `watch-project ~` is a real hazard the old
 #     guard refused);
 #   - inotify instances held by the daemon (informational — the
-#     exhaustion vector the C++ deploy's FD guard existed for);
-#   - the classic-watchman compat symlink, once take-watchman-name.sh has
-#     laid it (informational until cutover).
+#     exhaustion vector the C++ deploy's FD guard existed for).
 #
 # Daemon probes are gated on the service being active: an idle
 # socket-activated daemon is NORMAL, and probing would START it — this
@@ -81,18 +81,22 @@ case "$_bin_real" in
     ;;
 esac
 
-# --- `watchman` name custody (informational during coexistence) ---------------
-# Where the classic name resolves right now: the C++ build (coexistence),
-# this build (post-cutover), or nothing. Either of the first two is fine —
-# this line exists to make the transition state visible.
+# --- `watchman` name: this deploy owns it --------------------------------------
+# The argv[0] alias must resolve to this build (RUST_ALL links it; a
+# foreign resolution means the C++ deploy is still installed or something
+# else squats the name).
 if command -v watchman >/dev/null 2>&1; then
-  _wm_real="$(readlink -f "$(command -v watchman)" 2>/dev/null || true)"
-  case "$_wm_real" in
-    "${_dir%/}"/*) _say watchman-name "info: watchman -> THIS build (cutover complete)";;
-    *) _say watchman-name "info: watchman -> $_wm_real (foreign/C++; coexistence)";;
-  esac
+  _wm_res="$(command -v watchman)"
+  _wm_real="$(readlink -f "$_wm_res" 2>/dev/null || true)"
+  if [ "$_wm_real" = "$_target_real" ]; then
+    _say binary "OK: $_wm_res -> this build (drop-in name owned)"
+  else
+    _drift=1
+    _say binary "DRIFT: $_wm_res -> ${_wm_real:-?} is not this build ($_target_bin) — retire the foreign watchman and run {{BINS_DIR}}/install.sh"
+  fi
 else
-  _say watchman-name "info: no watchman on PATH (pre-cutover, name free)"
+  _drift=1
+  _say binary "DRIFT: no watchman on PATH — run {{BINS_DIR}}/install.sh (RUST_ALL links the alias)"
 fi
 
 # --- units: managed symlinks, enablement, activity ---------------------------
@@ -238,7 +242,8 @@ if [ -L "$_compat_sock" ]; then
     _say compat "DRIFT: $_compat_sock -> $(readlink "$_compat_sock") (expected $_expected_sock)"
   fi
 else
-  _say compat "info: no compat symlink yet ({{BINS_DIR}}/take-watchman-name.sh at cutover)"
+  _drift=1
+  _say compat "DRIFT: no compat symlink at $_compat_sock ({{BINS_DIR}}/activate-user.sh lays it)"
 fi
 
 if [ "$_drift" != 0 ]; then
