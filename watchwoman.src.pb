@@ -32,12 +32,10 @@
 # as ETC_FILES; each user activates with {{BINS_DIR}}/activate-user.sh:
 # links both units, enables ONLY the socket (sockets.target; the service
 # stays link-only so BOOT stays lazy — daemon on first connection), lays
-# the per-user compat socket symlinks (one per C++ build-family state dir;
-# a root still routing to a live legacy daemon is skipped loudly until
-# cutover), then restarts socket+service so the daemon is up and verified
-# right away. The restart is cheap (idle: ~50ms) and heals every weird
-# state (deaf socket from a unit-file unlink during daemon-reload, stale
-# fd, orphan daemon) in one stroke.
+# the compat socket symlink, then restarts socket+service so the daemon
+# is up and verified right away. The restart is cheap (idle: ~50ms) and
+# heals every weird state (deaf socket from a unit-file unlink during
+# daemon-reload, stale fd, orphan daemon) in one stroke.
 #
 # DELTAS vs the C++ watchman playbook, surfaced by status-watchwoman.sh:
 #   - NO root guard — watchwoman has no enforce_root_files and no global
@@ -85,20 +83,11 @@
     # if that unit isn't linked yet.
     SYSTEMD_ROOTS: [watchwomanService, watchwomanSocket]
 
-    # Upstream watchman's compiled-in state dir is PER BUILD FAMILY:
-    # ${CMAKE_INSTALL_PREFIX}/var/run/watchman. Every installed C++ build
-    # computes its own; a bare C++ CLI that finds a dead path auto-spawns
-    # a rival C++ daemon, so each family's <user>-state/sock needs a
-    # symlink to OUR zeroconf socket. Research (source-verified, incl. the
-    # non-existence of any sun_path hash fallback):
-    # .design/watchman-interop/watchman-interop.glm53.md
-    # (jj change xuksxrrkxlvu in the compfuzor-interop workspace).
-    WATCHWOMAN_COMPAT_ROOTS:
-      # canonical upstream default-prefix family (always materialized)
-      - /usr/local/var/run/watchman
-      # this host's July getdeps build (verified: strings on the binary)
-      - /usr/local/src/watchman-git/watchman/var/run/watchman
-    WATCHWOMAN_COMPAT_CANON: /usr/local/var/run/watchman
+    # The one compat path: upstream watchman's default-prefix socket
+    # location, symlinked to our zeroconf socket by activate-user.sh for
+    # clients that hardcode it (everything first-party asks the binary
+    # via get-sockname instead).
+    WATCHWOMAN_COMPAT_ROOT: /usr/local/var/run/watchman
 
     watchwomanSocket:
       SYSTEMD_SOCKET: watchwoman
@@ -207,44 +196,16 @@
           # unit file itself — and a unit file that vanishes while the
           # unit runs is exactly what daemon-reload-deafens a socket on.)
           rm -f "${HOME}/.config/systemd/user/default.target.wants/watchwoman.service"
-          # Compat: upstream watchman's compiled state dir is per build
-          # family (${prefix}/var/run/watchman); lay <root>/<user>-state/
-          # sock symlinks to OUR zeroconf socket at each family root, so
-          # path-computing clients land on the activated daemon (kernel
-          # resolves the symlink at connect) and stray C++ CLIs never find
-          # a dead path to auto-spawn a rival on. A <user>-state DIRECTORY
-          # symlink is the retired C++ deploy's routing artifact
-          # (install-cli-symlink.sh): replacing it while its target still
-          # has a live socket would hijack live clients mid-coexistence —
-          # skip it (loudly) until the legacy daemon is gone, or force
-          # with WATCHWOMAN_FORCE_TAKE=1.
-          _compat_roots="${WATCHWOMAN_COMPAT_ROOTS:-{{WATCHWOMAN_COMPAT_ROOTS|join(' ')}}}"
-          _compat_target="${HOME}/.local/state/watchman/$(id -un)-state/sock"
-          for _root in $_compat_roots; do
-            if [ ! -d "$_root" ]; then
-              # Non-canonical roots: only materialize when the build
-              # family is still present; never resurrect a deleted tree.
-              if [ "$_root" != "{{WATCHWOMAN_COMPAT_CANON}}" ] && [ ! -d "$(dirname "$(dirname "$_root")")" ]; then
-                echo "activate-user: skip $_root (build family absent)" >&2
-                continue
-              fi
-              mkdir -p "$_root" 2>/dev/null || sudo mkdir -p "$_root" 2>/dev/null || {
-                echo "activate-user: warning: cannot create $_root (needs root); skipping compat there" >&2
-                continue
-              }
-              if [ "$_root" = "{{WATCHWOMAN_COMPAT_CANON}}" ]; then
-                sudo chmod 1777 "$_root" 2>/dev/null || true
-              fi
-            fi
-            _user_dir="$_root/$(id -un)-state"
-            if [ -L "$_user_dir" ] && [ -S "$_user_dir/sock" ] && [ "${WATCHWOMAN_FORCE_TAKE:-}" != 1 ]; then
-              echo "activate-user: skip $_root (legacy daemon routing still live at $_user_dir; retire it first, or WATCHWOMAN_FORCE_TAKE=1)" >&2
-              continue
-            fi
-            [ -L "$_user_dir" ] && rm -f "$_user_dir"
-            mkdir -p "$_user_dir"
-            ln -sfnv "$_compat_target" "$_user_dir/sock"
-          done
+          # Compat: symlink upstream watchman's default socket location to
+          # the zeroconf socket, for clients that hardcode the path. The
+          # root dir is system territory — best-effort with a warning when
+          # sudo can't run (non-interactive shells); re-run interactively.
+          _compat_dir="{{WATCHWOMAN_COMPAT_ROOT}}/$(id -un)-state"
+          if mkdir -p "$_compat_dir" 2>/dev/null || sudo mkdir -p "$_compat_dir" 2>/dev/null; then
+            ln -sfnv "${HOME}/.local/state/watchman/$(id -un)-state/sock" "$_compat_dir/sock"
+          else
+            echo "activate-user: warning: cannot create {{WATCHWOMAN_COMPAT_ROOT}} (needs root); skipping compat symlink" >&2
+          fi
           # Restart heals everything: a socket deafened by a unit-file
           # unlink + daemon-reload (routine daemon-reloads are safe; only
           # a vanished unit file closes the fds — see the header), a
@@ -339,18 +300,9 @@
       - XDG_STATE_HOME must stay unset (or point at ~/.local/state) for
         the zeroconf contract between the socket unit and bare CLIs to
         hold; status-watchwoman.sh checks it via get-sockname.
-      - Compat: upstream's compiled state dir is per build family
-        (${prefix}/var/run/watchman). activate-user.sh lays
-        <root>/<user>-state/sock symlinks to the zeroconf socket at each
-        root in WATCHWOMAN_COMPAT_ROOTS — for clients that compute paths
-        and for stray C++ CLIs (a dead computed path auto-spawns a rival
-        C++ daemon; a live socket there prevents it). A root whose family
-        is absent is skipped; a root still routing to a live legacy
-        daemon is skipped loudly until you retire it (or
-        WATCHWOMAN_FORCE_TAKE=1). No sun_path hash fallback exists in any
-        watchman era — deep paths hard-fail, never relocate.
-        Source-verified details:
-        .design/watchman-interop/watchman-interop.glm53.md.
+      - Compat: activate-user.sh symlinks
+        {{WATCHWOMAN_COMPAT_ROOT}}/<user>-state/sock to the zeroconf
+        socket, for clients that hardcode upstream's default path.
       - daemon-reload is safe on a running socket (even with unit content
         changes); the socket only goes deaf if its unit FILE vanishes
         while running (e.g. `systemctl disable` on a linked unit). If
