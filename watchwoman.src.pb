@@ -10,15 +10,14 @@
 # routing needs no env vars and no symlink farm. First-party clients ask
 # `watchman get-sockname`, which we answer.
 #
-# SINGLE STACK, hard cutover: retire the C++ watchman playbook, then
 # install.sh links all six workspace bins (including the `watchman`
-# argv[0] alias) and install-user.sh links the units (socket enabled at
+# argv[0] alias); install-user.sh links the units (socket enabled at
 # sockets.target; the service activates on first connection — enabling
 # the socket also implicitly enables the service, so the daemon runs
 # from login) and applies the one compat LINKS record for hardcoding
 # clients.
 #
-# No root guard (no enforce_root_files in watchwoman):
+# No root guard: giant-root accidents are prevented client-side, and
 # init-watchmanconfig.sh seeds per-root ignore_dirs. No statefile/pidfile/
 # logfile: zero on-disk state modulo trigger persistence under the socket
 # dir; logs go to the journal.
@@ -68,6 +67,20 @@
         scope: user
         policy: replace
 
+    # Daemon env: emitted to {{DIR}}/env (+ env.export); the systemd
+    # machinery auto-injects EnvironmentFile=-{{DIR}}/env into the service
+    # unit (SYSTEMD_SERVICES_DEFAULT when ENV is set).
+    #
+    # Roots with no subscriptions/triggers/commands go stale after
+    # WATCHWOMAN_STALE_IDLE_SECS (upstream default 3600 = 1h) and the
+    # next watch re-crawls them (daemon is in-memory only). Pin 2d so
+    # idle roots survive overnight/weekend gaps: warm roots cost their
+    # Tree in RAM and re-watch is O(ms); stale ones cost a full crawl.
+    # Giant-root accidents are prevented client-side (opencode never
+    # watch-projects), not by reaping.
+    ENV:
+      WATCHWOMAN_STALE_IDLE_SECS: 172800
+
     watchwomanSocket:
       SYSTEMD_SOCKET: watchwoman
       SYSTEMD_UNITS:
@@ -115,24 +128,15 @@
         ExecStart: "{{GLOBAL_BINS_DIR}}/watchwoman --sockname %h/.local/state/watchman/%u-state/sock --foreground-daemon"
         Restart: on-failure
         RestartSec: 1
-        # Roots with no subscriptions/triggers/commands go stale after
-        # WATCHWOMAN_STALE_IDLE_SECS (upstream default 3600 = 1h) and the
-        # next watch re-crawls them (daemon is in-memory only). Pin 2d so
-        # idle roots survive overnight/weekend gaps: warm roots cost their
-        # Tree in RAM and re-watch is O(ms); stale ones cost a full crawl.
-        # Giant-root accidents are prevented client-side (opencode never
-        # watch-projects), not by reaping.
-        Environment: "WATCHWOMAN_STALE_IDLE_SECS=172800"
-        # One inotify watch per dir plus fds per root during crawl (same
-        # arithmetic as the C++ deploy; notify-rs inotify backend).
+        # One inotify watch per dir plus fds per root during crawl
+        # (notify-rs inotify backend).
         LimitNOFILE: 524288
         StandardOutput: journal
         StandardError: journal
         SyslogIdentifier: watchwoman
 
     # ignore_dirs seeded by init-watchmanconfig.sh into a root's
-    # .watchmanconfig (watchwoman's only ignore mechanism). Same list the
-    # C++ deploy shipped in its global guard config.
+    # .watchmanconfig (watchwoman's only ignore mechanism).
     IGNORE_DIRS:
       - node_modules
       - target
@@ -153,15 +157,6 @@
       - status-watchwoman.sh
 
     BINS:
-      # Tombstones: bespoke orchestration retired — the standard
-      # install-user.sh (unit linkers + links.ts records) is the whole
-      # activation story.
-      - name: install-companions.sh
-        state: absent
-      - name: take-watchman-name.sh
-        state: absent
-      - name: activate-user.sh
-        state: absent
       - name: status-watchwoman.sh
         # Drift reporter (also registered in STATUSES so status.sh runs it).
         basedir: false
@@ -170,7 +165,7 @@
         # .watchmanconfig (no global config file); this seeds one with
         # the standard ignore_dirs. The file is also a watch-project root
         # marker — the escape hatch for deliberately watching a non-VCS
-        # dir (the old `.watch` trick).
+        # dir.
         basedir: false
         content: |
           set -e
@@ -206,10 +201,6 @@
           watchwoman.service  Type=notify, activated by the socket;
                               Restart=on-failure if it dies
 
-      Cutover from C++ watchman: retire the old playbook's artifacts
-      (watchman-main units, /usr/local/bin/watchman link), run install.sh
-      + install-user.sh, restart long-running clients so they rebind.
-
       ## Operations
 
           systemctl --user status watchwoman.socket watchwoman.service
@@ -225,7 +216,7 @@
           {{BINS_DIR}}/init-watchmanconfig.sh <dir> [--force]
 
       The file doubles as a watch-project root marker, so dropping one in
-      a non-VCS dir also makes it watchable (the old `.watch` hatch).
+      a non-VCS dir also makes it watchable.
 
       ## Notes
 
@@ -242,8 +233,9 @@
       - Daemon state is zero-on-disk except trigger persistence under
         ~/.local/state/watchman/<user>-state/roots/. Logs go to the
         journal (identifier `watchwoman`).
-      - Root idle reaping: WATCHWOMAN_STALE_IDLE_SECS=172800 (2d). Roots
-        with no subscribers/triggers/commands for that long go stale and
+      - Root idle reaping: WATCHWOMAN_STALE_IDLE_SECS=172800 (2d), set in
+        {{DIR}}/env (the service unit's EnvironmentFile). Roots with no
+        subscribers/triggers/commands for that long go stale and
         re-crawl on next watch — keep them warm; the daemon forgets
         everything on restart regardless.
   tasks:
