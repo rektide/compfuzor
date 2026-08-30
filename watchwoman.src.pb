@@ -84,10 +84,17 @@
     SYSTEMD_ROOTS: [watchwomanService, watchwomanSocket]
 
     # The one compat path: upstream watchman's default-prefix socket
-    # location, symlinked to our zeroconf socket by activate-user.sh for
-    # clients that hardcode it (everything first-party asks the binary
-    # via get-sockname instead).
+    # location, symlinked to our zeroconf socket for clients that
+    # hardcode it (everything first-party asks the binary via
+    # get-sockname instead). links.ts owns it — apply, drift, removal,
+    # and sudo escalation for the root-owned parent dir all included.
     WATCHWOMAN_COMPAT_ROOT: /usr/local/var/run/watchman
+
+    LINKS:
+      - src: "${HOME}/.local/state/watchman/{{ansible_user_id}}-state/sock"
+        dest: "{{WATCHWOMAN_COMPAT_ROOT}}/{{ansible_user_id}}-state/sock"
+        scope: user
+        policy: replace
 
     watchwomanSocket:
       SYSTEMD_SOCKET: watchwoman

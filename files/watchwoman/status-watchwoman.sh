@@ -243,7 +243,7 @@ if [ -L "$_compat_sock" ]; then
   fi
 else
   _drift=1
-  _say compat "DRIFT: no compat symlink at $_compat_sock ({{BINS_DIR}}/activate-user.sh lays it)"
+  _say compat "DRIFT: no compat symlink at $_compat_sock ({{BINS_DIR}}/install-user.sh lays it via links.ts)"
 fi
 
 if [ "$_drift" != 0 ]; then
