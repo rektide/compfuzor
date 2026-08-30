@@ -134,6 +134,20 @@
   when: >
     (DIR is deftruthy or DIRS is deftruthy or FILES is deftruthy) and
     DIR_BYPASS is deffalsy and FS_BYPASS is deffalsy
+# The DIR-rooted FILES/DIRS pair rides the same fs_hierarchy machinery as the
+# DIRSET families (ETC_FILES etc.): rich writer (content/srcTemplate/once/
+# mode), become policy, family PROP. It is a pseudo-family: family_key points
+# at the compiled FILES family (root DIR, no exposure link -- the link task
+# self-skips when materialized and exposure roots are equal).
+- import_tasks: compfuzor/fs_hierarchy.tasks
+  vars:
+    include: root
+    family_key: FILES
+    dirs_name: DIRS
+    bypass_name: FILES_BYPASS
+  when: >
+    (FILES is deflengthy or DIRS is deflengthy) and
+    DIR_BYPASS is deffalsy and FS_BYPASS is deffalsy
 - import_tasks: compfuzor/link_plan.tasks
   when: _LINK_PLAN is defined and _LINK_PLAN.links | length > 0
 - import_tasks: compfuzor/fs_repo.tasks
