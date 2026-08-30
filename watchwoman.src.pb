@@ -18,9 +18,12 @@
 #                      NO CLI-routing symlink. The whole
 #                      install-cli-symlink/takeover apparatus of
 #                      watchman.srv.pb is structurally gone here: the socket
-#                      unit owns the bind from boot (linger), and a bare
-#                      CLI can never win a race to auto-spawn an
-#                      unconfigured rival while the socket unit is enabled.
+#                      unit owns the bind from boot (linger), and a bare CLI
+#                      only ever auto-spawns a rival past a STOPPED or
+#                      DEAFENED socket unit (daemon-reload on a running
+#                      socket closes its fds) — exactly the states
+#                      status-watchwoman.sh reports as drift, and the one
+#                      activate-user.sh rebinds away.
 #
 # HYBRID DEPLOY (global build + artifacts, per-user units): ansible clones
 # the fork under /usr/local/src, the rust subsystem builds it, units render
