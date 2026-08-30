@@ -2,7 +2,7 @@
 #
 # The design's promises, each mapped to one check: the managed build owns
 # both names; the units are compfuzor-managed and the socket is enabled +
-# active (linger on = bound from boot); ListenStream is the zeroconf path
+# active (linger on = bound from boot); ListenStream is the default path
 # the CLI resolves; the running daemon is the unit's; roots are healthy;
 # the compat LINK is laid.
 #
@@ -75,7 +75,7 @@ else
   _drift=1; _say linger "DRIFT: off — loginctl enable-linger $(id -un)"
 fi
 if _sys show "$_sock_unit" -p Listen 2>/dev/null | grep -q "$_expected_sock"; then
-  _say listen "OK: ListenStream is the zeroconf path ($_expected_sock)"
+  _say listen "OK: ListenStream is the CLI's default path ($_expected_sock)"
 else
   _drift=1
   _say listen "DRIFT: $_sock_unit ListenStream does not name $_expected_sock (get-sockname and systemd disagree — is XDG_STATE_HOME set?)"
@@ -110,7 +110,7 @@ fi
 # --- compat link (links.ts owns it) --------------------------------------------
 _compat_sock="{{WATCHWOMAN_COMPAT_ROOT}}/$(id -un)-state/sock"
 if [ -L "$_compat_sock" ] && [ "$(readlink "$_compat_sock")" = "$_expected_sock" ]; then
-  _say compat "OK: $_compat_sock -> zeroconf socket"
+  _say compat "OK: $_compat_sock -> default socket"
 else
   _drift=1
   _say compat "DRIFT: no compat symlink at $_compat_sock ({{BINS_DIR}}/install-user.sh lays it via links.ts)"

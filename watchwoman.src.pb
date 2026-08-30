@@ -4,7 +4,7 @@
 # socket activation (LISTEN_FDS adoption, never unlinks the socket file
 # while activated), sd_notify readiness (Type=notify), graceful SIGTERM.
 #
-# The socket unit binds the CLI's zeroconf path
+# The socket unit binds the CLI's default socket path
 # (~/.local/state/watchman/<user>-state/sock — upstream's
 # WATCHMAN_USE_XDG_STATE_HOME layout) via %h/%u specifiers, so client
 # routing needs no env vars and no symlink farm. First-party clients ask
@@ -56,7 +56,7 @@
     SYSTEMD_ROOTS: [watchwomanService, watchwomanSocket]
 
     # The one compat path: upstream watchman's default-prefix socket
-    # location, symlinked to our zeroconf socket for clients that
+    # location, symlinked to our default socket for clients that
     # hardcode it (everything first-party asks the binary via
     # get-sockname instead). links.ts owns it — apply, drift, removal,
     # and sudo escalation for the root-owned parent dir all included.
@@ -75,7 +75,7 @@
         Documentation: https://github.com/radiosilence/watchwoman
       SYSTEMD_SOCKETS:
         comments: |
-          Zeroconf contract with the CLI's sock::resolve: %h/%u expand at
+          Default-path agreement with the CLI's sock::resolve: %h/%u expand at
           unit-load, per user, no per-user templating — the username is
           part of the path contract on BOTH sides (upstream watchman's
           <user>-state layout and watchwoman's sock::resolve agree on
@@ -225,10 +225,10 @@
         over compfuzor's managed symlinks. (`watchwoman uninstall-unit`
         reverts if that already happened.)
       - XDG_STATE_HOME must stay unset (or point at ~/.local/state) for
-        the zeroconf contract between the socket unit and bare CLIs;
+        the default-path agreement between the socket unit and bare CLIs;
         status-watchwoman.sh checks it via get-sockname.
       - Compat LINKS record:
-        {{WATCHWOMAN_COMPAT_ROOT}}/<user>-state/sock → the zeroconf
+        {{WATCHWOMAN_COMPAT_ROOT}}/<user>-state/sock → the default
         socket, for clients that hardcode upstream's default-prefix
         path. links.ts owns it.
       - Daemon state is zero-on-disk except trigger persistence under
