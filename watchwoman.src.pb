@@ -81,7 +81,11 @@
 
     SYSTEMD_SCOPE: user
     SYSTEMD_INSTALL: user
-    SYSTEMD_ROOTS: [watchwomanSocket, watchwomanService]
+    # Service root FIRST: its installer only links the unit (link-only, no
+    # enable), which must exist before the socket installer's `enable` —
+    # systemd implicitly enables the service a socket activates, and fails
+    # if that unit isn't linked yet.
+    SYSTEMD_ROOTS: [watchwomanService, watchwomanSocket]
 
     watchwomanSocket:
       SYSTEMD_SOCKET: watchwoman
@@ -149,6 +153,9 @@
       - status-watchwoman.sh
 
     BINS:
+      - name: status-watchwoman.sh
+        # Drift reporter (also registered in STATUSES so status.sh runs it).
+        basedir: false
       - name: activate-user.sh
         # Per-user activation WITHOUT install-user.sh's rust leaf: that
         # leaf cargo-installs every workspace bin into ~/.cargo/bin —
@@ -163,6 +170,23 @@
           cd "$(dirname "$0")"
           ./install-systemd-user.sh
           ./install-links-user.sh
+          # `enable` on a socket unit implicitly enables the service it
+          # activates (default.target.wants) — that makes the daemon EAGER
+          # at login. Remove just that symlink: the service stays linked,
+          # socket-activated, and starts on the first connection instead.
+          # (NOT `systemctl disable`: on linked units it also unlinks the
+          # unit file itself.)
+          rm -f "${HOME}/.config/systemd/user/default.target.wants/watchwoman.service"
+          # The unit installers' daemon-reloads deafen an ALREADY-running
+          # socket ("unit configuration changed while running; no socket
+          # file descriptors are open"): systemd closes the fds and won't
+          # rebind without a restart. A deaf socket + idle service is the
+          # one window where a bare CLI auto-spawns an ORPHAN daemon that
+          # steals the path. Rebind unless the service is already serving
+          # (its adopted listener keeps the path alive by itself).
+          if ! systemctl --user is-active --quiet watchwoman.service; then
+            systemctl --user restart watchwoman.socket
+          fi
           echo "activate-user: socket enabled; service link-only (starts on first connect)"
       - name: install-companions.sh
         # install-rust.sh links only RUST_BIN (watchwoman); these four
@@ -181,7 +205,7 @@
         basedir: false
         content: |
           set -e
-          _target="{{DIR}}/target/release/watchman"
+          _target="{{REPO_DIR}}/target/release/watchman"
           [ -x "$_target" ] || { echo "take-watchman-name: $_target missing; build first" >&2; exit 1; }
           if command -v watchman >/dev/null 2>&1; then
             _current="$(readlink -f "$(command -v watchman)" 2>/dev/null || true)"

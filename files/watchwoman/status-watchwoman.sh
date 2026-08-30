@@ -5,7 +5,7 @@
 # ~/.local/state/watchman/<user>-state/sock), so client routing has no env
 # vars or symlink farm to drift. What's left is all watchwoman-specific:
 #
-#   - the deployed binary IS the managed build ({{DIR}}/target/release/watchwoman);
+#   - the deployed binary IS the managed build ({{REPO_DIR}}/target/release/watchwoman);
 #   - both units are compfuzor-managed symlinks (generic link status also
 #     reports these, but here with unit semantics: the SOCKET is the
 #     enabled one, the service must stay link-only);
@@ -19,10 +19,11 @@
 #   - no rival daemon: a socket file while the units are inactive, or a
 #     foreground-daemon process outside the unit, is a CLI-spawned
 #     squatter holding the name systemd should own;
-#   - roots health via `status --json`: unhealthy roots as drift, plus
-#     marker-less roots informational (watchwoman has NO enforce_root_files
-#     guard — watch-project falls back to the path itself, so a bare
-#     `watch-project ~` is a real hazard the old guard refused);
+#   - roots health via `status --json`: dead/missing roots as drift,
+#     plus marker-less roots informational (watchwoman has NO
+#     enforce_root_files guard — watch-project falls back to the path
+#     itself, so a bare `watch-project ~` is a real hazard the old
+#     guard refused);
 #   - inotify instances held by the daemon (informational — the
 #     exhaustion vector the C++ deploy's FD guard existed for);
 #   - the classic-watchman compat symlink, once take-watchman-name.sh has
@@ -42,7 +43,7 @@ _svc_unit="${WATCHWOMAN_SERVICE_UNIT:-watchwoman.service}"
 _compat_root="${WATCHWOMAN_COMPAT_ROOT:-/usr/local/var/run/watchman}"
 _expected_sock="${HOME}/.local/state/watchman/$(id -un)-state/sock"
 _dir="{{DIR}}"
-_target_bin="{{DIR}}/target/release/watchwoman"
+_target_bin="{{REPO_DIR}}/target/release/watchwoman"
 _managed_etc="{{ETC}}"
 _timeout="${WATCHWOMAN_STATUS_TIMEOUT:-5}"
 
@@ -141,10 +142,10 @@ else
 fi
 
 # --- daemon identity / rivals --------------------------------------------------
-_svc_state="$(_sys is-active "$_svc_unit" 2>/dev/null)"
+_svc_state="$(_sys is-active "$_svc_unit" 2>/dev/null || true)"
 _main_pid="$(_sys show "$_svc_unit" -p MainPID --value 2>/dev/null || true)"
 if [ "$_svc_state" = active ] && [ "${_main_pid:-0}" -gt 0 ] 2>/dev/null; then
-  _dpid="$(_daemon get-pid 2>/dev/null || true)"
+  _dpid="$(_daemon get-pid 2>/dev/null | jq -r '.pid // empty')"
   if [ -n "$_dpid" ] && [ "$_dpid" = "$_main_pid" ]; then
     _say daemon "OK: pid $_main_pid is the unit's (get-pid agrees)"
   else
@@ -155,11 +156,33 @@ else
   _say daemon "idle: socket-activated, not started yet (normal)"
 fi
 
-# Rival scan: a socket file with the units inactive, or a foreground daemon
-# outside the unit, means a bare CLI auto-spawned past the socket unit.
-if [ "$_svc_state" != active ] && [ -S "$_expected_sock" ]; then
+# Rival scan — listener custody on the path, not mere file presence (with
+# socket activation the file exists whenever the SOCKET unit is bound,
+# regardless of the service). The healthy states: systemd holds the
+# listener (socket unit live; daemon optional). Drift: a watchwoman
+# process holds it while the service is inactive (CLI auto-spawned
+# orphan past a deaf/stopped socket unit), or the file exists with no
+# listener at all (stale).
+_sock_state="$(_sys is-active "$_sock_unit" 2>/dev/null || true)"
+_listener_line="$(ss -H -xlp 2>/dev/null | grep -F "$_expected_sock" | head -1 || true)"
+if [ -n "$_listener_line" ]; then
+  case "$_listener_line" in
+    *'users:(("watchwoman"'*)
+      if [ "$_svc_state" != active ]; then
+        _drift=1
+        _say rival "DRIFT: a watchwoman process outside the unit listens on $_expected_sock (CLI-spawned orphan; shutdown-server it, then restart $_sock_unit)"
+      fi
+      ;;
+    *'users:(("systemd"'*)
+      if [ "$_sock_state" != active ]; then
+        _drift=1
+        _say rival "DRIFT: systemd listens on $_expected_sock but $_sock_unit is $_sock_state"
+      fi
+      ;;
+  esac
+elif [ -S "$_expected_sock" ]; then
   _drift=1
-  _say rival "DRIFT: socket exists while $_svc_unit is inactive — a CLI-spawned daemon holds $_expected_sock"
+  _say rival "DRIFT: $_expected_sock exists with no listener (stale file, or $_sock_unit deafened by a daemon-reload — restart it)"
 fi
 _strays="$(pgrep -f '[w]atchwoman.*--foreground-daemon' 2>/dev/null | grep -vx "${_main_pid:-none}" || true)"
 if [ -n "$_strays" ]; then
@@ -171,14 +194,17 @@ fi
 if [ "$_svc_state" = active ]; then
   _st="$(timeout "$_timeout" "$_wmbin" --no-spawn status --json 2>/dev/null || true)"
   if [ -n "$_st" ]; then
+    # health classes: active | idle (normal, no subs yet) | stale (GC will
+    # reap) | missing/dead (directory gone — real drift).
     _roots_n="$(jq -r '.roots | length' <<<"$_st" 2>/dev/null || echo '?')"
-    _bad="$(jq -r '[.roots[] | select(.health != "healthy" and .health != "active")] | length' <<<"$_st" 2>/dev/null || echo '?')"
-    _rss="$(jq -r '.rss_bytes // "?"' <<<"$_st" 2>/dev/null)"
-    _up="$(jq -r '.uptime_seconds // "?"' <<<"$_st" 2>/dev/null)"
-    _say roots "${_roots_n} watched; rss $(_hum "${_rss:-0}"); uptime ${_up}s; unhealthy: ${_bad}"
+    _bad="$(jq -r '[.roots[] | select(.health == "dead" or .health == "missing")] | length' <<<"$_st" 2>/dev/null || echo '?')"
+    _stale="$(jq -r '[.roots[] | select(.health == "stale")] | length' <<<"$_st" 2>/dev/null || echo '?')"
+    _rss="$(jq -r '.rss_bytes // "?"' <<<"$_st" 2>/dev/null || echo '?')"
+    _up="$(jq -r '.uptime_seconds // "?"' <<<"$_st" 2>/dev/null || echo '?')"
+    _say roots "${_roots_n} watched; rss $(_hum "${_rss:-0}"); uptime ${_up}s; stale ${_stale}; dead/missing ${_bad}"
     if [ "$_bad" != 0 ]; then
       _drift=1
-      jq -r '.roots[] | select(.health != "healthy" and .health != "active") | "  \(.health) \(.path) (idle \(.idle_seconds)s)"' <<<"$_st" 2>/dev/null
+      jq -r '.roots[] | select(.health == "dead" or .health == "missing") | "  \(.health) \(.path) (missing_ticks \(.missing_ticks))"' <<<"$_st" 2>/dev/null
     fi
     # No enforce_root_files in watchwoman: surface marker-less roots so a
     # runaway `watch-project ~` is at least visible. Markers mirror the
