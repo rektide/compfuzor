@@ -19,8 +19,8 @@
 #   - no rival daemon: a socket file while the units are inactive, or a
 #     foreground-daemon process outside the unit, is a CLI-spawned
 #     squatter holding the name systemd should own;
-#   - the classic-watchman compat symlink (upstream's default socket
-#     location) points at the zeroconf socket;
+#   - the classic-watchman compat symlinks (one per C++ build family:
+#     ${prefix}/var/run/watchman) point at the zeroconf socket;
 #   - roots health via `status --json`: dead/missing roots as drift,
 #     plus marker-less roots informational (watchwoman has NO
 #     enforce_root_files guard — watch-project falls back to the path
@@ -35,12 +35,12 @@
 #
 # status.sh reporter conventions: exit 0 clean, 1 drift, 2 not-applicable.
 # Test seams: WATCHWOMAN_BIN, WATCHWOMAN_SOCKET_UNIT, WATCHWOMAN_SERVICE_UNIT,
-# WATCHWOMAN_STATUS_TIMEOUT (secs), WATCHWOMAN_COMPAT_ROOT.
+# WATCHWOMAN_STATUS_TIMEOUT (secs), WATCHWOMAN_COMPAT_ROOTS (space-sep).
 
 _wmbin="${WATCHWOMAN_BIN:-watchwoman}"
 _sock_unit="${WATCHWOMAN_SOCKET_UNIT:-watchwoman.socket}"
 _svc_unit="${WATCHWOMAN_SERVICE_UNIT:-watchwoman.service}"
-_compat_root="${WATCHWOMAN_COMPAT_ROOT:-/usr/local/var/run/watchman}"
+_compat_roots="${WATCHWOMAN_COMPAT_ROOTS:-{{WATCHWOMAN_COMPAT_ROOTS|join(' ')}}}"
 _expected_sock="${HOME}/.local/state/watchman/$(id -un)-state/sock"
 _dir="{{DIR}}"
 _target_bin="{{REPO_DIR}}/target/release/watchwoman"
@@ -232,19 +232,34 @@ if [ "$_svc_state" = active ]; then
   fi
 fi
 
-# --- classic-watchman compat symlink -------------------------------------------
-_compat_sock="$_compat_root/$(id -un)-state/sock"
-if [ -L "$_compat_sock" ]; then
-  if [ "$(readlink "$_compat_sock")" = "$_expected_sock" ]; then
-    _say compat "OK: $_compat_sock -> zeroconf socket"
+# --- classic-watchman compat symlinks ------------------------------------------
+# Per build family (${prefix}/var/run/watchman): each root needs
+# <user>-state/sock pointing at the zeroconf socket. A root whose build
+# family is absent is informational (nothing computes that path anymore);
+# a present root without a correct symlink is drift (stray C++ CLIs
+# auto-spawn rivals on dead paths).
+_compat_roots="${WATCHWOMAN_COMPAT_ROOTS:-{{WATCHWOMAN_COMPAT_ROOTS|join(' ')}}}"
+for _root in $_compat_roots; do
+  if [ ! -d "$_root" ] && [ "$_root" != "{{WATCHWOMAN_COMPAT_CANON}}" ] && [ ! -d "$(dirname "$(dirname "$_root")")" ]; then
+    _say compat "info: $_root (build family absent, nothing to serve)"
+    continue
+  fi
+  _compat_sock="$_root/$(id -un)-state/sock"
+  if [ -L "$_compat_sock" ]; then
+    if [ "$(readlink "$_compat_sock")" = "$_expected_sock" ]; then
+      _say compat "OK: $_compat_sock -> zeroconf socket"
+    else
+      _drift=1
+      _say compat "DRIFT: $_compat_sock -> $(readlink "$_compat_sock") (expected $_expected_sock)"
+    fi
+  elif [ -L "$(dirname "$_compat_sock")" ] && [ -S "$_compat_sock" ]; then
+    _drift=1
+    _say compat "DRIFT: $_root still routes to the legacy daemon ($(readlink "$(dirname "$_compat_sock")")); retire it and re-run {{BINS_DIR}}/activate-user.sh"
   else
     _drift=1
-    _say compat "DRIFT: $_compat_sock -> $(readlink "$_compat_sock") (expected $_expected_sock)"
+    _say compat "DRIFT: no compat symlink at $_compat_sock ({{BINS_DIR}}/activate-user.sh lays it)"
   fi
-else
-  _drift=1
-  _say compat "DRIFT: no compat symlink at $_compat_sock ({{BINS_DIR}}/activate-user.sh lays it)"
-fi
+done
 
 if [ "$_drift" != 0 ]; then
   _say result "DRIFT"
