@@ -106,13 +106,15 @@
         Description: "Watchwoman (watchman-compatible) file watching daemon socket"
         Documentation: https://github.com/radiosilence/watchwoman
       SYSTEMD_SOCKETS:
-        # Zeroconf contract with the CLI's sock::resolve: %h/%u expand at
-        # unit-load, per user, no per-user templating — the username is
-        # part of the path contract on BOTH sides (upstream watchman's
-        # <user>-state layout and watchwoman's sock::resolve agree on it).
-        # XDG_STATE_HOME must stay unset or default; status-watchwoman.sh
-        # checks the agreement via get-sockname. systemd creates the
-        # parent dirs (DirectoryMode); 0700 keeps per-user state private.
+        comments: |
+          Zeroconf contract with the CLI's sock::resolve: %h/%u expand at
+          unit-load, per user, no per-user templating — the username is
+          part of the path contract on BOTH sides (upstream watchman's
+          <user>-state layout and watchwoman's sock::resolve agree on
+          it). XDG_STATE_HOME must stay unset or default;
+          status-watchwoman.sh checks via get-sockname. systemd creates
+          the parent dirs (DirectoryMode); 0700 keeps per-user state
+          private.
         ListenStream: "%h/.local/state/watchman/%u-state/sock"
         SocketMode: "0600"
         DirectoryMode: "0700"
@@ -125,15 +127,22 @@
       # connection); activation restarts it up immediately instead.
       SYSTEMD_ENABLE: false
       SYSTEMD_UNITS:
+        comments: |
+          Socket-activated by watchwoman.socket: an idle service is
+          normal (after boot, before any client connects). The daemon
+          adopts systemd's LISTEN_FDS listener and never unlinks the
+          socket file while activated — the socket unit owns it for its
+          whole life, so the bind survives daemon restarts.
         Description: "Watchwoman file watching daemon (watchman-compatible)"
         Documentation: https://github.com/radiosilence/watchwoman
         Requires: watchwoman.socket
         After: watchwoman.socket
       SYSTEMD_SERVICES:
-        # --sockname is redundant with the activated listener but pins the
-        # daemon's own path notion (get-sockname answer, trigger
-        # persistence dir) to the socket unit's ListenStream even if the
-        # unit's environment ever grows a stray XDG_STATE_HOME.
+        comments: |
+          --sockname is redundant with the activated listener but pins
+          the daemon's own path notion (get-sockname answer, trigger
+          persistence dir) to the socket unit's ListenStream even if the
+          unit's environment ever grows a stray XDG_STATE_HOME.
         Type: notify
         ExecStart: "{{GLOBAL_BINS_DIR}}/watchwoman --sockname %h/.local/state/watchman/%u-state/sock --foreground-daemon"
         Restart: on-failure

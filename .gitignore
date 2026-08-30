@@ -4,3 +4,4 @@ files/apt-repos/*gpg
 private
 .aider*
 .beads
+.test-agent*
