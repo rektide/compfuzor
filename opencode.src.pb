@@ -27,6 +27,11 @@
       OPENCODE_SERVICE_HOSTNAME: 0.0.0.0
       OPENCODE_SERVICE_PORT: 49374
       OPENCODE_SERVICE_URL: http://127.0.0.1:49374
+      # Root-scoped watchman backend; inert until the composed working
+      # workspace carries the watchman stack, then opts the service in.
+      # 4m command deadline: loaded host, prefer waiting over generation churn.
+      OPENCODE_WATCHER_BACKEND: watchman
+      OPENCODE_WATCHMAN_COMMAND_TIMEOUT_MS: 240000
     # Optional deployment inputs. Define these as Ansible variables to enable
     # OpenCode's native OTLP/HTTP logs and traces without hard-coding a backend.
     ENV_LIST:
