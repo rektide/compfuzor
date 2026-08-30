@@ -1,13 +1,16 @@
 {#- `comments` in a section dict renders `# ...` lines directly above the
     [Section] header. A string value is split on newlines; a list value
     renders each entry (entries may themselves be multiline). Trailing
-    whitespace is stripped per line; empty lines render as a bare `#`.
-    `comments` is a template control key, never a unit directive: systemd
-    directives are CamelCase and no section systemd defines ([Unit],
-    [Service], [Socket], [Install], ...) has a directive named `comments`,
-    so the lowercase key cannot collide with real output. A section whose
-    only content is comments still renders the comments followed by the
-    bare header, keeping the comment anchored to its section. -#}
+    whitespace is stripped per line; interior empty lines render as a
+    bare `#` while empty lines at the very start/end of the block are
+    dropped (a YAML `|` block scalar's trailing newline is syntax, not
+    content). `comments` is a template control key, never a unit
+    directive: systemd directives are CamelCase and no section systemd
+    defines ([Unit], [Service], [Socket], [Install], ...) has a
+    directive named `comments`, so the lowercase key cannot collide
+    with real output. A section whose only content is comments still
+    renders the comments followed by the bare header, keeping the
+    comment anchored to its section. -#}
 {%- macro section(name, data) -%}
 {#- falsy section data renders nothing (as before); truthy non-mapping
     data is an authoring error and fails loudly via .items(). -#}
@@ -25,6 +28,23 @@
 {%- set _ = comment_lines.extend((raw_comments | string).split('\n')) -%}
 {%- endif -%}
 {%- endif -%}
+{#- Trim blank lines from both ends of the comment block: a trailing
+    newline from a YAML `|` block scalar is syntax, not content.
+    Interior blank lines stay and render as a bare `#` (paragraph
+    break inside the comment). -#}
+{%- set _started = [] -%}
+{%- for line in comment_lines -%}
+{%- if _started or line.strip() -%}
+{%- set _ = _started.append(line) -%}
+{%- endif -%}
+{%- endfor -%}
+{%- set _comment_lines = [] -%}
+{%- for line in _started | reverse -%}
+{%- if _comment_lines or line.strip() -%}
+{%- set _ = _comment_lines.insert(0, line) -%}
+{%- endif -%}
+{%- endfor -%}
+{%- set comment_lines = _comment_lines -%}
 {%- set field_keys = data.keys() | reject('eq', 'comments') | list -%}
 {%- if comment_lines or field_keys -%}
 {%- for line in comment_lines -%}
