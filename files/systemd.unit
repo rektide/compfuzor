@@ -1,8 +1,39 @@
+{#- `comments` in a section dict renders `# ...` lines directly above the
+    [Section] header. A string value is split on newlines; a list value
+    renders each entry (entries may themselves be multiline). Trailing
+    whitespace is stripped per line; empty lines render as a bare `#`.
+    `comments` is a template control key, never a unit directive: systemd
+    directives are CamelCase and no section systemd defines ([Unit],
+    [Service], [Socket], [Install], ...) has a directive named `comments`,
+    so the lowercase key cannot collide with real output. A section whose
+    only content is comments still renders the comments followed by the
+    bare header, keeping the comment anchored to its section. -#}
 {%- macro section(name, data) -%}
-{%- if data and data.items() | list | length > 0 -%}
+{#- falsy section data renders nothing (as before); truthy non-mapping
+    data is an authoring error and fails loudly via .items(). -#}
+{%- set data = data if data is mapping else ({} if not data else data.items()) -%}
+{%- set raw_comments = data.get('comments') -%}
+{%- set comment_lines = [] -%}
+{%- if raw_comments -%}
+{%- if raw_comments is string -%}
+{%- set _ = comment_lines.extend(raw_comments.split('\n')) -%}
+{%- elif raw_comments is iterable -%}
+{%- for entry in raw_comments -%}
+{%- set _ = comment_lines.extend((entry | string).split('\n')) -%}
+{%- endfor -%}
+{%- else -%}
+{%- set _ = comment_lines.extend((raw_comments | string).split('\n')) -%}
+{%- endif -%}
+{%- endif -%}
+{%- set field_keys = data.keys() | reject('eq', 'comments') | list -%}
+{%- if comment_lines or field_keys -%}
+{%- for line in comment_lines -%}
+{{ ('# ' ~ line.rstrip()) if line.strip() else '#' }}
+{% endfor -%}
 [{{ name }}]
 {% for key, value in data.items() -%}
-{% if value is sameas false -%}
+{% if key == 'comments' -%}
+{% elif value is sameas false -%}
 {% elif value is iterable and value is not string -%}
 {% for v in value -%}
 {{ key }}={{ v }}
