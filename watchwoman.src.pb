@@ -115,6 +115,14 @@
         ExecStart: "{{GLOBAL_BINS_DIR}}/watchwoman --sockname %h/.local/state/watchman/%u-state/sock --foreground-daemon"
         Restart: on-failure
         RestartSec: 1
+        # Roots with no subscriptions/triggers/commands go stale after
+        # WATCHWOMAN_STALE_IDLE_SECS (upstream default 3600 = 1h) and the
+        # next watch re-crawls them (daemon is in-memory only). Pin 2d so
+        # idle roots survive overnight/weekend gaps: warm roots cost their
+        # Tree in RAM and re-watch is O(ms); stale ones cost a full crawl.
+        # Giant-root accidents are prevented client-side (opencode never
+        # watch-projects), not by reaping.
+        Environment: "WATCHWOMAN_STALE_IDLE_SECS=172800"
         # One inotify watch per dir plus fds per root during crawl (same
         # arithmetic as the C++ deploy; notify-rs inotify backend).
         LimitNOFILE: 524288
@@ -234,5 +242,9 @@
       - Daemon state is zero-on-disk except trigger persistence under
         ~/.local/state/watchman/<user>-state/roots/. Logs go to the
         journal (identifier `watchwoman`).
+      - Root idle reaping: WATCHWOMAN_STALE_IDLE_SECS=172800 (2d). Roots
+        with no subscribers/triggers/commands for that long go stale and
+        re-crawl on next watch — keep them warm; the daemon forgets
+        everything on restart regardless.
   tasks:
     - import_tasks: tasks/compfuzor.includes
