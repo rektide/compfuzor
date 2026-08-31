@@ -120,10 +120,10 @@
     opencodeCleanupTimer:
       SYSTEMD_TIMER: opencode-cleanup
       SYSTEMD_UNITS:
-        Description: Clean inactive OpenCode native-library artifacts daily
+        Description: Clean inactive OpenCode native-library artifacts every eight hours
         Documentation: https://github.com/anomalyco/opencode
       SYSTEMD_TIMERS:
-        OnCalendar: daily
+        OnCalendar: "*-*-* 00/8:00:00"
         Persistent: true
         Unit: opencode-cleanup.service
       SYSTEMD_INSTALLS:
@@ -200,10 +200,10 @@
       `--min-age` when an additional retention delay is desired; summaries
       report the count and allocated bytes retained by that delay.
 
-      `opencode-cleanup.timer` runs the apply form daily. `Persistent=true`
-      catches up a missed calendar run when the user manager next starts; user
-      lingering keeps that manager available outside login sessions on hosts
-      where it is enabled.
+      `opencode-cleanup.timer` runs the apply form every eight hours.
+      `Persistent=true` catches up a missed calendar run when the user manager
+      next starts; user lingering keeps that manager available outside login
+      sessions on hosts where it is enabled.
 
           systemctl --user status opencode-cleanup.timer
           systemctl --user list-timers opencode-cleanup.timer
