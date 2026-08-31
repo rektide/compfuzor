@@ -113,16 +113,18 @@
       shared libraries in `/tmp`. The cleanup utility recognizes OpenTUI by its
       ELF SONAME and FFF by its exported API symbols, under their strict Bun
       extraction filename slots. It never traverses `/tmp/opencode` and
-      defaults to a 24-hour dry run:
+      defaults to a dry run with no age delay:
 
           {{DIR}}/bin/cleanup.sh
-          {{DIR}}/bin/cleanup.sh --min-age 72h
+          {{DIR}}/bin/cleanup.sh --min-age 24h
           {{DIR}}/bin/cleanup.sh --apply
-          {{DIR}}/bin/cleanup.sh --apply --require-no-opencode
+          {{DIR}}/bin/cleanup.sh --apply --min-age 24h
 
       Files mapped or held open by any process are excluded. New dependency
       builds remain eligible as their bytes and sizes change, while unrelated
-      randomized shared libraries fail the semantic ELF identity checks.
+      randomized shared libraries fail the semantic ELF identity checks. Use
+      `--min-age` when an additional retention delay is desired; summaries
+      report the count and allocated bytes retained by that delay.
 
       The health probe must return HTTP 200. Its JSON `healthy` field remains
       true while the server is starting, stopping, or in managed boot failure.

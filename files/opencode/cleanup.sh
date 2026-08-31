@@ -3,7 +3,7 @@ shopt -s nullglob
 
 script_name=${0##*/}
 tmp_dir=${TMPDIR:-/tmp}
-min_age=24h
+min_age=0s
 apply=0
 require_no_opencode=0
 
@@ -16,7 +16,7 @@ The default is a dry run; deletion requires --apply.
 
 Options:
       --apply                 Delete eligible files.
-      --min-age DURATION      Minimum age (default: 24h). Suffix: s, m, h, d.
+      --min-age DURATION      Minimum age (default: 0s). Suffix: s, m, h, d.
       --require-no-opencode   Refuse to run while opencode/opencode2 exists.
       --tmp-dir DIR           Inspect DIR instead of TMPDIR or /tmp (testing).
   -h, --help                  Show this help.
@@ -179,6 +179,7 @@ deleted=0
 eligible_bytes=0
 deleted_bytes=0
 skipped_young=0
+skipped_young_bytes=0
 skipped_active=0
 skipped_identity=0
 skipped_content=0
@@ -192,6 +193,7 @@ while IFS= read -r -d '' path; do
   [[ ! -L $path ]] || { ((skipped_identity += 1)); continue; }
   before=$(snapshot "$path") || { ((skipped_changed += 1)); continue; }
   IFS='|' read -r _ inode owner links _ mtime blocks _ _ <<<"$before"
+  allocated=$((blocks * 512))
 
   if [[ $owner != "$uid" || $links != 1 ]]; then
     ((skipped_identity += 1))
@@ -199,6 +201,7 @@ while IFS= read -r -d '' path; do
   fi
   if ((mtime > cutoff)); then
     ((skipped_young += 1))
+    ((skipped_young_bytes += allocated))
     continue
   fi
   if [[ -n ${active_paths[$path]+x} ]]; then
@@ -217,7 +220,6 @@ while IFS= read -r -d '' path; do
     continue
   fi
 
-  allocated=$((blocks * 512))
   ((eligible += 1))
   ((eligible_bytes += allocated))
 
@@ -252,7 +254,8 @@ done < <(find "$tmp_dir" -xdev -mindepth 1 -maxdepth 1 -type f -print0)
 
 mode='dry-run'
 ((apply)) && mode='apply'
-printf '%s summary: scanned=%d eligible=%d eligible_bytes=%s deleted=%d deleted_bytes=%s young=%d active=%d identity=%d content=%d changed=%d\n' \
-  "$mode" "$scanned" "$eligible" "$(human_bytes "$eligible_bytes")" \
+printf '%s summary: min_age=%s scanned=%d eligible=%d eligible_bytes=%s deleted=%d deleted_bytes=%s young=%d young_bytes=%s active=%d identity=%d content=%d changed=%d\n' \
+  "$mode" "$min_age" "$scanned" "$eligible" "$(human_bytes "$eligible_bytes")" \
   "$deleted" "$(human_bytes "$deleted_bytes")" "$skipped_young" \
+  "$(human_bytes "$skipped_young_bytes")" \
   "$skipped_active" "$skipped_identity" "$skipped_content" "$skipped_changed"
