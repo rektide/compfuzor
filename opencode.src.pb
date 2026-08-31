@@ -35,6 +35,11 @@
       OPENCODE_SERVER_URL: http://127.0.0.1:49373
       OPENCODE_PASSWORD_FILE: "{{PASSWORDS_DIR}}/OPENCODE_PASSWORD"
       OPENCODE_DISABLE_AUTOUPDATE: 1
+      # Rendered empty and rewritten in place by bin/build-env-cors.sh, a
+      # build.sh compositor leaf: all hostname -A names plus
+      # <short hostname>.local, deduped, each http://<name>:<port>.
+      # serve.sh expands each into --cors.
+      OPENCODE_SERVER_CORS: ""
       # Root-scoped watchman backend; inert until the composed working
       # workspace carries the watchman stack, then opts the service in.
       # 4m command deadline: loaded host, prefer waiting over generation churn.
@@ -180,6 +185,19 @@
       Existing default-world processes and registrations on port 49374 may
       coexist and share the channel database; concurrent SQLite writers are
       supported but can contend.
+
+      ## CORS origins
+
+      `bin/build-env-cors.sh` is composed into `build.sh` by the bin
+      compositor (its `build*` name groups it there), so every build rewrites
+      `OPENCODE_SERVER_CORS` in `env` and `env.export` in place: every name
+      from `hostname -A` plus `<short hostname>.local`, deduplicated in
+      first-seen order, each as `http://<name>:<port>`, comma-separated. The
+      playbook renders the key empty, so an Ansible re-render resets it until
+      the next build (or a manual `{{DIR}}/bin/build-env-cors.sh` run).
+      `serve.sh` expands each origin into a repeatable `--cors` flag; an empty
+      value means no flags. Apply changes with
+      `systemctl --user restart opencode.service`.
 
       ## Native-library cleanup
 
@@ -374,6 +392,10 @@
           exec bun run --cwd "{{DIR}}" dev $(pwd)
       # TODO: compfuzor helpers for installing content, automate this in install-user
       - name: serve.sh
+        basedir: False
+      # Auto-grouped under the build.sh compositor by its build* name; every
+      # build.sh run refreshes the origins, no explicit call site required.
+      - name: build-env-cors.sh
         basedir: False
       - name: cleanup.sh
         basedir: False

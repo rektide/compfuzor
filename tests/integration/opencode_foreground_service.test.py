@@ -192,8 +192,55 @@ def test_launcher_reads_systemd_credential_without_argv_leak() -> None:
             raise AssertionError("launcher did not export the systemd credential")
 
 
+def test_launcher_expands_cors_origins_into_repeatable_flags() -> None:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-opencode-serve-") as temporary:
+        directory = Path(temporary)
+        binary = fake_binary(directory)
+        password_file = directory / "OPENCODE_PASSWORD"
+        password_file.write_text(TEST_PASSWORD, encoding="utf-8")
+        env = capture_env(directory, binary, password_file)
+        env.update(
+            {
+                "CREDENTIALS_DIRECTORY": str(directory),
+                "OPENCODE_SERVER_HOSTNAME": "0.0.0.0",
+                "OPENCODE_SERVER_PORT": "49373",
+                "OPENCODE_SERVER_CORS": (
+                    "http://workhorse.local:49373,"
+                    "http://workhorse.tail177464.ts.net:49373"
+                ),
+            }
+        )
+
+        result = subprocess.run(
+            ["bash", str(LAUNCHER)],
+            cwd=ROOT,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            raise AssertionError(f"foreground launcher failed:\n{result.stdout}{result.stderr}")
+        arguments = captured_arguments(directory)
+        expected = [
+            "serve",
+            "--hostname",
+            "0.0.0.0",
+            "--port",
+            "49373",
+            "--cors",
+            "http://workhorse.local:49373",
+            "--cors",
+            "http://workhorse.tail177464.ts.net:49373",
+        ]
+        if arguments != expected:
+            raise AssertionError(f"expected {expected!r}, got {arguments!r}")
+
+
 if __name__ == "__main__":
     test_zim_routes_without_lifecycle_management()
     test_zim_fails_before_execution_without_password()
     test_launcher_reads_systemd_credential_without_argv_leak()
+    test_launcher_expands_cors_origins_into_repeatable_flags()
     print("ok: OpenCode foreground service and ZIM routing")
