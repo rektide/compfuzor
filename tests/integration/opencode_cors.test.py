@@ -3,14 +3,16 @@
 
 from __future__ import annotations
 
+import atexit
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DISCOVERY = ROOT / "files/opencode/build-env-cors.sh"
+SOURCE = ROOT / "files/opencode/build-env-cors.sh"
 
 EXPECTED_CSV = ",".join(
     [
@@ -53,13 +55,65 @@ def write_fixture(work: Path, include_key: bool, include_export: bool = True) ->
         )
 
 
+_rendered: Path | None = None
+
+
+def rendered_discovery() -> Path:
+    """Render the Jinja source through Ansible once; return the bash path.
+
+    Bin sources deploy via lookup('template'), so they may contain Jinja
+    escapes (the array-length literal) that raw bash cannot parse. Tests
+    execute the rendered artifact -- the same bytes that land in bin/.
+    """
+    global _rendered
+    if _rendered is not None:
+        return _rendered
+    directory = tempfile.mkdtemp(prefix="compfuzor-opencode-cors-render-")
+    atexit.register(shutil.rmtree, directory, ignore_errors=True)
+    rendered = Path(directory) / "build-env-cors.sh"
+    playbook = ROOT / ".test-agent-opencode-cors-render.pb"
+    playbook.write_text(
+        f"""---
+- hosts: all
+  gather_facts: false
+  tasks:
+    - copy:
+        dest: {str(rendered)!r}
+        content: "{{{{ lookup('template', 'files/opencode/build-env-cors.sh') }}}}"
+""",
+        encoding="utf-8",
+    )
+    try:
+        env = os.environ.copy()
+        env["ANSIBLE_CONFIG"] = str(ROOT / "ansible.cfg")
+        result = subprocess.run(
+            ["ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook)],
+            cwd=ROOT,
+            env=env,
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+    finally:
+        playbook.unlink(missing_ok=True)
+    if result.returncode != 0:
+        raise AssertionError(f"bin render failed:\n{result.stdout}{result.stderr}")
+    syntax = subprocess.run(
+        ["bash", "-n", str(rendered)], check=False, capture_output=True, text=True
+    )
+    if syntax.returncode != 0:
+        raise AssertionError(f"rendered script is not valid bash:\n{syntax.stderr}")
+    _rendered = rendered
+    return rendered
+
+
 def run_discovery(shims: Path, work: Path) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env["PATH"] = f"{shims}:{env['PATH']}"
     env["DIR"] = str(work)
     env["OPENCODE_SERVER_PORT"] = "49373"
     return subprocess.run(
-        ["bash", str(DISCOVERY)],
+        ["bash", str(rendered_discovery())],
         cwd=ROOT,
         env=env,
         check=False,

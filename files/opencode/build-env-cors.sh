@@ -34,8 +34,15 @@ for name in "${names[@]}"; do
   fi
 done
 
+# The length check below is emitted through a Jinja string-literal escape:
+# bin sources pass through Ansible's template lookup, where a bare
+# brace-hash sequence would open a comment that never closes. The
+# integration test renders this source before executing it, exactly like
+# the bin deployment does.
 csv=''
-csv=$(IFS=,; printf '%s' "${origins[*]}")
+if (( ${{'{#'}}origins[@]} )); then
+  csv=$(IFS=,; printf '%s' "${origins[*]}")
+fi
 
 set_env_key() {
   local file=$1 prefix=$2 value=$3
