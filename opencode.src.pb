@@ -38,51 +38,83 @@
       - OTEL_EXPORTER_OTLP_ENDPOINT
       - OTEL_EXPORTER_OTLP_HEADERS
       - OTEL_RESOURCE_ATTRIBUTES
-    SYSTEMD_SERVICE: opencode
     SYSTEMD_SCOPE: user
     SYSTEMD_INSTALL: user
-    SYSTEMD_UNITS:
-      Description: OpenCode V2 background server
-      Documentation: https://opencode.ai/docs/
-      Wants: network-online.target
-      After: network-online.target
-      StartLimitIntervalSec: 60
-      StartLimitBurst: 5
-    SYSTEMD_SERVICES:
-      # OpenCode is an execution environment and needs the user's normal home,
-      # projects, tools, and /tmp. Generic filesystem/process sandboxing would
-      # silently break its core job, so harden lifecycle rather than access.
-      Type: exec
-      ExecStart: "{{GLOBAL_BINS_DIR}}/opencode2 serve --service --hostname ${OPENCODE_SERVICE_HOSTNAME} --port ${OPENCODE_SERVICE_PORT}"
-      WorkingDirectory: "%h"
-      Restart: on-failure
-      RestartSec: 1
-      RestartSteps: 5
-      RestartMaxDelaySec: 30
-      TimeoutStopSec: 30
-      TimeoutStopFailureMode: kill
-      KillMode: control-group
-      # OpenCode is control-plane infrastructure for active agent work. Exclude
-      # it from systemd-oomd's user-slice candidates rather than merely ranking
-      # it last; kernel OOM kills still fail and restart the whole unit.
-      ManagedOOMPreference: omit
-      # A value such as -900 would strongly protect against the kernel OOM
-      # killer, but an unprivileged user manager cannot lower oom_score_adj
-      # below its own inherited value. On this host systemd accepted -900 but
-      # the process remained at 100, so leave this disabled rather than imply
-      # protection that is not effective. It requires privileged policy on
-      # user@.service or moving this workload to a system service.
-      # OOMScoreAdjust: -900
-      OOMPolicy: stop
-      MemoryAccounting: true
-      TasksAccounting: true
-      IPAccounting: true
-      LimitNOFILE: 1048576
-      StandardOutput: journal
-      StandardError: journal
-      SyslogIdentifier: opencode
-    SYSTEMD_INSTALLS:
-      WantedBy: default.target
+    SYSTEMD_ROOTS:
+      - opencodeService
+      - opencodeCleanupService
+      - opencodeCleanupTimer
+    opencodeService:
+      SYSTEMD_SERVICE: opencode
+      SYSTEMD_UNITS:
+        Description: OpenCode V2 background server
+        Documentation: https://opencode.ai/docs/
+        Wants: network-online.target
+        After: network-online.target
+        StartLimitIntervalSec: 60
+        StartLimitBurst: 5
+      SYSTEMD_SERVICES:
+        # OpenCode is an execution environment and needs the user's normal home,
+        # projects, tools, and /tmp. Generic filesystem/process sandboxing would
+        # silently break its core job, so harden lifecycle rather than access.
+        Type: exec
+        ExecStart: "{{GLOBAL_BINS_DIR}}/opencode2 serve --service --hostname ${OPENCODE_SERVICE_HOSTNAME} --port ${OPENCODE_SERVICE_PORT}"
+        WorkingDirectory: "%h"
+        Restart: on-failure
+        RestartSec: 1
+        RestartSteps: 5
+        RestartMaxDelaySec: 30
+        TimeoutStopSec: 30
+        TimeoutStopFailureMode: kill
+        KillMode: control-group
+        # OpenCode is control-plane infrastructure for active agent work. Exclude
+        # it from systemd-oomd's user-slice candidates rather than merely ranking
+        # it last; kernel OOM kills still fail and restart the whole unit.
+        ManagedOOMPreference: omit
+        # A value such as -900 would strongly protect against the kernel OOM
+        # killer, but an unprivileged user manager cannot lower oom_score_adj
+        # below its own inherited value. On this host systemd accepted -900 but
+        # the process remained at 100, so leave this disabled rather than imply
+        # protection that is not effective. It requires privileged policy on
+        # user@.service or moving this workload to a system service.
+        # OOMScoreAdjust: -900
+        OOMPolicy: stop
+        MemoryAccounting: true
+        TasksAccounting: true
+        IPAccounting: true
+        LimitNOFILE: 1048576
+        StandardOutput: journal
+        StandardError: journal
+        SyslogIdentifier: opencode
+      SYSTEMD_INSTALLS:
+        WantedBy: default.target
+    opencodeCleanupService:
+      SYSTEMD_SERVICE: opencode-cleanup
+      # The timer activates this unit; installing it must only link the file.
+      SYSTEMD_ENABLE: false
+      SYSTEMD_UNITS:
+        Description: Clean inactive OpenCode native-library artifacts
+        Documentation: https://github.com/anomalyco/opencode
+      SYSTEMD_SERVICES:
+        Type: oneshot
+        ExecStart: "{{DIR}}/bin/cleanup.sh --apply --min-age 0s"
+        # Do not inherit daemon defaults or the server's environment.
+        EnvironmentFile: false
+        Restart: false
+        RestartSec: false
+      SYSTEMD_INSTALLS:
+        WantedBy: false
+    opencodeCleanupTimer:
+      SYSTEMD_TIMER: opencode-cleanup
+      SYSTEMD_UNITS:
+        Description: Clean inactive OpenCode native-library artifacts daily
+        Documentation: https://github.com/anomalyco/opencode
+      SYSTEMD_TIMERS:
+        OnCalendar: daily
+        Persistent: true
+        Unit: opencode-cleanup.service
+      SYSTEMD_INSTALLS:
+        WantedBy: timers.target
     ZIM_ENV:
       - OPENCODE_SERVICE_URL
     ZIM_MODULES:
@@ -101,6 +133,9 @@
 
           systemctl --user status opencode.service
           journalctl --user -u opencode.service -f
+          systemctl --user status opencode-cleanup.timer
+          systemctl --user list-timers opencode-cleanup.timer
+          journalctl --user -u opencode-cleanup.service
           systemctl --user show opencode.service \
             -p ActiveState -p SubState -p MainPID -p NRestarts \
             -p MemoryCurrent -p MemoryPeak -p CPUUsageNSec -p TasksCurrent
@@ -125,6 +160,11 @@
       randomized shared libraries fail the semantic ELF identity checks. Use
       `--min-age` when an additional retention delay is desired; summaries
       report the count and allocated bytes retained by that delay.
+
+      `opencode-cleanup.timer` runs the apply form daily. `Persistent=true`
+      catches up a missed calendar run when the user manager next starts; user
+      lingering keeps that manager available outside login sessions on hosts
+      where it is enabled.
 
       The health probe must return HTTP 200. Its JSON `healthy` field remains
       true while the server is starting, stopping, or in managed boot failure.

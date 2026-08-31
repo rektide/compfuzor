@@ -273,7 +273,8 @@
       {%- set out = [] -%}
       {%- for s in specs -%}
         {%- for scope in ['system', 'user'] -%}
-          {%- if lookup('vars', 'SYSTEMD_' ~ (scope | upper) ~ '_' ~ (s.type | upper) ~ '_INSTALL', default=(scope == 'system')) -%}
+          {# Types without a legacy per-scope gate still obey SYSTEMD_INSTALL. #}
+          {%- if lookup('vars', 'SYSTEMD_' ~ (scope | upper) ~ '_' ~ (s.type | upper) ~ '_INSTALL', default=(SYSTEMD_INSTALL_VALID in [scope, 'both', 'separate', true])) -%}
             {%- set _ = out.append(s | combine({'scope': scope})) -%}
           {%- endif -%}
         {%- endfor -%}
