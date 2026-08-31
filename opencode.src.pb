@@ -21,12 +21,20 @@
     PKGS:
       - binutils
     BACKUP_TARGET: /mnt/fu/backup/opencode-2026-5
+    PASSWORDS_DIR: "{{ansible_user_dir}}/.config/opencode/secrets"
+    PASSWORDS:
+      - name: OPENCODE_PASSWORD
+        format: "python3 -c 'import secrets; print(secrets.token_urlsafe(32))'"
+        per_host: true
+        file: true
     ENV:
       OPENCODE_PRINT_LOGS: 1
       OPENCODE_LOG_LEVEL: INFO
-      OPENCODE_SERVICE_HOSTNAME: 0.0.0.0
-      OPENCODE_SERVICE_PORT: 49374
-      OPENCODE_SERVICE_URL: http://127.0.0.1:49374
+      OPENCODE_SERVER_HOSTNAME: 0.0.0.0
+      OPENCODE_SERVER_PORT: 49373
+      OPENCODE_SERVER_URL: http://127.0.0.1:49373
+      OPENCODE_PASSWORD_FILE: "{{PASSWORDS_DIR}}/OPENCODE_PASSWORD"
+      OPENCODE_DISABLE_AUTOUPDATE: 1
       # Root-scoped watchman backend; inert until the composed working
       # workspace carries the watchman stack, then opts the service in.
       # 4m command deadline: loaded host, prefer waiting over generation churn.
@@ -47,8 +55,8 @@
     opencodeService:
       SYSTEMD_SERVICE: opencode
       SYSTEMD_UNITS:
-        Description: OpenCode V2 background server
-        Documentation: https://opencode.ai/docs/
+        Description: OpenCode V2 operator-managed foreground server
+        Documentation: https://opencode.ai/v2/docs/
         Wants: network-online.target
         After: network-online.target
         StartLimitIntervalSec: 60
@@ -58,15 +66,20 @@
         # projects, tools, and /tmp. Generic filesystem/process sandboxing would
         # silently break its core job, so harden lifecycle rather than access.
         Type: exec
-        ExecStart: "{{GLOBAL_BINS_DIR}}/opencode2 serve --service --hostname ${OPENCODE_SERVICE_HOSTNAME} --port ${OPENCODE_SERVICE_PORT}"
+        ExecStart: "{{DIR}}/bin/serve.sh"
         WorkingDirectory: "%h"
-        Restart: on-failure
+        LoadCredential: "OPENCODE_PASSWORD:{{PASSWORDS_DIR}}/OPENCODE_PASSWORD"
+        SuccessExitStatus: 130
+        Restart: always
         RestartSec: 1
         RestartSteps: 5
         RestartMaxDelaySec: 30
-        TimeoutStopSec: 30
+        TimeoutStopSec: 90
         TimeoutStopFailureMode: kill
-        KillMode: control-group
+        KillSignal: SIGTERM
+        FinalKillSignal: SIGKILL
+        KillMode: mixed
+        UMask: "0077"
         # OpenCode is control-plane infrastructure for active agent work. Exclude
         # it from systemd-oomd's user-slice candidates rather than merely ranking
         # it last; kernel OOM kills still fail and restart the whole unit.
@@ -116,33 +129,59 @@
       SYSTEMD_INSTALLS:
         WantedBy: timers.target
     ZIM_ENV:
-      - OPENCODE_SERVICE_URL
+      - OPENCODE_SERVER_URL
+      - OPENCODE_PASSWORD_FILE
     ZIM_MODULES:
       - name: opencode-service
         source: opencode-service.zsh
         phase: tools
-        comment: Route both OpenCode command names through the managed V2 server.
+        comment: Route both OpenCode command names through the operator-managed V2 server.
     README: |
-      # OpenCode V2 service
+      # Operator-managed OpenCode V2 server
 
-      OpenCode runs as the `opencode.service` systemd user unit on
-      `${OPENCODE_SERVICE_HOSTNAME}:${OPENCODE_SERVICE_PORT}`. Structured logs
-      are duplicated to journald and OpenCode's append-only XDG data log.
+      `opencode.service` runs plain foreground `opencode2 serve` on
+      `${OPENCODE_SERVER_HOSTNAME}:${OPENCODE_SERVER_PORT}`. It deliberately
+      does not use `--service`: OpenCode publishes no registration, performs no
+      incumbent election or self-eviction, and never manages this process.
+      Lifecycle authority belongs only to the systemd user unit.
+
+      The persisted 43-character password lives at `${OPENCODE_PASSWORD_FILE}`
+      with mode 0600. systemd copies it into a read-only runtime credential;
+      `serve.sh` exports it only to the server process. The ZIM module reads the
+      same file once in each new shell and exports `OPENCODE_PASSWORD` for
+      clients. The secret is never copied into `env`, `env.export`, a unit file,
+      or a generated ZIM fragment.
 
       ## Operations
 
           systemctl --user status opencode.service
+          systemctl --user restart opencode.service
           journalctl --user -u opencode.service -f
-          systemctl --user status opencode-cleanup.timer
-          systemctl --user list-timers opencode-cleanup.timer
-          journalctl --user -u opencode-cleanup.service
           systemctl --user show opencode.service \
             -p ActiveState -p SubState -p MainPID -p NRestarts \
             -p MemoryCurrent -p MemoryPeak -p CPUUsageNSec -p TasksCurrent
           opencode2 api get /api/health
-          opencode2 pair
+          opencode2 api get /api/server
 
-      ## Temporary native-library cleanup
+      The ZIM functions for `opencode` and `opencode2` inject
+      `--server ${OPENCODE_SERVER_URL}` for ordinary clients. They never start,
+      stop, probe, replace, or reconcile the server. Initial connection failure
+      is therefore fast and points back to `systemctl`; an established TUI uses
+      OpenCode's existing event-stream reconnection behavior.
+
+      `serve`, `service`, an explicit `--server`, and `--standalone` bypass the
+      wrapper so the upstream default world remains available as a parallel
+      fallback. Current command handlers for `pair`, `plugin list`,
+      `mcp list/auth/logout`, `console login`, and `debug config/agents` do not
+      honor the global explicit-server path; those commands still target the
+      fallback world until the optional upstream consistency patch lands.
+
+      Foreground mode never writes `~/.local/state/opencode/service.json`.
+      Existing default-world processes and registrations on port 49374 may
+      coexist and share the channel database; concurrent SQLite writers are
+      supported but can contend.
+
+      ## Native-library cleanup
 
       OpenCode's compiled native dependencies can leave byte-identical hidden
       shared libraries in `/tmp`. The cleanup utility recognizes OpenTUI by its
@@ -166,10 +205,11 @@
       lingering keeps that manager available outside login sessions on hosts
       where it is enabled.
 
-      The health probe must return HTTP 200. Its JSON `healthy` field remains
-      true while the server is starting, stopping, or in managed boot failure.
-      Do not build monitoring around the field alone, and do not probe through
-      a client path that can auto-start a detached server.
+          systemctl --user status opencode-cleanup.timer
+          systemctl --user list-timers opencode-cleanup.timer
+          journalctl --user -u opencode-cleanup.service
+
+      ## Operational notes
 
       Set `OTEL_EXPORTER_OTLP_ENDPOINT` (and optionally
       `OTEL_EXPORTER_OTLP_HEADERS` / `OTEL_RESOURCE_ATTRIBUTES`) as Ansible
@@ -186,9 +226,8 @@
       override the kernel OOM killer. An unprivileged user manager cannot lower
       `OOMScoreAdjust` below its inherited value; kernel-level priority would
       require a deliberate privileged policy for `user@.service` or a system
-      service deployment. If the kernel still OOM-kills a unit process,
-      `OOMPolicy=stop` makes the unit fail coherently and `Restart=on-failure`
-      recovers it with bounded backoff.
+      service deployment. `OOMPolicy=stop` keeps an OOM failure coherent, and
+      `Restart=always` recovers process exits with bounded backoff.
     MCP_CLIENT:
       remote: mcp
       wrapper: mcp
@@ -334,6 +373,8 @@
           # note/beware that we also are pulling in env.exports
           exec bun run --cwd "{{DIR}}" dev $(pwd)
       # TODO: compfuzor helpers for installing content, automate this in install-user
+      - name: serve.sh
+        basedir: False
       - name: cleanup.sh
         basedir: False
       - name: backup.sh
