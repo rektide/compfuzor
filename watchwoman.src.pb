@@ -129,7 +129,13 @@
         Restart: on-failure
         RestartSec: 1
         # One inotify watch per dir plus fds per root during crawl
-        # (notify-rs inotify backend).
+        # (notify-rs inotify backend). LimitNOFILE only covers fds;
+        # the WATCH budget is fs.inotify.max_user_watches, owned by
+        # sysctl-fs-inotify.etc.pb (16M). Journal WARNs of
+        # `Error { kind: MaxFilesWatch }` (notify-rs for inotify_add_watch
+        # ENOSPC) mean that sysctl pool is exhausted — typically
+        # node_modules-heavy roots without a seeded .watchmanconfig —
+        # not this unit's rlimit.
         LimitNOFILE: 524288
         StandardOutput: journal
         StandardError: journal
@@ -220,6 +226,12 @@
 
       ## Notes
 
+      - `Error { kind: MaxFilesWatch }` in the journal is notify-rs for
+        inotify_add_watch ENOSPC: the user's fs.inotify.max_user_watches
+        pool is gone (sysctl-fs-inotify.etc.pb owns it, 16M as of
+        2026-08-31). Usual arsonist: a root with no .watchmanconfig
+        crawling its node_modules — seed one with
+        {{BINS_DIR}}/init-watchmanconfig.sh <dir>.
       - Do not run `watchwoman install-unit`: it writes real unit files
         over compfuzor's managed symlinks. (`watchwoman uninstall-unit`
         reverts if that already happened.)
