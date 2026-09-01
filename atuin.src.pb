@@ -126,7 +126,10 @@
               | block-in-file -n atuin-search-mode -i - -o "$CFG" \
                 -b '^\[' -C file --append-newline
           else
-            block-in-file --remove-all atuin-search-mode -i /dev/null -o "$CFG"
+            # block-in-file 1.0's --remove-all drops the opening marker from
+            # every non-target block it scans. Delete only our exact markers
+            # so removing search routing cannot corrupt atuin-daemon.
+            sed -i '/^# atuin-search-mode start$/,/^# atuin-search-mode end$/d' "$CFG"
           fi
       - name: status-atuin.sh
         # Hybrid-deploy drift reporter (watchman-grade): managed unit links,
