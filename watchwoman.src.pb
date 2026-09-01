@@ -80,6 +80,14 @@
     # watch-projects), not by reaping.
     ENV:
       WATCHWOMAN_STALE_IDLE_SECS: 172800
+      # Shell clients should use the same default socket as watchwoman.socket.
+      # This module is deliberately one sort number before watchman-env so
+      # that this contributor wins the ZIM_ENV don't-stomp race when both
+      # playbooks are installed.
+      WATCHMAN_SOCK: "${HOME}/.local/state/watchman/$(id -un)-state/sock"
+    ZIM_ENV_PHASE: 54
+    ZIM_ENV:
+      - WATCHMAN_SOCK
 
     watchwomanSocket:
       SYSTEMD_SOCKET: watchwoman
