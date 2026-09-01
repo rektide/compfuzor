@@ -120,8 +120,8 @@ the `[daemon]` config merger is a hand-written, ungrouped bin.
 ```
 install-user.sh
 ├─ install-systemd-user.sh
-│   ├─ install-socket-atuin-daemon-user.sh   (enable+start)
-│   └─ install-service-atuin-daemon-user.sh  (link only, SYSTEMD_ENABLE=false)
+│   ├─ install-service-atuin-daemon-user.sh  (link first, SYSTEMD_ENABLE=false)
+│   └─ install-socket-atuin-daemon-user.sh   (then enable+start)
 └─ install-atuin-config.sh                    (merge [daemon] config)
 ```
 

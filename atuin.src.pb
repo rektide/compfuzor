@@ -34,7 +34,9 @@
       rust: "1.98.0"
     SYSTEMD_SCOPE: user
     SYSTEMD_INSTALL: user
-    SYSTEMD_ROOTS: [atuinSocket, atuinService]
+    # Link the service before enabling/starting its socket; systemd refuses to
+    # listen while the socket's activation target is not loaded.
+    SYSTEMD_ROOTS: [atuinService, atuinSocket]
     atuinSocket:
       SYSTEMD_SOCKET: atuin-daemon
       SYSTEMD_UNITS:
