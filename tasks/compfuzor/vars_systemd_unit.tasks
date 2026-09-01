@@ -8,17 +8,24 @@
     ETC_DIRS: "{{ETC_DIRS|default(_systemd_has_units|ternary([], omit))}}"
     _systemd_has_units: "{{_systemd_has_units}}"
   vars:
-    _systemd_has_service: "{{ SYSTEMD_SERVICE is deftruthy or SYSTEMD_SERVICES is deflengthy }}"
-    _systemd_has_socket: "{{ SYSTEMD_SOCKET is deftruthy or SYSTEMD_SOCKETS is deflengthy }}"
-    _systemd_has_mount: "{{ SYSTEMD_MOUNT is deftruthy or SYSTEMD_MOUNTS is deflengthy }}"
-    _systemd_has_dnssd: "{{ SYSTEMD_DNSSD is deftruthy or SYSTEMD_DNSSDS is deflengthy }}"
-    _systemd_has_units: "{{ _systemd_has_service or _systemd_has_socket or _systemd_has_mount or _systemd_has_dnssd }}"
+    # Presence per unit type, derived from SYSTEMD_UNITTYPES_ALL so every
+    # type (timer, path, slice, ...) is detectable at top level, in
+    # SYSTEMD_TYPE_CONFIG order. The previous hardcoded four-boolean zip
+    # silently mispaired: zip truncation matched the dnssd flag to timer
+    # (SYSTEMD_TYPE_CONFIG's fourth key) and never detected dnssd itself.
+    # scope's singular name (SYSTEMD_SCOPE) is the system/user selector, so
+    # only its plural SYSTEMD_SCOPES can declare scope units.
     types: >-
-      {{ SYSTEMD_UNITTYPES_ALL 
-        | zip([_systemd_has_service, _systemd_has_socket, _systemd_has_mount, _systemd_has_dnssd])
-        | selectattr(1)
-        | map(attribute=0)
-        | list }}
+      {%- set detected = [] -%}
+      {%- for unit_type in SYSTEMD_UNITTYPES_ALL -%}
+      {%- set singular = false if unit_type == 'scope' else lookup('vars', 'SYSTEMD_' ~ (unit_type | upper), default=false) -%}
+      {%- set plural = lookup('vars', 'SYSTEMD_' ~ SYSTEMD_TYPE_CONFIG[unit_type].var_suffix, default=false) -%}
+      {%- if singular is deftruthy or plural is deflengthy -%}
+      {%- set _ = detected.append(unit_type) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ detected }}
+    _systemd_has_units: "{{ types | length > 0 }}"
     serviceExec: "{{SYSTEMD_SERVICE|default(SYSTEMD_EXEC|def|ternary(True, omit))}}"
     serviceNameDefault: "{{SYSTEMD_SERVICE|default(omit) if SYSTEMD_SERVICE|def != True else NAME}}"
 
