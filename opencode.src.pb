@@ -45,6 +45,10 @@
       # 4m command deadline: loaded host, prefer waiting over generation churn.
       OPENCODE_WATCHER_BACKEND: watchman
       OPENCODE_WATCHMAN_COMMAND_TIMEOUT_MS: 240000
+      # Deployment source of the managed global links; status-opencode-ok.sh
+      # reads it to flag links drifting out of the composed workspace. Exported
+      # for shells without the wrapper too (never contains the secret).
+      OPENCODE_WORKING_DIR: "{{OPENCODE_WORKING_DIR}}"
     # Optional deployment inputs. Define these as Ansible variables to enable
     # OpenCode's native OTLP/HTTP logs and traces without hard-coding a backend.
     ENV_LIST:
@@ -133,6 +137,14 @@
         Unit: opencode-cleanup.service
       SYSTEMD_INSTALLS:
         WantedBy: timers.target
+    # status.sh reporters (prepended before the config/links contributors):
+    # status-cleanup.sh dry-runs cleanup.sh with the timer's eligibility window
+    # plus the timer's own unit state; status-opencode-ok.sh checks the
+    # invoking shell against the managed deployment and is also globally
+    # linked as opencode-status-ok for quick checks from wrapper-less shells.
+    STATUSES:
+      - status-cleanup.sh
+      - status-opencode-ok.sh
     ZIM_ENV:
       - OPENCODE_SERVER_URL
       - OPENCODE_PASSWORD_FILE
@@ -167,6 +179,27 @@
             -p MemoryCurrent -p MemoryPeak -p CPUUsageNSec -p TasksCurrent
           opencode2 api get /api/health
           opencode2 api get /api/server
+          {{DIR}}/bin/status.sh
+          opencode-status-ok
+
+      `bin/status.sh` runs the registered reporters: status-cleanup.sh (leaked
+      native libraries and the cleanup timer's state), status-opencode-ok.sh
+      (below), plus the config and link drift reporters. `opencode-status-ok`
+      is the same ok-checker as a global command, so any shell — including ones
+      without the ZIM wrapper — can quickly verify three things:
+
+      - wrapper: whether the invoking shell loaded the opencode/opencode2
+        wrapper. Shell functions are invisible to child processes, so the check
+        reads their footprint: OPENCODE_PASSWORD exported by the ZIM module
+        (the secret itself is never written to env or env.export).
+      - global: whether the managed links (opencode2, opencode2-node) resolve,
+        agree on version, and point into OPENCODE_WORKING_DIR rather than a
+        stale checkout.
+      - shell: what opencode/opencode2 resolve to on this shell's PATH and
+        whether those binaries match the managed version.
+
+      Exit 0 means this shell is on the managed deployment; exit 1 prints each
+      drift line. No network is involved — versions come from `--version`.
 
       The ZIM functions for `opencode` and `opencode2` inject
       `--server ${OPENCODE_SERVER_URL}` for ordinary clients. They never start,
@@ -226,6 +259,12 @@
           systemctl --user status opencode-cleanup.timer
           systemctl --user list-timers opencode-cleanup.timer
           journalctl --user -u opencode-cleanup.service
+
+      `bin/status.sh` reports cleanup through status-cleanup.sh: it dry-runs
+      `cleanup.sh` with the timer's eligibility window (`--min-age 0s`), so an
+      eligible count above zero is drift the next timer run should clear, and
+      it also verifies the timer is active and enabled. `--no-timer` skips the
+      timer half; `--min-age`/`--tmp-dir` pass through to the dry run.
 
       ## Operational notes
 
@@ -399,6 +438,17 @@
         basedir: False
       - name: cleanup.sh
         basedir: False
+      # status.sh reporter: leaked native libraries + timer state. Local bin
+      # only (STATUSES runs it via bin/status.sh).
+      - name: status-cleanup.sh
+        basedir: False
+      # status.sh reporter AND standalone global command: `global` as a string
+      # renames the link, so it lands in GLOBAL_BINS_DIR as opencode-status-ok
+      # while bin/status.sh still runs it under its bin/ name. Standalone-safe:
+      # every path it needs comes from env (OPENCODE_*), never the wrapper.
+      - name: status-opencode-ok.sh
+        basedir: False
+        global: opencode-status-ok
       - name: backup.sh
         basedir: False
   tasks:
