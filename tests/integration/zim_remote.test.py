@@ -46,6 +46,10 @@ def test_zim_remote() -> None:
         rebuild = host / "bin" / "config.sh"
         rebuild.write_text(f'#!/bin/sh\necho "$@" >> "{log}"\n')
         rebuild.chmod(0o770)
+        build_log = root / "build.log"
+        channel_builder = host / "bin" / "zimfw-channel.sh"
+        channel_builder.write_text(f'#!/bin/sh\necho "$@" >> "{build_log}"\n')
+        channel_builder.chmod(0o770)
 
         result = subprocess.run([str(installer), str(producer)], text=True, capture_output=True, check=False)
         assert result.returncode == 0, result.stderr
@@ -54,6 +58,7 @@ def test_zim_remote() -> None:
         assert active.is_symlink() and active.resolve() == enabled
         assert disabled.is_symlink() and disabled.resolve() == disabled_source
         assert log.read_text().splitlines() == ["zimenv", "zimenv", "zimrc"]
+        assert set(build_log.read_text().splitlines()) == {"zimrc install", "zimenv install"}
 
 
 if __name__ == "__main__":

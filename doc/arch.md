@@ -711,6 +711,9 @@ The config name defaults to the output basename minus its final extension, so
 omitted, the compiler infers `<output>.d/*.<extension>`; `zimfw.conf` therefore
 consumes `zimfw.conf.d/*.conf`.
 
+Every glob input directory is also contributed to `DIRS`, so callers do not
+repeat assembly directories in filesystem declarations.
+
 Compilation publishes durable runtime state at `SUBSYSTEM.config`: `spec`
 contains normalized configs and remote-input targets, while `contrib`
 contains the shared `DIRS`, `ETC_FILES`, `BINS`, `STATUSES`, and `PKGS`
@@ -755,16 +758,17 @@ selects the first glob input; on an input it selects that glob explicitly.
 Local files may coexist with remote symlinks. Remote tools are consumer-owned,
 mutate only local links and enabled/disabled link names, then invoke the normal
 targeted config rebuild. Compilation emits the single `config-remote.ts` tool
-only when at least one remote target exists.
+only when at least one remote target exists. Assembly and generic toggles follow
+valid symlinks while preserving the link itself as the mutable directory entry.
 
-For example, the Zim consumer's inferred `zimfw.conf.d/*.conf` input is named
-`zimfw.conf.d`. A producer keeps its fragment durable and asks the consumer to
-link it; disabling changes only the consumer link name:
+For example, the Zim host exposes separate `zimrc` and `zimenv` inputs. A
+producer keeps each fragment durable under its named channel and asks the
+consumer to link it; disabling changes only the consumer link name:
 
 ```sh
-/opt/zim-main/bin/config-remote.ts put zimfw.conf.d \
-  /opt/producer/etc/zim/55-example.conf
-/opt/zim-main/bin/config-remote.ts disable zimfw.conf.d 55-example.conf
+/opt/zim-main/bin/config-remote.ts put zimrc \
+  /opt/producer/etc/zim/zimrc/active/55-example.conf
+/opt/zim-main/bin/config-remote.ts disable zimrc 55-example.conf
 ```
 
 MCP uses the same seam after transformation. The producer's `mcp.json` is

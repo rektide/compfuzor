@@ -222,7 +222,7 @@ def test_disabled_routes_to_disabled_dir():
         [{"source": "history-substring-search", "phase": "late", "enabled": False}]
     )
     check(
-        "lands in zim-disabled/",
+        "lands in the channel disabled tree",
         out[0]["name"],
         "zim/zimrc/disabled/85-history-substring-search.conf",
     )

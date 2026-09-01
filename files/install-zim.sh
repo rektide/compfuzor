@@ -18,9 +18,11 @@ remote="$self_dir/bin/config-remote.ts"
 
 count=0
 shopt -s nullglob
+declare -A touched_channels
 for channel_dir in "$src_dir"/etc/zim/*; do
   [ -d "$channel_dir" ] || continue
   channel="$(basename "$channel_dir")"
+  touched_channels["$channel"]=1
   for f in "$channel_dir"/active/*.conf; do
     "$remote" link "$channel" "$f"
     count=$((count + 1))
@@ -32,5 +34,11 @@ for channel_dir in "$src_dir"/etc/zim/*; do
     count=$((count + 1))
   done
 done
+
+if [ -x "$self_dir/bin/zimfw-channel.sh" ]; then
+  for channel in "${!touched_channels[@]}"; do
+    "$self_dir/bin/zimfw-channel.sh" "$channel" install
+  done
+fi
 
 echo "install-zim: delegated $count fragment(s)"

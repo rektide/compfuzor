@@ -139,7 +139,7 @@
       bypass: ZIM
       content: |
         # Host discovery: ZIM_HOST_DIR wins; otherwise resolve through the zim
-        # config link (~/.config/zsh/zimfw.conf -> <host>/[etc/]zimfw.conf),
+        # config link (~/.config/zsh/zimfw.conf -> <host>/[etc/]zimrc),
         # which every zim host install creates -- the link IS the registry.
         # Final fallback /opt/zim-main (OPTS_DIR default location).
         host="${ZIM_HOST_DIR:-}"
@@ -147,8 +147,8 @@
           _conf="${ZIM_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zimfw.conf}"
           _real=$(readlink -f "$_conf" 2>/dev/null || true)
           if [ -n "$_real" ]; then
-            _etc_dir="${_real%/zimfw.conf}"
-            for _cand in "${_real%/etc/zimfw.conf}" "$_etc_dir" "/opt/$(basename "$_etc_dir")"; do
+            _etc_dir="$(dirname "$_real")"
+            for _cand in "${_etc_dir%/etc}" "$_etc_dir" "/opt/$(basename "$_etc_dir")"; do
               if [ "$_cand" != "$_real" ] && [ -x "$_cand/bin/install-zim.sh" ]; then
                 host="$_cand"
                 break
