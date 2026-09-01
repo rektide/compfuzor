@@ -45,6 +45,12 @@
       # 4m command deadline: loaded host, prefer waiting over generation churn.
       OPENCODE_WATCHER_BACKEND: watchman
       OPENCODE_WATCHMAN_COMMAND_TIMEOUT_MS: 240000
+      # Socket override for the fb-watchman transport. Unset, the transport
+      # shells out `watchman get-sockname`, which bootstraps a private daemon
+      # inside this unit's cgroup on every server start (PATH watchman is
+      # watchwoman 0.7.0 here). Pointing at the shared watchman-main daemon
+      # socket connects directly and never spawns a daemon.
+      WATCHMAN_SOCK: "{{ansible_user_dir}}/.local/var/lib/watchman-main/sock"
       # Location activity TTL: inert on stock upstream; the composed working
       # workspace reads it. 8h keeps location service stacks warm across a
       # working day while still bounding memory (stock default: 60m).
