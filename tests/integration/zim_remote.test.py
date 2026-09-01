@@ -17,13 +17,14 @@ def test_zim_remote() -> None:
         root = Path(tmp)
         host = root / "host"
         producer = root / "producer"
-        target = host / "etc" / "zimfw.conf.d"
+        main_target = host / "etc" / "zimrc.d"
+        env_target = host / "etc" / "zimenv.d"
         (host / "bin").mkdir(parents=True)
         (host / "etc").mkdir()
-        (producer / "etc" / "zim").mkdir(parents=True)
-        (producer / "etc" / "zim-disabled").mkdir()
-        enabled = producer / "etc" / "zim" / "20-enabled.conf"
-        disabled_source = producer / "etc" / "zim-disabled" / "40-disabled.conf"
+        (producer / "etc" / "zim" / "zimrc" / "active").mkdir(parents=True)
+        (producer / "etc" / "zim" / "zimenv" / "disabled").mkdir(parents=True)
+        enabled = producer / "etc" / "zim" / "zimrc" / "active" / "20-enabled.conf"
+        disabled_source = producer / "etc" / "zim" / "zimenv" / "disabled" / "40-disabled.conf"
         enabled.write_text("zmodule enabled\n")
         disabled_source.write_text("zmodule disabled\n")
 
@@ -33,9 +34,14 @@ def test_zim_remote() -> None:
         installer = host / "bin" / "install-zim.sh"
         installer.write_text((ROOT / "files" / "install-zim.sh").read_text().replace("{{DIR}}", str(host)))
         installer.chmod(0o770)
-        (host / "etc" / "config.spec.json").write_text(json.dumps({"remotes": {"zimfw.conf.d": {
-            "config": "zimfw", "directory": str(target), "pattern": "*.conf", "disabled_suffix": ".disabled"
-        }}}))
+        (host / "etc" / "config.spec.json").write_text(json.dumps({"remotes": {
+            "zimrc": {
+                "config": "zimrc", "directory": str(main_target), "pattern": "*.conf", "disabled_suffix": ".disabled"
+            },
+            "zimenv": {
+                "config": "zimenv", "directory": str(env_target), "pattern": "*.conf", "disabled_suffix": ".disabled"
+            }
+        }}))
         log = root / "rebuild.log"
         rebuild = host / "bin" / "config.sh"
         rebuild.write_text(f'#!/bin/sh\necho "$@" >> "{log}"\n')
@@ -43,11 +49,11 @@ def test_zim_remote() -> None:
 
         result = subprocess.run([str(installer), str(producer)], text=True, capture_output=True, check=False)
         assert result.returncode == 0, result.stderr
-        active = target / enabled.name
-        disabled = target / f"{disabled_source.name}.disabled"
+        active = main_target / enabled.name
+        disabled = env_target / f"{disabled_source.name}.disabled"
         assert active.is_symlink() and active.resolve() == enabled
         assert disabled.is_symlink() and disabled.resolve() == disabled_source
-        assert log.read_text().splitlines() == ["zimfw", "zimfw", "zimfw"]
+        assert log.read_text().splitlines() == ["zimenv", "zimenv", "zimrc"]
 
 
 if __name__ == "__main__":

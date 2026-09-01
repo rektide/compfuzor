@@ -2,7 +2,7 @@
 # gen_zim.tasks -- zim host/contributor synthesis (MCP-style).
 #
 # Contributor branch: a playbook declaring ZIM_MODULE / ZIM_MODULES renders one
-# fragment file per module under zim/ (or zim-disabled/ for enabled:false)
+# fragment file per module under zim/<channel>/active/ (or disabled/)
 # via the zim_fragment filter. Fragment names are relative to the ETC dir. The
 # host bridge delegates each durable source to config-remote.ts.
 # Filenames
@@ -17,7 +17,7 @@
 #
 # Every contributor also gets an auto-generated install-user-zimfw.sh (user
 # scope -- the `install-user-` prefix is what gen_bins keys on) that promotes
-# its zim/ fragments into the zim host assembly dir, so a contributor only
+# its channel fragments into the zim host assembly dirs, so a contributor only
 # declares ZIM_MODULES and otherwise does nothing install-shaped itself.
 #
 # ZIM_ARRAYS declares Zsh-only arrays directly rather than projecting process
@@ -36,7 +36,7 @@
 - name: "Compfuzor: render zim contributor fragments"
   set_fact:
     ETC_FILES: "{{ ETC_FILES | merge_list(_zim_fragments, preset='append') }}"
-    ETC_DIRS: "{{ ETC_DIRS | merge_list(['zim', 'zim-disabled'], _zim_module_dirs, preset='append') }}"
+    ETC_DIRS: "{{ ETC_DIRS | merge_list(['zim'], _zim_fragment_dirs, _zim_module_dirs, preset='append') }}"
   when:
     - (ZIM_MODULE is defined or ZIM_MODULES is defined or ZIM_ENV is deflengthy or ZIM_ARRAYS is deflengthy)
     - ZIM_BYPASS is deffalsy
@@ -84,6 +84,13 @@
          + ([_zim_array_module] if ZIM_ARRAYS is deflengthy else []) }}
     _zim_phase: "{{ ZIM_PHASE|def }}"
     _zim_fragments: "{{ _zim_modules | zim_fragment(phase=_zim_phase, etc=ETC) }}"
+    _zim_fragment_dirs: >-
+      {{ _zim_fragments
+        | map(attribute='name')
+        | select('match', '^zim/')
+        | map('regex_replace', '/[^/]+$', '')
+        | unique
+        | list }}
     # local modules (file, env, or arrays) emit a zim-modules/<name>/init.zsh record;
     # create each <name> dir so the ETC_FILES writer can land it.
     _zim_module_dirs: >-

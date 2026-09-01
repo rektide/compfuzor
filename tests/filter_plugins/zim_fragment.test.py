@@ -53,7 +53,7 @@ def test_string_entry_uses_default_phase():
     check(
         "renders under etc/zim with weight 40",
         out,
-        [{"name": "zim/40-minimal.conf", "content": "zmodule minimal\n"}],
+        [{"name": "zim/zimrc/active/40-minimal.conf", "content": "zmodule minimal\n"}],
     )
 
 
@@ -63,7 +63,7 @@ def test_numeric_phase_name():
     check(
         "numeric phase used directly, 2-digit padded",
         out[0]["name"],
-        "zim/55-fzf.conf",
+        "zim/zimrc/active/55-fzf.conf",
     )
 
 
@@ -81,14 +81,33 @@ def test_phase_name_maps_to_number():
         check(
             "{} -> {:02d}".format(name, num),
             out[0]["name"],
-            "zim/{:02d}-x.conf".format(num),
+            "zim/zimrc/active/{:02d}-x.conf".format(num),
         )
 
 
 def test_entry_phase_overrides_default():
     print("\nentry phase overrides default:")
     out = zim_fragment([{"source": "git", "phase": "tools"}], phase="prompt")
-    check("uses entry phase 55", out[0]["name"], "zim/55-git.conf")
+    check("uses entry phase 55", out[0]["name"], "zim/zimrc/active/55-git.conf")
+
+
+def test_channel_routes_fragment():
+    print("\nchannel routing:")
+    out = zim_fragment(
+        [{"source": "rektide/zim-mise", "phase": "core", "channel": "zimenv"}]
+    )
+    check(
+        "explicit channel selects its active tree",
+        out[0]["name"],
+        "zim/zimenv/active/20-zim-mise.conf",
+    )
+    check_raises(
+        "unsafe channel rejected",
+        lambda: zim_fragment(
+            [{"source": "x", "phase": "core", "channel": "../outside"}]
+        ),
+        "channel",
+    )
 
 
 def test_owner_repo_slug():
@@ -97,7 +116,7 @@ def test_owner_repo_slug():
     check(
         "takes last path segment",
         out[0]["name"],
-        "zim/70-zsh-completions.conf",
+        "zim/zimrc/active/70-zsh-completions.conf",
     )
 
 
@@ -106,7 +125,7 @@ def test_url_slug():
     out = zim_fragment(
         [{"source": "https://github.com/joke/zim-mise", "phase": "core"}]
     )
-    check("strips scheme + .git", out[0]["name"], "zim/20-zim-mise.conf")
+    check("strips scheme + .git", out[0]["name"], "zim/zimrc/active/20-zim-mise.conf")
 
 
 def test_url_with_git_suffix():
@@ -114,7 +133,7 @@ def test_url_with_git_suffix():
     out = zim_fragment(
         [{"source": "https://gitlab.com/Spriithy/basher.git", "phase": "prompt"}]
     )
-    check("strips .git", out[0]["name"], "zim/40-basher.conf")
+    check("strips .git", out[0]["name"], "zim/zimrc/active/40-basher.conf")
 
 
 def test_args_string():
@@ -188,13 +207,13 @@ def test_description_in_filename():
             }
         ]
     )
-    check("description appended", out[0]["name"], "zim/55-fzf-alt.conf")
+    check("description appended", out[0]["name"], "zim/zimrc/active/55-fzf-alt.conf")
 
 
 def test_explicit_name():
     print("\nexplicit name slug:")
     out = zim_fragment([{"source": "x", "phase": "core", "name": "custom"}])
-    check("uses explicit name", out[0]["name"], "zim/20-custom.conf")
+    check("uses explicit name", out[0]["name"], "zim/zimrc/active/20-custom.conf")
 
 
 def test_disabled_routes_to_disabled_dir():
@@ -205,7 +224,7 @@ def test_disabled_routes_to_disabled_dir():
     check(
         "lands in zim-disabled/",
         out[0]["name"],
-        "zim-disabled/85-history-substring-search.conf",
+        "zim/zimrc/disabled/85-history-substring-search.conf",
     )
 
 
@@ -213,7 +232,7 @@ def test_single_mapping_input():
     print("\nsingle mapping (not a list):")
     out = zim_fragment({"source": "minimal", "phase": "prompt"})
     check("accepted as one entry", len(out), 1)
-    check("correct file", out[0]["name"], "zim/40-minimal.conf")
+    check("correct file", out[0]["name"], "zim/zimrc/active/40-minimal.conf")
 
 
 def test_empty_and_undefined():
@@ -236,9 +255,9 @@ def test_multiple_entries_order_preserved():
         "names preserve declaration order",
         [r["name"] for r in out],
         [
-            "zim/20-environment.conf",
-            "zim/20-input.conf",
-            "zim/40-minimal.conf",
+            "zim/zimrc/active/20-environment.conf",
+            "zim/zimrc/active/20-input.conf",
+            "zim/zimrc/active/40-minimal.conf",
         ],
     )
 
@@ -297,7 +316,7 @@ def test_headroom_numeric():
     check(
         "pre-core and post-late headroom",
         [r["name"] for r in out],
-        ["zim/05-early.conf", "zim/99-last.conf"],
+        ["zim/zimrc/active/05-early.conf", "zim/zimrc/active/99-last.conf"],
     )
 
 
@@ -306,7 +325,7 @@ def test_local_file_source_renders_local_module():
     out = zim_fragment(
         [{"source": "watchman-env.zsh", "phase": "tools"}], etc="/etc/opt/watchman-main"
     )
-    check("declaration points at rendered module dir", out[0]["name"], "zim/55-watchman-env.conf")
+    check("declaration points at rendered module dir", out[0]["name"], "zim/zimrc/active/55-watchman-env.conf")
     check(
         "zmodule uses absolute module path",
         out[0]["content"],
@@ -318,7 +337,7 @@ def test_local_file_source_renders_local_module():
 def test_local_file_explicit_flag():
     print("\nfile: true forces local-file interpretation:")
     out = zim_fragment([{"source": "myscript", "file": True, "phase": "tools"}], etc="/e")
-    check("slug kept (no .zsh to strip)", out[0]["name"], "zim/55-myscript.conf")
+    check("slug kept (no .zsh to strip)", out[0]["name"], "zim/zimrc/active/55-myscript.conf")
     check("zmodule path", out[0]["content"], "zmodule /e/zim-modules/myscript\n")
 
 
@@ -334,7 +353,7 @@ def test_env_module_renders_generated_script():
         [{"name": "watchman-env", "phase": "tools", "env": {"WATCHMAN_SOCK": "/path/sock"}}],
         etc="/etc/opt/watchman-main",
     )
-    check("declaration points at module dir", out[0]["name"], "zim/55-watchman-env.conf")
+    check("declaration points at module dir", out[0]["name"], "zim/zimrc/active/55-watchman-env.conf")
     check("zmodule abspath", out[0]["content"], "zmodule /etc/opt/watchman-main/zim-modules/watchman-env\n")
     check("init.zsh carries generated content (not src)", "content" in out[1] and "src" not in out[1], True)
     check("overwrite helper defined", "_compfuzor_env_overwrite()" in out[1]["content"], True)
@@ -371,7 +390,7 @@ def test_array_module_renders_explicit_array_references():
         etc="/e",
     )
     body = out[1]["content"]
-    check("array module declaration", out[0]["name"], "zim/20-shell-arrays.conf")
+    check("array module declaration", out[0]["name"], "zim/zimrc/active/20-shell-arrays.conf")
     check("explicit temporary array", 'typeset -a _compfuzor_array_values_0=("/one function" "/two")' in body, True)
     check("setter receives array name", "_compfuzor_array_set fpath _compfuzor_array_values_0" in body, True)
     check("path is supported", '_compfuzor_array_set path _compfuzor_array_values_1' in body, True)
@@ -640,6 +659,7 @@ if __name__ == "__main__":
     test_numeric_phase_name()
     test_phase_name_maps_to_number()
     test_entry_phase_overrides_default()
+    test_channel_routes_fragment()
     test_owner_repo_slug()
     test_url_slug()
     test_url_with_git_suffix()

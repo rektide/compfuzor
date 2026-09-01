@@ -20,6 +20,7 @@ PHASE_NUMBERS = {
     "late": 85,
 }
 ZSH_PARAMETER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+ZIM_CHANNEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 
 
 def _is_sequence(value):
@@ -263,6 +264,15 @@ def _normalize_entry(entry, default_phase):
         enabled = True
     enabled = bool(enabled)
 
+    channel = entry.get("channel", "zimrc")
+    if channel is None or wrapped_test_undefined(channel):
+        channel = "zimrc"
+    channel = str(channel).strip()
+    if not ZIM_CHANNEL.match(channel):
+        raise AnsibleFilterError(
+            "zim module channel must start with an alphanumeric character and contain only alphanumerics, '-' or '_'"
+        )
+
     return {
         "kind": kind,
         "source": source,
@@ -277,6 +287,7 @@ def _normalize_entry(entry, default_phase):
         "args": entry.get("args"),
         "comment": entry.get("comment"),
         "enabled": enabled,
+        "channel": channel,
     }
 
 
@@ -406,11 +417,13 @@ def _fpath_line():
 def zim_fragment(modules, phase=None, etc=None):
     """Render zim module declarations into drop-in fragment files.
 
-    Each entry becomes one fragment file under ``zim/`` (or ``zim-disabled/``
-    when ``enabled: false``). Filenames are ``<num>-<name>[-<description>].conf``
-    where ``<num>`` is the resolved phase number, so lexical sort across
-    contributors yields deterministic load order. The block-in-file config
-    assembler globs these in sorted order to build the final zimfw config.
+    Each entry becomes one fragment file under
+    ``zim/<channel>/active/`` (or ``zim/<channel>/disabled/`` when
+    ``enabled: false``). The channel defaults to ``zimrc``. Filenames are
+    ``<num>-<name>[-<description>].conf`` where ``<num>`` is the resolved phase
+    number, so lexical sort across contributors yields deterministic load
+    order. The block-in-file config assembler globs these in sorted order to
+    build each channel's final zimfw config.
 
     ``modules`` may be a single string/mapping or a list of them. ``phase``
     is a default phase (number or name) applied to entries without one.
@@ -437,9 +450,9 @@ def zim_fragment(modules, phase=None, etc=None):
     (file modules additionally emit a ``{name, src}`` init.zsh record).
 
     ``name`` is relative to the ETC dir (the ETC_FILES writer base), so it is
-    ``zim/<file>`` / ``zim-disabled/<file>`` -- NOT ``etc/zim/...``. The latter
-    would double up to ``ETC/etc/zim`` and miss ``install-zim.sh``'s
-    ``DIR/etc/zim`` glob (DIR/etc is a symlink to ETC).
+    ``zim/<channel>/<state>/<file>`` -- NOT ``etc/zim/...``. The latter would
+    double up to ``ETC/etc/zim`` and miss ``install-zim.sh``'s ``DIR/etc/zim``
+    glob (DIR/etc is a symlink to ETC).
     """
     if modules is None or wrapped_test_undefined(modules):
         return []
@@ -459,7 +472,8 @@ def zim_fragment(modules, phase=None, etc=None):
     for entry in items:
         norm = _normalize_entry(entry, phase)
         fn = _filename(norm["num"], norm["name"], norm["description"])
-        rel_dir = "zim-disabled/" if not norm["enabled"] else "zim/"
+        state = "active" if norm["enabled"] else "disabled"
+        rel_dir = "zim/{}/{}/".format(norm["channel"], state)
         local_kinds = (
             "env",
             "arrays",
