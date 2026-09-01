@@ -102,9 +102,9 @@ def test_channel_routes_fragment():
         "zim/zimenv/active/20-zim-mise.conf",
     )
     check_raises(
-        "unsafe channel rejected",
+        "unsupported channel rejected",
         lambda: zim_fragment(
-            [{"source": "x", "phase": "core", "channel": "../outside"}]
+            [{"source": "x", "phase": "core", "channel": "other"}]
         ),
         "channel",
     )

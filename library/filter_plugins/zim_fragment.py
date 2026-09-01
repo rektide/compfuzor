@@ -20,7 +20,7 @@ PHASE_NUMBERS = {
     "late": 85,
 }
 ZSH_PARAMETER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-ZIM_CHANNEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+ZIM_CHANNELS = {"zimenv", "zimrc"}
 
 
 def _is_sequence(value):
@@ -268,9 +268,11 @@ def _normalize_entry(entry, default_phase):
     if channel is None or wrapped_test_undefined(channel):
         channel = "zimrc"
     channel = str(channel).strip()
-    if not ZIM_CHANNEL.match(channel):
+    if channel not in ZIM_CHANNELS:
         raise AnsibleFilterError(
-            "zim module channel must start with an alphanumeric character and contain only alphanumerics, '-' or '_'"
+            "zim module channel must be one of {}, got {!r}".format(
+                sorted(ZIM_CHANNELS), channel
+            )
         )
 
     return {

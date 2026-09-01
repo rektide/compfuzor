@@ -35,7 +35,8 @@ and one controller:
 | `zimrc` | `.zshrc` | `ETC/zimrc` | `~/.cache/zim` | the interactive module roster |
 
 `ZIM_MODULES` entries default to `channel: zimrc`. An explicit `channel:
-zimenv` routes a declaration into the early config. Producer fragments are
+zimenv` routes a declaration into the early config; other channel names are
+rejected until the host implements them. Producer fragments are
 grouped as `etc/zim/<channel>/{active,disabled}/` and promoted to a remote input
 with the same channel name.
 
@@ -77,7 +78,9 @@ context.
 `zimfw-channel.sh <zimrc|zimenv> [action]` runs the shared controller with user
 startup files disabled. Contributor promotion rebuilds every touched channel,
 so `.zshenv` normally sources a prebuilt static init rather than performing
-installation work.
+installation work. If `zimenv` changes through enable, disable, or direct remote
+mutation, the next shell rebuilds it before sourcing. A failed rebuild returns
+without sourcing the stale init.
 
 ## Config behavior
 
@@ -113,6 +116,8 @@ producer files may remain on disk without affecting the new channel outputs.
   remaining roster under `zimrc`.
 - A real isolated Zim build confirmed that the `.zshenv` loader does not leak
   `ZIM_HOME`, `ZIM_CONFIG_FILE`, or the secondary `zimfw` function.
+- `zim-mise/tests/mode.test.sh` exercises distinct interactive and
+  non-interactive caches, hooks, functions, and completion behavior.
 
 ## Cross-references
 

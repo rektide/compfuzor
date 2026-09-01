@@ -11,7 +11,7 @@
     CONFIGS:
       zimrc:
         processor: block-in-file
-        validate: 'zsh -n "$CONFIG_CANDIDATE"'
+        validate: 'zsh -dfn "$CONFIG_CANDIDATE"'
         inputs:
           - glob: zimrc.d/*.conf
             name: zimrc
@@ -22,7 +22,7 @@
             - '^zim/main/'
       zimenv:
         processor: block-in-file
-        validate: 'zsh -n "$CONFIG_CANDIDATE"'
+        validate: 'zsh -dfn "$CONFIG_CANDIDATE"'
         inputs:
           - glob: zimenv.d/*.conf
             name: zimenv
@@ -348,8 +348,9 @@
           () {
             local ZIM_HOME="${ZIM_ENV_HOME:-{{zim_env_home}}}"
             local ZIM_CONFIG_FILE="${ZIM_ENV_CONFIG:-{{zim_env_config}}}"
-            if [[ ! -r "$ZIM_HOME/init.zsh" ]]; then
-              print -u2 "zimenv: missing $ZIM_HOME/init.zsh; run {{DIR}}/bin/zimfw-channel.sh zimenv install"
+            if [[ ! "$ZIM_HOME/init.zsh" -nt "$ZIM_CONFIG_FILE" ]] && ! source {{DIR}}/src/zimfw.zsh init; then
+              unfunction zimfw 2>/dev/null || true
+              print -u2 "zimenv: failed to rebuild $ZIM_HOME/init.zsh from $ZIM_CONFIG_FILE"
               return
             fi
             source "$ZIM_HOME/init.zsh"
