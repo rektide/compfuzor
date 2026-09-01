@@ -87,6 +87,10 @@
           # ATUIN_SEARCH_MODE: daemon-fuzzy (managed as a top-level
           # search_mode key by install-atuin-config.sh).
     BINS:
+      # This is a global Rust build. Keep the generic per-user Cargo installer
+      # directly addressable, but out of this playbook's install-user.sh.
+      - name: install-rust-user.sh
+        compose: false
       - name: install-atuin-config.sh
         scope: ['user']
         basedir: False
