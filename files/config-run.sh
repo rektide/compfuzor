@@ -59,7 +59,7 @@ for config in "${configs[@]}"; do
           while IFS= read -r -d '' file; do
             filename=$(basename "$file")
             printf 'glob\t%s/%s/%s\t%s\t%s\n' "$(basename "$value")" "$input_index" "$filename" "$file" "$block" >> "$input_manifest"
-          done < <(find "$value" -maxdepth 1 -type f -name "$pattern" -print0 | sort -z)
+          done < <(find -L "$value" -maxdepth 1 -type f -name "$pattern" -print0 | sort -z)
           ;;
       esac
       input_index=$((input_index + 1))

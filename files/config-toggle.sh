@@ -43,7 +43,7 @@ for selector in "$@"; do
       sources+=("$file")
       targets+=("$target")
       matched=1
-    done < <(find "$path" -maxdepth 1 -type f -name "$search" -print0 | sort -z)
+    done < <(find -L "$path" -maxdepth 1 -type f -name "$search" -print0 | sort -z)
   done < <(jq -r --arg config "$CONFIG_NAME" --arg input "$INPUT_NAME" '
     .configs[$config].inputs[] | select(.glob and .name == $input) |
     [.directory, .pattern, (.disabled_suffix // "")] | @tsv

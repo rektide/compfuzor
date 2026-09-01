@@ -99,6 +99,117 @@ def test_config_remote() -> None:
         run([str(manager), "remove", "servers", "dangling.json"])
 
 
+def test_remote_symlink_assembly_and_toggle() -> None:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-config-remote-assembly-") as tmp:
+        root = Path(tmp)
+        host = root / "host"
+        target = host / "etc" / "fragments"
+        source = root / "producer" / "fragment.conf"
+        output = host / "etc" / "app.conf"
+        internal = host / "bin" / "internal" / "config"
+        internal.mkdir(parents=True)
+        source.parent.mkdir(parents=True)
+        source.write_text("remote=true\n", encoding="utf-8")
+
+        spec = {
+            "configs": {
+                "app": {
+                    "output": str(output),
+                    "processor": "concat",
+                    "inputs": [
+                        {
+                            "glob": str(target / "*.conf"),
+                            "directory": str(target),
+                            "pattern": "*.conf",
+                            "name": "fragments",
+                            "disabled_suffix": ".disabled",
+                            "remote": True,
+                        }
+                    ],
+                    "validate": None,
+                    "apply": True,
+                }
+            },
+            "remotes": {
+                "fragments": {
+                    "config": "app",
+                    "directory": str(target),
+                    "pattern": "*.conf",
+                    "disabled_suffix": ".disabled",
+                }
+            },
+        }
+        (host / "etc").mkdir(exist_ok=True)
+        (host / "etc" / "config.spec.json").write_text(json.dumps(spec), encoding="utf-8")
+
+        manager = host / "bin" / "config-remote.ts"
+        manager.write_text(
+            (ROOT / "files" / "config-remote.ts").read_text().replace("{{DIR}}", str(host)),
+            encoding="utf-8",
+        )
+        manager.chmod(0o770)
+        runner = host / "bin" / "config.sh"
+        runner.write_text(
+            f'#!/bin/bash\nexport DIR="{host}"\nexec bash "{ROOT / "files" / "config-run.sh"}" "$@"\n',
+            encoding="utf-8",
+        )
+        runner.chmod(0o770)
+        config_wrapper = host / "bin" / "config-app.sh"
+        config_wrapper.write_text(
+            f'#!/bin/bash\nexec "{runner}" app "$@"\n', encoding="utf-8"
+        )
+        config_wrapper.chmod(0o770)
+        leaf = internal / "app"
+        leaf.write_text(
+            """#!/bin/bash
+: > "$CONFIG_CANDIDATE"
+while IFS=$'\\t' read -r _kind _identity path _block; do
+  cat "$path" >> "$CONFIG_CANDIDATE"
+done < "$CONFIG_INPUTS_FILE"
+""",
+            encoding="utf-8",
+        )
+        leaf.chmod(0o770)
+        toggle = host / "bin" / "config-toggle.sh"
+        toggle.write_text(
+            "#!/bin/bash\n"
+            + (ROOT / "files" / "config-toggle.sh")
+            .read_text()
+            .replace("${{ '{#' }}sources[@]}", "${#sources[@]}"),
+            encoding="utf-8",
+        )
+        toggle.chmod(0o770)
+
+        run([str(manager), "put", "fragments", str(source)])
+        active = target / source.name
+        assert active.is_symlink()
+        assert output.read_text(encoding="utf-8") == "remote=true\n"
+
+        env = os.environ.copy()
+        env["DIR"] = str(host)
+        subprocess.run(
+            [str(toggle), "disable", "app", "fragments", source.stem],
+            check=True,
+            text=True,
+            capture_output=True,
+            env=env,
+        )
+        disabled = target / f"{source.name}.disabled"
+        assert disabled.is_symlink() and not os.path.lexists(active)
+        assert output.read_text(encoding="utf-8") == ""
+
+        subprocess.run(
+            [str(toggle), "enable", "app", "fragments", source.stem],
+            check=True,
+            text=True,
+            capture_output=True,
+            env=env,
+        )
+        assert active.is_symlink() and not os.path.lexists(disabled)
+        assert output.read_text(encoding="utf-8") == "remote=true\n"
+
+
 if __name__ == "__main__":
     test_config_remote()
+    test_remote_symlink_assembly_and_toggle()
     print("ok: remote config lifecycle")

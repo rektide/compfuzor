@@ -64,6 +64,16 @@ def test_compile():
     check("remote registry", plan["spec"]["remotes"]["zimfw.conf.d"]["config"], "zimfw")
     check("disabled suffix false", configs["policy"]["inputs"][0]["disabled_suffix"], None)
     check("candidate validation", configs["policy"]["validate"], 'test -s "$CONFIG_CANDIDATE"')
+    check(
+        "glob directories contributed",
+        {
+            "/srv/app/etc/core",
+            "/srv/app/etc/mcp",
+            "/srv/app/etc/zimfw.conf.d",
+            "/srv/app/etc/policy.d",
+        }.issubset(set(plan["dirs"])),
+        True,
+    )
 
     names = [item["name"] for item in plan["bins"]]
     check("flat leaf exists", "internal/config/opencode" in names, True)

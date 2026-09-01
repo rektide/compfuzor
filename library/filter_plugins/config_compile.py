@@ -184,6 +184,8 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled"):
                     "disabled_suffix": suffix,
                     "remote": bool(item.get("remote", False)),
                 }
+                if directory not in dirs:
+                    dirs.append(directory)
                 glob_indices.append(index)
             if processor == "block-in-file":
                 normalized_input["block"] = _block(item.get("block"), "CONFIGS.{}.inputs[{}].block".format(output_key, index), block)
