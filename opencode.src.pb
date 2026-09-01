@@ -45,6 +45,10 @@
       # 4m command deadline: loaded host, prefer waiting over generation churn.
       OPENCODE_WATCHER_BACKEND: watchman
       OPENCODE_WATCHMAN_COMMAND_TIMEOUT_MS: 240000
+      # Location activity TTL: inert on stock upstream; the composed working
+      # workspace reads it. 8h keeps location service stacks warm across a
+      # working day while still bounding memory (stock default: 60m).
+      OPENCODE_LOCATION_CACHE_TTL: "8 hours"
       # Deployment source of the managed global links; status-opencode-ok.sh
       # reads it to flag links drifting out of the composed workspace. Exported
       # for shells without the wrapper too (never contains the secret).
