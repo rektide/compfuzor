@@ -340,8 +340,8 @@ def test_env_module_renders_generated_script():
     check("overwrite helper defined", "_compfuzor_env_overwrite()" in out[1]["content"], True)
     check("all-tokens guard present", "1|TRUE|YES|Y|'*'" in out[1]["content"], True)
     check("comma-split + glob match present", 'case "${(U)1}" in $~p) return 0' in out[1]["content"], True)
-    check("per-var guard calls helper", "if [ -z \"${WATCHMAN_SOCK:-}\" ] || _compfuzor_env_overwrite WATCHMAN_SOCK; then" in out[1]["content"], True)
-    check("export line present", '  export WATCHMAN_SOCK="/path/sock"' in out[1]["content"], True)
+    check("setter checks existing value", '[ -n "${(P)name:-}" ] && ! _compfuzor_env_overwrite "$name" && return 0' in out[1]["content"], True)
+    check("setter call present", '_compfuzor_env_set WATCHMAN_SOCK "/path/sock"' in out[1]["content"], True)
 
 
 def test_env_module_multi_var_order_preserved():
@@ -351,8 +351,61 @@ def test_env_module_multi_var_order_preserved():
         etc="/e",
     )
     body = out[1]["content"]
-    check("AAA before BBB", body.index("export AAA") < body.index("export BBB"), True)
-    check("BBB before CCC", body.index("export BBB") < body.index("export CCC"), True)
+    check("AAA before BBB", body.index("_compfuzor_env_set AAA") < body.index("_compfuzor_env_set BBB"), True)
+    check("BBB before CCC", body.index("_compfuzor_env_set BBB") < body.index("_compfuzor_env_set CCC"), True)
+
+
+def test_array_module_renders_explicit_array_references():
+    print("\narray module -> generated init.zsh:")
+    out = zim_fragment(
+        [
+            {
+                "name": "shell-arrays",
+                "phase": "core",
+                "arrays": {
+                    "fpath": ["/one function", "/two"],
+                    "path": ["$HOME/.local/bin", "/usr/bin"],
+                },
+            }
+        ],
+        etc="/e",
+    )
+    body = out[1]["content"]
+    check("array module declaration", out[0]["name"], "zim/20-shell-arrays.conf")
+    check("explicit temporary array", 'typeset -a _compfuzor_array_values_0=("/one function" "/two")' in body, True)
+    check("setter receives array name", "_compfuzor_array_set fpath _compfuzor_array_values_0" in body, True)
+    check("path is supported", '_compfuzor_array_set path _compfuzor_array_values_1' in body, True)
+    check("setter uses indirect array expansion", 'set -A "$name" "${(@P)values_name}"' in body, True)
+
+
+def test_array_module_validation():
+    print("\narray module validation:")
+    check_raises(
+        "array value must be list",
+        lambda: zim_fragment(
+            [{"name": "m", "phase": "tools", "arrays": {"path": "/bin"}}]
+        ),
+        "must be a list",
+    )
+    check_raises(
+        "array name must be identifier",
+        lambda: zim_fragment(
+            [{"name": "m", "phase": "tools", "arrays": {"bad-name": ["x"]}}]
+        ),
+        "valid Zsh identifiers",
+    )
+    check_raises(
+        "array elements cannot nest",
+        lambda: zim_fragment(
+            [{"name": "m", "phase": "tools", "arrays": {"path": [["x"]]}}]
+        ),
+        "must be scalars",
+    )
+    check_raises(
+        "array module requires name",
+        lambda: zim_fragment([{"phase": "tools", "arrays": {"path": ["/bin"]}}]),
+        "requires 'name'",
+    )
 
 
 def test_env_module_requires_name():
@@ -532,6 +585,20 @@ def test_body_kinds_mutually_exclusive():
         ),
         "only one of",
     )
+    check_raises(
+        "env + arrays rejected",
+        lambda: zim_fragment(
+            [
+                {
+                    "name": "m",
+                    "phase": "tools",
+                    "env": {"X": "1"},
+                    "arrays": {"path": ["/bin"]},
+                }
+            ]
+        ),
+        "only one of",
+    )
 
 
 def test_aliases_and_functions_require_name():
@@ -597,6 +664,8 @@ if __name__ == "__main__":
     test_local_file_without_etc_falls_back()
     test_env_module_renders_generated_script()
     test_env_module_multi_var_order_preserved()
+    test_array_module_renders_explicit_array_references()
+    test_array_module_validation()
     test_env_module_requires_name()
     test_env_and_source_mutually_exclusive()
     test_aliases_module_renders_generated_script()

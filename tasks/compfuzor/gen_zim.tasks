@@ -20,6 +20,16 @@
 # its zim/ fragments into the zim host assembly dir, so a contributor only
 # declares ZIM_MODULES and otherwise does nothing install-shaped itself.
 #
+# ZIM_ARRAYS declares Zsh-only arrays directly rather than projecting process
+# ENV. `path` is supported and remains tied to exported `PATH` by Zsh:
+#
+#   ZIM_ARRAYS:
+#     fpath: ["${HOME}/.local/share/zsh/functions", /usr/share/zsh/site-functions]
+#     path: ["${HOME}/.local/bin", /usr/local/bin, /usr/bin]
+#
+# Existing non-empty arrays win. Because `path` normally starts populated, set
+# COMPFUZOR_ENV_OVERWRITE=PATH (or a matching pattern) to replace it explicitly.
+#
 # Host branch: a playbook marked ZIM_HOST provides the install-zim.sh bridge.
 # The host's CONFIGS declaration owns the remote target and lifecycle tooling.
 
@@ -28,7 +38,7 @@
     ETC_FILES: "{{ ETC_FILES | merge_list(_zim_fragments, preset='append') }}"
     ETC_DIRS: "{{ ETC_DIRS | merge_list(['zim', 'zim-disabled'], _zim_module_dirs, preset='append') }}"
   when:
-    - (ZIM_MODULE is defined or ZIM_MODULES is defined or ZIM_ENV is deflengthy)
+    - (ZIM_MODULE is defined or ZIM_MODULES is defined or ZIM_ENV is deflengthy or ZIM_ARRAYS is deflengthy)
     - ZIM_BYPASS is deffalsy
   vars:
     # ZIM_ENV: promote selected ENV vars into an auto-generated env module.
@@ -60,13 +70,21 @@
       phase: "{{ ZIM_ENV_PHASE|default('tools') }}"
       env: "{{ _zim_env_projection }}"
       comment: "{{ 'promoted from ENV via ZIM_ENV: ' ~ _zim_env_keys|join(',') }}"
+    # ZIM_ARRAYS is Zsh-only and direct: unlike ZIM_ENV it does not project
+    # from process ENV, because arbitrary arrays cannot be exported.
+    _zim_array_module:
+      name: "{{ ZIM_ARRAYS_NAME|default(NAME ~ '-arrays') }}"
+      phase: "{{ ZIM_ARRAYS_PHASE|default('tools') }}"
+      arrays: "{{ ZIM_ARRAYS | default({}) | resolve }}"
+      comment: "{{ 'Zsh arrays from ZIM_ARRAYS: ' ~ (ZIM_ARRAYS.keys()|list|join(',')) if ZIM_ARRAYS is mapping else 'Zsh arrays from ZIM_ARRAYS' }}"
     _zim_modules: >-
       {{ ZIM_MODULE|normalize(to='list')
          + ZIM_MODULES|normalize(to='list')
-         + ([_zim_env_module] if ZIM_ENV is deflengthy else []) }}
+         + ([_zim_env_module] if ZIM_ENV is deflengthy else [])
+         + ([_zim_array_module] if ZIM_ARRAYS is deflengthy else []) }}
     _zim_phase: "{{ ZIM_PHASE|def }}"
     _zim_fragments: "{{ _zim_modules | zim_fragment(phase=_zim_phase, etc=ETC) }}"
-    # local modules (file or env) emit a zim-modules/<name>/init.zsh record;
+    # local modules (file, env, or arrays) emit a zim-modules/<name>/init.zsh record;
     # create each <name> dir so the ETC_FILES writer can land it.
     _zim_module_dirs: >-
       {{ _zim_fragments
@@ -103,7 +121,7 @@
   set_fact:
     BINS: "{{ BINS | merge_list(_zimfw_install_bin | annotate_bins('zim'), preset='bins_generated') }}"
   when:
-    - (ZIM_MODULE is defined or ZIM_MODULES is defined or ZIM_ENV is deflengthy)
+    - (ZIM_MODULE is defined or ZIM_MODULES is defined or ZIM_ENV is deflengthy or ZIM_ARRAYS is deflengthy)
     - ZIM_HOST is not defined
     - ZIM_BYPASS is deffalsy
   vars:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections.abc
+import re
 
 from ansible.errors import AnsibleFilterError
 from ansible.module_utils.six import string_types
@@ -18,6 +19,7 @@ PHASE_NUMBERS = {
     "completion": 70,
     "late": 85,
 }
+ZSH_PARAMETER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _is_sequence(value):
@@ -115,21 +117,26 @@ def _normalize_entry(entry, default_phase):
 
     has_env = "env" in entry and not wrapped_test_undefined(entry["env"])
     has_source = "source" in entry
+    has_arrays = "arrays" in entry and not wrapped_test_undefined(
+        entry["arrays"]
+    )
     has_aliases = "aliases" in entry and not wrapped_test_undefined(entry["aliases"])
     has_functions = "functions" in entry and not wrapped_test_undefined(entry["functions"])
     has_completions = "completions" in entry and not wrapped_test_undefined(
         entry["completions"]
     )
     body_kinds = sum(
-        1 for flag in (has_env, has_source, has_aliases, has_functions) if flag
+        1
+        for flag in (has_env, has_arrays, has_source, has_aliases, has_functions)
+        if flag
     )
     if body_kinds > 1:
         raise AnsibleFilterError(
-            "zim module entry can have only one of 'env', 'source', 'aliases', 'functions'"
+            "zim module entry can have only one of 'env', 'arrays', 'source', 'aliases', 'functions'"
         )
     if body_kinds == 0 and not has_completions:
         raise AnsibleFilterError(
-            "zim module entry requires one of 'source', 'env', 'aliases', "
+            "zim module entry requires one of 'source', 'env', 'arrays', 'aliases', "
             "'functions', or 'completions'"
         )
     if not has_completions:
@@ -154,6 +161,7 @@ def _normalize_entry(entry, default_phase):
     # git (cloned). 'completions' may ride along with any local kind (adds an
     # fpath dir); alone it is a pure-completion module.
     env_map = None
+    array_map = None
     alias_map = None
     func_map = None
     source = ""
@@ -166,6 +174,31 @@ def _normalize_entry(entry, default_phase):
         if not env_map:
             raise AnsibleFilterError("zim module 'env' mapping is empty")
         kind = "env"
+    elif has_arrays:
+        array_map = entry["arrays"]
+        if not isinstance(array_map, collections.abc.Mapping):
+            raise AnsibleFilterError(
+                "zim module 'arrays' must be a mapping of parameter -> list"
+            )
+        if not array_map:
+            raise AnsibleFilterError("zim module 'arrays' mapping is empty")
+        for name, values in array_map.items():
+            if not isinstance(name, string_types) or not ZSH_PARAMETER.match(name):
+                raise AnsibleFilterError(
+                    "zim module array parameter names must be valid Zsh identifiers"
+                )
+            if not _is_sequence(values):
+                raise AnsibleFilterError(
+                    "zim module array {!r} must be a list".format(name)
+                )
+            if any(
+                isinstance(value, (collections.abc.Mapping, list, tuple))
+                for value in values
+            ):
+                raise AnsibleFilterError(
+                    "zim module array {!r} values must be scalars".format(name)
+                )
+        kind = "arrays"
     elif has_aliases:
         alias_map = entry["aliases"]
         if not isinstance(alias_map, collections.abc.Mapping):
@@ -209,7 +242,7 @@ def _normalize_entry(entry, default_phase):
             slug = slug[: -len(".zsh")]
         name = slug
     if not name:
-        if kind in ("env", "aliases", "functions", "completions"):
+        if kind in ("env", "arrays", "aliases", "functions", "completions"):
             raise AnsibleFilterError(
                 "zim module requires 'name' ({} modules have no source to derive one)".format(
                     kind
@@ -234,6 +267,7 @@ def _normalize_entry(entry, default_phase):
         "kind": kind,
         "source": source,
         "env": env_map,
+        "arrays": array_map,
         "aliases": alias_map,
         "functions": func_map,
         "completions": list(entry["completions"]) if has_completions else [],
@@ -274,7 +308,7 @@ def _body(source, args, comment):
 
 
 def _env_body(env_map, comment):
-    """Render an env module's init.zsh: one don't-stomp guard per var.
+    """Render an env module's init.zsh with centralized don't-stomp policy.
 
     Honors the gen_bins COMPFUZOR_ENV_OVERWRITE convention -- existing values
     win unless the operator opts into overwriting. The spec accepts:
@@ -297,12 +331,47 @@ def _env_body(env_map, comment):
     lines.append("  done")
     lines.append("  return 1")
     lines.append("}")
+    lines.append("_compfuzor_env_set() {")
+    lines.append('  local name="$1" value="$2"')
+    lines.append('  [ -n "${(P)name:-}" ] && ! _compfuzor_env_overwrite "$name" && return 0')
+    lines.append('  export "$name=$value"')
+    lines.append("}")
     for key, value in env_map.items():
-        lines.append(
-            "if [ -z \"${{{0}:-}}\" ] || _compfuzor_env_overwrite {0}; then".format(key)
-        )
-        lines.append('  export {0}="{1}"'.format(key, value))
-        lines.append("fi")
+        lines.append('_compfuzor_env_set {0} "{1}"'.format(key, value))
+    return "\n".join(lines) + "\n"
+
+
+def _array_body(array_map, comment):
+    """Render Zsh arrays with explicit array references and don't-stomp policy."""
+    lines = _comment_lines(comment)
+    lines.append("# Auto-generated by compfuzor zim (array module).")
+    lines.append("# Existing non-empty arrays win unless COMPFUZOR_ENV_OVERWRITE matches.")
+    lines.append("_compfuzor_env_overwrite() {")
+    lines.append('  local spec="${(U)COMPFUZOR_ENV_OVERWRITE:-}"')
+    lines.append('  [ -z "$spec" ] && return 1')
+    lines.append("  case \"$spec\" in 1|TRUE|YES|Y|'*') return 0 ;; esac")
+    lines.append("  local p")
+    lines.append('  for p in ${(s:,:)spec}; do')
+    lines.append('    case "${(U)1}" in $~p) return 0 ;; esac')
+    lines.append("  done")
+    lines.append("  return 1")
+    lines.append("}")
+    lines.append("_compfuzor_array_set() {")
+    lines.append('  local name="$1" values_name="$2"')
+    lines.append(
+        '  (( ${(P)#name} )) && ! _compfuzor_env_overwrite "$name" && return 0'
+    )
+    lines.append(
+        '  (( ${(P)#values_name} )) && set -A "$name" "${(@P)values_name}" && return 0'
+    )
+    lines.append('  set -A "$name"')
+    lines.append("}")
+    for index, (name, values) in enumerate(array_map.items()):
+        temp = "_compfuzor_array_values_{}".format(index)
+        rendered = " ".join('"{}"'.format(value) for value in values)
+        lines.append("typeset -a {}=({})".format(temp, rendered))
+        lines.append("_compfuzor_array_set {} {}".format(name, temp))
+        lines.append("unset {}".format(temp))
     return "\n".join(lines) + "\n"
 
 
@@ -353,7 +422,9 @@ def zim_fragment(modules, phase=None, etc=None):
     kinds: a **file** module (source ending in ``.zsh`` or ``file: true``) --
     init.zsh carries ``src`` resolved from files/<TYPE>/; and an **env** module
     (``env`` mapping of VAR -> value) -- init.zsh carries generated ``content``
-    with one don't-stomp-per-var guard (COMPFUZOR_ENV_OVERWRITE forces).
+    with one don't-stomp-per-var guard (COMPFUZOR_ENV_OVERWRITE forces); and
+    an **arrays** module (mapping of Zsh parameter -> explicit list), including
+    tied arrays such as ``path``.
     Additional generated kinds: **aliases** (mapping alias -> expansion, one
     ``alias`` line each), **functions** (mapping name -> body, one definition
     each), and **completions** (list of completion filenames, resolved from
@@ -389,7 +460,14 @@ def zim_fragment(modules, phase=None, etc=None):
         norm = _normalize_entry(entry, phase)
         fn = _filename(norm["num"], norm["name"], norm["description"])
         rel_dir = "zim-disabled/" if not norm["enabled"] else "zim/"
-        local_kinds = ("env", "aliases", "functions", "completions", "file")
+        local_kinds = (
+            "env",
+            "arrays",
+            "aliases",
+            "functions",
+            "completions",
+            "file",
+        )
         if norm["kind"] in local_kinds:
             # local zimfw module: zmodule points at the rendered module dir.
             module_path = (
@@ -410,6 +488,10 @@ def zim_fragment(modules, phase=None, etc=None):
                 completions = norm["completions"]
                 if norm["kind"] == "env":
                     init_lines = [_env_body(norm["env"], norm["comment"]).rstrip("\n")]
+                elif norm["kind"] == "arrays":
+                    init_lines = [
+                        _array_body(norm["arrays"], norm["comment"]).rstrip("\n")
+                    ]
                 elif norm["kind"] == "aliases":
                     init_lines = [
                         _alias_body(norm["aliases"], norm["comment"]).rstrip("\n")
