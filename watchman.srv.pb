@@ -27,12 +27,13 @@
 # informational count and guard-refusals.sh aggregates them.
 # `.watch` is the escape hatch for deliberately watching a non-VCS dir.
 #
-# CLI→DAEMON ROUTING — install-cli-symlink.sh: the C++ `watchman` CLI
-# ignores $WATCHMAN_SOCK (only python/node/rust clients honor it) and
-# computes its socket from the compile-time WATCHMAN_STATE_DIR macro:
-# <STATE_DIR>/<username>-state/sock. install-cli-symlink.sh symlinks that
-# path to the USER's var dir, so bare CLI invocations land on the managed
-# daemon instead of auto-spawning an unconfigured one.
+# CANONICAL SOCKET — both watchman-main and watchwoman use the upstream
+# default path: ~/.local/state/watchman/<user>-state/sock. Only one service
+# may own it at a time; mutual Conflicts declarations make starting one
+# service stop the other instead of creating a second watcher namespace.
+# The C++ CLI ignores $WATCHMAN_SOCK and computes its socket from the
+# compile-time WATCHMAN_STATE_DIR macro, so install-cli-symlink.sh maps that
+# compiled path to the same canonical socket directory.
 #
 # ORPHAN TAKEOVER — ExecStartPre takeover.sh: if the unit's daemon dies and
 # a client's bare `watchman` auto-spawns a replacement (which takes the
@@ -58,6 +59,7 @@
     # per-user paths for unit directives (%h, systemd expands at load)
     UNIT_VAR: "{{ lookup('fsh', 'var', user=True, name=True, home='%h') }}"
     UNIT_ETC_FILE: "{{ lookup('fsh', 'etc', user=True, name=True, home='%h') }}/watchman.json"
+    UNIT_SOCK: "%h/.local/state/watchman/%u-state/sock"
     # per-user paths for shell artifacts (${HOME}, shell expands at runtime)
     SHELL_VAR: "{{ lookup('fsh', 'var', user=True, name=True, home='${HOME}') }}"
     SHELL_ETC_FILE: "{{ lookup('fsh', 'etc', user=True, name=True, home='${HOME}') }}/watchman.json"
@@ -69,14 +71,17 @@
     # interactive shells via the zim module). The daemon gets the same vars
     # as %h Environment= lines below, which override the EnvironmentFile.
     ENV:
-      WATCHMAN_SOCK: "{{SHELL_VAR}}/sock"
+      WATCHMAN_SOCK: "${HOME}/.local/state/watchman/$(id -un)-state/sock"
       WATCHMAN_CONFIG_FILE: "{{SHELL_ETC_FILE}}"
 
+    SYSTEMD_UNITS:
+      Conflicts: watchwoman.socket watchwoman.service
+      Before: watchwoman.socket watchwoman.service
     SYSTEMD_SERVICES:
-      ExecStart: "watchman --persistent --foreground --statefile={{UNIT_VAR}}/state --pidfile={{UNIT_VAR}}/pid --sockname={{UNIT_VAR}}/sock --logfile={{UNIT_VAR}}/log"
+      ExecStart: "watchman --persistent --foreground --statefile={{UNIT_VAR}}/state --pidfile={{UNIT_VAR}}/pid --sockname={{UNIT_SOCK}} --logfile={{UNIT_VAR}}/log"
       ExecStartPre: "{{BINS_DIR}}/takeover.sh"
       Environment:
-        - "WATCHMAN_SOCK={{UNIT_VAR}}/sock"
+        - "WATCHMAN_SOCK={{UNIT_SOCK}}"
         - "WATCHMAN_CONFIG_FILE={{UNIT_ETC_FILE}}"
       LimitNOFILE: 524288
       Restart: always
@@ -121,8 +126,9 @@
             - ".pytest_cache"
 
     # The compile-time WATCHMAN_STATE_DIR that watchman.src.pb's getdeps
-    # build baked into the binary. The bare CLI computes its default socket
-    # as <WATCHMAN_DEFAULT_STATE_DIR>/<username>-state/sock.
+    # build baked into the binary. install-cli-symlink.sh maps its
+    # <WATCHMAN_DEFAULT_STATE_DIR>/<username>-state directory to the
+    # canonical XDG state directory used by watchwoman.socket.
     WATCHMAN_DEFAULT_STATE_DIR: /usr/local/src/watchman-git/watchman/var/run/watchman
 
     BINS:
@@ -162,7 +168,7 @@
           flock -n 9 && exit 0
           _owner="$(tr -dc '0-9' <"$_pidfile" 2>/dev/null || true)"
           echo "takeover: pidfile lock held${_owner:+ by pid $_owner}; requesting shutdown-server" >&2
-          watchman --no-spawn --no-local --sockname="$_vdir/sock" shutdown-server >/dev/null 2>&1 || true
+          watchman --no-spawn --no-local --sockname="${HOME}/.local/state/watchman/$(id -un)-state/sock" shutdown-server >/dev/null 2>&1 || true
           _i=0
           while [ "$_i" -lt 50 ]; do
             flock -n 9 && exit 0
@@ -175,14 +181,14 @@
         scope: user
         content: |
           # Symlink the bare `watchman` CLI's compile-time default <user>-state
-          # path to THIS user's var dir, and create that var dir (0700 —
-          # watchman refuses group/other-writable state dirs).
+          # path to the canonical socket directory. The daemon's durable state
+          # remains in its own var dir; only CLI routing is shared.
           _state_dir="{{WATCHMAN_DEFAULT_STATE_DIR}}"
           _user_state="$_state_dir/$(id -un)-state"
-          _vdir="${HOME}/.local/var/lib/watchman-main"
-          mkdir -p "$_state_dir" "$_vdir"
-          chmod 0700 "$_vdir"
+          _canonical="${HOME}/.local/state/watchman/$(id -un)-state"
+          mkdir -p "$_state_dir" "$_canonical"
+          chmod 0700 "$_canonical"
           rm -rf "$_user_state"
-          ln -sfnv "$_vdir" "$_user_state"
+          ln -sfnv "$_canonical" "$_user_state"
   tasks:
     - import_tasks: tasks/compfuzor.includes
