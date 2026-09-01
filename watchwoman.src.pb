@@ -17,10 +17,13 @@
 # from login) and applies the one compat LINKS record for hardcoding
 # clients.
 #
-# No root guard: giant-root accidents are prevented client-side, and
-# init-watchmanconfig.sh seeds per-root ignore_dirs. No statefile/pidfile/
-# logfile: zero on-disk state modulo trigger persistence under the socket
-# dir; logs go to the journal.
+# Root safety is daemon-owned. WATCHWOMAN_CONFIG_FILE in the generated env
+# points at managed etc/watchwoman.json: exact/subtree root denies, a 100k-file
+# warning, a 2M-file per-root ceiling, and a global ignore_dirs floor unioned
+# with each root's .watchmanconfig. Startup fails closed if that configured
+# file is invalid; SIGHUP reloads it without a restart. No statefile/pidfile/
+# logfile: zero on-disk state modulo trigger persistence under the socket dir;
+# logs go to the journal.
 #
 # Do NOT run `watchwoman install-unit` alongside this deploy: it writes
 # real unit files over compfuzor's managed symlinks (`watchwoman
@@ -71,14 +74,19 @@
     # machinery auto-injects EnvironmentFile=-{{DIR}}/env into the service
     # unit (SYSTEMD_SERVICES_DEFAULT when ENV is set).
     #
+    # WATCHWOMAN_CONFIG_FILE is an absolute literal because systemd does not
+    # expand shell variables in EnvironmentFile. /opt/watchwoman-git is the
+    # stable deployment alias for this source tree; files/_env automatically
+    # includes the mapping key in COMPFUZOR_ENVS and env.export.
+    #
     # Roots with no subscriptions/triggers/commands go stale after
     # WATCHWOMAN_STALE_IDLE_SECS (upstream default 3600 = 1h) and the
     # next watch re-crawls them (daemon is in-memory only). Pin 2d so
     # idle roots survive overnight/weekend gaps: warm roots cost their
     # Tree in RAM and re-watch is O(ms); stale ones cost a full crawl.
-    # Giant-root accidents are prevented client-side (opencode never
-    # watch-projects), not by reaping.
+    # Giant-root admission is handled by watchwoman.json, not by reaping.
     ENV:
+      WATCHWOMAN_CONFIG_FILE: /opt/watchwoman-git/etc/watchwoman.json
       WATCHWOMAN_STALE_IDLE_SECS: 172800
       # Shell clients should use the same default socket as watchwoman.socket.
       # This module is deliberately one sort number before watchman-env so
@@ -131,11 +139,16 @@
           --sockname is redundant with the activated listener but pins
           the daemon's own path notion (get-sockname answer, trigger
           persistence dir) to the socket unit's ListenStream even if the
-          unit's environment ever grows a stray XDG_STATE_HOME.
+          unit's environment ever grows a stray XDG_STATE_HOME. Routine
+          restarts target this service only: watchwoman.socket stays active,
+          keeps the path bound, and queues new connections for the replacement.
+          Established connections still close and re-subscribe from a fresh
+          daemon; TimeoutStopSec bounds a pathological graceful drain.
         Type: notify
         ExecStart: "{{GLOBAL_BINS_DIR}}/watchwoman --sockname %h/.local/state/watchman/%u-state/sock --foreground-daemon"
         Restart: on-failure
         RestartSec: 1
+        TimeoutStopSec: 15s
         # One inotify watch per dir plus fds per root during crawl
         # (notify-rs inotify backend). LimitNOFILE only covers fds;
         # the WATCH budget is fs.inotify.max_user_watches, owned by
@@ -149,23 +162,54 @@
         StandardError: journal
         SyslogIdentifier: watchwoman
 
-    # ignore_dirs seeded by init-watchmanconfig.sh into a root's
-    # .watchmanconfig (watchwoman's only ignore mechanism).
+    # The managed global floor is unioned with a root's .watchmanconfig.
+    # init-watchmanconfig.sh seeds the same floor into a root for portability
+    # to other watchman-compatible daemons and lets that root add more entries.
     IGNORE_DIRS:
       - node_modules
+      - .pnpm-store
       - target
-      - .build
       - build
       - dist
       - ".next"
+      - ".nuxt"
       - ".cache"
       - ".turbo"
+      - ".parcel-cache"
+      - bazel-out
+      - dist-newstyle
+      - _build
+      - __pycache__
       - ".venv"
       - venv
-      - __pycache__
-      - ".tox"
       - ".mypy_cache"
       - ".pytest_cache"
+      - ".direnv"
+      - ".test-agent"
+      - coverage
+
+    # Fail-closed daemon policy. `exact` denies only that directory as a root;
+    # `subtree` denies it and all descendants. First match wins.
+    ETC_FILES:
+      - name: watchwoman.json
+        json:
+          root_policy:
+            default: allow
+            rules:
+              - path: "~"
+                match: exact
+                reason: "home root: 32M files, two daemon deaths"
+              - path: "~/src"
+                match: exact
+                reason: "watch projects, not all of src"
+              - path: "~/archive"
+                match: exact
+                reason: "archived checkouts, huge"
+              - path: "~/.cache"
+                match: subtree
+          max_files_per_root: 2000000
+          warn_files_per_root: 100000
+          ignore_dirs: "{{IGNORE_DIRS}}"
 
     STATUSES:
       - status-watchwoman.sh
@@ -175,11 +219,10 @@
         # Drift reporter (also registered in STATUSES so status.sh runs it).
         basedir: false
       - name: init-watchmanconfig.sh
-        # watchwoman's only ignore mechanism is the per-root
-        # .watchmanconfig (no global config file); this seeds one with
-        # the standard ignore_dirs. The file is also a watch-project root
-        # marker — the escape hatch for deliberately watching a non-VCS
-        # dir.
+        # Seed a per-root .watchmanconfig with the managed global ignore floor;
+        # roots can add more entries but cannot remove global ones in watchwoman.
+        # The file is also a watch-project root marker — the escape hatch for
+        # deliberately watching a non-VCS dir.
         basedir: false
         content: |
           set -e
@@ -213,7 +256,8 @@
                               path the CLI resolves with no environment),
                               enabled at sockets.target
           watchwoman.service  Type=notify, activated by the socket;
-                              Restart=on-failure if it dies
+                              Restart=on-failure if it dies;
+                              TimeoutStopSec=15s
 
       ## Operations
 
@@ -223,9 +267,31 @@
           watchman status [--json]
           {{BINS_DIR}}/status-watchwoman.sh
 
-      ## Per-root ignores (no global config)
+      Policy-only changes reload without dropping allowed roots:
 
-      watchwoman reads ignore_dirs from each root's `.watchmanconfig`:
+          jq empty /opt/watchwoman-git/etc/watchwoman.json
+          systemctl --user kill -s HUP watchwoman.service
+
+      Binary, environment, and service-unit changes need a cold daemon. Keep
+      the socket active and restart only the service so connections queue at
+      the stable listener instead of seeing a missing/refused socket:
+
+          systemctl --user is-active watchwoman.socket
+          systemctl --user restart watchwoman.service
+
+      Never include watchwoman.socket in a routine restart. Existing streams
+      still close and re-subscribe, and the zero-state daemon re-crawls roots.
+
+      ## Root policy and ignores
+
+      WATCHWOMAN_CONFIG_FILE=/opt/watchwoman-git/etc/watchwoman.json points the
+      daemon at the managed, fail-closed policy. It denies ~, ~/src, and
+      ~/archive as exact roots (individual children remain watchable), denies
+      the ~/.cache subtree, warns when a scan crosses 100k files, caps each root
+      at 2M files, and supplies a global ignore_dirs floor. SIGHUP keeps the
+      last-good policy if a reload is invalid.
+
+      Each root's `.watchmanconfig` can add ignore_dirs to the global floor:
 
           {{BINS_DIR}}/init-watchmanconfig.sh <dir> [--force]
 
@@ -253,6 +319,10 @@
       - Daemon state is zero-on-disk except trigger persistence under
         ~/.local/state/watchman/<user>-state/roots/. Logs go to the
         journal (identifier `watchwoman`).
+      - Root admission policy and the global ignore floor live in
+        /opt/watchwoman-git/etc/watchwoman.json, selected through
+        WATCHWOMAN_CONFIG_FILE in {{DIR}}/env. Startup fails closed; SIGHUP
+        reloads while retaining the last-good policy on error.
       - Root idle reaping: WATCHWOMAN_STALE_IDLE_SECS=172800 (2d), set in
         {{DIR}}/env (the service unit's EnvironmentFile). Roots with no
         subscribers/triggers/commands for that long go stale and
