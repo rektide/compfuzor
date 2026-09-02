@@ -23,6 +23,10 @@
 - hosts: all
   vars:
     TYPE: fs-inotify
+    STATUSES:
+      # Per-user pool consumption as a status.sh reporter (usage.sh stays
+      # the interactive top-consumers view).
+      - status-inotify.sh
     KERNEL_SYSCTL:
       fs.inotify.max_user_watches: 3000000  # default 65536
       fs.inotify.max_user_instances: 8192   # default 1024
@@ -32,6 +36,11 @@
       # (top consumers); --sudo for system-wide. Distinct from status-sysctl.ts,
       # which reports sysctl drift.
       - name: usage.sh
+        basedir: false
+      - name: status-inotify.sh
+        # status.sh reporter: the current user's TOTAL watches/instances vs
+        # the pools this playbook owns, top consumers, drift at 90% of
+        # either pool (exhaustion poisons every watcher on the user).
         basedir: false
   tasks:
     - import_tasks: tasks/compfuzor.includes
