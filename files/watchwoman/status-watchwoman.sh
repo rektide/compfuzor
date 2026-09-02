@@ -148,7 +148,7 @@ else
 fi
 
 # --- compat link (links.ts owns it) --------------------------------------------
-_compat_sock="{{WATCHWOMAN_COMPAT_ROOT}}/$(id -un)-state/sock"
+_compat_sock="{{WATCHMAN_DEFAULT_PREFIX}}/$(id -un)-state/sock"
 if [ -L "$_compat_sock" ] && [ "$(readlink "$_compat_sock")" = "$_expected_sock" ]; then
   _say compat "OK: $_compat_sock -> default socket"
 else

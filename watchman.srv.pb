@@ -32,8 +32,8 @@
 # may own it at a time; mutual Conflicts declarations make starting one
 # service stop the other instead of creating a second watcher namespace.
 # The C++ CLI ignores $WATCHMAN_SOCK and computes its socket from the
-# compile-time WATCHMAN_STATE_DIR macro, so install-cli-symlink.sh maps that
-# compiled path to the same canonical socket directory.
+# compile-time WATCHMAN_STATE_DIR macro. The LINKS alias farm maps that
+# compiled path and both legacy socket paths to the canonical listener.
 #
 # ORPHAN TAKEOVER — ExecStartPre takeover.sh: if the unit's daemon dies and
 # a client's bare `watchman` auto-spawns a replacement (which takes the
@@ -64,6 +64,30 @@
     SHELL_VAR: "{{ lookup('fsh', 'var', user=True, name=True, home='${HOME}') }}"
     SHELL_ETC_FILE: "{{ lookup('fsh', 'etc', user=True, name=True, home='${HOME}') }}/watchman.json"
 
+    # All clients converge on one listener even when they carry a historical
+    # WATCHMAN_SOCK or derive a compiled/default-prefix path. Both watcher
+    # playbooks declare this same farm so either implementation installs a
+    # complete client-routing contract.
+    WATCHMAN_CANONICAL_STATE: "${HOME}/.local/state/watchman/{{ansible_user_id}}-state"
+    WATCHMAN_CANONICAL_SOCKET: "{{WATCHMAN_CANONICAL_STATE}}/sock"
+    WATCHMAN_MAIN_SOCKET: "${HOME}/.local/var/lib/watchman-main/sock"
+    WATCHMAN_DEFAULT_PREFIX: /usr/local/var/run/watchman
+    WATCHMAN_DEFAULT_STATE_DIR: /usr/local/src/watchman-git/watchman/var/run/watchman
+
+    LINKS:
+      - src: "{{WATCHMAN_CANONICAL_SOCKET}}"
+        dest: "{{WATCHMAN_MAIN_SOCKET}}"
+        scope: user
+        policy: replace
+      - src: "{{WATCHMAN_CANONICAL_SOCKET}}"
+        dest: "{{WATCHMAN_DEFAULT_PREFIX}}/{{ansible_user_id}}-state/sock"
+        scope: user
+        policy: replace
+      - src: "{{WATCHMAN_CANONICAL_STATE}}"
+        dest: "{{WATCHMAN_DEFAULT_STATE_DIR}}/{{ansible_user_id}}-state"
+        scope: user
+        policy: replace
+
     SYSTEMD_SCOPE: user
     SYSTEMD_INSTALL: user
 
@@ -89,7 +113,7 @@
 
     # Interactive shells: ZIM_ENV promotes the two client-facing vars into
     # an env module (don't-stomp) -- python/node/rust clients honor
-    # $WATCHMAN_SOCK, unlike the C++ CLI (handled by the CLI-routing symlink).
+    # $WATCHMAN_SOCK, unlike the C++ CLI (handled by the alias farm).
     ZIM_ENV:
       - WATCHMAN_SOCK
       - WATCHMAN_CONFIG_FILE
@@ -125,16 +149,10 @@
             - ".mypy_cache"
             - ".pytest_cache"
 
-    # The compile-time WATCHMAN_STATE_DIR that watchman.src.pb's getdeps
-    # build baked into the binary. install-cli-symlink.sh maps its
-    # <WATCHMAN_DEFAULT_STATE_DIR>/<username>-state directory to the
-    # canonical XDG state directory used by watchwoman.socket.
-    WATCHMAN_DEFAULT_STATE_DIR: /usr/local/src/watchman-git/watchman/var/run/watchman
-
     BINS:
       - name: status-watchman.sh
         # stats/health via the watchman CLI: managed-socket identity, unit
-        # vs pidfile, CLI-routing symlink, root-guard enforcement, guard
+        # vs pidfile, compiled-path alias, root-guard enforcement, guard
         # inversion (~ marker-free), config symlink farm, linger, inotify
         # pressure, state/log sizes, guard-refusal count (informational).
         basedir: false
@@ -178,18 +196,5 @@
           done
           echo "takeover: pidfile lock still held after 10s; failing start" >&2
           exit 1
-      - name: install-cli-symlink.sh
-        scope: user
-        content: |
-          # Symlink the bare `watchman` CLI's compile-time default <user>-state
-          # path to the canonical socket directory. The daemon's durable state
-          # remains in its own var dir; only CLI routing is shared.
-          _state_dir="{{WATCHMAN_DEFAULT_STATE_DIR}}"
-          _user_state="$_state_dir/$(id -un)-state"
-          _canonical="${HOME}/.local/state/watchman/$(id -un)-state"
-          mkdir -p "$_state_dir" "$_canonical"
-          chmod 0700 "$_canonical"
-          rm -rf "$_user_state"
-          ln -sfnv "$_canonical" "$_user_state"
   tasks:
     - import_tasks: tasks/compfuzor.includes

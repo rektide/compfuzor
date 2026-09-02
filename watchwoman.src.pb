@@ -61,9 +61,11 @@
     # apply, drift, deliberate removal, and sudo escalation for the root-owned
     # default-prefix parent are all included. The watchman-main alias keeps old
     # WATCHMAN_SOCK exports working without creating another daemon namespace.
-    WATCHMAN_CANONICAL_SOCKET: "${HOME}/.local/state/watchman/{{ansible_user_id}}-state/sock"
+    WATCHMAN_CANONICAL_STATE: "${HOME}/.local/state/watchman/{{ansible_user_id}}-state"
+    WATCHMAN_CANONICAL_SOCKET: "{{WATCHMAN_CANONICAL_STATE}}/sock"
     WATCHMAN_MAIN_SOCKET: "${HOME}/.local/var/lib/watchman-main/sock"
-    WATCHWOMAN_COMPAT_ROOT: /usr/local/var/run/watchman
+    WATCHMAN_DEFAULT_PREFIX: /usr/local/var/run/watchman
+    WATCHMAN_DEFAULT_STATE_DIR: /usr/local/src/watchman-git/watchman/var/run/watchman
 
     LINKS:
       - src: "{{WATCHMAN_CANONICAL_SOCKET}}"
@@ -71,7 +73,11 @@
         scope: user
         policy: replace
       - src: "{{WATCHMAN_CANONICAL_SOCKET}}"
-        dest: "{{WATCHWOMAN_COMPAT_ROOT}}/{{ansible_user_id}}-state/sock"
+        dest: "{{WATCHMAN_DEFAULT_PREFIX}}/{{ansible_user_id}}-state/sock"
+        scope: user
+        policy: replace
+      - src: "{{WATCHMAN_CANONICAL_STATE}}"
+        dest: "{{WATCHMAN_DEFAULT_STATE_DIR}}/{{ansible_user_id}}-state"
         scope: user
         policy: replace
 
@@ -256,7 +262,7 @@
       workspace bins — `watchwoman` (the argv[0] alias; this deploy owns
       the classic name), `watchmanctl`, `watchman-wait`, `watchman-make`,
       `watchman-diag`. install-user.sh links the units and applies the
-      compat LINKS record. That's the whole install.
+      compatibility alias farm. That's the whole install.
 
       ## Service
 
@@ -321,10 +327,10 @@
       - XDG_STATE_HOME must stay unset (or point at ~/.local/state) for
         the default-path agreement between the socket unit and bare CLIs;
         status-watchwoman.sh checks it via get-sockname.
-      - Compat LINKS record:
-        {{WATCHWOMAN_COMPAT_ROOT}}/<user>-state/sock → the default
-        socket, for clients that hardcode upstream's default-prefix
-        path. links.ts owns it.
+      - The LINKS alias farm maps the legacy watchman-main socket, upstream's
+        default-prefix socket, and the C++ CLI's compiled state directory to
+        the canonical socket directory. All aliases reach the same listener;
+        links.ts owns their apply and drift behavior.
       - Daemon state is zero-on-disk except trigger persistence under
         ~/.local/state/watchman/<user>-state/roots/. Logs go to the
         journal (identifier `watchwoman`).
