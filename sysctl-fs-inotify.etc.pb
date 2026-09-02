@@ -12,9 +12,9 @@
 #   and the limit that actually binds. 65536 -> 16777216 (2026-08-31: the
 #   1048576 bump was exhausted — watchwoman spammed
 #   `Error { kind: MaxFilesWatch }` (inotify_add_watch ENOSPC) crawling
-#   node_modules-heavy roots alongside ~60 opencode sessions). 16M is a
-#   ceiling, not an allocation: worst case ~16Gi kernel mem if fully
-#   consumed, on a 62Gi box — runaway consumers are the thing to watch.
+#   node_modules-heavy roots alongside ~60 opencode sessions). 3M is a
+#   deliberately bounded ceiling; the managed watcher status reporters show
+#   service-only consumption, while usage.sh shows the whole user's pool.
 # instances = inotify_init() fds (one per process); rarely the cap.
 #   1024 -> 8192 for headroom.
 # queued_events = per-instance kernel event-queue depth; bursts faster than
@@ -24,7 +24,7 @@
   vars:
     TYPE: fs-inotify
     KERNEL_SYSCTL:
-      fs.inotify.max_user_watches: 16777216  # default 65536
+      fs.inotify.max_user_watches: 3000000  # default 65536
       fs.inotify.max_user_instances: 8192   # default 1024
       fs.inotify.max_queued_events: 65536 # default 16384
     BINS:
