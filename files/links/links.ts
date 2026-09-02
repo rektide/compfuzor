@@ -19,7 +19,7 @@ interface LinkRecord {
   dest: string;
   policy: Policy;
   state: State;
-  runtimeRoots?: ("HOME" | "XDG_RUNTIME_DIR")[];
+  runtimeRoots?: ("HOME" | "XDG_RUNTIME_DIR" | "XDG_STATE_HOME")[];
 }
 
 interface Manifest {
@@ -135,7 +135,9 @@ const HELP = `Usage: links <apply|status|audit|remove> [MANIFEST ...] [options]
 
 Manage the version 1 link plan at DIR/links.json. Relative plan paths are
 based at deployment.dir (or the manifest directory). No shell expansion is
-performed; only leading ~, \${HOME}, and \${XDG_RUNTIME_DIR} are recognized.
+performed; only leading ~, \${HOME}, \${XDG_RUNTIME_DIR}, and
+\${XDG_STATE_HOME} are recognized. XDG_STATE_HOME defaults to
+\${HOME}/.local/state per the XDG base-directory specification.
 
 Options:
   --scope system|user  Operate on one activation scope
@@ -257,7 +259,7 @@ async function loadManifest(inputPath: string): Promise<{ path: string; manifest
     if (record.state !== "present" && record.state !== "absent") fail(`${path}: ${id}: invalid state`);
     let runtimeRoots: LinkRecord["runtimeRoots"];
     if (record.runtimeRoots !== undefined) {
-      if (!Array.isArray(record.runtimeRoots) || record.runtimeRoots.some((root) => root !== "HOME" && root !== "XDG_RUNTIME_DIR")) {
+      if (!Array.isArray(record.runtimeRoots) || record.runtimeRoots.some((root) => root !== "HOME" && root !== "XDG_RUNTIME_DIR" && root !== "XDG_STATE_HOME")) {
         fail(`${path}: ${id}: runtimeRoots contains an unsupported root`);
       }
       runtimeRoots = record.runtimeRoots as LinkRecord["runtimeRoots"];
@@ -285,6 +287,7 @@ function expandPath(value: string, base: string): string {
   let expanded = value;
   const home = process.env.HOME;
   const runtime = process.env.XDG_RUNTIME_DIR;
+  const state = process.env.XDG_STATE_HOME || (home ? join(home, ".local/state") : undefined);
   if (value === "~" || value.startsWith("~/")) {
     if (!home) fail(`HOME is required to expand ${value}`);
     expanded = home + value.slice(1);
@@ -294,6 +297,9 @@ function expandPath(value: string, base: string): string {
   } else if (value === "${XDG_RUNTIME_DIR}" || value.startsWith("${XDG_RUNTIME_DIR}/")) {
     if (!runtime) fail(`XDG_RUNTIME_DIR is required to expand ${value}`);
     expanded = runtime + value.slice("${XDG_RUNTIME_DIR}".length);
+  } else if (value === "${XDG_STATE_HOME}" || value.startsWith("${XDG_STATE_HOME}/")) {
+    if (!state) fail(`HOME or XDG_STATE_HOME is required to expand ${value}`);
+    expanded = state + value.slice("${XDG_STATE_HOME}".length);
   } else if (value.startsWith("~") || value.includes("${") || value.includes("$")) {
     fail(`unsupported runtime-root expression: ${value}`);
   }

@@ -12,7 +12,7 @@ from ansible.template import accept_args_markers
 
 _POLICIES = {"preserve", "fail", "replace"}
 _SCOPES = {"system", "user"}
-_RUNTIME_ROOT = re.compile(r"^\$\{(HOME|XDG_RUNTIME_DIR)\}(?:/|$)")
+_RUNTIME_ROOT = re.compile(r"^\$\{(HOME|XDG_RUNTIME_DIR|XDG_STATE_HOME)\}(?:/|$)")
 
 
 def _error(message):
