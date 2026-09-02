@@ -96,6 +96,11 @@ directory exists. The main watchwoman workspace is `~/src/watchwoman-systemd`
 
 ## 1. Live snapshot (2026-09-01)
 
+> **Superseded within hours** — the cutover happened the same evening; see
+> [Addendum: the flip](#addendum-the-flip-2026-09-01-evening) for the timeline,
+> what was fixed on the host, and what remains. This snapshot is kept as the
+> record of the failure modes, not of current state.
+
 Read-only inspection, ~17:00 EDT. This section is a *drift report*; it will go
 stale, and going stale is exactly what we currently have no tool to notice.
 
@@ -499,6 +504,91 @@ rg -v PASSWORD /usr/local/src/opencode-git/env
 
 Update this section when re-running the drift report, and expect the numbers to
 have moved.
+
+# Addendum: the flip (2026-09-01 evening)
+
+Written by the same session as the body, later the same day. The body's §1
+snapshot was historical by ~21:00. All times EDT.
+
+## Timeline
+
+- **03:18** — `opencode.service` restart spawns the cargo stray inside its
+  cgroup (unguarded upstream 0.7.0, allow-all). It quietly accepts `~`.
+- **14:00–16:41** — `watchman-main` crash-loops 80 generations (exit 1 every
+  ~68 s; each gen re-crawls 194 roots, ~55 s CPU / 2 GB). Cause still
+  undiagnosed; the 16:41 generation held.
+- **~17:00** — this doc's snapshot taken: stray at ~14 GB RSS / 5 cores /
+  13.5 h; total inotify usage **1,996,190 watches** (stray 1.39 M,
+  watchman-main 604 k = 99.8 % between the two daemons).
+- **19:36–19:46** — manual flip: cargo reinstall (still unguarded),
+  watchwoman units started from an Aug-30 build, stray + watchman-main
+  killed, opencode restarted — but its env still pinned the dead
+  watchman-main socket, so the transport silently fell back to Parcel.
+- **20:01–21:10** — playbook re-render wave (committed in-repo): canonical
+  naming lands — **`watchman.socket` / `watchman.service` are the canonical
+  units**, the C++ fallback is renamed **`watchman-facebook.service`** with
+  `Conflicts=` both ways; staged `watchwoman.json` policy deployed; env
+  wired (`WATCHWOMAN_CONFIG_FILE`, stale-idle pin); opencode consumes
+  `WATCHMAN_CANONICAL_SOCKET_ABS` from common vars; `restart.sh` lands with
+  a post-check that the service's `WATCHMAN_SOCK` matches expectations.
+- **21:10–23:33** — the unit-managed daemon ran the *unguarded* build for
+  2 h 22 m and peaked **27.5 GB RSS + 7.7 GB swap** — fire #3 in progress,
+  stopped only by the replacement below. Its stop needed the SIGKILL
+  ceiling (`TimeoutStopSec=15s`): the graceful-shutdown hang remains open.
+- **23:33** — guarded build installed: relinked the fork workspace's six
+  bins into the deploy workspace (`/usr/local/src/watchwoman-git/repo`,
+  which symlinks to the archive default workspace — one canonical file),
+  gentle service-only restart with the socket left bound.
+  **Verified live:** `debug-policy /home/rektide` → `allowed: false, "deny
+  exact ~: home root: 32M files, two daemon deaths"`; project dirs allowed;
+  clients reconnecting through socket activation.
+
+## Host cleanup performed
+
+- Quarantined the unguarded cargo set to `~/.cargo/bin/quarantine-20260901/`
+  (it was also first in the opencode unit's PATH — the respawn vector).
+- Pruned orphaned mise shims (`mise reshim`) that claimed `watchman`/`watchwoman`.
+- Disabled `watchman-healthcheck.timer` (legacy self-healer that would try to
+  resurrect the old watchman-main world).
+- Repointed `~/.zshrc` `WATCHMAN_SOCK` to `~/.local/state/watchman/$(id -un)-state/sock`.
+- Removed the C++ compile-time cli-route symlink (it had been repointed at
+  the watchwoman path; with the classic name on watchwoman the C++ CLI is
+  off-PATH and an explicit invocation should spawn nowhere near the live
+  socket).
+
+## Numbers after the flip
+
+- inotify total: **1,996,190 → 3,785 watches** (48 instances) once both old
+  daemons died; the managed daemon's roots re-grow as clients re-watch,
+  bounded by the root policy + 2 M file cap + ignore floor.
+- `fs.inotify.max_user_watches` playbook value dialed **16,777,216 → 3,000,000**
+  (safe: the old watchman-main steady state was 604 k). The live sysctl still
+  reads 16 M until the playbook applies (needs sudo).
+- `status-inotify.sh` (fs-inotify) now reports per-user pool totals + top
+  consumers in every `status.sh` run; both watcher statuses report
+  **canonical-service cgroup-scoped** consumption, per the "canonical service
+  only, not other instances" requirement.
+
+## Remaining
+
+1. **Restart `opencode.service`** (the 19:46 process still carries the dead
+   watchman-main socket in its environment and is on Parcel fallback — 0
+   peers on the canonical socket). `{{DIR}}/bin/restart.sh` is the intended
+   path once the re-rendered deploy is in place. `exec zsh` in live shells
+   for the same reason.
+2. Apply the 3 M sysctl (playbook run with sudo).
+3. Deliberate retirement list: `/srv/watchman-main` artifacts,
+   `~/.local/var/lib/watchman-main`, the quarantined cargo bins, the
+   `/opt/opencode-git` → tmp-render alias, and the `watchman-healthcheck.*`
+   units themselves.
+4. Diagnose the graceful-shutdown hang (watchwoman open issue) and the
+   watchman-main exit-1 crash loop (moot if watchman-facebook stays
+   retired, but unexplained).
+5. The duel's structural lesson held all evening: **every escalation
+   involved an unguarded binary reaching a socket** — cargo install, mise
+   shim, PATH ordering, render drift. Canonical naming + Conflicts + the
+   env pin + socket activation close all four vectors; keep them closed.
+
 
 # Addendum: endpoint naming normalized (2026-09-01, later session)
 
