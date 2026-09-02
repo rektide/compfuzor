@@ -14,7 +14,11 @@
 #   `Error { kind: MaxFilesWatch }` (inotify_add_watch ENOSPC) crawling
 #   node_modules-heavy roots alongside ~60 opencode sessions). 3M is a
 #   deliberately bounded ceiling; the managed watcher status reporters show
-#   service-only consumption, while usage.sh shows the whole user's pool.
+#   service-only consumption, while usage.sh shows the whole user's pool,
+#   and status-inotify.sh --unit UNIT is the shared per-unit surface:
+#   consuming playbooks (opencode.src.pb, the watcher deploys) declare
+#   their units against INOTIFY_STATUS_BIN in vars/common.yaml, since the
+#   kernel exposes no per-unit counters for the pool this file raises.
 # instances = inotify_init() fds (one per process); rarely the cap.
 #   1024 -> 8192 for headroom.
 # queued_events = per-instance kernel event-queue depth; bursts faster than
@@ -41,6 +45,9 @@
         # status.sh reporter: the current user's TOTAL watches/instances vs
         # the pools this playbook owns, top consumers, drift at 90% of
         # either pool (exhaustion poisons every watcher on the user).
+        # --unit UNIT scopes to one systemd --user unit's cgroup — the
+        # cross-subsystem declaration surface other playbooks call through
+        # INOTIFY_STATUS_BIN (vars/common.yaml).
         basedir: false
   tasks:
     - import_tasks: tasks/compfuzor.includes
