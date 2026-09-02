@@ -7,15 +7,15 @@
 # The socket unit binds the CLI's default socket path
 # (~/.local/state/watchman/<user>-state/sock — upstream's
 # WATCHMAN_USE_XDG_STATE_HOME layout) via %h/%u specifiers, so client
-# routing needs no env vars and no symlink farm. First-party clients ask
-# `watchman get-sockname`, which we answer.
+# routing needs no env vars. Compatibility aliases keep clients with older
+# hardcoded or exported socket paths on this same canonical listener.
+# First-party clients ask `watchman get-sockname`, which we answer.
 #
 # install.sh links all six workspace bins (including the `watchman`
 # argv[0] alias); install-user.sh links the units (socket enabled at
 # sockets.target; the service activates on first connection — enabling
 # the socket also implicitly enables the service, so the daemon runs
-# from login) and applies the one compat LINKS record for hardcoding
-# clients.
+# from login) and applies the compatibility LINKS records.
 #
 # Root safety is daemon-owned. WATCHWOMAN_CONFIG_FILE in the generated env
 # points at managed etc/watchwoman.json: exact/subtree root denies, a 100k-file
@@ -57,15 +57,20 @@
     # if that unit isn't linked yet.
     SYSTEMD_ROOTS: [watchwomanService, watchwomanSocket]
 
-    # The one compat path: upstream watchman's default-prefix socket
-    # location, symlinked to our default socket for clients that
-    # hardcode it (everything first-party asks the binary via
-    # get-sockname instead). links.ts owns it — apply, drift, removal,
-    # and sudo escalation for the root-owned parent dir all included.
+    # One listener, multiple compatible pathnames. links.ts owns these aliases:
+    # apply, drift, deliberate removal, and sudo escalation for the root-owned
+    # default-prefix parent are all included. The watchman-main alias keeps old
+    # WATCHMAN_SOCK exports working without creating another daemon namespace.
+    WATCHMAN_CANONICAL_SOCKET: "${HOME}/.local/state/watchman/{{ansible_user_id}}-state/sock"
+    WATCHMAN_MAIN_SOCKET: "${HOME}/.local/var/lib/watchman-main/sock"
     WATCHWOMAN_COMPAT_ROOT: /usr/local/var/run/watchman
 
     LINKS:
-      - src: "${HOME}/.local/state/watchman/{{ansible_user_id}}-state/sock"
+      - src: "{{WATCHMAN_CANONICAL_SOCKET}}"
+        dest: "{{WATCHMAN_MAIN_SOCKET}}"
+        scope: user
+        policy: replace
+      - src: "{{WATCHMAN_CANONICAL_SOCKET}}"
         dest: "{{WATCHWOMAN_COMPAT_ROOT}}/{{ansible_user_id}}-state/sock"
         scope: user
         policy: replace
