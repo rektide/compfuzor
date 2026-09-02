@@ -13,7 +13,10 @@
 # global {{ETC}}/watchman.json. Delete the symlink, write your own file —
 # you've overridden just that piece; everything else stays managed.
 #
-# Binary comes from watchman.src.pb (getdeps build → /usr/local/bin/watchman).
+# Binary comes from watchman.src.pb (getdeps build →
+# /usr/local/bin/watchman-facebook). Watchwoman owns the classic `watchman`
+# client name, so installing either implementation cannot change this unit's
+# executable.
 #
 # ROOT GUARD: a bare `watchman watch-project ~/src` (or any huge tree)
 # exhausts inotify watches → poison state → jj (fsmonitor) hangs. The global
@@ -74,6 +77,7 @@
     WATCHMAN_MAIN_SOCKET: "${HOME}/.local/var/lib/watchman-main/sock"
     WATCHMAN_DEFAULT_PREFIX: /usr/local/var/run/watchman
     WATCHMAN_DEFAULT_STATE_DIR: /usr/local/src/watchman-git/watchman/var/run/watchman
+    WATCHMAN_BIN: "{{GLOBAL_BINS_DIR}}/watchman-facebook"
 
     LINKS:
       - src: "{{WATCHMAN_CANONICAL_SOCKET}}"
@@ -106,7 +110,7 @@
     SYSTEMD_UNITS:
       Conflicts: watchwoman.socket
     SYSTEMD_SERVICES:
-      ExecStart: "{{GLOBAL_BINS_DIR}}/watchman --persistent --foreground --statefile={{UNIT_VAR}}/state --pidfile={{UNIT_VAR}}/pid --sockname={{UNIT_SOCK}} --logfile={{UNIT_VAR}}/log"
+      ExecStart: "{{WATCHMAN_BIN}} --persistent --foreground --statefile={{UNIT_VAR}}/state --pidfile={{UNIT_VAR}}/pid --sockname={{UNIT_SOCK}} --logfile={{UNIT_VAR}}/log"
       ExecStartPre: "{{BINS_DIR}}/takeover.sh"
       Environment:
         - "WATCHMAN_SOCK={{UNIT_SOCK}}"
@@ -178,7 +182,7 @@
           _vdir="${HOME}/.local/var/lib/watchman-main"
           _pidfile="$_vdir/pid"
           _logfile="$_vdir/log"
-          _watchman="{{GLOBAL_BINS_DIR}}/watchman"
+          _watchman="{{WATCHMAN_BIN}}"
           if [ -f "$_logfile" ]; then
             _size=$(stat -c %s "$_logfile" 2>/dev/null || echo 0)
             if [ "$_size" -gt 67108864 ]; then

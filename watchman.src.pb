@@ -67,8 +67,8 @@
       - name: install.sh
         basedir: false
         generated: |
-          [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="watchman"
-          ln -sfv "$DIR/watchman/bin/${INSTALL_BIN}" "$GLOBAL_BINS_DIR/${INSTALL_BIN}"
+          [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="watchman-facebook"
+          ln -sfv "$DIR/watchman/bin/watchman" "$GLOBAL_BINS_DIR/${INSTALL_BIN}"
     # Only build tooling needed at the system level — getdeps builds all
     # fbcode deps (folly, fizz, fbthrift, etc.) and lower-level libs (openssl,
     # zlib, zstd, ...) from pinned source under $DIR/scratch/.

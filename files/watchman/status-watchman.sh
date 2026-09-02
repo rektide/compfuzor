@@ -42,7 +42,7 @@ _statefile="$_vdir/state"
 _logfile="$_vdir/log"
 _cli_state="{{WATCHMAN_DEFAULT_STATE_DIR}}/$(id -un)-state"
 _cfg="${WATCHMAN_CONFIG_FILE:-$_uetc/watchman.json}"
-_wmbin="${WATCHMAN_BIN:-{{GLOBAL_BINS_DIR}}/watchman}"
+_wmbin="${WATCHMAN_BIN:-{{WATCHMAN_BIN}}}"
 _unit="${WATCHMAN_UNIT:-{{SYSTEMD_SERVICE}}.service}"
 
 _drift=0
