@@ -108,6 +108,8 @@
       WATCHMAN_CONFIG_FILE: "{{SHELL_ETC_FILE}}"
 
     SYSTEMD_UNITS:
+      Description: Facebook Watchman file-watching daemon
+      Documentation: https://facebook.github.io/watchman/
       Conflicts: watchwoman.socket
     SYSTEMD_SERVICES:
       ExecStart: "{{WATCHMAN_BIN}} --persistent --foreground --statefile={{UNIT_VAR}}/state --pidfile={{UNIT_VAR}}/pid --sockname={{UNIT_SOCK}} --logfile={{UNIT_VAR}}/log"
