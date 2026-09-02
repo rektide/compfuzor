@@ -150,10 +150,13 @@
     # status-cleanup.sh dry-runs cleanup.sh with the timer's eligibility window
     # plus the timer's own unit state; status-opencode-ok.sh checks the
     # invoking shell against the managed deployment and is also globally
-    # linked as opencode-status-ok for quick checks from wrapper-less shells.
+    # linked as opencode-status-ok for quick checks from wrapper-less shells;
+    # status-inotify.sh declares opencode.service a consumer of the user's
+    # inotify pools through the limit owner's shared --unit reporter.
     STATUSES:
       - status-cleanup.sh
       - status-opencode-ok.sh
+      - status-inotify.sh
     ZIM_ENV:
       - OPENCODE_SERVER_URL
       - OPENCODE_PASSWORD_FILE
@@ -206,9 +209,14 @@
 
       `bin/status.sh` runs the registered reporters: status-cleanup.sh (leaked
       native libraries and the cleanup timer's state), status-opencode-ok.sh
-      (below), plus the config and link drift reporters. `opencode-status-ok`
-      is the same ok-checker as a global command, so any shell — including ones
-      without the ZIM wrapper — can quickly verify three things:
+      (below), status-inotify.sh (this service's share of the user's inotify
+      pools — the kernel has no per-unit counters, so the entry declares
+      opencode.service against the fs-inotify limit owner's shared `--unit`
+      reporter via `INOTIFY_STATUS_BIN`; it reports not-applicable where that
+      deploy is absent), plus the config and link drift reporters.
+      `opencode-status-ok` is the same ok-checker as a global command, so any
+      shell — including ones without the ZIM wrapper — can quickly verify three
+      things:
 
       - wrapper: whether the invoking shell loaded the opencode/opencode2
         wrapper. Shell functions are invisible to child processes, so the check
@@ -504,6 +512,21 @@
       - name: status-opencode-ok.sh
         basedir: False
         global: opencode-status-ok
+      # status.sh reporter: this service's share of the user's inotify
+      # watch/instance pools, cgroup-scoped by the limit owner's shared
+      # reporter. This entry IS the declaration that opencode.service
+      # consumes the pools fs-inotify.etc.pb raises (the kernel has no
+      # per-unit counters); exit 2 (not-applicable) when that deploy is
+      # absent on the host.
+      - name: status-inotify.sh
+        basedir: False
+        content: |
+          _bin="{{INOTIFY_STATUS_BIN}}"
+          if [ ! -x "$_bin" ]; then
+            echo "status-inotify: limit owner's reporter not deployed at $_bin (run sysctl-fs-inotify.etc.pb); skipping" >&2
+            exit 2
+          fi
+          exec "$_bin" --unit "${OPENCODE_UNIT:-opencode.service}"
       - name: backup.sh
         basedir: False
   tasks:
