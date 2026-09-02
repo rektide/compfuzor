@@ -16,6 +16,10 @@
     # Deployment uses the locally composed jj workspace. The remote working
     # bookmark is only a snapshot and may lag the accepted local composition.
     OPENCODE_WORKING_DIR: "{{ ansible_user_dir }}/src/opencode-working"
+    # Match Watchman's WATCHMAN_USE_XDG_STATE_HOME default exactly. The
+    # standard fallback is ~/.local/state when XDG_STATE_HOME is unset/empty.
+    WATCHMAN_STATE_HOME: "{{ ansible_env.XDG_STATE_HOME | default(ansible_user_dir ~ '/.local/state', true) }}"
+    WATCHMAN_CANONICAL_SOCKET: "{{WATCHMAN_STATE_HOME}}/watchman/{{ansible_user_id}}-state/sock"
     # origin's rolling 'latest' tag drifts from the local fossil; allow clobber.
     #GIT_FORCE: True
     PKGS:
@@ -45,13 +49,11 @@
       # 4m command deadline: loaded host, prefer waiting over generation churn.
       OPENCODE_WATCHER_BACKEND: watchman
       OPENCODE_WATCHMAN_COMMAND_TIMEOUT_MS: 240000
-      # One canonical socket shared by the mutually-exclusive watchman-main
+      # One canonical socket shared by the mutually-exclusive watchman
       # and watchwoman services. Explicit routing prevents the transport from
       # shelling out `watchman get-sockname`, which can auto-spawn a private
       # daemon in this unit's cgroup.
-      WATCHMAN_SOCK: "{{ansible_user_dir}}/.local/state/watchman/{{ansible_user_id}}-state/sock"
-      # Do not let service PATH select a cargo-installed or ad-hoc watchman.
-      OPENCODE_WATCHMAN_BINARY: /usr/local/bin/watchwoman
+      WATCHMAN_SOCK: "{{WATCHMAN_CANONICAL_SOCKET}}"
       # Location activity TTL: inert on stock upstream; the composed working
       # workspace reads it. 8h keeps location service stacks warm across a
       # working day while still bounding memory (stock default: 60m).
@@ -198,8 +200,9 @@
       verifies that the new server inherited the canonical Watchman socket.
       It never touches standalone OpenCode panes.
 
-      OpenCode and both watcher daemon services use the same canonical socket:
-      `~/.local/state/watchman/<user>-state/sock`. `watchman-main.service` and
+      OpenCode and both watcher daemon services use Watchman's XDG-default
+      socket: `${XDG_STATE_HOME:-$HOME/.local/state}/watchman/<user>-state/sock`.
+      `watchman.service` and
       `watchwoman.socket` conflict with one another, so starting either one
       performs an explicit service handover rather than creating a second
       socket namespace.
@@ -461,8 +464,7 @@
           _unit="${OPENCODE_UNIT:-opencode.service}"
           _url="${OPENCODE_SERVER_URL:-http://127.0.0.1:49373}"
           _timeout="${OPENCODE_RESTART_TIMEOUT:-60}"
-          _sock="${WATCHMAN_SOCK:-}"
-          [ -n "$_sock" ] || { echo "restart-opencode: WATCHMAN_SOCK is not set" >&2; exit 2; }
+          _sock="{{WATCHMAN_CANONICAL_SOCKET}}"
 
           _reload="$(systemctl --user show "$_unit" -p NeedDaemonReload --value 2>/dev/null || true)"
           [ "$_reload" = yes ] && systemctl --user daemon-reload
