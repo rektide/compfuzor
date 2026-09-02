@@ -103,8 +103,48 @@ if [ "$_svc_state" = active ] && [ "${_main_pid:-0}" -gt 0 ] 2>/dev/null; then
     _drift=1
     _say roots "DRIFT: daemon active but status --json failed"
   fi
+
+  # Count only processes in the canonical service cgroup. The user's other
+  # OpenCode/editor instances are intentionally excluded from this report.
+  _service_cgroup="$(_sys show "$_svc_unit" -p ControlGroup --value 2>/dev/null || true)"
+  _service_watches=0
+  _service_instances=0
+  _service_processes=0
+  if [ -n "$_service_cgroup" ]; then
+    for _proc in /proc/[0-9]*; do
+      _proc_cgroup="$(sed -n 's/^0:://p' "$_proc/cgroup" 2>/dev/null || true)"
+      case "$_proc_cgroup" in
+        "$_service_cgroup"|"$_service_cgroup"/*) ;;
+        *) continue ;;
+      esac
+      _proc_instances=0
+      _proc_watches=0
+      for _fd in "$_proc"/fd/*; do
+        [ "$(readlink "$_fd" 2>/dev/null || true)" = anon_inode:inotify ] || continue
+        _proc_instances=$((_proc_instances + 1))
+        _fd_watches="$(awk '/^inotify wd:/{c++} END{print c+0}' "$_proc/fdinfo/${_fd##*/}" 2>/dev/null || echo 0)"
+        _proc_watches=$((_proc_watches + _fd_watches))
+      done
+      [ "$_proc_instances" -gt 0 ] || continue
+      _service_processes=$((_service_processes + 1))
+      _service_instances=$((_service_instances + _proc_instances))
+      _service_watches=$((_service_watches + _proc_watches))
+    done
+    _max="$(cat /proc/sys/fs/inotify/max_user_watches 2>/dev/null || echo 0)"
+    _pct=$(( _service_watches * 100 / (_max > 0 ? _max : 1) ))
+    if [ "$_pct" -ge 90 ]; then
+      _say inotify "DRIFT: $_service_watches/$_max watches (${_pct}%), $_service_instances instances, $_service_processes process(es) -- service only"
+      _drift=1
+    else
+      _say inotify "OK: $_service_watches/$_max watches (${_pct}%), $_service_instances instances, $_service_processes process(es) -- service only"
+    fi
+  else
+    _drift=1
+    _say inotify "DRIFT: service cgroup unavailable; cannot scope consumption"
+  fi
 else
   _say daemon "idle: socket-activated, not started yet (normal)"
+  _say inotify "n/a: canonical service inactive"
 fi
 
 # --- compat link (links.ts owns it) --------------------------------------------

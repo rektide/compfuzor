@@ -21,8 +21,8 @@
 #     -- so background services retry silently. guard-refusals.sh aggregates;
 #   - user linger is on, so the unit (and its guard config) runs from boot,
 #     before any client could auto-spawn an unguarded daemon;
-#   - the daemon's own inotify pressure vs fs.inotify.max_user_watches --
-#     the exhaustion vector that poisons state and hangs jj (fsmonitor);
+#   - the canonical service's inotify pressure vs fs.inotify.max_user_watches --
+#     counting only processes in this unit's cgroup, not other user daemons;
 #   - state/log artifact sizes (no rotation in this build; takeover.sh
 #     trims at each start).
 #
@@ -171,17 +171,48 @@ if [ "$_ipc_ok" = 1 ]; then
   fi
 fi
 
-# --- inotify pressure of the daemon itself ----------------------------------
-if [ -n "$_pid" ]; then
-  _watches="$(awk '/^inotify wd:/{c++} END{print c+0}' /proc/$_pid/fdinfo/* 2>/dev/null || echo 0)"
-  _max="$(cat /proc/sys/fs/inotify/max_user_watches 2>/dev/null || echo 0)"
-  _pct=$(( _watches * 100 / (_max > 0 ? _max : 1) ))
-  if [ "$_pct" -ge 90 ]; then
-    _say inotify "DRIFT: $_watches/$_max watches (${_pct}%) -- exhaustion poisons state (see fs-inotify)"
-    _drift=1
+# --- inotify pressure of the canonical service -------------------------------
+# Count every process in the unit cgroup. This excludes other watchman,
+# watchwoman, editor, and OpenCode instances sharing the user's inotify pool.
+if [ "${_svc_state:-}" = active ] && command -v systemctl >/dev/null 2>&1; then
+  _service_cgroup="$(systemctl --user show "$_unit" -p ControlGroup --value 2>/dev/null || true)"
+  _service_watches=0
+  _service_instances=0
+  _service_processes=0
+  if [ -n "$_service_cgroup" ]; then
+    for _proc in /proc/[0-9]*; do
+      _proc_cgroup="$(sed -n 's/^0:://p' "$_proc/cgroup" 2>/dev/null || true)"
+      case "$_proc_cgroup" in
+        "$_service_cgroup"|"$_service_cgroup"/*) ;;
+        *) continue ;;
+      esac
+      _proc_instances=0
+      _proc_watches=0
+      for _fd in "$_proc"/fd/*; do
+        [ "$(readlink "$_fd" 2>/dev/null || true)" = anon_inode:inotify ] || continue
+        _proc_instances=$((_proc_instances + 1))
+        _fd_watches="$(awk '/^inotify wd:/{c++} END{print c+0}' "$_proc/fdinfo/${_fd##*/}" 2>/dev/null || echo 0)"
+        _proc_watches=$((_proc_watches + _fd_watches))
+      done
+      [ "$_proc_instances" -gt 0 ] || continue
+      _service_processes=$((_service_processes + 1))
+      _service_instances=$((_service_instances + _proc_instances))
+      _service_watches=$((_service_watches + _proc_watches))
+    done
+    _max="$(cat /proc/sys/fs/inotify/max_user_watches 2>/dev/null || echo 0)"
+    _pct=$(( _service_watches * 100 / (_max > 0 ? _max : 1) ))
+    if [ "$_pct" -ge 90 ]; then
+      _say inotify "DRIFT: $_service_watches/$_max watches (${_pct}%), $_service_instances instances, $_service_processes process(es) -- service only"
+      _drift=1
+    else
+      _say inotify "OK: $_service_watches/$_max watches (${_pct}%), $_service_instances instances, $_service_processes process(es) -- service only"
+    fi
   else
-    _say inotify "OK: $_watches/$_max watches (${_pct}%)"
+    _say inotify "DRIFT: service cgroup unavailable; cannot scope consumption"
+    _drift=1
   fi
+else
+  _say inotify "n/a: canonical service inactive"
 fi
 
 # --- guard inversion: ~ and ~/archive must stay marker-free ------------------
