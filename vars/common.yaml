@@ -22,6 +22,28 @@ ARCHIVE_SRC: "{{HOMEDIR}}/archive/{{REPO_ORG}}/{{REPO_NAME}}"
 SHARES_DIR: /usr/share
 PASSWORDS_DIR: "{{ETC}}/secrets"
 
+# Canonical watcher endpoint — the one contract shared by watchman.srv.pb,
+# watchwoman.src.pb, and opencode.src.pb. Watchman's
+# WATCHMAN_USE_XDG_STATE_HOME default is the path contract:
+# ${XDG_STATE_HOME:-$HOME/.local/state}/watchman/<user>-state/sock.
+# Unit names: the socket is the public endpoint and carries the classic
+# name; the active daemon unit is implementation-named with a classic-name
+# alias; the C++ fallback is implementation-named outright.
+WATCHMAN_SOCKET_UNIT: watchman
+WATCHMAN_SERVICE_UNIT: watchwoman
+WATCHMAN_SERVICE_ALIAS_UNIT: watchman
+WATCHMAN_FALLBACK_UNIT: watchman-facebook
+# Runtime-root spellings for links.ts plans and env.export (expanded at
+# apply/source time; keep ${XDG_STATE_HOME} unexpanded so both roots work).
+WATCHMAN_CANONICAL_STATE: "${XDG_STATE_HOME}/watchman/{{ansible_user_id}}-state"
+WATCHMAN_CANONICAL_SOCKET: "{{WATCHMAN_CANONICAL_STATE}}/sock"
+WATCHMAN_MAIN_SOCKET: "${HOME}/.local/var/lib/watchman-main/sock"
+WATCHMAN_DEFAULT_PREFIX: /usr/local/var/run/watchman
+WATCHMAN_DEFAULT_STATE_DIR: /usr/local/src/watchman-git/watchman/var/run/watchman
+# Absolute spelling for consumers that cannot expand at runtime (systemd
+# EnvironmentFile never expands shell variables).
+WATCHMAN_CANONICAL_SOCKET_ABS: "{{ ansible_env.XDG_STATE_HOME | default(ansible_user_dir ~ '/.local/state', true) }}/watchman/{{ ansible_user_id }}-state/sock"
+
 # Archive download mode
 ARCHIVE_DOWNLOAD: true
 ARCHIVE_DIR: "{{HOMEDIR}}/archive"

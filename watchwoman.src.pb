@@ -4,12 +4,16 @@
 # socket activation (LISTEN_FDS adoption, never unlinks the socket file
 # while activated), sd_notify readiness (Type=notify), graceful SIGTERM.
 #
-# The socket unit binds Watchman's default socket path
+# Endpoint naming: watchman.socket is the public endpoint (classic name);
+# it activates watchwoman.service through the watchman.service alias, so
+# `systemctl status watchman` works while the real unit stays
+# implementation-named. The C++ fallback is watchman-facebook.service.
+# The socket binds Watchman's default path
 # (${XDG_STATE_HOME:-$HOME/.local/state}/watchman/<user>-state/sock) via
-# systemd's %S/%u specifiers, so client
-# routing needs no env vars. Compatibility aliases keep clients with older
-# hardcoded or exported socket paths on this same canonical listener.
-# First-party clients ask `watchman get-sockname`, which we answer.
+# systemd's %S/%u specifiers, so client routing needs no env vars.
+# Compatibility aliases keep clients with older hardcoded or exported socket
+# paths on this same canonical listener. First-party clients ask
+# `watchman get-sockname`, which we answer.
 #
 # install.sh links all six workspace bins (including the `watchman`
 # argv[0] alias); install-user.sh links the units (socket enabled at
@@ -55,18 +59,11 @@
     # enable), which must exist before the socket installer's `enable` —
     # systemd implicitly enables the service a socket activates, and fails
     # if that unit isn't linked yet.
-    SYSTEMD_ROOTS: [watchwomanService, watchwomanSocket]
+    SYSTEMD_ROOTS: [watchmanService, watchmanSocket]
 
-    # One listener, multiple compatible pathnames. links.ts owns these aliases:
-    # apply, drift, deliberate removal, and sudo escalation for the root-owned
-    # default-prefix parent are all included. The watchman-main alias keeps old
-    # WATCHMAN_SOCK exports working without creating another daemon namespace.
-    WATCHMAN_CANONICAL_STATE: "${XDG_STATE_HOME}/watchman/{{ansible_user_id}}-state"
-    WATCHMAN_CANONICAL_SOCKET: "{{WATCHMAN_CANONICAL_STATE}}/sock"
-    WATCHMAN_MAIN_SOCKET: "${HOME}/.local/var/lib/watchman-main/sock"
-    WATCHMAN_DEFAULT_PREFIX: /usr/local/var/run/watchman
-    WATCHMAN_DEFAULT_STATE_DIR: /usr/local/src/watchman-git/watchman/var/run/watchman
-
+    # Socket aliases and unit names come from the canonical endpoint contract
+    # in vars/common.yaml. links.ts owns apply, drift, deliberate removal,
+    # and sudo escalation for the root-owned default-prefix parent.
     LINKS:
       - src: "{{WATCHMAN_CANONICAL_SOCKET}}"
         dest: "{{WATCHMAN_MAIN_SOCKET}}"
@@ -78,6 +75,13 @@
         policy: replace
       - src: "{{WATCHMAN_CANONICAL_STATE}}"
         dest: "{{WATCHMAN_DEFAULT_STATE_DIR}}/{{ansible_user_id}}-state"
+        scope: user
+        policy: replace
+      # Classic-name alias for the daemon unit: watchman.service loads the
+      # same unit file as watchwoman.service, and watchman.socket pairs with
+      # the alias name for activation.
+      - src: "{{ETCS_DIR}}/{{NAME}}/{{WATCHMAN_SERVICE_UNIT}}.service"
+        dest: "${HOME}/.config/systemd/user/{{WATCHMAN_SERVICE_ALIAS_UNIT}}.service"
         scope: user
         policy: replace
 
@@ -99,7 +103,7 @@
     ENV:
       WATCHWOMAN_CONFIG_FILE: /opt/watchwoman-git/etc/watchwoman.json
       WATCHWOMAN_STALE_IDLE_SECS: 172800
-      # Shell clients should use the same default socket as watchwoman.socket.
+      # Shell clients should use the same default socket as watchman.socket.
       # This module is deliberately one sort number before watchman-env so
       # that this contributor wins the ZIM_ENV don't-stomp race when both
       # playbooks are installed.
@@ -108,21 +112,23 @@
     ZIM_ENV:
       - WATCHMAN_SOCK
 
-    watchwomanSocket:
-      SYSTEMD_SOCKET: watchwoman
+    watchmanSocket:
+      SYSTEMD_SOCKET: "{{WATCHMAN_SOCKET_UNIT}}"
       SYSTEMD_UNITS:
-        Description: "Watchwoman (watchman-compatible) file watching daemon socket"
+        Description: "Watchman-compatible file watching daemon socket"
         Documentation: https://github.com/radiosilence/watchwoman
-        # Endpoint owners exclude one another. One ordering edge is enough for
-        # either start direction: systemd stops the incumbent before starting
-        # the replacement. watchman-main is the old deployed unit name and can
-        # be removed after hosts have installed watchman.service.
-        Conflicts: watchman.service watchman-main.service
-        After: watchman.service watchman-main.service
+        # The public endpoint carries the classic name; its implicit pairing
+        # resolves through the watchman.service alias to watchwoman.service.
+        # Endpoint owners exclude one another with one ordering edge per
+        # start direction, so systemd stops the incumbent (the
+        # watchman-facebook fallback) before this socket binds, and vice
+        # versa.
+        Conflicts: "{{WATCHMAN_FALLBACK_UNIT}}.service"
+        After: "{{WATCHMAN_FALLBACK_UNIT}}.service"
       SYSTEMD_SOCKETS:
         comments: |
-          Default-path agreement with the CLI's sock::resolve: %S/%u expand at
-          unit-load from XDG_STATE_HOME and the user name, with no per-user templating — the username is
+          Default-path agreement with the CLI's sock::resolve: %S/%u expand
+          at unit-load from XDG_STATE_HOME and the user name — the username is
           part of the path contract on BOTH sides (upstream watchman's
           <user>-state layout and watchwoman's sock::resolve agree on
           it). `%S` follows XDG_STATE_HOME with the standard fallback;
@@ -135,32 +141,36 @@
       SYSTEMD_INSTALLS:
         WantedBy: sockets.target
 
-    watchwomanService:
-      SYSTEMD_SERVICE: watchwoman
+    watchmanService:
+      SYSTEMD_SERVICE: "{{WATCHMAN_SERVICE_UNIT}}"
       # Socket-activated: link-only. BOOT stays lazy (daemon on first
-      # connection); activation restarts it up immediately instead.
+      # connection); activation restarts it up immediately instead. The
+      # classic-name watchman.service alias (a LINKS record) points at this
+      # unit file, so watchman.socket's implicit pairing activates it.
       SYSTEMD_ENABLE: false
       SYSTEMD_UNITS:
         comments: |
-          Socket-activated by watchwoman.socket: an idle service is
-          normal (after boot, before any client connects). The daemon
-          adopts systemd's LISTEN_FDS listener and never unlinks the
-          socket file while activated — the socket unit owns it for its
-          whole life, so the bind survives daemon restarts.
+          Socket-activated by watchman.socket (through the watchman.service
+          alias): an idle service is normal (after boot, before any client
+          connects). The daemon adopts systemd's LISTEN_FDS listener and never
+          unlinks the socket file while activated — the socket unit owns it
+          for its whole life, so the bind survives daemon restarts.
         Description: "Watchwoman file watching daemon (watchman-compatible)"
         Documentation: https://github.com/radiosilence/watchwoman
-        Requires: watchwoman.socket
-        After: watchwoman.socket
+        Requires: "{{WATCHMAN_SOCKET_UNIT}}.socket"
+        After: "{{WATCHMAN_SOCKET_UNIT}}.socket"
       SYSTEMD_SERVICES:
         comments: |
           --sockname is redundant with the activated listener but pins
           the daemon's own path notion (get-sockname answer, trigger
           persistence dir) to the socket unit's ListenStream even if the
           unit's environment ever grows a stray XDG_STATE_HOME. Routine
-          restarts target this service only: watchwoman.socket stays active,
+          restarts target this service only: watchman.socket stays active,
           keeps the path bound, and queues new connections for the replacement.
           Established connections still close and re-subscribe from a fresh
           daemon; TimeoutStopSec bounds a pathological graceful drain.
+          SyslogIdentifier stays `watchwoman`: the journal tag names the
+          real implementation, while the alias keeps the classic name.
         Type: notify
         ExecStart: "{{GLOBAL_BINS_DIR}}/watchwoman --sockname %S/watchman/%u-state/sock --foreground-daemon"
         Restart: on-failure
@@ -269,17 +279,25 @@
 
       ## Service
 
-          watchwoman.socket   ListenStream=%S/watchman/%u-state/sock
+      The endpoint socket carries the classic name; the daemon unit is
+      implementation-named with a classic-name alias, so both
+      `systemctl status watchman` and `systemctl status watchwoman` work:
+
+          watchman.socket     ListenStream=%S/watchman/%u-state/sock
                               (upstream's XDG state-home layout — the exact
                               path the CLI resolves with no environment),
                               enabled at sockets.target
-          watchwoman.service  Type=notify, activated by the socket;
-                              Restart=on-failure if it dies;
-                              TimeoutStopSec=15s
+          watchwoman.service  Type=notify, activated by the socket through
+                              the watchman.service alias; Restart=on-failure
+                              if it dies; TimeoutStopSec=15s
+          watchman-facebook.service
+                              the C++ fallback (link-only, deliberately
+                              started); conflicts with watchman.socket and
+                              takes the canonical socket when started
 
       ## Operations
 
-          systemctl --user status watchwoman.socket watchwoman.service
+          systemctl --user status watchman.socket watchwoman.service
           journalctl --user -t watchwoman -f
           watchman watch-list
           watchman status [--json]
@@ -294,11 +312,17 @@
       the socket active and restart only the service so connections queue at
       the stable listener instead of seeing a missing/refused socket:
 
-          systemctl --user is-active watchwoman.socket
+          systemctl --user is-active watchman.socket
           systemctl --user restart watchwoman.service
 
-      Never include watchwoman.socket in a routine restart. Existing streams
+      Never include watchman.socket in a routine restart. Existing streams
       still close and re-subscribe, and the zero-state daemon re-crawls roots.
+
+      Handing the canonical socket to the fallback (or back) is one command —
+      the Conflicts declarations evict the incumbent either way:
+
+          systemctl --user start watchman-facebook.service   # to C++
+          systemctl --user start watchman.socket             # to watchwoman
 
       ## Root policy and ignores
 

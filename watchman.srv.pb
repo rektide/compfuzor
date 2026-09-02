@@ -30,11 +30,11 @@
 # informational count and guard-refusals.sh aggregates them.
 # `.watch` is the escape hatch for deliberately watching a non-VCS dir.
 #
-# CANONICAL SOCKET — both watchman and watchwoman use Watchman's XDG
+# CANONICAL SOCKET — both watchman-facebook and watchwoman use Watchman's XDG
 # default: ${XDG_STATE_HOME:-$HOME/.local/state}/watchman/<user>-state/sock.
 # systemd's %S is that same XDG state root for a user manager. Only one service
-# may own it at a time; mutual Conflicts declarations make starting one
-# service stop the other instead of creating a second watcher namespace.
+# may own it at a time; Conflicts against watchman.socket makes starting either
+# implementation stop the other instead of creating a second watcher namespace.
 # The C++ CLI ignores $WATCHMAN_SOCK and computes its socket from the
 # compile-time WATCHMAN_STATE_DIR macro. The LINKS alias farm maps that
 # compiled path and both legacy socket paths to the canonical listener.
@@ -68,15 +68,8 @@
     SHELL_VAR: "{{ lookup('fsh', 'var', user=True, name=True, home='${HOME}') }}"
     SHELL_ETC_FILE: "{{ lookup('fsh', 'etc', user=True, name=True, home='${HOME}') }}/watchman.json"
 
-    # All clients converge on one listener even when they carry a historical
-    # WATCHMAN_SOCK or derive a compiled/default-prefix path. Both watcher
-    # playbooks declare this same farm so either implementation installs a
-    # complete client-routing contract.
-    WATCHMAN_CANONICAL_STATE: "${XDG_STATE_HOME}/watchman/{{ansible_user_id}}-state"
-    WATCHMAN_CANONICAL_SOCKET: "{{WATCHMAN_CANONICAL_STATE}}/sock"
-    WATCHMAN_MAIN_SOCKET: "${HOME}/.local/var/lib/watchman-main/sock"
-    WATCHMAN_DEFAULT_PREFIX: /usr/local/var/run/watchman
-    WATCHMAN_DEFAULT_STATE_DIR: /usr/local/src/watchman-git/watchman/var/run/watchman
+    # Socket aliases, unit names, and the canonical endpoint contract live in
+    # vars/common.yaml; only the fallback's own binary path is local.
     WATCHMAN_BIN: "{{GLOBAL_BINS_DIR}}/watchman-facebook"
 
     LINKS:
@@ -95,10 +88,21 @@
 
     SYSTEMD_SCOPE: user
     SYSTEMD_INSTALL: user
-    # Keep the operational unit name symmetric with watchwoman.service. The
-    # watchman-main deployment name is Compfuzor's generic default instance
-    # name and remains only in artifact/state paths.
-    SYSTEMD_SERVICE: watchman
+    # The fallback daemon carries an implementation-specific unit name: the
+    # classic watchman.service name belongs to the watchwoman daemon's alias,
+    # and watchman.socket is the canonical endpoint the fallback competes for.
+    # The watchman-main deployment name is Compfuzor's generic default
+    # instance name and remains only in artifact/state paths.
+    SYSTEMD_SERVICE: "{{WATCHMAN_FALLBACK_UNIT}}"
+    # Link-only fallback: enabling it would start the C++ daemon at boot,
+    # where Conflicts=watchman.socket would evict the active endpoint owner
+    # on every login. Start it deliberately to hand over the canonical socket.
+    SYSTEMD_ENABLE: false
+
+    SYSTEMD_UNITS:
+      Description: Facebook Watchman file-watching daemon
+      Documentation: https://facebook.github.io/watchman/
+      Conflicts: "{{WATCHMAN_SOCKET_UNIT}}.socket"
 
     # ${HOME} literals for shell-side consumers (BINS scripts via envdefault,
     # interactive shells via the zim module). The daemon gets the same vars
@@ -107,10 +111,6 @@
       WATCHMAN_SOCK: "${XDG_STATE_HOME:-${HOME}/.local/state}/watchman/$(id -un)-state/sock"
       WATCHMAN_CONFIG_FILE: "{{SHELL_ETC_FILE}}"
 
-    SYSTEMD_UNITS:
-      Description: Facebook Watchman file-watching daemon
-      Documentation: https://facebook.github.io/watchman/
-      Conflicts: watchwoman.socket
     SYSTEMD_SERVICES:
       ExecStart: "{{WATCHMAN_BIN}} --persistent --foreground --statefile={{UNIT_VAR}}/state --pidfile={{UNIT_VAR}}/pid --sockname={{UNIT_SOCK}} --logfile={{UNIT_VAR}}/log"
       ExecStartPre: "{{BINS_DIR}}/takeover.sh"
