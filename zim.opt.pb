@@ -55,7 +55,7 @@
       - source: https://github.com/rektide/zim-mise
         channel: zimenv
         phase: core
-        comment: Single early mise load; full interactively, shims otherwise.
+        comment: Single early mise load; full interactively, shims otherwise. Mode/args via zstyle ':zim:plugins:mise' (see module README).
 
       # --- core (20) ---
       - source: environment
