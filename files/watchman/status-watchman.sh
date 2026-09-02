@@ -34,8 +34,9 @@
 # WATCHMAN_STATUS_TIMEOUT (secs).
 
 _vdir="${HOME}/.local/var/lib/watchman-main"
+_sockdir="${HOME}/.local/state/watchman/$(id -un)-state"
 _uetc="${HOME}/.config/watchman-main"
-_sock="$_vdir/sock"
+_sock="$_sockdir/sock"
 _pidfile="$_vdir/pid"
 _statefile="$_vdir/state"
 _logfile="$_vdir/log"
@@ -74,10 +75,10 @@ fi
 : "${_markers:=.git .hg .jj .watch .watchmanconfig}"
 
 # --- CLI routing symlink ----------------------------------------------------
-if [ -L "$_cli_state" ] && [ "$(readlink -m "$_cli_state")" = "$(readlink -m "$_vdir")" ]; then
-  _say cli-route "OK: $_cli_state -> $_vdir"
+if [ -L "$_cli_state" ] && [ "$(readlink -m "$_cli_state")" = "$(readlink -m "$_sockdir")" ]; then
+  _say cli-route "OK: $_cli_state -> $_sockdir"
 else
-  _say cli-route "DRIFT: $_cli_state is not a symlink to $_vdir -- bare CLI would spawn an unguarded daemon"
+  _say cli-route "DRIFT: $_cli_state is not a symlink to $_sockdir -- bare CLI would spawn an unguarded daemon"
   _drift=1
 fi
 
