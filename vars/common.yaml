@@ -734,10 +734,15 @@ SUBSYSTEM:
     # status-modules.ts / status-sysfs.ts for active kernel leaves).
     requested: "{{ (STATUS_DIRS is deftruthy) or (STATUS_DIRS_SUDO is deftruthy) or ((STATUSES | default([])) | length > 0) }}"
     contrib:
-      BINS: "{{ [ {'name': 'status.sh', 'src': '../status/status.sh', 'basedir': false} ] + ([ {'name': 'status-dirs.sh', 'src': '../status/status-dirs.sh', 'basedir': false} ] if (STATUS_DIRS is deftruthy or STATUS_DIRS_SUDO is deftruthy) else []) }}"
+      # status-proc.sh ships unconditionally: its default scope set (the
+      # user manager's active slices) needs no declaration; playbooks that
+      # want their own units scoped set PROC_STATUS_SCOPES (list of user
+      # units / @user / @slices), propagated colon-joined below.
+      BINS: "{{ [ {'name': 'status.sh', 'src': '../status/status.sh', 'basedir': false}, {'name': 'status-proc.sh', 'src': '../status/status-proc.sh', 'basedir': false} ] + ([ {'name': 'status-dirs.sh', 'src': '../status/status-dirs.sh', 'basedir': false} ] if (STATUS_DIRS is deftruthy or STATUS_DIRS_SUDO is deftruthy) else []) }}"
       ENV:
         STATUS_DIRS: "{{ STATUS_DIRS | join2(':') }}"
         STATUS_DIRS_SUDO: "{{ STATUS_DIRS_SUDO | join2(':') }}"
+        PROC_STATUS_SCOPES: "{{ PROC_STATUS_SCOPES | join2(':') }}"
 
   # Vars-phase subsystem (NOT a gen_* one): a service declares SYSTEMD_ENV
   # (mapping of VAR -> value) to publish those vars to the systemd manager on
