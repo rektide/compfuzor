@@ -201,6 +201,7 @@
       - venv
       - ".mypy_cache"
       - ".pytest_cache"
+      - ".tox"
       - ".direnv"
       - ".test-agent"
       - coverage
