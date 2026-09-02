@@ -45,12 +45,13 @@
       # 4m command deadline: loaded host, prefer waiting over generation churn.
       OPENCODE_WATCHER_BACKEND: watchman
       OPENCODE_WATCHMAN_COMMAND_TIMEOUT_MS: 240000
-      # Socket override for the fb-watchman transport. Unset, the transport
-      # shells out `watchman get-sockname`, which bootstraps a private daemon
-      # inside this unit's cgroup on every server start (PATH watchman is
-      # watchwoman 0.7.0 here). Pointing at the shared watchman-main daemon
-      # socket connects directly and never spawns a daemon.
-      WATCHMAN_SOCK: "{{ansible_user_dir}}/.local/var/lib/watchman-main/sock"
+      # One canonical socket shared by the mutually-exclusive watchman-main
+      # and watchwoman services. Explicit routing prevents the transport from
+      # shelling out `watchman get-sockname`, which can auto-spawn a private
+      # daemon in this unit's cgroup.
+      WATCHMAN_SOCK: "{{ansible_user_dir}}/.local/state/watchman/{{ansible_user_id}}-state/sock"
+      # Do not let service PATH select a cargo-installed or ad-hoc watchman.
+      OPENCODE_WATCHMAN_BINARY: /usr/local/bin/watchwoman
       # Location activity TTL: inert on stock upstream; the composed working
       # workspace reads it. 8h keeps location service stacks warm across a
       # working day while still bounding memory (stock default: 60m).
@@ -182,7 +183,7 @@
       ## Operations
 
           systemctl --user status opencode.service
-          systemctl --user restart opencode.service
+          {{DIR}}/bin/restart.sh
           journalctl --user -u opencode.service -f
           systemctl --user show opencode.service \
             -p ActiveState -p SubState -p MainPID -p NRestarts \
@@ -191,6 +192,17 @@
           opencode2 api get /api/server
           {{DIR}}/bin/status.sh
           opencode-status-ok
+
+      `restart.sh` is the managed-service restart path. It reloads systemd when
+      needed, restarts only `opencode.service`, waits for `/api/health`, and
+      verifies that the new server inherited the canonical Watchman socket.
+      It never touches standalone OpenCode panes.
+
+      OpenCode and both watcher daemon services use the same canonical socket:
+      `~/.local/state/watchman/<user>-state/sock`. `watchman-main.service` and
+      `watchwoman.socket` conflict with one another, so starting either one
+      performs an explicit service handover rather than creating a second
+      socket namespace.
 
       `bin/status.sh` runs the registered reporters: status-cleanup.sh (leaked
       native libraries and the cleanup timer's state), status-opencode-ok.sh
@@ -442,6 +454,40 @@
       # TODO: compfuzor helpers for installing content, automate this in install-user
       - name: serve.sh
         basedir: False
+      - name: restart.sh
+        basedir: False
+        content: |
+          set -eu
+          _unit="${OPENCODE_UNIT:-opencode.service}"
+          _url="${OPENCODE_SERVER_URL:-http://127.0.0.1:49373}"
+          _timeout="${OPENCODE_RESTART_TIMEOUT:-60}"
+          _sock="${WATCHMAN_SOCK:-}"
+          [ -n "$_sock" ] || { echo "restart-opencode: WATCHMAN_SOCK is not set" >&2; exit 2; }
+
+          _reload="$(systemctl --user show "$_unit" -p NeedDaemonReload --value 2>/dev/null || true)"
+          [ "$_reload" = yes ] && systemctl --user daemon-reload
+          systemctl --user restart "$_unit"
+
+          _i=0
+          while [ "$_i" -lt "$_timeout" ]; do
+            if systemctl --user is-active --quiet "$_unit" && \
+              curl --fail --silent --show-error --max-time 2 "$_url/api/health" >/dev/null 2>&1; then
+              _pid="$(systemctl --user show "$_unit" -p MainPID --value)"
+              _actual="$(tr '\0' '\n' <"/proc/$_pid/environ" 2>/dev/null | sed -n 's/^WATCHMAN_SOCK=//p' | head -1)"
+              [ "$_actual" = "$_sock" ] || {
+                echo "restart-opencode: service WATCHMAN_SOCK is '${_actual:-unset}', expected '$_sock'" >&2
+                exit 1
+              }
+              echo "restart-opencode: $_unit healthy (MainPID $_pid, WATCHMAN_SOCK=$_sock)"
+              exit 0
+            fi
+            sleep 1
+            _i=$((_i + 1))
+          done
+
+          systemctl --user status "$_unit" --no-pager >&2 || true
+          echo "restart-opencode: $_unit did not become healthy within ${_timeout}s" >&2
+          exit 1
       # Auto-grouped under the build.sh compositor by its build* name; every
       # build.sh run refreshes the origins, no explicit call site required.
       - name: build-env-cors.sh
