@@ -27,7 +27,7 @@
 # informational count and guard-refusals.sh aggregates them.
 # `.watch` is the escape hatch for deliberately watching a non-VCS dir.
 #
-# CANONICAL SOCKET — both watchman-main and watchwoman use Watchman's XDG
+# CANONICAL SOCKET — both watchman and watchwoman use Watchman's XDG
 # default: ${XDG_STATE_HOME:-$HOME/.local/state}/watchman/<user>-state/sock.
 # systemd's %S is that same XDG state root for a user manager. Only one service
 # may own it at a time; mutual Conflicts declarations make starting one
@@ -91,6 +91,10 @@
 
     SYSTEMD_SCOPE: user
     SYSTEMD_INSTALL: user
+    # Keep the operational unit name symmetric with watchwoman.service. The
+    # watchman-main deployment name is Compfuzor's generic default instance
+    # name and remains only in artifact/state paths.
+    SYSTEMD_SERVICE: watchman
 
     # ${HOME} literals for shell-side consumers (BINS scripts via envdefault,
     # interactive shells via the zim module). The daemon gets the same vars
@@ -100,8 +104,7 @@
       WATCHMAN_CONFIG_FILE: "{{SHELL_ETC_FILE}}"
 
     SYSTEMD_UNITS:
-      Conflicts: watchwoman.socket watchwoman.service
-      Before: watchwoman.socket watchwoman.service
+      Conflicts: watchwoman.socket
     SYSTEMD_SERVICES:
       ExecStart: "{{GLOBAL_BINS_DIR}}/watchman --persistent --foreground --statefile={{UNIT_VAR}}/state --pidfile={{UNIT_VAR}}/pid --sockname={{UNIT_SOCK}} --logfile={{UNIT_VAR}}/log"
       ExecStartPre: "{{BINS_DIR}}/takeover.sh"

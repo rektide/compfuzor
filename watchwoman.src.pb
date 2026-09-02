@@ -113,8 +113,12 @@
       SYSTEMD_UNITS:
         Description: "Watchwoman (watchman-compatible) file watching daemon socket"
         Documentation: https://github.com/radiosilence/watchwoman
-        Conflicts: watchman-main.service
-        Before: watchman-main.service
+        # Endpoint owners exclude one another. One ordering edge is enough for
+        # either start direction: systemd stops the incumbent before starting
+        # the replacement. watchman-main is the old deployed unit name and can
+        # be removed after hosts have installed watchman.service.
+        Conflicts: watchman.service watchman-main.service
+        After: watchman.service watchman-main.service
       SYSTEMD_SOCKETS:
         comments: |
           Default-path agreement with the CLI's sock::resolve: %S/%u expand at
@@ -147,8 +151,6 @@
         Documentation: https://github.com/radiosilence/watchwoman
         Requires: watchwoman.socket
         After: watchwoman.socket
-        Conflicts: watchman-main.service
-        Before: watchman-main.service
       SYSTEMD_SERVICES:
         comments: |
           --sockname is redundant with the activated listener but pins
