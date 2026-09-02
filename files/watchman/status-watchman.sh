@@ -34,7 +34,7 @@
 # WATCHMAN_STATUS_TIMEOUT (secs).
 
 _vdir="${HOME}/.local/var/lib/watchman-main"
-_sockdir="${HOME}/.local/state/watchman/$(id -un)-state"
+_sockdir="${XDG_STATE_HOME:-${HOME}/.local/state}/watchman/$(id -un)-state"
 _uetc="${HOME}/.config/watchman-main"
 _sock="$_sockdir/sock"
 _pidfile="$_vdir/pid"

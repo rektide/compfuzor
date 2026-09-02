@@ -4,9 +4,9 @@
 # socket activation (LISTEN_FDS adoption, never unlinks the socket file
 # while activated), sd_notify readiness (Type=notify), graceful SIGTERM.
 #
-# The socket unit binds the CLI's default socket path
-# (~/.local/state/watchman/<user>-state/sock — upstream's
-# WATCHMAN_USE_XDG_STATE_HOME layout) via %h/%u specifiers, so client
+# The socket unit binds Watchman's default socket path
+# (${XDG_STATE_HOME:-$HOME/.local/state}/watchman/<user>-state/sock) via
+# systemd's %S/%u specifiers, so client
 # routing needs no env vars. Compatibility aliases keep clients with older
 # hardcoded or exported socket paths on this same canonical listener.
 # First-party clients ask `watchman get-sockname`, which we answer.
@@ -61,7 +61,7 @@
     # apply, drift, deliberate removal, and sudo escalation for the root-owned
     # default-prefix parent are all included. The watchman-main alias keeps old
     # WATCHMAN_SOCK exports working without creating another daemon namespace.
-    WATCHMAN_CANONICAL_STATE: "${HOME}/.local/state/watchman/{{ansible_user_id}}-state"
+    WATCHMAN_CANONICAL_STATE: "${XDG_STATE_HOME}/watchman/{{ansible_user_id}}-state"
     WATCHMAN_CANONICAL_SOCKET: "{{WATCHMAN_CANONICAL_STATE}}/sock"
     WATCHMAN_MAIN_SOCKET: "${HOME}/.local/var/lib/watchman-main/sock"
     WATCHMAN_DEFAULT_PREFIX: /usr/local/var/run/watchman
@@ -103,7 +103,7 @@
       # This module is deliberately one sort number before watchman-env so
       # that this contributor wins the ZIM_ENV don't-stomp race when both
       # playbooks are installed.
-      WATCHMAN_SOCK: "${HOME}/.local/state/watchman/$(id -un)-state/sock"
+      WATCHMAN_SOCK: "${XDG_STATE_HOME:-${HOME}/.local/state}/watchman/$(id -un)-state/sock"
     ZIM_ENV_PHASE: 54
     ZIM_ENV:
       - WATCHMAN_SOCK
@@ -117,15 +117,15 @@
         Before: watchman-main.service
       SYSTEMD_SOCKETS:
         comments: |
-          Default-path agreement with the CLI's sock::resolve: %h/%u expand at
-          unit-load, per user, no per-user templating — the username is
+          Default-path agreement with the CLI's sock::resolve: %S/%u expand at
+          unit-load from XDG_STATE_HOME and the user name, with no per-user templating — the username is
           part of the path contract on BOTH sides (upstream watchman's
           <user>-state layout and watchwoman's sock::resolve agree on
-          it). XDG_STATE_HOME must stay unset or default;
+          it). `%S` follows XDG_STATE_HOME with the standard fallback;
           status-watchwoman.sh checks via get-sockname. systemd creates
           the parent dirs (DirectoryMode); 0700 keeps per-user state
           private.
-        ListenStream: "%h/.local/state/watchman/%u-state/sock"
+        ListenStream: "%S/watchman/%u-state/sock"
         SocketMode: "0600"
         DirectoryMode: "0700"
       SYSTEMD_INSTALLS:
@@ -160,7 +160,7 @@
           Established connections still close and re-subscribe from a fresh
           daemon; TimeoutStopSec bounds a pathological graceful drain.
         Type: notify
-        ExecStart: "{{GLOBAL_BINS_DIR}}/watchwoman --sockname %h/.local/state/watchman/%u-state/sock --foreground-daemon"
+        ExecStart: "{{GLOBAL_BINS_DIR}}/watchwoman --sockname %S/watchman/%u-state/sock --foreground-daemon"
         Restart: on-failure
         RestartSec: 1
         TimeoutStopSec: 15s
@@ -266,7 +266,7 @@
 
       ## Service
 
-          watchwoman.socket   ListenStream=%h/.local/state/watchman/%u-state/sock
+          watchwoman.socket   ListenStream=%S/watchman/%u-state/sock
                               (upstream's XDG state-home layout — the exact
                               path the CLI resolves with no environment),
                               enabled at sockets.target
@@ -324,16 +324,16 @@
       - Do not run `watchwoman install-unit`: it writes real unit files
         over compfuzor's managed symlinks. (`watchwoman uninstall-unit`
         reverts if that already happened.)
-      - XDG_STATE_HOME must stay unset (or point at ~/.local/state) for
-        the default-path agreement between the socket unit and bare CLIs;
-        status-watchwoman.sh checks it via get-sockname.
+      - `%S`, watchwoman's resolver, and the alias farm all follow
+        XDG_STATE_HOME with the standard ~/.local/state fallback;
+        status-watchwoman.sh checks their agreement via get-sockname.
       - The LINKS alias farm maps the legacy watchman-main socket, upstream's
         default-prefix socket, and the C++ CLI's compiled state directory to
         the canonical socket directory. All aliases reach the same listener;
         links.ts owns their apply and drift behavior.
       - Daemon state is zero-on-disk except trigger persistence under
-        ~/.local/state/watchman/<user>-state/roots/. Logs go to the
-        journal (identifier `watchwoman`).
+        ${XDG_STATE_HOME:-~/.local/state}/watchman/<user>-state/roots/. Logs
+        go to the journal (identifier `watchwoman`).
       - Root admission policy and the global ignore floor live in
         /opt/watchwoman-git/etc/watchwoman.json, selected through
         WATCHWOMAN_CONFIG_FILE in {{DIR}}/env. Startup fails closed; SIGHUP

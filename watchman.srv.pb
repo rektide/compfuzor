@@ -27,8 +27,9 @@
 # informational count and guard-refusals.sh aggregates them.
 # `.watch` is the escape hatch for deliberately watching a non-VCS dir.
 #
-# CANONICAL SOCKET — both watchman-main and watchwoman use the upstream
-# default path: ~/.local/state/watchman/<user>-state/sock. Only one service
+# CANONICAL SOCKET — both watchman-main and watchwoman use Watchman's XDG
+# default: ${XDG_STATE_HOME:-$HOME/.local/state}/watchman/<user>-state/sock.
+# systemd's %S is that same XDG state root for a user manager. Only one service
 # may own it at a time; mutual Conflicts declarations make starting one
 # service stop the other instead of creating a second watcher namespace.
 # The C++ CLI ignores $WATCHMAN_SOCK and computes its socket from the
@@ -59,7 +60,7 @@
     # per-user paths for unit directives (%h, systemd expands at load)
     UNIT_VAR: "{{ lookup('fsh', 'var', user=True, name=True, home='%h') }}"
     UNIT_ETC_FILE: "{{ lookup('fsh', 'etc', user=True, name=True, home='%h') }}/watchman.json"
-    UNIT_SOCK: "%h/.local/state/watchman/%u-state/sock"
+    UNIT_SOCK: "%S/watchman/%u-state/sock"
     # per-user paths for shell artifacts (${HOME}, shell expands at runtime)
     SHELL_VAR: "{{ lookup('fsh', 'var', user=True, name=True, home='${HOME}') }}"
     SHELL_ETC_FILE: "{{ lookup('fsh', 'etc', user=True, name=True, home='${HOME}') }}/watchman.json"
@@ -68,7 +69,7 @@
     # WATCHMAN_SOCK or derive a compiled/default-prefix path. Both watcher
     # playbooks declare this same farm so either implementation installs a
     # complete client-routing contract.
-    WATCHMAN_CANONICAL_STATE: "${HOME}/.local/state/watchman/{{ansible_user_id}}-state"
+    WATCHMAN_CANONICAL_STATE: "${XDG_STATE_HOME}/watchman/{{ansible_user_id}}-state"
     WATCHMAN_CANONICAL_SOCKET: "{{WATCHMAN_CANONICAL_STATE}}/sock"
     WATCHMAN_MAIN_SOCKET: "${HOME}/.local/var/lib/watchman-main/sock"
     WATCHMAN_DEFAULT_PREFIX: /usr/local/var/run/watchman
@@ -95,7 +96,7 @@
     # interactive shells via the zim module). The daemon gets the same vars
     # as %h Environment= lines below, which override the EnvironmentFile.
     ENV:
-      WATCHMAN_SOCK: "${HOME}/.local/state/watchman/$(id -un)-state/sock"
+      WATCHMAN_SOCK: "${XDG_STATE_HOME:-${HOME}/.local/state}/watchman/$(id -un)-state/sock"
       WATCHMAN_CONFIG_FILE: "{{SHELL_ETC_FILE}}"
 
     SYSTEMD_UNITS:
@@ -187,7 +188,8 @@
           flock -n 9 && exit 0
           _owner="$(tr -dc '0-9' <"$_pidfile" 2>/dev/null || true)"
           echo "takeover: pidfile lock held${_owner:+ by pid $_owner}; requesting shutdown-server" >&2
-          "$_watchman" --no-spawn --no-local --sockname="${HOME}/.local/state/watchman/$(id -un)-state/sock" shutdown-server >/dev/null 2>&1 || true
+          _state_home="${XDG_STATE_HOME:-${HOME}/.local/state}"
+          "$_watchman" --no-spawn --no-local --sockname="$_state_home/watchman/$(id -un)-state/sock" shutdown-server >/dev/null 2>&1 || true
           _i=0
           while [ "$_i" -lt 50 ]; do
             flock -n 9 && exit 0
