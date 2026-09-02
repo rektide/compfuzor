@@ -67,8 +67,28 @@ writing this doc (see [Live snapshot](#1-live-snapshot-2026-09-01)). A big
 watchwoman build and a large opencode-watchman plugin stack are both about to
 deploy. This document is the operational map: what exists, why the resources
 are scarce, what guards exist, how to cut over cleanly, and what tooling to
-build next. No playbook changes are included — those land after this is
-reviewed.
+build next. The original snapshot predates the follow-up playbook changes;
+the current declared architecture is recorded in [Current correction](#current-correction),
+but those declarations have not been applied to the host yet.
+
+## Current correction
+
+The intended architecture is one canonical socket, not one socket per daemon:
+
+`~/.local/state/watchman/<user>-state/sock`
+
+Both `watchman-main.service` and `watchwoman.socket` now declare that same
+path. Their units mutually conflict, so starting one stops the other rather
+than allowing two daemon namespaces. OpenCode is also declared to use this
+path and the managed `/usr/local/bin/watchwoman` client explicitly. The C++
+watchman CLI's compile-time default is symlinked to the same canonical state
+directory.
+
+The host remains in the manually switched state until the playbooks are
+applied: watchwoman owns the canonical socket, watchman-main is stopped, and
+the current OpenCode process must be restarted to inherit the updated
+declaration. Do not treat the source playbook change as applied until
+`/proc/<MainPID>/environ` and the watcher status checks agree.
 
 Naming note: "watchwoman-browse" was mentioned in conversation; no such
 directory exists. The main watchwoman workspace is `~/src/watchwoman-systemd`
@@ -384,9 +404,10 @@ compfuzor's managed symlinks).
 
 ## 9. Gaps and next tools
 
-No playbook changes yet — these are specs for the next pass. Per house rules,
-cleanup is **deliberate**: detectors and reporters are welcome; nothing here
-should auto-kill or auto-reconcile.
+The canonical socket, OpenCode routing, restart helper, service-scoped inotify
+status, and 3M pool declaration are now in clean playbook commits. Per house
+rules, cleanup is **deliberate**: detectors and reporters are welcome; nothing
+here should auto-kill or auto-reconcile.
 
 1. **`watcher-status` — one drift reporter for the whole duel** (the manual
    recipe from [§1](#1-live-snapshot-2026-09-01) as a script; registerable in
@@ -401,12 +422,10 @@ should auto-kill or auto-reconcile.
    - env wiring matrix: unit env vs `~/.zshrc` vs playbook `ENV` (drift = the
      §1 finding), plus `watchman` binary resolution in each context's PATH;
    - pool pressure via `usage.sh` + sysctl values.
-2. **`restart.sh` for `opencode.src.pb`** (the "restarting opencodes" ask):
-   check `NeedDaemonReload` → `daemon-reload` if unit changed → `restart` →
-   wait for `/api/health` readiness → post-checks (MainPID, NRestarts, the
-   watcher transport actually connected to the intended socket — peer-inode
-   technique from cutover.sh — plus first startup error lines). Never touches
-   standalone panes.
+2. **`restart.sh` for `opencode.src.pb`** is implemented: it checks
+   `NeedDaemonReload` → `daemon-reload` if unit changed → `restart` → waits for
+   `/api/health` → verifies MainPID and the inherited `WATCHMAN_SOCK`. It never
+   touches standalone panes.
 3. **`watcher-repoint.sh`**: validate a target daemon (alive, policy answers
    `debug-policy` correctly) → perform the env re-render/restart sequence of
    the cutover §7 steps 3–4 → re-run the drift reporter. This is cutover.sh's
@@ -421,24 +440,32 @@ should auto-kill or auto-reconcile.
    `~/.zshrc` export blocks; decide the owner of `/usr/local/bin/watchman`.
 6. **Render-drift guard**: the deployed env predating the playbook is how the
    spawn regressed invisibly. A status check comparing the live unit env
-   against the playbook's declared `ENV` (the §1 method) belongs in
-   `status-opencode-ok.sh`'s checks or `watcher-status`.
+    against the playbook's declared `ENV` (the §1 method) belongs in
+    `status-opencode-ok.sh`'s checks or `watcher-status`.
+
+The existing watcher reporters now provide the canonical-service portion of
+item 1 directly: `status-watchman.sh` and `status-watchwoman.sh` enumerate
+inotify file descriptors only in their respective managed service cgroups.
+The existing `/etc/opt/fs-inotify-git/bin/usage.sh` remains the whole-user
+pool view for finding other consumers.
 
 ## 10. Open questions
 
 1. Diagnose watchman-main's exit-1 crash loop (14:00–16:41, 80 generations,
    ~68 s each) — daemon log has binary content mixed in; correlate journal
    generations with log tails before the log trims.
-2. Retire watchman-main entirely after cutover, or keep as cold fallback? Both
-   playbooks installed is the current, ambiguous state.
-3. opencode unit: explicit `WATCHMAN_SOCK` pin to the watchwoman socket, or
-   drop the pin and rely on activation-aware `get-sockname` (zero-drift, but
-   PATH-sensitive until the binary surface is cleaned)?
+2. Keep watchman-main as a deliberately manual fallback, or retire its
+   playbook after watchwoman is proven? The units are now mutually exclusive,
+   so retaining it no longer creates a second socket namespace.
+3. Should the canonical socket be moved from the upstream XDG path later? Any
+   such change must update both daemon units, OpenCode, CLI routing, compat
+   links, and the status reporters together.
 4. Flip `root_policy.default` to `deny` (with allow carve-outs) once the rules
    prove out, per the post-mortem's own open question?
-5. Who owns the classic `watchman` name during transition — the playbook says
-   watchwoman, the filesystem currently says C++ (and cargo says itself, inside
-   the unit PATH)?
+5. Who owns the classic `watchman` name during transition? The source
+   declarations now explicitly pin OpenCode to `/usr/local/bin/watchwoman`,
+   but the host's existing PATH and `/usr/local/bin/watchman` link still need
+   deliberate cleanup during playbook application.
 6. Should `watcher-status` and friends live in a compfuzor playbook (which
    type?) or as `opencode-watchman` `.test-agent` graduates?
 
