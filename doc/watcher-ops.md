@@ -499,3 +499,29 @@ rg -v PASSWORD /usr/local/src/opencode-git/env
 
 Update this section when re-running the drift report, and expect the numbers to
 have moved.
+
+# Addendum: endpoint naming normalized (2026-09-01, later session)
+
+The §3/§7 material above predates the final naming decision. The converged
+contract, centralized in `vars/common.yaml` and consumed by
+`watchman.srv.pb`, `watchwoman.src.pb`, and `opencode.src.pb`:
+
+| Name | Kind | Owner |
+| --- | --- | --- |
+| `watchman.socket` | endpoint unit (classic name), `ListenStream=%S/watchman/%u-state/sock` | watchwoman playbook |
+| `watchwoman.service` | daemon unit (implementation-named), socket-activated | watchwoman playbook |
+| `watchman.service` | unit-name alias → the same unit file; `watchman.socket`'s implicit pairing activates through it, so `systemctl status watchman` works | LINKS record |
+| `watchman-facebook.service` | C++ fallback, link-only, `Conflicts=watchman.socket` | watchman playbook |
+| `/usr/local/bin/watchman` | watchwoman build (classic client name) | watchwoman playbook |
+| `/usr/local/bin/watchman-facebook` | C++ build | watchman playbook |
+
+The old `watchman-main.service` unit name is gone (it was compfuzor's generic
+`TYPE-main` deployment name leaking into a unit because `watchman.srv.pb`
+never overrode `SYSTEMD_SERVICE`; `watchwoman.src.pb` always overrode its unit
+names — that was the whole asymmetry). `-main` legitimately survives only on
+the srv deployment dir and the legacy socket alias.
+
+Verified live after migration: alias-based activation works on systemd 261,
+`enable` on the socket enables only the socket, one daemon process owns the
+canonical XDG socket, all three pathname aliases resolve to one inode, and
+starting either endpoint contender stops the other.
