@@ -14,7 +14,7 @@
 # Test seams: WATCHWOMAN_BIN, WATCHWOMAN_SOCKET_UNIT, WATCHWOMAN_SERVICE_UNIT,
 # WATCHWOMAN_STATUS_TIMEOUT (secs).
 
-_wmbin="${WATCHWOMAN_BIN:-watchwoman}"
+_wmbin="${WATCHWOMAN_BIN:-{{GLOBAL_BINS_DIR}}/watchwoman}"
 _sock_unit="${WATCHWOMAN_SOCKET_UNIT:-watchwoman.socket}"
 _svc_unit="${WATCHWOMAN_SERVICE_UNIT:-watchwoman.service}"
 _expected_sock="${HOME}/.local/state/watchman/$(id -un)-state/sock"

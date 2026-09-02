@@ -78,7 +78,7 @@
       Conflicts: watchwoman.socket watchwoman.service
       Before: watchwoman.socket watchwoman.service
     SYSTEMD_SERVICES:
-      ExecStart: "watchman --persistent --foreground --statefile={{UNIT_VAR}}/state --pidfile={{UNIT_VAR}}/pid --sockname={{UNIT_SOCK}} --logfile={{UNIT_VAR}}/log"
+      ExecStart: "{{GLOBAL_BINS_DIR}}/watchman --persistent --foreground --statefile={{UNIT_VAR}}/state --pidfile={{UNIT_VAR}}/pid --sockname={{UNIT_SOCK}} --logfile={{UNIT_VAR}}/log"
       ExecStartPre: "{{BINS_DIR}}/takeover.sh"
       Environment:
         - "WATCHMAN_SOCK={{UNIT_SOCK}}"
@@ -156,6 +156,7 @@
           _vdir="${HOME}/.local/var/lib/watchman-main"
           _pidfile="$_vdir/pid"
           _logfile="$_vdir/log"
+          _watchman="{{GLOBAL_BINS_DIR}}/watchman"
           if [ -f "$_logfile" ]; then
             _size=$(stat -c %s "$_logfile" 2>/dev/null || echo 0)
             if [ "$_size" -gt 67108864 ]; then
@@ -168,7 +169,7 @@
           flock -n 9 && exit 0
           _owner="$(tr -dc '0-9' <"$_pidfile" 2>/dev/null || true)"
           echo "takeover: pidfile lock held${_owner:+ by pid $_owner}; requesting shutdown-server" >&2
-          watchman --no-spawn --no-local --sockname="${HOME}/.local/state/watchman/$(id -un)-state/sock" shutdown-server >/dev/null 2>&1 || true
+          "$_watchman" --no-spawn --no-local --sockname="${HOME}/.local/state/watchman/$(id -un)-state/sock" shutdown-server >/dev/null 2>&1 || true
           _i=0
           while [ "$_i" -lt 50 ]; do
             flock -n 9 && exit 0
