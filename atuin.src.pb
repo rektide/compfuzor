@@ -61,12 +61,11 @@
         # `atuin daemon start` runs in the foreground (only the hidden
         # --daemonize flag backgrounds it), so it suits systemd directly.
         ExecStart: "{{GLOBAL_BINS_DIR}}/atuin daemon start --show-logs"
-    # Interactive search routing, managed. Unset by default: search falls
-    # back to atuin's local fuzzy over the database. Set to "daemon-fuzzy"
-    # to make ctrl-r use the daemon's hot in-memory index (non-interactive
-    # searches fall back to plain fuzzy, so scripts are unaffected).
+    # Interactive search routing, managed. daemon-fuzzy makes ctrl-r use the
+    # daemon's hot in-memory index; non-interactive searches fall back to plain
+    # fuzzy, so scripts are unaffected. Set empty to use local database fuzzy.
     # Managed as a TOP-LEVEL config key (see install-atuin-config.sh).
-    ATUIN_SEARCH_MODE: ""
+    ATUIN_SEARCH_MODE: daemon-fuzzy
     STATUSES:
       - status-atuin.sh
     ETC_FILES:
@@ -82,10 +81,8 @@
           autostart = false
           systemd_socket = true
           # socket_path left at default ($XDG_RUNTIME_DIR/atuin.sock) to match
-          # the .socket unit's ListenStream. To point interactive search at
-          # the daemon's hot in-memory fuzzy index, set the playbook var
-          # ATUIN_SEARCH_MODE: daemon-fuzzy (managed as a top-level
-          # search_mode key by install-atuin-config.sh).
+          # the .socket unit's ListenStream. Interactive search routing is
+          # managed as a top-level search_mode key by install-atuin-config.sh.
     BINS:
       # This is a global Rust build. Keep the generic per-user Cargo installer
       # directly addressable, but out of this playbook's install-user.sh.
