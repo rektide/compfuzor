@@ -44,17 +44,6 @@ WATCHMAN_DEFAULT_STATE_DIR: /usr/local/src/watchman-git/watchman/var/run/watchma
 # EnvironmentFile never expands shell variables).
 WATCHMAN_CANONICAL_SOCKET_ABS: "{{ ansible_env.XDG_STATE_HOME | default(ansible_user_dir ~ '/.local/state', true) }}/watchman/{{ ansible_user_id }}-state/sock"
 
-# Limit-monitoring contract (cross-subsystem). Kernel-gen sysctl pools are
-# user-scoped and the kernel exposes no per-unit counters, so consumption
-# status comes from the subsystem that owns each pool: its reporter grows a
-# --unit mode scoped to a systemd --user unit's cgroup, and consuming
-# playbooks declare their units with a one-line reporter that calls it
-# through these paths (rendered at the consumer's render time — deploy the
-# owner playbook first; the wrapper reporters exit 2 when it is absent).
-# Limit kinds are added here as their owners grow --unit modes; sysctls
-# that are not unit-consumed pools need no entry.
-INOTIFY_STATUS_BIN: "{{ETCS_DIR}}/fs-inotify/bin/status-inotify.sh"
-
 # Archive download mode
 ARCHIVE_DOWNLOAD: true
 ARCHIVE_DIR: "{{HOMEDIR}}/archive"

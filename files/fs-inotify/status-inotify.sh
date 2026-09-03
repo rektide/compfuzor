@@ -8,12 +8,11 @@
 # even when each individual consumer looks healthy.
 #
 # --unit UNIT scopes the count to one systemd --user unit's cgroup: the
-# service's own consumption only, never strays or other instances. This is
-# the cross-subsystem limit-monitoring surface: the kernel exposes no
-# per-unit counters, so the pool owner ships the counter and consuming
-# playbooks (opencode.src.pb, the watcher deploys) declare their units
-# against INOTIFY_STATUS_BIN in vars/common.yaml. An inactive unit reports
-# no consumption (exit 0); unit liveness itself is other reporters' drift.
+# service's own consumption only, never strays or other instances. Kept as
+# this pool owner's convenience; the generic per-scope surface (any
+# service/slice cgroup, subtree rollup, more counters) is the status
+# subsystem's status-proc.sh. An inactive unit reports no consumption
+# (exit 0); unit liveness itself is other reporters' drift.
 #
 # Counting (same technique as usage.sh): a WATCH is one
 # /proc/<pid>/fdinfo/<fd> "inotify wd:" line (~1KB kernel RAM each,

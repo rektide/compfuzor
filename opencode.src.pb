@@ -151,12 +151,19 @@
     # plus the timer's own unit state; status-opencode-ok.sh checks the
     # invoking shell against the managed deployment and is also globally
     # linked as opencode-status-ok for quick checks from wrapper-less shells;
-    # status-inotify.sh declares opencode.service a consumer of the user's
-    # inotify pools through the limit owner's shared --unit reporter.
+    # status-proc.sh (auto-registered by the status subsystem) reports the
+    # generic /proc counters, scoped below to this service plus the ambient
+    # slice rollup.
     STATUSES:
       - status-cleanup.sh
       - status-opencode-ok.sh
-      - status-inotify.sh
+    # The whole declaration for per-service /proc counter status: units (or
+    # @user/@slices) handed to the status subsystem's status-proc.sh, which
+    # counts fds / inotify watches+instances / epoll / eventfd / timerfd /
+    # socket / memfd over each scope's cgroup with subtree rollup. No bins,
+    # no cross-render contract vars.
+    PROC_STATUS_SCOPES:
+      - opencode.service
     ZIM_ENV:
       - OPENCODE_SERVER_URL
       - OPENCODE_PASSWORD_FILE
@@ -209,11 +216,12 @@
 
       `bin/status.sh` runs the registered reporters: status-cleanup.sh (leaked
       native libraries and the cleanup timer's state), status-opencode-ok.sh
-      (below), status-inotify.sh (this service's share of the user's inotify
-      pools — the kernel has no per-unit counters, so the entry declares
-      opencode.service against the fs-inotify limit owner's shared `--unit`
-      reporter via `INOTIFY_STATUS_BIN`; it reports not-applicable where that
-      deploy is absent), plus the config and link drift reporters.
+      (below), status-proc.sh (generic /proc counters — fds, inotify watches
+      and instances, epoll/eventfd/timerfd/socket/memfd — aggregated over the
+      cgroup scopes named by `PROC_STATUS_SCOPES`, here `opencode.service`,
+      plus the ambient top-level-slice rollup; subtree rollup means parent
+      scopes include children, and the kernel itself accounts none of these
+      per-cgroup), plus the config and link drift reporters.
       `opencode-status-ok` is the same ok-checker as a global command, so any
       shell — including ones without the ZIM wrapper — can quickly verify three
       things:
@@ -512,21 +520,6 @@
       - name: status-opencode-ok.sh
         basedir: False
         global: opencode-status-ok
-      # status.sh reporter: this service's share of the user's inotify
-      # watch/instance pools, cgroup-scoped by the limit owner's shared
-      # reporter. This entry IS the declaration that opencode.service
-      # consumes the pools fs-inotify.etc.pb raises (the kernel has no
-      # per-unit counters); exit 2 (not-applicable) when that deploy is
-      # absent on the host.
-      - name: status-inotify.sh
-        basedir: False
-        content: |
-          _bin="{{INOTIFY_STATUS_BIN}}"
-          if [ ! -x "$_bin" ]; then
-            echo "status-inotify: limit owner's reporter not deployed at $_bin (run sysctl-fs-inotify.etc.pb); skipping" >&2
-            exit 2
-          fi
-          exec "$_bin" --unit "${OPENCODE_UNIT:-opencode.service}"
       - name: backup.sh
         basedir: False
   tasks:
