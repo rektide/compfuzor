@@ -154,7 +154,7 @@ cause is not yet diagnosed (see [Open questions](#10-open-questions)).
 | `/usr/local/bin` watchwoman links | `watchwoman`, `watchmanctl`, `watchman-diag`, `watchman-make`, `watchman-wait` → `/usr/local/src/watchwoman-git/repo/target/release/…` (Aug 30); the classic name `watchman` is **not** linked to watchwoman — the C++ binary owns it |
 | `watchman-healthcheck.{service,timer}` | legacy self-healer (`~/.local/libexec/watchman-healthcheck`, Aug 13) that `rm`s the state file and restarts the unit on a failed probe; **not in any current playbook**; service static, timer enabled-but-inactive |
 | `/opt/opencode-git` | symlink → `~/tmp-opencode/oc-render` (a render scratch dir; that env even bakes `DIR=/home/rektide/tmp-opencode/oc-render`). The live unit actually consumes `/usr/local/src/opencode-git/{env,bin/serve.sh}` and `/etc/opt/opencode-git` units. The alias is stale drift. |
-| inotify sysctls | `max_user_watches=16,777,216` (65536 → 1,048,576 → 16M on 2026-08-31 after the 1M pool was exhausted), `instances=8192`, `queued_events=65536` — owned by [`sysctl-fs-inotify.etc.pb`](../sysctl-fs-inotify.etc.pb) |
+| inotify sysctls | `max_user_watches=3,000,000` (65536 → 1,048,576 → 16M on 2026-08-31 after the 1M pool was exhausted → 3M on 2026-09-03: ~1 KB/watch kernel mem made 16M's worst case ~16 GiB, 3M caps it at ~3 GiB), `instances=8192`, `queued_events=65536` — owned by [`sysctl-fs-inotify.etc.pb`](../sysctl-fs-inotify.etc.pb) |
 
 ### Root overlap (why "dueling" is literal)
 
@@ -277,7 +277,7 @@ they are **per-user**, shared by every daemon, every opencode session
 
 | Pool | Budget | Owner | Failure mode |
 | --- | --- | --- | --- |
-| `fs.inotify.max_user_watches` | 16,777,216 (~1 KB each, kernel mem, **non-swappable**; worst case ~16 GiB on a 62 GiB box) | [`sysctl-fs-inotify.etc.pb`](../sysctl-fs-inotify.etc.pb) | `inotify_add_watch` ENOSPC → notify-rs `MaxFilesWatch` (watchwoman journal) or silent recrawl storms (C++); new watchers anywhere fail |
+| `fs.inotify.max_user_watches` | 3,000,000 (~1 KB each, kernel mem, **non-swappable**; worst case ~3 GiB on a 62 GiB box — 16M 2026-08-31 → 3M 2026-09-03) | [`sysctl-fs-inotify.etc.pb`](../sysctl-fs-inotify.etc.pb) | `inotify_add_watch` ENOSPC → notify-rs `MaxFilesWatch` (watchwoman journal) or silent recrawl storms (C++); new watchers anywhere fail |
 | `fs.inotify.max_user_instances` | 8,192 fds | same | one `inotify_init()` per process; ~60 opencode sessions + daemons — rarely the cap, but non-trivial |
 | fds (`LimitNOFILE`) | 524,288 per unit | unit files | EMFILE segv-loops under hundreds of roots (the reason both units carry the limit) |
 | RAM / CPU | box-wide | — | per-root `Tree` in RAM: the 2026-08-31 fire peaked **41.1 GB + 16.8 GB swap + 20 h CPU** (gen 1) and **36.1 GB + 31.5 GB swap in 23 min** (gen 2) |
