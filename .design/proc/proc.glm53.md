@@ -111,3 +111,41 @@ metrics = fd-kind/fdinfo-line counters like inotify watches/instances,
 ceilings = sysctl-derived or literal) and get a baked, self-contained status
 reporter; the existing bespoke status-inotify.sh must be expressible as a
 declaration and then deleted."*
+
+# Addendum: the standalone-vs-gen tension, resolved (2026-09-03)
+
+The goal statement above over-centers on demolishing status-inotify;
+corrected frame: **compfuzor is a toolkit for making good deployable
+things with status, and the desirable thing is a gen subsystem playbooks
+use to monitor what makes sense for them.** The demolition is a
+consequence, not the mission.
+
+Why the gen subsystem wins over a standalone monitoring tool, on the
+merits:
+
+1. A standalone tool still needs per-consumer wiring to appear in any
+   playbook's status.sh — scopes/counters/ceilings written down somewhere
+   and compiled in. That written-down thing is a declaration, and
+   declarations + a shared engine compiled per render IS a gen subsystem.
+   The standalone option collapses into the gen option at the first
+   consumer.
+2. The engine ships per render either way — the self-contained-deploy
+   rule (learned via the rejected INOTIFY_STATUS_BIN cross-render
+   contract).
+3. The /proc state space being small and closed (~15 counters) argues
+   against a metric *definition language*, not against the gen subsystem.
+   Selection — catalog ids + scopes + ceilings — is the whole declaration
+   surface. A big open space would have required inline definitions; it
+   doesn't.
+4. Four in-tree consumers already hand-roll the same counting with
+   different parameters: status-inotify.sh, opencode's wrapper history,
+   and the cgroup-scoped inotify sections inside both watcher status
+   scripts. Identical engine, different scopes/metrics/ceilings — the
+   exact shape gen_kernel serves for KERNEL_SYSCTL.
+
+Rejected during alignment: a single procmon playbook owning "monitoring"
+generally — it surrenders the per-playbook targeting that makes status
+worth reading, and was proposed here in error before this resolution.
+
+draft0.glm53.md already proposes the agreed shape; the mission doc's
+"blow up status-inotify" phrasing should be read through this addendum.
