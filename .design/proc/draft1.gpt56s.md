@@ -77,7 +77,7 @@ its subsystem-derived bypass variable.
 ### `mainpid-env`
 
 Generates `status-mainpid-env.sh`. `expected` is a non-empty mapping of
-environment names to exact expected values. The reporter resolves the unit's
+environment names to exact expected string values. The reporter resolves the unit's
 live `MainPID` and compares its `/proc/<pid>/environ` without printing either
 the expected or actual values.
 
@@ -93,10 +93,11 @@ managed symlink while detecting replaced or deleted running executables.
 
 ## Generation
 
-`gen_status_proc.tasks` validates the whole collection, selects known check
-kinds, and merges each active leaf's `BINS` and `STATUSES` contributions. One
-kind produces one reporter regardless of how many rows select it. Empty input
-produces no status artifacts.
+`sub_status_proc.tasks` validates and normalizes the whole collection, then
+publishes one internal subsystem leaf for each selected check kind.
+`gen_status_proc.tasks` merges each active leaf's `BINS` and `STATUSES`
+contributions. One kind produces one reporter regardless of how many rows
+select it. Empty input produces no status artifacts.
 
 The old ambient `status-proc.sh` is removed. Proc inspection now appears only
 where a playbook states an operational invariant.

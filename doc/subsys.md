@@ -97,13 +97,15 @@ STATUS_PROC:
     expected: "{{ GLOBAL_BINS_DIR }}/opencode2"
 ```
 
-[`gen_status_proc.tasks`](../tasks/compfuzor/gen_status_proc.tasks) validates
-the collection and activates internal leaves by `check`. Each present kind
-contributes one reporter containing all matching rows:
+[`sub_status_proc.tasks`](/tasks/compfuzor/sub_status_proc.tasks) validates and
+normalizes the collection, then publishes internal leaves by `check`.
+[`gen_status_proc.tasks`](/tasks/compfuzor/gen_status_proc.tasks) merges each
+active leaf's contributions. Each present kind contributes one reporter
+containing all matching rows:
 
 | Check | Reporter | Check-specific contract |
 |---|---|---|
-| `mainpid-env` | `status-mainpid-env.sh` | `expected` is a non-empty mapping of non-sensitive environment values. |
+| `mainpid-env` | `status-mainpid-env.sh` | `expected` is a non-empty mapping of non-sensitive string environment values. |
 | `exe-current` | `status-exe-current.sh` | `expected` is an absolute executable path. |
 
 Both checks require a concrete `.service` `unit`. `manager` is `system` or
@@ -116,7 +118,7 @@ the complete status domain. The internal leaves also retain their derived
 check-specific bypass variables.
 
 The design and extension criteria are recorded in
-[`draft1.gpt56s.md`](../.design/proc/draft1.gpt56s.md).
+[`draft1.gpt56s.md`](/.design/proc/draft1.gpt56s.md).
 
 ## BINS merge behavior
 
