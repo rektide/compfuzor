@@ -1,0 +1,21 @@
+---
+# Compile the broad STATUS_PROC provider collection into internal status leaves.
+
+- name: "Compfuzor: publish STATUS_PROC provider and leaves"
+  set_fact:
+    SUBSYSTEM: >-
+      {{
+        SUBSYSTEM
+        | status_proc_publish(
+            _status_proc_input,
+            _STATUS_PROC_KINDS,
+            SYSTEMD_SCOPE | default('system')
+          )
+      }}
+  vars:
+    _status_proc_input: >-
+      {{
+        []
+        if (STATUS_PROC_BYPASS is deftruthy or STATUS_BYPASS is deftruthy)
+        else STATUS_PROC
+      }}

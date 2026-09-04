@@ -176,6 +176,19 @@ _ext: "{{ '.' + item.ext if item.ext|default(False) else '' }}"
 DEFAULT_HELPERS: ["env", "setopts", "loud"]
 CONFIG_DISABLED_SUFFIX: .disabled
 
+# Proc-backed status kind registry. sub_status_proc uses this single map to
+# publish one internal subsystem leaf per check kind; gen_status_proc uses the
+# same order to merge active reporter contributions.
+_STATUS_PROC_KINDS:
+  mainpid-env:
+    subsystem: status_proc_mainpid_env
+    reporter: status-mainpid-env.sh
+    src: ../status/status-mainpid-env.sh
+  exe-current:
+    subsystem: status_proc_exe_current
+    reporter: status-exe-current.sh
+    src: ../status/status-exe-current.sh
+
 _binsRun: "{{ BINS_BYPASS|default(False) is falsy and BINS_RUN_BYPASS|default(False) is falsy }}"
 _postRun: "{{ 'postRun' if _binsRun else 'skip' }}"
 
@@ -716,64 +729,6 @@ SUBSYSTEM:
         - name: README.md
           dest: "{{DIR}}/README.md"
           content: "{{ README }}"
-
-  # Proc-backed status leaves select their own typed rows from STATUS_PROC.
-  # Each leaf contributes one reporter that batches every matching row.
-  status_proc_mainpid_env:
-    domain: status
-    requested: >-
-      {{
-        STATUS_PROC is sequence
-        and STATUS_PROC is not string
-        and (
-          STATUS_PROC
-          | selectattr('check', 'defined')
-          | selectattr('check', 'equalto', 'mainpid-env')
-          | list
-          | length
-        ) > 0
-      }}
-    bypassed: "{{ STATUS_PROC_BYPASS is deftruthy }}"
-    contrib:
-      BINS:
-        - name: status-mainpid-env.sh
-          src: ../status/status-mainpid-env.sh
-          basedir: false
-          status_proc_checks: >-
-            {{
-              STATUS_PROC
-              | selectattr('check', 'equalto', 'mainpid-env')
-              | list
-            }}
-      STATUSES: [status-mainpid-env.sh]
-
-  status_proc_exe_current:
-    domain: status
-    requested: >-
-      {{
-        STATUS_PROC is sequence
-        and STATUS_PROC is not string
-        and (
-          STATUS_PROC
-          | selectattr('check', 'defined')
-          | selectattr('check', 'equalto', 'exe-current')
-          | list
-          | length
-        ) > 0
-      }}
-    bypassed: "{{ STATUS_PROC_BYPASS is deftruthy }}"
-    contrib:
-      BINS:
-        - name: status-exe-current.sh
-          src: ../status/status-exe-current.sh
-          basedir: false
-          status_proc_checks: >-
-            {{
-              STATUS_PROC
-              | selectattr('check', 'equalto', 'exe-current')
-              | list
-            }}
-      STATUSES: [status-exe-current.sh]
 
   status:
     # requested when dir dumps are declared, or any subsystem contributed a

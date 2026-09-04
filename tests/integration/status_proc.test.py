@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def generate_status_proc(
     temporary: Path,
-    status_proc: list[dict[str, object]],
+    status_proc: object,
     *,
     statuses: list[str] | None = None,
     extra: dict[str, object] | None = None,
@@ -48,6 +48,7 @@ def generate_status_proc(
     STATUS_DIRS_SUDO: []
     SYSTEMD_SCOPE: system
   tasks:
+    - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'sub_status_proc.tasks')!r}
     - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_status_proc.tasks')!r}
     - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_status.tasks')!r}
     - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'bins.tasks')!r}
@@ -90,6 +91,24 @@ def generate_status_proc(
         for path in (payload / "bin").iterdir()
     } if (payload / "bin").is_dir() else {}
     return generated
+
+
+def require_rejected_status_proc(
+    status_proc: object,
+    expected: str,
+    *,
+    extra: dict[str, object] | None = None,
+) -> None:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-status-proc-invalid-") as tmp:
+        try:
+            generate_status_proc(Path(tmp), status_proc, extra=extra)
+        except AssertionError as error:
+            if expected not in str(error):
+                raise AssertionError(
+                    f"expected generation error containing {expected!r}\n{error}"
+                ) from error
+        else:
+            raise AssertionError(f"STATUS_PROC unexpectedly accepted {status_proc!r}")
 
 
 def test_status_proc_selects_and_batches_reporters() -> None:
@@ -179,9 +198,10 @@ def test_status_proc_is_not_ambient() -> None:
 
 
 def test_status_proc_provider_bypass_disables_all_checks() -> None:
-    with tempfile.TemporaryDirectory(prefix="compfuzor-status-proc-bypass-") as tmp:
-        generated = generate_status_proc(
-            Path(tmp),
+    for index, status_proc in enumerate(
+        [
+            "malformed",
+            {"check": "exe-current"},
             [
                 {
                     "name": "opencode-executable",
@@ -190,13 +210,48 @@ def test_status_proc_provider_bypass_disables_all_checks() -> None:
                     "expected": "/usr/local/bin/opencode2",
                 }
             ],
-            extra={"STATUS_PROC_BYPASS": True},
-        )
-        assert generated == {"bins": [], "statuses": [], "scripts": {}}
+        ]
+    ):
+        with tempfile.TemporaryDirectory(
+            prefix=f"compfuzor-status-proc-bypass-{index}-"
+        ) as tmp:
+            generated = generate_status_proc(
+                Path(tmp),
+                status_proc,
+                extra={"STATUS_PROC_BYPASS": True},
+            )
+            assert generated == {"bins": [], "statuses": [], "scripts": {}}
+
+
+def test_status_proc_rejects_invalid_typed_fields() -> None:
+    require_rejected_status_proc(
+        [
+            {
+                "name": "bad-env",
+                "check": "mainpid-env",
+                "unit": "demo.service",
+                "expected": {"DEMO": ["not", "scalar"]},
+            }
+        ],
+        "expected values must be strings",
+    )
+    require_rejected_status_proc(
+        [
+            {
+                "name": "bad-manager",
+                "check": "exe-current",
+                "unit": "demo.service",
+                "expected": "/usr/bin/demo",
+            }
+        ],
+        "manager must resolve to system or user",
+        extra={"SYSTEMD_SCOPE": "invalid"},
+    )
 
 
 if __name__ == "__main__":
     test_status_proc_selects_and_batches_reporters()
     test_status_proc_is_not_ambient()
     test_status_proc_provider_bypass_disables_all_checks()
+    test_status_proc_rejects_invalid_typed_fields()
     print("ok: STATUS_PROC selectively generates proc-backed status reporters")

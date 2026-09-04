@@ -61,6 +61,9 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/sub_config.tasks
   tags: ['vars', 'always']
+- import_tasks: compfuzor/sub_status_proc.tasks
+  when: STATUS_PROC is defined
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_config.tasks
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_zim.tasks
@@ -106,7 +109,7 @@
     (LINKS is deftruthy or _ARTIFACTS | artifacts_have_links)
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_status_proc.tasks
-  when: STATUS_PROC is defined
+  when: SUBSYSTEM.status_proc is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_status.tasks
   tags: ['vars', 'always']
