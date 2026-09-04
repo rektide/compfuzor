@@ -150,20 +150,24 @@
     # status-cleanup.sh dry-runs cleanup.sh with the timer's eligibility window
     # plus the timer's own unit state; status-opencode-ok.sh checks the
     # invoking shell against the managed deployment and is also globally
-    # linked as opencode-status-ok for quick checks from wrapper-less shells;
-    # status-proc.sh (auto-registered by the status subsystem) reports the
-    # generic /proc counters, scoped below to this service plus the ambient
-    # slice rollup.
+    # linked as opencode-status-ok for quick checks from wrapper-less shells.
     STATUSES:
       - status-cleanup.sh
       - status-opencode-ok.sh
-    # The whole declaration for per-service /proc counter status: units (or
-    # @user/@slices) handed to the status subsystem's status-proc.sh, which
-    # counts fds / inotify watches+instances / epoll / eventfd / timerfd /
-    # socket / memfd over each scope's cgroup with subtree rollup. No bins,
-    # no cross-render contract vars.
-    PROC_STATUS_SCOPES:
-      - opencode.service
+    # Proc-backed status checks are typed rows. The provider emits one reporter
+    # per check kind and batches every matching row into that reporter.
+    STATUS_PROC:
+      - name: opencode-watchman-env
+        check: mainpid-env
+        unit: opencode.service
+        manager: user
+        expected:
+          WATCHMAN_SOCK: "{{WATCHMAN_CANONICAL_SOCKET_ABS}}"
+      - name: opencode-executable
+        check: exe-current
+        unit: opencode.service
+        manager: user
+        expected: "{{GLOBAL_BINS_DIR}}/opencode2"
     ZIM_ENV:
       - OPENCODE_SERVER_URL
       - OPENCODE_PASSWORD_FILE
@@ -216,12 +220,10 @@
 
       `bin/status.sh` runs the registered reporters: status-cleanup.sh (leaked
       native libraries and the cleanup timer's state), status-opencode-ok.sh
-      (below), status-proc.sh (generic /proc counters — fds, inotify watches
-      and instances, epoll/eventfd/timerfd/socket/memfd — aggregated over the
-      cgroup scopes named by `PROC_STATUS_SCOPES`, here `opencode.service`,
-      plus the ambient top-level-slice rollup; subtree rollup means parent
-      scopes include children, and the kernel itself accounts none of these
-      per-cgroup), plus the config and link drift reporters.
+      (below), status-mainpid-env.sh (the live server inherited the canonical
+      WATCHMAN_SOCK), status-exe-current.sh (the MainPID still executes the
+      currently deployed opencode2 inode), plus the config and link drift
+      reporters.
       `opencode-status-ok` is the same ok-checker as a global command, so any
       shell — including ones without the ZIM wrapper — can quickly verify three
       things:

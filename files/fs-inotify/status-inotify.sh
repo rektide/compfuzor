@@ -8,10 +8,8 @@
 # even when each individual consumer looks healthy.
 #
 # --unit UNIT scopes the count to one systemd --user unit's cgroup: the
-# service's own consumption only, never strays or other instances. Kept as
-# this pool owner's convenience; the generic per-scope surface (any
-# service/slice cgroup, subtree rollup, more counters) is the status
-# subsystem's status-proc.sh. An inactive unit reports no consumption
+# service's own consumption only, never strays or other instances. It remains
+# this pool owner's convenience view. An inactive unit reports no consumption
 # (exit 0); unit liveness itself is other reporters' drift.
 #
 # Counting (same technique as usage.sh): a WATCH is one

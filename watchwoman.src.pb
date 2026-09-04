@@ -108,6 +108,19 @@
       # that this contributor wins the ZIM_ENV don't-stomp race when both
       # playbooks are installed.
       WATCHMAN_SOCK: "${XDG_STATE_HOME:-${HOME}/.local/state}/watchman/$(id -un)-state/sock"
+    STATUS_PROC:
+      - name: watchwoman-environment
+        check: mainpid-env
+        unit: "{{WATCHMAN_SERVICE_UNIT}}.service"
+        manager: user
+        expected:
+          WATCHWOMAN_CONFIG_FILE: /opt/watchwoman-git/etc/watchwoman.json
+          WATCHWOMAN_STALE_IDLE_SECS: "172800"
+      - name: watchwoman-executable
+        check: exe-current
+        unit: "{{WATCHMAN_SERVICE_UNIT}}.service"
+        manager: user
+        expected: "{{GLOBAL_BINS_DIR}}/watchwoman"
     ZIM_ENV_PHASE: 54
     ZIM_ENV:
       - WATCHMAN_SOCK
