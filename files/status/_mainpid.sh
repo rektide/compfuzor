@@ -1,5 +1,5 @@
-_proc_root="${STATUS_PROC_ROOT:-/proc}"
-_systemctl_bin="${STATUS_SYSTEMCTL:-systemctl}"
+_proc_root=/proc
+_systemctl_bin=systemctl
 _applicable=0
 _drift=0
 _pid=""
