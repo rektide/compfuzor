@@ -75,6 +75,49 @@ into host globals (`BINS`, `ENV`, `PKGS`, etc.) via `merge_subsys`.
   when: lookup('subsys', id='go', get='active', default=false) | bool
 ```
 
+## Typed status providers
+
+Status declarations are grouped by their authoritative observation source.
+`STATUS_PROC` is a list of typed proc-backed checks; it is intentionally broader
+than one check-specific variable and narrower than a universal status schema.
+
+```yaml
+STATUS_PROC:
+  - name: opencode-watchman-env
+    check: mainpid-env
+    unit: opencode.service
+    manager: user
+    expected:
+      WATCHMAN_SOCK: "{{ WATCHMAN_CANONICAL_SOCKET_ABS }}"
+
+  - name: opencode-executable
+    check: exe-current
+    unit: opencode.service
+    manager: user
+    expected: "{{ GLOBAL_BINS_DIR }}/opencode2"
+```
+
+[`gen_status_proc.tasks`](../tasks/compfuzor/gen_status_proc.tasks) validates
+the collection and activates internal leaves by `check`. Each present kind
+contributes one reporter containing all matching rows:
+
+| Check | Reporter | Check-specific contract |
+|---|---|---|
+| `mainpid-env` | `status-mainpid-env.sh` | `expected` is a non-empty mapping of non-sensitive environment values. |
+| `exe-current` | `status-exe-current.sh` | `expected` is an absolute executable path. |
+
+Both checks require a concrete `.service` `unit`. `manager` is `system` or
+`user`; when omitted it inherits `SYSTEMD_SCOPE` and then defaults to `system`.
+Inactive units are not applicable. Query, visibility, or comparison failures
+are drift.
+
+`STATUS_PROC_BYPASS` disables all proc-backed checks. `STATUS_BYPASS` disables
+the complete status domain. The internal leaves also retain their derived
+check-specific bypass variables.
+
+The design and extension criteria are recorded in
+[`draft1.gpt56s.md`](../.design/proc/draft1.gpt56s.md).
+
 ## BINS merge behavior
 
 `BINS` uses the `bins_generated` merge preset from
