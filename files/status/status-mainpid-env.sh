@@ -44,8 +44,9 @@ _check_env() { # name unit key expected
   if grep -zFqx -- "$key=$expected" "$environ" 2>/dev/null; then
     _say "$name" "OK: $unit MainPID $_pid has expected $key"
     return 0
+  else
+    code=$?
   fi
-  code=$?
   if [ "$code" -eq 1 ]; then
     _say "$name" "DRIFT: $unit MainPID $_pid is missing or differs for $key"
   else
