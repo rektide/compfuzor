@@ -337,7 +337,9 @@
               return
             fi
             expected="$(cat "$source")"
-            actual="$(sed -n "/^# ${marker} start$/,/^# ${marker} end$/p" "$startup" | sed '1d;$d')"
+            # block-in-file stamps a "# source:" provenance line inside each
+            # block; it is installer metadata, not content -- exclude it.
+            actual="$(sed -n "/^# ${marker} start$/,/^# ${marker} end$/p" "$startup" | sed '1d;$d' | sed '/^# source: /d')"
             if [ "$actual" != "$expected" ]; then
               echo "drift: $marker block in $startup differs from $source"
               status=1
