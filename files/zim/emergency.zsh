@@ -2,14 +2,37 @@
 
 _compfuzor_emergency_noop() { :; }
 
-_compfuzor_emergency_dump_bindings() {
-  local keymap
-  local -a keymaps=("${(@f)$(bindkey -l)}")
+_compfuzor_emergency_bind_lean() {
+  local keymap=$1
 
-  bindkey -lL
-  for keymap in "${(@)keymaps[@]}"; do
-    bindkey -L -M "$keymap"
-  done
+  bindkey -N "$keymap" .safe || return
+  bindkey -M "$keymap" -R ' '-'~' self-insert || return
+  bindkey -M "$keymap" '^A' beginning-of-line || return
+  bindkey -M "$keymap" '^B' backward-char || return
+  bindkey -M "$keymap" '^C' send-break || return
+  bindkey -M "$keymap" '^D' delete-char || return
+  bindkey -M "$keymap" '^E' end-of-line || return
+  bindkey -M "$keymap" '^F' forward-char || return
+  bindkey -M "$keymap" '^H' backward-delete-char || return
+  bindkey -M "$keymap" '^I' _compfuzor_emergency_noop || return
+  bindkey -M "$keymap" '^J' accept-line || return
+  bindkey -M "$keymap" '^K' kill-line || return
+  bindkey -M "$keymap" '^L' clear-screen || return
+  bindkey -M "$keymap" '^M' accept-line || return
+  bindkey -M "$keymap" '^N' down-line-or-history || return
+  bindkey -M "$keymap" '^P' up-line-or-history || return
+  bindkey -M "$keymap" '^R' history-incremental-search-backward || return
+  bindkey -M "$keymap" '^U' kill-whole-line || return
+  bindkey -M "$keymap" '^W' backward-kill-word || return
+  bindkey -M "$keymap" '^Y' yank || return
+  bindkey -M "$keymap" '^?' backward-delete-char || return
+  bindkey -M "$keymap" '^[[A' up-line-or-history || return
+  bindkey -M "$keymap" '^[[B' down-line-or-history || return
+  bindkey -M "$keymap" '^[[C' forward-char || return
+  bindkey -M "$keymap" '^[[D' backward-char || return
+  bindkey -M "$keymap" '^[[3~' delete-char || return
+  bindkey -M "$keymap" '^[[200~' bracketed-paste || return
+  bindkey -A "$keymap" main
 }
 
 _compfuzor_emergency_load_hooks() {
@@ -49,7 +72,12 @@ _emergency_zim() {
         typeset -g _COMPFUZOR_EMERGENCY_CORRECT=${options[correct]}
         typeset -g _COMPFUZOR_EMERGENCY_CORRECT_ALL=${options[correctall]}
         typeset -g _COMPFUZOR_EMERGENCY_HASH_LIST_ALL=${options[hashlistall]}
-        typeset -g _COMPFUZOR_EMERGENCY_BINDINGS="$(_compfuzor_emergency_dump_bindings)"
+        typeset -g _COMPFUZOR_EMERGENCY_MAIN_KEYMAP="$(bindkey -lL main)"
+        typeset -g _COMPFUZOR_EMERGENCY_MAIN_BINDINGS=''
+        if [[ $_COMPFUZOR_EMERGENCY_MAIN_KEYMAP == 'bindkey -N main' ]]; then
+          _COMPFUZOR_EMERGENCY_MAIN_BINDINGS="$(bindkey -L -M main)"
+        fi
+        typeset -g _COMPFUZOR_EMERGENCY_KEYMAP="compfuzor-emergency-$$"
         typeset -ga _COMPFUZOR_EMERGENCY_PRECMD=("${(@)precmd_functions[@]}")
         typeset -ga _COMPFUZOR_EMERGENCY_PREEXEC=("${(@)preexec_functions[@]}")
         typeset -ga _COMPFUZOR_EMERGENCY_CHPWD=("${(@)chpwd_functions[@]}")
@@ -71,10 +99,8 @@ _emergency_zim() {
       periodic_functions=()
       zshaddhistory_functions=()
       zshexit_functions=()
-      bindkey -d
-      bindkey -e
       zle -N _compfuzor_emergency_noop
-      bindkey '^I' _compfuzor_emergency_noop
+      _compfuzor_emergency_bind_lean "$_COMPFUZOR_EMERGENCY_KEYMAP"
       ;;
     off)
       (( ${+_COMPFUZOR_EMERGENCY_ZIM_ACTIVE} )) || return 0
@@ -118,8 +144,11 @@ _emergency_zim() {
       periodic_functions=("${(@)_COMPFUZOR_EMERGENCY_PERIODIC[@]}")
       zshaddhistory_functions=("${(@)_COMPFUZOR_EMERGENCY_HISTORY[@]}")
       zshexit_functions=("${(@)_COMPFUZOR_EMERGENCY_EXIT[@]}")
-      bindkey -d
-      eval "$_COMPFUZOR_EMERGENCY_BINDINGS"
+      eval "$_COMPFUZOR_EMERGENCY_MAIN_KEYMAP" || return
+      if [[ -n $_COMPFUZOR_EMERGENCY_MAIN_BINDINGS ]]; then
+        eval "$_COMPFUZOR_EMERGENCY_MAIN_BINDINGS" || return
+      fi
+      bindkey -D "$_COMPFUZOR_EMERGENCY_KEYMAP" || return
 
       unset _COMPFUZOR_EMERGENCY_ZIM_ACTIVE
       ;;

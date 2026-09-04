@@ -74,6 +74,7 @@ bindkey -v
 bindkey '^R' clear-screen
 bindkey -N compfuzor-test
 bindkey -M compfuzor-test '^X' clear-screen
+bindkey -A compfuzor-test alternate-test
 setopt correct correctall hashlistall
 
 typeset -ga probe_calls=()
@@ -127,6 +128,7 @@ _emergency off
 [[ $(bindkey '^R') == *'clear-screen' ]]
 [[ $(bindkey -lL) == *'bindkey -A viins main'* ]]
 [[ $(bindkey -M compfuzor-test '^X') == *'clear-screen' ]]
+[[ $(bindkey -M alternate-test '^X') == *'clear-screen' ]]
 [[ ${(j:,:)probe_calls} == on,on,off ]]
 [[ $(_emergency status) == 'emergency: off' ]]
 
