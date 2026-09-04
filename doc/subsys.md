@@ -98,10 +98,10 @@ STATUS_PROC:
 ```
 
 [`sub_status_proc.tasks`](/tasks/compfuzor/sub_status_proc.tasks) validates and
-normalizes the collection, then publishes internal leaves by `check`.
-[`gen_status_proc.tasks`](/tasks/compfuzor/gen_status_proc.tasks) merges each
-active leaf's contributions. Each present kind contributes one reporter
-containing all matching rows:
+normalizes the collection into one complete `SUBSYSTEM.status_proc` record.
+[`gen_status_proc.tasks`](/tasks/compfuzor/gen_status_proc.tasks) merges that
+provider's aggregate contribution once. Each present kind contributes one
+reporter containing all matching rows:
 
 | Check | Reporter | Check-specific contract |
 |---|---|---|
@@ -114,8 +114,7 @@ Inactive units are not applicable. Query, visibility, or comparison failures
 are drift.
 
 `STATUS_PROC_BYPASS` disables all proc-backed checks. `STATUS_BYPASS` disables
-the complete status domain. The internal leaves also retain their derived
-check-specific bypass variables.
+the complete status domain.
 
 The design and extension criteria are recorded in
 [`draft1.gpt56s.md`](/.design/proc/draft1.gpt56s.md).

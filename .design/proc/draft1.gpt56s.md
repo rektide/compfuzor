@@ -26,9 +26,9 @@ sources:
 ## Decision
 
 Proc inspection is a **status provider**, not a general metric subsystem.
-Playbooks declare a typed list under the broad `STATUS_PROC` header. Internal
-status leaves select rows by `check`; each active leaf contributes one
-purpose-built reporter that batches every matching row. The existing
+Playbooks declare a typed list under the broad `STATUS_PROC` header. The
+provider selects rows by `check` and contributes one purpose-built reporter for
+each selected kind; every reporter batches all matching rows. The existing
 `gen_status` task remains the final `status.sh` compositor.
 
 This replaces both rejected extremes:
@@ -66,20 +66,19 @@ Common row fields:
 | `check` | Known proc-backed check kind. |
 | `unit` | Concrete `.service` unit whose `MainPID` is inspected. |
 | `manager` | `system` or `user`; defaults to the playbook's `SYSTEMD_SCOPE`, then `system`. |
-| check-specific fields | Validated by the selected status leaf. |
+| check-specific fields | Validated by the selected check-kind adapter. |
 
-`STATUS_PROC_BYPASS` suppresses every proc-backed leaf. `STATUS_BYPASS`
-suppresses the whole status domain. A leaf remains independently bypassable by
-its subsystem-derived bypass variable.
+`STATUS_PROC_BYPASS` suppresses the proc-backed provider. `STATUS_BYPASS`
+suppresses the whole status domain.
 
 ## Initial Checks
 
 ### `mainpid-env`
 
 Generates `status-mainpid-env.sh`. `expected` is a non-empty mapping of
-environment names to exact expected string values. The reporter resolves the unit's
-live `MainPID` and compares its `/proc/<pid>/environ` without printing either
-the expected or actual values.
+environment names to exact expected string values. The reporter resolves the
+unit's live `MainPID` and compares its `/proc/<pid>/environ` without printing
+either the expected or actual values.
 
 Expected values are baked into the executable reporter, so this check is for
 non-sensitive configuration only. Secret checks require a different protected
@@ -94,10 +93,10 @@ managed symlink while detecting replaced or deleted running executables.
 ## Generation
 
 `sub_status_proc.tasks` validates and normalizes the whole collection, then
-publishes one internal subsystem leaf for each selected check kind.
-`gen_status_proc.tasks` merges each active leaf's `BINS` and `STATUSES`
-contributions. One kind produces one reporter regardless of how many rows
-select it. Empty input produces no status artifacts.
+publishes one complete `SUBSYSTEM.status_proc` record. Its contribution contains
+one reporter per selected check kind. `gen_status_proc.tasks` merges that
+provider's `BINS` and `STATUSES` once. Empty input produces no subsystem record
+or status artifacts.
 
 The old ambient `status-proc.sh` is removed. Proc inspection now appears only
 where a playbook states an operational invariant.
@@ -133,7 +132,7 @@ a declared invariant or meaningful denominator.
   concretization layer. `gen_status_proc` follows that role and leaves runtime
   collection inside generated reporters.
 - [`/doc/subsys.md`](/doc/subsys.md) documents activation, contribution, and
-  bypass behavior for the internal status leaves.
+  bypass behavior for the status provider.
 - [`/doc/watcher-ops.md`](/doc/watcher-ops.md) provides the incidents that make
   live environment and executable currency actionable rather than generic
   telemetry.

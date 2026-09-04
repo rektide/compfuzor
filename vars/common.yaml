@@ -729,8 +729,8 @@ SUBSYSTEM:
 
   status:
     # requested when dir dumps are declared, or any subsystem contributed a
-    # reporter to STATUSES (gen_kernel and gen_status_proc append their leaves
-    # before the status parent is resolved).
+    # reporter to STATUSES (gen_kernel and gen_status_proc append their
+    # contributions before the status parent is resolved).
     requested: "{{ (STATUS_DIRS is deftruthy) or (STATUS_DIRS_SUDO is deftruthy) or ((STATUSES | default([])) | length > 0) }}"
     contrib:
       BINS: "{{ [ {'name': 'status.sh', 'src': '../status/status.sh', 'basedir': false} ] + ([ {'name': 'status-dirs.sh', 'src': '../status/status-dirs.sh', 'basedir': false} ] if (STATUS_DIRS is deftruthy or STATUS_DIRS_SUDO is deftruthy) else []) }}"

@@ -6,8 +6,9 @@
 # Runs after gen_kernel, which appends the kernel reporters (status-sysctl.ts /
 # status-modules.ts / status-sysfs.ts) to STATUSES for active leaves. This file
 # appends status-dirs.sh when STATUS_DIRS / STATUS_DIRS_SUDO are declared, then
-# merges contrib. Proc-backed leaves are selected by gen_status_proc before
-# this compositor runs. status.sh bakes the final STATUSES list at render time.
+# merges contrib. The proc-backed provider contributes its selected reporters
+# before this compositor runs. status.sh bakes the final STATUSES list at render
+# time.
 
 - name: "Compfuzor: register status-dirs reporter"
   set_fact:
