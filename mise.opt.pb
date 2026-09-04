@@ -27,7 +27,10 @@
           eval "$(mise activate bash --shims)"
     bash_rc: "$HOME/.bashrc"
     bash_profile: "$HOME/.bash_profile"
-    mise_npm_package_manager: "${MISE_NPM_PACKAGE_MANAGER:-pnpm}"
+    # Literal (not ${VAR:-default}): this lands in the systemd EnvironmentFile
+    # via ENV_LIST, and systemd does no shell expansion -- deferred syntax
+    # reaches mise as a literal string and panics its settings parser.
+    mise_npm_package_manager: "pnpm"
     mise_user_env_path: False
     ENV_LIST:
       - bash_rc
