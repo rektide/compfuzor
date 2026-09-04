@@ -52,6 +52,11 @@
     # filename order. `phase` is a name (core/prompt/tools/
     # completion/late) or a number 00-99 for fine placement between bands.
     ZIM_MODULES:
+      - name: emergency
+        source: emergency.zsh
+        phase: 99
+        comment: Reversible low-I/O shell mode; `_emergency` runs every registered `_emergency_<subsystem>` hook.
+
       - source: https://github.com/rektide/zim-mise
         channel: zimenv
         phase: core
@@ -345,6 +350,7 @@
     ETC_FILES:
       - name: zimenv.zsh
         content: |
+          [[ ${COMPFUZOR_EMERGENCY:-0} == 1 ]] && return
           () {
             local ZIM_HOME="${ZIM_ENV_HOME:-{{zim_env_home}}}"
             local ZIM_CONFIG_FILE="${ZIM_ENV_CONFIG:-{{zim_env_config}}}"
@@ -358,6 +364,11 @@
           }
       - name: zimrc.zsh
         content: |
+          if [[ ${COMPFUZOR_EMERGENCY:-0} == 1 ]]; then
+            typeset -g _COMPFUZOR_EMERGENCY_COLD=1
+            source {{ETC}}/zim-modules/emergency/init.zsh
+            return
+          fi
           # : is a no-op builtin; ${VAR:=default} sets VAR only if unset or empty
           : ${ZIM_HOME:={{zim_home}}}
           : ${ZIM_CONFIG_FILE:={{ETC}}/zimrc}

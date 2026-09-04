@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+"""Exercise the reversible, session-local emergency shell mode."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+
+
+ROOT = Path(__file__).resolve().parents[2]
+ZIM_MODULE = ROOT / "files/zim/emergency.zsh"
+ATUIN_MODULE = ROOT / "files/atuin/emergency.zsh"
+
+
+def test_emergency_shell_mode() -> None:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-emergency-") as temporary:
+        directory = Path(temporary)
+        systemctl_log = directory / "systemctl.log"
+        systemctl = directory / "systemctl"
+        systemctl.write_text(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$SYSTEMCTL_LOG\"\n",
+            encoding="utf-8",
+        )
+        systemctl.chmod(0o755)
+
+        env = os.environ.copy()
+        env.update(
+            {
+                "ATUIN_EMERGENCY_SYSTEMCTL": str(systemctl),
+                "ATUIN_MODULE": str(ATUIN_MODULE),
+                "SYSTEMCTL_LOG": str(systemctl_log),
+                "ZIM_MODULE": str(ZIM_MODULE),
+            }
+        )
+        env.pop("COMPFUZOR_EMERGENCY", None)
+
+        script = r"""
+setopt errexit
+
+keep_precmd() { :; }
+keep_preexec() { :; }
+keep_chpwd() { :; }
+keep_periodic() { :; }
+keep_history() { :; }
+keep_exit() { :; }
+_atuin_precmd() { :; }
+_atuin_preexec() { :; }
+_atuin_zshaddhistory() { :; }
+
+precmd_functions=(keep_precmd _atuin_precmd)
+preexec_functions=(keep_preexec _atuin_preexec)
+chpwd_functions=(keep_chpwd)
+periodic_functions=(keep_periodic)
+zshaddhistory_functions=(keep_history _atuin_zshaddhistory)
+zshexit_functions=(keep_exit)
+ZSH_AUTOSUGGEST_STRATEGY=(atuin match_prev_cmd atuin)
+ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets)
+_ZSH_AUTOSUGGEST_DISABLED=preserve
+PROMPT='rich prompt '
+RPROMPT='rich right'
+PROMPT2='rich continue '
+HISTFILE=/tmp/compfuzor-history
+bindkey '^R' clear-screen
+setopt correct correctall hashlistall
+
+typeset -ga probe_calls=()
+_emergency_probe() { probe_calls+=("$1"); }
+
+source "$ATUIN_MODULE"
+source "$ZIM_MODULE"
+
+[[ $(_emergency status) == 'emergency: off' ]]
+_emergency on
+_emergency on
+
+[[ $COMPFUZOR_EMERGENCY == 1 ]]
+[[ ${(t)COMPFUZOR_EMERGENCY} == *export* ]]
+[[ $PROMPT == 'emergency:%~%# ' ]]
+[[ -z $RPROMPT && $PROMPT2 == '> ' ]]
+[[ -z ${HISTFILE+x} ]]
+[[ $options[correct] == off && $options[correctall] == off ]]
+[[ $options[hashlistall] == off ]]
+(( ${#precmd_functions} == 0 ))
+(( ${#preexec_functions} == 0 ))
+(( ${#chpwd_functions} == 0 ))
+(( ${#periodic_functions} == 0 ))
+(( ${#zshaddhistory_functions} == 0 ))
+(( ${#zshexit_functions} == 0 ))
+(( ${#ZSH_HIGHLIGHT_HIGHLIGHTERS} == 0 ))
+[[ ${(j:,:)ZSH_AUTOSUGGEST_STRATEGY} == match_prev_cmd ]]
+[[ $(bindkey '^I') == *'_compfuzor_emergency_noop' ]]
+[[ $(bindkey '^R') == *'history-incremental-search-backward' ]]
+[[ $(_emergency status) == 'emergency: on' ]]
+
+_emergency off
+
+[[ -z ${COMPFUZOR_EMERGENCY+x} ]]
+[[ $PROMPT == 'rich prompt ' && $RPROMPT == 'rich right' ]]
+[[ $PROMPT2 == 'rich continue ' && $HISTFILE == /tmp/compfuzor-history ]]
+[[ $options[correct] == on && $options[correctall] == on ]]
+[[ $options[hashlistall] == on ]]
+[[ ${(j:,:)precmd_functions} == keep_precmd,_atuin_precmd ]]
+[[ ${(j:,:)preexec_functions} == keep_preexec,_atuin_preexec ]]
+[[ ${(j:,:)chpwd_functions} == keep_chpwd ]]
+[[ ${(j:,:)periodic_functions} == keep_periodic ]]
+[[ ${(j:,:)zshaddhistory_functions} == keep_history,_atuin_zshaddhistory ]]
+[[ ${(j:,:)zshexit_functions} == keep_exit ]]
+[[ ${(j:,:)ZSH_HIGHLIGHT_HIGHLIGHTERS} == main,brackets ]]
+[[ ${(j:,:)ZSH_AUTOSUGGEST_STRATEGY} == atuin,match_prev_cmd,atuin ]]
+[[ $_ZSH_AUTOSUGGEST_DISABLED == preserve ]]
+[[ $(bindkey '^R') == *'clear-screen' ]]
+[[ ${(j:,:)probe_calls} == on,on,off ]]
+[[ $(_emergency status) == 'emergency: off' ]]
+"""
+
+        result = subprocess.run(
+            ["zsh", "-dfc", script],
+            cwd=ROOT,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            raise AssertionError(f"emergency shell test failed:\n{result.stdout}{result.stderr}")
+        calls = systemctl_log.read_text(encoding="utf-8").splitlines()
+        assert calls == [
+            "--user stop --no-block atuin-daemon.service atuin-daemon.socket",
+            "--user stop --no-block atuin-daemon.service atuin-daemon.socket",
+            "--user start --no-block atuin-daemon.socket",
+        ]
+
+
+if __name__ == "__main__":
+    test_emergency_shell_mode()
+    print("ok: emergency shell mode")

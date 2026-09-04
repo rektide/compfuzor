@@ -66,6 +66,11 @@
     # fuzzy, so scripts are unaffected. Set empty to use local database fuzzy.
     # Managed as a TOP-LEVEL config key (see install-atuin-config.sh).
     ATUIN_SEARCH_MODE: daemon-fuzzy
+    ZIM_MODULES:
+      - name: atuin-emergency
+        source: emergency.zsh
+        phase: 56
+        comment: Removes Atuin shell hooks and stops its socket/service while Compfuzor emergency mode is active.
     STATUSES:
       - status-atuin.sh
     ETC_FILES:

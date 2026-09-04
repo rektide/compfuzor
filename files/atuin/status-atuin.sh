@@ -47,7 +47,8 @@
 #
 # status.sh reporter conventions: exit 0 clean, 1 drift, 2 not-activated.
 # Test seams: ATUIN_BIN, ATUIN_UNIT_BASE, ATUIN_CFG, ATUIN_RUNTIME_DIR,
-# ATUIN_DATA_DIR, ATUIN_USER_UNITS.
+# ATUIN_DATA_DIR, ATUIN_USER_UNITS. COMPFUZOR_EMERGENCY makes an intentionally
+# stopped socket healthy for the invoking shell.
 
 _atbin="${ATUIN_BIN:-{{GLOBAL_BINS_DIR}}/atuin}"
 _ubase="${ATUIN_UNIT_BASE:-atuin-daemon}"
@@ -55,6 +56,7 @@ _rundir="${ATUIN_RUNTIME_DIR:-${XDG_RUNTIME_DIR:-$HOME/.local/share/atuin}}"
 _datadir="${ATUIN_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/atuin}"
 _cfg="${ATUIN_CFG:-${XDG_CONFIG_HOME:-$HOME/.config}/atuin/config.toml}"
 _uunits="${ATUIN_USER_UNITS:-$HOME/.config/systemd/user}"
+_emergency="${COMPFUZOR_EMERGENCY:-0}"
 
 _drift=0
 _say() { printf '%-12s %s\n' "$1" "$2"; }
@@ -102,6 +104,8 @@ fi
 _sock_state="$(systemctl --user is-active "${_ubase}.socket" 2>/dev/null || true)"
 if [ "$_sock_state" = active ]; then
   _say socket "OK: ${_ubase}.socket active (listening)"
+elif [ "$_emergency" = 1 ]; then
+  _say socket "OK: ${_ubase}.socket intentionally stopped by emergency mode"
 else
   _say socket "DRIFT: ${_ubase}.socket is '${_sock_state:-unknown}' (enabled sockets start at login; or: systemctl --user start ${_ubase}.socket)"
   _drift=1
@@ -225,7 +229,9 @@ else
   # Idle socket-activated state is valid -- but a socket file held while our
   # unit is INACTIVE means a foreign daemon (or stale file) the unit cannot
   # bind through.
-  if [ "$_sock_state" != active ] && [ -S "$_exp_sock" ]; then
+  if [ "$_emergency" = 1 ] && [ "$_sock_state" != active ]; then
+    _say daemon "OK: stopped by emergency mode"
+  elif [ "$_sock_state" != active ] && [ -S "$_exp_sock" ]; then
     _say daemon "DRIFT: service inactive but $_exp_sock exists -- stale socket from an unclean shutdown; the socket unit cannot bind through it (fix: rm -f $_exp_sock; systemctl --user start ${_ubase}.socket)"
     _drift=1
   else
