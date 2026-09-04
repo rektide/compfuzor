@@ -20,17 +20,17 @@ _emergency_zim() {
         typeset -g _COMPFUZOR_EMERGENCY_AUTOSUGGEST_SET=${+_ZSH_AUTOSUGGEST_DISABLED}
         typeset -g _COMPFUZOR_EMERGENCY_AUTOSUGGEST=${_ZSH_AUTOSUGGEST_DISABLED-}
         typeset -g _COMPFUZOR_EMERGENCY_HIGHLIGHT_SET=${+ZSH_HIGHLIGHT_HIGHLIGHTERS}
-        typeset -ga _COMPFUZOR_EMERGENCY_HIGHLIGHT=("${(@)ZSH_HIGHLIGHT_HIGHLIGHTERS}")
-        typeset -g _COMPFUZOR_EMERGENCY_CORRECT=$options[correct]
-        typeset -g _COMPFUZOR_EMERGENCY_CORRECT_ALL=$options[correctall]
-        typeset -g _COMPFUZOR_EMERGENCY_HASH_LIST_ALL=$options[hashlistall]
+        typeset -ga _COMPFUZOR_EMERGENCY_HIGHLIGHT=("${(@)ZSH_HIGHLIGHT_HIGHLIGHTERS[@]}")
+        typeset -g _COMPFUZOR_EMERGENCY_CORRECT=${options[correct]}
+        typeset -g _COMPFUZOR_EMERGENCY_CORRECT_ALL=${options[correctall]}
+        typeset -g _COMPFUZOR_EMERGENCY_HASH_LIST_ALL=${options[hashlistall]}
         typeset -g _COMPFUZOR_EMERGENCY_BINDINGS="$(bindkey -L)"
-        typeset -ga _COMPFUZOR_EMERGENCY_PRECMD=("${(@)precmd_functions}")
-        typeset -ga _COMPFUZOR_EMERGENCY_PREEXEC=("${(@)preexec_functions}")
-        typeset -ga _COMPFUZOR_EMERGENCY_CHPWD=("${(@)chpwd_functions}")
-        typeset -ga _COMPFUZOR_EMERGENCY_PERIODIC=("${(@)periodic_functions}")
-        typeset -ga _COMPFUZOR_EMERGENCY_HISTORY=("${(@)zshaddhistory_functions}")
-        typeset -ga _COMPFUZOR_EMERGENCY_EXIT=("${(@)zshexit_functions}")
+        typeset -ga _COMPFUZOR_EMERGENCY_PRECMD=("${(@)precmd_functions[@]}")
+        typeset -ga _COMPFUZOR_EMERGENCY_PREEXEC=("${(@)preexec_functions[@]}")
+        typeset -ga _COMPFUZOR_EMERGENCY_CHPWD=("${(@)chpwd_functions[@]}")
+        typeset -ga _COMPFUZOR_EMERGENCY_PERIODIC=("${(@)periodic_functions[@]}")
+        typeset -ga _COMPFUZOR_EMERGENCY_HISTORY=("${(@)zshaddhistory_functions[@]}")
+        typeset -ga _COMPFUZOR_EMERGENCY_EXIT=("${(@)zshexit_functions[@]}")
       fi
 
       PROMPT='emergency:%~%# '
@@ -80,19 +80,19 @@ _emergency_zim() {
         unset _ZSH_AUTOSUGGEST_DISABLED
       fi
       if (( _COMPFUZOR_EMERGENCY_HIGHLIGHT_SET )); then
-        ZSH_HIGHLIGHT_HIGHLIGHTERS=("${(@)_COMPFUZOR_EMERGENCY_HIGHLIGHT}")
+        ZSH_HIGHLIGHT_HIGHLIGHTERS=("${(@)_COMPFUZOR_EMERGENCY_HIGHLIGHT[@]}")
       else
         unset ZSH_HIGHLIGHT_HIGHLIGHTERS
       fi
       [[ $_COMPFUZOR_EMERGENCY_CORRECT == on ]] && setopt correct || unsetopt correct
       [[ $_COMPFUZOR_EMERGENCY_CORRECT_ALL == on ]] && setopt correctall || unsetopt correctall
       [[ $_COMPFUZOR_EMERGENCY_HASH_LIST_ALL == on ]] && setopt hashlistall || unsetopt hashlistall
-      precmd_functions=("${(@)_COMPFUZOR_EMERGENCY_PRECMD}")
-      preexec_functions=("${(@)_COMPFUZOR_EMERGENCY_PREEXEC}")
-      chpwd_functions=("${(@)_COMPFUZOR_EMERGENCY_CHPWD}")
-      periodic_functions=("${(@)_COMPFUZOR_EMERGENCY_PERIODIC}")
-      zshaddhistory_functions=("${(@)_COMPFUZOR_EMERGENCY_HISTORY}")
-      zshexit_functions=("${(@)_COMPFUZOR_EMERGENCY_EXIT}")
+      precmd_functions=("${(@)_COMPFUZOR_EMERGENCY_PRECMD[@]}")
+      preexec_functions=("${(@)_COMPFUZOR_EMERGENCY_PREEXEC[@]}")
+      chpwd_functions=("${(@)_COMPFUZOR_EMERGENCY_CHPWD[@]}")
+      periodic_functions=("${(@)_COMPFUZOR_EMERGENCY_PERIODIC[@]}")
+      zshaddhistory_functions=("${(@)_COMPFUZOR_EMERGENCY_HISTORY[@]}")
+      zshexit_functions=("${(@)_COMPFUZOR_EMERGENCY_EXIT[@]}")
       bindkey -d
       eval "$_COMPFUZOR_EMERGENCY_BINDINGS"
 
@@ -138,20 +138,26 @@ _emergency() {
   esac
 
   hooks=(${(ok)functions[(I)_emergency_*]})
-  [[ $mode == off ]] && hooks=(${(Oa)hooks})
+  hooks=("${(@)hooks[@]:#_emergency_zim}")
+  if [[ $mode == on ]]; then
+    hooks=(_emergency_zim "${(@)hooks[@]}")
+  else
+    hooks=("${(@Oa)hooks[@]}" _emergency_zim)
+  fi
 
   [[ $mode == on ]] && typeset -gx COMPFUZOR_EMERGENCY=1
-  for hook in $hooks; do
+  for hook in "${(@)hooks[@]}"; do
     if ! "$hook" "$mode"; then
       print -u2 "emergency: $hook failed to turn $mode"
       result=1
+      [[ $mode == off ]] && break
     fi
   done
-  [[ $mode == off ]] && unset COMPFUZOR_EMERGENCY
+  [[ $mode == off && $result == 0 ]] && unset COMPFUZOR_EMERGENCY
 
-  if [[ $mode == off && ${_COMPFUZOR_EMERGENCY_COLD:-0} == 1 ]]; then
+  if [[ $mode == off && $result == 0 && ${_COMPFUZOR_EMERGENCY_COLD:-0} == 1 ]]; then
     unset _COMPFUZOR_EMERGENCY_COLD
-    if [[ $options[login] == on ]]; then
+    if [[ ${options[login]} == on ]]; then
       exec "${commands[zsh]:-${SHELL:-/bin/zsh}}" -l
     else
       exec "${commands[zsh]:-${SHELL:-/bin/zsh}}"

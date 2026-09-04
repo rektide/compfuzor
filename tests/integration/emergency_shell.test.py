@@ -20,7 +20,14 @@ def test_emergency_shell_mode() -> None:
         systemctl_log = directory / "systemctl.log"
         systemctl = directory / "systemctl"
         systemctl.write_text(
-            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$SYSTEMCTL_LOG\"\n",
+            """#!/bin/sh
+printf '%s\\n' "$*" >> "$SYSTEMCTL_LOG"
+if [ "$2" = start ] && [ -n "$SYSTEMCTL_FAIL_START_ONCE" ] \\
+  && [ ! -e "$SYSTEMCTL_FAIL_MARKER" ]; then
+  : > "$SYSTEMCTL_FAIL_MARKER"
+  exit 1
+fi
+""",
             encoding="utf-8",
         )
         systemctl.chmod(0o755)
@@ -31,6 +38,7 @@ def test_emergency_shell_mode() -> None:
                 "ATUIN_EMERGENCY_SYSTEMCTL": str(systemctl),
                 "ATUIN_MODULE": str(ATUIN_MODULE),
                 "SYSTEMCTL_LOG": str(systemctl_log),
+                "SYSTEMCTL_FAIL_MARKER": str(directory / "failed-start"),
                 "ZIM_MODULE": str(ZIM_MODULE),
             }
         )
@@ -49,11 +57,11 @@ _atuin_precmd() { :; }
 _atuin_preexec() { :; }
 _atuin_zshaddhistory() { :; }
 
-precmd_functions=(keep_precmd _atuin_precmd)
-preexec_functions=(keep_preexec _atuin_preexec)
+precmd_functions=(_atuin_precmd keep_precmd)
+preexec_functions=(_atuin_preexec keep_preexec)
 chpwd_functions=(keep_chpwd)
 periodic_functions=(keep_periodic)
-zshaddhistory_functions=(keep_history _atuin_zshaddhistory)
+zshaddhistory_functions=(_atuin_zshaddhistory keep_history)
 zshexit_functions=(keep_exit)
 ZSH_AUTOSUGGEST_STRATEGY=(atuin match_prev_cmd atuin)
 ZSH_HIGHLIGHT_HIGHLIGHTERS=(main brackets)
@@ -72,7 +80,9 @@ source "$ATUIN_MODULE"
 source "$ZIM_MODULE"
 
 [[ $(_emergency status) == 'emergency: off' ]]
+setopt ksharrays
 _emergency on
+unsetopt ksharrays
 _emergency on
 
 [[ $COMPFUZOR_EMERGENCY == 1 ]]
@@ -101,11 +111,11 @@ _emergency off
 [[ $PROMPT2 == 'rich continue ' && $HISTFILE == /tmp/compfuzor-history ]]
 [[ $options[correct] == on && $options[correctall] == on ]]
 [[ $options[hashlistall] == on ]]
-[[ ${(j:,:)precmd_functions} == keep_precmd,_atuin_precmd ]]
-[[ ${(j:,:)preexec_functions} == keep_preexec,_atuin_preexec ]]
+[[ ${(j:,:)precmd_functions} == _atuin_precmd,keep_precmd ]]
+[[ ${(j:,:)preexec_functions} == _atuin_preexec,keep_preexec ]]
 [[ ${(j:,:)chpwd_functions} == keep_chpwd ]]
 [[ ${(j:,:)periodic_functions} == keep_periodic ]]
-[[ ${(j:,:)zshaddhistory_functions} == keep_history,_atuin_zshaddhistory ]]
+[[ ${(j:,:)zshaddhistory_functions} == _atuin_zshaddhistory,keep_history ]]
 [[ ${(j:,:)zshexit_functions} == keep_exit ]]
 [[ ${(j:,:)ZSH_HIGHLIGHT_HIGHLIGHTERS} == main,brackets ]]
 [[ ${(j:,:)ZSH_AUTOSUGGEST_STRATEGY} == atuin,match_prev_cmd,atuin ]]
@@ -113,6 +123,19 @@ _emergency off
 [[ $(bindkey '^R') == *'clear-screen' ]]
 [[ ${(j:,:)probe_calls} == on,on,off ]]
 [[ $(_emergency status) == 'emergency: off' ]]
+
+export SYSTEMCTL_FAIL_START_ONCE=1
+_emergency on
+if _emergency off; then
+  print -u2 'failed Atuin restart incorrectly reported success'
+  exit 1
+fi
+[[ $COMPFUZOR_EMERGENCY == 1 ]]
+[[ $PROMPT == 'emergency:%~%# ' ]]
+_emergency off
+[[ -z ${COMPFUZOR_EMERGENCY+x} ]]
+[[ $PROMPT == 'rich prompt ' ]]
+[[ ${(j:,:)probe_calls} == on,on,off,on,off,off ]]
 """
 
         result = subprocess.run(
@@ -130,6 +153,9 @@ _emergency off
         assert calls == [
             "--user stop --no-block atuin-daemon.service atuin-daemon.socket",
             "--user stop --no-block atuin-daemon.service atuin-daemon.socket",
+            "--user start --no-block atuin-daemon.socket",
+            "--user stop --no-block atuin-daemon.service atuin-daemon.socket",
+            "--user start --no-block atuin-daemon.socket",
             "--user start --no-block atuin-daemon.socket",
         ]
 
