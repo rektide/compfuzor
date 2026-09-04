@@ -1,5 +1,14 @@
 # Atuin's contribution to Compfuzor's reversible emergency shell mode.
 
+typeset _compfuzor_emergency_hook_file=${${(%):-%x}:A}
+typeset -a _compfuzor_emergency_hook_files=(
+  "${(@s.:.)${COMPFUZOR_EMERGENCY_HOOKS:-}}"
+)
+if (( ! ${_compfuzor_emergency_hook_files[(Ie)$_compfuzor_emergency_hook_file]} )); then
+  typeset -gx COMPFUZOR_EMERGENCY_HOOKS="${COMPFUZOR_EMERGENCY_HOOKS:+${COMPFUZOR_EMERGENCY_HOOKS}:}${_compfuzor_emergency_hook_file}"
+fi
+unset _compfuzor_emergency_hook_file _compfuzor_emergency_hook_files
+
 _emergency_atuin() {
   emulate -L zsh
   local mode=${1:?emergency mode must be on or off}

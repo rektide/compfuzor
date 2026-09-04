@@ -2,6 +2,21 @@
 
 _compfuzor_emergency_noop() { :; }
 
+_compfuzor_emergency_load_hooks() {
+  (( ${+_COMPFUZOR_EMERGENCY_HOOKS_LOADED} )) && return 0
+
+  local hook_file
+  local -i result=0
+  local -a hook_files=("${(@s.:.)${COMPFUZOR_EMERGENCY_HOOKS:-}}")
+
+  for hook_file in "${(@)hook_files[@]}"; do
+    [[ -z $hook_file ]] && continue
+    source "$hook_file" || result=1
+  done
+  (( result == 0 )) && typeset -g _COMPFUZOR_EMERGENCY_HOOKS_LOADED=1
+  return $result
+}
+
 _emergency_zim() {
   local mode=${1:?emergency mode must be on or off}
 
@@ -136,6 +151,12 @@ _emergency() {
       return 2
       ;;
   esac
+
+  if [[ ${_COMPFUZOR_EMERGENCY_COLD:-0} == 1 ]] \
+    && ! _compfuzor_emergency_load_hooks; then
+    result=1
+    [[ $mode == off ]] && return $result
+  fi
 
   hooks=(${(ok)functions[(I)_emergency_*]})
   hooks=("${(@)hooks[@]:#_emergency_zim}")

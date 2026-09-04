@@ -136,6 +136,20 @@ _emergency off
 [[ -z ${COMPFUZOR_EMERGENCY+x} ]]
 [[ $PROMPT == 'rich prompt ' ]]
 [[ ${(j:,:)probe_calls} == on,on,off,on,off,off ]]
+
+typeset -a registered_hooks=("${(@s.:.)COMPFUZOR_EMERGENCY_HOOKS}")
+(( ${registered_hooks[(Ie)$ATUIN_MODULE]} ))
+unfunction _emergency_atuin
+unset _COMPFUZOR_EMERGENCY_HOOKS_LOADED
+typeset -g _COMPFUZOR_EMERGENCY_COLD=1
+typeset -gx COMPFUZOR_EMERGENCY=1
+source "$ZIM_MODULE"
+(( ${+functions[_emergency_atuin]} ))
+[[ $PROMPT == 'emergency:%~%# ' ]]
+typeset -g _COMPFUZOR_EMERGENCY_COLD=0
+_emergency off
+[[ -z ${COMPFUZOR_EMERGENCY+x} ]]
+[[ ${(j:,:)probe_calls} == on,on,off,on,off,off,on,off ]]
 """
 
         result = subprocess.run(
@@ -156,6 +170,8 @@ _emergency off
             "--user start --no-block atuin-daemon.socket",
             "--user stop --no-block atuin-daemon.service atuin-daemon.socket",
             "--user start --no-block atuin-daemon.socket",
+            "--user start --no-block atuin-daemon.socket",
+            "--user stop --no-block atuin-daemon.service atuin-daemon.socket",
             "--user start --no-block atuin-daemon.socket",
         ]
 
