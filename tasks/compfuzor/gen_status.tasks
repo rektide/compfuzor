@@ -1,24 +1,17 @@
 ---
 # gen_status.tasks -- assemble the STATUSES reporter list and merge the status
-# subsystem's contrib (the status.sh orchestrator + the status-proc.sh /
-# status-dirs.sh builtins + ENV that propagates STATUS_DIRS / STATUS_DIRS_SUDO
-# / PROC_STATUS_SCOPES colon-joined to bins).
+# subsystem's contrib (the status.sh orchestrator, optional status-dirs.sh,
+# and ENV that propagates STATUS_DIRS / STATUS_DIRS_SUDO to bins).
 #
 # Runs after gen_kernel, which appends the kernel reporters (status-sysctl.ts /
 # status-modules.ts / status-sysfs.ts) to STATUSES for active leaves. This file
-# appends status-dirs.sh when STATUS_DIRS / STATUS_DIRS_SUDO are declared,
-# always appends status-proc.sh for an active status subsystem (ambient
-# cgroup-scoped /proc counter rollup; ~seconds for one /proc pass), then
-# merges contrib. status.sh bakes the final STATUSES list in at render time.
+# appends status-dirs.sh when STATUS_DIRS / STATUS_DIRS_SUDO are declared, then
+# merges contrib. Proc-backed leaves are selected by gen_status_proc before
+# this compositor runs. status.sh bakes the final STATUSES list at render time.
 
 - name: "Compfuzor: register status-dirs reporter"
   set_fact:
     STATUSES: "{{ STATUSES | merge_list(['status-dirs.sh'] if (STATUS_DIRS is deftruthy or STATUS_DIRS_SUDO is deftruthy) else [], preset='append') }}"
-
-- name: "Compfuzor: register status-proc reporter"
-  set_fact:
-    STATUSES: "{{ STATUSES | merge_list(['status-proc.sh'], preset='append') }}"
-  when: lookup('subsys', id='status', get='active', default=false) | bool
 
 - name: "Compfuzor: synthesize status artifacts"
   set_fact:

@@ -105,6 +105,9 @@
     LINKS_BYPASS is deffalsy and
     (LINKS is deftruthy or _ARTIFACTS | artifacts_have_links)
   tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_status_proc.tasks
+  when: STATUS_PROC is defined
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_status.tasks
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_bins.tasks

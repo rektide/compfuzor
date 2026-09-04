@@ -717,21 +717,74 @@ SUBSYSTEM:
           dest: "{{DIR}}/README.md"
           content: "{{ README }}"
 
+  # Proc-backed status leaves select their own typed rows from STATUS_PROC.
+  # Each leaf contributes one reporter that batches every matching row.
+  status_proc_mainpid_env:
+    domain: status
+    requested: >-
+      {{
+        STATUS_PROC is sequence
+        and STATUS_PROC is not string
+        and (
+          STATUS_PROC
+          | selectattr('check', 'defined')
+          | selectattr('check', 'equalto', 'mainpid-env')
+          | list
+          | length
+        ) > 0
+      }}
+    bypassed: "{{ STATUS_PROC_BYPASS is deftruthy }}"
+    contrib:
+      BINS:
+        - name: status-mainpid-env.sh
+          src: ../status/status-mainpid-env.sh
+          basedir: false
+          status_proc_checks: >-
+            {{
+              STATUS_PROC
+              | selectattr('check', 'equalto', 'mainpid-env')
+              | list
+            }}
+      STATUSES: [status-mainpid-env.sh]
+
+  status_proc_exe_current:
+    domain: status
+    requested: >-
+      {{
+        STATUS_PROC is sequence
+        and STATUS_PROC is not string
+        and (
+          STATUS_PROC
+          | selectattr('check', 'defined')
+          | selectattr('check', 'equalto', 'exe-current')
+          | list
+          | length
+        ) > 0
+      }}
+    bypassed: "{{ STATUS_PROC_BYPASS is deftruthy }}"
+    contrib:
+      BINS:
+        - name: status-exe-current.sh
+          src: ../status/status-exe-current.sh
+          basedir: false
+          status_proc_checks: >-
+            {{
+              STATUS_PROC
+              | selectattr('check', 'equalto', 'exe-current')
+              | list
+            }}
+      STATUSES: [status-exe-current.sh]
+
   status:
     # requested when dir dumps are declared, or any subsystem contributed a
-    # reporter to STATUSES (gen_kernel appends status-sysctl.ts /
-    # status-modules.ts / status-sysfs.ts for active kernel leaves).
+    # reporter to STATUSES (gen_kernel and gen_status_proc append their leaves
+    # before the status parent is resolved).
     requested: "{{ (STATUS_DIRS is deftruthy) or (STATUS_DIRS_SUDO is deftruthy) or ((STATUSES | default([])) | length > 0) }}"
     contrib:
-      # status-proc.sh ships unconditionally: its default scope set (the
-      # user manager's active slices) needs no declaration; playbooks that
-      # want their own units scoped set PROC_STATUS_SCOPES (list of user
-      # units / @user / @slices), propagated colon-joined below.
-      BINS: "{{ [ {'name': 'status.sh', 'src': '../status/status.sh', 'basedir': false}, {'name': 'status-proc.sh', 'src': '../status/status-proc.sh', 'basedir': false} ] + ([ {'name': 'status-dirs.sh', 'src': '../status/status-dirs.sh', 'basedir': false} ] if (STATUS_DIRS is deftruthy or STATUS_DIRS_SUDO is deftruthy) else []) }}"
+      BINS: "{{ [ {'name': 'status.sh', 'src': '../status/status.sh', 'basedir': false} ] + ([ {'name': 'status-dirs.sh', 'src': '../status/status-dirs.sh', 'basedir': false} ] if (STATUS_DIRS is deftruthy or STATUS_DIRS_SUDO is deftruthy) else []) }}"
       ENV:
         STATUS_DIRS: "{{ STATUS_DIRS | join2(':') }}"
         STATUS_DIRS_SUDO: "{{ STATUS_DIRS_SUDO | join2(':') }}"
-        PROC_STATUS_SCOPES: "{{ PROC_STATUS_SCOPES | join2(':') }}"
 
   # Vars-phase subsystem (NOT a gen_* one): a service declares SYSTEMD_ENV
   # (mapping of VAR -> value) to publish those vars to the systemd manager on
