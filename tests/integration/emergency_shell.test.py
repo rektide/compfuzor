@@ -70,17 +70,21 @@ PROMPT='rich prompt '
 RPROMPT='rich right'
 PROMPT2='rich continue '
 HISTFILE=/tmp/compfuzor-history
+bindkey -v
 bindkey '^R' clear-screen
+bindkey -N compfuzor-test
+bindkey -M compfuzor-test '^X' clear-screen
 setopt correct correctall hashlistall
 
 typeset -ga probe_calls=()
 _emergency_probe() { probe_calls+=("$1"); }
 
+setopt ksharrays
+source "$ATUIN_MODULE"
 source "$ATUIN_MODULE"
 source "$ZIM_MODULE"
 
 [[ $(_emergency status) == 'emergency: off' ]]
-setopt ksharrays
 _emergency on
 unsetopt ksharrays
 _emergency on
@@ -121,6 +125,8 @@ _emergency off
 [[ ${(j:,:)ZSH_AUTOSUGGEST_STRATEGY} == atuin,match_prev_cmd,atuin ]]
 [[ $_ZSH_AUTOSUGGEST_DISABLED == preserve ]]
 [[ $(bindkey '^R') == *'clear-screen' ]]
+[[ $(bindkey -lL) == *'bindkey -A viins main'* ]]
+[[ $(bindkey -M compfuzor-test '^X') == *'clear-screen' ]]
 [[ ${(j:,:)probe_calls} == on,on,off ]]
 [[ $(_emergency status) == 'emergency: off' ]]
 
@@ -139,6 +145,7 @@ _emergency off
 
 typeset -a registered_hooks=("${(@s.:.)COMPFUZOR_EMERGENCY_HOOKS}")
 (( ${registered_hooks[(Ie)$ATUIN_MODULE]} ))
+(( ${#registered_hooks[@]} == 1 ))
 unfunction _emergency_atuin
 unset _COMPFUZOR_EMERGENCY_HOOKS_LOADED
 typeset -g _COMPFUZOR_EMERGENCY_COLD=1

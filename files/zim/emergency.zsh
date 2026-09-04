@@ -2,6 +2,16 @@
 
 _compfuzor_emergency_noop() { :; }
 
+_compfuzor_emergency_dump_bindings() {
+  local keymap
+  local -a keymaps=("${(@f)$(bindkey -l)}")
+
+  bindkey -lL
+  for keymap in "${(@)keymaps[@]}"; do
+    bindkey -L -M "$keymap"
+  done
+}
+
 _compfuzor_emergency_load_hooks() {
   (( ${+_COMPFUZOR_EMERGENCY_HOOKS_LOADED} )) && return 0
 
@@ -39,7 +49,7 @@ _emergency_zim() {
         typeset -g _COMPFUZOR_EMERGENCY_CORRECT=${options[correct]}
         typeset -g _COMPFUZOR_EMERGENCY_CORRECT_ALL=${options[correctall]}
         typeset -g _COMPFUZOR_EMERGENCY_HASH_LIST_ALL=${options[hashlistall]}
-        typeset -g _COMPFUZOR_EMERGENCY_BINDINGS="$(bindkey -L)"
+        typeset -g _COMPFUZOR_EMERGENCY_BINDINGS="$(_compfuzor_emergency_dump_bindings)"
         typeset -ga _COMPFUZOR_EMERGENCY_PRECMD=("${(@)precmd_functions[@]}")
         typeset -ga _COMPFUZOR_EMERGENCY_PREEXEC=("${(@)preexec_functions[@]}")
         typeset -ga _COMPFUZOR_EMERGENCY_CHPWD=("${(@)chpwd_functions[@]}")

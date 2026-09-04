@@ -4,10 +4,19 @@ typeset _compfuzor_emergency_hook_file=${${(%):-%x}:A}
 typeset -a _compfuzor_emergency_hook_files=(
   "${(@s.:.)${COMPFUZOR_EMERGENCY_HOOKS:-}}"
 )
-if (( ! ${_compfuzor_emergency_hook_files[(Ie)$_compfuzor_emergency_hook_file]} )); then
+typeset _compfuzor_emergency_existing_hook
+typeset -i _compfuzor_emergency_hook_registered=0
+for _compfuzor_emergency_existing_hook in "${(@)_compfuzor_emergency_hook_files[@]}"; do
+  if [[ $_compfuzor_emergency_existing_hook == $_compfuzor_emergency_hook_file ]]; then
+    _compfuzor_emergency_hook_registered=1
+    break
+  fi
+done
+if (( ! _compfuzor_emergency_hook_registered )); then
   typeset -gx COMPFUZOR_EMERGENCY_HOOKS="${COMPFUZOR_EMERGENCY_HOOKS:+${COMPFUZOR_EMERGENCY_HOOKS}:}${_compfuzor_emergency_hook_file}"
 fi
-unset _compfuzor_emergency_hook_file _compfuzor_emergency_hook_files
+unset _compfuzor_emergency_existing_hook _compfuzor_emergency_hook_file
+unset _compfuzor_emergency_hook_files _compfuzor_emergency_hook_registered
 
 _emergency_atuin() {
   emulate -L zsh
