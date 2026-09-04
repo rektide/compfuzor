@@ -78,17 +78,20 @@ bindkey -A compfuzor-test alternate-test
 setopt correct correctall hashlistall
 
 typeset -ga probe_calls=()
-_emergency_probe() { probe_calls+=("$1"); }
+_emergency_probe_on() { probe_calls+=(on); }
+_emergency_probe_off() { probe_calls+=(off); }
 
 setopt ksharrays
 source "$ATUIN_MODULE"
 source "$ATUIN_MODULE"
 source "$ZIM_MODULE"
+unsetopt ksharrays
 
-[[ $(_emergency status) == 'emergency: off' ]]
+[[ $(_emergency status) == $'emergency: off\n  atuin: off\n  probe: off\n  zim: off' ]]
+
+setopt ksharrays
 _emergency on
 unsetopt ksharrays
-_emergency on
 
 [[ $COMPFUZOR_EMERGENCY == 1 ]]
 [[ ${(t)COMPFUZOR_EMERGENCY} == *export* ]]
@@ -107,7 +110,11 @@ _emergency on
 [[ ${(j:,:)ZSH_AUTOSUGGEST_STRATEGY} == match_prev_cmd ]]
 [[ $(bindkey '^I') == *'_compfuzor_emergency_noop' ]]
 [[ $(bindkey '^R') == *'history-incremental-search-backward' ]]
-[[ $(_emergency status) == 'emergency: on' ]]
+[[ $(_emergency status) == $'emergency: on\n  atuin: on\n  probe: on\n  zim: on' ]]
+
+# repeated on is a state no-op: no actions re-run
+_emergency on
+[[ ${(j:,:)probe_calls} == on ]]
 
 _emergency off
 
@@ -129,9 +136,33 @@ _emergency off
 [[ $(bindkey -lL) == *'bindkey -A viins main'* ]]
 [[ $(bindkey -M compfuzor-test '^X') == *'clear-screen' ]]
 [[ $(bindkey -M alternate-test '^X') == *'clear-screen' ]]
-[[ ${(j:,:)probe_calls} == on,on,off ]]
-[[ $(_emergency status) == 'emergency: off' ]]
+[[ ${(j:,:)probe_calls} == on,off ]]
+[[ $(_emergency status) == $'emergency: off\n  atuin: off\n  probe: off\n  zim: off' ]]
 
+# per-subsystem control without engaging the whole-shell mode
+_emergency atuin on
+[[ -z ${COMPFUZOR_EMERGENCY+x} ]]
+[[ $(_emergency atuin status) == 'atuin: on' ]]
+[[ $(_emergency status) == $'emergency: off\n  atuin: on\n  probe: off\n  zim: off' ]]
+_emergency atuin off
+[[ $(_emergency atuin status) == 'atuin: off' ]]
+
+# unknown subsystem is rejected with the available names
+if _emergency bogus on; then
+  print -u2 'unknown subsystem unexpectedly accepted'
+  exit 1
+fi
+
+# global transitions only act on subsystems not already in the target state
+_emergency atuin on
+_emergency on
+[[ ${(j:,:)probe_calls} == on,off,on ]]
+_emergency off
+[[ -z ${COMPFUZOR_EMERGENCY+x} ]]
+[[ $PROMPT == 'rich prompt ' ]]
+[[ ${(j:,:)probe_calls} == on,off,on,off ]]
+
+# a failed off stays engaged per-subsystem and retries cleanly
 export SYSTEMCTL_FAIL_START_ONCE=1
 _emergency on
 if _emergency off; then
@@ -140,25 +171,38 @@ if _emergency off; then
 fi
 [[ $COMPFUZOR_EMERGENCY == 1 ]]
 [[ $PROMPT == 'emergency:%~%# ' ]]
+[[ $(_emergency atuin status) == 'atuin: on' ]]
 _emergency off
 [[ -z ${COMPFUZOR_EMERGENCY+x} ]]
 [[ $PROMPT == 'rich prompt ' ]]
-[[ ${(j:,:)probe_calls} == on,on,off,on,off,off ]]
+[[ ${(j:,:)probe_calls} == on,off,on,off,on,off ]]
 
+# cold shell: registry reload engages subsystem hooks, off restores + execs
 typeset -a registered_hooks=("${(@s.:.)COMPFUZOR_EMERGENCY_HOOKS}")
 (( ${registered_hooks[(Ie)$ATUIN_MODULE]} ))
 (( ${#registered_hooks[@]} == 1 ))
-unfunction _emergency_atuin
+unfunction _emergency_atuin_on _emergency_atuin_off
+unset _COMPFUZOR_EMERGENCY_ATUIN_ACTIVE
+unset _COMPFUZOR_EMERGENCY_STATE
 unset _COMPFUZOR_EMERGENCY_HOOKS_LOADED
 typeset -g _COMPFUZOR_EMERGENCY_COLD=1
 typeset -gx COMPFUZOR_EMERGENCY=1
 source "$ZIM_MODULE"
-(( ${+functions[_emergency_atuin]} ))
+(( ${+functions[_emergency_atuin_on]} ))
 [[ $PROMPT == 'emergency:%~%# ' ]]
 typeset -g _COMPFUZOR_EMERGENCY_COLD=0
 _emergency off
 [[ -z ${COMPFUZOR_EMERGENCY+x} ]]
-[[ ${(j:,:)probe_calls} == on,on,off,on,off,off,on,off ]]
+[[ $PROMPT == 'rich prompt ' ]]
+[[ ${(j:,:)probe_calls} == on,off,on,off,on,off,on,off ]]
+
+# subsystem toggle flips one entry without touching the others
+_emergency probe toggle
+[[ $(_emergency probe status) == 'probe: on' ]]
+[[ ${(j:,:)probe_calls} == on,off,on,off,on,off,on,off,on ]]
+_emergency probe toggle
+[[ $(_emergency probe status) == 'probe: off' ]]
+[[ ${(j:,:)probe_calls} == on,off,on,off,on,off,on,off,on,off ]]
 """
 
         result = subprocess.run(
@@ -175,6 +219,9 @@ _emergency off
         calls = systemctl_log.read_text(encoding="utf-8").splitlines()
         assert calls == [
             "--user stop --no-block atuin-daemon.service atuin-daemon.socket",
+            "--user start --no-block atuin-daemon.socket",
+            "--user stop --no-block atuin-daemon.service atuin-daemon.socket",
+            "--user start --no-block atuin-daemon.socket",
             "--user stop --no-block atuin-daemon.service atuin-daemon.socket",
             "--user start --no-block atuin-daemon.socket",
             "--user stop --no-block atuin-daemon.service atuin-daemon.socket",

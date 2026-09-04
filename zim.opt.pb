@@ -55,7 +55,7 @@
       - name: emergency
         source: emergency.zsh
         phase: 99
-        comment: Reversible low-I/O shell mode; `_emergency` runs every registered `_emergency_<subsystem>` hook.
+        comment: Reversible low-I/O shell mode; `_emergency` dispatches `_emergency_<name>_on/_off` pairs, globally or per subsystem (`_emergency atuin off`).
 
       - source: https://github.com/rektide/zim-mise
         channel: zimenv

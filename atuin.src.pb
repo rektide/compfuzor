@@ -70,7 +70,7 @@
       - name: atuin-emergency
         source: emergency.zsh
         phase: 56
-        comment: Removes Atuin shell hooks and stops its socket/service while Compfuzor emergency mode is active.
+        comment: Atuin emergency actions (`_emergency_atuin_on/off`); daemon stop/start plus autosuggest strategy, state held by the zim emergency dispatcher.
     STATUSES:
       - status-atuin.sh
     ETC_FILES:
