@@ -16,7 +16,7 @@ _ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _error(message: str) -> None:
-    raise AnsibleFilterError("status_proc_publish: {}".format(message))
+    raise AnsibleFilterError("status_proc_compile: {}".format(message))
 
 
 def _mapping(value, label: str) -> dict:
