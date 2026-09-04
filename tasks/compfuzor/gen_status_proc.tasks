@@ -1,12 +1,9 @@
 ---
-# Merge the proc-backed status leaves published by sub_status_proc. The leaves
-# contribute only BINS and STATUSES; gen_status remains the final compositor.
+# Merge the proc-backed provider published by sub_status_proc. gen_status
+# remains the final status.sh compositor.
 
-- name: "Compfuzor: synthesize proc-backed status leaves"
+- name: "Compfuzor: synthesize proc-backed status artifacts"
   set_fact:
-    BINS: "{{ lookup('merge_subsys', id=_status_proc_kind.value.subsystem, contrib='BINS') }}"
-    STATUSES: "{{ lookup('merge_subsys', id=_status_proc_kind.value.subsystem, contrib='STATUSES') }}"
-  loop: "{{ _STATUS_PROC_KINDS | dict2items }}"
-  loop_control:
-    loop_var: _status_proc_kind
-  when: lookup('subsys', id=_status_proc_kind.value.subsystem, domain='status', get='active', default=false) | bool
+    BINS: "{{ lookup('merge_subsys', id='status_proc', contrib='BINS') }}"
+    STATUSES: "{{ lookup('merge_subsys', id='status_proc', contrib='STATUSES') }}"
+  when: lookup('subsys', id='status_proc', domain='status', get='active', default=false) | bool

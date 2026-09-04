@@ -176,16 +176,13 @@ _ext: "{{ '.' + item.ext if item.ext|default(False) else '' }}"
 DEFAULT_HELPERS: ["env", "setopts", "loud"]
 CONFIG_DISABLED_SUFFIX: .disabled
 
-# Proc-backed status kind registry. sub_status_proc uses this single map to
-# publish one internal subsystem leaf per check kind; gen_status_proc uses the
-# same order to merge active reporter contributions.
+# Proc-backed status kind registry. sub_status_proc uses this single ordered map
+# to validate check support and compile the selected reporter contributions.
 _STATUS_PROC_KINDS:
   mainpid-env:
-    subsystem: status_proc_mainpid_env
     reporter: status-mainpid-env.sh
     src: ../status/status-mainpid-env.sh
   exe-current:
-    subsystem: status_proc_exe_current
     reporter: status-exe-current.sh
     src: ../status/status-exe-current.sh
 

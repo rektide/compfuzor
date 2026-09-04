@@ -1,21 +1,40 @@
 ---
-# Compile the broad STATUS_PROC provider collection into internal status leaves.
+# Compile the broad STATUS_PROC provider collection into one subsystem record.
 
-- name: "Compfuzor: publish STATUS_PROC provider and leaves"
+- name: "Compfuzor: publish STATUS_PROC provider"
   set_fact:
     SUBSYSTEM: >-
       {{
         SUBSYSTEM
-        | status_proc_publish(
-            _status_proc_input,
-            _STATUS_PROC_KINDS,
-            SYSTEMD_SCOPE | default('system')
+        | subsystem_publish(
+            'status_proc',
+            {
+              'subsystem': 'status_proc',
+              'domain': 'status',
+              'status': 'active',
+              'requested': true,
+              'bypassed': false,
+              'valid': true,
+              'active': true,
+              'reasons': [],
+              'spec': _status_proc_compiled.spec,
+              'contrib': _status_proc_compiled.contrib,
+            }
           )
       }}
+  when: _status_proc_compiled.spec | length > 0
   vars:
     _status_proc_input: >-
       {{
         []
         if (STATUS_PROC_BYPASS is deftruthy or STATUS_BYPASS is deftruthy)
         else STATUS_PROC
+      }}
+    _status_proc_compiled: >-
+      {{
+        _status_proc_input
+        | status_proc_compile(
+            _STATUS_PROC_KINDS,
+            SYSTEMD_SCOPE | default('system')
+          )
       }}

@@ -1,4 +1,4 @@
-"""Compile typed STATUS_PROC declarations into internal subsystem leaves."""
+"""Compile typed STATUS_PROC declarations into one provider contract."""
 
 from __future__ import annotations
 
@@ -25,12 +25,40 @@ def _mapping(value, label: str) -> dict:
     return dict(value)
 
 
+def _validate_mainpid_env(row: dict) -> None:
+    expected = row.get("expected")
+    if not isinstance(expected, collections.abc.Mapping) or not expected:
+        _error("STATUS_PROC mainpid-env requires a non-empty expected mapping")
+    for key, expected_value in expected.items():
+        if not isinstance(key, str) or not _ENV_NAME.fullmatch(key):
+            _error(
+                "STATUS_PROC mainpid-env contains an invalid environment variable name"
+            )
+        if not isinstance(expected_value, str):
+            _error("STATUS_PROC mainpid-env expected values must be strings")
+
+
+def _validate_exe_current(row: dict) -> None:
+    expected = row.get("expected")
+    if not isinstance(expected, str) or not expected.startswith("/"):
+        _error("STATUS_PROC exe-current requires an absolute expected executable path")
+
+
+_VALIDATORS = {
+    "mainpid-env": _validate_mainpid_env,
+    "exe-current": _validate_exe_current,
+}
+
+
 @accept_args_markers
-def publish_status_proc(subsystems, declarations, kinds, default_manager="system"):
-    """Validate STATUS_PROC and publish one subsystem leaf per present kind."""
-    subsystems = _mapping(raw_copy_template_data(subsystems), "SUBSYSTEM")
+def compile_status_proc(declarations, kinds, default_manager="system"):
+    """Validate and normalize STATUS_PROC, then build its contributions."""
     kinds = _mapping(raw_copy_template_data(kinds), "STATUS_PROC kind registry")
     declarations = raw_copy_template_data(declarations)
+
+    for check in kinds:
+        if check not in _VALIDATORS:
+            _error("STATUS_PROC kind '{}' has no validator".format(check))
 
     if isinstance(declarations, (str, bytes)) or not isinstance(
         declarations, collections.abc.Sequence
@@ -60,69 +88,43 @@ def publish_status_proc(subsystems, declarations, kinds, default_manager="system
         if manager not in ("system", "user"):
             _error("STATUS_PROC manager must resolve to system or user")
 
-        expected = row.get("expected")
-        if check == "mainpid-env":
-            if not isinstance(expected, collections.abc.Mapping) or not expected:
-                _error("STATUS_PROC mainpid-env requires a non-empty expected mapping")
-            for key, expected_value in expected.items():
-                if not isinstance(key, str) or not _ENV_NAME.fullmatch(key):
-                    _error(
-                        "STATUS_PROC mainpid-env contains an invalid environment variable name"
-                    )
-                if not isinstance(expected_value, str):
-                    _error("STATUS_PROC mainpid-env expected values must be strings")
-        elif check == "exe-current":
-            if not isinstance(expected, str) or not expected.startswith("/"):
-                _error(
-                    "STATUS_PROC exe-current requires an absolute expected executable path"
-                )
+        _VALIDATORS[check](row)
 
         row["manager"] = manager
         normalized.append(row)
 
     if not normalized:
-        return subsystems
+        return {"spec": [], "contrib": {"BINS": [], "STATUSES": []}}
 
-    provider = _mapping(subsystems.get("status_proc", {}), "SUBSYSTEM.status_proc")
-    provider.update({"domain": "status", "requested": True, "spec": normalized})
-    subsystems["status_proc"] = provider
-
+    bins = []
+    statuses = []
     for check, raw_kind in kinds.items():
         selected = [row for row in normalized if row["check"] == check]
         if not selected:
             continue
         kind = _mapping(raw_kind, "STATUS_PROC kind '{}'".format(check))
-        subsystem_id = kind.get("subsystem")
         reporter = kind.get("reporter")
         source = kind.get("src")
-        if not all(isinstance(value, str) and value for value in (subsystem_id, reporter, source)):
+        if not all(isinstance(value, str) and value for value in (reporter, source)):
             _error("STATUS_PROC kind '{}' is incomplete".format(check))
 
-        leaf = _mapping(subsystems.get(subsystem_id, {}), "SUBSYSTEM.{}".format(subsystem_id))
-        leaf.update(
+        bins.append(
             {
-                "domain": "status",
-                "requested": True,
-                "spec": selected,
-                "contrib": {
-                    "BINS": [
-                        {
-                            "name": reporter,
-                            "src": source,
-                            "basedir": False,
-                            "bypass": "STATUS_PROC",
-                            "status_proc_checks": selected,
-                        }
-                    ],
-                    "STATUSES": [reporter],
-                },
+                "name": reporter,
+                "src": source,
+                "basedir": False,
+                "bypass": "STATUS_PROC",
+                "status_proc_checks": selected,
             }
         )
-        subsystems[subsystem_id] = leaf
+        statuses.append(reporter)
 
-    return subsystems
+    return {
+        "spec": normalized,
+        "contrib": {"BINS": bins, "STATUSES": statuses},
+    }
 
 
 class FilterModule(object):
     def filters(self):
-        return {"status_proc_publish": publish_status_proc}
+        return {"status_proc_compile": compile_status_proc}

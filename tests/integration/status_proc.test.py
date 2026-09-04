@@ -27,6 +27,15 @@ def generate_status_proc(
     scenario = {"STATUS_PROC": status_proc, **(extra or {})}
     scenario_file.write_text(json.dumps(scenario), encoding="utf-8")
     (temporary / "files").symlink_to(ROOT / "files", target_is_directory=True)
+    task_dir = ROOT / "tasks" / "compfuzor"
+    sub_task = task_dir / "sub_status_proc.tasks"
+    gen_task = task_dir / "gen_status_proc.tasks"
+    status_task = task_dir / "gen_status.tasks"
+    bins_task = task_dir / "bins.tasks"
+    result_expression = (
+        "{{ {'bins': BINS, 'statuses': STATUSES, "
+        "'provider': SUBSYSTEM.status_proc | default({})} | to_nice_json }}"
+    )
 
     playbook = temporary / "generate.pb"
     playbook.write_text(
@@ -48,13 +57,13 @@ def generate_status_proc(
     STATUS_DIRS_SUDO: []
     SYSTEMD_SCOPE: system
   tasks:
-    - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'sub_status_proc.tasks')!r}
-    - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_status_proc.tasks')!r}
-    - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_status.tasks')!r}
-    - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'bins.tasks')!r}
+    - ansible.builtin.import_tasks: {str(sub_task)!r}
+    - ansible.builtin.import_tasks: {str(gen_task)!r}
+    - ansible.builtin.import_tasks: {str(status_task)!r}
+    - ansible.builtin.import_tasks: {str(bins_task)!r}
     - ansible.builtin.copy:
         dest: {str(result_file)!r}
-        content: "{{{{ {{'bins': BINS, 'statuses': STATUSES}} | to_nice_json }}}}"
+        content: {result_expression!r}
         mode: "0600"
 """,
         encoding="utf-8",
@@ -86,10 +95,14 @@ def generate_status_proc(
         )
 
     generated = json.loads(result_file.read_text(encoding="utf-8"))
-    generated["scripts"] = {
-        path.name: path.read_text(encoding="utf-8")
-        for path in (payload / "bin").iterdir()
-    } if (payload / "bin").is_dir() else {}
+    generated["scripts"] = (
+        {
+            path.name: path.read_text(encoding="utf-8")
+            for path in (payload / "bin").iterdir()
+        }
+        if (payload / "bin").is_dir()
+        else {}
+    )
     return generated
 
 
@@ -158,7 +171,7 @@ def test_status_proc_selects_and_batches_reporters() -> None:
         assert "status-proc.sh" not in by_name
 
         mainpid = by_name["status-mainpid-env.sh"]
-        assert mainpid["origin_subsystems"] == ["status_proc_mainpid_env"]
+        assert mainpid["origin_subsystems"] == ["status_proc"]
         assert mainpid["bypass_scopes"] == ["status"]
         assert [row["name"] for row in mainpid["status_proc_checks"]] == [
             "opencode-watchman-env",
@@ -166,10 +179,32 @@ def test_status_proc_selects_and_batches_reporters() -> None:
         ]
 
         executable = by_name["status-exe-current.sh"]
-        assert executable["origin_subsystems"] == ["status_proc_exe_current"]
+        assert executable["origin_subsystems"] == ["status_proc"]
         assert executable["bypass_scopes"] == ["status"]
         assert [row["name"] for row in executable["status_proc_checks"]] == [
             "opencode-executable"
+        ]
+
+        provider = generated["provider"]
+        assert {
+            "status": provider["status"],
+            "requested": provider["requested"],
+            "bypassed": provider["bypassed"],
+            "valid": provider["valid"],
+            "active": provider["active"],
+            "reasons": provider["reasons"],
+        } == {
+            "status": "active",
+            "requested": True,
+            "bypassed": False,
+            "valid": True,
+            "active": True,
+            "reasons": [],
+        }
+        assert [row["manager"] for row in provider["spec"]] == [
+            "user",
+            "user",
+            "system",
         ]
 
         scripts = generated["scripts"]
@@ -194,7 +229,12 @@ def test_status_proc_selects_and_batches_reporters() -> None:
 def test_status_proc_is_not_ambient() -> None:
     with tempfile.TemporaryDirectory(prefix="compfuzor-status-proc-empty-") as tmp:
         generated = generate_status_proc(Path(tmp), [])
-        assert generated == {"bins": [], "statuses": [], "scripts": {}}
+        assert generated == {
+            "bins": [],
+            "statuses": [],
+            "provider": {},
+            "scripts": {},
+        }
 
 
 def test_status_proc_provider_bypass_disables_all_checks() -> None:
@@ -220,7 +260,12 @@ def test_status_proc_provider_bypass_disables_all_checks() -> None:
                 status_proc,
                 extra={"STATUS_PROC_BYPASS": True},
             )
-            assert generated == {"bins": [], "statuses": [], "scripts": {}}
+            assert generated == {
+                "bins": [],
+                "statuses": [],
+                "provider": {},
+                "scripts": {},
+            }
 
 
 def test_status_proc_rejects_invalid_typed_fields() -> None:
@@ -246,6 +291,25 @@ def test_status_proc_rejects_invalid_typed_fields() -> None:
         ],
         "manager must resolve to system or user",
         extra={"SYSTEMD_SCOPE": "invalid"},
+    )
+    require_rejected_status_proc(
+        [
+            {
+                "name": "future-check",
+                "check": "future",
+                "unit": "demo.service",
+                "expected": "unused",
+            }
+        ],
+        "kind 'future' has no validator",
+        extra={
+            "_STATUS_PROC_KINDS": {
+                "future": {
+                    "reporter": "status-future.sh",
+                    "src": "../status/status-future.sh",
+                }
+            }
+        },
     )
 
 
