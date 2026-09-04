@@ -77,6 +77,28 @@
     _has_type: "{{ _unit_type in SYSTEMD_UNITTYPES }}"
     _separate_suffix: "{{ '-user' if _is_separate and _unit_scope == 'user' else '' }}"
     _unit_filename: "{{ _unit_name }}{{ _separate_suffix }}{{ '@' if SYSTEMD_INSTANCES is deftruthy else '' }}.{{ _unit_type }}"
+    # Unit aliases: a unit whose name carries the instance suffix (-git,
+    # -main, ...) gets an [Install] Alias= for the base name, so
+    # apt-cacher-rs-git.service is also reachable as apt-cacher-rs.service
+    # once enabled. SYSTEMD_ALIAS overrides the derived name (type suffix
+    # appended when missing); SYSTEMD_ALIAS: false opts out. Instanced (@)
+    # units never alias. Two deployments differing only by instance would
+    # fight over the base alias (systemd: last enable wins) -- opt one out.
+    _alias_base: >-
+      {%- set base = _unit_name -%}
+      {%- set base = base[:-5] if (_is_separate and _unit_scope == 'user' and base.endswith('-user')) else base -%}
+      {%- set base = base[:-(INSTANCE | length + 1)] if (INSTANCE is defined and base.endswith('-' ~ INSTANCE) and base | length > (INSTANCE | length + 1)) else base -%}
+      {{- base if base != _unit_name else '' }}
+    _alias_name: >-
+      {%- if SYSTEMD_ALIAS is defined -%}
+        {#- boolean false and string 'false' both mean opt out (extra-vars arrive as strings) -#}
+        {%- set control = (SYSTEMD_ALIAS | string) | lower -%}
+        {%- if control in ['', 'false', 'none'] -%}{{ '' }}
+        {%- else -%}{{ SYSTEMD_ALIAS if '.' in SYSTEMD_ALIAS else SYSTEMD_ALIAS ~ '.' ~ _unit_type }}
+        {%- endif -%}
+      {%- elif SYSTEMD_INSTANCES is deftruthy or not _alias_base -%}{{ '' }}
+      {%- else -%}{{ _alias_base ~ '.' ~ _unit_type }}
+      {%- endif -%}
     UNIT_TYPE: "{{ _unit_type }}"
     _raw_vars_base: "{{ (lookup('vars', SYSTEMD_VARS_ROOT, default={}) if SYSTEMD_VARS_ROOT is defined else {}) | combine_iff({'target': target}) }}"
     _raw_vars: "{{ _raw_vars_base | combine({'USERMODE': True}) if _is_separate and _unit_scope == 'user' else _raw_vars_base }}"
@@ -92,6 +114,18 @@
         {%- set user_vals = global_vals | combine(root_vals, recursive=True) -%}
         {%- set _ = merged.update({section_var: defaults | combine(user_vals, recursive=True)}) -%}
       {%- endfor -%}
+      {%- if _alias_name and 'SYSTEMD_INSTALLS' in merged -%}
+        {%- set install = merged['SYSTEMD_INSTALLS'] -%}
+        {%- set existing = install.get('Alias') -%}
+        {%- if existing is sameas false -%}
+          {#- explicit false: author suppressed aliases entirely -#}
+        {%- else -%}
+          {%- set existing_list = (existing if existing is sequence and existing is not string else [existing]) if existing else [] -%}
+          {%- if _alias_name not in existing_list -%}
+            {%- set _ = install.update({'Alias': existing_list + [_alias_name]}) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endif -%}
       {{ merged }}
     UNIT_VARS: "{{ _raw_vars | combine(_merged_sections) }}"
     _etc_file:
@@ -127,6 +161,21 @@
     _unit_name_key: "SYSTEMD_{{ _unit_type | upper }}"
     _unit_name_val: "{{ _root_data[_unit_name_key] | default(lookup('vars', _unit_name_key, default='')) }}"
     _unit_name: "{{ _unit_name_val if _unit_name_val and _unit_name_val not in [True, 'True'] else NAME }}"
+    _root_instances: "{{ _root_data.get('SYSTEMD_INSTANCES', SYSTEMD_INSTANCES | default(False)) }}"
+    # Same alias derivation as top-level units: strip the instance suffix,
+    # SYSTEMD_ALIAS in the root dict overrides/false opts out.
+    _alias_base: >-
+      {%- set base = _unit_name -%}
+      {%- set base = base[:-(INSTANCE | length + 1)] if (INSTANCE is defined and base.endswith('-' ~ INSTANCE) and base | length > (INSTANCE | length + 1)) else base -%}
+      {{- base if base != _unit_name else '' }}
+    _alias_name: >-
+      {%- set control = _root_data.get('SYSTEMD_ALIAS', SYSTEMD_ALIAS | default('')) -%}
+      {%- set control_word = (control | string) | lower -%}
+      {%- if control_word in ['', 'false', 'none'] -%}{{ '' }}
+      {%- elif control_word -%}{{ control if '.' in (control | string) else control ~ '.' ~ _unit_type }}
+      {%- elif _root_instances or not _alias_base -%}{{ '' }}
+      {%- else -%}{{ _alias_base ~ '.' ~ _unit_type }}
+      {%- endif -%}
     _unit_filename: "{{ _unit_name }}{{ '@' if UNIT_VARS.SYSTEMD_INSTANCES|def(SYSTEMD_INSTANCES, False) else '' }}.{{ _unit_type }}"
     _has_type_data: "{{ _root_data['SYSTEMD_' ~ _type_config.var_suffix] is defined or _root_data[_unit_name_key] is defined }}"
     UNIT_TYPE: "{{ _unit_type }}"
@@ -141,6 +190,18 @@
         {%- set user_vals = global_vals | combine(root_vals, recursive=True) -%}
         {%- set _ = merged.update({section_var: defaults | combine(user_vals, recursive=True)}) -%}
       {%- endfor -%}
+      {%- if _alias_name and 'SYSTEMD_INSTALLS' in merged -%}
+        {%- set install = merged['SYSTEMD_INSTALLS'] -%}
+        {%- set existing = install.get('Alias') -%}
+        {%- if existing is sameas false -%}
+          {#- explicit false: author suppressed aliases entirely -#}
+        {%- else -%}
+          {%- set existing_list = (existing if existing is sequence and existing is not string else [existing]) if existing else [] -%}
+          {%- if _alias_name not in existing_list -%}
+            {%- set _ = install.update({'Alias': existing_list + [_alias_name]}) -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endif -%}
       {{ merged }}
     UNIT_VARS: "{{ _root_data | combine(_merged_sections) }}"
     _etc_file:

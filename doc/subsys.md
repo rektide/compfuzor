@@ -501,6 +501,27 @@ with a real file is a `conflict` row, not silence), `audit` cross-checks
 deployments claiming the same system path, and `remove` uninstalls links
 with everything else.
 
+## Unit aliases
+
+A unit whose name carries the compfuzor instance suffix (`-git`, `-main`, …)
+automatically gets an `[Install] Alias=` for the base name:
+`apt-cacher-rs-git.service` is reachable as `apt-cacher-rs.service` once
+enabled (`systemctl status apt-cacher-rs` resolves). The alias materializes
+through `systemctl enable`, like every `[Install]` effect.
+
+- `SYSTEMD_ALIAS: <name>` overrides the derived alias (type suffix appended
+  when missing); `SYSTEMD_ALIAS: false` opts out — string `"false"` from
+  extra-vars is honored too.
+- Instanced (`@`) units never alias; `-user` separate-mode suffixes are
+  stripped alongside the instance suffix.
+- Explicit `SYSTEMD_INSTALLS.Alias` entries are kept and the derived alias
+  appended (deduped); `Alias: false` there suppresses aliasing entirely.
+
+Caveat: two deployments differing only by instance (a `-git` build and a
+`-main` package of the same software) both derive the same base alias —
+systemd resolves it to whichever enabled last. Opt one out with
+`SYSTEMD_ALIAS: false`.
+
 ## Python subsystem extensions
 
 ### `PYTHON_BUILD_COMMAND`
