@@ -13,6 +13,13 @@ set -e
 
 self_dir="{{DIR}}"
 
+# The env-export header only defaults $DIR when unset. Invoked from a
+# contributor's install-user-zimfw.sh, DIR still points at the contributor and
+# leaks into config-remote.ts/config.sh, which then resolve the contributor's
+# config.spec.json instead of the host's. This script is always host-scoped:
+# force DIR to the host deployment.
+export DIR="$self_dir"
+
 src_dir="${1:-$(pwd)}"
 remote="$self_dir/bin/config-remote.ts"
 
