@@ -3,17 +3,23 @@
   vars:
     TYPE: mise
     INSTANCE: main
-    SYSTEMD_SERVICE: mise-user-env
-    SYSTEMD_SCOPE: user
-    SYSTEMD_INSTALL: user
-    SYSTEMD_UNITS:
-      Before: default.target
-    SYSTEMD_SERVICES:
-      Type: oneshot
-      WorkingDirectory: "%h"
-      ExecStart: "{{DIR}}/bin/mise-systemd-env.sh{{ ' --path' if mise_user_env_path|default(False)|bool else '' }}"
-    SYSTEMD_INSTALLS:
-      WantedBy: default.target
+    # sysenv disabled 2026-09-05: the mise->systemd user environment bridge
+    # (mise-user-env oneshot pushing `mise env` via systemctl --user
+    # set-environment) was an ambient env channel competing with the zim
+    # module env (zim.opt.pb channels). Shells and services get their env
+    # from their own declared deployments again. Re-enable by uncommenting
+    # and re-running install-user + `systemctl --user enable --now`.
+    #SYSTEMD_SERVICE: mise-user-env
+    #SYSTEMD_SCOPE: user
+    #SYSTEMD_INSTALL: user
+    #SYSTEMD_UNITS:
+    #  Before: default.target
+    #SYSTEMD_SERVICES:
+    #  Type: oneshot
+    #  WorkingDirectory: "%h"
+    #  ExecStart: "{{DIR}}/bin/mise-systemd-env.sh{{ ' --path' if mise_user_env_path|default(False)|bool else '' }}"
+    #SYSTEMD_INSTALLS:
+    #  WantedBy: default.target
     # Zsh activation is owned by zim.opt.pb's zimenv channel. rektide/zim-mise
     # loads exactly once from ~/.zshenv: full activation for interactive shells,
     # shims only for non-interactive shells. Bash has no framework loader, so
@@ -31,7 +37,8 @@
     # via ENV_LIST, and systemd does no shell expansion -- deferred syntax
     # reaches mise as a literal string and panics its settings parser.
     mise_npm_package_manager: "pnpm"
-    mise_user_env_path: False
+    # (sysenv disabled 2026-09-05; only consumed by the mise-user-env ExecStart.)
+    #mise_user_env_path: False
     ENV_LIST:
       - bash_rc
       - bash_profile
