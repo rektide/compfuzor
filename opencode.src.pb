@@ -445,9 +445,18 @@
           # local keeps service-local.json, port 0xc0df, opencode-local.db,
           # inline sourcemaps, and disables the self-updater.
           export OPENCODE_CHANNEL=local
+          # Preview versions stamp YYYYMMDDHHMM per invocation, so separately
+          # invoked builds never agree and status-opencode-ok.sh flags the
+          # opencode2/opencode2-node pair as stale. Pin one stamp per run.
+          export OPENCODE_VERSION="0.0.0-local-$(date -u +%Y%m%d%H%M)"
           bun install --frozen-lockfile
+          # build.ts and build-node.ts each wipe their outdir unconditionally;
+          # running both against dist/ sequentially erases the first artifact.
+          # The node variant builds into a side outdir and merges in after.
           bun run --cwd packages/cli build -- --single --skip-install
-          bun run --cwd packages/cli build:node -- --single --skip-install
+          bun run --cwd packages/cli build:node -- --single --skip-install --outdir=dist.node
+          mv packages/cli/dist.node/cli-node-* packages/cli/dist/
+          rmdir packages/cli/dist.node
       - name: install.sh
         basedir: False
         content: |
