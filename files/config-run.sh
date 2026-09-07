@@ -4,12 +4,14 @@
 spec="$DIR/etc/config.spec.json"
 check=0
 quiet=0
+print=0
 target=""
 list=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --check) check=1 ;;
+    --stdout) print=1 ;;
     --list) list=1 ;;
     -q|--quiet) quiet=1 ;;
     --target) shift; target="${1:?--target requires a config name}" ;;
@@ -21,6 +23,11 @@ while [ "$#" -gt 0 ]; do
   esac
   shift
 done
+
+if [ "$print" = 1 ] && [ "$check" = 1 ]; then
+  printf '%s\n' '--stdout and --check are mutually exclusive' >&2
+  exit 2
+fi
 
 [ -f "$spec" ] || { printf 'missing config spec: %s\n' "$spec" >&2; exit 2; }
 if [ "$list" = 1 ]; then
@@ -71,17 +78,43 @@ for config in "${configs[@]}"; do
       end | @tsv
     ' "$spec")
 
-    tmp=$(mktemp "$(dirname "$output")/.config-candidate.XXXXXX")
+    # --stdout is a pure generate: build the candidate in the transaction dir
+    # (never touches the output directory) and stream it. With an explicit
+    # target the stream is byte-exact candidate output, ready for
+    # `config.sh --stdout NAME | diff - $output`; with no target each config
+    # gets a `# ---- config: NAME ----` separator header.
+    if [ "$print" = 1 ]; then
+      tmp=$(mktemp "$transaction/candidate.XXXXXX")
+    else
+      tmp=$(mktemp "$(dirname "$output")/.config-candidate.XXXXXX")
+    fi
     leaf="$DIR/bin/internal/config/$config"
     [ -x "$leaf" ] || { printf 'missing config leaf: %s\n' "$leaf" >&2; exit 2; }
-    if ! CONFIG_TRANSACTION="$transaction" CONFIG_CANDIDATE="$tmp" CONFIG_INPUTS_FILE="$input_manifest" \
+    if [ "$print" = 1 ]; then
+      # processor chatter (banners, per-input progress) must not pollute the stream
+      if ! CONFIG_TRANSACTION="$transaction" CONFIG_CANDIDATE="$tmp" CONFIG_INPUTS_FILE="$input_manifest" \
+        "$leaf" --config "$config" >&2; then
+        printf '%s: processor failed\n' "$config" >&2
+        exit 1
+      fi
+    elif ! CONFIG_TRANSACTION="$transaction" CONFIG_CANDIDATE="$tmp" CONFIG_INPUTS_FILE="$input_manifest" \
       "$leaf" --config "$config"; then
       printf '%s: processor failed\n' "$config" >&2
       exit 1
     fi
 
-    if [ -n "$validate" ] && ! CONFIG_CANDIDATE="$tmp" bash -c "$validate"; then
-      printf '%s: candidate validation failed\n' "$config" >&2; exit 1
+    if [ -n "$validate" ]; then
+      if [ "$print" = 1 ]; then
+        CONFIG_CANDIDATE="$tmp" bash -c "$validate" >&2 || { printf '%s: candidate validation failed\n' "$config" >&2; exit 1; }
+      else
+        CONFIG_CANDIDATE="$tmp" bash -c "$validate" || { printf '%s: candidate validation failed\n' "$config" >&2; exit 1; }
+      fi
+    fi
+    if [ "$print" = 1 ]; then
+      [ -n "$target" ] || printf '# ---- config: %s ----\n' "$config"
+      cat "$tmp"
+      rm -f "$tmp"
+      continue
     fi
     if [ -f "$output" ] && cmp -s "$tmp" "$output"; then
       rm -f "$tmp"; continue
