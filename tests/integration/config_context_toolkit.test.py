@@ -441,10 +441,18 @@ def test_config_context_toolkit() -> None:
         env_whole = runtime_env(home_whole, xdg_whole, temporary)
         run([str(payload / "bin" / "install-config-user-copy.sh"), "main"], cwd=temporary, env=env_whole)
         whole_only = run([*raw_status, "main", "--json-array"], cwd=temporary, env=env_whole, check=False)
-        assert whole_only.returncode == 2
+        assert whole_only.returncode == 0
         whole_only_rows = rows(whole_only)
         assert next(row for row in whole_only_rows if row["kind"] == "output")["status"] == "ok"
-        assert next(row for row in whole_only_rows if row["kind"] == "assembly")["status"] == "evaluation-error"
+        assert next(row for row in whole_only_rows if row["kind"] == "assembly")["status"] == "inactive"
+        assert all(row["status"] == "inactive" for row in whole_only_rows if row["kind"] == "input")
+        whole_inputs = run([str(inputs), "status", "main", "--json-array"], cwd=temporary, env=env_whole, check=False)
+        assert whole_inputs.returncode == 1 and any(row["status"] == "missing" for row in rows(whole_inputs))
+        whole_check = run([str(config), "--check", "main"], cwd=temporary, env=env_whole, check=False)
+        assert whole_check.returncode != 0
+        run([str(payload / "bin" / "install-config-user-link.sh"), "main"], cwd=temporary, env=env_whole)
+        whole_link_status = run([*raw_status, "main", "--json-array"], cwd=temporary, env=env_whole)
+        assert next(row for row in rows(whole_link_status) if row["kind"] == "output")["representation"] == "link"
 
         run([str(payload / "bin" / "install-config-system-test.sh"), "main"], cwd=temporary, env=env_one)
         system_consumer = temporary / "system consumer"

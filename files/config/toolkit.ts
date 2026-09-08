@@ -617,10 +617,44 @@ async function outputStatusRows(spec: ConfigSpec, options: ToolkitOptions, names
   return rows
 }
 
+async function assemblyInputsActive(spec: ConfigSpec, contextName: string, config: string): Promise<boolean> {
+  const resolved = bindContextConfigs(spec, contextName, [config]).configs[config]
+  for (const input of resolved.inputs) {
+    const path = typeof input.file === "string" ? input.file : input.directory
+    if (typeof path === "string" && await pathKind(path) !== "missing") return true
+  }
+  return false
+}
+
+async function markInactiveAssemblyRoutes(
+  spec: ConfigSpec,
+  contextName: string,
+  rows: StatusRow[],
+  names: string[],
+): Promise<void> {
+  for (const config of names) {
+    const output = rows.find((row) => row.kind === "output" && row.config === config)
+    const assembly = rows.find((row) => row.kind === "assembly" && row.config === config)
+    const healthyWhole = output?.status === "ok" && (output.representation === "copy" || output.representation === "link")
+    if (!healthyWhole || assembly?.status !== "evaluation-error" || await assemblyInputsActive(spec, contextName, config)) continue
+    assembly.status = "inactive"
+    assembly.severity = "ok"
+    assembly.note = `local assembly inputs are not initialized; ${assembly.note}`
+    for (const row of rows) {
+      if (row.kind === "input" && row.config === config && row.status === "missing") {
+        row.status = "inactive"
+        row.severity = "ok"
+        row.note = row.note ? `inactive assembly route: ${row.note}` : "inactive assembly route"
+      }
+    }
+  }
+}
+
 async function showStatus(spec: ConfigSpec, options: ToolkitOptions, config?: string, inputsOnly = false): Promise<number> {
   const names = selectedNames(spec, options.context, config)
   const inputRows = await inputStatusRows(spec, options.context, names)
   const rows = inputsOnly ? inputRows : [...await outputStatusRows(spec, options, names), ...inputRows]
+  if (!inputsOnly) await markInactiveAssemblyRoutes(spec, options.context, rows, names)
   printRows(rows, options.format)
   return rowSeverity(rows)
 }
