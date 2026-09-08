@@ -38,6 +38,65 @@ to make all three states streamable, a four-round design effort (sol/GPT-5.6
 xhigh) turned that into a full **install-and-status target declaration**
 system, and the design is now implementation-ready modulo six open decisions.
 
+## The inciting incident: mise & zim (Sep 4–7, 2026)
+
+This design effort did not start from abstraction. It started from a live,
+confusing debugging session on this machine's shell setup. The timeline:
+
+- **Sep 4**: zim was split into two channels — `zimrc` (interactive, loaded
+  from `.zshrc`) and `zimenv` (early, loaded from `.zshenv`) — each an
+  independent zimfw install (`~/.cache/zim`, `~/.cache/zim-env`) fed by its
+  own assembled config. Mise's zsh activation was moved out of mise.opt.pb
+  into the `rektide/zim-mise` module, loaded once via the zimenv channel
+  (full activation interactive, shims otherwise).
+- **Sep 5**: the `mise-user-env` systemd bridge (which pushed `mise env`
+  into the systemd user environment as an ambient channel) was disabled —
+  two competing env channels was the root confusion (commit `kzkrvlvlywzx`).
+- **The debugging residue** (still visible when this effort began): bisect
+  breadcrumbs `echo HI1/HI3/HI4` in `~/.zshrc` — **HI2 was never found and
+  never followed up**; two leaked `.config-candidate.*` temps in
+  `/etc/opt/zim-main` from interrupted config runs; a stale-mtime scare
+  where re-assembling `zimrc` made `~/.cache/zim/init.zsh` "drift" by
+  timestamp; and a `status.sh` crash (`ZIM_CONFIG_FILE: unbound variable`)
+  caused by an ambient exported `DIR` making generated bins source another
+  deployment's `env.export`.
+- **The question that started everything**: "I don't know what the drift
+  is" — which layer? fragments → assembled → zimfw-built → user startup
+  files → mise settings? Answering it produced the tri-state vocabulary,
+  `block-in-file --read`, `config.sh --stdout`, and then the whole design
+  corpus.
+
+**Where mise & zim sit in the design** (they are the first consumers, not
+afterthoughts):
+
+- **mise** — first ETC_FILES `targets` consumer: its `.bashrc`/`
+  .bash_profile` blocks (with `BASH_RC`/`BASH_PROFILE` env selectors) become
+  declared `strategy: block` targets; the hand-written
+  `install-bash-user.sh` is deleted (draft1 "Mise migration", retained in
+  draft3 commit 14). Its zsh side stays owned by the zim-mise module —
+  deliberately NOT re-imported.
+- **zim** — the deepest consumer. Option B locked: user-owned copied zimrc
+  (`ZIM_CONFIG_FILE`, copy default / link available) + link-only
+  `zimfw.conf` registry; contributor host discovery must resolve through
+  the registry (draft3 "Host discovery"). The startup loaders stay ETC_FILES
+  and must **never** become CONFIGS targets — they are different documents
+  from the config outputs (draft0's boundary finding). `install-config-
+  user-dropins` delivers canonical fragments into `~/.config/zsh/zimrc.d/
+  compfuzor`; the staged end-state composes both poles (pieces delivered by
+  Pole A, user file assembled by Pole B, aggregate copy retired at cutover).
+  zim's authored `status.sh` still masks the generic STATUSES orchestrator
+  and still has the unbound-variable bug — both fixed in draft3 commit 14.
+
+**Outstanding mise/zim cleanup from the original incident** (unclaimed):
+the HI markers in `~/.zshrc`, the leaked config-candidate temps, legacy
+pre-channel-split artifacts in `/etc/opt/zim-main` (flat `zim/*.conf`,
+`zim-disabled/`, `zimfw/`, `zimfw.conf`, `zim.zsh`), and stale mise-main
+files (`mise.zshrc`, `mise.zprofile`, `mise-user-env.service`, old install
+bins).
+
+Live state as of Sep 7: **both subsystems fully converged** — every drift
+surface green (see verification block below).
+
 ## Shipped and live (not design — working code)
 
 | What | Where | Commit |
