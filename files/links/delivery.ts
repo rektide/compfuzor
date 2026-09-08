@@ -76,7 +76,7 @@ function assertReplaceable(entry: DeliveryEntry, destination: string): void {
   }
 }
 
-async function physicalParent(path: string): Promise<string> {
+export async function physicalParent(path: string): Promise<string> {
   const parent = dirname(resolve(path))
   try {
     return await realpath(parent)
@@ -86,12 +86,30 @@ async function physicalParent(path: string): Promise<string> {
   }
 }
 
-async function assertDistinct(source: string, destination: string): Promise<void> {
-  if (normalize(resolve(source)) === normalize(resolve(destination))) {
-    throw new Error(`delivery source and destination are the same path: ${source}`)
+/** Compare directory entries without following either final entry. */
+export async function pathsSharePhysicalEntry(first: string, second: string): Promise<boolean> {
+  if (normalize(resolve(first)) === normalize(resolve(second))) return true
+  const [firstParent, secondParent] = await Promise.all([physicalParent(first), physicalParent(second)])
+  return firstParent === secondParent && basename(first) === basename(second)
+}
+
+async function physicalDirectory(path: string): Promise<string> {
+  try {
+    return await realpath(path)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+    return join(await physicalParent(path), basename(path))
   }
-  const [sourceParent, destinationParent] = await Promise.all([physicalParent(source), physicalParent(destination)])
-  if (sourceParent === destinationParent && basename(source) === basename(destination)) {
+}
+
+/** Compare directory locations, following a final directory symlink. */
+export async function pathsSharePhysicalDirectory(first: string, second: string): Promise<boolean> {
+  const [firstDirectory, secondDirectory] = await Promise.all([physicalDirectory(first), physicalDirectory(second)])
+  return firstDirectory === secondDirectory
+}
+
+async function assertDistinct(source: string, destination: string): Promise<void> {
+  if (await pathsSharePhysicalEntry(source, destination)) {
     throw new Error(`delivery source and destination resolve to the same directory entry: ${source}`)
   }
 }

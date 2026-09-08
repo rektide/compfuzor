@@ -10,6 +10,7 @@ import { tmpdir } from "node:os"
 import { fileURLToPath } from "node:url"
 
 import { bindContextSpec, type ConfigSpec } from "./config/context.ts"
+import { pathsSharePhysicalEntry } from "./links/delivery.ts"
 
 export type ConfigContextCliOptions = {
   context: string
@@ -23,6 +24,19 @@ export type ConfigContextResult = {
   code: number
   stdout: Buffer
   stderr: Buffer
+}
+
+function isPreview(runnerArgs: string[]): boolean {
+  return runnerArgs.some((argument) => argument === "--list" || argument === "--check" || argument === "--stdout")
+}
+
+async function assertContextOutputsSeparated(source: ConfigSpec, resolved: ConfigSpec): Promise<void> {
+  for (const [name, config] of Object.entries(resolved.configs)) {
+    const canonical = source.configs[name]?.output
+    if (canonical && await pathsSharePhysicalEntry(canonical, config.output)) {
+      throw new Error(`context output aliases canonical output for ${name}: ${config.output}`)
+    }
+  }
 }
 
 function fail(message: string): never {
@@ -103,6 +117,7 @@ async function invokeRunner(options: ConfigContextCliOptions, specPath: string):
 export async function runConfigContextResult(options: ConfigContextCliOptions): Promise<ConfigContextResult> {
   const spec = JSON.parse(await readFile(options.specPath, "utf8")) as ConfigSpec
   const resolvedSpec = bindContextSpec(spec, options.context, options.runnerArgs)
+  if (!isPreview(options.runnerArgs)) await assertContextOutputsSeparated(spec, resolvedSpec)
   const temporary = await mkdtemp(join(tmpdir(), "compfuzor-config-context-"))
   const resolvedPath = join(temporary, "config.spec.json")
   try {

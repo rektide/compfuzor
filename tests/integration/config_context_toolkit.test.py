@@ -476,6 +476,60 @@ def test_config_context_toolkit() -> None:
             )
             assert imported.stdout == "imported\n"
 
+        missing_extra = local_inputs / "91-dangling.conf.disabled"
+        missing_extra.symlink_to(temporary / "missing local extra.conf")
+        directory_target = temporary / "extra directory"
+        directory_target.mkdir()
+        directory_extra = local_inputs / "92-directory.conf"
+        directory_extra.symlink_to(directory_target, target_is_directory=True)
+        producer_chain = temporary / "producer-chain.conf"
+        producer_chain.symlink_to(temporary / "missing producer target.conf")
+        chain_extra = local_inputs / "93-chain.conf"
+        chain_extra.symlink_to(producer_chain)
+        weird_status = run([str(inputs), "status", "main", "--json-array"], cwd=temporary, env=env_one, check=False)
+        assert weird_status.returncode == 2
+        weird_rows = {row["name"]: row for row in rows(weird_status)}
+        assert weird_rows["91-dangling.conf"]["status"] == "dangling" and weird_rows["91-dangling.conf"]["state"] == "disabled"
+        assert weird_rows["92-directory.conf"]["status"] == "non-file-referent"
+        assert weird_rows["93-chain.conf"]["status"] == "dangling"
+        missing_extra.unlink()
+        directory_extra.unlink()
+        chain_extra.unlink()
+        producer_chain.unlink()
+
+        hazard_home = temporary / "hazard home"
+        hazard_xdg = temporary / "hazard xdg"
+        hazard_env = runtime_env(hazard_home, hazard_xdg, temporary)
+        hazard_root = hazard_xdg / "toolkit app"
+        hazard_root.mkdir(parents=True)
+        (hazard_root / "inputs").symlink_to(payload / "etc" / "inputs", target_is_directory=True)
+        (hazard_root / "outputs").symlink_to(payload / "etc" / "outputs", target_is_directory=True)
+        donor_snapshot = {path.name: path.read_bytes() for path in donor.iterdir() if path.is_file()}
+        donor_output_snapshot = (payload / "etc" / "outputs" / "main.conf").read_bytes()
+        custom_hazard = temporary / "99-custom.conf"
+        custom_hazard.write_text("custom=hazard\n", encoding="utf-8")
+        hazard_put = run(
+            [str(inputs), "put", "main/main", str(custom_hazard), "99-custom.conf", "--no-rebuild"],
+            cwd=temporary,
+            env=hazard_env,
+            check=False,
+        )
+        hazard_toggle = run([str(inputs), "disable", "main/main", "10-linked.conf"], cwd=temporary, env=hazard_env, check=False)
+        hazard_remove = run([str(inputs), "remove", "main/main", "10-linked.conf"], cwd=temporary, env=hazard_env, check=False)
+        hazard_direct = run([str(inputs), "put", "main/0", str(custom_hazard), "--no-rebuild"], cwd=temporary, env=hazard_env, check=False)
+        assert {hazard_put.returncode, hazard_toggle.returncode, hazard_remove.returncode, hazard_direct.returncode} == {2}
+        assert not (donor / "99-custom.conf").exists()
+        assert {path.name: path.read_bytes() for path in donor.iterdir() if path.is_file()} == donor_snapshot
+        hazard_assembly = run([str(config), "main"], cwd=temporary, env=hazard_env, check=False)
+        assert hazard_assembly.returncode == 2
+        assert (payload / "etc" / "outputs" / "main.conf").read_bytes() == donor_output_snapshot
+        hazard_preview = run([str(config), "--check", "main"], cwd=temporary, env=hazard_env, check=False)
+        assert "aliases canonical output" not in hazard_preview.stderr
+        hazard_status = run([*raw_status, "main", "--json-array"], cwd=temporary, env=hazard_env, check=False)
+        assert hazard_status.returncode == 2
+        assert any(row["status"] == "alias-hazard" and row["kind"] == "output" for row in rows(hazard_status))
+        assert any(row["status"] == "alias-hazard" and row["kind"] == "input" for row in rows(hazard_status))
+
         duplicate_disabled = local_inputs / "10-linked.conf.disabled"
         duplicate_disabled.write_text("duplicate local state\n", encoding="utf-8")
         conflict_status = run([str(status), "main", "--json-array"], cwd=temporary, env=env_one, check=False)

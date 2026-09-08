@@ -20,6 +20,8 @@ import {
   inspectDeliveryEntry,
   linkMatches,
   linkResolvesToSameFile,
+  pathsSharePhysicalDirectory,
+  pathsSharePhysicalEntry,
   replaceWithCopy,
   replaceWithLink,
   type DeliveryEntry,
@@ -56,6 +58,7 @@ type InputRelation = {
   suffix?: string
   donorState: "enabled" | "disabled"
   donorConflict?: string
+  aliasHazard?: string
 }
 
 type InputDirectory = {
@@ -67,6 +70,7 @@ type InputDirectory = {
   pattern: string
   suffix?: string
   donorNames: Set<string>
+  aliasHazard?: string
 }
 
 export type StatusRow = {
@@ -206,6 +210,9 @@ async function inputCatalog(spec: ConfigSpec, contextName: string, names: string
       const local = localConfig.inputs[index]
       const name = inputIdentity(donor, index)
       if (typeof donor.file === "string" && typeof local.file === "string") {
+        const aliasHazard = await pathsSharePhysicalEntry(donor.file, local.file)
+          ? `consumer file aliases canonical input: ${local.file}`
+          : undefined
         relations.push({
           id: `${configName}/${name}`,
           config: configName,
@@ -215,6 +222,7 @@ async function inputCatalog(spec: ConfigSpec, contextName: string, names: string
           destination: local.file,
           logicalName: basename(local.file),
           donorState: "enabled",
+          aliasHazard,
         })
         continue
       }
@@ -231,6 +239,9 @@ async function inputCatalog(spec: ConfigSpec, contextName: string, names: string
         pattern: donor.pattern,
         suffix,
         donorNames: new Set<string>(),
+        aliasHazard: await pathsSharePhysicalDirectory(donor.directory, local.directory)
+          ? `consumer directory aliases canonical input directory: ${local.directory}`
+          : undefined,
       }
       directories.push(directory)
       const entries = await readDirectory(donor.directory)
@@ -315,6 +326,7 @@ async function deliver(source: string, destination: string, strategy: Strategy):
 }
 
 async function applyRelation(relation: InputRelation, strategy: Strategy, seed: boolean): Promise<string> {
+  if (relation.aliasHazard) fail(`${relation.id}: ${relation.aliasHazard}`)
   if (relation.donorConflict) fail(`${relation.id}: donor has both enabled and disabled entries`)
   const sourceEntry = await inspectDeliveryEntry(relation.source)
   if (sourceEntry.kind === "missing" || sourceEntry.kind === "directory" || sourceEntry.kind === "special") {
@@ -336,6 +348,14 @@ async function applyDropins(spec: ConfigSpec, options: ToolkitOptions, strategy:
   const catalog = await inputCatalog(spec, options.context, names)
   let failed = catalog.rows.some((row) => row.severity === "error")
   for (const row of catalog.rows) console.error(`${row.status}: ${row.config}/${row.name}: ${row.note}`)
+  const aliasHazards = [
+    ...catalog.relations.filter((relation) => relation.aliasHazard).map((relation) => `${relation.id}: ${relation.aliasHazard}`),
+    ...catalog.directories.filter((directory) => directory.aliasHazard).map((directory) => `${directory.config}/${directory.inputName}: ${directory.aliasHazard}`),
+  ]
+  if (aliasHazards.length > 0) {
+    for (const hazard of aliasHazards) console.error(`error: ${hazard}`)
+    return 2
+  }
   for (const directory of catalog.directories) {
     try {
       await mkdir(directory.destinationDirectory, { recursive: true })
@@ -398,6 +418,12 @@ function printRows(rows: StatusRow[], format: Format): void {
 }
 
 async function relationStatus(relation: InputRelation): Promise<StatusRow> {
+  if (relation.aliasHazard) {
+    return {
+      kind: "input", status: "alias-hazard", severity: "error", config: relation.config, name: relation.logicalName,
+      source: relation.source, destination: relation.destination, note: relation.aliasHazard,
+    }
+  }
   if (relation.donorConflict) {
     return {
       kind: "input", status: "donor-conflict", severity: "drift", config: relation.config, name: relation.logicalName,
@@ -483,10 +509,25 @@ async function extraInputRows(directory: InputDirectory): Promise<StatusRow[]> {
     let note = "not present in current donor catalog"
     if (entry.kind === "symlink") {
       const donorRelative = normalize(entry.targetPath).startsWith(`${normalize(directory.donorDirectory)}/`)
-      if (donorRelative && await pathKind(entry.targetPath) === "missing") {
-        status = "donor-missing"
-        severity = "error"
-        note = `dangling link into donor directory: ${entry.target}`
+      try {
+        const referent = await stat(path)
+        if (!referent.isFile()) {
+          status = "non-file-referent"
+          severity = "drift"
+          note = `local link resolves to a non-file: ${entry.target}`
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+          status = donorRelative ? "donor-missing" : "dangling"
+          severity = "error"
+          note = donorRelative
+            ? `dangling link into donor directory: ${entry.target}`
+            : `local link has a missing referent: ${entry.target}`
+        } else {
+          status = "evaluation-error"
+          severity = "error"
+          note = `cannot inspect local link referent: ${error instanceof Error ? error.message : String(error)}`
+        }
       }
     }
     rows.push({
@@ -503,6 +544,13 @@ async function inputStatusRows(spec: ConfigSpec, contextName: string, names: str
   const rows = [...catalog.rows]
   for (const relation of catalog.relations) rows.push(await relationStatus(relation))
   for (const directory of catalog.directories) {
+    if (directory.aliasHazard) {
+      rows.push({
+        kind: "input", status: "alias-hazard", severity: "error", config: directory.config, name: directory.inputName,
+        source: directory.donorDirectory, destination: directory.destinationDirectory, note: directory.aliasHazard,
+      })
+      continue
+    }
     if (directory.donorNames.size === 0 && await pathKind(directory.destinationDirectory) === "missing") {
       rows.push({
         kind: "input", status: "missing", severity: "drift", config: directory.config, name: directory.inputName,
@@ -548,15 +596,23 @@ async function outputStatusRows(spec: ConfigSpec, options: ToolkitOptions, names
   for (const name of names) {
     const source = spec.configs[name].output
     const destination = resolved.configs[name].output
-    const [sourceState, entry, assembly] = await Promise.all([
+    const [sourceState, entry, assembly, aliasHazard] = await Promise.all([
       usableSource(source),
       inspectDeliveryEntry(destination),
       evaluateAssembly(options, name),
+      pathsSharePhysicalEntry(source, destination),
     ])
     const common = { kind: "output" as const, config: name, name, source, destination }
     rows.push(assembly.error
       ? { kind: "assembly", status: "evaluation-error", severity: "error", config: name, name, note: assembly.error }
       : { kind: "assembly", status: "ready", severity: "ok", config: name, name })
+    if (aliasHazard) {
+      rows.push({
+        ...common, status: "alias-hazard", severity: "error",
+        note: `consumer output aliases canonical output: ${destination}`,
+      })
+      continue
+    }
     if (entry.kind === "missing") {
       rows.push({ ...common, status: "missing", severity: "drift", note: sourceState.usable ? undefined : `canonical output unavailable: ${sourceState.note}` })
       continue
@@ -705,6 +761,20 @@ function resolvedInput(spec: ConfigSpec, contextName: string, found: ReturnType<
   return bindContextConfigs(spec, contextName, [found.config]).configs[found.config].inputs[found.index]
 }
 
+async function assertInputBindingSeparated(spec: ConfigSpec, contextName: string, found: ReturnType<typeof findInput>): Promise<void> {
+  const local = resolvedInput(spec, contextName, found)
+  if (typeof found.input.file === "string" && typeof local.file === "string") {
+    if (await pathsSharePhysicalEntry(found.input.file, local.file)) {
+      fail(`${found.config}/${inputIdentity(found.input, found.index)} consumer file aliases canonical input: ${local.file}`)
+    }
+    return
+  }
+  if (typeof found.input.directory === "string" && typeof local.directory === "string" &&
+      await pathsSharePhysicalDirectory(found.input.directory, local.directory)) {
+    fail(`${found.config}/${inputIdentity(found.input, found.index)} consumer directory aliases canonical input directory: ${local.directory}`)
+  }
+}
+
 function validateInputName(input: ConfigInput, name: string): void {
   if (!name || basename(name) !== name || name === "." || name === "..") fail(`invalid input filename: ${name}`)
   if (typeof input.pattern !== "string" || !filenameMatches(name, input.pattern)) fail(`${name} does not match input pattern ${String(input.pattern)}`)
@@ -727,6 +797,7 @@ async function inputPut(spec: ConfigSpec, options: ToolkitOptions, args: string[
   const [selector, sourceArgument, suppliedName] = args
   if (!selector || !sourceArgument || args.length > 3) fail("usage: config-inputs-CONTEXT.sh put INPUT SOURCE [NAME] [--strategy copy|link]")
   const found = findInput(spec, options.context, selector)
+  await assertInputBindingSeparated(spec, options.context, found)
   const source = resolve(sourceArgument)
   if (typeof found.input.file === "string") {
     if (suppliedName !== undefined) fail(`${selector} is a direct file input and does not accept a destination name`)
@@ -758,6 +829,7 @@ async function inputMutation(spec: ConfigSpec, options: ToolkitOptions, action: 
   const [selector, name] = args
   if (!selector) fail(`usage: config-inputs-CONTEXT.sh ${action} INPUT [NAME]`)
   const found = findInput(spec, options.context, selector)
+  await assertInputBindingSeparated(spec, options.context, found)
   if (typeof found.input.file === "string") {
     if (action !== "remove") fail(`${selector} is a direct file input and cannot be ${action}d`)
     if (args.length !== 1) fail(`usage: config-inputs-CONTEXT.sh remove DIRECT_INPUT`)
