@@ -851,6 +851,72 @@ SUBSYSTEM:
             fi
             exit "${_drift}"
 
+  # aptlane -- install-time package convergence + drift reporting for the
+  # declared package list (PKGS/PKGSET/PKGSETS, gathered in gen_apt.tasks
+  # mirroring pkgs.tasks). install-apt.sh joins install.sh's run_all in the
+  # `packages` lane (ahead of identity), so a fresh box converges with one
+  # `sudo bash bin/install.sh` even when the render pass skipped installs
+  # (PKGS_BYPASS/APT_BYPASS). Deliberately NOT gated on those flags: the id
+  # is `aptlane`, not `apt`, so the subsys <ID>_BYPASS convention does NOT
+  # auto-bind APT_BYPASS (a render-side bypass that must not kill the
+  # lane); APTLANE_BYPASS is the explicit generation opt-out.
+  # Deliberately NO apt-get update in the lane: repo configuration and
+  # index refresh stay render-side (apt.tasks -> ../apt.update.tasks).
+  # APT_INSTALL parity: default 'latest' upgrades named packages to the
+  # apt candidate; 'present' pins via --no-upgrade.
+  # status-apt.sh reports drift per the PKG_STATUS map (pkg -> installed |
+  # latest | ignore; unlisted = installed) per the status.sh convention.
+  aptlane:
+    requested: "{{ (PKGS|default([])|length > 0) or (PKGSET|default([])|length > 0) or (PKGSETS|default([])|length > 0) }}"
+    contrib:
+      STATUSES:
+        - status-apt.sh
+      BINS:
+        - name: install-apt.sh
+          phase: packages
+          generated: |
+            SUDO_CMD="sudo"
+            _pkgs="{{ _apt_pkgs | join(' ') }}"
+            [ -n "$_pkgs" ] || { echo "apt: no packages declared"; exit 0; }
+            # No apt-get update here on purpose (see apt subsystem notes).
+            # APT_INSTALL parity with render-time pkgs.tasks: 'latest'
+            # (default) upgrades the named packages; 'present' must not.
+            {% if APT_INSTALL|default('latest') == 'present' %}_upgrade=""
+            {% else %}_upgrade="--upgrade"
+            {% endif %}            $SUDO_CMD env DEBIAN_FRONTEND=noninteractive apt-get install -y ${_upgrade} ${_pkgs}
+        - name: status-apt.sh
+          basedir: False
+          compose: False
+          content: |
+            _pkgs="{{ _apt_pkgs | join(' ') }}"
+            [ -n "$_pkgs" ] || exit 2
+            declare -A _req=(
+            {% for _p, _r in (PKG_STATUS|default({})).items() %}              [{{ _p }}]={{ _r }}
+            {% endfor %}          )
+            _drift=0
+            for _p in ${_pkgs}; do
+                _level="${_req[${_p}]:-installed}"
+                [ "${_level}" = ignore ] && continue
+                _ver="$(dpkg-query -W -f='${Version}' "${_p}" 2>/dev/null || true)"
+                if [ -z "${_ver}" ]; then
+                    echo "missing package: ${_p}"
+                    _drift=1
+                    continue
+                fi
+                [ "${_level}" = latest ] || continue
+                # 'latest' compares against the CURRENT apt index (no
+                # update here): status is advisory against what apt knows.
+                _cand="$(apt-cache policy "${_p}" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+                if [ -n "${_cand}" ] && [ "${_cand}" != "(none)" ] && [ "${_cand}" != "${_ver}" ]; then
+                    echo "stale package: ${_p} (${_ver} != candidate ${_cand})"
+                    _drift=1
+                fi
+            done
+            if [ "${_drift}" = 0 ]; then
+                echo "apt: all declared packages satisfy their requirements"
+            fi
+            exit "${_drift}"
+
 _pr_patches_raw: "{{ PR_PATCHES | normalize(to='list') }}"
 _pr_patches_spec: >-
   {%- set normalized = [] -%}

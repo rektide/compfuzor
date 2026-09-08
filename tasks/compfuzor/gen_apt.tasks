@@ -1,0 +1,25 @@
+---
+# gen_apt -- install-time package lane (install-apt.sh, `packages` phase)
+# and drift reporter (status-apt.sh) for the declared package list.
+#
+# Mirrors pkgs.tasks' gather (same loop, fact named _apt_pkgs) because this
+# runs in the gen_* phase, before pkgs.tasks executes: the render-time
+# install and the install-time lane must converge the identical list.
+#
+# Deliberately NOT bypassed by PKGS_BYPASS/APT_BYPASS: skipping the
+# render-time install (no passwordless sudo) is precisely when
+# `sudo bash bin/install.sh` should pick up the packages lane.
+- name: "Compfuzor: gather declared packages (mirror of pkgs.tasks)"
+  set_fact:
+    _apt_pkgs: "{{ _apt_pkgs|def(PKGS, []) + (_pkgset if item != '' else []) }}"
+  loop: "{{ [''] + PKGSET|normalize(to='list') + PKGSETS|def([]) }}"
+  vars:
+    _pkgset: "{{ lookup('vars', item, default=[]) }}"
+
+- name: "Compfuzor: synthesize apt install/status bins"
+  set_fact:
+    STATUSES: "{{ lookup('merge_subsys', id='aptlane', contrib='STATUSES') }}"
+    BINS: "{{ lookup('merge_subsys', id='aptlane', contrib='BINS') }}"
+  when: _apt_active
+  vars:
+    _apt_active: "{{ lookup('subsys', id='aptlane', get='active', default=false) | bool }}"

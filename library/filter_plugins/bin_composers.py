@@ -18,7 +18,7 @@ BIN_ACTIONS: tuple[str, ...] = ("build", "install", "apply")
 # (stable: within a lane, BINS list order decides); an untagged bin is
 # `main`, so all-untagged configurations render exactly as before. A
 # subsystem compositor takes the earliest lane of its leaves.
-BIN_PHASES: tuple[str, ...] = ("identity", "main", "units", "records")
+BIN_PHASES: tuple[str, ...] = ("packages", "identity", "main", "units", "records")
 
 _PHASE_INDEX = {p: i for i, p in enumerate(BIN_PHASES)}
 
