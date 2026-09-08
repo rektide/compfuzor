@@ -55,6 +55,8 @@ def test_compile_contexts():
                 "scope": "user",
                 "root": "config",
                 "subpath": "example",
+                "install": "assemble",
+                "dropins": "link",
                 "configs": {
                     "app": {
                         "output": {"env": "APP_CONFIG", "default": "outputs/app.conf"},
@@ -75,6 +77,8 @@ def test_compile_contexts():
     user = compiled["spec"]["contexts"]["user"]
     check("user class root", user["root"], {"path": "${XDG_CONFIG_HOME}"})
     check("context subpath", user["subpath"], "example")
+    check("context install default", user["install"], "assemble")
+    check("context drop-in default", user["dropins"], "link")
     check("context selection", list(user["configs"]), ["app"])
     check(
         "output environment selector",
@@ -91,10 +95,17 @@ def test_compile_contexts():
     bins = {item["name"]: item for item in compiled["bins"]}
     check("shared context runtime", bins["config-context.ts"]["raw"], True)
     check("shared context module", bins["config/context.ts"]["raw"], True)
+    check("shared toolkit module", bins["config/toolkit.ts"]["raw"], True)
+    check("shared LINKS delivery module", bins["links/delivery.ts"]["raw"], True)
     check("context module directory", "/opt/example/bin/config" in compiled["dirs"], True)
     check("user entry point", bins["config-user.sh"]["helpers"], False)
     check("system entry point", "config-system-test.sh" in bins, True)
     check("context commands do not compose", bins["config-user.sh"]["compose"], False)
+    check("ordinary install composes", "compose" in bins["install-config-user.sh"], False)
+    check("drop-in refresh does not compose", bins["install-config-user-dropins.sh"]["compose"], False)
+    check("whole copy does not compose", bins["install-config-user-copy.sh"]["compose"], False)
+    check("input command does not compose", bins["config-inputs-user.sh"]["compose"], False)
+    check("context status is registered", "status-config-context-user.sh" in compiled["statuses"], True)
 
 
 def test_validation():
@@ -128,6 +139,13 @@ def test_validation():
             base_plan(), {"user": {"scope": "user", "root": "${OTHER}/path"}}, "/opt/example/etc", "/opt/example/bin"
         ),
         "unsupported runtime expression",
+    )
+    check_raises(
+        "invalid install default",
+        lambda: compile_config_contexts(
+            base_plan(), {"user": {"scope": "user", "root": "config", "install": "replace"}}, "/opt/example/etc", "/opt/example/bin"
+        ),
+        "install must be assemble, copy, or link",
     )
 
     external = compile_config(

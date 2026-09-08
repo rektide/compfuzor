@@ -16,6 +16,7 @@ export type ConfigContextCliOptions = {
   specPath: string
   runner: string
   runnerArgs: string[]
+  stdio?: "inherit" | "ignore"
 }
 
 function fail(message: string): never {
@@ -55,7 +56,7 @@ async function invokeRunner(options: ConfigContextCliOptions, specPath: string):
       cwd: runnerDeploymentDir,
       detached: true,
       env: { ...process.env, DIR: runnerDeploymentDir, CONFIG_SPEC: specPath },
-      stdio: "inherit",
+      stdio: options.stdio ?? "inherit",
     })
     const handlers = new Map<NodeJS.Signals, () => void>()
     const cleanupHandlers = (): void => {

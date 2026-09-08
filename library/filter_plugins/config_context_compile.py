@@ -211,6 +211,20 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
         "basedir": False,
     })
     occupied_bins.add(module_name)
+    for shared_name, source in (
+        ("config/toolkit.ts", "../config/toolkit.ts"),
+        ("links/delivery.ts", "../links/delivery.ts"),
+    ):
+        if shared_name in occupied_bins:
+            _error("generated command collision: {}".format(shared_name))
+        bins.append({
+            "name": shared_name,
+            "src": source,
+            "raw": True,
+            "compose": False,
+            "basedir": False,
+        })
+        occupied_bins.add(shared_name)
 
     normalized_contexts = {}
     for name, raw_context in contexts.items():
@@ -218,7 +232,7 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
         if not isinstance(name, str) or not _ID.fullmatch(name):
             _error("context names must match {}".format(_ID.pattern))
         context = _mapping(raw_context, label)
-        unknown = set(context) - {"scope", "root", "subpath", "configs"}
+        unknown = set(context) - {"scope", "root", "subpath", "configs", "install", "dropins"}
         if unknown:
             _error("{} has unknown settings: {}".format(label, ", ".join(sorted(unknown))))
         scope = context.get("scope")
@@ -227,6 +241,12 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
         if "root" not in context:
             _error("{}.root is required".format(label))
         root = _root(context["root"], scope, "{}.root".format(label))
+        install = context.get("install", "assemble")
+        if install not in {"assemble", "copy", "link"}:
+            _error("{}.install must be assemble, copy, or link".format(label))
+        dropins = context.get("dropins", "link")
+        if dropins not in {"copy", "link"}:
+            _error("{}.dropins must be copy or link".format(label))
         subpath = context.get("subpath")
         if subpath is not None:
             subpath = _relative(subpath, "{}.subpath".format(label))
@@ -279,7 +299,37 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
             "compose": False,
             "content": 'exec "$(dirname "$(readlink -f "$0")")/config-context.ts" --context {} "$@"'.format(name),
         })
-        normalized = {"scope": scope, "root": root, "configs": bindings}
+        toolkit_commands = (
+            ("install-config-{}.sh".format(name), "install", True),
+            ("install-config-{}-dropins.sh".format(name), "dropins", False),
+            ("install-config-{}-dropins-copy.sh".format(name), "dropins --strategy copy", False),
+            ("install-config-{}-dropins-link.sh".format(name), "dropins --strategy link", False),
+            ("install-config-{}-copy.sh".format(name), "whole --strategy copy", False),
+            ("install-config-{}-link.sh".format(name), "whole --strategy link", False),
+            ("config-inputs-{}.sh".format(name), "inputs", False),
+            ("status-config-context-{}.sh".format(name), "status", False),
+        )
+        for toolkit_name, action, compose in toolkit_commands:
+            if toolkit_name in occupied_bins:
+                _error("generated command collision: {}".format(toolkit_name))
+            occupied_bins.add(toolkit_name)
+            descriptor = {
+                "name": toolkit_name,
+                "basedir": False,
+                "helpers": False,
+                "content": 'exec "$(dirname "$(readlink -f "$0")")/config/toolkit.ts" --context {} {} "$@"'.format(name, action),
+                "scope": scope,
+            }
+            if not compose:
+                descriptor["compose"] = False
+            bins.append(descriptor)
+
+        status_name = "status-config-context-{}.sh".format(name)
+        statuses = list(compiled.get("statuses", []))
+        if status_name not in statuses:
+            statuses.append(status_name)
+        compiled["statuses"] = statuses
+        normalized = {"scope": scope, "root": root, "configs": bindings, "install": install, "dropins": dropins}
         if subpath is not None:
             normalized["subpath"] = subpath
         normalized_contexts[name] = normalized
@@ -288,9 +338,10 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
     compiled["spec"] = spec
     compiled["bins"] = bins
     dirs = list(compiled.get("dirs", []))
-    module_dir = posixpath.join(bins_dir, "config")
-    if module_dir not in dirs:
-        dirs.append(module_dir)
+    for relative_dir in ("config", "links"):
+        module_dir = posixpath.join(bins_dir, relative_dir)
+        if module_dir not in dirs:
+            dirs.append(module_dir)
     compiled["dirs"] = dirs
     return compiled
 

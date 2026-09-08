@@ -36,6 +36,8 @@ export type ConfigContext = {
   root: PathSelector
   subpath?: string
   configs: Record<string, ConfigBinding>
+  install?: "assemble" | "copy" | "link"
+  dropins?: "copy" | "link"
 }
 
 export type ConfigSpec = {
@@ -126,10 +128,26 @@ function requestedName(runnerArgs: string[]): { name?: string; listOnly: boolean
   return { name, listOnly }
 }
 
-export function selectContext(spec: ConfigSpec, contextName: string, runnerArgs: string[]): ContextSelection {
+export function getConfigContext(spec: ConfigSpec, contextName: string): ConfigContext {
   const contexts = object(spec.contexts, "config spec contexts")
   const context = object(contexts[contextName], `unknown config context ${contextName}`) as ConfigContext
   if (context.scope !== "user" && context.scope !== "system") fail(`context ${contextName}: invalid scope`)
+  object(context.configs, `context ${contextName}.configs`)
+  return context
+}
+
+export function contextConfigNames(spec: ConfigSpec, contextName: string, applyOnly = false): string[] {
+  const context = getConfigContext(spec, contextName)
+  const names = Object.keys(context.configs)
+  if (!applyOnly) return names
+  return names.filter((name) => {
+    const config = object(spec.configs[name], `context ${contextName}: missing source config ${name}`) as ConfigRecord
+    return config.apply !== false
+  })
+}
+
+export function selectContext(spec: ConfigSpec, contextName: string, runnerArgs: string[]): ContextSelection {
+  const context = getConfigContext(spec, contextName)
   const bindings = object(context.configs, `context ${contextName}.configs`)
   const request = requestedName(runnerArgs)
   const available = Object.keys(bindings)
@@ -138,34 +156,21 @@ export function selectContext(spec: ConfigSpec, contextName: string, runnerArgs:
     if (!(request.name in bindings)) fail(`unknown config in context ${contextName}: ${request.name}`)
     return { context, names: [request.name], listOnly: false }
   }
-  return {
-    context,
-    names: available.filter((name) => {
-      const config = object(spec.configs[name], `context ${contextName}: missing source config ${name}`) as ConfigRecord
-      return config.apply !== false
-    }),
-    listOnly: false,
-  }
+  return { context, names: contextConfigNames(spec, contextName, true), listOnly: false }
 }
 
-export function bindContextSpec(spec: ConfigSpec, contextName: string, runnerArgs: string[]): ConfigSpec {
-  const selection = selectContext(spec, contextName, runnerArgs)
-  if (selection.listOnly) {
-    return {
-      ...spec,
-      configs: Object.fromEntries(selection.names.map((name) => [name, spec.configs[name]])),
-      contexts: undefined,
-      remotes: {},
-    }
+export function bindContextConfigs(spec: ConfigSpec, contextName: string, names: string[]): ConfigSpec {
+  const context = getConfigContext(spec, contextName)
+  for (const name of names) {
+    if (!(name in context.configs)) fail(`unknown config in context ${contextName}: ${name}`)
   }
-
-  const root = resolvePathSelector(selection.context.root, undefined, `context ${contextName}.root`)
-  const base = selection.context.subpath ? resolve(root, selection.context.subpath) : root
-  const contextConfigs = object(selection.context.configs, `context ${contextName}.configs`) as Record<string, ConfigBinding>
+  const root = resolvePathSelector(context.root, undefined, `context ${contextName}.root`)
+  const base = context.subpath ? resolve(root, context.subpath) : root
+  const contextConfigs = object(context.configs, `context ${contextName}.configs`) as Record<string, ConfigBinding>
   const resolvedConfigs: Record<string, ConfigRecord> = {}
   const outputs = new Map<string, string>()
 
-  for (const name of selection.names) {
+  for (const name of names) {
     const source = object(spec.configs[name], `context ${contextName}: missing source config ${name}`) as ConfigRecord
     const binding = object(contextConfigs[name], `context ${contextName}.configs.${name}`) as ConfigBinding
     if (!Array.isArray(source.inputs) || !Array.isArray(binding.inputs) || source.inputs.length !== binding.inputs.length) {
@@ -188,4 +193,17 @@ export function bindContextSpec(spec: ConfigSpec, contextName: string, runnerArg
     resolvedConfigs[name] = { ...source, output, inputs }
   }
   return { ...spec, configs: resolvedConfigs, contexts: undefined, remotes: {} }
+}
+
+export function bindContextSpec(spec: ConfigSpec, contextName: string, runnerArgs: string[]): ConfigSpec {
+  const selection = selectContext(spec, contextName, runnerArgs)
+  if (selection.listOnly) {
+    return {
+      ...spec,
+      configs: Object.fromEntries(selection.names.map((name) => [name, spec.configs[name]])),
+      contexts: undefined,
+      remotes: {},
+    }
+  }
+  return bindContextConfigs(spec, contextName, selection.names)
 }
