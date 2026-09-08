@@ -43,6 +43,8 @@
       - bash_rc
       - bash_profile
       - mise_npm_package_manager
+    STATUSES:
+      - status-mise-bash.sh
     BINS:
       - name: install-user.sh
         content: |
@@ -56,16 +58,28 @@
           fi
       - name: install-bash-user.sh
         content: |
-          block-in-file \
+          command=${CONFIG_BLOCK_IN_FILE:-block-in-file}
+          "$command" \
             -n ${NAME:-{{NAME}}} \
             -C true \
-            -i {{DIR}}/etc/mise.bashrc \
+            -i "{{DIR}}/etc/mise.bashrc" \
             -o "${BASH_RC:-{{bash_rc}}}"
-          block-in-file \
+          "$command" \
             -n ${NAME:-{{NAME}}} \
             -C true \
-            -i {{DIR}}/etc/mise.bash_profile \
+            -i "{{DIR}}/etc/mise.bash_profile" \
             -o "${BASH_PROFILE:-{{bash_profile}}}"
+      - name: block-status.sh
+        src: ../block-status.sh
+        basedir: False
+        compose: False
+      - name: status-mise-bash.sh
+        basedir: False
+        content: |
+          status=0
+          "{{DIR}}/bin/block-status.sh" "${NAME:-{{NAME}}}" "{{DIR}}/etc/mise.bashrc" "${BASH_RC:-{{bash_rc}}}" || status=1
+          "{{DIR}}/bin/block-status.sh" "${NAME:-{{NAME}}}" "{{DIR}}/etc/mise.bash_profile" "${BASH_PROFILE:-{{bash_profile}}}" || status=1
+          exit "$status"
       - name: mise-systemd-env.sh
         basedir: False
         content: |
