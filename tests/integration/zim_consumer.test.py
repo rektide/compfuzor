@@ -8,7 +8,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import shutil
+import shlex
 import subprocess
 import tempfile
 
@@ -140,9 +140,13 @@ def test_zim_consumer_lifecycle() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     demo_setting = os.environ.get("COMPFUZOR_KEEP_ZIM_DEMO")
     if demo_setting:
-        demo_root = SCRATCH / "zim-demo" if demo_setting.lower() in {"1", "true", "yes"} else Path(demo_setting).resolve()
-        shutil.rmtree(demo_root, ignore_errors=True)
-        demo_root.mkdir(parents=True)
+        if demo_setting.lower() in {"1", "true", "yes"}:
+            demo_root = Path(tempfile.mkdtemp(prefix="zim-demo-", dir=SCRATCH))
+        else:
+            demo_root = Path(demo_setting).resolve()
+            if demo_root.exists() and any(demo_root.iterdir()):
+                raise RuntimeError(f"refusing nonempty demo root: {demo_root}")
+            demo_root.mkdir(parents=True, exist_ok=True)
         temporary_context = nullcontext(str(demo_root))
     else:
         temporary_context = tempfile.TemporaryDirectory(prefix="zim consumer migration-", dir=SCRATCH)
@@ -356,6 +360,54 @@ zimfw() { :; }
         for path in (*zimrc_d.iterdir(), *zimenv_d.iterdir()):
             path.chmod(0o644)
         if demo_setting:
+            def write_wrapper(name: str, values: dict[str, str]) -> None:
+                wrapper = temporary / name
+                exports = "\n".join(f"export {key}={shlex.quote(value)}" for key, value in values.items())
+                wrapper.write_text(f"#!/bin/sh\n{exports}\nexec \"$@\"\n", encoding="utf-8")
+                wrapper.chmod(0o755)
+
+            common = {
+                "CONFIG_BLOCK_IN_FILE": str(block_in_file),
+                "DIR": str(payload),
+                "PATH": os.pathsep.join((str(Path(NODE).parent), str(block_in_file.parent), "/usr/bin", "/bin")),
+            }
+            write_wrapper("user-one.sh", common | {
+                "HOME": str(home_one), "XDG_CONFIG_HOME": str(xdg_one), "ZDOTDIR": str(zdot_one),
+                "ZIM_HOME": str(home_one / ".cache" / "zim"), "ZIM_ENV_HOME": str(home_one / ".cache" / "zim-env"),
+                "ZIM_TEST_BUILD_LOG": str(build_log),
+            })
+            write_wrapper("user-two.sh", common | {
+                "HOME": str(home_two), "XDG_CONFIG_HOME": str(xdg_two), "ZDOTDIR": str(zdot_two),
+                "ZIM_HOME": str(home_two / ".cache" / "zim"), "ZIM_ENV_HOME": str(home_two / ".cache" / "zim-env"),
+                "ZIM_CONFIG_FILE": str(custom_zimrc), "ZIM_ENV_CONFIG": str(custom_zimenv), "ZIM_CONFIG_LINK": str(custom_registry),
+                "ZIM_TEST_BUILD_LOG": str(temporary / "build-two.log"),
+            })
+            (temporary / "README.md").write_text(
+                f"""# Isolated Zim consumer demo
+
+This directory was rendered from `zim.opt.pb` with downloads/package work disabled.
+`{controller}` is a local stub controller: it records cache builds and writes a harmless `init.zsh` comment.
+
+- host deployment: `{payload}`
+- canonical donor inputs: `{zimrc_d}` and `{zimenv_d}`
+- user one config: `{local_root_one}`
+- user two config: `{xdg_two / 'zsh'}` (custom outputs are under `{home_two / 'custom'}`)
+- producer fixture: `{producer}`
+
+Run tools without sourcing a live profile:
+
+```bash
+./user-one.sh {shlex.quote(str(payload / 'bin' / 'status.sh'))}
+./user-one.sh {shlex.quote(str(payload / 'bin' / 'config-user.sh'))} --check zimrc
+./user-one.sh {shlex.quote(str(payload / 'bin' / 'config-inputs-user.sh'))} status zimrc --json-array
+./user-two.sh {shlex.quote(str(payload / 'bin' / 'status.sh'))}
+```
+
+`install-zim-donor.sh` changes the canonical donor and is intentionally not run by either wrapper's ordinary user setup.
+All paths stay inside this demo root.
+""",
+                encoding="utf-8",
+            )
             print(f"demo preserved at {temporary}")
 
 
