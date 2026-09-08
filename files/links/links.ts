@@ -1,10 +1,17 @@
 #!/usr/bin/env -S node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
 
 import { execFile } from "node:child_process";
-import { access, constants as fsConstants, lstat, mkdir, readFile, readlink, rm, symlink } from "node:fs/promises";
+import { access, constants as fsConstants, lstat, readFile, rm } from "node:fs/promises";
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+
+import {
+  inspectDeliveryEntry,
+  localLinkDeliveryExecutor,
+  replaceWithLink,
+  type LinkDeliveryExecutor,
+} from "./delivery.ts";
 
 type Command = "apply" | "status" | "audit" | "remove";
 type Scope = "system" | "user";
@@ -58,7 +65,7 @@ interface Options {
   sudo?: string;
 }
 
-const DIR = process.env.DIR ?? dirname(dirname(fileURLToPath(import.meta.url)));
+const DIR = process.env.DIR ?? dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const _execFile = promisify(execFile);
 
 type SudoMode = "never" | "auto" | "always";
@@ -110,20 +117,21 @@ async function destWritable(destPath: string): Promise<boolean> {
   }
 }
 
-async function needsSudo(destPath: string): Promise<boolean> {
+async function needsSudo(scope: Scope, destPath: string): Promise<boolean> {
+  if (scope === "user") return false;
   if (SUDO_MODE === "always") return true;
   if (SUDO_MODE === "never") return false;
   return !(await destWritable(destPath));
 }
 
-async function mkdirP(path: string, sudo: boolean): Promise<void> {
-  if (sudo) await _execFile("sudo", ["mkdir", "-p", "--", path]);
-  else await mkdir(path, { recursive: true });
-}
-
-async function linkAt(src: string, dest: string, sudo: boolean): Promise<void> {
-  if (sudo) await _execFile("sudo", ["ln", "-s", "--", src, dest]);
-  else await symlink(src, dest);
+function linkExecutor(sudo: boolean): LinkDeliveryExecutor {
+  if (!sudo) return localLinkDeliveryExecutor;
+  return {
+    async mkdir(path) { await _execFile("sudo", ["mkdir", "-p", "--", path]); },
+    async symlink(source, destination) { await _execFile("sudo", ["ln", "-s", "--", source, destination]); },
+    async rename(source, destination) { await _execFile("sudo", ["mv", "-T", "--", source, destination]); },
+    async rm(path) { await _execFile("sudo", ["rm", "-f", "--", path]); },
+  };
 }
 
 async function rmLink(path: string, sudo: boolean): Promise<void> {
@@ -359,20 +367,12 @@ async function exists(path: string): Promise<boolean> {
 }
 
 async function destination(record: ResolvedRecord): Promise<{ kind: "missing" | "managed" | "foreign" | "directory" | "other"; target?: string }> {
-  let stat;
-  try {
-    stat = await lstat(record.destPath);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing" };
-    throw error;
-  }
-  if (!stat.isSymbolicLink()) {
-    if (stat.isDirectory()) return { kind: "directory" };
-    return { kind: stat.isFile() ? "foreign" : "other" };
-  }
-  const target = await readlink(record.destPath);
-  const targetPath = normalize(isAbsolute(target) ? target : resolve(dirname(record.destPath), target));
-  return { kind: targetPath === record.srcPath ? "managed" : "foreign", target };
+  const entry = await inspectDeliveryEntry(record.destPath);
+  if (entry.kind === "missing") return { kind: "missing" };
+  if (entry.kind === "directory") return { kind: "directory" };
+  if (entry.kind === "special") return { kind: "other" };
+  if (entry.kind === "file") return { kind: "foreign" };
+  return { kind: entry.targetPath === record.srcPath ? "managed" : "foreign", target: entry.target };
 }
 
 /** Actual entry kind at dest, from lstat/readlink truth (never the plan). */
@@ -433,7 +433,7 @@ function overwriteSelected(id: string): boolean {
 }
 
 async function removeManaged(record: ResolvedRecord, action: string): Promise<Row> {
-  const sudo = await needsSudo(record.destPath);
+  const sudo = await needsSudo(record.scope, record.destPath);
   const dest = await destination(record);
   const common = {
     id: record.id,
@@ -454,20 +454,18 @@ async function removeManaged(record: ResolvedRecord, action: string): Promise<Ro
 
 async function apply(record: ResolvedRecord): Promise<Row> {
   if (record.state === "absent") return removeManaged(record, "removed");
-  const sudo = await needsSudo(record.destPath);
+  const sudo = await needsSudo(record.scope, record.destPath);
   let row = await classify(record);
   if (row.status === "SOURCE_MISSING") return row;
   const dest = await destination(record);
   if (dest.kind === "missing") {
-    await mkdirP(dirname(record.destPath), sudo);
-    await linkAt(record.srcPath, record.destPath, sudo);
+    await replaceWithLink(record.srcPath, record.destPath, linkExecutor(sudo));
     return { ...row, status: "MANAGED", action: "created", entry: "symlink", target: record.srcPath, detail: sudo ? "via sudo" : undefined };
   }
   if (dest.kind === "managed") return { ...row, action: "unchanged" };
   const replace = record.policy === "replace" || (record.policy === "preserve" && overwriteSelected(record.id));
   if (!replace || (dest.kind !== "foreign")) return { ...row, action: "preserved" };
-  await rmLink(record.destPath, sudo);
-  await linkAt(record.srcPath, record.destPath, sudo);
+  await replaceWithLink(record.srcPath, record.destPath, linkExecutor(sudo));
   row = { ...row, status: "MANAGED", action: "replaced", entry: "symlink", target: record.srcPath, detail: sudo ? "via sudo" : undefined };
   return row;
 }
@@ -567,6 +565,9 @@ async function main(): Promise<number> {
   } else {
     const loaded = await loadManifest(options.paths[0]);
     const resolved = resolveRecords(loaded.path, loaded.manifest, options.scope, options.id);
+    if ((options.command === "apply" || options.command === "remove") && SUDO_MODE === "always" && resolved.records.some((record) => record.scope === "user")) {
+      fail("--sudo always is not permitted for user-scope link mutations");
+    }
     const operation = options.command === "apply" ? apply : options.command === "remove" ? removeRecord : classify;
     rows = [...resolved.invalid];
     // Mutation is all-or-nothing with respect to plan validity.

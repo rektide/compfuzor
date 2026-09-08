@@ -295,9 +295,30 @@ def test_sudo_routing() -> None:
 
         result = run(["apply", "--sudo", str(manifest)], env=shim_env(root))
         check("bare --sudo exits ok", result.returncode, 0)
-        check("bare --sudo routes rm+ln through sudo", "rm" in log.read_text(encoding="utf-8") and "ln" in log.read_text(encoding="utf-8"), True)
+        check("bare --sudo atomically routes ln+mv through sudo", "ln" in log.read_text(encoding="utf-8") and "mv" in log.read_text(encoding="utf-8"), True)
         check("bare --sudo creates the link", str(os.readlink(dest)), plan_src)
         check_contains("sudo-mutated row is marked", result.stdout, "via sudo")
+
+    # User scope is intrinsically non-escalating. Explicit always is rejected
+    # before any mutation rather than silently routing a user destination
+    # through sudo.
+    with tempfile.TemporaryDirectory(prefix="compfuzor-links-sudo-") as tmp:
+        root = Path(tmp).resolve()
+        log = make_sudo_shim(root)
+        source = root / "source"
+        source.write_text("managed\n", encoding="utf-8")
+        destination = root / "user.conf"
+        user_record = record("user.conf", str(source))
+        user_record["id"] = "user:user.conf"
+        user_record["scope"] = "user"
+        manifest = write_manifest(root, [user_record])
+
+        result = run(["apply", "--scope", "user", "--sudo", str(manifest)], env=shim_env(root))
+        check("user explicit sudo is rejected", result.returncode, 2)
+        check_contains("user sudo rejection is explicit", result.stderr, "not permitted for user-scope")
+        check("user sudo rejection leaves destination absent", destination.exists() or destination.is_symlink(), False)
+        sudo_calls = log.read_text(encoding="utf-8").strip() if log.exists() else ""
+        check("user scope never invokes sudo", sudo_calls, "")
 
     # env=never + unwritable dest: fail loud, never consult sudo
     with tempfile.TemporaryDirectory(prefix="compfuzor-links-sudo-") as tmp:
