@@ -274,7 +274,7 @@
           [ -x "$REPART/bin/repart" ] || { echo "Error: install repart.opt.pb first" >&2; exit 1; }
           # The toolkit copied into the guest is an opaque payload: preserve
           # its tokens so the spawned machine renders its own future trees.
-          args=(render --from etc --swap "{{SWAP_SIZE}}" \
+          args=(render --from {{ETC}} --swap "{{SWAP_SIZE}}" \
             --preserve mkosi.images/disk/mkosi.extra/opt/repart-main)
           [ -z "$DATE" ] || args+=(--date "$DATE")
           BUILD="$("$REPART/bin/repart" "${args[@]}")"
