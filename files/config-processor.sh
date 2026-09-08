@@ -2,7 +2,7 @@
 # Internal config leaf protocol and shared processor implementations.
 
 processor=${1:?processor identity is required}; shift
-spec="$DIR/etc/config.spec.json"
+spec=${CONFIG_SPEC:-"$DIR/etc/config.spec.json"}
 : "${CONFIG_TRANSACTION:?config processors are internal; use config.sh [--list | instance/assembly]}"
 
 config=""

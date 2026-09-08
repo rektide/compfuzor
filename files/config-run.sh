@@ -1,7 +1,8 @@
 #!/bin/bash
 # Build, validate, and atomically commit compiled configs.
 
-spec="$DIR/etc/config.spec.json"
+spec=${CONFIG_SPEC:-"$DIR/etc/config.spec.json"}
+export CONFIG_SPEC="$spec"
 check=0
 quiet=0
 print=0
@@ -78,16 +79,10 @@ for config in "${configs[@]}"; do
       end | @tsv
     ' "$spec")
 
-    # --stdout is a pure generate: build the candidate in the transaction dir
-    # (never touches the output directory) and stream it. With an explicit
-    # target the stream is byte-exact candidate output, ready for
-    # `config.sh --stdout NAME | diff - $output`; with no target each config
-    # gets a `# ---- config: NAME ----` separator header.
-    if [ "$print" = 1 ]; then
-      tmp=$(mktemp "$transaction/candidate.XXXXXX")
-    else
-      tmp=$(mktemp "$(dirname "$output")/.config-candidate.XXXXXX")
-    fi
+    # Every mode builds privately. Apply stages validated candidates beside
+    # their outputs later, immediately before the atomic commit. Thus check and
+    # stdout never require a writable destination directory.
+    tmp=$(mktemp "$transaction/candidate.XXXXXX")
     leaf="$DIR/bin/internal/config/$config"
     [ -x "$leaf" ] || { printf 'missing config leaf: %s\n' "$leaf" >&2; exit 2; }
     if [ "$print" = 1 ]; then
@@ -116,7 +111,10 @@ for config in "${configs[@]}"; do
       rm -f "$tmp"
       continue
     fi
-    if [ -f "$output" ] && cmp -s "$tmp" "$output"; then
+    # A matching symlink is still pending: assembly owns the directory entry
+    # and must detach it rather than leave a link to (and later write into) a
+    # donor output.
+    if [ ! -L "$output" ] && [ -f "$output" ] && cmp -s "$tmp" "$output"; then
       rm -f "$tmp"; continue
     fi
     temps+=("$tmp")
@@ -131,23 +129,39 @@ for config in "${configs[@]}"; do
 done
 
 if [ "$check" = 0 ]; then
-  backups=()
-  for output in "${pending_outputs[@]}"; do
-    [ ! -e "$output" ] || [ -f "$output" ] || { printf 'config output is not a regular file: %s\n' "$output" >&2; exit 1; }
-  done
+  staged_sources=()
+  staged_outputs=()
   for index in "${!pending_sources[@]}"; do
-    output=${pending_outputs[$index]}; backup=""
-    if [ -e "$output" ]; then
+    output=${pending_outputs[$index]}
+    parent=$(dirname "$output")
+    if [ -e "$output" ] || [ -L "$output" ]; then
+      [ -L "$output" ] || [ -f "$output" ] || { printf 'config output is not a regular file or symlink: %s\n' "$output" >&2; exit 1; }
+    fi
+    mkdir -p "$parent"
+    staged=$(mktemp "$parent/.config-candidate.XXXXXX")
+    temps+=("$staged")
+    mode=0600
+    if [ ! -L "$output" ] && [ -f "$output" ]; then mode=$(stat -c '%a' -- "$output"); fi
+    cp -- "${pending_sources[$index]}" "$staged"
+    chmod "$mode" "$staged"
+    staged_sources+=("$staged")
+    staged_outputs+=("$output")
+  done
+
+  backups=()
+  for index in "${!staged_sources[@]}"; do
+    output=${staged_outputs[$index]}; backup=""
+    if [ -e "$output" ] || [ -L "$output" ]; then
       backup=$(mktemp "$(dirname "$output")/.config-backup.XXXXXX"); rm -f "$backup"
       if ! mv "$output" "$backup"; then
-        for ((rollback=index - 1; rollback >= 0; rollback--)); do rm -f "${pending_outputs[$rollback]}"; [ -z "${backups[$rollback]}" ] || mv "${backups[$rollback]}" "${pending_outputs[$rollback]}"; done
+        for ((rollback=index - 1; rollback >= 0; rollback--)); do rm -f "${staged_outputs[$rollback]}"; [ -z "${backups[$rollback]}" ] || mv "${backups[$rollback]}" "${staged_outputs[$rollback]}"; done
         exit 1
       fi
     fi
     backups[$index]="$backup"
-    if ! mv "${pending_sources[$index]}" "$output"; then
+    if ! mv "${staged_sources[$index]}" "$output"; then
       [ -z "$backup" ] || mv "$backup" "$output"
-      for ((rollback=index - 1; rollback >= 0; rollback--)); do rm -f "${pending_outputs[$rollback]}"; [ -z "${backups[$rollback]}" ] || mv "${backups[$rollback]}" "${pending_outputs[$rollback]}"; done
+      for ((rollback=index - 1; rollback >= 0; rollback--)); do rm -f "${staged_outputs[$rollback]}"; [ -z "${backups[$rollback]}" ] || mv "${backups[$rollback]}" "${staged_outputs[$rollback]}"; done
       exit 1
     fi
     printf 'assembled -> %s\n' "$output"

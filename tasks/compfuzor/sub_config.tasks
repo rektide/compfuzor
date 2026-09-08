@@ -3,7 +3,10 @@
   set_fact:
     SUBSYSTEM: "{{ SUBSYSTEM | config_publish(compiled) }}"
   vars:
-    compiled: >-
+    base_compiled: >-
       {{ CONFIGS | default({}) | resolve |
          config_compile(ETC, BINS_DIR, CONFIG_DISABLED_SUFFIX) }}
+    compiled: >-
+      {{ base_compiled |
+         config_context_compile(CONFIG_CONTEXTS | default({}) | resolve, ETC) }}
   when: CONFIGS is defined
