@@ -318,8 +318,15 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
                 "basedir": False,
                 "helpers": False,
                 "content": 'exec "$(dirname "$(readlink -f "$0")")/config/toolkit.ts" --context {} {} "$@"'.format(name, action),
-                "scope": scope,
             }
+            if scope == "user":
+                descriptor["scope"] = "user"
+            if action == "status":
+                descriptor["content"] = (
+                    '"$(dirname "$(readlink -f "$0")")/config/toolkit.ts" '
+                    '--context {} status "$@"; code=$?; '
+                    '[ "$code" -eq 0 ] && exit 0; exit 1'
+                ).format(name)
             if not compose:
                 descriptor["compose"] = False
             bins.append(descriptor)

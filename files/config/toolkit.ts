@@ -2,10 +2,11 @@
 /** Donor delivery, local input operations, and status for bound CONFIGS contexts. */
 
 import { mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises"
-import { basename, dirname, isAbsolute, join, normalize, resolve } from "node:path"
+import type { Dirent } from "node:fs"
+import { basename, dirname, join, matchesGlob, normalize, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
-import { runConfigContext, type ConfigContextCliOptions } from "../config-context.ts"
+import { runConfigContext, runConfigContextResult, type ConfigContextCliOptions } from "../config-context.ts"
 import {
   bindContextConfigs,
   contextConfigNames,
@@ -18,6 +19,7 @@ import {
 import {
   inspectDeliveryEntry,
   linkMatches,
+  linkResolvesToSameFile,
   replaceWithCopy,
   replaceWithLink,
   type DeliveryEntry,
@@ -66,7 +68,7 @@ type InputDirectory = {
 }
 
 export type StatusRow = {
-  kind: "input" | "output"
+  kind: "input" | "output" | "assembly"
   status: string
   severity: Severity
   config: string
@@ -97,14 +99,10 @@ function truthy(value: string | undefined): boolean {
   return ["1", "true", "y", "yes"].includes(value?.trim().toLowerCase() ?? "")
 }
 
-function globMatches(pattern: string, value: string): boolean {
-  let source = "^"
-  for (const character of pattern) {
-    if (character === "*") source += ".*"
-    else if (character === "?") source += "."
-    else source += character.replace(/[\\^$.*+?()[\]{}|]/g, "\\$&")
-  }
-  return new RegExp(`${source}$`).test(value)
+function filenameMatches(value: string, pattern: string): boolean {
+  // Prefixing keeps leading-dot filenames compatible with find -name, whose
+  // '*' and '?' do not apply shell pathname-expansion dotfile suppression.
+  return matchesGlob(`x${value}`, `x${pattern}`)
 }
 
 function inputIdentity(input: ConfigInput, index: number): string {
@@ -168,18 +166,20 @@ async function usableSource(path: string): Promise<{ usable: boolean; note?: str
   return { usable: true }
 }
 
-async function sameContents(first: string, second: string): Promise<boolean> {
+type ContentComparison = { equal: boolean; error?: string }
+
+async function sameContents(first: string, second: string): Promise<ContentComparison> {
   try {
     const [one, two] = await Promise.all([readFile(first), readFile(second)])
-    return one.equals(two)
-  } catch {
-    return false
+    return { equal: one.equals(two) }
+  } catch (error) {
+    return { equal: false, error: `cannot compare ${first} and ${second}: ${error instanceof Error ? error.message : String(error)}` }
   }
 }
 
-async function readDirectory(path: string): Promise<Awaited<ReturnType<typeof readdir>> | undefined> {
+async function readDirectory(path: string): Promise<Dirent<string>[] | undefined> {
   try {
-    return await readdir(path, { withFileTypes: true })
+    return await readdir(path, { withFileTypes: true, encoding: "utf8" })
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined
     throw error
@@ -239,7 +239,7 @@ async function inputCatalog(spec: ConfigSpec, contextName: string, names: string
       for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
         const disabled = suffix !== undefined && entry.name.endsWith(suffix)
         const logicalName = disabled ? entry.name.slice(0, -suffix.length) : entry.name
-        if (!globMatches(donor.pattern, logicalName)) continue
+        if (!filenameMatches(logicalName, donor.pattern)) continue
         const source = join(donor.directory, entry.name)
         const relation: InputRelation = {
           id: `${configName}/${name}/${logicalName}`,
@@ -420,11 +420,24 @@ async function relationStatus(relation: InputRelation): Promise<StatusRow> {
   if (!source.usable) {
     return { ...common, status: "donor-missing", severity: "error", representation: local.selectedEntry.kind, note: source.note }
   }
-  if (linkMatches(local.selectedEntry, relation.source)) {
-    return { ...common, status: "ok", severity: "ok", representation: "link" }
+  if (local.selectedEntry.kind === "symlink") {
+    try {
+      if (await linkResolvesToSameFile(local.selectedEntry, relation.source)) {
+        return { ...common, status: "ok", severity: "ok", representation: "link" }
+      }
+    } catch (error) {
+      return {
+        ...common, status: "evaluation-error", severity: "error", representation: "link",
+        note: `cannot resolve link referents: ${error instanceof Error ? error.message : String(error)}`,
+      }
+    }
   }
-  if (local.selectedEntry.kind === "file" && await sameContents(relation.source, local.selectedPath)) {
-    return { ...common, status: "ok", severity: "ok", representation: "copy" }
+  if (local.selectedEntry.kind === "file") {
+    const comparison = await sameContents(relation.source, local.selectedPath)
+    if (comparison.error) {
+      return { ...common, status: "evaluation-error", severity: "error", representation: "copy", note: comparison.error }
+    }
+    if (comparison.equal) return { ...common, status: "ok", severity: "ok", representation: "copy" }
   }
   if (local.selectedEntry.kind === "directory" || local.selectedEntry.kind === "special") {
     return { ...common, status: "unsupported", severity: "drift", representation: local.selectedEntry.kind }
@@ -440,9 +453,10 @@ async function extraInputRows(directory: InputDirectory): Promise<StatusRow[]> {
   if (entries === undefined) return []
   const grouped = new Map<string, { active?: string; disabled?: string }>()
   for (const entry of entries) {
-    const disabled = directory.suffix !== undefined && entry.name.endsWith(directory.suffix)
-    const logical = disabled ? entry.name.slice(0, -directory.suffix.length) : entry.name
-    if (!globMatches(directory.pattern, logical) || directory.donorNames.has(logical)) continue
+    const suffix = directory.suffix
+    const disabled = suffix !== undefined && entry.name.endsWith(suffix)
+    const logical = disabled ? entry.name.slice(0, -suffix.length) : entry.name
+    if (!filenameMatches(logical, directory.pattern) || directory.donorNames.has(logical)) continue
     const group = grouped.get(logical) ?? {}
     group[disabled ? "disabled" : "active"] = join(directory.destinationDirectory, entry.name)
     grouped.set(logical, group)
@@ -494,15 +508,32 @@ async function inputStatusRows(spec: ConfigSpec, contextName: string, names: str
   return rows
 }
 
-async function assemblyMatches(options: ToolkitOptions, config: string): Promise<boolean> {
+type AssemblyEvaluation = { candidate?: Buffer; error?: string }
+
+async function evaluateAssembly(options: ToolkitOptions, config: string): Promise<AssemblyEvaluation> {
   const runOptions: ConfigContextCliOptions = {
     context: options.context,
     specPath: options.specPath,
     runner: options.runner,
-    runnerArgs: ["--check", "--quiet", config],
-    stdio: "ignore",
+    runnerArgs: ["--stdout", config],
+    stdio: "pipe",
   }
-  return await runConfigContext(runOptions) === 0
+  try {
+    const result = await runConfigContextResult(runOptions)
+    if (result.code === 0) return { candidate: result.stdout }
+    const detail = result.stderr.toString("utf8").trim()
+    return { error: `assembly candidate failed (exit ${result.code})${detail ? `: ${detail}` : ""}` }
+  } catch (error) {
+    return { error: `assembly candidate could not run: ${error instanceof Error ? error.message : String(error)}` }
+  }
+}
+
+async function candidateMatches(candidate: Buffer, destination: string): Promise<ContentComparison> {
+  try {
+    return { equal: candidate.equals(await readFile(destination)) }
+  } catch (error) {
+    return { equal: false, error: `cannot read assembled output ${destination}: ${error instanceof Error ? error.message : String(error)}` }
+  }
 }
 
 async function outputStatusRows(spec: ConfigSpec, options: ToolkitOptions, names: string[]): Promise<StatusRow[]> {
@@ -511,20 +542,76 @@ async function outputStatusRows(spec: ConfigSpec, options: ToolkitOptions, names
   for (const name of names) {
     const source = spec.configs[name].output
     const destination = resolved.configs[name].output
-    const [sourceState, entry] = await Promise.all([usableSource(source), inspectDeliveryEntry(destination)])
+    const [sourceState, entry, assembly] = await Promise.all([
+      usableSource(source),
+      inspectDeliveryEntry(destination),
+      evaluateAssembly(options, name),
+    ])
     const common = { kind: "output" as const, config: name, name, source, destination }
+    rows.push(assembly.error
+      ? { kind: "assembly", status: "evaluation-error", severity: "error", config: name, name, note: assembly.error }
+      : { kind: "assembly", status: "ready", severity: "ok", config: name, name })
     if (entry.kind === "missing") {
-      rows.push({ ...common, status: sourceState.usable ? "missing" : "donor-missing", severity: sourceState.usable ? "drift" : "error", note: sourceState.note })
-    } else if (linkMatches(entry, source)) {
-      rows.push({ ...common, status: sourceState.usable ? "ok" : "donor-missing", severity: sourceState.usable ? "ok" : "error", representation: "link", note: sourceState.note })
-    } else if (entry.kind === "file" && sourceState.usable && await sameContents(source, destination)) {
-      rows.push({ ...common, status: "ok", severity: "ok", representation: "copy" })
-    } else if (entry.kind === "file" && await assemblyMatches(options, name)) {
-      rows.push({ ...common, status: sourceState.usable ? "ok" : "donor-missing", severity: sourceState.usable ? "ok" : "error", representation: "assembly", note: sourceState.note })
-    } else if (entry.kind === "directory" || entry.kind === "special") {
+      rows.push({ ...common, status: "missing", severity: "drift", note: sourceState.usable ? undefined : `canonical output unavailable: ${sourceState.note}` })
+      continue
+    }
+    if (entry.kind === "directory" || entry.kind === "special") {
       rows.push({ ...common, status: "unsupported", severity: "drift", representation: entry.kind })
+      continue
+    }
+    if (entry.kind === "symlink") {
+      if (!sourceState.usable && linkMatches(entry, source)) {
+        rows.push({ ...common, status: "donor-missing", severity: "error", representation: "link", note: sourceState.note })
+        continue
+      }
+      if (sourceState.usable) {
+        try {
+          if (await linkResolvesToSameFile(entry, source)) {
+            rows.push({ ...common, status: "ok", severity: "ok", representation: "link" })
+            continue
+          }
+        } catch (error) {
+          rows.push({
+            ...common, status: "evaluation-error", severity: "error", representation: "link",
+            note: `cannot resolve link referents: ${error instanceof Error ? error.message : String(error)}`,
+          })
+          continue
+        }
+      }
+      rows.push({ ...common, status: "modified", severity: "drift", representation: "link", note: `points to ${entry.target}` })
+      continue
+    }
+
+    let donorComparisonError: string | undefined
+    if (sourceState.usable) {
+      const donorComparison = await sameContents(source, destination)
+      if (donorComparison.equal) {
+        rows.push({ ...common, status: "ok", severity: "ok", representation: "copy" })
+        continue
+      }
+      donorComparisonError = donorComparison.error
+      if (donorComparison.error && !assembly.candidate) {
+        rows.push({ ...common, status: "evaluation-error", severity: "error", representation: "copy", note: donorComparison.error })
+        continue
+      }
+    }
+    if (assembly.candidate) {
+      const localComparison = await candidateMatches(assembly.candidate, destination)
+      if (localComparison.error) {
+        rows.push({ ...common, status: "evaluation-error", severity: "error", representation: "assembly", note: localComparison.error })
+      } else if (localComparison.equal) {
+        rows.push({
+          ...common, status: "ok", severity: "ok", representation: "assembly",
+          note: donorComparisonError ?? (sourceState.usable ? undefined : `canonical output unavailable: ${sourceState.note}`),
+        })
+      } else {
+        rows.push({
+          ...common, status: "modified", severity: "drift", representation: "assembly",
+          note: donorComparisonError ?? (sourceState.usable ? "differs from donor and local assembly" : `differs from local assembly; canonical output unavailable: ${sourceState.note}`),
+        })
+      }
     } else {
-      rows.push({ ...common, status: "modified", severity: "drift", representation: entry.kind === "file" ? "copy" : "link", note: entry.kind === "symlink" ? `points to ${entry.target}` : "differs from donor and local assembly" })
+      rows.push({ ...common, status: "unclassified", severity: "error", representation: "file", note: "assembly evaluation failed" })
     }
   }
   return rows
@@ -580,7 +667,7 @@ function resolvedInput(spec: ConfigSpec, contextName: string, found: ReturnType<
 
 function validateInputName(input: ConfigInput, name: string): void {
   if (!name || basename(name) !== name || name === "." || name === "..") fail(`invalid input filename: ${name}`)
-  if (typeof input.pattern !== "string" || !globMatches(input.pattern, name)) fail(`${name} does not match input pattern ${String(input.pattern)}`)
+  if (typeof input.pattern !== "string" || !filenameMatches(name, input.pattern)) fail(`${name} does not match input pattern ${String(input.pattern)}`)
   if (typeof input.disabled_suffix === "string" && name.endsWith(input.disabled_suffix)) fail(`input filename must not include disabled suffix ${input.disabled_suffix}`)
 }
 
@@ -725,7 +812,7 @@ export async function runConfigToolkit(options: ToolkitOptions): Promise<number>
   return inputAction(spec, options)
 }
 
-export async function main(argv = process.argv.slice(2), modulePath = fileURLToPath(import.meta.url)): Promise<number> {
+export async function main(argv: string[] = process.argv.slice(2), modulePath: string = fileURLToPath(import.meta.url)): Promise<number> {
   const realModulePath = await realpath(modulePath)
   const deploymentDir = resolve(dirname(dirname(realModulePath)), "..")
   return runConfigToolkit(parseConfigToolkitArgs(argv, deploymentDir))

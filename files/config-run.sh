@@ -60,7 +60,8 @@ for config in "${configs[@]}"; do
     : > "$input_manifest"
 
     input_index=0
-    while IFS=$'\t' read -r kind value pattern block; do
+    while IFS=$'\t' read -r kind value pattern suffix block; do
+      [ "$suffix" != "-" ] || suffix=""
       case "$kind" in
         file) printf 'file\tfile/%s/%s\t%s\t%s\n' "$input_index" "$(basename "$value")" "$value" "$block" >> "$input_manifest" ;;
         glob)
@@ -77,6 +78,7 @@ for config in "${configs[@]}"; do
           fi
           while IFS= read -r -d '' file; do
             filename=$(basename "$file")
+            if [ -n "$suffix" ] && [[ "$filename" == *"$suffix" ]]; then continue; fi
             printf 'glob\t%s/%s/%s\t%s\t%s\n' "$(basename "$value")" "$input_index" "$filename" "$file" "$block" >> "$input_manifest"
           done < "$sorted"
           ;;
@@ -85,8 +87,8 @@ for config in "${configs[@]}"; do
     done < <(jq -r --arg config "$config" '
       .configs[$config].inputs[] |
       (.block // {} | tojson) as $block |
-      if has("file") then ["file", .file, "", $block]
-      else ["glob", .directory, .pattern, $block]
+       if has("file") then ["file", .file, "-", "-", $block]
+       else ["glob", .directory, .pattern, (.disabled_suffix // "-"), $block]
       end | @tsv
     ' "$spec")
 

@@ -102,10 +102,13 @@ def test_compile_contexts():
     check("system entry point", "config-system-test.sh" in bins, True)
     check("context commands do not compose", bins["config-user.sh"]["compose"], False)
     check("ordinary install composes", "compose" in bins["install-config-user.sh"], False)
+    check("user install carries user scope", bins["install-config-user.sh"]["scope"], "user")
+    check("system install uses bare scope", "scope" in bins["install-config-system-test.sh"], False)
     check("drop-in refresh does not compose", bins["install-config-user-dropins.sh"]["compose"], False)
     check("whole copy does not compose", bins["install-config-user-copy.sh"]["compose"], False)
     check("input command does not compose", bins["config-inputs-user.sh"]["compose"], False)
     check("context status is registered", "status-config-context-user.sh" in compiled["statuses"], True)
+    check("context status adapts reporter errors", 'exit 1' in bins["status-config-context-user.sh"]["content"], True)
 
 
 def test_validation():

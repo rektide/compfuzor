@@ -16,7 +16,13 @@ export type ConfigContextCliOptions = {
   specPath: string
   runner: string
   runnerArgs: string[]
-  stdio?: "inherit" | "ignore"
+  stdio?: "inherit" | "ignore" | "pipe"
+}
+
+export type ConfigContextResult = {
+  code: number
+  stdout: Buffer
+  stderr: Buffer
 }
 
 function fail(message: string): never {
@@ -49,15 +55,19 @@ function signalExitCode(signal: NodeJS.Signals): number {
   return typeof number === "number" ? 128 + number : 1
 }
 
-async function invokeRunner(options: ConfigContextCliOptions, specPath: string): Promise<number> {
+async function invokeRunner(options: ConfigContextCliOptions, specPath: string): Promise<ConfigContextResult> {
   const runnerDeploymentDir = resolve(dirname(options.runner), "..")
-  return await new Promise<number>((complete, reject) => {
+  return await new Promise<ConfigContextResult>((complete, reject) => {
     const child = spawn(options.runner, options.runnerArgs, {
       cwd: runnerDeploymentDir,
       detached: true,
       env: { ...process.env, DIR: runnerDeploymentDir, CONFIG_SPEC: specPath },
       stdio: options.stdio ?? "inherit",
     })
+    const stdout: Buffer[] = []
+    const stderr: Buffer[] = []
+    child.stdout?.on("data", (chunk: Buffer | string) => stdout.push(Buffer.from(chunk)))
+    child.stderr?.on("data", (chunk: Buffer | string) => stderr.push(Buffer.from(chunk)))
     const handlers = new Map<NodeJS.Signals, () => void>()
     const cleanupHandlers = (): void => {
       for (const [signal, handler] of handlers) process.off(signal, handler)
@@ -80,12 +90,16 @@ async function invokeRunner(options: ConfigContextCliOptions, specPath: string):
     })
     child.once("exit", (code, signal) => {
       cleanupHandlers()
-      complete(signal ? signalExitCode(signal) : (code ?? 1))
+      complete({
+        code: signal ? signalExitCode(signal) : (code ?? 1),
+        stdout: Buffer.concat(stdout),
+        stderr: Buffer.concat(stderr),
+      })
     })
   })
 }
 
-export async function runConfigContext(options: ConfigContextCliOptions): Promise<number> {
+export async function runConfigContextResult(options: ConfigContextCliOptions): Promise<ConfigContextResult> {
   const spec = JSON.parse(await readFile(options.specPath, "utf8")) as ConfigSpec
   const resolvedSpec = bindContextSpec(spec, options.context, options.runnerArgs)
   const temporary = await mkdtemp(join(tmpdir(), "compfuzor-config-context-"))
@@ -98,7 +112,11 @@ export async function runConfigContext(options: ConfigContextCliOptions): Promis
   }
 }
 
-export async function main(argv = process.argv.slice(2), modulePath = fileURLToPath(import.meta.url)): Promise<number> {
+export async function runConfigContext(options: ConfigContextCliOptions): Promise<number> {
+  return (await runConfigContextResult(options)).code
+}
+
+export async function main(argv: string[] = process.argv.slice(2), modulePath: string = fileURLToPath(import.meta.url)): Promise<number> {
   const realModulePath = await realpath(modulePath)
   const deploymentDir = resolve(dirname(realModulePath), "..")
   return runConfigContext(parseConfigContextArgs(argv, deploymentDir))
