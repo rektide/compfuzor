@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -117,6 +118,10 @@ output.write_text(text)
         processor: block-in-file
         block: {{after: EOF}}
         inputs: [{{glob: inputs/shell.d/*.conf}}]
+      outputs/optional.conf:
+        processor: concat
+        apply: false
+        inputs: [{{glob: inputs/optional.d/*.conf}}]
     CONFIG_CONTEXTS:
       user:
         scope: user
@@ -129,6 +134,8 @@ output.write_text(text)
               default: outputs/plain.conf
           settings: {{}}
           shell: {{}}
+          optional:
+            output: {{env: REQUIRED_OUTPUT}}
       system-test:
         scope: system
         root: {str(system_root)!r}
@@ -162,7 +169,7 @@ output.write_text(text)
         run(["ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook)], cwd=ROOT, env=ansible_env)
 
         plan = json.loads(plan_file.read_text(encoding="utf-8"))
-        assert {"config-context.ts", "config-user.sh", "config-system-test.sh"}.issubset(plan["bins"])
+        assert {"config-context.ts", "config/context.ts", "config-user.sh", "config-system-test.sh"}.issubset(plan["bins"])
         assert plan["spec"]["contexts"]["user"]["scope"] == "user"
         assert plan["spec"]["contexts"]["system-test"]["root"] == {"path": str(system_root)}
 
@@ -186,7 +193,11 @@ output.write_text(text)
         user_command = payload / "bin" / "config-user.sh"
 
         listed = run([str(user_command), "--list"], cwd=temporary, env=env_one)
-        assert listed.stdout.splitlines() == ["plain", "settings", "shell"]
+        assert listed.stdout.splitlines() == ["optional", "plain", "settings", "shell"]
+        no_home_env = env_one.copy()
+        no_home_env.pop("HOME")
+        listed_without_home = run([str(user_command), "--list"], cwd=temporary, env=no_home_env)
+        assert listed_without_home.stdout.splitlines() == ["optional", "plain", "settings", "shell"]
         streamed = run([str(user_command), "--stdout", "plain"], cwd=temporary, env=env_one)
         assert streamed.stdout == "valid=one\n"
         missing_check = run([str(user_command), "--check", "plain"], cwd=temporary, env=env_one, check=False)
@@ -200,6 +211,8 @@ output.write_text(text)
         shell_one = (output_one / "shell.conf").read_text(encoding="utf-8")
         assert "home_one=true" in shell_one
         assert all((output_one / name).stat().st_mode & 0o777 == 0o600 for name in ("plain.conf", "settings.json", "shell.conf"))
+        assert not (output_one / "optional.conf").exists()
+        run([str(user_command), "settings"], cwd=temporary, env=env_one)
 
         unchanged = (output_one / "plain.conf").stat()
         run([str(user_command)], cwd=temporary, env=env_one)
@@ -222,12 +235,23 @@ output.write_text(text)
         assert plain_output.read_bytes() == before_plain
         assert settings_output.read_bytes() == before_settings
 
+        (base_one / "inputs" / "plain.d" / "10-main.conf").write_text("valid=enumeration-pending\n", encoding="utf-8")
+        missing_settings = base_one / "inputs" / "settings.d.missing"
+        (base_one / "inputs" / "settings.d").rename(missing_settings)
+        enumeration_failed = run([str(user_command)], cwd=temporary, env=env_one, check=False)
+        assert enumeration_failed.returncode == 1
+        assert "config input directory is missing" in enumeration_failed.stderr
+        assert plain_output.read_bytes() == before_plain
+        missing_settings.rename(base_one / "inputs" / "settings.d")
+
         (base_one / "inputs" / "plain.d" / "10-main.conf").write_text("valid=true\n", encoding="utf-8")
         (base_one / "inputs" / "settings.d" / "10-main.json").write_text('{"allow":true,"consumer":"home_one"}\n', encoding="utf-8")
         donor_plain = canonical / "outputs" / "plain.conf"
         plain_output.unlink()
         plain_output.symlink_to(donor_plain)
         donor_before = donor_plain.read_bytes()
+        detach_check = run([str(user_command), "--check", "plain"], cwd=temporary, env=env_one, check=False)
+        assert detach_check.returncode == 1 and "detach symlink:" in detach_check.stdout
         run([str(user_command), "plain"], cwd=temporary, env=env_one)
         assert not plain_output.is_symlink()
         assert plain_output.read_bytes() == donor_before == donor_plain.read_bytes()
@@ -257,7 +281,7 @@ output.write_text(text)
             cwd=temporary,
             env=system_env,
         )
-        assert deployed_direct.stdout.splitlines() == ["plain", "settings", "shell"]
+        assert deployed_direct.stdout.splitlines() == ["optional", "plain", "settings", "shell"]
         source_direct = run(
             [
                 NODE,
@@ -273,12 +297,75 @@ output.write_text(text)
             cwd=ROOT,
             env=system_env,
         )
-        assert source_direct.stdout.splitlines() == ["plain", "settings", "shell"]
+        assert source_direct.stdout.splitlines() == ["optional", "plain", "settings", "shell"]
+
+        for module in (ROOT / "files" / "config" / "context.ts", payload / "bin" / "config" / "context.ts", ROOT / "files" / "config-context.ts"):
+            imported = run(
+                [NODE, "--input-type=module", "--eval", f'import({json.dumps(module.as_uri())}).then(() => console.log("imported"))'],
+                cwd=ROOT,
+                env=system_env,
+            )
+            assert imported.stdout == "imported\n"
 
         assert not list(temporary.rglob(".config-candidate.*"))
         assert not list(temporary.rglob(".config-backup.*"))
 
 
+def test_context_signal_cleanup() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="signal cleanup-", dir=SCRATCH) as tmp:
+        temporary = Path(tmp)
+        pid_file = temporary / "runner.pid"
+        runner = temporary / "bin" / "config.sh"
+        runner.parent.mkdir()
+        runner.write_text(
+            f'''#!/bin/bash
+trap 'exit 143' TERM
+printf '%s' "$$" > {str(pid_file)!r}
+while true; do sleep 30 & wait "$!"; done
+''',
+            encoding="utf-8",
+        )
+        runner.chmod(0o755)
+        spec = temporary / "config.spec.json"
+        spec.write_text(json.dumps({
+            "configs": {},
+            "contexts": {"test": {"scope": "system", "root": {"path": str(temporary / "root")}, "configs": {}}},
+        }), encoding="utf-8")
+        env = os.environ.copy()
+        env["TMPDIR"] = str(temporary)
+        env["PATH"] = os.pathsep.join((str(Path(NODE).parent), "/usr/bin", "/bin"))
+        process = subprocess.Popen(
+            [NODE, str(ROOT / "files" / "config-context.ts"), "--context", "test", "--spec", str(spec), "--runner", str(runner)],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        for _ in range(100):
+            if pid_file.exists():
+                break
+            if process.poll() is not None:
+                raise AssertionError(f"context runner exited before signal test: {process.communicate()}")
+            time.sleep(0.02)
+        else:
+            process.kill()
+            raise AssertionError("context runner did not start")
+        child_pid = int(pid_file.read_text(encoding="utf-8"))
+        process.terminate()
+        stdout, stderr = process.communicate(timeout=10)
+        assert process.returncode == 143, (stdout, stderr)
+        try:
+            os.kill(child_pid, 0)
+        except ProcessLookupError:
+            pass
+        else:
+            raise AssertionError(f"mutating child remained alive after SIGTERM: {child_pid}")
+        assert not list(temporary.glob("compfuzor-config-context-*"))
+
+
 if __name__ == "__main__":
     test_config_contexts()
+    test_context_signal_cleanup()
     print("ok: reusable config contexts")

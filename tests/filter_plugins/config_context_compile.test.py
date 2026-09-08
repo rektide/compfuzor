@@ -68,6 +68,7 @@ def test_compile_contexts():
             },
         },
         "/opt/example/etc",
+        "/opt/example/bin",
     )
 
     check("base plan is pure", "contexts" in original["spec"], False)
@@ -89,6 +90,8 @@ def test_compile_contexts():
 
     bins = {item["name"]: item for item in compiled["bins"]}
     check("shared context runtime", bins["config-context.ts"]["raw"], True)
+    check("shared context module", bins["config/context.ts"]["raw"], True)
+    check("context module directory", "/opt/example/bin/config" in compiled["dirs"], True)
     check("user entry point", bins["config-user.sh"]["helpers"], False)
     check("system entry point", "config-system-test.sh" in bins, True)
     check("context commands do not compose", bins["config-user.sh"]["compose"], False)
@@ -97,32 +100,32 @@ def test_compile_contexts():
 def test_validation():
     check_raises(
         "scope required",
-        lambda: compile_config_contexts(base_plan(), {"user": {"root": "config"}}, "/opt/example/etc"),
+        lambda: compile_config_contexts(base_plan(), {"user": {"root": "config"}}, "/opt/example/etc", "/opt/example/bin"),
         "scope must be user or system",
     )
     check_raises(
         "root required",
-        lambda: compile_config_contexts(base_plan(), {"user": {"scope": "user"}}, "/opt/example/etc"),
+        lambda: compile_config_contexts(base_plan(), {"user": {"scope": "user"}}, "/opt/example/etc", "/opt/example/bin"),
         "root is required",
     )
     check_raises(
         "unknown config",
         lambda: compile_config_contexts(
-            base_plan(), {"user": {"scope": "user", "root": "config", "configs": ["missing"]}}, "/opt/example/etc"
+            base_plan(), {"user": {"scope": "user", "root": "config", "configs": ["missing"]}}, "/opt/example/etc", "/opt/example/bin"
         ),
         "unknown config",
     )
     check_raises(
         "relative root rejected",
         lambda: compile_config_contexts(
-            base_plan(), {"user": {"scope": "user", "root": "relative"}}, "/opt/example/etc"
+            base_plan(), {"user": {"scope": "user", "root": "relative"}}, "/opt/example/etc", "/opt/example/bin"
         ),
         "must be absolute",
     )
     check_raises(
         "unknown runtime root rejected",
         lambda: compile_config_contexts(
-            base_plan(), {"user": {"scope": "user", "root": "${OTHER}/path"}}, "/opt/example/etc"
+            base_plan(), {"user": {"scope": "user", "root": "${OTHER}/path"}}, "/opt/example/etc", "/opt/example/bin"
         ),
         "unsupported runtime expression",
     )
@@ -134,13 +137,14 @@ def test_validation():
     )
     check_raises(
         "external input requires binding",
-        lambda: compile_config_contexts(external, {"user": {"scope": "user", "root": "config"}}, "/opt/example/etc"),
+        lambda: compile_config_contexts(external, {"user": {"scope": "user", "root": "config"}}, "/opt/example/etc", "/opt/example/bin"),
         "outside ETC",
     )
     rebound = compile_config_contexts(
         external,
         {"user": {"scope": "user", "root": "config", "configs": {"app": {"inputs": {0: "inputs/base.conf"}}}}},
         "/opt/example/etc",
+        "/opt/example/bin",
     )
     check("external input explicit binding", rebound["spec"]["contexts"]["user"]["configs"]["app"]["inputs"][0], {"relative": "inputs/base.conf"})
 
@@ -148,7 +152,7 @@ def test_validation():
     colliding["bins"].append({"name": "config-user.sh"})
     check_raises(
         "generated command collision",
-        lambda: compile_config_contexts(colliding, {"user": {"scope": "user", "root": "config"}}, "/opt/example/etc"),
+        lambda: compile_config_contexts(colliding, {"user": {"scope": "user", "root": "config"}}, "/opt/example/etc", "/opt/example/bin"),
         "generated command collision",
     )
 

@@ -174,7 +174,7 @@ def _bin_name(record):
 
 
 @accept_args_markers
-def compile_config_contexts(compiled, contexts, etc):
+def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
     """Add normalized runtime contexts and their entry points to a config plan."""
     compiled = copy.deepcopy(_mapping(raw_copy_template_data(compiled), "compiled config"))
     contexts = _mapping(raw_copy_template_data(contexts), "CONFIG_CONTEXTS")
@@ -182,6 +182,8 @@ def compile_config_contexts(compiled, contexts, etc):
         return compiled
     if not isinstance(etc, str) or not etc.startswith("/"):
         _error("ETC must be an absolute path")
+    if not isinstance(bins_dir, str) or not bins_dir.startswith("/"):
+        _error("BINS_DIR must be an absolute path")
 
     spec = _mapping(compiled.get("spec"), "compiled config spec")
     configs = _mapping(spec.get("configs"), "compiled config spec.configs")
@@ -198,6 +200,17 @@ def compile_config_contexts(compiled, contexts, etc):
         "basedir": False,
     })
     occupied_bins.add(runtime_name)
+    module_name = "config/context.ts"
+    if module_name in occupied_bins:
+        _error("generated command collision: {}".format(module_name))
+    bins.append({
+        "name": module_name,
+        "src": "../config/context.ts",
+        "raw": True,
+        "compose": False,
+        "basedir": False,
+    })
+    occupied_bins.add(module_name)
 
     normalized_contexts = {}
     for name, raw_context in contexts.items():
@@ -274,6 +287,11 @@ def compile_config_contexts(compiled, contexts, etc):
     spec["contexts"] = normalized_contexts
     compiled["spec"] = spec
     compiled["bins"] = bins
+    dirs = list(compiled.get("dirs", []))
+    module_dir = posixpath.join(bins_dir, "config")
+    if module_dir not in dirs:
+        dirs.append(module_dir)
+    compiled["dirs"] = dirs
     return compiled
 
 

@@ -8,5 +8,5 @@
          config_compile(ETC, BINS_DIR, CONFIG_DISABLED_SUFFIX) }}
     compiled: >-
       {{ base_compiled |
-         config_context_compile(CONFIG_CONTEXTS | default({}) | resolve, ETC) }}
+         config_context_compile(CONFIG_CONTEXTS | default({}) | resolve, ETC, BINS_DIR) }}
   when: CONFIGS is defined

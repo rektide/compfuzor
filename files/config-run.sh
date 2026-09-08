@@ -64,10 +64,21 @@ for config in "${configs[@]}"; do
       case "$kind" in
         file) printf 'file\tfile/%s/%s\t%s\t%s\n' "$input_index" "$(basename "$value")" "$value" "$block" >> "$input_manifest" ;;
         glob)
+          [ -d "$value" ] || { printf '%s: config input directory is missing: %s\n' "$config" "$value" >&2; exit 1; }
+          found="$transaction/found-${config}-${input_index}"
+          sorted="$transaction/sorted-${config}-${input_index}"
+          if ! find -L "$value" -maxdepth 1 -type f -name "$pattern" -print0 > "$found"; then
+            printf '%s: failed to enumerate config input directory: %s\n' "$config" "$value" >&2
+            exit 1
+          fi
+          if ! sort -z "$found" > "$sorted"; then
+            printf '%s: failed to sort config inputs from: %s\n' "$config" "$value" >&2
+            exit 1
+          fi
           while IFS= read -r -d '' file; do
             filename=$(basename "$file")
             printf 'glob\t%s/%s/%s\t%s\t%s\n' "$(basename "$value")" "$input_index" "$filename" "$file" "$block" >> "$input_manifest"
-          done < <(find -L "$value" -maxdepth 1 -type f -name "$pattern" -print0 | sort -z)
+          done < "$sorted"
           ;;
       esac
       input_index=$((input_index + 1))
@@ -121,7 +132,11 @@ for config in "${configs[@]}"; do
     if [ "$check" = 1 ]; then
       drift=1
       if [ "$quiet" = 0 ]; then
-        if [ -f "$output" ]; then diff -u "$output" "$tmp" || true; else printf 'missing: %s\n' "$output"; fi
+        if [ -L "$output" ] && [ -f "$output" ] && cmp -s "$tmp" "$output"; then
+          printf 'detach symlink: %s -> regular assembled output\n' "$output"
+        elif [ -f "$output" ]; then diff -u "$output" "$tmp" || true
+        else printf 'missing: %s\n' "$output"
+        fi
       fi
     else
       pending_sources+=("$tmp"); pending_outputs+=("$output")
