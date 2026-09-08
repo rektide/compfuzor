@@ -9,20 +9,24 @@ human says otherwise.
 
 ## Deltas since draft0/draft1 prompts
 
-### D1 — diff3 is the single arbiter; no cmp dual-path
+### D1 — cmp decides, diff3 explains (draft1 stands; CORRECTED)
 
-The human rejected maintaining `cmp` beside `diff3` just because GNU diff3
-exits 0 even when it reports differences. Locked decision: **parse diff3's
-section headers** (`====1` / `====2` / `====3` / `====`) from the one
-invocation — they yield both the human report and the machine-readable slot
-attribution. Split exit codes live on `--threeway` only (0 clean; 1
-would-run≠materialized; 2 materialized≠user; 3 both); `--check` and generated
-reporters stay canonical 0/1/2 for the STATUSES orchestrator. If draft2 finds
-the header format insufficiently stable to trust, the fallback is NOT cmp:
-diff3 becomes display-only and the attribution case fails loudly with a
-distinct high exit code signalling "unsupported". Empirically verified on this
-machine: drifted inputs print sections with rc=0; identical inputs print
-nothing.
+**Correction (supersedes the earlier phrasing of this section):** the human
+confirmed they are fine with drift decided by `cmp` — draft1's design is
+correct as written ("All byte drift is decided with cmp; diff/diff3 are
+explanatory only", draft1 ~189 and ~588). The requirement is only that
+**diff3 remains the human-facing output**: machines get `cmp` booleans,
+humans get the three-way report. The earlier draft of this section
+("no cmp dual-path, parse `^====` headers") was a misreading of the human
+and is retracted; no section-header parsing contract is needed.
+
+Consequences, per draft1 unchanged:
+- `--threeway` bitset from pairwise cmp: bit 1 = candidate≠materialized;
+  bit 2 = materialized≠user snapshot; 3 = both. Operational failures →
+  exit 4.
+- `--check`/reporters stay 0/1/2 (drift bits internal).
+- diff3 output printed for humans in three-way reports; unified diff for
+  two-way artifact reports; symlink topology predicates stay type tests.
 
 ### D2 — `link` strategy gains the drop-in target shape
 
