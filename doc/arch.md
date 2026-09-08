@@ -679,6 +679,10 @@ Together they do three jobs:
 
 Config owns assembly intent; filesystem tasks own directory and file effects.
 
+For runtime consumer contexts, copy/link choices, status semantics, and the Zim
+daily workflow, see the
+[`consumer configuration toolkit`](/doc/config/consumer-toolkit.md).
+
 This is a strict seam:
 
 - `ETC_DIRS` and `ETC_FILES` declare directories and locally authored fragments
@@ -762,13 +766,16 @@ only when at least one remote target exists. Assembly and generic toggles follow
 valid symlinks while preserving the link itself as the mutable directory entry.
 
 For example, the Zim host exposes separate `zimrc` and `zimenv` inputs. A
-producer keeps each fragment durable under its named channel and asks the
-consumer to link it; disabling changes only the consumer link name:
+producer keeps each fragment durable under its named channel. Ordinary producer
+installation imports it into the invoking user's context; explicit canonical
+promotion is a separate admin operation:
 
 ```sh
-/opt/zim-main/bin/config-remote.ts put zimrc \
-  /opt/producer/etc/zim/zimrc/active/55-example.conf
-/opt/zim-main/bin/config-remote.ts disable zimrc 55-example.conf
+/opt/producer/bin/install-user-zimfw.sh
+/opt/zim-main/bin/config-inputs-user.sh disable zimrc/zimrc 55-example.conf
+
+# Shared-donor administration, never composed into install-user:
+/opt/zim-main/bin/install-zim-donor.sh /opt/producer
 ```
 
 MCP uses the same seam after transformation. The producer's `mcp.json` is
