@@ -61,6 +61,13 @@ strategy commands never run automatically.
 Directories and special files are not replaced. There is no automatic prune,
 ownership receipt, force gate, or persistent mode database.
 
+A linked fragment exposes the donor's live bytes: editing through that link
+edits the donor if your filesystem permissions allow it. For independent content
+edits, make the fragment a copy first (using `put --strategy copy`, or the
+drop-in copy command for the selected config), or add a new local fragment.
+Renaming/enabling/disabling the local link changes only the local directory
+entry. Reassembly does not refresh those entries from the donor.
+
 ## Status
 
 Context status reports separate rows for:

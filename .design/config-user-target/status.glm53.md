@@ -1,10 +1,10 @@
 ---
 type: Status
 title: config-user-target design — handoff and state of play
-description: Where the tri-state drift/config work stands, what is shipped, what is designed, what remains undecided, and how a new session picks it up.
+description: Historical pre-build handoff for the tri-state drift/config design; current consumer-toolkit implementation is indexed in this directory's README.md.
 resource: /.design/config-user-target/status.glm53.md
 tags: [compfuzor, config, targets, drift, handoff, zim, mise, block-in-file]
-status: stable
+status: deprecated
 generated: { by: model:glm-5.3-max, at: 2026-09-08 }
 verified: { by: unverified }
 stale_after: 2026-10-08
@@ -21,6 +21,17 @@ sources:
 ---
 
 # config-user-target: handoff explainer
+
+> **Historical checkpoint, superseded by the consumer-toolkit build.** Start
+> with the [current index](/.design/config-user-target/README.md),
+> [user workflow](/doc/config/consumer-toolkit.md), and
+> [latest implementation checkpoint](/.design/config-user-target/build4.solx.md).
+> The human reopened the architecture after this handoff. The implemented
+> default is linked donor drop-in files plus local assembly, with whole-config
+> copy/link alternatives. The draft3 authority, locked rollout, and outstanding
+> implementation plan below describe the earlier state—not instructions to
+> replace or duplicate the implementation now present. The original incident
+> and decision history are preserved below.
 
 Written for fresh sessions (human or agent) picking this work up mid-stream.
 Read order: this doc, then **draft3** (authoritative design), then draft2
