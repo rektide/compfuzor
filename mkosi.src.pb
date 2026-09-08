@@ -98,7 +98,15 @@
           [Config]
           # Build only these subimages by default. `image.sh <variant>` overrides
           # via mkosi --dependency to build just one.
-          Dependencies=vps-seed,oci
+          # vps-seed is NOT in the default set: mkosi-initrd's Debian-family
+          # dpkg strip (mkosi-initrd/mkosi.conf.d/debian-kali-ubuntu/
+          # mkosi.conf.d/dpkg.conf -> RemovePackages=dpkg, active on trixie)
+          # breaks its own purge cascade -- postrm scripts hit
+          # `dpkg-query: not found` and dpkg stops with "too many errors".
+          # Upstream bug (their comment: "Needs perl >= 5.40.0-8 and
+          # dash >= 0.5.12-7 to drop this"); retry `image.sh vps-seed` after
+          # an mkosi bump.
+          Dependencies=oci
 
           [Output]
           Format=none
@@ -280,7 +288,15 @@
           BUILD="$("$REPART/bin/repart" "${args[@]}")"
           trap 'rm -rf "$BUILD"' EXIT
           echo "date stamp: ${MKOSI_DATE:-today}" >&2
-          if [ -n "${1:-}" ]; then set -- --dependency "$1"; fi
+          # RepartOffline=no lives in the MAIN config (universal scope:
+          # subimages cannot set it) because disk builds need loop devices --
+          # but that makes mkosi demand root for EVERY build. Lean variants
+          # (no disk in the set: vps-seed, oci, or the no-arg default) never
+          # touch repart: re-enable offline for them so they build as a
+          # normal user. Extra args after the variant pass through to mkosi.
+          variant=""; [ "$#" -gt 0 ] && { variant="$1"; shift; }
+          [ "$variant" = disk ] || set -- --repart-offline=yes "$@"
+          [ -n "$variant" ] && set -- --dependency "$variant" "$@"
           mkosi -B -f -C "$BUILD" "$@"
       - name: identity.sh
         src: identity.sh
@@ -298,7 +314,7 @@
 
           ansible-playbook -i 'localhost,' -c local mkosi.src.pb
           cd /usr/local/src/mkosi-git
-          bin/image.sh                          # build default subimages (vps-seed, oci)
+          bin/image.sh                          # build default subimage (oci)
           bin/image.sh disk                     # full disk image, universal layout
           MKOSI_DATE=20260901 bin/image.sh disk # explicit slot date
           bin/vps-seed.sh myseed                # host-tailored initrd (this kernel)
@@ -321,11 +337,15 @@
 
       - `etc/mkosi.conf` — main config: universal settings (Distribution/Release/
         Repositories, Output\*/Cache\* dirs → `var/`). `Format=none` (no main
-        artifact); `Dependencies=vps-seed,oci` selects which subimages build.
+        artifact); `Dependencies=oci` selects which subimages build (vps-seed
+        dropped from the default: upstream mkosi-initrd dpkg-strip bug on
+        trixie, see the conf comment).
       - `mkosi.images/vps-seed/` — bootable cpio initrd (`Include=mkosi-initrd`
         + ext4/xfs/btrfs/dos formatting tools). xz level 6 (commented zstd 15).
         **Generic** — does NOT inject host kernel modules; for a host-tailored
-        initrd use `vps-seed.sh`.
+        initrd use `vps-seed.sh`. **Currently broken on trixie** (upstream
+        mkosi-initrd `RemovePackages=dpkg` purge cascade fails); not in the
+        default `Dependencies=`.
       - `mkosi.images/oci/` — base Debian rootfs as an OCI container image.
       - `mkosi.images/disk/` — **sample** full disk image that consumes the
         compfuzor `PKGSETS` list. `Bootable=yes`, and its `mkosi.repart/` makes
