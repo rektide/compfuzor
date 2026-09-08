@@ -214,6 +214,14 @@ zimfw() { :; }
         (zdot_one / ".zshenv").write_text("unmanaged-env\n", encoding="utf-8")
         (zdot_one / ".zshrc").write_text("unmanaged-rc\n", encoding="utf-8")
         env_one = user_env(home_one, xdg_one, zdot_one, payload, build_log, block_in_file)
+        foreign = temporary / "foreign deployment"
+        (foreign / "bin").mkdir(parents=True)
+        foreign_log = temporary / "foreign-dispatch.log"
+        for name in ("install-config-user.sh", "status-zim.sh", "status-config-context-user.sh"):
+            path = foreign / "bin" / name
+            path.write_text(f'#!/bin/sh\necho {name} >> {str(foreign_log)!r}\nexit 0\n', encoding="utf-8")
+            path.chmod(0o755)
+        env_one["DIR"] = str(foreign)
         # Simulate values inherited from the pre-migration env/export contract.
         env_one["ZIM_CONFIG_FILE"] = str(canonical_zimrc)
         env_one["ZIM_ENV_CONFIG"] = str(canonical_zimenv)
@@ -224,6 +232,7 @@ zimfw() { :; }
         zimrc_d.chmod(0o555)
         zimenv_d.chmod(0o555)
         run([str(payload / "bin" / "install-user.sh")], cwd=temporary, env=env_one)
+        assert not foreign_log.exists()
 
         local_root_one = xdg_one / "zsh"
         local_zimrc = local_root_one / "zimrc"
@@ -310,6 +319,7 @@ zimfw() { :; }
             "ZIM_CONFIG_FILE": str(custom_zimrc),
             "ZIM_ENV_CONFIG": str(custom_zimenv),
             "ZIM_CONFIG_LINK": str(custom_registry),
+            "DIR": str(temporary / "missing ambient deployment"),
         })
         install_two = run([str(payload / "bin" / "install-user.sh")], cwd=temporary, env=env_two)
         assert custom_zimrc.is_file() and custom_zimenv.is_file()
@@ -320,6 +330,7 @@ zimfw() { :; }
         run([str(payload / "bin" / "install-zim-caches-user.sh")], cwd=temporary, env=env_one)
         clean_status = run([str(payload / "bin" / "status.sh")], cwd=temporary, env=env_one, check=False)
         assert clean_status.returncode == 0, (clean_status.stdout, clean_status.stderr)
+        assert not foreign_log.exists()
 
         different = temporary / "different-loader.zsh"
         different.write_text("echo different\n", encoding="utf-8")

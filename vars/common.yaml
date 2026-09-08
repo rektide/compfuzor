@@ -733,7 +733,7 @@ SUBSYSTEM:
     # contributions before the status parent is resolved).
     requested: "{{ (STATUS_DIRS is deftruthy) or (STATUS_DIRS_SUDO is deftruthy) or ((STATUSES | default([])) | length > 0) }}"
     contrib:
-      BINS: "{{ [ {'name': 'status.sh', 'src': '../status/status.sh', 'basedir': false} ] + ([ {'name': 'status-dirs.sh', 'src': '../status/status-dirs.sh', 'basedir': false} ] if (STATUS_DIRS is deftruthy or STATUS_DIRS_SUDO is deftruthy) else []) }}"
+      BINS: "{{ [ {'name': 'status.sh', 'src': '../status/status.sh', 'basedir': false, 'deployment_rooted': true} ] + ([ {'name': 'status-dirs.sh', 'src': '../status/status-dirs.sh', 'basedir': false} ] if (STATUS_DIRS is deftruthy or STATUS_DIRS_SUDO is deftruthy) else []) }}"
       ENV:
         STATUS_DIRS: "{{ STATUS_DIRS | join2(':') }}"
         STATUS_DIRS_SUDO: "{{ STATUS_DIRS_SUDO | join2(':') }}"

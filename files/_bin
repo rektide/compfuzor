@@ -3,6 +3,7 @@
 {% set _nuclear = _item_helpers is sameas false %}
 {% set _cf_run_all = item.run_all|normalize(to='list') %}
 {% set _is_compositor = item.generated_by | default('') == 'gen_bins' and _cf_run_all | length > 0 %}
+{% set _deployment_rooted = _is_compositor or item.deployment_rooted | default(false) %}
 {% set _has_own_body = item.early is defined or item.generated is defined or item.content is defined or item.exec is defined or item.execs is defined or item.late is defined %}
 {% set _fallback_type = TYPE | default(none) if not _is_compositor or _has_own_body else none %}
 {% set _resolver_bypass = false if _is_compositor and not _has_own_body else item.bypass | default(none) %}
@@ -22,6 +23,12 @@
   _item_helpers,
 ] %}
 {% set _helpers = [] if _nuclear else _helper_layers | resolve_helpers %}
+{% if _deployment_rooted %}
+# Deployment orchestrators never inherit another deployment's DIR.
+_cf_script="$(readlink -f -- "$0")"
+export DIR="$(dirname "$(dirname "$_cf_script")")"
+unset _cf_script
+{% endif %}
 {% for _h in _helpers %}
 {{ _h | helper_comment }}
 {% include "_helpers/" ~ _h %}

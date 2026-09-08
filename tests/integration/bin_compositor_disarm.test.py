@@ -159,6 +159,22 @@ def test_canonical_body_disarm_is_local_to_compositor_body() -> None:
         pure = run_script(output / "apply.sh")
         if body_output(pure) != ["pure-child"]:
             raise AssertionError(f"pure compositor did not run child: {pure!r}")
+
+        foreign = temporary / "foreign-deployment"
+        (foreign / "bin").mkdir(parents=True)
+        (foreign / "bin" / "apply-child.sh").write_text("#!/bin/sh\necho foreign-child\n", encoding="utf-8")
+        (foreign / "bin" / "apply-child.sh").chmod(0o755)
+        foreign_env = os.environ.copy()
+        foreign_env["DIR"] = str(foreign)
+        pinned = run_script(output / "apply.sh", foreign_env)
+        if body_output(pinned) != ["pure-child"] or "foreign-child" in pinned.stdout:
+            raise AssertionError(f"compositor dispatched through ambient DIR: {pinned!r}")
+
+        missing_env = os.environ.copy()
+        missing_env["DIR"] = str(temporary / "missing-deployment")
+        missing = run_script(output / "build.sh", missing_env)
+        if body_output(missing) != ["direct-body", "direct-child"]:
+            raise AssertionError(f"body compositor trusted missing ambient DIR: {missing!r}")
         print("ok: canonical body guards are local and pure compositors stay unguarded")
 
 
