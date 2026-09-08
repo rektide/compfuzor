@@ -37,6 +37,8 @@ export type ToolkitOptions = {
   action: ToolkitAction
   strategy?: Strategy
   seed: boolean
+  rebuild: boolean
+  initiallyDisabled: boolean
   format: Format
   args: string[]
 }
@@ -129,6 +131,8 @@ export function parseConfigToolkitArgs(argv: string[], deploymentDir: string): T
   let action: ToolkitAction | undefined
   let strategy: Strategy | undefined
   let seed = false
+  let rebuild = true
+  let initiallyDisabled = false
   let format: Format = "human"
   const args: string[] = []
   for (let index = 0; index < argv.length; index++) {
@@ -138,6 +142,8 @@ export function parseConfigToolkitArgs(argv: string[], deploymentDir: string): T
     else if (argument === "--runner") runner = resolve(argv[++index] ?? fail("--runner requires a path"))
     else if (argument === "--strategy") strategy = parseStrategy(argv[++index], "--strategy")
     else if (argument === "--seed") seed = true
+    else if (argument === "--no-rebuild") rebuild = false
+    else if (argument === "--disabled") initiallyDisabled = true
     else if (argument === "--json") format = "jsonl"
     else if (argument === "--json-array") format = "array"
     else if (!action && ["install", "dropins", "whole", "status", "inputs"].includes(argument)) action = argument as ToolkitAction
@@ -145,7 +151,7 @@ export function parseConfigToolkitArgs(argv: string[], deploymentDir: string): T
     else args.push(argument)
   }
   if (!context || !action) fail("usage: config/toolkit.ts --context NAME <install|dropins|whole|status|inputs> [options]")
-  return { context, specPath, runner, action, strategy, seed, format, args }
+  return { context, specPath, runner, action, strategy, seed, rebuild, initiallyDisabled, format, args }
 }
 
 async function pathKind(path: string): Promise<"missing" | "file" | "symlink" | "directory" | "special"> {
@@ -724,21 +730,28 @@ async function inputPut(spec: ConfigSpec, options: ToolkitOptions, args: string[
   const source = resolve(sourceArgument)
   if (typeof found.input.file === "string") {
     if (suppliedName !== undefined) fail(`${selector} is a direct file input and does not accept a destination name`)
+    if (options.initiallyDisabled) fail(`${selector} is a direct file input and cannot be disabled`)
     const local = resolvedInput(spec, options.context, found)
     if (typeof local.file !== "string") fail(`${selector} has an invalid resolved file binding`)
     await deliver(source, local.file, options.strategy ?? getConfigContext(spec, options.context).dropins ?? "link")
     console.log(`put\t${found.config}/${inputIdentity(found.input, found.index)}\t${local.file}`)
-    return rebuild(options, found.config)
+    return options.rebuild ? rebuild(options, found.config) : 0
   }
   const name = suppliedName ?? basename(source)
   validateInputName(found.input, name)
   const paths = await localInputPaths(spec, options.context, found, name)
   const pair = await inspectPair(paths)
   if (pair.conflict) fail(`both enabled and disabled local entries exist for ${name}`)
-  const destination = pair.active.kind !== "missing" ? paths.active : pair.disabled && pair.disabled.kind !== "missing" ? paths.disabled! : paths.active
+  const destination = pair.active.kind !== "missing"
+    ? paths.active
+    : pair.disabled && pair.disabled.kind !== "missing"
+      ? paths.disabled!
+      : options.initiallyDisabled
+        ? paths.disabled ?? fail(`${selector} cannot be disabled`)
+        : paths.active
   await deliver(source, destination, options.strategy ?? getConfigContext(spec, options.context).dropins ?? "link")
   console.log(`put\t${found.config}/${inputIdentity(found.input, found.index)}\t${destination}`)
-  return rebuild(options, found.config)
+  return options.rebuild ? rebuild(options, found.config) : 0
 }
 
 async function inputMutation(spec: ConfigSpec, options: ToolkitOptions, action: "enable" | "disable" | "remove", args: string[]): Promise<number> {

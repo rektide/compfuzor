@@ -59,7 +59,7 @@ def test_compile_contexts():
                 "dropins": "link",
                 "configs": {
                     "app": {
-                        "output": {"env": "APP_CONFIG", "default": "outputs/app.conf"},
+                        "output": {"env": "APP_CONFIG", "default": "outputs/app.conf", "ignore": ["/opt/example/etc/outputs/app.conf"]},
                         "inputs": {"fragments": "local/app.d"},
                     }
                 },
@@ -83,7 +83,7 @@ def test_compile_contexts():
     check(
         "output environment selector",
         user["configs"]["app"]["output"],
-        {"env": "APP_CONFIG", "default": {"relative": "outputs/app.conf"}},
+        {"env": "APP_CONFIG", "default": {"relative": "outputs/app.conf"}, "ignore": ["/opt/example/etc/outputs/app.conf"]},
     )
     check("ETC file keeps relative path", user["configs"]["app"]["inputs"][0], {"relative": "inputs/base.conf"})
     check("named input override", user["configs"]["app"]["inputs"][1], {"relative": "local/app.d"})

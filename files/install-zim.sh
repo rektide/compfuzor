@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# install-zim.sh - delegate contributor zim fragments to the host remote tool.
+# install-zim.sh - explicitly promote contributor fragments to the canonical donor.
 #
 # Contributors render module fragments under etc/zim/<channel>/{active,disabled}.
 # This script symlinks them into the host's channel-named remote targets so the
-# generic block-in-file config assembler picks them up in sorted filename order. Symlinks (not
-# copies) keep the contributor as source-of-truth, so a re-rendered fragment
-# updates the host automatically and status-config-zim.sh detects drift.
+# generic block-in-file config assembler picks them up in sorted filename order.
+# This is an admin operation affecting the shared donor roster. It never builds
+# a consumer's Zim cache and is not composed into install-user.sh.
 #
 # Usage: install-zim.sh [source_dir]   # source_dir defaults to $PWD
 
@@ -25,11 +25,9 @@ remote="$self_dir/bin/config-remote.ts"
 
 count=0
 shopt -s nullglob
-declare -A touched_channels
 for channel_dir in "$src_dir"/etc/zim/*; do
   [ -d "$channel_dir" ] || continue
   channel="$(basename "$channel_dir")"
-  touched_channels["$channel"]=1
   for f in "$channel_dir"/active/*.conf; do
     "$remote" link "$channel" "$f"
     count=$((count + 1))
@@ -42,10 +40,4 @@ for channel_dir in "$src_dir"/etc/zim/*; do
   done
 done
 
-if [ -x "$self_dir/bin/zimfw-channel.sh" ]; then
-  for channel in "${!touched_channels[@]}"; do
-    "$self_dir/bin/zimfw-channel.sh" "$channel" install
-  done
-fi
-
-echo "install-zim: delegated $count fragment(s)"
+echo "install-zim-donor: promoted $count fragment(s) to the canonical donor"

@@ -228,6 +228,42 @@ def test_disabled_routes_to_disabled_dir():
     )
 
 
+def test_host_routes_directly_to_canonical_inputs():
+    print("\nhost layout -> canonical CONFIGS inputs:")
+    out = zim_fragment(
+        [
+            {"source": "environment", "phase": "core"},
+            {"source": "rektide/zim-mise", "phase": "core", "channel": "zimenv"},
+            {"source": "minimal", "phase": "prompt", "enabled": False},
+        ],
+        host=True,
+    )
+    check(
+        "active and disabled host paths",
+        [entry["name"] for entry in out],
+        [
+            "zimrc.d/20-environment.conf",
+            "zimenv.d/20-zim-mise.conf",
+            "zimrc.d/40-minimal.conf.disabled",
+        ],
+    )
+
+
+def test_duplicate_counterparts_are_rejected():
+    print("\nduplicate active/disabled declarations:")
+    check_raises(
+        "same channel filename conflicts before rendering",
+        lambda: zim_fragment(
+            [
+                {"source": "minimal", "phase": "prompt"},
+                {"source": "minimal", "phase": "prompt", "enabled": False},
+            ],
+            host=True,
+        ),
+        "conflict",
+    )
+
+
 def test_single_mapping_input():
     print("\nsingle mapping (not a list):")
     out = zim_fragment({"source": "minimal", "phase": "prompt"})
@@ -670,6 +706,8 @@ if __name__ == "__main__":
     test_description_in_filename()
     test_explicit_name()
     test_disabled_routes_to_disabled_dir()
+    test_host_routes_directly_to_canonical_inputs()
+    test_duplicate_counterparts_are_rejected()
     test_single_mapping_input()
     test_empty_and_undefined()
     test_multiple_entries_order_preserved()

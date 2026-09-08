@@ -16,9 +16,9 @@
 # zimfw-loadable modules without a separate git repo.
 #
 # Every contributor also gets an auto-generated install-user-zimfw.sh (user
-# scope -- the `install-user-` prefix is what gen_bins keys on) that promotes
-# its channel fragments into the zim host assembly dirs, so a contributor only
-# declares ZIM_MODULES and otherwise does nothing install-shaped itself.
+# scope -- the `install-user-` prefix is what gen_bins keys on) that imports its
+# channel fragments into the invoking user's host context. Shared donor
+# promotion remains an explicit host-admin operation.
 #
 # ZIM_ARRAYS declares Zsh-only arrays directly rather than projecting process
 # ENV. `path` is supported and remains tied to exported `PATH` by Zsh:
@@ -30,8 +30,9 @@
 # Existing non-empty arrays win. Because `path` normally starts populated, set
 # COMPFUZOR_ENV_OVERWRITE=PATH (or a matching pattern) to replace it explicitly.
 #
-# Host branch: a playbook marked ZIM_HOST provides the install-zim.sh bridge.
-# The host's CONFIGS declaration owns the remote target and lifecycle tooling.
+# Host branch: the same renderer writes the host's own roster directly into its
+# canonical CONFIGS input dirs. install-zim-donor.sh remains an explicit bridge
+# for admin promotion; user installs never mutate that shared roster.
 
 - name: "Compfuzor: render zim contributor fragments"
   set_fact:
@@ -83,7 +84,7 @@
          + ([_zim_env_module] if ZIM_ENV is deflengthy else [])
          + ([_zim_array_module] if ZIM_ARRAYS is deflengthy else []) }}
     _zim_phase: "{{ ZIM_PHASE|def }}"
-    _zim_fragments: "{{ _zim_modules | zim_fragment(phase=_zim_phase, etc=ETC) }}"
+    _zim_fragments: "{{ _zim_modules | zim_fragment(phase=_zim_phase, etc=ETC, host=(ZIM_HOST is defined)) }}"
     _zim_fragment_dirs: >-
       {{ _zim_fragments
         | map(attribute='name')
@@ -138,13 +139,13 @@
       basedir: False
       bypass: ZIM
       content: |
-        # Host discovery: ZIM_HOST_DIR wins; otherwise resolve through the zim
-        # config link (~/.config/zsh/zimfw.conf -> <host>/[etc/]zimrc),
+        # Host discovery: ZIM_HOST_DIR wins; otherwise resolve through the
+        # canonical registry link (~/.config/zsh/zimfw.conf -> <host>/etc/zimrc),
         # which every zim host install creates -- the link IS the registry.
         # Final fallback /opt/zim-main (OPTS_DIR default location).
         host="${ZIM_HOST_DIR:-}"
         if [ -z "$host" ]; then
-          _conf="${ZIM_CONFIG_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zimfw.conf}"
+          _conf="${ZIM_CONFIG_LINK:-${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zimfw.conf}"
           _real=$(readlink -f "$_conf" 2>/dev/null || true)
           if [ -n "$_real" ]; then
             _etc_dir="$(dirname "$_real")"
@@ -157,8 +158,8 @@
           fi
         fi
         host="${host:-/opt/zim-main}"
-        if [ -x "$host/bin/install-zim.sh" ]; then
-          "$host/bin/install-zim.sh" "{{DIR}}"
+        if [ -x "$host/bin/install-zim-context.sh" ]; then
+          "$host/bin/install-zim-context.sh" "{{DIR}}"
         else
           _cf_report_skip "install-user-zimfw.sh" "zim: host not found at $host (set ZIM_HOST_DIR)"
         fi
@@ -171,6 +172,15 @@
     - ZIM_BYPASS is deffalsy
   vars:
     _zim_host_bins:
-      - name: install-zim.sh
+      - name: install-zim-donor.sh
         src: ../install-zim.sh
         basedir: False
+        compose: False
+      - name: install-zim.sh
+        dest: install-zim.sh
+        link: install-zim-donor.sh
+        compose: False
+      - name: install-zim-context.sh
+        src: ../install-zim-context.sh
+        basedir: False
+        compose: False

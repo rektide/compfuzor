@@ -91,13 +91,18 @@ def _selector(value, label, allow_relative=True):
     if isinstance(value, str):
         return _runtime_path(value, label, allow_relative)
     item = _mapping(value, label)
-    unknown = set(item) - {"env", "default"}
+    unknown = set(item) - {"env", "default", "ignore"}
     if unknown:
         _error("{} has unknown settings: {}".format(label, ", ".join(sorted(unknown))))
     env = item.get("env")
     if not isinstance(env, str) or not _ENV.fullmatch(env):
         _error("{}.env must name an environment variable".format(label))
     result = {"env": env}
+    if "ignore" in item:
+        ignored = _sequence(item["ignore"], "{}.ignore".format(label))
+        if any(not isinstance(entry, str) or not entry for entry in ignored):
+            _error("{}.ignore entries must be non-empty strings".format(label))
+        result["ignore"] = ignored
     if "default" in item:
         result["default"] = _selector(item["default"], "{}.default".format(label), allow_relative)
     return result

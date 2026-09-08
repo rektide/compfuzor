@@ -416,12 +416,14 @@ def _fpath_line():
 
 
 @accept_args_markers
-def zim_fragment(modules, phase=None, etc=None):
+def zim_fragment(modules, phase=None, etc=None, host=False):
     """Render zim module declarations into drop-in fragment files.
 
-    Each entry becomes one fragment file under
+    Each contributor entry becomes one fragment file under
     ``zim/<channel>/active/`` (or ``zim/<channel>/disabled/`` when
-    ``enabled: false``). The channel defaults to ``zimrc``. Filenames are
+    ``enabled: false``). With ``host: true``, the same renderer instead emits
+    directly into ``<channel>.d/`` and appends the compiled config's disabled
+    suffix for disabled entries. The channel defaults to ``zimrc``. Filenames are
     ``<num>-<name>[-<description>].conf`` where ``<num>`` is the resolved phase
     number, so lexical sort across contributors yields deterministic load
     order. The block-in-file config assembler globs these in sorted order to
@@ -471,11 +473,26 @@ def zim_fragment(modules, phase=None, etc=None):
         )
 
     results = []
+    seen_fragments = {}
+    host = bool(host) and not wrapped_test_undefined(host)
     for entry in items:
         norm = _normalize_entry(entry, phase)
         fn = _filename(norm["num"], norm["name"], norm["description"])
         state = "active" if norm["enabled"] else "disabled"
-        rel_dir = "zim/{}/{}/".format(norm["channel"], state)
+        fragment_key = (norm["channel"], fn)
+        if fragment_key in seen_fragments:
+            raise AnsibleFilterError(
+                "zim module declarations conflict for {}/{} ({} and {})".format(
+                    norm["channel"], fn, seen_fragments[fragment_key], state
+                )
+            )
+        seen_fragments[fragment_key] = state
+        if host:
+            fragment_name = "{}.d/{}{}".format(
+                norm["channel"], fn, "" if norm["enabled"] else ".disabled"
+            )
+        else:
+            fragment_name = "zim/{}/{}/{}".format(norm["channel"], state, fn)
         local_kinds = (
             "env",
             "arrays",
@@ -491,7 +508,7 @@ def zim_fragment(modules, phase=None, etc=None):
             )
             results.append(
                 {
-                    "name": rel_dir + fn,
+                    "name": fragment_name,
                     "content": _body(module_path, norm["args"], norm["comment"]),
                 }
             )
@@ -558,7 +575,7 @@ def zim_fragment(modules, phase=None, etc=None):
         else:
             results.append(
                 {
-                    "name": rel_dir + fn,
+                    "name": fragment_name,
                     "content": _body(norm["source"], norm["args"], norm["comment"]),
                 }
             )

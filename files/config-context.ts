@@ -1,7 +1,7 @@
 #!/usr/bin/env -S node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
 /** Thin CLI facade for reusable CONFIGS consumer-context binding. */
 
-import { spawn } from "node:child_process"
+import { spawn, type ChildProcess, type StdioOptions } from "node:child_process"
 import { constants as osConstants } from "node:os"
 import { realpath } from "node:fs/promises"
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
@@ -58,11 +58,12 @@ function signalExitCode(signal: NodeJS.Signals): number {
 async function invokeRunner(options: ConfigContextCliOptions, specPath: string): Promise<ConfigContextResult> {
   const runnerDeploymentDir = resolve(dirname(options.runner), "..")
   return await new Promise<ConfigContextResult>((complete, reject) => {
-    const child = spawn(options.runner, options.runnerArgs, {
+    const stdio: StdioOptions = options.stdio === "pipe" ? ["ignore", "pipe", "pipe"] : (options.stdio ?? "inherit")
+    const child: ChildProcess = spawn(options.runner, options.runnerArgs, {
       cwd: runnerDeploymentDir,
       detached: true,
       env: { ...process.env, DIR: runnerDeploymentDir, CONFIG_SPEC: specPath },
-      stdio: options.stdio ?? "inherit",
+      stdio,
     })
     const stdout: Buffer[] = []
     const stderr: Buffer[] = []

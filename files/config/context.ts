@@ -9,6 +9,7 @@ export type PathSelector = {
   relative?: string
   env?: string
   default?: PathSelector
+  ignore?: string[]
 }
 
 export type ConfigInput = {
@@ -111,7 +112,9 @@ export function resolvePathSelector(raw: unknown, base: string | undefined, labe
   }
   if (typeof selector.env !== "string" || !selector.env) fail(`${label}.env must name an environment variable`)
   const environmentValue = process.env[selector.env]
-  if (environmentValue) return expandPath(environmentValue, base, `${label}.env(${selector.env})`)
+  if (environmentValue && !selector.ignore?.includes(environmentValue)) {
+    return expandPath(environmentValue, base, `${label}.env(${selector.env})`)
+  }
   if (selector.default !== undefined) return resolvePathSelector(selector.default, base, `${label}.default`)
   fail(`${label}: environment variable ${selector.env} is required`)
 }

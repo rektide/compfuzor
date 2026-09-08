@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise Zim producer delegation to consumer-owned remote tooling."""
+"""Exercise explicit Zim producer promotion to canonical donor tooling."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ def test_zim_remote() -> None:
         manager = host / "bin" / "config-remote.ts"
         manager.write_text((ROOT / "files" / "config-remote.ts").read_text().replace("{{DIR}}", str(host)))
         manager.chmod(0o770)
-        installer = host / "bin" / "install-zim.sh"
+        installer = host / "bin" / "install-zim-donor.sh"
         installer.write_text((ROOT / "files" / "install-zim.sh").read_text().replace("{{DIR}}", str(host)))
         installer.chmod(0o770)
         (host / "etc" / "config.spec.json").write_text(json.dumps({"remotes": {
@@ -58,9 +58,9 @@ def test_zim_remote() -> None:
         assert active.is_symlink() and active.resolve() == enabled
         assert disabled.is_symlink() and disabled.resolve() == disabled_source
         assert log.read_text().splitlines() == ["zimenv", "zimenv", "zimrc"]
-        assert set(build_log.read_text().splitlines()) == {"zimrc install", "zimenv install"}
+        assert not build_log.exists()
 
 
 if __name__ == "__main__":
     test_zim_remote()
-    print("ok: Zim remote delegation")
+    print("ok: Zim canonical donor promotion")
