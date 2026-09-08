@@ -130,9 +130,12 @@ output.write_text(text)
         (payload / "etc" / "policy.d" / "10-policy.conf").write_text("policy=true\n")
         (payload / "etc" / "shell.conf").write_text("unmanaged\n# legacy-shell-old start\nstale\n# legacy-shell-old end\n")
         runtime_env = os.environ.copy()
+        # This test invokes the deployment-local config leaf directly. Keep an
+        # unrelated harness/developer DIR from selecting another deployment.
+        runtime_env.pop("DIR", None)
         runtime_env["CONFIG_BLOCK_IN_FILE"] = str(block_fixture)
 
-        listed = run([str(payload / "bin" / "config.sh"), "--list"], cwd=payload)
+        listed = run([str(payload / "bin" / "config.sh"), "--list"], cwd=payload, env=runtime_env)
         assert listed.stdout.splitlines() == ["app", "policy", "shell"]
         run([str(payload / "bin" / "config.sh")], cwd=payload, env=runtime_env)
         assert json.loads((payload / "etc" / "app.json").read_text()) == {"base": True, "core": True, "mcp": True}
@@ -141,7 +144,7 @@ output.write_text(text)
         assert "shell/shell.conf.d/0/10-first.conf" in shell
         assert "shell/shell.conf.d/0/20-second.conf" in shell
 
-        run([str(payload / "bin" / "disable-mcp.sh"), "10-server"], cwd=payload)
+        run([str(payload / "bin" / "disable-mcp.sh"), "10-server"], cwd=payload, env=runtime_env)
         assert (payload / "etc" / "mcp" / "10-server.json.disabled").exists()
         assert json.loads((payload / "etc" / "app.json").read_text()) == {"base": True, "core": True}
 
