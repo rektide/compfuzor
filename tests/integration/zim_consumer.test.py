@@ -8,9 +8,10 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import shlex
 import subprocess
 import tempfile
+
+from zim_demo import write_environment_wrapper
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -360,23 +361,20 @@ zimfw() { :; }
         for path in (*zimrc_d.iterdir(), *zimenv_d.iterdir()):
             path.chmod(0o644)
         if demo_setting:
-            def write_wrapper(name: str, values: dict[str, str]) -> None:
-                wrapper = temporary / name
-                exports = "\n".join(f"export {key}={shlex.quote(value)}" for key, value in values.items())
-                wrapper.write_text(f"#!/bin/sh\n{exports}\nexec \"$@\"\n", encoding="utf-8")
-                wrapper.chmod(0o755)
-
+            demo_tmp = temporary / "tmp"
+            demo_tmp.mkdir(exist_ok=True)
             common = {
                 "CONFIG_BLOCK_IN_FILE": str(block_in_file),
                 "DIR": str(payload),
+                "TMPDIR": str(demo_tmp),
                 "PATH": os.pathsep.join((str(Path(NODE).parent), str(block_in_file.parent), "/usr/bin", "/bin")),
             }
-            write_wrapper("user-one.sh", common | {
+            write_environment_wrapper(temporary / "user-one.sh", common | {
                 "HOME": str(home_one), "XDG_CONFIG_HOME": str(xdg_one), "ZDOTDIR": str(zdot_one),
                 "ZIM_HOME": str(home_one / ".cache" / "zim"), "ZIM_ENV_HOME": str(home_one / ".cache" / "zim-env"),
                 "ZIM_TEST_BUILD_LOG": str(build_log),
             })
-            write_wrapper("user-two.sh", common | {
+            write_environment_wrapper(temporary / "user-two.sh", common | {
                 "HOME": str(home_two), "XDG_CONFIG_HOME": str(xdg_two), "ZDOTDIR": str(zdot_two),
                 "ZIM_HOME": str(home_two / ".cache" / "zim"), "ZIM_ENV_HOME": str(home_two / ".cache" / "zim-env"),
                 "ZIM_CONFIG_FILE": str(custom_zimrc), "ZIM_ENV_CONFIG": str(custom_zimenv), "ZIM_CONFIG_LINK": str(custom_registry),
@@ -396,11 +394,15 @@ This directory was rendered from `zim.opt.pb` with downloads/package work disabl
 
 Run tools without sourcing a live profile:
 
+The wrappers clear inherited `ZIM_CONFIG_FILE`, `ZIM_ENV_CONFIG`, and
+`ZIM_CONFIG_LINK` before setting their own demo values, and pin `TMPDIR` inside
+this scratch root.
+
 ```bash
-./user-one.sh {shlex.quote(str(payload / 'bin' / 'status.sh'))}
-./user-one.sh {shlex.quote(str(payload / 'bin' / 'config-user.sh'))} --check zimrc
-./user-one.sh {shlex.quote(str(payload / 'bin' / 'config-inputs-user.sh'))} status zimrc --json-array
-./user-two.sh {shlex.quote(str(payload / 'bin' / 'status.sh'))}
+./user-one.sh {str(payload / 'bin' / 'status.sh')!r}
+./user-one.sh {str(payload / 'bin' / 'config-user.sh')!r} --check zimrc
+./user-one.sh {str(payload / 'bin' / 'config-inputs-user.sh')!r} status zimrc --json-array
+./user-two.sh {str(payload / 'bin' / 'status.sh')!r}
 ```
 
 `install-zim-donor.sh` changes the canonical donor and is intentionally not run by either wrapper's ordinary user setup.
