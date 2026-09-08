@@ -73,7 +73,7 @@ def test_id_filter_selects_record_slice(env: dict[str, str], tmp_path: Path) -> 
     assert not (tmp_path / "a" / "bin").exists()
     unmatched = run(env, "status", str(manifest), "--id", "nomatch-*")
     assert unmatched.returncode == 0, unmatched.stderr
-    assert unmatched.stdout.strip().endswith("action")  # header only, no rows
+    assert unmatched.stdout == ""  # A clean empty selection is silent.
 
 
 def test_preserve_replace_overwrite_and_directory_safety(env: dict[str, str], tmp_path: Path) -> None:
