@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 
@@ -136,7 +138,15 @@ def donor_digest(payload: Path) -> str:
 
 def test_zim_consumer_lifecycle() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="zim consumer migration-", dir=SCRATCH) as tmp:
+    demo_setting = os.environ.get("COMPFUZOR_KEEP_ZIM_DEMO")
+    if demo_setting:
+        demo_root = SCRATCH / "zim-demo" if demo_setting.lower() in {"1", "true", "yes"} else Path(demo_setting).resolve()
+        shutil.rmtree(demo_root, ignore_errors=True)
+        demo_root.mkdir(parents=True)
+        temporary_context = nullcontext(str(demo_root))
+    else:
+        temporary_context = tempfile.TemporaryDirectory(prefix="zim consumer migration-", dir=SCRATCH)
+    with temporary_context as tmp:
         temporary = Path(tmp)
         block_in_file = temporary / "block-in-file"
         block_in_file.write_text(
@@ -334,6 +344,8 @@ zimfw() { :; }
         zimenv_d.chmod(0o755)
         for path in (*zimrc_d.iterdir(), *zimenv_d.iterdir()):
             path.chmod(0o644)
+        if demo_setting:
+            print(f"demo preserved at {temporary}")
 
 
 if __name__ == "__main__":
