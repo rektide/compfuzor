@@ -77,14 +77,28 @@ never been initialized; its inactive assembly observations remain visible.
 `config-user.sh --check` and `config-inputs-user.sh status` remain the strict
 questions for the assembly route itself.
 
+If a bound consumer input directory or output entry physically aliases its
+canonical donor location through a parent-directory symlink, status reports an
+`alias-hazard` and mutating consumer commands refuse it. Final per-file links to
+donor files remain normal, replaceable consumer entries.
+
 ## Zim daily workflow
 
 The Zim host exposes `zimrc` and `zimenv` through one user context. Its own
 baseline roster is canonical; the default user workflow links those donor
 fragments into the user's XDG config tree and assembles there.
 
+These commands exist only after rerendering the updated playbook. This change
+has not been deployed to a live `/opt/zim-main`. The invoking user must be able
+to read the canonical donor files; the toolkit does not broaden donor
+permissions or invoke sudo.
+
 ```bash
-# Seed absent baseline inputs and assemble both local configs.
+# Complete initial setup: seed/assemble, install both loaders, build both
+# caches, and install the canonical registry link.
+/opt/zim-main/bin/install-user.sh
+
+# Daily config-only operation: seed absent baseline inputs and assemble.
 /opt/zim-main/bin/install-config-user.sh
 
 # Preview local reassembly and inspect all representations.

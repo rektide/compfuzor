@@ -472,12 +472,12 @@ The mise renderer also contributes an `early` hook (`mise install`) to the
 generated `install.sh`, so declared tools are installed before install scripts
 run.
 
-## Managed-link ownership (links.ts)
+## Declared LINKS and shared link delivery
 
-Every managed symlink belongs to the LINKS subsystem:
-[`links.ts`](../files/links/links.ts) is the only thing that creates, replaces,
-or removes them, driven by the records in `DIR/links.json`. Install bins do
-not hand-roll `ln -sf` — they delegate:
+Every symlink declared through `LINKS` belongs to the LINKS manager:
+[`links.ts`](../files/links/links.ts) applies, reports, audits, and removes its
+records from `DIR/links.json`. Install bins do not hand-roll `ln -sf` for those
+declarations — they delegate:
 
 - `install-unit.sh` applies the unit's record (`UNIT_LINK_ID`, baked at
   generation) before `daemon-reload`/enable; `install-sysusers.sh` applies the
@@ -486,13 +486,11 @@ not hand-roll `ln -sf` — they delegate:
   fragment — both `policy: replace` (matching the old `ln -sf` squatter
   behavior). User-scope unit records keep `${HOME}` literal, as a runtime
   root links.ts expands at apply time.
-- Privilege routing is per record: the default **auto** mode probes whether a
-  dest is writable and escalates only unwritable records through sudo
-  (`--sudo` or `COMPFUZOR_LINKS_SUDO` select `auto`/`always`/`never`;
-  mutated-via-sudo rows are marked `(via sudo)`). Install bins rely on the
-  default — no env tending, no scope branching: user-scope dests mutate
-  directly, `/etc/...` dests escalate. `never` keeps plain `links.ts apply`
-  strictly unprivileged for let-it-fail contexts.
+- Privilege routing is per system record: the default **auto** mode probes
+  whether a destination is writable; `--sudo` or `COMPFUZOR_LINKS_SUDO` select
+  `auto`/`always`/`never`, and sudo-mutated rows are marked. User-scope records
+  never escalate; explicit `always` is rejected before user mutation. `never`
+  keeps system work strictly unprivileged for let-it-fail callers.
 - With `LINKS_BYPASS` (no links.ts rendered), install bins fall back to a
   direct `ln -sf`.
 
@@ -500,6 +498,13 @@ What the records buy: `status` reports drift (a package overwriting a unit
 with a real file is a `conflict` row, not silence), `audit` cross-checks
 deployments claiming the same system path, and `remove` uninstalls links
 with everything else.
+
+Explicit CONFIGS consumer copy/link operations are not `LINKS` declarations:
+they resolve context paths from `config.spec.json`, intentionally permit
+replacing selected regular files or symlinks, and carry no ownership ledger.
+They nevertheless import the same `links/delivery.ts` entry inspection and
+atomic link primitive used by the LINKS manager. This keeps one symlink
+implementation while preserving the distinct declaration-policy contracts.
 
 ## Unit aliases
 
