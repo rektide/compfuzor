@@ -429,3 +429,74 @@ Supporting requirements applying at every rank:
 - [`files/watchwoman/status-watchwoman.sh`](/files/watchwoman/status-watchwoman.sh) — current deploy's health/drift checks; its "classic-watchman compat symlink" tripwire is the mechanism ranked #2 above, and its XDG zeroconf assumption matches §1.3 case 4 (note: both local C++ builds are XDG-OFF, so the XDG path is *not* what the installed CLI computes — it is only watchwoman's chosen canonical path).
 - [`watchman.src.pb`](/watchman.src.pb) / [`watchwoman.src.pb`](/watchwoman.src.pb) — build manifests for the getdeps checkout and the replacement daemon.
 - Upstream docs: [Socket Interface](https://facebook.github.io/watchman/docs/socket-interface.html) (corroborates `get-sockname` + `$WATCHMAN_SOCK` as the discovery contract).
+
+# Addendum: 2026-09-08 — the jj-background-monitor feedback loop
+
+## Incident
+
+A watchman trigger named `jj-background-monitor` (command `jj --quiet util
+snapshot`) on this repo entered a self-sustaining feedback loop during a
+`jj commit` session: **12,000+ concurrent `jj util snapshot` processes**
+(~20 spawns/sec), all but one parked in `locks_lock_inode_wait`, queueing on
+the jj repo lock. The spawner was the watchwoman daemon (`--sockname
+~/.local/state/watchman/rektide-state/sock --foreground-daemon`, pid 806505
+at the time) executing the trigger. Two `jj commit` attempts starved behind
+the herd and timed out.
+
+## Mechanism
+
+The trigger expression *intended* to exclude jj/colocated-git state:
+
+```json
+"expression": ["not", ["anyof",
+  ["name", [".git", ".jj"], "wholename"],
+  ["dirname", ".git"],
+  ["dirname", ".jj"]
+]],
+"append_files": false
+```
+
+**watchman's `dirname` term matches exactly one path component** — it excludes
+files *directly* under `.jj`/`.git`, not deeper paths. A colocated jj snapshot
+writes deep under both trees (`.jj/repo/op_heads/*`, `.git/refs/*`, …); each
+such write re-fired the trigger, and each spawned snapshot wrote more state:
+a genuine feedback loop. The `["name", …, "wholename"]` term only covers the
+directory entries themselves.
+
+## Intervention and current state
+
+1. SIGSTOP of the daemon + SIGKILL of the worker herd (twice — the loop
+   re-seeded from buffered events after the first CONT).
+2. `watchwoman trigger-list` captured the definition, then
+   `watchwoman trigger-del /home/rektide/src/compfuzor jj-background-monitor`.
+   The watch and all other roots are untouched; a sweep of every watched
+   root (≈50) found **zero other triggers** — this was the only armed one.
+3. The definition is preserved at
+   [`.test-agent/watchwoman/jj-background-monitor.trigger.json`](/.test-agent/watchwoman/jj-background-monitor.trigger.json)
+   (gitignored scratch).
+
+The trigger name appears in no source repo and not in the watchwoman binary:
+it was registered by hand or by a long-gone script.
+
+**Decision (operator, 2026-09-08): leave the trigger off.** ("i used to have
+more triggers they sometimes hurt.")
+
+## Durable fixes, ranked
+
+1. **Fork default (recommended)**: watchwoman already honors per-root
+   `.watchmanconfig` `ignore_dirs`
+   (`crates/watchwoman/src/daemon/state.rs:139` → `load_watchmanconfig_ignores`,
+   applied in `watcher::initial_scan` and the root's ignore set). Make
+   `.git`/`.jj`/`.hg` *default-ignored* unless a root overrides — then any
+   jj/git trigger pattern becomes structurally loop-safe on every repo.
+2. **Per-repo config (available today)**: drop
+   `{"ignore_dirs": [".jj", ".git"]}` as `.watchmanconfig` in a repo root,
+   then `watch-del` + re-watch so it takes effect.
+3. **Correct expression (belt-and-suspenders)** if a trigger is ever wanted
+   again, replace the one-level `dirname` terms with subtree matches, e.g.
+   `["not", ["anyof", ["name", [".git",".jj"], "wholename"],
+   ["match", ".git/**", "wholename"], ["match", ".jj/**", "wholename"]]]`.
+
+A trigger that shells out to a VCS *inside the watched root* is only ever one
+shallow-exclusion bug away from this loop — which is why the ignore_dirs
+default (fix 1) is the one that generalizes.
