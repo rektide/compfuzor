@@ -17,6 +17,16 @@
       user: "{{user|default(ansible_user_id)}}"
       password: "{{password|default('CHANGE_OR_ELSE')}}"
     MKOSI_PKGS: []
+    # Route all build-time package fetches through the local apt-cacher-rs
+    # instance (apt-cacher-rs.src.pb -> apt-cacher-rs-git, listening :3142).
+    # Renders [Build] ProxyUrl= below: mkosi marks ProxyUrl multiversal (tools
+    # tree + every subimage), passing Acquire::http(s)::Proxy= to apt and
+    # http(s)_proxy env into the build sandbox. The cacher upgrades upstream
+    # fetches to TLS itself (https_upgrade_mode=Auto), so plain-http repo URLs
+    # still get cached, verified packages. Override or disable via extra vars:
+    # -e APT_PROXY=http://other:3142/ or -e APT_PROXY= (empty drops the line
+    # for portable/offline builds).
+    APT_PROXY: http://127.0.0.1:3142/
     MKOSI_PKGSETS:
       - BASE
       # TODO: eventually support "BASE_{{ARCH}}" parametric pkgsets so the
@@ -78,6 +88,12 @@
           # btrfs subvolumes (Subvolumes=/DefaultSubvolume= in mkosi.repart/)
           # cannot be created without loopback devices, so build online.
           RepartOffline=no
+          # Local apt cache (APT_PROXY at the top of the playbook). Multiversal:
+          # proxies the tools tree and every subimage. Coexists with
+          # PackageCacheDirectory above (mkosi's on-disk deb cache); the proxy
+          # adds HTTP-level dedupe shared with this host's apt and other boxes.
+          {% if APT_PROXY %}ProxyUrl={{APT_PROXY}}
+          {% endif %}
 
           [Config]
           # Build only these subimages by default. `image.sh <variant>` overrides
@@ -345,6 +361,18 @@
       BASE_amd64` = 238 pkgs; uncomment the rest for a ~1000-pkg workstation
       image). Use this for full disk/workstation subimages — keep initrd/oci
       subimages lean with explicit `Packages=`.
+
+      ## apt caching
+
+      `APT_PROXY` (default `http://127.0.0.1:3142/` — this host's apt-cacher-rs
+      from `apt-cacher-rs.src.pb`) renders `[Build] ProxyUrl=` into
+      `etc/mkosi.conf`. ProxyUrl is multiversal in mkosi: one line proxies the
+      tools tree **and** every subimage — mkosi passes
+      `Acquire::http(s)::Proxy=` to apt and exports `http_proxy`/`https_proxy`
+      into the build sandbox (which shares the host netns, so loopback
+      reaches the daemon). Build with `-e APT_PROXY=` to drop it for
+      portable/offline configs. Watch it work: <http://127.0.0.1:3142/> while
+      `image.sh` runs.
 
       ## mkosi output formats
 
