@@ -122,6 +122,26 @@ The repo already has a concrete shared-tool precedent:
 and `--id`, and owns apply/status classification together. This is not a greenfield
 need for a scope-parametric runtime.
 
+The bounded GX code trace, checked against the relevant source here, makes the
+picture more specific:
+
+- **Systemd already demonstrates the desired shape.** Its wrappers set
+  `UNIT_DIR`, `SYSTEMCTL`, and `SUDO_CMD`, then source one `install-unit.sh`
+  implementation
+  ([`vars_systemd_unit.tasks:388-414`](/tasks/compfuzor/vars_systemd_unit.tasks#L388-L414)).
+  Separate scoped scripts do not imply duplicated algorithms.
+- **Rust exposes a different problem: different operations hidden behind scope
+  names.** `install-rust.sh` publishes existing build outputs; its user sibling
+  runs `cargo install --path`, which has its own build/install lifecycle
+  ([`common.yaml:396-459`](/vars/common.yaml#L396-L459)). Parameterizing the copy
+  destination would not preserve both behaviors. Distinguish prebuilt artifact
+  delivery from Cargo-managed installation before deciding what to share.
+- **Composition already accepts explicit scope metadata**, while also inferring
+  user scope from certain filename positions
+  ([`bin_composers.py:146-164`](/library/filter_plugins/bin_composers.py#L146-L164)).
+  New tools should carry explicit metadata instead of relying on a name such as
+  `install-config-user-dropins.sh` to imply an execution context.
+
 ## A more useful center: reusable recipe, consumer-specific result
 
 “Recipe” here just means the existing assembly declaration and its reusable
