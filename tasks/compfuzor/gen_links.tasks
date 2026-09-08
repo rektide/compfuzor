@@ -30,7 +30,7 @@
 - name: "Compfuzor: contribute deferred link consumers"
   set_fact:
     BINS: "{{ BINS | merge_list(_link_bins, preset='bins_generated') }}"
-    DIRS: "{{ DIRS | merge_list([BINS_DIR + '/links'], preset='append_unique') }}"
+    DIRS: "{{ DIRS | merge_list(BINS_DIR | links_runtime_dirs, preset='append_unique') }}"
     STATUSES: "{{ STATUSES | merge_list(['status-links.sh'], preset='append') }}"
     ENV: "{{ ENV | merge_dict({'LINKS_JSON': DIR + '/links.json'}, preset='overlay') }}"
     ENV_LIST: "{{ ENV_LIST | merge_list(['LINKS_JSON'], preset='append') }}"
@@ -40,25 +40,8 @@
     _link_user: "{{ _LINK_PLAN.links | selectattr('scope', 'equalto', 'user') | list | length > 0 }}"
     _link_bins: >-
       {{
-        [
-          {
-            'name': 'links.ts',
-            'src': '../links.ts',
-            'raw': True,
-            'compose': False,
-          },
-          {
-            'name': 'links/links.ts',
-            'src': '../links/links.ts',
-            'raw': True,
-            'compose': False,
-          },
-          {
-            'name': 'links/delivery.ts',
-            'src': '../links/delivery.ts',
-            'raw': True,
-            'compose': False,
-          },
+        (True | links_runtime_bins)
+        + [
           {
             'name': 'status-links.sh',
             'content': 'exec "$DIR/bin/links.ts" status "$@"',

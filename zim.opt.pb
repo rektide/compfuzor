@@ -308,14 +308,6 @@
         src: ../block-status.sh
         basedir: False
         compose: False
-      - name: links/links.ts
-        src: ../links/links.ts
-        raw: True
-        compose: False
-      - name: links/delivery.ts
-        src: ../links/delivery.ts
-        raw: True
-        compose: False
       - name: zim-registry.sh
         src: ../zim-registry.sh
         basedir: False

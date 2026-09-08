@@ -12,6 +12,7 @@ from ansible.errors import AnsibleFilterError
 from ansible.template import accept_args_markers
 
 from template_data import raw_copy_template_data
+from runtime_bundles import links_runtime_bins, links_runtime_dirs
 
 
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -216,10 +217,7 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
         "basedir": False,
     })
     occupied_bins.add(module_name)
-    for shared_name, source in (
-        ("config/toolkit.ts", "../config/toolkit.ts"),
-        ("links/delivery.ts", "../links/delivery.ts"),
-    ):
+    for shared_name, source in (("config/toolkit.ts", "../config/toolkit.ts"),):
         if shared_name in occupied_bins:
             _error("generated command collision: {}".format(shared_name))
         bins.append({
@@ -229,6 +227,12 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
             "compose": False,
             "basedir": False,
         })
+        occupied_bins.add(shared_name)
+    for record in links_runtime_bins(False):
+        shared_name = record["name"]
+        if shared_name in occupied_bins:
+            _error("generated command collision: {}".format(shared_name))
+        bins.append(record)
         occupied_bins.add(shared_name)
 
     normalized_contexts = {}
@@ -350,8 +354,10 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
     compiled["spec"] = spec
     compiled["bins"] = bins
     dirs = list(compiled.get("dirs", []))
-    for relative_dir in ("config", "links"):
-        module_dir = posixpath.join(bins_dir, relative_dir)
+    module_dir = posixpath.join(bins_dir, "config")
+    if module_dir not in dirs:
+        dirs.append(module_dir)
+    for module_dir in links_runtime_dirs(bins_dir):
         if module_dir not in dirs:
             dirs.append(module_dir)
     compiled["dirs"] = dirs

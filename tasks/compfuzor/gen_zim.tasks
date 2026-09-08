@@ -166,7 +166,8 @@
 
 - name: "Compfuzor: synthesize zim host artifacts"
   set_fact:
-    BINS: "{{ BINS | merge_list(_zim_host_bins | annotate_bins('zim'), preset='bins_generated') }}"
+    BINS: "{{ BINS | merge_list((_zim_host_bins + (True | links_runtime_bins)) | annotate_bins('zim'), preset='bins_generated') }}"
+    DIRS: "{{ DIRS | merge_list(BINS_DIR | links_runtime_dirs, preset='append_unique') }}"
   when:
     - ZIM_HOST is defined
     - ZIM_BYPASS is deffalsy
