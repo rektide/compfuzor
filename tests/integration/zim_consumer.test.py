@@ -26,7 +26,7 @@ def run(command: list[str], *, cwd: Path, env: dict[str, str], check: bool = Tru
     return result
 
 
-def render_host(payload: Path, scenario: Path, ansible_env: dict[str, str]) -> None:
+def render_host(payload: Path, scenario: Path, ansible_env: dict[str, str], default_context: str = "user") -> None:
     system = payload.parent / "system activation"
     values = {
         "TYPE": "zim",
@@ -55,7 +55,7 @@ def render_host(payload: Path, scenario: Path, ansible_env: dict[str, str]) -> N
                 "configs": ["zimrc", "zimenv"],
             },
         },
-        "ZIM_CONTEXT": "user",
+        "ZIM_CONTEXT": default_context,
         "ZIM_CONTEXTS": {
             "user": {"config": "user"},
             "system": {
@@ -237,6 +237,20 @@ zimfw() { :; }
         assert (payload / "bin" / "install-zim-donor.sh").is_file()
         assert not any(path.is_symlink() and path.resolve() == payload / "bin" / "install-zim.sh" for path in (payload / "bin").iterdir())
 
+        # The same generated Zim surface follows a system default into the bare
+        # package compositor rather than manufacturing context-specific leaves.
+        system_default_case = temporary / "system default case"
+        system_default_case.mkdir()
+        system_default_payload = system_default_case / "zim host"
+        render_host(system_default_payload, system_default_case / "host.json", ansible_env, "system")
+        install_system_text = (system_default_payload / "bin" / "install.sh").read_text(encoding="utf-8")
+        assert install_system_text.count('"$DIR/bin/install-zim.sh" "$@"') == 1
+        system_user_compositor = system_default_payload / "bin" / "install-user.sh"
+        assert not system_user_compositor.exists() or "install-zim.sh" not in system_user_compositor.read_text(encoding="utf-8")
+        for generated in ("install-zim.sh", "status-zim.sh", "zim/install.ts"):
+            assert (system_default_payload / "bin" / generated).is_file()
+        assert not (system_default_payload / "bin" / "install-zim-system.sh").exists()
+
         home_one = temporary / "home one"
         xdg_one = temporary / "xdg one"
         zdot_one = temporary / "zdot one"
@@ -369,8 +383,9 @@ zimfw() { :; }
         system_env["PATH"] = os.pathsep.join((str(sudo_shim), system_env["PATH"]))
         system_env.update({
             "COMPFUZOR_ZIM_CONTEXT": "system",
-            "COMPFUZOR_ZIM_INSTALL_STRATEGY": "copy",
-            "COMPFUZOR_ZIM_DROPINS_STRATEGY": "link",
+            # Compatibility names remain runtime inputs to the Zim dispatcher.
+            "COMPFUZOR_CONFIG_INSTALL_STRATEGY": "copy",
+            "COMPFUZOR_CONFIG_DROPINS_STRATEGY": "link",
         })
         run([str(payload / "bin" / "install-zim.sh")], cwd=temporary, env=system_env)
         assert (system_root / "config" / "zimrc").is_file()
@@ -380,7 +395,11 @@ zimfw() { :; }
         # beat both alias and environment strategy settings.
         system_alias = payload / "bin" / "install-zim-system.sh"
         system_alias.symlink_to("install-zim.sh")
-        alias_env = system_env | {"COMPFUZOR_ZIM_CONTEXT": "user"}
+        alias_env = system_env | {
+            "COMPFUZOR_ZIM_CONTEXT": "user",
+            "COMPFUZOR_ZIM_INSTALL_STRATEGY": "copy",
+            "COMPFUZOR_ZIM_DROPINS_STRATEGY": "link",
+        }
         run([str(system_alias), "--install", "assemble", "--dropins", "copy"], cwd=temporary, env=alias_env)
         assert (system_root / "config" / "zimrc.d" / "20-environment.conf").is_file()
         assert not (system_root / "config" / "zimrc.d" / "20-environment.conf").is_symlink()
@@ -413,7 +432,10 @@ zimfw() { :; }
         zim_spec["defaultContext"] = "system"
         zim_spec_path.write_text(json.dumps(zim_spec), encoding="utf-8")
         default_env = system_env.copy()
-        for key in ("COMPFUZOR_ZIM_CONTEXT", "COMPFUZOR_ZIM_INSTALL_STRATEGY", "COMPFUZOR_ZIM_DROPINS_STRATEGY"):
+        for key in (
+            "COMPFUZOR_ZIM_CONTEXT", "COMPFUZOR_ZIM_INSTALL_STRATEGY", "COMPFUZOR_ZIM_DROPINS_STRATEGY",
+            "COMPFUZOR_CONFIG_INSTALL_STRATEGY", "COMPFUZOR_CONFIG_DROPINS_STRATEGY",
+        ):
             default_env.pop(key, None)
         system_build_log.write_text("", encoding="utf-8")
         run([str(payload / "bin" / "install-zim.sh"), "--install", "copy"], cwd=temporary, env=default_env)
@@ -469,6 +491,26 @@ zimfw() { :; }
                 "ZIM_CONFIG_FILE": str(custom_zimrc), "ZIM_ENV_CONFIG": str(custom_zimenv), "ZIM_CONFIG_LINK": str(custom_registry),
                 "ZIM_TEST_BUILD_LOG": str(temporary / "build-two.log"),
             })
+            write_environment_wrapper(temporary / "system.sh", common | {
+                "HOME": str(temporary / "irrelevant system home"),
+                "XDG_CONFIG_HOME": str(temporary / "irrelevant system xdg"),
+                "ZDOTDIR": str(temporary / "irrelevant system zdot"),
+                "ZIM_TEST_BUILD_LOG": str(system_build_log),
+                "COMPFUZOR_ZIM_CONTEXT": "system",
+            })
+            hostile_env = os.environ.copy()
+            hostile_env.update({
+                "ZIM_CONFIG_FILE": "/hostile/zimrc",
+                "ZIM_ENV_CONFIG": "/hostile/zimenv",
+                "ZIM_CONFIG_LINK": "/hostile/registry",
+                "COMPFUZOR_ZIM_CONTEXT": "undeclared",
+                "COMPFUZOR_ZIM_INSTALL_STRATEGY": "invalid",
+                "COMPFUZOR_ZIM_DROPINS_STRATEGY": "invalid",
+                "COMPFUZOR_CONFIG_INSTALL_STRATEGY": "invalid",
+                "COMPFUZOR_CONFIG_DROPINS_STRATEGY": "invalid",
+            })
+            run([str(temporary / "user-one.sh"), str(payload / "bin" / "status-zim.sh")], cwd=temporary, env=hostile_env)
+            run([str(temporary / "system.sh"), str(payload / "bin" / "status-zim.sh")], cwd=temporary, env=hostile_env)
             (temporary / "README.md").write_text(
                 f"""# Isolated Zim consumer demo
 
@@ -479,19 +521,23 @@ This directory was rendered from `zim.opt.pb` with downloads/package work disabl
 - canonical donor inputs: `{zimrc_d}` and `{zimenv_d}`
 - user one config: `{local_root_one}`
 - user two config: `{xdg_two / 'zsh'}` (custom outputs are under `{home_two / 'custom'}`)
+- explicit system activation: `{system_root}`
 - producer fixture: `{producer}`
 
 Run tools without sourcing a live profile:
 
-The wrappers clear inherited `ZIM_CONFIG_FILE`, `ZIM_ENV_CONFIG`, and
-`ZIM_CONFIG_LINK` before setting their own demo values, and pin `TMPDIR` inside
-this scratch root.
+The wrappers clear inherited Zim context, strategy, output, registry, and config
+bypass variables before setting their own demo values, and pin `TMPDIR` inside
+this scratch root. `install-zim-system.sh` under the host `bin/` is a
+user-created symlink retained by the test; the playbook did not generate it.
 
 ```bash
 ./user-one.sh {str(payload / 'bin' / 'status.sh')!r}
 ./user-one.sh {str(payload / 'bin' / 'config-user.sh')!r} --check zimrc
 ./user-one.sh {str(payload / 'bin' / 'config-inputs-user.sh')!r} status zimrc --json-array
 ./user-two.sh {str(payload / 'bin' / 'status.sh')!r}
+./system.sh {str(payload / 'bin' / 'status-zim.sh')!r}
+./system.sh {str(payload / 'bin' / 'install-zim-system.sh')!r} --install assemble --dropins copy
 ```
 
 `install-zim-donor.sh` changes the canonical donor and is intentionally not run by either wrapper's ordinary user setup.

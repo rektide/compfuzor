@@ -100,6 +100,10 @@ def test_validation():
         "system context requires",
     )
     check_raises(
+        lambda: compile_zim_contexts({"bad/context": {"config": "user"}}, plan["spec"], "bad/context", "/e", "/d", "/b", "n", []),
+        "context names",
+    )
+    check_raises(
         lambda: compile_zim_contexts({"user": {"config": "user"}}, plan["spec"], "user", "/e", "/d", "/b", "n", [{"name": "install-zim.sh"}]),
         "collision",
     )
