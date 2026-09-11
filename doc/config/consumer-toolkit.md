@@ -4,37 +4,89 @@ Compfuzor can compile one `CONFIGS` recipe once and bind it to explicit user or
 system consumer roots at runtime. The canonical deployment stays reusable;
 consumer input choices and assembled outputs stay independent.
 
+## What runs automatically
+
+One generated command joins ordinary install composition; everything else is a
+manual operator tool. For the Zim user context:
+
+```text
+install-user.sh                    (ordinary user install — one command)
+├─ install-config-user.sh          seed missing donor inputs + assemble both configs
+├─ install-zimenv-loader-user.sh   .zshenv loader block
+├─ install-zimrc-loader-user.sh    .zshrc loader block
+├─ install-zim-caches-user.sh      build both user Zim caches
+└─ install-zim-registry-user.sh    canonical host registry link
+```
+
+`install-config-user.sh` is the context's ordinary dispatcher; its action comes
+from the declared `install:` default or `COMPFUZOR_CONFIG_INSTALL_STRATEGY`.
+The other generated commands never run automatically — `config-user.sh`
+(assembly/preview), the drop-in refresh and whole-output commands, and the
+input tools. `status-config-context-user.sh` also runs through the aggregate
+`status.sh` reporter list.
+
 ## Declare a context
+
+The smallest useful declaration binds where a consumer's files live:
 
 ```yaml
 CONFIG_CONTEXTS:
   user:
-    scope: user
-    root: config
-    subpath: zsh
-    install: assemble # assemble | copy | link
-    dropins: link     # link | copy
-    configs: [zimrc, zimenv]
+    scope: user        # user | system — composition lane + default root classes
+    root: config       # ${XDG_CONFIG_HOME:-$HOME/.config} for the invoking user
+    subpath: zsh       # optional path below the root
+    configs: [zimrc, zimenv]   # which compiled configs to expose (omit = all)
 ```
 
-For user scope, `root: config` means
-`${XDG_CONFIG_HOME:-$HOME/.config}` for the invoking user. System contexts use
-the same assembly implementation but run with the caller's existing authority;
-the config tools never invoke sudo.
+System contexts use the same assembly implementation but run with the caller's
+existing authority; the config tools never invoke sudo.
 
-Paths under canonical `ETC` keep their relative layout beneath the context
-root. External inputs require an explicit binding. Per-config output bindings
-may use an environment override:
+Two optional keys choose defaults for the ordinary dispatcher. They are
+runtime-overridable and generate nothing themselves:
 
 ```yaml
-configs:
-  app:
-    output: {env: APP_CONFIG_FILE, default: app.conf}
+    install: assemble   # assemble | copy | link — what install-config-user.sh does
+    dropins: link       # link | copy — how donor fragments are seeded/refreshed
 ```
+
+Paths under canonical `ETC` keep their relative layout beneath the context
+root (`zimrc.d/` → `~/.config/zsh/zimrc.d/`). Inputs or outputs outside `ETC`,
+or runtime-selected destinations, need explicit per-config bindings:
+
+```yaml
+    configs:
+      app:
+        output: {env: APP_CONFIG_FILE, default: app.conf}
+        inputs:
+          0: inputs/base.conf        # by input index
+          fragments: local/app.d     # by glob input name
+```
+
+Declaration options bind paths or pick defaults — they never add or remove
+generated files. Every context gets the same command set; the strategy-variant
+scripts differ only in baked arguments over one shared runtime.
+`CONFIG_CONTEXTS_BYPASS=True` suppresses the whole toolkit at generation;
+`COMPFUZOR_CONFIG_CONTEXTS_BYPASS=1` skips the composed dispatcher at runtime.
+
+### Runtime strategy selection
+
+Copy versus link does not require picking a different file:
+
+```bash
+COMPFUZOR_CONFIG_INSTALL_STRATEGY=link install-config-user.sh        # whole-link run
+COMPFUZOR_CONFIG_DROPINS_STRATEGY=copy install-config-user-dropins.sh  # copy refresh
+```
+
+Export either in your shell for a recurring preference; the playbook default
+stays authoritative for fresh users. The per-strategy commands
+(`install-config-user-copy.sh`, `-link.sh`, …) are stable, discoverable stems
+for the same actions — conveniences, not separate configurations.
 
 ## Generated commands
 
-For a context named `user`:
+Each command below is a one-line wrapper over the shared `config/toolkit.ts`
+runtime (or `config-context.ts` for assembly); the strategy variants differ
+only in baked arguments. For a context named `user`:
 
 ```text
 config-user.sh [--list | --check | --stdout] [CONFIG]
