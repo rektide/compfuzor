@@ -41,6 +41,7 @@
         subpath: zsh
         install: "{{ ZIM_CONFIG_INSTALL }}"
         dropins: "{{ ZIM_CONFIG_DROPINS }}"
+        compose: false
         configs:
           zimrc:
             output:
@@ -60,8 +61,10 @@
     ENV_LIST:
       - zim_home
       - zim_env_home
-    STATUSES:
-      - status-zim.sh
+    ZIM_CONTEXT: user
+    ZIM_CONTEXTS:
+      user:
+        config: user
     GET_URLS:
       - https://github.com/zimfw/zimfw/releases/latest/download/zimfw.zsh
     PKGS:
@@ -272,110 +275,6 @@
         phase: late
         enabled: false
         comment: must be sourced after zsh-syntax-highlighting
-    BINS:
-      - name: zimfw-channel.sh
-        basedir: False
-        content: |
-          channel=${1:?usage: zimfw-channel.sh CHANNEL [ACTION [OPTION]]}
-          shift
-          case "$channel" in
-            zimrc)
-              home="${ZIM_HOME:-{{zim_home}}}"
-              config="${ZIM_CONFIG_FILE:-}"
-              case "$config" in "{{ETC}}/zimrc"|"{{DIR}}/etc/zimrc") config="" ;; esac
-              config="${config:-{{zim_config_default}}}"
-              ;;
-            zimenv)
-              home="${ZIM_ENV_HOME:-{{zim_env_home}}}"
-              config="${ZIM_ENV_CONFIG:-}"
-              case "$config" in "{{ETC}}/zimenv"|"{{DIR}}/etc/zimenv") config="" ;; esac
-              config="${config:-{{zim_env_config_default}}}"
-              ;;
-            *)
-              echo "unknown Zim channel: $channel" >&2
-              exit 2
-              ;;
-          esac
-          [ "$#" -gt 0 ] || set -- install
-          exec zsh -dfc '
-            ZIM_HOME=$1
-            ZIM_CONFIG_FILE=$2
-            controller=$3
-            shift 3
-            source "$controller" "$@"
-          ' "zimfw-$channel" "$home" "$config" "{{DIR}}/src/zimfw.zsh" "$@"
-      - name: block-status.sh
-        src: ../block-status.sh
-        basedir: False
-        compose: False
-      - name: zim-registry.sh
-        src: ../zim-registry.sh
-        basedir: False
-        compose: False
-      - name: install-zimenv-loader-user.sh
-        scope: [user]
-        subsystem: zim
-        phase: units
-        content: |
-          command=${CONFIG_BLOCK_IN_FILE:-block-in-file}
-          startup="${ZDOTDIR:-$HOME}/.zshenv"
-          [ ! -f "$startup" ] || "$command" --remove-match '^{{NAME}}$' -o "$startup"
-          "$command" -n {{NAME}}-zimenv -C true -i "{{DIR}}/etc/zimenv.zsh" -o "$startup"
-      - name: install-zimrc-loader-user.sh
-        scope: [user]
-        subsystem: zim
-        phase: units
-        content: |
-          command=${CONFIG_BLOCK_IN_FILE:-block-in-file}
-          startup="${ZDOTDIR:-$HOME}/.zshrc"
-          [ ! -f "$startup" ] || "$command" --remove-match '^{{NAME}}$' -o "$startup"
-          "$command" -n {{NAME}}-zimrc -C true -i "{{DIR}}/etc/zimrc.zsh" -o "$startup"
-      - name: install-zim-caches-user.sh
-        scope: [user]
-        subsystem: zim
-        phase: records
-        content: |
-          "{{DIR}}/bin/zimfw-channel.sh" zimenv install
-          "{{DIR}}/bin/zimfw-channel.sh" zimrc install
-      - name: install-zim-registry-user.sh
-        scope: [user]
-        subsystem: zim
-        phase: records
-        content: |
-          exec "{{DIR}}/bin/zim-registry.sh" apply
-      - name: status-zim.sh
-        basedir: False
-        content: |
-          status=0
-          zshenv="${ZDOTDIR:-$HOME}/.zshenv"
-          zshrc="${ZDOTDIR:-$HOME}/.zshrc"
-          zimrc_config="${ZIM_CONFIG_FILE:-}"
-          case "$zimrc_config" in "{{ETC}}/zimrc"|"{{DIR}}/etc/zimrc") zimrc_config="" ;; esac
-          zimrc_config="${zimrc_config:-{{zim_config_default}}}"
-          zimenv_config="${ZIM_ENV_CONFIG:-}"
-          case "$zimenv_config" in "{{ETC}}/zimenv"|"{{DIR}}/etc/zimenv") zimenv_config="" ;; esac
-          zimenv_config="${zimenv_config:-{{zim_env_config_default}}}"
-          zimenv_home="${ZIM_ENV_HOME:-{{zim_env_home}}}"
-
-          if [ ! -f "$zimrc_config" ]; then
-            echo "drift: user zimrc is missing: $zimrc_config"
-            status=1
-          elif [ ! "${ZIM_HOME:-{{zim_home}}}/init.zsh" -nt "$zimrc_config" ]; then
-            echo "drift: zimrc init is missing or stale: ${ZIM_HOME:-{{zim_home}}}/init.zsh"
-            status=1
-          fi
-          if [ ! -f "$zimenv_config" ]; then
-            echo "drift: user zimenv is missing: $zimenv_config"
-            status=1
-          elif [ ! "$zimenv_home/init.zsh" -nt "$zimenv_config" ]; then
-            echo "drift: zimenv init is missing or stale: $zimenv_home/init.zsh"
-            status=1
-          fi
-          "{{DIR}}/bin/block-status.sh" "{{NAME}}-zimenv" "{{DIR}}/etc/zimenv.zsh" "$zshenv" || status=1
-          "{{DIR}}/bin/block-status.sh" "{{NAME}}-zimrc" "{{DIR}}/etc/zimrc.zsh" "$zshrc" || status=1
-          "{{DIR}}/bin/zim-registry.sh" status || status=1
-
-          exit "$status"
     ETC_FILES:
       - name: zimenv.zsh
         content: |

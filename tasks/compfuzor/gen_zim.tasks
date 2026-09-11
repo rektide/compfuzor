@@ -166,22 +166,31 @@
 
 - name: "Compfuzor: synthesize zim host artifacts"
   set_fact:
-    BINS: "{{ BINS | merge_list((_zim_host_bins + (True | links_runtime_bins)) | annotate_bins('zim'), preset='bins_generated') }}"
-    DIRS: "{{ DIRS | merge_list(BINS_DIR | links_runtime_dirs, preset='append_unique') }}"
+    BINS: "{{ BINS | merge_list((_zim_host_bins + (True | links_runtime_bins) + _zim_install.bins) | annotate_bins('zim'), preset='bins_generated') }}"
+    DIRS: "{{ DIRS | merge_list((BINS_DIR | links_runtime_dirs) + _zim_install.dirs, preset='append_unique') }}"
+    ETC_FILES: "{{ ETC_FILES | merge_list(_zim_install.etc_files, preset='append') }}"
+    STATUSES: "{{ STATUSES | merge_list(_zim_install.statuses, preset='append_unique') }}"
   when:
     - ZIM_HOST is defined
     - ZIM_BYPASS is deffalsy
   vars:
+    _zim_install: >-
+      {{ ZIM_CONTEXTS | default({}) | resolve |
+         zim_context_compile(
+           SUBSYSTEM.config.spec,
+           ZIM_CONTEXT | default('user'),
+           ETC,
+           DIR,
+           BINS_DIR,
+           NAME,
+           BINS) }}
     _zim_host_bins:
       - name: install-zim-donor.sh
-        src: ../install-zim.sh
+        src: ../install-zim-donor.sh
         basedir: False
-        compose: False
-      - name: install-zim.sh
-        dest: install-zim.sh
-        link: install-zim-donor.sh
         compose: False
       - name: install-zim-context.sh
         src: ../install-zim-context.sh
+        raw: True
         basedir: False
         compose: False

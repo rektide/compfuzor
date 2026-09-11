@@ -32,7 +32,7 @@ def test_zim_remote() -> None:
         manager.write_text((ROOT / "files" / "config-remote.ts").read_text().replace("{{DIR}}", str(host)))
         manager.chmod(0o770)
         installer = host / "bin" / "install-zim-donor.sh"
-        installer.write_text((ROOT / "files" / "install-zim.sh").read_text().replace("{{DIR}}", str(host)))
+        installer.write_text((ROOT / "files" / "install-zim-donor.sh").read_text().replace("{{DIR}}", str(host)))
         installer.chmod(0o770)
         (host / "etc" / "config.spec.json").write_text(json.dumps({"remotes": {
             "zimrc": {

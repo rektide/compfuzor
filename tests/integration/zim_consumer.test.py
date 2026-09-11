@@ -27,6 +27,7 @@ def run(command: list[str], *, cwd: Path, env: dict[str, str], check: bool = Tru
 
 
 def render_host(payload: Path, scenario: Path, ansible_env: dict[str, str]) -> None:
+    system = payload.parent / "system activation"
     values = {
         "TYPE": "zim",
         "NAME": "zim-main",
@@ -41,6 +42,30 @@ def render_host(payload: Path, scenario: Path, ansible_env: dict[str, str]) -> N
         "PKGS_BYPASS": True,
         "APT_BYPASS": True,
         "REPO_BYPASS": True,
+        "CONFIG_CONTEXTS": {
+            "user": {
+                "scope": "user", "root": "config", "subpath": "zsh", "install": "assemble", "dropins": "link", "compose": False,
+                "configs": {
+                    "zimrc": {"output": {"env": "ZIM_CONFIG_FILE", "default": "zimrc", "ignore": [str(payload / "etc" / "zimrc")]}},
+                    "zimenv": {"output": {"env": "ZIM_ENV_CONFIG", "default": "zimenv", "ignore": [str(payload / "etc" / "zimenv")]}},
+                },
+            },
+            "system": {
+                "scope": "system", "root": str(system / "config"), "install": "assemble", "dropins": "copy", "compose": False,
+                "configs": ["zimrc", "zimenv"],
+            },
+        },
+        "ZIM_CONTEXT": "user",
+        "ZIM_CONTEXTS": {
+            "user": {"config": "user"},
+            "system": {
+                "config": "system",
+                "loader_root": str(system / "startup"),
+                "zimrc_home": str(system / "cache" / "zim"),
+                "zimenv_home": str(system / "cache" / "zimenv"),
+                "registry": str(system / "registry" / "zimfw.conf"),
+            },
+        },
         "ZIM_MODULES": [
             {"source": "environment", "phase": "core"},
             {"source": "minimal", "phase": "prompt", "enabled": False},
@@ -200,22 +225,17 @@ zimfw() { :; }
         assert canonical_zimrc.is_file() and canonical_zimenv.is_file()
 
         install_user_text = (payload / "bin" / "install-user.sh").read_text(encoding="utf-8")
-        assert install_user_text.count('"$DIR/bin/install-config-user.sh" "$@"') == 1
+        assert install_user_text.count('"$DIR/bin/install-zim.sh" "$@"') == 1
+        assert "install-config-user.sh" not in install_user_text
         assert "install-zim-donor" not in install_user_text
-        # Zim leaves group under their subsystem compositor, after config assembly.
-        assert install_user_text.index("install-config-user.sh") < install_user_text.index("install-zim-user.sh")
-        for leaf in ("install-zimenv-loader-user.sh", "install-zimrc-loader-user.sh",
-                     "install-zim-caches-user.sh", "install-zim-registry-user.sh"):
-            assert leaf not in install_user_text
-        zim_compositor = (payload / "bin" / "install-zim-user.sh").read_text(encoding="utf-8")
-        ordered = [
-            "install-zimenv-loader-user.sh",
-            "install-zimrc-loader-user.sh",
-            "install-zim-caches-user.sh",
-            "install-zim-registry-user.sh",
-        ]
-        positions = [zim_compositor.index(name) for name in ordered]
-        assert positions == sorted(positions)
+        assert (payload / "bin" / "install-zim.sh").is_file() and not (payload / "bin" / "install-zim.sh").is_symlink()
+        for removed in (
+            "install-zim-user.sh", "install-zimenv-loader-user.sh", "install-zimrc-loader-user.sh",
+            "install-zim-caches-user.sh", "install-zim-registry-user.sh", "zimfw-channel.sh", "zim-registry.sh",
+        ):
+            assert not (payload / "bin" / removed).exists()
+        assert (payload / "bin" / "install-zim-donor.sh").is_file()
+        assert not any(path.is_symlink() and path.resolve() == payload / "bin" / "install-zim.sh" for path in (payload / "bin").iterdir())
 
         home_one = temporary / "home one"
         xdg_one = temporary / "xdg one"
@@ -227,7 +247,7 @@ zimfw() { :; }
         foreign = temporary / "foreign deployment"
         (foreign / "bin").mkdir(parents=True)
         foreign_log = temporary / "foreign-dispatch.log"
-        for name in ("install-config-user.sh", "status-zim.sh", "status-config-context-user.sh"):
+        for name in ("install-zim.sh", "install-config-user.sh", "status-zim.sh", "status-config-context-user.sh"):
             path = foreign / "bin" / name
             path.write_text(f'#!/bin/sh\necho {name} >> {str(foreign_log)!r}\nexit 0\n', encoding="utf-8")
             path.chmod(0o755)
@@ -337,7 +357,71 @@ zimfw() { :; }
         assert not (xdg_two / "zsh" / "zimrc.d" / producer_rc.name).exists()
         assert donor_digest(payload) == before_user
 
-        run([str(payload / "bin" / "install-zim-caches-user.sh")], cwd=temporary, env=env_one)
+        # One implementation targets a genuinely non-user activation context.
+        system_root = temporary / "system activation"
+        system_build_log = temporary / "build-system.log"
+        system_env = user_env(temporary / "irrelevant system home", temporary / "irrelevant system xdg", temporary / "irrelevant system zdot", payload, system_build_log, block_in_file)
+        sudo_shim = temporary / "sudo-shim"
+        sudo_shim.mkdir()
+        sudo_log = temporary / "sudo.log"
+        (sudo_shim / "sudo").write_text(f'#!/bin/sh\necho called >> {str(sudo_log)!r}\nexit 99\n', encoding="utf-8")
+        (sudo_shim / "sudo").chmod(0o755)
+        system_env["PATH"] = os.pathsep.join((str(sudo_shim), system_env["PATH"]))
+        system_env.update({
+            "COMPFUZOR_ZIM_CONTEXT": "system",
+            "COMPFUZOR_ZIM_INSTALL_STRATEGY": "copy",
+            "COMPFUZOR_ZIM_DROPINS_STRATEGY": "link",
+        })
+        run([str(payload / "bin" / "install-zim.sh")], cwd=temporary, env=system_env)
+        assert (system_root / "config" / "zimrc").is_file()
+        assert not (system_root / "config" / "zimrc.d").exists()
+
+        # Command aliases are user-created only. Alias context beats env; flags
+        # beat both alias and environment strategy settings.
+        system_alias = payload / "bin" / "install-zim-system.sh"
+        system_alias.symlink_to("install-zim.sh")
+        alias_env = system_env | {"COMPFUZOR_ZIM_CONTEXT": "user"}
+        run([str(system_alias), "--install", "assemble", "--dropins", "copy"], cwd=temporary, env=alias_env)
+        assert (system_root / "config" / "zimrc.d" / "20-environment.conf").is_file()
+        assert not (system_root / "config" / "zimrc.d" / "20-environment.conf").is_symlink()
+        assert (system_root / "startup" / ".zshenv").is_file()
+        assert (system_root / "startup" / ".zshrc").is_file()
+        assert (system_root / "cache" / "zimenv" / "init.zsh").is_file()
+        assert (system_root / "cache" / "zim" / "init.zsh").is_file()
+        assert (system_root / "registry" / "zimfw.conf").is_symlink()
+        assert (system_root / "registry" / "zimfw.conf").resolve() == canonical_zimrc
+        assert not sudo_log.exists()
+        system_status = run([str(payload / "bin" / "status-zim.sh"), "--context", "system"], cwd=temporary, env=system_env, check=False)
+        assert system_status.returncode == 0, (system_status.stdout, system_status.stderr)
+
+        system_build_log.write_text("", encoding="utf-8")
+        explicit_user_env = env_one | {"COMPFUZOR_ZIM_CONTEXT": "system", "ZIM_TEST_BUILD_LOG": str(system_build_log)}
+        run([str(system_alias), "--context", "user", "--install", "copy"], cwd=temporary, env=explicit_user_env)
+        assert all(str(local_root_one) in path for path in system_build_log.read_text(encoding="utf-8").splitlines())
+
+        unknown_alias = payload / "bin" / "install-zim-unknown.sh"
+        unknown_alias.symlink_to("install-zim.sh")
+        unknown = run([str(unknown_alias)], cwd=temporary, env=system_env, check=False)
+        assert unknown.returncode == 2 and "undeclared context" in unknown.stderr
+        unknown_alias.unlink()
+
+        # Changing only the compiled default changes direct behavior; the Zim
+        # public executable set is unchanged.
+        zim_spec_path = payload / "etc" / "zim.spec.json"
+        zim_spec = json.loads(zim_spec_path.read_text(encoding="utf-8"))
+        original_default = zim_spec["defaultContext"]
+        zim_spec["defaultContext"] = "system"
+        zim_spec_path.write_text(json.dumps(zim_spec), encoding="utf-8")
+        default_env = system_env.copy()
+        for key in ("COMPFUZOR_ZIM_CONTEXT", "COMPFUZOR_ZIM_INSTALL_STRATEGY", "COMPFUZOR_ZIM_DROPINS_STRATEGY"):
+            default_env.pop(key, None)
+        system_build_log.write_text("", encoding="utf-8")
+        run([str(payload / "bin" / "install-zim.sh"), "--install", "copy"], cwd=temporary, env=default_env)
+        assert all(str(system_root / "config") in path for path in system_build_log.read_text(encoding="utf-8").splitlines())
+        zim_spec["defaultContext"] = original_default
+        zim_spec_path.write_text(json.dumps(zim_spec), encoding="utf-8")
+
+        run([str(payload / "bin" / "install-zim.sh"), "--context", "user"], cwd=temporary, env=env_one)
         clean_status = run([str(payload / "bin" / "status.sh")], cwd=temporary, env=env_one, check=False)
         assert clean_status.returncode == 0, (clean_status.stdout, clean_status.stderr)
         assert not foreign_log.exists()
@@ -351,7 +435,7 @@ zimfw() { :; }
         )
         changed_loader = run([str(payload / "bin" / "status-zim.sh")], cwd=temporary, env=env_one, check=False)
         assert changed_loader.returncode == 1 and "differs" in changed_loader.stdout
-        run([str(payload / "bin" / "install-zimrc-loader-user.sh")], cwd=temporary, env=env_one)
+        run([str(payload / "bin" / "install-zim.sh"), "--context", "user"], cwd=temporary, env=env_one)
 
         loader_source = payload / "etc" / "zimrc.zsh"
         loader_backup = loader_source.read_bytes()
