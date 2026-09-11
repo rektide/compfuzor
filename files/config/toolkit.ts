@@ -28,6 +28,7 @@ import {
 } from "../links/delivery.ts"
 
 export type Strategy = "copy" | "link"
+export type InstallStrategy = "assemble" | Strategy
 type Format = "human" | "jsonl" | "array"
 type Severity = "ok" | "drift" | "error"
 type ToolkitAction = "install" | "dropins" | "whole" | "status" | "inputs"
@@ -38,6 +39,8 @@ export type ToolkitOptions = {
   runner: string
   action: ToolkitAction
   strategy?: Strategy
+  installStrategy?: InstallStrategy
+  dropinsStrategy?: Strategy
   seed: boolean
   rebuild: boolean
   initiallyDisabled: boolean
@@ -902,10 +905,10 @@ async function install(spec: ConfigSpec, options: ToolkitOptions, config?: strin
     return 0
   }
   const context = getConfigContext(spec, options.context)
-  const selected = defaultStrategy(context, "install")
+  const selected = options.installStrategy ?? defaultStrategy(context, "install")
   if (selected === "copy" || selected === "link") return applyWhole(spec, options, selected, config)
   if (selected !== "assemble") fail(`config install strategy must be assemble, copy, or link: ${selected}`)
-  const dropins = parseStrategy(defaultStrategy(context, "dropins"), "config dropins strategy")!
+  const dropins = options.dropinsStrategy ?? parseStrategy(defaultStrategy(context, "dropins"), "config dropins strategy")!
   const seeded = await applyDropins(spec, options, dropins, true, config)
   if (seeded !== 0) return seeded
   return runConfigContext({

@@ -241,7 +241,7 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
         if not isinstance(name, str) or not _ID.fullmatch(name):
             _error("context names must match {}".format(_ID.pattern))
         context = _mapping(raw_context, label)
-        unknown = set(context) - {"scope", "root", "subpath", "configs", "install", "dropins"}
+        unknown = set(context) - {"scope", "root", "subpath", "configs", "install", "dropins", "compose"}
         if unknown:
             _error("{} has unknown settings: {}".format(label, ", ".join(sorted(unknown))))
         scope = context.get("scope")
@@ -256,6 +256,9 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
         dropins = context.get("dropins", "link")
         if dropins not in {"copy", "link"}:
             _error("{}.dropins must be copy or link".format(label))
+        compose_install = context.get("compose", True)
+        if not isinstance(compose_install, bool):
+            _error("{}.compose must be a boolean".format(label))
         subpath = context.get("subpath")
         if subpath is not None:
             subpath = _relative(subpath, "{}.subpath".format(label))
@@ -336,7 +339,7 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
                     '--context {} status "$@"; code=$?; '
                     '[ "$code" -eq 0 ] && exit 0; exit 1'
                 ).format(name)
-            if not compose:
+            if not compose or not compose_install:
                 descriptor["compose"] = False
             bins.append(descriptor)
 
@@ -345,7 +348,7 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
         if status_name not in statuses:
             statuses.append(status_name)
         compiled["statuses"] = statuses
-        normalized = {"scope": scope, "root": root, "configs": bindings, "install": install, "dropins": dropins}
+        normalized = {"scope": scope, "root": root, "configs": bindings, "install": install, "dropins": dropins, "compose": compose_install}
         if subpath is not None:
             normalized["subpath"] = subpath
         normalized_contexts[name] = normalized

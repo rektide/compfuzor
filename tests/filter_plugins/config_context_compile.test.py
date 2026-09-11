@@ -57,6 +57,7 @@ def test_compile_contexts():
                 "subpath": "example",
                 "install": "assemble",
                 "dropins": "link",
+                "compose": False,
                 "configs": {
                     "app": {
                         "output": {"env": "APP_CONFIG", "default": "outputs/app.conf", "ignore": ["/opt/example/etc/outputs/app.conf"]},
@@ -79,6 +80,7 @@ def test_compile_contexts():
     check("context subpath", user["subpath"], "example")
     check("context install default", user["install"], "assemble")
     check("context drop-in default", user["dropins"], "link")
+    check("context install composition", user["compose"], False)
     check("context selection", list(user["configs"]), ["app"])
     check(
         "output environment selector",
@@ -101,7 +103,8 @@ def test_compile_contexts():
     check("user entry point", bins["config-user.sh"]["helpers"], False)
     check("system entry point", "config-system-test.sh" in bins, True)
     check("context commands do not compose", bins["config-user.sh"]["compose"], False)
-    check("ordinary install composes", "compose" in bins["install-config-user.sh"], False)
+    check("owned context install does not compose", bins["install-config-user.sh"]["compose"], False)
+    check("ordinary system install composes", "compose" in bins["install-config-system-test.sh"], False)
     check("user install carries user scope", bins["install-config-user.sh"]["scope"], "user")
     check("system install uses bare scope", "scope" in bins["install-config-system-test.sh"], False)
     check("drop-in refresh does not compose", bins["install-config-user-dropins.sh"]["compose"], False)

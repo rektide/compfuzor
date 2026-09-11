@@ -39,6 +39,7 @@ export type ConfigContext = {
   configs: Record<string, ConfigBinding>
   install?: "assemble" | "copy" | "link"
   dropins?: "copy" | "link"
+  compose?: boolean
 }
 
 export type ConfigSpec = {
