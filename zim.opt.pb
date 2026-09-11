@@ -314,6 +314,7 @@
         compose: False
       - name: install-zimenv-loader-user.sh
         scope: [user]
+        subsystem: zim
         phase: units
         content: |
           command=${CONFIG_BLOCK_IN_FILE:-block-in-file}
@@ -322,6 +323,7 @@
           "$command" -n {{NAME}}-zimenv -C true -i "{{DIR}}/etc/zimenv.zsh" -o "$startup"
       - name: install-zimrc-loader-user.sh
         scope: [user]
+        subsystem: zim
         phase: units
         content: |
           command=${CONFIG_BLOCK_IN_FILE:-block-in-file}
@@ -330,12 +332,14 @@
           "$command" -n {{NAME}}-zimrc -C true -i "{{DIR}}/etc/zimrc.zsh" -o "$startup"
       - name: install-zim-caches-user.sh
         scope: [user]
+        subsystem: zim
         phase: records
         content: |
           "{{DIR}}/bin/zimfw-channel.sh" zimenv install
           "{{DIR}}/bin/zimfw-channel.sh" zimrc install
       - name: install-zim-registry-user.sh
         scope: [user]
+        subsystem: zim
         phase: records
         content: |
           exec "{{DIR}}/bin/zim-registry.sh" apply

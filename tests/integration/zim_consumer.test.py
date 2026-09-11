@@ -200,17 +200,22 @@ zimfw() { :; }
         assert canonical_zimrc.is_file() and canonical_zimenv.is_file()
 
         install_user_text = (payload / "bin" / "install-user.sh").read_text(encoding="utf-8")
+        assert install_user_text.count('"$DIR/bin/install-config-user.sh" "$@"') == 1
+        assert "install-zim-donor" not in install_user_text
+        # Zim leaves group under their subsystem compositor, after config assembly.
+        assert install_user_text.index("install-config-user.sh") < install_user_text.index("install-zim-user.sh")
+        for leaf in ("install-zimenv-loader-user.sh", "install-zimrc-loader-user.sh",
+                     "install-zim-caches-user.sh", "install-zim-registry-user.sh"):
+            assert leaf not in install_user_text
+        zim_compositor = (payload / "bin" / "install-zim-user.sh").read_text(encoding="utf-8")
         ordered = [
-            "install-config-user.sh",
             "install-zimenv-loader-user.sh",
             "install-zimrc-loader-user.sh",
             "install-zim-caches-user.sh",
             "install-zim-registry-user.sh",
         ]
-        positions = [install_user_text.index(name) for name in ordered]
+        positions = [zim_compositor.index(name) for name in ordered]
         assert positions == sorted(positions)
-        assert install_user_text.count('"$DIR/bin/install-config-user.sh" "$@"') == 1
-        assert "install-zim-donor" not in install_user_text
 
         home_one = temporary / "home one"
         xdg_one = temporary / "xdg one"

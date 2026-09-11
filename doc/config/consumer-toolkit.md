@@ -12,11 +12,20 @@ manual operator tool. For the Zim user context:
 ```text
 install-user.sh                    (ordinary user install — one command)
 ├─ install-config-user.sh          seed missing donor inputs + assemble both configs
-├─ install-zimenv-loader-user.sh   .zshenv loader block
-├─ install-zimrc-loader-user.sh    .zshrc loader block
-├─ install-zim-caches-user.sh      build both user Zim caches
-└─ install-zim-registry-user.sh    canonical host registry link
+└─ install-zim-user.sh             Zim subsystem compositor
+   ├─ install-zimenv-loader-user.sh   .zshenv loader block
+   ├─ install-zimrc-loader-user.sh    .zshrc loader block
+   ├─ install-zim-caches-user.sh      build both user Zim caches
+   └─ install-zim-registry-user.sh    canonical host registry link
 ```
+
+The four Zim leaves declare `subsystem: zim`, so `install-zim-user.sh` re-runs
+just the Zim pieces (loaders, caches, registry) without touching config
+assembly — the same grouping systemd gets via `install-systemd-user.sh`. The
+config dispatcher deliberately stays ungrouped: a `config` subsystem
+compositor's generated name would collide with the dispatcher itself. The
+admin and contributor tools (`install-zim-donor.sh`, legacy `install-zim.sh`,
+`install-zim-context.sh`) are `compose: false` and never auto-run.
 
 `install-config-user.sh` is the context's ordinary dispatcher; its action comes
 from the declared `install:` default or `COMPFUZOR_CONFIG_INSTALL_STRATEGY`.
