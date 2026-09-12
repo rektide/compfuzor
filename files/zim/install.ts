@@ -146,7 +146,9 @@ function aliasContext(invokedAs: string, spec: ZimSpec): string | undefined {
 }
 
 export function resolveSettings(options: CliOptions, spec: ZimSpec, configSpec: ConfigSpec): EffectiveSettings {
-  const inferredContext = options.action === "install" ? aliasContext(options.invokedAs, spec) : undefined
+  const inferredContext = options.action === "install" && options.context === undefined
+    ? aliasContext(options.invokedAs, spec)
+    : undefined
   const contextName = options.context ?? inferredContext ?? process.env.COMPFUZOR_ZIM_CONTEXT ?? spec.defaultContext
   const activation = spec.contexts[contextName]
   if (!activation) fail(`unknown Zim context: ${contextName}`)

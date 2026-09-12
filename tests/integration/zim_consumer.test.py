@@ -422,7 +422,15 @@ zimfw() { :; }
         unknown_alias.symlink_to("install-zim.sh")
         unknown = run([str(unknown_alias)], cwd=temporary, env=system_env, check=False)
         assert unknown.returncode == 2 and "undeclared context" in unknown.stderr
+        run([str(unknown_alias), "--context", "user", "--install", "copy"], cwd=temporary, env=env_one)
         unknown_alias.unlink()
+
+        unsupported_alias = payload / "bin" / "my-zim-installer"
+        unsupported_alias.symlink_to("install-zim.sh")
+        unsupported = run([str(unsupported_alias)], cwd=temporary, env=env_one, check=False)
+        assert unsupported.returncode == 2 and "unsupported Zim command alias" in unsupported.stderr
+        run([str(unsupported_alias), "--context", "user", "--install", "copy"], cwd=temporary, env=env_one)
+        unsupported_alias.unlink()
 
         # Changing only the compiled default changes direct behavior; the Zim
         # public executable set is unchanged.
