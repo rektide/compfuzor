@@ -103,9 +103,11 @@ def bin_composers(bins, actions=None):
     subsystem generators at contrib time, overridable by hand). Ungrouped bins
     (``subsystem`` absent/False) stay direct children of the scope compositor.
 
-    ``scope`` accepts a string or list; install scripts ending in ``-user.sh``
-    infer the ``user`` scope. The legacy ``.user.sh`` suffix remains accepted.
-    ``compose: false`` and already-generated compositors
+    ``action`` may explicitly classify a command independently of its filename;
+    otherwise the historical filename grammar is used. ``scope`` accepts a
+    string or list; install scripts ending in ``-user.sh`` infer the ``user``
+    scope. The legacy ``.user.sh`` suffix remains accepted. ``compose: false``
+    and already-generated compositors
     (``generated_by: gen_bins``) are excluded.
 
     ``phase`` is a scheduling lane from ``BIN_PHASES`` (default ``main``):
@@ -126,6 +128,8 @@ def bin_composers(bins, actions=None):
     else:
         action_re = _ACTION_RE
 
+    known_actions = _actions if actions else BIN_ACTIONS
+
     # Collect every authored action name for reservation checks, then retain
     # composing leaves with resolved (action, subsystem, scopes).
     authored_names: set[str] = set()
@@ -141,13 +145,24 @@ def bin_composers(bins, actions=None):
         if not isinstance(name, string_types):
             continue
         match = action_re.match(name)
-        if not match:
+        explicit_action = item.get("action")
+        if explicit_action is not None and explicit_action is not False and explicit_action != "":
+            if not isinstance(explicit_action, string_types) or explicit_action not in known_actions:
+                raise AnsibleFilterError(
+                    "bin {!r} has unknown action {!r}; expected one of {}".format(
+                        name, explicit_action, "/".join(known_actions)
+                    )
+                )
+            action = explicit_action
+        elif match:
+            action = match.group("action")
+        else:
             continue
         scopes = _arrayitize(item.get("scope"))
-        if match.group("action") == "install" and (
+        if action == "install" and (
             name.startswith("install-user")
             or name.endswith("-user.sh")
-            or match.group("user")
+            or (match and match.group("user"))
         ):
             scopes.append("user")
         scopes = list(dict.fromkeys(str(s) for s in scopes))
@@ -158,7 +173,7 @@ def bin_composers(bins, actions=None):
         leaves.append(
             {
                 "name": name,
-                "action": match.group("action"),
+                "action": action,
                 "scopes": scopes,
                 "subsystem": _resolve_subsystem(item.get("subsystem")),
                 "phase": _resolve_phase(item),

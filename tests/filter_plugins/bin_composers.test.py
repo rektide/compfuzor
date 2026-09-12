@@ -406,6 +406,35 @@ def test_actions_override():
     )
 
 
+def test_explicit_action_is_independent_of_filename():
+    result = bin_composers(
+        [
+            {"name": "config-install.sh", "action": "install"},
+            {"name": "refresh-config.sh", "action": "install", "scope": "user"},
+            {"name": "ordinary-helper.sh"},
+        ]
+    )
+    by_name = {item["name"]: item for item in result}
+    check(
+        "explicit action composes filename-independent commands",
+        by_name["install.sh"]["run_all"],
+        ["config-install.sh"],
+    )
+    check(
+        "explicit action keeps explicit scope metadata",
+        by_name["install-user.sh"]["run_all"],
+        ["refresh-config.sh"],
+    )
+
+
+def test_unknown_explicit_action_raises():
+    check_raises(
+        "unknown explicit action fails loud",
+        lambda: bin_composers([{"name": "config-install.sh", "action": "deploy"}]),
+        "unknown action",
+    )
+
+
 def test_disarm_metadata_does_not_affect_grouping_or_compositors():
     result = bin_composers(
         [
@@ -523,6 +552,8 @@ if __name__ == "__main__":
     test_subsystem_single_leaf_keeps_compositor()
     test_rejects_reserved_subsystem_compositor_name()
     test_actions_override()
+    test_explicit_action_is_independent_of_filename()
+    test_unknown_explicit_action_raises()
     test_disarm_metadata_does_not_affect_grouping_or_compositors()
     test_phase_lanes_order_compositor_run_all()
     test_phase_records_sinks_last()

@@ -34,6 +34,13 @@ The set of recognized actions is data, in `BIN_ACTIONS` at the top of
 action (e.g. `status`) is a one-line change. `bin_composers(bins, actions=…)`
 also accepts an override list for ad-hoc use.
 
+An authored record may set `action: install` (or another recognized action) to
+join composition independently of its filename. This is useful for stable
+domain commands such as `config-install.sh`: the command remains directly
+invokable under its domain vocabulary while `install.sh` invokes that same file
+without a generated `install-config-*.sh` thunk. If `action` is absent, existing
+filename discovery is unchanged. Unknown explicit actions fail at compile time.
+
 ## The `subsystem` field
 
 A bin declares its grouping via `subsystem`:
