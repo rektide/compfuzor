@@ -751,7 +751,7 @@ This directory was rendered from `zim.opt.pb` with downloads/package work disabl
 - user one config: `{local_root_one}`
 - user two config: `{xdg_two / 'zsh'}` (custom outputs are under `{home_two / 'custom'}`)
 - explicit system activation: `{system_root}`
-- producer fixture: `{producer}`
+- producer fixture: `{producer}` (`bin/install-zimfw.sh`, explicitly user-scoped)
 
 Run tools without sourcing a live profile:
 
@@ -759,6 +759,8 @@ The wrappers clear inherited Zim context, strategy, output, registry, and config
 bypass variables before setting their own demo values, and pin `TMPDIR` inside
 this scratch root. `install-zim-system.sh` under the host `bin/` is a
 user-created symlink retained by the test; the playbook did not generate it.
+The fixture also relocates one v2 loader template, the emergency module, and
+extra legacy config names through `zim.spec.json` to prove those fields are read.
 
 ```bash
 ./user-one.sh {str(payload / 'bin' / 'status.sh')!r}
@@ -769,7 +771,7 @@ user-created symlink retained by the test; the playbook did not generate it.
 ./system.sh {str(payload / 'bin' / 'install-zim-system.sh')!r} --install assemble --dropins copy
 ```
 
-`install-zim-donor.sh` changes the canonical donor and is intentionally not run by either wrapper's ordinary user setup.
+`install-zim-donor.sh` changes the canonical donor and is intentionally not run by these ordinary context wrappers.
 All paths stay inside this demo root.
 """,
                 encoding="utf-8",
