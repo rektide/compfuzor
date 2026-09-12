@@ -12,8 +12,8 @@
 #       systemctl set-environment VAR=val ...
 #
 # Both scopes also `systemctl [--user] set-environment` explicitly so the value
-# is visible to `systemctl [--user] show-environment` (the discovery path the
-# rektide/zim-systemd-envvar zsh module and ssh-agent.srv.pb rely on). ExecStop
+# is visible to `systemctl [--user] show-environment` (the discovery path
+# ssh-agent.srv.pb relies on). ExecStop
 # unsets everything for symmetry.
 #
 # Mechanically this injects ExecStartPost / ExecStop into SYSTEMD_SERVICES so

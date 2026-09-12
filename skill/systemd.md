@@ -309,8 +309,8 @@ SYSTEMD_ENV:
   the D-Bus activation environment so graphical apps inherit it).
 - **stop** — `systemctl [--user] unset-environment VAR ...`.
 
-Consumers then read it via `systemctl [--user] show-environment` (the path the
-`rektide/zim-systemd-envvar` zsh module and `ssh-agent.srv.pb` use). This
+Consumers then read it via `systemctl [--user] show-environment` (the path
+`ssh-agent.srv.pb` uses). This
 generalizes the ad-hoc `ExecStartPost` patterns previously hand-written in
 `ssh-agent.srv.pb` and `mise.opt.pb`.
 

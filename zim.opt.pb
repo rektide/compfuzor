@@ -189,8 +189,6 @@
         phase: tools
       - source: rektide/zim-tgo
         phase: tools
-      - source: rektide/zim-systemd-envvar
-        phase: tools
       # disabled tool alternatives, preserved for inspection / recovery
       - source: https://github.com/hmgle/aider-zsh-complete
         phase: tools
