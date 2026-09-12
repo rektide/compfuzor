@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import copy
 import sys
 
 sys.path.insert(0, "library/filter_plugins")
@@ -104,7 +105,21 @@ def test_validation():
         "context names",
     )
     check_raises(
+        lambda: compile_zim_contexts({"donor": {"config": "user"}}, plan["spec"], "donor", "/e", "/d", "/b", "n", []),
+        "role command",
+    )
+    composing_spec = copy.deepcopy(plan["spec"])
+    composing_spec["contexts"]["user"]["compose"] = True
+    check_raises(
+        lambda: compile_zim_contexts({"user": {"config": "user"}}, composing_spec, "user", "/e", "/d", "/b", "n", []),
+        "compose: false",
+    )
+    check_raises(
         lambda: compile_zim_contexts({"user": {"config": "user"}}, plan["spec"], "user", "/e", "/d", "/b", "n", [{"name": "install-zim.sh"}]),
+        "collision",
+    )
+    check_raises(
+        lambda: compile_zim_contexts({"user": {"config": "user"}}, plan["spec"], "user", "/e", "/d", "/b", "n", [{"name": "install-zim-donor.sh"}]),
         "collision",
     )
 

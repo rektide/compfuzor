@@ -15,6 +15,7 @@ from template_data import raw_copy_template_data
 
 
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+_RESERVED_CONTEXTS = {"context", "donor"}
 
 
 def _error(message):
@@ -56,6 +57,12 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
         label = "ZIM_CONTEXTS.{}".format(context_name)
         if not isinstance(context_name, str) or not _ID.fullmatch(context_name):
             _error("Zim context names must match {}".format(_ID.pattern))
+        if context_name in _RESERVED_CONTEXTS:
+            _error(
+                "Zim context {!r} would collide with the install-zim-{}.sh role command".format(
+                    context_name, context_name
+                )
+            )
         item = _mapping(raw, label)
         unknown = set(item) - {"config", "loader_root", "zimrc_home", "zimenv_home", "registry"}
         if unknown:
@@ -67,6 +74,8 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
         scope = config_context.get("scope")
         if scope not in {"user", "system"}:
             _error("{}.config has an invalid scope".format(label))
+        if config_context.get("compose", True):
+            _error("{}.config must reference a CONFIG_CONTEXTS context with compose: false".format(label))
         selected_configs = _mapping(config_context.get("configs"), "config context {}.configs".format(config_name))
         for channel in ("zimrc", "zimenv"):
             if channel not in selected_configs:
@@ -96,7 +105,13 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
             occupied.add(record.get("dest", record.get("name")))
         elif isinstance(record, str):
             occupied.add(record)
-    generated_names = {"zim/install.ts", "install-zim.sh", "status-zim.sh"}
+    generated_names = {
+        "zim/install.ts",
+        "install-zim.sh",
+        "status-zim.sh",
+        "install-zim-context.sh",
+        "install-zim-donor.sh",
+    }
     collision = sorted(generated_names & occupied)
     if collision:
         _error("generated command collision: {}".format(", ".join(collision)))
