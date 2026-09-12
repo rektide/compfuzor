@@ -206,6 +206,12 @@ ZIM_CONTEXTS:
 The caller must already have authority to write those paths. Context selection
 never implies `sudo`.
 
+The generated `zim.spec.json` is version 2. Alongside activation contexts, its
+canonical section explicitly names `zimrcLegacy`, `zimenvLegacy`,
+`zimrcLoaderTemplate`, `zimenvLoaderTemplate`, and `emergencyModule`. These are
+runtime inputs rather than inferred sibling paths. A v1 deployment fails with
+clear rerender guidance instead of reinterpreting old fields.
+
 ### One installer and user-managed context aliases
 
 The ordinary interface is:
@@ -268,12 +274,14 @@ infrastructure, not Zim installer variants. There is no generated
 `install-zim-user.sh`, `install-zim-<context>.sh`, loader/cache/registry leaf,
 or alias symlink.
 
-The loader source files in the current host recipe preserve the established
-user-oriented Zsh runtime defaults. A non-user context install still uses its
-explicit resolved config and cache paths while building and installs its loader
-blocks at the declared root, but shells sourcing those static blocks must expose
-the corresponding `ZIM_*` runtime values. The installer does not infer user
-`HOME` values for a system context.
+`etc/zimenv.zsh` and `etc/zimrc.zsh` are the two specialized canonical loader
+templates. The shared Zim runtime projects safely quoted selected-context
+config/cache defaults into their placeholders, then sends those projected bytes
+to `block-in-file`. Status creates its expected bytes with the same projector.
+A declared system loader therefore works with all `ZIM_*` selectors unset while
+remaining overrideable through `ZIM_ENV_HOME`, `ZIM_HOME`, `ZIM_ENV_CONFIG`, and
+`ZIM_CONFIG_FILE`. `zimenv` retains its anonymous no-leak scope; `zimrc` retains
+its ordinary global assignments and emergency behavior.
 
 ## Zim daily workflow
 
@@ -319,9 +327,11 @@ permissions or invoke sudo.
 
 `install-zim-donor.sh PRODUCER_DIR` is deliberately different: it promotes a
 producer into the shared canonical donor and is never part of ordinary install.
-Contributor `install-user-zimfw.sh` instead calls `install-zim-context.sh` to
-import that producer into the selected consumer context, assemble each touched
-channel once, and build each touched cache once.
+Contributor `install-zimfw.sh [--context NAME]` instead calls
+`install-zim-context.sh` to import that producer into the selected consumer
+context, assemble each touched channel once, and build each touched cache once.
+Its filename is scope-neutral; explicit `scope: [user]` metadata composes it into
+the producer package's `install-user.sh`. Other compositor arguments are ignored.
 
 Zim's `.zshenv` and `.zshrc` loaders are independent named blocks. `ZDOTDIR`
 selects those startup files; XDG selects the default config tree.

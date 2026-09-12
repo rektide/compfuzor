@@ -60,6 +60,11 @@ compiles a small activation declaration over those existing bindings. It:
   collisions, unknown bindings, and inconsistent scope;
 - emits no command aliases.
 
+The generated spec is version 2. Its canonical record explicitly carries
+`zimrcLegacy`, `zimenvLegacy`, `zimrcLoaderTemplate`,
+`zimenvLoaderTemplate`, and `emergencyModule`; the runtime does not derive these
+inputs from sibling paths. Version 1 is rejected with rerender guidance.
+
 The checked-in declaration is intentionally small:
 
 ```yaml
@@ -119,6 +124,8 @@ install-zim-<declared-context>.sh -> install-zim.sh
 
 Only the context is inferred. Strategy tokens and Cartesian names are not
 supported. An unsupported basename or undeclared context fails with guidance.
+When `--context` is present, alias inference is skipped entirely, so that
+explicit flag also overrides an unsupported or undeclared invoked basename.
 The tested precedence is independent per setting:
 
 | Setting | Precedence |
@@ -154,10 +161,16 @@ installer. A base render has no generated context alias and no
 `install-zim-user.sh`, `zimfw-channel.sh`, `zim-registry.sh`, or context-specific
 loader/cache/registry leaves.
 
+The existing `etc/zimenv.zsh` and `etc/zimrc.zsh` host artifacts are now
+specialized two-channel loader templates. They are not additional installer
+commands.
+
 ## Preserved behavior and safety
 
 - Canonical donor administration and consumer-local producer import remain
   separate operations.
+- Contributor packages expose scope-neutral `install-zimfw.sh`; explicit
+  `scope: [user]` metadata composes it into their `install-user.sh`.
 - Contributor import assembles and builds each touched channel once.
 - Runtime config output overrides and legacy canonical-value normalization are
   still handled by the generic context resolver.
@@ -190,12 +203,14 @@ loader, cache, and registry paths. Tests prove:
   declaration;
 - a hostile `sudo` shim is never called.
 
-The current checked-in loader source files retain their established
-user-oriented Zsh runtime defaults. A system install builds with its explicit
-resolved paths and places blocks under its explicit loader root, but a shell
-sourcing those static blocks must expose matching `ZIM_HOME`, `ZIM_ENV_HOME`,
-`ZIM_CONFIG_FILE`, and `ZIM_ENV_CONFIG` values. This limitation is explicit;
-the runtime does not silently infer user HOME values for system scope.
+The checked-in loader templates are projected by one specialized renderer.
+Safely quoted selected-context config/cache values become the installed
+defaults, while `ZIM_HOME`, `ZIM_ENV_HOME`, `ZIM_CONFIG_FILE`, and
+`ZIM_ENV_CONFIG` remain runtime overrides. User and system loader blocks work
+with those variables unset. `zimenv` remains anonymous and leaks no Zim
+globals; `zimrc` retains ordinary global values and emergency behavior. Status
+uses the same projection as install rather than comparing against template
+bytes.
 
 ## Verification
 

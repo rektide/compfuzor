@@ -5,7 +5,7 @@
     INSTANCE: main
     # zsh delivery is via zimfw modules (gen_zim): git-env uses the env kind,
     # git-helpers the functions kind (bodies declared inline -- no files/
-    # needed). install-user-zimfw.sh auto-promotes fragments to the zim host.
+    # needed). install-zimfw.sh imports fragments into the effective host context.
     ZIM_MODULES:
       - name: git-env
         phase: tools

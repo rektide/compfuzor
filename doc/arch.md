@@ -767,11 +767,12 @@ valid symlinks while preserving the link itself as the mutable directory entry.
 
 For example, the Zim host exposes separate `zimrc` and `zimenv` inputs. A
 producer keeps each fragment durable under its named channel. Ordinary producer
-installation imports it into the invoking user's context; explicit canonical
-promotion is a separate admin operation:
+installation is explicitly user-scoped for package composition but imports into
+the effective host context; explicit canonical promotion is a separate admin
+operation:
 
 ```sh
-/opt/producer/bin/install-user-zimfw.sh
+/opt/producer/bin/install-zimfw.sh --context user
 /opt/zim-main/bin/config-inputs-user.sh disable zimrc/zimrc 55-example.conf
 
 # Shared-donor administration, never composed into install-user:

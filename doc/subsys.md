@@ -411,12 +411,12 @@ the generated `run_all` children runnable. A pure generated compositor has only
 ### Scope
 
 `scope` accepts a string or list; an entry with `scope: [user, shell]`
-participates in both scoped compositors (one entry-point per scope). `install-user.sh`
-and any `install-user-*.sh` (e.g. `install-user-zimfw.sh`, `install-service-user.sh`)
-infer the `user` scope from the filename; qualified `install-*-user.sh` names do
-too. The old `install-*.user.sh` spelling remains accepted for compatibility. This is how
-user-scope subsystems (zim, user systemd services) contribute their own install step
-without a system-scope script that would need root.
+participates in both scoped compositors (one entry-point per scope). Explicit
+scope metadata lets a neutral command such as `install-zimfw.sh` join
+`install-user.sh`. Names beginning with `install-user-` or qualified as
+`install-*-user.sh` also infer user scope; the old `install-*.user.sh` spelling
+remains accepted for compatibility. This is how user-scope subsystems contribute
+their own install step without a system-scope script that would need root.
 
 ```yaml
 BINS:

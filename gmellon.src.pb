@@ -20,7 +20,7 @@
     # "If an absolute path is given, the module is considered externally
     # installed and won't be installed or updated by zimfw"). The contributor
     # bridge (gen_zim) drops this fragment into zim/zimrc/active/ and
-    # install-user-zimfw.sh promotes it into the zim host.
+    # install-zimfw.sh imports it into the effective zim host context.
     # Ordering: the checkout must exist before zimfw rebuilds init.zsh
     # (zmodule eagerly errors on a missing module dir); same-playbook ordering
     # covers this, and a later checkout removal surfaces as ordinary zim
