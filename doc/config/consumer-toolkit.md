@@ -6,28 +6,27 @@ consumer input choices and assembled outputs stay independent.
 
 ## What runs automatically
 
-One generated command joins ordinary install composition; everything else is a
-manual operator tool. For the Zim user context:
+Zim joins ordinary install composition through one complete installer. With the
+current default context (`user`), the generated shape is:
 
 ```text
 install-user.sh                    (ordinary user install — one command)
-├─ install-config-user.sh          seed missing donor inputs + assemble both configs
-└─ install-zim-user.sh             Zim subsystem compositor
-   ├─ install-zimenv-loader-user.sh   .zshenv loader block
-   ├─ install-zimrc-loader-user.sh    .zshrc loader block
-   ├─ install-zim-caches-user.sh      build both user Zim caches
-   └─ install-zim-registry-user.sh    canonical host registry link
+└─ install-zim.sh                  complete selected-context setup
+   ├─ config seed/assembly or whole copy/link
+   ├─ .zshenv and .zshrc loader blocks
+   ├─ zimenv and zimrc caches
+   └─ canonical host registry link
 ```
 
-The four Zim leaves declare `subsystem: zim`, so `install-zim-user.sh` re-runs
-just the Zim pieces (loaders, caches, registry) without touching config
-assembly — the same grouping systemd gets via `install-systemd-user.sh`. The
-config dispatcher deliberately stays ungrouped: a `config` subsystem
-compositor's generated name would collide with the dispatcher itself. The
-admin and contributor tools (`install-zim-donor.sh`, legacy `install-zim.sh`,
-`install-zim-context.sh`) are `compose: false` and never auto-run.
+`install-zim.sh` invokes the generic config toolkit exactly once, then installs
+both loaders, builds both caches, and applies the registry exactly once. Zim's
+owned config contexts declare `compose: false`, so their directly invokable
+`install-config-<context>.sh` tools cannot duplicate that work through the
+package compositor. If Zim's compiled default is a system context, the same
+base `install-zim.sh` joins bare `install.sh` instead of `install-user.sh`.
+Neither path escalates privileges.
 
-`install-config-user.sh` is the context's ordinary dispatcher; its action comes
+`install-config-user.sh` remains the config domain's ordinary dispatcher; its action comes
 from the declared `install:` default or `COMPFUZOR_CONFIG_INSTALL_STRATEGY`.
 The other generated commands never run automatically — `config-user.sh`
 (assembly/preview), the drop-in refresh and whole-output commands, and the
@@ -50,12 +49,13 @@ CONFIG_CONTEXTS:
 System contexts use the same assembly implementation but run with the caller's
 existing authority; the config tools never invoke sudo.
 
-Two optional keys choose defaults for the ordinary dispatcher. They are
-runtime-overridable and generate nothing themselves:
+Two optional keys choose runtime-overridable defaults for the ordinary
+dispatcher; a third assigns composition ownership:
 
 ```yaml
     install: assemble   # assemble | copy | link — what install-config-user.sh does
     dropins: link       # link | copy — how donor fragments are seeded/refreshed
+    compose: false      # optional; keep the ordinary installer manually invoked
 ```
 
 Paths under canonical `ETC` keep their relative layout beneath the context
@@ -100,14 +100,21 @@ only in baked arguments. For a context named `user`:
 ```text
 config-user.sh [--list | --check | --stdout] [CONFIG]
 install-config-user.sh [CONFIG]
+install-config-user-dropins.sh [CONFIG]
 install-config-user-dropins-{copy,link}.sh [CONFIG]
 install-config-user-{copy,link}.sh [CONFIG]
 config-inputs-user.sh list|status|put|enable|disable|remove ...
 status-config-context-user.sh [CONFIG] [--json | --json-array]
 ```
 
-Only `install-config-user.sh` joins ordinary install composition. Explicit
-strategy commands never run automatically.
+That is nine context wrappers: one assembly command, one ordinary installer,
+three drop-in installers, two whole-output installers, one input operator, and
+one status reporter. Zim does not remove them; it only keeps the ordinary
+installer out of package composition for a Zim-owned context.
+
+By default only `install-config-user.sh` joins ordinary install composition.
+`compose: false` keeps even that ordinary dispatcher manual; explicit strategy
+commands never run automatically.
 
 ### Operation boundaries
 
@@ -150,11 +157,125 @@ canonical donor location through a parent-directory symlink, status reports an
 `alias-hazard` and mutating consumer commands refuse it. Final per-file links to
 donor files remain normal, replaceable consumer entries.
 
+## Zim activation contexts
+
+`CONFIG_CONTEXTS` owns config input and output bindings. `ZIM_CONTEXTS` is a
+small activation layer that references one of those bindings and adds the
+loader, cache, and registry destinations needed for a complete Zim install.
+The checked-in host declaration is intentionally concise:
+
+```yaml
+ZIM_CONTEXT: user
+ZIM_CONTEXTS:
+  user:
+    config: user
+```
+
+A user-scoped config context gets runtime-aware activation defaults:
+
+| Setting | Environment override | Default |
+|---|---|---|
+| loader root | `ZDOTDIR` | `${HOME}` |
+| zimrc cache home | `ZIM_HOME` | `${HOME}/.cache/zim` |
+| zimenv cache home | `ZIM_ENV_HOME` | `${HOME}/.cache/zim-env` |
+| registry destination | `ZIM_CONFIG_LINK` | `${XDG_CONFIG_HOME}/zsh/zimfw.conf` |
+
+A system-scoped context must declare all four explicitly. It never silently
+inherits `HOME`, XDG, or the user cache defaults:
+
+```yaml
+CONFIG_CONTEXTS:
+  host:
+    scope: system
+    root: /srv/shell/config
+    configs: [zimrc, zimenv]
+    compose: false
+
+ZIM_CONTEXTS:
+  host:
+    config: host
+    loader_root: /srv/shell/startup
+    zimrc_home: /srv/shell/cache/zim
+    zimenv_home: /srv/shell/cache/zim-env
+    registry: /srv/shell/registry/zimfw.conf
+```
+
+The caller must already have authority to write those paths. Context selection
+never implies `sudo`.
+
+### One installer and user-managed context aliases
+
+The ordinary interface is:
+
+```text
+install-zim.sh --context NAME [--install assemble|copy|link] [--dropins copy|link]
+status-zim.sh [--context NAME]
+```
+
+Each setting resolves independently in this order:
+
+1. an explicit CLI flag;
+2. the invoked basename, for context only;
+3. runtime environment;
+4. the compiled default.
+
+`COMPFUZOR_ZIM_CONTEXT` selects a runtime context. Install and drop-in strategy
+selection accepts `COMPFUZOR_ZIM_INSTALL_STRATEGY` and
+`COMPFUZOR_ZIM_DROPINS_STRATEGY`; the existing
+`COMPFUZOR_CONFIG_INSTALL_STRATEGY` and
+`COMPFUZOR_CONFIG_DROPINS_STRATEGY` names remain compatible fallbacks.
+
+Compfuzor generates **no command aliases or alias map**. An operator may create
+a symlink manually using the deterministic `install-zim-<declared-context>.sh`
+naming convention:
+
+```bash
+cd /opt/zim-main/bin
+ln -s install-zim.sh install-zim-host.sh
+./install-zim-host.sh                 # infers --context host
+./install-zim-host.sh --context user  # explicit CLI wins
+```
+
+The wrapper captures its basename before resolving the symlink. An undeclared
+context or any other non-base basename fails with guidance instead of silently
+using the default. Strategy aliases and Cartesian alias filenames are not
+supported; use flags or environment variables.
+
+### Exact generated surface
+
+For a Zim host, activation compilation adds exactly:
+
+```text
+etc/zim.spec.json
+bin/install-zim.sh
+bin/status-zim.sh
+bin/zim/install.ts
+```
+
+The host also retains the two explicit noncomposed role commands:
+
+```text
+bin/install-zim-donor.sh    # canonical donor administration
+bin/install-zim-context.sh  # consumer-context producer import
+```
+
+The stable LINKS manager modules used by the registry are shared generated
+infrastructure, not Zim installer variants. There is no generated
+`install-zim-user.sh`, `install-zim-<context>.sh`, loader/cache/registry leaf,
+or alias symlink.
+
+The loader source files in the current host recipe preserve the established
+user-oriented Zsh runtime defaults. A non-user context install still uses its
+explicit resolved config and cache paths while building and installs its loader
+blocks at the declared root, but shells sourcing those static blocks must expose
+the corresponding `ZIM_*` runtime values. The installer does not infer user
+`HOME` values for a system context.
+
 ## Zim daily workflow
 
-The Zim host exposes `zimrc` and `zimenv` through one user context. Its own
-baseline roster is canonical; the default user workflow links those donor
-fragments into the user's XDG config tree and assembles there.
+The checked-in Zim host exposes `zimrc` and `zimenv` through the default user
+context. Its own baseline roster is canonical; the ordinary workflow links
+those donor fragments into the user's XDG config tree and assembles there.
 
 These commands exist only after rerendering the updated playbook. This change
 has not been deployed to a live `/opt/zim-main`. The invoking user must be able
@@ -165,6 +286,10 @@ permissions or invoke sudo.
 # Complete initial setup: seed/assemble, install both loaders, build both
 # caches, and install the canonical registry link.
 /opt/zim-main/bin/install-user.sh
+
+# Re-run the same complete operation directly, or select another declaration.
+/opt/zim-main/bin/install-zim.sh --context user
+/opt/zim-main/bin/status-zim.sh --context user
 
 # Daily config-only operation: seed absent baseline inputs and assemble.
 /opt/zim-main/bin/install-config-user.sh
@@ -189,10 +314,10 @@ permissions or invoke sudo.
 ```
 
 `install-zim-donor.sh PRODUCER_DIR` is deliberately different: it promotes a
-producer into the shared canonical donor and is never part of user install.
-Contributor `install-user-zimfw.sh` instead imports that producer into the
-current user's context, assembles each touched channel once, and builds each
-touched cache once.
+producer into the shared canonical donor and is never part of ordinary install.
+Contributor `install-user-zimfw.sh` instead calls `install-zim-context.sh` to
+import that producer into the selected consumer context, assemble each touched
+channel once, and build each touched cache once.
 
 Zim's `.zshenv` and `.zshrc` loaders are independent named blocks. `ZDOTDIR`
 selects those startup files; XDG selects the default config tree.
@@ -223,6 +348,11 @@ node files/config/toolkit.ts \
   --context user --spec /path/to/deployment/etc/config.spec.json \
   --runner /path/to/deployment/bin/config.sh status zimrc --json-array
 
+node files/zim/install.ts install \
+  --spec /path/to/deployment/etc/zim.spec.json \
+  --config-spec /path/to/deployment/etc/config.spec.json \
+  --config-runner /path/to/deployment/bin/config.sh --context user
+
 node files/links/links.ts status /path/to/deployment/links.json
 ```
 
@@ -233,9 +363,13 @@ commands are for development and diagnosis.
 
 - [`config_context_compile.py`](/library/filter_plugins/config_context_compile.py)
   compiles bindings and commands.
+- [`zim_context_compile.py`](/library/filter_plugins/zim_context_compile.py)
+  validates activation declarations and emits the one Zim runtime surface.
 - [`config/context.ts`](/files/config/context.ts) resolves consumer selectors.
 - [`config/toolkit.ts`](/files/config/toolkit.ts) owns seed, refresh, input
   mutation, whole-output delivery, and status.
+- [`zim/install.ts`](/files/zim/install.ts) coordinates selected-context config,
+  loaders, caches, registry, imports, and status.
 - [`links/delivery.ts`](/files/links/delivery.ts) is the shared atomic copy/link
   primitive.
 - [`config-run.sh`](/files/config-run.sh) remains the single processor,
