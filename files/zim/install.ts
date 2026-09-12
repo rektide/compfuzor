@@ -37,15 +37,18 @@ type ZimActivationContext = {
 type ZimCanonical = {
   zimrc: string
   zimenv: string
-  zimrcLoader: string
-  zimenvLoader: string
+  zimrcLegacy: string[]
+  zimenvLegacy: string[]
+  zimrcLoaderTemplate: string
+  zimenvLoaderTemplate: string
   controller: string
+  emergencyModule: string
   registry: string
   blockPrefix: string
 }
 
 type ZimSpec = {
-  version: 1
+  version: 2
   defaultContext: string
   contexts: Record<string, ZimActivationContext>
   canonical: ZimCanonical
@@ -181,9 +184,15 @@ function resolveActivation(name: string, zimSpec: ZimSpec, configSpec: ConfigSpe
   }
 }
 
-async function command(file: string, args: string[], capture = false): Promise<CommandResult> {
+async function command(file: string, args: string[], capture = false, input?: Buffer): Promise<CommandResult> {
   return await new Promise<CommandResult>((complete, reject) => {
-    const child = spawn(file, args, { stdio: capture ? ["ignore", "pipe", "pipe"] : "inherit" })
+    const child = spawn(file, args, {
+      stdio: capture
+        ? [input ? "pipe" : "ignore", "pipe", "pipe"]
+        : input
+          ? ["pipe", "inherit", "inherit"]
+          : "inherit",
+    })
     const stdout: Buffer[] = []
     const stderr: Buffer[] = []
     child.stdout?.on("data", (chunk: Buffer | string) => stdout.push(Buffer.from(chunk)))
@@ -194,6 +203,7 @@ async function command(file: string, args: string[], capture = false): Promise<C
       stdout: Buffer.concat(stdout),
       stderr: Buffer.concat(stderr),
     }))
+    if (input) child.stdin?.end(input)
   })
 }
 
@@ -213,7 +223,47 @@ function toolkitOptions(options: CliOptions, context: string): ToolkitOptions {
   }
 }
 
-async function installLoader(block: string, source: string, destination: string, legacyBlock: string): Promise<void> {
+export function zshQuote(value: string): string {
+  if (value.includes("\0")) fail("cannot project a Zsh path containing NUL")
+  return `'${value.replaceAll("'", "'\\''")}'`
+}
+
+function replaceLoaderToken(template: string, token: string, value: string, source: string): string {
+  const first = template.indexOf(token)
+  if (first < 0) fail(`Zim loader template ${source} is missing ${token}`)
+  if (template.indexOf(token, first + token.length) >= 0) fail(`Zim loader template ${source} repeats ${token}`)
+  return `${template.slice(0, first)}${value}${template.slice(first + token.length)}`
+}
+
+async function projectLoader(
+  channel: "zimrc" | "zimenv",
+  activation: Activation,
+  canonical: ZimCanonical,
+): Promise<{ content: Buffer; template: string }> {
+  const template = channel === "zimrc" ? canonical.zimrcLoaderTemplate : canonical.zimenvLoaderTemplate
+  const home = channel === "zimrc" ? activation.zimrcHome : activation.zimenvHome
+  const config = channel === "zimrc" ? activation.zimrc : activation.zimenv
+  const legacy = channel === "zimrc" ? canonical.zimrcLegacy : canonical.zimenvLegacy
+  let projected = await readFile(template, "utf8")
+  const replacements: Array<[string, string]> = [
+    ["@@ZIM_CACHE_HOME@@", zshQuote(home)],
+    ["@@ZIM_CONFIG_OUTPUT@@", zshQuote(config)],
+    ["@@ZIM_LEGACY_CONFIG_PATTERN@@", [...new Set(legacy)].map(zshQuote).join("|")],
+    ["@@ZIM_CONTROLLER@@", zshQuote(canonical.controller)],
+  ]
+  if (channel === "zimrc") {
+    replacements.push(["@@ZIM_EMERGENCY_MODULE@@", zshQuote(canonical.emergencyModule)])
+  }
+  for (const [token, value] of replacements) projected = replaceLoaderToken(projected, token, value, template)
+  const unknown = projected.match(/@@ZIM_[A-Z_]+@@/)
+  if (unknown) fail(`Zim loader template ${template} has unsupported placeholder ${unknown[0]}`)
+  // block-in-file --read returns the block body without its terminal separator.
+  // Normalize one template boundary newline so install and status share bytes.
+  projected = projected.replace(/\r?\n$/, "")
+  return { content: Buffer.from(projected), template }
+}
+
+async function installLoader(block: string, content: Buffer, destination: string, legacyBlock: string): Promise<void> {
   const executable = process.env.CONFIG_BLOCK_IN_FILE || "block-in-file"
   try {
     await lstat(destination)
@@ -222,7 +272,7 @@ async function installLoader(block: string, source: string, destination: string,
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
   }
-  const installed = await command(executable, ["-n", block, "-C", "true", "-i", source, "-o", destination])
+  const installed = await command(executable, ["-n", block, "-C", "true", "-i", "-", "-o", destination], false, content)
   if (installed.code !== 0) fail(`failed to install block ${block} in ${destination}`)
 }
 
@@ -267,12 +317,16 @@ async function registry(action: "apply" | "status", activation: Activation, cano
 }
 
 async function install(options: CliOptions, settings: EffectiveSettings, activation: Activation, spec: ZimSpec, deploymentDir: string): Promise<number> {
+  const [zimenvLoader, zimrcLoader] = await Promise.all([
+    projectLoader("zimenv", activation, spec.canonical),
+    projectLoader("zimrc", activation, spec.canonical),
+  ])
   const configured = toolkitOptions({ ...options, install: settings.install, dropins: settings.dropins }, activation.spec.config)
   const configResult = await runConfigToolkit(configured)
   if (configResult !== 0) return configResult
   await mkdir(activation.loaderRoot, { recursive: true })
-  await installLoader(`${spec.canonical.blockPrefix}-zimenv`, spec.canonical.zimenvLoader, join(activation.loaderRoot, ".zshenv"), spec.canonical.blockPrefix)
-  await installLoader(`${spec.canonical.blockPrefix}-zimrc`, spec.canonical.zimrcLoader, join(activation.loaderRoot, ".zshrc"), spec.canonical.blockPrefix)
+  await installLoader(`${spec.canonical.blockPrefix}-zimenv`, zimenvLoader.content, join(activation.loaderRoot, ".zshenv"), spec.canonical.blockPrefix)
+  await installLoader(`${spec.canonical.blockPrefix}-zimrc`, zimrcLoader.content, join(activation.loaderRoot, ".zshrc"), spec.canonical.blockPrefix)
   await buildChannel("zimenv", activation, spec.canonical)
   await buildChannel("zimrc", activation, spec.canonical)
   const registryResult = await registry("apply", activation, spec.canonical, deploymentDir)
@@ -335,21 +389,28 @@ async function importProducer(options: CliOptions, settings: EffectiveSettings, 
   return 0
 }
 
-async function blockHealthy(name: string, source: string, destination: string): Promise<boolean> {
-  let expected: Buffer
+async function loaderHealthy(
+  channel: "zimrc" | "zimenv",
+  activation: Activation,
+  canonical: ZimCanonical,
+): Promise<boolean> {
+  let projection: { content: Buffer; template: string }
   try {
-    expected = await readFile(source)
+    projection = await projectLoader(channel, activation, canonical)
   } catch (error) {
-    console.log(`drift: block source is missing or unreadable: ${source}: ${error instanceof Error ? error.message : String(error)}`)
+    const template = channel === "zimrc" ? canonical.zimrcLoaderTemplate : canonical.zimenvLoaderTemplate
+    console.log(`drift: ${channel} loader template is missing or invalid: ${template}: ${error instanceof Error ? error.message : String(error)}`)
     return false
   }
+  const name = `${canonical.blockPrefix}-${channel}`
+  const destination = join(activation.loaderRoot, channel === "zimrc" ? ".zshrc" : ".zshenv")
   const result = await command(process.env.CONFIG_BLOCK_IN_FILE || "block-in-file", ["--read", "-n", name, destination], true)
   if (result.code !== 0) {
     console.log(`drift: block ${name} is missing or unreadable in ${destination}`)
     return false
   }
-  if (expected.equals(result.stdout)) return true
-  console.log(`drift: block ${name} in ${destination} differs from ${source}`)
+  if (projection.content.equals(result.stdout)) return true
+  console.log(`drift: block ${name} in ${destination} differs from projected template ${projection.template}`)
   return false
 }
 
@@ -370,8 +431,8 @@ async function status(activation: Activation, spec: ZimSpec, deploymentDir: stri
   const checks = await Promise.all([
     cacheHealthy("zimenv", activation),
     cacheHealthy("zimrc", activation),
-    blockHealthy(`${spec.canonical.blockPrefix}-zimenv`, spec.canonical.zimenvLoader, join(activation.loaderRoot, ".zshenv")),
-    blockHealthy(`${spec.canonical.blockPrefix}-zimrc`, spec.canonical.zimrcLoader, join(activation.loaderRoot, ".zshrc")),
+    loaderHealthy("zimenv", activation, spec.canonical),
+    loaderHealthy("zimrc", activation, spec.canonical),
   ])
   const registryResult = await registry("status", activation, spec.canonical, deploymentDir)
   return checks.every(Boolean) && registryResult === 0 ? 0 : 1
@@ -382,7 +443,9 @@ export async function runZim(options: CliOptions, deploymentDir: string): Promis
     readFile(options.zimSpecPath, "utf8").then((text) => JSON.parse(text) as ZimSpec),
     readFile(options.configSpecPath, "utf8").then((text) => JSON.parse(text) as ConfigSpec),
   ])
-  if (zimSpec.version !== 1) fail(`unsupported Zim spec version: ${String(zimSpec.version)}`)
+  if (zimSpec.version !== 2) {
+    fail(`unsupported Zim spec version: ${String(zimSpec.version)}; rerender the deployment with the current playbook (expected version 2)`)
+  }
   const settings = resolveSettings(options, zimSpec, configSpec)
   const activation = resolveActivation(settings.contextName, zimSpec, configSpec)
   if (options.action === "install") return install(options, settings, activation, zimSpec, deploymentDir)

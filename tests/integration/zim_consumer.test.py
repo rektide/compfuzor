@@ -27,7 +27,7 @@ def run(command: list[str], *, cwd: Path, env: dict[str, str], check: bool = Tru
 
 
 def render_host(payload: Path, scenario: Path, ansible_env: dict[str, str], default_context: str = "user") -> None:
-    system = payload.parent / "system activation"
+    system = payload.parent / "system activation's root"
     values = {
         "TYPE": "zim",
         "NAME": "zim-main",
@@ -162,6 +162,57 @@ def donor_digest(payload: Path) -> str:
     return digest.hexdigest()
 
 
+def extract_loader(
+    block_in_file: Path,
+    marker: str,
+    startup: Path,
+    destination: Path,
+    *,
+    cwd: Path,
+    env: dict[str, str],
+) -> Path:
+    projected = run(
+        [str(block_in_file), "--read", "-n", marker, str(startup)],
+        cwd=cwd,
+        env=env,
+    )
+    content = projected.stdout.encode()
+    assert b"@@ZIM_" not in content
+    destination.write_bytes(content)
+    return destination
+
+
+def source_loader(
+    loader: Path,
+    channel: str,
+    environment: dict[str, str],
+    build_log: Path,
+    expected_home: Path,
+    expected_config: Path,
+    *,
+    overrides: dict[str, str] | None = None,
+) -> None:
+    env = environment.copy()
+    for name in ("ZIM_HOME", "ZIM_ENV_HOME", "ZIM_CONFIG_FILE", "ZIM_ENV_CONFIG", "COMPFUZOR_EMERGENCY"):
+        env.pop(name, None)
+    env.update(overrides or {})
+    env["LOADER"] = str(loader)
+    state = build_log.parent / f"{build_log.name}.{channel}.state"
+    env["LOADER_STATE"] = str(state)
+    expected_home.mkdir(parents=True, exist_ok=True)
+    (expected_home / "init.zsh").unlink(missing_ok=True)
+    build_log.write_text("", encoding="utf-8")
+    if channel == "zimenv":
+        script = 'source "$LOADER"; [[ -z ${ZIM_HOME+x} && -z ${ZIM_CONFIG_FILE+x} ]]'
+    else:
+        script = 'source "$LOADER"; print -r -- "$ZIM_HOME|$ZIM_CONFIG_FILE" > "$LOADER_STATE"'
+    run(["zsh", "-dfc", script], cwd=loader.parent, env=env)
+    assert (expected_home / "init.zsh").is_file()
+    assert build_log.read_text(encoding="utf-8").splitlines() == [str(expected_config)]
+    if channel == "zimrc":
+        assert state.read_text(encoding="utf-8").strip() == f"{expected_home}|{expected_config}"
+
+
 def test_zim_consumer_lifecycle() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     demo_setting = os.environ.get("COMPFUZOR_KEEP_ZIM_DEMO")
@@ -223,6 +274,36 @@ zimfw() { :; }
         canonical_zimrc = payload / "etc" / "zimrc"
         canonical_zimenv = payload / "etc" / "zimenv"
         assert canonical_zimrc.is_file() and canonical_zimenv.is_file()
+
+        # Relocate three loader inputs independently through v2 fields. The
+        # runtime must consume this spec rather than derive sibling paths.
+        zim_spec_path = payload / "etc" / "zim.spec.json"
+        zim_spec = json.loads(zim_spec_path.read_text(encoding="utf-8"))
+        canonical = zim_spec["canonical"]
+        assert zim_spec["version"] == 2
+        assert set((
+            "zimrcLegacy", "zimenvLegacy", "zimrcLoaderTemplate",
+            "zimenvLoaderTemplate", "emergencyModule",
+        )).issubset(canonical)
+        relocated = temporary / "relocated loader sources"
+        relocated.mkdir()
+        relocated_zimenv_template = relocated / "zimenv loader's template.zsh"
+        relocated_zimenv_template.write_bytes(
+            (payload / "etc" / "zimenv.zsh").read_bytes()
+            + b"# relocated-zimenv-template\n"
+        )
+        relocated_emergency = relocated / "emergency module's init.zsh"
+        relocated_emergency.write_text(
+            'print -r -- relocated-emergency > "$ZIM_TEST_EMERGENCY_LOG"\n',
+            encoding="utf-8",
+        )
+        extra_zimrc_legacy = temporary / "retired canonical paths" / "zimrc"
+        extra_zimenv_legacy = temporary / "retired canonical paths" / "zimenv"
+        canonical["zimenvLoaderTemplate"] = str(relocated_zimenv_template)
+        canonical["emergencyModule"] = str(relocated_emergency)
+        canonical["zimrcLegacy"].append(str(extra_zimrc_legacy))
+        canonical["zimenvLegacy"].append(str(extra_zimenv_legacy))
+        zim_spec_path.write_text(json.dumps(zim_spec), encoding="utf-8")
 
         install_user_text = (payload / "bin" / "install-user.sh").read_text(encoding="utf-8")
         assert install_user_text.count('"$DIR/bin/install-zim.sh" "$@"') == 1
@@ -292,24 +373,83 @@ zimfw() { :; }
         registry_one = local_root_one / "zimfw.conf"
         assert registry_one.is_symlink() and registry_one.resolve() == canonical_zimrc
 
-        for marker, source, startup in (
-            ("zim-main-zimenv", payload / "etc" / "zimenv.zsh", zdot_one / ".zshenv"),
-            ("zim-main-zimrc", payload / "etc" / "zimrc.zsh", zdot_one / ".zshrc"),
-        ):
-            projected = run([str(block_in_file), "--read", "-n", marker, str(startup)], cwd=temporary, env=env_one)
-            assert projected.stdout.encode() == source.read_bytes()
+        user_loaders = {
+            "zimenv": extract_loader(
+                block_in_file,
+                "zim-main-zimenv",
+                zdot_one / ".zshenv",
+                temporary / "projected-user-zimenv.zsh",
+                cwd=temporary,
+                env=env_one,
+            ),
+            "zimrc": extract_loader(
+                block_in_file,
+                "zim-main-zimrc",
+                zdot_one / ".zshrc",
+                temporary / "projected-user-zimrc.zsh",
+                cwd=temporary,
+                env=env_one,
+            ),
+        }
+        assert b"@@ZIM_CACHE_HOME@@" in (payload / "etc" / "zimenv.zsh").read_bytes()
+        assert b"relocated-zimenv-template" in user_loaders["zimenv"].read_bytes()
+        assert str(local_zimenv).encode() in user_loaders["zimenv"].read_bytes()
+        assert str(local_zimrc).encode() in user_loaders["zimrc"].read_bytes()
 
-        no_leak = run(
-            ["zsh", "-dfc", 'unset ZIM_CONFIG_FILE zimfw; source "$ZDOTDIR/.zshenv"; [[ -z ${ZIM_CONFIG_FILE+x} && -z ${functions[zimfw]+x} ]]'],
-            cwd=temporary,
-            env=env_one,
+        emergency_log = temporary / "relocated-emergency.log"
+        emergency_env = env_one.copy()
+        for name in ("ZIM_HOME", "ZIM_ENV_HOME", "ZIM_CONFIG_FILE", "ZIM_ENV_CONFIG"):
+            emergency_env.pop(name, None)
+        emergency_env.update({
+            "COMPFUZOR_EMERGENCY": "1",
+            "ZIM_TEST_EMERGENCY_LOG": str(emergency_log),
+        })
+        run(["zsh", "-dfc", 'source "$1"', "emergency-loader", str(user_loaders["zimrc"])], cwd=temporary, env=emergency_env)
+        assert emergency_log.read_text(encoding="utf-8").strip() == "relocated-emergency"
+
+        # With all Zim selectors unset, projected loaders use the selected
+        # context defaults. zimenv remains anonymous and leaks no ZIM globals.
+        source_loader(user_loaders["zimenv"], "zimenv", env_one, build_log, home_one / ".cache" / "zim-env", local_zimenv)
+        source_loader(user_loaders["zimrc"], "zimrc", env_one, build_log, home_one / ".cache" / "zim", local_zimrc)
+
+        # Runtime channel overrides still win over embedded context defaults.
+        override_root = temporary / "loader override's root"
+        override_zimenv = override_root / "config" / "zimenv"
+        override_zimrc = override_root / "config" / "zimrc"
+        override_zimenv.parent.mkdir(parents=True)
+        override_zimenv.write_text("# override zimenv\n", encoding="utf-8")
+        override_zimrc.write_text("# override zimrc\n", encoding="utf-8")
+        source_loader(
+            user_loaders["zimenv"], "zimenv", env_one, build_log,
+            override_root / "cache" / "zimenv", override_zimenv,
+            overrides={"ZIM_ENV_HOME": str(override_root / "cache" / "zimenv"), "ZIM_ENV_CONFIG": str(override_zimenv)},
         )
-        assert no_leak.returncode == 0
+        source_loader(
+            user_loaders["zimrc"], "zimrc", env_one, build_log,
+            override_root / "cache" / "zimrc", override_zimrc,
+            overrides={"ZIM_HOME": str(override_root / "cache" / "zimrc"), "ZIM_CONFIG_FILE": str(override_zimrc)},
+        )
+
+        # Legacy canonical runtime values normalize to this activation's
+        # resolved output, not to a hardcoded user path.
+        source_loader(
+            user_loaders["zimenv"], "zimenv", env_one, build_log,
+            home_one / ".cache" / "zim-env", local_zimenv,
+            overrides={"ZIM_ENV_CONFIG": str(canonical_zimenv)},
+        )
+        source_loader(
+            user_loaders["zimrc"], "zimrc", env_one, build_log,
+            home_one / ".cache" / "zim", local_zimrc,
+            overrides={"ZIM_CONFIG_FILE": str(canonical_zimrc)},
+        )
 
         producer = temporary / "producer"
         render_producer(producer, temporary / "producer-render.pb", ansible_env)
-        producer_install = producer / "bin" / "install-user-zimfw.sh"
+        producer_install = producer / "bin" / "install-zimfw.sh"
         assert producer_install.is_file()
+        assert not (producer / "bin" / "install-user-zimfw.sh").exists()
+        producer_compositor = (producer / "bin" / "install-user.sh").read_text(encoding="utf-8")
+        assert producer_compositor.count('"$DIR/bin/install-zimfw.sh" "$@"') == 1
 
         run(
             [str(payload / "bin" / "config-inputs-user.sh"), "disable", "zimrc/zimrc", "20-environment.conf"],
@@ -317,7 +457,8 @@ zimfw() { :; }
             env=env_one,
         )
         build_log.write_text("", encoding="utf-8")
-        run([str(producer_install)], cwd=temporary, env=env_one)
+        producer_context_env = env_one | {"COMPFUZOR_ZIM_CONTEXT": "system"}
+        run([str(producer_install), "--context", "user"], cwd=temporary, env=producer_context_env)
         assert build_log.read_text(encoding="utf-8").splitlines() == [str(local_zimenv), str(local_zimrc)]
         producer_rc = local_root_one / "zimrc.d" / "55-producer-rc.conf"
         producer_env_disabled = local_root_one / "zimenv.d" / "55-producer-env.conf.disabled"
@@ -372,7 +513,7 @@ zimfw() { :; }
         assert donor_digest(payload) == before_user
 
         # One implementation targets a genuinely non-user activation context.
-        system_root = temporary / "system activation"
+        system_root = temporary / "system activation's root"
         system_build_log = temporary / "build-system.log"
         system_env = user_env(temporary / "irrelevant system home", temporary / "irrelevant system xdg", temporary / "irrelevant system zdot", payload, system_build_log, block_in_file)
         sudo_shim = temporary / "sudo-shim"
@@ -410,6 +551,71 @@ zimfw() { :; }
         assert (system_root / "registry" / "zimfw.conf").is_symlink()
         assert (system_root / "registry" / "zimfw.conf").resolve() == canonical_zimrc
         assert not sudo_log.exists()
+
+        system_loaders = {
+            "zimenv": extract_loader(
+                block_in_file,
+                "zim-main-zimenv",
+                system_root / "startup" / ".zshenv",
+                temporary / "projected-system-zimenv.zsh",
+                cwd=temporary,
+                env=system_env,
+            ),
+            "zimrc": extract_loader(
+                block_in_file,
+                "zim-main-zimrc",
+                system_root / "startup" / ".zshrc",
+                temporary / "projected-system-zimrc.zsh",
+                cwd=temporary,
+                env=system_env,
+            ),
+        }
+        # The apostrophe-bearing system paths exercise Zsh literal quoting.
+        # No external ZIM selector is needed to load the selected activation.
+        source_loader(
+            system_loaders["zimenv"], "zimenv", system_env, system_build_log,
+            system_root / "cache" / "zimenv", system_root / "config" / "zimenv",
+        )
+        source_loader(
+            system_loaders["zimrc"], "zimrc", system_env, system_build_log,
+            system_root / "cache" / "zim", system_root / "config" / "zimrc",
+        )
+
+        system_override = temporary / "system runtime override"
+        system_override_zimenv = system_override / "config" / "zimenv"
+        system_override_zimrc = system_override / "config" / "zimrc"
+        system_override_zimenv.parent.mkdir(parents=True)
+        system_override_zimenv.write_text("# system override zimenv\n", encoding="utf-8")
+        system_override_zimrc.write_text("# system override zimrc\n", encoding="utf-8")
+        source_loader(
+            system_loaders["zimenv"], "zimenv", system_env, system_build_log,
+            system_override / "cache" / "zimenv", system_override_zimenv,
+            overrides={
+                "ZIM_ENV_HOME": str(system_override / "cache" / "zimenv"),
+                "ZIM_ENV_CONFIG": str(system_override_zimenv),
+            },
+        )
+        source_loader(
+            system_loaders["zimrc"], "zimrc", system_env, system_build_log,
+            system_override / "cache" / "zimrc", system_override_zimrc,
+            overrides={
+                "ZIM_HOME": str(system_override / "cache" / "zimrc"),
+                "ZIM_CONFIG_FILE": str(system_override_zimrc),
+            },
+        )
+
+        # Canonical residue falls back to the system activation's embedded
+        # config outputs, then leaves that activation clean for status.
+        source_loader(
+            system_loaders["zimenv"], "zimenv", system_env, system_build_log,
+            system_root / "cache" / "zimenv", system_root / "config" / "zimenv",
+            overrides={"ZIM_ENV_CONFIG": str(extra_zimenv_legacy)},
+        )
+        source_loader(
+            system_loaders["zimrc"], "zimrc", system_env, system_build_log,
+            system_root / "cache" / "zim", system_root / "config" / "zimrc",
+            overrides={"ZIM_CONFIG_FILE": str(extra_zimrc_legacy)},
+        )
         system_status = run([str(payload / "bin" / "status-zim.sh"), "--context", "system"], cwd=temporary, env=system_env, check=False)
         assert system_status.returncode == 0, (system_status.stdout, system_status.stderr)
 
@@ -467,12 +673,12 @@ zimfw() { :; }
         assert changed_loader.returncode == 1 and "differs" in changed_loader.stdout
         run([str(payload / "bin" / "install-zim.sh"), "--context", "user"], cwd=temporary, env=env_one)
 
-        loader_source = payload / "etc" / "zimrc.zsh"
-        loader_backup = loader_source.read_bytes()
-        loader_source.unlink()
+        loader_template = payload / "etc" / "zimrc.zsh"
+        loader_backup = loader_template.read_bytes()
+        loader_template.unlink()
         missing_loader = run([str(payload / "bin" / "status-zim.sh")], cwd=temporary, env=env_one, check=False)
-        assert missing_loader.returncode == 1 and "block source is missing" in missing_loader.stdout
-        loader_source.write_bytes(loader_backup)
+        assert missing_loader.returncode == 1 and "loader template is missing or invalid" in missing_loader.stdout
+        loader_template.write_bytes(loader_backup)
 
         # Restore donor permissions for scratch cleanup.
         zimrc_d.chmod(0o755)

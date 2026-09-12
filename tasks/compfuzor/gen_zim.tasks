@@ -15,10 +15,9 @@
 # already-installed module). This is how compfuzor ships in-repo zsh scripts as
 # zimfw-loadable modules without a separate git repo.
 #
-# Every contributor also gets an auto-generated install-user-zimfw.sh (user
-# scope -- the `install-user-` prefix is what gen_bins keys on) that imports its
-# channel fragments into the invoking user's host context. Shared donor
-# promotion remains an explicit host-admin operation.
+# Every contributor also gets an auto-generated, explicitly user-scoped
+# install-zimfw.sh that imports its channel fragments into the effective host
+# context. Shared donor promotion remains an explicit host-admin operation.
 #
 # ZIM_ARRAYS declares Zsh-only arrays directly rather than projecting process
 # ENV. `path` is supported and remains tied to exported `PATH` by Zsh:
@@ -125,7 +124,7 @@
          | combine(_zim_env_prio_lookup)
          | combine(ENV_PRIO if ENV_PRIO is defined and ENV_PRIO is mapping else {}) }}
 
-- name: "Compfuzor: generate contributor install-user-zimfw.sh"
+- name: "Compfuzor: generate contributor install-zimfw.sh"
   set_fact:
     BINS: "{{ BINS | merge_list(_zimfw_install_bin | annotate_bins('zim'), preset='bins_generated') }}"
   when:
@@ -134,11 +133,36 @@
     - ZIM_BYPASS is deffalsy
   vars:
     _zimfw_install_bin:
-      name: install-user-zimfw.sh
+      name: install-zimfw.sh
       scope: [user]
       basedir: False
       bypass: ZIM
       content: |
+        # Scope is descriptor metadata, not part of this command's name. Parse
+        # only Zim's optional context flag; package compositors may pass other
+        # arguments that remain irrelevant to this importer.
+        _zim_context_args=()
+        _zim_context_set=0
+        while [ "$#" -gt 0 ]; do
+          case "$1" in
+            --context)
+              [ "$_zim_context_set" -eq 0 ] || { echo "install-zimfw: --context specified more than once" >&2; exit 2; }
+              shift
+              [ "$#" -gt 0 ] && [ -n "$1" ] || { echo "install-zimfw: --context requires a name" >&2; exit 2; }
+              _zim_context_args=(--context "$1")
+              _zim_context_set=1
+              ;;
+            --context=*)
+              [ "$_zim_context_set" -eq 0 ] || { echo "install-zimfw: --context specified more than once" >&2; exit 2; }
+              _zim_context=${1#--context=}
+              [ -n "$_zim_context" ] || { echo "install-zimfw: --context requires a name" >&2; exit 2; }
+              _zim_context_args=(--context "$_zim_context")
+              _zim_context_set=1
+              ;;
+          esac
+          shift
+        done
+
         # Host discovery: ZIM_HOST_DIR wins; otherwise resolve through the
         # canonical registry link (~/.config/zsh/zimfw.conf -> <host>/etc/zimrc),
         # which every zim host install creates -- the link IS the registry.
@@ -159,9 +183,9 @@
         fi
         host="${host:-/opt/zim-main}"
         if [ -x "$host/bin/install-zim-context.sh" ]; then
-          "$host/bin/install-zim-context.sh" "{{DIR}}"
+          "$host/bin/install-zim-context.sh" "${_zim_context_args[@]}" "{{DIR}}"
         else
-          _cf_report_skip "install-user-zimfw.sh" "zim: host not found at $host (set ZIM_HOST_DIR)"
+          _cf_report_skip "install-zimfw.sh" "zim: host not found at $host (set ZIM_HOST_DIR)"
         fi
 
 - name: "Compfuzor: synthesize zim host artifacts"

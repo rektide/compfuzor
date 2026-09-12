@@ -132,15 +132,24 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
         },
     ]
     spec = {
-        "version": 1,
+        "version": 2,
         "defaultContext": default_context,
         "contexts": normalized,
         "canonical": {
             "zimrc": posixpath.join(etc, "zimrc"),
             "zimenv": posixpath.join(etc, "zimenv"),
-            "zimrcLoader": posixpath.join(directory, "etc", "zimrc.zsh"),
-            "zimenvLoader": posixpath.join(directory, "etc", "zimenv.zsh"),
+            "zimrcLegacy": [
+                posixpath.join(etc, "zimrc"),
+                posixpath.join(directory, "etc", "zimrc"),
+            ],
+            "zimenvLegacy": [
+                posixpath.join(etc, "zimenv"),
+                posixpath.join(directory, "etc", "zimenv"),
+            ],
+            "zimrcLoaderTemplate": posixpath.join(directory, "etc", "zimrc.zsh"),
+            "zimenvLoaderTemplate": posixpath.join(directory, "etc", "zimenv.zsh"),
             "controller": posixpath.join(directory, "src", "zimfw.zsh"),
+            "emergencyModule": posixpath.join(etc, "zim-modules", "emergency", "init.zsh"),
             "registry": posixpath.join(etc, "zimrc"),
             "blockPrefix": name,
         },

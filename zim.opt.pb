@@ -276,13 +276,17 @@
     ETC_FILES:
       - name: zimenv.zsh
         content: |
+          # Context loader template projected by bin/zim/install.ts.
           [[ ${COMPFUZOR_EMERGENCY:-0} == 1 ]] && return
           () {
-            local ZIM_HOME="${ZIM_ENV_HOME:-{{zim_env_home}}}"
+            local default_zim_home=@@ZIM_CACHE_HOME@@
+            local default_zim_config_file=@@ZIM_CONFIG_OUTPUT@@
+            local controller=@@ZIM_CONTROLLER@@
+            local ZIM_HOME="${ZIM_ENV_HOME:-$default_zim_home}"
             local config="${ZIM_ENV_CONFIG:-}"
-            case "$config" in "{{ETC}}/zimenv"|"{{DIR}}/etc/zimenv") config="" ;; esac
-            local ZIM_CONFIG_FILE="${config:-{{zim_env_config_default}}}"
-            if [[ ! "$ZIM_HOME/init.zsh" -nt "$ZIM_CONFIG_FILE" ]] && ! source "{{DIR}}/src/zimfw.zsh" init; then
+            case "$config" in @@ZIM_LEGACY_CONFIG_PATTERN@@) config="" ;; esac
+            local ZIM_CONFIG_FILE="${config:-$default_zim_config_file}"
+            if [[ ! "$ZIM_HOME/init.zsh" -nt "$ZIM_CONFIG_FILE" ]] && ! source "$controller" init; then
               unfunction zimfw 2>/dev/null || true
               print -u2 "zimenv: failed to rebuild $ZIM_HOME/init.zsh from $ZIM_CONFIG_FILE"
               return
@@ -292,20 +296,24 @@
           }
       - name: zimrc.zsh
         content: |
+          # Context loader template projected by bin/zim/install.ts.
           if [[ ${COMPFUZOR_EMERGENCY:-0} == 1 ]]; then
             typeset -g _COMPFUZOR_EMERGENCY_COLD=1
-            source "{{ETC}}/zim-modules/emergency/init.zsh"
+            source @@ZIM_EMERGENCY_MODULE@@
             return
           fi
-          # : is a no-op builtin; ${VAR:=default} sets VAR only if unset or empty
-          : ${ZIM_HOME:={{zim_home}}}
-          case "${ZIM_CONFIG_FILE:-}" in "{{ETC}}/zimrc"|"{{DIR}}/etc/zimrc") unset ZIM_CONFIG_FILE ;; esac
-          : ${ZIM_CONFIG_FILE:={{zim_config_default}}}
+          if [[ -z ${ZIM_HOME:-} ]]; then
+            ZIM_HOME=@@ZIM_CACHE_HOME@@
+          fi
+          case "${ZIM_CONFIG_FILE:-}" in @@ZIM_LEGACY_CONFIG_PATTERN@@) unset ZIM_CONFIG_FILE ;; esac
+          if [[ -z ${ZIM_CONFIG_FILE:-} ]]; then
+            ZIM_CONFIG_FILE=@@ZIM_CONFIG_OUTPUT@@
+          fi
           # Install missing modules and update ${ZIM_HOME}/init.zsh if missing or outdated.
           if [[ ! "${ZIM_HOME}/init.zsh" -nt "${ZIM_CONFIG_FILE}" ]]; then
-            source "{{DIR}}/src/zimfw.zsh" init
+            source @@ZIM_CONTROLLER@@ init
           fi
-          source ${ZIM_HOME}/init.zsh
+          source "${ZIM_HOME}/init.zsh"
           export ZSH_AUTOSUGGEST_MANUAL_REBIND=1
     ARCH_PKGS:
       - bat

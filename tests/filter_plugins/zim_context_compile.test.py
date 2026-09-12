@@ -53,6 +53,19 @@ def test_compile_zim_contexts():
         plan["bins"],
     )
     assert compiled["spec"]["defaultContext"] == "user"
+    assert compiled["spec"]["version"] == 2
+    assert compiled["spec"]["canonical"] == {
+        "zimrc": "/opt/zim/etc/zimrc",
+        "zimenv": "/opt/zim/etc/zimenv",
+        "zimrcLegacy": ["/opt/zim/etc/zimrc", "/opt/zim/etc/zimrc"],
+        "zimenvLegacy": ["/opt/zim/etc/zimenv", "/opt/zim/etc/zimenv"],
+        "zimrcLoaderTemplate": "/opt/zim/etc/zimrc.zsh",
+        "zimenvLoaderTemplate": "/opt/zim/etc/zimenv.zsh",
+        "controller": "/opt/zim/src/zimfw.zsh",
+        "emergencyModule": "/opt/zim/etc/zim-modules/emergency/init.zsh",
+        "registry": "/opt/zim/etc/zimrc",
+        "blockPrefix": "zim-main",
+    }
     assert compiled["spec"]["contexts"]["user"]["loader_root"] == {
         "env": "ZDOTDIR", "default": {"path": "${HOME}"}
     }
