@@ -162,7 +162,9 @@ donor files remain normal, replaceable consumer entries.
 `CONFIG_CONTEXTS` owns config input and output bindings. `ZIM_CONTEXTS` is a
 small activation layer that references one of those bindings and adds the
 loader, cache, and registry destinations needed for a complete Zim install.
-The checked-in host declaration is intentionally concise:
+The referenced config context must set `compose: false`; compilation rejects a
+Zim-owned context that could also compose its generic installer. The checked-in
+host declaration is intentionally concise:
 
 ```yaml
 ZIM_CONTEXT: user
@@ -239,7 +241,8 @@ ln -s install-zim.sh install-zim-host.sh
 The wrapper captures its basename before resolving the symlink. An undeclared
 context or any other non-base basename fails with guidance instead of silently
 using the default. Strategy aliases and Cartesian alias filenames are not
-supported; use flags or environment variables.
+supported; use flags or environment variables. Context names `donor` and
+`context` are reserved for the canonical admin and consumer-import commands.
 
 ### Exact generated surface
 
