@@ -214,6 +214,9 @@ bytes.
 
 ## Verification
 
+The post-review verification and corrected loader-source proof are recorded in
+[`build5-review0.solx.md`](/.design/config-user-target/build5-review0.solx.md).
+
 Focused final verification is preserved under:
 
 ```text
@@ -249,7 +252,7 @@ Zim, and Mise.
 The current post-validation proof is:
 
 ```text
-/home/rektide/src/compfuzor/.test-agent/config-contexts/zim-demo-g1b_ojir
+/home/rektide/src/compfuzor/.test-agent/config-contexts/zim-demo-k960e_e3
 ```
 
 Its `README.md` maps canonical, user, system, and producer paths. Its
@@ -261,7 +264,7 @@ test first proves that rendering emitted no alias.
 Examples:
 
 ```bash
-demo=/home/rektide/src/compfuzor/.test-agent/config-contexts/zim-demo-g1b_ojir
+demo=/home/rektide/src/compfuzor/.test-agent/config-contexts/zim-demo-k960e_e3
 "$demo/user-one.sh" "$demo/zim host with spaces/bin/status.sh"
 "$demo/system.sh" "$demo/zim host with spaces/bin/status-zim.sh"
 "$demo/system.sh" "$demo/zim host with spaces/bin/install-zim-system.sh" \

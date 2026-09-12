@@ -375,8 +375,10 @@ commands are for development and diagnosis.
 
 ## Implementation references
 
-- [`build5.solx.md`](/.design/config-user-target/build5.solx.md) records the
-  implementation checkpoint, focused verification, and retained scratch proof.
+- [`build5-review0.solx.md`](/.design/config-user-target/build5-review0.solx.md)
+  records the corrected v2 loader contract, focused verification, and current
+  retained scratch proof; [`build5.solx.md`](/.design/config-user-target/build5.solx.md)
+  is the preceding implementation checkpoint.
 - [`config_context_compile.py`](/library/filter_plugins/config_context_compile.py)
   compiles bindings and commands.
 - [`zim_context_compile.py`](/library/filter_plugins/zim_context_compile.py)

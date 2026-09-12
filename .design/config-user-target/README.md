@@ -15,9 +15,11 @@ status without an unnecessary assembly layer.
 
 - [User workflow](/doc/config/consumer-toolkit.md): declarations, full initial
   setup, daily assembly, input management, copy/link alternatives, and Mise.
-- [Latest implementation checkpoint](/.design/config-user-target/build5.solx.md):
-  one context-aware Zim installer, manual-only aliases, explicit system
-  activation, focused verification, and the current preserved demo.
+- [Latest implementation review](/.design/config-user-target/build5-review0.solx.md):
+  explicit v2 loader sources, complete user/system loader semantics, corrected
+  alias precedence, neutral contributor naming, and the current preserved demo.
+- [Build 5 checkpoint](/.design/config-user-target/build5.solx.md): one
+  context-aware Zim installer and manual-only context aliases.
 - [Final architectural review](/.design/config-user-target/review-final0.unknown.md):
   independent standards/spec review resolutions and the two remaining unrelated
   OpenCode test failures.
@@ -43,6 +45,9 @@ between consequential steps:
 - [Build 5](/.design/config-user-target/build5.solx.md): one selected-context Zim
   dispatcher, config composition ownership, user-managed alias inference, and
   explicit user/system activation proof.
+- [Build 5 review](/.design/config-user-target/build5-review0.solx.md): bounded
+  v2 loader metadata/projection, lazy alias inference, and scope-neutral
+  contributor installation.
 
 The [initial build brief](/.design/config-user-target/build0.unknown.md) is a
 proposal retained for history, not a second specification to implement.
