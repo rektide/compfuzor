@@ -281,6 +281,21 @@ zimfw() { :; }
         zim_spec = json.loads(zim_spec_path.read_text(encoding="utf-8"))
         canonical = zim_spec["canonical"]
         assert zim_spec["version"] == 2
+        stale_spec = temporary / "zim-v1.spec.json"
+        stale_spec.write_text(json.dumps(zim_spec | {"version": 1}), encoding="utf-8")
+        stale_result = run(
+            [
+                str(payload / "bin" / "zim" / "install.ts"), "status",
+                "--spec", str(stale_spec),
+                "--config-spec", str(payload / "etc" / "config.spec.json"),
+                "--config-runner", str(payload / "bin" / "config.sh"),
+            ],
+            cwd=temporary,
+            env=canonical_env,
+            check=False,
+        )
+        assert stale_result.returncode == 2
+        assert "unsupported Zim spec version: 1" in stale_result.stderr and "rerender" in stale_result.stderr
         assert set((
             "zimrcLegacy", "zimenvLegacy", "zimrcLoaderTemplate",
             "zimenvLoaderTemplate", "emergencyModule",
