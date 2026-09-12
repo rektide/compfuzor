@@ -26,8 +26,9 @@ package compositor. If Zim's compiled default is a system context, the same
 base `install-zim.sh` joins bare `install.sh` instead of `install-user.sh`.
 Neither path escalates privileges.
 
-`install-config-user.sh` remains the config domain's ordinary dispatcher; its action comes
-from the declared `install:` default or `COMPFUZOR_CONFIG_INSTALL_STRATEGY`.
+`install-config-user.sh` remains the config domain's ordinary dispatcher; its
+action comes from the declared `install:` default or
+`COMPFUZOR_CONFIG_INSTALL_STRATEGY`.
 The other generated commands never run automatically — `config-user.sh`
 (assembly/preview), the drop-in refresh and whole-output commands, and the
 input tools. `status-config-context-user.sh` also runs through the aggregate
@@ -364,6 +365,8 @@ commands are for development and diagnosis.
 
 ## Implementation references
 
+- [`build5.solx.md`](/.design/config-user-target/build5.solx.md) records the
+  implementation checkpoint, focused verification, and retained scratch proof.
 - [`config_context_compile.py`](/library/filter_plugins/config_context_compile.py)
   compiles bindings and commands.
 - [`zim_context_compile.py`](/library/filter_plugins/zim_context_compile.py)

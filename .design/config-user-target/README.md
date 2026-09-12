@@ -7,15 +7,17 @@ The implemented default is **linked donor drop-in files, locally assembled
 configuration**. Copying drop-ins and copying/linking whole donor outputs remain
 explicit alternatives. User input choices stay local; canonical donor
 administration is a separate operation. CONFIGS reuses one assembly engine and
-shares file-delivery primitives with LINKS. Zim's shell-loader blocks remain
-separate, and Mise gains block status without an unnecessary assembly layer.
+shares file-delivery primitives with LINKS. Zim's two loader channels remain
+distinct inside one complete context-aware installer, and Mise gains block
+status without an unnecessary assembly layer.
 
 ## Start here
 
 - [User workflow](/doc/config/consumer-toolkit.md): declarations, full initial
   setup, daily assembly, input management, copy/link alternatives, and Mise.
-- [Latest implementation checkpoint](/.design/config-user-target/build4.solx.md):
-  review fixes, exact verification results, limitations, and preserved demo.
+- [Latest implementation checkpoint](/.design/config-user-target/build5.solx.md):
+  one context-aware Zim installer, manual-only aliases, explicit system
+  activation, focused verification, and the current preserved demo.
 - [Final architectural review](/.design/config-user-target/review-final0.unknown.md):
   independent standards/spec review resolutions and the two remaining unrelated
   OpenCode test failures.
@@ -38,6 +40,9 @@ between consequential steps:
   independent loaders and caches, and Mise Bash-block status.
 - [Build 4](/.design/config-user-target/build4.solx.md): review corrections,
   deployment-rooted orchestration, shared runtime packaging, and test sweep.
+- [Build 5](/.design/config-user-target/build5.solx.md): one selected-context Zim
+  dispatcher, config composition ownership, user-managed alias inference, and
+  explicit user/system activation proof.
 
 The [initial build brief](/.design/config-user-target/build0.unknown.md) is a
 proposal retained for history, not a second specification to implement.
