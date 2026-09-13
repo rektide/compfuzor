@@ -78,6 +78,13 @@ All six fixed CONFIG files are symlinks to
 default to `user`, and expose the declared `canonical,user` and `user` context
 sets respectively.
 
+Two concurrent immediate post-install probes transiently observed command
+lookup failures (`readlink` missing and `/usr/bin/env` reporting `node: Not a
+directory`) while new shells initialized the just-built Zim/Mise environment.
+A clean-shell trace showed a valid PATH, ten consecutive fixed-command launches
+succeeded, and the final sequential status checks above remained clean. No
+persistent drift or malformed activation file was found.
+
 ### Mise activation
 
 `/opt/mise-main/bin/install-user.sh --help` reported only
