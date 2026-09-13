@@ -558,12 +558,12 @@ export async function putInput(options: InputOperationOptions & { selector: stri
 
 async function inputMutation(spec: ConfigSpec, options: InputOperationOptions, action: "enable" | "disable" | "remove", args: string[]): Promise<number> {
   const [selector, name] = args
-  if (!selector) fail(`usage: config-inputs-CONTEXT.sh ${action} INPUT [NAME]`)
+  if (!selector) fail(`usage: config-inputs.sh ${action} INPUT [NAME]`)
   const found = findInput(spec, options.contextName, selector)
   await assertInputBindingSeparated(spec, options.contextName, found)
   if (typeof found.input.file === "string") {
     if (action !== "remove") fail(`${selector} is a direct file input and cannot be ${action}d`)
-    if (args.length !== 1) fail(`usage: config-inputs-CONTEXT.sh remove DIRECT_INPUT`)
+    if (args.length !== 1) fail(`usage: config-inputs.sh remove DIRECT_INPUT`)
     const local = resolvedInput(spec, options.contextName, found)
     if (typeof local.file !== "string") fail(`${selector} has an invalid resolved file binding`)
     const entry = await inspectDeliveryEntry(local.file)
@@ -573,7 +573,7 @@ async function inputMutation(spec: ConfigSpec, options: InputOperationOptions, a
     console.log(`remove\t${found.config}/${inputIdentity(found.input, found.index)}\t${local.file}`)
     return rebuild(options, found.config)
   }
-  if (!name || args.length !== 2) fail(`usage: config-inputs-CONTEXT.sh ${action} INPUT NAME`)
+  if (!name || args.length !== 2) fail(`usage: config-inputs.sh ${action} INPUT NAME`)
   validateInputName(found.input, name)
   const paths = await localInputPaths(spec, options.contextName, found, name)
   const pair = await inspectPair(paths)
