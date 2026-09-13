@@ -227,6 +227,9 @@ def test_copy_drift_policy_directory_source_and_conservative_remove(env: dict[st
     preserved = tmp_path / "preserved"; preserved.write_text("modified\n", encoding="utf-8")
     replaced = tmp_path / "replaced"; replaced.write_text("modified\n", encoding="utf-8")
     failed = tmp_path / "failed"; failed.write_text("modified\n", encoding="utf-8")
+    other = tmp_path / "other"; other.write_text("foreign\n", encoding="utf-8")
+    foreign_link = tmp_path / "foreign-link"; foreign_link.symlink_to(other)
+    dangling = tmp_path / "dangling"; dangling.symlink_to(tmp_path / "absent-target")
     directory = tmp_path / "directory"; directory.mkdir()
     missing_source = tmp_path / "missing-source"
     source_missing_dest = tmp_path / "source-missing"; source_missing_dest.write_text("old\n", encoding="utf-8")
@@ -235,6 +238,8 @@ def test_copy_drift_policy_directory_source_and_conservative_remove(env: dict[st
         represented_record("preserved", source, preserved, default="copy", policy="preserve"),
         represented_record("replaced", source, replaced, default="copy", policy="replace"),
         represented_record("failed", source, failed, default="copy", policy="fail"),
+        represented_record("foreign-link", source, foreign_link, default="copy", policy="replace"),
+        represented_record("dangling", source, dangling, default="copy", policy="fail"),
         represented_record("directory", source, directory, default="copy", policy="replace"),
         represented_record("missing-source", missing_source, source_missing_dest, default="copy", policy="replace"),
     ])
@@ -244,6 +249,8 @@ def test_copy_drift_policy_directory_source_and_conservative_remove(env: dict[st
     assert rows["preserved"]["status"] == "OVERRIDE" and preserved.read_text() == "modified\n"
     assert rows["replaced"]["status"] == "MANAGED" and replaced.read_bytes() == source.read_bytes()
     assert rows["failed"]["status"] == "CONFLICT" and failed.read_text() == "modified\n"
+    assert rows["foreign-link"]["status"] == "MANAGED" and not foreign_link.is_symlink() and foreign_link.read_bytes() == source.read_bytes()
+    assert rows["dangling"]["status"] == "CONFLICT" and "dangling link" in rows["dangling"]["detail"]
     assert rows["directory"]["detail"] == "never replaced" and directory.is_dir()
     assert rows["missing-source"]["status"] == "SOURCE_MISSING" and source_missing_dest.read_text() == "old\n"
 
