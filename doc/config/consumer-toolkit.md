@@ -13,14 +13,54 @@ config-inputs.sh
 config-status.sh
 ```
 
-Each file is a real symlink to the one thin dispatcher at
-`bin/config/command.ts`. Declarative argument parsing, alias inference, and
-action-specific help live in `bin/config/cli.ts`; the dispatcher selects an
-action and context, then delegates to separate typed assembly, input,
-publication, install, and status operations under `bin/config/`. The
-transaction runner and processor leaves remain internal. There is no public
+Each file is a real symlink to the one built dispatcher at
+`bin/config/command.mjs`. Declarative argument parsing, alias inference, and
+action-specific help are bundled from the domain-grouped TypeScript sources;
+the dispatcher selects an action and context, then delegates to the bundled
+assembly, input, publication, install, and status operations. The transaction
+runner and shell processor leaves remain internal. There is no public
 `config.sh`, `config-context.sh`, per-recipe assembly wrapper, per-context
 wrapper, or strategy-specific wrapper.
+
+## Controller compilation and deployed runtime
+
+The Python filter and lookup plugins are Ansible controller code. They compile
+declarations while a playbook renders and are not copied to managed machines.
+The managed CONFIG, Zim, LINKS, and config-remote runtime is JavaScript built by
+[Vite+](https://viteplus.dev/guide/pack/) from the TypeScript sources:
+
+```text
+files/                         # source checkout only
+  config/*.ts
+  links/*.ts
+  zim/*.ts
+  config-remote.ts
+build/runtime/                 # checked-in `pnpm build` products
+  config/command.mjs
+  config-remote/config-remote.mjs
+  links/links.mjs
+  zim/install.mjs
+<deployment>/bin/              # copied products and stable shell/symlink surface
+  config/command.mjs
+  config-remote.mjs
+  links/links.mjs
+  links.mjs -> links/links.mjs
+  zim/install.mjs
+```
+
+Run `pnpm install` once after checkout changes, then `pnpm build` to regenerate
+all four self-contained executables. Their shebangs and executable modes are
+preserved. The generated artifacts are committed because the controller needs
+them while rendering arbitrary playbooks; target playbooks never run pnpm or
+perform network installation. Rendering fails with a `pnpm build` instruction
+if an expected artifact is absent.
+
+No `.py` or `.ts` file is part of the relevant deployed `bin` tree. Other raw
+TypeScript deployment surfaces remain deliberately outside this cutover:
+kernel status reporters (`status-modules.ts`, `status-cmdline.ts`, and
+`status-sysctl.ts`), the Repart runtime (also embedded into Mkosi images), and
+the MCP drop-in adapter pair. They have separate domain behavior and are not
+imports or dependencies of the CONFIG/Zim/LINKS bundles.
 
 ## Defaults and composition
 
@@ -185,7 +225,7 @@ context/action alias in the deterministic order `config-CONTEXT-ACTION.sh`:
 
 ```bash
 ln -s config-assemble.sh config-user-assemble.sh
-ln -s config/command.ts config-host-status.sh
+ln -s config/command.mjs config-host-status.sh
 ```
 
 The alias may point through a fixed action symlink or directly to the internal
@@ -198,7 +238,7 @@ Fixed generated names infer only action. Direct internal invocation must name
 the action:
 
 ```bash
-node files/config/command.ts \
+bin/config/command.mjs \
   --action status --context user \
   --spec /path/to/deployment/etc/config.spec.json \
   --runner /path/to/deployment/bin/config/run.sh zimrc
