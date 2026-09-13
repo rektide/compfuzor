@@ -72,11 +72,12 @@ def test_compile_zim_contexts():
     }
     assert compiled["spec"]["contexts"]["system"]["scope"] == "system"
     by_name = {record["name"]: record for record in compiled["bins"]}
-    assert set(by_name) == {"zim/install.mjs", "install-zim.sh", "status-zim.sh"}
-    assert by_name["zim/install.mjs"]["src"].endswith("/build/runtime/zim/install.mjs")
+    assert set(by_name) == {"compfuzor-runtime.mjs", "zim/install.mjs", "install-zim.sh", "status-zim.sh"}
+    assert by_name["compfuzor-runtime.mjs"]["src"].endswith("/build/runtime/compfuzor-runtime.mjs")
+    assert by_name["zim/install.mjs"]["link"] == "compfuzor-runtime.mjs"
     assert by_name["install-zim.sh"]["action"] == "install"
     assert "scope" not in by_name["install-zim.sh"]
-    assert all(record.get("link") is None for record in compiled["bins"])
+    assert [record["name"] for record in compiled["bins"] if record.get("link")] == ["zim/install.mjs"]
     assert compiled["statuses"] == [{"name": "status-zim.sh", "args": ["--activation-only"], "exit2": "error"}]
     assert compiled["etc_files"][0]["name"] == "zim.spec.json"
 

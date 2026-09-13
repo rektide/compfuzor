@@ -13,9 +13,9 @@ config-inputs.sh
 config-status.sh
 ```
 
-Each file is a real symlink to the one built dispatcher at
-`bin/config/command.mjs`. Declarative argument parsing, alias inference, and
-action-specific help are bundled from the domain-grouped TypeScript sources;
+Each file is a real symlink through `bin/config/command.mjs` to the shared built
+dispatcher at `bin/compfuzor-runtime.mjs`. Declarative argument parsing, alias
+inference, and action-specific help remain in domain-grouped TypeScript sources;
 the dispatcher selects an action and context, then delegates to the bundled
 assembly, input, publication, install, and status operations. The transaction
 runner and shell processor leaves remain internal. There is no public
@@ -26,7 +26,8 @@ wrapper, or strategy-specific wrapper.
 
 The Python filter and lookup plugins are Ansible controller code. They compile
 declarations while a playbook renders and are not copied to managed machines.
-The managed CONFIG, Zim, LINKS, and config-remote runtime is JavaScript built by
+The managed CONFIG, Zim, LINKS, and config-remote runtime is one JavaScript
+multicall artifact built by
 [Vite+](https://viteplus.dev/guide/pack/) from the TypeScript sources:
 
 ```text
@@ -34,26 +35,33 @@ files/                         # source checkout only
   config/*.ts
   links/*.ts
   zim/*.ts
-  config-remote.ts
-build/runtime/                 # checked-in `pnpm build` products
-  config/command.mjs
-  config-remote/config-remote.mjs
-  links/links.mjs
-  zim/install.mjs
-<deployment>/bin/              # copied products and stable shell/symlink surface
-  config/command.mjs
-  config-remote.mjs
-  links/links.mjs
-  links.mjs -> links/links.mjs
-  zim/install.mjs
+  config-remote.ts             # source CLI wrapper
+  config-remote/*.ts
+  runtime/*.ts                 # minimal root dispatch only
+build/runtime/                 # checked-in `pnpm build` product
+  compfuzor-runtime.mjs
+<deployment>/bin/              # one copied product and stable aliases
+  compfuzor-runtime.mjs
+  config/command.mjs -> ../compfuzor-runtime.mjs
+  config-remote.mjs  -> compfuzor-runtime.mjs
+  links/links.mjs    -> ../compfuzor-runtime.mjs
+  links.mjs          -> compfuzor-runtime.mjs
+  zim/install.mjs    -> ../compfuzor-runtime.mjs
 ```
 
 Run `pnpm install` once after checkout changes, then `pnpm build` to regenerate
-all four self-contained executables. Their shebangs and executable modes are
-preserved. The generated artifacts are committed because the controller needs
-them while rendering arbitrary playbooks; target playbooks never run pnpm or
-perform network installation. Rendering fails with a `pnpm build` instruction
-if an expected artifact is absent.
+the self-contained executable. Its shebang and executable mode are preserved.
+The generated artifact is committed because the controller needs it while
+rendering arbitrary playbooks; target playbooks never run pnpm or perform
+network installation. Rendering fails with a `pnpm build` instruction if the
+artifact is absent.
+
+Each participating subsystem contributes the same compatible artifact claim and
+only its own aliases. The existing name-keyed BINS merge deduplicates those
+claims, so standalone CONFIG or LINKS deployments remain complete while a Zim
+host still installs only one regular `.mjs` file. The root dispatcher follows
+the lexical symlink chain before realpath erases it; CONFIG therefore retains
+its fixed, chained, and explicit custom-alias behavior.
 
 No `.py` or `.ts` file is part of the relevant deployed `bin` tree. Other raw
 TypeScript deployment surfaces remain deliberately outside this cutover:

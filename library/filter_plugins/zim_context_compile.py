@@ -12,7 +12,7 @@ from ansible.template import accept_args_markers
 
 from config_selectors import compile_path_selector
 from template_data import raw_copy_template_data
-from runtime_bundles import runtime_artifact_bin
+from runtime_bundles import compfuzor_runtime_bins
 
 
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -111,8 +111,7 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
     if collision:
         _error("generated command collision: {}".format(", ".join(collision)))
 
-    bins = [
-        runtime_artifact_bin("zim/install.mjs", "zim/install.mjs"),
+    bins = compfuzor_runtime_bins("zim/install.mjs") + [
         {"name": "install-zim.sh", "src": "../install-zim.sh", "raw": True, "basedir": False, "action": "install"},
         {
             "name": "status-zim.sh",

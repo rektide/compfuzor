@@ -15,13 +15,14 @@ def test_links_runtime_bundles():
     delivery = links_runtime_bins(False)
     assert delivery == []
     full = links_runtime_bins(True)
-    assert [record["name"] for record in full] == ["links/links.mjs", "links.mjs"]
+    assert [record["name"] for record in full] == ["compfuzor-runtime.mjs", "links/links.mjs", "links.mjs"]
     assert full[0]["raw"] and full[0]["compose"] is False
-    assert full[0]["src"].endswith("/build/runtime/links/links.mjs")
-    assert full[1]["link"] == "links/links.mjs"
+    assert full[0]["src"].endswith("/build/runtime/compfuzor-runtime.mjs")
+    assert full[1]["link"] == "compfuzor-runtime.mjs"
+    assert full[2]["link"] == "compfuzor-runtime.mjs"
     assert links_runtime_dirs("/opt/app/bin") == ["/opt/app/bin/links"]
     full[0]["name"] = "changed"
-    assert links_runtime_bins(True)[0]["name"] == "links/links.mjs"
+    assert links_runtime_bins(True)[0]["name"] == "compfuzor-runtime.mjs"
 
     try:
         links_runtime_bins("full")

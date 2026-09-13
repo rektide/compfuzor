@@ -147,6 +147,7 @@ def test_config_context_toolkit() -> None:
 
         plan = json.loads(plan_file.read_text(encoding="utf-8"))
         bins = {item["name"]: item for item in plan["bins"]}
+        assert list(item["name"] for item in plan["bins"]).count("compfuzor-runtime.mjs") == 1
         assert list(item["name"] for item in plan["bins"]).count("links/links.mjs") == 1
         assert list(item["name"] for item in plan["bins"]).count("links.mjs") == 1
         assert not any(item["name"].endswith(".ts") for item in plan["bins"])
@@ -465,7 +466,7 @@ def test_config_context_toolkit() -> None:
         assert str(donor) in listed.stdout and str(local_inputs) in listed.stdout
 
         for module in (
-            ROOT / "build" / "runtime" / "config" / "command.mjs",
+            ROOT / "build" / "runtime" / "compfuzor-runtime.mjs",
             payload / "bin" / "config" / "command.mjs",
             ROOT / "files" / "links" / "delivery.ts",
         ):

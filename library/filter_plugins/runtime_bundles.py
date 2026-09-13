@@ -1,4 +1,4 @@
-"""Small canonical module bundles shared by generated runtime consumers."""
+"""Canonical omnibus runtime records shared by generated consumers."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from ansible.template import accept_args_markers
 
 
 _REPOSITORY = Path(__file__).resolve().parents[2]
+_RUNTIME_ARTIFACT = "compfuzor-runtime.mjs"
 
 
 def runtime_artifact_bin(artifact, name):
@@ -30,27 +31,42 @@ def runtime_artifact_bin(artifact, name):
     }
 
 
+def compfuzor_runtime_bin():
+    """Return the canonical compatible claim for the omnibus runtime."""
+    return runtime_artifact_bin(_RUNTIME_ARTIFACT, _RUNTIME_ARTIFACT)
+
+
+def runtime_alias_bin(name):
+    """Return one stable command alias to the omnibus runtime."""
+    if not isinstance(name, str) or not name or posixpath.isabs(name):
+        raise AnsibleFilterError("runtime alias must be a non-empty relative path")
+    return {
+        "name": name,
+        "dest": name,
+        "link": _RUNTIME_ARTIFACT,
+        "compose": False,
+        "basedir": False,
+    }
+
+
+def compfuzor_runtime_bins(*aliases):
+    """Return one artifact claim and stable aliases for a runtime consumer."""
+    return [compfuzor_runtime_bin()] + [runtime_alias_bin(name) for name in aliases]
+
+
 @accept_args_markers
 def links_runtime_bins(full=False):
-    """Return no standalone delivery code or the complete built LINKS runtime."""
+    """Return no delivery code or a complete omnibus runtime plus LINKS aliases."""
     if full not in (True, False, None):
         raise AnsibleFilterError("links_runtime_bins expects a boolean or None")
     if not full:
         return []
-    return [
-        runtime_artifact_bin("links/links.mjs", "links/links.mjs"),
-        {
-            "name": "links.mjs",
-            "link": "links/links.mjs",
-            "compose": False,
-            "basedir": False,
-        },
-    ]
+    return compfuzor_runtime_bins("links/links.mjs", "links.mjs")
 
 
 @accept_args_markers
 def links_runtime_dirs(bins_dir):
-    """Return the directory required by either LINKS runtime bundle."""
+    """Return the directory required by the nested LINKS compatibility alias."""
     if not isinstance(bins_dir, str) or not bins_dir:
         raise AnsibleFilterError("links_runtime_dirs requires a non-empty BINS_DIR")
     return [posixpath.join(bins_dir, "links")]
@@ -59,6 +75,7 @@ def links_runtime_dirs(bins_dir):
 class FilterModule(object):
     def filters(self):
         return {
+            "compfuzor_runtime_bins": compfuzor_runtime_bins,
             "links_runtime_bins": links_runtime_bins,
             "links_runtime_dirs": links_runtime_dirs,
         }

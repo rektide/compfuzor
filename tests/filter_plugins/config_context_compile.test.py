@@ -98,8 +98,9 @@ def test_compile_contexts():
     check("derived output", system["configs"]["settings"]["output"], {"relative": "outputs/settings.json"})
 
     bins = {item["name"]: item for item in compiled["bins"]}
-    check("built command runtime", bins["config/command.mjs"]["raw"], True)
-    check("command runtime source", bins["config/command.mjs"]["src"].endswith("/build/runtime/config/command.mjs"), True)
+    check("built omnibus runtime", bins["compfuzor-runtime.mjs"]["raw"], True)
+    check("omnibus runtime source", bins["compfuzor-runtime.mjs"]["src"].endswith("/build/runtime/compfuzor-runtime.mjs"), True)
+    check("command runtime alias", bins["config/command.mjs"]["link"], "compfuzor-runtime.mjs")
     check("no deployed TypeScript runtime", [name for name in bins if name.endswith(".ts")], [])
     check("context module directory", "/opt/example/bin/config" in compiled["dirs"], True)
     check("internal runner bypass-neutral", bins["config/run.sh"]["bypass"], False)

@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-LINKS_CLI = ROOT / "build" / "runtime" / "links" / "links.mjs"
+LINKS_CLI = ROOT / "build" / "runtime" / "compfuzor-runtime.mjs"
 
 
 def check(label: str, actual: object, expected: object) -> None:
@@ -34,7 +34,7 @@ def check_absent(label: str, haystack: str, needle: str) -> None:
 
 def run(args: list[str], env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["node", str(LINKS_CLI), *args],
+        ["node", str(LINKS_CLI), "links", *args],
         capture_output=True,
         text=True,
         check=False,

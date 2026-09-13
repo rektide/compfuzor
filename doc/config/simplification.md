@@ -167,7 +167,9 @@ controller language.
 
 ## 3. Finish the Vite+ deployment boundary
 
-CONFIG, Zim, LINKS, and config-remote now deploy four built `.mjs` bundles.
+CONFIG, Zim, LINKS, and config-remote now dispatch through one built
+`compfuzor-runtime.mjs` artifact while retaining domain-grouped source and
+stable command aliases.
 Remaining raw TypeScript deployments are separate legacy surfaces:
 
 - kernel status reporters;

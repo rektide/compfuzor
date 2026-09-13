@@ -11,7 +11,7 @@ import {
   type ConfigSpec,
 } from "./context.ts"
 import { compareFileContents, inspectUsableFile } from "./file-state.ts"
-import { printStatusRows, statusCode, type StatusFormat, type StatusRow, type StatusSeverity } from "./report.ts"
+import { type StatusFormat, type StatusRow, type StatusSeverity } from "./report.ts"
 import {
   inspectDeliveryEntry,
   linkResolvesToSameFile,

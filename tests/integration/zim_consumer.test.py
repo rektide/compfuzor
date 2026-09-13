@@ -243,11 +243,15 @@ def test_zim_consumer_lifecycle() -> None:
 
         deployed_sources = [path.relative_to(payload / "bin") for path in (payload / "bin").rglob("*") if path.is_file()]
         assert not [path for path in deployed_sources if path.suffix in {".ts", ".py"}]
-        for bundle in ("config/command.mjs", "config-remote.mjs", "links/links.mjs", "zim/install.mjs"):
-            content = (payload / "bin" / bundle).read_text(encoding="utf-8")
-            assert content.startswith("#!/usr/bin/env")
-            assert 'from "./' not in content
-            assert not any(line.lstrip().startswith(("import ", "export ")) and ".ts" in line for line in content.splitlines())
+        runtime = payload / "bin" / "compfuzor-runtime.mjs"
+        assert runtime.is_file() and not runtime.is_symlink()
+        content = runtime.read_text(encoding="utf-8")
+        assert content.startswith("#!/usr/bin/env")
+        assert 'from "./' not in content
+        assert not any(line.lstrip().startswith(("import ", "export ")) and ".ts" in line for line in content.splitlines())
+        for alias in ("config/command.mjs", "config-remote.mjs", "links/links.mjs", "links.mjs", "zim/install.mjs"):
+            path = payload / "bin" / alias
+            assert path.is_symlink() and path.resolve() == runtime
 
         zimrc_d = payload / "etc" / "zimrc.d"
         zimenv_d = payload / "etc" / "zimenv.d"
@@ -361,7 +365,7 @@ zimfw() { :; }
         assert install_system_text.count('"$DIR/bin/install-zim.sh" "$@"') == 1
         system_user_compositor = system_default_payload / "bin" / "install-user.sh"
         assert not system_user_compositor.exists() or "install-zim.sh" not in system_user_compositor.read_text(encoding="utf-8")
-        for generated in ("install-zim.sh", "status-zim.sh", "zim/install.mjs"):
+        for generated in ("install-zim.sh", "status-zim.sh", "compfuzor-runtime.mjs", "zim/install.mjs"):
             assert (system_default_payload / "bin" / generated).is_file()
         assert not (system_default_payload / "bin" / "install-zim-system.sh").exists()
 

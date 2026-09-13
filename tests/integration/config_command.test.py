@@ -119,7 +119,10 @@ def test_config_command() -> None:
         fixed = {f"config-{action}.sh" for action in ("install", "assemble", "sync-inputs", "publish", "inputs", "status")}
         assert fixed.issubset(bins)
         assert all((payload / "bin" / name).is_symlink() for name in fixed)
-        assert all((payload / "bin" / name).resolve() == payload / "bin" / "config" / "command.mjs" for name in fixed)
+        runtime = payload / "bin" / "compfuzor-runtime.mjs"
+        assert runtime.is_file() and not runtime.is_symlink()
+        assert (payload / "bin" / "config" / "command.mjs").resolve() == runtime
+        assert all((payload / "bin" / name).resolve() == runtime for name in fixed)
         assert (payload / "bin" / "install.sh").read_text(encoding="utf-8").count('"$DIR/bin/config-install.sh" "$@"') == 1
         forbidden = ("config.sh", "config-context.sh", "config-user.sh", "config-system.sh")
         assert not any((payload / "bin" / name).exists() for name in forbidden)

@@ -3,13 +3,15 @@
   "version": "1.0.0",
   "scripts": {
     "build": "vp pack",
-    "check": "vp fmt vite.config.ts --check && vp lint files/config files/links files/zim files/config-remote.ts vite.config.ts",
-    "fix": "vp fmt vite.config.ts --write && vp lint --fix files/config files/links files/zim files/config-remote.ts vite.config.ts"
+    "check": "vp fmt vite.config.ts --check && vp lint files/config files/links files/zim files/runtime files/config-remote files/config-remote.ts vite.config.ts && pnpm check:type",
+    "fix": "vp fmt vite.config.ts --write && vp lint --fix files/config files/links files/zim files/runtime files/config-remote files/config-remote.ts vite.config.ts",
+    "check:type": "tsgo --noEmit"
   },
   "type": "module",
   "private": true,
   "devDependencies": {
     "@types/node": "^26.5.1",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "vite-plus": "^0.3.1"
   },
   "engines": {

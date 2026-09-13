@@ -303,7 +303,7 @@ output.write_text(text)
         )
         assert source_direct.stdout.splitlines() == ["optional", "plain", "settings", "shell"]
 
-        for module in (ROOT / "files" / "config" / "context.ts", ROOT / "build" / "runtime" / "config" / "command.mjs", payload / "bin" / "config" / "command.mjs"):
+        for module in (ROOT / "files" / "config" / "context.ts", ROOT / "build" / "runtime" / "compfuzor-runtime.mjs", payload / "bin" / "config" / "command.mjs"):
             imported = run(
                 [NODE, "--input-type=module", "--eval", f'import({json.dumps(module.as_uri())}).then(() => console.log("imported"))'],
                 cwd=ROOT,
@@ -342,7 +342,7 @@ while true; do sleep 30 & wait "$!"; done
         env["TMPDIR"] = str(temporary)
         env["PATH"] = os.pathsep.join((str(Path(NODE).parent), "/usr/bin", "/bin"))
         process = subprocess.Popen(
-            [NODE, str(ROOT / "build" / "runtime" / "config" / "command.mjs"), "--action", "assemble", "--context", "test", "--spec", str(spec), "--runner", str(runner)],
+            [NODE, str(ROOT / "build" / "runtime" / "compfuzor-runtime.mjs"), "config", "--action", "assemble", "--context", "test", "--spec", str(spec), "--runner", str(runner)],
             cwd=ROOT,
             env=env,
             text=True,

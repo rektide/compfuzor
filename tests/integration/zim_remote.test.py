@@ -29,7 +29,7 @@ def test_zim_remote() -> None:
         disabled_source.write_text("zmodule disabled\n")
 
         manager = host / "bin" / "config-remote.mjs"
-        manager.write_text((ROOT / "build" / "runtime" / "config-remote" / "config-remote.mjs").read_text())
+        manager.write_text((ROOT / "build" / "runtime" / "compfuzor-runtime.mjs").read_text())
         manager.chmod(0o770)
         installer = host / "bin" / "install-zim-donor.sh"
         installer.write_text((ROOT / "files" / "install-zim-donor.sh").read_text().replace("{{DIR}}", str(host)))

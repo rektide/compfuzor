@@ -34,7 +34,7 @@ def test_mcp_install() -> None:
         adapter = host / "bin" / "mcp-dropin.ts"
         adapter.write_text(rendered.replace("{{DIR}}", str(host)), encoding="utf-8")
         adapter.chmod(0o770)
-        manager_rendered = (ROOT / "build" / "runtime" / "config-remote" / "config-remote.mjs").read_text(encoding="utf-8")
+        manager_rendered = (ROOT / "build" / "runtime" / "compfuzor-runtime.mjs").read_text(encoding="utf-8")
         manager = host / "bin" / "config-remote.mjs"
         manager.write_text(manager_rendered.replace("{{DIR}}", str(host)), encoding="utf-8")
         manager.chmod(0o770)

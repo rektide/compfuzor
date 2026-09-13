@@ -2,6 +2,25 @@
 
 ## 2026-09-13
 
+### Omnibus runtime build boundary
+
+The repository build now emits one checked-in executable,
+`build/runtime/compfuzor-runtime.mjs`, instead of four bundles with duplicated
+CONFIG and delivery code. CONFIG, config-remote, LINKS, and Zim implementations
+remain domain-grouped; a minimal root dispatcher selects them through the stable
+deployed aliases. Independently complete subsystems contribute identical
+artifact records, and the existing name-keyed BINS merge leaves one regular
+runtime file in a composed deployment.
+
+The dispatcher preserves CONFIG's `$0` contract by inspecting the lexical
+symlink chain before resolving the shared artifact. Fixed actions, chained
+context aliases, and arbitrary aliases carrying explicit `--action`/`--context`
+therefore still reach CONFIG. Native TypeScript checking now enforces isolated
+declarations with explicit exported annotations.
+
+This entry records the repository and integration-test cutover, not a claim that
+the live `/opt/zim-main` deployment has already been rerendered.
+
 ### Deliberate migration prune
 
 After the Vite+ cutover and clean direct status, the human explicitly requested

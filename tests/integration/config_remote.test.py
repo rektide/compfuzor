@@ -30,7 +30,7 @@ def test_config_remote() -> None:
         sources.mkdir(parents=True)
         manager = host / "bin" / "config-remote.mjs"
         manager.write_text(
-            (ROOT / "build" / "runtime" / "config-remote" / "config-remote.mjs").read_text(), encoding="utf-8"
+            (ROOT / "build" / "runtime" / "compfuzor-runtime.mjs").read_text(), encoding="utf-8"
         )
         manager.chmod(0o770)
         (host / "etc").mkdir(exist_ok=True)
@@ -145,7 +145,7 @@ def test_remote_symlink_assembly_and_toggle() -> None:
 
         manager = host / "bin" / "config-remote.mjs"
         manager.write_text(
-            (ROOT / "build" / "runtime" / "config-remote" / "config-remote.mjs").read_text(),
+            (ROOT / "build" / "runtime" / "compfuzor-runtime.mjs").read_text(),
             encoding="utf-8",
         )
         manager.chmod(0o770)

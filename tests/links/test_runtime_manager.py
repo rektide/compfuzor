@@ -12,11 +12,11 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-CLI = ROOT / "build/runtime/links/links.mjs"
+CLI = [ROOT / "build/runtime/compfuzor-runtime.mjs", "links"]
 
 
 def run(env: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run([CLI, *args], env=env, text=True, capture_output=True, check=False)
+    return subprocess.run([*CLI, *args], env=env, text=True, capture_output=True, check=False)
 
 
 def write_manifest(path: Path, links: list[dict], *, version: int | None = None) -> None:
@@ -32,8 +32,10 @@ def record(id: str, src: str, dest: str, policy: str = "preserve", state: str = 
 @pytest.fixture
 def env(tmp_path: Path) -> dict[str, str]:
     value = os.environ.copy()
+    node_dir = Path(subprocess.run(["node", "-p", "process.execPath"], check=True, text=True, capture_output=True).stdout.strip()).parent
     value["HOME"] = str(tmp_path / "home")
     value["XDG_RUNTIME_DIR"] = str(tmp_path / "runtime")
+    value["PATH"] = os.pathsep.join((str(node_dir), "/usr/bin", "/bin"))
     Path(value["HOME"]).mkdir()
     Path(value["XDG_RUNTIME_DIR"]).mkdir()
     return value

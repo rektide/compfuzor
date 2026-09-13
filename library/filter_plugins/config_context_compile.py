@@ -13,7 +13,7 @@ from ansible.template import accept_args_markers
 
 from config_selectors import compile_path_selector, relative_path
 from template_data import raw_copy_template_data
-from runtime_bundles import runtime_artifact_bin
+from runtime_bundles import compfuzor_runtime_bins
 
 
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -218,11 +218,12 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
 
     bins = _internalize_config_bins(list(compiled.get("bins", [])), configs)
     occupied_bins = {name for name in (_bin_name(record) for record in bins) if name}
-    runtime_name = "config/command.mjs"
+    runtime_name = "compfuzor-runtime.mjs"
     if runtime_name in occupied_bins:
         _error("generated command collision: {}".format(runtime_name))
-    bins.append(runtime_artifact_bin("config/command.mjs", runtime_name))
-    occupied_bins.add(runtime_name)
+    for runtime_bin in compfuzor_runtime_bins("config/command.mjs"):
+        bins.append(runtime_bin)
+        occupied_bins.add(runtime_bin["name"])
 
     normalized_contexts = {}
     for name, raw_context in contexts.items():

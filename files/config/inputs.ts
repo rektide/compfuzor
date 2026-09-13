@@ -14,7 +14,6 @@ import {
 } from "./context.ts"
 import {
   inputStatusRows,
-  syncInputs,
   type InputOperationOptions,
   type InputStrategy,
 } from "./input-state.ts"

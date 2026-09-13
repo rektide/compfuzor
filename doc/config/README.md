@@ -35,7 +35,7 @@ There are three implementation environments:
 |---|---|---:|
 | Ansible controller | Python declaration compilers such as `config_compile.py` | No |
 | Source/build checkout | TypeScript source and `pnpm build` / Vite+ | No |
-| Managed deployment | Built `.mjs`, shell transaction/processors, specs, and stable command symlinks | Yes |
+| Managed deployment | One built multicall `.mjs`, shell transaction/processors, specs, and stable command symlinks | Yes |
 
 `config_compile.py` is not a bundler and does not run on the managed machine.
 It normalizes YAML/Jinja declarations into data. Vite+ bundles the TypeScript
@@ -55,8 +55,9 @@ config-inputs.sh
 config-status.sh
 ```
 
-All six are symlinks to the same small built dispatcher. The dispatcher chooses
-the action from `$0`, resolves a context, and calls a focused internal operation.
+All six are symlinks through the CONFIG alias to the shared built multicall
+dispatcher. CONFIG still chooses the action from `$0`, resolves a context, and
+calls a focused internal operation.
 The context defaults to `user`; a playbook may change `CONTEXT_DEFAULT` or a
 domain-specific default. Copy/link/assembly remain runtime options.
 
