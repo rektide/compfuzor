@@ -358,12 +358,18 @@ the temporary `SYSTEMD_BYPASS_LINK` alias.
 
 The [`bin_composers`](../library/filter_plugins/bin_composers.py) filter:
 
-1. Scans `BINS` for entries matching `build*.sh`, `install*.sh`, or `apply*.sh`.
-2. Groups by action (`build` or `install`) and scope.
+1. Selects records with explicit recognized `action` metadata, otherwise scans
+   filenames matching `build*.sh`, `install*.sh`, or `apply*.sh`.
+2. Groups by action (`build`, `install`, or `apply`) and scope.
 3. For each group, emits a compositor that retains the canonical name
    (`build.sh`, `install.sh`, `install-user.sh`).
 4. The compositor's `run_all` lists child scripts to invoke after the base
    script's own content.
+
+Explicit action metadata decouples composition from naming. For example,
+`config-install.sh` declares `action: install` and joins bare `install.sh`
+without a generated `install-config-*.sh` thunk. Filename discovery remains
+backward compatible for existing domains.
 
 ### Phase lanes
 

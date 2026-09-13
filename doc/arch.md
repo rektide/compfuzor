@@ -773,7 +773,7 @@ operation:
 
 ```sh
 /opt/producer/bin/install-zimfw.sh --context user
-/opt/zim-main/bin/config-inputs-user.sh disable zimrc/zimrc 55-example.conf
+/opt/zim-main/bin/config-inputs.sh --context user disable zimrc/zimrc 55-example.conf
 
 # Shared-donor administration, never composed into install-user:
 /opt/zim-main/bin/install-zim-donor.sh /opt/producer
