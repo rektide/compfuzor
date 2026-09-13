@@ -154,9 +154,11 @@ def test_config_command() -> None:
         assert not (user_root / "inputs" / "alpha.conf").is_symlink()
         run([str(sync), "--strategy", "link", "beta"], cwd=temporary, env=base_env)
         assert (user_root / "inputs" / "beta.d" / "10.conf").is_symlink()
+        run([str(sync), "--strategy", "link"], cwd=temporary, env=base_env)
         run([str(publish), "--strategy", "copy", "alpha", "gamma"], cwd=temporary, env=base_env)
         run([str(publish), "--strategy", "link", "beta"], cwd=temporary, env=base_env)
         assert (user_root / "outputs" / "beta.conf").is_symlink()
+        run([str(publish), "--strategy", "copy"], cwd=temporary, env=base_env)
         run([str(assemble), "alpha", "beta"], cwd=temporary, env=base_env)
         assert not (user_root / "outputs" / "beta.conf").is_symlink()
         run([str(status), "alpha"], cwd=temporary, env=base_env)
@@ -164,7 +166,9 @@ def test_config_command() -> None:
         run([str(status)], cwd=temporary, env=base_env)
         listed = run([str(inputs), "list", "alpha", "gamma"], cwd=temporary, env=base_env)
         assert "alpha/0" in listed.stdout and "gamma/gamma" in listed.stdout and "beta/beta" not in listed.stdout
+        assert "beta/beta" in run([str(inputs), "list"], cwd=temporary, env=base_env).stdout
         run([str(inputs), "status", "alpha", "gamma"], cwd=temporary, env=base_env)
+        run([str(inputs), "status"], cwd=temporary, env=base_env)
 
         # The sole runner validates every selected candidate before committing any.
         alpha_output = user_root / "outputs" / "alpha.conf"
@@ -223,6 +227,11 @@ def test_config_command() -> None:
         assert not (strategy_root / "inputs" / "alpha.conf").exists()
         run([str(install), "--strategy", "assemble", "--dropins", "link", "alpha"], cwd=temporary, env=strategy_env)
         assert (strategy_root / "inputs" / "alpha.conf").is_symlink()
+        copy_only_env = consumer_env(temporary / "copy-only home") | {
+            "COMPFUZOR_CONFIG_INSTALL_STRATEGY": "copy",
+            "COMPFUZOR_CONFIG_DROPINS_STRATEGY": "stale-unused",
+        }
+        run([str(install), "alpha"], cwd=temporary, env=copy_only_env)
         stale_env = base_env | {
             "COMPFUZOR_CONFIG_INSTALL_STRATEGY": "hostile",
             "COMPFUZOR_CONFIG_DROPINS_STRATEGY": "hostile",

@@ -43,7 +43,8 @@ def test_zim_remote() -> None:
             }
         }}))
         log = root / "rebuild.log"
-        rebuild = host / "bin" / "config.sh"
+        rebuild = host / "bin" / "config" / "command.ts"
+        rebuild.parent.mkdir()
         rebuild.write_text(f'#!/bin/sh\necho "$@" >> "{log}"\n')
         rebuild.chmod(0o770)
         build_log = root / "build.log"
@@ -57,7 +58,11 @@ def test_zim_remote() -> None:
         disabled = env_target / f"{disabled_source.name}.disabled"
         assert active.is_symlink() and active.resolve() == enabled
         assert disabled.is_symlink() and disabled.resolve() == disabled_source
-        assert log.read_text().splitlines() == ["zimenv", "zimenv", "zimrc"]
+        assert log.read_text().splitlines() == [
+            "--action assemble --context canonical zimenv",
+            "--action assemble --context canonical zimenv",
+            "--action assemble --context canonical zimrc",
+        ]
         assert not build_log.exists()
 
 
