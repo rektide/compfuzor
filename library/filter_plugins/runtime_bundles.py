@@ -38,6 +38,13 @@ _MANAGER = (
         "compose": False,
         "basedir": False,
     },
+    {
+        "name": "links/manifest.ts",
+        "src": "../links/manifest.ts",
+        "raw": True,
+        "compose": False,
+        "basedir": False,
+    },
 )
 
 
