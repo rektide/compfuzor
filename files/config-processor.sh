@@ -3,7 +3,7 @@
 
 processor=${1:?processor identity is required}; shift
 spec=${CONFIG_SPEC:-"$DIR/etc/config.spec.json"}
-: "${CONFIG_TRANSACTION:?config processors are internal; use config.sh [--list | instance/assembly]}"
+: "${CONFIG_TRANSACTION:?config processors are internal; use config-assemble.sh}"
 
 config=""
 while [ "$#" -gt 0 ]; do

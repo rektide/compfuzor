@@ -34,6 +34,7 @@ export type ConfigBinding = {
 
 export type ConfigContext = {
   scope: ConfigScope
+  canonical?: boolean
   root: PathSelector
   subpath?: string
   configs: Record<string, ConfigBinding>
@@ -43,15 +44,11 @@ export type ConfigContext = {
 }
 
 export type ConfigSpec = {
+  version: 2
+  defaultContext: string
   configs: Record<string, ConfigRecord>
   contexts?: Record<string, ConfigContext>
   [key: string]: unknown
-}
-
-export type ContextSelection = {
-  context: ConfigContext
-  names: string[]
-  listOnly: boolean
 }
 
 function fail(message: string): never {
@@ -120,19 +117,8 @@ export function resolvePathSelector(raw: unknown, base: string | undefined, labe
   fail(`${label}: environment variable ${selector.env} is required`)
 }
 
-function requestedName(runnerArgs: string[]): { name?: string; listOnly: boolean } {
-  let name: string | undefined
-  let listOnly = false
-  for (let index = 0; index < runnerArgs.length; index++) {
-    const argument = runnerArgs[index]
-    if (argument === "--list") listOnly = true
-    else if (argument === "--target") name = runnerArgs[++index]
-    else if (!argument.startsWith("-") && name === undefined) name = argument
-  }
-  return { name, listOnly }
-}
-
 export function getConfigContext(spec: ConfigSpec, contextName: string): ConfigContext {
+  if (spec.version !== 2) fail(`unsupported config spec version: ${String(spec.version)}; rerender the deployment (expected version 2)`)
   const contexts = object(spec.contexts, "config spec contexts")
   const context = object(contexts[contextName], `unknown config context ${contextName}`) as ConfigContext
   if (context.scope !== "user" && context.scope !== "system") fail(`context ${contextName}: invalid scope`)
@@ -150,17 +136,16 @@ export function contextConfigNames(spec: ConfigSpec, contextName: string, applyO
   })
 }
 
-export function selectContext(spec: ConfigSpec, contextName: string, runnerArgs: string[]): ContextSelection {
-  const context = getConfigContext(spec, contextName)
-  const bindings = object(context.configs, `context ${contextName}.configs`)
-  const request = requestedName(runnerArgs)
-  const available = Object.keys(bindings)
-  if (request.listOnly) return { context, names: available, listOnly: true }
-  if (request.name !== undefined) {
-    if (!(request.name in bindings)) fail(`unknown config in context ${contextName}: ${request.name}`)
-    return { context, names: [request.name], listOnly: false }
+export function selectRecipeNames(spec: ConfigSpec, contextName: string, requested: string[], applyOnly = true): string[] {
+  const available = contextConfigNames(spec, contextName)
+  if (requested.length === 0) return contextConfigNames(spec, contextName, applyOnly)
+  const seen = new Set<string>()
+  for (const name of requested) {
+    if (!available.includes(name)) fail(`unknown config in context ${contextName}: ${name}`)
+    if (seen.has(name)) fail(`config selected more than once in context ${contextName}: ${name}`)
+    seen.add(name)
   }
-  return { context, names: contextConfigNames(spec, contextName, true), listOnly: false }
+  return requested
 }
 
 export function bindContextConfigs(spec: ConfigSpec, contextName: string, names: string[]): ConfigSpec {
@@ -197,17 +182,4 @@ export function bindContextConfigs(spec: ConfigSpec, contextName: string, names:
     resolvedConfigs[name] = { ...source, output, inputs }
   }
   return { ...spec, configs: resolvedConfigs, contexts: undefined, remotes: {} }
-}
-
-export function bindContextSpec(spec: ConfigSpec, contextName: string, runnerArgs: string[]): ConfigSpec {
-  const selection = selectContext(spec, contextName, runnerArgs)
-  if (selection.listOnly) {
-    return {
-      ...spec,
-      configs: Object.fromEntries(selection.names.map((name) => [name, spec.configs[name]])),
-      contexts: undefined,
-      remotes: {},
-    }
-  }
-  return bindContextConfigs(spec, contextName, selection.names)
 }

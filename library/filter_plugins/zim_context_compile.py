@@ -10,7 +10,7 @@ import re
 from ansible.errors import AnsibleFilterError
 from ansible.template import accept_args_markers
 
-from config_context_compile import _selector
+from config_selectors import compile_path_selector
 from template_data import raw_copy_template_data
 
 
@@ -28,12 +28,6 @@ def _mapping(value, label):
     if not isinstance(value, collections.abc.Mapping):
         _error("{} must be a mapping".format(label))
     return dict(value)
-
-
-def _scope_bin(descriptor, scope):
-    if scope == "user":
-        descriptor["scope"] = "user"
-    return descriptor
 
 
 @accept_args_markers
@@ -74,8 +68,6 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
         scope = config_context.get("scope")
         if scope not in {"user", "system"}:
             _error("{}.config has an invalid scope".format(label))
-        if config_context.get("compose", True):
-            _error("{}.config must reference a CONFIG_CONTEXTS context with compose: false".format(label))
         selected_configs = _mapping(config_context.get("configs"), "config context {}.configs".format(config_name))
         for channel in ("zimrc", "zimenv"):
             if channel not in selected_configs:
@@ -96,7 +88,7 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
 
         resolved = {"config": config_name, "scope": scope}
         for field in ("loader_root", "zimrc_home", "zimenv_home", "registry"):
-            resolved[field] = _selector(item.get(field, defaults.get(field)), "{}.{}".format(label, field), allow_relative=False)
+            resolved[field] = compile_path_selector(item.get(field, defaults.get(field)), "{}.{}".format(label, field), allow_relative=False)
         normalized[context_name] = resolved
 
     occupied = set()
@@ -116,19 +108,15 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
     if collision:
         _error("generated command collision: {}".format(", ".join(collision)))
 
-    default_scope = normalized[default_context]["scope"]
     bins = [
         {"name": "zim/install.ts", "src": "../zim/install.ts", "raw": True, "compose": False, "basedir": False},
-        _scope_bin({"name": "install-zim.sh", "src": "../install-zim.sh", "raw": True, "basedir": False}, default_scope),
+        {"name": "install-zim.sh", "src": "../install-zim.sh", "raw": True, "basedir": False, "action": "install"},
         {
             "name": "status-zim.sh",
             "helpers": False,
             "basedir": False,
             "compose": False,
-            "content": (
-                '"$(dirname "$(readlink -f "$0")")/zim/install.ts" status "$@"; '
-                'code=$?; [ "$code" -eq 0 ] && exit 0; exit 1'
-            ),
+            "content": 'exec "$(dirname "$(readlink -f "$0")")/zim/install.ts" status "$@"',
         },
     ]
     spec = {
@@ -159,7 +147,7 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
         "bins": bins,
         "dirs": [posixpath.join(bins_dir, "zim")],
         "etc_files": [{"name": "zim.spec.json", "json": spec}],
-        "statuses": ["status-zim.sh"],
+        "statuses": [{"name": "status-zim.sh", "exit2": "error"}],
     }
 
 

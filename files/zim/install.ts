@@ -7,7 +7,7 @@ import { basename, dirname, join, resolve } from "node:path"
 import { tmpdir } from "node:os"
 import { fileURLToPath } from "node:url"
 
-import { runConfigContext } from "../config-context.ts"
+import { runAssembly } from "../config/assembly.ts"
 import {
   bindContextConfigs,
   getConfigContext,
@@ -17,11 +17,12 @@ import {
   type PathSelector,
 } from "../config/context.ts"
 import {
-  runConfigToolkit,
-  type InstallStrategy,
-  type Strategy,
-  type ToolkitOptions,
-} from "../config/toolkit.ts"
+  installContext,
+  type ConfigInstallStrategy,
+} from "../config/install.ts"
+import { putInput, type InputStrategy } from "../config/inputs.ts"
+import { resolveSelectedName } from "../config/invocation.ts"
+import { statusContext } from "../config/status.ts"
 
 type Action = "install" | "import" | "status"
 
@@ -57,8 +58,8 @@ type ZimSpec = {
 type CliOptions = {
   action: Action
   context?: string
-  install?: InstallStrategy
-  dropins?: Strategy
+  install?: ConfigInstallStrategy
+  dropins?: InputStrategy
   invokedAs: string
   zimSpecPath: string
   configSpecPath: string
@@ -68,8 +69,8 @@ type CliOptions = {
 
 type EffectiveSettings = {
   contextName: string
-  install: InstallStrategy
-  dropins: Strategy
+  install?: ConfigInstallStrategy
+  dropins?: InputStrategy
 }
 
 type Activation = {
@@ -98,12 +99,12 @@ function fail(message: string): never {
   throw new Error(message)
 }
 
-function parseInstall(value: string | undefined, label: string): InstallStrategy {
+function parseInstall(value: string | undefined, label: string): ConfigInstallStrategy {
   if (value === "assemble" || value === "copy" || value === "link") return value
   fail(`${label} must be assemble, copy, or link`)
 }
 
-function parseDropins(value: string | undefined, label: string): Strategy {
+function parseDropins(value: string | undefined, label: string): InputStrategy {
   if (value === "copy" || value === "link") return value
   fail(`${label} must be copy or link`)
 }
@@ -111,12 +112,12 @@ function parseDropins(value: string | undefined, label: string): Strategy {
 export function parseZimArgs(argv: string[], deploymentDir: string): CliOptions {
   let action: Action | undefined
   let context: string | undefined
-  let install: InstallStrategy | undefined
-  let dropins: Strategy | undefined
+  let install: ConfigInstallStrategy | undefined
+  let dropins: InputStrategy | undefined
   let invokedAs = "install-zim.sh"
   let zimSpecPath = join(deploymentDir, "etc", "zim.spec.json")
   let configSpecPath = join(deploymentDir, "etc", "config.spec.json")
-  let configRunner = join(deploymentDir, "bin", "config.sh")
+  let configRunner = join(deploymentDir, "bin", "config", "run.sh")
   const args: string[] = []
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index]
@@ -149,22 +150,26 @@ function aliasContext(invokedAs: string, spec: ZimSpec): string | undefined {
 }
 
 export function resolveSettings(options: CliOptions, spec: ZimSpec, configSpec: ConfigSpec): EffectiveSettings {
-  const inferredContext = options.action === "install" && options.context === undefined
-    ? aliasContext(options.invokedAs, spec)
-    : undefined
-  const contextName = options.context ?? inferredContext ?? process.env.COMPFUZOR_ZIM_CONTEXT ?? spec.defaultContext
+  const contextName = resolveSelectedName({
+    explicit: options.context,
+    invokedAs: options.invokedAs,
+    inferAlias: (invokedAs) => options.action === "install" ? aliasContext(invokedAs, spec) : undefined,
+    environment: process.env.COMPFUZOR_ZIM_CONTEXT ?? process.env.COMPFUZOR_CONTEXT,
+    fallback: spec.defaultContext,
+    declared: Object.keys(spec.contexts),
+    label: "Zim context",
+  })
   const activation = spec.contexts[contextName]
-  if (!activation) fail(`unknown Zim context: ${contextName}`)
   const configContext = getConfigContext(configSpec, activation.config)
   if (configContext.scope !== activation.scope) fail(`Zim context ${contextName} scope does not match config context ${activation.config}`)
-  const install = options.install ?? parseInstall(
+  const install = options.action === "install" ? options.install ?? parseInstall(
     process.env.COMPFUZOR_ZIM_INSTALL_STRATEGY ?? process.env.COMPFUZOR_CONFIG_INSTALL_STRATEGY ?? configContext.install ?? "assemble",
     "effective install strategy",
-  )
-  const dropins = options.dropins ?? parseDropins(
+  ) : undefined
+  const dropins = options.action === "import" || (options.action === "install" && install === "assemble") ? options.dropins ?? parseDropins(
     process.env.COMPFUZOR_ZIM_DROPINS_STRATEGY ?? process.env.COMPFUZOR_CONFIG_DROPINS_STRATEGY ?? configContext.dropins ?? "link",
     "effective drop-in strategy",
-  )
+  ) : undefined
   return { contextName, install, dropins }
 }
 
@@ -205,22 +210,6 @@ async function command(file: string, args: string[], capture = false, input?: Bu
     }))
     if (input) child.stdin?.end(input)
   })
-}
-
-function toolkitOptions(options: CliOptions, context: string): ToolkitOptions {
-  return {
-    context,
-    specPath: options.configSpecPath,
-    runner: options.configRunner,
-    action: "install",
-    installStrategy: options.install,
-    dropinsStrategy: options.dropins,
-    seed: false,
-    rebuild: true,
-    initiallyDisabled: false,
-    format: "human",
-    args: [],
-  }
 }
 
 export function zshQuote(value: string): string {
@@ -321,8 +310,14 @@ async function install(options: CliOptions, settings: EffectiveSettings, activat
     projectLoader("zimenv", activation, spec.canonical),
     projectLoader("zimrc", activation, spec.canonical),
   ])
-  const configured = toolkitOptions({ ...options, install: settings.install, dropins: settings.dropins }, activation.spec.config)
-  const configResult = await runConfigToolkit(configured)
+  const configResult = await installContext({
+    spec: activation.configSpec,
+    contextName: activation.spec.config,
+    runner: options.configRunner,
+    names: ["zimrc", "zimenv"],
+    strategy: settings.install!,
+    inputStrategy: settings.dropins,
+  })
   if (configResult !== 0) return configResult
   await mkdir(activation.loaderRoot, { recursive: true })
   await installLoader(`${spec.canonical.blockPrefix}-zimenv`, zimenvLoader.content, join(activation.loaderRoot, ".zshenv"), spec.canonical.blockPrefix)
@@ -363,24 +358,27 @@ async function importProducer(options: CliOptions, settings: EffectiveSettings, 
   const records = await inventoryProducer(resolve(options.args[0]))
   const touched = new Set<"zimrc" | "zimenv">()
   for (const record of records) {
-    const result = await runConfigToolkit({
-      ...toolkitOptions(options, activation.spec.config),
-      action: "inputs",
-      strategy: settings.dropins,
+    const result = await putInput({
+      spec: activation.configSpec,
+      contextName: activation.spec.config,
+      runner: options.configRunner,
+      strategy: settings.dropins!,
       rebuild: false,
       initiallyDisabled: record.disabled,
-      args: ["put", `${record.channel}/${record.channel}`, record.source, basename(record.source)],
+      selector: `${record.channel}/${record.channel}`,
+      source: record.source,
+      name: basename(record.source),
     })
     if (result !== 0) return result
     touched.add(record.channel)
   }
   for (const channel of ["zimenv", "zimrc"] as const) {
     if (!touched.has(channel)) continue
-    const assembled = await runConfigContext({
-      context: activation.spec.config,
-      specPath: options.configSpecPath,
+    const assembled = await runAssembly({
+      spec: activation.configSpec,
+      contextName: activation.spec.config,
       runner: options.configRunner,
-      runnerArgs: [channel],
+      names: [channel],
     })
     if (assembled !== 0) return assembled
     await buildChannel(channel, activation, spec.canonical)
@@ -427,7 +425,14 @@ async function cacheHealthy(channel: "zimrc" | "zimenv", activation: Activation)
   return false
 }
 
-async function status(activation: Activation, spec: ZimSpec, deploymentDir: string): Promise<number> {
+async function status(activation: Activation, spec: ZimSpec, deploymentDir: string, configRunner: string): Promise<number> {
+  const configResult = await statusContext({
+    spec: activation.configSpec,
+    contextName: activation.spec.config,
+    runner: configRunner,
+    names: ["zimrc", "zimenv"],
+    format: "human",
+  })
   const checks = await Promise.all([
     cacheHealthy("zimenv", activation),
     cacheHealthy("zimrc", activation),
@@ -435,7 +440,8 @@ async function status(activation: Activation, spec: ZimSpec, deploymentDir: stri
     loaderHealthy("zimrc", activation, spec.canonical),
   ])
   const registryResult = await registry("status", activation, spec.canonical, deploymentDir)
-  return checks.every(Boolean) && registryResult === 0 ? 0 : 1
+  if (configResult === 2 || registryResult === 2) return 2
+  return configResult === 0 && checks.every(Boolean) && registryResult === 0 ? 0 : 1
 }
 
 export async function runZim(options: CliOptions, deploymentDir: string): Promise<number> {
@@ -450,7 +456,7 @@ export async function runZim(options: CliOptions, deploymentDir: string): Promis
   const activation = resolveActivation(settings.contextName, zimSpec, configSpec)
   if (options.action === "install") return install(options, settings, activation, zimSpec, deploymentDir)
   if (options.action === "import") return importProducer(options, settings, activation, zimSpec)
-  return status(activation, zimSpec, deploymentDir)
+  return status(activation, zimSpec, deploymentDir, options.configRunner)
 }
 
 export async function main(argv: string[] = process.argv.slice(2), modulePath: string = fileURLToPath(import.meta.url)): Promise<number> {

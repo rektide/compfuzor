@@ -175,6 +175,12 @@ _ext: "{{ '.' + item.ext if item.ext|default(False) else '' }}"
 # library/filter_plugins/helpers.py.
 DEFAULT_HELPERS: ["env", "setopts", "loud"]
 CONFIG_DISABLED_SUFFIX: .disabled
+# Contexts default to the invoking user across Compfuzor. A playbook may change
+# the global default, then override CONFIG_CONTEXT or ZIM_CONTEXT independently.
+CONTEXT_DEFAULT: user
+CONFIG_CONTEXT: "{{ CONTEXT_DEFAULT }}"
+ZIM_CONTEXT: "{{ CONTEXT_DEFAULT }}"
+CONFIG_INSTALL_OWNER: config
 
 # Proc-backed status kind registry. sub_status_proc uses this single ordered map
 # to validate check support and compile the selected reporter contributions.

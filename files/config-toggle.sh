@@ -70,4 +70,4 @@ for index in "${!sources[@]}"; do
   printf '%s: %s -> %s\n' "$CONFIG_ACTION" "${sources[$index]}" "${targets[$index]}"
 done
 
-exec "$DIR/bin/config-${CONFIG_NAME}.sh"
+exec "$DIR/bin/config-assemble.sh" --context canonical "$CONFIG_NAME"

@@ -7,28 +7,34 @@
 #   - gen_status_proc appends the reporters selected by STATUS_PROC;
 #   - the status subsystem appends status-dirs.sh when STATUS_DIRS is set.
 #
-# Each reporter runs with "$@" passed through, under a section header. Exit
-# codes per reporter: 0 clean, 1 drift, 2 not-applicable (skipped silently).
-# status.sh exits 1 if any reporter drifts, 0 if all are clean (or skipped).
+# Each reporter runs with "$@" passed through, under a section header. String
+# records retain the historical 0 clean / 1 drift / 2 not-applicable contract.
+# A structured `{name, exit2: error}` record marks exit 2 as evaluation failure,
+# so aggregate status cannot silently collapse a direct reporter's error.
 #
 # This is a compfuzor _bin body: files/_bin supplies the shebang,
 # `set -euo pipefail`, env loading, and option restoration.
 
 # ordered reporters, baked in at render time from STATUSES
 REPORTERS=(
-{% for r in STATUSES | default([]) %}  {{ r }}
+{% for r in STATUSES | default([]) %}  {{ r.name if r is mapping else r }}
+{% endfor %})
+ERROR2=(
+{% for r in STATUSES | default([]) %}  {{ 1 if r is mapping and r.exit2 | default('') == 'error' else 0 }}
 {% endfor %})
 
 overall=0
-for r in "${REPORTERS[@]}"; do
+for i in "${!REPORTERS[@]}"; do
+  r="${REPORTERS[$i]}"
   script="$DIR/bin/$r"
   [ -x "$script" ] || continue
   printf '\n=== %s ===\n' "$r"
   code=0
   "$script" "$@" || code=$?
   case "$code" in
-    0|2) ;;            # clean, or not-applicable -> skip silently
-    *)   overall=1 ;;  # drift (1) or unexpected error -> needs attention
+    0) ;;
+    2) [ "${ERROR2[$i]}" = 0 ] || overall=1 ;;
+    *) overall=1 ;;
   esac
 done
 

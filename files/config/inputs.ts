@@ -1,24 +1,22 @@
-#!/usr/bin/env -S node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
-/** Donor delivery, local input operations, and status for bound CONFIGS contexts. */
+/** Consumer input synchronization, inventory, and mutation operations. */
 
-import { mkdir, readFile, readdir, realpath, rename, rm, stat } from "node:fs/promises"
+import { mkdir, readFile, readdir, rename, rm, stat } from "node:fs/promises"
 import type { Dirent } from "node:fs"
-import { basename, dirname, join, matchesGlob, normalize, resolve } from "node:path"
-import { fileURLToPath } from "node:url"
+import { basename, join, matchesGlob, normalize, resolve } from "node:path"
 
-import { runConfigContext, runConfigContextResult, type ConfigContextCliOptions } from "../config-context.ts"
+import { runAssembly } from "./assembly.ts"
 import {
   bindContextConfigs,
   contextConfigNames,
   getConfigContext,
-  type ConfigContext,
+  selectRecipeNames,
   type ConfigInput,
   type ConfigRecord,
   type ConfigSpec,
 } from "./context.ts"
+import { printStatusRows, statusCode, type StatusFormat, type StatusRow, type StatusSeverity } from "./report.ts"
 import {
   inspectDeliveryEntry,
-  linkMatches,
   linkResolvesToSameFile,
   pathsSharePhysicalDirectory,
   pathsSharePhysicalEntry,
@@ -27,27 +25,17 @@ import {
   type DeliveryEntry,
 } from "../links/delivery.ts"
 
-export type Strategy = "copy" | "link"
-export type InstallStrategy = "assemble" | Strategy
-type Format = "human" | "jsonl" | "array"
-type Severity = "ok" | "drift" | "error"
-type ToolkitAction = "install" | "dropins" | "whole" | "status" | "inputs"
+export type InputStrategy = "copy" | "link"
 
-export type ToolkitOptions = {
-  context: string
-  specPath: string
+export type InputOperationOptions = {
+  spec: ConfigSpec
+  contextName: string
   runner: string
-  action: ToolkitAction
-  strategy?: Strategy
-  installStrategy?: InstallStrategy
-  dropinsStrategy?: Strategy
-  seed: boolean
-  rebuild: boolean
-  initiallyDisabled: boolean
-  format: Format
-  args: string[]
+  strategy?: InputStrategy
+  rebuild?: boolean
+  initiallyDisabled?: boolean
+  format?: StatusFormat
 }
-
 type InputRelation = {
   id: string
   config: string
@@ -76,19 +64,6 @@ type InputDirectory = {
   aliasHazard?: string
 }
 
-export type StatusRow = {
-  kind: "input" | "output" | "assembly"
-  status: string
-  severity: Severity
-  config: string
-  name: string
-  state?: string
-  representation?: string
-  source?: string
-  destination?: string
-  note?: string
-}
-
 type InputCatalog = {
   relations: InputRelation[]
   directories: InputDirectory[]
@@ -104,10 +79,6 @@ function object(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
-function truthy(value: string | undefined): boolean {
-  return ["1", "true", "y", "yes"].includes(value?.trim().toLowerCase() ?? "")
-}
-
 function filenameMatches(value: string, pattern: string): boolean {
   // Prefixing keeps leading-dot filenames compatible with find -name, whose
   // '*' and '?' do not apply shell pathname-expansion dotfile suppression.
@@ -116,49 +87,6 @@ function filenameMatches(value: string, pattern: string): boolean {
 
 function inputIdentity(input: ConfigInput, index: number): string {
   return typeof input.name === "string" && input.name ? input.name : String(index)
-}
-
-function selectedNames(spec: ConfigSpec, contextName: string, name?: string, applyOnly = true): string[] {
-  const available = contextConfigNames(spec, contextName, applyOnly && name === undefined)
-  if (name === undefined) return available
-  if (!contextConfigNames(spec, contextName).includes(name)) fail(`unknown config in context ${contextName}: ${name}`)
-  return [name]
-}
-
-function parseStrategy(value: string | undefined, label: string): Strategy | undefined {
-  if (value === undefined) return undefined
-  if (value !== "copy" && value !== "link") fail(`${label} must be copy or link`)
-  return value
-}
-
-export function parseConfigToolkitArgs(argv: string[], deploymentDir: string): ToolkitOptions {
-  let context = ""
-  let specPath = join(deploymentDir, "etc", "config.spec.json")
-  let runner = join(deploymentDir, "bin", "config.sh")
-  let action: ToolkitAction | undefined
-  let strategy: Strategy | undefined
-  let seed = false
-  let rebuild = true
-  let initiallyDisabled = false
-  let format: Format = "human"
-  const args: string[] = []
-  for (let index = 0; index < argv.length; index++) {
-    const argument = argv[index]
-    if (argument === "--context") context = argv[++index] ?? fail("--context requires a name")
-    else if (argument === "--spec") specPath = resolve(argv[++index] ?? fail("--spec requires a path"))
-    else if (argument === "--runner") runner = resolve(argv[++index] ?? fail("--runner requires a path"))
-    else if (argument === "--strategy") strategy = parseStrategy(argv[++index], "--strategy")
-    else if (argument === "--seed") seed = true
-    else if (argument === "--no-rebuild") rebuild = false
-    else if (argument === "--disabled") initiallyDisabled = true
-    else if (argument === "--json") format = "jsonl"
-    else if (argument === "--json-array") format = "array"
-    else if (!action && ["install", "dropins", "whole", "status", "inputs"].includes(argument)) action = argument as ToolkitAction
-    else if (argument.startsWith("-")) fail(`unknown option: ${argument}`)
-    else args.push(argument)
-  }
-  if (!context || !action) fail("usage: config/toolkit.ts --context NAME <install|dropins|whole|status|inputs> [options]")
-  return { context, specPath, runner, action, strategy, seed, rebuild, initiallyDisabled, format, args }
 }
 
 async function pathKind(path: string): Promise<"missing" | "file" | "symlink" | "directory" | "special"> {
@@ -323,12 +251,12 @@ async function localSelection(relation: InputRelation): Promise<{
   }
 }
 
-async function deliver(source: string, destination: string, strategy: Strategy): Promise<void> {
+async function deliver(source: string, destination: string, strategy: InputStrategy): Promise<void> {
   if (strategy === "link") await replaceWithLink(source, destination)
   else await replaceWithCopy(source, destination)
 }
 
-async function applyRelation(relation: InputRelation, strategy: Strategy, seed: boolean): Promise<string> {
+async function applyRelation(relation: InputRelation, strategy: InputStrategy, seed: boolean): Promise<string> {
   if (relation.aliasHazard) fail(`${relation.id}: ${relation.aliasHazard}`)
   if (relation.donorConflict) fail(`${relation.id}: donor has both enabled and disabled entries`)
   const sourceEntry = await inspectDeliveryEntry(relation.source)
@@ -346,9 +274,8 @@ async function applyRelation(relation: InputRelation, strategy: Strategy, seed: 
   return `${seed ? "seeded" : "refreshed"}\t${relation.id}\t${state}\t${strategy}\t${destination}`
 }
 
-async function applyDropins(spec: ConfigSpec, options: ToolkitOptions, strategy: Strategy, seed: boolean, config?: string): Promise<number> {
-  const names = selectedNames(spec, options.context, config)
-  const catalog = await inputCatalog(spec, options.context, names)
+export async function syncInputs(options: InputOperationOptions & { names: string[]; strategy: InputStrategy; seed: boolean }): Promise<number> {
+  const catalog = await inputCatalog(options.spec, options.contextName, options.names)
   let failed = catalog.rows.some((row) => row.severity === "error")
   for (const row of catalog.rows) console.error(`${row.status}: ${row.config}/${row.name}: ${row.note}`)
   const aliasHazards = [
@@ -369,55 +296,13 @@ async function applyDropins(spec: ConfigSpec, options: ToolkitOptions, strategy:
   }
   for (const relation of catalog.relations) {
     try {
-      console.log(await applyRelation(relation, strategy, seed))
+      console.log(await applyRelation(relation, options.strategy, options.seed))
     } catch (error) {
       failed = true
       console.error(`error: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
   return failed ? 2 : 0
-}
-
-async function applyWhole(spec: ConfigSpec, options: ToolkitOptions, strategy: Strategy, config?: string): Promise<number> {
-  const names = selectedNames(spec, options.context, config)
-  const resolved = bindContextConfigs(spec, options.context, names)
-  let failed = false
-  for (const name of names) {
-    const source = spec.configs[name].output
-    const destination = resolved.configs[name].output
-    try {
-      await deliver(source, destination, strategy)
-      console.log(`${strategy}\t${name}\t${source}\t${destination}`)
-    } catch (error) {
-      failed = true
-      console.error(`error: ${name}: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-  return failed ? 2 : 0
-}
-
-function rowSeverity(rows: StatusRow[]): number {
-  if (rows.some((row) => row.severity === "error")) return 2
-  return rows.some((row) => row.severity === "drift") ? 1 : 0
-}
-
-function printRows(rows: StatusRow[], format: Format): void {
-  if (format === "array") {
-    console.log(JSON.stringify(rows, null, 2))
-    return
-  }
-  if (format === "jsonl") {
-    for (const row of rows) console.log(JSON.stringify(row))
-    return
-  }
-  if (rows.length === 0) return
-  console.log("kind\tstatus\tconfig\tname\tstate\trepresentation\tsource\tdestination\tnote")
-  for (const row of rows) {
-    console.log([
-      row.kind, row.status, row.config, row.name, row.state ?? "-", row.representation ?? "-",
-      row.source ?? "-", row.destination ?? "-", row.note ?? "-",
-    ].join("\t"))
-  }
 }
 
 async function relationStatus(relation: InputRelation): Promise<StatusRow> {
@@ -508,7 +393,7 @@ async function extraInputRows(directory: InputDirectory): Promise<StatusRow[]> {
     const path = group.active ?? group.disabled!
     const entry = await inspectDeliveryEntry(path)
     let status = "local"
-    let severity: Severity = entry.kind === "directory" || entry.kind === "special" ? "drift" : "ok"
+    let severity: StatusSeverity = entry.kind === "directory" || entry.kind === "special" ? "drift" : "ok"
     let note = "not present in current donor catalog"
     if (entry.kind === "symlink") {
       const donorRelative = normalize(entry.targetPath).startsWith(`${normalize(directory.donorDirectory)}/`)
@@ -542,7 +427,7 @@ async function extraInputRows(directory: InputDirectory): Promise<StatusRow[]> {
   return rows
 }
 
-async function inputStatusRows(spec: ConfigSpec, contextName: string, names: string[]): Promise<StatusRow[]> {
+export async function inputStatusRows(spec: ConfigSpec, contextName: string, names: string[]): Promise<StatusRow[]> {
   const catalog = await inputCatalog(spec, contextName, names)
   const rows = [...catalog.rows]
   for (const relation of catalog.relations) rows.push(await relationStatus(relation))
@@ -565,165 +450,6 @@ async function inputStatusRows(spec: ConfigSpec, contextName: string, names: str
   return rows
 }
 
-type AssemblyEvaluation = { candidate?: Buffer; error?: string }
-
-async function evaluateAssembly(options: ToolkitOptions, config: string): Promise<AssemblyEvaluation> {
-  const runOptions: ConfigContextCliOptions = {
-    context: options.context,
-    specPath: options.specPath,
-    runner: options.runner,
-    runnerArgs: ["--stdout", config],
-    stdio: "pipe",
-  }
-  try {
-    const result = await runConfigContextResult(runOptions)
-    if (result.code === 0) return { candidate: result.stdout }
-    const detail = result.stderr.toString("utf8").trim()
-    return { error: `assembly candidate failed (exit ${result.code})${detail ? `: ${detail}` : ""}` }
-  } catch (error) {
-    return { error: `assembly candidate could not run: ${error instanceof Error ? error.message : String(error)}` }
-  }
-}
-
-async function candidateMatches(candidate: Buffer, destination: string): Promise<ContentComparison> {
-  try {
-    return { equal: candidate.equals(await readFile(destination)) }
-  } catch (error) {
-    return { equal: false, error: `cannot read assembled output ${destination}: ${error instanceof Error ? error.message : String(error)}` }
-  }
-}
-
-async function outputStatusRows(spec: ConfigSpec, options: ToolkitOptions, names: string[]): Promise<StatusRow[]> {
-  const resolved = bindContextConfigs(spec, options.context, names)
-  const rows: StatusRow[] = []
-  for (const name of names) {
-    const source = spec.configs[name].output
-    const destination = resolved.configs[name].output
-    const [sourceState, entry, assembly, aliasHazard] = await Promise.all([
-      usableSource(source),
-      inspectDeliveryEntry(destination),
-      evaluateAssembly(options, name),
-      pathsSharePhysicalEntry(source, destination),
-    ])
-    const common = { kind: "output" as const, config: name, name, source, destination }
-    rows.push(assembly.error
-      ? { kind: "assembly", status: "evaluation-error", severity: "error", config: name, name, note: assembly.error }
-      : { kind: "assembly", status: "ready", severity: "ok", config: name, name })
-    if (aliasHazard) {
-      rows.push({
-        ...common, status: "alias-hazard", severity: "error",
-        note: `consumer output aliases canonical output: ${destination}`,
-      })
-      continue
-    }
-    if (entry.kind === "missing") {
-      rows.push({ ...common, status: "missing", severity: "drift", note: sourceState.usable ? undefined : `canonical output unavailable: ${sourceState.note}` })
-      continue
-    }
-    if (entry.kind === "directory" || entry.kind === "special") {
-      rows.push({ ...common, status: "unsupported", severity: "drift", representation: entry.kind })
-      continue
-    }
-    if (entry.kind === "symlink") {
-      if (!sourceState.usable && linkMatches(entry, source)) {
-        rows.push({ ...common, status: "donor-missing", severity: "error", representation: "link", note: sourceState.note })
-        continue
-      }
-      if (sourceState.usable) {
-        try {
-          if (await linkResolvesToSameFile(entry, source)) {
-            rows.push({ ...common, status: "ok", severity: "ok", representation: "link" })
-            continue
-          }
-        } catch (error) {
-          rows.push({
-            ...common, status: "evaluation-error", severity: "error", representation: "link",
-            note: `cannot resolve link referents: ${error instanceof Error ? error.message : String(error)}`,
-          })
-          continue
-        }
-      }
-      rows.push({ ...common, status: "modified", severity: "drift", representation: "link", note: `points to ${entry.target}` })
-      continue
-    }
-
-    let donorComparisonError: string | undefined
-    if (sourceState.usable) {
-      const donorComparison = await sameContents(source, destination)
-      if (donorComparison.equal) {
-        rows.push({ ...common, status: "ok", severity: "ok", representation: "copy" })
-        continue
-      }
-      donorComparisonError = donorComparison.error
-      if (donorComparison.error && !assembly.candidate) {
-        rows.push({ ...common, status: "evaluation-error", severity: "error", representation: "copy", note: donorComparison.error })
-        continue
-      }
-    }
-    if (assembly.candidate) {
-      const localComparison = await candidateMatches(assembly.candidate, destination)
-      if (localComparison.error) {
-        rows.push({ ...common, status: "evaluation-error", severity: "error", representation: "assembly", note: localComparison.error })
-      } else if (localComparison.equal) {
-        rows.push({
-          ...common, status: "ok", severity: "ok", representation: "assembly",
-          note: donorComparisonError ?? (sourceState.usable ? undefined : `canonical output unavailable: ${sourceState.note}`),
-        })
-      } else {
-        rows.push({
-          ...common, status: "modified", severity: "drift", representation: "assembly",
-          note: donorComparisonError ?? (sourceState.usable ? "differs from donor and local assembly" : `differs from local assembly; canonical output unavailable: ${sourceState.note}`),
-        })
-      }
-    } else {
-      rows.push({ ...common, status: "unclassified", severity: "error", representation: "file", note: "assembly evaluation failed" })
-    }
-  }
-  return rows
-}
-
-async function assemblyInputsActive(spec: ConfigSpec, contextName: string, config: string): Promise<boolean> {
-  const resolved = bindContextConfigs(spec, contextName, [config]).configs[config]
-  for (const input of resolved.inputs) {
-    const path = typeof input.file === "string" ? input.file : input.directory
-    if (typeof path === "string" && await pathKind(path) !== "missing") return true
-  }
-  return false
-}
-
-async function markInactiveAssemblyRoutes(
-  spec: ConfigSpec,
-  contextName: string,
-  rows: StatusRow[],
-  names: string[],
-): Promise<void> {
-  for (const config of names) {
-    const output = rows.find((row) => row.kind === "output" && row.config === config)
-    const assembly = rows.find((row) => row.kind === "assembly" && row.config === config)
-    const healthyWhole = output?.status === "ok" && (output.representation === "copy" || output.representation === "link")
-    if (!healthyWhole || assembly?.status !== "evaluation-error" || await assemblyInputsActive(spec, contextName, config)) continue
-    assembly.status = "inactive"
-    assembly.severity = "ok"
-    assembly.note = `local assembly inputs are not initialized; ${assembly.note}`
-    for (const row of rows) {
-      if (row.kind === "input" && row.config === config && row.status === "missing") {
-        row.status = "inactive"
-        row.severity = "ok"
-        row.note = row.note ? `inactive assembly route: ${row.note}` : "inactive assembly route"
-      }
-    }
-  }
-}
-
-async function showStatus(spec: ConfigSpec, options: ToolkitOptions, config?: string, inputsOnly = false): Promise<number> {
-  const names = selectedNames(spec, options.context, config)
-  const inputRows = await inputStatusRows(spec, options.context, names)
-  const rows = inputsOnly ? inputRows : [...await outputStatusRows(spec, options, names), ...inputRows]
-  if (!inputsOnly) await markInactiveAssemblyRoutes(spec, options.context, rows, names)
-  printRows(rows, options.format)
-  return rowSeverity(rows)
-}
-
 function findInput(spec: ConfigSpec, contextName: string, selector: string): { config: string; index: number; input: ConfigInput } {
   const slash = selector.indexOf("/")
   const configSelector = slash === -1 ? undefined : selector.slice(0, slash)
@@ -740,12 +466,12 @@ function findInput(spec: ConfigSpec, contextName: string, selector: string): { c
   return matches[0]
 }
 
-async function rebuild(options: ToolkitOptions, config: string): Promise<number> {
-  const code = await runConfigContext({
-    context: options.context,
-    specPath: options.specPath,
+async function rebuild(options: InputOperationOptions, config: string): Promise<number> {
+  const code = await runAssembly({
+    spec: options.spec,
+    contextName: options.contextName,
     runner: options.runner,
-    runnerArgs: [config],
+    names: [config],
   })
   if (code === 0) return 0
   console.error(`input mutation remains; config rebuild failed for ${config} (exit ${code})`)
@@ -796,47 +522,49 @@ function replaceableLocal(entry: DeliveryEntry, path: string): void {
   if (entry.kind === "directory" || entry.kind === "special") fail(`local input is not a regular file or symlink: ${path}`)
 }
 
-async function inputPut(spec: ConfigSpec, options: ToolkitOptions, args: string[]): Promise<number> {
-  const [selector, sourceArgument, suppliedName] = args
-  if (!selector || !sourceArgument || args.length > 3) fail("usage: config-inputs-CONTEXT.sh put INPUT SOURCE [NAME] [--strategy copy|link]")
-  const found = findInput(spec, options.context, selector)
-  await assertInputBindingSeparated(spec, options.context, found)
+export async function putInput(options: InputOperationOptions & { selector: string; source: string; name?: string }): Promise<number> {
+  const spec = options.spec
+  const selector = options.selector
+  const sourceArgument = options.source
+  const suppliedName = options.name
+  const found = findInput(spec, options.contextName, selector)
+  await assertInputBindingSeparated(spec, options.contextName, found)
   const source = resolve(sourceArgument)
   if (typeof found.input.file === "string") {
     if (suppliedName !== undefined) fail(`${selector} is a direct file input and does not accept a destination name`)
-    if (options.initiallyDisabled) fail(`${selector} is a direct file input and cannot be disabled`)
-    const local = resolvedInput(spec, options.context, found)
+    if ((options.initiallyDisabled ?? false)) fail(`${selector} is a direct file input and cannot be disabled`)
+    const local = resolvedInput(spec, options.contextName, found)
     if (typeof local.file !== "string") fail(`${selector} has an invalid resolved file binding`)
-    await deliver(source, local.file, options.strategy ?? getConfigContext(spec, options.context).dropins ?? "link")
+    await deliver(source, local.file, options.strategy ?? getConfigContext(spec, options.contextName).dropins ?? "link")
     console.log(`put\t${found.config}/${inputIdentity(found.input, found.index)}\t${local.file}`)
-    return options.rebuild ? rebuild(options, found.config) : 0
+    return (options.rebuild ?? true) ? rebuild(options, found.config) : 0
   }
   const name = suppliedName ?? basename(source)
   validateInputName(found.input, name)
-  const paths = await localInputPaths(spec, options.context, found, name)
+  const paths = await localInputPaths(spec, options.contextName, found, name)
   const pair = await inspectPair(paths)
   if (pair.conflict) fail(`both enabled and disabled local entries exist for ${name}`)
   const destination = pair.active.kind !== "missing"
     ? paths.active
     : pair.disabled && pair.disabled.kind !== "missing"
       ? paths.disabled!
-      : options.initiallyDisabled
+      : (options.initiallyDisabled ?? false)
         ? paths.disabled ?? fail(`${selector} cannot be disabled`)
         : paths.active
-  await deliver(source, destination, options.strategy ?? getConfigContext(spec, options.context).dropins ?? "link")
+  await deliver(source, destination, options.strategy ?? getConfigContext(spec, options.contextName).dropins ?? "link")
   console.log(`put\t${found.config}/${inputIdentity(found.input, found.index)}\t${destination}`)
-  return options.rebuild ? rebuild(options, found.config) : 0
+  return (options.rebuild ?? true) ? rebuild(options, found.config) : 0
 }
 
-async function inputMutation(spec: ConfigSpec, options: ToolkitOptions, action: "enable" | "disable" | "remove", args: string[]): Promise<number> {
+async function inputMutation(spec: ConfigSpec, options: InputOperationOptions, action: "enable" | "disable" | "remove", args: string[]): Promise<number> {
   const [selector, name] = args
   if (!selector) fail(`usage: config-inputs-CONTEXT.sh ${action} INPUT [NAME]`)
-  const found = findInput(spec, options.context, selector)
-  await assertInputBindingSeparated(spec, options.context, found)
+  const found = findInput(spec, options.contextName, selector)
+  await assertInputBindingSeparated(spec, options.contextName, found)
   if (typeof found.input.file === "string") {
     if (action !== "remove") fail(`${selector} is a direct file input and cannot be ${action}d`)
     if (args.length !== 1) fail(`usage: config-inputs-CONTEXT.sh remove DIRECT_INPUT`)
-    const local = resolvedInput(spec, options.context, found)
+    const local = resolvedInput(spec, options.contextName, found)
     if (typeof local.file !== "string") fail(`${selector} has an invalid resolved file binding`)
     const entry = await inspectDeliveryEntry(local.file)
     if (entry.kind === "missing") return 0
@@ -847,7 +575,7 @@ async function inputMutation(spec: ConfigSpec, options: ToolkitOptions, action: 
   }
   if (!name || args.length !== 2) fail(`usage: config-inputs-CONTEXT.sh ${action} INPUT NAME`)
   validateInputName(found.input, name)
-  const paths = await localInputPaths(spec, options.context, found, name)
+  const paths = await localInputPaths(spec, options.contextName, found, name)
   const pair = await inspectPair(paths)
   if (pair.conflict) fail(`both enabled and disabled local entries exist for ${name}`)
   if (action === "remove") {
@@ -871,9 +599,9 @@ async function inputMutation(spec: ConfigSpec, options: ToolkitOptions, action: 
   return rebuild(options, found.config)
 }
 
-async function listInputs(spec: ConfigSpec, options: ToolkitOptions, config?: string): Promise<number> {
-  const names = selectedNames(spec, options.context, config, false)
-  const resolved = bindContextConfigs(spec, options.context, names)
+async function listInputs(spec: ConfigSpec, options: InputOperationOptions, requested: string[]): Promise<number> {
+  const names = selectRecipeNames(spec, options.contextName, requested, false)
+  const resolved = bindContextConfigs(spec, options.contextName, names)
   for (const name of names) {
     spec.configs[name].inputs.forEach((input, index) => {
       const local = resolved.configs[name].inputs[index]
@@ -885,77 +613,21 @@ async function listInputs(spec: ConfigSpec, options: ToolkitOptions, config?: st
   return 0
 }
 
-async function inputAction(spec: ConfigSpec, options: ToolkitOptions): Promise<number> {
-  const [action, ...args] = options.args
-  if (action === "list") return listInputs(spec, options, args[0])
-  if (action === "status") return showStatus(spec, options, args[0], true)
-  if (action === "put") return inputPut(spec, options, args)
+export async function runInputAction(options: InputOperationOptions, commandArgs: string[]): Promise<number> {
+  const [action, ...args] = commandArgs
+  const spec = options.spec
+  if (action === "list") return listInputs(spec, options, args)
+  if (action === "status") {
+    const names = selectRecipeNames(spec, options.contextName, args)
+    const rows = await inputStatusRows(spec, options.contextName, names)
+    printStatusRows(rows, options.format ?? "human")
+    return statusCode(rows)
+  }
+  if (action === "put") {
+    const [selector, source, name] = args
+    if (!selector || !source || args.length > 3) fail("usage: config-inputs.sh put INPUT SOURCE [NAME] [--strategy copy|link]")
+    return putInput({ ...options, selector, source, name })
+  }
   if (action === "enable" || action === "disable" || action === "remove") return inputMutation(spec, options, action, args)
-  fail("usage: config-inputs-CONTEXT.sh <list|status|put|enable|disable|remove> ...")
-}
-
-function defaultStrategy(context: ConfigContext, surface: "install" | "dropins"): string {
-  if (surface === "install") return process.env.COMPFUZOR_CONFIG_INSTALL_STRATEGY || context.install || "assemble"
-  return process.env.COMPFUZOR_CONFIG_DROPINS_STRATEGY || context.dropins || "link"
-}
-
-async function install(spec: ConfigSpec, options: ToolkitOptions, config?: string): Promise<number> {
-  if (truthy(process.env.COMPFUZOR_CONFIG_CONTEXTS_BYPASS) || truthy(process.env.COMPFUZOR_CONFIG_BYPASS)) {
-    console.error(`skipped install-config-${options.context}: config context bypass`)
-    return 0
-  }
-  const context = getConfigContext(spec, options.context)
-  const selected = options.installStrategy ?? defaultStrategy(context, "install")
-  if (selected === "copy" || selected === "link") return applyWhole(spec, options, selected, config)
-  if (selected !== "assemble") fail(`config install strategy must be assemble, copy, or link: ${selected}`)
-  const dropins = options.dropinsStrategy ?? parseStrategy(defaultStrategy(context, "dropins"), "config dropins strategy")!
-  const seeded = await applyDropins(spec, options, dropins, true, config)
-  if (seeded !== 0) return seeded
-  return runConfigContext({
-    context: options.context,
-    specPath: options.specPath,
-    runner: options.runner,
-    runnerArgs: config ? [config] : [],
-  })
-}
-
-export async function runConfigToolkit(options: ToolkitOptions): Promise<number> {
-  const spec = JSON.parse(await readFile(options.specPath, "utf8")) as ConfigSpec
-  object(spec.configs, "config spec configs")
-  const config = options.args.length === 1 ? options.args[0] : undefined
-  if (options.action !== "inputs" && options.args.length > 1) fail(`${options.action} accepts at most one config name`)
-  if (options.action === "install") return install(spec, options, config)
-  if (options.action === "dropins") {
-    const strategy = options.strategy ?? parseStrategy(defaultStrategy(getConfigContext(spec, options.context), "dropins"), "config dropins strategy")!
-    return applyDropins(spec, options, strategy, options.seed, config)
-  }
-  if (options.action === "whole") return applyWhole(spec, options, options.strategy ?? fail("whole requires --strategy copy or link"), config)
-  if (options.action === "status") return showStatus(spec, options, config)
-  return inputAction(spec, options)
-}
-
-export async function main(argv: string[] = process.argv.slice(2), modulePath: string = fileURLToPath(import.meta.url)): Promise<number> {
-  const realModulePath = await realpath(modulePath)
-  const deploymentDir = resolve(dirname(dirname(realModulePath)), "..")
-  return runConfigToolkit(parseConfigToolkitArgs(argv, deploymentDir))
-}
-
-const argvPath = process.argv[1]
-if (argvPath) {
-  Promise.all([realpath(argvPath), realpath(fileURLToPath(import.meta.url))]).then(
-    ([realArgvPath, realModulePath]) => {
-      if (realArgvPath !== realModulePath) return
-      return main(process.argv.slice(2), realModulePath).then(
-        (code) => { process.exitCode = code },
-        (error: unknown) => {
-          console.error(error instanceof Error ? error.stack : String(error))
-          process.exitCode = 2
-        },
-      )
-    },
-    (error: unknown) => {
-      console.error(error instanceof Error ? error.stack : String(error))
-      process.exitCode = 2
-    },
-  )
+  fail("usage: config-inputs.sh <list|status|put|enable|disable|remove> ...")
 }

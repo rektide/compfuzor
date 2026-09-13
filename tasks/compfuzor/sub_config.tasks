@@ -9,7 +9,9 @@
     compiled: >-
       {{ base_compiled |
          config_context_compile(
-           ({} if (CONFIG_CONTEXTS_BYPASS | default(False) | bool) else (CONFIG_CONTEXTS | default({}) | resolve)),
-           ETC,
-           BINS_DIR) }}
+            ({} if (CONFIG_CONTEXTS_BYPASS | default(False) | bool) else (CONFIG_CONTEXTS | default({}) | resolve)),
+            ETC,
+            BINS_DIR,
+            CONFIG_CONTEXT,
+            CONFIG_INSTALL_OWNER) }}
   when: CONFIGS is defined

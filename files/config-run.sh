@@ -1,12 +1,17 @@
 #!/bin/bash
 # Build, validate, and atomically commit compiled configs.
 
+if [ -z "${DIR:-}" ]; then
+  script=$(readlink -f -- "$0")
+  DIR=$(dirname "$(dirname "$(dirname "$script")")")
+  export DIR
+fi
 spec=${CONFIG_SPEC:-"$DIR/etc/config.spec.json"}
 export CONFIG_SPEC="$spec"
 check=0
 quiet=0
 print=0
-target=""
+targets=()
 list=0
 
 while [ "$#" -gt 0 ]; do
@@ -15,11 +20,10 @@ while [ "$#" -gt 0 ]; do
     --stdout) print=1 ;;
     --list) list=1 ;;
     -q|--quiet) quiet=1 ;;
-    --target) shift; target="${1:?--target requires a config name}" ;;
+    --target) shift; targets+=("${1:?--target requires a config name}") ;;
     -*) printf 'unknown option: %s\n' "$1" >&2; exit 2 ;;
     *)
-      [ -z "$target" ] || { printf 'unexpected argument: %s\n' "$1" >&2; exit 2; }
-      target="$1"
+      targets+=("$1")
       ;;
   esac
   shift
@@ -32,15 +36,21 @@ fi
 
 [ -f "$spec" ] || { printf 'missing config spec: %s\n' "$spec" >&2; exit 2; }
 if [ "$list" = 1 ]; then
-  [ -z "$target" ] || { printf '--list does not accept a target\n' >&2; exit 2; }
+  [ "${#targets[@]}" -eq 0 ] || { printf '--list does not accept recipe names\n' >&2; exit 2; }
   jq -r '.configs | keys[]' "$spec"
   exit
 fi
-if [ -n "$target" ]; then
-  jq -e --arg target "$target" '.configs[$target]' "$spec" >/dev/null || {
-    printf 'unknown config: %s\n' "$target" >&2; exit 2;
-  }
-  configs=("$target")
+if [ "${#targets[@]}" -gt 0 ]; then
+  declare -A seen_targets
+  configs=()
+  for target in "${targets[@]}"; do
+    jq -e --arg target "$target" '.configs[$target]' "$spec" >/dev/null || {
+      printf 'unknown config: %s\n' "$target" >&2; exit 2;
+    }
+    [ -z "${seen_targets[$target]:-}" ] || { printf 'config selected more than once: %s\n' "$target" >&2; exit 2; }
+    seen_targets["$target"]=1
+    configs+=("$target")
+  done
 else
   mapfile -t configs < <(jq -r '.configs | to_entries[] | select(.value.apply) | .key' "$spec")
 fi
@@ -119,7 +129,7 @@ for config in "${configs[@]}"; do
       fi
     fi
     if [ "$print" = 1 ]; then
-      [ -n "$target" ] || printf '# ---- config: %s ----\n' "$config"
+      [ "${#configs[@]}" -eq 1 ] || printf '# ---- config: %s ----\n' "$config"
       cat "$tmp"
       rm -f "$tmp"
       continue

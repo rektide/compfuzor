@@ -11,6 +11,9 @@
     zim_config_link: "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zimfw.conf"
     ZIM_CONFIG_INSTALL: assemble
     ZIM_CONFIG_DROPINS: link
+    # The complete Zim installer owns ordinary composition for this host; the
+    # generic config installer remains directly invokable but does not duplicate it.
+    CONFIG_INSTALL_OWNER: zim
     CONFIGS:
       zimrc:
         processor: block-in-file
@@ -41,7 +44,6 @@
         subpath: zsh
         install: "{{ ZIM_CONFIG_INSTALL }}"
         dropins: "{{ ZIM_CONFIG_DROPINS }}"
-        compose: false
         configs:
           zimrc:
             output:
@@ -61,7 +63,6 @@
     ENV_LIST:
       - zim_home
       - zim_env_home
-    ZIM_CONTEXT: user
     ZIM_CONTEXTS:
       user:
         config: user

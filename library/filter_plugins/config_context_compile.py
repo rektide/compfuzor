@@ -11,13 +11,14 @@ import re
 from ansible.errors import AnsibleFilterError
 from ansible.template import accept_args_markers
 
+from config_selectors import compile_path_selector, relative_path
 from template_data import raw_copy_template_data
 from runtime_bundles import links_runtime_bins, links_runtime_dirs
 
 
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
-_ENV = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-_RUNTIME_ROOT = re.compile(r"^\$\{(?:HOME|XDG_CONFIG_HOME|XDG_STATE_HOME|XDG_CACHE_HOME|XDG_DATA_HOME)\}(?:/|$)")
+_CANONICAL = "canonical"
+_ACTIONS = ("install", "assemble", "sync-inputs", "publish", "inputs", "status")
 
 _ROOTS = {
     "user": {
@@ -64,55 +65,10 @@ def _sequence(value, label):
     return list(value)
 
 
-def _relative(value, label):
-    if not isinstance(value, str) or not value:
-        _error("{} must be a non-empty relative path".format(label))
-    normalized = posixpath.normpath(value)
-    if value.startswith("/") or value.startswith("~") or value.startswith("$") or normalized in ("", ".") or normalized == ".." or normalized.startswith("../"):
-        _error("{} must be a relative path contained by the context root".format(label))
-    return normalized
-
-
-def _runtime_path(value, label, allow_relative):
-    if not isinstance(value, str) or not value:
-        _error("{} must be a non-empty path".format(label))
-    if value.startswith("/") or value == "~" or value.startswith("~/") or value.startswith("${"):
-        runtime_root = _RUNTIME_ROOT.match(value)
-        if "$" in value and (not runtime_root or "$" in value[runtime_root.end():]):
-            _error("{} contains an unsupported runtime expression".format(label))
-        return {"path": posixpath.normpath(value)}
-    if "$" in value or "~" in value:
-        _error("{} contains an unsupported runtime expression".format(label))
-    if not allow_relative:
-        _error("{} must be absolute or start with a HOME/XDG runtime root".format(label))
-    return {"relative": _relative(value, label)}
-
-
-def _selector(value, label, allow_relative=True):
-    if isinstance(value, str):
-        return _runtime_path(value, label, allow_relative)
-    item = _mapping(value, label)
-    unknown = set(item) - {"env", "default", "ignore"}
-    if unknown:
-        _error("{} has unknown settings: {}".format(label, ", ".join(sorted(unknown))))
-    env = item.get("env")
-    if not isinstance(env, str) or not _ENV.fullmatch(env):
-        _error("{}.env must name an environment variable".format(label))
-    result = {"env": env}
-    if "ignore" in item:
-        ignored = _sequence(item["ignore"], "{}.ignore".format(label))
-        if any(not isinstance(entry, str) or not entry for entry in ignored):
-            _error("{}.ignore entries must be non-empty strings".format(label))
-        result["ignore"] = ignored
-    if "default" in item:
-        result["default"] = _selector(item["default"], "{}.default".format(label), allow_relative)
-    return result
-
-
 def _root(value, scope, label):
     if isinstance(value, str) and value in _ROOTS[scope]:
         return copy.deepcopy(_ROOTS[scope][value])
-    return _selector(value, label, allow_relative=False)
+    return compile_path_selector(value, label, allow_relative=False)
 
 
 def _under_etc(path, etc):
@@ -179,13 +135,31 @@ def _bin_name(record):
     return None
 
 
+def _canonical_context(configs):
+    bindings = {}
+    for name, config in configs.items():
+        bindings[name] = {
+            "output": {"path": config["output"]},
+            "inputs": [
+                {"path": item.get("file", item.get("directory"))}
+                for item in config.get("inputs", [])
+            ],
+        }
+    return {
+        "scope": "system",
+        "canonical": True,
+        "root": {"path": "/"},
+        "configs": bindings,
+        "install": "assemble",
+        "dropins": "link",
+    }
+
+
 @accept_args_markers
-def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
-    """Add normalized runtime contexts and their entry points to a config plan."""
+def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_context="user", install_owner="config"):
+    """Compile the v2 context schema and one fixed multicall command surface."""
     compiled = copy.deepcopy(_mapping(raw_copy_template_data(compiled), "compiled config"))
     contexts = _mapping(raw_copy_template_data(contexts), "CONFIG_CONTEXTS")
-    if not contexts:
-        return compiled
     if not isinstance(etc, str) or not etc.startswith("/"):
         _error("ETC must be an absolute path")
     if not isinstance(bins_dir, str) or not bins_dir.startswith("/"):
@@ -193,41 +167,29 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
 
     spec = _mapping(compiled.get("spec"), "compiled config spec")
     configs = _mapping(spec.get("configs"), "compiled config spec.configs")
+    if not configs and not contexts:
+        return compiled
+    if not isinstance(install_owner, str) or not install_owner:
+        _error("CONFIG_INSTALL_OWNER must be a non-empty domain name")
+
     bins = list(compiled.get("bins", []))
     occupied_bins = {name for name in (_bin_name(record) for record in bins) if name}
-    runtime_name = "config-context.ts"
-    if runtime_name in occupied_bins:
-        _error("generated command collision: {}".format(runtime_name))
-    bins.append({
-        "name": runtime_name,
-        "src": "../config-context.ts",
-        "raw": True,
-        "compose": False,
-        "basedir": False,
-    })
-    occupied_bins.add(runtime_name)
-    module_name = "config/context.ts"
-    if module_name in occupied_bins:
-        _error("generated command collision: {}".format(module_name))
-    bins.append({
-        "name": module_name,
-        "src": "../config/context.ts",
-        "raw": True,
-        "compose": False,
-        "basedir": False,
-    })
-    occupied_bins.add(module_name)
-    for shared_name, source in (("config/toolkit.ts", "../config/toolkit.ts"),):
-        if shared_name in occupied_bins:
-            _error("generated command collision: {}".format(shared_name))
-        bins.append({
-            "name": shared_name,
-            "src": source,
-            "raw": True,
-            "compose": False,
-            "basedir": False,
-        })
-        occupied_bins.add(shared_name)
+    runtime_bins = [
+        ("config/command.ts", "../config/command.ts"),
+        ("config/assembly.ts", "../config/assembly.ts"),
+        ("config/context.ts", "../config/context.ts"),
+        ("config/inputs.ts", "../config/inputs.ts"),
+        ("config/install.ts", "../config/install.ts"),
+        ("config/invocation.ts", "../config/invocation.ts"),
+        ("config/publication.ts", "../config/publication.ts"),
+        ("config/report.ts", "../config/report.ts"),
+        ("config/status.ts", "../config/status.ts"),
+    ]
+    for runtime_name, source in runtime_bins:
+        if runtime_name in occupied_bins:
+            _error("generated command collision: {}".format(runtime_name))
+        bins.append({"name": runtime_name, "src": source, "raw": True, "compose": False, "basedir": False})
+        occupied_bins.add(runtime_name)
     for record in links_runtime_bins(False):
         shared_name = record["name"]
         if shared_name in occupied_bins:
@@ -240,8 +202,10 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
         label = "CONFIG_CONTEXTS.{}".format(name)
         if not isinstance(name, str) or not _ID.fullmatch(name):
             _error("context names must match {}".format(_ID.pattern))
+        if name == _CANONICAL:
+            _error("context name {!r} is reserved for canonical donor assembly".format(name))
         context = _mapping(raw_context, label)
-        unknown = set(context) - {"scope", "root", "subpath", "configs", "install", "dropins", "compose"}
+        unknown = set(context) - {"scope", "root", "subpath", "configs", "install", "dropins"}
         if unknown:
             _error("{} has unknown settings: {}".format(label, ", ".join(sorted(unknown))))
         scope = context.get("scope")
@@ -256,12 +220,9 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
         dropins = context.get("dropins", "link")
         if dropins not in {"copy", "link"}:
             _error("{}.dropins must be copy or link".format(label))
-        compose_install = context.get("compose", True)
-        if not isinstance(compose_install, bool):
-            _error("{}.compose must be a boolean".format(label))
         subpath = context.get("subpath")
         if subpath is not None:
-            subpath = _relative(subpath, "{}.subpath".format(label))
+            subpath = relative_path(subpath, "{}.subpath".format(label))
 
         selected = _config_declarations(context.get("configs"), configs, "{}.configs".format(label))
         bindings = {}
@@ -279,7 +240,7 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
                 index = _input_index(key, inputs, "{}.inputs".format(config_label))
                 if index in overrides:
                     _error("{}.inputs binds input {} more than once".format(config_label, index))
-                overrides[index] = _selector(value, "{}.inputs.{}".format(config_label, key))
+                overrides[index] = compile_path_selector(value, "{}.inputs.{}".format(config_label, key))
 
             bound_inputs = []
             for index, config_input in enumerate(inputs):
@@ -289,10 +250,7 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
                 source_path = config_input.get("file", config_input.get("directory"))
                 bound_inputs.append(_derived_selector(source_path, etc, "{} input {} ({})".format(config_label, index, source_path)))
 
-            if "output" in declaration:
-                output = _selector(declaration["output"], "{}.output".format(config_label))
-            else:
-                output = _derived_selector(config.get("output"), etc, "{} output ({})".format(config_label, config.get("output")))
+            output = compile_path_selector(declaration["output"], "{}.output".format(config_label)) if "output" in declaration else _derived_selector(config.get("output"), etc, "{} output ({})".format(config_label, config.get("output")))
             claim = json.dumps(output, sort_keys=True)
             prior = output_claims.get(claim)
             if prior is not None:
@@ -300,67 +258,45 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None):
             output_claims[claim] = config_label
             bindings[config_name] = {"output": output, "inputs": bound_inputs}
 
-        command_name = "config-{}.sh".format(name)
-        if command_name in occupied_bins:
-            _error("generated command collision: {}".format(command_name))
-        occupied_bins.add(command_name)
-        bins.append({
-            "name": command_name,
-            "basedir": False,
-            "helpers": False,
-            "compose": False,
-            "content": 'exec "$(dirname "$(readlink -f "$0")")/config-context.ts" --context {} "$@"'.format(name),
-        })
-        toolkit_commands = (
-            ("install-config-{}.sh".format(name), "install", True),
-            ("install-config-{}-dropins.sh".format(name), "dropins", False),
-            ("install-config-{}-dropins-copy.sh".format(name), "dropins --strategy copy", False),
-            ("install-config-{}-dropins-link.sh".format(name), "dropins --strategy link", False),
-            ("install-config-{}-copy.sh".format(name), "whole --strategy copy", False),
-            ("install-config-{}-link.sh".format(name), "whole --strategy link", False),
-            ("config-inputs-{}.sh".format(name), "inputs", False),
-            ("status-config-context-{}.sh".format(name), "status", False),
-        )
-        for toolkit_name, action, compose in toolkit_commands:
-            if toolkit_name in occupied_bins:
-                _error("generated command collision: {}".format(toolkit_name))
-            occupied_bins.add(toolkit_name)
-            descriptor = {
-                "name": toolkit_name,
-                "basedir": False,
-                "helpers": False,
-                "content": 'exec "$(dirname "$(readlink -f "$0")")/config/toolkit.ts" --context {} {} "$@"'.format(name, action),
-            }
-            if scope == "user":
-                descriptor["scope"] = "user"
-            if action == "status":
-                descriptor["content"] = (
-                    '"$(dirname "$(readlink -f "$0")")/config/toolkit.ts" '
-                    '--context {} status "$@"; code=$?; '
-                    '[ "$code" -eq 0 ] && exit 0; exit 1'
-                ).format(name)
-            if not compose or not compose_install:
-                descriptor["compose"] = False
-            bins.append(descriptor)
-
-        status_name = "status-config-context-{}.sh".format(name)
-        statuses = list(compiled.get("statuses", []))
-        if status_name not in statuses:
-            statuses.append(status_name)
-        compiled["statuses"] = statuses
-        normalized = {"scope": scope, "root": root, "configs": bindings, "install": install, "dropins": dropins, "compose": compose_install}
+        normalized = {"scope": scope, "root": root, "configs": bindings, "install": install, "dropins": dropins}
         if subpath is not None:
             normalized["subpath"] = subpath
         normalized_contexts[name] = normalized
 
+    if normalized_contexts:
+        if not isinstance(default_context, str) or default_context not in normalized_contexts:
+            _error("CONFIG_CONTEXT must name a declared CONFIG_CONTEXTS context")
+        selected_default = default_context
+    else:
+        selected_default = _CANONICAL
+    normalized_contexts[_CANONICAL] = _canonical_context(configs)
+
+    for action in _ACTIONS:
+        command_name = "config-{}.sh".format(action)
+        if command_name in occupied_bins:
+            _error("generated command collision: {}".format(command_name))
+        descriptor = {
+            "name": command_name,
+            "dest": command_name,
+            "link": "config/command.ts",
+            "compose": False,
+            "basedir": False,
+        }
+        if action == "install" and normalized_contexts and selected_default != _CANONICAL and install_owner == "config":
+            descriptor["action"] = "install"
+            descriptor.pop("compose")
+        bins.append(descriptor)
+        occupied_bins.add(command_name)
+
+    spec["version"] = 2
+    spec["defaultContext"] = selected_default
     spec["contexts"] = normalized_contexts
+    spec["installOwner"] = install_owner
     compiled["spec"] = spec
     compiled["bins"] = bins
+    compiled["statuses"] = [{"name": "config-status.sh", "exit2": "error"}]
     dirs = list(compiled.get("dirs", []))
-    module_dir = posixpath.join(bins_dir, "config")
-    if module_dir not in dirs:
-        dirs.append(module_dir)
-    for module_dir in links_runtime_dirs(bins_dir):
+    for module_dir in [posixpath.join(bins_dir, "config")] + links_runtime_dirs(bins_dir):
         if module_dir not in dirs:
             dirs.append(module_dir)
     compiled["dirs"] = dirs
