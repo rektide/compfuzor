@@ -31,7 +31,7 @@ export function printStatusRows(rows: StatusRow[], format: StatusFormat): void {
     return
   }
   if (rows.length === 0) return
-  console.log("kind\tstatus\tconfig\tname\tstate\trepresentation\tsource\tdestination\tnote")
+  console.log("kind\tstatus\trecipe\titem\tstate\trepresentation\tsource\tdestination\tnote")
   for (const row of rows) {
     console.log([
       row.kind, row.status, row.config, row.name, row.state ?? "-", row.representation ?? "-",

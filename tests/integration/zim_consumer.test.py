@@ -738,6 +738,9 @@ zimfw() { :; }
         assert direct_complete_status.returncode == 0
         assert direct_complete_status.stdout.count("assembly\tready\tzimenv\tzimenv") == 1
         assert direct_complete_status.stdout.count("assembly\tready\tzimrc\tzimrc") == 1
+        for channel in ("zimenv", "zimrc"):
+            assert f"zim {channel} loader: ok:" in direct_complete_status.stdout
+            assert f"zim {channel} cache: ok:" in direct_complete_status.stdout
         activation_only_status = run(
             [str(payload / "bin" / "status-zim.sh"), "--activation-only"],
             cwd=temporary,

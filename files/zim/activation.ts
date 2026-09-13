@@ -179,36 +179,43 @@ async function loaderHealthy(
   activation: Activation,
   canonical: ZimCanonical,
 ): Promise<boolean> {
+  const destination = join(activation.loaderRoot, channel === "zimrc" ? ".zshrc" : ".zshenv")
   let projection: { content: Buffer; template: string }
   try {
     projection = await projectLoader(channel, activation, canonical)
   } catch (error) {
     const template = channel === "zimrc" ? canonical.zimrcLoaderTemplate : canonical.zimenvLoaderTemplate
-    console.log(`drift: ${channel} loader template is missing or invalid: ${template}: ${error instanceof Error ? error.message : String(error)}`)
+    console.log(`zim ${channel} loader: drift: ${destination} (loader template is missing or invalid: ${template}: ${error instanceof Error ? error.message : String(error)})`)
     return false
   }
   const name = `${canonical.blockPrefix}-${channel}`
-  const destination = join(activation.loaderRoot, channel === "zimrc" ? ".zshrc" : ".zshenv")
   const result = await runCommand(process.env.CONFIG_BLOCK_IN_FILE || "block-in-file", ["--read", "-n", name, destination], true)
   if (result.code !== 0) {
-    console.log(`drift: block ${name} is missing or unreadable in ${destination}`)
+    console.log(`zim ${channel} loader: drift: ${destination} (block ${name} is missing or unreadable)`)
     return false
   }
-  if (projection.content.equals(result.stdout)) return true
-  console.log(`drift: block ${name} in ${destination} differs from projected template ${projection.template}`)
+  if (projection.content.equals(result.stdout)) {
+    console.log(`zim ${channel} loader: ok: ${destination}`)
+    return true
+  }
+  console.log(`zim ${channel} loader: drift: ${destination} (block ${name} differs from projected template ${projection.template})`)
   return false
 }
 
 async function cacheHealthy(channel: ZimChannel, activation: Activation): Promise<boolean> {
   const config = channel === "zimrc" ? activation.zimrc : activation.zimenv
   const home = channel === "zimrc" ? activation.zimrcHome : activation.zimenvHome
+  const cache = join(home, "init.zsh")
   try {
-    const [configStat, cacheStat] = await Promise.all([stat(config), stat(join(home, "init.zsh"))])
-    if (cacheStat.mtimeMs > configStat.mtimeMs) return true
+    const [configStat, cacheStat] = await Promise.all([stat(config), stat(cache)])
+    if (cacheStat.mtimeMs > configStat.mtimeMs) {
+      console.log(`zim ${channel} cache: ok: ${cache}`)
+      return true
+    }
   } catch {
     // The common drift message below names both expected paths.
   }
-  console.log(`drift: ${channel} cache ${join(home, "init.zsh")} is missing or stale for ${config}`)
+  console.log(`zim ${channel} cache: drift: ${cache} (missing or stale for ${config})`)
   return false
 }
 

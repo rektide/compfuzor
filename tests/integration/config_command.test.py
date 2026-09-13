@@ -301,6 +301,7 @@ def test_config_command() -> None:
         }
         stale_status = run([str(status), "alpha"], cwd=temporary, env=stale_env, check=False)
         assert stale_status.returncode != 2
+        assert "kind\tstatus\trecipe\titem" in stale_status.stdout
         run([str(sync), "--strategy", "link", "alpha"], cwd=temporary, env=stale_env)
 
         canonical_rejection = run([str(sync), "--context", "canonical"], cwd=temporary, env=base_env, check=False)
