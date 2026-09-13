@@ -219,8 +219,9 @@ Avoid aliases for every combination and avoid an omnibus interactive wizard.
 ## 6. Deliberately prune proven migration residue
 
 No-prune remains the automatic policy. A human may still deliberately remove
-artifacts proven unreachable after a successful migration. The current live
-residue is listed in [`log.md`](/doc/config/log.md#deliberately-retained-migration-residue).
+artifacts proven unreachable after a successful migration. The residue found
+during this migration is recorded in
+[`log.md`](/doc/config/log.md#migration-residue-observed-before-the-explicit-prune).
 
 Before manual removal:
 
