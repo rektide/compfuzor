@@ -334,7 +334,9 @@
             {%- set nm_raw = rd['SYSTEMD_' ~ (t | upper)] | default('') -%}
             {%- set nm = nm_raw if (nm_raw and nm_raw not in [True, 'True']) else NAME -%}
         {%- set inst = rd.SYSTEMD_INSTANCES | def(SYSTEMD_INSTANCES, False) -%}
-        {%- set strategy = rd.SYSTEMD_INSTALL_STRATEGY | def(SYSTEMD_INSTALL_STRATEGY, 'link', enum=['link', 'copy']) -%}
+        {%- set root_legacy_copy = rd.SYSTEMD_INSTALL_COPY | def(rd.SYSTEMD_COPY, False) -%}
+        {%- set root_strategy_default = 'copy' if root_legacy_copy | bool else SYSTEMD_INSTALL_STRATEGY -%}
+        {%- set strategy = rd.SYSTEMD_INSTALL_STRATEGY | def(root_strategy_default, 'link', enum=['link', 'copy']) -%}
         {%- set _ = specs.append({'name': nm, 'type': t, 'enable': (rd.SYSTEMD_ENABLE | def(SYSTEMD_ENABLE, True)) | bool, 'start': (rd.SYSTEMD_START | def(SYSTEMD_START, True)) | bool, 'strategy': strategy, 'instanced': inst | bool, 'instances': (inst if (inst is sequence and inst is not string and inst is not boolean) else [])}) -%}
           {%- endif -%}
         {%- endfor -%}

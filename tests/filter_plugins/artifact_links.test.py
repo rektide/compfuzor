@@ -141,6 +141,14 @@ def test_links():
     check("strategy declaration", represented["strategies"], {"available": ["link", "copy"], "default": "copy"})
     check("composition declaration", represented["compose"], False)
     check("ordinary records stay implicit link-only", "strategies" in links[0], False)
+    canonical = compile_links(
+        [{"src": "/source", "dest": "/consumer", "strategies": {"available": ["copy", "link"], "default": "copy"}}],
+        {"families": {}},
+        "/srv/watchman-main",
+        "watchman-main",
+        ROOTS,
+    )["links"][0]
+    check("strategy set canonical order", canonical["strategies"]["available"], ["link", "copy"])
 
 
 def test_validation():

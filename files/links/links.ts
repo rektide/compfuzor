@@ -274,18 +274,21 @@ function stringField(value: unknown, description: string): string {
 function strategiesField(value: unknown, description: string): LinkRecord["strategies"] {
   if (value === undefined) return { available: ["link"], default: "link" };
   const strategies = object(value, description);
+  const unknown = Object.keys(strategies).filter((key) => key !== "available" && key !== "default");
+  if (unknown.length > 0) fail(`${description} has unknown fields: ${unknown.sort().join(", ")}`);
   if (!Array.isArray(strategies.available) || strategies.available.length === 0) {
     fail(`${description}.available must be a non-empty array`);
   }
   if (strategies.available.some((entry) => entry !== "link" && entry !== "copy")) {
     fail(`${description}.available contains an unsupported strategy`);
   }
-  const available = strategies.available as Strategy[];
-  if (new Set(available).size !== available.length) fail(`${description}.available contains duplicates`);
+  const declared = strategies.available as Strategy[];
+  if (new Set(declared).size !== declared.length) fail(`${description}.available contains duplicates`);
   if (strategies.default !== "link" && strategies.default !== "copy") {
     fail(`${description}.default must be link or copy`);
   }
-  if (!available.includes(strategies.default)) fail(`${description}.default must be available`);
+  if (!declared.includes(strategies.default)) fail(`${description}.default must be available`);
+  const available = (["link", "copy"] as Strategy[]).filter((strategy) => declared.includes(strategy));
   return { available, default: strategies.default };
 }
 

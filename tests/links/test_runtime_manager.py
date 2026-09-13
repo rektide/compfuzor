@@ -303,6 +303,7 @@ def test_strategy_manifest_validation(env: dict[str, str], tmp_path: Path) -> No
         ({"available": ["magic"], "default": "magic"}, "unsupported strategy"),
         ({"available": ["link", "link"], "default": "link"}, "duplicates"),
         ({"available": ["link"], "default": "copy"}, "must be available"),
+        ({"available": ["link"], "default": "link", "extra": True}, "unknown fields"),
     ]
     for strategies, message in bad_values:
         item = record("bad", str(source), str(tmp_path / "dest"))

@@ -232,6 +232,7 @@ def _normalize_strategies(value, origin):
         _error("{} strategies.available may contain only link or copy".format(origin))
     if len(set(available)) != len(available):
         _error("{} strategies.available contains duplicates".format(origin))
+    available = [strategy for strategy in ("link", "copy") if strategy in available]
     default = value.get("default")
     if default not in _STRATEGIES:
         _error("{} strategies.default must be link or copy".format(origin))
