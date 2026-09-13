@@ -6,6 +6,7 @@ import { lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, writeFile
 import { basename, dirname, join, resolve } from "node:path"
 import { tmpdir } from "node:os"
 import { fileURLToPath } from "node:url"
+import { parseArgs } from "node:util"
 
 import { runAssembly } from "../config/assembly.ts"
 import {
@@ -88,13 +89,33 @@ type Activation = {
 
 type CommandResult = { code: number; stdout: Buffer; stderr: Buffer }
 
-const HELP = `Usage:
-  install-zim.sh [--context NAME] [--install assemble|copy|link] [--dropins copy|link]
-  install-zim-context.sh [--context NAME] [--dropins copy|link] PRODUCER_DIR
-  status-zim.sh [--context NAME] [--activation-only]
+const HELP: Record<Action, string> = {
+  install: `Usage: install-zim.sh [--context NAME] [--install assemble|copy|link] [--dropins copy|link]
 
-Precedence per setting: explicit flag, user-created install-zim-CONTEXT.sh alias,
-runtime environment, compiled default. Context scope never invokes sudo.`
+Install and activate Zim for a selected context: install its CONFIG recipes,
+project startup loaders, build both caches, and publish the registry link.
+
+Options:
+  --context NAME                 Select a declared Zim context
+  --install assemble|copy|link  Override CONFIG output installation
+  --dropins copy|link            Override CONFIG input delivery`,
+  import: `Usage: install-zim-context.sh [--context NAME] [--dropins copy|link] PRODUCER_DIR
+
+Import a producer's Zim fragments into a selected consumer context, then rebuild
+only the channels that received fragments.
+
+Options:
+  --context NAME       Select a declared Zim context
+  --dropins copy|link  Select imported fragment representation`,
+  status: `Usage: status-zim.sh [--context NAME] [--activation-only]
+
+Report Zim activation health: CONFIG state, startup loaders, both caches, and
+the registry link. Exit 0 is clean, 1 is drift, and 2 is an evaluation error.
+
+Options:
+  --context NAME     Select a declared Zim context
+  --activation-only  Skip CONFIG rows (used by aggregate status)`,
+}
 
 function fail(message: string): never {
   throw new Error(message)
@@ -115,38 +136,45 @@ function parseDropins(value: string | undefined, label: string): InputStrategy {
 }
 
 export function parseZimArgs(argv: string[], deploymentDir: string): CliOptions {
-  let action: Action | undefined
-  let context: string | undefined
-  let install: ConfigInstallStrategy | undefined
-  let dropins: InputStrategy | undefined
-  let invokedAs = "install-zim.sh"
-  let zimSpecPath = join(deploymentDir, "etc", "zim.spec.json")
-  let configSpecPath = join(deploymentDir, "etc", "config.spec.json")
-  let configRunner = join(deploymentDir, "bin", "config", "run.sh")
-  let activationOnly = false
-  const args: string[] = []
-  for (let index = 0; index < argv.length; index++) {
-    const argument = argv[index]
-    if (argument === "-h" || argument === "--help") {
-      console.log(HELP)
-      process.exit(0)
-    } else if (!action && (argument === "install" || argument === "import" || argument === "status")) action = argument
-    else if (argument === "--context") context = argv[++index] ?? fail("--context requires a name")
-    else if (argument === "--install") install = parseInstall(argv[++index], "--install")
-    else if (argument === "--dropins") dropins = parseDropins(argv[++index], "--dropins")
-    else if (argument === "--invoked-as") invokedAs = basename(argv[++index] ?? fail("--invoked-as requires a basename"))
-    else if (argument === "--spec") zimSpecPath = resolve(argv[++index] ?? fail("--spec requires a path"))
-    else if (argument === "--config-spec") configSpecPath = resolve(argv[++index] ?? fail("--config-spec requires a path"))
-    else if (argument === "--config-runner") configRunner = resolve(argv[++index] ?? fail("--config-runner requires a path"))
-    else if (argument === "--activation-only") activationOnly = true
-    else if (argument.startsWith("-")) fail(`unknown option: ${argument}`)
-    else args.push(argument)
+  const { values, positionals } = parseArgs({
+    args: argv,
+    strict: true,
+    allowPositionals: true,
+    options: {
+      context: { type: "string" },
+      install: { type: "string" },
+      dropins: { type: "string" },
+      "invoked-as": { type: "string" },
+      spec: { type: "string" },
+      "config-spec": { type: "string" },
+      "config-runner": { type: "string" },
+      "activation-only": { type: "boolean" },
+      help: { type: "boolean", short: "h" },
+    },
+  })
+  const actionIndex = positionals.findIndex((value) => value === "install" || value === "import" || value === "status")
+  const action = actionIndex < 0 ? undefined : positionals[actionIndex] as Action
+  if (values.help) {
+    console.log(action ? HELP[action] : Object.values(HELP).join("\n\n"))
+    process.exit(0)
   }
-  if (!action) fail(HELP)
+  if (!action) fail("expected Zim action: install, import, or status")
+  const args = positionals.toSpliced(actionIndex, 1)
   if (action !== "import" && args.length > 0) fail(`${action} does not accept positional arguments`)
   if (action === "import" && args.length !== 1) fail("import requires exactly one producer directory")
-  if (activationOnly && action !== "status") fail("--activation-only requires status")
-  return { action, context, install, dropins, invokedAs, zimSpecPath, configSpecPath, configRunner, activationOnly, args }
+  if (values["activation-only"] && action !== "status") fail("--activation-only requires status")
+  return {
+    action,
+    context: values.context,
+    install: values.install === undefined ? undefined : parseInstall(values.install, "--install"),
+    dropins: values.dropins === undefined ? undefined : parseDropins(values.dropins, "--dropins"),
+    invokedAs: basename(values["invoked-as"] ?? "install-zim.sh"),
+    zimSpecPath: resolve(values.spec ?? join(deploymentDir, "etc", "zim.spec.json")),
+    configSpecPath: resolve(values["config-spec"] ?? join(deploymentDir, "etc", "config.spec.json")),
+    configRunner: resolve(values["config-runner"] ?? join(deploymentDir, "bin", "config", "run.sh")),
+    activationOnly: values["activation-only"] ?? false,
+    args,
+  }
 }
 
 function aliasContext(invokedAs: string, spec: ZimSpec): string | undefined {

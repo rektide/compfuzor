@@ -2,139 +2,30 @@
 /** Thin multicall dispatcher for the fixed CONFIG action vocabulary. */
 
 import { readFile, realpath } from "node:fs/promises"
-import { basename, dirname, join, resolve } from "node:path"
+import { basename, dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { runAssembly } from "./assembly.ts"
+import {
+  CONFIG_ACTIONS,
+  configAliasPieces,
+  parseConfigCommandArgs,
+  rejectIrrelevantFlags,
+  type ConfigAction,
+  type ConfigCliOptions,
+} from "./cli.ts"
 import { getConfigContext, selectRecipeNames, type ConfigSpec } from "./context.ts"
 import { runInputAction, syncInputs, type InputStrategy } from "./inputs.ts"
 import { installContext, type ConfigInstallStrategy } from "./install.ts"
 import { resolveSelectedName } from "./invocation.ts"
 import { publishOutputs } from "./publication.ts"
 import { statusContext } from "./status.ts"
-import type { StatusFormat } from "./report.ts"
 
-export const CONFIG_ACTIONS = ["install", "assemble", "sync-inputs", "publish", "inputs", "status"] as const
-export type ConfigAction = typeof CONFIG_ACTIONS[number]
-
-type CliOptions = {
-  action?: string
-  context?: string
-  invokedAs: string
-  specPath: string
-  runner: string
-  strategy?: string
-  dropins?: string
-  seed: boolean
-  rebuild: boolean
-  initiallyDisabled: boolean
-  format: StatusFormat
-  check: boolean
-  stdout: boolean
-  list: boolean
-  quiet: boolean
-  args: string[]
-}
-
-const HELP = `Usage:
-  config-install.sh [--context NAME] [--strategy assemble|copy|link] [--dropins copy|link] [CONFIG ...]
-  config-assemble.sh [--context NAME] [--check|--stdout|--list] [CONFIG ...]
-  config-sync-inputs.sh [--context NAME] [--strategy copy|link] [--seed] [CONFIG ...]
-  config-publish.sh [--context NAME] --strategy copy|link [CONFIG ...]
-  config-inputs.sh [--context NAME] list|status|put|enable|disable|remove ...
-  config-status.sh [--context NAME] [--json|--json-array] [CONFIG ...]
-
-Direct internal use adds --action ACTION. Selection precedence is explicit flag,
-recognized manual config-CONTEXT-ACTION.sh alias, environment, compiled default.`
+export { CONFIG_ACTIONS, parseConfigCommandArgs }
+export type { ConfigAction, ConfigCliOptions }
 
 function fail(message: string): never {
   throw new Error(message)
-}
-
-function optionValue(argv: string[], index: number, name: string): [string, number] {
-  const value = argv[index + 1]
-  if (!value) fail(`${name} requires a value`)
-  return [value, index + 1]
-}
-
-export function parseConfigCommandArgs(argv: string[], deploymentDir: string, invokedAs: string): CliOptions {
-  let action: string | undefined
-  let context: string | undefined
-  let specPath = join(deploymentDir, "etc", "config.spec.json")
-  let runner = join(deploymentDir, "bin", "config", "run.sh")
-  let strategy: string | undefined
-  let dropins: string | undefined
-  let seed = false
-  let rebuild = true
-  let initiallyDisabled = false
-  let format: StatusFormat = "human"
-  let check = false
-  let stdout = false
-  let list = false
-  let quiet = false
-  const args: string[] = []
-
-  for (let index = 0; index < argv.length; index++) {
-    const argument = argv[index]
-    if (argument === "-h" || argument === "--help") {
-      console.log(HELP)
-      process.exit(0)
-    } else if (argument === "--action") [action, index] = optionValue(argv, index, "--action")
-    else if (argument.startsWith("--action=")) action = argument.slice("--action=".length) || fail("--action requires a value")
-    else if (argument === "--context") [context, index] = optionValue(argv, index, "--context")
-    else if (argument.startsWith("--context=")) context = argument.slice("--context=".length) || fail("--context requires a value")
-    else if (argument === "--spec") [specPath, index] = optionValue(argv, index, "--spec")
-    else if (argument === "--runner") [runner, index] = optionValue(argv, index, "--runner")
-    else if (argument === "--strategy") [strategy, index] = optionValue(argv, index, "--strategy")
-    else if (argument === "--dropins") [dropins, index] = optionValue(argv, index, "--dropins")
-    else if (argument === "--seed") seed = true
-    else if (argument === "--no-rebuild") rebuild = false
-    else if (argument === "--disabled") initiallyDisabled = true
-    else if (argument === "--json") format = "jsonl"
-    else if (argument === "--json-array") format = "array"
-    else if (argument === "--check") check = true
-    else if (argument === "--stdout") stdout = true
-    else if (argument === "--list") list = true
-    else if (argument === "-q" || argument === "--quiet") quiet = true
-    else if (argument.startsWith("-")) fail(`unknown option: ${argument}`)
-    else args.push(argument)
-  }
-  return {
-    action, context, invokedAs, specPath: resolve(specPath), runner: resolve(runner), strategy, dropins,
-    seed, rebuild, initiallyDisabled, format, check, stdout, list, quiet, args,
-  }
-}
-
-type AliasPieces = { action?: ConfigAction; context?: string }
-
-function aliasPieces(options: CliOptions, contextNames: string[]): AliasPieces {
-  if (options.action !== undefined && options.context !== undefined) return {}
-  if (options.invokedAs === "command.ts") return {}
-  const fixed = CONFIG_ACTIONS.find((action) => options.invokedAs === `config-${action}.sh`)
-  if (fixed) return { action: options.action === undefined ? fixed : undefined }
-  if (!options.invokedAs.startsWith("config-") || !options.invokedAs.endsWith(".sh")) {
-    fail(`unsupported config command alias ${options.invokedAs}; use a fixed config-ACTION.sh command or explicit --action and --context`)
-  }
-  const body = options.invokedAs.slice("config-".length, -".sh".length)
-  const full = contextNames.flatMap((context) => CONFIG_ACTIONS
-    .filter((action) => body === `${context}-${action}`)
-    .map((action) => ({ action, context })))
-  if (options.action === undefined && options.context === undefined) {
-    if (full.length !== 1) fail(`unknown or ambiguous config command alias ${options.invokedAs}`)
-    return full[0]
-  }
-  if (options.action === undefined) {
-    const actions = CONFIG_ACTIONS.filter((candidate) => body.endsWith(`-${candidate}`))
-    const longest = Math.max(...actions.map((candidate) => candidate.length), -1)
-    const selected = actions.filter((candidate) => candidate.length === longest)
-    if (selected.length !== 1) fail(`unknown or ambiguous action in config command alias ${options.invokedAs}`)
-    return { action: selected[0] }
-  }
-  const contexts = contextNames.filter((candidate) => body === candidate || body.startsWith(`${candidate}-`))
-  const longest = Math.max(...contexts.map((candidate) => candidate.length), -1)
-  const selected = contexts.filter((candidate) => candidate.length === longest)
-  if (selected.length !== 1) fail(`unknown or ambiguous context in config command alias ${options.invokedAs}`)
-  return { context: selected[0] }
 }
 
 function parseInputStrategy(value: string | undefined, label: string): InputStrategy {
@@ -161,18 +52,10 @@ function contextInstallStrategy(spec: ConfigSpec, contextName: string, explicit?
   )
 }
 
-function rejectIrrelevantFlags(options: CliOptions, action: ConfigAction): void {
-  if (action !== "assemble" && (options.check || options.stdout || options.list || options.quiet)) fail(`${action} does not accept assembly display flags`)
-  if (action !== "status" && action !== "inputs" && options.format !== "human") fail(`${action} does not accept status format flags`)
-  if (action !== "sync-inputs" && options.seed) fail(`${action} does not accept --seed`)
-  if (action !== "inputs" && (!options.rebuild || options.initiallyDisabled)) fail(`${action} does not accept input mutation flags`)
-  if (action !== "install" && options.dropins !== undefined) fail(`${action} does not accept --dropins`)
-}
-
-export async function runConfigCommand(options: CliOptions): Promise<number> {
+export async function runConfigCommand(options: ConfigCliOptions): Promise<number> {
   const spec = JSON.parse(await readFile(options.specPath, "utf8")) as ConfigSpec
   const contextNames = Object.keys(spec.contexts ?? {})
-  const inferred = aliasPieces(options, contextNames)
+  const inferred = configAliasPieces(options, contextNames)
   const action = resolveSelectedName({
     explicit: options.action,
     invokedAs: options.invokedAs,

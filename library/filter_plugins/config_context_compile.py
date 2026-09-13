@@ -220,6 +220,7 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
     occupied_bins = {name for name in (_bin_name(record) for record in bins) if name}
     runtime_bins = [
         ("config/command.ts", "../config/command.ts"),
+        ("config/cli.ts", "../config/cli.ts"),
         ("config/assembly.ts", "../config/assembly.ts"),
         ("config/context.ts", "../config/context.ts"),
         ("config/inputs.ts", "../config/inputs.ts"),

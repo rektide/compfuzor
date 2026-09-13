@@ -335,6 +335,14 @@ zimfw() { :; }
         assert (payload / "bin" / "install-zim-donor.sh").is_file()
         assert not any(path.is_symlink() and path.resolve() == payload / "bin" / "install-zim.sh" for path in (payload / "bin").iterdir())
 
+        for command, summary in (
+            (payload / "bin" / "install-zim.sh", "Install and activate Zim"),
+            (payload / "bin" / "install-zim-context.sh", "Import a producer"),
+            (payload / "bin" / "status-zim.sh", "Report Zim activation"),
+        ):
+            command_help = run([str(command), "--help"], cwd=temporary, env=canonical_env)
+            assert summary in command_help.stdout, command_help.stdout
+
         # The same generated Zim surface uses bare install.sh regardless of
         # whether its runtime default is user or system.
         system_default_case = temporary / "system default case"

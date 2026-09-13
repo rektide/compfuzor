@@ -139,6 +139,25 @@ def test_config_command() -> None:
         publish = payload / "bin" / "config-publish.sh"
         inputs = payload / "bin" / "config-inputs.sh"
         status = payload / "bin" / "config-status.sh"
+
+        # Fixed commands explain only their own operation. The generated
+        # compositor exposes its immediate command hierarchy without running it.
+        help_expectations = {
+            install: ("Install selected CONFIG recipes", "--dropins copy|link"),
+            assemble: ("Assemble selected CONFIG recipes", "--stdout"),
+            sync: ("Synchronize canonical inputs", "--seed"),
+            publish: ("Publish canonical outputs", "--strategy copy|link"),
+            inputs: ("Inspect or mutate consumer inputs", "put CONFIG/INPUT"),
+            status: ("Report selected CONFIG recipes", "--json-array"),
+        }
+        for command, expected in help_expectations.items():
+            command_help = run([str(command), "--help"], cwd=temporary, env=base_env)
+            assert all(fragment in command_help.stdout for fragment in expected), command_help.stdout
+            assert command_help.stderr == ""
+        aggregate_help = run([str(payload / "bin" / "install.sh"), "--help"], cwd=temporary, env=base_env)
+        assert "Runs these commands in order:" in aggregate_help.stdout
+        assert "config-install.sh" in aggregate_help.stdout
+
         run([str(assemble), "--context", "canonical"], cwd=temporary, env=base_env)
 
         user_root = temporary / "home" / ".config" / "command-test"

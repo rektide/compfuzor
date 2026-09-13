@@ -7,6 +7,15 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import {
+  parseLinksArgs,
+  resolveSudoMode,
+  type LinksCliOptions as Options,
+  type LinksScope as Scope,
+  type LinksStrategy as Strategy,
+  type SudoMode,
+} from "./cli.ts";
+
+import {
   inspectDeliveryEntry,
   linkMatches,
   localCopyDeliveryExecutor,
@@ -18,12 +27,8 @@ import {
   type LinkDeliveryExecutor,
 } from "./delivery.ts";
 
-type Command = "apply" | "status" | "audit" | "remove";
-type Scope = "system" | "user";
 type Policy = "preserve" | "fail" | "replace";
 type State = "present" | "absent";
-type Strategy = "link" | "copy";
-type Format = "human" | "jsonl" | "array";
 type Status = "MANAGED" | "MISSING" | "OVERRIDE" | "CONFLICT" | "SOURCE_MISSING" | "SOURCE_UNUSABLE" | "INVALID";
 interface LinkRecord {
   id: string;
@@ -64,22 +69,8 @@ interface Row {
   manifest?: string;
 }
 
-interface Options {
-  command: Command;
-  scope?: Scope;
-  id?: string[];
-  format: Format;
-  quiet: number;
-  paths: string[];
-  sudo?: string;
-  strategy?: Strategy;
-  composed: boolean;
-}
-
 const DIR = process.env.DIR ?? dirname(dirname(dirname(fileURLToPath(import.meta.url))));
 const _execFile = promisify(execFile);
-
-type SudoMode = "never" | "auto" | "always";
 
 // Privilege routing for mutations (reads never need it). Selected by --sudo
 // or COMPFUZOR_LINKS_SUDO:
@@ -88,27 +79,6 @@ type SudoMode = "never" | "auto" | "always";
 //   always         -- route every mutation through sudo
 //   never          -- stay unprivileged; EACCES fails loud
 let SUDO_MODE: SudoMode = "auto";
-
-function _sudoWord(value: string): SudoMode | undefined {
-  const raw = value.trim().toLowerCase();
-  if (raw === "auto") return "auto";
-  if (["always", "1", "true", "y", "yes"].includes(raw)) return "always";
-  if (["never", "0", "false", "n", "no"].includes(raw)) return "never";
-  return undefined;
-}
-
-function resolveSudoMode(flagValue: string | undefined): SudoMode {
-  if (flagValue !== undefined) {
-    const mode = _sudoWord(flagValue);
-    if (!mode) fail(`--sudo expects auto, always, or never (got ${flagValue})`);
-    return mode;
-  }
-  const envValue = process.env.COMPFUZOR_LINKS_SUDO;
-  if (envValue === undefined || envValue.trim() === "") return "auto";
-  const mode = _sudoWord(envValue);
-  if (!mode) fail(`COMPFUZOR_LINKS_SUDO must be auto, always, or never (got ${envValue})`);
-  return mode;
-}
 
 async function destWritable(destPath: string): Promise<boolean> {
   let dir = dirname(destPath);
@@ -161,106 +131,8 @@ async function rmLink(path: string, sudo: boolean): Promise<void> {
   else await rm(path);
 }
 
-const HELP = `Usage: links <apply|status|audit|remove> [MANIFEST ...] [options]
-
-Manage version 1 and 2 link plans at DIR/links.json. Version 1 is strictly
-link-only and composed; version 2 adds optional strategies and compose fields.
-Relative plan paths are
-based at deployment.dir (or the manifest directory). No shell expansion is
-performed; only leading ~, \${HOME}, \${XDG_RUNTIME_DIR}, and
-\${XDG_STATE_HOME} are recognized. XDG_STATE_HOME defaults to
-\${HOME}/.local/state per the XDG base-directory specification.
-
-Options:
-  --scope system|user  Operate on one activation scope
-  --id <globs>         Comma-separated glob patterns on record ids
-                       (scope:dest); operate on the matching slice only.
-                        * and ? match, * crosses / (e.g. '*/.tool-versions').
-  --strategy link|copy Apply using this representation. A healthy alternate
-                        declared representation is replaced. No fallback when
-                        the selected records do not offer the strategy.
-  --composed           Apply only records participating in generic install
-                        composition. Direct apply without it includes all.
-  --json               Emit one JSON object per row
-  --json-array         Emit one JSON array
-  --sudo [auto|always|never]
-                       Mutation privilege routing: auto (the default) probes
-                       each dest and escalates only unwritable records through
-                       sudo; always routes all mutations through sudo; never
-                       stays unprivileged. Bare --sudo means always. Overrides
-                       COMPFUZOR_LINKS_SUDO.
-  -q, -qq              Synopsis only, or no output
-  -h, --help           Show this help
-
-audit accepts multiple manifests. A directory argument means its links.json.
-Environment:
-  COMPFUZOR_LINKS_SUDO  auto (default) | always | 1/true/yes | never | 0/false/no
-                        Same routing as --sudo, when the flag is absent.
-  COMPFUZOR_LINK_BYPASS     1/true/y/yes exits 0 without doing anything.
-Exit: 0 success/in-sync, 1 drift or policy conflict, 2 usage/source error.`;
-
 function fail(message: string): never {
   throw new Error(message);
-}
-
-function parseArgs(argv: string[]): Options {
-  let command: Command | undefined;
-  let scope: Scope | undefined;
-  let id: string[] | undefined;
-  let format: Format = "human";
-  let quiet = 0;
-  let sudo: string | undefined;
-  let strategy: Strategy | undefined;
-  let composed = false;
-  const paths: string[] = [];
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg === "-h" || arg === "--help") {
-      console.log(HELP);
-      process.exit(0);
-    }
-    if (/^-q+$/.test(arg)) {
-      quiet += arg.length - 1;
-    } else if (arg === "--json") {
-      format = "jsonl";
-    } else if (arg === "--json-array") {
-      format = "array";
-    } else if (arg === "--scope") {
-      const value = argv[++i];
-      if (value !== "system" && value !== "user") fail("--scope must be system or user");
-      scope = value;
-    } else if (arg === "--sudo") {
-      const next = argv[i + 1];
-      if (next !== undefined && _sudoWord(next) !== undefined) {
-        sudo = next;
-        i++;
-      } else {
-        sudo = "always";
-      }
-    } else if (arg === "--id") {
-      const value = argv[++i];
-      if (!value) fail("--id requires a comma-separated glob list");
-      id = (id ?? []).concat(value.split(",").map((part) => part.trim()).filter(Boolean));
-    } else if (arg === "--strategy") {
-      const value = argv[++i];
-      if (value !== "link" && value !== "copy") fail("--strategy must be link or copy");
-      strategy = value;
-    } else if (arg === "--composed") {
-      composed = true;
-    } else if (!command && ["apply", "status", "audit", "remove"].includes(arg)) {
-      command = arg as Command;
-    } else if (arg.startsWith("-")) {
-      fail(`unknown option: ${arg}`);
-    } else {
-      paths.push(arg);
-    }
-  }
-  if (!command) fail("expected apply, status, audit, or remove");
-  if (command !== "audit" && paths.length > 1) fail(`${command} accepts at most one manifest`);
-  if (strategy !== undefined && command !== "apply") fail("--strategy is only valid with apply");
-  if (composed && command !== "apply") fail("--composed is only valid with apply");
-  if (paths.length === 0) paths.push(join(DIR, "links.json"));
-  return { command, scope, id, format, quiet, paths, sudo, strategy, composed };
 }
 
 function object(value: unknown, description: string): Record<string, unknown> {
@@ -703,7 +575,7 @@ function output(rows: Row[], options: Options): void {
 }
 
 async function main(): Promise<number> {
-  const options = parseArgs(process.argv.slice(2));
+  const options = parseLinksArgs(process.argv.slice(2), join(DIR, "links.json"));
   SUDO_MODE = resolveSudoMode(options.sudo);
   if (["1", "true", "y", "yes"].includes(process.env.COMPFUZOR_LINK_BYPASS?.trim().toLowerCase() ?? "")) return 0;
   let rows: Row[];

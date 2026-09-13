@@ -99,6 +99,7 @@ def test_compile_contexts():
 
     bins = {item["name"]: item for item in compiled["bins"]}
     check("shared command runtime", bins["config/command.ts"]["raw"], True)
+    check("shared command-line module", bins["config/cli.ts"]["raw"], True)
     check("shared assembly operation", bins["config/assembly.ts"]["raw"], True)
     check("shared context module", bins["config/context.ts"]["raw"], True)
     check("shared input operation", bins["config/inputs.ts"]["raw"], True)

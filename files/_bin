@@ -53,6 +53,15 @@ cd {{DIR}}/{{item.basedir}}
 {% endif %}
 
 {% endif %}
+{% if _is_compositor %}
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  printf 'Usage: %s [ARGS...]\n\nRuns these commands in order:\n' "$(basename "$0")"
+{% for run_bin in _cf_run_all %}
+  printf '  %s\n' '{{ run_bin }}'
+{% endfor %}
+  exit 0
+fi
+{% endif %}
 {% if _active_bypass %}
 _cf_action_init "{{ _disarm.name }}" "{{ _cf_verb }}" "{{ _disarm.report_labels }}"
 {% if _body_local_bypass %}

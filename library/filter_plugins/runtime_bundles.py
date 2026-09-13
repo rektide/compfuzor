@@ -31,6 +31,13 @@ _MANAGER = (
         "compose": False,
         "basedir": False,
     },
+    {
+        "name": "links/cli.ts",
+        "src": "../links/cli.ts",
+        "raw": True,
+        "compose": False,
+        "basedir": False,
+    },
 )
 
 
