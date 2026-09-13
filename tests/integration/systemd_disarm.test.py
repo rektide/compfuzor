@@ -25,6 +25,8 @@ def clean_env() -> dict[str, str]:
     env = os.environ.copy()
     for variable in BYPASS_VARIABLES:
         env.pop(variable, None)
+    env.pop("SYSTEMD_COPY", None)
+    env.pop("SYSTEMD_INSTALL_COPY", None)
     env["ENV_BYPASS"] = "1"
     return env
 
@@ -222,6 +224,97 @@ def test_fallback_privileged_parent_uses_sudo_shim() -> None:
         print("ok: fallback parent mkdir uses bounded sudo command")
 
 
+def test_fallback_legacy_copy_values() -> None:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-systemd-copy-values-") as tmp:
+        root = Path(tmp)
+        source = root / "source.service"
+        source.write_text("[Service]\nExecStart=/bin/true\n", encoding="utf-8")
+
+        def invoke(name: str, *, default: str, values: dict[str, str]) -> tuple[subprocess.CompletedProcess, Path, Path]:
+            case = root / name
+            case.mkdir()
+            command, log = fake_systemctl(case)
+            destination = case / "units/probe.service"
+            env = clean_env()
+            env.update(
+                {
+                    "UNIT_TEMPLATE": "probe",
+                    "UNIT_TYPE": "service",
+                    "UNIT_DIR": str(destination.parent),
+                    "UNIT_SRC": str(source),
+                    "UNIT_DEST": str(destination),
+                    "UNIT_LINK_DEFAULT": default,
+                    "UNIT_ENABLE_TARGETS": "",
+                    "SUDO_CMD": "",
+                    "SYSTEMCTL": str(command),
+                    "SYSTEMCTL_LOG": str(log),
+                    **values,
+                }
+            )
+            result = subprocess.run(
+                ["bash", str(UNIT_SCRIPT)],
+                check=False,
+                text=True,
+                capture_output=True,
+                env=env,
+            )
+            return result, destination, log
+
+        precedence, destination, _ = invoke(
+            "precedence",
+            default="link",
+            values={"SYSTEMD_INSTALL_COPY": "False", "SYSTEMD_COPY": "True"},
+        )
+        assert precedence.returncode == 0, precedence.stderr
+        assert destination.is_symlink()
+
+        default_copy, destination, _ = invoke(
+            "false-default",
+            default="copy",
+            values={"SYSTEMD_COPY": "off"},
+        )
+        assert default_copy.returncode == 0, default_copy.stderr
+        assert destination.is_file() and not destination.is_symlink()
+
+        truthy, destination, _ = invoke(
+            "truthy",
+            default="link",
+            values={"SYSTEMD_COPY": "ON"},
+        )
+        assert truthy.returncode == 0, truthy.stderr
+        assert destination.is_file() and not destination.is_symlink()
+
+        for index, value in enumerate(("true", "yes", "y", "1", "on", "True")):
+            result, destination, _ = invoke(
+                f"truthy-{index}",
+                default="link",
+                values={"SYSTEMD_COPY": value},
+            )
+            assert result.returncode == 0, (value, result.stderr)
+            assert destination.is_file() and not destination.is_symlink(), value
+
+        for index, value in enumerate(("false", "no", "n", "0", "off", "", "False")):
+            result, destination, _ = invoke(
+                f"falsy-{index}",
+                default="link",
+                values={"SYSTEMD_COPY": value},
+            )
+            assert result.returncode == 0, (value, result.stderr)
+            assert destination.is_symlink(), value
+
+        invalid, destination, log = invoke(
+            "invalid",
+            default="link",
+            values={"SYSTEMD_INSTALL_COPY": "sometimes"},
+        )
+        assert invalid.returncode == 2
+        assert "SYSTEMD_INSTALL_COPY must be" in invalid.stderr
+        assert not destination.exists() and not destination.is_symlink()
+        assert not log.exists()
+        print("ok: fallback copy booleans honor precedence, defaults, and invalid values")
+
+
 if __name__ == "__main__":
     test_systemd_phase_names_and_aliases()
     test_fallback_privileged_parent_uses_sudo_shim()
+    test_fallback_legacy_copy_values()

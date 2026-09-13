@@ -199,12 +199,34 @@ def test_rendered_aggregate_preserves_or_switches_declared_representation() -> N
         run(aggregate, "--link", "--skip-enable", env={**env, "SYSTEMD_COPY": "1"})
         assert destination.is_symlink() and destination.resolve() == source
 
-        run(aggregate, "--skip-enable", env={**env, "SYSTEMD_INSTALL_COPY": "1"})
+        # Defined false at the preferred name masks a true lower-precedence
+        # alias and means no override. Missing publication uses the compiled
+        # link default.
+        destination.unlink()
+        run(
+            aggregate,
+            "--skip-enable",
+            env={**env, "SYSTEMD_INSTALL_COPY": "False", "SYSTEMD_COPY": "True"},
+        )
+        assert destination.is_symlink() and destination.resolve() == source
+
+        run(aggregate, "--skip-enable", env={**env, "SYSTEMD_INSTALL_COPY": "True"})
         assert destination.is_file() and not destination.is_symlink()
+
+        destination.unlink()
+        manager_calls = systemctl_log.read_text(encoding="utf-8")
+        invalid = run(
+            aggregate,
+            "--skip-enable",
+            env={**env, "SYSTEMD_INSTALL_COPY": "sometimes"},
+            check=False,
+        )
+        assert invalid.returncode == 2 and "SYSTEMD_INSTALL_COPY must be" in invalid.stderr
+        assert not destination.exists() and not destination.is_symlink()
+        assert systemctl_log.read_text(encoding="utf-8") == manager_calls
 
         # The systemd publication bypass remains authoritative when the later
         # generic records lane runs: compose:false omits this record.
-        destination.unlink()
         run(aggregate, "--skip-enable", env={**env, "COMPFUZOR_SYSTEMD_LINK_BYPASS": "1"})
         assert not destination.exists() and not destination.is_symlink()
         missing = run(payload / "bin/links.ts", "status", "--json-array", env=env, check=False)

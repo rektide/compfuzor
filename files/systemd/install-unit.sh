@@ -35,12 +35,37 @@ done
 UNIT_SRC="${UNIT_SRC:-$SCRIPT_DIR/../etc/${UNIT_TEMPLATE}.${UNIT_TYPE}}"
 UNIT_DEST="${UNIT_DEST:-$UNIT_DIR/${UNIT_TEMPLATE}.${UNIT_TYPE}}"
 
+_runtime_strategy=""
 if [ -n "$_explicit_strategy" ]; then
   _strategy="$_explicit_strategy"
-elif [ -n "${SYSTEMD_COPY:-}" ] || [ -n "${SYSTEMD_INSTALL_COPY:-}" ]; then
-  _strategy=copy
+  _runtime_strategy="$_explicit_strategy"
 else
   _strategy="${UNIT_LINK_DEFAULT:-link}"
+  _copy_name=""
+  _copy_value=""
+  if [ "${SYSTEMD_INSTALL_COPY+x}" = x ]; then
+    _copy_name=SYSTEMD_INSTALL_COPY
+    _copy_value="$SYSTEMD_INSTALL_COPY"
+  elif [ "${SYSTEMD_COPY+x}" = x ]; then
+    _copy_name=SYSTEMD_COPY
+    _copy_value="$SYSTEMD_COPY"
+  fi
+  if [ -n "$_copy_name" ]; then
+    case "${_copy_value,,}" in
+      1|true|yes|y|on)
+        _strategy=copy
+        _runtime_strategy=copy
+        ;;
+      ""|0|false|no|n|off)
+        # A false legacy value is no override. LINKS may preserve any healthy
+        # representation and otherwise uses the compiled record default.
+        ;;
+      *)
+        echo "${_copy_name} must be true/yes/y/1/on or false/no/n/0/off/empty (got ${_copy_value})" >&2
+        exit 2
+        ;;
+    esac
+  fi
 fi
 
 # SYSTEMD_BYPASS_* remains a temporary soak alias for generated artifacts.
@@ -54,7 +79,7 @@ else
     # Privilege routing is automatic: the default auto mode probes the dest
     # per record and escalates only unwritable ones through sudo, so
     # user-scope dests mutate directly.
-    if [ -n "$_explicit_strategy" ] || [ -n "${SYSTEMD_COPY:-}" ] || [ -n "${SYSTEMD_INSTALL_COPY:-}" ]; then
+    if [ -n "$_runtime_strategy" ]; then
       "$(dirname "$0")/links.ts" apply --id "$UNIT_LINK_ID" --strategy "$_strategy"
     else
       # No explicit selection lets LINKS preserve either currently healthy
