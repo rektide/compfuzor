@@ -65,6 +65,7 @@ fi
 
 transaction=$(mktemp -d)
 temps=()
+backups=()
 cleanup() {
   rm -rf "$transaction" || true
   for file in "${temps[@]}"; do rm -f "$file" || true; done
@@ -191,7 +192,20 @@ if [ "$check" = 0 ]; then
     staged_outputs+=("$output")
   done
 
-  backups=()
+  # Reserve every backup destination before the first output mutation. mktemp
+  # creates the placeholder; mv atomically replaces it when preserving an
+  # existing output. Tracking placeholders in temps makes allocation failure
+  # clean without requiring rollback because no output has changed yet.
+  for index in "${!staged_outputs[@]}"; do
+    output=${staged_outputs[$index]}
+    backup=""
+    if [ -e "$output" ] || [ -L "$output" ]; then
+      backup=$(mktemp "$(dirname "$output")/.config-backup.XXXXXX")
+      temps+=("$backup")
+    fi
+    backups[$index]="$backup"
+  done
+
   rollback_prior() {
     local last=$1 rollback prior_backup
     for ((rollback=last; rollback >= 0; rollback--)); do
@@ -203,9 +217,8 @@ if [ "$check" = 0 ]; then
     done
   }
   for index in "${!staged_sources[@]}"; do
-    output=${staged_outputs[$index]}; backup=""
-    if [ -e "$output" ] || [ -L "$output" ]; then
-      backup=$(mktemp "$(dirname "$output")/.config-backup.XXXXXX"); rm -f "$backup"
+    output=${staged_outputs[$index]}; backup=${backups[$index]:-}
+    if [ -n "$backup" ]; then
       if ! mv "$output" "$backup"; then
         rollback_prior "$((index - 1))"
         exit 1

@@ -272,3 +272,30 @@ comparison. This correction pass deliberately stops before that work.
   record alongside filename-independent action composition.
 - [`build5-review0.solx.md`](/.design/config-user-target/build5-review0.solx.md)
   remains the baseline for Zim loader, alias, and contributor behavior.
+
+# Addendum: Backup preallocation correction
+
+Final independent review found one remaining allocation window in the commit
+loop: backup `mktemp` calls occurred after earlier selected outputs could already
+have been replaced. A later backup-allocation failure exited under strict mode
+without calling `rollback_prior`.
+
+The runner now reserves every required backup destination before its first
+output mutation. Existing destinations receive `mktemp` placeholders, and the
+later `mv` atomically replaces those placeholders with the prior outputs;
+destinations absent at commit preparation require no backup. Every placeholder
+is registered with transaction cleanup immediately. If any reservation fails,
+all earlier placeholders and staged candidates are removed while every output
+still has its original bytes.
+
+Focused fault injection fails the second backup allocation for two existing
+selected outputs and proves:
+
+- both processors and staging execute only once;
+- neither output changes;
+- no candidate or backup placeholder remains.
+
+The ordinary two-output success path and the existing later-move rollback case
+also remain green. This invariant covers synchronous preparation and commit
+failures exercised by the transaction; it does not claim atomic recovery from
+uncatchable process termination or machine failure.

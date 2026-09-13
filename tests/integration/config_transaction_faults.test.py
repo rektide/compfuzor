@@ -111,6 +111,44 @@ def test_transaction_faults() -> None:
             assert failure.returncode == 73
             assert_preserved(root, expected)
 
+        # Backup destinations for every existing selected output are reserved
+        # before the first output move. Failing the second allocation therefore
+        # cannot require rollback and must clean the first placeholder.
+        shims = root / "mktemp-shims"
+        shims.mkdir()
+        backup_counter = root / "backup-mktemp-count"
+        staging_counter = root / "staging-copy-count"
+        failing_tool(
+            shims,
+            "mktemp",
+            f'''case "$*" in
+  *.config-backup.*)
+    count=0; [ ! -f {str(backup_counter)!r} ] || count=$(cat {str(backup_counter)!r})
+    count=$((count + 1)); printf '%s' "$count" > {str(backup_counter)!r}
+    [ "$count" -ne 2 ] || exit 75
+    ;;
+esac
+exec /usr/bin/mktemp "$@"''',
+        )
+        failing_tool(
+            shims,
+            "cp",
+            f'''count=0; [ ! -f {str(staging_counter)!r} ] || count=$(cat {str(staging_counter)!r})
+count=$((count + 1)); printf '%s' "$count" > {str(staging_counter)!r}
+exec /usr/bin/cp "$@"''',
+        )
+        marker.unlink(missing_ok=True)
+        backup_failure = run(
+            [str(runner), "one", "two"],
+            cwd=root,
+            env=env | {"PATH": f"{shims}:/usr/bin:/bin"},
+            check=False,
+        )
+        assert backup_failure.returncode == 75
+        assert marker.read_text(encoding="utf-8").splitlines() == ["--config", "--config"]
+        assert staging_counter.read_text(encoding="utf-8") == "2"
+        assert_preserved(root, expected)
+
         # Fail the second staged-output move after the first output committed.
         # Existing-output backup moves are calls 1 and 3, staged moves 2 and 4.
         shims = root / "mv-shims"
@@ -132,6 +170,15 @@ exec /usr/bin/mv "$@"''',
         )
         assert move_failure.returncode == 1
         assert_preserved(root, expected)
+
+        # The same two-existing-output path still succeeds ordinarily.
+        marker.unlink(missing_ok=True)
+        run([str(runner), "one", "two"], cwd=root, env=env)
+        assert marker.read_text(encoding="utf-8").splitlines() == ["--config", "--config"]
+        assert (outputs / "one.conf").read_text(encoding="utf-8") == "one=new\n"
+        assert (outputs / "two.conf").read_text(encoding="utf-8") == "two=new\n"
+        assert not list(root.rglob(".config-candidate.*"))
+        assert not list(root.rglob(".config-backup.*"))
 
 
 if __name__ == "__main__":
