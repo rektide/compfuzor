@@ -169,6 +169,8 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
     configs = _mapping(spec.get("configs"), "compiled config spec.configs")
     if not configs and not contexts:
         return compiled
+    if contexts and not configs:
+        _error("CONFIG_CONTEXTS requires at least one compiled CONFIGS recipe")
     if not isinstance(install_owner, str) or not install_owner:
         _error("CONFIG_INSTALL_OWNER must be a non-empty domain name")
 

@@ -123,6 +123,11 @@ def test_validation():
         "scope must be user or system",
     )
     check_raises(
+        "contexts require recipes",
+        lambda: compile_config_contexts({"spec": {"configs": {}}, "bins": []}, {"user": {"scope": "user", "root": "config"}}, "/opt/example/etc", "/opt/example/bin"),
+        "requires at least one",
+    )
+    check_raises(
         "root required",
         lambda: compile_config_contexts(base_plan(), {"user": {"scope": "user"}}, "/opt/example/etc", "/opt/example/bin"),
         "root is required",
