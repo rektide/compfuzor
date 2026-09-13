@@ -33,7 +33,7 @@ WATCHMAN_SOCKET_UNIT: watchman
 WATCHMAN_SERVICE_UNIT: watchwoman
 WATCHMAN_SERVICE_ALIAS_UNIT: watchman
 WATCHMAN_FALLBACK_UNIT: watchman-facebook
-# Runtime-root spellings for links.ts plans and env.export (expanded at
+# Runtime-root spellings for links.mjs plans and env.export (expanded at
 # apply/source time; keep ${XDG_STATE_HOME} unexpanded so both roots work).
 WATCHMAN_CANONICAL_STATE: "${XDG_STATE_HOME}/watchman/{{ansible_user_id}}-state"
 WATCHMAN_CANONICAL_SOCKET: "{{WATCHMAN_CANONICAL_STATE}}/sock"
@@ -379,7 +379,7 @@ SUBSYSTEM:
           generated: |
             {{ RUST_COMMENT | join2(prefix='# ') }}
             # Symlink the .tool-version/mise.toml before build, so we get the right version.
-            "$DIR/bin/links.ts" apply --scope system --id '*/.tool-versions,*/mise.toml' -q
+            "$DIR/bin/links.mjs" apply --scope system --id '*/.tool-versions,*/mise.toml' -q
             if [[ -n "${RUST_PROFILE:-}" ]]; then
                 PROFILE="--profile ${RUST_PROFILE}"
             elif [[ -z "${RELEASE+x}" ]]; then
@@ -768,7 +768,7 @@ SUBSYSTEM:
     requested: "{{ SYSUSERS is deftruthy or SYSTEMD_SYSUSER is deftruthy }}"
     contrib:
       LINKS:
-        # links.ts owns the /etc/sysusers.d symlink (policy replace, matching
+        # links.mjs owns the /etc/sysusers.d symlink (policy replace, matching
         # the old ln -sfn): status reports drift, audit cross-checks, remove
         # uninstalls. install-sysusers.sh applies this record before running
         # systemd-sysusers.
@@ -803,12 +803,12 @@ SUBSYSTEM:
             fi
             if [ "${1:-}" = "--copy" ] || [ -n "${SYSUSERS_COPY:-}" ]; then
                 $SUDO_CMD cp --remove-destination -f "$_src" "$_dest"
-            elif [ -x "${DIR}/bin/links.ts" ]; then
-                # Link creation delegated to links.ts (the LINKS subsystem
+            elif [ -x "${DIR}/bin/links.mjs" ]; then
+                # Link creation delegated to links.mjs (the LINKS subsystem
                 # owns every managed symlink; this fragment's record is in
                 # DIR/links.json). Auto privilege routing escalates the
                 # unwritable /etc/sysusers.d dest through sudo on its own.
-                "${DIR}/bin/links.ts" apply --id "system:$_dest"
+                "${DIR}/bin/links.mjs" apply --id "system:$_dest"
             else
                 $SUDO_CMD ln -sfn "$_src" "$_dest"
             fi

@@ -277,7 +277,7 @@
     ETC_FILES:
       - name: zimenv.zsh
         content: |
-          # Context loader template projected by bin/zim/install.ts.
+          # Context loader template projected by bin/zim/install.mjs.
           [[ ${COMPFUZOR_EMERGENCY:-0} == 1 ]] && return
           () {
             local default_zim_home=@@ZIM_CACHE_HOME@@
@@ -297,7 +297,7 @@
           }
       - name: zimrc.zsh
         content: |
-          # Context loader template projected by bin/zim/install.ts.
+          # Context loader template projected by bin/zim/install.mjs.
           if [[ ${COMPFUZOR_EMERGENCY:-0} == 1 ]]; then
             typeset -g _COMPFUZOR_EMERGENCY_COLD=1
             source @@ZIM_EMERGENCY_MODULE@@

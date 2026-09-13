@@ -62,20 +62,20 @@
         + [
           {
             'name': 'status-links.sh',
-            'content': 'exec "$DIR/bin/links.ts" status "$@"',
+            'content': 'exec "$DIR/bin/links.mjs" status "$@"',
             'basedir': False,
             'compose': False,
           },
           {
             'name': 'remove-link-records.sh',
-            'content': 'exec "$DIR/bin/links.ts" remove --scope system "$@"',
+            'content': 'exec "$DIR/bin/links.mjs" remove --scope system "$@"',
             'basedir': False,
             'compose': False,
             'bypass': 'LINK',
           },
           {
             'name': 'remove-link-records-user.sh',
-            'content': 'exec "$DIR/bin/links.ts" remove --scope user "$@"',
+            'content': 'exec "$DIR/bin/links.mjs" remove --scope user "$@"',
             'basedir': False,
             'compose': False,
             'scope': 'user',
@@ -84,7 +84,7 @@
         ]
         + ([{
            'name': 'install-link-records.sh',
-           'content': 'exec "$DIR/bin/links.ts" apply --composed --scope system',
+           'content': 'exec "$DIR/bin/links.mjs" apply --composed --scope system',
           'basedir': False,
           'subsystem': 'links',
           'bypass': 'LINK',
@@ -92,7 +92,7 @@
         }] if _link_system else [])
         + ([{
            'name': 'install-link-records-user.sh',
-           'content': 'exec "$DIR/bin/links.ts" apply --composed --scope user',
+           'content': 'exec "$DIR/bin/links.mjs" apply --composed --scope user',
           'basedir': False,
           'subsystem': 'links',
           'scope': 'user',

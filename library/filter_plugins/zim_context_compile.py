@@ -12,6 +12,7 @@ from ansible.template import accept_args_markers
 
 from config_selectors import compile_path_selector
 from template_data import raw_copy_template_data
+from runtime_bundles import runtime_artifact_bin
 
 
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -100,9 +101,7 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
         elif isinstance(record, str):
             occupied.add(record)
     generated_names = {
-        "zim/install.ts",
-        "zim/activation.ts",
-        "zim/cli.ts",
+        "zim/install.mjs",
         "install-zim.sh",
         "status-zim.sh",
         "install-zim-context.sh",
@@ -113,16 +112,14 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
         _error("generated command collision: {}".format(", ".join(collision)))
 
     bins = [
-        {"name": "zim/install.ts", "src": "../zim/install.ts", "raw": True, "compose": False, "basedir": False},
-        {"name": "zim/activation.ts", "src": "../zim/activation.ts", "raw": True, "compose": False, "basedir": False},
-        {"name": "zim/cli.ts", "src": "../zim/cli.ts", "raw": True, "compose": False, "basedir": False},
+        runtime_artifact_bin("zim/install.mjs", "zim/install.mjs"),
         {"name": "install-zim.sh", "src": "../install-zim.sh", "raw": True, "basedir": False, "action": "install"},
         {
             "name": "status-zim.sh",
             "helpers": False,
             "basedir": False,
             "compose": False,
-            "content": 'exec "$(dirname "$(readlink -f "$0")")/zim/install.ts" status "$@"',
+            "content": 'exec "$(dirname "$(readlink -f "$0")")/zim/install.mjs" status "$@"',
         },
     ]
     spec = {

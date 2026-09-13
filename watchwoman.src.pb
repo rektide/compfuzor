@@ -62,7 +62,7 @@
     SYSTEMD_ROOTS: [watchmanService, watchmanSocket]
 
     # Socket aliases and unit names come from the canonical endpoint contract
-    # in vars/common.yaml. links.ts owns apply, drift, deliberate removal,
+    # in vars/common.yaml. links.mjs owns apply, drift, deliberate removal,
     # and sudo escalation for the root-owned default-prefix parent.
     LINKS:
       - src: "{{WATCHMAN_CANONICAL_SOCKET}}"
@@ -370,7 +370,7 @@
       - The LINKS alias farm maps the legacy watchman-main socket, upstream's
         default-prefix socket, and the C++ CLI's compiled state directory to
         the canonical socket directory. All aliases reach the same listener;
-        links.ts owns their apply and drift behavior.
+        links.mjs owns their apply and drift behavior.
       - Daemon state is zero-on-disk except trigger persistence under
         ${XDG_STATE_HOME:-~/.local/state}/watchman/<user>-state/roots/. Logs
         go to the journal (identifier `watchwoman`).

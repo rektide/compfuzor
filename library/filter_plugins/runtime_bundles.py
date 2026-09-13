@@ -3,65 +3,49 @@
 from __future__ import annotations
 
 import posixpath
+from pathlib import Path
 
 from ansible.errors import AnsibleFilterError
 from ansible.template import accept_args_markers
 
 
-_DELIVERY = {
-    "name": "links/delivery.ts",
-    "src": "../links/delivery.ts",
-    "raw": True,
-    "compose": False,
-    "basedir": False,
-}
+_REPOSITORY = Path(__file__).resolve().parents[2]
 
-_MANAGER = (
-    {
-        "name": "links.ts",
-        "src": "../links.ts",
+
+def runtime_artifact_bin(artifact, name):
+    """Return one checked-in Vite+ runtime artifact or fail before rendering."""
+    source = _REPOSITORY / "build" / "runtime" / artifact
+    if not source.is_file():
+        raise AnsibleFilterError(
+            "missing built runtime {}: run `pnpm install` and `pnpm build` in {}".format(
+                artifact, _REPOSITORY
+            )
+        )
+    return {
+        "name": name,
+        "src": str(source),
         "raw": True,
         "compose": False,
         "basedir": False,
-    },
-    {
-        "name": "links/links.ts",
-        "src": "../links/links.ts",
-        "raw": True,
-        "compose": False,
-        "basedir": False,
-    },
-    {
-        "name": "links/cli.ts",
-        "src": "../links/cli.ts",
-        "raw": True,
-        "compose": False,
-        "basedir": False,
-    },
-    {
-        "name": "links/manifest.ts",
-        "src": "../links/manifest.ts",
-        "raw": True,
-        "compose": False,
-        "basedir": False,
-    },
-    {
-        "name": "links/operations.ts",
-        "src": "../links/operations.ts",
-        "raw": True,
-        "compose": False,
-        "basedir": False,
-    },
-)
+    }
 
 
 @accept_args_markers
 def links_runtime_bins(full=False):
-    """Return the delivery-only or full LINKS raw TypeScript module bundle."""
+    """Return no standalone delivery code or the complete built LINKS runtime."""
     if full not in (True, False, None):
         raise AnsibleFilterError("links_runtime_bins expects a boolean or None")
-    records = list(_MANAGER) + [_DELIVERY] if full else [_DELIVERY]
-    return [dict(record) for record in records]
+    if not full:
+        return []
+    return [
+        runtime_artifact_bin("links/links.mjs", "links/links.mjs"),
+        {
+            "name": "links.mjs",
+            "link": "links/links.mjs",
+            "compose": False,
+            "basedir": False,
+        },
+    ]
 
 
 @accept_args_markers

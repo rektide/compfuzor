@@ -9,7 +9,7 @@ case "$action" in apply|status) ;; *) echo "unknown registry action: $action" >&
 self_dir="{{DIR}}"
 canonical="{{ETC}}/zimrc"
 registry="${ZIM_CONFIG_LINK:-${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zimfw.conf}"
-manager="$self_dir/bin/links.ts"
+manager="$self_dir/bin/links.mjs"
 [ -x "$manager" ] || { echo "missing LINKS manager: $manager" >&2; exit 2; }
 
 manifest=$(mktemp)

@@ -38,7 +38,7 @@ async function atomicLink(source, destination) {
 }
 async function rebuild(config) {
 	await new Promise((resolve, reject) => {
-		const child = spawn(join(selfDir, "bin", "config", "command.ts"), [
+		const child = spawn(join(selfDir, "bin", "config", "command.mjs"), [
 			"--action",
 			"assemble",
 			"--context",
@@ -76,7 +76,7 @@ async function main() {
 	const action = rawAction === "link" ? "put" : rawAction;
 	const remotes = JSON.parse(await readFile(join(selfDir, "etc", "config.spec.json"), "utf-8")).remotes ?? {};
 	if (action === "list") {
-		if (target) throw new Error("usage: config-remote.ts list");
+		if (target) throw new Error("usage: config-remote.mjs list");
 		for (const name of Object.keys(remotes).sort()) {
 			const remote = remotes[name];
 			console.log(`${name}\tconfig=${remote.config}\tdestination=${join(remote.directory, remote.pattern)}\tdisabled=${remote.disabled_suffix ?? "-"}`);
@@ -86,13 +86,13 @@ async function main() {
 	if (!target || !remotes[target]) throw new Error(`unknown remote target: ${target ?? ""}`);
 	const remote = remotes[target];
 	if (action === "status") {
-		if (!value) throw new Error("usage: config-remote.ts status <target> <name>");
+		if (!value) throw new Error("usage: config-remote.mjs status <target> <name>");
 		const { active, disabled } = await inspect(remote, target, value);
 		console.log(`${target}/${value}\t${active ? "enabled" : disabled ? "disabled" : "absent"}${active || disabled ? `\t${(active ?? disabled).target}` : ""}`);
 		return;
 	}
 	if (action === "put") {
-		if (!value) throw new Error("usage: config-remote.ts put <target> <source> [name] [--name name]");
+		if (!value) throw new Error("usage: config-remote.mjs put <target> <source> [name] [--name name]");
 		if (parsed.values.name && positionalName) throw new Error("filename may be supplied positionally or with --name, not both");
 		const source = await realpath(value).catch((error) => {
 			throw new Error(`remote source does not exist: ${value}`, { cause: error });
@@ -118,7 +118,7 @@ async function main() {
 		"remove",
 		"enable",
 		"disable"
-	].includes(action ?? "") || !value) throw new Error("usage: config-remote.ts <list|put|link|status|remove|enable|disable> ...");
+	].includes(action ?? "") || !value) throw new Error("usage: config-remote.mjs <list|put|link|status|remove|enable|disable> ...");
 	const { active, disabled } = await inspect(remote, target, value);
 	if (action === "remove") {
 		const existing = active ?? disabled;

@@ -1619,7 +1619,7 @@ async function runRegistry(action, activation, canonical, deploymentDir) {
 		];
 		if (action === "apply") args.push("--sudo", "never");
 		args.push(manifest);
-		return (await runCommand(join(deploymentDir, "bin", "links.ts"), args)).code;
+		return (await runCommand(join(deploymentDir, "bin", "links.mjs"), args)).code;
 	});
 }
 async function installZim(options, settings, activation, spec, deploymentDir) {

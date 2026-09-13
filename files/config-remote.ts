@@ -8,7 +8,7 @@ import { basename, dirname, join, resolve } from "node:path"
 import { parseArgs } from "node:util"
 
 // Raw bins ship untemplated: derive the package root from this script's own
-// location (bin/config-remote.ts -> package dir).
+// location (bin/config-remote.mjs -> package dir).
 const selfDir = resolve(dirname(realpathSync(process.argv[1])), "..")
 
 type Remote = { config: string, directory: string, pattern: string, disabled_suffix: string | null }
@@ -50,7 +50,7 @@ async function atomicLink(source: string, destination: string): Promise<void> {
 async function rebuild(config: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(
-      join(selfDir, "bin", "config", "command.ts"),
+      join(selfDir, "bin", "config", "command.mjs"),
       ["--action", "assemble", "--context", "canonical", config],
       { cwd: selfDir, stdio: "inherit" },
     )
@@ -79,7 +79,7 @@ async function main(): Promise<void> {
   const remotes = (spec.remotes ?? {}) as Record<string, Remote>
 
   if (action === "list") {
-    if (target) throw new Error("usage: config-remote.ts list")
+    if (target) throw new Error("usage: config-remote.mjs list")
     for (const name of Object.keys(remotes).sort()) {
       const remote = remotes[name]
       console.log(`${name}\tconfig=${remote.config}\tdestination=${join(remote.directory, remote.pattern)}\tdisabled=${remote.disabled_suffix ?? "-"}`)
@@ -90,7 +90,7 @@ async function main(): Promise<void> {
   const remote = remotes[target]
 
   if (action === "status") {
-    if (!value) throw new Error("usage: config-remote.ts status <target> <name>")
+    if (!value) throw new Error("usage: config-remote.mjs status <target> <name>")
     const { active, disabled } = await inspect(remote, target, value)
     const state = active ? "enabled" : disabled ? "disabled" : "absent"
     console.log(`${target}/${value}\t${state}${active || disabled ? `\t${(active ?? disabled)!.target}` : ""}`)
@@ -98,7 +98,7 @@ async function main(): Promise<void> {
   }
 
   if (action === "put") {
-    if (!value) throw new Error("usage: config-remote.ts put <target> <source> [name] [--name name]")
+    if (!value) throw new Error("usage: config-remote.mjs put <target> <source> [name] [--name name]")
     if (parsed.values.name && positionalName) throw new Error("filename may be supplied positionally or with --name, not both")
     const source = await realpath(value).catch((error) => {
       throw new Error(`remote source does not exist: ${value}`, { cause: error })
@@ -122,7 +122,7 @@ async function main(): Promise<void> {
   }
 
   if (!["remove", "enable", "disable"].includes(action ?? "") || !value) {
-    throw new Error("usage: config-remote.ts <list|put|link|status|remove|enable|disable> ...")
+    throw new Error("usage: config-remote.mjs <list|put|link|status|remove|enable|disable> ...")
   }
   const { active, disabled } = await inspect(remote, target, value)
   if (action === "remove") {

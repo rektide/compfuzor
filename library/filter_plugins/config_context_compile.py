@@ -13,7 +13,7 @@ from ansible.template import accept_args_markers
 
 from config_selectors import compile_path_selector, relative_path
 from template_data import raw_copy_template_data
-from runtime_bundles import links_runtime_bins, links_runtime_dirs
+from runtime_bundles import runtime_artifact_bin
 
 
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -218,31 +218,11 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
 
     bins = _internalize_config_bins(list(compiled.get("bins", [])), configs)
     occupied_bins = {name for name in (_bin_name(record) for record in bins) if name}
-    runtime_bins = [
-        ("config/command.ts", "../config/command.ts"),
-        ("config/cli.ts", "../config/cli.ts"),
-        ("config/assembly.ts", "../config/assembly.ts"),
-        ("config/context.ts", "../config/context.ts"),
-        ("config/file-state.ts", "../config/file-state.ts"),
-        ("config/input-state.ts", "../config/input-state.ts"),
-        ("config/inputs.ts", "../config/inputs.ts"),
-        ("config/install.ts", "../config/install.ts"),
-        ("config/invocation.ts", "../config/invocation.ts"),
-        ("config/publication.ts", "../config/publication.ts"),
-        ("config/report.ts", "../config/report.ts"),
-        ("config/status.ts", "../config/status.ts"),
-    ]
-    for runtime_name, source in runtime_bins:
-        if runtime_name in occupied_bins:
-            _error("generated command collision: {}".format(runtime_name))
-        bins.append({"name": runtime_name, "src": source, "raw": True, "compose": False, "basedir": False})
-        occupied_bins.add(runtime_name)
-    for record in links_runtime_bins(False):
-        shared_name = record["name"]
-        if shared_name in occupied_bins:
-            _error("generated command collision: {}".format(shared_name))
-        bins.append(record)
-        occupied_bins.add(shared_name)
+    runtime_name = "config/command.mjs"
+    if runtime_name in occupied_bins:
+        _error("generated command collision: {}".format(runtime_name))
+    bins.append(runtime_artifact_bin("config/command.mjs", runtime_name))
+    occupied_bins.add(runtime_name)
 
     normalized_contexts = {}
     for name, raw_context in contexts.items():
@@ -325,7 +305,7 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
         descriptor = {
             "name": command_name,
             "dest": command_name,
-            "link": "config/command.ts",
+            "link": "config/command.mjs",
             "compose": False,
             "basedir": False,
         }
@@ -344,7 +324,7 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
     compiled["statuses"] = [{"name": "config-status.sh", "exit2": "error"}]
     legacy_processors = posixpath.join(bins_dir, "processors")
     dirs = [directory for directory in compiled.get("dirs", []) if directory != legacy_processors]
-    for module_dir in [posixpath.join(bins_dir, "config"), posixpath.join(bins_dir, "config/processors")] + links_runtime_dirs(bins_dir):
+    for module_dir in [posixpath.join(bins_dir, "config"), posixpath.join(bins_dir, "config/processors")]:
         if module_dir not in dirs:
             dirs.append(module_dir)
     compiled["dirs"] = dirs

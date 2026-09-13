@@ -72,22 +72,22 @@ fi
 if [ "$_bypass_link" = true ] || [ -n "${COMPFUZOR_SYSTEMD_LINK_BYPASS:-}" ] || [ -n "${SYSTEMD_BYPASS_LINK:-}" ]; then
   echo "Bypassed linking ${UNIT_DEST}"
 else
-  if [ -x "$(dirname "$0")/links.ts" ]; then
-    # Publication is delegated to links.ts: the LINKS subsystem owns both
+  if [ -x "$(dirname "$0")/links.mjs" ]; then
+    # Publication is delegated to links.mjs: the LINKS subsystem owns both
     # accepted unit representations. UNIT_LINK_ID is baked at generation and
     # matches the record id; ${HOME} stays literal for user scope.
     # Privilege routing is automatic: the default auto mode probes the dest
     # per record and escalates only unwritable ones through sudo, so
     # user-scope dests mutate directly.
     if [ -n "$_runtime_strategy" ]; then
-      "$(dirname "$0")/links.ts" apply --id "$UNIT_LINK_ID" --strategy "$_strategy"
+      "$(dirname "$0")/links.mjs" apply --id "$UNIT_LINK_ID" --strategy "$_strategy"
     else
       # No explicit selection lets LINKS preserve either currently healthy
       # representation and use the compiled record default only when missing.
-      "$(dirname "$0")/links.ts" apply --id "$UNIT_LINK_ID"
+      "$(dirname "$0")/links.mjs" apply --id "$UNIT_LINK_ID"
     fi
   else
-    # No links.ts (LINKS_BYPASS, or a deployment predating the LINKS
+    # No links.mjs (LINKS_BYPASS, or a deployment predating the LINKS
     # subsystem): retain direct copy/link behavior using the same selection.
     $SUDO_CMD mkdir -p "$(dirname "$UNIT_DEST")"
     if [ "$_strategy" = copy ]; then

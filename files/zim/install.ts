@@ -70,7 +70,7 @@ async function runRegistry(action: "apply" | "status", activation: Activation, c
     const args = [action, "--scope", activation.spec.scope]
     if (action === "apply") args.push("--sudo", "never")
     args.push(manifest)
-    return (await runCommand(join(deploymentDir, "bin", "links.ts"), args)).code
+    return (await runCommand(join(deploymentDir, "bin", "links.mjs"), args)).code
   })
 }
 

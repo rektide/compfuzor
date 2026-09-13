@@ -10,6 +10,7 @@ from ansible.errors import AnsibleFilterError
 from ansible.template import accept_args_markers
 
 from template_data import raw_copy_template_data
+from runtime_bundles import runtime_artifact_bin
 
 
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -242,7 +243,7 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled"):
         statuses.append(status)
 
     if remotes:
-        bins.append({"name": "config-remote.ts", "src": "../config-remote.ts", "basedir": False})
+        bins.append(runtime_artifact_bin("config-remote/config-remote.mjs", "config-remote.mjs"))
 
     if configs and bins_dir is not None:
         for path in ("processors", "internal/config"):

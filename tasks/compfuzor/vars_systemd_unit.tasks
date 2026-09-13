@@ -432,13 +432,13 @@
 
 - name: 'Contribute systemd unit link records'
   set_fact:
-    # Each installable unit gets a LINKS record so links.ts owns the unit-dir
+    # Each installable unit gets a LINKS record so links.mjs owns the unit-dir
     # symlink: status reports drift (a package overwriting our unit), audit
     # cross-checks deployments claiming the same unit path, remove uninstalls.
     # install-unit.sh applies the record (UNIT_LINK_ID) before enable; the
     # records lane afterwards sees it managed. Policy replace matches the old
     # ln -sf (a foreign squatter is replaced, not preserved). ${HOME} stays
-    # literal for user scope -- a runtime root links.ts expands.
+    # literal for user scope -- a runtime root links.mjs expands.
     LINKS: "{{ (LINKS | default([])) | merge_list(_systemd_unit_link_records, preset='append', resolve=True) }}"
   when: SYSTEMD_INSTALL_BYPASS is deffalsy
   vars:

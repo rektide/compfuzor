@@ -6,7 +6,7 @@ set -e
 self_dir="{{DIR}}"
 export DIR="$self_dir"
 src_dir="${1:-$(pwd)}"
-remote="$self_dir/bin/config-remote.ts"
+remote="$self_dir/bin/config-remote.mjs"
 
 count=0
 shopt -s nullglob
