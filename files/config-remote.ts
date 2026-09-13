@@ -7,7 +7,7 @@ import { lstat, mkdir, readFile, readlink, realpath, rename, rm, symlink } from 
 import { basename, dirname, join, resolve } from "node:path"
 import { parseArgs } from "node:util"
 
-// Raw bins ship untemplated: derive the package root from this script's own
+// The built entry ships untemplated: derive the package root from its own
 // location (bin/config-remote.mjs -> package dir).
 const selfDir = resolve(dirname(realpathSync(process.argv[1])), "..")
 
