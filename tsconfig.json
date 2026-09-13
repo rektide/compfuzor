@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "lib": ["ES2023"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "strict": true,
+    "target": "ES2022",
+    "types": ["node"]
+  },
+  "include": [
+    "files/config/**/*.ts",
+    "files/links/**/*.ts",
+    "files/zim/**/*.ts",
+    "files/config-remote.ts",
+    "vite.config.ts"
+  ]
+}

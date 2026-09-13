@@ -1,0 +1,25 @@
+{
+  "name": "compfuzor",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "vp pack",
+    "check": "vp fmt vite.config.ts --check && vp lint files/config files/links files/zim files/config-remote.ts vite.config.ts",
+    "fix": "vp fmt vite.config.ts --write && vp lint --fix files/config files/links files/zim files/config-remote.ts vite.config.ts"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "^11.20.0",
+      "onFail": "download"
+    }
+  },
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/node": "^26.5.1",
+    "vite-plus": "^0.3.1"
+  },
+  "engines": {
+    "node": "^20.19.0 || ^22.18.0 || >=24.11.0"
+  }
+}
