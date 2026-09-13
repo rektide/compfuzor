@@ -16,7 +16,9 @@ if (argvPath) {
       if (realArgvPath !== realModulePath) return;
       const deploymentDir = resolve(dirname(realModulePath), "../..");
       return main(process.argv.slice(2), deploymentDir).then(
-        (code) => { process.exitCode = code; },
+        (code) => {
+          process.exitCode = code;
+        },
         (error: unknown) => {
           console.error(error instanceof Error ? error.stack : String(error));
           process.exitCode = 2;
