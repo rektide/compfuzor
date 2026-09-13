@@ -17,9 +17,25 @@ export type LinkDeliveryExecutor = {
   rm(path: string): Promise<void>
 }
 
+export type CopyDeliveryExecutor = {
+  mkdir(path: string): Promise<void>
+  copyFile(source: string, destination: string): Promise<void>
+  chmod(path: string, mode: number): Promise<void>
+  rename(source: string, destination: string): Promise<void>
+  rm(path: string): Promise<void>
+}
+
 export const localLinkDeliveryExecutor: LinkDeliveryExecutor = {
   async mkdir(path) { await mkdir(path, { recursive: true }) },
   async symlink(source, destination) { await symlink(source, destination) },
+  async rename(source, destination) { await rename(source, destination) },
+  async rm(path) { await rm(path, { force: true }) },
+}
+
+export const localCopyDeliveryExecutor: CopyDeliveryExecutor = {
+  async mkdir(path) { await mkdir(path, { recursive: true }) },
+  async copyFile(source, destination) { await copyFile(source, destination) },
+  async chmod(path, mode) { await chmod(path, mode) },
   async rename(source, destination) { await rename(source, destination) },
   async rm(path) { await rm(path, { force: true }) },
 }
@@ -132,19 +148,23 @@ export async function replaceWithLink(
   }
 }
 
-export async function replaceWithCopy(source: string, destination: string): Promise<void> {
+export async function replaceWithCopy(
+  source: string,
+  destination: string,
+  executor: CopyDeliveryExecutor = localCopyDeliveryExecutor,
+): Promise<void> {
   await assertDistinct(source, destination)
   const sourceStat = await stat(source)
   if (!sourceStat.isFile()) throw new Error(`delivery source is not a regular file: ${source}`)
   assertReplaceable(await inspectDeliveryEntry(destination), destination)
-  await mkdir(dirname(destination), { recursive: true })
+  await executor.mkdir(dirname(destination))
   const temporary = temporaryPath(destination)
   try {
-    await copyFile(source, temporary)
-    await chmod(temporary, sourceStat.mode & 0o777)
-    await rename(temporary, destination)
+    await executor.copyFile(source, temporary)
+    await executor.chmod(temporary, sourceStat.mode & 0o777)
+    await executor.rename(temporary, destination)
   } catch (error) {
-    await rm(temporary, { force: true }).catch(() => undefined)
+    await executor.rm(temporary).catch(() => undefined)
     throw error
   }
 }

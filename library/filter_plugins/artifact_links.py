@@ -12,6 +12,7 @@ from ansible.template import accept_args_markers
 
 _POLICIES = {"preserve", "fail", "replace"}
 _SCOPES = {"system", "user"}
+_STRATEGIES = {"link", "copy"}
 _RUNTIME_ROOT = re.compile(r"^\$\{(HOME|XDG_RUNTIME_DIR|XDG_STATE_HOME)\}(?:/|$)")
 
 
@@ -217,6 +218,35 @@ def _record_id(scope, dest):
     return "{}:{}".format(scope, posixpath.normpath(dest))
 
 
+def _normalize_strategies(value, origin):
+    if not isinstance(value, collections.abc.Mapping):
+        _error("{} strategies must be a mapping".format(origin))
+    unknown = set(value) - {"available", "default"}
+    if unknown:
+        _error("{} strategies has unknown fields: {}".format(origin, ", ".join(sorted(unknown))))
+    available = value.get("available")
+    if not isinstance(available, collections.abc.Sequence) or isinstance(available, (str, bytes)) or not available:
+        _error("{} strategies.available must be a non-empty list".format(origin))
+    available = list(available)
+    if any(strategy not in _STRATEGIES for strategy in available):
+        _error("{} strategies.available may contain only link or copy".format(origin))
+    if len(set(available)) != len(available):
+        _error("{} strategies.available contains duplicates".format(origin))
+    default = value.get("default")
+    if default not in _STRATEGIES:
+        _error("{} strategies.default must be link or copy".format(origin))
+    if default not in available:
+        _error("{} strategies.default must be available".format(origin))
+    return {"available": available, "default": default}
+
+
+def _link_comparable(record):
+    comparable = {key: value for key, value in record.items() if key not in {"origin", "origins"}}
+    comparable.setdefault("strategies", {"available": ["link"], "default": "link"})
+    comparable.setdefault("compose", True)
+    return comparable
+
+
 def _normalize_link(raw, directory, roots, origin, default_src=None, inferred=None, index=0):
     if isinstance(raw, str):
         if raw == "user" and inferred is not None:
@@ -226,7 +256,7 @@ def _normalize_link(raw, directory, roots, origin, default_src=None, inferred=No
     if not isinstance(raw, collections.abc.Mapping):
         _error("{} link must be a string or mapping".format(origin))
     item = dict(raw)
-    unknown = set(item) - {"id", "src", "dest", "scope", "policy", "state"}
+    unknown = set(item) - {"id", "src", "dest", "scope", "policy", "state", "strategies", "compose"}
     if unknown:
         _error("{} link has unknown fields: {}".format(origin, ", ".join(sorted(unknown))))
     if default_src is not None and "src" in item:
@@ -241,6 +271,10 @@ def _normalize_link(raw, directory, roots, origin, default_src=None, inferred=No
     state = item.get("state", "present")
     if state not in {"present", "absent"}:
         _error("{} has unknown state {!r}".format(origin, state))
+    strategies = _normalize_strategies(item["strategies"], origin) if "strategies" in item else None
+    compose = item.get("compose", True)
+    if not isinstance(compose, bool):
+        _error("{} compose must be boolean".format(origin))
 
     src_value = default_src if default_src is not None else item.get("src")
     if not isinstance(src_value, str) or not src_value:
@@ -267,7 +301,7 @@ def _normalize_link(raw, directory, roots, origin, default_src=None, inferred=No
     record_id = item.get("id") or _record_id(scope, dest)
     if not isinstance(record_id, str) or not record_id:
         _error("{} id must be a non-empty string".format(origin))
-    return {
+    record = {
         "id": record_id,
         "origin": origin,
         "scope": scope,
@@ -277,6 +311,11 @@ def _normalize_link(raw, directory, roots, origin, default_src=None, inferred=No
         "policy": policy,
         "state": state,
     }
+    if strategies is not None:
+        record["strategies"] = strategies
+    if "compose" in item:
+        record["compose"] = compose
+    return record
 
 
 @accept_args_markers
@@ -333,10 +372,10 @@ def compile_links(links, artifacts, directory, name, roots):
     for record in records:
         identity = record["id"]
         dest_key = (record["scope"], posixpath.normpath(record["dest"]))
-        comparable = {key: value for key, value in record.items() if key != "origin"}
+        comparable = _link_comparable(record)
         if dest_key in by_dest:
             previous = by_dest[dest_key]
-            previous_comparable = {key: value for key, value in previous.items() if key not in {"origin", "origins"}}
+            previous_comparable = _link_comparable(previous)
             if previous_comparable != comparable:
                 _error("destination {!r} in scope {} has conflicting records".format(record["dest"], record["scope"]))
             previous.setdefault("origins", [previous["origin"]]).append(record["origin"])

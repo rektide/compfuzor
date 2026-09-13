@@ -124,6 +124,24 @@ def test_links():
     )["links"][0]
     check("xdg state runtime root", xdg["runtimeRoots"], ["HOME", "XDG_STATE_HOME"])
 
+    represented = compile_links(
+        [
+            {
+                "src": "/source",
+                "dest": "/consumer",
+                "strategies": {"available": ["link", "copy"], "default": "copy"},
+                "compose": False,
+            }
+        ],
+        {"families": {}},
+        "/srv/watchman-main",
+        "watchman-main",
+        ROOTS,
+    )["links"][0]
+    check("strategy declaration", represented["strategies"], {"available": ["link", "copy"], "default": "copy"})
+    check("composition declaration", represented["compose"], False)
+    check("ordinary records stay implicit link-only", "strategies" in links[0], False)
+
 
 def test_validation():
     check_raises(
@@ -206,6 +224,35 @@ def test_validation():
             ROOTS,
         ),
         "requires dest",
+    )
+    for label, strategies, expected in (
+        ("strategy mapping", ["link"], "strategies must be a mapping"),
+        ("strategy availability", {"available": [], "default": "link"}, "non-empty list"),
+        ("strategy name", {"available": ["magic"], "default": "magic"}, "only link or copy"),
+        ("strategy duplicate", {"available": ["link", "link"], "default": "link"}, "duplicates"),
+        ("strategy default", {"available": ["link"], "default": "copy"}, "must be available"),
+    ):
+        check_raises(
+            label,
+            lambda strategies=strategies: compile_links(
+                [{"src": "/source", "dest": "/dest", "strategies": strategies}],
+                {"families": {}},
+                "/srv/x",
+                "x",
+                ROOTS,
+            ),
+            expected,
+        )
+    check_raises(
+        "compose boolean",
+        lambda: compile_links(
+            [{"src": "/source", "dest": "/dest", "compose": "no"}],
+            {"families": {}},
+            "/srv/x",
+            "x",
+            ROOTS,
+        ),
+        "compose must be boolean",
     )
 
 

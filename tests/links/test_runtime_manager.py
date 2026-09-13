@@ -19,11 +19,11 @@ def run(env: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run([CLI, *args], env=env, text=True, capture_output=True, check=False)
 
 
-def write_manifest(path: Path, links: list[dict[str, str]]) -> None:
+def write_manifest(path: Path, links: list[dict]) -> None:
     path.write_text(json.dumps({"version": 1, "deployment": {"dir": str(path.parent)}, "links": links}))
 
 
-def record(id: str, src: str, dest: str, policy: str = "preserve", state: str = "present") -> dict[str, str]:
+def record(id: str, src: str, dest: str, policy: str = "preserve", state: str = "present") -> dict:
     return {"id": id, "scope": "user", "src": src, "dest": dest, "policy": policy, "state": state}
 
 
@@ -159,3 +159,147 @@ def test_audit_reports_cross_manifest_destination_conflicts(env: dict[str, str],
     audited = run(env, "audit", str(first), str(second), "--json-array")
     assert audited.returncode == 1, audited.stderr
     assert {row["status"] for row in json.loads(audited.stdout)} == {"CONFLICT"}
+
+
+def represented_record(id: str, src: Path, dest: Path, *, default: str = "link", policy: str = "replace", compose: bool = True) -> dict:
+    return {
+        **record(id, str(src), str(dest), policy),
+        "strategies": {"available": ["link", "copy"], "default": default},
+        "compose": compose,
+    }
+
+
+def test_declared_representations_are_both_healthy_and_nondefault_is_preserved(env: dict[str, str], tmp_path: Path) -> None:
+    source = tmp_path / "source"; source.write_bytes(b"managed\x00bytes\n")
+    linked = tmp_path / "linked"; linked.symlink_to(source)
+    copied = tmp_path / "copied"; copied.write_bytes(source.read_bytes())
+    manifest = tmp_path / "links.json"
+    write_manifest(manifest, [
+        represented_record("linked", source, linked, default="copy"),
+        represented_record("copied", source, copied, default="link"),
+    ])
+
+    status = run(env, "status", str(manifest), "--json-array")
+    assert status.returncode == 0, status.stderr
+    rows = {row["id"]: row for row in json.loads(status.stdout)}
+    assert rows["linked"]["status"] == "MANAGED" and rows["linked"]["representation"] == "link"
+    assert rows["copied"]["status"] == "MANAGED" and rows["copied"]["representation"] == "copy"
+
+    applied = run(env, "apply", str(manifest), "--json-array")
+    assert applied.returncode == 0, applied.stderr
+    assert linked.is_symlink() and not copied.is_symlink()
+    assert {row["action"] for row in json.loads(applied.stdout)} == {"unchanged"}
+
+
+def test_default_creation_explicit_switch_and_unavailable_strategy(env: dict[str, str], tmp_path: Path) -> None:
+    source = tmp_path / "source"; source.write_text("managed\n", encoding="utf-8")
+    destination = tmp_path / "destination"
+    untouched = tmp_path / "untouched"
+    manifest = tmp_path / "links.json"
+    write_manifest(manifest, [represented_record("represented", source, destination, default="copy")])
+
+    created = run(env, "apply", str(manifest), "--json-array")
+    assert created.returncode == 0, created.stderr
+    assert destination.is_file() and not destination.is_symlink()
+    assert json.loads(created.stdout)[0]["representation"] == "copy"
+
+    linked = run(env, "apply", str(manifest), "--strategy", "link", "--json-array")
+    assert linked.returncode == 0, linked.stderr
+    assert destination.is_symlink() and destination.resolve() == source
+    assert json.loads(linked.stdout)[0]["action"] == "switched"
+
+    copied = run(env, "apply", str(manifest), "--strategy", "copy", "--json-array")
+    assert copied.returncode == 0, copied.stderr
+    assert destination.is_file() and not destination.is_symlink() and destination.read_bytes() == source.read_bytes()
+
+    write_manifest(manifest, [
+        represented_record("represented", source, destination),
+        record("link-only", str(source), str(untouched)),
+    ])
+    unavailable = run(env, "apply", str(manifest), "--strategy", "copy")
+    assert unavailable.returncode == 2
+    assert "strategy copy is unavailable for: link-only" in unavailable.stderr
+    assert not untouched.exists() and not untouched.is_symlink()
+
+
+def test_copy_drift_policy_directory_source_and_conservative_remove(env: dict[str, str], tmp_path: Path) -> None:
+    source = tmp_path / "source"; source.write_text("managed\n", encoding="utf-8")
+    preserved = tmp_path / "preserved"; preserved.write_text("modified\n", encoding="utf-8")
+    replaced = tmp_path / "replaced"; replaced.write_text("modified\n", encoding="utf-8")
+    failed = tmp_path / "failed"; failed.write_text("modified\n", encoding="utf-8")
+    directory = tmp_path / "directory"; directory.mkdir()
+    missing_source = tmp_path / "missing-source"
+    source_missing_dest = tmp_path / "source-missing"; source_missing_dest.write_text("old\n", encoding="utf-8")
+    manifest = tmp_path / "links.json"
+    write_manifest(manifest, [
+        represented_record("preserved", source, preserved, default="copy", policy="preserve"),
+        represented_record("replaced", source, replaced, default="copy", policy="replace"),
+        represented_record("failed", source, failed, default="copy", policy="fail"),
+        represented_record("directory", source, directory, default="copy", policy="replace"),
+        represented_record("missing-source", missing_source, source_missing_dest, default="copy", policy="replace"),
+    ])
+    result = run(env, "apply", str(manifest), "--json-array")
+    assert result.returncode == 2
+    rows = {row["id"]: row for row in json.loads(result.stdout)}
+    assert rows["preserved"]["status"] == "OVERRIDE" and preserved.read_text() == "modified\n"
+    assert rows["replaced"]["status"] == "MANAGED" and replaced.read_bytes() == source.read_bytes()
+    assert rows["failed"]["status"] == "CONFLICT" and failed.read_text() == "modified\n"
+    assert rows["directory"]["detail"] == "never replaced" and directory.is_dir()
+    assert rows["missing-source"]["status"] == "SOURCE_MISSING" and source_missing_dest.read_text() == "old\n"
+
+    matching = tmp_path / "matching"; matching.write_bytes(source.read_bytes())
+    modified = tmp_path / "modified"; modified.write_text("changed\n", encoding="utf-8")
+    unverifiable = tmp_path / "unverifiable"; unverifiable.write_text("managed\n", encoding="utf-8")
+    write_manifest(manifest, [
+        represented_record("matching", source, matching),
+        represented_record("modified", source, modified),
+        represented_record("unverifiable", missing_source, unverifiable),
+    ])
+    removed = run(env, "remove", str(manifest), "--json-array")
+    assert removed.returncode == 0, removed.stderr
+    assert not matching.exists()
+    assert modified.read_text() == "changed\n" and unverifiable.read_text() == "managed\n"
+    remove_rows = {row["id"]: row for row in json.loads(removed.stdout)}
+    assert remove_rows["matching"]["action"] == "removed"
+    assert remove_rows["modified"]["action"] == remove_rows["unverifiable"]["action"] == "preserved"
+
+
+def test_composed_filter_keeps_direct_management_visible(env: dict[str, str], tmp_path: Path) -> None:
+    source = tmp_path / "source"; source.write_text("managed\n", encoding="utf-8")
+    composed = tmp_path / "composed"
+    direct = tmp_path / "direct"
+    manifest = tmp_path / "links.json"
+    write_manifest(manifest, [
+        represented_record("composed", source, composed),
+        represented_record("direct", source, direct, compose=False),
+    ])
+
+    applied = run(env, "apply", str(manifest), "--composed", "--json-array")
+    assert applied.returncode == 0, applied.stderr
+    assert composed.is_symlink() and not direct.exists()
+    assert [row["id"] for row in json.loads(applied.stdout)] == ["composed"]
+
+    status = run(env, "status", str(manifest), "--json-array")
+    assert status.returncode == 1
+    assert {row["id"] for row in json.loads(status.stdout)} == {"composed", "direct"}
+
+    direct_apply = run(env, "apply", str(manifest), "--id", "direct")
+    assert direct_apply.returncode == 0, direct_apply.stderr
+    assert direct.is_symlink()
+
+
+def test_strategy_manifest_validation(env: dict[str, str], tmp_path: Path) -> None:
+    source = tmp_path / "source"; source.write_text("managed")
+    manifest = tmp_path / "links.json"
+    bad_values = [
+        ({"available": [], "default": "link"}, "non-empty array"),
+        ({"available": ["magic"], "default": "magic"}, "unsupported strategy"),
+        ({"available": ["link", "link"], "default": "link"}, "duplicates"),
+        ({"available": ["link"], "default": "copy"}, "must be available"),
+    ]
+    for strategies, message in bad_values:
+        item = record("bad", str(source), str(tmp_path / "dest"))
+        item["strategies"] = strategies
+        write_manifest(manifest, [item])
+        result = run(env, "status", str(manifest))
+        assert result.returncode == 2 and message in result.stderr

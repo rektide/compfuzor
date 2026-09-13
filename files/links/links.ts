@@ -1,15 +1,20 @@
 #!/usr/bin/env -S node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
 
 import { execFile } from "node:child_process";
-import { access, constants as fsConstants, lstat, readFile, rm } from "node:fs/promises";
+import { access, constants as fsConstants, lstat, readFile, rm, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import {
   inspectDeliveryEntry,
+  linkMatches,
+  localCopyDeliveryExecutor,
   localLinkDeliveryExecutor,
+  replaceWithCopy,
   replaceWithLink,
+  type CopyDeliveryExecutor,
+  type DeliveryEntry,
   type LinkDeliveryExecutor,
 } from "./delivery.ts";
 
@@ -17,6 +22,7 @@ type Command = "apply" | "status" | "audit" | "remove";
 type Scope = "system" | "user";
 type Policy = "preserve" | "fail" | "replace";
 type State = "present" | "absent";
+type Strategy = "link" | "copy";
 type Format = "human" | "jsonl" | "array";
 type Status = "MANAGED" | "MISSING" | "OVERRIDE" | "CONFLICT" | "SOURCE_MISSING" | "INVALID";
 interface LinkRecord {
@@ -26,6 +32,8 @@ interface LinkRecord {
   dest: string;
   policy: Policy;
   state: State;
+  strategies: { available: Strategy[]; default: Strategy };
+  compose: boolean;
   runtimeRoots?: ("HOME" | "XDG_RUNTIME_DIR" | "XDG_STATE_HOME")[];
 }
 
@@ -50,6 +58,7 @@ interface Row {
   /** What actually sits at dest: entry kind + readlink target when a symlink. */
   entry?: "symlink" | "file" | "directory" | "special" | "missing";
   target?: string;
+  representation?: Strategy;
   action?: string;
   detail?: string;
   manifest?: string;
@@ -63,6 +72,8 @@ interface Options {
   quiet: number;
   paths: string[];
   sudo?: string;
+  strategy?: Strategy;
+  composed: boolean;
 }
 
 const DIR = process.env.DIR ?? dirname(dirname(dirname(fileURLToPath(import.meta.url))));
@@ -134,6 +145,17 @@ function linkExecutor(sudo: boolean): LinkDeliveryExecutor {
   };
 }
 
+function copyExecutor(sudo: boolean): CopyDeliveryExecutor {
+  if (!sudo) return localCopyDeliveryExecutor;
+  return {
+    async mkdir(path) { await _execFile("sudo", ["mkdir", "-p", "--", path]); },
+    async copyFile(source, destination) { await _execFile("sudo", ["cp", "--", source, destination]); },
+    async chmod(path, mode) { await _execFile("sudo", ["chmod", mode.toString(8), "--", path]); },
+    async rename(source, destination) { await _execFile("sudo", ["mv", "-T", "--", source, destination]); },
+    async rm(path) { await _execFile("sudo", ["rm", "-f", "--", path]); },
+  };
+}
+
 async function rmLink(path: string, sudo: boolean): Promise<void> {
   if (sudo) await _execFile("sudo", ["rm", "-f", "--", path]);
   else await rm(path);
@@ -151,7 +173,12 @@ Options:
   --scope system|user  Operate on one activation scope
   --id <globs>         Comma-separated glob patterns on record ids
                        (scope:dest); operate on the matching slice only.
-                       * and ? match, * crosses / (e.g. '*/.tool-versions').
+                        * and ? match, * crosses / (e.g. '*/.tool-versions').
+  --strategy link|copy Apply using this representation. A healthy alternate
+                        declared representation is replaced. No fallback when
+                        the selected records do not offer the strategy.
+  --composed           Apply only records participating in generic install
+                        composition. Direct apply without it includes all.
   --json               Emit one JSON object per row
   --json-array         Emit one JSON array
   --sudo [auto|always|never]
@@ -181,6 +208,8 @@ function parseArgs(argv: string[]): Options {
   let format: Format = "human";
   let quiet = 0;
   let sudo: string | undefined;
+  let strategy: Strategy | undefined;
+  let composed = false;
   const paths: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -210,6 +239,12 @@ function parseArgs(argv: string[]): Options {
       const value = argv[++i];
       if (!value) fail("--id requires a comma-separated glob list");
       id = (id ?? []).concat(value.split(",").map((part) => part.trim()).filter(Boolean));
+    } else if (arg === "--strategy") {
+      const value = argv[++i];
+      if (value !== "link" && value !== "copy") fail("--strategy must be link or copy");
+      strategy = value;
+    } else if (arg === "--composed") {
+      composed = true;
     } else if (!command && ["apply", "status", "audit", "remove"].includes(arg)) {
       command = arg as Command;
     } else if (arg.startsWith("-")) {
@@ -220,8 +255,10 @@ function parseArgs(argv: string[]): Options {
   }
   if (!command) fail("expected apply, status, audit, or remove");
   if (command !== "audit" && paths.length > 1) fail(`${command} accepts at most one manifest`);
+  if (strategy !== undefined && command !== "apply") fail("--strategy is only valid with apply");
+  if (composed && command !== "apply") fail("--composed is only valid with apply");
   if (paths.length === 0) paths.push(join(DIR, "links.json"));
-  return { command, scope, id, format, quiet, paths, sudo };
+  return { command, scope, id, format, quiet, paths, sudo, strategy, composed };
 }
 
 function object(value: unknown, description: string): Record<string, unknown> {
@@ -232,6 +269,24 @@ function object(value: unknown, description: string): Record<string, unknown> {
 function stringField(value: unknown, description: string): string {
   if (typeof value !== "string" || value.length === 0) fail(`${description} must be a non-empty string`);
   return value;
+}
+
+function strategiesField(value: unknown, description: string): LinkRecord["strategies"] {
+  if (value === undefined) return { available: ["link"], default: "link" };
+  const strategies = object(value, description);
+  if (!Array.isArray(strategies.available) || strategies.available.length === 0) {
+    fail(`${description}.available must be a non-empty array`);
+  }
+  if (strategies.available.some((entry) => entry !== "link" && entry !== "copy")) {
+    fail(`${description}.available contains an unsupported strategy`);
+  }
+  const available = strategies.available as Strategy[];
+  if (new Set(available).size !== available.length) fail(`${description}.available contains duplicates`);
+  if (strategies.default !== "link" && strategies.default !== "copy") {
+    fail(`${description}.default must be link or copy`);
+  }
+  if (!available.includes(strategies.default)) fail(`${description}.default must be available`);
+  return { available, default: strategies.default };
 }
 
 async function manifestPath(path: string): Promise<string> {
@@ -279,6 +334,12 @@ async function loadManifest(inputPath: string): Promise<{ path: string; manifest
       dest: stringField(record.dest, `${path}: ${id}: dest`),
       policy: record.policy,
       state: record.state,
+      strategies: strategiesField(record.strategies, `${path}: ${id}: strategies`),
+      compose: record.compose === undefined
+        ? true
+        : typeof record.compose === "boolean"
+          ? record.compose
+          : fail(`${path}: ${id}: compose must be boolean`),
       runtimeRoots,
     };
   });
@@ -319,13 +380,13 @@ function idMatches(idPatterns: string[] | undefined, id: string): boolean {
   return idPatterns.some((pattern) => globMatches(pattern, id));
 }
 
-function resolveRecords(path: string, manifest: Manifest, scope?: Scope, idPatterns?: string[]): { records: ResolvedRecord[]; invalid: Row[] } {
+function resolveRecords(path: string, manifest: Manifest, scope?: Scope, idPatterns?: string[], composed = false): { records: ResolvedRecord[]; invalid: Row[] } {
   const baseValue = manifest.deployment?.dir ?? dirname(resolve(path));
   const base = expandPath(baseValue, dirname(resolve(path)));
   const claims = new Map<string, ResolvedRecord>();
   const records: ResolvedRecord[] = [];
   const invalid: Row[] = [];
-  for (const record of manifest.links.filter((entry) => (!scope || entry.scope === scope) && idMatches(idPatterns, entry.id))) {
+  for (const record of manifest.links.filter((entry) => (!scope || entry.scope === scope) && idMatches(idPatterns, entry.id) && (!composed || entry.compose))) {
     try {
       const resolved: ResolvedRecord = {
         ...record,
@@ -336,7 +397,14 @@ function resolveRecords(path: string, manifest: Manifest, scope?: Scope, idPatte
       if (resolved.srcPath === resolved.destPath) fail(`${path}: ${record.id}: source and destination are the same path`);
       const key = `${record.scope}\0${resolved.destPath}`;
       const prior = claims.get(key);
-      if (prior && (prior.srcPath !== resolved.srcPath || prior.policy !== resolved.policy || prior.state !== resolved.state)) {
+      if (prior && (
+        prior.srcPath !== resolved.srcPath
+        || prior.policy !== resolved.policy
+        || prior.state !== resolved.state
+        || prior.compose !== resolved.compose
+        || prior.strategies.default !== resolved.strategies.default
+        || prior.strategies.available.join("\0") !== resolved.strategies.available.join("\0")
+      )) {
         fail(`${path}: conflicting claims for ${resolved.destPath}`);
       }
       claims.set(key, resolved);
@@ -356,62 +424,109 @@ function resolveRecords(path: string, manifest: Manifest, scope?: Scope, idPatte
   return { records, invalid };
 }
 
-async function exists(path: string): Promise<boolean> {
+type DestinationAssessment = {
+  entry: DeliveryEntry;
+  kind: "missing" | "healthy" | "foreign" | "directory" | "special";
+  sourceAvailable: boolean;
+  sourceRegular: boolean;
+  representation?: Strategy;
+  healthyRepresentation?: Strategy;
+  detail?: string;
+};
+
+async function sourceState(path: string): Promise<{ available: boolean; regular: boolean }> {
   try {
-    await lstat(path);
-    return true;
+    const source = await stat(path);
+    return { available: true, regular: source.isFile() };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { available: false, regular: false };
     throw error;
   }
 }
 
-async function destination(record: ResolvedRecord): Promise<{ kind: "missing" | "managed" | "foreign" | "directory" | "other"; target?: string }> {
-  const entry = await inspectDeliveryEntry(record.destPath);
-  if (entry.kind === "missing") return { kind: "missing" };
-  if (entry.kind === "directory") return { kind: "directory" };
-  if (entry.kind === "special") return { kind: "other" };
-  if (entry.kind === "file") return { kind: "foreign" };
-  return { kind: entry.targetPath === record.srcPath ? "managed" : "foreign", target: entry.target };
+async function filesMatch(source: string, destination: string): Promise<boolean> {
+  const [sourceBytes, destinationBytes] = await Promise.all([readFile(source), readFile(destination)]);
+  return sourceBytes.equals(destinationBytes);
 }
 
-/** Actual entry kind at dest, from lstat/readlink truth (never the plan). */
-function entryOf(dest: Awaited<ReturnType<typeof destination>>): Row["entry"] {
-  if (dest.kind === "missing") return "missing";
-  if (dest.target !== undefined) return "symlink";
-  if (dest.kind === "directory") return "directory";
-  return dest.kind === "foreign" ? "file" : "special";
+async function inspectRecord(record: ResolvedRecord): Promise<DestinationAssessment> {
+  const [entry, source] = await Promise.all([inspectDeliveryEntry(record.destPath), sourceState(record.srcPath)]);
+  if (entry.kind === "missing") return { entry, kind: "missing", sourceAvailable: source.available, sourceRegular: source.regular };
+  if (entry.kind === "directory") return { entry, kind: "directory", sourceAvailable: source.available, sourceRegular: source.regular };
+  if (entry.kind === "special") return { entry, kind: "special", sourceAvailable: source.available, sourceRegular: source.regular };
+  if (entry.kind === "symlink") {
+    const healthy = record.strategies.available.includes("link") && linkMatches(entry, record.srcPath);
+    if (healthy) {
+      return { entry, kind: "healthy", sourceAvailable: source.available, sourceRegular: source.regular, representation: "link", healthyRepresentation: "link" };
+    }
+    let dangling = false;
+    try {
+      await stat(record.destPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") dangling = true;
+      else throw error;
+    }
+    return {
+      entry,
+      kind: "foreign",
+      sourceAvailable: source.available,
+      sourceRegular: source.regular,
+      representation: "link",
+      detail: dangling ? "dangling link" : "foreign link",
+    };
+  }
+  const healthy = record.strategies.available.includes("copy") && source.regular && await filesMatch(record.srcPath, record.destPath);
+  return {
+    entry,
+    kind: healthy ? "healthy" : "foreign",
+    sourceAvailable: source.available,
+    sourceRegular: source.regular,
+    representation: "copy",
+    healthyRepresentation: healthy ? "copy" : undefined,
+    detail: record.strategies.available.includes("copy") ? "copy bytes differ" : undefined,
+  };
 }
 
-/** Actual readlink target, when dest is a symlink. */
-function targetOf(dest: Awaited<ReturnType<typeof destination>>): string | undefined {
-  return dest.target;
+function entryOf(assessment: DestinationAssessment): Row["entry"] {
+  return assessment.entry.kind;
 }
 
-async function classify(record: ResolvedRecord): Promise<Row> {
-  const dest = await destination(record);
-  const common = {
+function commonRow(record: ResolvedRecord, assessment: DestinationAssessment) {
+  return {
     id: record.id,
     scope: record.scope,
-    // src is the plan's wanted target: genuinely empty for state:absent
-    // records (the plan wants nothing at dest). Never suppressed when it
-    // matches actual -- a visible match is the whole point of the ok verdict.
     src: record.state === "absent" ? "" : record.srcPath,
     dest: record.destPath,
     manifest: record.manifest,
-    entry: entryOf(dest),
-    target: targetOf(dest),
+    entry: entryOf(assessment),
+    target: assessment.entry.kind === "symlink" ? assessment.entry.target : undefined,
+    representation: assessment.representation,
+  };
+}
+
+function classifyAssessment(record: ResolvedRecord, dest: DestinationAssessment): Row {
+  const common = {
+    ...commonRow(record, dest),
   };
   if (record.state === "absent") {
     if (dest.kind === "missing") return { ...common, status: "MANAGED", detail: "absent as requested" };
-    if (dest.kind === "managed") return { ...common, status: "CONFLICT", detail: "should be absent" };
+    if (dest.kind === "healthy") return { ...common, status: "CONFLICT", detail: "should be absent" };
     return { ...common, status: "OVERRIDE" };
   }
-  if (!(await exists(record.srcPath))) return { ...common, status: "SOURCE_MISSING", detail: "src missing" };
+  if (!dest.sourceAvailable) return { ...common, status: "SOURCE_MISSING", detail: "src missing" };
   if (dest.kind === "missing") return { ...common, status: "MISSING" };
-  if (dest.kind === "managed") return { ...common, status: "MANAGED" };
+  if (dest.kind === "healthy") return { ...common, status: "MANAGED" };
   if (record.policy === "preserve") return { ...common, status: "OVERRIDE" };
-  return { ...common, status: "CONFLICT", detail: dest.kind === "directory" ? "never replaced" : `${record.policy} policy` };
+  const detail = dest.kind === "directory" || dest.kind === "special"
+    ? "never replaced"
+    : dest.detail
+      ? `${dest.detail}; ${record.policy} policy`
+      : `${record.policy} policy`;
+  return { ...common, status: "CONFLICT", detail };
+}
+
+async function classify(record: ResolvedRecord): Promise<Row> {
+  return classifyAssessment(record, await inspectRecord(record));
 }
 
 function globMatches(pattern: string, value: string): boolean {
@@ -434,17 +549,9 @@ function overwriteSelected(id: string): boolean {
 
 async function removeManaged(record: ResolvedRecord, action: string): Promise<Row> {
   const sudo = await needsSudo(record.scope, record.destPath);
-  const dest = await destination(record);
-  const common = {
-    id: record.id,
-    scope: record.scope,
-    src: record.state === "absent" ? "" : record.srcPath,
-    dest: record.destPath,
-    manifest: record.manifest,
-    entry: entryOf(dest),
-    target: targetOf(dest),
-  };
-  if (dest.kind === "managed") {
+  const dest = await inspectRecord(record);
+  const common = commonRow(record, dest);
+  if (dest.kind === "healthy") {
     await rmLink(record.destPath, sudo);
     return { ...common, status: "MANAGED", action, detail: sudo ? "via sudo" : undefined };
   }
@@ -452,21 +559,31 @@ async function removeManaged(record: ResolvedRecord, action: string): Promise<Ro
   return { ...common, status: "OVERRIDE", action: "preserved" };
 }
 
-async function apply(record: ResolvedRecord): Promise<Row> {
+async function deliver(record: ResolvedRecord, strategy: Strategy, sudo: boolean): Promise<void> {
+  if (strategy === "link") await replaceWithLink(record.srcPath, record.destPath, linkExecutor(sudo));
+  else await replaceWithCopy(record.srcPath, record.destPath, copyExecutor(sudo));
+}
+
+async function apply(record: ResolvedRecord, selectedStrategy?: Strategy): Promise<Row> {
   if (record.state === "absent") return removeManaged(record, "removed");
   const sudo = await needsSudo(record.scope, record.destPath);
-  let row = await classify(record);
+  const dest = await inspectRecord(record);
+  let row = classifyAssessment(record, dest);
   if (row.status === "SOURCE_MISSING") return row;
-  const dest = await destination(record);
+  const strategy = selectedStrategy ?? record.strategies.default;
   if (dest.kind === "missing") {
-    await replaceWithLink(record.srcPath, record.destPath, linkExecutor(sudo));
-    return { ...row, status: "MANAGED", action: "created", entry: "symlink", target: record.srcPath, detail: sudo ? "via sudo" : undefined };
+    await deliver(record, strategy, sudo);
+    return { ...row, status: "MANAGED", action: "created", entry: strategy === "link" ? "symlink" : "file", target: strategy === "link" ? record.srcPath : undefined, representation: strategy, detail: sudo ? "via sudo" : undefined };
   }
-  if (dest.kind === "managed") return { ...row, action: "unchanged" };
+  if (dest.kind === "healthy" && (!selectedStrategy || dest.healthyRepresentation === selectedStrategy)) return { ...row, action: "unchanged" };
+  if (dest.kind === "healthy") {
+    await deliver(record, strategy, sudo);
+    return { ...row, status: "MANAGED", action: "switched", entry: strategy === "link" ? "symlink" : "file", target: strategy === "link" ? record.srcPath : undefined, representation: strategy, detail: sudo ? "via sudo" : undefined };
+  }
   const replace = record.policy === "replace" || (record.policy === "preserve" && overwriteSelected(record.id));
-  if (!replace || (dest.kind !== "foreign")) return { ...row, action: "preserved" };
-  await replaceWithLink(record.srcPath, record.destPath, linkExecutor(sudo));
-  row = { ...row, status: "MANAGED", action: "replaced", entry: "symlink", target: record.srcPath, detail: sudo ? "via sudo" : undefined };
+  if (!replace || dest.kind !== "foreign") return { ...row, action: "preserved" };
+  await deliver(record, strategy, sudo);
+  row = { ...row, status: "MANAGED", action: "replaced", entry: strategy === "link" ? "symlink" : "file", target: strategy === "link" ? record.srcPath : undefined, representation: strategy, detail: sudo ? "via sudo" : undefined };
   return row;
 }
 
@@ -490,7 +607,13 @@ async function audit(paths: string[], scope?: Scope, idPatterns?: string[]): Pro
   }
   return invalid.concat(records.map((record) => {
     const group = groups.get(`${record.scope}\0${record.destPath}`) ?? [];
-    const conflict = group.some((other) => other.srcPath !== record.srcPath || other.policy !== record.policy);
+    const conflict = group.some((other) => (
+      other.srcPath !== record.srcPath
+      || other.policy !== record.policy
+      || other.compose !== record.compose
+      || other.strategies.default !== record.strategies.default
+      || other.strategies.available.join("\0") !== record.strategies.available.join("\0")
+    ));
     return {
       id: record.id,
       scope: record.scope,
@@ -564,11 +687,19 @@ async function main(): Promise<number> {
     rows = await audit(options.paths, options.scope, options.id);
   } else {
     const loaded = await loadManifest(options.paths[0]);
-    const resolved = resolveRecords(loaded.path, loaded.manifest, options.scope, options.id);
+      const resolved = resolveRecords(loaded.path, loaded.manifest, options.scope, options.id, options.composed);
     if ((options.command === "apply" || options.command === "remove") && SUDO_MODE === "always" && resolved.records.some((record) => record.scope === "user")) {
       fail("--sudo always is not permitted for user-scope link mutations");
     }
-    const operation = options.command === "apply" ? apply : options.command === "remove" ? removeRecord : classify;
+    if (options.command === "apply" && options.strategy) {
+      const unavailable = resolved.records.filter((record) => record.state === "present" && !record.strategies.available.includes(options.strategy!));
+      if (unavailable.length > 0) fail(`strategy ${options.strategy} is unavailable for: ${unavailable.map((record) => record.id).join(", ")}`);
+    }
+    const operation = options.command === "apply"
+      ? (record: ResolvedRecord) => apply(record, options.strategy)
+      : options.command === "remove"
+        ? removeRecord
+        : classify;
     rows = [...resolved.invalid];
     // Mutation is all-or-nothing with respect to plan validity.
     if (resolved.invalid.length === 0 || options.command === "status") {

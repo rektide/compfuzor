@@ -347,6 +347,44 @@ def test_sudo_routing() -> None:
         check("invalid COMPFUZOR_LINKS_SUDO is exit 2", result.returncode, 2)
 
 
+def test_copy_sudo_routing() -> None:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-links-copy-sudo-") as tmp:
+        root = Path(tmp).resolve()
+        log = make_sudo_shim(root)
+        source = root / "source"
+        source.write_text("managed\n", encoding="utf-8")
+        system_dest = root / "system-copy"
+        system_record = record("system-copy", str(source), policy="replace")
+        system_record.update({
+            "dest": str(system_dest),
+            "strategies": {"available": ["link", "copy"], "default": "copy"},
+        })
+        manifest = write_manifest(root, [system_record])
+        result = run(["apply", "--sudo", "always", str(manifest)], env=shim_env(root))
+        check("system copy through sudo exits ok", result.returncode, 0)
+        calls = log.read_text(encoding="utf-8")
+        check("system copy routes cp chmod mv through sudo", all(word in calls for word in ("cp", "chmod", "mv")), True)
+        check("system copy bytes match", system_dest.read_bytes(), source.read_bytes())
+
+    with tempfile.TemporaryDirectory(prefix="compfuzor-links-copy-user-") as tmp:
+        root = Path(tmp).resolve()
+        log = make_sudo_shim(root)
+        source = root / "source"
+        source.write_text("managed\n", encoding="utf-8")
+        user_dest = root / "user-copy"
+        user_record = record(str(user_dest), str(source), policy="replace")
+        user_record.update({
+            "id": "user:copy",
+            "scope": "user",
+            "strategies": {"available": ["link", "copy"], "default": "copy"},
+        })
+        manifest = write_manifest(root, [user_record])
+        result = run(["apply", str(manifest)], env={**shim_env(root), "COMPFUZOR_LINKS_SUDO": "auto"})
+        check("user copy exits ok", result.returncode, 0)
+        check("user copy stays direct", log.exists(), False)
+        check("user copy bytes match", user_dest.read_bytes(), source.read_bytes())
+
+
 def main() -> None:
     test_human_lines_show_both_sides()
     test_json_carries_structured_reality()
@@ -354,6 +392,7 @@ def main() -> None:
     test_absent_and_directory()
     test_apply_routes_mutations_through_sudo()
     test_sudo_routing()
+    test_copy_sudo_routing()
     print("all links human-output checks passed")
 
 
