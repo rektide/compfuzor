@@ -13,9 +13,19 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def generate(payload: Path) -> None:
+def generate(payload: Path, *, composed_system: bool) -> None:
     output = payload.parent / "rendered.json"
     playbook = ROOT / ".test-agent-systemd-links.pb"
+    links = (
+        f"""    LINKS:
+      - id: composed-system
+        src: etc/ordinary.conf
+        dest: {str(payload.parent / 'ordinary.conf')!r}
+        scope: system
+"""
+        if composed_system
+        else "    LINKS: []\n"
+    )
     playbook.write_text(
         f"""---
 - hosts: all
@@ -32,7 +42,7 @@ def generate(payload: Path) -> None:
     DIRSET: [etc]
     FILES: []
     BINS: []
-    LINKS: []
+{links.rstrip()}
     STATUSES: []
     ENV: {{}}
     ENV_LIST: []
@@ -91,21 +101,25 @@ def generate(payload: Path) -> None:
 
     rendered = json.loads(output.read_text(encoding="utf-8"))
     assert rendered["plan"]["version"] == 2
-    record = rendered["plan"]["links"][0]
+    record = next(item for item in rendered["plan"]["links"] if item["dest"] == "/etc/systemd/system/probe.service")
     assert record["dest"] == "/etc/systemd/system/probe.service"
     assert record["strategies"] == {"available": ["link", "copy"], "default": "link"}
     assert record["compose"] is False
     by_name = {item["name"]: item for item in rendered["bins"]}
-    assert by_name["install.sh"]["run_all"] == ["install-systemd.sh"]
-    assert "install-link-records.sh" not in by_name
-    assert "install-links.sh" not in by_name
+    if composed_system:
+        assert by_name["install.sh"]["run_all"] == ["install-systemd.sh", "install-links.sh"]
+        assert by_name["install-links.sh"]["run_all"] == ["install-link-records.sh"]
+    else:
+        assert by_name["install.sh"]["run_all"] == ["install-systemd.sh"]
+        assert "install-link-records.sh" not in by_name
+        assert "install-links.sh" not in by_name
     assert {"links.ts", "status-links.sh", "remove-link-records.sh"} <= set(by_name)
 
 
 def retarget_fixture(payload: Path, unit_dir: Path) -> tuple[str, Path, Path]:
     manifest = payload / "links.json"
     plan = json.loads(manifest.read_text(encoding="utf-8"))
-    record = plan["links"][0]
+    record = next(item for item in plan["links"] if item["dest"] == "/etc/systemd/system/probe.service")
     old_dest = record["dest"]
     old_id = record["id"]
     destination = unit_dir / "probe.service"
@@ -163,8 +177,8 @@ def run(command: Path, *args: str, env: dict[str, str], check: bool = True) -> s
     return result
 
 
-def status(payload: Path, env: dict[str, str]) -> dict:
-    result = run(payload / "bin/links.ts", "status", "--json-array", env=env)
+def status(payload: Path, env: dict[str, str], link_id: str) -> dict:
+    result = run(payload / "bin/links.ts", "status", "--id", link_id, "--json-array", env=env)
     rows = json.loads(result.stdout)
     assert len(rows) == 1, (result.stdout, result.stderr)
     return rows[0]
@@ -175,7 +189,8 @@ def test_rendered_aggregate_preserves_or_switches_declared_representation() -> N
         root = Path(tmp)
         payload = root / "payload"
         payload.mkdir()
-        generate(payload)
+        generate(payload, composed_system=True)
+        (payload / "etc/ordinary.conf").write_text("ordinary\n", encoding="utf-8")
         link_id, source, destination = retarget_fixture(payload, root / "units")
         env, sudo_log, systemctl_log = fake_commands(root)
         env["DIR"] = str(payload)
@@ -183,12 +198,12 @@ def test_rendered_aggregate_preserves_or_switches_declared_representation() -> N
 
         run(aggregate, "--skip-enable", env=env)
         assert destination.is_symlink() and destination.resolve() == source
-        assert status(payload, env)["representation"] == "link"
+        assert status(payload, env, link_id)["representation"] == "link"
 
         run(aggregate, "--copy", "--skip-enable", env=env)
         assert destination.is_file() and not destination.is_symlink()
         assert destination.read_bytes() == source.read_bytes()
-        assert status(payload, env)["representation"] == "copy"
+        assert status(payload, env, link_id)["representation"] == "copy"
 
         # No selection preserves the healthy nondefault copy rather than
         # returning to the record's link default.
@@ -234,10 +249,10 @@ def test_rendered_aggregate_preserves_or_switches_declared_representation() -> N
         # generic records lane runs: compose:false omits this record.
         run(aggregate, "--skip-enable", env={**env, "COMPFUZOR_SYSTEMD_LINK_BYPASS": "1"})
         assert not destination.exists() and not destination.is_symlink()
-        missing = run(payload / "bin/links.ts", "status", "--json-array", env=env, check=False)
+        missing = run(payload / "bin/links.ts", "status", "--id", link_id, "--json-array", env=env, check=False)
         assert missing.returncode == 1 and json.loads(missing.stdout)[0]["status"] == "MISSING"
 
-        assert not (payload / "bin/install-link-records.sh").exists()
+        assert (payload / "bin/install-link-records.sh").exists()
         run(payload / "bin/links.ts", "apply", "--id", link_id, env=env)
         assert destination.is_symlink()
 
@@ -247,6 +262,17 @@ def test_rendered_aggregate_preserves_or_switches_declared_representation() -> N
         assert "systemctl daemon-reload" in sudo_log.read_text(encoding="utf-8")
 
 
+def test_systemd_only_plan_omits_generic_links_install_tier() -> None:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-systemd-links-only-") as tmp:
+        payload = Path(tmp) / "payload"
+        payload.mkdir()
+        generate(payload, composed_system=False)
+        assert not (payload / "bin/install-link-records.sh").exists()
+        assert (payload / "bin/links.ts").exists()
+        assert (payload / "bin/status-links.sh").exists()
+
+
 if __name__ == "__main__":
     test_rendered_aggregate_preserves_or_switches_declared_representation()
+    test_systemd_only_plan_omits_generic_links_install_tier()
     print("ok: systemd unit representations survive complete LINKS composition")
