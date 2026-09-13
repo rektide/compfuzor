@@ -101,6 +101,8 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
             occupied.add(record)
     generated_names = {
         "zim/install.ts",
+        "zim/activation.ts",
+        "zim/cli.ts",
         "install-zim.sh",
         "status-zim.sh",
         "install-zim-context.sh",
@@ -112,6 +114,8 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
 
     bins = [
         {"name": "zim/install.ts", "src": "../zim/install.ts", "raw": True, "compose": False, "basedir": False},
+        {"name": "zim/activation.ts", "src": "../zim/activation.ts", "raw": True, "compose": False, "basedir": False},
+        {"name": "zim/cli.ts", "src": "../zim/cli.ts", "raw": True, "compose": False, "basedir": False},
         {"name": "install-zim.sh", "src": "../install-zim.sh", "raw": True, "basedir": False, "action": "install"},
         {
             "name": "status-zim.sh",
