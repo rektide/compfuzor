@@ -24,7 +24,7 @@ type Policy = "preserve" | "fail" | "replace";
 type State = "present" | "absent";
 type Strategy = "link" | "copy";
 type Format = "human" | "jsonl" | "array";
-type Status = "MANAGED" | "MISSING" | "OVERRIDE" | "CONFLICT" | "SOURCE_MISSING" | "INVALID";
+type Status = "MANAGED" | "MISSING" | "OVERRIDE" | "CONFLICT" | "SOURCE_MISSING" | "SOURCE_UNUSABLE" | "INVALID";
 interface LinkRecord {
   id: string;
   scope: Scope;
@@ -38,7 +38,7 @@ interface LinkRecord {
 }
 
 interface Manifest {
-  version: 1;
+  version: 1 | 2;
   deployment?: { dir?: string };
   links: LinkRecord[];
 }
@@ -163,7 +163,9 @@ async function rmLink(path: string, sudo: boolean): Promise<void> {
 
 const HELP = `Usage: links <apply|status|audit|remove> [MANIFEST ...] [options]
 
-Manage the version 1 link plan at DIR/links.json. Relative plan paths are
+Manage version 1 and 2 link plans at DIR/links.json. Version 1 is strictly
+link-only and composed; version 2 adds optional strategies and compose fields.
+Relative plan paths are
 based at deployment.dir (or the manifest directory). No shell expansion is
 performed; only leading ~, \${HOME}, \${XDG_RUNTIME_DIR}, and
 \${XDG_STATE_HOME} are recognized. XDG_STATE_HOME defaults to
@@ -310,7 +312,8 @@ async function loadManifest(inputPath: string): Promise<{ path: string; manifest
     fail(`cannot read manifest ${path}: ${error instanceof Error ? error.message : String(error)}`);
   }
   const value = object(raw, `manifest ${path}`);
-  if (value.version !== 1) fail(`manifest ${path}: unsupported version ${String(value.version)}`);
+  if (value.version !== 1 && value.version !== 2) fail(`manifest ${path}: unsupported version ${String(value.version)}`);
+  const version = value.version;
   if (!Array.isArray(value.links)) fail(`manifest ${path}: links must be an array`);
   const seen = new Set<string>();
   const links = value.links.map((entry, index): LinkRecord => {
@@ -323,6 +326,9 @@ async function loadManifest(inputPath: string): Promise<{ path: string; manifest
       fail(`${path}: ${id}: invalid policy`);
     }
     if (record.state !== "present" && record.state !== "absent") fail(`${path}: ${id}: invalid state`);
+    if (version === 1 && (record.strategies !== undefined || record.compose !== undefined)) {
+      fail(`${path}: ${id}: version 1 records cannot declare strategies or compose; rerender as LINKS manifest version 2`);
+    }
     let runtimeRoots: LinkRecord["runtimeRoots"];
     if (record.runtimeRoots !== undefined) {
       if (!Array.isArray(record.runtimeRoots) || record.runtimeRoots.some((root) => root !== "HOME" && root !== "XDG_RUNTIME_DIR" && root !== "XDG_STATE_HOME")) {
@@ -352,7 +358,7 @@ async function loadManifest(inputPath: string): Promise<{ path: string; manifest
     if (entry.dir !== undefined) stringField(entry.dir, `${path}: deployment.dir`);
     deployment = { dir: entry.dir as string | undefined };
   }
-  return { path, manifest: { version: 1, deployment, links } };
+  return { path, manifest: { version, deployment, links } };
 }
 
 function expandPath(value: string, base: string): string {
@@ -430,19 +436,26 @@ function resolveRecords(path: string, manifest: Manifest, scope?: Scope, idPatte
 type DestinationAssessment = {
   entry: DeliveryEntry;
   kind: "missing" | "healthy" | "foreign" | "directory" | "special";
-  sourceAvailable: boolean;
+  sourceEntryExists: boolean;
   sourceRegular: boolean;
   representation?: Strategy;
   healthyRepresentation?: Strategy;
   detail?: string;
 };
 
-async function sourceState(path: string): Promise<{ available: boolean; regular: boolean }> {
+async function sourceState(path: string): Promise<{ entryExists: boolean; regular: boolean }> {
+  let entryExists = false;
+  try {
+    await lstat(path);
+    entryExists = true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
   try {
     const source = await stat(path);
-    return { available: true, regular: source.isFile() };
+    return { entryExists, regular: source.isFile() };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { available: false, regular: false };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { entryExists, regular: false };
     throw error;
   }
 }
@@ -454,13 +467,13 @@ async function filesMatch(source: string, destination: string): Promise<boolean>
 
 async function inspectRecord(record: ResolvedRecord): Promise<DestinationAssessment> {
   const [entry, source] = await Promise.all([inspectDeliveryEntry(record.destPath), sourceState(record.srcPath)]);
-  if (entry.kind === "missing") return { entry, kind: "missing", sourceAvailable: source.available, sourceRegular: source.regular };
-  if (entry.kind === "directory") return { entry, kind: "directory", sourceAvailable: source.available, sourceRegular: source.regular };
-  if (entry.kind === "special") return { entry, kind: "special", sourceAvailable: source.available, sourceRegular: source.regular };
+  if (entry.kind === "missing") return { entry, kind: "missing", sourceEntryExists: source.entryExists, sourceRegular: source.regular };
+  if (entry.kind === "directory") return { entry, kind: "directory", sourceEntryExists: source.entryExists, sourceRegular: source.regular };
+  if (entry.kind === "special") return { entry, kind: "special", sourceEntryExists: source.entryExists, sourceRegular: source.regular };
   if (entry.kind === "symlink") {
     const healthy = record.strategies.available.includes("link") && linkMatches(entry, record.srcPath);
     if (healthy) {
-      return { entry, kind: "healthy", sourceAvailable: source.available, sourceRegular: source.regular, representation: "link", healthyRepresentation: "link" };
+      return { entry, kind: "healthy", sourceEntryExists: source.entryExists, sourceRegular: source.regular, representation: "link", healthyRepresentation: "link" };
     }
     let dangling = false;
     try {
@@ -472,7 +485,7 @@ async function inspectRecord(record: ResolvedRecord): Promise<DestinationAssessm
     return {
       entry,
       kind: "foreign",
-      sourceAvailable: source.available,
+      sourceEntryExists: source.entryExists,
       sourceRegular: source.regular,
       representation: "link",
       detail: dangling ? "dangling link" : "foreign link",
@@ -482,7 +495,7 @@ async function inspectRecord(record: ResolvedRecord): Promise<DestinationAssessm
   return {
     entry,
     kind: healthy ? "healthy" : "foreign",
-    sourceAvailable: source.available,
+    sourceEntryExists: source.entryExists,
     sourceRegular: source.regular,
     representation: "copy",
     healthyRepresentation: healthy ? "copy" : undefined,
@@ -507,7 +520,7 @@ function commonRow(record: ResolvedRecord, assessment: DestinationAssessment) {
   };
 }
 
-function classifyAssessment(record: ResolvedRecord, dest: DestinationAssessment): Row {
+function classifyAssessment(record: ResolvedRecord, dest: DestinationAssessment, selectedStrategy?: Strategy): Row {
   const common = {
     ...commonRow(record, dest),
   };
@@ -516,7 +529,14 @@ function classifyAssessment(record: ResolvedRecord, dest: DestinationAssessment)
     if (dest.kind === "healthy") return { ...common, status: "CONFLICT", detail: "should be absent" };
     return { ...common, status: "OVERRIDE" };
   }
-  if (!dest.sourceAvailable) return { ...common, status: "SOURCE_MISSING", detail: "src missing" };
+  if (!dest.sourceEntryExists) return { ...common, status: "SOURCE_MISSING", detail: "src missing" };
+  if (dest.kind === "healthy" && (!selectedStrategy || dest.healthyRepresentation === selectedStrategy)) {
+    return { ...common, status: "MANAGED" };
+  }
+  const operationStrategy = selectedStrategy ?? record.strategies.default;
+  if (operationStrategy === "copy" && !dest.sourceRegular) {
+    return { ...common, status: "SOURCE_UNUSABLE", detail: "copy source does not resolve to a regular file" };
+  }
   if (dest.kind === "missing") return { ...common, status: "MISSING" };
   if (dest.kind === "healthy") return { ...common, status: "MANAGED" };
   if (record.policy === "preserve") return { ...common, status: "OVERRIDE" };
@@ -571,8 +591,8 @@ async function apply(record: ResolvedRecord, selectedStrategy?: Strategy): Promi
   if (record.state === "absent") return removeManaged(record, "removed");
   const sudo = await needsSudo(record.scope, record.destPath);
   const dest = await inspectRecord(record);
-  let row = classifyAssessment(record, dest);
-  if (row.status === "SOURCE_MISSING") return row;
+  let row = classifyAssessment(record, dest, selectedStrategy);
+  if (row.status === "SOURCE_MISSING" || row.status === "SOURCE_UNUSABLE") return row;
   const strategy = selectedStrategy ?? record.strategies.default;
   if (dest.kind === "missing") {
     await deliver(record, strategy, sudo);
@@ -636,6 +656,7 @@ const HUMAN_STATUS: Record<Status, string> = {
   MISSING: "missing",
   CONFLICT: "conflict",
   SOURCE_MISSING: "no-source",
+  SOURCE_UNUSABLE: "bad-source",
   INVALID: "invalid",
 };
 
@@ -652,7 +673,7 @@ function srcCell(row: Row): string {
 
 function output(rows: Row[], options: Options): void {
   if (options.quiet >= 2) return;
-  const sourceError = rows.some((row) => row.status === "SOURCE_MISSING" || row.status === "INVALID");
+  const sourceError = rows.some((row) => row.status === "SOURCE_MISSING" || row.status === "SOURCE_UNUSABLE" || row.status === "INVALID");
   const drift = rows.some((row) => row.status === "MISSING" || row.status === "CONFLICT");
   if (options.quiet === 1) {
     console.log(sourceError ? "ERROR" : drift ? "DRIFT" : "OK");
@@ -690,13 +711,20 @@ async function main(): Promise<number> {
     rows = await audit(options.paths, options.scope, options.id);
   } else {
     const loaded = await loadManifest(options.paths[0]);
-      const resolved = resolveRecords(loaded.path, loaded.manifest, options.scope, options.id, options.composed);
+    const resolved = resolveRecords(loaded.path, loaded.manifest, options.scope, options.id, options.composed);
     if ((options.command === "apply" || options.command === "remove") && SUDO_MODE === "always" && resolved.records.some((record) => record.scope === "user")) {
       fail("--sudo always is not permitted for user-scope link mutations");
     }
     if (options.command === "apply" && options.strategy) {
       const unavailable = resolved.records.filter((record) => record.state === "present" && !record.strategies.available.includes(options.strategy!));
       if (unavailable.length > 0) fail(`strategy ${options.strategy} is unavailable for: ${unavailable.map((record) => record.id).join(", ")}`);
+      if (options.strategy === "copy") {
+        const sourceStates = await Promise.all(resolved.records.map(async (record) => ({ record, source: await sourceState(record.srcPath) })));
+        const unusable = sourceStates.filter(({ record, source }) => record.state === "present" && source.entryExists && !source.regular);
+        if (unusable.length > 0) {
+          fail(`strategy copy requires a source that resolves to a regular file: ${unusable.map(({ record }) => record.id).join(", ")}`);
+        }
+      }
     }
     const operation = options.command === "apply"
       ? (record: ResolvedRecord) => apply(record, options.strategy)
@@ -710,7 +738,7 @@ async function main(): Promise<number> {
     }
   }
   output(rows, options);
-  if (rows.some((row) => row.status === "SOURCE_MISSING" || row.status === "INVALID")) return 2;
+  if (rows.some((row) => row.status === "SOURCE_MISSING" || row.status === "SOURCE_UNUSABLE" || row.status === "INVALID")) return 2;
   return rows.some((row) => row.status === "MISSING" || row.status === "CONFLICT") ? 1 : 0;
 }
 

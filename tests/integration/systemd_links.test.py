@@ -90,6 +90,7 @@ def generate(payload: Path) -> None:
         raise AssertionError(f"systemd/LINKS render failed:\n{result.stdout}{result.stderr}")
 
     rendered = json.loads(output.read_text(encoding="utf-8"))
+    assert rendered["plan"]["version"] == 2
     record = rendered["plan"]["links"][0]
     assert record["dest"] == "/etc/systemd/system/probe.service"
     assert record["strategies"] == {"available": ["link", "copy"], "default": "link"}

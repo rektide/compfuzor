@@ -106,7 +106,7 @@ def test_links():
         ROOTS,
     )
     links = plan["links"]
-    check("manifest version", plan["version"], 1)
+    check("manifest version", plan["version"], 2)
     check("manifest location metadata", plan["deployment"]["dir"], "/srv/watchman-main")
     check("explicit source base", links[0]["src"], "/srv/watchman-main/etc/source.conf")
     check("symmetric user destination", links[1]["dest"], "${HOME}/.config/watchman-main/watchman.json")

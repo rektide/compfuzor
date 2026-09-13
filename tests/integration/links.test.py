@@ -90,6 +90,7 @@ def test_link_generation() -> None:
 
         generated = json.loads(output.read_text(encoding="utf-8"))
         plan = generated["plan"]
+        assert plan["version"] == 2
         assert (payload / "links.json").is_file()
         assert plan["links"][0]["src"] == str(temporary / "etc/link-test/app.json")
         assert plan["links"][0]["dest"] == "${HOME}/.config/link-test/app.json"

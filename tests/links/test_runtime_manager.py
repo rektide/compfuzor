@@ -19,8 +19,10 @@ def run(env: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run([CLI, *args], env=env, text=True, capture_output=True, check=False)
 
 
-def write_manifest(path: Path, links: list[dict]) -> None:
-    path.write_text(json.dumps({"version": 1, "deployment": {"dir": str(path.parent)}, "links": links}))
+def write_manifest(path: Path, links: list[dict], *, version: int | None = None) -> None:
+    if version is None:
+        version = 2 if any("strategies" in item or "compose" in item for item in links) else 1
+    path.write_text(json.dumps({"version": version, "deployment": {"dir": str(path.parent)}, "links": links}))
 
 
 def record(id: str, src: str, dest: str, policy: str = "preserve", state: str = "present") -> dict:
@@ -142,10 +144,17 @@ def test_rejects_unsupported_runtime_expression_and_manifest_version(env: dict[s
     assert invalid[0]["status"] == "INVALID"
     assert "unsupported runtime-root expression" in invalid[0]["detail"]
     assert not untouched.exists() and not untouched.is_symlink()
-    manifest.write_text(json.dumps({"version": 2, "links": []}))
+    manifest.write_text(json.dumps({"version": 3, "links": []}))
     result = run(env, "status", str(manifest))
     assert result.returncode == 2
     assert "unsupported version" in result.stderr
+
+    mislabeled = represented_record("mislabeled", source, untouched)
+    write_manifest(manifest, [mislabeled], version=1)
+    result = run(env, "status", str(manifest))
+    assert result.returncode == 2
+    assert "version 1 records cannot declare strategies or compose" in result.stderr
+    assert "rerender" in result.stderr
 
 
 def test_audit_reports_cross_manifest_destination_conflicts(env: dict[str, str], tmp_path: Path) -> None:
@@ -311,3 +320,38 @@ def test_strategy_manifest_validation(env: dict[str, str], tmp_path: Path) -> No
         write_manifest(manifest, [item])
         result = run(env, "status", str(manifest))
         assert result.returncode == 2 and message in result.stderr
+
+
+def test_dangling_source_symlink_preserves_link_topology_but_cannot_copy(env: dict[str, str], tmp_path: Path) -> None:
+    source = tmp_path / "dangling-source"
+    source.symlink_to(tmp_path / "missing-referent")
+    destination = tmp_path / "destination"
+    manifest = tmp_path / "links.json"
+
+    # Old v1 plans remain topology-only: the source directory entry exists,
+    # so creating and observing the equally dangling destination link is valid.
+    write_manifest(manifest, [record("v1-link", str(source), str(destination))], version=1)
+    applied = run(env, "apply", str(manifest), "--json-array")
+    assert applied.returncode == 0, applied.stderr
+    assert destination.is_symlink() and os.readlink(destination) == str(source)
+    observed = run(env, "status", str(manifest), "--json-array")
+    assert observed.returncode == 0, observed.stderr
+    row = json.loads(observed.stdout)[0]
+    assert row["status"] == "MANAGED" and row["representation"] == "link"
+
+    # v2 can offer copy as well, but explicit copy has no fallback to link and
+    # rejects before replacing the currently healthy link.
+    write_manifest(manifest, [represented_record("v2-both", source, destination)], version=2)
+    copy = run(env, "apply", str(manifest), "--strategy", "copy")
+    assert copy.returncode == 2
+    assert "resolves to a regular file" in copy.stderr
+    assert destination.is_symlink() and os.readlink(destination) == str(source)
+
+    destination.unlink()
+    copy_default = represented_record("v2-copy-default", source, destination, default="copy")
+    write_manifest(manifest, [copy_default], version=2)
+    rejected = run(env, "apply", str(manifest), "--json-array")
+    assert rejected.returncode == 2
+    rejected_row = json.loads(rejected.stdout)[0]
+    assert rejected_row["status"] == "SOURCE_UNUSABLE"
+    assert not destination.exists() and not destination.is_symlink()

@@ -388,7 +388,7 @@ def compile_links(links, artifacts, directory, name, roots):
         output.append(record)
 
     return {
-        "version": 1,
+        "version": 2,
         "deployment": {"id": name, "name": name, "dir": directory},
         "links": output,
     }

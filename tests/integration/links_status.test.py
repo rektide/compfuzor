@@ -42,10 +42,12 @@ def run(args: list[str], env: dict[str, str] | None = None) -> subprocess.Comple
     )
 
 
-def write_manifest(root: Path, records: list[dict]) -> Path:
+def write_manifest(root: Path, records: list[dict], *, version: int | None = None) -> Path:
     manifest = root / "links.json"
+    if version is None:
+        version = 2 if any("strategies" in item or "compose" in item for item in records) else 1
     manifest.write_text(
-        json.dumps({"version": 1, "deployment": {"dir": str(root)}, "links": records}),
+        json.dumps({"version": version, "deployment": {"dir": str(root)}, "links": records}),
         encoding="utf-8",
     )
     return manifest
