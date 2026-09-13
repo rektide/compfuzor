@@ -96,6 +96,7 @@ def test_link_generation() -> None:
         assert plan["links"][1]["dest"] == "${HOME}/.local/usr/share/link-test/applications/link-test.desktop"
         by_name = {item["name"]: item for item in generated["bins"]}
         assert by_name["install-links-user.sh"]["run_all"] == ["install-link-records-user.sh"]
+        assert by_name["install-link-records-user.sh"]["content"] == 'exec "$DIR/bin/links.ts" apply --composed --scope user'
         assert "install-links-user.sh" in by_name["install-user.sh"]["run_all"]
         assert "status-links.sh" in generated["statuses"]
         print("ok: deferred links compile and compose through Ansible")

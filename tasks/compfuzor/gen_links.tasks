@@ -38,6 +38,8 @@
   vars:
     _link_system: "{{ _LINK_PLAN.links | selectattr('scope', 'equalto', 'system') | list | length > 0 }}"
     _link_user: "{{ _LINK_PLAN.links | selectattr('scope', 'equalto', 'user') | list | length > 0 }}"
+    # Record installers are fixed composition commands. They intentionally do
+    # not forward aggregate argv such as systemd's --copy/--link into LINKS.
     _link_bins: >-
       {{
         (True | links_runtime_bins)
@@ -65,16 +67,16 @@
           },
         ]
         + ([{
-          'name': 'install-link-records.sh',
-          'content': 'exec "$DIR/bin/links.ts" apply --scope system "$@"',
+           'name': 'install-link-records.sh',
+           'content': 'exec "$DIR/bin/links.ts" apply --composed --scope system',
           'basedir': False,
           'subsystem': 'links',
           'bypass': 'LINK',
           'phase': 'records',
         }] if _link_system else [])
         + ([{
-          'name': 'install-link-records-user.sh',
-          'content': 'exec "$DIR/bin/links.ts" apply --scope user "$@"',
+           'name': 'install-link-records-user.sh',
+           'content': 'exec "$DIR/bin/links.ts" apply --composed --scope user',
           'basedir': False,
           'subsystem': 'links',
           'scope': 'user',
