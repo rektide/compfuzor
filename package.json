@@ -6,13 +6,6 @@
     "check": "vp fmt vite.config.ts --check && vp lint files/config files/links files/zim files/config-remote.ts vite.config.ts",
     "fix": "vp fmt vite.config.ts --write && vp lint --fix files/config files/links files/zim files/config-remote.ts vite.config.ts"
   },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "^11.20.0",
-      "onFail": "download"
-    }
-  },
   "type": "module",
   "private": true,
   "devDependencies": {
