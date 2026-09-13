@@ -28,9 +28,9 @@ def test_config_remote() -> None:
         sources = root / "producer" / "etc"
         (host / "bin").mkdir(parents=True)
         sources.mkdir(parents=True)
-        manager = host / "bin" / "config-remote.ts"
+        manager = host / "bin" / "config-remote.mjs"
         manager.write_text(
-            (ROOT / "files" / "config-remote.ts").read_text().replace("{{DIR}}", str(host)), encoding="utf-8"
+            (ROOT / "build" / "runtime" / "config-remote" / "config-remote.mjs").read_text(), encoding="utf-8"
         )
         manager.chmod(0o770)
         (host / "etc").mkdir(exist_ok=True)
@@ -38,7 +38,7 @@ def test_config_remote() -> None:
             "config": "app", "directory": str(target), "pattern": "*.json", "disabled_suffix": ".disabled"
         }}}), encoding="utf-8")
         rebuild_log = root / "rebuild.log"
-        command = host / "bin" / "config" / "command.ts"
+        command = host / "bin" / "config" / "command.mjs"
         command.parent.mkdir()
         command.write_text(f'#!/bin/sh\necho "$@" >> "{rebuild_log}"\nexit "${{REBUILD_FAIL:-0}}"\n', encoding="utf-8")
         command.chmod(0o770)
@@ -143,9 +143,9 @@ def test_remote_symlink_assembly_and_toggle() -> None:
         (host / "etc").mkdir(exist_ok=True)
         (host / "etc" / "config.spec.json").write_text(json.dumps(spec), encoding="utf-8")
 
-        manager = host / "bin" / "config-remote.ts"
+        manager = host / "bin" / "config-remote.mjs"
         manager.write_text(
-            (ROOT / "files" / "config-remote.ts").read_text().replace("{{DIR}}", str(host)),
+            (ROOT / "build" / "runtime" / "config-remote" / "config-remote.mjs").read_text(),
             encoding="utf-8",
         )
         manager.chmod(0o770)
@@ -156,7 +156,7 @@ def test_remote_symlink_assembly_and_toggle() -> None:
             encoding="utf-8",
         )
         runner.chmod(0o770)
-        command = host / "bin" / "config" / "command.ts"
+        command = host / "bin" / "config" / "command.mjs"
         command.write_text(
             f'#!/bin/bash\nif [ "$1" = --action ]; then shift 4; else shift 2; fi\nexec "{runner}" "$@"\n', encoding="utf-8"
         )
@@ -173,7 +173,7 @@ done < "$CONFIG_INPUTS_FILE"
         )
         leaf.chmod(0o770)
         assemble = host / "bin" / "config-assemble.sh"
-        assemble.symlink_to("config/command.ts")
+        assemble.symlink_to("config/command.mjs")
         toggle = host / "bin" / "config" / "toggle.sh"
         toggle.write_text(
             "#!/bin/bash\n"

@@ -12,7 +12,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-CLI = ROOT / "files/links/links.ts"
+CLI = ROOT / "build/runtime/links/links.mjs"
 
 
 def run(env: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:

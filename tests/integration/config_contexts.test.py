@@ -169,7 +169,8 @@ output.write_text(text)
         run(["ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook)], cwd=ROOT, env=ansible_env)
 
         plan = json.loads(plan_file.read_text(encoding="utf-8"))
-        assert {"config/command.ts", "config/context.ts", "config-assemble.sh", "config-install.sh"}.issubset(plan["bins"])
+        assert {"config/command.mjs", "config-assemble.sh", "config-install.sh"}.issubset(plan["bins"])
+        assert not any(name.endswith(".ts") for name in plan["bins"])
         assert not {"config.sh", "config-context.sh", "config-user.sh", "config-system-test.sh"} & set(plan["bins"])
         assert plan["spec"]["contexts"]["user"]["scope"] == "user"
         assert plan["spec"]["contexts"]["system-test"]["root"] == {"path": str(system_root)}
@@ -279,7 +280,7 @@ output.write_text(text)
         assert (system_base / "outputs" / "plain.conf").read_text(encoding="utf-8") == "valid=system\n"
 
         deployed_direct = run(
-            [str(payload / "bin" / "config" / "command.ts"), "--action", "assemble", "--context", "system-test", "--list"],
+            [str(payload / "bin" / "config" / "command.mjs"), "--action", "assemble", "--context", "system-test", "--list"],
             cwd=temporary,
             env=system_env,
         )
@@ -302,7 +303,7 @@ output.write_text(text)
         )
         assert source_direct.stdout.splitlines() == ["optional", "plain", "settings", "shell"]
 
-        for module in (ROOT / "files" / "config" / "context.ts", payload / "bin" / "config" / "context.ts", ROOT / "files" / "config" / "command.ts"):
+        for module in (ROOT / "files" / "config" / "context.ts", ROOT / "build" / "runtime" / "config" / "command.mjs", payload / "bin" / "config" / "command.mjs"):
             imported = run(
                 [NODE, "--input-type=module", "--eval", f'import({json.dumps(module.as_uri())}).then(() => console.log("imported"))'],
                 cwd=ROOT,
@@ -341,7 +342,7 @@ while true; do sleep 30 & wait "$!"; done
         env["TMPDIR"] = str(temporary)
         env["PATH"] = os.pathsep.join((str(Path(NODE).parent), "/usr/bin", "/bin"))
         process = subprocess.Popen(
-            [NODE, str(ROOT / "files" / "config" / "command.ts"), "--action", "assemble", "--context", "test", "--spec", str(spec), "--runner", str(runner)],
+            [NODE, str(ROOT / "build" / "runtime" / "config" / "command.mjs"), "--action", "assemble", "--context", "test", "--spec", str(spec), "--runner", str(runner)],
             cwd=ROOT,
             env=env,
             text=True,

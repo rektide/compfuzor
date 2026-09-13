@@ -241,6 +241,14 @@ def test_zim_consumer_lifecycle() -> None:
         ansible_env["ANSIBLE_CONFIG"] = str(ROOT / "ansible.cfg")
         render_host(payload, scenario, ansible_env)
 
+        deployed_sources = [path.relative_to(payload / "bin") for path in (payload / "bin").rglob("*") if path.is_file()]
+        assert not [path for path in deployed_sources if path.suffix in {".ts", ".py"}]
+        for bundle in ("config/command.mjs", "config-remote.mjs", "links/links.mjs", "zim/install.mjs"):
+            content = (payload / "bin" / bundle).read_text(encoding="utf-8")
+            assert content.startswith("#!/usr/bin/env")
+            assert 'from "./' not in content
+            assert not any(line.lstrip().startswith(("import ", "export ")) and ".ts" in line for line in content.splitlines())
+
         zimrc_d = payload / "etc" / "zimrc.d"
         zimenv_d = payload / "etc" / "zimenv.d"
         assert (zimrc_d / "20-environment.conf").is_file()
@@ -285,7 +293,7 @@ zimfw() { :; }
         stale_spec.write_text(json.dumps(zim_spec | {"version": 1}), encoding="utf-8")
         stale_result = run(
             [
-                str(payload / "bin" / "zim" / "install.ts"), "status",
+                str(payload / "bin" / "zim" / "install.mjs"), "status",
                 "--spec", str(stale_spec),
                 "--config-spec", str(payload / "etc" / "config.spec.json"),
                 "--config-runner", str(payload / "bin" / "config" / "run.sh"),
@@ -353,7 +361,7 @@ zimfw() { :; }
         assert install_system_text.count('"$DIR/bin/install-zim.sh" "$@"') == 1
         system_user_compositor = system_default_payload / "bin" / "install-user.sh"
         assert not system_user_compositor.exists() or "install-zim.sh" not in system_user_compositor.read_text(encoding="utf-8")
-        for generated in ("install-zim.sh", "status-zim.sh", "zim/install.ts"):
+        for generated in ("install-zim.sh", "status-zim.sh", "zim/install.mjs"):
             assert (system_default_payload / "bin" / generated).is_file()
         assert not (system_default_payload / "bin" / "install-zim-system.sh").exists()
 

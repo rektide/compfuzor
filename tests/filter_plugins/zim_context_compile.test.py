@@ -72,7 +72,8 @@ def test_compile_zim_contexts():
     }
     assert compiled["spec"]["contexts"]["system"]["scope"] == "system"
     by_name = {record["name"]: record for record in compiled["bins"]}
-    assert set(by_name) == {"zim/install.ts", "zim/activation.ts", "zim/cli.ts", "install-zim.sh", "status-zim.sh"}
+    assert set(by_name) == {"zim/install.mjs", "install-zim.sh", "status-zim.sh"}
+    assert by_name["zim/install.mjs"]["src"].endswith("/build/runtime/zim/install.mjs")
     assert by_name["install-zim.sh"]["action"] == "install"
     assert "scope" not in by_name["install-zim.sh"]
     assert all(record.get("link") is None for record in compiled["bins"])

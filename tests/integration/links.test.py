@@ -104,7 +104,7 @@ def test_link_generation() -> None:
         assert user_links[1]["dest"] == "${HOME}/.local/usr/share/link-test/applications/link-test.desktop"
         by_name = {item["name"]: item for item in generated["bins"]}
         assert by_name["install-links-user.sh"]["run_all"] == ["install-link-records-user.sh"]
-        assert by_name["install-link-records-user.sh"]["content"] == 'exec "$DIR/bin/links.ts" apply --composed --scope user'
+        assert by_name["install-link-records-user.sh"]["content"] == 'exec "$DIR/bin/links.mjs" apply --composed --scope user'
         assert "install-links-user.sh" in by_name["install-user.sh"]["run_all"]
         assert "install-link-records.sh" not in by_name
         assert "install-links.sh" not in by_name

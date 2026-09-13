@@ -28,8 +28,8 @@ def test_zim_remote() -> None:
         enabled.write_text("zmodule enabled\n")
         disabled_source.write_text("zmodule disabled\n")
 
-        manager = host / "bin" / "config-remote.ts"
-        manager.write_text((ROOT / "files" / "config-remote.ts").read_text().replace("{{DIR}}", str(host)))
+        manager = host / "bin" / "config-remote.mjs"
+        manager.write_text((ROOT / "build" / "runtime" / "config-remote" / "config-remote.mjs").read_text())
         manager.chmod(0o770)
         installer = host / "bin" / "install-zim-donor.sh"
         installer.write_text((ROOT / "files" / "install-zim-donor.sh").read_text().replace("{{DIR}}", str(host)))
@@ -43,7 +43,7 @@ def test_zim_remote() -> None:
             }
         }}))
         log = root / "rebuild.log"
-        rebuild = host / "bin" / "config" / "command.ts"
+        rebuild = host / "bin" / "config" / "command.mjs"
         rebuild.parent.mkdir()
         rebuild.write_text(f'#!/bin/sh\necho "$@" >> "{log}"\n')
         rebuild.chmod(0o770)

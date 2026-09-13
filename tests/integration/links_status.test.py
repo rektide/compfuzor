@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""Direct CLI tests for links.ts status human output: verdict + both sides of each link."""
+"""Direct CLI tests for the built LINKS status output: verdict and both link sides."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-LINKS_TS = ROOT / "files" / "links" / "links.ts"
+LINKS_CLI = ROOT / "build" / "runtime" / "links" / "links.mjs"
 
 
 def check(label: str, actual: object, expected: object) -> None:
@@ -34,7 +34,7 @@ def check_absent(label: str, haystack: str, needle: str) -> None:
 
 def run(args: list[str], env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["node", str(LINKS_TS), *args],
+        ["node", str(LINKS_CLI), *args],
         capture_output=True,
         text=True,
         check=False,

@@ -80,7 +80,7 @@ def test_compile():
     check("base runner exists before surface compilation", "config.sh" in names, True)
     check("base recipe command exists before surface compilation", "config-opencode.sh" in names, True)
     check("input toggle exists", "disable-mcp.sh" in names, True)
-    check("shared remote implementation", "config-remote.ts" in names, True)
+    check("built remote implementation", "config-remote.mjs" in names, True)
     check("single remote implementation", len([name for name in names if name.startswith("config-remote")]), 1)
     check("immutable toggle absent", "disable-policy.d.sh" in names, False)
     leaf = next(item for item in plan["bins"] if item["name"] == "internal/config/opencode")

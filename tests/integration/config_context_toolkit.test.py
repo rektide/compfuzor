@@ -147,7 +147,9 @@ def test_config_context_toolkit() -> None:
 
         plan = json.loads(plan_file.read_text(encoding="utf-8"))
         bins = {item["name"]: item for item in plan["bins"]}
-        assert list(item["name"] for item in plan["bins"]).count("links/delivery.ts") == 1
+        assert list(item["name"] for item in plan["bins"]).count("links/links.mjs") == 1
+        assert list(item["name"] for item in plan["bins"]).count("links.mjs") == 1
+        assert not any(item["name"].endswith(".ts") for item in plan["bins"])
         assert bins["install.sh"]["run_all"].count("config-install.sh") == 1
         assert "config-install.sh" not in bins["install-user.sh"]["run_all"]
         assert {"name": "config-status.sh", "exit2": "error"} in plan["statuses"]
@@ -191,9 +193,9 @@ def test_config_context_toolkit() -> None:
         config = payload / "bin" / "config-assemble.sh"
         status = payload / "bin" / "config-status.sh"
         publish = payload / "bin" / "config-publish.sh"
-        raw_status = [str(payload / "bin" / "config" / "command.ts"), "--action", "status", "--context", "user"]
+        raw_status = [str(payload / "bin" / "config" / "command.mjs"), "--action", "status", "--context", "user"]
 
-        run([str(payload / "bin" / "links.ts"), "apply", "--scope", "user", str(payload / "links.json")], cwd=temporary, env=env_one)
+        run([str(payload / "bin" / "links.mjs"), "apply", "--scope", "user", str(payload / "links.json")], cwd=temporary, env=env_one)
         assert (home_one / ".config" / "shared-links-proof.conf").is_symlink()
 
         run([str(install), "main"], cwd=temporary, env=env_one)
@@ -463,10 +465,9 @@ def test_config_context_toolkit() -> None:
         assert str(donor) in listed.stdout and str(local_inputs) in listed.stdout
 
         for module in (
-            ROOT / "files" / "config" / "command.ts",
-            payload / "bin" / "config" / "command.ts",
+            ROOT / "build" / "runtime" / "config" / "command.mjs",
+            payload / "bin" / "config" / "command.mjs",
             ROOT / "files" / "links" / "delivery.ts",
-            payload / "bin" / "links" / "delivery.ts",
         ):
             imported = run(
                 [NODE, "--input-type=module", "--eval", f'import({json.dumps(module.as_uri())}).then(() => console.log("imported"))'],

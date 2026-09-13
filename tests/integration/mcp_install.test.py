@@ -34,8 +34,8 @@ def test_mcp_install() -> None:
         adapter = host / "bin" / "mcp-dropin.ts"
         adapter.write_text(rendered.replace("{{DIR}}", str(host)), encoding="utf-8")
         adapter.chmod(0o770)
-        manager_rendered = (ROOT / "files" / "config-remote.ts").read_text(encoding="utf-8")
-        manager = host / "bin" / "config-remote.ts"
+        manager_rendered = (ROOT / "build" / "runtime" / "config-remote" / "config-remote.mjs").read_text(encoding="utf-8")
+        manager = host / "bin" / "config-remote.mjs"
         manager.write_text(manager_rendered.replace("{{DIR}}", str(host)), encoding="utf-8")
         manager.chmod(0o770)
         (host / "etc").mkdir(exist_ok=True)
@@ -43,7 +43,7 @@ def test_mcp_install() -> None:
             json.dumps({"remotes": {"amp-mcp": {"config": "amp", "directory": str(target), "pattern": "*.json", "disabled_suffix": ".disabled"}}}),
             encoding="utf-8",
         )
-        command = host / "bin" / "config" / "command.ts"
+        command = host / "bin" / "config" / "command.mjs"
         command.parent.mkdir()
         command.write_text(
             "#!/bin/sh\n"

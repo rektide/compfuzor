@@ -68,6 +68,7 @@ def generate(payload: Path, *, composed_system: bool) -> None:
       loop: "{{{{ ETC_FILES }}}}"
     - import_tasks: {ROOT / 'tasks/compfuzor/link_plan.tasks'}
     - import_tasks: {ROOT / 'tasks/compfuzor/bins.tasks'}
+    - import_tasks: {ROOT / 'tasks/compfuzor/bins_link.tasks'}
     - copy:
         dest: {str(output)!r}
         content: >-
@@ -113,7 +114,7 @@ def generate(payload: Path, *, composed_system: bool) -> None:
         assert by_name["install.sh"]["run_all"] == ["install-systemd.sh"]
         assert "install-link-records.sh" not in by_name
         assert "install-links.sh" not in by_name
-    assert {"links.ts", "status-links.sh", "remove-link-records.sh"} <= set(by_name)
+    assert {"links.mjs", "links/links.mjs", "status-links.sh", "remove-link-records.sh"} <= set(by_name)
 
 
 def retarget_fixture(payload: Path, unit_dir: Path) -> tuple[str, Path, Path]:
@@ -178,7 +179,7 @@ def run(command: Path, *args: str, env: dict[str, str], check: bool = True) -> s
 
 
 def status(payload: Path, env: dict[str, str], link_id: str) -> dict:
-    result = run(payload / "bin/links.ts", "status", "--id", link_id, "--json-array", env=env)
+    result = run(payload / "bin/links.mjs", "status", "--id", link_id, "--json-array", env=env)
     rows = json.loads(result.stdout)
     assert len(rows) == 1, (result.stdout, result.stderr)
     return rows[0]
@@ -249,11 +250,11 @@ def test_rendered_aggregate_preserves_or_switches_declared_representation() -> N
         # generic records lane runs: compose:false omits this record.
         run(aggregate, "--skip-enable", env={**env, "COMPFUZOR_SYSTEMD_LINK_BYPASS": "1"})
         assert not destination.exists() and not destination.is_symlink()
-        missing = run(payload / "bin/links.ts", "status", "--id", link_id, "--json-array", env=env, check=False)
+        missing = run(payload / "bin/links.mjs", "status", "--id", link_id, "--json-array", env=env, check=False)
         assert missing.returncode == 1 and json.loads(missing.stdout)[0]["status"] == "MISSING"
 
         assert (payload / "bin/install-link-records.sh").exists()
-        run(payload / "bin/links.ts", "apply", "--id", link_id, env=env)
+        run(payload / "bin/links.mjs", "apply", "--id", link_id, env=env)
         assert destination.is_symlink()
 
         assert "daemon-reload" in systemctl_log.read_text(encoding="utf-8")
@@ -268,7 +269,7 @@ def test_systemd_only_plan_omits_generic_links_install_tier() -> None:
         payload.mkdir()
         generate(payload, composed_system=False)
         assert not (payload / "bin/install-link-records.sh").exists()
-        assert (payload / "bin/links.ts").exists()
+        assert (payload / "bin/links.mjs").exists()
         assert (payload / "bin/status-links.sh").exists()
 
 

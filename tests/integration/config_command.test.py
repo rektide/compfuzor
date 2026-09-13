@@ -119,7 +119,7 @@ def test_config_command() -> None:
         fixed = {f"config-{action}.sh" for action in ("install", "assemble", "sync-inputs", "publish", "inputs", "status")}
         assert fixed.issubset(bins)
         assert all((payload / "bin" / name).is_symlink() for name in fixed)
-        assert all((payload / "bin" / name).resolve() == payload / "bin" / "config" / "command.ts" for name in fixed)
+        assert all((payload / "bin" / name).resolve() == payload / "bin" / "config" / "command.mjs" for name in fixed)
         assert (payload / "bin" / "install.sh").read_text(encoding="utf-8").count('"$DIR/bin/config-install.sh" "$@"') == 1
         forbidden = ("config.sh", "config-context.sh", "config-user.sh", "config-system.sh")
         assert not any((payload / "bin" / name).exists() for name in forbidden)
@@ -258,7 +258,7 @@ def test_config_command() -> None:
         chain_alias = payload / "bin" / "config-system-assemble.sh"
         chain_alias.symlink_to("config-assemble.sh")
         direct_alias = payload / "bin" / "config-system-status.sh"
-        direct_alias.symlink_to("config/command.ts")
+        direct_alias.symlink_to("config/command.mjs")
         assert run([str(chain_alias), "--stdout", "alpha"], cwd=temporary, env=base_env).stdout == "alpha=system\n"
         conflicting_env = base_env | {"COMPFUZOR_CONFIG_CONTEXT": "system"}
         assert run([str(chain_alias), "--context", "user", "--stdout", "alpha"], cwd=temporary, env=conflicting_env).stdout == "alpha=pending\n"
@@ -266,16 +266,16 @@ def test_config_command() -> None:
         assert action_override.stdout == "alpha=system\n"
 
         hostile_action = payload / "bin" / "config-system-hostile.sh"
-        hostile_action.symlink_to("config/command.ts")
+        hostile_action.symlink_to("config/command.mjs")
         assert run([str(hostile_action), "--action", "assemble", "--stdout", "alpha"], cwd=temporary, env=base_env).stdout == "alpha=system\n"
         hostile_context = payload / "bin" / "config-hostile-assemble.sh"
-        hostile_context.symlink_to("config/command.ts")
+        hostile_context.symlink_to("config/command.mjs")
         assert run([str(hostile_context), "--context", "system", "--stdout", "alpha"], cwd=temporary, env=base_env).stdout == "alpha=system\n"
         hostile = payload / "bin" / "not-a-config-command"
-        hostile.symlink_to("config/command.ts")
+        hostile.symlink_to("config/command.mjs")
         assert run([str(hostile)], cwd=temporary, env=base_env, check=False).returncode == 2
         assert run([str(hostile), "--action", "assemble", "--context", "system", "--stdout", "alpha"], cwd=temporary, env=base_env).stdout == "alpha=system\n"
-        direct = payload / "bin" / "config" / "command.ts"
+        direct = payload / "bin" / "config" / "command.mjs"
         assert run([str(direct), "--action", "assemble", "--context", "system", "--stdout", "alpha"], cwd=temporary, env=base_env).stdout == "alpha=system\n"
 
         # Strategy precedence is action-local; stale install settings do not poison status.

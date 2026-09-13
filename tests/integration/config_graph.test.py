@@ -119,7 +119,7 @@ output.write_text(text)
         assert plan["spec"]["remotes"]["shell.conf.d"]["config"] == "shell"
         assert "disable-mcp.sh" in plan["bins"]
         assert "disable-shell.conf.d.sh" in plan["bins"]
-        assert "config-remote.ts" in plan["bins"]
+        assert "config-remote.mjs" in plan["bins"]
         assert len([name for name in plan["bins"] if name.startswith("config-remote")]) == 1
 
         (payload / "etc" / "base.json").write_text('{"base": true}\n')
