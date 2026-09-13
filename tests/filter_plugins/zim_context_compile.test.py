@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import copy
 import sys
 
 sys.path.insert(0, "library/filter_plugins")
@@ -23,8 +22,8 @@ def config_plan():
     return compile_config_contexts(
         base,
         {
-            "user": {"scope": "user", "root": "config", "configs": ["zimrc", "zimenv"], "compose": False},
-            "system": {"scope": "system", "root": "/scratch/config", "configs": ["zimrc", "zimenv"], "compose": False},
+            "user": {"scope": "user", "root": "config", "configs": ["zimrc", "zimenv"]},
+            "system": {"scope": "system", "root": "/scratch/config", "configs": ["zimrc", "zimenv"]},
         },
         "/opt/zim/etc",
         "/opt/zim/bin",
@@ -72,9 +71,10 @@ def test_compile_zim_contexts():
     assert compiled["spec"]["contexts"]["system"]["scope"] == "system"
     by_name = {record["name"]: record for record in compiled["bins"]}
     assert set(by_name) == {"zim/install.ts", "install-zim.sh", "status-zim.sh"}
-    assert by_name["install-zim.sh"]["scope"] == "user"
+    assert by_name["install-zim.sh"]["action"] == "install"
+    assert "scope" not in by_name["install-zim.sh"]
     assert all(record.get("link") is None for record in compiled["bins"])
-    assert compiled["statuses"] == ["status-zim.sh"]
+    assert compiled["statuses"] == [{"name": "status-zim.sh", "exit2": "error"}]
     assert compiled["etc_files"][0]["name"] == "zim.spec.json"
 
     system_default = compile_zim_contexts(
@@ -120,12 +120,6 @@ def test_validation():
     check_raises(
         lambda: compile_zim_contexts({"donor": {"config": "user"}}, plan["spec"], "donor", "/e", "/d", "/b", "n", []),
         "role command",
-    )
-    composing_spec = copy.deepcopy(plan["spec"])
-    composing_spec["contexts"]["user"]["compose"] = True
-    check_raises(
-        lambda: compile_zim_contexts({"user": {"config": "user"}}, composing_spec, "user", "/e", "/d", "/b", "n", []),
-        "compose: false",
     )
     check_raises(
         lambda: compile_zim_contexts({"user": {"config": "user"}}, plan["spec"], "user", "/e", "/d", "/b", "n", [{"name": "install-zim.sh"}]),

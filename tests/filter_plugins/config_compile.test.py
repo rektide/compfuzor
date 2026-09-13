@@ -77,13 +77,14 @@ def test_compile():
 
     names = [item["name"] for item in plan["bins"]]
     check("flat leaf exists", "internal/config/opencode" in names, True)
-    check("config command exists", "config-opencode.sh" in names, True)
+    check("internal runner exists", "config/run.sh" in names, True)
+    check("recipe command absent", "config-opencode.sh" in names, False)
     check("input toggle exists", "disable-mcp.sh" in names, True)
     check("shared remote implementation", "config-remote.ts" in names, True)
     check("single remote implementation", len([name for name in names if name.startswith("config-remote")]), 1)
     check("immutable toggle absent", "disable-policy.d.sh" in names, False)
     leaf = next(item for item in plan["bins"] if item["name"] == "internal/config/opencode")
-    check("leaf shares processor", leaf["link"], "processors/json-deep-merge")
+    check("leaf shares processor", leaf["link"], "config/processors/json-deep-merge")
 
     published = publish_config({"other": {"spec": "preserved"}}, plan)
     check("unrelated subsystem preserved", published["other"]["spec"], "preserved")

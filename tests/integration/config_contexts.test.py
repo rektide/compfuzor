@@ -169,7 +169,8 @@ output.write_text(text)
         run(["ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook)], cwd=ROOT, env=ansible_env)
 
         plan = json.loads(plan_file.read_text(encoding="utf-8"))
-        assert {"config-context.ts", "config/context.ts", "config-user.sh", "config-system-test.sh"}.issubset(plan["bins"])
+        assert {"config/command.ts", "config/context.ts", "config-assemble.sh", "config-install.sh"}.issubset(plan["bins"])
+        assert not {"config.sh", "config-context.sh", "config-user.sh", "config-system-test.sh"} & set(plan["bins"])
         assert plan["spec"]["contexts"]["user"]["scope"] == "user"
         assert plan["spec"]["contexts"]["system-test"]["root"] == {"path": str(system_root)}
 
@@ -182,7 +183,7 @@ output.write_text(text)
         canonical_env = os.environ.copy()
         canonical_env["CONFIG_BLOCK_IN_FILE"] = str(block_fixture)
         canonical_env.pop("DIR", None)
-        run([str(payload / "bin" / "config.sh")], cwd=payload, env=canonical_env)
+        run([str(payload / "bin" / "config-assemble.sh"), "--context", "canonical"], cwd=payload, env=canonical_env)
         assert (canonical / "outputs" / "plain.conf").read_text(encoding="utf-8") == "valid=true\n"
         assert "canonical unmanaged" in canonical_shell.read_text(encoding="utf-8")
 
@@ -190,7 +191,7 @@ output.write_text(text)
         base_one = home_one / ".config" / "config-context-test"
         seed_inputs(base_one, plain="valid=one\n", marker="home_one")
         env_one = consumer_env(home_one, block_fixture, temporary)
-        user_command = payload / "bin" / "config-user.sh"
+        user_command = payload / "bin" / "config-assemble.sh"
 
         listed = run([str(user_command), "--list"], cwd=temporary, env=env_one)
         assert listed.stdout.splitlines() == ["optional", "plain", "settings", "shell"]
@@ -213,6 +214,7 @@ output.write_text(text)
         assert all((output_one / name).stat().st_mode & 0o777 == 0o600 for name in ("plain.conf", "settings.json", "shell.conf"))
         assert not (output_one / "optional.conf").exists()
         run([str(user_command), "settings"], cwd=temporary, env=env_one)
+        run([str(user_command), "plain", "settings"], cwd=temporary, env=env_one)
 
         unchanged = (output_one / "plain.conf").stat()
         run([str(user_command)], cwd=temporary, env=env_one)
@@ -272,12 +274,12 @@ output.write_text(text)
         system_base = system_root / "service"
         seed_inputs(system_base, plain="valid=system\n", marker="system")
         system_env = consumer_env(home_one, block_fixture, temporary)
-        system_command = payload / "bin" / "config-system-test.sh"
-        run([str(system_command)], cwd=temporary, env=system_env)
+        system_command = payload / "bin" / "config-assemble.sh"
+        run([str(system_command), "--context", "system-test"], cwd=temporary, env=system_env)
         assert (system_base / "outputs" / "plain.conf").read_text(encoding="utf-8") == "valid=system\n"
 
         deployed_direct = run(
-            [str(payload / "bin" / "config-context.ts"), "--context", "system-test", "--list"],
+            [str(payload / "bin" / "config" / "command.ts"), "--action", "assemble", "--context", "system-test", "--list"],
             cwd=temporary,
             env=system_env,
         )
@@ -285,13 +287,14 @@ output.write_text(text)
         source_direct = run(
             [
                 NODE,
-                str(ROOT / "files" / "config-context.ts"),
+                str(ROOT / "files" / "config" / "command.ts"),
+                "--action", "assemble",
                 "--context",
                 "system-test",
                 "--spec",
                 str(payload / "etc" / "config.spec.json"),
                 "--runner",
-                str(payload / "bin" / "config.sh"),
+                str(payload / "bin" / "config" / "run.sh"),
                 "--list",
             ],
             cwd=ROOT,
@@ -299,7 +302,7 @@ output.write_text(text)
         )
         assert source_direct.stdout.splitlines() == ["optional", "plain", "settings", "shell"]
 
-        for module in (ROOT / "files" / "config" / "context.ts", payload / "bin" / "config" / "context.ts", ROOT / "files" / "config-context.ts"):
+        for module in (ROOT / "files" / "config" / "context.ts", payload / "bin" / "config" / "context.ts", ROOT / "files" / "config" / "command.ts"):
             imported = run(
                 [NODE, "--input-type=module", "--eval", f'import({json.dumps(module.as_uri())}).then(() => console.log("imported"))'],
                 cwd=ROOT,
@@ -329,6 +332,8 @@ while true; do sleep 30 & wait "$!"; done
         runner.chmod(0o755)
         spec = temporary / "config.spec.json"
         spec.write_text(json.dumps({
+            "version": 2,
+            "defaultContext": "test",
             "configs": {},
             "contexts": {"test": {"scope": "system", "root": {"path": str(temporary / "root")}, "configs": {}}},
         }), encoding="utf-8")
@@ -336,7 +341,7 @@ while true; do sleep 30 & wait "$!"; done
         env["TMPDIR"] = str(temporary)
         env["PATH"] = os.pathsep.join((str(Path(NODE).parent), "/usr/bin", "/bin"))
         process = subprocess.Popen(
-            [NODE, str(ROOT / "files" / "config-context.ts"), "--context", "test", "--spec", str(spec), "--runner", str(runner)],
+            [NODE, str(ROOT / "files" / "config" / "command.ts"), "--action", "assemble", "--context", "test", "--spec", str(spec), "--runner", str(runner)],
             cwd=ROOT,
             env=env,
             text=True,

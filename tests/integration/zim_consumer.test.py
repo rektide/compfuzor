@@ -44,14 +44,14 @@ def render_host(payload: Path, scenario: Path, ansible_env: dict[str, str], defa
         "REPO_BYPASS": True,
         "CONFIG_CONTEXTS": {
             "user": {
-                "scope": "user", "root": "config", "subpath": "zsh", "install": "assemble", "dropins": "link", "compose": False,
+                "scope": "user", "root": "config", "subpath": "zsh", "install": "assemble", "dropins": "link",
                 "configs": {
                     "zimrc": {"output": {"env": "ZIM_CONFIG_FILE", "default": "zimrc", "ignore": [str(payload / "etc" / "zimrc")]}},
                     "zimenv": {"output": {"env": "ZIM_ENV_CONFIG", "default": "zimenv", "ignore": [str(payload / "etc" / "zimenv")]}},
                 },
             },
             "system": {
-                "scope": "system", "root": str(system / "config"), "install": "assemble", "dropins": "copy", "compose": False,
+                "scope": "system", "root": str(system / "config"), "install": "assemble", "dropins": "copy",
                 "configs": ["zimrc", "zimenv"],
             },
         },
@@ -270,7 +270,7 @@ zimfw() { :; }
         canonical_env.pop("DIR", None)
         canonical_env["CONFIG_BLOCK_IN_FILE"] = str(block_in_file)
         canonical_env["TMPDIR"] = str(SCRATCH)
-        run([str(payload / "bin" / "config.sh")], cwd=payload, env=canonical_env)
+        run([str(payload / "bin" / "config-assemble.sh"), "--context", "canonical"], cwd=payload, env=canonical_env)
         canonical_zimrc = payload / "etc" / "zimrc"
         canonical_zimenv = payload / "etc" / "zimenv"
         assert canonical_zimrc.is_file() and canonical_zimenv.is_file()
@@ -288,7 +288,7 @@ zimfw() { :; }
                 str(payload / "bin" / "zim" / "install.ts"), "status",
                 "--spec", str(stale_spec),
                 "--config-spec", str(payload / "etc" / "config.spec.json"),
-                "--config-runner", str(payload / "bin" / "config.sh"),
+                "--config-runner", str(payload / "bin" / "config" / "run.sh"),
             ],
             cwd=temporary,
             env=canonical_env,
@@ -320,10 +320,12 @@ zimfw() { :; }
         canonical["zimenvLegacy"].append(str(extra_zimenv_legacy))
         zim_spec_path.write_text(json.dumps(zim_spec), encoding="utf-8")
 
-        install_user_text = (payload / "bin" / "install-user.sh").read_text(encoding="utf-8")
-        assert install_user_text.count('"$DIR/bin/install-zim.sh" "$@"') == 1
-        assert "install-config-user.sh" not in install_user_text
-        assert "install-zim-donor" not in install_user_text
+        install_text = (payload / "bin" / "install.sh").read_text(encoding="utf-8")
+        assert install_text.count('"$DIR/bin/install-zim.sh" "$@"') == 1
+        assert "config-install.sh" not in install_text
+        assert "install-zim-donor" not in install_text
+        install_user = payload / "bin" / "install-user.sh"
+        assert not install_user.exists() or "install-zim.sh" not in install_user.read_text(encoding="utf-8")
         assert (payload / "bin" / "install-zim.sh").is_file() and not (payload / "bin" / "install-zim.sh").is_symlink()
         for removed in (
             "install-zim-user.sh", "install-zimenv-loader-user.sh", "install-zimrc-loader-user.sh",
@@ -333,8 +335,8 @@ zimfw() { :; }
         assert (payload / "bin" / "install-zim-donor.sh").is_file()
         assert not any(path.is_symlink() and path.resolve() == payload / "bin" / "install-zim.sh" for path in (payload / "bin").iterdir())
 
-        # The same generated Zim surface follows a system default into the bare
-        # package compositor rather than manufacturing context-specific leaves.
+        # The same generated Zim surface uses bare install.sh regardless of
+        # whether its runtime default is user or system.
         system_default_case = temporary / "system default case"
         system_default_case.mkdir()
         system_default_payload = system_default_case / "zim host"
@@ -357,7 +359,7 @@ zimfw() { :; }
         foreign = temporary / "foreign deployment"
         (foreign / "bin").mkdir(parents=True)
         foreign_log = temporary / "foreign-dispatch.log"
-        for name in ("install-zim.sh", "install-config-user.sh", "status-zim.sh", "status-config-context-user.sh"):
+        for name in ("install-zim.sh", "config-install.sh", "status-zim.sh", "config-status.sh"):
             path = foreign / "bin" / name
             path.write_text(f'#!/bin/sh\necho {name} >> {str(foreign_log)!r}\nexit 0\n', encoding="utf-8")
             path.chmod(0o755)
@@ -371,7 +373,7 @@ zimfw() { :; }
             path.chmod(0o444)
         zimrc_d.chmod(0o555)
         zimenv_d.chmod(0o555)
-        run([str(payload / "bin" / "install-user.sh")], cwd=temporary, env=env_one)
+        run([str(payload / "bin" / "install.sh")], cwd=temporary, env=env_one)
         assert not foreign_log.exists()
 
         local_root_one = xdg_one / "zsh"
@@ -467,7 +469,7 @@ zimfw() { :; }
         assert producer_compositor.count('"$DIR/bin/install-zimfw.sh" "$@"') == 1
 
         run(
-            [str(payload / "bin" / "config-inputs-user.sh"), "disable", "zimrc/zimrc", "20-environment.conf"],
+            [str(payload / "bin" / "config-inputs.sh"), "disable", "zimrc/zimrc", "20-environment.conf"],
             cwd=temporary,
             env=env_one,
         )
@@ -484,7 +486,7 @@ zimfw() { :; }
         assert donor_digest(payload) == before_user
 
         run(
-            [str(payload / "bin" / "config-inputs-user.sh"), "enable", "zimenv/zimenv", "55-producer-env.conf"],
+            [str(payload / "bin" / "config-inputs.sh"), "enable", "zimenv/zimenv", "55-producer-env.conf"],
             cwd=temporary,
             env=env_one,
         )
@@ -494,16 +496,16 @@ zimfw() { :; }
         assert not producer_env_disabled.exists()
         assert build_log.read_text(encoding="utf-8").splitlines() == [str(local_zimenv), str(local_zimrc)]
 
-        run([str(payload / "bin" / "install-config-user-dropins-copy.sh"), "zimrc"], cwd=temporary, env=env_one)
+        run([str(payload / "bin" / "config-sync-inputs.sh"), "--strategy", "copy", "zimrc"], cwd=temporary, env=env_one)
         assert not (local_root_one / "zimrc.d" / "20-environment.conf.disabled").is_symlink()
         assert producer_rc.is_symlink()
 
-        run([str(payload / "bin" / "install-config-user-copy.sh"), "zimrc"], cwd=temporary, env=env_one)
+        run([str(payload / "bin" / "config-publish.sh"), "--strategy", "copy", "zimrc"], cwd=temporary, env=env_one)
         assert local_zimrc.is_file() and not local_zimrc.is_symlink()
         assert local_zimrc.read_bytes() == canonical_zimrc.read_bytes()
-        run([str(payload / "bin" / "install-config-user-link.sh"), "zimrc"], cwd=temporary, env=env_one)
+        run([str(payload / "bin" / "config-publish.sh"), "--strategy", "link", "zimrc"], cwd=temporary, env=env_one)
         assert local_zimrc.is_symlink() and local_zimrc.resolve() == canonical_zimrc
-        run([str(payload / "bin" / "config-user.sh"), "zimrc"], cwd=temporary, env=env_one)
+        run([str(payload / "bin" / "config-assemble.sh"), "zimrc"], cwd=temporary, env=env_one)
         assert local_zimrc.is_file() and not local_zimrc.is_symlink()
         assert donor_digest(payload) == before_user
 
@@ -521,7 +523,7 @@ zimfw() { :; }
             "ZIM_CONFIG_LINK": str(custom_registry),
             "DIR": str(temporary / "missing ambient deployment"),
         })
-        install_two = run([str(payload / "bin" / "install-user.sh")], cwd=temporary, env=env_two)
+        install_two = run([str(payload / "bin" / "install.sh")], cwd=temporary, env=env_two)
         assert custom_zimrc.is_file() and custom_zimenv.is_file()
         assert custom_registry.is_symlink() and custom_registry.resolve() == canonical_zimrc, (install_two.stdout, install_two.stderr, list(home_two.rglob("zimfw.conf")), list(xdg_two.rglob("zimfw.conf")))
         assert not (xdg_two / "zsh" / "zimrc.d" / producer_rc.name).exists()
@@ -677,6 +679,26 @@ zimfw() { :; }
         assert clean_status.returncode == 0, (clean_status.stdout, clean_status.stderr)
         assert not foreign_log.exists()
 
+        # Direct Zim status covers the generic selected-context config health,
+        # preserves evaluation-error exit 2, and aggregate status treats that
+        # error as attention rather than historical not-applicable.
+        broken_config = local_root_one / "zimrc.d" / "98-status-error.conf"
+        broken_config.write_text("'unterminated\n", encoding="utf-8")
+        direct_config_error = run(
+            [str(payload / "bin" / "status-zim.sh"), "--context", "user"],
+            cwd=temporary,
+            env=env_one | {
+                "COMPFUZOR_ZIM_INSTALL_STRATEGY": "stale-ignored-by-status",
+                "COMPFUZOR_ZIM_DROPINS_STRATEGY": "stale-ignored-by-status",
+            },
+            check=False,
+        )
+        assert direct_config_error.returncode == 2
+        assert "candidate validation failed" in direct_config_error.stdout
+        aggregate_config_error = run([str(payload / "bin" / "status.sh")], cwd=temporary, env=env_one, check=False)
+        assert aggregate_config_error.returncode == 1
+        broken_config.unlink()
+
         different = temporary / "different-loader.zsh"
         different.write_text("echo different\n", encoding="utf-8")
         run(
@@ -764,8 +786,8 @@ extra legacy config names through `zim.spec.json` to prove those fields are read
 
 ```bash
 ./user-one.sh {str(payload / 'bin' / 'status.sh')!r}
-./user-one.sh {str(payload / 'bin' / 'config-user.sh')!r} --check zimrc
-./user-one.sh {str(payload / 'bin' / 'config-inputs-user.sh')!r} status zimrc --json-array
+./user-one.sh {str(payload / 'bin' / 'config-assemble.sh')!r} --check zimrc
+./user-one.sh {str(payload / 'bin' / 'config-inputs.sh')!r} status zimrc --json-array
 ./user-two.sh {str(payload / 'bin' / 'status.sh')!r}
 ./system.sh {str(payload / 'bin' / 'status-zim.sh')!r}
 ./system.sh {str(payload / 'bin' / 'install-zim-system.sh')!r} --install assemble --dropins copy

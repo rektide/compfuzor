@@ -148,14 +148,14 @@ def test_config_context_toolkit() -> None:
         plan = json.loads(plan_file.read_text(encoding="utf-8"))
         bins = {item["name"]: item for item in plan["bins"]}
         assert list(item["name"] for item in plan["bins"]).count("links/delivery.ts") == 1
-        assert bins["install-user.sh"]["run_all"].count("install-config-user.sh") == 1
-        assert bins["install.sh"]["run_all"].count("install-config-system-test.sh") == 1
-        assert "install-system.sh" not in bins
-        assert not any(name in bins["install-user.sh"]["run_all"] for name in (
-            "install-config-user-copy.sh", "install-config-user-link.sh",
-            "install-config-user-dropins.sh", "install-config-user-dropins-copy.sh", "install-config-user-dropins-link.sh",
-        ))
-        assert "status-config-context-user.sh" in plan["statuses"]
+        assert bins["install.sh"]["run_all"].count("config-install.sh") == 1
+        assert "config-install.sh" not in bins["install-user.sh"]["run_all"]
+        assert {"name": "config-status.sh", "exit2": "error"} in plan["statuses"]
+        fixed = {f"config-{action}.sh" for action in ("install", "assemble", "sync-inputs", "publish", "inputs", "status")}
+        assert fixed.issubset(bins)
+        assert all((payload / "bin" / name).is_symlink() for name in fixed)
+        assert not any(name.startswith(("install-config-", "status-config-context-")) for name in bins)
+        assert not any(name in {"config.sh", "config-context.sh"} for name in bins)
         assert (payload / "bin" / "status.sh").is_file()
 
         donor = payload / "etc" / "inputs" / "main.d"
@@ -175,7 +175,7 @@ def test_config_context_toolkit() -> None:
         canonical_env = os.environ.copy()
         canonical_env.pop("DIR", None)
         canonical_env["TMPDIR"] = str(SCRATCH)
-        run([str(payload / "bin" / "config.sh"), "main"], cwd=payload, env=canonical_env)
+        run([str(payload / "bin" / "config-assemble.sh"), "--context", "canonical", "main"], cwd=payload, env=canonical_env)
         canonical_output = payload / "etc" / "outputs" / "main.conf"
         assert canonical_output.read_text(encoding="utf-8") == "base=one\nlinked=one\ncopied=one\nbracket=active\nwide=active\nwide=hidden\n"
 
@@ -185,13 +185,13 @@ def test_config_context_toolkit() -> None:
         local = xdg_one / "toolkit app"
         local_inputs = local / "inputs" / "main.d"
         local_output = local / "outputs" / "main.conf"
-        install = payload / "bin" / "install-config-user.sh"
-        dropins_copy = payload / "bin" / "install-config-user-dropins-copy.sh"
-        dropins_link = payload / "bin" / "install-config-user-dropins-link.sh"
-        inputs = payload / "bin" / "config-inputs-user.sh"
-        config = payload / "bin" / "config-user.sh"
-        status = payload / "bin" / "status-config-context-user.sh"
-        raw_status = [str(payload / "bin" / "config" / "toolkit.ts"), "--context", "user", "status"]
+        install = payload / "bin" / "config-install.sh"
+        sync_inputs = payload / "bin" / "config-sync-inputs.sh"
+        inputs = payload / "bin" / "config-inputs.sh"
+        config = payload / "bin" / "config-assemble.sh"
+        status = payload / "bin" / "config-status.sh"
+        publish = payload / "bin" / "config-publish.sh"
+        raw_status = [str(payload / "bin" / "config" / "command.ts"), "--action", "status", "--context", "user"]
 
         run([str(payload / "bin" / "links.ts"), "apply", "--scope", "user", str(payload / "links.json")], cwd=temporary, env=env_one)
         assert (home_one / ".config" / "shared-links-proof.conf").is_symlink()
@@ -227,7 +227,7 @@ def test_config_context_toolkit() -> None:
         )
         assert (local / "inputs" / "bracket.d" / "b2.conf").is_file()
 
-        run([str(dropins_copy), "main"], cwd=temporary, env=env_one)
+        run([str(sync_inputs), "--strategy", "copy", "main"], cwd=temporary, env=env_one)
         assert not (local / "inputs" / "base.conf").is_symlink()
         assert all(not (local_inputs / name).is_symlink() for name in ("10-linked.conf", "20-copied.conf", "30-disabled.conf.disabled"))
         run(
@@ -277,7 +277,7 @@ def test_config_context_toolkit() -> None:
 
         (donor / "10-linked.conf").write_text("linked=two\n", encoding="utf-8")
         (donor / "20-copied.conf").write_text("copied=two\n", encoding="utf-8")
-        run([str(dropins_link), "main"], cwd=temporary, env=env_one)
+        run([str(sync_inputs), "--strategy", "link", "main"], cwd=temporary, env=env_one)
         assert (local_inputs / "20-copied.conf").is_symlink()
         assert (local_inputs / "30-disabled.conf.disabled").is_symlink()
         assert not (local_inputs / "30-disabled.conf").exists()
@@ -285,15 +285,15 @@ def test_config_context_toolkit() -> None:
 
         (local_inputs / "20-copied.conf").unlink()
         (local_inputs / "20-copied.conf").write_text("edited-without-force\n", encoding="utf-8")
-        run([str(dropins_copy), "main"], cwd=temporary, env=env_one)
+        run([str(sync_inputs), "--strategy", "copy", "main"], cwd=temporary, env=env_one)
         assert (local_inputs / "20-copied.conf").read_bytes() == (donor / "20-copied.conf").read_bytes()
         (local_inputs / "20-copied.conf").write_text("edited-again\n", encoding="utf-8")
-        run([str(dropins_link), "main"], cwd=temporary, env=env_one)
+        run([str(sync_inputs), "--strategy", "link", "main"], cwd=temporary, env=env_one)
         assert (local_inputs / "20-copied.conf").is_symlink()
 
         (donor / "20-copied.conf").unlink()
         missing = run([str(status), "main", "--json-array"], cwd=temporary, env=env_one, check=False)
-        assert missing.returncode == 1
+        assert missing.returncode == 2
         missing_row = next(row for row in rows(missing) if row["kind"] == "input" and row["name"] == "20-copied.conf")
         assert missing_row["status"] == "donor-missing"
         missing_raw = run([*raw_status, "main", "--json-array"], cwd=temporary, env=env_one, check=False)
@@ -302,15 +302,15 @@ def test_config_context_toolkit() -> None:
 
         dangling_target = temporary / "missing producer.conf"
         (donor / "40-dangling.conf").symlink_to(dangling_target)
-        run([str(dropins_link), "main"], cwd=temporary, env=env_one)
+        run([str(sync_inputs), "--strategy", "link", "main"], cwd=temporary, env=env_one)
         dangling = run([str(status), "main", "--json-array"], cwd=temporary, env=env_one, check=False)
-        assert dangling.returncode == 1
+        assert dangling.returncode == 2
         dangling_row = next(row for row in rows(dangling) if row["kind"] == "input" and row["name"] == "40-dangling.conf")
         assert dangling_row["status"] == "donor-missing" and "dangling" in dangling_row["note"]
         dangling_raw = run([*raw_status, "main", "--json-array"], cwd=temporary, env=env_one, check=False)
         assert dangling_raw.returncode == 2
         aggregate = run([str(payload / "bin" / "status.sh")], cwd=temporary, env=env_one | {"DIR": str(payload)}, check=False)
-        assert aggregate.returncode == 1 and "status-config-context-user.sh" in aggregate.stdout
+        assert aggregate.returncode == 1 and "config-status.sh" in aggregate.stdout
         run([str(inputs), "remove", "main/main", "40-dangling.conf"], cwd=temporary, env=env_one)
         (donor / "40-dangling.conf").unlink()
 
@@ -347,7 +347,7 @@ def test_config_context_toolkit() -> None:
         unavailable_error = next(row for row in rows(unavailable_status) if row["kind"] == "assembly")
         assert "missing config leaf" in unavailable_error["note"]
 
-        run([str(dropins_copy), "main"], cwd=temporary, env=env_one)
+        run([str(sync_inputs), "--strategy", "copy", "main"], cwd=temporary, env=env_one)
         if os.geteuid() != 0:
             donor_copy = donor / "20-copied.conf"
             donor_copy.chmod(0)
@@ -362,11 +362,11 @@ def test_config_context_toolkit() -> None:
         run([str(inputs), "put", "main/0", str(donor_base), "--strategy", "copy"], cwd=temporary, env=env_one)
         assert (local / "inputs" / "base.conf").read_bytes() == donor_base.read_bytes()
 
-        run([str(payload / "bin" / "config.sh"), "main"], cwd=payload, env=canonical_env)
-        run([str(payload / "bin" / "install-config-user-copy.sh"), "main"], cwd=temporary, env=env_one)
+        run([str(payload / "bin" / "config-assemble.sh"), "--context", "canonical", "main"], cwd=payload, env=canonical_env)
+        run([str(publish), "--strategy", "copy", "main"], cwd=temporary, env=env_one)
         assert not local_output.is_symlink() and local_output.read_bytes() == canonical_output.read_bytes()
         local_output.write_text("edited whole output\n", encoding="utf-8")
-        run([str(payload / "bin" / "install-config-user-link.sh"), "main"], cwd=temporary, env=env_one)
+        run([str(publish), "--strategy", "link", "main"], cwd=temporary, env=env_one)
         assert local_output.is_symlink() and os.readlink(local_output) == str(canonical_output)
         canonical_alias = temporary / "canonical output alias"
         canonical_alias.symlink_to(canonical_output.parent, target_is_directory=True)
@@ -392,13 +392,13 @@ def test_config_context_toolkit() -> None:
         assert "canonical output unavailable" in local_health["note"]
         assert next(row for row in without_canonical_rows if row["kind"] == "assembly")["status"] == "ready"
         unavailable_whole = run(
-            [str(payload / "bin" / "install-config-user-copy.sh"), "main"],
+            [str(publish), "--strategy", "copy", "main"],
             cwd=temporary,
             env=env_one,
             check=False,
         )
         assert unavailable_whole.returncode == 2
-        run([str(payload / "bin" / "config.sh"), "main"], cwd=payload, env=canonical_env)
+        run([str(payload / "bin" / "config-assemble.sh"), "--context", "canonical", "main"], cwd=payload, env=canonical_env)
 
         before_bypass = local_output.read_bytes()
         (local_inputs / "90-local.conf").write_text("local=bypass-change\n", encoding="utf-8")
@@ -415,12 +415,11 @@ def test_config_context_toolkit() -> None:
             "COMPFUZOR_LINKS_SUDO": "always",
             "PATH": os.pathsep.join((str(sudo_shim), str(Path(NODE).parent), "/usr/bin", "/bin")),
         }
-        run([str(dropins_link), "main"], cwd=temporary, env=no_sudo_env)
+        run([str(sync_inputs), "--strategy", "link", "main"], cwd=temporary, env=no_sudo_env)
         assert not sudo_log.exists()
 
-        default_dropins = payload / "bin" / "install-config-user-dropins.sh"
         copy_default_env = env_one | {"COMPFUZOR_CONFIG_DROPINS_STRATEGY": "copy"}
-        run([str(default_dropins), "main"], cwd=temporary, env=copy_default_env)
+        run([str(sync_inputs), "main"], cwd=temporary, env=copy_default_env)
         assert not (local_inputs / "10-linked.conf").is_symlink()
         install_link_env = env_one | {"COMPFUZOR_CONFIG_INSTALL_STRATEGY": "link"}
         run([str(install), "main"], cwd=temporary, env=install_link_env)
@@ -439,7 +438,7 @@ def test_config_context_toolkit() -> None:
         home_whole = temporary / "whole-only home"
         xdg_whole = temporary / "whole-only xdg"
         env_whole = runtime_env(home_whole, xdg_whole, temporary)
-        run([str(payload / "bin" / "install-config-user-copy.sh"), "main"], cwd=temporary, env=env_whole)
+        run([str(publish), "--strategy", "copy", "main"], cwd=temporary, env=env_whole)
         whole_only = run([*raw_status, "main", "--json-array"], cwd=temporary, env=env_whole, check=False)
         assert whole_only.returncode == 0
         whole_only_rows = rows(whole_only)
@@ -450,11 +449,11 @@ def test_config_context_toolkit() -> None:
         assert whole_inputs.returncode == 1 and any(row["status"] == "missing" for row in rows(whole_inputs))
         whole_check = run([str(config), "--check", "main"], cwd=temporary, env=env_whole, check=False)
         assert whole_check.returncode != 0
-        run([str(payload / "bin" / "install-config-user-link.sh"), "main"], cwd=temporary, env=env_whole)
+        run([str(publish), "--strategy", "link", "main"], cwd=temporary, env=env_whole)
         whole_link_status = run([*raw_status, "main", "--json-array"], cwd=temporary, env=env_whole)
         assert next(row for row in rows(whole_link_status) if row["kind"] == "output")["representation"] == "link"
 
-        run([str(payload / "bin" / "install-config-system-test.sh"), "main"], cwd=temporary, env=env_one)
+        run([str(install), "--context", "system-test", "main"], cwd=temporary, env=env_one)
         system_consumer = temporary / "system consumer"
         assert (system_consumer / "inputs" / "main.d" / "10-linked.conf").is_symlink()
         assert (system_consumer / "outputs" / "main.conf").is_file()
@@ -464,8 +463,8 @@ def test_config_context_toolkit() -> None:
         assert str(donor) in listed.stdout and str(local_inputs) in listed.stdout
 
         for module in (
-            ROOT / "files" / "config" / "toolkit.ts",
-            payload / "bin" / "config" / "toolkit.ts",
+            ROOT / "files" / "config" / "command.ts",
+            payload / "bin" / "config" / "command.ts",
             ROOT / "files" / "links" / "delivery.ts",
             payload / "bin" / "links" / "delivery.ts",
         ):
@@ -535,7 +534,7 @@ def test_config_context_toolkit() -> None:
         conflict_status = run([str(status), "main", "--json-array"], cwd=temporary, env=env_one, check=False)
         assert conflict_status.returncode == 1
         assert any(row["status"] == "local-conflict" and row["name"] == "10-linked.conf" for row in rows(conflict_status))
-        conflict_refresh = run([str(dropins_link), "main"], cwd=temporary, env=env_one, check=False)
+        conflict_refresh = run([str(sync_inputs), "--strategy", "link", "main"], cwd=temporary, env=env_one, check=False)
         assert conflict_refresh.returncode == 2
         assert (local_inputs / "10-linked.conf").exists() and duplicate_disabled.exists()
         duplicate_disabled.unlink()
@@ -544,7 +543,7 @@ def test_config_context_toolkit() -> None:
         if regular_input.is_symlink() or regular_input.is_file():
             regular_input.unlink()
         regular_input.mkdir()
-        rejected_directory = run([str(dropins_copy), "main"], cwd=temporary, env=env_one, check=False)
+        rejected_directory = run([str(sync_inputs), "--strategy", "copy", "main"], cwd=temporary, env=env_one, check=False)
         assert rejected_directory.returncode == 2 and regular_input.is_dir()
         regular_input.rmdir()
 
@@ -558,8 +557,8 @@ def test_config_context_toolkit() -> None:
         )
         assert bypass_render.returncode == 0
         bypass_plan = json.loads(plan_file.read_text(encoding="utf-8"))
-        assert "contexts" not in bypass_plan["spec"]
-        assert "config-user.sh" not in {item["name"] for item in bypass_plan["bins"]}
+        assert list(bypass_plan["spec"]["contexts"]) == ["canonical"]
+        assert "config-install.sh" in {item["name"] for item in bypass_plan["bins"]}
 
 
 if __name__ == "__main__":

@@ -38,9 +38,10 @@ def test_config_remote() -> None:
             "config": "app", "directory": str(target), "pattern": "*.json", "disabled_suffix": ".disabled"
         }}}), encoding="utf-8")
         rebuild_log = root / "rebuild.log"
-        rebuild = host / "bin" / "config.sh"
-        rebuild.write_text(f'#!/bin/sh\necho "$@" >> "{rebuild_log}"\nexit "${{REBUILD_FAIL:-0}}"\n', encoding="utf-8")
-        rebuild.chmod(0o770)
+        command = host / "bin" / "config" / "command.ts"
+        command.parent.mkdir()
+        command.write_text(f'#!/bin/sh\necho "$@" >> "{rebuild_log}"\nexit "${{REBUILD_FAIL:-0}}"\n', encoding="utf-8")
+        command.chmod(0o770)
 
         one = sources / "one.json"
         two = sources / "two.json"
@@ -51,7 +52,7 @@ def test_config_remote() -> None:
         run([str(manager), "link", "servers", str(one), "example.json"])
         active = target / "example.json"
         assert active.is_symlink() and active.resolve() == one
-        assert rebuild_log.read_text().splitlines() == ["app"]
+        assert rebuild_log.read_text().splitlines() == ["--action assemble --context canonical app"]
 
         source_before = two.read_text()
         run([str(manager), "put", "servers", str(two), "example.json"])
@@ -148,17 +149,18 @@ def test_remote_symlink_assembly_and_toggle() -> None:
             encoding="utf-8",
         )
         manager.chmod(0o770)
-        runner = host / "bin" / "config.sh"
+        runner = host / "bin" / "config" / "run.sh"
+        runner.parent.mkdir()
         runner.write_text(
             f'#!/bin/bash\nexport DIR="{host}"\nexec bash "{ROOT / "files" / "config-run.sh"}" "$@"\n',
             encoding="utf-8",
         )
         runner.chmod(0o770)
-        config_wrapper = host / "bin" / "config-app.sh"
-        config_wrapper.write_text(
-            f'#!/bin/bash\nexec "{runner}" app "$@"\n', encoding="utf-8"
+        command = host / "bin" / "config" / "command.ts"
+        command.write_text(
+            f'#!/bin/bash\nif [ "$1" = --action ]; then shift 4; else shift 2; fi\nexec "{runner}" "$@"\n', encoding="utf-8"
         )
-        config_wrapper.chmod(0o770)
+        command.chmod(0o770)
         leaf = internal / "app"
         leaf.write_text(
             """#!/bin/bash
@@ -170,7 +172,9 @@ done < "$CONFIG_INPUTS_FILE"
             encoding="utf-8",
         )
         leaf.chmod(0o770)
-        toggle = host / "bin" / "config-toggle.sh"
+        assemble = host / "bin" / "config-assemble.sh"
+        assemble.symlink_to("config/command.ts")
+        toggle = host / "bin" / "config" / "toggle.sh"
         toggle.write_text(
             "#!/bin/bash\n"
             + (ROOT / "files" / "config-toggle.sh")

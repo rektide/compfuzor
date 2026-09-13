@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import re
 import sys
 
 sys.path.insert(0, "library/filter_plugins")
@@ -57,7 +58,6 @@ def test_compile_contexts():
                 "subpath": "example",
                 "install": "assemble",
                 "dropins": "link",
-                "compose": False,
                 "configs": {
                     "app": {
                         "output": {"env": "APP_CONFIG", "default": "outputs/app.conf", "ignore": ["/opt/example/etc/outputs/app.conf"]},
@@ -80,7 +80,10 @@ def test_compile_contexts():
     check("context subpath", user["subpath"], "example")
     check("context install default", user["install"], "assemble")
     check("context drop-in default", user["dropins"], "link")
-    check("context install composition", user["compose"], False)
+    check("config spec version", compiled["spec"]["version"], 2)
+    check("config default context", compiled["spec"]["defaultContext"], "user")
+    check("positive install owner", compiled["spec"]["installOwner"], "config")
+    check("canonical context is explicit", compiled["spec"]["contexts"]["canonical"]["canonical"], True)
     check("context selection", list(user["configs"]), ["app"])
     check(
         "output environment selector",
@@ -95,23 +98,22 @@ def test_compile_contexts():
     check("derived output", system["configs"]["settings"]["output"], {"relative": "outputs/settings.json"})
 
     bins = {item["name"]: item for item in compiled["bins"]}
-    check("shared context runtime", bins["config-context.ts"]["raw"], True)
+    check("shared command runtime", bins["config/command.ts"]["raw"], True)
+    check("shared assembly operation", bins["config/assembly.ts"]["raw"], True)
     check("shared context module", bins["config/context.ts"]["raw"], True)
-    check("shared toolkit module", bins["config/toolkit.ts"]["raw"], True)
+    check("shared input operation", bins["config/inputs.ts"]["raw"], True)
+    check("shared status operation", bins["config/status.ts"]["raw"], True)
     check("shared LINKS delivery module", bins["links/delivery.ts"]["raw"], True)
     check("context module directory", "/opt/example/bin/config" in compiled["dirs"], True)
-    check("user entry point", bins["config-user.sh"]["helpers"], False)
-    check("system entry point", "config-system-test.sh" in bins, True)
-    check("context commands do not compose", bins["config-user.sh"]["compose"], False)
-    check("owned context install does not compose", bins["install-config-user.sh"]["compose"], False)
-    check("ordinary system install composes", "compose" in bins["install-config-system-test.sh"], False)
-    check("user install carries user scope", bins["install-config-user.sh"]["scope"], "user")
-    check("system install uses bare scope", "scope" in bins["install-config-system-test.sh"], False)
-    check("drop-in refresh does not compose", bins["install-config-user-dropins.sh"]["compose"], False)
-    check("whole copy does not compose", bins["install-config-user-copy.sh"]["compose"], False)
-    check("input command does not compose", bins["config-inputs-user.sh"]["compose"], False)
-    check("context status is registered", "status-config-context-user.sh" in compiled["statuses"], True)
-    check("context status adapts reporter errors", 'exit 1' in bins["status-config-context-user.sh"]["content"], True)
+    fixed = {f"config-{action}.sh" for action in ("install", "assemble", "sync-inputs", "publish", "inputs", "status")}
+    check("fixed action symlinks exactly once", fixed.issubset(bins), True)
+    check("fixed actions link to dispatcher", {bins[name]["link"] for name in fixed}, {"config/command.ts"})
+    check("ordinary install uses explicit action metadata", bins["config-install.sh"]["action"], "install")
+    check("ordinary install is unscoped", "scope" in bins["config-install.sh"], False)
+    check("non-install actions do not compose", all(bins[name].get("compose") is False for name in fixed - {"config-install.sh"}), True)
+    check("context status is registered", compiled["statuses"], [{"name": "config-status.sh", "exit2": "error"}])
+    forbidden = re.compile(r"^(?:config-(?:user|system-test)|install-config-|status-config-context-)")
+    check("no context or strategy wrappers", [name for name in bins if forbidden.match(name)], [])
 
 
 def test_validation():
@@ -173,12 +175,28 @@ def test_validation():
     check("external input explicit binding", rebound["spec"]["contexts"]["user"]["configs"]["app"]["inputs"][0], {"relative": "inputs/base.conf"})
 
     colliding = base_plan()
-    colliding["bins"].append({"name": "config-user.sh"})
+    colliding["bins"].append({"name": "config-assemble.sh"})
     check_raises(
         "generated command collision",
         lambda: compile_config_contexts(colliding, {"user": {"scope": "user", "root": "config"}}, "/opt/example/etc", "/opt/example/bin"),
         "generated command collision",
     )
+
+    check_raises(
+        "default context must be declared",
+        lambda: compile_config_contexts(base_plan(), {"host": {"scope": "system", "root": "/srv/host"}}, "/opt/example/etc", "/opt/example/bin", "user"),
+        "CONFIG_CONTEXT must name",
+    )
+
+    canonical_only = compile_config_contexts(base_plan(), {}, "/opt/example/etc", "/opt/example/bin", "user")
+    check("context-free configs default canonical", canonical_only["spec"]["defaultContext"], "canonical")
+    check("canonical-only install does not compose", {item["name"]: item for item in canonical_only["bins"]}["config-install.sh"]["compose"], False)
+
+    owned = compile_config_contexts(
+        base_plan(), {"user": {"scope": "user", "root": "config"}},
+        "/opt/example/etc", "/opt/example/bin", "user", "zim",
+    )
+    check("other domain ownership suppresses config composition", {item["name"]: item for item in owned["bins"]}["config-install.sh"]["compose"], False)
 
 
 if __name__ == "__main__":

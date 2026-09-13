@@ -135,9 +135,9 @@ output.write_text(text)
         runtime_env.pop("DIR", None)
         runtime_env["CONFIG_BLOCK_IN_FILE"] = str(block_fixture)
 
-        listed = run([str(payload / "bin" / "config.sh"), "--list"], cwd=payload, env=runtime_env)
+        listed = run([str(payload / "bin" / "config-assemble.sh"), "--list"], cwd=payload, env=runtime_env)
         assert listed.stdout.splitlines() == ["app", "policy", "shell"]
-        run([str(payload / "bin" / "config.sh")], cwd=payload, env=runtime_env)
+        run([str(payload / "bin" / "config-assemble.sh")], cwd=payload, env=runtime_env)
         assert json.loads((payload / "etc" / "app.json").read_text()) == {"base": True, "core": True, "mcp": True}
         shell = (payload / "etc" / "shell.conf").read_text()
         assert "legacy-shell" not in shell and "unmanaged" in shell
@@ -150,7 +150,7 @@ output.write_text(text)
 
         (payload / "etc" / "policy.d" / "10-policy.conf").write_text("policy=false\n")
         (payload / "etc" / "core" / "10-core.json").write_text('{"core": false}\n')
-        failed = run([str(payload / "bin" / "config.sh")], cwd=payload, check=False, env=runtime_env)
+        failed = run([str(payload / "bin" / "config-assemble.sh")], cwd=payload, check=False, env=runtime_env)
         assert failed.returncode == 1
         assert json.loads((payload / "etc" / "app.json").read_text())["core"] is True
 
