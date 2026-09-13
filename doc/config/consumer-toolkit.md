@@ -347,3 +347,6 @@ future live migration must remove known old wrappers deliberately.
   loader/cache mechanics, and complete-install/import/status orchestration.
 - [`links/delivery.ts`](/files/links/delivery.ts) remains the shared atomic
   copy/link primitive.
+- [`log.md`](/doc/config/log.md) records maintained live-render commands,
+  verification outcomes, physical representations, and unpruned migration
+  residue.
