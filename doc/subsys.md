@@ -503,9 +503,9 @@ link-only/default-link/composed semantics. A v1 record that contains either v2
 field is rejected with a rerender/version error rather than silently activating
 mislabeled new behavior. No block or assembly representation is part of LINKS.
 
-Zim's temporary registry manifest intentionally remains version 1: it declares
-one ordinary link and uses no v2 field. Current durable plans from
-`compile_links` are consistently version 2.
+Zim's temporary registry manifests in `zim/install.ts` and `zim-registry.sh`
+intentionally remain version 1: each declares one ordinary link and uses no v2
+field. Current durable plans from `compile_links` are consistently version 2.
 
 - `status` accepts any declared healthy representation. A healthy link uses
   the existing managed-target path contract; a healthy copy is a regular file

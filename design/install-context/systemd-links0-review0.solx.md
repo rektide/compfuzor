@@ -43,9 +43,11 @@ Existing old v1 manifests continue through their complete lifecycle. Current
 compiled plans use v2 consistently even when every record happens to be
 link-only.
 
-Zim's [`withRegistryManifest`](/files/zim/install.ts) remains intentionally v1.
-That manifest is temporary, contains one ordinary link-only record, and does
-not use either v2 field; migrating it would communicate no additional behavior.
+Zim's [`withRegistryManifest`](/files/zim/install.ts) and legacy host
+[`zim-registry.sh`](/files/zim-registry.sh) manifests remain intentionally v1.
+Both are temporary, contain one ordinary link-only record, and use neither v2
+field; migrating them would communicate no additional behavior. The focused
+Zim consumer lifecycle exercises these strict-v1 paths successfully.
 
 ## 2. Composition no longer emits an empty install tier
 
