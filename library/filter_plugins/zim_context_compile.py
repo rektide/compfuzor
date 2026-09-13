@@ -149,7 +149,7 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
         "bins": bins,
         "dirs": [posixpath.join(bins_dir, "zim")],
         "etc_files": [{"name": "zim.spec.json", "json": spec}],
-        "statuses": [{"name": "status-zim.sh", "exit2": "error"}],
+        "statuses": [{"name": "status-zim.sh", "args": ["--activation-only"], "exit2": "error"}],
     }
 
 

@@ -64,6 +64,7 @@ type CliOptions = {
   zimSpecPath: string
   configSpecPath: string
   configRunner: string
+  activationOnly: boolean
   args: string[]
 }
 
@@ -90,7 +91,7 @@ type CommandResult = { code: number; stdout: Buffer; stderr: Buffer }
 const HELP = `Usage:
   install-zim.sh [--context NAME] [--install assemble|copy|link] [--dropins copy|link]
   install-zim-context.sh [--context NAME] [--dropins copy|link] PRODUCER_DIR
-  status-zim.sh [--context NAME]
+  status-zim.sh [--context NAME] [--activation-only]
 
 Precedence per setting: explicit flag, user-created install-zim-CONTEXT.sh alias,
 runtime environment, compiled default. Context scope never invokes sudo.`
@@ -122,6 +123,7 @@ export function parseZimArgs(argv: string[], deploymentDir: string): CliOptions 
   let zimSpecPath = join(deploymentDir, "etc", "zim.spec.json")
   let configSpecPath = join(deploymentDir, "etc", "config.spec.json")
   let configRunner = join(deploymentDir, "bin", "config", "run.sh")
+  let activationOnly = false
   const args: string[] = []
   for (let index = 0; index < argv.length; index++) {
     const argument = argv[index]
@@ -136,13 +138,15 @@ export function parseZimArgs(argv: string[], deploymentDir: string): CliOptions 
     else if (argument === "--spec") zimSpecPath = resolve(argv[++index] ?? fail("--spec requires a path"))
     else if (argument === "--config-spec") configSpecPath = resolve(argv[++index] ?? fail("--config-spec requires a path"))
     else if (argument === "--config-runner") configRunner = resolve(argv[++index] ?? fail("--config-runner requires a path"))
+    else if (argument === "--activation-only") activationOnly = true
     else if (argument.startsWith("-")) fail(`unknown option: ${argument}`)
     else args.push(argument)
   }
   if (!action) fail(HELP)
   if (action !== "import" && args.length > 0) fail(`${action} does not accept positional arguments`)
   if (action === "import" && args.length !== 1) fail("import requires exactly one producer directory")
-  return { action, context, install, dropins, invokedAs, zimSpecPath, configSpecPath, configRunner, args }
+  if (activationOnly && action !== "status") fail("--activation-only requires status")
+  return { action, context, install, dropins, invokedAs, zimSpecPath, configSpecPath, configRunner, activationOnly, args }
 }
 
 function aliasContext(invokedAs: string, spec: ZimSpec): string | undefined {
@@ -449,14 +453,14 @@ async function cacheHealthy(channel: "zimrc" | "zimenv", activation: Activation)
   return false
 }
 
-async function status(activation: Activation, spec: ZimSpec, deploymentDir: string, configRunner: string): Promise<number> {
-  const configResult = await statusContext({
-    spec: activation.configSpec,
-    contextName: activation.spec.config,
-    runner: configRunner,
-    names: ["zimrc", "zimenv"],
-    format: "human",
-  })
+async function status(activation: Activation, spec: ZimSpec, deploymentDir: string, configRunner: string, activationOnly: boolean): Promise<number> {
+  const configResult = activationOnly ? 0 : await statusContext({
+      spec: activation.configSpec,
+      contextName: activation.spec.config,
+      runner: configRunner,
+      names: ["zimrc", "zimenv"],
+      format: "human",
+    })
   const checks = await Promise.all([
     cacheHealthy("zimenv", activation),
     cacheHealthy("zimrc", activation),
@@ -484,7 +488,7 @@ export async function runZim(options: CliOptions, deploymentDir: string): Promis
   const activation = resolveActivation(settings.contextName, zimSpec, configSpec)
   if (options.action === "install") return install(options, settings, activation, zimSpec, deploymentDir)
   if (options.action === "import") return importProducer(options, settings, activation, zimSpec)
-  return status(activation, zimSpec, deploymentDir, options.configRunner)
+  return status(activation, zimSpec, deploymentDir, options.configRunner, options.activationOnly)
 }
 
 export async function main(argv: string[] = process.argv.slice(2), modulePath: string = fileURLToPath(import.meta.url)): Promise<number> {

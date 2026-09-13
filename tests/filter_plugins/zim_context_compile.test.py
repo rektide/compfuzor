@@ -76,7 +76,7 @@ def test_compile_zim_contexts():
     assert by_name["install-zim.sh"]["action"] == "install"
     assert "scope" not in by_name["install-zim.sh"]
     assert all(record.get("link") is None for record in compiled["bins"])
-    assert compiled["statuses"] == [{"name": "status-zim.sh", "exit2": "error"}]
+    assert compiled["statuses"] == [{"name": "status-zim.sh", "args": ["--activation-only"], "exit2": "error"}]
     assert compiled["etc_files"][0]["name"] == "zim.spec.json"
 
     system_default = compile_zim_contexts(

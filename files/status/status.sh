@@ -9,8 +9,8 @@
 #
 # Each reporter runs with "$@" passed through, under a section header. String
 # records retain the historical 0 clean / 1 drift / 2 not-applicable contract.
-# A structured `{name, exit2: error}` record marks exit 2 as evaluation failure,
-# so aggregate status cannot silently collapse a direct reporter's error.
+# A structured `{name, args, exit2: error}` record may bind fixed arguments and
+# marks exit 2 as evaluation failure, without generating another wrapper file.
 #
 # This is a compfuzor _bin body: files/_bin supplies the shebang,
 # `set -euo pipefail`, env loading, and option restoration.
@@ -29,8 +29,14 @@ for i in "${!REPORTERS[@]}"; do
   script="$DIR/bin/$r"
   [ -x "$script" ] || continue
   printf '\n=== %s ===\n' "$r"
+  reporter_args=()
+  case "$i" in
+{% for r in STATUSES | default([]) %}
+    {{ loop.index0 }}) reporter_args=({% if r is mapping %}{% for arg in r.args | default([]) | normalize(to='list') %} {{ arg | quote }}{% endfor %}{% endif %}) ;;
+{% endfor %}
+  esac
   code=0
-  "$script" "$@" || code=$?
+  "$script" "${reporter_args[@]}" "$@" || code=$?
   case "$code" in
     0) ;;
     2) [ "${ERROR2[$i]}" = 0 ] || overall=1 ;;

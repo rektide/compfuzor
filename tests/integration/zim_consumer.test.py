@@ -726,8 +726,22 @@ zimfw() { :; }
         zim_spec_path.write_text(json.dumps(zim_spec), encoding="utf-8")
 
         run([str(payload / "bin" / "install-zim.sh"), "--context", "user"], cwd=temporary, env=env_one)
+        direct_complete_status = run([str(payload / "bin" / "status-zim.sh")], cwd=temporary, env=env_one, check=False)
+        assert direct_complete_status.returncode == 0
+        assert direct_complete_status.stdout.count("assembly\tready\tzimenv\tzimenv") == 1
+        assert direct_complete_status.stdout.count("assembly\tready\tzimrc\tzimrc") == 1
+        activation_only_status = run(
+            [str(payload / "bin" / "status-zim.sh"), "--activation-only"],
+            cwd=temporary,
+            env=env_one,
+            check=False,
+        )
+        assert activation_only_status.returncode == 0
+        assert "assembly\tready\t" not in activation_only_status.stdout
         clean_status = run([str(payload / "bin" / "status.sh")], cwd=temporary, env=env_one, check=False)
         assert clean_status.returncode == 0, (clean_status.stdout, clean_status.stderr)
+        assert clean_status.stdout.count("assembly\tready\tzimenv\tzimenv") == 1
+        assert clean_status.stdout.count("assembly\tready\tzimrc\tzimrc") == 1
         assert not foreign_log.exists()
 
         # Direct Zim status covers the generic selected-context config health,
@@ -746,8 +760,10 @@ zimfw() { :; }
         )
         assert direct_config_error.returncode == 2
         assert "candidate validation failed" in direct_config_error.stdout
+        assert direct_config_error.stdout.count("assembly\tevaluation-error\tzimrc\tzimrc") == 1
         aggregate_config_error = run([str(payload / "bin" / "status.sh")], cwd=temporary, env=env_one, check=False)
         assert aggregate_config_error.returncode == 1
+        assert aggregate_config_error.stdout.count("assembly\tevaluation-error\tzimrc\tzimrc") == 1
         broken_config.unlink()
 
         different = temporary / "different-loader.zsh"
