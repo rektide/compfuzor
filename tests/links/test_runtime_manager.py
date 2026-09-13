@@ -341,7 +341,16 @@ def test_dangling_source_symlink_preserves_link_topology_but_cannot_copy(env: di
 
     # v2 can offer copy as well, but explicit copy has no fallback to link and
     # rejects before replacing the currently healthy link.
-    write_manifest(manifest, [represented_record("v2-both", source, destination)], version=2)
+    both = represented_record("v2-both", source, destination, default="copy")
+    write_manifest(manifest, [both], version=2)
+    healthy = run(env, "status", str(manifest), "--json-array")
+    assert healthy.returncode == 0, healthy.stderr
+    assert json.loads(healthy.stdout)[0]["representation"] == "link"
+    preserved = run(env, "apply", str(manifest), "--json-array")
+    assert preserved.returncode == 0, preserved.stderr
+    assert json.loads(preserved.stdout)[0]["action"] == "unchanged"
+    assert destination.is_symlink() and os.readlink(destination) == str(source)
+
     copy = run(env, "apply", str(manifest), "--strategy", "copy")
     assert copy.returncode == 2
     assert "resolves to a regular file" in copy.stderr

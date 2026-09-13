@@ -213,6 +213,11 @@ def test_rendered_aggregate_preserves_or_switches_declared_representation() -> N
         run(aggregate, "--skip-enable", env={**env, "SYSTEMD_INSTALL_COPY": "True"})
         assert destination.is_file() and not destination.is_symlink()
 
+        # False is no strategy override, so a healthy copy remains a copy even
+        # though the compiled missing-destination default is link.
+        run(aggregate, "--skip-enable", env={**env, "SYSTEMD_INSTALL_COPY": "false"})
+        assert destination.is_file() and not destination.is_symlink()
+
         destination.unlink()
         manager_calls = systemctl_log.read_text(encoding="utf-8")
         invalid = run(
