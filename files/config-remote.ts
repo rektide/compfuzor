@@ -2,11 +2,14 @@
 /** Manage external symlinks declared by config.spec.json remote targets. */
 
 import { spawn } from "node:child_process"
+import { realpathSync } from "node:fs"
 import { lstat, mkdir, readFile, readlink, realpath, rename, rm, symlink } from "node:fs/promises"
-import { basename, dirname, join } from "node:path"
+import { basename, dirname, join, resolve } from "node:path"
 import { parseArgs } from "node:util"
 
-const selfDir = "{{DIR}}"
+// Raw bins ship untemplated: derive the package root from this script's own
+// location (bin/config-remote.ts -> package dir).
+const selfDir = resolve(dirname(realpathSync(process.argv[1])), "..")
 
 type Remote = { config: string, directory: string, pattern: string, disabled_suffix: string | null }
 type LinkState = { path: string, target: string } | undefined
