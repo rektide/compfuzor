@@ -155,6 +155,47 @@ def _canonical_context(configs):
     }
 
 
+def _internalize_config_bins(records, config_names):
+    """Move base CONFIG machinery internal and remove its legacy public leaves."""
+    recipe_commands = {"config-{}.sh".format(name) for name in config_names}
+    recipe_statuses = {"status-config-{}.sh".format(name) for name in config_names}
+    result = []
+    for raw in records:
+        if not isinstance(raw, collections.abc.Mapping):
+            result.append(raw)
+            continue
+        item = copy.deepcopy(dict(raw))
+        name = item.get("dest", item.get("name"))
+        if name in recipe_commands or name in recipe_statuses:
+            continue
+        if name == "config.sh":
+            item.update({"name": "config/run.sh", "raw": True, "compose": False})
+            item.pop("dest", None)
+        elif name == "config-toggle.sh":
+            item.update({"name": "config/toggle.sh", "compose": False})
+            item.pop("dest", None)
+        elif name == "config-processor.sh":
+            item.update({"name": "config/processor.sh", "compose": False})
+            item.pop("dest", None)
+        elif isinstance(name, str) and name.startswith("processors/"):
+            item["name"] = "config/{}".format(name)
+            item.pop("dest", None)
+            if isinstance(item.get("content"), str):
+                item["content"] = item["content"].replace(
+                    "$DIR/bin/config-processor.sh", "$DIR/bin/config/processor.sh"
+                )
+        elif isinstance(name, str) and name.startswith("internal/config/"):
+            link = item.get("link")
+            if isinstance(link, str) and link.startswith("processors/"):
+                item["link"] = "config/{}".format(link)
+        elif isinstance(item.get("content"), str):
+            item["content"] = item["content"].replace(
+                "$DIR/bin/config-toggle.sh", "$DIR/bin/config/toggle.sh"
+            )
+        result.append(item)
+    return result
+
+
 @accept_args_markers
 def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_context="user", install_owner="config"):
     """Compile the v2 context schema and one fixed multicall command surface."""
@@ -174,7 +215,7 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
     if not isinstance(install_owner, str) or not install_owner:
         _error("CONFIG_INSTALL_OWNER must be a non-empty domain name")
 
-    bins = list(compiled.get("bins", []))
+    bins = _internalize_config_bins(list(compiled.get("bins", [])), configs)
     occupied_bins = {name for name in (_bin_name(record) for record in bins) if name}
     runtime_bins = [
         ("config/command.ts", "../config/command.ts"),
@@ -297,8 +338,9 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
     compiled["spec"] = spec
     compiled["bins"] = bins
     compiled["statuses"] = [{"name": "config-status.sh", "exit2": "error"}]
-    dirs = list(compiled.get("dirs", []))
-    for module_dir in [posixpath.join(bins_dir, "config")] + links_runtime_dirs(bins_dir):
+    legacy_processors = posixpath.join(bins_dir, "processors")
+    dirs = [directory for directory in compiled.get("dirs", []) if directory != legacy_processors]
+    for module_dir in [posixpath.join(bins_dir, "config"), posixpath.join(bins_dir, "config/processors")] + links_runtime_dirs(bins_dir):
         if module_dir not in dirs:
             dirs.append(module_dir)
     compiled["dirs"] = dirs
