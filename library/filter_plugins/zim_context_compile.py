@@ -40,6 +40,8 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
         _error("ZIM_CONTEXTS must declare at least one activation context")
     if not isinstance(default_context, str) or default_context not in contexts:
         _error("ZIM_CONTEXT must name a declared ZIM_CONTEXTS context")
+    if config_spec.get("installOwner") != "zim":
+        _error("Zim host requires CONFIG_INSTALL_OWNER: zim to prevent duplicate ordinary config installation")
     for value, label in ((etc, "ETC"), (directory, "DIR"), (bins_dir, "BINS_DIR")):
         if not isinstance(value, str) or not value.startswith("/"):
             _error("{} must be an absolute path".format(label))

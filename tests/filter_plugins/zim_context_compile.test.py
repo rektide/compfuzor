@@ -27,6 +27,8 @@ def config_plan():
         },
         "/opt/zim/etc",
         "/opt/zim/bin",
+        "user",
+        "zim",
     )
 
 
