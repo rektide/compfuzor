@@ -232,6 +232,10 @@ Before manual removal:
 
 This is a migration operation, not a precedent for automatic reconciliation.
 
+The enumerated 2026-09-13 Zim/Mise residue has now been removed following this
+procedure. See the [deployment log](/doc/config/log.md#deliberate-migration-prune).
+The automatic no-prune policy remains unchanged.
+
 ## Recommended order
 
 1. Replace custom Zim token substitution with block-in-file envsubst.

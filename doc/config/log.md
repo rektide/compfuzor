@@ -2,6 +2,47 @@
 
 ## 2026-09-13
 
+### Deliberate migration prune
+
+After the Vite+ cutover and clean direct status, the human explicitly requested
+pruning. This was a one-time, enumerated migration operation—not automatic
+reconciliation behavior.
+
+Removed from the live Zim deployment:
+
+- all 22 inert `.ts` files superseded by the four `.mjs` bundles;
+- old `config.sh`, processor/toggle, per-recipe config/status, enable/disable,
+  `install-user.sh`, and `zimfw-channel.sh` wrappers;
+- the old `bin/processors/` directory;
+- legacy `/etc/opt/zim-main/{zim,zim-disabled,zimfw}` fragment trees,
+  `zimfw.conf`, and `zim.zsh`;
+- two leaked `.config-candidate.*` transaction files;
+- the empty `/usr/local/src/zim-main/True` artifact;
+- the stale canonical and user links for the removed
+  `rektide/zim-systemd-envvar` module.
+
+Removed from Mise only the previously inventoried obsolete dotted-name install
+wrappers, disabled systemd installer/helper files, and stale
+`mise-user-env.service`. Current `install-user.sh`, Bash blocks, and status tools
+remain.
+
+`install-zim.sh` was rerun after removing the stale module so the user assembly,
+loaders, and caches reflect the current donor roster. Direct CONFIG assembly,
+CONFIG status, Zim activation status, and Mise block status passed. The first
+unqualified aggregate Zim status stalled in the unrelated apt-lane reporter;
+rerunning with `COMPFUZOR_APTLANE_BYPASS=1` passed, as did Mise aggregate status.
+
+Final deployed source-language counts:
+
+```text
+/opt/zim-main/bin:  0 .ts, 0 .py
+/opt/mise-main/bin: 0 .ts, 0 .py
+```
+
+Exact deletion logs were retained for this session at
+`/home/rektide/tmp-opencode/config-prune-20260913.log` and
+`/home/rektide/tmp-opencode/config-prune-data-20260913.log`.
+
 ### Vite+ packaged runtime cutover
 
 Built the four controller-side deployment inputs with `pnpm build` (Vite+
@@ -42,8 +83,9 @@ Mise was also rerendered because LINKS is shared. It completed with `changed=0`,
 Direct Mise Bash status and aggregate status both exited 0, and its bin tree
 contains no `.ts` or `.py` files.
 
-Compfuzor does not prune, so these pre-cutover TypeScript files remain as inert
-live residue even though no current wrapper or fixed action points to them:
+At cutover time, Compfuzor's no-prune policy left these pre-cutover TypeScript
+files as inert live residue. They were removed later by the explicit
+[migration prune](#deliberate-migration-prune):
 
 ```text
 /opt/zim-main/bin/config-remote.ts
@@ -157,10 +199,11 @@ applied the `mise-main` managed blocks to `/home/rektide/.bashrc` and
 `status-mise-bash.sh` and aggregate `status.sh` exited 0. The disabled systemd
 environment bridge was not re-enabled or invoked.
 
-### Deliberately retained migration residue
+### Migration residue observed before the explicit prune
 
-Compfuzor does not prune. These observed legacy files remain for deliberate
-operator cleanup rather than automatic deletion:
+Compfuzor did not prune these legacy files during rendering. They were recorded
+for operator review and subsequently removed by the explicit
+[migration prune](#deliberate-migration-prune):
 
 ```text
 /opt/zim-main/bin/config.sh
@@ -184,5 +227,6 @@ operator cleanup rather than automatic deletion:
 /etc/opt/mise-main/mise-user-env.service
 ```
 
-The Mise service/unit artifacts are residue only: the current compositor does
-not reference them. This deployment made no prune or removal decision.
+The Mise service/unit artifacts were residue only: the current compositor did
+not reference them. The rendering operation made no prune decision; the later
+manual migration did.
