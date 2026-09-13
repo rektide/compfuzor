@@ -12,7 +12,7 @@ def test_links_runtime_bundles():
     delivery = links_runtime_bins(False)
     assert [record["name"] for record in delivery] == ["links/delivery.ts"]
     full = links_runtime_bins(True)
-    assert [record["name"] for record in full] == ["links.ts", "links/links.ts", "links/cli.ts", "links/manifest.ts", "links/delivery.ts"]
+    assert [record["name"] for record in full] == ["links.ts", "links/links.ts", "links/cli.ts", "links/manifest.ts", "links/operations.ts", "links/delivery.ts"]
     assert all(record["raw"] and record["compose"] is False for record in full)
     assert links_runtime_dirs("/opt/app/bin") == ["/opt/app/bin/links"]
     delivery[0]["name"] = "changed"

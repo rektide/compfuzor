@@ -1,31 +1,15 @@
 #!/usr/bin/env -S node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
 
-import { execFile } from "node:child_process";
-import { access, constants as fsConstants, lstat, readFile, rm, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 
 import {
   parseLinksArgs,
   resolveSudoMode,
   type LinksCliOptions as Options,
   type LinksScope as Scope,
-  type LinksStrategy as Strategy,
-  type SudoMode,
 } from "./cli.ts";
 
-import {
-  inspectDeliveryEntry,
-  linkMatches,
-  localCopyDeliveryExecutor,
-  localLinkDeliveryExecutor,
-  replaceWithCopy,
-  replaceWithLink,
-  type CopyDeliveryExecutor,
-  type DeliveryEntry,
-  type LinkDeliveryExecutor,
-} from "./delivery.ts";
 import {
   globMatches,
   loadManifest,
@@ -34,243 +18,17 @@ import {
   type LinkStatus as Status,
   type ResolvedRecord,
 } from "./manifest.ts";
+import {
+  applyRecord,
+  classifyRecord,
+  removeRecord,
+  sourceState,
+} from "./operations.ts";
 
 const DIR = process.env.DIR ?? dirname(dirname(dirname(fileURLToPath(import.meta.url))));
-const _execFile = promisify(execFile);
-
-// Privilege routing for mutations (reads never need it). Selected by --sudo
-// or COMPFUZOR_LINKS_SUDO:
-//   auto (default) -- probe per record whether the dest is writable and
-//                     escalate only unwritable ones through sudo
-//   always         -- route every mutation through sudo
-//   never          -- stay unprivileged; EACCES fails loud
-let SUDO_MODE: SudoMode = "auto";
 
 function fail(message: string): never {
   throw new Error(message);
-}
-
-async function destWritable(destPath: string): Promise<boolean> {
-  let dir = dirname(destPath);
-  for (;;) {
-    try {
-      await access(dir, fsConstants.W_OK | fsConstants.X_OK);
-      return true;
-    } catch (error) {
-      // walk up to the nearest existing ancestor: that is the directory
-      // mkdir -p would have to create (and remove/replace) under
-      if ((error as NodeJS.ErrnoException).code === "ENOENT" && dirname(dir) !== dir) {
-        dir = dirname(dir);
-        continue;
-      }
-      return false;
-    }
-  }
-}
-
-async function needsSudo(scope: Scope, destPath: string): Promise<boolean> {
-  if (scope === "user") return false;
-  if (SUDO_MODE === "always") return true;
-  if (SUDO_MODE === "never") return false;
-  return !(await destWritable(destPath));
-}
-
-function linkExecutor(sudo: boolean): LinkDeliveryExecutor {
-  if (!sudo) return localLinkDeliveryExecutor;
-  return {
-    async mkdir(path) { await _execFile("sudo", ["mkdir", "-p", "--", path]); },
-    async symlink(source, destination) { await _execFile("sudo", ["ln", "-s", "--", source, destination]); },
-    async rename(source, destination) { await _execFile("sudo", ["mv", "-T", "--", source, destination]); },
-    async rm(path) { await _execFile("sudo", ["rm", "-f", "--", path]); },
-  };
-}
-
-function copyExecutor(sudo: boolean): CopyDeliveryExecutor {
-  if (!sudo) return localCopyDeliveryExecutor;
-  return {
-    async mkdir(path) { await _execFile("sudo", ["mkdir", "-p", "--", path]); },
-    async copyFile(source, destination) { await _execFile("sudo", ["cp", "--", source, destination]); },
-    async chmod(path, mode) { await _execFile("sudo", ["chmod", mode.toString(8), "--", path]); },
-    async rename(source, destination) { await _execFile("sudo", ["mv", "-T", "--", source, destination]); },
-    async rm(path) { await _execFile("sudo", ["rm", "-f", "--", path]); },
-  };
-}
-
-async function rmLink(path: string, sudo: boolean): Promise<void> {
-  if (sudo) await _execFile("sudo", ["rm", "-f", "--", path]);
-  else await rm(path);
-}
-
-
-type DestinationAssessment = {
-  entry: DeliveryEntry;
-  kind: "missing" | "healthy" | "foreign" | "directory" | "special";
-  sourceEntryExists: boolean;
-  sourceRegular: boolean;
-  representation?: Strategy;
-  healthyRepresentation?: Strategy;
-  detail?: string;
-};
-
-async function sourceState(path: string): Promise<{ entryExists: boolean; regular: boolean }> {
-  let entryExists = false;
-  try {
-    await lstat(path);
-    entryExists = true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-  }
-  try {
-    const source = await stat(path);
-    return { entryExists, regular: source.isFile() };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { entryExists, regular: false };
-    throw error;
-  }
-}
-
-async function filesMatch(source: string, destination: string): Promise<boolean> {
-  const [sourceBytes, destinationBytes] = await Promise.all([readFile(source), readFile(destination)]);
-  return sourceBytes.equals(destinationBytes);
-}
-
-async function inspectRecord(record: ResolvedRecord): Promise<DestinationAssessment> {
-  const [entry, source] = await Promise.all([inspectDeliveryEntry(record.destPath), sourceState(record.srcPath)]);
-  if (entry.kind === "missing") return { entry, kind: "missing", sourceEntryExists: source.entryExists, sourceRegular: source.regular };
-  if (entry.kind === "directory") return { entry, kind: "directory", sourceEntryExists: source.entryExists, sourceRegular: source.regular };
-  if (entry.kind === "special") return { entry, kind: "special", sourceEntryExists: source.entryExists, sourceRegular: source.regular };
-  if (entry.kind === "symlink") {
-    const healthy = record.strategies.available.includes("link") && linkMatches(entry, record.srcPath);
-    if (healthy) {
-      return { entry, kind: "healthy", sourceEntryExists: source.entryExists, sourceRegular: source.regular, representation: "link", healthyRepresentation: "link" };
-    }
-    let dangling = false;
-    try {
-      await stat(record.destPath);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") dangling = true;
-      else throw error;
-    }
-    return {
-      entry,
-      kind: "foreign",
-      sourceEntryExists: source.entryExists,
-      sourceRegular: source.regular,
-      representation: "link",
-      detail: dangling ? "dangling link" : "foreign link",
-    };
-  }
-  const healthy = record.strategies.available.includes("copy") && source.regular && await filesMatch(record.srcPath, record.destPath);
-  return {
-    entry,
-    kind: healthy ? "healthy" : "foreign",
-    sourceEntryExists: source.entryExists,
-    sourceRegular: source.regular,
-    representation: "copy",
-    healthyRepresentation: healthy ? "copy" : undefined,
-    detail: record.strategies.available.includes("copy") ? "copy bytes differ" : undefined,
-  };
-}
-
-function entryOf(assessment: DestinationAssessment): Row["entry"] {
-  return assessment.entry.kind;
-}
-
-function commonRow(record: ResolvedRecord, assessment: DestinationAssessment) {
-  return {
-    id: record.id,
-    scope: record.scope,
-    src: record.state === "absent" ? "" : record.srcPath,
-    dest: record.destPath,
-    manifest: record.manifest,
-    entry: entryOf(assessment),
-    target: assessment.entry.kind === "symlink" ? assessment.entry.target : undefined,
-    representation: assessment.representation,
-  };
-}
-
-function classifyAssessment(record: ResolvedRecord, dest: DestinationAssessment, selectedStrategy?: Strategy): Row {
-  const common = {
-    ...commonRow(record, dest),
-  };
-  if (record.state === "absent") {
-    if (dest.kind === "missing") return { ...common, status: "MANAGED", detail: "absent as requested" };
-    if (dest.kind === "healthy") return { ...common, status: "CONFLICT", detail: "should be absent" };
-    return { ...common, status: "OVERRIDE" };
-  }
-  if (!dest.sourceEntryExists) return { ...common, status: "SOURCE_MISSING", detail: "src missing" };
-  if (dest.kind === "healthy" && (!selectedStrategy || dest.healthyRepresentation === selectedStrategy)) {
-    return { ...common, status: "MANAGED" };
-  }
-  const operationStrategy = selectedStrategy ?? record.strategies.default;
-  if (operationStrategy === "copy" && !dest.sourceRegular) {
-    return { ...common, status: "SOURCE_UNUSABLE", detail: "copy source does not resolve to a regular file" };
-  }
-  if (dest.kind === "missing") return { ...common, status: "MISSING" };
-  if (dest.kind === "healthy") return { ...common, status: "MANAGED" };
-  if (record.policy === "preserve") return { ...common, status: "OVERRIDE" };
-  const detail = dest.kind === "directory" || dest.kind === "special"
-    ? "never replaced"
-    : dest.detail
-      ? `${dest.detail}; ${record.policy} policy`
-      : `${record.policy} policy`;
-  return { ...common, status: "CONFLICT", detail };
-}
-
-async function classify(record: ResolvedRecord): Promise<Row> {
-  return classifyAssessment(record, await inspectRecord(record));
-}
-
-
-function overwriteSelected(id: string): boolean {
-  const setting = process.env.COMPFUZOR_LINK_OVERWRITE?.trim();
-  if (!setting) return false;
-  if (["1", "true", "y", "yes", "*"].includes(setting.toLowerCase())) return true;
-  return setting.split(",").map((part) => part.trim()).filter(Boolean).some((pattern) => globMatches(pattern, id));
-}
-
-async function removeManaged(record: ResolvedRecord, action: string): Promise<Row> {
-  const sudo = await needsSudo(record.scope, record.destPath);
-  const dest = await inspectRecord(record);
-  const common = commonRow(record, dest);
-  if (dest.kind === "healthy") {
-    await rmLink(record.destPath, sudo);
-    return { ...common, status: "MANAGED", action, detail: sudo ? "via sudo" : undefined };
-  }
-  if (dest.kind === "missing") return { ...common, status: "MANAGED", action: "unchanged", detail: "already absent" };
-  return { ...common, status: "OVERRIDE", action: "preserved" };
-}
-
-async function deliver(record: ResolvedRecord, strategy: Strategy, sudo: boolean): Promise<void> {
-  if (strategy === "link") await replaceWithLink(record.srcPath, record.destPath, linkExecutor(sudo));
-  else await replaceWithCopy(record.srcPath, record.destPath, copyExecutor(sudo));
-}
-
-async function apply(record: ResolvedRecord, selectedStrategy?: Strategy): Promise<Row> {
-  if (record.state === "absent") return removeManaged(record, "removed");
-  const sudo = await needsSudo(record.scope, record.destPath);
-  const dest = await inspectRecord(record);
-  let row = classifyAssessment(record, dest, selectedStrategy);
-  if (row.status === "SOURCE_MISSING" || row.status === "SOURCE_UNUSABLE") return row;
-  const strategy = selectedStrategy ?? record.strategies.default;
-  if (dest.kind === "missing") {
-    await deliver(record, strategy, sudo);
-    return { ...row, status: "MANAGED", action: "created", entry: strategy === "link" ? "symlink" : "file", target: strategy === "link" ? record.srcPath : undefined, representation: strategy, detail: sudo ? "via sudo" : undefined };
-  }
-  if (dest.kind === "healthy" && (!selectedStrategy || dest.healthyRepresentation === selectedStrategy)) return { ...row, action: "unchanged" };
-  if (dest.kind === "healthy") {
-    await deliver(record, strategy, sudo);
-    return { ...row, status: "MANAGED", action: "switched", entry: strategy === "link" ? "symlink" : "file", target: strategy === "link" ? record.srcPath : undefined, representation: strategy, detail: sudo ? "via sudo" : undefined };
-  }
-  const replace = record.policy === "replace" || (record.policy === "preserve" && overwriteSelected(record.id));
-  if (!replace || dest.kind !== "foreign") return { ...row, action: "preserved" };
-  await deliver(record, strategy, sudo);
-  row = { ...row, status: "MANAGED", action: "replaced", entry: strategy === "link" ? "symlink" : "file", target: strategy === "link" ? record.srcPath : undefined, representation: strategy, detail: sudo ? "via sudo" : undefined };
-  return row;
-}
-
-async function removeRecord(record: ResolvedRecord): Promise<Row> {
-  return removeManaged(record, "removed");
 }
 
 async function audit(paths: string[], scope?: Scope, idPatterns?: string[]): Promise<Row[]> {
@@ -363,7 +121,7 @@ function output(rows: Row[], options: Options): void {
 
 async function main(): Promise<number> {
   const options = parseLinksArgs(process.argv.slice(2), join(DIR, "links.json"));
-  SUDO_MODE = resolveSudoMode(options.sudo);
+  const sudoMode = resolveSudoMode(options.sudo);
   if (["1", "true", "y", "yes"].includes(process.env.COMPFUZOR_LINK_BYPASS?.trim().toLowerCase() ?? "")) return 0;
   let rows: Row[];
   if (options.command === "audit") {
@@ -371,7 +129,7 @@ async function main(): Promise<number> {
   } else {
     const loaded = await loadManifest(options.paths[0]);
     const resolved = resolveRecords(loaded.path, loaded.manifest, options.scope, options.id, options.composed);
-    if ((options.command === "apply" || options.command === "remove") && SUDO_MODE === "always" && resolved.records.some((record) => record.scope === "user")) {
+    if ((options.command === "apply" || options.command === "remove") && sudoMode === "always" && resolved.records.some((record) => record.scope === "user")) {
       fail("--sudo always is not permitted for user-scope link mutations");
     }
     if (options.command === "apply" && options.strategy) {
@@ -386,10 +144,10 @@ async function main(): Promise<number> {
       }
     }
     const operation = options.command === "apply"
-      ? (record: ResolvedRecord) => apply(record, options.strategy)
+      ? (record: ResolvedRecord) => applyRecord(record, { sudoMode, strategy: options.strategy })
       : options.command === "remove"
-        ? removeRecord
-        : classify;
+        ? (record: ResolvedRecord) => removeRecord(record, sudoMode)
+        : classifyRecord;
     rows = [...resolved.invalid];
     // Mutation is all-or-nothing with respect to plan validity.
     if (resolved.invalid.length === 0 || options.command === "status") {

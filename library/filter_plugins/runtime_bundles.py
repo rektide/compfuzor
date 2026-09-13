@@ -45,6 +45,13 @@ _MANAGER = (
         "compose": False,
         "basedir": False,
     },
+    {
+        "name": "links/operations.ts",
+        "src": "../links/operations.ts",
+        "raw": True,
+        "compose": False,
+        "basedir": False,
+    },
 )
 
 
