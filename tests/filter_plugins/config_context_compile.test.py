@@ -102,6 +102,8 @@ def test_compile_contexts():
     check("shared command-line module", bins["config/cli.ts"]["raw"], True)
     check("shared assembly operation", bins["config/assembly.ts"]["raw"], True)
     check("shared context module", bins["config/context.ts"]["raw"], True)
+    check("shared file-state observation", bins["config/file-state.ts"]["raw"], True)
+    check("shared input-state operation", bins["config/input-state.ts"]["raw"], True)
     check("shared input operation", bins["config/inputs.ts"]["raw"], True)
     check("shared status operation", bins["config/status.ts"]["raw"], True)
     check("shared LINKS delivery module", bins["links/delivery.ts"]["raw"], True)

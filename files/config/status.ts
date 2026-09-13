@@ -1,9 +1,10 @@
 /** Multi-representation CONFIG status over selected recipes. */
 
-import { readFile, stat } from "node:fs/promises"
+import { readFile } from "node:fs/promises"
 
 import { evaluateAssembly } from "./assembly.ts"
 import { bindContextConfigs, getConfigContext, type ConfigSpec } from "./context.ts"
+import { compareFileContents, inspectUsableFile, type ContentComparison } from "./file-state.ts"
 import { inputStatusRows } from "./inputs.ts"
 import { printStatusRows, statusCode, type StatusFormat, type StatusRow } from "./report.ts"
 import {
@@ -21,31 +22,6 @@ export type ContextStatusOptions = {
   format: StatusFormat
 }
 
-type ContentComparison = { equal: boolean; error?: string }
-
-async function sameContents(first: string, second: string): Promise<ContentComparison> {
-  try {
-    const [one, two] = await Promise.all([readFile(first), readFile(second)])
-    return { equal: one.equals(two) }
-  } catch (error) {
-    return { equal: false, error: `cannot compare ${first} and ${second}: ${error instanceof Error ? error.message : String(error)}` }
-  }
-}
-
-async function usableSource(path: string): Promise<{ usable: boolean; note?: string }> {
-  const entry = await inspectDeliveryEntry(path)
-  if (entry.kind === "missing") return { usable: false, note: "donor entry missing" }
-  if (entry.kind === "directory" || entry.kind === "special") return { usable: false, note: `donor entry is ${entry.kind}` }
-  try {
-    const followed = await stat(path)
-    if (!followed.isFile()) return { usable: false, note: "donor entry does not resolve to a regular file" }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { usable: false, note: "donor entry is dangling" }
-    return { usable: false, note: error instanceof Error ? error.message : String(error) }
-  }
-  return { usable: true }
-}
-
 async function candidateMatches(candidate: Buffer, destination: string): Promise<ContentComparison> {
   try {
     return { equal: candidate.equals(await readFile(destination)) }
@@ -61,7 +37,7 @@ async function outputStatusRows(options: ContextStatusOptions): Promise<StatusRo
     const source = options.spec.configs[name].output
     const destination = resolved.configs[name].output
     const [sourceState, entry, assembly, aliasHazard] = await Promise.all([
-      usableSource(source),
+      inspectUsableFile(source),
       inspectDeliveryEntry(destination),
       evaluateAssembly(options, name),
       pathsSharePhysicalEntry(source, destination),
@@ -107,7 +83,7 @@ async function outputStatusRows(options: ContextStatusOptions): Promise<StatusRo
 
     let donorComparisonError: string | undefined
     if (sourceState.usable) {
-      const donorComparison = await sameContents(source, destination)
+      const donorComparison = await compareFileContents(source, destination)
       if (donorComparison.equal) {
         rows.push({ ...common, status: "ok", severity: "ok", representation: "copy" })
         continue

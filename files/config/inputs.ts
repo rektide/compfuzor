@@ -1,8 +1,7 @@
-/** Consumer input synchronization, inventory, and mutation operations. */
+/** Consumer input inventory and mutation operations. */
 
-import { mkdir, readFile, readdir, rename, rm, stat } from "node:fs/promises"
-import type { Dirent } from "node:fs"
-import { basename, join, matchesGlob, normalize, resolve } from "node:path"
+import { rename, rm } from "node:fs/promises"
+import { basename, join, matchesGlob, resolve } from "node:path"
 
 import { runAssembly } from "./assembly.ts"
 import {
@@ -11,13 +10,17 @@ import {
   getConfigContext,
   selectRecipeNames,
   type ConfigInput,
-  type ConfigRecord,
   type ConfigSpec,
 } from "./context.ts"
-import { printStatusRows, statusCode, type StatusFormat, type StatusRow, type StatusSeverity } from "./report.ts"
+import {
+  inputStatusRows,
+  syncInputs,
+  type InputOperationOptions,
+  type InputStrategy,
+} from "./input-state.ts"
+import { printStatusRows, statusCode } from "./report.ts"
 import {
   inspectDeliveryEntry,
-  linkResolvesToSameFile,
   pathsSharePhysicalDirectory,
   pathsSharePhysicalEntry,
   replaceWithCopy,
@@ -25,63 +28,14 @@ import {
   type DeliveryEntry,
 } from "../links/delivery.ts"
 
-export type InputStrategy = "copy" | "link"
-
-export type InputOperationOptions = {
-  spec: ConfigSpec
-  contextName: string
-  runner: string
-  strategy?: InputStrategy
-  rebuild?: boolean
-  initiallyDisabled?: boolean
-  format?: StatusFormat
-}
-type InputRelation = {
-  id: string
-  config: string
-  inputIndex: number
-  inputName: string
-  source: string
-  destinationDirectory?: string
-  destination: string
-  logicalName: string
-  pattern?: string
-  suffix?: string
-  donorState: "enabled" | "disabled"
-  donorConflict?: string
-  aliasHazard?: string
-}
-
-type InputDirectory = {
-  config: string
-  inputIndex: number
-  inputName: string
-  donorDirectory: string
-  destinationDirectory: string
-  pattern: string
-  suffix?: string
-  donorNames: Set<string>
-  aliasHazard?: string
-}
-
-type InputCatalog = {
-  relations: InputRelation[]
-  directories: InputDirectory[]
-  rows: StatusRow[]
-}
+export { inputStatusRows, syncInputs } from "./input-state.ts"
+export type { InputOperationOptions, InputStrategy } from "./input-state.ts"
 
 function fail(message: string): never {
   throw new Error(message)
 }
 
-function object(value: unknown, label: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) fail(`${label} must be an object`)
-  return value as Record<string, unknown>
-}
-
 function filenameMatches(value: string, pattern: string): boolean {
-  // Prefixing keeps leading-dot filenames compatible with find -name, whose
-  // '*' and '?' do not apply shell pathname-expansion dotfile suppression.
   return matchesGlob(`x${value}`, `x${pattern}`)
 }
 
@@ -89,381 +43,34 @@ function inputIdentity(input: ConfigInput, index: number): string {
   return typeof input.name === "string" && input.name ? input.name : String(index)
 }
 
-async function pathKind(path: string): Promise<"missing" | "file" | "symlink" | "directory" | "special"> {
-  return (await inspectDeliveryEntry(path)).kind
-}
-
-async function usableSource(path: string): Promise<{ usable: boolean; note?: string }> {
-  const entry = await inspectDeliveryEntry(path)
-  if (entry.kind === "missing") return { usable: false, note: "donor entry missing" }
-  if (entry.kind === "directory" || entry.kind === "special") return { usable: false, note: `donor entry is ${entry.kind}` }
-  try {
-    const followed = await stat(path)
-    if (!followed.isFile()) return { usable: false, note: "donor entry does not resolve to a regular file" }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { usable: false, note: "donor entry is dangling" }
-    return { usable: false, note: error instanceof Error ? error.message : String(error) }
-  }
-  return { usable: true }
-}
-
-type ContentComparison = { equal: boolean; error?: string }
-
-async function sameContents(first: string, second: string): Promise<ContentComparison> {
-  try {
-    const [one, two] = await Promise.all([readFile(first), readFile(second)])
-    return { equal: one.equals(two) }
-  } catch (error) {
-    return { equal: false, error: `cannot compare ${first} and ${second}: ${error instanceof Error ? error.message : String(error)}` }
-  }
-}
-
-async function readDirectory(path: string): Promise<Dirent<string>[] | undefined> {
-  try {
-    return await readdir(path, { withFileTypes: true, encoding: "utf8" })
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined
-    throw error
-  }
-}
-
-async function inputCatalog(spec: ConfigSpec, contextName: string, names: string[]): Promise<InputCatalog> {
-  const resolved = bindContextConfigs(spec, contextName, names)
-  const relations: InputRelation[] = []
-  const directories: InputDirectory[] = []
-  const rows: StatusRow[] = []
-
-  for (const configName of names) {
-    const donorConfig = object(spec.configs[configName], `config ${configName}`) as ConfigRecord
-    const localConfig = object(resolved.configs[configName], `resolved config ${configName}`) as ConfigRecord
-    for (let index = 0; index < donorConfig.inputs.length; index++) {
-      const donor = donorConfig.inputs[index]
-      const local = localConfig.inputs[index]
-      const name = inputIdentity(donor, index)
-      if (typeof donor.file === "string" && typeof local.file === "string") {
-        const aliasHazard = await pathsSharePhysicalEntry(donor.file, local.file)
-          ? `consumer file aliases canonical input: ${local.file}`
-          : undefined
-        relations.push({
-          id: `${configName}/${name}`,
-          config: configName,
-          inputIndex: index,
-          inputName: name,
-          source: donor.file,
-          destination: local.file,
-          logicalName: basename(local.file),
-          donorState: "enabled",
-          aliasHazard,
-        })
-        continue
-      }
-      if (typeof donor.directory !== "string" || typeof donor.pattern !== "string" || typeof local.directory !== "string") {
-        fail(`config ${configName} input ${index} has an invalid compiled shape`)
-      }
-      const suffix = typeof donor.disabled_suffix === "string" ? donor.disabled_suffix : undefined
-      const directory: InputDirectory = {
-        config: configName,
-        inputIndex: index,
-        inputName: name,
-        donorDirectory: donor.directory,
-        destinationDirectory: local.directory,
-        pattern: donor.pattern,
-        suffix,
-        donorNames: new Set<string>(),
-        aliasHazard: await pathsSharePhysicalDirectory(donor.directory, local.directory)
-          ? `consumer directory aliases canonical input directory: ${local.directory}`
-          : undefined,
-      }
-      directories.push(directory)
-      const entries = await readDirectory(donor.directory)
-      if (entries === undefined) {
-        rows.push({
-          kind: "input", status: "donor-missing", severity: "error", config: configName, name,
-          source: donor.directory, destination: local.directory, note: "donor input directory is missing",
-        })
-        continue
-      }
-      const byLogical = new Map<string, InputRelation>()
-      for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-        const disabled = suffix !== undefined && entry.name.endsWith(suffix)
-        const logicalName = disabled ? entry.name.slice(0, -suffix.length) : entry.name
-        if (!filenameMatches(logicalName, donor.pattern)) continue
-        const source = join(donor.directory, entry.name)
-        const relation: InputRelation = {
-          id: `${configName}/${name}/${logicalName}`,
-          config: configName,
-          inputIndex: index,
-          inputName: name,
-          source,
-          destinationDirectory: local.directory,
-          destination: join(local.directory, entry.name),
-          logicalName,
-          pattern: donor.pattern,
-          suffix,
-          donorState: disabled ? "disabled" : "enabled",
-        }
-        const previous = byLogical.get(logicalName)
-        if (previous) {
-          previous.donorConflict = source
-          continue
-        }
-        byLogical.set(logicalName, relation)
-        directory.donorNames.add(logicalName)
-      }
-      relations.push(...byLogical.values())
-    }
-  }
-  return { relations, directories, rows }
-}
-
-async function localSelection(relation: InputRelation): Promise<{
-  active: string
-  disabled?: string
-  activeEntry: DeliveryEntry
-  disabledEntry?: DeliveryEntry
-  selectedPath?: string
-  selectedState?: "enabled" | "disabled"
-  selectedEntry?: DeliveryEntry
-  conflict: boolean
-}> {
-  if (!relation.destinationDirectory || !relation.suffix) {
-    const entry = await inspectDeliveryEntry(relation.destination)
-    return {
-      active: relation.destination,
-      activeEntry: entry,
-      selectedPath: entry.kind === "missing" ? undefined : relation.destination,
-      selectedState: entry.kind === "missing" ? undefined : "enabled",
-      selectedEntry: entry.kind === "missing" ? undefined : entry,
-      conflict: false,
-    }
-  }
-  const active = join(relation.destinationDirectory, relation.logicalName)
-  const disabled = `${active}${relation.suffix}`
-  const [activeEntry, disabledEntry] = await Promise.all([inspectDeliveryEntry(active), inspectDeliveryEntry(disabled)])
-  const hasActive = activeEntry.kind !== "missing"
-  const hasDisabled = disabledEntry.kind !== "missing"
-  return {
-    active, disabled, activeEntry, disabledEntry,
-    selectedPath: hasActive ? active : hasDisabled ? disabled : undefined,
-    selectedState: hasActive ? "enabled" : hasDisabled ? "disabled" : undefined,
-    selectedEntry: hasActive ? activeEntry : hasDisabled ? disabledEntry : undefined,
-    conflict: hasActive && hasDisabled,
-  }
-}
-
 async function deliver(source: string, destination: string, strategy: InputStrategy): Promise<void> {
   if (strategy === "link") await replaceWithLink(source, destination)
   else await replaceWithCopy(source, destination)
 }
 
-async function applyRelation(relation: InputRelation, strategy: InputStrategy, seed: boolean): Promise<string> {
-  if (relation.aliasHazard) fail(`${relation.id}: ${relation.aliasHazard}`)
-  if (relation.donorConflict) fail(`${relation.id}: donor has both enabled and disabled entries`)
-  const sourceEntry = await inspectDeliveryEntry(relation.source)
-  if (sourceEntry.kind === "missing" || sourceEntry.kind === "directory" || sourceEntry.kind === "special") {
-    fail(`${relation.id}: donor source is ${sourceEntry.kind}: ${relation.source}`)
-  }
-  const local = await localSelection(relation)
-  if (local.conflict) fail(`${relation.id}: both enabled and disabled local entries exist`)
-  if (seed && local.selectedPath) return `preserved\t${relation.id}\t${local.selectedState}\t${local.selectedPath}`
-  const state = local.selectedState ?? relation.donorState
-  const destination = state === "disabled" && relation.suffix && relation.destinationDirectory
-    ? join(relation.destinationDirectory, `${relation.logicalName}${relation.suffix}`)
-    : relation.destinationDirectory ? join(relation.destinationDirectory, relation.logicalName) : relation.destination
-  await deliver(relation.source, destination, strategy)
-  return `${seed ? "seeded" : "refreshed"}\t${relation.id}\t${state}\t${strategy}\t${destination}`
+type SelectedInput = {
+  config: string
+  index: number
+  source: ConfigInput
+  consumer: ConfigInput
 }
 
-export async function syncInputs(options: InputOperationOptions & { names: string[]; strategy: InputStrategy; seed: boolean }): Promise<number> {
-  const catalog = await inputCatalog(options.spec, options.contextName, options.names)
-  let failed = catalog.rows.some((row) => row.severity === "error")
-  for (const row of catalog.rows) console.error(`${row.status}: ${row.config}/${row.name}: ${row.note}`)
-  const aliasHazards = [
-    ...catalog.relations.filter((relation) => relation.aliasHazard).map((relation) => `${relation.id}: ${relation.aliasHazard}`),
-    ...catalog.directories.filter((directory) => directory.aliasHazard).map((directory) => `${directory.config}/${directory.inputName}: ${directory.aliasHazard}`),
-  ]
-  if (aliasHazards.length > 0) {
-    for (const hazard of aliasHazards) console.error(`error: ${hazard}`)
-    return 2
-  }
-  for (const directory of catalog.directories) {
-    try {
-      await mkdir(directory.destinationDirectory, { recursive: true })
-    } catch (error) {
-      failed = true
-      console.error(`error: cannot create input directory ${directory.destinationDirectory}: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-  for (const relation of catalog.relations) {
-    try {
-      console.log(await applyRelation(relation, options.strategy, options.seed))
-    } catch (error) {
-      failed = true
-      console.error(`error: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-  return failed ? 2 : 0
-}
-
-async function relationStatus(relation: InputRelation): Promise<StatusRow> {
-  if (relation.aliasHazard) {
-    return {
-      kind: "input", status: "alias-hazard", severity: "error", config: relation.config, name: relation.logicalName,
-      source: relation.source, destination: relation.destination, note: relation.aliasHazard,
-    }
-  }
-  if (relation.donorConflict) {
-    return {
-      kind: "input", status: "donor-conflict", severity: "drift", config: relation.config, name: relation.logicalName,
-      source: relation.source, destination: relation.destination, note: `also present as ${relation.donorConflict}`,
-    }
-  }
-  const source = await usableSource(relation.source)
-  const local = await localSelection(relation)
-  if (local.conflict) {
-    return {
-      kind: "input", status: "local-conflict", severity: "drift", config: relation.config, name: relation.logicalName,
-      source: relation.source, destination: local.active, note: `both ${local.active} and ${local.disabled} exist`,
-    }
-  }
-  if (!local.selectedPath || !local.selectedEntry) {
-    return {
-      kind: "input", status: source.usable ? "missing" : "donor-missing", severity: source.usable ? "drift" : "error",
-      config: relation.config, name: relation.logicalName, state: relation.donorState,
-      source: relation.source, destination: relation.destination, note: source.note,
-    }
-  }
-  const common = {
-    kind: "input" as const, config: relation.config, name: relation.logicalName, state: local.selectedState,
-    source: relation.source, destination: local.selectedPath,
-  }
-  if (!source.usable) {
-    return { ...common, status: "donor-missing", severity: "error", representation: local.selectedEntry.kind, note: source.note }
-  }
-  if (local.selectedEntry.kind === "symlink") {
-    try {
-      if (await linkResolvesToSameFile(local.selectedEntry, relation.source)) {
-        return { ...common, status: "ok", severity: "ok", representation: "link" }
-      }
-    } catch (error) {
-      return {
-        ...common, status: "evaluation-error", severity: "error", representation: "link",
-        note: `cannot resolve link referents: ${error instanceof Error ? error.message : String(error)}`,
-      }
-    }
-  }
-  if (local.selectedEntry.kind === "file") {
-    const comparison = await sameContents(relation.source, local.selectedPath)
-    if (comparison.error) {
-      return { ...common, status: "evaluation-error", severity: "error", representation: "copy", note: comparison.error }
-    }
-    if (comparison.equal) return { ...common, status: "ok", severity: "ok", representation: "copy" }
-  }
-  if (local.selectedEntry.kind === "directory" || local.selectedEntry.kind === "special") {
-    return { ...common, status: "unsupported", severity: "drift", representation: local.selectedEntry.kind }
-  }
-  return {
-    ...common, status: "modified", severity: "drift", representation: local.selectedEntry.kind === "file" ? "copy" : "link",
-    note: local.selectedEntry.kind === "symlink" ? `points to ${local.selectedEntry.target}` : "bytes differ from donor",
-  }
-}
-
-async function extraInputRows(directory: InputDirectory): Promise<StatusRow[]> {
-  const entries = await readDirectory(directory.destinationDirectory)
-  if (entries === undefined) return []
-  const grouped = new Map<string, { active?: string; disabled?: string }>()
-  for (const entry of entries) {
-    const suffix = directory.suffix
-    const disabled = suffix !== undefined && entry.name.endsWith(suffix)
-    const logical = disabled ? entry.name.slice(0, -suffix.length) : entry.name
-    if (!filenameMatches(logical, directory.pattern) || directory.donorNames.has(logical)) continue
-    const group = grouped.get(logical) ?? {}
-    group[disabled ? "disabled" : "active"] = join(directory.destinationDirectory, entry.name)
-    grouped.set(logical, group)
-  }
-  const rows: StatusRow[] = []
-  for (const [logical, group] of [...grouped].sort(([a], [b]) => a.localeCompare(b))) {
-    if (group.active && group.disabled) {
-      rows.push({
-        kind: "input", status: "local-conflict", severity: "drift", config: directory.config, name: logical,
-        source: directory.donorDirectory, destination: group.active, note: `both active and disabled local entries exist`,
-      })
-      continue
-    }
-    const path = group.active ?? group.disabled!
-    const entry = await inspectDeliveryEntry(path)
-    let status = "local"
-    let severity: StatusSeverity = entry.kind === "directory" || entry.kind === "special" ? "drift" : "ok"
-    let note = "not present in current donor catalog"
-    if (entry.kind === "symlink") {
-      const donorRelative = normalize(entry.targetPath).startsWith(`${normalize(directory.donorDirectory)}/`)
-      try {
-        const referent = await stat(path)
-        if (!referent.isFile()) {
-          status = "non-file-referent"
-          severity = "drift"
-          note = `local link resolves to a non-file: ${entry.target}`
-        }
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-          status = donorRelative ? "donor-missing" : "dangling"
-          severity = "error"
-          note = donorRelative
-            ? `dangling link into donor directory: ${entry.target}`
-            : `local link has a missing referent: ${entry.target}`
-        } else {
-          status = "evaluation-error"
-          severity = "error"
-          note = `cannot inspect local link referent: ${error instanceof Error ? error.message : String(error)}`
-        }
-      }
-    }
-    rows.push({
-      kind: "input", status, severity, config: directory.config, name: logical,
-      state: group.disabled ? "disabled" : "enabled", representation: entry.kind,
-      destination: path, note,
-    })
-  }
-  return rows
-}
-
-export async function inputStatusRows(spec: ConfigSpec, contextName: string, names: string[]): Promise<StatusRow[]> {
-  const catalog = await inputCatalog(spec, contextName, names)
-  const rows = [...catalog.rows]
-  for (const relation of catalog.relations) rows.push(await relationStatus(relation))
-  for (const directory of catalog.directories) {
-    if (directory.aliasHazard) {
-      rows.push({
-        kind: "input", status: "alias-hazard", severity: "error", config: directory.config, name: directory.inputName,
-        source: directory.donorDirectory, destination: directory.destinationDirectory, note: directory.aliasHazard,
-      })
-      continue
-    }
-    if (directory.donorNames.size === 0 && await pathKind(directory.destinationDirectory) === "missing") {
-      rows.push({
-        kind: "input", status: "missing", severity: "drift", config: directory.config, name: directory.inputName,
-        source: directory.donorDirectory, destination: directory.destinationDirectory, note: "empty consumer input directory is missing",
-      })
-    }
-    rows.push(...await extraInputRows(directory))
-  }
-  return rows
-}
-
-function findInput(spec: ConfigSpec, contextName: string, selector: string): { config: string; index: number; input: ConfigInput } {
+function selectInput(spec: ConfigSpec, contextName: string, selector: string): SelectedInput {
   const slash = selector.indexOf("/")
   const configSelector = slash === -1 ? undefined : selector.slice(0, slash)
   const inputSelector = slash === -1 ? selector : selector.slice(slash + 1)
-  const matches: { config: string; index: number; input: ConfigInput }[] = []
+  const matches: Array<{ config: string; index: number; source: ConfigInput }> = []
   for (const config of contextConfigNames(spec, contextName)) {
     if (configSelector && config !== configSelector) continue
     const inputs = spec.configs[config].inputs
     inputs.forEach((input, index) => {
-      if (inputIdentity(input, index) === inputSelector) matches.push({ config, index, input })
+      if (inputIdentity(input, index) === inputSelector) matches.push({ config, index, source: input })
     })
   }
   if (matches.length !== 1) fail(matches.length === 0 ? `unknown context input: ${selector}` : `ambiguous context input: ${selector}; use CONFIG/INPUT`)
-  return matches[0]
+  const selected = matches[0]
+  const consumer = bindContextConfigs(spec, contextName, [selected.config]).configs[selected.config].inputs[selected.index]
+  return { ...selected, consumer }
 }
 
 async function rebuild(options: InputOperationOptions, config: string): Promise<number> {
@@ -478,29 +85,27 @@ async function rebuild(options: InputOperationOptions, config: string): Promise<
   return 4
 }
 
-async function localInputPaths(spec: ConfigSpec, contextName: string, found: ReturnType<typeof findInput>, name: string): Promise<{ active: string; disabled?: string }> {
-  const resolved = bindContextConfigs(spec, contextName, [found.config])
-  const input = resolved.configs[found.config].inputs[found.index]
-  if (typeof input.directory !== "string") fail(`${found.config}/${inputIdentity(found.input, found.index)} is not a glob input`)
-  const suffix = typeof found.input.disabled_suffix === "string" ? found.input.disabled_suffix : undefined
-  return { active: join(input.directory, name), disabled: suffix ? join(input.directory, `${name}${suffix}`) : undefined }
+function localInputPaths(selected: SelectedInput, name: string): { active: string; disabled?: string } {
+  if (typeof selected.consumer.directory !== "string") {
+    fail(`${selected.config}/${inputIdentity(selected.source, selected.index)} is not a glob input`)
+  }
+  const suffix = typeof selected.source.disabled_suffix === "string" ? selected.source.disabled_suffix : undefined
+  return {
+    active: join(selected.consumer.directory, name),
+    disabled: suffix ? join(selected.consumer.directory, `${name}${suffix}`) : undefined,
+  }
 }
 
-function resolvedInput(spec: ConfigSpec, contextName: string, found: ReturnType<typeof findInput>): ConfigInput {
-  return bindContextConfigs(spec, contextName, [found.config]).configs[found.config].inputs[found.index]
-}
-
-async function assertInputBindingSeparated(spec: ConfigSpec, contextName: string, found: ReturnType<typeof findInput>): Promise<void> {
-  const local = resolvedInput(spec, contextName, found)
-  if (typeof found.input.file === "string" && typeof local.file === "string") {
-    if (await pathsSharePhysicalEntry(found.input.file, local.file)) {
-      fail(`${found.config}/${inputIdentity(found.input, found.index)} consumer file aliases canonical input: ${local.file}`)
+async function assertInputBindingSeparated(selected: SelectedInput): Promise<void> {
+  if (typeof selected.source.file === "string" && typeof selected.consumer.file === "string") {
+    if (await pathsSharePhysicalEntry(selected.source.file, selected.consumer.file)) {
+      fail(`${selected.config}/${inputIdentity(selected.source, selected.index)} consumer file aliases canonical input: ${selected.consumer.file}`)
     }
     return
   }
-  if (typeof found.input.directory === "string" && typeof local.directory === "string" &&
-      await pathsSharePhysicalDirectory(found.input.directory, local.directory)) {
-    fail(`${found.config}/${inputIdentity(found.input, found.index)} consumer directory aliases canonical input directory: ${local.directory}`)
+  if (typeof selected.source.directory === "string" && typeof selected.consumer.directory === "string" &&
+      await pathsSharePhysicalDirectory(selected.source.directory, selected.consumer.directory)) {
+    fail(`${selected.config}/${inputIdentity(selected.source, selected.index)} consumer directory aliases canonical input directory: ${selected.consumer.directory}`)
   }
 }
 
@@ -527,21 +132,20 @@ export async function putInput(options: InputOperationOptions & { selector: stri
   const selector = options.selector
   const sourceArgument = options.source
   const suppliedName = options.name
-  const found = findInput(spec, options.contextName, selector)
-  await assertInputBindingSeparated(spec, options.contextName, found)
+  const selected = selectInput(spec, options.contextName, selector)
+  await assertInputBindingSeparated(selected)
   const source = resolve(sourceArgument)
-  if (typeof found.input.file === "string") {
+  if (typeof selected.source.file === "string") {
     if (suppliedName !== undefined) fail(`${selector} is a direct file input and does not accept a destination name`)
     if ((options.initiallyDisabled ?? false)) fail(`${selector} is a direct file input and cannot be disabled`)
-    const local = resolvedInput(spec, options.contextName, found)
-    if (typeof local.file !== "string") fail(`${selector} has an invalid resolved file binding`)
-    await deliver(source, local.file, options.strategy ?? getConfigContext(spec, options.contextName).dropins ?? "link")
-    console.log(`put\t${found.config}/${inputIdentity(found.input, found.index)}\t${local.file}`)
-    return (options.rebuild ?? true) ? rebuild(options, found.config) : 0
+    if (typeof selected.consumer.file !== "string") fail(`${selector} has an invalid resolved file binding`)
+    await deliver(source, selected.consumer.file, options.strategy ?? getConfigContext(spec, options.contextName).dropins ?? "link")
+    console.log(`put\t${selected.config}/${inputIdentity(selected.source, selected.index)}\t${selected.consumer.file}`)
+    return (options.rebuild ?? true) ? rebuild(options, selected.config) : 0
   }
   const name = suppliedName ?? basename(source)
-  validateInputName(found.input, name)
-  const paths = await localInputPaths(spec, options.contextName, found, name)
+  validateInputName(selected.source, name)
+  const paths = localInputPaths(selected, name)
   const pair = await inspectPair(paths)
   if (pair.conflict) fail(`both enabled and disabled local entries exist for ${name}`)
   const destination = pair.active.kind !== "missing"
@@ -552,30 +156,29 @@ export async function putInput(options: InputOperationOptions & { selector: stri
         ? paths.disabled ?? fail(`${selector} cannot be disabled`)
         : paths.active
   await deliver(source, destination, options.strategy ?? getConfigContext(spec, options.contextName).dropins ?? "link")
-  console.log(`put\t${found.config}/${inputIdentity(found.input, found.index)}\t${destination}`)
-  return (options.rebuild ?? true) ? rebuild(options, found.config) : 0
+  console.log(`put\t${selected.config}/${inputIdentity(selected.source, selected.index)}\t${destination}`)
+  return (options.rebuild ?? true) ? rebuild(options, selected.config) : 0
 }
 
-async function inputMutation(spec: ConfigSpec, options: InputOperationOptions, action: "enable" | "disable" | "remove", args: string[]): Promise<number> {
+async function inputMutation(options: InputOperationOptions, action: "enable" | "disable" | "remove", args: string[]): Promise<number> {
   const [selector, name] = args
   if (!selector) fail(`usage: config-inputs.sh ${action} INPUT [NAME]`)
-  const found = findInput(spec, options.contextName, selector)
-  await assertInputBindingSeparated(spec, options.contextName, found)
-  if (typeof found.input.file === "string") {
+  const selected = selectInput(options.spec, options.contextName, selector)
+  await assertInputBindingSeparated(selected)
+  if (typeof selected.source.file === "string") {
     if (action !== "remove") fail(`${selector} is a direct file input and cannot be ${action}d`)
     if (args.length !== 1) fail(`usage: config-inputs.sh remove DIRECT_INPUT`)
-    const local = resolvedInput(spec, options.contextName, found)
-    if (typeof local.file !== "string") fail(`${selector} has an invalid resolved file binding`)
-    const entry = await inspectDeliveryEntry(local.file)
+    if (typeof selected.consumer.file !== "string") fail(`${selector} has an invalid resolved file binding`)
+    const entry = await inspectDeliveryEntry(selected.consumer.file)
     if (entry.kind === "missing") return 0
-    replaceableLocal(entry, local.file)
-    await rm(local.file)
-    console.log(`remove\t${found.config}/${inputIdentity(found.input, found.index)}\t${local.file}`)
-    return rebuild(options, found.config)
+    replaceableLocal(entry, selected.consumer.file)
+    await rm(selected.consumer.file)
+    console.log(`remove\t${selected.config}/${inputIdentity(selected.source, selected.index)}\t${selected.consumer.file}`)
+    return rebuild(options, selected.config)
   }
   if (!name || args.length !== 2) fail(`usage: config-inputs.sh ${action} INPUT NAME`)
-  validateInputName(found.input, name)
-  const paths = await localInputPaths(spec, options.contextName, found, name)
+  validateInputName(selected.source, name)
+  const paths = localInputPaths(selected, name)
   const pair = await inspectPair(paths)
   if (pair.conflict) fail(`both enabled and disabled local entries exist for ${name}`)
   if (action === "remove") {
@@ -583,10 +186,10 @@ async function inputMutation(spec: ConfigSpec, options: InputOperationOptions, a
     if (!path) return 0
     replaceableLocal(path === paths.active ? pair.active : pair.disabled!, path)
     await rm(path)
-    console.log(`remove\t${found.config}/${inputIdentity(found.input, found.index)}\t${path}`)
-    return rebuild(options, found.config)
+    console.log(`remove\t${selected.config}/${inputIdentity(selected.source, selected.index)}\t${path}`)
+    return rebuild(options, selected.config)
   }
-  if (!paths.disabled) fail(`${found.config}/${inputIdentity(found.input, found.index)} cannot be disabled`)
+  if (!paths.disabled) fail(`${selected.config}/${inputIdentity(selected.source, selected.index)} cannot be disabled`)
   const from = action === "disable" ? paths.active : paths.disabled
   const to = action === "disable" ? paths.disabled : paths.active
   const fromEntry = action === "disable" ? pair.active : pair.disabled!
@@ -595,15 +198,15 @@ async function inputMutation(spec: ConfigSpec, options: InputOperationOptions, a
   if (fromEntry.kind === "missing") fail(`local input does not exist: ${from}`)
   replaceableLocal(fromEntry, from)
   await rename(from, to)
-  console.log(`${action}\t${found.config}/${inputIdentity(found.input, found.index)}\t${to}`)
-  return rebuild(options, found.config)
+  console.log(`${action}\t${selected.config}/${inputIdentity(selected.source, selected.index)}\t${to}`)
+  return rebuild(options, selected.config)
 }
 
-async function listInputs(spec: ConfigSpec, options: InputOperationOptions, requested: string[]): Promise<number> {
-  const names = selectRecipeNames(spec, options.contextName, requested, false)
-  const resolved = bindContextConfigs(spec, options.contextName, names)
+async function listInputs(options: InputOperationOptions, requested: string[]): Promise<number> {
+  const names = selectRecipeNames(options.spec, options.contextName, requested, false)
+  const resolved = bindContextConfigs(options.spec, options.contextName, names)
   for (const name of names) {
-    spec.configs[name].inputs.forEach((input, index) => {
+    options.spec.configs[name].inputs.forEach((input, index) => {
       const local = resolved.configs[name].inputs[index]
       const donor = typeof input.file === "string" ? input.file : input.directory
       const destination = typeof local.file === "string" ? local.file : local.directory
@@ -616,7 +219,7 @@ async function listInputs(spec: ConfigSpec, options: InputOperationOptions, requ
 export async function runInputAction(options: InputOperationOptions, commandArgs: string[]): Promise<number> {
   const [action, ...args] = commandArgs
   const spec = options.spec
-  if (action === "list") return listInputs(spec, options, args)
+  if (action === "list") return listInputs(options, args)
   if (action === "status") {
     const names = selectRecipeNames(spec, options.contextName, args)
     const rows = await inputStatusRows(spec, options.contextName, names)
@@ -628,6 +231,6 @@ export async function runInputAction(options: InputOperationOptions, commandArgs
     if (!selector || !source || args.length > 3) fail("usage: config-inputs.sh put INPUT SOURCE [NAME] [--strategy copy|link]")
     return putInput({ ...options, selector, source, name })
   }
-  if (action === "enable" || action === "disable" || action === "remove") return inputMutation(spec, options, action, args)
+  if (action === "enable" || action === "disable" || action === "remove") return inputMutation(options, action, args)
   fail("usage: config-inputs.sh <list|status|put|enable|disable|remove> ...")
 }

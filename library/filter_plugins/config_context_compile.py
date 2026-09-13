@@ -223,6 +223,8 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
         ("config/cli.ts", "../config/cli.ts"),
         ("config/assembly.ts", "../config/assembly.ts"),
         ("config/context.ts", "../config/context.ts"),
+        ("config/file-state.ts", "../config/file-state.ts"),
+        ("config/input-state.ts", "../config/input-state.ts"),
         ("config/inputs.ts", "../config/inputs.ts"),
         ("config/install.ts", "../config/install.ts"),
         ("config/invocation.ts", "../config/invocation.ts"),
