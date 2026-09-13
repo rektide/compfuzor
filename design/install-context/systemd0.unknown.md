@@ -576,3 +576,18 @@ Do not generalize:
   helper's phase behavior, install enum, hierarchy/order, and user no-sudo
   contract. They do not currently cover the complete aggregate's later LINKS
   interaction with systemd copy or link bypass.
+
+# Addendum: LINKS representation follow-up
+
+[`systemd-links0.solx.md`](/design/install-context/systemd-links0.solx.md)
+implements the bounded follow-up from §§7/9. LINKS v1 records can now declare
+accepted copy/link representations and can opt out of generic plan composition
+without leaving status/audit/remove ownership. Systemd unit records use both:
+their leaf publishes before manager reload, while the later records lane omits
+them. The rendered aggregate test now covers copy stability and authoritative
+systemd publication bypass.
+
+This correction reinforces rather than changes the verdict above. The shared
+seam is filesystem representation under LINKS ownership; systemd manager scope
+is still not a CONFIG context. `SYSTEMD_ROOTS` separate rendering, systemd
+manager status, and mixed-scope drop-ins remain distinct local issues.

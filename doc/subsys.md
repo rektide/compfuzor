@@ -480,37 +480,95 @@ run.
 
 ## Declared LINKS and shared link delivery
 
-Every symlink declared through `LINKS` belongs to the LINKS manager:
+Every destination declared through `LINKS` belongs to the LINKS manager:
 [`links.ts`](../files/links/links.ts) applies, reports, audits, and removes its
-records from `DIR/links.json`. Install bins do not hand-roll `ln -sf` for those
-declarations — they delegate:
+records from `DIR/links.json`. Version 1 records are link-only by default. A
+record may additionally declare accepted physical representations:
 
-- `install-unit.sh` applies the unit's record (`UNIT_LINK_ID`, baked at
-  generation) before `daemon-reload`/enable; `install-sysusers.sh` applies the
-  fragment's record before running `systemd-sysusers`.
-- Systemd contributes one record per installable unit, sysusers one per
-  fragment — both `policy: replace` (matching the old `ln -sf` squatter
-  behavior). User-scope unit records keep `${HOME}` literal, as a runtime
-  root links.ts expands at apply time.
+```yaml
+- src: /deployment/etc/example.service
+  dest: /etc/systemd/system/example.service
+  scope: system
+  policy: replace
+  strategies:
+    available: [link, copy]
+    default: link
+  compose: false
+```
+
+`strategies` and `compose` are optional v1 fields. Their absence means
+`available: [link]`, `default: link`, and `compose: true`, so old manifests and
+ordinary artifact link annotations retain exact link-only behavior. No block
+or assembly representation is part of LINKS.
+
+- `status` accepts any declared healthy representation. A healthy link uses
+  the existing managed-target path contract; a healthy copy is a regular file
+  whose bytes exactly match the available source. JSON rows retain `entry` and
+  `target` and add the observed `representation` (`link` or `copy`). A healthy
+  nondefault representation is clean, not drift. Missing sources, dangling or
+  foreign links, modified copies, directories, and special entries remain
+  visible.
+- `apply` with no strategy preserves any currently healthy available
+  representation; a missing destination uses the record default.
+  `--strategy link|copy` switches selected records explicitly and fails before
+  mutation if any selected present record does not offer that strategy. The
+  existing `preserve`/`fail`/`replace` policy still governs foreign regular
+  files and symlinks. Directories and special entries are never replaced.
+- `remove` deletes a managed link as before. It also deletes a declared copy
+  only while the source is available and byte-equal; modified and
+  source-unverifiable copies are preserved. Removal remains explicit—there is
+  no automatic prune or reconciliation pass.
+- `apply --composed` selects only records whose `compose` value is true. The
+  generated `install-link-records[-user].sh` commands use this filter and do
+  not forward aggregate argv into the LINKS domain. A direct `links.ts apply`
+  still sees every record, while `status`, `audit`, `remove`, and direct
+  `apply --id ID` always retain full declared ownership visibility.
 - Privilege routing is per system record: the default **auto** mode probes
   whether a destination is writable; `--sudo` or `COMPFUZOR_LINKS_SUDO` select
-  `auto`/`always`/`never`, and sudo-mutated rows are marked. User-scope records
-  never escalate; explicit `always` is rejected before user mutation. `never`
-  keeps system work strictly unprivileged for let-it-fail callers.
-- With `LINKS_BYPASS` (no links.ts rendered), install bins fall back to a
-  direct `ln -sf`.
+  `auto`/`always`/`never`, and sudo-mutated rows are marked. Atomic link and
+  copy delivery both use this routing. User-scope records never escalate;
+  explicit `always` is rejected before user mutation. `never` keeps system work
+  strictly unprivileged for let-it-fail callers.
 
-What the records buy: `status` reports drift (a package overwriting a unit
-with a real file is a `conflict` row, not silence), `audit` cross-checks
-deployments claiming the same system path, and `remove` uninstalls links
-with everything else.
+### Systemd unit publication
+
+`install-unit.sh` applies the unit's exact `UNIT_LINK_ID` before
+`daemon-reload` and enablement. Systemd unit records advertise both link and
+copy, retain `policy: replace`, and set `compose: false`: activation requires
+publication in the unit leaf, and the later generic records lane must neither
+repeat nor undo that ordered action. Consequently
+`COMPFUZOR_SYSTEMD_LINK_BYPASS`/`--skip-link` remains authoritative through a
+complete install.
+
+Runtime unit strategy precedence is:
+
+1. explicit `--copy` or `--link`;
+2. nonempty legacy `SYSTEMD_INSTALL_COPY` or `SYSTEMD_COPY` environment;
+3. the compiled record default.
+
+`SYSTEMD_INSTALL_STRATEGY` configures that compiled default (`link` unless the
+legacy playbook copy variables request copy). With no runtime override, the
+LINKS manager intentionally receives no explicit strategy, so reinstalling
+preserves either healthy representation. Explicit selection switches it. When
+the manager is absent because LINKS was bypassed or the deployment predates it,
+the leaf retains direct copy/link fallback and routes privileged parent
+creation through its bounded `SUDO_CMD`.
+
+User-scope units always target the user manager directory and never use sudo.
+Types whose directory map is system-only (currently network and any nspawn
+mapping) are rejected at compile time instead of combining an `/etc` target
+with `systemctl --user`.
+
+Sysusers records remain ordinary link-only, composed `policy: replace` records;
+their installer applies the fragment before running `systemd-sysusers`.
 
 Explicit CONFIGS consumer copy/link operations are not `LINKS` declarations:
 they resolve context paths from `config.spec.json`, intentionally permit
 replacing selected regular files or symlinks, and carry no ownership ledger.
 They nevertheless import the same `links/delivery.ts` entry inspection and
-atomic link primitive used by the LINKS manager. This keeps one symlink
-implementation while preserving the distinct declaration-policy contracts.
+atomic copy/link primitives used by the LINKS manager. This keeps one delivery
+implementation while preserving the distinct ownership and status contracts:
+LINKS representation strategy does not make systemd a CONFIG context.
 
 ## Unit aliases
 
