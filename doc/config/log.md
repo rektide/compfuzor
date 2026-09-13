@@ -2,6 +2,64 @@
 
 ## 2026-09-13
 
+### Vite+ packaged runtime cutover
+
+Built the four controller-side deployment inputs with `pnpm build` (Vite+
+`vp pack`) and rerendered Zim with the same local, no-package/no-repository
+command used below. The render completed with `changed=5`, `failed=0`; it did
+not invoke pnpm, npm, apt, downloads, or repository work. The new live runtime
+is:
+
+```text
+/opt/zim-main/bin/config/command.mjs
+/opt/zim-main/bin/config-remote.mjs
+/opt/zim-main/bin/links/links.mjs
+/opt/zim-main/bin/links.mjs -> /opt/zim-main/bin/links/links.mjs
+/opt/zim-main/bin/zim/install.mjs
+```
+
+All four files are executable and byte-for-byte match their checked-in
+`build/runtime` inputs. The six fixed CONFIG action names now link to
+`config/command.mjs`. No Python file is present under `/opt/zim-main/bin`;
+Python filter/lookup plugins remained on the Ansible controller.
+
+An initial direct `install-zim.sh` run exposed a package-bootstrap side effect:
+`pnpm init` had added a pnpm-only `devEngines.packageManager` constraint, while
+the existing block helper invokes npm. npm rejected that constraint and the Zim
+installer exited 2 while replacing startup blocks. The generated constraint
+was removed with `pnpm pkg delete devEngines`; a clean Vite+ rebuild and a second
+`install-zim.sh` run completed and restored both loaders and caches.
+
+Final live checks all exited 0: `config-assemble.sh --check`,
+`config-status.sh`, a temporary `config-user-status.sh` symlink (proving manual
+`$0` alias inference), `links.mjs status --scope user -q`, `status-zim.sh`, and
+aggregate `status.sh`. Both direct and aliased CONFIG status returned 72 rows;
+`config-remote.mjs list` returned the two Zim remote targets. Zim cache, loader,
+and registry status were all `ok`.
+
+Mise was also rerendered because LINKS is shared. It completed with `changed=0`,
+`failed=0`: that deployment does not currently materialize the LINKS manager.
+Direct Mise Bash status and aggregate status both exited 0, and its bin tree
+contains no `.ts` or `.py` files.
+
+Compfuzor does not prune, so these pre-cutover TypeScript files remain as inert
+live residue even though no current wrapper or fixed action points to them:
+
+```text
+/opt/zim-main/bin/config-remote.ts
+/opt/zim-main/bin/config/{assembly,cli,command,context,file-state,input-state,inputs,install,invocation,publication,report,status}.ts
+/opt/zim-main/bin/links.ts
+/opt/zim-main/bin/links/{cli,delivery,links,manifest,operations}.ts
+/opt/zim-main/bin/zim/{activation,cli,install}.ts
+```
+
+Focused verification covered a clean Vite+ build (including output-directory
+cleaning), Vite+ format/lint/type checking, CONFIG command/context/remote and
+transaction tests, LINKS delivery/manager/v1/v2/systemd tests, Zim
+consumer/donor/demo tests, MCP remote integration, Mise blocks, BINS
+composition, and Zim/Mise syntax checks. Vite+ reported four pre-existing
+unused-import warnings and no errors.
+
 Deployed the fixed CONFIG command runtime and Zim v2 adapter to `zim-main`, then
 materialized Mise's maintained Bash activation blocks. The invoking user was
 `rektide`; no system context or donor-admin command was used.
