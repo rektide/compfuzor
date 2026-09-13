@@ -43,8 +43,15 @@ def test_mcp_install() -> None:
             json.dumps({"remotes": {"amp-mcp": {"config": "amp", "directory": str(target), "pattern": "*.json", "disabled_suffix": ".disabled"}}}),
             encoding="utf-8",
         )
-        (host / "bin" / "config.sh").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-        (host / "bin" / "config.sh").chmod(0o770)
+        command = host / "bin" / "config" / "command.ts"
+        command.parent.mkdir()
+        command.write_text(
+            "#!/bin/sh\n"
+            "[ \"$1\" = --action ] && [ \"$2\" = assemble ] && "
+            "[ \"$3\" = --context ] && [ \"$4\" = canonical ]\n",
+            encoding="utf-8",
+        )
+        command.chmod(0o770)
         (source / "etc" / "mcp.json").write_text(
             json.dumps({"type": "remote", "url": "https://example.test/mcp"}),
             encoding="utf-8",
