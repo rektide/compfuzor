@@ -580,7 +580,7 @@ Do not generalize:
 # Addendum: LINKS representation follow-up
 
 [`systemd-links0.solx.md`](/design/install-context/systemd-links0.solx.md)
-implements the bounded follow-up from §§7/9. LINKS v1 records can now declare
+implements the bounded follow-up from §§7/9. LINKS v2 records can now declare
 accepted copy/link representations and can opt out of generic plan composition
 without leaving status/audit/remove ownership. Systemd unit records use both:
 their leaf publishes before manager reload, while the later records lane omits

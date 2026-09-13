@@ -181,3 +181,15 @@ These stay separate because they are not required by representation delivery:
 - [`systemd_links.test.py`](/tests/integration/systemd_links.test.py) is the
   rendered complete-install evidence; [`test_runtime_manager.py`](/tests/links/test_runtime_manager.py)
   covers the representation lifecycle independently.
+
+# Addendum: Independent review corrections
+
+The initial checkpoint's claim that representation fields were additive within
+manifest version 1 is superseded by
+[`systemd-links0-review0.solx.md`](/design/install-context/systemd-links0-review0.solx.md).
+Current compilation emits version 2; version 1 is accepted only with strict old
+link-only semantics. The review also corrected dangling source-symlink
+handling, removed empty generic install tiers for `compose: false`-only scopes,
+and made legacy systemd copy environment values defined, ordered booleans rather
+than nonempty-string switches. The systemd-not-CONFIG-context conclusion and
+remaining local issues are unchanged.

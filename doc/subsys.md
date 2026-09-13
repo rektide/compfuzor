@@ -482,8 +482,8 @@ run.
 
 Every destination declared through `LINKS` belongs to the LINKS manager:
 [`links.ts`](../files/links/links.ts) applies, reports, audits, and removes its
-records from `DIR/links.json`. Version 1 records are link-only by default. A
-record may additionally declare accepted physical representations:
+records from `DIR/links.json`. `compile_links` emits version 2 plans. A v2
+record may declare accepted physical representations:
 
 ```yaml
 - src: /deployment/etc/example.service
@@ -496,18 +496,29 @@ record may additionally declare accepted physical representations:
   compose: false
 ```
 
-`strategies` and `compose` are optional v1 fields. Their absence means
-`available: [link]`, `default: link`, and `compose: true`, so old manifests and
-ordinary artifact link annotations retain exact link-only behavior. No block
-or assembly representation is part of LINKS.
+`strategies` and `compose` are optional v2 fields. Their absence means
+`available: [link]`, `default: link`, and `compose: true`. The runtime also
+accepts old version 1 manifests, but normalizes them strictly to those old
+link-only/default-link/composed semantics. A v1 record that contains either v2
+field is rejected with a rerender/version error rather than silently activating
+mislabeled new behavior. No block or assembly representation is part of LINKS.
+
+Zim's temporary registry manifest intentionally remains version 1: it declares
+one ordinary link and uses no v2 field. Current durable plans from
+`compile_links` are consistently version 2.
 
 - `status` accepts any declared healthy representation. A healthy link uses
   the existing managed-target path contract; a healthy copy is a regular file
   whose bytes exactly match the available source. JSON rows retain `entry` and
   `target` and add the observed `representation` (`link` or `copy`). A healthy
-  nondefault representation is clean, not drift. Missing sources, dangling or
-  foreign links, modified copies, directories, and special entries remain
-  visible.
+  nondefault representation is clean, not drift. Source existence for link
+  topology uses `lstat`: a dangling source symlink is still an existing link
+  source, so an exact destination link is managed and a missing destination can
+  be linked to it. Copy usability separately follows the source with `stat` and
+  requires a regular-file referent. A copy-selected dangling or non-file source
+  is `SOURCE_UNUSABLE`/`bad-source` and never falls back to link. A truly absent
+  source remains `SOURCE_MISSING`/`no-source`. Foreign/dangling destination
+  links, modified copies, directories, and special entries remain visible.
 - `apply` with no strategy preserves any currently healthy available
   representation; a missing destination uses the record default.
   `--strategy link|copy` switches selected records explicitly and fails before
@@ -523,6 +534,13 @@ or assembly representation is part of LINKS.
   not forward aggregate argv into the LINKS domain. A direct `links.ts apply`
   still sees every record, while `status`, `audit`, `remove`, and direct
   `apply --id ID` always retain full declared ownership visibility.
+- A scoped `install-link-records`, `install-links` compositor, and corresponding
+  top-scope child are generated only when that scope has at least one composed
+  record. A deployment containing only systemd `compose: false` records still
+  gets `links.json`, the runtime, status, audit, and explicit remove tools, but
+  no empty generic LINKS install tier. Mixed plans generate the tier only for
+  scopes that participate. Previously deployed no-op scripts are not pruned
+  automatically.
 - Privilege routing is per system record: the default **auto** mode probes
   whether a destination is writable; `--sudo` or `COMPFUZOR_LINKS_SUDO` select
   `auto`/`always`/`never`, and sudo-mutated rows are marked. Atomic link and
@@ -543,11 +561,17 @@ complete install.
 Runtime unit strategy precedence is:
 
 1. explicit `--copy` or `--link`;
-2. nonempty legacy `SYSTEMD_INSTALL_COPY` or `SYSTEMD_COPY` environment;
+2. defined `SYSTEMD_INSTALL_COPY`, otherwise defined `SYSTEMD_COPY`;
 3. the compiled record default.
 
 `SYSTEMD_INSTALL_STRATEGY` configures that compiled default (`link` unless the
-legacy playbook copy variables request copy). With no runtime override, the
+legacy playbook copy variables request copy). Runtime legacy values are parsed
+case-insensitively: `true/yes/y/1/on` selects copy, while
+`false/no/n/0/off/empty` means no override. Thus
+`SYSTEMD_INSTALL_COPY=false` masks `SYSTEMD_COPY=true`, and a false value lets
+LINKS preserve a healthy representation or use the compiled default when
+missing; it does not force link. Invalid values fail with exit 2 before
+publication. With no runtime override, the
 LINKS manager intentionally receives no explicit strategy, so reinstalling
 preserves either healthy representation. Explicit selection switches it. When
 the manager is absent because LINKS was bypassed or the deployment predates it,
