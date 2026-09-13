@@ -46,7 +46,11 @@ async function atomicLink(source: string, destination: string): Promise<void> {
 
 async function rebuild(config: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(join(selfDir, "bin", "config.sh"), [config], { cwd: selfDir, stdio: "inherit" })
+    const child = spawn(
+      join(selfDir, "bin", "config", "command.ts"),
+      ["--action", "assemble", "--context", "canonical", config],
+      { cwd: selfDir, stdio: "inherit" },
+    )
     child.once("error", reject)
     child.once("exit", (code, signal) => code === 0 ? resolve() : reject(new Error(`config rebuild failed: ${signal ?? code}`)))
   })
