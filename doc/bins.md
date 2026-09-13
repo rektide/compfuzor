@@ -41,6 +41,14 @@ invokable under its domain vocabulary while `install.sh` invokes that same file
 without a generated `install-config-*.sh` thunk. If `action` is absent, existing
 filename discovery is unchanged. Unknown explicit actions fail at compile time.
 
+Status reporting uses a separate narrow structured record shape. A mapping may
+set `name`, fixed `args`, and `exit2: error`; aggregate `status.sh` invokes the
+same reporter with those fixed arguments followed by caller arguments. String
+records bind no fixed arguments and keep historical exit-2 not-applicable
+semantics. This supports `status-zim.sh --activation-only` in aggregation
+without generating another executable or turning BINS into a generic command
+graph.
+
 ## The `subsystem` field
 
 A bin declares its grouping via `subsystem`:

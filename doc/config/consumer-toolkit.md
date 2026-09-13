@@ -126,10 +126,10 @@ config-install.sh
 # Install exactly two recipes; explicit strategy beats env and context default.
 config-install.sh --context host --strategy assemble --dropins copy zimrc zimenv
 
-# Assemble/check/stream one or several recipes.
+# Assemble/check one or several recipes; stdout is byte-exactly one recipe.
 config-assemble.sh zimrc zimenv
 config-assemble.sh --check zimrc
-config-assemble.sh --stdout zimrc zimenv
+config-assemble.sh --stdout zimrc
 config-assemble.sh --list
 
 # Refresh existing local input entries. --seed preserves present entries.
@@ -150,6 +150,13 @@ input strategy resolves as explicit `--dropins` then
 `COMPFUZOR_CONFIG_DROPINS_STRATEGY` then context `dropins`. `sync-inputs` and
 `inputs put` use `--strategy` with the same input environment/default chain.
 Publication requires `--strategy`, or `COMPFUZOR_CONFIG_PUBLISH_STRATEGY`.
+
+`--stdout` is the one recipe-selection exception: resolution must produce
+exactly one recipe. Zero names is accepted only for a context with exactly one
+`apply: true` recipe; zero names selecting several, or several explicit names,
+fails with exit 2 before any processor runs. This preserves a byte-exact stream
+without inventing a framing format or leaking an earlier candidate before a
+later validation failure.
 
 Input subactions retain their own selector grammar rather than treating all
 positionals as recipe names:
@@ -202,12 +209,40 @@ The permissive Build 4/5 behavior remains intentional:
 - parent-directory physical aliases back into canonical inputs/outputs are
   rejected, while final links to donor files remain normal.
 
+The standalone transaction runner uses `set -euo pipefail`. Candidate creation,
+staging copy/mode changes, and output moves fail closed. Every selected
+candidate is built and validated before staging; staging failures mutate no
+outputs, and a later commit move failure rolls back outputs already moved in
+the same transaction. Temporary candidates and backups are cleaned on failure.
+Only expected comparison/diff/reporting outcomes are explicitly tolerated.
+
+### Runtime bypass
+
+`COMPFUZOR_CONFIG_BYPASS=1` and
+`COMPFUZOR_CONFIG_CONTEXTS_BYPASS=1` apply only to the ordinary typed CONFIG
+install operation. `config-install.sh` returns success with a skip report and
+does not resolve strategy settings, synchronize inputs, publish, assemble, or
+mutate output. Internal runner/processors are bypass-neutral, preventing a
+guarded processor from returning success without producing a candidate.
+
+Explicit operator/diagnostic actions remain active under CONFIG bypass:
+`config-assemble.sh`, `config-status.sh`, `config-sync-inputs.sh`,
+`config-publish.sh`, and `config-inputs.sh` keep their normal contracts. This is
+intentional: bypass suppresses ordinary composed installation, not observation
+or an explicitly requested repair/admin operation.
+
 Status reports input inventory, assembly readiness, and output health. Matching
 copies, equivalent links, and matching local assemblies are healthy. Direct
 `config-status.sh` exits 0 clean, 1 drift, or 2 evaluation error. Its structured
 aggregate reporter metadata marks exit 2 as an error; aggregate `status.sh`
 continues to return its boolean attention result without treating CONFIG errors
 as historical “not applicable.”
+
+Structured status records may also bind fixed arguments without creating a
+wrapper. On a Zim host, aggregate status runs generic `config-status.sh` once,
+then invokes `status-zim.sh --activation-only`; direct `status-zim.sh` remains
+complete. String reporter records retain their historical exit-2
+not-applicable behavior and receive caller arguments unchanged.
 
 ## Zim complete installation
 
@@ -217,7 +252,7 @@ concepts. The host surface remains:
 
 ```text
 install-zim.sh [--context NAME] [--install assemble|copy|link] [--dropins copy|link]
-status-zim.sh [--context NAME]
+status-zim.sh [--context NAME] [--activation-only]
 install-zim-context.sh [--context NAME] PRODUCER_DIR
 install-zim-donor.sh PRODUCER_DIR
 ```
@@ -229,6 +264,18 @@ well as loaders, caches, and registry, preserving direct 0/1/2 distinction.
 Install and status resolve context from explicit flag, supported Zim alias,
 `COMPFUZOR_ZIM_CONTEXT`, generic `COMPFUZOR_CONTEXT`, then compiled
 `defaultContext`. Install/drop-in settings are not resolved during status.
+
+When CONFIG install is bypassed inside a Zim install, the typed skip outcome is
+not mistaken for completed config work. If both selected `zimenv` and `zimrc`
+outputs already resolve to regular files, Zim may continue its independent
+loader/cache/registry work from those existing outputs. If either is absent,
+the remaining Zim install is skipped successfully with a reason. No empty or
+missing config is passed to cache construction.
+
+`COMPFUZOR_ZIM_BYPASS=1` skips ordinary Zim `install` and producer `import`
+before context or strategy resolution, for both direct and composed calls.
+Status remains active and observable. Generation-time `ZIM_BYPASS` behavior is
+unchanged; no additional per-step Zim bypass vocabulary is introduced.
 
 The Zim host composes into bare `install.sh` even when its default context is
 `user`; user context does not manufacture `install-user.sh`. Contributor
@@ -260,6 +307,9 @@ future live migration must remove known old wrappers deliberately.
 - [`command0.solx.md`](/design/config-context/command0.solx.md) records the
   architectural truth tables, implementation boundary, verification evidence,
   and next systemd comparison for this command consolidation.
+- [`command0-review0.solx.md`](/design/config-context/command0-review0.solx.md)
+  records the strict-runner, bypass, aggregate-status, and stdout corrections
+  found during independent review.
 - [`config_context_compile.py`](/library/filter_plugins/config_context_compile.py)
   compiles config spec v2, canonical/default contexts, modules, and fixed links.
 - [`config/command.ts`](/files/config/command.ts) parses/infer/selects and

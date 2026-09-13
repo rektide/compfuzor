@@ -267,6 +267,10 @@ inputs, failures, ordering, and recovery semantics.
 
 ## Cross-references
 
+- [`command0-review0.solx.md`](/design/config-context/command0-review0.solx.md)
+  records the strict-runner, bypass-boundary, aggregate-status, and singular
+  stdout corrections found during independent review. Its corrected contracts
+  supersede those details here while retaining this checkpoint's fixed surface.
 - [`core-rescope0.unknown.md`](/.design/config-user-target/core-rescope0.unknown.md)
   identified selected invocation and filename-independent composition as the
   two justified core seams; this checkpoint implements the accepted fixed
