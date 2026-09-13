@@ -368,6 +368,28 @@ zimfw() { :; }
         env_one["ZIM_CONFIG_FILE"] = str(canonical_zimrc)
         env_one["ZIM_ENV_CONFIG"] = str(canonical_zimenv)
         before_user = donor_digest(payload)
+        local_root_one = xdg_one / "zsh"
+        local_zimrc = local_root_one / "zimrc"
+        local_zimenv = local_root_one / "zimenv"
+
+        missing_config_bypass = run(
+            [str(payload / "bin" / "install-zim.sh"), "--context", "user"],
+            cwd=temporary,
+            env=env_one | {
+                "COMPFUZOR_CONFIG_BYPASS": "1",
+                "COMPFUZOR_ZIM_INSTALL_STRATEGY": "stale-not-resolved",
+            },
+        )
+        assert "required config outputs are unavailable" in missing_config_bypass.stderr
+        assert not local_zimrc.exists() and not local_zimenv.exists()
+        assert not (local_root_one / "zimfw.conf").exists()
+        zim_bypass = run(
+            [str(payload / "bin" / "install.sh")],
+            cwd=temporary,
+            env=env_one | {"COMPFUZOR_ZIM_BYPASS": "1", "COMPFUZOR_ZIM_CONTEXT": "undeclared-ignored"},
+        )
+        assert "skipped Zim install" in zim_bypass.stderr
+        assert not local_zimrc.exists() and not build_log.exists()
 
         for path in (*zimrc_d.iterdir(), *zimenv_d.iterdir()):
             path.chmod(0o444)
@@ -376,9 +398,6 @@ zimfw() { :; }
         run([str(payload / "bin" / "install.sh")], cwd=temporary, env=env_one)
         assert not foreign_log.exists()
 
-        local_root_one = xdg_one / "zsh"
-        local_zimrc = local_root_one / "zimrc"
-        local_zimenv = local_root_one / "zimenv"
         assert local_zimrc.is_file() and local_zimenv.is_file()
         assert canonical_zimrc.is_file() and canonical_zimenv.is_file()
         assert donor_digest(payload) == before_user
@@ -389,6 +408,30 @@ zimfw() { :; }
         assert build_log.read_text(encoding="utf-8").splitlines() == [str(local_zimenv), str(local_zimrc)]
         registry_one = local_root_one / "zimfw.conf"
         assert registry_one.is_symlink() and registry_one.resolve() == canonical_zimrc
+
+        bypass_extra = local_root_one / "zimrc.d" / "97-config-bypass.conf"
+        bypass_extra.write_text("zmodule bypass-only\n", encoding="utf-8")
+        output_before_bypass = local_zimrc.read_bytes()
+        build_log.write_text("", encoding="utf-8")
+        existing_config_bypass = run(
+            [str(payload / "bin" / "install-zim.sh"), "--context", "user"],
+            cwd=temporary,
+            env=env_one | {
+                "COMPFUZOR_CONFIG_BYPASS": "1",
+                "COMPFUZOR_ZIM_INSTALL_STRATEGY": "stale-not-resolved",
+            },
+        )
+        assert "skipped Zim config install" in existing_config_bypass.stderr
+        assert local_zimrc.read_bytes() == output_before_bypass
+        assert build_log.read_text(encoding="utf-8").splitlines() == [str(local_zimenv), str(local_zimrc)]
+        bypass_extra.unlink()
+
+        build_log.write_text("", encoding="utf-8")
+        run([str(payload / "bin" / "install-zim.sh")], cwd=temporary, env=env_one | {"COMPFUZOR_ZIM_BYPASS": "true"})
+        run([str(payload / "bin" / "install.sh")], cwd=temporary, env=env_one | {"COMPFUZOR_ZIM_BYPASS": "true"})
+        assert build_log.read_text(encoding="utf-8") == ""
+        visible_status = run([str(payload / "bin" / "status-zim.sh")], cwd=temporary, env=env_one | {"COMPFUZOR_ZIM_BYPASS": "true"}, check=False)
+        assert visible_status.returncode == 0
 
         user_loaders = {
             "zimenv": extract_loader(
@@ -467,6 +510,14 @@ zimfw() { :; }
         assert not (producer / "bin" / "install-user-zimfw.sh").exists()
         producer_compositor = (producer / "bin" / "install-user.sh").read_text(encoding="utf-8")
         assert producer_compositor.count('"$DIR/bin/install-zimfw.sh" "$@"') == 1
+
+        skipped_import = run(
+            [str(payload / "bin" / "install-zim-context.sh"), "--context", "user", str(producer)],
+            cwd=temporary,
+            env=env_one | {"COMPFUZOR_ZIM_BYPASS": "1"},
+        )
+        assert "skipped Zim import" in skipped_import.stderr
+        assert not (local_root_one / "zimrc.d" / "55-producer-rc.conf").exists()
 
         run(
             [str(payload / "bin" / "config-inputs.sh"), "disable", "zimrc/zimrc", "20-environment.conf"],

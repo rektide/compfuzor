@@ -105,6 +105,9 @@ def test_compile_contexts():
     check("shared status operation", bins["config/status.ts"]["raw"], True)
     check("shared LINKS delivery module", bins["links/delivery.ts"]["raw"], True)
     check("context module directory", "/opt/example/bin/config" in compiled["dirs"], True)
+    check("internal runner bypass-neutral", bins["config/run.sh"]["bypass"], False)
+    check("internal processor bypass-neutral", bins["config/processor.sh"]["bypass"], False)
+    check("processor leaves bypass-neutral", bins["config/processors/concat"]["bypass"], False)
     fixed = {f"config-{action}.sh" for action in ("install", "assemble", "sync-inputs", "publish", "inputs", "status")}
     check("fixed action symlinks exactly once", fixed.issubset(bins), True)
     check("fixed actions link to dispatcher", {bins[name]["link"] for name in fixed}, {"config/command.ts"})

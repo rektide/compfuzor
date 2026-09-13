@@ -169,16 +169,17 @@ def _internalize_config_bins(records, config_names):
         if name in recipe_commands or name in recipe_statuses:
             continue
         if name == "config.sh":
-            item.update({"name": "config/run.sh", "raw": True, "compose": False})
+            item.update({"name": "config/run.sh", "raw": True, "compose": False, "bypass": False})
             item.pop("dest", None)
         elif name == "config-toggle.sh":
-            item.update({"name": "config/toggle.sh", "compose": False})
+            item.update({"name": "config/toggle.sh", "compose": False, "bypass": False})
             item.pop("dest", None)
         elif name == "config-processor.sh":
-            item.update({"name": "config/processor.sh", "compose": False})
+            item.update({"name": "config/processor.sh", "compose": False, "bypass": False})
             item.pop("dest", None)
         elif isinstance(name, str) and name.startswith("processors/"):
             item["name"] = "config/{}".format(name)
+            item["bypass"] = False
             item.pop("dest", None)
             if isinstance(item.get("content"), str):
                 item["content"] = item["content"].replace(

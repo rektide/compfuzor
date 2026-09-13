@@ -51,10 +51,6 @@ function fail(message: string): never {
   throw new Error(message)
 }
 
-function truthy(value: string | undefined): boolean {
-  return ["1", "true", "y", "yes"].includes(value?.trim().toLowerCase() ?? "")
-}
-
 function optionValue(argv: string[], index: number, name: string): [string, number] {
   const value = argv[index + 1]
   if (!value) fail(`${name} requires a value`)
@@ -240,14 +236,17 @@ export async function runConfigCommand(options: CliOptions): Promise<number> {
     }, options.args)
   }
 
-  if (truthy(process.env.COMPFUZOR_CONFIG_CONTEXTS_BYPASS) || truthy(process.env.COMPFUZOR_CONFIG_BYPASS)) {
-    console.error(`skipped config install for ${contextName}: config context bypass`)
-    return 0
-  }
   const names = selectRecipeNames(spec, contextName, options.args)
-  const strategy = contextInstallStrategy(spec, contextName, options.strategy)
-  const inputStrategy = strategy === "assemble" ? contextInputStrategy(spec, contextName, options.dropins) : undefined
-  return installContext({ spec, contextName, runner: options.runner, names, strategy, inputStrategy })
+  const outcome = await installContext({
+    spec,
+    contextName,
+    runner: options.runner,
+    names,
+    strategy: () => contextInstallStrategy(spec, contextName, options.strategy),
+    inputStrategy: () => contextInputStrategy(spec, contextName, options.dropins),
+  })
+  if (outcome.status === "skipped") console.error(`skipped config install for ${contextName}: ${outcome.reason}`)
+  return outcome.code
 }
 
 export async function main(argv: string[] = process.argv.slice(2), modulePath: string = fileURLToPath(import.meta.url), invokedAs: string = basename(process.argv[1] ?? modulePath)): Promise<number> {

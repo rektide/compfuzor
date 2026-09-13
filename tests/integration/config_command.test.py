@@ -178,7 +178,9 @@ def test_config_command() -> None:
         # The sole runner validates every selected candidate before committing any.
         alpha_output = user_root / "outputs" / "alpha.conf"
         alpha_before = alpha_output.read_bytes()
-        (user_root / "inputs" / "alpha.conf").write_text("alpha=pending\n", encoding="utf-8")
+        alpha_input = user_root / "inputs" / "alpha.conf"
+        alpha_input.unlink()
+        alpha_input.write_text("alpha=pending\n", encoding="utf-8")
         gamma_input = user_root / "inputs" / "gamma.d" / "10.conf"
         gamma_input.unlink()
         gamma_input.write_text("BROKEN\n", encoding="utf-8")
@@ -186,6 +188,41 @@ def test_config_command() -> None:
         assert rejected.returncode == 1 and alpha_output.read_bytes() == alpha_before
         gamma_input.write_text("gamma=recovered\n", encoding="utf-8")
         run([str(assemble), "alpha", "gamma"], cwd=temporary, env=base_env)
+
+        # CONFIG bypass belongs only to ordinary install. It avoids strategy
+        # resolution and mutation, while direct assembly and internal processor
+        # execution remain diagnostic/operator-capable.
+        bypass_before = alpha_output.read_bytes()
+        alpha_input.write_text("alpha=bypass-pending\n", encoding="utf-8")
+        config_bypass_env = base_env | {
+            "COMPFUZOR_CONFIG_BYPASS": "1",
+            "COMPFUZOR_CONFIG_INSTALL_STRATEGY": "stale-not-resolved",
+            "COMPFUZOR_CONFIG_DROPINS_STRATEGY": "stale-not-resolved",
+        }
+        skipped_install = run([str(install), "alpha"], cwd=temporary, env=config_bypass_env)
+        assert "skipped config install" in skipped_install.stderr
+        assert alpha_output.read_bytes() == bypass_before
+        run([str(assemble), "alpha"], cwd=temporary, env=config_bypass_env)
+        assert alpha_output.read_text(encoding="utf-8") == "alpha=bypass-pending\n"
+        alpha_input.write_text("alpha=pending\n", encoding="utf-8")
+        run([str(assemble), "alpha"], cwd=temporary, env=config_bypass_env)
+
+        internal_candidate = temporary / "internal-candidate"
+        internal_manifest = temporary / "internal-inputs"
+        internal_manifest.write_text(f"file\tfile/0/alpha.conf\t{canonical / 'inputs' / 'alpha.conf'}\t{{}}\n", encoding="utf-8")
+        internal_env = config_bypass_env | {
+            "DIR": str(payload),
+            "CONFIG_SPEC": str(payload / "etc" / "config.spec.json"),
+            "CONFIG_TRANSACTION": str(temporary / "internal-transaction"),
+            "CONFIG_CANDIDATE": str(internal_candidate),
+            "CONFIG_INPUTS_FILE": str(internal_manifest),
+            "ENV_BYPASS": "1",
+        }
+        internal_result = run([str(payload / "bin" / "internal" / "config" / "alpha"), "--config", "alpha"], cwd=temporary, env=internal_env)
+        assert internal_candidate.read_text(encoding="utf-8") == "alpha=canonical\n", (
+            internal_candidate.read_text(encoding="utf-8"), internal_result.stdout, internal_result.stderr,
+            (payload / "bin" / "config" / "processors" / "concat").read_text(encoding="utf-8"),
+        )
 
         # Build a distinct system result for context/default/alias precedence.
         system_env = consumer_env(temporary / "irrelevant", "system")

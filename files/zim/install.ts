@@ -99,6 +99,10 @@ function fail(message: string): never {
   throw new Error(message)
 }
 
+function truthy(value: string | undefined): boolean {
+  return ["1", "true", "y", "yes"].includes(value?.trim().toLowerCase() ?? "")
+}
+
 function parseInstall(value: string | undefined, label: string): ConfigInstallStrategy {
   if (value === "assemble" || value === "copy" || value === "link") return value
   fail(`${label} must be assemble, copy, or link`)
@@ -162,14 +166,13 @@ export function resolveSettings(options: CliOptions, spec: ZimSpec, configSpec: 
   const activation = spec.contexts[contextName]
   const configContext = getConfigContext(configSpec, activation.config)
   if (configContext.scope !== activation.scope) fail(`Zim context ${contextName} scope does not match config context ${activation.config}`)
-  const install = options.action === "install" ? options.install ?? parseInstall(
-    process.env.COMPFUZOR_ZIM_INSTALL_STRATEGY ?? process.env.COMPFUZOR_CONFIG_INSTALL_STRATEGY ?? configContext.install ?? "assemble",
-    "effective install strategy",
-  ) : undefined
-  const dropins = options.action === "import" || (options.action === "install" && install === "assemble") ? options.dropins ?? parseDropins(
-    process.env.COMPFUZOR_ZIM_DROPINS_STRATEGY ?? process.env.COMPFUZOR_CONFIG_DROPINS_STRATEGY ?? configContext.dropins ?? "link",
-    "effective drop-in strategy",
-  ) : undefined
+  const install = options.action === "install" ? options.install : undefined
+  const dropins = options.action === "import"
+    ? options.dropins ?? parseDropins(
+      process.env.COMPFUZOR_ZIM_DROPINS_STRATEGY ?? process.env.COMPFUZOR_CONFIG_DROPINS_STRATEGY ?? configContext.dropins ?? "link",
+      "effective drop-in strategy",
+    )
+    : options.action === "install" ? options.dropins : undefined
   return { contextName, install, dropins }
 }
 
@@ -306,19 +309,40 @@ async function registry(action: "apply" | "status", activation: Activation, cano
 }
 
 async function install(options: CliOptions, settings: EffectiveSettings, activation: Activation, spec: ZimSpec, deploymentDir: string): Promise<number> {
-  const [zimenvLoader, zimrcLoader] = await Promise.all([
-    projectLoader("zimenv", activation, spec.canonical),
-    projectLoader("zimrc", activation, spec.canonical),
-  ])
+  const configContext = getConfigContext(activation.configSpec, activation.spec.config)
   const configResult = await installContext({
     spec: activation.configSpec,
     contextName: activation.spec.config,
     runner: options.configRunner,
     names: ["zimrc", "zimenv"],
-    strategy: settings.install!,
-    inputStrategy: settings.dropins,
+    strategy: () => settings.install ?? parseInstall(
+      process.env.COMPFUZOR_ZIM_INSTALL_STRATEGY ?? process.env.COMPFUZOR_CONFIG_INSTALL_STRATEGY ?? configContext.install ?? "assemble",
+      "effective install strategy",
+    ),
+    inputStrategy: () => settings.dropins ?? parseDropins(
+      process.env.COMPFUZOR_ZIM_DROPINS_STRATEGY ?? process.env.COMPFUZOR_CONFIG_DROPINS_STRATEGY ?? configContext.dropins ?? "link",
+      "effective drop-in strategy",
+    ),
   })
-  if (configResult !== 0) return configResult
+  if (configResult.code !== 0) return configResult.code
+  if (configResult.status === "skipped") {
+    const available = await Promise.all([activation.zimenv, activation.zimrc].map(async (path) => {
+      try {
+        return (await stat(path)).isFile()
+      } catch {
+        return false
+      }
+    }))
+    console.error(`skipped Zim config install for ${activation.name}: ${configResult.reason}`)
+    if (!available.every(Boolean)) {
+      console.error(`skipped remaining Zim install for ${activation.name}: required config outputs are unavailable`)
+      return 0
+    }
+  }
+  const [zimenvLoader, zimrcLoader] = await Promise.all([
+    projectLoader("zimenv", activation, spec.canonical),
+    projectLoader("zimrc", activation, spec.canonical),
+  ])
   await mkdir(activation.loaderRoot, { recursive: true })
   await installLoader(`${spec.canonical.blockPrefix}-zimenv`, zimenvLoader.content, join(activation.loaderRoot, ".zshenv"), spec.canonical.blockPrefix)
   await installLoader(`${spec.canonical.blockPrefix}-zimrc`, zimrcLoader.content, join(activation.loaderRoot, ".zshrc"), spec.canonical.blockPrefix)
@@ -445,6 +469,10 @@ async function status(activation: Activation, spec: ZimSpec, deploymentDir: stri
 }
 
 export async function runZim(options: CliOptions, deploymentDir: string): Promise<number> {
+  if (options.action !== "status" && truthy(process.env.COMPFUZOR_ZIM_BYPASS)) {
+    console.error(`skipped Zim ${options.action}: COMPFUZOR_ZIM_BYPASS`)
+    return 0
+  }
   const [zimSpec, configSpec] = await Promise.all([
     readFile(options.zimSpecPath, "utf8").then((text) => JSON.parse(text) as ZimSpec),
     readFile(options.configSpecPath, "utf8").then((text) => JSON.parse(text) as ConfigSpec),
