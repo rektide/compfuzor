@@ -1,6 +1,8 @@
 #!/bin/bash
 # Build, validate, and atomically commit compiled configs.
 
+set -euo pipefail
+
 if [ -z "${DIR:-}" ]; then
   script=$(readlink -f -- "$0")
   DIR=$(dirname "$(dirname "$(dirname "$script")")")
@@ -52,12 +54,21 @@ if [ "${#targets[@]}" -gt 0 ]; then
     configs+=("$target")
   done
 else
-  mapfile -t configs < <(jq -r '.configs | to_entries[] | select(.value.apply) | .key' "$spec")
+  selected=$(jq -r '.configs | to_entries[] | select(.value.apply) | .key' "$spec")
+  if [ -n "$selected" ]; then mapfile -t configs <<< "$selected"; else configs=(); fi
+fi
+
+if [ "$print" = 1 ] && [ "${#configs[@]}" -ne 1 ]; then
+  printf '%s\n' '--stdout requires exactly one selected config' >&2
+  exit 2
 fi
 
 transaction=$(mktemp -d)
 temps=()
-cleanup() { rm -rf "$transaction"; for file in "${temps[@]}"; do rm -f "$file"; done; }
+cleanup() {
+  rm -rf "$transaction" || true
+  for file in "${temps[@]}"; do rm -f "$file" || true; done
+}
 trap cleanup EXIT
 drift=0
 pending_sources=()
@@ -70,6 +81,17 @@ for config in "${configs[@]}"; do
     : > "$input_manifest"
 
     input_index=0
+    input_rows="$transaction/input-rows-${config}"
+    if ! jq -r --arg config "$config" '
+      .configs[$config].inputs[] |
+      (.block // {} | tojson) as $block |
+       if has("file") then ["file", .file, "-", "-", $block]
+       else ["glob", .directory, .pattern, (.disabled_suffix // "-"), $block]
+      end | @tsv
+    ' "$spec" > "$input_rows"; then
+      printf '%s: failed to read compiled inputs\n' "$config" >&2
+      exit 2
+    fi
     while IFS=$'\t' read -r kind value pattern suffix block; do
       [ "$suffix" != "-" ] || suffix=""
       case "$kind" in
@@ -94,13 +116,7 @@ for config in "${configs[@]}"; do
           ;;
       esac
       input_index=$((input_index + 1))
-    done < <(jq -r --arg config "$config" '
-      .configs[$config].inputs[] |
-      (.block // {} | tojson) as $block |
-       if has("file") then ["file", .file, "-", "-", $block]
-       else ["glob", .directory, .pattern, (.disabled_suffix // "-"), $block]
-      end | @tsv
-    ' "$spec")
+    done < "$input_rows"
 
     # Every mode builds privately. Apply stages validated candidates beside
     # their outputs later, immediately before the atomic commit. Thus check and
@@ -129,7 +145,6 @@ for config in "${configs[@]}"; do
       fi
     fi
     if [ "$print" = 1 ]; then
-      [ "${#configs[@]}" -eq 1 ] || printf '# ---- config: %s ----\n' "$config"
       cat "$tmp"
       rm -f "$tmp"
       continue
@@ -176,23 +191,35 @@ if [ "$check" = 0 ]; then
   done
 
   backups=()
+  rollback_prior() {
+    local last=$1 rollback prior_backup
+    for ((rollback=last; rollback >= 0; rollback--)); do
+      rm -f "${staged_outputs[$rollback]}" || true
+      prior_backup=${backups[$rollback]:-}
+      if [ -n "$prior_backup" ]; then
+        mv "$prior_backup" "${staged_outputs[$rollback]}" || printf 'warning: failed to restore %s\n' "${staged_outputs[$rollback]}" >&2
+      fi
+    done
+  }
   for index in "${!staged_sources[@]}"; do
     output=${staged_outputs[$index]}; backup=""
     if [ -e "$output" ] || [ -L "$output" ]; then
       backup=$(mktemp "$(dirname "$output")/.config-backup.XXXXXX"); rm -f "$backup"
       if ! mv "$output" "$backup"; then
-        for ((rollback=index - 1; rollback >= 0; rollback--)); do rm -f "${staged_outputs[$rollback]}"; [ -z "${backups[$rollback]}" ] || mv "${backups[$rollback]}" "${staged_outputs[$rollback]}"; done
+        rollback_prior "$((index - 1))"
         exit 1
       fi
     fi
     backups[$index]="$backup"
     if ! mv "${staged_sources[$index]}" "$output"; then
-      [ -z "$backup" ] || mv "$backup" "$output"
-      for ((rollback=index - 1; rollback >= 0; rollback--)); do rm -f "${staged_outputs[$rollback]}"; [ -z "${backups[$rollback]}" ] || mv "${backups[$rollback]}" "${staged_outputs[$rollback]}"; done
+      [ -z "$backup" ] || mv "$backup" "$output" || printf 'warning: failed to restore %s\n' "$output" >&2
+      rollback_prior "$((index - 1))"
       exit 1
     fi
-    printf 'assembled -> %s\n' "$output"
   done
-  for backup in "${backups[@]}"; do [ -z "$backup" ] || rm -f "$backup"; done
+  for backup in "${backups[@]}"; do
+    [ -z "$backup" ] || rm -f "$backup" || printf 'warning: failed to remove backup %s\n' "$backup" >&2
+  done
+  for output in "${staged_outputs[@]}"; do printf 'assembled -> %s\n' "$output" || true; done
 fi
 exit "$drift"

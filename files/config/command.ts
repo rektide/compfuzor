@@ -208,6 +208,7 @@ export async function runConfigCommand(options: CliOptions): Promise<number> {
       return 0
     }
     const names = selectRecipeNames(spec, contextName, options.args)
+    if (options.stdout && names.length !== 1) fail("--stdout requires exactly one selected config")
     return runAssembly({ spec, contextName, runner: options.runner, names, check: options.check, stdout: options.stdout, quiet: options.quiet })
   }
 

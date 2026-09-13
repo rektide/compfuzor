@@ -149,6 +149,11 @@ def test_config_command() -> None:
         assert not (user_root / "outputs" / "gamma.conf").exists()
         run([str(install), "gamma"], cwd=temporary, env=base_env)
 
+        multi_stdout = run([str(assemble), "--stdout", "alpha", "beta"], cwd=temporary, env=base_env, check=False)
+        assert multi_stdout.returncode == 2 and "exactly one" in multi_stdout.stderr
+        default_stdout = run([str(assemble), "--stdout"], cwd=temporary, env=base_env, check=False)
+        assert default_stdout.returncode == 2 and "exactly one" in default_stdout.stderr
+
         # Zero, one, and multiple recipe selections work across the public actions.
         run([str(sync), "--strategy", "copy", "alpha", "gamma"], cwd=temporary, env=base_env)
         assert not (user_root / "inputs" / "alpha.conf").is_symlink()
