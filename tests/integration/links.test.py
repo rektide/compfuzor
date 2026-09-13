@@ -49,7 +49,11 @@ def test_link_generation() -> None:
     ENV: {{}}
     ENV_LIST: []
     STATUSES: []
-    LINKS: []
+    LINKS:
+      - id: system-direct-only
+        src: etc/direct.conf
+        dest: {str(temporary / 'system-direct.conf')!r}
+        compose: false
   tasks:
     - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'compile_artifacts.tasks')!r}
     - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_links.tasks')!r}
@@ -92,15 +96,21 @@ def test_link_generation() -> None:
         plan = generated["plan"]
         assert plan["version"] == 2
         assert (payload / "links.json").is_file()
-        assert plan["links"][0]["src"] == str(temporary / "etc/link-test/app.json")
-        assert plan["links"][0]["dest"] == "${HOME}/.config/link-test/app.json"
-        assert plan["links"][1]["dest"] == "${HOME}/.local/usr/share/link-test/applications/link-test.desktop"
+        links_by_id = {item["id"]: item for item in plan["links"]}
+        assert links_by_id["system-direct-only"]["compose"] is False
+        user_links = [item for item in plan["links"] if item["scope"] == "user"]
+        assert user_links[0]["src"] == str(temporary / "etc/link-test/app.json")
+        assert user_links[0]["dest"] == "${HOME}/.config/link-test/app.json"
+        assert user_links[1]["dest"] == "${HOME}/.local/usr/share/link-test/applications/link-test.desktop"
         by_name = {item["name"]: item for item in generated["bins"]}
         assert by_name["install-links-user.sh"]["run_all"] == ["install-link-records-user.sh"]
         assert by_name["install-link-records-user.sh"]["content"] == 'exec "$DIR/bin/links.ts" apply --composed --scope user'
         assert "install-links-user.sh" in by_name["install-user.sh"]["run_all"]
+        assert "install-link-records.sh" not in by_name
+        assert "install-links.sh" not in by_name
+        assert "install.sh" not in by_name
         assert "status-links.sh" in generated["statuses"]
-        print("ok: deferred links compile and compose through Ansible")
+        print("ok: deferred links compile and compose only participating scopes")
 
 
 if __name__ == "__main__":

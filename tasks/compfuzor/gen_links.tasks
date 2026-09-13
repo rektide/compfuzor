@@ -36,8 +36,24 @@
     ENV_LIST: "{{ ENV_LIST | merge_list(['LINKS_JSON'], preset='append') }}"
   when: _LINK_PLAN.links | length > 0
   vars:
-    _link_system: "{{ _LINK_PLAN.links | selectattr('scope', 'equalto', 'system') | list | length > 0 }}"
-    _link_user: "{{ _LINK_PLAN.links | selectattr('scope', 'equalto', 'user') | list | length > 0 }}"
+    # Installer presence follows composition participation, not ownership.
+    # compose:false records still retain runtime/status/remove assets.
+    _link_system: >-
+      {%- set records = [] -%}
+      {%- for record in _LINK_PLAN.links -%}
+      {%- if record.scope == 'system' and record.compose | default(true) -%}
+      {%- set _ = records.append(record) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ records | length > 0 }}
+    _link_user: >-
+      {%- set records = [] -%}
+      {%- for record in _LINK_PLAN.links -%}
+      {%- if record.scope == 'user' and record.compose | default(true) -%}
+      {%- set _ = records.append(record) -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ records | length > 0 }}
     # Record installers are fixed composition commands. They intentionally do
     # not forward aggregate argv such as systemd's --copy/--link into LINKS.
     _link_bins: >-

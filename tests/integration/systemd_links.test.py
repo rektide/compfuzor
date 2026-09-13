@@ -96,8 +96,10 @@ def generate(payload: Path) -> None:
     assert record["strategies"] == {"available": ["link", "copy"], "default": "link"}
     assert record["compose"] is False
     by_name = {item["name"]: item for item in rendered["bins"]}
-    assert by_name["install.sh"]["run_all"] == ["install-systemd.sh", "install-links.sh"]
-    assert by_name["install-link-records.sh"]["content"] == 'exec "$DIR/bin/links.ts" apply --composed --scope system'
+    assert by_name["install.sh"]["run_all"] == ["install-systemd.sh"]
+    assert "install-link-records.sh" not in by_name
+    assert "install-links.sh" not in by_name
+    assert {"links.ts", "status-links.sh", "remove-link-records.sh"} <= set(by_name)
 
 
 def retarget_fixture(payload: Path, unit_dir: Path) -> tuple[str, Path, Path]:
@@ -208,8 +210,7 @@ def test_rendered_aggregate_preserves_or_switches_declared_representation() -> N
         missing = run(payload / "bin/links.ts", "status", "--json-array", env=env, check=False)
         assert missing.returncode == 1 and json.loads(missing.stdout)[0]["status"] == "MISSING"
 
-        run(payload / "bin/install-link-records.sh", env=env)
-        assert not destination.exists() and not destination.is_symlink()
+        assert not (payload / "bin/install-link-records.sh").exists()
         run(payload / "bin/links.ts", "apply", "--id", link_id, env=env)
         assert destination.is_symlink()
 
