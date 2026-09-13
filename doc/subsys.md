@@ -547,6 +547,10 @@ field. Current durable plans from `compile_links` are consistently version 2.
   copy delivery both use this routing. User-scope records never escalate;
   explicit `always` is rejected before user mutation. `never` keeps system work
   strictly unprivileged for let-it-fail callers.
+- The Node CLI uses strict `node:util` argument parsing and accepts both
+  `--flag value` and `--flag=value`. The historical bare `--sudo` shorthand is
+  normalized narrowly to `--sudo=always`; all other tokens go directly through
+  the standard parser.
 
 ### Systemd unit publication
 
@@ -593,6 +597,15 @@ They nevertheless import the same `links/delivery.ts` entry inspection and
 atomic copy/link primitives used by the LINKS manager. This keeps one delivery
 implementation while preserving the distinct ownership and status contracts:
 LINKS representation strategy does not make systemd a CONFIG context.
+
+The installed LINKS runtime is grouped by responsibility:
+
+- `links/cli.ts` parses command options;
+- `links/manifest.ts` decodes v1/v2 plans, expands paths, and selects records;
+- `links/operations.ts` assesses representations and performs bounded
+  copy/link/remove mutations from typed strategy and sudo settings;
+- `links/links.ts` orchestrates actions and renders rows;
+- `links/delivery.ts` provides shared atomic filesystem delivery.
 
 ## Unit aliases
 

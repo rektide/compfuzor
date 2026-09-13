@@ -86,6 +86,11 @@ install.sh / install-user.sh            (scope entry points — the top)
   scope, plus any ungrouped leaves. So each leaf is reached through exactly one
   path.
 
+Every generated compositor handles `-h`/`--help` before guards, authored body,
+or children. It prints its immediate ordered children and exits, making the
+generated hierarchy inspectable without accidentally starting an install. Run
+`--help` on a listed subsystem compositor to reveal its next tier.
+
 ### When a subsystem compositor is emitted
 
 Whenever a subsystem contributes at least one leaf to a given (action, scope).

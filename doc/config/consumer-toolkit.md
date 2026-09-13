@@ -14,11 +14,13 @@ config-status.sh
 ```
 
 Each file is a real symlink to the one thin dispatcher at
-`bin/config/command.ts`. The dispatcher selects an action and context, then
-delegates to separate typed assembly, input, publication, install, and status
-operations under `bin/config/`. The transaction runner and processor leaves
-remain internal. There is no public `config.sh`, `config-context.sh`, per-recipe
-assembly wrapper, per-context wrapper, or strategy-specific wrapper.
+`bin/config/command.ts`. Declarative argument parsing, alias inference, and
+action-specific help live in `bin/config/cli.ts`; the dispatcher selects an
+action and context, then delegates to separate typed assembly, input,
+publication, install, and status operations under `bin/config/`. The
+transaction runner and processor leaves remain internal. There is no public
+`config.sh`, `config-context.sh`, per-recipe assembly wrapper, per-context
+wrapper, or strategy-specific wrapper.
 
 ## Defaults and composition
 
@@ -107,6 +109,12 @@ rather than pretending those relationships are meaningful. Canonical assembly
 still runs during playbook generation before consumer installation.
 
 ## Actions and recipe selection
+
+Each fixed command's `--help` describes only that action. In particular,
+`config-assemble.sh --help` points to its existing `--list` operation for recipe
+discovery; operators do not need to read the internal spec. Both `--flag value`
+and `--flag=value` are accepted, and unknown options fail under strict Node
+argument parsing.
 
 All recipe-level actions accept zero, one, or many positional recipe names:
 
@@ -236,7 +244,9 @@ copies, equivalent links, and matching local assemblies are healthy. Direct
 `config-status.sh` exits 0 clean, 1 drift, or 2 evaluation error. Its structured
 aggregate reporter metadata marks exit 2 as an error; aggregate `status.sh`
 continues to return its boolean attention result without treating CONFIG errors
-as historical “not applicable.”
+as historical “not applicable.” The human table calls its two identity columns
+`recipe` and `item`: they intentionally coincide for whole outputs and differ
+for named fragments.
 
 Structured status records may also bind fixed arguments without creating a
 wrapper. On a Zim host, aggregate status runs generic `config-status.sh` once,
@@ -261,6 +271,9 @@ install-zim-donor.sh PRODUCER_DIR
 operation, then installs both projected loaders, builds both caches, and applies
 the registry. `status-zim.sh` includes selected-context generic CONFIG health as
 well as loaders, caches, and registry, preserving direct 0/1/2 distinction.
+Clean and drifting loader/cache checks each name their channel, component, and
+path, so a clean run confirms all four activation artifacts instead of printing
+only failures.
 Install and status resolve context from explicit flag, supported Zim alias,
 `COMPFUZOR_ZIM_CONTEXT`, generic `COMPFUZOR_CONTEXT`, then compiled
 `defaultContext`. Install/drop-in settings are not resolved during status.
@@ -312,16 +325,25 @@ future live migration must remove known old wrappers deliberately.
   found during independent review.
 - [`config_context_compile.py`](/library/filter_plugins/config_context_compile.py)
   compiles config spec v2, canonical/default contexts, modules, and fixed links.
-- [`config/command.ts`](/files/config/command.ts) parses/infer/selects and
-  dispatches; [`config/invocation.ts`](/files/config/invocation.ts) is the small
-  shared selected-name resolver used by CONFIG and Zim.
+- [`config/cli.ts`](/files/config/cli.ts) owns strict argument parsing, fixed
+  help, and alias inference; [`config/command.ts`](/files/config/command.ts)
+  selects typed operations and dispatches them.
+- [`config/invocation.ts`](/files/config/invocation.ts) is the small shared
+  selected-name resolver used by CONFIG and Zim.
 - [`config/assembly.ts`](/files/config/assembly.ts),
+  [`config/input-state.ts`](/files/config/input-state.ts),
   [`config/inputs.ts`](/files/config/inputs.ts),
   [`config/publication.ts`](/files/config/publication.ts), and
-  [`config/status.ts`](/files/config/status.ts) are typed operation modules.
+  [`config/status.ts`](/files/config/status.ts) separate assembly, input
+  observation, input mutation, publication, and whole-context status.
+- [`config/file-state.ts`](/files/config/file-state.ts) contains the common
+  regular-file availability and byte-comparison observations used by input and
+  output status.
 - [`config-run.sh`](/files/config-run.sh) remains the single build, validation,
   atomic commit, and rollback transaction runner.
-- [`zim/install.ts`](/files/zim/install.ts) retains the domain-specific complete
-  installation lifecycle.
+- [`zim/cli.ts`](/files/zim/cli.ts),
+  [`zim/activation.ts`](/files/zim/activation.ts), and
+  [`zim/install.ts`](/files/zim/install.ts) separate selected invocation,
+  loader/cache mechanics, and complete-install/import/status orchestration.
 - [`links/delivery.ts`](/files/links/delivery.ts) remains the shared atomic
   copy/link primitive.
