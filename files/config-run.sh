@@ -69,6 +69,7 @@ cleanup() {
   rm -rf "$transaction" || true
   for file in "${temps[@]}"; do rm -f "$file" || true; done
 }
+warn() { printf '%s\n' "$*" >&2 || true; }
 trap cleanup EXIT
 drift=0
 pending_sources=()
@@ -197,7 +198,7 @@ if [ "$check" = 0 ]; then
       rm -f "${staged_outputs[$rollback]}" || true
       prior_backup=${backups[$rollback]:-}
       if [ -n "$prior_backup" ]; then
-        mv "$prior_backup" "${staged_outputs[$rollback]}" || printf 'warning: failed to restore %s\n' "${staged_outputs[$rollback]}" >&2
+        mv "$prior_backup" "${staged_outputs[$rollback]}" || warn "warning: failed to restore ${staged_outputs[$rollback]}"
       fi
     done
   }
@@ -212,13 +213,13 @@ if [ "$check" = 0 ]; then
     fi
     backups[$index]="$backup"
     if ! mv "${staged_sources[$index]}" "$output"; then
-      [ -z "$backup" ] || mv "$backup" "$output" || printf 'warning: failed to restore %s\n' "$output" >&2
+      [ -z "$backup" ] || mv "$backup" "$output" || warn "warning: failed to restore $output"
       rollback_prior "$((index - 1))"
       exit 1
     fi
   done
   for backup in "${backups[@]}"; do
-    [ -z "$backup" ] || rm -f "$backup" || printf 'warning: failed to remove backup %s\n' "$backup" >&2
+    [ -z "$backup" ] || rm -f "$backup" || warn "warning: failed to remove backup $backup"
   done
   for output in "${staged_outputs[@]}"; do printf 'assembled -> %s\n' "$output" || true; done
 fi

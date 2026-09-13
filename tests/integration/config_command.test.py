@@ -206,6 +206,8 @@ def test_config_command() -> None:
         assert alpha_output.read_text(encoding="utf-8") == "alpha=bypass-pending\n"
         alpha_input.write_text("alpha=pending\n", encoding="utf-8")
         run([str(assemble), "alpha"], cwd=temporary, env=config_bypass_env)
+        bypass_status = run([str(status), "alpha"], cwd=temporary, env=config_bypass_env, check=False)
+        assert bypass_status.returncode == 1 and "assembly\tready\talpha\talpha" in bypass_status.stdout
 
         internal_candidate = temporary / "internal-candidate"
         internal_manifest = temporary / "internal-inputs"
