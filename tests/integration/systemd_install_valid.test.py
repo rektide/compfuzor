@@ -59,7 +59,7 @@ def check(value: str, expected: str) -> None:
     print(f"ok: SYSTEMD_INSTALL={value} -> {expected}")
 
 
-def check_user_timer_installer() -> None:
+def check_user_timer_installer(*, legacy_copy: bool = False) -> None:
     with tempfile.TemporaryDirectory(prefix="compfuzor-systemd-timer-") as temporary:
         output = Path(temporary) / "bins.json"
         playbook_path = ROOT / ".test-agent-systemd-user-timer.pb"
@@ -71,6 +71,7 @@ def check_user_timer_installer() -> None:
     - {ROOT / 'vars/systemd.yaml'}
   vars:
     NAME: probe
+    ETC: /deployment/etc
     SYSTEMD_SCOPE: user
     SYSTEMD_INSTALL: user
     SYSTEMD_ROOTS: [probeTimer]
@@ -83,22 +84,26 @@ def check_user_timer_installer() -> None:
         dest: {str(output)!r}
         content: >-
           {{{{ {{'bins': BINS,
+                 'links': LINKS | default([]),
                  'install': SYSTEMD_INSTALL_VALID}} | to_json }}}}
 """,
             encoding="utf-8",
         )
         try:
+            command = [
+                "ansible-playbook",
+                "-i",
+                "localhost,",
+                "-c",
+                "local",
+                str(playbook_path),
+                "-e",
+                "SYSTEMD_INSTALL=user",
+            ]
+            if legacy_copy:
+                command.extend(["-e", "SYSTEMD_COPY=true"])
             result = subprocess.run(
-                [
-                    "ansible-playbook",
-                    "-i",
-                    "localhost,",
-                    "-c",
-                    "local",
-                    str(playbook_path),
-                    "-e",
-                    "SYSTEMD_INSTALL=user",
-                ],
+                command,
                 cwd=ROOT,
                 text=True,
                 capture_output=True,
@@ -118,8 +123,10 @@ def check_user_timer_installer() -> None:
                 f"user timer installer missing; got {sorted(bins)}; gates={rendered}"
             )
         generated = bins[name]["generated"]
+        expected_strategy = "copy" if legacy_copy else "link"
         expected_fragments = (
             'UNIT_DIR="${HOME}/.config/systemd/user"',
+            f"UNIT_LINK_DEFAULT={expected_strategy}",
             'SYSTEMCTL="systemctl --user"',
         )
         for fragment in expected_fragments:
@@ -127,7 +134,52 @@ def check_user_timer_installer() -> None:
                 raise AssertionError(
                     f"user timer installer missing {fragment!r}:\n{generated}"
                 )
-        print("ok: SYSTEMD_INSTALL=user routes timer installer to user scope")
+        links = rendered["links"]
+        if len(links) != 1:
+            raise AssertionError(f"expected one unit link record: {links}")
+        link = links[0]
+        if link.get("strategies") != {"available": ["link", "copy"], "default": expected_strategy}:
+            raise AssertionError(f"unit strategies not compiled: {link}")
+        if link.get("compose") is not False:
+            raise AssertionError(f"unit link must stay out of generic composition: {link}")
+        suffix = " and maps SYSTEMD_COPY to copy default" if legacy_copy else ""
+        print(f"ok: SYSTEMD_INSTALL=user routes timer installer to user scope{suffix}")
+
+
+def check_user_nonunit_map_rejected() -> None:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-systemd-network-") as temporary:
+        playbook = ROOT / ".test-agent-systemd-user-network.pb"
+        playbook.write_text(
+            f"""---
+- hosts: all
+  gather_facts: false
+  vars_files:
+    - {ROOT / 'vars/systemd.yaml'}
+  vars:
+    NAME: probe
+    SYSTEMD_INSTALL: user
+    SYSTEMD_ROOTS: [probeNetwork]
+    probeNetwork:
+      SYSTEMD_NETWORK: probe
+  tasks:
+    - import_tasks: {ROOT / 'tasks/compfuzor/vars_systemd_unit.tasks'}
+""",
+            encoding="utf-8",
+        )
+        try:
+            result = subprocess.run(
+                ["ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook), "-e", "SYSTEMD_INSTALL=user"],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+        finally:
+            playbook.unlink(missing_ok=True)
+        output = result.stdout + result.stderr
+        if result.returncode == 0 or "directory map 'network' publishes outside the user manager" not in output:
+            raise AssertionError(f"user network map should be rejected:\n{output}")
+        print("ok: user scope rejects system-only network directory map")
 
 
 def main() -> None:
@@ -137,6 +189,8 @@ def main() -> None:
     check("separate", "RESULT=separate, true, true")
     check("user", "RESULT=user, false, true")
     check_user_timer_installer()
+    check_user_timer_installer(legacy_copy=True)
+    check_user_nonunit_map_rejected()
 
     typo = render("seperate")
     if typo.returncode == 0 or "not one of enum" not in (typo.stdout + typo.stderr):

@@ -175,5 +175,53 @@ def test_systemd_phase_names_and_aliases() -> None:
     print("ok: systemd broad, nested, and canonical/alias phases are behavioral")
 
 
+def test_fallback_privileged_parent_uses_sudo_shim() -> None:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-systemd-fallback-") as tmp:
+        temporary = Path(tmp)
+        command, systemctl_log = fake_systemctl(temporary)
+        sudo_log = temporary / "sudo.log"
+        sudo = temporary / "sudo"
+        sudo.write_text(
+            "#!/bin/bash\n"
+            f'printf \'%s\\n\' "$*" >> {sudo_log}\n'
+            'exec "$@"\n',
+            encoding="utf-8",
+        )
+        sudo.chmod(0o755)
+        source = temporary / "source.service"
+        source.write_text("[Service]\nExecStart=/bin/true\n", encoding="utf-8")
+        destination = temporary / "privileged-parent" / "nested" / "probe.service"
+        env = clean_env()
+        env.update(
+            {
+                "UNIT_TEMPLATE": "probe",
+                "UNIT_TYPE": "service",
+                "UNIT_DIR": str(destination.parent),
+                "UNIT_SRC": str(source),
+                "UNIT_DEST": str(destination),
+                "UNIT_ENABLE_TARGETS": "",
+                "SUDO_CMD": str(sudo),
+                "SYSTEMCTL": str(command),
+                "SYSTEMCTL_LOG": str(systemctl_log),
+            }
+        )
+        result = subprocess.run(
+            ["bash", str(UNIT_SCRIPT), "--link"],
+            check=False,
+            text=True,
+            capture_output=True,
+            env=env,
+        )
+        if result.returncode != 0:
+            raise AssertionError(f"fallback install failed:\n{result.stdout}{result.stderr}")
+        calls = sudo_log.read_text(encoding="utf-8").splitlines()
+        if not any(call.startswith("mkdir -p ") for call in calls):
+            raise AssertionError(f"fallback parent mkdir did not use sudo shim: {calls}")
+        if not destination.is_symlink() or destination.resolve() != source:
+            raise AssertionError("fallback did not publish managed link")
+        print("ok: fallback parent mkdir uses bounded sudo command")
+
+
 if __name__ == "__main__":
     test_systemd_phase_names_and_aliases()
+    test_fallback_privileged_parent_uses_sudo_shim()

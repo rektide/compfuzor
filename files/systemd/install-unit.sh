@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 _bypass_start=false
 _bypass_link=false
 _bypass_enable=false
-_copy=false
+_explicit_strategy=""
 _pass_through=()
 for arg in "$@"; do
   case "$arg" in
@@ -21,7 +21,10 @@ for arg in "$@"; do
       _bypass_enable=true
       ;;
     --copy)
-      _copy=true
+      _explicit_strategy=copy
+      ;;
+    --link)
+      _explicit_strategy=link
       ;;
     *)
       _pass_through+=("$arg")
@@ -32,29 +35,43 @@ done
 UNIT_SRC="${UNIT_SRC:-$SCRIPT_DIR/../etc/${UNIT_TEMPLATE}.${UNIT_TYPE}}"
 UNIT_DEST="${UNIT_DEST:-$UNIT_DIR/${UNIT_TEMPLATE}.${UNIT_TYPE}}"
 
+if [ -n "$_explicit_strategy" ]; then
+  _strategy="$_explicit_strategy"
+elif [ -n "${SYSTEMD_COPY:-}" ] || [ -n "${SYSTEMD_INSTALL_COPY:-}" ]; then
+  _strategy=copy
+else
+  _strategy="${UNIT_LINK_DEFAULT:-link}"
+fi
+
 # SYSTEMD_BYPASS_* remains a temporary soak alias for generated artifacts.
 if [ "$_bypass_link" = true ] || [ -n "${COMPFUZOR_SYSTEMD_LINK_BYPASS:-}" ] || [ -n "${SYSTEMD_BYPASS_LINK:-}" ]; then
   echo "Bypassed linking ${UNIT_DEST}"
 else
-  if [ "$_copy" = true ] || [ -n "${SYSTEMD_COPY:-}" ] || [ -n "${SYSTEMD_INSTALL_COPY:-}" ]; then
-    $SUDO_CMD mkdir -p "$(dirname "$UNIT_DEST")"
-    $SUDO_CMD cp --remove-destination -f "$UNIT_SRC" "$UNIT_DEST"
-    echo "Copied ${UNIT_SRC} -> ${UNIT_DEST}"
-  elif [ -x "$(dirname "$0")/links.ts" ]; then
-    # Link creation is delegated to links.ts: the LINKS subsystem owns every
-    # managed symlink, and this unit's record is in DIR/links.json (policy
-    # replace, matching the old ln -sf). UNIT_LINK_ID is baked at generation
-    # and matches the record id; ${HOME} stays literal for user scope.
+  if [ -x "$(dirname "$0")/links.ts" ]; then
+    # Publication is delegated to links.ts: the LINKS subsystem owns both
+    # accepted unit representations. UNIT_LINK_ID is baked at generation and
+    # matches the record id; ${HOME} stays literal for user scope.
     # Privilege routing is automatic: the default auto mode probes the dest
     # per record and escalates only unwritable ones through sudo, so
     # user-scope dests mutate directly.
-    "$(dirname "$0")/links.ts" apply --id "$UNIT_LINK_ID"
+    if [ -n "$_explicit_strategy" ] || [ -n "${SYSTEMD_COPY:-}" ] || [ -n "${SYSTEMD_INSTALL_COPY:-}" ]; then
+      "$(dirname "$0")/links.ts" apply --id "$UNIT_LINK_ID" --strategy "$_strategy"
+    else
+      # No explicit selection lets LINKS preserve either currently healthy
+      # representation and use the compiled record default only when missing.
+      "$(dirname "$0")/links.ts" apply --id "$UNIT_LINK_ID"
+    fi
   else
     # No links.ts (LINKS_BYPASS, or a deployment predating the LINKS
-    # subsystem): fall back to a direct link.
-    mkdir -p "$(dirname "$UNIT_DEST")"
-    $SUDO_CMD ln -sf "$UNIT_SRC" "$UNIT_DEST"
-    echo "Linked ${UNIT_SRC} -> ${UNIT_DEST}"
+    # subsystem): retain direct copy/link behavior using the same selection.
+    $SUDO_CMD mkdir -p "$(dirname "$UNIT_DEST")"
+    if [ "$_strategy" = copy ]; then
+      $SUDO_CMD cp --remove-destination -f "$UNIT_SRC" "$UNIT_DEST"
+      echo "Copied ${UNIT_SRC} -> ${UNIT_DEST}"
+    else
+      $SUDO_CMD ln -sf "$UNIT_SRC" "$UNIT_DEST"
+      echo "Linked ${UNIT_SRC} -> ${UNIT_DEST}"
+    fi
   fi
   $SUDO_CMD $SYSTEMCTL daemon-reload
 fi

@@ -41,6 +41,13 @@ SYSTEMD_ENABLE: true
 # Whether the install script also starts the unit now (enable --now vs enable).
 # Set false to enable for boot without starting immediately.
 SYSTEMD_START: true
+# Durable unit publication default. The legacy generation-time copy booleans
+# map to copy; otherwise links remain the established default. At runtime an
+# install leaf may still select --copy/--link explicitly.
+SYSTEMD_INSTALL_STRATEGY: >-
+  {{ 'copy'
+     if (SYSTEMD_INSTALL_COPY | default(SYSTEMD_COPY | default(False))) | bool
+     else 'link' }}
 SYSTEMD_SYSTEM_SERVICE_INSTALL: "{{ SYSTEMD_INSTALL_VALID in ['system', 'both', 'separate', true] }}"
 SYSTEMD_USER_SERVICE_INSTALL: "{{ SYSTEMD_INSTALL_VALID in ['user', 'both', 'separate', true] }}"
 SYSTEMD_SYSTEM_SOCKET_INSTALL: "{{ SYSTEMD_INSTALL_VALID in ['system', 'both', 'separate', true] }}"
