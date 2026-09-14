@@ -59,6 +59,7 @@
       # - WORDS
     ETC_DIRS:
       - mkosi.images/vps-seed
+      - mkosi.images/vps-seed/mkosi.extra/usr/lib/systemd/system-preset
       - mkosi.images/oci
       - mkosi.images/disk
       - mkosi.images/disk/mkosi.repart
@@ -204,6 +205,12 @@
                   btrfs-progs
                   dosfstools
                   util-linux
+                  # rescue SSH: socket-activated sshd (see the 81-vps-seed-ssh
+                  # preset below). Root has no password; auth is by injected
+                  # authorized_keys (initrd-rewrite --inject, same seam as the
+                  # networkd config). Host keys generate fresh per kexec
+                  # (RAM-only; the box's real identity stays on disk).
+                  openssh-server
           # xfs opt-in: uncomment BOTH lines. The empty RemovePackages= MUST
           # be unindented (indented lines continue Packages=) and AFTER the
           # Include -- mkosi list semantics: an empty value resets the
@@ -211,6 +218,13 @@
           #Packages=
           #        xfsprogs
           #RemovePackages=
+      # Enable ssh.socket in the seed: preset order is lexicographic and the
+      # FIRST matching line wins, so 81- beats mkosi-initrd's 99-mkosi.preset
+      # ("disable *", primarily Debian/Ubuntu). 80-mkosi-ssh.preset is mkosi's
+      # own vsock variant (mkosi vm only) — ours is plain TCP :22 on eth0.
+      - name: mkosi.images/vps-seed/mkosi.extra/usr/lib/systemd/system-preset/81-vps-seed-ssh.preset
+        content: |
+          enable ssh.socket
       # oci: the base Debian rootfs as an OCI container image.
       - name: mkosi.images/oci/mkosi.conf
         content: |
@@ -353,7 +367,10 @@
         artifact); `Dependencies=oci` selects which subimages build (lean
         default; `image.sh <variant>` builds any one subimage explicitly).
       - `mkosi.images/vps-seed/` — bootable cpio initrd (`Include=mkosi-initrd`
-        + ext4/btrfs/dos formatting tools). xz level 6 (commented zstd 15).
+        + ext4/btrfs/dos formatting tools + socket-activated sshd: `ssh.socket`
+        enabled via `mkosi.extra/…/81-vps-seed-ssh.preset` — first-match preset
+        beats mkosi-initrd's `disable *`; login by `authorized_keys` injected
+        on the box, host keys fresh per kexec). xz level 6 (commented zstd 15).
         **Generic** — does NOT inject host kernel modules; for a host-tailored
         initrd use `vps-seed.sh` (on the target box: mkosi-initrd copies the
         host's `/etc/apt` into its build sandbox, so running it on a repo-heavy
