@@ -32,7 +32,7 @@ The old emit-then-`_internalize_config_bins()` translation, per-recipe wrappers,
 and toggle wrappers are gone. Fixed `config-inputs.sh` preserves explicit
 canonical enable/disable administration without restoring wrapper generation.
 
-The Vite+ artifact remains one executable and is now 133.96 kB (31.61 kB gzip)
+The Vite+ artifact remains one executable and is now 133.97 kB (31.60 kB gzip)
 with catalog inspection included. This entry records repository generation and
 tests only; no live `/opt` deployment was rerendered or pruned.
 
