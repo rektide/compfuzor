@@ -122,6 +122,8 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_attribution.tasks
   tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_runtime_catalog.tasks
+  tags: ['vars', 'always']
 - debug: "msg='Compfuzor: completed vars'"
 
 - import_tasks: compfuzor/user.tasks

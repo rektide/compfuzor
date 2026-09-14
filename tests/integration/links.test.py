@@ -60,13 +60,14 @@ def test_link_generation() -> None:
     - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_links.tasks')!r}
     - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_bins.tasks')!r}
     - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_attribution.tasks')!r}
+    - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_runtime_catalog.tasks')!r}
     - ansible.builtin.file:
         path: {str(payload)!r}
         state: directory
     - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'link_plan.tasks')!r}
     - ansible.builtin.copy:
         dest: {str(output)!r}
-        content: "{{{{ {{'attribution': COMPFUZOR_ATTRIBUTION, 'plan': _LINK_PLAN, 'bins': BINS, 'statuses': STATUSES}} | to_nice_json }}}}"
+        content: "{{{{ {{'attribution': COMPFUZOR_ATTRIBUTION, 'catalog': _RUNTIME_CATALOG, 'plan': _LINK_PLAN, 'bins': BINS, 'statuses': STATUSES}} | to_nice_json }}}}"
         mode: "0600"
 """,
             encoding="utf-8",
@@ -98,6 +99,11 @@ def test_link_generation() -> None:
         assert generated["attribution"]["id"] == "deployment:link-test"
         assert generated["attribution"]["source"]["playbook"] == str(playbook.resolve())
         assert generated["attribution"]["source"]["confidence"] == "exact"
+        assert generated["catalog"]["catalog"]["execution"] == {
+            "authority": "legacy-shell",
+            "catalogOnly": True,
+        }
+        assert generated["catalog"]["files"]
         plan = generated["plan"]
         assert plan["version"] == 2
         assert (payload / "links.json").is_file()

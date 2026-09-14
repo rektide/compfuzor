@@ -1,0 +1,31 @@
+---
+- name: "Compfuzor: compile attributed runtime catalog"
+  set_fact:
+    _RUNTIME_CATALOG: >-
+      {{ COMPFUZOR_ATTRIBUTION |
+         runtime_catalog_compile(
+           BINS,
+           STATUSES,
+           _LINK_PLAN | default({}),
+           SUBSYSTEM | default({}),
+           ETC_FILES | default([])) }}
+  changed_when: false
+
+- name: "Compfuzor: contribute runtime catalog artifacts"
+  set_fact:
+    ETC_FILES: "{{ ETC_FILES | default([]) | merge_list(_RUNTIME_CATALOG.etc_files, preset='append') }}"
+    ETC_DIRS: "{{ ETC_DIRS | default([]) | merge_list(_RUNTIME_CATALOG.etc_dirs, preset='append_unique') }}"
+    BINS: "{{ BINS | merge_list(_catalog_bins, preset='bins_generated') }}"
+  vars:
+    _runtime_present: >-
+      {%- set found = namespace(value=false) -%}
+      {%- for record in BINS | default([]) -%}
+      {%- if record is mapping and (record.dest | default(record.name | default(''))) == 'compfuzor-runtime.mjs' -%}
+      {%- set found.value = true -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ found.value }}
+    _catalog_bins: >-
+      {{ (('compfuzor-catalog.sh' | compfuzor_runtime_bins) | attribute_bins(NAME, 'catalog'))
+         if _runtime_present else [] }}
+  changed_when: false

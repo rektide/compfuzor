@@ -90,6 +90,20 @@ def _phase_for(name, bins_by_name, seen=None):
     return min(child_phases, key=order.index) if child_phases else "main"
 
 
+def _contributors_for(name, bins_by_name, seen=None):
+    seen = set(seen or [])
+    if name in seen:
+        return []
+    seen.add(name)
+    record = bins_by_name.get(name, {})
+    result = _refs(record)
+    for child in record.get("run_all", []):
+        for contributor in _contributors_for(child, bins_by_name, seen):
+            if contributor not in result:
+                result.append(contributor)
+    return result
+
+
 def _invocation_file(flow, scope, child, sequence, bins_by_name):
     phase = _phase_for(child, bins_by_name)
     index = _PHASE_INDEX[flow].get(phase, _PHASE_INDEX[flow]["main"])
@@ -110,7 +124,7 @@ def _invocation_file(flow, scope, child, sequence, bins_by_name):
             "action": "command:{}".format(child),
             "handler": {"kind": "exec", "path": "bin/{}".format(child), "protocol": "legacy-exit-v1"},
         },
-        "contributors": _refs(record),
+        "contributors": _contributors_for(child, bins_by_name),
         "source": {"kind": "legacy-bin", "name": child},
     }
 
@@ -213,9 +227,15 @@ def compile_runtime_catalog(attribution, bins, statuses, links_plan=None, subsys
 
     files = []
     flows = {"build": [], "install": [], "status": []}
+    generated_children = {
+        child
+        for record in bin_records
+        if record.get("generated_by") == "gen_bins"
+        for child in record.get("run_all", [])
+    }
     for name, record in bins_by_name.items():
         match = _ROOT.fullmatch(name)
-        if not match or record.get("generated_by") != "gen_bins":
+        if not match or record.get("generated_by") != "gen_bins" or name in generated_children:
             continue
         flow, scope = match.groups()
         for sequence, child in enumerate(record.get("run_all", []), start=1):
@@ -257,7 +277,25 @@ def compile_runtime_catalog(attribution, bins, statuses, links_plan=None, subsys
         "flows": {name: {"name": name, "entries": entries} for name, entries in flows.items()},
         "execution": {"authority": "legacy-shell", "catalogOnly": True},
     }
-    return {"catalog": catalog, "files": files}
+    etc_files = [{"name": "compfuzor-runtime/catalog.json", "json": catalog}]
+    etc_files.extend(
+        {
+            "name": "compfuzor-runtime/workflows/compiled/{}".format(item["name"]),
+            "json": item["invocation"],
+        }
+        for item in files
+    )
+    return {
+        "catalog": catalog,
+        "files": files,
+        "etc_files": etc_files,
+        "etc_dirs": [
+            "compfuzor-runtime",
+            "compfuzor-runtime/workflows",
+            "compfuzor-runtime/workflows/compiled",
+            "compfuzor-runtime/workflows/site",
+        ],
+    }
 
 
 class FilterModule(object):

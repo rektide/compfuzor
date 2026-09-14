@@ -22,9 +22,15 @@ def test_runtime_catalog_compiles_attributed_legacy_flows():
                 "contributors": ["deployment:demo-main", "subsystem:rust"],
             },
             {
-                "name": "install.sh",
+                "name": "install-rust.sh",
                 "generated_by": "gen_bins",
                 "run_all": ["install-tool.sh"],
+                "contributors": ["deployment:demo-main"],
+            },
+            {
+                "name": "install.sh",
+                "generated_by": "gen_bins",
+                "run_all": ["install-rust.sh"],
                 "contributors": ["deployment:demo-main"],
             },
             {
@@ -65,12 +71,18 @@ def test_runtime_catalog_compiles_attributed_legacy_flows():
         "compfuzor.links/v2",
     ]
     files = {item["name"]: item["invocation"] for item in result["files"]}
-    install = files["40-install-001-install-tool-sh.json"]
+    install = files["40-install-001-install-rust-sh.json"]
     assert install["flow"] == "install"
-    assert install["invoke"]["action"] == "command:install-tool.sh"
+    assert install["invoke"]["action"] == "command:install-rust.sh"
     assert install["contributors"] == ["deployment:demo-main", "subsystem:rust"]
+    assert not any("install-tool-sh" in name for name in files)
     status = files["50-status-001-tool.json"]
     assert status["invoke"]["handler"]["protocol"] == "legacy-status-v1"
+    assert result["etc_files"][0]["name"] == "compfuzor-runtime/catalog.json"
+    assert result["etc_files"][1]["name"].startswith(
+        "compfuzor-runtime/workflows/compiled/"
+    )
+    assert result["etc_dirs"][-1] == "compfuzor-runtime/workflows/site"
 
 
 if __name__ == "__main__":
