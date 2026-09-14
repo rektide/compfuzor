@@ -5,11 +5,11 @@
     INSTANCE: main
     RUNTIME_FLOW_EXECUTION: true
     ZIM_HOST: true
-    zim_home: "$HOME/.cache/zim"
-    zim_env_home: "$HOME/.cache/zim-env"
-    zim_config_default: "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zimrc"
-    zim_env_config_default: "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zimenv"
-    zim_config_link: "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zimfw.conf"
+    zim_home: "$HOME/.cache/zim2"
+    zim_env_home: "$HOME/.cache/zim2-env"
+    zim_config_default: "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zim2/zimrc"
+    zim_env_config_default: "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zim2/zimenv"
+    zim_config_link: "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zim2/zimfw.conf"
     ZIM_CONFIG_INSTALL: assemble
     ZIM_CONFIG_DROPINS: link
     # The complete Zim installer owns ordinary composition for this host; the
@@ -42,20 +42,20 @@
       user:
         scope: user
         root: config
-        subpath: zsh
+        subpath: zsh/zim2
         install: "{{ ZIM_CONFIG_INSTALL }}"
         dropins: "{{ ZIM_CONFIG_DROPINS }}"
         configs:
           zimrc:
             output:
-              env: ZIM_CONFIG_FILE
+              env: ZIM2_CONFIG_FILE
               default: zimrc
               ignore:
                 - "{{ ETC }}/zimrc"
                 - "{{ DIR }}/etc/zimrc"
           zimenv:
             output:
-              env: ZIM_ENV_CONFIG
+              env: ZIM2_ENV_CONFIG
               default: zimenv
               ignore:
                 - "{{ ETC }}/zimenv"
@@ -67,6 +67,10 @@
     ZIM_CONTEXTS:
       user:
         config: user
+        loader_root: "${HOME}/.config/zsh/zim2/startup"
+        zimrc_home: "${HOME}/.cache/zim2"
+        zimenv_home: "${HOME}/.cache/zim2-env"
+        registry: "${HOME}/.config/zsh/zim2/zimfw.conf"
     GET_URLS:
       - https://github.com/zimfw/zimfw/releases/latest/download/zimfw.zsh
     PKGS:

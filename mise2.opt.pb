@@ -32,8 +32,10 @@
       - name: mise.bash_profile
         content: |
           eval "$(mise activate bash --shims)"
-    bash_rc: "$HOME/.bashrc"
-    bash_profile: "$HOME/.bash_profile"
+    bash_rc: "$HOME/.config/mise2/bashrc"
+    bash_profile: "$HOME/.config/mise2/bash_profile"
+    mise2_zdotdir: "$HOME/.config/mise2/zdot"
+    mise2_config_dir: "$HOME/.config/mise2/config"
     # Literal (not ${VAR:-default}): this lands in the systemd EnvironmentFile
     # via ENV_LIST, and systemd does no shell expansion -- deferred syntax
     # reaches mise as a literal string and panics its settings parser.
@@ -43,6 +45,8 @@
     ENV_LIST:
       - bash_rc
       - bash_profile
+      - mise2_zdotdir
+      - mise2_config_dir
       - mise_npm_package_manager
     STATUSES:
       - status-mise-bash.sh
@@ -50,12 +54,13 @@
       - name: install-user.sh
         content: |
           # Remove activation blocks owned by older mise.opt.pb revisions.
-          for startup in "${ZDOTDIR:-$HOME}/.zshenv" "${ZDOTDIR:-$HOME}/.zshrc"; do
+          for startup in "${MISE2_ZDOTDIR:-{{mise2_zdotdir}}}/.zshenv" "${MISE2_ZDOTDIR:-{{mise2_zdotdir}}}/.zshrc"; do
             [ ! -f "$startup" ] || sed -i '/^# {{NAME}} start$/,/^# {{NAME}} end$/d' "$startup"
           done
           if command -v mise >/dev/null 2>&1
           then
-            mise settings set npm.package_manager "${MISE_NPM_PACKAGE_MANAGER:-{{mise_npm_package_manager}}}"
+            MISE_CONFIG_DIR="${MISE2_CONFIG_DIR:-{{mise2_config_dir}}}" \
+              mise settings set npm.package_manager "${MISE_NPM_PACKAGE_MANAGER:-{{mise_npm_package_manager}}}"
           fi
       - name: install-bash-user.sh
         content: |
