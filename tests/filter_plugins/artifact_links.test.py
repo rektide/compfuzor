@@ -108,6 +108,7 @@ def test_links():
     check("runtime roots", links[1]["runtimeRoots"], ["HOME"])
     check("cross-family destination", links[2]["dest"], "${HOME}/.local/usr/share/watchman-main/applications/generated.desktop")
     check("annotation origin", links[2]["origin"]["family"], "ETC_FILES")
+    check("artifact link deployment contributor", links[2]["contributors"], ["deployment:watchman-main"])
 
     xdg = compile_links(
         [{"src": "${XDG_STATE_HOME}/watchman/user-state", "dest": "${HOME}/legacy"}],

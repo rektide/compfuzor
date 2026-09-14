@@ -443,6 +443,7 @@ def test_disarm_metadata_does_not_affect_grouping_or_compositors():
                 "subsystem": "go",
                 "origin_subsystems": ["go", "generator"],
                 "bypass_scopes": ["go"],
+                "contributors": ["deployment:demo", "subsystem:go"],
             }
         ]
     )
@@ -456,6 +457,11 @@ def test_disarm_metadata_does_not_affect_grouping_or_compositors():
             f"{item['name']} does not aggregate child disarm metadata",
             any(field in item for field in ("origin_subsystems", "bypass_scopes", "bypass")),
             False,
+        )
+        check(
+            f"{item['name']} retains contributor attribution",
+            item["contributors"],
+            ["deployment:demo", "subsystem:go"],
         )
 
 

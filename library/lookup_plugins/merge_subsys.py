@@ -288,7 +288,7 @@ def merge_subsys_value(variables, subsystem_id, contrib, templar=None, **kwargs)
                 bypass_scope=domain,
             )
         deployment = _template_value(variables.get("NAME"), templar)
-        if isinstance(deployment, str) and deployment and "{{" not in deployment and "}}" not in deployment:
+        if isinstance(deployment, str) and deployment and not _is_tagged_template(deployment) and "{{" not in deployment and "}}" not in deployment:
             if artifact == "BINS":
                 incoming = attribute_bins(incoming, deployment, subsystem_id)
             elif artifact == "LINKS":

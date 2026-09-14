@@ -31,7 +31,7 @@ def _records(value, label):
 
 
 def contributor_references(deployment, subsystem=None, existing=None):
-    references = list(existing or [])
+    references = [existing] if isinstance(existing, str) else list(existing or [])
     if isinstance(deployment, str) and deployment:
         references.append("deployment:{}".format(deployment))
     if isinstance(subsystem, str) and subsystem:
@@ -82,6 +82,8 @@ def attribute_statuses(records, deployment, subsystem=None, bins=None):
             record.setdefault("id", "legacy:{}".format(name))
         else:
             raise AnsibleFilterError("STATUSES entries must be strings or mappings")
+        if not isinstance(record.get("id"), str) or not record["id"]:
+            raise AnsibleFilterError("status records require a non-empty string id")
         refs = contributor_references(deployment, subsystem, record.get("contributors", []))
         refs = _stable(refs + bin_contributors.get(record["name"], []))
         if refs:

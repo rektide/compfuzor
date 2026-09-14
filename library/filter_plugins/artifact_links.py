@@ -71,6 +71,16 @@ def _first_truthy(*values):
     return None
 
 
+def _family_root(context, kind, role, default):
+    key = "FS_{}_{}_ROOT".format(kind.upper(), role.upper())
+    value = context.get(key)
+    if not _truthy(value):
+        return default
+    if not isinstance(value, str) or not value:
+        _error("{} must resolve to a non-empty string".format(key))
+    return value
+
+
 def _artifact_entry(item, family, kind, root, index):
     if isinstance(item, collections.abc.Mapping):
         declaration = dict(item)
@@ -135,7 +145,10 @@ def compile_artifacts(context):
                 fsh_root = base + "/" + name
             else:
                 continue
-        specs.append((upper + "_FILES", kind, fsh_root, directory + "/" + kind))
+        dir_root = directory + "/" + kind
+        materialized = _family_root(context, kind, "materialized", fsh_root)
+        exposure = _family_root(context, kind, "exposure", dir_root)
+        specs.append((upper + "_FILES", kind, materialized, exposure))
 
     families = {}
     copies = []
@@ -247,7 +260,7 @@ def _link_comparable(record):
     return comparable
 
 
-def _normalize_link(raw, directory, roots, origin, default_src=None, inferred=None, index=0):
+def _normalize_link(raw, directory, roots, origin, default_src=None, inferred=None, index=0, default_contributors=None):
     if isinstance(raw, str):
         if raw == "user" and inferred is not None:
             raw = {"scope": "user"}
@@ -317,11 +330,12 @@ def _normalize_link(raw, directory, roots, origin, default_src=None, inferred=No
         record["strategies"] = strategies
     if "compose" in item:
         record["compose"] = compose
-    contributors = item.get("contributors", [])
-    if isinstance(contributors, str):
-        contributors = [contributors]
-    if not isinstance(contributors, collections.abc.Sequence) or isinstance(contributors, (str, bytes)):
+    authored_contributors = item.get("contributors", [])
+    if isinstance(authored_contributors, str):
+        authored_contributors = [authored_contributors]
+    if not isinstance(authored_contributors, collections.abc.Sequence) or isinstance(authored_contributors, (str, bytes)):
         _error("{} contributors must be a string or list of strings".format(origin))
+    contributors = list(default_contributors or []) + list(authored_contributors)
     contributors = list(dict.fromkeys(contributors))
     if any(not isinstance(value, str) or not value for value in contributors):
         _error("{} contributors must contain non-empty strings".format(origin))
@@ -375,6 +389,15 @@ def compile_links(links, artifacts, directory, name, roots):
                         default_src=artifact["resolved_dest"],
                         inferred=artifact if field == "link" and annotation == "user" else None,
                         index=annotation_index,
+                        default_contributors=(
+                            list(declaration.get("contributors", []))
+                            if isinstance(declaration, collections.abc.Mapping)
+                            and not isinstance(declaration.get("contributors"), str)
+                            else [declaration.get("contributors")]
+                            if isinstance(declaration, collections.abc.Mapping)
+                            and declaration.get("contributors")
+                            else []
+                        ) + ["deployment:{}".format(name)],
                     )
                 )
 

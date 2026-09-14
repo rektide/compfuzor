@@ -54,9 +54,23 @@ def test_link_attribution_preserves_domain_record():
     }
 
 
+def test_string_contributor_and_invalid_status_id():
+    assert attribute_links(
+        [{"id": "tool", "src": "/src", "dest": "/dest", "contributors": "site:local"}],
+        "demo-main",
+    )[0]["contributors"] == ["site:local", "deployment:demo-main"]
+    try:
+        attribute_statuses([{"id": [], "name": "status-tool.sh"}], "demo-main")
+    except Exception as error:
+        assert "string id" in str(error)
+    else:
+        raise AssertionError("invalid status id was accepted")
+
+
 if __name__ == "__main__":
     test_bin_attribution_unions_existing_origins()
     test_status_shorthand_gets_legacy_identity()
     test_native_status_identity_survives()
     test_link_attribution_preserves_domain_record()
+    test_string_contributor_and_invalid_status_id()
     print("ok: contribution attribution")

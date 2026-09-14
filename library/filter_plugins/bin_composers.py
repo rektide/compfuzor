@@ -69,6 +69,27 @@ def _resolve_phase(item):
     return phase
 
 
+def _contributors(items):
+    result = []
+    for item in items:
+        values = item.get("contributors", [])
+        if isinstance(values, str):
+            values = [values]
+        for value in values:
+            if isinstance(value, str) and value and value not in result:
+                result.append(value)
+    return result
+
+
+def _item_contributors(item):
+    values = item.get("contributors", [])
+    if isinstance(values, str):
+        return [values]
+    if isinstance(values, collections.abc.Sequence) and not isinstance(values, (str, bytes)):
+        return list(values)
+    return []
+
+
 @accept_args_markers
 def partition_bin_states(bins):
     """Separate absent BINS tombstones from entries that should materialize."""
@@ -177,6 +198,7 @@ def bin_composers(bins, actions=None):
                 "scopes": scopes,
                 "subsystem": _resolve_subsystem(item.get("subsystem")),
                 "phase": _resolve_phase(item),
+                "contributors": _item_contributors(item),
             }
         )
 
@@ -212,7 +234,8 @@ def bin_composers(bins, actions=None):
                     comp_name
                 )
             )
-        subsystem_compositors[(action, subsystem, scope)] = {
+        member_records = [lf for lf in leaves if lf["action"] == action and lf["subsystem"] == subsystem and scope in lf["scopes"]]
+        compositor = {
             "name": comp_name,
             "action": action,
             "generated_by": "gen_bins",
@@ -224,6 +247,10 @@ def bin_composers(bins, actions=None):
             # so they stay correct even if DEFAULT_HELPERS is narrowed.
             "base_helpers": ["env", "setopts", "loud"],
         }
+        contributors = _contributors(member_records)
+        if contributors:
+            compositor["contributors"] = contributors
+        subsystem_compositors[(action, subsystem, scope)] = compositor
 
     # Build scope compositors in BINS order. Each claimed leaf contributes its
     # subsystem compositor (once); unclaimed leaves contribute themselves.
@@ -255,6 +282,11 @@ def bin_composers(bins, actions=None):
             "run_all": run_all,
             "base_helpers": ["env", "setopts", "loud"],
         }
+        contributors = _contributors([
+            lf for lf in leaves if lf["action"] == action and scope in lf["scopes"]
+        ])
+        if contributors:
+            compositor["contributors"] = contributors
         if scope:
             compositor["scope"] = [scope]
         compositors.append(compositor)

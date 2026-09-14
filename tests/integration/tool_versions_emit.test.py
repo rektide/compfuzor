@@ -83,7 +83,11 @@ def main() -> None:
         check(
             "only the repo link is emitted, pointing at DIR's file",
             links,
-            [{"src": str(deploy / ".tool-versions"), "dest": str(repo / ".tool-versions")}],
+            [{
+                "src": str(deploy / ".tool-versions"),
+                "dest": str(repo / ".tool-versions"),
+                "contributors": ["subsystem:tool_versions"],
+            }],
         )
 
         etc, links = run_gen(root, {"MISE_VERSIONS": {"nodejs": "26"}})
