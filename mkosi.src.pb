@@ -98,14 +98,12 @@
           [Config]
           # Build only these subimages by default. `image.sh <variant>` overrides
           # via mkosi --dependency to build just one.
-          # vps-seed is NOT in the default set: mkosi-initrd's Debian-family
-          # dpkg strip (mkosi-initrd/mkosi.conf.d/debian-kali-ubuntu/
-          # mkosi.conf.d/dpkg.conf -> RemovePackages=dpkg, active on trixie)
-          # breaks its own purge cascade -- postrm scripts hit
-          # `dpkg-query: not found` and dpkg stops with "too many errors".
-          # Upstream bug (their comment: "Needs perl >= 5.40.0-8 and
-          # dash >= 0.5.12-7 to drop this"); retry `image.sh vps-seed` after
-          # an mkosi bump.
+          # vps-seed is not in the default set on purpose (lean default: oci
+          # only) -- build it with `image.sh vps-seed`. Its old trixie breakage
+          # (mkosi-initrd RemovePackages=dpkg purge cascade) is fixed in the
+          # subimage conf: the trigger was trixie xfsprogs -> python3-minimal
+          # (Depends: dpkg), so no mkosi bump was ever going to help; xfsprogs
+          # is opt-in there now.
           Dependencies=oci
 
           [Output]
@@ -192,12 +190,27 @@
           #CompressLevel=15
 
           [Content]
+          # NO xfsprogs by default: trixie xfsprogs Depends python3 ->
+          # python3-minimal Depends dpkg, which collides with mkosi-initrd's
+          # RemovePackages=dpkg strip: apt cascade-removes every dpkg rdepend
+          # (xfsprogs itself!), dpkg deletes its own binaries mid-purge, and
+          # later maintainer scripts fail ("dpkg-query/dpkg-divert: not found"
+          # -> "too many errors"). Also +~20M compressed (python/libicu/dbus
+          # stack rides along). dpkg in an initrd is dead weight anyway: this
+          # is a throwaway bootstrap ramdisk, not the installed system -- the
+          # received OS keeps its own package manager.
           Packages=
                   e2fsprogs
                   btrfs-progs
-                  xfsprogs
                   dosfstools
                   util-linux
+          # xfs opt-in: uncomment BOTH lines. The empty RemovePackages= MUST
+          # be unindented (indented lines continue Packages=) and AFTER the
+          # Include -- mkosi list semantics: an empty value resets the
+          # accumulated list, neutralizing the inherited dpkg strip.
+          #Packages=
+          #        xfsprogs
+          #RemovePackages=
       # oci: the base Debian rootfs as an OCI container image.
       - name: mkosi.images/oci/mkosi.conf
         content: |
@@ -337,15 +350,23 @@
 
       - `etc/mkosi.conf` — main config: universal settings (Distribution/Release/
         Repositories, Output\*/Cache\* dirs → `var/`). `Format=none` (no main
-        artifact); `Dependencies=oci` selects which subimages build (vps-seed
-        dropped from the default: upstream mkosi-initrd dpkg-strip bug on
-        trixie, see the conf comment).
+        artifact); `Dependencies=oci` selects which subimages build (lean
+        default; `image.sh <variant>` builds any one subimage explicitly).
       - `mkosi.images/vps-seed/` — bootable cpio initrd (`Include=mkosi-initrd`
-        + ext4/xfs/btrfs/dos formatting tools). xz level 6 (commented zstd 15).
+        + ext4/btrfs/dos formatting tools). xz level 6 (commented zstd 15).
         **Generic** — does NOT inject host kernel modules; for a host-tailored
-        initrd use `vps-seed.sh`. **Currently broken on trixie** (upstream
-        mkosi-initrd `RemovePackages=dpkg` purge cascade fails); not in the
-        default `Dependencies=`.
+        initrd use `vps-seed.sh` (on the target box: mkosi-initrd copies the
+        host's `/etc/apt` into its build sandbox, so running it on a repo-heavy
+        workstation fails at apt update, not our bug). **No xfsprogs by
+        default**: trixie xfsprogs → python3-minimal (`Depends: dpkg`) collides
+        with mkosi-initrd's `RemovePackages=dpkg` strip — apt cascade-removes
+        the rdepends (xfsprogs itself), dpkg kills its own binaries mid-purge,
+        maintainer scripts die ("too many errors") — and it costs +~20M
+        compressed. The conf carries a two-line xfs opt-in (add xfsprogs +
+        unindented empty `RemovePackages=` to reset the inherited strip). dpkg
+        in an initrd is dead weight: the seed is a throwaway bootstrap ramdisk;
+        the received OS keeps its own package manager. Not in the default
+        `Dependencies=` (deliberate: lean default).
       - `mkosi.images/oci/` — base Debian rootfs as an OCI container image.
       - `mkosi.images/disk/` — **sample** full disk image that consumes the
         compfuzor `PKGSETS` list. `Bootable=yes`, and its `mkosi.repart/` makes
