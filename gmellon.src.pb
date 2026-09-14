@@ -27,7 +27,7 @@
     # drift in status-zim.sh.
     ZIM_MODULES:
       - name: gmellon
-        source: "{{DIR}}/zsh"
+        source: "{{DIR}}/zimfw"
         phase: tools
         comment: >
           SSH_AUTH_SOCK export (gcr socket, forwarding-safe) plus gkr-*
