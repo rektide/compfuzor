@@ -1,4 +1,3 @@
 ---
-# Put each deployment at /opt/<name>. Stack vars/containered.yml when its
-# hierarchy families should live under that same durable deployment root.
-PREFIX_DIR: /opt
+# Store every recipe as an opt deployment without changing its TYPE identity.
+type: opt

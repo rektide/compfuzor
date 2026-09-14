@@ -30,10 +30,11 @@ sources:
 > **Superseded direction:** the root-pair API, automatic platform selection,
 > and atomic-retention proposal below were rejected as unnecessary machinery.
 > The implemented direction deletes `FS_CONTAINERED`; `vars/steamos.yml` sets
-> `PREFIX_DIR: /opt`, while `vars/containered.yml` uses the existing `ETC`,
-> `VAR`, `SRC`, and other hierarchy vars directly. Profiles are selected
-> explicitly with `-e @vars/<profile>.yml`. The host observations remain useful;
-> the recommendations below are preserved only as the initial inquiry.
+> lowercase `type: opt`, while `vars/containered.yml` uses the existing `ETC`,
+> `VAR`, `SRC`, and other hierarchy vars plus reciprocal `<KIND>_LINK` vars.
+> Profiles are selected explicitly with `-e @vars/<profile>.yml`. The host
+> observations remain useful; the recommendations below are preserved only as
+> the initial inquiry.
 
 ## What is up
 

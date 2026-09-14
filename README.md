@@ -97,22 +97,23 @@ See [`doc/subsys.md`](doc/subsys.md) for the subsystem contrib pattern,
 ## Vars profiles
 
 Profiles are ordinary extra-vars files; Compfuzor does not infer them from the
-host. SteamOS deployments can be rooted in persistent `/opt` and keep their
-hierarchy in the same tree by stacking two small profiles:
+host. SteamOS recipes can use the `opt` storage type and keep their hierarchy
+in the same tree by stacking two small profiles:
 
 ```sh
 ansible-playbook -i 'localhost,' -c local app.src.pb \
   -e @vars/steamos.yml -e @vars/containered.yml
 ```
 
-[`vars/steamos.yml`](/vars/steamos.yml) is just `PREFIX_DIR: /opt`.
-[`vars/containered.yml`](/vars/containered.yml) sets `ETC`, `VAR`, `SRC`, and
-the other hierarchy roots beneath `DIR`. Copy it or override individual vars
-for a narrower layout:
+[`vars/steamos.yml`](/vars/steamos.yml) sets lowercase `type: opt`, changing
+storage without changing the recipe's uppercase `TYPE` identity.
+[`vars/containered.yml`](/vars/containered.yml) sets each hierarchy root under
+`DIR` and its reciprocal `<KIND>_LINK` at the normal host location. Copy it or
+override individual pairs for a narrower layout:
 
 ```yaml
 ETC: "{{DIR}}/etc"
-VAR: /var/lib/my-service
+ETC_LINK: "{{ETCS_DIR}}/{{NAME}}"
 ```
 
 The config/filesystem seam is defined under
