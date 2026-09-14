@@ -71,16 +71,6 @@ def _first_truthy(*values):
     return None
 
 
-def _family_root(context, kind, role, default):
-    key = "FS_{}_{}_ROOT".format(kind.upper(), role.upper())
-    value = context.get(key)
-    if not _truthy(value):
-        return default
-    if not isinstance(value, str) or not value:
-        _error("{} must resolve to a non-empty string".format(key))
-    return value
-
-
 def _artifact_entry(item, family, kind, root, index):
     if isinstance(item, collections.abc.Mapping):
         declaration = dict(item)
@@ -145,10 +135,7 @@ def compile_artifacts(context):
                 fsh_root = base + "/" + name
             else:
                 continue
-        dir_root = directory + "/" + kind
-        materialized = _family_root(context, kind, "materialized", fsh_root)
-        exposure = _family_root(context, kind, "exposure", dir_root)
-        specs.append((upper + "_FILES", kind, materialized, exposure))
+        specs.append((upper + "_FILES", kind, fsh_root, directory + "/" + kind))
 
     families = {}
     copies = []
@@ -250,7 +237,11 @@ def _normalize_strategies(value, origin):
 
 
 def _link_comparable(record):
-    comparable = {key: value for key, value in record.items() if key not in {"origin", "origins"}}
+    comparable = {
+        key: value
+        for key, value in record.items()
+        if key not in {"origin", "origins", "contributors"}
+    }
     comparable.setdefault("strategies", {"available": ["link"], "default": "link"})
     comparable.setdefault("compose", True)
     return comparable
@@ -265,7 +256,9 @@ def _normalize_link(raw, directory, roots, origin, default_src=None, inferred=No
     if not isinstance(raw, collections.abc.Mapping):
         _error("{} link must be a string or mapping".format(origin))
     item = dict(raw)
-    unknown = set(item) - {"id", "src", "dest", "scope", "policy", "state", "strategies", "compose"}
+    unknown = set(item) - {
+        "id", "src", "dest", "scope", "policy", "state", "strategies", "compose", "contributors"
+    }
     if unknown:
         _error("{} link has unknown fields: {}".format(origin, ", ".join(sorted(unknown))))
     if default_src is not None and "src" in item:
@@ -324,6 +317,16 @@ def _normalize_link(raw, directory, roots, origin, default_src=None, inferred=No
         record["strategies"] = strategies
     if "compose" in item:
         record["compose"] = compose
+    contributors = item.get("contributors", [])
+    if isinstance(contributors, str):
+        contributors = [contributors]
+    if not isinstance(contributors, collections.abc.Sequence) or isinstance(contributors, (str, bytes)):
+        _error("{} contributors must be a string or list of strings".format(origin))
+    contributors = list(dict.fromkeys(contributors))
+    if any(not isinstance(value, str) or not value for value in contributors):
+        _error("{} contributors must contain non-empty strings".format(origin))
+    if contributors:
+        record["contributors"] = contributors
     return record
 
 
@@ -388,6 +391,11 @@ def compile_links(links, artifacts, directory, name, roots):
             if previous_comparable != comparable:
                 _error("destination {!r} in scope {} has conflicting records".format(record["dest"], record["scope"]))
             previous.setdefault("origins", [previous["origin"]]).append(record["origin"])
+            previous["contributors"] = list(
+                dict.fromkeys(previous.get("contributors", []) + record.get("contributors", []))
+            )
+            if not previous["contributors"]:
+                previous.pop("contributors")
             continue
         if identity in by_id and by_id[identity] != comparable:
             _error("link id {!r} has conflicting records".format(identity))

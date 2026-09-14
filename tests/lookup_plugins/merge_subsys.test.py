@@ -110,6 +110,34 @@ def test_bins_defaults_merge_current_then_subsystem():
     )
 
 
+def test_attributed_record_contributions():
+    variables = {
+        "NAME": "demo-main",
+        "BINS": [],
+        "STATUSES": [],
+        "LINKS": [],
+        "SUBSYSTEM": {
+            "demo": {
+                "requested": True,
+                "contrib": {
+                    "BINS": [{"name": "build-demo.sh"}],
+                    "STATUSES": ["status-demo.sh"],
+                    "LINKS": [{"id": "demo", "src": "/src", "dest": "/dest"}],
+                },
+            }
+        },
+    }
+    assert merge_subsys_value(variables, "demo", "BINS")[0]["contributors"] == [
+        "deployment:demo-main",
+        "subsystem:demo",
+    ]
+    assert merge_subsys_value(variables, "demo", "STATUSES") == ["status-demo.sh"]
+    assert merge_subsys_value(variables, "demo", "LINKS")[0]["contributors"] == [
+        "deployment:demo-main",
+        "subsystem:demo",
+    ]
+
+
 def test_bins_tombstone_survives_subsystem_merge():
     print("\nmerge_subsys BINS tombstone:")
     variables = {
@@ -493,6 +521,7 @@ def test_lookup_run_rejects_positional_terms():
 
 if __name__ == "__main__":
     test_bins_defaults_merge_current_then_subsystem()
+    test_attributed_record_contributions()
     test_bins_tombstone_survives_subsystem_merge()
     test_artifact_switch_suppresses_only_selected_contribution()
     test_artifact_defaults_reference_only_preset_and_order()

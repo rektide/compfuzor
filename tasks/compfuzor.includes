@@ -8,6 +8,8 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_env.tasks
   tags: ['vars', 'always']
+- import_tasks: compfuzor/sub_attribution.tasks
+  tags: ['vars', 'always']
 - debug: "msg='Compfuzor: sourcing hierarchy vars'"
 - import_tasks: compfuzor/_multi.tasks
   vars:
@@ -117,6 +119,8 @@
 - import_tasks: compfuzor/gen_status.tasks
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_bins.tasks
+  tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_attribution.tasks
   tags: ['vars', 'always']
 - debug: "msg='Compfuzor: completed vars'"
 

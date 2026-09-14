@@ -95,6 +95,7 @@ from get import get_path  # noqa: E402
 from template_data import dict_get_raw as _dict_get_raw, raw_copy_template_data as _raw_copy_template_data, truthy as _truthy  # noqa: E402
 from cfmerge import run_value_preset, value_preset_metadata  # noqa: E402
 from bin_disarm import annotate_bins  # noqa: E402
+from contribution_attribution import attribute_bins, attribute_links  # noqa: E402
 
 _LOOKUP_DIR = os.path.abspath(os.path.dirname(__file__))
 if _LOOKUP_DIR not in sys.path:
@@ -286,6 +287,12 @@ def merge_subsys_value(variables, subsystem_id, contrib, templar=None, **kwargs)
                 origin_subsystem=subsystem_id,
                 bypass_scope=domain,
             )
+        deployment = _template_value(variables.get("NAME"), templar)
+        if isinstance(deployment, str) and deployment and "{{" not in deployment and "}}" not in deployment:
+            if artifact == "BINS":
+                incoming = attribute_bins(incoming, deployment, subsystem_id)
+            elif artifact == "LINKS":
+                incoming = attribute_links(incoming, deployment, subsystem_id)
 
     get_expr = kwargs.get("get")
     if wrapped_test_undefined(get_expr):

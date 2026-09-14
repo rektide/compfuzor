@@ -345,12 +345,14 @@ def test_presets_and_extract():
                 "name": "build.sh",
                 "origin_subsystems": ["base"],
                 "bypass_scopes": ["base"],
+                "contributors": ["deployment:demo"],
                 "bypass": ["BUILD"],
             }],
             [{
                 "name": "build.sh",
                 "origin_subsystems": ["go"],
                 "bypass_scopes": ["go"],
+                "contributors": ["subsystem:go"],
                 "bypass": ["LINK"],
             }],
             preset="bins_generated",
@@ -359,6 +361,7 @@ def test_presets_and_extract():
             "name": "build.sh",
             "origin_subsystems": ["base", "go"],
             "bypass_scopes": ["base", "go"],
+            "contributors": ["deployment:demo", "subsystem:go"],
             "bypass": ["LINK"],
         }],
     )

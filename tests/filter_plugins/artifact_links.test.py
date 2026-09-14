@@ -25,8 +25,8 @@ def check_raises(label, callback, expected):
     print(f"ok: {label}")
 
 
-def context(contained_etc=False):
-    result = {
+def context():
+    return {
         "DIR": "/srv/watchman-main",
         "NAME": "watchman-main",
         "DIRSET": ["etc", "var", "share"],
@@ -53,12 +53,6 @@ def context(contained_etc=False):
             },
         ],
     }
-    if contained_etc:
-        result.update({
-            "FS_ETC_MATERIALIZED_ROOT": "/srv/watchman-main/etc",
-            "FS_ETC_EXPOSURE_ROOT": "/etc/opt/watchman-main",
-        })
-    return result
 
 
 ROOTS = {
@@ -86,11 +80,6 @@ def test_artifacts():
     check("line and copy partition", (len(artifacts["copies"]), len(artifacts["lines"])), (4, 1))
     check("annotation discovery", artifacts_have_links(artifacts), True)
 
-    contained = compile_artifacts(context(contained_etc=True))
-    etc = contained["families"]["ETC_FILES"]
-    check("explicit materialized root", etc["materialized_root"], "/srv/watchman-main/etc")
-    check("explicit exposure root", etc["exposure_root"], "/etc/opt/watchman-main")
-    check("explicit materialized source", etc["entries"][0]["resolved_dest"], "/srv/watchman-main/etc/watchman.json")
     check("empty annotation discovery", artifacts_have_links(compile_artifacts({"DIR": "/srv/x", "NAME": "x", "DIRSET": []})), False)
 
 
@@ -146,6 +135,31 @@ def test_links():
     check("strategy declaration", represented["strategies"], {"available": ["link", "copy"], "default": "copy"})
     check("composition declaration", represented["compose"], False)
     check("ordinary records stay implicit link-only", "strategies" in links[0], False)
+    attributed = compile_links(
+        [
+            {
+                "id": "shared",
+                "src": "/source",
+                "dest": "/destination",
+                "contributors": ["deployment:demo", "subsystem:one"],
+            },
+            {
+                "id": "shared",
+                "src": "/source",
+                "dest": "/destination",
+                "contributors": ["deployment:demo", "subsystem:two"],
+            },
+        ],
+        {"families": {}},
+        "/srv/watchman-main",
+        "watchman-main",
+        ROOTS,
+    )["links"][0]
+    check(
+        "compatible link contributors",
+        attributed["contributors"],
+        ["deployment:demo", "subsystem:one", "subsystem:two"],
+    )
     canonical = compile_links(
         [{"src": "/source", "dest": "/consumer", "strategies": {"available": ["copy", "link"], "default": "copy"}}],
         {"families": {}},
@@ -161,11 +175,6 @@ def test_validation():
         "destTemplate retired",
         lambda: compile_artifacts({**context(), "ETC_FILES": [{"name": "x", "destTemplate": "/x"}]}),
         "destTemplate",
-    )
-    check_raises(
-        "invalid materialized root",
-        lambda: compile_artifacts({**context(), "FS_ETC_MATERIALIZED_ROOT": 42}),
-        "FS_ETC_MATERIALIZED_ROOT",
     )
     artifacts = compile_artifacts(context())
     check_raises(

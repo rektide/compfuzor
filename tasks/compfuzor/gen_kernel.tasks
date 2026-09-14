@@ -48,7 +48,7 @@
     ENV: "{{ _kernel_modprobe_contrib.ENV | merge_dict(_kernel_sysctl_contrib.ENV, _kernel_sysfs_contrib.ENV, _kernel_params_contrib.ENV, _kernel_bls_contrib.ENV, ENV, preset='overlay', skip_layers=['all']) }}"
     ENV_LIST: "{{ ENV_LIST | merge_list(_kernel_modprobe_contrib.ENV_LIST, _kernel_sysctl_contrib.ENV_LIST, _kernel_sysfs_contrib.ENV_LIST, _kernel_params_contrib.ENV_LIST, _kernel_bls_contrib.ENV_LIST, preset='append_unique') }}"
     PKGS: "{{ PKGS | merge_list(_kernel_modprobe_contrib.PKGS, _kernel_sysctl_contrib.PKGS, _kernel_sysfs_contrib.PKGS, _kernel_params_contrib.PKGS, _kernel_bls_contrib.PKGS, preset='append_unique') }}"
-    STATUSES: "{{ STATUSES | merge_list(_kernel_status_reporters, preset='append') }}"
+    STATUSES: "{{ STATUSES | merge_list(_kernel_status_reporters | attribute_statuses(NAME, 'kernel'), preset='append') }}"
   when: _kernel_any_active
   vars:
     _kernel_tagged_bins: "{{

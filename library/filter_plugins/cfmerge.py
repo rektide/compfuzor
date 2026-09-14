@@ -672,6 +672,7 @@ VALUE_PRESETS = {
                     "run_all",
                     "origin_subsystems",
                     "bypass_scopes",
+                    "contributors",
                 ),
             },
         },

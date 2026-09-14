@@ -59,8 +59,18 @@ def attribute_bins(records, deployment, subsystem=None):
 
 
 @accept_args_markers
-def attribute_statuses(records, deployment, subsystem=None):
+def attribute_statuses(records, deployment, subsystem=None, bins=None):
+    bin_contributors = {}
+    for item in _records(bins, "BINS"):
+        if not isinstance(item, collections.abc.Mapping):
+            continue
+        name = item.get("dest", item.get("name"))
+        if isinstance(name, str):
+            bin_contributors[name] = _stable(
+                bin_contributors.get(name, []) + item.get("contributors", [])
+            )
     output = []
+    by_id = {}
     for raw in _records(records, "STATUSES"):
         if isinstance(raw, str):
             record = {"id": "legacy:{}".format(raw), "name": raw}
@@ -73,9 +83,24 @@ def attribute_statuses(records, deployment, subsystem=None):
         else:
             raise AnsibleFilterError("STATUSES entries must be strings or mappings")
         refs = contributor_references(deployment, subsystem, record.get("contributors", []))
+        refs = _stable(refs + bin_contributors.get(record["name"], []))
         if refs:
             record["contributors"] = refs
-        output.append(record)
+        identity = record["id"]
+        previous = by_id.get(identity)
+        if previous is None:
+            by_id[identity] = record
+            output.append(record)
+            continue
+        comparable = {key: value for key, value in record.items() if key != "contributors"}
+        prior_comparable = {key: value for key, value in previous.items() if key != "contributors"}
+        if comparable != prior_comparable:
+            raise AnsibleFilterError(
+                "status id {!r} has conflicting invocations; assign explicit native ids".format(identity)
+            )
+        previous["contributors"] = _stable(
+            previous.get("contributors", []) + record.get("contributors", [])
+        )
     return output
 
 

@@ -8,6 +8,6 @@
     DIRS: "{{ DIRS | merge_list(SUBSYSTEM.config.contrib.DIRS, preset='append_unique') }}"
     ETC_FILES: "{{ ETC_FILES | merge_list(SUBSYSTEM.config.contrib.ETC_FILES, preset='append') }}"
     BINS: "{{ BINS | merge_list(SUBSYSTEM.config.contrib.BINS | annotate_bins('config'), preset='bins_generated') }}"
-    STATUSES: "{{ STATUSES | merge_list(SUBSYSTEM.config.contrib.STATUSES, preset='append_unique') }}"
+    STATUSES: "{{ STATUSES | merge_list(SUBSYSTEM.config.contrib.STATUSES | attribute_statuses(NAME, 'config'), preset='append_unique') }}"
     PKGS: "{{ PKGS | merge_list(SUBSYSTEM.config.contrib.PKGS, preset='append_unique') }}"
   when: CONFIGS is defined

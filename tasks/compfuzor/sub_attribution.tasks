@@ -1,0 +1,5 @@
+---
+- name: "Compfuzor: resolve deployment attribution"
+  set_fact:
+    COMPFUZOR_ATTRIBUTION: "{{ lookup('playbook_identity') }}"
+  changed_when: false

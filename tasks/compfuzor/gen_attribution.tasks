@@ -1,0 +1,6 @@
+---
+- name: "Compfuzor: finalize action and observation attribution"
+  set_fact:
+    BINS: "{{ BINS | default([]) | attribute_bins(NAME) }}"
+    STATUSES: "{{ STATUSES | default([]) | attribute_statuses(NAME, bins=BINS) }}"
+  changed_when: false

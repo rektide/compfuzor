@@ -1,7 +1,7 @@
 ---
 - name: "Compfuzor: compile deferred link plan"
   set_fact:
-    _LINK_PLAN: "{{ LINKS | default([]) | compile_links(_ARTIFACTS, DIR, NAME, _link_fsh_roots) }}"
+    _LINK_PLAN: "{{ LINKS | default([]) | attribute_links(NAME) | compile_links(_ARTIFACTS, DIR, NAME, _link_fsh_roots) }}"
   vars:
     _link_fsh_roots:
       system:
@@ -29,9 +29,9 @@
 
 - name: "Compfuzor: contribute deferred link consumers"
   set_fact:
-    BINS: "{{ BINS | merge_list(_link_bins, preset='bins_generated') }}"
+    BINS: "{{ BINS | merge_list(_link_bins | attribute_bins(NAME, 'links'), preset='bins_generated') }}"
     DIRS: "{{ DIRS | merge_list(BINS_DIR | links_runtime_dirs, preset='append_unique') }}"
-    STATUSES: "{{ STATUSES | merge_list(['status-links.sh'], preset='append') }}"
+    STATUSES: "{{ STATUSES | merge_list(['status-links.sh'] | attribute_statuses(NAME, 'links'), preset='append') }}"
     ENV: "{{ ENV | merge_dict({'LINKS_JSON': DIR + '/links.json'}, preset='overlay') }}"
     ENV_LIST: "{{ ENV_LIST | merge_list(['LINKS_JSON'], preset='append') }}"
   when: _LINK_PLAN.links | length > 0

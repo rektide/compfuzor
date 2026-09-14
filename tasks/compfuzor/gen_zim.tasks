@@ -193,7 +193,7 @@
     BINS: "{{ BINS | merge_list((_zim_host_bins + (True | links_runtime_bins) + _zim_install.bins) | annotate_bins('zim'), preset='bins_generated') }}"
     DIRS: "{{ DIRS | merge_list((BINS_DIR | links_runtime_dirs) + _zim_install.dirs, preset='append_unique') }}"
     ETC_FILES: "{{ ETC_FILES | merge_list(_zim_install.etc_files, preset='append') }}"
-    STATUSES: "{{ STATUSES | merge_list(_zim_install.statuses, preset='append_unique') }}"
+    STATUSES: "{{ STATUSES | merge_list(_zim_install.statuses | attribute_statuses(NAME, 'zim'), preset='append_unique') }}"
   when:
     - ZIM_HOST is defined
     - ZIM_BYPASS is deffalsy

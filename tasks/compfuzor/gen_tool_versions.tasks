@@ -39,12 +39,13 @@
         (_mise_etc if _mise_active else [])
       ) | merge_list(ETC_FILES, preset='append', resolve=True) }}
     LINKS: >-
-      {{ (
-        (_tv_links if _tv_active else []) +
-        (_mise_links if _mise_active else [])
-      ) | merge_list(LINKS, preset='append', resolve=True) }}
+      {{ ((_tv_links if _tv_active else []) +
+          (_mise_links if _mise_active else []))
+         | attribute_links(NAME, 'tool_versions')
+         | merge_list(LINKS, preset='append', resolve=True) }}
     BINS: >-
       {{ (_mise_bins if _mise_active else [])
+         | attribute_bins(NAME, 'tool_versions')
          | merge_list(BINS, preset='bins_generated', resolve=True) }}
   vars:
     _tool_versions: "{{ TOOL_VERSIONS | merge_dict(preset='tool_versions_overlay') }}"

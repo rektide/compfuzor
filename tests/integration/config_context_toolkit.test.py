@@ -153,7 +153,12 @@ def test_config_context_toolkit() -> None:
         assert not any(item["name"].endswith(".ts") for item in plan["bins"])
         assert bins["install.sh"]["run_all"].count("config-install.sh") == 1
         assert "config-install.sh" not in bins["install-user.sh"]["run_all"]
-        assert {"name": "config-status.sh", "exit2": "error"} in plan["statuses"]
+        assert {
+            "id": "legacy:config-status.sh",
+            "name": "config-status.sh",
+            "exit2": "error",
+            "contributors": ["deployment:config-toolkit-test", "subsystem:config"],
+        } in plan["statuses"]
         fixed = {f"config-{action}.sh" for action in ("install", "assemble", "sync-inputs", "publish", "inputs", "status")}
         assert fixed.issubset(bins)
         assert all((payload / "bin" / name).is_symlink() for name in fixed)

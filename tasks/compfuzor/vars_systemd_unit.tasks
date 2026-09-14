@@ -439,7 +439,7 @@
     # records lane afterwards sees it managed. Policy replace matches the old
     # ln -sf (a foreign squatter is replaced, not preserved). ${HOME} stays
     # literal for user scope -- a runtime root links.mjs expands.
-    LINKS: "{{ (LINKS | default([])) | merge_list(_systemd_unit_link_records, preset='append', resolve=True) }}"
+    LINKS: "{{ (LINKS | default([])) | merge_list(_systemd_unit_link_records | attribute_links(NAME, 'systemd'), preset='append', resolve=True) }}"
   when: SYSTEMD_INSTALL_BYPASS is deffalsy
   vars:
     _systemd_unit_link_records: >-

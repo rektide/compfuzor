@@ -55,16 +55,18 @@ def test_link_generation() -> None:
         dest: {str(temporary / 'system-direct.conf')!r}
         compose: false
   tasks:
+    - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'sub_attribution.tasks')!r}
     - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'compile_artifacts.tasks')!r}
     - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_links.tasks')!r}
     - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_bins.tasks')!r}
+    - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_attribution.tasks')!r}
     - ansible.builtin.file:
         path: {str(payload)!r}
         state: directory
     - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'link_plan.tasks')!r}
     - ansible.builtin.copy:
         dest: {str(output)!r}
-        content: "{{{{ {{'plan': _LINK_PLAN, 'bins': BINS, 'statuses': STATUSES}} | to_nice_json }}}}"
+        content: "{{{{ {{'attribution': COMPFUZOR_ATTRIBUTION, 'plan': _LINK_PLAN, 'bins': BINS, 'statuses': STATUSES}} | to_nice_json }}}}"
         mode: "0600"
 """,
             encoding="utf-8",
@@ -93,11 +95,15 @@ def test_link_generation() -> None:
             raise AssertionError(f"ansible-playbook failed\n{result.stdout}\n{result.stderr}")
 
         generated = json.loads(output.read_text(encoding="utf-8"))
+        assert generated["attribution"]["id"] == "deployment:link-test"
+        assert generated["attribution"]["source"]["playbook"] == str(playbook.resolve())
+        assert generated["attribution"]["source"]["confidence"] == "exact"
         plan = generated["plan"]
         assert plan["version"] == 2
         assert (payload / "links.json").is_file()
         links_by_id = {item["id"]: item for item in plan["links"]}
         assert links_by_id["system-direct-only"]["compose"] is False
+        assert links_by_id["system-direct-only"]["contributors"] == ["deployment:link-test"]
         user_links = [item for item in plan["links"] if item["scope"] == "user"]
         assert user_links[0]["src"] == str(temporary / "etc/link-test/app.json")
         assert user_links[0]["dest"] == "${HOME}/.config/link-test/app.json"
@@ -109,7 +115,11 @@ def test_link_generation() -> None:
         assert "install-link-records.sh" not in by_name
         assert "install-links.sh" not in by_name
         assert "install.sh" not in by_name
-        assert "status-links.sh" in generated["statuses"]
+        assert {
+            "id": "legacy:status-links.sh",
+            "name": "status-links.sh",
+            "contributors": ["deployment:link-test", "subsystem:links"],
+        } in generated["statuses"]
         print("ok: deferred links compile and compose only participating scopes")
 
 
