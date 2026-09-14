@@ -321,3 +321,93 @@ no longer block execution. Preserve those corrections. Do not promote catalog
 flows to live mutation until contained aliases retain argv-zero identity and a
 regression test proves both halves of the rule: safe internal aliases execute
 as aliases, while aliases resolving outside the deployment remain refused.
+
+# Final closure addendum — multicall-safe containment
+
+## Final result
+
+Commit `b21779c5` closes the last blocker. All six findings from the original
+review are now closed at the implementation-acceptance level, and this focused
+recheck found no new blocker.
+
+The executor now keeps physical authorization and invocation identity separate:
+
+1. it resolves the selected deployment and configured handler with `realpath`;
+2. it rejects the handler when that physical target is outside the physical
+   deployment root; and
+3. after successful validation, it returns and spawns the lexical in-deployment
+   path.
+
+The key implementation is
+[`files/flow/runtime.ts:72-86`](/files/flow/runtime.ts#L72-L86):
+`physicalPath` exists only for the containment comparison, while `lexicalPath`
+is returned to `spawn`. This preserves the runtime dispatcher's intentional
+argv-zero/symlink-chain contract without weakening the escape check.
+
+## Blocker reproduction is now a passing behavior
+
+The focused integration fixture now creates a contained
+`multicall-alias.sh -> dispatch.sh`, executes the alias through the flow, and
+asserts that the child observes `multicall-alias.sh` as `$0`
+([`catalog_flow.test.py:131-146`](/tests/integration/catalog_flow.test.py#L131-L146)).
+Immediately afterward, the same test creates an in-deployment alias to
+`/bin/true` and confirms that physical containment still rejects it
+([`catalog_flow.test.py:148-158`](/tests/integration/catalog_flow.test.py#L148-L158)).
+The two assertions jointly cover the required distinction: safe internal
+aliases retain identity; aliases to external targets do not gain authority.
+
+The real contained Zim2 status flow also passed the semantic check. Its stderr
+showed all three scheduled handlers in order:
+
+```text
+status-apt.sh
+config-status.sh
+status-zim.sh --activation-only
+```
+
+Unlike the previous probe, the CONFIG entry remained
+`bin/config-status.sh`, emitted CONFIG status rows, and did not produce omnibus
+dispatch usage. The subsequent Zim reporter emitted its activation/cache/link
+observations. The aggregate returned `1` because the isolated Zim2 inputs,
+provider-managed loaders, caches, and registry are intentionally uninstalled;
+that is expected observation drift, not execution failure.
+
+## Evidence closure
+
+The original evidence finding is now closed by the combination of:
+
+- committed coverage for foreign `DIR` replacement, status continuation and
+  folding, internal alias identity, external symlink refusal, authority refusal,
+  and signal propagation/process-group termination;
+- compiler coverage for authored aggregate roots and rendered Mise2 evidence
+  that the opaque root owns its body plus `run_all` child exactly once;
+- catalog coverage for closed membership, site placement, tombstones, and
+  code-unit scheduling implementation;
+- earlier contained probes for mutation failure short-circuit and
+  `exit2: error` folding; and
+- the real contained Zim2 run proving that catalog scheduling reaches the apt,
+  CONFIG multicall alias, and Zim reporters end to end.
+
+Dedicated committed assertions for mutation exit `1`/`2`, `exit2: error`, and
+punctuation/case scheduling would still be useful regression hardening, but are
+no longer blockers to this focused flow-authority slice.
+
+## Final verification
+
+On the tree containing `b21779c5`:
+
+- `pnpm check` passed formatting, lint, and TypeScript checking.
+- `pnpm build` reproduced the checked-in executable at 139.17 kB (32.68 kB
+  gzip) with no build-artifact diff.
+- `tests/integration/catalog_flow.test.py` passed, including alias identity,
+  symlink escape, foreign `DIR`, status behavior, and signal handling.
+- `tests/integration/runtime_catalog.test.py` passed.
+- `tests/filter_plugins/runtime_catalog.test.py` passed.
+- The contained Zim2 status flow reached apt, CONFIG, and Zim reporters in
+  lexical order and returned expected drift status `1` without a dispatch
+  error.
+- The rendered Zim2 runtime hash matched the checked-in runtime artifact.
+
+No implementation was modified during this final check. The prior gate against
+catalog mutation due to multicall alias loss is lifted; no blocker remains from
+this review sequence.
