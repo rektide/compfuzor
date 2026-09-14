@@ -87,6 +87,10 @@ function phaseFor(flow: string, index: number): string {
   return phase?.name ?? "unknown";
 }
 
+function lexical(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function parseCatalog(value: unknown): RuntimeCatalog {
   const record = object(value, "runtime catalog");
   if (record.version !== 1) fail(`unsupported runtime catalog version: ${String(record.version)}`);
@@ -189,7 +193,7 @@ async function readLayer(
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw error;
   }
-  const selected = names.filter((name) => name.endsWith(".json")).sort();
+  const selected = names.filter((name) => name.endsWith(".json")).sort(lexical);
   return await Promise.all(
     selected.map(async (name) => {
       const path = join(directory, name);
@@ -301,7 +305,7 @@ export async function loadFlow(
     });
   }
   return [...selected.values()].sort((left, right) =>
-    basename(left.selectedPath).localeCompare(basename(right.selectedPath)),
+    lexical(basename(left.selectedPath), basename(right.selectedPath)),
   );
 }
 

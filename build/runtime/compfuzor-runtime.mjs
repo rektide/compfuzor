@@ -1937,6 +1937,9 @@ function strings(value, label = "value") {
 function phaseFor(flow, index) {
 	return (FLOW_PHASES[flow]?.find((candidate) => index >= candidate.from && index <= candidate.to))?.name ?? "unknown";
 }
+function lexical(left, right) {
+	return left < right ? -1 : left > right ? 1 : 0;
+}
 function parseCatalog(value) {
 	const record = object$2(value, "runtime catalog");
 	if (record.version !== 1) fail$8(`unsupported runtime catalog version: ${String(record.version)}`);
@@ -2022,7 +2025,7 @@ async function readLayer(directory, layer) {
 		if (error.code === "ENOENT") return [];
 		throw error;
 	}
-	const selected = names.filter((name) => name.endsWith(".json")).sort();
+	const selected = names.filter((name) => name.endsWith(".json")).sort(lexical);
 	return await Promise.all(selected.map(async (name) => {
 		const path = join(directory, name);
 		return {
@@ -2101,7 +2104,7 @@ async function loadFlow(catalogPath, flow, suppliedCatalog) {
 			...previous ? { shadowedPath: previous.selectedPath } : {}
 		});
 	}
-	return [...selected.values()].sort((left, right) => basename(left.selectedPath).localeCompare(basename(right.selectedPath)));
+	return [...selected.values()].sort((left, right) => lexical(basename(left.selectedPath), basename(right.selectedPath)));
 }
 function printRows(rows) {
 	for (const row of rows) console.log(row.map((cell) => cell || "-").join("	"));
@@ -2220,28 +2223,61 @@ function parseOptions(argv, defaultDeployment) {
 		flow: positionals[0]
 	};
 }
-function executablePath(deploymentDir, configured, id) {
+async function executablePath(deploymentDir, configured, id) {
 	if (typeof configured !== "string" || !configured) fail$7(`flow invocation ${id} requires an executable path`);
-	const path = resolve(deploymentDir, configured);
-	const remainder = relative(deploymentDir, path);
+	const lexicalPath = resolve(deploymentDir, configured);
+	const [root, path] = await Promise.all([realpath(deploymentDir), realpath(lexicalPath)]);
+	const remainder = relative(root, path);
 	if (remainder === ".." || remainder.startsWith(`..${sep}`)) fail$7(`flow invocation ${id} executable escapes deployment: ${configured}`);
 	return path;
 }
-async function runExecutable(path, args) {
+async function runExecutable(path, args, deploymentDir) {
 	return await new Promise((complete, reject) => {
-		const child = spawn(path, args, { stdio: "inherit" });
-		child.once("error", reject);
-		child.once("exit", (code, signal) => complete(signal ? 1 : code ?? 1));
+		const child = spawn(path, args, {
+			detached: true,
+			env: {
+				...process.env,
+				DIR: deploymentDir
+			},
+			stdio: "inherit"
+		});
+		const signals = ["SIGINT", "SIGTERM"];
+		const listeners = /* @__PURE__ */ new Map();
+		let interrupted = false;
+		const cleanup = () => {
+			for (const [signal, listener] of listeners) process.off(signal, listener);
+		};
+		for (const signal of signals) {
+			const listener = () => {
+				interrupted = true;
+				if (child.pid === void 0) return;
+				try {
+					process.kill(-child.pid, signal);
+				} catch (error) {
+					if (error.code !== "ESRCH") reject(error);
+				}
+			};
+			listeners.set(signal, listener);
+			process.on(signal, listener);
+		}
+		child.once("error", (error) => {
+			cleanup();
+			reject(error);
+		});
+		child.once("exit", (code, signal) => {
+			cleanup();
+			complete(interrupted || signal ? 1 : code ?? 1);
+		});
 	});
 }
 async function runInvocation(entry, deploymentDir, dryRun) {
 	const invoke = object$1(entry.invoke, `flow invocation ${entry.id}`);
 	const handler = object$1(invoke.handler, `flow invocation ${entry.id} handler`);
 	if (handler.kind !== "exec") fail$7(`flow invocation ${entry.id} has unsupported handler kind ${String(handler.kind)}`);
-	const path = executablePath(deploymentDir, handler.path, entry.id);
+	const path = await executablePath(deploymentDir, handler.path, entry.id);
 	const args = stringArray(invoke.args, `flow invocation ${entry.id} args`);
 	console.error(`${dryRun ? "would run" : "running"} ${entry.effectiveIndex.toString().padStart(2, "0")} ${entry.id}: ${path}${args.length ? ` ${args.join(" ")}` : ""}`);
-	return dryRun ? 0 : await runExecutable(path, args);
+	return dryRun ? 0 : await runExecutable(path, args, deploymentDir);
 }
 async function executeFlow(options) {
 	const catalog = await loadCatalog(options.catalogPath);

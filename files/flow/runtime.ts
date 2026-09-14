@@ -1,6 +1,7 @@
 /** Sequential execution of validated, lexically ordered catalog flows. */
 
 import { spawn } from "node:child_process";
+import { realpath } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -68,23 +69,57 @@ function parseOptions(argv: string[], defaultDeployment: string): FlowOptions {
   };
 }
 
-function executablePath(deploymentDir: string, configured: unknown, id: string): string {
+async function executablePath(
+  deploymentDir: string,
+  configured: unknown,
+  id: string,
+): Promise<string> {
   if (typeof configured !== "string" || !configured) {
     fail(`flow invocation ${id} requires an executable path`);
   }
-  const path = resolve(deploymentDir, configured);
-  const remainder = relative(deploymentDir, path);
+  const lexicalPath = resolve(deploymentDir, configured);
+  const [root, path] = await Promise.all([realpath(deploymentDir), realpath(lexicalPath)]);
+  const remainder = relative(root, path);
   if (remainder === ".." || remainder.startsWith(`..${sep}`)) {
     fail(`flow invocation ${id} executable escapes deployment: ${configured}`);
   }
   return path;
 }
 
-async function runExecutable(path: string, args: string[]): Promise<number> {
+async function runExecutable(path: string, args: string[], deploymentDir: string): Promise<number> {
   return await new Promise<number>((complete, reject) => {
-    const child = spawn(path, args, { stdio: "inherit" });
-    child.once("error", reject);
-    child.once("exit", (code, signal) => complete(signal ? 1 : (code ?? 1)));
+    const child = spawn(path, args, {
+      detached: true,
+      env: { ...process.env, DIR: deploymentDir },
+      stdio: "inherit",
+    });
+    const signals = ["SIGINT", "SIGTERM"] as const;
+    const listeners = new Map<NodeJS.Signals, () => void>();
+    let interrupted = false;
+    const cleanup = (): void => {
+      for (const [signal, listener] of listeners) process.off(signal, listener);
+    };
+    for (const signal of signals) {
+      const listener = (): void => {
+        interrupted = true;
+        if (child.pid === undefined) return;
+        try {
+          process.kill(-child.pid, signal);
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ESRCH") reject(error);
+        }
+      };
+      listeners.set(signal, listener);
+      process.on(signal, listener);
+    }
+    child.once("error", (error) => {
+      cleanup();
+      reject(error);
+    });
+    child.once("exit", (code, signal) => {
+      cleanup();
+      complete(interrupted || signal ? 1 : (code ?? 1));
+    });
   });
 }
 
@@ -98,12 +133,12 @@ async function runInvocation(
   if (handler.kind !== "exec") {
     fail(`flow invocation ${entry.id} has unsupported handler kind ${String(handler.kind)}`);
   }
-  const path = executablePath(deploymentDir, handler.path, entry.id);
+  const path = await executablePath(deploymentDir, handler.path, entry.id);
   const args = stringArray(invoke.args, `flow invocation ${entry.id} args`);
   console.error(
     `${dryRun ? "would run" : "running"} ${entry.effectiveIndex.toString().padStart(2, "0")} ${entry.id}: ${path}${args.length ? ` ${args.join(" ")}` : ""}`,
   );
-  return dryRun ? 0 : await runExecutable(path, args);
+  return dryRun ? 0 : await runExecutable(path, args, deploymentDir);
 }
 
 async function executeFlow(options: FlowOptions): Promise<number> {
