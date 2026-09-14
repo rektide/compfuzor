@@ -14,6 +14,7 @@
     "types": ["node"]
   },
   "include": [
+    "files/catalog/**/*.ts",
     "files/config/**/*.ts",
     "files/links/**/*.ts",
     "files/zim/**/*.ts",

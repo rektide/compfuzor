@@ -7,14 +7,15 @@ import { fileURLToPath } from "node:url";
 
 import { main as runConfig } from "../config/runtime.ts";
 import { main as runConfigRemote } from "../config-remote/runtime.ts";
+import { main as runCatalog } from "../catalog/runtime.ts";
 import { main as runLinks } from "../links/runtime.ts";
 import { main as runZim } from "../zim/runtime.ts";
 
-export type RuntimeDomain = "config" | "config-remote" | "links" | "zim";
+export type RuntimeDomain = "catalog" | "config" | "config-remote" | "links" | "zim";
 
 const RUNTIME_NAME = "compfuzor-runtime.mjs";
 const RUNTIME_SOURCE_NAME = "compfuzor-runtime.ts";
-const USAGE = `Usage: compfuzor-runtime.mjs <config|config-remote|links|zim> ...
+const USAGE = `Usage: compfuzor-runtime.mjs <catalog|config|config-remote|links|zim> ...
 
 Ordinary deployments invoke this multicall runtime through stable domain
 aliases such as config/command.mjs, config-remote.mjs, links.mjs, and
@@ -26,6 +27,7 @@ function fail(message: string): never {
 
 function classifyCandidate(path: string): RuntimeDomain | undefined {
   const name = basename(path);
+  if (name === "compfuzor-catalog.sh") return "catalog";
   if (name === "config-remote.mjs") return "config-remote";
   if (name === "links.mjs") return "links";
   if (name === "command.mjs" && basename(dirname(path)) === "config") return "config";
@@ -68,7 +70,13 @@ async function selectedDomain(
     fail(`unknown Compfuzor runtime alias: ${basename(argvPath)}\n${USAGE}`);
   }
   const [domain, ...domainArgv] = argv;
-  if (domain !== "config" && domain !== "config-remote" && domain !== "links" && domain !== "zim") {
+  if (
+    domain !== "catalog" &&
+    domain !== "config" &&
+    domain !== "config-remote" &&
+    domain !== "links" &&
+    domain !== "zim"
+  ) {
     fail(USAGE);
   }
   return { domain, argv: domainArgv, invokedAs: domain === "config" ? "command.ts" : RUNTIME_NAME };
@@ -81,6 +89,7 @@ async function runDomain(
   deploymentDir: string,
 ): Promise<number> {
   try {
+    if (domain === "catalog") return await runCatalog(argv, deploymentDir);
     if (domain === "config") return await runConfig(argv, deploymentDir, invokedAs);
     if (domain === "links") return await runLinks(argv, deploymentDir);
     if (domain === "zim") return await runZim(argv, deploymentDir);

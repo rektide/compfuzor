@@ -7,11 +7,11 @@ import { constants as constants$1, tmpdir } from "node:os";
 import { parseArgs, promisify } from "node:util";
 //#region files/config/context.ts
 /** Import-safe consumer-context selection and path binding for CONFIGS specs. */
-function fail$12(message) {
+function fail$13(message) {
 	throw new Error(message);
 }
-function object$2(value, label) {
-	if (!value || typeof value !== "object" || Array.isArray(value)) fail$12(`${label} must be an object`);
+function object$3(value, label) {
+	if (!value || typeof value !== "object" || Array.isArray(value)) fail$13(`${label} must be an object`);
 	return value;
 }
 function knownRoot(name) {
@@ -25,52 +25,52 @@ function knownRoot(name) {
 function expandPath$1(value, base, label) {
 	let expanded = value;
 	if (value === "~" || value.startsWith("~/")) {
-		const home = knownRoot("HOME") ?? fail$12(`${label}: HOME is required to expand ${value}`);
-		if (value.slice(1).includes("$") || value.slice(1).includes("~")) fail$12(`${label}: unsupported runtime-root expression: ${value}`);
+		const home = knownRoot("HOME") ?? fail$13(`${label}: HOME is required to expand ${value}`);
+		if (value.slice(1).includes("$") || value.slice(1).includes("~")) fail$13(`${label}: unsupported runtime-root expression: ${value}`);
 		expanded = home + value.slice(1);
 	} else if (value.startsWith("${")) {
 		const match = /^\$\{(HOME|XDG_CONFIG_HOME|XDG_STATE_HOME|XDG_CACHE_HOME|XDG_DATA_HOME)\}(?:\/|$)/.exec(value);
-		if (!match) fail$12(`${label}: unsupported runtime-root expression: ${value}`);
-		const root = knownRoot(match[1]) ?? fail$12(`${label}: ${match[1]} or HOME is required to expand ${value}`);
+		if (!match) fail$13(`${label}: unsupported runtime-root expression: ${value}`);
+		const root = knownRoot(match[1]) ?? fail$13(`${label}: ${match[1]} or HOME is required to expand ${value}`);
 		const suffix = value.slice(match[0].length - (match[0].endsWith("/") ? 1 : 0));
-		if (suffix.includes("$") || suffix.includes("~")) fail$12(`${label}: unsupported runtime-root expression: ${value}`);
+		if (suffix.includes("$") || suffix.includes("~")) fail$13(`${label}: unsupported runtime-root expression: ${value}`);
 		expanded = root + suffix;
-	} else if (value.includes("$") || value.includes("~")) fail$12(`${label}: unsupported runtime-root expression: ${value}`);
+	} else if (value.includes("$") || value.includes("~")) fail$13(`${label}: unsupported runtime-root expression: ${value}`);
 	if (!isAbsolute(expanded)) {
-		if (!base) fail$12(`${label}: resolved root must be absolute: ${expanded}`);
+		if (!base) fail$13(`${label}: resolved root must be absolute: ${expanded}`);
 		expanded = resolve(base, expanded);
 	}
 	return normalize(expanded);
 }
 function resolvePathSelector(raw, base, label) {
-	const selector = object$2(raw, label);
+	const selector = object$3(raw, label);
 	if ([
 		selector.path !== void 0,
 		selector.relative !== void 0,
 		selector.env !== void 0
-	].filter(Boolean).length !== 1) fail$12(`${label} must contain exactly one of path, relative, or env`);
+	].filter(Boolean).length !== 1) fail$13(`${label} must contain exactly one of path, relative, or env`);
 	if (selector.path !== void 0) {
-		if (typeof selector.path !== "string" || !selector.path) fail$12(`${label}.path must be a non-empty string`);
+		if (typeof selector.path !== "string" || !selector.path) fail$13(`${label}.path must be a non-empty string`);
 		return expandPath$1(selector.path, void 0, `${label}.path`);
 	}
 	if (selector.relative !== void 0) {
-		if (typeof selector.relative !== "string" || !selector.relative || !base) fail$12(`${label}.relative requires a context root`);
+		if (typeof selector.relative !== "string" || !selector.relative || !base) fail$13(`${label}.relative requires a context root`);
 		const resolved = resolve(base, selector.relative);
 		const fromBase = relative(base, resolved);
-		if (fromBase === ".." || fromBase.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || isAbsolute(fromBase)) fail$12(`${label}.relative escapes the context root`);
+		if (fromBase === ".." || fromBase.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || isAbsolute(fromBase)) fail$13(`${label}.relative escapes the context root`);
 		return normalize(resolved);
 	}
-	if (typeof selector.env !== "string" || !selector.env) fail$12(`${label}.env must name an environment variable`);
+	if (typeof selector.env !== "string" || !selector.env) fail$13(`${label}.env must name an environment variable`);
 	const environmentValue = process.env[selector.env];
 	if (environmentValue && !selector.ignore?.includes(environmentValue)) return expandPath$1(environmentValue, base, `${label}.env(${selector.env})`);
 	if (selector.default !== void 0) return resolvePathSelector(selector.default, base, `${label}.default`);
-	fail$12(`${label}: environment variable ${selector.env} is required`);
+	fail$13(`${label}: environment variable ${selector.env} is required`);
 }
 function getConfigContext(spec, contextName) {
-	if (spec.version !== 2) fail$12(`unsupported config spec version: ${String(spec.version)}; rerender the deployment (expected version 2)`);
-	const context = object$2(object$2(spec.contexts, "config spec contexts")[contextName], `unknown config context ${contextName}`);
-	if (context.scope !== "user" && context.scope !== "system") fail$12(`context ${contextName}: invalid scope`);
-	object$2(context.configs, `context ${contextName}.configs`);
+	if (spec.version !== 2) fail$13(`unsupported config spec version: ${String(spec.version)}; rerender the deployment (expected version 2)`);
+	const context = object$3(object$3(spec.contexts, "config spec contexts")[contextName], `unknown config context ${contextName}`);
+	if (context.scope !== "user" && context.scope !== "system") fail$13(`context ${contextName}: invalid scope`);
+	object$3(context.configs, `context ${contextName}.configs`);
 	return context;
 }
 function contextConfigNames(spec, contextName, applyOnly = false) {
@@ -78,7 +78,7 @@ function contextConfigNames(spec, contextName, applyOnly = false) {
 	const names = Object.keys(context.configs);
 	if (!applyOnly) return names;
 	return names.filter((name) => {
-		return object$2(spec.configs[name], `context ${contextName}: missing source config ${name}`).apply !== false;
+		return object$3(spec.configs[name], `context ${contextName}: missing source config ${name}`).apply !== false;
 	});
 }
 function selectRecipeNames(spec, contextName, requested, applyOnly = true) {
@@ -86,30 +86,30 @@ function selectRecipeNames(spec, contextName, requested, applyOnly = true) {
 	if (requested.length === 0) return contextConfigNames(spec, contextName, applyOnly);
 	const seen = /* @__PURE__ */ new Set();
 	for (const name of requested) {
-		if (!available.includes(name)) fail$12(`unknown config in context ${contextName}: ${name}`);
-		if (seen.has(name)) fail$12(`config selected more than once in context ${contextName}: ${name}`);
+		if (!available.includes(name)) fail$13(`unknown config in context ${contextName}: ${name}`);
+		if (seen.has(name)) fail$13(`config selected more than once in context ${contextName}: ${name}`);
 		seen.add(name);
 	}
 	return requested;
 }
 function bindContextConfigs(spec, contextName, names) {
 	const context = getConfigContext(spec, contextName);
-	for (const name of names) if (!(name in context.configs)) fail$12(`unknown config in context ${contextName}: ${name}`);
+	for (const name of names) if (!(name in context.configs)) fail$13(`unknown config in context ${contextName}: ${name}`);
 	const root = resolvePathSelector(context.root, void 0, `context ${contextName}.root`);
 	const base = context.subpath ? resolve(root, context.subpath) : root;
-	const contextConfigs = object$2(context.configs, `context ${contextName}.configs`);
+	const contextConfigs = object$3(context.configs, `context ${contextName}.configs`);
 	const resolvedConfigs = {};
 	const outputs = /* @__PURE__ */ new Map();
 	for (const name of names) {
-		const source = object$2(spec.configs[name], `context ${contextName}: missing source config ${name}`);
-		const binding = object$2(contextConfigs[name], `context ${contextName}.configs.${name}`);
-		if (!Array.isArray(source.inputs) || !Array.isArray(binding.inputs) || source.inputs.length !== binding.inputs.length) fail$12(`context ${contextName}.configs.${name}: input bindings do not match the source recipe`);
+		const source = object$3(spec.configs[name], `context ${contextName}: missing source config ${name}`);
+		const binding = object$3(contextConfigs[name], `context ${contextName}.configs.${name}`);
+		if (!Array.isArray(source.inputs) || !Array.isArray(binding.inputs) || source.inputs.length !== binding.inputs.length) fail$13(`context ${contextName}.configs.${name}: input bindings do not match the source recipe`);
 		const output = resolvePathSelector(binding.output, base, `context ${contextName}.configs.${name}.output`);
 		const prior = outputs.get(output);
-		if (prior) fail$12(`context ${contextName}: configs ${prior} and ${name} resolve to the same output ${output}`);
+		if (prior) fail$13(`context ${contextName}: configs ${prior} and ${name} resolve to the same output ${output}`);
 		outputs.set(output, name);
 		const inputs = source.inputs.map((rawInput, index) => {
-			const input = { ...object$2(rawInput, `config ${name}.inputs[${index}]`) };
+			const input = { ...object$3(rawInput, `config ${name}.inputs[${index}]`) };
 			const path = resolvePathSelector(binding.inputs[index], base, `context ${contextName}.configs.${name}.inputs[${index}]`);
 			if (input.file !== void 0) input.file = path;
 			else {
@@ -466,7 +466,7 @@ Options:
   --json          Emit one JSON row per line
   --json-array    Emit one JSON array`
 };
-function fail$11(message) {
+function fail$12(message) {
 	throw new Error(message);
 }
 function explicitHelpAction(argv) {
@@ -546,35 +546,35 @@ function configAliasPieces(options, contextNames) {
 	if (options.invokedAs === "command.ts") return {};
 	const fixed = CONFIG_ACTIONS.find((action) => options.invokedAs === `config-${action}.sh`);
 	if (fixed) return { action: options.action === void 0 ? fixed : void 0 };
-	if (!options.invokedAs.startsWith("config-") || !options.invokedAs.endsWith(".sh")) fail$11(`unsupported config command alias ${options.invokedAs}; use a fixed config-ACTION.sh command or explicit --action and --context`);
+	if (!options.invokedAs.startsWith("config-") || !options.invokedAs.endsWith(".sh")) fail$12(`unsupported config command alias ${options.invokedAs}; use a fixed config-ACTION.sh command or explicit --action and --context`);
 	const body = options.invokedAs.slice(7, -3);
 	const full = contextNames.flatMap((context) => CONFIG_ACTIONS.filter((action) => body === `${context}-${action}`).map((action) => ({
 		action,
 		context
 	})));
 	if (options.action === void 0 && options.context === void 0) {
-		if (full.length !== 1) fail$11(`unknown or ambiguous config command alias ${options.invokedAs}`);
+		if (full.length !== 1) fail$12(`unknown or ambiguous config command alias ${options.invokedAs}`);
 		return full[0];
 	}
 	if (options.action === void 0) {
 		const actions = CONFIG_ACTIONS.filter((candidate) => body.endsWith(`-${candidate}`));
 		const longest = Math.max(...actions.map((candidate) => candidate.length), -1);
 		const selected = actions.filter((candidate) => candidate.length === longest);
-		if (selected.length !== 1) fail$11(`unknown or ambiguous action in config command alias ${options.invokedAs}`);
+		if (selected.length !== 1) fail$12(`unknown or ambiguous action in config command alias ${options.invokedAs}`);
 		return { action: selected[0] };
 	}
 	const contexts = contextNames.filter((candidate) => body === candidate || body.startsWith(`${candidate}-`));
 	const longest = Math.max(...contexts.map((candidate) => candidate.length), -1);
 	const selected = contexts.filter((candidate) => candidate.length === longest);
-	if (selected.length !== 1) fail$11(`unknown or ambiguous context in config command alias ${options.invokedAs}`);
+	if (selected.length !== 1) fail$12(`unknown or ambiguous context in config command alias ${options.invokedAs}`);
 	return { context: selected[0] };
 }
 function rejectIrrelevantFlags(options, action) {
-	if (action !== "assemble" && (options.check || options.stdout || options.list || options.quiet)) fail$11(`${action} does not accept assembly display flags`);
-	if (action !== "status" && action !== "inputs" && options.format !== "human") fail$11(`${action} does not accept status format flags`);
-	if (action !== "sync-inputs" && options.seed) fail$11(`${action} does not accept --seed`);
-	if (action !== "inputs" && (!options.rebuild || options.initiallyDisabled)) fail$11(`${action} does not accept input mutation flags`);
-	if (action !== "install" && options.dropins !== void 0) fail$11(`${action} does not accept --dropins`);
+	if (action !== "assemble" && (options.check || options.stdout || options.list || options.quiet)) fail$12(`${action} does not accept assembly display flags`);
+	if (action !== "status" && action !== "inputs" && options.format !== "human") fail$12(`${action} does not accept status format flags`);
+	if (action !== "sync-inputs" && options.seed) fail$12(`${action} does not accept --seed`);
+	if (action !== "inputs" && (!options.rebuild || options.initiallyDisabled)) fail$12(`${action} does not accept input mutation flags`);
+	if (action !== "install" && options.dropins !== void 0) fail$12(`${action} does not accept --dropins`);
 }
 //#endregion
 //#region files/config/file-state.ts
@@ -620,11 +620,11 @@ async function inspectUsableFile(path) {
 //#endregion
 //#region files/config/input-state.ts
 /** Consumer input catalog, synchronization, and status observation. */
-function fail$10(message) {
+function fail$11(message) {
 	throw new Error(message);
 }
-function object$1(value, label) {
-	if (!value || typeof value !== "object" || Array.isArray(value)) fail$10(`${label} must be an object`);
+function object$2(value, label) {
+	if (!value || typeof value !== "object" || Array.isArray(value)) fail$11(`${label} must be an object`);
 	return value;
 }
 function filenameMatches$1(value, pattern) {
@@ -653,8 +653,8 @@ async function inputCatalog(spec, contextName, names) {
 	const directories = [];
 	const rows = [];
 	for (const configName of names) {
-		const donorConfig = object$1(spec.configs[configName], `config ${configName}`);
-		const localConfig = object$1(resolved.configs[configName], `resolved config ${configName}`);
+		const donorConfig = object$2(spec.configs[configName], `config ${configName}`);
+		const localConfig = object$2(resolved.configs[configName], `resolved config ${configName}`);
 		for (let index = 0; index < donorConfig.inputs.length; index++) {
 			const donor = donorConfig.inputs[index];
 			const local = localConfig.inputs[index];
@@ -674,7 +674,7 @@ async function inputCatalog(spec, contextName, names) {
 				});
 				continue;
 			}
-			if (typeof donor.directory !== "string" || typeof donor.pattern !== "string" || typeof local.directory !== "string") fail$10(`config ${configName} input ${index} has an invalid compiled shape`);
+			if (typeof donor.directory !== "string" || typeof donor.pattern !== "string" || typeof local.directory !== "string") fail$11(`config ${configName} input ${index} has an invalid compiled shape`);
 			const suffix = typeof donor.disabled_suffix === "string" ? donor.disabled_suffix : void 0;
 			const directory = {
 				config: configName,
@@ -771,12 +771,12 @@ async function deliver$2(source, destination, strategy) {
 	else await replaceWithCopy(source, destination);
 }
 async function applyRelation(relation, strategy, seed) {
-	if (relation.aliasHazard) fail$10(`${relation.id}: ${relation.aliasHazard}`);
-	if (relation.donorConflict) fail$10(`${relation.id}: donor has both enabled and disabled entries`);
+	if (relation.aliasHazard) fail$11(`${relation.id}: ${relation.aliasHazard}`);
+	if (relation.donorConflict) fail$11(`${relation.id}: donor has both enabled and disabled entries`);
 	const sourceEntry = await inspectDeliveryEntry(relation.source);
-	if (sourceEntry.kind === "missing" || sourceEntry.kind === "directory" || sourceEntry.kind === "special") fail$10(`${relation.id}: donor source is ${sourceEntry.kind}: ${relation.source}`);
+	if (sourceEntry.kind === "missing" || sourceEntry.kind === "directory" || sourceEntry.kind === "special") fail$11(`${relation.id}: donor source is ${sourceEntry.kind}: ${relation.source}`);
 	const local = await localSelection(relation);
-	if (local.conflict) fail$10(`${relation.id}: both enabled and disabled local entries exist`);
+	if (local.conflict) fail$11(`${relation.id}: both enabled and disabled local entries exist`);
 	if (seed && local.selectedPath) return `preserved\t${relation.id}\t${local.selectedState}\t${local.selectedPath}`;
 	const state = local.selectedState ?? relation.donorState;
 	const destination = state === "disabled" && relation.suffix && relation.destinationDirectory ? join(relation.destinationDirectory, `${relation.logicalName}${relation.suffix}`) : relation.destinationDirectory ? join(relation.destinationDirectory, relation.logicalName) : relation.destination;
@@ -1042,7 +1042,7 @@ function printStatusRows(rows, format) {
 //#endregion
 //#region files/config/inputs.ts
 /** Consumer input inventory and mutation operations. */
-function fail$9(message) {
+function fail$10(message) {
 	throw new Error(message);
 }
 function filenameMatches(value, pattern) {
@@ -1070,7 +1070,7 @@ function selectInput(spec, contextName, selector) {
 			});
 		});
 	}
-	if (matches.length !== 1) fail$9(matches.length === 0 ? `unknown context input: ${selector}` : `ambiguous context input: ${selector}; use CONFIG/INPUT`);
+	if (matches.length !== 1) fail$10(matches.length === 0 ? `unknown context input: ${selector}` : `ambiguous context input: ${selector}; use CONFIG/INPUT`);
 	const selected = matches[0];
 	const consumer = bindContextConfigs(spec, contextName, [selected.config]).configs[selected.config].inputs[selected.index];
 	return {
@@ -1090,7 +1090,7 @@ async function rebuild$1(options, config) {
 	return 4;
 }
 function localInputPaths(selected, name) {
-	if (typeof selected.consumer.directory !== "string") fail$9(`${selected.config}/${inputIdentity(selected.source, selected.index)} is not a glob input`);
+	if (typeof selected.consumer.directory !== "string") fail$10(`${selected.config}/${inputIdentity(selected.source, selected.index)} is not a glob input`);
 	const suffix = typeof selected.source.disabled_suffix === "string" ? selected.source.disabled_suffix : void 0;
 	return {
 		active: join(selected.consumer.directory, name),
@@ -1099,15 +1099,15 @@ function localInputPaths(selected, name) {
 }
 async function assertInputBindingSeparated(selected) {
 	if (typeof selected.source.file === "string" && typeof selected.consumer.file === "string") {
-		if (await pathsSharePhysicalEntry(selected.source.file, selected.consumer.file)) fail$9(`${selected.config}/${inputIdentity(selected.source, selected.index)} consumer file aliases canonical input: ${selected.consumer.file}`);
+		if (await pathsSharePhysicalEntry(selected.source.file, selected.consumer.file)) fail$10(`${selected.config}/${inputIdentity(selected.source, selected.index)} consumer file aliases canonical input: ${selected.consumer.file}`);
 		return;
 	}
-	if (typeof selected.source.directory === "string" && typeof selected.consumer.directory === "string" && await pathsSharePhysicalDirectory(selected.source.directory, selected.consumer.directory)) fail$9(`${selected.config}/${inputIdentity(selected.source, selected.index)} consumer directory aliases canonical input directory: ${selected.consumer.directory}`);
+	if (typeof selected.source.directory === "string" && typeof selected.consumer.directory === "string" && await pathsSharePhysicalDirectory(selected.source.directory, selected.consumer.directory)) fail$10(`${selected.config}/${inputIdentity(selected.source, selected.index)} consumer directory aliases canonical input directory: ${selected.consumer.directory}`);
 }
 function validateInputName(input, name) {
-	if (!name || basename(name) !== name || name === "." || name === "..") fail$9(`invalid input filename: ${name}`);
-	if (typeof input.pattern !== "string" || !filenameMatches(name, input.pattern)) fail$9(`${name} does not match input pattern ${String(input.pattern)}`);
-	if (typeof input.disabled_suffix === "string" && name.endsWith(input.disabled_suffix)) fail$9(`input filename must not include disabled suffix ${input.disabled_suffix}`);
+	if (!name || basename(name) !== name || name === "." || name === "..") fail$10(`invalid input filename: ${name}`);
+	if (typeof input.pattern !== "string" || !filenameMatches(name, input.pattern)) fail$10(`${name} does not match input pattern ${String(input.pattern)}`);
+	if (typeof input.disabled_suffix === "string" && name.endsWith(input.disabled_suffix)) fail$10(`input filename must not include disabled suffix ${input.disabled_suffix}`);
 }
 async function inspectPair(paths) {
 	const [active, disabled] = await Promise.all([inspectDeliveryEntry(paths.active), paths.disabled ? inspectDeliveryEntry(paths.disabled) : Promise.resolve(void 0)]);
@@ -1118,7 +1118,7 @@ async function inspectPair(paths) {
 	};
 }
 function replaceableLocal(entry, path) {
-	if (entry.kind === "directory" || entry.kind === "special") fail$9(`local input is not a regular file or symlink: ${path}`);
+	if (entry.kind === "directory" || entry.kind === "special") fail$10(`local input is not a regular file or symlink: ${path}`);
 }
 async function putInput(options) {
 	const spec = options.spec;
@@ -1129,9 +1129,9 @@ async function putInput(options) {
 	await assertInputBindingSeparated(selected);
 	const source = resolve(sourceArgument);
 	if (typeof selected.source.file === "string") {
-		if (suppliedName !== void 0) fail$9(`${selector} is a direct file input and does not accept a destination name`);
-		if (options.initiallyDisabled ?? false) fail$9(`${selector} is a direct file input and cannot be disabled`);
-		if (typeof selected.consumer.file !== "string") fail$9(`${selector} has an invalid resolved file binding`);
+		if (suppliedName !== void 0) fail$10(`${selector} is a direct file input and does not accept a destination name`);
+		if (options.initiallyDisabled ?? false) fail$10(`${selector} is a direct file input and cannot be disabled`);
+		if (typeof selected.consumer.file !== "string") fail$10(`${selector} has an invalid resolved file binding`);
 		await deliver$1(source, selected.consumer.file, options.strategy ?? getConfigContext(spec, options.contextName).dropins ?? "link");
 		console.log(`put\t${selected.config}/${inputIdentity(selected.source, selected.index)}\t${selected.consumer.file}`);
 		return options.rebuild ?? true ? rebuild$1(options, selected.config) : 0;
@@ -1140,21 +1140,21 @@ async function putInput(options) {
 	validateInputName(selected.source, name);
 	const paths = localInputPaths(selected, name);
 	const pair = await inspectPair(paths);
-	if (pair.conflict) fail$9(`both enabled and disabled local entries exist for ${name}`);
-	const destination = pair.active.kind !== "missing" ? paths.active : pair.disabled && pair.disabled.kind !== "missing" ? paths.disabled : options.initiallyDisabled ?? false ? paths.disabled ?? fail$9(`${selector} cannot be disabled`) : paths.active;
+	if (pair.conflict) fail$10(`both enabled and disabled local entries exist for ${name}`);
+	const destination = pair.active.kind !== "missing" ? paths.active : pair.disabled && pair.disabled.kind !== "missing" ? paths.disabled : options.initiallyDisabled ?? false ? paths.disabled ?? fail$10(`${selector} cannot be disabled`) : paths.active;
 	await deliver$1(source, destination, options.strategy ?? getConfigContext(spec, options.contextName).dropins ?? "link");
 	console.log(`put\t${selected.config}/${inputIdentity(selected.source, selected.index)}\t${destination}`);
 	return options.rebuild ?? true ? rebuild$1(options, selected.config) : 0;
 }
 async function inputMutation(options, action, args) {
 	const [selector, name] = args;
-	if (!selector) fail$9(`usage: config-inputs.sh ${action} INPUT [NAME]`);
+	if (!selector) fail$10(`usage: config-inputs.sh ${action} INPUT [NAME]`);
 	const selected = selectInput(options.spec, options.contextName, selector);
 	await assertInputBindingSeparated(selected);
 	if (typeof selected.source.file === "string") {
-		if (action !== "remove") fail$9(`${selector} is a direct file input and cannot be ${action}d`);
-		if (args.length !== 1) fail$9(`usage: config-inputs.sh remove DIRECT_INPUT`);
-		if (typeof selected.consumer.file !== "string") fail$9(`${selector} has an invalid resolved file binding`);
+		if (action !== "remove") fail$10(`${selector} is a direct file input and cannot be ${action}d`);
+		if (args.length !== 1) fail$10(`usage: config-inputs.sh remove DIRECT_INPUT`);
+		if (typeof selected.consumer.file !== "string") fail$10(`${selector} has an invalid resolved file binding`);
 		const entry = await inspectDeliveryEntry(selected.consumer.file);
 		if (entry.kind === "missing") return 0;
 		replaceableLocal(entry, selected.consumer.file);
@@ -1162,11 +1162,11 @@ async function inputMutation(options, action, args) {
 		console.log(`remove\t${selected.config}/${inputIdentity(selected.source, selected.index)}\t${selected.consumer.file}`);
 		return rebuild$1(options, selected.config);
 	}
-	if (!name || args.length !== 2) fail$9(`usage: config-inputs.sh ${action} INPUT NAME`);
+	if (!name || args.length !== 2) fail$10(`usage: config-inputs.sh ${action} INPUT NAME`);
 	validateInputName(selected.source, name);
 	const paths = localInputPaths(selected, name);
 	const pair = await inspectPair(paths);
-	if (pair.conflict) fail$9(`both enabled and disabled local entries exist for ${name}`);
+	if (pair.conflict) fail$10(`both enabled and disabled local entries exist for ${name}`);
 	if (action === "remove") {
 		const path = pair.active.kind !== "missing" ? paths.active : pair.disabled && pair.disabled.kind !== "missing" ? paths.disabled : void 0;
 		if (!path) return 0;
@@ -1175,12 +1175,12 @@ async function inputMutation(options, action, args) {
 		console.log(`remove\t${selected.config}/${inputIdentity(selected.source, selected.index)}\t${path}`);
 		return rebuild$1(options, selected.config);
 	}
-	if (!paths.disabled) fail$9(`${selected.config}/${inputIdentity(selected.source, selected.index)} cannot be disabled`);
+	if (!paths.disabled) fail$10(`${selected.config}/${inputIdentity(selected.source, selected.index)} cannot be disabled`);
 	const from = action === "disable" ? paths.active : paths.disabled;
 	const to = action === "disable" ? paths.disabled : paths.active;
 	const fromEntry = action === "disable" ? pair.active : pair.disabled;
 	if ((action === "disable" ? pair.disabled : pair.active).kind !== "missing") return 0;
-	if (fromEntry.kind === "missing") fail$9(`local input does not exist: ${from}`);
+	if (fromEntry.kind === "missing") fail$10(`local input does not exist: ${from}`);
 	replaceableLocal(fromEntry, from);
 	await rename(from, to);
 	console.log(`${action}\t${selected.config}/${inputIdentity(selected.source, selected.index)}\t${to}`);
@@ -1209,7 +1209,7 @@ async function runInputAction(options, commandArgs) {
 	}
 	if (action === "put") {
 		const [selector, source, name] = args;
-		if (!selector || !source || args.length > 3) fail$9("usage: config-inputs.sh put INPUT SOURCE [NAME] [--strategy copy|link]");
+		if (!selector || !source || args.length > 3) fail$10("usage: config-inputs.sh put INPUT SOURCE [NAME] [--strategy copy|link]");
 		return putInput({
 			...options,
 			selector,
@@ -1218,7 +1218,7 @@ async function runInputAction(options, commandArgs) {
 		});
 	}
 	if (action === "enable" || action === "disable" || action === "remove") return inputMutation(options, action, args);
-	fail$9("usage: config-inputs.sh <list|status|put|enable|disable|remove> ...");
+	fail$10("usage: config-inputs.sh <list|status|put|enable|disable|remove> ...");
 }
 //#endregion
 //#region files/config/publication.ts
@@ -1292,7 +1292,7 @@ async function installContext(options) {
 }
 //#endregion
 //#region files/config/invocation.ts
-function fail$8(message) {
+function fail$9(message) {
 	throw new Error(message);
 }
 /**
@@ -1302,7 +1302,7 @@ function fail$8(message) {
 function resolveSelectedName(options) {
 	const declared = new Set(options.declared);
 	const selected = options.explicit ?? options.inferAlias(options.invokedAs, declared) ?? options.environment ?? options.fallback;
-	if (!declared.has(selected)) fail$8(`unknown ${options.label}: ${selected}`);
+	if (!declared.has(selected)) fail$9(`unknown ${options.label}: ${selected}`);
 	return selected;
 }
 //#endregion
@@ -1576,16 +1576,16 @@ async function statusContext(options) {
 //#endregion
 //#region files/config/runtime.ts
 /** Thin multicall dispatcher for the fixed CONFIG action vocabulary. */
-function fail$7(message) {
+function fail$8(message) {
 	throw new Error(message);
 }
 function parseInputStrategy$1(value, label) {
 	if (value === "copy" || value === "link") return value;
-	fail$7(`${label} must be copy or link`);
+	fail$8(`${label} must be copy or link`);
 }
 function parseInstallStrategy$1(value, label) {
 	if (value === "assemble" || value === "copy" || value === "link") return value;
-	fail$7(`${label} must be assemble, copy, or link`);
+	fail$8(`${label} must be assemble, copy, or link`);
 }
 function contextInputStrategy(spec, contextName, explicit) {
 	return parseInputStrategy$1(explicit ?? process.env.COMPFUZOR_CONFIG_DROPINS_STRATEGY ?? getConfigContext(spec, contextName).dropins ?? "link", "effective config input strategy");
@@ -1616,16 +1616,16 @@ async function runConfigCommand(options) {
 	});
 	const context = getConfigContext(spec, contextName);
 	rejectIrrelevantFlags(options, action);
-	if (context.canonical && !["assemble", "status"].includes(action)) fail$7(`config ${action} is not meaningful for canonical source=destination context; use assemble or status`);
+	if (context.canonical && !["assemble", "status"].includes(action)) fail$8(`config ${action} is not meaningful for canonical source=destination context; use assemble or status`);
 	if (action === "assemble") {
-		if (options.check && options.stdout) fail$7("--check and --stdout are mutually exclusive");
+		if (options.check && options.stdout) fail$8("--check and --stdout are mutually exclusive");
 		if (options.list) {
-			if (options.args.length > 0) fail$7("--list does not accept recipe names");
+			if (options.args.length > 0) fail$8("--list does not accept recipe names");
 			for (const name of selectRecipeNames(spec, contextName, [], false).sort()) console.log(name);
 			return 0;
 		}
 		const names = selectRecipeNames(spec, contextName, options.args);
-		if (options.stdout && names.length !== 1) fail$7("--stdout requires exactly one selected config");
+		if (options.stdout && names.length !== 1) fail$8("--stdout requires exactly one selected config");
 		return runAssembly({
 			spec,
 			contextName,
@@ -1666,7 +1666,7 @@ async function runConfigCommand(options) {
 	});
 	if (action === "inputs") {
 		const inputAction = options.args[0];
-		const strategy = inputAction === "put" ? contextInputStrategy(spec, contextName, options.strategy) : options.strategy === void 0 ? void 0 : fail$7(`${inputAction ?? "inputs"} does not accept --strategy`);
+		const strategy = inputAction === "put" ? contextInputStrategy(spec, contextName, options.strategy) : options.strategy === void 0 ? void 0 : fail$8(`${inputAction ?? "inputs"} does not accept --strategy`);
 		return runInputAction({
 			spec,
 			contextName,
@@ -1689,7 +1689,7 @@ async function runConfigCommand(options) {
 	if (outcome.status === "skipped") console.error(`skipped config install for ${contextName}: ${outcome.reason}`);
 	return outcome.code;
 }
-async function main$4(argv, deploymentDir, invokedAs) {
+async function main$5(argv, deploymentDir, invokedAs) {
 	return runConfigCommand(parseConfigCommandArgs(argv, deploymentDir, invokedAs));
 }
 //#endregion
@@ -1751,7 +1751,7 @@ async function inspect(remote, target, name) {
 		disabled
 	};
 }
-async function main$3(argv, deploymentDir) {
+async function main$4(argv, deploymentDir) {
 	const parsed = parseArgs({
 		args: argv,
 		allowPositionals: true,
@@ -1836,6 +1836,305 @@ async function main$3(argv, deploymentDir) {
 		}
 	}
 	console.log(`${action}: ${target}/${value}`);
+}
+//#endregion
+//#region files/catalog/runtime.ts
+/** Read-only inspection of attributed contributors, actions, resources, and flows. */
+const FLOW_PHASES = {
+	build: [
+		{
+			from: 1,
+			to: 19,
+			name: "prerequisites"
+		},
+		{
+			from: 20,
+			to: 39,
+			name: "prepare"
+		},
+		{
+			from: 40,
+			to: 69,
+			name: "compile"
+		},
+		{
+			from: 70,
+			to: 89,
+			name: "package"
+		},
+		{
+			from: 90,
+			to: 99,
+			name: "finalize"
+		}
+	],
+	install: [
+		{
+			from: 1,
+			to: 19,
+			name: "prerequisites"
+		},
+		{
+			from: 20,
+			to: 29,
+			name: "identity"
+		},
+		{
+			from: 30,
+			to: 49,
+			name: "materialize"
+		},
+		{
+			from: 50,
+			to: 69,
+			name: "publish"
+		},
+		{
+			from: 70,
+			to: 89,
+			name: "activate"
+		},
+		{
+			from: 90,
+			to: 99,
+			name: "record"
+		}
+	],
+	status: [{
+		from: 1,
+		to: 99,
+		name: "inspect"
+	}]
+};
+const USAGE$1 = `Usage: compfuzor-catalog.sh [--catalog PATH | --deployment DIR] [--json] [COMMAND]
+
+Inspect the compiled read-only runtime catalog. Commands:
+  contributors
+  actions
+  commands
+  resources
+  flows
+  flow NAME`;
+function fail$7(message) {
+	throw new Error(message);
+}
+function object$1(value, label) {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) fail$7(`${label} must be an object`);
+	return value;
+}
+function strings(value) {
+	return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
+}
+function phaseFor(flow, index) {
+	return (FLOW_PHASES[flow]?.find((candidate) => index >= candidate.from && index <= candidate.to))?.name ?? "unknown";
+}
+function parseCatalog(value) {
+	const record = object$1(value, "runtime catalog");
+	if (record.version !== 1) fail$7(`unsupported runtime catalog version: ${String(record.version)}`);
+	const flows = object$1(record.flows, "runtime catalog flows");
+	return {
+		version: 1,
+		deployment: object$1(record.deployment, "runtime catalog deployment"),
+		contributors: Array.isArray(record.contributors) ? record.contributors.map((item, index) => object$1(item, `contributor ${index}`)) : fail$7("runtime catalog contributors must be an array"),
+		resources: Array.isArray(record.resources) ? record.resources.map((item, index) => object$1(item, `resource ${index}`)) : fail$7("runtime catalog resources must be an array"),
+		commands: Array.isArray(record.commands) ? record.commands.map((item, index) => object$1(item, `command ${index}`)) : fail$7("runtime catalog commands must be an array"),
+		actions: Array.isArray(record.actions) ? record.actions.map((item, index) => object$1(item, `action ${index}`)) : fail$7("runtime catalog actions must be an array"),
+		flows: Object.fromEntries(Object.entries(flows).map(([name, item]) => {
+			return [name, {
+				name,
+				entries: strings(object$1(item, `flow ${name}`).entries)
+			}];
+		})),
+		execution: object$1(record.execution, "runtime catalog execution")
+	};
+}
+function parseOptions(argv, deploymentDir) {
+	const { values, positionals } = parseArgs({
+		args: argv,
+		strict: true,
+		allowPositionals: true,
+		options: {
+			catalog: { type: "string" },
+			deployment: { type: "string" },
+			json: { type: "boolean" },
+			help: {
+				type: "boolean",
+				short: "h"
+			}
+		}
+	});
+	if (values.help) {
+		console.log(USAGE$1);
+		process.exit(0);
+	}
+	if (values.catalog && values.deployment) fail$7("--catalog and --deployment are mutually exclusive");
+	const root = resolve(values.deployment ?? deploymentDir);
+	return {
+		catalogPath: resolve(values.catalog ?? join(root, "etc", "compfuzor-runtime", "catalog.json")),
+		json: values.json ?? false,
+		positionals
+	};
+}
+function placement(path, expectedFlow) {
+	const match = /^(\d{2})-([a-z0-9-]+)-.+\.json$/.exec(basename(path));
+	if (!match) fail$7(`invalid indexed flow filename: ${path}`);
+	const index = Number(match[1]);
+	if (index < 1 || index > 99) fail$7(`flow index must be 01-99: ${path}`);
+	if (match[2] !== expectedFlow) fail$7(`flow filename ${path} does not match descriptor flow ${expectedFlow}`);
+	return {
+		index,
+		flow: match[2]
+	};
+}
+function canonical(value) {
+	if (Array.isArray(value)) return value.map(canonical);
+	if (typeof value !== "object" || value === null) return value;
+	const record = value;
+	return Object.fromEntries(Object.keys(record).sort().map((key) => [key, canonical(record[key])]));
+}
+function semanticDescriptor(record) {
+	const copy = { ...record };
+	delete copy.index;
+	delete copy.effectiveIndex;
+	delete copy.effectivePhase;
+	delete copy.selectedPath;
+	delete copy.selectedLayer;
+	delete copy.shadowedPath;
+	return JSON.stringify(canonical(copy));
+}
+async function readLayer(directory, layer) {
+	let names;
+	try {
+		names = await readdir(directory);
+	} catch (error) {
+		if (error.code === "ENOENT") return [];
+		throw error;
+	}
+	const selected = names.filter((name) => name.endsWith(".json")).sort();
+	return await Promise.all(selected.map(async (name) => {
+		const path = join(directory, name);
+		return {
+			path,
+			record: object$1(JSON.parse(await readFile(path, "utf8")), `flow descriptor ${path}`),
+			layer
+		};
+	}));
+}
+async function loadFlow(catalogPath, flow) {
+	if (!(flow in FLOW_PHASES)) fail$7(`unknown flow: ${flow}`);
+	const root = join(dirname(catalogPath), "workflows");
+	const [compiled, site] = await Promise.all([readLayer(join(root, "compiled"), "compiled"), readLayer(join(root, "site"), "site")]);
+	const selected = /* @__PURE__ */ new Map();
+	for (const item of compiled) {
+		if (item.record.flow !== flow) continue;
+		const id = item.record.id;
+		if (typeof id !== "string" || !id) fail$7(`flow descriptor ${item.path} requires an id`);
+		if (selected.has(id)) fail$7(`duplicate compiled flow contribution id ${id}`);
+		const effective = placement(item.path, flow);
+		selected.set(id, {
+			...item.record,
+			id,
+			flow,
+			effectiveIndex: effective.index,
+			effectivePhase: phaseFor(flow, effective.index),
+			selectedPath: item.path,
+			selectedLayer: "compiled"
+		});
+	}
+	const siteIds = /* @__PURE__ */ new Set();
+	for (const item of site) {
+		const id = item.record.id;
+		if (typeof id !== "string" || !id) fail$7(`site flow descriptor ${item.path} requires an id`);
+		if (siteIds.has(id)) fail$7(`duplicate site flow contribution id ${id}`);
+		siteIds.add(id);
+		const previous = selected.get(id);
+		if (item.record.state === "absent") {
+			if (!previous) fail$7(`site tombstone ${item.path} names unknown compiled contribution ${id}`);
+			if (Object.keys(item.record).some((key) => key !== "id" && key !== "state")) fail$7(`site tombstone ${item.path} may contain only id and state`);
+			selected.delete(id);
+			continue;
+		}
+		if (item.record.flow !== flow) continue;
+		const effective = placement(item.path, flow);
+		if (previous && semanticDescriptor(previous) !== semanticDescriptor(item.record)) fail$7(`site flow contribution ${id} may change placement only; use a new id for changed behavior`);
+		selected.set(id, {
+			...item.record,
+			id,
+			flow,
+			effectiveIndex: effective.index,
+			effectivePhase: phaseFor(flow, effective.index),
+			selectedPath: item.path,
+			selectedLayer: "site",
+			...previous ? { shadowedPath: previous.selectedPath } : {}
+		});
+	}
+	return [...selected.values()].sort((left, right) => basename(left.selectedPath).localeCompare(basename(right.selectedPath)));
+}
+function printRows(rows) {
+	for (const row of rows) console.log(row.map((cell) => cell || "-").join("	"));
+}
+function cell(value) {
+	if (value === void 0 || value === null) return "";
+	if (typeof value === "string") return value;
+	if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
+	return JSON.stringify(value);
+}
+async function runCatalog(options) {
+	const catalog = parseCatalog(JSON.parse(await readFile(options.catalogPath, "utf8")));
+	const [command, argument, ...extra] = options.positionals;
+	if (extra.length > 0) fail$7(USAGE$1);
+	if (!command) {
+		const summary = {
+			deployment: catalog.deployment,
+			authority: catalog.execution.authority,
+			contributors: catalog.contributors.length,
+			actions: catalog.actions.length,
+			commands: catalog.commands.length,
+			resources: catalog.resources.length,
+			flows: Object.keys(catalog.flows)
+		};
+		if (options.json) console.log(JSON.stringify(summary));
+		else printRows(Object.entries(summary).map(([key, value]) => [key, typeof value === "object" ? JSON.stringify(value) : String(value)]));
+		return 0;
+	}
+	if (command === "flow") {
+		if (!argument) fail$7("catalog flow requires a flow name");
+		const entries = await loadFlow(options.catalogPath, argument);
+		if (options.json) console.log(JSON.stringify(entries));
+		else printRows(entries.map((entry) => [
+			String(entry.effectiveIndex).padStart(2, "0"),
+			entry.effectivePhase,
+			entry.id,
+			cell(object$1(entry.invoke, `flow invocation ${entry.id}`).action),
+			entry.selectedLayer,
+			strings(entry.contributors).join(",")
+		]));
+		return 0;
+	}
+	if (argument) fail$7(`${command} does not accept an argument`);
+	if (command === "flows") {
+		const rows = await Promise.all(Object.keys(catalog.flows).map(async (name) => [name, String((await loadFlow(options.catalogPath, name)).length)]));
+		if (options.json) console.log(JSON.stringify(Object.fromEntries(rows)));
+		else printRows(rows);
+		return 0;
+	}
+	const values = {
+		contributors: catalog.contributors,
+		actions: catalog.actions,
+		commands: catalog.commands,
+		resources: catalog.resources
+	}[command];
+	if (!values) fail$7(USAGE$1);
+	if (options.json) console.log(JSON.stringify(values));
+	else printRows(values.map((value) => [
+		cell(value.id ?? value.name),
+		cell(value.action ?? value.contract ?? value.kind),
+		strings(value.contributors).join(",")
+	]));
+	return 0;
+}
+async function main$3(argv, deploymentDir) {
+	return runCatalog(parseOptions(argv, deploymentDir));
 }
 //#endregion
 //#region files/links/cli.ts
@@ -3059,7 +3358,7 @@ async function main$1(argv, deploymentDir) {
 /** Minimal multicall entry for Compfuzor's domain-grouped JavaScript runtimes. */
 const RUNTIME_NAME = "compfuzor-runtime.mjs";
 const RUNTIME_SOURCE_NAME = "compfuzor-runtime.ts";
-const USAGE = `Usage: compfuzor-runtime.mjs <config|config-remote|links|zim> ...
+const USAGE = `Usage: compfuzor-runtime.mjs <catalog|config|config-remote|links|zim> ...
 
 Ordinary deployments invoke this multicall runtime through stable domain
 aliases such as config/command.mjs, config-remote.mjs, links.mjs, and
@@ -3069,6 +3368,7 @@ function fail(message) {
 }
 function classifyCandidate(path) {
 	const name = basename(path);
+	if (name === "compfuzor-catalog.sh") return "catalog";
 	if (name === "config-remote.mjs") return "config-remote";
 	if (name === "links.mjs") return "links";
 	if (name === "command.mjs" && basename(dirname(path)) === "config") return "config";
@@ -3107,7 +3407,7 @@ async function selectedDomain(argvPath, argv) {
 	}
 	if (basename(argvPath) !== RUNTIME_NAME && basename(argvPath) !== RUNTIME_SOURCE_NAME) fail(`unknown Compfuzor runtime alias: ${basename(argvPath)}\n${USAGE}`);
 	const [domain, ...domainArgv] = argv;
-	if (domain !== "config" && domain !== "config-remote" && domain !== "links" && domain !== "zim") fail(USAGE);
+	if (domain !== "catalog" && domain !== "config" && domain !== "config-remote" && domain !== "links" && domain !== "zim") fail(USAGE);
 	return {
 		domain,
 		argv: domainArgv,
@@ -3116,10 +3416,11 @@ async function selectedDomain(argvPath, argv) {
 }
 async function runDomain(domain, argv, invokedAs, deploymentDir) {
 	try {
-		if (domain === "config") return await main$4(argv, deploymentDir, invokedAs);
+		if (domain === "catalog") return await main$3(argv, deploymentDir);
+		if (domain === "config") return await main$5(argv, deploymentDir, invokedAs);
 		if (domain === "links") return await main$2(argv, deploymentDir);
 		if (domain === "zim") return await main$1(argv, deploymentDir);
-		await main$3(argv, deploymentDir);
+		await main$4(argv, deploymentDir);
 		return 0;
 	} catch (error) {
 		if (domain === "config-remote") {
