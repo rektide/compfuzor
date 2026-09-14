@@ -74,7 +74,7 @@ def test_catalog_and_site_placement() -> None:
         source = compiled / "95-install-links.json"
         write_json(source, invocation)
         write_json(
-            compiled / "50-build-tool.json",
+            compiled / "50-build-001-build-rust-sh.json",
             {
                 **invocation,
                 "id": "build.tool",

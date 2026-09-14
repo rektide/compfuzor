@@ -1985,7 +1985,7 @@ function parseOptions(argv, deploymentDir) {
 	};
 }
 function placement(path, expectedFlow) {
-	const match = /^(\d{2})-([a-z0-9-]+)-.+\.json$/.exec(basename(path));
+	const match = /^(\d{2})-(build|install|status)-.+\.json$/.exec(basename(path));
 	if (!match) fail$7(`invalid indexed flow filename: ${path}`);
 	const index = Number(match[1]);
 	if (index < 1 || index > 99) fail$7(`flow index must be 01-99: ${path}`);
