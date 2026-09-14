@@ -86,9 +86,15 @@ export async function runConfigCommand(options: ConfigCliOptions): Promise<numbe
   });
   const context = getConfigContext(spec, contextName);
   rejectIrrelevantFlags(options, action);
-  if (context.canonical && !["assemble", "status"].includes(action)) {
+  const canonicalInputAction = action === "inputs" ? options.args[0] : undefined;
+  const canonicalAllowed =
+    action === "assemble" ||
+    action === "status" ||
+    (action === "inputs" &&
+      ["list", "status", "enable", "disable"].includes(canonicalInputAction ?? ""));
+  if (context.canonical && !canonicalAllowed) {
     fail(
-      `config ${action} is not meaningful for canonical source=destination context; use assemble or status`,
+      `config ${action} is not meaningful for canonical source=destination context; use assemble, status, or explicit input list/status/enable/disable`,
     );
   }
 

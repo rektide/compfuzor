@@ -96,16 +96,31 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled"):
 
     if configs:
         bins.extend([
-            {"name": "config.sh", "src": "../config-run.sh", "basedir": False, "run": True, "requires_fs": True},
-            {"name": "config-toggle.sh", "src": "../config-toggle.sh", "basedir": False},
-            {"name": "config-processor.sh", "src": "../config-processor.sh", "basedir": False},
+            {
+                "name": "config/run.sh",
+                "src": "../config-run.sh",
+                "raw": True,
+                "compose": False,
+                "bypass": False,
+                "basedir": False,
+                "run": True,
+                "requires_fs": True,
+            },
+            {
+                "name": "config/processor.sh",
+                "src": "../config-processor.sh",
+                "compose": False,
+                "bypass": False,
+                "basedir": False,
+            },
         ])
         for processor in sorted(_PROCESSORS):
             bins.append({
-                "name": "processors/{}".format(processor),
+                "name": "config/processors/{}".format(processor),
                 "basedir": False,
                 "helpers": ["env"],
-                "content": 'exec "$DIR/bin/config-processor.sh" {} "$@"'.format(processor),
+                "bypass": False,
+                "content": 'exec "$DIR/bin/config/processor.sh" {} "$@"'.format(processor),
             })
 
     output_owners = {}
@@ -207,12 +222,6 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled"):
                 if owner is not None:
                     _error("mutable glob name {!r} is shared by {} and {}".format(target_name, owner, name))
                 mutable_inputs[target_name] = name
-                for action in ("disable", "enable"):
-                    bins.append({
-                        "name": "{}-{}.sh".format(action, target_name),
-                        "basedir": False,
-                        "content": 'exec "$DIR/bin/config-toggle.sh" {} {} {} "$@"'.format(action, name, target_name),
-                    })
             if item["remote"]:
                 if target_name in remotes:
                     _error("remote target {!r} is declared more than once".format(target_name))
@@ -236,17 +245,18 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled"):
         if output_dir and output_dir not in dirs:
             dirs.append(output_dir)
         leaf = "internal/config/{}".format(name)
-        bins.append({"name": leaf, "dest": leaf, "link": "processors/{}".format(processor)})
-        bins.append({"name": "config-{}.sh".format(name), "basedir": False, "content": 'exec "$DIR/bin/config.sh" {} "$@"'.format(name)})
-        status = "status-config-{}.sh".format(name)
-        bins.append({"name": status, "basedir": False, "content": 'exec "$DIR/bin/config-{}.sh" --check "$@"'.format(name)})
-        statuses.append(status)
+        bins.append({
+            "name": leaf,
+            "dest": leaf,
+            "link": "config/processors/{}".format(processor),
+            "bypass": False,
+        })
 
     if remotes:
         bins.append(runtime_alias_bin("config-remote.mjs"))
 
     if configs and bins_dir is not None:
-        for path in ("processors", "internal/config"):
+        for path in ("config", "config/processors", "internal/config"):
             directory = _path(bins_dir, path, "config bin directory")
             if directory not in dirs:
                 dirs.append(directory)

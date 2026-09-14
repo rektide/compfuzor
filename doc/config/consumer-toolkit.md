@@ -152,9 +152,11 @@ config-status.sh --context canonical
 ```
 
 Canonical source and destination are intentionally identical. Input sync,
-publication, local input mutation, and ordinary install reject `canonical`
-rather than pretending those relationships are meaningful. Canonical assembly
-still runs during playbook generation before consumer installation.
+publication, input put/remove, and ordinary install reject `canonical` rather
+than pretending those relationships are meaningful. Input list/status and the
+explicit enable/disable administration of mutable canonical fragments remain
+available. Canonical assembly still runs during playbook generation before
+consumer installation.
 
 ## Actions and recipe selection
 

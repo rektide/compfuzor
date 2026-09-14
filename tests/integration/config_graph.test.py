@@ -117,8 +117,9 @@ output.write_text(text)
         assert set(plan["spec"]["configs"]) == {"app", "shell", "policy"}
         assert plan["spec"]["configs"]["shell"]["inputs"][0]["glob"].endswith("shell.conf.d/*.conf")
         assert plan["spec"]["remotes"]["shell.conf.d"]["config"] == "shell"
-        assert "disable-mcp.sh" in plan["bins"]
-        assert "disable-shell.conf.d.sh" in plan["bins"]
+        assert "disable-mcp.sh" not in plan["bins"]
+        assert "disable-shell.conf.d.sh" not in plan["bins"]
+        assert "config-inputs.sh" in plan["bins"]
         assert "config-remote.mjs" in plan["bins"]
         assert len([name for name in plan["bins"] if name.startswith("config-remote")]) == 1
 
@@ -144,7 +145,18 @@ output.write_text(text)
         assert "shell/shell.conf.d/0/10-first.conf" in shell
         assert "shell/shell.conf.d/0/20-second.conf" in shell
 
-        run([str(payload / "bin" / "disable-mcp.sh"), "10-server"], cwd=payload, env=runtime_env)
+        run(
+            [
+                str(payload / "bin" / "config-inputs.sh"),
+                "--context",
+                "canonical",
+                "disable",
+                "app/mcp",
+                "10-server.json",
+            ],
+            cwd=payload,
+            env=runtime_env,
+        )
         assert (payload / "etc" / "mcp" / "10-server.json.disabled").exists()
         assert json.loads((payload / "etc" / "app.json").read_text()) == {"base": True, "core": True}
 

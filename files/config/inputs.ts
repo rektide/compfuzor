@@ -163,7 +163,9 @@ async function inputMutation(options: InputOperationOptions, action: "enable" | 
   const [selector, name] = args
   if (!selector) fail(`usage: config-inputs.sh ${action} INPUT [NAME]`)
   const selected = selectInput(options.spec, options.contextName, selector)
-  await assertInputBindingSeparated(selected)
+  if (!getConfigContext(options.spec, options.contextName).canonical || action === "remove") {
+    await assertInputBindingSeparated(selected)
+  }
   if (typeof selected.source.file === "string") {
     if (action !== "remove") fail(`${selector} is a direct file input and cannot be ${action}d`)
     if (args.length !== 1) fail(`usage: config-inputs.sh remove DIRECT_INPUT`)
