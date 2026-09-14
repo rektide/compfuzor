@@ -148,3 +148,21 @@ No implementation files were changed for this review.
 - [`execution-model0.gpt6.md`](/design/config-anneal/execution-model0.gpt6.md)
   requires generated one-invocation files and runtime validation to form one
   interoperable catalog, which the remaining filename mismatch prevents.
+
+# Addendum: compiler filename compatibility confirmed
+
+Commit `3707e0076ca91299253df59fb1328e30ed195abf` closes the residual
+high-severity finding. Runtime placement now recognizes the explicit
+`build|install|status` segment in compiler-shaped filenames
+([`runtime.ts`](/files/catalog/runtime.ts#L145-L152)), and the runtime fixture
+uses `50-build-001-build-rust-sh.json`.
+
+The built runtime successfully inspected the previously materialized full-include
+catalog containing `50-build-001-build-rust-sh.json` and three compiler-generated
+install files, returning `{"build":"1","install":"3","status":"0"}` and the
+expected entries. `pnpm check`, a byte-identical `pnpm build`, the Python catalog
+compiler test, runtime catalog integration, and full LINKS catalog/materialization
+integration all passed.
+
+**Final disposition:** the filename interoperability blocker is closed. No
+remaining blocker was found for the read-only attributed runtime catalog slice.
