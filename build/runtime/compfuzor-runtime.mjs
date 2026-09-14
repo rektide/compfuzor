@@ -1150,7 +1150,7 @@ async function inputMutation(options, action, args) {
 	const [selector, name] = args;
 	if (!selector) fail$10(`usage: config-inputs.sh ${action} INPUT [NAME]`);
 	const selected = selectInput(options.spec, options.contextName, selector);
-	await assertInputBindingSeparated(selected);
+	if (!getConfigContext(options.spec, options.contextName).canonical || action === "remove") await assertInputBindingSeparated(selected);
 	if (typeof selected.source.file === "string") {
 		if (action !== "remove") fail$10(`${selector} is a direct file input and cannot be ${action}d`);
 		if (args.length !== 1) fail$10(`usage: config-inputs.sh remove DIRECT_INPUT`);
@@ -1616,7 +1616,14 @@ async function runConfigCommand(options) {
 	});
 	const context = getConfigContext(spec, contextName);
 	rejectIrrelevantFlags(options, action);
-	if (context.canonical && !["assemble", "status"].includes(action)) fail$8(`config ${action} is not meaningful for canonical source=destination context; use assemble or status`);
+	const canonicalInputAction = action === "inputs" ? options.args[0] : void 0;
+	const canonicalAllowed = action === "assemble" || action === "status" || action === "inputs" && [
+		"list",
+		"status",
+		"enable",
+		"disable"
+	].includes(canonicalInputAction ?? "");
+	if (context.canonical && !canonicalAllowed) fail$8(`config ${action} is not meaningful for canonical source=destination context; use assemble, status, or explicit input list/status/enable/disable`);
 	if (action === "assemble") {
 		if (options.check && options.stdout) fail$8("--check and --stdout are mutually exclusive");
 		if (options.list) {
@@ -1922,8 +1929,10 @@ function object$1(value, label) {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) fail$7(`${label} must be an object`);
 	return value;
 }
-function strings(value) {
-	return Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
+function strings(value, label = "value") {
+	if (value === void 0) return [];
+	if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) fail$7(`${label} must be an array of strings`);
+	return value;
 }
 function phaseFor(flow, index) {
 	return (FLOW_PHASES[flow]?.find((candidate) => index >= candidate.from && index <= candidate.to))?.name ?? "unknown";
@@ -1942,7 +1951,7 @@ function parseCatalog(value) {
 		flows: Object.fromEntries(Object.entries(flows).map(([name, item]) => {
 			return [name, {
 				name,
-				entries: strings(object$1(item, `flow ${name}`).entries)
+				entries: strings(object$1(item, `flow ${name}`).entries, `flow ${name} entries`)
 			}];
 		})),
 		execution: object$1(record.execution, "runtime catalog execution")
@@ -2020,15 +2029,29 @@ async function readLayer(directory, layer) {
 		};
 	}));
 }
-async function loadFlow(catalogPath, flow) {
+async function loadFlow(catalogPath, flow, suppliedCatalog) {
 	if (!(flow in FLOW_PHASES)) fail$7(`unknown flow: ${flow}`);
+	const catalog = suppliedCatalog ?? parseCatalog(JSON.parse(await readFile(catalogPath, "utf8")));
+	const declaredById = /* @__PURE__ */ new Map();
+	for (const [declaredFlow, descriptor] of Object.entries(catalog.flows)) for (const id of descriptor.entries) {
+		const previous = declaredById.get(id);
+		if (previous) fail$7(`flow contribution id ${id} is declared by both ${previous} and ${declaredFlow}`);
+		declaredById.set(id, declaredFlow);
+	}
+	const declaredDescriptor = catalog.flows[flow];
+	if (!declaredDescriptor) fail$7(`catalog does not declare flow: ${flow}`);
+	const declared = new Set(declaredDescriptor.entries);
 	const root = join(dirname(catalogPath), "workflows");
 	const [compiled, site] = await Promise.all([readLayer(join(root, "compiled"), "compiled"), readLayer(join(root, "site"), "site")]);
 	const selected = /* @__PURE__ */ new Map();
 	for (const item of compiled) {
-		if (item.record.flow !== flow) continue;
 		const id = item.record.id;
 		if (typeof id !== "string" || !id) fail$7(`flow descriptor ${item.path} requires an id`);
+		if (!declared.has(id)) continue;
+		if (item.record.version !== 1) fail$7(`flow descriptor ${item.path} has unsupported version ${String(item.record.version)}`);
+		if (item.record.flow !== flow) fail$7(`flow descriptor ${item.path} is indexed under ${flow} but declares ${String(item.record.flow)}`);
+		object$1(item.record.invoke, `flow descriptor ${item.path} invocation`);
+		strings(item.record.contributors, `flow descriptor ${item.path} contributors`);
 		if (selected.has(id)) fail$7(`duplicate compiled flow contribution id ${id}`);
 		const effective = placement(item.path, flow);
 		selected.set(id, {
@@ -2041,12 +2064,16 @@ async function loadFlow(catalogPath, flow) {
 			selectedLayer: "compiled"
 		});
 	}
+	for (const id of declared) if (!selected.has(id)) fail$7(`catalog flow ${flow} references missing compiled contribution ${id}`);
 	const siteIds = /* @__PURE__ */ new Set();
 	for (const item of site) {
 		const id = item.record.id;
 		if (typeof id !== "string" || !id) fail$7(`site flow descriptor ${item.path} requires an id`);
 		if (siteIds.has(id)) fail$7(`duplicate site flow contribution id ${id}`);
 		siteIds.add(id);
+		const declaredFlow = declaredById.get(id);
+		if (!declaredFlow) fail$7(`site flow descriptor ${item.path} names undeclared contribution ${id}`);
+		if (declaredFlow !== flow) continue;
 		const previous = selected.get(id);
 		if (item.record.state === "absent") {
 			if (!previous) fail$7(`site tombstone ${item.path} names unknown compiled contribution ${id}`);
@@ -2054,7 +2081,10 @@ async function loadFlow(catalogPath, flow) {
 			selected.delete(id);
 			continue;
 		}
-		if (item.record.flow !== flow) continue;
+		if (item.record.version !== 1) fail$7(`site flow descriptor ${item.path} has unsupported version ${String(item.record.version)}`);
+		if (item.record.flow !== flow) fail$7(`site flow descriptor ${item.path} is indexed under ${flow} but declares ${String(item.record.flow)}`);
+		object$1(item.record.invoke, `site flow descriptor ${item.path} invocation`);
+		strings(item.record.contributors, `site flow descriptor ${item.path} contributors`);
 		const effective = placement(item.path, flow);
 		if (previous && semanticDescriptor(previous) !== semanticDescriptor(item.record)) fail$7(`site flow contribution ${id} may change placement only; use a new id for changed behavior`);
 		selected.set(id, {
@@ -2099,7 +2129,7 @@ async function runCatalog(options) {
 	}
 	if (command === "flow") {
 		if (!argument) fail$7("catalog flow requires a flow name");
-		const entries = await loadFlow(options.catalogPath, argument);
+		const entries = await loadFlow(options.catalogPath, argument, catalog);
 		if (options.json) console.log(JSON.stringify(entries));
 		else printRows(entries.map((entry) => [
 			String(entry.effectiveIndex).padStart(2, "0"),
@@ -2107,13 +2137,13 @@ async function runCatalog(options) {
 			entry.id,
 			cell(object$1(entry.invoke, `flow invocation ${entry.id}`).action),
 			entry.selectedLayer,
-			strings(entry.contributors).join(",")
+			strings(entry.contributors, `flow invocation ${entry.id} contributors`).join(",")
 		]));
 		return 0;
 	}
 	if (argument) fail$7(`${command} does not accept an argument`);
 	if (command === "flows") {
-		const rows = await Promise.all(Object.keys(catalog.flows).map(async (name) => [name, String((await loadFlow(options.catalogPath, name)).length)]));
+		const rows = await Promise.all(Object.keys(catalog.flows).map(async (name) => [name, String((await loadFlow(options.catalogPath, name, catalog)).length)]));
 		if (options.json) console.log(JSON.stringify(Object.fromEntries(rows)));
 		else printRows(rows);
 		return 0;
@@ -2129,7 +2159,7 @@ async function runCatalog(options) {
 	else printRows(values.map((value) => [
 		cell(value.id ?? value.name),
 		cell(value.action ?? value.contract ?? value.kind),
-		strings(value.contributors).join(",")
+		strings(value.contributors, "catalog contributors").join(",")
 	]));
 	return 0;
 }
