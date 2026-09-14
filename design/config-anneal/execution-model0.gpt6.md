@@ -130,9 +130,14 @@ Add attribution that distinguishes:
 
 | Relationship | Example | Meaning |
 |---|---|---|
-| `requested_by` | `playbook:jujutsu-main` | The deployment/playbook that activated the behavior. |
+| `requested_by` | `deployment:jujutsu-git` | The resolved `NAME` of the deployment that activated the behavior. |
 | `contributed_by` | `subsystem:rust` | The subsystem that produced the record. |
 | `synthesized_by` | `gen_rust`, `compile.synthesis` | The stage that derived or merged the final artifact. |
+
+The deployment `NAME` is authoritative identity. The invoked playbook path is
+source provenance: useful, but independently exact, ambiguous, legacy-derived,
+or unknown. This keeps attribution useful when one playbook creates multiple
+instances or when Ansible was invoked with several playbook paths.
 
 Example envelope:
 
@@ -141,9 +146,12 @@ SUBSYSTEM:
   rust:
     attribution:
       requested_by:
-        id: playbook:jujutsu-main
-        playbook: jujutsu.src.pb
-        deployment: jujutsu-main
+        id: deployment:jujutsu-git
+        deployment: jujutsu-git
+        source:
+          playbook: jujutsu.src.pb
+          resolution: ansible-cliargs
+          confidence: exact
       contributed_by:
         id: subsystem:rust
         domain: rust
@@ -164,7 +172,7 @@ in contributor envelopes:
 ```yaml
 name: install-rust.sh
 contributors:
-  - playbook:jujutsu-main
+  - deployment:jujutsu-git
   - subsystem:rust
 ```
 
@@ -562,8 +570,10 @@ that protocol.
 
 The first slice is deliberately observational:
 
-1. determine a reliable playbook/deployment identity from Ansible and add
-   playbook/contributor/stage attribution to subsystem envelopes;
+1. use deployment `NAME` as authoritative requested-by identity; resolve the
+   playbook source from an explicit override or Ansible CLI arguments, retaining
+   ambiguous candidates rather than guessing, and add
+   deployment/contributor/stage attribution to subsystem envelopes;
 2. preserve contributor IDs in BINS and status synthesis, then add safe
    projections for further artifact families incrementally;
 3. define flow phase charts and normalize contract defaults plus authored
@@ -580,8 +590,10 @@ live deployment belongs in this checkpoint.
 
 ## Open questions
 
-1. Verify the best Ansible source for the invoked playbook filename; do not rely
-   on `/proc/self/cmdline` if a trustworthy magic variable is available.
+1. Harden and test playbook source resolution. Ansible 2.21 exposes the play
+   name and directory but no filename magic variable; a controller lookup can
+   use an explicit override, then `ansible.context.CLIARGS.args`, retaining the
+   existing `/proc/self/cmdline` parse only as a marked legacy fallback.
 2. Finalize the exact `01–99` phase ranges after cataloguing representative
    deployments.
 3. Decide how much legacy BINS/STATUSES inference appears in catalog comparison
