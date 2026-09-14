@@ -102,6 +102,23 @@ def test_runtime_catalog_compiles_attributed_legacy_flows():
         "catalogOnly": False,
     }
 
+    rooted = compile_runtime_catalog(
+        {"id": "deployment:rooted", "name": "rooted"},
+        [
+            {"name": "install-child.sh"},
+            {
+                "name": "install-user.sh",
+                "generated_by": "gen_bins",
+                "generated": "echo root",
+                "run_all": ["install-child.sh"],
+            },
+        ],
+        [],
+    )
+    assert len(rooted["files"]) == 1
+    assert rooted["files"][0]["invocation"]["invoke"]["handler"]["path"] == "bin/install-user.sh"
+    assert rooted["files"][0]["invocation"]["source"]["kind"] == "legacy-root-bin"
+
 
 if __name__ == "__main__":
     test_runtime_catalog_compiles_attributed_legacy_flows()

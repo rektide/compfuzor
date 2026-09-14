@@ -26,6 +26,7 @@ _PHASE_NAME = {
     "install": {"packages": "prerequisites", "identity": "identity", "main": "materialize", "units": "activate", "records": "record"},
     "status": {"main": "inspect"},
 }
+_BODY_FIELDS = ("early", "generated", "content", "exec", "execs", "late")
 
 
 def _error(message):
@@ -259,6 +260,13 @@ def compile_runtime_catalog(
         if not match or record.get("generated_by") != "gen_bins" or name in generated_children:
             continue
         flow, scope = match.groups()
+        if any(record.get(field) not in (None, False, "", []) for field in _BODY_FIELDS):
+            filename, invocation = _invocation_file(flow, scope, name, 1, bins_by_name)
+            invocation["id"] = "legacy:{}:{}:{}".format(flow, scope or "system", name)
+            invocation["source"] = {"kind": "legacy-root-bin", "name": name}
+            files.append({"name": filename, "invocation": invocation})
+            flows[flow].append(invocation["id"])
+            continue
         for sequence, child in enumerate(record.get("run_all", []), start=1):
             filename, invocation = _invocation_file(flow, scope, child, sequence, bins_by_name)
             files.append({"name": filename, "invocation": invocation})
