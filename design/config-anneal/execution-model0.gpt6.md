@@ -180,6 +180,34 @@ This generalizes the existing BINS-only `origin_subsystems` mechanism. Scalar
 artifact families such as `PKGS` may use a catalog-side reverse index rather
 than replacing every scalar with an envelope.
 
+The common compiled field is `contributors`, an ordered, stably deduplicated
+list. It is compiler-owned provenance metadata accepted across artifact
+families. Domain-specific structural origin remains separate: for example, a
+LINKS record's existing `origin: {type, family, index, ...}` says which source
+location produced it, while `contributors` says which deployment and subsystem
+contributed it.
+
+### First exact artifact families
+
+Exact tracing begins with BINS, STATUSES, and LINKS because together they cover
+action composition, observation composition, and the first ordinary global-bin
+tracer.
+
+| Family | Existing identity | Initial attribution behavior |
+|---|---|---|
+| BINS | `name` | Preserve `origin_subsystems` for compatibility, add `contributors`, and configure `bins_generated` to union both. |
+| STATUSES | command string or mapping `name` | Native records require a stable `id`; legacy strings receive a visibly derived `legacy:<name>` ID. Normalize to mappings and union contributors by ID. |
+| LINKS | existing record `id` | Preserve contributors through strict normalization; union contributors and structural origins only when relationship records are otherwise compatible. |
+
+For status, command name and observation identity are distinct. Two observations
+may invoke the same executable with different fixed arguments and therefore need
+different IDs. Status synthesis should become a keyed merge by observation ID
+rather than relying only on whole-value `append_unique`.
+
+Contributor metadata is excluded from LINKS relationship conflict comparison.
+Attribution may explain compatible duplicate claims; it must never make
+incompatible source/destination/policy records mergeable.
+
 ### Safe direct projection
 
 “Direct dump” means preserving existing shapes where safe, not serializing all
@@ -199,6 +227,16 @@ objects:
 
 Unattributed legacy records remain visible and are labeled honestly rather than
 assigned guessed provenance.
+
+Playbook source and artifact lineage carry independent confidence:
+
+| Axis | Values |
+|---|---|
+| source identity | `exact`, `ambiguous`, `legacy`, `unknown` |
+| artifact lineage | `exact`, `source`, `unknown` |
+
+An exact deployment `NAME` does not imply that a merged artifact's field-level
+lineage is exact.
 
 ## General plural composition
 
@@ -574,8 +612,8 @@ The first slice is deliberately observational:
    playbook source from an explicit override or Ansible CLI arguments, retaining
    ambiguous candidates rather than guessing, and add
    deployment/contributor/stage attribution to subsystem envelopes;
-2. preserve contributor IDs in BINS and status synthesis, then add safe
-   projections for further artifact families incrementally;
+2. preserve exact contributor IDs in BINS, status, and LINKS synthesis, then add
+   safe projections for further artifact families incrementally;
 3. define flow phase charts and normalize contract defaults plus authored
    composition into explicit compiled declarations;
 4. emit one invocation per `NN-FLOW-SLUG.json` under the compiled layer;
@@ -590,10 +628,13 @@ live deployment belongs in this checkpoint.
 
 ## Open questions
 
-1. Harden and test playbook source resolution. Ansible 2.21 exposes the play
-   name and directory but no filename magic variable; a controller lookup can
-   use an explicit override, then `ansible.context.CLIARGS.args`, retaining the
-   existing `/proc/self/cmdline` parse only as a marked legacy fallback.
+1. Harden and test playbook source resolution. A local Ansible 2.21 probe
+   confirmed that `ansible_play_name` is the authored play label,
+   `playbook_dir` omits the filename, and `ansible.context.CLIARGS.args` carries
+   invoked playbook paths. A controller lookup can use an explicit override,
+   then an exact single CLI candidate, retaining multiple candidates as
+   ambiguous and the existing `/proc/self/cmdline` parse only as a marked legacy
+   fallback.
 2. Finalize the exact `01–99` phase ranges after cataloguing representative
    deployments.
 3. Decide how much legacy BINS/STATUSES inference appears in catalog comparison
