@@ -1,5 +1,41 @@
 # Configuration deployment log
 
+## 2026-09-14
+
+### Attributed read-only flow catalog
+
+Repository generation now resolves authoritative deployment identity from
+`NAME`, records exact or ambiguous playbook-source evidence, and preserves a
+common `contributors[]` reference through BINS, status, and LINKS synthesis.
+Native status records have stable IDs; legacy status shorthand receives a
+visible `legacy:` identity. Generated compositors retain the contributor union
+of their leaves, and compatible duplicate LINKS records union attribution
+without weakening relationship conflict checks.
+
+Every deployment compiles safe contributor/action/resource inventory and one
+`01-99` indexed file per observed build/install/status invocation under
+`etc/compfuzor-runtime`. Existing shell compositors remain authoritative; the
+catalog is explicitly read-only. Deployments already carrying the omnibus
+runtime expose `compfuzor-catalog.sh`; other deployments emit data without
+gaining a Node dependency. Compiled membership is closed against stale files,
+while the site layer supports placement-only shadowing and tombstones.
+
+Independent review found and drove correction of catalog materialization,
+closed-set selection, cross-flow tombstones, strict array/argument decoding,
+filesystem layout override preservation, artifact-derived LINKS attribution,
+compositor contributor propagation, and status-ID validation. Focused CONFIG,
+Zim, LINKS, systemd, status, tool-version, compiler, catalog, build, lint, and
+type checks passed after correction.
+
+CONFIG compilation now also emits its final internal command model directly.
+The old emit-then-`_internalize_config_bins()` translation, per-recipe wrappers,
+and toggle wrappers are gone. Fixed `config-inputs.sh` preserves explicit
+canonical enable/disable administration without restoring wrapper generation.
+
+The Vite+ artifact remains one executable and is now 133.96 kB (31.61 kB gzip)
+with catalog inspection included. This entry records repository generation and
+tests only; no live `/opt` deployment was rerendered or pruned.
+
 ## 2026-09-13
 
 ### Omnibus runtime build boundary

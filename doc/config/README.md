@@ -10,6 +10,9 @@ configuration for a selected consumer context.
   commands, contexts, copy/link choices, Zim workflow, and status semantics.
 - [Simplification plan](/doc/config/simplification.md) — candid account of the
   remaining accidental complexity and the deletion-oriented route out.
+- [Attributed runtime flows](/design/config-anneal/execution-model0.gpt6.md) —
+  current annealing checkpoint for contributors, composition, catalog order,
+  and cross-plane execution policy.
 - [Deployment log](/doc/config/log.md) — exact live render, activation, status,
   Vite+ packaging, and retained migration residue.
 
@@ -21,6 +24,7 @@ playbook declarations
     |  Python filter plugins (Ansible controller only)
     v
 config.spec.json / zim.spec.json / links.json
+runtime catalog + 01-99 indexed flow inventory
     |
     |  built JavaScript runtime (Vite+)
     v
@@ -60,6 +64,11 @@ dispatcher. CONFIG still chooses the action from `$0`, resolves a context, and
 calls a focused internal operation.
 The context defaults to `user`; a playbook may change `CONTEXT_DEFAULT` or a
 domain-specific default. Copy/link/assembly remain runtime options.
+
+Where the omnibus runtime is present, `compfuzor-catalog.sh` provides read-only
+inventory of attributed contributors, actions, commands, resource references,
+and build/install/status flow order. Existing generated shell compositors remain
+authoritative for execution while native composition is annealed.
 
 Zim adds one complete domain command, `install-zim.sh`, because installing Zim
 also means installing two loader blocks, building two caches, and maintaining a

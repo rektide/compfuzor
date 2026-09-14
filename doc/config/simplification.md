@@ -116,6 +116,13 @@ block-in-file rather than rebuilding substitution in Compfuzor.
 
 ## 2. Stop emitting an old command model and rewriting it
 
+**Completed in the repository on 2026-09-14.** `config_compile.py` now emits
+the final internal runner, processor, processor leaves, and recipe links
+directly. `config_context_compile.py` no longer contains
+`_internalize_config_bins()` or string/path rewrite knowledge. Legacy
+per-recipe and toggle wrappers are not emitted; canonical enable/disable remains
+available through the fixed `config-inputs.sh --context canonical` interface.
+
 ### What is wrong now
 
 [`config_compile.py`](/library/filter_plugins/config_compile.py) still emits the
@@ -241,11 +248,14 @@ The automatic no-prune policy remains unchanged.
 
 ## Recommended order
 
-1. Replace custom Zim token substitution with block-in-file envsubst.
-2. Make config compilation emit the final runtime directly.
-3. Improve concise inventory/status help using the now-smaller internals.
-4. Package remaining TypeScript domains through Vite+ one at a time.
-5. Reassess spec duplication only after those deletions.
+1. Validate a shared managed-block provider before replacing Zim projection.
+2. Use the attributed read-only runtime catalog to inspect current actions and
+   flow order; legacy shell compositors remain execution authority.
+3. Introduce native plural `composition` declarations through ordinary tracer
+   cases, beginning with global-bin LINKS.
+4. Migrate remaining TypeScript domains into the one Vite+ runtime one domain
+   at a time.
+5. Reassess spec duplication only after those deletions and tracers.
 
 The test for every step is the deletion test: if removing the layer merely moves
 the same complexity elsewhere, stop. If it eliminates a language, translation,

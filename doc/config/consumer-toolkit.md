@@ -70,6 +70,34 @@ kernel status reporters (`status-modules.ts`, `status-cmdline.ts`, and
 the MCP drop-in adapter pair. They have separate domain behavior and are not
 imports or dependencies of the CONFIG/Zim/LINKS bundles.
 
+### Read-only runtime catalog
+
+Every rendered deployment receives attributed catalog data under
+`etc/compfuzor-runtime/`. Deployments that already carry the omnibus runtime
+also receive `compfuzor-catalog.sh`; ordinary deployments are not forced to add
+a Node runtime merely for catalog emission.
+
+```text
+etc/compfuzor-runtime/catalog.json
+etc/compfuzor-runtime/workflows/compiled/NN-FLOW-SLUG.json
+etc/compfuzor-runtime/workflows/site/
+```
+
+The initial catalog projects existing BINS and STATUSES behavior for inspection
+only. It records `execution.authority: legacy-shell` and never invokes a
+catalogued handler. The compiled catalog is a closed membership index, so stale
+unpruned files are not treated as current declarations. A site file may move a
+declared contribution lexically or tombstone it; changed behavior requires a
+future explicitly attributed native contribution.
+
+```bash
+compfuzor-catalog.sh contributors
+compfuzor-catalog.sh actions
+compfuzor-catalog.sh flows
+compfuzor-catalog.sh flow install
+compfuzor-runtime.mjs catalog --deployment /opt/example flow status
+```
+
 ## Defaults and composition
 
 The Compfuzor-wide default is declared in [`vars/common.yaml`](/vars/common.yaml):
