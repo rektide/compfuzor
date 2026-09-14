@@ -61,6 +61,13 @@ def test_link_generation() -> None:
     - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_bins.tasks')!r}
     - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_attribution.tasks')!r}
     - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_runtime_catalog.tasks')!r}
+    - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'compile_artifacts.tasks')!r}
+    - ansible.builtin.file:
+        path: {str(payload)!r}
+        state: directory
+    - ansible.builtin.import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'fs_hierarchy.tasks')!r}
+      vars:
+        include: etc
     - ansible.builtin.file:
         path: {str(payload)!r}
         state: directory
@@ -104,6 +111,10 @@ def test_link_generation() -> None:
             "catalogOnly": True,
         }
         assert generated["catalog"]["files"]
+        assert (temporary / "etc" / "link-test" / "compfuzor-runtime" / "catalog.json").is_file()
+        assert any(
+            (temporary / "etc" / "link-test" / "compfuzor-runtime" / "workflows" / "compiled").glob("*.json")
+        )
         plan = generated["plan"]
         assert plan["version"] == 2
         assert (payload / "links.json").is_file()

@@ -49,7 +49,7 @@ def test_catalog_and_site_placement() -> None:
             "commands": [{"id": "command:install-links.sh", "name": "install-links.sh"}],
             "actions": [{"id": "command:install-links.sh", "action": "install"}],
             "flows": {
-                "build": {"name": "build", "entries": []},
+                "build": {"name": "build", "entries": ["build.tool"]},
                 "install": {"name": "install", "entries": ["links.install"]},
                 "status": {"name": "status", "entries": []},
             },
@@ -73,6 +73,20 @@ def test_catalog_and_site_placement() -> None:
         write_json(root / "catalog.json", catalog)
         source = compiled / "95-install-links.json"
         write_json(source, invocation)
+        write_json(
+            compiled / "50-build-tool.json",
+            {
+                **invocation,
+                "id": "build.tool",
+                "flow": "build",
+                "index": 50,
+                "phase": "compile",
+            },
+        )
+        write_json(
+            compiled / "40-install-stale.json",
+            {**invocation, "id": "stale.install", "index": 40},
+        )
 
         summary = json.loads(run("--deployment", str(deployment), "--json").stdout)
         assert summary["authority"] == "legacy-shell"
@@ -93,6 +107,16 @@ def test_catalog_and_site_placement() -> None:
         reordered.unlink()
         write_json(reordered, {"id": "links.install", "state": "absent"})
         assert json.loads(run("--deployment", str(deployment), "--json", "flow", "install").stdout) == []
+        assert json.loads(run("--deployment", str(deployment), "--json", "flows").stdout) == {
+            "build": "1",
+            "install": "0",
+            "status": "0",
+        }
+
+        write_json(site / "60-install-unknown.json", {**invocation, "id": "unknown.site"})
+        rejected = run("--deployment", str(deployment), "flow", "install", check=False)
+        assert rejected.returncode == 2
+        assert "undeclared contribution" in rejected.stderr
 
 
 if __name__ == "__main__":

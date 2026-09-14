@@ -146,6 +146,19 @@ def _resource_records(etc_files, links_plan, subsystems):
     return resources
 
 
+def _arguments(value, label):
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if not isinstance(value, collections.abc.Sequence) or isinstance(value, (str, bytes)):
+        _error("{} must be a string or list of strings".format(label))
+    result = list(value)
+    if any(not isinstance(item, str) for item in result):
+        _error("{} must contain only strings".format(label))
+    return result
+
+
 @accept_args_markers
 def compile_runtime_catalog(attribution, bins, statuses, links_plan=None, subsystems=None, etc_files=None):
     """Build catalog data and indexed legacy flow observations without executing them."""
@@ -258,7 +271,7 @@ def compile_runtime_catalog(attribution, bins, statuses, links_plan=None, subsys
             "native": False,
             "invoke": {
                 "action": "command:{}".format(name),
-                "args": list(status.get("args", [])),
+                "args": _arguments(status.get("args"), "status {} args".format(status.get("id", name))),
                 "handler": {"kind": "exec", "path": "bin/{}".format(name), "protocol": "legacy-status-v1"},
             },
             "contributors": _refs(status),

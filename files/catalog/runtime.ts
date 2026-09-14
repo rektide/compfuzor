@@ -72,10 +72,12 @@ function object(value: unknown, label: string): JsonRecord {
   return value as JsonRecord;
 }
 
-function strings(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string")
-    : [];
+function strings(value: unknown, label = "value"): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    fail(`${label} must be an array of strings`);
+  }
+  return value as string[];
 }
 
 function phaseFor(flow: string, index: number): string {
@@ -107,7 +109,7 @@ function parseCatalog(value: unknown): RuntimeCatalog {
     flows: Object.fromEntries(
       Object.entries(flows).map(([name, item]) => {
         const descriptor = object(item, `flow ${name}`);
-        return [name, { name, entries: strings(descriptor.entries) }];
+        return [name, { name, entries: strings(descriptor.entries, `flow ${name} entries`) }];
       }),
     ),
     execution: object(record.execution, "runtime catalog execution") as RuntimeCatalog["execution"],
@@ -196,8 +198,25 @@ async function readLayer(
   );
 }
 
-export async function loadFlow(catalogPath: string, flow: string): Promise<ScheduledInvocation[]> {
+export async function loadFlow(
+  catalogPath: string,
+  flow: string,
+  suppliedCatalog?: RuntimeCatalog,
+): Promise<ScheduledInvocation[]> {
   if (!(flow in FLOW_PHASES)) fail(`unknown flow: ${flow}`);
+  const catalog = suppliedCatalog ?? parseCatalog(JSON.parse(await readFile(catalogPath, "utf8")));
+  const declaredById = new Map<string, string>();
+  for (const [declaredFlow, descriptor] of Object.entries(catalog.flows)) {
+    for (const id of descriptor.entries) {
+      const previous = declaredById.get(id);
+      if (previous)
+        fail(`flow contribution id ${id} is declared by both ${previous} and ${declaredFlow}`);
+      declaredById.set(id, declaredFlow);
+    }
+  }
+  const declaredDescriptor = catalog.flows[flow];
+  if (!declaredDescriptor) fail(`catalog does not declare flow: ${flow}`);
+  const declared = new Set(declaredDescriptor.entries);
   const root = join(dirname(catalogPath), "workflows");
   const [compiled, site] = await Promise.all([
     readLayer(join(root, "compiled"), "compiled"),
@@ -205,9 +224,17 @@ export async function loadFlow(catalogPath: string, flow: string): Promise<Sched
   ]);
   const selected = new Map<string, ScheduledInvocation>();
   for (const item of compiled) {
-    if (item.record.flow !== flow) continue;
     const id = item.record.id;
     if (typeof id !== "string" || !id) fail(`flow descriptor ${item.path} requires an id`);
+    if (!declared.has(id)) continue;
+    if (item.record.version !== 1)
+      fail(`flow descriptor ${item.path} has unsupported version ${String(item.record.version)}`);
+    if (item.record.flow !== flow)
+      fail(
+        `flow descriptor ${item.path} is indexed under ${flow} but declares ${String(item.record.flow)}`,
+      );
+    object(item.record.invoke, `flow descriptor ${item.path} invocation`);
+    strings(item.record.contributors, `flow descriptor ${item.path} contributors`);
     if (selected.has(id)) fail(`duplicate compiled flow contribution id ${id}`);
     const effective = placement(item.path, flow);
     selected.set(id, {
@@ -220,12 +247,20 @@ export async function loadFlow(catalogPath: string, flow: string): Promise<Sched
       selectedLayer: "compiled",
     });
   }
+  for (const id of declared) {
+    if (!selected.has(id))
+      fail(`catalog flow ${flow} references missing compiled contribution ${id}`);
+  }
   const siteIds = new Set<string>();
   for (const item of site) {
     const id = item.record.id;
     if (typeof id !== "string" || !id) fail(`site flow descriptor ${item.path} requires an id`);
     if (siteIds.has(id)) fail(`duplicate site flow contribution id ${id}`);
     siteIds.add(id);
+    const declaredFlow = declaredById.get(id);
+    if (!declaredFlow)
+      fail(`site flow descriptor ${item.path} names undeclared contribution ${id}`);
+    if (declaredFlow !== flow) continue;
     const previous = selected.get(id);
     if (item.record.state === "absent") {
       if (!previous) fail(`site tombstone ${item.path} names unknown compiled contribution ${id}`);
@@ -234,7 +269,16 @@ export async function loadFlow(catalogPath: string, flow: string): Promise<Sched
       selected.delete(id);
       continue;
     }
-    if (item.record.flow !== flow) continue;
+    if (item.record.version !== 1)
+      fail(
+        `site flow descriptor ${item.path} has unsupported version ${String(item.record.version)}`,
+      );
+    if (item.record.flow !== flow)
+      fail(
+        `site flow descriptor ${item.path} is indexed under ${flow} but declares ${String(item.record.flow)}`,
+      );
+    object(item.record.invoke, `site flow descriptor ${item.path} invocation`);
+    strings(item.record.contributors, `site flow descriptor ${item.path} contributors`);
     const effective = placement(item.path, flow);
     if (previous && semanticDescriptor(previous) !== semanticDescriptor(item.record)) {
       fail(
@@ -296,7 +340,7 @@ async function runCatalog(options: CatalogOptions): Promise<number> {
   }
   if (command === "flow") {
     if (!argument) fail("catalog flow requires a flow name");
-    const entries = await loadFlow(options.catalogPath, argument);
+    const entries = await loadFlow(options.catalogPath, argument, catalog);
     if (options.json) console.log(JSON.stringify(entries));
     else
       printRows(
@@ -306,7 +350,7 @@ async function runCatalog(options: CatalogOptions): Promise<number> {
           entry.id,
           cell(object(entry.invoke, `flow invocation ${entry.id}`).action),
           entry.selectedLayer,
-          strings(entry.contributors).join(","),
+          strings(entry.contributors, `flow invocation ${entry.id} contributors`).join(","),
         ]),
       );
     return 0;
@@ -316,7 +360,7 @@ async function runCatalog(options: CatalogOptions): Promise<number> {
     const rows = await Promise.all(
       Object.keys(catalog.flows).map(async (name) => [
         name,
-        String((await loadFlow(options.catalogPath, name)).length),
+        String((await loadFlow(options.catalogPath, name, catalog)).length),
       ]),
     );
     if (options.json) console.log(JSON.stringify(Object.fromEntries(rows)));
@@ -337,7 +381,7 @@ async function runCatalog(options: CatalogOptions): Promise<number> {
       values.map((value) => [
         cell(value.id ?? value.name),
         cell(value.action ?? value.contract ?? value.kind),
-        strings(value.contributors).join(","),
+        strings(value.contributors, "catalog contributors").join(","),
       ]),
     );
   return 0;

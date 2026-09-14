@@ -84,6 +84,13 @@ def test_runtime_catalog_compiles_attributed_legacy_flows():
     )
     assert result["etc_dirs"][-1] == "compfuzor-runtime/workflows/site"
 
+    scalar_args = compile_runtime_catalog(
+        {"id": "deployment:demo", "name": "demo"},
+        [],
+        [{"id": "json", "name": "status-json.sh", "args": "--json"}],
+    )
+    assert scalar_args["files"][0]["invocation"]["invoke"]["args"] == ["--json"]
+
 
 if __name__ == "__main__":
     test_runtime_catalog_compiles_attributed_legacy_flows()
