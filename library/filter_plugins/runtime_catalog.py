@@ -160,7 +160,15 @@ def _arguments(value, label):
 
 
 @accept_args_markers
-def compile_runtime_catalog(attribution, bins, statuses, links_plan=None, subsystems=None, etc_files=None):
+def compile_runtime_catalog(
+    attribution,
+    bins,
+    statuses,
+    links_plan=None,
+    subsystems=None,
+    etc_files=None,
+    execution_enabled=False,
+):
     """Build catalog data and indexed legacy flow observations without executing them."""
     attribution = raw_copy_template_data(attribution)
     if not isinstance(attribution, collections.abc.Mapping):
@@ -272,7 +280,12 @@ def compile_runtime_catalog(attribution, bins, statuses, links_plan=None, subsys
             "invoke": {
                 "action": "command:{}".format(name),
                 "args": _arguments(status.get("args"), "status {} args".format(status.get("id", name))),
-                "handler": {"kind": "exec", "path": "bin/{}".format(name), "protocol": "legacy-status-v1"},
+                "handler": {
+                    "kind": "exec",
+                    "path": "bin/{}".format(name),
+                    "protocol": "legacy-status-v1",
+                    "exit2": status.get("exit2", "not-applicable"),
+                },
             },
             "contributors": _refs(status),
             "source": {"kind": "legacy-status", "id": status.get("id")},
@@ -288,7 +301,10 @@ def compile_runtime_catalog(attribution, bins, statuses, links_plan=None, subsys
         "commands": commands,
         "actions": actions,
         "flows": {name: {"name": name, "entries": entries} for name, entries in flows.items()},
-        "execution": {"authority": "legacy-shell", "catalogOnly": True},
+        "execution": {
+            "authority": "catalog" if execution_enabled else "legacy-shell",
+            "catalogOnly": not execution_enabled,
+        },
     }
     etc_files = [{"name": "compfuzor-runtime/catalog.json", "json": catalog}]
     etc_files.extend(

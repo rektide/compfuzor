@@ -8,7 +8,8 @@
            STATUSES,
            _LINK_PLAN | default({}),
            SUBSYSTEM | default({}),
-           ETC_FILES | default([])) }}
+           ETC_FILES | default([]),
+           RUNTIME_FLOW_EXECUTION | default(false) | bool) }}
   changed_when: false
 
 - name: "Compfuzor: contribute runtime catalog artifacts"
@@ -26,6 +27,11 @@
       {%- endfor -%}
       {{ found.value }}
     _catalog_bins: >-
-      {{ (('compfuzor-catalog.sh' | compfuzor_runtime_bins) | attribute_bins(NAME, 'catalog'))
-         if _runtime_present else [] }}
+      {{ (
+           ('compfuzor-catalog.sh' | compfuzor_runtime_bins('compfuzor-flow.sh'))
+           if RUNTIME_FLOW_EXECUTION | default(false) | bool
+           else ('compfuzor-catalog.sh' | compfuzor_runtime_bins)
+         ) | attribute_bins(NAME, 'catalog')
+         if (_runtime_present or (RUNTIME_FLOW_EXECUTION | default(false) | bool))
+         else [] }}
   changed_when: false

@@ -91,6 +91,17 @@ def test_runtime_catalog_compiles_attributed_legacy_flows():
     )
     assert scalar_args["files"][0]["invocation"]["invoke"]["args"] == ["--json"]
 
+    executable = compile_runtime_catalog(
+        {"id": "deployment:demo", "name": "demo"},
+        [],
+        [],
+        execution_enabled=True,
+    )
+    assert executable["catalog"]["execution"] == {
+        "authority": "catalog",
+        "catalogOnly": False,
+    }
+
 
 if __name__ == "__main__":
     test_runtime_catalog_compiles_attributed_legacy_flows()
