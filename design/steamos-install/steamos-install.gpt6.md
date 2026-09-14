@@ -1,10 +1,10 @@
 ---
 type: Design
 title: SteamOS installation and persistence architecture
-description: Evidence and design options for deploying Compfuzor across SteamOS A/B image updates.
+description: Superseded initial exploration of Compfuzor deployment across SteamOS A/B image updates.
 resource: https://github.com/rektide/compfuzor/blob/main/design/steamos-install/steamos-install.gpt6.md
 tags: [compfuzor, steamos, steam-deck, filesystem, persistence, ansible]
-status: draft
+status: deprecated
 generated: { by: llm:gpt6, at: 2026-09-14 }
 stale_after: 2026-12-14
 sources:
@@ -26,6 +26,14 @@ sources:
 ---
 
 # SteamOS installation and persistence architecture
+
+> **Superseded direction:** the root-pair API, automatic platform selection,
+> and atomic-retention proposal below were rejected as unnecessary machinery.
+> The implemented direction deletes `FS_CONTAINERED`; `vars/steamos.yml` sets
+> `PREFIX_DIR: /opt`, while `vars/containered.yml` uses the existing `ETC`,
+> `VAR`, `SRC`, and other hierarchy vars directly. Profiles are selected
+> explicitly with `-e @vars/<profile>.yml`. The host observations remain useful;
+> the recommendations below are preserved only as the initial inquiry.
 
 ## What is up
 
