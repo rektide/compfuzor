@@ -3,6 +3,9 @@
   vars:
     TYPE: interception-tools
     INSTANCE: main
+    ARCH_PKGS:
+      - interception-tools
+      - interception-caps2esc
     INTERCEPTION_TOOLS: /usr/bin
     SYSTEMD_WANTS: systemd-udev-settle.service
     SYSTEMD_AFTER: systemd-udev-settle.service
