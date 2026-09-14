@@ -2,6 +2,32 @@
 
 ## 2026-09-14
 
+### Experimental catalog flow authority
+
+Added opt-in sequential flow execution behind `RUNTIME_FLOW_EXECUTION: true`.
+The default catalog remains read-only and ordinary deployments still avoid a
+Node dependency unless they already need the runtime. Opted-in deployments add
+`compfuzor-flow.sh`, reject catalog-only authority, validate the closed indexed
+selection, constrain executable handlers beneath the deployment, use only
+descriptor-fixed arguments, stop failed build/install flows, and run/fold all
+legacy status reporters.
+
+`zim2.opt.pb` and `mise2.opt.pb` are isolated copies of the production
+playbooks with catalog authority enabled. Side-effect-contained renders under
+`.test-agent/catalog-flow/` passed with package, repository, download,
+generated-bin execution, and systemd activation work bypassed. Zim2 produced
+two install and three status invocations. Mise2 exposed a fidelity issue: its
+authored `install-user.sh` body owns Mise settings while generated children own
+the Bash blocks. Legacy compilation now invokes such an authored aggregate root
+once rather than lifting only its children; pure generated roots remain
+decomposed. Both deployments materialized catalogs/runtime aliases and passed
+safe install/status dry-runs.
+
+Isolated execution tests prove lexical order, dry-run behavior, mutation
+success, status drift continuation, exit-2 not-applicable handling, and refusal
+when catalog authority is disabled. The single Vite+ artifact is now 138.21 kB
+(32.39 kB gzip). No production or live `/opt` deployment was changed.
+
 ### Attributed read-only flow catalog
 
 Repository generation now resolves authoritative deployment identity from

@@ -70,6 +70,11 @@ inventory of attributed contributors, actions, commands, resource references,
 and build/install/status flow order. Existing generated shell compositors remain
 authoritative for execution while native composition is annealed.
 
+Experimental deployments may set `RUNTIME_FLOW_EXECUTION: true` to add
+`compfuzor-flow.sh` and make their validated catalog authoritative. Production
+Zim and Mise do not opt in; `zim2.opt.pb` and `mise2.opt.pb` are contained
+experiments.
+
 Zim adds one complete domain command, `install-zim.sh`, because installing Zim
 also means installing two loader blocks, building two caches, and maintaining a
 host registry. Mise does not acquire a CONFIG graph: its Bash blocks remain

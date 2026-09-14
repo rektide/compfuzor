@@ -98,6 +98,30 @@ compfuzor-catalog.sh flow install
 compfuzor-runtime.mjs catalog --deployment /opt/example flow status
 ```
 
+### Experimental catalog flow execution
+
+`RUNTIME_FLOW_EXECUTION: true` changes only the opted-in deployment: its catalog
+records `authority: catalog`, the runtime emits `compfuzor-flow.sh`, and
+build/install/status may execute their validated indexed invocations
+sequentially. Omission retains the read-only default.
+
+```bash
+compfuzor-flow.sh --dry-run install
+compfuzor-flow.sh build
+compfuzor-flow.sh status
+```
+
+The executor accepts no broadcast child arguments. Fixed arguments come from
+each descriptor. Build/install stop at the first failed mutation; status runs
+all reporters and folds legacy 0/1/2 semantics. Executable handlers must resolve
+beneath the deployment root. Site placement and tombstones are applied through
+the same closed catalog selection used by inspection.
+
+Legacy shell roots with authored bodies remain opaque invocations so their body
+and generated children execute exactly once. Pure generated roots may be
+represented by their ordered immediate children. This is migration behavior;
+native plural composition remains the destination.
+
 ## Defaults and composition
 
 The Compfuzor-wide default is declared in [`vars/common.yaml`](/vars/common.yaml):
