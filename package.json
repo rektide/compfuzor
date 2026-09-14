@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "scripts": {
     "build": "vp pack",
-    "check": "vp fmt vite.config.ts files/catalog files/runtime files/config-remote files/config-remote.ts files/config/command.ts files/config/runtime.ts files/links/links.ts files/links/runtime.ts files/zim/install.ts files/zim/runtime.ts --check && vp lint files/catalog files/config files/links files/zim files/runtime files/config-remote files/config-remote.ts vite.config.ts && pnpm check:type",
-    "fix": "vp fmt vite.config.ts files/catalog files/runtime files/config-remote files/config-remote.ts files/config/command.ts files/config/runtime.ts files/links/links.ts files/links/runtime.ts files/zim/install.ts files/zim/runtime.ts --write && vp lint --fix files/catalog files/config files/links files/zim files/runtime files/config-remote files/config-remote.ts vite.config.ts",
+    "check": "vp fmt vite.config.ts files/catalog files/flow files/runtime files/config-remote files/config-remote.ts files/config/command.ts files/config/runtime.ts files/links/links.ts files/links/runtime.ts files/zim/install.ts files/zim/runtime.ts --check && vp lint files/catalog files/flow files/config files/links files/zim files/runtime files/config-remote files/config-remote.ts vite.config.ts && pnpm check:type",
+    "fix": "vp fmt vite.config.ts files/catalog files/flow files/runtime files/config-remote files/config-remote.ts files/config/command.ts files/config/runtime.ts files/links/links.ts files/links/runtime.ts files/zim/install.ts files/zim/runtime.ts --write && vp lint --fix files/catalog files/flow files/config files/links files/zim files/runtime files/config-remote files/config-remote.ts vite.config.ts",
     "check:type": "tsgo --noEmit"
   },
   "type": "module",

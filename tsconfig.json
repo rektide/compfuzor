@@ -15,6 +15,7 @@
   },
   "include": [
     "files/catalog/**/*.ts",
+    "files/flow/**/*.ts",
     "files/config/**/*.ts",
     "files/links/**/*.ts",
     "files/zim/**/*.ts",

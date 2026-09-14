@@ -116,6 +116,10 @@ function parseCatalog(value: unknown): RuntimeCatalog {
   };
 }
 
+export async function loadCatalog(path: string): Promise<RuntimeCatalog> {
+  return parseCatalog(JSON.parse(await readFile(path, "utf8")));
+}
+
 function parseOptions(argv: string[], deploymentDir: string): CatalogOptions {
   const { values, positionals } = parseArgs({
     args: argv,
@@ -204,7 +208,7 @@ export async function loadFlow(
   suppliedCatalog?: RuntimeCatalog,
 ): Promise<ScheduledInvocation[]> {
   if (!(flow in FLOW_PHASES)) fail(`unknown flow: ${flow}`);
-  const catalog = suppliedCatalog ?? parseCatalog(JSON.parse(await readFile(catalogPath, "utf8")));
+  const catalog = suppliedCatalog ?? (await loadCatalog(catalogPath));
   const declaredById = new Map<string, string>();
   for (const [declaredFlow, descriptor] of Object.entries(catalog.flows)) {
     for (const id of descriptor.entries) {
@@ -315,7 +319,7 @@ function cell(value: unknown): string {
 }
 
 async function runCatalog(options: CatalogOptions): Promise<number> {
-  const catalog = parseCatalog(JSON.parse(await readFile(options.catalogPath, "utf8")));
+  const catalog = await loadCatalog(options.catalogPath);
   const [command, argument, ...extra] = options.positionals;
   if (extra.length > 0) fail(USAGE);
   if (!command) {
