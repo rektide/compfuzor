@@ -71,6 +71,16 @@ def _first_truthy(*values):
     return None
 
 
+def _family_root(context, kind, role, default):
+    key = "FS_{}_{}_ROOT".format(kind.upper(), role.upper())
+    value = context.get(key)
+    if not _truthy(value):
+        return default
+    if not isinstance(value, str) or not value:
+        _error("{} must resolve to a non-empty string".format(key))
+    return value
+
+
 def _artifact_entry(item, family, kind, root, index):
     if isinstance(item, collections.abc.Mapping):
         declaration = dict(item)
@@ -136,10 +146,8 @@ def compile_artifacts(context):
             else:
                 continue
         dir_root = directory + "/" + kind
-        if _truthy(context.get("FS_CONTAINERED")):
-            materialized, exposure = dir_root, fsh_root
-        else:
-            materialized, exposure = fsh_root, dir_root
+        materialized = _family_root(context, kind, "materialized", fsh_root)
+        exposure = _family_root(context, kind, "exposure", dir_root)
         specs.append((upper + "_FILES", kind, materialized, exposure))
 
     families = {}

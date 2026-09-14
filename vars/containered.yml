@@ -1,0 +1,34 @@
+---
+# Keep each hierarchy family inside the deployment tree and expose it at its
+# normal hierarchy root. If DIR is already that family's hierarchy root (for
+# example an .opt.pb deployment where DIR == OPT), use one root rather than
+# creating a degenerate DIR/opt -> DIR layout when both roots are identical.
+FS_OPT_MATERIALIZED_ROOT: "{{ DIR if DIR == OPT else DIR + '/opt' }}"
+FS_OPT_EXPOSURE_ROOT: "{{ DIR if DIR == OPT else OPT }}"
+
+FS_SRV_MATERIALIZED_ROOT: "{{ DIR if DIR == SRV else DIR + '/srv' }}"
+FS_SRV_EXPOSURE_ROOT: "{{ DIR if DIR == SRV else SRV }}"
+
+FS_ETC_MATERIALIZED_ROOT: "{{ DIR if DIR == ETC else DIR + '/etc' }}"
+FS_ETC_EXPOSURE_ROOT: "{{ DIR if DIR == ETC else ETC }}"
+
+FS_VAR_MATERIALIZED_ROOT: "{{ DIR if DIR == VAR else DIR + '/var' }}"
+FS_VAR_EXPOSURE_ROOT: "{{ DIR if DIR == VAR else VAR }}"
+
+FS_LOG_MATERIALIZED_ROOT: "{{ DIR if DIR == LOG else DIR + '/log' }}"
+FS_LOG_EXPOSURE_ROOT: "{{ DIR if DIR == LOG else LOG }}"
+
+FS_SPOOL_MATERIALIZED_ROOT: "{{ DIR if DIR == SPOOL else DIR + '/spool' }}"
+FS_SPOOL_EXPOSURE_ROOT: "{{ DIR if DIR == SPOOL else SPOOL }}"
+
+FS_CACHE_MATERIALIZED_ROOT: "{{ DIR if DIR == CACHE else DIR + '/cache' }}"
+FS_CACHE_EXPOSURE_ROOT: "{{ DIR if DIR == CACHE else CACHE }}"
+
+FS_SRC_MATERIALIZED_ROOT: "{{ DIR if DIR == SRC else DIR + '/src' }}"
+FS_SRC_EXPOSURE_ROOT: "{{ DIR if DIR == SRC else SRC }}"
+
+FS_PID_MATERIALIZED_ROOT: "{{ DIR if DIR == PID else DIR + '/pid' }}"
+FS_PID_EXPOSURE_ROOT: "{{ DIR if DIR == PID else PID }}"
+
+FS_SHARE_MATERIALIZED_ROOT: "{{ DIR if DIR == SHARE else DIR + '/share' }}"
+FS_SHARE_EXPOSURE_ROOT: "{{ DIR if DIR == SHARE else SHARE }}"
