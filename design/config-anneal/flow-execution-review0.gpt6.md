@@ -222,3 +222,102 @@ those corrections are made.
 - [`doc/config/log.md`](/doc/config/log.md#experimental-catalog-flow-authority)
   records the implementation's claimed validation surface; this review narrows
   the scratch evidence to render and dry-run confidence.
+
+# Closure addendum — 2026-09-14
+
+## Recheck scope and result
+
+This addendum reviews the original implementation through `08de0fd1` plus the
+containment/process correction `69b8fa08` and experimental isolation correction
+`94fa4aaa`. It supersedes the original gate above where explicitly stated.
+
+Five of the six original findings are substantively closed. The sixth,
+execution evidence, is improved but remains open because the containment fix
+introduced an untested, release-blocking multicall-alias regression. Catalog
+mutation should therefore remain gated.
+
+| Original finding | Status | Recheck evidence |
+|---|---|---|
+| Foreign ambient `DIR` | **Closed** | Every child receives `env: {...process.env, DIR: deploymentDir}` at [`files/flow/runtime.ts:89-95`](/files/flow/runtime.ts#L89-L95). The integration fixture starts the runner with `/foreign/deployment` and observes the selected deployment in both mutation and status children ([`catalog_flow.test.py:23-31`](/tests/integration/catalog_flow.test.py#L23-L31), [`catalog_flow.test.py:112-129`](/tests/integration/catalog_flow.test.py#L112-L129)). |
+| Symlink executable escape | **Closed, with blocker below** | Both deployment root and configured executable are resolved with `realpath`, then compared for containment at [`files/flow/runtime.ts:72-86`](/files/flow/runtime.ts#L72-L86). The integration test's in-tree symlink to `/bin/true` is refused ([`catalog_flow.test.py:131-141`](/tests/integration/catalog_flow.test.py#L131-L141)). Absolute external targets follow the same realpath containment check. |
+| Orphaned child after signal | **Closed** | Children run in detached process groups; `SIGINT`/`SIGTERM` are forwarded to the negative group PID; listeners are removed only on child error/exit; interruption folds to failure ([`files/flow/runtime.ts:89-123`](/files/flow/runtime.ts#L89-L123)). The test waits for a mutating child, terminates the parent, observes the child's trap, and requires nonzero parent completion ([`catalog_flow.test.py:150-203`](/tests/integration/catalog_flow.test.py#L150-L203)). |
+| Locale-dependent ordering | **Closed in implementation** | Both layer reads and final selection use the explicit code-unit comparator at [`files/catalog/runtime.ts:90-92`](/files/catalog/runtime.ts#L90-L92), [`files/catalog/runtime.ts:193-196`](/files/catalog/runtime.ts#L193-L196), and [`files/catalog/runtime.ts:307-309`](/files/catalog/runtime.ts#L307-L309). A punctuation/case regression assertion would still strengthen this closure. |
+| Zim2/Mise2 live-target isolation | **Closed for declared effects** | Zim2 now has distinct CONFIG selectors/subpath, loader root, caches, and registry ([`zim2.opt.pb:8-12`](/zim2.opt.pb#L8-L12), [`zim2.opt.pb:41-73`](/zim2.opt.pb#L41-L73)). Mise2 now targets separate Bash files, ZDOTDIR, and `MISE_CONFIG_DIR` ([`mise2.opt.pb:35-50`](/mise2.opt.pb#L35-L50), [`mise2.opt.pb:54-77`](/mise2.opt.pb#L54-L77)). Rendered specs/env files contain those isolated destinations. `files/zim2 -> files/zim` remains intentional implementation-source sharing, not shared deployed state. |
+| Adequacy of execution evidence | **Open** | Foreign `DIR`, external symlink rejection, process-group interruption, success ordering, status drift/not-applicable continuation, authority refusal, and rendered isolation are now covered. Multicall aliases are not, and the fixture still has no committed mutation-failure short-circuit, `exit2: error`, code-unit punctuation/case, site-selected execution, or runtime execution of an authored root plus child. |
+
+## New high-severity blocker — realpath validation destroys multicall alias identity
+
+`executablePath()` correctly resolves the configured path for containment, but
+returns the resolved target at [`files/flow/runtime.ts:80-86`](/files/flow/runtime.ts#L80-L86).
+`runInvocation()` then spawns that target at
+[`files/flow/runtime.ts:136-141`](/files/flow/runtime.ts#L136-L141). For a safe
+symlink that is intentionally an argv-zero interface, this changes observable
+behavior rather than merely validating it.
+
+The rendered Zim2 status flow demonstrates the regression:
+
+```text
+descriptor handler: bin/config-status.sh
+real target:         bin/compfuzor-runtime.mjs
+dry-run reports:     bin/compfuzor-runtime.mjs
+```
+
+Invoking `config-status.sh --help` directly selects CONFIG and succeeds.
+Invoking its resolved `compfuzor-runtime.mjs` target without a domain argument
+returns the omnibus usage error. This follows directly from the dispatcher's
+intentional lexical symlink-chain classification
+([`files/runtime/compfuzor-runtime.ts:41-85`](/files/runtime/compfuzor-runtime.ts#L41-L85)).
+An actual contained Zim2 status-flow probe reached the resolved omnibus path for
+the `config-status.sh` entry rather than the alias. Depending on PATH it either
+fails before Node in the local Mise shim or reaches the omnibus usage failure;
+in neither case does it execute CONFIG status.
+
+Containment and invocation identity need separate paths: validate the real
+target against the real deployment root, but spawn the contained lexical alias
+(or otherwise preserve the configured argv-zero contract). Add a flow test with
+a contained alias to the omnibus runtime; an external-target alias must still
+fail. This is a blocker for CONFIG flow entries and any other runtime alias used
+as a catalog handler.
+
+## Authored aggregate fidelity recheck
+
+The `08de0fd1` behavior remains correct. A generated legacy root with any
+non-empty authored body field is represented as one opaque root invocation;
+its `run_all` executes inside that root, so body ordering, local bypass handling,
+and child short-circuit semantics remain shell-owned. The rendered Mise2 catalog
+still has exactly one install entry targeting `bin/install-user.sh`; the
+rendered root contains both its Mise-settings body and one
+`install-bash-user.sh` child. No child is separately scheduled, so there is no
+duplicate execution or recursion.
+
+## Recheck verification
+
+The following passed on the post-`94fa4aaa` tree:
+
+- `pnpm check` and `pnpm build`; the build reproduced the checked-in 139.14 kB
+  (32.67 kB gzip) runtime without a build-artifact diff.
+- `zim2.opt.pb` and `mise2.opt.pb` syntax checks.
+- Runtime catalog, catalog flow, orchestrator identity, structured status args,
+  and Node argument integrations.
+- Runtime catalog/bundle, bin compositor, CONFIG compiler/context, Zim context,
+  and artifact LINKS filter suites.
+- CONFIG command, contexts, consumer toolkit, graph, remote, and transaction
+  fault integrations.
+- Zim consumer, remote, and wrapper integrations; Mise block integration.
+- LINKS generation/status and systemd LINKS integrations.
+- Post-fix contained Zim2/Mise2 render inspection and install/status dry-runs.
+  Zim2 declares two install and three status entries with isolated Zim paths;
+  Mise2 declares one opaque install root and one status entry with isolated Mise
+  paths. Both rendered runtime hashes match the checked-in bundle.
+
+The existing flow integration itself passes, but the contained alias probe
+above fails semantically and is the release gate. No implementation was changed
+during this recheck.
+
+## Updated gate
+
+The original `DIR`, escape, signal, ordering, and experimental-target findings
+no longer block execution. Preserve those corrections. Do not promote catalog
+flows to live mutation until contained aliases retain argv-zero identity and a
+regression test proves both halves of the rule: safe internal aliases execute
+as aliases, while aliases resolving outside the deployment remain refused.
