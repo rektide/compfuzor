@@ -78,12 +78,12 @@ async function executablePath(
     fail(`flow invocation ${id} requires an executable path`);
   }
   const lexicalPath = resolve(deploymentDir, configured);
-  const [root, path] = await Promise.all([realpath(deploymentDir), realpath(lexicalPath)]);
-  const remainder = relative(root, path);
+  const [root, physicalPath] = await Promise.all([realpath(deploymentDir), realpath(lexicalPath)]);
+  const remainder = relative(root, physicalPath);
   if (remainder === ".." || remainder.startsWith(`..${sep}`)) {
     fail(`flow invocation ${id} executable escapes deployment: ${configured}`);
   }
-  return path;
+  return lexicalPath;
 }
 
 async function runExecutable(path: string, args: string[], deploymentDir: string): Promise<number> {

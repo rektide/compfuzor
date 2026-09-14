@@ -128,6 +128,23 @@ def test_catalog_flow_execution() -> None:
             f"after|{deployment}",
         ]
 
+        dispatcher = deployment / "bin" / "dispatch.sh"
+        dispatcher.write_text(
+            f"#!/bin/sh\nbasename \"$0\" > {str(log)!r}\n",
+            encoding="utf-8",
+        )
+        dispatcher.chmod(0o755)
+        alias = deployment / "bin" / "multicall-alias.sh"
+        alias.symlink_to("dispatch.sh")
+        catalog["flows"]["install"]["entries"] = ["install.alias"]
+        write_json(root / "catalog.json", catalog)
+        write_json(
+            compiled / "50-install-003-alias.json",
+            invocation("install.alias", "install", "multicall-alias.sh", []),
+        )
+        run(deployment, "install")
+        assert log.read_text(encoding="utf-8") == "multicall-alias.sh\n"
+
         outside = deployment / "bin" / "outside.sh"
         outside.symlink_to("/bin/true")
         catalog["flows"]["install"]["entries"] = ["install.outside"]
