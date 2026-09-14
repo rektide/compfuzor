@@ -23,10 +23,19 @@ once rather than lifting only its children; pure generated roots remain
 decomposed. Both deployments materialized catalogs/runtime aliases and passed
 safe install/status dry-runs.
 
+Independent validation then hardened the execution boundary: child `DIR` is
+always the selected deployment rather than an ambient foreign value; physical
+`realpath` containment rejects handlers symlinked outside the deployment;
+SIGINT/SIGTERM reach the detached child process group while the runner waits;
+and code-unit filename comparison replaces locale-dependent sorting. Zim2 now
+uses isolated config selectors, subpath, loader root, caches, and registry;
+Mise2 uses isolated Bash files, Zsh startup root, and Mise configuration root.
+
 Isolated execution tests prove lexical order, dry-run behavior, mutation
-success, status drift continuation, exit-2 not-applicable handling, and refusal
-when catalog authority is disabled. The single Vite+ artifact is now 138.21 kB
-(32.39 kB gzip). No production or live `/opt` deployment was changed.
+success, status drift continuation, exit-2 not-applicable handling, foreign-DIR
+replacement, physical containment, signal propagation, and refusal when catalog
+authority is disabled. The single Vite+ artifact is now 139.14 kB (32.67 kB
+gzip). No production or live `/opt` deployment was changed.
 
 ### Attributed read-only flow catalog
 

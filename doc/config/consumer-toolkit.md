@@ -114,8 +114,11 @@ compfuzor-flow.sh status
 The executor accepts no broadcast child arguments. Fixed arguments come from
 each descriptor. Build/install stop at the first failed mutation; status runs
 all reporters and folds legacy 0/1/2 semantics. Executable handlers must resolve
-beneath the deployment root. Site placement and tombstones are applied through
-the same closed catalog selection used by inspection.
+beneath the deployment root, including through symlinks. Child processes receive
+the selected deployment as `DIR`; ambient foreign deployment state is not
+inherited. SIGINT/SIGTERM are forwarded to the detached child process group and
+the runner waits for termination. Site placement and tombstones are applied
+through the same closed catalog selection used by inspection.
 
 Legacy shell roots with authored bodies remain opaque invocations so their body
 and generated children execute exactly once. Pure generated roots may be
