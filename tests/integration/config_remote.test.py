@@ -174,41 +174,17 @@ done < "$CONFIG_INPUTS_FILE"
         leaf.chmod(0o770)
         assemble = host / "bin" / "config-assemble.sh"
         assemble.symlink_to("config/command.mjs")
-        toggle = host / "bin" / "config" / "toggle.sh"
-        toggle.write_text(
-            "#!/bin/bash\n"
-            + (ROOT / "files" / "config-toggle.sh")
-            .read_text()
-            .replace("${{ '{#' }}sources[@]}", "${#sources[@]}"),
-            encoding="utf-8",
-        )
-        toggle.chmod(0o770)
-
         run([str(manager), "put", "fragments", str(source)])
         active = target / source.name
         assert active.is_symlink()
         assert output.read_text(encoding="utf-8") == "remote=true\n"
 
-        env = os.environ.copy()
-        env["DIR"] = str(host)
-        subprocess.run(
-            [str(toggle), "disable", "app", "fragments", source.stem],
-            check=True,
-            text=True,
-            capture_output=True,
-            env=env,
-        )
+        run([str(manager), "disable", "fragments", source.name])
         disabled = target / f"{source.name}.disabled"
         assert disabled.is_symlink() and not os.path.lexists(active)
         assert output.read_text(encoding="utf-8") == ""
 
-        subprocess.run(
-            [str(toggle), "enable", "app", "fragments", source.stem],
-            check=True,
-            text=True,
-            capture_output=True,
-            env=env,
-        )
+        run([str(manager), "enable", "fragments", source.name])
         assert active.is_symlink() and not os.path.lexists(disabled)
         assert output.read_text(encoding="utf-8") == "remote=true\n"
 
