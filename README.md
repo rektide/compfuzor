@@ -94,38 +94,26 @@ prefix conventions, and worked examples.
 See [`doc/subsys.md`](doc/subsys.md) for the subsystem contrib pattern,
 `gen_*.tasks` conventions, and how to add a new subsystem.
 
-## Filesystem layout profiles
+## Vars profiles
 
-Filesystem profiles are ordinary extra-vars files selected explicitly at the
-command line. Compfuzor does not infer a platform from the host:
+Profiles are ordinary extra-vars files; Compfuzor does not infer them from the
+host. SteamOS deployments can be rooted in persistent `/opt` and keep their
+hierarchy in the same tree by stacking two small profiles:
 
 ```sh
 ansible-playbook -i 'localhost,' -c local app.src.pb \
-  -e @vars/steamos.yml
-
-ansible-playbook -i 'localhost,' -c local app.srv.pb \
   -e @vars/steamos.yml -e @vars/containered.yml
 ```
 
-[`vars/steamos.yml`](/vars/steamos.yml) redirects global deployment families
-into a domain-grouped, persistent `/opt/compfuzor` tree while leaving runtime
-files under `/run`. It deliberately does not preserve `/etc` through SteamOS's
-atomic-update retention configuration; rerun generated install bins to restore
-host integration after an image replacement.
-
-[`vars/containered.yml`](/vars/containered.yml) materializes every filesystem
-family inside `DIR` and exposes it at the normal hierarchy root. Fine-grained
-layouts can instead set any family pair independently:
+[`vars/steamos.yml`](/vars/steamos.yml) is just `PREFIX_DIR: /opt`.
+[`vars/containered.yml`](/vars/containered.yml) sets `ETC`, `VAR`, `SRC`, and
+the other hierarchy roots beneath `DIR`. Copy it or override individual vars
+for a narrower layout:
 
 ```yaml
-FS_ETC_MATERIALIZED_ROOT: "{{DIR}}/etc"
-FS_ETC_EXPOSURE_ROOT: "{{ETC}}"
+ETC: "{{DIR}}/etc"
+VAR: /var/lib/my-service
 ```
-
-The available pairs follow the `FS_<KIND>_{MATERIALIZED,EXPOSURE}_ROOT` pattern
-for `OPT`, `SRV`, `ETC`, `VAR`, `LOG`, `SPOOL`, `CACHE`, `SRC`, `PID`, and
-`SHARE`. Unset families retain the normal split layout: materialize at the FHS
-root and expose it as `DIR/<kind>`.
 
 The config/filesystem seam is defined under
 [`Config assembly and filesystem effects`](doc/arch.md#config-assembly-and-filesystem-effects):

@@ -1,28 +1,4 @@
 ---
-# Manual SteamOS deployment profile. Apply with:
-#   ansible-playbook -i 'localhost,' -c local <playbook>.pb \
-#     -e @vars/steamos.yml
-#
-# SteamOS replaces A/B root images. Keep Compfuzor's globally deployed payloads
-# in a domain-grouped tree under its natively persistent /opt mount. Runtime
-# files remain under /run. Host integration paths such as /etc/systemd/system
-# and /etc/sysusers.d intentionally remain unchanged: rerun generated install
-# bins after an OS update when SteamOS does not retain an integration artifact.
-STEAMOS_COMPFUZOR_ROOT: /opt/compfuzor
-
-OPTS_DIR: "{{ USERMODE_OPTS_DIR if USERMODE | default(False) | bool else STEAMOS_COMPFUZOR_ROOT + '/opt' }}"
-SRVS_DIR: "{{ USERMODE_SRVS_DIR if USERMODE | default(False) | bool else STEAMOS_COMPFUZOR_ROOT + '/srv' }}"
-ETCS_DIR: "{{ USERMODE_ETCS_DIR if USERMODE | default(False) | bool else STEAMOS_COMPFUZOR_ROOT + '/etc' }}"
-REPOS_DIR: "{{ USERMODE_ETCS_DIR if USERMODE | default(False) | bool else STEAMOS_COMPFUZOR_ROOT + '/repo' }}"
-VARS_DIR: "{{ USERMODE_VARS_DIR if USERMODE | default(False) | bool else STEAMOS_COMPFUZOR_ROOT + '/var/lib' }}"
-LOGS_DIR: "{{ USERMODE_LOGS_DIR if USERMODE | default(False) | bool else STEAMOS_COMPFUZOR_ROOT + '/var/log' }}"
-SPOOLS_DIR: "{{ USERMODE_SPOOLS_DIR if USERMODE | default(False) | bool else STEAMOS_COMPFUZOR_ROOT + '/var/spool' }}"
-CACHES_DIR: "{{ USERMODE_CACHES_DIR if USERMODE | default(False) | bool else STEAMOS_COMPFUZOR_ROOT + '/var/cache' }}"
-SRCS_DIR: "{{ USERMODE_SRCS_DIR if USERMODE | default(False) | bool else STEAMOS_COMPFUZOR_ROOT + '/src' }}"
-SHARES_DIR: "{{ USERMODE_SHARES_DIR if USERMODE | default(False) | bool else STEAMOS_COMPFUZOR_ROOT + '/share' }}"
-MEDIAS_DIR: "{{ USERMODE_MEDIAS_DIR if USERMODE | default(False) | bool else STEAMOS_COMPFUZOR_ROOT + '/media' }}"
-
-GLOBAL_BINS_DIR: "{{ USERMODE_GLOBAL_BINS_DIR if USERMODE | default(False) | bool else STEAMOS_COMPFUZOR_ROOT + '/bin' }}"
-PKGCONFIG_DIR: "{{ STEAMOS_COMPFUZOR_ROOT }}/lib/pkgconfig"
-PIDS_DIR: "{{ XDG_RUNTIME_DIR if USERMODE | default(False) | bool else '/run/compfuzor' }}"
-RUNS_DIR: "{{ PIDS_DIR }}"
+# Put each deployment at /opt/<name>. Stack vars/containered.yml when its
+# hierarchy families should live under that same durable deployment root.
+PREFIX_DIR: /opt
