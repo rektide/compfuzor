@@ -65,6 +65,16 @@ def test_string_contributor_and_invalid_status_id():
         assert "string id" in str(error)
     else:
         raise AssertionError("invalid status id was accepted")
+    for invalid in ({"bad": "shape"}, 42):
+        try:
+            attribute_links(
+                [{"id": "tool", "src": "/src", "dest": "/dest", "contributors": invalid}],
+                "demo-main",
+            )
+        except Exception as error:
+            assert "contributors" in str(error)
+        else:
+            raise AssertionError("invalid contributors were accepted")
 
 
 if __name__ == "__main__":

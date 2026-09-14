@@ -31,7 +31,14 @@ def _records(value, label):
 
 
 def contributor_references(deployment, subsystem=None, existing=None):
-    references = [existing] if isinstance(existing, str) else list(existing or [])
+    if existing is None:
+        references = []
+    elif isinstance(existing, str):
+        references = [existing]
+    elif isinstance(existing, collections.abc.Sequence) and not isinstance(existing, (str, bytes)):
+        references = list(existing)
+    else:
+        raise AnsibleFilterError("contributors must be a string or list of strings")
     if isinstance(deployment, str) and deployment:
         references.append("deployment:{}".format(deployment))
     if isinstance(subsystem, str) and subsystem:

@@ -24,7 +24,7 @@ def generate_status_proc(
     payload = temporary / "payload"
     result_file = temporary / "result.json"
     scenario_file = temporary / "scenario.json"
-    scenario = {"STATUS_PROC": status_proc, **(extra or {})}
+    scenario = {"NAME": "status-proc-test", "STATUS_PROC": status_proc, **(extra or {})}
     scenario_file.write_text(json.dumps(scenario), encoding="utf-8")
     (temporary / "files").symlink_to(ROOT / "files", target_is_directory=True)
     task_dir = ROOT / "tasks" / "compfuzor"
@@ -32,6 +32,7 @@ def generate_status_proc(
     gen_task = task_dir / "gen_status_proc.tasks"
     status_task = task_dir / "gen_status.tasks"
     bins_task = task_dir / "bins.tasks"
+    attribution_task = task_dir / "gen_attribution.tasks"
     result_expression = (
         "{{ {'bins': BINS, 'statuses': STATUSES, "
         "'provider': SUBSYSTEM.status_proc | default({})} | to_nice_json }}"
@@ -61,6 +62,7 @@ def generate_status_proc(
     - ansible.builtin.import_tasks: {str(gen_task)!r}
     - ansible.builtin.import_tasks: {str(status_task)!r}
     - ansible.builtin.import_tasks: {str(bins_task)!r}
+    - ansible.builtin.import_tasks: {str(attribution_task)!r}
     - ansible.builtin.copy:
         dest: {str(result_file)!r}
         content: {result_expression!r}
@@ -158,9 +160,21 @@ def test_status_proc_selects_and_batches_reporters() -> None:
         )
 
         assert generated["statuses"] == [
-            "status-existing.sh",
-            "status-mainpid-env.sh",
-            "status-exe-current.sh",
+            {
+                "id": "legacy:status-existing.sh",
+                "name": "status-existing.sh",
+                "contributors": ["deployment:status-proc-test"],
+            },
+            {
+                "id": "legacy:status-mainpid-env.sh",
+                "name": "status-mainpid-env.sh",
+                "contributors": ["deployment:status-proc-test", "subsystem:status_proc"],
+            },
+            {
+                "id": "legacy:status-exe-current.sh",
+                "name": "status-exe-current.sh",
+                "contributors": ["deployment:status-proc-test", "subsystem:status_proc"],
+            },
         ]
         by_name = {item["name"]: item for item in generated["bins"]}
         assert set(by_name) == {

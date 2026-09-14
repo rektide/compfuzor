@@ -249,6 +249,19 @@ def _normalize_strategies(value, origin):
     return {"available": available, "default": default}
 
 
+def _contributors(value, origin):
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, collections.abc.Sequence) or isinstance(value, (str, bytes)):
+        _error("{} contributors must be a string or list of strings".format(origin))
+    result = list(dict.fromkeys(value))
+    if any(not isinstance(item, str) or not item for item in result):
+        _error("{} contributors must contain non-empty strings".format(origin))
+    return result
+
+
 def _link_comparable(record):
     comparable = {
         key: value
@@ -330,15 +343,9 @@ def _normalize_link(raw, directory, roots, origin, default_src=None, inferred=No
         record["strategies"] = strategies
     if "compose" in item:
         record["compose"] = compose
-    authored_contributors = item.get("contributors", [])
-    if isinstance(authored_contributors, str):
-        authored_contributors = [authored_contributors]
-    if not isinstance(authored_contributors, collections.abc.Sequence) or isinstance(authored_contributors, (str, bytes)):
-        _error("{} contributors must be a string or list of strings".format(origin))
-    contributors = list(default_contributors or []) + list(authored_contributors)
-    contributors = list(dict.fromkeys(contributors))
-    if any(not isinstance(value, str) or not value for value in contributors):
-        _error("{} contributors must contain non-empty strings".format(origin))
+    contributors = list(dict.fromkeys(
+        _contributors(default_contributors, origin) + _contributors(item.get("contributors"), origin)
+    ))
     if contributors:
         record["contributors"] = contributors
     return record
@@ -390,12 +397,8 @@ def compile_links(links, artifacts, directory, name, roots):
                         inferred=artifact if field == "link" and annotation == "user" else None,
                         index=annotation_index,
                         default_contributors=(
-                            list(declaration.get("contributors", []))
+                            _contributors(declaration.get("contributors"), origin)
                             if isinstance(declaration, collections.abc.Mapping)
-                            and not isinstance(declaration.get("contributors"), str)
-                            else [declaration.get("contributors")]
-                            if isinstance(declaration, collections.abc.Mapping)
-                            and declaration.get("contributors")
                             else []
                         ) + ["deployment:{}".format(name)],
                     )
