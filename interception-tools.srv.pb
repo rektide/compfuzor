@@ -7,15 +7,19 @@
       - interception-tools
       - interception-caps2esc
     INTERCEPTION_TOOLS: /usr/bin
-    SYSTEMD_WANTS: systemd-udev-settle.service
-    SYSTEMD_AFTER: systemd-udev-settle.service
-    SYSTEMD_EXEC: "{{INTERCEPTION_TOOLS}}/udevmon -c {{ETC}}/interception.yaml"
-    SYSTEMD_CPU_SCHEDULING_PRIORITY: 5
-    SYSTEMD_CPU_SCHEDULING_POLICY: fifo
-    SYSTEMD_WANTED_BY: multi-user.target
-    SYSTEMD_ENVIRONMENT:
-    - "PATH={{ INTERCEPTION_TOOLS }}:/usr/bin:/bin"
-    SYSTEMD_NICE: -18
+    SYSTEMD_SERVICE: true
+    SYSTEMD_UNITS:
+      Wants: systemd-udev-settle.service
+      After: systemd-udev-settle.service
+    SYSTEMD_SERVICES:
+      ExecStart: "{{INTERCEPTION_TOOLS}}/udevmon -c {{ETC}}/interception.yaml"
+      CPUSchedulingPriority: 5
+      CPUSchedulingPolicy: fifo
+      Environment:
+        - "PATH={{ INTERCEPTION_TOOLS }}:/usr/bin:/bin"
+      Nice: -18
+    SYSTEMD_INSTALLS:
+      WantedBy: multi-user.target
     ETC_DIRS:
       - interception.yaml.d
     ETC_FILES:
