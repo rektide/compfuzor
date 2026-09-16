@@ -6,6 +6,32 @@
     REPO: https://github.com/vicinaehq/vicinae
     TOOL_VERSIONS:
       nodejs: True
+    # Matches upstream's Arch CI image (scripts/runners/arch/base.Dockerfile).
+    ARCH_PKGS:
+      - base-devel
+      - catch2
+      - ccache
+      - clang
+      - cmake
+      - curl
+      - extra-cmake-modules
+      - gcc
+      - git
+      - jq
+      - layer-shell-qt
+      - libqalculate
+      - mold
+      - ninja
+      - nodejs
+      - npm
+      - qt6-base
+      - qt6-declarative
+      - qt6-shadertools
+      - qt6-svg
+      - qt6-tools
+      - qtkeychain-qt6
+      - syntax-highlighting
+      - wayland-protocols
     PKGS:
       - build-essential
       - cmake
