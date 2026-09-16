@@ -14,8 +14,8 @@ TYPE_DIRS:
 ETC: "{{ DIR if type == 'etc' else DIR + '/etc' }}"
 ETC_LINK: "{{ ETCS_DIR + '/' + NAME if DIR != ETCS_DIR + '/' + NAME else DIR }}"
 
-# A relocated source recipe keeps its checkout at DIR while retaining src
-# behavior. Its conventional /usr/local/src exposure is replayable and may be
-# bypassed until the persistent /usr/local mount is restored.
-SRC: "{{ DIR if type == 'src' else SRCS_DIR + '/' + NAME }}"
-SRC_LINK: "{{ SRCS_DIR + '/' + NAME if type == 'src' and DIR != SRCS_DIR + '/' + NAME else (DIR if type == 'src' else DIR + '/src') }}"
+# Keep source checkouts and downloaded source artifacts inside the durable
+# deployment. Their conventional /usr/local/src exposure is replayable and may
+# be bypassed until the persistent /usr/local mount is restored.
+SRC: "{{ DIR if type == 'src' else DIR + '/src' }}"
+SRC_LINK: "{{ SRCS_DIR + '/' + NAME if SRC != SRCS_DIR + '/' + NAME else SRC }}"

@@ -323,7 +323,9 @@
           export ZSH_AUTOSUGGEST_MANUAL_REBIND=1
     ARCH_PKGS:
       - bat
-      - ripgrep
       - eza
+      - fzf
+      - ripgrep
+      - zoxide
   tasks:
     - import_tasks: tasks/compfuzor.includes
