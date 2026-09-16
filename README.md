@@ -94,31 +94,6 @@ prefix conventions, and worked examples.
 See [`doc/subsys.md`](doc/subsys.md) for the subsystem contrib pattern,
 `gen_*.tasks` conventions, and how to add a new subsystem.
 
-## Vars profiles
-
-Profiles are ordinary extra-vars files; Compfuzor does not infer them from the
-host. The SteamOS profile preserves recipe types while relocating types whose
-normal roots live in the replaceable image:
-
-```sh
-ansible-playbook -i 'localhost,' -c local app.src.pb \
-  -e @vars/steamos.yml
-```
-
-[`vars/steamos.yml`](/vars/steamos.yml) supplies a `TYPE_DIRS` map: `src`,
-deployments move beneath persistent, user-writable `~/src`; `etc` and
-package-oriented deployments move beneath persistent `/opt`; and `opt`, `srv`,
-and user recipes retain their normal roots. It also keeps authored config under
-`DIR` with a reciprocal `/etc/opt` exposure.
-[`vars/containered.yml`](/vars/containered.yml) sets each hierarchy root under
-`DIR` and its reciprocal `<KIND>_LINK` at the normal host location. Copy it or
-override individual pairs for a narrower layout:
-
-```yaml
-ETC: "{{DIR}}/etc"
-ETC_LINK: "{{ETCS_DIR}}/{{NAME}}"
-```
-
 The config/filesystem seam is defined under
 [`Config assembly and filesystem effects`](doc/arch.md#config-assembly-and-filesystem-effects):
 config owns assembly intent and ordering, while filesystem tasks own directory

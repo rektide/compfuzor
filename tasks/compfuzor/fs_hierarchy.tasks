@@ -3,7 +3,7 @@
   set_fact:
   args:
     _dir: "{{_compiled_family.materialized_root}}"
-    _link: "{{lookup('vars', upper + '_LINK', default=_compiled_family.exposure_root)}}"
+    _link: "{{_compiled_family.exposure_root}}"
     _upper: "{{upper}}"
     _vals: "{{vals}}"
     _stat:

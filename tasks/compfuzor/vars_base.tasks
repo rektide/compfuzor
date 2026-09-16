@@ -108,7 +108,7 @@
     subinstance: "{{(SUBINSTANCE if SUBINSTANCE is string else MACHINE_ID) if SUBINSTANCE is deftruthy else ''}}"
     subinstanceName: "{{'-' if subinstance is deftruthy else ''}}{{subinstance|default('')}}"
     name_: "{{NAME|default(TYPE + instanceName + subinstanceName)}}"
-    prefixType: "{{ (TYPE_DIRS|default({})).get(type_, lookup('vars', type_|upper+'S_DIR', default='')) }}"
+    prefixType: "{{lookup('vars', type_|upper+'S_DIR', default='')}}"
     prefixDir: "{{DIR|default()|dirname}}"
     prefix: "{{PREFIX_DIR|def(prefixDir, prefixType, falsy=True)}}"
     dir: "{{DIR|default(prefix + '/' + name_)}}"
