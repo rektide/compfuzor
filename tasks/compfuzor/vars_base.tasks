@@ -48,6 +48,7 @@
     echo last
   register: COMPFUZOR_BASE
   changed_when: False
+  check_mode: false
 
 - name: set compfuzor user facts
   set_fact:
