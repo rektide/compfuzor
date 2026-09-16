@@ -1,0 +1,28 @@
+---
+# Contained layout: materialize every hierarchy family inside DIR and expose
+# it at its normal hierarchy root via the reversed structural link. For
+# deployments that must be one portable tree (containers); SteamOS persistence
+# is handled by steamos-offload.srv.pb bind mounts instead.
+#
+# The deployment's own storage type already occupies DIR, so that family
+# collapses to one path rather than gaining a redundant child.
+OPT: "{{DIR if type == 'opt' else DIR + '/opt'}}"
+OPT_LINK: "{{DIR if type == 'opt' else OPTS_DIR + '/' + NAME}}"
+SRV: "{{DIR if type == 'srv' else DIR + '/srv'}}"
+SRV_LINK: "{{DIR if type == 'srv' else SRVS_DIR + '/' + NAME}}"
+ETC: "{{DIR if type == 'etc' else DIR + '/etc'}}"
+ETC_LINK: "{{DIR if type == 'etc' else ETCS_DIR + '/' + NAME}}"
+VAR: "{{DIR if type == 'var' else DIR + '/var'}}"
+VAR_LINK: "{{DIR if type == 'var' else VARS_DIR + '/' + NAME}}"
+LOG: "{{DIR if type == 'log' else DIR + '/log'}}"
+LOG_LINK: "{{DIR if type == 'log' else LOGS_DIR + '/' + NAME}}"
+SPOOL: "{{DIR if type == 'spool' else DIR + '/spool'}}"
+SPOOL_LINK: "{{DIR if type == 'spool' else SPOOLS_DIR + '/' + NAME}}"
+CACHE: "{{DIR if type == 'cache' else DIR + '/cache'}}"
+CACHE_LINK: "{{DIR if type == 'cache' else CACHES_DIR + '/' + NAME}}"
+SRC: "{{DIR if type == 'src' else DIR + '/src'}}"
+SRC_LINK: "{{DIR if type == 'src' else SRCS_DIR + '/' + NAME}}"
+PID: "{{DIR if type == 'pid' else DIR + '/pid'}}"
+PID_LINK: "{{DIR if type == 'pid' else PIDS_DIR + '/' + NAME}}"
+SHARE: "{{DIR if type == 'share' else DIR + '/share'}}"
+SHARE_LINK: "{{DIR if type == 'share' else SHARES_DIR + '/' + NAME}}"

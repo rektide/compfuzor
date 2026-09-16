@@ -3,7 +3,11 @@
   set_fact:
   args:
     _dir: "{{_compiled_family.materialized_root}}"
-    _link: "{{_compiled_family.exposure_root}}"
+    # <KIND>_LINK (e.g. ETC_LINK) overrides the exposure destination. Used by
+    # vars/containered.yml to reverse the structural link: materialize under
+    # DIR, expose at the normal hierarchy root, for portable single-tree
+    # deployments (containers).
+    _link: "{{lookup('vars', upper + '_LINK', default=_compiled_family.exposure_root)}}"
     _upper: "{{upper}}"
     _vals: "{{vals}}"
     _stat:

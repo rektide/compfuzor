@@ -265,7 +265,9 @@ If this proposal is accepted, remove:
 
 - `TYPE_DIRS` from `vars_base.tasks`;
 - `vars/steamos.yml` path remapping;
-- `vars/containered.yml` unless independently justified outside SteamOS;
+- `vars/containered.yml` unless independently justified outside SteamOS
+  (update: retained — the container/single-tree portability use case justified
+  it; see the README "Vars profiles" section);
 - `<KIND>_LINK` overrides in `fs_hierarchy.tasks` if the generic contained
   profile is removed;
 - dormant `FS_<KIND>_{MATERIALIZED,EXPOSURE}_ROOT` code;

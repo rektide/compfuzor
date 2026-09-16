@@ -86,6 +86,21 @@ under Ansible's `*.py` discovery: [`merge.py.deprecated`](/library/filter_plugin
 [`listify.py.deprecated`](/library/filter_plugins/listify.py.deprecated), and
 [`dictify.py.deprecated`](/library/filter_plugins/dictify.py.deprecated).
 
+## Vars profiles
+
+Profiles are ordinary extra-vars files; Compfuzor does not infer them from the
+host. [`vars/containered.yml`](/vars/containered.yml) materializes every
+hierarchy family inside `DIR` and reverses the structural links (e.g.
+`/etc/opt/<name> -> <DIR>/etc`) for deployments that must be one portable
+tree, such as containers:
+
+```sh
+ansible-playbook -i 'localhost,' -c local app.opt.pb -e @vars/containered.yml
+```
+
+SteamOS does not use a path profile: `steamos-offload.srv.pb` bind-mounts
+`/usr/local` and `/etc/opt` from SteamOS's persistent home instead.
+
 ## Architecture contract
 
 See [`doc/arch.md`](doc/arch.md) for the full subsystem model, phase lifecycle,
