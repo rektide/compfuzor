@@ -24,8 +24,36 @@
   #  systemuidmax
   #  sysusersdir
   #  tmpfilesdir
-  shell: "pkg-config systemd --variable=binfmtdir; pkg-config systemd --variable=catalogdir; pkg-config systemd --variable=modulesloaddir; pkg-config systemd --variable=pcfiledir; pkg-config systemd --variable=prefix; pkg-config systemd --variable=sysctldir; pkg-config systemd --variable=systemdshutdowndir; pkg-config systemd --variable=systemdsleepdir; pkg-config systemd --variable=systemdsystemconfdir; pkg-config systemd --variable=systemdsystemgeneratordir; pkg-config systemd --variable=systemdsystempresetdir; pkg-config systemd --variable=systemdsystemunitdir; pkg-config systemd --variable=systemdsystemunitpath; pkg-config systemd --variable=systemduserconfdir; pkg-config systemd --variable=systemdusergeneratordir; pkg-config systemd --variable=systemduserpresetdir; pkg-config systemd --variable=systemduserunitdir; pkg-config systemd --variable=systemduserunitpath; pkg-config systemd --variable=systemdutildir; pkg-config systemd --variable=systemgidmax; pkg-config systemd --variable=systemuidmax; pkg-config systemd --variable=sysusersdir; pkg-config systemd --variable=tmpfilesdir"
+  shell: |
+    systemd_var() {
+      value=$(pkg-config systemd --variable="$1" 2>/dev/null || true)
+      printf '%s\n' "${value:-$2}"
+    }
+    systemd_var binfmtdir /usr/lib/binfmt.d
+    systemd_var catalogdir /usr/lib/systemd/catalog
+    systemd_var modulesloaddir /usr/lib/modules-load.d
+    systemd_var pcfiledir /usr/share/pkgconfig
+    systemd_var prefix /usr
+    systemd_var sysctldir /usr/lib/sysctl.d
+    systemd_var systemdshutdowndir /usr/lib/systemd/system-shutdown
+    systemd_var systemdsleepdir /usr/lib/systemd/system-sleep
+    systemd_var systemdsystemconfdir /etc/systemd/system
+    systemd_var systemdsystemgeneratordir /usr/lib/systemd/system-generators
+    systemd_var systemdsystempresetdir /usr/lib/systemd/system-preset
+    systemd_var systemdsystemunitdir /usr/lib/systemd/system
+    systemd_var systemdsystemunitpath /etc/systemd/system:/run/systemd/system:/usr/local/lib/systemd/system:/usr/lib/systemd/system
+    systemd_var systemduserconfdir /etc/systemd/user
+    systemd_var systemdusergeneratordir /usr/lib/systemd/user-generators
+    systemd_var systemduserpresetdir /usr/lib/systemd/user-preset
+    systemd_var systemduserunitdir /usr/lib/systemd/user
+    systemd_var systemduserunitpath /etc/systemd/user:/run/systemd/user:/usr/local/lib/systemd/user:/usr/local/share/systemd/user:/usr/lib/systemd/user:/usr/share/systemd/user
+    systemd_var systemdutildir /usr/lib/systemd
+    systemd_var systemgidmax 999
+    systemd_var systemuidmax 999
+    systemd_var sysusersdir /usr/lib/sysusers.d
+    systemd_var tmpfilesdir /usr/lib/tmpfiles.d
   changed_when: False
+  check_mode: false
   register: _systemd_vars
 - name: "Defaulting unset systemd variables"
   action: include_defaults
