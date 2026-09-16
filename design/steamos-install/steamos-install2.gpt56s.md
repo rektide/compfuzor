@@ -318,6 +318,25 @@ explicit operation.
 5. After `/usr/local` is restored, should user source checkouts return there
    immediately or remain under `~/src` by preference?
 
+## Below the line for the first implementation
+
+The first direct implementation intentionally does **not** include:
+
+- installing, enabling, or starting the units on the Deck without the
+  operator's interactive sudo authorization;
+- proving behavior across a real SteamOS A/B update or rollback;
+- a pacman backend or automatic consumption of `ARCH_PKGS`;
+- migration or deletion of the temporary contained deployment trees created
+  during the earlier spike;
+- automatic reruns of application recipes after the mounts become active;
+- persistence policy for arbitrary `/etc`, `/usr/share`, `/usr/lib`, udev,
+  sysusers, sysctl, modules-load, desktop, or package-owned files;
+- new offloads for `/var` service state;
+- archive retention, compaction, or pruning;
+- Vicinae installation or other application-specific packaging choices;
+- removal of SteamOS's native `/opt` or `/srv` offloads;
+- a generic replacement for the removed container/path-rewriting profiles.
+
 ## Cross-references
 
 - [`/steamos-offload.srv.pb`](/steamos-offload.srv.pb) — existing single-mount
