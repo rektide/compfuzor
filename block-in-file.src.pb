@@ -29,7 +29,7 @@
           #cd "{{DIR}}"
           #mise x --cd "$realdir" -- deno run block-in-file $*
 
-          deno run {{DIR}}/block-in-file.ts $*
+          deno run --allow-all {{DIR}}/block-in-file.ts "$@"
     ENV:
       GLOBAL_BINS_DIR: "{{GLOBAL_BINS_DIR}}"
   tasks:
