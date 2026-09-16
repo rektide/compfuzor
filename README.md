@@ -106,9 +106,10 @@ ansible-playbook -i 'localhost,' -c local app.src.pb \
 ```
 
 [`vars/steamos.yml`](/vars/steamos.yml) supplies a `TYPE_DIRS` map: `src`,
-`etc`, and package-oriented deployments move beneath persistent `/opt`, while
-`opt`, `srv`, and user recipes retain their normal roots. It also keeps authored
-config under `DIR` with a reciprocal `/etc/opt` exposure.
+deployments move beneath persistent, user-writable `~/src`; `etc` and
+package-oriented deployments move beneath persistent `/opt`; and `opt`, `srv`,
+and user recipes retain their normal roots. It also keeps authored config under
+`DIR` with a reciprocal `/etc/opt` exposure.
 [`vars/containered.yml`](/vars/containered.yml) sets each hierarchy root under
 `DIR` and its reciprocal `<KIND>_LINK` at the normal host location. Copy it or
 override individual pairs for a narrower layout:

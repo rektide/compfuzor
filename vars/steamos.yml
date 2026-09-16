@@ -3,7 +3,7 @@
 # SteamOS's persistent /opt mount. opt and srv already use persistent native
 # SteamOS mounts; user deployments already live under persistent /home.
 TYPE_DIRS:
-  src: /opt/src
+  src: "{{HOMEDIR}}/src"
   etc: /opt/etc
   repo: /opt/repo
   pkg: /opt/pkg
