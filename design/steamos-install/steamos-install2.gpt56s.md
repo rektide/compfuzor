@@ -82,16 +82,13 @@ The old custom mounts failed for two independent reasons:
 
 ## Proposed bootstrap deployment
 
-One `steamos-offload` deployment lives under the already-persistent `/opt`, for
-example:
+One `steamos-offload` deployment lives under the already-persistent `/srv`:
 
 ```text
-/opt/steamos-offload-main/
+/srv/steamos-offload-main/
 ├── bin/
-│   ├── seed-offloads.sh
 │   └── generated systemd installers
 └── etc/
-    ├── steamos-offload-seed.service
     ├── usr-local.mount
     └── etc-opt.mount
 ```
@@ -101,35 +98,18 @@ must not depend on `/etc/opt` or `/usr/local` being mounted.
 
 ### Use the new multi-unit systemd model
 
-The playbook should use `SYSTEMD_ROOTS` to declare three units:
+The playbook uses `SYSTEMD_ROOTS` to declare two plain bind mount units,
+mirroring Valve's own `opt.mount`/`srv.mount`:
 
 ```yaml
 SYSTEMD_ROOTS:
-  - STEAMOS_OFFLOAD_SEED
   - STEAMOS_OFFLOAD_USR_LOCAL
   - STEAMOS_OFFLOAD_ETC_OPT
-```
-
-Conceptual root declarations:
-
-```yaml
-STEAMOS_OFFLOAD_SEED:
-  SYSTEMD_SERVICE: steamos-offload-seed
-  SYSTEMD_UNITS:
-    RequiresMountsFor: [/home/.steamos/offload, /opt]
-    Before: [usr-local.mount, etc-opt.mount]
-  SYSTEMD_SERVICES:
-    Type: oneshot
-    ExecStart: /opt/steamos-offload-main/bin/seed-offloads.sh
-    RemainAfterExit: true
-  SYSTEMD_INSTALLS:
-    WantedBy: holo-offload.target
 
 STEAMOS_OFFLOAD_USR_LOCAL:
   SYSTEMD_MOUNT: usr-local
   SYSTEMD_UNITS:
-    Requires: steamos-offload-seed.service
-    After: steamos-offload-seed.service
+    ConditionPathExists: /home/.steamos/offload/usr/local
   SYSTEMD_MOUNTS:
     What: /home/.steamos/offload/usr/local
     Where: /usr/local
@@ -141,8 +121,7 @@ STEAMOS_OFFLOAD_USR_LOCAL:
 STEAMOS_OFFLOAD_ETC_OPT:
   SYSTEMD_MOUNT: etc-opt
   SYSTEMD_UNITS:
-    Requires: steamos-offload-seed.service
-    After: steamos-offload-seed.service
+    ConditionPathExists: /home/.steamos/offload/etc/opt
   SYSTEMD_MOUNTS:
     What: /home/.steamos/offload/etc/opt
     Where: /etc/opt
@@ -152,8 +131,10 @@ STEAMOS_OFFLOAD_ETC_OPT:
     WantedBy: holo-offload.target
 ```
 
-The exact dependency directives need an end-to-end boot-order test, but the
-ownership boundary is firm: seed first, then mount both roots.
+`ConditionPathExists` on the backing path keeps boot ordering safe if a
+source directory is absent (Valve's own `nix.mount` precedent). The playbook
+creates both backing directories; `usr/local` already holds the pre-update
+31 GiB tree, `etc/opt` is created on first run.
 
 ### Copy bootstrap units into `/etc/systemd/system`
 
@@ -173,69 +154,32 @@ The bootstrap playbook may bypass the generic LINKS runtime so its generated
 unit installers take the direct copy fallback and do not require Node during
 recovery.
 
-## Seed and archive behavior
+## No seed or merge layer
 
-The seed service runs before either custom mount. For each declared path it
-copies the currently visible image tree onto the durable backing tree:
+An earlier draft ran a root oneshot "seed" service that rsynced image content
+from `/usr/local` and `/etc/opt` onto the backing trees (with build-ID stamps
+and an archive directory) before mounting. That was rejected and removed:
 
-```text
-/usr/local/  -> /home/.steamos/offload/usr/local/
-/etc/opt/    -> /home/.steamos/offload/etc/opt/
-```
+- SteamOS ships essentially nothing in those paths (observed: ~100 KiB
+  skeleton under `/usr/local`, ~8 KiB under `/etc/opt`), so there is no image
+  content worth merging;
+- Valve's own offload mounts (`opt.mount`, `srv.mount`) are plain binds with
+  no seeding — that is the native pattern to mirror;
+- the machinery was pure downside: root rsync at early boot, unbounded archive
+  growth, extra ordering constraints, and merge semantics that could stomp
+  local files if an image ever did ship something.
 
-Required semantics:
-
-1. Refuse to seed a path if it is already an exact mount point.
-2. Create the mount point, backing directory, archive directory, and state
-   directory when absent.
-3. Use `rsync -aHAXx --numeric-ids` with trailing-slash directory semantics.
-4. Let the currently installed SteamOS image win on same-name changed files.
-5. Preserve replaced destination files with `--backup --backup-dir=...`.
-6. Never use `--delete`; undeclared/stale cleanup remains deliberate.
-7. Mark success only after the complete rsync succeeds.
-8. Serialize runs with a lock.
-
-Suggested durable administration tree:
-
-```text
-/home/.steamos/offload/.compfuzor/
-├── archive/
-│   ├── usr-local/<build-id>/<timestamp>/...
-│   └── etc-opt/<build-id>/<timestamp>/...
-└── seeded/
-    ├── usr-local/<build-id>
-    └── etc-opt/<build-id>
-```
-
-### Seed once per SteamOS image
-
-Running the image-to-backing merge on every boot would repeatedly overwrite a
-locally modified destination with the same image copy. Gate it by SteamOS
-`BUILD_ID` (and retain a manual `--force` mode):
-
-```text
-if seeded/<path>/<BUILD_ID> exists:
-    skip
-else:
-    archive-and-rsync
-    atomically create the stamp
-```
-
-This also handles A/B rollback: an already-seeded build skips; a genuinely new
-build contributes its image files once.
+If a future image ever places files under these paths that matter, handle it
+deliberately then; do not reintroduce boot-time merging.
 
 ## Boot flow
 
 ```mermaid
 flowchart TD
-    home[home.mount] --> nativeOpt[SteamOS opt.mount]
-    nativeOpt --> seed[steamos-offload-seed.service]
-    home --> seed
-    seed --> usrLocal[usr-local.mount]
-    seed --> etcOpt[etc-opt.mount]
+    home[home.mount] --> usrLocal[usr-local.mount]
+    home --> etcOpt[etc-opt.mount]
     usrLocal --> holo[holo-offload.target]
     etcOpt --> holo
-    seed --> holo
     holo --> localFs[local-fs.target]
 ```
 
@@ -295,29 +239,22 @@ explicit operation.
 
 ## Acceptance checks
 
-1. Render all three units from one `SYSTEMD_ROOTS` playbook.
+1. Render both mount units from one `SYSTEMD_ROOTS` playbook.
 2. Verify unit files contain no source dependency on `/etc/opt` or `/usr/local`.
-3. Test seeding into scratch trees: source wins, replaced destination is
-   archived, destination-only files remain, second same-build run is inert.
+3. Verify backing directories are created by the playbook and that
+   `ConditionPathExists` guards both mounts.
 4. Verify generated installers use copy strategy without the LINKS runtime.
-5. Activate manually on the Deck and verify exact mount sources with `findmnt`.
-6. Reboot and verify all three units and both mounts.
-7. Simulate a new build stamp in scratch before relying on the next real A/B
-   update.
-8. Rerun representative `opt`, `srv`, `src`, and `etc` recipes without a
+5. Activate on the Deck (`bin/install-systemd.sh` with sudo) and verify exact
+   mount sources with `findmnt`.
+6. Reboot and verify both mounts come up under `holo-offload.target`.
+7. Rerun representative `opt`, `srv`, `src`, and `etc` recipes without a
    SteamOS path profile.
 
 ## Open decisions
 
-1. Is `BUILD_ID` alone a sufficient image identity, or should the root
-   partition UUID be included?
-2. Should a seed failure block both mounts (recommended) or allow mounting the
-   previous durable trees?
-3. Should `/etc/opt` and `/usr/local` share one seed service transaction, or
-   have independent seed services and failure domains?
-4. Should the bootstrap retain generated direct installers only, or also ship
+1. Should the bootstrap retain generated direct installers only, or also ship
    one hand-written recovery command independent of Compfuzor's runtime?
-5. After `/usr/local` is restored, should user source checkouts return there
+2. After `/usr/local` is restored, should user source checkouts return there
    immediately or remain under `~/src` by preference?
 
 ## Below the line for the first implementation
@@ -334,10 +271,11 @@ The first direct implementation intentionally does **not** include:
 - persistence policy for arbitrary `/etc`, `/usr/share`, `/usr/lib`, udev,
   sysusers, sysctl, modules-load, desktop, or package-owned files;
 - new offloads for `/var` service state;
-- archive retention, compaction, or pruning;
+- any image-to-backing merge, seed, or archive layer (rejected; see above);
 - Vicinae installation or other application-specific packaging choices;
 - removal of SteamOS's native `/opt` or `/srv` offloads;
-- a generic replacement for the removed container/path-rewriting profiles.
+- a SteamOS-specific path profile (the generic `containered.yml` profile
+  remains for single-tree portable deployments such as containers).
 
 ## Cross-references
 
