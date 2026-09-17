@@ -2,7 +2,7 @@
 {% macro def(var, val) -%}
 
 {% if val == True and val|string != "1" -%}
-	{% set finalVal = lookup('vars', var, default=None)|trim -%}
+	{% set finalVal = lookup('vars', var, default="MAGIC_NONE_COMPFUZOR")|trim -%}
 {% else -%}
 	{% set finalVal = val -%}
 {% endif -%}
