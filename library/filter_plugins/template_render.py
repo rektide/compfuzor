@@ -56,7 +56,11 @@ def render_templates(context, value):
         A plain container tree with template strings resolved at this scope.
     """
     if isinstance(value, str) and "{{" in value:
-        variables = context.get("vars", {})
+        # get_all() is the public Jinja API for the full variable scope
+        # (globals + locals). The legacy internal "vars" dict is deprecated
+        # (removal slated for ansible-core 2.24) and returned empty in var
+        # evaluation contexts, which silently disabled rendering.
+        variables = context.get_all()
         if variables:
             try:
                 return context.environment.from_string(value).render(**variables)
