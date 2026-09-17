@@ -214,17 +214,23 @@ _subsystem_active: "{{ _subsystem_requested and (not _subsystem_bypassed) and _s
 SUBSYSTEM:
   get_urls:
     requested: "{{ GET_URLS | deflengthy }}"
+    # A dest that is itself a template (e.g. "{{BINS_DIR}}/polytool") passes
+    # through raw: defaultDir would mistake the unexpanded string for a
+    # relative name and prepend SRC. Lazy var resolution expands it by the
+    # time tasks consume the spec (same as templated url rows).
     spec: >-
       {%- set _items = GET_URLS | normalize(to='list') -%}
       {%- set normalized = [] -%}
       {%- for item in _items -%}
         {%- set row = item if item is mapping else {'url': item} -%}
         {%- set url = row.url -%}
-        {%- set destName = row.dest if row.dest is defined else (url | basename) -%}
+        {%- set destRaw = row.dest if row.dest is defined else (url | basename) -%}
+        {%- set destName = destRaw if (destRaw is string and destRaw.startswith('{{')) else (destRaw | defaultDir(SRC)) -%}
         {%- set og = {} -%}
         {%- if row.owner is defined and row.owner -%}{%- set _ = og.update({'owner': row.owner}) -%}{%- endif -%}
         {%- if row.group is defined and row.group -%}{%- set _ = og.update({'group': row.group}) -%}{%- endif -%}
-        {%- set entry = {'url': url, 'dest': (destName | defaultDir(SRC)), 'validate_certs': (row.validate_certs | default(VALIDATE_CERTS | default(true)))} | combine(og) -%}
+        {%- if row.mode is defined and row.mode -%}{%- set _ = og.update({'mode': row.mode}) -%}{%- endif -%}
+        {%- set entry = {'url': url, 'dest': destName, 'validate_certs': (row.validate_certs | default(VALIDATE_CERTS | default(true)))} | combine(og) -%}
         {%- set _ = normalized.append(entry) -%}
       {%- endfor -%}
       {{ normalized }}
@@ -237,12 +243,16 @@ SUBSYSTEM:
             cd "${DIR}"
 
             # Find and re-download from all .url files
-            for urlfile in *.url; do
+            for urlfile in *.url bin/*.url; do
               [ -e "$urlfile" ] || continue
               url=$(cat "$urlfile")
               dest="${urlfile%.url}"
               echo "Fetching: $url -> $dest"
-              curl -fsSL "$url" -o "$dest"
+              if [ -e "$dest" ]; then
+                curl -fsSL -z "$dest" -o "$dest" "$url"
+              else
+                curl -fsSL -o "$dest" "$url"
+              fi
             done
 
   go:

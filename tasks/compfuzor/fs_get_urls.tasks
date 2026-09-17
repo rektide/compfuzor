@@ -1,13 +1,43 @@
 - name: "Compfuzor: apply url-fetch subsystem"
   block:
+    # Dest parents are not guaranteed to exist yet (BINS_DIR is created later,
+    # in bins.tasks), so rows fetching directly into the deployment (e.g.
+    # dest: "{{ BINS_DIR }}/polytool") need their parent created here.
+    - name: "get url dest parent directories"
+      file:
+        path: "{{ item.dest|dirname }}"
+        state: directory
+        owner: "{{ item.owner | default(omit) }}"
+        group: "{{ item.group | default(omit) }}"
+      with_items: "{{ lookup('subsys', id=subsystem_id | default('get_urls'), name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='spec') }}"
+      become: "{{ _become.become }}"
+      vars:
+        _become: "{{ item.dest|dirname|become_calc(owner=item.owner|def(OWNER, falsy=True), group=item.group|def(GROUP, falsy=True)) }}"
+
     - name: "get urls"
       get_url:
         url: "{{ item.url }}"
         dest: "{{ item.dest }}"
         owner: "{{ item.owner | default(omit) }}"
         group: "{{ item.group | default(omit) }}"
+        mode: "{{ item.mode | default(omit) }}"
         validate_certs: "{{ item.validate_certs | default(true) }}"
       with_items: "{{ lookup('subsys', id=subsystem_id | default('get_urls'), name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='spec') }}"
+      become: "{{ _become.become }}"
+      vars:
+        _become: "{{ item.dest|dirname|become_calc(owner=item.owner|def(OWNER, falsy=True), group=item.group|def(GROUP, falsy=True)) }}"
+
+    # get_url applies declared attributes at download time but skips them on
+    # the unchanged-file fast path; converge owner/group/mode for rows that
+    # declare them.
+    - name: "get url attributes"
+      file:
+        path: "{{ item.dest }}"
+        owner: "{{ item.owner | default(omit) }}"
+        group: "{{ item.group | default(omit) }}"
+        mode: "{{ item.mode | default(omit) }}"
+      with_items: "{{ lookup('subsys', id=subsystem_id | default('get_urls'), name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='spec') }}"
+      when: item.mode is defined or item.owner is defined or item.group is defined
       become: "{{ _become.become }}"
       vars:
         _become: "{{ item.dest|dirname|become_calc(owner=item.owner|def(OWNER, falsy=True), group=item.group|def(GROUP, falsy=True)) }}"
