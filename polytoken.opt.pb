@@ -10,8 +10,10 @@
 #                          channels.json at vars time; -e PT_VERSION=X.Y.Z pins
 #   platform detection  -> ARCH (uname -m) -> linux-amd64 / linux-arm64
 #   binary + checksums  -> GET_URLS fetched straight into DIR/bin (the
-#                          deployment payload, not SRC staging), mode 0755;
-#                          .url sidecars let bin/get-urls.sh re-download
+#                          deployment payload, not SRC staging), mode 0755.
+#                          The spec rows are dumped verbatim to
+#                          DIR/etc/get-urls.json; bin/get-urls.sh re-fetches
+#                          from that same data contract
 #   sha256 verification -> bin/verify.sh, run every pass; the GLOBAL_BINS_DIR
 #                          link is delay: postRun, so nothing goes on PATH
 #                          unverified
@@ -64,7 +66,7 @@
 
       - version: {{PT_VERSION}} (channel: {{PT_CHANNEL}}, platform: {{PT_PLATFORM}})
       - payload: `{{BINS_DIR}}/polytoken` (0755) + `{{BINS_DIR}}/SHA256SUMS`
-        (`.url` sidecars; `bin/get-urls.sh` re-downloads them)
+        (data contract: `etc/get-urls.json`; `bin/get-urls.sh` re-fetches)
       - verify: `bin/verify.sh` — sha256 against the SHA256SUMS entry
       - on PATH: {{GLOBAL_BINS_DIR}}/polytoken -> {{BINS_DIR}}/polytoken
 

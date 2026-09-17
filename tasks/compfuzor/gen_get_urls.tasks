@@ -2,4 +2,6 @@
 - name: "Compfuzor: synthesize get_urls artifacts"
   set_fact:
     BINS: "{{ lookup('merge_subsys', id='get_urls', contrib='BINS') }}"
+    ENV: "{{ lookup('merge_subsys', id='get_urls', contrib='ENV') }}"
+    PKGS: "{{ lookup('merge_subsys', id='get_urls', contrib='PKGS') }}"
   when: lookup('subsys', id='get_urls', get='active', default=false) | bool

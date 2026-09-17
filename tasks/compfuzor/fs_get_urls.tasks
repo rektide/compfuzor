@@ -14,6 +14,19 @@
       vars:
         _become: "{{ item.dest|dirname|become_calc(owner=item.owner|def(OWNER, falsy=True), group=item.group|def(GROUP, falsy=True)) }}"
 
+    # The raw spec rows, dumped verbatim to one json per deployment. This is
+    # the data contract shared with bin/get-urls.sh (ENV: GET_URLS_JSON): the
+    # shell path re-fetches from the same dataset the tasks below consume, so
+    # there is one declaration and one derived dataset, two executors.
+    - name: "get urls data contract"
+      copy:
+        content: "{{ lookup('subsys', id=subsystem_id | default('get_urls'), name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='spec') | to_json }}"
+        dest: "{{DIR}}/etc/get-urls.json"
+      become: "{{ _become.become }}"
+      when: ETC_BYPASS is deffalsy
+      vars:
+        _become: "{{ (DIR ~ '/etc/get-urls.json')|become_calc(owner=OWNER|def(none, falsy=True), group=GROUP|def(none, falsy=True)) }}"
+
     - name: "get urls"
       get_url:
         url: "{{ item.url }}"
@@ -41,15 +54,3 @@
       become: "{{ _become.become }}"
       vars:
         _become: "{{ item.dest|dirname|become_calc(owner=item.owner|def(OWNER, falsy=True), group=item.group|def(GROUP, falsy=True)) }}"
-
-    - name: "save '.url' file"
-      copy:
-        content: "{{ item.url }}"
-        dest: "{{ item.dest }}.url"
-        owner: "{{ item.owner | default(omit) }}"
-        group: "{{ item.group | default(omit) }}"
-      with_items: "{{ lookup('subsys', id=subsystem_id | default('get_urls'), name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='spec') }}"
-      become: "{{ _become.become }}"
-      vars:
-        _become: "{{ item.dest|dirname|become_calc(owner=item.owner|def(OWNER, falsy=True), group=item.group|def(GROUP, falsy=True)) }}"
-  when: lookup('subsys', id=subsystem_id | default('get_urls'), name=subsystem_name | default('get_urls'), fallback_id='get_urls', get='active')

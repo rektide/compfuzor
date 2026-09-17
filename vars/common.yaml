@@ -235,25 +235,26 @@ SUBSYSTEM:
       {%- endfor -%}
       {{ normalized }}
     contrib:
+      ENV:
+        GET_URLS_JSON: "{{DIR}}/etc/get-urls.json"
+      PKGS: [jq]
       BINS:
         - name: get-urls.sh
           run: true
           generated: |
-            [ -z "$DIR" ] && export DIR="{{SRC}}"
-            cd "${DIR}"
-
-            # Find and re-download from all .url files
-            for urlfile in *.url bin/*.url; do
-              [ -e "$urlfile" ] || continue
-              url=$(cat "$urlfile")
-              dest="${urlfile%.url}"
+            # Data contract: DIR/etc/get-urls.json holds the raw get_urls spec
+            # rows verbatim (url, dest, mode, ...) -- the same dataset the
+            # fs_get_urls tasks consume -- so shell and ansible stay in parity.
+            GET_URLS_JSON="${GET_URLS_JSON:-{{DIR}}/etc/get-urls.json}"
+            [ -f "$GET_URLS_JSON" ] || { echo "get-urls: missing $GET_URLS_JSON" >&2; exit 1; }
+            while IFS=$'\t' read -r url dest mode; do
+              [ -n "$url" ] || continue
               echo "Fetching: $url -> $dest"
-              if [ -e "$dest" ]; then
-                curl -fsSL -z "$dest" -o "$dest" "$url"
-              else
-                curl -fsSL -o "$dest" "$url"
-              fi
-            done
+              zflag=()
+              if [ -e "$dest" ]; then zflag=(-z "$dest"); fi
+              curl -fsSL "${zflag[@]}" -o "$dest" "$url"
+              if [ -n "$mode" ]; then chmod "$mode" "$dest"; fi
+            done < <(jq -r '.[] | [.url, .dest, (.mode // "")] | @tsv' "$GET_URLS_JSON")
 
   go:
     contrib:

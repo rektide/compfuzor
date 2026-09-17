@@ -837,6 +837,7 @@ SUBSYSTEM:
     spec:
       - url: https://example.invalid/file.tar.gz
         dest: /opt/file.tar.gz
+        mode: "0755"
         owner: root
         group: root
         validate_certs: true
@@ -859,7 +860,7 @@ Lifecycle view:
 | raw | `GET_URLS` | playbook input |
 | spec | `SUBSYSTEM.get_urls.spec` | authoritative download contract |
 | contrib | `SUBSYSTEM.get_urls.contrib` | helper and shared-artifact contributions |
-| apply | `fs_get_urls.tasks` | downloads and `.url` sidecars |
+| apply | `fs_get_urls.tasks` | downloads; dumps the raw spec rows to `DIR/etc/get-urls.json`, the data contract `bin/get-urls.sh` re-fetches from |
 
 ### Kernel
 
