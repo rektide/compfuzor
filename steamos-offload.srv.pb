@@ -51,12 +51,12 @@
     # /etc/opt onto the offload backing trees before the mounts are enabled.
     # Replaced files are archived under .seed-backup/. Run once with sudo.
     BINS:
-      - name: seed.sh
+      - name: install-replicate.sh
         basedir: false
         compose: false
         content: |
           if [ "$(id -u)" -ne 0 ]; then
-            echo "seed.sh: run with sudo, before the mounts are enabled" >&2
+            echo "install-replicate.sh: run with sudo, before the mounts are enabled" >&2
             exit 1
           fi
           root={{STEAMOS_OFFLOAD_ROOT}}
@@ -64,13 +64,13 @@
           ts=$(date -u +%Y%m%dT%H%M%SZ)
           for rel in usr/local etc/opt; do
             if mountpoint -q "/$rel"; then
-              echo "seed.sh: /$rel is mounted; skipping"
+              echo "install-replicate.sh: /$rel is mounted; skipping"
               continue
             fi
-            echo "seed.sh: /$rel -> $root/$rel"
+            echo "install-replicate.sh: /$rel -> $root/$rel"
             rsync -aHAXx --numeric-ids --backup --backup-dir="$root/.seed-backup/$ts" "/$rel/" "$root/$rel/"
           done
-          echo "seed.sh: done; replaced files (if any) archived under $root/.seed-backup/$ts"
+          echo "install-replicate.sh: done; replaced files (if any) archived under $root/.seed-backup/$ts"
   tasks:
     - import_tasks: tasks/compfuzor.includes
 

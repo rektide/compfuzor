@@ -77,7 +77,7 @@ def test_steamos_offload() -> None:
                     raise AssertionError(f"{unit.name}: missing {fragment!r}:\n{text}")
         if (etc / "steamos-offload-seed.service").exists():
             raise AssertionError("seed service rendered")
-        seed = deployment / "bin/seed.sh"
+        seed = deployment / "bin/install-replicate.sh"
         seed_text = seed.read_text(encoding="utf-8")
         for fragment in (
             "usr/local",

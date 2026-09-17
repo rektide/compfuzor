@@ -169,10 +169,10 @@ stamps, an archive tree, and a lock. That was rejected and removed:
   image-wins merge semantics are pure downside risk.
 
 What remains is what was originally asked for: a short manual
-`bin/seed.sh` (~15 lines) for first activation. Run once with sudo before
-enabling the mounts: it overlays image `/usr/local` and `/etc/opt` onto the
-backing trees with `rsync --backup` (replaced files archived under
-`.seed-backup/<timestamp>/`), skips any path already mounted, and never
+`bin/install-replicate.sh` (~15 lines) for first activation. Run once with
+sudo before enabling the mounts: it overlays image `/usr/local` and `/etc/opt`
+onto the backing trees with `rsync --backup` (replaced files archived under
+`.seed-backup/<timestamp>/`), refuses any path already mounted, and never
 deletes. If a future image ever ships files under these paths that matter,
 rerun it deliberately.
 
