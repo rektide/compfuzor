@@ -77,8 +77,17 @@ def test_steamos_offload() -> None:
                     raise AssertionError(f"{unit.name}: missing {fragment!r}:\n{text}")
         if (etc / "steamos-offload-seed.service").exists():
             raise AssertionError("seed service rendered")
-        if (deployment / "bin/seed-offloads.sh").exists():
-            raise AssertionError("seed script rendered")
+        seed = deployment / "bin/seed.sh"
+        seed_text = seed.read_text(encoding="utf-8")
+        for fragment in (
+            "usr/local",
+            "etc/opt",
+            "rsync -aHAXx",
+            "--backup",
+            "mountpoint -q",
+        ):
+            if fragment not in seed_text:
+                raise AssertionError(f"seed.sh missing {fragment!r}:\n{seed_text}")
         if not (offload / "usr/local").is_dir() or not (offload / "etc/opt").is_dir():
             raise AssertionError("backing directories not created")
 

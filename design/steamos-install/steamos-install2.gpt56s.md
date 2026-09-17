@@ -154,23 +154,27 @@ The bootstrap playbook may bypass the generic LINKS runtime so its generated
 unit installers take the direct copy fallback and do not require Node during
 recovery.
 
-## No seed or merge layer
+## Seeding is a short manual script, not a boot service
 
-An earlier draft ran a root oneshot "seed" service that rsynced image content
-from `/usr/local` and `/etc/opt` onto the backing trees (with build-ID stamps
-and an archive directory) before mounting. That was rejected and removed:
+An earlier draft ran a root oneshot "seed" *systemd service* that rsynced
+image content onto the backing trees at every boot-check, with `BUILD_ID`
+stamps, an archive tree, and a lock. That was rejected and removed:
 
 - SteamOS ships essentially nothing in those paths (observed: ~100 KiB
-  skeleton under `/usr/local`, ~8 KiB under `/etc/opt`), so there is no image
-  content worth merging;
+  skeleton under `/usr/local`, ~8 KiB under `/etc/opt`), so boot-time merging
+  is machinery with no payload;
 - Valve's own offload mounts (`opt.mount`, `srv.mount`) are plain binds with
   no seeding — that is the native pattern to mirror;
-- the machinery was pure downside: root rsync at early boot, unbounded archive
-  growth, extra ordering constraints, and merge semantics that could stomp
-  local files if an image ever did ship something.
+- automatic root rsync at early boot, unbounded stamp/archive growth, and
+  image-wins merge semantics are pure downside risk.
 
-If a future image ever places files under these paths that matter, handle it
-deliberately then; do not reintroduce boot-time merging.
+What remains is what was originally asked for: a short manual
+`bin/seed.sh` (~15 lines) for first activation. Run once with sudo before
+enabling the mounts: it overlays image `/usr/local` and `/etc/opt` onto the
+backing trees with `rsync --backup` (replaced files archived under
+`.seed-backup/<timestamp>/`), skips any path already mounted, and never
+deletes. If a future image ever ships files under these paths that matter,
+rerun it deliberately.
 
 ## Boot flow
 
