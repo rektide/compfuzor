@@ -34,7 +34,11 @@
     WHERE: "{{where|default('/mnt/' + INSTANCE)}}"
     CREDENTIALS: "{{credentials|default('/root/.config/smb/nano')}}"
     UNIT: "{{ lookup('pipe', 'systemd-escape --path ' ~ WHERE) }}"
-    MOUNT_OPTS: "credentials={{CREDENTIALS}},vers=3.1.1,posix,iocharset=utf8,soft{{ ',' ~ mount_opts if mount_opts is defined else '' }}"
+    # WARNING:nostrictsync!
+    # WARNING idsfromsid
+    # WARNING uid=1000, not cifs.idmap
+    # not set: `fsc` caching, `compress` experimental, `persistenthandles`, `cache=loose`, `nosetuids`
+    MOUNT_OPTS: "uid=1000,gid=staff,actimeo=10,max_cached_dirs=1024,max_channels=4,resilienthandles,echo_interval=20,nostrictsync,credentials={{CREDENTIALS}},vers=3.1.1,posix,iocharset=utf8,soft{{ ',' ~ mount_opts if mount_opts is defined else '' }}"
     SYSTEMD_ROOTS:
       - CIFS_MOUNT
       - CIFS_AUTOMOUNT
