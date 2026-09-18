@@ -15,10 +15,20 @@
   file:
     path: "{{_dest}}"
     state: absent
-  with_items: "{{ BINS_ABSENT | default([]) | normalize(to='list') }}"
+  with_items: "{{ _absent_bins }}"
   become: "{{ _become.become }}"
   when: item is mapping and item.dest|def(item.name, False) is truthy
   vars:
+    # Tombstones live in two places: the dedicated BINS_ABSENT list, and BINS
+    # entries carrying `state: absent`. gen_bins.tasks normally resolves the
+    # latter into BINS_ABSENT after composition; honoring `state: absent`
+    # here too makes tombstones work in minimal playbooks that import
+    # bins.tasks directly, and an entry whose name merges (bins_generated
+    # preset) with a live claim acts as a one-shot migration primer: this
+    # task removes the stale representation early, and the later claim tasks
+    # re-create the new one. Drop the tombstone after the migration to avoid
+    # remove/recreate churn on every run.
+    _absent_bins: "{{ (BINS_ABSENT|default([])|normalize(to='list')) + (BINS|default([])|normalize(to='list')|selectattr('state', 'defined')|selectattr('state', 'equalto', 'absent')|list) }}"
     _dest: "{{BINS_DIR}}/{{item.dest|def(item.name)}}"
     _become: "{{ _dest|become_calc }}"
 - name: "Create exec/execs `BINS`"
@@ -55,9 +65,12 @@
     and not _isLink
     and not _contentful
     and _exists
+    and (_item.src is deftruthy or _item.state|def('') != 'absent')
   vars:
     _item: "{{ bin_item if bin_item is mapping else {'name': bin_item} }}"
     _srcName: "{{_item.src|def(_item.name, False)}}"
+    # `state: absent` tombstones without their own src must not fall through
+    # the name-as-src fallback and template a missing files/<TYPE>/<name>.
     # `../` in a bin src escapes files/<TYPE>/ (shared scripts like
     # systemd/install-unit.sh live under files/systemd/, reached via
     # `../systemd/...`); resolve those directly under files/ so they work even

@@ -88,5 +88,70 @@ def test_bin_tombstone_materialization() -> None:
         print("ok: bin tombstone removes stale leaf and prevents empty compositor")
 
 
+def test_state_absent_without_gen_bins() -> None:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-bin-state-absent-") as tmp:
+        temporary = Path(tmp)
+        payload = temporary / "payload"
+        output = payload / "bin"
+        playbook = temporary / "render.pb"
+        (temporary / "files").symlink_to(ROOT / "files", target_is_directory=True)
+        playbook.write_text(
+            f"""---
+- hosts: all
+  gather_facts: false
+  vars:
+    TYPE: tombstone-test
+    DIR: {str(payload)!r}
+    BINS_DIR: {str(output)!r}
+    BINMODE: '0755'
+    BINS:
+      - name: live.sh
+        content: echo live
+      - name: stale-bundle.mjs
+        state: absent
+  tasks:
+    - ansible.builtin.file:
+        path: {str(output)!r}
+        state: directory
+        mode: '0771'
+    - ansible.builtin.copy:
+        dest: {str(output / 'stale-bundle.mjs')!r}
+        content: stale
+        mode: '0755'
+    - ansible.builtin.import_tasks: {str(ROOT / 'tasks/compfuzor/bins.tasks')!r}
+""",
+            encoding="utf-8",
+        )
+
+        env = os.environ.copy()
+        env["ANSIBLE_CONFIG"] = str(ROOT / "ansible.cfg")
+        rendered = subprocess.run(
+            [
+                "ansible-playbook",
+                "-i",
+                "localhost,",
+                "-c",
+                "local",
+                str(playbook),
+            ],
+            cwd=ROOT,
+            env=env,
+            check=False,
+            text=True,
+            capture_output=True,
+        )
+        if rendered.returncode:
+            raise AssertionError(
+                f"ansible-playbook failed ({rendered.returncode})\n"
+                f"{rendered.stdout}\n{rendered.stderr}"
+            )
+
+        names = {path.name for path in output.iterdir()}
+        if names != {"live.sh"}:
+            raise AssertionError(f"unexpected materialized bins: {sorted(names)}")
+        print("ok: state:absent tombstone honored by bins.tasks without gen_bins")
+
+
 if __name__ == "__main__":
     test_bin_tombstone_materialization()
+    test_state_absent_without_gen_bins()
