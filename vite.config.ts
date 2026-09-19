@@ -4,8 +4,10 @@ const config: ReturnType<typeof defineConfig> = defineConfig({
   pack: [
     {
       entry: { "compfuzor-runtime": "files/runtime/compfuzor-runtime.ts" },
-      outDir: "build/runtime",
-      clean: true,
+      # runtime/ also vendors zimfw.zsh (and future local-first artifacts);
+      # never clean it or the build would delete the vendored controller.
+      outDir: "runtime",
+      clean: false,
       format: "esm",
       platform: "node",
       target: "node20.19",

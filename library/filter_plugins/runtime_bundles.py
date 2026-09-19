@@ -15,7 +15,7 @@ _RUNTIME_ARTIFACT = "compfuzor-runtime.mjs"
 
 def runtime_artifact_bin(artifact, name):
     """Return one checked-in Vite+ runtime artifact or fail before rendering."""
-    source = _REPOSITORY / "build" / "runtime" / artifact
+    source = _REPOSITORY / "runtime" / artifact
     if not source.is_file():
         raise AnsibleFilterError(
             "missing built runtime {}: run `pnpm install` and `pnpm build` in {}".format(

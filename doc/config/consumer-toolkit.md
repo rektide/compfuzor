@@ -38,8 +38,9 @@ files/                         # source checkout only
   config-remote.ts             # source CLI wrapper
   config-remote/*.ts
   runtime/*.ts                 # minimal root dispatch only
-build/runtime/                 # checked-in `pnpm build` product
+runtime/                       # checked-in `pnpm build` product + vendored controller
   compfuzor-runtime.mjs
+  zimfw.zsh                    # vendored zimfw release; GET_URLS refreshes deployments
 <deployment>/bin/              # one copied product and stable aliases
   compfuzor-runtime.mjs
   config/command.mjs -> ../compfuzor-runtime.mjs

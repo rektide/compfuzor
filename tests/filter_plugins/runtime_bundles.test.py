@@ -17,7 +17,7 @@ def test_links_runtime_bundles():
     full = links_runtime_bins(True)
     assert [record["name"] for record in full] == ["compfuzor-runtime.mjs", "links/links.mjs", "links.mjs"]
     assert full[0]["raw"] and full[0]["compose"] is False
-    assert full[0]["src"].endswith("/build/runtime/compfuzor-runtime.mjs")
+    assert full[0]["src"].endswith("/runtime/compfuzor-runtime.mjs")
     assert full[1]["link"] == "compfuzor-runtime.mjs"
     assert full[2]["link"] == "compfuzor-runtime.mjs"
     assert links_runtime_dirs("/opt/app/bin") == ["/opt/app/bin/links"]

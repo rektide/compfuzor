@@ -99,7 +99,7 @@ def test_compile_contexts():
 
     bins = {item["name"]: item for item in compiled["bins"]}
     check("built omnibus runtime", bins["compfuzor-runtime.mjs"]["raw"], True)
-    check("omnibus runtime source", bins["compfuzor-runtime.mjs"]["src"].endswith("/build/runtime/compfuzor-runtime.mjs"), True)
+    check("omnibus runtime source", bins["compfuzor-runtime.mjs"]["src"].endswith("/runtime/compfuzor-runtime.mjs"), True)
     check("command runtime alias", bins["config/command.mjs"]["link"], "compfuzor-runtime.mjs")
     check("no deployed TypeScript runtime", [name for name in bins if name.endswith(".ts")], [])
     check("context module directory", "/opt/example/bin/config" in compiled["dirs"], True)

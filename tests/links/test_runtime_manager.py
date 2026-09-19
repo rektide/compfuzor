@@ -12,7 +12,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-CLI = [ROOT / "build/runtime/compfuzor-runtime.mjs", "links"]
+CLI = [ROOT / "runtime/compfuzor-runtime.mjs", "links"]
 
 
 def run(env: dict[str, str], *args: str) -> subprocess.CompletedProcess[str]:
