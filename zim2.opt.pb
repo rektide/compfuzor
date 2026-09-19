@@ -283,43 +283,54 @@
       - name: zimenv.zsh
         content: |
           # Context loader template projected by bin/zim/install.mjs.
+          # Startup never rebuilds and never sources the deployment: rebuilds
+          # are deliberate install-time actions. Missing or stale init.zsh
+          # warns with the deployment's install bin and degrades gracefully.
           [[ ${COMPFUZOR_EMERGENCY:-0} == 1 ]] && return
           () {
             local default_zim_home=@@ZIM_CACHE_HOME@@
             local default_zim_config_file=@@ZIM_CONFIG_OUTPUT@@
             local controller=@@ZIM_CONTROLLER@@
+            local rebuild="${controller:h:h}/bin/install.sh"
             local ZIM_HOME="${ZIM_ENV_HOME:-$default_zim_home}"
             local config="${ZIM_ENV_CONFIG:-}"
             case "$config" in @@ZIM_LEGACY_CONFIG_PATTERN@@) config="" ;; esac
             local ZIM_CONFIG_FILE="${config:-$default_zim_config_file}"
-            if [[ ! "$ZIM_HOME/init.zsh" -nt "$ZIM_CONFIG_FILE" ]] && ! source "$controller" init; then
-              unfunction zimfw 2>/dev/null || true
-              print -u2 "zimenv: failed to rebuild $ZIM_HOME/init.zsh from $ZIM_CONFIG_FILE"
+            if [[ ! -e "$ZIM_HOME/init.zsh" ]]; then
+              print -u2 "zimenv: $ZIM_HOME/init.zsh is missing; run $rebuild to build it"
               return
             fi
+            if [[ ! "$ZIM_HOME/init.zsh" -nt "$ZIM_CONFIG_FILE" ]]; then
+              print -u2 "zimenv: $ZIM_CONFIG_FILE changed since init.zsh was built; run $rebuild to rebuild (continuing with stale init.zsh)"
+            fi
             source "$ZIM_HOME/init.zsh"
-            unfunction zimfw 2>/dev/null || true
           }
       - name: zimrc.zsh
         content: |
           # Context loader template projected by bin/zim/install.mjs.
+          # Startup never rebuilds and never sources the deployment: rebuilds
+          # are deliberate install-time actions. Missing or stale init.zsh
+          # warns with the deployment's install bin and degrades gracefully.
           if [[ ${COMPFUZOR_EMERGENCY:-0} == 1 ]]; then
             typeset -g _COMPFUZOR_EMERGENCY_COLD=1
             source @@ZIM_EMERGENCY_MODULE@@
             return
           fi
-          if [[ -z ${ZIM_HOME:-} ]]; then
-            ZIM_HOME=@@ZIM_CACHE_HOME@@
-          fi
-          case "${ZIM_CONFIG_FILE:-}" in @@ZIM_LEGACY_CONFIG_PATTERN@@) unset ZIM_CONFIG_FILE ;; esac
-          if [[ -z ${ZIM_CONFIG_FILE:-} ]]; then
-            ZIM_CONFIG_FILE=@@ZIM_CONFIG_OUTPUT@@
-          fi
-          # Install missing modules and update ${ZIM_HOME}/init.zsh if missing or outdated.
-          if [[ ! "${ZIM_HOME}/init.zsh" -nt "${ZIM_CONFIG_FILE}" ]]; then
-            source @@ZIM_CONTROLLER@@ init
-          fi
-          source "${ZIM_HOME}/init.zsh"
+          () {
+            local controller=@@ZIM_CONTROLLER@@
+            local rebuild="${controller:h:h}/bin/install.sh"
+            typeset -g ZIM_HOME="${ZIM_HOME:-@@ZIM_CACHE_HOME@@}"
+            case "${ZIM_CONFIG_FILE:-}" in @@ZIM_LEGACY_CONFIG_PATTERN@@) unset ZIM_CONFIG_FILE ;; esac
+            : "${ZIM_CONFIG_FILE:=@@ZIM_CONFIG_OUTPUT@@}"
+            if [[ ! -e "${ZIM_HOME}/init.zsh" ]]; then
+              print -u2 "zim: ${ZIM_HOME}/init.zsh is missing; run ${rebuild} to build it"
+              return
+            fi
+            if [[ ! "${ZIM_HOME}/init.zsh" -nt "${ZIM_CONFIG_FILE}" ]]; then
+              print -u2 "zim: ${ZIM_CONFIG_FILE} changed since init.zsh was built; run ${rebuild} to rebuild (sourcing stale init.zsh)"
+            fi
+            source "${ZIM_HOME}/init.zsh"
+          }
           export ZSH_AUTOSUGGEST_MANUAL_REBIND=1
     ARCH_PKGS:
       - bat
