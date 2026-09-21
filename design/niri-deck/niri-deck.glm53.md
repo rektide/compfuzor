@@ -202,20 +202,25 @@ ephemerally.
 
 ## Proposed compfuzor slice
 
-Not implemented yet — this doc is the assessment. Sketch:
+**Implemented** (2026-09-21):
 
-- New `niri-deck` playbook (`.etc.pb`-ish, `USERMODE=False`), owning:
-  - package list (`niri xwayland-satellite [xdg-desktop-portal-gnome]` + shell bits)
-    following the `steamdeck-pacman.etc.pb` `packages.txt` + `install-pkgs.sh`
-    pattern (with `--needed`),
-  - `steamosctl set-default-desktop-session niri.desktop` as an idempotent bin,
-  - `ETC_FILES` for niri config include/overlay (deck-specific binds, gamescope
-    couch-mode launcher) mirroring the `config-overlay.kdl` pattern already in
-    `niri.src.pb`,
-  - user `niri.service.wants` symlinks for waybar/mako.
-- Separate cleanup (bug spotted): `niri.src.pb` has two `PKGS` keys and the second
-  one is Debian-style `-dev` package names (`libgbm-dev` etc.) — fine on apt hosts,
-  wrong for the deck; needs host-conditional packages if it's ever run there.
+- [`steamos-niri.opt.pb`](/steamos-niri.opt.pb) — `ARCH_PKGS`-driven package
+  list (archlane), `install.sh` = `steamos-readonly disable` + composed
+  `install-arch.sh` lane (one command re-applies everything after a SteamOS
+  update), `session.sh`/`session-plasma.sh` for the `steamosctl` session
+  switch/rollback, `user-config.sh` for the niri config include +
+  `niri.service` wants, `ETC_FILES` deck binds overlay (ghostty, nested
+  gamescope gamepadUI couch mode, brightness/volume keys).
+- **archlane subsystem** — `ARCH_PKGS`/`ARCH_PKGSET`/`ARCH_PKGSETS` are now
+  real machinery (previously informational-only, as in `zed.src.pb`):
+  [`gen_arch.tasks`](/tasks/compfuzor/gen_arch.tasks) gathers `_arch_pkgs`
+  once and synthesizes `install-arch.sh` (packages lane, pacman
+  `--needed` self-gated on the pacman binary) + `status-arch.sh` drift
+  reporter; `pkgs.tasks` dispatches render-side on `ansible_pkg_mgr` (apt vs
+  pacman). Covered by `tests/integration/archlane.test.py`.
+- `niri.src.pb` PKGS bug fixed: the duplicate `PKGS` keys are split into
+  Debian build deps (`PKGS`) and the Arch list (`ARCH_PKGS`, companions +
+  PKGBUILD deps), so the playbook is now host-correct on both families.
 
 ## Gaps & risks
 

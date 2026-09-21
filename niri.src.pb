@@ -5,8 +5,13 @@
     INSTANCE: git
     REPO: https://github.com/YaLTeR/niri
     ENV: True
-    # arch recommendations
-    PKGS:
+    # Arch package list: companions + build deps (upstream PKGBUILD
+    # depends/makedepends), consumed by the archlane (gen_arch.tasks ->
+    # install-arch.sh lane / render-side pacman). On the deck the packaged
+    # niri from steamos-niri.opt.pb replaces this git build. cargo comes
+    # from rustup, not this list.
+    ARCH_PKGS:
+      # companions
       - alacritty
       - fuzzel
       # resolution switching
@@ -20,6 +25,22 @@
       - xdg-desktop-portal-gnome
       # and xwayland-satellite
       - xwayland
+      - xwayland-satellite
+      # build deps
+      - cairo
+      - clang
+      - dbus
+      - git
+      - glib2
+      - libdisplay-info
+      - libinput
+      - libxkbcommon
+      - mesa
+      - pango
+      - pipewire
+      - seatd
+      - systemd-libs
+      - wayland
       #- udiskie
     ETC_FILES:
       - name: config-overlay.kdl
