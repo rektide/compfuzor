@@ -1,3 +1,5 @@
 ---
 # http://askubuntu.com/questions/65245/apt-get-update-only-for-a-specific-repository
+# Legacy per-repo refresh; churns indexes on every run. Prefer
+# `-e APT_BYPASS=True` on repeat runs.
 - shell: apt-get update -o Dir::Etc::sourcelist="sources.list.d/{{name}}.list" -o Dir::Etc::sourceparts="-" -o APT::Get::List-Cleanup="0"

@@ -1,5 +1,8 @@
 ---
 # http://askubuntu.com/questions/65245/apt-get-update-only-for-a-specific-repository
+# The churn hotspot of the apt lane: skip with `-e APT_BYPASS=True`
+# (whole lane) or `-e APT_UPDATE_BYPASS=True` (this pass alone) unless
+# indexes must refresh this run.
 - name: "Update repository {{repo}}"
   shell:
     cmd: "apt-get update -o Dir::Etc::sourcelist='sources.list.d/{{repo}}.list' -o Dir::Etc::sourceparts='-' -o APT::Get::List-Cleanup='0'"

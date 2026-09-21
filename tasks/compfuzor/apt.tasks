@@ -1,4 +1,12 @@
 ---
+# apt repo config lane: key downloads, source list templates, links into
+# /etc/apt, then a per-repo `apt-get update` (../apt.update.tasks).
+#
+# Recommend bypass in most cases: run with `-e APT_BYPASS=True`. The index
+# refresh is real system churn and dominates repeat-run time; iterate
+# without it unless you intend to change repo config or refresh indexes
+# this run. Finer-grained: `-e APT_UPDATE_BYPASS=True` keeps repo config
+# but skips only the `apt-get update` pass.
 - debug: "msg='Compfuzor: install & update apt repository'"
 - include_tasks: vars_base.tasks
   when: (APT_DEFAULT_COMPONENT is not defined and APT_DEFAULT_COMPONENTS is not defined and APT_COMPONENT is not defined and APT_COMPONENTS is not defined) or ARCH is not defined
