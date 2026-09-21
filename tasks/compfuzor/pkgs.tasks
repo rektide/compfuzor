@@ -17,4 +17,15 @@
     state: "{{APT_INSTALL}}"
     pkg: "{{_pkgs}}"
   become: "{{ PKG_BECOME|default(True) }}"
-  when: _pkgs is deflengthy or PKGS is truthy
+  when: >
+    (_pkgs is deflengthy or PKGS is truthy) and
+    ansible_pkg_mgr|default('apt') == 'apt'
+# Arch side: _arch_pkgs is gathered once by gen_arch.tasks (compile phase,
+# single source -- see its header) and simply consumed here. Empty default
+# covers playbooks that declare no ARCH_PKGS at all.
+- name: install arch pkgs
+  command: pacman -S --needed --noconfirm {{ _arch_pkgs|default([])|join(' ') }}
+  become: "{{ PKG_BECOME|default(True) }}"
+  when: >
+    _arch_pkgs|default([])|length > 0 and
+    ansible_pkg_mgr|default('') == 'pacman'

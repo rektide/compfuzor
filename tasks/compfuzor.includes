@@ -61,6 +61,9 @@
 - import_tasks: compfuzor/gen_apt.tasks
   when: PKGS is defined or PKGSET is defined or PKGSETS is defined
   tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_arch.tasks
+  when: ARCH_PKGS is defined or ARCH_PKGSET is defined or ARCH_PKGSETS is defined
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_mcp.tasks
   when: MCP_COMMAND is defined or MCP_URL is defined or MCP_CLIENT is defined
   tags: ['vars', 'always']
@@ -215,7 +218,10 @@
 - import_tasks: compfuzor/apt.tasks
   when: (APT_REPO|default(APT_REPOS) is deftruthy or APT_LIST_URL is deftruthy) and APT_BYPASS is deffalsy
 - import_tasks: compfuzor/pkgs.tasks
-  when: (PKGS is defined or PKGSET is defined or PKGSETS is defined) and PKGS_BYPASS is deffalsy and USERMODE is deffalsy
+  when: >
+    (PKGS is defined or PKGSET is defined or PKGSETS is defined or
+     ARCH_PKGS is defined or ARCH_PKGSET is defined or ARCH_PKGSETS is defined) and
+    PKGS_BYPASS is deffalsy and USERMODE is deffalsy
 - import_tasks: compfuzor/dbconfig.tasks
   when: DBCONFIG is deftruthy and DBCONFIG_BYPASS is deffalsy
 - import_tasks: compfuzor/kernel_modules.tasks

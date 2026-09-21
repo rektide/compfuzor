@@ -381,12 +381,19 @@ of its leaves. Unknown phase values fail generation.
 
 | lane | semantics | who tags it |
 |---|---|---|
+| `packages` | package convergence must precede identity and artifact builds | aptlane, archlane |
 | `identity` | accounts/groups must exist before anything runs as/creates them | sysusers |
 | `main` | default: build outputs, artifact installs, config assembly | everyone untagged |
 | `units` | unit link + enable/start — needs the artifacts and identity in place | systemd |
 | `records` | bookkeeping applied last (links.json records) | links |
 
-The invariant the lanes encode: identity → artifacts → enable/start → records.
+The invariant the lanes encode: packages → identity → artifacts → enable/start → records.
+
+`aptlane` and `archlane` are the two package lanes. Each self-gates on the
+package manager binary (`apt-get` / `pacman`) inside its lane script, so a
+playbook declaring both `PKGS` and `ARCH_PKGS` converges the correct list on
+either family with one `sudo bash bin/install.sh`. Render-side, `pkgs.tasks`
+dispatches the same way on `ansible_pkg_mgr`.
 Before lanes, this ordering was accidental (BINS list order = task-file
 geography), which worked only while nobody looked — units enabled before their
 ExecStart binary landed crashlooped on fresh installs until Restart rescued

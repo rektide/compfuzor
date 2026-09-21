@@ -934,6 +934,72 @@ SUBSYSTEM:
             fi
             exit "${_drift}"
 
+  # archlane -- install-time package convergence + drift reporting for the
+  # declared Arch-family package list (ARCH_PKGS/ARCH_PKGSET/ARCH_PKGSETS,
+  # gathered once in gen_arch.tasks; pkgs.tasks consumes the same
+  # _arch_pkgs fact for its render-side pacman apply). install-arch.sh
+  # joins install.sh's run_all in the `packages` lane alongside
+  # install-apt.sh; each lane self-gates on the package manager binary, so
+  # dual-list playbooks (PKGS for Debian + ARCH_PKGS for Arch) converge
+  # correctly on either family. Deliberately NOT gated on PKGS_BYPASS/
+  # APT_BYPASS (render-side bypasses that must not kill the lane);
+  # ARCHLANE_BYPASS is the explicit generation opt-out.
+  # Deliberately NO `pacman -Sy` in the lane: index refresh stays
+  # render-side, and immutable images (SteamOS) ship their sync db in the
+  # image. `pacman -S --needed` is the convergence semantics: install
+  # missing, upgrade stale, skip satisfied (APT_INSTALL 'latest' parity;
+  # arch has no cheap 'present' pin without version specs).
+  # status-arch.sh reports drift per the PKG_STATUS map like status-apt.sh.
+  archlane:
+    requested: "{{ (ARCH_PKGS|default([])|length > 0) or (ARCH_PKGSET|default([])|length > 0) or (ARCH_PKGSETS|default([])|length > 0) }}"
+    contrib:
+      STATUSES:
+        - status-arch.sh
+      BINS:
+        - name: install-arch.sh
+          phase: packages
+          generated: |
+            command -v pacman >/dev/null 2>&1 || { echo "arch: pacman not found, skipping"; exit 0; }
+            SUDO_CMD="sudo"
+            _pkgs="{{ _arch_pkgs | join(' ') }}"
+            [ -n "$_pkgs" ] || { echo "arch: no packages declared"; exit 0; }
+            # No pacman -Sy here on purpose (see archlane notes): --needed
+            # converges against whatever index the host already has.
+            $SUDO_CMD pacman -S --needed --noconfirm ${_pkgs}
+        - name: status-arch.sh
+          basedir: False
+          compose: False
+          content: |
+            command -v pacman >/dev/null 2>&1 || exit 2
+            _pkgs="{{ _arch_pkgs | join(' ') }}"
+            [ -n "$_pkgs" ] || exit 2
+            declare -A _req=(
+            {% for _p, _r in (PKG_STATUS|default({})).items() %}              [{{ _p }}]={{ _r }}
+            {% endfor %}          )
+            _drift=0
+            for _p in ${_pkgs}; do
+                _level="${_req[${_p}]:-installed}"
+                [ "${_level}" = ignore ] && continue
+                _ver="$(pacman -Q "${_p}" 2>/dev/null | awk '{print $2; exit}')"
+                if [ -z "${_ver}" ]; then
+                    echo "missing package: ${_p}"
+                    _drift=1
+                    continue
+                fi
+                [ "${_level}" = latest ] || continue
+                # 'latest' compares against the CURRENT sync db (no refresh
+                # here): status is advisory against what pacman knows.
+                _cand="$(pacman -Si "${_p}" 2>/dev/null | awk '/^Version:/ {print $3; exit}')"
+                if [ -n "${_cand}" ] && [ "${_cand}" != "${_ver}" ]; then
+                    echo "stale package: ${_p} (${_ver} != candidate ${_cand})"
+                    _drift=1
+                fi
+            done
+            if [ "${_drift}" = 0 ]; then
+                echo "arch: all declared packages satisfy their requirements"
+            fi
+            exit "${_drift}"
+
 _pr_patches_raw: "{{ PR_PATCHES | normalize(to='list') }}"
 _pr_patches_spec: >-
   {%- set normalized = [] -%}

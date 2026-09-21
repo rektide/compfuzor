@@ -1,0 +1,29 @@
+---
+# gen_arch -- install-time package lane (install-arch.sh, `packages` phase)
+# and drift reporter (status-arch.sh) for the declared Arch-family package
+# list (ARCH_PKGS/ARCH_PKGSET/ARCH_PKGSETS).
+#
+# Mirrors gen_apt.tasks with one deliberate difference: gen_arch is the
+# SINGLE gather source for _arch_pkgs. pkgs.tasks' render-side pacman apply
+# consumes this fact instead of re-gathering (the apt pair converges two
+# mirrors because gen_apt postdates pkgs.tasks; a second arch gather would
+# double-append on re-run).
+#
+# Deliberately NOT bypassed by PKGS_BYPASS/APT_BYPASS: skipping the
+# render-time install (no passwordless sudo) is precisely when
+# `sudo bash bin/install.sh` should pick up the arch packages lane.
+# ARCHLANE_BYPASS is the explicit generation opt-out.
+- name: "Compfuzor: gather declared arch packages"
+  set_fact:
+    _arch_pkgs: "{{ _arch_pkgs|def(ARCH_PKGS, []) + (_pkgset if item != '' else []) }}"
+  loop: "{{ [''] + ARCH_PKGSET|normalize(to='list') + ARCH_PKGSETS|def([]) }}"
+  vars:
+    _pkgset: "{{ lookup('vars', item, default=[]) }}"
+
+- name: "Compfuzor: synthesize arch install/status bins"
+  set_fact:
+    STATUSES: "{{ lookup('merge_subsys', id='archlane', contrib='STATUSES') }}"
+    BINS: "{{ lookup('merge_subsys', id='archlane', contrib='BINS') }}"
+  when: _arch_active
+  vars:
+    _arch_active: "{{ lookup('subsys', id='archlane', get='active', default=false) | bool }}"
