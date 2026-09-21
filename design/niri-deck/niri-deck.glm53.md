@@ -221,6 +221,13 @@ ephemerally.
 - `niri.src.pb` PKGS bug fixed: the duplicate `PKGS` keys are split into
   Debian build deps (`PKGS`) and the Arch list (`ARCH_PKGS`, companions +
   PKGBUILD deps), so the playbook is now host-correct on both families.
+- [`steamos-niri.srv.pb`](/steamos-niri.srv.pb) — operator session tools in
+  `/srv/steamos-niri-srv` (durable across updates): `to-niri.sh` /
+  `to-plasma.sh` live switches (`switch-to-desktop-mode`, ends the current
+  session), `to-game.sh` ("Return to Gaming Mode" from any desktop session),
+  `default-niri.sh` / `default-plasma.sh` commit the persistent default
+  without switching, `sessions.sh` state overview. Global-linked into
+  `/usr/local/bin` for convenience; `/srv` copies are the durable home.
 
 ## Gaps & risks
 
