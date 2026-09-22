@@ -5,8 +5,9 @@
 # points at (k3s.srv.pb NODE_IP): embedded-etcd member peer URLs stop
 # drifting with DHCP leases while the host remains fully DHCP-mobile.
 #
-# The address lands as a networkd drop-in (SYSTEMD_NETWORK_DIR/<NETWORK_FILE>.d/
-# <NAME>.conf) merged into the existing config -- no .network replacement,
+# The address lands as a networkd drop-in
+# (/etc/systemd/network/<NETWORK_FILE>.network.d/<NAME>.conf) merged into the
+# existing config -- no .network replacement,
 # no DHCP disruption -- applied live via `networkctl reload && reconfigure`
 # (briefest of address blips; no reboot).
 #
@@ -24,6 +25,10 @@
     IFACE: eno1
     # basename (sans .network) of the existing networkd config to extend
     NETWORK_FILE: en
+    # SYSTEMD_NETWORK_DIR resolves to systemd's vendor unit directory on
+    # this host (/usr/lib/networkd/network). Local administrative overrides
+    # belong in /etc/systemd/network instead.
+    NETWORKD_CONFIG_DIR: /etc/systemd/network
     # NODE_IP_CIDR belongs in host inventory beside k3s's NODE_IP so this
     # playbook and k3s.srv.pb cannot drift apart.
     ADDRESS_CIDR: "{{NODE_IP_CIDR|default('192.168.1.8/22')}}"
@@ -39,7 +44,7 @@
 
     LINKS:
       - src: "{{ETC}}/extra-addr.conf"
-        dest: "{{SYSTEMD_NETWORK_DIR}}/{{NETWORK_FILE}}.d/{{NAME}}.conf"
+        dest: "{{NETWORKD_CONFIG_DIR}}/{{NETWORK_FILE}}.network.d/{{NAME}}.conf"
 
     BINS:
       - name: apply.sh
@@ -48,7 +53,7 @@
           # Apply the drop-in live: reload networkd, reconfigure the iface,
           # verify the address actually landed.
           set -e
-          sudo mkdir -p {{SYSTEMD_NETWORK_DIR}}/{{NETWORK_FILE}}.d
+          sudo mkdir -p {{NETWORKD_CONFIG_DIR}}/{{NETWORK_FILE}}.network.d
           sudo networkctl reload
           sudo networkctl reconfigure {{IFACE}}
           sleep 2
