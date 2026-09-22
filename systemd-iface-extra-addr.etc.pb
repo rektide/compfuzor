@@ -64,13 +64,24 @@
           sudo chmod 0644 {{NETWORKD_CONFIG_DIR}}/{{NETWORK_FILE}}.network.d/{{NAME}}.conf
           sudo networkctl reload
           sudo networkctl reconfigure {{IFACE}}
-          sleep 2
-          if ip -4 addr show {{IFACE}} | grep -q "{{_addr}}"; then
-            echo "OK: {{_addr}} assigned on {{IFACE}}"
-          else
-            echo "ERROR: {{_addr}} not assigned on {{IFACE}}" >&2
+          # Reconfigure briefly drops the DHCP lease. Do not report success
+          # until both the static address and DHCP-owned default route return.
+          ready=false
+          for _ in $(seq 1 30); do
+            if ip -4 addr show {{IFACE}} | grep -q "{{_addr}}" \
+              && ip -4 route show default dev {{IFACE}} | grep -q '^default '; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            echo "ERROR: {{IFACE}} did not regain both {{_addr}} and its DHCP default route" >&2
+            ip -4 -brief addr show {{IFACE}} >&2 || true
+            ip -4 route show default dev {{IFACE}} >&2 || true
             exit 1
           fi
+          echo "OK: {{_addr}} assigned on {{IFACE}}; DHCP default route restored"
           echo
           ip -4 -brief addr show {{IFACE}}
 
