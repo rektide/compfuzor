@@ -14,9 +14,9 @@
 # !!! Pick an address OUTSIDE the DHCP pool (or reserve it router-side) !!!
 # Two owners of one address is a silent, nasty failure mode.
 #
-# Deploy example:
-#   ansible-playbook -i 'localhost,' -c local systemd-iface-extra-addr.etc.pb \
-#     -e ADDRESS_CIDR=192.168.1.8/22
+# Inventory-driven deploy example (`NODE_IP_CIDR` lives with k3s_node_ip):
+#   ansible-playbook -i ~/.ansible/k3s -c local \
+#     systemd-iface-extra-addr.etc.pb --limit workhorse
 - hosts: all
   vars:
     TYPE: systemd-iface-extra-addr

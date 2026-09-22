@@ -122,6 +122,42 @@ Tailscale addresses (e.g. `100.76.116.2`) belong in `TLS_SANS` for remote
 API access; making one the node-ip would chain kube availability to
 tailscaled, so the LAN pin is preferred.
 
+### Inventory-driven deployment
+
+Keep host policy under its cluster group in `~/.ansible/k3s` and deploy with
+the established limit rather than reconstructing extra-vars:
+
+```yaml
+workhorse:
+  vars:
+    k3s_node_ip: 192.168.1.8
+    NODE_IP_CIDR: 192.168.1.8/22
+    extraSans: [100.76.116.2]
+    k3s_cluster_cidr: 10.39.0.0/16
+    k3s_service_cidr: 10.40.0.0/16
+    k3s_cluster_dns: 10.40.0.2
+    k3s_kubelet_args:
+      - eviction-hard=nodefs.available<25Gi,imagefs.available<30Gi
+      - image-gc-high-threshold=98
+      - image-gc-low-threshold=97
+    k3s_etcd_snapshot_sink: /mnt/bitblaster/backup/kube-workhorse
+    k3s_etcd_snapshot_sink_keep: 120
+    k3s_etcd_snapshot_sink_creds: "true"
+```
+
+```sh
+ansible-playbook -i ~/.ansible/k3s -c local \
+  systemd-iface-extra-addr.etc.pb --limit workhorse
+ansible-playbook -i ~/.ansible/k3s -c local \
+  k3s.srv.pb --limit workhorse
+```
+
+The root and container image filesystems on workhorse are the same 3.4 TiB
+btrfs filesystem. Percentage defaults caused permanent DiskPressure at 149
+GiB free (`5%` still means roughly 170 GiB) and futile image GC attempts at
+85%/80%. Absolute 25/30 GiB eviction plus 98%/97% image GC keeps meaningful
+safety margins without demanding hundreds of GiB of unrelated host storage.
+
 ## Cross-references
 
 - [`k3s-cluster-rebuild.md`](/doc/k3s-cluster-rebuild.md) — companion

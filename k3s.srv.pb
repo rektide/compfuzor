@@ -205,8 +205,8 @@
     DISABLE_NETWORK_POLICY: "{{ DISABLE|default([], true)|intersect(['network-policy'])|length() == 0}}"
     DISABLE_KUBE_PROXY:     "{{ DISABLE|default([], true)|intersect(['kube-proxy']    )|length() == 1}}"
     ETCD_SNAPSHOT_RETENTION: "{{k3s_etcd_snapshot_retention|default(28)}}"
-    # Off-box snapshot sync: when ETCD_SNAPSHOT_SINK is set (e.g. an autofs
-    # CIFS mount like /mnt/bitblaster/backup/<name>), an hourly
+    # Off-box snapshot sync: set inventory input k3s_etcd_snapshot_sink (e.g.
+    # an autofs CIFS mount like /mnt/bitblaster/backup/<name>); an hourly
     # <NAME>-snapshot-sync.{service,timer} pair copies new snapshot zips
     # there (no-clobber; sink pruned to the newest ETCD_SNAPSHOT_SINK_KEEP
     # entries). Empty disables the units entirely. ETCD_SNAPSHOT_SINK_CREDS
@@ -221,8 +221,8 @@
     # Kubelet pass-through arguments. Accepts either one string (backwards
     # compatible) or a list; every item becomes its own repeated
     # `--kubelet-arg <item>`. Keep host/storage-specific policy in inventory.
-    # Example:
-    #   KUBELET_ARGS:
+    # Inventory example:
+    #   k3s_kubelet_args:
     #     - eviction-hard=nodefs.available<25Gi,imagefs.available<30Gi
     #     - image-gc-high-threshold=98
     #     - image-gc-low-threshold=97
