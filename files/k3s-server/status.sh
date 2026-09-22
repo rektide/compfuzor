@@ -47,8 +47,8 @@ else
 fi
 
 printf 'drift baseline (var/drift.state): '
-if [ -r "$DIR/var/drift.state" ]; then
-  printf '%s\n' "$(tr -d '[:space:]' < "$DIR/var/drift.state")"
+if as_root test -r "$DIR/var/drift.state" 2>/dev/null; then
+  printf '%s\n' "$(as_root cat "$DIR/var/drift.state" | tr -d '[:space:]')"
 else
   printf '%s(none -- drift-guard will seed on next start)%s\n' "$YLW" "$RST"
 fi
@@ -71,7 +71,9 @@ if as_root test -r "$ETCD_TLS_DIR/server-client.crt" 2>/dev/null; then
   if [ "${member_count:-0}" -gt 1 ]; then
     printf '  %sMULTI-SERVER: %s members. reset.sh will refuse.%s\n' "$YLW" "$member_count" "$RST"
   elif [ -n "$current_ip" ]; then
-    if echo "$member_output" | grep -q "=https://${current_ip}:2380"; then
+    # etcdctl 3.5's simple format has used both name=https://IP:2380 and
+    # comma-separated `..., https://IP:2380, ...` forms across releases.
+    if echo "$member_output" | grep -Eq "(=|[ ,])https://${current_ip}:2380([, ]|$)"; then
       printf '  %speer URL matches current IP%s\n' "$GRN" "$RST"
     else
       printf '  %sDRIFT: current IP %s not in peer URLs; reset.sh can fix%s\n' "$RED" "$current_ip" "$RST"
@@ -91,9 +93,9 @@ hr "off-box snapshot sink"
 if [ -n "${ETCD_SNAPSHOT_SINK:-}" ]; then
   printf 'sink: %s\n' "$ETCD_SNAPSHOT_SINK"
   if as_root test -d "$ETCD_SNAPSHOT_SINK" 2>/dev/null; then
-    count="$(as_root ls -1 "$ETCD_SNAPSHOT_SINK" 2>/dev/null | grep -v '^creds$' | wc -l)"
-    newest="$(as_root ls -1t "$ETCD_SNAPSHOT_SINK" 2>/dev/null | grep -v '^creds$' | head -n1)"
-    printf 'contents: %s file(s); newest: %s\n' "$count" "${newest:-(none)}"
+    count="$(as_root find "$ETCD_SNAPSHOT_SINK" -maxdepth 1 -type f -name '*.zip' | wc -l)"
+    newest="$(as_root find "$ETCD_SNAPSHOT_SINK" -maxdepth 1 -type f -name '*.zip' -printf '%T@ %f\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
+    printf 'contents: %s snapshot(s); newest: %s\n' "$count" "${newest:-(none)}"
     printf 'timer: %s\n' "$(systemctl is-active "$NAME-snapshot-sync.timer" 2>&1)"
     if as_root test -f "$ETCD_SNAPSHOT_SINK/creds/token" 2>/dev/null; then
       printf 'DR creds: %s\n' "mirrored (token present)"
