@@ -103,15 +103,22 @@ refuse_if_multiserver() {
 }
 
 # --- post-reset hygiene ------------------------------------------------------
-# cluster-reset touches server/cred/*; a cred file left newer than the
-# datastore makes k3s refuse to start ("... newer than datastore and could
-# cause a cluster outage. Remove the file(s) from disk and restart to be
-# recreated from datastore"). Move them aside; k3s recreates them from the
-# datastore on next start. NEVER move the encryption files: without that key
-# every encrypted secret in the cluster is permanently unreadable.
+# cluster-reset can leave server/cred files newer than etcd's backend; k3s
+# then refuses to start ("... newer than datastore and could cause a cluster
+# outage"). Move ONLY those newer files aside. Moving every credential is too
+# broad: on v1.36 a reset regenerated the kubeconfigs before the final backend
+# write, so they were already safe, and removing supervisor.kubeconfig caused
+# controller startup to race/fail before it could be recreated. NEVER move the
+# encryption files: without that key every encrypted secret in the cluster is
+# permanently unreadable.
 stash_creds_for_reset() {
-  local ts f moved=0
+  local ts f datastore moved=0
   [ -d "$CRED_DIR" ] || return 0
+  datastore="$DB_DIR/etcd/member/snap/db"
+  if [ ! -f "$datastore" ]; then
+    echo "==> no etcd backend at $datastore; not stashing credentials"
+    return 0
+  fi
   ts="$(date +%Y%m%d%H%M%S)"
   for f in "$CRED_DIR"/*; do
     [ -f "$f" ] || continue
@@ -119,10 +126,11 @@ stash_creds_for_reset() {
       encryption-config.json|encryption-state.json) continue ;;
       *.bak.*) continue ;;
     esac
+    [ "$f" -nt "$datastore" ] || continue
     as_root mv "$f" "${f}.bak.${ts}"
     moved=$((moved + 1))
   done
-  echo "==> stashed $moved cred file(s) as .bak.$ts (encryption files preserved)"
+  echo "==> stashed $moved cred file(s) newer than datastore as .bak.$ts (encryption files preserved)"
 }
 
 # --- snapshots ---------------------------------------------------------------

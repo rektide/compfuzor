@@ -54,8 +54,8 @@ if [ "$yes" -ne 1 ]; then
   echo "  1. stop $NAME.service (if running)"
   echo "  2. k3s server --cluster-reset --node-ip=$node_ip"
   echo "     (data preserved, etcd member peer URL re-pointed; SINGLE-SERVER ONLY)"
-  echo "  3. stash server/cred/* aside (k3s recreates them from the datastore;"
-  echo "     encryption files preserved)"
+  echo "  3. stash server/cred files newer than the datastore (k3s recreates"
+  echo "     them from datastore; encryption files always preserved)"
   echo
   printf "Press Ctrl-C to abort, Enter to continue: "
   read -r _

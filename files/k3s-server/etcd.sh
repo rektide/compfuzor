@@ -100,7 +100,7 @@ case "$cmd" in
 
   save)
     save_args=(--data-dir "$DATA" --etcd-snapshot-compress)
-    [ -n "${1:-}" ] && save_args+=("$1")
+    [ -n "${1:-}" ] && save_args+=(--name "$1")
     as_root "$K3S_BIN" etcd-snapshot save "${save_args[@]}"
     ;;
 

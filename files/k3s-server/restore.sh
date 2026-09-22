@@ -60,7 +60,8 @@ if [ "$yes" -ne 1 ]; then
   echo "  1. stop $NAME.service (if running)"
   echo "  2. k3s server --cluster-reset --cluster-reset-restore-path=<snapshot>"
   echo "     (current db moved to db/etcd-old-<ts>/, then snapshot restored)"
-  echo "  3. stash server/cred/* aside (k3s recreates them from the datastore)"
+  echo "  3. stash server/cred files newer than the datastore (encryption"
+  echo "     files always preserved)"
   echo
   printf "Press Ctrl-C to abort, Enter to continue: "
   read -r _
