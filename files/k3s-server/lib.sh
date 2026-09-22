@@ -17,6 +17,10 @@ _LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DIR="$(cd -- "$_LIB_DIR/.." && pwd)"
 
 ENV_FILE="${ENV_FILE:-$DIR/env}"
+# The env file is authoritative (it is what the unit's EnvironmentFile loads,
+# so the guard and k3s always agree). To experiment with ad-hoc values (e.g.
+# NODE_IP or K3S_MULTISERVER), run with ENV_FILE=/dev/null and set the vars
+# in the process environment.
 # shellcheck disable=SC1090
 [ -r "$ENV_FILE" ] && . "$ENV_FILE"
 

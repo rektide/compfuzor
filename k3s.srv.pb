@@ -206,9 +206,13 @@
     # CIFS mount like /mnt/bitblaster/backup/<name>), an hourly
     # <NAME>-snapshot-sync.{service,timer} pair copies new snapshot zips
     # there (no-clobber; sink pruned to the newest ETCD_SNAPSHOT_SINK_KEEP
-    # entries). Empty disables the units entirely.
+    # entries). Empty disables the units entirely. ETCD_SNAPSHOT_SINK_CREDS
+    # additionally mirrors the DR secrets (cluster token, agent token,
+    # secrets-encryption key) into <sink>/creds/ -- without them a snapshot
+    # cannot be restored on fresh hardware.
     ETCD_SNAPSHOT_SINK: ""
     ETCD_SNAPSHOT_SINK_KEEP: 120
+    ETCD_SNAPSHOT_SINK_CREDS: "false"
     SECRETS_ENCRYPTION: true
     SECRETS_ENCRYPTION_PROVIDER: secretbox
     # Kubelet eviction thresholds; empty string disables. Single-arg form
@@ -251,6 +255,7 @@
       ETCD_SNAPSHOT_RETENTION: "{{ETCD_SNAPSHOT_RETENTION}}"
       ETCD_SNAPSHOT_SINK: "{{ETCD_SNAPSHOT_SINK}}"
       ETCD_SNAPSHOT_SINK_KEEP: "{{ETCD_SNAPSHOT_SINK_KEEP}}"
+      ETCD_SNAPSHOT_SINK_CREDS: "{{ETCD_SNAPSHOT_SINK_CREDS}}"
       SNAPSHOTTER: "{{SNAPSHOTTER}}"
       DISABLE_LIST: "{{DISABLE_LIST}}"
       KUBELET_ARGS: "{{KUBELET_ARGS}}"

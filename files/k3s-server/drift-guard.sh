@@ -17,6 +17,13 @@
 #       which re-points the etcd member peer URL (data preserved;
 #       SINGLE-SERVER only), then let the unit start normally.
 #
+# MULTI-SERVER CLUSTERS NEVER auto-reset here: cluster-reset is etcd's
+# --force-new-cluster and would sever this node from its peers. When
+# K3S_MULTISERVER=1 (from the playbook env) -- or a live member list says
+# more than one member -- drift blocks the start with a pointer to the
+# runbook instead (doc/k3s-cluster-rebuild.md: HA peer-URL drift is
+# etcdctl member remove on a healthy peer, then rejoin).
+#
 # Related tools: reset.sh (manual remedy / re-pinning), restore.sh (snapshot
 # restore), etcd.sh (inspection), status.sh (read-only report).
 #
@@ -68,6 +75,12 @@ last_ip=""
 if [ -z "$last_ip" ]; then
   log "no drift baseline; seeding $current_ip (no reset)"
 elif [ "$current_ip" != "$last_ip" ]; then
+  if [ "${K3S_MULTISERVER:-0}" = "1" ] || ! refuse_if_multiserver; then
+    warn "DRIFT: node IP changed '$last_ip' -> '$current_ip'"
+    warn "multi-server cluster: automatic cluster-reset DISABLED (it would sever this node from its peers)"
+    warn "see doc/k3s-cluster-rebuild.md: etcdctl member remove on a healthy peer, then rejoin"
+    exit 1
+  fi
   warn "DRIFT: node IP changed '$last_ip' -> '$current_ip'"
   warn "one-shot k3s --cluster-reset --node-ip=$current_ip (re-points etcd member peer URL, data preserved)"
   if as_root "$K3S_BIN" server --cluster-reset --data-dir="$DATA" --node-ip="$current_ip" >/dev/null 2>&1; then

@@ -26,6 +26,7 @@ hr() { printf '\n%s-- %s --%s\n' "$HDR" "$*" "$RST"; }
 hr "service"
 printf 'active:   %s\n' "$(systemctl is-active "$NAME" 2>&1)"
 printf 'enabled:  %s\n' "$(systemctl is-enabled "$NAME" 2>&1)"
+printf 'topology: %s\n' "$( [ "${K3S_MULTISERVER:-0}" = "1" ] && echo multi-server || echo single-server )"
 systemctl show "$NAME" -p ActiveEnterTimestamp -p ExecMainPID -p Result 2>/dev/null \
   | tr ' ' '\n' | sed 's/^/  /'
 
@@ -90,10 +91,15 @@ hr "off-box snapshot sink"
 if [ -n "${ETCD_SNAPSHOT_SINK:-}" ]; then
   printf 'sink: %s\n' "$ETCD_SNAPSHOT_SINK"
   if as_root test -d "$ETCD_SNAPSHOT_SINK" 2>/dev/null; then
-    count="$(as_root ls -1 "$ETCD_SNAPSHOT_SINK" 2>/dev/null | wc -l)"
-    newest="$(as_root ls -1t "$ETCD_SNAPSHOT_SINK" 2>/dev/null | head -n1)"
+    count="$(as_root ls -1 "$ETCD_SNAPSHOT_SINK" 2>/dev/null | grep -v '^creds$' | wc -l)"
+    newest="$(as_root ls -1t "$ETCD_SNAPSHOT_SINK" 2>/dev/null | grep -v '^creds$' | head -n1)"
     printf 'contents: %s file(s); newest: %s\n' "$count" "${newest:-(none)}"
     printf 'timer: %s\n' "$(systemctl is-active "$NAME-snapshot-sync.timer" 2>&1)"
+    if as_root test -f "$ETCD_SNAPSHOT_SINK/creds/token" 2>/dev/null; then
+      printf 'DR creds: %s\n' "mirrored (token present)"
+    else
+      printf 'DR creds: %s\n' "not mirrored (ETCD_SNAPSHOT_SINK_CREDS=true to enable)"
+    fi
   else
     printf '%s unreachable%s\n' "$RED" "$RST"
   fi
