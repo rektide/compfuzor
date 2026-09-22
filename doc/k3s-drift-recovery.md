@@ -44,8 +44,9 @@ Facts verified against k3s release-1.36 source and docs (full research log:
 - **`--cluster-reset-keep-control-plane-members` does not exist** in any
   k3s release — the June 2026 `launch.sh`/`recover.sh` on the deployed box
   were built around a phantom flag and would have failed if invoked.
-- After a reset, cred files newer than the datastore make k3s refuse to
-  start; move only the named/newer offenders aside (k3s recreates them from
+- After a reset, `server/cred/passwd` (and sometimes other cred files) can
+  be newer than bootstrap data and make k3s refuse to start; move `passwd`
+  and any other named/newer offenders aside (k3s recreates them from
   the datastore) but **never** `encryption-config.json` /
   `encryption-state.json` —
   without that key every encrypted secret is permanently unreadable.

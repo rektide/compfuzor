@@ -241,7 +241,7 @@ themselves as learners.
 | `not a member of the etcd cluster` | stale peer URL | single: `reset.sh`; HA: S4 |
 | guard blocks: fresh cluster over snapshots | no db + snapshots + plain start | `restore.sh`, or override deliberately |
 | guard blocks: NODE_IP not assigned | static pin missing | fix the networkd drop-in |
-| `newer than datastore and could cause a cluster outage` | cred mtimes post-reset | `reset.sh`/`restore.sh` stash only files newer than the etcd backend; by hand move only the named/newer offender aside, never the encryption files |
+| `newer than datastore and could cause a cluster outage` | cred/bootstrap timestamps post-reset | `reset.sh`/`restore.sh` always stash `passwd` plus filesystem-newer files; by hand move only the named offender aside, never the encryption files |
 | `cluster token does not match` on restore | foreign token | seed the original token (S3 step 1) |
 | apiserver cert SAN wrong | tls-san set wrong at deploy | redeploy with `TLS_SANS` (cert auto-regenerates) |
 | agent `node password ... requires delete` | password secret conflict | delete Node or `/etc/rancher/node` |

@@ -122,7 +122,10 @@ stash_creds_for_reset() {
   ts="$(date +%Y%m%d%H%M%S)"
   # reset.sh/restore.sh are normally invoked by an unprivileged operator;
   # globbing or test -f cannot traverse k3s's root-only server tree. Have
-  # find perform both discovery and the mtime comparison under as_root.
+  # find perform discovery under as_root. Always stash passwd: k3s compares
+  # it to the bootstrap data's internal timestamp, which is not reliably the
+  # backend inode mtime (two live resets rejected passwd even when `find
+  # -newer <backend>` did not). Add any other filesystem-newer files too.
   while IFS= read -r -d '' f; do
     case "$(basename "$f")" in
       encryption-config.json|encryption-state.json) continue ;;
@@ -130,8 +133,8 @@ stash_creds_for_reset() {
     esac
     as_root mv "$f" "${f}.bak.${ts}"
     moved=$((moved + 1))
-  done < <(as_root find "$CRED_DIR" -maxdepth 1 -type f -newer "$datastore" -print0)
-  echo "==> stashed $moved cred file(s) newer than datastore as .bak.$ts (encryption files preserved)"
+  done < <(as_root find "$CRED_DIR" -maxdepth 1 -type f \( -name passwd -o -newer "$datastore" \) -print0)
+  echo "==> stashed $moved qualifying cred file(s) (always passwd; plus filesystem-newer files) as .bak.$ts (encryption files preserved)"
 }
 
 # --- snapshots ---------------------------------------------------------------
