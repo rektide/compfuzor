@@ -215,14 +215,17 @@ ephemerally.
   real machinery (previously informational-only, as in `zed.src.pb`):
   [`gen_arch.tasks`](/tasks/compfuzor/gen_arch.tasks) gathers `_arch_pkgs`
   once and synthesizes `install-arch.sh` (packages lane, pacman
-  `--needed` self-gated on the pacman binary) + `status-arch.sh` drift
+  `--needed` self-gated on the pacman binary and a non-empty repository
+  configuration) + `status-arch.sh` drift
   reporter; `pkgs.tasks` dispatches render-side on `ansible_pkg_mgr` (apt vs
   pacman). Covered by `tests/integration/archlane.test.py`.
 - `niri.src.pb` PKGS bug fixed: the duplicate `PKGS` keys are split into
   Debian build deps (`PKGS`) and the Arch list (`ARCH_PKGS`, companions +
   PKGBUILD deps), so the playbook is now host-correct on both families.
-- [`steamos-niri.srv.pb`](/steamos-niri.srv.pb) — operator session tools in
-  `/srv/steamos-niri-srv` (durable across updates): `to-niri.sh` /
+- [`steamos-niri.srv.pb`](/steamos-niri.srv.pb) — composes the generic actions
+  from [`vars/steamos-session.yaml`](/vars/steamos-session.yaml) with the
+  niri-specific wrappers into `/srv/steamos-niri-srv` (durable across
+  updates): `to-niri.sh` /
   `to-plasma.sh` live switches (`switch-to-desktop-mode`, ends the current
   session), `to-game.sh` ("Return to Gaming Mode" from any desktop session),
   `default-niri.sh` / `default-plasma.sh` commit the persistent default
