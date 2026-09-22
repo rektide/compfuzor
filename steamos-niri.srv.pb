@@ -20,13 +20,13 @@
       - name: to-niri.sh
         global: True
         content: |
-          exec /srv/steamos-session-main/bin/to-desktop.sh niri.desktop
+          exec "${DIR}/bin/to-desktop.sh" niri.desktop
       # commit the persistent default without switching (the granular
       # counterpart of steamos-niri.opt.pb's session.sh)
       - name: default-niri.sh
         global: True
         content: |
-          exec /srv/steamos-session-main/bin/default-desktop.sh niri.desktop
+          exec "${DIR}/bin/default-desktop.sh" niri.desktop
   tasks:
     - name: publish shared and niri session actions
       set_fact:
