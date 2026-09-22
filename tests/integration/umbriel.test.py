@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -22,6 +23,7 @@ SCRATCH = ROOT / ".test-agent" / "umbriel-test"
 
 def render(name: str, playbook: str) -> Path:
     deployment = SCRATCH / name
+    shutil.rmtree(deployment, ignore_errors=True)
     payload = deployment / "payload"
     payload.mkdir(parents=True, exist_ok=True)
     scenario = deployment / "scenario.json"
@@ -88,7 +90,7 @@ def test_regular_source_deployment() -> None:
     assert installer.index("install-apt.sh") < installer.index("install-arch.sh")
     assert installer.index("install-arch.sh") < installer.index("install-umbriel.sh")
     build = (bins / "build.sh").read_text(encoding="utf-8")
-    assert "--prefix=\"$_prefix\"" in build and "_prefix=/usr/local" in build
+    assert "--prefix=/usr/local" in build
     assert '_build="${DIR}/build-release"' in build
     assert '$PWD/build-release' not in build
     assert "-Dtests=disabled" in build
@@ -109,7 +111,7 @@ def test_steamos_deployment_is_reinstallable() -> None:
     umbriel_run = installer.index('"$DIR/bin/install-umbriel.sh"')
     assert installer.index("steamos-readonly disable") < arch_run < umbriel_run
     build = (bins / "build.sh").read_text(encoding="utf-8")
-    assert "_prefix=/usr" in build
+    assert "--prefix=/usr" in build
     assert 'rm -rf "$_build"' in build
     session = (bins / "session.sh").read_text(encoding="utf-8")
     assert "set-default-desktop-session umbriel.desktop" in session
@@ -117,12 +119,10 @@ def test_steamos_deployment_is_reinstallable() -> None:
     print("ok: SteamOS Umbriel renders readonly/package/clean-build/session recovery")
 
 
-def test_steamos_session_toolkit_composes_umbriel() -> None:
+def test_steamos_umbriel_session_tools() -> None:
     payload = render("session", "steamos-umbriel.srv.pb")
     bins = payload / "bin"
     expected = {
-        "to-desktop.sh",
-        "default-desktop.sh",
         "to-plasma.sh",
         "default-plasma.sh",
         "to-game.sh",
@@ -133,12 +133,11 @@ def test_steamos_session_toolkit_composes_umbriel() -> None:
     assert expected == {path.name for path in bins.iterdir()}
     umbriel_switch = (bins / "to-umbriel.sh").read_text(encoding="utf-8")
     assert "umbriel.desktop" in umbriel_switch
-    assert '"${DIR}/bin/to-desktop.sh"' in umbriel_switch
     assert_shell_syntax(bins)
-    print("ok: shared SteamOS toolkit composes Umbriel-specific operators")
+    print("ok: self-contained SteamOS Umbriel session operators render")
 
 
 if __name__ == "__main__":
     test_regular_source_deployment()
     test_steamos_deployment_is_reinstallable()
-    test_steamos_session_toolkit_composes_umbriel()
+    test_steamos_umbriel_session_tools()
