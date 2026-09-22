@@ -33,11 +33,15 @@ fi
 
 as_root mkdir -p "$SINK"
 # snapshots are immutable once written, so this is a no-clobber copy: reruns
-# only copy new zips (~2.7 MB each)
-as_root cp -n --preserve=timestamps "$SNAPSHOTS_DIR/." "$SINK/"
+# only copy new zips (~2.7 MB each). Copy files individually: `$dir/.` is a
+# directory and plain cp (without -R) silently does no useful work.
+while IFS= read -r -d '' snapshot; do
+  as_root cp -n --preserve=timestamps "$snapshot" "$SINK/"
+done < <(as_root find "$SNAPSHOTS_DIR" -maxdepth 1 -type f -name '*.zip' -print0)
 
-# prune the sink to the newest SINK_KEEP snapshot entries (never creds/)
-as_root sh -c "cd '$SINK' && ls -1t | grep -v '^creds$' | tail -n +$((SINK_KEEP + 1)) | xargs -r rm -f --"
+# Prune only snapshot zips. The sink can also contain cold-db archives,
+# checksum manifests, and creds/; none of those are retention candidates.
+as_root sh -c "cd '$SINK' && find . -maxdepth 1 -type f -name '*.zip' -printf '%T@ %f\\n' | sort -nr | tail -n +$((SINK_KEEP + 1)) | cut -d' ' -f2- | xargs -r rm -f --"
 
 if [ "$SINK_CREDS" = "true" ]; then
   as_root mkdir -p "$SINK/creds"
@@ -49,8 +53,8 @@ if [ "$SINK_CREDS" = "true" ]; then
   done
 fi
 
-count="$(as_root ls -1 "$SINK" | grep -v '^creds$' | wc -l)"
-newest="$(as_root ls -1t "$SINK" | grep -v '^creds$' | head -n1)"
+count="$(as_root find "$SINK" -maxdepth 1 -type f -name '*.zip' | wc -l)"
+newest="$(as_root find "$SINK" -maxdepth 1 -type f -name '*.zip' -printf '%T@ %f\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
 creds_note=""
 [ "$SINK_CREDS" = "true" ] && creds_note="; creds mirrored"
 echo "synced: $count snapshot(s) in $SINK; newest: ${newest:-(none)}${creds_note}"
