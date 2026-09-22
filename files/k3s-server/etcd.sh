@@ -7,6 +7,14 @@
 #   members            live member list incl. peer URLs (needs etcd up)
 #   health             live endpoint health + status (needs etcd up)
 #   save [name]        on-demand snapshot (compressed, like scheduled ones)
+#   remove-member <id> HA stale-peer remedy: etcdctl member remove. The id is
+#                      the hex member ID from `members`. Use when a server's
+#                      IP changed and it cannot rejoin (join refuses duplicate
+#                      node names, so the stale member must go first); the
+#                      changed node then restarts with its --server join
+#                      config and re-adds itself as a learner.
+#                      NEVER remove the member you are running this on unless
+#                      it is the last resort on a dead cluster.
 #
 # etcdctl note: k3s v1.36 embeds etcd in-process and bundles no etcdctl, so
 # this uses the system etcdctl (3.5.x). The v3 API is stable across 3.5/3.6;
@@ -67,6 +75,21 @@ case "$cmd" in
 
   members)
     etcdctl_live member list
+    ;;
+
+  remove-member)
+    member_id="${1:-}"
+    if [ -z "$member_id" ]; then
+      echo "usage: etcd.sh remove-member <member-id>   (ids: etcd.sh members)" >&2
+      exit 64
+    fi
+    echo "member list before removal:"
+    etcdctl_live member list | sed 's/^/  /'
+    echo
+    etcdctl_live member remove "$member_id"
+    echo
+    echo "removed $member_id; restart the affected server with its --server"
+    echo "join config and it will re-add itself as a learner at its new IP"
     ;;
 
   health)

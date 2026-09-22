@@ -25,7 +25,12 @@
 # etcdctl member remove on a healthy peer, then rejoin).
 #
 # Related tools: reset.sh (manual remedy / re-pinning), restore.sh (snapshot
-# restore), etcd.sh (inspection), status.sh (read-only report).
+# restore), etcd.sh (inspection + HA member removal), status.sh (report).
+#
+# Fresh-install protection: k3s has NO auto-restore. On an empty db a plain
+# start (--cluster-init) creates a fresh cluster and silently ignores any
+# snapshots on disk, so the guard blocks that combination and points at
+# restore.sh (K3S_ALLOW_FRESH_OVER_SNAPSHOTS=1 overrides deliberately).
 #
 # Runs as root from the unit; also safe to invoke by hand. Nonzero exit
 # blocks the k3s start (systemd Restart=always retries every RestartSec).
@@ -63,8 +68,32 @@ if [ -z "$current_ip" ]; then
   exit 0
 fi
 
-if [ ! -d "$DB_DIR" ]; then
-  log "fresh install (no db yet); seeding drift baseline $current_ip"
+# db presence test: etcd member data, not merely the db/ directory (a db/
+# left empty by a partial wipe looks like "no db" to k3s too). Unprivileged
+# read first: the db tree is root-only, but scratch/test dirs often are not,
+# and an interactive sudo prompt inside a guard is a bad surprise.
+list_dir_entries() {
+  ls -A "$1" 2>/dev/null || as_root ls -A "$1" 2>/dev/null || true
+}
+db_has_etcd_data() {
+  [ -d "$DB_DIR/etcd" ] && [ -n "$(list_dir_entries "$DB_DIR/etcd")" ]
+}
+snapshots_exist() {
+  [ -d "$SNAPSHOTS_DIR" ] && [ -n "$(list_dir_entries "$SNAPSHOTS_DIR")" ]
+}
+
+if ! db_has_etcd_data; then
+  if snapshots_exist && [ "${K3S_ALLOW_FRESH_OVER_SNAPSHOTS:-0}" != "1" ]; then
+    # k3s has NO auto-restore: on an empty db a plain start (with the
+    # bootstrap host's --cluster-init) creates a fresh cluster and silently
+    # ignores the snapshots on disk.
+    warn "no etcd db, but snapshots exist in $SNAPSHOTS_DIR"
+    warn "refusing to start: this would initialize a FRESH cluster and ignore them"
+    warn "run restore.sh <snapshot> to restore, move the snapshots aside, or set"
+    warn "K3S_ALLOW_FRESH_OVER_SNAPSHOTS=1 to confirm a deliberate fresh start"
+    exit 1
+  fi
+  log "fresh install (no etcd data); seeding drift baseline $current_ip"
   persist_state "$current_ip"
   exit 0
 fi
