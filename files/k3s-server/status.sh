@@ -34,6 +34,8 @@ systemctl show "$NAME" -p ActiveEnterTimestamp -p ExecMainPID -p Result 2>/dev/n
 hr "node IP (kubelet selection)"
 current_ip="$(detect_node_ip)"
 printf 'current (default-route src): %s\n' "${current_ip:-<undetectable>}"
+effective_ip="$(effective_node_ip)"
+printf 'effective k3s node IP:       %s\n' "${effective_ip:-<undetectable>}"
 
 printf '\nnode-IP pin: '
 if [ -n "${NODE_IP:-}" ]; then
@@ -70,13 +72,13 @@ if as_root test -r "$ETCD_TLS_DIR/server-client.crt" 2>/dev/null; then
   echo
   if [ "${member_count:-0}" -gt 1 ]; then
     printf '  %sMULTI-SERVER: %s members. reset.sh will refuse.%s\n' "$YLW" "$member_count" "$RST"
-  elif [ -n "$current_ip" ]; then
+  elif [ -n "$effective_ip" ]; then
     # etcdctl 3.5's simple format has used both name=https://IP:2380 and
     # comma-separated `..., https://IP:2380, ...` forms across releases.
-    if echo "$member_output" | grep -Eq "(=|[ ,])https://${current_ip}:2380([, ]|$)"; then
-      printf '  %speer URL matches current IP%s\n' "$GRN" "$RST"
+    if echo "$member_output" | grep -Eq "(=|[ ,])https://${effective_ip}:2380([, ]|$)"; then
+      printf '  %speer URL matches effective node IP%s\n' "$GRN" "$RST"
     else
-      printf '  %sDRIFT: current IP %s not in peer URLs; reset.sh can fix%s\n' "$RED" "$current_ip" "$RST"
+      printf '  %sDRIFT: effective node IP %s not in peer URLs; reset.sh can fix%s\n' "$RED" "$effective_ip" "$RST"
     fi
   fi
 else
