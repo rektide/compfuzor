@@ -111,9 +111,10 @@ else
   printf '(ETCD_SNAPSHOT_SINK unset; no off-box sync)\n'
 fi
 
-# --- the actual failure signature
-hr "recent 'not a member of the etcd cluster' (last 3, 24h)"
+# --- the actual peer-URL drift signature (exclude normal startup connection
+# retries, which also begin with "Failed to test etcd connection")
+hr "recent etcd membership mismatch (last 3, 24h)"
 journalctl -u "$NAME" --no-pager --since "24 hours ago" 2>&1 \
-  | grep "Failed to test etcd" | tail -3 | sed 's/^/  /' || true
+  | grep "this server is not a member of the etcd cluster" | tail -3 | sed 's/^/  /' || true
 
 echo
