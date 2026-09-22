@@ -177,7 +177,7 @@
 
     # k3s common
     CONTAINER_RUNTIME_ENDPOINT: false
-    NODE_IP: false
+    NODE_IP: "{{k3s_node_ip|default(False)}}"
     NODE_EXTERNAL_IP: false
     NODE_NAME: false
     PRIVATE_REGISTRY: false
@@ -188,9 +188,12 @@
     PREFER_BUNDLED_BIN: false
 
     # k3s server
-    CLUSTER_CIDR: "10.39.0.0/16"
-    SERVICE_CIDR: "10.40.0.0/16"
-    CLUSTER_DNS: "10.40.0.2"
+    # `k3s_*` names are inventory-facing inputs. Ansible play vars outrank
+    # inventory vars, so inventory must not try to override these derived
+    # uppercase runtime names directly.
+    CLUSTER_CIDR: "{{k3s_cluster_cidr|default('10.39.0.0/16')}}"
+    SERVICE_CIDR: "{{k3s_service_cidr|default('10.40.0.0/16')}}"
+    CLUSTER_DNS: "{{k3s_cluster_dns|default('10.40.0.2')}}"
     FLANNEL_BACKEND: none
     LOCAL_PROVISIONER_PATH: "{{VAR}}/local-provisioner"
     DISABLE:
@@ -201,7 +204,7 @@
     DISABLE_LIST: "{{ DISABLE|default([], true)|difference(['network-policy', 'kube-proxy'])|join(',')}}"
     DISABLE_NETWORK_POLICY: "{{ DISABLE|default([], true)|intersect(['network-policy'])|length() == 0}}"
     DISABLE_KUBE_PROXY:     "{{ DISABLE|default([], true)|intersect(['kube-proxy']    )|length() == 1}}"
-    ETCD_SNAPSHOT_RETENTION: 28
+    ETCD_SNAPSHOT_RETENTION: "{{k3s_etcd_snapshot_retention|default(28)}}"
     # Off-box snapshot sync: when ETCD_SNAPSHOT_SINK is set (e.g. an autofs
     # CIFS mount like /mnt/bitblaster/backup/<name>), an hourly
     # <NAME>-snapshot-sync.{service,timer} pair copies new snapshot zips
@@ -210,16 +213,23 @@
     # additionally mirrors the DR secrets (cluster token, agent token,
     # secrets-encryption key) into <sink>/creds/ -- without them a snapshot
     # cannot be restored on fresh hardware.
-    ETCD_SNAPSHOT_SINK: ""
-    ETCD_SNAPSHOT_SINK_KEEP: 120
-    ETCD_SNAPSHOT_SINK_CREDS: "false"
+    ETCD_SNAPSHOT_SINK: "{{k3s_etcd_snapshot_sink|default('')}}"
+    ETCD_SNAPSHOT_SINK_KEEP: "{{k3s_etcd_snapshot_sink_keep|default(120)}}"
+    ETCD_SNAPSHOT_SINK_CREDS: "{{k3s_etcd_snapshot_sink_creds|default('false')}}"
     SECRETS_ENCRYPTION: true
     SECRETS_ENCRYPTION_PROVIDER: secretbox
-    # Kubelet eviction thresholds; empty string disables. Single-arg form
-    # uses k3s/kubelet's default soft+hard parsing. Example below matches the
-    # production workhorse-voodoowarez-com deployment.
-    # Example: "eviction-hard=nodefs.available<25Gi,imagefs.available<25Gi"
-    KUBELET_ARGS: ""
+    # Kubelet pass-through arguments. Accepts either one string (backwards
+    # compatible) or a list; every item becomes its own repeated
+    # `--kubelet-arg <item>`. Keep host/storage-specific policy in inventory.
+    # Example:
+    #   KUBELET_ARGS:
+    #     - eviction-hard=nodefs.available<25Gi,imagefs.available<30Gi
+    #     - image-gc-high-threshold=98
+    #     - image-gc-low-threshold=97
+    KUBELET_ARGS: "{{k3s_kubelet_args|default([])}}"
+    _KUBELET_ARGS: >-
+      {{ KUBELET_ARGS if (KUBELET_ARGS is sequence and KUBELET_ARGS is not string)
+         else ([KUBELET_ARGS] if KUBELET_ARGS else []) }}
 
     # k3s agent
 
@@ -258,7 +268,9 @@
       ETCD_SNAPSHOT_SINK_CREDS: "{{ETCD_SNAPSHOT_SINK_CREDS}}"
       SNAPSHOTTER: "{{SNAPSHOTTER}}"
       DISABLE_LIST: "{{DISABLE_LIST}}"
-      KUBELET_ARGS: "{{KUBELET_ARGS}}"
+      # Informational copy for status/debugging; ExecStart renders one
+      # --kubelet-arg per normalized item directly (below).
+      KUBELET_ARGS: "{{_KUBELET_ARGS|join(' ')}}"
       K3S_MULTISERVER: "{{ '1' if is_multiserver else '0' }}"
 
     # TODO/fantasy: make commonEnv/serverEnv/agentEnv and something to generate EXEC from that k/v!
@@ -268,7 +280,7 @@
     - "{{ '--node-ip $NODE_IP' if NODE_IP|default(False) else '' }}"
     - "{{ '--node-external-ip $NODE_EXTERNAL_IP' + NODE_EXTERNAL_IP if NODE_EXTERNAL_IP|default(False) else '' }}"
     - "{{ '--private-registry $PRIVATE_REGISTRY' if PRIVATE_REGISTRY|default(False) else '' }}"
-    - "{{ '--kubelet-arg $KUBELET_ARGS' if KUBELET_ARGS else '' }}"
+    - "{{ _KUBELET_ARGS | map('regex_replace', '^(.*)$', '--kubelet-arg \\1') | join(' ') }}"
     agentArgs: {}
     serverArgs:
     # bootstrap server initializes the cluster; joiners contact it via --server.

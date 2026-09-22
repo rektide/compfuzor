@@ -24,7 +24,9 @@
     IFACE: eno1
     # basename (sans .network) of the existing networkd config to extend
     NETWORK_FILE: en
-    ADDRESS_CIDR: "192.168.1.8/22"
+    # NODE_IP_CIDR belongs in host inventory beside k3s's NODE_IP so this
+    # playbook and k3s.srv.pb cannot drift apart.
+    ADDRESS_CIDR: "{{NODE_IP_CIDR|default('192.168.1.8/22')}}"
 
     _addr: "{{ADDRESS_CIDR.split('/')[0]}}"
 

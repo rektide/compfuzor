@@ -21,6 +21,7 @@ SINK_KEEP="${ETCD_SNAPSHOT_SINK_KEEP:-120}"
 # every encrypted secret is unreadable. NOTE: the sink then holds live cluster
 # secrets -- protect the share accordingly.
 SINK_CREDS="${ETCD_SNAPSHOT_SINK_CREDS:-false}"
+SINK_CREDS="${SINK_CREDS,,}"
 
 [ -n "$SINK" ] || { echo "ERROR: no sink (pass a path or set ETCD_SNAPSHOT_SINK)" >&2; exit 64; }
 [ -d "$SNAPSHOTS_DIR" ] || { echo "no snapshots dir yet ($SNAPSHOTS_DIR); nothing to sync"; exit 0; }
