@@ -963,6 +963,8 @@ SUBSYSTEM:
           phase: packages
           generated: |
             command -v pacman >/dev/null 2>&1 || { echo "arch: pacman not found, skipping"; exit 0; }
+            command -v pacman-conf >/dev/null 2>&1 || { echo "arch: pacman-conf not found, skipping"; exit 0; }
+            [ -n "$(pacman-conf --repo-list 2>/dev/null)" ] || { echo "arch: no pacman repositories configured, skipping"; exit 0; }
             SUDO_CMD="sudo"
             _pkgs="{{ _arch_pkgs | join(' ') }}"
             [ -n "$_pkgs" ] || { echo "arch: no packages declared"; exit 0; }
@@ -974,6 +976,8 @@ SUBSYSTEM:
           compose: False
           content: |
             command -v pacman >/dev/null 2>&1 || exit 2
+            command -v pacman-conf >/dev/null 2>&1 || exit 2
+            [ -n "$(pacman-conf --repo-list 2>/dev/null)" ] || exit 2
             _pkgs="{{ _arch_pkgs | join(' ') }}"
             [ -n "$_pkgs" ] || exit 2
             declare -A _req=(
