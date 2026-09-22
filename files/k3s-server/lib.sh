@@ -113,23 +113,24 @@ refuse_if_multiserver() {
 # permanently unreadable.
 stash_creds_for_reset() {
   local ts f datastore moved=0
-  [ -d "$CRED_DIR" ] || return 0
+  as_root test -d "$CRED_DIR" 2>/dev/null || return 0
   datastore="$DB_DIR/etcd/member/snap/db"
-  if [ ! -f "$datastore" ]; then
+  if ! as_root test -f "$datastore" 2>/dev/null; then
     echo "==> no etcd backend at $datastore; not stashing credentials"
     return 0
   fi
   ts="$(date +%Y%m%d%H%M%S)"
-  for f in "$CRED_DIR"/*; do
-    [ -f "$f" ] || continue
+  # reset.sh/restore.sh are normally invoked by an unprivileged operator;
+  # globbing or test -f cannot traverse k3s's root-only server tree. Have
+  # find perform both discovery and the mtime comparison under as_root.
+  while IFS= read -r -d '' f; do
     case "$(basename "$f")" in
       encryption-config.json|encryption-state.json) continue ;;
       *.bak.*) continue ;;
     esac
-    [ "$f" -nt "$datastore" ] || continue
     as_root mv "$f" "${f}.bak.${ts}"
     moved=$((moved + 1))
-  done
+  done < <(as_root find "$CRED_DIR" -maxdepth 1 -type f -newer "$datastore" -print0)
   echo "==> stashed $moved cred file(s) newer than datastore as .bak.$ts (encryption files preserved)"
 }
 
