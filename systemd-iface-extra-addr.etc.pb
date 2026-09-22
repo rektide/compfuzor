@@ -45,6 +45,10 @@
     LINKS:
       - src: "{{ETC}}/extra-addr.conf"
         dest: "{{NETWORKD_CONFIG_DIR}}/{{NETWORK_FILE}}.network.d/{{NAME}}.conf"
+        policy: replace
+        strategies:
+          available: [copy]
+          default: copy
 
     BINS:
       - name: apply.sh
@@ -53,7 +57,11 @@
           # Apply the drop-in live: reload networkd, reconfigure the iface,
           # verify the address actually landed.
           set -e
-          sudo mkdir -p {{NETWORKD_CONFIG_DIR}}/{{NETWORK_FILE}}.network.d
+          # networkd cannot traverse Compfuzor's private deployment dirs, so
+          # LINKS delivers this as a regular copy. Ensure networkd can traverse
+          # the drop-in dir and read the copied file before reload.
+          sudo install -d -m 0755 {{NETWORKD_CONFIG_DIR}}/{{NETWORK_FILE}}.network.d
+          sudo chmod 0644 {{NETWORKD_CONFIG_DIR}}/{{NETWORK_FILE}}.network.d/{{NAME}}.conf
           sudo networkctl reload
           sudo networkctl reconfigure {{IFACE}}
           sleep 2
