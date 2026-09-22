@@ -65,12 +65,12 @@ root units.
 
 | script | role |
 |---|---|
-| `status.sh` | read-only report: service, node IP + pin, drift baseline, listeners, live etcd member list, snapshots, sink freshness |
-| `drift-guard.sh` | `ExecStartPre` in the generated unit: auto cluster-reset on drift, or pin verification; nonzero exit blocks start so systemd retries |
+| `status.sh` | read-only report: service, topology, node IP + pin, drift baseline, listeners, live etcd member list, snapshots, sink freshness |
+| `drift-guard.sh` | `ExecStartPre` in the generated unit: auto cluster-reset on drift (single-server only — multi-server blocks with a runbook pointer), static-pin verification, and refusal to start a fresh cluster over existing snapshots |
 | `reset.sh` | manual cluster-reset to a target IP (`reset.sh --yes 192.168.1.8`); refuses multi-server |
-| `restore.sh` | snapshot restore (`restore.sh latest`); lists snapshots when run bare |
-| `etcd.sh` | `list` / `status <snap>` (offline) / `members` / `health` (live) / `save` |
-| `snapshot-sync.sh` | no-clobber copy of snapshot zips to the sink, pruned to newest `ETCD_SNAPSHOT_SINK_KEEP` |
+| `restore.sh` | snapshot restore (`restore.sh latest`); lists snapshots when run bare; refuses multi-server (HA restore is a different procedure) |
+| `etcd.sh` | `list` / `status <snap>` (offline) / `members` / `health` (live) / `save` / `remove-member <id>` (HA stale-peer remedy) |
+| `snapshot-sync.sh` | no-clobber copy of snapshot zips to the sink, pruned to newest `ETCD_SNAPSHOT_SINK_KEEP`; optional DR-credential mirror |
 
 Snapshots: 12h cadence (`0 */12 * * *`), `--etcd-snapshot-compress`
 (~2.7 MB zips), retention 28. With `ETCD_SNAPSHOT_SINK` set (e.g. the
@@ -122,6 +122,10 @@ tailscaled, so the LAN pin is preferred.
 
 ## Cross-references
 
+- [`k3s-cluster-rebuild.md`](/doc/k3s-cluster-rebuild.md) — companion
+  runbook for when data (not just the registration) is the problem: snapshot
+  restores, total teardown/redeploy, HA member surgery, quorum loss, and
+  fresh-hardware DR.
 - [`k3s.srv.pb`](/k3s.srv.pb) — the playbook wiring (drift-guard
   ExecStartPre, `TLS_SANS`, `ETCD_SNAPSHOT_SINK` units).
 - [`watcher-ops.md`](/doc/watcher-ops.md) — sibling ops-runbook style and
