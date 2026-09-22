@@ -76,6 +76,10 @@ reset_args=(--cluster-reset --cluster-reset-restore-path="$snap" --data-dir "$DA
 as_root "$K3S_BIN" server "${reset_args[@]}"
 
 stash_creds_for_reset
+if [ -n "$node_ip" ]; then
+  printf '%s\n' "$node_ip" | as_root tee "$DIR/var/drift.state" >/dev/null
+  echo "==> drift baseline updated to $node_ip"
+fi
 
 echo
 echo "Done (previous db kept under db/etcd-old-*/). Start k3s with:"

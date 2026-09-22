@@ -68,6 +68,8 @@ echo "==> cluster-reset at $node_ip"
 as_root "$K3S_BIN" server --cluster-reset --data-dir="$DATA" --node-ip="$node_ip"
 
 stash_creds_for_reset
+printf '%s\n' "$node_ip" | as_root tee "$DIR/var/drift.state" >/dev/null
+echo "==> drift baseline updated to $node_ip"
 
 echo
 echo "Done. Start k3s with:"
