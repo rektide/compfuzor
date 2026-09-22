@@ -9,12 +9,7 @@
 
 set -euo pipefail
 
-INSTANCE_DIR="/srv/k3s-server-workhorse-voodoowarez-com"
-ENV_FILE="${INSTANCE_DIR}/env"
-K3S_BIN="/usr/local/bin/k3s"
-
-[ -r "$ENV_FILE" ] && . "$ENV_FILE"
-: "${DATA:=/var/lib/k3s-server-workhorse-voodoowarez-com/data}"
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 COLOR=${COLOR:-1}
 [ "${1:-}" = "--no-color" ] && COLOR=0
@@ -29,35 +24,46 @@ hr() { printf '\n%s-- %s --%s\n' "$HDR" "$*" "$RST"; }
 
 # --- service
 hr "service"
-printf 'active:   %s\n' "$(systemctl is-active k3s-server.service 2>&1)"
-printf 'enabled:  %s\n' "$(systemctl is-enabled k3s-server.service 2>&1)"
-systemctl show k3s-server.service -p ActiveEnterTimestamp -p ExecMainPID -p Result 2>/dev/null \
+printf 'active:   %s\n' "$(systemctl is-active "$NAME" 2>&1)"
+printf 'enabled:  %s\n' "$(systemctl is-enabled "$NAME" 2>&1)"
+systemctl show "$NAME" -p ActiveEnterTimestamp -p ExecMainPID -p Result 2>/dev/null \
   | tr ' ' '\n' | sed 's/^/  /'
 
 # --- node IP
 hr "node IP (kubelet selection)"
-current_ip="$(ip -4 route get 1.1.1.1 2>/dev/null \
-  | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}' || true)"
+current_ip="$(detect_node_ip)"
 printf 'current (default-route src): %s\n' "${current_ip:-<undetectable>}"
+
+printf '\nnode-IP pin: '
+if [ -n "${NODE_IP:-}" ]; then
+  if ip_assigned_locally "$NODE_IP"; then
+    printf '%s (pinned, assigned)%s\n' "$GRN$NODE_IP" "$RST"
+  else
+    printf '%s (pinned, NOT ASSIGNED -- drift-guard will block start)%s\n' "$RED$NODE_IP" "$RST"
+  fi
+else
+  printf '(none; drift-guard auto mode)%s\n' "$YLW"
+fi
+
+printf 'drift baseline (var/drift.state): '
+if [ -r "$DIR/var/drift.state" ]; then
+  printf '%s\n' "$(tr -d '[:space:]' < "$DIR/var/drift.state")"
+else
+  printf '%s(none -- drift-guard will seed on next start)%s\n' "$YLW" "$RST"
+fi
 
 printf '\ndefault route:\n'
 ip -4 route show default 2>/dev/null | sed 's/^/  /'
 
 # --- listeners
 hr "listeners (etcd 2379/2380, apiserver 6443, kubelet 10250)"
-sudo ss -ltnp 2>/dev/null | grep -E ':(2379|2380|6443|10250)\b' | sed 's/^/  /' \
+as_root ss -ltnp 2>/dev/null | grep -E ':(2379|2380|6443|10250)\b' | sed 's/^/  /' \
   || echo "  (none / sudo needed)"
 
 # --- etcd member list (the cached peer URL that drift breaks)
 hr "etcd member list (registered peer URLs)"
-ETCD_TLS_DIR="$DATA/server/tls/etcd"
-if sudo test -r "$ETCD_TLS_DIR/server-client.crt" 2>/dev/null; then
-  member_output="$(sudo /usr/bin/etcdctl \
-    --endpoints=https://127.0.0.1:2379 \
-    --cacert="$ETCD_TLS_DIR/server-ca.crt" \
-    --cert="$ETCD_TLS_DIR/server-client.crt" \
-    --key="$ETCD_TLS_DIR/server-client.key" \
-    member list 2>&1 || true)"
+if as_root test -r "$ETCD_TLS_DIR/server-client.crt" 2>/dev/null; then
+  member_output="$(etcdctl_live member list 2>&1 || true)"
   echo "$member_output" | sed 's/^/  /'
   member_count="$(echo "$member_output" | grep -c '^' || true)"
   echo
@@ -76,12 +82,28 @@ fi
 
 # --- snapshots
 hr "etcd snapshots (latest 5)"
-sudo "$K3S_BIN" etcd-snapshot list --data-dir="$DATA" 2>/dev/null | tail -5 | sed 's/^/  /' \
+as_root "$K3S_BIN" etcd-snapshot list --data-dir="$DATA" 2>/dev/null | tail -5 | sed 's/^/  /' \
   || echo "  (k3s etcd-snapshot list failed)"
+
+# --- off-box snapshot sink
+hr "off-box snapshot sink"
+if [ -n "${ETCD_SNAPSHOT_SINK:-}" ]; then
+  printf 'sink: %s\n' "$ETCD_SNAPSHOT_SINK"
+  if as_root test -d "$ETCD_SNAPSHOT_SINK" 2>/dev/null; then
+    count="$(as_root ls -1 "$ETCD_SNAPSHOT_SINK" 2>/dev/null | wc -l)"
+    newest="$(as_root ls -1t "$ETCD_SNAPSHOT_SINK" 2>/dev/null | head -n1)"
+    printf 'contents: %s file(s); newest: %s\n' "$count" "${newest:-(none)}"
+    printf 'timer: %s\n' "$(systemctl is-active "$NAME-snapshot-sync.timer" 2>&1)"
+  else
+    printf '%s unreachable%s\n' "$RED" "$RST"
+  fi
+else
+  printf '(ETCD_SNAPSHOT_SINK unset; no off-box sync)\n'
+fi
 
 # --- the actual failure signature
 hr "recent 'not a member of the etcd cluster' (last 3, 24h)"
-journalctl -t k3s-server-workhorse-voodoowarez-com --no-pager --since "24 hours ago" 2>&1 \
+journalctl -u "$NAME" --no-pager --since "24 hours ago" 2>&1 \
   | grep "Failed to test etcd" | tail -3 | sed 's/^/  /' || true
 
 echo

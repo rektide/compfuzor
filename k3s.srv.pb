@@ -39,13 +39,21 @@
     is_multiserver: "{{ (groups[cluster]|default([inventory_hostname])|length) > 1 }}"
     # all hostnames in the cluster group (for tls-san aggregation across peers)
     _cluster_hosts: "{{ groups[cluster] | default([inventory_hostname]) }}"
+    # Explicit apiserver SAN list: extra names + cluster hostnames + the
+    # pinned node IP (auto-included in the serving cert by --node-ip anyway,
+    # but listed to keep the unit self-describing) + extraSans. NEVER
+    # aggregate ansible_all_ipv4_addresses into tls-san: on DHCP hosts that
+    # freezes the deploy-time lease into the unit -- the recurring "bad ip".
+    TLS_SANS: >-
+      {{ (extraDomains|default([]) + _cluster_hosts + extraSans|default([])
+          + ([NODE_IP] if NODE_IP|default(False) else [])) | unique }}
 
-    # unit
-    SYSTEMD_UNITS:
-      Description: "{{ NAME }}"
-      After: network-online.target
-      Wants: network-online.target
-    # service
+    # unit(s) via SYSTEMD_ROOTS: the main server unit plus (when
+    # ETCD_SNAPSHOT_SINK is set) the snapshot-sync pair. Roots keep every
+    # unit's sections self-contained: top-level SYSTEMD_* sections leak into
+    # each root render (Restart/ExecStartPre/Alias collisions).
+    SYSTEMD_ROOTS: "{{ ['k3sUnit'] + (['snapSyncService', 'snapSyncTimer'] if ETCD_SNAPSHOT_SINK else []) }}"
+    #service
     #SYSTEMD_SERVICE: True
     # support added in https://github.com/rancher/k3s/pull/100 ?
     _exec:
@@ -53,46 +61,105 @@
       - "{{is_control_plane|ternary('server', 'agent')}}"
       - "{{commonArgs|reject('eq', '')|join(' ')}}"
       - "{{(is_control_plane|ternary(serverArgs, agentArgs))|reject('eq', '')|join(' ')}}"
-    SYSTEMD_SERVICES:
-      Delegate: yes
-      ExecStart: "{{_exec|join(' ')}}"
-      ExecStartPre:
-        - "-/sbin/modprobe br_netfilter"
-        - "-/sbin/modprobe overlay"
-      # Kubelet forces kernel.panic_on_oops=1 at startup. Its
-      # --protect-kernel-defaults option only turns that rewrite into a fatal
-      # mismatch; it does not preserve a local value of 0. Leave this disabled
-      # while collecting the next ramoops capture. Afterwards, uncomment it to
-      # restore oops-without-panic after k3s reaches READY=1. kernel.panic=10 is
-      # intentionally retained for genuine panics and manual ramoops tests.
-      # Compfuzor will then emit ExecStartPost= into the generated k3s systemd
-      # unit. Systemd runs it as root after READY=1 on every service start,
-      # changing the live sysctl only; it does not persist the value across boot.
-      # ExecStartPost:
-      #   - "/usr/sbin/sysctl -w kernel.panic_on_oops=0"
-      KillMode: process
-      LimitNOFILE: 1048576
-      LimitNPROC: infinity
-      LimitCORE: infinity
-      Restart: always
-      RestartSec: 30s
-      TasksMax: infinity
-      TimeoutStartSec: 0
-      Type: notify
-    # install
-    SYSTEMD_INSTALLS:
-      Alias: "{{TYPE}}.service"
+    k3sUnit:
+      SYSTEMD_SERVICE: "{{NAME}}"
+      SYSTEMD_UNITS:
+        Description: "{{ NAME }}"
+        After: network-online.target
+        Wants: network-online.target
+      SYSTEMD_SERVICES:
+        Delegate: yes
+        ExecStart: "{{_exec|join(' ')}}"
+        ExecStartPre:
+          - "-/sbin/modprobe br_netfilter"
+          - "-/sbin/modprobe overlay"
+          # no "-" prefix: a failed guard must block the k3s start. The guard
+          # auto-recovers single-server etcd member peer-URL drift (DHCP lease
+          # change) via a one-shot cluster-reset, or verifies a static NODE_IP
+          # pin is assigned; systemd restarts (RestartSec=30s) until it passes.
+          - "{{DIR}}/bin/drift-guard.sh"
+        # Kubelet forces kernel.panic_on_oops=1 at startup. Its
+        # --protect-kernel-defaults option only turns that rewrite into a fatal
+        # mismatch; it does not preserve a local value of 0. Leave this disabled
+        # while collecting the next ramoops capture. Afterwards, uncomment it to
+        # restore oops-without-panic after k3s reaches READY=1. kernel.panic=10 is
+        # intentionally retained for genuine panics and manual ramoops tests.
+        # Compfuzor will then emit ExecStartPost= into the generated k3s systemd
+        # unit. Systemd runs it as root after READY=1 on every service start,
+        # changing the live sysctl only; it does not persist the value across boot.
+        # ExecStartPost:
+        #   - "/usr/sbin/sysctl -w kernel.panic_on_oops=0"
+        KillMode: process
+        LimitNOFILE: 1048576
+        LimitNPROC: infinity
+        LimitCORE: infinity
+        Restart: always
+        RestartSec: 30s
+        TasksMax: infinity
+        TimeoutStartSec: 0
+        Type: notify
+      # install
+      SYSTEMD_INSTALLS:
+        Alias: "{{TYPE}}.service"
 
-    # Control-plane-only toolkit. reset.sh is manual cluster-reset for
-    # single-server IP-drift recovery (refuses on multi-server); status.sh
-    # is a read-only diagnostic. Deployed raw from files/k3s-server/ to
-    # {{BINS_DIR}}/.
+    # off-box snapshot sync pair, generated only when ETCD_SNAPSHOT_SINK is
+    # set (control-plane concern; harmless definition when unset).
+    snapSyncService:
+      SYSTEMD_SERVICE: "{{NAME}}-snapshot-sync"
+      # the timer activates this unit; installing only links the file
+      SYSTEMD_ENABLE: false
+      SYSTEMD_UNITS:
+        Description: "{{NAME}} etcd snapshot off-box sync"
+        RequiresMountsFor: "{{ETCD_SNAPSHOT_SINK}}"
+      SYSTEMD_SERVICES:
+        Type: oneshot
+        ExecStart: "{{DIR}}/bin/snapshot-sync.sh {{ETCD_SNAPSHOT_SINK}}"
+        # script sources lib.sh -> env itself; no unit env inheritance
+        EnvironmentFile: false
+    snapSyncTimer:
+      SYSTEMD_TIMER: "{{NAME}}-snapshot-sync"
+      SYSTEMD_UNITS:
+        Description: "Hourly {{NAME}} etcd snapshot sync"
+      SYSTEMD_TIMERS:
+        OnCalendar: hourly
+        Persistent: true
+        Unit: "{{NAME}}-snapshot-sync.service"
+      SYSTEMD_INSTALLS:
+        WantedBy: timers.target
+
+    # Control-plane-only toolkit, deployed raw from files/k3s-server/ to
+    # {{BINS_DIR}}/. All scripts discover their instance via bin/lib.sh
+    # (BASH_SOURCE -> ../env -> DATA/NAME), so they work for any instance.
+    #   status.sh        read-only diagnostic report
+    #   drift-guard.sh   ExecStartPre: auto cluster-reset on node-IP drift,
+    #                    or pin verification when NODE_IP is set
+    #   reset.sh         manual single-server cluster-reset (drift remedy /
+    #                    re-pin to a new node IP)
+    #   restore.sh       snapshot restore (--cluster-reset-restore-path)
+    #   etcd.sh          etcd/snapshot inspection + on-demand snapshot
+    #   snapshot-sync.sh off-box snapshot copy (driven by snapshot-sync timer)
+    #   lib.sh           shared helpers (sourced, not run)
     server_bins:
+      - name: lib.sh
+        src: lib.sh
+        raw: True
       - name: status.sh
         src: status.sh
         raw: True
+      - name: drift-guard.sh
+        src: drift-guard.sh
+        raw: True
       - name: reset.sh
         src: reset.sh
+        raw: True
+      - name: restore.sh
+        src: restore.sh
+        raw: True
+      - name: etcd.sh
+        src: etcd.sh
+        raw: True
+      - name: snapshot-sync.sh
+        src: snapshot-sync.sh
         raw: True
     BINS: "{{ server_bins if is_control_plane else [] }}"
 
@@ -135,6 +202,13 @@
     DISABLE_NETWORK_POLICY: "{{ DISABLE|default([], true)|intersect(['network-policy'])|length() == 0}}"
     DISABLE_KUBE_PROXY:     "{{ DISABLE|default([], true)|intersect(['kube-proxy']    )|length() == 1}}"
     ETCD_SNAPSHOT_RETENTION: 28
+    # Off-box snapshot sync: when ETCD_SNAPSHOT_SINK is set (e.g. an autofs
+    # CIFS mount like /mnt/bitblaster/backup/<name>), an hourly
+    # <NAME>-snapshot-sync.{service,timer} pair copies new snapshot zips
+    # there (no-clobber; sink pruned to the newest ETCD_SNAPSHOT_SINK_KEEP
+    # entries). Empty disables the units entirely.
+    ETCD_SNAPSHOT_SINK: ""
+    ETCD_SNAPSHOT_SINK_KEEP: 120
     SECRETS_ENCRYPTION: true
     SECRETS_ENCRYPTION_PROVIDER: secretbox
     # Kubelet eviction thresholds; empty string disables. Single-arg form
@@ -175,6 +249,8 @@
       NODE_EXTERNAL_IP: "{{NODE_EXTERNAL_IP|default('', true)}}"
       # server
       ETCD_SNAPSHOT_RETENTION: "{{ETCD_SNAPSHOT_RETENTION}}"
+      ETCD_SNAPSHOT_SINK: "{{ETCD_SNAPSHOT_SINK}}"
+      ETCD_SNAPSHOT_SINK_KEEP: "{{ETCD_SNAPSHOT_SINK_KEEP}}"
       SNAPSHOTTER: "{{SNAPSHOTTER}}"
       DISABLE_LIST: "{{DISABLE_LIST}}"
       KUBELET_ARGS: "{{KUBELET_ARGS}}"
@@ -194,7 +270,7 @@
     - "{{ '--cluster-init' if is_bootstrap else '--server $K3S_URL' }}"
     - "{{ '--disable-agent' if not is_kubelet else '' }}"
     #- "--tls-san $CLUSTER_DOMAIN"
-    - "{{ '--tls-san ' ~ (extraDomains | merge_list(_cluster_hosts, extraIpv4Domains, preset='append') | unique | join(',')) if extraDomains|default(False) else '' }}"
+    - "{{ '--tls-san ' ~ TLS_SANS|join(',') if TLS_SANS|length > 0 else '' }}"
     - "--cluster-domain $CLUSTER_DOMAIN"
     - "--cluster-cidr $CLUSTER_CIDR"
     - "--service-cidr $SERVICE_CIDR"

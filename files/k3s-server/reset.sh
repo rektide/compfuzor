@@ -1,106 +1,74 @@
 #!/usr/bin/env bash
 # Manual one-shot cluster-reset for SINGLE-SERVER embedded-etcd k3s.
 #
-# Runs `k3s server --cluster-reset --node-ip=<current>` to rewrite the etcd
-# member peer URL after node-IP drift (DHCP changes, etc.).
+# Rewrites the etcd member peer URL to a target IP:
+#   - after DHCP drift (registered OLD_IP -> current IP), or
+#   - when moving the cluster onto a static node IP pin (--node-ip).
+# Data is preserved: cluster-reset is etcd's --force-new-cluster over the
+# existing db, and k3s re-points the member peer URL to --node-ip.
 #
-# !!! SINGLE-SERVER ONLY !!!
-# cluster-reset is etcd's --force-new-cluster: it preserves the local data
-# dir but resets cluster membership to a single member. On multi-server it
-# severs this node from its peers (each peer must then be wiped at db/ and
-# re-joined). This script checks member count and refuses if >1. For
-# multi-server recovery, use `etcdctl member remove`/`member add` against a
-# healthy peer -- that's a runbook, not a script.
+# !!! SINGLE-SERVER ONLY !!! cluster-reset resets etcd membership to a
+# single member; on multi-server it severs this node from its peers (each
+# peer must then be wiped at db/ and re-joined). The member-count guard
+# refuses to run on a multi-member cluster; multi-server peer drift is a
+# runbook (etcdctl member remove on a healthy peer), not a script.
 #
-# Use this when k3s is failing to start with:
+# Use when k3s fails with:
 #   "Failed to test etcd connection: this server is a not a member of the etcd
-#    cluster. Found [...=https://OLD_IP:2380], expect: [...=https://NEW_IP:2380]"
+#    cluster. Found [...=https://OLD:2380], expect: [...=https://NEW:2380]"
 #
 # Usage:
-#   ./reset.sh              # interactive (prompts before stopping k3s)
-#   ./reset.sh --yes        # skip the prompt
-
+#   ./reset.sh                     # interactive; target = $NODE_IP or detected
+#   ./reset.sh --yes               # skip the prompt
+#   ./reset.sh 192.168.1.8         # explicit target IP (e.g. new static pin)
+#   ./reset.sh --yes 192.168.1.8
 set -euo pipefail
 
-INSTANCE_DIR="/srv/k3s-server-workhorse-voodoowarez-com"
-ENV_FILE="${INSTANCE_DIR}/env"
-K3S_BIN="/usr/local/bin/k3s"
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-[ -r "$ENV_FILE" ] && . "$ENV_FILE"
-: "${DATA:=/var/lib/k3s-server-workhorse-voodoowarez-com/data}"
+yes=0
+target=""
+for arg in "$@"; do
+  case "$arg" in
+    --yes|-y) yes=1 ;;
+    -h|--help) sed -n '2,27p' "$0"; exit 0 ;;
+    *) target="$arg" ;;
+  esac
+done
 
-current_ip="$(ip -4 route get 1.1.1.1 2>/dev/null \
-  | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}' || true)"
-
-if [ -z "$current_ip" ]; then
-  echo "ERROR: could not detect current node IP" >&2
+node_ip="$(effective_node_ip "$target")"
+if [ -z "$node_ip" ]; then
+  echo "ERROR: no target IP (pass one explicitly, set NODE_IP, or fix the default route)" >&2
   exit 1
 fi
 
-echo "Detected current node IP : $current_ip"
-echo "k3s data dir            : $DATA"
+refuse_if_multiserver
+
+echo "Target node IP : $node_ip${target:+ (explicit)}"
+echo "k3s data dir   : $DATA"
+echo "unit           : $NAME.service"
 echo
 
-# --- multi-server guard: refuse if etcd reports >1 member ---
-ETCD_TLS_DIR="$DATA/server/tls/etcd"
-if sudo test -r "$ETCD_TLS_DIR/server-client.crt" 2>/dev/null; then
-  member_count="$(sudo /usr/bin/etcdctl \
-    --endpoints=https://127.0.0.1:2379 \
-    --cacert="$ETCD_TLS_DIR/server-ca.crt" \
-    --cert="$ETCD_TLS_DIR/server-client.crt" \
-    --key="$ETCD_TLS_DIR/server-client.key" \
-    member list 2>/dev/null | grep -c '^' || true)"
-  if [ "${member_count:-0}" -gt 1 ]; then
-    echo "ERROR: etcd reports $member_count members -- multi-server cluster." >&2
-    echo "  --cluster-reset would sever this node from its peers." >&2
-    echo "  For peer-URL drift: etcdctl member remove <stale-id> on a healthy peer," >&2
-    echo "  then restart this node to rejoin." >&2
-    exit 1
-  fi
-fi
-
-if [ "${1:-}" != "--yes" ]; then
+if [ "$yes" -ne 1 ]; then
   echo "About to:"
-  echo "  1. stop k3s-server.service (if running)"
-  echo "  2. run k3s --cluster-reset --node-ip=$current_ip"
-  echo "     (preserves data, rewrites peer URL; SINGLE-SERVER ONLY)"
+  echo "  1. stop $NAME.service (if running)"
+  echo "  2. k3s server --cluster-reset --node-ip=$node_ip"
+  echo "     (data preserved, etcd member peer URL re-pointed; SINGLE-SERVER ONLY)"
+  echo "  3. stash server/cred/* aside (k3s recreates them from the datastore;"
+  echo "     encryption files preserved)"
   echo
   printf "Press Ctrl-C to abort, Enter to continue: "
   read -r _
 fi
 
-echo "==> stopping k3s-server.service"
-sudo systemctl stop k3s-server.service 2>/dev/null || true
+echo "==> stopping $NAME.service"
+as_root systemctl stop "$NAME" 2>/dev/null || true
 
-echo "==> running cluster-reset"
-sudo "$K3S_BIN" server \
-  --cluster-reset \
-  --data-dir="$DATA" \
-  --node-ip="$current_ip"
+echo "==> cluster-reset at $node_ip"
+as_root "$K3S_BIN" server --cluster-reset --data-dir="$DATA" --node-ip="$node_ip"
 
-# --- move cred files aside to prevent "newer than datastore" fatal ---
-# cluster-reset touches server/cred/* files, giving them a newer mtime than
-# the datastore. k3s refuses to start ("could cause a cluster outage").
-# Move them aside; k3s recreates them from the datastore on next start.
-# DO NOT move encryption files — losing the encryption key makes all
-# encrypted secrets permanently unreadable.
-cred_dir="$DATA/server/cred"
-if [ -d "$cred_dir" ]; then
-  ts="$(date +%Y%m%d%H%M%S)"
-  moved=0
-  for f in "$cred_dir"/*; do
-    [ -f "$f" ] || continue
-    case "$(basename "$f")" in
-      encryption-config.json|encryption-state.json) continue ;;
-    esac
-    sudo mv "$f" "${f}.bak.${ts}"
-    moved=$((moved + 1))
-  done
-  if [ "$moved" -gt 0 ]; then
-    echo "==> moved $moved cred file(s) to .bak.${ts} (encryption files preserved)"
-  fi
-fi
+stash_creds_for_reset
 
 echo
 echo "Done. Start k3s with:"
-echo "  sudo systemctl start k3s-server.service"
+echo "  sudo systemctl start $NAME"
