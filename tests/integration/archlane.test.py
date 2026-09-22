@@ -129,6 +129,10 @@ def test_archlane_and_aptlane_coexist_in_packages_lane() -> None:
     assert compositor.index("install-apt.sh") < compositor.index("install-arch.sh")
     assert (payload / "bin" / "install-apt.sh").is_file()
     assert (payload / "bin" / "install-arch.sh").is_file()
+    apt_lane = (payload / "bin" / "install-apt.sh").read_text(encoding="utf-8")
+    assert "command -v apt-get" in apt_lane
+    arch_lane = (payload / "bin" / "install-arch.sh").read_text(encoding="utf-8")
+    assert "command -v pacman" in arch_lane
     print("ok: apt and arch lanes coexist in the packages lane, apt first")
 
 

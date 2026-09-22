@@ -892,6 +892,7 @@ SUBSYSTEM:
         - name: install-apt.sh
           phase: packages
           generated: |
+            command -v apt-get >/dev/null 2>&1 || { echo "apt: apt-get not found, skipping"; exit 0; }
             SUDO_CMD="sudo"
             _pkgs="{{ _apt_pkgs | join(' ') }}"
             [ -n "$_pkgs" ] || { echo "apt: no packages declared"; exit 0; }
@@ -905,6 +906,8 @@ SUBSYSTEM:
           basedir: False
           compose: False
           content: |
+            command -v dpkg-query >/dev/null 2>&1 || exit 2
+            command -v apt-cache >/dev/null 2>&1 || exit 2
             _pkgs="{{ _apt_pkgs | join(' ') }}"
             [ -n "$_pkgs" ] || exit 2
             declare -A _req=(
