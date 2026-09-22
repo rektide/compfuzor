@@ -22,9 +22,13 @@ BIN_PHASES: tuple[str, ...] = ("packages", "identity", "main", "units", "records
 
 _PHASE_INDEX = {p: i for i, p in enumerate(BIN_PHASES)}
 
+# Suffix chars include `.` and `\` so systemd-escaped unit names (e.g.
+# install-mount-mnt-...-RimWorld\x2djc141-files-.game\x2droot\x2dmnt.sh)
+# classify as action leaves instead of falling out of the compositor
+# hierarchy (they would never be wired into install-systemd.sh).
 _ACTION_RE = re.compile(
     r"^(?P<action>" + "|".join(BIN_ACTIONS) + r")"
-    r"(?P<suffix>-[A-Za-z0-9][A-Za-z0-9_-]*)?"
+    r"(?P<suffix>-[A-Za-z0-9.\\][A-Za-z0-9._\\-]*)?"
     r"(?P<user>\.user)?\.sh$"
 )
 
@@ -143,7 +147,7 @@ def bin_composers(bins, actions=None):
         _actions = tuple(actions)
         action_re = re.compile(
             r"^(?P<action>" + "|".join(_actions) + r")"
-            r"(?P<suffix>-[A-Za-z0-9][A-Za-z0-9_-]*)?"
+            r"(?P<suffix>-[A-Za-z0-9.\\][A-Za-z0-9._\\-]*)?"
             r"(?P<user>\.user)?\.sh$"
         )
     else:
