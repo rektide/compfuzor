@@ -247,6 +247,11 @@
       is therefore fast and points back to `systemctl`; an established TUI uses
       OpenCode's existing event-stream reconnection behavior.
 
+      `opencode-last` selects the newest executable dated client snapshot from
+      `/usr/local/bin/opencode-<datestamp>` and runs it through the same
+      argument-vector-aware routing. `opencode-last list` lists clients
+      newest-first.
+
       `serve`, `service`, an explicit `--server`, and `--standalone` bypass the
       wrapper so the upstream default world remains available as a parallel
       fallback. Current command handlers for `pair`, `plugin list`,
@@ -524,6 +529,10 @@
       # only (STATUSES runs it via bin/status.sh).
       - name: status-cleanup.sh
         basedir: False
+      # Stable launcher for the newest immutable dated client snapshot.
+      - name: opencode-last
+        basedir: False
+        global: True
       # status.sh reporter AND standalone global command: `global` as a string
       # renames the link, so it lands in GLOBAL_BINS_DIR as opencode-status-ok
       # while bin/status.sh still runs it under its bin/ name. Standalone-safe:

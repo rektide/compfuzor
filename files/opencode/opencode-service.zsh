@@ -8,12 +8,15 @@ fi
 # Route interactive clients read-only through OpenCode's explicit-server path.
 # Administrative service commands and explicit connection choices remain the
 # upstream default/fallback world; their lifecycle is not delegated to systemd.
-_opencode_managed() {
+_opencode_run() {
   local binary=${OPENCODE_BINARY:-/usr/local/bin/opencode2}
   local url=${OPENCODE_SERVER_URL:-http://127.0.0.1:49373}
   local arg top
   local -i index=1
-  local -a routed
+  # Keep the command line as an argument vector, never a shell-split string.
+  # The native CLI OPENCODE_ARGS environment feature is a separate, not-started
+  # working-set patch; this array is local to the wrapper for now.
+  local -a OPENCODE_ARGS
 
   if [[ ! -x $binary ]]; then
     print -u2 "opencode: V2 client not found at $binary"
@@ -23,7 +26,8 @@ _opencode_managed() {
   for arg in "$@"; do
     case $arg in
       --server|--server=*|--standalone)
-        command "$binary" "$@"
+        OPENCODE_ARGS=("$@")
+        command "$binary" "${OPENCODE_ARGS[@]}"
         return
         ;;
     esac
@@ -57,7 +61,8 @@ _opencode_managed() {
     acp|debug|console|mcp|plugin|pair|serve|service)
       # These commands either are not clients or do not yet accept the
       # explicit-server path. Keep them in the upstream fallback world.
-      command "$binary" "$@"
+      OPENCODE_ARGS=("$@")
+      command "$binary" "${OPENCODE_ARGS[@]}"
       return
       ;;
   esac
@@ -69,31 +74,33 @@ _opencode_managed() {
 
   case $top in
     api|models|stats|export|import|mini|run)
-      routed=("${(@)argv[1,index]}" --server "$url")
-      (( index < $# )) && routed+=("${(@)argv[index + 1,-1]}")
-      command "$binary" "${routed[@]}"
+      OPENCODE_ARGS=("${(@)argv[1,index]}" --server "$url")
+      (( index < $# )) && OPENCODE_ARGS+=("${(@)argv[index + 1,-1]}")
+      command "$binary" "${OPENCODE_ARGS[@]}"
       ;;
     auth)
       # auth declares connection flags on list/login/logout, one level deeper.
       if (( index < $# )); then
-        routed=("${(@)argv[1,index + 1]}" --server "$url")
-        (( index + 1 < $# )) && routed+=("${(@)argv[index + 2,-1]}")
-        command "$binary" "${routed[@]}"
+        OPENCODE_ARGS=("${(@)argv[1,index + 1]}" --server "$url")
+        (( index + 1 < $# )) && OPENCODE_ARGS+=("${(@)argv[index + 2,-1]}")
+        command "$binary" "${OPENCODE_ARGS[@]}"
       else
-        command "$binary" "$@"
+        OPENCODE_ARGS=("$@")
+        command "$binary" "${OPENCODE_ARGS[@]}"
       fi
       ;;
     *)
       # No subcommand: this is the full-screen client plus optional directory.
-      command "$binary" --server "$url" "$@"
+      OPENCODE_ARGS=(--server "$url" "$@")
+      command "$binary" "${OPENCODE_ARGS[@]}"
       ;;
   esac
 }
 
 opencode() {
-  _opencode_managed "$@"
+  _opencode_run "$@"
 }
 
 opencode2() {
-  _opencode_managed "$@"
+  _opencode_run "$@"
 }

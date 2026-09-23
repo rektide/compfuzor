@@ -13,15 +13,18 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 LAUNCHER = ROOT / "files/opencode/serve.sh"
 ZIM_MODULE = ROOT / "files/opencode/opencode-service.zsh"
+LAST_CLIENT = ROOT / "files/opencode/opencode-last"
 TEST_PASSWORD = "test-only-opencode-password"
 
 
-def fake_binary(directory: Path) -> Path:
-    binary = directory / "opencode2"
+def fake_binary(directory: Path, name: str = "opencode2") -> Path:
+    binary = directory / name
     binary.write_text(
         """#!/bin/bash
 printf '%s\\0' "$@" > "$OPENCODE_TEST_ARGS"
 printf '%s' "${OPENCODE_PASSWORD:-}" > "$OPENCODE_TEST_PASSWORD"
+printf '%s' "$0" > "$OPENCODE_TEST_BINARY"
+printf '%s' "${OPENCODE_ARGS+x}" > "$OPENCODE_TEST_OPENCODE_ARGS"
 """,
         encoding="utf-8",
     )
@@ -38,6 +41,8 @@ def capture_env(directory: Path, binary: Path, password_file: Path) -> dict[str,
             "OPENCODE_SERVER_URL": "http://127.0.0.1:49373",
             "OPENCODE_TEST_ARGS": str(directory / "args"),
             "OPENCODE_TEST_PASSWORD": str(directory / "password-capture"),
+            "OPENCODE_TEST_BINARY": str(directory / "binary-capture"),
+            "OPENCODE_TEST_OPENCODE_ARGS": str(directory / "opencode-args-capture"),
         }
     )
     env.pop("OPENCODE_PASSWORD", None)
@@ -155,6 +160,60 @@ def test_zim_fails_before_execution_without_password() -> None:
             raise AssertionError("fallback command was not passed through unchanged")
 
 
+def test_last_client_lists_and_runs_newest_snapshot_with_server() -> None:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-opencode-last-") as temporary:
+        directory = Path(temporary)
+        older = fake_binary(directory, "opencode-202609221135")
+        newer = fake_binary(directory, "opencode-20260923161000")
+        fake_binary(directory, "opencode-backup")
+        (directory / "opencode-20260924").write_text("not executable", encoding="utf-8")
+        env = capture_env(directory, older, directory / "OPENCODE_PASSWORD")
+        password_file = directory / "OPENCODE_PASSWORD"
+        password_file.write_text(TEST_PASSWORD, encoding="utf-8")
+        env.update(
+            {
+                "OPENCODE_SNAPSHOT_DIR": str(directory),
+                "OPENCODE_SERVICE_MODULE": str(ZIM_MODULE),
+                "OPENCODE_ARGS": "--must-not-be-forwarded",
+            }
+        )
+
+        listed = subprocess.run(
+            [str(LAST_CLIENT), "list"],
+            cwd=ROOT,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        expected_list = f"{newer}\n{older}\n"
+        if listed.returncode != 0 or listed.stdout != expected_list:
+            raise AssertionError(
+                f"expected newest-first snapshot list {expected_list!r}, "
+                f"got {listed.returncode}: {listed.stdout!r}{listed.stderr}"
+            )
+
+        result = subprocess.run(
+            [str(LAST_CLIENT), "api", "get", "/api/health"],
+            cwd=ROOT,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise AssertionError(f"opencode-last failed:\n{result.stdout}{result.stderr}")
+        expected_args = ["api", "--server", "http://127.0.0.1:49373", "get", "/api/health"]
+        if captured_arguments(directory) != expected_args:
+            raise AssertionError(f"expected {expected_args!r}, got {captured_arguments(directory)!r}")
+        if Path((directory / "binary-capture").read_text(encoding="utf-8")) != newer:
+            raise AssertionError("opencode-last did not execute the newest dated client")
+        if (directory / "opencode-args-capture").read_text(encoding="utf-8"):
+            raise AssertionError("opencode-last propagated OPENCODE_ARGS to the client")
+        if (directory / "password-capture").read_text(encoding="utf-8") != TEST_PASSWORD:
+            raise AssertionError("opencode-last did not load the configured client password")
+
+
 def test_launcher_reads_systemd_credential_without_argv_leak() -> None:
     with tempfile.TemporaryDirectory(prefix="compfuzor-opencode-serve-") as temporary:
         directory = Path(temporary)
@@ -167,6 +226,7 @@ def test_launcher_reads_systemd_credential_without_argv_leak() -> None:
                 "CREDENTIALS_DIRECTORY": str(directory),
                 "OPENCODE_SERVER_HOSTNAME": "0.0.0.0",
                 "OPENCODE_SERVER_PORT": "49373",
+                "OPENCODE_SERVER_CORS": "",
             }
         )
 
@@ -241,6 +301,7 @@ def test_launcher_expands_cors_origins_into_repeatable_flags() -> None:
 if __name__ == "__main__":
     test_zim_routes_without_lifecycle_management()
     test_zim_fails_before_execution_without_password()
+    test_last_client_lists_and_runs_newest_snapshot_with_server()
     test_launcher_reads_systemd_credential_without_argv_leak()
     test_launcher_expands_cors_origins_into_repeatable_flags()
     print("ok: OpenCode foreground service and ZIM routing")

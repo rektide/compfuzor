@@ -1,0 +1,54 @@
+#!/usr/bin/env zsh
+
+emulate -L zsh
+setopt extended_glob
+
+typeset snapshot_dir=${OPENCODE_SNAPSHOT_DIR:-/usr/local/bin}
+typeset candidate stamp
+typeset -A snapshot_by_stamp
+typeset -a stamps
+
+for candidate in "$snapshot_dir"/opencode-[0-9]##(N); do
+  [[ -x $candidate ]] || continue
+  stamp=${candidate:t}
+  stamp=${stamp#opencode-}
+  case ${#stamp} in
+    8) stamp+="000000" ;;
+    12) stamp+="00" ;;
+    14) ;;
+    *) continue ;;
+  esac
+  snapshot_by_stamp[$stamp]=$candidate
+done
+
+stamps=("${(@Ok)snapshot_by_stamp}")
+
+if [[ ${argv[1]:-} == list ]]; then
+  (( $# == 1 )) || {
+    print -u2 "usage: opencode-last list"
+    exit 2
+  }
+  for stamp in "${stamps[@]}"; do
+    print -r -- "${snapshot_by_stamp[$stamp]}"
+  done
+  exit 0
+fi
+
+if (( ${#stamps} == 0 )); then
+  print -u2 "opencode-last: no executable dated clients in $snapshot_dir"
+  exit 127
+fi
+
+export OPENCODE_BINARY=${snapshot_by_stamp[$stamps[1]]}
+export OPENCODE_SERVER_URL=${OPENCODE_SERVER_URL:-http://127.0.0.1:49373}
+export OPENCODE_PASSWORD_FILE=${OPENCODE_PASSWORD_FILE:-$HOME/.config/opencode/secrets/OPENCODE_PASSWORD}
+unset OPENCODE_ARGS
+
+typeset service_module=${OPENCODE_SERVICE_MODULE:-/etc/opt/opencode-git/zim-modules/opencode-service/init.zsh}
+if [[ ! -r $service_module ]]; then
+  print -u2 "opencode-last: cannot read the server-routing module: $service_module"
+  exit 1
+fi
+
+source "$service_module"
+_opencode_run "$@"
