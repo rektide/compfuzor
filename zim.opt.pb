@@ -268,8 +268,11 @@
       - source: zsh-users/zsh-autosuggestions
         phase: late
         comment: Fish-like autosuggestions. Set ZSH_AUTOSUGGEST_MANUAL_REBIND=1 for performance.
-      - source: https://github.com/lukechilds/zsh-better-npm-completion
-        phase: late
+      # Disabled: generic npm completion falls back to spawning `npm completion`
+      # on most TAB presses. Re-enable deliberately if its npm run suggestions
+      # are worth the per-completion process startup.
+      # - source: https://github.com/lukechilds/zsh-better-npm-completion
+      #   phase: late
       - source: zsh-users/zsh-history-substring-search
         phase: late
         enabled: false
@@ -316,6 +319,8 @@
           fi
           source "${ZIM_HOME}/init.zsh"
           export ZSH_AUTOSUGGEST_MANUAL_REBIND=1
+          # Override Zim completion module's insert-tab false for an empty prompt.
+          zstyle ':completion:*' insert-tab true
     ARCH_PKGS:
       - bat
       - eza
