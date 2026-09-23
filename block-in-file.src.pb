@@ -4,23 +4,26 @@
     TYPE: block-in-file
     INSTANCE: git
     REPO: https://github.com/jauntywunderkind/block-in-file
-    # Host prerequisites: node on PATH for the wrapper (system-wide), pnpm for
-    # build.sh (admin environment; bins run through the BINS_SHELL zsh lane so
-    # mise shims resolve). The wrapper executes the dependency-free standalone
-    # bundle so any user with a stock node can run it — no npx/tsx/node_modules.
+    # nodejs subsystem: build-nodejs.sh runs pnpm i --frozen-lockfile plus the
+    # package `build` script (bundle + standalone) inside the local-first repo
+    # checkout. NODEJS_BUILD_COMMANDS then promotes the dependency-free
+    # standalone into the deployment dir: the repo lives under the admin's
+    # 0700 archive, so shared consumers cannot exec from repo/dist directly.
+    NODEJS: True
+    NODEJS_BUILD_COMMANDS: >-
+      install -D -m 0755 dist/block-in-file.standalone.mjs
+      {{DIR}}/dist/block-in-file.standalone.mjs
     BINS:
-      - name: build.sh
-        run: True
-        deployment_rooted: True
-        content: |
-          pnpm install --frozen-lockfile
-          pnpm build
+      # Multi-user global command: the deployment bin is a plain link to the
+      # promoted standalone, whose #!/usr/bin/env node shebang runs on any
+      # user's stock node. `pnpm link -g` alone is per-admin and cannot serve
+      # shared consumers. delay: postRun links only after the build promoted
+      # the artifact.
       - name: block-in-file
+        dest: block-in-file
+        link: ../dist/block-in-file.standalone.mjs
         global: True
-        basedir: False
-        deployment_rooted: True
-        content: |
-          exec node "$DIR/dist/block-in-file.standalone.mjs" "$@"
+        delay: postRun
       - name: blockinfile
         state: absent
   tasks:
