@@ -1,4 +1,6 @@
 #!/usr/bin/env zsh
+# `opencode-last list` prints executable dated snapshots newest-first;
+# otherwise run the newest snapshot with the managed server routing defaults.
 
 emulate -L zsh
 setopt extended_glob

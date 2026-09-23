@@ -247,10 +247,38 @@
       is therefore fast and points back to `systemctl`; an established TUI uses
       OpenCode's existing event-stream reconnection behavior.
 
+      The runner keeps its final argument vector in a local Zsh array named
+      `OPENCODE_ARGS`; it is not shell-split or exported. `opencode-last` clears
+      any inherited `OPENCODE_ARGS` before handing execution to the same runner.
+      Native CLI environment support for `OPENCODE_ARGS` is a separate,
+      not-started working-set change.
+
       `opencode-last` selects the newest executable dated client snapshot from
       `/usr/local/bin/opencode-<datestamp>` and runs it through the same
       argument-vector-aware routing. `opencode-last list` lists clients
       newest-first.
+
+      ## Dated CLI clients
+
+      Before running `build.sh` to replace the working CLI, preserve the
+      currently deployed binary as a no-clobber dated copy:
+
+          stamp=$(date +%Y%m%d%H%M%S)
+          snapshot=/usr/local/bin/opencode-$stamp
+          test ! -e "$snapshot" && test ! -L "$snapshot" || {
+            echo "snapshot exists: $snapshot" >&2; exit 1;
+          }
+          cp -pL /usr/local/bin/opencode2 "$snapshot"
+          "$snapshot" --version
+          cmp -s "$(readlink -f /usr/local/bin/opencode2)" "$snapshot" || {
+            echo "snapshot mismatch" >&2; exit 1;
+          }
+          opencode-last list
+
+      The copy is a standalone executable and remains runnable after the build
+      replaces its output. `opencode-last` discovers these names dynamically;
+      it is not repointed for each snapshot. Keep dated clients until deliberate
+      operator cleanup.
 
       `serve`, `service`, an explicit `--server`, and `--standalone` bypass the
       wrapper so the upstream default world remains available as a parallel
