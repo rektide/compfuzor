@@ -5,6 +5,12 @@ if [[ -z ${OPENCODE_PASSWORD:-} && -r ${OPENCODE_PASSWORD_FILE:-} ]]; then
   export OPENCODE_PASSWORD
 fi
 
+# Load the client-only ZIM_ARRAYS defaults here as well as through the host
+# roster. This keeps both the shell wrapper and opencode-last on one argv source.
+typeset _opencode_args_module=${OPENCODE_ARGS_MODULE:-/etc/opt/opencode-git/zim-modules/opencode-client-args/init.zsh}
+[[ ! -r $_opencode_args_module ]] || source "$_opencode_args_module"
+unset _opencode_args_module
+
 # Route interactive clients read-only through OpenCode's explicit-server path.
 # Administrative service commands and explicit connection choices remain the
 # upstream default/fallback world; their lifecycle is not delegated to systemd.

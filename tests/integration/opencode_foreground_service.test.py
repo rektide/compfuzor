@@ -116,6 +116,18 @@ def test_zim_routes_without_lifecycle_management() -> None:
             'typeset -ga OPENCODE_ARGS=(--server http://client-args.test); opencode2 api get /api/health',
             ["api", "--server", "http://client-args.test", "get", "/api/health"],
         )
+        args_module = directory / "opencode-client-args.zsh"
+        args_module.write_text(
+            'typeset -ga OPENCODE_ARGS=(--server "http://module-args.test")\n',
+            encoding="utf-8",
+        )
+        configured_args_env = env | {"OPENCODE_ARGS_MODULE": str(args_module)}
+        assert_fake_call(
+            directory,
+            configured_args_env,
+            "opencode2 api get /api/health",
+            ["api", "--server", "http://module-args.test", "get", "/api/health"],
+        )
         scalar_args_env = env | {"OPENCODE_ARGS": "--must-not-be-forwarded"}
         assert_fake_call(
             directory,
@@ -123,6 +135,8 @@ def test_zim_routes_without_lifecycle_management() -> None:
             "opencode2 api get /api/health",
             ["api", "--server", "http://127.0.0.1:49373", "get", "/api/health"],
         )
+        if (directory / "opencode-args-capture").read_text(encoding="utf-8"):
+            raise AssertionError("the wrapper forwarded scalar OPENCODE_ARGS to the client")
         assert_fake_call(
             directory,
             env,
