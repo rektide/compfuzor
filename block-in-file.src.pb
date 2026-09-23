@@ -4,33 +4,24 @@
     TYPE: block-in-file
     INSTANCE: git
     REPO: https://github.com/jauntywunderkind/block-in-file
-    ETC_FILES:
-      - name: tool-versions
-        content: |
-          deno 2
+    # Host prerequisites: node on PATH for the wrapper (system-wide), pnpm for
+    # build.sh (admin environment; bins run through the BINS_SHELL zsh lane so
+    # mise shims resolve). The wrapper executes the dependency-free standalone
+    # bundle so any user with a stock node can run it — no npx/tsx/node_modules.
     BINS:
-      - name: install.sh
-        basedir: repo
+      - name: build.sh
         run: True
+        deployment_rooted: True
         content: |
-          [ ! -f '.tool-versions' ] && ln -s etc/tool-versions .tool-versions
-
-          echo deno install
-          deno install
-          echo
-
-          echo deno install --global
-          # deno automatically adds "/bin" to the path so pre-remove our copy of it
-          ROOT=$(dirname $GLOBAL_BINS_DIR) deno task install:dir
-      - name: blockinfile
+          pnpm install --frozen-lockfile
+          pnpm build
+      - name: block-in-file
+        global: True
         basedir: False
+        deployment_rooted: True
         content: |
-          #realdir="$(pwd)"
-          #cd "{{DIR}}"
-          #mise x --cd "$realdir" -- deno run block-in-file $*
-
-          deno run --allow-all {{DIR}}/block-in-file.ts "$@"
-    ENV:
-      GLOBAL_BINS_DIR: "{{GLOBAL_BINS_DIR}}"
+          exec node "$DIR/dist/block-in-file.standalone.mjs" "$@"
+      - name: blockinfile
+        state: absent
   tasks:
     - import_tasks: tasks/compfuzor.includes
