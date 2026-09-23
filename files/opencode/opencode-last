@@ -46,6 +46,9 @@ export OPENCODE_SERVER_URL=${OPENCODE_SERVER_URL:-http://127.0.0.1:49373}
 export OPENCODE_PASSWORD_FILE=${OPENCODE_PASSWORD_FILE:-$HOME/.config/opencode/secrets/OPENCODE_PASSWORD}
 unset OPENCODE_ARGS
 
+typeset args_module=${OPENCODE_ARGS_MODULE:-/etc/opt/opencode-git/zim-modules/opencode-client-args/init.zsh}
+[[ ! -r $args_module ]] || source "$args_module"
+
 typeset service_module=${OPENCODE_SERVICE_MODULE:-/etc/opt/opencode-git/zim-modules/opencode-service/init.zsh}
 if [[ ! -r $service_module ]]; then
   print -u2 "opencode-last: cannot read the server-routing module: $service_module"

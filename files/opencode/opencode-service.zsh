@@ -13,10 +13,18 @@ _opencode_run() {
   local url=${OPENCODE_SERVER_URL:-http://127.0.0.1:49373}
   local arg top
   local -i index=1
-  # Keep the command line as an argument vector, never a shell-split string.
-  # The native CLI OPENCODE_ARGS environment feature is a separate, not-started
-  # working-set patch; this array is local to the wrapper for now.
-  local -a OPENCODE_ARGS
+  local -a server_args routed
+
+  # ZIM_ARRAYS provides OPENCODE_ARGS as a client-shell-only Zsh array. Ignore
+  # scalar environment values until native CLI OPENCODE_ARGS support lands.
+  if (( ${+OPENCODE_ARGS} )) && [[ ${(t)OPENCODE_ARGS} != *array* ]]; then
+    unset OPENCODE_ARGS
+  fi
+  if (( ${+OPENCODE_ARGS} )); then
+    server_args=("${(@)OPENCODE_ARGS}")
+  else
+    server_args=(--server "$url")
+  fi
 
   if [[ ! -x $binary ]]; then
     print -u2 "opencode: V2 client not found at $binary"
@@ -26,8 +34,7 @@ _opencode_run() {
   for arg in "$@"; do
     case $arg in
       --server|--server=*|--standalone)
-        OPENCODE_ARGS=("$@")
-        command "$binary" "${OPENCODE_ARGS[@]}"
+        command "$binary" "$@"
         return
         ;;
     esac
@@ -61,8 +68,7 @@ _opencode_run() {
     acp|debug|console|mcp|plugin|pair|serve|service)
       # These commands either are not clients or do not yet accept the
       # explicit-server path. Keep them in the upstream fallback world.
-      OPENCODE_ARGS=("$@")
-      command "$binary" "${OPENCODE_ARGS[@]}"
+      command "$binary" "$@"
       return
       ;;
   esac
@@ -74,25 +80,24 @@ _opencode_run() {
 
   case $top in
     api|models|stats|export|import|mini|run)
-      OPENCODE_ARGS=("${(@)argv[1,index]}" --server "$url")
-      (( index < $# )) && OPENCODE_ARGS+=("${(@)argv[index + 1,-1]}")
-      command "$binary" "${OPENCODE_ARGS[@]}"
+      routed=("${(@)argv[1,index]}" "${server_args[@]}")
+      (( index < $# )) && routed+=("${(@)argv[index + 1,-1]}")
+      command "$binary" "${routed[@]}"
       ;;
     auth)
       # auth declares connection flags on list/login/logout, one level deeper.
       if (( index < $# )); then
-        OPENCODE_ARGS=("${(@)argv[1,index + 1]}" --server "$url")
-        (( index + 1 < $# )) && OPENCODE_ARGS+=("${(@)argv[index + 2,-1]}")
-        command "$binary" "${OPENCODE_ARGS[@]}"
+        routed=("${(@)argv[1,index + 1]}" "${server_args[@]}")
+        (( index + 1 < $# )) && routed+=("${(@)argv[index + 2,-1]}")
+        command "$binary" "${routed[@]}"
       else
-        OPENCODE_ARGS=("$@")
-        command "$binary" "${OPENCODE_ARGS[@]}"
+        command "$binary" "$@"
       fi
       ;;
     *)
       # No subcommand: this is the full-screen client plus optional directory.
-      OPENCODE_ARGS=(--server "$url" "$@")
-      command "$binary" "${OPENCODE_ARGS[@]}"
+      routed=("${server_args[@]}" "$@")
+      command "$binary" "${routed[@]}"
       ;;
   esac
 }

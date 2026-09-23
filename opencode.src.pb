@@ -171,6 +171,14 @@
     ZIM_ENV:
       - OPENCODE_SERVER_URL
       - OPENCODE_PASSWORD_FILE
+    # Client-only Zsh argv defaults. Keep these out of ENV/env.export so the
+    # systemd `serve` process never receives client connection flags.
+    ZIM_ARRAYS_NAME: opencode-client-args
+    ZIM_ARRAYS_PHASE: tools
+    ZIM_ARRAYS:
+      OPENCODE_ARGS:
+        - --server
+        - "{{ OPENCODE_SERVER_URL }}"
     ZIM_MODULES:
       - name: opencode-service
         source: opencode-service.zsh
@@ -247,11 +255,16 @@
       is therefore fast and points back to `systemctl`; an established TUI uses
       OpenCode's existing event-stream reconnection behavior.
 
-      The runner keeps its final argument vector in a local Zsh array named
-      `OPENCODE_ARGS`; it is not shell-split or exported. `opencode-last` clears
-      any inherited `OPENCODE_ARGS` before handing execution to the same runner.
-      Native CLI environment support for `OPENCODE_ARGS` is a separate,
-      not-started working-set change.
+      Compfuzor's `opencode-client-args` ZIM array module defines `OPENCODE_ARGS`
+      as a Zsh-only array containing `--server` and the configured URL for
+      interactive client shells. It is not an exported process environment
+      value and is not added to the systemd server environment. The ZIM runner
+      inserts those argument tokens at the correct command-parser boundary;
+      explicit `--server` and `--standalone` still override the default.
+      `opencode-last` clears an inherited scalar `OPENCODE_ARGS`, sources the
+      client-only array module, and delegates to the same runner. Native CLI
+      environment support for `OPENCODE_ARGS` remains a separate, not-started
+      working-set change.
 
       `opencode-last` selects the newest executable dated client snapshot from
       `/usr/local/bin/opencode-<datestamp>` and runs it through the same

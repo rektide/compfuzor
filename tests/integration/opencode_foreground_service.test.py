@@ -113,6 +113,19 @@ def test_zim_routes_without_lifecycle_management() -> None:
         assert_fake_call(
             directory,
             env,
+            'typeset -ga OPENCODE_ARGS=(--server http://client-args.test); opencode2 api get /api/health',
+            ["api", "--server", "http://client-args.test", "get", "/api/health"],
+        )
+        scalar_args_env = env | {"OPENCODE_ARGS": "--must-not-be-forwarded"}
+        assert_fake_call(
+            directory,
+            scalar_args_env,
+            "opencode2 api get /api/health",
+            ["api", "--server", "http://127.0.0.1:49373", "get", "/api/health"],
+        )
+        assert_fake_call(
+            directory,
+            env,
             "opencode2 auth list --format json",
             [
                 "auth",
@@ -170,10 +183,16 @@ def test_last_client_lists_and_runs_newest_snapshot_with_server() -> None:
         env = capture_env(directory, older, directory / "OPENCODE_PASSWORD")
         password_file = directory / "OPENCODE_PASSWORD"
         password_file.write_text(TEST_PASSWORD, encoding="utf-8")
+        args_module = directory / "opencode-client-args.zsh"
+        args_module.write_text(
+            'typeset -ga OPENCODE_ARGS=(--server "http://client-args.test")\n',
+            encoding="utf-8",
+        )
         env.update(
             {
                 "OPENCODE_SNAPSHOT_DIR": str(directory),
                 "OPENCODE_SERVICE_MODULE": str(ZIM_MODULE),
+                "OPENCODE_ARGS_MODULE": str(args_module),
                 "OPENCODE_ARGS": "--must-not-be-forwarded",
             }
         )
@@ -203,7 +222,7 @@ def test_last_client_lists_and_runs_newest_snapshot_with_server() -> None:
         )
         if result.returncode != 0:
             raise AssertionError(f"opencode-last failed:\n{result.stdout}{result.stderr}")
-        expected_args = ["api", "--server", "http://127.0.0.1:49373", "get", "/api/health"]
+        expected_args = ["api", "--server", "http://client-args.test", "get", "/api/health"]
         if captured_arguments(directory) != expected_args:
             raise AssertionError(f"expected {expected_args!r}, got {captured_arguments(directory)!r}")
         if Path((directory / "binary-capture").read_text(encoding="utf-8")) != newer:
