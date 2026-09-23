@@ -532,6 +532,7 @@
       # Stable launcher for the newest immutable dated client snapshot.
       - name: opencode-last
         basedir: False
+        raw: True
         global: True
       # status.sh reporter AND standalone global command: `global` as a string
       # renames the link, so it lands in GLOBAL_BINS_DIR as opencode-status-ok
