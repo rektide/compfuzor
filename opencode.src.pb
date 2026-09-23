@@ -170,6 +170,7 @@
         expected: "{{GLOBAL_BINS_DIR}}/opencode2"
     ZIM_ENV:
       - OPENCODE_SERVER_URL
+      - OPENCODE_SERVER_PORT
       - OPENCODE_PASSWORD_FILE
     # Client-only Zsh argv defaults. Keep these out of ENV/env.export so the
     # systemd `serve` process never receives client connection flags.
