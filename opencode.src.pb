@@ -266,6 +266,11 @@
       environment support for `OPENCODE_ARGS` remains a separate, not-started
       working-set change.
 
+      `OPENCODE_SERVER_PORT` is the port source of truth; `OPENCODE_SERVER_URL`
+      and the client `OPENCODE_ARGS` default are derived from it. If the client
+      array is missing or empty, the wrapper falls back to
+      `--server http://127.0.0.1:${OPENCODE_SERVER_PORT}`.
+
       `opencode-last` selects the newest executable dated client snapshot from
       `/usr/local/bin/opencode-<datestamp>` and runs it through the same
       argument-vector-aware routing. `opencode-last list` lists clients

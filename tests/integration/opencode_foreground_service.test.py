@@ -137,6 +137,13 @@ def test_zim_routes_without_lifecycle_management() -> None:
         )
         if (directory / "opencode-args-capture").read_text(encoding="utf-8"):
             raise AssertionError("the wrapper forwarded scalar OPENCODE_ARGS to the client")
+        port_env = env | {"OPENCODE_SERVER_URL": "", "OPENCODE_SERVER_PORT": "49777"}
+        assert_fake_call(
+            directory,
+            port_env,
+            "typeset -ga OPENCODE_ARGS=(); opencode2 api get /api/health",
+            ["api", "--server", "http://127.0.0.1:49777", "get", "/api/health"],
+        )
         assert_fake_call(
             directory,
             env,
@@ -245,6 +252,27 @@ def test_last_client_lists_and_runs_newest_snapshot_with_server() -> None:
             raise AssertionError("opencode-last propagated OPENCODE_ARGS to the client")
         if (directory / "password-capture").read_text(encoding="utf-8") != TEST_PASSWORD:
             raise AssertionError("opencode-last did not load the configured client password")
+
+        empty_args_module = directory / "opencode-client-args-empty.zsh"
+        empty_args_module.write_text("typeset -ga OPENCODE_ARGS=()\n", encoding="utf-8")
+        port_env = env | {
+            "OPENCODE_ARGS_MODULE": str(empty_args_module),
+            "OPENCODE_SERVER_URL": "",
+            "OPENCODE_SERVER_PORT": "49888",
+        }
+        port_result = subprocess.run(
+            [str(LAST_CLIENT), "api", "get", "/api/health"],
+            cwd=ROOT,
+            env=port_env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if port_result.returncode != 0:
+            raise AssertionError(f"opencode-last port fallback failed:\n{port_result.stdout}{port_result.stderr}")
+        expected_port_args = ["api", "--server", "http://127.0.0.1:49888", "get", "/api/health"]
+        if captured_arguments(directory) != expected_port_args:
+            raise AssertionError(f"expected {expected_port_args!r}, got {captured_arguments(directory)!r}")
 
 
 def test_launcher_reads_systemd_credential_without_argv_leak() -> None:

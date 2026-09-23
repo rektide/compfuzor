@@ -16,7 +16,8 @@ unset _opencode_args_module
 # upstream default/fallback world; their lifecycle is not delegated to systemd.
 _opencode_run() {
   local binary=${OPENCODE_BINARY:-/usr/local/bin/opencode2}
-  local url=${OPENCODE_SERVER_URL:-http://127.0.0.1:49373}
+  local port=${OPENCODE_SERVER_PORT:-49373}
+  local url=${OPENCODE_SERVER_URL:-http://127.0.0.1:$port}
   local arg top
   local -i index=1
   local -a server_args routed
@@ -26,7 +27,7 @@ _opencode_run() {
   if (( ${+OPENCODE_ARGS} )) && [[ ${(t)OPENCODE_ARGS} != *array* ]]; then
     unset OPENCODE_ARGS
   fi
-  if (( ${+OPENCODE_ARGS} )); then
+  if (( ${+OPENCODE_ARGS} )) && (( $#OPENCODE_ARGS > 0 )); then
     server_args=("${(@)OPENCODE_ARGS}")
   else
     server_args=(--server "$url")
