@@ -57,7 +57,12 @@ def render_host(payload: Path, scenario: Path, ansible_env: dict[str, str], defa
         },
         "ZIM_CONTEXT": default_context,
         "ZIM_CONTEXTS": {
-            "user": {"config": "user"},
+            "user": {
+                "config": "user",
+                "zshenv": "${HOME}/.zshenv",
+                "zshrc": "${HOME}/.zshrc",
+                "wire_remove": ["^legacy-zim-"],
+            },
             "system": {
                 "config": "system",
                 "loader_root": str(system / "startup"),
@@ -415,6 +420,17 @@ zimfw() { :; }
             path.chmod(0o444)
         zimrc_d.chmod(0o555)
         zimenv_d.chmod(0o555)
+        # Dotfile wiring must preserve unmanaged HOME dotfile content and
+        # migrate away legacy loader blocks matching wire_remove.
+        home_legacy = home_one / ".zshenv"
+        home_legacy.parent.mkdir(parents=True, exist_ok=True)
+        home_legacy.write_text(
+            "unmanaged-home-env\n"
+            "# legacy-zim-oldenv start\n"
+            "old-inline-loader\n"
+            "# legacy-zim-oldenv end\n",
+            encoding="utf-8",
+        )
         run([str(payload / "bin" / "install.sh")], cwd=temporary, env=env_one)
         assert not foreign_log.exists()
 
@@ -428,6 +444,22 @@ zimfw() { :; }
         assert build_log.read_text(encoding="utf-8").splitlines() == [str(local_zimenv), str(local_zimrc)]
         registry_one = local_root_one / "zimfw.conf"
         assert registry_one.is_symlink() and registry_one.resolve() == canonical_zimrc
+
+        wired_zshenv = home_one / ".zshenv"
+        wired_zshrc = home_one / ".zshrc"
+        assert "unmanaged-home-env" in wired_zshenv.read_text(encoding="utf-8")
+        assert "legacy-zim-oldenv" not in wired_zshenv.read_text(encoding="utf-8")
+        assert "old-inline-loader" not in wired_zshenv.read_text(encoding="utf-8")
+        for channel, dotfile, startup in (
+            ("zimenv", wired_zshenv, zdot_one / ".zshenv"),
+            ("zimrc", wired_zshrc, zdot_one / ".zshrc"),
+        ):
+            wired = run(
+                [str(block_in_file), "--read", "-n", f"zim-main-{channel}", str(dotfile)],
+                cwd=temporary,
+                env=env_one,
+            )
+            assert wired.stdout.rstrip("\n") == f"source '{startup}'", wired.stdout
 
         bypass_extra = local_root_one / "zimrc.d" / "97-config-bypass.conf"
         bypass_extra.write_text("zmodule bypass-only\n", encoding="utf-8")
@@ -452,6 +484,16 @@ zimfw() { :; }
         assert build_log.read_text(encoding="utf-8") == ""
         visible_status = run([str(payload / "bin" / "status-zim.sh")], cwd=temporary, env=env_one | {"COMPFUZOR_ZIM_BYPASS": "true"}, check=False)
         assert visible_status.returncode == 0
+        assert "zim zimenv wiring: ok:" in visible_status.stdout
+        assert "zim zimrc wiring: ok:" in visible_status.stdout
+        tampered = wired_zshrc.read_text(encoding="utf-8").replace("source", "soucre")
+        wired_zshrc.write_text(tampered, encoding="utf-8")
+        drifted = run([str(payload / "bin" / "status-zim.sh")], cwd=temporary, env=env_one | {"COMPFUZOR_ZIM_BYPASS": "true"}, check=False)
+        assert drifted.returncode == 1
+        assert "zim zimrc wiring: drift:" in drifted.stdout
+        run([str(payload / "bin" / "install-zim.sh"), "--context", "user"], cwd=temporary, env=env_one)
+        repaired = run([str(payload / "bin" / "status-zim.sh")], cwd=temporary, env=env_one | {"COMPFUZOR_ZIM_BYPASS": "true"}, check=False)
+        assert repaired.returncode == 0
 
         user_loaders = {
             "zimenv": extract_loader(

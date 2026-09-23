@@ -34,7 +34,8 @@ const HELP: Record<ZimAction, string> = {
   install: `Usage: install-zim.sh [--context NAME] [--install assemble|copy|link] [--dropins copy|link]
 
 Install and activate Zim for a selected context: install its CONFIG recipes,
-project startup loaders, build both caches, and publish the registry link.
+project startup loaders, build both caches, wire the loaders into the context's
+dotfiles (when declared), and publish the registry link.
 
 Options:
   --context NAME                 Select a declared Zim context

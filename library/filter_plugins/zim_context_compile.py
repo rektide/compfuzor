@@ -61,7 +61,7 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
                 )
             )
         item = _mapping(raw, label)
-        unknown = set(item) - {"config", "loader_root", "zimrc_home", "zimenv_home", "registry"}
+        unknown = set(item) - {"config", "loader_root", "zimrc_home", "zimenv_home", "registry", "zshenv", "zshrc", "wire_remove"}
         if unknown:
             _error("{} has unknown settings: {}".format(label, ", ".join(sorted(unknown))))
         config_name = item.get("config", context_name)
@@ -92,6 +92,17 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
         resolved = {"config": config_name, "scope": scope}
         for field in ("loader_root", "zimrc_home", "zimenv_home", "registry"):
             resolved[field] = compile_path_selector(item.get(field, defaults.get(field)), "{}.{}".format(label, field), allow_relative=False)
+        # Optional dotfile wiring: source lines installed into the context's
+        # zshenv/zshrc so shells adopt the projected startup loaders without a
+        # manual ZDOTDIR. Undeclared channels stay unwired (loader-only).
+        for field in ("zshenv", "zshrc"):
+            if field in item:
+                resolved[field] = compile_path_selector(item[field], "{}.{}".format(label, field), allow_relative=False)
+        wire_remove = item.get("wire_remove")
+        if wire_remove is not None:
+            if not isinstance(wire_remove, list) or not all(isinstance(pattern, str) and pattern for pattern in wire_remove):
+                _error("{}.wire_remove must be a list of non-empty regex patterns".format(label))
+            resolved["wire_remove"] = list(wire_remove)
         normalized[context_name] = resolved
 
     occupied = set()

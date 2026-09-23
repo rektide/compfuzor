@@ -71,6 +71,14 @@
         zimrc_home: "${HOME}/.cache/zim2"
         zimenv_home: "${HOME}/.cache/zim2-env"
         registry: "${HOME}/.config/zsh/zim2/zimfw.conf"
+        # install-zim.sh wires source lines into these dotfiles; new users need
+        # no manual ZDOTDIR or dotfile editing. wire_remove migrates hosts off
+        # the previous zim-main deployment's inline loader blocks.
+        zshenv: "${HOME}/.zshenv"
+        zshrc: "${HOME}/.zshrc"
+        wire_remove:
+          - '^zim-main-zimenv$'
+          - '^zim-main-zimrc$'
     GET_URLS:
       - https://github.com/zimfw/zimfw/releases/latest/download/zimfw.zsh
     PKGS:

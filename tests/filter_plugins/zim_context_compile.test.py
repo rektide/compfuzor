@@ -70,6 +70,9 @@ def test_compile_zim_contexts():
     assert compiled["spec"]["contexts"]["user"]["loader_root"] == {
         "env": "ZDOTDIR", "default": {"path": "${HOME}"}
     }
+    assert "zshenv" not in compiled["spec"]["contexts"]["user"]
+    assert "zshrc" not in compiled["spec"]["contexts"]["user"]
+    assert "wire_remove" not in compiled["spec"]["contexts"]["user"]
     assert compiled["spec"]["contexts"]["system"]["scope"] == "system"
     by_name = {record["name"]: record for record in compiled["bins"]}
     assert set(by_name) == {"compfuzor-runtime.mjs", "zim/install.mjs", "install-zim.sh", "status-zim.sh"}
@@ -96,6 +99,49 @@ def test_compile_zim_contexts():
     )
     assert "scope" not in next(record for record in system_default["bins"] if record["name"] == "install-zim.sh")
     assert {record["name"] for record in system_default["bins"]} == set(by_name)
+
+
+def test_compile_zim_contexts_dotfile_wiring():
+    plan = config_plan()
+    compiled = compile_zim_contexts(
+        {
+            "user": {
+                "config": "user",
+                "zshenv": "${HOME}/.zshenv",
+                "zshrc": "${HOME}/.zshrc",
+                "wire_remove": ["^zim-main-zimenv$", "^zim-main-zimrc$"],
+            },
+        },
+        plan["spec"],
+        "user",
+        "/opt/zim2/etc",
+        "/opt/zim2",
+        "/opt/zim2/bin",
+        "zim2-main",
+        plan["bins"],
+    )
+    context = compiled["spec"]["contexts"]["user"]
+    assert context["zshenv"] == {"path": "${HOME}/.zshenv"}
+    assert context["zshrc"] == {"path": "${HOME}/.zshrc"}
+    assert context["wire_remove"] == ["^zim-main-zimenv$", "^zim-main-zimrc$"]
+
+
+def test_compile_zim_contexts_wiring_validation():
+    plan = config_plan()
+    check_raises(
+        lambda: compile_zim_contexts(
+            {"user": {"config": "user", "wire_remove": "zim-main-"}},
+            plan["spec"], "user", "/opt/zim/etc", "/opt/zim", "/opt/zim/bin", "zim-main", plan["bins"],
+        ),
+        "wire_remove must be a list",
+    )
+    check_raises(
+        lambda: compile_zim_contexts(
+            {"user": {"config": "user", "zshenv": "relative/path"}},
+            plan["spec"], "user", "/opt/zim/etc", "/opt/zim", "/opt/zim/bin", "zim-main", plan["bins"],
+        ),
+        "zshenv",
+    )
 
 
 def check_raises(operation, expected):

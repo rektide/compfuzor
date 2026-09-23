@@ -3081,7 +3081,10 @@ function resolveActivation(name, zimSpec, configSpec) {
 		loaderRoot: resolvePathSelector(spec.loader_root, void 0, `Zim context ${name}.loader_root`),
 		zimrcHome: resolvePathSelector(spec.zimrc_home, void 0, `Zim context ${name}.zimrc_home`),
 		zimenvHome: resolvePathSelector(spec.zimenv_home, void 0, `Zim context ${name}.zimenv_home`),
-		registry: resolvePathSelector(spec.registry, void 0, `Zim context ${name}.registry`)
+		registry: resolvePathSelector(spec.registry, void 0, `Zim context ${name}.registry`),
+		zshenv: spec.zshenv === void 0 ? void 0 : resolvePathSelector(spec.zshenv, void 0, `Zim context ${name}.zshenv`),
+		zshrc: spec.zshrc === void 0 ? void 0 : resolvePathSelector(spec.zshrc, void 0, `Zim context ${name}.zshrc`),
+		wireRemove: spec.wire_remove ?? []
 	};
 }
 async function runCommand(file, args, capture = false, input) {
@@ -3184,6 +3187,60 @@ async function installActivation(activation, canonical) {
 	await installLoader(`${canonical.blockPrefix}-zimrc`, zimrcLoader.content, join(activation.loaderRoot, ".zshrc"), canonical.blockPrefix);
 	await buildChannel("zimenv", activation, canonical);
 	await buildChannel("zimrc", activation, canonical);
+	await wireDotfile("zimenv", activation, canonical);
+	await wireDotfile("zimrc", activation, canonical);
+}
+function wiringTarget(channel, activation) {
+	return channel === "zimrc" ? activation.zshrc : activation.zshenv;
+}
+function wiringContent(channel, activation) {
+	return `source ${zshQuote(join(activation.loaderRoot, channel === "zimrc" ? ".zshrc" : ".zshenv"))}\n`;
+}
+async function wireDotfile(channel, activation, canonical) {
+	const destination = wiringTarget(channel, activation);
+	if (destination === void 0) return;
+	const executable = process.env.CONFIG_BLOCK_IN_FILE || "block-in-file";
+	const block = `${canonical.blockPrefix}-${channel}`;
+	await mkdir(dirname(destination), { recursive: true });
+	try {
+		await stat(destination);
+	} catch {
+		await writeFile(destination, "", { mode: 420 });
+	}
+	for (const pattern of activation.wireRemove) if ((await runCommand(executable, [
+		"--remove-match",
+		pattern,
+		"-o",
+		destination
+	])).code !== 0) fail$3(`failed to remove legacy block ${pattern} from ${destination}`);
+	if ((await runCommand(executable, [
+		"-n",
+		block,
+		"-C",
+		"true",
+		"-i",
+		"-",
+		"-o",
+		destination
+	], false, Buffer.from(wiringContent(channel, activation)))).code !== 0) fail$3(`failed to wire block ${block} into ${destination}`);
+}
+async function wiringHealthy(channel, activation, canonical) {
+	const destination = wiringTarget(channel, activation);
+	if (destination === void 0) return true;
+	const block = `${canonical.blockPrefix}-${channel}`;
+	const result = await runCommand(process.env.CONFIG_BLOCK_IN_FILE || "block-in-file", [
+		"--read",
+		"-n",
+		block,
+		destination
+	], true);
+	const expected = wiringContent(channel, activation).replace(/\r?\n$/, "");
+	if (result.code === 0 && result.stdout.toString() === expected) {
+		console.log(`zim ${channel} wiring: ok: ${destination}`);
+		return true;
+	}
+	console.log(`zim ${channel} wiring: drift: ${destination} (block ${block} is missing or does not source ${join(activation.loaderRoot, channel === "zimrc" ? ".zshrc" : ".zshenv")})`);
+	return false;
 }
 async function loaderHealthy(channel, activation, canonical) {
 	const destination = join(activation.loaderRoot, channel === "zimrc" ? ".zshrc" : ".zshenv");
@@ -3232,7 +3289,9 @@ async function activationHealthy(activation, canonical) {
 		cacheHealthy("zimenv", activation),
 		cacheHealthy("zimrc", activation),
 		loaderHealthy("zimenv", activation, canonical),
-		loaderHealthy("zimrc", activation, canonical)
+		loaderHealthy("zimrc", activation, canonical),
+		wiringHealthy("zimenv", activation, canonical),
+		wiringHealthy("zimrc", activation, canonical)
 	])).every(Boolean);
 }
 //#endregion
@@ -3242,7 +3301,8 @@ const HELP = {
 	install: `Usage: install-zim.sh [--context NAME] [--install assemble|copy|link] [--dropins copy|link]
 
 Install and activate Zim for a selected context: install its CONFIG recipes,
-project startup loaders, build both caches, and publish the registry link.
+project startup loaders, build both caches, wire the loaders into the context's
+dotfiles (when declared), and publish the registry link.
 
 Options:
   --context NAME                 Select a declared Zim context

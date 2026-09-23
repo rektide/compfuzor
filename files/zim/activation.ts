@@ -1,8 +1,8 @@
 /** Zim context binding, loader projection, cache builds, and health checks. */
 
 import { spawn } from "node:child_process"
-import { lstat, mkdir, readFile, stat } from "node:fs/promises"
-import { join } from "node:path"
+import { lstat, mkdir, readFile, stat, writeFile } from "node:fs/promises"
+import { dirname, join } from "node:path"
 
 import {
   bindContextConfigs,
@@ -21,6 +21,9 @@ export type ZimActivationContext = {
   zimrc_home: PathSelector
   zimenv_home: PathSelector
   registry: PathSelector
+  zshenv?: PathSelector
+  zshrc?: PathSelector
+  wire_remove?: string[]
 }
 
 export type ZimCanonical = {
@@ -53,6 +56,9 @@ export type Activation = {
   zimrcHome: string
   zimenvHome: string
   registry: string
+  zshenv?: string
+  zshrc?: string
+  wireRemove: string[]
 }
 
 export type CommandResult = { code: number; stdout: Buffer; stderr: Buffer }
@@ -74,6 +80,9 @@ export function resolveActivation(name: string, zimSpec: ZimSpec, configSpec: Co
     zimrcHome: resolvePathSelector(spec.zimrc_home, undefined, `Zim context ${name}.zimrc_home`),
     zimenvHome: resolvePathSelector(spec.zimenv_home, undefined, `Zim context ${name}.zimenv_home`),
     registry: resolvePathSelector(spec.registry, undefined, `Zim context ${name}.registry`),
+    zshenv: spec.zshenv === undefined ? undefined : resolvePathSelector(spec.zshenv, undefined, `Zim context ${name}.zshenv`),
+    zshrc: spec.zshrc === undefined ? undefined : resolvePathSelector(spec.zshrc, undefined, `Zim context ${name}.zshrc`),
+    wireRemove: spec.wire_remove ?? [],
   }
 }
 
@@ -172,6 +181,60 @@ export async function installActivation(activation: Activation, canonical: ZimCa
   await installLoader(`${canonical.blockPrefix}-zimrc`, zimrcLoader.content, join(activation.loaderRoot, ".zshrc"), canonical.blockPrefix)
   await buildChannel("zimenv", activation, canonical)
   await buildChannel("zimrc", activation, canonical)
+  // Dotfile wiring comes last: shells only get pointed at fully-built caches.
+  await wireDotfile("zimenv", activation, canonical)
+  await wireDotfile("zimrc", activation, canonical)
+}
+
+export function wiringTarget(channel: ZimChannel, activation: Activation): string | undefined {
+  return channel === "zimrc" ? activation.zshrc : activation.zshenv
+}
+
+function wiringContent(channel: ZimChannel, activation: Activation): string {
+  const loader = join(activation.loaderRoot, channel === "zimrc" ? ".zshrc" : ".zshenv")
+  return `source ${zshQuote(loader)}\n`
+}
+
+async function wireDotfile(channel: ZimChannel, activation: Activation, canonical: ZimCanonical): Promise<void> {
+  const destination = wiringTarget(channel, activation)
+  if (destination === undefined) return
+  const executable = process.env.CONFIG_BLOCK_IN_FILE || "block-in-file"
+  const block = `${canonical.blockPrefix}-${channel}`
+  await mkdir(dirname(destination), { recursive: true })
+  try {
+    await stat(destination)
+  } catch {
+    await writeFile(destination, "", { mode: 0o644 })
+  }
+  for (const pattern of activation.wireRemove) {
+    const removed = await runCommand(executable, ["--remove-match", pattern, "-o", destination])
+    if (removed.code !== 0) fail(`failed to remove legacy block ${pattern} from ${destination}`)
+  }
+  const installed = await runCommand(
+    executable,
+    ["-n", block, "-C", "true", "-i", "-", "-o", destination],
+    false,
+    Buffer.from(wiringContent(channel, activation)),
+  )
+  if (installed.code !== 0) fail(`failed to wire block ${block} into ${destination}`)
+}
+
+async function wiringHealthy(channel: ZimChannel, activation: Activation, canonical: ZimCanonical): Promise<boolean> {
+  const destination = wiringTarget(channel, activation)
+  if (destination === undefined) return true
+  const block = `${canonical.blockPrefix}-${channel}`
+  const result = await runCommand(
+    process.env.CONFIG_BLOCK_IN_FILE || "block-in-file",
+    ["--read", "-n", block, destination],
+    true,
+  )
+  const expected = wiringContent(channel, activation).replace(/\r?\n$/, "")
+  if (result.code === 0 && result.stdout.toString() === expected) {
+    console.log(`zim ${channel} wiring: ok: ${destination}`)
+    return true
+  }
+  console.log(`zim ${channel} wiring: drift: ${destination} (block ${block} is missing or does not source ${join(activation.loaderRoot, channel === "zimrc" ? ".zshrc" : ".zshenv")})`)
+  return false
 }
 
 async function loaderHealthy(
@@ -226,6 +289,8 @@ export async function activationHealthy(activation: Activation, canonical: ZimCa
     cacheHealthy("zimrc", activation),
     loaderHealthy("zimenv", activation, canonical),
     loaderHealthy("zimrc", activation, canonical),
+    wiringHealthy("zimenv", activation, canonical),
+    wiringHealthy("zimrc", activation, canonical),
   ])
   return checks.every(Boolean)
 }
