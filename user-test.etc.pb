@@ -34,10 +34,10 @@
           set -euo pipefail
 
           users=("$@")
-          if [ ${#users[@]} -eq 0 ]; then
+          if [ ${{'{#'}}users[@]} -eq 0 ]; then
             read -r -a users <<<"${USER_TEST_USERS//,/ }"
           fi
-          if [ ${#users[@]} -eq 0 ] || [ -z "${users[0]:-}" ]; then
+          if [ ${{'{#'}}users[@]} -eq 0 ] || [ -z "${users[0]:-}" ]; then
             echo "user-test: no users requested (args or USER_TEST_USERS); nothing to do"
             exit 0
           fi
@@ -83,10 +83,10 @@
           set -euo pipefail
 
           users=("$@")
-          if [ ${#users[@]} -eq 0 ]; then
+          if [ ${{'{#'}}users[@]} -eq 0 ]; then
             read -r -a users <<<"${USER_TEST_USERS//,/ }"
           fi
-          if [ ${#users[@]} -eq 0 ] || [ -z "${users[0]:-}" ]; then
+          if [ ${{'{#'}}users[@]} -eq 0 ] || [ -z "${users[0]:-}" ]; then
             echo "user-test: no users requested (args or USER_TEST_USERS); nothing to do"
             exit 0
           fi
@@ -119,10 +119,10 @@
           set -euo pipefail
 
           users=("$@")
-          if [ ${#users[@]} -eq 0 ]; then
+          if [ ${{'{#'}}users[@]} -eq 0 ]; then
             read -r -a users <<<"${USER_TEST_USERS//,/ }"
           fi
-          if [ ${#users[@]} -eq 0 ] || [ -z "${users[0]:-}" ]; then
+          if [ ${{'{#'}}users[@]} -eq 0 ] || [ -z "${users[0]:-}" ]; then
             echo "user-test: no users requested (args or USER_TEST_USERS); nothing to do"
             exit 0
           fi
