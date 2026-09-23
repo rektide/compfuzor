@@ -317,11 +317,13 @@
             return
           fi
           () {
+            local default_zim_home=@@ZIM_CACHE_HOME@@
+            local default_zim_config_file=@@ZIM_CONFIG_OUTPUT@@
             local controller=@@ZIM_CONTROLLER@@
             local rebuild="${controller:h:h}/bin/install.sh"
-            typeset -g ZIM_HOME="${ZIM_HOME:-@@ZIM_CACHE_HOME@@}"
+            typeset -g ZIM_HOME="${ZIM_HOME:-$default_zim_home}"
             case "${ZIM_CONFIG_FILE:-}" in @@ZIM_LEGACY_CONFIG_PATTERN@@) unset ZIM_CONFIG_FILE ;; esac
-            : "${ZIM_CONFIG_FILE:=@@ZIM_CONFIG_OUTPUT@@}"
+            : "${ZIM_CONFIG_FILE:=$default_zim_config_file}"
             if [[ ! -e "${ZIM_HOME}/init.zsh" ]]; then
               print -u2 "zim: ${ZIM_HOME}/init.zsh is missing; run ${rebuild} to build it"
               return
