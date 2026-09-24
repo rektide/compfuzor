@@ -8,6 +8,14 @@
 #   GIT_REMOTE: explicit selected remote for an ordinary GIT_VERSION
 # The selected remote drives clone/update/checkout. Supplemental remotes are
 # configured and fetched after the selected Git checkout.
+- name: "Compfuzor: precreate deployment dir for auxiliary repositories"
+  file:
+    path: "{{ DIR }}"
+    state: directory
+    owner: "{{ OWNER|def(_cf_user_id, omit) }}"
+    group: "{{ GROUP|def(ansible_group_id, omit) }}"
+  when: ARCHIVE_DOWNLOAD is deftruthy and REPO is deftruthy and REPOS is deftruthy
+
 - name: "Compfuzor: precreate git dir"
   file:
     path: "{{dest}}"

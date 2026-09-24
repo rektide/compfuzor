@@ -200,9 +200,13 @@ def test_full_includes_route_primary_to_archive_and_link_it() -> None:
     with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
         tmp = Path(directory)
         remote, _ = create_remote(tmp)
+        # Auxiliary REPOS are independent deployment-local Git clones even
+        # when the primary REPO uses the jj archive lane.
+        aux_dir = tmp / "auxiliary"
+        aux_dir.mkdir()
+        auxiliary, _ = create_remote(aux_dir)
         archive = tmp / "archive" / "fixture"
         deployed = tmp / "fixture"
-        deployed.mkdir()
         (tmp / "vars").symlink_to(ROOT / "vars", target_is_directory=True)
         (tmp / "files").symlink_to(ROOT / "files", target_is_directory=True)
         playbook = tmp / "full-render.pb"
@@ -221,6 +225,7 @@ def test_full_includes_route_primary_to_archive_and_link_it() -> None:
     REPO_DIR: {str(archive)!r}
     GIT_DIR: {str(archive)!r}
     REPO: {str(remote)!r}
+    REPOS: {{aux: {str(auxiliary)!r}}}
     ARCHIVE_DOWNLOAD: true
     COMPFUZOR_REPO_JJ_RUNNER: {str(RUNNER)!r}
     PKGS_BYPASS: true
@@ -240,6 +245,39 @@ def test_full_includes_route_primary_to_archive_and_link_it() -> None:
         output = run("ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook), cwd=ROOT,
                      env=environment)
         assert (archive / ".jj").is_dir() and (deployed / "repo").resolve() == archive, output
+        assert (deployed / "aux" / ".git").is_dir() and not (deployed / "aux" / ".jj").exists()
         assert "BOOKMARK CREATED  main ->" in output
         git_task = output.split("TASK [Compfuzor: fetch git repositories]", 1)[1].split("TASK [", 1)[0]
-        assert "skipping: [localhost]" in git_task
+        assert str(deployed / "aux") in git_task and str(archive) not in git_task
+
+
+def test_nonarchive_git_checkout_updates_by_default_without_custom_guard() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, seed = create_remote(tmp)
+        deployment = tmp / "deployment"
+        deployment.mkdir()
+        checkout = deployment / "checkout"
+        playbook = tmp / "git-render.pb"
+        playbook.write_text(f"""---
+- hosts: all
+  gather_facts: false
+  vars:
+    REPO: {str(remote)!r}
+    REPO_DIR: {str(checkout)!r}
+    GIT_DIR: {str(checkout)!r}
+    DIR: {str(deployment)!r}
+    OWNER: {os.getuid()}
+    GROUP: {os.getgid()}
+    ARCHIVE_DOWNLOAD: false
+  tasks:
+    - import_tasks: {str(ROOT / 'tasks/compfuzor/repo_git.tasks')!r}
+""")
+        environment = os.environ | {"ANSIBLE_CONFIG": str(ROOT / "ansible.cfg")}
+        command = ("ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook))
+        run(*command, cwd=ROOT, env=environment)
+        assert (checkout / ".git").is_dir() and not (checkout / ".jj").exists()
+        advance(seed)
+        run(*command, cwd=ROOT, env=environment)
+        assert (checkout / "tracked").read_text() == "upstream\n"
