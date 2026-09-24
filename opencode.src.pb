@@ -339,22 +339,32 @@
 
       1. **record** — for each live root client process (topmost opencode
          process of a tree, plain TUI argv only), resolve the opencode
-         session id with `cotail find-id <pid> --id-only` (falling back to
-         `OPENCODE_SESSION_ID` in `/proc/<pid>/environ`) and its tmux pane
-         by walking the PPid chain to a pane shell, and append one TSV row
-         to an in-memory registry at
+         session id with `cotail find-id <pid> --id-only` — the only
+         working resolver, since client processes never carry
+         `OPENCODE_SESSION_ID` in their environ (that env reaches tool
+         shells via the opencode-shell-sessionids plugin, never the TUIs)
+         — and its tmux pane by walking the PPid chain to a pane shell,
+         then append one TSV row to an in-memory registry at
          `${XDG_RUNTIME_DIR:-/run/user/<uid>}/opencode/clients.tsv`
          (tmpfs: runtime truth, wiped at logout/reboot, never durable
          config).
-      2. **restart** (default) — kill the recorded clients (TERM, then KILL),
-         sweep orphaned pane-descendant opencode processes, and relaunch
-         each pane by waiting for its shell to resurface and then
-         `tmux send-keys`-ing `cd <cwd> && opencode --session <id>`. The
-         pane's ZIM wrapper injects `--server`, so the relaunched client
-         reattaches to the managed deployment exactly like a manual
-         relaunch.
-      3. **list** — print the registry with liveness annotations.
-         `-n`/`--dry-run` previews any of these without killing or sending.
+      2. **restart** (default) — kill the recorded clients (TERM, then
+         KILL), sweep orphaned pane-descendant opencode processes, and
+         relaunch each pane by waiting for its shell to resurface and then
+         `tmux send-keys`-ing `opencode --session <id>` (no `cd`: the pane
+         shell is normally still in the launch directory; drift against
+         the recorded cwd is reported, and a cd-prefixed form is kept
+         commented in the bin). The pane's ZIM wrapper injects
+         `--server`, so the relaunched client reattaches to the managed
+         deployment exactly like a manual relaunch.
+      3. **list** — print the registry with liveness annotations;
+         **clear** — forget it. `-n`/`--dry-run` previews any of these
+         without killing or sending.
+
+      Sessions idle longer than `OPENCODE_RESTART_CLIENTS_MAX_IDLE`
+      (default `5d`, `0` disables) are not relaunched: the gate reads
+      cotail's `timeIdle`/`timeUpdated` for the recorded session and
+      leaves stale panes as plain shells.
 
       Excluded by design: the server unit's MainPID and any `serve` process,
       server-spawned tool shells (not pane descendants), and the script's
@@ -375,10 +385,8 @@
       Second, session resolution is `cotail find-id` (cwd + most recently
       updated session): a freshly launched TUI that never ran a prompt can
       associate with a different recently active session in the same
-      directory. A staleness gate is also planned: consult cotail for the
-      session's last activity (`find-id --session <id> --json` →
-      `timeIdle`/`timeUpdated`) and skip relaunching sessions idle past
-      ~3 days; see the TODO in the bin.
+      directory. The idle gate (above) bounds which sessions come back at
+      all; see `OPENCODE_RESTART_CLIENTS_MAX_IDLE` in the bin.
 
       OpenCode and both watcher daemons use Watchman's XDG-default socket:
       `${XDG_STATE_HOME:-$HOME/.local/state}/watchman/<user>-state/sock`

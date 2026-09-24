@@ -7,11 +7,16 @@
 #   cd <recorded cwd> && opencode --session <recorded session id>
 # into the pane with tmux send-keys. The pane's ZIM wrapper injects
 # --server around that argv, so the relaunched client attaches to the
-# managed deployment exactly like a manual relaunch would.
+# managed deployment exactly like a manual relaunch would. No `cd` is sent
+# by default: the pane shell is normally still in the directory the client
+# was launched from; when the shell's path has drifted from the recorded
+# cwd the drift is reported (a cd-prefixed form is kept commented inside
+# relaunch_client).
 #
 # Subcommands:
 #   record    snapshot live clients into the state file and exit
 #   list      print the recorded state with liveness annotations
+#   clear     remove the state file (forget the registry)
 #   restart   (default) record, kill the clients, sweep orphans, relaunch
 #             each recorded client in its recorded pane
 #
@@ -23,8 +28,10 @@
 # The registry lives in memory (tmpfs), never on disk config:
 #   ${XDG_RUNTIME_DIR:-/run/user/<uid>}/opencode/clients.tsv
 # One TSV row per client: pid, opencode session id, tmux session:win.pane
-# label, pane id, cwd, exe. Session ids come from `cotail find-id <pid>
-# --id-only` with a fallback to OPENCODE_SESSION_ID in /proc/<pid>/environ.
+# label, pane id, cwd, and exe. Session ids come from `cotail find-id <pid>
+# --id-only` — the only working resolver: client processes never carry
+# OPENCODE_SESSION_ID in their environ (that env is injected into tool
+# shells by the opencode-shell-sessionids plugin, never into the TUIs).
 # It is runtime truth only — wiped at logout/reboot, re-recordable any time.
 #
 # What is never touched: the managed server unit's MainPID and any process
@@ -53,7 +60,10 @@
 # may be restarted one extra time before converging.
 #
 # Env: OPENCODE_UNIT (server unit to spare, default opencode.service),
-#      OPENCODE_CLIENTS_STATE (state file override).
+#      OPENCODE_CLIENTS_STATE (state file override),
+#      OPENCODE_RESTART_CLIENTS_MAX_IDLE (idle gate, default 5d; sessions
+#      whose last activity — cotail's timeIdle/timeUpdated — is older are
+#      not relaunched; 0 disables the gate).
 #
 # Exit codes: 0 clean, 1 warnings were printed, 2 usage.
 
@@ -72,7 +82,7 @@ warn() { printf 'warn: %s\n' "$*" >&2; warned=1; }
 
 usage() {
   cat <<'EOF'
-usage: restart-clients.sh [record|list|restart] [-n|--dry-run]
+usage: restart-clients.sh [record|list|clear|restart] [-n|--dry-run]
 
 Restart every OpenCode client without touching the managed server.
 Default subcommand: restart. The client registry is kept in tmpfs at
@@ -80,15 +90,20 @@ ${XDG_RUNTIME_DIR:-/run/user/<uid>}/opencode/clients.tsv.
 
   record    snapshot live clients (pid, session id, tmux pane, cwd, exe)
   list      print the registry with liveness annotations
+  clear     remove the registry file
   restart   kill every client and relaunch each in its recorded tmux pane
-            via `cd <cwd> && opencode --session <id>`
+            via `opencode --session <id>` (no cd; drift from the pane
+            shell's cwd is reported)
   -n        dry run: print actions only
+
+Sessions idle longer than OPENCODE_RESTART_CLIENTS_MAX_IDLE (default 5d)
+are not relaunched; 0 disables the gate.
 EOF
 }
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    record|list|restart) cmd=$1 ;;
+    record|list|clear|restart) cmd=$1 ;;
     -n|--dry-run) dry_run=1 ;;
     -h|--help) usage; exit 0 ;;
     *)
@@ -99,6 +114,51 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+# ------------------------------------------------------------- idle gate
+
+max_idle="${OPENCODE_RESTART_CLIENTS_MAX_IDLE:-5d}"
+idle_ms=0
+
+duration_to_ms() {
+  # "5d" / "72h" / "30m" / "432000s" / plain seconds -> milliseconds
+  local v=$1 n=0 s=0
+  case $v in
+    *d) n=${v%d}; s=$((n * 86400)) ;;
+    *h) n=${v%h}; s=$((n * 3600)) ;;
+    *m) n=${v%m}; s=$((n * 60)) ;;
+    *s) n=${v%s}; s=$n ;;
+    *) n=$v; s=$n ;;
+  esac
+  case $n in
+    ''|*[!0-9]*)
+      printf 'restart-clients.sh: bad OPENCODE_RESTART_CLIENTS_MAX_IDLE: %s\n' "$v" >&2
+      return 1
+      ;;
+  esac
+  printf '%s' $((s * 1000))
+}
+
+if [ "$max_idle" != 0 ]; then
+  idle_ms=$(duration_to_ms "$max_idle") || exit 2
+fi
+
+session_last_active_ms() {
+  # newest of cotail's activity epochs for the session (epoch ms); empty
+  # when unknown (cotail missing, session not found, parse failure)
+  local sid=$1 json t_idle t_updated
+  command -v cotail >/dev/null 2>&1 || { printf ''; return 0; }
+  json=$(cotail find-id --session "$sid" --json 2>/dev/null | head -1 || true)
+  [ -n "$json" ] || { printf ''; return 0; }
+  t_idle=$(printf '%s' "$json" | sed -n 's/.*"timeIdle":\([0-9][0-9]*\).*/\1/p')
+  t_updated=$(printf '%s' "$json" | sed -n 's/.*"timeUpdated":\([0-9][0-9]*\).*/\1/p')
+  if [ -n "$t_idle" ] && [ -n "$t_updated" ]; then
+    if [ "$t_idle" -gt "$t_updated" ]; then printf '%s' "$t_idle"
+    else printf '%s' "$t_updated"; fi
+  else
+    printf '%s' "${t_idle:-$t_updated}"
+  fi
+}
 
 # ---------------------------------------------------------------- helpers
 
@@ -246,13 +306,13 @@ is_tui_argv() {
 }
 
 session_of() {
+  # cotail is the only working resolver (FX-checked: no opencode client
+  # process carries OPENCODE_SESSION_ID in its environ — that env only
+  # reaches tool shells via the opencode-shell-sessionids plugin — and an
+  # inherited stale value would silently record the wrong session)
   local pid=$1 sid=""
   if command -v cotail >/dev/null 2>&1; then
     sid=$(cotail find-id "$pid" --id-only 2>/dev/null || true)
-  fi
-  if [ -z "$sid" ] && [ -r "/proc/$pid/environ" ]; then
-    sid=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null \
-      | sed -n 's/^OPENCODE_SESSION_ID=//p' | head -1 || true)
   fi
   case $sid in
     ses_*) printf '%s' "$sid" ;;
@@ -410,18 +470,34 @@ relaunch_client() {
     warn "client $pid ($label): no session id resolved (cotail find-id failed?); pane left at a shell"
     return 0
   fi
-  # TODO(cotail idle gate): before resurrecting a session, look up its last
-  # activity and skip relaunch past a staleness threshold (~3 days), leaving
-  # the pane as a plain shell instead. Candidate source, epoch-ms fields:
-  #   cotail find-id --session "$sid" --json   -> .timeIdle / .timeUpdated
-  # plumbed through an env knob such as OPENCODE_RESTART_CLIENTS_MAX_IDLE=3d.
-  local launch
-  if [ -n "$cwd" ] && [ -d "$cwd" ]; then
-    launch="cd $(quote "$cwd") && opencode --session $(quote "$sid")"
-  else
-    warn "client $pid ($label): recorded cwd '${cwd:-}' is gone; resuming in the pane's current directory"
-    launch="opencode --session $(quote "$sid")"
+
+  # idle gate: a session untouched for longer than the threshold is not
+  # worth resurrecting — leave the pane as a plain shell
+  local last_ms age_ms
+  if [ "$idle_ms" -gt 0 ]; then
+    last_ms=$(session_last_active_ms "$sid")
+    if [ -n "$last_ms" ]; then
+      age_ms=$(($(date +%s%3N) - last_ms))
+      if [ "$age_ms" -gt "$idle_ms" ]; then
+        say "  skipped $label: session idle for $((age_ms / 86400000))d (gate ${max_idle}); pane left at a shell"
+        return 0
+      fi
+    else
+      say "  note: $label: cotail could not determine session age; gate not applied"
+    fi
   fi
+
+  # no cd: the pane shell is normally still where the client was launched
+  # from. Detect drift against the recorded cwd and report it; the cd form
+  # stays commented here for when forcing the directory matters.
+  #   launch="cd $(quote "$cwd") && opencode --session $(quote "$sid")"
+  local shell_path launch
+  shell_path=$(tmux display-message -p -t "$pane" '#{pane_current_path}' 2>/dev/null || true)
+  if [ -n "$cwd" ] && [ -n "$shell_path" ] && [ "$shell_path" != "$cwd" ]; then
+    say "  note: $label: pane cwd $shell_path != recorded $cwd (no cd sent)"
+  fi
+  launch="opencode --session $(quote "$sid")"
+
   if [ "$dry_run" = 1 ]; then
     say "  dry-run: would send to $label ($pane): $launch"
     return 0
@@ -463,7 +539,24 @@ do_restart() {
 
 # ------------------------------------------------------------------ list
 
+do_clear() {
+  if [ ! -e "$state_file" ]; then
+    say "no state file at $state_file"
+    return 0
+  fi
+  if [ "$dry_run" = 1 ]; then
+    say "dry-run: would remove $state_file"
+    return 0
+  fi
+  rm -f -- "$state_file"
+  say "cleared $state_file"
+}
+
 do_list() {
+  if [ ! -r "$state_file" ]; then
+    warn "no state file at $state_file (run: record)"
+    return 0
+  fi
   read_state
   local n=${#r_pid[@]} i pid st pst
   say "state: $state_file"
@@ -489,6 +582,7 @@ do_list() {
 case $cmd in
   record) do_record ;;
   list) do_list ;;
+  clear) do_clear ;;
   restart) do_restart ;;
 esac
 
