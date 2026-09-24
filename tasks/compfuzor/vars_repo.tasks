@@ -4,24 +4,6 @@
   when: "REPOS is defined and not lookup('deftruthy', var_name)"
   vars:
     var_name: "{{item|upper|replace('-', '_')}}_DIR"
-- name: "Compfuzor: clear tool-version symlinks before repo update"
-  shell: |
-    git reset --quiet -- {{ item|quote }}
-    rm -f -- {{ item|quote }}
-  args:
-    chdir: "{{ REPO_DIR }}"
-  loop:
-    - .tool-versions
-    - mise.toml
-  when:
-    - REPO_DIR is directory
-    - (REPO_DIR + '/.git') is exists
-    - (REPO_DIR + '/' + item) is link
-    # Archive checkouts must reach jj's snapshot with the full tree intact.
-    - ARCHIVE_DOWNLOAD is deffalsy or REPO is not deftruthy
-    - GIT_UPDATE|default(true)|bool
-    - GIT_BYPASS is deffalsy
-    - REPO_BYPASS is deffalsy
 - name: "Add GOPATH and REPO_DIR to ENV"
   set_fact:
     ENV: "{{ env_current | combine(env_additions) }}"

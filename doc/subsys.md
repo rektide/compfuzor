@@ -454,10 +454,11 @@ After gen_bins: `install-user.sh` has `run_all: [install-service-user.sh]`.
 4. `run_all` (child invocations: `"$DIR/bin/<child>" "$@"`)
 5. `late`
 
-## Version-manager rendering
+## Build-time version-manager pins
 
-[`gen_tool_versions.tasks`](../tasks/compfuzor/gen_tool_versions.tasks) renders
-tool-version artifacts. Two symmetric modes:
+[`gen_tool_versions.tasks`](../tasks/compfuzor/gen_tool_versions.tasks) synthesizes
+`build-mise.sh`; it does **not** write pin files or repository links during
+Ansible rendering. The build step handles two pin formats:
 
 | Variable | Output file | Syntax |
 |---|---|---|
@@ -472,18 +473,28 @@ MISE_VERSIONS:
   - python: "3.12"  # explicit version
 ```
 
-When `MISE_VERSIONS` is set, no `.tool-versions` is emitted. Subsystem tool
+When `MISE_VERSIONS` is set, the build step writes `mise.toml` instead of
+`.tool-versions`, merging `TOOL_VERSIONS` as its base. Subsystem tool
 contributions (e.g. `python: true` from the python subsystem) are routed into
-`mise.toml` automatically.
+the selected pin automatically.
 
-The version file is a real file directly in `DIR` (no `DIR/etc` copy, no
-DIR-level symlink); the only link is the repo-root one, pointing at DIR's
-file, because asdf/mise resolve `getcwd()` through the physical checkout and
-walk ancestors from there.
+`build-mise.sh` is first in the automatic BINS run lane and in the generated
+`build.sh` compositor, before tool-consuming builds. It writes the real pin in
+`DIR` (no `DIR/etc` copy), then, when `REPO_DIR` is a distinct Git checkout,
+adds `/<pin filename>` to `.git/info/exclude` before linking an absent repo-root
+pin back to the deployment file. asdf/mise resolve `getcwd()` through the
+physical checkout and walk ancestors from there; the repo-root link makes the
+deployment pin visible to them while remaining ignored by Git and jj.
 
-The mise renderer also contributes an `early` hook (`mise install`) to the
-generated `install.sh`, so declared tools are installed before install scripts
-run.
+If the repo already owns the path, the build step does not clobber it: it prints
+a labeled diff and continues to `mise install`. During an Ansible render these
+warnings accumulate with repository notices and print at the end of the play.
+`COMPFUZOR_MISE_BYPASS=1` skips the entire build step;
+`TOOL_VERSIONS_LINK_BYPASS=True` generates a deployment pin without the repo
+link; `COMPFUZOR_MISE_LINK_FORCE=1` consciously replaces an occupied file or
+symlink. Excludes are clone-local and only affect untracked files; a previously
+snapshotted generated link needs an explicit `jj file untrack <name>` after
+adding the exclude.
 
 ## Declared LINKS and shared link delivery
 

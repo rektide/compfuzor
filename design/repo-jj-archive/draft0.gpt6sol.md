@@ -8,7 +8,7 @@ Use `jj git clone --colocate` for absent archives, `jj git init --git-repo <exis
 
 The safety ordering on an existing clone is deliberate:
 
-1. `jj status` snapshots all non-ignored working-copy files and imports colocation's Git branches as bookmarks. Failure to snapshot aborts the render. Do not pre-reset tool-version symlinks in archive mode.
+1. `jj status` snapshots all non-ignored working-copy files and imports colocation's Git branches as bookmarks. Failure to snapshot aborts the render. Never pre-reset tool-version symlinks; the version-manager build step handles future generated links separately.
 2. On a requested update, duplicate any nonempty `@` under a unique `harvest/<deployment>/working-copy-*` bookmark. The duplicate has a separate change ID, so subsequent edits to the live `@` cannot move the recovery bookmark; it retains untracked files that jj snapshots. Every imported local branch retains its own bookmark. Untrack tracked local bookmarks *before* fetching, so jj cannot silently advance or abandon their old commits while deciding what to save.
 3. Fetch the selected and supplemental remotes with unreachable-commit abandonment disabled. If the old base contains work not ancestral to the fetched tip, give it a unique `harvest/<deployment>/<base>-*` bookmark **before** moving the base bookmark. Then explicitly set the base bookmark to the selected remote tip and re-track it. Do not automatically push harvest refs.
 4. Keep local work available in the worktree: fast-forward an empty `@` directly based on the old base; merge a dirty or divergent `@` with the new base via a new `@`, keeping the original bookmarked commit unchanged. Conflicts remain visible, not silently discarded. Do not silently prune stale artifacts or perform forced resets.
@@ -30,4 +30,4 @@ The jj runner returns structured notices (bookmark creation with name and full t
 
 - [`script/harvest-legacy-repo.sh`](/script/harvest-legacy-repo.sh) is the standalone legacy-checkout migration precedent: namespaced branches and a working-copy recovery tip. The archive lane operates in-place without deleting a legacy deployment directory or making safety bundles.
 - [`tasks/compfuzor/vars_src.tasks`](/tasks/compfuzor/vars_src.tasks), [`tasks/compfuzor/fs_repo.tasks`](/tasks/compfuzor/fs_repo.tasks), and [`vars/common.yaml`](/vars/common.yaml) establish the source path and downstream symlink contracts.
-- [`tasks/compfuzor/vars_repo.tasks`](/tasks/compfuzor/vars_repo.tasks) formerly removed symlinks ahead of repository update; in archive mode it must not run before the jj snapshot.
+- [`tasks/compfuzor/vars_repo.tasks`](/tasks/compfuzor/vars_repo.tasks) formerly removed tool-version symlinks ahead of repository update; the build-time version-manager path replaces this render-time behavior.

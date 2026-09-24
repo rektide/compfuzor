@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify tool-version symlinks are cleared before repository updates."""
+"""Repo vars must not clean up tool-version paths before the build-mise bin."""
 
 from __future__ import annotations
 
@@ -10,125 +10,41 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
+SCRATCH = ROOT / ".test-agent" / "build-mise" / "repo-vars"
 VARS_REPO_TASKS = ROOT / "tasks/compfuzor/vars_repo.tasks"
 
 
-def run_playbook(playbook: Path) -> subprocess.CompletedProcess[str]:
-    env = os.environ.copy()
-    env["ANSIBLE_CONFIG"] = str(ROOT / "ansible.cfg")
-    return subprocess.run(
-        [
-            "ansible-playbook",
-            "-i",
-            "localhost,",
-            "-c",
-            "local",
-            str(playbook),
-        ],
-        cwd=ROOT,
-        env=env,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-
-def init_repo(path: Path) -> None:
-    subprocess.run(["git", "init", "-q", str(path)], check=True)
-
-
-def test_symlinks_are_removed_without_touching_regular_files() -> None:
-    with tempfile.TemporaryDirectory(prefix="compfuzor-tool-version-link-") as tmp:
-        temporary = Path(tmp)
-        generated = temporary / "generated/etc"
-        generated.mkdir(parents=True)
-        (generated / ".tool-versions").write_text("nodejs 25\n", encoding="utf-8")
-        (generated / "mise.toml").write_text(
-            '[tools]\nnodejs = "25"\n', encoding="utf-8"
-        )
-
-        managed = temporary / "managed"
-        init_repo(managed)
-        (managed / ".tool-versions").symlink_to(generated / ".tool-versions")
-        (managed / "mise.toml").symlink_to(generated / "mise.toml")
-        # Reproduce the index state after a colocated Jujutsu repo snapshots them.
-        subprocess.run(
-            [
-                "git",
-                "-C",
-                str(managed),
-                "add",
-                "--intent-to-add",
-                "--",
-                ".tool-versions",
-            ],
-            check=True,
-        )
-
-        owned = temporary / "owned"
-        init_repo(owned)
-        (owned / ".tool-versions").write_text("python 3.14\n", encoding="utf-8")
-        (owned / "mise.toml").write_text(
-            '[tools]\npython = "3.14"\n', encoding="utf-8"
-        )
-
-        playbook = temporary / "cleanup.pb"
-        playbook.write_text(
-            f"""---
+def test_repo_vars_leave_existing_version_paths_untouched() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        deployment = tmp / "deployment"
+        deployment.mkdir()
+        (deployment / ".tool-versions").write_text("nodejs 26\n")
+        checkout = tmp / "repo"
+        subprocess.run(["git", "init", "-q", str(checkout)], check=True)
+        managed = checkout / ".tool-versions"
+        managed.symlink_to(deployment / ".tool-versions")
+        existing = checkout / "mise.toml"
+        existing.write_text('[tools]\nnodejs = "old"\n')
+        playbook = tmp / "vars-render.pb"
+        playbook.write_text(f"""---
 - hosts: all
   gather_facts: false
   vars:
-    DIR: {str(temporary / 'generated')!r}
-    REPO_DIR: {str(managed)!r}
+    DIR: {str(deployment)!r}
+    REPO_DIR: {str(checkout)!r}
     ENV: {{}}
-    GIT_BYPASS: false
-    REPO_BYPASS: false
+    GIT_UPDATE: true
   tasks:
     - import_tasks: {str(VARS_REPO_TASKS)!r}
-    - name: Point cleanup at the repository-owned fixtures
-      ansible.builtin.set_fact:
-        REPO_DIR: {str(owned)!r}
-    - import_tasks: {str(VARS_REPO_TASKS)!r}
-""",
-            encoding="utf-8",
+""")
+        env = os.environ | {"ANSIBLE_CONFIG": str(ROOT / "ansible.cfg")}
+        result = subprocess.run(
+            ["ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook)],
+            cwd=ROOT, env=env, capture_output=True, text=True, check=False,
         )
-
-        result = run_playbook(playbook)
         if result.returncode:
-            raise AssertionError(
-                f"ansible-playbook failed ({result.returncode})\n"
-                f"{result.stdout}\n{result.stderr}"
-            )
-
-        for name in (".tool-versions", "mise.toml"):
-            if (managed / name).is_symlink():
-                raise AssertionError(f"managed link was not removed: {managed / name}")
-        managed_status = subprocess.run(
-            [
-                "git",
-                "-C",
-                str(managed),
-                "status",
-                "--porcelain",
-                "--",
-                ".tool-versions",
-                "mise.toml",
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        ).stdout
-        if managed_status:
-            raise AssertionError(f"managed paths remain dirty:\n{managed_status}")
-
-        if (owned / ".tool-versions").read_text(encoding="utf-8") != "python 3.14\n":
-            raise AssertionError("repository-owned .tool-versions was modified")
-        if (owned / "mise.toml").read_text(encoding="utf-8") != (
-            '[tools]\npython = "3.14"\n'
-        ):
-            raise AssertionError("repository-owned mise.toml was modified")
-
-
-if __name__ == "__main__":
-    test_symlinks_are_removed_without_touching_regular_files()
-    print("ok: tool-version symlinks are cleared before git update")
+            raise AssertionError(f"render failed:\n{result.stdout}\n{result.stderr}")
+        assert managed.is_symlink() and managed.resolve() == deployment / ".tool-versions"
+        assert existing.read_text() == '[tools]\nnodejs = "old"\n'
