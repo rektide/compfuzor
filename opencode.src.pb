@@ -2,7 +2,45 @@
 - hosts: all
   vars:
     TYPE: opencode
+    # INSTANCE selects the deployment variant. `git` is the primary instance:
+    # it owns the un-suffixed surface (opencode.service, /usr/local/bin/
+    # opencode2, the ~/.config/opencode link, and the interactive
+    # opencode/opencode2 ZIM wrapper). Run any other instance side by side
+    # with `-e INSTANCE=<name>`: every generated name, path, port, and
+    # credential is instance-suffixed and isolated by default.
     INSTANCE: git
+    OPENCODE_PRIMARY_INSTANCE: git
+    # |bool keeps this a native boolean: a rendered "False" string would be
+    # truthy in every downstream conditional.
+    OPENCODE_PRIMARY: "{{ (INSTANCE == OPENCODE_PRIMARY_INSTANCE)|bool }}"
+    OPENCODE_SUFFIX: "{{ '' if OPENCODE_PRIMARY else '-' ~ INSTANCE }}"
+    # systemd unit basename: opencode (primary) / opencode-<INSTANCE>.
+    OPENCODE_UNIT: "opencode{{OPENCODE_SUFFIX}}"
+    # Global client links: opencode2 (primary) / opencode2-<INSTANCE>.
+    OPENCODE_CLIENT: "opencode2{{OPENCODE_SUFFIX}}"
+    OPENCODE_CLIENT_NODE: "opencode2-node{{OPENCODE_SUFFIX}}"
+    # Secondary instances bind loopback only; the primary keeps its wildcard
+    # bind for LAN compatibility. Override per run with
+    # -e OPENCODE_SERVER_HOSTNAME=<addr>.
+    OPENCODE_SERVER_HOSTNAME: "{{ '0.0.0.0' if OPENCODE_PRIMARY else '127.0.0.1' }}"
+    # Secondary instances have no port default: pick an explicit distinct one
+    # (-e OPENCODE_SERVER_PORT=<port>) or the guard task fails the run.
+    # 49373 is the primary; 49374 is the stock upstream managed service.
+    OPENCODE_SERVER_PORT: "{{ 49373 if OPENCODE_PRIMARY else None }}"
+    OPENCODE_SERVER_URL: "http://127.0.0.1:{{OPENCODE_SERVER_PORT}}"
+    # Secondary deployments build from their own composed working workspace.
+    OPENCODE_WORKING_DIR: "{{ ansible_user_dir }}/src/opencode-working{{OPENCODE_SUFFIX}}"
+    # Secondary default DB: isolated file under the shared XDG data dir
+    # (~/.local/share/opencode/opencode-<INSTANCE>.db). Override deliberately
+    # with -e OPENCODE_DB=<path-or-filename> for shared/clone experiments;
+    # the semantics and risks are documented in the README below.
+    OPENCODE_INSTANCE_DB: "{{ OPENCODE_DB|default('opencode' ~ OPENCODE_SUFFIX ~ '.db', True) }}"
+    # vars/common.yaml (GLOBAL_BINS_DIR, ETCS_DIR) loads inside
+    # tasks/compfuzor.includes, but the secondary env merge below runs before
+    # it; derive the same locations from the lookup defaults instead. Command
+    # line overrides (-e GLOBAL_BINS_DIR/-e ETCS_DIR) are visible directly.
+    OPENCODE_GLOBAL_BINS: "{{ lookup('vars', 'GLOBAL_BINS_DIR', default='/usr/local/bin') }}"
+    OPENCODE_INSTANCE_ETC: "{{ lookup('vars', 'ETCS_DIR', default='/etc/opt') }}/opencode{{OPENCODE_SUFFIX}}"
     BUN: True
     BUN_BINS: False
     NODEJS: True
@@ -13,15 +51,15 @@
     # jj-style remote bookmark selector; repo_git resolves this as the working
     # branch fetched from the rektide remote while retaining upstream as origin.
     GIT_VERSION: working@rektide
-    # Deployment uses the locally composed jj workspace. The remote working
-    # bookmark is only a snapshot and may lag the accepted local composition.
-    OPENCODE_WORKING_DIR: "{{ ansible_user_dir }}/src/opencode-working"
     # origin's rolling 'latest' tag drifts from the local fossil; allow clobber.
     #GIT_FORCE: True
     PKGS:
       - binutils
     BACKUP_TARGET: /mnt/fu/backup/opencode-2026-5
-    PASSWORDS_DIR: "{{ansible_user_dir}}/.config/opencode/secrets"
+    # The primary stores its credential under ~/.config/opencode/secrets
+    # (which is the symlink to the primary ETC dir); secondaries get their
+    # own suffixed directory because ~/.config/opencode stays primary-owned.
+    PASSWORDS_DIR: "{{ansible_user_dir}}/.config/opencode{{OPENCODE_SUFFIX}}/secrets"
     PASSWORDS:
       - name: OPENCODE_PASSWORD
         format: "python3 -c 'import secrets; print(secrets.token_urlsafe(32))'"
@@ -30,9 +68,9 @@
     ENV:
       OPENCODE_PRINT_LOGS: 1
       OPENCODE_LOG_LEVEL: INFO
-      OPENCODE_SERVER_HOSTNAME: 0.0.0.0
-      OPENCODE_SERVER_PORT: 49373
-      OPENCODE_SERVER_URL: http://127.0.0.1:49373
+      OPENCODE_SERVER_HOSTNAME: "{{OPENCODE_SERVER_HOSTNAME}}"
+      OPENCODE_SERVER_PORT: "{{OPENCODE_SERVER_PORT}}"
+      OPENCODE_SERVER_URL: "{{OPENCODE_SERVER_URL}}"
       OPENCODE_PASSWORD_FILE: "{{PASSWORDS_DIR}}/OPENCODE_PASSWORD"
       OPENCODE_DISABLE_AUTOUPDATE: 1
       # Rendered empty and rewritten in place by bin/build-env-cors.sh, a
@@ -71,7 +109,7 @@
       - opencodeCleanupService
       - opencodeCleanupTimer
     opencodeService:
-      SYSTEMD_SERVICE: opencode
+      SYSTEMD_SERVICE: "{{OPENCODE_UNIT}}"
       SYSTEMD_UNITS:
         Description: OpenCode V2 operator-managed foreground server
         Documentation: https://opencode.ai/v2/docs/
@@ -116,11 +154,11 @@
         LimitNOFILE: 1048576
         StandardOutput: journal
         StandardError: journal
-        SyslogIdentifier: opencode
+        SyslogIdentifier: "{{OPENCODE_UNIT}}"
       SYSTEMD_INSTALLS:
         WantedBy: default.target
     opencodeCleanupService:
-      SYSTEMD_SERVICE: opencode-cleanup
+      SYSTEMD_SERVICE: "{{OPENCODE_UNIT}}-cleanup"
       # The timer activates this unit; installing it must only link the file.
       SYSTEMD_ENABLE: false
       SYSTEMD_UNITS:
@@ -136,7 +174,7 @@
       SYSTEMD_INSTALLS:
         WantedBy: false
     opencodeCleanupTimer:
-      SYSTEMD_TIMER: opencode-cleanup
+      SYSTEMD_TIMER: "{{OPENCODE_UNIT}}-cleanup"
       SYSTEMD_UNITS:
         Description: Clean inactive OpenCode native-library artifacts every eight hours
         Documentation: https://github.com/anomalyco/opencode
@@ -159,15 +197,22 @@
     STATUS_PROC:
       - name: opencode-watchman-env
         check: mainpid-env
-        unit: opencode.service
+        unit: "{{OPENCODE_UNIT}}.service"
         manager: user
         expected:
           WATCHMAN_SOCK: "{{WATCHMAN_CANONICAL_SOCKET_ABS}}"
       - name: opencode-executable
         check: exe-current
-        unit: opencode.service
+        unit: "{{OPENCODE_UNIT}}.service"
         manager: user
-        expected: "{{GLOBAL_BINS_DIR}}/opencode2"
+        expected: "{{GLOBAL_BINS_DIR}}/{{OPENCODE_CLIENT}}"
+    # Only the primary instance promotes connection facts into interactive
+    # shells: ZIM modules define the opencode/opencode2 functions and the
+    # OPENCODE_ARGS array, so two imported instances would silently fight over
+    # the same shell namespace. Secondary instances bypass ZIM entirely; their
+    # entrypoint is the opencode-<INSTANCE> launcher instead. |bool keeps the
+    # bypass a native boolean (a rendered "False" string would read truthy).
+    ZIM_BYPASS: "{{ (not OPENCODE_PRIMARY)|bool }}"
     ZIM_ENV:
       - OPENCODE_SERVER_URL
       - OPENCODE_SERVER_PORT
@@ -194,6 +239,73 @@
       incumbent election or self-eviction, and never manages this process.
       Lifecycle authority belongs only to the systemd user unit.
 
+      ## Instances
+
+      This deployment is instance-scoped. `INSTANCE=git` (the default) is the
+      primary instance and keeps the historical unsuffixed surface: unit
+      `opencode.service` / `opencode-cleanup.timer`, global links `opencode2`
+      and `opencode2-node` (plus `opencode-status-ok`, `opencode-last`,
+      `opencode-live`), the `~/.config/opencode` symlink, the interactive
+      `opencode`/`opencode2` ZIM wrapper, port 49373, wildcard bind, and the
+      server's default database.
+
+      Any other instance runs side by side with explicit isolation:
+
+          ansible-playbook -i 'localhost,' -c local opencode.src.pb \
+            -e INSTANCE=dev -e OPENCODE_SERVER_PORT=49375
+
+      A secondary instance names everything after itself — deployment
+      `/usr/local/src/opencode-<INSTANCE>` (checkout via `GIT_VERSION`, build
+      from `~/src/opencode-working-<INSTANCE>`), config `/etc/opt/opencode-<INSTANCE>`,
+      credential `~/.config/opencode-<INSTANCE>/secrets/OPENCODE_PASSWORD`,
+      units `opencode-<INSTANCE>.service` / `opencode-<INSTANCE>-cleanup.timer`,
+      client links `opencode2-<INSTANCE>` / `opencode2-node-<INSTANCE>` — and
+      its clients enter through one global launcher:
+
+          opencode-<INSTANCE> [args...]     # e.g. opencode-dev api get /api/health
+
+      The launcher sources the instance env, so it routes through the same
+      boundary-aware `--server` injection as the primary's shell wrapper, with
+      `--server`/`--standalone` and administrative commands still passing
+      through unchanged. It never manages the server's lifecycle; that stays
+      with `systemctl --user` and the instance's own `bin/restart.sh`.
+
+      Isolation defaults for secondaries are deliberate:
+
+      - An explicit distinct `OPENCODE_SERVER_PORT` is required (the run fails
+        without one); 49373 is the primary and 49374 the stock upstream
+        managed service.
+      - The bind defaults to `127.0.0.1`, not the primary's wildcard. Expose a
+        secondary deliberately with `-e OPENCODE_SERVER_HOSTNAME=<addr>` and
+        the same trust/funnel considerations as the primary's wildcard notes
+        below.
+      - The database defaults to `opencode-<INSTANCE>.db` under
+        `~/.local/share/opencode/`, separate from every other instance.
+      - No ZIM modules are emitted and no `~/.config/opencode` link is made:
+        two instances must not fight over the interactive `opencode`/`opencode2`
+        shell functions or the shared config path. Server and launcher read the
+        instance config through `OPENCODE_CONFIG_DIR=/etc/opt/opencode-<INSTANCE>`.
+
+      ### Database sharing
+
+      `-e OPENCODE_DB=<path>` selects the server database explicitly (absolute
+      path, or a filename under `~/.local/share/opencode/`). Pointing two live
+      servers at one file is an experiment, not a supported mode: beyond SQLite
+      write contention, V2 session-execution coordination is process-local, and
+      a server starting against a database with suspended execution claims will
+      adopt work that may still be running elsewhere. One execution server per
+      database is the supported shape; a cloned database carries the clone's
+      busy claims and needs a deliberate recovery policy before its server is
+      started. The playbook never launches servers for you — units are
+      installed but activation is the operator's `systemctl` call.
+
+      What stays shared across instances today: the XDG data/state roots
+      (`~/.local/share/opencode`, `~/.local/state/opencode`) hold auth,
+      repositories, snapshots, and logs for all instances; the Watchman socket
+      is the single canonical user daemon. `backup.sh` mirrors that shared data
+      root, so per-instance backup targets are an operator choice, not an
+      isolation boundary.
+
       The persisted 43-character password lives at `${OPENCODE_PASSWORD_FILE}`
       with mode 0600. systemd copies it into a read-only runtime credential;
       `serve.sh` exports it only to the server process. The ZIM module reads the
@@ -203,19 +315,19 @@
 
       ## Operations
 
-          systemctl --user status opencode.service
+          systemctl --user status {{OPENCODE_UNIT}}.service
           {{DIR}}/bin/restart.sh
-          journalctl --user -u opencode.service -f
-          systemctl --user show opencode.service \
+          journalctl --user -u {{OPENCODE_UNIT}}.service -f
+          systemctl --user show {{OPENCODE_UNIT}}.service \
             -p ActiveState -p SubState -p MainPID -p NRestarts \
             -p MemoryCurrent -p MemoryPeak -p CPUUsageNSec -p TasksCurrent
-          opencode2 api get /api/health
-          opencode2 api get /api/server
+          {{ 'opencode2' if OPENCODE_PRIMARY else 'opencode-' ~ INSTANCE }} api get /api/health
+          {{ 'opencode2' if OPENCODE_PRIMARY else 'opencode-' ~ INSTANCE }} api get /api/server
           {{DIR}}/bin/status.sh
-          opencode-status-ok
+          {% if OPENCODE_PRIMARY %}opencode-status-ok{% endif %}
 
       `restart.sh` is the managed-service restart path. It reloads systemd when
-      needed, restarts only `opencode.service`, waits for `/api/health`, and
+      needed, restarts only `{{OPENCODE_UNIT}}.service`, waits for `/api/health`, and
       verifies that the new server inherited the canonical Watchman socket.
       It never touches standalone OpenCode panes.
 
@@ -322,7 +434,7 @@
       the next build (or a manual `{{DIR}}/bin/build-env-cors.sh` run).
       `serve.sh` expands each origin into a repeatable `--cors` flag; an empty
       value means no flags. Apply changes with
-      `systemctl --user restart opencode.service`.
+      `systemctl --user restart {{OPENCODE_UNIT}}.service`.
 
       ## Native-library cleanup
 
@@ -486,6 +598,14 @@
       #      openrouter:
       #        options:
       #          apiKEy: "{env:OPENROUTER_API_KEY}"
+    # One static BINS list for every instance: the compfuzor filters read
+    # declarations through raw_copy_template_data, so top-level conditional
+    # compositions cannot be digested. Instance differences live in
+    # field-level templates and rendered content instead (global link names,
+    # link targets, unit defaults). Interactive-surface notes: opencode-last
+    # and opencode-live keep their bins everywhere (their defaults target the
+    # primary deployment; secondaries reach clients through the launcher),
+    # but only the primary links them globally.
     BINS:
       - name: build.sh
         basedir: False
@@ -513,23 +633,18 @@
         basedir: False
         content: |
           cd "{{OPENCODE_WORKING_DIR}}"
-          ln -sfv $(pwd)/packages/cli/dist/cli-linux-x64/bin/opencode2 $GLOBAL_BINS_DIR/
-          ln -sfv $(pwd)/packages/cli/dist/cli-node-linux-x64/bin/opencode2-node $GLOBAL_BINS_DIR/
+          ln -sfv $(pwd)/packages/cli/dist/cli-linux-x64/bin/opencode2 $GLOBAL_BINS_DIR/{{OPENCODE_CLIENT}}
+          ln -sfv $(pwd)/packages/cli/dist/cli-node-linux-x64/bin/opencode2-node $GLOBAL_BINS_DIR/{{OPENCODE_CLIENT_NODE}}
       - name: install-user.sh
         basedir: False
         content: |
           dir={{DIR}}
           mkdir -p ~/.local/share/opencode/log
-
+          {% if OPENCODE_PRIMARY %}
           [ -n "$TARGET" ] || TARGET="$HOME/.config/opencode"
           mkdir -p $(dirname $TARGET)
           ln -sv ${dir}/etc $TARGET/
-      - name: opencode-live
-        basedir: False
-        global: True
-        content: |
-          # note/beware that we also are pulling in env.exports
-          exec bun run --cwd "{{DIR}}" dev $(pwd)
+          {% endif %}
       # TODO: compfuzor helpers for installing content, automate this in install-user
       - name: serve.sh
         basedir: False
@@ -537,8 +652,8 @@
         basedir: False
         content: |
           set -eu
-          _unit="${OPENCODE_UNIT:-opencode.service}"
-          _url="${OPENCODE_SERVER_URL:-http://127.0.0.1:49373}"
+          _unit="${OPENCODE_UNIT:-{{OPENCODE_UNIT}}.service}"
+          _url="${OPENCODE_SERVER_URL:-http://127.0.0.1:{{OPENCODE_SERVER_PORT}}}"
           _timeout="${OPENCODE_RESTART_TIMEOUT:-60}"
           _sock="{{WATCHMAN_CANONICAL_SOCKET_ABS}}"
 
@@ -576,19 +691,80 @@
       # only (STATUSES runs it via bin/status.sh).
       - name: status-cleanup.sh
         basedir: False
+      # status.sh reporter AND standalone global command — but only for the
+      # primary instance: `global` as a string renames the link into
+      # GLOBAL_BINS_DIR as opencode-status-ok, and a second deployment would
+      # collide on that name. Secondary instances keep the bin locally (env
+      # driven, so it checks its own instance) without the global link.
+      # Standalone-safe: every path it needs comes from env (OPENCODE_*),
+      # never the wrapper.
+      - name: status-opencode-ok.sh
+        basedir: False
+        global: "{{ 'opencode-status-ok' if OPENCODE_PRIMARY else False }}"
+      - name: backup.sh
+        basedir: False
+      # Primary-only interactive surface: the dev-TUI launcher and the dated
+      # snapshot runner both target the primary deployment through unsuffixed
+      # defaults (ZIM modules, /usr/local/bin snapshots); secondaries keep the
+      # local bins but never link them globally.
+      - name: opencode-live
+        basedir: False
+        global: "{{ True if OPENCODE_PRIMARY else False }}"
+        content: |
+          # note/beware that we also are pulling in env.exports
+          exec bun run --cwd "{{DIR}}" dev $(pwd)
       # Stable launcher for the newest immutable dated client snapshot.
       - name: opencode-last
         basedir: False
         raw: True
-        global: True
-      # status.sh reporter AND standalone global command: `global` as a string
-      # renames the link, so it lands in GLOBAL_BINS_DIR as opencode-status-ok
-      # while bin/status.sh still runs it under its bin/ name. Standalone-safe:
-      # every path it needs comes from env (OPENCODE_*), never the wrapper.
-      - name: status-opencode-ok.sh
+        global: "{{ True if OPENCODE_PRIMARY else False }}"
+      # Secondary entrypoint: linked globally as opencode-<INSTANCE>, sources
+      # the instance env, and routes the client through _opencode_run exactly
+      # like the primary's ZIM wrapper. Primary renders the bin but never
+      # links it (no OPENCODE_SERVICE_MODULE in the primary env).
+      - name: opencode-instance
         basedir: False
-        global: opencode-status-ok
-      - name: backup.sh
-        basedir: False
+        raw: True
+        global: "{{ 'opencode-' ~ INSTANCE if not OPENCODE_PRIMARY else False }}"
   tasks:
+    - name: "opencode: secondary instances require an explicit distinct server port"
+      fail:
+        msg: >-
+          INSTANCE={{INSTANCE}} is a secondary deployment and needs an
+          explicit port: rerun with -e OPENCODE_SERVER_PORT=<port>, distinct
+          from every other OpenCode server on this host (49373 is the primary
+          instance, 49374 the stock upstream managed service).
+      when: >-
+        not OPENCODE_PRIMARY and (
+          OPENCODE_SERVER_PORT is not defined or
+          OPENCODE_SERVER_PORT|default('')|string in ['', 'None', '49373', '49374']
+        )
+    - name: "opencode: note operator-selected database path"
+      debug:
+        msg: >-
+          OPENCODE_DB={{OPENCODE_INSTANCE_DB}} is operator-selected for
+          INSTANCE={{INSTANCE}}. One live execution server per database is the
+          supported shape: V2 session-execution coordination is process-local,
+          and a server starting against a database with suspended execution
+          claims will adopt work that may still be running elsewhere. Sharing
+          is an explicit experiment, not a supported concurrent mode.
+      when: not OPENCODE_PRIMARY and OPENCODE_DB is defined
+    - name: "opencode: secondary instance env keys and routing module"
+      # Presence-gated keys (OPENCODE_BINARY/OPENCODE_CONFIG_DIR/OPENCODE_DB/
+      # OPENCODE_SERVICE_MODULE) must stay absent for the primary: an empty
+      # OPENCODE_DB would be adopted as a real (invalid) path by the server.
+      # They ride ENV_PRIO rather than ENV because merging ENV here would
+      # render its values (WATCHMAN_SOCK et al.) before vars/common.yaml has
+      # loaded; ENV_PRIO overrides nothing for secondaries, it only defines.
+      # The client routing module is appended as a plain ETC file because
+      # secondaries emit no ZIM modules.
+      set_fact:
+        ENV_PRIO: "{{ ENV_PRIO|default({}) | combine({
+               'OPENCODE_BINARY': OPENCODE_GLOBAL_BINS ~ '/' ~ OPENCODE_CLIENT,
+               'OPENCODE_CONFIG_DIR': OPENCODE_INSTANCE_ETC,
+               'OPENCODE_DB': OPENCODE_INSTANCE_DB,
+               'OPENCODE_SERVICE_MODULE': OPENCODE_INSTANCE_ETC ~ '/client/service.zsh',
+             }) }}"
+        ETC_FILES: "{{ ETC_FILES + [{'name': 'client/service.zsh', 'src': 'opencode-service.zsh'}] }}"
+      when: not OPENCODE_PRIMARY
     - import_tasks: tasks/compfuzor.includes

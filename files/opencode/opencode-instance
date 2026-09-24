@@ -1,0 +1,48 @@
+#!/usr/bin/env zsh
+# opencode-<INSTANCE> — explicit-server client entrypoint for one secondary
+# OpenCode deployment. Linked globally under the instance's own name (for the
+# primary `git` instance this launcher is not installed; interactive shells
+# there get the opencode/opencode2 ZIM wrapper instead).
+#
+# The launcher is deliberately instance-neutral: every deployment fact comes
+# from the instance's rendered env file (OPENCODE_SERVER_URL,
+# OPENCODE_PASSWORD_FILE, OPENCODE_BINARY, OPENCODE_CONFIG_DIR,
+# OPENCODE_SERVICE_MODULE, OPENCODE_DB), located relative to this script's
+# real path (bin/ inside the deployment DIR). It routes the client argv
+# through the same _opencode_run boundary-aware injection the ZIM wrapper
+# uses, so `--server`, `--standalone`, and administrative commands keep
+# their upstream meanings. It never starts, stops, probes, or replaces the
+# server; lifecycle belongs to the instance's systemd user unit.
+
+emulate -L zsh
+
+# Resolve the deployment root through the global symlink: /usr/local/bin/
+# opencode-<INSTANCE> -> <DIR>/bin/opencode-instance, so ${0:A:h:h} is <DIR>.
+typeset _oc_dir="${0:A:h:h}"
+if [[ ! -r ${_oc_dir}/env ]]; then
+  print -u2 "opencode: cannot read the instance env: ${_oc_dir}/env"
+  exit 1
+fi
+# allexport while sourcing env so the client child process inherits the
+# instance contract (config dir, database, server URL, credential file).
+# The env file never contains the secret itself.
+setopt allexport
+source "${_oc_dir}/env"
+unsetopt allexport
+unset _oc_dir
+
+if [[ -z ${OPENCODE_SERVICE_MODULE:-} ]]; then
+  print -u2 "opencode: OPENCODE_SERVICE_MODULE is not set in the instance env"
+  exit 1
+fi
+if [[ ! -r ${OPENCODE_SERVICE_MODULE} ]]; then
+  print -u2 "opencode: cannot read the server-routing module: ${OPENCODE_SERVICE_MODULE}"
+  exit 1
+fi
+
+# Clear an inherited scalar OPENCODE_ARGS (Zsh-array-only contract, same as
+# opencode-last) and let the module load its own array defaults if present.
+unset OPENCODE_ARGS
+
+source "${OPENCODE_SERVICE_MODULE}"
+_opencode_run "$@"
