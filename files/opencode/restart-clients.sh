@@ -17,8 +17,18 @@
 #   record    snapshot live clients into the state file and exit
 #   list      print the recorded state with liveness annotations
 #   clear     remove the state file (forget the registry)
-#   restart   (default) record, kill the clients, sweep orphans, relaunch
-#             each recorded client in its recorded pane
+#   kill      record, then kill every client (TERM, 20s grace, then KILL)
+#             and sweep orphans; the registry stays for a later relaunch.
+#             The server is not touched: restart it in this window
+#             (bin/restart.sh), then bring the clients back with relaunch.
+#   relaunch  relaunch every registry entry in its recorded pane, without
+#             re-recording (the clients are dead; a fresh scan would find
+#             nothing)
+#   restart   (default) one-pass kill + relaunch, for client-only churn
+#             when the server is current and builds match
+#
+# Full-restart sequence (server and clients both):
+#   restart-clients.sh kill && bin/restart.sh && restart-clients.sh relaunch
 #
 # Options (position-independent):
 #   -n, --dry-run   print what would happen; kill and send nothing, and
@@ -46,10 +56,11 @@
 # Caveats:
 #   * Relaunch rides the pane's *current* wrapper (managed client build).
 #     If the running server lags the deployed client — the exe drift that
-#     status.sh's exe-current reporter flags — relaunched clients cannot
-#     connect; run bin/restart.sh first so server and client builds match.
-#     Dated-snapshot clients are likewise resumed through the wrapper, not
-#     their original binary.
+#     status.sh's exe-current reporter flags — one-pass restart reconnects
+#     clients to a server they cannot talk to. Use the split sequence
+#     instead (kill, bin/restart.sh, relaunch) so clients come back only
+#     after the server is current. Dated-snapshot clients are likewise
+#     resumed through the wrapper, not their original binary.
 #   * Session resolution is cotail find-id: cwd match + most recently
 #     updated session. A freshly launched TUI that never ran a prompt has
 #     no session of its own and can associate with a different recently
@@ -82,7 +93,7 @@ warn() { printf 'warn: %s\n' "$*" >&2; warned=1; }
 
 usage() {
   cat <<'EOF'
-usage: restart-clients.sh [record|list|clear|restart] [-n|--dry-run]
+usage: restart-clients.sh [record|list|clear|kill|relaunch|restart] [-n|--dry-run]
 
 Restart every OpenCode client without touching the managed server.
 Default subcommand: restart. The client registry is kept in tmpfs at
@@ -91,10 +102,16 @@ ${XDG_RUNTIME_DIR:-/run/user/<uid>}/opencode/clients.tsv.
   record    snapshot live clients (pid, session id, tmux pane, cwd, exe)
   list      print the registry with liveness annotations
   clear     remove the registry file
-  restart   kill every client and relaunch each in its recorded tmux pane
-            via `opencode --session <id>` (no cd; drift from the pane
-            shell's cwd is reported)
+  kill      record then kill every client (TERM, 20s grace, then KILL);
+            registry kept — restart the server now, then `relaunch`
+  relaunch  relaunch every registry entry in its recorded pane via
+            `opencode --session <id>` (no cd; drift from the pane shell's
+            cwd is reported)
+  restart   one-pass kill + relaunch (server current, builds matching)
   -n        dry run: print actions only
+
+Full-restart sequence (server and clients both):
+  restart-clients.sh kill && bin/restart.sh && restart-clients.sh relaunch
 
 Sessions idle longer than OPENCODE_RESTART_CLIENTS_MAX_IDLE (default 5d)
 are not relaunched; 0 disables the gate.
@@ -103,7 +120,7 @@ EOF
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    record|list|clear|restart) cmd=$1 ;;
+    record|list|clear|kill|relaunch|restart) cmd=$1 ;;
     -n|--dry-run) dry_run=1 ;;
     -h|--help) usage; exit 0 ;;
     *)
@@ -404,7 +421,9 @@ kill_client() {
     return 0
   fi
   kill -TERM "$pid" 2>/dev/null || true
-  for i in $(seq 10); do
+  # 20s grace: the TUI saves state, closes its event stream, and repaints
+  # the pane shell; TERM is the cooperative path, KILL is the fallback
+  for i in $(seq 40); do
     if ! proc_alive "$pid"; then say "  killed $pid (TERM)"; return 0; fi
     sleep 0.5
   done
@@ -508,18 +527,11 @@ relaunch_client() {
   say "  relaunched in $label: $launch"
 }
 
-do_restart() {
-  do_record
-  read_state_lines <<<"$record_lines"
-  local n=${#r_pid[@]} i
-  if [ "$n" -eq 0 ]; then
-    say "no opencode clients found; nothing to restart"
-    return 0
-  fi
-  say "restarting $n client(s)"
+kill_phase() {
   # kill phase; the pane hosting this very session goes last: killing our
   # ancestor TUI (standalone mode only — server-hosted tool shells are
   # never pane descendants) can cut this script's output mid-run
+  local n=${#r_pid[@]} i
   for i in $(seq 0 $((n - 1))); do
     if is_ancestor_of_self "${r_pid[$i]}"; then continue; fi
     say "client ${r_pid[$i]} (${r_label[$i]}) sid=${r_sid[$i]:-none}"
@@ -531,9 +543,60 @@ do_restart() {
     kill_client "${r_pid[$i]}"
   done
   sweep_orphans
+}
+
+relaunch_phase() {
+  local n=${#r_pid[@]} i
   for i in $(seq 0 $((n - 1))); do
     relaunch_client "${r_pid[$i]}" "${r_sid[$i]}" "${r_label[$i]}" "${r_pane[$i]}" "${r_cwd[$i]}"
   done
+}
+
+do_kill() {
+  # stop half of the full-restart sequence: clients die, the registry stays
+  # for a later relaunch. The server is NOT touched here — restart it in
+  # this window (bin/restart.sh), then bring the clients back.
+  do_record
+  read_state_lines <<<"$record_lines"
+  local n=${#r_pid[@]}
+  if [ "$n" -eq 0 ]; then
+    say "no opencode clients found; nothing to kill"
+    return 0
+  fi
+  say "killing $n client(s)"
+  kill_phase
+  if [ "$dry_run" = 1 ]; then return 0; fi
+  say "clients down; server window: bin/restart.sh now, then: $(basename "$0") relaunch"
+}
+
+do_relaunch() {
+  # bring half of the full-restart sequence: relaunch from the recorded
+  # registry without re-recording (the clients are dead; a fresh scan
+  # would find nothing)
+  read_state
+  local n=${#r_pid[@]}
+  if [ "$n" -eq 0 ]; then
+    say "registry empty; nothing to relaunch"
+    return 0
+  fi
+  say "relaunching $n client(s) from registry"
+  relaunch_phase
+  say "done: $n client(s) processed"
+}
+
+do_restart() {
+  # one-pass form for client-only churn (server current, builds matching);
+  # the kill -> restart.sh -> relaunch split lives in kill/relaunch
+  do_record
+  read_state_lines <<<"$record_lines"
+  local n=${#r_pid[@]}
+  if [ "$n" -eq 0 ]; then
+    say "no opencode clients found; nothing to restart"
+    return 0
+  fi
+  say "restarting $n client(s)"
+  kill_phase
+  relaunch_phase
   say "done: $n client(s) processed"
 }
 
@@ -583,6 +646,8 @@ case $cmd in
   record) do_record ;;
   list) do_list ;;
   clear) do_clear ;;
+  kill) do_kill ;;
+  relaunch) do_relaunch ;;
   restart) do_restart ;;
 esac
 

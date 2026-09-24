@@ -348,18 +348,31 @@
          `${XDG_RUNTIME_DIR:-/run/user/<uid>}/opencode/clients.tsv`
          (tmpfs: runtime truth, wiped at logout/reboot, never durable
          config).
-      2. **restart** (default) — kill the recorded clients (TERM, then
-         KILL), sweep orphaned pane-descendant opencode processes, and
-         relaunch each pane by waiting for its shell to resurface and then
-         `tmux send-keys`-ing `opencode --session <id>` (no `cd`: the pane
-         shell is normally still in the launch directory; drift against
-         the recorded cwd is reported, and a cd-prefixed form is kept
-         commented in the bin). The pane's ZIM wrapper injects
-         `--server`, so the relaunched client reattaches to the managed
-         deployment exactly like a manual relaunch.
-      3. **list** — print the registry with liveness annotations;
-         **clear** — forget it. `-n`/`--dry-run` previews any of these
+      2. **kill** — kill the recorded clients (TERM with a 20s grace,
+         then KILL), sweep orphaned pane-descendant opencode processes,
+         and keep the registry for a later relaunch. The server is not
+         touched: this is the window to restart it.
+      3. **relaunch** — for each registry entry, wait for its pane's shell
+         to resurface and `tmux send-keys` `opencode --session <id>` (no
+         `cd`: the pane shell is normally still in the launch directory;
+         drift against the recorded cwd is reported, and a cd-prefixed
+         form is kept commented in the bin). Reads the registry without
+         re-recording — the clients are dead, a fresh scan would find
+         nothing. The pane's ZIM wrapper injects `--server`, so the
+         relaunched client reattaches to the managed deployment exactly
+         like a manual relaunch.
+      4. **restart** (default) — one-pass kill + relaunch for client-only
+         churn when the server is current and builds match.
+         **list** prints the registry with liveness annotations, and
+         **clear** forgets it. `-n`/`--dry-run` previews any of these
          without killing or sending.
+
+      Full-restart sequence — clients die first, then the server, then
+      the clients come back against the new server:
+
+          {{DIR}}/bin/restart-clients.sh kill
+          {{DIR}}/bin/restart.sh
+          {{DIR}}/bin/restart-clients.sh relaunch
 
       Sessions idle longer than `OPENCODE_RESTART_CLIENTS_MAX_IDLE`
       (default `5d`, `0` disables) are not relaunched: the gate reads
@@ -380,8 +393,9 @@
       Two caveats learned from live testing. First, relaunch rides the
       pane's current wrapper: when the running server lags the deployed
       client build (the exe drift `status.sh`'s exe-current reporter
-      flags), relaunched clients get a health-endpoint error on connect —
-      run `bin/restart.sh` first so server and client builds match.
+      flags), a one-pass restart reconnects clients to a server they
+      cannot talk to — use the kill / `restart.sh` / relaunch sequence
+      above so clients come back only after the server is current.
       Second, session resolution is `cotail find-id` (cwd + most recently
       updated session): a freshly launched TUI that never ran a prompt can
       associate with a different recently active session in the same
