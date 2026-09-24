@@ -137,10 +137,18 @@
 
 - debug: "msg=''"
 - debug: "msg='Compfuzor: REPOSITORIES'"
+- name: "Compfuzor: initialize repository notices for this play"
+  ansible.builtin.set_fact:
+    compfuzor_repo_notices: []
+- name: "Compfuzor: register repository notice handler"
+  ansible.builtin.import_role:
+    name: compfuzor_repo_notices
 - import_tasks: compfuzor/repo_go.tasks
   when: REPO_GO is deftruthy and REPO_BYPASS is deffalsy
+- import_tasks: compfuzor/repo_jj_archive.tasks
+  when: REPO is deftruthy and ARCHIVE_DOWNLOAD is deftruthy and GIT_BYPASS is deffalsy and REPO_BYPASS is deffalsy
 - import_tasks: compfuzor/repo_git.tasks
-  when: (REPO is defined or REPOS is defined or REPO_WORKTREE is defined) and GIT_BYPASS is deffalsy and REPO_BYPASS is deffalsy
+  when: (REPOS is deftruthy or ((REPO is defined or REPO_WORKTREE is defined) and (ARCHIVE_DOWNLOAD is deffalsy or REPO is not deftruthy))) and GIT_BYPASS is deffalsy and REPO_BYPASS is deffalsy
 - import_tasks: compfuzor/repo_cvs.tasks
   when: CVS_REPO is defined and REPO_BYPASS is deffalsy
 - import_tasks: compfuzor/repo_svn.tasks
@@ -228,6 +236,23 @@
   when: MODULES is deftruthy
 - import_tasks: compfuzor/bins_run.tasks
   when: BINS_BYPASS is deffalsy and BINS_RUN_BYPASS is deffalsy
+- name: "Compfuzor: collect build-time repository notices"
+  ansible.builtin.set_fact:
+    compfuzor_repo_notices: >-
+      {{ (compfuzor_repo_notices | default([])) + [
+           {'kind': 'version-config', 'path': item | regex_replace('^COMPFUZOR_REPO_VERSION_SKIP\t', '')}
+           if item is match('^COMPFUZOR_REPO_VERSION_SKIP\t') else
+           {'kind': 'notice', 'message': item | regex_replace('^COMPFUZOR_REPO_NOTICE\t', '')}
+         ] }}
+  loop: >-
+    {{ (compfuzor_bins_run_results.results | default([])
+        | selectattr('stdout_lines', 'defined') | map(attribute='stdout_lines') | flatten
+        | select('match', '^COMPFUZOR_REPO_(NOTICE|VERSION_SKIP)\t') | list)
+        if compfuzor_bins_run_results is defined else [] }}
+  loop_control:
+    label: "{{ item }}"
+  changed_when: true
+  notify: "Compfuzor: print repository notices"
 - import_tasks: compfuzor/pkgconfig.tasks
   when: PKGCONFIG is deftruthy
 - import_tasks: compfuzor/sysctl.tasks

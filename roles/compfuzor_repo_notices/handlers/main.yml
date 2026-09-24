@@ -1,0 +1,12 @@
+---
+- name: "Compfuzor: print repository notices"
+  ansible.builtin.debug:
+    msg: >-
+      {{ 'BOOKMARK CREATED  ' ~ item.name ~ ' -> ' ~ item.target
+         if item.kind == 'bookmark-created' else
+         'REPO VERSION CONFIG EXISTS  ' ~ item.path ~ ' (link skipped)'
+         if item.kind == 'version-config' else
+         'REPO NOTICE  ' ~ item.message }}
+  loop: "{{ compfuzor_repo_notices | default([]) }}"
+  loop_control:
+    label: "{{ item.name | default(item.path | default(item.message)) }}"

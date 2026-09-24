@@ -127,7 +127,7 @@ and concatenates these fields across overlapping entries:
 
 | Concat field | Rendered by | Purpose |
 |---|---|---|
-| `early` | [`files/_bin`](../files/_bin) before generated content | Pre-build hooks (e.g. `mise install`) |
+| `early` | [`files/_bin`](../files/_bin) before generated content | Script-local pre-build hooks |
 | `generated` | [`files/_bin`](../files/_bin) main body | The script's primary work |
 | `run_all` | [`files/_bin`](../files/_bin) after generated content | Child script invocations |
 | `origin_subsystems` | disarm resolver/reporting | Contributing subsystem IDs |
@@ -454,10 +454,11 @@ After gen_bins: `install-user.sh` has `run_all: [install-service-user.sh]`.
 4. `run_all` (child invocations: `"$DIR/bin/<child>" "$@"`)
 5. `late`
 
-## Version-manager rendering
+## Build-time version-manager pins
 
-[`gen_tool_versions.tasks`](../tasks/compfuzor/gen_tool_versions.tasks) renders
-tool-version artifacts. Two symmetric modes:
+[`gen_tool_versions.tasks`](../tasks/compfuzor/gen_tool_versions.tasks) synthesizes
+`build-mise.sh`; it does **not** write pin files or repository links during
+Ansible rendering. The build step handles two pin formats:
 
 | Variable | Output file | Syntax |
 |---|---|---|
@@ -472,18 +473,28 @@ MISE_VERSIONS:
   - python: "3.12"  # explicit version
 ```
 
-When `MISE_VERSIONS` is set, no `.tool-versions` is emitted. Subsystem tool
+When `MISE_VERSIONS` is set, the build step writes `mise.toml` instead of
+`.tool-versions`, merging `TOOL_VERSIONS` as its base. Subsystem tool
 contributions (e.g. `python: true` from the python subsystem) are routed into
-`mise.toml` automatically.
+the selected pin automatically.
 
-The version file is a real file directly in `DIR` (no `DIR/etc` copy, no
-DIR-level symlink); the only link is the repo-root one, pointing at DIR's
-file, because asdf/mise resolve `getcwd()` through the physical checkout and
-walk ancestors from there.
+`build-mise.sh` is first in the automatic BINS run lane and in the generated
+`build.sh` compositor, before tool-consuming builds. It writes the real pin in
+`DIR` (no `DIR/etc` copy), then, when `REPO_DIR` is a distinct Git checkout,
+adds `/<pin filename>` to `.git/info/exclude` before linking an absent repo-root
+pin back to the deployment file. asdf/mise resolve `getcwd()` through the
+physical checkout and walk ancestors from there; the repo-root link makes the
+deployment pin visible to them while remaining ignored by Git and jj.
 
-The mise renderer also contributes an `early` hook (`mise install`) to the
-generated `install.sh`, so declared tools are installed before install scripts
-run.
+If the repo already owns the path, the build step does not clobber it: it prints
+a labeled diff and continues to `mise install`. During an Ansible render these
+warnings accumulate with repository notices and print at the end of the play.
+`COMPFUZOR_MISE_BYPASS=1` skips the entire build step;
+`TOOL_VERSIONS_LINK_BYPASS=True` generates a deployment pin without the repo
+link; `COMPFUZOR_MISE_LINK_FORCE=1` consciously replaces an occupied file or
+symlink. Excludes are clone-local and only affect untracked files; a previously
+snapshotted generated link needs an explicit `jj file untrack <name>` after
+adding the exclude.
 
 ## Declared LINKS and shared link delivery
 
@@ -741,7 +752,7 @@ Common bin fields:
 | [`library/filter_plugins/dictify.py`](../library/filter_plugins/dictify.py) | Mapping/list-shorthand normalization |
 | [`library/filter_plugins/zim_fragment.py`](../library/filter_plugins/zim_fragment.py) | Zim module line rendering |
 | [`tasks/compfuzor/gen_bins.tasks`](../tasks/compfuzor/gen_bins.tasks) | Bin action compositor synthesis |
-| [`tasks/compfuzor/gen_tool_versions.tasks`](../tasks/compfuzor/gen_tool_versions.tasks) | `.tool-versions` and `mise.toml` rendering |
+| [`tasks/compfuzor/gen_tool_versions.tasks`](../tasks/compfuzor/gen_tool_versions.tasks) | Build-mise bin synthesis; pins written at build time |
 | [`tasks/compfuzor/gen_python.tasks`](../tasks/compfuzor/gen_python.tasks) | Python subsystem + console scripts |
 | [`tasks/compfuzor/gen_kernel.tasks`](../tasks/compfuzor/gen_kernel.tasks) | Kernel validation and multi-child merging |
 | [`files/_bin`](../files/_bin) | Bin template: resolves helpers, emits prologues/epilogues, then body |
