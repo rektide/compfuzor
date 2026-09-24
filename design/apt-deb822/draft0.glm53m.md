@@ -285,7 +285,13 @@ so this is a delivery swap, not a format rework.
 
 ## Decision points
 
-### Decision 1: where sources get installed
+Decision log (settled with rektide, 2026-09-24): Decision 1 **both, render-time
+first** (delivery phases land as separate commits/slices); Decision 3
+**support + test inline keyblocks in slice 1, pilots stay path-based**;
+Decision 2 leans the recommendation (`APT`/`APTS`) with pin naming to
+re-confirm at implementation if the legacy `APT_PIN` shadow bites.
+
+### Decision 1: where sources get installed — SETTLED: (a) then (b)
 
 - **(a) Keep render-time become lane (recommended for slice 1).** Smallest
   blast radius; no privilege-model change; matches "initial design" scope.
@@ -308,6 +314,10 @@ Recommendation: (a) now, (b) as slice 3 if the fresh-box convergence story
 matters (I believe it does, eventually). (c) rejected for the bootstrap
 cycle.
 
+**Settled:** both — render-time delivery first, lane absorption as a
+separate later slice/commit. The lane absorption (b) is planned, not
+hypothetical; slice 1 artifacts must stay lane-ready.
+
 ### Decision 2: naming
 
 `APT`/`APTS` matches the user's phrasing and compfuzor's plural-list idiom
@@ -317,11 +327,10 @@ longer); `APT_STANZAS`. Also `APT_PIN`/`APT_PINS` shadow today's legacy
 new-path-active guard. If that reads as too cute, `APT_PREFS` avoids the
 shadow entirely.
 
-### Decision 3: inline keyblocks
+### Decision 3: inline keyblocks — SETTLED: support in slice 1
 
 Ship `Signed-By:` inline keyblock support in slice 1 (it falls out of the
-renderer for free) or defer until a playbook wants it. Recommend: support
-it, test it, but convert pilots to path-based keyrings first.
+renderer for free); convert pilots to path-based keyrings first.
 
 ## Migration plan (slices)
 
