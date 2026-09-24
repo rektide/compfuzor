@@ -17,6 +17,8 @@
     - REPO_DIR is directory
     - (REPO_DIR + '/.git') is exists
     - (REPO_DIR + '/' + item) is link
+    # Archive checkouts must reach jj's snapshot with the full tree intact.
+    - ARCHIVE_DOWNLOAD is deffalsy or REPO is not deftruthy
     - GIT_UPDATE|default(true)|bool
     - GIT_BYPASS is deffalsy
     - REPO_BYPASS is deffalsy
