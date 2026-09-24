@@ -1,87 +1,87 @@
 ---
-# Single-pass synthesis of version-manager artifacts.
-#
-# The version file (.tool-versions / mise.toml) is a REAL file directly in
-# DIR -- not under DIR/etc, and no DIR-level symlink. The only link is the
-# repo-root one: asdf/mise call getcwd(), which resolves through the DIR/repo
-# symlink to the *physical* archive path and then walks ancestors, so
-# DIR/.tool-versions is invisible from inside the repo. When a checkout
-# actually exists at REPO_DIR, link the repo root at DIR's real file.
-#
-# Emission uses an ETC_FILES entry with an absolute dest override (the same
-# trick as readme's README.md): the FILES family writes via template src,
-# not inline content, so ETC_FILES-with-dest is how a DIR-rooted generated
-# file is expressed today.
-#
-# `force` stays at the LINKS default (false): a real file already in the repo
-# is NOT clobbered -- ansible fails loudly rather than stomping. The cross-file
-# case (we emit .tool-versions, repo has mise.toml, or vice versa) is left
-# intentionally unhandled/undefined.
-#
-# Set TOOL_VERSIONS_LINK_BYPASS=True to skip emitting the repo-root link
-# entirely (the DIR file is unaffected). Use this when the repo owns its own
-# version config and you don't want compfuzor touching it.
-#
-# Artifact lists (_tv_etc, _tv_links, _mise_etc, _mise_links, _mise_bins) are
-# defined as YAML literals under `vars:` and rendered through
-# merge_list(resolve=True). This keeps the dict construction in YAML (readable,
-# diffs cleanly) while ensuring template strings inside -- which reference
-# task-local vars like _tv_path / _tool_versions -- are rendered at THIS task's
-# scope before being stored as facts. Without resolve=, ansible leaves nested
-# template strings raw and re-renders them later when the task-local vars are
-# out of scope (e.g. inside fs_hierarchy), producing '_tool_versions is
-# undefined'.
-- name: "Compfuzor: synthesize version-manager artifacts"
+# Pin synthesis only: no repo-root link, version file, or mise install is
+# executed during the Ansible render. build-mise.sh handles them at build time.
+# The bin is first in the raw BINS run lane; phase: packages likewise puts it
+# ahead of main-phase build-nodejs/build-rust in the build.sh compositor.
+- name: "Compfuzor: synthesize version-manager build step"
   set_fact:
-    ETC_FILES: >-
-      {{ (
-        (_tv_etc if _tv_active else []) +
-        (_mise_etc if _mise_active else [])
-      ) | merge_list(ETC_FILES, preset='append', resolve=True) }}
-    LINKS: >-
-      {{ ((_tv_links if _tv_active else []) +
-          (_mise_links if _mise_active else []))
-         | attribute_links(NAME, 'tool_versions')
-         | merge_list(LINKS, preset='append', resolve=True) }}
-    BINS: >-
-      {{ (_mise_bins if _mise_active else [])
-         | attribute_bins(NAME, 'tool_versions')
-         | merge_list(BINS, preset='bins_generated', resolve=True) }}
+    BINS: "{{ [_build_mise_bin] | merge_list(BINS, preset='bins_generated', resolve=True) }}"
   vars:
     _tool_versions: "{{ TOOL_VERSIONS | merge_dict(preset='tool_versions_overlay') }}"
     _mise_versions: "{{ MISE_VERSIONS | merge_dict(preset='tool_versions_overlay') }}"
-    _tv_active: "{{ _tool_versions is deflengthy and _mise_versions is not deflengthy }}"
     _mise_active: "{{ _mise_versions is deflengthy }}"
-    _has_repo: "{{ (REPO_DIR | default('')) and (REPO_DIR is directory) }}"
-    _link_repo: "{{ _has_repo and not (TOOL_VERSIONS_LINK_BYPASS|default(False)|bool) }}"
-    _tv_path: "{{ DIR + '/.tool-versions' }}"
-    _tv_repo_link:
-      src: "{{ _tv_path }}"
-      dest: "{{ REPO_DIR }}/.tool-versions"
-    _tv_links: "{{ [_tv_repo_link] if _link_repo else [] }}"
-    _tv_etc:
-      - name: ".tool-versions"
-        dest: "{{ _tv_path }}"
-        content: |
-          {% for target, version in _tool_versions.items() %}
-          {{ target }} {{ version if version != True else lookup('vars', target | upper + '_VERSION') }}
-          {% endfor %}
-    _mise_path: "{{ DIR + '/mise.toml' }}"
-    _mise_repo_link:
-      src: "{{ _mise_path }}"
-      dest: "{{ REPO_DIR }}/mise.toml"
-    _mise_links: "{{ [_mise_repo_link] if _link_repo else [] }}"
+    _pin_name: "{{ 'mise.toml' if _mise_active else '.tool-versions' }}"
     _mise_tools: "{{ _tool_versions | merge_dict(_mise_versions, preset='tool_versions_overlay') }}"
-    _mise_etc:
-      - name: "mise.toml"
-        dest: "{{ _mise_path }}"
-        content: |
-          [tools]
-          {% for target, version in _mise_tools.items() %}
-          {{ target }} = {{ (version if version != True else (lookup('vars', target | upper + '_VERSION') | default('latest'))) | to_json }}
-          {% endfor %}
-    _mise_bins:
-      - name: install.sh
-        early: |
-          mise install
-  when: _tv_active or _mise_active
+    _pin_content: |-
+      {% if _mise_active %}
+      [tools]
+      {% for target, version in _mise_tools.items() %}
+      {{ target }} = {{ (version if version != True else (lookup('vars', target | upper + '_VERSION') | default('latest'))) | to_json }}
+      {% endfor %}
+      {% else %}
+      {% for target, version in _tool_versions.items() %}
+      {{ target }} {{ version if version != True else lookup('vars', target | upper + '_VERSION') }}
+      {% endfor %}
+      {% endif %}
+    _build_mise_bin:
+      name: build-mise.sh
+      run: "{{ BUILD_RUN_BYPASS is deffalsy and BINS_RUN_BYPASS is deffalsy }}"
+      phase: packages
+      bypass: [BUILD, MISE]
+      basedir: false
+      generated: |
+        # Write a deployment-owned pin at *build* time; do not rewrite it
+        # when its content already matches the requested versions.
+        _cf_mise_pin={{ (DIR ~ '/' ~ _pin_name) | quote }}
+        _cf_mise_repo={{ (REPO_DIR | default('')) | quote }}
+        _cf_mise_tmp=$(mktemp "${_cf_mise_pin}.tmp.XXXXXXXX")
+        trap 'rm -f -- "${_cf_mise_tmp}"' EXIT
+        printf '%s' '{{ _pin_content | b64encode }}' | base64 --decode > "${_cf_mise_tmp}"
+        if ! cmp -s -- "${_cf_mise_pin}" "${_cf_mise_tmp}"; then
+            mv -f -- "${_cf_mise_tmp}" "${_cf_mise_pin}"
+            chmod 0644 -- "${_cf_mise_pin}"
+        fi
+
+        # The physical cwd of builds using DIR/repo is the archive repo root.
+        # Exclude the generated link BEFORE it lands: Git and jj both ignore
+        # it when untracked, while upstream-tracked files remain visible.
+        {% if TOOL_VERSIONS_LINK_BYPASS | default(false) | bool %}
+        : # TOOL_VERSIONS_LINK_BYPASS: deploy pin, but leave repo alone
+        {% else %}
+        if [ -n "${_cf_mise_repo}" ] && [ "${_cf_mise_repo}" != "${DIR%/}" ] && [ -d "${_cf_mise_repo}/.git" ]; then
+            _cf_mise_exclude="${_cf_mise_repo}/.git/info/exclude"
+            mkdir -p -- "${_cf_mise_repo}/.git/info"
+            if ! grep -Fxq -- '/{{ _pin_name }}' "${_cf_mise_exclude}" 2>/dev/null; then
+                [ ! -s "${_cf_mise_exclude}" ] || [ "$(tail -c 1 "${_cf_mise_exclude}" | wc -l)" -eq 1 ] || printf '\n' >> "${_cf_mise_exclude}"
+                printf '/{{ _pin_name }}\n' >> "${_cf_mise_exclude}"
+            fi
+            _cf_mise_link="${_cf_mise_repo}/{{ _pin_name }}"
+            if [ -L "${_cf_mise_link}" ] && [ "$(readlink -- "${_cf_mise_link}")" = "${_cf_mise_pin}" ]; then
+                : # already our link
+            elif [ -e "${_cf_mise_link}" ] || [ -L "${_cf_mise_link}" ]; then
+                _cf_mise_force="${COMPFUZOR_MISE_LINK_FORCE:-}"
+                case "${_cf_mise_force,,}" in
+                    1|true|yes|on)
+                        if [ -d "${_cf_mise_link}" ] && [ ! -L "${_cf_mise_link}" ]; then
+                            printf 'COMPFUZOR_REPO_NOTICE\tCannot replace directory %s with version link\n' "${_cf_mise_link}"
+                        else
+                            printf 'COMPFUZOR_REPO_NOTICE\tFORCED VERSION LINK %s -> %s\n' "${_cf_mise_link}" "${_cf_mise_pin}"
+                            ln -sfnT -- "${_cf_mise_pin}" "${_cf_mise_link}"
+                        fi
+                        ;;
+                    *)
+                        printf 'COMPFUZOR_REPO_VERSION_SKIP\t%s\n' "${_cf_mise_link}"
+                        _cf_mise_diff=$(diff -u --label "repo: ${_cf_mise_link}" --label "compfuzor: ${_cf_mise_pin}" "${_cf_mise_link}" "${_cf_mise_pin}" 2>&1) || :
+                        while IFS= read -r _cf_mise_line; do
+                            printf 'COMPFUZOR_REPO_NOTICE\t%s\n' "${_cf_mise_line}"
+                        done <<< "${_cf_mise_diff}"
+                        ;;
+                esac
+            else
+                ln -s -- "${_cf_mise_pin}" "${_cf_mise_link}"
+            fi
+        fi
+        {% endif %}
+        cd "${DIR}"
+        mise install
+  when: _tool_versions is deflengthy or _mise_versions is deflengthy

@@ -236,6 +236,23 @@
   when: MODULES is deftruthy
 - import_tasks: compfuzor/bins_run.tasks
   when: BINS_BYPASS is deffalsy and BINS_RUN_BYPASS is deffalsy
+- name: "Compfuzor: collect build-time repository notices"
+  ansible.builtin.set_fact:
+    compfuzor_repo_notices: >-
+      {{ (compfuzor_repo_notices | default([])) + [
+           {'kind': 'version-config', 'path': item.split('\t', 1)[1]}
+           if item.startswith('COMPFUZOR_REPO_VERSION_SKIP\t') else
+           {'kind': 'notice', 'message': item.split('\t', 1)[1]}
+         ] }}
+  loop: >-
+    {{ (compfuzor_bins_run_results.results | default([])
+        | selectattr('stdout_lines', 'defined') | map(attribute='stdout_lines') | flatten
+        | select('match', '^COMPFUZOR_REPO_(NOTICE|VERSION_SKIP)\t') | list)
+        if compfuzor_bins_run_results is defined else [] }}
+  loop_control:
+    label: "{{ item }}"
+  changed_when: true
+  notify: "Compfuzor: print repository notices"
 - import_tasks: compfuzor/pkgconfig.tasks
   when: PKGCONFIG is deftruthy
 - import_tasks: compfuzor/sysctl.tasks

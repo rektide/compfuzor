@@ -15,4 +15,5 @@
     (item.args is deftruthy or item.run is deftruthy or item.become is deftruthy or
     (item.exec is deftruthy and not item.dest|def(item.name, False)))
   with_items: "{{ BINS|normalize(to='list') }}"
+  register: compfuzor_bins_run_results
   become: "{{ item.become|def(item.sudo) if item.become|def(item.sudo, False) else False }}"
