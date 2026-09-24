@@ -1,0 +1,45 @@
+---
+# Generate payload independently of the PKGS aptlane and APT_BYPASS.
+# Presence (not truthiness) selects deb822: APT: {} must fail, not fall back.
+- include_defaults:
+    file: vars/apt.yaml
+- name: "Compfuzor: resolve deb822 source identity"
+  set_fact:
+    _apt_source_name: "{{ APT_SOURCELIST | default(NAME) }}"
+    _apt_key_name: "{{ APT_TRUSTED | default(TYPE) }}"
+    _apt_key_ext: "{{ APT_GPG_EXT | default('gpg') }}"
+- name: "Compfuzor: validate deb822 output names"
+  assert:
+    that:
+      - _apt_source_name is match('^[A-Za-z0-9][A-Za-z0-9._-]*$')
+      - _apt_key_name is match('^[A-Za-z0-9][A-Za-z0-9._-]*$')
+      - _apt_key_ext in ['gpg', 'asc']
+- name: "Compfuzor: resolve deb822 key and source stanzas"
+  set_fact:
+    _apt_key_url: "{{ APT_KEYRING_URL | default('') }}"
+    _apt_key_vendor: "{{ lookup('fileglob', 'files/apt-repos/' ~ _apt_key_name ~ '.' ~ _apt_key_ext, wantlist=True) | first | default('') }}"
+    _apt_source_stanzas: "{{ ([APT] if APT is defined else []) + (APTS | default([])) }}"
+- name: "Compfuzor: render deb822 payload"
+  set_fact:
+    _apt_source_text: "{{ _apt_source_stanzas | apt_sources(APT_DEFAULTS, _apt_derived_key) }}"
+    _apt_pref_text: "{{ APT_PREFS | apt_preferences if APT_PREFS is defined else '' }}"
+  vars:
+    _apt_derived_key: "{{ (APT_KEYRINGS_DIR | default('/usr/share/keyrings')) ~ '/' ~ _apt_key_name ~ '.' ~ _apt_key_ext if _apt_key_url or _apt_key_vendor else none }}"
+- name: "Compfuzor: append deb822 source and preference payloads"
+  set_fact:
+    ETC_FILES: "{{ (ETC_FILES | default([])) + _apt_files }}"
+  vars:
+    _apt_files: >-
+      {{ [{'name': _apt_source_name ~ '.sources', 'content': _apt_source_text, 'mode': '0644'}]
+         + ([{'name': _apt_source_name ~ '.pref', 'content': _apt_pref_text, 'mode': '0644'}] if _apt_pref_text else [])
+         + ([{'name': _apt_key_name ~ '.' ~ _apt_key_ext, 'src': _apt_key_vendor, 'mode': '0644'}]
+            if _apt_key_vendor and not _apt_key_url else []) }}
+- name: "Compfuzor: warn when new apt sources override legacy settings"
+  debug:
+    msg: "APT/APTS uses deb822; ignoring legacy source/pin vars: {{ _apt_ignored | join(', ') }}"
+  when: _apt_ignored | length > 0
+  vars:
+    _apt_ignored: >-
+      {{ ['APT_REPO', 'APT_REPOS', 'APT_LIST_URL', 'APT_DISTRIBUTION', 'APT_DISTRIBUTIONS',
+          'APT_COMPONENT', 'APT_COMPONENTS', 'APT_ARCHS', 'APT_SOURCE', 'APT_PIN',
+          'APT_PIN_PRIORITY', 'APT_PIN_PACKAGE'] | select('in', vars) | list }}

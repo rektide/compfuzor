@@ -22,6 +22,9 @@
   tags: ['password', 'vars', 'always']
 - import_tasks: compfuzor/vars_apt.tasks
   tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_apt_sources.tasks
+  when: APT is defined or APTS is defined
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_systemd.tasks
   tags: ['vars', 'always']
 - import_tasks: compfuzor/vars_systemd_env.tasks
@@ -224,7 +227,7 @@
 - import_tasks: compfuzor/debconf.tasks
   when: DEBCONF_BYPASS is deffalsy
 - import_tasks: compfuzor/apt.tasks
-  when: (APT_REPO|default(APT_REPOS) is deftruthy or APT_LIST_URL is deftruthy) and APT_BYPASS is deffalsy
+  when: ((APT is defined or APTS is defined) or (APT_REPO|default(APT_REPOS) is deftruthy or APT_LIST_URL is deftruthy)) and APT_BYPASS is deffalsy
 - import_tasks: compfuzor/pkgs.tasks
   when: >
     (PKGS is defined or PKGSET is defined or PKGSETS is defined or

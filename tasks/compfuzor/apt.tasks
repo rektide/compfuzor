@@ -7,6 +7,10 @@
 # without it unless you intend to change repo config or refresh indexes
 # this run. Finer-grained: `-e APT_UPDATE_BYPASS=True` keeps repo config
 # but skips only the `apt-get update` pass.
+- import_tasks: apt_deb822.tasks
+  when: APT is defined or APTS is defined
+- import_tasks: apt_legacy.tasks
+  when: APT is not defined and APTS is not defined
 - debug: "msg='Compfuzor: install & update apt repository'"
 - include_tasks: vars_base.tasks
   when: (APT_DEFAULT_COMPONENT is not defined and APT_DEFAULT_COMPONENTS is not defined and APT_COMPONENT is not defined and APT_COMPONENTS is not defined) or ARCH is not defined

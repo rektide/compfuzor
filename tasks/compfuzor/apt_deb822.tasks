@@ -1,0 +1,45 @@
+---
+# Called after ETC_FILES have been written. APT_BYPASS gates only this
+# render-time delivery, never generation of the install-time payload.
+- name: "Compfuzor: fetch deb822 apt keyring"
+  get_url:
+    url: "{{ _apt_key_url }}"
+    dest: "{{ ETC }}/{{ _apt_key_name }}.{{ _apt_key_ext }}{{ '.armor' if APT_DEARMOR | default(false) | bool else '' }}"
+    mode: '0644'
+  become: "{{ APT_BECOME | default(true) }}"
+  when: _apt_key_url | length > 0
+- name: "Compfuzor: dearmor deb822 apt keyring"
+  command:
+    argv: [gpg, --yes, --dearmor, --output, "{{ ETC }}/{{ _apt_key_name }}.{{ _apt_key_ext }}", "{{ ETC }}/{{ _apt_key_name }}.{{ _apt_key_ext }}.armor"]
+  become: "{{ APT_BECOME | default(true) }}"
+  when: _apt_key_url | length > 0 and APT_DEARMOR | default(false) | bool
+- name: "Compfuzor: make deb822 keyring readable by _apt"
+  file:
+    path: "{{ ETC }}/{{ _apt_key_name }}.{{ _apt_key_ext }}"
+    mode: '0644'
+  become: "{{ APT_BECOME | default(true) }}"
+  when: _apt_key_url | length > 0 and APT_DEARMOR | default(false) | bool
+- name: "Compfuzor: make apt payload directory traversable"
+  file:
+    path: "{{ ETC }}"
+    mode: o+rx
+  become: "{{ APT_BECOME | default(true) }}"
+- name: "Compfuzor: publish deb822 source and preferences"
+  file:
+    src: "{{ ETC }}/{{ item.name }}"
+    dest: "{{ item.dir }}/{{ item.name }}"
+    state: link
+  become: "{{ APT_BECOME | default(true) }}"
+  loop: "{{ _apt_publish }}"
+  vars:
+    _apt_publish: >-
+      {{ [{'name': _apt_source_name ~ '.sources', 'dir': APT_SOURCES_DIR | default('/etc/apt/sources.list.d')}]
+         + ([{'name': _apt_source_name ~ '.pref', 'dir': APT_PREFERENCES_DIR | default('/etc/apt/preferences.d')}]
+            if _apt_pref_text else [])
+         + ([{'name': _apt_key_name ~ '.' ~ _apt_key_ext, 'dir': APT_KEYRINGS_DIR | default('/usr/share/keyrings')}]
+            if _apt_key_url or _apt_key_vendor else []) }}
+- name: "Compfuzor: refresh deb822 apt index for the declared source"
+  shell:
+    cmd: "apt-get update -o Dir::Etc::sourcelist='sources.list.d/{{ _apt_source_name }}.sources' -o Dir::Etc::sourceparts='-' -o APT::Get::List-Cleanup='0'"
+  become: "{{ APT_BECOME | default(true) }}"
+  when: APT_UPDATE_BYPASS | default(false) | bool == false
