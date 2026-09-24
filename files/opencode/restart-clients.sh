@@ -1,0 +1,495 @@
+#!/usr/bin/env bash
+# restart-clients.sh — fully restart every OpenCode *client* on this host
+# while leaving the managed server alone (bin/restart.sh owns that side).
+#
+# Restarting a client means: kill the client process, wait for its tmux pane
+# to fall back to the shell, then type
+#   cd <recorded cwd> && opencode --session <recorded session id>
+# into the pane with tmux send-keys. The pane's ZIM wrapper injects
+# --server around that argv, so the relaunched client attaches to the
+# managed deployment exactly like a manual relaunch would.
+#
+# Subcommands:
+#   record    snapshot live clients into the state file and exit
+#   list      print the recorded state with liveness annotations
+#   restart   (default) record, kill the clients, sweep orphans, relaunch
+#             each recorded client in its recorded pane
+#
+# Options (position-independent):
+#   -n, --dry-run   print what would happen; kill and send nothing, and
+#                   leave the state file unwritten
+#   -h, --help      this help
+#
+# The registry lives in memory (tmpfs), never on disk config:
+#   ${XDG_RUNTIME_DIR:-/run/user/<uid>}/opencode/clients.tsv
+# One TSV row per client: pid, opencode session id, tmux session:win.pane
+# label, pane id, cwd, exe. Session ids come from `cotail find-id <pid>
+# --id-only` with a fallback to OPENCODE_SESSION_ID in /proc/<pid>/environ.
+# It is runtime truth only — wiped at logout/reboot, re-recordable any time.
+#
+# What is never touched: the managed server unit's MainPID and any process
+# running `serve`; server-spawned tool shells (they are not pane
+# descendants); this script's own process tree. Only root clients (the
+# topmost opencode process of a tree) are recorded, so helper children
+# (opencode2-node and friends) never duplicate their parent's pane.
+# Clients with no resolvable session id, or whose pane is gone or showing
+# another foreground program at relaunch time, are killed but left as a
+# plain shell with a warning.
+#
+# Caveats:
+#   * Relaunch rides the pane's *current* wrapper (managed client build).
+#     If the running server lags the deployed client — the exe drift that
+#     status.sh's exe-current reporter flags — relaunched clients cannot
+#     connect; run bin/restart.sh first so server and client builds match.
+#     Dated-snapshot clients are likewise resumed through the wrapper, not
+#     their original binary.
+#   * Session resolution is cotail find-id: cwd match + most recently
+#     updated session. A freshly launched TUI that never ran a prompt has
+#     no session of its own and can associate with a different recently
+#     active session in the same directory.
+#
+# Re-running restart after an interrupted run is safe; the state file is
+# re-recorded from live processes each run, so an already-relaunched client
+# may be restarted one extra time before converging.
+#
+# Env: OPENCODE_UNIT (server unit to spare, default opencode.service),
+#      OPENCODE_CLIENTS_STATE (state file override).
+#
+# Exit codes: 0 clean, 1 warnings were printed, 2 usage.
+
+set -euo pipefail
+
+self=$$
+unit="${OPENCODE_UNIT:-opencode.service}"
+state_file="${OPENCODE_CLIENTS_STATE:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/opencode/clients.tsv}"
+
+dry_run=0
+cmd=restart
+warned=0
+
+say() { printf '%s\n' "$*"; }
+warn() { printf 'warn: %s\n' "$*" >&2; warned=1; }
+
+usage() {
+  cat <<'EOF'
+usage: restart-clients.sh [record|list|restart] [-n|--dry-run]
+
+Restart every OpenCode client without touching the managed server.
+Default subcommand: restart. The client registry is kept in tmpfs at
+${XDG_RUNTIME_DIR:-/run/user/<uid>}/opencode/clients.tsv.
+
+  record    snapshot live clients (pid, session id, tmux pane, cwd, exe)
+  list      print the registry with liveness annotations
+  restart   kill every client and relaunch each in its recorded tmux pane
+            via `cd <cwd> && opencode --session <id>`
+  -n        dry run: print actions only
+EOF
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    record|list|restart) cmd=$1 ;;
+    -n|--dry-run) dry_run=1 ;;
+    -h|--help) usage; exit 0 ;;
+    *)
+      printf 'restart-clients.sh: unknown argument: %s\n' "$1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+# ---------------------------------------------------------------- helpers
+
+quote() {
+  # single-quote for the pane's zsh: ' -> '\''
+  local q=${1//\'/\'\\\'\'}
+  printf "'%s'" "$q"
+}
+
+proc_ppid() { sed -n 's/^PPid:[[:space:]]*//p' "/proc/$1/status" 2>/dev/null | head -1; }
+proc_alive() { kill -0 "$1" 2>/dev/null; }
+
+is_ancestor_of_self() {
+  local target=$1 p=$self pp
+  if [ "$target" = "$self" ]; then return 0; fi
+  for _ in $(seq 16); do
+    pp=$(proc_ppid "$p" || true)
+    if [ -z "$pp" ] || [ "$pp" -le 1 ]; then return 1; fi
+    if [ "$pp" = "$target" ]; then return 0; fi
+    p=$pp
+  done
+  return 1
+}
+
+is_descendant_of_self() {
+  local target=$1
+  local p=$target pp
+  if [ "$target" = "$self" ]; then return 0; fi
+  for _ in $(seq 16); do
+    pp=$(proc_ppid "$p" || true)
+    if [ -z "$pp" ] || [ "$pp" -le 1 ]; then return 1; fi
+    if [ "$pp" = "$self" ]; then return 0; fi
+    p=$pp
+  done
+  return 1
+}
+
+# ---------------------------------------------------------------- tmux map
+
+declare -A pane_by_shell_pid=()
+declare -A label_by_pane=()
+
+load_panes() {
+  pane_by_shell_pid=()
+  label_by_pane=()
+  if ! command -v tmux >/dev/null 2>&1; then return 0; fi
+  local fmt=$'#{pane_id}\t#{session_name}\t#{window_index}\t#{pane_index}\t#{pane_pid}'
+  local pane session widx pidx shell
+  while IFS=$'\t' read -r pane session widx pidx shell; do
+    [ -n "$pane" ] || continue
+    pane_by_shell_pid[$shell]=$pane
+    label_by_pane[$pane]="$session:$widx.$pidx"
+  done < <(tmux list-panes -a -F "$fmt" 2>/dev/null || true)
+}
+
+pane_of() {
+  # tmux pane hosting pid (through its ancestor shells); empty when the
+  # process is not under tmux (console client, server tool shell, ...)
+  local p=$1 pp
+  for _ in $(seq 16); do
+    if [ -n "${pane_by_shell_pid[$p]:-}" ]; then
+      printf '%s' "${pane_by_shell_pid[$p]}"
+      return 0
+    fi
+    pp=$(proc_ppid "$p" || true)
+    if [ -z "$pp" ] || [ "$pp" -le 1 ]; then return 1; fi
+    p=$pp
+  done
+  return 1
+}
+
+pane_alive() {
+  tmux display-message -p -t "$1" '#{pane_id}' 2>/dev/null | grep -q .
+}
+
+wait_pane_shell() {
+  # wait until the pane's foreground is a shell again; never type a
+  # relaunch command into some other program the user put in the pane
+  local pane=$1 i cur=""
+  for i in $(seq 20); do
+    cur=$(tmux display-message -p -t "$pane" '#{pane_current_command}' 2>/dev/null || true)
+    case $cur in
+      zsh|bash|fish|sh|dash|ksh) sleep 0.4; return 0 ;;
+      "") return 1 ;;
+    esac
+    sleep 0.25
+  done
+  warn "pane $pane foreground stayed '${cur:-?}'; not typing into it"
+  return 1
+}
+
+# ------------------------------------------------------------ process scan
+
+server_pid="$(systemctl --user show "$unit" -p MainPID --value 2>/dev/null || true)"
+case $server_pid in ''|0|'[not'*) server_pid=0 ;; esac
+
+declare -A oc_pids=()
+declare -A oc_ppid=()
+declare -A oc_args=()
+
+scan_processes() {
+  oc_pids=(); oc_ppid=(); oc_args=()
+  local pid ppid comm args
+  while read -r pid ppid comm args; do
+    [ -n "$pid" ] || continue
+    oc_pids[$pid]=1
+    oc_ppid[$pid]=$ppid
+    oc_args[$pid]=${args:-}
+  done < <(ps -eo pid=,ppid=,comm=,args= 2>/dev/null | awk '$3 ~ /^opencode/ {print}' || true)
+}
+
+is_server_process() {
+  if [ "$1" = "$server_pid" ] && [ "$server_pid" != 0 ]; then return 0; fi
+  case $2 in
+    *" serve "*|*" serve") return 0 ;;
+  esac
+  return 1
+}
+
+is_tui_argv() {
+  # plain TUI launches only: root flags plus at most a directory positional.
+  # Anything with a subcommand (api, run, --version, completions, ...) is a
+  # transient or non-interactive client: killed by the sweep, never
+  # relaunched into its pane.
+  local -a tok
+  read -r -a tok <<<"$1"
+  local i=0 n=${#tok[@]}
+  while [ "$i" -lt "$n" ]; do
+    case ${tok[$i]} in
+      --server|--session|-s|--prompt|--log-level|--completions) i=$((i + 2)) ;;
+      --server=*|--session=*|--prompt=*|--log-level=*|--completions=*) i=$((i + 1)) ;;
+      --standalone|--print-logs|--wizard|--auto|--continue|-c) i=$((i + 1)) ;;
+      --) return 1 ;;
+      -*) i=$((i + 1)) ;;
+      *)
+        # first positional: the TUI takes a directory here, nothing else
+        case ${tok[$i]} in
+          /*|*/*|.|..) return 0 ;;
+          *) return 1 ;;
+        esac
+        ;;
+    esac
+  done
+  return 0
+}
+
+session_of() {
+  local pid=$1 sid=""
+  if command -v cotail >/dev/null 2>&1; then
+    sid=$(cotail find-id "$pid" --id-only 2>/dev/null || true)
+  fi
+  if [ -z "$sid" ] && [ -r "/proc/$pid/environ" ]; then
+    sid=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null \
+      | sed -n 's/^OPENCODE_SESSION_ID=//p' | head -1 || true)
+  fi
+  case $sid in
+    ses_*) printf '%s' "$sid" ;;
+    *) printf '' ;;
+  esac
+}
+
+sanitize() { printf '%s' "$1" | tr -d '\t\n\r'; }
+
+# ---------------------------------------------------------------- record
+
+record_lines=""
+record_count=0
+
+do_record() {
+  load_panes
+  scan_processes
+  record_lines=""
+  record_count=0
+  local pid ppid pane sid cwd exe label
+  for pid in "${!oc_pids[@]}"; do
+    ppid=${oc_ppid[$pid]}
+    # root clients only: helper children would duplicate their parent's pane
+    if [ -n "${oc_pids[$ppid]:-}" ]; then continue; fi
+    # spare the managed server and anything running serve
+    if is_server_process "$pid" "${oc_args[$pid]}"; then continue; fi
+    # spare this script's own tree; its transient children look like clients
+    if [ "$pid" = "$self" ] || is_descendant_of_self "$pid"; then continue; fi
+    # only plain TUI argv shapes are recorded; transients go to the sweep
+    if ! is_tui_argv "${oc_args[$pid]}"; then continue; fi
+    pane=$(pane_of "$pid" || true)
+    sid=$(session_of "$pid")
+    cwd=$(readlink "/proc/$pid/cwd" 2>/dev/null || true)
+    exe=$(readlink "/proc/$pid/exe" 2>/dev/null || true)
+    if [ -n "$pane" ]; then label=${label_by_pane[$pane]:-}; else label="-"; fi
+    record_lines+="$(sanitize "$pid")$(printf '\t')$(sanitize "$sid")$(printf '\t')$(sanitize "$label")$(printf '\t')$(sanitize "$pane")$(printf '\t')$(sanitize "$cwd")$(printf '\t')$(sanitize "$exe")
+"
+    record_count=$((record_count + 1))
+    printf 'recorded %s sid=%s pane=%s label=%s cwd=%s\n' \
+      "$pid" "${sid:--}" "${pane:--}" "$label" "${cwd:--}"
+  done
+  if [ "$dry_run" = 1 ]; then
+    say "dry-run: $record_count client(s) would be recorded to $state_file"
+    return 0
+  fi
+  mkdir -p "$(dirname "$state_file")"
+  local tmp="$state_file.tmp.$$"
+  {
+    printf '# opencode client registry — runtime truth in tmpfs, written by restart-clients.sh\n'
+    printf '# fields: pid session_id tmux_label pane_id cwd exe\n'
+    printf '%s' "$record_lines"
+  } > "$tmp"
+  mv -f "$tmp" "$state_file"
+  say "recorded $record_count client(s) -> $state_file"
+}
+
+# ----------------------------------------------------------------- state
+
+declare -a r_pid=() r_sid=() r_label=() r_pane=() r_cwd=() r_exe=()
+
+read_state_lines() {
+  r_pid=(); r_sid=(); r_label=(); r_pane=(); r_cwd=(); r_exe=()
+  local pid sid label pane cwd exe
+  while IFS=$'\t' read -r pid sid label pane cwd exe; do
+    case $pid in ''|'#'*) continue ;; esac
+    r_pid+=("$pid"); r_sid+=("$sid"); r_label+=("$label")
+    r_pane+=("$pane"); r_cwd+=("$cwd"); r_exe+=("$exe")
+  done
+}
+
+read_state() {
+  if [ ! -r "$state_file" ]; then
+    warn "no state file at $state_file (run: record)"
+    return 0
+  fi
+  read_state_lines < "$state_file"
+}
+
+# --------------------------------------------------------------- restart
+
+kill_client() {
+  local pid=$1 i
+  if ! proc_alive "$pid"; then
+    say "  pid $pid already gone"
+    return 0
+  fi
+  if [ "$dry_run" = 1 ]; then
+    say "  dry-run: would kill $pid"
+    return 0
+  fi
+  kill -TERM "$pid" 2>/dev/null || true
+  for i in $(seq 10); do
+    if ! proc_alive "$pid"; then say "  killed $pid (TERM)"; return 0; fi
+    sleep 0.5
+  done
+  kill -KILL "$pid" 2>/dev/null || true
+  for i in $(seq 6); do
+    if ! proc_alive "$pid"; then say "  killed $pid (KILL)"; return 0; fi
+    sleep 0.5
+  done
+  warn "pid $pid survived SIGKILL"
+}
+
+sweep_skip() {
+  # 0 (skip) when the pid is the server, this script's tree, an
+  # already-handled recorded root, or not under any tmux pane
+  local pid=$1 i
+  if is_server_process "$pid" "${oc_args[$pid]:-}"; then return 0; fi
+  if [ "$pid" = "$self" ] || is_descendant_of_self "$pid"; then return 0; fi
+  for i in $(seq 0 $((${#r_pid[@]} - 1))); do
+    if [ "${r_pid[$i]}" = "$pid" ]; then return 0; fi
+  done
+  if [ -z "$(pane_of "$pid" || true)" ]; then return 0; fi
+  return 1
+}
+
+sweep_orphans() {
+  # after the root clients died, kill any remaining pane-descendant
+  # opencode processes the record/kill phases did not already own: orphaned
+  # helpers and transient foreground clients. Never the recorded roots
+  # (handled above), the server and its (non-pane) children, or this
+  # script's tree.
+  scan_processes
+  load_panes
+  local pid
+  for pid in "${!oc_pids[@]}"; do
+    if sweep_skip "$pid"; then continue; fi
+    if proc_alive "$pid"; then
+      say "sweep: killing pane-descendant $pid (${oc_args[$pid]:0:60})"
+      if [ "$dry_run" = 1 ]; then continue; fi
+      kill -TERM "$pid" 2>/dev/null || true
+    fi
+  done
+  if [ "$dry_run" = 1 ]; then return 0; fi
+  sleep 1
+  for pid in "${!oc_pids[@]}"; do
+    if sweep_skip "$pid"; then continue; fi
+    if proc_alive "$pid"; then
+      kill -KILL "$pid" 2>/dev/null || true
+    fi
+  done
+}
+
+relaunch_client() {
+  local pid=$1 sid=$2 label=$3 pane=$4 cwd=$5
+  if [ -z "$pane" ] || [ "$pane" = "-" ]; then
+    warn "client $pid ($label): no tmux pane recorded; left killed, relaunch manually"
+    return 0
+  fi
+  if ! pane_alive "$pane"; then
+    warn "client $pid ($label): pane $pane is gone; relaunch manually in that window"
+    return 0
+  fi
+  if [ -z "$sid" ]; then
+    warn "client $pid ($label): no session id resolved (cotail find-id failed?); pane left at a shell"
+    return 0
+  fi
+  # TODO(cotail idle gate): before resurrecting a session, look up its last
+  # activity and skip relaunch past a staleness threshold (~3 days), leaving
+  # the pane as a plain shell instead. Candidate source, epoch-ms fields:
+  #   cotail find-id --session "$sid" --json   -> .timeIdle / .timeUpdated
+  # plumbed through an env knob such as OPENCODE_RESTART_CLIENTS_MAX_IDLE=3d.
+  local launch
+  if [ -n "$cwd" ] && [ -d "$cwd" ]; then
+    launch="cd $(quote "$cwd") && opencode --session $(quote "$sid")"
+  else
+    warn "client $pid ($label): recorded cwd '${cwd:-}' is gone; resuming in the pane's current directory"
+    launch="opencode --session $(quote "$sid")"
+  fi
+  if [ "$dry_run" = 1 ]; then
+    say "  dry-run: would send to $label ($pane): $launch"
+    return 0
+  fi
+  if ! wait_pane_shell "$pane"; then return 0; fi
+  tmux send-keys -t "$pane" -l -- "$launch"
+  tmux send-keys -t "$pane" C-m
+  say "  relaunched in $label: $launch"
+}
+
+do_restart() {
+  do_record
+  read_state_lines <<<"$record_lines"
+  local n=${#r_pid[@]} i
+  if [ "$n" -eq 0 ]; then
+    say "no opencode clients found; nothing to restart"
+    return 0
+  fi
+  say "restarting $n client(s)"
+  # kill phase; the pane hosting this very session goes last: killing our
+  # ancestor TUI (standalone mode only — server-hosted tool shells are
+  # never pane descendants) can cut this script's output mid-run
+  for i in $(seq 0 $((n - 1))); do
+    if is_ancestor_of_self "${r_pid[$i]}"; then continue; fi
+    say "client ${r_pid[$i]} (${r_label[$i]}) sid=${r_sid[$i]:-none}"
+    kill_client "${r_pid[$i]}"
+  done
+  for i in $(seq 0 $((n - 1))); do
+    if ! is_ancestor_of_self "${r_pid[$i]}"; then continue; fi
+    say "NOTE: client ${r_pid[$i]} hosts this very session; killed last, output may end here"
+    kill_client "${r_pid[$i]}"
+  done
+  sweep_orphans
+  for i in $(seq 0 $((n - 1))); do
+    relaunch_client "${r_pid[$i]}" "${r_sid[$i]}" "${r_label[$i]}" "${r_pane[$i]}" "${r_cwd[$i]}"
+  done
+  say "done: $n client(s) processed"
+}
+
+# ------------------------------------------------------------------ list
+
+do_list() {
+  read_state
+  local n=${#r_pid[@]} i pid st pst
+  say "state: $state_file"
+  if [ "$n" -eq 0 ]; then
+    say "(empty)"
+    return 0
+  fi
+  printf '%-9s %-6s %-8s %-26s %s\n' PID STATE PANE SESSION CWD
+  for i in $(seq 0 $((n - 1))); do
+    pid=${r_pid[$i]}
+    if proc_alive "$pid"; then st=alive; else st=dead; fi
+    if [ -n "${r_pane[$i]}" ] && [ "${r_pane[$i]}" != "-" ] && pane_alive "${r_pane[$i]}"; then
+      pst=pane-ok
+    else
+      pst=no-pane
+    fi
+    printf '%-9s %-6s %-8s %-26s %s\n' "$pid" "$st" "$pst" "${r_sid[$i]:-?}" "${r_cwd[$i]:-?} (${r_label[$i]})"
+  done
+}
+
+# ------------------------------------------------------------------ main
+
+case $cmd in
+  record) do_record ;;
+  list) do_list ;;
+  restart) do_restart ;;
+esac
+
+if [ "$warned" != 0 ]; then exit 1; fi

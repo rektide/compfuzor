@@ -245,7 +245,8 @@
       primary instance and keeps the historical unsuffixed surface: unit
       `opencode.service` / `opencode-cleanup.timer`, global links `opencode2`
       and `opencode2-node` (plus `opencode-status-ok`, `opencode-last`,
-      `opencode-live`), the `~/.config/opencode` symlink, the interactive
+      `opencode-live`, `opencode-restart-clients`), the `~/.config/opencode`
+      symlink, the interactive
       `opencode`/`opencode2` ZIM wrapper, port 49373, wildcard bind, and the
       server's default database.
 
@@ -317,6 +318,7 @@
 
           systemctl --user status {{OPENCODE_UNIT}}.service
           {{DIR}}/bin/restart.sh
+          {{DIR}}/bin/restart-clients.sh
           journalctl --user -u {{OPENCODE_UNIT}}.service -f
           systemctl --user show {{OPENCODE_UNIT}}.service \
             -p ActiveState -p SubState -p MainPID -p NRestarts \
@@ -330,6 +332,53 @@
       needed, restarts only `{{OPENCODE_UNIT}}.service`, waits for `/api/health`, and
       verifies that the new server inherited the canonical Watchman socket.
       It never touches standalone OpenCode panes.
+
+      `restart-clients.sh` is the client-side counterpart (global command:
+      `opencode-restart-clients`, primary instance only). It restarts every
+      OpenCode client on the host without touching the server:
+
+      1. **record** — for each live root client process (topmost opencode
+         process of a tree, plain TUI argv only), resolve the opencode
+         session id with `cotail find-id <pid> --id-only` (falling back to
+         `OPENCODE_SESSION_ID` in `/proc/<pid>/environ`) and its tmux pane
+         by walking the PPid chain to a pane shell, and append one TSV row
+         to an in-memory registry at
+         `${XDG_RUNTIME_DIR:-/run/user/<uid>}/opencode/clients.tsv`
+         (tmpfs: runtime truth, wiped at logout/reboot, never durable
+         config).
+      2. **restart** (default) — kill the recorded clients (TERM, then KILL),
+         sweep orphaned pane-descendant opencode processes, and relaunch
+         each pane by waiting for its shell to resurface and then
+         `tmux send-keys`-ing `cd <cwd> && opencode --session <id>`. The
+         pane's ZIM wrapper injects `--server`, so the relaunched client
+         reattaches to the managed deployment exactly like a manual
+         relaunch.
+      3. **list** — print the registry with liveness annotations.
+         `-n`/`--dry-run` previews any of these without killing or sending.
+
+      Excluded by design: the server unit's MainPID and any `serve` process,
+      server-spawned tool shells (not pane descendants), and the script's
+      own tree. Clients with no resolvable session id, or whose pane is gone
+      or showing another foreground program at relaunch time, are killed but
+      left as a plain shell with a warning. Dated-snapshot clients
+      (`opencode-<stamp>`, see below) are recorded with their exe but
+      relaunch through the managed wrapper — resume on the current client,
+      not the dated binary. Re-running after an interrupted run re-records
+      from live processes, so an already-relaunched client may be restarted
+      once more before converging.
+
+      Two caveats learned from live testing. First, relaunch rides the
+      pane's current wrapper: when the running server lags the deployed
+      client build (the exe drift `status.sh`'s exe-current reporter
+      flags), relaunched clients get a health-endpoint error on connect —
+      run `bin/restart.sh` first so server and client builds match.
+      Second, session resolution is `cotail find-id` (cwd + most recently
+      updated session): a freshly launched TUI that never ran a prompt can
+      associate with a different recently active session in the same
+      directory. A staleness gate is also planned: consult cotail for the
+      session's last activity (`find-id --session <id> --json` →
+      `timeIdle`/`timeUpdated`) and skip relaunching sessions idle past
+      ~3 days; see the TODO in the bin.
 
       OpenCode and both watcher daemons use Watchman's XDG-default socket:
       `${XDG_STATE_HOME:-$HOME/.local/state}/watchman/<user>-state/sock`
@@ -681,6 +730,19 @@
           systemctl --user status "$_unit" --no-pager >&2 || true
           echo "restart-opencode: $_unit did not become healthy within ${_timeout}s" >&2
           exit 1
+      # Client-side counterpart to restart.sh (raw bin: files/opencode/
+      # restart-clients.sh). Records every live client's opencode session id
+      # (cotail find-id) and tmux pane into an in-mem tmpfs registry, kills
+      # the clients, then relaunches each in its recorded pane via tmux
+      # send-keys with `cd <cwd> && opencode --session <id>` — the pane's
+      # ZIM wrapper injects --server, and the managed server is never
+      # touched. Dated-snapshot clients (opencode-<stamp>) relaunch through
+      # the managed wrapper rather than their original binary. Global link
+      # is primary-only; secondaries keep the local, env-driven bin.
+      - name: restart-clients.sh
+        basedir: False
+        raw: True
+        global: "{{ 'opencode-restart-clients' if OPENCODE_PRIMARY else False }}"
       # Auto-grouped under the build.sh compositor by its build* name; every
       # build.sh run refreshes the origins, no explicit call site required.
       - name: build-env-cors.sh
