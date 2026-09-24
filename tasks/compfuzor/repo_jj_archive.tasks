@@ -15,7 +15,9 @@
           + (['--depth', GIT_DEPTH|string] if GIT_DEPTH is defined else [])
           + (['--submodules'] if GIT_SUBMODULES|default(false)|bool else []) }}
   register: compfuzor_repo_jj_result
-  changed_when: (compfuzor_repo_jj_result.stdout | from_json).changed | bool
+  # On runner failure stdout is intentionally empty; leave the jj diagnostic
+  # intact instead of obscuring it with a JSON parsing exception.
+  changed_when: (compfuzor_repo_jj_result.stdout | from_json).changed | bool if compfuzor_repo_jj_result.rc == 0 else false
   when: JJ_BYPASS is deffalsy
 
 - name: "Compfuzor: collect jj archive notices"

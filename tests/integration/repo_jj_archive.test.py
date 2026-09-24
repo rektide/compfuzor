@@ -281,3 +281,29 @@ def test_nonarchive_git_checkout_updates_by_default_without_custom_guard() -> No
         advance(seed)
         run(*command, cwd=ROOT, env=environment)
         assert (checkout / "tracked").read_text() == "upstream\n"
+
+
+def test_archive_failure_reports_runner_error_not_json_parse_error() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, _ = create_remote(tmp)
+        destination = tmp / "occupied-non-repo"
+        destination.mkdir()
+        playbook = tmp / "failure.pb"
+        playbook.write_text(f"""---
+- hosts: all
+  gather_facts: false
+  vars:
+    DIR: {str(tmp)!r}
+    NAME: fixture
+    REPO: {str(remote)!r}
+    GIT_DIR: {str(destination)!r}
+    COMPFUZOR_REPO_JJ_RUNNER: {str(RUNNER)!r}
+  tasks:
+    - import_tasks: {str(ROOT / 'tasks/compfuzor/repo_jj_archive.tasks')!r}
+""")
+        env = os.environ | {"ANSIBLE_CONFIG": str(ROOT / "ansible.cfg")}
+        output = run("ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook),
+                     cwd=ROOT, env=env, check=False)
+        assert "not a colocated Git checkout" in output and "from_json" not in output
