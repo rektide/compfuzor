@@ -12,7 +12,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRATCH = ROOT / ".test-agent" / "repo-jj-archive" / "tests"
-RUNNER = ROOT / "script" / "repo-jj-archive.py"
+RUNNER = ROOT / "script" / "repo-jj-archive.ts"
 NOOP = {"changed": False, "notices": []}
 
 
@@ -49,7 +49,7 @@ def advance(seed: Path, content: str = "upstream\n") -> str:
 
 def render(archive: Path, remote: Path, *, update: bool = True, version: str = "HEAD") -> dict:
     return json.loads(run(
-        "python3", str(RUNNER), "--dest", str(archive), "--repo", str(remote),
+        str(RUNNER), "--dest", str(archive), "--repo", str(remote),
         "--remotes", "{}", "--label", "fixture", "--version", version,
         "--update", "true" if update else "false", cwd=archive.parent,
     ))

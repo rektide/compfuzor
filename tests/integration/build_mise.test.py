@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 
@@ -69,8 +70,13 @@ def mise_env(tmp: Path, deploy: Path) -> dict[str, str]:
     stub.mkdir(exist_ok=True)
     (stub / "mise").write_text('#!/bin/sh\nprintf "mise:%s\\n" "$PWD" >> "$MISE_TEST_LOG"\n')
     (stub / "mise").chmod(0o755)
+    # The minimal PATH below only needs to shadow `mise` with the stub. Keep
+    # the test process's own node resolvable ahead of /usr/bin as well: the
+    # repo-jj-archive runner is TypeScript executed directly by node, and
+    # distro node builds may lack compile-time TypeScript support.
+    node = Path(shutil.which("node") or "/usr/bin/node").resolve().parent
     return os.environ | {"DIR": str(deploy), "MISE_TEST_LOG": str(tmp / "mise.log"),
-                         "PATH": f"{stub}:/usr/local/bin:/usr/bin:/bin"}
+                         "PATH": f"{stub}:{node}:/usr/local/bin:/usr/bin:/bin"}
 
 
 def test_build_mise_orders_before_consumers_and_excludes_new_link() -> None:
@@ -161,7 +167,7 @@ def test_full_render_collects_mise_diff_after_build_run() -> None:
     REPO: {str(remote)!r}
     ARCHIVE_DOWNLOAD: true
     GIT_UPDATE: false
-    COMPFUZOR_REPO_JJ_RUNNER: {str(ROOT / 'script/repo-jj-archive.py')!r}
+    COMPFUZOR_REPO_JJ_RUNNER: {str(ROOT / 'script/repo-jj-archive.ts')!r}
     MISE_VERSIONS: {{nodejs: '26'}}
     PKGS_BYPASS: true
     APT_BYPASS: true

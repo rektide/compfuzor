@@ -22,6 +22,7 @@
     "files/runtime/**/*.ts",
     "files/config-remote/**/*.ts",
     "files/config-remote.ts",
+    "script/repo-jj-archive.ts",
     "vite.config.ts"
   ]
 }
