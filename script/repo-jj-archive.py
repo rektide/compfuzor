@@ -62,8 +62,6 @@ def main() -> None:
     parser.add_argument("--depth", type=int)
     parser.add_argument("--submodules", action="store_true")
     parser.add_argument("--update", choices=("true", "false"), default="true")
-    parser.add_argument("--tool-version-links", default="[]", help="JSON basenames of declared repo-root links")
-    parser.add_argument("--deployment", type=Path)
     args = parser.parse_args()
     declared = {"origin": args.repo, **json.loads(args.remotes)}
     version = args.version
@@ -78,54 +76,11 @@ def main() -> None:
         raise ValueError("GIT_SUBMODULES requires explicit submodule safety handling; disable it for this archive render")
     if args.depth is not None and args.depth < 1:
         raise ValueError("GIT_DEPTH must be positive")
-    version_links = json.loads(args.tool_version_links)
-    if not isinstance(version_links, list) or any(name not in (".tool-versions", "mise.toml") for name in version_links):
-        raise ValueError("tool-version links must be .tool-versions or mise.toml")
-    if version_links and args.deployment is None:
-        raise ValueError("tool-version links require a deployment directory")
     label = re.sub(r"[^A-Za-z0-9._-]+", "-", args.label).strip(".-") or "deployment"
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     notices: list[dict[str, str]] = []
     changed = False
     cloned = False
-    skipped_links: list[str] = []
-
-    def exclude_version_links() -> None:
-        nonlocal changed
-        if not version_links:
-            return
-        exclude = args.dest / ".git" / "info" / "exclude"
-        exclude.parent.mkdir(parents=True, exist_ok=True)
-        old = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
-        entries = {line.strip() for line in old.splitlines()}
-        missing = [f"/{name}" for name in dict.fromkeys(version_links) if f"/{name}" not in entries]
-        if missing:
-            with exclude.open("a", encoding="utf-8") as output:
-                if old and not old.endswith("\n"):
-                    output.write("\n")
-                output.write("\n".join(missing) + "\n")
-            changed = True
-
-    def check_version_links(upstream: str) -> None:
-        nonlocal changed
-        for name in dict.fromkeys(version_links):
-            dest = args.dest / name
-            generated = args.deployment / name
-            tracked_upstream = jj("file", "list", "-r", upstream, name, cwd=args.dest)
-            if tracked_upstream:
-                skipped_links.append(str(dest))
-                notices.append({"kind": "repo-owned-version", "path": str(dest)})
-                continue
-            if dest.is_symlink() and dest.resolve(strict=False) == generated.resolve(strict=False):
-                # A managed link created before excludes existed may already
-                # live in @. The ignore entry was installed before this jj
-                # command; untracking it keeps the symlink on disk.
-                if jj("file", "list", "-r", "@", name, cwd=args.dest):
-                    jj("file", "untrack", name, cwd=args.dest)
-                    changed = True
-            elif dest.exists() or dest.is_symlink():
-                skipped_links.append(str(dest))
-                notices.append({"kind": "repo-owned-version", "path": str(dest)})
 
     def harvest(kind: str, target: str, *, copy: bool = False) -> None:
         nonlocal changed
@@ -158,12 +113,10 @@ def main() -> None:
     elif not args.dest.is_dir() or not (args.dest / ".git").exists():
         raise ValueError(f"{args.dest} exists but is not a colocated Git checkout; refusing to replace it")
     elif not (args.dest / ".jj").exists():
-        exclude_version_links()  # before jj first imports this pre-existing checkout
         jj("git", "init", "--git-repo", str(args.dest / ".git"), str(args.dest), cwd=args.dest)
         notices.append({"kind": "notice", "message": f"adopted existing Git archive into jj: {args.dest}"})
         changed = True
 
-    exclude_version_links()  # before jj status snapshots any untracked repo-root links
     # This snapshots tracked/untracked changes and imports local Git branches.
     # Do not continue to fetch if jj cannot snapshot the worktree.
     jj("status", cwd=args.dest)
@@ -183,13 +136,7 @@ def main() -> None:
             changed = True
 
     if args.update == "false" and before:
-        base = version if version != "HEAD" else next((name for name in ("main", "master") if (name, selected) in before), None)
-        upstream = before.get((base, selected), (None, False))[0]
-        if version_links and (upstream is None or upstream == "conflict"):
-            raise ValueError(f"cannot determine selected base {version}@{selected} without fetching")
-        if version_links:
-            check_version_links(upstream)
-        print(json.dumps({"changed": changed, "notices": notices, "skip_version_links": skipped_links}))
+        print(json.dumps({"changed": changed, "notices": notices}))
         return
 
     # HEAD is the conventional base. Explicit versions select branch bookmarks.
@@ -249,8 +196,6 @@ def main() -> None:
         notices.append({"kind": "bookmark-created", "name": base, "target": upstream})
     jj("bookmark", "track", base, "--remote", selected, cwd=args.dest)
 
-    check_version_links(upstream)
-
     # Fetch may have changed the current revision only if external Git refs
     # rewrote it; never assume jj's automatic rebase imported the right state.
     current, now_empty, current_parents, _ = revision(args.dest, "@")
@@ -275,7 +220,7 @@ def main() -> None:
         notices.append({"kind": "notice", "message": "working copy has merge conflicts; resolve them before building"})
     if before.get((base, selected), (None, False))[0] != upstream:
         changed = True
-    print(json.dumps({"changed": changed, "notices": notices, "skip_version_links": skipped_links}))
+    print(json.dumps({"changed": changed, "notices": notices}))
 
 
 if __name__ == "__main__":

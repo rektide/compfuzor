@@ -13,7 +13,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 SCRATCH = ROOT / ".test-agent" / "repo-jj-archive" / "tests"
 RUNNER = ROOT / "script" / "repo-jj-archive.py"
-NOOP = {"changed": False, "notices": [], "skip_version_links": []}
+NOOP = {"changed": False, "notices": []}
 
 
 def run(*command: str, cwd: Path, check: bool = True, env: dict[str, str] | None = None) -> str:
