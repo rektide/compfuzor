@@ -127,7 +127,7 @@ and concatenates these fields across overlapping entries:
 
 | Concat field | Rendered by | Purpose |
 |---|---|---|
-| `early` | [`files/_bin`](../files/_bin) before generated content | Pre-build hooks (e.g. `mise install`) |
+| `early` | [`files/_bin`](../files/_bin) before generated content | Script-local pre-build hooks |
 | `generated` | [`files/_bin`](../files/_bin) main body | The script's primary work |
 | `run_all` | [`files/_bin`](../files/_bin) after generated content | Child script invocations |
 | `origin_subsystems` | disarm resolver/reporting | Contributing subsystem IDs |
@@ -752,7 +752,7 @@ Common bin fields:
 | [`library/filter_plugins/dictify.py`](../library/filter_plugins/dictify.py) | Mapping/list-shorthand normalization |
 | [`library/filter_plugins/zim_fragment.py`](../library/filter_plugins/zim_fragment.py) | Zim module line rendering |
 | [`tasks/compfuzor/gen_bins.tasks`](../tasks/compfuzor/gen_bins.tasks) | Bin action compositor synthesis |
-| [`tasks/compfuzor/gen_tool_versions.tasks`](../tasks/compfuzor/gen_tool_versions.tasks) | `.tool-versions` and `mise.toml` rendering |
+| [`tasks/compfuzor/gen_tool_versions.tasks`](../tasks/compfuzor/gen_tool_versions.tasks) | Build-mise bin synthesis; pins written at build time |
 | [`tasks/compfuzor/gen_python.tasks`](../tasks/compfuzor/gen_python.tasks) | Python subsystem + console scripts |
 | [`tasks/compfuzor/gen_kernel.tasks`](../tasks/compfuzor/gen_kernel.tasks) | Kernel validation and multi-child merging |
 | [`files/_bin`](../files/_bin) | Bin template: resolves helpers, emits prologues/epilogues, then body |

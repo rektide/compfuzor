@@ -962,6 +962,14 @@ What this split buys you:
 
 ### Toolchain and `.tool-versions`
 
+**Current-implementation note (2026-09):** The example below is an earlier
+target decomposition, not the current output contract. The implementation now
+synthesizes a build-mise bin rather than render-time `ETC_FILES`/`LINKS`; see
+[`doc/subsys.md`](/doc/subsys.md#build-time-version-manager-pins) and
+[`design/build-mise/draft0.gpt6sol.md`](/design/build-mise/draft0.gpt6sol.md).
+The intent/synthesis separation remains useful, but any future `sub_*` design
+must preserve build-time pin/link ownership.
+
 Current file:
 
 - [`/tasks/compfuzor/vars_tool_versions.tasks`](/tasks/compfuzor/vars_tool_versions.tasks)
