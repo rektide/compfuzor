@@ -78,6 +78,33 @@
           allowed_proxy_clients = [ '127.0.0.1', '::1', '192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12' ]
           allowed_webif_clients = [ '127.0.0.1', '::1', '192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12' ]
 
+          # HTTPS CONNECT tunnels (uncached passthrough for https:// apt
+          # sources). Post-v0.8.0 upstream made these opt-in and fail-closed
+          # (commit 03ef57d); the previously deployed 0.8.0 was fail-open,
+          # which is why tunnels "just worked" there. Without this block a
+          # rebuilt daemon refuses every CONNECT (apt: 403 through the
+          # proxy). No bare '*' wildcard exists, so each host is listed;
+          # apt CONNECTs to the DNS-canonical name, so CNAME targets appear
+          # too (mirrors.kernel.org -> mirrors.edge.kernel.org). Each HTTPS
+          # repo holds one tunnel per concurrent update run: the default
+          # per-client cap of 10 sat below this host's repo count and apt
+          # saw "429 Too Many Requests" on the overflow repos. Keep the
+          # mirror list fresh with:
+          #   script/apt-tunnel-mirrors.ts             # sync from /etc/apt
+          #   script/apt-tunnel-mirrors.ts --journal   # + hosts clients asked to tunnel
+          https_tunnel_enabled = true
+          https_tunnel_allowed_ports = [ 443 ]
+          https_tunnel_max_connections_per_client = 25
+          # BEGIN tunnel-mirrors (managed by script/apt-tunnel-mirrors.ts - do not edit)
+          https_tunnel_allowed_mirrors = [
+            'deb.debian.org', 'deb.nodesource.com', 'dl.google.com',
+            'download.opensuse.org', 'downloads.cursor.com', 'liquorix.net',
+            'mise.jdx.dev', 'mirrors.edge.kernel.org', 'mirrors.kernel.org',
+            'packages.clickhouse.com', 'packages.microsoft.com',
+            'pkgs.tailscale.com', 'repo.jellyfin.org', 'repo.waydro.id',
+          ]
+          # END tunnel-mirrors
+
           # bind_port          = 3142     (default)
           # https_upgrade_mode = 'Auto'   (default)
       - name: 30proxy
@@ -171,6 +198,8 @@
       edit the host for remote clients). HTTPS upstreams are fetched over TLS
       by the proxy (`https_upgrade_mode`, default 'Auto'), so clients may keep
       plain http:// source URLs and still get cached, verified packages.
+      https://-only sources bypass the cache via CONNECT tunnels (uncached
+      passthrough) and their hosts must be allowlisted — see Tuning.
 
       ## Locations
 
@@ -192,9 +221,27 @@
       Notable knobs: `disk_quota` (hard cap; reference-based pruning reclaims
       packages absent from the current Release set independently), `allowed_mirrors`
       (empty by default in upstream — this playbook seeds Debian/Ubuntu/LLVM),
-      `allowed_proxy_clients` / `allowed_webif_clients` (client ACLs). Full
+      `allowed_proxy_clients` / `allowed_webif_clients` (client ACLs),
+      `https_tunnel_enabled` + `https_tunnel_allowed_mirrors` (fail-closed
+      CONNECT tunnel ACL — no bare `*` wildcard; every https:// repo host and
+      its DNS CNAME target must be listed), `https_tunnel_max_connections_per_client`
+      (one tunnel per https repo per concurrent update; 10 default < repo count
+      here => apt 429s). Keep the tunnel list fresh:
+      `script/apt-tunnel-mirrors.ts [--journal]`. Full
       option reference: `debian/apt-cacher-rs.conf` in the source tree, or
       `man apt-cacher-rs(8)`.
+
+      ## Deploying over the running daemon
+
+      NAME resolves to `apt-cacher-rs-git` (src playbooks get INSTANCE=git),
+      so a rebuild lands on the same unit, user, conf and state as the
+      currently running deployment: render, build, then `sudo bash
+      {{DIR}}/bin/install.sh` (stop/restart handled by the systemd thunk).
+      The conf below is valid for both the running v0.8.0 binary and HEAD:
+      v0.8.0 predates the fail-closed tunnel ACL (it also consults
+      `https_tunnel_allowed_mirrors` only loosely), while HEAD enforces it —
+      the explicit `https_tunnel_enabled` + allowlist keeps behavior
+      identical across the upgrade.
   tasks:
     # Daemon identity is fully declarative now (SYSTEMD_SYSUSER above); no
     # inline `user:` praxis violation remains. Sudo is needed only at install
