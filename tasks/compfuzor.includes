@@ -240,9 +240,9 @@
   ansible.builtin.set_fact:
     compfuzor_repo_notices: >-
       {{ (compfuzor_repo_notices | default([])) + [
-           {'kind': 'version-config', 'path': item.split('\t', 1)[1]}
-           if item.startswith('COMPFUZOR_REPO_VERSION_SKIP\t') else
-           {'kind': 'notice', 'message': item.split('\t', 1)[1]}
+           {'kind': 'version-config', 'path': item | regex_replace('^COMPFUZOR_REPO_VERSION_SKIP\t', '')}
+           if item is match('^COMPFUZOR_REPO_VERSION_SKIP\t') else
+           {'kind': 'notice', 'message': item | regex_replace('^COMPFUZOR_REPO_NOTICE\t', '')}
          ] }}
   loop: >-
     {{ (compfuzor_bins_run_results.results | default([])

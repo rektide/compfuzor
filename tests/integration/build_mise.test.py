@@ -70,7 +70,7 @@ def mise_env(tmp: Path, deploy: Path) -> dict[str, str]:
     (stub / "mise").write_text('#!/bin/sh\nprintf "mise:%s\\n" "$PWD" >> "$MISE_TEST_LOG"\n')
     (stub / "mise").chmod(0o755)
     return os.environ | {"DIR": str(deploy), "MISE_TEST_LOG": str(tmp / "mise.log"),
-                         "PATH": f"{stub}:/usr/bin:/bin"}
+                         "PATH": f"{stub}:/usr/local/bin:/usr/bin:/bin"}
 
 
 def test_build_mise_orders_before_consumers_and_excludes_new_link() -> None:
@@ -119,3 +119,66 @@ def test_build_mise_preserves_repo_file_reports_diff_and_force_is_explicit() -> 
         assert "FORCED VERSION LINK" in forced
         assert (repo / "mise.toml").is_symlink()
         assert (repo / "mise.toml").resolve() == tmp / "deployment/mise.toml"
+
+
+def test_full_render_collects_mise_diff_after_build_run() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote = tmp / "upstream.git"
+        seed = tmp / "seed"
+        archive = tmp / "archive"
+        deploy = tmp / "fixture"
+        deploy.mkdir()
+        run("git", "init", "--bare", str(remote), cwd=tmp)
+        run("git", "clone", str(remote), str(seed), cwd=tmp)
+        run("git", "config", "user.name", "Mise Test", cwd=seed)
+        run("git", "config", "user.email", "mise@example.invalid", cwd=seed)
+        (seed / "mise.toml").write_text('[tools]\nnodejs = "old"\n')
+        run("git", "add", "mise.toml", cwd=seed)
+        run("git", "commit", "-m", "pin", cwd=seed)
+        run("git", "branch", "-M", "main", cwd=seed)
+        run("git", "push", "-u", "origin", "main", cwd=seed)
+        run("git", "symbolic-ref", "HEAD", "refs/heads/main", cwd=remote)
+        run("jj", "git", "clone", "--colocate", str(remote), str(archive), cwd=tmp)
+        (tmp / "files").symlink_to(ROOT / "files", target_is_directory=True)
+        (tmp / "vars").symlink_to(ROOT / "vars", target_is_directory=True)
+        playbook = tmp / "build-render.pb"
+        playbook.write_text(f"""---
+- hosts: all
+  gather_facts: false
+  vars:
+    TYPE: opt
+    type: opt
+    NAME: fixture
+    INSTANCE: main
+    DIR: {str(deploy)!r}
+    ETC: {str(deploy / 'etc')!r}
+    HOMEDIR: {str(tmp / 'home')!r}
+    ARCHIVE_SRC: {str(archive)!r}
+    REPO_DIR: {str(archive)!r}
+    GIT_DIR: {str(archive)!r}
+    REPO: {str(remote)!r}
+    ARCHIVE_DOWNLOAD: true
+    GIT_UPDATE: false
+    COMPFUZOR_REPO_JJ_RUNNER: {str(ROOT / 'script/repo-jj-archive.py')!r}
+    MISE_VERSIONS: {{nodejs: '26'}}
+    PKGS_BYPASS: true
+    APT_BYPASS: true
+    FS_BYPASS: true
+    DIR_BYPASS: true
+    ENV_BYPASS: true
+    LINKS_BYPASS: true
+    GLOBAL_BINS_BYPASS: true
+    SYSTEMD_THUNK_BYPASS: true
+  tasks:
+    - import_tasks: {str(ROOT / 'tasks/compfuzor.includes')!r}
+""")
+        env = mise_env(tmp, deploy) | {"ANSIBLE_CONFIG": str(ROOT / "ansible.cfg"),
+                                      "ANSIBLE_ROLES_PATH": str(ROOT / "roles")}
+        output = run("ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook), cwd=ROOT, env=env)
+        assert "REPO VERSION CONFIG EXISTS" in output and "REPO NOTICE  -nodejs =" in output, output[-5000:]
+        assert "REPO NOTICE  +nodejs =" in output
+        assert (archive / "mise.toml").read_text() == '[tools]\nnodejs = "old"\n'
+        assert (archive / ".git/info/exclude").read_text().splitlines().count("/mise.toml") == 1
+        assert (deploy / "mise.toml").read_text() == '[tools]\nnodejs = "26"\n'

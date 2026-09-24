@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
-
-"""Verify version-manager artifact emission: real file in DIR, repo link only."""
+"""Version-manager generator only synthesizes an ordered build bin."""
 
 from __future__ import annotations
 
@@ -12,23 +11,18 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[2]
+SCRATCH = ROOT / ".test-agent" / "build-mise" / "emit"
 GEN_TASKS = ROOT / "tasks" / "compfuzor" / "gen_tool_versions.tasks"
 
 
-def check(label: str, actual: object, expected: object) -> None:
-    if actual != expected:
-        raise AssertionError(f"{label}: expected {expected!r}, got {actual!r}")
-    print(f"ok: {label}")
-
-
-def run_gen(tmp: Path, extra_vars: dict) -> tuple[dict, dict]:
-    """Run gen_tool_versions.tasks; return (etc_files, links) it produced."""
+def run_gen(tmp: Path, extra_vars: dict) -> dict:
     deploy = tmp / "deploy"
-    (deploy / "etc").mkdir(parents=True, exist_ok=True)
+    deploy.mkdir()
     repo = tmp / "repo"
-    repo.mkdir(exist_ok=True)
+    repo.mkdir()
     out = tmp / "out.json"
     playbook = tmp / "emit.pb"
+    vars_lines = "\n    ".join(f"{key}: {json.dumps(value)}" for key, value in extra_vars.items())
     playbook.write_text(
         f"""---
 - hosts: all
@@ -38,80 +32,48 @@ def run_gen(tmp: Path, extra_vars: dict) -> tuple[dict, dict]:
     REPO_DIR: {str(repo)!r}
     ETC_FILES: []
     LINKS: []
-    BINS: []
-    {extra_vars_text(extra_vars)}
+    BINS: [{{name: build-nodejs.sh, generated: 'echo node', run: true}}]
+    {vars_lines}
   tasks:
     - import_tasks: {str(GEN_TASKS)!r}
     - ansible.builtin.copy:
         dest: {str(out)!r}
-        content: "{{{{ {{'etc': ETC_FILES, 'links': LINKS}} | to_nice_json }}}}"
+        content: "{{{{ {{'etc': ETC_FILES, 'links': LINKS, 'bins': BINS, 'composers': BINS | bin_composers}} | to_nice_json }}}}"
 """,
         encoding="utf-8",
     )
-    env = os.environ.copy()
-    env["ANSIBLE_CONFIG"] = str(ROOT / "ansible.cfg")
+    env = os.environ | {"ANSIBLE_CONFIG": str(ROOT / "ansible.cfg")}
     result = subprocess.run(
         ["ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook)],
-        cwd=ROOT,
-        env=env,
-        check=False,
-        capture_output=True,
-        text=True,
+        cwd=ROOT, env=env, check=False, capture_output=True, text=True,
     )
     if result.returncode:
         raise AssertionError(f"ansible-playbook failed:\n{result.stdout}\n{result.stderr}")
-    payload = json.loads(out.read_text(encoding="utf-8"))
-    return payload["etc"], payload["links"]
+    return json.loads(out.read_text())
 
 
-def extra_vars_text(extra_vars: dict) -> str:
-    return "\n    ".join(f"{key}: {json.dumps(value)}" for key, value in extra_vars.items())
-
-
-def main() -> None:
-    with tempfile.TemporaryDirectory(prefix="compfuzor-tv-emit-") as tmp:
-        root = Path(tmp)
-        deploy = root / "deploy"
-        repo = root / "repo"
-
-        etc, links = run_gen(root, {"TOOL_VERSIONS": {"rust": "1.85"}})
-        check(
-            "tool-versions file is a DIR-rooted ETC_FILES entry",
-            etc,
-            [{"name": ".tool-versions", "dest": str(deploy / ".tool-versions"), "content": "rust 1.85\n"}],
-        )
-        check(
-            "only the repo link is emitted, pointing at DIR's file",
-            links,
-            [{
-                "src": str(deploy / ".tool-versions"),
-                "dest": str(repo / ".tool-versions"),
-                "contributors": ["subsystem:tool_versions"],
-            }],
-        )
-
-        etc, links = run_gen(root, {"MISE_VERSIONS": {"nodejs": "26"}})
-        check(
-            "mise.toml file is a DIR-rooted ETC_FILES entry",
-            etc[0]["dest"],
-            str(deploy / "mise.toml"),
-        )
-        check(
-            "mise repo link points at DIR's file",
-            links[0]["src"],
-            str(deploy / "mise.toml"),
-        )
-
-        _, links = run_gen(
-            root, {"TOOL_VERSIONS": {"rust": "1.85"}, "TOOL_VERSIONS_LINK_BYPASS": True}
-        )
-        check("TOOL_VERSIONS_LINK_BYPASS emits no links", links, [])
-
-        _, links = run_gen(root, {"TOOL_VERSIONS": {"rust": "1.85"}, "REPO_DIR": str(root / "absent")})
-        check("missing repo dir emits no links", links, [])
-
-    print("all tool-version emission checks passed")
+def test_tool_versions_emit_build_step_only() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        for name, settings in (
+            (".tool-versions", {"TOOL_VERSIONS": {"rust": "1.85"}}),
+            ("mise.toml", {"MISE_VERSIONS": {"nodejs": "26"}}),
+            ("mise.toml", {"TOOL_VERSIONS": {"rust": "1.85"}, "MISE_VERSIONS": {"nodejs": "26"}}),
+        ):
+            case = tmp / name.replace(".", "-")
+            if case.exists():
+                case = tmp / "combined"
+            case.mkdir()
+            payload = run_gen(case, settings)
+            assert payload["etc"] == [] and payload["links"] == []
+            assert not (case / "deploy" / name).exists()
+            assert payload["bins"][0]["name"] == "build-mise.sh"
+            assert "mise install" in payload["bins"][0]["generated"]
+            build = next(bin for bin in payload["composers"] if bin["name"] == "build.sh")
+            assert build["run_all"] == ["build-mise.sh", "build-nodejs.sh"]
 
 
 if __name__ == "__main__":
-    main()
+    test_tool_versions_emit_build_step_only()
+    print("ok: tool-version pins are build-time only")
