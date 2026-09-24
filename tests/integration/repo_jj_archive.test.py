@@ -13,6 +13,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 SCRATCH = ROOT / ".test-agent" / "repo-jj-archive" / "tests"
 RUNNER = ROOT / "script" / "repo-jj-archive.py"
+NOOP = {"changed": False, "notices": [], "skip_version_links": []}
 
 
 def run(*command: str, cwd: Path, check: bool = True, env: dict[str, str] | None = None) -> str:
@@ -67,12 +68,12 @@ def test_archive_fast_forward_and_noop() -> None:
         first = render(archive, remote)
         assert first["changed"] and (archive / ".jj").is_dir() and (archive / ".git").is_dir()
         assert any(n["kind"] == "bookmark-created" and n["name"] == "main" for n in first["notices"])
-        assert render(archive, remote) == {"changed": False, "notices": []}
+        assert render(archive, remote) == NOOP
         new_tip = advance(seed)
         assert render(archive, remote)["changed"]
         assert run("jj", "log", "-G", "-r", "main", "-T", "commit_id", cwd=archive) == new_tip
         assert (archive / "tracked").read_text() == "upstream\n"
-        assert render(archive, remote) == {"changed": False, "notices": []}
+        assert render(archive, remote) == NOOP
 
 
 def test_archive_harvests_dirty_work_and_divergent_base() -> None:
@@ -88,7 +89,7 @@ def test_archive_harvests_dirty_work_and_divergent_base() -> None:
         work = next(n for n in first["notices"] if n["kind"] == "bookmark-created")
         assert work["name"].startswith("harvest/fixture/working-copy-")
         assert run("jj", "file", "show", "-r", work["name"], "untracked", cwd=archive) == "local untracked"
-        assert render(archive, remote) == {"changed": False, "notices": []}
+        assert render(archive, remote) == NOOP
         (archive / "untracked").write_text("edited later\n")
         later = render(archive, remote)
         assert any(n["kind"] == "bookmark-created" and n["name"] != work["name"] for n in later["notices"])
@@ -152,7 +153,7 @@ def test_archive_update_bypass_keeps_base_and_resumes() -> None:
         render(archive, remote)
         before = run("jj", "log", "-G", "-r", "main", "-T", "commit_id", cwd=archive)
         advance(seed)
-        assert render(archive, remote, update=False) == {"changed": False, "notices": []}
+        assert render(archive, remote, update=False) == NOOP
         assert run("jj", "log", "-G", "-r", "main", "-T", "commit_id", cwd=archive) == before
         assert render(archive, remote)["changed"]
 
@@ -169,6 +170,7 @@ def test_ansible_accumulates_bookmark_notices_at_play_end() -> None:
   gather_facts: false
   vars:
     NAME: fixture
+    DIR: {str(tmp / 'deployment')!r}
     REPO: {str(remote)!r}
     GIT_DIR: {str(archive)!r}
     COMPFUZOR_REPO_JJ_RUNNER: {str(RUNNER)!r}
@@ -239,4 +241,5 @@ def test_full_includes_route_primary_to_archive_and_link_it() -> None:
                      env=environment)
         assert (archive / ".jj").is_dir() and (deployed / "repo").resolve() == archive, output
         assert "BOOKMARK CREATED  main ->" in output
-        assert "fetch git repositories" not in output
+        git_task = output.split("TASK [Compfuzor: fetch git repositories]", 1)[1].split("TASK [", 1)[0]
+        assert "skipping: [localhost]" in git_task

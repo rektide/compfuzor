@@ -2,6 +2,20 @@
 # The archive's worktree and bookmarks belong to jj, not ansible.builtin.git.
 # repo-jj-archive.py emits one JSON result so Ansible can collect structured
 # notices without parsing jj's human-facing output.
+- name: "Compfuzor: identify declared archive version links"
+  ansible.builtin.set_fact:
+    compfuzor_repo_jj_version_links: "{{ compfuzor_repo_jj_version_links_json | from_json }}"
+  vars:
+    compfuzor_repo_jj_version_links_json: >-
+      {%- set names = [] -%}
+      {%- for link in (_LINK_PLAN | default({})).links | default([]) -%}
+        {%- if 'subsystem:tool_versions' in (link.contributors | default([]))
+               and link.dest in [GIT_DIR ~ '/.tool-versions', GIT_DIR ~ '/mise.toml'] -%}
+          {%- set _ = names.append(link.dest | basename) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ names | to_json }}
+
 - name: "Compfuzor: refresh jj archive"
   ansible.builtin.command:
     argv: >-
@@ -11,6 +25,8 @@
           '--remote', GIT_REMOTE|default('origin'),
           '--version', GIT_VERSION|default('HEAD')|string,
           '--label', NAME,
+          '--tool-version-links', compfuzor_repo_jj_version_links | to_json,
+          '--deployment', DIR,
           '--update', 'true' if GIT_UPDATE|default(true)|bool else 'false']
           + (['--depth', GIT_DEPTH|string] if GIT_DEPTH is defined else [])
           + (['--submodules'] if GIT_SUBMODULES|default(false)|bool else []) }}
@@ -18,11 +34,18 @@
   changed_when: (compfuzor_repo_jj_result.stdout | from_json).changed | bool
   when: JJ_BYPASS is deffalsy
 
+- name: "Compfuzor: keep repo-owned version configs out of the deferred link plan"
+  ansible.builtin.set_fact:
+    _LINK_PLAN: "{{ _LINK_PLAN | combine({'links': _LINK_PLAN.links | rejectattr('dest', 'in', skipped) | list}) }}"
+  vars:
+    skipped: "{{ (compfuzor_repo_jj_result.stdout | from_json).skip_version_links | default([]) }}"
+  when: compfuzor_repo_jj_result is not skipped and _LINK_PLAN is defined and skipped | length > 0
+
 - name: "Compfuzor: collect jj archive notices"
   ansible.builtin.set_fact:
     compfuzor_repo_notices: "{{ (compfuzor_repo_notices | default([])) + [item] }}"
   loop: "{{ (compfuzor_repo_jj_result.stdout | from_json).notices if compfuzor_repo_jj_result is not skipped else [] }}"
   loop_control:
-    label: "{{ item.name | default(item.message) }}"
+    label: "{{ item.name | default(item.path | default(item.message | default('notice'))) }}"
   changed_when: true
   notify: "Compfuzor: print repository notices"
