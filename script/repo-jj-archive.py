@@ -82,8 +82,18 @@ def main() -> None:
     changed = False
     cloned = False
 
-    def harvest(kind: str, target: str) -> None:
+    def harvest(kind: str, target: str, *, copy: bool = False) -> None:
         nonlocal changed
+        if copy:
+            # A bookmark on @ itself follows its change ID when the user
+            # subsequently edits the worktree. Duplicate under a new change
+            # ID so this snapshot cannot drift with future @ rewrites.
+            heads = set(jj("log", "-G", "-r", "heads(all())", "-T", 'commit_id ++ "\\n"', cwd=args.dest).splitlines())
+            jj("duplicate", "-r", target, cwd=args.dest)
+            new_heads = set(jj("log", "-G", "-r", "heads(all())", "-T", 'commit_id ++ "\\n"', cwd=args.dest).splitlines()) - heads
+            if len(new_heads) != 1:
+                raise RuntimeError(f"expected one duplicated jj snapshot; found {new_heads}")
+            target = new_heads.pop()
         name = f"harvest/{label}/{kind}-{stamp}-{uuid4().hex[:8]}"
         jj("bookmark", "create", name, "-r", target, cwd=args.dest)
         notices.append({"kind": "bookmark-created", "name": name, "target": target})
@@ -134,10 +144,12 @@ def main() -> None:
     # A dirty @ is already a jj commit. Do not mint repeated recovery names
     # for the same revision on consecutive renders without an upstream change.
     if not empty and not any(
-        name.startswith(f"harvest/{label}/working-copy-") and remote == "-" and target == work
+        name.startswith(f"harvest/{label}/working-copy-") and remote == "-"
+        and revision(args.dest, target)[2] == parents
+        and not jj("diff", "--from", target, "--to", "@", "--summary", cwd=args.dest)
         for (name, remote), (target, _) in before.items()
     ):
-        harvest("working-copy", work)
+        harvest("working-copy", work, copy=True)
 
     # Freeze *all* tracked local refs before fetching: jj's tracked-remote sync
     # otherwise moves them, and a rewritten upstream can abandon the old tip.
@@ -187,7 +199,12 @@ def main() -> None:
     # Fetch may have changed the current revision only if external Git refs
     # rewrote it; never assume jj's automatic rebase imported the right state.
     current, now_empty, current_parents, _ = revision(args.dest, "@")
-    if not ancestor(args.dest, upstream, current):
+    if old_base == current and old_base != upstream and ancestor(args.dest, upstream, current):
+        # Local @ was itself the ahead base. Keep it as a fixed, bookmarked
+        # parent before the next user edit can rewrite that old base tip.
+        jj("new", "@", cwd=args.dest)
+        changed = True
+    elif not ancestor(args.dest, upstream, current):
         if now_empty and old_base and current_parents == [old_base] and ancestor(args.dest, old_base, upstream):
             jj("rebase", "-r", "@", "-d", base, cwd=args.dest)
         else:

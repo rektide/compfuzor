@@ -1,5 +1,5 @@
 - name: "Compfuzor: set repos variables"
-  set_fact: "{{var_name}}={{REPO_DIR}}/{{item}}"
+  set_fact: "{{var_name}}={{DIR if ARCHIVE_DOWNLOAD is deftruthy and REPO is deftruthy else REPO_DIR}}/{{item}}"
   with_items: "{{(REPOS|default({})).keys()}}"
   when: "REPOS is defined and not lookup('deftruthy', var_name)"
   vars:

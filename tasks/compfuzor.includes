@@ -137,6 +137,9 @@
 
 - debug: "msg=''"
 - debug: "msg='Compfuzor: REPOSITORIES'"
+- name: "Compfuzor: initialize repository notices for this play"
+  ansible.builtin.set_fact:
+    compfuzor_repo_notices: []
 - name: "Compfuzor: register repository notice handler"
   ansible.builtin.import_role:
     name: compfuzor_repo_notices
@@ -145,7 +148,7 @@
 - import_tasks: compfuzor/repo_jj_archive.tasks
   when: REPO is deftruthy and ARCHIVE_DOWNLOAD is deftruthy and GIT_BYPASS is deffalsy and REPO_BYPASS is deffalsy
 - import_tasks: compfuzor/repo_git.tasks
-  when: (REPO is defined or REPOS is defined or REPO_WORKTREE is defined) and (ARCHIVE_DOWNLOAD is deffalsy or REPO is not deftruthy) and GIT_BYPASS is deffalsy and REPO_BYPASS is deffalsy
+  when: (REPOS is deftruthy or ((REPO is defined or REPO_WORKTREE is defined) and (ARCHIVE_DOWNLOAD is deffalsy or REPO is not deftruthy))) and GIT_BYPASS is deffalsy and REPO_BYPASS is deffalsy
 - import_tasks: compfuzor/repo_cvs.tasks
   when: CVS_REPO is defined and REPO_BYPASS is deffalsy
 - import_tasks: compfuzor/repo_svn.tasks

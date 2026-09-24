@@ -24,4 +24,5 @@
   loop: "{{ (compfuzor_repo_jj_result.stdout | from_json).notices if compfuzor_repo_jj_result is not skipped else [] }}"
   loop_control:
     label: "{{ item.name | default(item.message) }}"
+  changed_when: true
   notify: "Compfuzor: print repository notices"
