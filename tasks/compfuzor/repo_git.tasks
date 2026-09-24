@@ -118,6 +118,66 @@
   loop: "{{ git_repos | normalize(to='list') }}"
   when: (item.dest + '/.git') is exists
 
+# The guard keeps renders from destroying archive work. The ansible git
+# module's update resets the working tree to the tracked branch tip, which
+# reverts tracked modifications, moves a branch that is ahead of upstream,
+# and re-attaches a detached HEAD. jj-colocated repos get a best-effort
+# working-copy snapshot first, so even a deliberate bypass leaves the dirty
+# state recoverable from @. Fresh (uncloned) destinations pass through.
+- name: "Compfuzor: guard git repositories against destructive updates"
+  shell: |
+    set -eu
+    [ -d .git ] || exit 0
+    branch=$(git branch --show-current)
+    problems=""
+    if [ -z "$branch" ]; then
+      problems="${problems}
+    - HEAD is detached at $(git rev-parse --short HEAD); update would move it to the tracked branch"
+    else
+      upstream=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+      if [ -n "$upstream" ]; then
+        ahead=$(git rev-list --count "$upstream..$branch")
+        if [ "$ahead" -gt 0 ]; then
+          problems="${problems}
+    - branch $branch is $ahead commit(s) ahead of $upstream; update would move it back"
+        fi
+      fi
+    fi
+    dirty=$(git status --short | awk 'substr($0,1,1) != "?"')
+    if [ -n "$dirty" ]; then
+      if [ -d .jj ] && command -v jj >/dev/null 2>&1; then
+        jj st >/dev/null 2>&1 || true
+        echo "guard: snapshotted working copy into jj @ (recoverable even if overridden)" >&2
+      fi
+      count=$(printf '%s\n' "$dirty" | wc -l)
+      problems="${problems}
+    - $count tracked file(s) modified; update would revert them"
+    fi
+    if [ -n "$problems" ]; then
+      {
+        echo "REFUSING destructive repo update for $(pwd):$problems"
+        echo ""
+        echo "Resolve any of:"
+        echo "  - commit and push the work (jj commit / git push)"
+        echo "  - harvest it as bookmarks: <compfuzor-checkout>/script/harvest-legacy-repo.sh '$PWD' '$PWD'"
+        echo "  - render without touching repos:  -e GIT_UPDATE=False"
+        echo "  - consciously override the guard: -e REPO_GUARD_BYPASS=True"
+      } >&2
+      exit 78
+    fi
+  args:
+    executable: /bin/bash
+    chdir: "{{ item.dest }}"
+  with_items: "{{ git_repos|normalize(to='list') }}"
+  changed_when: false
+  become: "{{ item.become|default(false)|bool }}"
+  when: >
+    git_repos is deflengthy
+    and GIT_BYPASS is deffalsy
+    and REPO_BYPASS is deffalsy
+    and REPO_GUARD_BYPASS is deffalsy
+    and GIT_UPDATE|default(false)|bool
+
 - name: "Compfuzor: fetch git repositories"
   git:
     repo: "{{ item.repo }}"
@@ -127,7 +187,10 @@
     accept_hostkey: "{{ GIT_ACCEPT|default(False) }}"
     depth: "{{ GIT_DEPTH|default(omit) }}"
     version: "{{ item.version }}"
-    update: "{{ GIT_UPDATE|default(omit) }}"
+    # Triage 2026-09: updates are opt-in. Renders clone once and then never
+    # reset the archive; pass -e GIT_UPDATE=True to sync (the guard above
+    # then refuses if the repo holds unpushed or unsaved work).
+    update: "{{ GIT_UPDATE|default(false)|bool }}"
     reference: "{{ item.reference|defaultDir(SRCS_DIR) if item.reference is deftruthy else omit }}"
   become: "{{ item.become|default(false)|bool }}"
   loop: "{{ git_repos|normalize(to='list') }}"
@@ -174,7 +237,7 @@
   loop: "{{ git_remote_specs | normalize(to='list') }}"
   when:
     - not item.selected
-    - GIT_UPDATE | default(true) | bool
+    - GIT_UPDATE | default(false) | bool
 
 - name: "Compfuzor: colocate jj on cloned git repositories"
   shell: |
