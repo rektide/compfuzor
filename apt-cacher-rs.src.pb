@@ -202,6 +202,16 @@
       https://-only sources bypass the cache via CONNECT tunnels (uncached
       passthrough) and their hosts must be allowlisted — see Tuning.
 
+      Caching only happens for plain http:// client URLs. Flip the
+      byte-heavy mirrors to http client-side with the apt-srctools
+      deployment's `apt-src-scheme.ts` (block-in-file-managed rows,
+      byte-exact, mode-preserving; https-only vendors stay on tunnels):
+
+          sudo apt-src-scheme.ts --to http /etc/apt/sources.list.d/debian.list
+
+      Each mirror flipped this way must also appear in `allowed_mirrors`
+      above, or the cache path refuses it (fail-closed like the tunnel ACL).
+
       ## Locations
 
       | what        | where                                                |

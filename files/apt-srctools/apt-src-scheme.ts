@@ -30,7 +30,16 @@
  */
 
 import { spawn } from "node:child_process";
-import { lstat, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  chown,
+  lstat,
+  readFile,
+  readdir,
+  realpath,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import {
@@ -137,13 +146,13 @@ function scanBlocks(lines: string[]): Block[] {
       if (!open || open.id !== Number(e[1]))
         throw new Error(`unmatched '# apt-scheme-${e[1]} end' at line ${i + 1}`);
       const content: number[] = [];
-      for (let j = open.begin + 1; j < i; j++)
-        if (!PROVENANCE_RE.test(lines[j]!)) content.push(j);
+      for (let j = open.begin + 1; j < i; j++) if (!PROVENANCE_RE.test(lines[j]!)) content.push(j);
       blocks.push({ id: open.id, begin: open.begin, end: i, content });
       open = null;
     }
   }
-  if (open) throw new Error(`'# apt-scheme-${open.id} begin' at line ${open.begin + 1} has no end marker`);
+  if (open)
+    throw new Error(`'# apt-scheme-${open.id} begin' at line ${open.begin + 1} has no end marker`);
   return blocks;
 }
 
@@ -181,6 +190,8 @@ function bifUpdate(path: string, id: number, content: string): Promise<boolean> 
     "end",
     "--mode",
     "ensure",
+    "--source-label",
+    SOURCE_LABEL,
   ];
   return new Promise((resolve) => {
     const child = spawn(BIF, args, { stdio: ["pipe", "ignore", "pipe"] });
@@ -190,6 +201,10 @@ function bifUpdate(path: string, id: number, content: string): Promise<boolean> 
     child.stdin.end(content + "\n");
   });
 }
+
+/** Provenance label BIF stamps as `# source: <text>` on rows we manage --
+ *  BIF's README recommends a path identifying the managing source. */
+const SOURCE_LABEL = "files/apt-srctools/apt-src-scheme.ts";
 
 async function defaultFiles(): Promise<string[]> {
   const out: string[] = [];
@@ -230,7 +245,32 @@ function render(
   return out.join("\n");
 }
 
+/** processFile mutates system config; every writer below (our writeFile and
+ *  block-in-file's temp-file+rename alike) derives new-file mode from the
+ *  invoking umask -- under a root shell with umask 077 that silently turns
+ *  0644 sources into 0600 and breaks unprivileged readers (apt itself, and
+ *  any user-side tooling). Preserve the pre-edit stat: mode always, owner
+ *  when running as root. This is tool-side belt-and-braces until
+ *  block-in-file itself preserves modes on managed edits. */
 async function processFile(path: string, target: string): Promise<string | null> {
+  const st = await stat(path);
+  try {
+    return await processFileInner(path, target);
+  } finally {
+    const current = await stat(path);
+    const root = typeof process.geteuid === "function" && process.geteuid() === 0;
+    const ownershipChanged = root && (current.uid !== st.uid || current.gid !== st.gid);
+    if (ownershipChanged) {
+      await chown(path, st.uid, st.gid);
+    }
+    // chown can clear setuid/setgid bits, so restore mode after ownership.
+    if (ownershipChanged || (current.mode & 0o7777) !== (st.mode & 0o7777)) {
+      await chmod(path, st.mode & 0o7777);
+    }
+  }
+}
+
+async function processFileInner(path: string, target: string): Promise<string | null> {
   const original = await readFile(path, "utf8");
   const fmt = detectFormat(path, original);
   let expectedCount: number;
@@ -253,10 +293,8 @@ async function processFile(path: string, target: string): Promise<string | null>
   const adopt = new Map<number, number>();
   let id = nextId;
   const singleContent = new Map<number, number>(); // row lineIdx -> block id
-  for (const b of blocks)
-    if (b.content.length === 1) singleContent.set(b.content[0]!, b.id);
-  for (const r of rows)
-    if (!singleContent.has(r.lineIdx)) adopt.set(r.lineIdx, id++);
+  for (const b of blocks) if (b.content.length === 1) singleContent.set(b.content[0]!, b.id);
+  for (const r of rows) if (!singleContent.has(r.lineIdx)) adopt.set(r.lineIdx, id++);
 
   const viaBif: Array<{ id: number; content: string }> = [];
   for (const r of rows) {
@@ -303,8 +341,10 @@ async function processFile(path: string, target: string): Promise<string | null>
       const after = await readFile(path, "utf8");
       const problem = verify(after, fmt, target, expectedCount);
       if (!problem) {
-        return `${path}: flipped ${rows.length} URI row(s) to ${target} ` +
-          `(${viaBif.length} via block-in-file, ${adopt.size} adopted)`;
+        return (
+          `${path}: flipped ${rows.length} URI row(s) to ${target} ` +
+          `(${viaBif.length} via block-in-file, ${adopt.size} adopted)`
+        );
       }
       console.warn(`warn: ${path}: block-in-file path failed verification; retrying surgically`);
       await writeFile(path, original, "utf8");

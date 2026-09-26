@@ -20,6 +20,7 @@
     "files/links/**/*.ts",
     "files/zim/**/*.ts",
     "files/runtime/**/*.ts",
+    "files/apt-srctools/**/*.ts",
     "files/config-remote/**/*.ts",
     "files/config-remote.ts",
     "script/repo-jj-archive.ts",

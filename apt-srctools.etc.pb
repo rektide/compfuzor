@@ -76,6 +76,14 @@
         managed blocks where possible. Symlinked sources are skipped by
         default (`--follow` to edit through them): a linked file is managed
         by its deployment, and a re-render would clobber an on-disk edit.
+        The pre-edit mode/owner of each file is preserved across every
+        write (our writes and block-in-file's temp-file+rename alike
+        derive mode from the invoking umask -- under `sudo` with umask 077
+        that silently turned 0644 sources into 0600). Block provenance is
+        labeled via block-in-file's `--source-label
+        files/apt-srctools/apt-src-scheme.ts` option. Requires a deployed
+        block-in-file version with that option; keep the two tools promoted
+        together so provenance is stable.
 
       See design/apt-srctools/ for the JSON schema, the roundtrip fidelity
       map (what is bijective through JSON, what normalizes or is lossy), and
