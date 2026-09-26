@@ -761,7 +761,7 @@ after all renames succeed.
 selects the first glob input; on an input it selects that glob explicitly.
 Local files may coexist with remote symlinks. Remote tools are consumer-owned,
 mutate only local links and enabled/disabled link names, then invoke the normal
-targeted config rebuild. Compilation emits the single `config-remote.ts` tool
+targeted config rebuild. Compilation emits the `config-remote.mjs` command
 only when at least one remote target exists. Assembly and generic toggles follow
 valid symlinks while preserving the link itself as the mutable directory entry.
 

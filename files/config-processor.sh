@@ -52,27 +52,33 @@ case "$processor" in
               gsub("\\$\\{(?<key>[A-Za-z_][A-Za-z0-9_]*)\\}";
                 env[.key] // error("missing environment variable: " + .key))
             else . end);
-          if length != 2 then error($identity + ": expected exactly one JSON document in the input")
-          else .[0] as $base | .[1] as $input |
-          (if $settings.envsubst then ($input | substitute) else $input end) as $value |
-          if $settings.place == null then $base * $value
+          if length != 2 then
+            error($identity + ": expected exactly one JSON document in the input")
           else
-            ($settings.place.at | split(".")) as $path |
-            ($base | getpath($path)) as $old |
-            if $settings.place.as == "object" then
-              if ($value | type) != "object" then error($identity + ": expected JSON object")
-              elif $old != null and ($old | type) != "object" then error($identity + ": destination is not an object")
+            .[0] as $base | .[1] as $input |
+            (if $settings.envsubst then ($input | substitute) else $input end) as $value |
+            if $settings.place == null then
+              $base * $value
+            else
+              ($settings.place.at | split(".")) as $path |
+              ($base | getpath($path)) as $old |
+              if $settings.place.as == "object" then
+                if ($value | type) != "object" then error($identity + ": expected JSON object")
+                elif $old != null and ($old | type) != "object" then error($identity + ": destination is not an object")
+                else
+                  ($identity | split("/") | last | sub("\\.json$"; "")) as $slot |
+                  if $slot == "" then error($identity + ": empty filename slot")
+                  else $base | setpath($path; ($old // {}) * {($slot): $value}) end
+                end
+              elif $settings.place.as == "array" then
+                if ($value | type) != "array" then error($identity + ": expected JSON array")
+                elif $old != null and ($old | type) != "array" then error($identity + ": destination is not an array")
+                else $base | setpath($path; ($old // []) + $value) end
               else
-                ($identity | split("/") | last | sub("\\.json$"; "")) as $slot |
-                if $slot == "" then error($identity + ": empty filename slot")
-                else $base | setpath($path; ($old // {}) * {($slot): $value}) end
+                error($identity + ": unsupported placement")
               end
-            elif $settings.place.as == "array" then
-              if ($value | type) != "array" then error($identity + ": expected JSON array")
-              elif $old != null and ($old | type) != "array" then error($identity + ": destination is not an array")
-              else $base | setpath($path; ($old // []) + $value) end
-            else error($identity + ": unsupported placement") end
-          end end
+            end
+          end
         ' "$CONFIG_CANDIDATE" "$path" > "$next" || exit 1
       ) || { rm -f "$next"; exit 1; }
       mv "$next" "$CONFIG_CANDIDATE" || exit 1
