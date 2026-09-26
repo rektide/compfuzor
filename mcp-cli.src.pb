@@ -41,6 +41,8 @@
       - name: install-user.sh
         content: |
           mkdir -p ~/.config/mcp
-          ln -sfn $(pwd)/etc/mcp_servers.json ~/.config/mcp/mcp_servers.json
+          # Bake the deployment path at render time: $(pwd) would follow an
+          # ambient DIR exported by unrelated deployments' env.export files.
+          ln -sfn {{DIR}}/etc/mcp_servers.json ~/.config/mcp/mcp_servers.json
   tasks:
     - import_tasks: tasks/compfuzor.includes

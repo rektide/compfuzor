@@ -1,5 +1,40 @@
 # Configuration deployment log
 
+## 2026-09-26
+
+### mcp-cli live migration to portable MCP records
+
+`mcp-cli.src.pb` now declares a `mcp-portable` glob input
+(`place: {at: mcpServers, as: object, command_args: true, rename:
+{environment: env}}`), matching the loader's actual schema in its
+`src/config.ts`: `command` must be a string with separate `args`, and the
+environment map is named `env` — the deployed config's `environment:` blocks
+had been silently ignored all along. No `envsubst` is declared: mcp-cli
+substitutes `${VAR}` itself at load time (strict by default), so placeholders
+pass through and secrets stay out of the assembled file. Consequence: records
+carrying `${VAR}` (for example `github-mcp`) must not be imported unless the
+variables exist in the invoking shell — one missing variable fails every
+mcp-cli command, because substitution runs over the whole config.
+
+Live sequence on this host: rendered `mcp-cli.src.pb` with package/repo/run/link
+bypasses (107 ok), imported
+`config-remote.mjs put mcp-portable /etc/opt/codanna-mcp-git/etc/mcp.json
+codanna-mcp.json` (assembled output splits `command`/`args` correctly and
+replaces the pre-wrapped slot), and healed `~/.config/mcp/mcp_servers.json`
+from a stale regular-file copy into the intended symlink. Its `install-user.sh`
+previously used `$(pwd)` and inherited an ambient `DIR` from an unrelated
+deployment's `env.export`, linking the user config at the wrong deployment; the
+playbook now bakes `{{DIR}}` at render time. Verified end to end with
+`mcp-cli info codanna-mcp` (real stdio connection through the imported record).
+
+Deliberate migration prune (per procedure below): removed the deployment's
+dead pre-migration surface — `bin/mcp-config.sh`, `bin/mcp-disable.sh`,
+`bin/mcp-install.ts` (the old adapter installer), and the empty
+`etc/mcp-disabled/` — after confirming no references from the new surface and a
+clean `bin/status.sh` before and after. `etc/opencode.json` in that deployment
+is stale hand-written V1-shaped content; left in place for the operator to
+remove deliberately.
+
 ## 2026-09-14
 
 ### Experimental catalog flow authority
