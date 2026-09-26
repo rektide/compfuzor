@@ -609,6 +609,9 @@
       native `{env:VAR}` expression and ensure the server has that variable;
       `${VAR}` expansion writes the value into the assembled config. To avoid
       a stale server configuration, restart the service after changing MCPs.
+      Previously deployed `bin/mcp-dropin.ts` and `bin/mcp-dropin-core.ts`
+      may remain on disk: Compfuzor does not prune undeclared artifacts. They
+      are no longer generated or used; remove them deliberately if desired.
 
       ## Operational notes
 
