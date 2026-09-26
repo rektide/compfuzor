@@ -30,7 +30,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { lstat, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import {
@@ -50,6 +50,9 @@ Options:
   --to SCHEME    target scheme: https or http (required)
   FILE...        source files (default: /etc/apt/sources.list plus
                  /etc/apt/sources.list.d/*.list and *.sources)
+  --follow       edit through symlinks (they are skipped by default: a
+                 linked source file is managed elsewhere, e.g. a compfuzor
+                 deployment whose re-render would clobber the edit)
   --help, -h     this help
 
 Maintains just the URI row per entry, via block-in-file managed blocks
@@ -318,6 +321,7 @@ async function main(): Promise<number> {
     allowPositionals: true,
     options: {
       to: { type: "string" },
+      follow: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -340,12 +344,24 @@ async function main(): Promise<number> {
   let failures = 0;
   for (const path of files) {
     try {
-      const stat_ = await stat(path);
+      // lstat, not stat: see through the link rather than to the target, so
+      // compfuzor-managed symlinks are not silently edited behind their
+      // playbook (a re-render would clobber the change).
+      const stat_ = await lstat(path);
+      if (stat_.isSymbolicLink() && !args.values.follow) {
+        console.warn(`skip: ${path} is a symlink (managed elsewhere; --follow to edit through it)`);
+        continue;
+      }
       if (!stat_.isFile() && !stat_.isSymbolicLink()) {
         console.warn(`skip: ${path} is not a regular file`);
         continue;
       }
-      const msg = await processFile(path, target);
+      // --follow must edit the referent, not the link: block-in-file's
+      // atomic write (temp + rename) would REPLACE the symlink with a
+      // regular file while the surgical adoption wrote through it --
+      // a split-brain stale-target + destroyed-link outcome.
+      const filePath = stat_.isSymbolicLink() ? await realpath(path) : path;
+      const msg = await processFile(filePath, target);
       if (msg === null) console.log(`${path}: no flippable URIs (already ${target} or non-http)`);
       else console.log(msg);
     } catch (err) {

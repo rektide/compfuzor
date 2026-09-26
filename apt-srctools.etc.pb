@@ -14,6 +14,13 @@
 - hosts: all
   vars:
     TYPE: apt-srctools
+    # node resolves module type by walking up from bin/; without this marker
+    # every tool run prints a MODULE_TYPELESS_PACKAGE_JSON warning and pays
+    # a re-parse. For etc-type, ETC is the deployment root itself.
+    ETC_FILES:
+      - name: package.json
+        content: |
+          {"type": "module", "private": true}
     BINS:
       # Shared model + classic/deb822 parse/emit. Library, not a command.
       - name: apt-src-model.ts
@@ -63,7 +70,9 @@
         /etc/apt/sources.list.d) and move it to the target format.
       - `apt-src-scheme.ts --to https|http [FILE...]` -- flip the URI scheme
         on sources, maintaining just the URI row per entry via block-in-file
-        managed blocks where possible.
+        managed blocks where possible. Symlinked sources are skipped by
+        default (`--follow` to edit through them): a linked file is managed
+        by its deployment, and a re-render would clobber an on-disk edit.
 
       See design/apt-srctools/ for the JSON schema, the roundtrip fidelity
       map (what is bijective through JSON, what normalizes or is lossy), and
