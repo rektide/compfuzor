@@ -307,6 +307,9 @@ CONFIGS:
         place:
           at: mcp.servers               # dotted object path
           as: object                    # object | array; explicit, not inferred
+          command_args: true            # optional: split a command array
+          rename:                       # optional: rename record keys
+            environment: env
         envsubst:
           file: ../env.export           # relative to each real producer file
 ```
@@ -326,6 +329,21 @@ so a former local server's `command` cannot leak into a remote server with the
 same name. Use separate globs for pre-wrapped and
 portable records to avoid wrapping an already-wrapped record again.
 
+Two optional record adaptations run before object placement, in order:
+
+- `command_args: true` splits an array-valued `command` into `command` (the
+  first element, a string) plus `args` (the rest, appended after any existing
+  `args`) — the convention most MCP clients use (Claude, Cursor, amp, mcp-cli).
+  A `command` that is already a string passes through; an empty array fails
+  assembly. Records without `command` (for example remote servers) are
+  untouched.
+- `rename` maps top-level record keys to the client's vocabulary, for example
+  `environment: env` for mcp-cli, whose loader reads `env` and ignores
+  `environment`. Unlisted keys are left alone.
+
+Neither adaptation is inferred: a client declares the record shape it wants,
+and a mismatch fails loudly instead of guessing.
+
 `envsubst.file` opts into **single-pass**, JSON-aware `${NAME}` substitution
 in string values only. The file is sourced as shell code in a per-input
 subprocess; **only configure trusted producer `env.export` files**. Relative
@@ -344,11 +362,15 @@ no longer needed. Changing a producer record or env file changes assembly
 results, but the consumer must reassemble and restart/reload its application
 when appropriate.
 
-The OpenCode playbook opts into portable input placement. Amp and `mcp-cli`
-continue accepting their already-wrapped `mcp/*.json` fragments; they require
-`command`/`args` rewriting for local servers and have **not** opted into the
-portable input contract. Do not link a raw producer record into their existing
-glob. This interface does not silently infer client-specific field mappings.
+The OpenCode and `mcp-cli` playbooks opt into portable input placement.
+OpenCode consumes records as-is (`mcp.servers`, command arrays);
+`mcp-cli` declares `command_args: true` plus `rename: {environment: env}` for
+its `command`/`args`/`env` schema and relies on its own runtime `${VAR}`
+substitution instead of `envsubst`, keeping secrets out of the assembled file.
+Amp still accepts only its already-wrapped `mcp/*.json` fragments; it can
+adopt the same declaration when its schema is wanted. Do not link a raw
+producer record into a glob that has not declared `place`. This interface does
+not silently infer client-specific field mappings.
 
 ## Manual aliases
 
