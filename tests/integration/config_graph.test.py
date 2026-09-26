@@ -196,6 +196,11 @@ output.write_text(text)
         assert failed.returncode != 0 and "missing environment variable" in failed.stderr
         assert (payload / "etc" / "app.json").read_text() == original
         (producer / "etc" / "mcp.json").write_text('{"type":"local", "command":["echo"]}\n')
+        (producer / "env.export").write_text('return 1\n', encoding="utf-8")
+        failed = run([str(payload / "bin" / "config-assemble.sh"), "app"], cwd=payload, check=False, env=runtime_env)
+        assert failed.returncode != 0 and "failed to load JSON input environment file" in failed.stderr
+        assert (payload / "etc" / "app.json").read_text() == original
+        (producer / "env.export").write_text('export API_KEY=\'quoted"value\'\n', encoding="utf-8")
         (payload / "etc" / "plugins" / "10-plugin.json").write_text('{"not": "an array"}\n')
         failed = run([str(payload / "bin" / "config-assemble.sh"), "app"], cwd=payload, check=False, env=runtime_env)
         assert failed.returncode != 0 and "expected JSON array" in failed.stderr

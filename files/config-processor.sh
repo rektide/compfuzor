@@ -29,20 +29,21 @@ case "$processor" in
   json-deep-merge)
     printf '{}\n' > "$CONFIG_CANDIDATE"
     while IFS=$'\t' read -r _kind identity path settings; do
-      next=$(mktemp "$CONFIG_TRANSACTION/json.XXXXXX")
+      next=$(mktemp "$CONFIG_TRANSACTION/json.XXXXXX") || exit 1
       # Source the explicitly declared producer env in a subshell so each
       # fragment gets its own environment; never leak it into another input.
       (
-        env_file=$(jq -r '.envsubst.file // empty' <<<"$settings")
+        env_file=$(jq -r '.envsubst.file // empty' <<<"$settings") || exit 1
         if [ -n "$env_file" ]; then
           case "$env_file" in
             /*) ;;
-            *) env_file="$(dirname "$(realpath -- "$path")")/$env_file" ;;
+            *) resolved_source=$(realpath -- "$path") || exit 1
+               env_file="$(dirname "$resolved_source")/$env_file" ;;
           esac
           [ -f "$env_file" ] || { printf 'missing JSON input environment file: %s\n' "$env_file" >&2; exit 1; }
           set -a
           # This is a trusted, explicitly declared Compfuzor env.export file.
-          source "$env_file"
+          source "$env_file" || { printf 'failed to load JSON input environment file: %s\n' "$env_file" >&2; exit 1; }
           set +a
         fi
         jq -s --argjson settings "$settings" --arg identity "$identity" '
@@ -72,9 +73,9 @@ case "$processor" in
               else $base | setpath($path; ($old // []) + $value) end
             else error($identity + ": unsupported placement") end
           end end
-        ' "$CONFIG_CANDIDATE" "$path" > "$next"
+        ' "$CONFIG_CANDIDATE" "$path" > "$next" || exit 1
       ) || { rm -f "$next"; exit 1; }
-      mv "$next" "$CONFIG_CANDIDATE"
+      mv "$next" "$CONFIG_CANDIDATE" || exit 1
     done < "$CONFIG_INPUTS_FILE"
     ;;
   block-in-file)
