@@ -89,6 +89,10 @@
       DNS, and lease renewals. The static address is the stable anchor other
       systems pin to -- notably the k3s `--node-ip` (see the repo's
       doc/k3s-drift-recovery.md "static secondary IP + NODE_IP pin").
+      `k3s.srv.pb` installs `drift-guard.sh` as `ExecStartPre`, re-verifying
+      the pin is assigned before every k3s start: if this drop-in ever
+      vanishes, starts fail loudly instead of silently re-registering under
+      the DHCP address.
 
       ## Verify with `ip` -- NEVER ifconfig
 

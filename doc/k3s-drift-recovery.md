@@ -118,6 +118,25 @@ without touching the host's DHCP mobility:
 3. **One-time re-registration** — `sudo ./reset.sh --yes <static-ip>`
    re-points the etcd member peer URL at the pin; drift then cannot recur.
 
+### Verifying: use `ip`, never ifconfig
+
+net-tools `ifconfig` reads `SIOCGIFADDR` and can only ever show the
+kernel-**primary** address of an interface. Once the static drop-in lands,
+the static usually becomes primary — so `ifconfig` displays *only* the
+static and silently hides the live DHCP lease. That looks exactly like
+"DHCP stopped working" and is purely an observation artifact:
+
+```sh
+ip -4 -brief addr show eno1   # both addresses, always
+networkctl status eno1        # which is (DHCPv4 via ...), Network File + drop-in
+ip route show default         # proto dhcp proves DHCP authority
+```
+
+`systemd-iface-extra-addr`'s `apply.sh` re-checks all three after every
+run, and `drift-guard.sh` re-verifies the pin is assigned before every
+k3s start — a vanished drop-in fails loudly instead of silently
+re-registering the node under the DHCP address.
+
 Tailscale addresses (e.g. `100.76.116.2`) belong in `TLS_SANS` for remote
 API access; making one the node-ip would chain kube availability to
 tailscaled, so the LAN pin is preferred.
