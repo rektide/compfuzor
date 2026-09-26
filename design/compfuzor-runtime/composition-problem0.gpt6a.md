@@ -52,12 +52,23 @@ that must survive. Significant rework is welcome when justified.
 - **Take a bold pass at the single-tree problem.** Describe material locations,
   exposure locations, relativity, and link direction explicitly enough for
   runtime to understand and use them. “Containered” is an unsatisfactory name
-  for a capability not limited to containers.
+  for a capability not limited to containers. Material/exposure/placement is
+  a potential framing, not a required domain model; alternative concepts are
+  welcome if they make these behaviors understandable.
 - **Reuse declared link information where useful.** Confext selection could
   use regexes or a full gitignore-like rule language with selection rather
   than exclusion as its purpose. `fd`/`rg` are possible exploratory tools.
 - **Preserve execution controls.** Composition must not silently auto-run
   apply or defeat bypasses. Building an artifact must not imply activating it.
+- **Early shared runtime is on the table.** The operator is willing to make
+  runtime bootstrap an early Compfuzor obligation and assume stronger host
+  prerequisites. A common installed runtime, possibly with built-in actions,
+  may be preferable to redistributing a runtime into every deployment. Do not
+  preserve per-deployment distribution as a requirement. Verify existing
+  executable/alias arrangements rather than assuming `cf-r` or `cfr` already
+  exists. Explain bootstrap ordering, version compatibility, and the behavior
+  when the common runtime is missing. This also opens a credible executor for
+  pre-write project preparation; it does not eliminate bootstrap dependencies.
 
 ### Hypotheses, not requirements
 
@@ -137,7 +148,9 @@ and is not a generic sandbox.
 5. **Scope and relativity:** which roots and targets are named, and when are
    locations resolved? Containment alone does not guarantee relocatability.
 6. **Distribution:** statically bundled TypeScript contributions, dynamically
-   imported trusted modules, generated descriptors, or a combination?
+    imported trusted modules, generated descriptors, or a combination? How does
+    early host-wide runtime installation change contribution loading, built-in
+    actions, project portability, and version expectations?
 7. **Policy:** automatic execution, explicit invocation, concern-specific bypass,
    and generation bypass must remain distinguishable.
 8. **Selection:** namespace, precedence, negation/re-inclusion, missing matches,
@@ -150,6 +163,28 @@ through the examples above. Compare substantially different shapes, not just
 different names for the same registry. Show authored module/declaration examples,
 CLI discovery and invocation, the resulting plan, and an explanation of membership
 and order. Show how legacy BINS participates and what can be deleted or replaced.
+
+### Drafting guidelines for independent proposals
+
+These are tools for thought and comparison, not a mandatory template or a demand
+to solve every question in one draft:
+
+- Show what authors write and what users discover and invoke.
+- Walk representative shared examples: narrow/broad apply, apply followed by
+  related status, mixed phases, multiple consumers, and an iface confext build.
+- Explain where ordering and reuse are defined, what existing machinery is
+  retained or deleted, and what the design deliberately makes difficult.
+- Consider early shared runtime bootstrap and built-in capabilities alongside
+  contributed modules; state which host requirements the proposal assumes.
+- Propose your own domain model and allocation of responsibility. A single
+  registry/assembly engine, explicit membership records, universal hierarchy,
+  and phase groups are all open to challenge. Seek coherent alternatives, not
+  cosmetic variations of a presumed answer.
+
+For an independent wave, do not read the linked first answer draft or other
+agents' current-wave drafts before committing your own. The problem brief,
+prior research, apply proposal, and existing code are shared background. Later
+cross-review will deliberately bring the different answers together.
 
 Separate verified current behavior, operator requirements, and proposed semantics.
 Do not assume a runtime rewrite is necessary or that compatibility requires
