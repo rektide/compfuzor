@@ -68,7 +68,7 @@ def apt_sources(specs, defaults=None, signed_by=None):
     if not isinstance(specs, list) or not specs:
         raise AnsibleFilterError("APT/APTS must declare at least one source stanza")
     base = {"Types": "deb", **(defaults or {})}
-    if signed_by:
+    if signed_by and not any(name.lower() == "signed-by" for name in base):
         base["Signed-By"] = signed_by
     return "\n\n".join(_stanza(spec, base, ("Types", "URIs", "Suites")) for spec in specs) + "\n"
 
