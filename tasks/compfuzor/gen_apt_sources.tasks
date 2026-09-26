@@ -7,7 +7,7 @@
   set_fact:
     # Rendered artifacts for the filesystem pass and later publication.
     ETC_FILES: "{{ (ETC_FILES | default([])) + _apt_files }}"
-    BINS: "{{ (BINS | default([])) + [{'name': 'install-apt-sources.sh', 'phase': 'packages', 'generated': _install_script, 'bypass': false}] }}"
+    BINS: "{{ BINS | default([]) | merge_list(_apt_bin, preset='bins_generated', resolve=True) }}"
     # Delivery metadata is shared by render-time and install-time actions.
     _apt_source_name: "{{ _source_name }}"
     _apt_key_name: "{{ _key_name }}"
@@ -33,6 +33,11 @@
          + ([{'name': _key_name ~ '.' ~ _key_ext, 'src': _key_vendor, 'mode': '0644'}]
             if _key_vendor and not _key_url else []) }}
     _install_script: "{{ lookup('template', 'files/_apt_install_sources') }}"
+    _apt_bin:
+      name: install-apt-sources.sh
+      phase: packages
+      generated: "{{ _install_script }}"
+      bypass: false
 - name: "Compfuzor: validate deb822 output names"
   assert:
     that:
