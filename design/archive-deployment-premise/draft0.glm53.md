@@ -116,6 +116,39 @@ The operator's sync policy, replacing the runner's blanket moves:
 - Push phase placement: playbook run (opt-in `REPO_PUSH`?) vs separate operator
   command the playbook only notices.
 
+## Addendum: what the 2026-09-26 fleet push proved
+
+The rektide/tngl fleet push (≈1270 refs landed on rektide, 1261 on tngl)
+exercised every failure mode the intelligent sync must handle:
+
+- **Stale remote-tracking ⇒ false plans.** The local view of rektide was weeks
+  old, so `--dry-run`/`--all` planned ~150 bookmarks as `[add]` that the fork
+  already held at pre-rebase targets. Seven pushes failed with
+  "unexpectedly moved on the remote (reason: stale info)". A sync that fetches
+  (with `git.abandon-unreachable-commits=false`) *before* planning would have
+  computed the real per-bookmark deltas.
+- **Rebase-refresh divergence.** Tracking a remote bookmark whose target shares
+  no ancestry with local (the refresh workflow rebases lines onto new bases)
+  turns the local bookmark into a jj *conflict* — jj's own guard against
+  clobbering unknown remote state. That is the desired bail; resolution was a
+  deliberate operator decision ("local tips win", old tips already preserved
+  under dated names on both sides).
+- **Conflicted history blocks explicit pushes.** `working`'s range contains a
+  conflicted intermediate (`b66b6537`, jj-vcs work resolved later) and an empty
+  undescribed commit (`04319825`), so pushing it required both
+  `--allow-conflicts` and `--allow-empty-description`. Per-bookmark push
+  reporting should surface *why* (range-commit vs tip) rather than only naming
+  the first offender.
+- **Push targets behaved as specified.** rektide (primary) accepted the fleet;
+  tngl accepted 1261 refs including everything the rektide run skipped for
+  description reasons; conflicted/undescribed WIP tips
+  (`explicit-port-20260817`, `jj-vcs-rektide*`, `watchman*`,
+  `subagent-list-wip`, `watchman-design-wip0`) were refused per-bookmark and
+  left local — conflicts bail, as intended.
+- **Zombie pushes accumulate.** Two leftover `jj git push -b main` processes
+  (Sep 6 and Sep 20, one suspended) were found holding nothing; killed. A
+  sync tool that owns pushes should also surface/handle stale pushers.
+
 ## Cross-references
 
 - [`opencode.src.pb`](/opencode.src.pb) — the consumer that surfaced this; its
