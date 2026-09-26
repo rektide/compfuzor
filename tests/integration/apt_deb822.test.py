@@ -11,8 +11,15 @@ SCRATCH = ROOT / ".test-agent" / "apt-deb822"
 
 def render(name, overrides, expect_failure=False):
     root = SCRATCH / name
-    for directory in (root / "etc", root / "sources", root / "preferences", root / "keyrings"):
+    for directory in (root / "etc", root / "bin", root / "sources", root / "preferences", root / "keyrings"):
         directory.mkdir(parents=True, exist_ok=True)
+    for output in (
+        root / "sources/apt-probe.sources", root / "preferences/apt-probe.pref",
+        root / "keyrings/chrome-apt.gpg", root / "keyrings/test-key.gpg",
+        root / "etc/chrome-apt.gpg", root / "etc/test-key.gpg",
+    ):
+        if output.is_file() or output.is_symlink():
+            output.unlink()
     SCRATCH.mkdir(parents=True, exist_ok=True)
     (SCRATCH / "README.md").write_text("# apt-deb822 tests\n\nSandboxed render and publication probes.\n")
     for child in ("vars", "files"):
@@ -31,6 +38,8 @@ def render(name, overrides, expect_failure=False):
     NAME: apt-probe-main
     ETC: {etc}
     ETC_FILES: []
+    BINS: []
+    STATUSES: []
     APT_SOURCES_DIR: {sources}
     APT_PREFERENCES_DIR: {preferences}
     APT_KEYRINGS_DIR: {keyrings}
@@ -40,18 +49,36 @@ def render(name, overrides, expect_failure=False):
     - import_tasks: {vars_apt}
     - import_tasks: {gen}
       when: APT is defined or APTS is defined
+    - import_tasks: {gen_apt}
+      when: PKGS is defined
+    - import_tasks: {gen_bins}
+    - copy:
+        dest: "{{{{ ETC }}}}/../bin/install-apt-sources.sh"
+        content: "{{{{ item.generated }}}}"
+        mode: "0755"
+      loop: "{{{{ BINS | selectattr('name', 'equalto', 'install-apt-sources.sh') | list }}}}"
+    - copy:
+        dest: "{{{{ ETC }}}}/../bins.json"
+        content: "{{{{ BINS | to_json }}}}"
     - copy:
         dest: "{{{{ ETC }}}}/{{{{ item.name }}}}"
         content: "{{{{ item.content }}}}"
         mode: "0644"
       loop: "{{{{ ETC_FILES | selectattr('content', 'defined') | list }}}}"
+    - copy:
+        dest: "{{{{ ETC }}}}/{{{{ item.name }}}}"
+        src: "{{{{ item.src }}}}"
+        mode: "0644"
+      loop: "{{{{ ETC_FILES | selectattr('src', 'defined') | list }}}}"
     - import_tasks: {deliver}
-      when: APT is defined or APTS is defined
+      when: (APT is defined or APTS is defined) and not APT_BYPASS | default(false) | bool
 """.format(
             common=ROOT / "vars/common.yaml", etc=root / "etc", sources=root / "sources",
             preferences=root / "preferences", keyrings=root / "keyrings",
             vars_apt=ROOT / "tasks/compfuzor/vars_apt.tasks",
             gen=ROOT / "tasks/compfuzor/gen_apt_sources.tasks",
+            gen_apt=ROOT / "tasks/compfuzor/gen_apt.tasks",
+            gen_bins=ROOT / "tasks/compfuzor/gen_bins.tasks",
             deliver=ROOT / "tasks/compfuzor/apt_deb822.tasks",
         )
     )
@@ -84,6 +111,55 @@ def test_sources_override_legacy():
     assert "ignoring legacy" in log
     assert "APT_REPO" in log and "APT_PIN" in log
 
+    # The install-time leaf works even when there are no PKGS, and the
+    # render-time APT_BYPASS does not gate generation.
+    source.unlink()
+    (root / "preferences/apt-probe.pref").unlink()
+    command = ["bash", "-euo", "pipefail", str(root / "bin/install-apt-sources.sh")]
+    env = {**os.environ, "DIR": str(root), "COMPFUZOR_APT_SUDO": "", "COMPFUZOR_APT_UPDATE_BYPASS": "1"}
+    subprocess.run(command, cwd=ROOT, env=env, check=True)
+    assert source.is_symlink() and (root / "preferences/apt-probe.pref").is_symlink()
+    assert "install-apt-sources.sh" in [record["name"] for record in json.loads((root / "bins.json").read_text())]
+
+
+def test_sources_before_packages():
+    root, _ = render("packages", {"APT": {"URIs": "https://example.org"}, "PKGS": ["jq"]})
+    bins = json.loads((root / "bins.json").read_text())
+    install = next(record for record in bins if record["name"] == "install.sh")
+    assert install["run_all"].index("install-apt-sources.sh") < install["run_all"].index("install-apt.sh")
+
+
+def test_bypass_and_vendor_key():
+    root, _ = render("bypassed", {
+        "APT": {"URIs": "https://example.org"}, "APT_TRUSTED": "chrome-apt", "APT_BYPASS": True,
+    })
+    assert not (root / "sources/apt-probe.sources").exists()
+    assert "Signed-By: " + str(root / "keyrings/chrome-apt.gpg") in (root / "etc/apt-probe.sources").read_text()
+    assert (root / "etc/chrome-apt.gpg").is_file()
+    env = {**os.environ, "DIR": str(root), "COMPFUZOR_APT_SUDO": "", "COMPFUZOR_APT_UPDATE_BYPASS": "1"}
+    subprocess.run(["bash", "-euo", "pipefail", str(root / "bin/install-apt-sources.sh")], cwd=ROOT, env=env, check=True)
+    assert (root / "keyrings/chrome-apt.gpg").is_symlink()
+    assert (root / "sources/apt-probe.sources").is_symlink()
+
+
+def test_url_key_dearmor_at_install_time():
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    armored = SCRATCH / "test-key.asc"
+    with armored.open("w") as output:
+        subprocess.run(
+            ["gpg", "--no-default-keyring", "--keyring", str(ROOT / "files/apt-repos/chrome-apt.gpg"), "--armor", "--export"],
+            stdout=output, check=True,
+        )
+    root, _ = render("url-key", {
+        "APT": {"URIs": "https://example.org"}, "APT_KEYRING_URL": armored.as_uri(),
+        "APT_DEARMOR": True, "APT_BYPASS": True, "APT_TRUSTED": "test-key",
+    })
+    assert not (root / "etc/test-key.gpg").exists()
+    env = {**os.environ, "DIR": str(root), "COMPFUZOR_APT_SUDO": "", "COMPFUZOR_APT_UPDATE_BYPASS": "1"}
+    subprocess.run(["bash", "-euo", "pipefail", str(root / "bin/install-apt-sources.sh")], cwd=ROOT, env=env, check=True)
+    assert (root / "etc/test-key.gpg").read_bytes()[:1] != b"-"
+    assert (root / "keyrings/test-key.gpg").is_symlink()
+
 
 def test_invalid_empty_apt_does_not_fall_back():
     _, log = render("empty", {"APT": {}, "APT_REPO": "https://legacy.example.org"}, True)
@@ -92,5 +168,8 @@ def test_invalid_empty_apt_does_not_fall_back():
 
 if __name__ == "__main__":
     test_sources_override_legacy()
+    test_sources_before_packages()
+    test_bypass_and_vendor_key()
+    test_url_key_dearmor_at_install_time()
     test_invalid_empty_apt_does_not_fall_back()
     print("ok: deb822 source render and precedence")

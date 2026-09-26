@@ -1,0 +1,47 @@
+# Source delivery is independent of the apt packages lane. This script is a
+# generated BINS body; files/_bin provides its shell prologue and DIR.
+{% set source = _source_name ~ '.sources' %}
+{% set key = _key_name ~ '.' ~ _key_ext %}
+if [ "${COMPFUZOR_APT_SOURCES_BYPASS:-}" ]; then exit 0; fi
+SUDO_CMD="${COMPFUZOR_APT_SUDO-sudo}"
+[ "$(id -u)" -eq 0 ] && SUDO_CMD=
+{% if _key_url %}
+if [ ! -s "$DIR/etc/{{ key }}" ]; then
+    _apt_key_tmp="$(mktemp)"
+    trap 'rm -f -- "$_apt_key_tmp"' EXIT
+{% if APT_DEARMOR | default(false) | bool %}
+    curl -fsSL {{ _key_url | quote }} | gpg --dearmor >"$_apt_key_tmp"
+{% else %}
+    curl -fsSL {{ _key_url | quote }} >"$_apt_key_tmp"
+{% endif %}
+    ${SUDO_CMD} install -m 0644 -- "$_apt_key_tmp" "$DIR/etc/{{ key }}"
+    rm -f -- "$_apt_key_tmp"
+    trap - EXIT
+fi
+{% endif %}
+# A foreign file or link is not ours to replace. No implicit prune or force.
+_apt_link() {
+    local src="$1" dest="$2"
+    [ -f "$src" ] || { printf 'missing apt payload: %s\n' "$src" >&2; return 1; }
+    ${SUDO_CMD} mkdir -p -- "${dest%/*}"
+    if [ -L "$dest" ]; then
+        [ "$(readlink -- "$dest")" = "$src" ] || { printf 'foreign apt symlink: %s\n' "$dest" >&2; return 1; }
+    elif [ -e "$dest" ]; then
+        printf 'foreign apt file: %s\n' "$dest" >&2
+        return 1
+    else
+        ${SUDO_CMD} ln -s -- "$src" "$dest"
+    fi
+}
+{% if _key_vendor or _key_url %}
+_apt_link "$DIR/etc/{{ key }}" {{ ((APT_KEYRINGS_DIR | default('/usr/share/keyrings')) ~ '/' ~ key) | quote }}
+{% endif %}
+_apt_link "$DIR/etc/{{ source }}" {{ ((APT_SOURCES_DIR | default('/etc/apt/sources.list.d')) ~ '/' ~ source) | quote }}
+{% if _prefs %}
+_apt_link "$DIR/etc/{{ _source_name }}.pref" {{ ((APT_PREFERENCES_DIR | default('/etc/apt/preferences.d')) ~ '/' ~ _source_name ~ '.pref') | quote }}
+{% endif %}
+# Index refresh stays optional because apt-get update is expensive on repeat
+# installs; it must happen before install-apt.sh in the packages phase.
+if [ -z "${COMPFUZOR_APT_UPDATE_BYPASS:-}" ]; then
+    ${SUDO_CMD} apt-get update -o {{ ('Dir::Etc::sourcelist=sources.list.d/' ~ source) | quote }} -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0
+fi
