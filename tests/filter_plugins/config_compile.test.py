@@ -94,6 +94,28 @@ def test_compile():
 
 
 def test_validation():
+    plan = compile_config({"app.json": {"processor": "json-deep-merge", "inputs": [{
+        "glob": "portable/*.json", "remote": True,
+        "place": {"at": "mcp.servers", "as": "object"},
+        "envsubst": {"file": "../env.export"},
+    }]}}, "/etc")
+    check("placement compiled", plan["spec"]["configs"]["app"]["inputs"][0]["place"], {"at": "mcp.servers", "as": "object"})
+    check("envsubst compiled", plan["spec"]["configs"]["app"]["inputs"][0]["envsubst"], {"file": "../env.export"})
+    for item, message in [
+        ({"place": {"at": "mcp..servers", "as": "object"}}, "dotted path"),
+        ({"place": {"at": "mcp", "as": "something"}}, "must be object or array"),
+        ({"place": {"at": "mcp"}}, "exactly 'at' and 'as'"),
+        ({"envsubst": {"file": ""}}, "non-empty file path"),
+    ]:
+        check_raises("invalid JSON input transform", lambda item=item: compile_config({
+            "app.json": {"processor": "json-deep-merge", "inputs": [{"glob": "d/*.json", **item}]}
+        }, "/etc"), message)
+    check_raises("non-JSON placement", lambda: compile_config({
+        "app.conf": {"processor": "concat", "inputs": [{"glob": "d/*.conf", "place": {"at": "x", "as": "object"}}]}
+    }, "/etc"), "require the json-deep-merge processor")
+    check_raises("file placement needs slot", lambda: compile_config({
+        "app.json": {"processor": "json-deep-merge", "inputs": [{"file": "x.json", "place": {"at": "mcp", "as": "object"}}]}
+    }, "/etc"), "requires a glob input")
     check_raises(
         "removed artifact input",
         lambda: compile_config({"x.conf": {"processor": "concat", "inputs": [{"artifact": "y"}]}}, "/etc"),

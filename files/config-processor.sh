@@ -27,9 +27,54 @@ case "$processor" in
     while IFS=$'\t' read -r _kind _identity path _block; do cat "$path" >> "$CONFIG_CANDIDATE"; done < "$CONFIG_INPUTS_FILE"
     ;;
   json-deep-merge)
-    files=()
-    while IFS=$'\t' read -r _kind _identity path _block; do files+=("$path"); done < "$CONFIG_INPUTS_FILE"
-    if [ "${{ '{#' }}files[@]}" -eq 0 ]; then printf '{}\n' > "$CONFIG_CANDIDATE"; else jq -s 'reduce .[] as $item ({}; . * $item)' "${files[@]}" > "$CONFIG_CANDIDATE"; fi
+    printf '{}\n' > "$CONFIG_CANDIDATE"
+    while IFS=$'\t' read -r _kind identity path settings; do
+      next=$(mktemp "$CONFIG_TRANSACTION/json.XXXXXX")
+      # Source the explicitly declared producer env in a subshell so each
+      # fragment gets its own environment; never leak it into another input.
+      (
+        env_file=$(jq -r '.envsubst.file // empty' <<<"$settings")
+        if [ -n "$env_file" ]; then
+          case "$env_file" in
+            /*) ;;
+            *) env_file="$(dirname "$(realpath -- "$path")")/$env_file" ;;
+          esac
+          [ -f "$env_file" ] || { printf 'missing JSON input environment file: %s\n' "$env_file" >&2; exit 1; }
+          set -a
+          # This is a trusted, explicitly declared Compfuzor env.export file.
+          source "$env_file"
+          set +a
+        fi
+        jq -s --argjson settings "$settings" --arg identity "$identity" '
+          def substitute:
+            walk(if type == "string" then
+              gsub("\\$\\{(?<key>[A-Za-z_][A-Za-z0-9_]*)\\}";
+                env[.key] // error("missing environment variable: " + .key))
+            else . end);
+          .[0] as $base | .[1] as $input |
+          (if $settings.envsubst then ($input | substitute) else $input end) as $value |
+          if $settings.place == null then $base * $value
+          else
+            ($settings.place.at | split(".")) as $path |
+            ($base | getpath($path)) as $old |
+            if $settings.place.as == "object" then
+              if ($value | type) != "object" then error($identity + ": expected JSON object")
+              elif $old != null and ($old | type) != "object" then error($identity + ": destination is not an object")
+              else
+                ($identity | split("/") | last | sub("\\.json$"; "")) as $slot |
+                if $slot == "" then error($identity + ": empty filename slot")
+                else $base | setpath($path; ($old // {}) * {($slot): $value}) end
+              end
+            elif $settings.place.as == "array" then
+              if ($value | type) != "array" then error($identity + ": expected JSON array")
+              elif $old != null and ($old | type) != "array" then error($identity + ": destination is not an array")
+              else $base | setpath($path; ($old // []) + $value) end
+            else error($identity + ": unsupported placement") end
+          end
+        ' "$CONFIG_CANDIDATE" "$path" > "$next"
+      ) || { rm -f "$next"; exit 1; }
+      mv "$next" "$CONFIG_CANDIDATE"
+    done < "$CONFIG_INPUTS_FILE"
     ;;
   block-in-file)
     output=$(jq -r --arg config "$config" '.configs[$config].output' "$spec")

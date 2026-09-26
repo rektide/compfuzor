@@ -76,6 +76,14 @@ output.write_text(text)
           - glob: mcp/*.json
             name: mcp
             remote: true
+          - glob: portable/*.json
+            name: portable
+            remote: true
+            place: {{at: mcp.servers, as: object}}
+            envsubst: {{file: ../env.export}}
+          - glob: plugins/*.json
+            name: plugins
+            place: {{at: plugins, as: array}}
       shell.conf:
         processor: block-in-file
         remote: true
@@ -95,7 +103,7 @@ output.write_text(text)
         path: "{{{{ item }}}}"
         state: directory
         mode: '0770'
-      loop: "{{{{ SUBSYSTEM.config.contrib.DIRS + [ETC, BINS_DIR, ETC + '/core', ETC + '/mcp', ETC + '/shell.conf.d', ETC + '/policy.d'] }}}}"
+      loop: "{{{{ SUBSYSTEM.config.contrib.DIRS + [ETC, BINS_DIR, ETC + '/core', ETC + '/mcp', ETC + '/portable', ETC + '/plugins', ETC + '/shell.conf.d', ETC + '/policy.d'] }}}}"
     - copy:
         dest: "{{{{ ETC }}}}/config.spec.json"
         content: "{{{{ SUBSYSTEM.config.spec | to_nice_json }}}}"
@@ -125,7 +133,15 @@ output.write_text(text)
 
         (payload / "etc" / "base.json").write_text('{"base": true}\n')
         (payload / "etc" / "core" / "10-core.json").write_text('{"core": true}\n')
-        (payload / "etc" / "mcp" / "10-server.json").write_text('{"mcp": true}\n')
+        (payload / "etc" / "mcp" / "10-server.json").write_text('{"mcp": {"legacy": true}}\n')
+        producer = temporary / "producer"
+        (producer / "etc").mkdir(parents=True)
+        (producer / "env.export").write_text('export API_KEY=\'quoted"value\'\n', encoding="utf-8")
+        (producer / "etc" / "mcp.json").write_text(
+            '{"type":"remote","url":"https://example.test/mcp","headers":{"Authorization":"Bearer ${API_KEY}"}}\n',
+            encoding="utf-8",
+        )
+        (payload / "etc" / "plugins" / "10-plugin.json").write_text('["one", "two"]\n')
         (payload / "etc" / "shell.conf.d" / "10-first.conf").write_text("first\n")
         (payload / "etc" / "shell.conf.d" / "20-second.conf").write_text("second\n")
         (payload / "etc" / "policy.d" / "10-policy.conf").write_text("policy=true\n")
@@ -136,10 +152,16 @@ output.write_text(text)
         runtime_env.pop("DIR", None)
         runtime_env["CONFIG_BLOCK_IN_FILE"] = str(block_fixture)
 
+        # The generic remote manager links a portable producer record; the
+        # filename, not its original basename, supplies the object slot.
+        run([str(payload / "bin" / "config-remote.mjs"), "put", "portable", str(producer / "etc" / "mcp.json"), "docs.json"], cwd=payload, env=runtime_env)
+        assert (payload / "etc" / "portable" / "docs.json").is_symlink()
+        assert json.loads((payload / "etc" / "app.json").read_text())["mcp"]["servers"]["docs"]["headers"]["Authorization"] == 'Bearer quoted"value'
+
         listed = run([str(payload / "bin" / "config-assemble.sh"), "--list"], cwd=payload, env=runtime_env)
         assert listed.stdout.splitlines() == ["app", "policy", "shell"]
         run([str(payload / "bin" / "config-assemble.sh")], cwd=payload, env=runtime_env)
-        assert json.loads((payload / "etc" / "app.json").read_text()) == {"base": True, "core": True, "mcp": True}
+        assert json.loads((payload / "etc" / "app.json").read_text()) == {"base": True, "core": True, "mcp": {"legacy": True, "servers": {"docs": {"type": "remote", "url": "https://example.test/mcp", "headers": {"Authorization": 'Bearer quoted"value'}}}}, "plugins": ["one", "two"]}
         shell = (payload / "etc" / "shell.conf").read_text()
         assert "legacy-shell" not in shell and "unmanaged" in shell
         assert "shell/shell.conf.d/0/10-first.conf" in shell
@@ -158,7 +180,19 @@ output.write_text(text)
             env=runtime_env,
         )
         assert (payload / "etc" / "mcp" / "10-server.json.disabled").exists()
-        assert json.loads((payload / "etc" / "app.json").read_text()) == {"base": True, "core": True}
+        assert json.loads((payload / "etc" / "app.json").read_text())["mcp"]["servers"]["docs"]["type"] == "remote"
+
+        original = (payload / "etc" / "app.json").read_text()
+        (producer / "etc" / "mcp.json").write_text('{"url":"${UNSET_PORTABLE_TEST_VAR}"}\n')
+        failed = run([str(payload / "bin" / "config-assemble.sh"), "app"], cwd=payload, check=False, env=runtime_env)
+        assert failed.returncode != 0 and "missing environment variable" in failed.stderr
+        assert (payload / "etc" / "app.json").read_text() == original
+        (producer / "etc" / "mcp.json").write_text('{"type":"local", "command":["echo"]}\n')
+        (payload / "etc" / "plugins" / "10-plugin.json").write_text('{"not": "an array"}\n')
+        failed = run([str(payload / "bin" / "config-assemble.sh"), "app"], cwd=payload, check=False, env=runtime_env)
+        assert failed.returncode != 0 and "expected JSON array" in failed.stderr
+        assert (payload / "etc" / "app.json").read_text() == original
+        (payload / "etc" / "plugins" / "10-plugin.json").write_text('["one", "two"]\n')
 
         (payload / "etc" / "policy.d" / "10-policy.conf").write_text("policy=false\n")
         (payload / "etc" / "core" / "10-core.json").write_text('{"core": false}\n')

@@ -83,6 +83,33 @@ def _block(value, label, inherited=None):
     return block
 
 
+def _json_input_settings(item, label, processor):
+    """Validate optional JSON-only input transformations without guessing types."""
+    if "place" not in item and "envsubst" not in item:
+        return {}
+    if processor != "json-deep-merge":
+        _error("{}: place/envsubst require the json-deep-merge processor".format(label))
+    result = {}
+    if "place" in item:
+        if "glob" not in item:
+            _error("{}.place requires a glob input (the filename supplies the slot)".format(label))
+        place = _mapping(item["place"], "{}.place".format(label))
+        if set(place) != {"at", "as"}:
+            _error("{}.place requires exactly 'at' and 'as'".format(label))
+        at = place["at"]
+        if not isinstance(at, str) or not at or not all(_ID.fullmatch(part) and "." not in part for part in at.split(".")):
+            _error("{}.place.at must be a dotted path of non-empty names".format(label))
+        if place["as"] not in ("object", "array"):
+            _error("{}.place.as must be object or array".format(label))
+        result["place"] = place
+    if "envsubst" in item:
+        subst = _mapping(item["envsubst"], "{}.envsubst".format(label))
+        if set(subst) != {"file"} or not isinstance(subst["file"], str) or not subst["file"]:
+            _error("{}.envsubst requires exactly a non-empty file path".format(label))
+        result["envsubst"] = subst
+    return result
+
+
 @accept_args_markers
 def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled"):
     """Normalize CONFIGS and emit config subsystem contributions."""
@@ -174,12 +201,12 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled"):
             kind, value = typed[0]
             input_base = item.get("dir", base)
             if kind == "file":
-                unknown = set(item) - {"file", "dir", "block"}
+                unknown = set(item) - {"file", "dir", "block", "place", "envsubst"}
                 if unknown:
                     _error("file input has unknown settings: {}".format(", ".join(sorted(unknown))))
                 normalized_input = {"file": _path(input_base, value, "config file input")}
             else:
-                unknown = set(item) - {"glob", "dir", "name", "remote", "disabled_suffix", "block"}
+                unknown = set(item) - {"glob", "dir", "name", "remote", "disabled_suffix", "block", "place", "envsubst"}
                 if unknown:
                     _error("glob input has unknown settings: {}".format(", ".join(sorted(unknown))))
                 glob_path = _path(input_base, value, "config glob input")
@@ -203,6 +230,7 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled"):
                 if directory not in dirs:
                     dirs.append(directory)
                 glob_indices.append(index)
+            normalized_input.update(_json_input_settings(item, "CONFIGS.{}.inputs[{}]".format(output_key, index), processor))
             if processor == "block-in-file":
                 normalized_input["block"] = _block(item.get("block"), "CONFIGS.{}.inputs[{}].block".format(output_key, index), block)
             elif "block" in item:

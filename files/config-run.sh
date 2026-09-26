@@ -86,9 +86,9 @@ for config in "${configs[@]}"; do
     input_rows="$transaction/input-rows-${config}"
     if ! jq -r --arg config "$config" '
       .configs[$config].inputs[] |
-      (.block // {} | tojson) as $block |
-       if has("file") then ["file", .file, "-", "-", $block]
-       else ["glob", .directory, .pattern, (.disabled_suffix // "-"), $block]
+      ((.block // {}) + {place: (.place // null), envsubst: (.envsubst // null)} | tojson) as $settings |
+       if has("file") then ["file", .file, "-", "-", $settings]
+       else ["glob", .directory, .pattern, (.disabled_suffix // "-"), $settings]
       end | @tsv
     ' "$spec" > "$input_rows"; then
       printf '%s: failed to read compiled inputs\n' "$config" >&2
