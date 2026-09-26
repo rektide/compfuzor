@@ -104,4 +104,36 @@ successfully but its postcondition is false) to avoid a merely printable planner
 Nested composition and plan stability should be exposed by those examples rather
 than solved as a speculative universal graph.
 
+### Experiment 2 — parent assessment
+
+Read [the report](/design/compfuzor-runtime/experiment2.sxh.md) and scratch
+`kernel/{catalog,plan,run}.ts`. Accept reported demo/typecheck evidence without
+rerunning. The separation between **many contributed entries** and **one chosen
+implementation** is useful. Programs registered by independent modules and
+composed by ID are a stronger answer to broad participation than experiment 1.
+The contribution-set concept deserves keeping; the name `scope` may collide with
+existing user/system scope and should not become terminology by accident.
+
+**Important rejection:** program/query equality must not imply execution reuse.
+`plan.ts`'s global `seen` plus `run.ts`'s no-op reuse nodes can suppress a second
+status after intervening changes. Deduplicating overlapping collection selectors
+is different from deduplicating two authored calls. Default authored calls should
+be occurrences; explicitly shared invocation identity, if offered, needs separate
+semantics. No inferred memoization of effectful or observational programs.
+
+**Deeper limits:** the kernel hard-codes `ready` interpretation and script
+transport, and most extensibility still means bags of executable entries.
+Claims are local to one collection, not physical output identity. ID sorting
+does not establish prerequisites. These are acceptable probe limitations, but
+not features to bless as the backbone.
+
+**Experiment 3:** move to contributed data with domain interpreters. Use real
+scratch bytes, explicit ownership, two genuinely opposite link layouts and a
+build-only confext directory from the same declarations. Ask whether this changes
+the core beyond call scheduling, and where producer/consumer prerequisites live.
+Keep domain result interpretation outside the generic runner where possible;
+demonstrate repeated observation rather than inherited automatic program reuse.
+No host publication or extension activation. The experiment must expose output
+relationships, not merely register an opaque `confext.build` action.
+
 Completion means architectural learning, not acceptance of the prototype.
