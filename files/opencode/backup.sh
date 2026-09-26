@@ -132,7 +132,7 @@ main() {
 
   local targets=()
   read -ra targets <<<"${BACKUP_TARGETS}"
-  if [ "${#targets[@]}" -eq 0 ]; then
+  if [ -z "${targets[*]:-}" ]; then
     printf 'error: no backup targets configured (BACKUP_TARGETS is empty)\n' >&2
     exit 1
   fi
@@ -162,8 +162,10 @@ main() {
   if [ -d "$CONFIG_SRC" ]; then sources+=("$CONFIG_SRC"); fi
 
   local failures=0
+  local total=0
   local target data_dst config_dst
   for target in "${targets[@]}"; do
+    total=$((total + 1))
     data_dst="${target%/}/opencode"
     config_dst="${target%/}/opencode-config"
     if [ ! -d "$target" ]; then
@@ -184,7 +186,7 @@ main() {
   done
 
   if [ "$failures" -gt 0 ]; then
-    printf 'error: %d of %d backup targets were missing or unmounted\n' "$failures" "${#targets[@]}" >&2
+    printf 'error: %d of %d backup targets were missing or unmounted\n' "$failures" "$total" >&2
     exit 1
   fi
 
