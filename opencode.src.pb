@@ -55,7 +55,13 @@
     #GIT_FORCE: True
     PKGS:
       - binutils
-    BACKUP_TARGET: /mnt/fu/backup/opencode-2026-5
+    # Backup destinations mirrored in order by bin/backup.sh (space-joined
+    # into its BACKUP_TARGETS default). fu is NTFS via fuseblk, bitblaster
+    # is CIFS. A missing/unmounted target is skipped with a warning but
+    # fails the run overall.
+    BACKUP_TARGETS:
+      - /mnt/fu/backup/opencode-2026-5
+      - /mnt/bitblaster/backup/opencode/
     # The primary stores its credential under ~/.config/opencode/secrets
     # (which is the symlink to the primary ETC dir); secondaries get their
     # own suffixed directory because ~/.config/opencode stays primary-owned.
@@ -304,8 +310,9 @@
       (`~/.local/share/opencode`, `~/.local/state/opencode`) hold auth,
       repositories, snapshots, and logs for all instances; the Watchman socket
       is the single canonical user daemon. `backup.sh` mirrors that shared data
-      root, so per-instance backup targets are an operator choice, not an
-      isolation boundary.
+      root to every `BACKUP_TARGETS` destination (the fu mount and
+      `/mnt/bitblaster/backup/opencode/` by default), so per-instance backup
+      targets are an operator choice, not an isolation boundary.
 
       The persisted 43-character password lives at `${OPENCODE_PASSWORD_FILE}`
       with mode 0600. systemd copies it into a read-only runtime credential;
@@ -493,6 +500,23 @@
       Existing default-world processes and registrations on port 49374 may
       coexist and share the channel database; concurrent SQLite writers are
       supported but can contend.
+
+      ## Backups
+
+      `bin/backup.sh` mirrors `~/.local/share/opencode/` — the shared data
+      root for all instances: auth, DBs, sessions, snapshots, logs — to every
+      `BACKUP_TARGETS` destination (the fu mount and
+      `/mnt/bitblaster/backup/opencode/` by default). The mirror uses
+      `--delete`, so it holds the current live state, not history. Old DB
+      generations are preserved by dated `consistent-snapshot-<stamp>/` dirs
+      (sqlite3 `.backup` + `integrity_check` + sha256 — see
+      `consistent-snapshot-20260923T185710/` on the fu target); automating
+      that with btrfs snapshots is a tracked TODO in the script, blocked by
+      both current targets being NTFS/CIFS rather than btrfs.
+
+          {{DIR}}/bin/backup.sh --db-only   # fast DB+auth refresh
+          {{DIR}}/bin/backup.sh --config    # data + ~/.config/opencode
+          BACKUP_ROOT=<dir> {{DIR}}/bin/backup.sh   # single ad-hoc target
 
       ## CORS origins
 
