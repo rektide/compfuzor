@@ -131,7 +131,7 @@ output.write_text(text)
         assert "config-remote.mjs" in plan["bins"]
         assert len([name for name in plan["bins"] if name.startswith("config-remote")]) == 1
 
-        (payload / "etc" / "base.json").write_text('{"base": true}\n')
+        (payload / "etc" / "base.json").write_text('{"base": true, "mcp": {"servers": {"docs": {"type": "local", "command": ["stale"]}}}}\n')
         (payload / "etc" / "core" / "10-core.json").write_text('{"core": true}\n')
         (payload / "etc" / "mcp" / "10-server.json").write_text('{"mcp": {"legacy": true}}\n')
         producer = temporary / "producer"
@@ -157,9 +157,19 @@ output.write_text(text)
         run([str(payload / "bin" / "config-remote.mjs"), "put", "portable", str(producer / "etc" / "mcp.json"), "docs.json"], cwd=payload, env=runtime_env)
         assert (payload / "etc" / "portable" / "docs.json").is_symlink()
         assert json.loads((payload / "etc" / "app.json").read_text())["mcp"]["servers"]["docs"]["headers"]["Authorization"] == 'Bearer quoted"value'
+        assert "command" not in json.loads((payload / "etc" / "app.json").read_text())["mcp"]["servers"]["docs"]
+        second = temporary / "second-producer"
+        (second / "etc").mkdir(parents=True)
+        (second / "env.export").write_text('export API_KEY=second\n', encoding="utf-8")
+        (second / "etc" / "mcp.json").write_text('{"url":"${API_KEY}"}\n', encoding="utf-8")
+        run([str(payload / "bin" / "config-remote.mjs"), "put", "portable", str(second / "etc" / "mcp.json"), "second.json"], cwd=payload, env=runtime_env)
+        servers = json.loads((payload / "etc" / "app.json").read_text())["mcp"]["servers"]
+        assert servers["second"]["url"] == "second"
+        assert servers["docs"]["headers"]["Authorization"] == 'Bearer quoted"value'
+        run([str(payload / "bin" / "config-remote.mjs"), "remove", "portable", "second.json"], cwd=payload, env=runtime_env)
         run([str(payload / "bin" / "config-remote.mjs"), "disable", "portable", "docs.json"], cwd=payload, env=runtime_env)
         assert (payload / "etc" / "portable" / "docs.json.disabled").is_symlink()
-        assert "servers" not in json.loads((payload / "etc" / "app.json").read_text())["mcp"]
+        assert json.loads((payload / "etc" / "app.json").read_text())["mcp"]["servers"]["docs"]["command"] == ["stale"]
         run([str(payload / "bin" / "config-remote.mjs"), "enable", "portable", "docs.json"], cwd=payload, env=runtime_env)
 
         listed = run([str(payload / "bin" / "config-assemble.sh"), "--list"], cwd=payload, env=runtime_env)

@@ -321,8 +321,9 @@ config transactionally. With `as: object`, each input must be a JSON object;
 `example.json` places it at `mcp.servers.example`. With `as: array`, each
 input must be an array, and its elements are appended at `at` in sorted file
 order; the filename does not become a key. A pre-existing destination with the
-wrong type fails assembly. A new slot overrides an older value at that slot,
-just like an ordinary deep-merge input. Use separate globs for pre-wrapped and
+wrong type fails assembly. A named slot replaces its entire previous record,
+so a former local server's `command` cannot leak into a remote server with the
+same name. Use separate globs for pre-wrapped and
 portable records to avoid wrapping an already-wrapped record again.
 
 `envsubst.file` opts into **single-pass**, JSON-aware `${NAME}` substitution

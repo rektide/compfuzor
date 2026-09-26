@@ -68,7 +68,7 @@ case "$processor" in
                 else
                   ($identity | split("/") | last | sub("\\.json$"; "")) as $slot |
                   if $slot == "" then error($identity + ": empty filename slot")
-                  else $base | setpath($path; ($old // {}) * {($slot): $value}) end
+                  else $base | setpath($path + [$slot]; $value) end
                 end
               elif $settings.place.as == "array" then
                 if ($value | type) != "array" then error($identity + ": expected JSON array")
