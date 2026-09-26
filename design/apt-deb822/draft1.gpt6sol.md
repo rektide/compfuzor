@@ -67,3 +67,5 @@ must not depend on the package `gen_apt.tasks` running.
 - [`draft0.glm53m.md`](/design/apt-deb822/draft0.glm53m.md) — initial assessment and proposed defaults.
 - [`doc/subsys.md`](/doc/subsys.md) — packages-lane ordering and bypass semantics.
 - [`skill/systemd.md`](/skill/systemd.md) — mapping-over-defaults authoring precedent.
+- [`doc/apt.md`](/doc/apt.md) — implemented authoring and delivery contract;
+  consult this instead of this historical checkpoint for current behavior.
