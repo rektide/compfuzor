@@ -136,4 +136,34 @@ demonstrate repeated observation rather than inherited automatic program reuse.
 No host publication or extension activation. The experiment must expose output
 relationships, not merely register an opaque `confext.build` action.
 
+### Experiment 3 — parent assessment
+
+Read [the report](/design/compfuzor-runtime/experiment3.sxh.md) and scratch
+`kernel/model.ts`, `programs/material.ts`, and `domain/material.ts`. Accept
+reported demo/typecheck results. Real opposite links, file modes, selection,
+producer prerequisites and confext-shaped output make this the strongest
+material evidence yet. Descriptions and callable operations are complementary;
+placement is not meaningfully recoverable from opaque handler lists alone.
+
+**Limits that matter to backbone design:** the generic-looking kernel model
+still names the material domain directly; several contributed programs are thin
+forwarders to one powerful domain object. This does not yet demonstrate a common
+extensibility seam for unrelated domains. `inspect()` gets expected hashes from
+an in-memory WeakMap keyed by plan: a fresh invocation can no longer detect byte
+drift reliably. `buildConfext()` regenerates selected material rather than proving
+reuse of existing build materials. Status currently requires an exposure link,
+so artifact-only material health is not independently described. These are
+architectural questions, not demands to polish the throwaway implementation.
+
+**Experiment 4:** test a single coherent library/runner across processes and
+domains. A checkout-local executable exposes a scratch global entry using its
+own registered installation operation, then the global entry operates on a
+different not-yet-created project. Preparation is an explicit first-write
+precondition (ordinary scratch directory, not pretend btrfs support). Later
+processes inspect and package persisted material evidence, detect tampering, and
+distinguish reuse from explicitly requested production. Verify absence/mismatch
+and required-skip behavior before misleading success or unwanted writes. Do not
+hard-code every scenario into the generic dispatcher; expose any remaining need
+for host-driver glue honestly. Preserve manual apply and no host activation.
+
 Completion means architectural learning, not acceptance of the prototype.
