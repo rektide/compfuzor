@@ -142,3 +142,51 @@ DOS endings, chattr attributes, and `--additive` merging were not exercised:
 none of them bear on "maintain exactly one existing row". The removal family
 (`--remove`, `--remove-orphans`) was not needed because apt-srctools never
 removes rows.
+
+## Addendum: status and settled intent (2026-09-26)
+
+Post-wave update after discussion with rektide; supersedes parts of the
+numbered items above where noted.
+
+**#1 adoption and #2 fail-closed: implemented and closed** in
+block-in-file as bd tickets `bif-adopt-line` (`--adopt REGEX`) and
+`bif-create-false-gates` (`--create false` now errors without writing when
+the block or file is absent — a bugfix per the README's documented meaning).
+Verified from repo source against a live deb822 fixture; the *deployed*
+compfuzor standalone is still v1.0.0 and predates both — rebuild/redeploy is
+gated until all BIF work lands, then apt-src-scheme.ts drops its surgical
+adoption path (keeping verification + fallback).
+
+**#3 provenance: settled as a two-stage `--source-label` ticket pair.**
+Preliminary: `--source-label <text>` sets the provenance line's value —
+semi-free-form and opaque to BIF, with an encouraged convention of a
+path/glob that materially identifies the managing source (e.g.
+`files/apt-srctools/apt-src-scheme.ts`); unset keeps today's default.
+Batched later: `--source-label none|false` omits the line entirely. No short
+aliases; marker-tag relocation considered and deliberately deferred. Intent:
+provenance exists to help operators tell what manages a row and where to go
+change it.
+
+**#4 blank lines: settled as `--blank-lines keep|never|separators`,
+default `keep`**, with per-regime semantics: adopt/update-in-place and
+anchored inserts preserve surrounding context byte-for-byte under `keep`
+(the new `--adopt` makes this the natural default); `never` is a hard
+no-emitted-blanks guarantee for mid-stanza maintainers; `separators` makes a
+fresh unanchored (EOF) insert ensure exactly one blank line before its begin
+marker. Caveat carried on the ticket: under `keep`, unanchored inserts into
+stanza formats still risk merging into a trailing stanza — that regime
+remains caller responsibility unless `separators` is chosen.
+
+**#5 (block identity): untouched, planned as a joint session.**
+
+**Symlinks:** a separate research proposal landed at
+`~/src/block-in-file/.design/symlinks/draft.gpt-6-sol.md` (recommending
+`--symlink=follow` default with explicit `replace`/`error`, realpath before
+all writes, backups beside the referent); the `bif-symlinks` ticket now
+carries its pointer and the source corrections it found. Consumer-side,
+apt-src-scheme.ts already defaults to skipping symlinks and realpaths under
+`--follow`.
+
+**Sequencing gate:** #5 joint session -> batch-file the #3 pair, #4, and
+whatever #5 and the symlink proposal yield -> one sol-medium implements ->
+rebuild/redeploy BIF -> rewire apt-src-scheme.ts onto `--adopt`.
