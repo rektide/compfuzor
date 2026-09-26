@@ -76,5 +76,32 @@ specifications. A surprising first result should change subsequent questions.
 
 ## Checkpoints
 
-Pending: experiment 1. Assessments will be recorded as experiments complete;
-completion means architectural learning, not acceptance of the prototype.
+### Experiment 1 — parent assessment
+
+[Sol's report](/design/compfuzor-runtime/experiment1.sxh.md) and the scratch
+`kernel/{contracts,library,runner}.ts` and `consumers/selection.ts` were read.
+Reported demo/typecheck results are accepted; no duplicate verification run.
+
+**Useful reinterpretation:** capability providers do not own every consumer's
+composition. Consumers author reusable programs; CLI routes become a view rather
+than the core. Reusing the status program within apply is concretely demonstrated.
+
+**Not yet demonstrated:** broad easy contribution. `selection.ts` hard-codes
+source names per contract, `Library.require()` requires exactly one matching
+provider per subject, and `Program` remains a flat sequence of stage/call arrays.
+Thus implementation choice (one provider) and additive contribution (many useful
+pieces) are conflated. Adding a new independently useful source may require
+editing consumers. Moreover source names are self-declared labels in the toy,
+not authenticated trust; its acceptance mechanism is composition filtering, not
+a security boundary. Do not let the next probe become primarily security plumbing.
+
+**Next experiment:** distinguish choosing a capability implementation from
+collecting independently contributed work, and make programs reusable/discoverable
+contributions too. Test whether a new module can enrich an intended composition
+without edits to its consumer, while that consumer can still deliberately bind
+its contribution set. Require execution-result interpretation (an observation ran
+successfully but its postcondition is false) to avoid a merely printable planner.
+Nested composition and plan stability should be exposed by those examples rather
+than solved as a speculative universal graph.
+
+Completion means architectural learning, not acceptance of the prototype.
