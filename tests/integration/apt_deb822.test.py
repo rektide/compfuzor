@@ -19,7 +19,7 @@ def render(name, overrides, expect_failure=False):
     if "ETC" in overrides:
         Path(overrides["ETC"]).mkdir(parents=True, exist_ok=True)
     for output in (
-        root / "sources/apt-probe.sources", root / "preferences/apt-probe.pref",
+        root / "sources/apt-probe-main.sources", root / "preferences/apt-probe-main.pref",
         root / "keyrings/chrome-apt.gpg", root / "keyrings/test-key.gpg",
         root / "etc/chrome-apt.gpg", root / "etc/test-key.gpg",
     ):
@@ -52,6 +52,9 @@ def render(name, overrides, expect_failure=False):
     APT_UPDATE_BYPASS: true
   tasks:
     - import_tasks: {vars_apt}
+    - copy:
+        dest: "{{{{ ETC }}}}/../source-name"
+        content: "{{{{ APT_SOURCELIST }}}}"
     - import_tasks: {gen}
       when: APT is defined or APTS is defined
     - import_tasks: {gen_apt}
@@ -107,23 +110,23 @@ def test_sources_override_legacy():
         "APT_PIN": "release n=legacy", "APT_PIN_PRIORITY": 200,
         "APT_PREFS": {"Pin": "release n=stable", "Pin-Priority": 600},
     })
-    source = root / "sources/apt-probe.sources"
+    source = root / "sources/apt-probe-main.sources"
     assert source.is_symlink()
     assert "By-Hash: yes" in source.read_text()
     assert "legacy.example.org" not in source.read_text()
-    assert not (root / "sources/apt-probe.list").exists()
-    assert (root / "preferences/apt-probe.pref").read_text() == "Package: *\nPin: release n=stable\nPin-Priority: 600\n"
+    assert not (root / "sources/apt-probe-main.list").exists()
+    assert (root / "preferences/apt-probe-main.pref").read_text() == "Package: *\nPin: release n=stable\nPin-Priority: 600\n"
     assert "ignoring legacy" in log
     assert "APT_REPO" in log and "APT_PIN" in log
 
     # The install-time leaf works even when there are no PKGS, and the
     # render-time APT_BYPASS does not gate generation.
     source.unlink()
-    (root / "preferences/apt-probe.pref").unlink()
+    (root / "preferences/apt-probe-main.pref").unlink()
     command = ["bash", "-euo", "pipefail", str(root / "bin/install-apt-sources.sh")]
     env = {**os.environ, "DIR": str(root), "COMPFUZOR_APT_SUDO": "", "COMPFUZOR_APT_UPDATE_BYPASS": "1"}
     subprocess.run(command, cwd=ROOT, env=env, check=True)
-    assert source.is_symlink() and (root / "preferences/apt-probe.pref").is_symlink()
+    assert source.is_symlink() and (root / "preferences/apt-probe-main.pref").is_symlink()
     assert "install-apt-sources.sh" in [record["name"] for record in json.loads((root / "bins.json").read_text())]
     source.unlink()
     source.write_text("foreign source\n")
@@ -143,26 +146,26 @@ def test_materialized_etc_matches_both_delivery_passes():
     root = SCRATCH / "external-etc"
     materialized = root / "materialized"
     rendered, _ = render("external-etc", {"APT": {"URIs": "https://example.org"}, "ETC": str(materialized)})
-    source = rendered / "sources/apt-probe.sources"
-    assert source.is_symlink() and source.readlink() == materialized / "apt-probe.sources"
+    source = rendered / "sources/apt-probe-main.sources"
+    assert source.is_symlink() and source.readlink() == materialized / "apt-probe-main.sources"
     env = {**os.environ, "DIR": str(rendered), "COMPFUZOR_APT_SUDO": "", "COMPFUZOR_APT_UPDATE_BYPASS": "1"}
     subprocess.run(["bash", "-euo", "pipefail", str(rendered / "bin/install-apt-sources.sh")], cwd=ROOT, env=env, check=True)
-    assert source.readlink() == materialized / "apt-probe.sources"
+    assert source.readlink() == materialized / "apt-probe-main.sources"
 
 
 def test_bypass_and_vendor_key():
     root, _ = render("bypassed", {
         "APT": {"URIs": "https://example.org"}, "APT_TRUSTED": "chrome-apt", "APT_BYPASS": True,
     })
-    assert not (root / "sources/apt-probe.sources").exists()
-    assert "Signed-By: " + str(root / "keyrings/chrome-apt.gpg") in (root / "etc/apt-probe.sources").read_text()
+    assert not (root / "sources/apt-probe-main.sources").exists()
+    assert "Signed-By: " + str(root / "keyrings/chrome-apt.gpg") in (root / "etc/apt-probe-main.sources").read_text()
     assert (root / "etc/chrome-apt.gpg").is_file()
     (root / "etc").chmod(0o700)
     env = {**os.environ, "DIR": str(root), "COMPFUZOR_APT_SUDO": "", "COMPFUZOR_APT_UPDATE_BYPASS": "1"}
     subprocess.run(["bash", "-euo", "pipefail", str(root / "bin/install-apt-sources.sh")], cwd=ROOT, env=env, check=True)
     assert (root / "etc").stat().st_mode & 0o005 == 0o005
     assert (root / "keyrings/chrome-apt.gpg").is_symlink()
-    assert (root / "sources/apt-probe.sources").is_symlink()
+    assert (root / "sources/apt-probe-main.sources").is_symlink()
 
 
 def test_url_key_dearmor_at_install_time():
@@ -189,6 +192,25 @@ def test_invalid_empty_apt_does_not_fall_back():
     assert "requires URIs" in log
 
 
+def test_apts_only_and_legacy_name():
+    root, _ = render("multiple", {
+        "APTS": [
+            {"URIs": "https://one.example.org", "Suites": "stable"},
+            {"URIs": "https://two.example.org", "Suites": "/", "Components": [], "Enabled": False},
+        ],
+        "APT_REPO": "https://ignored.example.org",
+    })
+    text = (root / "sources/apt-probe-main.sources").read_text()
+    assert text.count("URIs:") == 2 and "Enabled: no" in text
+    assert "Components: main" in text.split("\n\n")[0]
+    assert "Components:" not in text.split("\n\n")[1]
+    assert "ignored.example.org" not in text
+    assert (root / "source-name").read_text() == "apt-probe-main"
+
+    old, _ = render("legacy-name", {"APT_REPO": "https://old.example.org"})
+    assert (old / "source-name").read_text() == "apt-probe"
+
+
 def test_apt_accepts_inline_signed_by():
     """APT's actual deb822 parser accepts the encoded multiline keyblock."""
     key = subprocess.run(
@@ -212,5 +234,6 @@ if __name__ == "__main__":
     test_bypass_and_vendor_key()
     test_url_key_dearmor_at_install_time()
     test_invalid_empty_apt_does_not_fall_back()
+    test_apts_only_and_legacy_name()
     test_apt_accepts_inline_signed_by()
     print("ok: deb822 source render and precedence")

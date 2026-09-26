@@ -1,10 +1,11 @@
 # APT sources: deb822 declarations and delivery
 
 `APT:` declares one deb822 source stanza; `APTS:` declares several in one
-`<APT_SOURCELIST|TYPE>.sources` file. Keys are apt field names, not a fixed
+`<APT_SOURCELIST|NAME>.sources` file. Keys are apt field names, not a fixed
 Compfuzor schema. The defaults from [`vars/apt.yaml`](/vars/apt.yaml) supply
 `Types: deb`, `Suites: APT_DEFAULT_DISTRIBUTION` and `Components:
-APT_DEFAULT_COMPONENT`; an authored field wins. `APT_DEFAULTS:` can override
+ APT_DEFAULT_COMPONENT`; an authored field wins. The old `.list` path still
+defaults to `<TYPE>.list`. `APT_DEFAULTS:` can override
 the default map. Values can be scalars or space-joined lists; `[]` or `null`
 omits a field (for example, `Components: []` for a flat `/` suite). Booleans
 emit `yes`/`no`, except `Components: false` also omits that default. The
@@ -27,7 +28,7 @@ For source packages, declare `Types: [deb, deb-src]`. For several independent
 stanzas, use `APTS: [{URIs: ..., Suites: ...}, ...]`; `APT` plus `APTS`
 concatenates in that order. To change apt preferences, use `APT_PREFS` as a
 mapping or list of maps: `Pin` and `Pin-Priority` required, `Package` defaults
-to `*`. This writes `<APT_SOURCELIST|TYPE>.pref` under
+to `*`. This writes `<APT_SOURCELIST|NAME>.pref` under
 `/etc/apt/preferences.d`:
 
 ```yaml

@@ -1,7 +1,8 @@
 - name: "Compfuzor: source apt variables"
   set_fact:
   vars:
-    _sourcelist: "{{APT_SOURCELIST|def(TYPE, NAME)}}"
+    # Deb822 instances get distinct filenames; legacy .list keeps TYPE.
+    _sourcelist: "{{ APT_SOURCELIST | def(NAME if APT is defined or APTS is defined else TYPE) }}"
     _trusted: "{{APT_TRUSTED|def(TYPE, NAME)}}"
     _arch: "{{APT_ARCH|default(ARCH)}}"
     _name: "{{TYPE}}"
