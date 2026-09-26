@@ -277,7 +277,7 @@ bytes into a directory artifact and writes a sidecar manifest. It never calls
 
 ```text
 scratch/target-project/outputs/iface-final/
-  etc/extension-release.d/extension-release.iface-fixture
+  etc/extension-release.d/extension-release.iface-final
   etc/systemd/network/10-ens3-static-only.network
   etc/systemd/network/en.network.d/systemd-iface-extra-addr-eno1.conf
 scratch/target-project/outputs/iface-final.manifest.json
@@ -294,6 +294,10 @@ The artifact is **directory-form**; no image/verity/DDI or installation is
 implied. Confext release location and `_any`/`CONFEXT_SCOPE` policy carry
 forward the local-systemd source checks in
 [experiment 3](/design/compfuzor-runtime/experiment3.sxh.md#build-only-directory-form-confext-from-intended-destinations).
+The release **basename must match the directory image name**; it is now
+derived from `artifactName` rather than fixed to the default name. The probe
+deliberately rejects `_`/`+` image-name suffix conventions instead of
+implementing systemd's suffix truncation rules.
 The builder checks health before considering a named output; it refuses to
 overwrite an existing artifact and never prunes old outputs.
 
@@ -349,6 +353,39 @@ with extension overlays, production runtime packaging/installation/upgrade,
 and image/DDI formats or actual systemd validation. Node and target-root
 bootstrap inputs remain genuinely external. Neither a fake symlink nor a
 marker claims to implement real host permissions or btrfs.
+
+### Review correction and remaining proof boundary
+
+**Correction (2026-09-26):** The initial experiment-4 report described
+`outputs/iface-final/` containing `extension-release.iface-fixture`. That
+was a real naming bug, not a valid custom-named confext directory. In the
+local systemd checkout, [`os-util.c` L44–46,L239–245](~/archive/systemd/systemd/src/basic/os-util.c)
+looks for `/etc/extension-release.d/extension-release.<image-name>`;
+[`path_extract_image_name()` L67–92](~/archive/systemd/systemd/src/basic/os-util.c)
+extracts a directory's name and truncates `_`/`+` suffixes. The prototype
+now writes `extension-release.${name}` where `name` is the output directory
+basename and restricts names to a subset without those suffixes. The demo
+asserts **matching 0644 release files** for all three successful custom
+directories: `iface-healthy`, `iface-final`, and `iface-selected-only`.
+`node .test-agent/cfr-backbone/experiment4/demo.ts` and the existing-tool
+`tsgo` command above passed after correction; inspecting each output path
+found its matching file. This verifies file names and bytes in scratch against
+the checked lookup rule; **no systemd-confext validation, dissection, merge
+or mount was run**.
+
+**Limits of the genericity proof:** the final `Request` type still explicitly
+contains prototype scenario fields (`fakeGlobal`, `target.project`,
+`skipPreparation`, `extraAddress`, artifact naming). Registration and program
+dispatch are generic, but the invocation envelope is **not yet** a general
+host/project/domain context model. `async Program.run` made cross-domain reuse
+easy but lost experiment 2's inspectable composition tree: `describe()` lists
+program IDs and data without revealing *which programs call which* before
+execution; the `calls` trace only explains composition **after** a run.
+Dynamic external module discovery, typed contract tokens/schema validation,
+general monotonic bypass semantics, and the CLI path hierarchy from earlier
+probes were likewise **not carried through** to experiment 4. These are
+proof-coverage regressions and open design questions, not solved by the
+prototype or a request for a fifth framework experiment.
 
 ## Cross-references
 
