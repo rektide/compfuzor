@@ -47,5 +47,6 @@
   vars:
     _apt_ignored: >-
       {{ ['APT_REPO', 'APT_REPOS', 'APT_LIST_URL', 'APT_DISTRIBUTION', 'APT_DISTRIBUTIONS',
-          'APT_COMPONENT', 'APT_COMPONENTS', 'APT_ARCHS', 'APT_SOURCE', 'APT_PIN',
-          'APT_PIN_PRIORITY', 'APT_PIN_PACKAGE'] | select('in', lookup('varnames', '^APT_.*$', wantlist=True)) | list }}
+          'APT_COMPONENT', 'APT_COMPONENTS', 'APT_ARCHS', 'APT_SOURCE', 'APT_TRUST',
+          'APT_KEY', 'APT_PIN', 'APT_PIN_PRIORITY', 'APT_PIN_PACKAGE']
+          | select('in', lookup('varnames', '^APT_.*$', wantlist=True)) | list }}
