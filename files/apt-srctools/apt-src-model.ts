@@ -16,8 +16,10 @@
  *         "architectures": ["amd64"],        // null when unset
  *         "trusted": false,
  *         "enabled": true,                   // false: "#deb" / "Enabled: no"
- *         "options": {},                     // classic-only bracket remainder
- *         "fields": {}                       // deb822 passthrough (By-Hash, ...)
+ *         "options": {},                     // classic-side home for bracket
+ *                                              // options not otherwise modeled
+ *         "fields": {}                       // deb822-side home for unmodeled
+ *                                              // fields (By-Hash, ...)
  *       }
  *     ]
  *   }
