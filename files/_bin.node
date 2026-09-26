@@ -1,0 +1,2 @@
+#!/usr/bin/env node
+{{ (item.content|join2('\n'))|regex_replace('^#![^\n]*\n', '') }}

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -30,10 +31,42 @@ def test_mcp_install() -> None:
         (host / "bin").mkdir(parents=True)
         (source / "etc").mkdir(parents=True)
 
-        rendered = (ROOT / "files" / "mcp-dropin.ts").read_text(encoding="utf-8")
+        (temporary / "files").symlink_to(ROOT / "files", target_is_directory=True)
+        playbook = temporary / "render.pb"
+        playbook.write_text(
+            f"""---
+- hosts: all
+  gather_facts: false
+  vars:
+    TYPE: mcp-test
+    DIR: {str(host)!r}
+    BINS_DIR: {str(host / 'bin')!r}
+    BINMODE: '0755'
+    BINS: []
+    MCP_CLIENT:
+      remote: amp-mcp
+      wrapper: amp.mcpServers
+      command_args: true
+  tasks:
+    - ansible.builtin.import_tasks: {str(ROOT / 'tasks/compfuzor/gen_mcp.tasks')!r}
+    - ansible.builtin.import_tasks: {str(ROOT / 'tasks/compfuzor/bins.tasks')!r}
+""",
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            ["ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook)],
+            cwd=ROOT,
+            env={**os.environ, "ANSIBLE_CONFIG": str(ROOT / "ansible.cfg")},
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
         adapter = host / "bin" / "mcp-dropin.ts"
-        adapter.write_text(rendered.replace("{{DIR}}", str(host)), encoding="utf-8")
-        adapter.chmod(0o770)
+        core = host / "bin" / "mcp-dropin-core.ts"
+        assert adapter.read_text(encoding="utf-8").startswith("#!/usr/bin/env node\nimport { run }")
+        assert core.read_text(encoding="utf-8").startswith("#!/usr/bin/env node\n/** Transform")
+        assert "{{DIR}}" not in core.read_text(encoding="utf-8")
+        assert "#!/bin/bash" not in adapter.read_text(encoding="utf-8")
         manager_rendered = (ROOT / "build" / "runtime" / "compfuzor-runtime.mjs").read_text(encoding="utf-8")
         manager = host / "bin" / "config-remote.mjs"
         manager.write_text(manager_rendered.replace("{{DIR}}", str(host)), encoding="utf-8")
@@ -57,7 +90,7 @@ def test_mcp_install() -> None:
             encoding="utf-8",
         )
 
-        run([str(adapter), "amp-mcp", "amp.mcpServers", "true", str(source)])
+        run([str(adapter), str(source)])
         fragment = target / "example.json"
         durable = source / "etc" / "mcp-remote" / "example.json"
         assert fragment.is_symlink() and fragment.resolve() == durable
@@ -72,13 +105,15 @@ def test_mcp_install() -> None:
                 }
             }
         }
+        # The shared core remains directly executable with its original CLI.
+        run([str(core), "amp-mcp", "amp.mcpServers", "true", str(source)])
 
         disabled = fragment.with_suffix(".json.disabled")
         fragment.rename(disabled)
         (source / "etc" / "mcp.json").write_text(
             json.dumps({"type": "remote", "url": "https://example.test/new"}), encoding="utf-8"
         )
-        reinstall = run([str(adapter), "amp-mcp", "amp.mcpServers", "true", str(source)], check=False)
+        reinstall = run([str(adapter), str(source)], check=False)
         assert reinstall.returncode == 0
         assert not fragment.exists()
         assert "https://example.test/new" in disabled.read_text(encoding="utf-8")

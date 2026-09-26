@@ -2,8 +2,9 @@
 /** Transform a portable MCP record into a durable producer source, then delegate. */
 
 import { spawn } from "node:child_process"
-import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises"
+import { access, mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises"
 import { basename, join } from "node:path"
+import { fileURLToPath } from "node:url"
 
 const selfDir = "{{DIR}}"
 
@@ -65,8 +66,12 @@ async function delegate(setName: string, source: string, name: string): Promise<
   })
 }
 
-async function main(): Promise<void> {
-  const [setName, wrapper, splitArgs, sourceArg] = process.argv.slice(2)
+export async function run(
+  settings: { remote: string; wrapper: string; commandArgs: boolean },
+  args: string[],
+): Promise<void> {
+  const { remote: setName, wrapper, commandArgs } = settings
+  const [sourceArg] = args
   if (!setName || !wrapper) throw new Error("usage: mcp-dropin.ts <remote> <wrapper> <command-args> [source-dir]")
   const sourceDir = sourceArg ?? process.cwd()
   const mcpFile = join(sourceDir, "etc", "mcp.json")
@@ -84,7 +89,7 @@ async function main(): Promise<void> {
     throw error
   })
   try {
-    await writeFile(temporary, `${JSON.stringify(transform(name, config, wrapper, splitArgs === "true"), null, "\t")}\n`)
+    await writeFile(temporary, `${JSON.stringify(transform(name, config, wrapper, commandArgs), null, "\t")}\n`)
     await rename(temporary, fragment)
     await delegate(setName, fragment, `${name}.json`)
   } catch (error) {
@@ -98,7 +103,12 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error: unknown) => {
-  console.error(`error: ${error instanceof Error ? error.message : String(error)}`)
-  process.exitCode = 1
+// Keep the shared implementation directly runnable without running it on import.
+if (process.argv[1]) realpath(process.argv[1]).then((invoked) => {
+  if (invoked !== fileURLToPath(import.meta.url)) return
+  const [remote, wrapper, splitArgs, ...args] = process.argv.slice(2)
+  return run({ remote, wrapper, commandArgs: splitArgs === "true" }, args).catch((error: unknown) => {
+    console.error(`error: ${error instanceof Error ? error.message : String(error)}`)
+    process.exitCode = 1
+  })
 })

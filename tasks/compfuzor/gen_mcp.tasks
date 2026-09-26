@@ -6,7 +6,7 @@
 #
 # What MCP contributes itself:
 #   - mcp.json ETC_FILES (server config, from MCP_URL or MCP_COMMAND)
-#   - mcp-dropin.ts (thin transform delegated to a named remote lifecycle tool)
+#   - mcp-dropin.ts (Node entry point delegated to a shared TS implementation)
 
 - name: 'Build vars for remote MCP server'
   set_fact:
@@ -68,15 +68,19 @@
   vars:
     helper:
       name: mcp-dropin.ts
+      runtime: node
       basedir: False
-      content: >-
-        exec "$DIR/bin/mcp-dropin-core.ts"
-        {{ MCP_CLIENT.remote | quote }}
-        {{ MCP_CLIENT.wrapper | quote }}
-        {{ (MCP_CLIENT.command_args | default(false) | bool) | ternary('true', 'false') }}
-        "$@"
+      content: |
+        import { run } from "./mcp-dropin-core.ts"
+
+        await run({
+          remote: {{ MCP_CLIENT.remote | to_json }},
+          wrapper: {{ MCP_CLIENT.wrapper | to_json }},
+          commandArgs: {{ MCP_CLIENT.command_args | default(false) | bool | to_json }},
+        }, process.argv.slice(2))
     implementation:
       name: mcp-dropin-core.ts
+      runtime: node
       src: ../mcp-dropin.ts
       basedir: False
   when: MCP_CLIENT is defined

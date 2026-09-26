@@ -172,6 +172,28 @@ is emitted even for one leaf, keeping the subsystem entry point stable.
 
 ## Helpers
 
+### Node/TypeScript bins
+
+`BINS` records with `runtime: node` select [`files/_bin.node`](/files/_bin.node)
+instead of the Bash `_bin` template. It emits a Node shebang followed by
+rendered TypeScript `content` (or a rendered `src`), removing an existing
+source shebang when present. For example:
+
+```yaml
+- name: example.ts
+  runtime: node
+  content: |
+    console.log("hello")
+```
+
+`raw: true` remains a byte-for-byte copy and bypasses both templates. Runtime
+selection is explicit: `.ts` alone does not change an existing bin. The Node
+template intentionally does **not** translate shell helpers, `basedir`,
+`bypass`, or `run_all`; use the Bash action compositors to invoke executable TS
+leaves, and keep language-specific setup in shared TS code where needed.
+
+### Bash helpers
+
 [`files/_bin`](/files/_bin) wraps every bin with **helpers** — named,
 independently-toggleable template sections. A bin gets only the helpers it
 needs, so a plain `exec` bin no longer carries ~50 lines of unused action-runner

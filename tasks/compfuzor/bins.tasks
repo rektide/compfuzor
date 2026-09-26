@@ -34,7 +34,7 @@
 - name: "Create exec/execs `BINS`"
   template:
     dest: "{{_dest}}"
-    src: "files/_bin"
+    src: "{{ 'files/_bin.node' if item.runtime|default('shell') == 'node' else 'files/_bin' }}"
     mode: "{{item.mode|default(BINMODE)}}"
     owner: "{{OWNER|def(omit)}}"
     group: "{{GROUP|def(omit)}}"
@@ -50,7 +50,7 @@
     contentful: "{{item.content|def or item.exec|def or item.execs|def or item.generated|def or item.run_all|def or item.early|def or item.late|def}}"
 - name: "Create wrapped src/template `BINS`"
   template:
-    src: "files/_bin"
+    src: "{{ 'files/_bin.node' if _item.runtime|default('shell') == 'node' else 'files/_bin' }}"
     dest: "{{_dest}}"
     mode: "{{_item.mode|default(BINMODE)}}"
     owner: "{{_item.owner|def(OWNER, omit)}}"
