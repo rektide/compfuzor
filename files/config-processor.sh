@@ -52,11 +52,25 @@ case "$processor" in
               gsub("\\$\\{(?<key>[A-Za-z_][A-Za-z0-9_]*)\\}";
                 env[.key] // error("missing environment variable: " + .key))
             else . end);
+          def adapt:
+            if type != "object" then .
+            else
+              (if $settings.place.rename then
+                with_entries(if $settings.place.rename[.key] then .key = $settings.place.rename[.key] else . end)
+              else . end)
+              | if $settings.place.command_args and has("command") then
+                  if (.command | type) != "array" then .
+                  elif (.command | length) == 0 then error($identity + ": empty command array")
+                  else . + {command: .command[0]} + (if (.command | length) > 1 then {args: ((.args // []) + .command[1:])} else {} end)
+                  end
+                else . end
+            end;
           if length != 2 then
             error($identity + ": expected exactly one JSON document in the input")
           else
             .[0] as $base | .[1] as $input |
-            (if $settings.envsubst then ($input | substitute) else $input end) as $value |
+            (if $settings.envsubst then ($input | substitute) else $input end) |
+            (if $settings.place == null then . elif $settings.place.as == "object" then adapt else . end) as $value |
             if $settings.place == null then
               $base * $value
             else

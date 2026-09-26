@@ -96,15 +96,20 @@ def test_compile():
 def test_validation():
     plan = compile_config({"app.json": {"processor": "json-deep-merge", "inputs": [{
         "glob": "portable/*.json", "remote": True,
-        "place": {"at": "mcp.servers", "as": "object"},
+        "place": {"at": "mcp.servers", "as": "object", "command_args": True, "rename": {"environment": "env"}},
         "envsubst": {"file": "../env.export"},
     }]}}, "/etc")
-    check("placement compiled", plan["spec"]["configs"]["app"]["inputs"][0]["place"], {"at": "mcp.servers", "as": "object"})
+    check("placement compiled", plan["spec"]["configs"]["app"]["inputs"][0]["place"], {
+        "at": "mcp.servers", "as": "object", "command_args": True, "rename": {"environment": "env"},
+    })
     check("envsubst compiled", plan["spec"]["configs"]["app"]["inputs"][0]["envsubst"], {"file": "../env.export"})
     for item, message in [
         ({"place": {"at": "mcp..servers", "as": "object"}}, "dotted path"),
         ({"place": {"at": "mcp", "as": "something"}}, "must be object or array"),
-        ({"place": {"at": "mcp"}}, "exactly 'at' and 'as'"),
+        ({"place": {"at": "mcp"}}, "requires 'at' and 'as'"),
+        ({"place": {"at": "mcp", "as": "object", "command_args": "yes"}}, "must be true or false"),
+        ({"place": {"at": "mcp", "as": "object", "rename": {"environment": ""}}}, "non-empty names"),
+        ({"place": {"at": "mcp", "as": "object", "split": True}}, "unknown settings"),
         ({"envsubst": {"file": ""}}, "non-empty file path"),
     ]:
         check_raises("invalid JSON input transform", lambda item=item: compile_config({

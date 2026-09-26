@@ -94,13 +94,27 @@ def _json_input_settings(item, label, processor):
         if "glob" not in item:
             _error("{}.place requires a glob input (the filename supplies the slot)".format(label))
         place = _mapping(item["place"], "{}.place".format(label))
-        if set(place) != {"at", "as"}:
-            _error("{}.place requires exactly 'at' and 'as'".format(label))
+        unknown = set(place) - {"at", "as", "command_args", "rename"}
+        if unknown:
+            _error("{}.place has unknown settings: {}".format(label, ", ".join(sorted(unknown))))
+        missing = {"at", "as"} - set(place)
+        if missing:
+            _error("{}.place requires 'at' and 'as'".format(label))
         at = place["at"]
         if not isinstance(at, str) or not at or not all(_ID.fullmatch(part) and "." not in part for part in at.split(".")):
             _error("{}.place.at must be a dotted path of non-empty names".format(label))
         if place["as"] not in ("object", "array"):
             _error("{}.place.as must be object or array".format(label))
+        if "command_args" in place and not isinstance(place["command_args"], bool):
+            _error("{}.place.command_args must be true or false".format(label))
+        if "rename" in place:
+            rename = _mapping(place["rename"], "{}.place.rename".format(label))
+            if not rename or any(
+                not isinstance(source, str) or not source or not isinstance(target, str) or not target
+                for source, target in rename.items()
+            ):
+                _error("{}.place.rename must map non-empty names to non-empty names".format(label))
+            place["rename"] = rename
         result["place"] = place
     if "envsubst" in item:
         subst = _mapping(item["envsubst"], "{}.envsubst".format(label))

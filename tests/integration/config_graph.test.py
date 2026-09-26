@@ -84,6 +84,9 @@ output.write_text(text)
           - glob: plugins/*.json
             name: plugins
             place: {{at: plugins, as: array}}
+          - glob: commands/*.json
+            name: commands
+            place: {{at: tools, as: object, command_args: true, rename: {{environment: env}}}}
       shell.conf:
         processor: block-in-file
         remote: true
@@ -103,7 +106,7 @@ output.write_text(text)
         path: "{{{{ item }}}}"
         state: directory
         mode: '0770'
-      loop: "{{{{ SUBSYSTEM.config.contrib.DIRS + [ETC, BINS_DIR, ETC + '/core', ETC + '/mcp', ETC + '/portable', ETC + '/plugins', ETC + '/shell.conf.d', ETC + '/policy.d'] }}}}"
+      loop: "{{{{ SUBSYSTEM.config.contrib.DIRS + [ETC, BINS_DIR, ETC + '/core', ETC + '/mcp', ETC + '/portable', ETC + '/plugins', ETC + '/commands', ETC + '/shell.conf.d', ETC + '/policy.d'] }}}}"
     - copy:
         dest: "{{{{ ETC }}}}/config.spec.json"
         content: "{{{{ SUBSYSTEM.config.spec | to_nice_json }}}}"
@@ -142,6 +145,9 @@ output.write_text(text)
             encoding="utf-8",
         )
         (payload / "etc" / "plugins" / "10-plugin.json").write_text('["one", "two"]\n')
+        (payload / "etc" / "commands" / "10-run.json").write_text(
+            '{"command": ["bin", "--flag", "x"], "environment": {"KEEP": "${KEEP_ME}"}}\n'
+        )
         (payload / "etc" / "shell.conf.d" / "10-first.conf").write_text("first\n")
         (payload / "etc" / "shell.conf.d" / "20-second.conf").write_text("second\n")
         (payload / "etc" / "policy.d" / "10-policy.conf").write_text("policy=true\n")
@@ -175,7 +181,13 @@ output.write_text(text)
         listed = run([str(payload / "bin" / "config-assemble.sh"), "--list"], cwd=payload, env=runtime_env)
         assert listed.stdout.splitlines() == ["app", "policy", "shell"]
         run([str(payload / "bin" / "config-assemble.sh")], cwd=payload, env=runtime_env)
-        assert json.loads((payload / "etc" / "app.json").read_text()) == {"base": True, "core": True, "mcp": {"legacy": True, "servers": {"docs": {"type": "remote", "url": "https://example.test/mcp", "headers": {"Authorization": 'Bearer quoted"value'}}}}, "plugins": ["one", "two"]}
+        assert json.loads((payload / "etc" / "app.json").read_text()) == {
+            "base": True,
+            "core": True,
+            "mcp": {"legacy": True, "servers": {"docs": {"type": "remote", "url": "https://example.test/mcp", "headers": {"Authorization": 'Bearer quoted"value'}}}},
+            "plugins": ["one", "two"],
+            "tools": {"10-run": {"command": "bin", "args": ["--flag", "x"], "env": {"KEEP": "${KEEP_ME}"}}},
+        }
         shell = (payload / "etc" / "shell.conf").read_text()
         assert "legacy-shell" not in shell and "unmanaged" in shell
         assert "shell/shell.conf.d/0/10-first.conf" in shell
@@ -216,6 +228,13 @@ output.write_text(text)
         assert failed.returncode != 0 and "expected JSON array" in failed.stderr
         assert (payload / "etc" / "app.json").read_text() == original
         (payload / "etc" / "plugins" / "10-plugin.json").write_text('["one", "two"]\n')
+        (payload / "etc" / "commands" / "10-run.json").write_text('{"command": []}\n')
+        failed = run([str(payload / "bin" / "config-assemble.sh"), "app"], cwd=payload, check=False, env=runtime_env)
+        assert failed.returncode != 0 and "empty command array" in failed.stderr
+        assert (payload / "etc" / "app.json").read_text() == original
+        (payload / "etc" / "commands" / "10-run.json").write_text(
+            '{"command": ["bin", "--flag", "x"], "environment": {"KEEP": "${KEEP_ME}"}}\n'
+        )
         (producer / "etc" / "mcp.json").write_text('{"x":1}\n{"y":2}\n')
         failed = run([str(payload / "bin" / "config-assemble.sh"), "app"], cwd=payload, check=False, env=runtime_env)
         assert failed.returncode != 0 and "exactly one JSON document" in failed.stderr
