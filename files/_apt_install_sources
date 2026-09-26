@@ -10,6 +10,9 @@ if [ "${COMPFUZOR_APT_SOURCES_BYPASS:-}" ]; then exit 0; fi
 command -v apt-get >/dev/null 2>&1 || { echo "apt: apt-get not found, skipping sources"; exit 0; }
 SUDO_CMD="${COMPFUZOR_APT_SUDO-sudo}"
 [ "$(id -u)" -eq 0 ] && SUDO_CMD=
+# Filesystem generation can leave ETC at 0770 when render-time APT_BYPASS
+# skips its chmod; apt's unprivileged _apt worker needs directory traversal.
+${SUDO_CMD} chmod o+rx -- "$APT_PAYLOAD"
 {% if _key_url %}
 # Re-fetch on explicit install: rotating the key at the same URL must update
 # declared state. Never replace the usable key until download/dearmor succeeds.

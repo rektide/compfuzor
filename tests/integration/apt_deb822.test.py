@@ -157,8 +157,10 @@ def test_bypass_and_vendor_key():
     assert not (root / "sources/apt-probe.sources").exists()
     assert "Signed-By: " + str(root / "keyrings/chrome-apt.gpg") in (root / "etc/apt-probe.sources").read_text()
     assert (root / "etc/chrome-apt.gpg").is_file()
+    (root / "etc").chmod(0o700)
     env = {**os.environ, "DIR": str(root), "COMPFUZOR_APT_SUDO": "", "COMPFUZOR_APT_UPDATE_BYPASS": "1"}
     subprocess.run(["bash", "-euo", "pipefail", str(root / "bin/install-apt-sources.sh")], cwd=ROOT, env=env, check=True)
+    assert (root / "etc").stat().st_mode & 0o005 == 0o005
     assert (root / "keyrings/chrome-apt.gpg").is_symlink()
     assert (root / "sources/apt-probe.sources").is_symlink()
 
