@@ -251,6 +251,17 @@ end-of-play handler. A confext builder rhymes with this shape almost exactly.
 
 ## 5. confext/sysext grounding (local sources, no web)
 
+> **⚠ CORRECTED** — this section presents several facts via sysext analogy that
+> are wrong for confext specifically: confext has its own search paths
+> (`/run/confexts`, `/var/lib/confexts`, `/usr/local/lib/confexts`,
+> `/usr/lib/confexts` — **not** the `extensions/` dirs) and its own
+> extension-release location (`/etc/extension-release.d/`, not
+> `/usr/lib/extension-release.d/`); "confext has never been used here" and
+> "two years old" are both overclaims. See
+> [`build-inputs1.fx.md`](/design/confext/build-inputs1.fx.md) §1–§2 for the
+> verified corrections; §2's impasse framing is also re-stated there. Text
+> below is preserved as written.
+
 From the local checkout `~/archive/systemd/systemd` (v261-1244) and this host:
 
 - **What confext extends**: sysext merges extension images over `/usr` and
