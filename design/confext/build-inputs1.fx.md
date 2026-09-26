@@ -172,18 +172,41 @@ Existing, already-committed switches give a render-only mode today:
 
 | Switch | Layer | Effect on iface playbooks | Evidence |
 |---|---|---|---|
-| `LINKS_BYPASS=True` | Ansible compile | `gen_links` skipped: no plan, no `links.json`, no `install-link-records.sh`, no delivery. ETC_FILES still materialize into DIR. | [`compfuzor.includes` L117–120](/tasks/compfuzor.includes#L117-L120) |
-| `BINS_RUN_BYPASS=True` | Ansible apply | `bins_run` lane skipped: `apply.sh` never auto-runs (no reload/reconfigure/chmod). | [`compfuzor.includes` L240](/tasks/compfuzor.includes#L240) |
+| `BINS_RUN_BYPASS=True` | Ansible apply | `bins_run` lane skipped: `apply.sh` and `install-link-records.sh` never auto-run (no reload/reconfigure/chmod, no host copy) — while `links.json` is still compiled and written. | [`compfuzor.includes` L240](/tasks/compfuzor.includes#L240) |
 | `COMPFUZOR_LINK_BYPASS=1` | runtime env | `links.mjs apply` exits 0 — plan exists, delivery skipped. | [`runtime/compfuzor-runtime.mjs` L3037](/runtime/compfuzor-runtime.mjs#L3037); [`files/_helpers/guard`](/files/_helpers/guard) (`COMPFUZOR_<CONCERN>_BYPASS`) |
+| `LINKS_BYPASS=True` | Ansible compile | `gen_links` skipped: no plan, **no `links.json`**, no `install-link-records.sh`, no delivery. ETC_FILES still materialize into DIR — payload only. | [`compfuzor.includes` L117–120](/tasks/compfuzor.includes#L117-L120) |
 | `DIR_BYPASS=True` | Ansible compile | **do not use** for this purpose — skips materialization entirely, so the bytes a builder needs never land. | [`compfuzor.includes` L166–170](/tasks/compfuzor.includes#L166-L170) |
 
 So `ansible-playbook -i 'localhost,' -c local systemd-iface-static-only.etc.pb
--e INSTANCE=ens3 -e … -e LINKS_BYPASS=True -e BINS_RUN_BYPASS=True` produces a
-deployment tree whose `DIR/{iface-static-only.network, links.json, …}` is a
-complete, host-unpublished build input set. (AGENTS.md's bypass table entry
-`LINKS_BYPASS | symlinks into system dirs` matches this gate; the separate
-runtime concern is `LINK` → `COMPFUZOR_LINK_BYPASS` — two layers, both real,
-[`doc/subsys.md` L310](/doc/subsys.md#L310).)
+-e INSTANCE=ens3 -e … -e BINS_RUN_BYPASS=True` is the render recipe: **link
+compilation stays on** (gen_links runs, `_LINK_PLAN` compiles,
+`DIR/links.json` is written), while the bins_run lane is skipped — so
+`install-link-records.sh` and `apply.sh` are materialized into `DIR/bin` but
+never executed, and nothing is copied into host `/etc/systemd/network`.
+`LINKS_BYPASS=True` is the *payload-only variant*: it skips gen_links
+entirely, so the tree has no `links.json` and destination knowledge must come
+from elsewhere (inventory or builder declaration); it is not the recipe for
+the R1 input contract below.
+
+Scope of that claim — inspected, not render-tested. From source, with
+`BINS_RUN_BYPASS=True` on these two playbooks: the direct playbook tasks that
+still run are read-only (`networkctl status` guards, extra-addr L183–186,
+static-only L181–193; both tolerate a foreign build host — static-only's
+assert passes benignly when the interface is absent, extra-addr needs its
+`-e NETWORK_FILE=`/`-e DHCP_REQUIRED=False` overrides per §2.3); the ETC
+family structural link self-skips for etc-type (roots equal,
+[`compfuzor.includes` L171–174](/tasks/compfuzor.includes#L171-L174)); bins
+materialization and `bins_link` write only inside `DIR`; the global-bins lane
+is var-gated off (`GLOBAL_BINS` unset → [`bins_link_global` skip,
+L272–274](/tasks/compfuzor.includes#L272-L274)); the systemd lane's legacy
+import is commented out and `systemd.thunk` needs `SYSTEMD_SERVICE` (absent);
+all EXTRAS/REPO lanes are var-gated off. This is a read of the lane map and
+these playbooks' vars — **not a tested render**, and not a general
+side-effect-free mode: a playbook setting `GLOBAL_BINS`, `SYSTEMD_SERVICE`,
+`REPO`, or package vars mutates other host paths and needs its own bypass
+audit ([`AGENTS.md`](/AGENTS.md) bypass table), the same boundary
+[`runtime0.sm.md`](/design/confext/runtime0.sm.md) draws against calling
+anything here a sandbox. No deployment was run for this document.
 
 ## 3. Does the runtime catalog carry bytes/destinations? No — references only
 
@@ -238,20 +261,35 @@ and the forbidden-content rule (no `/usr/lib/os-release` in the tree).
 
 - **R1 — input contract**: `build-confext` consumes an already-rendered
   deployment: `DIR` (payload files) + `DIR/links.json` (declared destinations)
-  produced by a render-only play (`LINKS_BYPASS=True BINS_RUN_BYPASS=True`,
-  §2.4). It reads; it never publishes.
-- **R2 — output**: emit a **directory-form confext** under the deployment
-  (e.g. `DIR/confext/<NAME>/etc/…`) with the metadata file from §4. Keep
-  `/var/lib/confexts` publication, `systemd-confext merge/refresh`, and any
-  erofs/DDI packaging as *later, separate* steps — per the operator's
-  build-only priority. The projection from directory form to image/DDI is
-  mechanical afterwards (`mksquashfs`/`mkfs.erofs`/repart definitions).
+  produced by a render-only play that **keeps link compilation on and skips
+  only the bins-run lane** (`-e BINS_RUN_BYPASS=True`, §2.4). It reads; it
+  never publishes. (A `LINKS_BYPASS=True` render yields the payload without
+  `links.json`; a builder could accept that shape with destinations supplied
+  out-of-band, but it is not this contract.)
+- **R2 — output**: building the confext artifact itself is the main ask, and
+  the **output-form choice — directory vs filesystem image vs DDI — is an
+  in-scope user/design choice** (§4 compares the three with verified
+  requirements), not something deferred. Directory form is the useful
+  *intermediate and build representation* (diffable, no mkfs tools) and the
+  projection from it to image/DDI is mechanical
+  (`mksquashfs`/`mkfs.erofs`/repart definitions with the §4 metadata), but the
+  builder should treat "which artifact does the build emit" as a declared
+  option. What stays out of scope is only **installation and activation**:
+  placing into `/var/lib/confexts` and running
+  `systemd-confext merge/refresh`.
 - **R3 — pilot targets in order**: `systemd-iface-static-only.etc.pb` first
   (fully declared destination); `systemd-iface-extra-addr.etc.pb` second with
   explicit `-e NETWORK_FILE=` (and the §2.3 note about tolerating the
-  discovery task). The dest→payload mapping for both is one drop-in under
-  `/etc/systemd/network/` — exactly what a confext `/etc` overlay represents
-  natively.
+  discovery task). Both destinations live under `/etc/systemd/network/` but
+  with **different shapes**: extra-addr delivers a per-interface **drop-in**
+  (`…/<NETWORK_FILE>.network.d/<NAME>.conf`); static-only delivers a
+  **standalone `.network` file** (`/etc/systemd/network/10-<INSTANCE>-static-only.network`,
+  [`systemd-iface-static-only.etc.pb` L70–77](/systemd-iface-static-only.etc.pb#L70-L77))
+  that replaces the interface's first-match config. Both are ordinary `/etc`
+  subtrees — exactly what a confext `/etc` overlay represents natively — but a
+  builder must preserve the distinction: a standalone `.network` in a confext
+  would win networkd's first-match race on every host it merges onto, whereas
+  the drop-in only extends an existing governing file.
 - **R4 — mode policy**: decide where host-visible modes come from. Options:
   declare `mode:` on the bundle-bound ETC_FILES records (supported,
   [`fs_hierarchy.tasks` L148](/tasks/compfuzor/fs_hierarchy.tasks#L148)); or
@@ -317,6 +355,14 @@ and the forbidden-content rule (no `/usr/lib/os-release` in the tree).
   `mkosi/resources/repart/definitions/confext-unsigned.repart.d/`.
 
 ## Method and verification limits
+
+Revision note (same day, post-review errata): the §2.4 render recipe and R1
+were corrected — `LINKS_BYPASS=True` removes `links.json`, so the documented
+recipe is now `-e BINS_RUN_BYPASS=True` with link compilation preserved, plus
+an inspected-effects caveat (structural/global/systemd lanes) and an explicit
+inspection-vs-tested-render boundary; R2 now treats image/DDI output choice as
+in-scope build design; R3 corrects static-only's standalone `.network`
+destination.
 
 Upstream facts were read from the local checkouts named above (systemd
 v261-1244, mkosi v27-12) — no web fetches; the archive-first rule was
