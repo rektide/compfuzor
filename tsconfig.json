@@ -21,6 +21,7 @@
     "files/zim/**/*.ts",
     "files/runtime/**/*.ts",
     "files/apt-srctools/**/*.ts",
+    "files/opencode/backup.ts",
     "files/config-remote/**/*.ts",
     "files/config-remote.ts",
     "script/repo-jj-archive.ts",

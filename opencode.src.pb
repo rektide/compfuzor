@@ -91,6 +91,9 @@
       # workspace carries the watchman stack, then opts the service in.
       # 4m command deadline: loaded host, prefer waiting over generation churn.
       OPENCODE_WATCHER_BACKEND: watchman
+      # Defaults for bin/backup.ts: raw TS bins get no Jinja rendering, so
+      # they source this env.export for BACKUP_TARGETS at runtime.
+      BACKUP_TARGETS: "{{ BACKUP_TARGETS|join(' ') }}"
       OPENCODE_WATCHMAN_COMMAND_TIMEOUT_MS: 240000
       # One canonical socket shared by the mutually-exclusive watchman
       # and watchwoman services. Explicit routing prevents the transport from
@@ -530,6 +533,11 @@
       `PRAGMA integrity_check` + SHA256SUMS — works on any filesystem,
       costs a full DB copy per snapshot.
 
+      `bin/backup.ts` is the TypeScript port of the same tool (node
+      `parse-args` CLI, deployed as a raw node-shebang bin that sources this
+      deployment's `env.export` for its `BACKUP_TARGETS` default). Behavior
+      and flags match `backup.sh`; retire one once the other is proven.
+
           {{DIR}}/bin/backup.sh --db-only   # fast DB+auth refresh
           {{DIR}}/bin/backup.sh --config    # data + ~/.config/opencode
           {{DIR}}/bin/backup.sh --snapshot  # consistent DB snapshot
@@ -828,6 +836,13 @@
         global: "{{ 'opencode-status-ok' if OPENCODE_PRIMARY else False }}"
       - name: backup.sh
         basedir: False
+      # TypeScript port of backup.sh (node:util parse-args CLI). Raw copy:
+      # no sh compositor preamble — runs under node via its shebang and
+      # sources the deployment env.export itself for defaults
+      # (BACKUP_TARGETS rides ENV for exactly that).
+      - name: backup.ts
+        basedir: False
+        raw: True
       # Primary-only interactive surface: the dev-TUI launcher and the dated
       # snapshot runner both target the primary deployment through unsuffixed
       # defaults (ZIM modules, /usr/local/bin snapshots); secondaries keep the
