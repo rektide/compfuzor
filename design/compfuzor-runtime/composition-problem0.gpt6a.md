@@ -70,6 +70,17 @@ that must survive. Significant rework is welcome when justified.
   when the common runtime is missing. This also opens a credible executor for
   pre-write project preparation; it does not eliminate bootstrap dependencies.
 
+  **Operator clarification after the independent wave:** `cf-r` was the idea
+  for a shared-runtime deployment, not an existing tool agents were meant to
+  find. Initially this can be another ordinary Compfuzor checkout with its bins
+  installed globally, exposing `runtime/compfuzor-runtime.mjs`. A playbook is one
+  entry point; ideally the local runtime can also invoke its own installation
+  machinery to expose itself globally without the playbook or a pre-existing
+  global runtime. Track this separately as **compfuzor-runtime-bootstrap**.
+  Command spelling is not settled. Self-installation must have a terminating
+  bootstrap path, and runtime location must not be confused with the deployment
+  being operated on.
+
 ### Hypotheses, not requirements
 
 The operator's latest intuition is that **a phase might imply a group in that
