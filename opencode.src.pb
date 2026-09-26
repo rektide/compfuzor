@@ -56,9 +56,12 @@
     PKGS:
       - binutils
     # Backup destinations mirrored in order by bin/backup.sh (space-joined
-    # into its BACKUP_TARGETS default). fu is NTFS via fuseblk, bitblaster
-    # is CIFS. A missing/unmounted target is skipped with a warning but
-    # fails the run overall.
+    # into its BACKUP_TARGETS default). Entries are local paths or
+    # user@host:/path remote specs (rsync over ssh, btrfs snapshot versioning
+    # via ssh). fu is NTFS via fuseblk, bitblaster is CIFS — both mirror
+    # without versioning; btrfs targets get per-run readonly snapshots. A
+    # missing/unmounted target is skipped with a warning but fails the run
+    # overall.
     BACKUP_TARGETS:
       - /mnt/fu/backup/opencode-2026-5
       - /mnt/bitblaster/backup/opencode/
@@ -505,18 +508,32 @@
 
       `bin/backup.sh` mirrors `~/.local/share/opencode/` — the shared data
       root for all instances: auth, DBs, sessions, snapshots, logs — to every
-      `BACKUP_TARGETS` destination (the fu mount and
-      `/mnt/bitblaster/backup/opencode/` by default). The mirror uses
-      `--delete`, so it holds the current live state, not history. Old DB
-      generations are preserved by dated `consistent-snapshot-<stamp>/` dirs
-      (sqlite3 `.backup` + `integrity_check` + sha256 — see
-      `consistent-snapshot-20260923T185710/` on the fu target); automating
-      that with btrfs snapshots is a tracked TODO in the script, blocked by
-      both current targets being NTFS/CIFS rather than btrfs.
+      `BACKUP_TARGETS` destination. Entries are local paths or
+      `user@host:/path` remote specs (rsync over ssh; btrfs operations run
+      by ssh'ing into the host). Defaults: the fu mount and
+      `/mnt/bitblaster/backup/opencode/` (both non-btrfs, so they mirror
+      without versioning and say so).
+
+      On btrfs targets the mirror lives in a `<target>/opencode`
+      subvolume (bootstrapped on first run) and every successful rsync is
+      versioned as a readonly snapshot under `<target>/.snapshots/`,
+      pruned to `BACKUP_SNAPSHOT_KEEP` (default 14). Old DB generations
+      therefore survive a corrupted live DB. Readonly snapshot deletion
+      needs root even with user_subvol_rm_allowed: pruning tries plain
+      `btrfs subvolume delete`, then `sudo -n`, then warns — give backup
+      hosts a narrow sudoers rule for `btrfs subvolume delete` if you want
+      unattended pruning.
+
+      `--snapshot [db ...]` skips the mirror and writes a consistent
+      per-DB snapshot to `<target>/consistent-snapshot-<stamp>/` using
+      sqlite3 `.backup` (WAL-safe while the server runs) +
+      `PRAGMA integrity_check` + SHA256SUMS — works on any filesystem,
+      costs a full DB copy per snapshot.
 
           {{DIR}}/bin/backup.sh --db-only   # fast DB+auth refresh
           {{DIR}}/bin/backup.sh --config    # data + ~/.config/opencode
-          BACKUP_ROOT=<dir> {{DIR}}/bin/backup.sh   # single ad-hoc target
+          {{DIR}}/bin/backup.sh --snapshot  # consistent DB snapshot
+          BACKUP_ROOT=user@host:/path {{DIR}}/bin/backup.sh  # ad-hoc target
 
       ## CORS origins
 
