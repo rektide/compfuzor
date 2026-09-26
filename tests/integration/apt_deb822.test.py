@@ -120,6 +120,11 @@ def test_sources_override_legacy():
     subprocess.run(command, cwd=ROOT, env=env, check=True)
     assert source.is_symlink() and (root / "preferences/apt-probe.pref").is_symlink()
     assert "install-apt-sources.sh" in [record["name"] for record in json.loads((root / "bins.json").read_text())]
+    source.unlink()
+    source.write_text("foreign source\n")
+    foreign = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True)
+    assert foreign.returncode != 0 and "foreign apt file" in foreign.stderr
+    assert source.read_text() == "foreign source\n"
 
 
 def test_sources_before_packages():

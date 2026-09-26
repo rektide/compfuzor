@@ -6,7 +6,8 @@ if [ "${COMPFUZOR_APT_SOURCES_BYPASS:-}" ]; then exit 0; fi
 SUDO_CMD="${COMPFUZOR_APT_SUDO-sudo}"
 [ "$(id -u)" -eq 0 ] && SUDO_CMD=
 {% if _key_url %}
-if [ ! -s "$DIR/etc/{{ key }}" ]; then
+# Re-fetch on explicit install: rotating the key at the same URL must update
+# declared state. Never replace the usable key until download/dearmor succeeds.
     _apt_key_tmp="$(mktemp)"
     trap 'rm -f -- "$_apt_key_tmp"' EXIT
 {% if APT_DEARMOR | default(false) | bool %}
@@ -14,10 +15,11 @@ if [ ! -s "$DIR/etc/{{ key }}" ]; then
 {% else %}
     curl -fsSL {{ _key_url | quote }} >"$_apt_key_tmp"
 {% endif %}
-    ${SUDO_CMD} install -m 0644 -- "$_apt_key_tmp" "$DIR/etc/{{ key }}"
+    if ! cmp -s -- "$_apt_key_tmp" "$DIR/etc/{{ key }}"; then
+        ${SUDO_CMD} install -m 0644 -- "$_apt_key_tmp" "$DIR/etc/{{ key }}"
+    fi
     rm -f -- "$_apt_key_tmp"
     trap - EXIT
-fi
 {% endif %}
 # A foreign file or link is not ours to replace. No implicit prune or force.
 _apt_link() {
