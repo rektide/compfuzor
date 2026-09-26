@@ -7,7 +7,7 @@
   set_fact:
     # Rendered artifacts for the filesystem pass and later publication.
     ETC_FILES: "{{ (ETC_FILES | default([])) + _apt_files }}"
-    BINS: "{{ BINS | default([]) | merge_list(_apt_bin, preset='bins_generated', resolve=True) }}"
+    BINS: "{{ BINS | default([]) | merge_list(_apt_bin | resolve, preset='bins_generated') }}"
     # Delivery metadata is shared by render-time and install-time actions.
     _apt_source_name: "{{ _source_name }}"
     _apt_key_name: "{{ _key_name }}"
