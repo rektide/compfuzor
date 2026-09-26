@@ -68,6 +68,7 @@ repo-only playbook without `PKGS`. It fetches/dearmors URL keys (requires
 `curl`, `gpg` if dearmoring), publishes only declared files, then updates the
 index unless `COMPFUZOR_APT_UPDATE_BYPASS=1`. The script refuses to replace a
 foreign regular file or symlink; it neither prunes old files nor adopts them.
+Like `install-apt.sh`, it skips cleanly if `apt-get` is absent.
 Render-time and install-time links target the same materialized `ETC` path,
 not two spellings of it; moving a generated deployment to a host with a
 different `ETC` location requires rerendering there.

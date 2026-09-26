@@ -7,6 +7,7 @@
 # DIR/etc here would falsely treat render-time links as foreign.
 APT_PAYLOAD={{ ETC | quote }}
 if [ "${COMPFUZOR_APT_SOURCES_BYPASS:-}" ]; then exit 0; fi
+command -v apt-get >/dev/null 2>&1 || { echo "apt: apt-get not found, skipping sources"; exit 0; }
 SUDO_CMD="${COMPFUZOR_APT_SUDO-sudo}"
 [ "$(id -u)" -eq 0 ] && SUDO_CMD=
 {% if _key_url %}
