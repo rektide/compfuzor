@@ -10,10 +10,7 @@
   vars:
     mcp_file:
       name: mcp.json
-      json:
-        type: remote
-        url: "{{ MCP_URL }}"
-        headers: "{{ MCP_HEADERS|default(omit) }}"
+      json: "{{ {'type': 'remote', 'url': MCP_URL} | combine({'headers': MCP_HEADERS} if MCP_HEADERS is defined else {}) }}"
   when: MCP_URL is defined
 
 - name: 'Compute local MCP invocation'
@@ -28,27 +25,25 @@
       {{- MCP_COMMAND + args }}
   when: MCP_COMMAND is defined
 
+- name: 'Compute local MCP environment'
+  set_fact:
+    _mcp_environment: >-
+      {%- if MCP_ENV is mapping -%}
+      {{ MCP_ENV }}
+      {%- else -%}
+      {%- set env_dict = {} -%}
+      {%- for var in MCP_ENV -%}
+      {%- set _ = env_dict.update({var: '${' + var + '}'}) -%}
+      {%- endfor -%}
+      {{ env_dict }}
+      {%- endif -%}
+  when: MCP_COMMAND is defined and MCP_ENV is defined
+
 - name: 'Build vars for local MCP server'
   set_fact:
     ETC_FILES: "{{ [mcp_file] | merge_list(ETC_FILES, preset='append') }}"
   vars:
     mcp_file:
       name: mcp.json
-      json:
-        type: local
-        command: "{{ _mcp_command_with_args }}"
-        environment: >-
-          {%- if MCP_ENV is defined -%}
-          {%- if MCP_ENV is mapping -%}
-          {{ MCP_ENV }}
-          {%- elif MCP_ENV is sequence -%}
-          {%- set env_dict = {} -%}
-          {%- for var in MCP_ENV -%}
-          {%- set _ = env_dict.update({var: '${' + var + '}'}) -%}
-          {%- endfor -%}
-          {{ env_dict }}
-          {%- endif -%}
-          {%- else -%}
-          {{ omit }}
-          {%- endif -%}
+      json: "{{ {'type': 'local', 'command': _mcp_command_with_args} | combine({'environment': _mcp_environment} if MCP_ENV is defined else {}) }}"
   when: MCP_COMMAND is defined
