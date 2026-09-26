@@ -32,6 +32,9 @@ import {
   emitDeb822,
   parseClassic,
   parseDeb822,
+  semanticUnits,
+  unaliasableOptions,
+  unclassicable,
 } from "./apt-src-model.ts";
 
 const USAGE = `apt-src-convert-dir.ts - convert a directory of apt sources between formats
@@ -142,13 +145,25 @@ async function main(): Promise<number> {
       continue;
     }
 
-    // verify: re-parse what we would write and canonical-compare
+    // surface the documented lossy corners before writing anything
+    if (targetExt === ".sources")
+      for (const w of unaliasableOptions(json))
+        console.warn(`warn: ${path}: dropping ${w} (no deb822 field spelling)`);
+    if (targetExt === ".list")
+      for (const w of unclassicable(json))
+        console.warn(`warn: ${path}: dropping ${w} (no classic .list spelling)`);
+
+    // verify: re-parse what we would write and compare the semantic core
+    // (metadata fields with no target-format spelling warn above; they are
+    // not semantic to apt)
     let out: string;
     try {
       out = emitAs(targetExt, json);
       const reparsed = canonical(parseAs(targetExt, out, `${path} (emitted)`));
-      if (JSON.stringify(reparsed) !== JSON.stringify(json))
-        throw new Error(`${path}: emitted ${target} does not roundtrip to the same JSON; refusing`);
+      const before = JSON.stringify(semanticUnits(json));
+      const after = JSON.stringify(semanticUnits(reparsed));
+      if (before !== after)
+        throw new Error(`${path}: emitted ${target} does not roundtrip to the same semantic sources; refusing`);
     } catch (err) {
       console.error(`error: ${(err as Error).message}`);
       failures++;

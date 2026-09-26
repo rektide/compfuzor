@@ -266,6 +266,11 @@ export function classicBracket(e: AptSourceEntry): string {
   if (e.architectures) parts.push(`arch=${e.architectures.join(",")}`);
   if (e.trusted) parts.push("trusted=yes");
   for (const [k, v] of Object.entries(e.options)) parts.push(`${k}=${v}`);
+  // deb822-side fields with a classic bracket spelling alias back out
+  for (const [k, v] of Object.entries(e.fields)) {
+    const opt = ALIAS_TO_OPTION[k.toLowerCase()];
+    if (opt) parts.push(`${opt}=${v}`);
+  }
   return parts.length ? `[ ${parts.join(" ")} ]` : "";
 }
 
@@ -356,10 +361,19 @@ function stanzaToEntry(fields: Deb822Field[], lineNo: number): AptSourceEntry {
   const passthrough: Record<string, string> = {};
   for (const f of fields) {
     if (DEB822_KNOWN.has(f.key.toLowerCase())) continue;
-    const value = [f.first, ...f.conts.map(unstuff)].join("\n");
-    const opt = ALIAS_TO_OPTION[f.key.toLowerCase()];
-    if (opt) options[opt] = value;
-    else passthrough[f.key] = value;
+    // unknown keys live in "fields" (the deb822-side home); emitClassic
+    // aliases the ones with a classic bracket spelling back out
+    passthrough[f.key] = [f.first, ...f.conts.map(unstuff)].join("\n");
+  }
+
+  // Trusted values that are not clean booleans (e.g. a legacy
+  // "trusted=yes,arch=amd64" comma blob, which apt prefix-bools) roundtrip
+  // verbatim through options, symmetric with the classic parser.
+  let trustedBlob: string | null = null;
+  if (trustedF) {
+    const v = trustedF.first.trim();
+    if (v !== "yes" && v !== "true" && v !== "no" && v !== "false")
+      trustedBlob = v;
   }
 
   return canonicalEntry({
@@ -371,7 +385,7 @@ function stanzaToEntry(fields: Deb822Field[], lineNo: number): AptSourceEntry {
     architectures: archF ? splitDeb822Values(archF.first) : null,
     trusted: trustedF ? trustedF.first.trim() === "yes" || trustedF.first.trim() === "true" : false,
     enabled: enabledF ? !(enabledF.first.trim() === "no" || enabledF.first.trim() === "false") : true,
-    options,
+    options: trustedBlob !== null ? { trusted: trustedBlob } : options,
     fields: passthrough,
   });
 }
@@ -427,6 +441,8 @@ export function emitDeb822(json: AptSourcesJson): string {
     if (e.architectures) L.push(`Architectures: ${e.architectures.join(" ")}`);
     if (!e.enabled) L.push("Enabled: no");
     if (e.trusted) L.push("Trusted: yes");
+    else if (e.options.trusted !== undefined)
+      L.push(`Trusted: ${e.options.trusted}`); // verbatim legacy comma blob
     if (e.signedBy != null) {
       const kl = e.signedBy.split("\n");
       if (kl.length === 1) L.push(`Signed-By: ${e.signedBy}`);
@@ -468,7 +484,37 @@ export function unclassicable(json: AptSourcesJson): string[] {
     if (e.signedBy?.includes("\n"))
       out.push(`entry ${i}: inline Signed-By keyblock`);
     for (const k of Object.keys(e.fields ?? {}))
-      out.push(`entry ${i}: field '${k}'`);
+      if (!ALIAS_TO_OPTION[k.toLowerCase()])
+        out.push(`entry ${i}: field '${k}'`);
   });
   return out;
+}
+
+/**
+ * The format-agnostic semantic core: every (type, uri, suite) unit with the
+ * entry fields apt actually acts on. Two sources files are equivalent when
+ * their sorted units match, regardless of stanza grouping or which side of
+ * the options/fields alias divide a value lives on.
+ */
+export function semanticUnits(json: AptSourcesJson): string[] {
+  const units: string[] = [];
+  for (const raw of json.sources) {
+    const e = canonicalEntry(raw);
+    for (const type of e.types)
+      for (const uri of e.uris)
+        for (const suite of e.suites)
+          units.push(
+            JSON.stringify({
+              type,
+              uri,
+              suite,
+              components: e.components,
+              signedBy: e.signedBy,
+              architectures: e.architectures,
+              trusted: e.trusted,
+              enabled: e.enabled,
+            }),
+          );
+  }
+  return units.sort();
 }
