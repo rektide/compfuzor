@@ -50,11 +50,14 @@
       - name: apt-src-scheme.ts
         raw: True
         global: True
-      # FUTURE (do not build yet -- strong-comment spec lands here after the
-      # rest of this playbook settles): apt-src-pin-priority.ts -- rewrite
-      # apt pin priorities for repos matching a distribution filter, e.g.
-      # forky=X sid=Y experimental=Z. Starts hardcoded-narrow, generalizes
-      # into --filter/--set later.
+      # FUTURE, specified but deliberately not built (see
+      # files/apt-srctools/apt-src-pin-priority.ts -- the file IS the spec):
+      # retune Pin-Priority for pin stanzas matching a distribution filter
+      # (forky=X sid=Y experimental=Z to start, --filter/--set later),
+      # inheriting scheme's row-maintenance contract.
+      - name: apt-src-pin-priority.ts
+        raw: True
+        global: True
     README: |
       # apt-srctools
 
@@ -77,5 +80,9 @@
       See design/apt-srctools/ for the JSON schema, the roundtrip fidelity
       map (what is bijective through JSON, what normalizes or is lossy), and
       the block-in-file wishlist.
+
+      - `apt-src-pin-priority.ts` -- NOT IMPLEMENTED; the script is the
+        living spec for retuning pin priorities by distribution filter
+        (forky/sid/experimental to start). Run it and it says so.
   tasks:
     - import_tasks: tasks/compfuzor.includes
