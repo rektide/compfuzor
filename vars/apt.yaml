@@ -1,5 +1,5 @@
 # Source stanza defaults only. APT/APTS fields override these by name.
 APT_DEFAULTS:
   Types: deb
-  Suites: "{{ APT_DEFAULT_DISTRIBUTION }}"
-  Components: "{{ APT_DEFAULT_COMPONENT }}"
+  Suites: "{{ APT_DEFAULT_DISTRIBUTIONS | default(APT_DEFAULT_DISTRIBUTION) }}"
+  Components: "{{ APT_DEFAULT_COMPONENTS | default(APT_DEFAULT_COMPONENT) }}"

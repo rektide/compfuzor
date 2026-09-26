@@ -29,6 +29,8 @@ def test_sources():
         "URIs: https://flat.example/\n"
     )
     assert "Signed-By" not in apt_sources([{"URIs": "https://example.org"}], {"Suites": "forky"})
+    assert "Enabled: no" in apt_sources([{"URIs": "https://example.org", "Enabled": False}], {"Suites": "forky"})
+    assert "Trusted: no" in apt_sources([{"URIs": "https://example.org", "Trusted": False}], {"Suites": "forky"})
     fails(apt_sources, [{}], {"Suites": "forky"})
     fails(apt_sources, [], {})
     fails(apt_sources, [{"URIs": "u", "Bad:Field": "x"}], {"Suites": "s"})

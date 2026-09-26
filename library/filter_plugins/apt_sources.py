@@ -37,7 +37,7 @@ def _stanza(spec, defaults, required):
             raise AnsibleFilterError(f"apt deb822 stanza requires {field}")
     rows = []
     for name, value in fields.values():
-        if value is None or value is False or value == []:
+        if value is None or value == [] or (name.lower() == "components" and value is False):
             continue
         if isinstance(value, (tuple, list)):
             if not value or any(not isinstance(part, (str, int)) or "\n" in str(part) for part in value):
@@ -45,6 +45,8 @@ def _stanza(spec, defaults, required):
             value = " ".join(map(str, value))
         elif value is True:
             value = "yes"
+        elif value is False:
+            value = "no"
         elif not isinstance(value, (str, int)):
             raise AnsibleFilterError(f"invalid apt {name} value: {value!r}")
         value = str(value)
