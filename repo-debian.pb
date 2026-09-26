@@ -2,17 +2,17 @@
 - hosts: all
   vars:
     TYPE: debian
-    INSTANCE: "{{APT_DISTRIBUTION|default(APT_DEFAULT_DISTRIBUTION)}}"
+    INSTANCE: "{{APT_DEFAULT_DISTRIBUTION}}"
     # above default 500
-    APT_REPO: "{{APT_DEFAULT_MIRROR}}"
-    APT_PIN: "release n={{INSTANCE}}"
-    APT_PIN_PRIORITY: 600
+    APT:
+      URIs: "{{APT_DEFAULT_MIRROR}}"
+      Suites: "{{INSTANCE}}"
+      Components: [main, non-free, contrib, non-free-firmware]
+    APT_PREFS:
+      Pin: "release n={{INSTANCE}}"
+      Pin-Priority: 600
     APT_SOURCELIST: "{{NAME}}"
-    APT_COMPONENTS:
-      - main
-      - non-free
-      - contrib
-      - non-free-firmware
-    APT_TRUST: False
   tasks:
-    - include: tasks/compfuzor.includes type=etc
+    - import_tasks: tasks/compfuzor.includes
+      vars:
+        type: etc
