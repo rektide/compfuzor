@@ -166,4 +166,68 @@ and required-skip behavior before misleading success or unwanted writes. Do not
 hard-code every scenario into the generic dispatcher; expose any remaining need
 for host-driver glue honestly. Preserve manual apply and no host activation.
 
+### Experiment 4 — parent assessment and end of sequence
+
+Read [the final report](/design/compfuzor-runtime/experiment4.sxh.md) and scratch
+`kernel/library.ts`, `checkout/cli.ts`, `domains/{material,confext,preparation}.ts`.
+Accepted reported subprocess/demo/typecheck evidence. Parent found the fixed
+confext release basename under custom output names; Sol corrected it within
+experiment 4, checked the upstream rule, reran demo/typecheck, and committed a
+report revision. No actual systemd validation/activation was performed.
+
+The four-experiment sequence is complete. No fifth probe or implementation is
+authorized by these results.
+
+**Retain as architectural evidence:**
+
+- Collection of many declarations differs from selecting one implementation.
+- Programs as contributions are useful; an invocation context can bind chosen
+  modules, domain implementations, and an explicit project target.
+- Structured material descriptions enable multiple consumers without executing
+  the original installer or reconstructing its intent from shell code.
+- Ordinary checkout-local capabilities can expose a global entry without an
+  already-installed runtime; executable location is not deployment identity.
+- Realization, exposure, and artifact state require separate observations.
+- Persisted realization evidence permits fresh-process inspection and packaging
+  existing bytes without implicit regeneration. This does not establish that
+  every legacy material must first acquire a CFR-owned receipt.
+- Repeated authored calls are occurrences. Selection overlap can be deduplicated;
+  program/query equality alone does not justify execution reuse.
+
+**Reject a claim of a completed backbone:** experiment 4 is a small dependency
+binding/registration mechanism and async dispatcher. Its Request envelope is
+scenario-shaped; its generic type assertions do not validate contracts; its
+program descriptions do not describe executable composition before execution.
+The earlier plan tree, broad/narrow CLI semantics, and general execution policy
+have not been combined with the final multi-domain model. Domains still embed
+important dependencies and refusal behavior themselves. These probes establish
+compatible ideas in parts, not a fully integrated architecture.
+
+**Recommended reinterpretation:** CFR is a composable runtime environment for
+domain modules. The registry describes available data, implementations, and
+programs; a selected invocation context supplies bindings and targets; domain
+modules interpret declarations; the runner interprets inspectable program
+composition and execution policy. Ansible is a producer/consumer of this system,
+not its sole author. CLI paths and generated bins are views of public program
+structure, not the source of its meaning.
+
+The next design should explicitly reconcile ordinary TS authoring with structured
+program composition. Candidate: modules construct a small inspectable program
+algebra (calls, selections, sequencing, and bounded result-dependent continuation),
+while domain operations remain ordinary implementations. Do not assume this is
+the selected API: compare with explicit planning methods and effect-based
+interpreters, explaining where each loses truthful inspection. Dynamic continuation
+may expose only a known prefix before execution; display that boundary rather
+than pretending to know future work. Opaque legacy operations remain honest leaves.
+
+**Human checkpoint:** discuss that backbone direction before implementation.
+Favor a deliberate replacement of the current partial catalog/flow authority
+while retaining useful CONFIG/LINKS/Zim and rendering implementations. Avoid
+premature global task graphs, mandatory receipts for all legacy inputs, forced
+confext dependency on a fully project-contained layout, and a new round of toy
+experiments by default. The desired authoring experience still needs explicit
+attention: easy independently contributed modules, discovery by scripts, tags,
+narrow/broad paths, and phase/consumer relationships must not be lost in kernel
+minimalism.
+
 Completion means architectural learning, not acceptance of the prototype.
