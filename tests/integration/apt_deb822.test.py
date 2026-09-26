@@ -4,9 +4,12 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRATCH = ROOT / ".test-agent" / "apt-deb822"
+sys.path.insert(0, str(ROOT / "library/filter_plugins"))
+from apt_sources import apt_sources  # noqa: E402
 
 
 def render(name, overrides, expect_failure=False):
@@ -184,6 +187,22 @@ def test_invalid_empty_apt_does_not_fall_back():
     assert "requires URIs" in log
 
 
+def test_apt_accepts_inline_signed_by():
+    """APT's actual deb822 parser accepts the encoded multiline keyblock."""
+    key = subprocess.run(
+        ["gpg", "--no-default-keyring", "--keyring", str(ROOT / "files/apt-repos/chrome-apt.gpg"), "--armor", "--export"],
+        check=True, capture_output=True, text=True,
+    ).stdout
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    source = SCRATCH / "inline.sources"
+    source.write_text(apt_sources([{"URIs": "https://example.org", "Signed-By": key}], {"Suites": "stable", "Components": "main"}))
+    result = subprocess.run(
+        ["apt-get", "indextargets", "-o", f"Dir::Etc::sourcelist={source}", "-o", "Dir::Etc::sourceparts=-"],
+        cwd=ROOT, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 if __name__ == "__main__":
     test_sources_override_legacy()
     test_sources_before_packages()
@@ -191,4 +210,5 @@ if __name__ == "__main__":
     test_bypass_and_vendor_key()
     test_url_key_dearmor_at_install_time()
     test_invalid_empty_apt_does_not_fall_back()
+    test_apt_accepts_inline_signed_by()
     print("ok: deb822 source render and precedence")
