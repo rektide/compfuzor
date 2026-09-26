@@ -2,6 +2,10 @@
 # generated BINS body; files/_bin provides its shell prologue and DIR.
 {% set source = _source_name ~ '.sources' %}
 {% set key = _key_name ~ '.' ~ _key_ext %}
+# Match the render-time links: the ETC family is physically materialized at
+# ETC (often /etc/opt/NAME), while DIR/etc can be a symlink to it. Referencing
+# DIR/etc here would falsely treat render-time links as foreign.
+APT_PAYLOAD={{ ETC | quote }}
 if [ "${COMPFUZOR_APT_SOURCES_BYPASS:-}" ]; then exit 0; fi
 SUDO_CMD="${COMPFUZOR_APT_SUDO-sudo}"
 [ "$(id -u)" -eq 0 ] && SUDO_CMD=
@@ -15,8 +19,8 @@ SUDO_CMD="${COMPFUZOR_APT_SUDO-sudo}"
 {% else %}
     curl -fsSL {{ _key_url | quote }} >"$_apt_key_tmp"
 {% endif %}
-    if ! cmp -s -- "$_apt_key_tmp" "$DIR/etc/{{ key }}"; then
-        ${SUDO_CMD} install -m 0644 -- "$_apt_key_tmp" "$DIR/etc/{{ key }}"
+    if ! cmp -s -- "$_apt_key_tmp" "$APT_PAYLOAD/{{ key }}"; then
+        ${SUDO_CMD} install -m 0644 -- "$_apt_key_tmp" "$APT_PAYLOAD/{{ key }}"
     fi
     rm -f -- "$_apt_key_tmp"
     trap - EXIT
@@ -36,11 +40,11 @@ _apt_link() {
     fi
 }
 {% if _key_vendor or _key_url %}
-_apt_link "$DIR/etc/{{ key }}" {{ ((APT_KEYRINGS_DIR | default('/usr/share/keyrings')) ~ '/' ~ key) | quote }}
+_apt_link "$APT_PAYLOAD/{{ key }}" {{ ((APT_KEYRINGS_DIR | default('/usr/share/keyrings')) ~ '/' ~ key) | quote }}
 {% endif %}
-_apt_link "$DIR/etc/{{ source }}" {{ ((APT_SOURCES_DIR | default('/etc/apt/sources.list.d')) ~ '/' ~ source) | quote }}
+_apt_link "$APT_PAYLOAD/{{ source }}" {{ ((APT_SOURCES_DIR | default('/etc/apt/sources.list.d')) ~ '/' ~ source) | quote }}
 {% if _prefs %}
-_apt_link "$DIR/etc/{{ _source_name }}.pref" {{ ((APT_PREFERENCES_DIR | default('/etc/apt/preferences.d')) ~ '/' ~ _source_name ~ '.pref') | quote }}
+_apt_link "$APT_PAYLOAD/{{ _source_name }}.pref" {{ ((APT_PREFERENCES_DIR | default('/etc/apt/preferences.d')) ~ '/' ~ _source_name ~ '.pref') | quote }}
 {% endif %}
 # Index refresh stays optional because apt-get update is expensive on repeat
 # installs; it must happen before install-apt.sh in the packages phase.

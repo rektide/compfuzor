@@ -13,6 +13,8 @@ def render(name, overrides, expect_failure=False):
     root = SCRATCH / name
     for directory in (root / "etc", root / "bin", root / "sources", root / "preferences", root / "keyrings"):
         directory.mkdir(parents=True, exist_ok=True)
+    if "ETC" in overrides:
+        Path(overrides["ETC"]).mkdir(parents=True, exist_ok=True)
     for output in (
         root / "sources/apt-probe.sources", root / "preferences/apt-probe.pref",
         root / "keyrings/chrome-apt.gpg", root / "keyrings/test-key.gpg",
@@ -134,6 +136,17 @@ def test_sources_before_packages():
     assert install["run_all"].index("install-apt-sources.sh") < install["run_all"].index("install-apt.sh")
 
 
+def test_materialized_etc_matches_both_delivery_passes():
+    root = SCRATCH / "external-etc"
+    materialized = root / "materialized"
+    rendered, _ = render("external-etc", {"APT": {"URIs": "https://example.org"}, "ETC": str(materialized)})
+    source = rendered / "sources/apt-probe.sources"
+    assert source.is_symlink() and source.readlink() == materialized / "apt-probe.sources"
+    env = {**os.environ, "DIR": str(rendered), "COMPFUZOR_APT_SUDO": "", "COMPFUZOR_APT_UPDATE_BYPASS": "1"}
+    subprocess.run(["bash", "-euo", "pipefail", str(rendered / "bin/install-apt-sources.sh")], cwd=ROOT, env=env, check=True)
+    assert source.readlink() == materialized / "apt-probe.sources"
+
+
 def test_bypass_and_vendor_key():
     root, _ = render("bypassed", {
         "APT": {"URIs": "https://example.org"}, "APT_TRUSTED": "chrome-apt", "APT_BYPASS": True,
@@ -174,6 +187,7 @@ def test_invalid_empty_apt_does_not_fall_back():
 if __name__ == "__main__":
     test_sources_override_legacy()
     test_sources_before_packages()
+    test_materialized_etc_matches_both_delivery_passes()
     test_bypass_and_vendor_key()
     test_url_key_dearmor_at_install_time()
     test_invalid_empty_apt_does_not_fall_back()
