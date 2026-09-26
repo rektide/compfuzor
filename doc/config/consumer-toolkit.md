@@ -67,9 +67,11 @@ its fixed, chained, and explicit custom-alias behavior.
 No `.py` or `.ts` file is part of the relevant deployed `bin` tree. Other raw
 TypeScript deployment surfaces remain deliberately outside this cutover:
 kernel status reporters (`status-modules.ts`, `status-cmdline.ts`, and
-`status-sysctl.ts`), the Repart runtime (also embedded into Mkosi images), and
-the MCP drop-in adapter pair. They have separate domain behavior and are not
-imports or dependencies of the CONFIG/Zim/LINKS bundles.
+`status-sysctl.ts`) and the Repart runtime (also embedded into Mkosi images).
+The former MCP drop-in adapter pair was deleted; existing deployments may
+retain old copies until deliberate cleanup. OpenCode's `backup.ts` uses the
+separate Node bin template. These domains are not imports or dependencies of
+the CONFIG/Zim/LINKS bundles.
 
 ### Read-only runtime catalog
 
