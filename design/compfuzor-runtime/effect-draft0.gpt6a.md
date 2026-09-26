@@ -113,6 +113,24 @@ understand fibers or Effect's primitive implementation. The detailed contract
 must preserve `A`, `E`, and `R`: an invocation cannot claim `R = never` while
 secretly requiring a filesystem, policy, material or publication service.
 
+The [GX probe](/design/compfuzor-runtime/effect-probe0.glm53.md) exercised this
+minimal bridge with the actual public APIs:
+
+```ts
+// Tested probe excerpt; a single material domain, not the final plugin API.
+abstract class Op<A> extends Effectable.Class<A, OpError, MaterialRuntime> {
+  // Subclasses carry id, kind, concern, tags, material and domain payload.
+  asEffect(): Effect.Effect<A, OpError, MaterialRuntime> {
+    return MaterialRuntime.use((runtime) => runtime.run(this));
+  }
+}
+```
+
+Class-style service keys track the class identifier in `R`, not the key string.
+Use that tested style for named CFR services. Function-style keys with explicit
+identifier and implementation types are also valid; class syntax is not an
+upstream soundness requirement.
+
 ### Data is not necessarily an instruction
 
 Not every contributed value should be executed. A material specification,
@@ -451,9 +469,35 @@ do not mechanically port all four scratch kernels or every domain at once.
 
 The [four experiments](/design/compfuzor-runtime/experiments0.gpt6a.md) are evidence
 for contribution kinds, placement, cross-process material reuse and bootstrap,
-not Effect implementations. A focused Effect probe is being used to check the
-public-API seam before this draft's final checkpoint; the rest of these CFR
-interfaces are explicitly proposed.
+not Effect implementations. The additional
+[Effect-native GX probe](/design/compfuzor-runtime/effect-probe0.glm53.md) tests the
+public-API seam on the same checkout revision. The parent reviewed its operation
+and group classes, service keys, interpreter and demo; reported demo/typecheck
+results are accepted without a duplicate run.
+
+| Evidence from the Effect probe | What it supports, and what it does not |
+|---|---|
+| 24 executable checks passed; strict tsgo check passed | The small source-checkout prototype runs/types correctly; not a full migration or packaged-distribution test |
+| `Op` and nested `Group` are Effectable; group evaluation uses `Effect.forEach` | Direct yieldability and composition through Effect, without a separate scheduler |
+| Schema-encoded description triggers no handlers, Layers, policy checks or generator bodies | Pure inspection of these CFR-owned objects; not static inference through arbitrary user implementations |
+| Same observation instance yielded before and after a write runs twice | Occurrence semantics survive Effect evaluation |
+| Independent modules concatenate contributed operation data under one interpreter Layer | Additive contribution is separate from provider replacement; external module discovery is still proposed |
+| Denied publication fails before a link; false postcondition is typed failure; a thrown fixture error is a defect | The intended distinctions can be expressed directly in Effect; not complete execution-policy coverage |
+| One Layer acquisition for several calls, fresh acquisition for separately provided runs | Construction sharing differs from operation caching; managed-runtime lifetime remains an explicit choice |
+| Trying to walk a generator with fabricated observations executes author code and changes branch choice | A fake execution is not an exact static plan |
+
+The probe leaves an unsafe generic cast in interpreter dispatch, uses direct
+promise-backed I/O, and encodes descriptions without proving full decode/rebuild
+round-trips. Do not copy those shortcuts into production. Domain-specific typed
+handlers must preserve the input/result relationship without allowing arbitrary
+`Op<A>` subclasses to claim unsupported results. The open contribution model
+must not become one closed switch of every domain's operation kinds.
+
+For example, adding a new native domain should add its definitions, schemas,
+Effect service and selected Layer—not modify a global `OpKind` union or teach
+the runner a new interpreter case. Generic inspection reads public descriptors;
+executing a call delegates to that domain's typed interface. Schema validation
+and explicit handler bindings enforce the corresponding external-data contract.
 
 Effect's public [Effectable][effectable], [Context/Layer][layers],
 [ChildProcess][child-process], [CLI][cli-example] and [Toolkit][toolkit] provide
@@ -480,6 +524,9 @@ Effect. No production dependency or runtime has been changed by this draft.
   direction, command specificity, open contribution and bootstrap clarification.
 - [Parent experiment assessments](/design/compfuzor-runtime/experiments0.gpt6a.md)
   — why an async dispatcher alone was insufficient and what domain evidence survived.
+- [Effect-native probe](/design/compfuzor-runtime/effect-probe0.glm53.md) — direct
+  public-API execution evidence for Effectable descriptions and nested groups,
+  plus the limits and parent-corrected source/distribution claims.
 - [Experiment 3](/design/compfuzor-runtime/experiment3.sxh.md) and
   [experiment 4](/design/compfuzor-runtime/experiment4.sxh.md) — real scratch
   links/artifacts, durable evidence and the limits of those demonstrations.

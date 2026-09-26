@@ -55,9 +55,10 @@ capture: [`scratch-demo-output.txt`](/.test-agent/cfr-effect/experiment0/scratch
 ## Observed exact APIs (v4, against the pinned checkout)
 
 Effect checkout `~/a/Effect-TS/effect` @ `64093976e9f595f0f9638aad5526738c78a3fa08`,
-`packages/effect` manifest version `4.0.0-rc.117`. The published package maps
-its `"."` export to `./src/index.ts` — TypeScript source is the shipped entry,
-so Node 26 runs it under type-stripping with **no install at all**
+`packages/effect` manifest version `4.0.0-rc.117`. The checkout package maps
+its `"."` export to `./src/index.ts`; its separate `publishConfig.exports`
+maps the published root to `./dist/index.js`. This probe used checkout source,
+which Node 26 runs under type-stripping with **no install at all**
 (`deps.ts` imports the checkout by absolute path; no `internal/*` import from
 our code).
 
@@ -104,9 +105,10 @@ export class MaterialRuntime extends Context.Service<MaterialRuntime, {
 `"MaterialRuntime"` — `ServiceClass<Self, …> extends Service<Self, Shape>`,
 so the key's identifier type is `Self`. tsgo rejected our first
 `"MaterialRuntime"`-literal annotations; the string is only the runtime slot
-key. The function-style `Context.Service<Shape>("Key")` defaults
-`Identifier = Shape`, which is worse for tracking; class-style is the sound
-pattern. Service keys are themselves yieldable (`yield* Policy` inside the
+key. The function-style signature is `Context.Service<Identifier, Shape =
+Identifier>("Key")`: supplying just the shape uses it for both types, but an
+explicit identifier and shape are also supported. Class-style is the tested
+convention here, not the only sound form. Service keys are themselves yieldable (`yield* Policy` inside the
 layer builder — *tested*), and `use` is
 `use<A, E, R>(f: (service: Shape) => Effect<A, E, R>): Effect<A, E, R | Identifier>`
 ([`Context.ts:101`](~/a/Effect-TS/effect/packages/effect/src/Context.ts#L101)).
@@ -124,9 +126,11 @@ export const makeMaterialRuntimeLayer = (env, policyLayer = PolicyLive) =>
 ```
 
 *Tested:* a program yielding N ops acquires the layer exactly **once** (S2: 3
-ops → 1 acquisition; S3: 6 ops across nested groups → 1); two separate
-`Effect.runPromise` runs acquire **twice** (S6) — Layer MemoMap memoizes
-construction per build, never execution. This is experiment-2's
+ops → 1 acquisition; S3: 6 ops across nested groups → 1); two separately
+provided runs acquire **twice** in this probe (S6). Layer MemoMap shares
+construction within its lifetime; explicitly shared memo maps or managed runtimes
+can extend that lifetime across runs. This does not deduplicate op execution.
+This is experiment-2's
 construction-vs-occurrence distinction, native.
 
 **4. Typed errors are data and yieldable — `Schema.TaggedError`**
@@ -227,8 +231,9 @@ are data, deliberately not services).
 
 ## Runtime/dependency constraints
 
-- **No install required.** The v4 package's `exports["."]` points at TS
-  source; Node ≥22.18/24.11 type-strips it (we ran Node v26.6.0). Prototype
+- **No install required for this checkout-based probe.** The checkout's
+  `exports["."]` points at TS source (published exports are configured separately).
+  Native type stripping was exercised on Node v26.6.0; lower versions were not tested. Prototype
   imports the pinned archive checkout directly — zero changes to compfuzor's
   root manifests, zero network.
 - **Vanilla tsgo sufficed** for this subset: the repo's
@@ -238,7 +243,8 @@ are data, deliberately not services).
   for ordinary use).
 - **Strip-only restrictions apply to our code**: no TS parameter properties
   (classes declare fields explicitly); no enums/namespaces.
-- **v4 is `4.0.0-rc.117`, unreleased**; the rc line is moving (checkout commit
+- **The checkout declares `4.0.0-rc.117`, a prerelease version**; registry
+  publication status was not queried. The rc line is moving (checkout commit
   is from 2026-09-26). APIs used here are `@since 4.0.0` public surface, but
   pin an exact revision if the draft leans on them.
 - One honest cast remains: the interpreter's dispatch switch returns
@@ -270,9 +276,9 @@ Against [`effect-material0.glm53.md`](/design/compfuzor-runtime/effect-material0
    memoized… side effects before suspension can repeat" caveat remains
    prior-scan reading, not evidence. Do not let the draft lean on it.
 4. **New fact material0 lacked:** class-style service keys type `R` as the
-   class instance type (not the key string), and function-style keys default
-   their identifier to the shape — class-style declarations are the pattern
-   that actually tracks requirements.
+   class instance type (not the key string). Function-style keys also support
+   explicit identifier/shape types; the one-generic shorthand uses that type
+   for both. Both forms can track requirements; this probe checked class-style.
 
 ## What this suggests for the parent's draft (not a competing draft)
 
@@ -296,10 +302,22 @@ Against [`effect-material0.glm53.md`](/design/compfuzor-runtime/effect-material0
 - **Durability stays ours:** Layer memoization is per-build only; receipts,
    cross-process replay, and fresh-process health remain CFR concerns on top
    of Effect, not inherited from it.
-- **Risks to carry into the decision:** unreleased rc line; TS-source-as-entry
-   is unusual even if deliberate; strip-only authoring constraints; the
+- **Risks to carry into the decision:** prerelease API churn; checkout-source
+  execution does not validate packaged distribution; strip-only authoring constraints; the
    interpreter-side `any` cast at the dispatch seam (soluble with more type
    discipline, worth not hiding).
+
+## Parent review corrections
+
+The parent reviewed the operation/group classes, service keys, interpreter and
+demo, and checked the upstream Context signatures and package manifest. The
+export-layout, key-typing and Layer-lifetime claims above were narrowed after
+the first committed report; no demo result was changed and no duplicate run was
+performed. The prototype's `Effect.promise` I/O and read-error-to-missing shortcut
+are not a recommended production error model; use typed platform errors and
+distinguish absence from permission/I/O failure. Its generic interpreter cast and
+`instanceof` dispatch test one loaded domain, not a validated third-party plugin
+protocol. The named metadata fields are not a demonstrated full wire round-trip.
 
 ## Cross-references
 
