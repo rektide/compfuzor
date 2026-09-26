@@ -72,6 +72,7 @@
 
           allowed_mirrors = [
             '*.debian.org', 'deb.debian.org', 'security.debian.org',
+            'mirrors.kernel.org', 'mirrors.edge.kernel.org',
             '*.ubuntu.com', 'archive.ubuntu.com', 'security.ubuntu.com',
             'apt.llvm.org', 'download.vscodium.com',
           ]
