@@ -2,10 +2,6 @@
 - hosts: all
   vars:
     NPM: '@sourcegraph/amp@latest'
-    MCP_CLIENT:
-      remote: mcp
-      wrapper: amp.mcpServers
-      command_args: true
     ETC_DIRS:
       - config.d
       - mcp

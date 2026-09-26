@@ -51,7 +51,8 @@ case "$processor" in
               gsub("\\$\\{(?<key>[A-Za-z_][A-Za-z0-9_]*)\\}";
                 env[.key] // error("missing environment variable: " + .key))
             else . end);
-          .[0] as $base | .[1] as $input |
+          if length != 2 then error($identity + ": expected exactly one JSON document in the input")
+          else .[0] as $base | .[1] as $input |
           (if $settings.envsubst then ($input | substitute) else $input end) as $value |
           if $settings.place == null then $base * $value
           else
@@ -70,7 +71,7 @@ case "$processor" in
               elif $old != null and ($old | type) != "array" then error($identity + ": destination is not an array")
               else $base | setpath($path; ($old // []) + $value) end
             else error($identity + ": unsupported placement") end
-          end
+          end end
         ' "$CONFIG_CANDIDATE" "$path" > "$next"
       ) || { rm -f "$next"; exit 1; }
       mv "$next" "$CONFIG_CANDIDATE"

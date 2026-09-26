@@ -7,7 +7,8 @@ configuration for a selected consumer context.
 ## Start here
 
 - [Consumer configuration toolkit](/doc/config/consumer-toolkit.md) — current
-  commands, contexts, copy/link choices, Zim workflow, and status semantics.
+  commands, contexts, copy/link choices, portable JSON input placement,
+  Zim workflow, and status semantics.
 - [Simplification plan](/doc/config/simplification.md) — candid account of the
   remaining accidental complexity and the deletion-oriented route out.
 - [Attributed runtime flows](/design/config-anneal/execution-model0.gpt6.md) —

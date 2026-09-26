@@ -157,6 +157,10 @@ output.write_text(text)
         run([str(payload / "bin" / "config-remote.mjs"), "put", "portable", str(producer / "etc" / "mcp.json"), "docs.json"], cwd=payload, env=runtime_env)
         assert (payload / "etc" / "portable" / "docs.json").is_symlink()
         assert json.loads((payload / "etc" / "app.json").read_text())["mcp"]["servers"]["docs"]["headers"]["Authorization"] == 'Bearer quoted"value'
+        run([str(payload / "bin" / "config-remote.mjs"), "disable", "portable", "docs.json"], cwd=payload, env=runtime_env)
+        assert (payload / "etc" / "portable" / "docs.json.disabled").is_symlink()
+        assert "servers" not in json.loads((payload / "etc" / "app.json").read_text())["mcp"]
+        run([str(payload / "bin" / "config-remote.mjs"), "enable", "portable", "docs.json"], cwd=payload, env=runtime_env)
 
         listed = run([str(payload / "bin" / "config-assemble.sh"), "--list"], cwd=payload, env=runtime_env)
         assert listed.stdout.splitlines() == ["app", "policy", "shell"]
@@ -183,6 +187,10 @@ output.write_text(text)
         assert json.loads((payload / "etc" / "app.json").read_text())["mcp"]["servers"]["docs"]["type"] == "remote"
 
         original = (payload / "etc" / "app.json").read_text()
+        (producer / "env.export").write_text('export API_KEY=changed\n', encoding="utf-8")
+        drift = run([str(payload / "bin" / "config-assemble.sh"), "--check", "--quiet", "app"], cwd=payload, check=False, env=runtime_env)
+        assert drift.returncode == 1 and (payload / "etc" / "app.json").read_text() == original
+        (producer / "env.export").write_text('export API_KEY=\'quoted"value\'\n', encoding="utf-8")
         (producer / "etc" / "mcp.json").write_text('{"url":"${UNSET_PORTABLE_TEST_VAR}"}\n')
         failed = run([str(payload / "bin" / "config-assemble.sh"), "app"], cwd=payload, check=False, env=runtime_env)
         assert failed.returncode != 0 and "missing environment variable" in failed.stderr
@@ -193,6 +201,10 @@ output.write_text(text)
         assert failed.returncode != 0 and "expected JSON array" in failed.stderr
         assert (payload / "etc" / "app.json").read_text() == original
         (payload / "etc" / "plugins" / "10-plugin.json").write_text('["one", "two"]\n')
+        (producer / "etc" / "mcp.json").write_text('{"x":1}\n{"y":2}\n')
+        failed = run([str(payload / "bin" / "config-assemble.sh"), "app"], cwd=payload, check=False, env=runtime_env)
+        assert failed.returncode != 0 and "exactly one JSON document" in failed.stderr
+        assert (payload / "etc" / "app.json").read_text() == original
 
         (payload / "etc" / "policy.d" / "10-policy.conf").write_text("policy=false\n")
         (payload / "etc" / "core" / "10-core.json").write_text('{"core": false}\n')

@@ -181,9 +181,10 @@ Remaining raw TypeScript deployments are separate legacy surfaces:
 
 - kernel status reporters;
 - Repart/Mkosi runtime;
-- MCP drop-in adapters.
+- MCP drop-in adapters (removed in favor of JSON input placement and
+  `config-remote.mjs`; previously deployed copies are not pruned automatically).
 
-Move them one domain at a time into the existing Vite+ multi-entry build. Each
+Move the remaining ones one domain at a time into the existing Vite+ multi-entry build. Each
 slice should replace raw BINS records with one built executable and prove its
 embedded/imported use case. Do not create another package, bundler, or build
 configuration per domain.

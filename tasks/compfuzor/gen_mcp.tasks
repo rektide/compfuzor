@@ -1,12 +1,8 @@
 ---
-# gen_mcp.tasks — MCP server configuration and client tooling.
+# gen_mcp.tasks — portable MCP server records.
 #
-# MCP clients declare CONFIGS; the central config synthesis pass provides
-# their merger, generic toggles, status, and apply ordering.
-#
-# What MCP contributes itself:
-#   - mcp.json ETC_FILES (server config, from MCP_URL or MCP_COMMAND)
-#   - mcp-dropin.ts (Node entry point delegated to a shared TS implementation)
+# Clients declare CONFIGS for importing records. MCP_COMMAND/MCP_URL only
+# contribute producer data; the generic config-remote command links it.
 
 - name: 'Build vars for remote MCP server'
   set_fact:
@@ -20,11 +16,9 @@
         headers: "{{ MCP_HEADERS|default(omit) }}"
   when: MCP_URL is defined
 
-- name: 'Build vars for local MCP server'
+- name: 'Compute local MCP invocation'
   set_fact:
-    ETC_FILES: "{{ [mcp_file] | merge_list(ETC_FILES, preset='append') }}"
-  vars:
-    mcp_command_with_args: >-
+    _mcp_command_with_args: >-
       {%- set args = [] -%}
       {%- for key in (ENV|default({})).keys() -%}
         {%- if key.startswith('mcp_arg_') and ENV[key] | string | length > 0 -%}
@@ -32,11 +26,17 @@
         {%- endif -%}
       {%- endfor -%}
       {{- MCP_COMMAND + args }}
+  when: MCP_COMMAND is defined
+
+- name: 'Build vars for local MCP server'
+  set_fact:
+    ETC_FILES: "{{ [mcp_file] | merge_list(ETC_FILES, preset='append') }}"
+  vars:
     mcp_file:
       name: mcp.json
       json:
         type: local
-        command: "{{ mcp_command_with_args }}"
+        command: "{{ _mcp_command_with_args }}"
         environment: >-
           {%- if MCP_ENV is defined -%}
           {%- if MCP_ENV is mapping -%}
@@ -52,35 +52,3 @@
           {{ omit }}
           {%- endif -%}
   when: MCP_COMMAND is defined
-
-- name: 'Validate MCP drop-in helper request'
-  assert:
-    that:
-      - MCP_CLIENT is mapping
-      - MCP_CLIENT.remote is string
-      - MCP_CLIENT.wrapper is string
-    fail_msg: 'MCP_CLIENT requires string remote and wrapper fields'
-  when: MCP_CLIENT is defined
-
-- name: 'Contribute MCP drop-in helper'
-  set_fact:
-    BINS: "{{ BINS | merge_list([helper, implementation] | annotate_bins('mcp'), preset='bins_generated') }}"
-  vars:
-    helper:
-      name: mcp-dropin.ts
-      runtime: node
-      basedir: False
-      content: |
-        import { run } from "./mcp-dropin-core.ts"
-
-        await run({
-          remote: {{ MCP_CLIENT.remote | to_json }},
-          wrapper: {{ MCP_CLIENT.wrapper | to_json }},
-          commandArgs: {{ MCP_CLIENT.command_args | default(false) | bool | to_json }},
-        }, process.argv.slice(2))
-    implementation:
-      name: mcp-dropin-core.ts
-      runtime: node
-      src: ../mcp-dropin.ts
-      basedir: False
-  when: MCP_CLIENT is defined

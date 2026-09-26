@@ -3,10 +3,6 @@
   vars:
     REPO: https://github.com/philschmid/mcp-cli
     BUN: True
-    MCP_CLIENT:
-      remote: mcp
-      wrapper: mcpServers
-      command_args: true
     ETC_DIRS:
       - mcp
     CONFIGS:

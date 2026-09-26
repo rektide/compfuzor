@@ -68,7 +68,7 @@
   when: ARCH_PKGS is defined or ARCH_PKGSET is defined or ARCH_PKGSETS is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/gen_mcp.tasks
-  when: MCP_COMMAND is defined or MCP_URL is defined or MCP_CLIENT is defined
+  when: MCP_COMMAND is defined or MCP_URL is defined
   tags: ['vars', 'always']
 - import_tasks: compfuzor/sub_config.tasks
   tags: ['vars', 'always']

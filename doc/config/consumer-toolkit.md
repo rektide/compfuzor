@@ -284,6 +284,69 @@ config-inputs.sh disable CONFIG/INPUT NAME
 config-inputs.sh remove CONFIG/INPUT [NAME]
 ```
 
+## Portable JSON inputs
+
+`json-deep-merge` inputs can opt into placement and environment substitution.
+Other inputs keep the ordinary deep-merge behavior. A glob with `place` can
+wrap raw JSON records as it assembles, without changing the producer file or
+creating a client-specific adapter:
+
+```yaml
+CONFIGS:
+  opencode.json:
+    processor: json-deep-merge
+    inputs:
+      - file: base.json
+      - glob: mcp/*.json                 # existing pre-wrapped fragments
+        name: mcp
+      - glob: mcp-portable/*.json
+        name: mcp-portable
+        remote: true
+        place:
+          at: mcp.servers               # dotted object path
+          as: object                    # object | array; explicit, not inferred
+        envsubst:
+          file: ../env.export           # relative to each real producer file
+```
+
+```sh
+bin/config-remote.mjs put mcp-portable \
+  /usr/local/src/example-mcp/etc/mcp.json example.json
+```
+
+The remote command still manages **only links** and rebuilds the canonical
+config transactionally. With `as: object`, each input must be a JSON object;
+`example.json` places it at `mcp.servers.example`. With `as: array`, each
+input must be an array, and its elements are appended at `at` in sorted file
+order; the filename does not become a key. A pre-existing destination with the
+wrong type fails assembly. A new slot overrides an older value at that slot,
+just like an ordinary deep-merge input. Use separate globs for pre-wrapped and
+portable records to avoid wrapping an already-wrapped record again.
+
+`envsubst.file` opts into **single-pass**, JSON-aware `${NAME}` substitution
+in string values only. The file is sourced as shell code in a per-input
+subprocess; **only configure trusted producer `env.export` files**. Relative
+paths are resolved from the symlink's real target directory, not the consumer's
+directory. Values from the env file override inherited environment variables;
+an undefined name fails assembly (including during remote `put`, which rolls
+the link back). Literal `{env:NAME}` is left for the consumer application to
+resolve at runtime. This is preferable for credentials: `${NAME}` materializes
+its value into the assembled config. Check/status may show config diffs, so
+use quiet check when avoiding secret values in terminal output.
+
+There is no automatic registration or producer install hook: select a server
+name explicitly with `put ... name.json`; `config-remote.mjs` keeps disabled
+links disabled on subsequent puts. Remove or disable a link deliberately when
+no longer needed. Changing a producer record or env file changes assembly
+results, but the consumer must reassemble and restart/reload its application
+when appropriate.
+
+The OpenCode playbook opts into portable input placement. Amp and `mcp-cli`
+continue accepting their already-wrapped `mcp/*.json` fragments; they require
+`command`/`args` rewriting for local servers and have **not** opted into the
+portable input contract. Do not link a raw producer record into their existing
+glob. This interface does not silently infer client-specific field mappings.
+
 ## Manual aliases
 
 Compfuzor generates no context aliases or alias map. An operator may create a

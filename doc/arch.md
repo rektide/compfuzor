@@ -779,16 +779,19 @@ operation:
 /opt/zim-main/bin/install-zim-donor.sh /opt/producer
 ```
 
-MCP uses the same seam after transformation. The producer's `mcp.json` is
-transformed to a durable `etc/mcp-remote/<server>.json`; the MCP adapter then
-calls the selected client's lifecycle tool, for example:
+MCP uses the same seam without a separate adapter. A client may declare a
+`json-deep-merge` glob input with `place: {at: mcp.servers, as: object}`. The
+filename chosen at import becomes the server name; the consumer assembler
+wraps the producer's portable `etc/mcp.json` when building its output:
 
 ```sh
-/opt/amp/bin/config-remote.ts put mcp \
-  /usr/local/src/example-mcp/etc/mcp-remote/example-mcp.json example-mcp.json
+/usr/local/src/opencode-git/bin/config-remote.mjs put mcp-portable \
+  /usr/local/src/example-mcp/etc/mcp.json example.json
 ```
 
-Remote operations never copy, rename, or edit producer files. Link updates
+An optional `envsubst: {file: ../env.export}` input setting reads the file
+relative to the symlink's real producer path during assembly. Remote operations
+never copy, rename, or edit producer files. Link updates
 retain disabled state, conflicting active and disabled links are rejected, and
 a failed rebuild rolls the local symlink mutation back.
 

@@ -539,11 +539,6 @@
       default). Behavior and flags match `backup.sh`; retire one once the
       other is proven.
 
-      `bin/mcp-dropin.ts` is also a Node/TypeScript bin: Compfuzor renders
-      this instance's MCP remote settings into the entry point, which calls
-      `mcp-dropin-core.ts` directly. There is no Bash exec wrapper between
-      the two; run it with `[source-dir]` (defaults to the current directory).
-
           {{DIR}}/bin/backup.sh --db-only   # fast DB+auth refresh
           {{DIR}}/bin/backup.sh --config    # data + ~/.config/opencode
           {{DIR}}/bin/backup.sh --snapshot  # consistent DB snapshot
@@ -596,6 +591,25 @@
       it also verifies the timer is active and enabled. `--no-timer` skips the
       timer half; `--min-age`/`--tmp-dir` pass through to the dry run.
 
+      ## Portable MCP records
+
+      Existing hand-authored `etc/mcp/*.json` fragments are already wrapped
+      for OpenCode and remain untouched. Portable producer `etc/mcp.json`
+      records go to a separate input, whose JSON assembler places each record
+      under `mcp.servers.<filename stem>` (OpenCode V2):
+
+          {{DIR}}/bin/config-remote.mjs put mcp-portable \
+            /usr/local/src/cratedocs-mcp-git/etc/mcp.json cratedocs.json
+          {{DIR}}/bin/config-remote.mjs disable mcp-portable cratedocs.json
+
+      The symlink points at the producer's original record. On each assembly,
+      `${VAR}` in JSON strings is expanded from that producer's `env.export`
+      and the invoking environment; unresolved names fail assembly. The
+      producer file is never rewritten. For runtime secrets, prefer OpenCode's
+      native `{env:VAR}` expression and ensure the server has that variable;
+      `${VAR}` expansion writes the value into the assembled config. To avoid
+      a stale server configuration, restart the service after changing MCPs.
+
       ## Operational notes
 
       Set `OTEL_EXPORTER_OTLP_ENDPOINT` (and optionally
@@ -615,13 +629,11 @@
       require a deliberate privileged policy for `user@.service` or a system
       service deployment. `OOMPolicy=stop` keeps an OOM failure coherent, and
       `Restart=always` recovers process exits with bounded backoff.
-    MCP_CLIENT:
-      remote: mcp
-      wrapper: mcp
     ETC_DIRS:
       - agent
       - etc_d
       - mcp
+      - mcp-portable
     CONFIGS:
       opencode.json:
         processor: json-deep-merge
@@ -632,6 +644,14 @@
           - glob: mcp/*.json
             name: mcp
             remote: true
+          - glob: mcp-portable/*.json
+            name: mcp-portable
+            remote: true
+            place:
+              at: mcp.servers
+              as: object
+            envsubst:
+              file: ../env.export
     ETC_FILES:
       - name: base.json
         json:
