@@ -91,8 +91,8 @@
       # workspace carries the watchman stack, then opts the service in.
       # 4m command deadline: loaded host, prefer waiting over generation churn.
       OPENCODE_WATCHER_BACKEND: watchman
-      # Defaults for bin/backup.ts: raw TS bins get no Jinja rendering, so
-      # they source this env.export for BACKUP_TARGETS at runtime.
+      # Defaults for bin/backup.ts: the Node bin template supplies the shebang,
+      # while backup.ts reads this env.export for BACKUP_TARGETS at runtime.
       BACKUP_TARGETS: "{{ BACKUP_TARGETS|join(' ') }}"
       OPENCODE_WATCHMAN_COMMAND_TIMEOUT_MS: 240000
       # One canonical socket shared by the mutually-exclusive watchman
@@ -534,9 +534,15 @@
       costs a full DB copy per snapshot.
 
       `bin/backup.ts` is the TypeScript port of the same tool (node
-      `parse-args` CLI, deployed as a raw node-shebang bin that sources this
-      deployment's `env.export` for its `BACKUP_TARGETS` default). Behavior
-      and flags match `backup.sh`; retire one once the other is proven.
+      `parse-args` CLI, deployed through Compfuzor's Node bin template and
+      reading this deployment's `env.export` for its `BACKUP_TARGETS`
+      default). Behavior and flags match `backup.sh`; retire one once the
+      other is proven.
+
+      `bin/mcp-dropin.ts` is also a Node/TypeScript bin: Compfuzor renders
+      this instance's MCP remote settings into the entry point, which calls
+      `mcp-dropin-core.ts` directly. There is no Bash exec wrapper between
+      the two; run it with `[source-dir]` (defaults to the current directory).
 
           {{DIR}}/bin/backup.sh --db-only   # fast DB+auth refresh
           {{DIR}}/bin/backup.sh --config    # data + ~/.config/opencode
@@ -836,13 +842,12 @@
         global: "{{ 'opencode-status-ok' if OPENCODE_PRIMARY else False }}"
       - name: backup.sh
         basedir: False
-      # TypeScript port of backup.sh (node:util parse-args CLI). Raw copy:
-      # no sh compositor preamble — runs under node via its shebang and
-      # sources the deployment env.export itself for defaults
+      # TypeScript port of backup.sh (node:util parse-args CLI). The Node
+      # template emits the shebang; backup.ts reads env.export for defaults
       # (BACKUP_TARGETS rides ENV for exactly that).
       - name: backup.ts
         basedir: False
-        raw: True
+        runtime: node
       # Primary-only interactive surface: the dev-TUI launcher and the dated
       # snapshot runner both target the primary deployment through unsuffixed
       # defaults (ZIM modules, /usr/local/bin snapshots); secondaries keep the
