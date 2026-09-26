@@ -394,9 +394,11 @@ package manager binary (`apt-get` / `pacman`) inside its lane script, so a
 playbook declaring both `PKGS` and `ARCH_PKGS` converges the correct list on
 either family with one `sudo bash bin/install.sh`. Render-side, `pkgs.tasks`
 dispatches the same way on `ansible_pkg_mgr`.
+
 Deb822 repository configuration is a separate `install-apt-sources.sh` child
 of the packages phase; it precedes `install-apt.sh` even on repo-only
 playbooks. Its source, key and bypass contracts are in [`doc/apt.md`](/doc/apt.md).
+
 Before lanes, this ordering was accidental (BINS list order = task-file
 geography), which worked only while nobody looked — units enabled before their
 ExecStart binary landed crashlooped on fresh installs until Restart rescued
