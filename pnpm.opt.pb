@@ -22,8 +22,11 @@
     GET_URLS:
       - url: https://github.com/pnpm/pnpm/releases/download/v{{version}}/pnpm-linux-x64.tar.gz
         dest: pnpm-linux-x64.tar.gz
-        # world-readable: the fetch lands root-owned under SRCS_DIR, but
-        # install-system.sh (run as the invoking user) must read it.
+        # Deployment-user ownership: the ansible fetch task may elevate (GROUP
+        # in scope), but the shell re-fetch lane (get-urls.sh) converges the
+        # declared mode as the invoking user -- the fetched artifact must
+        # stay theirs or that chmod fails with EPERM.
+        owner: "{{OWNER|def(_cf_user_id)}}"
         mode: "0644"
     ENV_LIST:
       - version
