@@ -62,8 +62,9 @@ fail-on-mismatch. Review the failure's URL table before setting that variable.
 
 `COMPFUZOR_REPO_JJ_RUNNER` can override the runner path. By default the
 playbook uses `playbook_dir/script/repo-jj-archive.ts`, which imports
-`archive/src/repo-jj-archive.ts` first (no bundle transport) or the committed
-`archive/repo-jj-archive.mjs` when sources are absent. The optional `self`
+`archive/src/repo-jj-archive.ts` first when source **and installed CLI modules**
+are present (no bundle transport), or the committed
+`archive/repo-jj-archive.mjs` when either is absent. The optional `self`
 command **never** influences this path or requires the compfuzor archive
 checkout to exist. The old flag-only invocation is still accepted as an alias
 for `refresh --json`; old `--version BRANCH` maps to `--branch BRANCH` (Gunshi

@@ -72,7 +72,7 @@ when it would obscure the explicit ordering in the principal flow.
 - The [task](/tasks/compfuzor/repo_jj_archive.tasks) now invokes `refresh
   --json` explicitly. `GIT_REMOTE_FIX=true` passes the opt-in URL reconciliation
   flag; absent/false preserves fail-loud behavior. The launcher resolves src
-  first, committed bundle second, and never relies on `self` detecting an
+  first when its CLI modules are installed, committed bundle otherwise, and never relies on `self` detecting an
   archive compfuzor checkout. Gunshi's default header and validation output
   were disabled, so success is one JSON line and errors go to stderr.
 - `--update false` still snapshots and checks remotes; it skips fetch and

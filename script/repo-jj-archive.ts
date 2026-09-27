@@ -10,7 +10,7 @@
  *      via Node type stripping; no bundler transport between checkout and
  *      execution.
  *   2. archive/repo-jj-archive.mjs — the committed build output, for trees
- *      that ship only built artifacts.
+ *      without source or locally installed CLI dependencies.
  */
 
 import { realpath, stat } from "node:fs/promises";
@@ -22,7 +22,15 @@ async function launch(): Promise<void> {
   const root = resolve(dirname(import.meta.filename), "..");
   const source = join(root, "archive/src/repo-jj-archive.ts");
   const bundle = join(root, "archive/repo-jj-archive.mjs");
-  const runner = (await stat(source, { throwIfNoEntry: false })) === undefined ? bundle : source;
+  const sourceFiles = [
+    source,
+    join(root, "node_modules/gunshi"),
+    join(root, "node_modules/@gunshi/plugin-completion"),
+  ];
+  const available = await Promise.all(
+    sourceFiles.map((path) => stat(path, { throwIfNoEntry: false })),
+  );
+  const runner = available.every(Boolean) ? source : bundle;
   const { main } = (await import(runner)) as Runner;
   await main();
 }
