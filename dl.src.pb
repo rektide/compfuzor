@@ -50,7 +50,7 @@
       checkout at `~/src/dl` is left untouched (compfuzor does not prune
       undeclared artifacts); to switch back to it run
       `cd ~/src/dl && pnpm link --global`, and migrate it deliberately (see
-      `script/harvest-legacy-repo.sh`) when ready.
+      `script/deprecated-harvest-legacy-repo.sh`) when ready.
 
       ## Run
 

@@ -12,7 +12,7 @@ sources:
     resource: /design/archive-migration/draft0.glm53.md#walkthrough
     title: live migration performed 2026-09-27 (this document)
   - id: harvest-legacy
-    resource: /script/harvest-legacy-repo.sh
+    resource: /script/deprecated-harvest-legacy-repo.sh
     title: legacy harvest script (bash, outside the toolkit)
   - id: toolkit
     resource: /archive/README.md
@@ -64,7 +64,7 @@ Fresh jj-colocated clone at the house path; `main` tracked at the remote tip.
 ### 2. Harvest the legacy checkout (nothing in it is touched)
 
 ```sh
-./script/harvest-legacy-repo.sh ~/src/dl ~/archive/rektide/dl --label dl-legacy
+./script/deprecated-harvest-legacy-repo.sh ~/src/dl ~/archive/rektide/dl --label dl-legacy
 # harvest: safety bundles written to /home/rektide/archive/rektide/
 # harvest: branch  main -> harvest/dl-legacy/main
 # harvest: head     c2ed9631… -> harvest/dl-legacy/head
@@ -159,5 +159,5 @@ The preflight from the ghost-head incident, dogfooded on the fresh archive.
 - [`/design/repo-jj-archive/incident-ghost-heads.glm53.md`](/design/repo-jj-archive/incident-ghost-heads.glm53.md) — the failure class `health`/`heal` guard against; adopt must run the same preflight.
 - [`/design/repo-jj-archive/draft1.gpt6sol.md`](/design/repo-jj-archive/draft1.gpt6sol.md) — the toolkit rework this builds on.
 - [`/design/archive-deployment-premise/draft0.glm53.md`](/design/archive-deployment-premise/draft0.glm53.md) — the archive premise; migration is its missing front door.
-- [`/script/harvest-legacy-repo.sh`](/script/harvest-legacy-repo.sh) — current bash implementation; candidate for absorption.
+- [`script/deprecated-harvest-legacy-repo.sh`](/script/deprecated-harvest-legacy-repo.sh) — current bash implementation; candidate for absorption.
 - [`/dl.src.pb`](/dl.src.pb) — the destination-side management once migration completes.
