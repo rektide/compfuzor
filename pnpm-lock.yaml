@@ -207,12 +207,18 @@ importers:
 
   .:
     devDependencies:
+      '@gunshi/plugin-completion':
+        specifier: ^0.37.3
+        version: 0.37.3(@gunshi/plugin-i18n@0.37.3)
       '@types/node':
         specifier: ^26.5.1
         version: 26.5.1
       '@typescript/native-preview':
         specifier: 7.0.0-dev.20260707.2
         version: 7.0.0-dev.20260707.2
+      gunshi:
+        specifier: ^0.37.3
+        version: 0.37.3
       vite-plus:
         specifier: ^0.3.1
         version: 0.3.1(@types/node@26.5.1)
@@ -233,6 +239,40 @@ packages:
 
   '@blazediff/core@1.9.1':
     resolution: {integrity: sha512-ehg3jIkYKulZh+8om/O25vkvSsXXwC+skXmyA87FFx6A/45eqOkZsBltMw/TVteb0mloiGT8oGRTcjRAz66zaA==}
+
+  '@bomb.sh/tab@0.0.22':
+    resolution: {integrity: sha512-l5IuWpV7szqG4MM6A7I+qPMmP2qPMq2TD4veIXaOH0sD53dV0Tv8WZPARp5O5Kp4+y4fnVCl3VL1HZKNghO1yg==}
+    hasBin: true
+    peerDependencies:
+      cac: ^6.7.14 || ^7.0.0
+      citty: ^0.1.6 || ^0.2.0
+      commander: ^13.1.0 || ^14.0.0 || ^15.0.0
+    peerDependenciesMeta:
+      cac:
+        optional: true
+      citty:
+        optional: true
+      commander:
+        optional: true
+
+  '@gunshi/plugin-completion@0.37.3':
+    resolution: {integrity: sha512-gifbK4T29fJpiOH7+HuWiWfMdRx9dgCC48hT9JVrIJrYCFoeCv26H6DusqJjdUPfsexWL8YIOi/tDnG1tvfZGA==}
+    engines: {node: '>= 22'}
+    peerDependencies:
+      '@gunshi/plugin-i18n': 0.37.3
+
+  '@gunshi/plugin-i18n@0.37.3':
+    resolution: {integrity: sha512-gR2RT7BfC6YY1D/0oY+4bQbQUHJYm1pyn1sV8TWBj4ZcdIW/1ue6ZdaCQ8HhofxZqRu61bUkfrn+tE8hKETmKA==}
+    engines: {node: '>= 22'}
+    peerDependencies:
+      '@gunshi/plugin-global': 0.37.3
+    peerDependenciesMeta:
+      '@gunshi/plugin-global':
+        optional: true
+
+  '@gunshi/plugin@0.37.3':
+    resolution: {integrity: sha512-f/P3qigd7P9BW/R4siYzR2WPJ1TPNmKvnN4ZuAQc0GFDn+wtfRGk/Osus9QJVUKR+s0qrrPweP91WI2X3Lq8WA==}
+    engines: {node: '>= 22'}
 
   '@jridgewell/sourcemap-codec@1.6.0':
     resolution: {integrity: sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw==}
@@ -940,6 +980,10 @@ packages:
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
+  gunshi@0.37.3:
+    resolution: {integrity: sha512-uwm23bguqDcleEetknuQnF5okLcgmQPM3iv4aWVHTPDbiSs9shh02F079NCY0mWkrIRjHqNhgmzW6k0FCXhy1g==}
+    engines: {node: '>= 22'}
+
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
@@ -1228,6 +1272,24 @@ snapshots:
   '@babel/runtime@7.29.7': {}
 
   '@blazediff/core@1.9.1': {}
+
+  '@bomb.sh/tab@0.0.22': {}
+
+  '@gunshi/plugin-completion@0.37.3(@gunshi/plugin-i18n@0.37.3)':
+    dependencies:
+      '@bomb.sh/tab': 0.0.22
+      '@gunshi/plugin': 0.37.3
+      '@gunshi/plugin-i18n': 0.37.3
+    transitivePeerDependencies:
+      - cac
+      - citty
+      - commander
+
+  '@gunshi/plugin-i18n@0.37.3':
+    dependencies:
+      '@gunshi/plugin': 0.37.3
+
+  '@gunshi/plugin@0.37.3': {}
 
   '@jridgewell/sourcemap-codec@1.6.0': {}
 
@@ -1656,6 +1718,8 @@ snapshots:
 
   fsevents@2.3.3:
     optional: true
+
+  gunshi@0.37.3: {}
 
   js-tokens@4.0.0: {}
 

@@ -25,6 +25,7 @@
     "files/config-remote/**/*.ts",
     "files/config-remote.ts",
     "archive/src/**/*.ts",
+    "script/repo-jj-archive.ts",
     "script/apt-tunnel-mirrors.ts",
     "vite.config.ts"
   ]

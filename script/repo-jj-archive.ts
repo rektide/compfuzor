@@ -13,33 +13,33 @@
  *      that ship only built artifacts.
  */
 
-import { realpath, stat } from "node:fs/promises"
-import { dirname, join, resolve } from "node:path"
+import { realpath, stat } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 
-type Runner = { main: () => Promise<void> }
+type Runner = { main: () => Promise<void> };
 
 async function launch(): Promise<void> {
-  const root = resolve(dirname(import.meta.filename), "..")
-  const source = join(root, "archive/src/repo-jj-archive.ts")
-  const bundle = join(root, "archive/repo-jj-archive.mjs")
-  const runner = (await stat(source, { throwIfNoEntry: false })) === undefined ? bundle : source
-  const { main } = (await import(runner)) as Runner
-  await main()
+  const root = resolve(dirname(import.meta.filename), "..");
+  const source = join(root, "archive/src/repo-jj-archive.ts");
+  const bundle = join(root, "archive/repo-jj-archive.mjs");
+  const runner = (await stat(source, { throwIfNoEntry: false })) === undefined ? bundle : source;
+  const { main } = (await import(runner)) as Runner;
+  await main();
 }
 
-const argvPath = process.argv[1]
+const argvPath = process.argv[1];
 if (argvPath) {
   realpath(argvPath).then(
     (realArgv) => {
-      if (realArgv !== import.meta.filename) return
+      if (realArgv !== import.meta.filename) return;
       return launch().catch((error: unknown) => {
-        console.error(`repo-jj-archive: ${error instanceof Error ? error.message : String(error)}`)
-        process.exitCode = 1
-      })
+        console.error(`repo-jj-archive: ${error instanceof Error ? error.message : String(error)}`);
+        process.exitCode = 1;
+      });
     },
     (error: unknown) => {
-      console.error(`repo-jj-archive: ${error instanceof Error ? error.message : String(error)}`)
-      process.exitCode = 1
+      console.error(`repo-jj-archive: ${error instanceof Error ? error.message : String(error)}`);
+      process.exitCode = 1;
     },
-  )
+  );
 }
