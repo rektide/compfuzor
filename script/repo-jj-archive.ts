@@ -41,7 +41,15 @@ if (argvPath) {
     (realArgv) => {
       if (realArgv !== import.meta.filename) return;
       return launch().catch((error: unknown) => {
-        console.error(`repo-jj-archive: ${error instanceof Error ? error.message : String(error)}`);
+        const detail =
+          error instanceof AggregateError
+            ? error.errors
+                .map((item: unknown) => (item instanceof Error ? item.message : String(item)))
+                .join("; ")
+            : error instanceof Error
+              ? error.message
+              : String(error);
+        console.error(`repo-jj-archive: ${detail}`);
         process.exitCode = 1;
       });
     },

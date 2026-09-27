@@ -326,6 +326,9 @@ def test_cli_and_legacy_refresh_have_the_same_json_contract() -> None:
         assert json.loads(toolkit("refresh", "--json", *args, cwd=tmp)) == NOOP
         assert json.loads(toolkit(*args, cwd=tmp)) == NOOP
         assert legacy["changed"] and toolkit("refresh", "--help", cwd=tmp).count("--json") == 1
+        invalid = subprocess.run((str(RUNNER), "refresh", "--json", "--repo", str(remote),
+                                  "--label", "fixture"), cwd=tmp, capture_output=True, text=True)
+        assert invalid.returncode and invalid.stdout == "" and "--dest" in invalid.stderr
 
 
 def test_remote_mismatch_fails_loudly_then_reconciles_deliberately() -> None:
