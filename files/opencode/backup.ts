@@ -6,8 +6,8 @@
  * parse-args.
  *
  * Targets are space-separated in BACKUP_TARGETS (defaults come from the
- * deployment env.export this bin sources); each entry is a local path or an
- * rsync remote spec (user@host:/path — mirrored over ssh; btrfs operations
+ * deployment env.export loadConfig() sources); each entry is a local path or
+ * an rsync remote spec (user@host:/path — mirrored over ssh; btrfs operations
  * run by ssh'ing into the host). BACKUP_ROOT overrides with a single target
  * for ad-hoc runs. A missing or unmounted target is skipped with a warning
  * but still fails the run overall.
@@ -23,16 +23,29 @@
  *     .backup (WAL-safe, no server stop needed) into
  *     <target>/consistent-snapshot-<stamp>/ with PRAGMA integrity_check
  *     verified and SHA256SUMS + backup.log written.
+ *
+ * Runtime shape: no import-time side effects. main() builds the run
+ * configuration once via loadConfig() and threads it explicitly through the
+ * helpers, so the module is importable without touching process.env, and
+ * every helper's data flow is visible in its signature. Staged --snapshot
+ * directories are cleaned on normal exits and on SIGINT/SIGTERM.
  */
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { rmSync } from "node:fs";
-import { access, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { createReadStream, rmSync } from "node:fs";
+import {
+  access,
+  mkdtemp,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, join } from "node:path";
-import { realpath } from "node:fs/promises";
 import { parseArgs } from "node:util";
 
 const SCRIPT_NAME = "backup.ts";
@@ -46,6 +59,17 @@ class BackupError extends Error {
     super(message);
     this.code = code;
   }
+}
+
+/** Everything derived from the environment, built once per run. */
+interface Config {
+  readonly dataSrc: string;
+  readonly configSrc: string;
+  readonly targets: string[];
+  readonly snapshotKeep: number;
+  readonly snapshotsEnabled: boolean;
+  readonly backupSsh: string;
+  readonly sshOptionArgs: string[];
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -68,19 +92,22 @@ async function sourceEnv(path: string): Promise<void> {
   }
 }
 
-// import.meta.dirname is <DIR>/bin; the deployment root is one dirname up.
-const deploymentDir = dirname(import.meta.dirname);
-await sourceEnv(join(deploymentDir, "env.export"));
-
-const home = process.env.HOME ?? "/home/rektide";
-const dataSrc = join(home, ".local/share/opencode");
-const configSrc = join(home, ".config/opencode");
-const backupRoot = process.env.BACKUP_ROOT ?? "";
-const backupTargets = (backupRoot || process.env.BACKUP_TARGETS || "").split(/\s+/).filter(Boolean);
-const snapshotKeep = Number.parseInt(process.env.BACKUP_SNAPSHOT_KEEP ?? "14", 10);
-const snapshotsEnabled = (process.env.BACKUP_SNAPSHOTS ?? "1") !== "0";
-const backupSsh = process.env.BACKUP_SSH ?? "";
-const sshOptionArgs = backupSsh ? backupSsh.split(/\s+/).filter(Boolean) : [];
+async function loadConfig(): Promise<Config> {
+  // import.meta.dirname is <DIR>/bin; the deployment root is one dirname up.
+  await sourceEnv(join(dirname(import.meta.dirname), "env.export"));
+  const home = process.env.HOME ?? "/home/rektide";
+  const backupRoot = process.env.BACKUP_ROOT ?? "";
+  const backupSsh = process.env.BACKUP_SSH ?? "";
+  return {
+    dataSrc: join(home, ".local/share/opencode"),
+    configSrc: join(home, ".config/opencode"),
+    targets: (backupRoot || process.env.BACKUP_TARGETS || "").split(/\s+/).filter(Boolean),
+    snapshotKeep: Number.parseInt(process.env.BACKUP_SNAPSHOT_KEEP ?? "14", 10),
+    snapshotsEnabled: (process.env.BACKUP_SNAPSHOTS ?? "1") !== "0",
+    backupSsh,
+    sshOptionArgs: backupSsh ? backupSsh.split(/\s+/).filter(Boolean) : [],
+  };
+}
 
 const pad = (n: number): string => String(n).padStart(2, "0");
 
@@ -116,10 +143,16 @@ interface Result {
   stderr: string;
 }
 
-// Run a command on a target host (empty host = locally). BACKUP_SSH word
-// splits into extra ssh options for remote runs.
-function run(command: string, args: string[], host = "", inherit = false): Promise<Result> {
-  const argv = host ? ["ssh", ...sshOptionArgs, host, command, ...args] : [command, ...args];
+// Run a command on a target host (empty host = locally). cfg carries the
+// BACKUP_SSH options, word-split into extra ssh args for remote runs.
+function run(
+  cfg: Config,
+  command: string,
+  args: string[],
+  host = "",
+  inherit = false,
+): Promise<Result> {
+  const argv = host ? ["ssh", ...cfg.sshOptionArgs, host, command, ...args] : [command, ...args];
   return new Promise((resolve, reject) => {
     const child = spawn(argv[0]!, argv.slice(1), {
       stdio: inherit ? "inherit" : ["ignore", "pipe", "pipe"],
@@ -139,14 +172,19 @@ function run(command: string, args: string[], host = "", inherit = false): Promi
   });
 }
 
-function sshE(host: string): string[] {
-  return host && backupSsh ? ["-e", `ssh ${backupSsh}`] : [];
+function sshE(cfg: Config, host: string): string[] {
+  return host && cfg.backupSsh ? ["-e", `ssh ${cfg.backupSsh}`] : [];
 }
 
-async function runRsync(label: string, args: string[], dryRun: boolean): Promise<void> {
+async function runRsync(
+  cfg: Config,
+  label: string,
+  args: string[],
+  dryRun: boolean,
+): Promise<void> {
   const completion = dryRun ? "dry run complete" : "complete";
   log(`starting ${label}`);
-  const result = await run("rsync", args, "", true);
+  const result = await run(cfg, "rsync", args, "", true);
   if (result.code === 0) {
     log(`${label} ${completion}`);
   } else if (result.code === 24) {
@@ -202,21 +240,21 @@ function targetPath(target: string): string {
   return host ? target.slice(target.indexOf(":") + 1) : target;
 }
 
-async function targetFsType(host: string, path: string): Promise<string> {
-  const result = await run("stat", ["-f", "-c", "%T", "--", path], host);
+async function targetFsType(cfg: Config, host: string, path: string): Promise<string> {
+  const result = await run(cfg, "stat", ["-f", "-c", "%T", "--", path], host);
   return result.code === 0 ? result.stdout.trim() : "unknown";
 }
 
-async function pathExists(host: string, path: string): Promise<boolean> {
+async function pathExists(cfg: Config, host: string, path: string): Promise<boolean> {
   // No `--`: test is not a getopt tool, the separator would be an operand.
-  return (await run("test", ["-e", path], host)).code === 0;
+  return (await run(cfg, "test", ["-e", path], host)).code === 0;
 }
 
 // btrfs subvolume delete, tolerating unprivileged filesystems: plain, then
 // passwordless sudo, else a warning (prune failures never abort the run).
-async function runSubvolumeDelete(host: string, path: string): Promise<boolean> {
-  if ((await run("btrfs", ["subvolume", "delete", path], host)).code === 0) return true;
-  if ((await run("sudo", ["-n", "btrfs", "subvolume", "delete", path], host)).code === 0)
+async function runSubvolumeDelete(cfg: Config, host: string, path: string): Promise<boolean> {
+  if ((await run(cfg, "btrfs", ["subvolume", "delete", path], host)).code === 0) return true;
+  if ((await run(cfg, "sudo", ["-n", "btrfs", "subvolume", "delete", path], host)).code === 0)
     return true;
   log(
     `warning: could not delete snapshot (mount with user_subvol_rm_allowed or allow sudo): ${path}`,
@@ -229,12 +267,13 @@ async function runSubvolumeDelete(host: string, path: string): Promise<boolean> 
 // A btrfs subvolume root always has inode 256; `btrfs subvolume show` needs
 // root privileges, so stat is the unprivileged-safe check.
 async function ensureMirrorSubvolume(
+  cfg: Config,
   host: string,
   target: string,
   mirror: string,
 ): Promise<boolean> {
-  if (await pathExists(host, mirror)) {
-    const inode = await run("stat", ["-c", "%i", "--", mirror], host);
+  if (await pathExists(cfg, host, mirror)) {
+    const inode = await run(cfg, "stat", ["-c", "%i", "--", mirror], host);
     if (inode.code !== 0 || inode.stdout.trim() !== "256") {
       console.error(
         `error: btrfs target ${target}: ${mirror} exists but is not a subvolume; move it aside (or delete it), then rerun to bootstrap a versioned subvolume`,
@@ -245,8 +284,8 @@ async function ensureMirrorSubvolume(
   }
   log(`bootstrapping btrfs subvolume: ${mirror}`);
   const created =
-    (await run("btrfs", ["subvolume", "create", mirror], host)).code === 0 ||
-    (await run("sudo", ["-n", "btrfs", "subvolume", "create", mirror], host)).code === 0;
+    (await run(cfg, "btrfs", ["subvolume", "create", mirror], host)).code === 0 ||
+    (await run(cfg, "sudo", ["-n", "btrfs", "subvolume", "create", mirror], host)).code === 0;
   if (!created) {
     console.error(`error: cannot create subvolume ${mirror}`);
     return false;
@@ -256,6 +295,7 @@ async function ensureMirrorSubvolume(
 
 // A name <prefix>-<stamp>[-N] that does not exist under dir yet.
 async function uniqueName(
+  cfg: Config,
   host: string,
   dir: string,
   prefix: string,
@@ -263,15 +303,20 @@ async function uniqueName(
 ): Promise<string> {
   let name = `${prefix}-${stampValue}`;
   let n = 1;
-  while (await pathExists(host, join(dir, name))) {
+  while (await pathExists(cfg, host, join(dir, name))) {
     name = `${prefix}-${stampValue}-${n}`;
     n += 1;
   }
   return name;
 }
 
-async function pruneSnapshots(host: string, snapdir: string, keep: number): Promise<void> {
-  const listing = await run("ls", ["-1", "--", snapdir], host);
+async function pruneSnapshots(
+  cfg: Config,
+  host: string,
+  snapdir: string,
+  keep: number,
+): Promise<void> {
+  const listing = await run(cfg, "ls", ["-1", "--", snapdir], host);
   if (listing.code !== 0) return;
   const names = listing.stdout
     .split("\n")
@@ -281,31 +326,39 @@ async function pruneSnapshots(host: string, snapdir: string, keep: number): Prom
   const excess = names.slice(0, names.length - keep);
   let failures = 0;
   for (const name of excess) {
-    if (!(await runSubvolumeDelete(host, join(snapdir, name)))) failures += 1;
+    if (!(await runSubvolumeDelete(cfg, host, join(snapdir, name)))) failures += 1;
   }
   if (failures > 0) log(`warning: failed to prune ${failures} snapshot(s) under ${snapdir}`);
 }
 
 async function snapshotMirror(
+  cfg: Config,
   host: string,
   path: string,
   mirror: string,
   keep: number,
 ): Promise<void> {
   const snapdir = join(path, SNAPDIR_NAME);
-  await run("mkdir", ["-p", "--", snapdir], host);
-  const name = await uniqueName(host, snapdir, SNAP_PREFIX, stamp());
+  await run(cfg, "mkdir", ["-p", "--", snapdir], host);
+  const name = await uniqueName(cfg, host, snapdir, SNAP_PREFIX, stamp());
   const destination = join(snapdir, name);
   const snapped =
-    (await run("btrfs", ["subvolume", "snapshot", "-r", mirror, destination], host)).code === 0 ||
-    (await run("sudo", ["-n", "btrfs", "subvolume", "snapshot", "-r", mirror, destination], host))
-      .code === 0;
+    (await run(cfg, "btrfs", ["subvolume", "snapshot", "-r", mirror, destination], host)).code ===
+      0 ||
+    (
+      await run(
+        cfg,
+        "sudo",
+        ["-n", "btrfs", "subvolume", "snapshot", "-r", mirror, destination],
+        host,
+      )
+    ).code === 0;
   if (!snapped) {
     log(`warning: snapshot failed for ${mirror} (versioning skipped this run)`);
     return;
   }
   log(`snapshot: ${destination}`);
-  if (keep > 0) await pruneSnapshots(host, snapdir, keep);
+  if (keep > 0) await pruneSnapshots(cfg, host, snapdir, keep);
 }
 
 async function sha256(path: string): Promise<string> {
@@ -315,49 +368,67 @@ async function sha256(path: string): Promise<string> {
 }
 
 let stagingDir: string | undefined;
-process.on("exit", () => {
-  // Sync rm in an exit handler: never leak a staged snapshot on any exit.
+
+// Sync rm: exit handlers and signal handlers cannot await.
+function cleanupStaging(): void {
   if (stagingDir) rmSync(stagingDir, { recursive: true, force: true });
-});
+  stagingDir = undefined;
+}
+
+process.on("exit", cleanupStaging);
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(signal, () => {
+    // 'exit' handlers do not run on signal death: clean the staging dir
+    // here, then restore the default disposition and re-raise so the
+    // process still reports death-by-signal.
+    cleanupStaging();
+    process.removeAllListeners(signal);
+    process.kill(process.pid, signal);
+  });
+}
 
 // --snapshot mode: consistent per-DB copies via sqlite3 .backup, verified
 // with PRAGMA integrity_check, delivered with SHA256SUMS + backup.log.
-async function consistentSnapshot(target: string, dbs: string[]): Promise<boolean> {
+async function consistentSnapshot(cfg: Config, target: string, dbs: string[]): Promise<boolean> {
   const host = targetHost(target);
   const path = targetPath(target);
   if (!path) {
     log(`warning: cannot --snapshot to URL-style target, skipping: ${target}`);
     return false;
   }
-  if (!(await pathExists(host, path))) {
+  if (!(await pathExists(cfg, host, path))) {
     log(`warning: backup target missing or unmounted, skipping: ${target}`);
     return false;
   }
-  const name = await uniqueName(host, path, "consistent-snapshot", stamp());
+  const name = await uniqueName(cfg, host, path, "consistent-snapshot", stamp());
   const destination = `${target.replace(/\/+$/, "")}/${name}`;
-  stagingDir = await mkdtemp(join(tmpdir(), "opencode-snapshot."));
+  const staging = await mkdtemp(join(tmpdir(), "opencode-snapshot."));
+  stagingDir = staging;
   const logLines: string[] = [
     "=== consistent SQLite online-backup snapshot ===",
     `started: ${isoLocal()}`,
-    `source: ${dataSrc}`,
+    `source: ${cfg.dataSrc}`,
   ];
   try {
     for (const db of dbs) {
       log(`sqlite3 .backup: ${db}`);
-      const backed = await run("sqlite3", [join(dataSrc, db), `.backup '${join(stagingDir, db)}'`]);
+      const backed = await run(cfg, "sqlite3", [
+        join(cfg.dataSrc, db),
+        `.backup '${join(staging, db)}'`,
+      ]);
       if (backed.code !== 0) {
         throw new BackupError(`sqlite3 .backup failed (${backed.code}) for ${db}`, backed.code);
       }
-      const info = await stat(join(stagingDir, db));
+      const info = await stat(join(staging, db));
       logLines.push(
         "--- sqlite3 .backup ---",
         "backup rc=0",
-        `-${modeString(info.mode)} 1 ${info.uid} ${info.gid} ${info.size} ${isoLocal(info.mtime)} ${join(stagingDir, db)}`,
+        `-${modeString(info.mode)} 1 ${info.uid} ${info.gid} ${info.size} ${isoLocal(info.mtime)} ${join(staging, db)}`,
       );
     }
     for (const db of dbs) {
-      const integrity = await run("sqlite3", [
-        `file:${join(stagingDir, db)}?mode=ro`,
+      const integrity = await run(cfg, "sqlite3", [
+        `file:${join(staging, db)}?mode=ro`,
         "PRAGMA integrity_check;",
       ]);
       if (integrity.stdout.trim() !== "ok") {
@@ -369,18 +440,19 @@ async function consistentSnapshot(target: string, dbs: string[]): Promise<boolea
     }
     const sums: string[] = [];
     for (const db of dbs) {
-      sums.push(`${await sha256(join(stagingDir, db))}  ${db}`);
+      sums.push(`${await sha256(join(staging, db))}  ${db}`);
     }
     logLines.push("--- sha256 ---", ...sums, `finished: ${isoLocal()}`);
-    await writeFile(join(stagingDir, "backup.log"), `${logLines.join("\n")}\n`);
-    await writeFile(join(stagingDir, "SHA256SUMS"), `${sums.join("\n")}\n`);
+    await writeFile(join(staging, "backup.log"), `${logLines.join("\n")}\n`);
+    await writeFile(join(staging, "SHA256SUMS"), `${sums.join("\n")}\n`);
     await runRsync(
-      `snapshot delivery: ${stagingDir}/ -> ${destination}/`,
-      ["-a", ...sshE(host), "--", `${stagingDir}/`, `${destination}/`],
+      cfg,
+      `snapshot delivery: ${staging}/ -> ${destination}/`,
+      ["-a", ...sshE(cfg, host), "--", `${staging}/`, `${destination}/`],
       false,
     );
   } finally {
-    await rm(stagingDir, { recursive: true, force: true });
+    await rm(staging, { recursive: true, force: true });
     stagingDir = undefined;
   }
   log(`consistent snapshot: ${destination}`);
@@ -396,8 +468,8 @@ function modeString(mode: number): string {
   return out;
 }
 
-function usage(): void {
-  const defaults = backupTargets.join(" ") || "<none configured>";
+function usage(cfg: Config): void {
+  const defaults = cfg.targets.join(" ") || "<none configured>";
   console.log(`Usage: ${SCRIPT_NAME} [options] [--snapshot [db ...]]
 
 Mirror opencode user data to every configured backup target
@@ -420,7 +492,7 @@ Options:
   -v, --verbose    Verbose rsync output (per-file list).
   -h, --help       Show this help.
 
-Default (no flags): mirrors ${dataSrc}/ to <target>/opencode/ of each
+Default (no flags): mirrors ${cfg.dataSrc}/ to <target>/opencode/ of each
 target with --delete and NTFS/CIFS-safe flags (both filesystems have coarse
 mtime granularity). --partial-dir=.rsync-partial makes transfers resumable
 across kills. Excludes *.v2ed* migration artifacts.
@@ -463,8 +535,10 @@ async function main(): Promise<void> {
   })();
   const { values, positionals } = parsed;
 
+  const cfg = await loadConfig();
+
   if (values.help) {
-    usage();
+    usage(cfg);
     return;
   }
   const dryRun = values["dry-run"] ?? false;
@@ -482,49 +556,50 @@ async function main(): Promise<void> {
     );
   }
 
-  if (!(await exists(dataSrc))) {
-    throw new BackupError(`required directory missing: ${dataSrc}`);
+  if (!(await exists(cfg.dataSrc))) {
+    throw new BackupError(`required directory missing: ${cfg.dataSrc}`);
   }
   // A source checkout must never be mirrored over backup targets: a
   // checkout copied into /mnt/fu/backup/opencode-2026-5 is exactly the
   // pollution that required a manual cleanup.
   if (
-    (await exists(join(dataSrc, ".git"))) ||
-    ((await exists(join(dataSrc, "package.json"))) && (await exists(join(dataSrc, "bun.lock"))))
+    (await exists(join(cfg.dataSrc, ".git"))) ||
+    ((await exists(join(cfg.dataSrc, "package.json"))) &&
+      (await exists(join(cfg.dataSrc, "bun.lock"))))
   ) {
     throw new BackupError(
-      `${dataSrc} looks like a source checkout (.git / package.json+bun.lock); refusing to mirror it over backup targets`,
+      `${cfg.dataSrc} looks like a source checkout (.git / package.json+bun.lock); refusing to mirror it over backup targets`,
     );
   }
 
-  if (backupTargets.length === 0) {
+  if (cfg.targets.length === 0) {
     throw new BackupError("no backup targets configured (BACKUP_TARGETS is empty)");
   }
 
   if (snapshotMode) {
-    if ((await run("sqlite3", ["--version"])).code !== 0) {
+    if ((await run(cfg, "sqlite3", ["--version"])).code !== 0) {
       throw new BackupError("--snapshot requires sqlite3");
     }
-    const entries = await readdir(dataSrc);
+    const entries = await readdir(cfg.dataSrc);
     const allDbs = entries.filter((entry) => entry.endsWith(".db"));
     let dbs: string[];
     if (positionals.length > 0) {
       dbs = positionals;
       for (const db of dbs) {
-        if (!(await exists(join(dataSrc, db)))) {
-          throw new BackupError(`no such DB in ${dataSrc}: ${db}`);
+        if (!(await exists(join(cfg.dataSrc, db)))) {
+          throw new BackupError(`no such DB in ${cfg.dataSrc}: ${db}`);
         }
       }
     } else {
       dbs = [];
       for (const db of allDbs) {
-        if ((await stat(join(dataSrc, db))).isFile()) dbs.push(db);
+        if ((await stat(join(cfg.dataSrc, db))).isFile()) dbs.push(db);
       }
-      if (dbs.length === 0) throw new BackupError(`no *.db files found in ${dataSrc}`);
+      if (dbs.length === 0) throw new BackupError(`no *.db files found in ${cfg.dataSrc}`);
     }
     let failures = 0;
-    for (const target of backupTargets) {
-      if (!(await consistentSnapshot(target, dbs))) failures += 1;
+    for (const target of cfg.targets) {
+      if (!(await consistentSnapshot(cfg, target, dbs))) failures += 1;
     }
     if (failures > 0) {
       throw new BackupError(`${failures} target(s) could not take consistent snapshots`);
@@ -533,8 +608,8 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (includeConfig && !(await exists(configSrc))) {
-    throw new BackupError(`--config requested but ${configSrc} missing`);
+  if (includeConfig && !(await exists(cfg.configSrc))) {
+    throw new BackupError(`--config requested but ${cfg.configSrc} missing`);
   }
 
   const common = [
@@ -561,23 +636,23 @@ async function main(): Promise<void> {
   }
   const configArgs = [...common, "--exclude=node_modules/"];
 
-  if ((await run("pgrep", ["-x", "opencode"])).code === 0) {
+  if ((await run(cfg, "pgrep", ["-x", "opencode"])).code === 0) {
     log(
       "warning: opencode is running; the live DB may be captured mid-write. For a guaranteed-clean snapshot, quit opencode first (or use --snapshot).",
     );
   }
 
-  const sources = [dataSrc];
-  if (await exists(configSrc)) sources.push(configSrc);
+  const sources = [cfg.dataSrc];
+  if (await exists(cfg.configSrc)) sources.push(cfg.configSrc);
 
   let failures = 0;
-  for (const target of backupTargets) {
+  for (const target of cfg.targets) {
     const host = targetHost(target);
     const path = targetPath(target);
     if (!path) {
       log(`warning: URL-style target cannot be snapshot-versioned: ${target}`);
     }
-    if (!(await pathExists(host, path))) {
+    if (!(await pathExists(cfg, host, path))) {
       log(`warning: backup target missing or unmounted, skipping: ${target}`);
       failures += 1;
       continue;
@@ -588,35 +663,43 @@ async function main(): Promise<void> {
       await guardDestination(join(targetRoot, "opencode"), sources);
       if (includeConfig) await guardDestination(join(targetRoot, "opencode-config"), sources);
     }
-    const fsType = await targetFsType(host, path);
+    const fsType = await targetFsType(cfg, host, path);
     let versioned = false;
-    if (fsType === "btrfs" && snapshotsEnabled && !dryRun && path) {
-      if (!(await ensureMirrorSubvolume(host, target, mirrorPath))) {
+    if (fsType === "btrfs" && cfg.snapshotsEnabled && !dryRun && path) {
+      if (!(await ensureMirrorSubvolume(cfg, host, target, mirrorPath))) {
         failures += 1;
         continue;
       }
       versioned = true;
-    } else if (fsType !== "btrfs" && snapshotsEnabled && !dryRun) {
+    } else if (fsType !== "btrfs" && cfg.snapshotsEnabled && !dryRun) {
       log(`note: ${target} is ${fsType}, not btrfs; mirroring without snapshot versioning`);
     }
     await runRsync(
-      `data mirror: ${dataSrc}/ -> ${targetRoot}/opencode/`,
-      [...dataArgs, ...sshE(host), "--", `${dataSrc}/`, `${targetRoot}/opencode/`],
+      cfg,
+      `data mirror: ${cfg.dataSrc}/ -> ${targetRoot}/opencode/`,
+      [...dataArgs, ...sshE(cfg, host), "--", `${cfg.dataSrc}/`, `${targetRoot}/opencode/`],
       dryRun,
     );
     if (includeConfig) {
       await runRsync(
-        `config mirror: ${configSrc}/ -> ${targetRoot}/opencode-config/`,
-        [...configArgs, ...sshE(host), "--", `${configSrc}/`, `${targetRoot}/opencode-config/`],
+        cfg,
+        `config mirror: ${cfg.configSrc}/ -> ${targetRoot}/opencode-config/`,
+        [
+          ...configArgs,
+          ...sshE(cfg, host),
+          "--",
+          `${cfg.configSrc}/`,
+          `${targetRoot}/opencode-config/`,
+        ],
         dryRun,
       );
     }
-    if (versioned) await snapshotMirror(host, path, mirrorPath, snapshotKeep);
+    if (versioned) await snapshotMirror(cfg, host, path, mirrorPath, cfg.snapshotKeep);
   }
 
   if (failures > 0) {
     throw new BackupError(
-      `${failures} of ${backupTargets.length} backup targets were missing or unmounted`,
+      `${failures} of ${cfg.targets.length} backup targets were missing or unmounted`,
     );
   }
   log(dryRun ? "dry run done" : "done");
