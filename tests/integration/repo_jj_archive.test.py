@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 
@@ -445,3 +446,19 @@ def test_fine_grained_commands_and_opt_in_checkout_detection() -> None:
         assert "(origin fetched)" in toolkit("self", "--archive-dir", str(tmp / "archive"),
                                               "--freshen", cwd=tmp)
         assert "No compfuzor archive" in toolkit("self", "--archive-dir", str(tmp / "absent"), cwd=tmp)
+
+
+def test_launcher_uses_standalone_bundle_without_source_or_node_modules() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        (tmp / "script").mkdir()
+        (tmp / "archive").mkdir()
+        launcher = tmp / "script/repo-jj-archive.ts"
+        shutil.copy2(RUNNER, launcher)
+        shutil.copy2(ROOT / "archive/repo-jj-archive.mjs", tmp / "archive/repo-jj-archive.mjs")
+        remote, _ = create_remote(tmp)
+        checkout = tmp / "checkout"
+        output = run(str(launcher), "refresh", "--json", "--dest", str(checkout),
+                     "--repo", str(remote), "--label", "fixture", cwd=tmp)
+        assert json.loads(output)["changed"] and (checkout / ".jj").is_dir()
