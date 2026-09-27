@@ -12,7 +12,7 @@ sources:
     resource: /archive/README.md
     title: Archive toolkit commands and safety contract
   - id: legacy-harvest
-    resource: /script/harvest-legacy-repo.sh
+    resource: /script/deprecated-harvest-legacy-repo.sh
     title: Cross-checkout Git harvest implementation
   - id: dl-playbook
     resource: /dl.src.pb
@@ -64,8 +64,9 @@ archive's declared `origin` is GitHub; it is *not* the legacy checkout's
 `origin`. The choice of remote belongs to the deployment contract, not to
 the incidental legacy remote name.
 
-I exercised the **real** `archive/src/repo-jj-archive.ts` and
-`script/harvest-legacy-repo.sh` in the ignored
+I exercised the **real** `archive/src/repo-jj-archive.ts` and the shell harvest
+script (subsequently renamed to `script/deprecated-harvest-legacy-repo.sh`
+while this independent draft was being written) in the ignored
 `.test-agent/archive-migration/fixture-gpt6sol/` only. The fixture has a local
 bare `file://` upstream with `main`; a separate legacy clone has one unpushed
 commit on `main`, a later detached commit, a modified tracked README, an
@@ -113,7 +114,7 @@ CLI="$ROOT/archive/src/repo-jj-archive.ts"
 node "$CLI" refresh --dest "$F/archive" --repo "file://$F/upstream.git" \
   --branch main --label fixture
 node "$CLI" health --dest "$F/archive"
-bash "$ROOT/script/harvest-legacy-repo.sh" "$F/legacy" "$F/archive" \
+bash "$ROOT/script/deprecated-harvest-legacy-repo.sh" "$F/legacy" "$F/archive" \
   --label fixture-legacy
 node "$CLI" health --dest "$F/archive"
 git -C "$F/archive" for-each-ref --format='%(refname:short) %(objectname:short)' \
@@ -151,7 +152,7 @@ git -C "$F/legacy" -c "core.excludesFile=$F/exclude-transient" \
   check-ignore .jj/experimental facts.db wf.db
 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.excludesFile \
   GIT_CONFIG_VALUE_0="$F/exclude-transient" \
-  bash "$ROOT/script/harvest-legacy-repo.sh" "$F/legacy" "$F/archive" \
+  bash "$ROOT/script/deprecated-harvest-legacy-repo.sh" "$F/legacy" "$F/archive" \
     --label fixture-safe
 git -C "$F/archive" ls-tree -r --name-only \
   refs/heads/harvest/fixture-safe/working-copy
@@ -164,7 +165,7 @@ operator's order on a **new** fixture archive:
 ```
 refresh --dest "$F/staged/archive" --repo "file://$F/upstream.git" --label fixture --branch main --update false
 health --dest "$F/staged/archive"
-harvest-legacy-repo.sh "$F/legacy" "$F/staged/archive" --label fixture-safe  # with the same GIT_CONFIG_* exclusions
+deprecated-harvest-legacy-repo.sh "$F/legacy" "$F/staged/archive" --label fixture-safe  # with the same GIT_CONFIG_* exclusions
 health --dest "$F/staged/archive"
 refresh --dest "$F/staged/archive" --repo "file://$F/upstream.git" --label fixture --branch main
 health --dest "$F/staged/archive"
@@ -236,7 +237,7 @@ mirror `~/src/dl`'s `origin` into the archive merely because it is named
      check-ignore .jj/repo/config-id facts.db wf.db
    GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.excludesFile \
      GIT_CONFIG_VALUE_0="$EXCLUDES" \
-     bash "$ROOT/script/harvest-legacy-repo.sh" \
+     bash "$ROOT/script/deprecated-harvest-legacy-repo.sh" \
        "$LEGACY" "$ARCHIVE" --label "$LABEL"
    ```
 
@@ -392,7 +393,7 @@ and state/shim tasks as human follow-ups, not forced adoption side effects.
 ## Cross-references
 
 - [`archive/README.md`](/archive/README.md) and [toolkit implementation](/archive/src/refresh.ts) define `health`, `refresh`, remote mismatch and main-worktree reconciliation; adoption composes but must not quietly extend their routine semantics.
-- [`script/harvest-legacy-repo.sh`](/script/harvest-legacy-repo.sh) is the existing two-checkout transport; its initial bundles, forced refs, working-copy temp index, and ignored-export-error path are the fixture's specific safety findings.
+- [`script/deprecated-harvest-legacy-repo.sh`](/script/deprecated-harvest-legacy-repo.sh) is the existing (now deprecated) two-checkout transport; its initial bundles, forced refs, working-copy temp index, and ignored-export-error path are the fixture's specific safety findings.
 - [`dl.src.pb`](/dl.src.pb), [`vars/common.yaml`](/vars/common.yaml), and [`fs_repo.tasks`](/tasks/compfuzor/fs_repo.tasks) establish the source/deployment paths and the separate pnpm global shim tail.
 - [Original archive safety contract](/design/repo-jj-archive/draft0.gpt6sol.md) explains why `refresh` snapshots/harvests before fetch; this is different from importing another repository's history.
 - [Toolkit follow-up](/design/repo-jj-archive/draft1.gpt6sol.md) documents landed subcommands and explicit re-adoption; [the ghost-head incident](/design/repo-jj-archive/incident-ghost-heads.glm53.md) shows why recoverability requires actual Git ref/object coverage, not only a jj view head.
