@@ -24,7 +24,7 @@
     "files/opencode/backup.ts",
     "files/config-remote/**/*.ts",
     "files/config-remote.ts",
-    "script/repo-jj-archive.ts",
+    "archive/src/**/*.ts",
     "script/apt-tunnel-mirrors.ts",
     "vite.config.ts"
   ]
