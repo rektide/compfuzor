@@ -55,6 +55,10 @@ def render(archive: Path, remote: Path, *, update: bool = True, version: str = "
     ))
 
 
+def toolkit(*args: str, cwd: Path, check: bool = True) -> str:
+    return run("node", str(ROOT / "archive/src/repo-jj-archive.ts"), *args, cwd=cwd, check=check)
+
+
 def names(archive: Path) -> list[str]:
     return run("jj", "bookmark", "list", "--all-remotes", "-T", 'name ++ "\\n"', cwd=archive).splitlines()
 
@@ -307,3 +311,85 @@ def test_archive_failure_reports_runner_error_not_json_parse_error() -> None:
         output = run("ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook),
                      cwd=ROOT, env=env, check=False)
         assert "not a colocated Git checkout" in output and "from_json" not in output
+
+
+def test_cli_and_legacy_refresh_have_the_same_json_contract() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, _ = create_remote(tmp)
+        archive = tmp / "archive"
+        legacy = render(archive, remote)
+        args = ("--dest", str(archive), "--repo", str(remote),
+                "--remotes", "{}", "--label", "fixture")
+        assert json.loads(toolkit("refresh", "--json", *args, cwd=tmp)) == NOOP
+        assert json.loads(toolkit(*args, cwd=tmp)) == NOOP
+        assert legacy["changed"] and toolkit("refresh", "--help", cwd=tmp).count("--json") == 1
+
+
+def test_remote_mismatch_fails_loudly_then_reconciles_deliberately() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        original, _ = create_remote(tmp)
+        # URL mismatch need not point at a real remote until explicitly reconciled.
+        archive = tmp / "archive"
+        render(archive, original)
+        declared = str(tmp / "replacement.git")
+        args = ("--dest", str(archive), "--repo", declared,
+                "--remotes", "{}", "--label", "fixture", "--update", "false")
+        result = subprocess.run((str(RUNNER), "refresh", "--json", *args), cwd=tmp,
+                                capture_output=True, text=True)
+        assert result.returncode and result.stdout == ""
+        assert str(original) in result.stderr and declared in result.stderr
+        assert "remotes --dest" in result.stderr and "--reconcile" in result.stderr
+        assert run("jj", "git", "remote", "list", cwd=archive) == f"origin {original}"
+        assert "Reconciled origin" in toolkit("remotes", "--dest", str(archive),
+                                              "--repo", declared, "--reconcile", cwd=tmp)
+        assert run("jj", "git", "remote", "list", cwd=archive) == f"origin {declared}"
+        assert json.loads(toolkit("refresh", "--json", *args, cwd=tmp)) == NOOP
+        # Missing additional remotes are also proposed, not silently forgotten.
+        missing = subprocess.run((str(RUNNER), "remotes", "--dest", str(archive), "--repo",
+                                  declared, "--remotes", '{"peer":"other"}'), cwd=tmp,
+                                 capture_output=True, text=True)
+        assert missing.returncode and 'peer\t"other"\t"(missing)"' in missing.stderr
+
+
+def test_ghost_head_preflight_and_explicit_re_adopt() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, _ = create_remote(tmp)
+        archive = tmp / "archive"
+        render(archive, remote)
+        run("jj", "new", "main", cwd=archive)
+        (archive / "ghost-only").write_text("discarded by Git maintenance\n")
+        run("jj", "status", cwd=archive)
+        ghost = run("jj", "log", "-G", "-r", "@", "-T", "commit_id", cwd=archive)
+        run("jj", "new", "main", cwd=archive)
+        # Simulate a git repack pruning a *bare jj view head* with no Git ref.
+        # Quarantine the loose object only inside the disposable fixture.
+        loose = archive / ".git" / "objects" / ghost[:2] / ghost[2:]
+        assert loose.is_file() and ghost in run("jj", "log", "-G", "-r", "visible_heads()",
+                                                  "-T", "commit_id", cwd=archive)
+        for ref in run("git", "for-each-ref", "--format=%(refname) %(objectname)",
+                       "refs/jj/keep", cwd=archive).splitlines():
+            name, target = ref.split()
+            if target == ghost:
+                run("git", "update-ref", "-d", name, cwd=archive)
+        loose.rename(tmp / "pruned-commit-object")
+        result = subprocess.run((str(RUNNER), "refresh", "--json", "--dest", str(archive),
+                                 "--repo", str(remote), "--remotes", "{}", "--label", "fixture"),
+                                cwd=tmp, capture_output=True, text=True)
+        assert result.returncode and result.stdout == ""
+        assert ghost in result.stderr and "ghost commit" in result.stderr
+        assert "heal --dest" in result.stderr and "Object " not in result.stderr
+        refused = subprocess.run((str(RUNNER), "heal", "--dest", str(archive)), cwd=tmp,
+                                 capture_output=True, text=True)
+        assert refused.returncode and "--yes" in refused.stderr and (archive / ".jj").is_dir()
+        message = toolkit("heal", "--dest", str(archive), "--yes", cwd=tmp)
+        backup = next(archive.glob(".jj.broken-ghost-*"))
+        assert str(backup) in message and backup.is_dir() and (archive / ".jj").is_dir()
+        assert "Visible heads OK" in toolkit("health", "--dest", str(archive), cwd=tmp)
+        assert json.loads(toolkit("refresh", "--json", "--dest", str(archive),
+                                  "--repo", str(remote), "--label", "fixture", cwd=tmp)) == NOOP

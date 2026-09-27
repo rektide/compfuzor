@@ -1,19 +1,22 @@
 ---
 # The archive's worktree and bookmarks belong to jj, not ansible.builtin.git.
-# repo-jj-archive.ts emits one JSON result so Ansible can collect structured
-# notices without parsing jj's human-facing output.
+# Explicit `refresh --json` emits exactly one JSON result for Ansible; the
+# flag-only legacy argv is also accepted. Mismatched URLs fail by default.
+# GIT_REMOTE_FIX=true opts into refresh's deliberate remote reconcile before
+# any fetch; use only after reviewing the declared-vs-actual URLs.
 - name: "Compfuzor: refresh jj archive"
   ansible.builtin.command:
     argv: >-
-      {{ [COMPFUZOR_REPO_JJ_RUNNER | default(playbook_dir ~ '/script/repo-jj-archive.ts'),
+      {{ [COMPFUZOR_REPO_JJ_RUNNER | default(playbook_dir ~ '/script/repo-jj-archive.ts'), 'refresh', '--json',
           '--dest', GIT_DIR|def(REPO_DIR, DIR, falsy=True),
           '--repo', REPO, '--remotes', GIT_REMOTES|default({})|to_json,
           '--remote', GIT_REMOTE|default('origin'),
-          '--version', GIT_VERSION|default('HEAD')|string,
+           '--branch', GIT_VERSION|default('HEAD')|string,
           '--label', NAME,
           '--update', 'true' if GIT_UPDATE|default(true)|bool else 'false']
           + (['--depth', GIT_DEPTH|string] if GIT_DEPTH is defined else [])
-          + (['--submodules'] if GIT_SUBMODULES|default(false)|bool else []) }}
+           + (['--submodules'] if GIT_SUBMODULES|default(false)|bool else [])
+           + (['--reconcile-remotes'] if GIT_REMOTE_FIX|default(false)|bool else []) }}
   register: compfuzor_repo_jj_result
   # On runner failure stdout is intentionally empty; leave the jj diagnostic
   # intact instead of obscuring it with a JSON parsing exception.
