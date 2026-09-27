@@ -404,7 +404,7 @@ def test_ansible_remote_fix_requires_opt_in() -> None:
         archive = tmp / "archive"
         render(archive, original)
         replacement = tmp / "alternate.git"
-        run("git", "init", "--bare", str(replacement), cwd=tmp)
+        run("git", "clone", "--bare", str(original), str(replacement), cwd=tmp)
         playbook = tmp / "remote-fix.pb"
         playbook.write_text(f"""---
 - hosts: all
@@ -415,7 +415,6 @@ def test_ansible_remote_fix_requires_opt_in() -> None:
     REPO: {str(replacement)!r}
     GIT_DIR: {str(archive)!r}
     COMPFUZOR_REPO_JJ_RUNNER: {str(RUNNER)!r}
-    GIT_UPDATE: false
   tasks:
     - import_tasks: {str(ROOT / 'tasks/compfuzor/repo_jj_archive.tasks')!r}
 """)
