@@ -1,77 +1,117 @@
-# archive — jj archive tooling
+# archive — a jj toolkit for source archives
 
-Tooling for the canonical source archives at `~/archive/<org>/<repo>` — the
-house convention for third-party and first-party checkouts that deployments
-link into rather than re-clone. `dl` (the shell helper that fetches repos and
-wikis into `~/archive`) is the primary user of the convention today; compfuzor
-is leaning in via its `ARCHIVE_DOWNLOAD` lane, and this project is where that
-shared tooling lives.
+Our canonical source archives live at `~/archive/<org>/<repo>`. `dl` is the
+primary user of that convention today; compfuzor's `ARCHIVE_DOWNLOAD` lane is
+leaning into it rather than making deployment-local clones. This toolkit gives
+operators small, individually runnable jj operations as well as a composed
+`refresh` for compfuzor. It operates on **the archive's main worktree**; a
+deployment-specific jj workspace is a separate, future design. Do not run it
+concurrently with another writer to the same checkout.
 
-**Status: faithful scaffold — toolkit rework planned.** The runner was moved
-here verbatim from `script/repo-jj-archive.ts` to establish the project shape.
-Growing it into a general jj toolkit (workspaces, per-bookmark sync, push) is
-planned; see [`design/repo-jj-archive/`](/design/repo-jj-archive/) (subsystem
-design and the ghost-head incident) and
-[`design/archive-deployment-premise/`](/design/archive-deployment-premise/)
-(the direction the rework heads toward).
+Run the source directly from a compfuzor checkout (Node type stripping; no
+build required):
 
-## Layout
-
-| Path | What |
-|---|---|
-| `src/repo-jj-archive.ts` | The runner. Single-file TypeScript, executed directly by Node (type stripping). Exports `main()` and self-runs only as the main module. |
-| `repo-jj-archive.mjs` | Committed build output (`pnpm build`), mirroring the [`runtime/`](/runtime) precedent. A deployment convenience, not a development artifact. |
-| [`/script/repo-jj-archive.ts`](/script/repo-jj-archive.ts) | Thin compatibility launcher kept for the Ansible entry point. |
-
-## Running from a checkout
-
-```
+```sh
 node archive/src/repo-jj-archive.ts --help
+node archive/src/repo-jj-archive.ts refresh --help
+node archive/src/repo-jj-archive.ts complete bash  # also zsh, fish, powershell
 ```
 
-The runner refreshes a jj-colocated archive without Git's worktree-resetting
-update path: it snapshots the working copy into `harvest/<label>/…` bookmarks,
-untracks local bookmarks, fetches declared remotes (with unreachable-commit
-abandonment disabled), force-moves the base bookmark to the selected remote
-tip with an off-ramp harvest for diverged history, and reconciles `@`. Stdout
-is one JSON line — `{"changed": …, "notices": […]}` — for Ansible; diagnostics
-go to stderr. Read the source header and the design docs before changing the
-safety ordering.
+## Commands
 
-## How Ansible invokes it
+Each command has `--help` with its flags. `--dest` is a jj-colocated checkout
+unless the command explicitly creates or detects one.
+
+| Command | Purpose / notable flags |
+|---|---|
+| `health --dest DIR` | Materialize `visible_heads()` and report conflicted bookmarks before walking history. No mutations. |
+| `snapshot --dest DIR` | `jj status`: import colocated Git refs and snapshot tracked/untracked files. |
+| `harvest --dest DIR --label NAME [--kind TYPE] [--target REV] [--copy]` | Give a revision a unique `harvest/<label>/…` recovery bookmark. `--copy` duplicates mutable `@` under a different change ID first. |
+| `remotes --dest DIR --repo URL [--remotes JSON] [--reconcile]` | Compare declared origin/additional URLs to actual. Differences fail with a table and exact reconcile command; **only** `--reconcile` adds/sets URLs. |
+| `fetch --dest DIR --label NAME [--remote NAME]` | Snapshot, harvest dirty `@` if needed, freeze tracked local bookmarks, fetch that remote without abandoning unreachable commits. Does **not** move local base or reconcile `@`; run `refresh` afterward if desired. |
+| `refresh --dest DIR --repo URL --label NAME [options]` | Compose adoption/clone, health, snapshot, remote policy, recovery harvest, fetch, base bookmark move, and worktree reconciliation. `--branch HEAD\|branch\|branch@remote`, `--remote NAME`, `--remotes JSON`, `--update true\|false`, `--depth N`, `--json`, `--reconcile-remotes`. Submodules are explicitly unsupported. |
+| `heal --dest DIR --yes` | Explicitly move `.jj` to a dated `.jj.broken-ghost-*` backup, then `jj git init --colocate` from Git refs. Refuses without `--yes`. |
+| `self [--archive-dir PATH] [--freshen]` | Detect the standard `~/archive/rektide/compfuzor` checkout; optionally fetch its `origin` (no checkout reset). Missing checkout is fine. |
+| `complete SHELL` | Generate tab completion via `@gunshi/plugin-completion`. |
+
+For example, inspect and fix a mismatched remote deliberately:
+
+```sh
+node archive/src/repo-jj-archive.ts health --dest ~/archive/ORG/REPO
+node archive/src/repo-jj-archive.ts remotes --dest ~/archive/ORG/REPO \
+  --repo https://github.com/ORG/REPO --remotes '{"peer":"https://github.com/PEER/REPO"}'
+# If the printed declared/actual table is right, repeat with --reconcile.
+```
+
+`refresh --update false` still validates/adopts the checkout and checks remote
+URLs; it skips fetch/base reconciliation when the archive has existing refs.
+Missing declared remotes are added in `refresh`; **different URLs on existing
+remotes always fail** unless explicitly authorized. `refresh --reconcile-remotes`
+opts into rewriting mismatches, whereas `remotes --reconcile` is a standalone
+operator step. No command pushes, prunes old refs, or resets a dirty tree.
+
+## Compfuzor / Ansible
 
 [`tasks/compfuzor/repo_jj_archive.tasks`](/tasks/compfuzor/repo_jj_archive.tasks)
-runs:
+calls `script/repo-jj-archive.ts refresh --json` with `--dest GIT_DIR` (fallback
+`REPO_DIR`/`DIR`), `--repo REPO`, `--remotes GIT_REMOTES|default({})`,
+`--remote GIT_REMOTE|default('origin')`, `--branch GIT_VERSION|default('HEAD')`,
+`--label NAME`, `--update GIT_UPDATE`, and optional `GIT_DEPTH` / `GIT_SUBMODULES`.
+`GIT_REMOTE_FIX=true` **explicitly opts into** `--reconcile-remotes`; default is
+fail-on-mismatch. Review the failure's URL table before setting that variable.
 
-```
-COMPFUZOR_REPO_JJ_RUNNER | default(playbook_dir ~ '/script/repo-jj-archive.ts')
-```
+`COMPFUZOR_REPO_JJ_RUNNER` can override the runner path. By default the
+playbook uses `playbook_dir/script/repo-jj-archive.ts`, which imports
+`archive/src/repo-jj-archive.ts` first (no bundle transport) or the committed
+`archive/repo-jj-archive.mjs` when sources are absent. The optional `self`
+command **never** influences this path or requires the compfuzor archive
+checkout to exist. The old flag-only invocation is still accepted as an alias
+for `refresh --json`; old `--version BRANCH` maps to `--branch BRANCH` (Gunshi
+reserves `--version` for its CLI version). Prefer the explicit subcommand.
 
-so the default entry is the launcher at `script/repo-jj-archive.ts`, which
-resolves in order:
+In `--json` mode stdout has **exactly one JSON result line** on success:
 
-1. `archive/src/repo-jj-archive.ts` — the TypeScript source directly via Node
-   type stripping (preferred: no bundler transport between checkout and
-   execution);
-2. `archive/repo-jj-archive.mjs` — the committed bundle, for trees that ship
-   only built output.
-
-Override `COMPFUZOR_REPO_JJ_RUNNER` (as `tests/integration/repo_jj_archive.test.py`
-does) to point at either the source, the launcher, or the bundle explicitly.
-
-## Building
-
-```
-pnpm build
+```json
+{"changed":false,"notices":[]}
 ```
 
-The root `vite.config.ts` packs `src/repo-jj-archive.ts` into
-`repo-jj-archive.mjs` (ESM, node platform, no hashes/sourcemaps/dts, `clean:
-false` so the source and this README survive). The bundle is committed like
-`runtime/` so Ansible consumers work without a build step — rebuild and commit
-when the source changes.
+Bookmark notices contain `kind: "bookmark-created"`, `name`, and full `target`;
+other notices have `kind: "notice"` and `message`. The playbook accumulates
+them and prints them at play end. Failures emit diagnostics to stderr, not a
+partial JSON result; Ansible checks the return code before parsing stdout.
 
-## Checks
+## Safety and repair
 
-`pnpm check` (format + lint + typecheck) covers `archive/src` via the root
-globs; `archive/src/**/*.ts` is in `tsconfig.json`.
+Before any `heads(all())` walk, the toolkit materializes `visible_heads()`.
+This catches ghost commits left in jj's view when Git maintenance pruned an
+object (including bare heads and conflicted-bookmark terms), and reports the
+missing commit ID and repair command rather than jj's opaque backend error.
+`health` can run this check independently. Resolve conflicted bookmarks first
+if necessary; `heal --yes` is a **last-resort**, explicit re-adoption. The
+backup stays in the checkout; Git refs/history still present are reimported,
+but jj-only view/operation history is absent from the new `.jj`. Ensure Git
+refs themselves are healthy before healing. Never run it on a production
+archive to test it: use fixtures. See the
+[ghost-head incident](/design/repo-jj-archive/incident-ghost-heads.glm53.md).
+
+The `refresh` ordering preserves the previous safety contract: snapshot before
+fetch; duplicate nonempty `@` under a stable recovery bookmark; untrack local
+bookmarks before fetching; preserve diverged old base under a harvest bookmark;
+then reconcile the local base and checkout without resetting local work. Remote
+URL checks happen after the initial snapshot, **before** harvest/fetch or
+bookmark rewrites. See [the original archive design](/design/repo-jj-archive/draft0.gpt6sol.md)
+and [the toolkit follow-up](/design/repo-jj-archive/draft1.gpt6sol.md).
+
+## Build, checks, tests
+
+```sh
+pnpm check             # formatting, lint, tsgo (including the script/ launcher)
+pnpm build             # bundling for distribution only; not type-checking
+python3 -m pytest --import-mode=importlib -q tests/integration/repo_jj_archive.test.py
+```
+
+The root `vite.config.ts` packs `archive/src/repo-jj-archive.ts` into one
+committed `archive/repo-jj-archive.mjs` (ESM, node platform, no type emit,
+`clean: false`). Rebuild and commit the bundle with source changes. Integration
+tests use disposable jj+Git fixtures and local Ansible plays, never production
+archives.

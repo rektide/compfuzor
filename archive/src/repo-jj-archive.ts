@@ -162,8 +162,10 @@ const fetch = define({
     await jj(["status"], dest);
     const before = await refs(dest);
     const working = await revision(dest, "@");
-    if (!working.empty && !(await recoveryCovered(dest, label, before, working.parents)))
-      await harvest(dest, label, "working-copy", working.commit, true);
+    if (!working.empty && !(await recoveryCovered(dest, label, before, working.parents))) {
+      const saved = await harvest(dest, label, "working-copy", working.commit, true);
+      console.log(`BOOKMARK CREATED  ${saved.name} -> ${saved.target}`);
+    }
     for (const ref of before.values()) {
       if (ref.remote !== "-" && ref.remote !== "git" && ref.tracked)
         await jj(["bookmark", "untrack", ref.name, "--remote", ref.remote], dest);
@@ -237,6 +239,9 @@ export async function main(): Promise<void> {
       // Gunshi prints the header even when a command succeeds; JSON mode
       // promises *one* stdout line and the header would break Ansible.
       renderHeader: null,
+      // Validation errors also default to stdout. Keep every failure on stderr.
+      renderValidationErrors: null,
+      strict: true,
       subCommands: {
         refresh,
         health,
@@ -258,7 +263,15 @@ if (argvPath) {
     (realArgv) => {
       if (realArgv !== import.meta.filename) return;
       return main().catch((error: unknown) => {
-        console.error(`repo-jj-archive: ${error instanceof Error ? error.message : String(error)}`);
+        const detail =
+          error instanceof AggregateError
+            ? error.errors
+                .map((item: unknown) => (item instanceof Error ? item.message : String(item)))
+                .join("; ")
+            : error instanceof Error
+              ? error.message
+              : String(error);
+        console.error(`repo-jj-archive: ${detail}`);
         process.exitCode = 1;
       });
     },

@@ -17,7 +17,7 @@ export async function preflight(dest: string): Promise<string[]> {
     throw new Error(
       `jj ghost commit(s) missing from Git object store: ${ghosts.join(", ")}. ` +
         `Resolve conflicted bookmarks and re-adopt the checkout, or explicitly run ` +
-        `repo-jj-archive heal --dest ${JSON.stringify(dest)} --yes (backs up .jj).`,
+        `node '${(process.argv[1] ?? "archive/src/repo-jj-archive.ts").replaceAll("'", "'\\''")}' heal --dest '${dest.replaceAll("'", "'\\''")}' --yes (backs up .jj).`,
     );
   }
   return [...(await refs(dest)).values()]

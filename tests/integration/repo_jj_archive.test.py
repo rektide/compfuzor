@@ -393,3 +393,55 @@ def test_ghost_head_preflight_and_explicit_re_adopt() -> None:
         assert "Visible heads OK" in toolkit("health", "--dest", str(archive), cwd=tmp)
         assert json.loads(toolkit("refresh", "--json", "--dest", str(archive),
                                   "--repo", str(remote), "--label", "fixture", cwd=tmp)) == NOOP
+
+
+def test_ansible_remote_fix_requires_opt_in() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        original, _ = create_remote(tmp)
+        archive = tmp / "archive"
+        render(archive, original)
+        replacement = tmp / "alternate.git"
+        run("git", "init", "--bare", str(replacement), cwd=tmp)
+        playbook = tmp / "remote-fix.pb"
+        playbook.write_text(f"""---
+- hosts: all
+  gather_facts: false
+  vars:
+    NAME: fixture
+    DIR: {str(tmp)!r}
+    REPO: {str(replacement)!r}
+    GIT_DIR: {str(archive)!r}
+    COMPFUZOR_REPO_JJ_RUNNER: {str(RUNNER)!r}
+    GIT_UPDATE: false
+  tasks:
+    - import_tasks: {str(ROOT / 'tasks/compfuzor/repo_jj_archive.tasks')!r}
+""")
+        env = os.environ | {"ANSIBLE_CONFIG": str(ROOT / "ansible.cfg")}
+        cmd = ("ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook))
+        failed = run(*cmd, cwd=ROOT, env=env, check=False)
+        assert "declared remote URL mismatch" in failed and "from_json" not in failed
+        assert run("jj", "git", "remote", "list", cwd=archive) == f"origin {original}"
+        run(*cmd, "-e", "GIT_REMOTE_FIX=true", cwd=ROOT, env=env)
+        assert run("jj", "git", "remote", "list", cwd=archive) == f"origin {replacement}"
+
+
+def test_fine_grained_commands_and_opt_in_checkout_detection() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, _ = create_remote(tmp)
+        archive = tmp / "archive" / "rektide" / "compfuzor"
+        archive.parent.mkdir(parents=True)
+        render(archive, remote)
+        assert str(archive) in toolkit("self", "--archive-dir", str(tmp / "archive"), cwd=tmp)
+        assert "Visible heads OK" in toolkit("health", "--dest", str(archive), cwd=tmp)
+        (archive / "local-note").write_text("kept\n")
+        assert "Snapshotted" in toolkit("snapshot", "--dest", str(archive), cwd=tmp)
+        fetched = toolkit("fetch", "--dest", str(archive), "--label", "fixture", cwd=tmp)
+        assert "BOOKMARK CREATED  harvest/fixture/working-copy-" in fetched
+        assert "Fetched origin" in fetched
+        assert "(origin fetched)" in toolkit("self", "--archive-dir", str(tmp / "archive"),
+                                              "--freshen", cwd=tmp)
+        assert "No compfuzor archive" in toolkit("self", "--archive-dir", str(tmp / "absent"), cwd=tmp)

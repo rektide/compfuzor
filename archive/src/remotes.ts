@@ -2,6 +2,7 @@ import { jj, lines } from "./jj.ts";
 
 export type RemoteDifference = { name: string; declared: string; actual: string | null };
 const REMOTE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const quote = (value: string): string => `'${value.replaceAll("'", "'\\''")}'`;
 
 export function declaredRemotes(repo: string, remotes: string): Map<string, string> {
   const json: unknown = JSON.parse(remotes);
@@ -49,8 +50,8 @@ export function mismatchError(
   return new Error(
     `declared remote URL mismatch (no remote was changed):\n` +
       `name\tdeclared\tactual\n${table}\n` +
-      `To apply deliberately: repo-jj-archive remotes --dest ${JSON.stringify(dest)} ` +
-      `--repo ${JSON.stringify(repo)} --remotes ${JSON.stringify(remotes)} --reconcile`,
+      `To apply deliberately: node ${quote(process.argv[1] ?? "archive/src/repo-jj-archive.ts")} remotes --dest ${quote(dest)} ` +
+      `--repo ${quote(repo)} --remotes ${quote(remotes)} --reconcile`,
   );
 }
 
