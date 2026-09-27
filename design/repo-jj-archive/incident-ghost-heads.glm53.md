@@ -86,4 +86,5 @@ Diagnostic trap: piping `jj log -r 'heads(all())'` into `head -N` SIGPIPEs jj
 ## Cross-references
 
 - [`/design/repo-jj-archive/draft0.gpt6sol.md`](/design/repo-jj-archive/draft0.gpt6sol.md) — subsystem design draft this incident informs.
+- [Toolkit follow-up](/design/repo-jj-archive/draft1.gpt6sol.md) — the landed `visible_heads()` preflight, explicit backup/re-adopt command, and fixture proof that address these lessons.
 - [`/design/archive-deployment-premise/draft0.glm53.md`](/design/archive-deployment-premise/draft0.glm53.md) — the runner-on-main-working-copy premise under which the incident occurred.

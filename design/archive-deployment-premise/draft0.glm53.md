@@ -151,6 +151,7 @@ exercised every failure mode the intelligent sync must handle:
 
 ## Cross-references
 
+- [Archive toolkit follow-up](/design/repo-jj-archive/draft1.gpt6sol.md) — hardens and decomposes the existing main-worktree runner but explicitly defers this document's workspace/per-bookmark-sync premise.
 - [`opencode.src.pb`](/opencode.src.pb) — the consumer that surfaced this; its
   README already documents building from a composed workspace, not the
   deployment checkout.
