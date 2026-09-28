@@ -150,12 +150,16 @@ unregistered). Adding a command is a new module under `cli/commands/` plus one
 registry entry.
 
 The root `vite.config.ts` packs `archive/src/repo-jj-archive.ts` into one
-committed `archive/repo-jj-archive.mjs` (ESM, node platform, no type emit,
-`clean: false`): a self-contained ~885 KB (207 KB gzip) single file with only
-`node:` imports. It is **distribution only** — it runs outside this checkout
-without `node_modules`; develop against the source instead. Rebuild and commit
-the bundle with source changes. While source changes are still landing the
-committed bundle may lag behind (CLI semantics stay the same); run `pnpm
-build` and commit the result before relying on bundle freshness. Integration
-tests use disposable jj+Git fixtures and local Ansible plays, never production
-archives.
+committed `archive/repo-jj-archive.ts` (ESM, Node platform, `node26`, no type
+emit, code splitting, or source map). Rolldown's erased JavaScript is valid
+TypeScript, so Node 26 executes this single file with native type stripping.
+The bundle includes all JavaScript dependencies and has only `node:` imports;
+it contains no Node runtime. The host supplies system Node 26 from the
+Nodesource 26.x package declared by [`nodesource.repo.pb`](/nodesource.repo.pb).
+There is no compatibility target for older Node versions. This is
+**distribution only** — the file runs outside this checkout without
+`node_modules`; develop against the source instead. Rebuild and commit the
+bundle with source changes. While source changes are still landing the
+committed bundle may lag behind; run `pnpm build` and commit the result before
+relying on bundle freshness. Integration tests use disposable jj+Git fixtures
+and local Ansible plays, never production archives.

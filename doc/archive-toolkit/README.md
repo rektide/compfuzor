@@ -1,7 +1,7 @@
 ---
 type: TopicDoc
 title: Archive toolkit
-description: Entry point for the repo-jj-archive toolkit topic — Effect CLI contract, launcher/bundle transport, completion coverage, and custody development status.
+description: Entry point for the repo-jj-archive toolkit topic — Effect CLI contract, Node 26 launcher and bundle transport, completion coverage, and custody development status.
 resource: /doc/archive-toolkit/README.md
 tags: [compfuzor, archive, jj, effect, cli]
 status: stable
@@ -105,9 +105,15 @@ the custody brief: [`design/archive-migration/brief0.gpt6sol.md`](/design/archiv
 
 ## Open items
 
-- Bundle freshness is hand-maintained: rebuild (`pnpm build`) and commit
-  `archive/repo-jj-archive.mjs` with source changes; it may lag while source
-  changes land. No rebuild-is-a-no-op test exists yet.
-- Node engine floor (20.19) and signal behavior are exercised manually, not
+- Bundle freshness is hand-maintained: rebuild (`pnpm build`) and commit the
+  single-file `archive/repo-jj-archive.ts` with source changes; it may lag
+  while source changes land. No rebuild-is-a-no-op test exists yet.
+- The archive runner requires system Node 26, supplied by the Nodesource
+  26.x `nodejs` package in [`nodesource.repo.pb`](/nodesource.repo.pb). The
+  bundle contains all JavaScript dependencies but no Node binary, and does
+  not support older Node versions. The root package engine range remains
+  broader for other project tools; it is not the archive runner's runtime
+  contract.
+- The Node 26 runtime floor and signal behavior are exercised manually, not
   by suite.
 - Custody registration awaits the core-review gate passing end to end.
