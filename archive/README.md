@@ -137,8 +137,9 @@ have passed local clean/dirty existing-destination fixtures. The
 reports no remaining blocker from that review **under Linux, quiesced paths,
 existing destinations and commit/tag-tip custody**. This is **not blanket
 production approval**, a deletion verdict, or a complete implementation of
-the [custody brief](/design/archive-migration/brief0.gpt6sol.md). Final
-distribution and full-suite verification are separate and still in progress.
+the [custody brief](/design/archive-migration/brief0.gpt6sol.md). The separate
+[distribution verification](/design/archive-toolkit/verification0.gpt6luna.md)
+passed checks, 127 Node tests, 34 integration tests, and a reproducible bundle build.
 Use [the custody operator and library guide](/doc/archive-toolkit/custody.md)
 for admission limits, review-file formats, plan/apply/verify examples, and
 what a receipt actually proves. In particular, adoption never creates a

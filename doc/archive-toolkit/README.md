@@ -121,12 +121,17 @@ Older lineage (pre-Effect toolkit design): [`design/repo-jj-archive/`](/design/r
 including the [ghost-head incident](/design/repo-jj-archive/incident-ghost-heads.glm53.md);
 the custody brief: [`design/archive-migration/brief0.gpt6sol.md`](/design/archive-migration/brief0.gpt6sol.md).
 
-## Open items
+## Verification and remaining boundaries
+
+[Final verification](/design/archive-toolkit/verification0.gpt6luna.md) passed
+`pnpm check`, 127 Node tests, and 34 integration tests. Two builds produced
+identical bundle bytes. A copied distribution exercised refresh, launcher
+fallback, custody apply, and verification after source removal without a source
+tree or installed dependencies. Signal tests cover the shipped entry points.
 
 - Bundle freshness is hand-maintained: rebuild (`pnpm build`) and commit the
   single-file `archive/repo-jj-archive.ts` with source changes; validate
-  freshness before relying on distribution. Final distribution verification
-  is in progress; no final size or test result is asserted here.
+  freshness before relying on a subsequently changed distribution.
 - The archive runner requires system Node 26, supplied by the Nodesource
   26.x `nodejs` package in [`nodesource.repo.pb`](/nodesource.repo.pb). The
   bundle contains all JavaScript dependencies but no Node binary, and does
@@ -135,8 +140,8 @@ the custody brief: [`design/archive-migration/brief0.gpt6sol.md`](/design/archiv
   contract.
 - The earlier manual runtime probes in
   [`runtime-checks0.glm53.md`](/design/archive-toolkit/runtime-checks0.glm53.md)
-  predate the Node 26 distribution and signal-lifecycle changes; final checks
-  of the current bundle are in progress.
+  predate the Node 26 distribution and signal-lifecycle changes; use the final
+  verification report above for the current bundle's evidence.
 - The focused custody safety review has no remaining blocker **within its
   stated assumptions**. It does not certify concurrent writers, runtime
   state, off-host backup, publication, missing-destination creation, or

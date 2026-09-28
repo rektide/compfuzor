@@ -29,8 +29,9 @@ runtime state, remote publication, or authorization to dispose of the source.
 Existing-destination clean/dirty fixture tests pass. The
 [final focused safety disposition](/design/archive-toolkit/safety-review0.gpt6sol.md#final-focused-checkpoint-standalone-verifier-helper-gate)
 reports no remaining blocker from its Linux/quiesced-path,
-existing-destination, commit/tag-tip review; final distribution and full-suite
-checks are separate and still running. Do **not** infer blanket production
+existing-destination, commit/tag-tip review. The separate
+[distribution and full-suite checks](/design/archive-toolkit/verification0.gpt6luna.md)
+also passed. Do **not** infer blanket production
 approval, source-retirement permission, or full brief v1 support.
 Stop all writers to both checkouts before planning and keep them stopped through
 apply: fingerprint checks are not an atomic snapshot of a live repository.
@@ -217,5 +218,7 @@ library or a guaranteed stable external package API.
   or deletion signoff.
 - [Earlier runtime checks](/design/archive-toolkit/runtime-checks0.glm53.md):
   pre-Node-26 signal and `.mjs` transport findings, useful as historical
-  motivation rather than evidence for the current `.ts` bundle. Final
-  distribution verification is still in progress.
+  motivation rather than evidence for the current `.ts` bundle.
+- [Final distribution verification](/design/archive-toolkit/verification0.gpt6luna.md):
+  passing full checks, reproducible bundle bytes, cancellation through shipped
+  entry points, and copied-bundle custody verification after source removal.
