@@ -15,7 +15,7 @@
  * silent exclusions.
  */
 import { Effect, Result } from "effect";
-import { readFile, readdir, lstat, realpath, stat } from "node:fs/promises";
+import { open, readFile, readdir, lstat, realpath, stat } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { gitRead } from "../../repository/git.ts";
 import { oid as oidOf, destinationRefsSha256, sha256 } from "../codec.ts";
@@ -233,6 +233,40 @@ function sensitiveClass(path: string): string | null {
 
 const hasInternals = (path: string): boolean =>
   path.split("/").some((part) => part === ".git" || part === ".jj");
+
+/** Canonical LFS pointer header; matching this prefix identifies a pointer. */
+const LFS_POINTER_PREFIX = "version https://git-lfs.github.com/spec/v1\n";
+/** Bounded header read: pointer files are ~130 bytes, never megabytes. */
+const LFS_PROBE_BYTES = LFS_POINTER_PREFIX.length;
+
+/**
+ * Detect LFS pointer files among the files the synthetic tree would stage:
+ * the current index/worktree state of tracked paths plus selected untracked
+ * paths, never ignored files. Only the fixed-size header prefix is read and
+ * only the match/no-match outcome is recorded — file contents are never
+ * emitted. Scope is the current snapshot input, not the whole history:
+ * pointers deeper in history surface when their blobs enter the manifest.
+ */
+async function lfsPointers(root: string, paths: readonly RepoPath[]): Promise<readonly RepoPath[]> {
+  const found: RepoPath[] = [];
+  const header = Buffer.from(LFS_POINTER_PREFIX, "latin1");
+  for (const path of paths) {
+    const handle = await open(join(root, path), "r").catch(() => null);
+    if (handle === null) continue; // deleted or unreadable: not a pointer
+    try {
+      const buffer = Buffer.alloc(LFS_PROBE_BYTES);
+      const { bytesRead } = await handle.read(buffer, 0, LFS_PROBE_BYTES, 0);
+      if (
+        buffer.subarray(0, bytesRead).equals(header.subarray(0, bytesRead)) &&
+        bytesRead === LFS_PROBE_BYTES
+      )
+        found.push(path);
+    } finally {
+      await handle.close();
+    }
+  }
+  return found;
+}
 
 function parseNulPaths(bytes: Uint8Array): RepoPath[] {
   const parts = strictUtf8(bytes, "path list").split("\0");
@@ -825,8 +859,49 @@ export function probeSource(
       });
     }
 
-    // --- tracked sensitive paths (names/classes only) ---
-    const sensitive: Issue[] = [];
+    // --- LFS pointers among snapshot input (current index/worktree scope) ---
+    if (observed.indexEntries !== null && untracked !== null && statusParsed !== null) {
+      const deleted = new Set(
+        statusParsed.changes
+          .filter(
+            ({ indexStatus, worktreeStatus }) =>
+              indexStatus === "deleted" || worktreeStatus === "deleted",
+          )
+          .flatMap(({ path, originalPath }) =>
+            originalPath === null ? [path] : [path, originalPath],
+          ),
+      );
+      const staged = [
+        ...new Set([...observed.indexEntries.map(({ path }) => path), ...untracked]),
+      ].filter((path) => !deleted.has(path));
+      if (staged.length > BOUNDS.untracked) {
+        blockers.push({
+          code: "source-lfs-probe-unbounded",
+          subject: gitDir,
+          reason: `snapshot input exceeds the LFS pointer probe bound ${BOUNDS.untracked}`,
+        });
+      } else {
+        const pointers = yield* Effect.result(
+          fs(() => lfsPointers(real, staged), "probe LFS pointers"),
+        );
+        if (Result.isFailure(pointers))
+          blockers.push({
+            code: "source-lfs-probe-failed",
+            subject: gitDir,
+            reason: pointers.failure.message,
+          });
+        else
+          for (const path of pointers.success)
+            blockers.push({
+              code: "source-lfs-pointer",
+              subject: path,
+              reason:
+                "LFS pointer file in snapshot input: v1 custody cannot take custody of LFS payloads from pointers",
+            });
+      }
+    }
+
+    // --- tracked sensitive paths (names/classes only) ---    const sensitive: Issue[] = [];
     const seenSensitive = new Set<string>();
     for (const entry of [...(treePaths ?? []), ...(observed.indexEntries ?? [])]) {
       if (seenSensitive.has(entry.path)) continue;

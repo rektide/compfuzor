@@ -326,8 +326,7 @@ test("dirty worktree carries an exact snapshot proposal, not a fabricated snapsh
   const result = await plan(input(source, dest));
   assert.equal(result.state, "blocked");
   assert.ok(codes(result).includes("path-review-required"));
-  assert.ok(codes(result).includes("snapshot-apply-pending"));
-  assert.ok(!codes(result).includes("private-staging-pending"));
+  assert.ok(!codes(result).includes("snapshot-apply-pending"));
   assert.ok(result.source.untrackedPaths?.some((path) => path === "untracked.txt"));
   assert.ok(result.source.ignoredPaths?.some((path) => path === "debug.log"));
   assert.ok(result.source.trackedSensitivePaths?.some(({ subject }) => subject === ".env"));
@@ -392,11 +391,75 @@ test("snapshot review bound to the preview manifest clears the review blocker", 
     }),
   );
   const reviewed = await plan(input(source, dest, { pathReview: reviewFile }));
-  assert.equal(reviewed.state, "blocked");
-  assert.ok(!codes(reviewed).includes("path-review-required"));
-  assert.ok(codes(reviewed).includes("snapshot-apply-pending"));
+  assert.deepEqual(codes(reviewed), []);
+  assert.equal(reviewed.state, "ready");
+  // The approved snapshot is the proposal without proposal-only fields,
+  // carrying the validated review; a working-copy pin covers its commit.
+  assert.ok(reviewed.proposedSnapshot !== null);
+  assert.ok(!("manifestSha256" in reviewed.proposedSnapshot));
+  assert.ok(!("reviewRequirements" in reviewed.proposedSnapshot));
+  assert.equal(reviewed.proposedSnapshot.commitOid, proposal.commitOid);
+  assert.equal(reviewed.proposedSnapshot.pathReview?.manifestSha256, proposal.manifestSha256);
+  const wcPin = reviewed.pins.find(({ sourceKind }) => sourceKind === "working-copy");
+  assert.ok(wcPin !== undefined);
+  assert.equal(wcPin.sourceOid, proposal.commitOid);
+  assert.ok(wcPin.destinationRef.includes("/working-copy/"));
   assert.equal(reviewed.cleanHeadPathReview, null);
   assert.ok(!JSON.stringify(reviewed).includes("otter"));
+
+  // A stale review (wrong manifest digest) stays blocked with the visible
+  // proposal so the operator can rebind against the reported digest.
+  const staleFile = join(ROOT, "review-stale.json");
+  await writeFileUtf8(
+    staleFile,
+    JSON.stringify({
+      schema: "compfuzor.archive-path-review/v1",
+      manifestSha256: "0".repeat(64),
+      included: [],
+      stagedVsUnstaged: null,
+    }),
+  );
+  const stale = await plan(input(source, dest, { pathReview: staleFile }));
+  assert.equal(stale.state, "blocked");
+  assert.ok(codes(stale).includes("path-review-invalid"));
+  assert.ok(stale.proposedSnapshot !== null);
+});
+
+test("plain dirty worktree without sensitive paths plans ready with a reviewless snapshot", async () => {
+  const source = await fresh("plain-dirty-src");
+  await initRepo(source);
+  await commit(source, "one", "README.md", "one\n");
+  await commit(source, "two", "notes.txt", "plain\n");
+  await writeFileUtf8(join(source, "notes.txt"), "plain\nedited\n");
+  await writeFileUtf8(join(source, "extra.txt"), "brand new\n");
+  const dest = await makeDest(source, "plain-dirty-dest");
+
+  const result = await plan(input(source, dest));
+  assert.deepEqual(codes(result), []);
+  assert.equal(result.state, "ready");
+  assert.ok(result.proposedSnapshot !== null);
+  assert.equal(result.proposedSnapshot.pathReview, null);
+  assert.ok(result.proposedSnapshot.paths.some(({ path }) => path === "extra.txt"));
+  assert.ok(result.pins.some(({ sourceKind }) => sourceKind === "working-copy"));
+  assert.equal(result.proposedSnapshot.stagedVsUnstaged, "none");
+});
+
+test("tracked LFS pointer without filter configuration is a named blocker", async () => {
+  const source = await fresh("lfs-src");
+  await initRepo(source);
+  await commit(source, "one", "README.md", "one\n");
+  const pointer =
+    "version https://git-lfs.github.com/spec/v1\noid sha256:4355a46b19d348dc2f57c046f8ef63d4538ebb936000f6c10d7823b49e72009c\nsize 7\n";
+  await writeFileUtf8(join(source, "asset.bin"), pointer);
+  await git(["add", "-f", "asset.bin"], source);
+  await git(["commit", "--quiet", "-m", "pointer"], source);
+  const dest = await makeDest(source, "lfs-dest");
+
+  const result = await plan(input(source, dest));
+  assert.equal(result.state, "blocked");
+  assert.ok(codes(result).includes("source-lfs-pointer"), codes(result).join(","));
+  // The pointer payload (its oid line) is never emitted in the plan.
+  assert.ok(!JSON.stringify(result).includes("4355a46b19d348dc2f57c046f8ef63d4538ebb93"));
 });
 
 test("unborn HEAD reports a blocker and a null head category", async () => {

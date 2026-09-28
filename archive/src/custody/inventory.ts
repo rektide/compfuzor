@@ -41,6 +41,7 @@ import type {
   RemoteBaseline,
   RepoPath,
   Sha256,
+  Snapshot,
   SnapshotProposal,
   SourceInventory,
 } from "./model.ts";
@@ -280,6 +281,9 @@ export const planAdoption: (input: AdoptInput) => Effect.Effect<PlanV1, CustodyE
       });
       const previewed = yield* Effect.result(
         Effect.tryPromise({
+          // Interruption contract: when previewSnapshot gains its optional
+          // execution {signal}, forward this callback's AbortSignal so an
+          // interrupted plan stops staging instead of detaching the child.
           try: () =>
             previewSnapshot({
               sourceRoot: probe.source,
@@ -329,15 +333,19 @@ export const planAdoption: (input: AdoptInput) => Effect.Effect<PlanV1, CustodyE
     }
 
     let cleanHeadPathReview: ReturnType<typeof parsePathReview> | null = null;
+    let approvedSnapshot: Snapshot | null = null;
+    let workingCopy: { commitOid: Oid; parentOid: Oid; treeOid: Oid } | null = null;
     if (probe.dirty && proposal !== null) {
-      // Mirror the receipt rules: a snapshot review binds the exact
-      // proposal manifest and covers every sensitive path; the staged
-      // versus unstaged split needs an explicit single-tree approval.
+      // Mirror the receipt rules — the same rules stage.prepareSnapshot's
+      // bindPathReview enforces at apply — so a plan that cannot produce a
+      // valid receipt reports it now, not at apply time.
       const needsReview =
         proposal.trackedSensitivePaths.length > 0 ||
         proposal.reviewRequirements.stagedVsUnstagedApprovalRequired;
+      let reviewProblems = false;
       if (pathReview === null) {
-        if (needsReview)
+        if (needsReview) {
+          reviewProblems = true;
           blockers.push({
             code: "path-review-required",
             subject: null,
@@ -347,6 +355,7 @@ export const planAdoption: (input: AdoptInput) => Effect.Effect<PlanV1, CustodyE
               .slice(0, 16)
               .join(", ")}`,
           });
+        }
       } else {
         const entries = new Set(
           proposal.paths.map(({ path, mode, blobOid }) => `${path}\0${mode}\0${blobOid}`),
@@ -368,22 +377,40 @@ export const planAdoption: (input: AdoptInput) => Effect.Effect<PlanV1, CustodyE
           pathReview.stagedVsUnstaged === null
         )
           problems.push("lost index/worktree split is not approved");
-        if (problems.length > 0)
+        if (problems.length > 0) {
+          reviewProblems = true;
           blockers.push({
             code: "path-review-invalid",
             subject: null,
             reason: problems.slice(0, 8).join("; "),
           });
+        }
       }
-      // A real pending dependency, kept until the apply door exists: the
-      // approved Snapshot is minted by prepareSnapshot from a bound review,
-      // never by this read-only plan.
-      blockers.push({
-        code: "snapshot-apply-pending",
-        subject: probe.source,
-        reason:
-          "approved snapshot is minted at apply from the private stage; this plan carries the exact preview proposal only",
-      });
+      if (!reviewProblems) {
+        // Approved: the proposal minus its proposal-only fields becomes the
+        // Snapshot the apply door mints from the identical private stage
+        // (deterministic identity — prepareSnapshot reproduces the same
+        // commit OID from the same manifest). A plain dirty worktree with no
+        // sensitive paths and no staged/unstaged split needs no review.
+        approvedSnapshot = {
+          format: proposal.format,
+          parentOid: proposal.parentOid,
+          treeOid: proposal.treeOid,
+          commitOid: proposal.commitOid,
+          paths: proposal.paths,
+          stagedVsUnstaged: proposal.stagedVsUnstaged,
+          excludeFileSha256: proposal.excludeFileSha256,
+          excludedUntracked: proposal.excludedUntracked,
+          ignoredPaths: proposal.ignoredPaths,
+          trackedSensitivePaths: proposal.trackedSensitivePaths,
+          pathReview,
+        };
+        workingCopy = {
+          commitOid: proposal.commitOid,
+          parentOid: proposal.parentOid,
+          treeOid: proposal.treeOid,
+        };
+      }
     } else if (pathReview !== null && probe.observed.head !== null && !probe.dirty) {
       // Clean HEAD: the review binds the exact HEAD tree manifest. Mirror
       // the receipt rules from codec.validateReceipt so a plan that cannot
@@ -571,7 +598,12 @@ export const planAdoption: (input: AdoptInput) => Effect.Effect<PlanV1, CustodyE
     }
 
     // --- pins (ready plans only) ---
-    const { pins, failures } = buildPins(probe.observed, input.label, input.generation);
+    const { pins, failures } = buildPins(
+      probe.observed,
+      input.label,
+      input.generation,
+      workingCopy,
+    );
     if (failures.length > 0) blockers.push(...failures);
 
     // --- assemble the plan ---
@@ -619,7 +651,7 @@ export const planAdoption: (input: AdoptInput) => Effect.Effect<PlanV1, CustodyE
         destinationRealpath: dest.realpath,
       },
       source,
-      proposedSnapshot: null,
+      proposedSnapshot: approvedSnapshot,
       cleanHeadPathReview,
       baselines,
       pins,
@@ -682,6 +714,7 @@ function buildPins(
   observed: PinMaterial,
   label: string,
   generation: string,
+  workingCopy: { commitOid: Oid; parentOid: Oid; treeOid: Oid } | null,
 ): { readonly pins: readonly PinIntent[]; readonly failures: readonly Issue[] } {
   const pins: PinIntent[] = [];
   const failures: Issue[] = [];
@@ -729,6 +762,26 @@ function buildPins(
       objectType: candidate.objectType,
       destinationOid: candidate.oid,
     });
+  }
+  // The synthetic working-copy commit is only pinned when its snapshot is
+  // approved; the content-addressed lane makes an unchanged retry identical.
+  if (workingCopy !== null) {
+    const intent: Omit<PinIntent, "destinationRef"> = {
+      sourceKind: "working-copy",
+      sourceName: "working-copy",
+      sourceOid: workingCopy.commitOid,
+      objectType: "commit",
+      destinationOid: workingCopy.commitOid,
+    };
+    try {
+      pins.push({ ...intent, destinationRef: pinRef(intent, label, generation, workingCopy) });
+    } catch (error) {
+      failures.push({
+        code: "pin-mapping-invalid",
+        subject: "working-copy",
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
   return { pins, failures };
 }
