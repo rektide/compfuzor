@@ -364,6 +364,17 @@ export const planAdoption: (input: AdoptInput) => Effect.Effect<PlanV1, CustodyE
       });
     }
 
+    // A staged version can differ from both HEAD and the worktree while the
+    // preview tree equals HEAD. No synthetic commit or pin then retains that
+    // index-only blob. A review cannot turn absent custody into preservation.
+    if (probe.dirty && proposal === null && stagedExists)
+      blockers.push({
+        code: "source-index-only-state",
+        subject: probe.source,
+        reason:
+          "staged index state has no synthetic snapshot; separate index custody is required before adoption",
+      });
+
     let cleanHeadPathReview: ReturnType<typeof parsePathReview> | null = null;
     let approvedSnapshot: Snapshot | null = null;
     let workingCopy: { commitOid: Oid; parentOid: Oid; treeOid: Oid } | null = null;

@@ -445,6 +445,35 @@ test("plain dirty worktree without sensitive paths plans ready with a reviewless
   assert.equal(result.proposedSnapshot.stagedVsUnstaged, "none");
 });
 
+test("index-only staged content blocks adoption even when the worktree equals HEAD", async () => {
+  const source = await fresh("index-only-src");
+  await initRepo(source);
+  await commit(source, "one", "note.txt", "HEAD text\n");
+  const dest = await makeDest(source, "index-only-dest");
+  await writeFileUtf8(join(source, "note.txt"), "STAGED-ONLY-CONTENT\n");
+  await git(["add", "note.txt"], source);
+  await writeFileUtf8(join(source, "note.txt"), "HEAD text\n");
+  const stagedOid = await git(["rev-parse", ":note.txt"], source);
+  assert.notEqual(stagedOid, await git(["rev-parse", "HEAD:note.txt"], source));
+  const beforeSource = await fingerprintTree(source);
+  const beforeGit = await fingerprintTree(join(source, ".git"));
+  const beforeDest = await fingerprintTree(dest);
+  const result = await plan(input(source, dest));
+  assert.equal(result.state, "blocked");
+  assert.ok(codes(result).includes("source-index-only-state"));
+  assert.equal(result.proposedSnapshot, null);
+  assert.ok(
+    result.source.worktreeChanges?.some(
+      ({ path, indexStatus }) => path === "note.txt" && indexStatus !== "unchanged",
+    ),
+  );
+  await assert.rejects(Effect.runPromise(applyAdoption(input(source, dest))), CustodyError);
+  assert.equal(await fingerprintTree(source), beforeSource);
+  assert.equal(await fingerprintTree(join(source, ".git")), beforeGit);
+  assert.equal(await fingerprintTree(dest), beforeDest);
+  assert.equal(await git(["rev-parse", ":note.txt"], source), stagedOid);
+});
+
 test("tracked LFS pointer without filter configuration is a named blocker", async () => {
   const source = await fresh("lfs-src");
   await initRepo(source);
