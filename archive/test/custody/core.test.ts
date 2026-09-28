@@ -4,6 +4,7 @@ import {
   canonicalJson,
   candidateIdentity,
   decodeIdentity,
+  destinationRefsSha256,
   digest,
   encodeIdentity,
   encodeReceipt,
@@ -82,7 +83,7 @@ function sample(): ReceiptV1 {
     baselines: {
       sourceRemoteTracking: [],
       destinationPreRefs: [],
-      destinationPreRefsSha256: D,
+      destinationPreRefsSha256: destinationRefsSha256([]),
       destinationWorktreeFingerprintSha256: D,
       destinationIndexSha256: D,
       selectedBranch: "main",
@@ -94,7 +95,7 @@ function sample(): ReceiptV1 {
     bundle: {
       pathRelativeToDestinationParent: `.compfuzor-adoptions/${sha256(Buffer.from("/fixtures/archive"))}/${"e".repeat(32)}/source.bundle`,
       sha256: D,
-      verifiedHeads: [{ ref: refName("refs/stage/head"), oid: sourceOid }],
+      verifiedHeads: [{ ref: pin.destinationRef, oid: sourceOid }],
       freshRestoreVerified: true,
     },
     checks: {
@@ -150,6 +151,9 @@ test("bad components, lossy paths, and unsafe vault paths are rejected", () => {
     assert.throws(() => refComponent(label));
   assert.throws(() => repoPath(Buffer.from([0xff])));
   assert.throws(() => refName(Buffer.from([0xff])));
+  assert.equal(refName("refs/stash"), "refs/stash");
+  assert.equal(refName("refs/notes/x"), "refs/notes/x");
+  assert.throws(() => refName("stash"));
   assert.throws(() =>
     vaultBundlePath("/fixtures/archive", ".compfuzor-adoptions/../../etc/passwd"),
   );
@@ -240,7 +244,15 @@ test("exact reviewed path and staged/index loss are mandatory for dirty snapshot
       snapshot,
     ),
   } as const;
-  const receipt: ReceiptV1 = { ...clean, snapshot, pins: [...clean.pins, pin] };
+  const receipt: ReceiptV1 = {
+    ...clean,
+    snapshot,
+    pins: [...clean.pins, pin],
+    bundle: {
+      ...clean.bundle,
+      verifiedHeads: [...clean.bundle.verifiedHeads, { ref: pin.destinationRef, oid: commitOid }],
+    },
+  };
   assert.equal(
     parseReceipt(encodeReceipt(receipt)).snapshot?.pathReview?.fileSha256,
     sha256(Buffer.from(JSON.stringify(reviewInput))),
@@ -338,6 +350,195 @@ test("receipt cannot silently omit named refs, selected candidates, or tracked i
   );
 });
 
+test("stash ref and typed stash pin round-trip; candidate identities bind selection, OID and type", () => {
+  const receipt = sample();
+  const stash = {
+    name: refName("refs/stash"),
+    oid: O("2"),
+    objectType: "commit" as const,
+    peeledOid: null,
+  };
+  const stashPin: PinIntent = {
+    sourceKind: "stash",
+    sourceName: stash.name,
+    sourceOid: stash.oid,
+    objectType: "commit",
+    destinationOid: stash.oid,
+    destinationRef: pinRef(
+      {
+        sourceKind: "stash",
+        sourceName: stash.name,
+        sourceOid: stash.oid,
+        destinationOid: stash.oid,
+      },
+      "legacy",
+      "g0",
+    ),
+  };
+  const selected = {
+    kind: "stash-older" as const,
+    oid: O("3"),
+    objectType: "commit" as const,
+    provenance: ["reflog"],
+    disposition: "pin" as const,
+    reason: null,
+  };
+  const candidatePin: PinIntent = {
+    sourceKind: "reflog",
+    sourceName: candidateIdentity(selected.kind, selected.oid),
+    sourceOid: selected.oid,
+    objectType: "commit",
+    destinationOid: selected.oid,
+    destinationRef: pinRef(
+      {
+        sourceKind: "reflog",
+        sourceName: candidateIdentity(selected.kind, selected.oid),
+        sourceOid: selected.oid,
+        destinationOid: selected.oid,
+      },
+      "legacy",
+      "g0",
+    ),
+  };
+  const full: ReceiptV1 = {
+    ...receipt,
+    source: { ...receipt.source, refs: [stash], candidates: [selected] },
+    pins: [...receipt.pins, stashPin, candidatePin],
+    bundle: {
+      ...receipt.bundle,
+      verifiedHeads: [
+        ...receipt.bundle.verifiedHeads,
+        { ref: stashPin.destinationRef, oid: stash.oid },
+        { ref: candidatePin.destinationRef, oid: selected.oid },
+      ],
+    },
+  };
+  assert.deepEqual(parseReceipt(encodeReceipt(full)), full);
+  assert.throws(
+    () =>
+      validateReceipt({
+        ...full,
+        pins: full.pins.map((pin) =>
+          pin === candidatePin
+            ? {
+                ...pin,
+                sourceName: `stash-older:${"4".repeat(40)}`,
+                destinationRef: pinRef(
+                  { ...pin, sourceName: `stash-older:${"4".repeat(40)}` },
+                  "legacy",
+                  "g0",
+                ),
+              }
+            : pin,
+        ),
+      }),
+    /candidate pin identity/,
+  );
+  assert.throws(
+    () =>
+      validateReceipt({
+        ...full,
+        pins: full.pins.map((pin) =>
+          pin === candidatePin
+            ? {
+                ...pin,
+                sourceName: `stash-older:${"3".repeat(64)}`,
+                destinationRef: pinRef(
+                  { ...pin, sourceName: `stash-older:${"3".repeat(64)}` },
+                  "legacy",
+                  "g0",
+                ),
+              }
+            : pin,
+        ),
+      }),
+    /invalid sha1 object ID/,
+  );
+  assert.throws(
+    () =>
+      validateReceipt({
+        ...full,
+        source: {
+          ...full.source,
+          candidates: [{ ...selected, disposition: "not-required", reason: "excluded" }],
+        },
+      }),
+    /candidate pin lacks selected/,
+  );
+  assert.throws(
+    () =>
+      validateReceipt({
+        ...full,
+        bundle: { ...full.bundle, verifiedHeads: full.bundle.verifiedHeads.slice(0, -1) },
+      }),
+    /bundle heads/,
+  );
+  assert.throws(
+    () =>
+      validateReceipt({
+        ...full,
+        bundle: {
+          ...full.bundle,
+          verifiedHeads: full.bundle.verifiedHeads.map((head, index) =>
+            index === 1 ? { ...head, ref: refName("refs/heads/unrelated") } : head,
+          ),
+        },
+      }),
+    /bundle heads/,
+  );
+  assert.throws(
+    () =>
+      validateReceipt({
+        ...full,
+        bundle: {
+          ...full.bundle,
+          verifiedHeads: [
+            ...full.bundle.verifiedHeads,
+            { ref: refName("refs/stage/extra"), oid: O("4") },
+          ],
+        },
+      }),
+    /bundle heads/,
+  );
+});
+
+test("destination baseline rejects repeated ref names and hashes raw inventory format", () => {
+  const receipt = sample();
+  const ref = {
+    name: refName("refs/stash"),
+    oid: O("2"),
+    objectType: "commit" as const,
+    peeledOid: null,
+  };
+  const hash = sha256(Buffer.from(`refs/stash\0${ref.oid}\0commit\0\0\n`));
+  assert.equal(destinationRefsSha256([ref]), hash);
+  const withRef = {
+    ...receipt,
+    baselines: { ...receipt.baselines, destinationPreRefs: [ref], destinationPreRefsSha256: hash },
+  };
+  validateReceipt(withRef);
+  assert.throws(
+    () =>
+      validateReceipt({
+        ...withRef,
+        baselines: { ...withRef.baselines, destinationPreRefs: [ref, ref] },
+      }),
+    /duplicate ref/,
+  );
+  assert.throws(
+    () =>
+      validateReceipt({
+        ...withRef,
+        baselines: { ...withRef.baselines, destinationPreRefsSha256: D },
+      }),
+    /pre-ref hash/,
+  );
+  assert.throws(
+    () => validateReceipt({ ...receipt, source: { ...receipt.source, refs: [ref, ref] } }),
+    /duplicate ref/,
+  );
+});
+
 test("same-input retry discounts only its own installed refs and retains the original baseline", () => {
   const receipt = sample();
   const receiptCommitOid = O("6");
@@ -430,5 +631,140 @@ test("same-input retry discounts only its own installed refs and retains the ori
         new Map([[receipt.receiptRef, receiptCommitOid]]),
       ),
     /fresh destination ref observation/,
+  );
+});
+
+test("retry ignores ordering of independent pins and refs, but not ordered candidate provenance", () => {
+  const receipt = sample();
+  const branch = {
+    name: refName("refs/heads/topic"),
+    oid: O("2"),
+    objectType: "commit" as const,
+    peeledOid: null,
+  };
+  const tag = {
+    name: refName("refs/tags/v1"),
+    oid: O("3"),
+    objectType: "tag" as const,
+    peeledOid: O("2"),
+  };
+  const pins: PinIntent[] = [
+    ...receipt.pins,
+    ...([branch, tag] as const).map(({ name, oid: sourceOid, objectType }) => {
+      const sourceKind = name.startsWith("refs/tags/") ? ("tag" as const) : ("branch" as const);
+      return {
+        sourceKind,
+        sourceName: name,
+        sourceOid,
+        objectType,
+        destinationOid: sourceOid,
+        destinationRef: pinRef(
+          { sourceKind, sourceName: name, sourceOid, destinationOid: sourceOid },
+          "legacy",
+          "g0",
+        ),
+      };
+    }),
+  ];
+  const selected = {
+    kind: "reflog" as const,
+    oid: O("4"),
+    objectType: "commit" as const,
+    provenance: ["first", "second"],
+    disposition: "pin" as const,
+    reason: null,
+  };
+  pins.push({
+    sourceKind: "reflog",
+    sourceName: candidateIdentity(selected.kind, selected.oid),
+    sourceOid: selected.oid,
+    objectType: "commit",
+    destinationOid: selected.oid,
+    destinationRef: pinRef(
+      {
+        sourceKind: "reflog",
+        sourceName: candidateIdentity(selected.kind, selected.oid),
+        sourceOid: selected.oid,
+        destinationOid: selected.oid,
+      },
+      "legacy",
+      "g0",
+    ),
+  });
+  const full: ReceiptV1 = {
+    ...receipt,
+    source: { ...receipt.source, refs: [branch, tag], candidates: [selected] },
+    pins,
+    bundle: {
+      ...receipt.bundle,
+      verifiedHeads: [
+        ...receipt.bundle.verifiedHeads,
+        ...pins.slice(1).map(({ destinationRef, destinationOid }) => ({
+          ref: destinationRef,
+          oid: destinationOid,
+        })),
+      ],
+    },
+  };
+  const commit = O("6");
+  const present = new Map<string, string>([
+    [full.receiptRef, commit],
+    ...pins.map(({ destinationRef, destinationOid }) => [destinationRef, destinationOid] as const),
+  ]);
+  const plan: PlanV1 = {
+    schema: "compfuzor.archive-adoption-plan/v1",
+    state: "ready",
+    identity: full.identity,
+    source: { ...full.source, refs: [tag, branch] },
+    proposedSnapshot: null,
+    pins: [...pins].reverse(),
+    baselines: {
+      ...full.baselines,
+      destinationPreRefs: [...present].map(([name, target]) => ({
+        name: refName(name),
+        oid: oid(target, "sha1"),
+        objectType: "commit" as const,
+        peeledOid: null,
+      })),
+    },
+    blockers: [],
+    warnings: [],
+    retirementUnresolved: [],
+  };
+  assert.equal(approveSameInputRetry(plan, full, commit, present).matchingReceiptApproved, true);
+  assert.throws(
+    () =>
+      approveSameInputRetry(
+        {
+          ...plan,
+          source: {
+            ...plan.source,
+            candidates: [{ ...selected, provenance: [...selected.provenance].reverse() }],
+          },
+        },
+        full,
+        commit,
+        present,
+      ),
+    /source inventory/,
+  );
+  assert.throws(
+    () =>
+      approveSameInputRetry(
+        {
+          ...plan,
+          baselines: {
+            ...plan.baselines,
+            destinationPreRefs: [
+              ...plan.baselines.destinationPreRefs,
+              plan.baselines.destinationPreRefs[0],
+            ],
+          },
+        },
+        full,
+        commit,
+        present,
+      ),
+    /duplicate fresh destination ref/,
   );
 });

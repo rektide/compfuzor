@@ -1,14 +1,36 @@
 /** Same-generation retry admission: never reinterpret a changed destination as a new import. */
 import { canonicalJson, oid, receiptRef, validateReceipt } from "../custody/codec.ts";
 import { CustodyError } from "../custody/errors.ts";
-import type { Oid, PlanV1, ReceiptV1, RefName } from "../custody/model.ts";
+import type { Oid, PlanV1, ReceiptV1, RefName, SourceInventory } from "../custody/model.ts";
 import type { RefInstall } from "./transaction.ts";
 
 function same(left: unknown, right: unknown): boolean {
   return canonicalJson(left) === canonicalJson(right);
 }
+const codepoint = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+function unordered<T>(items: readonly T[]): readonly T[] {
+  return [...items].sort((a, b) => codepoint(canonicalJson(a), canonicalJson(b)));
+}
+/** Only collections with no order-dependent provenance or manifest digest. */
+function comparableSource(source: SourceInventory) {
+  return {
+    ...source,
+    refs: unordered(source.refs),
+    candidates: unordered(source.candidates),
+    remotes: unordered(source.remotes),
+    indexEntries: unordered(source.indexEntries),
+    worktreeChanges: unordered(source.worktreeChanges),
+    untrackedPaths: unordered(source.untrackedPaths),
+    ignoredPaths: unordered(source.ignoredPaths),
+    excludedUntracked: unordered(source.excludedUntracked),
+    trackedSensitivePaths: unordered(source.trackedSensitivePaths),
+    leftBehind: unordered(source.leftBehind),
+    jjCoverage: { ...source.jjCoverage, headOids: unordered(source.jjCoverage.headOids) },
+    head: { ...source.head, treePaths: unordered(source.head.treePaths) },
+  };
+}
 function sortedRefs(refs: ReadonlyMap<string, string>): readonly (readonly [string, string])[] {
-  return [...refs].sort(([a], [b]) => a.localeCompare(b));
+  return [...refs].sort(([a], [b]) => codepoint(a, b));
 }
 function mismatch(field: string): never {
   throw new CustodyError(
@@ -43,9 +65,10 @@ export function approveSameInputRetry(
   ] as const) {
     if (plan.identity[field] !== receipt.identity[field]) mismatch(`identity.${field}`);
   }
-  if (!same(plan.source, receipt.source)) mismatch("source inventory/fingerprint");
+  if (!same(comparableSource(plan.source), comparableSource(receipt.source)))
+    mismatch("source inventory/fingerprint");
   if (!same(plan.proposedSnapshot, receipt.snapshot)) mismatch("path manifest/review");
-  if (!same(plan.pins, receipt.pins)) mismatch("pin mapping");
+  if (!same(unordered(plan.pins), unordered(receipt.pins))) mismatch("pin mapping");
   for (const field of [
     "sourceRemoteTracking",
     "destinationWorktreeFingerprintSha256",
@@ -54,7 +77,14 @@ export function approveSameInputRetry(
     "declaredRepo",
     "headNotInRecordedBaseline",
   ] as const) {
-    if (!same(plan.baselines[field], receipt.baselines[field]))
+    if (
+      !same(
+        field === "sourceRemoteTracking" ? unordered(plan.baselines[field]) : plan.baselines[field],
+        field === "sourceRemoteTracking"
+          ? unordered(receipt.baselines[field])
+          : receipt.baselines[field],
+      )
+    )
       mismatch(`destination baseline ${field}`);
   }
   // A new plan's ref list/delta is measured *after* our pins. Do not replace
@@ -70,6 +100,11 @@ export function approveSameInputRetry(
   const original = new Map(
     receipt.baselines.destinationPreRefs.map(({ name, oid }) => [name, oid]),
   );
+  if (
+    new Set(plan.baselines.destinationPreRefs.map(({ name }) => name)).size !==
+    plan.baselines.destinationPreRefs.length
+  )
+    mismatch("duplicate fresh destination ref");
   const plannedNow = new Map(plan.baselines.destinationPreRefs.map(({ name, oid }) => [name, oid]));
   if (!same(sortedRefs(plannedNow), sortedRefs(currentRefs)))
     mismatch("fresh destination ref observation");

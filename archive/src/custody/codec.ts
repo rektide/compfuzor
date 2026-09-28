@@ -73,8 +73,7 @@ export function refComponent(value: string): string {
 }
 export function refName(value: string | Uint8Array): RefName {
   const name = typeof value === "string" ? value : text(value);
-  if (!name.startsWith("refs/") || name.length > 4096 || name.split("/").length < 3)
-    invalid("invalid full Git ref");
+  if (!name.startsWith("refs/") || enc.encode(name).length > 4096) invalid("invalid full Git ref");
   for (const component of name.split("/")) refComponent(component);
   return name as RefName;
 }
@@ -308,6 +307,23 @@ export function canonicalJson(value: unknown): string {
   return `{${entries.map(([key, field]) => `${JSON.stringify(key)}:${canonicalJson(field)}`).join(",")}}`;
 }
 
+/** The exact bytes of inventory's for-each-ref --format output, in Git refname order. */
+export function destinationRefsSha256(
+  refs: readonly { name: RefName; oid: Oid; objectType: string; peeledOid: Oid | null }[],
+): Sha256 {
+  const ordered = [...refs].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return sha256(
+    enc.encode(
+      ordered
+        .map(
+          ({ name, oid: target, objectType, peeledOid }) =>
+            `${name}\0${target}\0${objectType}\0${peeledOid ?? ""}\0\n`,
+        )
+        .join(""),
+    ),
+  );
+}
+
 export function validateReceipt(value: unknown): ReceiptV1 {
   if (!value || typeof value !== "object" || Array.isArray(value))
     invalid("receipt must be an object");
@@ -443,6 +459,29 @@ export function validateReceipt(value: unknown): ReceiptV1 {
     receipt.identity.destinationRealpath,
     receipt.bundle.pathRelativeToDestinationParent,
   );
+  for (const refs of [receipt.source.refs, receipt.baselines.destinationPreRefs]) {
+    const seen = new Set<string>();
+    for (const { name } of refs) {
+      if (seen.has(name)) invalid(`duplicate ref in inventory: ${name}`);
+      seen.add(name);
+    }
+  }
+  const candidateNames = new Set<string>();
+  for (const candidate of receipt.source.candidates) {
+    const name = candidateIdentity(candidate.kind, candidate.oid);
+    if (candidateNames.has(name)) invalid(`duplicate candidate identity: ${name}`);
+    candidateNames.add(name);
+  }
+  if (
+    receipt.baselines.destinationPreRefsSha256 !==
+    destinationRefsSha256(receipt.baselines.destinationPreRefs)
+  )
+    invalid("destination pre-ref hash differs from inventory");
+  const heads = new Map<string, Oid>();
+  for (const head of receipt.bundle.verifiedHeads) {
+    if (heads.has(head.ref)) invalid("duplicate advertised bundle head");
+    heads.set(head.ref, head.oid);
+  }
   const names = new Set<string>();
   for (const pin of receipt.pins) {
     if (
@@ -457,6 +496,32 @@ export function validateReceipt(value: unknown): ReceiptV1 {
     if (pin.sourceKind === "head" && pin.sourceOid !== receipt.source.head.oid)
       invalid("HEAD pin differs from source HEAD");
     if (pin.destinationOid !== pin.sourceOid) invalid("pin source/destination OIDs differ");
+    if (pin.sourceKind === "reflog") {
+      const match = /^(stash-older|reflog|dangling):(.+)$/.exec(pin.sourceName);
+      if (!match || oid(match[2], format) !== pin.sourceOid)
+        invalid("candidate pin identity differs from source OID");
+      const matched = receipt.source.candidates.find(
+        (candidate) => candidateIdentity(candidate.kind, candidate.oid) === pin.sourceName,
+      );
+      if (!matched || matched.disposition !== "pin" || matched.objectType !== pin.objectType)
+        invalid("candidate pin lacks selected matching candidate");
+    } else if (
+      pin.sourceKind !== "head" &&
+      pin.sourceKind !== "working-copy" &&
+      !receipt.source.refs.some(
+        ({ name, oid: id, objectType }) =>
+          name === pin.sourceName && id === pin.sourceOid && objectType === pin.objectType,
+      )
+    ) {
+      invalid("named pin lacks matching source ref");
+    } else if (pin.sourceKind === "stash" && pin.sourceName !== "refs/stash") {
+      invalid("stash pin must name refs/stash");
+    } else if (
+      pin.sourceKind === "other" &&
+      (/^refs\/(heads|tags)\//.test(pin.sourceName) || pin.sourceName === "refs/stash")
+    ) {
+      invalid("named Git ref must use its dedicated pin lane");
+    }
     const computed = pinRef(
       pin,
       receipt.identity.label,
@@ -467,10 +532,27 @@ export function validateReceipt(value: unknown): ReceiptV1 {
       invalid("pin mapping mismatch or duplicate");
     names.add(computed);
   }
+  // Stage proves `bundle list-heads` exactly equals its installed pin refs.
+  if (
+    heads.size !== receipt.pins.length ||
+    receipt.pins.some(
+      ({ destinationRef, destinationOid }) => heads.get(destinationRef) !== destinationOid,
+    )
+  )
+    invalid("advertised bundle heads do not equal selected pin refs and OIDs");
   for (const tip of receipt.source.refs) {
+    const kind =
+      tip.name === "refs/stash"
+        ? "stash"
+        : tip.name.startsWith("refs/heads/")
+          ? "branch"
+          : tip.name.startsWith("refs/tags/")
+            ? "tag"
+            : "other";
     if (
       !receipt.pins.some(
         (pin) =>
+          pin.sourceKind === kind &&
           pin.sourceName === tip.name &&
           pin.sourceOid === tip.oid &&
           pin.objectType === tip.objectType,
