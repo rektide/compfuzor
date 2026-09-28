@@ -263,6 +263,14 @@ index state, and file manifests before changing anything.
 | `workspace add` succeeded; file copy incomplete | Confirm the registered workspace name/root and `.jj/repo`/`.git` pointers; rerun only the bounded data-copy step from the still-complete archive root, excluding metadata. | Do not rerun `workspace add` into the now-populated destination; don't copy archive `.jj` or `.git` over the new pointers. |
 | File copy complete; verification incomplete | Preserve both roots and all metadata; compare manifests and refs, then inspect every existing workspace binding. | Do not delete a staging/source copy, prune worktrees, or declare the migration complete. |
 
+One source-level caveat: jj 0.45.1 creates the Git worktree before initializing
+the jj workspace (`workspace/add.rs` lines 147–173). Those are separate Git and
+jj metadata writes, not one cross-store atomic transaction. I did not inject a
+failure between those calls. If `workspace add` errors or is interrupted,
+inspect `git worktree list`, `jj workspace list`, and the destination's `.git`
+and `.jj` state before deciding whether to resume or recover; do not retry
+blindly.
+
 The tested `mv` was same-filesystem. If source and archive are on different
 filesystems, `mv` is not an atomic directory rename; use a separately planned
 copy-to-staging plus verification while retaining the original, and account for
