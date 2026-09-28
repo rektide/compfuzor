@@ -18,12 +18,14 @@ class MemoryRefStore implements RefStore {
   public async list(): Promise<ReadonlyMap<string, string>> {
     return new Map(this.refs);
   }
-  public async createAtomically(missing: readonly RefTarget[]): Promise<void> {
+  public async createAtomically(missing: readonly RefTarget[], matching: readonly RefTarget[]): Promise<void> {
     this.injectRace?.();
     // The real adapter uses Git `update-ref --stdin` with one start/prepare/commit.
     // This fake models all-or-nothing create after the observation/race point.
     for (const { ref } of missing)
       if (this.refs.has(ref)) throw new Error(`already exists: ${ref}`);
+    for (const { ref, oid } of matching)
+      if (this.refs.get(ref) !== oid) throw new Error(`matching ref moved: ${ref}`);
     for (const { ref, oid } of missing) this.refs.set(ref, oid);
   }
 }
@@ -74,11 +76,46 @@ test("atomic install intent, unchanged retry, partial matching receipt resumes o
     false,
   );
   store.refs.delete(other.destinationRef);
+  assert.equal(
+    createTransactionStdin([{ ref: other.destinationRef, oid: other.destinationOid }], [
+      { ref: receipt, oid: O("1") }, { ref: branch.destinationRef, oid: O("1") },
+    ]),
+    `start\nverify ${receipt} ${O("1")}\nverify ${branch.destinationRef} ${O("1")}\ncreate ${other.destinationRef} ${O("2")}\nprepare\ncommit\n`,
+  );
   assert.deepEqual(
     (await installImmutableRefs(store, { ...input, matchingReceiptApproved: true })).created,
     [other.destinationRef],
   );
   assert.equal(store.refs.get(receipt), O("1"));
+});
+
+test("matching receipt changing during missing-pin installation aborts every creation", async () => {
+  const store = new MemoryRefStore();
+  const receipt = receiptRef("legacy", "g0");
+  store.refs.set(receipt, O("1"));
+  store.injectRace = () => store.refs.set(receipt, O("2"));
+  const branch = pin(O("1"));
+  await assert.rejects(
+    installImmutableRefs(store, { receiptRef: receipt, receiptCommitOid: O("1"), pins: [branch], matchingReceiptApproved: true }),
+    /atomic compare-and-create failed/,
+  );
+  assert.equal(store.refs.has(branch.destinationRef), false);
+  assert.equal(store.refs.get(receipt), O("2"));
+});
+
+test("desired prefix collisions and untrusted branded OIDs are refused before writes", () => {
+  const receipt = receiptRef("legacy", "g0");
+  const branch = pin(O("1"));
+  const root = "refs/heads/harvest/legacy/g0/branch" as RefName;
+  assert.throws(() => decideInstallation(new Map(), {
+    receiptRef: receipt, receiptCommitOid: O("1"),
+    pins: [branch, { ...branch, destinationRef: root }], matchingReceiptApproved: false,
+  }), /desired ref prefix conflict/);
+  assert.throws(() => decideInstallation(new Map(), {
+    receiptRef: receipt, receiptCommitOid: "1\ncommit" as Oid,
+    pins: [branch], matchingReceiptApproved: false,
+  }), /invalid sha256 object ID/);
+  assert.throws(() => createTransactionStdin([{ ref: receipt, oid: "0".repeat(40) as Oid }]), /invalid or repeated/);
 });
 
 test("occupied old harvest prefixes and different receipt block without changing refs", async () => {
