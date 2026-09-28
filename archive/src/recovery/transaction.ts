@@ -1,28 +1,13 @@
 /** Append-only receipt + pin installation. Caller must verify bundle, receipt, source/dest drift first. */
-import { execFile as callbackExecFile } from "node:child_process";
-import { promisify } from "node:util";
 import { CustodyError, invalid } from "../custody/errors.ts";
-import { oid, refName } from "../custody/codec.ts";
-import type { GitObjectFormat, Oid, PinIntent, RefName } from "../custody/model.ts";
-
-const execFile = promisify(callbackExecFile);
-const utf8 = new TextDecoder("utf-8", { fatal: true });
-function gitEnvironment(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    GIT_CONFIG_NOSYSTEM: "1",
-    GIT_CONFIG_GLOBAL: "/dev/null",
-  };
-  for (const key of Object.keys(env))
-    if (key.startsWith("GIT_") && key !== "GIT_CONFIG_NOSYSTEM" && key !== "GIT_CONFIG_GLOBAL")
-      delete env[key];
-  return env;
-}
-type RefTarget = Readonly<{ ref: RefName; oid: Oid }>;
+import { refName } from "../custody/codec.ts";
+import type { Oid, PinIntent, RefName } from "../custody/model.ts";
+export type RefTarget = Readonly<{ ref: RefName; oid: Oid }>;
 
 /** A reader/runner injection point: tests can simulate races without mutating real repositories. */
 export interface RefStore {
   list(): Promise<ReadonlyMap<string, string>>;
+  /** One `git update-ref --stdin --no-deref` transaction; create with expected-old zero. */
   createAtomically(missing: readonly RefTarget[]): Promise<void>;
 }
 
@@ -136,98 +121,13 @@ export async function installImmutableRefs(
   return { changed: true, created: missing.map(({ ref }) => ref), alreadyPresent };
 }
 
-/** All Git calls are scoped to a validated colocated destination, without hooks/maintenance. */
-export class GitRefStore implements RefStore {
-  public readonly dest: string;
-  public readonly format: GitObjectFormat;
-  public constructor(dest: string, format: GitObjectFormat) {
-    this.dest = dest;
-    this.format = format;
-  }
-
-  public async list(): Promise<ReadonlyMap<string, string>> {
-    const { stdout } = await execFile(
-      "git",
-      [
-        "-C",
-        this.dest,
-        "-c",
-        "maintenance.auto=false",
-        "for-each-ref",
-        "--format=%(refname)%00%(objectname)%00%(symref)",
-      ],
-      {
-        encoding: "buffer",
-        maxBuffer: 64 * 1024 * 1024,
-        env: { ...gitEnvironment(), GIT_OPTIONAL_LOCKS: "0" },
-      },
-    );
-    const refs = new Map<string, string>();
-    let output: string;
-    try {
-      output = utf8.decode(stdout);
-    } catch {
-      throw new CustodyError("inspection-failed", "destination refs contain invalid UTF-8");
-    }
-    for (const line of output.split("\n")) {
-      if (!line) continue;
-      const [name, target, symbolic, ...extra] = line.split("\0");
-      if (extra.length || !name || !target || symbolic)
-        throw new CustodyError("inspection-failed", "symbolic or malformed destination ref");
-      const validated = refName(name);
-      if (refs.has(validated))
-        throw new CustodyError("inspection-failed", "duplicate destination ref");
-      refs.set(validated, oid(target, this.format));
-    }
-    return refs;
-  }
-
-  public async createAtomically(missing: readonly RefTarget[]): Promise<void> {
-    if (missing.length === 0) return;
-    const commands = [
-      "start",
-      ...missing.map(
-        ({ ref, oid: target }) => `create ${refName(ref)} ${oid(target, this.format)}`,
-      ),
-      "prepare",
-      "commit",
-      "",
-    ].join("\n");
-    // update-ref `create` is expected-old zero and fails if any ref appears, including
-    // a packed ref. prepare+commit is one Git ref transaction; no partial success.
-    const { spawn } = await import("node:child_process");
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn(
-        "git",
-        [
-          "-C",
-          this.dest,
-          "-c",
-          "core.hooksPath=/dev/null",
-          "-c",
-          "maintenance.auto=false",
-          "update-ref",
-          "--no-deref",
-          "--stdin",
-        ],
-        {
-          stdio: ["pipe", "ignore", "pipe"],
-          env: gitEnvironment(),
-        },
-      );
-      const stderr: Buffer[] = [];
-      child.stderr.on("data", (part: Buffer) => stderr.push(part));
-      child.on("error", reject);
-      child.on("close", (status) =>
-        status === 0
-          ? resolve()
-          : reject(
-              new Error(
-                `git update-ref exited ${status}: ${Buffer.concat(stderr).toString("utf8").trim()}`,
-              ),
-            ),
-      );
-      child.stdin.end(commands);
-    });
-  }
+/** Exact stdin protocol: process adapter handles argv/env, Git handles atomicity. */
+export function createTransactionStdin(missing: readonly RefTarget[]): string {
+  return [
+    "start",
+    ...missing.map(({ ref, oid }) => `create ${refName(ref)} ${oid}`),
+    "prepare",
+    "commit",
+    "",
+  ].join("\n");
 }

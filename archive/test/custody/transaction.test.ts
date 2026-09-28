@@ -1,43 +1,33 @@
 import assert from "node:assert/strict";
-import { execFile as callbackExecFile } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { test } from "node:test";
-import { promisify } from "node:util";
 import { oid, pinRef, receiptRef } from "../../src/custody/codec.ts";
-import type { PinIntent, RefName } from "../../src/custody/model.ts";
+import type { Oid, PinIntent, RefName } from "../../src/custody/model.ts";
 import {
+  createTransactionStdin,
   decideInstallation,
-  GitRefStore,
   installImmutableRefs,
   prefixConflict,
+  type RefStore,
+  type RefTarget,
 } from "../../src/recovery/transaction.ts";
 
-const exec = promisify(callbackExecFile);
-async function git(dest: string, ...args: string[]): Promise<string> {
-  const { stdout } = await exec("git", ["-C", dest, ...args]);
-  return stdout.trim();
+const O = (digit: string) => oid(digit.repeat(40), "sha1");
+class MemoryRefStore implements RefStore {
+  public refs = new Map<string, string>();
+  public injectRace: (() => void) | null = null;
+  public async list(): Promise<ReadonlyMap<string, string>> {
+    return new Map(this.refs);
+  }
+  public async createAtomically(missing: readonly RefTarget[]): Promise<void> {
+    this.injectRace?.();
+    // The real adapter uses Git `update-ref --stdin` with one start/prepare/commit.
+    // This fake models all-or-nothing create after the observation/race point.
+    for (const { ref } of missing)
+      if (this.refs.has(ref)) throw new Error(`already exists: ${ref}`);
+    for (const { ref, oid } of missing) this.refs.set(ref, oid);
+  }
 }
-async function fixture(t: {
-  after: (cleanup: () => Promise<void>) => void;
-}): Promise<{ dest: string; first: ReturnType<typeof oid>; second: ReturnType<typeof oid> }> {
-  const scratch = join(process.cwd(), ".test-agent", "recovery");
-  await mkdir(scratch, { recursive: true });
-  const dest = await mkdtemp(join(scratch, "fixture-"));
-  t.after(() => rm(dest, { recursive: true, force: true }));
-  await git(dest, "init", "-q");
-  await git(dest, "config", "user.name", "Fixture");
-  await git(dest, "config", "user.email", "fixture@example.invalid");
-  await writeFile(join(dest, "file"), "first");
-  await git(dest, "add", "file");
-  await git(dest, "commit", "-qm", "first");
-  const first = oid(await git(dest, "rev-parse", "HEAD"), "sha1");
-  await writeFile(join(dest, "file"), "second");
-  await git(dest, "commit", "-qam", "second");
-  const second = oid(await git(dest, "rev-parse", "HEAD"), "sha1");
-  return { dest, first, second };
-}
-function pin(target: ReturnType<typeof oid>): PinIntent {
+function pin(target: Oid): PinIntent {
   const input = {
     sourceKind: "branch",
     sourceName: "refs/heads/head",
@@ -47,110 +37,113 @@ function pin(target: ReturnType<typeof oid>): PinIntent {
   return { ...input, objectType: "commit", destinationRef: pinRef(input, "legacy", "g0") };
 }
 
-test("atomic install: identical retry no-op, partial matching receipt resumes only missing pin", async (t) => {
-  const { dest, first, second } = await fixture(t);
-  const store = new GitRefStore(dest, "sha1");
+test("atomic install intent, unchanged retry, partial matching receipt resumes only missing pin", async () => {
+  const store = new MemoryRefStore();
   const receipt = receiptRef("legacy", "g0");
-  const branch = pin(first);
-  const other: PinIntent = {
-    ...pin(second),
+  const branch = pin(O("1"));
+  const headInput = {
     sourceKind: "head",
     sourceName: "HEAD",
-    destinationRef: pinRef(
-      { sourceKind: "head", sourceName: "HEAD", sourceOid: second, destinationOid: second },
-      "legacy",
-      "g0",
-    ),
+    sourceOid: O("2"),
+    destinationOid: O("2"),
+  } as const;
+  const other: PinIntent = {
+    ...headInput,
+    objectType: "commit",
+    destinationRef: pinRef(headInput, "legacy", "g0"),
   };
   const input = {
     receiptRef: receipt,
-    receiptCommitOid: first,
+    receiptCommitOid: O("1"),
     pins: [branch, other],
     matchingReceiptApproved: false,
   };
-  const installed = await installImmutableRefs(store, input);
-  assert.equal(installed.created.length, 3);
-  assert.equal(await git(dest, "rev-parse", receipt), first);
-  assert.equal(await git(dest, "rev-parse", branch.destinationRef), first);
-  assert.equal(await git(dest, "rev-parse", other.destinationRef), second);
-  await assert.rejects(installImmutableRefs(store, input), /receipt has not passed same-input/);
-  const retry = await installImmutableRefs(store, { ...input, matchingReceiptApproved: true });
-  assert.equal(retry.changed, false);
-  // Simulate an interrupted/external receipt-first state, not a normal expected outcome.
-  await git(dest, "update-ref", "-d", other.destinationRef);
-  const resumed = await installImmutableRefs(store, { ...input, matchingReceiptApproved: true });
-  assert.deepEqual(resumed.created, [other.destinationRef]);
-  assert.equal(await git(dest, "rev-parse", receipt), first);
-  assert.equal(await git(dest, "rev-parse", other.destinationRef), second);
+  const expected = decideInstallation(store.refs, input).missing;
+  assert.equal(
+    createTransactionStdin(expected),
+    `start\ncreate ${receipt} ${O("1")}\ncreate ${branch.destinationRef} ${O("1")}\ncreate ${other.destinationRef} ${O("2")}\nprepare\ncommit\n`,
+  );
+  assert.deepEqual((await installImmutableRefs(store, input)).created, [
+    receipt,
+    branch.destinationRef,
+    other.destinationRef,
+  ]);
+  await assert.rejects(installImmutableRefs(store, input), /same-input\/intent review/);
+  assert.equal(
+    (await installImmutableRefs(store, { ...input, matchingReceiptApproved: true })).changed,
+    false,
+  );
+  store.refs.delete(other.destinationRef);
+  assert.deepEqual(
+    (await installImmutableRefs(store, { ...input, matchingReceiptApproved: true })).created,
+    [other.destinationRef],
+  );
+  assert.equal(store.refs.get(receipt), O("1"));
 });
 
-test("occupied old harvest prefixes and different receipt block without changing existing refs", async (t) => {
-  const { dest, first, second } = await fixture(t);
-  const store = new GitRefStore(dest, "sha1");
-  await git(dest, "update-ref", "refs/heads/harvest/legacy/head", first);
+test("occupied old harvest prefixes and different receipt block without changing refs", async () => {
+  const store = new MemoryRefStore();
+  store.refs.set("refs/heads/harvest/legacy/head", O("1"));
   const receipt = receiptRef("legacy", "g0");
+  const input = {
+    receiptRef: receipt,
+    receiptCommitOid: O("1"),
+    pins: [pin(O("1"))],
+    matchingReceiptApproved: false,
+  };
+  await assert.rejects(installImmutableRefs(store, input), /legacy harvest namespace/);
+  assert.equal(store.refs.has(receipt), false);
+  store.refs.delete("refs/heads/harvest/legacy/head");
+  store.refs.set(receipt, O("2"));
   await assert.rejects(
-    installImmutableRefs(store, {
-      receiptRef: receipt,
-      receiptCommitOid: first,
-      pins: [pin(first)],
-      matchingReceiptApproved: false,
-    }),
-    /legacy harvest namespace/,
-  );
-  assert.equal((await store.list()).has(receipt), false);
-  assert.equal(await git(dest, "rev-parse", "refs/heads/harvest/legacy/head"), first);
-  await git(dest, "update-ref", receipt, second);
-  await assert.rejects(
-    installImmutableRefs(store, {
-      receiptRef: receipt,
-      receiptCommitOid: first,
-      pins: [],
-      matchingReceiptApproved: true,
-    }),
+    installImmutableRefs(store, { ...input, matchingReceiptApproved: true }),
     /another OID/,
   );
-  assert.equal(await git(dest, "rev-parse", receipt), second);
+  assert.equal(store.refs.get(receipt), O("2"));
 });
 
-test("concurrent creation after observation fails whole transaction, never replaces either ref", async (t) => {
-  const { dest, first, second } = await fixture(t);
-  const store = new GitRefStore(dest, "sha1");
+test("creation race fails whole transaction without rewriting existing pin", async () => {
+  const store = new MemoryRefStore();
   const receipt = receiptRef("legacy", "g0");
-  const branch = pin(first);
-  const racingStore = {
-    list: () => store.list(),
-    createAtomically: async (refs: readonly { ref: RefName; oid: ReturnType<typeof oid> }[]) => {
-      await git(dest, "update-ref", branch.destinationRef, second);
-      await store.createAtomically(refs);
-    },
-  };
+  const branch = pin(O("1"));
+  store.injectRace = () => store.refs.set(branch.destinationRef, O("2"));
   await assert.rejects(
-    installImmutableRefs(racingStore, {
+    installImmutableRefs(store, {
       receiptRef: receipt,
-      receiptCommitOid: first,
+      receiptCommitOid: O("1"),
       pins: [branch],
       matchingReceiptApproved: false,
     }),
     /atomic compare-and-create failed/,
   );
-  assert.equal((await store.list()).has(receipt), false);
-  assert.equal(await git(dest, "rev-parse", branch.destinationRef), second);
+  assert.equal(store.refs.has(receipt), false);
+  assert.equal(store.refs.get(branch.destinationRef), O("2"));
 });
 
-test("pure decision rejects pins installed without receipt and prefix-colliding planned pins", () => {
-  const expected = receiptRef("legacy", "g0");
-  const branch = pin(oid("1".repeat(40), "sha1"));
+test("pure decision refuses orphan pins and prefix-colliding refs", () => {
+  const receipt = receiptRef("legacy", "g0");
+  const branch = pin(O("1"));
   assert.equal(prefixConflict("refs/heads/harvest/legacy/head", branch.destinationRef), false);
   assert.equal(prefixConflict("refs/heads/harvest/legacy", branch.destinationRef), true);
   assert.throws(
     () =>
       decideInstallation(new Map([[branch.destinationRef, branch.destinationOid]]), {
-        receiptRef: expected,
-        receiptCommitOid: branch.sourceOid,
+        receiptRef: receipt,
+        receiptCommitOid: O("1"),
         pins: [branch],
         matchingReceiptApproved: false,
       }),
     /without an approved matching receipt/,
+  );
+  const alias = "refs/heads/harvest/legacy/g0/branch" as RefName;
+  assert.throws(
+    () =>
+      decideInstallation(new Map([[alias, O("1")]]), {
+        receiptRef: receipt,
+        receiptCommitOid: O("1"),
+        pins: [branch],
+        matchingReceiptApproved: false,
+      }),
+    /prefix conflict/,
   );
 });
