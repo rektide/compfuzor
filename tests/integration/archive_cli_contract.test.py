@@ -503,7 +503,7 @@ def bare_packages(paths: list[Path]) -> set[str]:
 def test_bundle_is_self_contained() -> None:
     text = BUNDLE.read_text()
     assert text.startswith(SHEBANG)
-    assert "export { main }" in text
+    assert "export { main, runExecutable }" in text
     assert "0.1.0" in text
     assert not DYNAMIC_IMPORT.search(text), "dynamic imports break single-file use"
     for specifier in IMPORT_STATEMENT.findall(text):

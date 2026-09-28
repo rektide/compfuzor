@@ -8,7 +8,8 @@
  *
  *   1. archive/src/repo-jj-archive.ts — run the TypeScript source directly
  *      via Node type stripping; no bundler transport between checkout and
- *      execution.
+ *      execution. Its runExecutable() entry uses native Node signal handling;
+ *      main() remains available as an importable Promise API.
  *   2. archive/repo-jj-archive.ts — the committed single-file bundle
  *      (erased JS emitted as TypeScript), for trees without source or
  *      locally installed CLI dependencies. Runs on system Node ≥ 26.
@@ -17,7 +18,7 @@
 import { realpath, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
-type Runner = { main: () => Promise<void> };
+type Runner = { runExecutable: () => void };
 
 async function launch(): Promise<void> {
   const root = resolve(dirname(import.meta.filename), "..");
@@ -32,8 +33,8 @@ async function launch(): Promise<void> {
     sourceFiles.map((path) => stat(path, { throwIfNoEntry: false })),
   );
   const runner = available.every(Boolean) ? source : bundle;
-  const { main } = (await import(runner)) as Runner;
-  await main();
+  const { runExecutable } = (await import(runner)) as Runner;
+  runExecutable();
 }
 
 const argvPath = process.argv[1];

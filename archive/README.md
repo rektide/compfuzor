@@ -77,6 +77,10 @@ contract, which imports `archive/src/repo-jj-archive.ts` first when the source
 `node_modules/@effect/platform-node`) are present (no bundle transport), or
 the committed single-file bundle `archive/repo-jj-archive.ts` (erased JS
 emitted as TypeScript, runs on system Node ≥ 26) when either is absent.
+The launcher calls the entry's `runExecutable()` so Node's native signal
+handling tears down active child processes; `main()` remains an importable
+Promise API. Direct execution of the source entry or copied bundle uses the
+same `runExecutable()` path.
 `COMPFUZOR_SELF_FRESHEN=true` opts into fetching the host checkout's origin
 before resolution (fetch only, never a worktree reset; a missing checkout is
 a clean no-op). A run resolved to the host checkout says so with a
@@ -119,25 +123,26 @@ URL checks happen after the initial snapshot, **before** harvest/fetch or
 bookmark rewrites. See [the original archive design](/design/repo-jj-archive/draft0.gpt6sol.md)
 and [the toolkit follow-up](/design/repo-jj-archive/draft1.gpt6sol.md).
 
-## Custody: in development, not yet a workflow
+## Custody: registered; safety review in progress
 
-Cross-repository source custody (`adopt`, `verify-adoption`: moving a source
-directory's Git history into the archive under an immutable receipt) is under
-active development in `archive/src/custody/`. Those commands are deliberately
-**not registered in the CLI yet** — there is no ready-to-use workflow, and the
-[core review](/design/archive-toolkit/core-review0.glm53.md) gate must pass
-with inventory, artifact proof, ref installation, and independent verification
-composing end to end first. The intended contract lives in the
+Cross-repository source custody is exposed by `adopt` (read-only planning by
+default; `--apply` explicitly transfers and verifies custody) and
+`verify-adoption` (independent receipt/pin/vault verification). These commands
+are registered, but source-inventory safety findings are still being
+corrected; registration is **not production signoff**. Do not treat the
+commands as a ready retirement workflow. The [core review](/design/archive-toolkit/core-review0.glm53.md)
+gate remains open. The intended contract lives in the
 [custody brief](/design/archive-migration/brief0.gpt6sol.md) and the
 [custody contracts](/design/archive-toolkit/custody-contracts0.gpt6sol.md).
-None of it publishes refs, prunes artifacts, or retires a source directory;
-verification reports custody state, never permission to delete.
+Custody operations do not publish refs, prune artifacts, or retire a source
+directory; verification reports custody state, never permission to delete.
 
 ## Build, checks, tests
 
 ```sh
 pnpm check             # formatting, lint, tsgo (including the script/ launcher)
 pnpm build             # bundling for distribution only; not type-checking
+node --test archive/test/repository/cancellation.test.ts # real source/launcher/bundle signal paths
 python3 -m pytest --import-mode=importlib -q tests/integration/repo_jj_archive.test.py
 ```
 
@@ -145,9 +150,9 @@ The source is grouped by domain: `archive/src/cli/` (command tree, flags,
 legacy argv adapter, completions), `repository/` (ordinary checkout
 operations, including the `jj`/`git` execution boundaries — subprocesses run
 as argv arrays through Effect's `ChildProcessSpawner`, never a shell),
-`recovery/` (jj recovery and explicit repair), and `custody/` (in development,
-unregistered). Adding a command is a new module under `cli/commands/` plus one
-registry entry.
+`recovery/` (jj recovery and explicit repair), and `custody/` (registered,
+under safety review). Adding a command is a new module under `cli/commands/`
+plus one registry entry.
 
 The root `vite.config.ts` packs `archive/src/repo-jj-archive.ts` into one
 committed `archive/repo-jj-archive.ts` (ESM, Node platform, `node26`, no type

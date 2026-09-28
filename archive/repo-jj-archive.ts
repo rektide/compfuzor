@@ -1,14 +1,16 @@
 #!/usr/bin/env -S node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
-import { mkdir, realpath, rename, stat } from "node:fs/promises";
+import { link, lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import * as NodeChildProcess from "node:child_process";
 import { PassThrough } from "node:stream";
 import * as NodeCrypto from "node:crypto";
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import * as NFS from "node:fs";
+import { constants } from "node:fs";
 import * as OS from "node:os";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import * as Path from "node:path";
-import { dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import * as NodeUrl from "node:url";
 import * as readline from "node:readline";
 //#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Pipeable.js
@@ -285,6 +287,25 @@ const constTrue = /*#__PURE__*/ constant(true);
 * @since 2.0.0
 */
 const constFalse = /*#__PURE__*/ constant(false);
+/**
+* Returns `null` when called.
+*
+* **When to use**
+*
+* Use when you need a thunk that returns `null` on every invocation.
+*
+* **Example** (Returning null from a thunk)
+*
+* ```ts import.meta.vitest
+* import { Function } from "effect"
+*
+* Function.constNull() // => null
+* ```
+*
+* @category constants
+* @since 2.0.0
+*/
+const constNull = /*#__PURE__*/ constant(null);
 /**
 * Returns `undefined` when called.
 *
@@ -981,7 +1002,7 @@ const symbol$1 = "~effect/Hash";
 * @category hashing
 * @since 2.0.0
 */
-const hash = (self) => {
+const hash$1 = (self) => {
 	switch (typeof self) {
 		case "number": return number$1(self);
 		case "bigint": return string$1(self.toString(10));
@@ -993,7 +1014,7 @@ const hash = (self) => {
 			return string$1(self.toISOString());
 		} else if (self instanceof RegExp) return string$1(self.toString());
 		else {
-			if (byReferenceInstances.has(self)) return random(self);
+			if (byReferenceInstances.has(self)) return random$1(self);
 			const cached = hashCache.get(self);
 			if (cached !== void 0) return cached;
 			if (visitedObjects.has(self)) {
@@ -1005,7 +1026,7 @@ const hash = (self) => {
 			let h;
 			try {
 				if ("~effect/Hash" in self) h = self[symbol$1]();
-				else if (typeof self === "function") h = random(self);
+				else if (typeof self === "function") h = random$1(self);
 				else if (self instanceof DataView) h = array(viewBytes(self));
 				else if (Array.isArray(self) || ArrayBuffer.isView(self)) h = array(self);
 				else if (self instanceof Map) h = hashMap(self);
@@ -1049,7 +1070,7 @@ const hash = (self) => {
 * @category hashing
 * @since 2.0.0
 */
-const random = (self) => {
+const random$1 = (self) => {
 	if (!randomHashCache.has(self)) randomHashCache.set(self, optimize(Math.random() * 4294967296 | 0));
 	return randomHashCache.get(self);
 };
@@ -1218,7 +1239,7 @@ const string$1 = (str) => {
 */
 const structureKeys = (o, keys) => {
 	let h = 12289;
-	for (const key of keys) h ^= combine$1(hash(key), hash(o[key]));
+	for (const key of keys) h ^= combine$1(hash$1(key), hash$1(o[key]));
 	return optimize(h);
 };
 /**
@@ -1252,7 +1273,7 @@ const structureKeys = (o, keys) => {
 * @since 2.0.0
 */
 const structure = (o) => structureKeys(o, getAllObjectKeys(o));
-const unordered = (seed, f) => (iter) => {
+const unordered$1 = (seed, f) => (iter) => {
 	let h = seed;
 	for (const element of iter) h ^= f(element);
 	return optimize(h);
@@ -1293,12 +1314,12 @@ const unordered = (seed, f) => (iter) => {
 */
 const array = (arr) => {
 	let h = 6151;
-	for (const element of arr) h = combine$1(h, hash(element));
+	for (const element of arr) h = combine$1(h, hash$1(element));
 	return optimize(h);
 };
-const hashMap = /*#__PURE__*/ unordered(/*#__PURE__*/ string$1("Map"), ([k, v]) => combine$1(hash(k), hash(v)));
+const hashMap = /*#__PURE__*/ unordered$1(/*#__PURE__*/ string$1("Map"), ([k, v]) => combine$1(hash$1(k), hash$1(v)));
 const setSeed = /*#__PURE__*/ string$1("Set");
-const hashSet = /*#__PURE__*/ unordered(setSeed, (element) => combine$1(setSeed, hash(element)));
+const hashSet = /*#__PURE__*/ unordered$1(setSeed, (element) => combine$1(setSeed, hash$1(element)));
 const randomHashCache = /*#__PURE__*/ new WeakMap();
 const hashCache = /*#__PURE__*/ new WeakMap();
 const visitedObjects = /*#__PURE__*/ new WeakSet();
@@ -1381,7 +1402,7 @@ const pathLeft = [];
 const pathRight = [];
 const results = /*#__PURE__*/ new WeakMap();
 function compareStructure(self, that) {
-	if (hash(self) !== hash(that)) return false;
+	if (hash$1(self) !== hash$1(that)) return false;
 	else if (self instanceof Date) {
 		if (!(that instanceof Date)) return false;
 		const selfTime = self.getTime();
@@ -1404,7 +1425,7 @@ function compareStructure(self, that) {
 		return compareHashed(self, that, entryHash, equalEntries);
 	} else if (self instanceof Set) {
 		if (!(that instanceof Set) || self.size !== that.size) return false;
-		return compareHashed(self, that, hash, compareBoth);
+		return compareHashed(self, that, hash$1, compareBoth);
 	}
 	return compareRecords(self, that);
 }
@@ -1445,7 +1466,7 @@ function compareHashed(self, that, hashOf, equivalent) {
 	}
 	return true;
 }
-const entryHash = (entry) => hash(entry[0]);
+const entryHash = (entry) => hash$1(entry[0]);
 const equalEntries = (self, that) => compareBoth(self[0], that[0]) && compareBoth(self[1], that[1]);
 /**
 * Checks whether a value implements the {@link Equal} interface.
@@ -2287,7 +2308,7 @@ var Fail = class extends ReasonBase {
 		return isFailReason$1(that) && equals$1(this.error, that.error) && equals$1(this.annotations, that.annotations);
 	}
 	[symbol$1]() {
-		return combine$1(string$1(this._tag))(combine$1(hash(this.error))(hash(this.annotations)));
+		return combine$1(string$1(this._tag))(combine$1(hash$1(this.error))(hash$1(this.annotations)));
 	}
 };
 /** @internal */
@@ -2315,7 +2336,7 @@ var Die = class extends ReasonBase {
 		return isDieReason(that) && equals$1(this.defect, that.defect) && equals$1(this.annotations, that.annotations);
 	}
 	[symbol$1]() {
-		return combine$1(string$1(this._tag))(combine$1(hash(this.defect))(hash(this.annotations)));
+		return combine$1(string$1(this._tag))(combine$1(hash$1(this.defect))(hash$1(this.annotations)));
 	}
 };
 /** @internal */
@@ -2377,7 +2398,7 @@ const makeExit = (options) => {
 			return isExit(that) && that._tag === this._tag && equals$1(this[args], that[args]);
 		},
 		[symbol$1]() {
-			return combine$1(string$1(options.op), hash(this[args]));
+			return combine$1(string$1(options.op), hash$1(this[args]));
 		}
 	};
 	const ExitPrimitive = function(value) {
@@ -2540,7 +2561,7 @@ const SomeProto = /*#__PURE__*/ Object.defineProperty(/*#__PURE__*/ Object.assig
 		return isOption(that) && isSome$1(that) && equals$1(this.value, that.value);
 	},
 	[symbol$1]() {
-		return combine$1(hash(this._tag))(hash(this.value));
+		return combine$1(hash$1(this._tag))(hash$1(this.value));
 	},
 	toString() {
 		return `some(${format$1(this.value)})`;
@@ -2555,7 +2576,7 @@ const SomeProto = /*#__PURE__*/ Object.defineProperty(/*#__PURE__*/ Object.assig
 }), "valueOrUndefined", { get() {
 	return this.value;
 } });
-const NoneHash = /*#__PURE__*/ hash("None");
+const NoneHash = /*#__PURE__*/ hash$1("None");
 const NoneProto = /*#__PURE__*/ Object.assign(/*#__PURE__*/ Object.create(CommonProto$1), {
 	_tag: "None",
 	_op: "None",
@@ -2612,7 +2633,7 @@ const SuccessProto = /*#__PURE__*/ Object.assign(/*#__PURE__*/ Object.create(Com
 		return isResult(that) && isSuccess$2(that) && equals$1(this.success, that.success);
 	},
 	[symbol$1]() {
-		return combine$1(hash(this._tag))(hash(this.success));
+		return combine$1(hash$1(this._tag))(hash$1(this.success));
 	},
 	toString() {
 		return `success(${format$1(this.success)})`;
@@ -2632,7 +2653,7 @@ const FailureProto = /*#__PURE__*/ Object.assign(/*#__PURE__*/ Object.create(Com
 		return isResult(that) && isFailure$2(that) && equals$1(this.failure, that.failure);
 	},
 	[symbol$1]() {
-		return combine$1(hash(this._tag))(hash(this.failure));
+		return combine$1(hash$1(this._tag))(hash$1(this.failure));
 	},
 	toString() {
 		return `failure(${format$1(this.failure)})`;
@@ -2657,14 +2678,14 @@ const FailureImpl = function(failure) {
 };
 FailureImpl.prototype = FailureProto;
 /** @internal */
-const fail$6 = (failure) => new FailureImpl(failure);
+const fail$7 = (failure) => new FailureImpl(failure);
 /** @internal */
 const SuccessImpl = function(success) {
 	this.success = success;
 };
 SuccessImpl.prototype = SuccessProto;
 /** @internal */
-const succeed$7 = (success) => new SuccessImpl(success);
+const succeed$8 = (success) => new SuccessImpl(success);
 //#endregion
 //#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Order.js
 /**
@@ -2714,7 +2735,7 @@ const succeed$7 = (success) => new SuccessImpl(success);
 * @category constructors
 * @since 2.0.0
 */
-function make$27(compare) {
+function make$29(compare) {
 	return (self, that) => self === that ? 0 : compare(self, that);
 }
 /**
@@ -2744,7 +2765,7 @@ function make$27(compare) {
 * @category instances
 * @since 4.0.0
 */
-const String$8 = /*#__PURE__*/ make$27((self, that) => self < that ? -1 : 1);
+const String$8 = /*#__PURE__*/ make$29((self, that) => self < that ? -1 : 1);
 /**
 * Order instance for numbers that compares them numerically.
 *
@@ -2776,7 +2797,7 @@ const String$8 = /*#__PURE__*/ make$27((self, that) => self < that ? -1 : 1);
 * @category instances
 * @since 4.0.0
 */
-const Number$6 = /*#__PURE__*/ make$27((self, that) => {
+const Number$6 = /*#__PURE__*/ make$29((self, that) => {
 	if (globalThis.Number.isNaN(self) && globalThis.Number.isNaN(that)) return 0;
 	if (globalThis.Number.isNaN(self)) return -1;
 	if (globalThis.Number.isNaN(that)) return 1;
@@ -2814,7 +2835,7 @@ const Number$6 = /*#__PURE__*/ make$27((self, that) => {
 * @category mapping
 * @since 2.0.0
 */
-const mapInput = /*#__PURE__*/ dual(2, (self, f) => make$27((b1, b2) => self(f(b1), f(b2))));
+const mapInput = /*#__PURE__*/ dual(2, (self, f) => make$29((b1, b2) => self(f(b1), f(b2))));
 /**
 * Checks whether one value is strictly greater than another according to the given order.
 *
@@ -3082,6 +3103,34 @@ const fromNullishOr = (a) => a == null ? none() : some(a);
 */
 const fromUndefinedOr = (a) => a === void 0 ? none() : some(a);
 /**
+* Extracts the value from a `Some`, or returns `null` for `None`.
+*
+* **When to use**
+*
+* Use when you need to pass absent `Option` values to APIs that expect `null`.
+*
+* **Details**
+*
+* - `Some` → the inner value
+* - `None` → `null`
+*
+* **Example** (Unwrapping to null)
+*
+* ```ts import.meta.vitest
+* import { Option } from "effect"
+*
+* Option.getOrNull(Option.some(1)) // => 1
+* Option.getOrNull(Option.none()) // => null
+* ```
+*
+* @see {@link getOrUndefined} to return `undefined` instead
+* @see {@link getOrElse} for a custom fallback
+*
+* @category getters
+* @since 2.0.0
+*/
+const getOrNull = /*#__PURE__*/ getOrElse(constNull);
+/**
 * Extracts the value from a `Some`, or returns `undefined` for `None`.
 *
 * **When to use**
@@ -3310,7 +3359,7 @@ const ServiceProto = {
 		return self;
 	},
 	context(self) {
-		return make$26(this, self);
+		return make$28(this, self);
 	},
 	use(f) {
 		return withFiber$1((fiber) => f(get$2(fiber.context, this)));
@@ -3510,7 +3559,7 @@ const emptyContext = /*#__PURE__*/ makeUnsafe$6(/*#__PURE__*/ new Map());
 * @category constructors
 * @since 2.0.0
 */
-const make$26 = (key, service) => makeUnsafe$6(/* @__PURE__ */ new Map([[key.key, service]]));
+const make$28 = (key, service) => makeUnsafe$6(/* @__PURE__ */ new Map([[key.key, service]]));
 /**
 * Adds a service to a given `Context`.
 *
@@ -3891,7 +3940,7 @@ const normalize$1 = (n) => n > 0 ? Math.floor(n) : 0;
 * @category constructors
 * @since 4.0.0
 */
-const succeed$6 = succeed$7;
+const succeed$7 = succeed$8;
 /**
 * Creates a `Result` holding a `Failure` value.
 *
@@ -3917,7 +3966,7 @@ const succeed$6 = succeed$7;
 * @category constructors
 * @since 4.0.0
 */
-const fail$5 = fail$6;
+const fail$6 = fail$7;
 /**
 * Checks whether a `Result` is a `Failure`.
 *
@@ -3949,6 +3998,37 @@ const fail$5 = fail$6;
 * @since 4.0.0
 */
 const isFailure$1 = isFailure$2;
+/**
+* Checks whether a `Result` is a `Success`.
+*
+* **When to use**
+*
+* Use to narrow a known `Result` to the `Success` variant.
+*
+* **Details**
+*
+* - Acts as a TypeScript type guard, narrowing to `Success<A, E>`
+* - After narrowing, you can access `.success` to read the value
+*
+* **Example** (Narrowing to success)
+*
+* ```ts import.meta.vitest
+* import { Result } from "effect"
+*
+* const result = Result.succeed(42)
+*
+* if (Result.isSuccess(result)) {
+*   result.success // => 42
+* }
+* ```
+*
+* @see {@link isFailure} for the opposite check
+* @see {@link isResult} to check if a value is any Result
+*
+* @category guards
+* @since 4.0.0
+*/
+const isSuccess$1 = isSuccess$2;
 //#endregion
 //#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Iterable.js
 /**
@@ -4354,7 +4434,7 @@ const reduce = /*#__PURE__*/ dual(3, (self, b, f) => fromIterable$1(self).reduce
 //#endregion
 //#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Duration.js
 const TypeId$30 = "~effect/Duration";
-const bigint0$2 = /*#__PURE__*/ BigInt(0);
+const bigint0$3 = /*#__PURE__*/ BigInt(0);
 const bigint1$2 = /*#__PURE__*/ BigInt(1);
 const bigint2 = /*#__PURE__*/ BigInt(2);
 const bigint10$1 = /*#__PURE__*/ BigInt(10);
@@ -4368,7 +4448,7 @@ const parseNanos = (input, scale) => {
 	const fractional = input.slice(decimalIndex + 1);
 	const fractionalScale = bigint10$1 ** BigInt(fractional.length);
 	const scaled = (BigInt(input.slice(isNegative ? 1 : 0, decimalIndex)) * fractionalScale + BigInt(fractional)) * scale;
-	const rounded = scaled / fractionalScale + (scaled % fractionalScale * bigint2 >= fractionalScale ? bigint1$2 : bigint0$2);
+	const rounded = scaled / fractionalScale + (scaled % fractionalScale * bigint2 >= fractionalScale ? bigint1$2 : bigint0$3);
 	return isNegative ? -rounded : rounded;
 };
 const DURATION_REGEXP = /^(-?\d+(?:\.\d+)?)\s+(nanos?|micros?|millis?|seconds?|minutes?|hours?|days?|weeks?)$/;
@@ -4431,11 +4511,11 @@ const fromInputUnsafe$1 = (input) => {
 			if (input === null) break;
 			if (TypeId$30 in input) return input;
 			if (Array.isArray(input)) {
-				if (input.length !== 2 || !input.every(isNumber)) return invalid$2(input);
+				if (input.length !== 2 || !input.every(isNumber)) return invalid$3(input);
 				if (Number.isNaN(input[0]) || Number.isNaN(input[1])) return zero$1;
 				if (input[0] === -Infinity || input[1] === -Infinity) return negativeInfinity;
 				if (input[0] === Infinity || input[1] === Infinity) return infinity;
-				return make$25(roundTiesAwayFromZero(input[0] * 1e9 + input[1]));
+				return make$27(roundTiesAwayFromZero(input[0] * 1e9 + input[1]));
 			}
 			const obj = input;
 			let millis = 0;
@@ -4445,13 +4525,13 @@ const fromInputUnsafe$1 = (input) => {
 			if (obj.minutes) millis += obj.minutes * 6e4;
 			if (obj.seconds) millis += obj.seconds * 1e3;
 			if (obj.milliseconds) millis += obj.milliseconds;
-			if (!obj.microseconds && !obj.nanoseconds) return make$25(millis);
-			return make$25(roundTiesAwayFromZero(millis * 1e6 + (obj.microseconds ?? 0) * 1e3 + (obj.nanoseconds ?? 0)));
+			if (!obj.microseconds && !obj.nanoseconds) return make$27(millis);
+			return make$27(roundTiesAwayFromZero(millis * 1e6 + (obj.microseconds ?? 0) * 1e3 + (obj.nanoseconds ?? 0)));
 		}
 	}
-	return invalid$2(input);
+	return invalid$3(input);
 };
-const invalid$2 = (input) => {
+const invalid$3 = (input) => {
 	throw new Error(`Invalid Input: ${input}`);
 };
 const zeroDurationValue = {
@@ -4466,9 +4546,9 @@ const DurationProto = {
 		switch (this.value._tag) {
 			case "Millis": {
 				const nanos = this.value.millis * 1e6;
-				return Number.isFinite(nanos) ? hash(roundTiesAwayFromZero(nanos)) : number$1(this.value.millis);
+				return Number.isFinite(nanos) ? hash$1(roundTiesAwayFromZero(nanos)) : number$1(this.value.millis);
 			}
-			case "Nanos": return hash(this.value.nanos);
+			case "Nanos": return hash$1(this.value.nanos);
 			default: return structure(this.value);
 		}
 	},
@@ -4512,7 +4592,7 @@ const DurationProto = {
 		return pipeArguments(this, arguments);
 	}
 };
-const make$25 = (input) => {
+const make$27 = (input) => {
 	const duration = Object.create(DurationProto);
 	if (typeof input === "number") {
 		if (isNaN(input) || input === 0 || Object.is(input, -0)) duration.value = zeroDurationValue;
@@ -4525,7 +4605,7 @@ const make$25 = (input) => {
 			_tag: "Millis",
 			millis: input
 		};
-	} else if (input === bigint0$2) duration.value = zeroDurationValue;
+	} else if (input === bigint0$3) duration.value = zeroDurationValue;
 	else duration.value = {
 		_tag: "Nanos",
 		nanos: input
@@ -4578,7 +4658,7 @@ const isFinite$1 = (self) => self.value._tag !== "Infinity" && self.value._tag !
 * @category constructors
 * @since 2.0.0
 */
-const zero$1 = /*#__PURE__*/ make$25(0);
+const zero$1 = /*#__PURE__*/ make$27(0);
 /**
 * A Duration representing infinite time.
 *
@@ -4593,7 +4673,7 @@ const zero$1 = /*#__PURE__*/ make$25(0);
 * @category constructors
 * @since 2.0.0
 */
-const infinity = /*#__PURE__*/ make$25(Infinity);
+const infinity = /*#__PURE__*/ make$27(Infinity);
 /**
 * A Duration representing negative infinite time.
 *
@@ -4608,7 +4688,7 @@ const infinity = /*#__PURE__*/ make$25(Infinity);
 * @category constructors
 * @since 4.0.0
 */
-const negativeInfinity = /*#__PURE__*/ make$25(-Infinity);
+const negativeInfinity = /*#__PURE__*/ make$27(-Infinity);
 /**
 * Creates a Duration from nanoseconds.
 *
@@ -4623,7 +4703,7 @@ const negativeInfinity = /*#__PURE__*/ make$25(-Infinity);
 * @category constructors
 * @since 2.0.0
 */
-const nanos = (nanos) => make$25(nanos);
+const nanos = (nanos) => make$27(nanos);
 /**
 * Creates a Duration from milliseconds.
 *
@@ -4638,7 +4718,7 @@ const nanos = (nanos) => make$25(nanos);
 * @category constructors
 * @since 2.0.0
 */
-const millis = (millis) => make$25(millis);
+const millis = (millis) => make$27(millis);
 /**
 * Creates a Duration from seconds.
 *
@@ -4653,7 +4733,7 @@ const millis = (millis) => make$25(millis);
 * @category constructors
 * @since 2.0.0
 */
-const seconds = (seconds) => make$25(seconds * 1e3);
+const seconds = (seconds) => make$27(seconds * 1e3);
 /**
 * Creates a Duration from minutes.
 *
@@ -4668,7 +4748,7 @@ const seconds = (seconds) => make$25(seconds * 1e3);
 * @category constructors
 * @since 2.0.0
 */
-const minutes = (minutes) => make$25(minutes * 6e4);
+const minutes = (minutes) => make$27(minutes * 6e4);
 /**
 * Creates a Duration from hours.
 *
@@ -4683,7 +4763,7 @@ const minutes = (minutes) => make$25(minutes * 6e4);
 * @category constructors
 * @since 2.0.0
 */
-const hours = (hours) => make$25(hours * 36e5);
+const hours = (hours) => make$27(hours * 36e5);
 /**
 * Creates a Duration from days.
 *
@@ -4698,7 +4778,7 @@ const hours = (hours) => make$25(hours * 36e5);
 * @category constructors
 * @since 2.0.0
 */
-const days = (days) => make$25(days * 864e5);
+const days = (days) => make$27(days * 864e5);
 /**
 * Creates a Duration from weeks.
 *
@@ -4713,7 +4793,7 @@ const days = (days) => make$25(days * 864e5);
 * @category constructors
 * @since 2.0.0
 */
-const weeks = (weeks) => make$25(weeks * 6048e5);
+const weeks = (weeks) => make$27(weeks * 6048e5);
 /**
 * Converts a Duration to milliseconds.
 *
@@ -5261,7 +5341,67 @@ const Error$2 = Error$3;
 */
 const TaggedError$1 = TaggedError$2;
 //#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/encoding/Hex.js
+/**
+* Generates a random lowercase hexadecimal string, optimized for lengths that
+* are multiples of 8.
+*
+* **Details**
+*
+* `length` is not validated. The function generates `length >>> 3` random
+* 8-character words, so non-negative lengths below `2 ** 32` are rounded down
+* to a multiple of 8 and other values follow JavaScript's unsigned 32-bit
+* coercion rules.
+*
+* This function uses `Math.random()` and is not cryptographically secure. For
+* security-sensitive values, use the `Crypto.Crypto` service's `randomBytes`
+* method and encode the result with {@link encode}.
+*
+* @category encoding
+* @since 4.0.0
+*/
+const random = (length) => {
+	switch (length) {
+		case 16: return random16();
+		case 32: return random32();
+		default: {
+			let result = "";
+			for (let i = length >>> 3; i > 0; i--) result += random8();
+			return result;
+		}
+	}
+};
+const hexCharCodes = /*#__PURE__*/ Uint8Array.from("0123456789abcdef", (c) => c.charCodeAt(0));
+const randomWord = () => Math.random() * 4294967296 >>> 0;
+const random8 = () => {
+	const a = randomWord();
+	return String.fromCharCode(hexCharCodes[a >>> 28], hexCharCodes[a >>> 24 & 15], hexCharCodes[a >>> 20 & 15], hexCharCodes[a >>> 16 & 15], hexCharCodes[a >>> 12 & 15], hexCharCodes[a >>> 8 & 15], hexCharCodes[a >>> 4 & 15], hexCharCodes[a & 15]);
+};
+const random16 = () => {
+	const a = randomWord();
+	const b = randomWord();
+	return String.fromCharCode(hexCharCodes[a >>> 28], hexCharCodes[a >>> 24 & 15], hexCharCodes[a >>> 20 & 15], hexCharCodes[a >>> 16 & 15], hexCharCodes[a >>> 12 & 15], hexCharCodes[a >>> 8 & 15], hexCharCodes[a >>> 4 & 15], hexCharCodes[a & 15], hexCharCodes[b >>> 28], hexCharCodes[b >>> 24 & 15], hexCharCodes[b >>> 20 & 15], hexCharCodes[b >>> 16 & 15], hexCharCodes[b >>> 12 & 15], hexCharCodes[b >>> 8 & 15], hexCharCodes[b >>> 4 & 15], hexCharCodes[b & 15]);
+};
+const random32 = () => {
+	const a = randomWord();
+	const b = randomWord();
+	const c = randomWord();
+	const d = randomWord();
+	return String.fromCharCode(hexCharCodes[a >>> 28], hexCharCodes[a >>> 24 & 15], hexCharCodes[a >>> 20 & 15], hexCharCodes[a >>> 16 & 15], hexCharCodes[a >>> 12 & 15], hexCharCodes[a >>> 8 & 15], hexCharCodes[a >>> 4 & 15], hexCharCodes[a & 15], hexCharCodes[b >>> 28], hexCharCodes[b >>> 24 & 15], hexCharCodes[b >>> 20 & 15], hexCharCodes[b >>> 16 & 15], hexCharCodes[b >>> 12 & 15], hexCharCodes[b >>> 8 & 15], hexCharCodes[b >>> 4 & 15], hexCharCodes[b & 15], hexCharCodes[c >>> 28], hexCharCodes[c >>> 24 & 15], hexCharCodes[c >>> 20 & 15], hexCharCodes[c >>> 16 & 15], hexCharCodes[c >>> 12 & 15], hexCharCodes[c >>> 8 & 15], hexCharCodes[c >>> 4 & 15], hexCharCodes[c & 15], hexCharCodes[d >>> 28], hexCharCodes[d >>> 24 & 15], hexCharCodes[d >>> 20 & 15], hexCharCodes[d >>> 16 & 15], hexCharCodes[d >>> 12 & 15], hexCharCodes[d >>> 8 & 15], hexCharCodes[d >>> 4 & 15], hexCharCodes[d & 15]);
+};
+//#endregion
 //#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Tracer.js
+/**
+* Defines the low-level tracing model used by Effect.
+*
+* A span records the lifetime of an operation, including its name, parent,
+* attributes, links, annotations, sampling decision, kind, and completion
+* status. The module also defines the tracer service, parent-span context,
+* external span support, trace propagation settings, and the default in-memory
+* span implementation.
+*
+* @since 2.0.0
+*/
 /**
 * Defines the string key for the parent-span context service.
 *
@@ -5284,6 +5424,123 @@ const TaggedError$1 = TaggedError$2;
 */
 const ParentSpanKey = "effect/Tracer/ParentSpan";
 /**
+* Context service containing the `Span` or `ExternalSpan` to use as the parent
+* of newly-created child spans.
+*
+* **Example** (Accessing the parent span)
+*
+* ```ts import.meta.vitest
+* import { Effect, Tracer } from "effect"
+*
+* // Access the parent span from the context
+* const program = Effect.gen(function*() {
+*   const parentSpan = yield* Effect.service(Tracer.ParentSpan)
+*   return parentSpan.spanId
+* })
+*
+* const parent = Tracer.externalSpan({ spanId: "span-123", traceId: "trace-456" })
+* await Effect.runPromise(Effect.provideService(program, Tracer.ParentSpan, parent)) // => "span-123"
+* ```
+*
+* @category services
+* @since 2.0.0
+*/
+var ParentSpan = class extends (/*#__PURE__*/ Service()(ParentSpanKey, { fiberCached: true })) {};
+/**
+* Creates a `Tracer` value from a tracer implementation object.
+*
+* **When to use**
+*
+* Use to create a custom tracing backend value that Effect can use when
+* creating spans.
+*
+* **Details**
+*
+* `make` returns the supplied implementation object unchanged. The object must
+* satisfy the `Tracer` contract, including a `span` method that returns a
+* `Span`.
+*
+* @see {@link Span} for the span values returned by tracer implementations
+*
+* @category constructors
+* @since 2.0.0
+*/
+const make$26 = (options) => options;
+/**
+* Context reference for disabling trace propagation.
+*
+* **When to use**
+*
+* Use to prevent spans in a scope from propagating tracing context.
+*
+* **Details**
+*
+* When enabled on fiber or span annotations, new spans are created as
+* non-propagating no-op spans and disabled spans are skipped when deriving a
+* parent span.
+*
+* **Example** (Disabling span propagation)
+*
+* ```ts import.meta.vitest
+* import { Effect, Tracer } from "effect"
+*
+* // Disable span propagation for a specific effect
+* const program = Tracer.DisablePropagation.pipe(
+*   Effect.provideService(Tracer.DisablePropagation, true)
+* )
+*
+* await Effect.runPromise(program) // => true
+* ```
+*
+* @category services
+* @since 3.12.0
+*/
+const DisablePropagation = /*#__PURE__*/ Reference("effect/Tracer/DisablePropagation", { defaultValue: constFalse });
+/**
+* Context reference for controlling the current trace level for dynamic filtering.
+*
+* **When to use**
+*
+* Use to set the default trace level for spans in a scope when span options do
+* not provide `level`.
+*
+* **Details**
+*
+* The default value is `"Info"`. Span creation uses `options.level ??
+* CurrentTraceLevel` before applying `MinimumTraceLevel`.
+*
+* @see {@link MinimumTraceLevel} for the threshold that decides whether spans at that level are sampled
+*
+* @category services
+* @since 4.0.0
+*/
+const CurrentTraceLevel = /*#__PURE__*/ Reference("effect/Tracer/CurrentTraceLevel", { defaultValue: () => "Info" });
+/**
+* Context reference for setting the minimum trace level threshold. Spans and their
+* descendants below this level will have their sampling decision forced to
+* false, preventing them from being exported.
+*
+* **When to use**
+*
+* Use to set the trace-level threshold that controls whether spans are sampled
+* by default.
+*
+* **Details**
+*
+* The default value is `"All"`. Span creation compares the span level from
+* `options.level ?? CurrentTraceLevel` against this threshold.
+*
+* **Gotchas**
+*
+* Explicit `options.sampled` bypasses threshold computation.
+*
+* @see {@link CurrentTraceLevel} for the default span level used when options do not specify one
+*
+* @category services
+* @since 4.0.0
+*/
+const MinimumTraceLevel = /*#__PURE__*/ Reference("effect/Tracer/MinimumTraceLevel", { defaultValue: () => "All" });
+/**
 * Defines the string key for the active tracer context reference.
 *
 * **When to use**
@@ -5295,6 +5552,99 @@ const ParentSpanKey = "effect/Tracer/ParentSpan";
 * @since 4.0.0
 */
 const TracerKey = "effect/Tracer";
+/**
+* The default `Tracer` implementation backing the `Tracer` reference. It
+* creates in-memory `NativeSpan` instances and does not export them anywhere.
+*
+* **Details**
+*
+* Runtime code can compare the active tracer against `nativeTracer` to detect
+* that no tracing backend is installed and skip work that only a backend could
+* observe, such as recording span attributes.
+*
+* @category references
+* @since 4.0.0
+*/
+const nativeTracer = /*#__PURE__*/ make$26({ span: (options) => new NativeSpan(options) });
+/**
+* Default in-memory `Span` implementation used by the native tracer. It
+* generates span and trace identifiers, stores attributes, events, and links,
+* and records `Started` or `Ended` status.
+*
+* **Details**
+*
+* The constructor initializes the span with `Started` status. Trace and span
+* identifiers, the attribute map, and the event list are created lazily on
+* first access, so spans that are never inspected allocate as little as
+* possible. Attributes, events, links, and status are mutated through `Span`
+* methods.
+*
+* @see {@link Span} for the interface implemented by native spans
+*
+* @category models
+* @since 4.0.0
+*/
+var NativeSpan = class {
+	_tag = "Span";
+	sampled;
+	name;
+	parent;
+	annotations;
+	links;
+	startTime;
+	kind;
+	status;
+	_traceId = void 0;
+	_spanId = void 0;
+	_attributes = void 0;
+	_events = void 0;
+	constructor(options) {
+		this.name = options.name;
+		this.parent = options.parent;
+		this.annotations = options.annotations;
+		this.links = options.links;
+		this.startTime = options.startTime;
+		this.kind = options.kind;
+		this.sampled = options.sampled;
+		this.status = {
+			_tag: "Started",
+			startTime: options.startTime
+		};
+	}
+	get traceId() {
+		return this._traceId ??= getOrUndefined$1(this.parent)?.traceId ?? random(32);
+	}
+	get spanId() {
+		return this._spanId ??= random(16);
+	}
+	get attributes() {
+		return this._attributes ??= /* @__PURE__ */ new Map();
+	}
+	get events() {
+		return this._events ??= [];
+	}
+	end(endTime, exit) {
+		this.status = {
+			_tag: "Ended",
+			endTime,
+			exit,
+			startTime: this.status.startTime
+		};
+	}
+	attribute(key, value) {
+		this.attributes.set(key, value);
+	}
+	event(name, startTime, attributes) {
+		this.events.push([
+			name,
+			startTime,
+			attributes ?? {}
+		]);
+	}
+	addLinks(links) {
+		this.links.push(...links);
+	}
+};
 //#endregion
 //#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/metric.js
 /** @internal */
@@ -5312,6 +5662,12 @@ const TracerEnabled = /*#__PURE__*/ Reference("effect/References/TracerEnabled",
 	defaultValue: constTrue
 });
 /** @internal */
+const TracerTimingEnabled = /*#__PURE__*/ Reference("effect/References/TracerTimingEnabled", { defaultValue: constTrue });
+/** @internal */
+const TracerSpanAnnotations = /*#__PURE__*/ Reference("effect/References/TracerSpanAnnotations", { defaultValue: () => ({}) });
+/** @internal */
+const TracerSpanLinks = /*#__PURE__*/ Reference("effect/References/TracerSpanLinks", { defaultValue: () => [] });
+/** @internal */
 const CurrentLogAnnotations = /*#__PURE__*/ Reference("effect/References/CurrentLogAnnotations", { defaultValue: () => ({}) });
 /** @internal */
 const CurrentLogLevel = /*#__PURE__*/ Reference("effect/References/CurrentLogLevel", {
@@ -5325,6 +5681,22 @@ const MinimumLogLevel$1 = /*#__PURE__*/ Reference("effect/References/MinimumLogL
 });
 /** @internal */
 const CurrentLogSpans = /*#__PURE__*/ Reference("effect/References/CurrentLogSpans", { defaultValue: () => [] });
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/tracer.js
+/** @internal */
+const makeStackCleaner = (line) => (stack) => {
+	let cache;
+	return () => {
+		if (cache !== void 0) return cache;
+		const trace = stack();
+		if (!trace) return void 0;
+		const lines = trace.split("\n");
+		if (lines[line] !== void 0) {
+			cache = lines[line].trim();
+			return cache;
+		}
+	};
+};
 //#endregion
 //#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/effect.js
 /** @internal */
@@ -5346,7 +5718,7 @@ var Interrupt = class extends ReasonBase {
 		return isInterruptReason(that) && this.fiberId === that.fiberId && this.annotations === that.annotations;
 	}
 	[symbol$1]() {
-		return combine$1(string$1(`${this._tag}:${this.fiberId}`))(random(this.annotations));
+		return combine$1(string$1(`${this._tag}:${this.fiberId}`))(random$1(this.annotations));
 	}
 };
 /** @internal */
@@ -5354,25 +5726,32 @@ const causeInterrupt = (fiberId) => new CauseImpl([new Interrupt(fiberId)]);
 /** @internal */
 const findFail = (self) => {
 	const reason = self.reasons.find(isFailReason$1);
-	return reason ? succeed$6(reason) : fail$5(self);
+	return reason ? succeed$7(reason) : fail$6(self);
 };
 /** @internal */
 const findError = (self) => {
 	for (let i = 0; i < self.reasons.length; i++) {
 		const reason = self.reasons[i];
-		if (reason._tag === "Fail") return succeed$6(reason.error);
+		if (reason._tag === "Fail") return succeed$7(reason.error);
 	}
-	return fail$5(self);
+	return fail$6(self);
+};
+/** @internal */
+const findDefect = (self) => {
+	const reason = self.reasons.find(isDieReason);
+	return reason ? succeed$7(reason.defect) : fail$6(self);
 };
 /** @internal */
 const hasInterrupts = (self) => self.reasons.some(isInterruptReason);
+/** @internal */
+const hasInterruptsOnly$1 = (self) => self.reasons.length > 0 && self.reasons.every(isInterruptReason);
 const dedupeReasons = (self, that) => {
 	const buckets = /* @__PURE__ */ new Map();
 	const out = [];
 	for (const reason of self.concat(that)) {
-		const hash$1 = hash(reason);
-		const bucket = buckets.get(hash$1);
-		if (bucket === void 0) buckets.set(hash$1, [reason]);
+		const hash = hash$1(reason);
+		const bucket = buckets.get(hash);
+		if (bucket === void 0) buckets.set(hash, [reason]);
 		else if (bucket.some((previous) => equals$1(previous, reason))) continue;
 		else bucket.push(reason);
 		out.push(reason);
@@ -5571,7 +5950,7 @@ var FiberImpl = class {
 	interruptUnsafe(fiberId, annotations) {
 		if (this._exit) return;
 		let cause = causeInterrupt(fiberId);
-		if (this.cache.stackFrame) cause = causeAnnotate(cause, make$26(StackTraceKey, this.cache.stackFrame));
+		if (this.cache.stackFrame) cause = causeAnnotate(cause, make$28(StackTraceKey, this.cache.stackFrame));
 		if (annotations) cause = causeAnnotate(cause, annotations);
 		this._interruptedCause = this._interruptedCause ? causeCombine(this._interruptedCause, cause) : cause;
 		if (this.interruptible) {
@@ -5735,10 +6114,10 @@ const fiberStackAnnotations = (fiber) => {
 /** @internal */
 const fiberAwait = (self) => {
 	const impl = self;
-	if (impl._exit) return succeed$5(impl._exit);
+	if (impl._exit) return succeed$6(impl._exit);
 	return callback$2((resume) => {
-		if (impl._exit) return resume(succeed$5(impl._exit));
-		return sync$1(self.addObserver((exit) => resume(succeed$5(exit))));
+		if (impl._exit) return resume(succeed$6(impl._exit));
+		return sync$2(self.addObserver((exit) => resume(succeed$6(exit))));
 	});
 };
 /** @internal */
@@ -5760,10 +6139,10 @@ const fiberAwaitAll = (self) => callback$2((resume) => {
 			});
 			return;
 		}
-		resume(succeed$5(exits));
+		resume(succeed$6(exits));
 	}
 	loop();
-	return sync$1(() => cancel?.());
+	return sync$2(() => cancel?.());
 });
 /** @internal */
 const fiberInterrupt = (self) => withFiber$1((fiber) => fiberInterruptAs(self, fiber.id));
@@ -5772,7 +6151,7 @@ const fiberInterruptAs = /*#__PURE__*/ dual((args) => hasProperty(args[0], Fiber
 	let ann = fiberStackAnnotations(parent);
 	ann = ann && annotations ? merge$2(ann, annotations) : ann ?? annotations;
 	self.interruptUnsafe(fiberId, ann);
-	return asVoid(fiberAwait(self));
+	return asVoid$1(fiberAwait(self));
 }));
 /** @internal */
 const fiberInterruptAll = (fibers) => withFiber$1((parent) => {
@@ -5782,16 +6161,16 @@ const fiberInterruptAll = (fibers) => withFiber$1((parent) => {
 		fiber.interruptUnsafe(parent.id, annotations);
 		fiberArr.push(fiber);
 	}
-	return asVoid(fiberAwaitAll(fiberArr));
+	return asVoid$1(fiberAwaitAll(fiberArr));
 });
 /** @internal */
-const succeed$5 = exitSucceed;
+const succeed$6 = exitSucceed;
 /** @internal */
 const failCause$3 = exitFailCause;
 /** @internal */
-const fail$4 = exitFail;
+const fail$5 = exitFail;
 /** @internal */
-const sync$1 = /*#__PURE__*/ makePrimitive$1({
+const sync$2 = /*#__PURE__*/ makePrimitive$1({
 	op: "Sync",
 	[evaluate](fiber) {
 		const value = this[args]();
@@ -5821,24 +6200,24 @@ const yieldNow = /*#__PURE__*/ (/* @__PURE__ */ makePrimitive$1({
 	}
 }))(0);
 /** @internal */
-const succeedNone = /*#__PURE__*/ succeed$5(/*#__PURE__*/ none());
+const succeedNone = /*#__PURE__*/ succeed$6(/*#__PURE__*/ none());
 /** @internal */
 const failCauseSync$1 = (evaluate) => suspend$3(() => failCause$3(evaluate()));
 /** @internal */
 const die$2 = (defect) => exitDie(defect);
 /** @internal */
-const failSync = (error) => suspend$3(() => fail$4(error()));
+const failSync = (error) => suspend$3(() => fail$5(error()));
 /** @internal */
-const void_$2 = /*#__PURE__*/ succeed$5(void 0);
+const void_$2 = /*#__PURE__*/ succeed$6(void 0);
 /** @internal */
 const try_$1 = (options) => {
 	const evaluate = typeof options === "function" ? options : options.try;
 	const catcher = typeof options === "function" ? (cause) => new UnknownError$1(cause, "An error occurred in Effect.try") : options.catch;
 	return suspend$3(() => {
 		try {
-			return succeed$5(evaluate());
+			return succeed$6(evaluate());
 		} catch (err) {
-			return fail$4(catcher(err));
+			return fail$5(catcher(err));
 		}
 	});
 };
@@ -5849,13 +6228,13 @@ const tryPromise$1 = (options) => {
 	return callbackOptions(function(resume, signal) {
 		const failWithCatch = (cause) => {
 			try {
-				resume(fail$4(internalCall(() => catcher(cause))));
+				resume(fail$5(internalCall(() => catcher(cause))));
 			} catch (err) {
 				resume(die$2(err));
 			}
 		};
 		try {
-			f(signal).then((a) => resume(succeed$5(a)), failWithCatch);
+			f(signal).then((a) => resume(succeed$6(a)), failWithCatch);
 		} catch (err) {
 			failWithCatch(err);
 		}
@@ -5939,6 +6318,51 @@ const defineFunctionLength = (length, fn) => Object.defineProperty(fn, "length",
 	value: length,
 	configurable: true
 });
+const fnStackCleaner = /*#__PURE__*/ makeStackCleaner(2);
+/** @internal */
+const fn$1 = function() {
+	const nameFirst = typeof arguments[0] === "string";
+	const name = nameFirst ? arguments[0] : "Effect.fn";
+	const spanOptions = nameFirst ? arguments[1] : void 0;
+	const prevLimit = getStackTraceLimit();
+	let defError;
+	if (prevLimit !== 0) {
+		setStackTraceLimit(2);
+		defError = new globalThis.Error();
+		setStackTraceLimit(prevLimit);
+	}
+	if (nameFirst) return (body, ...pipeables) => makeFn(name, body, defError, pipeables, nameFirst, spanOptions);
+	return makeFn(name, arguments[0], defError, Array.prototype.slice.call(arguments, 1), nameFirst, spanOptions);
+};
+const makeFn = (name, bodyOrOptions, defError, pipeables, addSpan, spanOptions) => {
+	const body = typeof bodyOrOptions === "function" ? bodyOrOptions : pipeables.shift().bind(bodyOrOptions.self);
+	const definitionName = `${name} (definition)`;
+	const definitionStack = defError ? fnStackCleaner(() => defError.stack) : constUndefined;
+	return defineFunctionLength(body.length, function(...args) {
+		let result = suspend$3(() => {
+			const iter = body.apply(this, arguments);
+			return isEffect$1(iter) ? iter : fromIteratorUnsafe(iter);
+		});
+		for (let i = 0; i < pipeables.length; i++) result = pipeables[i](result, ...args);
+		if (!isEffect$1(result)) return result;
+		const prevLimit = getStackTraceLimit();
+		let callError;
+		if (prevLimit !== 0) {
+			setStackTraceLimit(2);
+			callError = new globalThis.Error();
+			setStackTraceLimit(prevLimit);
+		}
+		return updateService(addSpan ? useSpan(name, spanOptions, (span) => provideParentSpan(result, span)) : result, CurrentStackFrame, (prev) => ({
+			name,
+			stack: callError ? fnStackCleaner(() => callError.stack) : constUndefined,
+			parent: {
+				name: definitionName,
+				stack: definitionStack,
+				parent: prev
+			}
+		}));
+	});
+};
 /** @internal */
 const fnUntracedEager$1 = (body, ...pipeables) => defineFunctionLength(body.length, pipeables.length === 0 ? function() {
 	return fromIteratorEagerUnsafe(() => body.apply(this, arguments));
@@ -5953,7 +6377,7 @@ const fromIteratorEagerUnsafe = (evaluate) => {
 		let value = void 0;
 		while (true) {
 			const state = iterator.next(value);
-			if (state.done) return succeed$5(state.value);
+			if (state.done) return succeed$6(state.value);
 			const primitive = state.value;
 			if (primitive && primitive._tag === "Success") {
 				value = primitive.value;
@@ -5980,7 +6404,7 @@ const fromIteratorUnsafe = /*#__PURE__*/ function() {
 			const iter = this.iterator;
 			while (true) {
 				const state = iter.next(value);
-				if (state.done) return succeed$5(state.value);
+				if (state.done) return succeed$6(state.value);
 				if (!effectIsExit(state.value)) {
 					fiber._stack.push(this);
 					return state.value;
@@ -6002,7 +6426,7 @@ const fromIteratorUnsafe = /*#__PURE__*/ function() {
 	};
 }();
 /** @internal */
-const as$1 = /*#__PURE__*/ dual(2, (self, value) => new ContImpl(self, returnPayload, succeed$5(value)));
+const as$1 = /*#__PURE__*/ dual(2, (self, value) => new ContImpl(self, returnPayload, succeed$6(value)));
 const evaluateCont = function(fiber) {
 	fiber._stack.push(this);
 	return this[args];
@@ -6051,7 +6475,7 @@ const andThen$1 = /*#__PURE__*/ dual(2, (self, f) => new ContImpl(self, isEffect
 /** @internal */
 const tap$1 = /*#__PURE__*/ dual(2, (self, f) => new ContImpl(self, isEffect$1(f) ? tapEffectCont : tapCont, f));
 /** @internal */
-const asVoid = (self) => new ContImpl(self, returnPayload, exitVoid);
+const asVoid$1 = (self) => new ContImpl(self, returnPayload, exitVoid);
 /** @internal */
 const raceAllFirst = (all, options) => withFiber$1((parent) => callback$2((resume) => {
 	let done = false;
@@ -6101,7 +6525,7 @@ const exitIsSuccess = (self) => self._tag === "Success";
 /** @internal */
 const exitIsFailure = (self) => self._tag === "Failure";
 /** @internal */
-const exitFilterCause = (self) => self._tag === "Failure" ? succeed$6(self.cause) : fail$5(self);
+const exitFilterCause = (self) => self._tag === "Failure" ? succeed$7(self.cause) : fail$6(self);
 /** @internal */
 const exitVoid = /*#__PURE__*/ exitSucceed(void 0);
 /** @internal */
@@ -6115,7 +6539,7 @@ const exitAsVoidAll = (exits) => {
 	return failures.length === 0 ? exitVoid : exitFailCause(causeFromReasons(failures));
 };
 /** @internal */
-const serviceOption$1 = (service) => withFiber$1((fiber) => succeed$5(getOption(fiber.context, service)));
+const serviceOption$1 = (service) => withFiber$1((fiber) => succeed$6(getOption(fiber.context, service)));
 /** @internal */
 const updateContext = /*#__PURE__*/ dual(2, (self, f) => withFiber$1((fiber) => {
 	const prevContext = fiber.context;
@@ -6126,6 +6550,13 @@ const updateContext = /*#__PURE__*/ dual(2, (self, f) => withFiber$1((fiber) => 
 		fiber.setContext(prevContext);
 	});
 	return self;
+}));
+/** @internal */
+const updateService = /*#__PURE__*/ dual(3, (self, service, f) => updateContext(self, (s) => {
+	const prev = getUnsafe(s, service);
+	const next = f(prev);
+	if (prev === next) return s;
+	return add(s, service, next);
 }));
 /** @internal */
 const contextWith = (f) => withFiber$1((fiber) => f(fiber.context));
@@ -6165,6 +6596,10 @@ const catchCauseFilter = /*#__PURE__*/ dual(3, (self, filter, f) => catchCause$1
 /** @internal */
 const catch_$1 = /*#__PURE__*/ dual(2, (self, f) => catchCauseFilter(self, findError, (e) => f(e)));
 /** @internal */
+const catchDefect$1 = /*#__PURE__*/ dual(2, (self, f) => catchCauseFilter(self, findDefect, f));
+/** @internal */
+const tapCause$1 = /*#__PURE__*/ dual(2, (self, f) => catchCause$1(self, (cause) => andThen$1(f(cause), failCause$3(cause))));
+/** @internal */
 const catchIf = /*#__PURE__*/ dual((args) => isEffect$1(args[0]), (self, predicate, f, orElse) => catchCause$1(self, (cause) => {
 	const error = findError(cause);
 	if (isFailure$1(error)) return failCause$3(error.failure);
@@ -6189,7 +6624,7 @@ const catchTags$1 = /*#__PURE__*/ dual((args) => isEffect$1(args[0]), (self, cas
 	let keys;
 	return catchFilter$1(self, (e) => {
 		keys ??= Object.keys(cases);
-		return hasProperty(e, "_tag") && isString(e["_tag"]) && keys.includes(e["_tag"]) ? succeed$6(e) : fail$5(e);
+		return hasProperty(e, "_tag") && isString(e["_tag"]) && keys.includes(e["_tag"]) ? succeed$7(e) : fail$6(e);
 	}, (e) => cases[e["_tag"]](e), orElse);
 });
 /** @internal */
@@ -6213,8 +6648,8 @@ const ignore$1 = /*#__PURE__*/ dual((args) => isEffect$1(args[0]), (self, option
 });
 /** @internal */
 const result$1 = (self) => matchEager(self, {
-	onFailure: fail$5,
-	onSuccess: succeed$6
+	onFailure: fail$6,
+	onSuccess: succeed$7
 });
 /** @internal */
 const matchCauseEffect = /*#__PURE__*/ dual(2, (self, options) => new OnSuccessAndFailureImpl(self, options.onSuccess.length !== 1 ? (a) => options.onSuccess(a) : options.onSuccess, options.onFailure.length !== 1 ? (cause) => options.onFailure(cause) : options.onFailure));
@@ -6566,13 +7001,13 @@ const forEach$2 = /*#__PURE__*/ dual((args) => typeof args[1] === "function", (i
 	if (concurrency === 1) return forEachSequential(iterable, f, options);
 	const items = fromIterable$1(iterable);
 	let length = items.length;
-	if (length === 0) return options?.discard ? void_$2 : succeed$5([]);
+	if (length === 0) return options?.discard ? void_$2 : succeed$6([]);
 	const out = options?.discard ? void 0 : new Array(length);
 	const eff = forEachConcurrent({
 		f,
 		out
 	}, items, { concurrency });
-	return eff ? as$1(eff, out) : succeed$5(out);
+	return eff ? as$1(eff, out) : succeed$6(out);
 }));
 const forEachSequential = (iterable, f, options) => suspend$3(() => {
 	const out = options?.discard ? void 0 : [];
@@ -6742,7 +7177,7 @@ const forkIn$1 = /*#__PURE__*/ dual((args) => isEffect$1(args[0]), (self, scope,
 			fiber.addObserver(() => scopeRemoveFinalizerUnsafe(scope, key));
 		} else fiber.interruptUnsafe(parent.id, fiberStackAnnotations(parent));
 	}
-	return succeed$5(fiber);
+	return succeed$6(fiber);
 }));
 /** @internal */
 const forkScoped$1 = /*#__PURE__*/ dual((args) => isEffect$1(args[0]), (self, options) => flatMap$2(scope$1, (scope) => forkIn$1(self, scope, options)));
@@ -6809,8 +7244,8 @@ const runSyncExitWith = (context) => {
 };
 /** @internal */
 const runSyncExit$1 = /*#__PURE__*/ runSyncExitWith(/*#__PURE__*/ empty$3());
-const succeedTrue = /*#__PURE__*/ succeed$5(true);
-const succeedFalse = /*#__PURE__*/ succeed$5(false);
+const succeedTrue = /*#__PURE__*/ succeed$6(true);
+const succeedFalse = /*#__PURE__*/ succeed$6(false);
 var Latch = class {
 	waiters = [];
 	scheduled = void 0;
@@ -6854,7 +7289,7 @@ var Latch = class {
 	await = /*#__PURE__*/ callback$2((resume) => {
 		if (this._isOpen) return resume(void_$2);
 		this.waiters.push(resume);
-		return sync$1(() => {
+		return sync$2(() => {
 			let index = this.waiters.indexOf(resume);
 			if (index !== -1) this.waiters.splice(index, 1);
 			else if (this.scheduled !== void 0) {
@@ -6868,7 +7303,7 @@ var Latch = class {
 		this._isOpen = false;
 		return true;
 	}
-	close = /*#__PURE__*/ sync$1(() => this.closeUnsafe());
+	close = /*#__PURE__*/ sync$2(() => this.closeUnsafe());
 	whenOpen = (self) => flatMap$2(this.await, () => self);
 	isOpen() {
 		return this._isOpen;
@@ -6876,6 +7311,83 @@ var Latch = class {
 };
 /** @internal */
 const makeLatchUnsafe = (open) => new Latch(open ?? false);
+const bigint0$2 = /*#__PURE__*/ BigInt(0);
+const NoopSpanProto = {
+	_tag: "Span",
+	spanId: "noop",
+	traceId: "noop",
+	sampled: false,
+	status: {
+		_tag: "Ended",
+		startTime: bigint0$2,
+		endTime: bigint0$2,
+		exit: exitVoid
+	},
+	attributes: /*#__PURE__*/ new Map(),
+	links: [],
+	kind: "internal",
+	attribute() {},
+	event() {},
+	end() {},
+	addLinks() {}
+};
+/** @internal */
+const noopSpan = (options) => Object.assign(Object.create(NoopSpanProto), options);
+const filterDisablePropagation = (span) => {
+	if (!span) return none();
+	return get$2(span.annotations, DisablePropagation) ? span._tag === "Span" ? filterDisablePropagation(getOrUndefined$1(span.parent)) : none() : some(span);
+};
+/** @internal */
+const makeSpanUnsafe = (fiber, name, options) => {
+	const disablePropagation = !fiber.cache.tracerEnabled || options?.annotations && get$2(options.annotations, DisablePropagation);
+	const parent = options?.parent !== void 0 ? some(options.parent) : options?.root ? none() : filterDisablePropagation(fiber.cache.span);
+	let span;
+	if (disablePropagation) span = noopSpan({
+		name,
+		parent,
+		annotations: add(options?.annotations ?? empty$3(), DisablePropagation, true)
+	});
+	else {
+		const tracer = fiber.cache.tracer ?? nativeTracer;
+		const clock = fiber.getRef(ClockRef);
+		const timingEnabled = fiber.getRef(TracerTimingEnabled);
+		const annotationsFromEnv = fiber.getRef(TracerSpanAnnotations);
+		const linksFromEnv = fiber.getRef(TracerSpanLinks);
+		const level = options?.level ?? fiber.getRef(CurrentTraceLevel);
+		const links = options?.links !== void 0 ? [...linksFromEnv, ...options.links] : linksFromEnv.length === 0 ? [] : linksFromEnv.slice();
+		span = tracer.span({
+			name,
+			parent,
+			annotations: options?.annotations ?? empty$3(),
+			links,
+			startTime: timingEnabled ? clock.currentTimeNanosUnsafe() : bigint0$2,
+			kind: options?.kind ?? "internal",
+			root: options?.root ?? isNone(parent),
+			sampled: options?.sampled ?? (isSome(parent) && parent.value.sampled === false ? false : !isLogLevelGreaterThan(fiber.getRef(MinimumTraceLevel), level))
+		});
+		for (const key in annotationsFromEnv) span.attribute(key, annotationsFromEnv[key]);
+		if (options?.attributes !== void 0) for (const key in options.attributes) span.attribute(key, options.attributes[key]);
+	}
+	return span;
+};
+/** @internal */
+const endSpan = (span, exit, clock, timingEnabled) => sync$2(() => {
+	if (span.status._tag === "Ended") return;
+	span.end(timingEnabled ? clock.currentTimeNanosUnsafe() : bigint0$2, exit);
+});
+/** @internal */
+const useSpan = (name, ...args) => {
+	const options = args.length === 1 ? void 0 : args[0];
+	const evaluate = args[args.length - 1];
+	return withFiber$1((fiber) => {
+		const span = makeSpanUnsafe(fiber, name, options);
+		const clock = fiber.getRef(ClockRef);
+		const timingEnabled = fiber.getRef(TracerTimingEnabled);
+		onExitUnsafe(fiber, (exit) => endSpan(span, exit, clock, timingEnabled));
+		return evaluate(span);
+	});
+};
+const provideParentSpan = /*#__PURE__*/ provideService$1(ParentSpan);
 /** @internal */
 const ClockRef = /*#__PURE__*/ Reference("effect/Clock", { defaultValue: () => new ClockImpl() });
 const MAX_TIMER_MILLIS = 2 ** 31 - 1;
@@ -6883,15 +7395,15 @@ var ClockImpl = class {
 	currentTimeMillisUnsafe() {
 		return Date.now();
 	}
-	currentTimeMillis = /*#__PURE__*/ sync$1(() => this.currentTimeMillisUnsafe());
+	currentTimeMillis = /*#__PURE__*/ sync$2(() => this.currentTimeMillisUnsafe());
 	currentTimeNanosUnsafe() {
 		return wallTimeNanos();
 	}
-	currentTimeNanos = /*#__PURE__*/ sync$1(() => this.currentTimeNanosUnsafe());
+	currentTimeNanos = /*#__PURE__*/ sync$2(() => this.currentTimeNanosUnsafe());
 	monotonicTimeNanosUnsafe() {
 		return monotonicNowNanos();
 	}
-	monotonicTimeNanos = /*#__PURE__*/ sync$1(() => this.monotonicTimeNanosUnsafe());
+	monotonicTimeNanos = /*#__PURE__*/ sync$2(() => this.monotonicTimeNanosUnsafe());
 	sleep(duration) {
 		return this.sleepMillis(toMillis(duration));
 	}
@@ -6901,7 +7413,7 @@ var ClockImpl = class {
 		return callback$2((resume) => {
 			const continuation = millis > MAX_TIMER_MILLIS ? this.sleepMillis(millis - MAX_TIMER_MILLIS) : void_$2;
 			const handle = setTimeout(() => resume(continuation), Math.min(millis, MAX_TIMER_MILLIS));
-			return sync$1(() => clearTimeout(handle));
+			return sync$2(() => clearTimeout(handle));
 		});
 	}
 };
@@ -7167,7 +7679,7 @@ const fromReasons = causeFromReasons;
 * @category constructors
 * @since 2.0.0
 */
-const fail$3 = causeFail;
+const fail$4 = causeFail;
 /**
 * Creates a `Cause` containing a single `Die` reason with the
 * given defect.
@@ -7191,6 +7703,30 @@ const fail$3 = causeFail;
 * @since 2.0.0
 */
 const die$1 = causeDie;
+/**
+* Returns `true` if every reason in the cause is an `Interrupt` (and
+* there is at least one reason).
+*
+* **When to use**
+*
+* Use when you need to detect failures caused only by interruption.
+*
+* **Example** (Checking interrupt-only causes)
+*
+* ```ts import.meta.vitest
+* import { Cause } from "effect"
+*
+* Cause.hasInterruptsOnly(Cause.interrupt(123)) // => true
+* Cause.hasInterruptsOnly(Cause.fail("error")) // => false
+* Cause.hasInterruptsOnly(Cause.empty) // => false
+* ```
+*
+* @see {@link hasInterrupts} — `true` if the cause contains *any* interrupts
+*
+* @category predicates
+* @since 4.0.0
+*/
+const hasInterruptsOnly = hasInterruptsOnly$1;
 /**
 * Transforms the typed error values inside a `Cause` using the
 * provided function. Only `Fail` reasons are affected; `Die` and `Interrupt`
@@ -7224,6 +7760,46 @@ const die$1 = causeDie;
 * @since 2.0.0
 */
 const map$6 = causeMap;
+/**
+* Collapses a `Cause` into a single `unknown` value, picking the "most
+* important" failure in this order:
+*
+* **When to use**
+*
+* Use to collapse a structured cause to the single value that synchronous and
+* promise runners would throw.
+*
+* **Details**
+*
+* 1. First `Fail` error (the `E` value)
+* 2. First `Die` defect
+* 3. A generic `Error("All fibers interrupted without error")` for interrupt-only causes
+* 4. A generic `Error("Empty cause")` for `empty`
+*
+* This is the function used by `Effect.runPromise` and `Effect.runSync` to
+* decide what to throw.
+*
+* **Gotchas**
+*
+* This function is lossy. Use {@link prettyErrors} or iterate `cause.reasons`
+* when you need all failures.
+*
+* **Example** (Squashing a cause)
+*
+* ```ts import.meta.vitest
+* import { Cause } from "effect"
+*
+* Cause.squash(Cause.fail("error")) // => "error"
+* Cause.squash(Cause.die("defect")) // => "defect"
+* ```
+*
+* @see {@link prettyErrors} — non-lossy conversion to `Array<Error>`
+* @see {@link pretty} — human-readable string rendering
+*
+* @category destructors
+* @since 2.0.0
+*/
+const squash = causeSquash;
 /**
 * Checks whether an arbitrary value is a `Done` signal.
 *
@@ -7322,7 +7898,7 @@ const UnknownError = UnknownError$1;
 * @category constructors
 * @since 2.0.0
 */
-const succeed$4 = exitSucceed;
+const succeed$5 = exitSucceed;
 /**
 * Creates a failed Exit from a Cause.
 *
@@ -7380,7 +7956,7 @@ const failCause$2 = exitFailCause;
 * @category constructors
 * @since 2.0.0
 */
-const fail$2 = exitFail;
+const fail$3 = exitFail;
 const void_$1 = exitVoid;
 /**
 * Checks whether an Exit is a Success.
@@ -7475,7 +8051,7 @@ const _await = (self) => callback$2((resume) => {
 	if (self.effect) return resume(self.effect);
 	self.resumes ??= [];
 	self.resumes.push(resume);
-	return sync$1(() => {
+	return sync$2(() => {
 		const resumes = self.resumes;
 		if (resumes === void 0) return;
 		const index = resumes.indexOf(resume);
@@ -7509,7 +8085,7 @@ const _await = (self) => callback$2((resume) => {
 * @category predicates
 * @since 2.0.0
 */
-const isDone = (self) => sync$1(() => isDoneUnsafe(self));
+const isDone = (self) => sync$2(() => isDoneUnsafe(self));
 /**
 * Returns whether this `Deferred` has already been completed synchronously.
 *
@@ -8206,9 +8782,9 @@ const buildWithScope = /*#__PURE__*/ dual(2, (self, scope) => withFiber$1((fiber
 * @category constructors
 * @since 2.0.0
 */
-const succeed$3 = function() {
-	if (arguments.length === 1) return (resource) => succeedContext(make$26(arguments[0], resource));
-	return succeedContext(make$26(arguments[0], arguments[1]));
+const succeed$4 = function() {
+	if (arguments.length === 1) return (resource) => succeedContext(make$28(arguments[0], resource));
+	return succeedContext(make$28(arguments[0], arguments[1]));
 };
 /**
 * Constructs a layer that provides all services in an already available
@@ -8257,7 +8833,7 @@ const succeed$3 = function() {
 * @category constructors
 * @since 2.0.0
 */
-const succeedContext = (context) => fromBuildUnsafe(constant(succeed$5(context)));
+const succeedContext = (context) => fromBuildUnsafe(constant(succeed$6(context)));
 /**
 * Constructs a layer from an effect that produces a single service.
 *
@@ -8300,7 +8876,7 @@ const effect = function() {
 	if (arguments.length === 1) return (effect) => effectImpl(arguments[0], effect);
 	return effectImpl(arguments[0], arguments[1]);
 };
-const effectImpl = (service, effect) => effectContext(map$7(effect, (value) => make$26(service, value)));
+const effectImpl = (service, effect) => effectContext(map$7(effect, (value) => make$28(service, value)));
 /**
 * Constructs a layer from an effect that produces all services in a `Context`.
 *
@@ -8641,8 +9217,8 @@ const filterDone = (cause) => {
 	let hasFailure = false;
 	for (const reason of cause.reasons) if (isDoneFailure(reason)) done ??= reason.error;
 	else if (reason._tag !== "Interrupt") hasFailure = true;
-	if (done === void 0) return fail$5(cause);
-	return hasFailure ? fail$5(fromReasons(cause.reasons.filter((reason) => !isDoneFailure(reason)))) : succeed$6(done);
+	if (done === void 0) return fail$6(cause);
+	return hasFailure ? fail$6(fromReasons(cause.reasons.filter((reason) => !isDoneFailure(reason)))) : succeed$7(done);
 };
 /**
 * Filters a Cause to extract the leftover value from done errors.
@@ -8657,7 +9233,7 @@ const filterDone = (cause) => {
 */
 const filterDoneLeftover = (cause) => {
 	const done = filterDone(cause);
-	return isFailure$1(done) ? done : succeed$6(done.success.value);
+	return isFailure$1(done) ? done : succeed$7(done.success.value);
 };
 /**
 * Converts a `Cause` into an `Exit`, treating `Cause.Done` as successful
@@ -8683,7 +9259,7 @@ const filterDoneLeftover = (cause) => {
 */
 const doneExitFromCause = (cause) => {
 	const halt = filterDone(cause);
-	return !isFailure$1(halt) ? succeed$4(halt.success.value) : failCause$2(halt.failure);
+	return !isFailure$1(halt) ? succeed$5(halt.success.value) : failCause$2(halt.failure);
 };
 /**
 * Pattern matches on a Pull, handling success, failure, and done cases.
@@ -9040,7 +9616,7 @@ const tryPromise = tryPromise$1;
 * @category constructors
 * @since 2.0.0
 */
-const succeed$2 = succeed$5;
+const succeed$3 = succeed$6;
 /**
 * Creates an `Effect` lazily, delaying construction until it is needed.
 *
@@ -9170,7 +9746,7 @@ const suspend$2 = suspend$3;
 * @category constructors
 * @since 2.0.0
 */
-const sync = sync$1;
+const sync$1 = sync$2;
 const void_ = void_$2;
 /**
 * Creates an `Effect` from a callback-based asynchronous API.
@@ -9293,7 +9869,7 @@ const gen = gen$1;
 * @category constructors
 * @since 2.0.0
 */
-const fail$1 = fail$4;
+const fail$2 = fail$5;
 /**
 * Creates an `Effect` that represents a failure with a specific `Cause`.
 *
@@ -9803,6 +10379,23 @@ const map$5 = map$7;
 * @since 2.0.0
 */
 const as = as$1;
+/**
+* Maps the success value of an `Effect` to `void`, preserving failures.
+*
+* **Example** (Discarding success values)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const program = Effect.asVoid(Effect.succeed(42))
+*
+* Effect.runSync(program) // => undefined
+* ```
+*
+* @category mapping
+* @since 2.0.0
+*/
+const asVoid = asVoid$1;
 const catch_ = catch_$1;
 /**
 * Catches and handles specific errors by their `_tag` field, which is used as a
@@ -9946,6 +10539,50 @@ const catchTags = catchTags$1;
 */
 const catchCause = catchCause$1;
 /**
+* Recovers from defects using a provided recovery function.
+*
+* **When to use**
+*
+* Use when you need to report or translate defects at integration boundaries.
+*
+* **Details**
+*
+* `catchDefect` handles unexpected defects, such as thrown exceptions or
+* values passed to `die`, without catching typed failures or interruptions.
+*
+* When to Recover from Defects:
+*
+* Defects are unexpected errors that typically should not be recovered from, as
+* they often indicate serious issues. In some cases, such as dynamically loaded
+* plugins, controlled recovery may be needed.
+*
+* **Example** (Recovering from defects)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* // An effect that might throw an unexpected error (defect)
+* const program = Effect.sync(() => {
+*   throw new Error("Unexpected error")
+* })
+*
+* // Recover from defects only
+* const recovered = Effect.catchDefect(program, (defect) => {
+*   return Effect.sync(() => { output.push(`Caught defect: ${(defect as Error).message}`) }).pipe(
+*     Effect.as("Recovered from defect")
+*   )
+* })
+*
+* void output.push(Effect.runSync(recovered))
+* output // => ["Caught defect: Unexpected error", "Recovered from defect"]
+* ```
+*
+* @category error handling
+* @since 4.0.0
+*/
+const catchDefect = catchDefect$1;
+/**
 * Recovers from specific errors using a `Filter`.
 *
 * **When to use**
@@ -10042,6 +10679,42 @@ const mapError = mapError$1;
 * @since 2.0.0
 */
 const orDie = orDie$1;
+/**
+* Runs an effectful operation with the full `Cause` when the source effect
+* fails.
+*
+* **When to use**
+*
+* Use when failure observation needs typed failures, defects, and interruptions
+* rather than only the typed error value.
+*
+* **Details**
+*
+* Use this to log or inspect typed failures, defects, and interruptions. When
+* the operation succeeds, the original cause is preserved. If the operation
+* fails, its error is also represented in the returned effect.
+*
+* **Example** (Observing full failure causes)
+*
+* ```ts import.meta.vitest
+* import { Cause, Effect, Exit } from "effect"
+* const output: Array<unknown> = []
+*
+* const task = Effect.fail("Something went wrong")
+*
+* const program = Effect.tapCause(
+*   task,
+*   (cause) => Effect.sync(() => { output.push(`Logging cause: ${Cause.squash(cause)}`) })
+* )
+*
+* void output.push(Effect.runSyncExit(program))
+* output // => ["Logging cause: Something went wrong", Exit.fail("Something went wrong")]
+* ```
+*
+* @category error handling
+* @since 4.0.0
+*/
+const tapCause = tapCause$1;
 /**
 * Discards both the success and failure values of an effect.
 *
@@ -11137,6 +11810,129 @@ const runSyncExit = runSyncExit$1;
 */
 const fnUntraced = fnUntraced$1;
 /**
+* Creates a reusable traced function from an Effect body.
+*
+* **When to use**
+*
+* Use when you are defining a reusable Effect function whose implementation
+* would otherwise be a normal function returning {@link gen}, and you want
+* tracing spans or stack-frame capture.
+*
+* **Details**
+*
+* Compared to a plain function that returns {@link gen}, `Effect.fn` reuses the
+* generator body instead of allocating a fresh generator closure around the
+* arguments on every call. Call `Effect.fn(body, ...)` for a generic
+* stack-frame boundary without creating a span. Call
+* `Effect.fn("operationName", options?)(body, ...)` when that boundary should
+* have a readable operation name and the returned `Effect` should create a
+* tracing span when run. {@link SpanOptionsNoTrace} configures span metadata
+* such as attributes, links, parent or root selection, kind, sampling, and log
+* level. Additional arguments after the generator body act like `pipe`
+* transforms: each transform receives the previous result and the original
+* function arguments. When those transforms return an `Effect`, the returned
+* effect includes stack-frame metadata and, for the named form, a tracing span.
+* Generator bodies may declare a `this` parameter; pass `{ self }` before the
+* body to bind `this` when the function is created.
+*
+* **Example** (Defining traced effect functions)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const f = Effect.fn("calculateLength")(function*(value: string) {
+*   return yield* Effect.succeed(value.length)
+* })
+*
+* //      ┌─── Effect.Effect<number>
+* //      ▼
+* const program = f("hello")
+* Effect.runSync(program) // => 5
+* ```
+*
+* **Example** (Transforming the returned Effect)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const f = Effect.fn("formatLength")(
+*   function*(value: string) {
+*     return yield* Effect.succeed(value.length)
+*   },
+*   (effect, value) =>
+*     effect.pipe(Effect.map((length) => `${value}: ${length}`))
+* )
+*
+* //      ┌─── Effect.Effect<string>
+* //      ▼
+* const program = f("hello")
+* Effect.runSync(program) // => "hello: 5"
+* ```
+*
+* **Example** (Binding this)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* class Counter {
+*   count = 0
+*
+*   increment = Effect.fn("Counter.increment")(
+*     { self: this },
+*     function*(this: Counter, by: number) {
+*       this.count += by
+*       return yield* Effect.succeed(this.count)
+*     }
+*   )
+* }
+*
+* const counter = new Counter()
+*
+* //      ┌─── Effect.Effect<number>
+* //      ▼
+* const program = counter.increment(1)
+* Effect.runSync(program) // => 1
+* ```
+*
+* **Example** (Annotating a traced non-parametric function)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const f = Effect.fn("calculateLength")(function*(
+*   value: string
+* ): Effect.fn.Return<number> {
+*   return yield* Effect.succeed(value.length)
+* })
+*
+* //      ┌─── Effect.Effect<number>
+* //      ▼
+* const program = f("hello")
+* Effect.runSync(program) // => 5
+* ```
+*
+* **Example** (Annotating a traced parametric function)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const f = Effect.fn("succeed")(function*<A>(
+*   value: A
+* ): Effect.fn.Return<A> {
+*   return yield* Effect.succeed(value)
+* })
+*
+* //      ┌─── Effect.Effect<string>
+* //      ▼
+* const program = f("hello")
+* Effect.runSync(program) // => "hello"
+* ```
+*
+* @category constructors
+* @since 3.11.0
+*/
+const fn = fn$1;
+/**
 * Retrieves the `Clock` service from the context and provides it to the
 * specified effectful function.
 *
@@ -11158,6 +11954,30 @@ const fnUntraced = fnUntraced$1;
 * @since 2.0.0
 */
 const clockWith = clockWith$1;
+/**
+* Logs one or more messages at the ERROR level.
+*
+* **Example** (Logging errors)
+*
+* ```ts import.meta.vitest
+* import { Effect, Logger } from "effect"
+* const output: Array<unknown> = []
+*
+* const program = Effect.gen(function*() {
+*   yield* Effect.logError("Database connection failed")
+* })
+*
+* const logger = Logger.make<unknown, void>(({ logLevel, message }) => {
+*   void output.push(`${logLevel}: ${Array.isArray(message) ? message.map(String).join(" ") : String(message)}`)
+* })
+* Effect.runSync(Effect.provide(program, Logger.layer([logger])))
+* output // => ["Error: Database connection failed"]
+* ```
+*
+* @category logging
+* @since 2.0.0
+*/
+const logError = /*#__PURE__*/ logWithLevel("Error");
 /**
 * Converts an error-first callback API into a function that returns an
 * `Effect`.
@@ -11213,11 +12033,11 @@ const clockWith = clockWith$1;
 const effectify = (fn, onError, onSyncError) => (...args) => callback$1((resume) => {
 	try {
 		fn(...args, (err, result) => {
-			if (err) resume(fail$1(onError ? onError(err, args) : err));
-			else resume(succeed$2(result));
+			if (err) resume(fail$2(onError ? onError(err, args) : err));
+			else resume(succeed$3(result));
 		});
 	} catch (err) {
-		resume(onSyncError ? fail$1(onSyncError(err, args)) : die(err));
+		resume(onSyncError ? fail$2(onSyncError(err, args)) : die(err));
 	}
 });
 /**
@@ -11409,7 +12229,7 @@ const isBigDecimal = (u) => hasProperty(u, TypeId$26);
 * @category constructors
 * @since 2.0.0
 */
-const make$23 = (value, scale) => {
+const make$24 = (value, scale) => {
 	if (!Number.isSafeInteger(scale)) throw new RangeError(`Scale must be a safe integer, got ${scale}`);
 	const o = Object.create(BigDecimalProto);
 	o.value = value;
@@ -11417,7 +12237,7 @@ const make$23 = (value, scale) => {
 	return o;
 };
 const makeNormalized = (value, scale) => {
-	const o = make$23(value, scale);
+	const o = make$24(value, scale);
 	o.normalized = o;
 	return o;
 };
@@ -11841,13 +12661,13 @@ const binaryUnits = [
 ];
 const allUnits = [...decimalUnits, .../*#__PURE__*/ binaryUnits.slice(1)];
 const unitsByName = /*#__PURE__*/ new Map(/*#__PURE__*/ allUnits.flatMap((unit) => unit.names.map((name) => [name, unit])));
-const make$22 = (value) => value;
-const invalid$1 = (message) => {
+const make$23 = (value) => value;
+const invalid$2 = (message) => {
 	throw new Error(`Invalid ByteSize: ${message}`);
 };
 const fromNumber = (input) => {
-	if (!Number.isSafeInteger(input) || input < 0) return invalid$1(`expected a non-negative safe integer, received ${input}`);
-	return make$22(BigInt(input));
+	if (!Number.isSafeInteger(input) || input < 0) return invalid$2(`expected a non-negative safe integer, received ${input}`);
+	return make$23(BigInt(input));
 };
 /**
 * Parses a byte-size string and throws for invalid syntax, unsupported units,
@@ -11865,14 +12685,14 @@ const fromNumber = (input) => {
 */
 const fromStringUnsafe = (input) => {
 	const match = /^\s*(\d+)(?:\.(\d+))?\s*([A-Za-z]+)\s*$/.exec(input);
-	if (match === null) return invalid$1(`unsupported syntax ${JSON.stringify(input)}`);
+	if (match === null) return invalid$2(`unsupported syntax ${JSON.stringify(input)}`);
 	const unit = unitsByName.get(match[3]);
-	if (unit === void 0) return invalid$1(`unsupported unit ${JSON.stringify(match[3])}`);
+	if (unit === void 0) return invalid$2(`unsupported unit ${JSON.stringify(match[3])}`);
 	const fraction = match[2] ?? "";
 	const scale = BigInt(10) ** BigInt(fraction.length);
 	const numerator = BigInt(match[1] + fraction) * unit.factor;
-	if (numerator % scale !== bigint0) return invalid$1(`${JSON.stringify(input)} does not represent an integral number of bytes`);
-	return make$22(numerator / scale);
+	if (numerator % scale !== bigint0) return invalid$2(`${JSON.stringify(input)} does not represent an integral number of bytes`);
+	return make$23(numerator / scale);
 };
 /**
 * Decodes a trusted input into a byte size and throws for invalid input.
@@ -11883,12 +12703,12 @@ const fromStringUnsafe = (input) => {
 const fromInputUnsafe = (input) => {
 	switch (typeof input) {
 		case "bigint":
-			if (input < bigint0) return invalid$1(`expected a non-negative bigint, received ${input}`);
-			return make$22(input);
+			if (input < bigint0) return invalid$2(`expected a non-negative bigint, received ${input}`);
+			return make$23(input);
 		case "number": return fromNumber(input);
 		case "string": return fromStringUnsafe(input);
 	}
-	return invalid$1(`unsupported input ${input}`);
+	return invalid$2(`unsupported input ${input}`);
 };
 /**
 * Creates a byte size from a non-negative byte count.
@@ -11981,7 +12801,7 @@ const isRedacted = (u) => hasProperty(u, TypeId$24);
 * @category constructors
 * @since 3.3.0
 */
-const make$20 = (value, options) => {
+const make$21 = (value, options) => {
 	const self = Object.create(Proto$5);
 	if (options?.label) self.label = options.label;
 	redactedRegistry.set(self, value);
@@ -11998,7 +12818,7 @@ const Proto$5 = {
 		return `<redacted${isString(this.label) ? ":" + this.label : ""}>`;
 	},
 	[symbol$1]() {
-		return hash(redactedRegistry.get(this));
+		return hash$1(redactedRegistry.get(this));
 	},
 	[symbol](that) {
 		return isRedacted(that) && equals$1(redactedRegistry.get(this), redactedRegistry.get(that));
@@ -12030,7 +12850,7 @@ const value = value$1;
 //#endregion
 //#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/annotations.js
 /** @internal */
-function resolve$1(ast) {
+function resolve$2(ast) {
 	return ast.checks ? ast.checks[ast.checks.length - 1].annotations : ast.annotations;
 }
 /** @internal */
@@ -12039,7 +12859,7 @@ const SENTINELS_ANNOTATION_KEY = "~sentinels";
 const CONSTRUCTOR_ANNOTATION_KEY = "~constructor";
 /** @internal */
 const getExpected = /*#__PURE__*/ memoize((ast) => {
-	const identifier = resolve$1(ast)?.identifier;
+	const identifier = resolve$2(ast)?.identifier;
 	if (typeof identifier === "string") return identifier;
 	return ast.getExpected(getExpected);
 });
@@ -12048,15 +12868,15 @@ const getExpected = /*#__PURE__*/ memoize((ast) => {
 /** @internal */
 const missing = /*#__PURE__*/ Symbol();
 /** @internal */
-const succeed$1 = succeed$4;
+const succeed$2 = succeed$5;
 /** @internal */
-const missingExit = /*#__PURE__*/ succeed$1(missing);
+const missingExit = /*#__PURE__*/ succeed$2(missing);
 /** @internal */
-const sameExit = /*#__PURE__*/ succeed$1(missing);
+const sameExit = /*#__PURE__*/ succeed$2(missing);
 /** @internal */
 const toOption = (value) => value === missing ? none() : some(value);
 /** @internal */
-const fromOptionExit = (option) => option._tag === "None" ? missingExit : succeed$1(option.value);
+const fromOptionExit = (option) => option._tag === "None" ? missingExit : succeed$2(option.value);
 //#endregion
 //#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/SchemaIssue.js
 /**
@@ -13377,10 +14197,10 @@ const Arrays = class extends ASTNodeImpl {
 				if (options.errors === "all") {
 					if (state.issues) state.issues.push(issue);
 					else state.issues = [issue];
-				} else return fail$1(new Composite(ast, [issue], input, options));
+				} else return fail$2(new Composite(ast, [issue], input, options));
 			}
-			if (state.issues) return fail$1(new Composite(ast, state.issues, input, options));
-			return succeed$1(state.output);
+			if (state.issues) return fail$2(new Composite(ast, state.issues, input, options));
+			return succeed$2(state.output);
 		};
 		const parse = (input, options) => {
 			const len = input.length;
@@ -13412,7 +14232,7 @@ const Arrays = class extends ASTNodeImpl {
 		return (input, options) => {
 			if (input === missing) return missingExit;
 			try {
-				if (!Array.isArray(input)) return fail$1(new InvalidType(ast, input, options));
+				if (!Array.isArray(input)) return fail$2(new InvalidType(ast, input, options));
 				if (!elements) {
 					elements = ast.elements.map((ast) => ({
 						ast,
@@ -13459,7 +14279,7 @@ function stepArray(s, item, exit, i) {
 		if (s.options.errors === "all") {
 			if (s.issues) s.issues.push(issue);
 			else s.issues = [issue];
-		} else return fail$2(new Composite(s.ast, [issue], s.input, s.options));
+		} else return fail$3(new Composite(s.ast, [issue], s.input, s.options));
 	}
 }
 const parseArrayOptions = {
@@ -13480,7 +14300,7 @@ const wrapPropertyKeyIssue = (s, ast, key, exit) => {
 	if (s.options.errors === "all") {
 		if (s.issues) s.issues.push(pointer);
 		else s.issues = [pointer];
-	} else return fail$2(new Composite(ast, [pointer], s.input, s.options));
+	} else return fail$3(new Composite(ast, [pointer], s.input, s.options));
 };
 /**
 * floating point or integer, with optional exponent
@@ -13634,7 +14454,7 @@ const Objects = class extends ASTNodeImpl {
 			}) : void 0;
 			return fnUntracedEager(function* (input, options) {
 				if (input === missing) return missing;
-				if (!(typeof input === "object" && input !== null && !Array.isArray(input))) return yield* fail$1(new InvalidType(ast, input, options));
+				if (!(typeof input === "object" && input !== null && !Array.isArray(input))) return yield* fail$2(new InvalidType(ast, input, options));
 				compileMembers();
 				const record = input;
 				const out = {};
@@ -13662,7 +14482,7 @@ const Objects = class extends ASTNodeImpl {
 								if (state.issues) state.issues.push(issue);
 								else state.issues = [issue];
 								continue;
-							} else return yield* fail$1(new Composite(ast, [issue], input, options));
+							} else return yield* fail$2(new Composite(ast, [issue], input, options));
 						}
 					}
 				}
@@ -13690,7 +14510,7 @@ const Objects = class extends ASTNodeImpl {
 					const eff = parseIndexes(state, keyPairs, { concurrency });
 					if (eff) yield* eff;
 				}
-				if (state.issues) return yield* fail$1(new Composite(ast, state.issues, input, options));
+				if (state.issues) return yield* fail$2(new Composite(ast, state.issues, input, options));
 				return out;
 			});
 		};
@@ -13701,7 +14521,7 @@ const Objects = class extends ASTNodeImpl {
 			return flatMap$1(exit(pending), (exit) => {
 				const terminal = stepProperty(state, property, exit);
 				if (terminal) return terminal;
-				const done = () => succeed$1(state.out);
+				const done = () => succeed$2(state.out);
 				const eff = parseProperties(state, properties.slice(index + 1));
 				return eff ? flatMapEager(eff, done) : done();
 			});
@@ -13709,7 +14529,7 @@ const Objects = class extends ASTNodeImpl {
 		return (input, options) => {
 			if (input === missing) return missingExit;
 			if (options.errors === "all" || options.onExcessProperty !== void 0 || options.concurrency !== void 0 && resolveConcurrency(options.concurrency) !== 1) return (fallback ??= makeFallback())(input, options);
-			if (!(typeof input === "object" && input !== null && !Array.isArray(input))) return fail$1(new InvalidType(ast, input, options));
+			if (!(typeof input === "object" && input !== null && !Array.isArray(input))) return fail$2(new InvalidType(ast, input, options));
 			const props = compileMembers();
 			const record = input;
 			const out = {};
@@ -13738,7 +14558,7 @@ const Objects = class extends ASTNodeImpl {
 			} catch (error) {
 				return die(error);
 			}
-			return succeed$1(out);
+			return succeed$2(out);
 		};
 	}
 	_rebuild(recur, recurParameter, checks, encodingChecks) {
@@ -13783,7 +14603,7 @@ function stepProperty(s, p, exit) {
 			if (s.issues) s.issues.push(issue);
 			else s.issues = [issue];
 			return;
-		} else return fail$2(new Composite(s.ast, [issue], s.input, s.options));
+		} else return fail$3(new Composite(s.ast, [issue], s.input, s.options));
 	}
 }
 const parsePropertiesOptions = {
@@ -14054,7 +14874,7 @@ const Union$1 = class extends ASTNodeImpl {
 		return (input, options) => {
 			if (input === missing) return missingExit;
 			const candidates = getCandidates(input, ast.types, compileField !== void 0);
-			if (candidates.length === 0) return fail$1(new AnyOf(ast, [], input, options));
+			if (candidates.length === 0) return fail$2(new AnyOf(ast, [], input, options));
 			if (candidates.length === 1) {
 				const result = compile(candidates[0])(input, options);
 				if (result._tag === "Success") return result;
@@ -14072,12 +14892,12 @@ const Union$1 = class extends ASTNodeImpl {
 			const eff = parseUnion(state, candidates);
 			if (!eff) {
 				if (state.out) return state.out;
-				return fail$1(new AnyOf(ast, state.issues ?? [], input, options));
+				return fail$2(new AnyOf(ast, state.issues ?? [], input, options));
 			}
 			return flatMapEager(eff, (_) => {
-				if (state.out === sameExit) return succeed$2(input);
+				if (state.out === sameExit) return succeed$3(input);
 				if (state.out) return state.out;
-				return fail$1(new AnyOf(ast, state.issues ?? [], input, options));
+				return fail$2(new AnyOf(ast, state.issues ?? [], input, options));
 			});
 		};
 	}
@@ -14127,7 +14947,7 @@ const Union$1 = class extends ASTNodeImpl {
 function failSingleUnionCandidate(ast, cause, input, options) {
 	const issue = getSchemaIssue(cause);
 	if (!issue) return failCause$2(cause);
-	return fail$2(new AnyOf(ast, [issue], input, options));
+	return fail$3(new AnyOf(ast, [issue], input, options));
 }
 const parseUnion = /*#__PURE__*/ iterateEager()({
 	onItem(s, ast) {
@@ -14142,7 +14962,7 @@ const parseUnion = /*#__PURE__*/ iterateEager()({
 		} else {
 			if (s.out && s.successes) {
 				s.successes.push(candidate);
-				return fail$2(new OneOf(s.ast, s.successes, s.input, s.options));
+				return fail$3(new OneOf(s.ast, s.successes, s.input, s.options));
 			}
 			s.out = exit;
 			if (s.successes) s.successes.push(candidate);
@@ -14575,18 +15395,18 @@ function containsUndefined(ast) {
 	}
 }
 function fromConst(ast, value) {
-	const succeed = value === 0 ? sameExit : succeed$1(value);
+	const succeed = value === 0 ? sameExit : succeed$2(value);
 	return (input, options) => {
 		if (input === missing) return missingExit;
 		if (input === value) return succeed;
-		return fail$1(new InvalidType(ast, input, options));
+		return fail$2(new InvalidType(ast, input, options));
 	};
 }
 function fromRefinement(ast, refinement) {
 	return (input, options) => {
 		if (input === missing) return missingExit;
 		if (refinement(input)) return sameExit;
-		return fail$1(new InvalidType(ast, input, options));
+		return fail$2(new InvalidType(ast, input, options));
 	};
 }
 /** @internal */
@@ -14707,7 +15527,7 @@ function isJson(u) {
 	return isTree(u, isJsonLeaf);
 }
 /** @internal */
-const Json$1 = /*#__PURE__*/ new Declaration([], () => (input, ast, options) => isJson(input) ? sameExit : fail$1(new InvalidType(ast, input, options)), {
+const Json$1 = /*#__PURE__*/ new Declaration([], () => (input, ast, options) => isJson(input) ? sameExit : fail$2(new InvalidType(ast, input, options)), {
 	representation: {
 		id: "effect/schema/Json",
 		payload: null
@@ -14727,7 +15547,7 @@ function isStringTree(u) {
 	return isTree(u, isStringTreeLeaf);
 }
 /** @internal */
-const unknownToStringTree = /*#__PURE__*/ new Link(/* @__PURE__ */ new Declaration([], () => (input, ast, options) => isStringTree(input) ? sameExit : fail$1(new InvalidType(ast, input, options)), {
+const unknownToStringTree = /*#__PURE__*/ new Link(/* @__PURE__ */ new Declaration([], () => (input, ast, options) => isStringTree(input) ? sameExit : fail$2(new InvalidType(ast, input, options)), {
 	expected: "StringTree",
 	toCodecStringTree: () => void 0
 }), /*#__PURE__*/ passthrough());
@@ -14736,14 +15556,14 @@ const unknownToStringTree = /*#__PURE__*/ new Link(/* @__PURE__ */ new Declarati
 const flatMapTransformation = (result, current, f) => result === sameExit ? f(current) : flatMapEager(result, f);
 function compileTransformation(transformation) {
 	if (transformation._tag === "Middleware") return (result, current, options) => {
-		const transformed = result === sameExit ? transformation.decode(succeed$1(toOption(current)), options) : transformation.decode(mapEager(result, toOption), options);
+		const transformed = result === sameExit ? transformation.decode(succeed$2(toOption(current)), options) : transformation.decode(mapEager(result, toOption), options);
 		return fromOptionalEffect(transformed);
 	};
 	const getter = transformation.decode;
 	switch (getter._tag) {
-		case "Passthrough": return (result, current) => result === sameExit ? succeed$1(current) : result;
+		case "Passthrough": return (result, current) => result === sameExit ? succeed$2(current) : result;
 		case "Transform": {
-			const transform = (value) => value === missing ? missingExit : succeed$1(getter.transform(value));
+			const transform = (value) => value === missing ? missingExit : succeed$2(getter.transform(value));
 			return (result, current) => flatMapTransformation(result, current, transform);
 		}
 		case "TransformOptional": {
@@ -14778,7 +15598,7 @@ function withDefault$2(ast, parser) {
 		}
 		return flatMapEager(wrapEncoding(ast, input, options, result), (value) => {
 			const local = parser(value, options);
-			return local === sameExit ? succeed$1(value) : local;
+			return local === sameExit ? succeed$2(value) : local;
 		});
 	};
 }
@@ -14806,15 +15626,15 @@ function compile(ast, compile, compileField, base, specialize) {
 					const output = result === sameExit ? input : result[args];
 					if (input !== missing && output !== missing) {
 						const issues = collectIssues(encodingChecks, input, void 0, ast, options);
-						if (issues) result = fail$1(new Composite(ast, issues, input, options));
+						if (issues) result = fail$2(new Composite(ast, issues, input, options));
 					}
 				}
 			} else result = flatMap$1(result, (value) => {
 				if (input !== missing && value !== missing) {
 					const issues = collectIssues(encodingChecks, input, void 0, ast, options);
-					if (issues) return fail$1(new Composite(ast, issues, input, options));
+					if (issues) return fail$2(new Composite(ast, issues, input, options));
 				}
-				return succeed$2(value);
+				return succeed$3(value);
 			});
 		}
 		if (checks && !options.disableChecks) {
@@ -14823,14 +15643,14 @@ function compile(ast, compile, compileField, base, specialize) {
 					const value = result === sameExit ? input : result[args];
 					if (value === missing) return result;
 					const issues = collectIssues(checks, value, void 0, ast, options);
-					if (issues) result = fail$1(new Composite(ast, issues, value, options));
+					if (issues) result = fail$2(new Composite(ast, issues, value, options));
 				}
 			} else result = flatMap$1(result, (value) => {
 				if (value !== missing) {
 					const issues = collectIssues(checks, value, void 0, ast, options);
-					if (issues) return fail$1(new Composite(ast, issues, value, options));
+					if (issues) return fail$2(new Composite(ast, issues, value, options));
 				}
-				return succeed$2(value);
+				return succeed$3(value);
 			});
 		}
 		return result;
@@ -14850,7 +15670,7 @@ function compile(ast, compile, compileField, base, specialize) {
 					result = next(current, options);
 				} else result = flatMapEager(result, (value) => {
 					const nextResult = next(value, options);
-					return nextResult === sameExit ? succeed$1(value) : nextResult;
+					return nextResult === sameExit ? succeed$2(value) : nextResult;
 				});
 			}
 		}
@@ -14862,17 +15682,17 @@ function compile(ast, compile, compileField, base, specialize) {
 		result = wrapEncoding(ast, input, options, result);
 		return flatMapEager(result, (value) => {
 			const local = parseLocal(value, options);
-			return local === sameExit ? succeed$1(value) : local;
+			return local === sameExit ? succeed$2(value) : local;
 		});
 	};
 }
 //#endregion
 //#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/compilerRegistry.js
 /** @internal */
-const invalid = /*#__PURE__*/ Symbol();
+const invalid$1 = /*#__PURE__*/ Symbol();
 const cache = /*#__PURE__*/ new WeakMap();
-const decodeChild = (ast) => resolve(ast).parser;
-const makeChild = (ast) => resolve(ast).makeEffect;
+const decodeChild = (ast) => resolve$1(ast).parser;
+const makeChild = (ast) => resolve$1(ast).makeEffect;
 const makeField = (ast) => compileField(ast, makeChild);
 var InterpretedEntry = class {
 	ast;
@@ -14890,7 +15710,7 @@ var InterpretedEntry = class {
 	}
 };
 /** @internal */
-function resolve(ast) {
+function resolve$1(ast) {
 	const cached = cache.get(ast);
 	if (cached !== void 0) return cached;
 	const entry = new InterpretedEntry(ast);
@@ -14990,7 +15810,7 @@ function makeOption(schema) {
 * @category constructors
 * @since 4.0.0
 */
-function make$18(schema) {
+function make$19(schema) {
 	return makeConstructorSync(toType(schema.ast));
 }
 /**
@@ -15071,15 +15891,15 @@ const mergeParseOptions = (options, overrideOptions) => overrideOptions ? {
 	...overrideOptions
 } : options;
 const getValue = (value) => {
-	if (value === missing) return fail$1(new InvalidValue$1());
-	return succeed$2(value);
+	if (value === missing) return fail$2(new InvalidValue$1());
+	return succeed$3(value);
 };
 /** @internal */
 function run$3(ast) {
 	return runWithCompiler(normalCompiler, ast);
 }
 function parserResult(result, input) {
-	if (result === sameExit) return succeed$2(input);
+	if (result === sameExit) return succeed$3(input);
 	if (!effectIsExit(result)) return flatMapEager(result, getValue);
 	return result[args] === missing ? getValue(missing) : result;
 }
@@ -15087,7 +15907,7 @@ function runWithCompiler(compiler, ast) {
 	let parser;
 	return (input, options) => {
 		const result = (parser ??= compiler(ast))(input, options ?? defaultParseOptions);
-		if (result === sameExit) return succeed$2(input);
+		if (result === sameExit) return succeed$3(input);
 		if (!effectIsExit(result)) return flatMapEager(result, getValue);
 		return result[args] === missing ? getValue(missing) : result;
 	};
@@ -15105,7 +15925,7 @@ function makeConstructorSync(ast) {
 	let entry;
 	let parser;
 	return (input, options) => {
-		entry ??= resolve(ast);
+		entry ??= resolve$1(ast);
 		const parseOptions = options?.disableChecks ? options.parseOptions ? {
 			...options.parseOptions,
 			disableChecks: true
@@ -15119,13 +15939,13 @@ function makeConstructorSync(ast) {
 				getSchemaIssueOrThrow(die$1(error), "Constructor adapter can only throw schema issues");
 				throw error;
 			}
-			if (output !== invalid && output !== missing) return output;
+			if (output !== invalid$1 && output !== missing) return output;
 		}
 		return runSync(parserResult((parser ??= entry.makeEffect)(input, parseOptions), input), "Constructor adapter can only throw schema issues");
 	};
 }
-const normalCompiler = (ast) => resolve(ast).parser;
-const constructorCompiler = (ast) => resolve(ast).makeEffect;
+const normalCompiler = (ast) => resolve$1(ast).parser;
+const constructorCompiler = (ast) => resolve$1(ast).makeEffect;
 //#endregion
 //#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/make.js
 /** @internal */
@@ -15134,7 +15954,7 @@ const RebuildOptions = /*#__PURE__*/ Symbol();
 const SchemaProto = {
 	[TypeId$19]: TypeId$19,
 	get make() {
-		const value = make$18(this);
+		const value = make$19(this);
 		Object.defineProperty(this, "make", {
 			value,
 			enumerable: true
@@ -15170,11 +15990,11 @@ const SchemaProto = {
 		return this.rebuild(appendChecks(this.ast, checks));
 	},
 	rebuild(ast) {
-		return make$17(ast, this[RebuildOptions]);
+		return make$18(ast, this[RebuildOptions]);
 	}
 };
 /** @internal */
-function make$17(ast, options) {
+function make$18(ast, options) {
 	function Schema() {}
 	const self = Object.setPrototypeOf(Schema, SchemaProto);
 	if (options && (Object.hasOwn(options, "name") || Object.hasOwn(options, "length") || Object.hasOwn(options, "__proto__"))) Object.defineProperties(self, Object.getOwnPropertyDescriptors({ ...options }));
@@ -15209,7 +16029,7 @@ function makeReorder(getPriority) {
 }
 /** @internal */
 function toCodecStringTree$1(schema) {
-	return make$17(toCodecStringTreeAST(schema.ast), { schema });
+	return make$18(toCodecStringTreeAST(schema.ast), { schema });
 }
 const toStringTreeReorder = /*#__PURE__*/ makeReorder((ast) => {
 	switch (ast._tag) {
@@ -15225,7 +16045,7 @@ const toStringTreeReorder = /*#__PURE__*/ makeReorder((ast) => {
 function toCodecStringTreeASTStep(ast, recur, onMissingAnnotation) {
 	switch (ast._tag) {
 		case "Declaration": {
-			const typeParameters = ast.typeParameters.map((tp) => make$17(recur(toEncoded(tp))));
+			const typeParameters = ast.typeParameters.map((tp) => make$18(recur(toEncoded(tp))));
 			const getStringTreeLink = ast.annotations?.toCodecStringTree;
 			if (isFunction(getStringTreeLink)) {
 				const link = getStringTreeLink(typeParameters);
@@ -15454,7 +16274,7 @@ function decodeUnknownEffect(schema, options) {
 * @category constructors
 * @since 3.10.0
 */
-const make$16 = make$17;
+const make$17 = make$18;
 /**
 * Checks whether a value is a `Schema`.
 *
@@ -15486,7 +16306,7 @@ function isSchema(u) {
 * @category combinators
 * @since 4.0.0
 */
-const optionalKey = /*#__PURE__*/ lambda((schema) => make$16(optionalKey$1(schema.ast), { schema }));
+const optionalKey = /*#__PURE__*/ lambda((schema) => make$17(optionalKey$1(schema.ast), { schema }));
 /**
 * Marks a struct field as optional, allowing the key to be absent or
 * `undefined`.
@@ -15518,7 +16338,7 @@ const optionalKey = /*#__PURE__*/ lambda((schema) => make$16(optionalKey$1(schem
 */
 const optional$2 = /*#__PURE__*/ lambda((self) => {
 	const schema = UndefinedOr(self);
-	return make$16(optional$3(self.ast), { schema });
+	return make$17(optional$3(self.ast), { schema });
 });
 /**
 * Creates a schema for a single literal value (string, number, bigint, boolean, or null).
@@ -15540,7 +16360,7 @@ const optional$2 = /*#__PURE__*/ lambda((self) => {
 * @since 3.10.0
 */
 function Literal(literal) {
-	const out = make$16(new Literal$1(literal), {
+	const out = make$17(new Literal$1(literal), {
 		literal,
 		transform(to) {
 			return out.pipe(decodeTo(Literal(to), {
@@ -15563,7 +16383,7 @@ function Literal(literal) {
 * @category schemas
 * @since 3.10.0
 */
-const Unknown = /*#__PURE__*/ make$16(unknown);
+const Unknown = /*#__PURE__*/ make$17(unknown);
 /**
 * Schema for the `undefined` literal. Validates that the input is strictly `undefined`.
 *
@@ -15571,14 +16391,14 @@ const Unknown = /*#__PURE__*/ make$16(unknown);
 * @category schemas
 * @since 3.10.0
 */
-const Undefined = /*#__PURE__*/ make$16(undefined_);
+const Undefined = /*#__PURE__*/ make$17(undefined_);
 /**
 * Schema for `string` values. Validates that the input is `typeof` `"string"`.
 *
 * @category schemas
 * @since 4.0.0
 */
-const String$5 = /*#__PURE__*/ make$16(string);
+const String$5 = /*#__PURE__*/ make$17(string);
 /**
 * Schema for `boolean` values. Validates that the input is `typeof` `"boolean"`.
 *
@@ -15591,9 +16411,9 @@ const String$5 = /*#__PURE__*/ make$16(string);
 * @category schemas
 * @since 4.0.0
 */
-const Boolean$4 = /*#__PURE__*/ make$16(boolean);
+const Boolean$4 = /*#__PURE__*/ make$17(boolean);
 function makeStruct(ast, fields) {
-	return make$16(ast, {
+	return make$17(ast, {
 		fields,
 		mapFields(f, options) {
 			const fields = f(this.fields);
@@ -15642,9 +16462,9 @@ function Struct(fields) {
 * @category constructors
 * @since 4.0.0
 */
-const ArraySchema = /*#__PURE__*/ lambda((schema) => make$16(new Arrays(false, [], [schema.ast]), { value: schema }));
+const ArraySchema = /*#__PURE__*/ lambda((schema) => make$17(new Arrays(false, [], [schema.ast]), { value: schema }));
 function makeUnion(ast, members) {
-	return make$16(ast, {
+	return make$17(ast, {
 		members,
 		mapMembers(f, options) {
 			const members = f(this.members);
@@ -15697,7 +16517,7 @@ function Union(members, options) {
 */
 function Literals$3(literals) {
 	const members = literals.map(Literal);
-	return make$16(union(members, void 0, void 0), {
+	return make$17(union(members, void 0, void 0), {
 		literals,
 		members,
 		mapMembers(f) {
@@ -15720,7 +16540,7 @@ function Literals$3(literals) {
 const UndefinedOr = /*#__PURE__*/ lambda((self) => Union([self, Undefined]));
 function decodeTo(to, transformation) {
 	return (from) => {
-		return make$16(decodeTo$1(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough()), {
+		return make$17(decodeTo$1(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough()), {
 			from,
 			to
 		});
@@ -15774,7 +16594,7 @@ const BooleanLiterals = /*#__PURE__*/ Literals$3([...TrueLiterals.literals, ...F
 * @since 3.10.0
 */
 function withConstructorDefault(defaultValue) {
-	return (schema) => make$16(withConstructorDefault$1(schema.ast, defaultValue), { schema });
+	return (schema) => make$17(withConstructorDefault$1(schema.ast, defaultValue), { schema });
 }
 /**
 * Combines a {@link Literal} schema with {@link withConstructorDefault}, making it ideal
@@ -15799,7 +16619,7 @@ function withConstructorDefault(defaultValue) {
 * @since 3.10.0
 */
 function tag(literal) {
-	return Literal(literal).pipe(withConstructorDefault(succeed$2(literal)));
+	return Literal(literal).pipe(withConstructorDefault(succeed$3(literal)));
 }
 /**
 * Creates a struct schema with an automatically populated `_tag` field.
@@ -15957,7 +16777,7 @@ function makeClass(Inherited, identifier, struct$1, annotations, proto) {
 			return getClassSchema(this).rebuild(ast);
 		}
 		static make(input, options) {
-			return make$18(getClassSchema(this))(input ?? {}, options);
+			return make$19(getClassSchema(this))(input ?? {}, options);
 		}
 		static makeOption(input, options) {
 			return makeOption(getClassSchema(this))(input ?? {}, options);
@@ -16008,8 +16828,8 @@ function getClassSchemaFactory(from, identifier, annotations) {
 		const ClassTypeId = getClassTypeId(identifier);
 		const isClassValue = (input) => input instanceof self || hasProperty(input, ClassTypeId);
 		const transformation = getClassTransformation(self);
-		return memo = decodeTo(make$16(new Declaration([from.ast], () => (input, ast, options) => {
-			return isClassValue(input) ? succeed$2(input) : fail$1(new InvalidType(ast, input, options));
+		return memo = decodeTo(make$17(new Declaration([from.ast], () => (input, ast, options) => {
+			return isClassValue(input) ? succeed$3(input) : fail$2(new InvalidType(ast, input, options));
 		}, {
 			identifier,
 			[CONSTRUCTOR_ANNOTATION_KEY]: ([from]) => ({
@@ -16129,7 +16949,7 @@ const toCodecStringTree = toCodecStringTree$1;
 * @category schemas
 * @since 4.0.0
 */
-const Json = /*#__PURE__*/ make$16(/*#__PURE__*/ annotate$1(Json$1, { toCode: () => ({
+const Json = /*#__PURE__*/ make$17(/*#__PURE__*/ annotate$1(Json$1, { toCode: () => ({
 	runtime: "Schema.Json",
 	Type: "Schema.Json"
 }) }));
@@ -16153,7 +16973,7 @@ const Json = /*#__PURE__*/ make$16(/*#__PURE__*/ annotate$1(Json$1, { toCode: ()
 function nominal() {
 	return Object.assign((input) => input, {
 		option: (input) => some(input),
-		result: (input) => succeed$6(input),
+		result: (input) => succeed$7(input),
 		is: (_) => true
 	});
 }
@@ -16304,7 +17124,7 @@ const MutableRefProto = {
 * @category constructors
 * @since 2.0.0
 */
-const make$15 = (value) => {
+const make$16 = (value) => {
 	const ref = Object.create(MutableRefProto);
 	ref.current = value;
 	return ref;
@@ -16353,7 +17173,7 @@ const Empty = /*#__PURE__*/ Symbol.for("effect/MutableList/Empty");
 * @category constructors
 * @since 2.0.0
 */
-const make$14 = () => ({
+const make$15 = () => ({
 	head: void 0,
 	tail: void 0,
 	length: 0
@@ -16582,12 +17402,12 @@ const QueueProto = {
 * @category constructors
 * @since 4.0.0
 */
-const make$13 = (options) => withFiber$1((fiber) => {
+const make$14 = (options) => withFiber$1((fiber) => {
 	const self = Object.create(QueueProto);
 	self.dispatcher = fiber.currentDispatcher;
 	self.capacity = options?.capacity ?? Number.POSITIVE_INFINITY;
 	self.strategy = options?.strategy ?? "suspend";
-	self.messages = make$14();
+	self.messages = make$15();
 	self.scheduleRunning = false;
 	self.state = {
 		_tag: "Open",
@@ -16595,7 +17415,7 @@ const make$13 = (options) => withFiber$1((fiber) => {
 		offers: /* @__PURE__ */ new Set(),
 		awaiters: /* @__PURE__ */ new Set()
 	};
-	return succeed$5(self);
+	return succeed$6(self);
 });
 /**
 * Creates a bounded queue with the specified capacity that uses backpressure strategy.
@@ -16627,7 +17447,7 @@ const make$13 = (options) => withFiber$1((fiber) => {
 * @category constructors
 * @since 2.0.0
 */
-const bounded = (capacity) => make$13({ capacity });
+const bounded = (capacity) => make$14({ capacity });
 /**
 * Adds a message to the queue. Returns `false` if the queue is done.
 *
@@ -16743,7 +17563,7 @@ const offerUnsafe = (self, message) => {
 * @category completion
 * @since 4.0.0
 */
-const failCause = /*#__PURE__*/ dual(2, (self, cause) => sync$1(() => failCauseUnsafe(self, cause)));
+const failCause = /*#__PURE__*/ dual(2, (self, cause) => sync$2(() => failCauseUnsafe(self, cause)));
 /**
 * Fails the queue with a cause synchronously. If the queue is already done, `false` is
 * returned.
@@ -16882,7 +17702,7 @@ const endUnsafe = (self) => failCauseUnsafe(self, causeFail(Done$1()));
 * @category completion
 * @since 2.0.0
 */
-const shutdown = (self) => sync$1(() => shutdownUnsafe(self));
+const shutdown = (self) => sync$2(() => shutdownUnsafe(self));
 /**
 * Shuts down the queue synchronously, discarding buffered messages and resuming
 * pending operations.
@@ -17070,9 +17890,9 @@ const take = (self) => suspend$3(() => takeUnsafe(self) ?? andThen$1(awaitTake(s
 */
 const poll = (self) => suspend$3(() => {
 	const result = takeUnsafe(self);
-	if (result === void 0) return succeed$5(none());
-	if (result._tag === "Success") return succeed$5(some(result.value));
-	return succeed$5(none());
+	if (result === void 0) return succeed$6(none());
+	if (result._tag === "Success") return succeed$6(some(result.value));
+	return succeed$6(none());
 });
 /**
 * Attempts to take one message from the queue synchronously.
@@ -17211,7 +18031,7 @@ const awaitTake = (self, ready) => callback$2((resume) => {
 	if (self.state._tag === "Done") return resume(self.state.exit);
 	if (ready()) return resume(exitVoid);
 	self.state.takers.add(resume);
-	return sync$1(() => {
+	return sync$2(() => {
 		if (self.state._tag !== "Done") self.state.takers.delete(resume);
 	});
 });
@@ -17224,7 +18044,7 @@ const waitToOffer = (self, entry) => {
 	if (self.state._tag !== "Open") return resumeUnoffered(entry);
 	const offers = self.state.offers;
 	offers.add(entry);
-	return sync$1(() => {
+	return sync$2(() => {
 		if (self.state._tag === "Done") return;
 		offers.delete(entry);
 		if (self.state._tag === "Closing" && offers.size === 0 && self.messages.length === 0) finalize(self, self.state.exit);
@@ -17335,7 +18155,7 @@ const waitForPermits = (self, n, effect) => callback$2((resume) => {
 		resume(effect);
 	};
 	self.waiters.add(observer);
-	return sync$1(() => {
+	return sync$2(() => {
 		self.waiters.delete(observer);
 	});
 });
@@ -17353,15 +18173,15 @@ var SemaphoreImpl = class {
 		const take = suspend$3(() => {
 			if (this.free < n) return waitForPermits(this, n, take);
 			this.taken += n;
-			return succeed$5(n);
+			return succeed$6(n);
 		});
 		return take;
 	}
 	takeIfAvailable(n) {
 		return suspend$3(() => {
-			if (this.free < n) return succeed$5(false);
+			if (this.free < n) return succeed$6(false);
 			this.taken += n;
-			return succeed$5(true);
+			return succeed$6(true);
 		});
 	}
 	releaseUnsafe(fiber, n) {
@@ -17383,10 +18203,10 @@ var SemaphoreImpl = class {
 		});
 	}
 	release(n) {
-		return withFiber$1((fiber) => succeed$5(this.releaseUnsafe(fiber, n)));
+		return withFiber$1((fiber) => succeed$6(this.releaseUnsafe(fiber, n)));
 	}
 	get releaseAll() {
-		return withFiber$1((fiber) => succeed$5(this.releaseUnsafe(fiber, this.taken)));
+		return withFiber$1((fiber) => succeed$6(this.releaseUnsafe(fiber, this.taken)));
 	}
 	withPermits(n) {
 		return (self) => uninterruptibleMask$1((restore) => {
@@ -17483,7 +18303,7 @@ const ChannelProto = {
 */
 const fromTransform$1 = (transform) => {
 	const self = Object.create(ChannelProto);
-	self.transform = (upstream, scope) => catchCause(transform(upstream, scope), (cause) => succeed$2(failCause$1(cause)));
+	self.transform = (upstream, scope) => catchCause(transform(upstream, scope), (cause) => succeed$3(failCause$1(cause)));
 	return self;
 };
 /**
@@ -17573,7 +18393,7 @@ const fromTransformBracket = (f) => fromTransform$1(fnUntraced(function* (upstre
 * @since 4.0.0
 */
 const toTransform = (channel) => channel.transform;
-const asyncQueue = (scope, f, options) => make$13({
+const asyncQueue = (scope, f, options) => make$14({
 	capacity: options?.bufferSize,
 	strategy: options?.strategy
 }).pipe(tap((queue) => addFinalizer$1(scope, shutdown(queue))), tap((queue) => forkIn(provide$2(f(queue), scope), scope)));
@@ -17614,6 +18434,22 @@ const callbackArray = (f, options) => fromTransform$1((_, scope) => map$5(asyncQ
 */
 const suspend$1 = (evaluate) => fromTransform$1((upstream, scope) => suspend$2(() => toTransform(evaluate())(upstream, scope)));
 /**
+* Creates a `Channel` that emits a single value and then ends.
+*
+* **Example** (Creating channels that succeed)
+*
+* ```ts import.meta.vitest
+* import { Channel, Effect } from "effect"
+*
+* const channel = Channel.succeed(42)
+* Effect.runSync(Channel.runCollect(channel)) // => [42]
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const succeed$1 = (value) => fromEffect(succeed$3(value));
+/**
 * Represents a `Channel` that emits no elements.
 *
 * **Example** (Creating empty channels)
@@ -17638,7 +18474,32 @@ const suspend$1 = (evaluate) => fromTransform$1((upstream, scope) => suspend$2((
 * @category constructors
 * @since 4.0.0
 */
-const empty$1 = /*#__PURE__*/ fromPull$1(/*#__PURE__*/ succeed$2(/*#__PURE__*/ done()));
+const empty$1 = /*#__PURE__*/ fromPull$1(/*#__PURE__*/ succeed$3(/*#__PURE__*/ done()));
+/**
+* Uses an effect to write a single value to the channel.
+*
+* **Example** (Creating channels from effects)
+*
+* ```ts import.meta.vitest
+* import { Channel, Effect } from "effect"
+*
+* const successChannel = Channel.fromEffect(
+*   Effect.succeed("Hello from effect!")
+* )
+* Effect.runSync(Channel.runCollect(successChannel)) // => ["Hello from effect!"]
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const fromEffect = (effect) => fromPull$1(sync$1(() => {
+	let done$15 = false;
+	return suspend$2(() => {
+		if (done$15) return done();
+		done$15 = true;
+		return effect;
+	});
+}));
 /**
 * Maps the output of this channel using the specified function.
 *
@@ -17679,7 +18540,7 @@ const empty$1 = /*#__PURE__*/ fromPull$1(/*#__PURE__*/ succeed$2(/*#__PURE__*/ d
 * @category sequencing
 * @since 2.0.0
 */
-const map$4 = /*#__PURE__*/ dual(2, (self, f) => transformPull$1(self, (pull) => sync(() => {
+const map$4 = /*#__PURE__*/ dual(2, (self, f) => transformPull$1(self, (pull) => sync$1(() => {
 	let i = 0;
 	return map$5(pull, (o) => f(o, i++));
 })));
@@ -17689,7 +18550,7 @@ const map$4 = /*#__PURE__*/ dual(2, (self, f) => transformPull$1(self, (pull) =>
 * @category sequencing
 * @since 4.0.0
 */
-const mapDone = /*#__PURE__*/ dual(2, (self, f) => mapDoneEffect(self, (o) => succeed$2(f(o))));
+const mapDone = /*#__PURE__*/ dual(2, (self, f) => mapDoneEffect(self, (o) => succeed$3(f(o))));
 /**
 * Maps the done value of this channel using the specified effectful function.
 *
@@ -17701,7 +18562,7 @@ const mapDone = /*#__PURE__*/ dual(2, (self, f) => mapDoneEffect(self, (o) => su
 * @category sequencing
 * @since 4.0.0
 */
-const mapDoneEffect = /*#__PURE__*/ dual(2, (self, f) => transformPull$1(self, (pull) => succeed$2(catchDone(pull, (done$17) => flatMap$1(f(done$17), done)))));
+const mapDoneEffect = /*#__PURE__*/ dual(2, (self, f) => transformPull$1(self, (pull) => succeed$3(catchDone(pull, (done$17) => flatMap$1(f(done$17), done)))));
 /**
 * Returns a new channel, which is the merge of this channel and the specified
 * channel.
@@ -17771,7 +18632,7 @@ const merge$1 = /*#__PURE__*/ dual((args) => isChannel(args[0]) && isChannel(arg
 * @category splitting
 * @since 2.0.0
 */
-const splitLines$1 = () => fromTransform$1((upstream, _scope) => sync(() => {
+const splitLines$1 = () => fromTransform$1((upstream, _scope) => sync$1(() => {
 	let stringBuilder = "";
 	let midCRLF = false;
 	let done$13 = none();
@@ -17829,7 +18690,7 @@ const splitLines$1 = () => fromTransform$1((upstream, _scope) => sync(() => {
 					const last = stringBuilder;
 					stringBuilder = "";
 					midCRLF = false;
-					return succeed$2([last]);
+					return succeed$3([last]);
 				}
 				return done(leftover);
 			}
@@ -17837,7 +18698,7 @@ const splitLines$1 = () => fromTransform$1((upstream, _scope) => sync(() => {
 	});
 	function loop(chunk) {
 		const lines = splitLinesArray(chunk);
-		return lines !== null ? succeed$2(lines) : pullOrFlush;
+		return lines !== null ? succeed$3(lines) : pullOrFlush;
 	}
 	return pullOrFlush;
 }));
@@ -17899,7 +18760,7 @@ const pipeTo = /*#__PURE__*/ dual(2, (self, that) => fromTransform$1((upstream, 
 */
 const unwrap$2 = (channel) => fromTransform$1((upstream, scope) => {
 	let pull;
-	return succeed$2(suspend$2(() => {
+	return succeed$3(suspend$2(() => {
 		if (pull) return pull;
 		return channel.pipe(provide$2(scope), flatMap$1((channel) => toTransform(channel)(upstream, scope)), flatMap$1((pull_) => pull = pull_));
 	}));
@@ -17907,7 +18768,7 @@ const unwrap$2 = (channel) => fromTransform$1((upstream, scope) => {
 const runWith$1 = (self, f, onHalt) => suspend$2(() => {
 	const scope = makeUnsafe$4();
 	const makePull = toTransform(self)(done(), scope);
-	return catchDone(flatMap$1(makePull, f), onHalt ? onHalt : succeed$2).pipe(onExit((exit) => close(scope, exit)));
+	return catchDone(flatMap$1(makePull, f), onHalt ? onHalt : succeed$3).pipe(onExit((exit) => close(scope, exit)));
 });
 /**
 * Runs a channel and folds over all output elements with an accumulator.
@@ -17941,7 +18802,7 @@ const runFold = /*#__PURE__*/ dual(3, (self, initial, f) => suspend$2(() => {
 		step: (value) => {
 			state = f(state, value);
 		}
-	}), () => succeed$2(state));
+	}), () => succeed$3(state));
 }));
 /**
 * Converts a channel to a Pull within an existing scope.
@@ -18145,7 +19006,7 @@ const fromChannel$2 = (channel) => new Stream(channel);
 //#endregion
 //#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Sink.js
 const TypeId$12 = "~effect/Sink";
-const endVoid = /*#__PURE__*/ succeed$2([void 0]);
+const endVoid = /*#__PURE__*/ succeed$3([void 0]);
 const sinkVariance = {
 	_A: identity,
 	_In: identity,
@@ -18204,7 +19065,7 @@ const isSink = (u) => hasProperty(u, TypeId$12);
 * @category constructors
 * @since 2.0.0
 */
-const fromChannel$1 = (channel) => fromTransform((upstream, scope) => toTransform(channel)(upstream, scope).pipe(flatMap$1(forever({ disableYield: true })), catchDone(succeed$2)));
+const fromChannel$1 = (channel) => fromTransform((upstream, scope) => toTransform(channel)(upstream, scope).pipe(flatMap$1(forever({ disableYield: true })), catchDone(succeed$3)));
 /**
 * Creates a `Sink` from a low-level transform function.
 *
@@ -18240,7 +19101,7 @@ const fromTransform = (transform) => {
 * @category constructors
 * @since 2.0.0
 */
-const toChannel$1 = (self) => fromTransform$1((upstream, scope) => succeed$2(flatMap$1(self.transform(upstream, scope), done)));
+const toChannel$1 = (self) => fromTransform$1((upstream, scope) => succeed$3(flatMap$1(self.transform(upstream, scope), done)));
 /**
 * Consumes and ignores all stream inputs.
 *
@@ -18353,7 +19214,7 @@ var RcRefImpl = class {
 	}
 };
 /** @internal */
-const make$12 = (options) => withFiber((fiber) => {
+const make$13 = (options) => withFiber((fiber) => {
 	const context = fiber.context;
 	const scope = get$2(context, Scope);
 	const ref = new RcRefImpl(options.acquire, context, scope, options.idleTimeToLive !== void 0 ? fromInputUnsafe$1(options.idleTimeToLive) : void 0);
@@ -18369,7 +19230,7 @@ const getState = (self, restore) => {
 		case "Acquired": {
 			const state = self.state;
 			state.refCount++;
-			return state.fiber ? as(interrupt(state.fiber), state) : succeed$2(state);
+			return state.fiber ? as(interrupt(state.fiber), state) : succeed$3(state);
 		}
 		case "Empty": return self.semaphore.withPermit(suspend$2(() => {
 			if (self.state._tag !== "Empty") return getState(self, restore);
@@ -18385,7 +19246,7 @@ const getState = (self, restore) => {
 					invalidated: false
 				};
 				self.state = state;
-				return succeed$2(state);
+				return succeed$3(state);
 			}), onExit((exit) => isFailure(exit) ? close(scope, exit) : void_));
 		}));
 	}
@@ -18409,7 +19270,7 @@ const release = (self, state) => {
 			return close(state.scope, void_$1);
 		}
 		return void_;
-	})).pipe(ensuring(sync(() => {
+	})).pipe(ensuring(sync$1(() => {
 		state.fiber = void 0;
 	})), runForkWith(self.context), runIn(self.scope));
 	return void_;
@@ -18462,7 +19323,7 @@ const release = (self, state) => {
 * @category constructors
 * @since 3.5.0
 */
-const make$11 = make$12;
+const make$12 = make$13;
 /**
 * Gets the value from an `RcRef`, acquiring it first if needed.
 *
@@ -18686,6 +19547,23 @@ const callback = (f, options) => fromChannel(callbackArray(f, options));
 */
 const empty = /*#__PURE__*/ fromChannel(empty$1);
 /**
+* Creates a stream from a sequence of values.
+*
+* **Example** (Creating a stream from a sequence of values)
+*
+* ```ts import.meta.vitest
+* import { Effect, Stream } from "effect"
+*
+* const stream = Stream.make(1, 2, 3)
+*
+* await Effect.runPromise(Stream.runCollect(stream)) // => [1, 2, 3]
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const make$11 = (...values) => fromArray(values);
+/**
 * Creates a lazily constructed stream.
 *
 * **Details**
@@ -18704,6 +19582,27 @@ const empty = /*#__PURE__*/ fromChannel(empty$1);
 * @since 2.0.0
 */
 const suspend = (stream) => fromChannel(suspend$1(() => stream().channel));
+/**
+* Creates a stream from an array of values.
+*
+* **Example** (Creating a stream from an array of values)
+*
+* ```ts import.meta.vitest
+* import { Effect, Stream } from "effect"
+*
+* const program = Effect.gen(function*() {
+*   const stream = Stream.fromArray([1, 2, 3])
+*   const values = yield* Stream.runCollect(stream)
+*   values // => [1, 2, 3]
+* })
+*
+* await Effect.runPromise(program)
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const fromArray = (array) => isReadonlyArrayNonEmpty(array) ? fromChannel(succeed$1(array)) : empty;
 /**
 * Creates a stream produced from an `Effect`.
 *
@@ -18796,18 +19695,18 @@ const merge = /*#__PURE__*/ dual((args) => isStream(args[0]) && isStream(args[1]
 * @category aggregation
 * @since 2.0.0
 */
-const transduce = /*#__PURE__*/ dual(2, (self, sink) => transformPull(self, (upstream, scope) => sync(() => {
+const transduce = /*#__PURE__*/ dual(2, (self, sink) => transformPull(self, (upstream, scope) => sync$1(() => {
 	let done$9;
 	let leftover;
 	const upstreamWithLeftover = suspend$2(() => {
 		if (leftover !== void 0) {
 			const chunk = leftover;
 			leftover = void 0;
-			return succeed$2(chunk);
+			return succeed$3(chunk);
 		}
 		return upstream;
 	}).pipe(catch_((error) => {
-		done$9 = fail$2(error);
+		done$9 = fail$3(error);
 		return done();
 	}));
 	const pull = map$5(suspend$2(() => sink.transform(upstreamWithLeftover, scope)), ([value, leftover_]) => {
@@ -19012,7 +19911,7 @@ const FileSystem = /*#__PURE__*/ Service("effect/FileSystem");
 const make$10 = (impl) => FileSystem.of({
 	...impl,
 	[TypeId$9]: TypeId$9,
-	exists: (path) => pipe(impl.access(path), as(true), catchTag("PlatformError", (e) => e.reason._tag === "NotFound" ? succeed$2(false) : fail$1(e))),
+	exists: (path) => pipe(impl.access(path), as(true), catchTag("PlatformError", (e) => e.reason._tag === "NotFound" ? succeed$3(false) : fail$2(e))),
 	readFileString: (path, encoding) => flatMap$1(impl.readFile(path), (_) => try_({
 		try: () => new TextDecoder(encoding).decode(_),
 		catch: (cause) => badArgument({
@@ -19030,14 +19929,14 @@ const make$10 = (impl) => FileSystem.of({
 		let totalBytesRead = BigInt(0);
 		const chunkSize = Number(BigInt(options?.chunkSize ?? 65536));
 		const readChunk = file.readAlloc(chunkSize);
-		return fromPull(succeed$2(flatMap$1(suspend$2(() => {
+		return fromPull(succeed$3(flatMap$1(suspend$2(() => {
 			if (bytesToRead !== void 0 && bytesToRead <= totalBytesRead) return done();
 			return bytesToRead !== void 0 && bytesToRead - totalBytesRead < chunkSize ? file.readAlloc(Number(bytesToRead - totalBytesRead)) : readChunk;
 		}), match$5({
 			onNone: () => done(),
 			onSome: (buf) => {
 				totalBytesRead += BigInt(buf.length);
-				return succeed$2(of(buf));
+				return succeed$3(of(buf));
 			}
 		}))));
 	}, unwrap),
@@ -19305,7 +20204,7 @@ const consoleWith = (f) => withFiber$1((fiber) => f(fiber.getRef(Console)));
 * @category accessors
 * @since 2.0.0
 */
-const error = (...args) => consoleWith((console) => sync$1(() => {
+const error = (...args) => consoleWith((console) => sync$2(() => {
 	console.error(...args);
 }));
 /**
@@ -19338,7 +20237,7 @@ const error = (...args) => consoleWith((console) => sync$1(() => {
 * @category accessors
 * @since 2.0.0
 */
-const log = (...args) => consoleWith((console) => sync$1(() => {
+const log = (...args) => consoleWith((console) => sync$2(() => {
 	console.log(...args);
 }));
 //#endregion
@@ -19377,9 +20276,9 @@ const stringify = (bytes) => {
 		bytes.subarray(10, 16)
 	].map((segment) => Array.from(segment, hex).join("")).join("-");
 };
-const randomBytes = () => globalThis.crypto.getRandomValues(/* @__PURE__ */ new Uint8Array(16));
+const randomBytes$1 = () => globalThis.crypto.getRandomValues(/* @__PURE__ */ new Uint8Array(16));
 /** @internal */
-function v4Bytes(bytes = randomBytes()) {
+function v4Bytes(bytes = randomBytes$1()) {
 	bytes[6] = bytes[6] & 15 | 64;
 	bytes[8] = bytes[8] & 63 | 128;
 	return bytes;
@@ -19388,7 +20287,7 @@ function v4Bytes(bytes = randomBytes()) {
 const v4String = (bytes) => stringify(bytes === void 0 ? v4Bytes() : v4Bytes(bytes));
 const maxV7Timestamp = 2 ** 48 - 1;
 /** @internal */
-function v7Bytes(timestampMillis, bytes = randomBytes()) {
+function v7Bytes(timestampMillis, bytes = randomBytes$1()) {
 	const timestamp = Math.min(Math.max(0, Math.trunc(timestampMillis)), maxV7Timestamp);
 	bytes[0] = Math.floor(timestamp / 2 ** 40);
 	bytes[1] = Math.floor(timestamp / 2 ** 32) & 255;
@@ -19491,19 +20390,19 @@ const make$9 = (impl) => {
 		nextDoubleUnsafe,
 		nextIntUnsafe,
 		digest: impl.digest,
-		random: sync(() => nextDoubleUnsafe()),
-		randomBoolean: sync(() => nextDoubleUnsafe() > .5),
-		randomInt: sync(() => nextIntUnsafe()),
-		randomBetween: (min, max) => sync(() => nextBetween(min, max, nextDoubleUnsafe())),
+		random: sync$1(() => nextDoubleUnsafe()),
+		randomBoolean: sync$1(() => nextDoubleUnsafe() > .5),
+		randomInt: sync$1(() => nextIntUnsafe()),
+		randomBetween: (min, max) => sync$1(() => nextBetween(min, max, nextDoubleUnsafe())),
 		randomIntBetween(min, max, options) {
 			const extra = options?.halfOpen === true ? 0 : 1;
-			return sync(() => {
+			return sync$1(() => {
 				const minInt = Math.ceil(min);
 				const maxInt = Math.floor(max);
 				return Math.floor(nextDoubleUnsafe() * (maxInt - minInt + extra)) + minInt;
 			});
 		},
-		randomShuffle: (elements) => sync(() => {
+		randomShuffle: (elements) => sync$1(() => {
 			const buffer = Array.from(elements);
 			for (let i = buffer.length - 1; i >= 1; i = i - 1) {
 				const index = Math.min(i, Math.floor(nextDoubleUnsafe() * (i + 1)));
@@ -19513,18 +20412,158 @@ const make$9 = (impl) => {
 			}
 			return buffer;
 		}),
-		randomUUIDv4: sync(() => v4String(randomBytesUnsafe(16))),
-		randomUUIDv7: clockWith((clock) => succeed$2(v7String(clock.currentTimeMillisUnsafe(), randomBytesUnsafe(16)))),
-		randomULID: clockWith((clock) => succeed$2(ulidString(clock.currentTimeMillisUnsafe(), randomBytesUnsafe(10))))
+		randomUUIDv4: sync$1(() => v4String(randomBytesUnsafe(16))),
+		randomUUIDv7: clockWith((clock) => succeed$3(v7String(clock.currentTimeMillisUnsafe(), randomBytesUnsafe(16)))),
+		randomULID: clockWith((clock) => succeed$3(ulidString(clock.currentTimeMillisUnsafe(), randomBytesUnsafe(10))))
 	});
 };
-const validateSize = (method, size) => Number.isSafeInteger(size) && size >= 0 ? succeed$2(size) : fail$1(badArgument({
+const validateSize = (method, size) => Number.isSafeInteger(size) && size >= 0 ? succeed$3(size) : fail$2(badArgument({
 	module: "Crypto",
 	method,
 	description: "size must be a non-negative safe integer"
 }));
 //#endregion
 //#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Runtime.js
+/**
+* Helpers for turning an `Effect` program into a host application's main entry
+* point. This module is the low-level layer used by platform adapters to run a
+* main effect, observe its fiber, report unhandled failures, and translate the
+* resulting `Exit` into an application or process exit code. It provides
+* `makeRunMain`, the default teardown behavior, and error markers for custom
+* exit codes and already-reported failures. Application code usually calls the
+* platform-provided runner instead of using this module directly.
+*
+* @since 4.0.0
+*/
+/**
+* The default teardown function that determines exit codes from an Effect exit.
+*
+* **When to use**
+*
+* Use as the standard teardown for main programs with conventional process
+* exit codes and support for {@link errorExitCode}.
+*
+* **Details**
+*
+* This teardown follows these exit-code rules:
+*
+* - `0` for successful completion.
+* - `130` for interruption-only failures.
+* - The squashed error's {@link errorExitCode} value for other failures when
+*   present.
+* - `1` for other failures.
+*
+* **Gotchas**
+*
+* The `130` code is used only when the Cause contains interruptions and no
+* other failure reasons. Mixed causes use the squashed error path instead.
+*
+* **Example** (Referencing default teardown)
+*
+* ```ts import.meta.vitest
+* import { Exit, Runtime } from "effect"
+*
+* const exitCodes: Array<number> = []
+* const collectExitCode = (exit: Exit.Exit<any, any>) =>
+*   Runtime.defaultTeardown(exit, (code) => exitCodes.push(code))
+*
+* collectExitCode(Exit.succeed(42))
+* collectExitCode(Exit.fail("error"))
+* collectExitCode(Exit.interrupt(123))
+*
+* exitCodes // => [0, 1, 130]
+* ```
+*
+* @see {@link errorExitCode} for customizing failure exit codes
+*
+* @category running
+* @since 4.0.0
+*/
+const defaultTeardown = (exit, onExit) => {
+	if (isSuccess(exit)) return onExit(0);
+	if (hasInterruptsOnly(exit.cause)) return onExit(130);
+	return onExit(getErrorExitCode(squash(exit.cause)));
+};
+/**
+* Creates a platform-specific main program runner that handles Effect execution lifecycle.
+*
+* **When to use**
+*
+* Use when building a runtime adapter for a host platform.
+*
+* **Details**
+*
+* The runner executes Effect programs as main entry points. The provided
+* function receives a forked fiber and a teardown callback so it can install
+* platform-specific signal handling, fiber observers, and final exit behavior.
+*
+* Most applications should use a platform-provided runner, such as
+* `NodeRuntime.runMain`, rather than constructing one directly.
+*
+* `disableErrorReporting` disables the automatic log emitted for unreported
+* non-interruption failures. It does not change exit-code calculation or the
+* custom teardown callback.
+*
+* **Gotchas**
+*
+* The setup function is responsible for observing the fiber and eventually
+* invoking teardown. `makeRunMain` also tries to keep the host process alive
+* with a long interval while the main fiber is running; if the host blocks
+* timers, the runner still starts but cannot use that keep-alive fallback.
+*
+* **Example** (Creating platform runners)
+*
+* ```ts import.meta.vitest
+* import { Effect, Exit, Runtime } from "effect"
+*
+* const events: Array<string> = []
+* const completed = new Promise<readonly [Exit.Exit<unknown, unknown>, number]>((resolve) => {
+* // Create a simple runner for a hypothetical platform
+*   const runMain = Runtime.makeRunMain(({ fiber, teardown }) => {
+*     // Handle fiber completion
+*     fiber.addObserver((exit) => {
+*       teardown(exit, (code) => resolve([exit, code]))
+*     })
+*   })
+*
+*   // Use the runner
+*   const program = Effect.sync(() => {
+*     events.push("Starting program", "Program completed")
+*     return "success"
+*   })
+*
+*   runMain(program, {
+*     teardown: (exit, onExit) => {
+*       events.push("Custom teardown logic")
+*       Runtime.defaultTeardown(exit, onExit)
+*     }
+*   })
+* })
+*
+* const result = await completed
+* result // => [Exit.succeed("success"), 0]
+* events // => ["Starting program", "Program completed", "Custom teardown logic"]
+* ```
+*
+* @category running
+* @since 4.0.0
+*/
+const makeRunMain = (f) => dual((args) => isEffect(args[0]), (effect, options) => {
+	const fiber = options?.disableErrorReporting === true ? runFork(effect) : runFork(tapCause(effect, (cause) => {
+		if (hasInterruptsOnly(cause)) return void_;
+		return getErrorReported(squash(cause)) ? logError(cause) : void_;
+	}));
+	try {
+		const keepAlive = globalThis.setInterval(constVoid, 2147483647);
+		fiber.addObserver(() => {
+			clearInterval(keepAlive);
+		});
+	} catch {}
+	return f({
+		fiber,
+		teardown: options?.teardown ?? defaultTeardown
+	});
+});
 /**
 * Allows associating an exit code with an error for determining the process
 * exit code on failure.
@@ -19566,6 +20605,37 @@ const validateSize = (method, size) => Number.isSafeInteger(size) && size >= 0 ?
 */
 const errorExitCode = "~effect/Runtime/errorExitCode";
 /**
+* Reads the runtime exit-code marker from an unknown error value.
+*
+* **When to use**
+*
+* Use to read a custom failure exit code from an unknown error value, falling
+* back to the default failure code.
+*
+* **Details**
+*
+* Returns the numeric `[Runtime.errorExitCode]` property when it is present on
+* an object. Otherwise returns `1`, the default failure exit code used by
+* `defaultTeardown`.
+*
+* **Gotchas**
+*
+* Non-object values, missing markers, and non-number marker values all return
+* `1`.
+*
+* @see {@link errorExitCode} for the marker read by this function
+*
+* @category getters
+* @since 4.0.0
+*/
+const getErrorExitCode = (u) => {
+	if (typeof u === "object" && u !== null && "~effect/Runtime/errorExitCode" in u) {
+		const code = u[errorExitCode];
+		if (typeof code === "number") return code;
+	}
+	return 1;
+};
+/**
 * Defines the runtime marker that controls default `runMain` error logging for an error.
 *
 * **When to use**
@@ -19606,6 +20676,36 @@ const errorExitCode = "~effect/Runtime/errorExitCode";
 * @since 4.0.0
 */
 const errorReported = "~effect/Runtime/errorReported";
+/**
+* Reads the runtime error-reporting marker from an unknown error value.
+*
+* **When to use**
+*
+* Use to read whether an unknown error value should be treated as already
+* reported by the default main runner.
+*
+* **Details**
+*
+* Returns a boolean `[Runtime.errorReported]` property when it is present on an
+* object. Otherwise returns `true`, so failures are logged by default.
+*
+* **Gotchas**
+*
+* Non-object values, missing markers, and non-boolean marker values all return
+* `true`.
+*
+* @see {@link errorReported} for the marker read by this function
+*
+* @category getters
+* @since 4.0.0
+*/
+const getErrorReported = (u) => {
+	if (typeof u === "object" && u !== null && "~effect/Runtime/errorReported" in u) {
+		const isReported = u[errorReported];
+		if (typeof isReported === "boolean") return isReported;
+	}
+	return true;
+};
 //#endregion
 //#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Stdio.js
 /**
@@ -19670,8 +20770,8 @@ const Stdio = /*#__PURE__*/ Service(TypeId$6);
 */
 const make$8 = (options) => ({
 	[TypeId$6]: TypeId$6,
-	stdinIsTerminal: succeed$2(false),
-	stdoutIsTerminal: succeed$2(false),
+	stdinIsTerminal: succeed$3(false),
+	stdoutIsTerminal: succeed$3(false),
 	...options
 });
 //#endregion
@@ -20407,7 +21507,7 @@ const Boolean$3 = /*#__PURE__*/ makeSchemaPrimitive("Boolean", BooleanLiterals);
 * @category constructors
 * @since 4.0.0
 */
-const String$4 = /*#__PURE__*/ makePrimitive("String", (value) => succeed$2(value));
+const String$4 = /*#__PURE__*/ makePrimitive("String", (value) => succeed$3(value));
 /**
 * Creates a primitive that accepts only specific choice values mapped to custom types.
 *
@@ -20460,8 +21560,8 @@ const Choice = (choices) => {
 	const choiceMap = new Map(choices);
 	const validChoices = choices.map(([key]) => format$1(key)).join(" | ");
 	const primitive = makePrimitive("Choice", (value) => {
-		if (choiceMap.has(value)) return succeed$2(choiceMap.get(value));
-		return fail$1(validChoices);
+		if (choiceMap.has(value)) return succeed$3(choiceMap.get(value));
+		return fail$2(validChoices);
 	});
 	return Object.assign(primitive, { choiceKeys: choices.map(([key]) => key) });
 };
@@ -20826,7 +21926,7 @@ const Date$1 = (options) => {
 	const opts = {
 		initial: new globalThis.Date(),
 		dateMask: "YYYY-MM-DD HH:mm:ss",
-		validate: succeed$2,
+		validate: succeed$3,
 		...options,
 		locales: {
 			...defaultLocales,
@@ -20882,9 +21982,9 @@ const Number$1 = (options) => {
 		decrementBy: 1,
 		precision: 2,
 		validate: (n) => {
-			if (n < opts.min) return fail$1(`${n} must be greater than or equal to ${opts.min}`);
-			if (n > opts.max) return fail$1(`${n} must be less than or equal to ${opts.max}`);
-			return succeed$2(n);
+			if (n < opts.min) return fail$2(`${n} must be greater than or equal to ${opts.min}`);
+			if (n > opts.max) return fail$2(`${n} must be less than or equal to ${opts.max}`);
+			return succeed$3(n);
 		},
 		...options
 	};
@@ -20920,9 +22020,9 @@ const Int = (options) => {
 		incrementBy: 1,
 		decrementBy: 1,
 		validate: (n) => {
-			if (n < opts.min) return fail$1(`${n} must be greater than or equal to ${opts.min}`);
-			if (n > opts.max) return fail$1(`${n} must be less than or equal to ${opts.max}`);
-			return succeed$2(n);
+			if (n < opts.min) return fail$2(`${n} must be greater than or equal to ${opts.min}`);
+			if (n > opts.max) return fail$2(`${n} must be less than or equal to ${opts.max}`);
+			return succeed$3(n);
 		},
 		...options
 	};
@@ -20954,7 +22054,7 @@ const map$2 = /*#__PURE__*/ dual(2, (self, f) => flatMap(self, (a) => succeed(f(
 * @category constructors
 * @since 4.0.0
 */
-const Password = (options) => basePrompt(options, "password").pipe(map$2(make$20));
+const Password = (options) => basePrompt(options, "password").pipe(map$2(make$21));
 /**
 * Runs a prompt by reading terminal input and rendering prompt frames until the
 * prompt submits a value.
@@ -21069,7 +22169,7 @@ const runWithInput = (prompt, terminal, input) => suspend$2(() => {
 	switch (op._tag) {
 		case "Loop": return runLoop(op, terminal, input);
 		case "OnSuccess": return flatMap$1(runWithInput(op.prompt, terminal, input), (a) => runWithInput(op.onSuccess(a), terminal, input));
-		case "Succeed": return succeed$2(op.value);
+		case "Succeed": return succeed$3(op.value);
 	}
 });
 const runLoop = /*#__PURE__*/ fnUntraced(function* (loop, terminal, input) {
@@ -21159,7 +22259,7 @@ const renderConfirmSubmission = /*#__PURE__*/ fnUntraced(function* (value, optio
 const handleConfirmRender = (options) => {
 	return (_, action) => {
 		return Action$1.$match(action, {
-			Beep: () => succeed$2(renderBeep),
+			Beep: () => succeed$3(renderBeep),
 			NextFrame: ({ state }) => renderConfirmNextFrame(state, options),
 			Submit: ({ value }) => renderConfirmSubmission(value, options)
 		});
@@ -21169,10 +22269,10 @@ const TRUE_VALUE_REGEXP = /^y|t$/;
 const FALSE_VALUE_REGEXP = /^n|f$/;
 const handleConfirmProcess = (input, defaultValue) => {
 	const value = getOrElse(input.input, () => "");
-	if (input.key.name === "enter" || input.key.name === "return") return succeed$2(Action$1.Submit({ value: defaultValue }));
-	if (TRUE_VALUE_REGEXP.test(value.toLowerCase())) return succeed$2(Action$1.Submit({ value: true }));
-	if (FALSE_VALUE_REGEXP.test(value.toLowerCase())) return succeed$2(Action$1.Submit({ value: false }));
-	return succeed$2(Action$1.Beep());
+	if (input.key.name === "enter" || input.key.name === "return") return succeed$3(Action$1.Submit({ value: defaultValue }));
+	if (TRUE_VALUE_REGEXP.test(value.toLowerCase())) return succeed$3(Action$1.Submit({ value: true }));
+	if (FALSE_VALUE_REGEXP.test(value.toLowerCase())) return succeed$3(Action$1.Submit({ value: false }));
+	return succeed$3(Action$1.Beep());
 };
 const handleDateClear = (options) => {
 	return fnUntraced(function* (state, _) {
@@ -21332,7 +22432,7 @@ const defaultLocales = {
 const handleDateRender = (options) => {
 	return (state, action) => {
 		return Action$1.$match(action, {
-			Beep: () => succeed$2(renderBeep),
+			Beep: () => succeed$3(renderBeep),
 			NextFrame: ({ state }) => renderDateNextFrame(state, options),
 			Submit: () => renderDateSubmission(state, options)
 		});
@@ -21341,13 +22441,13 @@ const handleDateRender = (options) => {
 const handleDateProcess = (options) => {
 	return (input, state) => {
 		switch (input.key.name) {
-			case "left": return succeed$2(processDateCursorLeft(state));
-			case "right": return succeed$2(processDateCursorRight(state));
+			case "left": return succeed$3(processDateCursorLeft(state));
+			case "right": return succeed$3(processDateCursorRight(state));
 			case "k":
-			case "up": return succeed$2(processUp(state));
+			case "up": return succeed$3(processUp(state));
 			case "j":
-			case "down": return succeed$2(processDown(state));
-			case "tab": return succeed$2(processDateNext(state));
+			case "down": return succeed$3(processDown(state));
+			case "tab": return succeed$3(processDateNext(state));
 			case "enter":
 			case "return": return match(options.validate(state.value), {
 				onFailure: (error) => Action$1.NextFrame({ state: {
@@ -21356,7 +22456,7 @@ const handleDateProcess = (options) => {
 				} }),
 				onSuccess: (value) => Action$1.Submit({ value })
 			});
-			default: return succeed$2(defaultDateProcessor(getOrElse(input.input, () => ""), state));
+			default: return succeed$3(defaultDateProcessor(getOrElse(input.input, () => ""), state));
 		}
 	};
 };
@@ -21665,44 +22765,44 @@ const renderNumberSubmission = /*#__PURE__*/ fnUntraced(function* (nextState, op
 	return renderNumberOutput(nextState, leadingSymbol, trailingSymbol, options, figures, void 0, true) + "\n";
 });
 const processNumberBackspace = (state) => {
-	if (state.value.length <= 0) return succeed$2(Action$1.Beep());
+	if (state.value.length <= 0) return succeed$3(Action$1.Beep());
 	const value = state.value.slice(0, state.value.length - 1);
-	return succeed$2(Action$1.NextFrame({ state: {
+	return succeed$3(Action$1.NextFrame({ state: {
 		...state,
 		value,
 		error: none()
 	} }));
 };
-const processNumberClear = (state) => succeed$2(Action$1.NextFrame({ state: {
+const processNumberClear = (state) => succeed$3(Action$1.NextFrame({ state: {
 	...state,
 	cursor: 0,
 	value: "",
 	error: none()
 } }));
 const defaultIntProcessor = (input, state) => {
-	if (state.value.length === 0 && input === "-") return succeed$2(Action$1.NextFrame({ state: {
+	if (state.value.length === 0 && input === "-") return succeed$3(Action$1.NextFrame({ state: {
 		...state,
 		value: "-",
 		error: none()
 	} }));
 	const parsed = globalThis.Number.parseInt(state.value + input);
-	if (globalThis.Number.isNaN(parsed)) return succeed$2(Action$1.Beep());
-	else return succeed$2(Action$1.NextFrame({ state: {
+	if (globalThis.Number.isNaN(parsed)) return succeed$3(Action$1.Beep());
+	else return succeed$3(Action$1.NextFrame({ state: {
 		...state,
 		value: `${parsed}`,
 		error: none()
 	} }));
 };
 const defaultFloatProcessor = (input, state) => {
-	if (input === "." && state.value.includes(".")) return succeed$2(Action$1.Beep());
-	if (state.value.length === 0 && input === "-") return succeed$2(Action$1.NextFrame({ state: {
+	if (input === "." && state.value.includes(".")) return succeed$3(Action$1.Beep());
+	if (state.value.length === 0 && input === "-") return succeed$3(Action$1.NextFrame({ state: {
 		...state,
 		value: "-",
 		error: none()
 	} }));
 	const parsed = globalThis.Number.parseFloat(state.value + input);
-	if (globalThis.Number.isNaN(parsed)) return succeed$2(Action$1.Beep());
-	else return succeed$2(Action$1.NextFrame({ state: {
+	if (globalThis.Number.isNaN(parsed)) return succeed$3(Action$1.Beep());
+	else return succeed$3(Action$1.NextFrame({ state: {
 		...state,
 		value: input === "." ? `${parsed}.` : state.value.includes(".") && /^\d$/.test(input) ? state.value + input : `${parsed}`,
 		error: none()
@@ -21711,7 +22811,7 @@ const defaultFloatProcessor = (input, state) => {
 const handleRenderInteger = (options) => {
 	return (state, action) => {
 		return Action$1.$match(action, {
-			Beep: () => succeed$2(renderBeep),
+			Beep: () => succeed$3(renderBeep),
 			NextFrame: ({ state }) => renderNumberNextFrame(state, options),
 			Submit: () => renderNumberSubmission(state, options)
 		});
@@ -21723,13 +22823,13 @@ const handleProcessInteger = (options) => {
 		switch (input.key.name) {
 			case "backspace": return processNumberBackspace(state);
 			case "k":
-			case "up": return succeed$2(Action$1.NextFrame({ state: {
+			case "up": return succeed$3(Action$1.NextFrame({ state: {
 				...state,
 				value: state.value === "" || state.value === "-" ? `${options.incrementBy}` : `${globalThis.Number.parseInt(state.value) + options.incrementBy}`,
 				error: none()
 			} }));
 			case "j":
-			case "down": return succeed$2(Action$1.NextFrame({ state: {
+			case "down": return succeed$3(Action$1.NextFrame({ state: {
 				...state,
 				value: state.value === "" || state.value === "-" ? `-${options.decrementBy}` : `${globalThis.Number.parseInt(state.value) - options.decrementBy}`,
 				error: none()
@@ -21737,7 +22837,7 @@ const handleProcessInteger = (options) => {
 			case "enter":
 			case "return": {
 				const parsed = globalThis.Number.parseInt(state.value);
-				if (globalThis.Number.isNaN(parsed)) return succeed$2(Action$1.NextFrame({ state: {
+				if (globalThis.Number.isNaN(parsed)) return succeed$3(Action$1.NextFrame({ state: {
 					...state,
 					error: some("Must provide an integer value")
 				} }));
@@ -21756,7 +22856,7 @@ const handleProcessInteger = (options) => {
 const handleRenderFloat = (options) => {
 	return (state, action) => {
 		return Action$1.$match(action, {
-			Beep: () => succeed$2(renderBeep),
+			Beep: () => succeed$3(renderBeep),
 			NextFrame: ({ state }) => renderNumberNextFrame(state, options),
 			Submit: () => renderNumberSubmission(state, options)
 		});
@@ -21768,13 +22868,13 @@ const handleProcessFloat = (options) => {
 		switch (input.key.name) {
 			case "backspace": return processNumberBackspace(state);
 			case "k":
-			case "up": return succeed$2(Action$1.NextFrame({ state: {
+			case "up": return succeed$3(Action$1.NextFrame({ state: {
 				...state,
 				value: state.value === "" || state.value === "-" ? `${options.incrementBy}` : `${globalThis.Number.parseFloat(state.value) + options.incrementBy}`,
 				error: none()
 			} }));
 			case "j":
-			case "down": return succeed$2(Action$1.NextFrame({ state: {
+			case "down": return succeed$3(Action$1.NextFrame({ state: {
 				...state,
 				value: state.value === "" || state.value === "-" ? `-${options.decrementBy}` : `${globalThis.Number.parseFloat(state.value) - options.decrementBy}`,
 				error: none()
@@ -21782,11 +22882,11 @@ const handleProcessFloat = (options) => {
 			case "enter":
 			case "return": {
 				const parsed = globalThis.Number.parseFloat(state.value);
-				if (globalThis.Number.isNaN(parsed)) return succeed$2(Action$1.NextFrame({ state: {
+				if (globalThis.Number.isNaN(parsed)) return succeed$3(Action$1.NextFrame({ state: {
 					...state,
 					error: some("Must provide a floating point value")
 				} }));
-				else return flatMap$1(sync(() => round(parsed, options.precision)), (rounded) => match(options.validate(rounded), {
+				else return flatMap$1(sync$1(() => round(parsed, options.precision)), (rounded) => match(options.validate(rounded), {
 					onFailure: (error) => Action$1.NextFrame({ state: {
 						...state,
 						error: some(error)
@@ -21845,20 +22945,20 @@ const renderSelectSubmission = /*#__PURE__*/ fnUntraced(function* (state, option
 	return (renderSelectOutput(leadingSymbol, trailingSymbol, options) ?? leadingSymbol) + " " + annotate(selected, figures.submittedColor) + "\n";
 });
 const processSelectCursorUp = (state, choices) => {
-	if (state === 0) return succeed$2(Action$1.NextFrame({ state: choices.length - 1 }));
-	return succeed$2(Action$1.NextFrame({ state: state - 1 }));
+	if (state === 0) return succeed$3(Action$1.NextFrame({ state: choices.length - 1 }));
+	return succeed$3(Action$1.NextFrame({ state: state - 1 }));
 };
 const processSelectCursorDown = (state, choices) => {
-	if (state === choices.length - 1) return succeed$2(Action$1.NextFrame({ state: 0 }));
-	return succeed$2(Action$1.NextFrame({ state: state + 1 }));
+	if (state === choices.length - 1) return succeed$3(Action$1.NextFrame({ state: 0 }));
+	return succeed$3(Action$1.NextFrame({ state: state + 1 }));
 };
 const processSelectNext = (state, choices) => {
-	return succeed$2(Action$1.NextFrame({ state: (state + 1) % choices.length }));
+	return succeed$3(Action$1.NextFrame({ state: (state + 1) % choices.length }));
 };
 const handleSelectRender = (options) => {
 	return (state, action) => {
 		return Action$1.$match(action, {
-			Beep: () => succeed$2(renderBeep),
+			Beep: () => succeed$3(renderBeep),
 			NextFrame: ({ state }) => renderSelectNextFrame(state, options),
 			Submit: () => renderSelectSubmission(state, options)
 		});
@@ -21883,10 +22983,10 @@ const handleSelectProcess = (options) => {
 			case "enter":
 			case "return": {
 				const selected = options.choices[state];
-				if (selected.disabled) return succeed$2(Action$1.Beep());
-				return succeed$2(Action$1.Submit({ value: selected.value }));
+				if (selected.disabled) return succeed$3(Action$1.Beep());
+				return succeed$3(Action$1.Submit({ value: selected.value }));
 			}
-			default: return succeed$2(Action$1.Beep());
+			default: return succeed$3(Action$1.Beep());
 		}
 	};
 };
@@ -21945,56 +23045,56 @@ const renderTextSubmission = /*#__PURE__*/ fnUntraced(function* (state, options)
 	return renderTextOutput(state, leadingSymbol, trailingSymbol, options, figures, void 0, true) + "\n";
 });
 const processTextBackspace = (state) => {
-	if (state.cursor <= 0) return succeed$2(Action$1.Beep());
+	if (state.cursor <= 0) return succeed$3(Action$1.Beep());
 	const beforeCursor = state.value.slice(0, state.cursor - 1);
 	const afterCursor = state.value.slice(state.cursor);
 	const cursor = state.cursor - 1;
 	const value = `${beforeCursor}${afterCursor}`;
-	return succeed$2(Action$1.NextFrame({ state: {
+	return succeed$3(Action$1.NextFrame({ state: {
 		...state,
 		cursor,
 		value,
 		error: none()
 	} }));
 };
-const processTextClear = (state) => succeed$2(Action$1.NextFrame({ state: {
+const processTextClear = (state) => succeed$3(Action$1.NextFrame({ state: {
 	...state,
 	cursor: 0,
 	value: "",
 	error: none()
 } }));
 const processTextCursorLeft = (state) => {
-	if (state.cursor <= 0) return succeed$2(Action$1.Beep());
+	if (state.cursor <= 0) return succeed$3(Action$1.Beep());
 	const cursor = state.cursor - 1;
-	return succeed$2(Action$1.NextFrame({ state: {
+	return succeed$3(Action$1.NextFrame({ state: {
 		...state,
 		cursor,
 		error: none()
 	} }));
 };
 const processTextCursorRight = (state) => {
-	if (state.cursor >= state.value.length) return succeed$2(Action$1.Beep());
+	if (state.cursor >= state.value.length) return succeed$3(Action$1.Beep());
 	const cursor = Math.min(state.cursor + 1, state.value.length);
-	return succeed$2(Action$1.NextFrame({ state: {
+	return succeed$3(Action$1.NextFrame({ state: {
 		...state,
 		cursor,
 		error: none()
 	} }));
 };
-const processTextCursorStart = (state) => succeed$2(Action$1.NextFrame({ state: {
+const processTextCursorStart = (state) => succeed$3(Action$1.NextFrame({ state: {
 	...state,
 	cursor: 0,
 	error: none()
 } }));
-const processTextCursorEnd = (state) => succeed$2(Action$1.NextFrame({ state: {
+const processTextCursorEnd = (state) => succeed$3(Action$1.NextFrame({ state: {
 	...state,
 	cursor: state.value.length,
 	error: none()
 } }));
 const processTab = (state, options) => {
-	if (state.value === options.default) return succeed$2(Action$1.Beep());
+	if (state.value === options.default) return succeed$3(Action$1.Beep());
 	const value = state.value.length === 0 ? options.default : state.value;
-	return succeed$2(Action$1.NextFrame({ state: {
+	return succeed$3(Action$1.NextFrame({ state: {
 		...state,
 		value,
 		cursor: value.length,
@@ -22004,7 +23104,7 @@ const processTab = (state, options) => {
 const defaultTextProcessor = (input, state) => {
 	const value = `${state.value.slice(0, state.cursor)}${input}${state.value.slice(state.cursor)}`;
 	const cursor = state.cursor + input.length;
-	return succeed$2(Action$1.NextFrame({ state: {
+	return succeed$3(Action$1.NextFrame({ state: {
 		...state,
 		cursor,
 		value,
@@ -22014,7 +23114,7 @@ const defaultTextProcessor = (input, state) => {
 const handleTextRender = (options) => {
 	return (state, action) => {
 		return Action$1.$match(action, {
-			Beep: () => succeed$2(renderBeep),
+			Beep: () => succeed$3(renderBeep),
 			NextFrame: ({ state }) => renderTextNextFrame(state, options),
 			Submit: () => renderTextSubmission(state, options)
 		});
@@ -22026,7 +23126,7 @@ const handleTextProcess = (options) => {
 			case "u": return processTextClear(state);
 			case "a": return processTextCursorStart(state);
 			case "e": return processTextCursorEnd(state);
-			default: return succeed$2(Action$1.Beep());
+			default: return succeed$3(Action$1.Beep());
 		}
 		switch (input.key.name) {
 			case "backspace": return processTextBackspace(state);
@@ -22060,7 +23160,7 @@ const basePrompt = (options, type) => {
 	const opts = {
 		default: "",
 		type,
-		validate: succeed$2,
+		validate: succeed$3,
 		...options
 	};
 	const initialState = {
@@ -22106,12 +23206,12 @@ const renderToggleSubmission = /*#__PURE__*/ fnUntraced(function* (value, option
 	const toggle = renderToggle(value, options, figures, true);
 	return renderToggleOutput(toggle, leadingSymbol, trailingSymbol, options) + "\n";
 });
-const activate = /*#__PURE__*/ succeed$2(/*#__PURE__*/ Action$1.NextFrame({ state: true }));
-const deactivate = /*#__PURE__*/ succeed$2(/*#__PURE__*/ Action$1.NextFrame({ state: false }));
+const activate = /*#__PURE__*/ succeed$3(/*#__PURE__*/ Action$1.NextFrame({ state: true }));
+const deactivate = /*#__PURE__*/ succeed$3(/*#__PURE__*/ Action$1.NextFrame({ state: false }));
 const handleToggleRender = (options) => {
 	return (state, action) => {
 		switch (action._tag) {
-			case "Beep": return succeed$2(renderBeep);
+			case "Beep": return succeed$3(renderBeep);
 			case "NextFrame": return renderToggleNextFrame(state, options);
 			case "Submit": return renderToggleSubmission(state, options);
 		}
@@ -22131,8 +23231,8 @@ const handleToggleProcess = (input, state) => {
 		case " ":
 		case "tab": return state ? deactivate : activate;
 		case "enter":
-		case "return": return succeed$2(Action$1.Submit({ value: state }));
-		default: return succeed$2(Action$1.Beep());
+		case "return": return succeed$3(Action$1.Submit({ value: state }));
+		default: return succeed$3(Action$1.Beep());
 	}
 };
 const entriesToDisplay = (cursor, total, maxVisible) => {
@@ -22544,8 +23644,8 @@ const mapEffect = /*#__PURE__*/ dual(2, (self, f) => transform(self, (parse) => 
 */
 const optional$1 = (param) => {
 	const parse = (args) => param.parse(args).pipe(map$5(([leftover, value]) => [leftover, some(value)]), catchTags({
-		MissingOption: () => succeed$2([args.arguments, none()]),
-		MissingArgument: () => succeed$2([args.arguments, none()])
+		MissingOption: () => succeed$3([args.arguments, none()]),
+		MissingArgument: () => succeed$3([args.arguments, none()])
 	}));
 	return Object.assign(Object.create(Proto$2), {
 		_tag: "Optional",
@@ -22589,7 +23689,7 @@ const withDefault$1 = /*#__PURE__*/ dual(2, (self, defaultValue) => {
 	if (!isEffect(defaultValue)) return map$1(optional$1(self), getOrElse(() => defaultValue));
 	return mapEffect(optional$1(self), match$5({
 		onNone: () => defaultValue,
-		onSome: succeed$2
+		onSome: succeed$3
 	}));
 });
 /**
@@ -24142,7 +25242,7 @@ const makeCommand = (options) => {
 	const annotations = options.annotations ?? empty$3();
 	const globalFlags = options.globalFlags ?? [];
 	const subcommands = options.subcommands ?? [];
-	const handle = (input, commandPath) => isNotUndefined(options.handle) ? options.handle(input, commandPath) : fail$1(new ShowHelp({
+	const handle = (input, commandPath) => isNotUndefined(options.handle) ? options.handle(input, commandPath) : fail$2(new ShowHelp({
 		commandPath,
 		errors: []
 	}));
@@ -26052,10 +27152,10 @@ const runWith = (command, config) => {
 		}
 		const services = match$5(logLevel, {
 			onNone: () => empty$3(),
-			onSome: (level) => make$26(MinimumLogLevel, level)
+			onSome: (level) => make$28(MinimumLogLevel, level)
 		});
 		yield* provideContext(program, services);
-	}, catchFilter((error) => isCliError(error) && error._tag === "ShowHelp" ? succeed$6(error) : fail$5(error), (error) => andThen(showHelp(command, error, config.renderErrors !== false), fail$1(error))), catchFilter((error) => config.renderErrors !== false && isCliError(error) && error._tag === "UserError" ? succeed$6(error) : fail$5(error), (error) => andThen(showUserError(error), fail$1(error))), catchFilter((e) => isQuitError(e) ? succeed$6(e) : fail$5(e), (_) => interrupt$1));
+	}, catchFilter((error) => isCliError(error) && error._tag === "ShowHelp" ? succeed$7(error) : fail$6(error), (error) => andThen(showHelp(command, error, config.renderErrors !== false), fail$2(error))), catchFilter((error) => config.renderErrors !== false && isCliError(error) && error._tag === "UserError" ? succeed$7(error) : fail$6(error), (error) => andThen(showUserError(error), fail$2(error))), catchFilter((e) => isQuitError(e) ? succeed$7(e) : fail$6(e), (_) => interrupt$1));
 };
 //#endregion
 //#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/process/ChildProcessSpawner.js
@@ -26418,7 +27518,7 @@ const fromWritable = (options) => fromChannel$1(mapDone(fromWritableChannel(opti
 */
 const fromWritableChannel = (options) => fromTransform$1((pull) => {
 	const writable = options.evaluate();
-	return succeed$2(pullIntoWritable({
+	return succeed$3(pullIntoWritable({
 		...options,
 		writable,
 		pull
@@ -26455,7 +27555,7 @@ const pullIntoWritable = (options) => options.pull.pipe(flatMap$1((chunk) => {
 			if (!cancelled) resume(void_);
 		};
 		loop();
-		return sync(() => {
+		return sync$1(() => {
 			cancelled = true;
 			options.writable.off("drain", loop);
 		});
@@ -26466,14 +27566,14 @@ const pullIntoWritable = (options) => options.pull.pipe(flatMap$1((chunk) => {
 		const onFinish = () => resume(done(_));
 		options.writable.once("finish", onFinish);
 		options.writable.end();
-		return sync(() => {
+		return sync$1(() => {
 			options.writable.off("finish", onFinish);
 		});
 	});
 }) : identity, raceFirst(callback$1((resume) => {
-	const onError = (error) => resume(fail$1(options.onError(error)));
+	const onError = (error) => resume(fail$2(options.onError(error)));
 	options.writable.once("error", onError);
-	return sync(() => {
+	return sync$1(() => {
 		options.writable.off("error", onError);
 	});
 })));
@@ -26517,17 +27617,17 @@ const fromReadableChannel = (options) => fromTransform$1((_, scope) => readableT
 const readableToPullUnsafe = (options) => {
 	const readable = options.readable;
 	const closeOnDone = options.closeOnDone ?? true;
-	const exit = options.exit ?? make$15(void 0);
+	const exit = options.exit ?? make$16(void 0);
 	const latch = options.latch ?? makeUnsafe$1(false);
 	function onReadable() {
 		latch.openUnsafe();
 	}
 	function onError(error) {
-		exit.current = fail$2(options.onError(error));
+		exit.current = fail$3(options.onError(error));
 		latch.openUnsafe();
 	}
 	function onEnd() {
-		exit.current = fail$2(Done());
+		exit.current = fail$3(Done());
 		latch.openUnsafe();
 	}
 	readable.on("readable", onReadable);
@@ -26537,7 +27637,7 @@ const readableToPullUnsafe = (options) => {
 		let item = options.readable.read(options.chunkSize);
 		if (item === null) {
 			if (exit.current) return exit.current;
-			if (readable.readableEnded) return fail$1(Done());
+			if (readable.readableEnded) return fail$2(Done());
 			latch.closeUnsafe();
 			return flatMap$1(latch.await, loop);
 		}
@@ -26547,9 +27647,9 @@ const readableToPullUnsafe = (options) => {
 			if (item === null) break;
 			chunk.push(item);
 		}
-		return succeed$2(chunk);
+		return succeed$3(chunk);
 	});
-	return as(addFinalizer$1(options.scope, sync(() => {
+	return as(addFinalizer$1(options.scope, sync$1(() => {
 		readable.off("readable", onReadable);
 		readable.off("error", onError);
 		readable.off("end", onEnd);
@@ -26712,7 +27812,7 @@ const layer$11 = /*#__PURE__*/ effect(ChildProcessSpawner, /* @__PURE__ */ gen(f
 			encoding: config.encoding
 		});
 		if (isStream(config.stream)) return as(forkScoped(run$2(config.stream, sink)), sink);
-		return succeed$2(sink);
+		return succeed$3(sink);
 	});
 	const setupChildOutputStreams = (command, childProcess, stdoutConfig, stderrConfig) => {
 		let stdout = childProcess.stdout ? (() => {
@@ -26746,22 +27846,22 @@ const layer$11 = /*#__PURE__*/ effect(ChildProcessSpawner, /* @__PURE__ */ gen(f
 		const deferred = makeUnsafe$5();
 		const handle = NodeChildProcess.spawn(command.command, command.args, spawnOptions);
 		handle.on("error", (error) => {
-			resume(fail$1(toPlatformError("spawn", error, command)));
+			resume(fail$2(toPlatformError("spawn", error, command)));
 		});
 		handle.on("exit", (...args) => {
-			doneUnsafe(deferred, succeed$4(args));
+			doneUnsafe(deferred, succeed$5(args));
 		});
 		handle.on("spawn", () => {
-			resume(succeed$2([handle, deferred]));
+			resume(succeed$3([handle, deferred]));
 		});
-		return sync(() => {
+		return sync$1(() => {
 			handle.kill("SIGTERM");
 		});
 	});
 	const killProcessGroup = (command, childProcess, signal) => {
 		if (globalThis.process.platform === "win32") return callback$1((resume) => {
 			taskkill(childProcess, (error) => {
-				if (error) resume(fail$1(toPlatformError("kill", toError(error), command)));
+				if (error) resume(fail$2(toPlatformError("kill", toError(error), command)));
 				else resume(void_);
 			});
 		});
@@ -26784,7 +27884,7 @@ const layer$11 = /*#__PURE__*/ effect(ChildProcessSpawner, /* @__PURE__ */ gen(f
 	const killProcess = (command, childProcess, signal) => suspend$2(() => {
 		if (!childProcess.kill(signal)) {
 			const error = new globalThis.Error("Failed to kill child process");
-			return fail$1(toPlatformError("kill", error, command));
+			return fail$2(toPlatformError("kill", error, command));
 		}
 		return void_;
 	});
@@ -26807,7 +27907,7 @@ const layer$11 = /*#__PURE__*/ effect(ChildProcessSpawner, /* @__PURE__ */ gen(f
 		};
 		childProcess.on("exit", poll);
 		poll();
-		return sync(stop);
+		return sync$1(stop);
 	});
 	const terminateProcessGroup = fnUntraced(function* (command, childProcess, exitSignal, options) {
 		const signalGroup = (signal) => killProcessGroup(command, childProcess, signal).pipe(catch_(() => killProcess(command, childProcess, signal)));
@@ -26868,13 +27968,13 @@ const layer$11 = /*#__PURE__*/ effect(ChildProcessSpawner, /* @__PURE__ */ gen(f
 				childProcess.on("exit", (code) => {
 					if (code !== 0 && isNotNull(code)) killProcessGroupOnExit(childProcess, cmd.options.killSignal ?? "SIGTERM");
 				});
-				const reref = sync(() => {
+				const reref = sync$1(() => {
 					if (!isReferenced) {
 						childProcess.ref();
 						isReferenced = true;
 					}
 				});
-				const unref = sync(() => {
+				const unref = sync$1(() => {
 					if (isReferenced) {
 						childProcess.unref();
 						isReferenced = false;
@@ -26886,9 +27986,9 @@ const layer$11 = /*#__PURE__*/ effect(ChildProcessSpawner, /* @__PURE__ */ gen(f
 				const { getInputFd, getOutputFd } = yield* setupAdditionalFds(cmd, childProcess, resolvedAdditionalFds);
 				const isRunning = map$5(isDone(exitSignal), (done) => !done);
 				const exitCode = flatMap$1(_await(exitSignal), ([code, signal]) => {
-					if (isNotNull(code)) return succeed$2(ExitCode(code));
+					if (isNotNull(code)) return succeed$3(ExitCode(code));
 					const error = new globalThis.Error(`Process interrupted due to receipt of signal: '${signal}'`);
-					return fail$1(toPlatformError("exitCode", error, cmd));
+					return fail$2(toPlatformError("exitCode", error, cmd));
 				});
 				const kill = (options) => terminateProcessGroup(cmd, childProcess, exitSignal, options);
 				return makeHandle({
@@ -26913,7 +28013,7 @@ const layer$11 = /*#__PURE__*/ effect(ChildProcessSpawner, /* @__PURE__ */ gen(f
 					const command = pipeline[i];
 					const options = pipeOptions[i] ?? {};
 					const stdinConfig = resolveStdinOption(command.options);
-					const sourceStream = unwrap(succeed$2(getSourceStream(handles[handles.length - 1], options.from)));
+					const sourceStream = unwrap(succeed$3(getSourceStream(handles[handles.length - 1], options.from)));
 					const toOption = options.to ?? "stdin";
 					if (toOption === "stdin") handles.push(yield* spawnCommand(make$3(command.command, command.args, {
 						...command.options,
@@ -27020,7 +28120,7 @@ const toHashAlgorithm = (algorithm) => {
 		case "SHA-512": return "sha512";
 	}
 };
-const digest = (algorithm, data) => try_({
+const digest$1 = (algorithm, data) => try_({
 	try: () => Uint8Array.from(NodeCrypto.createHash(toHashAlgorithm(algorithm)).update(data).digest()),
 	catch: (cause) => systemError({
 		module: "Crypto",
@@ -27051,9 +28151,9 @@ const digest = (algorithm, data) => try_({
 * @category layers
 * @since 1.0.0
 */
-const layer$9 = /* @__PURE__ */ succeed$3(Crypto, /* @__PURE__ */ make$9({
+const layer$9 = /* @__PURE__ */ succeed$4(Crypto, /* @__PURE__ */ make$9({
 	randomBytes: NodeCrypto.randomBytes,
-	digest
+	digest: digest$1
 }));
 //#endregion
 //#region node_modules/.pnpm/@effect+platform-node-shared@4.0.0-rc.118_effect@4.0.0-rc.118/node_modules/@effect/platform-node-shared/dist/NodeFileSystem.js
@@ -27119,7 +28219,7 @@ const glob = /*#__PURE__*/ (() => {
 		exclude: options?.exclude
 	});
 })();
-const link = /*#__PURE__*/ (() => {
+const link$1 = /*#__PURE__*/ (() => {
 	const nodeLink = /*#__PURE__*/ effectify(NFS.link, /*#__PURE__*/ handleErrnoException("FileSystem", "link"), /*#__PURE__*/ handleBadArgument("link"));
 	return (existingPath, newPath) => nodeLink(existingPath, newPath);
 })();
@@ -27157,7 +28257,7 @@ const openFactory = (method) => {
 	const nodeClose = effectify(NFS.close, handleErrnoException("FileSystem", method), handleBadArgument(method));
 	return (path, options) => pipe(acquireRelease(nodeOpen(path, options?.flag ?? "r", options?.mode), (fd) => orDie(nodeClose(fd))), map$5((fd) => makeFile(fd, options?.flag?.startsWith("a") ?? false)));
 };
-const open = /*#__PURE__*/ openFactory("open");
+const open$1 = /*#__PURE__*/ openFactory("open");
 const makeFile = /*#__PURE__*/ (() => {
 	const nodeReadFactory = (method) => effectify(NFS.read, handleErrnoException("FileSystem", method), handleBadArgument(method));
 	const nodeRead = /*#__PURE__*/ nodeReadFactory("read");
@@ -27187,13 +28287,13 @@ const makeFile = /*#__PURE__*/ (() => {
 		seek(offset, from) {
 			return suspend$2(() => {
 				const position = from === "start" ? offset : this.position + offset;
-				if (position < BigInt(0)) return fail$1(badArgument({
+				if (position < BigInt(0)) return fail$2(badArgument({
 					module: "FileSystem",
 					method: "seek",
 					description: "Cannot seek before the start of the file"
 				}));
 				this.position = position;
-				return succeed$2(position);
+				return succeed$3(position);
 			});
 		}
 		read(buffer) {
@@ -27226,7 +28326,7 @@ const makeFile = /*#__PURE__*/ (() => {
 						return some(dst);
 					});
 				} catch (cause) {
-					return fail$1(handleBadArgument("readAlloc")(cause));
+					return fail$2(handleBadArgument("readAlloc")(cause));
 				}
 			});
 		}
@@ -27241,7 +28341,7 @@ const makeFile = /*#__PURE__*/ (() => {
 		write(buffer) {
 			return suspend$2(() => {
 				const position = this.position;
-				return flatMap$1(this.append ? succeed$2(void 0) : positionToNumber(position, "write"), (nodePosition) => map$5(nodeWrite(this.fd, buffer, void 0, void 0, nodePosition), (bytesWritten) => {
+				return flatMap$1(this.append ? succeed$3(void 0) : positionToNumber(position, "write"), (nodePosition) => map$5(nodeWrite(this.fd, buffer, void 0, void 0, nodePosition), (bytesWritten) => {
 					if (!this.append) this.position = position + BigInt(bytesWritten);
 					return bytesWritten;
 				}));
@@ -27250,8 +28350,8 @@ const makeFile = /*#__PURE__*/ (() => {
 		writeAllChunk(buffer) {
 			return suspend$2(() => {
 				const position = this.position;
-				return flatMap$1(this.append ? succeed$2(void 0) : positionToNumber(position, "writeAll"), (nodePosition) => flatMap$1(nodeWriteAll(this.fd, buffer, void 0, void 0, nodePosition), (bytesWritten) => {
-					if (bytesWritten === 0) return fail$1(systemError({
+				return flatMap$1(this.append ? succeed$3(void 0) : positionToNumber(position, "writeAll"), (nodePosition) => flatMap$1(nodeWriteAll(this.fd, buffer, void 0, void 0, nodePosition), (bytesWritten) => {
+					if (bytesWritten === 0) return fail$2(systemError({
 						module: "FileSystem",
 						method: "writeAll",
 						_tag: "WriteZero",
@@ -27275,7 +28375,7 @@ const makeTempFileFactory = (method) => {
 		const directory = yield* makeDirectory(options);
 		const random = NodeCrypto.randomBytes(6).toString("hex");
 		const name = Path.join(directory, options?.suffix ? `${random}${options.suffix}` : random);
-		yield* writeFile(name, /* @__PURE__ */ new Uint8Array(0));
+		yield* writeFile$1(name, /* @__PURE__ */ new Uint8Array(0));
 		return name;
 	});
 };
@@ -27289,14 +28389,14 @@ const readDirectory = (path, options) => tryPromise({
 	try: () => NFS.promises.readdir(path, options),
 	catch: (err) => handleErrnoException("FileSystem", "readDirectory")(err, [path])
 });
-const readFile = (path) => callback$1((resume, signal) => {
+const readFile$1 = (path) => callback$1((resume, signal) => {
 	try {
 		NFS.readFile(path, { signal }, (err, data) => {
-			if (err) resume(fail$1(handleErrnoException("FileSystem", "readFile")(err, [path])));
-			else resume(succeed$2(data));
+			if (err) resume(fail$2(handleErrnoException("FileSystem", "readFile")(err, [path])));
+			else resume(succeed$3(data));
 		});
 	} catch (err) {
-		resume(fail$1(handleBadArgument("readFile")(err)));
+		resume(fail$2(handleBadArgument("readFile")(err)));
 	}
 });
 const readLink = /*#__PURE__*/ (() => {
@@ -27346,7 +28446,7 @@ const utimes = /*#__PURE__*/ (() => {
 	const nodeUtimes = /*#__PURE__*/ effectify(NFS.utimes, /*#__PURE__*/ handleErrnoException("FileSystem", "utime"), /*#__PURE__*/ handleBadArgument("utime"));
 	return (path, atime, mtime) => nodeUtimes(path, atime, mtime);
 })();
-const watchNode = (path, info, options) => callback((queue) => acquireRelease(sync(() => {
+const watchNode = (path, info, options) => callback((queue) => acquireRelease(sync$1(() => {
 	const directory = info.type === "Directory" ? path : Path.dirname(path);
 	const watcher = NFS.watch(path, { recursive: options?.recursive ?? false }, (event, path) => {
 		if (!path) return;
@@ -27372,7 +28472,7 @@ const watchNode = (path, info, options) => callback((queue) => acquireRelease(sy
 		}
 	});
 	watcher.on("error", (error) => {
-		failCauseUnsafe(queue, fail$3(systemError({
+		failCauseUnsafe(queue, fail$4(systemError({
 			module: "FileSystem",
 			_tag: "Unknown",
 			method: "watch",
@@ -27384,20 +28484,20 @@ const watchNode = (path, info, options) => callback((queue) => acquireRelease(sy
 		endUnsafe(queue);
 	});
 	return watcher;
-}), (watcher) => sync(() => watcher.close())));
+}), (watcher) => sync$1(() => watcher.close())));
 const watch = (backend, path, options) => stat$1(path).pipe(map$5((stat) => backend.pipe(flatMap$3((_) => _.register(path, stat, options)), getOrElse(() => watchNode(path, stat, options)))), unwrap);
-const writeFile = (path, data, options) => callback$1((resume, signal) => {
+const writeFile$1 = (path, data, options) => callback$1((resume, signal) => {
 	try {
 		NFS.writeFile(path, data, {
 			signal,
 			flag: options?.flag,
 			mode: options?.mode
 		}, (err) => {
-			if (err) resume(fail$1(handleErrnoException("FileSystem", "writeFile")(err, [path])));
+			if (err) resume(fail$2(handleErrnoException("FileSystem", "writeFile")(err, [path])));
 			else resume(void_);
 		});
 	} catch (err) {
-		resume(fail$1(handleBadArgument("writeFile")(err)));
+		resume(fail$2(handleBadArgument("writeFile")(err)));
 	}
 });
 const makeFileSystem = /*#__PURE__*/ map$5(/*#__PURE__*/ serviceOption(WatchBackend), (backend) => make$10({
@@ -27407,15 +28507,15 @@ const makeFileSystem = /*#__PURE__*/ map$5(/*#__PURE__*/ serviceOption(WatchBack
 	copy,
 	copyFile,
 	glob,
-	link,
+	link: link$1,
 	makeDirectory,
 	makeTempDirectory,
 	makeTempDirectoryScoped,
 	makeTempFile,
 	makeTempFileScoped,
-	open,
+	open: open$1,
 	readDirectory,
-	readFile,
+	readFile: readFile$1,
 	readLink,
 	realPath,
 	remove,
@@ -27427,7 +28527,7 @@ const makeFileSystem = /*#__PURE__*/ map$5(/*#__PURE__*/ serviceOption(WatchBack
 	watch(path, options) {
 		return watch(backend, path, options);
 	},
-	writeFile
+	writeFile: writeFile$1
 }));
 //#endregion
 //#region node_modules/.pnpm/@effect+platform-node@4.0.0-rc.118_effect@4.0.0-rc.118_redis@6.2.1/node_modules/@effect/platform-node/dist/NodeFileSystem.js
@@ -27505,7 +28605,7 @@ const fileUrlOps = (windows) => ({
 * @category layers
 * @since 4.0.0
 */
-const layer$5 = /* @__PURE__ */ succeed$3(Path$1)({
+const layer$5 = /* @__PURE__ */ succeed$4(Path$1)({
 	[TypeId$8]: TypeId$8,
 	...Path,
 	.../*#__PURE__*/ fileUrlOps(void 0)
@@ -27529,10 +28629,10 @@ const layer$5 = /* @__PURE__ */ succeed$3(Path$1)({
 * @category layers
 * @since 4.0.0
 */
-const layer$3 = /* @__PURE__ */ succeed$3(Stdio, /*#__PURE__*/ make$8({
-	args: /*#__PURE__*/ sync(() => process.argv.slice(2)),
-	stdinIsTerminal: /*#__PURE__*/ sync(() => process.stdin.isTTY === true),
-	stdoutIsTerminal: /*#__PURE__*/ sync(() => process.stdout.isTTY === true),
+const layer$3 = /* @__PURE__ */ succeed$4(Stdio, /*#__PURE__*/ make$8({
+	args: /*#__PURE__*/ sync$1(() => process.argv.slice(2)),
+	stdinIsTerminal: /*#__PURE__*/ sync$1(() => process.stdin.isTTY === true),
+	stdoutIsTerminal: /*#__PURE__*/ sync$1(() => process.stdout.isTTY === true),
 	stdout: (options) => fromWritable({
 		evaluate: () => process.stdout,
 		onError: (cause) => systemError({
@@ -27574,7 +28674,7 @@ const layer$3 = /* @__PURE__ */ succeed$3(Stdio, /*#__PURE__*/ make$8({
 const layer$2 = /*#__PURE__*/ effect(Terminal, /*#__PURE__*/ (/* @__PURE__ */ fnUntraced(function* (shouldQuit = defaultShouldQuit) {
 	const stdin = process.stdin;
 	const stdout = process.stdout;
-	const lines = yield* make$13();
+	const lines = yield* make$14();
 	let inputEnded = stdin.readableEnded;
 	let readlineActive = false;
 	const onStdinEnd = () => {
@@ -27582,9 +28682,9 @@ const layer$2 = /*#__PURE__*/ effect(Terminal, /*#__PURE__*/ (/* @__PURE__ */ fn
 		if (!readlineActive) endUnsafe(lines);
 	};
 	stdin.once("end", onStdinEnd);
-	yield* addFinalizer(() => sync(() => stdin.off("end", onStdinEnd)));
-	const rlRef = yield* make$11({
-		acquire: acquireRelease(sync(() => {
+	yield* addFinalizer(() => sync$1(() => stdin.off("end", onStdinEnd)));
+	const rlRef = yield* make$12({
+		acquire: acquireRelease(sync$1(() => {
 			const rl = readline.createInterface({
 				input: stdin,
 				escapeCodeTimeout: 50
@@ -27604,7 +28704,7 @@ const layer$2 = /*#__PURE__*/ effect(Terminal, /*#__PURE__*/ (/* @__PURE__ */ fn
 				onClose,
 				onLine
 			};
-		}), ({ rl, onClose, onLine }) => sync(() => {
+		}), ({ rl, onClose, onLine }) => sync$1(() => {
 			readlineActive = false;
 			rl.off("line", onLine);
 			rl.off("close", onClose);
@@ -27614,10 +28714,10 @@ const layer$2 = /*#__PURE__*/ effect(Terminal, /*#__PURE__*/ (/* @__PURE__ */ fn
 		})),
 		idleTimeToLive: "10 millis"
 	});
-	const columns = sync(() => stdout.columns ?? 0);
-	const rows = sync(() => stdout.rows ?? 0);
+	const columns = sync$1(() => stdout.columns ?? 0);
+	const rows = sync$1(() => stdout.rows ?? 0);
 	const readInput = gen(function* () {
-		const queue = yield* make$13();
+		const queue = yield* make$14();
 		const handleKeypress = (s, k) => {
 			const userInput = {
 				input: fromUndefinedOr(s),
@@ -27636,7 +28736,7 @@ const layer$2 = /*#__PURE__*/ effect(Terminal, /*#__PURE__*/ (/* @__PURE__ */ fn
 			clearInterval(keepAlive);
 			endUnsafe(queue);
 		};
-		yield* addFinalizer(() => sync(() => {
+		yield* addFinalizer(() => sync$1(() => {
 			clearInterval(keepAlive);
 			stdin.off("keypress", handleKeypress);
 			stdin.off("end", handleEnd);
@@ -27651,10 +28751,10 @@ const layer$2 = /*#__PURE__*/ effect(Terminal, /*#__PURE__*/ (/* @__PURE__ */ fn
 	});
 	const readLine = suspend$2(() => poll(lines).pipe(flatMap$1(match$5({
 		onNone: () => scoped(andThen(get(rlRef), take(lines))),
-		onSome: succeed$2
+		onSome: succeed$3
 	})), mapError(() => new QuitError({}))));
 	const display = (prompt) => uninterruptible(callback$1((resume) => {
-		stdout.write(prompt, (err) => isNullish(err) ? resume(void_) : resume(fail$1(badArgument({
+		stdout.write(prompt, (err) => isNullish(err) ? resume(void_) : resume(fail$2(badArgument({
 			module: "Terminal",
 			method: "display",
 			description: "Failed to write prompt to stdout",
@@ -27682,6 +28782,58 @@ function defaultShouldQuit(input) {
 * @since 4.0.0
 */
 const layer = /*#__PURE__*/ provideMerge(layer$11, /*#__PURE__*/ mergeAll(layer$7, layer$9, layer$5, layer$3, layer$2));
+//#endregion
+//#region node_modules/.pnpm/@effect+platform-node@4.0.0-rc.118_effect@4.0.0-rc.118_redis@6.2.1/node_modules/@effect/platform-node/dist/NodeRuntime.js
+/**
+* Node.js process runner for Effect programs.
+*
+* This module exports `runMain`, which runs one Effect as the main process
+* fiber in Node.js. It reuses the shared Node runtime runner, including its
+* error reporting, `SIGINT` / `SIGTERM` interruption, and optional teardown
+* behavior.
+*
+* @since 4.0.0
+*/
+/**
+* Helps you run a main effect with built-in error handling, logging, and signal management.
+*
+* **When to use**
+*
+* Use to run a Node.js application's main Effect with structured error
+* handling, log management, interrupt support, or advanced teardown
+* capabilities.
+*
+* **Details**
+*
+* This function launches an Effect as the main entry point, setting exit codes
+* based on success or failure, handling interrupts (e.g., Ctrl+C), and optionally
+* logging errors. By default, it logs errors and uses a "pretty" format, but both
+* behaviors can be turned off. You can also provide custom teardown logic to
+* finalize resources or produce different exit codes.
+*
+* The optional configuration object can include:
+* - `disableErrorReporting`: Turn off automatic error logging.
+* - `teardown`: Provide custom finalization logic.
+*
+* @category running
+* @since 4.0.0
+*/
+const runMain = /* @__PURE__ */ makeRunMain(({ fiber, teardown }) => {
+	let receivedSignal = false;
+	fiber.addObserver((exit) => {
+		process.removeListener("SIGINT", onSigint);
+		process.removeListener("SIGTERM", onSigint);
+		teardown(exit, (code) => {
+			if (receivedSignal || code !== 0) process.exit(code);
+		});
+	});
+	function onSigint() {
+		receivedSignal = true;
+		fiber.interruptUnsafe(fiber.id);
+	}
+	process.on("SIGINT", onSigint);
+	process.on("SIGTERM", onSigint);
+});
 //#endregion
 //#region archive/src/cli/failure.ts
 /**
@@ -27815,16 +28967,1864 @@ const completeCommand = (root) => make$5("complete", { shell: Literals$1("shell"
 	renderErrors: false
 })(["--completions", input.shell])).pipe(withDescription("Generate a tab-completion script for the given shell."));
 //#endregion
-//#region archive/src/cli/flags.ts
+//#region archive/src/repository/git.ts
 /**
-* Shared flag definitions reused across command modules. Definitions live
-* outside the commands so help text and parsing stay identical wherever a
-* concept (destination checkout, declared origin, …) appears.
+* Concrete Git adapter over Effect's native child-process support.
+*
+* `git` spawns the installed `git` executable through `ChildProcessSpawner`
+* (provided by `NodeServices.layer`) and returns raw stdout/stderr bytes plus
+* the exit code: nothing here decodes, prints, or retries. Scope, stream
+* draining, and cancellation belong to the spawner; we only collect bytes and
+* validate the exit code at the callsite that cares. There is deliberately no
+* process framework, capability abstraction, or write allowlist — every
+* mutation is an auditable concrete argv at its caller.
+*
+* `gitRead` is the read-only shape used for source inventory: it opts out of
+* replace refs, lazy fetches, optional locks, auto maintenance, and inherited
+* global/system config so host state cannot alter what is read. Every entry
+* point drops inherited `GIT_*` environment variables — a polluted parent
+* could otherwise redirect `GIT_DIR`/`GIT_CONFIG_COUNT`/… to another
+* repository and misroute writes as well as reads — while PATH, HOME, and the
+* rest of the non-Git environment survive. Repository routing happens only
+* through `cwd` or deliberate `options.env`; private staging passes its own
+* `GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE`/`GIT_OBJECT_DIRECTORY` there.
 */
-const destFlag = String$1("dest").pipe(withDescription$1("Path to jj-colocated archive checkout"));
-const repoFlag = String$1("repo").pipe(withDescription$1("Declared origin URL"));
-const remotesFlag = String$1("remotes").pipe(withDefault("{}"), withDescription$1("JSON object of additional remote names and URLs"));
-const labelFlag = String$1("label").pipe(withDescription$1("Deployment label for recovery bookmarks"));
+/**
+* `git` exited nonzero. The message names only the subcommand, exit status,
+* and working directory; the `argv` and stderr bytes are retained as fields
+* for deliberate access, so source contents passed as arguments or echoed by
+* Git cannot leak into logs by accident.
+*/
+var GitError = class extends Error {
+	argv;
+	cwd;
+	exitCode;
+	stderr;
+	constructor(init) {
+		const sub = init.argv[0] === void 0 || init.argv[0].startsWith("-") ? "" : ` ${init.argv[0]}`;
+		const where = init.cwd === void 0 ? "" : ` (cwd ${init.cwd})`;
+		super(`git${sub} exited ${init.exitCode}${where}; argv and stderr are retained on the error, not printed`);
+		this.name = "GitError";
+		this.argv = init.argv;
+		this.cwd = init.cwd;
+		this.exitCode = init.exitCode;
+		this.stderr = init.stderr;
+	}
+};
+/** Environment that isolates a read from host and repo-convenience state. */
+const readEnv = {
+	GIT_OPTIONAL_LOCKS: "0",
+	GIT_NO_REPLACE_OBJECTS: "1",
+	GIT_NO_LAZY_FETCH: "1",
+	GIT_CONFIG_NOSYSTEM: "1",
+	GIT_CONFIG_GLOBAL: "/dev/null"
+};
+/**
+* Inherited environment minus every `GIT_*` variable: a polluted parent
+* process (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`,
+* `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_COMMON_DIR`, `GIT_NAMESPACE`,
+* `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_n`/`GIT_CONFIG_VALUE_n`,
+* `GIT_CONFIG_PARAMETERS`, …) must not be able to redirect a command that
+* names its repository by `cwd` to some other repository — that matters for
+* writes (update-ref, hash-object -w) as much as for reads. PATH, HOME, and
+* the rest of the non-Git environment survive. Git's network-facing variables
+* (`GIT_SSH_COMMAND`, `GIT_ASKPASS`, …) are stripped with the prefix; no
+* current helper does network operations, and one that does must pass its
+* agent/auth configuration deliberately through `options.env`.
+*/
+const sanitizedEnv = () => {
+	const clean = {};
+	for (const [key, value] of Object.entries(process.env)) if (!key.startsWith("GIT_")) clean[key] = value;
+	return clean;
+};
+/** Shared runner: sanitized inheritance, deliberate routing, native spawn. */
+const spawnGit = (args, options) => gen(function* () {
+	const handle = yield* (yield* ChildProcessSpawner).spawn(make$3("git", args, {
+		cwd: options.cwd,
+		env: {
+			...sanitizedEnv(),
+			...options.env
+		},
+		extendEnv: false,
+		stdin: options.input === void 0 ? "ignore" : make$11(options.input)
+	}));
+	const [stdout, stderr, exitCode] = yield* all([
+		runCollect(handle.stdout),
+		runCollect(handle.stderr),
+		handle.exitCode
+	], { concurrency: "unbounded" });
+	return {
+		stdout: concatBytes$1(stdout),
+		stderr: concatBytes$1(stderr),
+		exitCode
+	};
+}).pipe(scoped, provide(layer));
+/** Run `git args`, collecting raw stdout/stderr bytes and the exit code. */
+const git$1 = (args, options) => spawnGit(args, options ?? {});
+/**
+* Read-only `git`: disables auto gc/maintenance on the argv and forces
+* `readEnv` after any caller env — the isolation keys cannot be switched off
+* through `options.env` — for inventory-style queries that must not mutate
+* the source or follow host-level config and replacement state.
+*/
+const gitRead = (args, options) => spawnGit([
+	"-c",
+	"gc.auto=0",
+	"-c",
+	"maintenance.auto=false",
+	"-c",
+	"core.fsmonitor=false",
+	...args
+], {
+	...options,
+	env: {
+		...options?.env,
+		...readEnv
+	}
+});
+/**
+* Checked `git`: fails with `GitError` on nonzero exit, otherwise returns
+* stdout bytes. Stderr stays on the error, separate from its message. The
+* ref-store uses this for destination writes: sanitized inheritance plus its
+* deliberate env decides where the write lands.
+*/
+const gitChecked = (args, options) => git$1(args, options).pipe(flatMap$1((result) => result.exitCode === 0 ? succeed$3(result.stdout) : fail$2(new GitError({
+	argv: args,
+	cwd: options?.cwd,
+	exitCode: result.exitCode,
+	stderr: result.stderr
+}))));
+/**
+* Decode Git output as UTF-8, throwing on invalid bytes instead of replacing
+* them. For parsing `--z` inventory records where mangled bytes would silently
+* corrupt paths and object identities.
+*/
+const utf8Fatal = (bytes) => new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+const concatBytes$1 = (chunks) => {
+	let size = 0;
+	for (const chunk of chunks) size += chunk.byteLength;
+	const bytes = new Uint8Array(size);
+	let offset = 0;
+	for (const chunk of chunks) {
+		bytes.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return bytes;
+};
+//#endregion
+//#region archive/src/custody/errors.ts
+var CustodyError = class extends Error {
+	code;
+	subject;
+	constructor(code, message, subject = null) {
+		super(message);
+		this.name = "CustodyError";
+		this.code = code;
+		this.subject = subject;
+	}
+};
+function invalid(message) {
+	throw new CustodyError("invalid-input", message);
+}
+//#endregion
+//#region archive/src/custody/codec.ts
+const enc = new TextEncoder();
+const dec = new TextDecoder("utf-8", { fatal: true });
+function sha256(bytes) {
+	return createHash("sha256").update(bytes).digest("hex");
+}
+function oid(value, format) {
+	if (!new RegExp(`^[0-9a-f]{${format === "sha1" ? 40 : 64}}$`).test(value)) invalid(`invalid ${format} object ID`);
+	return value;
+}
+function digest(value) {
+	if (!/^[0-9a-f]{64}$/.test(value)) invalid("invalid SHA-256 digest");
+	return value;
+}
+function text(bytes) {
+	let decoded;
+	try {
+		decoded = dec.decode(bytes);
+	} catch {
+		return invalid("Git name is not lossless UTF-8");
+	}
+	if (!Buffer.from(enc.encode(decoded)).equals(Buffer.from(bytes))) invalid("Git name cannot round-trip UTF-8");
+	return decoded;
+}
+function repoPath(value) {
+	const path = typeof value === "string" ? value : text(value);
+	if (!path || path.startsWith("/") || path.includes("\0") || path.split("/").some((part) => part === "" || part === "." || part === "..")) invalid("invalid repository path");
+	if (typeof value === "string" && text(enc.encode(value)) !== value) invalid("invalid UTF-8 path");
+	return path;
+}
+/** Git ref component rules plus refusal to normalize operator input. */
+function refComponent(value) {
+	if (!value || value === "." || value === ".." || value.endsWith(".lock") || value.startsWith(".") || value.endsWith(".") || value.includes("..") || value.includes("@{") || Array.from(value).some((char) => char.charCodeAt(0) <= 32 || char.charCodeAt(0) === 127 || "~^:?*[]\\/".includes(char))) invalid(`invalid Git ref component ${JSON.stringify(value)}`);
+	if (text(enc.encode(value)) !== value) invalid("invalid UTF-8 ref component");
+	return value;
+}
+function refName(value) {
+	const name = typeof value === "string" ? value : text(value);
+	if (!name.startsWith("refs/") || enc.encode(name).length > 4096) invalid("invalid full Git ref");
+	for (const component of name.split("/")) refComponent(component);
+	return name;
+}
+/** Fixed-size hex components; length prefix disambiguates concatenations and empty bytes. */
+function encodeIdentity(value) {
+	const data = enc.encode(value);
+	if (text(data) !== value || data.length > 1024) invalid("identity is not encodable as a Git ref");
+	const hex = Buffer.from(data).toString("hex");
+	return [`b${data.length.toString(16).padStart(8, "0")}`, ...hex.match(/.{1,64}/g) ?? ["00"]].join("/");
+}
+function receiptRef(label, generation) {
+	refComponent(label);
+	refComponent(generation);
+	return refName(`refs/adopt/receipts/${label}/${generation}`);
+}
+/** A candidate sourceName is a stable kind+OID identity, not a reflog index. */
+function candidateIdentity(kind, id) {
+	return `${kind}:${id}`;
+}
+/** Lexical checks only: vault opener must also lstat every component and reject symlinks. */
+function vaultBundlePath(destRealpath, relative) {
+	const root = dirname(destRealpath);
+	const archive = sha256(enc.encode(destRealpath));
+	const parts = relative.split("/");
+	if (parts.length !== 4 || parts[0] !== ".compfuzor-adoptions" || parts[1] !== archive || !/^[0-9a-f]{32,}$/.test(parts[2]) || parts[3] !== "source.bundle") invalid("bundle path is outside the private vault");
+	const full = resolve(root, ...parts);
+	if (!full.startsWith(`${resolve(root, ".compfuzor-adoptions", archive)}/`)) invalid("bundle vault path escape");
+	return full;
+}
+function pinRef(pin, label, generation, snapshot) {
+	refComponent(label);
+	refComponent(generation);
+	const root = `${label}/${generation}`;
+	const { sourceKind: kind, sourceName: name, sourceOid } = pin;
+	let full;
+	if (kind === "branch") {
+		if (!name.startsWith("refs/heads/")) invalid("branch pin requires full original branch ref");
+		refName(name);
+		full = `refs/heads/harvest/${root}/branch/${encodeIdentity(name.slice(11))}`;
+	} else if (kind === "tag") {
+		if (!name.startsWith("refs/tags/")) invalid("tag pin requires full original tag ref");
+		refName(name);
+		full = `refs/tags/harvest/${root}/${encodeIdentity(name.slice(10))}`;
+	} else if (kind === "head") {
+		if (name !== "HEAD") invalid("HEAD pin must identify HEAD");
+		full = `refs/heads/harvest/${root}/head/${sourceOid}`;
+	} else if (kind === "working-copy") {
+		if (!snapshot || name !== "working-copy" || sourceOid !== pin.destinationOid) invalid("invalid worktree pin");
+		full = `refs/heads/harvest/${root}/working-copy/${snapshot.parentOid}-${snapshot.treeOid}-worktree-v1`;
+	} else {
+		if (kind === "reflog") {
+			if (!/^(stash-older|reflog|dangling):[0-9a-f]{40}([0-9a-f]{24})?$/.test(name)) invalid("invalid stable candidate identity");
+		} else refName(name);
+		full = `refs/adopt/custody/${root}/${kind}/${encodeIdentity(name)}`;
+	}
+	return refName(full);
+}
+function record(value, fields, at) {
+	if (!value || typeof value !== "object" || Array.isArray(value) || Object.getPrototypeOf(value) !== Object.prototype) invalid(`${at} must be a plain object`);
+	const object = value;
+	if (!isDeepStrictEqual(Object.keys(object).sort(), Object.keys(fields).sort())) invalid(`${at} has missing or unknown fields`);
+	for (const [name, check] of Object.entries(fields)) check(object[name], `${at}.${name}`);
+	return object;
+}
+const str = (value, at) => {
+	if (typeof value !== "string") invalid(`${at} must be a string`);
+};
+const nonempty = (value, at) => {
+	str(value, at);
+	if (!value.trim()) invalid(`${at} must be nonempty`);
+};
+const nul = (check) => (value, at) => {
+	if (value !== null) check(value, at);
+};
+const lit = (expected) => (value, at) => {
+	if (value !== expected) invalid(`${at} must be ${JSON.stringify(expected)}`);
+};
+const one = (...values) => (value, at) => {
+	if (!values.includes(value)) invalid(`${at} has invalid value`);
+};
+const arr = (check) => (value, at) => {
+	if (!Array.isArray(value)) invalid(`${at} must be an array`);
+	value.forEach((item, index) => check(item, `${at}[${index}]`));
+};
+const shape = (fields) => (value, at) => {
+	record(value, fields, at);
+};
+const hash = (value, at) => {
+	str(value, at);
+	digest(value);
+};
+const path = (value, at) => {
+	str(value, at);
+	repoPath(value);
+};
+const ref = (value, at) => {
+	str(value, at);
+	refName(value);
+};
+const mode = one("100644", "100755", "120000", "160000");
+const changeStatus = one("unchanged", "added", "modified", "deleted", "renamed", "copied", "typechanged", "unmerged");
+const gitOid = (format) => (value, at) => {
+	str(value, at);
+	oid(value, format);
+};
+const count = (value, at) => {
+	if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) invalid(`${at} must be a nonnegative count`);
+};
+const issue = shape({
+	code: nonempty,
+	subject: nul(str),
+	reason: nonempty
+});
+const pathEntry = (id) => shape({
+	path,
+	mode,
+	blobOid: id
+});
+function reviewSchema(id) {
+	return shape({
+		schema: lit("compfuzor.archive-path-review/v1"),
+		manifestSha256: hash,
+		fileSha256: hash,
+		included: arr(shape({
+			path,
+			mode,
+			blobOid: id,
+			classification: one("credential", "runtime-state", "other-sensitive"),
+			decision: lit("local-custody-approved"),
+			reason: nonempty
+		})),
+		stagedVsUnstaged: nul(shape({
+			decision: lit("single-tree-approved"),
+			reason: nonempty
+		}))
+	});
+}
+function parsePathReview(bytes, format) {
+	let value;
+	try {
+		value = JSON.parse(text(bytes));
+	} catch {
+		return invalid("invalid path review JSON");
+	}
+	if (value === null || typeof value !== "object" || Array.isArray(value)) invalid("path review must be an object");
+	const review = value;
+	reviewSchema(gitOid(format))({
+		...review,
+		fileSha256: sha256(bytes)
+	}, "pathReview");
+	if (Object.hasOwn(review, "fileSha256")) invalid("path review input cannot contain its own file hash");
+	return {
+		...review,
+		fileSha256: sha256(bytes)
+	};
+}
+/** Sorted object keys, stable array order, no undefined/NaN/duplicate keys or prototype tricks. */
+function canonicalJson(value) {
+	if (value === null || typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);
+	if (typeof value === "number" && Number.isSafeInteger(value)) return JSON.stringify(value);
+	if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+	if (typeof value !== "object" || Object.getPrototypeOf(value) !== Object.prototype) invalid("non-JSON canonical value");
+	return `{${Object.entries(value).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([key, field]) => `${JSON.stringify(key)}:${canonicalJson(field)}`).join(",")}}`;
+}
+/** The exact bytes of inventory's for-each-ref --format output, in Git refname order. */
+function destinationRefsSha256(refs) {
+	const ordered = [...refs].sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+	return sha256(enc.encode(ordered.map(({ name, oid: target, objectType, peeledOid }) => `${name}\0${target}\0${objectType}\0${peeledOid ?? ""}\0\n`).join("")));
+}
+function validateReceipt(value) {
+	if (!value || typeof value !== "object" || Array.isArray(value)) invalid("receipt must be an object");
+	const format = value.source?.objectFormat;
+	if (format !== "sha1" && format !== "sha256") invalid("unknown receipt Git object format");
+	const id = gitOid(format);
+	const tip = shape({
+		name: ref,
+		oid: id,
+		objectType: one("commit", "tag", "tree", "blob"),
+		peeledOid: nul(id)
+	});
+	const candidate = shape({
+		kind: one("stash-older", "reflog", "dangling"),
+		oid: id,
+		objectType: one("commit", "tag", "tree", "blob"),
+		provenance: arr(str),
+		disposition: one("pin", "not-required", "unclassified"),
+		reason: nul(nonempty)
+	});
+	const identity = shape({
+		label: nonempty,
+		generation: nonempty,
+		legacyRealpathAtCapture: nonempty,
+		sourceGitCommonDir: nonempty,
+		destinationRealpath: nonempty,
+		createdAt: nonempty
+	});
+	const snapshot = shape({
+		format: lit("worktree-v1"),
+		parentOid: id,
+		treeOid: id,
+		commitOid: id,
+		paths: arr(pathEntry(id)),
+		stagedVsUnstaged: one("none", "reported-not-preserved"),
+		excludeFileSha256: nul(hash),
+		excludedUntracked: arr(path),
+		ignoredPaths: arr(path),
+		trackedSensitivePaths: arr(path),
+		pathReview: nul(reviewSchema(id))
+	});
+	record(value, {
+		schema: lit("compfuzor.archive-adoption/v1"),
+		receiptRef: ref,
+		identity,
+		source: shape({
+			objectFormat: lit(format),
+			sourceGitCommonDir: nonempty,
+			head: shape({
+				symbolicRef: nul(ref),
+				oid: id,
+				treeOid: id,
+				treePaths: arr(pathEntry(id))
+			}),
+			refs: arr(tip),
+			candidates: arr(candidate),
+			remotes: arr(shape({
+				name: nonempty,
+				url: nonempty
+			})),
+			indexEntries: arr(shape({
+				path,
+				stage: one(0, 1, 2, 3),
+				mode,
+				blobOid: id
+			})),
+			worktreeChanges: arr(shape({
+				path,
+				originalPath: nul(path),
+				indexStatus: changeStatus,
+				worktreeStatus: changeStatus
+			})),
+			untrackedPaths: arr(path),
+			ignoredPaths: arr(path),
+			excludedUntracked: arr(path),
+			trackedSensitivePaths: arr(issue),
+			leftBehind: arr(issue),
+			jjCoverage: shape({
+				classification: one("none", "git-covered", "blocked"),
+				headOids: arr(id),
+				operationId: nul(str)
+			}),
+			fingerprints: shape({
+				indexSha256: hash,
+				gitConfigSha256: hash,
+				refsSha256: hash,
+				reflogsSha256: hash,
+				odbListingSha256: hash,
+				includedWorktreeSha256: hash,
+				jjStoreSha256: nul(hash),
+				canonicalInputsSha256: hash
+			}),
+			excludeFileSha256: nul(hash),
+			dispositionsFileSha256: nul(hash)
+		}),
+		snapshot: nul(snapshot),
+		cleanHeadPathReview: nul(reviewSchema(id)),
+		baselines: shape({
+			sourceRemoteTracking: arr(shape({
+				remote: nonempty,
+				url: nonempty,
+				ref,
+				oid: id,
+				freshness: lit("local-only")
+			})),
+			destinationPreRefs: arr(tip),
+			destinationPreRefsSha256: hash,
+			destinationWorktreeFingerprintSha256: hash,
+			destinationIndexSha256: hash,
+			selectedBranch: nonempty,
+			declaredRepo: nonempty,
+			headNotInRecordedBaseline: nul(count),
+			selectedTipsNotInDestination: nul(count)
+		}),
+		pins: arr(shape({
+			sourceKind: one("branch", "head", "tag", "stash", "other", "reflog", "working-copy"),
+			sourceName: nonempty,
+			sourceOid: id,
+			objectType: one("commit", "tag", "tree", "blob"),
+			destinationRef: ref,
+			destinationOid: id
+		})),
+		bundle: shape({
+			pathRelativeToDestinationParent: nonempty,
+			sha256: hash,
+			verifiedHeads: arr(shape({
+				ref,
+				oid: id
+			})),
+			freshRestoreVerified: lit(true)
+		}),
+		checks: shape({
+			sourceFingerprintRechecked: lit(true),
+			sourceOdbUnchanged: lit(true),
+			destinationWorktreeUnchanged: lit(true),
+			bundleClosureVerified: lit(true)
+		}),
+		unresolved: arr(issue)
+	}, "receipt");
+	const receipt = value;
+	if (receipt.receiptRef !== receiptRef(receipt.identity.label, receipt.identity.generation)) invalid("receipt identity/ref mismatch");
+	vaultBundlePath(receipt.identity.destinationRealpath, receipt.bundle.pathRelativeToDestinationParent);
+	for (const refs of [receipt.source.refs, receipt.baselines.destinationPreRefs]) {
+		const seen = /* @__PURE__ */ new Set();
+		for (const { name } of refs) {
+			if (seen.has(name)) invalid(`duplicate ref in inventory: ${name}`);
+			seen.add(name);
+		}
+	}
+	const candidateNames = /* @__PURE__ */ new Set();
+	for (const candidate of receipt.source.candidates) {
+		const name = candidateIdentity(candidate.kind, candidate.oid);
+		if (candidateNames.has(name)) invalid(`duplicate candidate identity: ${name}`);
+		candidateNames.add(name);
+	}
+	if (receipt.baselines.destinationPreRefsSha256 !== destinationRefsSha256(receipt.baselines.destinationPreRefs)) invalid("destination pre-ref hash differs from inventory");
+	const heads = /* @__PURE__ */ new Map();
+	for (const head of receipt.bundle.verifiedHeads) {
+		if (heads.has(head.ref)) invalid("duplicate advertised bundle head");
+		heads.set(head.ref, head.oid);
+	}
+	const names = /* @__PURE__ */ new Set();
+	for (const pin of receipt.pins) {
+		if (pin.sourceKind === "branch" || pin.sourceKind === "head" || pin.sourceKind === "working-copy") {
+			if (pin.objectType !== "commit") invalid("commit lane has a noncommit object");
+		}
+		if (pin.sourceKind === "working-copy" && pin.sourceOid !== receipt.snapshot?.commitOid) invalid("working-copy commit differs from snapshot");
+		if (pin.sourceKind === "head" && pin.sourceOid !== receipt.source.head.oid) invalid("HEAD pin differs from source HEAD");
+		if (pin.destinationOid !== pin.sourceOid) invalid("pin source/destination OIDs differ");
+		if (pin.sourceKind === "reflog") {
+			const match = /^(stash-older|reflog|dangling):(.+)$/.exec(pin.sourceName);
+			if (!match || oid(match[2], format) !== pin.sourceOid) invalid("candidate pin identity differs from source OID");
+			const matched = receipt.source.candidates.find((candidate) => candidateIdentity(candidate.kind, candidate.oid) === pin.sourceName);
+			if (!matched || matched.disposition !== "pin" || matched.objectType !== pin.objectType) invalid("candidate pin lacks selected matching candidate");
+		} else if (pin.sourceKind !== "head" && pin.sourceKind !== "working-copy" && !receipt.source.refs.some(({ name, oid: id, objectType }) => name === pin.sourceName && id === pin.sourceOid && objectType === pin.objectType)) invalid("named pin lacks matching source ref");
+		else if (pin.sourceKind === "stash" && pin.sourceName !== "refs/stash") invalid("stash pin must name refs/stash");
+		else if (pin.sourceKind === "other" && (/^refs\/(heads|tags)\//.test(pin.sourceName) || pin.sourceName === "refs/stash")) invalid("named Git ref must use its dedicated pin lane");
+		const computed = pinRef(pin, receipt.identity.label, receipt.identity.generation, receipt.snapshot);
+		if (pin.destinationRef !== computed || names.has(computed)) invalid("pin mapping mismatch or duplicate");
+		names.add(computed);
+	}
+	if (heads.size !== receipt.pins.length || receipt.pins.some(({ destinationRef, destinationOid }) => heads.get(destinationRef) !== destinationOid)) invalid("advertised bundle heads do not equal selected pin refs and OIDs");
+	for (const tip of receipt.source.refs) {
+		const kind = tip.name === "refs/stash" ? "stash" : tip.name.startsWith("refs/heads/") ? "branch" : tip.name.startsWith("refs/tags/") ? "tag" : "other";
+		if (!receipt.pins.some((pin) => pin.sourceKind === kind && pin.sourceName === tip.name && pin.sourceOid === tip.oid && pin.objectType === tip.objectType)) invalid(`source ref lacks a custody pin: ${tip.name}`);
+	}
+	for (const candidate of receipt.source.candidates) {
+		if (candidate.disposition === "not-required" && !candidate.reason) invalid("excluded candidate lacks operator reason");
+		if (candidate.disposition === "pin" && !receipt.pins.some((pin) => pin.sourceName === candidateIdentity(candidate.kind, candidate.oid) && pin.sourceOid === candidate.oid && pin.objectType === candidate.objectType)) invalid("selected candidate lacks a custody pin");
+	}
+	for (const entries of [receipt.source.head.treePaths, receipt.snapshot?.paths ?? []]) {
+		const uniquePaths = /* @__PURE__ */ new Set();
+		for (const entry of entries) {
+			if (uniquePaths.has(entry.path)) invalid("duplicate path in tree manifest");
+			uniquePaths.add(entry.path);
+			if (entry.mode === "160000") invalid("submodule gitlink requires separate custody design");
+			if (entry.path.split("/").some((part) => part === ".git" || part === ".jj")) invalid("tracked Git/jj internals cannot be adopted");
+		}
+	}
+	if (receipt.snapshot !== null && receipt.cleanHeadPathReview !== null) invalid("clean HEAD review cannot stand in for a snapshot review");
+	if (receipt.snapshot === null) {
+		const review = receipt.cleanHeadPathReview;
+		const sensitive = receipt.source.trackedSensitivePaths;
+		if (sensitive.length && review === null) invalid("clean HEAD with tracked sensitive paths lacks local custody review");
+		if (review !== null) {
+			const manifest = receipt.source.head.treePaths;
+			if (review.manifestSha256 !== sha256(enc.encode(`${canonicalJson(manifest)}\n`))) invalid("clean HEAD review manifest differs from source HEAD");
+			if (review.stagedVsUnstaged !== null) invalid("clean HEAD review cannot approve a lost index/worktree split");
+			const included = /* @__PURE__ */ new Set();
+			const entries = new Set(manifest.map(({ path, mode, blobOid }) => `${path}\0${mode}\0${blobOid}`));
+			for (const { path, mode, blobOid } of review.included) {
+				const key = `${path}\0${mode}\0${blobOid}`;
+				if (!entries.has(key) || included.has(path)) invalid("clean HEAD review includes stale or repeated file");
+				included.add(path);
+			}
+			for (const { subject } of sensitive) if (subject === null || !included.has(subject)) invalid("sensitive tracked HEAD path has no exact local custody review");
+		}
+	}
+	if (receipt.snapshot && receipt.snapshot.parentOid !== receipt.source.head.oid) invalid("snapshot parent differs from HEAD");
+	if (!receipt.pins.some(({ sourceKind }) => sourceKind === "head")) invalid("receipt lacks a HEAD pin");
+	if (receipt.snapshot !== null && !receipt.pins.some(({ sourceKind }) => sourceKind === "working-copy")) invalid("receipt lacks snapshot pin");
+	if (receipt.snapshot === null && receipt.pins.some(({ sourceKind }) => sourceKind === "working-copy")) invalid("clean receipt has working-copy pin");
+	if (receipt.snapshot?.stagedVsUnstaged === "reported-not-preserved" && !receipt.snapshot.pathReview?.stagedVsUnstaged) invalid("lost index/worktree split is not reviewed");
+	if (receipt.snapshot !== null && receipt.snapshot.pathReview !== null) {
+		const snapshot = receipt.snapshot;
+		const review = receipt.snapshot.pathReview;
+		const manifest = sha256(enc.encode(`${canonicalJson(snapshot.paths)}\n`));
+		if (review.manifestSha256 !== manifest) invalid("path review manifest does not match snapshot");
+		const entries = new Set(snapshot.paths.map(({ path, mode, blobOid }) => `${path}\0${mode}\0${blobOid}`));
+		const reviewed = /* @__PURE__ */ new Set();
+		for (const { path, mode, blobOid } of review.included) {
+			const key = `${path}\0${mode}\0${blobOid}`;
+			if (!entries.has(key) || reviewed.has(key)) invalid("path review includes stale or repeated file");
+			reviewed.add(key);
+		}
+		for (const sensitive of snapshot.trackedSensitivePaths) if (!review.included.some(({ path }) => path === sensitive)) invalid("sensitive tracked path has no review");
+	} else if (receipt.snapshot?.trackedSensitivePaths.length) invalid("sensitive tracked paths have no review");
+	if (receipt.source.candidates.some((candidate) => candidate.disposition === "unclassified")) invalid("receipt has unclassified candidates");
+	return receipt;
+}
+function encodeReceipt(receipt) {
+	validateReceipt(receipt);
+	return enc.encode(`${canonicalJson(receipt)}\n`);
+}
+function parseReceipt(bytes) {
+	const wire = text(bytes);
+	let parsed;
+	try {
+		parsed = JSON.parse(wire);
+	} catch {
+		return invalid("invalid receipt JSON");
+	}
+	const receipt = validateReceipt(parsed);
+	if (wire !== `${canonicalJson(receipt)}\n`) invalid("receipt is not canonically serialized");
+	return receipt;
+}
+//#endregion
+//#region archive/src/recovery/transaction.ts
+/** Append-only receipt + pin installation. Caller must verify bundle, receipt, source/dest drift first. */
+function requiredRefs(input) {
+	const refs = [{
+		ref: refName(input.receiptRef),
+		oid: input.receiptCommitOid
+	}];
+	const unique = /* @__PURE__ */ new Set([input.receiptRef]);
+	for (const pin of input.pins) {
+		const ref = refName(pin.destinationRef);
+		if (unique.has(ref)) invalid(`duplicate custody ref: ${ref}`);
+		unique.add(ref);
+		refs.push({
+			ref,
+			oid: pin.destinationOid
+		});
+	}
+	const format = refs[0].oid.length === 40 ? "sha1" : "sha256";
+	for (const target of refs) {
+		oid(target.oid, format);
+		if (/^0+$/.test(target.oid)) invalid(`zero is not a custody object ID: ${target.ref}`);
+	}
+	for (let i = 0; i < refs.length; i++) for (let j = i + 1; j < refs.length; j++) if (prefixConflict(refs[i].ref, refs[j].ref)) throw new CustodyError("occupied-namespace", `desired ref prefix conflict: ${refs[i].ref} versus ${refs[j].ref}`, refs[i].ref);
+	return refs;
+}
+/** Ref file/directory conflicts also exist when the exact leaf does not yet exist. */
+function prefixConflict(name, other) {
+	return name !== other && (name.startsWith(`${other}/`) || other.startsWith(`${name}/`));
+}
+function decideInstallation(observed, input) {
+	const desired = requiredRefs(input);
+	const existingReceipt = observed.get(input.receiptRef);
+	if (existingReceipt !== void 0 && existingReceipt !== input.receiptCommitOid) throw new CustodyError("different-receipt", `receipt ref has another OID: ${input.receiptRef}`, input.receiptRef);
+	if (existingReceipt !== void 0 && !input.matchingReceiptApproved) throw new CustodyError("different-receipt", "existing receipt has not passed same-input/intent review", input.receiptRef);
+	if (existingReceipt === void 0 && desired.some(({ ref }) => ref !== input.receiptRef && observed.has(ref))) throw new CustodyError("occupied-namespace", "pin exists without an approved matching receipt; inspect manually");
+	const label = input.receiptRef.split("/")[3];
+	for (const old of [`refs/heads/harvest/${label}/head`, `refs/heads/harvest/${label}/working-copy`]) if (observed.has(old)) throw new CustodyError("occupied-namespace", `legacy harvest namespace under this label: ${old}`, old);
+	const missing = [];
+	const matching = [];
+	const alreadyPresent = [];
+	for (const { ref, oid: expected } of desired) {
+		for (const other of observed.keys()) if (prefixConflict(ref, other)) throw new CustodyError("occupied-namespace", `ref prefix conflict: ${ref} versus ${other}`, ref);
+		const actual = observed.get(ref);
+		if (actual !== void 0 && actual !== expected) throw new CustodyError("occupied-namespace", `ref has another OID: ${ref}`, ref);
+		if (actual === expected) {
+			alreadyPresent.push(ref);
+			matching.push({
+				ref,
+				oid: expected
+			});
+		} else missing.push({
+			ref,
+			oid: expected
+		});
+	}
+	return {
+		missing,
+		matching,
+		alreadyPresent
+	};
+}
+/** No automatic repair: even on a failed Git transaction, inspect refs again on retry. */
+async function installImmutableRefs(store, input) {
+	const { missing, matching, alreadyPresent } = decideInstallation(await store.list(), input);
+	if (missing.length === 0) return {
+		changed: false,
+		created: [],
+		alreadyPresent
+	};
+	try {
+		await store.createAtomically(missing, matching);
+	} catch (error) {
+		throw new CustodyError("ref-race", `atomic compare-and-create failed; inspect refs before retry: ${error instanceof Error ? error.message : String(error)}`);
+	}
+	return {
+		changed: true,
+		created: missing.map(({ ref }) => ref),
+		alreadyPresent
+	};
+}
+/** Exact stdin protocol: process adapter handles argv/env, Git handles atomicity. */
+function createTransactionStdin(missing, matching = []) {
+	const refs = [...missing, ...matching];
+	if (!refs.length) invalid("empty custody ref transaction");
+	const format = refs[0].oid.length === 40 ? "sha1" : "sha256";
+	const names = /* @__PURE__ */ new Set();
+	for (const { ref, oid: target } of refs) {
+		refName(ref);
+		oid(target, format);
+		if (/^0+$/.test(target) || names.has(ref)) invalid("invalid or repeated transaction target");
+		names.add(ref);
+	}
+	return [
+		"start",
+		...matching.map(({ ref, oid }) => `verify ${ref} ${oid}`),
+		...missing.map(({ ref, oid }) => `create ${refName(ref)} ${oid}`),
+		"prepare",
+		"commit",
+		""
+	].join("\n");
+}
+//#endregion
+//#region archive/src/recovery/git-ref-store.ts
+/** Destination-only adapter: reads every Git ref, then performs one immutable transaction. */
+var GitRefStore = class {
+	destination;
+	signal;
+	/**
+	* Bind the calling Effect's cancellation signal to every Git child spawned
+	* by this Promise adapter. An aborted update-ref transaction has uncertain
+	* outcome: callers reinspect refs on retry, never roll it back or guess.
+	*/
+	constructor(destination, execution = {}) {
+		this.destination = destination;
+		this.signal = execution.signal;
+	}
+	async list() {
+		try {
+			this.signal?.throwIfAborted();
+			const formatResult = await runPromise(gitRead(["rev-parse", "--show-object-format"], { cwd: this.destination }), { signal: this.signal });
+			this.signal?.throwIfAborted();
+			if (formatResult.exitCode !== 0) throw new Error(`Git object-format inspection failed (${formatResult.exitCode})`);
+			const format = utf8Fatal(formatResult.stdout).trim();
+			if (format !== "sha1" && format !== "sha256") invalid("unsupported destination object format");
+			const refs = await runPromise(gitRead(["for-each-ref", "--format=%(refname)%00%(objectname)"], { cwd: this.destination }), { signal: this.signal });
+			this.signal?.throwIfAborted();
+			if (refs.exitCode !== 0) throw new Error(`Git ref listing failed (${refs.exitCode})`);
+			const output = utf8Fatal(refs.stdout);
+			const observed = /* @__PURE__ */ new Map();
+			for (const line of output === "" ? [] : output.split("\n").slice(0, -1)) {
+				const fields = line.split("\0");
+				if (fields.length !== 2) invalid("malformed Git ref listing");
+				const name = refName(fields[0]);
+				if (observed.has(name)) invalid("duplicate Git ref in listing");
+				observed.set(name, oid(fields[1], format));
+			}
+			if (output !== "" && !output.endsWith("\n")) invalid("truncated Git ref listing");
+			return observed;
+		} catch (error) {
+			this.signal?.throwIfAborted();
+			throw new CustodyError("inspection-failed", `destination Git ref inspection failed: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+	async createAtomically(missing, matching) {
+		this.signal?.throwIfAborted();
+		const input = new TextEncoder().encode(createTransactionStdin(missing, matching));
+		await runPromise(gitChecked([
+			"-c",
+			"gc.auto=0",
+			"-c",
+			"maintenance.auto=false",
+			"update-ref",
+			"--stdin",
+			"--no-deref"
+		], {
+			cwd: this.destination,
+			env: readEnv,
+			input
+		}), { signal: this.signal });
+		this.signal?.throwIfAborted();
+	}
+};
+//#endregion
+//#region archive/src/recovery/retry.ts
+/** Same-generation retry admission: never reinterpret a changed destination as a new import. */
+function same$1(left, right) {
+	return canonicalJson(left) === canonicalJson(right);
+}
+const codepoint = (a, b) => a < b ? -1 : a > b ? 1 : 0;
+function unordered(items) {
+	return [...items].sort((a, b) => codepoint(canonicalJson(a), canonicalJson(b)));
+}
+/** Only collections with no order-dependent provenance or manifest digest. */
+function comparableSource(source) {
+	return {
+		...source,
+		refs: unordered(source.refs),
+		candidates: unordered(source.candidates),
+		remotes: unordered(source.remotes),
+		indexEntries: unordered(source.indexEntries),
+		worktreeChanges: unordered(source.worktreeChanges),
+		untrackedPaths: unordered(source.untrackedPaths),
+		ignoredPaths: unordered(source.ignoredPaths),
+		excludedUntracked: unordered(source.excludedUntracked),
+		trackedSensitivePaths: unordered(source.trackedSensitivePaths),
+		leftBehind: unordered(source.leftBehind),
+		jjCoverage: {
+			...source.jjCoverage,
+			headOids: unordered(source.jjCoverage.headOids)
+		},
+		head: {
+			...source.head,
+			treePaths: unordered(source.head.treePaths)
+		}
+	};
+}
+function sortedRefs(refs) {
+	return [...refs].sort(([a], [b]) => codepoint(a, b));
+}
+function mismatch(field) {
+	throw new CustodyError("different-receipt", `same-generation retry differs from recorded ${field}; choose a new generation or inspect`, field);
+}
+/**
+* Caller reads the existing receipt ref and blob from destination, parses it,
+* independently verifies the sealed bundle/intent, then calls this function.
+* RefInstall approval is granted only for exact matching historical input.
+*/
+function approveSameInputRetry(plan, existing, receiptCommitOid, currentRefs) {
+	const receipt = validateReceipt(existing);
+	oid(receiptCommitOid, receipt.source.objectFormat);
+	if (plan.schema !== "compfuzor.archive-adoption-plan/v1") mismatch("plan schema");
+	if (plan.state !== "ready" || plan.blockers.length) mismatch("apply blockers");
+	if (receipt.receiptRef !== receiptRef(plan.identity.label, plan.identity.generation)) mismatch("identity");
+	for (const field of [
+		"legacyRealpathAtCapture",
+		"sourceGitCommonDir",
+		"destinationRealpath"
+	]) if (plan.identity[field] !== receipt.identity[field]) mismatch(`identity.${field}`);
+	if (!same$1(comparableSource(plan.source), comparableSource(receipt.source))) mismatch("source inventory/fingerprint");
+	if (!same$1(plan.proposedSnapshot, receipt.snapshot)) mismatch("path manifest/review");
+	if (!same$1(unordered(plan.pins), unordered(receipt.pins))) mismatch("pin mapping");
+	for (const field of [
+		"sourceRemoteTracking",
+		"destinationWorktreeFingerprintSha256",
+		"destinationIndexSha256",
+		"selectedBranch",
+		"declaredRepo",
+		"headNotInRecordedBaseline"
+	]) if (!same$1(field === "sourceRemoteTracking" ? unordered(plan.baselines[field]) : plan.baselines[field], field === "sourceRemoteTracking" ? unordered(receipt.baselines[field]) : receipt.baselines[field])) mismatch(`destination baseline ${field}`);
+	const custodyRefs = /* @__PURE__ */ new Map([[receipt.receiptRef, receiptCommitOid]]);
+	for (const pin of receipt.pins) custodyRefs.set(pin.destinationRef, pin.destinationOid);
+	if (currentRefs.get(receipt.receiptRef) !== receiptCommitOid) mismatch("receipt ref OID");
+	for (const [name, target] of custodyRefs) {
+		const actual = currentRefs.get(name);
+		if (actual !== void 0 && actual !== target) mismatch(`custody ref ${name}`);
+	}
+	const original = new Map(receipt.baselines.destinationPreRefs.map(({ name, oid }) => [name, oid]));
+	if (new Set(plan.baselines.destinationPreRefs.map(({ name }) => name)).size !== plan.baselines.destinationPreRefs.length) mismatch("duplicate fresh destination ref");
+	if (!same$1(sortedRefs(new Map(plan.baselines.destinationPreRefs.map(({ name, oid }) => [name, oid]))), sortedRefs(currentRefs))) mismatch("fresh destination ref observation");
+	const now = new Map([...currentRefs].filter(([name]) => !custodyRefs.has(name)));
+	if (!same$1(sortedRefs(original), sortedRefs(now))) mismatch("pre-import destination refs");
+	return {
+		receiptRef: receipt.receiptRef,
+		receiptCommitOid,
+		pins: receipt.pins,
+		matchingReceiptApproved: true
+	};
+}
+/** New generation: reject already installed custody pins without a matching receipt. */
+function freshInstall(receipt, receiptCommitOid) {
+	validateReceipt(receipt);
+	oid(receiptCommitOid, receipt.source.objectFormat);
+	return {
+		receiptRef: receipt.receiptRef,
+		receiptCommitOid,
+		pins: receipt.pins,
+		matchingReceiptApproved: false
+	};
+}
+//#endregion
+//#region archive/src/custody/stage.ts
+/**
+* Private Git staging and the complete-bundle proof for archive adoption.
+*
+* This module owns the stage/bundle slice of the adoption brief: turning a
+* reviewed legacy checkout state into (a) an exact `worktree-v1` snapshot
+* minted inside a private bare scratch repository, and (b) a proven,
+* self-contained `git bundle` of the selected typed pins. It does not plan
+* admissions (inventory), seal vault bundles, mint receipts, or write
+* destination refs: those are separate owners. Every Git call goes through
+* the shared Effect adapter in `repository/git.ts`; there is no private
+* process runner here.
+*
+* Two doors share one staging core: `previewSnapshot` is the approval-free
+* proposal door (plain data, disposable scratch — it exists so an operator
+* can author a path review against the exact manifest digest without which
+* `prepareSnapshot` would refuse), and `prepareSnapshot` is the apply door
+* (enforces the manifest-bound review; `expected: null` is never an approval
+* bypass). Neither door accepts a force-style flag.
+*
+* Isolation model: the scratch repository is created outside the source
+* checkout; its object database and index are brand new, and source objects
+* are readable only through an `objects/info/alternates` pointer at the
+* source's object store. Every new blob/tree/commit lands in scratch. This is
+* the fix for the historical hazard that redirecting `GIT_INDEX_FILE` alone
+* still writes the untracked file's blob into the source ODB: routing
+* (`GIT_DIR`/`GIT_WORK_TREE`/`GIT_INDEX_FILE`/`GIT_OBJECT_DIRECTORY`) is
+* explicit on every staging command, and the adapter sanitizes inherited
+* `GIT_*` variables so a polluted parent cannot reroute a write. The
+* alternates pointer is removed before any bundle is created, so the bundle —
+* and its fresh-repository restore proof — can only carry objects that were
+* materialized into scratch itself.
+*/
+/**
+* Fixed `worktree-v1` commit metadata: identical parent, tree, and format
+* must always produce the identical commit OID. The epoch date keeps the
+* snapshot a pure function of tree content — no capture-time clock leaks into
+* custody identity.
+*/
+const WORKTREE_V1_METADATA = {
+	authorName: "compfuzor archive",
+	authorEmail: "archive@compfuzor.invalid",
+	committerName: "compfuzor archive",
+	committerEmail: "archive@compfuzor.invalid",
+	date: "@0 +0000",
+	message: "compfuzor worktree snapshot (worktree-v1)"
+};
+const encoder$3 = new TextEncoder();
+/** Both directions matter: scratch inside source and source inside scratch. */
+const contains$2 = (parent, child) => {
+	const rel = relative(parent, child);
+	return rel === "" || rel !== ".." && !rel.startsWith("../") && !isAbsolute(rel);
+};
+const stepFailure = (code, step, error) => error instanceof CustodyError ? error : new CustodyError(code, `${step} failed: ${error instanceof Error ? error.message : String(error)}`);
+/**
+* Cancellation surfaces as the caller's abort reason, never as a wrapped
+* inspection failure — an aborted stage is a caller decision, not a Git
+* defect, and Sol's apply must be able to distinguish it.
+*/
+const abortReason = (signal) => signal?.reason instanceof Error ? signal.reason : /* @__PURE__ */ new Error("stage execution aborted");
+/** Cancellation gate between async filesystem mutations. */
+const abortBarrier = (signal) => {
+	signal?.throwIfAborted();
+};
+/**
+* Every stage command names its repository explicitly. Worktree-touching
+* commands (check-attr, add) add GIT_WORK_TREE and run with the source root
+* as cwd; everything else runs inside the bare scratch with no worktree, so
+* ls-tree paths are never relativized.
+*/
+const runStage = async (wiring, args, env = {}, signal) => {
+	const routing = {
+		GIT_DIR: wiring.gitDir,
+		GIT_OBJECT_DIRECTORY: join(wiring.gitDir, "objects"),
+		GIT_INDEX_FILE: join(wiring.gitDir, "index")
+	};
+	if (wiring.workTree !== null) routing.GIT_WORK_TREE = wiring.workTree;
+	return checkedRead(args, wiring.workTree ?? wiring.gitDir, {
+		...routing,
+		...env
+	}, "private stage git", signal);
+};
+/** Discovery and restore commands: no Git routing, cwd decides the repo. */
+const runPlain = async (args, cwd, signal) => checkedRead(args, cwd, {}, "git", signal);
+/**
+* `gitRead` isolation plus checked exit: stdout bytes on success, `GitError`
+* (argv/stderr retained, never printed) on failure, wrapped as a custody
+* failure naming the step. The `signal` interrupts the fiber through
+* `Effect.runPromise`, closing the spawner scope and killing the child.
+*/
+const checkedRead = async (args, cwd, env, step, signal, input) => {
+	try {
+		const result = await runPromise(gitRead(args, {
+			cwd,
+			env,
+			input
+		}), { signal });
+		if (result.exitCode !== 0) throw new GitError({
+			argv: args,
+			cwd,
+			exitCode: result.exitCode,
+			stderr: result.stderr
+		});
+		return result.stdout;
+	} catch (error) {
+		if (signal?.aborted) throw abortReason(signal);
+		throw stepFailure("inspection-failed", `${step} ${args[0] ?? ""}`, error);
+	}
+};
+const unsupported = (reason, subject) => new CustodyError("unsupported-repository", reason, subject);
+const denyInternals = (paths, what, fail = invalid) => {
+	for (const entry of paths) if (entry.split("/").some((part) => part === ".git" || part === ".jj")) fail(`${what} names nested .git/.jj internals: ${entry}`);
+};
+const validatedPaths = (paths, what) => {
+	const seen = /* @__PURE__ */ new Set();
+	for (const entry of paths) {
+		repoPath(entry);
+		if (seen.has(entry)) invalid(`duplicate ${what} path: ${entry}`);
+		seen.add(entry);
+	}
+	return [...paths];
+};
+const pathOrder = (a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
+const validateExpected = (expected, format) => {
+	const copy = [...expected];
+	for (const entry of copy) {
+		repoPath(entry.path);
+		oid(entry.blobOid, format);
+		if (entry.mode === "160000") throw unsupported(`gitlink path requires separate custody design: ${entry.path}`, entry.path);
+	}
+	denyInternals(copy.map(({ path }) => path), "expected manifest");
+	const sorted = [...copy].sort(pathOrder);
+	for (let i = 0; i < sorted.length; i++) if (expected[i] !== sorted[i]) invalid("expected manifest must be sorted by path");
+	return sorted;
+};
+/**
+* Read-only source discovery: the Git dir must be a plain directory (not a
+* linked worktree or bare repo) holding the declared object format, with no
+* alternates or shallow grafts of its own. Alternates in the source would be
+* followed transitively by the stage, and shallow/partial objects cannot
+* back a complete-custody promise.
+*/
+const discoverSource = async (sourceRoot, format, signal) => {
+	const gitDir = utf8Fatal(await runPlain(["rev-parse", "--absolute-git-dir"], sourceRoot, signal)).trim();
+	const commonRaw = utf8Fatal(await runPlain(["rev-parse", "--git-common-dir"], sourceRoot, signal)).trim();
+	const commonDir = commonRaw.startsWith("/") ? commonRaw : join(sourceRoot, commonRaw);
+	if (commonDir !== gitDir) throw unsupported(`linked worktrees are unsupported: git dir ${gitDir} differs from common dir ${commonDir}`, sourceRoot);
+	if (utf8Fatal(await runPlain(["rev-parse", "--is-bare-repository"], sourceRoot, signal)).trim() === "true") throw unsupported("a bare source has no worktree to stage", sourceRoot);
+	const observed = utf8Fatal(await runPlain(["rev-parse", "--show-object-format"], sourceRoot, signal)).trim();
+	if (observed !== format) invalid(`source object format is ${observed}, but ${format} was declared`);
+	const objectsDir = join(gitDir, "objects");
+	const fileExists = async (file) => {
+		try {
+			await readFile(file);
+			return true;
+		} catch {
+			return false;
+		}
+	};
+	for (const [file, reason] of [[join(objectsDir, "info", "alternates"), "source itself uses alternates"], [join(gitDir, "shallow"), "shallow source"]]) if (await fileExists(file)) throw unsupported(reason, file);
+	return {
+		gitDir,
+		objectsDir
+	};
+};
+/** check-attr needs the path list on stdin as NUL-delimited bytes. */
+const runStageWithInput = async (wiring, args, paths, signal) => {
+	const routing = {
+		GIT_DIR: wiring.gitDir,
+		GIT_OBJECT_DIRECTORY: join(wiring.gitDir, "objects"),
+		GIT_INDEX_FILE: join(wiring.gitDir, "index")
+	};
+	if (wiring.workTree !== null) routing.GIT_WORK_TREE = wiring.workTree;
+	return checkedRead(args, wiring.workTree ?? wiring.gitDir, routing, "private stage git", signal, encoder$3.encode(`${paths.join("\0")}\0`));
+};
+/**
+* Refuse clean/smudge filter attributes *before* any payload file is read.
+* `text`/`eol` re-encoding is Git-native and deterministic; an external
+* filter driver is an arbitrary program whose bytes cannot be promised here.
+*/
+const assertNoFilters = async (wiring, paths, signal) => {
+	if (!paths.length) return;
+	const output = await runStageWithInput(wiring, [
+		"check-attr",
+		"--stdin",
+		"-z",
+		"-z",
+		"filter"
+	], paths, signal);
+	const tokens = utf8Fatal(output).split("\0");
+	if (tokens.at(-1) === "") tokens.pop();
+	if (tokens.length !== paths.length * 3) invalid("malformed check-attr output");
+	const requested = new Set(paths);
+	for (let i = 0; i < tokens.length; i += 3) {
+		const path = tokens[i];
+		const attribute = tokens[i + 1];
+		const value = tokens[i + 2];
+		if (attribute !== "filter" || !requested.has(path)) invalid("check-attr reported an unexpected path");
+		if (value !== "unspecified" && value !== "unset") throw unsupported(`clean/smudge filter attribute cannot be faithfully staged: ${path}`, path);
+	}
+};
+/**
+* Parse `ls-tree -r -z` into the canonical manifest: the first TAB separates
+* `mode type oid` from a path that may contain any bytes (spaces, globs,
+* newlines are impossible in lossless-UTF-8 validated names). Entries are
+* sorted by path (code-unit order) — the order the receipt and path-review
+* digest are computed over.
+*/
+const parseManifest$1 = (bytes, format) => {
+	const records = [];
+	let start = 0;
+	for (let i = 0; i < bytes.length; i++) if (bytes[i] === 0) {
+		records.push(bytes.subarray(start, i));
+		start = i + 1;
+	}
+	if (start < bytes.length) records.push(bytes.subarray(start));
+	const entries = [];
+	for (const record of records) {
+		if (!record.length) continue;
+		let tab = -1;
+		for (let i = 0; i < record.length; i++) if (record[i] === 9) {
+			tab = i;
+			break;
+		}
+		if (tab < 0) invalid("malformed ls-tree record");
+		const meta = utf8Fatal(record.subarray(0, tab)).split(" ");
+		if (meta.length !== 3) invalid("malformed ls-tree metadata");
+		const [mode, type, oidText] = meta;
+		const entryPath = repoPath(utf8Fatal(record.subarray(tab + 1)));
+		if (type === "commit") throw unsupported(`gitlink path requires separate custody design: ${entryPath}`, entryPath);
+		if (type !== "blob") invalid(`unexpected ls-tree entry type: ${type}`);
+		if (mode !== "100644" && mode !== "100755" && mode !== "120000") invalid(`unexpected ls-tree mode: ${mode}`);
+		entries.push({
+			path: entryPath,
+			mode,
+			blobOid: oid(oidText, format)
+		});
+	}
+	entries.sort(pathOrder);
+	return entries;
+};
+/** The staged manifest must equal the reviewed proposal exactly, or stop. */
+const compareWithExpected = (manifest, expected) => {
+	if (canonicalJson(manifest) === canonicalJson(expected)) return;
+	const actual = new Map(manifest.map((entry) => [entry.path, entry]));
+	const proposed = new Map(expected.map((entry) => [entry.path, entry]));
+	const differences = [];
+	for (const [path, entry] of proposed) {
+		const staged = actual.get(path);
+		if (staged === void 0) differences.push(`missing ${path}`);
+		else if (staged.mode !== entry.mode || staged.blobOid !== entry.blobOid) differences.push(`changed ${path}`);
+	}
+	for (const path of actual.keys()) if (!proposed.has(path)) differences.push(`extra ${path}`);
+	throw new CustodyError("source-drift", `staged tree differs from the reviewed manifest: ${differences.slice(0, 8).join("; ")}`, differences[0] ?? null);
+};
+/** Mirror the receipt-level path-review invariants while the stage is live. */
+const bindPathReview = (snapshotPaths, input, snapshotWillExist) => {
+	const review = input.pathReview;
+	if (snapshotWillExist && input.trackedSensitivePaths.length > 0 && review === null) invalid("sensitive tracked paths require an approved path review");
+	if (snapshotWillExist && input.stagedVsUnstaged === "reported-not-preserved" && review?.stagedVsUnstaged == null) invalid("losing the staged/unstaged split requires the path review's single-tree approval");
+	if (review === null) return;
+	if (review.manifestSha256 !== sha256(encoder$3.encode(`${canonicalJson(snapshotPaths)}\n`))) invalid("path review digest does not match the staged manifest");
+	const staged = new Map(snapshotPaths.map((entry) => [entry.path, entry]));
+	for (const entry of review.included) {
+		const match = staged.get(entry.path);
+		if (match === void 0 || match.mode !== entry.mode || match.blobOid !== entry.blobOid) invalid(`path review includes a path absent from the staged manifest: ${entry.path}`);
+	}
+	const reviewed = new Set(review.included.map((entry) => entry.path));
+	for (const path of input.trackedSensitivePaths) if (!reviewed.has(path)) invalid(`sensitive tracked path has no review entry: ${path}`);
+};
+/**
+* Shared staging core for `prepareSnapshot` and `previewSnapshot`: validate
+* the request, build the private stage, stage exactly the requested paths,
+* and compute the exact tree manifest (compared against `expected` when
+* present). Approval enforcement is deliberately **not** part of the core —
+* the preview and apply doors differ exactly there. Scratch is left in place
+* on failure for inspection; its lifecycle belongs to the caller.
+*/
+const stageTree = async (input, signal) => {
+	abortBarrier(signal);
+	const format = input.objectFormat;
+	oid(input.headOid, format);
+	const restage = validatedPaths(input.restageTracked, "restaged tracked");
+	const untracked = validatedPaths(input.addUntracked, "selected untracked");
+	validatedPaths(input.excludedUntracked, "excluded untracked");
+	validatedPaths(input.ignoredPaths, "ignored");
+	validatedPaths(input.trackedSensitivePaths, "sensitive tracked");
+	denyInternals(restage, "tracked restage list");
+	denyInternals(untracked, "selected untracked list");
+	for (const path of restage) if (untracked.includes(path)) invalid(`path is both tracked-restage and untracked: ${path}`);
+	const expected = input.expected === null ? null : validateExpected(input.expected, format);
+	const sourceRoot = await realpath(input.sourceRoot).catch(() => invalid(`source root does not exist: ${input.sourceRoot}`));
+	const scratchRoot = await realpath(input.scratchRoot).catch(() => invalid(`scratch root does not exist: ${input.scratchRoot}`));
+	if (contains$2(sourceRoot, scratchRoot)) invalid("private scratch must live outside the source checkout");
+	if (contains$2(scratchRoot, sourceRoot)) invalid("source checkout must not live inside the private scratch");
+	const { objectsDir: sourceObjectsDir } = await discoverSource(sourceRoot, format, signal);
+	const stageRoot = await mkdtemp(join(scratchRoot, "stage-"));
+	abortBarrier(signal);
+	const gitDir = join(stageRoot, "stage.git");
+	await runPlain([
+		"init",
+		"--quiet",
+		"--bare",
+		`--object-format=${format}`,
+		"--initial-branch=compfuzor-stage-unborn",
+		gitDir
+	], stageRoot, signal);
+	const wiring = {
+		gitDir,
+		workTree: null
+	};
+	const workWiring = {
+		gitDir,
+		workTree: sourceRoot
+	};
+	await runStage(wiring, [
+		"config",
+		"core.bare",
+		"false"
+	], {}, signal);
+	const alternatesPath = join(gitDir, "objects", "info", "alternates");
+	await writeFile(alternatesPath, `${sourceObjectsDir}\n`);
+	abortBarrier(signal);
+	const headTreeOid = oid(utf8Fatal(await runStage(wiring, ["rev-parse", `${input.headOid}^{tree}`], {}, signal)).trim(), format);
+	await runStage(wiring, ["read-tree", headTreeOid], {}, signal);
+	const selected = [...restage, ...untracked];
+	await assertNoFilters(workWiring, selected, signal);
+	if (selected.length > 0) {
+		const pathspecFile = join(stageRoot, "pathspec.nul");
+		await writeFile(pathspecFile, encoder$3.encode(selected.map((p) => `:(literal)${p}`).join("\0")));
+		abortBarrier(signal);
+		await runStage(workWiring, [
+			"add",
+			"-A",
+			`--pathspec-from-file=${pathspecFile}`,
+			"--pathspec-file-nul"
+		], {}, signal);
+	}
+	const treeOid = oid(utf8Fatal(await runStage(wiring, ["write-tree"], {}, signal)).trim(), format);
+	const manifest = parseManifest$1(await runStage(wiring, [
+		"ls-tree",
+		"-r",
+		"-z",
+		treeOid
+	], {}, signal), format);
+	denyInternals(manifest.map(({ path }) => path), "staged tree", (message) => {
+		throw unsupported(message, null);
+	});
+	if (expected !== null) compareWithExpected(manifest, expected);
+	return {
+		wiring,
+		stageRoot,
+		gitDir,
+		sourceRoot,
+		sourceObjectsDir,
+		objectFormat: format,
+		headOid: input.headOid,
+		headTreeOid,
+		treeOid,
+		manifest,
+		dirty: treeOid !== headTreeOid
+	};
+};
+/** Mint the deterministic `worktree-v1` commit; caller has decided it exists. */
+const mintWorktreeCommit = async (staged, signal) => oid(utf8Fatal(await runStage(staged.wiring, [
+	"commit-tree",
+	staged.treeOid,
+	"-p",
+	staged.headOid,
+	"-m",
+	WORKTREE_V1_METADATA.message
+], {
+	GIT_AUTHOR_NAME: WORKTREE_V1_METADATA.authorName,
+	GIT_AUTHOR_EMAIL: WORKTREE_V1_METADATA.authorEmail,
+	GIT_COMMITTER_NAME: WORKTREE_V1_METADATA.committerName,
+	GIT_COMMITTER_EMAIL: WORKTREE_V1_METADATA.committerEmail,
+	GIT_AUTHOR_DATE: WORKTREE_V1_METADATA.date,
+	GIT_COMMITTER_DATE: WORKTREE_V1_METADATA.date
+}, signal)).trim(), staged.objectFormat);
+/**
+* Build the `worktree-v1` snapshot of a legacy checkout inside a new private
+* bare scratch repository. The source's ODB, index, refs, reflogs and
+* worktree are never written; new blobs, trees and the optional deterministic
+* commit exist only in scratch. The synthetic commit is minted **iff** the
+* staged tree differs from the HEAD tree, with fixed metadata so identical
+* parent+tree always produce the identical commit OID.
+*
+* This is the apply door: sensitive tracked paths and a reported staged
+* split require a path review already bound to the exact manifest digest,
+* and `expected: null` is never an approval bypass. Use `previewSnapshot`
+* to compute the proposal and digest first.
+*/
+const prepareSnapshot = async (input, execution = {}) => {
+	const staged = await stageTree(input, execution.signal);
+	bindPathReview(staged.manifest, input, staged.dirty);
+	abortBarrier(execution.signal);
+	const snapshotCommitOid = staged.dirty ? await mintWorktreeCommit(staged, execution.signal) : null;
+	const snapshot = snapshotCommitOid === null ? null : {
+		format: "worktree-v1",
+		parentOid: input.headOid,
+		treeOid: staged.treeOid,
+		commitOid: snapshotCommitOid,
+		paths: staged.manifest,
+		stagedVsUnstaged: input.stagedVsUnstaged,
+		excludeFileSha256: input.excludeFileSha256,
+		excludedUntracked: [...input.excludedUntracked],
+		ignoredPaths: [...input.ignoredPaths],
+		trackedSensitivePaths: [...input.trackedSensitivePaths],
+		pathReview: input.pathReview
+	};
+	return {
+		stageRoot: staged.stageRoot,
+		gitDir: staged.gitDir,
+		sourceRoot: staged.sourceRoot,
+		sourceObjectsDir: staged.sourceObjectsDir,
+		objectFormat: staged.objectFormat,
+		headOid: staged.headOid,
+		headTreeOid: staged.headTreeOid,
+		snapshot,
+		snapshotCommitOid
+	};
+};
+/**
+* Compute the proposed snapshot without requiring any approval: the answer
+* to the review chicken-and-egg. The preview runs the identical private,
+* source-read-only staging as `prepareSnapshot` and returns the shared
+* [`SnapshotProposal`](./model.ts) contract — the exact manifest, the
+* deterministic commit identity it would mint, the digest a path review must
+* bind, and the review requirements the apply door will enforce — then
+* disposes its throwaway scratch. A clean source (tree identical to HEAD)
+* yields `null`, exactly like a plan's `proposedSnapshot`: inspect the
+* inventory's HEAD tree manifest and use the receipt-level
+* `cleanHeadPathReview` there; this module owns only the dirty preview/apply
+* pair. Plain data only — never a `StageHandle`, nothing transferable to
+* `proveBundle`, and no force-style flag that could weaken `prepareSnapshot`.
+*/
+const previewSnapshot = async (input, execution = {}) => {
+	const staged = await stageTree(input, execution.signal);
+	try {
+		if (!staged.dirty) return null;
+		abortBarrier(execution.signal);
+		const commitOid = await mintWorktreeCommit(staged, execution.signal);
+		return {
+			format: "worktree-v1",
+			parentOid: input.headOid,
+			treeOid: staged.treeOid,
+			commitOid,
+			paths: staged.manifest,
+			stagedVsUnstaged: input.stagedVsUnstaged,
+			excludeFileSha256: input.excludeFileSha256,
+			excludedUntracked: [...input.excludedUntracked],
+			ignoredPaths: [...input.ignoredPaths],
+			trackedSensitivePaths: [...input.trackedSensitivePaths],
+			manifestSha256: sha256(encoder$3.encode(`${canonicalJson(staged.manifest)}\n`)),
+			reviewRequirements: {
+				sensitivePaths: [...input.trackedSensitivePaths],
+				stagedVsUnstagedApprovalRequired: input.stagedVsUnstaged === "reported-not-preserved"
+			}
+		};
+	} finally {
+		await rm(staged.stageRoot, {
+			recursive: true,
+			force: true
+		});
+	}
+};
+const bundleInvalid = (reason, subject = null) => new CustodyError("bundle-invalid", reason, subject);
+const parseBundleHeads = (bytes, format) => {
+	const heads = [];
+	for (const line of utf8Fatal(bytes).split("\n")) {
+		if (!line) continue;
+		const space = line.indexOf(" ");
+		if (space < 0) throw bundleInvalid("malformed bundle head record");
+		const headOid = oid(line.slice(0, space), format);
+		const name = line.slice(space + 1);
+		let ref;
+		try {
+			ref = refName(name);
+		} catch {
+			throw bundleInvalid(`bundle advertises a non-ref head: ${name}`, name);
+		}
+		heads.push({
+			ref,
+			oid: headOid
+		});
+	}
+	heads.sort((a, b) => a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0);
+	return heads;
+};
+const parseForEachRef$1 = (bytes, format) => {
+	const refs = /* @__PURE__ */ new Map();
+	const output = utf8Fatal(bytes);
+	if (output === "") return refs;
+	if (!output.endsWith("\n")) invalid("truncated for-each-ref listing");
+	for (const line of output.split("\n").slice(0, -1)) {
+		const fields = line.split("\0");
+		if (fields.length !== 2) invalid("malformed for-each-ref listing");
+		refs.set(refName(fields[0]), oid(fields[1], format));
+	}
+	return refs;
+};
+/**
+* Structural pin validation shared by the stage proof and the standalone
+* restoration check: OIDs match the declared format, source and destination
+* OIDs are identical, refs are valid and pairwise non-conflicting, and only
+* commit/tag tips are promised — `git bundle` on the installed Git can
+* mechanically carry tree/blob tip refs, but the custody promise (ancestry,
+* peeled targets, manifest checks) is only defined for commits and tags, so
+* v1 refuses them rather than promising something untested.
+*/
+const validateBundlePins = (format, pins) => {
+	if (!pins.length) invalid("no pins selected for the bundle proof");
+	const seen = /* @__PURE__ */ new Set();
+	const pinMap = /* @__PURE__ */ new Map();
+	for (const pin of pins) {
+		if (pin.destinationOid !== pin.sourceOid) invalid(`pin source/destination OIDs differ: ${pin.sourceKind}`);
+		oid(pin.sourceOid, format);
+		if (pin.objectType === "tree" || pin.objectType === "blob") throw unsupported(`git bundle custody is not promised for ${pin.objectType} tips; pinned trees/blobs need separate design`, pin.sourceName);
+		const ref = refName(pin.destinationRef);
+		if (seen.has(ref)) invalid(`duplicate pin ref: ${ref}`);
+		for (const other of seen) if (prefixConflict(ref, other)) throw new CustodyError("occupied-namespace", `pin refs conflict: ${ref} versus ${other}`, ref);
+		seen.add(ref);
+		pinMap.set(ref, pin);
+	}
+	return pinMap;
+};
+/**
+* Prove a bundle restores its complete custody promise using nothing but
+* itself: `bundle list-heads` must advertise exactly the pin refs at the pin
+* OIDs, `bundle verify` must succeed inside a fresh empty repository of the
+* declared object format (which also proves there are no prerequisites the
+* empty repo would lack), `fetch '+refs/*:refs/*'` must recreate every pin
+* ref, each object must have its pinned type (tag objects must still peel to
+* a commit), the snapshot commit must carry exactly the recorded tree and
+* path/mode/blob manifest, and a full reachable-object walk must succeed
+* there. The restore repository is returned for inspection and disposal.
+*/
+const checkBundleRestoration = async (input, execution = {}) => {
+	abortBarrier(execution.signal);
+	const format = input.objectFormat;
+	const pinMap = validateBundlePins(format, input.pins);
+	const scratchRoot = await realpath(input.scratchRoot).catch(() => invalid(`restore scratch root does not exist: ${input.scratchRoot}`));
+	const heads = parseBundleHeads(await runPlain([
+		"bundle",
+		"list-heads",
+		input.bundlePath
+	], scratchRoot, execution.signal), format);
+	const advertised = new Map(heads.map((head) => [head.ref, head.oid]));
+	if (advertised.size !== pinMap.size || [...pinMap.keys()].some((ref) => !advertised.has(ref))) throw bundleInvalid(`bundle advertises ${advertised.size} heads for ${pinMap.size} pins`, [...advertised.keys()].find((ref) => !pinMap.has(ref)) ?? null);
+	for (const [ref, pin] of pinMap) if (advertised.get(ref) !== pin.sourceOid) throw bundleInvalid(`bundle head OID differs from pin: ${ref}`, ref);
+	abortBarrier(execution.signal);
+	const restoreDir = await mkdtemp(join(scratchRoot, "restore-"));
+	const restoreGit = join(restoreDir, "restore.git");
+	await runPlain([
+		"init",
+		"--quiet",
+		"--bare",
+		`--object-format=${format}`,
+		"--initial-branch=compfuzor-restore-unborn",
+		restoreGit
+	], restoreDir, execution.signal);
+	const algorithm = utf8Fatal(await runPlain([
+		"bundle",
+		"verify",
+		input.bundlePath
+	], restoreGit, execution.signal)).match(/hash algorithm: (sha1|sha256)/);
+	if (algorithm !== null && algorithm[1] !== format) throw bundleInvalid(`bundle object format ${algorithm[1]} differs from ${format}`);
+	await runPlain([
+		"fetch",
+		"--quiet",
+		input.bundlePath,
+		"+refs/*:refs/*"
+	], restoreGit, execution.signal);
+	const restored = parseForEachRef$1(await runPlain(["for-each-ref", "--format=%(refname)%00%(objectname)"], restoreGit, execution.signal), format);
+	if (restored.size !== pinMap.size) throw bundleInvalid(`fresh restore holds ${restored.size} refs for ${pinMap.size} pins`);
+	for (const [ref, pin] of pinMap) {
+		if (restored.get(ref) !== pin.sourceOid) throw bundleInvalid(`restored ref OID differs from pin: ${ref}`, ref);
+		const type = utf8Fatal(await runPlain([
+			"cat-file",
+			"-t",
+			pin.sourceOid
+		], restoreGit, execution.signal)).trim();
+		if (type !== pin.objectType) throw bundleInvalid(`restored object type ${type} differs from ${pin.objectType}: ${ref}`, ref);
+		if (pin.objectType === "tag") await runPlain(["rev-parse", `${pin.sourceOid}^{commit}`], restoreGit, execution.signal);
+	}
+	await runPlain([
+		"rev-list",
+		"--objects",
+		"--all"
+	], restoreGit, execution.signal);
+	let snapshotManifestVerified = false;
+	if (input.snapshot !== null) {
+		if (utf8Fatal(await runPlain(["rev-parse", `${input.snapshot.commitOid}^{tree}`], restoreGit)).trim() !== input.snapshot.treeOid) throw bundleInvalid("restored snapshot commit does not carry the staged tree");
+		if (canonicalJson(parseManifest$1(await runPlain([
+			"ls-tree",
+			"-r",
+			"-z",
+			input.snapshot.commitOid
+		], restoreGit), format)) !== canonicalJson(input.snapshot.paths)) throw bundleInvalid("restored snapshot path manifest differs from the staged manifest");
+		snapshotManifestVerified = true;
+	}
+	return {
+		freshRestoreVerified: true,
+		restoreRepoPath: restoreGit,
+		verifiedHeads: heads,
+		snapshotManifestVerified
+	};
+};
+/**
+* Prove a complete, source-independent bundle of the selected typed pins
+* (branches, HEAD, annotated/lightweight tags, stash, reflog candidates, and
+* the synthetic working-copy commit).
+*
+* The proof: attach one staging ref per pin, materialize the reachable
+* closure into the scratch ODB (`repack -a -d`), **remove the alternates
+* pointer to the source**, walk every object locally, create a
+* no-prerequisite `git bundle create --all`, and hand the resulting private
+* bundle to `checkBundleRestoration` for the fresh-repository proof. The
+* returned bundle is proven but still private: sealing it into the durable
+* vault (atomic write, fsync, permissions) belongs to the vault owner.
+*/
+const proveBundle = async (stage, pins, execution = {}) => {
+	abortBarrier(execution.signal);
+	const format = stage.objectFormat;
+	const wiring = {
+		gitDir: stage.gitDir,
+		workTree: null
+	};
+	const pinMap = validateBundlePins(format, pins);
+	for (const pin of pins) {
+		if (pin.sourceKind === "head" && pin.sourceOid !== stage.headOid) invalid("HEAD pin does not match the staged source HEAD");
+		if (pin.sourceKind === "working-copy") {
+			if (stage.snapshotCommitOid === null) throw unsupported("working-copy pin on a clean (snapshot-free) stage", pin.sourceName);
+			if (pin.sourceOid !== stage.snapshotCommitOid) invalid("working-copy pin does not match the staged snapshot commit");
+		}
+	}
+	if (stage.snapshotCommitOid !== null && !pins.some(({ sourceKind }) => sourceKind === "working-copy")) invalid("a staged snapshot requires its working-copy pin in the bundle");
+	for (const [ref, pin] of pinMap) await runStage(wiring, [
+		"update-ref",
+		ref,
+		pin.sourceOid
+	], {}, execution.signal);
+	await runStage(wiring, [
+		"repack",
+		"-a",
+		"-d",
+		"-q"
+	], {}, execution.signal);
+	abortBarrier(execution.signal);
+	await rm(join(stage.gitDir, "objects", "info", "alternates"), { force: true });
+	await runStage(wiring, [
+		"rev-list",
+		"--objects",
+		"--all"
+	], {}, execution.signal);
+	await runStage(wiring, [
+		"cat-file",
+		"--batch-all-objects",
+		"--batch-check"
+	], {}, execution.signal);
+	abortBarrier(execution.signal);
+	const bundlePath = join(stage.stageRoot, "source.bundle");
+	await runStage(wiring, [
+		"bundle",
+		"create",
+		bundlePath,
+		"--all"
+	], {}, execution.signal);
+	const check = await checkBundleRestoration({
+		bundlePath,
+		objectFormat: format,
+		scratchRoot: stage.stageRoot,
+		pins,
+		snapshot: stage.snapshot === null ? null : {
+			commitOid: stage.snapshot.commitOid,
+			treeOid: stage.snapshot.treeOid,
+			paths: stage.snapshot.paths
+		}
+	}, execution);
+	return {
+		stage,
+		bundlePath,
+		bundleSha256: sha256(await readFile(bundlePath)),
+		verifiedHeads: check.verifiedHeads,
+		freshRestoreVerified: check.freshRestoreVerified,
+		restoreRepoPath: check.restoreRepoPath,
+		snapshotManifestVerified: check.snapshotManifestVerified
+	};
+};
+//#endregion
+//#region archive/src/custody/inventory/decode.ts
+/**
+* Pure byte-level decoding of Git plumbing output into custody model values.
+*
+* No I/O happens here: every function takes the raw bytes (or text) a Git
+* command produced and either returns fully validated values or throws
+* `CustodyError`. The probe layer maps those failures to named blockers and
+* records which inventory category could not be represented — a decode
+* failure is never silently coerced to an empty list.
+*
+* Parsing rules (see design/archive-migration/brief0.gpt6sol.md):
+* - `--z` record output is split on NUL so filenames cannot spoof delimiters;
+* - mixed NUL/newline formats (`for-each-ref`, `reflog show --format`) are
+*   split on newline first, and each line must end with a NUL terminator;
+* - all names are decoded as strict UTF-8 and must round-trip byte-for-byte,
+*   so unrepresentable path/ref bytes become named blockers, not lossy data;
+* - OIDs are validated against the repository's object format before use.
+*/
+const encoder$2 = new TextEncoder();
+/** Strict UTF-8 decode that refuses lossy round-trips (lone surrogates). */
+function strictUtf8(bytes, what) {
+	let decoded;
+	try {
+		decoded = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+	} catch {
+		throw new CustodyError("invalid-input", `${what} is not valid UTF-8`);
+	}
+	if (!Buffer.from(encoder$2.encode(decoded)).equals(Buffer.from(bytes))) throw new CustodyError("invalid-input", `${what} cannot round-trip UTF-8`);
+	return decoded;
+}
+/**
+* Split pure NUL-terminated records (`--z` output with no newline framing):
+* each record is the bytes between NUL bytes; one trailing empty record from
+* the final terminator is dropped, any interior empty record is invalid.
+*/
+function nulRecords(bytes, what) {
+	const parts = [];
+	let start = 0;
+	for (let i = 0; i < bytes.length; i += 1) if (bytes[i] === 0) {
+		parts.push(bytes.subarray(start, i));
+		start = i + 1;
+	}
+	if (start < bytes.length) parts.push(bytes.subarray(start));
+	if (parts.length > 0 && parts[parts.length - 1].length === 0) parts.pop();
+	if (parts.some((part) => part.length === 0)) throw new CustodyError("inspection-failed", `empty ${what} record`);
+	return parts;
+}
+/**
+* Line-framed NUL format (`--format='...%00'`): each record ends with NUL
+* followed by a newline, so the buffer is split on newline first and every
+* line must end with the NUL terminator. Returns strict-UTF-8 field lists.
+*/
+function nulLines(bytes, what) {
+	const lines = strictUtf8(bytes, what).split("\n");
+	if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+	return lines.map((line) => {
+		if (!line.endsWith("\0")) throw new CustodyError("inspection-failed", `${what} record is not NUL-terminated`);
+		return line.slice(0, -1).split("\0");
+	});
+}
+/** `for-each-ref --format='%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00'` */
+function parseForEachRef(bytes, format) {
+	return nulLines(bytes, "for-each-ref record").map((fields) => {
+		if (fields.length !== 4) throw new CustodyError("inspection-failed", "for-each-ref record arity");
+		const [name, target, type, peeled] = fields;
+		if (type !== "commit" && type !== "tag" && type !== "tree" && type !== "blob") throw new CustodyError("inspection-failed", `unknown object type for ${name}`);
+		return {
+			name: refName(name),
+			oid: oid(target, format),
+			objectType: type,
+			peeledOid: peeled === "" ? null : oid(peeled, format)
+		};
+	});
+}
+/** `ls-files --stage -z`: `mode SP oid SP stage TAB path`. */
+function parseLsFilesStage(bytes, format) {
+	return nulRecords(bytes, "ls-files record").map((record) => {
+		const tab = record.indexOf(9);
+		if (tab === -1) throw new CustodyError("inspection-failed", "ls-files record has no path");
+		const meta = strictUtf8(record.subarray(0, tab), "ls-files metadata").split(" ");
+		if (meta.length !== 3) throw new CustodyError("inspection-failed", "ls-files metadata arity");
+		const stage = Number.parseInt(meta[2], 10);
+		if (stage !== 0 && stage !== 1 && stage !== 2 && stage !== 3) throw new CustodyError("inspection-failed", `unknown index stage ${meta[2]}`);
+		return {
+			mode: modeOf(meta[0]),
+			blobOid: oid(meta[1], format),
+			path: repoPath(record.subarray(tab + 1)),
+			stage
+		};
+	});
+}
+/** `ls-tree -r -z`: `mode SP type SP oid TAB path` (blobs and gitlinks with `-r`). */
+function parseLsTree(bytes, format) {
+	return nulRecords(bytes, "ls-tree record").map((record) => {
+		const tab = record.indexOf(9);
+		if (tab === -1) throw new CustodyError("inspection-failed", "ls-tree record has no path");
+		const meta = strictUtf8(record.subarray(0, tab), "ls-tree metadata").split(" ");
+		if (meta.length !== 3) throw new CustodyError("inspection-failed", "ls-tree metadata arity");
+		if (meta[1] !== "blob" && !(meta[1] === "commit" && meta[0] === "160000")) throw new CustodyError("inspection-failed", `unexpected ls-tree entry type ${meta[1]}`);
+		return {
+			mode: modeOf(meta[0]),
+			blobOid: oid(meta[2], format),
+			path: repoPath(record.subarray(tab + 1))
+		};
+	});
+}
+function modeOf(mode) {
+	if (mode === "100644" || mode === "100755" || mode === "120000" || mode === "160000") return mode;
+	throw new CustodyError("inspection-failed", `unsupported Git mode ${mode}`);
+}
+const STATUS_LETTER = {
+	".": "unchanged",
+	A: "added",
+	M: "modified",
+	D: "deleted",
+	R: "renamed",
+	C: "copied",
+	T: "typechanged",
+	U: "unmerged"
+};
+function letter(char, what) {
+	const status = STATUS_LETTER[char];
+	if (status === void 0) throw new CustodyError("inspection-failed", `unknown status letter ${char} in ${what}`);
+	return status;
+}
+/**
+* `status --porcelain=v2 -z --untracked-files=all`. Rename/copy records carry
+* two paths (`path` NUL `origPath` NUL), so records are consumed with a
+* cursor rather than parsed independently. Header widths are field-counted
+* from real Git output: `1` records carry two object names (Git omits the
+* worktree hash), `2` adds the rename score, `u` carries all three stages.
+*/
+function parseStatusV2(bytes) {
+	const records = nulRecords(bytes, "status record");
+	const changes = [];
+	const untracked = [];
+	const ignored = [];
+	const spacesBeforePath = {
+		"1": 8,
+		"2": 9,
+		u: 10
+	};
+	for (let i = 0; i < records.length; i += 1) {
+		const record = strictUtf8(records[i], "status record");
+		if (record.startsWith("? ") || record.startsWith("! ")) {
+			const path = repoPath(record.slice(2));
+			(record.startsWith("? ") ? untracked : ignored).push(path);
+			continue;
+		}
+		const kind = record.slice(0, 1);
+		const headerSpaces = spacesBeforePath[kind];
+		if (headerSpaces === void 0) throw new CustodyError("inspection-failed", `unknown status record kind ${kind}`);
+		let spaces = 0;
+		let pathStart = -1;
+		for (let j = 0; j < record.length; j += 1) if (record.charCodeAt(j) === 32) {
+			spaces += 1;
+			if (spaces === headerSpaces) {
+				pathStart = j + 1;
+				break;
+			}
+		}
+		if (pathStart === -1) throw new CustodyError("inspection-failed", "status record header arity");
+		const header = record.slice(0, pathStart).trim().split(/\s+/);
+		const path = repoPath(record.slice(pathStart));
+		if (kind === "1" || kind === "u") {
+			const xy = header[1] ?? "";
+			if (xy.length !== 2) throw new CustodyError("inspection-failed", "status XY arity");
+			const shared = kind === "u" ? "unmerged" : letter(xy[0], "index status");
+			const worktree = kind === "u" ? "unmerged" : letter(xy[1], "worktree status");
+			changes.push({
+				path,
+				originalPath: null,
+				indexStatus: shared,
+				worktreeStatus: worktree
+			});
+		} else if (kind === "2") {
+			const xy = header[1] ?? "";
+			if (xy.length !== 2) throw new CustodyError("inspection-failed", "status XY arity");
+			const original = records[i + 1];
+			if (original === void 0) throw new CustodyError("inspection-failed", "rename record lacks original path");
+			i += 1;
+			changes.push({
+				path,
+				originalPath: repoPath(original),
+				indexStatus: letter(xy[0], "index status"),
+				worktreeStatus: letter(xy[1], "worktree status")
+			});
+		} else throw new CustodyError("inspection-failed", `unknown status record kind ${kind}`);
+	}
+	return {
+		changes,
+		untracked,
+		ignored
+	};
+}
+/** `reflog show --all --format='%H%x00%gD%x00'`: full reflog selector provenance. */
+function parseReflogShow(bytes, format) {
+	return nulLines(bytes, "reflog record").map((fields) => {
+		if (fields.length !== 2) throw new CustodyError("inspection-failed", "reflog record arity");
+		const selector = fields[1];
+		if (!selector.includes("@{") || selector.includes("\0")) throw new CustodyError("inspection-failed", `malformed reflog selector`);
+		return {
+			oid: oid(fields[0], format),
+			selector
+		};
+	});
+}
+/** `fsck --no-reflogs --unreachable`: dangling tips are candidates; anything else is evidence. */
+function parseFsck(stdout, stderr, format) {
+	const lines = [...new TextDecoder("utf-8", { fatal: false }).decode(stdout).split("\n"), ...new TextDecoder("utf-8", { fatal: false }).decode(stderr).split("\n")].filter((line) => line !== "");
+	const candidates = /* @__PURE__ */ new Map();
+	const corruption = [];
+	const candidate = /^(dangling|unreachable) (commit|tag|tree|blob) ([0-9a-f]+)$/;
+	for (const line of lines) {
+		const match = line.match(candidate);
+		if (match === null) {
+			corruption.push(line.slice(0, 200));
+			continue;
+		}
+		try {
+			oid(match[3], format);
+		} catch {
+			corruption.push(line.slice(0, 200));
+			continue;
+		}
+		const oid$1 = match[3];
+		const key = `${match[2]}:${oid$1}`;
+		const entry = {
+			oid: oid$1,
+			objectType: match[2],
+			label: "dangling"
+		};
+		if (candidates.get(key) === void 0) candidates.set(key, entry);
+		else if (match[1] === "dangling") candidates.set(key, entry);
+	}
+	return {
+		candidates: [...candidates.values()].filter(({ label }) => label === "dangling"),
+		corruption: corruption.slice(0, 32)
+	};
+}
+/** `config --get-regexp ^remote\..*\.url$` lines: `remote.<name>.url <value>`. */
+function parseRemoteUrls(bytes) {
+	return strictUtf8(bytes, "remote configuration").split("\n").filter((line) => line !== "").map((line) => {
+		const match = line.match(/^remote\.([A-Za-z0-9][A-Za-z0-9._-]*)\.url (.+)$/);
+		if (match === null) throw new CustodyError("inspection-failed", "malformed remote url line");
+		return {
+			name: match[1],
+			url: match[2]
+		};
+	});
+}
+/** `config --get-regexp <pattern>` lines split into key/value pairs. */
+function parseConfigPairs(bytes) {
+	return strictUtf8(bytes, "repository configuration").split("\n").filter((line) => line !== "").map((line) => {
+		const space = line.indexOf(" ");
+		if (space === -1) throw new CustodyError("inspection-failed", "config line without value");
+		return {
+			key: line.slice(0, space),
+			value: line.slice(space + 1)
+		};
+	});
+}
+/** `rev-list --count` output: a single nonnegative decimal. */
+function parseCount(bytes) {
+	const text = strictUtf8(bytes, "rev-list count");
+	if (!/^\d+\n?$/.test(text)) throw new CustodyError("inspection-failed", "malformed rev-list count");
+	const value = Number.parseInt(text, 10);
+	if (!Number.isSafeInteger(value) || value < 0) throw new CustodyError("inspection-failed", "rev-list count out of range");
+	return value;
+}
+/** `rev-parse --is-*` / boolean config output: exactly `true` or `false`. */
+function parseBoolean(bytes, what) {
+	const text = strictUtf8(bytes, what);
+	if (text === "true\n" || text === "true") return true;
+	if (text === "false\n" || text === "false") return false;
+	throw new CustodyError("inspection-failed", `${what} is not a boolean`);
+}
+/** `hash-object` batch output: one hex OID per line, in argument order. */
+function parseHashObjectLines(bytes, format, expected) {
+	const lines = strictUtf8(bytes, "hash-object output").split("\n");
+	if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+	if (lines.length !== expected) throw new CustodyError("inspection-failed", "hash-object output count mismatch");
+	return lines.map((line) => oid(line, format));
+}
 //#endregion
 //#region archive/src/repository/jj.ts
 /**
@@ -27834,6 +30834,14 @@ const labelFlag = String$1("label").pipe(withDescription$1("Deployment label for
 * belong to the spawner; this module only collects output and checks the
 * exit code. The library boundary stays Promise-based for the repository,
 * recovery, and custody callers.
+*
+* Cancellation: a Promise cannot be cancelled from outside, but every jj
+* spawn here accepts an optional {@link ExecutionOptions} signal. The signal
+* is forwarded to `Effect.runPromise`, which interrupts the fiber that owns
+* the spawn scope — the spawner's scope finalizer then SIGTERMs (and waits
+* on) the child's process group. The CLI feeds its main-fiber interruption
+* signal in this way (see cli/failure.ts), so SIGINT/SIGTERM on the process
+* kills in-flight children instead of orphaning them.
 *
 * The child inherits the parent environment untouched. jj is
 * operator-facing tooling: `JJ_CONFIG`, `JJ_EDITOR`, a `PATH` override, and
@@ -27884,7 +30892,7 @@ const jjOutcome = (argv, cwd) => gen(function* () {
 		exitCode
 	};
 }).pipe(scoped, provide(layer));
-async function jj(args, cwd, options) {
+async function jj(args, cwd, options, execution) {
 	const argv = [
 		"--no-pager",
 		"--color=never",
@@ -27892,11 +30900,13 @@ async function jj(args, cwd, options) {
 		...args
 	];
 	try {
-		const outcome = await runPromise(jjOutcome(argv, cwd));
+		const outcome = await runPromise(jjOutcome(argv, cwd), execution?.signal === void 0 ? void 0 : { signal: execution.signal });
 		if (outcome.exitCode !== 0) throw new JjError(args, outcome.stderr.trim());
 		return outcome.stdout.trim();
 	} catch (error) {
-		throw error instanceof JjError ? error : new JjError(args, error instanceof Error ? error.message : String(error));
+		if (error instanceof JjError) throw error;
+		if (execution?.signal?.aborted === true) throw new JjError(args, "interrupted");
+		throw error instanceof Error ? new JjError(args, error.message) : new JjError(args, String(error));
 	}
 }
 function lines(output) {
@@ -27905,7 +30915,7 @@ function lines(output) {
 async function exists(path) {
 	return await stat(path, { throwIfNoEntry: false }) !== void 0;
 }
-async function isDirectory(path) {
+async function isDirectory$1(path) {
 	const info = await stat(path, { throwIfNoEntry: false });
 	return info !== void 0 && info.isDirectory();
 }
@@ -27913,7 +30923,7 @@ const REF_TEMPLATE = "name ++ \"\\t\" ++ if(remote,remote,\"-\") ++ \"\\t\" ++ i
 const COMMIT_TEMPLATE = "commit_id ++ \"\\t\" ++ empty ++ \"\\t\" ++ parents.map(|c| c.commit_id()).join(\",\") ++ \"\\t\" ++ conflict ++ \"\\n\"";
 const HEAD_TEMPLATE = "commit_id ++ \"\\n\"";
 const refKey = (name, remote) => `${name}\t${remote}`;
-async function refs(dest, options) {
+async function refs(dest, options, execution) {
 	const result = /* @__PURE__ */ new Map();
 	for (const line of lines(await jj([
 		"bookmark",
@@ -27921,7 +30931,7 @@ async function refs(dest, options) {
 		"--all-remotes",
 		"-T",
 		REF_TEMPLATE
-	], dest, options))) {
+	], dest, options, execution))) {
 		const parts = line.split("	");
 		if (parts.length !== 4) throw new Error(`malformed bookmark line: ${line}`);
 		result.set(refKey(parts[0], parts[1]), {
@@ -27933,7 +30943,7 @@ async function refs(dest, options) {
 	}
 	return result;
 }
-async function revision(dest, rev) {
+async function revision(dest, rev, execution) {
 	const output = await jj([
 		"log",
 		"-G",
@@ -27941,7 +30951,7 @@ async function revision(dest, rev) {
 		rev,
 		"-T",
 		COMMIT_TEMPLATE
-	], dest);
+	], dest, void 0, execution);
 	const parts = output.split("	");
 	if (parts.length !== 4) throw new Error(`malformed revision line for ${rev}: ${output}`);
 	return {
@@ -27951,13 +30961,13 @@ async function revision(dest, rev) {
 		conflict: parts[3] === "true"
 	};
 }
-async function ancestor(dest, older, newer) {
+async function ancestor(dest, older, newer, execution) {
 	return Number(await jj([
 		"log",
 		"-r",
 		`${older}::${newer}`,
 		"--count"
-	], dest)) > 0;
+	], dest, void 0, execution)) > 0;
 }
 /** Decode jj text output as UTF-8, replacing invalid bytes like execFile did. */
 const utf8 = (bytes) => new TextDecoder("utf-8").decode(bytes);
@@ -27972,10 +30982,2013 @@ const concatBytes = (chunks) => {
 	}
 	return bytes;
 };
+const pinned = (args, repo) => tryPromise({
+	try: (signal) => jj(args, repo, { readOnly: true }, { signal }),
+	catch: (error) => error instanceof JjError ? new CustodyError("inspection-failed", `jj ${error.args.join(" ")}: ${error.detail}`) : new CustodyError("inspection-failed", `jj query failed: ${String(error)}`)
+});
+async function jjDirectory(repo) {
+	const info = await stat(join(repo, ".jj"), { throwIfNoEntry: false });
+	return info !== void 0 && info.isDirectory();
+}
+/** Ghost commits: jj heads whose Git objects are missing from the store. */
+function ghosts(detail) {
+	return [...new Set([...detail.matchAll(/Object ([0-9a-f]{40,64}) of type commit not found/gi)].map((m) => m[1]))];
+}
+/** Pinned, read-only visible-head enumeration for a jj repository. */
+function visibleHeads(repo) {
+	return gen(function* () {
+		const heads = (yield* pinned([
+			"log",
+			"-r",
+			"visible_heads()",
+			"--no-graph",
+			"-T",
+			"commit_id ++ \"\\n\""
+		], repo)).split("\n").filter((line) => line !== "");
+		if (heads.length > 512) return yield* fail$2(new CustodyError("inspection-failed", `jj visible heads exceed 512`));
+		return heads;
+	});
+}
+const blockedView = (reason) => ({
+	classification: "blocked",
+	headOids: [],
+	uncoveredOids: [],
+	conflictedHeadOids: [],
+	operationId: null,
+	workingCopyOid: null,
+	workingCopyEmpty: null,
+	workingCopyDescribed: null,
+	failure: {
+		code: "jj-inspection-failed",
+		subject: null,
+		reason
+	}
+});
+/** Exit code 0 for a read-only `gitRead` invocation; false on any failure. */
+function exitOk(result) {
+	return result.exitCode === 0;
+}
+/**
+* Classify jj state of a source checkout against the currently selected Git
+* tips (full ref tips plus HEAD, peeled). Heads jj knows about that current
+* Git tips do not cover — including commits absent from the Git ODB — are
+* reported uncovered, never silently inferred away. The working-copy commit
+* is exempt only while it is diff-empty *and* undescribed: the pristine
+* colocated working copy carries no Git-representable work, while a
+* described or content-bearing @ is intentional jj-only work and blocks.
+*/
+function sourceJjView(repo, selectedGitTips, format) {
+	const inspect = gen(function* () {
+		const operation = yield* pinned([
+			"op",
+			"log",
+			"--limit",
+			"1",
+			"--no-graph",
+			"-T",
+			"id ++ \"\\n\""
+		], repo);
+		const wcOutput = yield* pinned([
+			"log",
+			"-r",
+			"@",
+			"--no-graph",
+			"-T",
+			"commit_id ++ \" \" ++ empty ++ \" \" ++ description.len()"
+		], repo);
+		const heads = yield* visibleHeads(repo);
+		const conflicts = yield* pinned([
+			"log",
+			"-r",
+			"visible_heads() & conflicts()",
+			"--no-graph",
+			"-T",
+			"commit_id ++ \"\\n\""
+		], repo);
+		const [wcOidText, wcEmptyText, wcDescText] = wcOutput.split(" ");
+		const workingCopyOid = (format === "sha1" ? /^[0-9a-f]{40}$/ : /^[0-9a-f]{64}$/).test(wcOidText) ? wcOidText : null;
+		const workingCopyEmpty = wcEmptyText === "true" ? true : wcEmptyText === "false" ? false : null;
+		const workingCopyDescribed = wcDescText !== void 0 && /^\d+$/.test(wcDescText) ? Number(wcDescText) > 0 : null;
+		const uncovered = [];
+		for (const head of heads) {
+			if (head === workingCopyOid && workingCopyEmpty === true && workingCopyDescribed === false) continue;
+			if (!(yield* gitRead([
+				"cat-file",
+				"-e",
+				`${head}^{commit}`
+			], { cwd: repo }).pipe(map$5(exitOk), catch_(() => succeed$3(false))))) {
+				uncovered.push(head);
+				continue;
+			}
+			let covered = false;
+			for (const tip of selectedGitTips) if (yield* gitRead([
+				"merge-base",
+				"--is-ancestor",
+				head,
+				tip
+			], { cwd: repo }).pipe(map$5(exitOk), catch_(() => succeed$3(false)))) {
+				covered = true;
+				break;
+			}
+			if (!covered) uncovered.push(head);
+		}
+		return {
+			classification: uncovered.length === 0 ? "git-covered" : "blocked",
+			headOids: heads,
+			uncoveredOids: uncovered,
+			conflictedHeadOids: conflicts.split("\n").filter((line) => line !== ""),
+			operationId: operation,
+			workingCopyOid,
+			workingCopyEmpty,
+			workingCopyDescribed,
+			failure: null
+		};
+	});
+	return gen(function* () {
+		const present = yield* result(tryPromise({
+			try: () => jjDirectory(repo),
+			catch: (error) => new CustodyError("inspection-failed", `jj presence check: ${String(error)}`)
+		}));
+		if (isFailure$1(present)) return blockedView(`jj presence check: ${present.failure.message}`);
+		if (!present.success) return {
+			classification: "none",
+			headOids: [],
+			uncoveredOids: [],
+			conflictedHeadOids: [],
+			operationId: null,
+			workingCopyOid: null,
+			workingCopyEmpty: null,
+			workingCopyDescribed: null,
+			failure: null
+		};
+		const result$3 = yield* result(inspect);
+		return isSuccess$1(result$3) ? result$3.success : blockedView(`${result$3.failure.code}: ${result$3.failure.message}`);
+	});
+}
+/**
+* Destination jj preflight, pinned and read-only: visible heads must resolve
+* (ghost commits are reported, not healed) and no bookmark may be conflicted.
+*/
+function destinationJjView(dest) {
+	return gen(function* () {
+		const heads = yield* result(pinned([
+			"log",
+			"-r",
+			"visible_heads()",
+			"--no-graph",
+			"-T",
+			"commit_id ++ \"\\n\""
+		], dest));
+		if (isFailure$1(heads)) {
+			const found = ghosts(heads.failure.message);
+			if (found.length > 0) return {
+				ghostOids: found,
+				conflictedBookmarks: [],
+				failure: {
+					code: "destination-jj-ghost-heads",
+					subject: null,
+					reason: `jj heads missing from Git object store: ${found.join(", ")}`
+				}
+			};
+			return {
+				ghostOids: [],
+				conflictedBookmarks: [],
+				failure: {
+					code: "destination-jj-inspection-failed",
+					subject: dest,
+					reason: `${heads.failure.code}: ${heads.failure.message}`
+				}
+			};
+		}
+		const bookmarks = yield* result(pinned([
+			"bookmark",
+			"list",
+			"--all-remotes",
+			"-T",
+			REF_TEMPLATE
+		], dest));
+		if (isFailure$1(bookmarks)) return {
+			ghostOids: [],
+			conflictedBookmarks: [],
+			failure: {
+				code: "destination-jj-inspection-failed",
+				subject: dest,
+				reason: `bookmark list: ${bookmarks.failure.message}`
+			}
+		};
+		const conflicted = [];
+		for (const line of bookmarks.success.split("\n").filter((line) => line !== "")) {
+			const parts = line.split("	");
+			if (parts.length === 4 && parts[2] === "conflict") conflicted.push(parts[0] + (parts[1] === "-" ? "" : `@${parts[1]}`));
+		}
+		return {
+			ghostOids: [],
+			conflictedBookmarks: conflicted,
+			failure: conflicted.length > 0 ? {
+				code: "destination-jj-conflicts",
+				subject: null,
+				reason: `conflicted bookmarks: ${conflicted.join(", ")}`
+			} : null
+		};
+	});
+}
+//#endregion
+//#region archive/src/custody/inventory/probe.ts
+/**
+* Read-only source and destination evidence collection for custody planning.
+*
+* Every Git invocation goes through `gitRead` from `archive/src/repository/
+* git.ts`: argv arrays, explicit cwd, optional locks disabled, lazy fetches
+* and replace refs refused, host/system config excluded, maintenance off.
+* Exit statuses are checked explicitly — a nonzero exit is a probe result,
+* not an exception. Nothing here stages, commits, exports, repairs, fetches
+* or writes in either repository; filesystem access is read-only.
+*
+* Inspection failures become named blockers plus a null inventory category
+* (never a fabricated empty list), per the PlanV1 observed-inventory
+* contract. Unsupported Git variants (linked worktrees, shallow, promisor,
+* sparse, alternates, filters, unknown extensions) are named blockers, not
+* silent exclusions.
+*/
+/** Bounds keep the plan honest: past them the category becomes a named blocker. */
+const BOUNDS = {
+	reflogEntries: 8192,
+	untracked: 4096,
+	ignoredListed: 512,
+	odbFiles: 16384,
+	jjFiles: 8192,
+	manifestUntracked: 2048,
+	hashBatch: 128
+};
+/** Lift a throwing decode into the Effect error channel as a CustodyError. */
+const sync = (decode) => try_({
+	try: decode,
+	catch: (error) => error instanceof CustodyError ? error : new CustodyError("inspection-failed", String(error))
+});
+/**
+* Resolve a path inside the repository the same way Git does (`--git-path`),
+* so linked-worktree and similar layouts read the right file instead of
+* assuming `$GIT_DIR/<name>`. Null makes callers fall back to the plain join.
+*/
+function gitPath(real, name) {
+	return gen(function* () {
+		const out = yield* git([
+			"rev-parse",
+			"--git-path",
+			name
+		], real);
+		if (out.exitCode !== 0) return null;
+		const text = yield* sync(() => strictUtf8(out.stdout, `git path ${name}`).trim());
+		return text === "" ? null : resolve(real, text);
+	});
+}
+const isHex2 = (name) => /^[0-9a-f]{2}$/.test(name);
+async function isDirectory(path) {
+	const info = await stat(path, { throwIfNoEntry: false });
+	return info !== void 0 && info.isDirectory();
+}
+async function isFile(path) {
+	try {
+		return (await lstat(path)).isFile();
+	} catch {
+		return false;
+	}
+}
+const fs = (operation, what) => tryPromise({
+	try: operation,
+	catch: (error) => new CustodyError("inspection-failed", `${what}: ${error instanceof Error ? error.message : String(error)}`)
+});
+/** Run a read-only git command; nonzero exits are returned, not thrown. */
+function git(args, cwd) {
+	return gitRead(args, { cwd }).pipe(mapError((error) => new CustodyError("inspection-failed", `git ${args[0]}: ${error.message}`)));
+}
+/** Stdout bytes when the command exited zero, otherwise null. */
+function gitZero(args, cwd) {
+	return git(args, cwd).pipe(map$5((result) => result.exitCode === 0 ? result.stdout : null));
+}
+/** Config-only preflight: never run status, hashing, or path probes with local helpers. */
+function localHelpers(root) {
+	return gen(function* () {
+		const out = yield* git([
+			"config",
+			"--get-regexp",
+			"^(filter\\.|core\\.fsmonitor$|core\\.hooksPath$)"
+		], root);
+		if (out.exitCode === 1) return [];
+		if (out.exitCode !== 0) return yield* fail$2(new CustodyError("inspection-failed", "local helper config could not be inspected"));
+		return (yield* sync(() => parseConfigPairs(out.stdout))).filter(({ key, value }) => key !== "core.fsmonitor" || value !== "false").map(({ key }) => key);
+	});
+}
+/** Exit-0 predicate for an ancestry/existence probe. */
+function gitOk(args, cwd) {
+	return git(args, cwd).pipe(map$5((result) => result.exitCode === 0), catch_(() => succeed$3(false)));
+}
+async function walkFiles(root, cap, what) {
+	const found = [];
+	const visit = async (dir) => {
+		const entries = await readdir(dir, { withFileTypes: true });
+		for (const entry of entries) {
+			const full = join(dir, entry.name);
+			if (entry.isDirectory()) await visit(full);
+			else if (entry.isFile()) {
+				found.push(relative(root, full));
+				if (found.length > cap) throw new CustodyError("inspection-failed", `${what} listing exceeds ${cap} files`);
+			}
+		}
+	};
+	await visit(root);
+	return found.sort();
+}
+/** Loose and packed object inventory: relative paths and sizes, no contents. */
+async function odbListing(objectsDir) {
+	const lines = [];
+	const entries = await readdir(objectsDir, { withFileTypes: true }).catch(() => []);
+	for (const entry of entries) {
+		if (!entry.isDirectory()) continue;
+		if (entry.name === "info") continue;
+		if (!isHex2(entry.name) && entry.name !== "pack") continue;
+		const files = await walkFiles(join(objectsDir, entry.name), BOUNDS.odbFiles, "object database");
+		for (const file of files) {
+			const info = await lstat(join(objectsDir, entry.name, file));
+			lines.push(`objects/${join(entry.name, file)}\t${info.size}`);
+		}
+	}
+	if (lines.length > BOUNDS.odbFiles) throw new CustodyError("inspection-failed", "object database exceeds bound");
+	lines.sort();
+	return lines.join("\n");
+}
+/** Per-file content digest of the jj store: proves jj state unchanged across probes. */
+async function jjStoreListing(source) {
+	const root = join(source, ".jj");
+	const files = await walkFiles(root, BOUNDS.jjFiles, "jj store");
+	const lines = [];
+	for (const file of files) lines.push(`${file}\t${sha256(await readFile(join(root, file)))}`);
+	lines.sort();
+	return lines.join("\n");
+}
+const CREDENTIAL_BASENAME = /^(\.env(\..+)?|[^/]*\.env|id_(rsa|ed25519|ecdsa)(\.pub)?|[^/]*\.(pem|key|kdbx|p12|pfx)|credentials(\..+)?|secrets?\..+)$/;
+const SENSITIVE_COMPONENTS = /* @__PURE__ */ new Set([
+	".ssh",
+	".gnupg",
+	".aws",
+	".kube"
+]);
+const RUNTIME_COMPONENTS = /* @__PURE__ */ new Set([
+	".beads",
+	".data",
+	".cache"
+]);
+/** Name/class only — never contents, never credential values. */
+function sensitiveClass(path) {
+	const parts = path.split("/");
+	const base = parts[parts.length - 1] ?? "";
+	if (parts.some((part) => SENSITIVE_COMPONENTS.has(part)) || CREDENTIAL_BASENAME.test(base)) return "credential-like";
+	if (parts.some((part) => RUNTIME_COMPONENTS.has(part))) return "runtime-state";
+	return null;
+}
+const hasInternals = (path) => path.split("/").some((part) => part === ".git" || part === ".jj");
+/** Canonical LFS pointer header; matching this prefix identifies a pointer. */
+const LFS_POINTER_PREFIX = "version https://git-lfs.github.com/spec/v1\n";
+/** Bounded header read: pointer files are ~130 bytes, never megabytes. */
+const LFS_PROBE_BYTES = 43;
+/**
+* Detect pointers in selected current worktree files. Do not follow symlinks:
+* Git stages their target string, not the file they point to. Only the
+* fixed-size header prefix is read; no content is emitted.
+*/
+async function lfsPointers(root, paths) {
+	const found = [];
+	const header = Buffer.from(LFS_POINTER_PREFIX, "latin1");
+	for (const path of paths) {
+		const full = join(root, path);
+		const info = await lstat(full).catch((error) => {
+			if (error.code === "ENOENT") return null;
+			throw error;
+		});
+		if (info === null || !info.isFile()) continue;
+		const handle = await open(full, "r");
+		try {
+			const buffer = Buffer.alloc(LFS_PROBE_BYTES);
+			const { bytesRead } = await handle.read(buffer, 0, LFS_PROBE_BYTES, 0);
+			if (bytesRead === LFS_PROBE_BYTES && buffer.equals(header)) found.push(path);
+		} finally {
+			await handle.close();
+		}
+	}
+	return found;
+}
+/** Git grep only yields candidate names; inspect their small blobs to verify the header. */
+function gitLfsCandidates(root, entries, revision) {
+	return gen(function* () {
+		const matches = yield* git([
+			"grep",
+			"-l",
+			"-z",
+			"-F",
+			"-e",
+			LFS_POINTER_PREFIX.trimEnd(),
+			...revision === "HEAD" ? ["HEAD"] : ["--cached"],
+			"--"
+		], root);
+		if (matches.exitCode === 1) return [];
+		if (matches.exitCode !== 0) return yield* fail$2(new CustodyError("inspection-failed", `LFS ${revision} grep failed`));
+		const byPath = new Map(entries.filter(({ mode }) => mode !== "160000").map((entry) => [entry.path, entry]));
+		const names = yield* sync(() => parseNulPaths(matches.stdout));
+		if (names.length > BOUNDS.untracked) return yield* fail$2(new CustodyError("inspection-failed", `LFS ${revision} candidates exceed ${BOUNDS.untracked}`));
+		const pointers = [];
+		for (const name of names) {
+			const path = revision === "HEAD" ? name.slice(5) : name;
+			if (revision === "HEAD" && !name.startsWith("HEAD:")) return yield* fail$2(new CustodyError("inspection-failed", "LFS HEAD grep returned an unexpected path"));
+			const entry = byPath.get(path);
+			if (entry === void 0) continue;
+			const size = yield* git([
+				"cat-file",
+				"-s",
+				entry.blobOid
+			], root);
+			if (size.exitCode !== 0) return yield* fail$2(new CustodyError("inspection-failed", `LFS ${revision} blob size query failed`));
+			const length = yield* sync(() => Number(strictUtf8(size.stdout, "LFS blob size").trim()));
+			if (!Number.isSafeInteger(length) || length < 0) return yield* fail$2(new CustodyError("inspection-failed", "LFS blob size is invalid"));
+			if (length > 1024) continue;
+			const blob = yield* git([
+				"cat-file",
+				"blob",
+				entry.blobOid
+			], root);
+			if (blob.exitCode !== 0) return yield* fail$2(new CustodyError("inspection-failed", `LFS ${revision} blob read failed`));
+			if (Buffer.from(blob.stdout.subarray(0, LFS_PROBE_BYTES)).equals(Buffer.from(LFS_POINTER_PREFIX))) pointers.push(path);
+		}
+		return pointers;
+	});
+}
+function parseNulPaths(bytes) {
+	const parts = strictUtf8(bytes, "path list").split("\0");
+	if (parts.length > 0 && parts[parts.length - 1] === "") parts.pop();
+	return parts.map((part) => part);
+}
+/**
+* Collect the complete read-only source inventory with admission decisions.
+* Categories that cannot be faithfully represented stay null with a named
+* blocker. `dispositions` maps candidate identities (`kind:oid`) to operator
+* decisions; unknown identities are rejected by the caller, not here.
+*/
+function probeSource(source, options) {
+	return gen(function* () {
+		const blockers = [];
+		const warnings = [];
+		const leftBehind = [];
+		const retirement = [];
+		const observed = {
+			objectFormat: null,
+			sourceGitCommonDir: null,
+			head: null,
+			refs: null,
+			candidates: null,
+			remotes: null,
+			indexEntries: null,
+			worktreeChanges: null,
+			untrackedPaths: null,
+			ignoredPaths: null,
+			excludedUntracked: null,
+			trackedSensitivePaths: null,
+			leftBehind: null,
+			jjCoverage: null,
+			fingerprints: null,
+			excludeFileSha256: null,
+			dispositionsFileSha256: null
+		};
+		const raw = {
+			refs: null,
+			reflogs: null,
+			status: null
+		};
+		/**
+		* Decode one inventory category: a decode failure becomes a named blocker
+		* and a null result, so unrepresentable bytes block the plan instead of
+		* failing the probe or fabricating an empty list.
+		*/
+		const category = (code, effect) => result(effect).pipe(map$5((result) => {
+			if (isFailure$1(result)) {
+				blockers.push({
+					code,
+					subject: null,
+					reason: result.failure.message
+				});
+				return null;
+			}
+			return result.success;
+		}));
+		if (!(yield* fs(() => isDirectory(source), "inspect source path"))) {
+			blockers.push({
+				code: "source-not-directory",
+				subject: source,
+				reason: "adoption source must be an existing directory"
+			});
+			return {
+				source,
+				gitDir: null,
+				objectFormat: null,
+				observed,
+				blockers,
+				warnings,
+				leftBehind,
+				retirementUnresolved: retirement,
+				raw,
+				selectedTipOids: [],
+				includedManifest: null,
+				fingerprintFiles: null,
+				dirty: false
+			};
+		}
+		const real = yield* fs(() => realpath(source), "resolve source path");
+		const earlyReturn = () => ({
+			source: real,
+			gitDir,
+			objectFormat: format,
+			observed,
+			blockers,
+			warnings,
+			leftBehind,
+			retirementUnresolved: retirement,
+			raw,
+			selectedTipOids: [],
+			includedManifest: null,
+			fingerprintFiles: null,
+			dirty: false
+		});
+		let gitDir = null;
+		let format = null;
+		const helpers = yield* result(localHelpers(real));
+		if (isFailure$1(helpers)) {
+			blockers.push({
+				code: "source-helper-inspection-failed",
+				subject: real,
+				reason: helpers.failure.message
+			});
+			return earlyReturn();
+		}
+		if (helpers.success.length > 0) {
+			blockers.push({
+				code: "source-filter-configured",
+				subject: real,
+				reason: `repository-local executable helpers are unsupported: ${helpers.success.join(", ")}`
+			});
+			return earlyReturn();
+		}
+		leftBehind.push({
+			code: "source-repository-metadata",
+			subject: join(real, ".git"),
+			reason: "the source repository directory itself is never captured; only selected Git objects are"
+		});
+		if (yield* fs(() => isFile(join(real, ".git")), "inspect .git entry")) blockers.push({
+			code: "source-gitfile-linked-worktree",
+			subject: join(real, ".git"),
+			reason: "`.git` is a file: linked worktrees are unsupported in v1"
+		});
+		const gitDirOut = yield* git(["rev-parse", "--absolute-git-dir"], real);
+		if (gitDirOut.exitCode !== 0) {
+			blockers.push({
+				code: "source-not-git-repository",
+				subject: real,
+				reason: "not inside a Git work tree"
+			});
+			return earlyReturn();
+		}
+		const gitDirDecoded = yield* category("source-gitdir-unrepresentable", sync(() => strictUtf8(gitDirOut.stdout, "git dir").trim()));
+		if (gitDirDecoded === null) return earlyReturn();
+		gitDir = gitDirDecoded;
+		observed.sourceGitCommonDir = gitDir;
+		const commonOut = yield* git(["rev-parse", "--git-common-dir"], real);
+		if (commonOut.exitCode === 0) {
+			const common = yield* category("source-gitdir-unrepresentable", sync(() => strictUtf8(commonOut.stdout, "git common dir").trim()));
+			if (common !== null && resolve(real, common) !== gitDir) blockers.push({
+				code: "source-linked-worktree",
+				subject: gitDir,
+				reason: `git dir ${gitDir} differs from common dir ${resolve(real, common)}: linked worktree`
+			});
+		}
+		const bareOut = yield* gitZero(["rev-parse", "--is-bare-repository"], real);
+		if (bareOut !== null) {
+			if ((yield* category("source-inspection-failed", sync(() => parseBoolean(bareOut, "bare flag")))) === true) blockers.push({
+				code: "source-bare",
+				subject: gitDir,
+				reason: "bare repositories have no worktree to adopt"
+			});
+		}
+		const formatOut = yield* gitZero(["rev-parse", "--show-object-format"], real);
+		if (formatOut === null) {
+			blockers.push({
+				code: "source-format-unknown",
+				subject: gitDir,
+				reason: "object format could not be determined"
+			});
+			return earlyReturn();
+		}
+		const formatText = yield* category("source-format-unrepresentable", sync(() => strictUtf8(formatOut, "object format").trim()));
+		if (formatText === null || formatText !== "sha1" && formatText !== "sha256") {
+			if (formatText !== null) blockers.push({
+				code: "source-format-unsupported",
+				subject: gitDir,
+				reason: `unknown object format ${formatText}`
+			});
+			return earlyReturn();
+		}
+		format = formatText;
+		observed.objectFormat = format;
+		const alternatesPath = (yield* gitPath(real, "objects/info/alternates")) ?? join(gitDir, "objects", "info", "alternates");
+		const alternates = yield* fs(() => readFile(alternatesPath).catch(() => null), "read alternates");
+		if (alternates !== null && alternates.length > 0) blockers.push({
+			code: "source-alternates",
+			subject: alternatesPath,
+			reason: "alternate object directories make closure unprovable in v1"
+		});
+		const shallowOut = yield* gitZero(["rev-parse", "--is-shallow-repository"], real);
+		if (shallowOut !== null) {
+			if ((yield* category("source-inspection-failed", sync(() => parseBoolean(shallowOut, "shallow flag")))) === true) blockers.push({
+				code: "source-shallow",
+				subject: gitDir,
+				reason: "shallow history is not complete custody"
+			});
+		}
+		const extensionsOut = yield* gitZero([
+			"config",
+			"--get-regexp",
+			"^extensions\\."
+		], real);
+		if (extensionsOut !== null) {
+			const pairs = yield* category("source-inspection-failed", sync(() => parseConfigPairs(extensionsOut)));
+			for (const { key } of pairs ?? []) if (key !== "extensions.objectformat") blockers.push({
+				code: "source-unsupported-extension",
+				subject: key,
+				reason: `Git extension ${key} is not supported by v1 custody`
+			});
+		}
+		const promisorOut = yield* gitZero([
+			"config",
+			"--get-regexp",
+			"^remote\\..*\\.(promisor|partialclonefilter)$|^extensions\\.partialclone$"
+		], real);
+		if (promisorOut !== null && promisorOut.length > 0) blockers.push({
+			code: "source-partial-clone",
+			subject: gitDir,
+			reason: "promisor/partial clone configuration implies fetching v1 refuses"
+		});
+		const sparseMain = yield* gitZero([
+			"config",
+			"--get",
+			"core.sparseCheckout"
+		], real);
+		const sparseCone = yield* gitZero([
+			"config",
+			"--get",
+			"core.sparseCheckoutCone"
+		], real);
+		const sparseList = yield* git(["sparse-checkout", "list"], real);
+		const sparseMainOn = sparseMain === null ? false : (yield* category("source-inspection-failed", sync(() => parseBoolean(sparseMain, "sparse config")))) === true;
+		const sparseConeOn = sparseCone === null ? false : (yield* category("source-inspection-failed", sync(() => parseBoolean(sparseCone, "sparse cone")))) === true;
+		if (sparseMainOn || sparseConeOn || sparseList.exitCode === 0) blockers.push({
+			code: "source-sparse-checkout",
+			subject: gitDir,
+			reason: "sparse checkouts do not hold the full worktree"
+		});
+		const filtersOut = yield* gitZero([
+			"config",
+			"--get-regexp",
+			"^filter\\."
+		], real);
+		if (filtersOut !== null && filtersOut.length > 0) {
+			const names = ((yield* category("source-inspection-failed", sync(() => parseConfigPairs(filtersOut)))) ?? []).map(({ key }) => key);
+			blockers.push({
+				code: "source-filter-configured",
+				subject: gitDir,
+				reason: `clean/smudge filters cannot be faithfully staged in v1: ${names.join(", ")}`
+			});
+		}
+		let symbolicRef = null;
+		let headOid = null;
+		const symref = yield* git([
+			"symbolic-ref",
+			"-q",
+			"HEAD"
+		], real);
+		if (symref.exitCode === 0) symbolicRef = yield* category("source-head-unrepresentable", sync(() => strictUtf8(symref.stdout, "HEAD symbolic ref").trim()));
+		else if (symref.exitCode === 1) warnings.push({
+			code: "detached-head",
+			subject: null,
+			reason: "HEAD is detached; the exact commit will be pinned separately"
+		});
+		else blockers.push({
+			code: "source-head-unknowable",
+			subject: gitDir,
+			reason: "HEAD could not be inspected"
+		});
+		const headVerify = yield* git([
+			"rev-parse",
+			"--verify",
+			"HEAD"
+		], real);
+		if (headVerify.exitCode === 0) headOid = yield* category("source-head-unrepresentable", sync(() => oid(strictUtf8(headVerify.stdout, "HEAD oid").trim(), format)));
+		else blockers.push({
+			code: "source-unborn-head",
+			subject: symbolicRef,
+			reason: "unborn HEAD: no commit exists to take custody of"
+		});
+		let treePaths = null;
+		if (headOid !== null) {
+			const treeVerify = yield* git([
+				"rev-parse",
+				"--verify",
+				"HEAD^{tree}"
+			], real);
+			const treeOut = yield* gitZero([
+				"ls-tree",
+				"-r",
+				"-z",
+				"HEAD"
+			], real);
+			if (treeVerify.exitCode === 0 && treeOut !== null) {
+				treePaths = yield* category("source-head-tree-unrepresentable", sync(() => parseLsTree(treeOut, format)));
+				const treeOid = yield* category("source-head-unrepresentable", sync(() => oid(strictUtf8(treeVerify.stdout, "HEAD tree").trim(), format)));
+				for (const entry of treePaths ?? []) {
+					if (entry.mode === "160000") blockers.push({
+						code: "source-submodule-gitlink",
+						subject: entry.path,
+						reason: "gitlink entries require separate submodule custody design"
+					});
+					if (hasInternals(entry.path)) blockers.push({
+						code: "source-tracked-internals",
+						subject: entry.path,
+						reason: "tracked .git/.jj path components cannot be adopted; classify explicitly"
+					});
+				}
+				if (treePaths !== null && treeOid !== null) observed.head = {
+					symbolicRef,
+					oid: headOid,
+					treeOid,
+					treePaths
+				};
+			} else blockers.push({
+				code: "source-head-tree-unknowable",
+				subject: gitDir,
+				reason: "HEAD tree manifest could not be listed"
+			});
+		}
+		const refsOut = yield* git(["for-each-ref", "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00"], real);
+		let refs = null;
+		if (refsOut.exitCode === 0) {
+			raw.refs = refsOut.stdout;
+			refs = yield* category("source-refs-unrepresentable", sync(() => parseForEachRef(refsOut.stdout, format)));
+			observed.refs = refs;
+			if (refs?.some(({ name }) => name.startsWith("refs/jj/"))) warnings.push({
+				code: "jj-internal-refs",
+				subject: null,
+				reason: "refs/jj/* keep refs present; they are inventoried but are jj-internal"
+			});
+		} else blockers.push({
+			code: "source-refs-unknowable",
+			subject: gitDir,
+			reason: "for-each-ref failed"
+		});
+		const reflogOut = yield* git([
+			"reflog",
+			"show",
+			"--all",
+			"--format=%H%x00%gD%x00"
+		], real);
+		let reflogEntries = null;
+		if (reflogOut.exitCode === 0) {
+			raw.reflogs = reflogOut.stdout;
+			const decoded = yield* category("source-reflogs-unrepresentable", sync(() => parseReflogShow(reflogOut.stdout, format)));
+			if (decoded !== null && decoded.length > BOUNDS.reflogEntries) {
+				blockers.push({
+					code: "source-reflogs-unbounded",
+					subject: gitDir,
+					reason: `reflog entries exceed ${BOUNDS.reflogEntries}`
+				});
+				reflogEntries = null;
+			} else reflogEntries = decoded;
+		} else blockers.push({
+			code: "source-reflogs-unknowable",
+			subject: gitDir,
+			reason: "reflog show --all failed"
+		});
+		const indexPath = (yield* gitPath(real, "index")) ?? join(gitDir, "index");
+		const indexBytes = yield* fs(() => readFile(indexPath).catch(() => null), "read index");
+		const stageOut = yield* gitZero([
+			"ls-files",
+			"--stage",
+			"-z"
+		], real);
+		if (stageOut !== null) {
+			const indexEntries = yield* category("source-index-unrepresentable", sync(() => parseLsFilesStage(stageOut, format)));
+			observed.indexEntries = indexEntries;
+			for (const entry of indexEntries ?? []) {
+				if (entry.stage !== 0) blockers.push({
+					code: "source-unmerged-index",
+					subject: entry.path,
+					reason: `unmerged index entry at stage ${entry.stage} blocks synthetic staging`
+				});
+				if (entry.mode === "160000") blockers.push({
+					code: "source-submodule-gitlink",
+					subject: entry.path,
+					reason: "gitlink index entries require separate submodule custody design"
+				});
+			}
+		} else blockers.push({
+			code: "source-index-unknowable",
+			subject: gitDir,
+			reason: "ls-files --stage failed"
+		});
+		const statusOut = yield* git([
+			"status",
+			"--porcelain=v2",
+			"-z",
+			"--untracked-files=all"
+		], real);
+		let statusParsed = null;
+		if (statusOut.exitCode === 0) {
+			raw.status = statusOut.stdout;
+			statusParsed = yield* category("source-status-unrepresentable", sync(() => parseStatusV2(statusOut.stdout)));
+		} else blockers.push({
+			code: "source-status-unknowable",
+			subject: gitDir,
+			reason: "status --porcelain=v2 failed"
+		});
+		if (statusParsed !== null) observed.worktreeChanges = statusParsed.changes;
+		const untrackedOut = yield* gitZero([
+			"ls-files",
+			"--others",
+			"--exclude-standard",
+			"-z"
+		], real);
+		const selectedOut = options.excludeFrom === null ? null : yield* gitZero([
+			"ls-files",
+			"--others",
+			"--exclude-standard",
+			"-z",
+			"--exclude-from",
+			options.excludeFrom
+		], real);
+		let untracked = null;
+		let excludedUntracked = [];
+		if (untrackedOut !== null) {
+			const listed = yield* category("source-untracked-unrepresentable", sync(() => parseNulPaths(untrackedOut)));
+			if (listed === null || listed.length > BOUNDS.untracked) {
+				if (listed !== null) blockers.push({
+					code: "source-untracked-unbounded",
+					subject: gitDir,
+					reason: `untracked paths exceed ${BOUNDS.untracked}`
+				});
+			} else {
+				untracked = listed.filter((path) => {
+					if (!hasInternals(path)) return true;
+					leftBehind.push({
+						code: "untracked-repository-internals",
+						subject: path,
+						reason: "untracked .git/.jj internals are never staged into the synthetic tree"
+					});
+					return false;
+				});
+				observed.untrackedPaths = untracked;
+				if (options.excludeFrom === null) observed.excludedUntracked = [];
+				else if (selectedOut !== null) {
+					const selected = yield* category("source-untracked-unrepresentable", sync(() => parseNulPaths(selectedOut)));
+					if (selected === null) blockers.push({
+						code: "source-excluded-unknowable",
+						subject: gitDir,
+						reason: "--exclude-from selection could not be represented"
+					});
+					else {
+						const selectedSet = new Set(selected);
+						excludedUntracked = untracked.filter((path) => !selectedSet.has(path));
+						observed.excludedUntracked = excludedUntracked;
+					}
+				} else blockers.push({
+					code: "source-excluded-unknowable",
+					subject: gitDir,
+					reason: "--exclude-from selection query failed"
+				});
+			}
+		} else blockers.push({
+			code: "source-untracked-unknowable",
+			subject: gitDir,
+			reason: "ls-files --others failed"
+		});
+		const ignoredOut = yield* gitZero([
+			"ls-files",
+			"--others",
+			"--ignored",
+			"--exclude-standard",
+			"-z"
+		], real);
+		if (ignoredOut !== null) {
+			const ignoredAll = yield* category("source-ignored-unrepresentable", sync(() => parseNulPaths(ignoredOut)));
+			const listed = (ignoredAll ?? []).slice(0, BOUNDS.ignoredListed);
+			observed.ignoredPaths = listed;
+			for (const path of listed) leftBehind.push({
+				code: "ignored-runtime-state",
+				subject: path,
+				reason: "ignored files are left behind, never staged; runtime state is a retirement item"
+			});
+			if ((ignoredAll?.length ?? 0) > listed.length) warnings.push({
+				code: "ignored-paths-capped",
+				subject: null,
+				reason: `${(ignoredAll?.length ?? 0) - listed.length} further ignored paths not listed (bound ${BOUNDS.ignoredListed})`
+			});
+			retirement.push({
+				code: "ignored-runtime-state",
+				subject: null,
+				reason: `${ignoredAll?.length ?? 0} ignored path(s) remain with the source; DB/WAL consistency is not established`
+			});
+		} else blockers.push({
+			code: "source-ignored-unknowable",
+			subject: gitDir,
+			reason: "ignored listing failed"
+		});
+		const lfsFound = /* @__PURE__ */ new Set();
+		for (const [revision, entries] of [["HEAD", treePaths], ["index", observed.indexEntries]]) {
+			if (entries === null) continue;
+			const candidates = yield* result(gitLfsCandidates(real, entries, revision));
+			if (isFailure$1(candidates)) blockers.push({
+				code: "source-lfs-probe-failed",
+				subject: gitDir,
+				reason: candidates.failure.message
+			});
+			else for (const path of candidates.success) lfsFound.add(path);
+		}
+		if (observed.indexEntries !== null && untracked !== null && statusParsed !== null) {
+			const deleted = new Set(statusParsed.changes.filter(({ worktreeStatus }) => worktreeStatus === "deleted").flatMap(({ path, originalPath }) => originalPath === null ? [path] : [path, originalPath]));
+			const staged = [.../* @__PURE__ */ new Set([...observed.indexEntries.map(({ path }) => path), ...untracked.filter((path) => !excludedUntracked.includes(path))])].filter((path) => !deleted.has(path));
+			if (staged.length > BOUNDS.untracked) blockers.push({
+				code: "source-lfs-probe-unbounded",
+				subject: gitDir,
+				reason: `snapshot input exceeds the LFS pointer probe bound ${BOUNDS.untracked}`
+			});
+			else {
+				const pointers = yield* result(fs(() => lfsPointers(real, staged), "probe LFS pointers"));
+				if (isFailure$1(pointers)) blockers.push({
+					code: "source-lfs-probe-failed",
+					subject: gitDir,
+					reason: pointers.failure.message
+				});
+				else for (const path of pointers.success) lfsFound.add(path);
+			}
+		}
+		for (const path of lfsFound) blockers.push({
+			code: "source-lfs-pointer",
+			subject: path,
+			reason: "LFS pointer in current HEAD, index, or selected worktree input; v1 custody cannot preserve LFS payloads"
+		});
+		const sensitive = [];
+		const seenSensitive = /* @__PURE__ */ new Set();
+		for (const entry of [...treePaths ?? [], ...observed.indexEntries ?? []]) {
+			if (seenSensitive.has(entry.path)) continue;
+			seenSensitive.add(entry.path);
+			const classification = sensitiveClass(entry.path);
+			if (classification !== null) sensitive.push({
+				code: "tracked-sensitive-path",
+				subject: entry.path,
+				reason: `${classification}: flagged for privacy review; custody does not authorize publication`
+			});
+		}
+		observed.trackedSensitivePaths = sensitive;
+		let candidates = [];
+		let candidatesKnowable = true;
+		const fsckRun = yield* git([
+			"fsck",
+			"--no-reflogs",
+			"--unreachable"
+		], real);
+		const report = yield* sync(() => parseFsck(fsckRun.stdout, fsckRun.stderr, format));
+		if (fsckRun.exitCode !== 0 && fsckRun.stdout.length === 0) {
+			blockers.push({
+				code: "source-fsck-unknowable",
+				subject: gitDir,
+				reason: "fsck failed without output"
+			});
+			candidatesKnowable = false;
+		} else {
+			if (report.corruption.length > 0) blockers.push({
+				code: "source-object-corruption",
+				subject: gitDir,
+				reason: `fsck reported: ${report.corruption.slice(0, 3).join("; ")}`
+			});
+			candidates = report.candidates.map((candidate) => ({
+				kind: "dangling",
+				oid: candidate.oid,
+				objectType: candidate.objectType,
+				provenance: ["fsck --no-reflogs --unreachable"],
+				disposition: candidate.objectType === "commit" || candidate.objectType === "tag" ? "unclassified" : "not-required",
+				reason: candidate.objectType === "commit" || candidate.objectType === "tag" ? null : "unreferenced noncommit object; inventoried only, not presumed wanted"
+			}));
+		}
+		if (reflogEntries !== null && refs !== null) {
+			const tipOids = /* @__PURE__ */ new Set([...refs.map((ref) => ref.oid), ...refs.map((ref) => ref.peeledOid).filter((oid) => oid !== null)]);
+			if (headOid !== null) tipOids.add(headOid);
+			const byOid = /* @__PURE__ */ new Map();
+			for (const entry of reflogEntries) {
+				if (tipOids.has(entry.oid)) continue;
+				byOid.set(entry.oid, [...byOid.get(entry.oid) ?? [], entry.selector]);
+			}
+			const stashTip = refs.find(({ name }) => name === "refs/stash")?.oid ?? null;
+			const reflogCandidates = [];
+			for (const [oidText, selectors] of byOid) {
+				const stashSelectors = selectors.filter((selector) => selector.startsWith("refs/stash@{"));
+				if (stashSelectors.length > 0 && oidText !== stashTip) {
+					reflogCandidates.push({
+						kind: "stash-older",
+						oid: oidText,
+						objectType: "commit",
+						provenance: stashSelectors,
+						disposition: "pin",
+						reason: "older stash entry: pinned by default per stash custody policy"
+					});
+					continue;
+				}
+				let covered = false;
+				for (const tip of tipOids) if (yield* gitOk([
+					"merge-base",
+					"--is-ancestor",
+					oidText,
+					tip
+				], real)) {
+					covered = true;
+					break;
+				}
+				if (!covered) reflogCandidates.push({
+					kind: "reflog",
+					oid: oidText,
+					objectType: "commit",
+					provenance: selectors,
+					disposition: "unclassified",
+					reason: null
+				});
+			}
+			const candidatesByOid = new Map(candidates.map((candidate) => [candidate.oid, candidate]));
+			const merged = [...candidates];
+			for (const candidate of reflogCandidates) {
+				const existing = candidatesByOid.get(candidate.oid);
+				if (existing !== void 0 && existing.kind === "dangling") {
+					const index = merged.indexOf(existing);
+					merged[index] = {
+						...candidate,
+						provenance: [...candidate.provenance, ...existing.provenance]
+					};
+				} else merged.push(candidate);
+			}
+			candidates = merged;
+		} else if (candidatesKnowable) {
+			blockers.push({
+				code: "source-reflog-candidates-unknowable",
+				subject: gitDir,
+				reason: "reflog or ref inventory unavailable; candidates cannot be classified"
+			});
+			candidatesKnowable = false;
+		}
+		if (options.dispositions !== null) {
+			const dispositions = options.dispositions;
+			candidates = candidates.map((candidate) => {
+				const decision = dispositions.get(`${candidate.kind}:${candidate.oid}`);
+				return decision === void 0 ? candidate : {
+					...candidate,
+					disposition: decision.disposition,
+					reason: decision.reason
+				};
+			});
+		}
+		const unclassified = candidates.filter(({ disposition }) => disposition === "unclassified");
+		if (unclassified.length > 0) blockers.push({
+			code: "candidates-unclassified",
+			subject: null,
+			reason: `dangling/reflog work lacks dispositions: ${unclassified.map(({ kind, oid }) => `${kind}:${oid}`).join(", ").slice(0, 400)}`
+		});
+		if (candidatesKnowable) observed.candidates = candidates;
+		const remotesOut = yield* git([
+			"config",
+			"--get-regexp",
+			"^remote\\..*\\.url$"
+		], real);
+		if (remotesOut.exitCode === 0) observed.remotes = yield* category("source-remotes-unrepresentable", sync(() => parseRemoteUrls(remotesOut.stdout)));
+		else if (remotesOut.exitCode === 1) observed.remotes = [];
+		else blockers.push({
+			code: "source-remotes-unknowable",
+			subject: gitDir,
+			reason: "remote url configuration unreadable"
+		});
+		const stagedChanges = (statusParsed?.changes ?? []).filter(({ indexStatus }) => indexStatus !== "unchanged");
+		const unstagedChanges = (statusParsed?.changes ?? []).filter(({ worktreeStatus }) => worktreeStatus !== "unchanged");
+		const dirty = stagedChanges.length > 0 || unstagedChanges.length > 0 || (untracked?.length ?? 0) > 0;
+		if (stagedChanges.length > 0 && unstagedChanges.length > 0) warnings.push({
+			code: "staged-vs-unstaged",
+			subject: null,
+			reason: "both staged and unstaged changes exist; a single synthetic tree cannot preserve the split"
+		});
+		let includedManifest = null;
+		if (treePaths !== null && statusParsed !== null && untracked !== null) {
+			const manifest = /* @__PURE__ */ new Map();
+			for (const entry of treePaths) manifest.set(entry.path, entry);
+			const hashable = [];
+			for (const change of statusParsed.changes) {
+				if (change.indexStatus === "deleted" || change.worktreeStatus === "deleted") {
+					manifest.delete(change.path);
+					continue;
+				}
+				if (change.originalPath !== null) manifest.delete(change.originalPath);
+				hashable.push(change.path);
+			}
+			const selectedUntracked = untracked.filter((path) => !excludedUntracked.includes(path));
+			if (selectedUntracked.length > BOUNDS.manifestUntracked) blockers.push({
+				code: "source-manifest-unbounded",
+				subject: gitDir,
+				reason: `included untracked paths exceed ${BOUNDS.manifestUntracked}`
+			});
+			else {
+				for (const path of selectedUntracked) hashable.push(path);
+				const oidByPath = /* @__PURE__ */ new Map();
+				let hashOk = true;
+				for (let i = 0; i < hashable.length && hashOk; i += BOUNDS.hashBatch) {
+					const batch = hashable.slice(i, i + BOUNDS.hashBatch);
+					const hashed = yield* gitZero([
+						"hash-object",
+						"--no-filters",
+						"--",
+						...batch
+					], real);
+					if (hashed === null) {
+						hashOk = false;
+						break;
+					}
+					const oids = yield* category("source-manifest-unrepresentable", sync(() => parseHashObjectLines(hashed, format, batch.length)));
+					if (oids === null) {
+						hashOk = false;
+						break;
+					}
+					batch.forEach((path, index) => oidByPath.set(path, oids[index]));
+				}
+				if (hashOk) {
+					for (const [path, oid] of oidByPath) {
+						const info = yield* fs(() => lstat(join(real, path)), `stat ${path}`);
+						const mode = info.isSymbolicLink() ? "120000" : (info.mode & 73) !== 0 ? "100755" : "100644";
+						manifest.set(path, {
+							path,
+							mode,
+							blobOid: oid
+						});
+					}
+					includedManifest = [...manifest.values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+				} else blockers.push({
+					code: "source-manifest-unknowable",
+					subject: gitDir,
+					reason: "hash-object failed; included manifest cannot be computed"
+				});
+			}
+		}
+		let fingerprintFiles = null;
+		const configPath = (yield* gitPath(real, "config")) ?? join(gitDir, "config");
+		const objectsDir = (yield* gitPath(real, "objects")) ?? join(gitDir, "objects");
+		const configBytes = yield* fs(() => readFile(configPath), "read config");
+		const odb = yield* result(fs(() => odbListing(objectsDir), "list object database"));
+		const jj = (yield* fs(() => jjDirectory(real), "check .jj")) ? yield* result(fs(() => jjStoreListing(real), "fingerprint jj store")) : succeed$7(null);
+		if (isSuccess$1(odb)) {
+			if (indexBytes !== null) fingerprintFiles = {
+				indexBytes,
+				configBytes,
+				odbListing: odb.success,
+				jjStore: isSuccess$1(jj) ? jj.success : null
+			};
+			else blockers.push({
+				code: "source-index-unknowable",
+				subject: join(gitDir, "index"),
+				reason: "index bytes unreadable; fingerprints impossible"
+			});
+		} else blockers.push({
+			code: "source-odb-unknowable",
+			subject: gitDir,
+			reason: `object database listing failed: ${odb.failure.message}`
+		});
+		if (isFailure$1(jj)) blockers.push({
+			code: "source-jj-store-unknowable",
+			subject: join(real, ".jj"),
+			reason: `jj store fingerprint failed: ${jj.failure.message}`
+		});
+		const selectedTipOids = [];
+		const seenTips = /* @__PURE__ */ new Set();
+		const addTip = (tip) => {
+			if (seenTips.has(tip)) return;
+			seenTips.add(tip);
+			selectedTipOids.push(tip);
+		};
+		if (headOid !== null) addTip(headOid);
+		for (const ref of refs ?? []) {
+			if (ref.name.startsWith("refs/jj/")) continue;
+			addTip(ref.peeledOid ?? ref.oid);
+		}
+		observed.leftBehind = leftBehind;
+		return {
+			source: real,
+			gitDir,
+			objectFormat: format,
+			observed,
+			blockers,
+			warnings,
+			leftBehind,
+			retirementUnresolved: retirement,
+			raw,
+			selectedTipOids,
+			includedManifest,
+			fingerprintFiles,
+			dirty
+		};
+	}).pipe(catchDefect((defect) => fail$2(defect instanceof CustodyError ? defect : new CustodyError("inspection-failed", `unexpected defect: ${String(defect)}`))));
+}
+/** Read-only destination checks: clean worktree, declared origin, exact pre-state. */
+function probeDestination(dest, declaredRepo, sourceFormat) {
+	return gen(function* () {
+		const blockers = [];
+		const warnings = [];
+		const category = (code, effect) => result(effect).pipe(map$5((result) => {
+			if (isFailure$1(result)) {
+				blockers.push({
+					code,
+					subject: null,
+					reason: result.failure.message
+				});
+				return null;
+			}
+			return result.success;
+		}));
+		const partial = () => ({
+			exists: true,
+			realpath: real,
+			blockers,
+			warnings,
+			gitDir: null,
+			objectFormat: null,
+			preRefs: null,
+			preRefsSha256: null,
+			statusSha256: null,
+			indexSha256: null
+		});
+		const missing = () => ({
+			exists: false,
+			realpath: null,
+			blockers: [{
+				code: "destination-missing",
+				subject: dest,
+				reason: "destination does not exist; creation awaits the safe-clone slice after plan approval"
+			}],
+			warnings,
+			gitDir: null,
+			objectFormat: null,
+			preRefs: null,
+			preRefsSha256: null,
+			statusSha256: null,
+			indexSha256: null
+		});
+		const real = yield* fs(() => realpath(dest).catch(() => null), "resolve destination");
+		if (real === null || !(yield* fs(() => isDirectory(real), "inspect destination"))) return missing();
+		const helpers = yield* result(localHelpers(real));
+		if (isFailure$1(helpers)) {
+			blockers.push({
+				code: "destination-helper-inspection-failed",
+				subject: real,
+				reason: helpers.failure.message
+			});
+			return partial();
+		}
+		if (helpers.success.length > 0) {
+			blockers.push({
+				code: "destination-filter-configured",
+				subject: real,
+				reason: `repository-local executable helpers are unsupported: ${helpers.success.join(", ")}`
+			});
+			return partial();
+		}
+		if (yield* fs(() => isFile(join(real, ".git")), "inspect dest .git")) blockers.push({
+			code: "destination-gitfile-linked-worktree",
+			subject: real,
+			reason: "destination .git is a file"
+		});
+		const gitDirOut = yield* git(["rev-parse", "--absolute-git-dir"], real);
+		if (gitDirOut.exitCode !== 0) {
+			blockers.push({
+				code: "destination-not-git-repository",
+				subject: real,
+				reason: "no Git repository at destination"
+			});
+			return {
+				exists: true,
+				realpath: real,
+				blockers,
+				warnings,
+				gitDir: null,
+				objectFormat: null,
+				preRefs: null,
+				preRefsSha256: null,
+				statusSha256: null,
+				indexSha256: null
+			};
+		}
+		const gitDirDecoded = yield* category("destination-inspection-failed", sync(() => strictUtf8(gitDirOut.stdout, "dest git dir").trim()));
+		if (gitDirDecoded === null) return partial();
+		const gitDir = gitDirDecoded;
+		const commonOut = yield* git(["rev-parse", "--git-common-dir"], real);
+		if (commonOut.exitCode === 0) {
+			const common = yield* category("destination-inspection-failed", sync(() => strictUtf8(commonOut.stdout, "dest common dir").trim()));
+			if (common !== null && resolve(real, common) !== gitDir) blockers.push({
+				code: "destination-linked-worktree",
+				subject: gitDir,
+				reason: "destination is a linked worktree"
+			});
+		}
+		const bareOut = yield* gitZero(["rev-parse", "--is-bare-repository"], real);
+		if (bareOut !== null) {
+			if ((yield* category("destination-inspection-failed", sync(() => parseBoolean(bareOut, "dest bare flag")))) === true) blockers.push({
+				code: "destination-bare",
+				subject: gitDir,
+				reason: "bare destination lacks the required worktree"
+			});
+		}
+		if (!(yield* fs(() => jjDirectory(real), "check dest .jj"))) blockers.push({
+			code: "destination-jj-missing",
+			subject: real,
+			reason: "destination must be a jj-colocated archive"
+		});
+		const destAlternatesPath = (yield* gitPath(real, "objects/info/alternates")) ?? join(gitDir, "objects", "info", "alternates");
+		const alternates = yield* fs(() => readFile(destAlternatesPath).catch(() => null), "read dest alternates");
+		if (alternates !== null && alternates.length > 0) blockers.push({
+			code: "destination-alternates",
+			subject: gitDir,
+			reason: "destination alternates weaken object custody"
+		});
+		const shallowOut = yield* gitZero(["rev-parse", "--is-shallow-repository"], real);
+		if (shallowOut !== null) {
+			if ((yield* category("destination-inspection-failed", sync(() => parseBoolean(shallowOut, "dest shallow flag")))) === true) blockers.push({
+				code: "destination-shallow",
+				subject: gitDir,
+				reason: "shallow destination cannot hold full custody"
+			});
+		}
+		const extensionsOut = yield* gitZero([
+			"config",
+			"--get-regexp",
+			"^extensions\\."
+		], real);
+		if (extensionsOut !== null) {
+			const pairs = yield* category("destination-inspection-failed", sync(() => parseConfigPairs(extensionsOut)));
+			for (const { key } of pairs ?? []) if (key !== "extensions.objectformat") blockers.push({
+				code: "destination-unsupported-extension",
+				subject: key,
+				reason: `Git extension ${key} unsupported at destination`
+			});
+		}
+		let objectFormat = null;
+		const formatOut = yield* gitZero(["rev-parse", "--show-object-format"], real);
+		if (formatOut !== null) {
+			const text = yield* category("destination-inspection-failed", sync(() => strictUtf8(formatOut, "dest object format").trim()));
+			if (text === "sha1" || text === "sha256") {
+				objectFormat = text;
+				if (sourceFormat !== null && sourceFormat !== text) blockers.push({
+					code: "destination-object-format-mismatch",
+					subject: real,
+					reason: `source ${sourceFormat} versus destination ${text}`
+				});
+			}
+		}
+		const originOut = yield* git([
+			"config",
+			"--get",
+			"remote.origin.url"
+		], real);
+		if (originOut.exitCode === 0) {
+			const origin = yield* category("destination-inspection-failed", sync(() => strictUtf8(originOut.stdout, "origin url").trim()));
+			if (origin !== null && origin !== declaredRepo) blockers.push({
+				code: "destination-remote-mismatch",
+				subject: "origin",
+				reason: `declared ${declaredRepo} but destination origin is ${origin}`
+			});
+		} else blockers.push({
+			code: "destination-origin-missing",
+			subject: real,
+			reason: "destination has no origin remote url"
+		});
+		const statusOut = yield* git([
+			"status",
+			"--porcelain=v2",
+			"-z",
+			"--untracked-files=all"
+		], real);
+		let statusSha256 = null;
+		if (statusOut.exitCode === 0) {
+			statusSha256 = sha256(statusOut.stdout);
+			const parsed = yield* category("destination-status-unrepresentable", sync(() => parseStatusV2(statusOut.stdout)));
+			if (parsed !== null && parsed.changes.length > 0) blockers.push({
+				code: "destination-worktree-dirty",
+				subject: real,
+				reason: `destination has ${parsed.changes.length} tracked change(s); busy checkouts block adoption`
+			});
+			if (parsed !== null && parsed.untracked.length > 0) warnings.push({
+				code: "destination-untracked",
+				subject: real,
+				reason: `${parsed.untracked.length} untracked destination path(s) recorded`
+			});
+		} else blockers.push({
+			code: "destination-status-unknowable",
+			subject: real,
+			reason: "destination status failed"
+		});
+		const refsOut = yield* git(["for-each-ref", "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00"], real);
+		let preRefs = null;
+		let preRefsSha256 = null;
+		if (refsOut.exitCode === 0 && objectFormat !== null) {
+			preRefs = yield* category("destination-refs-unrepresentable", sync(() => parseForEachRef(refsOut.stdout, objectFormat)));
+			if (preRefs !== null) preRefsSha256 = destinationRefsSha256(preRefs);
+		} else if (objectFormat !== null) blockers.push({
+			code: "destination-refs-unknowable",
+			subject: real,
+			reason: "destination for-each-ref failed"
+		});
+		const destIndexPath = (yield* gitPath(real, "index")) ?? join(gitDir, "index");
+		const indexBytes = yield* fs(() => readFile(destIndexPath).catch(() => null), "read dest index");
+		return {
+			exists: true,
+			realpath: real,
+			blockers,
+			warnings,
+			gitDir,
+			objectFormat,
+			preRefs,
+			preRefsSha256,
+			statusSha256,
+			indexSha256: indexBytes === null ? null : sha256(indexBytes)
+		};
+	}).pipe(catchDefect((defect) => fail$2(defect instanceof CustodyError ? defect : new CustodyError("inspection-failed", `unexpected defect: ${String(defect)}`))));
+}
+//#endregion
+//#region archive/src/custody/inventory.ts
+/**
+* `planAdoption`: the read-only adoption plan for a standalone Git checkout.
+*
+* The plan is an observation, not a reservation: dirty work is previewed in
+* disposable private scratch, and approved snapshots may be planned, but no
+* source or destination repository is mutated. Missing destinations report
+* `destination-missing` pending deliberate cloning.
+*
+* Failure model: invalid operator input (bad label/generation/branch, a
+* dispositions or path-review file that does not parse, unknown disposition
+* identities, nested/aliased paths) fails the Effect with `CustodyError`.
+* Every inspection or admission problem is a blocker inside a successful
+* `PlanV1` — never a fabricated fact, never an inferred empty set.
+*/
+const encoder$1 = new TextEncoder();
+/** Strict `--dispositions` loader: JSON object keyed by `kind:oid`. */
+function loadDispositions(path) {
+	return gen(function* () {
+		const bytes = yield* tryPromise({
+			try: () => readFile(path),
+			catch: (error) => new CustodyError("invalid-input", `dispositions file: ${error instanceof Error ? error.message : String(error)}`)
+		});
+		const parsed = yield* try_({
+			try: () => JSON.parse(strictText(bytes)),
+			catch: () => new CustodyError("invalid-input", "dispositions file is not UTF-8 JSON")
+		});
+		if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) invalid("dispositions must be a JSON object keyed by candidate identity");
+		const decisions = /* @__PURE__ */ new Map();
+		for (const [key, value] of Object.entries(parsed)) {
+			if (!/^(stash-older|reflog|dangling):([0-9a-f]{40}|[0-9a-f]{64})$/.test(key)) invalid(`dispositions key is not a candidate identity: ${key}`);
+			if (value === null || typeof value !== "object" || Array.isArray(value)) invalid(`dispositions entry must be an object: ${key}`);
+			const entry = value;
+			const keys = Object.keys(entry).sort();
+			const disposition = entry.disposition;
+			const reason = entry.reason;
+			if (disposition === "pin" && (keys.length === 1 || keys.length === 2 && typeof reason === "string")) {
+				decisions.set(key, {
+					disposition: "pin",
+					reason: typeof reason === "string" ? reason : null
+				});
+				continue;
+			}
+			if (disposition === "not-required" && keys.length === 2 && typeof reason === "string" && reason.trim() !== "") {
+				decisions.set(key, {
+					disposition: "not-required",
+					reason
+				});
+				continue;
+			}
+			invalid(`dispositions entry must be pin or not-required (with reason): ${key}`);
+		}
+		return {
+			decisions,
+			fileSha256: sha256(bytes)
+		};
+	});
+}
+function strictText(bytes) {
+	return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+}
+function pathContains(outer, inner) {
+	return outer !== inner && (inner.startsWith(`${outer}/`) || outer.startsWith(`${inner}/`));
+}
+function validateInput(input) {
+	refComponent(input.label);
+	refComponent(input.generation);
+	refName(`refs/heads/${input.branch.replace(/^refs\/heads\//, "")}`);
+	if (input.repo.trim() === "") invalid("--repo must be a nonempty URL");
+}
+function resolvePaths(input) {
+	const legacy = resolve(input.legacy);
+	const dest = resolve(input.dest);
+	if (legacy === dest) invalid(`legacy and destination are the same path: ${legacy}`);
+	if (pathContains(legacy, dest)) invalid(`destination nests inside the legacy checkout: ${dest} under ${legacy}`);
+	if (pathContains(dest, legacy)) invalid(`legacy checkout nests inside the destination: ${legacy} under ${dest}`);
+	return {
+		legacy,
+		dest
+	};
+}
+/** Canonicalize even an absent path through its nearest existing ancestor. */
+async function canonicalPath(path) {
+	const tail = [];
+	let cursor = path;
+	while (true) try {
+		await lstat(cursor);
+		const ancestor = await realpath(cursor);
+		return {
+			path: resolve(ancestor, ...tail.reverse()),
+			exists: tail.length === 0
+		};
+	} catch (error) {
+		if (error.code !== "ENOENT") throw error;
+		const parent = dirname(cursor);
+		if (parent === cursor) throw error;
+		tail.push(basename(cursor));
+		cursor = parent;
+	}
+}
+/**
+* Produce the adoption plan. The Effect fails only for invalid operator
+* input; inspection and admission problems are blockers in the plan.
+*/
+const planAdoption = fn("custody.planAdoption")((input) => gen(function* () {
+	validateInput(input);
+	const paths = resolvePaths(input);
+	const canonical = yield* tryPromise({
+		try: () => Promise.all([canonicalPath(paths.legacy), canonicalPath(paths.dest)]),
+		catch: (error) => new CustodyError("invalid-input", `resolve repository roots: ${String(error)}`)
+	});
+	if (canonical[0].path === canonical[1].path || pathContains(canonical[0].path, canonical[1].path)) invalid("source and destination resolve to identical or nested paths");
+	const dispositions = input.dispositions === null ? null : yield* loadDispositions(input.dispositions);
+	const excludeBytes = input.excludeFrom === null ? null : yield* tryPromise({
+		try: () => readFile(input.excludeFrom),
+		catch: (error) => new CustodyError("invalid-input", `exclude file: ${error instanceof Error ? error.message : String(error)}`)
+	});
+	const pathReviewBytes = input.pathReview === null ? null : yield* tryPromise({
+		try: () => readFile(input.pathReview),
+		catch: (error) => new CustodyError("invalid-input", `path review file: ${error instanceof Error ? error.message : String(error)}`)
+	});
+	const probe = yield* probeSource(paths.legacy, {
+		excludeFrom: input.excludeFrom,
+		dispositions: dispositions?.decisions ?? null
+	});
+	if (dispositions !== null && probe.observed.candidates !== null) {
+		const known = new Set(probe.observed.candidates.map(({ kind, oid }) => `${kind}:${oid}`));
+		const unknown = [...dispositions.decisions.keys()].filter((key) => !known.has(key));
+		if (unknown.length > 0) invalid(`dispositions reference unknown candidates: ${unknown.join(", ")}`);
+	}
+	const blockers = [...probe.blockers];
+	const warnings = [...probe.warnings];
+	const retirement = [...probe.retirementUnresolved];
+	const jj = yield* sourceJjView(probe.source, probe.selectedTipOids, probe.objectFormat ?? "sha1");
+	probe.observed.jjCoverage = {
+		classification: jj.classification,
+		headOids: jj.headOids,
+		operationId: jj.operationId
+	};
+	if (jj.classification === "blocked" && jj.failure !== null) blockers.push(jj.failure);
+	if (jj.uncoveredOids.length > 0) blockers.push({
+		code: "jj-heads-uncovered",
+		subject: null,
+		reason: `jj visible heads not covered by selected Git tips: ${jj.uncoveredOids.join(", ").slice(0, 400)}`
+	});
+	if (jj.classification !== "none") {
+		retirement.push({
+			code: "jj-operation-history",
+			subject: join(probe.source, ".jj"),
+			reason: "jj operation log and workspace state are not preserved by Git custody"
+		});
+		if (jj.workingCopyEmpty === false || jj.workingCopyDescribed === true) warnings.push({
+			code: "jj-working-copy-snapshot",
+			subject: null,
+			reason: "jj working-copy commit has content or a description; it counts as jj-only work for coverage"
+		});
+	}
+	const headManifestSha256 = probe.observed.head === null ? null : sha256(encoder$1.encode(`${canonicalJson(probe.observed.head.treePaths)}\n`));
+	let pathReview = null;
+	if (probe.objectFormat !== null && pathReviewBytes !== null) pathReview = yield* try_({
+		try: () => parsePathReview(pathReviewBytes, probe.objectFormat),
+		catch: (error) => error instanceof CustodyError ? error : new CustodyError("invalid-input", "path review failed to parse")
+	});
+	const sensitiveTracked = probe.observed.trackedSensitivePaths ?? [];
+	if (sensitiveTracked.length > 0) retirement.push({
+		code: "publication-review",
+		subject: null,
+		reason: `${sensitiveTracked.length} tracked sensitive path(s) require review before any publication; custody does not authorize it`
+	});
+	const sensitiveSubjects = sensitiveTracked.map(({ subject }) => subject).filter((subject) => subject !== null);
+	let proposal = null;
+	const changes = probe.observed.worktreeChanges ?? [];
+	const stagedExists = changes.some(({ indexStatus }) => indexStatus !== "unchanged");
+	const unstagedExists = changes.some(({ worktreeStatus }) => worktreeStatus !== "unchanged");
+	if (probe.dirty && probe.objectFormat !== null && probe.observed.head !== null && probe.observed.worktreeChanges !== null && probe.observed.untrackedPaths !== null && probe.observed.excludedUntracked !== null) {
+		const scratchRoot = yield* tryPromise({
+			try: () => mkdtemp(join(tmpdir(), "custody-preview-")),
+			catch: (error) => new CustodyError("inspection-failed", `preview scratch: ${error instanceof Error ? error.message : String(error)}`)
+		});
+		const previewed = yield* result(tryPromise({
+			try: (signal) => previewSnapshot({
+				sourceRoot: probe.source,
+				scratchRoot,
+				objectFormat: probe.objectFormat,
+				headOid: probe.observed.head.oid,
+				restageTracked: [...new Set(changes.map(({ path }) => path))],
+				addUntracked: probe.observed.untrackedPaths.filter((path) => !probe.observed.excludedUntracked.includes(path)),
+				stagedVsUnstaged: stagedExists && unstagedExists ? "reported-not-preserved" : "none",
+				excludeFileSha256: excludeBytes === null ? null : sha256(excludeBytes),
+				excludedUntracked: probe.observed.excludedUntracked,
+				ignoredPaths: probe.observed.ignoredPaths ?? [],
+				trackedSensitivePaths: sensitiveSubjects,
+				pathReview: null,
+				expected: probe.includedManifest
+			}, { signal }),
+			catch: (error) => new CustodyError("inspection-failed", `snapshot preview failed: ${error instanceof Error ? error.message : String(error)}`)
+		}));
+		if (isFailure$1(previewed)) blockers.push({
+			code: "snapshot-preview-failed",
+			subject: probe.source,
+			reason: previewed.failure.message
+		});
+		else proposal = previewed.success;
+		yield* tryPromise({
+			try: () => rm(scratchRoot, {
+				recursive: true,
+				force: true
+			}),
+			catch: (error) => new CustodyError("inspection-failed", `preview scratch cleanup: ${String(error)}`)
+		}).pipe(catch_(() => succeed$3(void 0)));
+	} else if (probe.dirty) blockers.push({
+		code: "snapshot-preview-unknowable",
+		subject: probe.source,
+		reason: "worktree is dirty but inventory categories are missing; the proposal cannot be computed"
+	});
+	let cleanHeadPathReview = null;
+	let approvedSnapshot = null;
+	let workingCopy = null;
+	if (probe.dirty && proposal !== null) {
+		const needsReview = proposal.trackedSensitivePaths.length > 0 || proposal.reviewRequirements.stagedVsUnstagedApprovalRequired;
+		let reviewProblems = false;
+		if (pathReview === null) {
+			if (needsReview) {
+				reviewProblems = true;
+				blockers.push({
+					code: "path-review-required",
+					subject: null,
+					reason: `snapshot with sensitive paths or a staged/unstaged split requires --path-review bound to manifest ${proposal.manifestSha256}: ${[...proposal.reviewRequirements.sensitivePaths].slice(0, 16).join(", ")}`
+				});
+			}
+		} else {
+			const entries = new Set(proposal.paths.map(({ path, mode, blobOid }) => `${path}\0${mode}\0${blobOid}`));
+			const included = /* @__PURE__ */ new Set();
+			const problems = [];
+			if (pathReview.manifestSha256 !== proposal.manifestSha256) problems.push("review manifest digest differs from the snapshot proposal");
+			for (const entry of pathReview.included) {
+				const key = `${entry.path}\0${entry.mode}\0${entry.blobOid}`;
+				if (!entries.has(key)) problems.push(`review includes stale file ${entry.path}`);
+				else if (included.has(entry.path)) problems.push(`review repeats file ${entry.path}`);
+				else included.add(entry.path);
+			}
+			for (const path of proposal.reviewRequirements.sensitivePaths) if (!included.has(path)) problems.push(`sensitive path lacks an exact review: ${path}`);
+			if (proposal.reviewRequirements.stagedVsUnstagedApprovalRequired && pathReview.stagedVsUnstaged === null) problems.push("lost index/worktree split is not approved");
+			if (problems.length > 0) {
+				reviewProblems = true;
+				blockers.push({
+					code: "path-review-invalid",
+					subject: null,
+					reason: problems.slice(0, 8).join("; ")
+				});
+			}
+		}
+		if (!reviewProblems) {
+			approvedSnapshot = {
+				format: proposal.format,
+				parentOid: proposal.parentOid,
+				treeOid: proposal.treeOid,
+				commitOid: proposal.commitOid,
+				paths: proposal.paths,
+				stagedVsUnstaged: proposal.stagedVsUnstaged,
+				excludeFileSha256: proposal.excludeFileSha256,
+				excludedUntracked: proposal.excludedUntracked,
+				ignoredPaths: proposal.ignoredPaths,
+				trackedSensitivePaths: proposal.trackedSensitivePaths,
+				pathReview
+			};
+			workingCopy = {
+				commitOid: proposal.commitOid,
+				parentOid: proposal.parentOid,
+				treeOid: proposal.treeOid
+			};
+		}
+	} else if (pathReview !== null && probe.observed.head !== null && !probe.dirty) {
+		const manifest = probe.observed.head.treePaths;
+		const expected = headManifestSha256;
+		const entries = new Set(manifest.map(({ path, mode, blobOid }) => `${path}\0${mode}\0${blobOid}`));
+		const included = /* @__PURE__ */ new Set();
+		const problems = [];
+		if (pathReview.manifestSha256 !== expected) problems.push("review manifest digest differs from the clean HEAD tree");
+		if (pathReview.stagedVsUnstaged !== null) problems.push("clean HEAD review cannot approve a lost index/worktree split");
+		for (const entry of pathReview.included) {
+			const key = `${entry.path}\0${entry.mode}\0${entry.blobOid}`;
+			if (!entries.has(key)) problems.push(`review includes stale file ${entry.path}`);
+			else if (included.has(entry.path)) problems.push(`review repeats file ${entry.path}`);
+			else included.add(entry.path);
+		}
+		for (const { subject } of sensitiveTracked) if (subject === null || !included.has(subject)) problems.push(`sensitive tracked path lacks an exact review: ${subject}`);
+		if (problems.length > 0) blockers.push({
+			code: "clean-head-path-review-invalid",
+			subject: null,
+			reason: problems.slice(0, 8).join("; ")
+		});
+		else cleanHeadPathReview = pathReview;
+	}
+	if (!probe.dirty && sensitiveTracked.length > 0 && cleanHeadPathReview === null) blockers.push({
+		code: "clean-head-path-review-required",
+		subject: null,
+		reason: `clean HEAD with tracked sensitive paths requires a --path-review binding the HEAD tree manifest: ${sensitiveTracked.map(({ subject }) => subject).filter((subject) => subject !== null).slice(0, 16).join(", ")}`
+	});
+	const dest = yield* probeDestination(paths.dest, input.repo, probe.objectFormat);
+	blockers.push(...dest.blockers);
+	warnings.push(...dest.warnings);
+	if (dest.exists) {
+		const destJj = yield* destinationJjView(dest.realpath);
+		if (destJj.failure !== null) blockers.push(destJj.failure);
+	}
+	const remotes = probe.observed.remotes ?? [];
+	const urlByName = new Map(remotes.map(({ name, url }) => [name, url]));
+	const remoteTracking = [];
+	for (const ref of probe.observed.refs ?? []) {
+		const match = ref.name.match(/^refs\/remotes\/([^/]+)\/(.+)$/);
+		if (match === null || match[2] !== input.branch) continue;
+		const url = urlByName.get(match[1]);
+		if (url === void 0) {
+			warnings.push({
+				code: "remote-url-unknown",
+				subject: match[1],
+				reason: "remote-tracking ref exists without a configured remote url"
+			});
+			continue;
+		}
+		remoteTracking.push({
+			remote: match[1],
+			url,
+			ref: ref.name,
+			oid: ref.oid,
+			freshness: "local-only"
+		});
+	}
+	remoteTracking.sort((a, b) => a.remote < b.remote ? -1 : a.remote > b.remote ? 1 : 0);
+	const head = probe.observed.head;
+	let headNotInRecordedBaseline = null;
+	if (head !== null && remoteTracking.length > 0) headNotInRecordedBaseline = yield* countNotIn(probe.source, [head.oid], [remoteTracking[0].oid]);
+	else if (head !== null) warnings.push({
+		code: "baseline-unknown",
+		subject: null,
+		reason: "no locally recorded remote-tracking baseline; unknown, not unpushed"
+	});
+	let selectedTipsNotInDestination = null;
+	const branchTips = (probe.observed.refs ?? []).filter(({ name }) => name.startsWith("refs/heads/")).map(({ oid }) => oid);
+	if (dest.preRefs !== null && head !== null) {
+		const destTips = dest.preRefs.filter(({ name }) => !name.startsWith("refs/jj/")).map(({ peeledOid, oid }) => peeledOid ?? oid);
+		selectedTipsNotInDestination = yield* countNotIn(probe.source, [head.oid, ...branchTips], destTips);
+		if (selectedTipsNotInDestination === null) warnings.push({
+			code: "destination-count-unknown",
+			subject: null,
+			reason: "destination tips are not all present in the source object store; delta count unknown"
+		});
+	}
+	let baselines = null;
+	if (dest.exists && dest.preRefs !== null && dest.statusSha256 !== null && dest.indexSha256 !== null) baselines = {
+		sourceRemoteTracking: remoteTracking,
+		destinationPreRefs: dest.preRefs,
+		destinationPreRefsSha256: dest.preRefsSha256,
+		destinationWorktreeFingerprintSha256: dest.statusSha256,
+		destinationIndexSha256: dest.indexSha256,
+		selectedBranch: input.branch,
+		declaredRepo: input.repo,
+		headNotInRecordedBaseline,
+		selectedTipsNotInDestination
+	};
+	if (probe.fingerprintFiles !== null && probe.includedManifest !== null && probe.raw.refs !== null && probe.raw.reflogs !== null && probe.fingerprintFiles.odbListing !== null) {
+		const { indexBytes, configBytes, odbListing, jjStore } = probe.fingerprintFiles;
+		const indexSha256 = sha256(indexBytes);
+		const canonicalInputs = {
+			head: head === null ? null : {
+				symbolicRef: head.symbolicRef,
+				oid: head.oid
+			},
+			refs: (probe.observed.refs ?? []).map(({ name, oid, objectType, peeledOid }) => ({
+				name,
+				oid,
+				objectType,
+				peeledOid
+			})),
+			reflogSelection: (probe.observed.candidates ?? []).map(({ kind, oid, disposition }) => ({
+				kind,
+				oid,
+				disposition
+			})),
+			indexSha256,
+			includedManifest: probe.includedManifest,
+			excludeFileSha256: excludeBytes === null ? null : sha256(excludeBytes),
+			dispositionsFileSha256: dispositions === null ? null : dispositions.fileSha256,
+			declaredRepo: input.repo,
+			selectedBranch: input.branch
+		};
+		probe.observed.fingerprints = {
+			indexSha256,
+			gitConfigSha256: sha256(configBytes),
+			refsSha256: sha256(probe.raw.refs),
+			reflogsSha256: sha256(probe.raw.reflogs),
+			odbListingSha256: sha256(encoder$1.encode(odbListing)),
+			includedWorktreeSha256: sha256(encoder$1.encode(`${canonicalJson(probe.includedManifest)}\n`)),
+			jjStoreSha256: jjStore === null ? null : sha256(encoder$1.encode(jjStore)),
+			canonicalInputsSha256: sha256(encoder$1.encode(`${canonicalJson(canonicalInputs)}\n`))
+		};
+		probe.observed.excludeFileSha256 = excludeBytes === null ? null : sha256(excludeBytes);
+		probe.observed.dispositionsFileSha256 = dispositions === null ? null : dispositions.fileSha256;
+	}
+	const { pins, failures } = buildPins(probe.observed, input.label, input.generation, workingCopy);
+	if (failures.length > 0) blockers.push(...failures);
+	const partialIdentity = {
+		label: input.label,
+		generation: input.generation,
+		legacyRealpathAtCapture: probe.source,
+		sourceGitCommonDir: probe.gitDir,
+		destinationRealpath: dest.realpath,
+		createdAt: (/* @__PURE__ */ new Date()).toISOString()
+	};
+	const uniqueBlockers = [...new Map(blockers.map((issue) => [`${issue.code}\0${issue.subject}`, issue])).values()];
+	if (uniqueBlockers.length > 0) return {
+		schema: "compfuzor.archive-adoption-plan/v1",
+		state: "blocked",
+		headManifestSha256,
+		identity: partialIdentity,
+		source: probe.observed,
+		proposedSnapshot: proposal,
+		cleanHeadPathReview,
+		baselines,
+		pins: null,
+		blockers: uniqueBlockers,
+		warnings,
+		retirementUnresolved: retirement
+	};
+	const source = assembleSource(probe.observed);
+	if (source === null || baselines === null) invalid("internal: blocker-free plan still lacks inventory categories");
+	if (probe.gitDir === null || dest.realpath === null) invalid("internal: blocker-free plan lacks resolved repository paths");
+	return {
+		schema: "compfuzor.archive-adoption-plan/v1",
+		state: "ready",
+		headManifestSha256,
+		identity: {
+			...partialIdentity,
+			sourceGitCommonDir: probe.gitDir,
+			destinationRealpath: dest.realpath
+		},
+		source,
+		proposedSnapshot: approvedSnapshot,
+		cleanHeadPathReview,
+		baselines,
+		pins,
+		blockers: [],
+		warnings,
+		retirementUnresolved: retirement
+	};
+}));
+/** Deduplicated `rev-list --count tips --not negatives`; null when unknowable. */
+function countNotIn(source, tips, negatives) {
+	return gen(function* () {
+		if (tips.length === 0 || negatives.length === 0) return null;
+		for (const negative of negatives) if (!(yield* gitRead([
+			"cat-file",
+			"-e",
+			`${negative}^{commit}`
+		], { cwd: source }).pipe(map$5((result) => result.exitCode === 0), catch_(() => succeed$3(false))))) return null;
+		const result$2 = yield* gitRead([
+			"rev-list",
+			"--count",
+			...tips,
+			...negatives.map((oid) => `^${oid}`)
+		], { cwd: source }).pipe(mapError((error) => new CustodyError("inspection-failed", error.message)));
+		if (result$2.exitCode !== 0) return null;
+		const counted = yield* result(try_({
+			try: () => parseCount(result$2.stdout),
+			catch: (error) => error instanceof CustodyError ? error : new CustodyError("inspection-failed", String(error))
+		}));
+		return isSuccess$1(counted) ? counted.success : null;
+	});
+}
+function buildPins(observed, label, generation, workingCopy) {
+	const pins = [];
+	const failures = [];
+	const pin = (intent) => {
+		try {
+			pins.push({
+				...intent,
+				destinationRef: pinRef(intent, label, generation)
+			});
+		} catch (error) {
+			failures.push({
+				code: "pin-mapping-invalid",
+				subject: intent.sourceName,
+				reason: error instanceof Error ? error.message : String(error)
+			});
+		}
+	};
+	if (observed.head !== null) pin({
+		sourceKind: "head",
+		sourceName: "HEAD",
+		sourceOid: observed.head.oid,
+		objectType: "commit",
+		destinationOid: observed.head.oid
+	});
+	for (const ref of observed.refs ?? []) pin({
+		sourceKind: ref.name.startsWith("refs/heads/") ? "branch" : ref.name.startsWith("refs/tags/") ? "tag" : ref.name === "refs/stash" ? "stash" : "other",
+		sourceName: ref.name,
+		sourceOid: ref.oid,
+		objectType: ref.objectType,
+		destinationOid: ref.oid
+	});
+	for (const candidate of observed.candidates ?? []) {
+		if (candidate.disposition !== "pin") continue;
+		pin({
+			sourceKind: "reflog",
+			sourceName: candidateIdentity(candidate.kind, candidate.oid),
+			sourceOid: candidate.oid,
+			objectType: candidate.objectType,
+			destinationOid: candidate.oid
+		});
+	}
+	if (workingCopy !== null) {
+		const intent = {
+			sourceKind: "working-copy",
+			sourceName: "working-copy",
+			sourceOid: workingCopy.commitOid,
+			objectType: "commit",
+			destinationOid: workingCopy.commitOid
+		};
+		try {
+			pins.push({
+				...intent,
+				destinationRef: pinRef(intent, label, generation, workingCopy)
+			});
+		} catch (error) {
+			failures.push({
+				code: "pin-mapping-invalid",
+				subject: "working-copy",
+				reason: error instanceof Error ? error.message : String(error)
+			});
+		}
+	}
+	return {
+		pins,
+		failures
+	};
+}
+/** Narrow an observed inventory to the complete shape, or null. */
+function assembleSource(observed) {
+	if (observed.objectFormat === null || observed.sourceGitCommonDir === null || observed.head === null || observed.refs === null || observed.candidates === null || observed.remotes === null || observed.indexEntries === null || observed.worktreeChanges === null || observed.untrackedPaths === null || observed.ignoredPaths === null || observed.excludedUntracked === null || observed.trackedSensitivePaths === null || observed.leftBehind === null || observed.jjCoverage === null || observed.fingerprints === null) return null;
+	return {
+		objectFormat: observed.objectFormat,
+		sourceGitCommonDir: observed.sourceGitCommonDir,
+		head: observed.head,
+		refs: observed.refs,
+		candidates: observed.candidates,
+		remotes: observed.remotes,
+		indexEntries: observed.indexEntries,
+		worktreeChanges: observed.worktreeChanges,
+		untrackedPaths: observed.untrackedPaths,
+		ignoredPaths: observed.ignoredPaths,
+		excludedUntracked: observed.excludedUntracked,
+		trackedSensitivePaths: observed.trackedSensitivePaths,
+		leftBehind: observed.leftBehind,
+		jjCoverage: observed.jjCoverage,
+		fingerprints: observed.fingerprints,
+		excludeFileSha256: observed.excludeFileSha256,
+		dispositionsFileSha256: observed.dispositionsFileSha256
+	};
+}
 //#endregion
 //#region archive/src/repository/health.ts
 /** Materialize all visible view heads, including bare heads and bookmark conflict terms. */
-async function preflight(dest, options = {}) {
+async function preflight(dest, options = {}, execution) {
 	try {
 		await jj([
 			"log",
@@ -27984,15 +32997,1124 @@ async function preflight(dest, options = {}) {
 			"visible_heads()",
 			"-T",
 			"commit_id ++ \"\\n\""
-		], dest, options);
+		], dest, options, execution);
 	} catch (error) {
 		if (!(error instanceof JjError)) throw error;
 		const ghosts = [...new Set([...error.detail.matchAll(/Object ([0-9a-f]{40,64}) of type commit not found/gi)].map((match) => match[1]))];
 		if (ghosts.length === 0) throw error;
 		throw new Error(`jj ghost commit(s) missing from Git object store: ${ghosts.join(", ")}. Resolve conflicted bookmarks and re-adopt the checkout, or explicitly run node '${(process.argv[1] ?? "archive/src/repo-jj-archive.ts").replaceAll("'", "'\\''")}' heal --dest '${dest.replaceAll("'", "'\\''")}' --yes (backs up .jj).`);
 	}
-	return [...(await refs(dest, options)).values()].filter((ref) => ref.target === "conflict").map((ref) => `${ref.name}${ref.remote === "-" ? "" : `@${ref.remote}`}`);
+	return [...(await refs(dest, options, execution)).values()].filter((ref) => ref.target === "conflict").map((ref) => `${ref.name}${ref.remote === "-" ? "" : `@${ref.remote}`}`);
 }
+//#endregion
+//#region archive/src/custody/vault.ts
+/**
+* Private bundle vault: sibling-of-destination storage for adoption bundles.
+*
+* The vault lives at `dirname(dest)/.compfuzor-adoptions/<archive-id>/<run-id>/`
+* where `<archive-id>` is the SHA-256 of the canonical destination realpath
+* **at capture** and `<run-id>` is a cryptographic random (128+ bit) identity
+* minted per apply run. Owner-only permissions (`0700` directories, `0600`
+* files), atomic rename installation, and exclusive creation keep the vault
+* private and never overwrite pre-existing artifacts; abandoned runs are left
+* for deliberate diagnosis, never pruned automatically.
+*
+* Two halves: safe *resolution* of a receipt's recorded bundle path under a
+* possibly moved archive (the verifier's read path), and the durable *writer*
+* {@link sealBundle} that apply uses to install a proven bundle and its
+* signed-off intent before any destination ref exists.
+*/
+const VAULT_DIRNAME = ".compfuzor-adoptions";
+const BUNDLE_NAME = "source.bundle";
+const INTENT_NAME = "intent.json";
+const encoder = new TextEncoder();
+/** Archive identity: SHA-256 over the canonical destination realpath bytes. */
+function vaultArchiveId(destRealpath) {
+	return sha256(encoder.encode(destRealpath));
+}
+/**
+* Shape-only parse of a receipt's `pathRelativeToDestinationParent` value.
+* The hash binding to a specific destination is checked by
+* {@link resolveVaultBundle} (via the codec) against the receipt's own
+* recorded capture path, never against the current location.
+*/
+function parseVaultRelative(relative) {
+	const parts = relative.split("/");
+	if (parts.length !== 4 || parts[0] !== ".compfuzor-adoptions" || parts[3] !== "source.bundle" || !/^[0-9a-f]{64}$/.test(parts[1]) || !/^[0-9a-f]{32,}$/.test(parts[2])) invalid("bundle path is outside the private vault");
+	return {
+		archiveId: parts[1],
+		runId: parts[2]
+	};
+}
+/**
+* Which on-disk vault component failed resolution, and whether it was absent
+* (versus present but wrong: symlink, wrong type). Lets the verifier report a
+* genuinely missing bundle file distinctly from a redirected or absent vault.
+*/
+var VaultPathComponentError = class extends CustodyError {
+	name = "VaultPathComponentError";
+	component;
+	missing;
+	constructor(init) {
+		super("bundle-invalid", init.message, init.path);
+		this.component = init.component;
+		this.missing = init.missing;
+	}
+};
+/**
+* The absolute bundle location implied by a receipt under the **current**
+* destination parent — shape- and hash-validated, but without touching the
+* filesystem. Pure addressing, shared by the resolver below.
+*/
+function vaultBundleTarget(receipt, destRealpath) {
+	const relative = receipt.bundle.pathRelativeToDestinationParent;
+	vaultBundlePath(receipt.identity.destinationRealpath, relative);
+	const { archiveId, runId } = parseVaultRelative(relative);
+	return join(dirname(destRealpath), VAULT_DIRNAME, archiveId, runId, BUNDLE_NAME);
+}
+/**
+* Resolve the sealed bundle for a receipt under the **current** destination,
+* proving every on-disk component is what it claims.
+*
+* Moved-archive contract: the archive-id directory name is the hash of the
+* destination realpath at capture time. Once an archive moves, a new hash
+* cannot be derived for the recorded path and the original absolute path must
+* not be consulted — so the recorded relative path is validated against the
+* receipt's own `identity.destinationRealpath` (proving it was minted for
+* exactly this archive), and then resolved relative to the *current*
+* destination's parent, where the vault must have moved with the archive. A
+* vault that stayed behind, or a clone that never had one, fails distinctly.
+*
+* Every path component is `lstat`d and must be a real directory (and the leaf
+* a real regular file): a symlink anywhere on the vault path is rejected
+* without being followed, so the bundle cannot be redirected outside the
+* vault by swapping a component for a link.
+*/
+async function resolveVaultBundle(receipt, destRealpath) {
+	const target = vaultBundleTarget(receipt, destRealpath);
+	const { archiveId, runId } = parseVaultRelative(receipt.bundle.pathRelativeToDestinationParent);
+	const component = async (path, componentKind, what, expect) => {
+		const reject = (message, missing) => new VaultPathComponentError({
+			component: componentKind,
+			path,
+			message,
+			missing
+		});
+		const info = await lstat(path).catch(() => null);
+		if (info === null) throw reject(`vault ${what} is missing: ${path}`, true);
+		if (info.isSymbolicLink()) throw reject(`vault ${what} is a symlink; refusing to follow it out of the vault: ${path}`, false);
+		if (expect === "directory" && !info.isDirectory()) throw reject(`vault ${what} is not a directory: ${path}`, false);
+		if (expect === "file" && !info.isFile()) throw reject(`vault ${what} is not a regular file: ${path}`, false);
+	};
+	const vault = join(dirname(destRealpath), VAULT_DIRNAME);
+	await component(vault, "root", "root", "directory");
+	await component(join(vault, archiveId), "archive", "archive directory", "directory");
+	await component(join(vault, archiveId, runId), "run", "run directory", "directory");
+	await component(target, "bundle", "bundle", "file");
+	return target;
+}
+/** 128 bits of cryptographic randomness, hex-encoded. */
+function vaultRunId() {
+	return randomBytes(16).toString("hex");
+}
+const vaultWrite = (message, subject = null) => new CustodyError("invalid-input", `vault write refused: ${message}`, subject);
+/** fsync a directory (by fd) so a create/rename survives a crash. */
+const syncDir = async (dir) => {
+	const handle = await open(dir, "r");
+	try {
+		await handle.sync();
+	} finally {
+		await handle.close();
+	}
+};
+/** mkdir one owner-only level, tolerating an already-correct existing level. */
+const mkdirLevel = async (dir, what, signal) => {
+	signal?.throwIfAborted();
+	const existing = await lstat(dir).catch(() => null);
+	signal?.throwIfAborted();
+	if (existing !== null) {
+		if (!existing.isDirectory() || existing.isSymbolicLink()) throw vaultWrite(`${what} exists and is not a directory`, dir);
+		return;
+	}
+	try {
+		signal?.throwIfAborted();
+		await mkdir(dir, { mode: 448 });
+	} catch (error) {
+		signal?.throwIfAborted();
+		throw vaultWrite(`could not create ${what}: ${error instanceof Error ? error.message : String(error)}`, dir);
+	}
+	await syncDir(dirname(dir));
+	signal?.throwIfAborted();
+};
+/** Containment in either direction (a path component boundary, not prefixes). */
+const contains$1 = (parent, child) => {
+	const rel = relative(parent, child);
+	return rel === "" || rel !== ".." && !rel.startsWith("../") && !isAbsolute(rel);
+};
+/**
+* Create an exclusive, owner-only vault run directory for an apply attempt.
+* `destRealpath` is the canonical destination of *this* run (the archive-id
+* hash is minted from it); an existing run directory is refused — the vault is
+* append-only and never reuses or prunes runs. {@link sealBundle} composes
+* this with the intent/bundle installs; it stays exported for apply's
+* restart-diagnosis writes into an existing run.
+*/
+async function createVaultRun(destRealpath, runId, execution = {}) {
+	const { signal } = execution;
+	signal?.throwIfAborted();
+	if (!/^[0-9a-f]{32,}$/.test(runId)) invalid("vault run id must be 128+ bits of hex randomness");
+	const vaultRoot = join(dirname(destRealpath), VAULT_DIRNAME);
+	const archiveDir = join(vaultRoot, vaultArchiveId(destRealpath));
+	const runDir = join(archiveDir, runId);
+	const existing = await lstat(runDir).catch(() => null);
+	signal?.throwIfAborted();
+	if (existing !== null) throw vaultWrite("run directory already exists; runs are exclusive and never reused", runDir);
+	await mkdirLevel(vaultRoot, "vault root", signal);
+	await mkdirLevel(archiveDir, "archive directory", signal);
+	try {
+		signal?.throwIfAborted();
+		await mkdir(runDir, { mode: 448 });
+	} catch (error) {
+		signal?.throwIfAborted();
+		throw vaultWrite(`could not create the exclusive run directory: ${error instanceof Error ? error.message : String(error)}`, runDir);
+	}
+	await syncDir(archiveDir);
+	signal?.throwIfAborted();
+	return {
+		vaultRoot,
+		archiveDir,
+		runDir,
+		runId,
+		bundlePath: join(runDir, BUNDLE_NAME),
+		intentPath: join(runDir, INTENT_NAME)
+	};
+}
+/**
+* Durably install a vault file: write to a private `0600` temporary in the
+* same directory, fsync it, then hard-link it onto the final name (`link(2)`
+* is atomic *and* exclusive — unlike `rename(2)` it cannot clobber a racing
+* creator) and fsync the directory. A pre-existing target is refused and no
+* temporary survives a failure path. Exported for apply's diagnosis writes.
+*/
+async function sealVaultFile(target, bytes, execution = {}) {
+	const { signal } = execution;
+	signal?.throwIfAborted();
+	const existing = await lstat(target).catch(() => null);
+	signal?.throwIfAborted();
+	if (existing !== null) throw vaultWrite("target already exists; vault files are never overwritten", target);
+	const directory = dirname(target);
+	const temp = join(directory, `.${basename(target)}.tmp-${randomBytes(8).toString("hex")}`);
+	try {
+		signal?.throwIfAborted();
+		const handle = await open(temp, "wx", 384);
+		try {
+			signal?.throwIfAborted();
+			await handle.writeFile(bytes);
+			signal?.throwIfAborted();
+			await handle.sync();
+		} finally {
+			await handle.close();
+		}
+		signal?.throwIfAborted();
+		await link(temp, target);
+	} catch (error) {
+		await unlink(temp).catch(() => {});
+		signal?.throwIfAborted();
+		if (error instanceof CustodyError) throw error;
+		throw vaultWrite(`could not install ${basename(target)}: ${error instanceof Error ? error.message : String(error)}`, target);
+	}
+	await unlink(temp).catch(() => {});
+	await syncDir(directory);
+	signal?.throwIfAborted();
+}
+/**
+* Durally seal a proven adoption bundle and its signed-off intent into a new,
+* exclusive, owner-only vault run beside the destination.
+*
+* Ordering contract for apply: the intent is installed first and the bundle
+* second, both before any destination ref exists; the receipt is constructed
+* only afterwards from the returned checksum (so it can never cyclically
+* contain its own bundle hash). The vault root must lie outside both the
+* destination and the legacy checkout; a run is never reused or overwritten,
+* and abandoned attempts are left for diagnosis.
+*/
+async function sealBundle(options, execution = {}) {
+	const { signal } = execution;
+	signal?.throwIfAborted();
+	const { destRealpath, legacyRealpath, proven, intent } = options;
+	const vaultRoot = join(dirname(destRealpath), VAULT_DIRNAME);
+	if (contains$1(destRealpath, vaultRoot) || contains$1(vaultRoot, destRealpath)) invalid("vault must be a sibling of the destination, never inside or around it");
+	if (contains$1(legacyRealpath, vaultRoot)) throw vaultWrite("vault would live inside the legacy checkout", vaultRoot);
+	if (contains$1(vaultRoot, legacyRealpath)) throw vaultWrite("legacy checkout would live inside the vault", legacyRealpath);
+	const bundleBytes = await readFile(proven.bundlePath).catch(() => {
+		signal?.throwIfAborted();
+		throw vaultWrite("proven bundle is not readable", proven.bundlePath);
+	});
+	signal?.throwIfAborted();
+	const observed = sha256(bundleBytes);
+	if (observed !== proven.bundleSha256) throw vaultWrite(`proven bundle changed underfoot: hashes to ${observed}, promised ${proven.bundleSha256}`, proven.bundlePath);
+	const run = await createVaultRun(destRealpath, vaultRunId(), execution);
+	await sealVaultFile(run.intentPath, intent, execution);
+	await sealVaultFile(run.bundlePath, bundleBytes, execution);
+	const sealed = {
+		pathRelativeToDestinationParent: join(VAULT_DIRNAME, vaultArchiveId(destRealpath), run.runId, BUNDLE_NAME),
+		sha256: proven.bundleSha256,
+		verifiedHeads: proven.verifiedHeads,
+		freshRestoreVerified: true
+	};
+	signal?.throwIfAborted();
+	return {
+		run,
+		sealed
+	};
+}
+//#endregion
+//#region archive/src/custody/verify.ts
+/**
+* Source-independent custody verification (`verify-adoption`).
+*
+* The verifier reads the receipt by full ref from the destination Git ODB
+* (`<receipt ref>:adoption.json`), strictly re-parses it, and re-derives every
+* custody claim against the archive and its private vault bundle — without
+* opening the legacy checkout. Proven at verification time:
+*
+* - the receipt ref resolves to a parentless metadata commit holding exactly
+*   one `adoption.json` blob (whose canonical JSON never names its own commit);
+* - every pin's destination ref exists in the archive with the exact expected
+*   OID and object type, its lane recomputed from the receipt's own identity,
+*   with commit/tag closures walking inside the destination ODB;
+* - the recorded full HEAD tree and the worktree snapshot tree are reproduced
+*   path/mode/blob-exactly from the destination object store;
+* - the vault bundle hashes to its recorded checksum and restores completely
+*   through the shared `checkBundleRestoration` proof (exact advertised heads,
+*   no prerequisites, fresh empty repository with no alternates, per-pin
+*   type/closure, snapshot manifest equality).
+*
+* Reported separately from custody: destination drift (pre-import refs,
+* worktree, index observed now versus the receipt baseline) and optional
+* legacy source drift are diagnostics — subsequent drift never redefines
+* historical custody, and custody never grants retirement permission. jj
+* health is additional evidence (`readOnly` query mode, never snapshot/import):
+* its findings land in `retirementUnresolved`, and receipt-carried unresolved
+* items are preserved.
+*
+* Failure model: structural inability to observe a receipt at all (missing
+* ref, unusable destination) throws `CustodyError` for the CLI to exit
+* nonzero. Every check that a parsed receipt frames — ref/object/manifest/
+* bundle/vault evidence — is collected into `custodyFailures` with
+* `custodyVerified: false`, also a nonzero exit for the CLI. The only writes
+* this module ever performs are inside its private scratch directory.
+*/
+const REF_FORMAT = "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00";
+/**
+* Read-only runner: raw stdout bytes on exit 0, `null` otherwise. Git failures
+* are observations for the caller to classify, never exceptions here.
+*/
+const softGit = async (args, cwd, signal) => {
+	signal?.throwIfAborted();
+	const outcome = await runPromise(gitRead(args, { cwd }), { signal }).catch((error) => {
+		signal?.throwIfAborted();
+		throw error;
+	});
+	signal?.throwIfAborted();
+	return outcome.exitCode === 0 ? outcome.stdout : null;
+};
+/** Structural runner: a nonzero exit means the step itself is broken. */
+const hardGit = async (args, cwd, step, signal) => {
+	signal?.throwIfAborted();
+	const outcome = await runPromise(gitRead(args, { cwd }), { signal }).catch((error) => {
+		signal?.throwIfAborted();
+		throw error;
+	});
+	signal?.throwIfAborted();
+	if (outcome.exitCode !== 0) throw new CustodyError("inspection-failed", `${step} failed (git ${args[0] ?? ""} exited ${outcome.exitCode})`);
+	return outcome.stdout;
+};
+const parseRefRows = (bytes, format) => {
+	const rows = [];
+	const text = utf8Fatal(bytes);
+	if (text === "") return rows;
+	if (!text.endsWith("\n")) throw new CustodyError("inspection-failed", "truncated for-each-ref output");
+	for (const line of text.split("\n").slice(0, -1)) {
+		const fields = line.split("\0");
+		if (fields.length !== 5) throw new CustodyError("inspection-failed", "malformed for-each-ref output");
+		rows.push({
+			name: refName(fields[0]),
+			oid: requireOid(fields[1], format),
+			objectType: fields[2],
+			peeledOid: fields[3] === "" ? null : requireOid(fields[3], format)
+		});
+	}
+	return rows;
+};
+const requireOid = (value, format) => {
+	if (!new RegExp(`^[0-9a-f]{${format === "sha1" ? 40 : 64}}$`).test(value)) throw new CustodyError("inspection-failed", `observed OID is not ${format}-shaped: ${value}`);
+	return value;
+};
+/**
+* Parse `ls-tree -r -z` into the canonical path/mode/blob manifest. The first
+* TAB separates `mode type oid` from a path that may contain any bytes; the
+* result is sorted by path, matching how receipts and reviews digest it.
+*/
+const parseManifest = (bytes, format) => {
+	const records = [];
+	let start = 0;
+	for (let i = 0; i < bytes.length; i++) if (bytes[i] === 0) {
+		records.push(bytes.subarray(start, i));
+		start = i + 1;
+	}
+	if (start < bytes.length) records.push(bytes.subarray(start));
+	const entries = [];
+	for (const record of records) {
+		if (record.length === 0) continue;
+		let tab = -1;
+		for (let i = 0; i < record.length; i++) if (record[i] === 9) {
+			tab = i;
+			break;
+		}
+		if (tab < 0) throw new CustodyError("inspection-failed", "malformed ls-tree record");
+		const meta = utf8Fatal(record.subarray(0, tab)).split(" ");
+		if (meta.length !== 3) throw new CustodyError("inspection-failed", "malformed ls-tree metadata");
+		if (meta[1] !== "blob") throw new CustodyError("inspection-failed", `unexpected ls-tree entry type: ${meta[1]}`);
+		entries.push({
+			path: requireRepoPath(utf8Fatal(record.subarray(tab + 1))),
+			mode: requireMode(meta[0]),
+			blobOid: requireOid(meta[2], format)
+		});
+	}
+	entries.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+	return entries;
+};
+const requireRepoPath = (value) => {
+	if (!value || value.startsWith("/") || value.split("/").some((part) => part === "" || part === "." || part === "..")) throw new CustodyError("inspection-failed", "observed tree path is not representable");
+	return value;
+};
+const requireMode = (value) => {
+	if (value !== "100644" && value !== "100755" && value !== "120000") throw new CustodyError("inspection-failed", `unexpected ls-tree mode: ${value}`);
+	return value;
+};
+/** The single `for-each-ref` row for an exact ref name, or null when absent. */
+const exactRefRow = async (repo, ref, format, signal) => {
+	return parseRefRows(await hardGit([
+		"for-each-ref",
+		REF_FORMAT,
+		ref
+	], repo, `ref lookup for ${ref}`, signal), format).find((row) => row.name === ref) ?? null;
+};
+/**
+* Observe and strictly parse the receipt behind `receiptRef`. Throws
+* `CustodyError` when the ref is missing or the repository is unusable —
+* apply's retry protocol and the verifier share this exact reading.
+*/
+async function readReceipt(dest, receiptRef, execution = {}) {
+	const { signal } = execution;
+	signal?.throwIfAborted();
+	const ref = refName(receiptRef);
+	const destReal = await realpath(dest).catch(() => {
+		throw new CustodyError("invalid-input", `destination does not exist: ${dest}`, dest);
+	});
+	const formatText = utf8Fatal(await hardGit(["rev-parse", "--show-object-format"], destReal, "destination object format probe", signal)).trim();
+	if (formatText !== "sha1" && formatText !== "sha256") throw new CustodyError("unsupported-repository", `destination object format is not sha1/sha256: ${formatText}`, destReal);
+	const row = await exactRefRow(destReal, ref, formatText, signal);
+	if (row === null) throw new CustodyError("verification-failed", `receipt ref does not exist in the destination: ${ref}`, ref);
+	if (row.objectType !== "commit") throw new CustodyError("verification-failed", `receipt ref does not point at a commit (observed ${row.objectType}): ${ref}`, ref);
+	const blob = await softGit([
+		"cat-file",
+		"blob",
+		`${row.oid}:adoption.json`
+	], destReal, signal);
+	if (blob === null) throw new CustodyError("verification-failed", `receipt commit has no adoption.json blob: ${ref}`, ref);
+	return {
+		receipt: parseReceipt(blob),
+		receiptCommitOid: row.oid,
+		adoptionJson: blob
+	};
+}
+/**
+* Independent verification of an installed adoption. See the module comment
+* for the full check list and the custody/drift/jj reporting split.
+*/
+async function verifyAdoption(input, execution = {}) {
+	const { signal } = execution;
+	signal?.throwIfAborted();
+	const soft = (args, cwd) => softGit(args, cwd, signal);
+	const hard = (args, cwd, step) => hardGit(args, cwd, step, signal);
+	const failures = [];
+	const retirement = [];
+	const fail = (code, subject, reason) => {
+		failures.push({
+			code,
+			subject,
+			reason
+		});
+	};
+	const ref = refName(input.receiptRef);
+	const destReal = await realpath(input.dest).catch(() => {
+		throw new CustodyError("invalid-input", `destination does not exist: ${input.dest}`, input.dest);
+	});
+	const gitDir = utf8Fatal(await hard(["rev-parse", "--absolute-git-dir"], destReal, "destination discovery")).trim();
+	const formatText = utf8Fatal(await hard(["rev-parse", "--show-object-format"], destReal, "destination object format probe")).trim();
+	if (formatText !== "sha1" && formatText !== "sha256") throw new CustodyError("unsupported-repository", `destination object format is not sha1/sha256: ${formatText}`, destReal);
+	const destFormat = formatText;
+	const row = await exactRefRow(destReal, ref, destFormat, signal);
+	if (row === null) throw new CustodyError("verification-failed", `receipt ref does not exist in the destination: ${ref}`, ref);
+	const receiptCommitOid = row.oid;
+	let receipt = null;
+	if (row.objectType !== "commit") fail("receipt-not-commit", ref, `receipt ref points at a ${row.objectType}, not the metadata commit`);
+	else {
+		const blob = await soft([
+			"cat-file",
+			"blob",
+			`${receiptCommitOid}:adoption.json`
+		], destReal);
+		if (blob === null) fail("receipt-blob-missing", ref, "receipt commit carries no adoption.json blob");
+		else try {
+			const parsed = parseReceipt(blob);
+			if (parsed.receiptRef !== ref) fail("receipt-ref-mismatch", ref, `receipt names ${parsed.receiptRef}; it was read from ${ref}`);
+			if (utf8Fatal(blob).includes(receiptCommitOid)) fail("receipt-self-reference", ref, "adoption.json embeds its own metadata commit OID");
+			receipt = parsed;
+		} catch (error) {
+			signal?.throwIfAborted();
+			fail("receipt-invalid", ref, error instanceof Error ? error.message : String(error));
+		}
+	}
+	if (receipt !== null) {
+		const parentsBytes = await soft([
+			"rev-list",
+			"--parents",
+			"-n",
+			"1",
+			receiptCommitOid
+		], destReal);
+		if (parentsBytes === null) fail("receipt-commit-shape", ref, "receipt metadata commit is unreadable");
+		else if (utf8Fatal(parentsBytes).trim().split(" ").length > 1) fail("receipt-commit-shape", ref, "receipt metadata commit has parents");
+		const treeRows = await soft([
+			"ls-tree",
+			"-z",
+			`${receiptCommitOid}^{tree}`
+		], destReal);
+		let sole = false;
+		if (treeRows === null) fail("receipt-commit-shape", ref, "receipt metadata commit tree is unreadable");
+		else {
+			const entries = utf8Fatal(treeRows).split("\0").filter((line) => line !== "");
+			sole = entries.length === 1 && /^100644 blob [0-9a-f]{40,64}\tadoption\.json$/.test(entries[0]);
+			if (!sole) fail("receipt-commit-shape", ref, "receipt metadata commit tree must hold exactly one adoption.json blob");
+		}
+		if (receipt.source.objectFormat !== destFormat) fail("object-format-mismatch", destReal, `receipt records ${receipt.source.objectFormat}; destination is ${destFormat}`);
+		for (const pin of receipt.pins) {
+			const expected = pinRef(pin, receipt.identity.label, receipt.identity.generation, receipt.snapshot);
+			if (pin.destinationRef !== expected) fail("pin-mapping", pin.destinationRef, "recomputed destination lane differs from the recorded pin");
+		}
+	}
+	if (receipt !== null) {
+		const alternates = await readFile(join(gitDir, "objects", "info", "alternates")).catch(() => null);
+		if (alternates !== null && alternates.length > 0) fail("destination-alternates", destReal, "destination object store uses alternates; custody objects may live elsewhere");
+		const listing = await soft(["for-each-ref", REF_FORMAT], destReal);
+		let observed = null;
+		try {
+			observed = listing === null ? null : new Map(parseRefRows(listing, destFormat).map((r) => [r.name, r]));
+		} catch {
+			observed = null;
+		}
+		if (observed === null) fail("destination-refs-unreadable", destReal, "destination ref listing is unreadable");
+		else for (const pin of receipt.pins) {
+			const actual = observed.get(pin.destinationRef);
+			if (actual === void 0) {
+				fail("pin-ref-missing", pin.destinationRef, "custody pin ref is absent");
+				continue;
+			}
+			if (actual.oid !== pin.destinationOid) fail("pin-oid-mismatch", pin.destinationRef, `pin ref holds ${actual.oid}; receipt expects ${pin.destinationOid}`);
+			if (actual.objectType !== pin.objectType) fail("pin-type-mismatch", pin.destinationRef, `pin ref holds a ${actual.objectType}; receipt expects ${pin.objectType}`);
+			if (actual.oid !== pin.destinationOid || actual.objectType !== pin.objectType) continue;
+			const type = await soft([
+				"cat-file",
+				"-t",
+				pin.destinationOid
+			], destReal);
+			if (type === null || utf8Fatal(type).trim() !== pin.objectType) fail("pin-object-missing", pin.destinationRef, "pinned object is missing from the destination store");
+			if (pin.objectType === "tag") {
+				if (await soft(["rev-parse", `${pin.destinationOid}^{commit}`], destReal) === null) fail("pin-object-missing", pin.destinationRef, "annotated tag target is missing");
+			}
+			if (pin.objectType === "commit") {
+				if (await soft([
+					"rev-list",
+					"--objects",
+					pin.destinationOid
+				], destReal) === null) fail("pin-closure", pin.destinationRef, "reachable closure does not walk inside the destination object store");
+			}
+		}
+		const head = receipt.source.head;
+		const headTree = await soft(["rev-parse", `${head.oid}^{tree}`], destReal);
+		if (headTree === null || utf8Fatal(headTree).trim() !== head.treeOid) fail("tree-oid-mismatch", head.oid, "HEAD commit does not carry the recorded tree");
+		else {
+			const headListing = await soft([
+				"ls-tree",
+				"-r",
+				"-z",
+				head.treeOid
+			], destReal);
+			if (headListing === null) fail("manifest-mismatch", head.treeOid, "HEAD tree is unreadable in the destination");
+			else if (canonicalJson(parseManifest(headListing, destFormat)) !== canonicalJson(head.treePaths)) fail("manifest-mismatch", head.treeOid, "HEAD tree manifest differs from the receipt");
+		}
+		const snapshot = receipt.snapshot;
+		if (snapshot !== null) {
+			const tree = await soft(["rev-parse", `${snapshot.commitOid}^{tree}`], destReal);
+			if (tree === null || utf8Fatal(tree).trim() !== snapshot.treeOid) fail("tree-oid-mismatch", snapshot.commitOid, "snapshot commit does not carry the recorded tree");
+			else {
+				const snapshotListing = await soft([
+					"ls-tree",
+					"-r",
+					"-z",
+					snapshot.treeOid
+				], destReal);
+				if (snapshotListing === null) fail("manifest-mismatch", snapshot.treeOid, "snapshot tree is unreadable in the destination");
+				else if (canonicalJson(parseManifest(snapshotListing, destFormat)) !== canonicalJson(snapshot.paths)) fail("manifest-mismatch", snapshot.treeOid, "snapshot manifest differs from the receipt");
+			}
+		}
+	}
+	if (receipt !== null) {
+		let bundlePath = null;
+		try {
+			bundlePath = await resolveVaultBundle(receipt, destReal);
+		} catch (error) {
+			signal?.throwIfAborted();
+			const detail = error instanceof Error ? error.message : String(error);
+			if (error instanceof VaultPathComponentError && error.component === "bundle" && error.missing) fail("bundle-unreadable", error.subject, detail);
+			else fail("vault-path-invalid", error instanceof CustodyError ? error.subject : receipt.bundle.pathRelativeToDestinationParent, detail);
+		}
+		const bundleBytes = bundlePath === null ? null : await readFile(bundlePath).catch(() => null);
+		if (bundleBytes === null) {
+			if (bundlePath !== null) fail("bundle-unreadable", bundlePath, "sealed vault bundle is unreadable");
+		} else {
+			const observed = sha256(bundleBytes);
+			if (observed !== receipt.bundle.sha256) fail("bundle-checksum", receipt.bundle.pathRelativeToDestinationParent, `bundle hashes to ${observed}; receipt records ${receipt.bundle.sha256}`);
+			try {
+				const check = await checkBundleRestoration({
+					bundlePath,
+					objectFormat: receipt.source.objectFormat,
+					scratchRoot: input.scratchRoot,
+					pins: receipt.pins,
+					snapshot: receipt.snapshot === null ? null : {
+						commitOid: receipt.snapshot.commitOid,
+						treeOid: receipt.snapshot.treeOid,
+						paths: receipt.snapshot.paths
+					}
+				}, execution);
+				await rm(dirname(check.restoreRepoPath), {
+					recursive: true,
+					force: true
+				});
+			} catch (error) {
+				signal?.throwIfAborted();
+				fail("bundle-restore", error instanceof CustodyError ? error.subject : null, error instanceof Error ? error.message : String(error));
+			}
+		}
+	}
+	const jjDirectory = await stat(join(destReal, ".jj")).catch(() => null);
+	if (jjDirectory === null || !jjDirectory.isDirectory()) retirement.push({
+		code: "jj-preflight-unavailable",
+		subject: destReal,
+		reason: "destination has no .jj store; jj visibility of custody refs is unproven"
+	});
+	else try {
+		const conflicts = await preflight(destReal, { readOnly: true }, execution);
+		if (conflicts.length > 0) retirement.push({
+			code: "jj-bookmark-conflict",
+			subject: conflicts.join(", "),
+			reason: "conflicted visible bookmarks need repair before retirement; custody refs and objects are checked independently above"
+		});
+	} catch (error) {
+		signal?.throwIfAborted();
+		retirement.push({
+			code: "jj-preflight-failed",
+			subject: destReal,
+			reason: error instanceof Error ? error.message : String(error)
+		});
+	}
+	const verification = {
+		receiptRef: ref,
+		receiptCommitOid,
+		custodyVerified: failures.length === 0,
+		custodyFailures: failures,
+		sourceDrift: await sourceDriftOf(input, receipt, signal).catch(() => {
+			signal?.throwIfAborted();
+			return "unknown";
+		}),
+		destinationDrift: await destinationDriftOf(receipt, destReal, gitDir, ref, receiptCommitOid, signal).catch(() => {
+			signal?.throwIfAborted();
+			return "unknown";
+		}),
+		retirementUnresolved: [...receipt?.unresolved ?? [], ...retirement]
+	};
+	signal?.throwIfAborted();
+	return verification;
+}
+/**
+* Subsequent destination drift, reported separately from historical custody:
+* the pre-import protected refs must still exist at their recorded OIDs, the
+* only new refs must be this receipt's custody refs, and the worktree/index
+* fingerprints must match the recorded baseline. Any unreadable category
+* yields `"unknown"`; this never flips `custodyVerified`.
+*/
+const destinationDriftOf = async (receipt, destReal, gitDir, ref, receiptCommitOid, signal) => {
+	const soft = (args, cwd) => softGit(args, cwd, signal);
+	if (receipt === null) return "unknown";
+	let changed = false;
+	let unknown = false;
+	const expected = /* @__PURE__ */ new Map();
+	for (const tip of receipt.baselines.destinationPreRefs) expected.set(tip.name, tip.oid);
+	expected.set(ref, receiptCommitOid);
+	for (const pin of receipt.pins) expected.set(pin.destinationRef, pin.destinationOid);
+	const listing = await soft(["for-each-ref", REF_FORMAT], destReal);
+	if (listing === null) unknown = true;
+	else {
+		const observed = /* @__PURE__ */ new Map();
+		for (const row of parseRefRows(listing, receipt.source.objectFormat)) observed.set(row.name, row.oid);
+		for (const [name, oid] of expected) if (observed.get(name) !== oid) changed = true;
+		for (const name of observed.keys()) if (!expected.has(name)) changed = true;
+	}
+	const status = await soft([
+		"status",
+		"--porcelain=v2",
+		"-z",
+		"--untracked-files=all"
+	], destReal);
+	if (status === null) unknown = true;
+	else if (sha256(status) !== receipt.baselines.destinationWorktreeFingerprintSha256) changed = true;
+	const index = await readFile(join(gitDir, "index")).catch(() => null);
+	if (index === null) unknown = true;
+	else if (sha256(index) !== receipt.baselines.destinationIndexSha256) changed = true;
+	return changed ? "changed" : unknown ? "unknown" : "unchanged";
+};
+/**
+* Optional legacy diagnostics: compare the surviving legacy checkout's HEAD,
+* full ref map, index digest, `.jj` presence, and the content of every path
+* in the recorded included manifest (read-only `hash-object --stdin-paths`,
+* never `-w`) against the captured inventory. Absence, change, or omission
+* never redefines custody that was already proven into the archive.
+*/
+const sourceDriftOf = async (input, receipt, signal) => {
+	const soft = (args, cwd) => softGit(args, cwd, signal);
+	if (input.legacy === null || receipt === null) return "unknown";
+	const real = await realpath(input.legacy).catch(() => null);
+	if (real === null) return "absent";
+	let changed = false;
+	const head = await soft(["rev-parse", "HEAD"], real);
+	if (head === null || utf8Fatal(head).trim() !== receipt.source.head.oid) changed = true;
+	const format = receipt.source.objectFormat;
+	const listing = await soft(["for-each-ref", REF_FORMAT], real);
+	if (listing === null) changed = true;
+	else {
+		const observed = /* @__PURE__ */ new Map();
+		for (const row of parseRefRows(listing, format)) observed.set(row.name, row.oid);
+		const recorded = new Map(receipt.source.refs.map((tip) => [tip.name, tip.oid]));
+		if (observed.size !== recorded.size) changed = true;
+		for (const [name, oid] of recorded) if (observed.get(name) !== oid) changed = true;
+	}
+	const legacyGitDir = await soft(["rev-parse", "--absolute-git-dir"], real);
+	if (legacyGitDir === null) changed = true;
+	else {
+		const index = await readFile(join(utf8Fatal(legacyGitDir).trim(), "index")).catch(() => null);
+		if (index === null || sha256(index) !== receipt.source.fingerprints.indexSha256) changed = true;
+	}
+	const jjDirectory = await stat(join(real, ".jj")).catch(() => null);
+	const jjRecorded = receipt.source.fingerprints.jjStoreSha256 !== null || receipt.source.jjCoverage.classification !== "none";
+	if ((jjDirectory !== null && jjDirectory.isDirectory()) !== jjRecorded) changed = true;
+	const manifest = receipt.snapshot?.paths ?? receipt.source.head.treePaths;
+	if (manifest.length > 0) {
+		const pathsInput = new TextEncoder().encode(`${manifest.map(({ path }) => path).join("\n")}\n`);
+		const hashed = await runPromise(gitRead(["hash-object", "--stdin-paths"], {
+			cwd: real,
+			input: pathsInput
+		}), { signal }).catch((error) => {
+			signal?.throwIfAborted();
+			throw error;
+		});
+		signal?.throwIfAborted();
+		if (hashed.exitCode !== 0) changed = true;
+		else {
+			const observedOids = utf8Fatal(hashed.stdout).split("\n");
+			manifest.forEach((entry, index) => {
+				if (observedOids[index] !== entry.blobOid) changed = true;
+			});
+		}
+	}
+	return changed ? "changed" : "unchanged";
+};
+//#endregion
+//#region archive/src/custody/apply.ts
+/** Append-only adoption orchestration. No source or destination worktree writes. */
+const fail = (code, detail) => {
+	throw new CustodyError(code, detail);
+};
+const ready = (plan) => {
+	if (plan.state !== "ready" || plan.blockers.length) throw new CustodyError("invalid-input", `adoption blocked: ${plan.blockers.map((issue) => issue.code).join(", ")}`);
+	return plan;
+};
+const same = (a, b) => canonicalJson(a) === canonicalJson(b);
+const sortedRefPairs = (pairs) => [...pairs].sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0);
+/** The intent stores the reviewed facts rather than a second receipt schema. */
+function intentFacts(receipt, bundle) {
+	return {
+		identity: receipt.identity,
+		source: receipt.source,
+		snapshot: receipt.snapshot,
+		cleanHeadPathReview: receipt.cleanHeadPathReview,
+		baselines: receipt.baselines,
+		pins: receipt.pins,
+		bundleSha256: bundle.sha256,
+		verifiedHeads: bundle.verifiedHeads,
+		unresolved: receipt.unresolved
+	};
+}
+const intentBytes = (facts) => new TextEncoder().encode(`${canonicalJson(facts)}\n`);
+function receiptFacts(plan, snapshot, pins) {
+	return {
+		identity: plan.identity,
+		source: plan.source,
+		snapshot,
+		cleanHeadPathReview: plan.cleanHeadPathReview,
+		baselines: plan.baselines,
+		pins,
+		unresolved: plan.retirementUnresolved
+	};
+}
+function receiptOf(plan, facts, bundle) {
+	return {
+		schema: "compfuzor.archive-adoption/v1",
+		receiptRef: receiptRef(plan.identity.label, plan.identity.generation),
+		...facts,
+		bundle,
+		checks: {
+			sourceFingerprintRechecked: true,
+			sourceOdbUnchanged: true,
+			destinationWorktreeUnchanged: true,
+			bundleClosureVerified: true
+		}
+	};
+}
+/** Reinspect exact immutable input and worktree/index/refs before proceeding. */
+function recheck(first, next, retry) {
+	const now = ready(next);
+	if (!same(first.source, now.source) || !same(first.proposedSnapshot, now.proposedSnapshot) || !same(first.pins, now.pins) || !same(first.cleanHeadPathReview, now.cleanHeadPathReview) || first.identity.legacyRealpathAtCapture !== now.identity.legacyRealpathAtCapture || first.identity.destinationRealpath !== now.identity.destinationRealpath) fail("source-drift", "source inventory or reviewed snapshot changed during apply");
+	for (const key of [
+		"destinationWorktreeFingerprintSha256",
+		"destinationIndexSha256",
+		"selectedBranch",
+		"declaredRepo"
+	]) if (!same(first.baselines[key], now.baselines[key])) fail("destination-drift", `destination baseline changed during apply: ${key}`);
+	if (!retry && !same(first.baselines.destinationPreRefs, now.baselines.destinationPreRefs)) fail("destination-drift", "destination refs changed during apply");
+}
+const mutation = (args, cwd, input, env) => gitChecked(args, {
+	cwd,
+	input,
+	env: {
+		...readEnv,
+		...env
+	}
+}).pipe(mapError((error) => new CustodyError("inspection-failed", `private Git object transfer failed: ${error.message}`)));
+/** Unbundle writes only objects; it does not fetch a branch or touch FETCH_HEAD. */
+function importBundle(dest, bundlePath) {
+	return mutation([
+		"bundle",
+		"unbundle",
+		bundlePath
+	], dest).pipe(asVoid);
+}
+/** Pack the parentless metadata commit from scratch, import without changing any refs. */
+function importReceipt(dest, stageGitDir, commitOid) {
+	return gen(function* () {
+		const pack = yield* mutation([
+			"pack-objects",
+			"--stdout",
+			"--revs"
+		], stageGitDir, new TextEncoder().encode(`${commitOid}\n`), {
+			GIT_DIR: stageGitDir,
+			GIT_OBJECT_DIRECTORY: join(stageGitDir, "objects")
+		});
+		yield* mutation(["index-pack", "--stdin"], dest, pack);
+	});
+}
+function stagePaths(plan) {
+	return [...new Set(plan.source.worktreeChanges.map(({ path }) => path))];
+}
+function stageRequest(plan, scratchRoot) {
+	const proposal = plan.proposedSnapshot;
+	return {
+		sourceRoot: plan.identity.legacyRealpathAtCapture,
+		scratchRoot,
+		objectFormat: plan.source.objectFormat,
+		headOid: plan.source.head.oid,
+		restageTracked: stagePaths(plan),
+		addUntracked: plan.source.untrackedPaths.filter((path) => !plan.source.excludedUntracked.includes(path)),
+		stagedVsUnstaged: proposal?.stagedVsUnstaged ?? "none",
+		excludeFileSha256: plan.source.excludeFileSha256,
+		excludedUntracked: plan.source.excludedUntracked,
+		ignoredPaths: plan.source.ignoredPaths,
+		trackedSensitivePaths: plan.source.trackedSensitivePaths.map(({ subject }) => subject),
+		pathReview: proposal?.pathReview ?? null,
+		expected: proposal?.paths ?? plan.source.head.treePaths
+	};
+}
+/** One parentless fixed-metadata commit, isolated in the already private stage. */
+function mintReceipt(stageGitDir, receipt) {
+	return gen(function* () {
+		const env = {
+			GIT_DIR: stageGitDir,
+			GIT_OBJECT_DIRECTORY: join(stageGitDir, "objects")
+		};
+		const blob = oid(utf8Fatal(yield* mutation([
+			"hash-object",
+			"-w",
+			"--stdin"
+		], stageGitDir, encodeReceipt(receipt), env)).trim(), receipt.source.objectFormat);
+		const tree = oid(utf8Fatal(yield* mutation(["mktree", "-z"], stageGitDir, new TextEncoder().encode(`100644 blob ${blob}\tadoption.json\0`), env)).trim(), receipt.source.objectFormat);
+		const commit = yield* mutation([
+			"commit-tree",
+			tree,
+			"-m",
+			"compfuzor archive adoption receipt (v1)"
+		], stageGitDir, void 0, {
+			...env,
+			GIT_AUTHOR_NAME: "compfuzor archive",
+			GIT_AUTHOR_EMAIL: "archive@compfuzor.invalid",
+			GIT_COMMITTER_NAME: "compfuzor archive",
+			GIT_COMMITTER_EMAIL: "archive@compfuzor.invalid",
+			GIT_AUTHOR_DATE: "@0 +0000",
+			GIT_COMMITTER_DATE: "@0 +0000"
+		});
+		return oid(utf8Fatal(commit).trim(), receipt.source.objectFormat);
+	});
+}
+/** No ref prefix collision or orphan pin may be allowed through staging. */
+function precheck(refs, ref, pins) {
+	const desired = [ref, ...pins.map((pin) => pin.destinationRef)];
+	for (const name of desired) {
+		if (refs.has(name)) fail("occupied-namespace", `custody ref already exists: ${name}`);
+		for (const existing of refs.keys()) if (prefixConflict(name, existing)) fail("occupied-namespace", `custody ref prefix conflict: ${name} / ${existing}`);
+	}
+	const label = ref.split("/")[3];
+	for (const old of [`refs/heads/harvest/${label}/head`, `refs/heads/harvest/${label}/working-copy`]) if (refs.has(old)) fail("occupied-namespace", `old harvest namespace occupied: ${old}`);
+}
+function assertObservedRefs(plan, actual) {
+	const observed = plan.baselines.destinationPreRefs.map(({ name, oid }) => [name, oid]);
+	if (!same(sortedRefPairs(observed), sortedRefPairs(actual))) fail("destination-drift", "destination refs changed since the read-only plan");
+}
+/** The receipt's own refs are the only discounted entries on retry. */
+function retryRefsUnchanged(plan, original, current, commitOid) {
+	const expected = new Map([[original.receiptRef, commitOid], ...original.pins.map((pin) => [pin.destinationRef, pin.destinationOid])]);
+	const clean = new Map([...current].filter(([name]) => !expected.has(name)));
+	const baseline = new Map(original.baselines.destinationPreRefs.map(({ name, oid }) => [name, oid]));
+	if (!same(sortedRefPairs(clean), sortedRefPairs(baseline))) fail("destination-drift", "destination refs changed since original receipt");
+	const observed = plan.baselines.destinationPreRefs.map(({ name, oid }) => [name, oid]);
+	if (!same(sortedRefPairs(observed), sortedRefPairs(current))) fail("destination-drift", "destination ref observation changed");
+}
+/** Fail closed until every independent proof passes; historical drift is diagnostic. */
+function verified(report) {
+	if (!report.custodyVerified || report.custodyFailures.length) fail("verification-failed", `independent custody verification failed: ${report.custodyFailures.map((i) => i.code).join(", ")}`);
+	if (report.sourceDrift !== "unchanged") fail("source-drift", `source changed or became uninspectable during apply: ${report.sourceDrift}`);
+	if (report.destinationDrift !== "unchanged") fail("destination-drift", `destination changed or became uninspectable during apply: ${report.destinationDrift}`);
+	return report;
+}
+/** Promise adapters only around the existing legacy Promise-based seams. */
+const fromPromise = (operation, code) => tryPromise({
+	try: operation,
+	catch: (error) => error instanceof CustodyError ? error : new CustodyError(code, error instanceof Error ? error.message : String(error))
+});
+const hook = (action) => action === void 0 ? void_ : fromPromise(action, "inspection-failed");
+function proveExistingBundle(receipt, dest, scratchRoot) {
+	return gen(function* () {
+		const bundlePath = yield* fromPromise(() => resolveVaultBundle(receipt, dest), "bundle-invalid");
+		const intent = yield* fromPromise(async (signal) => {
+			const file = await open(join(dirname(bundlePath), INTENT_NAME), constants.O_RDONLY | constants.O_NOFOLLOW);
+			try {
+				if (!(await file.stat()).isFile()) fail("bundle-invalid", "existing intent is not a regular file");
+				return file.readFile({ signal });
+			} finally {
+				await file.close();
+			}
+		}, "bundle-invalid");
+		const expectedIntent = intentBytes(intentFacts(receipt, receipt.bundle));
+		if (!Buffer.from(intent).equals(Buffer.from(expectedIntent))) fail("different-receipt", "sealed original intent does not match existing receipt");
+		if (sha256(yield* fromPromise((signal) => readFile(bundlePath, { signal }), "bundle-invalid")) !== receipt.bundle.sha256) fail("bundle-invalid", "existing receipt bundle checksum mismatch");
+		const proof = yield* fromPromise((signal) => checkBundleRestoration({
+			bundlePath,
+			objectFormat: receipt.source.objectFormat,
+			scratchRoot,
+			pins: receipt.pins,
+			snapshot: receipt.snapshot === null ? null : {
+				commitOid: receipt.snapshot.commitOid,
+				treeOid: receipt.snapshot.treeOid,
+				paths: receipt.snapshot.paths
+			}
+		}, { signal }), "bundle-invalid");
+		if (!same(proof.verifiedHeads, receipt.bundle.verifiedHeads)) fail("bundle-invalid", "existing receipt bundle advertises different pin heads");
+		return bundlePath;
+	});
+}
+/**
+* Replan on every invocation. The existing receipt, if any, wins over a fresh
+* timestamp or vault: its original intent and baseline are immutable. All
+* destination writes are object-only until one atomic compare/create of refs.
+*/
+const applyAdoption = (input, testHooks = {}) => gen(function* () {
+	const plan = ready(yield* planAdoption(input));
+	const dest = plan.identity.destinationRealpath;
+	const ref = receiptRef(plan.identity.label, plan.identity.generation);
+	const listRefs = () => fromPromise((signal) => new GitRefStore(dest, { signal }).list(), "inspection-failed");
+	const current = yield* listRefs();
+	assertObservedRefs(plan, current);
+	if (current.has(ref)) {
+		const original = yield* fromPromise((signal) => readReceipt(dest, ref, { signal }), "different-receipt");
+		const receipt = original.receipt;
+		if (original.receiptCommitOid !== current.get(ref)) fail("ref-race", "receipt ref changed while it was being read");
+		retryRefsUnchanged(plan, receipt, current, original.receiptCommitOid);
+		const install = approveSameInputRetry(plan, receipt, original.receiptCommitOid, current);
+		const scratch = yield* fromPromise(() => mkdtemp(join(dirname(dest), ".compfuzor-verify-")), "inspection-failed");
+		yield* proveExistingBundle(receipt, dest, scratch);
+		const checked = ready(yield* planAdoption(input));
+		recheck(plan, checked, true);
+		const beforeInstall = yield* listRefs();
+		retryRefsUnchanged(checked, receipt, beforeInstall, original.receiptCommitOid);
+		approveSameInputRetry(checked, receipt, original.receiptCommitOid, beforeInstall);
+		const changed = yield* fromPromise((signal) => installImmutableRefs(new GitRefStore(dest, { signal }), install), "ref-race");
+		yield* hook(testHooks.afterInstall);
+		const verification = verified(yield* fromPromise((signal) => verifyAdoption({
+			dest,
+			receiptRef: ref,
+			legacy: input.legacy,
+			scratchRoot: scratch
+		}, { signal }), "verification-failed"));
+		yield* fromPromise(() => rm(scratch, {
+			recursive: true,
+			force: true
+		}), "inspection-failed");
+		return {
+			changed: changed.changed,
+			receiptRef: ref,
+			receiptCommitOid: original.receiptCommitOid,
+			verification
+		};
+	}
+	precheck(current, ref, plan.pins);
+	const scratch = yield* fromPromise(() => mkdtemp(join(dirname(dest), ".compfuzor-stage-")), "inspection-failed");
+	const stage = yield* fromPromise((signal) => prepareSnapshot(stageRequest(plan, scratch), { signal }), "source-drift");
+	if (!same(stage.snapshot, plan.proposedSnapshot)) fail("source-drift", "private stage differs from the exact reviewed snapshot");
+	if (stage.snapshot !== null && !plan.pins.some(({ sourceKind, sourceOid }) => sourceKind === "working-copy" && sourceOid === stage.snapshot?.commitOid)) fail("invalid-input", "ready dirty plan has no exact working-copy pin");
+	recheck(plan, yield* planAdoption(input), false);
+	const proven = yield* fromPromise((signal) => proveBundle(stage, plan.pins, { signal }), "bundle-invalid");
+	recheck(plan, yield* planAdoption(input), false);
+	const facts = receiptFacts(plan, stage.snapshot, plan.pins);
+	const sealed = yield* fromPromise((signal) => sealBundle({
+		destRealpath: dest,
+		legacyRealpath: plan.identity.legacyRealpathAtCapture,
+		proven,
+		intent: intentBytes(intentFacts(facts, {
+			sha256: proven.bundleSha256,
+			verifiedHeads: proven.verifiedHeads
+		}))
+	}, { signal }), "bundle-invalid");
+	yield* hook(testHooks.afterSeal);
+	const receipt = receiptOf(plan, facts, sealed.sealed);
+	const commitOid = yield* mintReceipt(stage.gitDir, receipt);
+	yield* importBundle(dest, sealed.run.bundlePath);
+	yield* importReceipt(dest, stage.gitDir, commitOid);
+	yield* hook(testHooks.afterTransfer);
+	recheck(plan, yield* planAdoption(input), false);
+	assertObservedRefs(plan, yield* listRefs());
+	const installed = yield* fromPromise((signal) => installImmutableRefs(new GitRefStore(dest, { signal }), freshInstall(receipt, commitOid)), "ref-race");
+	yield* hook(testHooks.afterInstall);
+	const verification = verified(yield* fromPromise((signal) => verifyAdoption({
+		dest,
+		receiptRef: ref,
+		legacy: input.legacy,
+		scratchRoot: scratch
+	}, { signal }), "verification-failed"));
+	yield* fromPromise(() => rm(scratch, {
+		recursive: true,
+		force: true
+	}), "inspection-failed");
+	return {
+		changed: installed.changed,
+		receiptRef: ref,
+		receiptCommitOid: commitOid,
+		verification
+	};
+}).pipe(catchDefect((defect) => fail$2(defect instanceof CustodyError ? defect : new CustodyError("inspection-failed", `unexpected apply defect: ${String(defect)}`))));
+//#endregion
+//#region archive/src/cli/flags.ts
+/**
+* Shared flag definitions reused across command modules. Definitions live
+* outside the commands so help text and parsing stay identical wherever a
+* concept (destination checkout, declared origin, …) appears.
+*/
+const destFlag = String$1("dest").pipe(withDescription$1("Path to jj-colocated archive checkout"));
+const repoFlag = String$1("repo").pipe(withDescription$1("Declared origin URL"));
+const remotesFlag = String$1("remotes").pipe(withDefault("{}"), withDescription$1("JSON object of additional remote names and URLs"));
+const labelFlag = String$1("label").pipe(withDescription$1("Deployment label for recovery bookmarks"));
+//#endregion
+//#region archive/src/cli/commands/adopt.ts
+/** Explicit local Git custody: read-only plan unless --apply is supplied. */
+const optionalPath = (name, description) => optional(String$1(name).pipe(withDescription$1(description)));
+const issueLines = (title, issues) => issues.map(({ code, subject, reason }) => `${title} ${code}${subject === null ? "" : ` (${subject})`}: ${reason}`);
+const renderPlan = (plan) => {
+	const snapshotDigest = plan.state === "blocked" ? plan.proposedSnapshot?.manifestSha256 ?? "not available" : plan.proposedSnapshot === null ? "none (clean HEAD)" : sha256(new TextEncoder().encode(`${canonicalJson(plan.proposedSnapshot.paths)}\n`));
+	const lines = [
+		`Adoption plan: ${plan.state} (no destination changes)`,
+		`HEAD manifest SHA-256: ${plan.headManifestSha256 ?? "not observed"}`,
+		`Snapshot manifest SHA-256: ${snapshotDigest}`,
+		`Selected local remote baseline: ${plan.baselines?.sourceRemoteTracking.length ?? "not observed"} locally recorded tip(s); freshness is not proven`,
+		`Selected tips not in destination: ${plan.baselines?.selectedTipsNotInDestination ?? "unknown"}`,
+		...issueLines("BLOCKER", plan.blockers),
+		...issueLines("WARNING", plan.warnings),
+		...issueLines("RETIREMENT UNRESOLVED", plan.retirementUnresolved)
+	];
+	if (plan.blockers.some(({ code }) => code === "destination-missing")) lines.push("Initialize the destination separately with refresh; adopt never clones or initializes it.");
+	if (plan.state === "blocked" && plan.proposedSnapshot !== null) lines.push(`Snapshot review requirements: ${plan.proposedSnapshot.reviewRequirements.sensitivePaths.length} sensitive path(s); staged/unstaged approval ${plan.proposedSnapshot.reviewRequirements.stagedVsUnstagedApprovalRequired ? "required" : "not required"}. Use --json for the complete manifest and exact path/mode/blob identities.`);
+	if (plan.state === "ready") lines.push(`Exact local path review: ${plan.proposedSnapshot?.pathReview == null && plan.cleanHeadPathReview === null ? "not required" : "recorded"}. Use --json for complete manifest and review evidence.`);
+	lines.push("Git custody does not establish publication safety, off-host backup, or retirement readiness.");
+	return lines.join("\n");
+};
+const adoptCommand = make$5("adopt", {
+	legacy: String$1("legacy").pipe(withDescription$1("Standalone legacy Git checkout")),
+	dest: destFlag,
+	repo: repoFlag,
+	label: labelFlag,
+	branch: String$1("branch").pipe(withDefault("main")),
+	generation: String$1("generation").pipe(withDefault("g0")),
+	"exclude-from": optionalPath("exclude-from", "Exact untracked-path exclusions file"),
+	dispositions: optionalPath("dispositions", "Kind-and-OID candidate decisions JSON"),
+	"path-review": optionalPath("path-review", "Exact manifest-bound local custody review JSON"),
+	apply: Boolean$1("apply").pipe(withDefault(false), withDescription$1("Explicitly transfer and verify custody")),
+	json: Boolean$1("json").pipe(withDefault(false), withDescription$1("One complete JSON result line"))
+}, (flags) => {
+	const input = {
+		legacy: flags.legacy,
+		dest: flags.dest,
+		repo: flags.repo,
+		label: flags.label,
+		branch: flags.branch,
+		generation: flags.generation,
+		excludeFrom: getOrNull(flags["exclude-from"]),
+		dispositions: getOrNull(flags.dispositions),
+		pathReview: getOrNull(flags["path-review"])
+	};
+	return gen(function* () {
+		if (!flags.apply) {
+			const plan = yield* planAdoption(input);
+			yield* log(flags.json ? JSON.stringify(plan) : renderPlan(plan));
+			return;
+		}
+		const result = yield* applyAdoption(input);
+		yield* log(flags.json ? JSON.stringify(result) : [
+			`Adoption ${result.changed ? "installed" : "unchanged"}: ${result.receiptRef}`,
+			`Receipt commit: ${result.receiptCommitOid}`,
+			`Custody verified: ${result.verification.custodyVerified}`,
+			`Retirement unresolved: ${result.verification.retirementUnresolved.length} item(s); review with --json or verify-adoption.`,
+			"No publication or retirement permission is implied."
+		].join("\n"));
+	});
+}).pipe(withDescription("Plan Git custody read-only; --apply explicitly installs immutable pins and verifies."));
 //#endregion
 //#region archive/src/recovery/harvest.ts
 function stamp() {
@@ -28004,10 +34126,10 @@ function safeLabel(label) {
 	return label.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[.-]+|[.-]+$/g, "") || "deployment";
 }
 /** Duplicate a mutable @ so its recovery bookmark cannot drift with subsequent edits. */
-async function harvest(dest, label, kind, target, copy = false) {
+async function harvest(dest, label, kind, target, copy = false, execution) {
 	let commit = target;
 	if (copy) {
-		await preflight(dest);
+		await preflight(dest, {}, execution);
 		const heads = new Set(lines(await jj([
 			"log",
 			"-G",
@@ -28015,13 +34137,13 @@ async function harvest(dest, label, kind, target, copy = false) {
 			"heads(all())",
 			"-T",
 			HEAD_TEMPLATE
-		], dest)));
+		], dest, void 0, execution)));
 		await jj([
 			"duplicate",
 			"-r",
 			target
-		], dest);
-		await preflight(dest);
+		], dest, void 0, execution);
+		await preflight(dest, {}, execution);
 		const newHeads = lines(await jj([
 			"log",
 			"-G",
@@ -28029,7 +34151,7 @@ async function harvest(dest, label, kind, target, copy = false) {
 			"heads(all())",
 			"-T",
 			HEAD_TEMPLATE
-		], dest)).filter((head) => !heads.has(head));
+		], dest, void 0, execution)).filter((head) => !heads.has(head));
 		if (newHeads.length !== 1) throw new Error(`expected one duplicated jj snapshot; found [${newHeads.join(", ")}]`);
 		commit = newHeads[0];
 	}
@@ -28040,17 +34162,17 @@ async function harvest(dest, label, kind, target, copy = false) {
 		name,
 		"-r",
 		commit
-	], dest);
+	], dest, void 0, execution);
 	return {
 		kind: "bookmark-created",
 		name,
 		target: commit
 	};
 }
-async function recoveryCovered(dest, label, before, parents) {
+async function recoveryCovered(dest, label, before, parents, execution) {
 	for (const ref of before.values()) {
 		if (!ref.name.startsWith(`harvest/${safeLabel(label)}/working-copy-`) || ref.remote !== "-") continue;
-		if ((await revision(dest, ref.target)).parents.join(",") !== parents.join(",")) continue;
+		if ((await revision(dest, ref.target, execution)).parents.join(",") !== parents.join(",")) continue;
 		if (await jj([
 			"diff",
 			"--from",
@@ -28058,7 +34180,7 @@ async function recoveryCovered(dest, label, before, parents) {
 			"--to",
 			"@",
 			"--summary"
-		], dest) !== "") continue;
+		], dest, void 0, execution) !== "") continue;
 		return true;
 	}
 	return false;
@@ -28073,9 +34195,9 @@ async function recoveryCovered(dest, label, before, parents) {
 * instead of printing. The conflicted-bookmark list comes from the health
 * preflight that must precede any history walk.
 */
-async function snapshot(dest) {
-	const conflicts = await preflight(dest);
-	await jj(["status"], dest);
+async function snapshot(dest, execution) {
+	const conflicts = await preflight(dest, {}, execution);
+	await jj(["status"], dest, void 0, execution);
 	return {
 		dest,
 		conflicts
@@ -28092,21 +34214,21 @@ async function snapshot(dest) {
 * Library twin of the CLI `fetch` command: returns structured notices
 * instead of printing. No console I/O happens here.
 */
-async function fetchRemote(options) {
+async function fetchRemote(options, execution) {
 	const { dest, label } = options;
 	const remote = options.remote ?? "origin";
 	const notices = [];
-	await snapshot(dest);
-	const before = await refs(dest);
-	const working = await revision(dest, "@");
-	if (!working.empty && !await recoveryCovered(dest, label, before, working.parents)) notices.push(await harvest(dest, label, "working-copy", working.commit, true));
+	await snapshot(dest, execution);
+	const before = await refs(dest, void 0, execution);
+	const working = await revision(dest, "@", execution);
+	if (!working.empty && !await recoveryCovered(dest, label, before, working.parents, execution)) notices.push(await harvest(dest, label, "working-copy", working.commit, true, execution));
 	for (const ref of before.values()) if (ref.remote !== "-" && ref.remote !== "git" && ref.tracked) await jj([
 		"bookmark",
 		"untrack",
 		ref.name,
 		"--remote",
 		ref.remote
-	], dest);
+	], dest, void 0, execution);
 	await jj([
 		"--config",
 		"git.abandon-unreachable-commits=false",
@@ -28114,7 +34236,7 @@ async function fetchRemote(options) {
 		"fetch",
 		"--remote",
 		remote
-	], dest);
+	], dest, void 0, execution);
 	return {
 		remote,
 		notices
@@ -28131,11 +34253,11 @@ const fetchCommand = make$5("fetch", {
 	dest: destFlag,
 	remote: String$1("remote").pipe(withDefault("origin"), withDescription$1("Existing remote to fetch")),
 	label: labelFlag
-}, (input) => runLibrary(() => fetchRemote({
+}, (input) => runLibrary((signal) => fetchRemote({
 	dest: input.dest,
 	label: input.label,
 	remote: input.remote
-})).pipe(flatMap$1((result) => {
+}, { signal })).pipe(flatMap$1((result) => {
 	const lines = result.notices.map((notice) => `BOOKMARK CREATED  ${notice.name} -> ${notice.target}`);
 	lines.push(`Fetched ${result.remote}; local bookmarks remain frozen until refresh`);
 	return log(lines.join("\n"));
@@ -28149,9 +34271,9 @@ const harvestCommand = make$5("harvest", {
 	kind: String$1("kind").pipe(withDefault("manual"), withDescription$1("Recovery bookmark category")),
 	target: String$1("target").pipe(withDefault("@"), withDescription$1("Revision to pin")),
 	copy: Boolean$1("copy").pipe(withDefault(false), withDescription$1("Duplicate mutable @ to a fixed change ID before pinning"))
-}, (input) => runLibrary(async () => {
-	await snapshot(input.dest);
-	return harvest(input.dest, input.label, input.kind, input.target, input.copy);
+}, (input) => runLibrary(async (signal) => {
+	await snapshot(input.dest, { signal });
+	return harvest(input.dest, input.label, input.kind, input.target, input.copy, { signal });
 }).pipe(flatMap$1((notice) => log(`BOOKMARK CREATED  ${notice.name} -> ${notice.target}`)))).pipe(withDescription("Pin a revision under a unique harvest/<label>/ bookmark."));
 //#endregion
 //#region archive/src/cli/commands/health.ts
@@ -28160,20 +34282,20 @@ const harvestCommand = make$5("harvest", {
 * read-only query mode (`--ignore-working-copy`): the checkout's jj state is
 * observed, never snapshotted or re-imported.
 */
-const health = make$5("health", { dest: destFlag }, (input) => runLibrary(() => preflight(input.dest, { readOnly: true })).pipe(flatMap$1((conflicts) => log(conflicts.length ? `Visible heads OK; conflicted bookmarks: ${conflicts.join(", ")}` : "Visible heads OK; no conflicted bookmarks")))).pipe(withDescription("Materialize visible_heads() and list conflicted bookmarks; no mutations."));
+const health = make$5("health", { dest: destFlag }, (input) => runLibrary((signal) => preflight(input.dest, { readOnly: true }, { signal })).pipe(flatMap$1((conflicts) => log(conflicts.length ? `Visible heads OK; conflicted bookmarks: ${conflicts.join(", ")}` : "Visible heads OK; no conflicted bookmarks")))).pipe(withDescription("Materialize visible_heads() and list conflicted bookmarks; no mutations."));
 //#endregion
 //#region archive/src/recovery/heal.ts
 /** Explicit re-adoption drops jj's broken view, not the Git checkout or backup. */
-async function heal(dest, yes) {
+async function heal(dest, yes, execution) {
 	if (!yes) throw new Error("heal is destructive to jj's operation history; pass --yes to back up .jj and re-adopt");
-	if (!await isDirectory(dest) || !await exists(join(dest, ".git")) || !await isDirectory(join(dest, ".jj"))) throw new Error(`${dest} must be a jj-colocated Git checkout; refusing to re-adopt`);
+	if (!await isDirectory$1(dest) || !await exists(join(dest, ".git")) || !await isDirectory$1(join(dest, ".jj"))) throw new Error(`${dest} must be a jj-colocated Git checkout; refusing to re-adopt`);
 	const backup = join(dest, `.jj.broken-ghost-${stamp()}-${randomUUID().slice(0, 8)}`);
 	await rename(join(dest, ".jj"), backup);
 	await jj([
 		"git",
 		"init",
 		"--colocate"
-	], dest);
+	], dest, void 0, execution);
 	return backup;
 }
 //#endregion
@@ -28182,7 +34304,7 @@ async function heal(dest, yes) {
 const healCommand = make$5("heal", {
 	dest: destFlag,
 	yes: Boolean$1("yes").pipe(withDefault(false), withDescription$1("Required explicit permission to back up and replace .jj"))
-}, (input) => runLibrary(() => heal(input.dest, input.yes)).pipe(flatMap$1((backup) => log(`Re-adopted ${input.dest}; old jj state preserved at ${backup}`)))).pipe(withDescription("Back up .jj and re-adopt from Git refs; loses jj-only operation history."));
+}, (input) => runLibrary((signal) => heal(input.dest, input.yes, { signal })).pipe(flatMap$1((backup) => log(`Re-adopted ${input.dest}; old jj state preserved at ${backup}`)))).pipe(withDescription("Back up .jj and re-adopt from Git refs; loses jj-only operation history."));
 //#endregion
 //#region archive/src/repository/remotes.ts
 const REMOTE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -28198,13 +34320,13 @@ function declaredRemotes(repo, remotes) {
 	}
 	return urls;
 }
-async function remoteDiff(dest, urls) {
+async function remoteDiff(dest, urls, execution) {
 	const actual = /* @__PURE__ */ new Map();
 	for (const line of lines(await jj([
 		"git",
 		"remote",
 		"list"
-	], dest))) {
+	], dest, void 0, execution))) {
 		const space = line.indexOf(" ");
 		actual.set(space === -1 ? line : line.slice(0, space), space === -1 ? "" : line.slice(space + 1));
 	}
@@ -28219,14 +34341,14 @@ function mismatchError(dest, differences, repo, remotes) {
 	return /* @__PURE__ */ new Error(`declared remote URL mismatch (no remote was changed):\nname\tdeclared\tactual\n${table}\nTo apply deliberately: node ${quote(process.argv[1] ?? "archive/src/repo-jj-archive.ts")} remotes --dest ${quote(dest)} --repo ${quote(repo)} --remotes ${quote(remotes)} --reconcile`);
 }
 /** Adds missing remotes and rewrites mismatches only on explicit operator request. */
-async function reconcile(dest, differences) {
+async function reconcile(dest, differences, execution) {
 	for (const { name, declared, actual } of differences) await jj([
 		"git",
 		"remote",
 		actual === null ? "add" : "set-url",
 		name,
 		declared
-	], dest);
+	], dest, void 0, execution);
 }
 //#endregion
 //#region archive/src/repository/refresh.ts
@@ -28236,7 +34358,7 @@ async function reconcile(dest, differences) {
 * Stdout is one JSON result for Ansible; jj diagnostics and failures go to stderr.
 * Only run this on a checkout whose working tree is not being edited concurrently.
 */
-async function refreshArchive(options) {
+async function refreshArchive(options, execution) {
 	const { dest, repo, remotes: remotesArg, label, reconcileRemotes } = options;
 	const update = options.update ?? "true";
 	if (update !== "true" && update !== "false") throw new Error(`argument --update: invalid choice: '${update}' (choose from 'true', 'false')`);
@@ -28256,7 +34378,7 @@ async function refreshArchive(options) {
 	let changed = false;
 	let cloned = false;
 	const harvest$1 = async (kind, target, copy = false) => {
-		notices.push(await harvest(dest, label, kind, target, copy));
+		notices.push(await harvest(dest, label, kind, target, copy, execution));
 		changed = true;
 	};
 	if (!await exists(dest)) {
@@ -28274,14 +34396,14 @@ async function refreshArchive(options) {
 			...command,
 			urls.get(selected),
 			dest
-		], dirname(dest));
+		], dirname(dest), void 0, execution);
 		notices.push({
 			kind: "notice",
 			message: `cloned jj-colocated archive ${dest}`
 		});
 		changed = true;
 		cloned = true;
-	} else if (!await isDirectory(dest) || !await exists(join(dest, ".git"))) throw new Error(`${dest} exists but is not a colocated Git checkout; refusing to replace it`);
+	} else if (!await isDirectory$1(dest) || !await exists(join(dest, ".git"))) throw new Error(`${dest} exists but is not a colocated Git checkout; refusing to replace it`);
 	else if (!await exists(join(dest, ".jj"))) {
 		await jj([
 			"git",
@@ -28289,37 +34411,37 @@ async function refreshArchive(options) {
 			"--git-repo",
 			join(dest, ".git"),
 			dest
-		], dest);
+		], dest, void 0, execution);
 		notices.push({
 			kind: "notice",
 			message: `adopted existing Git archive into jj: ${dest}`
 		});
 		changed = true;
 	}
-	await snapshot(dest);
-	const before = await refs(dest);
-	const working = await revision(dest, "@");
+	await snapshot(dest, execution);
+	const before = await refs(dest, void 0, execution);
+	const working = await revision(dest, "@", execution);
 	const work = working.commit;
 	const empty = working.empty;
 	const parents = working.parents;
-	const differences = await remoteDiff(dest, urls);
+	const differences = await remoteDiff(dest, urls, execution);
 	if (differences.some((difference) => difference.actual !== null) && !reconcileRemotes) throw mismatchError(dest, differences, repo, remotesArg);
 	if (differences.length) {
-		await reconcile(dest, differences);
+		await reconcile(dest, differences, execution);
 		changed = true;
 	}
 	if (update === "false" && before.size > 0) return {
 		changed,
 		notices
 	};
-	if (!empty && !await recoveryCovered(dest, label, before, parents)) await harvest$1("working-copy", work, true);
+	if (!empty && !await recoveryCovered(dest, label, before, parents, execution)) await harvest$1("working-copy", work, true);
 	for (const ref of before.values()) if (ref.remote !== "-" && ref.remote !== "git" && ref.tracked) await jj([
 		"bookmark",
 		"untrack",
 		ref.name,
 		"--remote",
 		ref.remote
-	], dest);
+	], dest, void 0, execution);
 	for (const name of urls.keys()) await jj([
 		"--config",
 		"git.abandon-unreachable-commits=false",
@@ -28327,8 +34449,8 @@ async function refreshArchive(options) {
 		"fetch",
 		"--remote",
 		name
-	], dest);
-	const after = await refs(dest);
+	], dest, void 0, execution);
+	const after = await refs(dest, void 0, execution);
 	const base = version !== "HEAD" ? version : ["main", "master"].find((name) => after.has(refKey(name, selected))) ?? null;
 	if (base === null || !after.has(refKey(base, selected))) throw new Error(`remote ${selected} does not have branch ${version}; specify GIT_VERSION explicitly`);
 	const upstream = after.get(refKey(base, selected)).target;
@@ -28340,7 +34462,7 @@ async function refreshArchive(options) {
 		const current = after.get(refKey(ref.name, "-"));
 		if (current === void 0 || current.target !== ref.target) await harvest$1(`${ref.name.replaceAll("/", "-")}-local`, ref.target);
 	}
-	if (oldBase !== null && oldBase !== upstream && !await ancestor(dest, oldBase, upstream)) await harvest$1(base.replaceAll("/", "-"), oldBase);
+	if (oldBase !== null && oldBase !== upstream && !await ancestor(dest, oldBase, upstream, execution)) await harvest$1(base.replaceAll("/", "-"), oldBase);
 	if (oldBase !== upstream) {
 		await jj([
 			"bookmark",
@@ -28349,7 +34471,7 @@ async function refreshArchive(options) {
 			"-r",
 			upstream,
 			base
-		], dest);
+		], dest, void 0, execution);
 		if (oldBase === null) notices.push({
 			kind: "bookmark-created",
 			name: base,
@@ -28371,26 +34493,26 @@ async function refreshArchive(options) {
 		base,
 		"--remote",
 		selected
-	], dest);
-	const current = await revision(dest, "@");
-	if (oldBase === current.commit && oldBase !== upstream && await ancestor(dest, upstream, current.commit)) {
-		await jj(["new", "@"], dest);
+	], dest, void 0, execution);
+	const current = await revision(dest, "@", execution);
+	if (oldBase === current.commit && oldBase !== upstream && await ancestor(dest, upstream, current.commit, execution)) {
+		await jj(["new", "@"], dest, void 0, execution);
 		changed = true;
-	} else if (!await ancestor(dest, upstream, current.commit)) {
-		if (current.empty && oldBase !== null && current.parents.join(",") === oldBase && await ancestor(dest, oldBase, upstream)) await jj([
+	} else if (!await ancestor(dest, upstream, current.commit, execution)) {
+		if (current.empty && oldBase !== null && current.parents.join(",") === oldBase && await ancestor(dest, oldBase, upstream, execution)) await jj([
 			"rebase",
 			"-r",
 			"@",
 			"-d",
 			base
-		], dest);
+		], dest, void 0, execution);
 		else {
 			if (empty && current.commit !== work) await harvest$1("head", work);
 			await jj([
 				"new",
 				"@",
 				base
-			], dest);
+			], dest, void 0, execution);
 		}
 		changed = true;
 		notices.push({
@@ -28398,7 +34520,7 @@ async function refreshArchive(options) {
 			message: `merged local checkout with ${base}@${selected}`
 		});
 	}
-	if ((await revision(dest, "@")).conflict) notices.push({
+	if ((await revision(dest, "@", execution)).conflict) notices.push({
 		kind: "notice",
 		message: "working copy has merge conflicts; resolve them before building"
 	});
@@ -28428,7 +34550,7 @@ const refresh = make$5("refresh", {
 	submodules: Boolean$1("submodules").pipe(withDefault(false), withDescription$1("Unsupported: fail rather than silently recurse")),
 	json: Boolean$1("json").pipe(withDefault(false), withDescription$1("Exactly one JSON line on stdout for Ansible")),
 	"reconcile-remotes": Boolean$1("reconcile-remotes").pipe(withDefault(false), withDescription$1("Explicitly add/rewrite declared remotes before refresh"))
-}, (input) => runLibrary(() => refreshArchive({
+}, (input) => runLibrary((signal) => refreshArchive({
 	dest: input.dest,
 	repo: input.repo,
 	remotes: input.remotes,
@@ -28439,7 +34561,7 @@ const refresh = make$5("refresh", {
 	depth: getOrElse(input.depth, () => void 0),
 	submodules: input.submodules,
 	reconcileRemotes: input["reconcile-remotes"]
-})).pipe(flatMap$1((result) => render(result, input.json)))).pipe(withDescription("Snapshot, preserve recovery tips, fetch, and reconcile the selected base and worktree."));
+}, { signal })).pipe(flatMap$1((result) => render(result, input.json)))).pipe(withDescription("Snapshot, preserve recovery tips, fetch, and reconcile the selected base and worktree."));
 const render = (result, json) => {
 	if (json) return log(JSON.stringify(result));
 	const lines = [result.changed ? "Archive changed" : "Archive unchanged"];
@@ -28457,10 +34579,10 @@ const remotesCommand = make$5("remotes", {
 	repo: repoFlag,
 	remotes: remotesFlag,
 	reconcile: Boolean$1("reconcile").pipe(withDefault(false), withDescription$1("Apply missing or mismatched remote URLs"))
-}, (input) => runLibrary(async () => {
-	const diff = await remoteDiff(input.dest, declaredRemotes(input.repo, input.remotes));
+}, (input) => runLibrary(async (signal) => {
+	const diff = await remoteDiff(input.dest, declaredRemotes(input.repo, input.remotes), { signal });
 	if (input.reconcile) {
-		await reconcile(input.dest, diff);
+		await reconcile(input.dest, diff, { signal });
 		return diff.length ? `Reconciled ${diff.map(({ name }) => name).join(", ")}` : "Remotes match";
 	}
 	if (diff.length) throw mismatchError(input.dest, diff, input.repo, input.remotes);
@@ -28469,7 +34591,7 @@ const remotesCommand = make$5("remotes", {
 //#endregion
 //#region archive/src/repository/self.ts
 /** Convenience only; compfuzor playbooks always use the launcher in playbook_dir. */
-async function locateCompfuzor(freshen, archiveDir) {
+async function locateCompfuzor(freshen, archiveDir, execution) {
 	const root = archiveDir ?? join(homedir(), "archive");
 	const path = join(root, "rektide", "compfuzor");
 	if (!await exists(join(path, ".git"))) return null;
@@ -28482,7 +34604,7 @@ async function locateCompfuzor(freshen, archiveDir) {
 			"fetch",
 			"--remote",
 			"origin"
-		], path);
+		], path, void 0, execution);
 	}
 	return path;
 }
@@ -28492,22 +34614,74 @@ async function locateCompfuzor(freshen, archiveDir) {
 const self = make$5("self", {
 	"archive-dir": optional(String$1("archive-dir").pipe(withDescription$1("Override ~/archive for detection (useful for fixtures)"))),
 	freshen: Boolean$1("freshen").pipe(withDefault(false), withDescription$1("Opt in to fetching origin of detected checkout"))
-}, (input) => runLibrary(() => locateCompfuzor(input.freshen, getOrElse(input["archive-dir"], () => void 0))).pipe(flatMap$1((location) => log(location === null ? "No compfuzor archive checkout detected" : `${location}${input.freshen ? " (origin fetched)" : ""}`)))).pipe(withDescription("Detect ~/archive/rektide/compfuzor; optionally fetch its origin."));
+}, (input) => runLibrary((signal) => locateCompfuzor(input.freshen, getOrElse(input["archive-dir"], () => void 0), { signal })).pipe(flatMap$1((location) => log(location === null ? "No compfuzor archive checkout detected" : `${location}${input.freshen ? " (origin fetched)" : ""}`)))).pipe(withDescription("Detect ~/archive/rektide/compfuzor; optionally fetch its origin."));
+//#endregion
+//#region archive/src/cli/commands/snapshot.ts
+/** `snapshot` — snapshot worktree state and import colocated Git refs. */
+const snapshotCommand = make$5("snapshot", { dest: destFlag }, (input) => runLibrary((signal) => snapshot(input.dest, { signal })).pipe(flatMap$1((result) => log(`Snapshotted ${result.dest}`)))).pipe(withDescription("Snapshot current tracked/untracked work and import colocated Git refs."));
+//#endregion
+//#region archive/src/cli/commands/verify-adoption.ts
+/** Source-independent receipt verification, with optional legacy drift diagnostics. */
+const contains = (outer, inner) => {
+	const path = relative(outer, inner);
+	return path === "" || path !== ".." && !path.startsWith(`../`) && !path.startsWith("/");
+};
+/** Never place restoration scratch inside either checkout, including symlink aliases. */
+const scratchParent = async (dest, legacy) => {
+	const destReal = await realpath(dest);
+	const legacyReal = legacy === null ? null : await realpath(legacy).catch(() => resolve(legacy));
+	for (const candidate of [tmpdir(), dirname(destReal)]) {
+		const parent = await realpath(candidate);
+		if (!contains(destReal, parent) && (legacyReal === null || !contains(legacyReal, parent))) return parent;
+	}
+	throw new CustodyError("invalid-input", "no private scratch parent outside the destination and legacy roots");
+};
 //#endregion
 //#region archive/src/cli/commands.ts
 /**
 * The command registry — the toolkit's composition seam. Adding a command is
 * a new named module under commands/ plus one entry here; grouping (e.g. a
 * future custody group) can switch entries to `[group, [commands]]` form
-* without touching root.ts or main.ts. Custody commands (`adopt`,
-* `verify-adoption`) are deliberately absent until their implementations
-* exist — no stub successes. `complete` is wired in root.ts because it needs
+* without touching root.ts or main.ts. `complete` is wired in root.ts because it needs
 * the root command itself.
 */
 const commands = [
 	refresh,
+	adoptCommand,
+	make$5("verify-adoption", {
+		dest: destFlag,
+		receipt: String$1("receipt").pipe(withDescription$1("Full refs/adopt/receipts/<label>/<generation> ref")),
+		legacy: optional(String$1("legacy").pipe(withDescription$1("Optional source drift diagnosis"))),
+		json: Boolean$1("json").pipe(withDefault(false), withDescription$1("One complete JSON result line"))
+	}, (flags) => {
+		const legacy = getOrNull(flags.legacy);
+		return tryPromise({
+			try: async (signal) => {
+				const parent = await scratchParent(flags.dest, legacy);
+				signal.throwIfAborted();
+				const scratchRoot = await mkdtemp(join(parent, ".compfuzor-verify-"));
+				const report = await verifyAdoption({
+					dest: flags.dest,
+					receiptRef: flags.receipt,
+					legacy,
+					scratchRoot
+				}, { signal });
+				signal.throwIfAborted();
+				if (!report.custodyVerified || report.custodyFailures.length > 0) throw new CustodyError("verification-failed", `custody verification failed: ${report.custodyFailures.map(({ code }) => code).join(", ")}`);
+				await rm(scratchRoot, { recursive: true });
+				return report;
+			},
+			catch: (error) => error instanceof Error ? error : new Error(String(error))
+		}).pipe(flatMap$1((report) => log(flags.json ? JSON.stringify(report) : [
+			`Receipt: ${report.receiptRef} (${report.receiptCommitOid})`,
+			`Custody verified: ${report.custodyVerified}`,
+			`Source drift: ${report.sourceDrift}; destination drift: ${report.destinationDrift}`,
+			...report.retirementUnresolved.map(({ code, reason }) => `RETIREMENT UNRESOLVED ${code}: ${reason}`),
+			"Git custody does not authorize publication or retirement."
+		].join("\n"))));
+	}).pipe(withDescription("Independently check the receipt, Git pins and vault without requiring the legacy source.")),
 	health,
-	make$5("snapshot", { dest: destFlag }, (input) => runLibrary(() => snapshot(input.dest)).pipe(flatMap$1((result) => log(`Snapshotted ${result.dest}`)))).pipe(withDescription("Snapshot current tracked/untracked work and import colocated Git refs.")),
+	snapshotCommand,
 	harvestCommand,
 	remotesCommand,
 	fetchCommand,
@@ -28601,15 +34775,37 @@ const normalizeArgv = (args) => {
 	}
 	return argv;
 };
-const main = () => {
+const invocation = () => {
 	const output = createOutputBuffer();
-	const program = runWith(root, {
-		version: VERSION,
-		renderErrors: false
-	})(normalizeArgv(process.argv.slice(2))).pipe(provideService(Console, output.console), provideService(Formatter, formatter), provideService(CliConfig, make$6({ builtIns })), provide(layer));
+	return {
+		program: runWith(root, {
+			version: VERSION,
+			renderErrors: false
+		})(normalizeArgv(process.argv.slice(2))).pipe(provideService(Console, output.console), provideService(Formatter, formatter), provideService(CliConfig, make$6({ builtIns })), provide(layer)),
+		output
+	};
+};
+/** Importable Promise facade; the executable must use runExecutable for signal handling. */
+const main = () => {
+	const { program, output } = invocation();
 	return runPromise(program).then(() => output.flush(), (error) => {
 		output.discard();
 		reportFailure(error);
+	});
+};
+/** Native Node/Effect main fiber owns SIGINT/SIGTERM and completes child teardown before exit. */
+const runExecutable = () => {
+	const { program, output } = invocation();
+	runMain(program, {
+		disableErrorReporting: true,
+		teardown: (exit, onExit) => {
+			if (isSuccess(exit)) output.flush();
+			else {
+				output.discard();
+				if (!hasInterruptsOnly(exit.cause)) reportFailure(squash(exit.cause));
+			}
+			defaultTeardown(exit, onExit);
+		}
 	});
 };
 //#endregion
@@ -28618,14 +34814,10 @@ const main = () => {
 const argvPath = process.argv[1];
 if (argvPath) realpath(argvPath).then((realArgv) => {
 	if (realArgv !== import.meta.filename) return;
-	return main().catch((error) => {
-		const detail = error instanceof AggregateError ? error.errors.map((item) => item instanceof Error ? item.message : String(item)).join("; ") : error instanceof Error ? error.message : String(error);
-		console.error(`repo-jj-archive: ${detail}`);
-		process.exitCode = 1;
-	});
+	return runExecutable();
 }, (error) => {
 	console.error(`repo-jj-archive: ${error instanceof Error ? error.message : String(error)}`);
 	process.exitCode = 1;
 });
 //#endregion
-export { main };
+export { main, runExecutable };

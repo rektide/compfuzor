@@ -34,6 +34,9 @@ The operator-facing contract — commands, flags, refresh ordering, the
 one-JSON-line Ansible protocol, launcher resolution — lives in
 [`/archive/README.md`](/archive/README.md). This document is the doc-tree
 entry point: it summarizes what is pinned and where the inquiry records live.
+The launcher calls the selected entry's `runExecutable()` so native Node
+signal handling can finish child-process teardown; `main()` remains the
+importable Promise API.
 
 ## The CLI contract is executable
 
@@ -48,6 +51,10 @@ touch production archives:
   `repo-jj-archive:` stderr line), help/version/completion behavior, argv
   parsing semantics, legacy adapter rules, launcher resolution order, and
   bundle self-containment.
+- [`archive/test/repository/cancellation.test.ts`](/archive/test/repository/cancellation.test.ts)
+  — SIGINT/SIGTERM through the actual source entry, launcher, and an executable
+  copied bundle; asserts empty stdout, a killed `jj` child, and no delayed
+  child mutation.
 
 Non-negotiable invariants: failures leave stdout empty (Ansible parses
 stdout only when rc == 0); `refresh --json` success is exactly one JSON line;
@@ -73,13 +80,15 @@ spells `--branch BRANCH` under refresh, and `--` stops the adapter's scan.
 | bash / zsh / fish | Effect CLI command-tree generator (same bytes as the native `--completions` action) | Full tree: subcommands and per-command flags |
 | powershell | Static generator in the toolkit | **Subcommand names and global flags only** — not per-command flags; a documented coverage reduction, not parity |
 
-## Custody: in development
+## Custody: registered, safety review in progress
 
-Cross-repository source custody (`adopt`, `verify-adoption`) has library work
-in `archive/src/custody/` but is **not registered in the CLI** — there is no
-ready workflow. The intended contract and its review gates live in the
-design records below. Verification reports custody state, never permission to
-delete; nothing publishes refs or retires a source directory.
+The CLI now registers `adopt` (read-only planning unless `--apply` is explicit)
+and `verify-adoption` (independent receipt/pin/vault verification). Source
+inventory safety findings are still being corrected, so registration is **not
+production signoff** and these commands must not be treated as retirement
+authorization. The review gate and intended contract live in the design
+records below. Verification reports custody state, never permission to delete;
+the commands do not publish refs or retire a source directory.
 
 ## Where the inquiry lives
 
@@ -96,8 +105,8 @@ delete; nothing publishes refs or retires a source directory.
   precedents, and the process-execution boundary decision.
 - [`custody-contracts0.gpt6sol.md`](/design/archive-toolkit/custody-contracts0.gpt6sol.md)
   and [`core-review0.glm53.md`](/design/archive-toolkit/core-review0.glm53.md) —
-  custody module seams and the integration review gate that adoption must
-  pass before the commands register.
+  custody module seams and the still-open integration/safety review gate; CLI
+  registration does not mean the gate has passed.
 
 Older lineage (pre-Effect toolkit design): [`design/repo-jj-archive/`](/design/repo-jj-archive/),
 including the [ghost-head incident](/design/repo-jj-archive/incident-ghost-heads.glm53.md);
@@ -116,4 +125,5 @@ the custody brief: [`design/archive-migration/brief0.gpt6sol.md`](/design/archiv
   contract.
 - The Node 26 runtime floor and signal behavior are exercised manually, not
   by suite.
-- Custody registration awaits the core-review gate passing end to end.
+- Custody production signoff awaits correction of the source-inventory safety
+  findings and the core-review gate passing end to end.
