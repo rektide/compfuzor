@@ -467,6 +467,41 @@ export function validateReceipt(value: unknown): ReceiptV1 {
       invalid("pin mapping mismatch or duplicate");
     names.add(computed);
   }
+  for (const tip of receipt.source.refs) {
+    if (
+      !receipt.pins.some(
+        (pin) =>
+          pin.sourceName === tip.name &&
+          pin.sourceOid === tip.oid &&
+          pin.objectType === tip.objectType,
+      )
+    )
+      invalid(`source ref lacks a custody pin: ${tip.name}`);
+  }
+  for (const candidate of receipt.source.candidates) {
+    if (candidate.disposition === "not-required" && !candidate.reason)
+      invalid("excluded candidate lacks operator reason");
+    if (
+      candidate.disposition === "pin" &&
+      !receipt.pins.some(
+        (pin) =>
+          pin.sourceName === candidateIdentity(candidate.kind, candidate.oid) &&
+          pin.sourceOid === candidate.oid &&
+          pin.objectType === candidate.objectType,
+      )
+    )
+      invalid("selected candidate lacks a custody pin");
+  }
+  for (const entries of [receipt.source.head.treePaths, receipt.snapshot?.paths ?? []]) {
+    const uniquePaths = new Set<string>();
+    for (const entry of entries) {
+      if (uniquePaths.has(entry.path)) invalid("duplicate path in tree manifest");
+      uniquePaths.add(entry.path);
+      if (entry.mode === "160000") invalid("submodule gitlink requires separate custody design");
+      if (entry.path.split("/").some((part) => part === ".git" || part === ".jj"))
+        invalid("tracked Git/jj internals cannot be adopted");
+    }
+  }
   if (receipt.snapshot && receipt.snapshot.parentOid !== receipt.source.head.oid)
     invalid("snapshot parent differs from HEAD");
   if (!receipt.pins.some(({ sourceKind }) => sourceKind === "head"))

@@ -270,6 +270,74 @@ test("object-format validation rejects mixed SHA lengths", () => {
   );
 });
 
+test("receipt cannot silently omit named refs, selected candidates, or tracked internals", () => {
+  const receipt = sample();
+  const branch = {
+    name: refName("refs/heads/topic"),
+    oid: O("2"),
+    objectType: "commit" as const,
+    peeledOid: null,
+  };
+  assert.throws(
+    () => validateReceipt({ ...receipt, source: { ...receipt.source, refs: [branch] } }),
+    /source ref lacks a custody pin/,
+  );
+  assert.throws(
+    () =>
+      validateReceipt({
+        ...receipt,
+        source: {
+          ...receipt.source,
+          candidates: [
+            {
+              kind: "reflog",
+              oid: O("2"),
+              objectType: "commit",
+              provenance: [],
+              disposition: "pin",
+              reason: null,
+            },
+          ],
+        },
+      }),
+    /selected candidate lacks a custody pin/,
+  );
+  assert.throws(
+    () =>
+      validateReceipt({
+        ...receipt,
+        source: {
+          ...receipt.source,
+          candidates: [
+            {
+              kind: "dangling",
+              oid: O("2"),
+              objectType: "commit",
+              provenance: [],
+              disposition: "not-required",
+              reason: null,
+            },
+          ],
+        },
+      }),
+    /operator reason/,
+  );
+  assert.throws(
+    () =>
+      validateReceipt({
+        ...receipt,
+        source: {
+          ...receipt.source,
+          head: {
+            ...receipt.source.head,
+            treePaths: [{ path: repoPath(".jj/store/secret"), mode: "100644", blobOid: O("2") }],
+          },
+        },
+      }),
+    /tracked Git\/jj internals/,
+  );
+});
+
 test("same-input retry discounts only its own installed refs and retains the original baseline", () => {
   const receipt = sample();
   const receiptCommitOid = O("6");
