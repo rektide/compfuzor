@@ -2,26 +2,36 @@
 """CLI compatibility contract for the archive toolkit runner.
 
 Companion to tests/integration/repo_jj_archive.test.py (the Ansible-behavior
-baseline). This suite pins the *command-line surface* documented in
-design/archive-toolkit/compatibility-checks0.glm53.md so the Gunshi -> Effect
-CLI migration cannot silently change what the launcher, the Ansible tasks, or
-a human invoking `--help` see:
+baseline). This suite pins the *command-line surface* of the Effect CLI
+implementation against the compatibility commitments in
+design/archive-toolkit/direction0.gpt6astra.md (recorded after the migration
+review): documented argv and machine output are preserved, while incidental
+Gunshi parsing is not:
 
 * every failure exits nonzero with **empty stdout** and a single
   `repo-jj-archive: <detail>` line on stderr (help/version/completion are the
-  only intentional stdout successes, never JSON);
-* argv parsing quirks (equals form, `--` stop-flag, duplicate last-wins,
-  legacy flag-only alias, `refresh --version BRANCH` spelling);
+  only intentional stdout successes, never JSON) — the exact wording of
+  Effect's native parse errors is not pinned, only that the offending token is
+  named on stderr;
+* native semantics that differ from Gunshi are asserted as the contract:
+  help heading without a colon, one-missing-flag-at-a-time reporting,
+  duplicate **first-wins** flags, strict rejection of unexpected positionals
+  (including after `--`), and root help-over-version action precedence;
+* root `--version` prints the toolkit version and the native `--completions`
+  action works — neither is stolen by the legacy flag-only refresh adapter,
+  while the legacy adapter itself (flag-only `refresh --json`, the
+  `--version BRANCH` -> `--branch BRANCH` spelling, `--` stopping the scan)
+  keeps working;
 * launcher resolution: source-first when its dependencies are installed,
   committed bundle otherwise, and the dependency gate covering every bare
   import of the source entry;
 * the committed single-file bundle staying self-contained and directly
   executable.
 
-Baseline tests pass against the current Gunshi implementation. Tests named
-`test_intended_*` encode decided post-migration behavior (parent decisions:
-real root `--version`, loud `complete` argument rejection) and are marked
-xfail until the migration lands them; flip the marker off when they pass.
+The `complete` command and the native `--completions` action both serve
+bash/zsh/fish from Effect's command-tree generator; PowerShell comes from the
+static generator (subcommand names and global flags only — a documented
+coverage reduction, see archive/README.md).
 """
 
 from __future__ import annotations
@@ -36,8 +46,6 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-import pytest
-
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRATCH = ROOT / ".test-agent" / "archive-cli-contract" / "tests"
@@ -46,6 +54,10 @@ BUNDLE = ROOT / "archive/repo-jj-archive.mjs"
 RUNNER = ROOT / "script/repo-jj-archive.ts"
 SHEBANG = "#!/usr/bin/env -S node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON\n"
 NOOP = {"changed": False, "notices": []}
+
+# Gunshi printed "USAGE:"; Effect prints a bare "USAGE" heading. The contract
+# is a usage section naming the binary, not the colon.
+USAGE_HEADING = re.compile(r"^USAGE:?\s*$", re.MULTILINE)
 
 # The launcher must be a transparent transport: every CLI-surface test runs
 # against both the TypeScript source entry and the launcher shim.
@@ -133,7 +145,7 @@ def jj_commit(revision: str, archive: Path) -> str:
     return must("jj", "log", "-G", "-r", revision, "-T", "commit_id", cwd=archive)
 
 
-# --- Root and per-command help/version surface (matrix rows 10-11, G1) ------
+# --- Root and per-command help/version surface -------------------------------
 
 
 def test_root_help_and_noargs_contract() -> None:
@@ -141,21 +153,29 @@ def test_root_help_and_noargs_contract() -> None:
         for entry in ENTRIES:
             result = invoke(entry, "--help", cwd=tmp)
             assert result.returncode == 0, result.stderr
-            for needle in ("USAGE:", "refresh", "repo-jj-archive"):
-                assert needle in result.stdout, (entry[0], result.stdout)
+            assert USAGE_HEADING.search(result.stdout), (entry[0], result.stdout)
+            for needle in ("refresh", "repo-jj-archive"):
+                assert needle in result.stdout, (entry[0], needle, result.stdout)
 
             result = invoke(entry, cwd=tmp)
             assert result.returncode == 0, result.stderr
             assert result.stdout.strip() == "Run repo-jj-archive --help for commands."
 
-            result = invoke(entry, "-v", cwd=tmp)
-            assert result.returncode == 0 and result.stdout.strip() == "0.1.0", result.stderr
+            # Root version is real: both spellings print the toolkit version.
+            for flag in ("-v", "--version"):
+                result = invoke(entry, flag, cwd=tmp)
+                assert result.returncode == 0, (entry[0], flag, result.stderr)
+                assert result.stdout.strip() == "0.1.0" and result.stderr == ""
 
-            expect_failure(invoke(entry, "-V", cwd=tmp), "Unknown option: -V")
+            # The short-flag set is exactly -h/-v; -V is an unknown flag.
+            expect_failure(invoke(entry, "-V", cwd=tmp), "-V")
 
-            # Parser precedence quirk: version wins over a preceding --help.
-            result = invoke(entry, "--help", "--version", cwd=tmp)
-            assert result.returncode == 0 and result.stdout.strip() == "0.1.0"
+            # Root action precedence follows the native parser: help wins over
+            # version regardless of argv order (Gunshi let version win).
+            for order in (("--help", "--version"), ("--version", "--help")):
+                result = invoke(entry, *order, cwd=tmp)
+                assert result.returncode == 0, (entry[0], order, result.stderr)
+                assert USAGE_HEADING.search(result.stdout), (entry[0], order, result.stdout)
 
 
 def test_per_command_version_flag() -> None:
@@ -167,20 +187,25 @@ def test_per_command_version_flag() -> None:
                     entry[0], command, result.stdout, result.stderr)
 
 
-# --- Failure purity: stderr only, never stdout (rows 4/6/7, G2) ------------
+# --- Failure purity: stderr only, never stdout --------------------------------
 
 
 def test_parse_failures_are_stderr_only() -> None:
+    """Native wording, contract shape: the offending token is named on stderr.
+
+    Effect reports one missing flag at a time rather than Gunshi's aggregate;
+    the contract is that a missing required flag is reported (here --dest,
+    the first one), with stdout still empty.
+    """
     with scratch() as tmp:
         for entry in ENTRIES:
-            expect_failure(invoke(entry, "bogus", cwd=tmp), "Command not found: bogus")
-            expect_failure(invoke(entry, "refresh", "--bogus", cwd=tmp),
-                           "'--dest' is required", "Unknown option: --bogus")
+            expect_failure(invoke(entry, "bogus", cwd=tmp), "bogus")
+            expect_failure(invoke(entry, "refresh", "--bogus", cwd=tmp), "--bogus")
             expect_failure(invoke(entry, "refresh", "--json", cwd=tmp),
-                           "'--dest' is required", "'--repo' is required", "'--label' is required")
+                           "--dest", "required")
             # A dash-leading token is not consumed as --dest's value.
             expect_failure(invoke(entry, "health", "--dest", "--label", "x", cwd=tmp),
-                           "'--dest' is required", "Unknown option: --label")
+                           "--dest", "--label")
 
 
 def test_refresh_argument_value_validation() -> None:
@@ -203,10 +228,10 @@ def test_refresh_argument_value_validation() -> None:
         assert not dest.exists()
 
 
-# --- argv parsing quirks (row 9, G3) ----------------------------------------
+# --- argv parsing semantics ----------------------------------------------------
 
 
-def test_option_parsing_quirks_are_stable() -> None:
+def test_option_parsing_contract() -> None:
     with scratch() as tmp:
         # A fake archive layout so `self` detection is observable, and an empty
         # HOME so default detection cannot find a real machine checkout.
@@ -221,25 +246,38 @@ def test_option_parsing_quirks_are_stable() -> None:
             result = invoke(entry, "self", f"--archive-dir={tmp / 'archdir'}", cwd=tmp, env=env)
             assert result.returncode == 0 and detected in result.stdout, result.stderr
 
-            # `--` stops flag parsing: the override must NOT be applied.
-            result = invoke(entry, "self", "--", f"--archive-dir={tmp / 'archdir'}", cwd=tmp, env=env)
-            assert result.returncode == 0 and result.stdout.strip() == undetected
-
-            # Duplicate flags: last one wins.
+            # Duplicate flags: the first occurrence wins (authorized Effect
+            # change; Gunshi applied the last).
             result = invoke(entry, "self", "--archive-dir", str(tmp / "absent"),
                             "--archive-dir", str(tmp / "archdir"), cwd=tmp, env=env)
-            assert result.returncode == 0 and detected in result.stdout
+            assert result.returncode == 0 and result.stdout.strip() == undetected
 
-            # Stray token after a boolean flag and unknown positional are tolerated.
+            # A stray token after a boolean flag stays tolerated...
             result = invoke(entry, "self", "--freshen", "true", cwd=tmp, env=env)
             assert result.returncode == 0 and result.stdout.strip() == undetected
-            result = invoke(entry, "self", "extra", cwd=tmp, env=env)
+
+            # ...but unexpected positionals are rejected (authorized Effect
+            # change; Gunshi silently ignored them).
+            expect_failure(invoke(entry, "self", "extra", cwd=tmp, env=env), "extra")
+
+            # `--` ends flag parsing: a bare separator is fine, and a flag
+            # after it is a positional — rejected, never applied.
+            result = invoke(entry, "self", "--", cwd=tmp, env=env)
             assert result.returncode == 0 and result.stdout.strip() == undetected
+            expect_failure(invoke(entry, "self", "--", f"--archive-dir={tmp / 'archdir'}",
+                                  cwd=tmp, env=env), "--archive-dir")
+
+            # A leading `--` also hides refresh flags from the legacy adapter:
+            # this is a positional-only root invocation, not flag-only refresh.
+            expect_failure(invoke(entry, "--", "--dest", str(tmp), cwd=tmp), "--dest")
 
 
-# --- Completion for supported shells (row 12, G4) ---------------------------
+# --- Completion for supported shells ------------------------------------------
 
 SUPPORTED_SHELLS = ("bash", "zsh", "fish", "powershell")
+# Effect's native generator; PowerShell is served only by `complete` via the
+# static generator, so it is not part of the native-action assertions.
+NATIVE_SHELLS = ("bash", "zsh", "fish")
 
 
 def test_completion_scripts_for_supported_shells() -> None:
@@ -260,6 +298,19 @@ def test_completion_scripts_for_supported_shells() -> None:
             must("bash", "-n", str(script), cwd=tmp)
             result = invoke(entry, "complete", "--help", cwd=tmp)
             assert result.returncode == 0 and "complete" in result.stdout
+
+            # The native `--completions` action is not stolen by the legacy
+            # refresh adapter and prints the same script as `complete`.
+            for shell in NATIVE_SHELLS:
+                native = invoke(entry, "--completions", shell, cwd=tmp)
+                assert native.returncode == 0, (entry[0], shell, native.stderr)
+                assert native.stderr == "", (entry[0], shell, native.stderr)
+                assert native.stdout == scripts[shell], (entry[0], shell)
+
+            # Unsupported shells and a missing shell argument are loud
+            # failures (the intended surface; Gunshi silently no-opped).
+            expect_failure(invoke(entry, "complete", "bogus", cwd=tmp), "bogus")
+            expect_failure(invoke(entry, "complete", cwd=tmp))
 
 
 # --- Refresh parity across source, launcher, and standalone bundle ----------
@@ -323,8 +374,17 @@ def test_refresh_branch_at_remote_selects_declared_remote() -> None:
                                 "--version", "main", cwd=tmp)
         assert reverted["changed"] and jj_commit("main", archive) == origin_tip
 
+        # The same spelling inside a flag-only legacy invocation (no
+        # subcommand, dest flags present) still selects the declared remote.
+        flagged = success_json(str(RUNNER), "--dest", str(archive), "--repo", str(remote),
+                               "--remotes", remotes, "--label", "fixture",
+                               "--version", "main@peer", cwd=tmp)
+        assert flagged["changed"]
+        assert any(f"(peer)" in n.get("message", "") for n in flagged["notices"])
+        assert jj_commit("main", archive) == peer_tip
 
-# --- Launcher resolution order (rows 1-2, G5/G6) ----------------------------
+
+# --- Launcher resolution order ------------------------------------------------
 
 
 def test_launcher_prefers_source_when_dependencies_present() -> None:
@@ -468,35 +528,3 @@ def test_launcher_dependency_gate_covers_every_bare_import() -> None:
     assert SOURCE in reachable and len(reachable) > 1
     missing = {f"node_modules/{name}" for name in bare_packages(reachable)} - gated
     assert not missing, f"bare imports not covered by launcher gate: {sorted(missing)}"
-
-
-# --- Decided post-migration behavior (fails on the Gunshi baseline) ---------
-
-
-@pytest.mark.xfail(
-    reason="intended post-migration surface: root --version must print the "
-           "toolkit version instead of the legacy refresh --branch hijack",
-    strict=False,
-)
-def test_intended_root_version_prints_toolkit_version() -> None:
-    result = run("node", str(SOURCE), "--version", cwd=ROOT)
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "0.1.0" and result.stderr == ""
-
-
-@pytest.mark.xfail(
-    reason="intended post-migration surface: complete with an unsupported "
-           "shell must fail on stderr rather than Gunshi's silent rc0",
-    strict=False,
-)
-def test_intended_complete_unknown_shell_is_rejected() -> None:
-    expect_failure(run("node", str(SOURCE), "complete", "bogus", cwd=ROOT))
-
-
-@pytest.mark.xfail(
-    reason="intended post-migration surface: complete without a shell argument "
-           "must fail on stderr rather than emitting the ':4' directive oddity",
-    strict=False,
-)
-def test_intended_complete_requires_a_shell_argument() -> None:
-    expect_failure(run("node", str(SOURCE), "complete", cwd=ROOT))
