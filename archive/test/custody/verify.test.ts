@@ -8,6 +8,7 @@ import {
   realpath,
   rename,
   rm,
+  stat,
   symlink,
   writeFile,
 } from "node:fs/promises";
@@ -42,7 +43,15 @@ import type {
 } from "../../src/custody/model.ts";
 import { prepareSnapshot, proveBundle } from "../../src/custody/stage.ts";
 import { readReceipt, verifyAdoption } from "../../src/custody/verify.ts";
-import { resolveVaultBundle } from "../../src/custody/vault.ts";
+import {
+  createVaultRun,
+  resolveVaultBundle,
+  sealBundle,
+  sealVaultFile,
+  VAULT_DIRNAME,
+  vaultArchiveId,
+  vaultRunId,
+} from "../../src/custody/vault.ts";
 
 // Every fixture is disposable scratch under .test-agent; production archives
 // are never touched. Adoptions here are manually assembled from REAL Git
@@ -384,14 +393,21 @@ export async function adoption(
   // --- import custody objects and refs, install the receipt ---
   await run(dest, "-c", "gc.auto=0", "fetch", "--quiet", proven.bundlePath, "+refs/*:refs/*");
 
-  const runId = "0123456789abcdef0123456789abcdef";
-  const archiveId = sha256(encoder.encode(destReal));
-  const vaultRunDir = join(dirname(destReal), ".compfuzor-adoptions", archiveId, runId);
-  await mkdir(dirname(vaultRunDir), { recursive: true, mode: 0o700 });
-  await mkdir(vaultRunDir, { mode: 0o700 });
-  await writeFile(join(vaultRunDir, "source.bundle"), await readFile(proven.bundlePath), {
-    mode: 0o600,
+  // Seal the proven bundle + signed-off intent through the durable writer.
+  const sealed = await sealBundle({
+    destRealpath: destReal,
+    legacyRealpath: await realpath(source),
+    proven: {
+      bundlePath: proven.bundlePath,
+      bundleSha256: proven.bundleSha256,
+      verifiedHeads: proven.verifiedHeads,
+      freshRestoreVerified: proven.freshRestoreVerified,
+    },
+    intent: encoder.encode(
+      `${canonicalJson({ schema: "compfuzor.archive-adoption-intent/v1", label: "legacy", generation: "g0" })}\n`,
+    ),
   });
+  const vaultRunDir = sealed.run.runDir;
 
   const receipt: ReceiptV1 = {
     schema: "compfuzor.archive-adoption/v1",
@@ -466,16 +482,7 @@ export async function adoption(
       selectedTipsNotInDestination: null,
     },
     pins,
-    bundle: {
-      pathRelativeToDestinationParent: `.compfuzor-adoptions/${archiveId}/${runId}/source.bundle`,
-      sha256: proven.bundleSha256,
-      verifiedHeads: pins.map(({ destinationRef, destinationOid }) => ({
-        ref: destinationRef,
-        oid: destinationOid,
-      })),
-      freshRestoreVerified: true,
-    },
-    checks: {
+    bundle: sealed.sealed,    checks: {
       sourceFingerprintRechecked: true,
       sourceOdbUnchanged: true,
       destinationWorktreeUnchanged: true,
@@ -753,4 +760,122 @@ test("jj-colocated destinations pass the read-only preflight without jj items", 
     readOnly: true,
   });
   assert.equal(opAfter, opBefore);
+});
+
+// ---------------------------------------------------------------------------
+// Durable vault writer (apply's seal path)
+// ---------------------------------------------------------------------------
+
+const mode = async (path: string): Promise<number> => (await stat(path)).mode & 0o777;
+
+/** Minimal proven-bundle facts backed by real bytes on disk. */
+async function provenFacts(
+  t: { after: (hook: () => Promise<unknown>) => void },
+  bytes: Uint8Array,
+) {
+  const holder = await area(t, "proven");
+  const bundlePath = join(holder, "proven.bundle");
+  await writeFile(bundlePath, bytes, { mode: 0o600 });
+  return {
+    bundlePath,
+    bundleSha256: sha256(bytes),
+    verifiedHeads: [
+      {
+        ref: refName(`refs/heads/harvest/legacy/g0/head/${"1".repeat(40)}`),
+        oid: oid("1".repeat(40), "sha1"),
+      },
+    ],
+    freshRestoreVerified: true as const,
+  };
+}
+
+test("sealBundle installs an owner-only run, returns a receipt-ready record, and never overwrites", async (t) => {
+  const root = await area(t, "writer");
+  const dest = join(root, "archive");
+  const legacy = join(root, "legacy");
+  await mkdir(dest);
+  await mkdir(legacy);
+  const destReal = await realpath(dest);
+  const proven = await provenFacts(t, encoder.encode("bundle bytes\n"));
+  const intent = encoder.encode('{"schema":"compfuzor.archive-adoption-intent/v1"}\n');
+
+  const { run, sealed } = await sealBundle({
+    destRealpath: destReal,
+    legacyRealpath: await realpath(legacy),
+    proven,
+    intent,
+  });
+  assert.equal(sealed.sha256, proven.bundleSha256);
+  assert.deepEqual(sealed.verifiedHeads, proven.verifiedHeads);
+  assert.equal(sealed.freshRestoreVerified, true);
+  assert.equal(
+    sealed.pathRelativeToDestinationParent,
+    `${VAULT_DIRNAME}/${vaultArchiveId(destReal)}/${run.runId}/source.bundle`,
+  );
+  assert.match(run.runId, /^[0-9a-f]{32,}$/);
+  // Owner-only structure: 0700 directories down the run, 0600 files inside.
+  assert.equal(await mode(join(destReal, "..", VAULT_DIRNAME)), 0o700);
+  assert.equal(await mode(run.archiveDir), 0o700);
+  assert.equal(await mode(run.runDir), 0o700);
+  assert.equal(await mode(run.bundlePath), 0o600);
+  assert.equal(await mode(run.intentPath), 0o600);
+  // The sealed bytes are exactly the proven bytes, and the resolver accepts
+  // the recorded path under a receipt-shaped identity.
+  assert.deepEqual(await readFile(run.bundlePath), Buffer.from("bundle bytes\n"));
+  const receiptish = {
+    identity: { destinationRealpath: destReal },
+    bundle: { pathRelativeToDestinationParent: sealed.pathRelativeToDestinationParent },
+  } as unknown as Parameters<typeof resolveVaultBundle>[0];
+  assert.equal(await resolveVaultBundle(receiptish, destReal), run.bundlePath);
+
+  // Runs are append-only: a second seal creates a distinct sibling run; a
+  // checksum drift underfoot, a reused run id, and an existing target are all
+  // refused — never overwritten.
+  const again = await sealBundle({
+    destRealpath: destReal,
+    legacyRealpath: await realpath(legacy),
+    proven,
+    intent,
+  });
+  assert.notEqual(again.run.runId, run.runId);
+  const before = await readFile(run.bundlePath);
+  const drifted = await custodyError(
+    sealBundle({
+      destRealpath: destReal,
+      legacyRealpath: await realpath(legacy),
+      proven: { ...proven, bundleSha256: sha256(encoder.encode("tampered\n")) },
+      intent,
+    }),
+  );
+  assert.equal(drifted.code, "invalid-input");
+  assert.equal(Buffer.compare(await readFile(run.bundlePath), before), 0);
+  const reused = await custodyError(
+    (async () => {
+      const existing = await createVaultRun(destReal, run.runId);
+      await sealVaultFile(existing.intentPath, intent);
+    })(),
+  );
+  assert.equal(reused.code, "invalid-input");
+});
+
+test("sealBundle refuses vaults that would sit inside either checkout", async (t) => {
+  const root = await area(t, "writer-roots");
+  const legacy = join(root, "legacy");
+  const destInside = join(legacy, "archive");
+  await mkdir(legacy);
+  await mkdir(destInside);
+  const proven = await provenFacts(t, encoder.encode("bytes\n"));
+  const inside = await custodyError(
+    sealBundle({
+      destRealpath: await realpath(destInside),
+      legacyRealpath: await realpath(legacy),
+      proven,
+      intent: encoder.encode("{}\n"),
+    }),
+  );
+  assert.equal(inside.code, "invalid-input");
+  assert.ok(/legacy/.test(inside.message));
+  // The refused attempt created nothing beside the legacy checkout.
+  assert.equal(await stat(join(legacy, VAULT_DIRNAME)).catch(() => null), null);
+  assert.match(vaultRunId(), /^[0-9a-f]{32,}$/);
 });
