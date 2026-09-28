@@ -30443,13 +30443,13 @@ const checkBundleRestoration = async (input, execution = {}) => {
 	], restoreGit, execution.signal);
 	let snapshotManifestVerified = false;
 	if (input.snapshot !== null) {
-		if (utf8Fatal(await runPlain(["rev-parse", `${input.snapshot.commitOid}^{tree}`], restoreGit)).trim() !== input.snapshot.treeOid) throw bundleInvalid("restored snapshot commit does not carry the staged tree");
+		if (utf8Fatal(await runPlain(["rev-parse", `${input.snapshot.commitOid}^{tree}`], restoreGit, execution.signal)).trim() !== input.snapshot.treeOid) throw bundleInvalid("restored snapshot commit does not carry the staged tree");
 		if (canonicalJson(parseManifest$1(await runPlain([
 			"ls-tree",
 			"-r",
 			"-z",
 			input.snapshot.commitOid
-		], restoreGit), format)) !== canonicalJson(input.snapshot.paths)) throw bundleInvalid("restored snapshot path manifest differs from the staged manifest");
+		], restoreGit, execution.signal), format)) !== canonicalJson(input.snapshot.paths)) throw bundleInvalid("restored snapshot path manifest differs from the staged manifest");
 		snapshotManifestVerified = true;
 	}
 	return {
@@ -33782,12 +33782,9 @@ async function verifyAdoption(input, execution = {}) {
 		}
 	}
 	if (receipt !== null) {
-		let bundlePath = null;
 		let bundleBytes = null;
 		try {
-			const bundle = await readVaultBundle(receipt, destReal);
-			bundlePath = bundle.path;
-			bundleBytes = bundle.bytes;
+			bundleBytes = (await readVaultBundle(receipt, destReal)).bytes;
 		} catch (error) {
 			signal?.throwIfAborted();
 			const detail = error instanceof Error ? error.message : String(error);
@@ -33797,9 +33794,16 @@ async function verifyAdoption(input, execution = {}) {
 		if (bundleBytes === null) {} else {
 			const observed = sha256(bundleBytes);
 			if (observed !== receipt.bundle.sha256) fail("bundle-checksum", receipt.bundle.pathRelativeToDestinationParent, `bundle hashes to ${observed}; receipt records ${receipt.bundle.sha256}`);
+			let proofScratch = null;
 			try {
+				signal?.throwIfAborted();
+				proofScratch = await mkdtemp(join(input.scratchRoot, "verify-bundle-"));
+				const proofBundle = join(proofScratch, "source.bundle");
+				signal?.throwIfAborted();
+				await writeFile(proofBundle, bundleBytes, { mode: 384 });
+				signal?.throwIfAborted();
 				const check = await checkBundleRestoration({
-					bundlePath,
+					bundlePath: proofBundle,
 					objectFormat: receipt.source.objectFormat,
 					scratchRoot: input.scratchRoot,
 					pins: receipt.pins,
@@ -33816,6 +33820,11 @@ async function verifyAdoption(input, execution = {}) {
 			} catch (error) {
 				signal?.throwIfAborted();
 				fail("bundle-restore", error instanceof CustodyError ? error.subject : null, error instanceof Error ? error.message : String(error));
+			} finally {
+				if (proofScratch !== null) await rm(proofScratch, {
+					recursive: true,
+					force: true
+				});
 			}
 		}
 	}
@@ -33840,6 +33849,26 @@ async function verifyAdoption(input, execution = {}) {
 			reason: error instanceof Error ? error.message : String(error)
 		});
 	}
+	let safeDestinationStatus = receipt !== null;
+	if (receipt !== null) {
+		let reason = null;
+		try {
+			const helpers = await runPromise(localHelpers(destReal), { signal });
+			signal?.throwIfAborted();
+			if (helpers.length > 0) reason = `repository-local executable helpers are configured: ${helpers.join(", ")}`;
+		} catch (error) {
+			signal?.throwIfAborted();
+			reason = `repository-local helper config cannot be inspected: ${error instanceof Error ? error.message : String(error)}`;
+		}
+		if (reason !== null) {
+			safeDestinationStatus = false;
+			retirement.push({
+				code: "destination-drift-unavailable",
+				subject: destReal,
+				reason
+			});
+		}
+	}
 	const verification = {
 		receiptRef: ref,
 		receiptCommitOid,
@@ -33849,7 +33878,7 @@ async function verifyAdoption(input, execution = {}) {
 			signal?.throwIfAborted();
 			return "unknown";
 		}),
-		destinationDrift: await destinationDriftOf(receipt, destReal, gitDir, ref, receiptCommitOid, signal).catch(() => {
+		destinationDrift: await destinationDriftOf(receipt, destReal, gitDir, ref, receiptCommitOid, safeDestinationStatus, signal).catch(() => {
 			signal?.throwIfAborted();
 			return "unknown";
 		}),
@@ -33865,7 +33894,8 @@ async function verifyAdoption(input, execution = {}) {
 * fingerprints must match the recorded baseline. Any unreadable category
 * yields `"unknown"`; this never flips `custodyVerified`.
 */
-const destinationDriftOf = async (receipt, destReal, gitDir, ref, receiptCommitOid, signal) => {
+const destinationDriftOf = async (receipt, destReal, gitDir, ref, receiptCommitOid, safeStatus, signal) => {
+	if (!safeStatus) return "unknown";
 	const soft = (args, cwd) => softGit(args, cwd, signal);
 	if (receipt === null) return "unknown";
 	let changed = false;
