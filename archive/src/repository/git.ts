@@ -146,10 +146,13 @@ export const gitRead = (
   args: ReadonlyArray<string>,
   options?: GitOptions,
 ): Effect.Effect<GitResult, PlatformError> =>
-  spawnGit(["-c", "gc.auto=0", "-c", "maintenance.auto=false", ...args], {
-    ...options,
-    env: { ...options?.env, ...readEnv },
-  });
+  spawnGit(
+    ["-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "core.fsmonitor=false", ...args],
+    {
+      ...options,
+      env: { ...options?.env, ...readEnv },
+    },
+  );
 
 /**
  * Checked `git`: fails with `GitError` on nonzero exit, otherwise returns

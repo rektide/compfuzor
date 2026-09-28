@@ -160,6 +160,31 @@ function gitZero(
   );
 }
 
+/** Config-only preflight: never run status, hashing, or path probes with local helpers. */
+function localHelpers(root: string): Effect.Effect<readonly string[], CustodyError> {
+  return Effect.gen(function* () {
+    const out = yield* git(
+      [
+        "config",
+        "--local",
+        "--includes",
+        "--get-regexp",
+        "^(filter\\.|core\\.fsmonitor$|core\\.hooksPath$)",
+      ],
+      root,
+    );
+    if (out.exitCode === 1) return [];
+    if (out.exitCode !== 0)
+      return yield* Effect.fail(
+        new CustodyError("inspection-failed", "local helper config could not be inspected"),
+      );
+    const pairs = yield* sync(() => parseConfigPairs(out.stdout));
+    return pairs
+      .filter(({ key, value }) => key !== "core.fsmonitor" || value !== "false")
+      .map(({ key }) => key);
+  });
+}
+
 /** Exit-0 predicate for an ancestry/existence probe. */
 function gitOk(args: readonly string[], cwd: string): Effect.Effect<boolean, never> {
   return git(args, cwd).pipe(
@@ -451,6 +476,23 @@ export function probeSource(
     });
     let gitDir: string | null = null;
     let format: GitObjectFormat | null = null;
+    const helpers = yield* Effect.result(localHelpers(real));
+    if (Result.isFailure(helpers)) {
+      blockers.push({
+        code: "source-helper-inspection-failed",
+        subject: real,
+        reason: helpers.failure.message,
+      });
+      return earlyReturn();
+    }
+    if (helpers.success.length > 0) {
+      blockers.push({
+        code: "source-filter-configured",
+        subject: real,
+        reason: `repository-local executable helpers are unsupported: ${helpers.success.join(", ")}`,
+      });
+      return earlyReturn();
+    }
     leftBehind.push({
       code: "source-repository-metadata",
       subject: join(real, ".git"),
@@ -1377,6 +1419,24 @@ export function probeDestination(
     const real = yield* fs(() => realpath(dest).catch(() => null), "resolve destination");
     if (real === null || !(yield* fs(() => isDirectory(real), "inspect destination")))
       return missing();
+
+    const helpers = yield* Effect.result(localHelpers(real));
+    if (Result.isFailure(helpers)) {
+      blockers.push({
+        code: "destination-helper-inspection-failed",
+        subject: real,
+        reason: helpers.failure.message,
+      });
+      return partial();
+    }
+    if (helpers.success.length > 0) {
+      blockers.push({
+        code: "destination-filter-configured",
+        subject: real,
+        reason: `repository-local executable helpers are unsupported: ${helpers.success.join(", ")}`,
+      });
+      return partial();
+    }
 
     if (yield* fs(() => isFile(join(real, ".git")), "inspect dest .git"))
       blockers.push({

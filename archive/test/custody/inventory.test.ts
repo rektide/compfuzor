@@ -470,6 +470,33 @@ test("tracked LFS pointer without filter configuration is a named blocker", asyn
   assert.ok(!JSON.stringify(edited).includes("4355a46b19d348dc2f57c046f8ef63d4538ebb93"));
 });
 
+test("configured clean filters and fsmonitor never execute during blocked inventory", async () => {
+  const source = await fresh("helpers-src");
+  await initRepo(source);
+  await commit(source, "one", "asset.txt", "first\n");
+  const dest = await makeDest(source, "helpers-dest");
+  const marker = join(ROOT, "source-helper-marker");
+  await rm(marker, { force: true });
+  await writeFileUtf8(join(source, ".gitattributes"), "asset.txt filter=unsafe\n");
+  await git(["config", "filter.unsafe.clean", `sh -c 'touch ${marker}; cat'`], source);
+  await git(["config", "core.fsmonitor", `sh -c 'touch ${marker}; echo /'`], source);
+  const blocked = await plan(input(source, dest));
+  assert.equal(blocked.state, "blocked");
+  assert.ok(codes(blocked).includes("source-filter-configured"));
+  await assert.rejects(readFile(marker), { code: "ENOENT" });
+
+  const destMarker = join(ROOT, "dest-helper-marker");
+  await rm(destMarker, { force: true });
+  await git(["config", "core.fsmonitor", `sh -c 'touch ${destMarker}; echo /'`], dest);
+  const cleanSource = await fresh("helpers-clean-source");
+  await initRepo(cleanSource);
+  await commit(cleanSource, "one", "asset.txt", "first\n");
+  const blockedDest = await plan(input(cleanSource, dest));
+  assert.equal(blockedDest.state, "blocked");
+  assert.ok(codes(blockedDest).includes("destination-filter-configured"));
+  await assert.rejects(readFile(destMarker), { code: "ENOENT" });
+});
+
 test("unborn HEAD reports a blocker and a null head category", async () => {
   const source = await fresh("unborn-src");
   await initRepo(source, "feature");
