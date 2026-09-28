@@ -55,3 +55,21 @@ export type { Notice } from "./recovery/harvest.ts";
 
 // recovery/heal.ts — explicit last-resort jj re-adoption with retained backup.
 export { heal } from "./recovery/heal.ts";
+
+// custody — read-only admission, explicit immutable transfer, independent receipt proof.
+export { planAdoption, loadDispositions } from "./custody/inventory.ts";
+export type { Dispositions } from "./custody/inventory.ts";
+export { applyAdoption } from "./custody/apply.ts";
+export type { ApplyResult, ApplyTestHooks } from "./custody/apply.ts";
+export { verifyAdoption, readReceipt } from "./custody/verify.ts";
+export type { VerifyInput, ObservedReceipt } from "./custody/verify.ts";
+export { CustodyError } from "./custody/errors.ts";
+export type { CustodyFailure } from "./custody/errors.ts";
+export type {
+  AdoptInput,
+  PlanV1,
+  ReceiptV1,
+  Verification,
+  Issue,
+  PathReview,
+} from "./custody/model.ts";
