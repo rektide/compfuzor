@@ -249,6 +249,30 @@ migration must keep the relocated archive and any source-side staging copy
 until the operator verifies every attached workspace; no cleanup/reconcile
 behavior is inferred here.
 
+## Failure, retry, and rollback boundaries
+
+Treat the move and workspace registration as separate checkpoints, and record
+the source/archive paths, current `@`, workspace names, refs, Git common dir,
+index state, and file manifests before changing anything.
+
+| Stopping point | Safe next action | Do not do |
+|---|---|---|
+| Before moving | Abort with source untouched if dirty state, destination occupancy, filesystem boundary, or workspace inventory is unresolved. | Do not initialize jj in the source merely to test it; that can snapshot or alter the index. |
+| Whole root now at archive; jj init not yet done (plain Git only) | Confirm archive is the intact moved checkout and source path is vacant; initialize there once. If this was already jj-colocated, skip init. | Do not create a second archive repo or clone over the moved `.git`. |
+| jj initialized; old path not yet registered | Inspect `.jj` and workspace list. If initialization completed, proceed with `workspace add`; don't initialize again. | Do not infer from exit status alone that refs/history were checked. |
+| `workspace add` succeeded; file copy incomplete | Confirm the registered workspace name/root and `.jj/repo`/`.git` pointers; rerun only the bounded data-copy step from the still-complete archive root, excluding metadata. | Do not rerun `workspace add` into the now-populated destination; don't copy archive `.jj` or `.git` over the new pointers. |
+| File copy complete; verification incomplete | Preserve both roots and all metadata; compare manifests and refs, then inspect every existing workspace binding. | Do not delete a staging/source copy, prune worktrees, or declare the migration complete. |
+
+The tested `mv` was same-filesystem. If source and archive are on different
+filesystems, `mv` is not an atomic directory rename; use a separately planned
+copy-to-staging plus verification while retaining the original, and account for
+filesystem metadata that the chosen copy tool does not preserve. This research
+did not test a cross-device transfer. A rollback after `workspace add` is not a
+simple `mv archive source`: the old path is occupied by an attached workspace
+and Git worktree. Stop at that boundary and recover from the recorded
+checkpoint; do not improvise metadata surgery or remove ignored files to make
+the path empty.
+
 ## Existing canonical archive is a separate case
 
 `jj workspace add` attaches to the jj repository selected by the command's
