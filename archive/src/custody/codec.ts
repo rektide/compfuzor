@@ -62,7 +62,10 @@ export function refComponent(value: string): string {
     value.endsWith(".") ||
     value.includes("..") ||
     value.includes("@{") ||
-    /[\x00-\x20\x7f~^:?*\[\\/]/u.test(value)
+    Array.from(value).some(
+      (char) =>
+        char.charCodeAt(0) <= 32 || char.charCodeAt(0) === 127 || "~^:?*[]\\/".includes(char),
+    )
   )
     invalid(`invalid Git ref component ${JSON.stringify(value)}`);
   if (text(enc.encode(value)) !== value) invalid("invalid UTF-8 ref component");

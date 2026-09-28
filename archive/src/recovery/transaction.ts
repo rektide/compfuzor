@@ -140,10 +140,7 @@ export async function installImmutableRefs(
 export class GitRefStore implements RefStore {
   public readonly dest: string;
   public readonly format: GitObjectFormat;
-  public constructor(
-    dest: string,
-    format: GitObjectFormat,
-  ) {
+  public constructor(dest: string, format: GitObjectFormat) {
     this.dest = dest;
     this.format = format;
   }

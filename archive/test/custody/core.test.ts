@@ -20,6 +20,8 @@ import {
   vaultBundlePath,
 } from "../../src/custody/codec.ts";
 import type { PathEntry, PinIntent, ReceiptV1 } from "../../src/custody/model.ts";
+import type { PlanV1 } from "../../src/custody/model.ts";
+import { approveSameInputRetry, freshInstall } from "../../src/recovery/retry.ts";
 
 const O = (char: string) => oid(char.repeat(40), "sha1");
 const D = digest("a".repeat(64));
@@ -247,5 +249,72 @@ test("object-format validation rejects mixed SHA lengths", () => {
   assert.throws(() => oid("f".repeat(64), "sha1"));
   assert.throws(() =>
     validateReceipt({ ...sample(), source: { ...sample().source, objectFormat: "sha256" } }),
+  );
+});
+
+test("same-input retry discounts only its own installed refs and retains the original baseline", () => {
+  const receipt = sample();
+  const receiptCommitOid = O("6");
+  const plan: PlanV1 = {
+    schema: "compfuzor.archive-adoption-plan/v1",
+    identity: { ...receipt.identity, createdAt: "later inspection" },
+    source: receipt.source,
+    proposedSnapshot: receipt.snapshot,
+    baselines: {
+      ...receipt.baselines,
+      destinationPreRefs: [
+        { name: receipt.receiptRef, oid: receiptCommitOid, objectType: "commit", peeledOid: null },
+        {
+          name: receipt.pins[0].destinationRef,
+          oid: receipt.pins[0].destinationOid,
+          objectType: "commit",
+          peeledOid: null,
+        },
+      ],
+      selectedTipsNotInDestination: 0,
+    },
+    pins: receipt.pins,
+    blockers: [],
+    warnings: [],
+    retirementUnresolved: [],
+  };
+  const actual = new Map<string, string>([
+    [receipt.receiptRef, receiptCommitOid],
+    [receipt.pins[0].destinationRef, receipt.pins[0].destinationOid],
+  ]);
+  assert.equal(freshInstall(receipt, receiptCommitOid).matchingReceiptApproved, false);
+  assert.equal(
+    approveSameInputRetry(plan, receipt, receiptCommitOid, actual).matchingReceiptApproved,
+    true,
+  );
+  assert.throws(
+    () =>
+      approveSameInputRetry(
+        { ...plan, source: { ...plan.source, inputFingerprintSha256: digest("b".repeat(64)) } },
+        receipt,
+        receiptCommitOid,
+        actual,
+      ),
+    /source inventory/,
+  );
+  assert.throws(
+    () =>
+      approveSameInputRetry(
+        plan,
+        receipt,
+        receiptCommitOid,
+        new Map([...actual, ["refs/heads/main", O("1")]]),
+      ),
+    /fresh destination ref observation/,
+  );
+  assert.throws(
+    () =>
+      approveSameInputRetry(
+        plan,
+        receipt,
+        receiptCommitOid,
+        new Map([[receipt.receiptRef, receiptCommitOid]]),
+      ),
+    /fresh destination ref observation/,
   );
 });
