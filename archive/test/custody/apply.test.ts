@@ -376,6 +376,16 @@ void test("missing destination is a named plan blocker; apply never creates an i
   assert.equal(await digestTree(source), before);
 });
 
+void test("occupied receipt namespace is not reinterpreted as a fresh generation", async () => {
+  const { dest, input } = await fixture("occupied-receipt");
+  const other = await git(dest, "rev-parse", "HEAD");
+  const receipt = "refs/adopt/receipts/legacy/g0";
+  await git(dest, "update-ref", receipt, other);
+  await assert.rejects(() => Effect.runPromise(applyAdoption(input)));
+  assert.equal(await git(dest, "rev-parse", receipt), other);
+  await assert.rejects(() => readdir(join(dirname(dest), ".compfuzor-adoptions")));
+});
+
 void test("interrupted verification returns failure; retry verifies original installed receipt", async () => {
   const { dest, input } = await fixture("verify-interrupt");
   await assert.rejects(() =>
@@ -392,4 +402,34 @@ void test("interrupted verification returns failure; retry verifies original ins
   assert.equal(retry.changed, false);
   assert.equal(retry.receiptCommitOid, original);
   assert.equal(retry.verification.custodyVerified, true);
+});
+
+void test("destination worktree drift during final verification refuses success but retains immutable refs", async () => {
+  const { dest, input } = await fixture("final-destination-drift");
+  await assert.rejects(
+    () =>
+      Effect.runPromise(
+        applyAdoption(input, {
+          afterInstall: () => writeFile(join(dest, "tracked.txt"), "drift before final proof\n"),
+        }),
+      ),
+    { code: "destination-drift" },
+  );
+  assert.match(await git(dest, "rev-parse", "refs/adopt/receipts/legacy/g0"), /^[0-9a-f]{40}$/);
+  assert.equal(await readFile(join(dest, "tracked.txt"), "utf8"), "drift before final proof\n");
+});
+
+void test("source drift during final verification refuses success but retains immutable refs", async () => {
+  const { source, dest, input } = await fixture("final-source-drift");
+  await assert.rejects(
+    () =>
+      Effect.runPromise(
+        applyAdoption(input, {
+          afterInstall: () =>
+            writeFile(join(source, "tracked.txt"), "source drift before final proof\n"),
+        }),
+      ),
+    { code: "source-drift" },
+  );
+  assert.match(await git(dest, "rev-parse", "refs/adopt/receipts/legacy/g0"), /^[0-9a-f]{40}$/);
 });

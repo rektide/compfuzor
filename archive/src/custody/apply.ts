@@ -316,6 +316,19 @@ function verified(report: Verification): Verification {
       "verification-failed",
       `independent custody verification failed: ${report.custodyFailures.map((i) => i.code).join(", ")}`,
     );
+  // Standalone verification deliberately reports later drift separately from
+  // historical custody; an apply has no such grace period and must not claim
+  // *this run* succeeded if either checkout changed before its final proof.
+  if (report.sourceDrift !== "unchanged")
+    fail(
+      "source-drift",
+      `source changed or became uninspectable during apply: ${report.sourceDrift}`,
+    );
+  if (report.destinationDrift !== "unchanged")
+    fail(
+      "destination-drift",
+      `destination changed or became uninspectable during apply: ${report.destinationDrift}`,
+    );
   return report;
 }
 
