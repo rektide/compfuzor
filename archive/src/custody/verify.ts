@@ -33,12 +33,14 @@
  * `custodyVerified: false`, also a nonzero exit for the CLI. The only writes
  * this module ever performs are inside its private scratch directory.
  */
-import { readFile, realpath, rm, stat } from "node:fs/promises";
+import { mkdtemp, open, readFile, readlink, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { constants } from "node:fs";
 import { dirname, join } from "node:path";
 import { Effect } from "effect";
 import { preflight } from "../repository/health.ts";
 import { gitRead, utf8Fatal } from "../repository/git.ts";
-import { resolveVaultBundle, VaultPathComponentError } from "./vault.ts";
+import { readVaultBundle, VaultPathComponentError } from "./vault.ts";
 import { checkBundleRestoration, type StageExecution } from "./stage.ts";
 import { canonicalJson, parseReceipt, pinRef, refName, sha256 } from "./codec.ts";
 import { CustodyError } from "./errors.ts";
@@ -80,6 +82,50 @@ interface RefRow {
 }
 
 const REF_FORMAT = "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00";
+
+const gitBlobOid = (bytes: Uint8Array, format: GitObjectFormat): string =>
+  createHash(format).update(`blob ${bytes.byteLength}\0`).update(bytes).digest("hex");
+
+/** Literal path acquisition: descriptors prevent a swapped directory or leaf
+ * symlink from redirecting the read outside the legacy worktree. */
+const readManifestPath = async (
+  source: string,
+  entry: PathEntry,
+  signal?: AbortSignal,
+): Promise<Uint8Array | null> => {
+  const handles: Awaited<ReturnType<typeof open>>[] = [];
+  try {
+    signal?.throwIfAborted();
+    handles.push(
+      await open(source, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW),
+    );
+    const parts = entry.path.split("/");
+    for (const part of parts.slice(0, -1)) {
+      signal?.throwIfAborted();
+      const parent = handles.at(-1)!;
+      handles.push(
+        await open(
+          `/proc/self/fd/${parent.fd}/${part}`,
+          constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW,
+        ),
+      );
+    }
+    signal?.throwIfAborted();
+    const leaf = `/proc/self/fd/${handles.at(-1)!.fd}/${parts.at(-1)!}`;
+    if (entry.mode === "120000") return await readlink(leaf, { encoding: "buffer" });
+    const file = await open(leaf, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    handles.push(file);
+    if (!(await file.stat()).isFile()) return null;
+    return await file.readFile();
+  } catch (error) {
+    signal?.throwIfAborted();
+    const code = (error as NodeJS.ErrnoException).code;
+    if (["ENOENT", "ELOOP", "ENOTDIR", "EINVAL"].includes(code ?? "")) return null;
+    throw error;
+  } finally {
+    for (const handle of handles.reverse()) await handle.close();
+  }
+};
 
 /**
  * Read-only runner: raw stdout bytes on exit 0, `null` otherwise. Git failures
@@ -525,9 +571,10 @@ export async function verifyAdoption(
     // A genuinely absent bundle file is a different custody failure from a
     // redirected or wholly missing vault; the typed component error carries
     // that distinction from the resolver.
-    let bundlePath: string | null = null;
+    let bundleBytes: Uint8Array | null = null;
     try {
-      bundlePath = await resolveVaultBundle(receipt, destReal);
+      const bundle = await readVaultBundle(receipt, destReal);
+      bundleBytes = bundle.bytes;
     } catch (error) {
       signal?.throwIfAborted();
       const detail = error instanceof Error ? error.message : String(error);
@@ -542,10 +589,8 @@ export async function verifyAdoption(
           detail,
         );
     }
-    const bundleBytes = bundlePath === null ? null : await readFile(bundlePath).catch(() => null);
     if (bundleBytes === null) {
-      if (bundlePath !== null)
-        fail("bundle-unreadable", bundlePath, "sealed vault bundle is unreadable");
+      // The anchored resolver already classified missing/unsafe bundle reads.
     } else {
       const observed = sha256(bundleBytes);
       if (observed !== receipt.bundle.sha256)
@@ -554,13 +599,23 @@ export async function verifyAdoption(
           receipt.bundle.pathRelativeToDestinationParent,
           `bundle hashes to ${observed}; receipt records ${receipt.bundle.sha256}`,
         );
-      // The shared restoration proof (custody/stage.ts): advertised heads
-      // exactly equal the pins, no prerequisites, complete fetch into a fresh
-      // empty repository, per-pin type/closure, snapshot manifest equality.
+      // Restore the very bytes read from anchored vault descriptors. Passing
+      // the vault pathname back to Git would reopen a replaceable component
+      // after its ownership/checksum check (a path-swap race). The copy lives
+      // only in private scratch and never touches destination or legacy.
+      let proofScratch: string | null = null;
       try {
+        signal?.throwIfAborted();
+        proofScratch = await mkdtemp(join(input.scratchRoot, "verify-bundle-"));
+        const proofBundle = join(proofScratch, "source.bundle");
+        signal?.throwIfAborted();
+        await writeFile(proofBundle, bundleBytes, { mode: 0o600 });
+        signal?.throwIfAborted();
+        // The shared restoration proof checks heads, prerequisites, complete
+        // fetch, pin closure and the snapshot manifest in a fresh repository.
         const check = await checkBundleRestoration(
           {
-            bundlePath: bundlePath as string,
+            bundlePath: proofBundle,
             objectFormat: receipt.source.objectFormat,
             scratchRoot: input.scratchRoot,
             pins: receipt.pins,
@@ -585,6 +640,8 @@ export async function verifyAdoption(
           error instanceof CustodyError ? error.subject : null,
           error instanceof Error ? error.message : String(error),
         );
+      } finally {
+        if (proofScratch !== null) await rm(proofScratch, { recursive: true, force: true });
       }
     }
   }
@@ -689,8 +746,8 @@ const destinationDriftOf = async (
 /**
  * Optional legacy diagnostics: compare the surviving legacy checkout's HEAD,
  * full ref map, index digest, `.jj` presence, and the content of every path
- * in the recorded included manifest (read-only `hash-object --stdin-paths`,
- * never `-w`) against the captured inventory. Absence, change, or omission
+ * in the recorded included manifest (literal filesystem paths, hash symlink
+ * text rather than its target). Absence, change, or omission
  * never redefines custody that was already proven into the archive.
  */
 const sourceDriftOf = async (
@@ -731,30 +788,14 @@ const sourceDriftOf = async (
     receipt.source.jjCoverage.classification !== "none";
   if ((jjDirectory !== null && jjDirectory.isDirectory()) !== jjRecorded) changed = true;
   // Worktree content over the recorded included set: the snapshot manifest
-  // when one exists, otherwise the clean HEAD tree. Pure read: no object is
-  // written into the legacy store. (Symlink entries may hash their targets —
-  // drift is diagnostic, so a false "changed" is safe.)
+  // when one exists, otherwise the clean HEAD tree. Literal per-path reads
+  // support newlines and do not use Git's quoted/newline path protocol.
   const manifest = receipt.snapshot?.paths ?? receipt.source.head.treePaths;
-  if (manifest.length > 0) {
-    const pathsInput = new TextEncoder().encode(
-      `${manifest.map(({ path }) => path as string).join("\n")}\n`,
-    );
-    const hashed = await Effect.runPromise(
-      gitRead(["hash-object", "--stdin-paths"], { cwd: real, input: pathsInput }),
-      { signal },
-    ).catch((error: unknown) => {
-      signal?.throwIfAborted();
-      throw error;
-    });
+  for (const entry of manifest) {
     signal?.throwIfAborted();
-    if (hashed.exitCode !== 0) {
-      changed = true;
-    } else {
-      const observedOids = utf8Fatal(hashed.stdout).split("\n");
-      manifest.forEach((entry, index) => {
-        if (observedOids[index] !== entry.blobOid) changed = true;
-      });
-    }
+    const bytes = await readManifestPath(real, entry, signal);
+    signal?.throwIfAborted();
+    if (bytes === null || gitBlobOid(bytes, format) !== entry.blobOid) changed = true;
   }
   return changed ? "changed" : "unchanged";
 };

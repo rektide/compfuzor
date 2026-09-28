@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import {
   mkdir,
   mkdtemp,
+  chmod,
+  chown,
   readFile,
   readdir,
   readlink,
@@ -31,6 +33,7 @@ import {
   sha256,
 } from "../../src/custody/codec.ts";
 import { CustodyError } from "../../src/custody/errors.ts";
+import { applyAdoption } from "../../src/custody/apply.ts";
 import type {
   GitObjectType,
   GitTip,
@@ -46,12 +49,14 @@ import { prepareSnapshot, proveBundle } from "../../src/custody/stage.ts";
 import { readReceipt, verifyAdoption } from "../../src/custody/verify.ts";
 import {
   createVaultRun,
+  readVaultBundle,
   resolveVaultBundle,
   sealBundle,
   sealVaultFile,
   VAULT_DIRNAME,
   vaultArchiveId,
   vaultRunId,
+  VaultPathComponentError,
 } from "../../src/custody/vault.ts";
 
 // Every fixture is disposable scratch under .test-agent; production archives
@@ -226,7 +231,7 @@ async function installReceiptBlob(
 export async function adoption(
   t: { after: (hook: () => Promise<unknown>) => void },
   name: string,
-  options: { readonly jjColocate?: boolean } = {},
+  options: { readonly jjColocate?: boolean; readonly specialPaths?: boolean } = {},
 ): Promise<Adoption> {
   const root = await area(t, name);
   const source = join(root, "legacy");
@@ -238,6 +243,14 @@ export async function adoption(
   await writeFile(join(source, "README.md"), "readme\n");
   await writeFile(join(source, "tracked.txt"), "hello\n");
   await writeFile(join(source, ".gitignore"), "*.ignored\n");
+  if (options.specialPaths) {
+    await writeFile(join(source, "line\nbreak"), "newline filename\n");
+    await mkdir(join(source, "nested"));
+    await writeFile(join(source, "nested", "inside"), "inside bytes\n");
+    const outside = join(root, "outside-target");
+    await writeFile(outside, "outside contents\n");
+    await symlink(outside, join(source, "link"));
+  }
   await run(source, ...identity, "add", "-A", ".");
   await run(source, ...identity, "commit", "--quiet", "-m", "base");
   const head = oid(await run(source, "rev-parse", "HEAD"), "sha1");
@@ -577,6 +590,27 @@ test("verification never mutates the destination", async (t) => {
   assert.deepEqual(after, before);
 });
 
+test("bundle restore consumes the checked scratch copy, never reopens the vault path", async (t) => {
+  const a = await adoption(t, "anchored-restore");
+  const shimDir = join(a.root, "bin");
+  await mkdir(shimDir);
+  const observed = join(a.root, "bundle-argv");
+  await writeFile(
+    join(shimDir, "git"),
+    `#!/bin/sh\ncase "$*" in\n  *'bundle list-heads'*) printf '%s\\n' "$*" >> '${observed}';;\nesac\nexec /usr/bin/git "$@"\n`,
+    { mode: 0o755 },
+  );
+  const previous = process.env.PATH;
+  process.env.PATH = `${shimDir}:${previous ?? ""}`;
+  t.after(() => {
+    process.env.PATH = previous;
+  });
+  assert.equal((await verify(a)).custodyVerified, true);
+  const command = await readFile(observed, "utf8");
+  assert.match(command, /verify-bundle-[^/]+\/source\.bundle/);
+  assert.ok(!command.includes(a.bundlePath));
+});
+
 test("tampered and missing vault bundles fail custody distinctly", async (t) => {
   const tampered = await adoption(t, "tampered");
   const original = await readFile(tampered.bundlePath);
@@ -737,6 +771,111 @@ test("removed and drifted legacy sources are diagnostics, never custody losses",
   assert.equal(changed.custodyVerified, true);
   assert.equal(changed.sourceDrift, "changed");
   assert.equal(changed.destinationDrift, "unchanged");
+});
+
+test("source drift reads newline paths literally and hashes symlink text, not its target", async (t) => {
+  const a = await adoption(t, "literal-source", { specialPaths: true });
+  const unchanged = await verify(a, a.source);
+  assert.equal(unchanged.custodyVerified, true);
+  assert.equal(unchanged.sourceDrift, "unchanged");
+  // Changing an external link target cannot alter the stored Git symlink blob.
+  await writeFile(join(a.root, "outside-target"), "replaced outside contents\n");
+  assert.equal((await verify(a, a.source)).sourceDrift, "unchanged");
+  await writeFile(join(a.source, "line\nbreak"), "changed source bytes\n");
+  assert.equal((await verify(a, a.source)).sourceDrift, "changed");
+  await writeFile(join(a.source, "line\nbreak"), "newline filename\n");
+  await rm(join(a.source, "nested"), { recursive: true });
+  await symlink(a.root, join(a.source, "nested"));
+  assert.equal((await verify(a, a.source)).sourceDrift, "changed");
+});
+
+test("clean apply with newline and symlink paths finishes post-install verification", async (t) => {
+  const root = await area(t, "apply-special-paths");
+  const source = join(root, "source");
+  const dest = join(root, "destination");
+  await run(root, "init", "--quiet", "--initial-branch=main", source);
+  await writeFile(join(source, "line\nbreak"), "newline name\n");
+  await symlink("line\nbreak", join(source, "link"));
+  await run(source, ...identity, "add", "-A", ".");
+  await run(source, ...identity, "commit", "--quiet", "-m", "base");
+  await run(root, "clone", "--quiet", "--no-hardlinks", source, dest);
+  await jj(["git", "init", "--colocate", "--quiet"], dest);
+  const result = await Effect.runPromise(
+    applyAdoption({
+      legacy: source,
+      dest,
+      repo: source,
+      branch: "main",
+      label: "legacy",
+      generation: "g0",
+      excludeFrom: null,
+      dispositions: null,
+      pathReview: null,
+    }),
+  );
+  assert.equal(result.verification.custodyVerified, true);
+  assert.equal(result.verification.sourceDrift, "unchanged");
+});
+
+test("existing vault components must be private for writing and reading", async (t) => {
+  const root = await area(t, "vault-privacy");
+  const dest = join(root, "archive");
+  await mkdir(dest);
+  const destReal = await realpath(dest);
+  const vault = join(root, VAULT_DIRNAME);
+  await mkdir(vault, { mode: 0o777 });
+  await chmod(vault, 0o777);
+  const runId = vaultRunId();
+  const denied = await custodyError(createVaultRun(destReal, runId));
+  assert.match(denied.message, /owner-only/);
+  const proven = await provenFacts(t, encoder.encode("private bundle\n"));
+  const legacy = join(root, "legacy");
+  await mkdir(legacy);
+  const refusedSeal = await custodyError(
+    sealBundle({
+      destRealpath: destReal,
+      legacyRealpath: await realpath(legacy),
+      proven,
+      intent: encoder.encode("{}\n"),
+    }),
+  );
+  assert.match(refusedSeal.message, /owner-only/);
+  assert.equal(await stat(join(vault, vaultArchiveId(destReal))).catch(() => null), null);
+  await chmod(vault, 0o700);
+  const archiveDir = join(vault, vaultArchiveId(destReal));
+  await mkdir(archiveDir, { mode: 0o777 });
+  await chmod(archiveDir, 0o777);
+  const deniedArchive = await custodyError(createVaultRun(destReal, runId));
+  assert.match(deniedArchive.message, /owner-only/);
+  await chmod(archiveDir, 0o700);
+  const run = await createVaultRun(destReal, runId);
+  await sealVaultFile(run.bundlePath, encoder.encode("bundle bytes"));
+  const receiptish = {
+    identity: { destinationRealpath: destReal },
+    bundle: {
+      pathRelativeToDestinationParent: `${VAULT_DIRNAME}/${vaultArchiveId(destReal)}/${runId}/source.bundle`,
+    },
+  } as unknown as ReceiptV1;
+  await chmod(run.bundlePath, 0o644);
+  await assert.rejects(readVaultBundle(receiptish, destReal), VaultPathComponentError);
+  await chmod(run.bundlePath, 0o600);
+  await chmod(run.runDir, 0o777);
+  await assert.rejects(readVaultBundle(receiptish, destReal), VaultPathComponentError);
+  await chmod(run.runDir, 0o700);
+  assert.deepEqual(
+    (await readVaultBundle(receiptish, destReal)).bytes,
+    Buffer.from("bundle bytes"),
+  );
+  // A non-root test process cannot manufacture a differently owned readable
+  // inode; exercise uid refusal where chown is available without privileges.
+  if (process.geteuid?.() === 0) {
+    await chown(run.bundlePath, 65534, 65534);
+    try {
+      await assert.rejects(readVaultBundle(receiptish, destReal), VaultPathComponentError);
+    } finally {
+      await chown(run.bundlePath, 0, 0);
+    }
+  }
 });
 
 test("subsequent destination worktree drift is reported separately from custody", async (t) => {
