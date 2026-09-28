@@ -26,9 +26,10 @@ source archives: small individually runnable operations (`health`, `snapshot`,
 `harvest`, `remotes`, `fetch`, `heal`, `self`), a composed `refresh` for
 Ansible, and tab-completion generation. The CLI is built on Effect
 (`effect` + `@effect/platform-node`, pinned 4.0.0-rc.118); the operations
-library underneath remains Promise-based — Effect was adopted at the CLI
-boundary, not everywhere. This is a partial adoption by design, not a
-completed Effect migration.
+repository/recovery library underneath remains Promise-based, while custody
+planning/apply return Effects (see the
+[library guide](/doc/archive-toolkit/custody.md#public-library-entry-points)).
+This is a mixed API, not an all-Effect migration.
 
 The operator-facing contract — commands, flags, refresh ordering, the
 one-JSON-line Ansible protocol, launcher resolution — lives in
@@ -85,9 +86,13 @@ spells `--branch BRANCH` under refresh, and `--` stops the adapter's scan.
 [`custody.md`](/doc/archive-toolkit/custody.md) is the maintained guide to
 `adopt` (read-only plan unless `--apply` is explicit), `verify-adoption`,
 review inputs, supported cases, the private vault, and public library entry
-points. Local existing-destination clean/dirty fixtures pass, but independent
-safety review remains open. These commands are **not production signoff** or
-retirement authorization. They do not publish refs or retire a source directory.
+points. Local existing-destination clean/dirty fixtures pass. The
+[final focused safety disposition](/design/archive-toolkit/safety-review0.gpt6sol.md#final-focused-checkpoint-standalone-verifier-helper-gate)
+reports no remaining blocker under its Linux/quiesced-path,
+existing-destination, commit/tag-tip scope. That is **not blanket production
+approval** or retirement authorization; final distribution/full-suite checks
+are separate and still running. The commands do not publish refs or retire a
+source directory.
 
 ## Where the inquiry lives
 
@@ -103,9 +108,14 @@ retirement authorization. They do not publish refs or retire a source directory.
   Effect CLI API eras (`effect/unstable/cli` vs `effect/cli`), local
   precedents, and the process-execution boundary decision.
 - [`custody-contracts0.gpt6sol.md`](/design/archive-toolkit/custody-contracts0.gpt6sol.md)
-  and [`core-review0.glm53.md`](/design/archive-toolkit/core-review0.glm53.md) —
-  custody module seams and the still-open integration/safety review gate; CLI
-  registration does not mean the gate has passed.
+  — custody module seams; [`core-review0.glm53.md`](/design/archive-toolkit/core-review0.glm53.md)
+  records historical findings subsequently corrected, and
+  [`safety-review0.gpt6sol.md`](/design/archive-toolkit/safety-review0.gpt6sol.md)
+  records the qualified final focused disposition, not a disposal verdict.
+- [`runtime-checks0.glm53.md`](/design/archive-toolkit/runtime-checks0.glm53.md)
+  — historical pre-Node-26 runtime, signal and `.mjs` bundle probes; its
+  then-current Node 20 support and stale-bundle findings do **not** describe
+  today's Node 26 single-file `.ts` distribution contract.
 
 Older lineage (pre-Effect toolkit design): [`design/repo-jj-archive/`](/design/repo-jj-archive/),
 including the [ghost-head incident](/design/repo-jj-archive/incident-ghost-heads.glm53.md);
@@ -114,15 +124,20 @@ the custody brief: [`design/archive-migration/brief0.gpt6sol.md`](/design/archiv
 ## Open items
 
 - Bundle freshness is hand-maintained: rebuild (`pnpm build`) and commit the
-  single-file `archive/repo-jj-archive.ts` with source changes; it may lag
-  while source changes land. No rebuild-is-a-no-op test exists yet.
+  single-file `archive/repo-jj-archive.ts` with source changes; validate
+  freshness before relying on distribution. Final distribution verification
+  is in progress; no final size or test result is asserted here.
 - The archive runner requires system Node 26, supplied by the Nodesource
   26.x `nodejs` package in [`nodesource.repo.pb`](/nodesource.repo.pb). The
   bundle contains all JavaScript dependencies but no Node binary, and does
   not support older Node versions. The root package engine range remains
   broader for other project tools; it is not the archive runner's runtime
   contract.
-- The Node 26 runtime floor and signal behavior are exercised manually, not
-  by suite.
-- Custody production signoff awaits the final independent safety check and
-  resolution of any resulting findings; fixture coverage is not signoff.
+- The earlier manual runtime probes in
+  [`runtime-checks0.glm53.md`](/design/archive-toolkit/runtime-checks0.glm53.md)
+  predate the Node 26 distribution and signal-lifecycle changes; final checks
+  of the current bundle are in progress.
+- The focused custody safety review has no remaining blocker **within its
+  stated assumptions**. It does not certify concurrent writers, runtime
+  state, off-host backup, publication, missing-destination creation, or
+  source retirement.

@@ -26,8 +26,12 @@ content from a standalone checkout in an existing jj-colocated archive.
 `verify-adoption` independently tests that custody later, without needing the
 source. This is a local custody operation, not deployment migration, backup of
 runtime state, remote publication, or authorization to dispose of the source.
-Existing-destination clean/dirty fixture tests pass; final independent safety
-review is pending. Do **not** infer production signoff or full brief v1 support.
+Existing-destination clean/dirty fixture tests pass. The
+[final focused safety disposition](/design/archive-toolkit/safety-review0.gpt6sol.md#final-focused-checkpoint-standalone-verifier-helper-gate)
+reports no remaining blocker from its Linux/quiesced-path,
+existing-destination, commit/tag-tip review; final distribution and full-suite
+checks are separate and still running. Do **not** infer blanket production
+approval, source-retirement permission, or full brief v1 support.
 Stop all writers to both checkouts before planning and keep them stopped through
 apply: fingerprint checks are not an atomic snapshot of a live repository.
 
@@ -207,5 +211,11 @@ library or a guaranteed stable external package API.
   current implementation. Follow implemented blockers rather than assuming
   every brief feature is delivered.
 - [Core safety review](/design/archive-toolkit/core-review0.glm53.md):
-  historical findings; some corrections landed, but final independent review
-  remains pending. No reviewer acceptance is implied here.
+  historical findings subsequently corrected; the
+  [final focused disposition](/design/archive-toolkit/safety-review0.gpt6sol.md#final-focused-checkpoint-standalone-verifier-helper-gate)
+  reports no remaining blocker **within its stated scope**, not a production
+  or deletion signoff.
+- [Earlier runtime checks](/design/archive-toolkit/runtime-checks0.glm53.md):
+  pre-Node-26 signal and `.mjs` transport findings, useful as historical
+  motivation rather than evidence for the current `.ts` bundle. Final
+  distribution verification is still in progress.

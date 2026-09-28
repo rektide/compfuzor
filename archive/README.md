@@ -9,8 +9,10 @@ deployment-specific jj workspace is a separate, future design. Do not run it
 concurrently with another writer to the same checkout.
 
 The CLI is built on Effect (`effect` and `@effect/platform-node`, pinned at
-4.0.0-rc.118); the operations library underneath stays Promise-based, with
-Effect adopted at the CLI boundary. Run the source directly from a compfuzor
+4.0.0-rc.118); ordinary repository/recovery operations remain Promise-based,
+while custody planning/apply return Effects (see the
+[library guide](/doc/archive-toolkit/custody.md#public-library-entry-points)).
+Run the source directly from a compfuzor
 checkout (Node type stripping; no build required — source development needs
 the CLI dependencies installed via `pnpm install`):
 
@@ -125,22 +127,27 @@ URL checks happen after the initial snapshot, **before** harvest/fetch or
 bookmark rewrites. See [the original archive design](/design/repo-jj-archive/draft0.gpt6sol.md)
 and [the toolkit follow-up](/design/repo-jj-archive/draft1.gpt6sol.md).
 
-## Custody: available for fixture evaluation; safety review in progress
+## Custody: focused safety review cleared within its stated scope
 
 Cross-repository source custody is exposed by `adopt` (read-only planning by
 default; `--apply` explicitly transfers and verifies custody) and
 `verify-adoption` (independent receipt/pin/vault verification). These commands
-have passed local clean/dirty existing-destination fixtures, but independent
-safety review remains open: **not production signoff** or a complete
-implementation of the [custody brief](/design/archive-migration/brief0.gpt6sol.md).
+have passed local clean/dirty existing-destination fixtures. The
+[final focused safety disposition](/design/archive-toolkit/safety-review0.gpt6sol.md#final-focused-checkpoint-standalone-verifier-helper-gate)
+reports no remaining blocker from that review **under Linux, quiesced paths,
+existing destinations and commit/tag-tip custody**. This is **not blanket
+production approval**, a deletion verdict, or a complete implementation of
+the [custody brief](/design/archive-migration/brief0.gpt6sol.md). Final
+distribution and full-suite verification are separate and still in progress.
 Use [the custody operator and library guide](/doc/archive-toolkit/custody.md)
 for admission limits, review-file formats, plan/apply/verify examples, and
 what a receipt actually proves. In particular, adoption never creates a
 destination; a separate `refresh` may initialize one deliberately, but also
 mutates the selected checkout. Custody operations do not publish refs, prune
 artifacts, or retire a source directory; verification never grants deletion
-permission. See the [core review](/design/archive-toolkit/core-review0.glm53.md)
-and [custody contracts](/design/archive-toolkit/custody-contracts0.gpt6sol.md).
+permission. The [core review](/design/archive-toolkit/core-review0.glm53.md)
+records historical findings since addressed; see also the
+[custody contracts](/design/archive-toolkit/custody-contracts0.gpt6sol.md).
 
 ## Build, checks, tests
 
@@ -155,8 +162,8 @@ The source is grouped by domain: `archive/src/cli/` (command tree, flags,
 legacy argv adapter, completions), `repository/` (ordinary checkout
 operations, including the `jj`/`git` execution boundaries — subprocesses run
 as argv arrays through Effect's `ChildProcessSpawner`, never a shell),
-`recovery/` (jj recovery and explicit repair), and `custody/` (registered,
-under safety review). Adding a command is a new module under `cli/commands/`
+`recovery/` (jj recovery and explicit repair), and `custody/` (local Git
+custody within the guide's admission boundary). Adding a command is a new module under `cli/commands/`
 plus one registry entry.
 
 The root `vite.config.ts` packs `archive/src/repo-jj-archive.ts` into one
@@ -169,7 +176,6 @@ Nodesource 26.x package declared by [`nodesource.repo.pb`](/nodesource.repo.pb).
 There is no compatibility target for older Node versions. This is
 **distribution only** — the file runs outside this checkout without
 `node_modules`; develop against the source instead. Rebuild and commit the
-bundle with source changes. While source changes are still landing the
-committed bundle may lag behind; run `pnpm build` and commit the result before
-relying on bundle freshness. Integration tests use disposable jj+Git fixtures
+bundle with source changes; check distribution freshness before relying on a
+new bundle. Integration tests use disposable jj+Git fixtures
 and local Ansible plays, never production archives.
