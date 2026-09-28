@@ -1,5 +1,5 @@
 /** Same-generation retry admission: never reinterpret a changed destination as a new import. */
-import { canonicalJson, receiptRef, validateReceipt } from "../custody/codec.ts";
+import { canonicalJson, oid, receiptRef, validateReceipt } from "../custody/codec.ts";
 import { CustodyError } from "../custody/errors.ts";
 import type { Oid, PlanV1, ReceiptV1, RefName } from "../custody/model.ts";
 import type { RefInstall } from "./transaction.ts";
@@ -30,6 +30,7 @@ export function approveSameInputRetry(
   currentRefs: ReadonlyMap<string, string>,
 ): RefInstall {
   const receipt = validateReceipt(existing);
+  oid(receiptCommitOid, receipt.source.objectFormat);
   if (plan.schema !== "compfuzor.archive-adoption-plan/v1") mismatch("plan schema");
   if (plan.state !== "ready" || plan.blockers.length) mismatch("apply blockers");
   if (receipt.receiptRef !== receiptRef(plan.identity.label, plan.identity.generation))
@@ -85,6 +86,7 @@ export function approveSameInputRetry(
 /** New generation: reject already installed custody pins without a matching receipt. */
 export function freshInstall(receipt: ReceiptV1, receiptCommitOid: Oid): RefInstall {
   validateReceipt(receipt);
+  oid(receiptCommitOid, receipt.source.objectFormat);
   return {
     receiptRef: receipt.receiptRef as RefName,
     receiptCommitOid,

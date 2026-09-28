@@ -59,7 +59,11 @@ export function prefixConflict(name: string, other: string): boolean {
 export function decideInstallation(
   observed: ReadonlyMap<string, string>,
   input: RefInstall,
-): Readonly<{ missing: readonly RefTarget[]; matching: readonly RefTarget[]; alreadyPresent: readonly RefName[] }> {
+): Readonly<{
+  missing: readonly RefTarget[];
+  matching: readonly RefTarget[];
+  alreadyPresent: readonly RefName[];
+}> {
   const desired = requiredRefs(input);
   const existingReceipt = observed.get(input.receiptRef);
   if (existingReceipt !== undefined && existingReceipt !== input.receiptCommitOid) {
@@ -115,8 +119,7 @@ export function decideInstallation(
     if (actual === expected) {
       alreadyPresent.push(ref);
       matching.push({ ref, oid: expected });
-    }
-    else missing.push({ ref, oid: expected });
+    } else missing.push({ ref, oid: expected });
   }
   return { missing, matching, alreadyPresent };
 }
@@ -141,7 +144,10 @@ export async function installImmutableRefs(
 }
 
 /** Exact stdin protocol: process adapter handles argv/env, Git handles atomicity. */
-export function createTransactionStdin(missing: readonly RefTarget[], matching: readonly RefTarget[] = []): string {
+export function createTransactionStdin(
+  missing: readonly RefTarget[],
+  matching: readonly RefTarget[] = [],
+): string {
   const refs = [...missing, ...matching];
   if (!refs.length) invalid("empty custody ref transaction");
   const format = refs[0].oid.length === 40 ? "sha1" : "sha256";
