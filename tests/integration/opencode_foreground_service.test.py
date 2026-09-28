@@ -292,7 +292,7 @@ def test_launcher_reads_systemd_credential_without_argv_leak() -> None:
         )
 
         result = subprocess.run(
-            ["bash", str(LAUNCHER)],
+            ["bash", "-x", str(LAUNCHER)],
             cwd=ROOT,
             env=env,
             check=False,
@@ -308,6 +308,8 @@ def test_launcher_reads_systemd_credential_without_argv_leak() -> None:
             raise AssertionError(f"expected {expected!r}, got {arguments!r}")
         if TEST_PASSWORD in arguments:
             raise AssertionError("password leaked into the server argument vector")
+        if TEST_PASSWORD in result.stderr:
+            raise AssertionError("password leaked to xtrace output")
         captured_password = (directory / "password-capture").read_text(encoding="utf-8")
         if captured_password != TEST_PASSWORD:
             raise AssertionError("launcher did not export the systemd credential")

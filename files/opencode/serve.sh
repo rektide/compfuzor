@@ -1,4 +1,7 @@
 set -euo pipefail
+# The launcher reads a systemd credential below; never trace the secret into
+# the journal even if its generated caller enabled V>2 xtrace.
+case $- in *x*) set +x ;; esac
 
 credential_dir=${CREDENTIALS_DIRECTORY:?systemd did not provide the OpenCode credential}
 credential=$credential_dir/OPENCODE_PASSWORD
