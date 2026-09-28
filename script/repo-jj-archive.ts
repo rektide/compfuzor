@@ -24,8 +24,8 @@ async function launch(): Promise<void> {
   const bundle = join(root, "archive/repo-jj-archive.mjs");
   const sourceFiles = [
     source,
-    join(root, "node_modules/gunshi"),
-    join(root, "node_modules/@gunshi/plugin-completion"),
+    join(root, "node_modules/effect"),
+    join(root, "node_modules/@effect/platform-node"),
   ];
   const available = await Promise.all(
     sourceFiles.map((path) => stat(path, { throwIfNoEntry: false })),
