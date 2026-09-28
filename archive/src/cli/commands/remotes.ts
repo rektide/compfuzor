@@ -21,10 +21,12 @@ export const remotesCommand: AnyCommand = Command.make(
     ),
   },
   (input) =>
-    runLibrary(async () => {
-      const diff = await remoteDiff(input.dest, declaredRemotes(input.repo, input.remotes));
+    runLibrary(async (signal) => {
+      const diff = await remoteDiff(input.dest, declaredRemotes(input.repo, input.remotes), {
+        signal,
+      });
       if (input.reconcile) {
-        await reconcile(input.dest, diff);
+        await reconcile(input.dest, diff, { signal });
         return diff.length
           ? `Reconciled ${diff.map(({ name }) => name).join(", ")}`
           : "Remotes match";

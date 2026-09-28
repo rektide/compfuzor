@@ -19,10 +19,11 @@ export const self: AnyCommand = Command.make(
     ),
   },
   (input) =>
-    runLibrary(() =>
+    runLibrary((signal) =>
       locateCompfuzor(
         input.freshen,
         Option.getOrElse(input["archive-dir"], () => undefined),
+        { signal },
       ),
     ).pipe(
       Effect.flatMap((location) =>

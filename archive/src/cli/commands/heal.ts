@@ -16,7 +16,7 @@ export const healCommand: AnyCommand = Command.make(
     ),
   },
   (input) =>
-    runLibrary(() => heal(input.dest, input.yes)).pipe(
+    runLibrary((signal) => heal(input.dest, input.yes, { signal })).pipe(
       Effect.flatMap((backup) =>
         Console.log(`Re-adopted ${input.dest}; old jj state preserved at ${backup}`),
       ),

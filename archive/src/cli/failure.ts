@@ -28,7 +28,9 @@ export class ToolkitFailure extends Error {
 }
 
 /** Lift a (possibly throwing) Promise-returning library call into the Effect error channel. */
-export const runLibrary = <A>(operation: () => Promise<A>): Effect.Effect<A, ToolkitFailure> =>
+export const runLibrary = <A>(
+  operation: (signal: AbortSignal) => Promise<A>,
+): Effect.Effect<A, ToolkitFailure> =>
   Effect.tryPromise({
     try: operation,
     catch: (cause: unknown) => new ToolkitFailure(cause),

@@ -11,7 +11,10 @@ import { jj, type ExecutionOptions } from "./jj.ts";
 
 export type SnapshotResult = { dest: string; conflicts: string[] };
 
-export async function snapshot(dest: string, execution?: ExecutionOptions): Promise<SnapshotResult> {
+export async function snapshot(
+  dest: string,
+  execution?: ExecutionOptions,
+): Promise<SnapshotResult> {
   const conflicts = await preflight(dest, {}, execution);
   // This snapshots tracked/untracked changes and imports local Git branches.
   // Do not continue to fetch if jj cannot snapshot the worktree.

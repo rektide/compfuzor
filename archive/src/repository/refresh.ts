@@ -17,6 +17,7 @@ import {
   refs,
   revision,
   type BookmarkRef,
+  type ExecutionOptions,
 } from "./jj.ts";
 import { declaredRemotes, mismatchError, reconcile, remoteDiff } from "./remotes.ts";
 import { snapshot } from "./snapshot.ts";
@@ -35,7 +36,10 @@ export type RefreshOptions = {
 };
 export type RefreshResult = { changed: boolean; notices: Notice[] };
 
-export async function refreshArchive(options: RefreshOptions): Promise<RefreshResult> {
+export async function refreshArchive(
+  options: RefreshOptions,
+  execution?: ExecutionOptions,
+): Promise<RefreshResult> {
   const { dest, repo, remotes: remotesArg, label, reconcileRemotes } = options;
   const update = options.update ?? "true";
   if (update !== "true" && update !== "false") {
@@ -63,7 +67,7 @@ export async function refreshArchive(options: RefreshOptions): Promise<RefreshRe
   let changed = false;
   let cloned = false;
   const harvest = async (kind: string, target: string, copy = false): Promise<void> => {
-    notices.push(await save(dest, label, kind, target, copy));
+    notices.push(await save(dest, label, kind, target, copy, execution));
     changed = true;
   };
 
@@ -72,31 +76,31 @@ export async function refreshArchive(options: RefreshOptions): Promise<RefreshRe
     const command = ["git", "clone", "--colocate", "--remote", selected];
     if (depth !== undefined) command.push("--depth", String(depth));
     if (version !== "HEAD") command.push("--branch", version);
-    await jj([...command, urls.get(selected) as string, dest], dirname(dest));
+    await jj([...command, urls.get(selected) as string, dest], dirname(dest), undefined, execution);
     notices.push({ kind: "notice", message: `cloned jj-colocated archive ${dest}` });
     changed = true;
     cloned = true;
   } else if (!(await isDirectory(dest)) || !(await exists(join(dest, ".git")))) {
     throw new Error(`${dest} exists but is not a colocated Git checkout; refusing to replace it`);
   } else if (!(await exists(join(dest, ".jj")))) {
-    await jj(["git", "init", "--git-repo", join(dest, ".git"), dest], dest);
+    await jj(["git", "init", "--git-repo", join(dest, ".git"), dest], dest, undefined, execution);
     notices.push({ kind: "notice", message: `adopted existing Git archive into jj: ${dest}` });
     changed = true;
   }
 
-  await snapshot(dest);
-  const before = await refs(dest);
-  const working = await revision(dest, "@");
+  await snapshot(dest, execution);
+  const before = await refs(dest, undefined, execution);
+  const working = await revision(dest, "@", execution);
   const work = working.commit;
   const empty = working.empty;
   const parents = working.parents;
 
-  const differences = await remoteDiff(dest, urls);
+  const differences = await remoteDiff(dest, urls, execution);
   if (differences.some((difference) => difference.actual !== null) && !reconcileRemotes) {
     throw mismatchError(dest, differences, repo, remotesArg);
   }
   if (differences.length) {
-    await reconcile(dest, differences);
+    await reconcile(dest, differences, execution);
     changed = true;
   }
 
@@ -108,7 +112,7 @@ export async function refreshArchive(options: RefreshOptions): Promise<RefreshRe
   // For an initial clone, fetch is still necessary for extra remotes/branches.
   // A dirty @ is already a jj commit. Do not mint repeated recovery names
   // for the same revision on consecutive renders without an upstream change.
-  if (!empty && !(await recoveryCovered(dest, label, before, parents))) {
+  if (!empty && !(await recoveryCovered(dest, label, before, parents, execution))) {
     await harvest("working-copy", work, true);
   }
 
@@ -116,7 +120,12 @@ export async function refreshArchive(options: RefreshOptions): Promise<RefreshRe
   // otherwise moves them, and a rewritten upstream can abandon the old tip.
   for (const ref of before.values()) {
     if (ref.remote !== "-" && ref.remote !== "git" && ref.tracked) {
-      await jj(["bookmark", "untrack", ref.name, "--remote", ref.remote], dest);
+      await jj(
+        ["bookmark", "untrack", ref.name, "--remote", ref.remote],
+        dest,
+        undefined,
+        execution,
+      );
     }
   }
 
@@ -126,9 +135,11 @@ export async function refreshArchive(options: RefreshOptions): Promise<RefreshRe
     await jj(
       ["--config", "git.abandon-unreachable-commits=false", "git", "fetch", "--remote", name],
       dest,
+      undefined,
+      execution,
     );
   }
-  const after = await refs(dest);
+  const after = await refs(dest, undefined, execution);
   const base =
     version !== "HEAD"
       ? version
@@ -157,11 +168,15 @@ export async function refreshArchive(options: RefreshOptions): Promise<RefreshRe
     }
   }
 
-  if (oldBase !== null && oldBase !== upstream && !(await ancestor(dest, oldBase, upstream))) {
+  if (
+    oldBase !== null &&
+    oldBase !== upstream &&
+    !(await ancestor(dest, oldBase, upstream, execution))
+  ) {
     await harvest(base.replaceAll("/", "-"), oldBase);
   }
   if (oldBase !== upstream) {
-    await jj(["bookmark", "set", "-B", "-r", upstream, base], dest);
+    await jj(["bookmark", "set", "-B", "-r", upstream, base], dest, undefined, execution);
     if (oldBase === null) {
       notices.push({ kind: "bookmark-created", name: base, target: upstream });
     } else {
@@ -171,28 +186,28 @@ export async function refreshArchive(options: RefreshOptions): Promise<RefreshRe
   } else if (cloned) {
     notices.push({ kind: "bookmark-created", name: base, target: upstream });
   }
-  await jj(["bookmark", "track", base, "--remote", selected], dest);
+  await jj(["bookmark", "track", base, "--remote", selected], dest, undefined, execution);
 
   // Fetch may have changed the current revision only if external Git refs
   // rewrote it; never assume jj's automatic rebase imported the right state.
-  const current = await revision(dest, "@");
+  const current = await revision(dest, "@", execution);
   if (
     oldBase === current.commit &&
     oldBase !== upstream &&
-    (await ancestor(dest, upstream, current.commit))
+    (await ancestor(dest, upstream, current.commit, execution))
   ) {
     // Local @ was itself the ahead base. Keep it as a fixed, bookmarked
     // parent before the next user edit can rewrite that old base tip.
-    await jj(["new", "@"], dest);
+    await jj(["new", "@"], dest, undefined, execution);
     changed = true;
-  } else if (!(await ancestor(dest, upstream, current.commit))) {
+  } else if (!(await ancestor(dest, upstream, current.commit, execution))) {
     if (
       current.empty &&
       oldBase !== null &&
       current.parents.join(",") === oldBase &&
-      (await ancestor(dest, oldBase, upstream))
+      (await ancestor(dest, oldBase, upstream, execution))
     ) {
-      await jj(["rebase", "-r", "@", "-d", base], dest);
+      await jj(["rebase", "-r", "@", "-d", base], dest, undefined, execution);
     } else {
       // Never rewrite a bookmarked dirty @: jj moves bookmarks with a
       // rewritten change. A merge keeps the exact pre-fetch worktree as
@@ -200,12 +215,12 @@ export async function refreshArchive(options: RefreshOptions): Promise<RefreshRe
       if (empty && current.commit !== work) {
         await harvest("head", work);
       }
-      await jj(["new", "@", base], dest);
+      await jj(["new", "@", base], dest, undefined, execution);
     }
     changed = true;
     notices.push({ kind: "notice", message: `merged local checkout with ${base}@${selected}` });
   }
-  if ((await revision(dest, "@")).conflict) {
+  if ((await revision(dest, "@", execution)).conflict) {
     notices.push({
       kind: "notice",
       message: "working copy has merge conflicts; resolve them before building",

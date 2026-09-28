@@ -4,9 +4,9 @@
  * the launcher (script/repo-jj-archive.ts) and the committed bundle keep the
  * same import contract as before the Effect migration.
  */
-import { Console, Effect } from "effect";
+import { Cause, Console, Effect, Exit, Runtime } from "effect";
 import { CliConfig, CliOutput, Command, GlobalFlag } from "effect/cli";
-import { NodeServices } from "@effect/platform-node";
+import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { reportFailure } from "./failure.ts";
 import { createOutputBuffer } from "./output.ts";
 import { root } from "./root.ts";
@@ -90,7 +90,7 @@ export const normalizeArgv = (args: ReadonlyArray<string>): Array<string> => {
   return argv;
 };
 
-export const main = (): Promise<void> => {
+const invocation = () => {
   const output = createOutputBuffer();
   const program = Command.runWith(root, { version: VERSION, renderErrors: false })(
     normalizeArgv(process.argv.slice(2)),
@@ -100,6 +100,12 @@ export const main = (): Promise<void> => {
     Effect.provideService(CliConfig.CliConfig, CliConfig.make({ builtIns })),
     Effect.provide(NodeServices.layer),
   );
+  return { program, output };
+};
+
+/** Importable Promise facade; the executable must use runExecutable for signal handling. */
+export const main = (): Promise<void> => {
+  const { program, output } = invocation();
   return Effect.runPromise(program).then(
     () => output.flush(),
     (error: unknown) => {
@@ -107,4 +113,20 @@ export const main = (): Promise<void> => {
       reportFailure(error);
     },
   );
+};
+
+/** Native Node/Effect main fiber owns SIGINT/SIGTERM and completes child teardown before exit. */
+export const runExecutable = (): void => {
+  const { program, output } = invocation();
+  NodeRuntime.runMain(program, {
+    disableErrorReporting: true,
+    teardown: (exit, onExit) => {
+      if (Exit.isSuccess(exit)) output.flush();
+      else {
+        output.discard();
+        if (!Cause.hasInterruptsOnly(exit.cause)) reportFailure(Cause.squash(exit.cause));
+      }
+      Runtime.defaultTeardown(exit, onExit);
+    },
+  });
 };

@@ -26,10 +26,10 @@ export const harvestCommand: AnyCommand = Command.make(
     ),
   },
   (input) =>
-    runLibrary(async () => {
+    runLibrary(async (signal) => {
       // Pin only a materialized state: snapshot before creating the bookmark.
-      await snapshot(input.dest);
-      return harvest(input.dest, input.label, input.kind, input.target, input.copy);
+      await snapshot(input.dest, { signal });
+      return harvest(input.dest, input.label, input.kind, input.target, input.copy, { signal });
     }).pipe(
       Effect.flatMap((notice) =>
         Console.log(`BOOKMARK CREATED  ${notice.name} -> ${notice.target}`),

@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { rename } from "node:fs/promises";
 import { join } from "node:path";
-import { exists, isDirectory, jj } from "../repository/jj.ts";
+import { exists, isDirectory, jj, type ExecutionOptions } from "../repository/jj.ts";
 import { stamp } from "./harvest.ts";
 
 /** Explicit re-adoption drops jj's broken view, not the Git checkout or backup. */
-export async function heal(dest: string, yes: boolean): Promise<string> {
+export async function heal(
+  dest: string,
+  yes: boolean,
+  execution?: ExecutionOptions,
+): Promise<string> {
   if (!yes)
     throw new Error(
       "heal is destructive to jj's operation history; pass --yes to back up .jj and re-adopt",
@@ -19,6 +23,6 @@ export async function heal(dest: string, yes: boolean): Promise<string> {
   const backup = join(dest, `.jj.broken-ghost-${stamp()}-${randomUUID().slice(0, 8)}`);
   await rename(join(dest, ".jj"), backup);
   // If init fails, the backup remains available for manual restore; never delete it.
-  await jj(["git", "init", "--colocate"], dest);
+  await jj(["git", "init", "--colocate"], dest, undefined, execution);
   return backup;
 }

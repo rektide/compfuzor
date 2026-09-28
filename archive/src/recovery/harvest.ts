@@ -31,24 +31,37 @@ export async function harvest(
   kind: string,
   target: string,
   copy = false,
+  execution?: ExecutionOptions,
 ): Promise<Notice> {
   let commit = target;
   if (copy) {
-    await preflight(dest);
+    await preflight(dest, {}, execution);
     const heads = new Set(
-      lines(await jj(["log", "-G", "-r", "heads(all())", "-T", HEAD_TEMPLATE], dest)),
+      lines(
+        await jj(
+          ["log", "-G", "-r", "heads(all())", "-T", HEAD_TEMPLATE],
+          dest,
+          undefined,
+          execution,
+        ),
+      ),
     );
-    await jj(["duplicate", "-r", target], dest);
-    await preflight(dest);
+    await jj(["duplicate", "-r", target], dest, undefined, execution);
+    await preflight(dest, {}, execution);
     const newHeads = lines(
-      await jj(["log", "-G", "-r", "heads(all())", "-T", HEAD_TEMPLATE], dest),
+      await jj(
+        ["log", "-G", "-r", "heads(all())", "-T", HEAD_TEMPLATE],
+        dest,
+        undefined,
+        execution,
+      ),
     ).filter((head) => !heads.has(head));
     if (newHeads.length !== 1)
       throw new Error(`expected one duplicated jj snapshot; found [${newHeads.join(", ")}]`);
     commit = newHeads[0];
   }
   const name = `harvest/${safeLabel(label)}/${kind}-${stamp()}-${randomUUID().replaceAll("-", "").slice(0, 8)}`;
-  await jj(["bookmark", "create", name, "-r", commit], dest);
+  await jj(["bookmark", "create", name, "-r", commit], dest, undefined, execution);
   return { kind: "bookmark-created", name, target: commit };
 }
 
@@ -57,12 +70,22 @@ export async function recoveryCovered(
   label: string,
   before: Map<string, BookmarkRef>,
   parents: string[],
+  execution?: ExecutionOptions,
 ): Promise<boolean> {
   for (const ref of before.values()) {
     if (!ref.name.startsWith(`harvest/${safeLabel(label)}/working-copy-`) || ref.remote !== "-")
       continue;
-    if ((await revision(dest, ref.target)).parents.join(",") !== parents.join(",")) continue;
-    if ((await jj(["diff", "--from", ref.target, "--to", "@", "--summary"], dest)) !== "") continue;
+    if ((await revision(dest, ref.target, execution)).parents.join(",") !== parents.join(","))
+      continue;
+    if (
+      (await jj(
+        ["diff", "--from", ref.target, "--to", "@", "--summary"],
+        dest,
+        undefined,
+        execution,
+      )) !== ""
+    )
+      continue;
     return true;
   }
   return false;

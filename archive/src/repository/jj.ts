@@ -79,7 +79,6 @@ export type JjOptions = { readOnly?: boolean; pinned?: boolean };
  */
 export type ExecutionOptions = { signal?: AbortSignal };
 
-
 /** Flags shared by every query-mode invocation. */
 const QUERY_FLAGS = ["--ignore-working-copy", "--at-op=@"] as const;
 
@@ -193,7 +192,12 @@ export async function revision(
   rev: string,
   execution?: ExecutionOptions,
 ): Promise<Revision> {
-  const output = await jj(["log", "-G", "-r", rev, "-T", COMMIT_TEMPLATE], dest, undefined, execution);
+  const output = await jj(
+    ["log", "-G", "-r", rev, "-T", COMMIT_TEMPLATE],
+    dest,
+    undefined,
+    execution,
+  );
   const parts = output.split("\t");
   if (parts.length !== 4) throw new Error(`malformed revision line for ${rev}: ${output}`);
   return {
@@ -210,9 +214,9 @@ export async function ancestor(
   newer: string,
   execution?: ExecutionOptions,
 ): Promise<boolean> {
-  return Number(
-    await jj(["log", "-r", `${older}::${newer}`, "--count"], dest, undefined, execution),
-  ) > 0;
+  return (
+    Number(await jj(["log", "-r", `${older}::${newer}`, "--count"], dest, undefined, execution)) > 0
+  );
 }
 
 /** Decode jj text output as UTF-8, replacing invalid bytes like execFile did. */

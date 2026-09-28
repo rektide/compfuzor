@@ -16,7 +16,12 @@ export async function preflight(
   execution?: ExecutionOptions,
 ): Promise<string[]> {
   try {
-    await jj(["log", "-G", "-r", "visible_heads()", "-T", 'commit_id ++ "\\n"'], dest, options, execution);
+    await jj(
+      ["log", "-G", "-r", "visible_heads()", "-T", 'commit_id ++ "\\n"'],
+      dest,
+      options,
+      execution,
+    );
   } catch (error) {
     if (!(error instanceof JjError)) throw error;
     const ghosts = [

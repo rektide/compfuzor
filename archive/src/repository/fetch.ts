@@ -8,29 +8,37 @@
  * instead of printing. No console I/O happens here.
  */
 import { harvest, recoveryCovered, type Notice } from "../recovery/harvest.ts";
-import { jj, refs, revision } from "./jj.ts";
+import { jj, refs, revision, type ExecutionOptions } from "./jj.ts";
 import { snapshot } from "./snapshot.ts";
 
 export type FetchOptions = { dest: string; label: string; remote?: string };
 export type FetchResult = { remote: string; notices: Notice[] };
 
-export async function fetchRemote(options: FetchOptions): Promise<FetchResult> {
+export async function fetchRemote(
+  options: FetchOptions,
+  execution?: ExecutionOptions,
+): Promise<FetchResult> {
   const { dest, label } = options;
   const remote = options.remote ?? "origin";
   const notices: Notice[] = [];
 
-  await snapshot(dest);
-  const before = await refs(dest);
-  const working = await revision(dest, "@");
-  if (!working.empty && !(await recoveryCovered(dest, label, before, working.parents))) {
-    notices.push(await harvest(dest, label, "working-copy", working.commit, true));
+  await snapshot(dest, execution);
+  const before = await refs(dest, undefined, execution);
+  const working = await revision(dest, "@", execution);
+  if (!working.empty && !(await recoveryCovered(dest, label, before, working.parents, execution))) {
+    notices.push(await harvest(dest, label, "working-copy", working.commit, true, execution));
   }
 
   // Freeze *all* tracked local refs before fetching: jj's tracked-remote sync
   // otherwise moves them, and a rewritten upstream can abandon the old tip.
   for (const ref of before.values()) {
     if (ref.remote !== "-" && ref.remote !== "git" && ref.tracked) {
-      await jj(["bookmark", "untrack", ref.name, "--remote", ref.remote], dest);
+      await jj(
+        ["bookmark", "untrack", ref.name, "--remote", ref.remote],
+        dest,
+        undefined,
+        execution,
+      );
     }
   }
 
@@ -39,6 +47,8 @@ export async function fetchRemote(options: FetchOptions): Promise<FetchResult> {
   await jj(
     ["--config", "git.abandon-unreachable-commits=false", "git", "fetch", "--remote", remote],
     dest,
+    undefined,
+    execution,
   );
   return { remote, notices };
 }

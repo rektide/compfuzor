@@ -11,7 +11,7 @@ import type { AnyCommand } from "../types.ts";
 import { preflight } from "../../repository/health.ts";
 
 export const health: AnyCommand = Command.make("health", { dest: destFlag }, (input) =>
-  runLibrary(() => preflight(input.dest, { readOnly: true })).pipe(
+  runLibrary((signal) => preflight(input.dest, { readOnly: true }, { signal })).pipe(
     Effect.flatMap((conflicts) =>
       Console.log(
         conflicts.length

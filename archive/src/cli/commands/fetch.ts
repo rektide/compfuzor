@@ -21,8 +21,8 @@ export const fetchCommand: AnyCommand = Command.make(
     label: labelFlag,
   },
   (input) =>
-    runLibrary(() =>
-      fetchRemote({ dest: input.dest, label: input.label, remote: input.remote }),
+    runLibrary((signal) =>
+      fetchRemote({ dest: input.dest, label: input.label, remote: input.remote }, { signal }),
     ).pipe(
       Effect.flatMap((result) => {
         const lines = result.notices.map(

@@ -7,7 +7,7 @@ import type { AnyCommand } from "../types.ts";
 import { snapshot } from "../../repository/snapshot.ts";
 
 export const snapshotCommand: AnyCommand = Command.make("snapshot", { dest: destFlag }, (input) =>
-  runLibrary(() => snapshot(input.dest)).pipe(
+  runLibrary((signal) => snapshot(input.dest, { signal })).pipe(
     Effect.flatMap((result) => Console.log(`Snapshotted ${result.dest}`)),
   ),
 ).pipe(

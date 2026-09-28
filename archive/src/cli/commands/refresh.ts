@@ -48,19 +48,22 @@ export const refresh: AnyCommand = Command.make(
     ),
   },
   (input) =>
-    runLibrary(() =>
-      refreshArchive({
-        dest: input.dest,
-        repo: input.repo,
-        remotes: input.remotes,
-        label: input.label,
-        remote: input.remote,
-        version: input.branch,
-        update: input.update,
-        depth: Option.getOrElse(input.depth, () => undefined),
-        submodules: input.submodules,
-        reconcileRemotes: input["reconcile-remotes"],
-      }),
+    runLibrary((signal) =>
+      refreshArchive(
+        {
+          dest: input.dest,
+          repo: input.repo,
+          remotes: input.remotes,
+          label: input.label,
+          remote: input.remote,
+          version: input.branch,
+          update: input.update,
+          depth: Option.getOrElse(input.depth, () => undefined),
+          submodules: input.submodules,
+          reconcileRemotes: input["reconcile-remotes"],
+        },
+        { signal },
+      ),
     ).pipe(Effect.flatMap((result) => render(result, input.json))),
 ).pipe(
   Command.withDescription(
