@@ -8,8 +8,11 @@ operators small, individually runnable jj operations as well as a composed
 deployment-specific jj workspace is a separate, future design. Do not run it
 concurrently with another writer to the same checkout.
 
-Run the source directly from a compfuzor checkout (Node type stripping; no
-build required):
+The CLI is built on Effect (`effect` and `@effect/platform-node`, pinned at
+4.0.0-rc.118); the operations library underneath stays Promise-based, with
+Effect adopted at the CLI boundary. Run the source directly from a compfuzor
+checkout (Node type stripping; no build required — source development needs
+the CLI dependencies installed via `pnpm install`):
 
 ```sh
 node archive/src/repo-jj-archive.ts --help
@@ -24,7 +27,7 @@ unless the command explicitly creates or detects one.
 
 | Command | Purpose / notable flags |
 |---|---|
-| `health --dest DIR` | Materialize `visible_heads()` and report conflicted bookmarks before walking history. No mutations. |
+| `health --dest DIR` | Materialize `visible_heads()` and report conflicted bookmarks. Runs in the pinned read-only query mode (`--ignore-working-copy` + `--at-op=@`): the checkout's jj state is observed, never snapshotted or re-imported. |
 | `snapshot --dest DIR` | `jj status`: import colocated Git refs and snapshot tracked/untracked files. |
 | `harvest --dest DIR --label NAME [--kind TYPE] [--target REV] [--copy]` | Give a revision a unique `harvest/<label>/…` recovery bookmark. `--copy` duplicates mutable `@` under a different change ID first. |
 | `remotes --dest DIR --repo URL [--remotes JSON] [--reconcile]` | Compare declared origin/additional URLs to actual. Differences fail with a table and exact reconcile command; **only** `--reconcile` adds/sets URLs. |
@@ -32,7 +35,7 @@ unless the command explicitly creates or detects one.
 | `refresh --dest DIR --repo URL --label NAME [options]` | Compose adoption/clone, health, snapshot, remote policy, recovery harvest, fetch, base bookmark move, and worktree reconciliation. `--branch HEAD\|branch\|branch@remote`, `--remote NAME`, `--remotes JSON`, `--update true\|false`, `--depth N`, `--json`, `--reconcile-remotes`. Submodules are explicitly unsupported. |
 | `heal --dest DIR --yes` | Explicitly move `.jj` to a dated `.jj.broken-ghost-*` backup, then `jj git init --colocate` from Git refs. Refuses without `--yes`. |
 | `self [--archive-dir PATH] [--freshen]` | Detect the standard `~/archive/rektide/compfuzor` checkout; optionally fetch its `origin` (no checkout reset). Missing checkout is fine. |
-| `complete SHELL` | Generate tab completion via `@gunshi/plugin-completion`. |
+| `complete SHELL` | Print a tab-completion script. `bash`/`zsh`/`fish` come from Effect CLI's command-tree generator (byte-identical to the native `--completions` action); `powershell` comes from a static generator covering **only subcommand names and global flags** — not the per-command flag tree the POSIX shells get. |
 
 For example, inspect and fix a mismatched remote deliberately:
 
@@ -62,13 +65,17 @@ fail-on-mismatch. Review the failure's URL table before setting that variable.
 
 `COMPFUZOR_REPO_JJ_RUNNER` can override the runner path. By default the
 playbook uses `playbook_dir/script/repo-jj-archive.ts`, which imports
-`archive/src/repo-jj-archive.ts` first when source **and installed CLI modules**
+`archive/src/repo-jj-archive.ts` first when the source **and the installed CLI
+dependencies** (`node_modules/effect` and `node_modules/@effect/platform-node`)
 are present (no bundle transport), or the committed
 `archive/repo-jj-archive.mjs` when either is absent. The optional `self`
 command **never** influences this path or requires the compfuzor archive
 checkout to exist. The old flag-only invocation is still accepted as an alias
-for `refresh --json`; old `--version BRANCH` maps to `--branch BRANCH` (Gunshi
-reserves `--version` for its CLI version). Prefer the explicit subcommand.
+for `refresh --json`; in that spelling (and under an explicit `refresh`) the
+old `--version BRANCH` maps to `--branch BRANCH`, while root `--version` on
+its own prints the toolkit version. Prefer the explicit subcommand. The
+Effect CLI migration left this task's runner path, argv, and JSON result
+shape unchanged.
 
 In `--json` mode stdout has **exactly one JSON result line** on success:
 
@@ -103,6 +110,20 @@ URL checks happen after the initial snapshot, **before** harvest/fetch or
 bookmark rewrites. See [the original archive design](/design/repo-jj-archive/draft0.gpt6sol.md)
 and [the toolkit follow-up](/design/repo-jj-archive/draft1.gpt6sol.md).
 
+## Custody: in development, not yet a workflow
+
+Cross-repository source custody (`adopt`, `verify-adoption`: moving a source
+directory's Git history into the archive under an immutable receipt) is under
+active development in `archive/src/custody/`. Those commands are deliberately
+**not registered in the CLI yet** — there is no ready-to-use workflow, and the
+[core review](/design/archive-toolkit/core-review0.glm53.md) gate must pass
+with inventory, artifact proof, ref installation, and independent verification
+composing end to end first. The intended contract lives in the
+[custody brief](/design/archive-migration/brief0.gpt6sol.md) and the
+[custody contracts](/design/archive-toolkit/custody-contracts0.gpt6sol.md).
+None of it publishes refs, prunes artifacts, or retires a source directory;
+verification reports custody state, never permission to delete.
+
 ## Build, checks, tests
 
 ```sh
@@ -111,8 +132,21 @@ pnpm build             # bundling for distribution only; not type-checking
 python3 -m pytest --import-mode=importlib -q tests/integration/repo_jj_archive.test.py
 ```
 
+The source is grouped by domain: `archive/src/cli/` (command tree, flags,
+legacy argv adapter, completions), `repository/` (ordinary checkout
+operations, including the `jj`/`git` execution boundaries — subprocesses run
+as argv arrays through Effect's `ChildProcessSpawner`, never a shell),
+`recovery/` (jj recovery and explicit repair), and `custody/` (in development,
+unregistered). Adding a command is a new module under `cli/commands/` plus one
+registry entry.
+
 The root `vite.config.ts` packs `archive/src/repo-jj-archive.ts` into one
 committed `archive/repo-jj-archive.mjs` (ESM, node platform, no type emit,
-`clean: false`). Rebuild and commit the bundle with source changes. Integration
+`clean: false`): a self-contained ~885 KB (207 KB gzip) single file with only
+`node:` imports. It is **distribution only** — it runs outside this checkout
+without `node_modules`; develop against the source instead. Rebuild and commit
+the bundle with source changes. While source changes are still landing the
+committed bundle may lag behind (CLI semantics stay the same); run `pnpm
+build` and commit the result before relying on bundle freshness. Integration
 tests use disposable jj+Git fixtures and local Ansible plays, never production
 archives.
