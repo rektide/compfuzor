@@ -5,7 +5,7 @@
     # INSTANCE selects the deployment variant. `git` is the primary instance:
     # it owns the un-suffixed surface (opencode.service, /usr/local/bin/
     # opencode, the ~/.config/opencode link, and the interactive
-    # opencode/opencode2 ZIM wrapper). Run any other instance side by side
+    # client-env ZIM module). Run any other instance side by side
     # with `-e INSTANCE=<name>`: every generated name, path, port, and
     # credential is instance-suffixed and isolated by default.
     INSTANCE: git
@@ -106,7 +106,7 @@
       OPENCODE_LOCATION_CACHE_TTL: "8 hours"
       # Deployment source of the managed global links; status-opencode-ok.sh
       # reads it to flag links drifting out of the composed workspace. Exported
-      # for shells without the wrapper too (never contains the secret).
+      # for shells without the ZIM client-env module too (never contains the secret).
       OPENCODE_WORKING_DIR: "{{OPENCODE_WORKING_DIR}}"
     # Optional deployment inputs. Define these as Ansible variables to enable
     # OpenCode's native OTLP/HTTP logs and traces without hard-coding a backend.
@@ -200,7 +200,7 @@
     # status-cleanup.sh dry-runs cleanup.sh with the timer's eligibility window
     # plus the timer's own unit state; status-opencode-ok.sh checks the
     # invoking shell against the managed deployment and is also globally
-    # linked as opencode-status-ok for quick checks from wrapper-less shells.
+    # linked as opencode-status-ok for quick checks from shells without ZIM env.
     STATUSES:
       - status-cleanup.sh
       - status-opencode-ok.sh
@@ -218,30 +218,31 @@
         unit: "{{OPENCODE_UNIT}}.service"
         manager: user
         expected: "{{GLOBAL_BINS_DIR}}/{{OPENCODE_CLIENT}}"
-    # Only the primary instance promotes connection facts into interactive
-    # shells: ZIM modules define the opencode/opencode2 functions and the
-    # OPENCODE_ARGS array, so two imported instances would silently fight over
-    # the same shell namespace. Secondary instances bypass ZIM entirely; their
-    # entrypoint is the opencode-<INSTANCE> launcher instead. |bool keeps the
-    # bypass a native boolean (a rendered "False" string would read truthy).
+    # Only the primary instance imports the interactive client environment
+    # module; secondary instances get the same module through their own launcher.
+    # |bool keeps the bypass a native boolean (a rendered "False" string would
+    # read truthy).
     ZIM_BYPASS: "{{ (not OPENCODE_PRIMARY)|bool }}"
+    ZIM_ENV_PHASE: 54
     ZIM_ENV:
       - OPENCODE_SERVER_URL
       - OPENCODE_SERVER_PORT
       - OPENCODE_PASSWORD_FILE
-    # Client-only Zsh argv defaults. Keep these out of ENV/env.export so the
-    # systemd `serve` process never receives client connection flags.
-    ZIM_ARRAYS_NAME: opencode-client-args
-    ZIM_ARRAYS_PHASE: tools
-    ZIM_ARRAYS:
-      OPENCODE_ARGS:
-        - --server
-        - "{{ OPENCODE_SERVER_URL }}"
     ZIM_MODULES:
-      - name: opencode-service
-        source: opencode-service.zsh
-        phase: tools
-        comment: Route both OpenCode command names through the operator-managed V2 server.
+      # Reuse the existing ZIM module identity so its active fragment and init
+      # file are updated in place from the old array module to scalar env args.
+      - name: opencode-client-args
+        source: opencode-client-env.zsh
+        phase: 55
+        comment: Export the client credential and native server-argument default.
+      # Retain the old boundary-aware shell functions in
+      # files/opencode/opencode-service.zsh, but keep this module disabled now
+      # that the deployed CLI handles OPENCODE_ARGS natively. Uncomment only
+      # for a client build without native argument defaults; keep it after
+      # client-env so it consumes the shared credential and OPENCODE_ARGS.
+      # - name: opencode-service-legacy
+      #   source: opencode-service.zsh
+      #   phase: 56
     README: |
       # Operator-managed OpenCode V2 server
 
@@ -259,7 +260,7 @@
       and `opencode2-node` (plus `opencode-status-ok`, `opencode-last`,
       `opencode-live`, `opencode-restart-clients`), the `~/.config/opencode`
       symlink, the interactive
-      `opencode`/`opencode2` ZIM wrapper, port 49373, wildcard bind, and the
+      `opencode` client-env ZIM module, port 49373, wildcard bind, and the
       server's default database.
 
       Any other instance runs side by side with explicit isolation:
@@ -277,10 +278,11 @@
 
           opencode-<INSTANCE> [args...]     # e.g. opencode-dev api get /api/info
 
-      The launcher sources the instance env, so it routes through the same
-      boundary-aware `--server` injection as the primary's shell wrapper, with
-      `--server`/`--standalone` and administrative commands still passing
-      through unchanged. It never manages the server's lifecycle; that stays
+      The launcher sources the instance env and client-env module, so native
+      `OPENCODE_ARGS` routes supported commands to the instance server. An
+      explicit `--server` takes precedence; use
+      `OPENCODE_ARGS= opencode-<INSTANCE> --standalone` to bypass it. It never
+      manages the server's lifecycle; that stays
       with `systemctl --user` and the instance's own `bin/restart.sh`.
 
       Isolation defaults for secondaries are deliberate:
@@ -294,10 +296,9 @@
         below.
       - The database defaults to `opencode-<INSTANCE>.db` under
         `~/.local/share/opencode/`, separate from every other instance.
-      - No ZIM modules are emitted and no `~/.config/opencode` link is made:
-        two instances must not fight over the interactive `opencode`/`opencode2`
-        shell functions or the shared config path. Server and launcher read the
-        instance config through `OPENCODE_CONFIG_DIR=/etc/opt/opencode-<INSTANCE>`.
+       - No ZIM modules are emitted and no `~/.config/opencode` link is made;
+         the instance launcher reads its own config through
+         `OPENCODE_CONFIG_DIR=/etc/opt/opencode-<INSTANCE>`.
 
       ### Database sharing
 
@@ -326,6 +327,16 @@
       same file once in each new shell and exports `OPENCODE_PASSWORD` for
       clients. The secret is never copied into `env`, `env.export`, a unit file,
       or a generated ZIM fragment.
+
+      The user unit gets ordinary runtime settings from its generated
+      `EnvironmentFile={{DIR}}/env`: hostname, port, CORS origins, Watchman
+      socket, and instance-specific binary. `LoadCredential` supplies the
+      password file separately. `serve.sh` is only the systemd credential and
+      argument adapter: it exports the credential to the server process,
+      expands comma-separated CORS origins into repeated flags, and execs
+      `opencode serve`. It is rendered without generic BINS helpers because a
+      long-running `ExecStart` must not exit successfully through a provisioning
+      bypass guard.
 
       ## Operations
 
@@ -371,8 +382,8 @@
          drift against the recorded cwd is reported, and a cd-prefixed
          form is kept commented in the bin). Reads the registry without
          re-recording — the clients are dead, a fresh scan would find
-         nothing. The pane's ZIM wrapper injects `--server`, so the
-         relaunched client reattaches to the managed deployment exactly
+         nothing. The pane's exported `OPENCODE_ARGS` default sends the
+         relaunched client to the managed deployment exactly
          like a manual relaunch.
       4. **restart** (default) — one-pass kill + relaunch for client-only
          churn when the server is current and builds match.
@@ -398,13 +409,13 @@
       or showing another foreground program at relaunch time, are killed but
       left as a plain shell with a warning. Dated-snapshot clients
       (`opencode-<stamp>`, see below) are recorded with their exe but
-      relaunch through the managed wrapper — resume on the current client,
+       relaunch through the managed `opencode` command — resume on the current client,
       not the dated binary. Re-running after an interrupted run re-records
       from live processes, so an already-relaunched client may be restarted
       once more before converging.
 
-      Two caveats learned from live testing. First, relaunch rides the
-      pane's current wrapper: when the running server lags the deployed
+       Two caveats learned from live testing. First, relaunch rides the
+       pane's current client environment: when the running server lags the deployed
       client build (the exe drift `status.sh`'s exe-current reporter
       flags), a one-pass restart reconnects clients to a server they
       cannot talk to — use the kill / `restart.sh` / relaunch sequence
@@ -430,13 +441,12 @@
       currently deployed opencode inode), plus the config and link drift
       reporters.
       `opencode-status-ok` is the same ok-checker as a global command, so any
-      shell — including ones without the ZIM wrapper — can quickly verify three
+      shell — including ones without the ZIM module — can quickly verify three
       things:
 
-      - wrapper: whether the invoking shell loaded the opencode/opencode2
-        wrapper. Shell functions are invisible to child processes, so the check
-        reads their footprint: OPENCODE_PASSWORD exported by the ZIM module
-        (the secret itself is never written to env or env.export).
+      - client environment: whether OPENCODE_PASSWORD and OPENCODE_ARGS were
+        exported by the ZIM module. The secret itself is never written to env
+        or env.export.
       - global: whether the managed links (opencode, opencode2-node) resolve,
         agree on version, and point into OPENCODE_WORKING_DIR rather than a
         stale checkout.
@@ -446,31 +456,25 @@
       Exit 0 means this shell is on the managed deployment; exit 1 prints each
       drift line. No network is involved — versions come from `--version`.
 
-      The ZIM functions for `opencode` and `opencode2` inject
-      `--server ${OPENCODE_SERVER_URL}` for ordinary clients. They never start,
-      stop, probe, replace, or reconcile the server. Initial connection failure
-      is therefore fast and points back to `systemctl`; an established TUI uses
-      OpenCode's existing event-stream reconnection behavior.
+      The local `opencode-client-args` ZIM module exports the credential and
+      scalar `OPENCODE_ARGS="--server ${OPENCODE_SERVER_URL}"` to interactive
+      clients. The native CLI parses this shell-word string before command
+      routing; explicit `--server` arguments take precedence. `OPENCODE_ARGS`
+      is not in ENV/env.export or the systemd unit, so the `serve` process
+      never inherits this client default. The shell functions in
+      `files/opencode/opencode-service.zsh` remain as an inactive legacy
+      fallback; no current ZIM module loads them.
 
-      Compfuzor's `opencode-client-args` ZIM array module defines `OPENCODE_ARGS`
-      as a Zsh-only array containing `--server` and the configured URL for
-      interactive client shells. It is not an exported process environment
-      value and is not added to the systemd server environment. The ZIM runner
-      inserts those argument tokens at the correct command-parser boundary;
-      explicit `--server` and `--standalone` still override the default.
-      `opencode-last` clears an inherited scalar `OPENCODE_ARGS`, sources the
-      client-only array module, and delegates to the same runner. Native CLI
-      environment support for `OPENCODE_ARGS` remains a separate, not-started
-      working-set change.
+      Native defaults are dropped with a warning on routes that do not declare
+      `--server`. For standalone mode, clear the default explicitly:
+      `OPENCODE_ARGS= opencode --standalone`.
 
       `OPENCODE_SERVER_PORT` is the port source of truth; `OPENCODE_SERVER_URL`
-      and the client `OPENCODE_ARGS` default are derived from it. If the client
-      array is missing or empty, the wrapper falls back to
-      `--server http://127.0.0.1:${OPENCODE_SERVER_PORT}`.
+      and the client `OPENCODE_ARGS` default are derived from it.
 
       `opencode-last` selects the newest executable dated client snapshot from
-      `/usr/local/bin/opencode-<datestamp>` and runs it through the same
-      argument-vector-aware routing. `opencode-last list` lists clients
+      `/usr/local/bin/opencode-<datestamp>` and runs it with the same native
+      `OPENCODE_ARGS` environment. `opencode-last list` lists clients
       newest-first.
 
       ## Dated CLI clients
@@ -495,12 +499,10 @@
       it is not repointed for each snapshot. Keep dated clients until deliberate
       operator cleanup.
 
-      `serve`, `service`, an explicit `--server`, and `--standalone` bypass the
-      wrapper so the upstream default world remains available as a parallel
-      fallback. Current command handlers for `pair`, `plugin list`,
-      `mcp list/auth/logout`, `console login`, and `debug config/agents` do not
-      honor the global explicit-server path; those commands still target the
-      fallback world until the optional upstream consistency patch lands.
+      Explicit `--server` arguments take precedence over OPENCODE_ARGS. Clear
+      OPENCODE_ARGS for standalone operation (`OPENCODE_ARGS= opencode
+      --standalone`). Routes without a `--server` option drop the environment
+      default and may print a warning before using their ordinary behavior.
 
       Foreground mode never writes `~/.local/state/opencode/service.json`.
       Existing default-world processes and registrations on port 49374 may
@@ -659,6 +661,12 @@
       - name: base.json
         json:
           "$schema": "https://opencode.ai/config.json"
+      # Replace the former active wrapper import in place on ZIM context
+      # install. The wrapper source stays in files/opencode/opencode-service.zsh
+      # for deliberate fallback; the primary client now uses native OPENCODE_ARGS.
+      - name: zim/zimrc/active/55-opencode-service.conf
+        content: |
+          # Legacy shell helper-wrapper intentionally unloaded; native client-env is active.
       - name: etc_d/keybind-tabs.json
         json:
           keybinds:
@@ -797,6 +805,11 @@
       # TODO: compfuzor helpers for installing content, automate this in install-user
       - name: serve.sh
         basedir: False
+        # ExecStart is a long-running systemd process, not a provisioning
+        # action. The generic TYPE=opencode bypass wrapper can exit 0 on a
+        # bypass and fight Restart=always. systemd's EnvironmentFile and
+        # LoadCredential supply its inputs; the body validates required values.
+        helpers: false
       - name: restart.sh
         basedir: False
         content: |
@@ -848,9 +861,9 @@
       # (cotail find-id) and tmux pane into an in-mem tmpfs registry, kills
       # the clients, then relaunches each in its recorded pane via tmux
       # send-keys with `cd <cwd> && opencode --session <id>` — the pane's
-      # ZIM wrapper injects --server, and the managed server is never
+      # ZIM client-env module supplies OPENCODE_ARGS, and the managed server is never
       # touched. Dated-snapshot clients (opencode-<stamp>) relaunch through
-      # the managed wrapper rather than their original binary. Global link
+      # the managed client rather than their original binary. Global link
       # is primary-only; secondaries keep the local, env-driven bin.
       - name: restart-clients.sh
         basedir: False
@@ -871,8 +884,7 @@
       # GLOBAL_BINS_DIR as opencode-status-ok, and a second deployment would
       # collide on that name. Secondary instances keep the bin locally (env
       # driven, so it checks its own instance) without the global link.
-      # Standalone-safe: every path it needs comes from env (OPENCODE_*),
-      # never the wrapper.
+      # Standalone-safe: every path it needs comes from env (OPENCODE_*).
       - name: status-opencode-ok.sh
         basedir: False
         global: "{{ 'opencode-status-ok' if OPENCODE_PRIMARY else False }}"
@@ -886,7 +898,7 @@
         runtime: node
       # Primary-only interactive surface: the dev-TUI launcher and the dated
       # snapshot runner both target the primary deployment through unsuffixed
-      # defaults (ZIM modules, /usr/local/bin snapshots); secondaries keep the
+      # defaults (ZIM client-env module, /usr/local/bin snapshots); secondaries keep the
       # local bins but never link them globally.
       - name: opencode-live
         basedir: False
@@ -900,9 +912,8 @@
         raw: True
         global: "{{ True if OPENCODE_PRIMARY else False }}"
       # Secondary entrypoint: linked globally as opencode-<INSTANCE>, sources
-      # the instance env, and routes the client through _opencode_run exactly
-      # like the primary's ZIM wrapper. Primary renders the bin but never
-      # links it (no OPENCODE_SERVICE_MODULE in the primary env).
+      # the instance env and native client-env module. Primary renders the bin
+      # but never links it (no OPENCODE_CLIENT_ENV_MODULE in the primary env).
       - name: opencode-instance
         basedir: False
         raw: True
@@ -930,22 +941,22 @@
           claims will adopt work that may still be running elsewhere. Sharing
           is an explicit experiment, not a supported concurrent mode.
       when: not OPENCODE_PRIMARY and OPENCODE_DB is defined
-    - name: "opencode: secondary instance env keys and routing module"
+    - name: "opencode: secondary instance env keys and client module"
       # Presence-gated keys (OPENCODE_BINARY/OPENCODE_CONFIG_DIR/OPENCODE_DB/
-      # OPENCODE_SERVICE_MODULE) must stay absent for the primary: an empty
+      # OPENCODE_CLIENT_ENV_MODULE) must stay absent for the primary: an empty
       # OPENCODE_DB would be adopted as a real (invalid) path by the server.
       # They ride ENV_PRIO rather than ENV because merging ENV here would
       # render its values (WATCHMAN_SOCK et al.) before vars/common.yaml has
       # loaded; ENV_PRIO overrides nothing for secondaries, it only defines.
-      # The client routing module is appended as a plain ETC file because
+      # The client environment module is appended as a plain ETC file because
       # secondaries emit no ZIM modules.
       set_fact:
         ENV_PRIO: "{{ ENV_PRIO|default({}) | combine({
                'OPENCODE_BINARY': OPENCODE_GLOBAL_BINS ~ '/' ~ OPENCODE_CLIENT,
                'OPENCODE_CONFIG_DIR': OPENCODE_INSTANCE_ETC,
                'OPENCODE_DB': OPENCODE_INSTANCE_DB,
-               'OPENCODE_SERVICE_MODULE': OPENCODE_INSTANCE_ETC ~ '/client/service.zsh',
+              'OPENCODE_CLIENT_ENV_MODULE': OPENCODE_INSTANCE_ETC ~ '/client/client-env.zsh',
              }) }}"
-        ETC_FILES: "{{ ETC_FILES + [{'name': 'client/service.zsh', 'src': 'opencode-service.zsh'}] }}"
+        ETC_FILES: "{{ ETC_FILES + [{'name': 'client/client-env.zsh', 'src': 'opencode-client-env.zsh'}] }}"
       when: not OPENCODE_PRIMARY
     - import_tasks: tasks/compfuzor.includes
