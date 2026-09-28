@@ -45,6 +45,7 @@ export OPENCODE_BINARY=${snapshot_by_stamp[$stamps[1]]}
 export OPENCODE_SERVER_PORT=${OPENCODE_SERVER_PORT:-49373}
 export OPENCODE_SERVER_URL=${OPENCODE_SERVER_URL:-http://127.0.0.1:$OPENCODE_SERVER_PORT}
 export OPENCODE_PASSWORD_FILE=${OPENCODE_PASSWORD_FILE:-$HOME/.config/opencode/secrets/OPENCODE_PASSWORD}
+unset OPENCODE_PASSWORD
 
 typeset client_env_module=${OPENCODE_CLIENT_ENV_MODULE:-/etc/opt/opencode-git/zim-modules/opencode-client-args/init.zsh}
 if [[ ! -r $client_env_module ]]; then

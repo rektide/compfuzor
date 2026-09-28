@@ -286,7 +286,7 @@ def test_launcher_routes_instance(fixture: Path) -> None:
             "OPENCODE_TEST_OPENCODE_ARGS": str(work / "opencode-args-capture"),
         }
     )
-    env.pop("OPENCODE_PASSWORD", None)
+    env["OPENCODE_PASSWORD"] = "stale-primary-password"
     env.pop("OPENCODE_ARGS", None)
 
     for command, expected, args_override in (

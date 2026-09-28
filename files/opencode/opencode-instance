@@ -41,6 +41,7 @@ fi
 if [[ -n ${OPENCODE_ARGS:-} ]]; then
   unset OPENCODE_ARGS
 fi
+unset OPENCODE_PASSWORD
 
 source "${OPENCODE_CLIENT_ENV_MODULE}"
 

@@ -231,6 +231,7 @@ def test_last_client_lists_and_runs_newest_snapshot_with_server() -> None:
             {
                 "OPENCODE_SNAPSHOT_DIR": str(directory),
                 "OPENCODE_CLIENT_ENV_MODULE": str(CLIENT_ENV_MODULE),
+                "OPENCODE_PASSWORD": "stale-primary-password",
             }
         )
 
