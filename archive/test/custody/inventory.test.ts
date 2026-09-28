@@ -497,6 +497,48 @@ test("configured clean filters and fsmonitor never execute during blocked invent
   await assert.rejects(readFile(destMarker), { code: "ENOENT" });
 });
 
+test("dirty in-root symlinks preview link bytes; external symlinks block without reading targets", async () => {
+  const source = await fresh("links-src");
+  await initRepo(source);
+  await commit(source, "one", "target.txt", "inside\n");
+  const dest = await makeDest(source, "links-dest");
+  await symlink("target.txt", join(source, "inside-link"));
+  const inside = await plan(input(source, dest));
+  assert.equal(inside.state, "ready", codes(inside).join(","));
+  assert.equal(
+    inside.proposedSnapshot?.paths.find(({ path }) => path === "inside-link")?.mode,
+    "120000",
+  );
+
+  const outside = join(ROOT, "external-link-target");
+  await writeFileUtf8(outside, "external-secret-do-not-read\n");
+  await symlink(outside, join(source, "outside-link"));
+  const blocked = await plan(input(source, dest));
+  assert.equal(blocked.state, "blocked");
+  assert.ok(codes(blocked).includes("source-path-unsafe"));
+  assert.ok(!JSON.stringify(blocked).includes("external-secret-do-not-read"));
+
+  await git(["add", "-f", "outside-link"], source);
+  await git(["commit", "--quiet", "-m", "external link"], source);
+  const cleanTracked = await plan(input(source, dest));
+  assert.equal(cleanTracked.state, "blocked");
+  assert.ok(codes(cleanTracked).includes("source-path-unsafe"));
+});
+
+test("ignored path inventory remains complete beyond the former listing cap", async () => {
+  const source = await fresh("ignored-many-src");
+  await initRepo(source);
+  await commit(source, "one", ".gitignore", "ignored/\n");
+  await mkdir(join(source, "ignored"));
+  for (let i = 0; i < 513; i++)
+    await writeFileUtf8(join(source, "ignored", `entry-${String(i).padStart(3, "0")}`), "x");
+  const dest = await makeDest(source, "ignored-many-dest");
+  const result = await plan(input(source, dest));
+  assert.equal(result.state, "ready", codes(result).join(","));
+  assert.equal(result.source.ignoredPaths.length, 513);
+  assert.ok(result.source.leftBehind.some(({ subject }) => subject === "ignored/entry-512"));
+});
+
 test("unborn HEAD reports a blocker and a null head category", async () => {
   const source = await fresh("unborn-src");
   await initRepo(source, "feature");

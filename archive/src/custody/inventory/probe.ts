@@ -15,8 +15,8 @@
  * silent exclusions.
  */
 import { Effect, Result } from "effect";
-import { open, readFile, readdir, lstat, realpath, stat } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { open, readFile, readlink, readdir, lstat, realpath, stat } from "node:fs/promises";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { gitRead } from "../../repository/git.ts";
 import { oid as oidOf, destinationRefsSha256, sha256 } from "../codec.ts";
 import { CustodyError } from "../errors.ts";
@@ -49,7 +49,6 @@ import {
 export const BOUNDS = {
   reflogEntries: 8192,
   untracked: 4096,
-  ignoredListed: 512,
   odbFiles: 16384,
   jjFiles: 8192,
   manifestUntracked: 2048,
@@ -259,6 +258,29 @@ function sensitiveClass(path: string): string | null {
 const hasInternals = (path: string): boolean =>
   path.split("/").some((part) => part === ".git" || part === ".jj");
 
+/** Refuse traversal through symlinked parents before any path-content probe. */
+async function safePathInfo(root: string, path: RepoPath) {
+  const parts = path.split("/");
+  let parent = root;
+  for (const part of parts.slice(0, -1)) {
+    parent = join(parent, part);
+    if ((await lstat(parent)).isSymbolicLink())
+      throw new CustodyError("inspection-failed", `symlinked parent in selected path: ${path}`);
+  }
+  const full = join(root, path);
+  const info = await lstat(full);
+  if (!info.isFile() && !info.isSymbolicLink())
+    throw new CustodyError("inspection-failed", `unsupported selected file kind: ${path}`);
+  if (info.isSymbolicLink()) {
+    const target = await readlink(full, { encoding: "buffer" });
+    const resolved = resolve(dirname(full), target.toString());
+    if (resolved !== root && !resolved.startsWith(root + sep))
+      throw new CustodyError("inspection-failed", `symlink target leaves source root: ${path}`);
+    return { info, target };
+  }
+  return { info, target: null };
+}
+
 /** Canonical LFS pointer header; matching this prefix identifies a pointer. */
 const LFS_POINTER_PREFIX = "version https://git-lfs.github.com/spec/v1\n";
 /** Bounded header read: pointer files are ~130 bytes, never megabytes. */
@@ -274,11 +296,11 @@ async function lfsPointers(root: string, paths: readonly RepoPath[]): Promise<re
   const header = Buffer.from(LFS_POINTER_PREFIX, "latin1");
   for (const path of paths) {
     const full = join(root, path);
-    const info = await lstat(full).catch((error: NodeJS.ErrnoException) => {
+    const checked = await safePathInfo(root, path).catch((error: NodeJS.ErrnoException) => {
       if (error.code === "ENOENT") return null;
       throw error;
     });
-    if (info === null || !info.isFile()) continue;
+    if (checked === null || !checked.info.isFile()) continue;
     const handle = await open(full, "r");
     try {
       const buffer = Buffer.alloc(LFS_PROBE_BYTES);
@@ -942,19 +964,12 @@ export function probeSource(
         "source-ignored-unrepresentable",
         sync(() => parseNulPaths(ignoredOut)),
       );
-      const listed = (ignoredAll ?? []).slice(0, BOUNDS.ignoredListed);
-      observed.ignoredPaths = listed;
-      for (const path of listed)
+      observed.ignoredPaths = ignoredAll;
+      for (const path of ignoredAll ?? [])
         leftBehind.push({
           code: "ignored-runtime-state",
           subject: path,
           reason: "ignored files are left behind, never staged; runtime state is a retirement item",
-        });
-      if ((ignoredAll?.length ?? 0) > listed.length)
-        warnings.push({
-          code: "ignored-paths-capped",
-          subject: null,
-          reason: `${(ignoredAll?.length ?? 0) - listed.length} further ignored paths not listed (bound ${BOUNDS.ignoredListed})`,
         });
       retirement.push({
         code: "ignored-runtime-state",
@@ -973,6 +988,30 @@ export function probeSource(
     // A smudged worktree can conceal a pointer retained in HEAD or the index.
     // These queries inspect only current Git state, not historical commits.
     const lfsFound = new Set<RepoPath>();
+    const selectedPaths = new Set<RepoPath>([
+      ...(treePaths ?? []).map(({ path }) => path),
+      ...(observed.indexEntries ?? []).map(({ path }) => path),
+      ...(untracked ?? []).filter((path) => !excludedUntracked.includes(path)),
+    ]);
+    for (const path of selectedPaths) {
+      const checked = yield* Effect.result(
+        fs(
+          () =>
+            safePathInfo(real, path).catch((error: NodeJS.ErrnoException) => {
+              if (error.code === "ENOENT") return null;
+              throw error;
+            }),
+          "inspect selected path",
+        ),
+      );
+      if (Result.isFailure(checked)) {
+        blockers.push({
+          code: "source-path-unsafe",
+          subject: path,
+          reason: checked.failure.message,
+        });
+      }
+    }
     for (const [revision, entries] of [
       ["HEAD", treePaths],
       ["index", observed.indexEntries],
@@ -1209,7 +1248,7 @@ export function probeSource(
       for (const entry of treePaths) manifest.set(entry.path, entry);
       const hashable: RepoPath[] = [];
       for (const change of statusParsed.changes) {
-        if (change.indexStatus === "deleted" || change.worktreeStatus === "deleted") {
+        if (change.worktreeStatus === "deleted") {
           manifest.delete(change.path);
           continue;
         }
@@ -1226,9 +1265,51 @@ export function probeSource(
       } else {
         for (const path of selectedUntracked) hashable.push(path);
         const oidByPath = new Map<RepoPath, Oid>();
+        const modeByPath = new Map<RepoPath, PathEntry["mode"]>();
+        const regular: RepoPath[] = [];
         let hashOk = true;
-        for (let i = 0; i < hashable.length && hashOk; i += BOUNDS.hashBatch) {
-          const batch = hashable.slice(i, i + BOUNDS.hashBatch);
+        for (const path of hashable) {
+          const checked = yield* Effect.result(
+            fs(() => safePathInfo(real, path), `inspect ${path}`),
+          );
+          if (Result.isFailure(checked)) {
+            blockers.push({
+              code: "source-manifest-unsafe-path",
+              subject: path,
+              reason: checked.failure.message,
+            });
+            hashOk = false;
+            break;
+          }
+          const { info, target } = checked.success;
+          if (target === null) {
+            regular.push(path);
+            modeByPath.set(path, (info.mode & 0o111) !== 0 ? "100755" : "100644");
+            continue;
+          }
+          modeByPath.set(path, "120000");
+          // Link targets must be passed as bytes to Git, never as a pathname
+          // whose referent Git could dereference.
+          const hashed = yield* gitRead(["hash-object", "--stdin"], {
+            cwd: real,
+            input: target,
+          }).pipe(Effect.mapError((error) => new CustodyError("inspection-failed", error.message)));
+          if (hashed.exitCode !== 0) {
+            hashOk = false;
+            break;
+          }
+          const linkOid = yield* category(
+            "source-manifest-unrepresentable",
+            sync(() => parseHashObjectLines(hashed.stdout, format, 1)[0]),
+          );
+          if (linkOid === null) {
+            hashOk = false;
+            break;
+          }
+          oidByPath.set(path, linkOid);
+        }
+        for (let i = 0; i < regular.length && hashOk; i += BOUNDS.hashBatch) {
+          const batch = regular.slice(i, i + BOUNDS.hashBatch);
           const hashed = yield* gitZero(["hash-object", "--no-filters", "--", ...batch], real);
           if (hashed === null) {
             hashOk = false;
@@ -1246,13 +1327,11 @@ export function probeSource(
         }
         if (hashOk) {
           for (const [path, oid] of oidByPath) {
-            const info = yield* fs(() => lstat(join(real, path)), `stat ${path}`);
-            const mode: PathEntry["mode"] = info.isSymbolicLink()
-              ? "120000"
-              : (info.mode & 0o111) !== 0
-                ? "100755"
-                : "100644";
-            manifest.set(path, { path, mode, blobOid: oid });
+            manifest.set(path, {
+              path,
+              mode: modeByPath.get(path) as PathEntry["mode"],
+              blobOid: oid,
+            });
           }
           includedManifest = [...manifest.values()].sort((a, b) =>
             a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
