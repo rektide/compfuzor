@@ -386,6 +386,17 @@ void test("occupied receipt namespace is not reinterpreted as a fresh generation
   await assert.rejects(() => readdir(join(dirname(dest), ".compfuzor-adoptions")));
 });
 
+void test("new generations add refs without rewriting an older immutable receipt", async () => {
+  const { dest, input } = await fixture("two-generations");
+  const first = await Effect.runPromise(applyAdoption(input));
+  const next = await Effect.runPromise(applyAdoption({ ...input, generation: "g1" }));
+  assert.equal(first.verification.custodyVerified, true);
+  assert.equal(next.verification.custodyVerified, true);
+  assert.notEqual(first.receiptRef, next.receiptRef);
+  assert.equal(await git(dest, "rev-parse", first.receiptRef), first.receiptCommitOid);
+  assert.equal(await git(dest, "rev-parse", next.receiptRef), next.receiptCommitOid);
+});
+
 void test("interrupted verification returns failure; retry verifies original installed receipt", async () => {
   const { dest, input } = await fixture("verify-interrupt");
   await assert.rejects(() =>
