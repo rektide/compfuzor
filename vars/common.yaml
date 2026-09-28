@@ -19,6 +19,14 @@ PIDS_DIR: /var/run
 RUNS_DIR: /var/run
 SRCS_DIR: /usr/local/src
 ARCHIVE_SRC: "{{HOMEDIR}}/archive/{{REPO_ORG}}/{{REPO_NAME}}"
+# Canonical host compfuzor checkout (house archive convention; not yet
+# guaranteed to exist). The repo_jj_archive runner prefers this checkout's
+# launcher when present so archive refreshes use the freshest toolkit
+# regardless of which checkout renders the playbook; the executing
+# playbook's launcher remains the always-available fallback and
+# COMPFUZOR_REPO_JJ_RUNNER overrides both. Keep the rektide/compfuzor shape:
+# the opt-in self-freshen derives --archive-dir from its dirname.
+COMPFUZOR_ARCHIVE: "{{ARCHIVE_DIR}}/rektide/compfuzor"
 SHARES_DIR: /usr/share
 PASSWORDS_DIR: "{{ETC}}/secrets"
 

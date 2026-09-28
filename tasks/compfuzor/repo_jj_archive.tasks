@@ -1,13 +1,65 @@
 ---
 # The archive's worktree and bookmarks belong to jj, not ansible.builtin.git.
-# Explicit `refresh --json` emits exactly one JSON result for Ansible; the
-# flag-only legacy argv is also accepted. Mismatched URLs fail by default.
-# GIT_REMOTE_FIX=true opts into refresh's deliberate remote reconcile before
-# any fetch; use only after reviewing the declared-vs-actual URLs.
+# Runner resolution (dual path): the host's canonical compfuzor checkout
+# (COMPFUZOR_ARCHIVE) is preferred when present, so refreshes run the
+# freshest toolkit rather than whatever checkout renders this playbook; the
+# executing playbook's launcher (source-then-bundle) is the fallback that
+# always works. COMPFUZOR_REPO_JJ_RUNNER overrides both — the escape hatch
+# for a stale or broken host checkout. COMPFUZOR_SELF_FRESHEN=true opts into
+# fetching the host checkout's origin before resolution (fetch only, never a
+# worktree reset; a missing checkout is a clean no-op). Mismatched declared
+# remote URLs fail by default; GIT_REMOTE_FIX=true opts into refresh's
+# deliberate remote reconcile before any fetch.
+- name: "Compfuzor: opt-in freshen of the host compfuzor checkout"
+  ansible.builtin.command:
+    argv: >-
+      {{ [COMPFUZOR_REPO_JJ_RUNNER|default(playbook_dir ~ '/script/repo-jj-archive.ts'), 'self', '--freshen',
+          '--archive-dir', COMPFUZOR_ARCHIVE|default(lookup('env', 'HOME') ~ '/archive/rektide/compfuzor', true)|dirname|dirname] }}
+  register: compfuzor_self_freshen
+  changed_when: "'(origin fetched)' in compfuzor_self_freshen.stdout"
+  when: COMPFUZOR_SELF_FRESHEN|default(false)|bool and JJ_BYPASS is deffalsy
+
+- name: "Compfuzor: stat the host compfuzor checkout launcher"
+  ansible.builtin.stat:
+    path: "{{ COMPFUZOR_ARCHIVE|default(lookup('env', 'HOME') ~ '/archive/rektide/compfuzor', true) }}/script/repo-jj-archive.ts"
+  register: compfuzor_host_launcher
+  when: COMPFUZOR_REPO_JJ_RUNNER is undefined and JJ_BYPASS is deffalsy
+
+- name: "Compfuzor: resolve the jj archive runner"
+  ansible.builtin.set_fact:
+    compfuzor_repo_jj_runner: >-
+      {{ COMPFUZOR_REPO_JJ_RUNNER|default(
+           COMPFUZOR_ARCHIVE|default(lookup('env', 'HOME') ~ '/archive/rektide/compfuzor', true) ~ '/script/repo-jj-archive.ts'
+             if compfuzor_host_launcher.stat.executable|default(False) else
+           playbook_dir ~ '/script/repo-jj-archive.ts', True) }}
+
+- name: "Compfuzor: jj archive runner resolved to the host checkout"
+  ansible.builtin.debug:
+    msg: >-
+      repo-jj-archive: host compfuzor checkout preferred ({{COMPFUZOR_ARCHIVE|default(lookup('env', 'HOME') ~ '/archive/rektide/compfuzor', true)}});
+      set COMPFUZOR_REPO_JJ_RUNNER to pin a specific runner
+  when: compfuzor_host_launcher.stat.executable|default(False)
+
+- name: "Compfuzor: jj archive runner falling back to the playbook bundle"
+  ansible.builtin.debug:
+    msg: >-
+      repo-jj-archive: no usable host compfuzor launcher found at
+      {{COMPFUZOR_ARCHIVE|default(lookup('env', 'HOME') ~ '/archive/rektide/compfuzor', true)}};
+      using the playbook checkout's launcher (source when its deps exist,
+      otherwise its committed bundle)
+  when: >-
+    COMPFUZOR_REPO_JJ_RUNNER is undefined and
+    not (compfuzor_host_launcher.stat.executable|default(False))
+
+- name: "Compfuzor: jj archive runner pinned by override"
+  ansible.builtin.debug:
+    msg: "repo-jj-archive: using COMPFUZOR_REPO_JJ_RUNNER={{COMPFUZOR_REPO_JJ_RUNNER}}"
+  when: COMPFUZOR_REPO_JJ_RUNNER is defined
+
 - name: "Compfuzor: refresh jj archive"
   ansible.builtin.command:
     argv: >-
-      {{ [COMPFUZOR_REPO_JJ_RUNNER | default(playbook_dir ~ '/script/repo-jj-archive.ts'), 'refresh', '--json',
+      {{ [compfuzor_repo_jj_runner, 'refresh', '--json',
           '--dest', GIT_DIR|def(REPO_DIR, DIR, falsy=True),
           '--repo', REPO, '--remotes', GIT_REMOTES|default({})|to_json,
           '--remote', GIT_REMOTE|default('origin'),

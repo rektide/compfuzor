@@ -467,3 +467,93 @@ def test_launcher_uses_standalone_bundle_without_source_or_node_modules() -> Non
         output = run(str(launcher), "refresh", "--json", "--dest", str(checkout),
                      "--repo", str(remote), "--label", "fixture", cwd=tmp)
         assert json.loads(output)["changed"] and (checkout / ".jj").is_dir()
+
+
+def test_runner_prefers_host_checkout_with_playbook_fallback() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, seed = create_remote(tmp)
+        archive = tmp / "archive"
+        # Host compfuzor checkout in the canonical rektide/compfuzor shape;
+        # its launcher is a wrapper that records use, then execs the real
+        # committed bundle so the refresh itself behaves identically.
+        hostcf = tmp / "archive-root" / "rektide" / "compfuzor"
+        run("git", "clone", str(remote), str(hostcf), cwd=tmp)
+        run("jj", "git", "init", "--colocate", cwd=hostcf)
+        (hostcf / "script").mkdir(parents=True)
+        marker = tmp / "host-runner-used"
+        wrapper = hostcf / "script" / "repo-jj-archive.ts"
+        wrapper.write_text(
+            "#!/bin/sh\n"
+            f"printf 'host\\n' >> {str(marker)!s}\n"
+            f"exec node {str(ROOT / 'archive/repo-jj-archive.ts')!s} \"$@\"\n"
+        )
+        wrapper.chmod(0o755)
+        # The opt-in freshen must discover this exact checkout from the
+        # archive root (two parent directories above COMPFUZOR_ARCHIVE).
+        freshened = advance(seed, "freshened by self\n")
+        # Each case renders from its own playbook dir staged as a slim
+        # executing checkout: launcher plus committed bundle, no source.
+        def stage(case: str) -> Path:
+            play_dir = tmp / case
+            (play_dir / "script").mkdir(parents=True, exist_ok=True)
+            (play_dir / "archive").mkdir(exist_ok=True)
+            shutil.copy2(RUNNER, play_dir / "script/repo-jj-archive.ts")
+            shutil.copy2(ROOT / "archive/repo-jj-archive.ts",
+                         play_dir / "archive/repo-jj-archive.ts")
+            return play_dir
+
+        environment = os.environ | {
+            "ANSIBLE_CONFIG": str(ROOT / "ansible.cfg"),
+            "ANSIBLE_ROLES_PATH": str(ROOT / "roles"),
+        }
+
+        def play(case: str, comfuzor_archive: Path, runner: Path | None = None) -> str:
+            playbook = stage(case) / "render.pb"
+            override = f"\n    COMPFUZOR_REPO_JJ_RUNNER: {str(runner)!r}" if runner else ""
+            playbook.write_text(f"""---
+- hosts: all
+  gather_facts: false
+  vars:
+    NAME: fixture
+    DIR: {str(tmp / ('deployment-' + case))!r}
+    REPO: {str(remote)!r}
+    GIT_DIR: {str(archive)!r}
+    COMPFUZOR_ARCHIVE: {str(comfuzor_archive)!r}
+    COMPFUZOR_SELF_FRESHEN: true{override}
+  tasks:
+    - import_role:
+        name: compfuzor_repo_notices
+    - import_tasks: {str(ROOT / 'tasks/compfuzor/repo_jj_archive.tasks')!r}
+""")
+            return run("ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook),
+                       cwd=ROOT, env=environment)
+
+        # Host checkout is preferred over the executing playbook's launcher;
+        # opt-in freshen fetches its origin without resetting its worktree.
+        output = play("a", hostcf)
+        assert "host compfuzor checkout preferred" in output, output
+        assert marker.exists(), "host launcher was not used"
+        assert run("git", "rev-parse", "refs/remotes/origin/main", cwd=hostcf) == freshened
+        assert (archive / ".jj").is_dir()
+        # Explicit runner override beats the host checkout.
+        marker.unlink(missing_ok=True)
+        output = play("b", hostcf, runner=RUNNER)
+        assert "host compfuzor checkout preferred" not in output, output
+        assert "using COMPFUZOR_REPO_JJ_RUNNER" in output, output
+        assert not marker.exists(), "override did not bypass the host launcher"
+        # Missing host checkout falls back to the playbook_dir launcher.
+        marker.unlink(missing_ok=True)
+        output = play("c", tmp / "absent")
+        assert "host compfuzor checkout preferred" not in output, output
+        assert "using the playbook checkout's launcher" in output, output
+        assert not marker.exists(), "host launcher used despite missing checkout"
+        assert (archive / ".jj").is_dir()
+        # A checkout directory with a non-executable launcher is unavailable,
+        # not a selected-but-broken runner; use the same playbook fallback.
+        wrapper.chmod(0o644)
+        marker.unlink(missing_ok=True)
+        output = play("d", hostcf)
+        assert "no usable host compfuzor launcher found" in output, output
+        assert not marker.exists(), "non-executable host launcher was selected"
