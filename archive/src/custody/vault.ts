@@ -16,6 +16,7 @@
  */
 import { link, lstat, mkdir, open, readFile, unlink } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
+import { constants } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import { sha256, vaultBundlePath } from "./codec.ts";
 import { CustodyError, invalid } from "./errors.ts";
@@ -27,6 +28,10 @@ export const BUNDLE_NAME = "source.bundle";
 export const INTENT_NAME = "intent.json";
 
 const encoder = new TextEncoder();
+
+/** Existing vault components must be private, not merely writable by us. */
+const privateComponent = (info: { uid: number; mode: number }): boolean =>
+  info.uid === (process.geteuid?.() ?? -1) && (info.mode & 0o077) === 0;
 
 /** Archive identity: SHA-256 over the canonical destination realpath bytes. */
 export function vaultArchiveId(destRealpath: string): Sha256 {
@@ -137,6 +142,11 @@ export async function resolveVaultBundle(
       throw reject(`vault ${what} is not a directory: ${path}`, false);
     if (expect === "file" && !info.isFile())
       throw reject(`vault ${what} is not a regular file: ${path}`, false);
+    if (!privateComponent(info))
+      throw reject(
+        `vault ${what} is not owned by this user with owner-only permissions: ${path}`,
+        false,
+      );
   };
   const vault = join(dirname(destRealpath), VAULT_DIRNAME);
   await component(vault, "root", "root", "directory");
@@ -144,6 +154,76 @@ export async function resolveVaultBundle(
   await component(join(vault, archiveId, runId), "run", "run directory", "directory");
   await component(target, "bundle", "bundle", "file");
   return target;
+}
+
+/**
+ * Read through anchored Linux directory descriptors. Checking a pathname and
+ * later opening it is not sufficient: an untrusted archive parent could swap
+ * a directory component between the two operations. Each child is opened via
+ * its parent's /proc/self/fd descriptor with O_NOFOLLOW; fstat checks the
+ * opened inode, including owner and permissions. The caller receives bytes,
+ * never a path to reopen for the custody proof.
+ */
+export async function readVaultBundle(
+  receipt: ReceiptV1,
+  destRealpath: string,
+): Promise<{ readonly path: string; readonly bytes: Uint8Array }> {
+  const path = vaultBundleTarget(receipt, destRealpath);
+  const { archiveId, runId } = parseVaultRelative(receipt.bundle.pathRelativeToDestinationParent);
+  const handles: Awaited<ReturnType<typeof open>>[] = [];
+  const vault = join(dirname(destRealpath), VAULT_DIRNAME);
+  const parts = [
+    { name: vault, kind: "root" as const, expect: "directory" as const },
+    { name: archiveId, kind: "archive" as const, expect: "directory" as const },
+    { name: runId, kind: "run" as const, expect: "directory" as const },
+    { name: BUNDLE_NAME, kind: "bundle" as const, expect: "file" as const },
+  ];
+  try {
+    for (const part of parts) {
+      const parent = handles.at(-1);
+      const anchored = parent === undefined ? part.name : `/proc/self/fd/${parent.fd}/${part.name}`;
+      let handle: Awaited<ReturnType<typeof open>>;
+      try {
+        handle = await open(
+          anchored,
+          constants.O_RDONLY |
+            constants.O_NOFOLLOW |
+            (part.expect === "directory" ? constants.O_DIRECTORY : 0),
+        );
+      } catch (error) {
+        const missing = (error as NodeJS.ErrnoException).code === "ENOENT";
+        throw new VaultPathComponentError({
+          component: part.kind,
+          path:
+            part.kind === "root"
+              ? vault
+              : join(
+                  vault,
+                  archiveId,
+                  ...(part.kind === "run" || part.kind === "bundle" ? [runId] : []),
+                  ...(part.kind === "bundle" ? [BUNDLE_NAME] : []),
+                ),
+          message: `vault ${part.kind} ${missing ? "is missing" : "cannot be safely opened"}: ${path}`,
+          missing,
+        });
+      }
+      handles.push(handle);
+      const info = await handle.stat();
+      if (
+        (part.expect === "directory" ? !info.isDirectory() : !info.isFile()) ||
+        !privateComponent(info)
+      )
+        throw new VaultPathComponentError({
+          component: part.kind,
+          path,
+          message: `vault ${part.kind} is not an owner-only ${part.expect}: ${path}`,
+          missing: false,
+        });
+    }
+    return { path, bytes: await handles[handles.length - 1]!.readFile() };
+  } finally {
+    for (const handle of handles.reverse()) await handle.close();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -189,6 +269,8 @@ const mkdirLevel = async (dir: string, what: string, signal?: AbortSignal): Prom
   if (existing !== null) {
     if (!existing.isDirectory() || existing.isSymbolicLink())
       throw vaultWrite(`${what} exists and is not a directory`, dir);
+    if (!privateComponent(existing))
+      throw vaultWrite(`${what} is not owned by this user with owner-only permissions`, dir);
     return;
   }
   try {
@@ -203,6 +285,9 @@ const mkdirLevel = async (dir: string, what: string, signal?: AbortSignal): Prom
   }
   await syncDir(dirname(dir));
   signal?.throwIfAborted();
+  const created = await lstat(dir);
+  if (!created.isDirectory() || !privateComponent(created))
+    throw vaultWrite(`${what} is not owner-only after creation`, dir);
 };
 
 /** Containment in either direction (a path component boundary, not prefixes). */
@@ -248,6 +333,9 @@ export async function createVaultRun(
   }
   await syncDir(archiveDir);
   signal?.throwIfAborted();
+  const created = await lstat(runDir);
+  if (!created.isDirectory() || !privateComponent(created))
+    throw vaultWrite("run directory is not owner-only after creation", runDir);
   return {
     vaultRoot,
     archiveDir,
@@ -277,6 +365,10 @@ export async function sealVaultFile(
   if (existing !== null)
     throw vaultWrite("target already exists; vault files are never overwritten", target);
   const directory = dirname(target);
+  const dirInfo = await lstat(directory);
+  signal?.throwIfAborted();
+  if (!dirInfo.isDirectory() || !privateComponent(dirInfo))
+    throw vaultWrite("target directory is not owner-only", directory);
   const temp = join(directory, `.${basename(target)}.tmp-${randomBytes(8).toString("hex")}`);
   try {
     signal?.throwIfAborted();
