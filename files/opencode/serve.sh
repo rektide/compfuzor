@@ -26,11 +26,17 @@ binary=${OPENCODE_BINARY:-/usr/local/bin/opencode}
 # word-splits it into exec argv because systemd cannot — ExecStart ${VAR}
 # expansion passes the whole value as a single argument.
 #
-# Drop-in plan: when the opencode-args feature line (~/src/opencode-args)
-# lands native LoadCredential password reading (the credential export above)
-# and serve-route environment argument parsing, this wrapper is deleted and
-# ExecStart becomes bare `opencode serve` with the vector in the unit
-# environment. Nothing else about the deployment changes.
+# Drop-in plan (mechanism verified on systemd 262): when the opencode-args
+# feature line (~/src/opencode-args) is composed and deployed with
+# OPENCODE_PASSWORD_FILE support, this wrapper is deleted. systemd expands
+# ${CREDENTIALS_DIRECTORY} in ExecStart argv but not in Environment=, so the
+# unit becomes:
+#   ExecStart=/usr/bin/env \
+#     OPENCODE_PASSWORD_FILE=${CREDENTIALS_DIRECTORY}/OPENCODE_PASSWORD \
+#     <binary> serve
+# with the credential export above gone and the baked vector moved to the
+# variable the CLI parses natively — paired with filtering serve-scoped arg
+# variables from the session env so tool shells do not inherit them.
 serve_args=${OPENCODE_SERVE_ARGS:?OPENCODE_SERVE_ARGS is not set: run build.sh (or bin/build-env-serve-args.sh) to bake the serve arguments}
 read -r -a serve_argv <<<"$serve_args"
 

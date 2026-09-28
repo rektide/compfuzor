@@ -352,11 +352,16 @@
       BINS helpers because a long-running `ExecStart` must not exit
       successfully through a provisioning bypass guard.
 
-      When the `opencode-args` feature line (`~/src/opencode-args`) lands
-      native LoadCredential password reading and serve-route environment
-      argument parsing, `serve.sh` is deleted: `ExecStart` becomes bare
-      `opencode serve` and the baked vector moves to the variable the CLI
-      parses natively from the unit EnvironmentFile.
+      When the `opencode-args` feature line (`~/src/opencode-args`) is
+      composed and deployed with `OPENCODE_PASSWORD_FILE` support,
+      `serve.sh` is deleted. systemd expands `${CREDENTIALS_DIRECTORY}` in
+      `ExecStart` argv but not in `Environment=` (verified on systemd 262),
+      so the unit runs
+      `ExecStart=/usr/bin/env OPENCODE_PASSWORD_FILE=${CREDENTIALS_DIRECTORY}/OPENCODE_PASSWORD <binary> serve`
+      and the baked vector moves to the variable the CLI parses natively
+      from the unit EnvironmentFile — paired with filtering serve-scoped
+      argument variables from the session env so tool shells spawned by the
+      server do not inherit them.
 
       ## Operations
 
@@ -837,10 +842,15 @@
         # action. The generic TYPE=opencode bypass wrapper can exit 0 on a
         # bypass and fight Restart=always. systemd's EnvironmentFile and
         # LoadCredential supply its inputs; the body validates required values.
-        # Drop-in plan: deleted once the opencode-args feature line
-        # (~/src/opencode-args) lands LoadCredential password reading and
-        # serve-route environment argument parsing; ExecStart then becomes
-        # bare `opencode serve` with the baked vector in the unit environment.
+        # Drop-in plan (mechanism verified on systemd 262): deleted once the
+        # opencode-args feature line (~/src/opencode-args) is composed and
+        # deployed with OPENCODE_PASSWORD_FILE support. systemd expands
+        # ${CREDENTIALS_DIRECTORY} in ExecStart argv but not in Environment=,
+        # so the unit runs
+        #   ExecStart=/usr/bin/env OPENCODE_PASSWORD_FILE=${CREDENTIALS_DIRECTORY}/OPENCODE_PASSWORD <binary> serve
+        # with the baked vector in the unit environment on the variable the
+        # CLI parses natively, paired with session-env filtering so tool
+        # shells do not inherit serve-scoped args.
         helpers: false
       - name: restart.sh
         basedir: False
