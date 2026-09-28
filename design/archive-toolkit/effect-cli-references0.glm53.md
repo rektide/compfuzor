@@ -391,3 +391,127 @@ ansible transport constrains laziness.
 - `~/src/dl/design/` (Model B / rc.116 capability inventory) — sibling repo's current Effect adoption research.
 - `~/src/opencode-bus-smart/design/bus-smart/observability0.glm53.md` — verified Effect v4 observability notes (rc.112→rc.115).
 - Sibling waves in this directory (`direction0.gpt6astra.md`, `custody-contracts0.gpt6sol.md`) were deliberately **not** read, per wave-independence rules.
+
+---
+
+# Addendum — execution boundary: Effect process execution, tinyexec fallback (2026-09-27)
+
+Operator decision to record, revising this wave's scope: **use Effect process
+execution if available, otherwise tinyexec. No bespoke process-runtime work;
+no general custom subprocess framework** (parent halted that line). This
+section pins the exact current-API references that authorize the execution
+boundary. All references verified against the rc.117 checkout
+(`git 64093976`, 2026-09-26) unless marked rc.112-era.
+
+## A. `effect/process` — the primary path is available on rc.117
+
+The v4 core package exposes subprocess execution as a service at subpath
+[`effect/process`](https://github.com/Effect-TS/effect/blob/main/packages/effect/src/process/)
+(`@stability unstable`, `@since 4.0.0`). Two modules:
+
+- [`ChildProcess.ts`](https://github.com/Effect-TS/effect/blob/main/packages/effect/src/process/ChildProcess.ts) — command descriptions:
+  - `ChildProcess.make(command, args, options?)` → `StandardCommand`;
+    `pipeTo(left, right, options?)` → `PipedCommand` (both are
+    `Effect<ChildProcessHandle, PlatformError, ChildProcessSpawner | Scope>`);
+    combinators `prefix`, `setCwd`, `setEnv`; helpers `fdName(number)` →
+    `"fd3"`, `parseFdName`.
+  - `CommandOptions` (extends `KillOptions`): `cwd`, `env`,
+    `extendEnv`, `shell`, `detached`, `windowsHide`, `stdin`/`stdout`/`stderr`
+    configs, and `additionalFds: Record<"fd3" | …, AdditionalFdConfig>`.
+    `PipeFromOption`: `"stdout" | "stderr" | "all" | \`fd${number}\``.
+- [`ChildProcessSpawner.ts`](https://github.com/Effect-TS/effect/blob/main/packages/effect/src/process/ChildProcessSpawner.ts) — the service and handle:
+  - `class ChildProcessSpawner extends Context.Service<…>` (tag
+    `"effect/process/ChildProcessSpawner"`) with methods `spawn(command)` →
+    handle (scoped), `exitCode(command)` → branded `ExitCode`,
+    `streamString(command, {includeStderr?})`, `streamLines(…)`,
+    `lines(…)` → `Effect<Array<string>>`, `string(…)` → `Effect<string>`.
+  - `ChildProcessHandle`: `pid: ProcessId`, `exitCode`, `isRunning`,
+    `kill({signal?})` (default `SIGTERM`), `unref`/`reref`, **and the raw
+    byte surface**:
+    - `stdin: Sink.Sink<void, Uint8Array, never, PlatformError>`
+    - `stdout` / `stderr`: `Stream.Stream<Uint8Array, PlatformError>`
+    - `all`: interleaved `Stream.Stream<Uint8Array, PlatformError>`
+      (docstring warns about interleaving when also reading `stdout`/`stderr`)
+    - `getInputFd(fd)` / `getOutputFd(fd)` for `additionalFds` — same
+      `Uint8Array` Sink/Stream shapes (drain/empty when unconfigured).
+
+**Raw byte stdout/stdin support is native**: the handle's streams and sink are
+`Uint8Array`-typed; text (`streamString`/`streamLines`/`string`/`lines`) is a
+derived convenience via `Stream.decodeText`, not the wire format. jj's
+stdout/stderr can be consumed as bytes with no transcoding layer.
+
+## B. Node layer references
+
+- [`packages/platform/node/src/NodeServices.ts`](https://github.com/Effect-TS/effect/blob/main/packages/platform/node/src/NodeServices.ts):
+  `NodeServices = ChildProcessSpawner | Crypto | FileSystem | Path | Stdio | Terminal`;
+  **`NodeServices.layer` includes `NodeChildProcessSpawner.layer`**
+  (`Layer.provideMerge`). One layer provides the spawner alongside everything
+  the CLI basics example already uses.
+- [`packages/platform/node/src/NodeChildProcessSpawner.ts`](https://github.com/Effect-TS/effect/blob/main/packages/platform/node/src/NodeChildProcessSpawner.ts):
+  re-export of the implementation at
+  [`packages/platform/node-shared/src/NodeChildProcessSpawner.ts`](https://github.com/Effect-TS/effect/blob/main/packages/platform/node-shared/src/NodeChildProcessSpawner.ts),
+  which imports `node:child_process` (+ `node:stream` `PassThrough`) and
+  exposes `layer: Layer.Layer<ChildProcessSpawner, never, FileSystem | Path>`.
+  Note the requirement: the Node spawner wants `FileSystem` + `Path` in
+  context — `NodeServices.layer` satisfies this; a bare
+  `NodeChildProcessSpawner.layer` does not.
+- Upstream in-repo fixture precedent: the CLI `CliTestLayer` jsdoc stubs
+  `ChildProcessSpawner` via `ChildProcessSpawner.make(() => Effect.die(...))`
+  (§1.3 of the main report) — the same seam used for tests.
+
+## C. The fallback seam, precisely
+
+`ChildProcessSpawner.make(spawn)` (in
+[`ChildProcessSpawner.ts`](https://github.com/Effect-TS/effect/blob/main/packages/effect/src/process/ChildProcessSpawner.ts))
+constructs the **entire service from one function** — the raw `spawn`
+implementation — deriving `exitCode`, `streamString`, `streamLines`, `lines`,
+`string` for you. This is the exact, sanctioned point where a tinyexec-backed
+backend would plug in *if* one is ever needed: implement only raw spawn
+against `tinyexec`'s `x()` result (stdin `Uint8Array` piping, byte stdout
+collection), get the full high-level API unchanged. It is also how tests stub
+the spawner. `makeHandle(params)` exists for fabricating handles in such
+backends.
+
+**Local proof of the seam** (rc.112-era, cited as evidence the seam works —
+not as a template to generalize): `opencode-provider-metrics` /
+`opencode-args` `packages/core/src/cross-spawn-spawner.ts` implement a full
+`ChildProcessSpawner` over the `cross-spawn` npm package: `makeSpawner(own
+spawn)`, `makeHandle`, errno→`PlatformError` tag mapping, piped-command
+flattening, with tests (`test/effect/cross-spawn-spawner.test.ts`), plus an
+app-typed wrapper `packages/core/src/process.ts` (`AppProcessError`, byte
+`stdin`, output caps). Per the halt: do **not** extract or rebuild this as a
+shared framework; it only demonstrates that `make(spawn)` is sufficient.
+
+## D. tinyexec — the fallback, local evidence
+
+tinyexec is already the local habit for lightweight subprocess calls outside
+Effect:
+
+- `exec-all` `~/src/exec-all` — `tinyexec ^1.3.1`, imports in `exec-all.ts` (a whole CLI dedicated to running subprocesses).
+- `niri-mcp` — `tinyexec ^1.0.2`, e.g. `tool/msg/overview-state.ts`.
+- `dl-gpt` — `tinyexec ^1.0.2`; `block-in-file` — `^1.0.2`; `omnipo`,
+  `gunshi-dirs-xdg` (`src/systemd.ts`) — import sites confirmed.
+
+Version note: `^1.3.1` is current locally; the `^1.0.x` pins predate it —
+prefer `@latest` if added to the toolkit.
+
+## E. Current toolkit state the boundary governs
+
+`/archive/src/repository/jj.ts` invokes jj via `promisify(execFile)` from
+`node:child_process` — a callback-era promisified helper with no bytes-typed
+surfaces and no cancellation/scope story. Under the decision this becomes:
+`ChildProcess` commands + `ChildProcessSpawner` from `NodeServices.layer`
+when the Effect runtime is present (the rc.117 core API *is* available —
+"if available" resolves to yes on the current pin), with tinyexec reserved
+for non-Effect contexts. `CommandOptions.cwd/env/extendEnv` covers the
+toolkit's per-checkout `cwd` + env-passing needs; `handle.stdout` byte
+streams cover `--json`-mode parsing; scoped `spawn` gives deterministic
+child teardown per command run.
+
+## F. Version caveat for the boundary
+
+rc.112-era local code imports `effect/unstable/process/*` (see the
+cross-spawn spawner); rc.117 moved it to `effect/process` (#8354, §1.4 of the
+main report). Any boundary code on the archive pin uses `effect/process`
+paths; when reading the rc.112 precedents, translate both module path and
+constructor-era.
