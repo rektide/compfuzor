@@ -188,6 +188,39 @@ def test_deploy_uses_colocated_workspace_without_moving_archive_main() -> None:
         assert (archive / "operator-note").read_text() == "unsnapshotted archive work\n"
 
 
+def test_deploy_accepts_symlinked_archive_but_refuses_dangling_link() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, seed = create_remote(tmp)
+        archive = tmp / "store" / "fixture"
+        archive.parent.mkdir()
+        render(archive, remote)
+        linked = tmp / "archive" / "fixture"
+        linked.parent.mkdir()
+        linked.symlink_to(archive, target_is_directory=True)
+        workspace = tmp / "deployment" / "repo"
+        args = ("deploy", "--json", "--archive", str(linked), "--workspace", str(workspace),
+                "--repo", str(remote), "--label", "fixture")
+        first = json.loads(toolkit(*args, cwd=tmp))
+        assert first["changed"] and (workspace / ".git").is_file() and (workspace / ".jj").is_dir()
+        assert run("jj", "workspace", "root", cwd=workspace) == str(workspace)
+        assert json.loads(toolkit(*args, cwd=tmp)) == NOOP
+        advance(seed)
+        assert json.loads(toolkit(*args, cwd=tmp))["changed"]
+        assert (workspace / "tracked").read_text() == "upstream\n"
+        dangling = tmp / "dangling" / "fixture"
+        dangling.parent.mkdir()
+        dangling.symlink_to(tmp / "store" / "absent")
+        broken = subprocess.run(
+            ("node", str(ROOT / "archive/src/repo-jj-archive.ts"), "deploy", "--json",
+             "--archive", str(dangling), "--workspace", str(tmp / "nowhere" / "repo"),
+             "--repo", str(remote), "--label", "fixture"),
+            cwd=tmp, capture_output=True, text=True)
+        assert broken.returncode and "not a jj-colocated archive" in broken.stderr
+        assert not (tmp / "nowhere").exists()
+
+
 def test_deploy_adds_git_worktree_to_existing_archive_jj_workspace() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:

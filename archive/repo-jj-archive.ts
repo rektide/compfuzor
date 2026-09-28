@@ -34752,6 +34752,25 @@ const entry = async (path) => {
 		throw error;
 	}
 };
+/** Like {@link entry}, but follows a symlinked final component. */
+const followEntry = async (path) => {
+	try {
+		return await stat(path);
+	} catch (error) {
+		if (error.code === "ENOENT") return void 0;
+		throw error;
+	}
+};
+/**
+* An archive reached through a symlink is the archive it points at: relocated
+* `~/archive/<org>/<repo>` entries are legitimate shared repositories. A
+* dangling link falls back to the link itself so it is reported as an
+* unprepared path rather than treated as a clone candidate.
+*/
+const archiveEntryAt = async (archive) => {
+	const declared = await entry(archive);
+	return declared?.isSymbolicLink() ? await followEntry(archive) ?? declared : declared;
+};
 /** Canonicalize an absent destination via its nearest existing ancestor. */
 const canonicalPath = async (path) => await entry(path) ? realpath(path) : join(await canonicalPath(dirname(path)), basename(path));
 const within = (parent, child) => {
@@ -34766,7 +34785,7 @@ const gitWorktreeBelongsTo = async (archive, workspace) => {
 async function deployWorkspace(options, execution) {
 	const archive = resolve(options.archive);
 	const workspace = resolve(options.workspace);
-	const archiveEntry = await entry(archive);
+	const archiveEntry = await archiveEntryAt(archive);
 	if (archiveEntry && (!archiveEntry.isDirectory() || !(await entry(`${archive}/.jj`))?.isDirectory() || !(await entry(`${archive}/.git`))?.isDirectory())) throw new Error(`${archive} is not a jj-colocated archive; prepare it separately`);
 	const workspaceEntry = await entry(workspace);
 	if (workspaceEntry && !workspaceEntry.isDirectory()) throw new Error(`${workspace} is occupied; move it aside or clean it up manually before creating a jj workspace`);

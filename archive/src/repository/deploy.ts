@@ -2,7 +2,7 @@
  * A Compfuzor deployment is a real jj workspace (and Git worktree) of the
  * canonical archive. Never convert, replace, or clear an occupied destination.
  */
-import { lstat, mkdir, readFile, readdir, realpath } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, realpath, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { safeLabel } from "../recovery/harvest.ts";
@@ -19,6 +19,27 @@ const entry = async (path: string) => {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw error;
   }
+};
+
+/** Like {@link entry}, but follows a symlinked final component. */
+const followEntry = async (path: string) => {
+  try {
+    return await stat(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+};
+
+/**
+ * An archive reached through a symlink is the archive it points at: relocated
+ * `~/archive/<org>/<repo>` entries are legitimate shared repositories. A
+ * dangling link falls back to the link itself so it is reported as an
+ * unprepared path rather than treated as a clone candidate.
+ */
+const archiveEntryAt = async (archive: string) => {
+  const declared = await entry(archive);
+  return declared?.isSymbolicLink() ? ((await followEntry(archive)) ?? declared) : declared;
 };
 
 /** Canonicalize an absent destination via its nearest existing ancestor. */
@@ -48,7 +69,7 @@ export async function deployWorkspace(
 ): Promise<RefreshResult> {
   const archive = resolve(options.archive);
   const workspace = resolve(options.workspace);
-  const archiveEntry = await entry(archive);
+  const archiveEntry = await archiveEntryAt(archive);
   if (
     archiveEntry &&
     (!archiveEntry.isDirectory() ||
