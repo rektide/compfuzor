@@ -1,42 +1,24 @@
-# Load the operator-managed server credential once per shell. Keep the secret
-# in its single persisted 0600 file rather than copying it into a ZIM fragment.
-if [[ -z ${OPENCODE_PASSWORD:-} && -r ${OPENCODE_PASSWORD_FILE:-} ]]; then
-  IFS= read -r OPENCODE_PASSWORD < "$OPENCODE_PASSWORD_FILE"
-  export OPENCODE_PASSWORD
-fi
-
-# Load the client-only ZIM_ARRAYS defaults here as well as through the host
-# roster. This keeps both the shell wrapper and opencode-last on one argv source.
-# Rendered default kept in its own assignment: a Jinja expression inline in a
-# parameter expansion can lose its closing brace before rendering (see
-# status-opencode-ok.sh). Primary instances read the ZIM module; secondary
-# instances have no ZIM emission, so the file is absent and this is a no-op.
-typeset _opencode_args_default="{{ETC}}/zim-modules/opencode-client-args/init.zsh"
-typeset _opencode_args_module=${OPENCODE_ARGS_MODULE:-$_opencode_args_default}
-[[ ! -r $_opencode_args_module ]] || source "$_opencode_args_module"
-unset _opencode_args_module _opencode_args_default
+# Legacy boundary-aware shell wrapper, retained as an opt-in fallback for an
+# older CLI. Load opencode-client-env.zsh first; it owns credentials and the
+# scalar OPENCODE_ARGS default. This file only converts those defaults to argv.
 
 # Route interactive clients read-only through OpenCode's explicit-server path.
 # Administrative service commands and explicit connection choices remain the
 # upstream default/fallback world; their lifecycle is not delegated to systemd.
 _opencode_run() {
   local binary=${OPENCODE_BINARY:-/usr/local/bin/opencode}
-  local port=${OPENCODE_SERVER_PORT:-49373}
-  local url=${OPENCODE_SERVER_URL:-http://127.0.0.1:$port}
   local arg top
   local -i index=1
   local -a server_args routed
 
-  # ZIM_ARRAYS provides OPENCODE_ARGS as a client-shell-only Zsh array. Ignore
-  # scalar environment values until native CLI OPENCODE_ARGS support lands.
-  if (( ${+OPENCODE_ARGS} )) && [[ ${(t)OPENCODE_ARGS} != *array* ]]; then
-    unset OPENCODE_ARGS
+  # The client environment module owns OPENCODE_ARGS. This legacy wrapper
+  # consumes its shell-word value, then clears it for the child after placing
+  # those defaults at the command parser boundary.
+  if (( ! ${+OPENCODE_ARGS} )); then
+    print -u2 "opencode: client-env module did not set OPENCODE_ARGS"
+    return 1
   fi
-  if (( ${+OPENCODE_ARGS} )) && (( $#OPENCODE_ARGS > 0 )); then
-    server_args=("${(@)OPENCODE_ARGS}")
-  else
-    server_args=(--server "$url")
-  fi
+  [[ -z $OPENCODE_ARGS ]] || server_args=("${(@z)OPENCODE_ARGS}")
 
   if [[ ! -x $binary ]]; then
     print -u2 "opencode: V2 client not found at $binary"
@@ -46,7 +28,7 @@ _opencode_run() {
   for arg in "$@"; do
     case $arg in
       --server|--server=*|--standalone)
-        command "$binary" "$@"
+        env OPENCODE_ARGS= "$binary" "$@"
         return
         ;;
     esac
@@ -80,7 +62,7 @@ _opencode_run() {
     acp|debug|console|mcp|plugin|pair|serve|service)
       # These commands either are not clients or do not yet accept the
       # explicit-server path. Keep them in the upstream fallback world.
-      command "$binary" "$@"
+      env OPENCODE_ARGS= "$binary" "$@"
       return
       ;;
   esac
@@ -94,22 +76,22 @@ _opencode_run() {
     api|models|stats|export|import|mini|run)
       routed=("${(@)argv[1,index]}" "${server_args[@]}")
       (( index < $# )) && routed+=("${(@)argv[index + 1,-1]}")
-      command "$binary" "${routed[@]}"
+      env OPENCODE_ARGS= "$binary" "${routed[@]}"
       ;;
     auth)
       # auth declares connection flags on list/login/logout, one level deeper.
       if (( index < $# )); then
         routed=("${(@)argv[1,index + 1]}" "${server_args[@]}")
         (( index + 1 < $# )) && routed+=("${(@)argv[index + 2,-1]}")
-        command "$binary" "${routed[@]}"
+        env OPENCODE_ARGS= "$binary" "${routed[@]}"
       else
-        command "$binary" "$@"
+        env OPENCODE_ARGS= "$binary" "$@"
       fi
       ;;
     *)
       # No subcommand: this is the full-screen client plus optional directory.
       routed=("${server_args[@]}" "$@")
-      command "$binary" "${routed[@]}"
+      env OPENCODE_ARGS= "$binary" "${routed[@]}"
       ;;
   esac
 }

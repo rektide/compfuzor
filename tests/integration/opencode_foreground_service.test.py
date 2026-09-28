@@ -12,19 +12,20 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 LAUNCHER = ROOT / "files/opencode/serve.sh"
-ZIM_MODULE = ROOT / "files/opencode/opencode-service.zsh"
+CLIENT_ENV_MODULE = ROOT / "files/opencode/opencode-client-env.zsh"
+LEGACY_WRAPPER = ROOT / "files/opencode/opencode-service.zsh"
 LAST_CLIENT = ROOT / "files/opencode/opencode-last"
 TEST_PASSWORD = "test-only-opencode-password"
 
 
-def fake_binary(directory: Path, name: str = "opencode2") -> Path:
+def fake_binary(directory: Path, name: str = "opencode") -> Path:
     binary = directory / name
     binary.write_text(
         """#!/bin/bash
 printf '%s\\0' "$@" > "$OPENCODE_TEST_ARGS"
 printf '%s' "${OPENCODE_PASSWORD:-}" > "$OPENCODE_TEST_PASSWORD"
 printf '%s' "$0" > "$OPENCODE_TEST_BINARY"
-printf '%s' "${OPENCODE_ARGS+x}" > "$OPENCODE_TEST_OPENCODE_ARGS"
+printf '%s' "${OPENCODE_ARGS:-}" > "$OPENCODE_TEST_OPENCODE_ARGS"
 """,
         encoding="utf-8",
     )
@@ -45,7 +46,9 @@ def capture_env(directory: Path, binary: Path, password_file: Path) -> dict[str,
             "OPENCODE_TEST_OPENCODE_ARGS": str(directory / "opencode-args-capture"),
         }
     )
+    env["PATH"] = f"{directory}:{env.get('PATH', '')}"
     env.pop("OPENCODE_PASSWORD", None)
+    env.pop("OPENCODE_ARGS", None)
     return env
 
 
@@ -56,7 +59,22 @@ def captured_arguments(directory: Path) -> list[str]:
 
 def run_zim(env: dict[str, str], command: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["zsh", "-c", f"source {shlex.quote(str(ZIM_MODULE))}; {command}"],
+        [
+            "zsh",
+            "-c",
+            f"source {shlex.quote(str(CLIENT_ENV_MODULE))}; source {shlex.quote(str(LEGACY_WRAPPER))}; {command}",
+        ],
+        cwd=ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def run_client_env(env: dict[str, str], command: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["zsh", "-c", f"source {shlex.quote(str(CLIENT_ENV_MODULE))}; {command}"],
         cwd=ROOT,
         env=env,
         check=False,
@@ -70,6 +88,7 @@ def assert_fake_call(
     env: dict[str, str],
     command: str,
     expected: list[str],
+    expected_opencode_args: str = "",
 ) -> None:
     result = run_zim(env, command)
     if result.returncode != 0:
@@ -79,7 +98,34 @@ def assert_fake_call(
         raise AssertionError(f"{command!r}: expected {expected!r}, got {actual!r}")
     captured_password = (directory / "password-capture").read_text(encoding="utf-8")
     if captured_password != TEST_PASSWORD:
-        raise AssertionError("ZIM wrapper did not export the password file value")
+        raise AssertionError("ZIM module did not export the password file value")
+    captured_opencode_args = (directory / "opencode-args-capture").read_text(encoding="utf-8")
+    if captured_opencode_args != expected_opencode_args:
+        raise AssertionError(
+            f"expected OPENCODE_ARGS={expected_opencode_args!r}, got {captured_opencode_args!r}"
+        )
+
+
+def test_native_client_env_without_routing_functions() -> None:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-opencode-client-env-") as temporary:
+        directory = Path(temporary)
+        binary = fake_binary(directory)
+        password_file = directory / "OPENCODE_PASSWORD"
+        password_file.write_text(TEST_PASSWORD, encoding="utf-8")
+        env = capture_env(directory, binary, password_file)
+
+        result = run_client_env(
+            env,
+            '(( ${+functions[opencode]} == 0 && ${+functions[opencode2]} == 0 )) || exit 10; "$OPENCODE_BINARY" models',
+        )
+        if result.returncode != 0:
+            raise AssertionError(f"native client env module call failed:\n{result.stdout}{result.stderr}")
+        if captured_arguments(directory) != ["models"]:
+            raise AssertionError(f"client env module rewrote argv: {captured_arguments(directory)!r}")
+        if (directory / "opencode-args-capture").read_text(encoding="utf-8") != "--server http://127.0.0.1:49373":
+            raise AssertionError("client env module did not export the native OPENCODE_ARGS default")
+        if (directory / "password-capture").read_text(encoding="utf-8") != TEST_PASSWORD:
+            raise AssertionError("client env module did not export the credential")
 
 
 def test_zim_routes_without_lifecycle_management() -> None:
@@ -113,36 +159,20 @@ def test_zim_routes_without_lifecycle_management() -> None:
         assert_fake_call(
             directory,
             env,
-            'typeset -ga OPENCODE_ARGS=(--server http://client-args.test); opencode2 api get /api/health',
+            'export OPENCODE_ARGS="--server http://client-args.test"; opencode2 api get /api/health',
             ["api", "--server", "http://client-args.test", "get", "/api/health"],
         )
-        args_module = directory / "opencode-client-args.zsh"
-        args_module.write_text(
-            'typeset -ga OPENCODE_ARGS=(--server "http://module-args.test")\n',
-            encoding="utf-8",
-        )
-        configured_args_env = env | {"OPENCODE_ARGS_MODULE": str(args_module)}
         assert_fake_call(
             directory,
-            configured_args_env,
-            "opencode2 api get /api/health",
-            ["api", "--server", "http://module-args.test", "get", "/api/health"],
+            env,
+            "opencode api --server http://example.test get /api/health",
+            ["api", "--server", "http://example.test", "get", "/api/health"],
         )
-        scalar_args_env = env | {"OPENCODE_ARGS": "--must-not-be-forwarded"}
         assert_fake_call(
             directory,
-            scalar_args_env,
-            "opencode2 api get /api/health",
-            ["api", "--server", "http://127.0.0.1:49373", "get", "/api/health"],
-        )
-        if (directory / "opencode-args-capture").read_text(encoding="utf-8"):
-            raise AssertionError("the wrapper forwarded scalar OPENCODE_ARGS to the client")
-        port_env = env | {"OPENCODE_SERVER_URL": "", "OPENCODE_SERVER_PORT": "49777"}
-        assert_fake_call(
-            directory,
-            port_env,
-            "typeset -ga OPENCODE_ARGS=(); opencode2 api get /api/health",
-            ["api", "--server", "http://127.0.0.1:49777", "get", "/api/health"],
+            env | {"OPENCODE_ARGS": ""},
+            "opencode2 --standalone",
+            ["--standalone"],
         )
         assert_fake_call(
             directory,
@@ -159,18 +189,11 @@ def test_zim_routes_without_lifecycle_management() -> None:
         )
         assert_fake_call(directory, env, "opencode service status", ["service", "status"])
         assert_fake_call(directory, env, "opencode2 mcp list", ["mcp", "list"])
-        assert_fake_call(directory, env, "opencode2 --standalone", ["--standalone"])
         assert_fake_call(
             directory,
             env,
             "opencode2 /workspace",
             ["--server", "http://127.0.0.1:49373", "/workspace"],
-        )
-        assert_fake_call(
-            directory,
-            env,
-            "opencode api --server http://example.test get /api/health",
-            ["api", "--server", "http://example.test", "get", "/api/health"],
         )
 
 
@@ -204,17 +227,10 @@ def test_last_client_lists_and_runs_newest_snapshot_with_server() -> None:
         env = capture_env(directory, older, directory / "OPENCODE_PASSWORD")
         password_file = directory / "OPENCODE_PASSWORD"
         password_file.write_text(TEST_PASSWORD, encoding="utf-8")
-        args_module = directory / "opencode-client-args.zsh"
-        args_module.write_text(
-            'typeset -ga OPENCODE_ARGS=(--server "http://client-args.test")\n',
-            encoding="utf-8",
-        )
         env.update(
             {
                 "OPENCODE_SNAPSHOT_DIR": str(directory),
-                "OPENCODE_SERVICE_MODULE": str(ZIM_MODULE),
-                "OPENCODE_ARGS_MODULE": str(args_module),
-                "OPENCODE_ARGS": "--must-not-be-forwarded",
+                "OPENCODE_CLIENT_ENV_MODULE": str(CLIENT_ENV_MODULE),
             }
         )
 
@@ -243,20 +259,18 @@ def test_last_client_lists_and_runs_newest_snapshot_with_server() -> None:
         )
         if result.returncode != 0:
             raise AssertionError(f"opencode-last failed:\n{result.stdout}{result.stderr}")
-        expected_args = ["api", "--server", "http://client-args.test", "get", "/api/health"]
+        expected_args = ["api", "get", "/api/health"]
         if captured_arguments(directory) != expected_args:
             raise AssertionError(f"expected {expected_args!r}, got {captured_arguments(directory)!r}")
         if Path((directory / "binary-capture").read_text(encoding="utf-8")) != newer:
             raise AssertionError("opencode-last did not execute the newest dated client")
-        if (directory / "opencode-args-capture").read_text(encoding="utf-8"):
-            raise AssertionError("opencode-last propagated OPENCODE_ARGS to the client")
+        expected_server_args = "--server http://127.0.0.1:49373"
+        if (directory / "opencode-args-capture").read_text(encoding="utf-8") != expected_server_args:
+            raise AssertionError("opencode-last did not set the native server-argument default")
         if (directory / "password-capture").read_text(encoding="utf-8") != TEST_PASSWORD:
             raise AssertionError("opencode-last did not load the configured client password")
 
-        empty_args_module = directory / "opencode-client-args-empty.zsh"
-        empty_args_module.write_text("typeset -ga OPENCODE_ARGS=()\n", encoding="utf-8")
         port_env = env | {
-            "OPENCODE_ARGS_MODULE": str(empty_args_module),
             "OPENCODE_SERVER_URL": "",
             "OPENCODE_SERVER_PORT": "49888",
         }
@@ -270,9 +284,11 @@ def test_last_client_lists_and_runs_newest_snapshot_with_server() -> None:
         )
         if port_result.returncode != 0:
             raise AssertionError(f"opencode-last port fallback failed:\n{port_result.stdout}{port_result.stderr}")
-        expected_port_args = ["api", "--server", "http://127.0.0.1:49888", "get", "/api/health"]
+        expected_port_args = ["api", "get", "/api/health"]
         if captured_arguments(directory) != expected_port_args:
             raise AssertionError(f"expected {expected_port_args!r}, got {captured_arguments(directory)!r}")
+        if (directory / "opencode-args-capture").read_text(encoding="utf-8") != "--server http://127.0.0.1:49888":
+            raise AssertionError("opencode-last did not derive native args from the overridden port")
 
 
 def test_launcher_reads_systemd_credential_without_argv_leak() -> None:
@@ -362,6 +378,7 @@ def test_launcher_expands_cors_origins_into_repeatable_flags() -> None:
 
 
 if __name__ == "__main__":
+    test_native_client_env_without_routing_functions()
     test_zim_routes_without_lifecycle_management()
     test_zim_fails_before_execution_without_password()
     test_last_client_lists_and_runs_newest_snapshot_with_server()

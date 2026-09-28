@@ -1,12 +1,10 @@
 # status-opencode-ok.sh — verify this shell talks to the managed OpenCode V2
 # deployment. Linked globally as opencode-status-ok so any shell — including
-# ones that never loaded the ZIM wrapper functions — can quickly answer:
+# ones that never loaded the client-env ZIM module — can quickly answer:
 #
-#   wrapper  is the opencode --server wrapper loaded in the invoking
-#            shell? Shell functions are invisible to child processes, so the
-#            check reads the wrapper's observable footprint instead: the ZIM
-#            module reads the 0600 password file and exports OPENCODE_PASSWORD
-#            (the secret itself never reaches env or env.export).
+#   client   did the ZIM client-env module export the 0600 credential and the
+#            native OPENCODE_ARGS default? The secret itself never reaches
+#            env or env.export.
 #   global   do the operator-managed global links (install.sh: opencode,
 #            opencode2-node) resolve, agree on version, and point into the
 #            composed working workspace instead of a stale checkout?
@@ -42,7 +40,7 @@ while [ "$#" -gt 0 ]; do
       cat <<'EOF'
 usage: status-opencode-ok.sh
   Check the invoking shell against the operator-managed OpenCode V2
-  deployment: wrapper loaded, managed global links healthy and current, and
+  deployment: client environment loaded, managed global links healthy and current, and
   PATH-resolved opencode at the managed version.
 EOF
       exit 0 ;;
@@ -66,11 +64,19 @@ realpath_of() {
   realpath -e -- "$1" 2>/dev/null || true
 }
 
-# wrapper -------------------------------------------------------------------
-if [ -n "${OPENCODE_PASSWORD:-}" ]; then
-  ok "wrapper loaded (OPENCODE_PASSWORD exported; routes --server ${OPENCODE_SERVER_URL:-<unset>})"
+# client environment -------------------------------------------------------
+if [ -n "${OPENCODE_PASSWORD:-}" ] && [ -n "${OPENCODE_SERVER_URL:-}" ]; then
+  expected_server_args="--server ${OPENCODE_SERVER_URL}"
+  case " ${OPENCODE_ARGS:-} " in
+    *" $expected_server_args "*)
+      ok "client environment loaded (OPENCODE_PASSWORD exported; native args route to ${OPENCODE_SERVER_URL})"
+      ;;
+    *)
+      bad "client OPENCODE_ARGS does not include the managed server default: $expected_server_args"
+      ;;
+  esac
 else
-  bad "wrapper not loaded in this shell: OPENCODE_PASSWORD unset; the ZIM module exports it after reading ${OPENCODE_PASSWORD_FILE:-the password file}, and without it opencode skips --server and hits the default world"
+  bad "client environment not loaded: OPENCODE_PASSWORD or OPENCODE_SERVER_URL unset; source the opencode-client-args ZIM module"
 fi
 
 # global managed deployment -------------------------------------------------
@@ -117,11 +123,7 @@ done
 for name in opencode; do
   resolved="$(command -v "$name" 2>/dev/null || true)"
   if [ -z "$resolved" ]; then
-    if [ "$name" = opencode ] && [ -n "${OPENCODE_PASSWORD:-}" ]; then
-      note "opencode is not on PATH here; the wrapper function supplies that name in shells that loaded the module"
-    else
-      bad "$name is not on PATH in this shell"
-    fi
+    bad "$name is not on PATH in this shell"
     continue
   fi
   real="$(realpath_of "$resolved")"

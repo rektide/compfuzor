@@ -59,6 +59,7 @@ def run_playbook(extra: dict[str, str], expect_failure: bool = False):
 def roots(fixture: Path, instance: str) -> dict[str, str]:
     return {
         "SRCS_DIR": str(fixture / "src"),
+        "OPTS_DIR": str(fixture / "opts"),
         "ETCS_DIR": str(fixture / "etc-opt"),
         "GLOBAL_BINS_DIR": str(fixture / "global-bins"),
         "PASSWORDS_DIR": str(fixture / "config" / f"opencode-{instance}" / "secrets"),
@@ -109,7 +110,12 @@ def test_primary_render_is_unchanged(fixture: Path) -> None:
     ):
         if expected not in env:
             raise AssertionError(f"primary env lost {expected!r}:\n{env}")
-    for forbidden in ("OPENCODE_BINARY=", "OPENCODE_CONFIG_DIR=", "OPENCODE_DB=", "OPENCODE_SERVICE_MODULE="):
+    for forbidden in (
+        "OPENCODE_BINARY=",
+        "OPENCODE_CONFIG_DIR=",
+        "OPENCODE_DB=",
+        "OPENCODE_CLIENT_ENV_MODULE=",
+    ):
         if forbidden in env:
             raise AssertionError(f"primary env gained presence-gated key {forbidden!r}:\n{env}")
 
@@ -118,6 +124,8 @@ def test_primary_render_is_unchanged(fixture: Path) -> None:
         "Description=OpenCode V2 operator-managed foreground server",
         "SyslogIdentifier=opencode",
         f"ExecStart={deployment}/bin/serve.sh",
+        f"EnvironmentFile=-{deployment}/env",
+        f"LoadCredential=OPENCODE_PASSWORD:{fixture}/config/opencode-git/secrets/OPENCODE_PASSWORD",
     ):
         if expected not in service:
             raise AssertionError(f"primary unit lost {expected!r}:\n{service}")
@@ -137,10 +145,30 @@ def test_primary_render_is_unchanged(fixture: Path) -> None:
         if expected not in install:
             raise AssertionError(f"primary install.sh lost unsuffixed link {expected!r}:\n{install}")
 
-    module = require_file(etc / "zim-modules" / "opencode-service" / "init.zsh", "primary ZIM module")
-    if f'_opencode_args_default="{etc}/zim-modules/opencode-client-args/init.zsh"' not in module:
-        raise AssertionError(f"primary ZIM module default path drifted:\n{module}")
-    require_file(etc / "zim-modules" / "opencode-client-args" / "init.zsh", "primary client-args module")
+    module = require_file(etc / "zim-modules" / "opencode-client-args" / "init.zsh", "primary client-env ZIM module")
+    for expected in (
+        'export OPENCODE_ARGS="--server ${OPENCODE_SERVER_URL:?OPENCODE_SERVER_URL is not set}"',
+        "export OPENCODE_PASSWORD",
+    ):
+        if expected not in module:
+            raise AssertionError(f"primary ZIM module missing {expected!r}:\n{module}")
+    if (etc / "zim-modules" / "opencode-service").exists():
+        raise AssertionError("legacy shell wrapper was loaded as an active ZIM module")
+    retired_wrapper = require_file(
+        etc / "zim" / "zimrc" / "active" / "55-opencode-service.conf",
+        "legacy wrapper import tombstone",
+    )
+    if "zmodule" in retired_wrapper:
+        raise AssertionError(f"legacy shell wrapper remains imported:\n{retired_wrapper}")
+
+    serve = require_file(deployment / "bin" / "serve.sh", "systemd serve launcher")
+    for expected in ("CREDENTIALS_DIRECTORY", '"${cors_args[@]}"'):
+        if expected not in serve:
+            raise AssertionError(f"serve.sh lost service behavior {expected!r}:\n{serve}")
+    for forbidden in ("# guard helper:", "COMPFUZOR_OPENCODE_BYPASS", "env helper:", "# loud helper:"):
+        if forbidden in serve:
+            raise AssertionError(f"systemd serve launcher retained generic bin helper {forbidden!r}")
+    subprocess.run(["bash", "-n", str(deployment / "bin" / "serve.sh")], check=True)
 
     require_file(deployment / "bin" / "opencode-last", "primary opencode-last")
     require_file(deployment / "bin" / "opencode-live", "primary opencode-live")
@@ -159,7 +187,7 @@ def test_secondary_render(fixture: Path) -> None:
         f'OPENCODE_BINARY="{fixture}/global-bins/opencode-dev"',
         f'OPENCODE_CONFIG_DIR="{etc}"',
         'OPENCODE_DB="opencode-dev.db"',
-        f'OPENCODE_SERVICE_MODULE="{etc}/client/service.zsh"',
+        f'OPENCODE_CLIENT_ENV_MODULE="{etc}/client/client-env.zsh"',
         f'OPENCODE_WORKING_DIR="{Path.home()}/src/opencode-working-dev"',
         f'OPENCODE_PASSWORD_FILE="{fixture}/config/opencode-dev/secrets/OPENCODE_PASSWORD"',
     ):
@@ -184,7 +212,7 @@ def test_secondary_render(fixture: Path) -> None:
         if expected not in install:
             raise AssertionError(f"secondary install.sh missing suffixed link {expected!r}:\n{install}")
 
-    require_file(etc / "client" / "service.zsh", "secondary routing module")
+    require_file(etc / "client" / "client-env.zsh", "secondary client-env module")
     if (etc / "zim-modules").exists():
         raise AssertionError("secondary render emitted ZIM modules")
     if (etc / "zim").exists():
@@ -229,7 +257,8 @@ def fake_client(directory: Path) -> Path:
         'printf \'%s\\0\' "$@" > "$OPENCODE_TEST_ARGS"\n'
         'printf \'%s\' "${OPENCODE_PASSWORD:-}" > "$OPENCODE_TEST_PASSWORD"\n'
         'printf \'%s\' "${OPENCODE_CONFIG_DIR:-}" > "$OPENCODE_TEST_CONFIG_DIR"\n'
-        'printf \'%s\' "${OPENCODE_DB:-}" > "$OPENCODE_TEST_DB"\n',
+        'printf \'%s\' "${OPENCODE_DB:-}" > "$OPENCODE_TEST_DB"\n'
+        'printf \'%s\' "${OPENCODE_ARGS:-}" > "$OPENCODE_TEST_OPENCODE_ARGS"\n',
         encoding="utf-8",
     )
     binary.chmod(0o755)
@@ -254,20 +283,22 @@ def test_launcher_routes_instance(fixture: Path) -> None:
             "OPENCODE_TEST_PASSWORD": str(work / "password-capture"),
             "OPENCODE_TEST_CONFIG_DIR": str(work / "config-dir-capture"),
             "OPENCODE_TEST_DB": str(work / "db-capture"),
+            "OPENCODE_TEST_OPENCODE_ARGS": str(work / "opencode-args-capture"),
         }
     )
     env.pop("OPENCODE_PASSWORD", None)
     env.pop("OPENCODE_ARGS", None)
 
-    for command, expected in (
-        (["api", "get", "/api/health"], ["api", "--server", "http://127.0.0.1:49381", "get", "/api/health"]),
-        (["service", "status"], ["service", "status"]),
-        (["--standalone"], ["--standalone"]),
+    for command, expected, args_override in (
+        (["api", "get", "/api/info"], ["api", "get", "/api/info"], None),
+        (["service", "status"], ["service", "status"], None),
+        (["--standalone"], ["--standalone"], ""),
     ):
+        command_env = env if args_override is None else env | {"OPENCODE_ARGS": args_override}
         result = subprocess.run(
             ["zsh", str(launcher), *command],
             cwd=ROOT,
-            env=env,
+            env=command_env,
             check=False,
             capture_output=True,
             text=True,
@@ -283,6 +314,11 @@ def test_launcher_routes_instance(fixture: Path) -> None:
             raise AssertionError("launcher did not export the instance config dir")
         if (work / "db-capture").read_text(encoding="utf-8") != "opencode-dev.db":
             raise AssertionError("launcher did not export the instance database")
+        expected_server_args = args_override if args_override is not None else "--server http://127.0.0.1:49381"
+        if (work / "opencode-args-capture").read_text(encoding="utf-8") != expected_server_args:
+            raise AssertionError(
+                f"launcher exported wrong OPENCODE_ARGS for {command}: expected {expected_server_args!r}"
+            )
     print("ok: secondary launcher routes argv, credential, config, and db")
 
 

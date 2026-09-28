@@ -5,8 +5,8 @@
 # Restarting a client means: kill the client process, wait for its tmux pane
 # to fall back to the shell, then type
 #   cd <recorded cwd> && opencode --session <recorded session id>
-# into the pane with tmux send-keys. The pane's ZIM wrapper injects
-# --server around that argv, so the relaunched client attaches to the
+# into the pane with tmux send-keys. The pane's client-env ZIM module exports
+# OPENCODE_ARGS, so the relaunched client attaches to the
 # managed deployment exactly like a manual relaunch would. No `cd` is sent
 # by default: the pane shell is normally still in the directory the client
 # was launched from; when the shell's path has drifted from the recorded
@@ -54,13 +54,13 @@
 # plain shell with a warning.
 #
 # Caveats:
-#   * Relaunch rides the pane's *current* wrapper (managed client build).
+#   * Relaunch rides the pane's *current* client environment (managed build).
 #     If the running server lags the deployed client — the exe drift that
 #     status.sh's exe-current reporter flags — one-pass restart reconnects
 #     clients to a server they cannot talk to. Use the split sequence
 #     instead (kill, bin/restart.sh, relaunch) so clients come back only
 #     after the server is current. Dated-snapshot clients are likewise
-#     resumed through the wrapper, not their original binary.
+#     resumed through the managed `opencode` command, not their original binary.
 #   * Session resolution is cotail find-id: cwd match + most recently
 #     updated session. A freshly launched TUI that never ran a prompt has
 #     no session of its own and can associate with a different recently

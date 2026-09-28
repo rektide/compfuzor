@@ -2,17 +2,13 @@
 # opencode-<INSTANCE> — explicit-server client entrypoint for one secondary
 # OpenCode deployment. Linked globally under the instance's own name (for the
 # primary `git` instance this launcher is not installed; interactive shells
-# there get the opencode/opencode2 ZIM wrapper instead).
+# there get native OPENCODE_ARGS from the opencode ZIM module instead).
 #
-# The launcher is deliberately instance-neutral: every deployment fact comes
-# from the instance's rendered env file (OPENCODE_SERVER_URL,
-# OPENCODE_PASSWORD_FILE, OPENCODE_BINARY, OPENCODE_CONFIG_DIR,
-# OPENCODE_SERVICE_MODULE, OPENCODE_DB), located relative to this script's
-# real path (bin/ inside the deployment DIR). It routes the client argv
-# through the same _opencode_run boundary-aware injection the ZIM wrapper
-# uses, so `--server`, `--standalone`, and administrative commands keep
-# their upstream meanings. It never starts, stops, probes, or replaces the
-# server; lifecycle belongs to the instance's systemd user unit.
+# The launcher is deliberately instance-neutral: deployment facts come from
+# its rendered env file. It loads the same client environment ZIM module as the
+# primary shell (with this instance's server URL and credential), then execs
+# the configured client binary. OpenCode itself interprets OPENCODE_ARGS.
+# The launcher never manages the server lifecycle; its systemd user unit does.
 
 emulate -L zsh
 
@@ -31,18 +27,29 @@ source "${_oc_dir}/env"
 unsetopt allexport
 unset _oc_dir
 
-if [[ -z ${OPENCODE_SERVICE_MODULE:-} ]]; then
-  print -u2 "opencode: OPENCODE_SERVICE_MODULE is not set in the instance env"
+if [[ -z ${OPENCODE_CLIENT_ENV_MODULE:-} ]]; then
+  print -u2 "opencode: OPENCODE_CLIENT_ENV_MODULE is not set in the instance env"
   exit 1
 fi
-if [[ ! -r ${OPENCODE_SERVICE_MODULE} ]]; then
-  print -u2 "opencode: cannot read the server-routing module: ${OPENCODE_SERVICE_MODULE}"
+if [[ ! -r ${OPENCODE_CLIENT_ENV_MODULE} ]]; then
+  print -u2 "opencode: cannot read the client environment module: ${OPENCODE_CLIENT_ENV_MODULE}"
   exit 1
 fi
 
-# Clear an inherited scalar OPENCODE_ARGS (Zsh-array-only contract, same as
-# opencode-last) and let the module load its own array defaults if present.
-unset OPENCODE_ARGS
+# Drop an inherited non-empty primary default so the instance module supplies
+# this instance's URL. Preserve an explicit empty override for --standalone.
+if [[ -n ${OPENCODE_ARGS:-} ]]; then
+  unset OPENCODE_ARGS
+fi
 
-source "${OPENCODE_SERVICE_MODULE}"
-_opencode_run "$@"
+source "${OPENCODE_CLIENT_ENV_MODULE}"
+
+if [[ ! -x ${OPENCODE_BINARY:-} ]]; then
+  print -u2 "opencode: instance client is not executable: ${OPENCODE_BINARY:-<unset>}"
+  exit 127
+fi
+if [[ -z ${OPENCODE_PASSWORD:-} ]]; then
+  print -u2 "opencode: OPENCODE_PASSWORD was not loaded from ${OPENCODE_PASSWORD_FILE:-the configured password file}"
+  exit 1
+fi
+exec "$OPENCODE_BINARY" "$@"
