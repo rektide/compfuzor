@@ -67,7 +67,7 @@ test("explicit GIT_DIR addresses a private object store outside any repo", async
   assert.deepEqual(back.stdout, Uint8Array.from(payload));
 });
 
-test("gitRead does not inherit global config that the base adapter passes through", async (t) => {
+test("adapter strips Git env pollution; deliberate env still routes", async (t) => {
   const dir = await scratch(t, "isolation");
   assert.equal((await run(git(["init", "--quiet"], { cwd: dir }))).exitCode, 0);
   const fakeGlobal = path.join(dir, "fake-global-config");
@@ -78,13 +78,154 @@ test("gitRead does not inherit global config that the base adapter passes throug
     if (saved === undefined) delete process.env.GIT_CONFIG_GLOBAL;
     else process.env.GIT_CONFIG_GLOBAL = saved;
   });
-  // Positive control: the base adapter inherits the process environment.
-  const inherited = await run(git(["config", "--get", "custody.probe"], { cwd: dir }));
-  assert.equal(inherited.exitCode, 0);
-  assert.equal(utf8Fatal(inherited.stdout).trim(), "inherited");
-  // The read helper forces GIT_CONFIG_GLOBAL to /dev/null: value invisible.
+  // Pollution in the parent process is stripped for every entry point.
+  const stripped = await run(git(["config", "--get", "custody.probe"], { cwd: dir }));
+  assert.equal(stripped.exitCode, 1);
+  // Positive control that the variable still routes when passed deliberately.
+  const deliberate = await run(
+    git(["config", "--get", "custody.probe"], { cwd: dir, env: { GIT_CONFIG_GLOBAL: fakeGlobal } }),
+  );
+  assert.equal(deliberate.exitCode, 0);
+  assert.equal(utf8Fatal(deliberate.stdout).trim(), "inherited");
+  // gitRead ignores both the polluted parent and a caller trying to loosen it.
   const isolated = await run(gitRead(["config", "--get", "custody.probe"], { cwd: dir }));
   assert.equal(isolated.exitCode, 1);
+  const loosened = await run(
+    gitRead(["config", "--get", "custody.probe"], {
+      cwd: dir,
+      env: { GIT_CONFIG_GLOBAL: fakeGlobal },
+    }),
+  );
+  assert.equal(loosened.exitCode, 1);
+});
+
+test("polluted GIT_CONFIG_COUNT injection is stripped from every entry point", async (t) => {
+  const dir = await scratch(t, "envconfig");
+  assert.equal((await run(git(["init", "--quiet"], { cwd: dir }))).exitCode, 0);
+  const saved = {
+    count: process.env.GIT_CONFIG_COUNT,
+    key: process.env.GIT_CONFIG_KEY_0,
+    value: process.env.GIT_CONFIG_VALUE_0,
+  };
+  process.env.GIT_CONFIG_COUNT = "1";
+  process.env.GIT_CONFIG_KEY_0 = "custody.injected";
+  process.env.GIT_CONFIG_VALUE_0 = "polluted";
+  t.after(() => {
+    for (const [key, was] of Object.entries(saved)) {
+      if (was === undefined) delete process.env[key];
+      else process.env[key] = was;
+    }
+  });
+  for (const adapter of [git, gitRead]) {
+    const result = await run(adapter(["config", "--get", "custody.injected"], { cwd: dir }));
+    assert.equal(
+      result.exitCode,
+      1,
+      `${adapter === git ? "git" : "gitRead"} must strip inherited injection`,
+    );
+  }
+  // Positive control: the same variables passed deliberately do configure git.
+  const deliberate = await run(
+    git(["config", "--get", "custody.injected"], {
+      cwd: dir,
+      env: {
+        GIT_CONFIG_COUNT: "1",
+        GIT_CONFIG_KEY_0: "custody.injected",
+        GIT_CONFIG_VALUE_0: "polluted",
+      },
+    }),
+  );
+  assert.equal(deliberate.exitCode, 0);
+  assert.equal(utf8Fatal(deliberate.stdout).trim(), "polluted");
+});
+
+test("update-ref and hash-object land in the declared cwd despite polluted GIT_DIR", async (t) => {
+  const holder = await scratch(t, "writerouting");
+  const target = path.join(holder, "target");
+  const decoy = path.join(holder, "decoy");
+  for (const dir of [target, decoy]) {
+    await mkdir(dir);
+    assert.equal((await run(git(["init", "--quiet"], { cwd: dir }))).exitCode, 0);
+  }
+  const identity = [
+    "-c",
+    "user.name=probe",
+    "-c",
+    "user.email=probe@example.invalid",
+    "-c",
+    "commit.gpgsign=false",
+  ];
+  await run(
+    git([...identity, "commit", "--allow-empty", "--quiet", "-m", "base"], { cwd: target }),
+  );
+  const oid = utf8Fatal((await run(git(["rev-parse", "HEAD"], { cwd: target }))).stdout).trim();
+  const saved = process.env.GIT_DIR;
+  process.env.GIT_DIR = path.join(decoy, ".git");
+  t.after(() => {
+    if (saved === undefined) delete process.env.GIT_DIR;
+    else process.env.GIT_DIR = saved;
+  });
+  // Writes must land in `target` even though the parent points at `decoy`.
+  await run(gitChecked(["update-ref", "refs/heads/probe", oid], { cwd: target }));
+  const blob = Buffer.from("routed write\n");
+  const hashed = await run(git(["hash-object", "-w", "--stdin"], { cwd: target, input: blob }));
+  const blobOid = utf8Fatal(hashed.stdout).trim();
+  // Prove the decoy is reachable only through deliberate env — and empty.
+  const inTarget = await run(git(["rev-parse", "refs/heads/probe"], { cwd: target }));
+  assert.equal(utf8Fatal(inTarget.stdout).trim(), oid);
+  assert.equal((await run(git(["cat-file", "-e", blobOid], { cwd: target }))).exitCode, 0);
+  const decoyEnv = { GIT_DIR: path.join(decoy, ".git") };
+  assert.notEqual(
+    (await run(git(["rev-parse", "--verify", "refs/heads/probe"], { env: decoyEnv }))).exitCode,
+    0,
+  );
+  assert.notEqual((await run(git(["cat-file", "-e", blobOid], { env: decoyEnv }))).exitCode, 0);
+});
+
+test("gitRead resolves the declared cwd repository, not a polluted GIT_DIR", async (t) => {
+  const holder = await scratch(t, "readrouting");
+  const declared = path.join(holder, "declared");
+  const other = path.join(holder, "other");
+  const identity = [
+    "-c",
+    "user.name=probe",
+    "-c",
+    "user.email=probe@example.invalid",
+    "-c",
+    "commit.gpgsign=false",
+  ];
+  for (const [dir, subject] of [
+    [declared, "declared"],
+    [other, "other"],
+  ] as const) {
+    await mkdir(dir);
+    assert.equal((await run(git(["init", "--quiet"], { cwd: dir }))).exitCode, 0);
+    await run(
+      git([...identity, "commit", "--allow-empty", "--quiet", "-m", subject], { cwd: dir }),
+    );
+  }
+  const saved = process.env.GIT_DIR;
+  process.env.GIT_DIR = path.join(other, ".git");
+  t.after(() => {
+    if (saved === undefined) delete process.env.GIT_DIR;
+    else process.env.GIT_DIR = saved;
+  });
+  // Positive control: deliberate env routing is the one way to reach `other`.
+  const deliberate = utf8Fatal(
+    (
+      await run(
+        git(["log", "-1", "--format=%s"], {
+          cwd: declared,
+          env: { GIT_DIR: path.join(other, ".git") },
+        }),
+      )
+    ).stdout,
+  ).trim();
+  assert.equal(deliberate, "other");
+  const read = utf8Fatal(
+    (await run(gitRead(["log", "-1", "--format=%s"], { cwd: declared }))).stdout,
+  ).trim();
+  assert.equal(read, "declared");
 });
 
 test("gitRead sees real history where the base adapter follows refs/replace", async (t) => {
@@ -127,6 +268,7 @@ test("gitChecked returns stdout on success and retains stderr on GitError", asyn
   assert.match(utf8Fatal(err.stderr), /fatal:/);
   // The diagnostic stays a separate field: nothing of it lands in the message.
   assert.ok(!err.message.includes("fatal:"));
+  assert.ok(!err.message.includes("0".repeat(40)));
   assert.ok(err.message.includes("cat-file"));
 });
 
