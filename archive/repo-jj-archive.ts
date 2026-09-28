@@ -34758,6 +34758,11 @@ const within = (parent, child) => {
 	const path = relative(parent, child);
 	return path === "" || path !== ".." && !path.startsWith("../") && !path.startsWith("..\\");
 };
+const gitWorktreeBelongsTo = async (archive, workspace) => {
+	if (!(await entry(`${workspace}/.git`))?.isFile()) return false;
+	const pointer = (await readFile(`${workspace}/.git`, "utf8")).trim();
+	return pointer.startsWith("gitdir: ") && (await realpath(resolve(workspace, pointer.slice(8)))).startsWith(`${await realpath(`${archive}/.git`)}/worktrees/`);
+};
 async function deployWorkspace(options, execution) {
 	const archive = resolve(options.archive);
 	const workspace = resolve(options.workspace);
@@ -34769,12 +34774,12 @@ async function deployWorkspace(options, execution) {
 	const actualWorkspace = await canonicalPath(workspace);
 	if (within(actualArchive, actualWorkspace) || within(actualWorkspace, actualArchive)) throw new Error(`archive ${archive} and workspace ${workspace} must be distinct, non-nested paths`);
 	const existing = (workspaceEntry ? await readdir(workspace) : []).length > 0;
+	let addGitWorktree = false;
 	if (existing) {
-		if (!archiveEntry || !(await entry(`${workspace}/.jj`))?.isDirectory() || !await entry(`${workspace}/.git`)) throw new Error(`${workspace} is occupied; move it aside or clean it up manually before creating a jj workspace`);
+		if (!archiveEntry || !(await entry(`${workspace}/.jj`))?.isDirectory()) throw new Error(`${workspace} is occupied; move it aside or clean it up manually before creating a jj workspace`);
 		const gitEntry = await entry(`${workspace}/.git`);
-		const jjPointer = await entry(`${workspace}/.jj/repo`);
-		const gitPointer = gitEntry?.isFile() ? (await readFile(`${workspace}/.git`, "utf8")).trim() : "";
-		if (!gitEntry?.isFile() || !jjPointer?.isFile() || !gitPointer.startsWith("gitdir: ") || !(await realpath(resolve(workspace, gitPointer.slice(8)))).startsWith(`${await realpath(`${archive}/.git`)}/worktrees/`) || await realpath(resolve(`${workspace}/.jj`, (await readFile(`${workspace}/.jj/repo`, "utf8")).trim())) !== await realpath(`${archive}/.jj/repo`) || await jj(["workspace", "root"], workspace, { readOnly: true }, execution) !== workspace) throw new Error(`${workspace} is not a colocated workspace of ${archive}; refusing to change it`);
+		if (!(await entry(`${workspace}/.jj/repo`))?.isFile() || await realpath(resolve(`${workspace}/.jj`, (await readFile(`${workspace}/.jj/repo`, "utf8")).trim())) !== await realpath(`${archive}/.jj/repo`) || await jj(["workspace", "root"], workspace, { readOnly: true }, execution) !== workspace || gitEntry !== void 0 && !await gitWorktreeBelongsTo(archive, workspace)) throw new Error(`${workspace} is not a verified jj workspace of ${archive}; refusing to change it`);
+		addGitWorktree = gitEntry === void 0;
 	}
 	let createdArchive = {
 		changed: false,
@@ -34787,6 +34792,14 @@ async function deployWorkspace(options, execution) {
 	else if (!options.reconcileRemotes) {
 		const differences = await remoteDiff(archive, declaredRemotes(options.repo, options.remotes), execution, true);
 		if (differences.some((difference) => difference.actual !== null)) throw mismatchError(archive, differences, options.repo, options.remotes);
+	}
+	if (addGitWorktree) {
+		await jj([
+			"git",
+			"colocation",
+			"enable"
+		], workspace, void 0, execution);
+		if (!await gitWorktreeBelongsTo(archive, workspace)) throw new Error(`jj did not create a Git worktree of ${archive} at ${workspace}`);
 	}
 	if (!existing) {
 		const urls = declaredRemotes(options.repo, options.remotes);
@@ -34819,12 +34832,16 @@ async function deployWorkspace(options, execution) {
 		dest: workspace
 	}, execution);
 	return {
-		changed: createdArchive.changed || !existing || result.changed,
+		changed: createdArchive.changed || !existing || addGitWorktree || result.changed,
 		notices: [
 			...createdArchive.notices,
 			...!existing ? [{
 				kind: "notice",
 				message: `created jj workspace ${workspace} backed by ${archive}`
+			}] : [],
+			...addGitWorktree ? [{
+				kind: "notice",
+				message: `added Git worktree to jj workspace ${workspace}`
 			}] : [],
 			...result.notices
 		]

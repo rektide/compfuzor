@@ -400,9 +400,11 @@ that rebuilding jj metadata can recover objects Git no longer has.
 `deploy --json`. `ARCHIVE_SRC` is the shared repository at
 `~/archive/<org>/<repo>`; `GIT_DIR` (normally `DIR/repo`) is a **real jj
 workspace and colocated Git worktree** backed by that repository. A missing or
-empty workspace path is created; an old symlink, standalone checkout, or any
-other occupied path is refused without converting or deleting its contents.
-An existing workspace must be linked to the specified archive. Fetching from
+empty workspace path is created. An existing jj workspace of this archive
+without `.git` gains a Git worktree via `jj git colocation enable`, retaining
+its worktree files; subsequent runs are no-ops when already colocated. An old
+symlink, standalone checkout, unrelated jj repository, or occupied `.git` entry
+is refused without converting or deleting its contents. Fetching from
 the deployment workspace does not use the archive main worktree as its
 deployment checkout. **Creating** a workspace from an existing archive runs
 `jj workspace add` in the archive; jj may snapshot previously unsnapshotted

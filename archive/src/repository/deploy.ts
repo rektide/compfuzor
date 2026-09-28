@@ -30,6 +30,18 @@ const within = (parent: string, child: string): boolean => {
   return path === "" || (path !== ".." && !path.startsWith("../") && !path.startsWith("..\\"));
 };
 
+const gitWorktreeBelongsTo = async (archive: string, workspace: string): Promise<boolean> => {
+  const gitLink = await entry(`${workspace}/.git`);
+  if (!gitLink?.isFile()) return false;
+  const pointer = (await readFile(`${workspace}/.git`, "utf8")).trim();
+  return (
+    pointer.startsWith("gitdir: ") &&
+    (await realpath(resolve(workspace, pointer.slice(8)))).startsWith(
+      `${await realpath(`${archive}/.git`)}/worktrees/`,
+    )
+  );
+};
+
 export async function deployWorkspace(
   options: DeployOptions,
   execution?: ExecutionOptions,
@@ -60,39 +72,31 @@ export async function deployWorkspace(
   }
   const contents = workspaceEntry ? await readdir(workspace) : [];
   const existing = contents.length > 0;
+  let addGitWorktree = false;
   if (existing) {
-    // Validate both jj's shared store and the colocated Git worktree. A
-    // checkout belonging to some other archive must never be refreshed here.
-    if (
-      !archiveEntry ||
-      !(await entry(`${workspace}/.jj`))?.isDirectory() ||
-      !(await entry(`${workspace}/.git`))
-    ) {
+    // Admit an existing child jj workspace of this archive even if it has no
+    // Git worktree yet. Never treat an unrelated jj repo or a partial/broken
+    // .git entry as a candidate for progressive colocation.
+    if (!archiveEntry || !(await entry(`${workspace}/.jj`))?.isDirectory()) {
       throw new Error(
         `${workspace} is occupied; move it aside or clean it up manually before creating a jj workspace`,
       );
     }
     const gitEntry = await entry(`${workspace}/.git`);
     const jjPointer = await entry(`${workspace}/.jj/repo`);
-    const gitPointer = gitEntry?.isFile()
-      ? (await readFile(`${workspace}/.git`, "utf8")).trim()
-      : "";
     if (
-      !gitEntry?.isFile() ||
       !jjPointer?.isFile() ||
-      !gitPointer.startsWith("gitdir: ") ||
-      !(await realpath(resolve(workspace, gitPointer.slice(8)))).startsWith(
-        `${await realpath(`${archive}/.git`)}/worktrees/`,
-      ) ||
       (await realpath(
         resolve(`${workspace}/.jj`, (await readFile(`${workspace}/.jj/repo`, "utf8")).trim()),
       )) !== (await realpath(`${archive}/.jj/repo`)) ||
-      (await jj(["workspace", "root"], workspace, { readOnly: true }, execution)) !== workspace
+      (await jj(["workspace", "root"], workspace, { readOnly: true }, execution)) !== workspace ||
+      (gitEntry !== undefined && !(await gitWorktreeBelongsTo(archive, workspace)))
     ) {
       throw new Error(
-        `${workspace} is not a colocated workspace of ${archive}; refusing to change it`,
+        `${workspace} is not a verified jj workspace of ${archive}; refusing to change it`,
       );
     }
+    addGitWorktree = gitEntry === undefined;
   }
 
   let createdArchive: RefreshResult = { changed: false, notices: [] };
@@ -108,6 +112,12 @@ export async function deployWorkspace(
     );
     if (differences.some((difference) => difference.actual !== null)) {
       throw mismatchError(archive, differences, options.repo, options.remotes);
+    }
+  }
+  if (addGitWorktree) {
+    await jj(["git", "colocation", "enable"], workspace, undefined, execution);
+    if (!(await gitWorktreeBelongsTo(archive, workspace))) {
+      throw new Error(`jj did not create a Git worktree of ${archive} at ${workspace}`);
     }
   }
   if (!existing) {
@@ -152,7 +162,7 @@ export async function deployWorkspace(
   }
   const result = await refreshArchive({ ...options, dest: workspace }, execution);
   return {
-    changed: createdArchive.changed || !existing || result.changed,
+    changed: createdArchive.changed || !existing || addGitWorktree || result.changed,
     notices: [
       ...createdArchive.notices,
       ...(!existing
@@ -162,6 +172,9 @@ export async function deployWorkspace(
               message: `created jj workspace ${workspace} backed by ${archive}`,
             },
           ]
+        : []),
+      ...(addGitWorktree
+        ? [{ kind: "notice" as const, message: `added Git worktree to jj workspace ${workspace}` }]
         : []),
       ...result.notices,
     ],

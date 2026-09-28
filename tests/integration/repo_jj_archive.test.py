@@ -188,6 +188,67 @@ def test_deploy_uses_colocated_workspace_without_moving_archive_main() -> None:
         assert (archive / "operator-note").read_text() == "unsnapshotted archive work\n"
 
 
+def test_deploy_adds_git_worktree_to_existing_archive_jj_workspace() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, seed = create_remote(tmp)
+        archive = tmp / "archive"
+        workspace = tmp / "deployment" / "repo"
+        render(archive, remote)
+        workspace.parent.mkdir()
+        run("jj", "workspace", "add", "--no-colocate", "--name", "fixture-deployment",
+            "--revision", "main@origin", str(workspace), cwd=archive)
+        assert (workspace / ".jj").is_dir() and not (workspace / ".git").exists()
+        (workspace / "local-note").write_text("uncommitted local work\n")
+        (workspace / ".gitignore").write_text(".runtime/\n")
+        (workspace / ".runtime").mkdir()
+        (workspace / ".runtime" / "db").write_bytes(b"ignored runtime bytes\n")
+        (archive / "archive-note").write_text("unsnapshotted archive work\n")
+        archive_at = run("jj", "--ignore-working-copy", "log", "-G", "-r", "@", "-T", "commit_id", cwd=archive)
+        args = ("deploy", "--json", "--archive", str(archive), "--workspace", str(workspace),
+                "--repo", str(remote), "--label", "fixture")
+        (workspace / ".git").write_text("occupied Git metadata\n")
+        refused = subprocess.run(("node", str(ROOT / "archive/src/repo-jj-archive.ts"), *args),
+                                 cwd=tmp, capture_output=True, text=True)
+        assert refused.returncode and (workspace / ".git").read_text() == "occupied Git metadata\n"
+        (workspace / ".git").unlink()
+        result = json.loads(run("node", str(ROOT / "archive/repo-jj-archive.ts"), *args, cwd=tmp))
+        assert result["changed"] and any("added Git worktree" in n.get("message", "")
+                                         for n in result["notices"])
+        assert (workspace / ".git").is_file()
+        assert run("git", "rev-parse", "--show-toplevel", cwd=workspace) == str(workspace)
+        assert run("git", "check-ignore", ".runtime/db", cwd=workspace) == ".runtime/db"
+        assert (workspace / "local-note").read_text() == "uncommitted local work\n"
+        assert (workspace / ".runtime" / "db").read_bytes() == b"ignored runtime bytes\n"
+        assert run("jj", "--ignore-working-copy", "log", "-G", "-r", "@", "-T", "commit_id", cwd=archive) == archive_at
+        assert json.loads(toolkit(*args, cwd=tmp)) == NOOP
+        advance(seed)
+        assert json.loads(toolkit(*args, cwd=tmp))["changed"]
+        assert (workspace / "tracked").read_text() == "upstream\n"
+        assert (workspace / "local-note").read_text() == "uncommitted local work\n"
+        assert (workspace / ".runtime" / "db").read_bytes() == b"ignored runtime bytes\n"
+        assert (archive / "archive-note").read_text() == "unsnapshotted archive work\n"
+
+
+def test_deploy_refuses_unrelated_jj_repo_without_git_worktree() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, _ = create_remote(tmp)
+        archive = tmp / "archive"
+        workspace = tmp / "unrelated"
+        render(archive, remote)
+        run("jj", "git", "clone", "--no-colocate", str(remote), str(workspace), cwd=tmp)
+        args = ("deploy", "--json", "--archive", str(archive), "--workspace", str(workspace),
+                "--repo", str(remote), "--label", "fixture")
+        output = subprocess.run(("node", str(ROOT / "archive/src/repo-jj-archive.ts"), *args),
+                                cwd=tmp, capture_output=True, text=True)
+        assert output.returncode and "not a verified jj workspace" in output.stderr
+        assert not (workspace / ".git").exists()
+        assert (workspace / ".jj").is_dir()
+
+
 def test_adding_another_workspace_snapshots_archive_once_then_refreshes_leave_it_alone() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
