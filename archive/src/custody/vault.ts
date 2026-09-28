@@ -19,6 +19,7 @@ import { randomBytes } from "node:crypto";
 import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import { sha256, vaultBundlePath } from "./codec.ts";
 import { CustodyError, invalid } from "./errors.ts";
+import type { StageExecution } from "./stage.ts";
 import type { BundleHead, ReceiptV1, SealedBundle, Sha256 } from "./model.ts";
 
 export const VAULT_DIRNAME = ".compfuzor-adoptions";
@@ -181,22 +182,27 @@ const syncDir = async (dir: string): Promise<void> => {
 };
 
 /** mkdir one owner-only level, tolerating an already-correct existing level. */
-const mkdirLevel = async (dir: string, what: string): Promise<void> => {
+const mkdirLevel = async (dir: string, what: string, signal?: AbortSignal): Promise<void> => {
+  signal?.throwIfAborted();
   const existing = await lstat(dir).catch(() => null);
+  signal?.throwIfAborted();
   if (existing !== null) {
     if (!existing.isDirectory() || existing.isSymbolicLink())
       throw vaultWrite(`${what} exists and is not a directory`, dir);
     return;
   }
   try {
+    signal?.throwIfAborted();
     await mkdir(dir, { mode: 0o700 });
   } catch (error) {
+    signal?.throwIfAborted();
     throw vaultWrite(
       `could not create ${what}: ${error instanceof Error ? error.message : String(error)}`,
       dir,
     );
   }
   await syncDir(dirname(dir));
+  signal?.throwIfAborted();
 };
 
 /** Containment in either direction (a path component boundary, not prefixes). */
@@ -213,26 +219,35 @@ const contains = (parent: string, child: string): boolean => {
  * this with the intent/bundle installs; it stays exported for apply's
  * restart-diagnosis writes into an existing run.
  */
-export async function createVaultRun(destRealpath: string, runId: string): Promise<VaultRun> {
-  if (!/^[0-9a-f]{32,}$/.test(runId))
-    invalid("vault run id must be 128+ bits of hex randomness");
+export async function createVaultRun(
+  destRealpath: string,
+  runId: string,
+  execution: StageExecution = {},
+): Promise<VaultRun> {
+  const { signal } = execution;
+  signal?.throwIfAborted();
+  if (!/^[0-9a-f]{32,}$/.test(runId)) invalid("vault run id must be 128+ bits of hex randomness");
   const vaultRoot = join(dirname(destRealpath), VAULT_DIRNAME);
   const archiveDir = join(vaultRoot, vaultArchiveId(destRealpath));
   const runDir = join(archiveDir, runId);
   const existing = await lstat(runDir).catch(() => null);
+  signal?.throwIfAborted();
   if (existing !== null)
     throw vaultWrite("run directory already exists; runs are exclusive and never reused", runDir);
-  await mkdirLevel(vaultRoot, "vault root");
-  await mkdirLevel(archiveDir, "archive directory");
+  await mkdirLevel(vaultRoot, "vault root", signal);
+  await mkdirLevel(archiveDir, "archive directory", signal);
   try {
+    signal?.throwIfAborted();
     await mkdir(runDir, { mode: 0o700 });
   } catch (error) {
+    signal?.throwIfAborted();
     throw vaultWrite(
       `could not create the exclusive run directory: ${error instanceof Error ? error.message : String(error)}`,
       runDir,
     );
   }
   await syncDir(archiveDir);
+  signal?.throwIfAborted();
   return {
     vaultRoot,
     archiveDir,
@@ -250,23 +265,35 @@ export async function createVaultRun(destRealpath: string, runId: string): Promi
  * creator) and fsync the directory. A pre-existing target is refused and no
  * temporary survives a failure path. Exported for apply's diagnosis writes.
  */
-export async function sealVaultFile(target: string, bytes: Uint8Array): Promise<void> {
+export async function sealVaultFile(
+  target: string,
+  bytes: Uint8Array,
+  execution: StageExecution = {},
+): Promise<void> {
+  const { signal } = execution;
+  signal?.throwIfAborted();
   const existing = await lstat(target).catch(() => null);
+  signal?.throwIfAborted();
   if (existing !== null)
     throw vaultWrite("target already exists; vault files are never overwritten", target);
   const directory = dirname(target);
   const temp = join(directory, `.${basename(target)}.tmp-${randomBytes(8).toString("hex")}`);
   try {
+    signal?.throwIfAborted();
     const handle = await open(temp, "wx", 0o600);
     try {
+      signal?.throwIfAborted();
       await handle.writeFile(bytes);
+      signal?.throwIfAborted();
       await handle.sync();
     } finally {
       await handle.close();
     }
+    signal?.throwIfAborted();
     await link(temp, target);
   } catch (error) {
     await unlink(temp).catch(() => {});
+    signal?.throwIfAborted();
     if (error instanceof CustodyError) throw error;
     throw vaultWrite(
       `could not install ${basename(target)}: ${error instanceof Error ? error.message : String(error)}`,
@@ -275,6 +302,7 @@ export async function sealVaultFile(target: string, bytes: Uint8Array): Promise<
   }
   await unlink(temp).catch(() => {});
   await syncDir(directory);
+  signal?.throwIfAborted();
 }
 
 /** The proven bundle facts apply passes in (satisfied by stage's ProvenBundle). */
@@ -316,7 +344,12 @@ export interface SealedVaultRun {
  * destination and the legacy checkout; a run is never reused or overwritten,
  * and abandoned attempts are left for diagnosis.
  */
-export async function sealBundle(options: SealBundleOptions): Promise<SealedVaultRun> {
+export async function sealBundle(
+  options: SealBundleOptions,
+  execution: StageExecution = {},
+): Promise<SealedVaultRun> {
+  const { signal } = execution;
+  signal?.throwIfAborted();
   const { destRealpath, legacyRealpath, proven, intent } = options;
   const vaultRoot = join(dirname(destRealpath), VAULT_DIRNAME);
   if (contains(destRealpath, vaultRoot) || contains(vaultRoot, destRealpath))
@@ -326,24 +359,32 @@ export async function sealBundle(options: SealBundleOptions): Promise<SealedVaul
   if (contains(vaultRoot, legacyRealpath))
     throw vaultWrite("legacy checkout would live inside the vault", legacyRealpath);
   const bundleBytes = await readFile(proven.bundlePath).catch(() => {
+    signal?.throwIfAborted();
     throw vaultWrite("proven bundle is not readable", proven.bundlePath);
   });
+  signal?.throwIfAborted();
   const observed = sha256(bundleBytes);
   if (observed !== proven.bundleSha256)
     throw vaultWrite(
       `proven bundle changed underfoot: hashes to ${observed}, promised ${proven.bundleSha256}`,
       proven.bundlePath,
     );
-  const run = await createVaultRun(destRealpath, vaultRunId());
+  const run = await createVaultRun(destRealpath, vaultRunId(), execution);
   // Intent first: a crash between the two writes leaves a diagnosable intent,
   // not an unexplained bundle.
-  await sealVaultFile(run.intentPath, intent);
-  await sealVaultFile(run.bundlePath, bundleBytes);
+  await sealVaultFile(run.intentPath, intent, execution);
+  await sealVaultFile(run.bundlePath, bundleBytes, execution);
   const sealed: SealedBundle = {
-    pathRelativeToDestinationParent: join(VAULT_DIRNAME, vaultArchiveId(destRealpath), run.runId, BUNDLE_NAME),
+    pathRelativeToDestinationParent: join(
+      VAULT_DIRNAME,
+      vaultArchiveId(destRealpath),
+      run.runId,
+      BUNDLE_NAME,
+    ),
     sha256: proven.bundleSha256,
     verifiedHeads: proven.verifiedHeads,
     freshRestoreVerified: true,
   };
+  signal?.throwIfAborted();
   return { run, sealed };
 }

@@ -13,6 +13,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { test } from "node:test";
 import { Effect } from "effect";
 import { gitChecked, gitRead, utf8Fatal } from "../../src/repository/git.ts";
@@ -482,7 +483,8 @@ export async function adoption(
       selectedTipsNotInDestination: null,
     },
     pins,
-    bundle: sealed.sealed,    checks: {
+    bundle: sealed.sealed,
+    checks: {
       sourceFingerprintRechecked: true,
       sourceOdbUnchanged: true,
       destinationWorktreeUnchanged: true,
@@ -878,4 +880,107 @@ test("sealBundle refuses vaults that would sit inside either checkout", async (t
   // The refused attempt created nothing beside the legacy checkout.
   assert.equal(await stat(join(legacy, VAULT_DIRNAME)).catch(() => null), null);
   assert.match(vaultRunId(), /^[0-9a-f]{32,}$/);
+});
+
+test("readReceipt interruption kills the in-flight Git child before receipt lookup", async (t) => {
+  const a = await adoption(t, "abort-read");
+  const shimDir = join(a.root, "bin");
+  await mkdir(shimDir);
+  const marker = join(a.root, "blocked-pid");
+  const calls = join(a.root, "git-calls");
+  // Use an absolute executable outside our PATH shim.
+  const realGit = "/usr/bin/git";
+  assert.ok((await stat(realGit)).isFile());
+  await writeFile(
+    join(shimDir, "git"),
+    `#!/bin/sh\nprintf '%s\\n' "$*" >> '${calls}'\ncase "$*" in\n  *'rev-parse --show-object-format'*) echo $$ > '${marker}'; exec sleep 30;;\nesac\nexec '${realGit}' "$@"\n`,
+    { mode: 0o755 },
+  );
+  const previous = process.env.PATH;
+  process.env.PATH = `${shimDir}:${previous ?? ""}`;
+  t.after(() => {
+    process.env.PATH = previous;
+  });
+  const controller = new AbortController();
+  const pending = readReceipt(a.dest, a.receiptRef, { signal: controller.signal });
+  let pid: number | undefined;
+  for (let attempt = 0; attempt < 300; attempt++) {
+    const found = await readFile(marker, "utf8").catch(() => null);
+    if (found !== null) {
+      pid = Number(found.trim());
+      break;
+    }
+    await delay(10);
+  }
+  assert.ok(pid, "fake Git must have entered long subprocess");
+  controller.abort(new DOMException("cancel read", "AbortError"));
+  await assert.rejects(
+    pending,
+    (error: unknown) => error instanceof DOMException && error.name === "AbortError",
+  );
+  assert.throws(() => process.kill(pid!, 0), { code: "ESRCH" });
+  assert.ok(!(await readFile(calls, "utf8")).includes("for-each-ref"));
+  await rm(marker);
+  await writeFile(calls, "");
+  const verifyController = new AbortController();
+  const verification = verifyAdoption(
+    {
+      dest: a.dest,
+      receiptRef: a.receiptRef,
+      legacy: null,
+      scratchRoot: a.scratch,
+    },
+    { signal: verifyController.signal },
+  );
+  let verifyPid: number | undefined;
+  for (let attempt = 0; attempt < 300; attempt++) {
+    const found = await readFile(marker, "utf8").catch(() => null);
+    if (found !== null) {
+      verifyPid = Number(found.trim());
+      break;
+    }
+    await delay(10);
+  }
+  assert.ok(verifyPid, "verification must enter long Git subprocess");
+  verifyController.abort(new DOMException("cancel verification", "AbortError"));
+  await assert.rejects(verification, { name: "AbortError" });
+  assert.throws(() => process.kill(verifyPid!, 0), { code: "ESRCH" });
+  assert.ok(!(await readFile(calls, "utf8")).includes("for-each-ref"));
+});
+
+test("aborted vault seal cannot claim a complete bundle", async (t) => {
+  const root = await area(t, "abort-seal");
+  const dest = join(root, "archive");
+  const legacy = join(root, "legacy");
+  await mkdir(dest);
+  await mkdir(legacy);
+  const proven = await provenFacts(t, encoder.encode("bundle bytes\n"));
+  const controller = new AbortController();
+  // Aborting immediately must leave no sealed record and no vault run.
+  controller.abort(new DOMException("cancel seal", "AbortError"));
+  await assert.rejects(
+    sealBundle(
+      {
+        destRealpath: await realpath(dest),
+        legacyRealpath: await realpath(legacy),
+        proven,
+        intent: encoder.encode("{}\n"),
+      },
+      { signal: controller.signal },
+    ),
+    { name: "AbortError" },
+  );
+  assert.equal(await stat(join(root, VAULT_DIRNAME)).catch(() => null), null);
+  // A cancellation between the intent and bundle install retains the run as
+  // diagnosis; the caller never gets a receipt-ready sealed record.
+  const run = await createVaultRun(await realpath(dest), vaultRunId());
+  await sealVaultFile(run.intentPath, encoder.encode("{}\n"));
+  const mid = new AbortController();
+  mid.abort(new DOMException("cancel continuation", "AbortError"));
+  await assert.rejects(
+    sealVaultFile(run.bundlePath, encoder.encode("bundle bytes\n"), { signal: mid.signal }),
+    { name: "AbortError" },
+  );
+  assert.equal(await stat(run.bundlePath).catch(() => null), null);
+  assert.ok((await stat(run.intentPath)).isFile());
 });

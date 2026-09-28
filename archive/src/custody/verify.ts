@@ -39,7 +39,7 @@ import { Effect } from "effect";
 import { preflight } from "../repository/health.ts";
 import { gitRead, utf8Fatal } from "../repository/git.ts";
 import { resolveVaultBundle, VaultPathComponentError } from "./vault.ts";
-import { checkBundleRestoration } from "./stage.ts";
+import { checkBundleRestoration, type StageExecution } from "./stage.ts";
 import { canonicalJson, parseReceipt, pinRef, refName, sha256 } from "./codec.ts";
 import { CustodyError } from "./errors.ts";
 import type {
@@ -85,14 +85,37 @@ const REF_FORMAT = "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*obj
  * Read-only runner: raw stdout bytes on exit 0, `null` otherwise. Git failures
  * are observations for the caller to classify, never exceptions here.
  */
-const soft = async (args: readonly string[], cwd: string): Promise<Uint8Array | null> => {
-  const outcome = await Effect.runPromise(gitRead(args, { cwd }));
+const softGit = async (
+  args: readonly string[],
+  cwd: string,
+  signal?: AbortSignal,
+): Promise<Uint8Array | null> => {
+  signal?.throwIfAborted();
+  const outcome = await Effect.runPromise(gitRead(args, { cwd }), { signal }).catch(
+    (error: unknown) => {
+      signal?.throwIfAborted();
+      throw error;
+    },
+  );
+  signal?.throwIfAborted();
   return outcome.exitCode === 0 ? outcome.stdout : null;
 };
 
 /** Structural runner: a nonzero exit means the step itself is broken. */
-const hard = async (args: readonly string[], cwd: string, step: string): Promise<Uint8Array> => {
-  const outcome = await Effect.runPromise(gitRead(args, { cwd }));
+const hardGit = async (
+  args: readonly string[],
+  cwd: string,
+  step: string,
+  signal?: AbortSignal,
+): Promise<Uint8Array> => {
+  signal?.throwIfAborted();
+  const outcome = await Effect.runPromise(gitRead(args, { cwd }), { signal }).catch(
+    (error: unknown) => {
+      signal?.throwIfAborted();
+      throw error;
+    },
+  );
+  signal?.throwIfAborted();
   if (outcome.exitCode !== 0)
     throw new CustodyError(
       "inspection-failed",
@@ -188,9 +211,10 @@ const exactRefRow = async (
   repo: string,
   ref: RefName,
   format: GitObjectFormat,
+  signal?: AbortSignal,
 ): Promise<RefRow | null> => {
   const rows = parseRefRows(
-    await hard(["for-each-ref", REF_FORMAT, ref], repo, `ref lookup for ${ref}`),
+    await hardGit(["for-each-ref", REF_FORMAT, ref], repo, `ref lookup for ${ref}`, signal),
     format,
   );
   return rows.find((row) => row.name === ref) ?? null;
@@ -201,13 +225,24 @@ const exactRefRow = async (
  * `CustodyError` when the ref is missing or the repository is unusable —
  * apply's retry protocol and the verifier share this exact reading.
  */
-export async function readReceipt(dest: string, receiptRef: string): Promise<ObservedReceipt> {
+export async function readReceipt(
+  dest: string,
+  receiptRef: string,
+  execution: StageExecution = {},
+): Promise<ObservedReceipt> {
+  const { signal } = execution;
+  signal?.throwIfAborted();
   const ref = refName(receiptRef);
   const destReal = await realpath(dest).catch(() => {
     throw new CustodyError("invalid-input", `destination does not exist: ${dest}`, dest);
   });
   const formatText = utf8Fatal(
-    await hard(["rev-parse", "--show-object-format"], destReal, "destination object format probe"),
+    await hardGit(
+      ["rev-parse", "--show-object-format"],
+      destReal,
+      "destination object format probe",
+      signal,
+    ),
   ).trim();
   if (formatText !== "sha1" && formatText !== "sha256")
     throw new CustodyError(
@@ -216,7 +251,7 @@ export async function readReceipt(dest: string, receiptRef: string): Promise<Obs
       destReal,
     );
   const format: GitObjectFormat = formatText;
-  const row = await exactRefRow(destReal, ref, format);
+  const row = await exactRefRow(destReal, ref, format, signal);
   if (row === null)
     throw new CustodyError(
       "verification-failed",
@@ -229,7 +264,7 @@ export async function readReceipt(dest: string, receiptRef: string): Promise<Obs
       `receipt ref does not point at a commit (observed ${row.objectType}): ${ref}`,
       ref,
     );
-  const blob = await soft(["cat-file", "blob", `${row.oid}:adoption.json`], destReal);
+  const blob = await softGit(["cat-file", "blob", `${row.oid}:adoption.json`], destReal, signal);
   if (blob === null)
     throw new CustodyError(
       "verification-failed",
@@ -247,7 +282,15 @@ export async function readReceipt(dest: string, receiptRef: string): Promise<Obs
  * Independent verification of an installed adoption. See the module comment
  * for the full check list and the custody/drift/jj reporting split.
  */
-export async function verifyAdoption(input: VerifyInput): Promise<Verification> {
+export async function verifyAdoption(
+  input: VerifyInput,
+  execution: StageExecution = {},
+): Promise<Verification> {
+  const { signal } = execution;
+  signal?.throwIfAborted();
+  const soft = (args: readonly string[], cwd: string) => softGit(args, cwd, signal);
+  const hard = (args: readonly string[], cwd: string, step: string) =>
+    hardGit(args, cwd, step, signal);
   const failures: Issue[] = [];
   const retirement: Issue[] = [];
   const fail = (code: string, subject: string | null, reason: string): void => {
@@ -277,7 +320,7 @@ export async function verifyAdoption(input: VerifyInput): Promise<Verification> 
   const destFormat: GitObjectFormat = formatText;
 
   // --- phase 1: the receipt ref itself -------------------------------------
-  const row = await exactRefRow(destReal, ref, destFormat);
+  const row = await exactRefRow(destReal, ref, destFormat, signal);
   if (row === null)
     throw new CustodyError(
       "verification-failed",
@@ -312,6 +355,7 @@ export async function verifyAdoption(input: VerifyInput): Promise<Verification> 
           fail("receipt-self-reference", ref, "adoption.json embeds its own metadata commit OID");
         receipt = parsed;
       } catch (error) {
+        signal?.throwIfAborted();
         fail("receipt-invalid", ref, error instanceof Error ? error.message : String(error));
       }
     }
@@ -485,6 +529,7 @@ export async function verifyAdoption(input: VerifyInput): Promise<Verification> 
     try {
       bundlePath = await resolveVaultBundle(receipt, destReal);
     } catch (error) {
+      signal?.throwIfAborted();
       const detail = error instanceof Error ? error.message : String(error);
       if (error instanceof VaultPathComponentError && error.component === "bundle" && error.missing)
         fail("bundle-unreadable", error.subject, detail);
@@ -513,24 +558,28 @@ export async function verifyAdoption(input: VerifyInput): Promise<Verification> 
       // exactly equal the pins, no prerequisites, complete fetch into a fresh
       // empty repository, per-pin type/closure, snapshot manifest equality.
       try {
-        const check = await checkBundleRestoration({
-          bundlePath: bundlePath as string,
-          objectFormat: receipt.source.objectFormat,
-          scratchRoot: input.scratchRoot,
-          pins: receipt.pins,
-          snapshot:
-            receipt.snapshot === null
-              ? null
-              : {
-                  commitOid: receipt.snapshot.commitOid,
-                  treeOid: receipt.snapshot.treeOid,
-                  paths: receipt.snapshot.paths,
-                },
-        });
+        const check = await checkBundleRestoration(
+          {
+            bundlePath: bundlePath as string,
+            objectFormat: receipt.source.objectFormat,
+            scratchRoot: input.scratchRoot,
+            pins: receipt.pins,
+            snapshot:
+              receipt.snapshot === null
+                ? null
+                : {
+                    commitOid: receipt.snapshot.commitOid,
+                    treeOid: receipt.snapshot.treeOid,
+                    paths: receipt.snapshot.paths,
+                  },
+          },
+          execution,
+        );
         // The proof hands back its disposable restore repository; nothing of
         // it may outlive verification.
         await rm(dirname(check.restoreRepoPath), { recursive: true, force: true });
       } catch (error) {
+        signal?.throwIfAborted();
         fail(
           "bundle-restore",
           error instanceof CustodyError ? error.subject : null,
@@ -550,7 +599,7 @@ export async function verifyAdoption(input: VerifyInput): Promise<Verification> 
     });
   } else {
     try {
-      const conflicts = await preflight(destReal, { readOnly: true });
+      const conflicts = await preflight(destReal, { readOnly: true }, execution);
       if (conflicts.length > 0)
         retirement.push({
           code: "jj-bookmark-conflict",
@@ -559,6 +608,7 @@ export async function verifyAdoption(input: VerifyInput): Promise<Verification> 
             "conflicted visible bookmarks need repair before retirement; custody refs and objects are checked independently above",
         });
     } catch (error) {
+      signal?.throwIfAborted();
       retirement.push({
         code: "jj-preflight-failed",
         subject: destReal,
@@ -572,16 +622,24 @@ export async function verifyAdoption(input: VerifyInput): Promise<Verification> 
     receiptCommitOid,
     custodyVerified: failures.length === 0,
     custodyFailures: failures,
-    sourceDrift: await sourceDriftOf(input, receipt).catch(() => "unknown"),
+    sourceDrift: await sourceDriftOf(input, receipt, signal).catch(() => {
+      signal?.throwIfAborted();
+      return "unknown";
+    }),
     destinationDrift: await destinationDriftOf(
       receipt,
       destReal,
       gitDir,
       ref,
       receiptCommitOid,
-    ).catch(() => "unknown"),
+      signal,
+    ).catch(() => {
+      signal?.throwIfAborted();
+      return "unknown";
+    }),
     retirementUnresolved: [...(receipt?.unresolved ?? []), ...retirement],
   };
+  signal?.throwIfAborted();
   return verification;
 }
 
@@ -598,7 +656,9 @@ const destinationDriftOf = async (
   gitDir: string,
   ref: RefName,
   receiptCommitOid: Oid,
+  signal?: AbortSignal,
 ): Promise<Verification["destinationDrift"]> => {
+  const soft = (args: readonly string[], cwd: string) => softGit(args, cwd, signal);
   if (receipt === null) return "unknown";
   let changed = false;
   let unknown = false;
@@ -636,7 +696,9 @@ const destinationDriftOf = async (
 const sourceDriftOf = async (
   input: VerifyInput,
   receipt: ReceiptV1 | null,
+  signal?: AbortSignal,
 ): Promise<Verification["sourceDrift"]> => {
+  const soft = (args: readonly string[], cwd: string) => softGit(args, cwd, signal);
   if (input.legacy === null || receipt === null) return "unknown";
   const real = await realpath(input.legacy).catch(() => null);
   if (real === null) return "absent";
@@ -679,7 +741,12 @@ const sourceDriftOf = async (
     );
     const hashed = await Effect.runPromise(
       gitRead(["hash-object", "--stdin-paths"], { cwd: real, input: pathsInput }),
-    );
+      { signal },
+    ).catch((error: unknown) => {
+      signal?.throwIfAborted();
+      throw error;
+    });
+    signal?.throwIfAborted();
     if (hashed.exitCode !== 0) {
       changed = true;
     } else {
