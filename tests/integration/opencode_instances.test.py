@@ -162,7 +162,7 @@ def test_primary_render_is_unchanged(fixture: Path) -> None:
         raise AssertionError(f"legacy shell wrapper remains imported:\n{retired_wrapper}")
 
     serve = require_file(deployment / "bin" / "serve.sh", "systemd serve launcher")
-    for expected in ("CREDENTIALS_DIRECTORY", '"${cors_args[@]}"'):
+    for expected in ("CREDENTIALS_DIRECTORY", "OPENCODE_SERVE_ARGS", '"${serve_argv[@]}"'):
         if expected not in serve:
             raise AssertionError(f"serve.sh lost service behavior {expected!r}:\n{serve}")
     for forbidden in ("# guard helper:", "COMPFUZOR_OPENCODE_BYPASS", "env helper:", "# loud helper:"):

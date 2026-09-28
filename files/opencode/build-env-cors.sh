@@ -2,13 +2,15 @@ set -euo pipefail
 
 # Rewrite OPENCODE_SERVER_CORS in env/env.export from live host names.
 #
-# The playbook renders the key empty; build.sh runs this before the bun build
-# so every build refreshes the server's CORS origins without an Ansible pass.
+# The playbook renders the key empty; build.sh runs this after the bun build
+# (compositor leaves follow the authored body) so every build refreshes the
+# server's CORS origins without an Ansible pass.
 # Origins: <short hostname>.local plus every name from hostname -A, trailing
 # dots stripped, deduplicated in first-seen order, each http://<name>:<port>,
-# comma-separated. serve.sh expands each origin into a repeatable --cors flag;
-# an empty value means no flags. Manual runs are fine too -- restart
-# opencode.service afterwards to apply.
+# comma-separated. bin/build-env-serve-args.sh folds the list into the baked
+# OPENCODE_SERVE_ARGS vector; an empty value means no --cors flags. Manual
+# runs are fine too — follow with build-env-serve-args.sh and restart
+# opencode.service to apply.
 
 dir=${DIR:?DIR is not set (the generated wrapper normally provides it)}
 port=${OPENCODE_SERVER_PORT:-49373}

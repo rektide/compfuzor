@@ -302,9 +302,7 @@ def test_launcher_reads_systemd_credential_without_argv_leak() -> None:
         env.update(
             {
                 "CREDENTIALS_DIRECTORY": str(directory),
-                "OPENCODE_SERVER_HOSTNAME": "0.0.0.0",
-                "OPENCODE_SERVER_PORT": "49373",
-                "OPENCODE_SERVER_CORS": "",
+                "OPENCODE_SERVE_ARGS": "--hostname 0.0.0.0 --port 49373",
             }
         )
 
@@ -332,7 +330,7 @@ def test_launcher_reads_systemd_credential_without_argv_leak() -> None:
             raise AssertionError("launcher did not export the systemd credential")
 
 
-def test_launcher_expands_cors_origins_into_repeatable_flags() -> None:
+def test_launcher_word_splits_baked_serve_args() -> None:
     with tempfile.TemporaryDirectory(prefix="compfuzor-opencode-serve-") as temporary:
         directory = Path(temporary)
         binary = fake_binary(directory)
@@ -342,11 +340,10 @@ def test_launcher_expands_cors_origins_into_repeatable_flags() -> None:
         env.update(
             {
                 "CREDENTIALS_DIRECTORY": str(directory),
-                "OPENCODE_SERVER_HOSTNAME": "0.0.0.0",
-                "OPENCODE_SERVER_PORT": "49373",
-                "OPENCODE_SERVER_CORS": (
-                    "http://workhorse.local:49373,"
-                    "http://workhorse.tail177464.ts.net:49373"
+                "OPENCODE_SERVE_ARGS": (
+                    "--hostname 0.0.0.0 --port 49373 "
+                    "--cors http://workhorse.local:49373 "
+                    "--cors http://workhorse.tail177464.ts.net:49373"
                 ),
             }
         )
@@ -378,11 +375,39 @@ def test_launcher_expands_cors_origins_into_repeatable_flags() -> None:
             raise AssertionError(f"expected {expected!r}, got {arguments!r}")
 
 
+def test_launcher_fails_without_baked_serve_args() -> None:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-opencode-serve-") as temporary:
+        directory = Path(temporary)
+        binary = fake_binary(directory)
+        password_file = directory / "OPENCODE_PASSWORD"
+        password_file.write_text(TEST_PASSWORD, encoding="utf-8")
+        env = capture_env(directory, binary, password_file)
+        env.update({"CREDENTIALS_DIRECTORY": str(directory)})
+        env.pop("OPENCODE_SERVE_ARGS", None)
+
+        result = subprocess.run(
+            ["bash", str(LAUNCHER)],
+            cwd=ROOT,
+            env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode == 0:
+            raise AssertionError("launcher succeeded without baked serve arguments")
+        if "OPENCODE_SERVE_ARGS is not set" not in result.stderr:
+            raise AssertionError(f"missing bake did not fail clearly:\n{result.stdout}{result.stderr}")
+        if (directory / "args").exists():
+            raise AssertionError("server executed despite missing baked serve arguments")
+
+
 if __name__ == "__main__":
     test_native_client_env_without_routing_functions()
     test_zim_routes_without_lifecycle_management()
     test_zim_fails_before_execution_without_password()
     test_last_client_lists_and_runs_newest_snapshot_with_server()
     test_launcher_reads_systemd_credential_without_argv_leak()
-    test_launcher_expands_cors_origins_into_repeatable_flags()
+    test_launcher_word_splits_baked_serve_args()
+    test_launcher_fails_without_baked_serve_args()
     print("ok: OpenCode foreground service and ZIM routing")

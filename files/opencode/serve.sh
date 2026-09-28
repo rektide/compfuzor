@@ -20,20 +20,18 @@ export OPENCODE_PASSWORD
 
 binary=${OPENCODE_BINARY:-/usr/local/bin/opencode}
 
-# OPENCODE_SERVER_CORS is a comma-separated origin list maintained in env and
-# env.export by bin/build-env-cors.sh (run from build.sh); each origin expands
-# into opencode's repeatable --cors flag. Empty means no flags.
-cors_args=()
-if [[ -n ${OPENCODE_SERVER_CORS:-} ]]; then
-  IFS=',' read -r -a cors_origins <<<"$OPENCODE_SERVER_CORS"
-  for origin in "${cors_origins[@]}"; do
-    if [[ -n $origin ]]; then
-      cors_args+=(--cors "$origin")
-    fi
-  done
-fi
+# OPENCODE_SERVE_ARGS is the complete serve argument vector baked by
+# bin/build-env-serve-args.sh at build time (--hostname, --port, one --cors
+# per discovered origin). It rides the unit's EnvironmentFile; this script
+# word-splits it into exec argv because systemd cannot — ExecStart ${VAR}
+# expansion passes the whole value as a single argument.
+#
+# Drop-in plan: when the opencode-args feature line (~/src/opencode-args)
+# lands native LoadCredential password reading (the credential export above)
+# and serve-route environment argument parsing, this wrapper is deleted and
+# ExecStart becomes bare `opencode serve` with the vector in the unit
+# environment. Nothing else about the deployment changes.
+serve_args=${OPENCODE_SERVE_ARGS:?OPENCODE_SERVE_ARGS is not set: run build.sh (or bin/build-env-serve-args.sh) to bake the serve arguments}
+read -r -a serve_argv <<<"$serve_args"
 
-exec "$binary" serve \
-  --hostname "${OPENCODE_SERVER_HOSTNAME:?OPENCODE_SERVER_HOSTNAME is not set}" \
-  --port "${OPENCODE_SERVER_PORT:?OPENCODE_SERVER_PORT is not set}" \
-  "${cors_args[@]}"
+exec "$binary" serve "${serve_argv[@]}"

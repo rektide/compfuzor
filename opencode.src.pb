@@ -85,8 +85,20 @@
       # Rendered empty and rewritten in place by bin/build-env-cors.sh, a
       # build.sh compositor leaf: all hostname -A names plus
       # <short hostname>.local, deduped, each http://<name>:<port>.
-      # serve.sh expands each into --cors.
+      # bin/build-env-serve-args.sh folds these into OPENCODE_SERVE_ARGS.
       OPENCODE_SERVER_CORS: ""
+      # Rendered empty and rewritten in place by bin/build-env-serve-args.sh,
+      # the second build.sh compositor leaf (BINS order runs it after the cors
+      # leaf): the complete `serve` argument vector -- --hostname, --port, one
+      # --cors per discovered origin -- baked once per build instead of
+      # reassembled per boot. serve.sh word-splits it into exec argv because
+      # systemd cannot: ExecStart ${VAR} expansion passes the whole value as a
+      # single argument. When the opencode-args feature line
+      # (~/src/opencode-args) lands native LoadCredential password reading and
+      # serve-route environment argument parsing, serve.sh is deleted,
+      # ExecStart becomes bare `opencode serve`, and this vector moves to the
+      # variable the CLI parses natively from the unit EnvironmentFile.
+      OPENCODE_SERVE_ARGS: ""
       # Root-scoped watchman backend; inert until the composed working
       # workspace carries the watchman stack, then opts the service in.
       # 4m command deadline: loaded host, prefer waiting over generation churn.
@@ -329,14 +341,22 @@
       or a generated ZIM fragment.
 
       The user unit gets ordinary runtime settings from its generated
-      `EnvironmentFile={{DIR}}/env`: hostname, port, CORS origins, Watchman
-      socket, and instance-specific binary. `LoadCredential` supplies the
-      password file separately. `serve.sh` is only the systemd credential and
-      argument adapter: it exports the credential to the server process,
-      expands comma-separated CORS origins into repeated flags, and execs
-      `opencode serve`. It is rendered without generic BINS helpers because a
-      long-running `ExecStart` must not exit successfully through a provisioning
-      bypass guard.
+      `EnvironmentFile={{DIR}}/env`: hostname, port, CORS origins, the baked
+      serve argument vector, Watchman socket, and instance-specific binary.
+      `LoadCredential` supplies the password file separately. `serve.sh` is
+      only the systemd credential and argument adapter: it exports the
+      credential to the server process, word-splits the baked
+      `OPENCODE_SERVE_ARGS` vector into exec argv (systemd cannot —
+      `ExecStart` `${VAR}` expansion passes the whole value as a single
+      argument), and execs `opencode serve`. It is rendered without generic
+      BINS helpers because a long-running `ExecStart` must not exit
+      successfully through a provisioning bypass guard.
+
+      When the `opencode-args` feature line (`~/src/opencode-args`) lands
+      native LoadCredential password reading and serve-route environment
+      argument parsing, `serve.sh` is deleted: `ExecStart` becomes bare
+      `opencode serve` and the baked vector moves to the variable the CLI
+      parses natively from the unit EnvironmentFile.
 
       ## Operations
 
@@ -546,17 +566,25 @@
           {{DIR}}/bin/backup.sh --snapshot  # consistent DB snapshot
           BACKUP_ROOT=user@host:/path {{DIR}}/bin/backup.sh  # ad-hoc target
 
-      ## CORS origins
+      ## CORS origins and serve arguments
 
-      `bin/build-env-cors.sh` is composed into `build.sh` by the bin
-      compositor (its `build*` name groups it there), so every build rewrites
-      `OPENCODE_SERVER_CORS` in `env` and `env.export` in place: every name
-      from `hostname -A` plus `<short hostname>.local`, deduplicated in
-      first-seen order, each as `http://<name>:<port>`, comma-separated. The
-      playbook renders the key empty, so an Ansible re-render resets it until
-      the next build (or a manual `{{DIR}}/bin/build-env-cors.sh` run).
-      `serve.sh` expands each origin into a repeatable `--cors` flag; an empty
-      value means no flags. Apply changes with
+      Two config tasks are composed into `build.sh` by the bin compositor
+      (their `build*` names group them there; BINS order runs cors first):
+
+      1. `bin/build-env-cors.sh` rewrites `OPENCODE_SERVER_CORS` in `env`
+         and `env.export` in place: every name from `hostname -A` plus
+         `<short hostname>.local`, deduplicated in first-seen order, each as
+         `http://<name>:<port>`, comma-separated.
+      2. `bin/build-env-serve-args.sh` folds `OPENCODE_SERVER_HOSTNAME`,
+         `OPENCODE_SERVER_PORT`, and those origins into the baked
+         `OPENCODE_SERVE_ARGS` vector — `--hostname`, `--port`, one `--cors`
+         per origin — the complete serve argument list, computed once per
+         build instead of reassembled per boot. `serve.sh` word-splits it
+         into exec argv.
+
+      The playbook renders both keys empty, so an Ansible re-render resets
+      them until the next build (or a manual run of either script). An empty
+      CORS value means no `--cors` flags. Apply changes with
       `systemctl --user restart {{OPENCODE_UNIT}}.service`.
 
       ## Native-library cleanup
@@ -809,6 +837,10 @@
         # action. The generic TYPE=opencode bypass wrapper can exit 0 on a
         # bypass and fight Restart=always. systemd's EnvironmentFile and
         # LoadCredential supply its inputs; the body validates required values.
+        # Drop-in plan: deleted once the opencode-args feature line
+        # (~/src/opencode-args) lands LoadCredential password reading and
+        # serve-route environment argument parsing; ExecStart then becomes
+        # bare `opencode serve` with the baked vector in the unit environment.
         helpers: false
       - name: restart.sh
         basedir: False
@@ -872,6 +904,12 @@
       # Auto-grouped under the build.sh compositor by its build* name; every
       # build.sh run refreshes the origins, no explicit call site required.
       - name: build-env-cors.sh
+        basedir: False
+      # Second build.sh leaf, deliberately after build-env-cors.sh in BINS
+      # order (the compositor lane sort is stable, BINS order decides): folds
+      # OPENCODE_SERVER_HOSTNAME/PORT plus the CORS origins the cors leaf just
+      # refreshed into the baked OPENCODE_SERVE_ARGS vector.
+      - name: build-env-serve-args.sh
         basedir: False
       - name: cleanup.sh
         basedir: False
