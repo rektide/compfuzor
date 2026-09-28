@@ -1,5 +1,5 @@
 #!/usr/bin/env -S node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
-import { link, lstat, mkdir, mkdtemp, open, readFile, readdir, realpath, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { link, lstat, mkdir, mkdtemp, open, readFile, readdir, readlink, realpath, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import * as NodeChildProcess from "node:child_process";
 import { PassThrough } from "node:stream";
 import * as NodeCrypto from "node:crypto";
@@ -9,7 +9,7 @@ import { constants } from "node:fs";
 import * as OS from "node:os";
 import { homedir, tmpdir } from "node:os";
 import * as Path from "node:path";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import * as NodeUrl from "node:url";
 import * as readline from "node:readline";
@@ -31214,7 +31214,6 @@ function destinationJjView(dest) {
 const BOUNDS = {
 	reflogEntries: 8192,
 	untracked: 4096,
-	ignoredListed: 512,
 	odbFiles: 16384,
 	jjFiles: 8192,
 	manifestUntracked: 2048,
@@ -31269,14 +31268,20 @@ function gitZero(args, cwd) {
 /** Config-only preflight: never run status, hashing, or path probes with local helpers. */
 function localHelpers(root) {
 	return gen(function* () {
-		const out = yield* git([
-			"config",
-			"--get-regexp",
-			"^(filter\\.|core\\.fsmonitor$|core\\.hooksPath$)"
-		], root);
-		if (out.exitCode === 1) return [];
-		if (out.exitCode !== 0) return yield* fail$2(new CustodyError("inspection-failed", "local helper config could not be inspected"));
-		return (yield* sync(() => parseConfigPairs(out.stdout))).filter(({ key, value }) => key !== "core.fsmonitor" || value !== "false").map(({ key }) => key);
+		const pairs = [];
+		for (const scope of ["--local", "--worktree"]) {
+			const out = yield* git([
+				"config",
+				scope,
+				"--includes",
+				"--get-regexp",
+				"^(filter\\.|core\\.fsmonitor$|core\\.hooksPath$)"
+			], root);
+			if (out.exitCode === 1) continue;
+			if (out.exitCode !== 0) return yield* fail$2(new CustodyError("inspection-failed", `${scope} helper config could not be inspected`));
+			pairs.push(...yield* sync(() => parseConfigPairs(out.stdout)));
+		}
+		return pairs.filter(({ key, value }) => key !== "core.fsmonitor" || value !== "false").map(({ key }) => key);
 	});
 }
 /** Exit-0 predicate for an ancestry/existence probe. */
@@ -31347,6 +31352,31 @@ function sensitiveClass(path) {
 	return null;
 }
 const hasInternals = (path) => path.split("/").some((part) => part === ".git" || part === ".jj");
+/** Refuse traversal through symlinked parents before any path-content probe. */
+async function safePathInfo(root, path) {
+	const parts = path.split("/");
+	let parent = root;
+	for (const part of parts.slice(0, -1)) {
+		parent = join(parent, part);
+		if ((await lstat(parent)).isSymbolicLink()) throw new CustodyError("inspection-failed", `symlinked parent in selected path: ${path}`);
+	}
+	const full = join(root, path);
+	const info = await lstat(full);
+	if (!info.isFile() && !info.isSymbolicLink()) throw new CustodyError("inspection-failed", `unsupported selected file kind: ${path}`);
+	if (info.isSymbolicLink()) {
+		const target = await readlink(full, { encoding: "buffer" });
+		const resolved = resolve(dirname(full), target.toString());
+		if (resolved !== root && !resolved.startsWith(root + sep)) throw new CustodyError("inspection-failed", `symlink target leaves source root: ${path}`);
+		return {
+			info,
+			target
+		};
+	}
+	return {
+		info,
+		target: null
+	};
+}
 /** Canonical LFS pointer header; matching this prefix identifies a pointer. */
 const LFS_POINTER_PREFIX = "version https://git-lfs.github.com/spec/v1\n";
 /** Bounded header read: pointer files are ~130 bytes, never megabytes. */
@@ -31361,11 +31391,11 @@ async function lfsPointers(root, paths) {
 	const header = Buffer.from(LFS_POINTER_PREFIX, "latin1");
 	for (const path of paths) {
 		const full = join(root, path);
-		const info = await lstat(full).catch((error) => {
+		const checked = await safePathInfo(root, path).catch((error) => {
 			if (error.code === "ENOENT") return null;
 			throw error;
 		});
-		if (info === null || !info.isFile()) continue;
+		if (checked === null || !checked.info.isFile()) continue;
 		const handle = await open(full, "r");
 		try {
 			const buffer = Buffer.alloc(LFS_PROBE_BYTES);
@@ -31518,6 +31548,14 @@ function probeSource(source, options) {
 		});
 		let gitDir = null;
 		let format = null;
+		if (yield* fs(() => isFile(join(real, ".git")), "inspect .git entry")) {
+			blockers.push({
+				code: "source-gitfile-linked-worktree",
+				subject: join(real, ".git"),
+				reason: "`.git` is a file: linked worktrees are unsupported in v1"
+			});
+			return earlyReturn();
+		}
 		const helpers = yield* result(localHelpers(real));
 		if (isFailure$1(helpers)) {
 			blockers.push({
@@ -31539,11 +31577,6 @@ function probeSource(source, options) {
 			code: "source-repository-metadata",
 			subject: join(real, ".git"),
 			reason: "the source repository directory itself is never captured; only selected Git objects are"
-		});
-		if (yield* fs(() => isFile(join(real, ".git")), "inspect .git entry")) blockers.push({
-			code: "source-gitfile-linked-worktree",
-			subject: join(real, ".git"),
-			reason: "`.git` is a file: linked worktrees are unsupported in v1"
 		});
 		const gitDirOut = yield* git(["rev-parse", "--absolute-git-dir"], real);
 		if (gitDirOut.exitCode !== 0) {
@@ -31803,7 +31836,8 @@ function probeSource(source, options) {
 			"status",
 			"--porcelain=v2",
 			"-z",
-			"--untracked-files=all"
+			"--untracked-files=all",
+			"--ignore-submodules=all"
 		], real);
 		let statusParsed = null;
 		if (statusOut.exitCode === 0) {
@@ -31883,17 +31917,11 @@ function probeSource(source, options) {
 		], real);
 		if (ignoredOut !== null) {
 			const ignoredAll = yield* category("source-ignored-unrepresentable", sync(() => parseNulPaths(ignoredOut)));
-			const listed = (ignoredAll ?? []).slice(0, BOUNDS.ignoredListed);
-			observed.ignoredPaths = listed;
-			for (const path of listed) leftBehind.push({
+			observed.ignoredPaths = ignoredAll;
+			for (const path of ignoredAll ?? []) leftBehind.push({
 				code: "ignored-runtime-state",
 				subject: path,
 				reason: "ignored files are left behind, never staged; runtime state is a retirement item"
-			});
-			if ((ignoredAll?.length ?? 0) > listed.length) warnings.push({
-				code: "ignored-paths-capped",
-				subject: null,
-				reason: `${(ignoredAll?.length ?? 0) - listed.length} further ignored paths not listed (bound ${BOUNDS.ignoredListed})`
 			});
 			retirement.push({
 				code: "ignored-runtime-state",
@@ -31906,6 +31934,22 @@ function probeSource(source, options) {
 			reason: "ignored listing failed"
 		});
 		const lfsFound = /* @__PURE__ */ new Set();
+		const selectedPaths = /* @__PURE__ */ new Set([
+			...(treePaths ?? []).map(({ path }) => path),
+			...(observed.indexEntries ?? []).map(({ path }) => path),
+			...(untracked ?? []).filter((path) => !excludedUntracked.includes(path))
+		]);
+		for (const path of selectedPaths) {
+			const checked = yield* result(fs(() => safePathInfo(real, path).catch((error) => {
+				if (error.code === "ENOENT") return null;
+				throw error;
+			}), "inspect selected path"));
+			if (isFailure$1(checked)) blockers.push({
+				code: "source-path-unsafe",
+				subject: path,
+				reason: checked.failure.message
+			});
+		}
 		for (const [revision, entries] of [["HEAD", treePaths], ["index", observed.indexEntries]]) {
 			if (entries === null) continue;
 			const candidates = yield* result(gitLfsCandidates(real, entries, revision));
@@ -32089,7 +32133,7 @@ function probeSource(source, options) {
 			for (const entry of treePaths) manifest.set(entry.path, entry);
 			const hashable = [];
 			for (const change of statusParsed.changes) {
-				if (change.indexStatus === "deleted" || change.worktreeStatus === "deleted") {
+				if (change.worktreeStatus === "deleted") {
 					manifest.delete(change.path);
 					continue;
 				}
@@ -32105,9 +32149,44 @@ function probeSource(source, options) {
 			else {
 				for (const path of selectedUntracked) hashable.push(path);
 				const oidByPath = /* @__PURE__ */ new Map();
+				const modeByPath = /* @__PURE__ */ new Map();
+				const regular = [];
 				let hashOk = true;
-				for (let i = 0; i < hashable.length && hashOk; i += BOUNDS.hashBatch) {
-					const batch = hashable.slice(i, i + BOUNDS.hashBatch);
+				for (const path of hashable) {
+					const checked = yield* result(fs(() => safePathInfo(real, path), `inspect ${path}`));
+					if (isFailure$1(checked)) {
+						blockers.push({
+							code: "source-manifest-unsafe-path",
+							subject: path,
+							reason: checked.failure.message
+						});
+						hashOk = false;
+						break;
+					}
+					const { info, target } = checked.success;
+					if (target === null) {
+						regular.push(path);
+						modeByPath.set(path, (info.mode & 73) !== 0 ? "100755" : "100644");
+						continue;
+					}
+					modeByPath.set(path, "120000");
+					const hashed = yield* gitRead(["hash-object", "--stdin"], {
+						cwd: real,
+						input: target
+					}).pipe(mapError((error) => new CustodyError("inspection-failed", error.message)));
+					if (hashed.exitCode !== 0) {
+						hashOk = false;
+						break;
+					}
+					const linkOid = yield* category("source-manifest-unrepresentable", sync(() => parseHashObjectLines(hashed.stdout, format, 1)[0]));
+					if (linkOid === null) {
+						hashOk = false;
+						break;
+					}
+					oidByPath.set(path, linkOid);
+				}
+				for (let i = 0; i < regular.length && hashOk; i += BOUNDS.hashBatch) {
+					const batch = regular.slice(i, i + BOUNDS.hashBatch);
 					const hashed = yield* gitZero([
 						"hash-object",
 						"--no-filters",
@@ -32126,15 +32205,11 @@ function probeSource(source, options) {
 					batch.forEach((path, index) => oidByPath.set(path, oids[index]));
 				}
 				if (hashOk) {
-					for (const [path, oid] of oidByPath) {
-						const info = yield* fs(() => lstat(join(real, path)), `stat ${path}`);
-						const mode = info.isSymbolicLink() ? "120000" : (info.mode & 73) !== 0 ? "100755" : "100644";
-						manifest.set(path, {
-							path,
-							mode,
-							blobOid: oid
-						});
-					}
+					for (const [path, oid] of oidByPath) manifest.set(path, {
+						path,
+						mode: modeByPath.get(path),
+						blobOid: oid
+					});
 					includedManifest = [...manifest.values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
 				} else blockers.push({
 					code: "source-manifest-unknowable",
@@ -32245,8 +32320,19 @@ function probeDestination(dest, declaredRepo, sourceFormat) {
 			statusSha256: null,
 			indexSha256: null
 		});
-		const real = yield* fs(() => realpath(dest).catch(() => null), "resolve destination");
-		if (real === null || !(yield* fs(() => isDirectory(real), "inspect destination"))) return missing();
+		const real = yield* fs(() => realpath(dest).catch((error) => {
+			if (error.code === "ENOENT") return null;
+			throw error;
+		}), "resolve destination");
+		if (real === null) return missing();
+		if (!(yield* fs(() => isDirectory(real), "inspect destination"))) {
+			blockers.push({
+				code: "destination-not-directory",
+				subject: real,
+				reason: "destination exists but is not a directory"
+			});
+			return partial();
+		}
 		const helpers = yield* result(localHelpers(real));
 		if (isFailure$1(helpers)) {
 			blockers.push({
@@ -32376,7 +32462,8 @@ function probeDestination(dest, declaredRepo, sourceFormat) {
 			"status",
 			"--porcelain=v2",
 			"-z",
-			"--untracked-files=all"
+			"--untracked-files=all",
+			"--ignore-submodules=all"
 		], real);
 		let statusSha256 = null;
 		if (statusOut.exitCode === 0) {
@@ -32510,19 +32597,22 @@ function resolvePaths(input) {
 async function canonicalPath(path) {
 	const tail = [];
 	let cursor = path;
-	while (true) try {
-		await lstat(cursor);
+	while (true) {
+		try {
+			await lstat(cursor);
+		} catch (error) {
+			if (error.code !== "ENOENT") throw error;
+			const parent = dirname(cursor);
+			if (parent === cursor) throw error;
+			tail.push(basename(cursor));
+			cursor = parent;
+			continue;
+		}
 		const ancestor = await realpath(cursor);
 		return {
 			path: resolve(ancestor, ...tail.reverse()),
 			exists: tail.length === 0
 		};
-	} catch (error) {
-		if (error.code !== "ENOENT") throw error;
-		const parent = dirname(cursor);
-		if (parent === cursor) throw error;
-		tail.push(basename(cursor));
-		cursor = parent;
 	}
 }
 /**
@@ -32639,6 +32729,11 @@ const planAdoption = fn("custody.planAdoption")((input) => gen(function* () {
 		code: "snapshot-preview-unknowable",
 		subject: probe.source,
 		reason: "worktree is dirty but inventory categories are missing; the proposal cannot be computed"
+	});
+	if (probe.dirty && proposal === null && stagedExists) blockers.push({
+		code: "source-index-only-state",
+		subject: probe.source,
+		reason: "staged index state has no synthetic snapshot; separate index custody is required before adoption"
 	});
 	let cleanHeadPathReview = null;
 	let approvedSnapshot = null;
@@ -33028,6 +33123,8 @@ const VAULT_DIRNAME = ".compfuzor-adoptions";
 const BUNDLE_NAME = "source.bundle";
 const INTENT_NAME = "intent.json";
 const encoder = new TextEncoder();
+/** Existing vault components must be private, not merely writable by us. */
+const privateComponent = (info) => info.uid === (process.geteuid?.() ?? -1) && (info.mode & 63) === 0;
 /** Archive identity: SHA-256 over the canonical destination realpath bytes. */
 function vaultArchiveId(destRealpath) {
 	return sha256(encoder.encode(destRealpath));
@@ -33105,6 +33202,7 @@ async function resolveVaultBundle(receipt, destRealpath) {
 		if (info.isSymbolicLink()) throw reject(`vault ${what} is a symlink; refusing to follow it out of the vault: ${path}`, false);
 		if (expect === "directory" && !info.isDirectory()) throw reject(`vault ${what} is not a directory: ${path}`, false);
 		if (expect === "file" && !info.isFile()) throw reject(`vault ${what} is not a regular file: ${path}`, false);
+		if (!privateComponent(info)) throw reject(`vault ${what} is not owned by this user with owner-only permissions: ${path}`, false);
 	};
 	const vault = join(dirname(destRealpath), VAULT_DIRNAME);
 	await component(vault, "root", "root", "directory");
@@ -33112,6 +33210,74 @@ async function resolveVaultBundle(receipt, destRealpath) {
 	await component(join(vault, archiveId, runId), "run", "run directory", "directory");
 	await component(target, "bundle", "bundle", "file");
 	return target;
+}
+/**
+* Read through anchored Linux directory descriptors. Checking a pathname and
+* later opening it is not sufficient: an untrusted archive parent could swap
+* a directory component between the two operations. Each child is opened via
+* its parent's /proc/self/fd descriptor with O_NOFOLLOW; fstat checks the
+* opened inode, including owner and permissions. The caller receives bytes,
+* never a path to reopen for the custody proof.
+*/
+async function readVaultBundle(receipt, destRealpath) {
+	const path = vaultBundleTarget(receipt, destRealpath);
+	const { archiveId, runId } = parseVaultRelative(receipt.bundle.pathRelativeToDestinationParent);
+	const handles = [];
+	const vault = join(dirname(destRealpath), VAULT_DIRNAME);
+	const parts = [
+		{
+			name: vault,
+			kind: "root",
+			expect: "directory"
+		},
+		{
+			name: archiveId,
+			kind: "archive",
+			expect: "directory"
+		},
+		{
+			name: runId,
+			kind: "run",
+			expect: "directory"
+		},
+		{
+			name: BUNDLE_NAME,
+			kind: "bundle",
+			expect: "file"
+		}
+	];
+	try {
+		for (const part of parts) {
+			const parent = handles.at(-1);
+			const anchored = parent === void 0 ? part.name : `/proc/self/fd/${parent.fd}/${part.name}`;
+			let handle;
+			try {
+				handle = await open(anchored, constants.O_RDONLY | constants.O_NOFOLLOW | (part.expect === "directory" ? constants.O_DIRECTORY : 0));
+			} catch (error) {
+				const missing = error.code === "ENOENT";
+				throw new VaultPathComponentError({
+					component: part.kind,
+					path: part.kind === "root" ? vault : join(vault, archiveId, ...part.kind === "run" || part.kind === "bundle" ? [runId] : [], ...part.kind === "bundle" ? [BUNDLE_NAME] : []),
+					message: `vault ${part.kind} ${missing ? "is missing" : "cannot be safely opened"}: ${path}`,
+					missing
+				});
+			}
+			handles.push(handle);
+			const info = await handle.stat();
+			if ((part.expect === "directory" ? !info.isDirectory() : !info.isFile()) || !privateComponent(info)) throw new VaultPathComponentError({
+				component: part.kind,
+				path,
+				message: `vault ${part.kind} is not an owner-only ${part.expect}: ${path}`,
+				missing: false
+			});
+		}
+		return {
+			path,
+			bytes: await handles[handles.length - 1].readFile()
+		};
+	} finally {
+		for (const handle of handles.reverse()) await handle.close();
+	}
 }
 /** 128 bits of cryptographic randomness, hex-encoded. */
 function vaultRunId() {
@@ -33134,6 +33300,7 @@ const mkdirLevel = async (dir, what, signal) => {
 	signal?.throwIfAborted();
 	if (existing !== null) {
 		if (!existing.isDirectory() || existing.isSymbolicLink()) throw vaultWrite(`${what} exists and is not a directory`, dir);
+		if (!privateComponent(existing)) throw vaultWrite(`${what} is not owned by this user with owner-only permissions`, dir);
 		return;
 	}
 	try {
@@ -33145,6 +33312,8 @@ const mkdirLevel = async (dir, what, signal) => {
 	}
 	await syncDir(dirname(dir));
 	signal?.throwIfAborted();
+	const created = await lstat(dir);
+	if (!created.isDirectory() || !privateComponent(created)) throw vaultWrite(`${what} is not owner-only after creation`, dir);
 };
 /** Containment in either direction (a path component boundary, not prefixes). */
 const contains$1 = (parent, child) => {
@@ -33180,6 +33349,8 @@ async function createVaultRun(destRealpath, runId, execution = {}) {
 	}
 	await syncDir(archiveDir);
 	signal?.throwIfAborted();
+	const created = await lstat(runDir);
+	if (!created.isDirectory() || !privateComponent(created)) throw vaultWrite("run directory is not owner-only after creation", runDir);
 	return {
 		vaultRoot,
 		archiveDir,
@@ -33203,6 +33374,9 @@ async function sealVaultFile(target, bytes, execution = {}) {
 	signal?.throwIfAborted();
 	if (existing !== null) throw vaultWrite("target already exists; vault files are never overwritten", target);
 	const directory = dirname(target);
+	const dirInfo = await lstat(directory);
+	signal?.throwIfAborted();
+	if (!dirInfo.isDirectory() || !privateComponent(dirInfo)) throw vaultWrite("target directory is not owner-only", directory);
 	const temp = join(directory, `.${basename(target)}.tmp-${randomBytes(8).toString("hex")}`);
 	try {
 		signal?.throwIfAborted();
@@ -33306,6 +33480,41 @@ async function sealBundle(options, execution = {}) {
 * this module ever performs are inside its private scratch directory.
 */
 const REF_FORMAT = "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00";
+const gitBlobOid = (bytes, format) => createHash(format).update(`blob ${bytes.byteLength}\0`).update(bytes).digest("hex");
+/** Literal path acquisition: descriptors prevent a swapped directory or leaf
+* symlink from redirecting the read outside the legacy worktree. */
+const readManifestPath = async (source, entry, signal) => {
+	const handles = [];
+	try {
+		signal?.throwIfAborted();
+		handles.push(await open(source, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW));
+		const parts = entry.path.split("/");
+		for (const part of parts.slice(0, -1)) {
+			signal?.throwIfAborted();
+			const parent = handles.at(-1);
+			handles.push(await open(`/proc/self/fd/${parent.fd}/${part}`, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW));
+		}
+		signal?.throwIfAborted();
+		const leaf = `/proc/self/fd/${handles.at(-1).fd}/${parts.at(-1)}`;
+		if (entry.mode === "120000") return await readlink(leaf, { encoding: "buffer" });
+		const file = await open(leaf, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+		handles.push(file);
+		if (!(await file.stat()).isFile()) return null;
+		return await file.readFile();
+	} catch (error) {
+		signal?.throwIfAborted();
+		const code = error.code;
+		if ([
+			"ENOENT",
+			"ELOOP",
+			"ENOTDIR",
+			"EINVAL"
+		].includes(code ?? "")) return null;
+		throw error;
+	} finally {
+		for (const handle of handles.reverse()) await handle.close();
+	}
+};
 /**
 * Read-only runner: raw stdout bytes on exit 0, `null` otherwise. Git failures
 * are observations for the caller to classify, never exceptions here.
@@ -33574,18 +33783,18 @@ async function verifyAdoption(input, execution = {}) {
 	}
 	if (receipt !== null) {
 		let bundlePath = null;
+		let bundleBytes = null;
 		try {
-			bundlePath = await resolveVaultBundle(receipt, destReal);
+			const bundle = await readVaultBundle(receipt, destReal);
+			bundlePath = bundle.path;
+			bundleBytes = bundle.bytes;
 		} catch (error) {
 			signal?.throwIfAborted();
 			const detail = error instanceof Error ? error.message : String(error);
 			if (error instanceof VaultPathComponentError && error.component === "bundle" && error.missing) fail("bundle-unreadable", error.subject, detail);
 			else fail("vault-path-invalid", error instanceof CustodyError ? error.subject : receipt.bundle.pathRelativeToDestinationParent, detail);
 		}
-		const bundleBytes = bundlePath === null ? null : await readFile(bundlePath).catch(() => null);
-		if (bundleBytes === null) {
-			if (bundlePath !== null) fail("bundle-unreadable", bundlePath, "sealed vault bundle is unreadable");
-		} else {
+		if (bundleBytes === null) {} else {
 			const observed = sha256(bundleBytes);
 			if (observed !== receipt.bundle.sha256) fail("bundle-checksum", receipt.bundle.pathRelativeToDestinationParent, `bundle hashes to ${observed}; receipt records ${receipt.bundle.sha256}`);
 			try {
@@ -33689,8 +33898,8 @@ const destinationDriftOf = async (receipt, destReal, gitDir, ref, receiptCommitO
 /**
 * Optional legacy diagnostics: compare the surviving legacy checkout's HEAD,
 * full ref map, index digest, `.jj` presence, and the content of every path
-* in the recorded included manifest (read-only `hash-object --stdin-paths`,
-* never `-w`) against the captured inventory. Absence, change, or omission
+* in the recorded included manifest (literal filesystem paths, hash symlink
+* text rather than its target). Absence, change, or omission
 * never redefines custody that was already proven into the archive.
 */
 const sourceDriftOf = async (input, receipt, signal) => {
@@ -33721,23 +33930,11 @@ const sourceDriftOf = async (input, receipt, signal) => {
 	const jjRecorded = receipt.source.fingerprints.jjStoreSha256 !== null || receipt.source.jjCoverage.classification !== "none";
 	if ((jjDirectory !== null && jjDirectory.isDirectory()) !== jjRecorded) changed = true;
 	const manifest = receipt.snapshot?.paths ?? receipt.source.head.treePaths;
-	if (manifest.length > 0) {
-		const pathsInput = new TextEncoder().encode(`${manifest.map(({ path }) => path).join("\n")}\n`);
-		const hashed = await runPromise(gitRead(["hash-object", "--stdin-paths"], {
-			cwd: real,
-			input: pathsInput
-		}), { signal }).catch((error) => {
-			signal?.throwIfAborted();
-			throw error;
-		});
+	for (const entry of manifest) {
 		signal?.throwIfAborted();
-		if (hashed.exitCode !== 0) changed = true;
-		else {
-			const observedOids = utf8Fatal(hashed.stdout).split("\n");
-			manifest.forEach((entry, index) => {
-				if (observedOids[index] !== entry.blobOid) changed = true;
-			});
-		}
+		const bytes = await readManifestPath(real, entry, signal);
+		signal?.throwIfAborted();
+		if (bytes === null || gitBlobOid(bytes, format) !== entry.blobOid) changed = true;
 	}
 	return changed ? "changed" : "unchanged";
 };
