@@ -524,6 +524,18 @@ test("configured clean filters and fsmonitor never execute during blocked invent
   assert.equal(blockedDest.state, "blocked");
   assert.ok(codes(blockedDest).includes("destination-filter-configured"));
   await assert.rejects(readFile(destMarker), { code: "ENOENT" });
+
+  const worktreeMarker = join(ROOT, "worktree-helper-marker");
+  await rm(worktreeMarker, { force: true });
+  await git(["config", "extensions.worktreeConfig", "true"], cleanSource);
+  await git(
+    ["config", "--worktree", "core.fsmonitor", `sh -c 'touch ${worktreeMarker}; echo /'`],
+    cleanSource,
+  );
+  const worktreePlan = await plan(input(cleanSource, dest));
+  assert.equal(worktreePlan.state, "blocked");
+  assert.ok(codes(worktreePlan).includes("source-filter-configured"));
+  await assert.rejects(readFile(worktreeMarker), { code: "ENOENT" });
 });
 
 test("dirty in-root symlinks preview link bytes; external symlinks block without reading targets", async () => {
@@ -890,6 +902,10 @@ test("nested or aliased paths are rejected as invalid input", async () => {
   await assert.rejects(Effect.runPromise(applyAdoption(input(source, alias))), CustodyError);
   assert.equal(await fingerprintTree(join(source, ".git/objects")), before);
   await assert.rejects(plan(input(source, join(alias, "nested"))), CustodyError);
+  const dangling = join(ROOT, "dangling-dest-alias");
+  await rm(dangling, { force: true });
+  await symlink(join(ROOT, "missing-target"), dangling);
+  await assert.rejects(plan(input(source, dangling)), CustodyError);
 });
 
 test("dispositions referencing unknown candidates are rejected", async () => {

@@ -145,15 +145,17 @@ async function canonicalPath(path: string): Promise<{ path: string; exists: bool
   while (true) {
     try {
       await lstat(cursor);
-      const ancestor = await realpath(cursor);
-      return { path: resolve(ancestor, ...tail.reverse()), exists: tail.length === 0 };
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       const parent = dirname(cursor);
       if (parent === cursor) throw error;
       tail.push(basename(cursor));
       cursor = parent;
+      continue;
     }
+    // An existing but dangling symlink is not a missing destination.
+    const ancestor = await realpath(cursor);
+    return { path: resolve(ancestor, ...tail.reverse()), exists: tail.length === 0 };
   }
 }
 

@@ -162,22 +162,25 @@ function gitZero(
 /** Config-only preflight: never run status, hashing, or path probes with local helpers. */
 function localHelpers(root: string): Effect.Effect<readonly string[], CustodyError> {
   return Effect.gen(function* () {
-    const out = yield* git(
-      [
-        "config",
-        "--local",
-        "--includes",
-        "--get-regexp",
-        "^(filter\\.|core\\.fsmonitor$|core\\.hooksPath$)",
-      ],
-      root,
-    );
-    if (out.exitCode === 1) return [];
-    if (out.exitCode !== 0)
-      return yield* Effect.fail(
-        new CustodyError("inspection-failed", "local helper config could not be inspected"),
+    const pairs = [] as { readonly key: string; readonly value: string }[];
+    for (const scope of ["--local", "--worktree"]) {
+      const out = yield* git(
+        [
+          "config",
+          scope,
+          "--includes",
+          "--get-regexp",
+          "^(filter\\.|core\\.fsmonitor$|core\\.hooksPath$)",
+        ],
+        root,
       );
-    const pairs = yield* sync(() => parseConfigPairs(out.stdout));
+      if (out.exitCode === 1) continue;
+      if (out.exitCode !== 0)
+        return yield* Effect.fail(
+          new CustodyError("inspection-failed", `${scope} helper config could not be inspected`),
+        );
+      pairs.push(...(yield* sync(() => parseConfigPairs(out.stdout))));
+    }
     return pairs
       .filter(({ key, value }) => key !== "core.fsmonitor" || value !== "false")
       .map(({ key }) => key);
@@ -498,6 +501,14 @@ export function probeSource(
     });
     let gitDir: string | null = null;
     let format: GitObjectFormat | null = null;
+    if (yield* fs(() => isFile(join(real, ".git")), "inspect .git entry")) {
+      blockers.push({
+        code: "source-gitfile-linked-worktree",
+        subject: join(real, ".git"),
+        reason: "`.git` is a file: linked worktrees are unsupported in v1",
+      });
+      return earlyReturn();
+    }
     const helpers = yield* Effect.result(localHelpers(real));
     if (Result.isFailure(helpers)) {
       blockers.push({
@@ -521,13 +532,6 @@ export function probeSource(
       reason:
         "the source repository directory itself is never captured; only selected Git objects are",
     });
-
-    if (yield* fs(() => isFile(join(real, ".git")), "inspect .git entry"))
-      blockers.push({
-        code: "source-gitfile-linked-worktree",
-        subject: join(real, ".git"),
-        reason: "`.git` is a file: linked worktrees are unsupported in v1",
-      });
 
     const gitDirOut = yield* git(["rev-parse", "--absolute-git-dir"], real);
     if (gitDirOut.exitCode !== 0) {
@@ -864,7 +868,10 @@ export function probeSource(
     }
 
     // --- status, untracked, ignored ---
-    const statusOut = yield* git(["status", "--porcelain=v2", "-z", "--untracked-files=all"], real);
+    const statusOut = yield* git(
+      ["status", "--porcelain=v2", "-z", "--untracked-files=all", "--ignore-submodules=all"],
+      real,
+    );
     let statusParsed: ReturnType<typeof parseStatusV2> | null = null;
     if (statusOut.exitCode === 0) {
       raw.status = statusOut.stdout;
@@ -1495,9 +1502,23 @@ export function probeDestination(
       statusSha256: null,
       indexSha256: null,
     });
-    const real = yield* fs(() => realpath(dest).catch(() => null), "resolve destination");
-    if (real === null || !(yield* fs(() => isDirectory(real), "inspect destination")))
-      return missing();
+    const real = yield* fs(
+      () =>
+        realpath(dest).catch((error: NodeJS.ErrnoException) => {
+          if (error.code === "ENOENT") return null;
+          throw error;
+        }),
+      "resolve destination",
+    );
+    if (real === null) return missing();
+    if (!(yield* fs(() => isDirectory(real), "inspect destination"))) {
+      blockers.push({
+        code: "destination-not-directory",
+        subject: real,
+        reason: "destination exists but is not a directory",
+      });
+      return partial();
+    }
 
     const helpers = yield* Effect.result(localHelpers(real));
     if (Result.isFailure(helpers)) {
@@ -1664,7 +1685,10 @@ export function probeDestination(
       });
     }
 
-    const statusOut = yield* git(["status", "--porcelain=v2", "-z", "--untracked-files=all"], real);
+    const statusOut = yield* git(
+      ["status", "--porcelain=v2", "-z", "--untracked-files=all", "--ignore-submodules=all"],
+      real,
+    );
     let statusSha256: string | null = null;
     if (statusOut.exitCode === 0) {
       statusSha256 = sha256(statusOut.stdout);
