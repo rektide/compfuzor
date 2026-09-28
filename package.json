@@ -10,9 +10,11 @@
   "type": "module",
   "private": true,
   "devDependencies": {
+    "@effect/platform-node": "4.0.0-rc.118",
     "@gunshi/plugin-completion": "^0.37.3",
     "@types/node": "^26.5.1",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
+    "effect": "4.0.0-rc.118",
     "gunshi": "^0.37.3",
     "vite-plus": "^0.3.1"
   },
