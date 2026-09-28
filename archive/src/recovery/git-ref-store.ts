@@ -7,17 +7,27 @@ import { createTransactionStdin, type RefStore, type RefTarget } from "./transac
 
 export class GitRefStore implements RefStore {
   public readonly destination: string;
-  public constructor(destination: string) {
+  public readonly signal: AbortSignal | undefined;
+  /**
+   * Bind the calling Effect's cancellation signal to every Git child spawned
+   * by this Promise adapter. An aborted update-ref transaction has uncertain
+   * outcome: callers reinspect refs on retry, never roll it back or guess.
+   */
+  public constructor(destination: string, execution: { readonly signal?: AbortSignal } = {}) {
     this.destination = destination;
+    this.signal = execution.signal;
   }
 
   public async list(): Promise<ReadonlyMap<string, string>> {
     try {
+      this.signal?.throwIfAborted();
       const formatResult = await Effect.runPromise(
         gitRead(["rev-parse", "--show-object-format"], {
           cwd: this.destination,
         }),
+        { signal: this.signal },
       );
+      this.signal?.throwIfAborted();
       if (formatResult.exitCode !== 0)
         throw new Error(`Git object-format inspection failed (${formatResult.exitCode})`);
       const format = utf8Fatal(formatResult.stdout).trim();
@@ -27,7 +37,9 @@ export class GitRefStore implements RefStore {
         gitRead(["for-each-ref", "--format=%(refname)%00%(objectname)"], {
           cwd: this.destination,
         }),
+        { signal: this.signal },
       );
+      this.signal?.throwIfAborted();
       if (refs.exitCode !== 0) throw new Error(`Git ref listing failed (${refs.exitCode})`);
       const output = utf8Fatal(refs.stdout);
       const observed = new Map<string, string>();
@@ -41,6 +53,7 @@ export class GitRefStore implements RefStore {
       if (output !== "" && !output.endsWith("\n")) invalid("truncated Git ref listing");
       return observed;
     } catch (error) {
+      this.signal?.throwIfAborted();
       throw new CustodyError(
         "inspection-failed",
         `destination Git ref inspection failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -52,6 +65,7 @@ export class GitRefStore implements RefStore {
     missing: readonly RefTarget[],
     matching: readonly RefTarget[],
   ): Promise<void> {
+    this.signal?.throwIfAborted();
     const input = new TextEncoder().encode(createTransactionStdin(missing, matching));
     // Git's prepare checks every verify/create and its commit updates all or
     // none. No batch-updates, no dereferencing symbolic refs, no force writes.
@@ -64,6 +78,8 @@ export class GitRefStore implements RefStore {
           input,
         },
       ),
+      { signal: this.signal },
     );
+    this.signal?.throwIfAborted();
   }
 }

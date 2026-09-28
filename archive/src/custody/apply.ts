@@ -414,8 +414,9 @@ export const applyAdoption = (
     const plan = ready(yield* planAdoption(input));
     const dest = plan.identity.destinationRealpath;
     const ref = receiptRef(plan.identity.label, plan.identity.generation);
-    const store = new GitRefStore(dest);
-    const current = yield* fromPromise(() => store.list(), "inspection-failed");
+    const listRefs = () =>
+      fromPromise((signal) => new GitRefStore(dest, { signal }).list(), "inspection-failed");
+    const current = yield* listRefs();
     assertObservedRefs(plan, current);
 
     // Existing receipt first: no stage, no freshly sealed bundle, and no
@@ -439,10 +440,13 @@ export const applyAdoption = (
       yield* proveExistingBundle(receipt, dest, scratch);
       const checked = ready(yield* planAdoption(input));
       recheck(plan, checked, true);
-      const beforeInstall = yield* fromPromise(() => store.list(), "inspection-failed");
+      const beforeInstall = yield* listRefs();
       retryRefsUnchanged(checked, receipt, beforeInstall, original.receiptCommitOid);
       approveSameInputRetry(checked, receipt, original.receiptCommitOid, beforeInstall);
-      const changed = yield* fromPromise(() => installImmutableRefs(store, install), "ref-race");
+      const changed = yield* fromPromise(
+        (signal) => installImmutableRefs(new GitRefStore(dest, { signal }), install),
+        "ref-race",
+      );
       yield* hook(testHooks.afterInstall);
       const verification = verified(
         yield* fromPromise(
@@ -521,10 +525,11 @@ export const applyAdoption = (
     yield* importReceipt(dest, stage.gitDir, commitOid);
     yield* hook(testHooks.afterTransfer);
     recheck(plan, yield* planAdoption(input), false);
-    const immediatelyBefore = yield* fromPromise(() => store.list(), "inspection-failed");
+    const immediatelyBefore = yield* listRefs();
     assertObservedRefs(plan, immediatelyBefore);
     const installed = yield* fromPromise(
-      () => installImmutableRefs(store, freshInstall(receipt, commitOid)),
+      (signal) =>
+        installImmutableRefs(new GitRefStore(dest, { signal }), freshInstall(receipt, commitOid)),
       "ref-race",
     );
     yield* hook(testHooks.afterInstall);

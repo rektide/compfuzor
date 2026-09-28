@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
+import { setTimeout as delay } from "node:timers/promises";
 import { test } from "node:test";
 import { Effect } from "effect";
 import { applyAdoption } from "../../src/custody/apply.ts";
@@ -229,6 +230,110 @@ void test("interruption after durable seal installs no refs; retry can finish", 
   await assert.rejects(() => git(dest, "rev-parse", "refs/adopt/receipts/legacy/g0"));
   const resumed = await Effect.runPromise(applyAdoption(input));
   assert.equal(resumed.verification.custodyVerified, true);
+});
+
+void test("aborting the Effect after seal leaves the vault but never starts destination transfer", async () => {
+  const { dest, input } = await fixture("abort-after-seal");
+  const controller = new AbortController();
+  await assert.rejects(() =>
+    Effect.runPromise(
+      applyAdoption(input, {
+        afterSeal: async () => {
+          controller.abort(new Error("abort before destination transfer"));
+        },
+      }),
+      { signal: controller.signal },
+    ),
+  );
+  const vault = join(dirname(dest), ".compfuzor-adoptions");
+  assert.equal((await readdir(vault)).length, 1);
+  await assert.rejects(() => git(dest, "rev-parse", "refs/adopt/receipts/legacy/g0"));
+  const resumed = await Effect.runPromise(applyAdoption(input));
+  assert.equal(resumed.verification.custodyVerified, true);
+});
+
+void test("abort kills a blocked destination update-ref child and never starts verification", async () => {
+  const { dest, input } = await fixture("abort-update-ref");
+  const toolDir = join(dirname(dest), "git-wrapper");
+  await mkdir(toolDir);
+  const marker = join(toolDir, "update-ref.pid");
+  await writeFile(
+    join(toolDir, "git"),
+    [
+      "#!/bin/sh",
+      'if [ "$PWD" = "$CUSTODY_TEST_DEST" ]; then',
+      '  for arg in "$@"; do',
+      '    if [ "$arg" = "update-ref" ]; then',
+      '      printf "%s\\n" "$$" > "$CUSTODY_TEST_MARKER"',
+      "      exec sleep 30",
+      "    fi",
+      "  done",
+      "fi",
+      'exec "$CUSTODY_TEST_REAL_GIT" "$@"',
+      "",
+    ].join("\n"),
+    { mode: 0o755 },
+  );
+  const originalPath = process.env.PATH;
+  const originalDest = process.env.CUSTODY_TEST_DEST;
+  const originalMarker = process.env.CUSTODY_TEST_MARKER;
+  const originalGit = process.env.CUSTODY_TEST_REAL_GIT;
+  const actualGit = await command("which", ["git"]);
+  const controller = new AbortController();
+  let verified = false;
+  let observedPid: number | null = null;
+  const watch = async (): Promise<void> => {
+    for (let attempt = 0; attempt < 150; attempt++) {
+      const text = await readFile(marker, "utf8").catch(() => null);
+      if (text !== null) {
+        observedPid = Number(text.trim());
+        controller.abort(new Error("abort blocked update-ref"));
+        return;
+      }
+      await delay(20);
+    }
+    controller.abort(new Error("update-ref wrapper did not start"));
+  };
+  try {
+    process.env.PATH = `${toolDir}:${originalPath}`;
+    process.env.CUSTODY_TEST_DEST = dest;
+    process.env.CUSTODY_TEST_MARKER = marker;
+    process.env.CUSTODY_TEST_REAL_GIT = actualGit;
+    const watching = watch();
+    await assert.rejects(() =>
+      Effect.runPromise(
+        applyAdoption(input, {
+          afterInstall: async () => {
+            verified = true;
+          },
+        }),
+        { signal: controller.signal },
+      ),
+    );
+    await watching;
+    assert.equal(verified, false);
+    const pid = observedPid;
+    if (pid === null) throw new Error("blocked update-ref did not start before abort");
+    // Effect's scoped child spawner must reap/terminate the actual process,
+    // not merely reject the outer Promise while update-ref runs detached.
+    for (let attempt = 0; attempt < 50; attempt++) {
+      try {
+        process.kill(pid, 0);
+      } catch {
+        break;
+      }
+      await delay(20);
+    }
+    assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+  } finally {
+    process.env.PATH = originalPath;
+    if (originalDest === undefined) delete process.env.CUSTODY_TEST_DEST;
+    else process.env.CUSTODY_TEST_DEST = originalDest;
+    if (originalMarker === undefined) delete process.env.CUSTODY_TEST_MARKER;
+    else process.env.CUSTODY_TEST_MARKER = originalMarker;
+    if (originalGit === undefined) delete process.env.CUSTODY_TEST_REAL_GIT;
+    else process.env.CUSTODY_TEST_REAL_GIT = originalGit;
+  }
 });
 
 void test("changed destination refs after transfer block installation without removing any ref", async () => {
