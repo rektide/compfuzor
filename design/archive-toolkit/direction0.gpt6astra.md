@@ -129,6 +129,18 @@ and approved these implementation decisions:
   Effect supplies typed orchestration and the CLI, not lossy conversion of Git
   path/object streams into terminal text.
 
+## Operator correction: reuse process execution
+
+The operator explicitly rejected building a custom subprocess runtime. Use
+Effect's process execution facilities if available; otherwise use `tinyexec`.
+Git remains the installed executable responsible for object, bundle, and ref
+semantics. Private staging means a temporary Git repository, not a replacement
+Git implementation. Keep only concrete command arguments, environment policy,
+and result decoding in project helpers; do not build an injectable general
+process framework. The first custom runner was checkpointed, found to have no
+callers, and removed in a separate corrective commit rather than adopted as a
+foundation.
+
 # Cross-references
 
 - [Custody brief](/design/archive-migration/brief0.gpt6sol.md): the detailed
