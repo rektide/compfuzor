@@ -46,6 +46,10 @@ export type { RemoteDifference } from "./repository/remotes.ts";
 export { refreshArchive } from "./repository/refresh.ts";
 export type { RefreshOptions, RefreshResult } from "./repository/refresh.ts";
 
+// repository/deploy.ts — dedicated colocated deployment workspaces.
+export { deployWorkspace } from "./repository/deploy.ts";
+export type { DeployOptions } from "./repository/deploy.ts";
+
 // repository/self.ts — standard compfuzor archive checkout detection.
 export { locateCompfuzor } from "./repository/self.ts";
 

@@ -1,5 +1,5 @@
 ---
-# The archive's worktree and bookmarks belong to jj, not ansible.builtin.git.
+# The archive backs a dedicated deployment jj workspace / Git worktree.
 # Runner resolution (dual path): the host's canonical compfuzor checkout
 # (COMPFUZOR_ARCHIVE) is preferred when present, so refreshes run the
 # freshest toolkit rather than whatever checkout renders this playbook; the
@@ -56,11 +56,11 @@
     msg: "repo-jj-archive: using COMPFUZOR_REPO_JJ_RUNNER={{COMPFUZOR_REPO_JJ_RUNNER}}"
   when: COMPFUZOR_REPO_JJ_RUNNER is defined
 
-- name: "Compfuzor: refresh jj archive"
+- name: "Compfuzor: refresh jj deployment workspace"
   ansible.builtin.command:
     argv: >-
-      {{ [compfuzor_repo_jj_runner, 'refresh', '--json',
-          '--dest', GIT_DIR|def(REPO_DIR, DIR, falsy=True),
+      {{ [compfuzor_repo_jj_runner, 'deploy', '--json',
+          '--archive', ARCHIVE_SRC, '--workspace', GIT_DIR|def(REPO_DIR, DIR, falsy=True),
           '--repo', REPO, '--remotes', GIT_REMOTES|default({})|to_json,
           '--remote', GIT_REMOTE|default('origin'),
            '--branch', GIT_VERSION|default('HEAD')|string,

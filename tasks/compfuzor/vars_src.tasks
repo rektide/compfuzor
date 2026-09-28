@@ -7,7 +7,7 @@
     PREPREFIX: "{{ DEST|def(NAME, TYPE) }}"
     CORES: "{{ CORES|default(COMPFUZOR_BASE.stdout_lines[24]|int)|default(8) }}"
     GOPATH: "{{DIR}}"
-    SRC: "{{ARCHIVE_SRC if ARCHIVE_DOWNLOAD is deftruthy and REPO is defined else SRC|default(omit)}}"
+    SRC: "{{DIR ~ '/' ~ REPO_LINK_DIR if ARCHIVE_DOWNLOAD is deftruthy and REPO is defined else SRC|default(omit)}}"
 
 - name: "set PREFIX var"
   set_fact: PREFIX="{{ ('--prefix='+(OPTS_DIR+'/' if PREPREFIX|first != '/' and PREPREFIX|first !='~' else '')+PREPREFIX) if PREFIX is deffalsy else PREFIX }}"

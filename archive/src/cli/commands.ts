@@ -6,6 +6,7 @@
  * the root command itself.
  */
 import { adoptCommand } from "./commands/adopt.ts";
+import { deploy } from "./commands/deploy.ts";
 import { fetchCommand } from "./commands/fetch.ts";
 import { harvestCommand } from "./commands/harvest.ts";
 import { health } from "./commands/health.ts";
@@ -19,6 +20,7 @@ import type { AnyCommand } from "./types.ts";
 
 export const commands: ReadonlyArray<AnyCommand> = [
   refresh,
+  deploy,
   adoptCommand,
   verifyAdoptionCommand,
   health,

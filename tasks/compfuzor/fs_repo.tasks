@@ -5,7 +5,7 @@
     dest: "{{DIR}}/{{REPO_LINK_DIR}}"
     state: link
     owner: "{{OWNER|default(omit)}}"
-  when: REPO is defined or REPOS is defined
+  when: (REPO is defined and ARCHIVE_DOWNLOAD is deffalsy) or (REPOS is defined and REPO is undefined)
 - name: "other repo symlinks"
   file:
     src: "{{ REPO_DIR|def(DIR, falsy=True) }}"

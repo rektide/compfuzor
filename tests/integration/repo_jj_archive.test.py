@@ -163,6 +163,54 @@ def test_archive_update_bypass_keeps_base_and_resumes() -> None:
         assert render(archive, remote)["changed"]
 
 
+def test_deploy_uses_colocated_workspace_without_moving_archive_main() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, seed = create_remote(tmp)
+        archive = tmp / "archive" / "fixture"
+        workspace = tmp / "deployment" / "repo"
+        args = ("deploy", "--json", "--archive", str(archive), "--workspace", str(workspace),
+                "--repo", str(remote), "--label", "fixture")
+        first = json.loads(toolkit(*args, cwd=tmp))
+        assert first["changed"] and (archive / ".git").is_dir()
+        assert (workspace / ".git").is_file() and (workspace / ".jj").is_dir()
+        assert run("jj", "workspace", "root", cwd=workspace) == str(workspace)
+        assert json.loads(toolkit(*args, cwd=tmp)) == NOOP
+        archive_at = run("jj", "--ignore-working-copy", "log", "-G", "-r", "@", "-T", "commit_id", cwd=archive)
+        advance(seed)
+        assert json.loads(toolkit(*args, cwd=tmp))["changed"]
+        assert (workspace / "tracked").read_text() == "upstream\n"
+        assert run("jj", "--ignore-working-copy", "log", "-G", "-r", "@", "-T", "commit_id", cwd=archive) == archive_at
+
+
+def test_deploy_refuses_occupied_checkout_without_changing_archive() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, _ = create_remote(tmp)
+        archive = tmp / "archive"
+        workspace = tmp / "deployment" / "repo"
+        workspace.mkdir(parents=True)
+        (workspace / ".gitignore").write_text("runtime\n")
+        args = ("deploy", "--json", "--archive", str(archive), "--workspace", str(workspace),
+                "--repo", str(remote), "--label", "fixture")
+        result = subprocess.run(("node", str(ROOT / "archive/src/repo-jj-archive.ts"), *args),
+                                cwd=tmp, capture_output=True, text=True)
+        assert result.returncode and "is occupied" in result.stderr and result.stdout == ""
+        assert not archive.exists() and (workspace / ".gitignore").read_text() == "runtime\n"
+        (workspace / ".gitignore").unlink()
+        run("git", "clone", str(remote), str(workspace), cwd=tmp)
+        (workspace / "tracked").write_text("local changes\n")
+        run("git", "switch", "-c", "local-feature", cwd=workspace)
+        result = subprocess.run(("node", str(ROOT / "archive/src/repo-jj-archive.ts"), *args),
+                                cwd=tmp, capture_output=True, text=True)
+        assert result.returncode and "is occupied" in result.stderr
+        assert not archive.exists() and not (workspace / ".jj").exists()
+        assert run("git", "branch", "--show-current", cwd=workspace) == "local-feature"
+        assert (workspace / "tracked").read_text() == "local changes\n"
+
+
 def test_ansible_accumulates_bookmark_notices_at_play_end() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
@@ -176,8 +224,9 @@ def test_ansible_accumulates_bookmark_notices_at_play_end() -> None:
   vars:
     NAME: fixture
     DIR: {str(tmp / 'deployment')!r}
-    REPO: {str(remote)!r}
-    GIT_DIR: {str(archive)!r}
+     REPO: {str(remote)!r}
+     GIT_DIR: {str(archive)!r}
+     ARCHIVE_SRC: {str(archive)!r}
     COMPFUZOR_REPO_JJ_RUNNER: {str(RUNNER)!r}
   tasks:
     - import_role:
