@@ -127,9 +127,13 @@ def test_primary_render_is_unchanged(fixture: Path) -> None:
     restart = require_file(deployment / "bin" / "restart.sh", "primary restart.sh")
     if "${OPENCODE_UNIT:-opencode.service}" not in restart:
         raise AssertionError(f"primary restart.sh lost the opencode.service default:\n{restart}")
+    for expected in ('"$_url/api/info"', 'user = "opencode:%s"', "_password_file="):
+        if expected not in restart:
+            raise AssertionError(f"primary restart.sh missing authenticated readiness check {expected!r}:\n{restart}")
+    subprocess.run(["bash", "-n", str(deployment / "bin" / "restart.sh")], check=True)
 
     install = require_file(deployment / "bin" / "install.sh", "primary install.sh")
-    for expected in ("$GLOBAL_BINS_DIR/opencode2\n", "$GLOBAL_BINS_DIR/opencode2-node\n"):
+    for expected in ("$GLOBAL_BINS_DIR/opencode\n", "$GLOBAL_BINS_DIR/opencode2-node\n"):
         if expected not in install:
             raise AssertionError(f"primary install.sh lost unsuffixed link {expected!r}:\n{install}")
 
@@ -152,7 +156,7 @@ def test_secondary_render(fixture: Path) -> None:
         'OPENCODE_SERVER_HOSTNAME="127.0.0.1"',
         'OPENCODE_SERVER_PORT="49381"',
         'OPENCODE_SERVER_URL="http://127.0.0.1:49381"',
-        f'OPENCODE_BINARY="{fixture}/global-bins/opencode2-dev"',
+        f'OPENCODE_BINARY="{fixture}/global-bins/opencode-dev"',
         f'OPENCODE_CONFIG_DIR="{etc}"',
         'OPENCODE_DB="opencode-dev.db"',
         f'OPENCODE_SERVICE_MODULE="{etc}/client/service.zsh"',
@@ -176,7 +180,7 @@ def test_secondary_render(fixture: Path) -> None:
         raise AssertionError(f"secondary restart.sh unit default wrong:\n{restart}")
 
     install = require_file(deployment / "bin" / "install.sh", "secondary install.sh")
-    for expected in ("$GLOBAL_BINS_DIR/opencode2-dev\n", "$GLOBAL_BINS_DIR/opencode2-node-dev\n"):
+    for expected in ("$GLOBAL_BINS_DIR/opencode-dev\n", "$GLOBAL_BINS_DIR/opencode2-node-dev\n"):
         if expected not in install:
             raise AssertionError(f"secondary install.sh missing suffixed link {expected!r}:\n{install}")
 
@@ -191,7 +195,7 @@ def test_secondary_render(fixture: Path) -> None:
     launcher = require_file(deployment / "bin" / "opencode-instance", "secondary launcher")
 
     status_proc = require_file(deployment / "bin" / "status-exe-current.sh", "exe-current reporter")
-    if f"{fixture}/global-bins/opencode2-dev" not in status_proc:
+    if f"{fixture}/global-bins/opencode-dev" not in status_proc:
         raise AssertionError(f"secondary exe-current expects the wrong link:\n{status_proc}")
 
     install_user = require_file(deployment / "bin" / "install-user.sh", "secondary install-user.sh")
@@ -199,7 +203,7 @@ def test_secondary_render(fixture: Path) -> None:
         raise AssertionError(f"secondary install-user.sh must not touch the primary config link:\n{install_user}")
 
     readme = require_file(deployment / "README.md", "secondary README")
-    for expected in ("opencode-dev.service", "opencode-dev api get /api/health"):
+    for expected in ("opencode-dev.service", "opencode-dev api get /api/info"):
         if expected not in readme:
             raise AssertionError(f"secondary README missing {expected!r}:\n{readme}")
     print("ok: secondary render isolates names, env, units, and entrypoint")
@@ -218,7 +222,8 @@ def test_port_guard(fixture: Path) -> None:
 
 
 def fake_client(directory: Path) -> Path:
-    binary = directory / "opencode2-dev"
+    directory.mkdir(parents=True, exist_ok=True)
+    binary = directory / "opencode-dev"
     binary.write_text(
         "#!/bin/bash\n"
         'printf \'%s\\0\' "$@" > "$OPENCODE_TEST_ARGS"\n'
@@ -236,7 +241,7 @@ def test_launcher_routes_instance(fixture: Path) -> None:
     launcher = deployment / "bin" / "opencode-instance"
     work = fixture / "launcher-run"
     work.mkdir()
-    fake_client(work)
+    fake_client(fixture / "global-bins")
 
     # The generated credential is authoritative: the playbook generated it
     # into the redirected PASSWORDS_DIR and env points at it.

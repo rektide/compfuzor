@@ -346,8 +346,8 @@ describes):
 3. **Re-render and redeploy opencode** so the unit env carries the socket pin
    (playbook edit — deliberately *after* this doc; today the deployed env
    predates the pin). Restart gently: `systemctl --user restart
-   opencode.service`, wait for `/api/health`, confirm the transport connected
-   to the intended socket.
+   opencode.service`, wait for authenticated `/api/info`, confirm the transport
+   connected to the intended socket.
 4. **Terminate the stray** (deliberate, manual, after step 2–3 so nothing
    respawns it): `kill <pid>` / `shutdown-server` against its socket. Expect
    opencode skills/config watchers to reconnect against the new routing.
@@ -429,8 +429,8 @@ here should auto-kill or auto-reconcile.
    - pool pressure via `usage.sh` + sysctl values.
 2. **`restart.sh` for `opencode.src.pb`** is implemented: it checks
    `NeedDaemonReload` → `daemon-reload` if unit changed → `restart` → waits for
-   `/api/health` → verifies MainPID and the inherited `WATCHMAN_SOCK`. It never
-   touches standalone panes.
+   authenticated `/api/info` → verifies MainPID and the inherited
+   `WATCHMAN_SOCK`. It never touches standalone panes.
 3. **`watcher-repoint.sh`**: validate a target daemon (alive, policy answers
    `debug-policy` correctly) → perform the env re-render/restart sequence of
    the cutover §7 steps 3–4 → re-run the drift reporter. This is cutover.sh's

@@ -4,7 +4,7 @@
     TYPE: opencode
     # INSTANCE selects the deployment variant. `git` is the primary instance:
     # it owns the un-suffixed surface (opencode.service, /usr/local/bin/
-    # opencode2, the ~/.config/opencode link, and the interactive
+    # opencode, the ~/.config/opencode link, and the interactive
     # opencode/opencode2 ZIM wrapper). Run any other instance side by side
     # with `-e INSTANCE=<name>`: every generated name, path, port, and
     # credential is instance-suffixed and isolated by default.
@@ -16,8 +16,8 @@
     OPENCODE_SUFFIX: "{{ '' if OPENCODE_PRIMARY else '-' ~ INSTANCE }}"
     # systemd unit basename: opencode (primary) / opencode-<INSTANCE>.
     OPENCODE_UNIT: "opencode{{OPENCODE_SUFFIX}}"
-    # Global client links: opencode2 (primary) / opencode2-<INSTANCE>.
-    OPENCODE_CLIENT: "opencode2{{OPENCODE_SUFFIX}}"
+    # Global client links: opencode (primary) / opencode-<INSTANCE>.
+    OPENCODE_CLIENT: "opencode{{OPENCODE_SUFFIX}}"
     OPENCODE_CLIENT_NODE: "opencode2-node{{OPENCODE_SUFFIX}}"
     # Secondary instances bind loopback only; the primary keeps its wildcard
     # bind for LAN compatibility. Override per run with
@@ -245,7 +245,7 @@
     README: |
       # Operator-managed OpenCode V2 server
 
-      `opencode.service` runs plain foreground `opencode2 serve` on
+      `opencode.service` runs plain foreground `opencode serve` on
       `${OPENCODE_SERVER_HOSTNAME}:${OPENCODE_SERVER_PORT}`. It deliberately
       does not use `--service`: OpenCode publishes no registration, performs no
       incumbent election or self-eviction, and never manages this process.
@@ -255,7 +255,7 @@
 
       This deployment is instance-scoped. `INSTANCE=git` (the default) is the
       primary instance and keeps the historical unsuffixed surface: unit
-      `opencode.service` / `opencode-cleanup.timer`, global links `opencode2`
+      `opencode.service` / `opencode-cleanup.timer`, global links `opencode`
       and `opencode2-node` (plus `opencode-status-ok`, `opencode-last`,
       `opencode-live`, `opencode-restart-clients`), the `~/.config/opencode`
       symlink, the interactive
@@ -272,10 +272,10 @@
       from `~/src/opencode-working-<INSTANCE>`), config `/etc/opt/opencode-<INSTANCE>`,
       credential `~/.config/opencode-<INSTANCE>/secrets/OPENCODE_PASSWORD`,
       units `opencode-<INSTANCE>.service` / `opencode-<INSTANCE>-cleanup.timer`,
-      client links `opencode2-<INSTANCE>` / `opencode2-node-<INSTANCE>` — and
+      client links `opencode-<INSTANCE>` / `opencode2-node-<INSTANCE>` — and
       its clients enter through one global launcher:
 
-          opencode-<INSTANCE> [args...]     # e.g. opencode-dev api get /api/health
+          opencode-<INSTANCE> [args...]     # e.g. opencode-dev api get /api/info
 
       The launcher sources the instance env, so it routes through the same
       boundary-aware `--server` injection as the primary's shell wrapper, with
@@ -336,14 +336,14 @@
           systemctl --user show {{OPENCODE_UNIT}}.service \
             -p ActiveState -p SubState -p MainPID -p NRestarts \
             -p MemoryCurrent -p MemoryPeak -p CPUUsageNSec -p TasksCurrent
-          {{ 'opencode2' if OPENCODE_PRIMARY else 'opencode-' ~ INSTANCE }} api get /api/health
-          {{ 'opencode2' if OPENCODE_PRIMARY else 'opencode-' ~ INSTANCE }} api get /api/server
+          {{ 'opencode' if OPENCODE_PRIMARY else 'opencode-' ~ INSTANCE }} api get /api/info
           {{DIR}}/bin/status.sh
           {% if OPENCODE_PRIMARY %}opencode-status-ok{% endif %}
 
       `restart.sh` is the managed-service restart path. It reloads systemd when
-      needed, restarts only `{{OPENCODE_UNIT}}.service`, waits for `/api/health`, and
-      verifies that the new server inherited the canonical Watchman socket.
+      needed, restarts only `{{OPENCODE_UNIT}}.service`, authenticates to
+      `/api/info`, and verifies that the new server inherited the canonical
+      Watchman socket.
       It never touches standalone OpenCode panes.
 
       `restart-clients.sh` is the client-side counterpart (global command:
@@ -427,7 +427,7 @@
       native libraries and the cleanup timer's state), status-opencode-ok.sh
       (below), status-mainpid-env.sh (the live server inherited the canonical
       WATCHMAN_SOCK), status-exe-current.sh (the MainPID still executes the
-      currently deployed opencode2 inode), plus the config and link drift
+      currently deployed opencode inode), plus the config and link drift
       reporters.
       `opencode-status-ok` is the same ok-checker as a global command, so any
       shell — including ones without the ZIM wrapper — can quickly verify three
@@ -437,11 +437,11 @@
         wrapper. Shell functions are invisible to child processes, so the check
         reads their footprint: OPENCODE_PASSWORD exported by the ZIM module
         (the secret itself is never written to env or env.export).
-      - global: whether the managed links (opencode2, opencode2-node) resolve,
+      - global: whether the managed links (opencode, opencode2-node) resolve,
         agree on version, and point into OPENCODE_WORKING_DIR rather than a
         stale checkout.
-      - shell: what opencode/opencode2 resolve to on this shell's PATH and
-        whether those binaries match the managed version.
+      - shell: what does opencode resolve to on this shell's PATH and whether
+        it matches the managed version.
 
       Exit 0 means this shell is on the managed deployment; exit 1 prints each
       drift line. No network is involved — versions come from `--version`.
@@ -483,9 +483,9 @@
           test ! -e "$snapshot" && test ! -L "$snapshot" || {
             echo "snapshot exists: $snapshot" >&2; exit 1;
           }
-          cp -pL /usr/local/bin/opencode2 "$snapshot"
+          cp -pL /usr/local/bin/opencode "$snapshot"
           "$snapshot" --version
-          cmp -s "$(readlink -f /usr/local/bin/opencode2)" "$snapshot" || {
+          cmp -s "$(readlink -f /usr/local/bin/opencode)" "$snapshot" || {
             echo "snapshot mismatch" >&2; exit 1;
           }
           opencode-last list
@@ -768,7 +768,7 @@
           export OPENCODE_CHANNEL=local
           # Preview versions stamp YYYYMMDDHHMM per invocation, so separately
           # invoked builds never agree and status-opencode-ok.sh flags the
-          # opencode2/opencode2-node pair as stale. Pin one stamp per run.
+          # opencode/opencode2-node pair as stale. Pin one stamp per run.
           export OPENCODE_VERSION="0.0.0-local-$(date -u +%Y%m%d%H%M)"
           bun install --frozen-lockfile
           # build.ts and build-node.ts each wipe their outdir unconditionally;
@@ -782,7 +782,7 @@
         basedir: False
         content: |
           cd "{{OPENCODE_WORKING_DIR}}"
-          ln -sfv $(pwd)/packages/cli/dist/cli-linux-x64/bin/opencode2 $GLOBAL_BINS_DIR/{{OPENCODE_CLIENT}}
+          ln -sfv $(pwd)/packages/cli/dist/cli-linux-x64/bin/opencode $GLOBAL_BINS_DIR/{{OPENCODE_CLIENT}}
           ln -sfv $(pwd)/packages/cli/dist/cli-node-linux-x64/bin/opencode2-node $GLOBAL_BINS_DIR/{{OPENCODE_CLIENT_NODE}}
       - name: install-user.sh
         basedir: False
@@ -805,6 +805,7 @@
           _url="${OPENCODE_SERVER_URL:-http://127.0.0.1:{{OPENCODE_SERVER_PORT}}}"
           _timeout="${OPENCODE_RESTART_TIMEOUT:-60}"
           _sock="{{WATCHMAN_CANONICAL_SOCKET_ABS}}"
+          _password_file="${OPENCODE_PASSWORD_FILE:-$HOME/.config/opencode/secrets/OPENCODE_PASSWORD}"
 
           _reload="$(systemctl --user show "$_unit" -p NeedDaemonReload --value 2>/dev/null || true)"
           [ "$_reload" = yes ] && systemctl --user daemon-reload
@@ -812,8 +813,20 @@
 
           _i=0
           while [ "$_i" -lt "$_timeout" ]; do
-            if systemctl --user is-active --quiet "$_unit" && \
-              curl --fail --silent --show-error --max-time 2 "$_url/api/health" >/dev/null 2>&1; then
+            if systemctl --user is-active --quiet "$_unit" && [ -r "$_password_file" ]; then
+              _cf_restart_xtrace=0
+              case $- in *x*) _cf_restart_xtrace=1; set +x ;; esac
+              if curl --config <(printf 'user = "opencode:%s"\n' "$(<"$_password_file")") \
+                --fail --silent --show-error --max-time 2 "$_url/api/info" >/dev/null 2>&1; then
+                _healthy=1
+              else
+                _healthy=0
+              fi
+              [ "$_cf_restart_xtrace" -eq 0 ] || set -x
+            else
+              _healthy=0
+            fi
+            if [ "$_healthy" -eq 1 ]; then
               _pid="$(systemctl --user show "$_unit" -p MainPID --value)"
               _actual="$(tr '\0' '\n' <"/proc/$_pid/environ" 2>/dev/null | sed -n 's/^WATCHMAN_SOCK=//p' | head -1)"
               [ "$_actual" = "$_sock" ] || {

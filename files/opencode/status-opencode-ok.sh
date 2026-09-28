@@ -2,15 +2,15 @@
 # deployment. Linked globally as opencode-status-ok so any shell — including
 # ones that never loaded the ZIM wrapper functions — can quickly answer:
 #
-#   wrapper  is the opencode/opencode2 --server wrapper loaded in the invoking
+#   wrapper  is the opencode --server wrapper loaded in the invoking
 #            shell? Shell functions are invisible to child processes, so the
 #            check reads the wrapper's observable footprint instead: the ZIM
 #            module reads the 0600 password file and exports OPENCODE_PASSWORD
 #            (the secret itself never reaches env or env.export).
-#   global   do the operator-managed global links (install.sh: opencode2,
+#   global   do the operator-managed global links (install.sh: opencode,
 #            opencode2-node) resolve, agree on version, and point into the
 #            composed working workspace instead of a stale checkout?
-#   shell    what do opencode/opencode2 resolve to on this shell's PATH, and
+#   shell    what does opencode resolve to on this shell's PATH, and
 #            does that binary match the managed one?
 #
 # No network: versions come from --version on local binaries only.
@@ -28,7 +28,7 @@
 # its closing brace eaten by bash before Jinja ever renders it
 RENDERED_GLOBAL_BINS="{{GLOBAL_BINS_DIR}}"
 GLOBAL_BINS="${OPENCODE_GLOBAL_BINS_DIR:-$RENDERED_GLOBAL_BINS}"
-MANAGED="${OPENCODE_BINARY:-$GLOBAL_BINS/opencode2}"
+MANAGED="${OPENCODE_BINARY:-$GLOBAL_BINS/opencode}"
 WORKING="${OPENCODE_WORKING_DIR:-}"
 
 drift=0
@@ -43,7 +43,7 @@ while [ "$#" -gt 0 ]; do
 usage: status-opencode-ok.sh
   Check the invoking shell against the operator-managed OpenCode V2
   deployment: wrapper loaded, managed global links healthy and current, and
-  PATH-resolved opencode/opencode2 at the managed version.
+  PATH-resolved opencode at the managed version.
 EOF
       exit 0 ;;
     *)
@@ -70,7 +70,7 @@ realpath_of() {
 if [ -n "${OPENCODE_PASSWORD:-}" ]; then
   ok "wrapper loaded (OPENCODE_PASSWORD exported; routes --server ${OPENCODE_SERVER_URL:-<unset>})"
 else
-  bad "wrapper not loaded in this shell: OPENCODE_PASSWORD unset; the ZIM module exports it after reading ${OPENCODE_PASSWORD_FILE:-the password file}, and without it opencode/opencode2 skip --server and hit the default world"
+  bad "wrapper not loaded in this shell: OPENCODE_PASSWORD unset; the ZIM module exports it after reading ${OPENCODE_PASSWORD_FILE:-the password file}, and without it opencode skips --server and hits the default world"
 fi
 
 # global managed deployment -------------------------------------------------
@@ -84,10 +84,10 @@ else
 fi
 managed_token="$(version_token "$managed_version")"
 
-for name in opencode2 opencode2-node; do
+for name in opencode opencode2-node; do
   link="$GLOBAL_BINS/$name"
   if [ ! -e "$link" ] && [ ! -L "$link" ]; then
-    if [ "$name" != opencode2 ]; then
+    if [ "$name" != opencode ]; then
       note "global $name not installed; skipping"
     fi
     continue
@@ -114,7 +114,7 @@ for name in opencode2 opencode2-node; do
 done
 
 # shell resolution ----------------------------------------------------------
-for name in opencode opencode2; do
+for name in opencode; do
   resolved="$(command -v "$name" 2>/dev/null || true)"
   if [ -z "$resolved" ]; then
     if [ "$name" = opencode ] && [ -n "${OPENCODE_PASSWORD:-}" ]; then

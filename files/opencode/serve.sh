@@ -15,7 +15,7 @@ IFS= read -r OPENCODE_PASSWORD < "$credential" || [[ -n $OPENCODE_PASSWORD ]]
 }
 export OPENCODE_PASSWORD
 
-binary=${OPENCODE_BINARY:-/usr/local/bin/opencode2}
+binary=${OPENCODE_BINARY:-/usr/local/bin/opencode}
 
 # OPENCODE_SERVER_CORS is a comma-separated origin list maintained in env and
 # env.export by bin/build-env-cors.sh (run from build.sh); each origin expands

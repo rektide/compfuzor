@@ -20,7 +20,7 @@ unset _opencode_args_module _opencode_args_default
 # Administrative service commands and explicit connection choices remain the
 # upstream default/fallback world; their lifecycle is not delegated to systemd.
 _opencode_run() {
-  local binary=${OPENCODE_BINARY:-/usr/local/bin/opencode2}
+  local binary=${OPENCODE_BINARY:-/usr/local/bin/opencode}
   local port=${OPENCODE_SERVER_PORT:-49373}
   local url=${OPENCODE_SERVER_URL:-http://127.0.0.1:$port}
   local arg top
