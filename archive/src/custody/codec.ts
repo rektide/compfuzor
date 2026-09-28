@@ -413,6 +413,7 @@ export function validateReceipt(value: unknown): ReceiptV1 {
         dispositionsFileSha256: nul(hash),
       }),
       snapshot: nul(snapshot),
+      cleanHeadPathReview: nul(reviewSchema(id)),
       baselines: shape({
         sourceRemoteTracking: arr(
           shape({ remote: nonempty, url: nonempty, ref, oid: id, freshness: lit("local-only") }),
@@ -582,6 +583,35 @@ export function validateReceipt(value: unknown): ReceiptV1 {
       if (entry.mode === "160000") invalid("submodule gitlink requires separate custody design");
       if (entry.path.split("/").some((part) => part === ".git" || part === ".jj"))
         invalid("tracked Git/jj internals cannot be adopted");
+    }
+  }
+  if (receipt.snapshot !== null && receipt.cleanHeadPathReview !== null)
+    invalid("clean HEAD review cannot stand in for a snapshot review");
+  if (receipt.snapshot === null) {
+    const review = receipt.cleanHeadPathReview;
+    const sensitive = receipt.source.trackedSensitivePaths;
+    if (sensitive.length && review === null)
+      invalid("clean HEAD with tracked sensitive paths lacks local custody review");
+    if (review !== null) {
+      const manifest = receipt.source.head.treePaths;
+      if (review.manifestSha256 !== sha256(enc.encode(`${canonicalJson(manifest)}\n`)))
+        invalid("clean HEAD review manifest differs from source HEAD");
+      if (review.stagedVsUnstaged !== null)
+        invalid("clean HEAD review cannot approve a lost index/worktree split");
+      const included = new Set<string>();
+      const entries = new Set(
+        manifest.map(({ path, mode, blobOid }) => `${path}\0${mode}\0${blobOid}`),
+      );
+      for (const { path, mode, blobOid } of review.included) {
+        const key = `${path}\0${mode}\0${blobOid}`;
+        if (!entries.has(key) || included.has(path))
+          invalid("clean HEAD review includes stale or repeated file");
+        included.add(path);
+      }
+      for (const { subject } of sensitive) {
+        if (subject === null || !included.has(subject))
+          invalid("sensitive tracked HEAD path has no exact local custody review");
+      }
     }
   }
   if (receipt.snapshot && receipt.snapshot.parentOid !== receipt.source.head.oid)

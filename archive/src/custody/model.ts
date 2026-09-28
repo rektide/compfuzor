@@ -131,6 +131,15 @@ export interface Snapshot {
   readonly trackedSensitivePaths: readonly RepoPath[];
   readonly pathReview: PathReview | null;
 }
+/** Read-only staging preview, not an approved snapshot or transfer authority. */
+export interface SnapshotProposal extends Omit<Snapshot, "pathReview"> {
+  /** SHA-256 of `${canonicalJson(paths)}\n`, for constructing a path review. */
+  readonly manifestSha256: Sha256;
+  readonly reviewRequirements: {
+    readonly sensitivePaths: readonly RepoPath[];
+    readonly stagedVsUnstagedApprovalRequired: boolean;
+  };
+}
 export interface RemoteBaseline {
   readonly remote: string;
   readonly url: string;
@@ -181,6 +190,8 @@ export interface ReceiptV1 {
   };
   readonly source: SourceInventory;
   readonly snapshot: Snapshot | null;
+  /** Local custody review for a clean HEAD tree; never authorizes publication. */
+  readonly cleanHeadPathReview: PathReview | null;
   readonly baselines: DestinationBaseline;
   readonly pins: readonly PinIntent[];
   readonly bundle: SealedBundle;
@@ -204,6 +215,8 @@ export type ObservedSourceInventory = {
 
 export interface PlanFields {
   readonly schema: "compfuzor.archive-adoption-plan/v1";
+  /** Available when HEAD paths were inspected, even when clean-path review is still pending. */
+  readonly headManifestSha256: Sha256 | null;
   readonly blockers: readonly Issue[];
   readonly warnings: readonly Issue[];
   readonly retirementUnresolved: readonly Issue[];
@@ -216,6 +229,7 @@ export type PlanV1 = PlanFields &
         readonly identity: ReceiptV1["identity"];
         readonly source: SourceInventory;
         readonly proposedSnapshot: Snapshot | null;
+        readonly cleanHeadPathReview: PathReview | null;
         readonly baselines: DestinationBaseline;
         readonly pins: readonly PinIntent[];
       }
@@ -230,7 +244,9 @@ export type PlanV1 = PlanFields &
           readonly createdAt: string;
         };
         readonly source: ObservedSourceInventory;
-        readonly proposedSnapshot: null;
+        /** Null if unobserved or no synthetic commit is needed; inspect source.head for a clean HEAD manifest. */
+        readonly proposedSnapshot: SnapshotProposal | null;
+        readonly cleanHeadPathReview: PathReview | null;
         readonly baselines: DestinationBaseline | null;
         readonly pins: null;
       }

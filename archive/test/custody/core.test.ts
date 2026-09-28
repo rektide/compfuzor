@@ -20,7 +20,7 @@ import {
   validateReceipt,
   vaultBundlePath,
 } from "../../src/custody/codec.ts";
-import type { PathEntry, PinIntent, ReceiptV1 } from "../../src/custody/model.ts";
+import type { PathEntry, PinIntent, ReceiptV1, SnapshotProposal } from "../../src/custody/model.ts";
 import type { PlanV1 } from "../../src/custody/model.ts";
 import { approveSameInputRetry, freshInstall } from "../../src/recovery/retry.ts";
 
@@ -80,6 +80,7 @@ function sample(): ReceiptV1 {
       dispositionsFileSha256: null,
     },
     snapshot: null,
+    cleanHeadPathReview: null,
     baselines: {
       sourceRemoteTracking: [],
       destinationPreRefs: [],
@@ -257,6 +258,10 @@ test("exact reviewed path and staged/index loss are mandatory for dirty snapshot
     parseReceipt(encodeReceipt(receipt)).snapshot?.pathReview?.fileSha256,
     sha256(Buffer.from(JSON.stringify(reviewInput))),
   );
+  assert.throws(
+    () => validateReceipt({ ...receipt, cleanHeadPathReview: review }),
+    /clean HEAD review cannot stand in/,
+  );
   assert.throws(() =>
     validateReceipt({
       ...receipt,
@@ -272,6 +277,118 @@ test("exact reviewed path and staged/index loss are mandatory for dirty snapshot
   assert.throws(() =>
     parsePathReview(Buffer.from(JSON.stringify({ ...reviewInput, fileSha256: D })), "sha1"),
   );
+});
+
+test("clean tracked-sensitive HEAD requires an exact, locally approved HEAD manifest", () => {
+  const clean = sample();
+  const entry: PathEntry = { path: repoPath("config/key.pem"), mode: "100644", blobOid: O("3") };
+  const sensitive = {
+    code: "tracked-sensitive-path",
+    subject: entry.path,
+    reason: "credential: local custody review required, not publication approval",
+  };
+  const source = {
+    ...clean.source,
+    head: { ...clean.source.head, treePaths: [entry] },
+    trackedSensitivePaths: [sensitive],
+  };
+  const missingReview = { ...clean, source };
+  assert.throws(() => validateReceipt(missingReview), /clean HEAD.*local custody review/);
+  const input = {
+    schema: "compfuzor.archive-path-review/v1",
+    manifestSha256: sha256(Buffer.from(`${canonicalJson([entry])}\n`)),
+    included: [
+      {
+        ...entry,
+        classification: "credential",
+        decision: "local-custody-approved",
+        reason: "approved private custody, not publication",
+      },
+    ],
+    stagedVsUnstaged: null,
+  };
+  const review = parsePathReview(Buffer.from(JSON.stringify(input)), "sha1");
+  const approved: ReceiptV1 = { ...missingReview, cleanHeadPathReview: review };
+  assert.deepEqual(parseReceipt(encodeReceipt(approved)), approved);
+  assert.throws(
+    () =>
+      validateReceipt({
+        ...approved,
+        cleanHeadPathReview: {
+          ...review,
+          manifestSha256: D,
+        },
+      }),
+    /clean HEAD review manifest/,
+  );
+  assert.throws(
+    () =>
+      validateReceipt({
+        ...approved,
+        cleanHeadPathReview: {
+          ...review,
+          included: [{ ...review.included[0], blobOid: O("4") }],
+        },
+      }),
+    /stale or repeated file/,
+  );
+  assert.throws(
+    () =>
+      validateReceipt({
+        ...approved,
+        cleanHeadPathReview: {
+          ...review,
+          included: [],
+        },
+      }),
+    /sensitive tracked HEAD path/,
+  );
+  assert.throws(
+    () =>
+      validateReceipt({
+        ...approved,
+        cleanHeadPathReview: {
+          ...review,
+          stagedVsUnstaged: { decision: "single-tree-approved", reason: "not needed" },
+        },
+      }),
+    /clean HEAD review cannot approve/,
+  );
+});
+
+test("blocked plan may expose a reviewless exact snapshot proposal without becoming ready", () => {
+  const receipt = sample();
+  const entry: PathEntry = { path: repoPath("config/key.pem"), mode: "100644", blobOid: O("3") };
+  const proposal: SnapshotProposal = {
+    format: "worktree-v1",
+    parentOid: receipt.source.head.oid,
+    treeOid: O("4"),
+    commitOid: O("5"),
+    paths: [entry],
+    manifestSha256: sha256(Buffer.from(`${canonicalJson([entry])}\n`)),
+    stagedVsUnstaged: "reported-not-preserved",
+    excludeFileSha256: null,
+    excludedUntracked: [],
+    ignoredPaths: [],
+    trackedSensitivePaths: [entry.path],
+    reviewRequirements: { sensitivePaths: [entry.path], stagedVsUnstagedApprovalRequired: true },
+  };
+  const blocked: PlanV1 = {
+    schema: "compfuzor.archive-adoption-plan/v1",
+    state: "blocked",
+    headManifestSha256: sha256(Buffer.from(`${canonicalJson(receipt.source.head.treePaths)}\n`)),
+    identity: receipt.identity,
+    source: receipt.source,
+    proposedSnapshot: proposal,
+    cleanHeadPathReview: null,
+    baselines: receipt.baselines,
+    pins: null,
+    blockers: [{ code: "path-review-required", subject: entry.path, reason: "needs approval" }],
+    warnings: [],
+    retirementUnresolved: [],
+  };
+  assert.equal(blocked.proposedSnapshot?.manifestSha256, proposal.manifestSha256);
+  assert.throws(() => approveSameInputRetry(blocked, receipt, O("6"), new Map()), /apply blockers/);
 });
 
 test("object-format validation rejects mixed SHA lengths", () => {
@@ -545,9 +662,11 @@ test("same-input retry discounts only its own installed refs and retains the ori
   const plan: PlanV1 = {
     schema: "compfuzor.archive-adoption-plan/v1",
     state: "ready",
+    headManifestSha256: sha256(Buffer.from(`${canonicalJson(receipt.source.head.treePaths)}\n`)),
     identity: { ...receipt.identity, createdAt: "later inspection" },
     source: receipt.source,
     proposedSnapshot: receipt.snapshot,
+    cleanHeadPathReview: receipt.cleanHeadPathReview,
     baselines: {
       ...receipt.baselines,
       destinationPreRefs: [
@@ -602,6 +721,7 @@ test("same-input retry discounts only its own installed refs and retains the ori
           state: "blocked",
           source: { ...plan.source, head: null },
           proposedSnapshot: null,
+          cleanHeadPathReview: null,
           baselines: null,
           pins: null,
           blockers: [{ code: "unborn-head", subject: "HEAD", reason: "no commit" }],
@@ -714,9 +834,11 @@ test("retry ignores ordering of independent pins and refs, but not ordered candi
   const plan: PlanV1 = {
     schema: "compfuzor.archive-adoption-plan/v1",
     state: "ready",
+    headManifestSha256: sha256(Buffer.from(`${canonicalJson(full.source.head.treePaths)}\n`)),
     identity: full.identity,
     source: { ...full.source, refs: [tag, branch] },
     proposedSnapshot: null,
+    cleanHeadPathReview: null,
     pins: [...pins].reverse(),
     baselines: {
       ...full.baselines,
