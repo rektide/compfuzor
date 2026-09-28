@@ -24,6 +24,18 @@ export function safeLabel(label: string): string {
   return label.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[.-]+|[.-]+$/g, "") || "deployment";
 }
 
+/** Keep a local branch tip reachable when its tracked upstream diverges. */
+export async function saveDisplacedTip(
+  dest: string,
+  branch: string,
+  target: string,
+  execution?: ExecutionOptions,
+): Promise<Notice> {
+  const name = `compfuzor/save/${safeLabel(branch)}-${stamp()}-${randomUUID().replaceAll("-", "").slice(0, 8)}`;
+  await jj(["bookmark", "create", name, "-r", target], dest, undefined, execution);
+  return { kind: "bookmark-created", name, target };
+}
+
 /** Duplicate a mutable @ so its recovery bookmark cannot drift with subsequent edits. */
 export async function harvest(
   dest: string,

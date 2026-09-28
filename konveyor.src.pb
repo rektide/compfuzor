@@ -125,8 +125,8 @@
               echo "konveyor: plasmashell not found -- run from inside the Plasma session" >&2
               exit 1
           fi
-          # canonical checkout: DIR/repo (symlink into ~/archive via
-          # ARCHIVE_DOWNLOAD), kept fresh by this playbook's repo tasks
+          # DIR/repo is a dedicated jj workspace backed by ~/archive,
+          # refreshed by this playbook's repo tasks.
           cd "${DIR}/repo"
           ./install.sh --skip-deps --no-pull
       - name: uninstall-konveyor.sh

@@ -31,6 +31,20 @@ export const refresh: AnyCommand = Command.make(
       Flag.withDefault("true"),
       Flag.withDescription("Fetch/reconcile: true or false"),
     ),
+    "fetch-scope": Flag.String("fetch-scope").pipe(
+      Flag.withDefault("all"),
+      Flag.withDescription(
+        "Fetch all declared branches, or only the selected branch: all|selected",
+      ),
+    ),
+    untrack: Flag.String("untrack").pipe(
+      Flag.withDefault("none"),
+      Flag.withDescription("Explicit tracking override: none|selected|all"),
+    ),
+    "no-save-displaced": Flag.Boolean("no-save-displaced").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription("Leave divergent bookmarks conflicted instead of saving and resolving"),
+    ),
     depth: Flag.optional(
       Flag.String("depth").pipe(Flag.withDescription("Clone depth (only for new archives)")),
     ),
@@ -58,6 +72,9 @@ export const refresh: AnyCommand = Command.make(
           remote: input.remote,
           version: input.branch,
           update: input.update,
+          fetchScope: input["fetch-scope"] as "all" | "selected",
+          untrack: input.untrack as "none" | "selected" | "all",
+          saveDisplaced: !input["no-save-displaced"],
           depth: Option.getOrElse(input.depth, () => undefined),
           submodules: input.submodules,
           reconcileRemotes: input["reconcile-remotes"],

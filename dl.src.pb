@@ -3,8 +3,8 @@
   vars:
     TYPE: dl
     INSTANCE: git
-    # The archive lane (ARCHIVE_DOWNLOAD) keeps the canonical jj checkout at
-    # ~/archive/rektide/dl; this deployment dir gets the `repo` symlink.
+    # The archive lane keeps Git+jj at ~/archive/rektide/dl and creates a
+    # dedicated colocated jj/Git workspace at this deployment's `repo` path.
     REPO: https://github.com/rektide/dl
     GIT_VERSION: main
     TOOL_VERSIONS:
@@ -13,7 +13,7 @@
     ENV: True
     # dl is the house archive tool (~->~/archive/<org>/<repo>); this playbook
     # brings its own deployment under compfuzor management. The build installs
-    # into the archive worktree through the symlink and (re)points the pnpm
+    # into the deployment workspace and (re)points the pnpm
     # global `dl` shim at the managed checkout.
     BINS:
       - name: build.sh
@@ -22,8 +22,7 @@
           cd "{{DIR}}/repo"
           pnpm install
           # Repoint the global dl shim at this managed checkout. node_modules,
-          # facts.db, and wf.db are gitignored, so the archive worktree stays
-          # snapshot-clean for repo-jj-archive refreshes.
+          # facts.db, and wf.db are gitignored in the deployment workspace.
           pnpm link --global
     README: |
       # dl — repository/packaging archive CLI
@@ -39,10 +38,9 @@
         [`repo_jj_archive.tasks`](/tasks/compfuzor/repo_jj_archive.tasks) via
         the [`archive/`](/archive/README.md) toolkit (`GIT_VERSION: main`).
       - Deployment dir (`{{DIR}}` with `-e USERMODE=True`): generated env plus
-        the `repo` symlink into the archive checkout.
-      - Build: `pnpm install` in the archive worktree (node_modules and the
-        facts/wf databases are gitignored there, so archive refreshes stay
-        clean), then `pnpm link --global`.
+        the dedicated `repo` jj workspace and Git worktree.
+      - Build: `pnpm install` in the deployment workspace (node_modules and
+        the facts/wf databases are gitignored), then `pnpm link --global`.
 
       ## The global shim
 

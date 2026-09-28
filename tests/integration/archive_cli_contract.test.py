@@ -363,11 +363,9 @@ def test_refresh_branch_at_remote_selects_declared_remote() -> None:
                                 "--repo", str(remote), "--remotes", remotes, "--label", "fixture",
                                 "--branch", "main@peer", cwd=tmp)
         assert selected["changed"]
-        assert any(f"(peer)" in n.get("message", "") for n in selected["notices"])
-        preserved = next(n for n in selected["notices"]
-                         if n["kind"] == "bookmark-created" and "/main-" in n["name"])
-        assert preserved["target"] == origin_tip
-        assert jj_commit("main", archive) == peer_tip
+        assert any("advanced checkout to main@peer" in n.get("message", "") for n in selected["notices"])
+        assert jj_commit("main", archive) == origin_tip  # Shared local bookmark stays ahead.
+        assert jj_commit("@-", archive) == peer_tip
 
         # Legacy `refresh --version BRANCH` spelling equals `--branch BRANCH`.
         reverted = success_json(str(RUNNER), "refresh", "--json", "--dest", str(archive),
@@ -381,8 +379,9 @@ def test_refresh_branch_at_remote_selects_declared_remote() -> None:
                                "--remotes", remotes, "--label", "fixture",
                                "--version", "main@peer", cwd=tmp)
         assert flagged["changed"]
-        assert any(f"(peer)" in n.get("message", "") for n in flagged["notices"])
-        assert jj_commit("main", archive) == peer_tip
+        assert any("advanced checkout to main@peer" in n.get("message", "") for n in flagged["notices"])
+        assert jj_commit("main", archive) == origin_tip
+        assert jj_commit("@-", archive) == peer_tip
 
 
 # --- Launcher resolution order ------------------------------------------------

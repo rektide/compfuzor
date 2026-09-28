@@ -32594,7 +32594,7 @@ function resolvePaths(input) {
 	};
 }
 /** Canonicalize even an absent path through its nearest existing ancestor. */
-async function canonicalPath(path) {
+async function canonicalPath$1(path) {
 	const tail = [];
 	let cursor = path;
 	while (true) {
@@ -32623,7 +32623,7 @@ const planAdoption = fn("custody.planAdoption")((input) => gen(function* () {
 	validateInput(input);
 	const paths = resolvePaths(input);
 	const canonical = yield* tryPromise({
-		try: () => Promise.all([canonicalPath(paths.legacy), canonicalPath(paths.dest)]),
+		try: () => Promise.all([canonicalPath$1(paths.legacy), canonicalPath$1(paths.dest)]),
 		catch: (error) => new CustodyError("invalid-input", `resolve repository roots: ${String(error)}`)
 	});
 	if (canonical[0].path === canonical[1].path || pathContains(canonical[0].path, canonical[1].path)) invalid("source and destination resolve to identical or nested paths");
@@ -34352,6 +34352,22 @@ function stamp() {
 function safeLabel(label) {
 	return label.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[.-]+|[.-]+$/g, "") || "deployment";
 }
+/** Keep a local branch tip reachable when its tracked upstream diverges. */
+async function saveDisplacedTip(dest, branch, target, execution) {
+	const name = `compfuzor/save/${safeLabel(branch)}-${stamp()}-${randomUUID().replaceAll("-", "").slice(0, 8)}`;
+	await jj([
+		"bookmark",
+		"create",
+		name,
+		"-r",
+		target
+	], dest, void 0, execution);
+	return {
+		kind: "bookmark-created",
+		name,
+		target
+	};
+}
 /** Duplicate a mutable @ so its recovery bookmark cannot drift with subsequent edits. */
 async function harvest(dest, label, kind, target, copy = false, execution) {
 	let commit = target;
@@ -34413,126 +34429,6 @@ async function recoveryCovered(dest, label, before, parents, execution) {
 	return false;
 }
 //#endregion
-//#region archive/src/repository/snapshot.ts
-/**
-* Snapshot an archive worktree: materialize visible heads, then import
-* colocated Git refs and snapshot tracked/untracked working-copy changes.
-*
-* Library twin of the CLI `snapshot` command: returns a structured result
-* instead of printing. The conflicted-bookmark list comes from the health
-* preflight that must precede any history walk.
-*/
-async function snapshot(dest, execution) {
-	const conflicts = await preflight(dest, {}, execution);
-	await jj(["status"], dest, void 0, execution);
-	return {
-		dest,
-		conflicts
-	};
-}
-//#endregion
-//#region archive/src/repository/fetch.ts
-/**
-* Fetch one remote of an archive without moving the local base or
-* reconciling the worktree: snapshot, harvest a dirty `@` if recovery does
-* not already cover it, freeze tracked local bookmarks, then fetch with no
-* abandon of unreachable commits. Run `refresh` afterward for reconciliation.
-*
-* Library twin of the CLI `fetch` command: returns structured notices
-* instead of printing. No console I/O happens here.
-*/
-async function fetchRemote(options, execution) {
-	const { dest, label } = options;
-	const remote = options.remote ?? "origin";
-	const notices = [];
-	await snapshot(dest, execution);
-	const before = await refs(dest, void 0, execution);
-	const working = await revision(dest, "@", execution);
-	if (!working.empty && !await recoveryCovered(dest, label, before, working.parents, execution)) notices.push(await harvest(dest, label, "working-copy", working.commit, true, execution));
-	for (const ref of before.values()) if (ref.remote !== "-" && ref.remote !== "git" && ref.tracked) await jj([
-		"bookmark",
-		"untrack",
-		ref.name,
-		"--remote",
-		ref.remote
-	], dest, void 0, execution);
-	await jj([
-		"--config",
-		"git.abandon-unreachable-commits=false",
-		"git",
-		"fetch",
-		"--remote",
-		remote
-	], dest, void 0, execution);
-	return {
-		remote,
-		notices
-	};
-}
-//#endregion
-//#region archive/src/cli/commands/fetch.ts
-/**
-* `fetch` — safe single-remote fetch: snapshot, harvest dirty `@` if needed,
-* freeze tracked local bookmarks, fetch without abandoning unreachable
-* commits. Reconciliation stays with `refresh`.
-*/
-const fetchCommand = make$5("fetch", {
-	dest: destFlag,
-	remote: String$1("remote").pipe(withDefault("origin"), withDescription$1("Existing remote to fetch")),
-	label: labelFlag
-}, (input) => runLibrary((signal) => fetchRemote({
-	dest: input.dest,
-	label: input.label,
-	remote: input.remote
-}, { signal })).pipe(flatMap$1((result) => {
-	const lines = result.notices.map((notice) => `BOOKMARK CREATED  ${notice.name} -> ${notice.target}`);
-	lines.push(`Fetched ${result.remote}; local bookmarks remain frozen until refresh`);
-	return log(lines.join("\n"));
-}))).pipe(withDescription("Snapshot, harvest dirty @, freeze tracked refs, then fetch one remote."));
-//#endregion
-//#region archive/src/cli/commands/harvest.ts
-/** `harvest` — pin a revision under a unique harvest/<label>/ recovery bookmark. */
-const harvestCommand = make$5("harvest", {
-	dest: destFlag,
-	label: labelFlag,
-	kind: String$1("kind").pipe(withDefault("manual"), withDescription$1("Recovery bookmark category")),
-	target: String$1("target").pipe(withDefault("@"), withDescription$1("Revision to pin")),
-	copy: Boolean$1("copy").pipe(withDefault(false), withDescription$1("Duplicate mutable @ to a fixed change ID before pinning"))
-}, (input) => runLibrary(async (signal) => {
-	await snapshot(input.dest, { signal });
-	return harvest(input.dest, input.label, input.kind, input.target, input.copy, { signal });
-}).pipe(flatMap$1((notice) => log(`BOOKMARK CREATED  ${notice.name} -> ${notice.target}`)))).pipe(withDescription("Pin a revision under a unique harvest/<label>/ bookmark."));
-//#endregion
-//#region archive/src/cli/commands/health.ts
-/**
-* `health` — ghost-head preflight and conflicted-bookmark report. Runs in the
-* read-only query mode (`--ignore-working-copy`): the checkout's jj state is
-* observed, never snapshotted or re-imported.
-*/
-const health = make$5("health", { dest: destFlag }, (input) => runLibrary((signal) => preflight(input.dest, { readOnly: true }, { signal })).pipe(flatMap$1((conflicts) => log(conflicts.length ? `Visible heads OK; conflicted bookmarks: ${conflicts.join(", ")}` : "Visible heads OK; no conflicted bookmarks")))).pipe(withDescription("Materialize visible_heads() and list conflicted bookmarks; no mutations."));
-//#endregion
-//#region archive/src/recovery/heal.ts
-/** Explicit re-adoption drops jj's broken view, not the Git checkout or backup. */
-async function heal(dest, yes, execution) {
-	if (!yes) throw new Error("heal is destructive to jj's operation history; pass --yes to back up .jj and re-adopt");
-	if (!await isDirectory$1(dest) || !await exists(join(dest, ".git")) || !await isDirectory$1(join(dest, ".jj"))) throw new Error(`${dest} must be a jj-colocated Git checkout; refusing to re-adopt`);
-	const backup = join(dest, `.jj.broken-ghost-${stamp()}-${randomUUID().slice(0, 8)}`);
-	await rename(join(dest, ".jj"), backup);
-	await jj([
-		"git",
-		"init",
-		"--colocate"
-	], dest, void 0, execution);
-	return backup;
-}
-//#endregion
-//#region archive/src/cli/commands/heal.ts
-/** `heal` — last-resort jj re-adoption from Git refs, gated on `--yes`. */
-const healCommand = make$5("heal", {
-	dest: destFlag,
-	yes: Boolean$1("yes").pipe(withDefault(false), withDescription$1("Required explicit permission to back up and replace .jj"))
-}, (input) => runLibrary((signal) => heal(input.dest, input.yes, { signal })).pipe(flatMap$1((backup) => log(`Re-adopted ${input.dest}; old jj state preserved at ${backup}`)))).pipe(withDescription("Back up .jj and re-adopt from Git refs; loses jj-only operation history."));
-//#endregion
 //#region archive/src/repository/remotes.ts
 const REMOTE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
@@ -34547,13 +34443,13 @@ function declaredRemotes(repo, remotes) {
 	}
 	return urls;
 }
-async function remoteDiff(dest, urls, execution) {
+async function remoteDiff(dest, urls, execution, readOnly = false) {
 	const actual = /* @__PURE__ */ new Map();
 	for (const line of lines(await jj([
 		"git",
 		"remote",
 		"list"
-	], dest, void 0, execution))) {
+	], dest, readOnly ? { readOnly: true } : void 0, execution))) {
 		const space = line.indexOf(" ");
 		actual.set(space === -1 ? line : line.slice(0, space), space === -1 ? "" : line.slice(space + 1));
 	}
@@ -34578,6 +34474,24 @@ async function reconcile(dest, differences, execution) {
 	], dest, void 0, execution);
 }
 //#endregion
+//#region archive/src/repository/snapshot.ts
+/**
+* Snapshot an archive worktree: materialize visible heads, then import
+* colocated Git refs and snapshot tracked/untracked working-copy changes.
+*
+* Library twin of the CLI `snapshot` command: returns a structured result
+* instead of printing. The conflicted-bookmark list comes from the health
+* preflight that must precede any history walk.
+*/
+async function snapshot(dest, execution) {
+	const conflicts = await preflight(dest, {}, execution);
+	await jj(["status"], dest, void 0, execution);
+	return {
+		dest,
+		conflicts
+	};
+}
+//#endregion
 //#region archive/src/repository/refresh.ts
 /**
 * Refresh a canonical archive without using Git's worktree-resetting update path.
@@ -34589,13 +34503,23 @@ async function refreshArchive(options, execution) {
 	const { dest, repo, remotes: remotesArg, label, reconcileRemotes } = options;
 	const update = options.update ?? "true";
 	if (update !== "true" && update !== "false") throw new Error(`argument --update: invalid choice: '${update}' (choose from 'true', 'false')`);
+	const fetchScope = options.fetchScope ?? "all";
+	const untrack = options.untrack ?? "none";
+	if (fetchScope !== "all" && fetchScope !== "selected") throw new Error(`invalid fetch scope: ${fetchScope}`);
+	if (![
+		"none",
+		"selected",
+		"all"
+	].includes(untrack)) throw new Error(`invalid untrack scope: ${untrack}`);
 	const urls = declaredRemotes(repo, remotesArg);
 	let version = options.version ?? "HEAD";
 	let selected = options.remote ?? "origin";
+	let followSelectedRemote = selected !== "origin";
 	const marker = version.lastIndexOf("@");
 	if (marker !== -1 && urls.has(version.slice(marker + 1))) {
 		selected = version.slice(marker + 1);
 		version = version.slice(0, marker);
+		followSelectedRemote = true;
 	}
 	if (!urls.has(selected)) throw new Error(`selected remote '${selected}' is not declared`);
 	if (options.submodules) throw new Error("GIT_SUBMODULES requires explicit submodule safety handling; disable it for this archive render");
@@ -34647,6 +34571,7 @@ async function refreshArchive(options, execution) {
 	}
 	await snapshot(dest, execution);
 	const before = await refs(dest, void 0, execution);
+	const selectedBranch = version !== "HEAD" ? version : ["main", "master"].find((name) => before.has(refKey(name, selected))) ?? null;
 	const working = await revision(dest, "@", execution);
 	const work = working.commit;
 	const empty = working.empty;
@@ -34662,35 +34587,77 @@ async function refreshArchive(options, execution) {
 		notices
 	};
 	if (!empty && !await recoveryCovered(dest, label, before, parents, execution)) await harvest$1("working-copy", work, true);
-	for (const ref of before.values()) if (ref.remote !== "-" && ref.remote !== "git" && ref.tracked) await jj([
-		"bookmark",
-		"untrack",
-		ref.name,
-		"--remote",
-		ref.remote
-	], dest, void 0, execution);
-	for (const name of urls.keys()) await jj([
+	for (const ref of before.values()) if (ref.remote !== "-" && ref.remote !== "git" && ref.tracked && (untrack === "all" || untrack === "selected" && ref.remote === selected && ref.name === selectedBranch)) {
+		await jj([
+			"bookmark",
+			"untrack",
+			ref.name,
+			"--remote",
+			ref.remote
+		], dest, void 0, execution);
+		changed = true;
+	}
+	for (const name of fetchScope === "all" ? urls.keys() : [selected]) await jj([
 		"--config",
 		"git.abandon-unreachable-commits=false",
 		"git",
 		"fetch",
 		"--remote",
-		name
+		name,
+		...fetchScope === "all" ? [
+			"--branch",
+			"*",
+			"--tag",
+			"*"
+		] : selectedBranch !== null ? ["--branch", selectedBranch] : []
 	], dest, void 0, execution);
 	const after = await refs(dest, void 0, execution);
+	for (const [key, ref] of after) if (ref.remote !== "-" && ref.remote !== "git" && (before.get(key)?.target !== ref.target || before.get(key)?.tracked !== ref.tracked)) changed = true;
+	for (const [key, ref] of before) if (ref.remote !== "-" && ref.remote !== "git" && !after.has(key)) changed = true;
 	const base = version !== "HEAD" ? version : ["main", "master"].find((name) => after.has(refKey(name, selected))) ?? null;
 	if (base === null || !after.has(refKey(base, selected))) throw new Error(`remote ${selected} does not have branch ${version}; specify GIT_VERSION explicitly`);
 	const upstream = after.get(refKey(base, selected)).target;
 	if (upstream === "conflict") throw new Error(`remote ${base}@${selected} is conflicted`);
+	let selectedSaved = false;
+	for (const ref of before.values()) {
+		if (ref.remote === "-" || ref.remote === "git" || !ref.tracked || fetchScope === "selected" && (ref.remote !== selected || ref.name !== base)) continue;
+		const oldLocal = before.get(refKey(ref.name, "-"))?.target;
+		const newRemote = after.get(refKey(ref.name, ref.remote))?.target;
+		if (!oldLocal || oldLocal === "conflict" || !newRemote || newRemote === "conflict" || ref.target === "conflict" || newRemote === ref.target || oldLocal === ref.target) continue;
+		if (await ancestor(dest, oldLocal, newRemote, execution) || await ancestor(dest, newRemote, oldLocal, execution)) continue;
+		if ([...before.values()].filter((other) => other.name === ref.name && other.remote !== "-" && other.remote !== "git" && other.tracked).length !== 1) {
+			notices.push({
+				kind: "notice",
+				message: `${ref.name}: multiple tracked remotes diverged; resolve manually`
+			});
+			continue;
+		}
+		if (options.saveDisplaced === false) {
+			notices.push({
+				kind: "notice",
+				message: `${ref.name}: local and ${ref.remote} diverged; bookmark left conflicted`
+			});
+			continue;
+		}
+		notices.push(await saveDisplacedTip(dest, ref.name, oldLocal, execution));
+		await jj([
+			"bookmark",
+			"set",
+			"-B",
+			"-r",
+			newRemote,
+			ref.name
+		], dest, void 0, execution);
+		if (ref.name === base && ref.remote === selected) selectedSaved = true;
+		changed = true;
+	}
+	const reconciled = await refs(dest, void 0, execution);
 	const oldBase = before.get(refKey(base, "-"))?.target ?? null;
 	if (oldBase === "conflict") throw new Error(`local bookmark ${base} is conflicted; resolve it before updating`);
-	for (const ref of before.values()) {
-		if (ref.remote !== "-" || ref.name === base || ref.target === "conflict") continue;
-		const current = after.get(refKey(ref.name, "-"));
-		if (current === void 0 || current.target !== ref.target) await harvest$1(`${ref.name.replaceAll("/", "-")}-local`, ref.target);
-	}
-	if (oldBase !== null && oldBase !== upstream && !await ancestor(dest, oldBase, upstream, execution)) await harvest$1(base.replaceAll("/", "-"), oldBase);
-	if (oldBase !== upstream) {
+	const currentBase = reconciled.get(refKey(base, "-"))?.target;
+	if (currentBase === "conflict") throw new Error(`${base} is conflicted after fetch; resolve it before updating this workspace`);
+	if (currentBase === void 0 || currentBase !== upstream && !await ancestor(dest, upstream, currentBase, execution)) {
+		if (oldBase !== null && currentBase !== void 0 && currentBase !== upstream && options.saveDisplaced === false && !await ancestor(dest, currentBase, upstream, execution)) throw new Error(`${base} has local work not covered by ${base}@${selected}; save or resolve it before updating`);
 		await jj([
 			"bookmark",
 			"set",
@@ -34714,7 +34681,7 @@ async function refreshArchive(options, execution) {
 		name: base,
 		target: upstream
 	});
-	await jj([
+	if (untrack === "none" && !reconciled.get(refKey(base, selected))?.tracked) await jj([
 		"bookmark",
 		"track",
 		base,
@@ -34722,11 +34689,25 @@ async function refreshArchive(options, execution) {
 		selected
 	], dest, void 0, execution);
 	const current = await revision(dest, "@", execution);
-	if (oldBase === current.commit && oldBase !== upstream && await ancestor(dest, upstream, current.commit, execution)) {
+	if (followSelectedRemote && current.empty && current.parents.join(",") !== upstream) {
+		await jj(["new", upstream], dest, void 0, execution);
+		changed = true;
+		notices.push({
+			kind: "notice",
+			message: `advanced checkout to ${base}@${selected}`
+		});
+	} else if (oldBase === current.commit && oldBase !== upstream && await ancestor(dest, upstream, current.commit, execution)) {
 		await jj(["new", "@"], dest, void 0, execution);
 		changed = true;
 	} else if (!await ancestor(dest, upstream, current.commit, execution)) {
-		if (current.empty && oldBase !== null && current.parents.join(",") === oldBase && await ancestor(dest, oldBase, upstream, execution)) await jj([
+		if (selectedSaved) {
+			await jj(["new", upstream], dest, void 0, execution);
+			changed = true;
+			notices.push({
+				kind: "notice",
+				message: `advanced deployment checkout to ${base}@${selected}; local tip saved`
+			});
+		} else if (current.empty && oldBase !== null && current.parents.join(",") === oldBase && await ancestor(dest, oldBase, upstream, execution)) await jj([
 			"rebase",
 			"-r",
 			"@",
@@ -34758,6 +34739,252 @@ async function refreshArchive(options, execution) {
 	};
 }
 //#endregion
+//#region archive/src/repository/deploy.ts
+/**
+* A Compfuzor deployment is a real jj workspace (and Git worktree) of the
+* canonical archive. Never convert, replace, or clear an occupied destination.
+*/
+const entry = async (path) => {
+	try {
+		return await lstat(path);
+	} catch (error) {
+		if (error.code === "ENOENT") return void 0;
+		throw error;
+	}
+};
+/** Canonicalize an absent destination via its nearest existing ancestor. */
+const canonicalPath = async (path) => await entry(path) ? realpath(path) : join(await canonicalPath(dirname(path)), basename(path));
+const within = (parent, child) => {
+	const path = relative(parent, child);
+	return path === "" || path !== ".." && !path.startsWith("../") && !path.startsWith("..\\");
+};
+async function deployWorkspace(options, execution) {
+	const archive = resolve(options.archive);
+	const workspace = resolve(options.workspace);
+	const archiveEntry = await entry(archive);
+	if (archiveEntry && (!archiveEntry.isDirectory() || !(await entry(`${archive}/.jj`))?.isDirectory() || !(await entry(`${archive}/.git`))?.isDirectory())) throw new Error(`${archive} is not a jj-colocated archive; prepare it separately`);
+	const workspaceEntry = await entry(workspace);
+	if (workspaceEntry && !workspaceEntry.isDirectory()) throw new Error(`${workspace} is occupied; move it aside or clean it up manually before creating a jj workspace`);
+	const actualArchive = await canonicalPath(archive);
+	const actualWorkspace = await canonicalPath(workspace);
+	if (within(actualArchive, actualWorkspace) || within(actualWorkspace, actualArchive)) throw new Error(`archive ${archive} and workspace ${workspace} must be distinct, non-nested paths`);
+	const existing = (workspaceEntry ? await readdir(workspace) : []).length > 0;
+	if (existing) {
+		if (!archiveEntry || !(await entry(`${workspace}/.jj`))?.isDirectory() || !await entry(`${workspace}/.git`)) throw new Error(`${workspace} is occupied; move it aside or clean it up manually before creating a jj workspace`);
+		const gitEntry = await entry(`${workspace}/.git`);
+		const jjPointer = await entry(`${workspace}/.jj/repo`);
+		const gitPointer = gitEntry?.isFile() ? (await readFile(`${workspace}/.git`, "utf8")).trim() : "";
+		if (!gitEntry?.isFile() || !jjPointer?.isFile() || !gitPointer.startsWith("gitdir: ") || !(await realpath(resolve(workspace, gitPointer.slice(8)))).startsWith(`${await realpath(`${archive}/.git`)}/worktrees/`) || await realpath(resolve(`${workspace}/.jj`, (await readFile(`${workspace}/.jj/repo`, "utf8")).trim())) !== await realpath(`${archive}/.jj/repo`) || await jj(["workspace", "root"], workspace, { readOnly: true }, execution) !== workspace) throw new Error(`${workspace} is not a colocated workspace of ${archive}; refusing to change it`);
+	}
+	let createdArchive = {
+		changed: false,
+		notices: []
+	};
+	if (!archiveEntry) createdArchive = await refreshArchive({
+		...options,
+		dest: archive
+	}, execution);
+	else if (!options.reconcileRemotes) {
+		const differences = await remoteDiff(archive, declaredRemotes(options.repo, options.remotes), execution, true);
+		if (differences.some((difference) => difference.actual !== null)) throw mismatchError(archive, differences, options.repo, options.remotes);
+	}
+	if (!existing) {
+		const urls = declaredRemotes(options.repo, options.remotes);
+		let remote = options.remote ?? "origin";
+		let branch = options.version ?? "HEAD";
+		const at = branch.lastIndexOf("@");
+		if (at !== -1 && urls.has(branch.slice(at + 1))) {
+			remote = branch.slice(at + 1);
+			branch = branch.slice(0, at);
+		}
+		if (!urls.has(remote)) throw new Error(`selected remote '${remote}' is not declared`);
+		const available = await refs(archive, { readOnly: true }, execution);
+		if (branch === "HEAD") branch = ["main", "master"].find((name) => available.has(refKey(name, remote))) ?? "";
+		if (!branch || !available.has(refKey(branch, remote))) throw new Error(`${branch || "HEAD"}@${remote} is unavailable in ${archive}; fetch it before creating ${workspace}`);
+		if (available.get(refKey(branch, remote))?.target === "conflict") throw new Error(`${branch}@${remote} is conflicted; resolve it before creating ${workspace}`);
+		await mkdir(dirname(workspace), { recursive: true });
+		await jj([
+			"workspace",
+			"add",
+			"--colocate",
+			"--name",
+			`compfuzor-${safeLabel(options.label)}-${createHash("sha256").update(workspace).digest("hex").slice(0, 12)}`,
+			"--revision",
+			`${branch}@${remote}`,
+			workspace
+		], archive, void 0, execution);
+	}
+	const result = await refreshArchive({
+		...options,
+		dest: workspace
+	}, execution);
+	return {
+		changed: createdArchive.changed || !existing || result.changed,
+		notices: [
+			...createdArchive.notices,
+			...!existing ? [{
+				kind: "notice",
+				message: `created jj workspace ${workspace} backed by ${archive}`
+			}] : [],
+			...result.notices
+		]
+	};
+}
+//#endregion
+//#region archive/src/cli/commands/deploy.ts
+/** Create or refresh a dedicated deployment workspace without using archive @. */
+const deploy = make$5("deploy", {
+	archive: String$1("archive").pipe(withDescription$1("Shared jj-colocated Git archive at ~/archive/<org>/<repo>")),
+	workspace: String$1("workspace").pipe(withDescription$1("Dedicated deployment jj workspace and Git worktree")),
+	repo: repoFlag,
+	remotes: remotesFlag,
+	label: labelFlag,
+	remote: String$1("remote").pipe(withDefault("origin")),
+	branch: String$1("branch").pipe(withDefault("HEAD")),
+	update: String$1("update").pipe(withDefault("true")),
+	"fetch-scope": String$1("fetch-scope").pipe(withDefault("all"), withDescription$1("Fetch all declared branches or only the selected branch: all|selected")),
+	untrack: String$1("untrack").pipe(withDefault("none"), withDescription$1("Explicit tracking override: none|selected|all")),
+	"no-save-displaced": Boolean$1("no-save-displaced").pipe(withDefault(false), withDescription$1("Leave diverged bookmarks conflicted instead of saving and resolving")),
+	depth: optional(String$1("depth")),
+	submodules: Boolean$1("submodules").pipe(withDefault(false)),
+	json: Boolean$1("json").pipe(withDefault(false)),
+	"reconcile-remotes": Boolean$1("reconcile-remotes").pipe(withDefault(false))
+}, (input) => runLibrary((signal) => deployWorkspace({
+	archive: input.archive,
+	workspace: input.workspace,
+	repo: input.repo,
+	remotes: input.remotes,
+	label: input.label,
+	remote: input.remote,
+	version: input.branch,
+	update: input.update,
+	fetchScope: input["fetch-scope"],
+	untrack: input.untrack,
+	saveDisplaced: !input["no-save-displaced"],
+	depth: getOrElse(input.depth, () => void 0),
+	submodules: input.submodules,
+	reconcileRemotes: input["reconcile-remotes"]
+}, { signal })).pipe(flatMap$1((result) => log(input.json ? JSON.stringify(result) : result.notices.map((notice) => notice.message ?? `BOOKMARK CREATED  ${notice.name} -> ${notice.target}`).join("\n") || (result.changed ? "Workspace changed" : "Workspace unchanged"))))).pipe(withDescription("Create or refresh a jj/Git deployment workspace of an archive."));
+//#endregion
+//#region archive/src/repository/fetch.ts
+/**
+* Fetch one remote of an archive without moving the local base or
+* reconciling the worktree: snapshot, harvest a dirty `@` if recovery does
+* not already cover it, then fetch without abandoning unreachable commits.
+* Untracking is explicit; run `refresh` afterward for reconciliation.
+*
+* Library twin of the CLI `fetch` command: returns structured notices
+* instead of printing. No console I/O happens here.
+*/
+async function fetchRemote(options, execution) {
+	const { dest, label } = options;
+	const remote = options.remote ?? "origin";
+	const untrack = options.untrack ?? "none";
+	if (![
+		"none",
+		"selected",
+		"all"
+	].includes(untrack)) throw new Error(`invalid untrack scope: ${untrack}`);
+	if (untrack === "selected" && !options.branch) throw new Error("untrack=selected requires a --branch");
+	const notices = [];
+	await snapshot(dest, execution);
+	const before = await refs(dest, void 0, execution);
+	const working = await revision(dest, "@", execution);
+	if (!working.empty && !await recoveryCovered(dest, label, before, working.parents, execution)) notices.push(await harvest(dest, label, "working-copy", working.commit, true, execution));
+	for (const ref of before.values()) if (ref.remote !== "-" && ref.remote !== "git" && ref.tracked && (untrack === "all" || untrack === "selected" && ref.remote === remote && ref.name === options.branch)) await jj([
+		"bookmark",
+		"untrack",
+		ref.name,
+		"--remote",
+		ref.remote
+	], dest, void 0, execution);
+	await jj([
+		"--config",
+		"git.abandon-unreachable-commits=false",
+		"git",
+		"fetch",
+		"--remote",
+		remote,
+		...options.branch ? ["--branch", options.branch] : [
+			"--branch",
+			"*",
+			"--tag",
+			"*"
+		]
+	], dest, void 0, execution);
+	return {
+		remote,
+		notices
+	};
+}
+//#endregion
+//#region archive/src/cli/commands/fetch.ts
+/**
+* `fetch` — safe single-remote fetch: snapshot, harvest dirty `@` if needed,
+* fetch without abandoning unreachable commits. Tracking changes are opt-in;
+* reconciliation stays with `refresh`.
+*/
+const fetchCommand = make$5("fetch", {
+	dest: destFlag,
+	remote: String$1("remote").pipe(withDefault("origin"), withDescription$1("Existing remote to fetch")),
+	label: labelFlag,
+	branch: optional(String$1("branch").pipe(withDescription$1("Fetch only this branch; required for untrack=selected"))),
+	untrack: String$1("untrack").pipe(withDefault("none"), withDescription$1("Explicit tracking override: none|selected|all"))
+}, (input) => runLibrary((signal) => fetchRemote({
+	dest: input.dest,
+	label: input.label,
+	remote: input.remote,
+	branch: getOrElse(input.branch, () => void 0),
+	untrack: input.untrack
+}, { signal })).pipe(flatMap$1((result) => {
+	const lines = result.notices.map((notice) => `BOOKMARK CREATED  ${notice.name} -> ${notice.target}`);
+	lines.push(`Fetched ${result.remote}; run refresh to reconcile the selected checkout`);
+	return log(lines.join("\n"));
+}))).pipe(withDescription("Snapshot and fetch a remote; optionally untrack selected bookmarks."));
+//#endregion
+//#region archive/src/cli/commands/harvest.ts
+/** `harvest` — pin a revision under a unique harvest/<label>/ recovery bookmark. */
+const harvestCommand = make$5("harvest", {
+	dest: destFlag,
+	label: labelFlag,
+	kind: String$1("kind").pipe(withDefault("manual"), withDescription$1("Recovery bookmark category")),
+	target: String$1("target").pipe(withDefault("@"), withDescription$1("Revision to pin")),
+	copy: Boolean$1("copy").pipe(withDefault(false), withDescription$1("Duplicate mutable @ to a fixed change ID before pinning"))
+}, (input) => runLibrary(async (signal) => {
+	await snapshot(input.dest, { signal });
+	return harvest(input.dest, input.label, input.kind, input.target, input.copy, { signal });
+}).pipe(flatMap$1((notice) => log(`BOOKMARK CREATED  ${notice.name} -> ${notice.target}`)))).pipe(withDescription("Pin a revision under a unique harvest/<label>/ bookmark."));
+//#endregion
+//#region archive/src/cli/commands/health.ts
+/**
+* `health` — ghost-head preflight and conflicted-bookmark report. Runs in the
+* read-only query mode (`--ignore-working-copy`): the checkout's jj state is
+* observed, never snapshotted or re-imported.
+*/
+const health = make$5("health", { dest: destFlag }, (input) => runLibrary((signal) => preflight(input.dest, { readOnly: true }, { signal })).pipe(flatMap$1((conflicts) => log(conflicts.length ? `Visible heads OK; conflicted bookmarks: ${conflicts.join(", ")}` : "Visible heads OK; no conflicted bookmarks")))).pipe(withDescription("Materialize visible_heads() and list conflicted bookmarks; no mutations."));
+//#endregion
+//#region archive/src/recovery/heal.ts
+/** Explicit re-adoption drops jj's broken view, not the Git checkout or backup. */
+async function heal(dest, yes, execution) {
+	if (!yes) throw new Error("heal is destructive to jj's operation history; pass --yes to back up .jj and re-adopt");
+	if (!await isDirectory$1(dest) || !await exists(join(dest, ".git")) || !await isDirectory$1(join(dest, ".jj"))) throw new Error(`${dest} must be a jj-colocated Git checkout; refusing to re-adopt`);
+	const backup = join(dest, `.jj.broken-ghost-${stamp()}-${randomUUID().slice(0, 8)}`);
+	await rename(join(dest, ".jj"), backup);
+	await jj([
+		"git",
+		"init",
+		"--colocate"
+	], dest, void 0, execution);
+	return backup;
+}
+//#endregion
+//#region archive/src/cli/commands/heal.ts
+/** `heal` — last-resort jj re-adoption from Git refs, gated on `--yes`. */
+const healCommand = make$5("heal", {
+	dest: destFlag,
+	yes: Boolean$1("yes").pipe(withDefault(false), withDescription$1("Required explicit permission to back up and replace .jj"))
+}, (input) => runLibrary((signal) => heal(input.dest, input.yes, { signal })).pipe(flatMap$1((backup) => log(`Re-adopted ${input.dest}; old jj state preserved at ${backup}`)))).pipe(withDescription("Back up .jj and re-adopt from Git refs; loses jj-only operation history."));
+//#endregion
 //#region archive/src/cli/commands/refresh.ts
 /**
 * `refresh` — the composed archive convergence operation for Ansible and
@@ -34773,6 +35000,9 @@ const refresh = make$5("refresh", {
 	remote: String$1("remote").pipe(withDefault("origin"), withDescription$1("Selected declared remote")),
 	branch: String$1("branch").pipe(withDefault("HEAD"), withDescription$1("Branch or branch@remote; HEAD chooses main then master")),
 	update: String$1("update").pipe(withDefault("true"), withDescription$1("Fetch/reconcile: true or false")),
+	"fetch-scope": String$1("fetch-scope").pipe(withDefault("all"), withDescription$1("Fetch all declared branches, or only the selected branch: all|selected")),
+	untrack: String$1("untrack").pipe(withDefault("none"), withDescription$1("Explicit tracking override: none|selected|all")),
+	"no-save-displaced": Boolean$1("no-save-displaced").pipe(withDefault(false), withDescription$1("Leave divergent bookmarks conflicted instead of saving and resolving")),
 	depth: optional(String$1("depth").pipe(withDescription$1("Clone depth (only for new archives)"))),
 	submodules: Boolean$1("submodules").pipe(withDefault(false), withDescription$1("Unsupported: fail rather than silently recurse")),
 	json: Boolean$1("json").pipe(withDefault(false), withDescription$1("Exactly one JSON line on stdout for Ansible")),
@@ -34785,6 +35015,9 @@ const refresh = make$5("refresh", {
 	remote: input.remote,
 	version: input.branch,
 	update: input.update,
+	fetchScope: input["fetch-scope"],
+	untrack: input.untrack,
+	saveDisplaced: !input["no-save-displaced"],
 	depth: getOrElse(input.depth, () => void 0),
 	submodules: input.submodules,
 	reconcileRemotes: input["reconcile-remotes"]
@@ -34874,6 +35107,7 @@ const scratchParent = async (dest, legacy) => {
 */
 const commands = [
 	refresh,
+	deploy,
 	adoptCommand,
 	make$5("verify-adoption", {
 		dest: destFlag,

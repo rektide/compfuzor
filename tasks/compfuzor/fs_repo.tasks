@@ -1,11 +1,25 @@
 ---
+- name: "Compfuzor: inspect custom workspace exposure path"
+  ansible.builtin.stat:
+    path: "{{DIR}}/{{REPO_LINK_DIR}}"
+    follow: false
+  register: compfuzor_custom_repo_link
+  when: REPO is defined and ARCHIVE_DOWNLOAD is deftruthy and GIT_DIR|def(REPO_DIR, DIR, falsy=True) != DIR ~ '/' ~ REPO_LINK_DIR
+
+- name: "Compfuzor: refuse to replace an occupied workspace exposure path"
+  ansible.builtin.assert:
+    that:
+      - not compfuzor_custom_repo_link.stat.exists or (compfuzor_custom_repo_link.stat.islnk|default(false) and compfuzor_custom_repo_link.stat.lnk_source == GIT_DIR)
+    fail_msg: "{{DIR}}/{{REPO_LINK_DIR}} is occupied; inspect it before linking the custom jj workspace"
+  when: REPO is defined and ARCHIVE_DOWNLOAD is deftruthy and GIT_DIR|def(REPO_DIR, DIR, falsy=True) != DIR ~ '/' ~ REPO_LINK_DIR
+
 - name: "Compfuzor: repo symlink"
   file:
     src: "{{ GIT_DIR|def(REPO_DIR, DIR, falsy=True) }}"
     dest: "{{DIR}}/{{REPO_LINK_DIR}}"
     state: link
     owner: "{{OWNER|default(omit)}}"
-  when: (REPO is defined and ARCHIVE_DOWNLOAD is deffalsy) or (REPOS is defined and REPO is undefined)
+  when: (REPO is defined and (ARCHIVE_DOWNLOAD is deffalsy or GIT_DIR|def(REPO_DIR, DIR, falsy=True) != DIR ~ '/' ~ REPO_LINK_DIR)) or (REPOS is defined and REPO is undefined)
 - name: "other repo symlinks"
   file:
     src: "{{ REPO_DIR|def(DIR, falsy=True) }}"

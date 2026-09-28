@@ -19,14 +19,17 @@ There are two related, but deliberately different, jobs:
 
 | Job | Starting point | Intended result |
 |---|---|---|
-| **Maintain an archive** | A checkout you want to keep working in or using | Fetch upstream changes, preserve recovery tips, and reconcile the selected base and worktree. |
+| **Maintain an archive or deployment workspace** | A checkout you want to keep working in or using | Fetch upstream changes, preserve displaced local tips, and advance the selected checkout. |
 | **Take custody of another checkout's work** | An older checkout whose history or uncommitted files must not be overlooked | Account for the selected Git work, preserve it in an existing archive, and leave evidence that can be verified without the old checkout. |
 
-Use `refresh` for the first job. Use `adopt`, followed by `verify-adoption`, for
+Use `deploy` for a Compfuzor deployment workspace, `refresh` for an explicitly
+selected checkout, and `adopt` followed by `verify-adoption` for custody. The
+last two jobs are not interchangeable:
 the second. They are not interchangeable:
 
-- **Refresh changes the active checkout.** It can snapshot local files, import
-  refs, fetch, move the selected bookmark, and reconcile the worktree.
+- **Refresh changes the active checkout.** It snapshots local files, imports
+  refs, fetches, and advances the selected working copy. It can also move
+  tracked bookmarks in the shared repo, saving divergent local tips first.
 - **Adoption adds custody without switching either checkout.** It preserves
   selected objects under new refs and records what was preserved. It does not
   choose which recovered history an application should run.
@@ -91,12 +94,25 @@ new Git refs. A healthy result is not a claim that the checkout is clean or
 that all of its work has been backed up.
 
 `refresh` composes the maintenance sequence: initialize or clone when needed,
-snapshot, check remotes, preserve recovery tips, fetch, and reconcile. A merge
-can leave conflicts for you to resolve; preserving work is not conflict resolution.
+snapshot, check remotes, fetch, save divergent local tips, and reconcile the
+selected checkout. It fetches all branches from declared remotes by default,
+without untracking any bookmark. Normal upstream movement fast-forwards a
+tracked local bookmark. If a locally moved bookmark diverges from upstream,
+the old local tip is saved as `compfuzor/save/<branch>-<datestamp>-<suffix>`
+before the local bookmark is set to upstream. A branch already conflicted
+before this fetch, or one tracking multiple remotes, requires manual resolution.
+
+`--fetch-scope selected` fetches only the selected branch from the selected
+remote. `--untrack selected` and `--untrack all` are explicit tracking
+overrides; the default is `none`. `--no-save-displaced` leaves new divergent
+bookmarks conflicted instead of saving and resolving them; if the selected
+branch conflicts, the command fails rather than advancing its worktree.
+Neither fetch nor save publishes commits to a remote.
 
 For finer control, use `snapshot`, `harvest`, `remotes`, and `fetch` separately.
-In particular, `fetch` freezes tracked local bookmarks before fetching; it
-does **not** then move the selected base or reconcile the checkout.
+`fetch` now retains bookmark tracking by default. Its explicit `--untrack`
+option changes tracking; unlike `refresh`, it does not reconcile a newly
+conflicted bookmark or advance the checkout.
 
 **`refresh --update false` is not a dry run.** It can still initialize jj,
 snapshot/import, and manage declared remotes. There is no universal plan mode
@@ -365,8 +381,9 @@ name is not a substitute for understanding its mutation boundary.
 | `snapshot --dest DIR` | Explicitly run jj status, snapshot files and import colocated Git refs. |
 | `harvest --dest DIR --label NAME [--kind TYPE] [--target REV] [--copy]` | Pin a revision under a unique recovery bookmark; `--copy` duplicates mutable work before pinning. |
 | `remotes --dest DIR --repo URL [--remotes JSON] [--reconcile]` | Compare declared URLs; only `--reconcile` authorizes adding or changing them. |
-| `fetch --dest DIR --label NAME [--remote NAME]` | Snapshot, preserve dirty work and freeze tracked local bookmarks before fetching one remote. |
-| `refresh --dest DIR --repo URL --label NAME` | Compose maintenance. Options include `--branch HEAD\|branch\|branch@remote`, `--remote`, `--remotes`, `--update true\|false`, `--depth`, `--json`, and `--reconcile-remotes`. |
+| `fetch --dest DIR --label NAME [--remote NAME]` | Snapshot and fetch one remote without reconciliation. `--branch` limits fetched refs; `--untrack none\|selected\|all` is explicit. |
+| `refresh --dest DIR --repo URL --label NAME` | Compose maintenance. Options include `--branch HEAD\|branch\|branch@remote`, `--remote`, `--remotes`, `--fetch-scope all\|selected`, `--untrack none\|selected\|all`, `--no-save-displaced`, `--update true\|false`, `--depth`, `--json`, and `--reconcile-remotes`. |
+| `deploy --archive DIR --workspace DIR --repo URL --label NAME` | Create or refresh a deployment jj workspace with a colocated Git worktree; accepts the same fetch, tracking and save controls as `refresh`. |
 | `adopt --legacy DIR --dest DIR --repo URL --label NAME` | Produce a custody plan; add `--apply` to transfer. Also accepts `--branch`, `--generation`, `--exclude-from`, `--dispositions`, `--path-review`, and `--json`. |
 | `verify-adoption --dest DIR --receipt REF [--legacy DIR] [--json]` | Check installed custody, optionally comparing the old source too. |
 | `heal --dest DIR --yes` | Back up `.jj` and re-adopt from existing Git refs. Explicit last resort, not recovery of missing Git objects or jj-only history. |
@@ -380,11 +397,28 @@ that rebuilding jj metadata can recover objects Git no longer has.
 ## Compfuzor integration
 
 [`repo_jj_archive.tasks`](/tasks/compfuzor/repo_jj_archive.tasks) calls
-`refresh --json`. Its repository declarations map to the same operator-facing
-options; `GIT_REMOTE_FIX=true` is explicit permission to reconcile remote URLs.
+`deploy --json`. `ARCHIVE_SRC` is the shared repository at
+`~/archive/<org>/<repo>`; `GIT_DIR` (normally `DIR/repo`) is a **real jj
+workspace and colocated Git worktree** backed by that repository. A missing or
+empty workspace path is created; an old symlink, standalone checkout, or any
+other occupied path is refused without converting or deleting its contents.
+An existing workspace must be linked to the specified archive. Fetching from
+the deployment workspace does not use the archive main worktree as its
+deployment checkout. **Creating** a workspace from an existing archive runs
+`jj workspace add` in the archive; jj may snapshot previously unsnapshotted
+files in the archive main `@` once. This preserves their contents and parent
+but changes that `@` commit ID. Subsequent deployment refreshes run from the
+dedicated workspace. With a custom `GIT_DIR`, `DIR/repo` links to that custom
+workspace only if the exposure path is vacant or already points there.
+
+`GIT_REMOTE_FIX=true` permits remote URL reconciliation. `JJ_FETCH_SCOPE`,
+`JJ_UNTRACK`, and `JJ_SAVE_DISPLACED` expose the corresponding CLI controls;
+the defaults fetch all, untrack none, and save displaced local tips. A
+deployment with an old checkout or symlink needs a deliberate operator
+cutover; the repository task does not silently migrate it.
 
 The host's canonical Compfuzor checkout is preferred when its launcher is
-executable. The executing playbook's launcher is the fallback.
+executable **and supports `deploy`**. The executing playbook's launcher is the fallback.
 `COMPFUZOR_REPO_JJ_RUNNER` overrides the selection.
 
 `COMPFUZOR_SELF_FRESHEN=true` separately opts into fetching the host checkout's
@@ -394,7 +428,7 @@ The launcher at [`script/repo-jj-archive.ts`](/script/repo-jj-archive.ts) uses
 source when source and Effect dependencies are available; otherwise it uses
 the single-file distribution. Neither path requires a separate tool implementation.
 
-A successful refresh's machine result is one JSON line:
+A successful deployment's machine result is one JSON line:
 
 ```json
 {"changed":false,"notices":[]}

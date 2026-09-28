@@ -8,8 +8,8 @@
     # which we do not pass) and its unit keeps upstream's ProtectHome=yes, so
     # the binary must be a real file the apt-cacher-rs user can exec:
     #   - the default install symlink resolves through DIR (DIRMODE 0770)
-    #   - and through the repo symlink into ~/archive (blocked by
-    #     ProtectHome=yes, and wrong for a daemon anyway)
+    #   - and through the deployment workspace under DIR (wrong for a daemon
+    #     with ProtectHome=yes, and wrong for an installed binary anyway)
     # RUST_COPY: True makes install-rust.sh cp a 0755 real file into
     # $GLOBAL_BINS_DIR instead -- matching upstream's own deb, which ships
     # /usr/sbin/apt-cacher-rs as a real file. Cargo.toml edition = "2024":

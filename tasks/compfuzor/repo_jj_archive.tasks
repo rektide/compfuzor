@@ -25,12 +25,23 @@
   register: compfuzor_host_launcher
   when: COMPFUZOR_REPO_JJ_RUNNER is undefined and JJ_BYPASS is deffalsy
 
+- name: "Compfuzor: check host runner supports deployment workspaces"
+  ansible.builtin.command:
+    argv:
+      - "{{ COMPFUZOR_ARCHIVE|default(lookup('env', 'HOME') ~ '/archive/rektide/compfuzor', true) }}/script/repo-jj-archive.ts"
+      - deploy
+      - --help
+  register: compfuzor_host_deploy_help
+  changed_when: false
+  failed_when: false
+  when: COMPFUZOR_REPO_JJ_RUNNER is undefined and compfuzor_host_launcher.stat.executable|default(False)
+
 - name: "Compfuzor: resolve the jj archive runner"
   ansible.builtin.set_fact:
     compfuzor_repo_jj_runner: >-
       {{ COMPFUZOR_REPO_JJ_RUNNER|default(
            COMPFUZOR_ARCHIVE|default(lookup('env', 'HOME') ~ '/archive/rektide/compfuzor', true) ~ '/script/repo-jj-archive.ts'
-             if compfuzor_host_launcher.stat.executable|default(False) else
+             if compfuzor_host_deploy_help.rc|default(1) == 0 and 'repo-jj-archive deploy' in compfuzor_host_deploy_help.stdout|default('') else
            playbook_dir ~ '/script/repo-jj-archive.ts', True) }}
 
 - name: "Compfuzor: jj archive runner resolved to the host checkout"
@@ -38,7 +49,7 @@
     msg: >-
       repo-jj-archive: host compfuzor checkout preferred ({{COMPFUZOR_ARCHIVE|default(lookup('env', 'HOME') ~ '/archive/rektide/compfuzor', true)}});
       set COMPFUZOR_REPO_JJ_RUNNER to pin a specific runner
-  when: compfuzor_host_launcher.stat.executable|default(False)
+  when: COMPFUZOR_REPO_JJ_RUNNER is undefined and compfuzor_host_deploy_help.rc|default(1) == 0 and 'repo-jj-archive deploy' in compfuzor_host_deploy_help.stdout|default('')
 
 - name: "Compfuzor: jj archive runner falling back to the playbook bundle"
   ansible.builtin.debug:
@@ -49,7 +60,7 @@
       otherwise its committed bundle)
   when: >-
     COMPFUZOR_REPO_JJ_RUNNER is undefined and
-    not (compfuzor_host_launcher.stat.executable|default(False))
+    compfuzor_host_deploy_help.rc|default(1) != 0 or 'repo-jj-archive deploy' not in compfuzor_host_deploy_help.stdout|default('')
 
 - name: "Compfuzor: jj archive runner pinned by override"
   ansible.builtin.debug:
@@ -68,7 +79,10 @@
           '--update', 'true' if GIT_UPDATE|default(true)|bool else 'false']
           + (['--depth', GIT_DEPTH|string] if GIT_DEPTH is defined else [])
            + (['--submodules'] if GIT_SUBMODULES|default(false)|bool else [])
-           + (['--reconcile-remotes'] if GIT_REMOTE_FIX|default(false)|bool else []) }}
+           + (['--reconcile-remotes'] if GIT_REMOTE_FIX|default(false)|bool else [])
+           + (['--fetch-scope', JJ_FETCH_SCOPE|string] if JJ_FETCH_SCOPE is defined else [])
+           + (['--untrack', JJ_UNTRACK|string] if JJ_UNTRACK is defined else [])
+           + (['--no-save-displaced'] if JJ_SAVE_DISPLACED is defined and not JJ_SAVE_DISPLACED|bool else []) }}
   register: compfuzor_repo_jj_result
   # On runner failure stdout is intentionally empty; leave the jj diagnostic
   # intact instead of obscuring it with a JSON parsing exception.

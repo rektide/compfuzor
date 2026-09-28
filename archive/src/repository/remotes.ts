@@ -22,9 +22,12 @@ export async function remoteDiff(
   dest: string,
   urls: Map<string, string>,
   execution?: ExecutionOptions,
+  readOnly = false,
 ): Promise<RemoteDifference[]> {
   const actual = new Map<string, string>();
-  for (const line of lines(await jj(["git", "remote", "list"], dest, undefined, execution))) {
+  for (const line of lines(
+    await jj(["git", "remote", "list"], dest, readOnly ? { readOnly: true } : undefined, execution),
+  )) {
     const space = line.indexOf(" ");
     actual.set(
       space === -1 ? line : line.slice(0, space),
