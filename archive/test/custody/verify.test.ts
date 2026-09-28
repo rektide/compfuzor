@@ -231,7 +231,11 @@ async function installReceiptBlob(
 export async function adoption(
   t: { after: (hook: () => Promise<unknown>) => void },
   name: string,
-  options: { readonly jjColocate?: boolean; readonly specialPaths?: boolean } = {},
+  options: {
+    readonly jjColocate?: boolean;
+    readonly specialPaths?: boolean;
+    readonly attributedDest?: boolean;
+  } = {},
 ): Promise<Adoption> {
   const root = await area(t, name);
   const source = join(root, "legacy");
@@ -396,6 +400,8 @@ export async function adoption(
     await run(root, "init", "--quiet", "--initial-branch=main", dest);
   }
   await writeFile(join(dest, "archive-readme.md"), "archive\n");
+  if (options.attributedDest)
+    await writeFile(join(dest, ".gitattributes"), "archive-readme.md filter=unsafe\n");
   await run(dest, ...identity, "add", "-A", ".");
   await run(dest, ...identity, "commit", "--quiet", "-m", "archive base");
   const destReal = await realpath(dest);
@@ -885,6 +891,27 @@ test("subsequent destination worktree drift is reported separately from custody"
   assert.equal(result.custodyVerified, true);
   assert.deepEqual(result.custodyFailures, []);
   assert.equal(result.destinationDrift, "changed");
+});
+
+test("standalone verifier refuses destination status when a later clean filter could run", async (t) => {
+  const a = await adoption(t, "late-filter", { attributedDest: true });
+  const marker = join(a.root, "unsafe-filter-ran");
+  await run(a.dest, "config", "filter.unsafe.clean", `sh -c 'touch "${marker}"; cat'`);
+  // Equal-size edit forces Git status to inspect content instead of merely
+  // detecting a stat-size difference. If status runs, the filter writes marker.
+  await writeFile(join(a.dest, "archive-readme.md"), "altered\n");
+  const odbBefore = await treeLines(join(a.dest, ".git", "objects"), null);
+  const result = await verify(a);
+  assert.equal(result.custodyVerified, true);
+  assert.equal(result.destinationDrift, "unknown");
+  assert.ok(
+    result.retirementUnresolved.some(
+      ({ code, reason }) =>
+        code === "destination-drift-unavailable" && /filter\.unsafe\.clean/.test(reason),
+    ),
+  );
+  assert.equal(await stat(marker).catch(() => null), null);
+  assert.deepEqual(await treeLines(join(a.dest, ".git", "objects"), null), odbBefore);
 });
 
 test("jj-colocated destinations pass the read-only preflight without jj items", async (t) => {

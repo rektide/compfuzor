@@ -160,7 +160,7 @@ function gitZero(
 }
 
 /** Config-only preflight: never run status, hashing, or path probes with local helpers. */
-function localHelpers(root: string): Effect.Effect<readonly string[], CustodyError> {
+export function localHelpers(root: string): Effect.Effect<readonly string[], CustodyError> {
   return Effect.gen(function* () {
     const pairs = [] as { readonly key: string; readonly value: string }[];
     for (const scope of ["--local", "--worktree"]) {

@@ -40,6 +40,7 @@ import { dirname, join } from "node:path";
 import { Effect } from "effect";
 import { preflight } from "../repository/health.ts";
 import { gitRead, utf8Fatal } from "../repository/git.ts";
+import { localHelpers } from "./inventory/probe.ts";
 import { readVaultBundle, VaultPathComponentError } from "./vault.ts";
 import { checkBundleRestoration, type StageExecution } from "./stage.ts";
 import { canonicalJson, parseReceipt, pinRef, refName, sha256 } from "./codec.ts";
@@ -674,6 +675,28 @@ export async function verifyAdoption(
     }
   }
 
+  // A later operator may have configured a clean filter since adoption.
+  // Git status can execute it, even with read-only Git environment flags.
+  // Use inventory's config-only admission check before optional drift status;
+  // custody evidence remains independent when drift cannot be observed safely.
+  let safeDestinationStatus = receipt !== null;
+  if (receipt !== null) {
+    let reason: string | null = null;
+    try {
+      const helpers = await Effect.runPromise(localHelpers(destReal), { signal });
+      signal?.throwIfAborted();
+      if (helpers.length > 0)
+        reason = `repository-local executable helpers are configured: ${helpers.join(", ")}`;
+    } catch (error) {
+      signal?.throwIfAborted();
+      reason = `repository-local helper config cannot be inspected: ${error instanceof Error ? error.message : String(error)}`;
+    }
+    if (reason !== null) {
+      safeDestinationStatus = false;
+      retirement.push({ code: "destination-drift-unavailable", subject: destReal, reason });
+    }
+  }
+
   const verification: Verification = {
     receiptRef: ref,
     receiptCommitOid,
@@ -689,6 +712,7 @@ export async function verifyAdoption(
       gitDir,
       ref,
       receiptCommitOid,
+      safeDestinationStatus,
       signal,
     ).catch(() => {
       signal?.throwIfAborted();
@@ -713,8 +737,10 @@ const destinationDriftOf = async (
   gitDir: string,
   ref: RefName,
   receiptCommitOid: Oid,
+  safeStatus: boolean,
   signal?: AbortSignal,
 ): Promise<Verification["destinationDrift"]> => {
+  if (!safeStatus) return "unknown";
   const soft = (args: readonly string[], cwd: string) => softGit(args, cwd, signal);
   if (receipt === null) return "unknown";
   let changed = false;
