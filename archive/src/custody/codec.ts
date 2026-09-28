@@ -1,0 +1,492 @@
+import { createHash } from "node:crypto";
+import { dirname, resolve } from "node:path";
+import { isDeepStrictEqual } from "node:util";
+import { invalid } from "./errors.ts";
+import type {
+  GitObjectFormat,
+  Oid,
+  RefName,
+  RepoPath,
+  Sha256,
+  PinIntent,
+  ReceiptV1,
+  PathReview,
+} from "./model.ts";
+
+const enc = new TextEncoder();
+const dec = new TextDecoder("utf-8", { fatal: true });
+
+export function sha256(bytes: Uint8Array): Sha256 {
+  return createHash("sha256").update(bytes).digest("hex") as Sha256;
+}
+export function oid(value: string, format: GitObjectFormat): Oid {
+  if (!new RegExp(`^[0-9a-f]{${format === "sha1" ? 40 : 64}}$`).test(value))
+    invalid(`invalid ${format} object ID`);
+  return value as Oid;
+}
+export function digest(value: string): Sha256 {
+  if (!/^[0-9a-f]{64}$/.test(value)) invalid("invalid SHA-256 digest");
+  return value as Sha256;
+}
+function text(bytes: Uint8Array): string {
+  let decoded: string;
+  try {
+    decoded = dec.decode(bytes);
+  } catch {
+    return invalid("Git name is not lossless UTF-8");
+  }
+  if (!Buffer.from(enc.encode(decoded)).equals(Buffer.from(bytes)))
+    invalid("Git name cannot round-trip UTF-8");
+  return decoded;
+}
+export function repoPath(value: string | Uint8Array): RepoPath {
+  const path = typeof value === "string" ? value : text(value);
+  if (
+    !path ||
+    path.startsWith("/") ||
+    path.includes("\0") ||
+    path.split("/").some((part) => part === "" || part === "." || part === "..")
+  )
+    invalid("invalid repository path");
+  if (typeof value === "string" && text(enc.encode(value)) !== value) invalid("invalid UTF-8 path");
+  return path as RepoPath;
+}
+/** Git ref component rules plus refusal to normalize operator input. */
+export function refComponent(value: string): string {
+  if (
+    !value ||
+    value === "." ||
+    value === ".." ||
+    value.endsWith(".lock") ||
+    value.startsWith(".") ||
+    value.endsWith(".") ||
+    value.includes("..") ||
+    value.includes("@{") ||
+    /[\x00-\x20\x7f~^:?*\[\\/]/u.test(value)
+  )
+    invalid(`invalid Git ref component ${JSON.stringify(value)}`);
+  if (text(enc.encode(value)) !== value) invalid("invalid UTF-8 ref component");
+  return value;
+}
+export function refName(value: string | Uint8Array): RefName {
+  const name = typeof value === "string" ? value : text(value);
+  if (!name.startsWith("refs/") || name.length > 4096 || name.split("/").length < 3)
+    invalid("invalid full Git ref");
+  for (const component of name.split("/")) refComponent(component);
+  return name as RefName;
+}
+
+/** Fixed-size hex components; length prefix disambiguates concatenations and empty bytes. */
+export function encodeIdentity(value: string): string {
+  const data = enc.encode(value);
+  if (text(data) !== value || data.length > 1024) invalid("identity is not encodable as a Git ref");
+  const hex = Buffer.from(data).toString("hex");
+  return [
+    `b${data.length.toString(16).padStart(8, "0")}`,
+    ...(hex.match(/.{1,64}/g) ?? ["00"]),
+  ].join("/");
+}
+export function decodeIdentity(value: string): string {
+  const [length, ...parts] = value.split("/");
+  if (
+    !/^b[0-9a-f]{8}$/.test(length) ||
+    !parts.length ||
+    parts.some((part) => !/^[0-9a-f]+$/.test(part) || part.length > 64 || part.length % 2)
+  )
+    invalid("invalid encoded identity");
+  const hex = parts.join("");
+  const size = Number.parseInt(length.slice(1), 16);
+  if (hex.length !== size * 2) {
+    if (size === 0 && parts.length === 1 && parts[0] === "00") return "";
+    invalid("encoded identity length mismatch");
+  }
+  const decoded = text(Buffer.from(hex, "hex"));
+  if (encodeIdentity(decoded) !== value) invalid("noncanonical encoded identity");
+  return decoded;
+}
+
+export function receiptRef(label: string, generation: string): RefName {
+  refComponent(label);
+  refComponent(generation);
+  return refName(`refs/adopt/receipts/${label}/${generation}`);
+}
+/** A candidate sourceName is a stable kind+OID identity, not a reflog index. */
+export function candidateIdentity(kind: "stash-older" | "reflog" | "dangling", id: Oid): string {
+  return `${kind}:${id}`;
+}
+/** Lexical checks only: vault opener must also lstat every component and reject symlinks. */
+export function vaultBundlePath(destRealpath: string, relative: string): string {
+  const root = dirname(destRealpath);
+  const archive = sha256(enc.encode(destRealpath));
+  const parts = relative.split("/");
+  if (
+    parts.length !== 4 ||
+    parts[0] !== ".compfuzor-adoptions" ||
+    parts[1] !== archive ||
+    !/^[0-9a-f]{32,}$/.test(parts[2]) ||
+    parts[3] !== "source.bundle"
+  )
+    invalid("bundle path is outside the private vault");
+  const full = resolve(root, ...parts);
+  if (!full.startsWith(`${resolve(root, ".compfuzor-adoptions", archive)}/`))
+    invalid("bundle vault path escape");
+  return full;
+}
+export function pinRef(
+  pin: Pick<PinIntent, "sourceKind" | "sourceName" | "sourceOid" | "destinationOid">,
+  label: string,
+  generation: string,
+  snapshot?: { parentOid: Oid; treeOid: Oid } | null,
+): RefName {
+  refComponent(label);
+  refComponent(generation);
+  const root = `${label}/${generation}`;
+  const { sourceKind: kind, sourceName: name, sourceOid } = pin;
+  let full: string;
+  if (kind === "branch") {
+    if (!name.startsWith("refs/heads/")) invalid("branch pin requires full original branch ref");
+    refName(name);
+    full = `refs/heads/harvest/${root}/branch/${encodeIdentity(name.slice(11))}`;
+  } else if (kind === "tag") {
+    if (!name.startsWith("refs/tags/")) invalid("tag pin requires full original tag ref");
+    refName(name);
+    full = `refs/tags/harvest/${root}/${encodeIdentity(name.slice(10))}`;
+  } else if (kind === "head") {
+    if (name !== "HEAD") invalid("HEAD pin must identify HEAD");
+    full = `refs/heads/harvest/${root}/head/${sourceOid}`;
+  } else if (kind === "working-copy") {
+    if (!snapshot || name !== "working-copy" || sourceOid !== pin.destinationOid)
+      invalid("invalid worktree pin");
+    full = `refs/heads/harvest/${root}/working-copy/${snapshot.parentOid}-${snapshot.treeOid}-worktree-v1`;
+  } else {
+    if (kind === "reflog") {
+      if (!/^(stash-older|reflog|dangling):[0-9a-f]{40}([0-9a-f]{24})?$/.test(name))
+        invalid("invalid stable candidate identity");
+    } else refName(name);
+    full = `refs/adopt/custody/${root}/${kind}/${encodeIdentity(name)}`;
+  }
+  return refName(full);
+}
+
+function record(
+  value: unknown,
+  fields: Record<string, Validator>,
+  at: string,
+): Record<string, unknown> {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  )
+    invalid(`${at} must be a plain object`);
+  const object = value as Record<string, unknown>;
+  if (!isDeepStrictEqual(Object.keys(object).sort(), Object.keys(fields).sort()))
+    invalid(`${at} has missing or unknown fields`);
+  for (const [name, check] of Object.entries(fields)) check(object[name], `${at}.${name}`);
+  return object;
+}
+type Validator = (value: unknown, at: string) => void;
+const str: Validator = (value, at) => {
+  if (typeof value !== "string") invalid(`${at} must be a string`);
+};
+const nonempty: Validator = (value, at) => {
+  str(value, at);
+  if (!(value as string).trim()) invalid(`${at} must be nonempty`);
+};
+const nul =
+  (check: Validator): Validator =>
+  (value, at) => {
+    if (value !== null) check(value, at);
+  };
+const lit =
+  (expected: string | boolean): Validator =>
+  (value, at) => {
+    if (value !== expected) invalid(`${at} must be ${JSON.stringify(expected)}`);
+  };
+const one =
+  (...values: readonly string[]): Validator =>
+  (value, at) => {
+    if (!values.includes(value as string)) invalid(`${at} has invalid value`);
+  };
+const arr =
+  (check: Validator): Validator =>
+  (value, at) => {
+    if (!Array.isArray(value)) invalid(`${at} must be an array`);
+    value.forEach((item: unknown, index: number) => check(item, `${at}[${index}]`));
+  };
+const shape =
+  (fields: Record<string, Validator>): Validator =>
+  (value, at) => {
+    record(value, fields, at);
+  };
+const hash: Validator = (value, at) => {
+  str(value, at);
+  digest(value as string);
+};
+const path: Validator = (value, at) => {
+  str(value, at);
+  repoPath(value as string);
+};
+const ref: Validator = (value, at) => {
+  str(value, at);
+  refName(value as string);
+};
+const mode = one("100644", "100755", "120000", "160000");
+const gitOid =
+  (format: GitObjectFormat): Validator =>
+  (value, at) => {
+    str(value, at);
+    oid(value as string, format);
+  };
+const count: Validator = (value, at) => {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
+    invalid(`${at} must be a nonnegative count`);
+};
+const issue = shape({ code: nonempty, subject: nul(str), reason: nonempty });
+const pathEntry = (id: Validator) => shape({ path, mode, blobOid: id });
+
+function reviewSchema(id: Validator): Validator {
+  return shape({
+    schema: lit("compfuzor.archive-path-review/v1"),
+    manifestSha256: hash,
+    fileSha256: hash,
+    included: arr(
+      shape({
+        path,
+        mode,
+        blobOid: id,
+        classification: one("credential", "runtime-state", "other-sensitive"),
+        decision: lit("local-custody-approved"),
+        reason: nonempty,
+      }),
+    ),
+    stagedVsUnstaged: nul(shape({ decision: lit("single-tree-approved"), reason: nonempty })),
+  });
+}
+export function parsePathReview(bytes: Uint8Array, format: GitObjectFormat): PathReview {
+  let value: unknown;
+  try {
+    value = JSON.parse(text(bytes));
+  } catch {
+    return invalid("invalid path review JSON");
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    invalid("path review must be an object");
+  const review = value as Record<string, unknown>;
+  // The input cannot contain its own SHA-256 without a circular dependency.
+  reviewSchema(gitOid(format))({ ...review, fileSha256: sha256(bytes) }, "pathReview");
+  if (Object.hasOwn(review, "fileSha256"))
+    invalid("path review input cannot contain its own file hash");
+  return { ...review, fileSha256: sha256(bytes) } as unknown as PathReview;
+}
+
+/** Sorted object keys, stable array order, no undefined/NaN/duplicate keys or prototype tricks. */
+export function canonicalJson(value: unknown): string {
+  if (value === null || typeof value === "string" || typeof value === "boolean")
+    return JSON.stringify(value);
+  if (typeof value === "number" && Number.isSafeInteger(value)) return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (typeof value !== "object" || Object.getPrototypeOf(value) !== Object.prototype)
+    invalid("non-JSON canonical value");
+  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  );
+  return `{${entries.map(([key, field]) => `${JSON.stringify(key)}:${canonicalJson(field)}`).join(",")}}`;
+}
+
+export function validateReceipt(value: unknown): ReceiptV1 {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    invalid("receipt must be an object");
+  const raw = value as Record<string, unknown>;
+  const source = raw.source as Record<string, unknown>;
+  const format = source?.objectFormat;
+  if (format !== "sha1" && format !== "sha256") invalid("unknown receipt Git object format");
+  const id = gitOid(format);
+  const tip = shape({
+    name: ref,
+    oid: id,
+    objectType: one("commit", "tag", "tree", "blob"),
+    peeledOid: nul(id),
+  });
+  const candidate = shape({
+    kind: one("stash-older", "reflog", "dangling"),
+    oid: id,
+    objectType: one("commit", "tag", "tree", "blob"),
+    provenance: arr(str),
+    disposition: one("pin", "not-required", "unclassified"),
+    reason: nul(nonempty),
+  });
+  const identity = shape({
+    label: nonempty,
+    generation: nonempty,
+    legacyRealpathAtCapture: nonempty,
+    sourceGitCommonDir: nonempty,
+    destinationRealpath: nonempty,
+    createdAt: nonempty,
+  });
+  const snapshot = shape({
+    format: lit("worktree-v1"),
+    parentOid: id,
+    treeOid: id,
+    commitOid: id,
+    paths: arr(pathEntry(id)),
+    stagedVsUnstaged: one("none", "reported-not-preserved"),
+    excludeFileSha256: nul(hash),
+    excludedUntracked: arr(path),
+    ignoredPaths: arr(path),
+    trackedSensitivePaths: arr(path),
+    pathReview: nul(reviewSchema(id)),
+  });
+  record(
+    value,
+    {
+      schema: lit("compfuzor.archive-adoption/v1"),
+      receiptRef: ref,
+      identity,
+      source: shape({
+        objectFormat: lit(format),
+        head: shape({ symbolicRef: nul(ref), oid: id, treeOid: id, treePaths: arr(pathEntry(id)) }),
+        refs: arr(tip),
+        candidates: arr(candidate),
+        jjCoverage: shape({
+          classification: one("none", "git-covered", "blocked"),
+          headOids: arr(id),
+          operationId: nul(str),
+        }),
+        indexSha256: hash,
+        inputFingerprintSha256: hash,
+        dispositionsFileSha256: nul(hash),
+      }),
+      snapshot: nul(snapshot),
+      baselines: shape({
+        sourceRemoteTracking: arr(
+          shape({ remote: nonempty, url: nonempty, ref, oid: id, freshness: lit("local-only") }),
+        ),
+        destinationPreRefs: arr(tip),
+        destinationPreRefsSha256: hash,
+        destinationWorktreeFingerprintSha256: hash,
+        destinationIndexSha256: hash,
+        selectedBranch: nonempty,
+        declaredRepo: nonempty,
+        headNotInRecordedBaseline: nul(count),
+        selectedTipsNotInDestination: nul(count),
+      }),
+      pins: arr(
+        shape({
+          sourceKind: one("branch", "head", "tag", "stash", "other", "reflog", "working-copy"),
+          sourceName: nonempty,
+          sourceOid: id,
+          objectType: one("commit", "tag", "tree", "blob"),
+          destinationRef: ref,
+          destinationOid: id,
+        }),
+      ),
+      bundle: shape({
+        pathRelativeToDestinationParent: nonempty,
+        sha256: hash,
+        verifiedHeads: arr(shape({ ref, oid: id })),
+        freshRestoreVerified: lit(true),
+      }),
+      checks: shape({
+        sourceFingerprintRechecked: lit(true),
+        sourceOdbUnchanged: lit(true),
+        destinationWorktreeUnchanged: lit(true),
+        bundleClosureVerified: lit(true),
+      }),
+      unresolved: arr(issue),
+    },
+    "receipt",
+  );
+  const receipt = value as ReceiptV1;
+  if (receipt.receiptRef !== receiptRef(receipt.identity.label, receipt.identity.generation))
+    invalid("receipt identity/ref mismatch");
+  vaultBundlePath(
+    receipt.identity.destinationRealpath,
+    receipt.bundle.pathRelativeToDestinationParent,
+  );
+  const names = new Set<string>();
+  for (const pin of receipt.pins) {
+    if (
+      pin.sourceKind === "branch" ||
+      pin.sourceKind === "head" ||
+      pin.sourceKind === "working-copy"
+    ) {
+      if (pin.objectType !== "commit") invalid("commit lane has a noncommit object");
+    }
+    if (pin.sourceKind === "working-copy" && pin.sourceOid !== receipt.snapshot?.commitOid)
+      invalid("working-copy commit differs from snapshot");
+    if (pin.sourceKind === "head" && pin.sourceOid !== receipt.source.head.oid)
+      invalid("HEAD pin differs from source HEAD");
+    if (pin.destinationOid !== pin.sourceOid) invalid("pin source/destination OIDs differ");
+    const computed = pinRef(
+      pin,
+      receipt.identity.label,
+      receipt.identity.generation,
+      receipt.snapshot,
+    );
+    if (pin.destinationRef !== computed || names.has(computed))
+      invalid("pin mapping mismatch or duplicate");
+    names.add(computed);
+  }
+  if (receipt.snapshot && receipt.snapshot.parentOid !== receipt.source.head.oid)
+    invalid("snapshot parent differs from HEAD");
+  if (!receipt.pins.some(({ sourceKind }) => sourceKind === "head"))
+    invalid("receipt lacks a HEAD pin");
+  if (
+    receipt.snapshot !== null &&
+    !receipt.pins.some(({ sourceKind }) => sourceKind === "working-copy")
+  )
+    invalid("receipt lacks snapshot pin");
+  if (
+    receipt.snapshot === null &&
+    receipt.pins.some(({ sourceKind }) => sourceKind === "working-copy")
+  )
+    invalid("clean receipt has working-copy pin");
+  if (
+    receipt.snapshot?.stagedVsUnstaged === "reported-not-preserved" &&
+    !receipt.snapshot.pathReview?.stagedVsUnstaged
+  )
+    invalid("lost index/worktree split is not reviewed");
+  if (receipt.snapshot !== null && receipt.snapshot.pathReview !== null) {
+    const snapshot = receipt.snapshot;
+    const review = receipt.snapshot.pathReview;
+    const manifest = sha256(enc.encode(`${canonicalJson(snapshot.paths)}\n`));
+    if (review.manifestSha256 !== manifest) invalid("path review manifest does not match snapshot");
+    const entries = new Set(
+      snapshot.paths.map(({ path, mode, blobOid }) => `${path}\0${mode}\0${blobOid}`),
+    );
+    const reviewed = new Set<string>();
+    for (const { path, mode, blobOid } of review.included) {
+      const key = `${path}\0${mode}\0${blobOid}`;
+      if (!entries.has(key) || reviewed.has(key))
+        invalid("path review includes stale or repeated file");
+      reviewed.add(key);
+    }
+    for (const sensitive of snapshot.trackedSensitivePaths) {
+      if (!review.included.some(({ path }) => path === sensitive))
+        invalid("sensitive tracked path has no review");
+    }
+  } else if (receipt.snapshot?.trackedSensitivePaths.length)
+    invalid("sensitive tracked paths have no review");
+  if (receipt.source.candidates.some((candidate) => candidate.disposition === "unclassified"))
+    invalid("receipt has unclassified candidates");
+  return receipt;
+}
+
+export function encodeReceipt(receipt: ReceiptV1): Uint8Array {
+  validateReceipt(receipt);
+  return enc.encode(`${canonicalJson(receipt)}\n`);
+}
+export function parseReceipt(bytes: Uint8Array): ReceiptV1 {
+  const wire = text(bytes);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(wire);
+  } catch {
+    return invalid("invalid receipt JSON");
+  }
+  const receipt = validateReceipt(parsed);
+  if (wire !== `${canonicalJson(receipt)}\n`) invalid("receipt is not canonically serialized");
+  return receipt;
+}
