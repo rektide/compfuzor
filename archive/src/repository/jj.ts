@@ -6,6 +6,14 @@
  * exit code. The library boundary stays Promise-based for the repository,
  * recovery, and custody callers.
  *
+ * Cancellation: a Promise cannot be cancelled from outside, but every jj
+ * spawn here accepts an optional {@link ExecutionOptions} signal. The signal
+ * is forwarded to `Effect.runPromise`, which interrupts the fiber that owns
+ * the spawn scope — the spawner's scope finalizer then SIGTERMs (and waits
+ * on) the child's process group. The CLI feeds its main-fiber interruption
+ * signal in this way (see cli/failure.ts), so SIGINT/SIGTERM on the process
+ * kills in-flight children instead of orphaning them.
+ *
  * The child inherits the parent environment untouched. jj is
  * operator-facing tooling: `JJ_CONFIG`, `JJ_EDITOR`, a `PATH` override, and
  * the rest of the operator's jj setup must keep working. Unlike the raw-git
@@ -63,6 +71,15 @@ export class JjError extends Error {
  */
 export type JjOptions = { readOnly?: boolean; pinned?: boolean };
 
+/**
+ * Execution concern, deliberately separate from domain inputs (query mode,
+ * destinations, labels): an optional `AbortSignal` observed by the spawn.
+ * When aborted mid-flight the child's process group is terminated by the
+ * spawner finalizer; when already aborted the call fails fast.
+ */
+export type ExecutionOptions = { signal?: AbortSignal };
+
+
 /** Flags shared by every query-mode invocation. */
 const QUERY_FLAGS = ["--ignore-working-copy", "--at-op=@"] as const;
 
@@ -94,7 +111,12 @@ const jjOutcome = (
     };
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer));
 
-export async function jj(args: string[], cwd?: string, options?: JjOptions): Promise<string> {
+export async function jj(
+  args: string[],
+  cwd?: string,
+  options?: JjOptions,
+  execution?: ExecutionOptions,
+): Promise<string> {
   const argv = [
     "--no-pager",
     "--color=never",
@@ -102,13 +124,20 @@ export async function jj(args: string[], cwd?: string, options?: JjOptions): Pro
     ...args,
   ];
   try {
-    const outcome = await Effect.runPromise(jjOutcome(argv, cwd));
+    const outcome = await Effect.runPromise(
+      jjOutcome(argv, cwd),
+      execution?.signal === undefined ? undefined : { signal: execution.signal },
+    );
     if (outcome.exitCode !== 0) throw new JjError(args, outcome.stderr.trim());
     return outcome.stdout.trim();
   } catch (error) {
-    throw error instanceof JjError
-      ? error
-      : new JjError(args, error instanceof Error ? error.message : String(error));
+    if (error instanceof JjError) throw error;
+    // An aborted signal means the spawn was interrupted, not that jj failed;
+    // report that instead of a squashed interruption cause.
+    if (execution?.signal?.aborted === true) throw new JjError(args, "interrupted");
+    throw error instanceof Error
+      ? new JjError(args, error.message)
+      : new JjError(args, String(error));
   }
 }
 
@@ -136,10 +165,14 @@ export const HEAD_TEMPLATE = 'commit_id ++ "\\n"';
 export type BookmarkRef = { name: string; remote: string; target: string; tracked: boolean };
 export const refKey = (name: string, remote: string): string => `${name}\t${remote}`;
 
-export async function refs(dest: string, options?: JjOptions): Promise<Map<string, BookmarkRef>> {
+export async function refs(
+  dest: string,
+  options?: JjOptions,
+  execution?: ExecutionOptions,
+): Promise<Map<string, BookmarkRef>> {
   const result = new Map<string, BookmarkRef>();
   for (const line of lines(
-    await jj(["bookmark", "list", "--all-remotes", "-T", REF_TEMPLATE], dest, options),
+    await jj(["bookmark", "list", "--all-remotes", "-T", REF_TEMPLATE], dest, options, execution),
   )) {
     const parts = line.split("\t");
     if (parts.length !== 4) throw new Error(`malformed bookmark line: ${line}`);
@@ -155,8 +188,12 @@ export async function refs(dest: string, options?: JjOptions): Promise<Map<strin
 
 export type Revision = { commit: string; empty: boolean; parents: string[]; conflict: boolean };
 
-export async function revision(dest: string, rev: string): Promise<Revision> {
-  const output = await jj(["log", "-G", "-r", rev, "-T", COMMIT_TEMPLATE], dest);
+export async function revision(
+  dest: string,
+  rev: string,
+  execution?: ExecutionOptions,
+): Promise<Revision> {
+  const output = await jj(["log", "-G", "-r", rev, "-T", COMMIT_TEMPLATE], dest, undefined, execution);
   const parts = output.split("\t");
   if (parts.length !== 4) throw new Error(`malformed revision line for ${rev}: ${output}`);
   return {
@@ -167,8 +204,15 @@ export async function revision(dest: string, rev: string): Promise<Revision> {
   };
 }
 
-export async function ancestor(dest: string, older: string, newer: string): Promise<boolean> {
-  return Number(await jj(["log", "-r", `${older}::${newer}`, "--count"], dest)) > 0;
+export async function ancestor(
+  dest: string,
+  older: string,
+  newer: string,
+  execution?: ExecutionOptions,
+): Promise<boolean> {
+  return Number(
+    await jj(["log", "-r", `${older}::${newer}`, "--count"], dest, undefined, execution),
+  ) > 0;
 }
 
 /** Decode jj text output as UTF-8, replacing invalid bytes like execFile did. */

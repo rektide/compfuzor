@@ -1,6 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { preflight } from "../repository/health.ts";
-import { HEAD_TEMPLATE, jj, lines, revision, type BookmarkRef } from "../repository/jj.ts";
+import {
+  HEAD_TEMPLATE,
+  jj,
+  lines,
+  revision,
+  type BookmarkRef,
+  type ExecutionOptions,
+} from "../repository/jj.ts";
 
 export type Notice = { kind: string; name?: string; target?: string; message?: string };
 

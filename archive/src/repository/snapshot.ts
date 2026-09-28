@@ -7,14 +7,14 @@
  * preflight that must precede any history walk.
  */
 import { preflight } from "./health.ts";
-import { jj } from "./jj.ts";
+import { jj, type ExecutionOptions } from "./jj.ts";
 
 export type SnapshotResult = { dest: string; conflicts: string[] };
 
-export async function snapshot(dest: string): Promise<SnapshotResult> {
-  const conflicts = await preflight(dest);
+export async function snapshot(dest: string, execution?: ExecutionOptions): Promise<SnapshotResult> {
+  const conflicts = await preflight(dest, {}, execution);
   // This snapshots tracked/untracked changes and imports local Git branches.
   // Do not continue to fetch if jj cannot snapshot the worktree.
-  await jj(["status"], dest);
+  await jj(["status"], dest, undefined, execution);
   return { dest, conflicts };
 }

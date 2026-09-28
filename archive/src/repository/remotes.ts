@@ -1,4 +1,4 @@
-import { jj, lines } from "./jj.ts";
+import { jj, lines, type ExecutionOptions } from "./jj.ts";
 
 export type RemoteDifference = { name: string; declared: string; actual: string | null };
 const REMOTE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -21,9 +21,10 @@ export function declaredRemotes(repo: string, remotes: string): Map<string, stri
 export async function remoteDiff(
   dest: string,
   urls: Map<string, string>,
+  execution?: ExecutionOptions,
 ): Promise<RemoteDifference[]> {
   const actual = new Map<string, string>();
-  for (const line of lines(await jj(["git", "remote", "list"], dest))) {
+  for (const line of lines(await jj(["git", "remote", "list"], dest, undefined, execution))) {
     const space = line.indexOf(" ");
     actual.set(
       space === -1 ? line : line.slice(0, space),
@@ -56,8 +57,17 @@ export function mismatchError(
 }
 
 /** Adds missing remotes and rewrites mismatches only on explicit operator request. */
-export async function reconcile(dest: string, differences: RemoteDifference[]): Promise<void> {
+export async function reconcile(
+  dest: string,
+  differences: RemoteDifference[],
+  execution?: ExecutionOptions,
+): Promise<void> {
   for (const { name, declared, actual } of differences) {
-    await jj(["git", "remote", actual === null ? "add" : "set-url", name, declared], dest);
+    await jj(
+      ["git", "remote", actual === null ? "add" : "set-url", name, declared],
+      dest,
+      undefined,
+      execution,
+    );
   }
 }
