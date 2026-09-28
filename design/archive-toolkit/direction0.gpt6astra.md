@@ -45,6 +45,17 @@ publish refs, prune artifacts, or retire a source directory.
 - A receipt records an expected transfer. Only independent verification can
   report custody complete. Verification never reports permission to delete.
 
+## Read-only checks need a stronger execution boundary
+
+Initial code review found that existing `preflight()` calls ordinary `jj log`
+and `jj bookmark list` through the general runner. That is not sufficient
+evidence for the README's no-mutation claim: colocated jj queries can snapshot
+or import Git state. Before reusing health for custody, introduce and fixture-test
+a genuinely read-only query mode against the installed jj CLI's documented
+flags. Custody remote checks must follow the same rule. Keep this correction
+separate from the mechanical directory reorganization so its behavioral effect
+is reviewable.
+
 # Proposed operator surface
 
 Keep the existing top-level commands, rather than making users discover a new
