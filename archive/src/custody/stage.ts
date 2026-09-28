@@ -10,6 +10,13 @@
  * the shared Effect adapter in `repository/git.ts`; there is no private
  * process runner here.
  *
+ * Two doors share one staging core: `previewSnapshot` is the approval-free
+ * proposal door (plain data, disposable scratch — it exists so an operator
+ * can author a path review against the exact manifest digest without which
+ * `prepareSnapshot` would refuse), and `prepareSnapshot` is the apply door
+ * (enforces the manifest-bound review; `expected: null` is never an approval
+ * bypass). Neither door accepts a force-style flag.
+ *
  * Isolation model: the scratch repository is created outside the source
  * checkout; its object database and index are brand new, and source objects
  * are readable only through an `objects/info/alternates` pointer at the
@@ -41,6 +48,7 @@ import type {
   RepoPath,
   Sha256,
   Snapshot,
+  SnapshotProposal,
 } from "./model.ts";
 
 /**
@@ -470,15 +478,29 @@ const bindPathReview = (
     if (!reviewed.has(path)) invalid(`sensitive tracked path has no review entry: ${path}`);
 };
 
+interface StagedTree {
+  readonly wiring: Wiring;
+  readonly stageRoot: string;
+  readonly gitDir: string;
+  readonly sourceRoot: string;
+  readonly sourceObjectsDir: string;
+  readonly objectFormat: GitObjectFormat;
+  readonly headOid: Oid;
+  readonly headTreeOid: Oid;
+  readonly treeOid: Oid;
+  readonly manifest: readonly PathEntry[];
+  readonly dirty: boolean;
+}
+
 /**
- * Build the `worktree-v1` snapshot of a legacy checkout inside a new private
- * bare scratch repository. The source's ODB, index, refs, reflogs and
- * worktree are never written; new blobs, trees and the optional deterministic
- * commit exist only in scratch. The synthetic commit is minted **iff** the
- * staged tree differs from the HEAD tree, with fixed metadata so identical
- * parent+tree always produce the identical commit OID.
+ * Shared staging core for `prepareSnapshot` and `previewSnapshot`: validate
+ * the request, build the private stage, stage exactly the requested paths,
+ * and compute the exact tree manifest (compared against `expected` when
+ * present). Approval enforcement is deliberately **not** part of the core —
+ * the preview and apply doors differ exactly there. Scratch is left in place
+ * on failure for inspection; its lifecycle belongs to the caller.
  */
-export const prepareSnapshot = async (input: PrepareSnapshotInput): Promise<StageHandle> => {
+const stageTree = async (input: PrepareSnapshotInput): Promise<StagedTree> => {
   const format = input.objectFormat;
   oid(input.headOid, format);
   const restage = validatedPaths(input.restageTracked, "restaged tracked");
@@ -554,37 +576,67 @@ export const prepareSnapshot = async (input: PrepareSnapshotInput): Promise<Stag
     },
   );
   if (expected !== null) compareWithExpected(manifest, expected);
-  bindPathReview(manifest, input, treeOid !== headTreeOid);
+  return {
+    wiring,
+    stageRoot,
+    gitDir,
+    sourceRoot,
+    sourceObjectsDir,
+    objectFormat: format,
+    headOid: input.headOid,
+    headTreeOid,
+    treeOid,
+    manifest,
+    dirty: treeOid !== headTreeOid,
+  };
+};
 
-  let snapshotCommitOid: Oid | null = null;
-  if (treeOid !== headTreeOid) {
-    snapshotCommitOid = oid(
-      utf8Fatal(
-        await runStage(
-          wiring,
-          ["commit-tree", treeOid, "-p", input.headOid, "-m", WORKTREE_V1_METADATA.message],
-          {
-            GIT_AUTHOR_NAME: WORKTREE_V1_METADATA.authorName,
-            GIT_AUTHOR_EMAIL: WORKTREE_V1_METADATA.authorEmail,
-            GIT_COMMITTER_NAME: WORKTREE_V1_METADATA.committerName,
-            GIT_COMMITTER_EMAIL: WORKTREE_V1_METADATA.committerEmail,
-            GIT_AUTHOR_DATE: WORKTREE_V1_METADATA.date,
-            GIT_COMMITTER_DATE: WORKTREE_V1_METADATA.date,
-          },
-        ),
-      ).trim(),
-      format,
-    );
-  }
+/** Mint the deterministic `worktree-v1` commit; caller has decided it exists. */
+const mintWorktreeCommit = async (staged: StagedTree): Promise<Oid> =>
+  oid(
+    utf8Fatal(
+      await runStage(
+        staged.wiring,
+        ["commit-tree", staged.treeOid, "-p", staged.headOid, "-m", WORKTREE_V1_METADATA.message],
+        {
+          GIT_AUTHOR_NAME: WORKTREE_V1_METADATA.authorName,
+          GIT_AUTHOR_EMAIL: WORKTREE_V1_METADATA.authorEmail,
+          GIT_COMMITTER_NAME: WORKTREE_V1_METADATA.committerName,
+          GIT_COMMITTER_EMAIL: WORKTREE_V1_METADATA.committerEmail,
+          GIT_AUTHOR_DATE: WORKTREE_V1_METADATA.date,
+          GIT_COMMITTER_DATE: WORKTREE_V1_METADATA.date,
+        },
+      ),
+    ).trim(),
+    staged.objectFormat,
+  );
+
+/**
+ * Build the `worktree-v1` snapshot of a legacy checkout inside a new private
+ * bare scratch repository. The source's ODB, index, refs, reflogs and
+ * worktree are never written; new blobs, trees and the optional deterministic
+ * commit exist only in scratch. The synthetic commit is minted **iff** the
+ * staged tree differs from the HEAD tree, with fixed metadata so identical
+ * parent+tree always produce the identical commit OID.
+ *
+ * This is the apply door: sensitive tracked paths and a reported staged
+ * split require a path review already bound to the exact manifest digest,
+ * and `expected: null` is never an approval bypass. Use `previewSnapshot`
+ * to compute the proposal and digest first.
+ */
+export const prepareSnapshot = async (input: PrepareSnapshotInput): Promise<StageHandle> => {
+  const staged = await stageTree(input);
+  bindPathReview(staged.manifest, input, staged.dirty);
+  const snapshotCommitOid = staged.dirty ? await mintWorktreeCommit(staged) : null;
   const snapshot: Snapshot | null =
     snapshotCommitOid === null
       ? null
       : {
           format: "worktree-v1",
           parentOid: input.headOid,
-          treeOid,
+          treeOid: staged.treeOid,
           commitOid: snapshotCommitOid,
-          paths: manifest,
+          paths: staged.manifest,
           stagedVsUnstaged: input.stagedVsUnstaged,
           excludeFileSha256: input.excludeFileSha256,
           excludedUntracked: [...input.excludedUntracked],
@@ -593,16 +645,59 @@ export const prepareSnapshot = async (input: PrepareSnapshotInput): Promise<Stag
           pathReview: input.pathReview,
         };
   return {
-    stageRoot,
-    gitDir,
-    sourceRoot,
-    sourceObjectsDir,
-    objectFormat: format,
-    headOid: input.headOid,
-    headTreeOid,
+    stageRoot: staged.stageRoot,
+    gitDir: staged.gitDir,
+    sourceRoot: staged.sourceRoot,
+    sourceObjectsDir: staged.sourceObjectsDir,
+    objectFormat: staged.objectFormat,
+    headOid: staged.headOid,
+    headTreeOid: staged.headTreeOid,
     snapshot,
     snapshotCommitOid,
   };
+};
+
+/**
+ * Compute the proposed snapshot without requiring any approval: the answer
+ * to the review chicken-and-egg. The preview runs the identical private,
+ * source-read-only staging as `prepareSnapshot` and returns the shared
+ * [`SnapshotProposal`](./model.ts) contract — the exact manifest, the
+ * deterministic commit identity it would mint, the digest a path review must
+ * bind, and the review requirements the apply door will enforce — then
+ * disposes its throwaway scratch. A clean source (tree identical to HEAD)
+ * yields `null`, exactly like a plan's `proposedSnapshot`: inspect the
+ * inventory's HEAD tree manifest and use the receipt-level
+ * `cleanHeadPathReview` there; this module owns only the dirty preview/apply
+ * pair. Plain data only — never a `StageHandle`, nothing transferable to
+ * `proveBundle`, and no force-style flag that could weaken `prepareSnapshot`.
+ */
+export const previewSnapshot = async (
+  input: PrepareSnapshotInput,
+): Promise<SnapshotProposal | null> => {
+  const staged = await stageTree(input);
+  try {
+    if (!staged.dirty) return null;
+    const commitOid = await mintWorktreeCommit(staged);
+    return {
+      format: "worktree-v1",
+      parentOid: input.headOid,
+      treeOid: staged.treeOid,
+      commitOid,
+      paths: staged.manifest,
+      stagedVsUnstaged: input.stagedVsUnstaged,
+      excludeFileSha256: input.excludeFileSha256,
+      excludedUntracked: [...input.excludedUntracked],
+      ignoredPaths: [...input.ignoredPaths],
+      trackedSensitivePaths: [...input.trackedSensitivePaths],
+      manifestSha256: sha256(encoder.encode(`${canonicalJson(staged.manifest)}\n`)),
+      reviewRequirements: {
+        sensitivePaths: [...input.trackedSensitivePaths],
+        stagedVsUnstagedApprovalRequired: input.stagedVsUnstaged === "reported-not-preserved",
+      },
+    };
+  } finally {
+    await rm(staged.stageRoot, { recursive: true, force: true });
+  }
 };
 
 const bundleInvalid = (reason: string, subject: string | null = null): CustodyError =>

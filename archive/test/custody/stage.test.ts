@@ -23,7 +23,12 @@ import {
 } from "../../src/custody/codec.ts";
 import { CustodyError } from "../../src/custody/errors.ts";
 import type { Oid, PathEntry, PinIntent, RepoPath } from "../../src/custody/model.ts";
-import { prepareSnapshot, proveBundle, WORKTREE_V1_METADATA } from "../../src/custody/stage.ts";
+import {
+  prepareSnapshot,
+  previewSnapshot,
+  proveBundle,
+  WORKTREE_V1_METADATA,
+} from "../../src/custody/stage.ts";
 import type { StageHandle } from "../../src/custody/stage.ts";
 import { git, gitChecked, utf8Fatal } from "../../src/repository/git.ts";
 
@@ -179,22 +184,23 @@ const untrackedDefaults = (): readonly RepoPath[] => [
   repoPath("staged-only.txt"),
 ];
 
-const request = (ask: SnapshotRequest) =>
-  prepareSnapshot({
-    sourceRoot: ask.source,
-    scratchRoot: ask.scratchRoot,
-    objectFormat: "sha1",
-    headOid: ask.head as Oid,
-    restageTracked: ask.restage ?? restageDefaults(),
-    addUntracked: ask.untracked ?? untrackedDefaults(),
-    stagedVsUnstaged: ask.stagedVsUnstaged ?? "none",
-    excludeFileSha256: null,
-    excludedUntracked: [],
-    ignoredPaths: [repoPath("runtime.ignored")],
-    trackedSensitivePaths: ask.sensitive ?? [],
-    pathReview: ask.review ?? null,
-    expected: ask.expected ?? null,
-  });
+const snapshotInput = (ask: SnapshotRequest) => ({
+  sourceRoot: ask.source,
+  scratchRoot: ask.scratchRoot,
+  objectFormat: "sha1" as const,
+  headOid: ask.head as Oid,
+  restageTracked: ask.restage ?? restageDefaults(),
+  addUntracked: ask.untracked ?? untrackedDefaults(),
+  stagedVsUnstaged: ask.stagedVsUnstaged ?? "none",
+  excludeFileSha256: null,
+  excludedUntracked: [],
+  ignoredPaths: [repoPath("runtime.ignored")],
+  trackedSensitivePaths: ask.sensitive ?? [],
+  pathReview: ask.review ?? null,
+  expected: ask.expected ?? null,
+});
+
+const request = (ask: SnapshotRequest) => prepareSnapshot(snapshotInput(ask));
 
 const custodyError = async (promise: Promise<unknown>): Promise<CustodyError> => {
   try {
@@ -353,6 +359,35 @@ test("clean source produces no snapshot; unchanged restage is not a difference",
   assert.equal(clean.snapshot, null);
   assert.equal(clean.snapshotCommitOid, null);
   assert.equal(clean.headTreeOid, await run(legacy.source, "rev-parse", `${legacy.head}^{tree}`));
+  // Clean preview is null (the plan's proposedSnapshot shape); sensitive
+  // review of a clean HEAD tree is the receipt's cleanHeadPathReview, not
+  // this module's business. The preview's scratch is disposed either way.
+  const cleanPreview = await previewSnapshot(
+    snapshotInput({
+      source: legacy.source,
+      head: legacy.head,
+      scratchRoot: scratch,
+      restage: [repoPath("tracked.txt")],
+      untracked: [],
+      sensitive: [repoPath("secret.key")],
+    }),
+  );
+  assert.equal(cleanPreview, null);
+  const previewScratch = join(legacy.root, "preview-scratch");
+  await mkdir(previewScratch);
+  assert.equal(
+    await previewSnapshot(
+      snapshotInput({
+        source: legacy.source,
+        head: legacy.head,
+        scratchRoot: previewScratch,
+        restage: [repoPath("tracked.txt")],
+        untracked: [],
+      }),
+    ),
+    null,
+  );
+  assert.deepEqual(await readdir(previewScratch), []);
 });
 
 test("typed pins including annotated tag, stash and reflog candidate survive a no-prerequisite bundle proof", async (t) => {
@@ -683,6 +718,90 @@ test("expected-manifest mismatch, filters, missing review and nested scratch are
   await rm(inside, { recursive: true });
 
   assert.deepEqual(await fingerprintsOf(legacy.source), before, "refusals never mutate the source");
+});
+
+test("previewSnapshot breaks the review chicken-and-egg without weakening the apply door", async (t) => {
+  const legacy = await dirtyLegacy(t, "preview");
+  const scratch = join(legacy.root, "scratch");
+  await mkdir(scratch);
+  // A real staged split plus a sensitive tracked path: the exact state whose
+  // approval `prepareSnapshot` requires before it will stage anything.
+  await run(legacy.source, "add", "staged-only.txt");
+  const before = await fingerprintsOf(legacy.source);
+  const ask = {
+    source: legacy.source,
+    head: legacy.head,
+    scratchRoot: scratch,
+    sensitive: [legacy.secretKey],
+    stagedVsUnstaged: "reported-not-preserved" as const,
+  };
+
+  const preview = await previewSnapshot(snapshotInput(ask));
+  assert.ok(preview, "a dirty preview carries the shared SnapshotProposal");
+  assert.equal(preview.format, "worktree-v1");
+  assert.equal(preview.parentOid, legacy.head);
+  assert.ok(preview.commitOid, "a dirty preview carries the deterministic commit identity");
+  assert.equal(preview.paths.length > 0, true);
+  assert.equal(preview.manifestSha256, sha256(Buffer.from(`${canonicalJson(preview.paths)}\n`)));
+  assert.deepEqual(preview.reviewRequirements.sensitivePaths, [legacy.secretKey]);
+  assert.equal(preview.reviewRequirements.stagedVsUnstagedApprovalRequired, true);
+  // Plain data only: no stage location leaks out of the preview door.
+  assert.equal("gitDir" in preview, false);
+  assert.equal("stageRoot" in preview, false);
+  // The throwaway scratch is disposed, and the source is untouched.
+  assert.deepEqual(await readdir(scratch), []);
+  assert.deepEqual(await fingerprintsOf(legacy.source), before);
+
+  // Apply refuses the same inputs without a manifest-bound review…
+  const refused = await custodyError(request(ask));
+  assert.equal(refused.code, "invalid-input");
+  assert.match(refused.message, /path review/);
+
+  // …including a review bound to some other manifest.
+  const reviewInput = {
+    schema: "compfuzor.archive-path-review/v1",
+    manifestSha256: "0".repeat(64),
+    included: [],
+    stagedVsUnstaged: { decision: "single-tree-approved", reason: "bound to nothing" },
+  };
+  const unbound = await custodyError(
+    request({ ...ask, review: parsePathReview(Buffer.from(JSON.stringify(reviewInput)), "sha1") }),
+  );
+  assert.equal(unbound.code, "invalid-input");
+  assert.match(unbound.message, /digest does not match/);
+
+  // A review authored against the preview's exact digest and manifest opens
+  // the apply door, and the applied snapshot is exactly what was previewed.
+  const secret = preview.paths.find(({ path }) => path === legacy.secretKey);
+  assert.ok(secret);
+  const review = parsePathReview(
+    Buffer.from(
+      JSON.stringify({
+        ...reviewInput,
+        manifestSha256: preview.manifestSha256,
+        included: [
+          {
+            path: secret.path,
+            mode: secret.mode,
+            blobOid: secret.blobOid,
+            classification: "credential",
+            decision: "local-custody-approved",
+            reason: "approved from preview digest",
+          },
+        ],
+      }),
+    ),
+    "sha1",
+  );
+  const stage = await request({ ...ask, review, expected: preview.paths });
+  assert.ok(stage.snapshot);
+  assert.deepEqual(stage.snapshot.paths, preview.paths);
+  assert.equal(stage.snapshot.commitOid, preview.commitOid);
+  assert.deepEqual(
+    await fingerprintsOf(legacy.source),
+    before,
+    "neither door ever mutates the source",
+  );
 });
 
 test("tracked .jj internals block staging and .git/.jj input paths are refused outright", async (t) => {
