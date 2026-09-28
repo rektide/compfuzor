@@ -141,6 +141,33 @@ process framework. The first custom runner was checkpointed, found to have no
 callers, and removed in a separate corrective commit rather than adopted as a
 foundation.
 
+# Effect CLI checkpoint
+
+The implementation uses exactly pinned Effect/platform-node `4.0.0-rc.118`.
+The [local-project and upstream research](/design/archive-toolkit/effect-cli-references0.glm53.md)
+establishes that `effect/cli` and `effect/process` provide the required CLI,
+completion, process lifecycle, and raw-byte streams. No fallback process
+implementation is needed. The installed Git and jj executables remain the
+repository engines.
+
+Preserve documented argv and machine output, not incidental Gunshi parsing.
+Native Effect help/error wording, first-wins duplicate flags, and rejection of
+unexpected positional arguments are accepted changes. Root version and native
+completion must not be stolen by the legacy refresh adapter. Bash/zsh/fish use
+Effect's command-tree completion; the retained PowerShell generator currently
+offers only command names and global flags, a documented coverage reduction.
+
+The initial Effect bundle is approximately 885 KB (207 KB gzip), with only Node
+builtin imports and no split chunks. Rebuild again after all reachable source
+changes land; a successful earlier standalone probe does not establish final
+bundle freshness.
+
+The [core review](/design/archive-toolkit/core-review0.glm53.md) found a valid
+`refs/stash` rejection and incomplete receipt consistency checks. Those are
+integration blockers, not reasons to weaken custody guarantees. Adoption stays
+unregistered until inventory, artifact proof, ref installation, and independent
+verification compose successfully.
+
 # Cross-references
 
 - [Custody brief](/design/archive-migration/brief0.gpt6sol.md): the detailed
@@ -151,3 +178,6 @@ foundation.
   the Ansible result protocol that this expansion must preserve.
 - [Custody contracts](/design/archive-toolkit/custody-contracts0.gpt6sol.md):
   module seams, privacy review, immutable retry, and acceptance ownership.
+- [Compatibility audit](/design/archive-toolkit/compatibility-checks0.glm53.md):
+  observed legacy behavior and acceptance-test gaps; intentional parser changes
+  are distinguished above from compatibility requirements.
