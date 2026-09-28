@@ -20,8 +20,15 @@ worktree, not a deployment-specific jj workspace.
 Use Node **26 or newer**, Git and jj. For a copied distribution, run the
 committed executable [`archive/repo-jj-archive.ts`](/archive/repo-jj-archive.ts):
 it is one file with its JavaScript dependencies bundled, but does **not**
-include Node, Git or jj. From a compfuzor checkout with CLI dependencies
-installed (`pnpm install`), develop against the TypeScript source instead:
+include Node, Git or jj. After copying it to your chosen directory:
+
+```sh
+./repo-jj-archive.ts --help
+./repo-jj-archive.ts health --dest ~/archive/ORG/REPO
+```
+
+From a compfuzor checkout with CLI dependencies installed (`pnpm install`),
+develop against the TypeScript source instead:
 
 ```sh
 node archive/src/repo-jj-archive.ts --help
