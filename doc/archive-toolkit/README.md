@@ -31,10 +31,10 @@ planning/apply return Effects (see the
 [library guide](/doc/archive-toolkit/custody.md#public-library-entry-points)).
 This is a mixed API, not an all-Effect migration.
 
-The operator-facing contract — commands, flags, refresh ordering, the
-one-JSON-line Ansible protocol, launcher resolution — lives in
-[`/archive/README.md`](/archive/README.md). This document is the doc-tree
-entry point: it summarizes what is pinned and where the inquiry records live.
+Start with the [operator README](/archive/README.md) for purpose, first runs,
+workflow choices, the custody plan/receipt/verification model and Linux scope.
+This document is the doc-tree entry point for CLI contract evidence and inquiry
+records. The README also covers flags, Ansible JSON and launcher resolution.
 The launcher calls the selected entry's `runExecutable()` so native Node
 signal handling can finish child-process teardown; `main()` remains the
 importable Promise API.
@@ -90,8 +90,9 @@ points. Local existing-destination clean/dirty fixtures pass. The
 [final focused safety disposition](/design/archive-toolkit/safety-review0.gpt6sol.md#final-focused-checkpoint-standalone-verifier-helper-gate)
 reports no remaining blocker under its Linux/quiesced-path,
 existing-destination, commit/tag-tip scope. That is **not blanket production
-approval** or retirement authorization; final distribution/full-suite checks
-are separate and still running. The commands do not publish refs or retire a
+approval** or retirement authorization; the separate
+[distribution/full-suite checks](/design/archive-toolkit/verification0.gpt6luna.md)
+passed. The commands do not publish refs or retire a
 source directory.
 
 ## Where the inquiry lives
