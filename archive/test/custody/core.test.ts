@@ -343,6 +343,7 @@ test("same-input retry discounts only its own installed refs and retains the ori
   const receiptCommitOid = O("6");
   const plan: PlanV1 = {
     schema: "compfuzor.archive-adoption-plan/v1",
+    state: "ready",
     identity: { ...receipt.identity, createdAt: "later inspection" },
     source: receipt.source,
     proposedSnapshot: receipt.snapshot,
@@ -391,6 +392,24 @@ test("same-input retry discounts only its own installed refs and retains the ori
         actual,
       ),
     /source inventory/,
+  );
+  assert.throws(
+    () =>
+      approveSameInputRetry(
+        {
+          ...plan,
+          state: "blocked",
+          source: { ...plan.source, head: null },
+          proposedSnapshot: null,
+          baselines: null,
+          pins: null,
+          blockers: [{ code: "unborn-head", subject: "HEAD", reason: "no commit" }],
+        },
+        receipt,
+        receiptCommitOid,
+        actual,
+      ),
+    /apply blockers/,
   );
   assert.throws(
     () =>

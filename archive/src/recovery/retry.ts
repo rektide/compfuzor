@@ -31,6 +31,7 @@ export function approveSameInputRetry(
 ): RefInstall {
   const receipt = validateReceipt(existing);
   if (plan.schema !== "compfuzor.archive-adoption-plan/v1") mismatch("plan schema");
+  if (plan.state !== "ready" || plan.blockers.length) mismatch("apply blockers");
   if (receipt.receiptRef !== receiptRef(plan.identity.label, plan.identity.generation))
     mismatch("identity");
   // The receipt's first capture time is immutable; fresh plan time is not part of input.
@@ -57,7 +58,6 @@ export function approveSameInputRetry(
   }
   // A new plan's ref list/delta is measured *after* our pins. Do not replace
   // the original receipt baseline with that later observation.
-  if (plan.blockers.length) mismatch("apply blockers");
 
   const custodyRefs = new Map<string, Oid>([[receipt.receiptRef, receiptCommitOid]]);
   for (const pin of receipt.pins) custodyRefs.set(pin.destinationRef, pin.destinationOid);

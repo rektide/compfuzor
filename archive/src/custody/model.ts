@@ -193,17 +193,48 @@ export interface ReceiptV1 {
   readonly unresolved: readonly Issue[];
 }
 
-export interface PlanV1 {
+/**
+ * A null observation means "not proven inspectable", never "empty". Arrays may
+ * be populated only when that entire inventory category was inspected. A blocked
+ * plan cannot be promoted to a receipt by filling in absent OIDs or defaults.
+ */
+export type ObservedSourceInventory = {
+  readonly [K in keyof SourceInventory]: SourceInventory[K] | null;
+};
+
+export interface PlanFields {
   readonly schema: "compfuzor.archive-adoption-plan/v1";
-  readonly identity: ReceiptV1["identity"];
-  readonly source: SourceInventory;
-  readonly proposedSnapshot: Snapshot | null;
-  readonly baselines: DestinationBaseline;
-  readonly pins: readonly PinIntent[];
   readonly blockers: readonly Issue[];
   readonly warnings: readonly Issue[];
   readonly retirementUnresolved: readonly Issue[];
 }
+/** Ready plans have no blockers; callers still check the runtime blocker list. */
+export type PlanV1 = PlanFields &
+  (
+    | {
+        readonly state: "ready";
+        readonly identity: ReceiptV1["identity"];
+        readonly source: SourceInventory;
+        readonly proposedSnapshot: Snapshot | null;
+        readonly baselines: DestinationBaseline;
+        readonly pins: readonly PinIntent[];
+      }
+    | {
+        readonly state: "blocked";
+        readonly identity: {
+          readonly label: string;
+          readonly generation: string;
+          readonly legacyRealpathAtCapture: string | null;
+          readonly sourceGitCommonDir: string | null;
+          readonly destinationRealpath: string | null;
+          readonly createdAt: string;
+        };
+        readonly source: ObservedSourceInventory;
+        readonly proposedSnapshot: null;
+        readonly baselines: DestinationBaseline | null;
+        readonly pins: null;
+      }
+  );
 export interface Verification {
   readonly receiptRef: RefName;
   readonly receiptCommitOid: Oid;
