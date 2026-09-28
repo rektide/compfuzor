@@ -140,6 +140,20 @@ export interface ProvenBundle {
 }
 
 /**
+ * Optional execution control for the Promise facade. Passing `signal` makes
+ * an in-flight Git child killable: every `Effect.runPromise` in this module
+ * carries the signal, so aborting interrupts the fiber and the adapter's
+ * scoped spawner finalizer SIGTERMs (then SIGKILLs) the child process group
+ * — the detached-runner orphan documented in
+ * [`runtime-checks0`](/design/archive-toolkit/runtime-checks0.glm53.md) does
+ * not happen for callers that propagate a signal. Data domain types stay
+ * signal-free; the parameter is optional and backward-compatible.
+ */
+export interface StageExecution {
+  readonly signal?: AbortSignal | undefined;
+}
+
+/**
  * Receipt-shaped bundle restoration check, reusable by the independent
  * verifier: prove that a bundle alone restores the exact pin refs/OIDs,
  * object types and full snapshot path manifest into a fresh empty repository
@@ -187,6 +201,19 @@ const stepFailure = (
         `${step} failed: ${error instanceof Error ? error.message : String(error)}`,
       );
 
+/**
+ * Cancellation surfaces as the caller's abort reason, never as a wrapped
+ * inspection failure — an aborted stage is a caller decision, not a Git
+ * defect, and Sol's apply must be able to distinguish it.
+ */
+const abortReason = (signal: AbortSignal | undefined): unknown =>
+  signal?.reason instanceof Error ? signal.reason : new Error("stage execution aborted");
+
+/** Cancellation gate between async filesystem mutations. */
+const abortBarrier = (signal: AbortSignal | undefined): void => {
+  signal?.throwIfAborted();
+};
+
 interface Wiring {
   readonly gitDir: string;
   readonly workTree: string | null;
@@ -202,6 +229,7 @@ const runStage = async (
   wiring: Wiring,
   args: readonly string[],
   env: Record<string, string> = {},
+  signal?: AbortSignal,
 ): Promise<Uint8Array> => {
   const routing: Record<string, string> = {
     GIT_DIR: wiring.gitDir,
@@ -214,31 +242,38 @@ const runStage = async (
     wiring.workTree ?? wiring.gitDir,
     { ...routing, ...env },
     "private stage git",
+    signal,
   );
 };
 
 /** Discovery and restore commands: no Git routing, cwd decides the repo. */
-const runPlain = async (args: readonly string[], cwd: string): Promise<Uint8Array> =>
-  checkedRead(args, cwd, {}, "git");
+const runPlain = async (
+  args: readonly string[],
+  cwd: string,
+  signal?: AbortSignal,
+): Promise<Uint8Array> => checkedRead(args, cwd, {}, "git", signal);
 
 /**
  * `gitRead` isolation plus checked exit: stdout bytes on success, `GitError`
  * (argv/stderr retained, never printed) on failure, wrapped as a custody
- * failure naming the step.
+ * failure naming the step. The `signal` interrupts the fiber through
+ * `Effect.runPromise`, closing the spawner scope and killing the child.
  */
 const checkedRead = async (
   args: readonly string[],
   cwd: string,
   env: Record<string, string>,
   step: string,
+  signal: AbortSignal | undefined,
   input?: Uint8Array,
 ): Promise<Uint8Array> => {
   try {
-    const result = await Effect.runPromise(gitRead(args, { cwd, env, input }));
+    const result = await Effect.runPromise(gitRead(args, { cwd, env, input }), { signal });
     if (result.exitCode !== 0)
       throw new GitError({ argv: args, cwd, exitCode: result.exitCode, stderr: result.stderr });
     return result.stdout;
   } catch (error) {
+    if (signal?.aborted) throw abortReason(signal);
     throw stepFailure("inspection-failed", `${step} ${args[0] ?? ""}`, error);
   }
 };
@@ -300,9 +335,14 @@ const validateExpected = (
 const discoverSource = async (
   sourceRoot: string,
   format: GitObjectFormat,
+  signal: AbortSignal | undefined,
 ): Promise<{ readonly gitDir: string; readonly objectsDir: string }> => {
-  const gitDir = utf8Fatal(await runPlain(["rev-parse", "--absolute-git-dir"], sourceRoot)).trim();
-  const commonRaw = utf8Fatal(await runPlain(["rev-parse", "--git-common-dir"], sourceRoot)).trim();
+  const gitDir = utf8Fatal(
+    await runPlain(["rev-parse", "--absolute-git-dir"], sourceRoot, signal),
+  ).trim();
+  const commonRaw = utf8Fatal(
+    await runPlain(["rev-parse", "--git-common-dir"], sourceRoot, signal),
+  ).trim();
   const commonDir = commonRaw.startsWith("/") ? commonRaw : join(sourceRoot, commonRaw);
   if (commonDir !== gitDir)
     throw unsupported(
@@ -310,11 +350,12 @@ const discoverSource = async (
       sourceRoot,
     );
   if (
-    utf8Fatal(await runPlain(["rev-parse", "--is-bare-repository"], sourceRoot)).trim() === "true"
+    utf8Fatal(await runPlain(["rev-parse", "--is-bare-repository"], sourceRoot, signal)).trim() ===
+    "true"
   )
     throw unsupported("a bare source has no worktree to stage", sourceRoot);
   const observed = utf8Fatal(
-    await runPlain(["rev-parse", "--show-object-format"], sourceRoot),
+    await runPlain(["rev-parse", "--show-object-format"], sourceRoot, signal),
   ).trim();
   if (observed !== format)
     invalid(`source object format is ${observed}, but ${format} was declared`);
@@ -341,6 +382,7 @@ const runStageWithInput = async (
   wiring: Wiring,
   args: readonly string[],
   paths: readonly RepoPath[],
+  signal: AbortSignal | undefined,
 ): Promise<Uint8Array> => {
   const routing: Record<string, string> = {
     GIT_DIR: wiring.gitDir,
@@ -353,6 +395,7 @@ const runStageWithInput = async (
     wiring.workTree ?? wiring.gitDir,
     routing,
     "private stage git",
+    signal,
     encoder.encode(`${paths.join("\0")}\0`),
   );
 };
@@ -362,12 +405,17 @@ const runStageWithInput = async (
  * `text`/`eol` re-encoding is Git-native and deterministic; an external
  * filter driver is an arbitrary program whose bytes cannot be promised here.
  */
-const assertNoFilters = async (wiring: Wiring, paths: readonly RepoPath[]): Promise<void> => {
+const assertNoFilters = async (
+  wiring: Wiring,
+  paths: readonly RepoPath[],
+  signal: AbortSignal | undefined,
+): Promise<void> => {
   if (!paths.length) return;
   const output = await runStageWithInput(
     wiring,
     ["check-attr", "--stdin", "-z", "-z", "filter"],
     paths,
+    signal,
   );
   const tokens = utf8Fatal(output).split("\0");
   if (tokens.at(-1) === "") tokens.pop();
@@ -500,7 +548,11 @@ interface StagedTree {
  * the preview and apply doors differ exactly there. Scratch is left in place
  * on failure for inspection; its lifecycle belongs to the caller.
  */
-const stageTree = async (input: PrepareSnapshotInput): Promise<StagedTree> => {
+const stageTree = async (
+  input: PrepareSnapshotInput,
+  signal: AbortSignal | undefined,
+): Promise<StagedTree> => {
+  abortBarrier(signal);
   const format = input.objectFormat;
   oid(input.headOid, format);
   const restage = validatedPaths(input.restageTracked, "restaged tracked");
@@ -526,9 +578,10 @@ const stageTree = async (input: PrepareSnapshotInput): Promise<StagedTree> => {
   if (contains(scratchRoot, sourceRoot))
     invalid("source checkout must not live inside the private scratch");
 
-  const { objectsDir: sourceObjectsDir } = await discoverSource(sourceRoot, format);
+  const { objectsDir: sourceObjectsDir } = await discoverSource(sourceRoot, format, signal);
 
   const stageRoot = await mkdtemp(join(scratchRoot, "stage-"));
+  abortBarrier(signal);
   const gitDir = join(stageRoot, "stage.git");
   await runPlain(
     [
@@ -540,34 +593,40 @@ const stageTree = async (input: PrepareSnapshotInput): Promise<StagedTree> => {
       gitDir,
     ],
     stageRoot,
+    signal,
   );
   const wiring: Wiring = { gitDir, workTree: null };
   const workWiring: Wiring = { gitDir, workTree: sourceRoot };
-  await runStage(wiring, ["config", "core.bare", "false"]);
+  await runStage(wiring, ["config", "core.bare", "false"], {}, signal);
   // Read-only view of source objects; scratch receives every new object.
   const alternatesPath = join(gitDir, "objects", "info", "alternates");
   await writeFile(alternatesPath, `${sourceObjectsDir}\n`);
+  abortBarrier(signal);
 
   const headTreeOid = oid(
-    utf8Fatal(await runStage(wiring, ["rev-parse", `${input.headOid}^{tree}`])).trim(),
+    utf8Fatal(await runStage(wiring, ["rev-parse", `${input.headOid}^{tree}`], {}, signal)).trim(),
     format,
   );
-  await runStage(wiring, ["read-tree", headTreeOid]);
+  await runStage(wiring, ["read-tree", headTreeOid], {}, signal);
 
   const selected = [...restage, ...untracked];
-  await assertNoFilters(workWiring, selected);
+  await assertNoFilters(workWiring, selected, signal);
   if (selected.length > 0) {
     const pathspecFile = join(stageRoot, "pathspec.nul");
     await writeFile(pathspecFile, encoder.encode(selected.map((p) => `:(literal)${p}`).join("\0")));
-    await runStage(workWiring, [
-      "add",
-      "-A",
-      `--pathspec-from-file=${pathspecFile}`,
-      "--pathspec-file-nul",
-    ]);
+    abortBarrier(signal);
+    await runStage(
+      workWiring,
+      ["add", "-A", `--pathspec-from-file=${pathspecFile}`, "--pathspec-file-nul"],
+      {},
+      signal,
+    );
   }
-  const treeOid = oid(utf8Fatal(await runStage(wiring, ["write-tree"])).trim(), format);
-  const manifest = parseManifest(await runStage(wiring, ["ls-tree", "-r", "-z", treeOid]), format);
+  const treeOid = oid(utf8Fatal(await runStage(wiring, ["write-tree"], {}, signal)).trim(), format);
+  const manifest = parseManifest(
+    await runStage(wiring, ["ls-tree", "-r", "-z", treeOid], {}, signal),
+    format,
+  );
   denyInternals(
     manifest.map(({ path }) => path),
     "staged tree",
@@ -592,7 +651,10 @@ const stageTree = async (input: PrepareSnapshotInput): Promise<StagedTree> => {
 };
 
 /** Mint the deterministic `worktree-v1` commit; caller has decided it exists. */
-const mintWorktreeCommit = async (staged: StagedTree): Promise<Oid> =>
+const mintWorktreeCommit = async (
+  staged: StagedTree,
+  signal: AbortSignal | undefined,
+): Promise<Oid> =>
   oid(
     utf8Fatal(
       await runStage(
@@ -606,6 +668,7 @@ const mintWorktreeCommit = async (staged: StagedTree): Promise<Oid> =>
           GIT_AUTHOR_DATE: WORKTREE_V1_METADATA.date,
           GIT_COMMITTER_DATE: WORKTREE_V1_METADATA.date,
         },
+        signal,
       ),
     ).trim(),
     staged.objectFormat,
@@ -624,10 +687,16 @@ const mintWorktreeCommit = async (staged: StagedTree): Promise<Oid> =>
  * and `expected: null` is never an approval bypass. Use `previewSnapshot`
  * to compute the proposal and digest first.
  */
-export const prepareSnapshot = async (input: PrepareSnapshotInput): Promise<StageHandle> => {
-  const staged = await stageTree(input);
+export const prepareSnapshot = async (
+  input: PrepareSnapshotInput,
+  execution: StageExecution = {},
+): Promise<StageHandle> => {
+  const staged = await stageTree(input, execution.signal);
   bindPathReview(staged.manifest, input, staged.dirty);
-  const snapshotCommitOid = staged.dirty ? await mintWorktreeCommit(staged) : null;
+  abortBarrier(execution.signal);
+  const snapshotCommitOid = staged.dirty
+    ? await mintWorktreeCommit(staged, execution.signal)
+    : null;
   const snapshot: Snapshot | null =
     snapshotCommitOid === null
       ? null
@@ -673,11 +742,13 @@ export const prepareSnapshot = async (input: PrepareSnapshotInput): Promise<Stag
  */
 export const previewSnapshot = async (
   input: PrepareSnapshotInput,
+  execution: StageExecution = {},
 ): Promise<SnapshotProposal | null> => {
-  const staged = await stageTree(input);
+  const staged = await stageTree(input, execution.signal);
   try {
     if (!staged.dirty) return null;
-    const commitOid = await mintWorktreeCommit(staged);
+    abortBarrier(execution.signal);
+    const commitOid = await mintWorktreeCommit(staged, execution.signal);
     return {
       format: "worktree-v1",
       parentOid: input.headOid,
@@ -696,6 +767,9 @@ export const previewSnapshot = async (
       },
     };
   } finally {
+    // Only reached after any in-flight Git child finalized: an aborted
+    // runPromise rejects once the spawner scope has closed and the child is
+    // reaped, so this never races a live process inside the scratch.
     await rm(staged.stageRoot, { recursive: true, force: true });
   }
 };
@@ -794,14 +868,16 @@ const validateBundlePins = (
  */
 export const checkBundleRestoration = async (
   input: RestorationCheckInput,
+  execution: StageExecution = {},
 ): Promise<RestorationCheck> => {
+  abortBarrier(execution.signal);
   const format = input.objectFormat;
   const pinMap = validateBundlePins(format, input.pins);
   const scratchRoot = await realpath(input.scratchRoot).catch(() =>
     invalid(`restore scratch root does not exist: ${input.scratchRoot}`),
   );
   const heads = parseBundleHeads(
-    await runPlain(["bundle", "list-heads", input.bundlePath], scratchRoot),
+    await runPlain(["bundle", "list-heads", input.bundlePath], scratchRoot, execution.signal),
     format,
   );
   const advertised = new Map(heads.map((head) => [head.ref as string, head.oid as string]));
@@ -814,6 +890,7 @@ export const checkBundleRestoration = async (
     if (advertised.get(ref) !== pin.sourceOid)
       throw bundleInvalid(`bundle head OID differs from pin: ${ref}`, ref);
 
+  abortBarrier(execution.signal);
   const restoreDir = await mkdtemp(join(scratchRoot, "restore-"));
   const restoreGit = join(restoreDir, "restore.git");
   await runPlain(
@@ -826,14 +903,25 @@ export const checkBundleRestoration = async (
       restoreGit,
     ],
     restoreDir,
+    execution.signal,
   );
-  const verifyOut = utf8Fatal(await runPlain(["bundle", "verify", input.bundlePath], restoreGit));
+  const verifyOut = utf8Fatal(
+    await runPlain(["bundle", "verify", input.bundlePath], restoreGit, execution.signal),
+  );
   const algorithm = verifyOut.match(/hash algorithm: (sha1|sha256)/);
   if (algorithm !== null && algorithm[1] !== format)
     throw bundleInvalid(`bundle object format ${algorithm[1]} differs from ${format}`);
-  await runPlain(["fetch", "--quiet", input.bundlePath, "+refs/*:refs/*"], restoreGit);
+  await runPlain(
+    ["fetch", "--quiet", input.bundlePath, "+refs/*:refs/*"],
+    restoreGit,
+    execution.signal,
+  );
   const restored = parseForEachRef(
-    await runPlain(["for-each-ref", "--format=%(refname)%00%(objectname)"], restoreGit),
+    await runPlain(
+      ["for-each-ref", "--format=%(refname)%00%(objectname)"],
+      restoreGit,
+      execution.signal,
+    ),
     format,
   );
   if (restored.size !== pinMap.size)
@@ -841,16 +929,18 @@ export const checkBundleRestoration = async (
   for (const [ref, pin] of pinMap) {
     if (restored.get(ref) !== pin.sourceOid)
       throw bundleInvalid(`restored ref OID differs from pin: ${ref}`, ref);
-    const type = utf8Fatal(await runPlain(["cat-file", "-t", pin.sourceOid], restoreGit)).trim();
+    const type = utf8Fatal(
+      await runPlain(["cat-file", "-t", pin.sourceOid], restoreGit, execution.signal),
+    ).trim();
     if (type !== pin.objectType)
       throw bundleInvalid(
         `restored object type ${type} differs from ${pin.objectType}: ${ref}`,
         ref,
       );
     if (pin.objectType === "tag")
-      await runPlain(["rev-parse", `${pin.sourceOid}^{commit}`], restoreGit);
+      await runPlain(["rev-parse", `${pin.sourceOid}^{commit}`], restoreGit, execution.signal);
   }
-  await runPlain(["rev-list", "--objects", "--all"], restoreGit);
+  await runPlain(["rev-list", "--objects", "--all"], restoreGit, execution.signal);
 
   let snapshotManifestVerified = false;
   if (input.snapshot !== null) {
@@ -891,7 +981,9 @@ export const checkBundleRestoration = async (
 export const proveBundle = async (
   stage: StageHandle,
   pins: readonly PinIntent[],
+  execution: StageExecution = {},
 ): Promise<ProvenBundle> => {
+  abortBarrier(execution.signal);
   const format = stage.objectFormat;
   const wiring: Wiring = { gitDir: stage.gitDir, workTree: null };
   const pinMap = validateBundlePins(format, pins);
@@ -911,29 +1003,40 @@ export const proveBundle = async (
   )
     invalid("a staged snapshot requires its working-copy pin in the bundle");
 
-  for (const [ref, pin] of pinMap) await runStage(wiring, ["update-ref", ref, pin.sourceOid]);
-  await runStage(wiring, ["repack", "-a", "-d", "-q"]);
+  for (const [ref, pin] of pinMap)
+    await runStage(wiring, ["update-ref", ref, pin.sourceOid], {}, execution.signal);
+  await runStage(wiring, ["repack", "-a", "-d", "-q"], {}, execution.signal);
+  abortBarrier(execution.signal);
   // From here the stage must be self-contained: no source object access.
   await rm(join(stage.gitDir, "objects", "info", "alternates"), { force: true });
-  await runStage(wiring, ["rev-list", "--objects", "--all"]);
-  await runStage(wiring, ["cat-file", "--batch-all-objects", "--batch-check"]);
+  await runStage(wiring, ["rev-list", "--objects", "--all"], {}, execution.signal);
+  await runStage(
+    wiring,
+    ["cat-file", "--batch-all-objects", "--batch-check"],
+    {},
+    execution.signal,
+  );
 
+  abortBarrier(execution.signal);
   const bundlePath = join(stage.stageRoot, "source.bundle");
-  await runStage(wiring, ["bundle", "create", bundlePath, "--all"]);
-  const check = await checkBundleRestoration({
-    bundlePath,
-    objectFormat: format,
-    scratchRoot: stage.stageRoot,
-    pins,
-    snapshot:
-      stage.snapshot === null
-        ? null
-        : {
-            commitOid: stage.snapshot.commitOid,
-            treeOid: stage.snapshot.treeOid,
-            paths: stage.snapshot.paths,
-          },
-  });
+  await runStage(wiring, ["bundle", "create", bundlePath, "--all"], {}, execution.signal);
+  const check = await checkBundleRestoration(
+    {
+      bundlePath,
+      objectFormat: format,
+      scratchRoot: stage.stageRoot,
+      pins,
+      snapshot:
+        stage.snapshot === null
+          ? null
+          : {
+              commitOid: stage.snapshot.commitOid,
+              treeOid: stage.snapshot.treeOid,
+              paths: stage.snapshot.paths,
+            },
+    },
+    execution,
+  );
   return {
     stage,
     bundlePath,

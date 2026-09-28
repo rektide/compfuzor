@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -904,4 +905,166 @@ test("sha256 sources stage and prove with 64-hex custody identities", async (t) 
   const proven = await proveBundle(stage, [headPin, workPin]);
   assert.equal(proven.verifiedHeads.length, 2);
   assert.equal(proven.snapshotManifestVerified, true);
+});
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const pathExists = async (file: string): Promise<boolean> => {
+  try {
+    await readFile(file);
+    return true;
+  } catch {
+    return false;
+  }
+};
+const waitFor = async (file: string, ms = 4000): Promise<boolean> => {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    if (await pathExists(file)) return true;
+    await sleep(20);
+  }
+  return false;
+};
+
+/**
+ * Controllable-process fixture: a `git` shim on PATH blocks the named
+ * subcommand until released (touching `killed` on TERM), everything else
+ * passes through to the real git. Proves aborting the execution signal kills
+ * the in-flight stage child and that no ref/bundle/restore work continues.
+ */
+test("aborting an execution kills the in-flight Git child and stops all further stage work", async (t) => {
+  const legacy = await dirtyLegacy(t, "abort");
+  const scratch = join(legacy.root, "scratch");
+  await mkdir(scratch);
+  const stage = await request({ source: legacy.source, head: legacy.head, scratchRoot: scratch });
+  assert.ok(stage.snapshot);
+  const headPin: PinIntent = {
+    sourceKind: "head",
+    sourceName: "HEAD",
+    sourceOid: legacy.head as Oid,
+    objectType: "commit",
+    destinationOid: legacy.head as Oid,
+    destinationRef: pinRef(
+      {
+        sourceKind: "head",
+        sourceName: "HEAD",
+        sourceOid: legacy.head as Oid,
+        destinationOid: legacy.head as Oid,
+      },
+      "legacy",
+      "g0",
+    ),
+  };
+  const snapshotCommit = stage.snapshot.commitOid;
+  const workPin: PinIntent = {
+    sourceKind: "working-copy",
+    sourceName: "working-copy",
+    sourceOid: snapshotCommit,
+    objectType: "commit",
+    destinationOid: snapshotCommit,
+    destinationRef: pinRef(
+      {
+        sourceKind: "working-copy",
+        sourceName: "working-copy",
+        sourceOid: snapshotCommit,
+        destinationOid: snapshotCommit,
+      },
+      "legacy",
+      "g0",
+      { parentOid: stage.snapshot.parentOid, treeOid: stage.snapshot.treeOid },
+    ),
+  };
+
+  const bin = join(legacy.root, "bin");
+  const mark = join(legacy.root, "mark");
+  await mkdir(bin);
+  await mkdir(mark);
+  const realPath = process.env.PATH ?? "";
+  await writeFile(join(bin, "realpath"), `${realPath}\n`);
+  await writeFile(join(bin, "control"), "none\n");
+  await writeFile(join(bin, "mark"), `${mark}\n`);
+  const shim = join(bin, "git");
+  await writeFile(
+    shim,
+    [
+      "#!/bin/sh",
+      'BIN=$(dirname "$0")',
+      'BLOCKED=$(cat "$BIN/control" 2>/dev/null || printf none)',
+      'MARK=$(cat "$BIN/mark" 2>/dev/null || printf "$BIN")',
+      'for a in "$@"; do',
+      '  if [ "$a" = "$BLOCKED" ]; then',
+      "    trap 'touch \"$MARK/killed\"; exit 9' TERM INT",
+      '    touch "$MARK/started"',
+      '    while [ ! -e "$MARK/release" ]; do sleep 0.02; done',
+      '    touch "$MARK/completed"',
+      "    exit 42",
+      "  fi",
+      "done",
+      'PATH="$(cat "$BIN/realpath")" exec git "$@"',
+      "",
+    ].join("\n"),
+  );
+  await chmod(shim, 0o755);
+  process.env.PATH = `${bin}:${realPath}`;
+  t.after(() => {
+    process.env.PATH = realPath;
+  });
+
+  try {
+    // Block the very first pin update-ref; abort mid-flight.
+    await writeFile(join(bin, "control"), "update-ref\n");
+    const controller = new AbortController();
+    const pending = proveBundle(stage, [headPin, workPin], { signal: controller.signal });
+    assert.equal(await waitFor(join(mark, "started")), true, "blocked git invocation reached");
+    controller.abort();
+    const failure = await pending.then(
+      () => null,
+      (error: unknown) => error,
+    );
+    assert.ok(failure instanceof Error, `expected the abort to reject, got ${String(failure)}`);
+    assert.equal((failure as Error & { name?: string }).name, "AbortError");
+    assert.equal(
+      await waitFor(join(mark, "killed")),
+      true,
+      "the in-flight stage child was terminated (not orphaned)",
+    );
+    // Nothing after the abort point ran: no pin refs, no repack/bundle, no
+    // restore; the alternates pointer survives for diagnosis.
+    assert.equal(await run(stage.gitDir, "for-each-ref"), "");
+    assert.equal(await pathExists(join(stage.gitDir, "objects", "info", "alternates")), true);
+    assert.equal(await pathExists(join(stage.stageRoot, "source.bundle")), false);
+    assert.deepEqual((await readdir(stage.stageRoot)).sort(), ["pathspec.nul", "stage.git"]);
+    // The blocked loop is dead, not paused: releasing it cannot complete.
+    await writeFile(join(mark, "release"), "now\n");
+    await sleep(250);
+    assert.equal(await pathExists(join(mark, "completed")), false);
+
+    // Preview abort: the throwaway scratch is cleaned only after the
+    // interrupted child finalized, and abort is not masked as a Git failure.
+    const mark2 = join(legacy.root, "mark2");
+    await mkdir(mark2);
+    await writeFile(join(bin, "mark"), `${mark2}\n`);
+    await writeFile(join(bin, "control"), "commit-tree\n");
+    const previewScratch = join(legacy.root, "preview-scratch");
+    await mkdir(previewScratch);
+    const previewController = new AbortController();
+    const previewPending = previewSnapshot(
+      snapshotInput({ source: legacy.source, head: legacy.head, scratchRoot: previewScratch }),
+      { signal: previewController.signal },
+    );
+    assert.equal(await waitFor(join(mark2, "started")), true);
+    previewController.abort();
+    const previewFailure = await previewPending.then(
+      () => null,
+      (error: unknown) => error,
+    );
+    assert.ok(previewFailure instanceof Error);
+    assert.equal((previewFailure as Error & { name?: string }).name, "AbortError");
+    assert.equal(await waitFor(join(mark2, "killed")), true);
+    assert.deepEqual(await readdir(previewScratch), [], "preview scratch disposed after abort");
+  } finally {
+    // Release any hypothetical straggler and restore the real PATH.
+    await writeFile(join(mark, "release"), "now\n");
+    await writeFile(join(bin, "control"), "none\n");
+    process.env.PATH = realPath;
+  }
 });
