@@ -1,7 +1,7 @@
 ---
 type: TopicDoc
 title: Archive toolkit
-description: Entry point for the repo-jj-archive toolkit topic — Effect CLI contract, Node 26 launcher and bundle transport, completion coverage, and custody development status.
+description: Entry point for the repo-jj-archive toolkit — CLI contract, Node 26 transport, and custody operator/library guide.
 resource: /doc/archive-toolkit/README.md
 tags: [compfuzor, archive, jj, effect, cli]
 status: stable
@@ -80,15 +80,14 @@ spells `--branch BRANCH` under refresh, and `--` stops the adapter's scan.
 | bash / zsh / fish | Effect CLI command-tree generator (same bytes as the native `--completions` action) | Full tree: subcommands and per-command flags |
 | powershell | Static generator in the toolkit | **Subcommand names and global flags only** — not per-command flags; a documented coverage reduction, not parity |
 
-## Custody: registered, safety review in progress
+## Custody: operator and library guide
 
-The CLI now registers `adopt` (read-only planning unless `--apply` is explicit)
-and `verify-adoption` (independent receipt/pin/vault verification). Source
-inventory safety findings are still being corrected, so registration is **not
-production signoff** and these commands must not be treated as retirement
-authorization. The review gate and intended contract live in the design
-records below. Verification reports custody state, never permission to delete;
-the commands do not publish refs or retire a source directory.
+[`custody.md`](/doc/archive-toolkit/custody.md) is the maintained guide to
+`adopt` (read-only plan unless `--apply` is explicit), `verify-adoption`,
+review inputs, supported cases, the private vault, and public library entry
+points. Local existing-destination clean/dirty fixtures pass, but independent
+safety review remains open. These commands are **not production signoff** or
+retirement authorization. They do not publish refs or retire a source directory.
 
 ## Where the inquiry lives
 
@@ -125,5 +124,5 @@ the custody brief: [`design/archive-migration/brief0.gpt6sol.md`](/design/archiv
   contract.
 - The Node 26 runtime floor and signal behavior are exercised manually, not
   by suite.
-- Custody production signoff awaits correction of the source-inventory safety
-  findings and the core-review gate passing end to end.
+- Custody production signoff awaits the final independent safety check and
+  resolution of any resulting findings; fixture coverage is not signoff.

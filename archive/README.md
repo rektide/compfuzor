@@ -35,6 +35,8 @@ unless the command explicitly creates or detects one.
 | `refresh --dest DIR --repo URL --label NAME [options]` | Compose adoption/clone, health, snapshot, remote policy, recovery harvest, fetch, base bookmark move, and worktree reconciliation. `--branch HEAD\|branch\|branch@remote`, `--remote NAME`, `--remotes JSON`, `--update true\|false`, `--depth N`, `--json`, `--reconcile-remotes`. Submodules are explicitly unsupported. |
 | `heal --dest DIR --yes` | Explicitly move `.jj` to a dated `.jj.broken-ghost-*` backup, then `jj git init --colocate` from Git refs. Refuses without `--yes`. |
 | `self [--archive-dir PATH] [--freshen]` | Detect the standard `~/archive/rektide/compfuzor` checkout; optionally fetch its `origin` (no checkout reset). Missing checkout is fine. |
+| `adopt --legacy DIR --dest DIR --repo URL --label NAME [--branch BRANCH] [--generation ID] [--exclude-from FILE] [--dispositions FILE] [--path-review FILE] [--json] [--apply]` | Plan local Git custody without writes by default; `--apply` explicitly installs pins, a receipt and private vault bundle, then verifies. Requires an **existing** destination. |
+| `verify-adoption --dest DIR --receipt refs/adopt/receipts/NAME/ID [--legacy DIR] [--json]` | Independently verify receipt, pins and vault without requiring the source; optional `--legacy` adds drift diagnostics. |
 | `complete SHELL` | Print a tab-completion script. `bash`/`zsh`/`fish` come from Effect CLI's command-tree generator (byte-identical to the native `--completions` action); `powershell` comes from a static generator covering **only subcommand names and global flags** — not the per-command flag tree the POSIX shells get. |
 
 For example, inspect and fix a mismatched remote deliberately:
@@ -123,19 +125,22 @@ URL checks happen after the initial snapshot, **before** harvest/fetch or
 bookmark rewrites. See [the original archive design](/design/repo-jj-archive/draft0.gpt6sol.md)
 and [the toolkit follow-up](/design/repo-jj-archive/draft1.gpt6sol.md).
 
-## Custody: registered; safety review in progress
+## Custody: available for fixture evaluation; safety review in progress
 
 Cross-repository source custody is exposed by `adopt` (read-only planning by
 default; `--apply` explicitly transfers and verifies custody) and
 `verify-adoption` (independent receipt/pin/vault verification). These commands
-are registered, but source-inventory safety findings are still being
-corrected; registration is **not production signoff**. Do not treat the
-commands as a ready retirement workflow. The [core review](/design/archive-toolkit/core-review0.glm53.md)
-gate remains open. The intended contract lives in the
-[custody brief](/design/archive-migration/brief0.gpt6sol.md) and the
-[custody contracts](/design/archive-toolkit/custody-contracts0.gpt6sol.md).
-Custody operations do not publish refs, prune artifacts, or retire a source
-directory; verification reports custody state, never permission to delete.
+have passed local clean/dirty existing-destination fixtures, but independent
+safety review remains open: **not production signoff** or a complete
+implementation of the [custody brief](/design/archive-migration/brief0.gpt6sol.md).
+Use [the custody operator and library guide](/doc/archive-toolkit/custody.md)
+for admission limits, review-file formats, plan/apply/verify examples, and
+what a receipt actually proves. In particular, adoption never creates a
+destination; a separate `refresh` may initialize one deliberately, but also
+mutates the selected checkout. Custody operations do not publish refs, prune
+artifacts, or retire a source directory; verification never grants deletion
+permission. See the [core review](/design/archive-toolkit/core-review0.glm53.md)
+and [custody contracts](/design/archive-toolkit/custody-contracts0.gpt6sol.md).
 
 ## Build, checks, tests
 
