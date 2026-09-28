@@ -945,12 +945,20 @@ export const checkBundleRestoration = async (
   let snapshotManifestVerified = false;
   if (input.snapshot !== null) {
     const restoredTree = utf8Fatal(
-      await runPlain(["rev-parse", `${input.snapshot.commitOid}^{tree}`], restoreGit),
+      await runPlain(
+        ["rev-parse", `${input.snapshot.commitOid}^{tree}`],
+        restoreGit,
+        execution.signal,
+      ),
     ).trim();
     if (restoredTree !== input.snapshot.treeOid)
       throw bundleInvalid("restored snapshot commit does not carry the staged tree");
     const manifest = parseManifest(
-      await runPlain(["ls-tree", "-r", "-z", input.snapshot.commitOid], restoreGit),
+      await runPlain(
+        ["ls-tree", "-r", "-z", input.snapshot.commitOid],
+        restoreGit,
+        execution.signal,
+      ),
       format,
     );
     if (canonicalJson(manifest) !== canonicalJson(input.snapshot.paths))

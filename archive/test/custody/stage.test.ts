@@ -13,6 +13,7 @@ import {
 } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import { Effect } from "effect";
 import {
   candidateIdentity,
@@ -26,6 +27,7 @@ import { CustodyError } from "../../src/custody/errors.ts";
 import type { Oid, PathEntry, PinIntent, RepoPath } from "../../src/custody/model.ts";
 import {
   prepareSnapshot,
+  checkBundleRestoration,
   previewSnapshot,
   proveBundle,
   WORKTREE_V1_METADATA,
@@ -202,6 +204,105 @@ const snapshotInput = (ask: SnapshotRequest) => ({
 });
 
 const request = (ask: SnapshotRequest) => prepareSnapshot(snapshotInput(ask));
+
+test("abort during restore snapshot manifest kills the in-flight Git child", async (t) => {
+  const legacy = await dirtyLegacy(t, "abort-restore-manifest");
+  const scratch = join(legacy.root, "scratch");
+  await mkdir(scratch);
+  const stage = await request({ source: legacy.source, head: legacy.head, scratchRoot: scratch });
+  assert.ok(stage.snapshot);
+  const headPin: PinIntent = {
+    sourceKind: "head",
+    sourceName: "HEAD",
+    sourceOid: legacy.head as Oid,
+    objectType: "commit",
+    destinationOid: legacy.head as Oid,
+    destinationRef: pinRef(
+      {
+        sourceKind: "head",
+        sourceName: "HEAD",
+        sourceOid: legacy.head as Oid,
+        destinationOid: legacy.head as Oid,
+      },
+      "legacy",
+      "g0",
+    ),
+  };
+  const snapshot = stage.snapshot;
+  const workPin: PinIntent = {
+    sourceKind: "working-copy",
+    sourceName: "working-copy",
+    sourceOid: snapshot.commitOid,
+    objectType: "commit",
+    destinationOid: snapshot.commitOid,
+    destinationRef: pinRef(
+      {
+        sourceKind: "working-copy",
+        sourceName: "working-copy",
+        sourceOid: snapshot.commitOid,
+        destinationOid: snapshot.commitOid,
+      },
+      "legacy",
+      "g0",
+      { parentOid: snapshot.parentOid, treeOid: snapshot.treeOid },
+    ),
+  };
+  const proven = await proveBundle(stage, [headPin, workPin]);
+  const bin = join(legacy.root, "bin");
+  await mkdir(bin);
+  const pidPath = join(legacy.root, "blocked-pid");
+  const callLog = join(legacy.root, "calls");
+  await writeFile(
+    join(bin, "git"),
+    `#!/bin/sh\nprintf '%s\\n' "$*" >> '${callLog}'\ncase "$*" in\n  *"$STAGE_BLOCK"*) echo $$ > '${pidPath}'; exec sleep 30;;\nesac\nexec /usr/bin/git "$@"\n`,
+    { mode: 0o755 },
+  );
+  const previousPath = process.env.PATH;
+  const previousBlock = process.env.STAGE_BLOCK;
+  process.env.PATH = `${bin}:${previousPath ?? ""}`;
+  t.after(() => {
+    process.env.PATH = previousPath;
+    process.env.STAGE_BLOCK = previousBlock;
+  });
+  for (const command of ["rev-parse", "ls-tree"] as const) {
+    await rm(pidPath, { force: true });
+    await writeFile(callLog, "");
+    process.env.STAGE_BLOCK =
+      command === "rev-parse"
+        ? `${snapshot.commitOid}^{tree}`
+        : `ls-tree -r -z ${snapshot.commitOid}`;
+    const controller = new AbortController();
+    const pending = checkBundleRestoration(
+      {
+        bundlePath: proven.bundlePath,
+        objectFormat: "sha1",
+        scratchRoot: scratch,
+        pins: [headPin, workPin],
+        snapshot: {
+          commitOid: snapshot.commitOid,
+          treeOid: snapshot.treeOid,
+          paths: snapshot.paths,
+        },
+      },
+      { signal: controller.signal },
+    );
+    let pid: number | undefined;
+    for (let attempt = 0; attempt < 300; attempt++) {
+      const seen = await readFile(pidPath, "utf8").catch(() => null);
+      if (seen !== null) {
+        pid = Number(seen.trim());
+        break;
+      }
+      await delay(10);
+    }
+    assert.ok(pid, `blocked snapshot ${command} reached`);
+    controller.abort(new DOMException(`cancel ${command}`, "AbortError"));
+    await assert.rejects(pending, { name: "AbortError" });
+    assert.throws(() => process.kill(pid!, 0), { code: "ESRCH" });
+    if (command === "rev-parse")
+      assert.ok(!(await readFile(callLog, "utf8")).includes(`ls-tree -r -z ${snapshot.commitOid}`));
+  }
+});
 
 const custodyError = async (promise: Promise<unknown>): Promise<CustodyError> => {
   try {
