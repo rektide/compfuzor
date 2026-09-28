@@ -1,9 +1,18 @@
 import { jj, JjError, refs } from "./jj.ts";
 
+/**
+ * Health preflight mode. The default is the historical behavior: ordinary
+ * jj commands, which may snapshot the working copy and import colocated
+ * Git refs (see the restructure checkpoint note). `readOnly: true` runs
+ * both probes with `--ignore-working-copy` so the checkout's jj state is
+ * observed, never mutated — the mode custody contracts must use.
+ */
+export type PreflightOptions = { readOnly?: boolean };
+
 /** Materialize all visible view heads, including bare heads and bookmark conflict terms. */
-export async function preflight(dest: string): Promise<string[]> {
+export async function preflight(dest: string, options: PreflightOptions = {}): Promise<string[]> {
   try {
-    await jj(["log", "-G", "-r", "visible_heads()", "-T", 'commit_id ++ "\\n"'], dest);
+    await jj(["log", "-G", "-r", "visible_heads()", "-T", 'commit_id ++ "\\n"'], dest, options);
   } catch (error) {
     if (!(error instanceof JjError)) throw error;
     const ghosts = [
@@ -20,7 +29,7 @@ export async function preflight(dest: string): Promise<string[]> {
         `node '${(process.argv[1] ?? "archive/src/repo-jj-archive.ts").replaceAll("'", "'\\''")}' heal --dest '${dest.replaceAll("'", "'\\''")}' --yes (backs up .jj).`,
     );
   }
-  return [...(await refs(dest)).values()]
+  return [...(await refs(dest, options)).values()]
     .filter((ref) => ref.target === "conflict")
     .map((ref) => `${ref.name}${ref.remote === "-" ? "" : `@${ref.remote}`}`);
 }

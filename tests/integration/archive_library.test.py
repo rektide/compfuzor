@@ -133,3 +133,41 @@ console.log(JSON.stringify({ snapshot: snap, harvest: saved.name }));
             + 'const fetch = await lib.fetchRemote({ dest, label: "fixture" });\n'
             + "console.log(JSON.stringify(fetch));\n", tmp))
         assert second == {"remote": "origin", "notices": []}, second
+
+
+def test_read_only_preflight_never_mutates_the_checkout() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, _ = create_remote(tmp)
+        archive = tmp / "archive"
+        render(archive, remote)
+        head = run("git", "rev-parse", "HEAD", cwd=archive)
+        # Dirt that ordinary jj commands would snapshot and import.
+        (archive / "pending-edit").write_text("not snapshotted yet\n")
+        run("git", "update-ref", "refs/heads/extside", head, cwd=archive)
+        op_head = lambda: run("jj", "--ignore-working-copy", "op", "log", "--no-graph", "-n1",
+                              "-T", "id", cwd=archive)
+        before = op_head()
+        probe = json.loads(node_eval(
+            "const lib = " + import_line(INDEX) + ";\n"
+            f"const dest = {json.dumps(str(archive))};\n"
+            + 'const conflicts = await lib.preflight(dest, { readOnly: true });\n'
+            + 'console.log(JSON.stringify({ conflicts, bookmarks: [...(await lib.refs(dest, { readOnly: true })).keys()] }));\n',
+            tmp))
+        assert probe["conflicts"] == [], probe
+        # Genuinely read-only: no snapshot, no Git ref import, no new operation.
+        assert op_head() == before, "read-only preflight advanced the operation log"
+        bookmarks = run("jj", "--ignore-working-copy", "bookmark", "list", "-T", 'name ++ "\\n"',
+                        cwd=archive)
+        assert "extside" not in bookmarks.split(), "read-only preflight imported a Git ref"
+        assert "pending-edit" not in run("jj", "--ignore-working-copy", "diff", "-r", "@",
+                                         "--summary", cwd=archive)
+        # Control sensitivity: the default (mutating) mode does both.
+        node_eval(
+            "const lib = " + import_line(INDEX) + ";\n"
+            f"const dest = {json.dumps(str(archive))};\n"
+            + "await lib.preflight(dest);\n", tmp)
+        assert op_head() != before, "test cannot detect mutations from the default mode"
+        assert "extside" in run("jj", "--ignore-working-copy", "bookmark", "list", "-T",
+                                'name ++ "\\n"', cwd=archive).split()

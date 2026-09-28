@@ -24,10 +24,11 @@ export {
   revision,
   ancestor,
 } from "./repository/jj.ts";
-export type { BookmarkRef, Revision } from "./repository/jj.ts";
+export type { BookmarkRef, Revision, JjOptions } from "./repository/jj.ts";
 
 // repository/health.ts — ghost-head preflight and conflicted-bookmark report.
 export { preflight } from "./repository/health.ts";
+export type { PreflightOptions } from "./repository/health.ts";
 
 // repository/snapshot.ts — snapshot worktree and import colocated Git refs.
 export { snapshot } from "./repository/snapshot.ts";

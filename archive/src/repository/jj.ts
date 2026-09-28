@@ -15,9 +15,21 @@ export class JjError extends Error {
   }
 }
 
-export async function jj(args: string[], cwd?: string): Promise<string> {
+/**
+ * Query-mode option for {@link jj}: `readOnly` runs the command with
+ * `--ignore-working-copy`, which (verified against jj 0.45.1) neither
+ * snapshots nor updates the working copy and does not import colocated
+ * Git refs — the operation log stays untouched. The probe therefore
+ * observes jj's current view, possibly stale relative to the worktree and
+ * Git refs; that is the contract custody checks need. JjError still
+ * reports the logical args without the injected transport flag.
+ */
+export type JjOptions = { readOnly?: boolean };
+
+export async function jj(args: string[], cwd?: string, options?: JjOptions): Promise<string> {
+  const readOnly = options?.readOnly === true ? ["--ignore-working-copy"] : [];
   try {
-    const { stdout } = await exec("jj", ["--no-pager", "--color=never", ...args], {
+    const { stdout } = await exec("jj", ["--no-pager", "--color=never", ...readOnly, ...args], {
       cwd,
       encoding: "utf8",
       maxBuffer: 64 * 1024 * 1024,
@@ -56,10 +68,10 @@ export const HEAD_TEMPLATE = 'commit_id ++ "\\n"';
 export type BookmarkRef = { name: string; remote: string; target: string; tracked: boolean };
 export const refKey = (name: string, remote: string): string => `${name}\t${remote}`;
 
-export async function refs(dest: string): Promise<Map<string, BookmarkRef>> {
+export async function refs(dest: string, options?: JjOptions): Promise<Map<string, BookmarkRef>> {
   const result = new Map<string, BookmarkRef>();
   for (const line of lines(
-    await jj(["bookmark", "list", "--all-remotes", "-T", REF_TEMPLATE], dest),
+    await jj(["bookmark", "list", "--all-remotes", "-T", REF_TEMPLATE], dest, options),
   )) {
     const parts = line.split("\t");
     if (parts.length !== 4) throw new Error(`malformed bookmark line: ${line}`);
