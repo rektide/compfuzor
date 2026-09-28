@@ -3,7 +3,12 @@ _cf_run_guard() {
   local mode="$1"; shift
   local _cf_rg_out _cf_rg_err _cf_rg_rc=0 _cf_rg_reason=""
   _cf_rg_out="$(mktemp)" ; _cf_rg_err="$(mktemp)"
+  # A caller may enable xtrace (V>2). Do not let tracing from the predicate
+  # become captured stderr and masquerade as a guard denial.
+  local _cf_rg_xtrace=0
+  case $- in *x*) _cf_rg_xtrace=1; set +x ;; esac
   "$@" >"$_cf_rg_out" 2>"$_cf_rg_err" || _cf_rg_rc=$?
+  [ "$_cf_rg_xtrace" -eq 0 ] || set -x
   if [ $((mode & 0x4)) -ne 0 ] && [ -s "$_cf_rg_out" ]; then
     _cf_rg_reason="$(cat "$_cf_rg_out")"
   elif [ $((mode & 0x2)) -ne 0 ] && [ -s "$_cf_rg_err" ]; then

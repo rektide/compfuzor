@@ -204,6 +204,22 @@ def test_rendered_helpers() -> None:
         if run.stdout.strip() != "automatic":
             raise AssertionError(f"automatic run body missing: {run!r}")
         require(run.stderr, "+ build-go.sh: build (go)", "automatic loud report")
+
+        traced_env = os.environ.copy()
+        traced_env["V"] = "99"
+        traced = subprocess.run(
+            [str(automatic_path)],
+            check=False,
+            text=True,
+            capture_output=True,
+            env=traced_env,
+        )
+        if traced.returncode != 0 or traced.stdout.strip() != "automatic":
+            raise AssertionError(
+                f"successful guard was skipped under xtrace: {traced.stdout!r} {traced.stderr!r}"
+            )
+        reject(traced.stderr, "skipped build-go.sh:", "successful guard under xtrace")
+
         skipped_env = os.environ.copy()
         skipped_env["COMPFUZOR_GO_BYPASS"] = "1"
         skipped = subprocess.run(
