@@ -898,7 +898,7 @@ def test_runner_prefers_host_checkout_with_playbook_fallback() -> None:
         # opt-in freshen fetches its origin without resetting its worktree.
         output = play("a", hostcf)
         assert "host compfuzor checkout preferred" in output, output
-        assert marker.exists(), "host launcher was not used"
+        assert marker.read_text() == "host\n", "host launcher should run only for deploy"
         assert run("git", "rev-parse", "refs/remotes/origin/main", cwd=hostcf) == freshened
         assert (archive / ".jj").is_dir()
         # Explicit runner override beats the host checkout.
@@ -921,9 +921,3 @@ def test_runner_prefers_host_checkout_with_playbook_fallback() -> None:
         output = play("d", hostcf)
         assert "no usable host compfuzor launcher found" in output, output
         assert not marker.exists(), "non-executable host launcher was selected"
-        # A stale CLI may return success and show *root* help for unknown
-        # `deploy --help`; do not mistake that for deploy support.
-        wrapper.write_text("#!/bin/sh\nif [ \"$1\" = deploy ]; then echo 'repo-jj-archive <subcommand>'; exit 0; fi\nexit 1\n")
-        wrapper.chmod(0o755)
-        output = play("e", hostcf)
-        assert "using the playbook checkout's launcher" in output, output

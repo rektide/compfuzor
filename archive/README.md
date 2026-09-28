@@ -420,7 +420,7 @@ deployment with an old checkout or symlink needs a deliberate operator
 cutover; the repository task does not silently migrate it.
 
 The host's canonical Compfuzor checkout is preferred when its launcher is
-executable **and supports `deploy`**. The executing playbook's launcher is the fallback.
+executable. The executing playbook's launcher is the fallback.
 `COMPFUZOR_REPO_JJ_RUNNER` overrides the selection.
 
 `COMPFUZOR_SELF_FRESHEN=true` separately opts into fetching the host checkout's

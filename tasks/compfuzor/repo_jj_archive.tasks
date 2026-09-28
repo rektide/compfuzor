@@ -25,23 +25,12 @@
   register: compfuzor_host_launcher
   when: COMPFUZOR_REPO_JJ_RUNNER is undefined and JJ_BYPASS is deffalsy
 
-- name: "Compfuzor: check host runner supports deployment workspaces"
-  ansible.builtin.command:
-    argv:
-      - "{{ COMPFUZOR_ARCHIVE|default(lookup('env', 'HOME') ~ '/archive/rektide/compfuzor', true) }}/script/repo-jj-archive.ts"
-      - deploy
-      - --help
-  register: compfuzor_host_deploy_help
-  changed_when: false
-  failed_when: false
-  when: COMPFUZOR_REPO_JJ_RUNNER is undefined and compfuzor_host_launcher.stat.executable|default(False)
-
 - name: "Compfuzor: resolve the jj archive runner"
   ansible.builtin.set_fact:
     compfuzor_repo_jj_runner: >-
       {{ COMPFUZOR_REPO_JJ_RUNNER|default(
            COMPFUZOR_ARCHIVE|default(lookup('env', 'HOME') ~ '/archive/rektide/compfuzor', true) ~ '/script/repo-jj-archive.ts'
-             if compfuzor_host_deploy_help.rc|default(1) == 0 and 'repo-jj-archive deploy' in compfuzor_host_deploy_help.stdout|default('') else
+              if compfuzor_host_launcher.stat.executable|default(False) else
            playbook_dir ~ '/script/repo-jj-archive.ts', True) }}
 
 - name: "Compfuzor: jj archive runner resolved to the host checkout"
@@ -49,7 +38,7 @@
     msg: >-
       repo-jj-archive: host compfuzor checkout preferred ({{COMPFUZOR_ARCHIVE|default(lookup('env', 'HOME') ~ '/archive/rektide/compfuzor', true)}});
       set COMPFUZOR_REPO_JJ_RUNNER to pin a specific runner
-  when: COMPFUZOR_REPO_JJ_RUNNER is undefined and compfuzor_host_deploy_help.rc|default(1) == 0 and 'repo-jj-archive deploy' in compfuzor_host_deploy_help.stdout|default('')
+  when: compfuzor_host_launcher.stat.executable|default(False)
 
 - name: "Compfuzor: jj archive runner falling back to the playbook bundle"
   ansible.builtin.debug:
@@ -60,7 +49,7 @@
       otherwise its committed bundle)
   when: >-
     COMPFUZOR_REPO_JJ_RUNNER is undefined and
-    compfuzor_host_deploy_help.rc|default(1) != 0 or 'repo-jj-archive deploy' not in compfuzor_host_deploy_help.stdout|default('')
+    not (compfuzor_host_launcher.stat.executable|default(False))
 
 - name: "Compfuzor: jj archive runner pinned by override"
   ansible.builtin.debug:
