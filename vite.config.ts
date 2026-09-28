@@ -24,13 +24,20 @@ const config: ReturnType<typeof defineConfig> = defineConfig({
       // precedent: a single ESM entry, no hashes, checked in so ansible
       // consumers work without a build step. clean: false keeps
       // archive/src and archive/README.md in the output directory.
+      //
+      // The artifact is ONE TypeScript file (rolldown's erased JS is valid
+      // TS) executed by the installed system Node 26 (nodesource 26.x)
+      // via native type stripping — no .mjs twin, no node_modules
+      // transport, no Node 20/22 compatibility. outExtensions names the
+      // real emitted file (it overrides fixedExtension); this is the
+      // pack option, not a post-build rename of the artifact.
       entry: { "repo-jj-archive": "archive/src/repo-jj-archive.ts" },
       outDir: "archive",
       clean: false,
       format: "esm",
       platform: "node",
-      target: "node20.19",
-      fixedExtension: true,
+      target: "node26",
+      outExtensions: () => ({ js: ".ts" }),
       hash: false,
       dts: false,
       sourcemap: false,

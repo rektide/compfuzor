@@ -63,19 +63,28 @@ calls `script/repo-jj-archive.ts refresh --json` with `--dest GIT_DIR` (fallback
 `GIT_REMOTE_FIX=true` **explicitly opts into** `--reconcile-remotes`; default is
 fail-on-mismatch. Review the failure's URL table before setting that variable.
 
-`COMPFUZOR_REPO_JJ_RUNNER` can override the runner path. By default the
-playbook uses `playbook_dir/script/repo-jj-archive.ts`, which imports
-`archive/src/repo-jj-archive.ts` first when the source **and the installed CLI
-dependencies** (`node_modules/effect` and `node_modules/@effect/platform-node`)
-are present (no bundle transport), or the committed
-`archive/repo-jj-archive.mjs` when either is absent. The optional `self`
-command **never** influences this path or requires the compfuzor archive
-checkout to exist. The old flag-only invocation is still accepted as an alias
-for `refresh --json`; in that spelling (and under an explicit `refresh`) the
-old `--version BRANCH` maps to `--branch BRANCH`, while root `--version` on
-its own prints the toolkit version. Prefer the explicit subcommand. The
-Effect CLI migration left this task's runner path, argv, and JSON result
-shape unchanged.
+Runner resolution is a **dual path**: the host's canonical compfuzor checkout
+(`COMPFUZOR_ARCHIVE`, `~/archive/rektide/compfuzor` per
+[`vars/common.yaml`](/vars/common.yaml)) is preferred when its
+`script/repo-jj-archive.ts` launcher exists, so archive refreshes run the
+freshest toolkit regardless of which checkout renders the playbook. When that
+checkout is absent, the executing playbook's own
+`playbook_dir/script/repo-jj-archive.ts` is the fallback that always works.
+`COMPFUZOR_REPO_JJ_RUNNER` overrides both — the escape hatch when the host
+checkout is stale or broken. Both entries go through the same launcher
+contract, which imports `archive/src/repo-jj-archive.ts` first when the source
+**and the installed CLI dependencies** (`node_modules/effect` and
+`node_modules/@effect/platform-node`) are present (no bundle transport), or
+the committed single-file bundle `archive/repo-jj-archive.ts` (erased JS
+emitted as TypeScript, runs on system Node ≥ 26) when either is absent.
+`COMPFUZOR_SELF_FRESHEN=true` opts into fetching the host checkout's origin
+before resolution (fetch only, never a worktree reset; a missing checkout is
+a clean no-op). A run resolved to the host checkout says so with a
+`host compfuzor checkout preferred` debug line. The old flag-only invocation
+is still accepted as an alias for `refresh --json`; in that spelling (and
+under an explicit `refresh`) the old `--version BRANCH` maps to `--branch
+BRANCH`, while root `--version` on its own prints the toolkit version.
+Prefer the explicit subcommand.
 
 In `--json` mode stdout has **exactly one JSON result line** on success:
 

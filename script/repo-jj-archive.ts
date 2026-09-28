@@ -9,8 +9,9 @@
  *   1. archive/src/repo-jj-archive.ts — run the TypeScript source directly
  *      via Node type stripping; no bundler transport between checkout and
  *      execution.
- *   2. archive/repo-jj-archive.mjs — the committed build output, for trees
- *      without source or locally installed CLI dependencies.
+ *   2. archive/repo-jj-archive.ts — the committed single-file bundle
+ *      (erased JS emitted as TypeScript), for trees without source or
+ *      locally installed CLI dependencies. Runs on system Node ≥ 26.
  */
 
 import { realpath, stat } from "node:fs/promises";
@@ -21,7 +22,7 @@ type Runner = { main: () => Promise<void> };
 async function launch(): Promise<void> {
   const root = resolve(dirname(import.meta.filename), "..");
   const source = join(root, "archive/src/repo-jj-archive.ts");
-  const bundle = join(root, "archive/repo-jj-archive.mjs");
+  const bundle = join(root, "archive/repo-jj-archive.ts");
   const sourceFiles = [
     source,
     join(root, "node_modules/effect"),

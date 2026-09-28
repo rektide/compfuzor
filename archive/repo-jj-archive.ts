@@ -1,0 +1,28631 @@
+#!/usr/bin/env -S node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
+import { mkdir, realpath, rename, stat } from "node:fs/promises";
+import * as NodeChildProcess from "node:child_process";
+import { PassThrough } from "node:stream";
+import * as NodeCrypto from "node:crypto";
+import { randomUUID } from "node:crypto";
+import * as NFS from "node:fs";
+import * as OS from "node:os";
+import { homedir } from "node:os";
+import * as Path from "node:path";
+import { dirname, join } from "node:path";
+import * as NodeUrl from "node:url";
+import * as readline from "node:readline";
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Pipeable.js
+/**
+* The `Pipeable` module defines the shared interface and implementation helpers
+* for values that support Effect-style method chaining with `.pipe(...)`.
+*
+* A `Pipeable` value can pass itself through a sequence of unary functions from
+* left to right, so code can be written as `value.pipe(f, g, h)` instead of
+* deeply nesting calls. This is the method form used by many Effect data types
+* to compose transformations, validations, and effectful operations while
+* keeping the original value as the starting point of the pipeline.
+*
+* @since 2.0.0
+*/
+/**
+* Applies a `pipe` method's variadic arguments to an initial value from left
+* to right.
+*
+* **When to use**
+*
+* Use to implement a custom `.pipe(...)` method from JavaScript's `arguments`
+* object.
+*
+* **Details**
+*
+* This helper is intended for implementing `Pipeable.pipe` methods that
+* receive JavaScript's `arguments` object. With no functions it returns the
+* original value; otherwise it feeds each result into the next function.
+*
+* **Example** (Implementing a pipe method)
+*
+* ```ts import.meta.vitest
+* import { Pipeable } from "effect"
+*
+* class NumberBox {
+*   constructor(readonly value: number) {}
+*
+*   pipe(..._fns: ReadonlyArray<(value: number) => number>): number {
+*     return Pipeable.pipeArguments(this.value, arguments) as number
+*   }
+* }
+*
+* const result = new NumberBox(5).pipe(
+*   (n) => n + 2,
+*   (n) => n * 3
+* )
+* result // => 21
+* ```
+*
+* @category combinators
+* @since 2.0.0
+*/
+const pipeArguments = (self, args) => {
+	switch (args.length) {
+		case 0: return self;
+		case 1: return args[0](self);
+		case 2: return args[1](args[0](self));
+		case 3: return args[2](args[1](args[0](self)));
+		case 4: return args[3](args[2](args[1](args[0](self))));
+		case 5: return args[4](args[3](args[2](args[1](args[0](self)))));
+		case 6: return args[5](args[4](args[3](args[2](args[1](args[0](self))))));
+		case 7: return args[6](args[5](args[4](args[3](args[2](args[1](args[0](self)))))));
+		case 8: return args[7](args[6](args[5](args[4](args[3](args[2](args[1](args[0](self))))))));
+		case 9: return args[8](args[7](args[6](args[5](args[4](args[3](args[2](args[1](args[0](self)))))))));
+		default: {
+			let ret = self;
+			for (let i = 0, len = args.length; i < len; i++) ret = args[i](ret);
+			return ret;
+		}
+	}
+};
+/**
+* Reusable prototype that implements `Pipeable.pipe`.
+*
+* **When to use**
+*
+* Use when classes or object prototypes can reuse this value when they need the
+* standard pipe implementation backed by `pipeArguments`.
+*
+* @category prototypes
+* @since 3.15.0
+*/
+const Prototype$1 = { pipe() {
+	return pipeArguments(this, arguments);
+} };
+/**
+* Provides a base constructor whose instances implement the standard `Pipeable.pipe`
+* method.
+*
+* **When to use**
+*
+* Use when you need to define a class that supports Effect-style method
+* chaining through `.pipe(...)`.
+*
+* @category constructors
+* @since 3.15.0
+*/
+const Class$1 = /*#__PURE__*/ function() {
+	function PipeableBase() {}
+	PipeableBase.prototype = Prototype$1;
+	return PipeableBase;
+}();
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Function.js
+/**
+* Creates a function that can be called in data-first style or data-last
+* (`pipe`-friendly) style.
+*
+* **When to use**
+*
+* Use to expose one implementation through both direct and `pipe`-friendly
+* call styles.
+*
+* **Details**
+*
+* Pass either the arity of the uncurried function or a predicate that decides
+* whether the current call is data-first. Arity is the common case. Use a
+* predicate when optional arguments make arity ambiguous.
+*
+* **Example** (Selecting data-first or data-last style by arity)
+*
+* ```ts import.meta.vitest
+* import { Function, pipe } from "effect"
+*
+* const sum = Function.dual<
+*   (that: number) => (self: number) => number,
+*   (self: number, that: number) => number
+* >(2, (self, that) => self + that)
+*
+* sum(2, 3) // => 5
+* pipe(2, sum(3)) // => 5
+* ```
+*
+* **Example** (Defining overloads with call signatures)
+*
+* ```ts import.meta.vitest
+* import { Function, pipe } from "effect"
+*
+* const sum: {
+*   (that: number): (self: number) => number
+*   (self: number, that: number): number
+* } = Function.dual(2, (self: number, that: number): number => self + that)
+*
+* sum(2, 3) // => 5
+* pipe(2, sum(3)) // => 5
+* ```
+*
+* **Example** (Selecting data-first or data-last style with a predicate)
+*
+* ```ts import.meta.vitest
+* import { Function, pipe } from "effect"
+*
+* const sum = Function.dual<
+*   (that: number) => (self: number) => number,
+*   (self: number, that: number) => number
+* >(
+*   (args) => args.length === 2,
+*   (self, that) => self + that
+* )
+*
+* sum(2, 3) // => 5
+* pipe(2, sum(3)) // => 5
+* ```
+*
+* @category combinators
+* @since 2.0.0
+*/
+const dual = function(arity, body) {
+	if (typeof arity === "function") return function() {
+		return arity(arguments) ? body.apply(this, arguments) : (self) => body(self, ...arguments);
+	};
+	switch (arity) {
+		case 0:
+		case 1: throw new RangeError(`Invalid arity ${arity}`);
+		case 2: return function(a, b) {
+			if (arguments.length >= 2) return body(a, b);
+			return function(self) {
+				return body(self, a);
+			};
+		};
+		case 3: return function(a, b, c) {
+			if (arguments.length >= 3) return body(a, b, c);
+			return function(self) {
+				return body(self, a, b);
+			};
+		};
+		default: return function() {
+			if (arguments.length >= arity) return body.apply(this, arguments);
+			const args = arguments;
+			return function(self) {
+				return body(self, ...args);
+			};
+		};
+	}
+};
+/**
+* Returns its input argument unchanged.
+*
+* **When to use**
+*
+* Use to return a value unchanged where a function is required.
+*
+* **Example** (Returning the same value)
+*
+* ```ts import.meta.vitest
+* import { identity } from "effect"
+*
+* identity(5) // => 5
+* ```
+*
+* @category combinators
+* @since 2.0.0
+*/
+const identity = (a) => a;
+/**
+* Creates a zero-argument function that always returns the provided value.
+*
+* **When to use**
+*
+* Use when you need a thunk or callback that returns the same value on every
+* invocation.
+*
+* **Example** (Creating a constant thunk)
+*
+* ```ts import.meta.vitest
+* import { Function } from "effect"
+*
+* const constNull = Function.constant(null)
+*
+* constNull() // => null
+* constNull() // => null
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const constant = (value) => () => value;
+/**
+* Returns `true` when called.
+*
+* **When to use**
+*
+* Use when you need a thunk that returns `true` on every invocation.
+*
+* **Example** (Returning true from a thunk)
+*
+* ```ts import.meta.vitest
+* import { Function } from "effect"
+*
+* Function.constTrue() // => true
+* ```
+*
+* @category constants
+* @since 2.0.0
+*/
+const constTrue = /*#__PURE__*/ constant(true);
+/**
+* Returns `false` when called.
+*
+* **When to use**
+*
+* Use when you need a thunk that returns `false` on every invocation.
+*
+* **Example** (Returning false from a thunk)
+*
+* ```ts import.meta.vitest
+* import { Function } from "effect"
+*
+* Function.constFalse() // => false
+* ```
+*
+* @category constants
+* @since 2.0.0
+*/
+const constFalse = /*#__PURE__*/ constant(false);
+/**
+* Returns `undefined` when called.
+*
+* **When to use**
+*
+* Use when you need a thunk that returns `undefined` on every invocation.
+*
+* **Example** (Returning undefined from a thunk)
+*
+* ```ts import.meta.vitest
+* import { Function } from "effect"
+*
+* Function.constUndefined() // => undefined
+* ```
+*
+* @category constants
+* @since 2.0.0
+*/
+const constUndefined = /*#__PURE__*/ constant(void 0);
+/**
+* Returns no meaningful value when called.
+*
+* **When to use**
+*
+* Use when you need a thunk that is called only for its effect and has no
+* meaningful return value.
+*
+* **Example** (Returning void from a thunk)
+*
+* ```ts import.meta.vitest
+* import { Function } from "effect"
+*
+* Function.constVoid() // => undefined
+* ```
+*
+* @category constants
+* @since 2.0.0
+*/
+const constVoid = constUndefined;
+function pipe(a, ...args) {
+	return pipeArguments(a, args);
+}
+/**
+* Creates a memoized function whose input is an object, caching results by
+* object identity.
+*
+* **When to use**
+*
+* Use to reuse the result of a synchronous computation whose output is stable
+* for a given object reference.
+*
+* **Details**
+*
+* Each memoized wrapper owns a private `WeakMap` keyed by object identity.
+*
+* **Gotchas**
+*
+* `undefined` is reserved to represent a cache miss and is therefore not
+* supported as a return value.
+*
+* Structurally equal objects do not share cache entries. If the same object is
+* mutated after its first call, later calls still return the cached result for
+* that reference.
+*
+* @category caching
+* @since 4.0.0
+*/
+function memoize(f) {
+	const cache = /* @__PURE__ */ new WeakMap();
+	return (a) => {
+		const cached = cache.get(a);
+		if (cached !== void 0) return cached;
+		const result = f(a);
+		cache.set(a, result);
+		return result;
+	};
+}
+/**
+* Creates a memoized idempotent object transformation that caches both inputs
+* and their outputs by object identity.
+*
+* **When to use**
+*
+* Use when an object transformation is idempotent and its output can be safely
+* reused as a fixed point.
+*
+* **Details**
+*
+* After computing an input, the returned function caches both the input and
+* the output. Calling it with either reference returns the output without
+* invoking the supplied function again.
+*
+* **Gotchas**
+*
+* The returned function treats each computed output as a fixed point. If
+* applying the supplied function to an output would produce an observably
+* different value, this memoization changes that behavior.
+*
+* @see {@link memoize} for memoizing functions without an idempotence requirement
+* @category caching
+* @since 4.0.0
+*/
+function memoizeIdempotent(f) {
+	const cache = /* @__PURE__ */ new WeakMap();
+	return (a) => {
+		const cached = cache.get(a);
+		if (cached !== void 0) return cached;
+		const result = f(a);
+		cache.set(a, result);
+		if (result !== a) cache.set(result, result);
+		return result;
+	};
+}
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/equal.js
+/** @internal */
+const getAllObjectKeys = (obj) => {
+	const keys = new Set(Reflect.ownKeys(obj));
+	if (obj.constructor === Object) return keys;
+	if (obj instanceof Error) keys.delete("stack");
+	const proto = Object.getPrototypeOf(obj);
+	let current = proto;
+	while (current !== null && current !== Object.prototype) {
+		const ownKeys = Reflect.ownKeys(current);
+		for (let i = 0; i < ownKeys.length; i++) keys.add(ownKeys[i]);
+		current = Object.getPrototypeOf(current);
+	}
+	if (keys.has("constructor") && typeof obj.constructor === "function" && proto === obj.constructor.prototype) keys.delete("constructor");
+	return keys;
+};
+/** @internal */
+const byReferenceInstances = /*#__PURE__*/ new WeakSet();
+/** @internal */
+const viewBytes = (view) => new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/hash.js
+/**
+* Back-edge count used to avoid caching entry-point-dependent hashes.
+*
+* @internal
+*/
+let backEdges = 0;
+/** @internal */
+const addBackEdge = () => {
+	backEdges++;
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Predicate.js
+/**
+* Defines runtime checks for values.
+*
+* A `Predicate<A>` returns `true` or `false` for an `A`. A
+* `Refinement<A, B>` is a predicate that also narrows the TypeScript type when
+* it succeeds. This module includes guards for common JavaScript values,
+* property and tag checks, tuple and struct checks, boolean combinators, and
+* helpers for composing predicates and refinements.
+*
+* @since 2.0.0
+*/
+/**
+* Checks whether a value is a `string`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` guard to narrow an `unknown` value to a
+* string.
+*
+* **Details**
+*
+* Uses `typeof input === "string"`.
+*
+* **Example** (Guarding strings)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const data: unknown = "hi"
+*
+* if (Predicate.isString(data)) {
+*   data.toUpperCase() // => "HI"
+* }
+* ```
+*
+* @see {@link isNumber}
+* @see {@link isBoolean}
+* @see {@link Refinement}
+* @category guards
+* @since 2.0.0
+*/
+function isString(input) {
+	return typeof input === "string";
+}
+/**
+* Checks whether a value is a `number`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` guard to narrow an `unknown` value to a
+* number.
+*
+* **Details**
+*
+* Uses `typeof input === "number"` and does not exclude `NaN` or `Infinity`.
+*
+* **Example** (Guarding numbers)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const data: unknown = 42
+*
+* if (Predicate.isNumber(data)) {
+*   data + 1 // => 43
+* }
+* ```
+*
+* @see {@link isBigInt}
+* @see {@link isString}
+* @category guards
+* @since 2.0.0
+*/
+function isNumber(input) {
+	return typeof input === "number";
+}
+/**
+* Checks whether a value is a `boolean`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` guard to narrow an `unknown` value to a
+* boolean.
+*
+* **Details**
+*
+* Uses `typeof input === "boolean"`.
+*
+* **Example** (Guarding booleans)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const data: unknown = true
+*
+* if (Predicate.isBoolean(data)) {
+*   data ? "yes" : "no" // => "yes"
+* }
+* ```
+*
+* @see {@link isString}
+* @see {@link isNumber}
+* @category guards
+* @since 2.0.0
+*/
+function isBoolean$1(input) {
+	return typeof input === "boolean";
+}
+/**
+* Checks whether a value is a `function`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` guard to narrow an `unknown` value to a
+* callable function.
+*
+* **Details**
+*
+* Uses `typeof input === "function"`.
+*
+* **Example** (Guarding functions)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const data: unknown = () => 1
+*
+* if (Predicate.isFunction(data)) {
+*   data() // => 1
+* }
+* ```
+*
+* @see {@link isObjectKeyword}
+* @category guards
+* @since 2.0.0
+*/
+function isFunction(input) {
+	return typeof input === "function";
+}
+/**
+* Checks whether a value is `undefined`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` guard for values that are exactly
+* `undefined`.
+*
+* **Details**
+*
+* Uses `input === undefined`.
+*
+* **Example** (Guarding undefined values)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const data: unknown = undefined
+*
+* Predicate.isUndefined(data) // => true
+* ```
+*
+* @see {@link isNotUndefined}
+* @see {@link isNullish}
+* @category guards
+* @since 2.0.0
+*/
+function isUndefined(input) {
+	return input === void 0;
+}
+/**
+* Checks whether a value is not `undefined`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` refinement that filters out `undefined`
+* while preserving other falsy values.
+*
+* **Details**
+*
+* Returns a refinement that excludes `undefined`.
+*
+* **Example** (Filtering undefined values)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const values = [1, undefined, 2]
+* const defined = values.filter(Predicate.isNotUndefined) // => [1, 2]
+* ```
+*
+* @see {@link isUndefined}
+* @see {@link isNotNullish}
+* @category guards
+* @since 2.0.0
+*/
+function isNotUndefined(input) {
+	return input !== void 0;
+}
+/**
+* Checks whether a value is not `null`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` refinement that filters out `null` while
+* preserving other falsy values.
+*
+* **Details**
+*
+* Returns a refinement that excludes `null`.
+*
+* **Example** (Filtering null values)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const values = [1, null, 2]
+* const nonNull = values.filter(Predicate.isNotNull) // => [1, 2]
+* ```
+*
+* @see {@link isNull}
+* @see {@link isNotNullish}
+* @category guards
+* @since 2.0.0
+*/
+function isNotNull(input) {
+	return input !== null;
+}
+/**
+* Checks whether a value is `null` or `undefined`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` guard for nullish values.
+*
+* **Details**
+*
+* Uses `input === null || input === undefined`.
+*
+* **Example** (Guarding nullish values)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const values = [0, null, "", undefined]
+* const nullish = values.filter(Predicate.isNullish) // => [null, undefined]
+* ```
+*
+* @see {@link isNotNullish}
+* @see {@link isUndefined}
+* @see {@link isNull}
+* @category guards
+* @since 4.0.0
+*/
+function isNullish(input) {
+	return input === null || input === void 0;
+}
+/**
+* Checks whether a value is not `null` and not `undefined`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` refinement that filters out nullish values
+* but keeps other falsy ones.
+*
+* **Details**
+*
+* Uses `input != null`.
+*
+* **Example** (Filtering non-nullish values)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const values = [0, null, "", undefined]
+* const present = values.filter(Predicate.isNotNullish) // => [0, ""]
+* ```
+*
+* @see {@link isNullish}
+* @see {@link isNotNull}
+* @see {@link isNotUndefined}
+* @category guards
+* @since 4.0.0
+*/
+function isNotNullish(input) {
+	return input != null;
+}
+/**
+* Type guard that always returns `true`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` that always accepts, e.g. as a placeholder.
+*
+* **Example** (Matching every value)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* Predicate.isUnknown(123) // => true
+* ```
+*
+* @see {@link isNever}
+* @category guards
+* @since 2.0.0
+*/
+function isUnknown(_) {
+	return true;
+}
+/**
+* Checks whether a value is a non-null object value that is not an array.
+*
+* **When to use**
+*
+* Use to narrow unknown input to a non-null, non-array object with a
+* `Predicate` guard.
+*
+* **Details**
+*
+* This is a structural runtime check using `typeof input === "object"`, so it
+* also accepts object instances such as `Date`, `Map`, class instances, and
+* typed arrays. It excludes `null` and arrays.
+*
+* **Example** (Guarding objects)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* Predicate.isObject({ a: 1 }) // => true
+* Predicate.isObject([1, 2]) // => false
+* ```
+*
+* @see {@link isObjectOrArray}
+* @see {@link isReadonlyObject}
+* @category guards
+* @since 2.0.0
+*/
+function isObject(input) {
+	return typeof input === "object" && input !== null && !Array.isArray(input);
+}
+/**
+* Checks whether a value is an `object` in the JavaScript sense (objects, arrays, functions).
+*
+* **When to use**
+*
+* Use when you need a `Predicate` guard that accepts arrays and functions as
+* well as objects.
+*
+* **Details**
+*
+* Returns `true` for arrays and functions, and `false` for `null`.
+*
+* **Example** (Checking object keywords)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* Predicate.isObjectKeyword(() => 1) // => true
+* Predicate.isObjectKeyword(null) // => false
+* ```
+*
+* @see {@link isObject}
+* @see {@link isObjectOrArray}
+* @category guards
+* @since 4.0.0
+*/
+function isObjectKeyword(input) {
+	return typeof input === "object" && input !== null || isFunction(input);
+}
+/**
+* Checks whether a value has a given property key.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` guard for property access on `unknown`
+* values with a simple structural object check.
+*
+* **Details**
+*
+* Uses the `in` operator and `isObjectKeyword`. This does not check property
+* value types.
+*
+* **Example** (Guarding object properties)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const hasName = Predicate.hasProperty("name")
+* const data: unknown = { name: "Ada" }
+*
+* if (hasName(data)) {
+*   data.name // => "Ada"
+* }
+* ```
+*
+* @see {@link isTagged}
+* @see {@link isObjectKeyword}
+* @category guards
+* @since 2.0.0
+*/
+const hasProperty = /*#__PURE__*/ dual(2, (self, property) => isObjectKeyword(self) && property in self);
+/**
+* Checks whether a value has a `_tag` property equal to the given tag.
+*
+* **When to use**
+*
+* Use when you model tagged unions with a `_tag` field and want a quick
+* `Predicate` guard for tagged values.
+*
+* **Details**
+*
+* Uses `hasProperty` and strict equality on `_tag`.
+*
+* **Example** (Guarding tagged values)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const isOk = Predicate.isTagged("Ok")
+*
+* isOk({ _tag: "Ok", value: 1 }) // => true
+* ```
+*
+* @see {@link hasProperty}
+* @category guards
+* @since 2.0.0
+*/
+const isTagged = /*#__PURE__*/ dual(2, (self, tag) => hasProperty(self, "_tag") && self["_tag"] === tag);
+/**
+* Checks whether a value is an `Error`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` guard for errors caught from unknown sources.
+*
+* **Details**
+*
+* Uses `instanceof Error`.
+*
+* **Example** (Guarding errors)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const data: unknown = new Error("boom")
+*
+* Predicate.isError(data) // => true
+* ```
+*
+* @see {@link isUnknown}
+* @category guards
+* @since 2.0.0
+*/
+function isError(input) {
+	return input instanceof Error;
+}
+/**
+* Checks whether a value is iterable.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` guard before iterating an unknown value.
+*
+* **Details**
+*
+* Accepts strings as iterable and uses `hasProperty` for `Symbol.iterator`.
+*
+* **Example** (Guarding iterables)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const data: unknown = [1, 2, 3]
+*
+* Predicate.isIterable(data) // => true
+* ```
+*
+* @see {@link isSet}
+* @see {@link isMap}
+* @category guards
+* @since 2.0.0
+*/
+function isIterable(input) {
+	return hasProperty(input, Symbol.iterator) || isString(input);
+}
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Hash.js
+/**
+* Computes Effect hash values and defines the interface for objects that want
+* to provide their own hash implementation. Hashes are small numeric
+* fingerprints used by Effect data structures to bucket values quickly; they
+* are not cryptographic digests and they are not proof that two values are
+* equal. The module also includes helpers for primitive, structure, array, and
+* reference-based hashes, plus functions for combining and optimizing numeric
+* hash values.
+*
+* @since 2.0.0
+*/
+/**
+* Defines the unique identifier used to identify objects that implement the Hash interface.
+*
+* **When to use**
+*
+* Use as the computed property key for the method that supplies a custom hash
+* value on a `Hash` implementor.
+*
+* @see {@link Hash} for the interface implemented with this symbol
+* @see {@link isHash} for checking whether a value implements `Hash`
+* @see {@link hash} for computing hash values
+*
+* @category symbols
+* @since 2.0.0
+*/
+const symbol$1 = "~effect/Hash";
+/**
+* Computes a hash value for any given value.
+*
+* **When to use**
+*
+* Use to compute an Effect hash for primitives, collections, and hashable
+* objects.
+*
+* **Details**
+*
+* This function can hash primitives (numbers, strings, booleans, etc.) as well as
+* objects, arrays, and other complex data structures. It automatically handles
+* different types and provides a consistent hash value for equivalent inputs.
+*
+* **Gotchas**
+*
+* Objects being hashed must be treated as immutable after their first hash
+* computation. Hash results are cached, so mutating an object after hashing will
+* lead to stale cached values and broken hash-based operations. For mutable
+* objects, implement a custom `Hash` interface that hashes the object reference
+* rather than its content.
+*
+* **Example** (Hashing different values)
+*
+* ```ts import.meta.vitest
+* import { Hash } from "effect"
+*
+* Hash.hash(42) === Hash.hash(42) // => true
+* Hash.hash("hello") === Hash.hash("hello") // => true
+* Hash.hash([1, 2, 3]) === Hash.hash([1, 2, 3]) // => true
+* ```
+*
+* @category hashing
+* @since 2.0.0
+*/
+const hash = (self) => {
+	switch (typeof self) {
+		case "number": return number$1(self);
+		case "bigint": return string$1(self.toString(10));
+		case "string": return string$1(self);
+		case "function":
+		case "object": if (self === null) break;
+		else if (self instanceof Date) {
+			if (Number.isNaN(self.getTime())) return string$1("Invalid Date");
+			return string$1(self.toISOString());
+		} else if (self instanceof RegExp) return string$1(self.toString());
+		else {
+			if (byReferenceInstances.has(self)) return random(self);
+			const cached = hashCache.get(self);
+			if (cached !== void 0) return cached;
+			if (visitedObjects.has(self)) {
+				addBackEdge();
+				return string$1("[Circular]");
+			}
+			visitedObjects.add(self);
+			const seen = backEdges;
+			let h;
+			try {
+				if ("~effect/Hash" in self) h = self[symbol$1]();
+				else if (typeof self === "function") h = random(self);
+				else if (self instanceof DataView) h = array(viewBytes(self));
+				else if (Array.isArray(self) || ArrayBuffer.isView(self)) h = array(self);
+				else if (self instanceof Map) h = hashMap(self);
+				else if (self instanceof Set) h = hashSet(self);
+				else h = structure(self);
+			} finally {
+				visitedObjects.delete(self);
+			}
+			if (seen === backEdges) hashCache.set(self, h);
+			return h;
+		}
+	}
+	return optimize(mix(string$1(String(self))));
+};
+/**
+* Generates a random hash value for an object and caches it.
+*
+* **When to use**
+*
+* Use to hash an object by reference identity instead of structural content.
+*
+* **Details**
+*
+* This function creates a random hash value for objects that don't have their own
+* hash implementation. The hash value is cached using a WeakMap, so the same object
+* will always return the same hash value during its lifetime.
+*
+* **Example** (Hashing objects by reference)
+*
+* ```ts import.meta.vitest
+* import { Hash } from "effect"
+*
+* const obj1 = { a: 1 }
+* const obj2 = { a: 1 }
+*
+* Hash.random(obj1) === Hash.random(obj1) // => true
+*
+* typeof Hash.random(obj2) // => "number"
+* ```
+*
+* @category hashing
+* @since 2.0.0
+*/
+const random = (self) => {
+	if (!randomHashCache.has(self)) randomHashCache.set(self, optimize(Math.random() * 4294967296 | 0));
+	return randomHashCache.get(self);
+};
+const mix = (h) => {
+	h ^= h >>> 16;
+	h = Math.imul(h, 2246822507);
+	h ^= h >>> 13;
+	h = Math.imul(h, 3266489909);
+	return h ^ h >>> 16;
+};
+/**
+* Combines two hash values into a single hash value.
+*
+* **When to use**
+*
+* Use to build a hash for a composite value by folding together hash values for
+* its parts.
+*
+* **Details**
+*
+* Supports direct and pipeable usage. Argument order affects the result.
+*
+* **Example** (Combining hash values)
+*
+* ```ts import.meta.vitest
+* import { Hash, pipe } from "effect"
+*
+* const hash1 = Hash.hash("hello")
+* const hash2 = Hash.hash("world")
+*
+* const combined = Hash.combine(hash2)(hash1)
+* combined === pipe(hash1, Hash.combine(hash2)) // => true
+* ```
+*
+* @see {@link hash} for computing hash values from arbitrary inputs
+* @see {@link structureKeys} for hashing selected object fields without manual combination
+*
+* @category hashing
+* @since 2.0.0
+*/
+const combine$1 = /*#__PURE__*/ dual(2, (self, b) => mix(Math.imul(self, 2654435761) + Math.imul(b, 2246822507)));
+/**
+* Applies bit manipulation techniques to optimize a hash value.
+*
+* **When to use**
+*
+* Use to improve the bit distribution of a raw numeric hash value.
+*
+* **Details**
+*
+* This function takes a hash value and applies bitwise operations to improve
+* the distribution of hash values, reducing the likelihood of collisions.
+*
+* **Example** (Optimizing a hash value)
+*
+* ```ts import.meta.vitest
+* import { Hash } from "effect"
+*
+* Hash.optimize(1234567890) // => 160826066
+* ```
+*
+* @category hashing
+* @since 2.0.0
+*/
+const optimize = (n) => n & 3221225471 | n >>> 1 & 1073741824;
+const float64 = /*#__PURE__*/ new DataView(/*#__PURE__*/ new ArrayBuffer(8));
+/**
+* Computes a hash value for a number.
+*
+* **When to use**
+*
+* Use to hash a JavaScript number with Effect's numeric hash semantics.
+*
+* **Details**
+*
+* Int32 values hash to themselves. Other numbers hash from their IEEE-754 bits,
+* with a canonical representation for `NaN`.
+*
+* **Example** (Hashing numbers)
+*
+* ```ts import.meta.vitest
+* import { Hash } from "effect"
+*
+* Number.isInteger(Hash.number(42)) // => true
+* Number.isInteger(Hash.number(3.14)) // => true
+* Hash.number(NaN) === Hash.number(NaN) // => true
+* Hash.number(Infinity) === Hash.number(Infinity) // => true
+* Hash.number(100) === Hash.number(100) // => true
+* ```
+*
+* @category hashing
+* @since 2.0.0
+*/
+const number$1 = (n) => {
+	const h = n | 0;
+	if (h === n) return optimize(h);
+	float64.setFloat64(0, n !== n ? NaN : n);
+	return optimize(combine$1(float64.getInt32(0), float64.getInt32(4)));
+};
+/**
+* Computes a hash value for a string using the djb2 algorithm.
+*
+* **When to use**
+*
+* Use when you need a string field to contribute to a custom structural hash
+* implementation.
+*
+* **Details**
+*
+* This function implements a variation of the djb2 hash algorithm, which is
+* known for its good distribution properties and speed. It processes each
+* character of the string to produce a consistent hash value.
+*
+* **Example** (Hashing strings)
+*
+* ```ts import.meta.vitest
+* import { Hash } from "effect"
+*
+* Hash.string("hello") // => 181380007
+* Hash.string("world") // => 164394279
+* Hash.string("") // => 5381
+* Hash.string("test") === Hash.string("test") // => true
+* ```
+*
+* @category hashing
+* @since 2.0.0
+*/
+const string$1 = (str) => {
+	let h = 5381, i = str.length;
+	while (i) h = h * 33 ^ str.charCodeAt(--i);
+	return optimize(h);
+};
+/**
+* Computes a hash value for an object using only the specified keys.
+*
+* **When to use**
+*
+* Use to hash an object by a selected set of property keys.
+*
+* **Details**
+*
+* This function allows you to hash an object by considering only specific keys,
+* which is useful when you want to create a hash based on a subset of an object's
+* properties.
+*
+* **Example** (Hashing selected object keys)
+*
+* ```ts import.meta.vitest
+* import { Hash } from "effect"
+*
+* const person = { name: "John", age: 30, city: "New York" }
+*
+* const hash1 = Hash.structureKeys(person, ["name", "age"])
+* const hash2 = Hash.structureKeys(person, ["name", "city"])
+*
+* hash1 // => -731887653
+* hash2 // => 148523102
+*
+* const person2 = { name: "John", age: 30, city: "Boston" }
+* const hash3 = Hash.structureKeys(person2, ["name", "age"])
+* hash1 === hash3 // => true
+* ```
+*
+* @category hashing
+* @since 2.0.0
+*/
+const structureKeys = (o, keys) => {
+	let h = 12289;
+	for (const key of keys) h ^= combine$1(hash(key), hash(o[key]));
+	return optimize(h);
+};
+/**
+* Computes a structural hash for an object using Effect's object key collection.
+*
+* **When to use**
+*
+* Use to hash an object from all structural keys collected by Effect.
+*
+* **Details**
+*
+* The hash is based on the object's structural keys and their values, including
+* symbol keys and relevant prototype keys for non-plain objects.
+*
+* **Example** (Hashing object structures)
+*
+* ```ts import.meta.vitest
+* import { Hash } from "effect"
+*
+* const obj1 = { name: "John", age: 30 }
+* const obj2 = { name: "Jane", age: 25 }
+* const obj3 = { name: "John", age: 30 }
+*
+* Hash.structure(obj1) // => -731887653
+* Hash.structure(obj2) // => -222100417
+* Hash.structure(obj3) // => -731887653
+* Hash.structure(obj1) === Hash.structure(obj3) // => true
+* ```
+*
+* @category hashing
+* @since 2.0.0
+*/
+const structure = (o) => structureKeys(o, getAllObjectKeys(o));
+const unordered = (seed, f) => (iter) => {
+	let h = seed;
+	for (const element of iter) h ^= f(element);
+	return optimize(h);
+};
+/**
+* Computes a hash value for an iterable by hashing all of its elements.
+*
+* **When to use**
+*
+* Use to hash the values yielded by an iterable with Effect hash semantics.
+*
+* **Details**
+*
+* Folds element hashes with {@link combine}, so order and length affect the
+* result.
+*
+* **Gotchas**
+*
+* A hash is not an equality proof. Distinct inputs can still share a hash.
+*
+* **Example** (Hashing arrays)
+*
+* ```ts import.meta.vitest
+* import { Hash } from "effect"
+*
+* const arr1 = [1, 2, 3]
+* const arr2 = [1, 2, 3]
+* const arr3 = [3, 2, 1]
+*
+* Hash.array(arr1) === Hash.array(arr2) // => true
+* Hash.array(arr1) === Hash.array(arr3) // => false
+* ```
+*
+* @see {@link hash} for the general-purpose hash dispatcher
+*
+* @category hashing
+* @since 2.0.0
+*/
+const array = (arr) => {
+	let h = 6151;
+	for (const element of arr) h = combine$1(h, hash(element));
+	return optimize(h);
+};
+const hashMap = /*#__PURE__*/ unordered(/*#__PURE__*/ string$1("Map"), ([k, v]) => combine$1(hash(k), hash(v)));
+const setSeed = /*#__PURE__*/ string$1("Set");
+const hashSet = /*#__PURE__*/ unordered(setSeed, (element) => combine$1(setSeed, hash(element)));
+const randomHashCache = /*#__PURE__*/ new WeakMap();
+const hashCache = /*#__PURE__*/ new WeakMap();
+const visitedObjects = /*#__PURE__*/ new WeakSet();
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Equal.js
+/**
+* Defines the unique string identifier for the `Equal` interface.
+*
+* **When to use**
+*
+* Use when you implement custom equality and need the computed property key for
+* the equality method.
+*
+* **Details**
+*
+* This is a pure constant with no allocation or side effects.
+*
+* **Example** (Implementing Equal on a class)
+*
+* ```ts import.meta.vitest
+* import { Equal, Hash } from "effect"
+*
+* class UserId implements Equal.Equal {
+*   constructor(readonly id: string) {}
+*
+*   [Equal.symbol](that: Equal.Equal): boolean {
+*     return that instanceof UserId && this.id === that.id
+*   }
+*
+*   [Hash.symbol](): number {
+*     return Hash.string(this.id)
+*   }
+* }
+*
+* Equal.equals(new UserId("1"), new UserId("1")) // => true
+* Equal.equals(new UserId("1"), new UserId("2")) // => false
+* ```
+*
+* @see {@link Equal} — the interface that uses this symbol
+* @see {@link isEqual} — type guard for `Equal` implementors
+* @category symbols
+* @since 2.0.0
+*/
+const symbol = "~effect/Equal";
+function equals$1() {
+	if (arguments.length === 1) return (self) => compareBoth(self, arguments[0]);
+	return compareBoth(arguments[0], arguments[1]);
+}
+function compareBoth(self, that) {
+	if (self === that) return true;
+	if (self == null || that == null) return false;
+	const selfType = typeof self;
+	if (selfType !== typeof that) return false;
+	if (selfType === "number" && self !== self && that !== that) return true;
+	if (selfType !== "object" && selfType !== "function") return false;
+	if (byReferenceInstances.has(self) || byReferenceInstances.has(that)) return false;
+	return compareObjects(self, that);
+}
+function compareObjects(self, that) {
+	const depth = pathLeft.length;
+	for (let i = depth; i-- > 0;) if (pathLeft[i] === self && pathRight[i] === that) return true;
+	if (depth) return compareOnPath(self, that);
+	let known = results.get(self);
+	if (!known) results.set(self, known = /* @__PURE__ */ new WeakMap());
+	let result = known.get(that);
+	if (result === void 0) known.set(that, result = compareOnPath(self, that));
+	return result;
+}
+function compareOnPath(self, that) {
+	pathLeft.push(self);
+	pathRight.push(that);
+	try {
+		return compareStructure(self, that);
+	} finally {
+		pathLeft.pop();
+		pathRight.pop();
+	}
+}
+const pathLeft = [];
+const pathRight = [];
+const results = /*#__PURE__*/ new WeakMap();
+function compareStructure(self, that) {
+	if (hash(self) !== hash(that)) return false;
+	else if (self instanceof Date) {
+		if (!(that instanceof Date)) return false;
+		const selfTime = self.getTime();
+		const thatTime = that.getTime();
+		return selfTime === thatTime || Number.isNaN(selfTime) && Number.isNaN(thatTime);
+	} else if (self instanceof RegExp) return that instanceof RegExp && self.toString() === that.toString();
+	const bothEquals = isEqual(self);
+	if (bothEquals !== isEqual(that) || typeof self === "function" && !bothEquals) return false;
+	else if (bothEquals) return self[symbol](that);
+	else if (Array.isArray(self)) {
+		if (!Array.isArray(that) || self.length !== that.length) return false;
+		return compareArrays(self, that);
+	} else if (ArrayBuffer.isView(self)) {
+		const selfIsDataView = self instanceof DataView;
+		if (!ArrayBuffer.isView(that) || self.byteLength !== that.byteLength || selfIsDataView !== that instanceof DataView) return false;
+		if (selfIsDataView) return compareTypedArrays(viewBytes(self), viewBytes(that));
+		return compareTypedArrays(self, that);
+	} else if (self instanceof Map) {
+		if (!(that instanceof Map) || self.size !== that.size) return false;
+		return compareHashed(self, that, entryHash, equalEntries);
+	} else if (self instanceof Set) {
+		if (!(that instanceof Set) || self.size !== that.size) return false;
+		return compareHashed(self, that, hash, compareBoth);
+	}
+	return compareRecords(self, that);
+}
+function compareArrays(self, that) {
+	for (let i = 0; i < self.length; i++) if (!compareBoth(self[i], that[i])) return false;
+	return true;
+}
+function compareTypedArrays(self, that) {
+	if (self.length !== that.length) return false;
+	for (let i = 0; i < self.length; i++) if (self[i] !== that[i]) return false;
+	return true;
+}
+function compareRecords(self, that) {
+	const selfKeys = getAllObjectKeys(self);
+	const thatKeys = getAllObjectKeys(that);
+	if (selfKeys.size !== thatKeys.size) return false;
+	for (const key of selfKeys) if (!thatKeys.has(key) || !compareBoth(self[key], that[key])) return false;
+	return true;
+}
+function compareHashed(self, that, hashOf, equivalent) {
+	const groups = /* @__PURE__ */ new Map();
+	for (const item of that) {
+		const h = hashOf(item);
+		const group = groups.get(h);
+		if (group) group.push(item);
+		else groups.set(h, [item]);
+	}
+	outer: for (const item of self) {
+		const group = groups.get(hashOf(item));
+		if (group) {
+			for (let i = 0; i < group.length; i++) if (equivalent(item, group[i])) {
+				group[i] = group[group.length - 1];
+				group.pop();
+				continue outer;
+			}
+		}
+		return false;
+	}
+	return true;
+}
+const entryHash = (entry) => hash(entry[0]);
+const equalEntries = (self, that) => compareBoth(self[0], that[0]) && compareBoth(self[1], that[1]);
+/**
+* Checks whether a value implements the {@link Equal} interface.
+*
+* **When to use**
+*
+* Use when you need generic utility code to distinguish `Equal` implementors
+* from plain values before calling `[Equal.symbol]` directly.
+*
+* **Details**
+*
+* - Pure function, no side effects.
+* - Returns `true` if and only if `u` has a property keyed by
+*   {@link symbol}.
+* - Acts as a TypeScript type guard, narrowing the input to {@link Equal}.
+*
+* **Example** (Checking Equal values)
+*
+* ```ts import.meta.vitest
+* import { Equal, Hash } from "effect"
+*
+* class Token implements Equal.Equal {
+*   constructor(readonly value: string) {}
+*   [Equal.symbol](that: Equal.Equal): boolean {
+*     return that instanceof Token && this.value === that.value
+*   }
+*   [Hash.symbol](): number {
+*     return Hash.string(this.value)
+*   }
+* }
+*
+* Equal.isEqual(new Token("abc")) // => true
+* Equal.isEqual({ x: 1 }) // => false
+* Equal.isEqual(42) // => false
+* ```
+*
+* @see {@link Equal} — the interface being checked
+* @see {@link symbol} — the property key that signals `Equal` support
+* @category guards
+* @since 2.0.0
+*/
+const isEqual = (u) => hasProperty(u, symbol);
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Redactable.js
+/**
+* Defines the symbol used to identify objects that implement the {@link Redactable}
+* protocol.
+*
+* **When to use**
+*
+* Use as the property key when implementing the `Redactable` protocol.
+*
+* **Details**
+*
+* Add a method under this key to make an object redactable. The method receives
+* the current `Context` and must return the replacement value. The symbol is
+* registered globally via `Symbol.for("~effect/Redactable")`, so it is
+* identical across multiple copies of the library at runtime.
+*
+* **Example** (Masking an API key)
+*
+* ```ts import.meta.vitest
+* import { Context, Redactable } from "effect"
+*
+* class ApiKey {
+*   constructor(readonly raw: string) {}
+*
+*   [Redactable.symbolRedactable](_ctx: Context.Context<never>) {
+*     return this.raw.slice(0, 4) + "..."
+*   }
+* }
+*
+* Redactable.redact(new ApiKey("secret-key")) // => "secr..."
+* ```
+*
+* @see {@link Redactable} for the interface this symbol belongs to
+* @see {@link isRedactable} to check whether a value has this symbol
+* @category symbols
+* @since 3.10.0
+*/
+const symbolRedactable = /*#__PURE__*/ Symbol.for("~effect/Redactable");
+/**
+* Type guard that checks whether a value implements the {@link Redactable}
+* interface.
+*
+* **When to use**
+*
+* Use to narrow an unknown value before calling redaction-specific helpers.
+*
+* @see {@link Redactable} for the interface being checked
+* @see {@link redact} to apply redaction if the value is redactable
+* @category guards
+* @since 3.10.0
+*/
+const isRedactable = (u) => hasProperty(u, symbolRedactable);
+/**
+* Returns a redacted value if it implements {@link Redactable}, otherwise returns it
+* unchanged.
+*
+* **When to use**
+*
+* Use as the general-purpose entry point for redaction when the input may
+* or may not implement the redaction protocol.
+*
+* **Details**
+*
+* This function calls {@link isRedactable} and, when it returns `true`,
+* delegates to {@link getRedacted}.
+*
+* **Gotchas**
+*
+* Redaction is not recursive. Nested redactable values inside the returned
+* object are not automatically redacted.
+*
+* @see {@link isRedactable} to check before redacting
+* @see {@link getRedacted} for the lower-level variant for known redactables
+* @category destructors
+* @since 3.10.0
+*/
+function redact(u) {
+	if (isRedactable(u)) return getRedacted(u);
+	return u;
+}
+/**
+* Returns the result of calling `[symbolRedactable]` on a value that is
+* already known to be {@link Redactable}.
+*
+* **When to use**
+*
+* Use when you need to read the redacted representation from a value already
+* verified as `Redactable`.
+*
+* **Details**
+*
+* This function reads the current fiber's `Context` from the global fiber
+* reference and passes it to the redaction method.
+*
+* **Gotchas**
+*
+* If no fiber is active, an empty `Context` is passed to the redaction method.
+*
+* @see {@link redact} for the higher-level variant that handles non-redactable values
+* @see {@link isRedactable} for the type guard to verify before calling this
+* @category destructors
+* @since 4.0.0
+*/
+function getRedacted(redactable) {
+	return redactable[symbolRedactable](globalThis["~effect/Fiber/currentFiber"]?.context ?? emptyContext$1);
+}
+/** @internal */
+const currentFiberTypeId = "~effect/Fiber/currentFiber";
+const emptyMap = /*#__PURE__*/ new Map();
+const emptyContext$1 = {
+	"~effect/Context": {},
+	base: emptyMap,
+	depth: 0,
+	mapUnsafe: emptyMap,
+	pipe() {
+		return pipeArguments(this, arguments);
+	}
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Formatter.js
+/**
+* Formats JavaScript values into readable strings.
+*
+* `format` is intended for logs, diagnostics, and error messages. It handles
+* primitives, objects, arrays, dates, regular expressions, maps, sets, class
+* instances, errors, circular references, and redactable values. `formatJson`
+* wraps JSON formatting with redaction and circular-reference handling, and the
+* module also includes helpers for property keys, paths, and dates.
+*
+* @since 4.0.0
+*/
+/**
+* Converts any JavaScript value into a human-readable string.
+*
+* **When to use**
+*
+* Use when you need to format arbitrary JavaScript values for debugging,
+* logging, or error messages.
+*
+* **Details**
+*
+* - Output is **not** valid JSON; use {@link formatJson} when you need
+*   parseable JSON.
+* - Handles `BigInt`, `Symbol`, `Set`, `Map`, `Date`, `RegExp`, and class
+*   instances that `JSON.stringify` cannot represent.
+* - Circular references are shown as `"[Circular]"` instead of throwing.
+* - Failures while inspecting a value are rendered as diagnostic placeholders instead of throwing.
+* - Primitives: stringified naturally (`null`, `undefined`, `123`, `true`).
+*   Strings are JSON-quoted.
+* - Objects with a custom `toString` (not `Object.prototype.toString`):
+*   `toString()` is called unless `ignoreToString` is `true`.
+* - Errors with a `cause`: formatted as `"<message> (cause: <cause>)"`.
+* - Iterables (`Set`, `Map`, etc.): formatted as
+*   `ClassName([...elements])`.
+* - Class instances: wrapped as `ClassName({...})`.
+* - `Redactable` values are automatically redacted.
+* - Arrays/objects with 0–1 entries are inline; larger ones are
+*   pretty-printed when `space` is set.
+* - `space` — indentation unit (number of spaces, or a string like
+*   `"\t"`). Defaults to `0` (compact).
+* - `ignoreToString` — skip calling `toString()`. Defaults to `false`.
+*
+* **Example** (Formatting compact output)
+*
+* ```ts import.meta.vitest
+* import { Formatter } from "effect"
+*
+* Formatter.format({ a: 1, b: [2, 3] }) // => "{\"a\":1,\"b\":[2,3]}"
+* ```
+*
+* **Example** (Pretty-printed output)
+*
+* ```ts import.meta.vitest
+* import { Formatter } from "effect"
+*
+* const output = Formatter.format({ a: 1, b: [2, 3] }, { space: 2 })
+* output // => "{\n  \"a\": 1,\n  \"b\": [\n    2,\n    3\n  ]\n}"
+* ```
+*
+* **Example** (Handling circular references)
+*
+* ```ts import.meta.vitest
+* import { Formatter } from "effect"
+*
+* const obj: any = { name: "loop" }
+* obj.self = obj
+* Formatter.format(obj) // => "{\"name\":\"loop\",\"self\":[Circular]}"
+* ```
+*
+* @see {@link formatJson}
+* @see {@link Formatter}
+* @category formatting
+* @since 2.0.0
+*/
+function format$1(input, options) {
+	const space = options?.space ?? 0;
+	const ancestors = /* @__PURE__ */ new WeakSet();
+	const gap = !space ? "" : typeof space === "number" ? " ".repeat(space) : space;
+	const ind = (d) => gap.repeat(d);
+	const wrap = (v, body) => {
+		const ctor = v?.constructor;
+		return ctor && ctor !== Object.prototype.constructor && ctor.name ? `${ctor.name}(${body})` : body;
+	};
+	const ownKeys = (o) => {
+		try {
+			return Reflect.ownKeys(o);
+		} catch {
+			return ["[ownKeys threw]"];
+		}
+	};
+	function recur(v, d = 0) {
+		try {
+			return recurUnsafe(v, d);
+		} catch {
+			if (typeof v === "object" && v !== null || typeof v === "function") ancestors.delete(v);
+			return "[inspection threw]";
+		}
+	}
+	function recurUnsafe(v, d = 0) {
+		if (typeof v === "string") return JSON.stringify(v);
+		if (typeof v === "number" || v == null || typeof v === "boolean" || typeof v === "symbol") return String(v);
+		if (typeof v === "bigint") return String(v) + "n";
+		if (typeof v === "object" || typeof v === "function") {
+			if (ancestors.has(v)) return CIRCULAR;
+			ancestors.add(v);
+			let output;
+			if (symbolRedactable in v) output = recur(getRedacted(v), d);
+			else if (Array.isArray(v)) output = !gap || v.length <= 1 ? `[${v.map((x) => recur(x, d)).join(",")}]` : `[\n${ind(d + 1)}${v.map((x) => recur(x, d + 1)).join(",\n" + ind(d + 1))}\n${ind(d)}]`;
+			else if (v instanceof Date) output = formatDate(v);
+			else if (!options?.ignoreToString && hasProperty(v, "toString") && typeof v["toString"] === "function" && v["toString"] !== Object.prototype.toString && v["toString"] !== Array.prototype.toString) {
+				const s = safeToString(v);
+				output = v instanceof Error && v.cause !== void 0 ? `${s} (cause: ${recur(v.cause, d)})` : s;
+			} else if (Symbol.iterator in v) output = `${v.constructor.name}(${recur(Array.from(v), d)})`;
+			else {
+				const keys = ownKeys(v);
+				if (!gap || keys.length <= 1) {
+					const body = `{${keys.map((k) => `${formatPropertyKey(k)}:${recur(safeGet(v, k), d)}`).join(",")}}`;
+					output = wrap(v, body);
+				} else {
+					const body = `{\n${keys.map((k) => `${ind(d + 1)}${formatPropertyKey(k)}: ${recur(safeGet(v, k), d + 1)}`).join(",\n")}\n${ind(d)}}`;
+					output = wrap(v, body);
+				}
+			}
+			ancestors.delete(v);
+			return output;
+		}
+		return String(v);
+	}
+	return recur(input, 0);
+}
+const CIRCULAR = "[Circular]";
+/**
+* @internal
+*/
+function formatPropertyKey(name) {
+	return typeof name === "string" ? JSON.stringify(name) : String(name);
+}
+/**
+* Formats an array of property keys as a bracket-notation path string.
+*
+* @internal
+*/
+function formatPath(path) {
+	return path.map((key) => `[${formatPropertyKey(key)}]`).join("");
+}
+/**
+* Formats a `Date` as an ISO 8601 string, returning `"Invalid Date"` for
+* invalid dates instead of throwing.
+*
+* @internal
+*/
+function formatDate(date) {
+	try {
+		return date.toISOString();
+	} catch {
+		return "Invalid Date";
+	}
+}
+function safeToString(input) {
+	try {
+		const s = input.toString();
+		return typeof s === "string" ? s : String(s);
+	} catch {
+		return "[toString threw]";
+	}
+}
+function safeGet(input, key) {
+	try {
+		return input[key];
+	} catch {
+		return "[property access threw]";
+	}
+}
+/**
+* Stringifies a value to JSON safely, silently dropping circular references.
+*
+* **When to use**
+*
+* Use when you need valid JSON output, unlike `format`, and the input may
+* contain circular references that should be silently omitted rather than
+* throwing a `TypeError`.
+*
+* **Details**
+*
+* Uses `JSON.stringify` internally with a replacer that tracks the current
+* object ancestry. Circular references are replaced with `undefined`, which
+* omits them from object output. `Redactable` values are automatically redacted
+* before serialization. `BigInt` values are stringified with an `n` suffix.
+* `Error` instances without a `toJSON` property include their enumerable
+* properties plus `name` and `message`. Errors with `toJSON` keep their custom
+* representation. Other values follow standard `JSON.stringify` behavior. The
+* `space` parameter controls indentation and defaults to `0`.
+*
+* **Gotchas**
+*
+* When the root input is `undefined`, a symbol, or a function, `formatJson`
+* returns `"null"` instead of the `undefined` returned by `JSON.stringify`.
+* Nested values retain standard `JSON.stringify` behavior.
+*
+* **Example** (Formatting compact JSON)
+*
+* ```ts import.meta.vitest
+* import { Formatter } from "effect"
+*
+* Formatter.formatJson({ name: "Alice", age: 30 }) // => "{\"name\":\"Alice\",\"age\":30}"
+* ```
+*
+* **Example** (Handling circular references)
+*
+* ```ts import.meta.vitest
+* import { Formatter } from "effect"
+*
+* const obj: any = { name: "test" }
+* obj.self = obj
+* Formatter.formatJson(obj) // => "{\"name\":\"test\"}"
+* ```
+*
+* **Example** (Pretty-printed JSON)
+*
+* ```ts import.meta.vitest
+* import { Formatter } from "effect"
+*
+* const output = Formatter.formatJson({ name: "Alice", age: 30 }, { space: 2 })
+* output // => "{\n  \"name\": \"Alice\",\n  \"age\": 30\n}"
+* ```
+*
+* @see {@link format}
+* @see {@link Formatter}
+* @category serialization
+* @since 4.0.0
+*/
+function formatJson(input, options) {
+	const ancestors = [];
+	return JSON.stringify(input, function(key, value) {
+		const original = Object.getOwnPropertyDescriptor(this, key)?.value;
+		const redacted = hasProperty(original, symbolRedactable) ? redact(original) : redact(value);
+		if (typeof redacted === "bigint") return format$1(redacted);
+		if (typeof redacted !== "object" || redacted === null) return redacted;
+		const current = redacted instanceof Error && !hasProperty(redacted, "toJSON") ? {
+			...redacted,
+			name: redacted.name,
+			message: redacted.message
+		} : redacted;
+		while (ancestors.length > 0 && ancestors[ancestors.length - 1] !== this) ancestors.pop();
+		if (ancestors.includes(redacted)) return;
+		ancestors.push(redacted);
+		if (current !== redacted) ancestors.push(current);
+		return current;
+	}, options?.space) ?? "null";
+}
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Inspectable.js
+/**
+* Controls how values appear in logs and debugging output.
+*
+* Effect data types use `Inspectable` to provide stable string, JSON, and
+* Node.js inspection output. This keeps custom values readable in logs, REPLs,
+* test failures, and diagnostics. This module defines the Node inspect symbol,
+* the `Inspectable` interface, safe conversion helpers, and shared prototype or
+* class implementations for custom values.
+*
+* @since 2.0.0
+*/
+/**
+* Defines the symbol used by Node.js for custom object inspection.
+*
+* **When to use**
+*
+* Use to implement Node.js custom inspection for a value.
+*
+* **Details**
+*
+* This symbol is recognized by Node.js's `util.inspect()` function and the REPL
+* for custom object representation. When an object has a method with this symbol,
+* it will be called to determine how the object should be displayed.
+*
+* **Example** (Defining custom Node inspection)
+*
+* ```ts import.meta.vitest
+* import { Inspectable } from "effect"
+*
+* class CustomObject {
+*   constructor(private value: string) {}
+*
+*   [Inspectable.NodeInspectSymbol]() {
+*     return `CustomObject(${this.value})`
+*   }
+* }
+*
+* const obj = new CustomObject("hello")
+* obj[Inspectable.NodeInspectSymbol]() // => "CustomObject(hello)"
+* ```
+*
+* @category symbols
+* @since 2.0.0
+*/
+const NodeInspectSymbol = /*#__PURE__*/ Symbol.for("nodejs.util.inspect.custom");
+/**
+* Converts a value to its structured inspection representation.
+*
+* **When to use**
+*
+* Use when you need the structured representation of an inspectable value
+* without risking unhandled errors.
+*
+* **Details**
+*
+* This function applies redaction before extracting data from objects that
+* implement `toJSON`, recursively processes arrays, and handles errors
+* gracefully. Plain objects are returned unchanged, so the result is not
+* guaranteed to be accepted by `JSON.stringify`; it may still contain values
+* such as `BigInt`, functions, or circular references.
+*
+* @see {@link toStringUnknown} for converting unknown values to strings
+*
+* @category converting
+* @since 4.0.0
+*/
+const toJson = (input) => {
+	try {
+		input = redact(input);
+		if (hasProperty(input, "toJSON") && isFunction(input["toJSON"]) && input["toJSON"].length === 0) return input.toJSON();
+		else if (Array.isArray(input)) return input.map(toJson);
+		return input;
+	} catch {
+		return "[toJSON threw]";
+	}
+};
+/**
+* Converts an unknown value to a string for diagnostics.
+*
+* **When to use**
+*
+* Use to produce a diagnostic string from a value whose runtime type is unknown.
+*
+* **Details**
+*
+* Strings are returned unchanged. Objects are formatted as JSON using the
+* provided whitespace setting when possible, and values that cannot be
+* formatted are converted with `String`.
+*
+* @category converting
+* @since 2.0.0
+*/
+const toStringUnknown = (u, whitespace = 2) => {
+	if (typeof u === "string") return u;
+	try {
+		return typeof u === "object" ? formatJson(u, { space: whitespace }) : format$1(u, { space: whitespace });
+	} catch {
+		return String(u);
+	}
+};
+/**
+* A base prototype object that implements the {@link Inspectable} interface.
+*
+* **When to use**
+*
+* Use as a prototype for plain objects that should share standard inspectable behavior.
+*
+* **Details**
+*
+* This object provides default implementations for the {@link Inspectable} methods.
+* It can be used as a prototype for objects that want to be inspectable,
+* or as a mixin to add inspection capabilities to existing objects.
+*
+* **Example** (Using the base inspectable prototype)
+*
+* ```ts import.meta.vitest
+* import { Inspectable } from "effect"
+*
+* // Use as prototype
+* const myObject = Object.create(Inspectable.BaseProto)
+* myObject.name = "example"
+* myObject.value = 42
+*
+* myObject.toString() // => "\"[toJSON threw]\""
+*
+* // Or extend in a constructor
+* function MyClass(this: any, name: string) {
+*   this.name = name
+* }
+* MyClass.prototype = Object.create(Inspectable.BaseProto)
+* MyClass.prototype.constructor = MyClass
+* ```
+*
+* @category prototypes
+* @since 2.0.0
+*/
+const BaseProto = {
+	toJSON() {
+		return toJson(this);
+	},
+	[NodeInspectSymbol]() {
+		return this.toJSON();
+	},
+	toString() {
+		return format$1(this.toJSON());
+	}
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/stackTraceLimit.js
+/**
+* Check if `Error.stackTraceLimit` is writable.
+* Returns `false` if the property is frozen, non-writable, or `Error` is non-extensible.
+*
+* @internal
+*/
+const isStackTraceLimitWritable = () => {
+	const desc = Object.getOwnPropertyDescriptor(Error, "stackTraceLimit");
+	if (desc === void 0) return Object.isExtensible(Error);
+	return Object.hasOwn(desc, "writable") ? desc.writable === true : desc.set !== void 0;
+};
+const canWriteStackTraceLimit = /*#__PURE__*/ isStackTraceLimitWritable();
+/**
+* Get the current `Error.stackTraceLimit` value.
+* Returns `undefined` if the property doesn't exist.
+*
+* @internal
+*/
+const getStackTraceLimit = () => Error.stackTraceLimit;
+/**
+* Safely set `Error.stackTraceLimit` if possible, otherwise no-op.
+*
+* Accepts `undefined` so a value read via {@link getStackTraceLimit} can be
+* restored faithfully.
+*
+* @internal
+*/
+const setStackTraceLimit = (value) => {
+	if (canWriteStackTraceLimit) Error.stackTraceLimit = value;
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Utils.js
+/**
+* Yields its wrapped value exactly once, then completes with the value sent
+* back in.
+*
+* **When to use**
+*
+* Use to implement `[Symbol.iterator]()` on Effect-like types so they can be
+* `yield*`-ed inside generator functions, such as `Effect.gen` and
+* `Option.gen`.
+*
+* **Details**
+*
+* The first call to `next()` returns a fresh `{ value: self, done: false }`.
+* Every subsequent call returns `{ value: a, done: true }` where `a` is the
+* argument passed to `next()`. To keep `yield*` cheap, the completion result
+* is the iterator itself rather than a new object, so only the iterator and
+* the single yielded result are allocated per `yield*`.
+*
+* **Example** (Yielding a wrapped value in a generator)
+*
+* ```ts import.meta.vitest
+* import { Utils } from "effect"
+*
+* const gen = new Utils.SingleShotGen<string, number>("hello")
+*
+* gen.next(0).value // => "hello"
+*
+* gen.next(42).value // => 42
+* ```
+*
+* @see {@link Gen} for the type-level signature that relies on `SingleShotGen`
+* @category constructors
+* @since 2.0.0
+*/
+var SingleShotGen = class {
+	constructor(self) {
+		this.value = self;
+		this.done = false;
+	}
+	/**
+	* Yields the stored value once, then completes with the value sent back in.
+	*
+	* **When to use**
+	*
+	* Use to advance a `SingleShotGen` through its single yield and completion
+	* step.
+	*
+	* @since 2.0.0
+	*/
+	next(a) {
+		if (this.done) {
+			this.value = a;
+			return this;
+		}
+		this.done = true;
+		return {
+			value: this.value,
+			done: false
+		};
+	}
+};
+const pickInternalCall = () => {
+	const InternalTypeId = "~effect/Utils/internal";
+	const standard = { [InternalTypeId]: (body) => {
+		return body();
+	} };
+	const forced = { [InternalTypeId]: (body) => {
+		try {
+			return body();
+		} finally {}
+	} };
+	return getStackTraceLimit() !== 0 && standard[InternalTypeId](() => (/* @__PURE__ */ new Error()).stack)?.includes(InternalTypeId) === true ? standard[InternalTypeId] : forced[InternalTypeId];
+};
+/** @internal */
+const internalCall = /*#__PURE__*/ pickInternalCall();
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/record.js
+/** @internal */
+function assignProperty(self, key, value) {
+	if (key === "__proto__") Object.defineProperty(self, key, {
+		value,
+		writable: true,
+		enumerable: true,
+		configurable: true
+	});
+	else self[key] = value;
+}
+/** @internal */
+function assignProperties(self, source) {
+	for (const key of Reflect.ownKeys(source)) if (Object.prototype.propertyIsEnumerable.call(source, key)) assignProperty(self, key, source[key]);
+}
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/core.js
+/** @internal */
+const EffectTypeId = `~effect/Effect`;
+/** @internal */
+const ExitTypeId = `~effect/Exit`;
+const effectVariance = {
+	_A: identity,
+	_E: identity,
+	_R: identity
+};
+/** @internal */
+const identifier = `${EffectTypeId}/identifier`;
+/** @internal */
+const args = `${EffectTypeId}/args`;
+/** @internal */
+const evaluate = `${EffectTypeId}/evaluate`;
+/** @internal */
+const contA = `${EffectTypeId}/successCont`;
+/** @internal */
+const contE = `${EffectTypeId}/failureCont`;
+/** @internal */
+const contAll = `${EffectTypeId}/ensureCont`;
+/** @internal */
+const Yield = /*#__PURE__*/ Symbol.for("effect/Effect/Yield");
+/** @internal */
+const PipeInspectableProto = {
+	pipe() {
+		return pipeArguments(this, arguments);
+	},
+	toJSON() {
+		return { ...this };
+	},
+	toString() {
+		return format$1(this.toJSON(), {
+			ignoreToString: true,
+			space: 2
+		});
+	},
+	[NodeInspectSymbol]() {
+		return this.toJSON();
+	}
+};
+/** @internal */
+const EffectProto = {
+	[EffectTypeId]: effectVariance,
+	...PipeInspectableProto,
+	[Symbol.iterator]() {
+		return new SingleShotGen(this);
+	},
+	toJSON() {
+		return {
+			_id: "Effect",
+			op: this[identifier],
+			...args in this ? { args: this[args] } : void 0
+		};
+	}
+};
+/** @internal */
+const isEffect$1 = (u) => hasProperty(u, EffectTypeId);
+/** @internal */
+const isExit = (u) => hasProperty(u, ExitTypeId);
+/** @internal */
+const CauseTypeId = "~effect/Cause";
+/** @internal */
+const CauseReasonTypeId = "~effect/Cause/Reason";
+/** @internal */
+const isCause = (self) => hasProperty(self, CauseTypeId);
+/** @internal */
+var CauseImpl = class {
+	constructor(failures) {
+		this[CauseTypeId] = CauseTypeId;
+		this.reasons = failures;
+	}
+	pipe() {
+		return pipeArguments(this, arguments);
+	}
+	toJSON() {
+		return {
+			_id: "Cause",
+			failures: this.reasons.map((f) => f.toJSON())
+		};
+	}
+	toString() {
+		return `Cause(${format$1(this.reasons)})`;
+	}
+	[NodeInspectSymbol]() {
+		return this.toJSON();
+	}
+	[symbol](that) {
+		return isCause(that) && this.reasons.length === that.reasons.length && this.reasons.every((e, i) => equals$1(e, that.reasons[i]));
+	}
+	[symbol$1]() {
+		return array(this.reasons);
+	}
+};
+const annotationsMap = /*#__PURE__*/ new WeakMap();
+/** @internal */
+var ReasonBase = class {
+	[CauseReasonTypeId];
+	annotations;
+	_tag;
+	constructor(_tag, annotations, originalError) {
+		this[CauseReasonTypeId] = CauseReasonTypeId;
+		this._tag = _tag;
+		if (annotations !== constEmptyAnnotations && typeof originalError === "object" && originalError !== null && annotations.size > 0) {
+			const prevAnnotations = annotationsMap.get(originalError);
+			if (prevAnnotations) annotations = new Map([...prevAnnotations, ...annotations]);
+			annotationsMap.set(originalError, annotations);
+		}
+		this.annotations = annotations;
+	}
+	annotate(annotations, options) {
+		if (annotations.mapUnsafe.size === 0) return this;
+		const newAnnotations = new Map(this.annotations);
+		annotations.mapUnsafe.forEach((value, key) => {
+			if (options?.overwrite !== true && newAnnotations.has(key)) return;
+			newAnnotations.set(key, value);
+		});
+		const self = Object.assign(Object.create(Object.getPrototypeOf(this)), this);
+		self.annotations = newAnnotations;
+		return self;
+	}
+	pipe() {
+		return pipeArguments(this, arguments);
+	}
+	toString() {
+		return format$1(this);
+	}
+	[NodeInspectSymbol]() {
+		return this.toString();
+	}
+};
+/** @internal */
+const constEmptyAnnotations = /*#__PURE__*/ new Map();
+/** @internal */
+var Fail = class extends ReasonBase {
+	constructor(error, annotations = constEmptyAnnotations) {
+		super("Fail", annotations, error);
+		this.error = error;
+	}
+	toString() {
+		return `Fail(${format$1(this.error)})`;
+	}
+	toJSON() {
+		return {
+			_tag: "Fail",
+			error: this.error
+		};
+	}
+	[symbol](that) {
+		return isFailReason$1(that) && equals$1(this.error, that.error) && equals$1(this.annotations, that.annotations);
+	}
+	[symbol$1]() {
+		return combine$1(string$1(this._tag))(combine$1(hash(this.error))(hash(this.annotations)));
+	}
+};
+/** @internal */
+const causeFromReasons = (reasons) => new CauseImpl(reasons);
+/** @internal */
+const causeEmpty = /*#__PURE__*/ new CauseImpl([]);
+/** @internal */
+const causeFail = (error) => new CauseImpl([new Fail(error)]);
+/** @internal */
+var Die = class extends ReasonBase {
+	constructor(defect, annotations = constEmptyAnnotations) {
+		super("Die", annotations, defect);
+		this.defect = defect;
+	}
+	toString() {
+		return `Die(${format$1(this.defect)})`;
+	}
+	toJSON() {
+		return {
+			_tag: "Die",
+			defect: this.defect
+		};
+	}
+	[symbol](that) {
+		return isDieReason(that) && equals$1(this.defect, that.defect) && equals$1(this.annotations, that.annotations);
+	}
+	[symbol$1]() {
+		return combine$1(string$1(this._tag))(combine$1(hash(this.defect))(hash(this.annotations)));
+	}
+};
+/** @internal */
+const causeDie = (defect) => new CauseImpl([new Die(defect)]);
+/** @internal */
+const causeAnnotate = /*#__PURE__*/ dual((args) => isCause(args[0]), (self, annotations, options) => {
+	if (annotations.mapUnsafe.size === 0) return self;
+	return new CauseImpl(self.reasons.map((f) => f.annotate(annotations, options)));
+});
+/** @internal */
+const isFailReason$1 = (self) => self._tag === "Fail";
+/** @internal */
+const isDieReason = (self) => self._tag === "Die";
+/** @internal */
+const isInterruptReason = (self) => self._tag === "Interrupt";
+function defaultEvaluate(_fiber) {
+	return exitDie(`Effect.evaluate: Not implemented`);
+}
+/** @internal */
+const makePrimitiveProto = (options) => ({
+	...EffectProto,
+	[identifier]: options.op,
+	[evaluate]: options[evaluate] ?? defaultEvaluate,
+	[contA]: options[contA],
+	[contE]: options[contE],
+	[contAll]: options[contAll]
+});
+/** @internal */
+const makePrimitive$1 = (options) => {
+	const Proto = makePrimitiveProto(options);
+	const PrimitiveImpl = function(value) {
+		this[args] = value;
+	};
+	PrimitiveImpl.prototype = Proto;
+	return function(value) {
+		return new PrimitiveImpl(value);
+	};
+};
+/** @internal */
+const makeExit = (options) => {
+	const Proto = {
+		[ExitTypeId]: ExitTypeId,
+		_tag: options.op,
+		get [options.prop]() {
+			return this[args];
+		},
+		...makePrimitiveProto(options),
+		toString() {
+			return `${options.op}(${format$1(this[args])})`;
+		},
+		toJSON() {
+			return {
+				_id: "Exit",
+				_tag: options.op,
+				[options.prop]: this[args]
+			};
+		},
+		[symbol](that) {
+			return isExit(that) && that._tag === this._tag && equals$1(this[args], that[args]);
+		},
+		[symbol$1]() {
+			return combine$1(string$1(options.op), hash(this[args]));
+		}
+	};
+	const ExitPrimitive = function(value) {
+		this[args] = value;
+	};
+	ExitPrimitive.prototype = Proto;
+	return function(value) {
+		return new ExitPrimitive(value);
+	};
+};
+/** @internal */
+const exitSucceed = /*#__PURE__*/ makeExit({
+	op: "Success",
+	prop: "value",
+	[evaluate](fiber) {
+		const cont = fiber.getCont(contA);
+		return cont ? cont[contA](this[args], fiber, this) : fiber.yieldWith(this);
+	}
+});
+/** @internal */
+const StackTraceKey = { key: "effect/Cause/StackTrace" };
+/** @internal */
+const InterruptorStackTrace = { key: "effect/Cause/InterruptorStackTrace" };
+/** @internal */
+const exitFailCause = /*#__PURE__*/ makeExit({
+	op: "Failure",
+	prop: "cause",
+	[evaluate](fiber) {
+		let cause = this[args];
+		let annotated = false;
+		if (fiber.cache.stackFrame) {
+			cause = causeAnnotate(cause, { mapUnsafe: /* @__PURE__ */ new Map([[StackTraceKey.key, fiber.cache.stackFrame]]) });
+			annotated = true;
+		}
+		let cont = fiber.getCont(contE);
+		while (fiber.interruptible && fiber._interruptedCause && cont) cont = fiber.getCont(contE);
+		return cont ? cont[contE](cause, fiber, annotated ? void 0 : this) : fiber.yieldWith(annotated ? exitFailCause(cause) : this);
+	}
+});
+/** @internal */
+const exitFail = (e) => exitFailCause(causeFail(e));
+/** @internal */
+const exitDie = (defect) => exitFailCause(causeDie(defect));
+/** @internal */
+const withFiber$1 = /*#__PURE__*/ makePrimitive$1({
+	op: "WithFiber",
+	[evaluate](fiber) {
+		return this[args](fiber);
+	}
+});
+/** @internal */
+const YieldableError = /*#__PURE__*/ function() {
+	class YieldableError extends globalThis.Error {}
+	const proto = /*#__PURE__*/ makePrimitiveProto({
+		op: "YieldableError",
+		[evaluate]() {
+			return exitFail(this);
+		}
+	});
+	delete proto.toString;
+	Object.assign(YieldableError.prototype, proto);
+	return YieldableError;
+}();
+/** @internal */
+const Error$3 = /*#__PURE__*/ function() {
+	const plainArgsSymbol = /*#__PURE__*/ Symbol.for("effect/Data/Error/plainArgs");
+	return class Base extends YieldableError {
+		constructor(args) {
+			super(args?.message, args?.cause ? { cause: args.cause } : void 0);
+			if (args) {
+				assignProperties(this, args);
+				Object.defineProperty(this, plainArgsSymbol, {
+					value: args,
+					enumerable: false
+				});
+			}
+		}
+		toJSON() {
+			return {
+				...this[plainArgsSymbol],
+				...this
+			};
+		}
+	};
+}();
+/** @internal */
+const TaggedError$2 = (tag) => {
+	class Base extends Error$3 {
+		_tag = tag;
+	}
+	Base.prototype.name = tag;
+	return Base;
+};
+/** @internal */
+const DoneTypeId = "~effect/Cause/Done";
+/** @internal */
+const isDone$2 = (u) => hasProperty(u, DoneTypeId);
+const DoneVoid = {
+	[DoneTypeId]: DoneTypeId,
+	_tag: "Done",
+	value: void 0
+};
+/** @internal */
+const Done$1 = (value) => {
+	if (value === void 0) return DoneVoid;
+	return {
+		[DoneTypeId]: DoneTypeId,
+		_tag: "Done",
+		value
+	};
+};
+const doneVoid = /*#__PURE__*/ exitFail(DoneVoid);
+/** @internal */
+const done$1 = (value) => {
+	if (value === void 0) return doneVoid;
+	return exitFail(Done$1(value));
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Effectable.js
+/**
+* Create a low-level `Effect` prototype.
+*
+* **When to use**
+*
+* Use when you need to create a custom Effect-like value without extending a
+* class, by providing a label and an evaluate function that receives the
+* current fiber.
+*
+* **Details**
+*
+* When the effect is evaluated, it calls `evaluate` with the current fiber.
+*
+* @see {@link Class} for a class-based approach to defining custom Effect values
+* @see {@link Mixin} for wrapping an existing class constructor
+*
+* @category prototypes
+* @since 4.0.0
+*/
+const Prototype = (options) => makePrimitiveProto({
+	op: options.label,
+	[evaluate]: options.evaluate
+});
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/option.js
+/**
+* @since 2.0.0
+*/
+const TypeId$33 = "~effect/Option";
+const CommonProto$1 = {
+	[TypeId$33]: { _A: (_) => _ },
+	...PipeInspectableProto,
+	[Symbol.iterator]() {
+		return new SingleShotGen(this);
+	}
+};
+const SomeProto = /*#__PURE__*/ Object.defineProperty(/*#__PURE__*/ Object.assign(/*#__PURE__*/ Object.create(CommonProto$1), {
+	_tag: "Some",
+	_op: "Some",
+	[symbol](that) {
+		return isOption(that) && isSome$1(that) && equals$1(this.value, that.value);
+	},
+	[symbol$1]() {
+		return combine$1(hash(this._tag))(hash(this.value));
+	},
+	toString() {
+		return `some(${format$1(this.value)})`;
+	},
+	toJSON() {
+		return {
+			_id: "Option",
+			_tag: this._tag,
+			value: toJson(this.value)
+		};
+	}
+}), "valueOrUndefined", { get() {
+	return this.value;
+} });
+const NoneHash = /*#__PURE__*/ hash("None");
+const NoneProto = /*#__PURE__*/ Object.assign(/*#__PURE__*/ Object.create(CommonProto$1), {
+	_tag: "None",
+	_op: "None",
+	valueOrUndefined: void 0,
+	[symbol](that) {
+		return isOption(that) && isNone$1(that);
+	},
+	[symbol$1]() {
+		return NoneHash;
+	},
+	toString() {
+		return `none()`;
+	},
+	toJSON() {
+		return {
+			_id: "Option",
+			_tag: this._tag
+		};
+	}
+});
+/** @internal */
+const isOption = (input) => hasProperty(input, TypeId$33);
+/** @internal */
+const isNone$1 = (fa) => fa._tag === "None";
+/** @internal */
+const isSome$1 = (fa) => fa._tag === "Some";
+/** @internal */
+const none$1 = /*#__PURE__*/ Object.create(NoneProto);
+/** @internal */
+const SomeImpl = function(value) {
+	this.value = value;
+};
+SomeImpl.prototype = SomeProto;
+/** @internal */
+const some$1 = (value) => new SomeImpl(value);
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/result.js
+const TypeId$32 = "~effect/Result";
+const CommonProto = {
+	[TypeId$32]: {
+		/* v8 ignore next 2 */
+		_A: (_) => _,
+		_E: (_) => _
+	},
+	...PipeInspectableProto,
+	[Symbol.iterator]() {
+		return new SingleShotGen(this);
+	}
+};
+const SuccessProto = /*#__PURE__*/ Object.assign(/*#__PURE__*/ Object.create(CommonProto), {
+	_tag: "Success",
+	_op: "Success",
+	[symbol](that) {
+		return isResult(that) && isSuccess$2(that) && equals$1(this.success, that.success);
+	},
+	[symbol$1]() {
+		return combine$1(hash(this._tag))(hash(this.success));
+	},
+	toString() {
+		return `success(${format$1(this.success)})`;
+	},
+	toJSON() {
+		return {
+			_id: "Result",
+			_tag: this._tag,
+			value: toJson(this.success)
+		};
+	}
+});
+const FailureProto = /*#__PURE__*/ Object.assign(/*#__PURE__*/ Object.create(CommonProto), {
+	_tag: "Failure",
+	_op: "Failure",
+	[symbol](that) {
+		return isResult(that) && isFailure$2(that) && equals$1(this.failure, that.failure);
+	},
+	[symbol$1]() {
+		return combine$1(hash(this._tag))(hash(this.failure));
+	},
+	toString() {
+		return `failure(${format$1(this.failure)})`;
+	},
+	toJSON() {
+		return {
+			_id: "Result",
+			_tag: this._tag,
+			failure: toJson(this.failure)
+		};
+	}
+});
+/** @internal */
+const isResult = (input) => hasProperty(input, TypeId$32);
+/** @internal */
+const isFailure$2 = (result) => result._tag === "Failure";
+/** @internal */
+const isSuccess$2 = (result) => result._tag === "Success";
+/** @internal */
+const FailureImpl = function(failure) {
+	this.failure = failure;
+};
+FailureImpl.prototype = FailureProto;
+/** @internal */
+const fail$6 = (failure) => new FailureImpl(failure);
+/** @internal */
+const SuccessImpl = function(success) {
+	this.success = success;
+};
+SuccessImpl.prototype = SuccessProto;
+/** @internal */
+const succeed$7 = (success) => new SuccessImpl(success);
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Order.js
+/**
+* Defines comparison functions for ordered values.
+*
+* An `Order<A>` compares two `A` values and returns whether the first is less
+* than, equal to, or greater than the second. Orders are used for sorting,
+* choosing minimum or maximum values, checking ranges, and building ordered data
+* structures. This module includes built-in orders, constructors for custom
+* orders, tools for reversing and combining comparisons, tuple and struct
+* helpers, comparison predicates, clamping, and reducer support.
+*
+* @since 2.0.0
+*/
+/**
+* Creates a new `Order` instance from a comparison function.
+*
+* **When to use**
+*
+* Use when you need a sorting rule not covered by the built-in orders or input
+* mapping helpers, and you can provide a total comparison.
+*
+* **Details**
+*
+* Uses reference equality (`===`) as a shortcut: if `self === that`, it returns
+* `0` without calling the comparison function. The comparison function should
+* return `-1`, `0`, or `1`, and the returned order satisfies total ordering
+* laws when the comparison function does.
+*
+* **Example** (Creating an Order)
+*
+* ```ts import.meta.vitest
+* import { Order } from "effect"
+*
+* const byAge = Order.make<{ name: string; age: number }>((self, that) => {
+*   if (self.age < that.age) return -1
+*   if (self.age > that.age) return 1
+*   return 0
+* })
+*
+* byAge({ name: "Alice", age: 30 }, { name: "Bob", age: 25 }) // => 1
+* byAge({ name: "Alice", age: 25 }, { name: "Bob", age: 30 }) // => -1
+* ```
+*
+* @see {@link mapInput} to transform an order by mapping the input type
+* @see {@link combine} to combine multiple orders
+* @category constructors
+* @since 2.0.0
+*/
+function make$27(compare) {
+	return (self, that) => self === that ? 0 : compare(self, that);
+}
+/**
+* Order instance for strings that compares them lexicographically using JavaScript's `<` operator.
+*
+* **When to use**
+*
+* Use when you need lexicographic string ordering.
+*
+* **Details**
+*
+* Uses lexicographic dictionary ordering. The empty string is less than any
+* non-empty string, and comparisons are case-sensitive.
+*
+* **Example** (Ordering strings)
+*
+* ```ts import.meta.vitest
+* import { Order } from "effect"
+*
+* Order.String("apple", "banana") // => -1
+* Order.String("banana", "apple") // => 1
+* Order.String("apple", "apple") // => 0
+* ```
+*
+* @see {@link mapInput} to compare objects by a string property
+* @see {@link Struct} to combine with other orders for struct comparison
+* @category instances
+* @since 4.0.0
+*/
+const String$8 = /*#__PURE__*/ make$27((self, that) => self < that ? -1 : 1);
+/**
+* Order instance for numbers that compares them numerically.
+*
+* **When to use**
+*
+* Use when you need numeric ordering for numbers.
+*
+* **Details**
+*
+* `0` is considered equal to `-0`. All `NaN` values are considered equal to
+* each other, and any `NaN` is considered less than any non-`NaN` number. All
+* other values use standard numeric comparison.
+*
+* **Example** (Ordering numbers)
+*
+* ```ts import.meta.vitest
+* import { Order } from "effect"
+*
+* Order.Number(1, 1) // => 0
+* Order.Number(1, 2) // => -1
+* Order.Number(2, 1) // => 1
+*
+* Order.Number(0, -0) // => 0
+* Order.Number(NaN, 1) // => -1
+* ```
+*
+* @see {@link mapInput} to compare objects by a number property
+* @see {@link BigInt} for bigint comparisons
+* @category instances
+* @since 4.0.0
+*/
+const Number$6 = /*#__PURE__*/ make$27((self, that) => {
+	if (globalThis.Number.isNaN(self) && globalThis.Number.isNaN(that)) return 0;
+	if (globalThis.Number.isNaN(self)) return -1;
+	if (globalThis.Number.isNaN(that)) return 1;
+	return self < that ? -1 : 1;
+});
+/**
+* Transforms an `Order` on type `A` into an `Order` on type `B` by providing a function that
+* maps values of type `B` to values of type `A`.
+*
+* **When to use**
+*
+* Use when you need to adapt an `Order` to compare a larger value by one
+* derived property.
+*
+* **Details**
+*
+* Applies the mapping function to both values before comparison. The mapping
+* function should be pure and not have side effects so the ordering properties
+* of the original order are preserved.
+*
+* **Example** (Mapping Input)
+*
+* ```ts import.meta.vitest
+* import { Order } from "effect"
+*
+* const byLength = Order.mapInput(Order.Number, (s: string) => s.length)
+*
+* byLength("a", "bb") // => -1
+* byLength("bb", "a") // => 1
+* byLength("aa", "bb") // => 0
+* ```
+*
+* @see {@link combine} to combine mapped orders for multi-criteria comparison
+* @see {@link Struct} to create orders for structs with multiple fields
+* @category mapping
+* @since 2.0.0
+*/
+const mapInput = /*#__PURE__*/ dual(2, (self, f) => make$27((b1, b2) => self(f(b1), f(b2))));
+/**
+* Checks whether one value is strictly greater than another according to the given order.
+*
+* **When to use**
+*
+* Use when you need a boolean greater-than predicate using an `Order`.
+*
+* **Details**
+*
+* Returns `true` if the order returns `1`, meaning the first value is greater
+* than the second. Equal or lesser values return `false`.
+*
+* **Example** (Checking greater-than comparisons)
+*
+* ```ts import.meta.vitest
+* import { Order } from "effect"
+*
+* const isGreaterThanNumber = Order.isGreaterThan(Order.Number)
+*
+* isGreaterThanNumber(2, 1) // => true
+* isGreaterThanNumber(1, 2) // => false
+* isGreaterThanNumber(1, 1) // => false
+* ```
+*
+* @see {@link isGreaterThanOrEqualTo} for non-strict greater than or equal
+* @see {@link isLessThan} for strict less than
+* @category predicates
+* @since 4.0.0
+*/
+const isGreaterThan$1 = (O) => dual(2, (self, that) => O(self, that) === 1);
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Option.js
+/**
+* Creates an `Option` representing the absence of a value.
+*
+* **When to use**
+*
+* Use to represent a missing or uninitialized value, such as returning "no
+* result" from a function.
+*
+* **Details**
+*
+* - Returns `Option<never>`, which is a subtype of `Option<A>` for any `A`
+* - Always returns the same singleton instance
+*
+* **Example** (Creating an empty Option)
+*
+* ```ts import.meta.vitest
+* import { Option } from "effect"
+*
+* //      ┌─── Option<never>
+* //      ▼
+* const noValue = Option.none() // => Option.none()
+* ```
+*
+* @see {@link some} for the opposite operation.
+*
+* @category constructors
+* @since 2.0.0
+*/
+const none = () => none$1;
+/**
+* Wraps the given value into an `Option` to represent its presence.
+*
+* **When to use**
+*
+* Use to wrap a known present value as `Option`
+* - Returning a successful result from a partial function
+*
+* **Details**
+*
+* - Always returns `Some<A>`
+* - Does not filter `null` or `undefined`; use {@link fromNullishOr} for that
+*
+* **Example** (Wrapping a value)
+*
+* ```ts import.meta.vitest
+* import { Option } from "effect"
+*
+* //      ┌─── Option<number>
+* //      ▼
+* const value = Option.some(1) // => Option.some(1)
+* ```
+*
+* @see {@link none} for the opposite operation.
+*
+* @category constructors
+* @since 2.0.0
+*/
+const some = some$1;
+/**
+* Checks whether an `Option` is `None` (absent).
+*
+* **When to use**
+*
+* Use when you need to branch on an absent `Option` before accessing `.value`.
+*
+* **Details**
+*
+* - Acts as a type guard, narrowing to `None<A>`
+*
+* **Example** (Checking for None)
+*
+* ```ts import.meta.vitest
+* import { Option } from "effect"
+*
+* Option.isNone(Option.some(1)) // => false
+* Option.isNone(Option.none()) // => true
+* ```
+*
+* @see {@link isSome} for the opposite check.
+*
+* @category guards
+* @since 2.0.0
+*/
+const isNone = isNone$1;
+/**
+* Checks whether an `Option` contains a value (`Some`).
+*
+* **When to use**
+*
+* Use when you need to branch on a present `Option` before accessing `.value`.
+*
+* **Details**
+*
+* - Acts as a type guard, narrowing to `Some<A>`
+*
+* **Example** (Checking for Some)
+*
+* ```ts import.meta.vitest
+* import { Option } from "effect"
+*
+* Option.isSome(Option.some(1)) // => true
+* Option.isSome(Option.none()) // => false
+* ```
+*
+* @see {@link isNone} for the opposite check.
+*
+* @category guards
+* @since 2.0.0
+*/
+const isSome = isSome$1;
+/**
+* Pattern-matches on an `Option`, handling both `None` and `Some` cases.
+*
+* **When to use**
+*
+* Use when you need to handle both `Some` and `None` in one expression and
+* transform an `Option` into a plain value.
+*
+* **Details**
+*
+* - If `None`, calls `onNone` and returns its result
+* - If `Some`, calls `onSome` with the value and returns its result
+* - Supports the `dual` API (data-last and data-first)
+*
+* **Example** (Matching on an Option)
+*
+* ```ts import.meta.vitest
+* import { Option } from "effect"
+*
+* Option.match(Option.some(1), {
+*   onNone: () => "Option is empty",
+*   onSome: (value) => `Option has a value: ${value}`
+* }) // => "Option has a value: 1"
+* ```
+*
+* @see {@link getOrElse} for unwrapping with a default
+*
+* @category pattern matching
+* @since 2.0.0
+*/
+const match$5 = /*#__PURE__*/ dual(2, (self, { onNone, onSome }) => isNone(self) ? onNone() : onSome(self.value));
+/**
+* Extracts the value from a `Some`, or evaluates a fallback thunk on `None`.
+*
+* **When to use**
+*
+* Use when providing a default value for an absent `Option`
+* - Unwrapping with lazy evaluation of the fallback
+*
+* **Details**
+*
+* - `Some` → returns the inner value
+* - `None` → calls `onNone()` and returns its result
+* - `onNone` is only called when needed (lazy)
+*
+* **Example** (Unwrapping with a fallback)
+*
+* ```ts import.meta.vitest
+* import { Option } from "effect"
+*
+* Option.some(1).pipe(Option.getOrElse(() => 0)) // => 1
+* Option.none().pipe(Option.getOrElse(() => 0)) // => 0
+* ```
+*
+* @see {@link getOrNull} to fall back to `null`
+* @see {@link getOrUndefined} to fall back to `undefined`
+* @see {@link getOrThrow} to throw on `None`
+*
+* @category getters
+* @since 2.0.0
+*/
+const getOrElse = /*#__PURE__*/ dual(2, (self, onNone) => isNone(self) ? onNone() : self.value);
+/**
+* Converts a nullable value (`null` or `undefined`) into an `Option`.
+*
+* **When to use**
+*
+* Use when you need JavaScript nullish values to become absence at an API
+* boundary while all other values, including falsy ones, remain present.
+*
+* **Details**
+*
+* - `null` or `undefined` → `None`
+* - Any other value → `Some` (typed as `NonNullable<A>`)
+*
+* **Example** (Converting nullable values to an Option)
+*
+* ```ts import.meta.vitest
+* import { Option } from "effect"
+*
+* Option.fromNullishOr(undefined) // => Option.none()
+* Option.fromNullishOr(null) // => Option.none()
+* Option.fromNullishOr(1) // => Option.some(1)
+* ```
+*
+* @see {@link fromNullOr} to only treat `null` as absent
+* @see {@link fromUndefinedOr} to only treat `undefined` as absent
+* @see {@link liftNullishOr} to lift a nullable-returning function
+*
+* @category converting
+* @since 4.0.0
+*/
+const fromNullishOr = (a) => a == null ? none() : some(a);
+/**
+* Converts a possibly `undefined` value into an `Option`, leaving `null`
+* as a valid `Some`.
+*
+* **When to use**
+*
+* Use when you want to treat only `undefined` as absent while preserving `null`
+* as a meaningful value.
+*
+* **Details**
+*
+* - `undefined` → `None`
+* - Any other value (including `null`) → `Some`
+*
+* **Example** (Converting possibly undefined values to an Option)
+*
+* ```ts import.meta.vitest
+* import { Option } from "effect"
+*
+* Option.fromUndefinedOr(undefined) // => Option.none()
+* Option.fromUndefinedOr(null) // => Option.some(null)
+* Option.fromUndefinedOr(42) // => Option.some(42)
+* ```
+*
+* @see {@link fromNullishOr} to treat both `null` and `undefined` as absent
+* @see {@link fromNullOr} to only treat `null` as absent
+*
+* @category converting
+* @since 4.0.0
+*/
+const fromUndefinedOr = (a) => a === void 0 ? none() : some(a);
+/**
+* Extracts the value from a `Some`, or returns `undefined` for `None`.
+*
+* **When to use**
+*
+* Use when you need to pass absent `Option` values to APIs that expect
+* `undefined`.
+*
+* **Details**
+*
+* - `Some` → the inner value
+* - `None` → `undefined`
+*
+* **Example** (Unwrapping to undefined)
+*
+* ```ts import.meta.vitest
+* import { Option } from "effect"
+*
+* Option.getOrUndefined(Option.some(1)) // => 1
+* Option.getOrUndefined(Option.none()) // => undefined
+* ```
+*
+* @see {@link getOrNull} to return `null` instead
+* @see {@link getOrElse} for a custom fallback
+*
+* @category getters
+* @since 2.0.0
+*/
+const getOrUndefined$1 = /*#__PURE__*/ getOrElse(constUndefined);
+/**
+* Transforms the value inside a `Some` using the provided function, leaving
+* `None` unchanged.
+*
+* **When to use**
+*
+* Use to apply a pure transformation to an `Option`'s present value, especially
+* when chaining transformations in a pipeline.
+*
+* **Details**
+*
+* - `Some` → applies `f` and wraps the result in a new `Some`
+* - `None` → returns `None` unchanged
+*
+* **Example** (Mapping over an Option)
+*
+* ```ts import.meta.vitest
+* import { Option } from "effect"
+*
+* Option.map(Option.some(2), (n) => n * 2) // => Option.some(4)
+* Option.map(Option.none(), (n: number) => n * 2) // => Option.none()
+* ```
+*
+* @see {@link flatMap} when `f` returns an `Option`
+* @see {@link as} to replace the value with a constant
+*
+* @category mapping
+* @since 2.0.0
+*/
+const map$10 = /*#__PURE__*/ dual(2, (self, f) => isNone(self) ? none() : some(f(self.value)));
+/**
+* Applies a function that returns an `Option` to the value of a `Some`,
+* flattening the result. Returns `None` if the input is `None`.
+*
+* **When to use**
+*
+* Use when you need to chain dependent `Option` computations where each step
+* may return `None`.
+*
+* **Details**
+*
+* - `Some` → applies `f` to the value and returns its `Option` result
+* - `None` → returns `None` without calling `f`
+* - Equivalent to `map` followed by {@link flatten}
+*
+* **Example** (Chaining optional lookups)
+*
+* ```ts import.meta.vitest
+* import { Option } from "effect"
+*
+* interface User {
+*   readonly name: string
+*   readonly address: Option.Option<{ readonly street: Option.Option<string> }>
+* }
+*
+* const user: User = {
+*   name: "John",
+*   address: Option.some({ street: Option.some("123 Main St") })
+* }
+*
+* user.address.pipe(
+*   Option.flatMap((addr) => addr.street)
+* ) // => Option.some("123 Main St")
+* ```
+*
+* @see {@link map} when `f` returns a plain value
+* @see {@link andThen} for a more flexible variant
+* @see {@link flatten} to unwrap a nested `Option<Option<A>>`
+*
+* @category sequencing
+* @since 2.0.0
+*/
+const flatMap$3 = /*#__PURE__*/ dual(2, (self, f) => isNone(self) ? none() : f(self.value));
+/**
+* Checks whether the value in a `Some` satisfies a predicate or refinement.
+*
+* **When to use**
+*
+* Use to check a condition on an optional value without unwrapping
+*
+* **Details**
+*
+* - `None` → `false`
+* - `Some` where `predicate(value)` is `true` → `true`
+* - `Some` where `predicate(value)` is `false` → `false`
+* - With a refinement, narrows the `Option` type on `true`
+*
+* **Example** (Testing a condition)
+*
+* ```ts import.meta.vitest
+* import { Option } from "effect"
+*
+* const isEven = (n: number) => n % 2 === 0
+*
+* Option.some(2).pipe(Option.exists(isEven)) // => true
+* Option.some(1).pipe(Option.exists(isEven)) // => false
+* Option.none().pipe(Option.exists(isEven)) // => false
+* ```
+*
+* @see {@link filter} to keep or discard based on a predicate
+* @see {@link contains} to test for a specific value
+*
+* @category predicates
+* @since 2.0.0
+*/
+const exists$1 = /*#__PURE__*/ dual(2, (self, refinement) => isNone(self) ? false : refinement(self.value));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Context.js
+/**
+* Runtime type identifier attached to `Context` service keys and used by
+* `isKey` to recognize them.
+*
+* @category type IDs
+* @since 4.0.0
+*/
+const ServiceTypeId = "~effect/Context/Service";
+/**
+* Creates a `Context` service key.
+*
+* **When to use**
+*
+* Use when you need to define a context service key for a dependency that must
+* be provided by the surrounding context.
+*
+* **Details**
+*
+* Call `Context.Service("Key")` for a function-style key, or use the two-stage
+* form `Context.Service<Self, Shape>()("Key")` for class-style service
+* declarations. The returned key can be yielded as an Effect and passed to
+* `Context.make`, `Context.add`, and the Context getter functions.
+*
+* **Gotchas**
+*
+* The string key is the runtime identity of the service. Reusing the same key
+* string for unrelated services makes them occupy the same slot in a
+* `Context`.
+*
+* **Example** (Creating service keys)
+*
+* ```ts import.meta.vitest
+* import { Context } from "effect"
+*
+* // Create a simple service
+* const Database = Context.Service<{
+*   query: (sql: string) => string
+* }>("Database")
+*
+* // Create a service class
+* class Config extends Context.Service<Config, {
+*   port: number
+* }>()("Config") {}
+*
+* // Use the services to create contexts
+* const db = Context.make(Database, {
+*   query: (sql) => `Result: ${sql}`
+* })
+* const config = Context.make(Config, { port: 8080 })
+* Context.get(db, Database).query("SELECT 1") // => "Result: SELECT 1"
+* Context.get(config, Config).port // => 8080
+* ```
+*
+* @see {@link Reference} for service keys with default values
+*
+* @category services
+* @since 4.0.0
+*/
+const Service = function() {
+	function KeyClass() {}
+	const self = KeyClass;
+	Object.setPrototypeOf(self, ServiceProto);
+	const init = (key, options) => {
+		self.key = key;
+		if (options?.defaultValue) {
+			self[ReferenceTypeId] = ReferenceTypeId;
+			self.defaultValue = options.defaultValue;
+		}
+		if (options?.make) self.make = options.make;
+		if (options?.fiberCached) cacheKeys.add(key);
+		return self;
+	};
+	return arguments.length > 0 ? init(arguments[0], arguments[1]) : init;
+};
+const ServiceProto = {
+	[ServiceTypeId]: ServiceTypeId,
+	.../*#__PURE__*/ Prototype({
+		label: "Service",
+		evaluate(fiber) {
+			return exitSucceed(get$2(fiber.context, this));
+		}
+	}),
+	toJSON() {
+		return {
+			_id: "Service",
+			key: this.key
+		};
+	},
+	of(self) {
+		return self;
+	},
+	context(self) {
+		return make$26(this, self);
+	},
+	use(f) {
+		return withFiber$1((fiber) => f(get$2(fiber.context, this)));
+	},
+	useSync(f) {
+		return withFiber$1((fiber) => exitSucceed(f(get$2(fiber.context, this))));
+	}
+};
+const cacheKeys = /*#__PURE__*/ new Set();
+const ReferenceTypeId = "~effect/Context/Reference";
+const TypeId$31 = "~effect/Context";
+const MaxDepth = 8;
+const FlattenAfterBaseHits = 8;
+const makeImpl = (cacheRoot, base, overlay, depth) => {
+	const self = Object.create(Proto$8);
+	self.cacheRoot = cacheRoot ?? self;
+	self.base = base;
+	self.overlay = overlay;
+	self.depth = depth;
+	self._flat = void 0;
+	self.baseHits = 0;
+	return self;
+};
+const applyOverlays = (map, overlay) => {
+	if (!overlay) return;
+	applyOverlays(map, overlay.parent);
+	map.set(overlay.key, overlay.value);
+};
+const flatten = (self) => {
+	if (self._flat) return self._flat;
+	if (!self.overlay) return self._flat = self.base;
+	const map = new Map(self.base);
+	applyOverlays(map, self.overlay);
+	return self._flat = map;
+};
+const withFlat = (self, f) => {
+	const map = new Map(self.mapUnsafe);
+	f(map);
+	return makeUnsafe$6(map);
+};
+const notFound = /*#__PURE__*/ Symbol();
+const lookup = (self, key) => {
+	const impl = self;
+	for (let overlay = impl.overlay; overlay; overlay = overlay.parent) if (overlay.key === key) return overlay.value;
+	const value = impl.base.get(key);
+	if (value === void 0 && !impl.base.has(key)) return notFound;
+	if (impl.overlay && ++impl.baseHits >= impl.base.size && impl.baseHits >= FlattenAfterBaseHits) {
+		impl.base = flatten(impl);
+		impl.overlay = void 0;
+		impl.depth = 0;
+	}
+	return value;
+};
+/**
+* Creates a `Context` from an existing service map.
+*
+* **When to use**
+*
+* Use when constructing a low-level `Context` from a trusted map whose lifecycle
+* you control.
+*
+* **Gotchas**
+*
+* The provided map is retained without copying and must not be mutated after
+* construction. Prefer `empty`, `make`, `add`, or `merge` for normal Context
+* construction.
+*
+* **Example** (Creating a context from a map)
+*
+* ```ts import.meta.vitest
+* import { Context } from "effect"
+*
+* // Create a context from a Map (unsafe)
+* const map = new Map([
+*   ["Logger", { log: (_msg: string) => {} }]
+* ])
+*
+* const context = Context.makeUnsafe(map)
+* context.mapUnsafe.size // => 1
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const makeUnsafe$6 = (mapUnsafe) => makeImpl(void 0, mapUnsafe, void 0, 0);
+const Proto$8 = {
+	get mapUnsafe() {
+		return flatten(this);
+	},
+	...PipeInspectableProto,
+	[TypeId$31]: { _Services: (_) => _ },
+	toJSON() {
+		return {
+			_id: "Context",
+			services: Array.from(this.mapUnsafe).map(([key, value]) => ({
+				key,
+				value
+			}))
+		};
+	},
+	[symbol](that) {
+		if (!isContext(that)) return false;
+		const self = this.mapUnsafe;
+		const other = that.mapUnsafe;
+		if (self.size !== other.size) return false;
+		for (const [key, value] of self) if (!other.has(key) || !equals$1(value, other.get(key))) return false;
+		return true;
+	},
+	[symbol$1]() {
+		return number$1(this.mapUnsafe.size);
+	}
+};
+/** @internal */
+const hasSameCache = (self, that) => self.cacheRoot === that.cacheRoot;
+/**
+* Checks whether the provided argument is a `Context`.
+*
+* **When to use**
+*
+* Use to narrow an unknown value before passing it to APIs that require a
+* `Context`.
+*
+* **Details**
+*
+* This checks the runtime `Context` marker and does not inspect which services
+* the context contains.
+*
+* **Gotchas**
+*
+* This guard only proves that the value is a `Context`; it does not prove that
+* any specific service is present.
+*
+* **Example** (Checking for contexts)
+*
+* ```ts import.meta.vitest
+* import { Context } from "effect"
+* Context.isContext(Context.empty()) // => true
+* ```
+*
+* @see {@link isKey} for checking service keys
+* @see {@link isReference} for checking references with defaults
+*
+* @category guards
+* @since 2.0.0
+*/
+const isContext = (u) => hasProperty(u, TypeId$31);
+/**
+* Checks whether the provided argument is a `Reference`.
+*
+* **Example** (Checking for references)
+*
+* ```ts import.meta.vitest
+* import { Context } from "effect"
+*
+* const LoggerRef = Context.Reference("Logger", {
+*   defaultValue: () => ({ log: (_msg: string) => {} })
+* })
+*
+* Context.isReference(LoggerRef) // => true
+* Context.isReference(Context.Service("Key")) // => false
+* ```
+*
+* @category guards
+* @since 3.11.0
+*/
+const isReference = (u) => !!u[ReferenceTypeId];
+/**
+* Returns an empty `Context`.
+*
+* **Example** (Creating an empty context)
+*
+* ```ts import.meta.vitest
+* import { Context } from "effect"
+* Context.empty().mapUnsafe.size // => 0
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const empty$3 = () => emptyContext;
+const emptyContext = /*#__PURE__*/ makeUnsafe$6(/*#__PURE__*/ new Map());
+/**
+* Creates a new `Context` with a single service associated to the key.
+*
+* **Example** (Creating a context with one service)
+*
+* ```ts import.meta.vitest
+* import { Context } from "effect"
+*
+* const Port = Context.Service<{ PORT: number }>("Port")
+*
+* const context = Context.make(Port, { PORT: 8080 })
+*
+* Context.get(context, Port).PORT // => 8080
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const make$26 = (key, service) => makeUnsafe$6(/* @__PURE__ */ new Map([[key.key, service]]));
+/**
+* Adds a service to a given `Context`.
+*
+* **When to use**
+*
+* Use when you need to store a known service value in a `Context`.
+*
+* **Details**
+*
+* If the context already contains the same service key, the new service
+* replaces the previous one.
+*
+* **Example** (Adding a service to a context)
+*
+* ```ts import.meta.vitest
+* import { Context, pipe } from "effect"
+*
+* const Port = Context.Service<{ PORT: number }>("Port")
+* const Timeout = Context.Service<{ TIMEOUT: number }>("Timeout")
+*
+* const someContext = Context.make(Port, { PORT: 8080 })
+*
+* const context = pipe(
+*   someContext,
+*   Context.add(Timeout, { TIMEOUT: 5000 })
+* )
+*
+* const values = [Context.get(context, Port).PORT, Context.get(context, Timeout).TIMEOUT]
+* values // => [8080, 5000]
+* ```
+*
+* @see {@link addOrOmit} for adding or removing a service from an `Option`
+*
+* @category combining
+* @since 2.0.0
+*/
+const add = /*#__PURE__*/ dual(3, (self, key, service) => addUnsafe(self, key.key, service));
+/**
+* Adds a service by key to a given `Context` using a string key.
+*
+* @category combining
+* @since 4.0.0
+*/
+const addUnsafe = (self, key, service) => {
+	const impl = self;
+	const cacheRoot = cacheKeys.has(key) ? void 0 : impl.cacheRoot;
+	if (impl.depth >= MaxDepth) {
+		const map = new Map(impl.mapUnsafe);
+		map.set(key, service);
+		return makeImpl(cacheRoot, map, void 0, 0);
+	}
+	return makeImpl(cacheRoot, impl.base, {
+		key,
+		value: service,
+		parent: impl.overlay
+	}, impl.depth + 1);
+};
+/**
+* Returns the service currently stored for a key, or `undefined` when the key
+* is absent.
+*
+* **When to use**
+*
+* Use when you need to read the service stored for a key without resolving
+* `Context.Reference` defaults.
+*
+* **Gotchas**
+*
+* This is a raw lookup and does not resolve default values for
+* `Context.Reference` keys.
+*
+* @see {@link getOption} for a reference-aware optional lookup
+*
+* @category getters
+* @since 4.0.0
+*/
+const getOrUndefined = /*#__PURE__*/ dual(2, (self, key) => getOrUndefinedUnsafe(self, key.key));
+/** @internal */
+const getOrUndefinedUnsafe = (self, key) => {
+	const value = lookup(self, key);
+	return value === notFound ? void 0 : value;
+};
+/**
+* Gets the service for a key, throwing if an absent non-reference key cannot be
+* resolved.
+*
+* **When to use**
+*
+* Use when you need to read a service from a context whose type does not prove
+* the service is present.
+*
+* **Details**
+*
+* If the key is a `Context.Reference` and no override is stored in the
+* context, its cached default value is returned. For absent non-reference keys,
+* this function throws a runtime error.
+*
+* **Example** (Getting services unsafely)
+*
+* ```ts import.meta.vitest
+* import { Context, Option } from "effect"
+*
+* const Port = Context.Service<{ PORT: number }>("Port")
+* const Timeout = Context.Service<{ TIMEOUT: number }>("Timeout")
+*
+* const context = Context.make(Port, { PORT: 8080 })
+*
+* Context.getUnsafe(context, Port).PORT // => 8080
+* Context.getOption(context, Timeout) // => Option.none()
+* ```
+*
+* @see {@link get} for type-checked service access
+* @see {@link getOption} for optional service access
+*
+* @category unsafe
+* @since 4.0.0
+*/
+const getUnsafe = /*#__PURE__*/ dual(2, (self, service) => {
+	const value = lookup(self, service.key);
+	if (value === notFound) {
+		if (isReference(service)) return getDefaultValue(service);
+		throw serviceNotFoundError(service);
+	}
+	return value;
+});
+/**
+* Gets a service from the context that corresponds to the given key.
+*
+* **When to use**
+*
+* Use when you need type-checked access to a service already included in the
+* context type.
+*
+* **Example** (Getting a service from a context)
+*
+* ```ts import.meta.vitest
+* import { Context, pipe } from "effect"
+*
+* const Port = Context.Service<{ PORT: number }>("Port")
+* const Timeout = Context.Service<{ TIMEOUT: number }>("Timeout")
+*
+* const context = pipe(
+*   Context.make(Port, { PORT: 8080 }),
+*   Context.add(Timeout, { TIMEOUT: 5000 })
+* )
+*
+* Context.get(context, Timeout).TIMEOUT // => 5000
+* ```
+*
+* @see {@link getOption} for optional service access
+* @see {@link getOrElse} for fallback values
+*
+* @category getters
+* @since 2.0.0
+*/
+const get$2 = getUnsafe;
+const defaultValueCacheKey = "~effect/Context/defaultValue";
+const getDefaultValue = (ref) => {
+	if (defaultValueCacheKey in ref) return ref[defaultValueCacheKey];
+	return ref[defaultValueCacheKey] = ref.defaultValue();
+};
+const serviceNotFoundError = (service) => {
+	const error = /* @__PURE__ */ new Error(`Service not found${service.key ? `: ${String(service.key)}` : ""}`);
+	if (error.stack) {
+		const lines = error.stack.split("\n");
+		lines.splice(1, 3);
+		error.stack = lines.join("\n");
+	}
+	return error;
+};
+/**
+* Gets the service for a key safely wrapped in an `Option`.
+*
+* **When to use**
+*
+* Use when you need to read a `Context` service as an `Option` so absence is
+* represented as data.
+*
+* **Details**
+*
+* Returns `Option.some` when the service is stored in the context. If the key
+* is a `Context.Reference` and no override is stored, returns `Option.some` of
+* the cached default value. Missing non-reference keys return `Option.none`.
+*
+* **Example** (Getting optional services)
+*
+* ```ts import.meta.vitest
+* import { Context, Option } from "effect"
+*
+* const Port = Context.Service<{ PORT: number }>("Port")
+* const Timeout = Context.Service<{ TIMEOUT: number }>("Timeout")
+*
+* const context = Context.make(Port, { PORT: 8080 })
+*
+* Context.getOption(context, Port) // => Option.some({ PORT: 8080 })
+* Context.getOption(context, Timeout) // => Option.none()
+* ```
+*
+* @see {@link getOrElse} for returning a fallback value directly
+*
+* @category getters
+* @since 2.0.0
+*/
+const getOption = /*#__PURE__*/ dual(2, (self, service) => {
+	const value = lookup(self, service.key);
+	if (value !== notFound) return some(value);
+	return isReference(service) ? some(getDefaultValue(service)) : none();
+});
+/**
+* Merges two `Context`s into one.
+*
+* **When to use**
+*
+* Use when you need to combine two contexts.
+*
+* **Details**
+*
+* When both contexts contain the same service key, the service from `that`
+* overrides the service from `self`.
+*
+* **Example** (Merging two contexts)
+*
+* ```ts import.meta.vitest
+* import { Context } from "effect"
+*
+* const Port = Context.Service<{ PORT: number }>("Port")
+* const Timeout = Context.Service<{ TIMEOUT: number }>("Timeout")
+*
+* const firstContext = Context.make(Port, { PORT: 8080 })
+* const secondContext = Context.make(Timeout, { TIMEOUT: 5000 })
+*
+* const context = Context.merge(firstContext, secondContext)
+*
+* const values = [Context.get(context, Port).PORT, Context.get(context, Timeout).TIMEOUT]
+* values // => [8080, 5000]
+* ```
+*
+* @see {@link mergeAll} for merging more than two contexts at once
+*
+* @category combining
+* @since 2.0.0
+*/
+const merge$2 = /*#__PURE__*/ dual(2, (self, that) => {
+	if (self.mapUnsafe.size === 0) return that;
+	if (that.mapUnsafe.size === 0) return self;
+	return withFlat(self, (map) => that.mapUnsafe.forEach((value, key) => map.set(key, value)));
+});
+/**
+* Merges any number of `Context`s into one.
+*
+* **When to use**
+*
+* Use when you need to combine a variadic list of contexts.
+*
+* **Details**
+*
+* When multiple contexts contain the same service key, the service from the
+* last context with that key is kept.
+*
+* **Example** (Merging multiple contexts)
+*
+* ```ts import.meta.vitest
+* import { Context } from "effect"
+*
+* const Port = Context.Service<{ PORT: number }>("Port")
+* const Timeout = Context.Service<{ TIMEOUT: number }>("Timeout")
+* const Host = Context.Service<{ HOST: string }>("Host")
+*
+* const firstContext = Context.make(Port, { PORT: 8080 })
+* const secondContext = Context.make(Timeout, { TIMEOUT: 5000 })
+* const thirdContext = Context.make(Host, { HOST: "localhost" })
+*
+* const context = Context.mergeAll(
+*   firstContext,
+*   secondContext,
+*   thirdContext
+* )
+*
+* context.mapUnsafe.size // => 3
+* ```
+*
+* @see {@link merge} for merging two contexts
+*
+* @category combining
+* @since 3.12.0
+*/
+const mergeAll$1 = (...ctxs) => {
+	const map = /* @__PURE__ */ new Map();
+	for (let i = 0; i < ctxs.length; i++) ctxs[i].mapUnsafe.forEach((value, key) => {
+		map.set(key, value);
+	});
+	return makeUnsafe$6(map);
+};
+/**
+* Creates a context key with a default value.
+*
+* **When to use**
+*
+* Use when you need to define a context key with a lazily computed default
+* value.
+*
+* **Details**
+*
+* `Context.Reference` allows you to create a key that can hold a value. You
+* can provide a default value for the service, which will automatically be used
+* when the context is accessed, or override it with a custom implementation
+* when needed. The default value is computed lazily and cached on the
+* reference.
+*
+* **Example** (Creating references with default values)
+*
+* ```ts import.meta.vitest
+* import { Context } from "effect"
+*
+* // Create a reference with a default value
+* const messages: Array<string> = []
+* const LoggerRef = Context.Reference("Logger", {
+*   defaultValue: () => ({ log: (msg: string) => messages.push(`Default: ${msg}`) })
+* })
+*
+* // The reference provides the default value when accessed from an empty context
+* const context = Context.empty()
+* const logger = Context.get(context, LoggerRef)
+*
+* // You can also override the default value
+* const customContext = Context.make(LoggerRef, {
+*   log: (msg: string) => messages.push(`Custom: ${msg}`)
+* })
+* const customLogger = Context.get(customContext, LoggerRef)
+* logger.log("default")
+* customLogger.log("message")
+* messages // => ["Default: default", "Custom: message"]
+* ```
+*
+* @see {@link Service} for required services without default values
+*
+* @category services
+* @since 3.11.0
+*/
+const Reference = Service;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/array.js
+/**
+* @since 2.0.0
+*/
+/** @internal */
+const isArrayNonEmpty$1 = (self) => self.length > 0;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/count.js
+/**
+* Normalizes a collection count to a non-negative integer. `NaN` and
+* non-positive values become `0`; positive infinity is preserved.
+*
+* @internal
+*/
+const normalize$1 = (n) => n > 0 ? Math.floor(n) : 0;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Result.js
+/**
+* Creates a `Result` holding a `Success` value.
+*
+* **Details**
+*
+* - Use when you have a value and want to lift it into the `Result` type
+* - The error type `E` defaults to `never`
+*
+* **Example** (Wrapping a value)
+*
+* ```ts import.meta.vitest
+* import { Result } from "effect"
+*
+* Result.succeed(42) // => Result.succeed(42)
+* ```
+*
+* @see {@link fail} to create a Failure
+* @see {@link void_ void} for a pre-built `Success<void>`
+*
+* @category constructors
+* @since 4.0.0
+*/
+const succeed$6 = succeed$7;
+/**
+* Creates a `Result` holding a `Failure` value.
+*
+* **When to use**
+*
+* Use to represent a failed `Result` with a typed failure value.
+*
+* **Details**
+*
+* - The success type `A` defaults to `never`
+*
+* **Example** (Creating a failure)
+*
+* ```ts import.meta.vitest
+* import { Result } from "effect"
+*
+* Result.fail("Something went wrong") // => Result.fail("Something went wrong")
+* ```
+*
+* @see {@link succeed} to create a Success
+* @see {@link mapError} to transform the error
+*
+* @category constructors
+* @since 4.0.0
+*/
+const fail$5 = fail$6;
+/**
+* Checks whether a `Result` is a `Failure`.
+*
+* **When to use**
+*
+* Use to narrow a known `Result` to the `Failure` variant.
+*
+* **Details**
+*
+* - Acts as a TypeScript type guard, narrowing to `Failure<A, E>`
+* - After narrowing, you can access `.failure` to read the error value
+*
+* **Example** (Narrowing to failure)
+*
+* ```ts import.meta.vitest
+* import { Result } from "effect"
+*
+* const result = Result.fail("oops")
+*
+* if (Result.isFailure(result)) {
+*   result.failure // => "oops"
+* }
+* ```
+*
+* @see {@link isSuccess} for the opposite check
+* @see {@link isResult} to check if a value is any Result
+*
+* @category guards
+* @since 4.0.0
+*/
+const isFailure$1 = isFailure$2;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Iterable.js
+/**
+* Returns the first element that satisfies the specified
+* predicate, or `None` if no such element exists.
+*
+* **Example** (Finding the first match)
+*
+* ```ts import.meta.vitest
+* import { Iterable, Option } from "effect"
+*
+* const numbers = [1, 3, 4, 6, 8]
+* const firstEven = Iterable.findFirst(numbers, (x) => x % 2 === 0)
+* firstEven // => Option.some(4)
+*
+* const firstGreaterThan10 = Iterable.findFirst(numbers, (x) => x > 10)
+* firstGreaterThan10 // => Option.none()
+*
+* // With index
+* const letters = ["a", "b", "c", "d"]
+* const atEvenIndex = Iterable.findFirst(letters, (_, i) => i % 2 === 0)
+* atEvenIndex // => Option.some("a")
+*
+* // Type refinement
+* const mixed: Array<string | number> = [1, "hello", 2, "world"]
+* const firstString = Iterable.findFirst(
+*   mixed,
+*   (x): x is string => typeof x === "string"
+* )
+* firstString // => Option.some("hello")
+*
+* // Transform during search
+* const findSquareRoot = Iterable.findFirst([1, 4, 9, 16], (x) => {
+*   const sqrt = Math.sqrt(x)
+*   return Number.isInteger(sqrt) ? Option.some(sqrt) : Option.none()
+* })
+* findSquareRoot // => Option.some(1)
+* ```
+*
+* @category searching
+* @since 2.0.0
+*/
+const findFirst$1 = /*#__PURE__*/ dual(2, (self, f) => {
+	let i = 0;
+	for (const a of self) {
+		const o = f(a, i);
+		if (isBoolean$1(o)) {
+			if (o) return some(a);
+		} else if (isSome(o)) return o;
+		i++;
+	}
+	return none();
+});
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Array.js
+/**
+* Exposes the global array constructor.
+*
+* **When to use**
+*
+* Use to access native JavaScript array constructor methods such as `isArray`
+* or `from` from the Effect module namespace.
+*
+* **Example** (Accessing the Array constructor)
+*
+* ```ts import.meta.vitest
+* import { Array } from "effect"
+*
+* Array.Array === globalThis.Array // => true
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Array$1 = globalThis.Array;
+/**
+* Converts an `Iterable` to an `Array`.
+*
+* **When to use**
+*
+* Use to convert any `Iterable` (Set, Generator, etc.) into an array.
+*
+* **Details**
+*
+* If the input is already an array, this returns it by reference without
+* copying. Otherwise, it creates a new array from the iterable. Use `copy` if
+* you need a fresh array even when the input is already an array.
+*
+* **Example** (Converting a Set to an array)
+*
+* ```ts import.meta.vitest
+* import { Array } from "effect"
+*
+* Array.fromIterable(new Set([1, 2, 3])) // => [1, 2, 3]
+* ```
+*
+* @see {@link ensure} — wrap a single value or return an existing array
+* @see {@link copy} — create a shallow copy of an array
+*
+* @category constructors
+* @since 2.0.0
+*/
+const fromIterable$1 = (collection) => Array$1.isArray(collection) ? collection : Array$1.from(collection);
+/**
+* Pattern-matches on an array, handling empty and non-empty cases separately.
+*
+* **When to use**
+*
+* Use when you need to branch on whether an array is empty.
+*
+* **Details**
+*
+* `onNonEmpty` receives a `NonEmptyReadonlyArray`. Supports both data-first and
+* data-last usage.
+*
+* **Example** (Branching on emptiness)
+*
+* ```ts import.meta.vitest
+* import { Array } from "effect"
+*
+* const describe = Array.match({
+*   onEmpty: () => "empty",
+*   onNonEmpty: ([head, ...tail]) => `head: ${head}, tail: ${tail.length}`
+* })
+*
+* describe([]) // => "empty"
+* describe([1, 2, 3]) // => "head: 1, tail: 2"
+* ```
+*
+* @see {@link matchLeft} — destructures into head + tail
+* @see {@link matchRight} — destructures into init + last
+*
+* @category pattern matching
+* @since 2.0.0
+*/
+const match$3 = /*#__PURE__*/ dual(2, (self, { onEmpty, onNonEmpty }) => isReadonlyArrayNonEmpty(self) ? onNonEmpty(self) : onEmpty());
+/**
+* Adds a single element to the end of an iterable, returning a `NonEmptyArray`.
+*
+* **When to use**
+*
+* Use when you need to guarantee a non-empty result after adding a required
+* trailing value.
+*
+* **Example** (Appending an element)
+*
+* ```ts import.meta.vitest
+* import { Array } from "effect"
+*
+* Array.append([1, 2, 3], 4) // => [1, 2, 3, 4]
+* ```
+*
+* @see {@link prepend} — add to the front
+* @see {@link appendAll} — append multiple elements
+*
+* @category combining
+* @since 2.0.0
+*/
+const append$1 = /*#__PURE__*/ dual(2, (self, last) => [...self, last]);
+Array$1.isArray;
+/**
+* Checks whether a mutable `Array` is non-empty, narrowing the type to
+* `NonEmptyArray`.
+*
+* **When to use**
+*
+* Use when you need the narrowed value to remain a mutable `Array` after proving
+* it has at least one element.
+*
+* **Example** (Checking for a non-empty array)
+*
+* ```ts import.meta.vitest
+* import { Array } from "effect"
+*
+* Array.isArrayNonEmpty([]) // => false
+* Array.isArrayNonEmpty([1, 2, 3]) // => true
+* ```
+*
+* @see {@link isReadonlyArrayNonEmpty} — readonly variant
+* @see {@link isArrayEmpty} — opposite check
+*
+* @category guards
+* @since 4.0.0
+*/
+const isArrayNonEmpty = isArrayNonEmpty$1;
+/**
+* Checks whether a `ReadonlyArray` is non-empty, narrowing the type to
+* `NonEmptyReadonlyArray`.
+*
+* **When to use**
+*
+* Use when you need to prove a readonly array has at least one element without
+* requiring mutable array methods afterward.
+*
+* **Example** (Checking for a non-empty readonly array)
+*
+* ```ts import.meta.vitest
+* import { Array } from "effect"
+*
+* Array.isReadonlyArrayNonEmpty([]) // => false
+* Array.isReadonlyArrayNonEmpty([1, 2, 3]) // => true
+* ```
+*
+* @see {@link isArrayNonEmpty} — mutable variant
+* @see {@link isReadonlyArrayEmpty} — opposite check
+*
+* @category guards
+* @since 4.0.0
+*/
+const isReadonlyArrayNonEmpty = isArrayNonEmpty$1;
+/**
+* Returns the index of the first element matching the predicate, wrapped in an
+* `Option`.
+*
+* **When to use**
+*
+* Use to find the index of the first matching element from the start of an
+* iterable.
+*
+* **Example** (Finding an index)
+*
+* ```ts import.meta.vitest
+* import { Array, Option } from "effect"
+*
+* Array.findFirstIndex([5, 3, 8, 9], (x) => x > 5) // => Option.some(2)
+* ```
+*
+* @see {@link findLastIndex} — search from the end
+* @see {@link findFirst} — get the element itself
+*
+* @category searching
+* @since 2.0.0
+*/
+const findFirstIndex = /*#__PURE__*/ dual(2, (self, predicate) => {
+	let i = 0;
+	for (const a of self) {
+		if (predicate(a, i)) return some(i);
+		i++;
+	}
+	return none();
+});
+/**
+* Returns the first element matching a predicate, refinement, or mapping
+* function, wrapped in `Option`.
+*
+* **When to use**
+*
+* Use to scan an iterable in iteration order and return the first selected
+* element or mapped value as an `Option`.
+*
+* **Details**
+*
+* Accepts a predicate `(a, i) => boolean`, a refinement, or a function
+* `(a, i) => Option<B>` for simultaneous find-and-transform. If no element
+* matches, this returns `Option.none()`.
+*
+* **Example** (Finding the first match)
+*
+* ```ts import.meta.vitest
+* import { Array, Option } from "effect"
+*
+* Array.findFirst([1, 2, 3, 4, 5], (x) => x > 3) // => Option.some(4)
+* ```
+*
+* @see {@link findLast} — search from the end
+* @see {@link findFirstIndex} — get the index instead
+* @see {@link findFirstWithIndex} — get both element and index
+*
+* @category searching
+* @since 2.0.0
+*/
+const findFirst = findFirst$1;
+/**
+* Returns the last element matching a predicate, refinement, or mapping
+* function, wrapped in `Option`.
+*
+* **When to use**
+*
+* Use to find the last matching element from the end of an array.
+*
+* **Details**
+*
+* Searches from the end of the array. If no element matches, this returns
+* `Option.none()`.
+*
+* **Example** (Finding the last match)
+*
+* ```ts import.meta.vitest
+* import { Array, Option } from "effect"
+*
+* Array.findLast([1, 2, 3, 4, 5], (n) => n % 2 === 0) // => Option.some(4)
+* ```
+*
+* @see {@link findFirst} — search from the start
+* @see {@link findLastIndex} — get the index instead
+*
+* @category searching
+* @since 2.0.0
+*/
+const findLast = /*#__PURE__*/ dual(2, (self, f) => {
+	const input = fromIterable$1(self);
+	for (let i = input.length - 1; i >= 0; i--) {
+		const a = input[i];
+		const o = f(a, i);
+		if (typeof o === "boolean") {
+			if (o) return some(a);
+		} else if (isSome(o)) return o;
+	}
+	return none();
+});
+/**
+* Creates an empty array.
+*
+* **When to use**
+*
+* Use to create a typed empty array without allocating placeholder elements.
+*
+* **Example** (Creating an empty array)
+*
+* ```ts import.meta.vitest
+* import { Array } from "effect"
+*
+* Array.empty<number>() // => []
+* ```
+*
+* @see {@link of} — create a single-element array
+* @see {@link make} — create from multiple values
+*
+* @category constructors
+* @since 2.0.0
+*/
+const empty$2 = () => [];
+/**
+* Wraps a single value in a `NonEmptyArray`.
+*
+* **Example** (Creating a single-element array)
+*
+* ```ts import.meta.vitest
+* import { Array } from "effect"
+*
+* Array.of(1) // => [1]
+* ```
+*
+* @see {@link make} — create from multiple values
+* @see {@link empty} — create an empty array
+*
+* @category constructors
+* @since 2.0.0
+*/
+const of = (a) => [a];
+/**
+* Transforms each element using a function, returning a new array.
+*
+* **When to use**
+*
+* Use to transform each element independently while preserving the array shape.
+*
+* **Details**
+*
+* The function receives `(element, index)`. The return type preserves
+* `NonEmptyArray`.
+*
+* **Example** (Doubling values)
+*
+* ```ts import.meta.vitest
+* import { Array } from "effect"
+*
+* Array.map([1, 2, 3], (x) => x * 2) // => [2, 4, 6]
+* ```
+*
+* @see {@link flatMap} — map and flatten
+*
+* @category mapping
+* @since 2.0.0
+*/
+const map$8 = /*#__PURE__*/ dual(2, (self, f) => self.map(f));
+/**
+* Folds an iterable from left to right into a single value.
+*
+* **When to use**
+*
+* Use to combine all elements into one accumulated value from left to right.
+*
+* **Details**
+*
+* The function receives `(accumulator, element, index)`.
+*
+* **Example** (Summing an array)
+*
+* ```ts import.meta.vitest
+* import { Array } from "effect"
+*
+* Array.reduce([1, 2, 3], 0, (acc, n) => acc + n) // => 6
+* ```
+*
+* @see {@link reduceRight} — fold from right to left
+* @see {@link scan} — fold keeping intermediate values
+*
+* @category folding
+* @since 2.0.0
+*/
+const reduce = /*#__PURE__*/ dual(3, (self, b, f) => fromIterable$1(self).reduce((b, a, i) => f(b, a, i), b));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Duration.js
+const TypeId$30 = "~effect/Duration";
+const bigint0$2 = /*#__PURE__*/ BigInt(0);
+const bigint1$2 = /*#__PURE__*/ BigInt(1);
+const bigint2 = /*#__PURE__*/ BigInt(2);
+const bigint10$1 = /*#__PURE__*/ BigInt(10);
+const bigint1e3 = /*#__PURE__*/ BigInt(1e3);
+const roundTiesAwayFromZero = (input) => BigInt(input < 0 ? Math.ceil(input - .5) : Math.floor(input + .5));
+const roundMillisToNanos = (millis) => roundTiesAwayFromZero(millis * 1e6);
+const parseNanos = (input, scale) => {
+	const decimalIndex = input.indexOf(".");
+	if (decimalIndex === -1) return BigInt(input) * scale;
+	const isNegative = input[0] === "-";
+	const fractional = input.slice(decimalIndex + 1);
+	const fractionalScale = bigint10$1 ** BigInt(fractional.length);
+	const scaled = (BigInt(input.slice(isNegative ? 1 : 0, decimalIndex)) * fractionalScale + BigInt(fractional)) * scale;
+	const rounded = scaled / fractionalScale + (scaled % fractionalScale * bigint2 >= fractionalScale ? bigint1$2 : bigint0$2);
+	return isNegative ? -rounded : rounded;
+};
+const DURATION_REGEXP = /^(-?\d+(?:\.\d+)?)\s+(nanos?|micros?|millis?|seconds?|minutes?|hours?|days?|weeks?)$/;
+/**
+* Decodes a `Duration.Input` into a `Duration`.
+*
+* **When to use**
+*
+* Use when the input has already been validated or comes from a trusted source
+* and throwing is acceptable for invalid duration syntax.
+*
+* **Gotchas**
+*
+* If the input is not a valid `Duration.Input`, it throws an error.
+*
+* **Example** (Decoding duration inputs)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.fromInputUnsafe(1000) // => Duration.millis(1000)
+* Duration.fromInputUnsafe("5 seconds") // => Duration.seconds(5)
+* Duration.fromInputUnsafe("Infinity") // => Duration.infinity
+* Duration.fromInputUnsafe([2, 500_000_000]) // => Duration.nanos(2_500_000_000n)
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const fromInputUnsafe$1 = (input) => {
+	switch (typeof input) {
+		case "number": return millis(input);
+		case "bigint": return nanos(input);
+		case "string": {
+			if (input === "Infinity") return infinity;
+			if (input === "-Infinity") return negativeInfinity;
+			const match = DURATION_REGEXP.exec(input);
+			if (!match) break;
+			const [_, valueStr, unit] = match;
+			if (unit === "nano" || unit === "nanos") return nanos(parseNanos(valueStr, bigint1$2));
+			if (unit === "micro" || unit === "micros") return nanos(parseNanos(valueStr, bigint1e3));
+			const value = Number(valueStr);
+			switch (unit) {
+				case "milli":
+				case "millis": return millis(value);
+				case "second":
+				case "seconds": return seconds(value);
+				case "minute":
+				case "minutes": return minutes(value);
+				case "hour":
+				case "hours": return hours(value);
+				case "day":
+				case "days": return days(value);
+				case "week":
+				case "weeks": return weeks(value);
+			}
+			break;
+		}
+		case "object": {
+			if (input === null) break;
+			if (TypeId$30 in input) return input;
+			if (Array.isArray(input)) {
+				if (input.length !== 2 || !input.every(isNumber)) return invalid$2(input);
+				if (Number.isNaN(input[0]) || Number.isNaN(input[1])) return zero$1;
+				if (input[0] === -Infinity || input[1] === -Infinity) return negativeInfinity;
+				if (input[0] === Infinity || input[1] === Infinity) return infinity;
+				return make$25(roundTiesAwayFromZero(input[0] * 1e9 + input[1]));
+			}
+			const obj = input;
+			let millis = 0;
+			if (obj.weeks) millis += obj.weeks * 6048e5;
+			if (obj.days) millis += obj.days * 864e5;
+			if (obj.hours) millis += obj.hours * 36e5;
+			if (obj.minutes) millis += obj.minutes * 6e4;
+			if (obj.seconds) millis += obj.seconds * 1e3;
+			if (obj.milliseconds) millis += obj.milliseconds;
+			if (!obj.microseconds && !obj.nanoseconds) return make$25(millis);
+			return make$25(roundTiesAwayFromZero(millis * 1e6 + (obj.microseconds ?? 0) * 1e3 + (obj.nanoseconds ?? 0)));
+		}
+	}
+	return invalid$2(input);
+};
+const invalid$2 = (input) => {
+	throw new Error(`Invalid Input: ${input}`);
+};
+const zeroDurationValue = {
+	_tag: "Millis",
+	millis: 0
+};
+const infinityDurationValue = { _tag: "Infinity" };
+const negativeInfinityDurationValue = { _tag: "NegativeInfinity" };
+const DurationProto = {
+	[TypeId$30]: TypeId$30,
+	[symbol$1]() {
+		switch (this.value._tag) {
+			case "Millis": {
+				const nanos = this.value.millis * 1e6;
+				return Number.isFinite(nanos) ? hash(roundTiesAwayFromZero(nanos)) : number$1(this.value.millis);
+			}
+			case "Nanos": return hash(this.value.nanos);
+			default: return structure(this.value);
+		}
+	},
+	[symbol](that) {
+		return isDuration(that) && equals(this, that);
+	},
+	toString() {
+		switch (this.value._tag) {
+			case "Infinity": return "Infinity";
+			case "NegativeInfinity": return "-Infinity";
+			case "Nanos": return `${this.value.nanos} nanos`;
+			case "Millis": return `${this.value.millis} millis`;
+		}
+	},
+	toJSON() {
+		switch (this.value._tag) {
+			case "Millis": return {
+				_id: "Duration",
+				_tag: "Millis",
+				millis: this.value.millis
+			};
+			case "Nanos": return {
+				_id: "Duration",
+				_tag: "Nanos",
+				nanos: String(this.value.nanos)
+			};
+			case "Infinity": return {
+				_id: "Duration",
+				_tag: "Infinity"
+			};
+			case "NegativeInfinity": return {
+				_id: "Duration",
+				_tag: "NegativeInfinity"
+			};
+		}
+	},
+	[NodeInspectSymbol]() {
+		return this.toJSON();
+	},
+	pipe() {
+		return pipeArguments(this, arguments);
+	}
+};
+const make$25 = (input) => {
+	const duration = Object.create(DurationProto);
+	if (typeof input === "number") {
+		if (isNaN(input) || input === 0 || Object.is(input, -0)) duration.value = zeroDurationValue;
+		else if (!Number.isFinite(input)) duration.value = input > 0 ? infinityDurationValue : negativeInfinityDurationValue;
+		else if (!Number.isInteger(input)) duration.value = {
+			_tag: "Nanos",
+			nanos: roundMillisToNanos(input)
+		};
+		else duration.value = {
+			_tag: "Millis",
+			millis: input
+		};
+	} else if (input === bigint0$2) duration.value = zeroDurationValue;
+	else duration.value = {
+		_tag: "Nanos",
+		nanos: input
+	};
+	return duration;
+};
+/**
+* Checks whether a value is a Duration.
+*
+* **Example** (Checking for durations)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.isDuration(Duration.seconds(1)) // => true
+* Duration.isDuration(1000) // => false
+* ```
+*
+* @category guards
+* @since 2.0.0
+*/
+const isDuration = (u) => hasProperty(u, TypeId$30);
+/**
+* Checks whether a Duration is finite (not infinite).
+*
+* **Example** (Checking finite durations)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.isFinite(Duration.seconds(5)) // => true
+* Duration.isFinite(Duration.infinity) // => false
+* ```
+*
+* @category predicates
+* @since 2.0.0
+*/
+const isFinite$1 = (self) => self.value._tag !== "Infinity" && self.value._tag !== "NegativeInfinity";
+/**
+* A Duration representing zero time.
+*
+* **Example** (Referencing the zero duration)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.toMillis(Duration.zero) // => 0
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const zero$1 = /*#__PURE__*/ make$25(0);
+/**
+* A Duration representing infinite time.
+*
+* **Example** (Referencing infinite duration)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.toMillis(Duration.infinity) // => Infinity
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const infinity = /*#__PURE__*/ make$25(Infinity);
+/**
+* A Duration representing negative infinite time.
+*
+* **Example** (Referencing negative infinite duration)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.toMillis(Duration.negativeInfinity) // => -Infinity
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const negativeInfinity = /*#__PURE__*/ make$25(-Infinity);
+/**
+* Creates a Duration from nanoseconds.
+*
+* **Example** (Creating durations from nanoseconds)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.nanos(500_000_000n) // => Duration.nanos(500_000_000n)
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const nanos = (nanos) => make$25(nanos);
+/**
+* Creates a Duration from milliseconds.
+*
+* **Example** (Creating durations from milliseconds)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.toMillis(Duration.millis(1000)) // => 1000
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const millis = (millis) => make$25(millis);
+/**
+* Creates a Duration from seconds.
+*
+* **Example** (Creating durations from seconds)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.toMillis(Duration.seconds(30)) // => 30_000
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const seconds = (seconds) => make$25(seconds * 1e3);
+/**
+* Creates a Duration from minutes.
+*
+* **Example** (Creating durations from minutes)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.toMillis(Duration.minutes(5)) // => 300_000
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const minutes = (minutes) => make$25(minutes * 6e4);
+/**
+* Creates a Duration from hours.
+*
+* **Example** (Creating durations from hours)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.toMillis(Duration.hours(2)) // => 7_200_000
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const hours = (hours) => make$25(hours * 36e5);
+/**
+* Creates a Duration from days.
+*
+* **Example** (Creating durations from days)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.toMillis(Duration.days(1)) // => 86_400_000
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const days = (days) => make$25(days * 864e5);
+/**
+* Creates a Duration from weeks.
+*
+* **Example** (Creating durations from weeks)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.toMillis(Duration.weeks(1)) // => 604_800_000
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const weeks = (weeks) => make$25(weeks * 6048e5);
+/**
+* Converts a Duration to milliseconds.
+*
+* **Example** (Converting durations to milliseconds)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.toMillis(Duration.seconds(5)) // => 5000
+* Duration.toMillis(Duration.minutes(2)) // => 120_000
+* ```
+*
+* @category getters
+* @since 2.0.0
+*/
+const toMillis = (self) => match$2(fromInputUnsafe$1(self), {
+	onMillis: identity,
+	onNanos: (nanos) => Number(nanos) / 1e6,
+	onInfinity: () => Infinity,
+	onNegativeInfinity: () => -Infinity
+});
+/**
+* Gets the duration in nanoseconds as a bigint.
+*
+* **When to use**
+*
+* Use when the duration is known to be finite and you need the nanosecond value
+* as a `bigint`.
+*
+* **Details**
+*
+* Millisecond-backed fractional durations are rounded to the nearest
+* nanosecond, with ties away from zero.
+*
+* **Gotchas**
+*
+* If the duration is infinite, it throws an error.
+*
+* **Example** (Reading nanoseconds unsafely)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.toNanosUnsafe(Duration.seconds(2)) // => 2_000_000_000n
+*
+* // Duration.toNanosUnsafe(Duration.infinity)
+* // throws Error: "Cannot convert infinite duration to nanos"
+* ```
+*
+* @category getters
+* @since 4.0.0
+*/
+const toNanosUnsafe = (input) => {
+	const self = fromInputUnsafe$1(input);
+	switch (self.value._tag) {
+		case "Infinity":
+		case "NegativeInfinity": throw new Error("Cannot convert infinite duration to nanos");
+		case "Nanos": return self.value.nanos;
+		case "Millis": return roundMillisToNanos(self.value.millis);
+	}
+};
+/**
+* Pattern matches on the representation of a `Duration`.
+*
+* **Details**
+*
+* Provide handlers for millisecond-backed values, nanosecond-backed values,
+* and positive infinity. Use `onNegativeInfinity` to handle negative infinity
+* separately; otherwise negative infinity is handled by `onInfinity`.
+*
+* **Example** (Pattern matching on duration representations)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.match(Duration.seconds(5), {
+*   onMillis: (millis) => `${millis} milliseconds`,
+*   onNanos: (nanos) => `${nanos} nanoseconds`,
+*   onInfinity: () => "infinite"
+* }) // => "5000 milliseconds"
+* ```
+*
+* @category pattern matching
+* @since 2.0.0
+*/
+const match$2 = /*#__PURE__*/ dual(2, (self, options) => {
+	switch (self.value._tag) {
+		case "Millis": return options.onMillis(self.value.millis);
+		case "Nanos": return options.onNanos(self.value.nanos);
+		case "Infinity": return options.onInfinity();
+		case "NegativeInfinity": return (options.onNegativeInfinity ?? options.onInfinity)();
+	}
+});
+/**
+* Pattern matches on two `Duration`s, providing handlers that receive both values.
+*
+* **Example** (Pattern matching on duration pairs)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.matchPair(Duration.seconds(3), Duration.seconds(2), {
+*   onMillis: (a, b) => a + b,
+*   onNanos: (a, b) => Number(a + b),
+*   onInfinity: () => Infinity
+* }) // => 5000
+* ```
+*
+* @category pattern matching
+* @since 4.0.0
+*/
+const matchPair = /*#__PURE__*/ dual(3, (self, that, options) => {
+	if (self.value._tag === "Infinity" || self.value._tag === "NegativeInfinity" || that.value._tag === "Infinity" || that.value._tag === "NegativeInfinity") return options.onInfinity(self, that);
+	if (self.value._tag === "Millis") return that.value._tag === "Millis" ? options.onMillis(self.value.millis, that.value.millis) : options.onNanos(toNanosUnsafe(self), that.value.nanos);
+	else return options.onNanos(self.value.nanos, toNanosUnsafe(that));
+});
+/**
+* Provides an `Equivalence` instance for comparing `Duration` values.
+*
+* **Example** (Comparing durations for equivalence)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.Equivalence(Duration.seconds(5), Duration.millis(5000)) // => true
+* ```
+*
+* @category instances
+* @since 2.0.0
+*/
+const Equivalence$1 = (self, that) => matchPair(self, that, {
+	onMillis: (self, that) => self === that,
+	onNanos: (self, that) => self === that,
+	onInfinity: (self, that) => self.value._tag === that.value._tag
+});
+/**
+* Checks whether two Durations are equal.
+*
+* **Example** (Checking duration equality)
+*
+* ```ts import.meta.vitest
+* import { Duration } from "effect"
+*
+* Duration.equals(Duration.seconds(5), Duration.millis(5000)) // => true
+* ```
+*
+* @category predicates
+* @since 2.0.0
+*/
+const equals = /*#__PURE__*/ dual(2, (self, that) => Equivalence$1(self, that));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Scheduler.js
+/**
+* Controls how runnable Effect fiber tasks are dispatched.
+*
+* A scheduler decides how tasks are queued, when queued tasks run, and when a
+* fiber should pause so other work can continue. This module includes the
+* scheduler service reference, the default `MixedScheduler`, dispatcher types
+* for queued tasks, and references for tuning or disabling automatic scheduler
+* yields.
+*
+* @since 2.0.0
+*/
+/**
+* Context reference for the scheduler used by the Effect runtime.
+*
+* **When to use**
+*
+* Use when you need to replace scheduling behavior globally in tests or runtime
+* setup, such as forcing deterministic task dispatch.
+*
+* **Details**
+*
+* The default value creates a `MixedScheduler`. Provide this service to
+* customize execution mode, task dispatching, or yield behavior.
+*
+* @category services
+* @since 2.0.0
+*/
+const Scheduler = /*#__PURE__*/ Reference("effect/Scheduler", {
+	fiberCached: true,
+	defaultValue: () => new MixedScheduler()
+});
+const setMicrotask = (f) => {
+	let cancelled = false;
+	Promise.resolve().then(() => {
+		if (!cancelled) f();
+	});
+	return () => {
+		cancelled = true;
+	};
+};
+const setTimer = "setImmediate" in globalThis ? (f) => {
+	const timer = globalThis.setImmediate(f);
+	return () => globalThis.clearImmediate(timer);
+} : (f) => {
+	const timer = setTimeout(f, 0);
+	return () => clearTimeout(timer);
+};
+const setImmediate = (f) => {
+	try {
+		return setTimer(f);
+	} catch {
+		return setMicrotask(f);
+	}
+};
+var PriorityBuckets = class {
+	buckets = [];
+	scheduleTask(task, priority) {
+		const buckets = this.buckets;
+		const len = buckets.length;
+		let bucket;
+		let index = 0;
+		for (; index < len; index++) {
+			if (buckets[index][0] > priority) break;
+			bucket = buckets[index];
+		}
+		if (bucket && bucket[0] === priority) bucket[1].push(task);
+		else if (index === len) buckets.push([priority, [task]]);
+		else buckets.splice(index, 0, [priority, [task]]);
+	}
+	drain() {
+		const buckets = this.buckets;
+		this.buckets = [];
+		return buckets;
+	}
+};
+/**
+* Provides a scheduler implementation that batches queued tasks and dispatches them by
+* priority.
+*
+* **When to use**
+*
+* Use when you need the default runtime scheduler directly, including a
+* scheduler that batches queued work by priority and preserves FIFO order within
+* each priority.
+*
+* **Details**
+*
+* `MixedScheduler` supports synchronous and asynchronous execution modes, uses
+* operation counts to decide when fibers should yield, and is the default
+* scheduler implementation.
+*
+* @category models
+* @since 2.0.0
+*/
+var MixedScheduler = class {
+	executionMode;
+	setImmediate;
+	constructor(executionMode = "async", setImmediateFn) {
+		this.executionMode = executionMode;
+		this.setImmediate = setImmediateFn ?? (executionMode === "sync" ? setMicrotask : setImmediate);
+	}
+	/**
+	* Returns whether the fiber has reached its operation budget and should yield.
+	*
+	* **When to use**
+	*
+	* Use to decide whether a fiber should yield after consuming its current
+	* operation budget.
+	*
+	* @since 2.0.0
+	*/
+	shouldYield(fiber) {
+		return fiber.currentOpCount >= fiber.cache.maxOpsBeforeYield;
+	}
+	/**
+	* Creates a dispatcher that schedules work through this scheduler.
+	*
+	* **When to use**
+	*
+	* Use when you need a standalone dispatcher from a scheduler instance, for
+	* example in tests that enqueue tasks and then flush them deterministically.
+	*
+	* @since 4.0.0
+	*/
+	makeDispatcher() {
+		return new MixedSchedulerDispatcher(this.setImmediate);
+	}
+};
+var MixedSchedulerDispatcher = class {
+	tasks = /*#__PURE__*/ new PriorityBuckets();
+	running = void 0;
+	setImmediate;
+	constructor(setImmediateFn = setImmediate) {
+		this.setImmediate = setImmediateFn;
+	}
+	/**
+	* @since 2.0.0
+	*/
+	scheduleTask(task, priority) {
+		this.tasks.scheduleTask(task, priority);
+		if (this.running === void 0) this.running = this.setImmediate(this.afterScheduled);
+	}
+	/**
+	* @since 2.0.0
+	*/
+	afterScheduled = () => {
+		this.running = void 0;
+		this.runTasks();
+	};
+	/**
+	* @since 2.0.0
+	*/
+	runTasks() {
+		const buckets = this.tasks.drain();
+		for (let i = 0; i < buckets.length; i++) {
+			const toRun = buckets[i][1];
+			for (let j = 0; j < toRun.length; j++) toRun[j]();
+		}
+	}
+	/**
+	* @since 2.0.0
+	*/
+	flush() {
+		while (this.tasks.buckets.length > 0) {
+			if (this.running !== void 0) {
+				this.running();
+				this.running = void 0;
+			}
+			this.runTasks();
+		}
+	}
+};
+/**
+* Context reference that controls the maximum number of operations a fiber
+* can perform before yielding control back to the scheduler.
+*
+* **When to use**
+*
+* Use to tune scheduler fairness for CPU-bound fibers by changing the scheduler
+* operation budget that triggers a yield.
+*
+* **Details**
+*
+* The default value is `2048` operations, which balances performance and
+* fairness by helping prevent long-running fibers from monopolizing the
+* execution thread.
+*
+* @see {@link PreventSchedulerYield} for bypassing scheduler yield checks entirely rather than tuning the operation budget
+*
+* @category services
+* @since 4.0.0
+*/
+const MaxOpsBeforeYield = /*#__PURE__*/ Reference("effect/Scheduler/MaxOpsBeforeYield", {
+	fiberCached: true,
+	defaultValue: () => 2048
+});
+/**
+* Context reference that controls whether the runtime should bypass scheduler
+* yield checks. When set to `true`, the fiber run loop won't call
+* `Scheduler.shouldYield`.
+*
+* **When to use**
+*
+* Use to bypass scheduler yield checks for controlled runtime workloads where
+* cooperative yielding should be disabled.
+*
+* **Gotchas**
+*
+* Setting this reference to `true` can let long-running fibers monopolize the
+* JavaScript thread.
+*
+* @see {@link MaxOpsBeforeYield} for tuning yield frequency without disabling yield checks
+* @see {@link Scheduler} for providing custom scheduler yield behavior
+*
+* @category services
+* @since 4.0.0
+*/
+const PreventSchedulerYield = /*#__PURE__*/ Reference("effect/Scheduler/PreventSchedulerYield", {
+	fiberCached: true,
+	defaultValue: () => false
+});
+/**
+* Creates constructors and matchers for a `TaggedEnum` type.
+*
+* **When to use**
+*
+* Use when you model a closed union with plain data objects and want
+* construction, tag checks, and exhaustive matching from the same definition.
+*
+* **Details**
+*
+* Returns an object with:
+* - One constructor per variant (keyed by tag name)
+* - `$is(tag)` — returns a type-guard function that checks only the `_tag` field
+* - `$match` — exhaustive pattern matching (data-first or data-last)
+*
+* **Gotchas**
+*
+* - Constructors produce **plain objects**, not class instances.
+* - `$is(tag)` only checks the `_tag` field, not the full structure. It relies
+*   on the tag being globally unique and the value being produced by your
+*   constructors. For untrusted input, validate with the `Schema` module first.
+*
+* **Example** (Creating and matching tagged enum values)
+*
+* ```ts import.meta.vitest
+* import { Data } from "effect"
+*
+* type HttpError = Data.TaggedEnum<{
+*   BadRequest: { readonly message: string }
+*   NotFound: { readonly url: string }
+* }>
+*
+* const { BadRequest, NotFound, $is, $match } = Data.taggedEnum<HttpError>()
+*
+* const err = NotFound({ url: "/missing" })
+*
+* $is("NotFound")(err) // => true
+*
+* $match(err, {
+*   BadRequest: (e) => e.message,
+*   NotFound: (e) => `${e.url} not found`
+* }) // => "/missing not found"
+* ```
+*
+* **Example** (Defining a generic tagged enum)
+*
+* ```ts import.meta.vitest
+* import { Data } from "effect"
+*
+* type MyResult<E, A> = Data.TaggedEnum<{
+*   Failure: { readonly error: E }
+*   Success: { readonly value: A }
+* }>
+* interface MyResultDef extends Data.TaggedEnum.WithGenerics<2> {
+*   readonly taggedEnum: MyResult<this["A"], this["B"]>
+* }
+* const { Failure, Success } = Data.taggedEnum<MyResultDef>()
+*
+* const ok = Success({ value: 42 })
+* // ok: { readonly _tag: "Success"; readonly value: number }
+* ok // => { value: 42, _tag: "Success" }
+* ```
+*
+* @see {@link TaggedEnum} — the type-level companion
+* @see {@link TaggedEnum.Constructor} — the returned object type
+* @see {@link TaggedEnum.WithGenerics} — generic enum support
+*
+* @category constructors
+* @since 2.0.0
+*/
+const taggedEnum = () => new Proxy({}, { get(_target, tag, _receiver) {
+	if (tag === "$is") return isTagged;
+	else if (tag === "$match") return taggedMatch;
+	return (props) => ({
+		...props,
+		_tag: tag
+	});
+} });
+function taggedMatch() {
+	if (arguments.length === 1) {
+		const cases = arguments[0];
+		return function(value) {
+			return cases[value._tag](value);
+		};
+	}
+	const value = arguments[0];
+	return arguments[1][value._tag](value);
+}
+/**
+* Provides a base class for yieldable errors.
+*
+* **When to use**
+*
+* Use when you need yieldable errors that do **not** need tag-based
+* discrimination.
+*
+* **Details**
+*
+* Extends `Cause.YieldableError`, so instances can be yielded inside
+* `Effect.gen` to fail the enclosing effect. Fields are passed as a single
+* object; when there are no fields the argument is optional. If a `message`
+* field is provided, it becomes the error's `.message`.
+*
+* **Example** (Defining a yieldable error)
+*
+* ```ts import.meta.vitest
+* import { Data, Effect, Exit } from "effect"
+*
+* class NetworkError extends Data.Error<{
+*   readonly code: number
+*   readonly message: string
+* }> {}
+*
+* const program = Effect.gen(function*() {
+*   return yield* new NetworkError({ code: 500, message: "timeout" })
+* })
+*
+* Effect.runSync(Effect.exit(program)) // => Exit.fail(new NetworkError({ code: 500, message: "timeout" }))
+* ```
+*
+* @see {@link TaggedError} — adds a `_tag` for `Effect.catchTag`
+* @see {@link Class} — non-error data class
+*
+* @category constructors
+* @since 2.0.0
+*/
+const Error$2 = Error$3;
+/**
+* Creates a tagged error class with a `_tag` discriminator.
+*
+* **When to use**
+*
+* Use when you need domain errors with discriminated-union handling.
+*
+* **Details**
+*
+* Like {@link Error}, but instances also carry a `readonly _tag` property,
+* enabling `Effect.catchTag` and `Effect.catchTags` for tag-based recovery.
+* The `_tag` is excluded from the constructor argument. Yielding an instance
+* inside `Effect.gen` fails the effect with this error.
+*
+* **Example** (Recovering by tag)
+*
+* ```ts import.meta.vitest
+* import { Data, Effect } from "effect"
+*
+* class NotFound extends Data.TaggedError("NotFound")<{
+*   readonly resource: string
+* }> {}
+*
+* class Forbidden extends Data.TaggedError("Forbidden")<{
+*   readonly reason: string
+* }> {}
+*
+* const program = Effect.gen(function*() {
+*   return yield* new NotFound({ resource: "/users/42" })
+* })
+*
+* const recovered = program.pipe(
+*   Effect.catchTag("NotFound", (e) =>
+*     Effect.succeed(`missing: ${e.resource}`))
+* )
+*
+* await Effect.runPromise(recovered) // => "missing: /users/42"
+* ```
+*
+* @see {@link Error} — without a `_tag`
+* @see {@link TaggedClass} — tagged class that is not an error
+*
+* @category constructors
+* @since 2.0.0
+*/
+const TaggedError$1 = TaggedError$2;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Tracer.js
+/**
+* Defines the string key for the parent-span context service.
+*
+* **When to use**
+*
+* Use when you need the raw context key for parent span lookup in lower-level
+* tracing code.
+*
+* **Example** (Reading the parent span key)
+*
+* ```ts import.meta.vitest
+* import { Tracer } from "effect"
+*
+* // The key used to identify parent spans in the context
+* Tracer.ParentSpanKey // => "effect/Tracer/ParentSpan"
+* ```
+*
+* @category constants
+* @since 4.0.0
+*/
+const ParentSpanKey = "effect/Tracer/ParentSpan";
+/**
+* Defines the string key for the active tracer context reference.
+*
+* **When to use**
+*
+* Use when you need the raw context key for active tracer lookup in lower-level
+* tracing code.
+*
+* @category constants
+* @since 4.0.0
+*/
+const TracerKey = "effect/Tracer";
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/metric.js
+/** @internal */
+const FiberRuntimeMetricsKey = "effect/Metric/FiberRuntimeMetrics";
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/references.js
+/** @internal */
+const CurrentStackFrame = /*#__PURE__*/ Reference("effect/References/CurrentStackFrame", {
+	fiberCached: true,
+	defaultValue: constUndefined
+});
+/** @internal */
+const TracerEnabled = /*#__PURE__*/ Reference("effect/References/TracerEnabled", {
+	fiberCached: true,
+	defaultValue: constTrue
+});
+/** @internal */
+const CurrentLogAnnotations = /*#__PURE__*/ Reference("effect/References/CurrentLogAnnotations", { defaultValue: () => ({}) });
+/** @internal */
+const CurrentLogLevel = /*#__PURE__*/ Reference("effect/References/CurrentLogLevel", {
+	fiberCached: true,
+	defaultValue: () => "Info"
+});
+/** @internal */
+const MinimumLogLevel$1 = /*#__PURE__*/ Reference("effect/References/MinimumLogLevel", {
+	fiberCached: true,
+	defaultValue: () => "Info"
+});
+/** @internal */
+const CurrentLogSpans = /*#__PURE__*/ Reference("effect/References/CurrentLogSpans", { defaultValue: () => [] });
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/effect.js
+/** @internal */
+var Interrupt = class extends ReasonBase {
+	constructor(fiberId, annotations = constEmptyAnnotations) {
+		super("Interrupt", annotations, "Interrupted");
+		this.fiberId = fiberId;
+	}
+	toString() {
+		return `Interrupt(${this.fiberId})`;
+	}
+	toJSON() {
+		return {
+			_tag: "Interrupt",
+			fiberId: this.fiberId
+		};
+	}
+	[symbol](that) {
+		return isInterruptReason(that) && this.fiberId === that.fiberId && this.annotations === that.annotations;
+	}
+	[symbol$1]() {
+		return combine$1(string$1(`${this._tag}:${this.fiberId}`))(random(this.annotations));
+	}
+};
+/** @internal */
+const causeInterrupt = (fiberId) => new CauseImpl([new Interrupt(fiberId)]);
+/** @internal */
+const findFail = (self) => {
+	const reason = self.reasons.find(isFailReason$1);
+	return reason ? succeed$6(reason) : fail$5(self);
+};
+/** @internal */
+const findError = (self) => {
+	for (let i = 0; i < self.reasons.length; i++) {
+		const reason = self.reasons[i];
+		if (reason._tag === "Fail") return succeed$6(reason.error);
+	}
+	return fail$5(self);
+};
+/** @internal */
+const hasInterrupts = (self) => self.reasons.some(isInterruptReason);
+const dedupeReasons = (self, that) => {
+	const buckets = /* @__PURE__ */ new Map();
+	const out = [];
+	for (const reason of self.concat(that)) {
+		const hash$1 = hash(reason);
+		const bucket = buckets.get(hash$1);
+		if (bucket === void 0) buckets.set(hash$1, [reason]);
+		else if (bucket.some((previous) => equals$1(previous, reason))) continue;
+		else bucket.push(reason);
+		out.push(reason);
+	}
+	return out;
+};
+/** @internal */
+const causeCombine = /*#__PURE__*/ dual(2, (self, that) => {
+	if (self.reasons.length === 0) return that;
+	else if (that.reasons.length === 0) return self;
+	const newCause = new CauseImpl(dedupeReasons(self.reasons, that.reasons));
+	return equals$1(self, newCause) ? self : newCause;
+});
+/** @internal */
+const causeMap = /*#__PURE__*/ dual(2, (self, f) => {
+	let hasFail = false;
+	const failures = self.reasons.map((failure) => {
+		if (isFailReason$1(failure)) {
+			hasFail = true;
+			return new Fail(f(failure.error), failure.annotations);
+		}
+		return failure;
+	});
+	return hasFail ? causeFromReasons(failures) : self;
+});
+/** @internal */
+const causeSquash = (self) => {
+	let die;
+	for (const reason of self.reasons) {
+		if (reason._tag === "Fail") return reason.error;
+		if (reason._tag === "Die") die ??= reason;
+	}
+	if (die !== void 0) return die.defect;
+	if (self.reasons.length > 0) return new globalThis.Error("All fibers interrupted without error");
+	return new globalThis.Error("Empty cause");
+};
+/** @internal */
+const causePrettyErrors = (self, options) => {
+	const errors = [];
+	const interrupts = [];
+	if (self.reasons.length === 0) return errors;
+	const prevStackLimit = getStackTraceLimit();
+	if (prevStackLimit !== 0) setStackTraceLimit(1);
+	try {
+		for (const failure of self.reasons) {
+			if (failure._tag === "Interrupt") {
+				interrupts.push(failure);
+				continue;
+			}
+			errors.push(causePrettyError(failure._tag === "Die" ? failure.defect : failure.error, failure.annotations, options));
+		}
+		if (errors.length === 0) {
+			const cause = /* @__PURE__ */ new Error("The fiber was interrupted by:");
+			cause.name = "InterruptCause";
+			cause.stack = interruptCauseStack(cause, interrupts);
+			const error = new globalThis.Error("All fibers interrupted without error", { cause });
+			error.name = "InterruptError";
+			error.stack = `${error.name}: ${error.message}`;
+			errors.push(causePrettyError(error, interrupts[0].annotations, options));
+		}
+	} finally {
+		if (prevStackLimit !== 0) setStackTraceLimit(prevStackLimit);
+	}
+	return errors;
+};
+/** @internal */
+const causePrettyError = (original, annotations, options) => {
+	const kind = typeof original;
+	let error;
+	if (original && kind === "object") {
+		error = new globalThis.Error(causePrettyMessage(original), { cause: original.cause ? causePrettyError(original.cause) : void 0 });
+		if (typeof original.name === "string") error.name = original.name;
+		if (typeof original.stack === "string") error.stack = cleanErrorStack(original.stack, error, annotations);
+		else {
+			const stack = `${error.name}: ${error.message}`;
+			error.stack = annotations ? addStackAnnotations(stack, annotations) : stack;
+		}
+		if (options?.includeCauseInStack) error.stack = renderPrettyError(error);
+		for (const key of Object.keys(original)) if (!(key in error)) error[key] = original[key];
+	} else error = new globalThis.Error(!original ? `Unknown error: ${original}` : kind === "string" ? original : formatJson(original));
+	return error;
+};
+const causePrettyMessage = (u) => {
+	if (typeof u.message === "string") return u.message;
+	else if (typeof u.toString === "function" && u.toString !== Object.prototype.toString && u.toString !== Array.prototype.toString) try {
+		return u.toString();
+	} catch {}
+	return formatJson(u);
+};
+const locationRegExp = /\((.*)\)/g;
+const cleanErrorStack = (stack, error, annotations) => {
+	const message = `${error.name}: ${error.message}`;
+	const lines = (stack.startsWith(message) ? stack.slice(message.length) : stack).split("\n");
+	const out = [message];
+	for (let i = 1; i < lines.length; i++) {
+		if (/Generator\.next|~effect\/(?:Effect|Utils)/.test(lines[i])) break;
+		out.push(lines[i]);
+	}
+	return annotations ? addStackAnnotations(out.join("\n"), annotations) : out.join("\n");
+};
+const addStackAnnotations = (stack, annotations) => {
+	const frame = annotations?.get(StackTraceKey.key);
+	if (frame) stack = `${stack}\n${currentStackTrace(frame)}`;
+	return stack;
+};
+const interruptCauseStack = (error, interrupts) => {
+	const out = [`${error.name}: ${error.message}`];
+	for (const current of interrupts) {
+		const fiberId = current.fiberId !== void 0 ? `#${current.fiberId}` : "unknown";
+		const frame = current.annotations.get(InterruptorStackTrace.key);
+		out.push(`    at fiber (${fiberId})`);
+		if (frame) out.push(currentStackTrace(frame));
+	}
+	return out.join("\n");
+};
+const currentStackTrace = (frame) => {
+	const out = [];
+	let current = frame;
+	let i = 0;
+	while (current && i < 10) {
+		const stack = current.stack();
+		if (stack) {
+			const locationMatchAll = stack.matchAll(locationRegExp);
+			let match = false;
+			for (const [, location] of locationMatchAll) {
+				match = true;
+				out.push(`    at ${current.name} (${location})`);
+			}
+			if (!match) out.push(`    at ${current.name} (${stack.replace(/^at /, "")})`);
+		} else out.push(`    at ${current.name}`);
+		current = current.parent;
+		i++;
+	}
+	return out.join("\n");
+};
+/** @internal */
+const causePretty = (cause) => causePrettyErrors(cause).map(renderPrettyError).join("\n");
+const renderPrettyError = (e) => e.cause ? `${e.stack} {\n${renderErrorCause(e.cause, "  ")}\n}` : e.stack;
+const renderErrorCause = (cause, prefix) => {
+	const lines = cause.stack.split("\n");
+	let stack = `${prefix}[cause]: ${lines[0]}`;
+	for (let i = 1, len = lines.length; i < len; i++) stack += `\n${prefix}${lines[i]}`;
+	if (cause.cause) stack += ` {\n${renderErrorCause(cause.cause, `${prefix}  `)}\n${prefix}}`;
+	return stack;
+};
+/** @internal */
+const FiberTypeId = "~effect/Fiber";
+const fiberVariance = {
+	_A: identity,
+	_E: identity
+};
+const fiberIdStore = { id: 0 };
+/** @internal */
+const getCurrentFiber = () => globalThis[currentFiberTypeId];
+/** @internal */
+var FiberImpl = class {
+	constructor(context, interruptible = true) {
+		this.setContext(context);
+		this.id = ++fiberIdStore.id;
+		this.currentOpCount = 0;
+		this.interruptible = interruptible;
+		this._stack = [];
+		this._observers = void 0;
+		this._exit = void 0;
+		this._children = void 0;
+		this._interruptedCause = void 0;
+		this._yielded = void 0;
+		this._running = false;
+		this._deferredInterrupt = false;
+		this._parent = void 0;
+		this.cache.runtimeMetrics?.recordFiberStart(this.context);
+	}
+	get [FiberTypeId]() {
+		return fiberVariance;
+	}
+	get currentDispatcher() {
+		return this._dispatcher ??= this.cache.scheduler.makeDispatcher();
+	}
+	getRef(ref) {
+		return get$2(this.context, ref);
+	}
+	addObserver(cb) {
+		if (this._exit) {
+			cb(this._exit);
+			return constVoid;
+		}
+		if (this._observers === void 0) this._observers = [cb];
+		else this._observers.push(cb);
+		return () => this.removeObserver(cb);
+	}
+	removeObserver(cb) {
+		if (this._exit || this._observers === void 0) return;
+		const index = this._observers.indexOf(cb);
+		if (index >= 0) this._observers.splice(index, 1);
+	}
+	interruptUnsafe(fiberId, annotations) {
+		if (this._exit) return;
+		let cause = causeInterrupt(fiberId);
+		if (this.cache.stackFrame) cause = causeAnnotate(cause, make$26(StackTraceKey, this.cache.stackFrame));
+		if (annotations) cause = causeAnnotate(cause, annotations);
+		this._interruptedCause = this._interruptedCause ? causeCombine(this._interruptedCause, cause) : cause;
+		if (this.interruptible) {
+			if (this._running) this._deferredInterrupt = true;
+			else this.evaluate(failCause$3(this._interruptedCause));
+		}
+	}
+	pollUnsafe() {
+		return this._exit;
+	}
+	evaluate(effect) {
+		if (this._exit) return;
+		else if (this._yielded !== void 0) {
+			const yielded = this._yielded;
+			this._yielded = void 0;
+			yielded();
+		}
+		const exit = this.runLoop(effect);
+		if (exit === Yield) return;
+		const interruptChildren = fiberMiddleware.interruptChildren && fiberMiddleware.interruptChildren(this);
+		if (interruptChildren !== void 0) return this.evaluate(flatMap$2(interruptChildren, () => exit));
+		this._exit = exit;
+		this.cache.runtimeMetrics?.recordFiberEnd(this.context, this._exit);
+		if (this._parent) {
+			this._parent._children?.delete(this);
+			this._parent = void 0;
+		}
+		if (this._observers !== void 0) {
+			const observers = this._observers;
+			this._observers = void 0;
+			for (let i = 0; i < observers.length; i++) observers[i](exit);
+		}
+		this._stack.length = 0;
+		this._children = void 0;
+		this.context = empty$3();
+	}
+	runLoop(effect) {
+		const prevFiber = globalThis[currentFiberTypeId];
+		globalThis[currentFiberTypeId] = this;
+		const prevRunning = this._running;
+		this._running = true;
+		let yielding = false;
+		let current = effect;
+		this.currentOpCount = 0;
+		try {
+			while (true) {
+				if (this._deferredInterrupt) {
+					this._deferredInterrupt = false;
+					current = failCause$3(this._interruptedCause);
+				}
+				this.currentOpCount++;
+				const cache = this.cache;
+				if (!yielding && !cache.preventYield && cache.scheduler.shouldYield(this)) {
+					yielding = true;
+					const prev = current;
+					current = flatMap$2(yieldNow, () => prev);
+				}
+				current = cache.tracerContext ? cache.tracerContext(current, this) : current[evaluate](this);
+				if (current === Yield) {
+					const yielded = this._yielded;
+					if (ExitTypeId in yielded) {
+						this._deferredInterrupt = false;
+						this._yielded = void 0;
+						return yielded;
+					} else if (this._deferredInterrupt) {
+						this._yielded = void 0;
+						yielded();
+						continue;
+					}
+					return Yield;
+				}
+			}
+		} catch (error) {
+			if (!hasProperty(current, evaluate)) return exitDie(`Fiber.runLoop: Not a valid effect: ${String(current)}`);
+			return this.runLoop(exitDie(error));
+		} finally {
+			this._running = prevRunning;
+			globalThis[currentFiberTypeId] = prevFiber;
+		}
+	}
+	getCont(symbol) {
+		if (this._deferredInterrupt) {
+			this._deferredInterrupt = false;
+			return deferredInterruptCont;
+		}
+		while (true) {
+			const op = this._stack.pop();
+			if (!op) return void 0;
+			const all = op[contAll];
+			if (all !== void 0) {
+				const cont = all.call(op, this);
+				if (cont) {
+					cont[symbol] = cont;
+					return cont;
+				}
+			}
+			if (op[symbol]) return op;
+		}
+	}
+	succeedWith(value) {
+		if ((++this.currentOpCount & maxInlineSteps - 1) === 0) return exitSucceed(value);
+		const cont = this.getCont(contA);
+		return cont ? cont[contA](value, this) : this.yieldWith(exitSucceed(value));
+	}
+	yieldWith(value) {
+		this._yielded = value;
+		return Yield;
+	}
+	children() {
+		return this._children ??= /* @__PURE__ */ new Set();
+	}
+	pipe() {
+		return pipeArguments(this, arguments);
+	}
+	setContext(context) {
+		const previous = this.context;
+		this.context = context;
+		if (previous !== void 0 && hasSameCache(previous, context)) return;
+		const root = context.cacheRoot;
+		const cache = root._fiberCache ??= makeFiberContextCache(context);
+		if (this.cache?.scheduler !== cache.scheduler) this._dispatcher = void 0;
+		this.cache = cache;
+	}
+	get currentSpanLocal() {
+		const span = this.cache.span;
+		return span?._tag === "Span" ? span : void 0;
+	}
+};
+const makeFiberContextCache = (context) => {
+	const currentTracer = getOrUndefinedUnsafe(context, TracerKey);
+	return {
+		scheduler: get$2(context, Scheduler),
+		tracer: currentTracer,
+		tracerContext: currentTracer ? currentTracer["context"] : void 0,
+		tracerEnabled: get$2(context, TracerEnabled),
+		span: getOrUndefinedUnsafe(context, ParentSpanKey),
+		logLevel: get$2(context, CurrentLogLevel),
+		minimumLogLevel: get$2(context, MinimumLogLevel$1),
+		stackFrame: get$2(context, CurrentStackFrame),
+		runtimeMetrics: getOrUndefinedUnsafe(context, FiberRuntimeMetricsKey),
+		maxOpsBeforeYield: get$2(context, MaxOpsBeforeYield),
+		preventYield: get$2(context, PreventSchedulerYield)
+	};
+};
+const deferredInterruptCont = {
+	[contA](_value, fiber) {
+		return failCause$3(fiber._interruptedCause);
+	},
+	[contE](_cause, fiber) {
+		return failCause$3(fiber._interruptedCause);
+	}
+};
+const maxInlineSteps = 32;
+const fiberMiddleware = { interruptChildren: void 0 };
+const fiberStackAnnotations = (fiber) => {
+	if (!fiber.cache.stackFrame) return void 0;
+	const annotations = /* @__PURE__ */ new Map();
+	annotations.set(InterruptorStackTrace.key, fiber.cache.stackFrame);
+	return makeUnsafe$6(annotations);
+};
+/** @internal */
+const fiberAwait = (self) => {
+	const impl = self;
+	if (impl._exit) return succeed$5(impl._exit);
+	return callback$2((resume) => {
+		if (impl._exit) return resume(succeed$5(impl._exit));
+		return sync$1(self.addObserver((exit) => resume(succeed$5(exit))));
+	});
+};
+/** @internal */
+const fiberAwaitAll = (self) => callback$2((resume) => {
+	const iter = self[Symbol.iterator]();
+	const exits = [];
+	let cancel = void 0;
+	function loop() {
+		let result = iter.next();
+		while (!result.done) {
+			if (result.value._exit) {
+				exits.push(result.value._exit);
+				result = iter.next();
+				continue;
+			}
+			cancel = result.value.addObserver((exit) => {
+				exits.push(exit);
+				loop();
+			});
+			return;
+		}
+		resume(succeed$5(exits));
+	}
+	loop();
+	return sync$1(() => cancel?.());
+});
+/** @internal */
+const fiberInterrupt = (self) => withFiber$1((fiber) => fiberInterruptAs(self, fiber.id));
+/** @internal */
+const fiberInterruptAs = /*#__PURE__*/ dual((args) => hasProperty(args[0], FiberTypeId), (self, fiberId, annotations) => withFiber$1((parent) => {
+	let ann = fiberStackAnnotations(parent);
+	ann = ann && annotations ? merge$2(ann, annotations) : ann ?? annotations;
+	self.interruptUnsafe(fiberId, ann);
+	return asVoid(fiberAwait(self));
+}));
+/** @internal */
+const fiberInterruptAll = (fibers) => withFiber$1((parent) => {
+	const annotations = fiberStackAnnotations(parent);
+	let fiberArr = empty$2();
+	for (const fiber of fibers) {
+		fiber.interruptUnsafe(parent.id, annotations);
+		fiberArr.push(fiber);
+	}
+	return asVoid(fiberAwaitAll(fiberArr));
+});
+/** @internal */
+const succeed$5 = exitSucceed;
+/** @internal */
+const failCause$3 = exitFailCause;
+/** @internal */
+const fail$4 = exitFail;
+/** @internal */
+const sync$1 = /*#__PURE__*/ makePrimitive$1({
+	op: "Sync",
+	[evaluate](fiber) {
+		const value = this[args]();
+		const cont = fiber.getCont(contA);
+		return cont ? cont[contA](value, fiber) : fiber.yieldWith(exitSucceed(value));
+	}
+});
+/** @internal */
+const suspend$3 = /*#__PURE__*/ makePrimitive$1({
+	op: "Suspend",
+	[evaluate](_fiber) {
+		return this[args]();
+	}
+});
+/** @internal */
+const yieldNow = /*#__PURE__*/ (/* @__PURE__ */ makePrimitive$1({
+	op: "Yield",
+	[evaluate](fiber) {
+		let resumed = false;
+		fiber.currentDispatcher.scheduleTask(() => {
+			if (resumed) return;
+			fiber.evaluate(exitVoid);
+		}, this[args] ?? 0);
+		return fiber.yieldWith(() => {
+			resumed = true;
+		});
+	}
+}))(0);
+/** @internal */
+const succeedNone = /*#__PURE__*/ succeed$5(/*#__PURE__*/ none());
+/** @internal */
+const failCauseSync$1 = (evaluate) => suspend$3(() => failCause$3(evaluate()));
+/** @internal */
+const die$2 = (defect) => exitDie(defect);
+/** @internal */
+const failSync = (error) => suspend$3(() => fail$4(error()));
+/** @internal */
+const void_$2 = /*#__PURE__*/ succeed$5(void 0);
+/** @internal */
+const try_$1 = (options) => {
+	const evaluate = typeof options === "function" ? options : options.try;
+	const catcher = typeof options === "function" ? (cause) => new UnknownError$1(cause, "An error occurred in Effect.try") : options.catch;
+	return suspend$3(() => {
+		try {
+			return succeed$5(evaluate());
+		} catch (err) {
+			return fail$4(catcher(err));
+		}
+	});
+};
+/** @internal */
+const tryPromise$1 = (options) => {
+	const f = typeof options === "function" ? options : options.try;
+	const catcher = typeof options === "function" ? (cause) => new UnknownError$1(cause, "An error occurred in Effect.tryPromise") : options.catch;
+	return callbackOptions(function(resume, signal) {
+		const failWithCatch = (cause) => {
+			try {
+				resume(fail$4(internalCall(() => catcher(cause))));
+			} catch (err) {
+				resume(die$2(err));
+			}
+		};
+		try {
+			f(signal).then((a) => resume(succeed$5(a)), failWithCatch);
+		} catch (err) {
+			failWithCatch(err);
+		}
+	}, f.length !== 0);
+};
+/** @internal */
+const withFiberId = (f) => withFiber$1((fiber) => f(fiber.id));
+const callbackOptions = /*#__PURE__*/ function() {
+	const Proto = /*#__PURE__*/ makePrimitiveProto({
+		op: "Async",
+		[evaluate](fiber) {
+			let resumed = false;
+			let yielded = false;
+			const controller = this.withSignal ? new AbortController() : void 0;
+			const onCancel = this.register.call(fiber.cache.scheduler, (effect) => {
+				if (resumed) return;
+				resumed = true;
+				if (yielded) fiber.evaluate(effect);
+				else yielded = effect;
+			}, controller?.signal);
+			if (yielded !== false) return yielded;
+			yielded = true;
+			fiber._yielded = () => {
+				resumed = true;
+			};
+			if (controller === void 0 && onCancel === void 0) return Yield;
+			fiber._stack.push(asyncFinalizer(() => {
+				resumed = true;
+				controller?.abort();
+				return onCancel ?? exitVoid;
+			}));
+			return Yield;
+		}
+	});
+	const AsyncImpl = function(register, withSignal) {
+		this.register = register;
+		this.withSignal = withSignal;
+	};
+	AsyncImpl.prototype = Proto;
+	return function(register, withSignal) {
+		return new AsyncImpl(register, withSignal);
+	};
+}();
+const asyncFinalizer = /*#__PURE__*/ makePrimitive$1({
+	op: "AsyncFinalizer",
+	[contAll](fiber) {
+		if (fiber.interruptible) {
+			fiber.interruptible = false;
+			fiber._stack.push(setInterruptibleTrue);
+		}
+	},
+	[contE](cause, _fiber) {
+		return hasInterrupts(cause) ? flatMap$2(this[args](), () => failCause$3(cause)) : failCause$3(cause);
+	}
+});
+/** @internal */
+const callback$2 = (register) => callbackOptions(register, register.length >= 2);
+/** @internal */
+const never = /*#__PURE__*/ callback$2(constVoid);
+/** @internal */
+const gen$1 = (...args) => {
+	if (args.length === 1) {
+		const body = args[0];
+		return suspend$3(() => fromIteratorUnsafe(body()));
+	}
+	const [options, body] = args;
+	return suspend$3(() => fromIteratorUnsafe(body.call(options.self)));
+};
+/** @internal */
+const fnUntraced$1 = (body, ...pipeables) => {
+	const fn = pipeables.length === 0 ? function() {
+		return suspend$3(() => fromIteratorUnsafe(body.apply(this, arguments)));
+	} : function() {
+		let effect = suspend$3(() => fromIteratorUnsafe(body.apply(this, arguments)));
+		for (let i = 0; i < pipeables.length; i++) effect = pipeables[i](effect, ...arguments);
+		return effect;
+	};
+	return defineFunctionLength(body.length, fn);
+};
+const defineFunctionLength = (length, fn) => Object.defineProperty(fn, "length", {
+	value: length,
+	configurable: true
+});
+/** @internal */
+const fnUntracedEager$1 = (body, ...pipeables) => defineFunctionLength(body.length, pipeables.length === 0 ? function() {
+	return fromIteratorEagerUnsafe(() => body.apply(this, arguments));
+} : function() {
+	let effect = fromIteratorEagerUnsafe(() => body.apply(this, arguments));
+	for (const pipeable of pipeables) effect = pipeable(effect, ...arguments);
+	return effect;
+});
+const fromIteratorEagerUnsafe = (evaluate) => {
+	try {
+		const iterator = evaluate();
+		let value = void 0;
+		while (true) {
+			const state = iterator.next(value);
+			if (state.done) return succeed$5(state.value);
+			const primitive = state.value;
+			if (primitive && primitive._tag === "Success") {
+				value = primitive.value;
+				continue;
+			} else if (primitive && primitive._tag === "Failure") return state.value;
+			else {
+				let isFirstExecution = true;
+				return suspend$3(() => {
+					if (isFirstExecution) {
+						isFirstExecution = false;
+						return flatMap$2(state.value, (value) => fromIteratorUnsafe(iterator, value));
+					} else return suspend$3(() => fromIteratorUnsafe(evaluate()));
+				});
+			}
+		}
+	} catch (error) {
+		return die$2(error);
+	}
+};
+const fromIteratorUnsafe = /*#__PURE__*/ function() {
+	const Proto = /*#__PURE__*/ makePrimitiveProto({
+		op: "Iterator",
+		[contA](value, fiber) {
+			const iter = this.iterator;
+			while (true) {
+				const state = iter.next(value);
+				if (state.done) return succeed$5(state.value);
+				if (!effectIsExit(state.value)) {
+					fiber._stack.push(this);
+					return state.value;
+				} else if (state.value._tag === "Failure") return state.value;
+				value = state.value.value;
+			}
+		},
+		[evaluate](fiber) {
+			return this[contA](this.initial, fiber);
+		}
+	});
+	const IteratorImpl = function(iterator, initial) {
+		this.iterator = iterator;
+		this.initial = initial;
+	};
+	IteratorImpl.prototype = Proto;
+	return function(iterator, initial) {
+		return new IteratorImpl(iterator, initial);
+	};
+}();
+/** @internal */
+const as$1 = /*#__PURE__*/ dual(2, (self, value) => new ContImpl(self, returnPayload, succeed$5(value)));
+const evaluateCont = function(fiber) {
+	fiber._stack.push(this);
+	return this[args];
+};
+const OnSuccessProto = /*#__PURE__*/ makePrimitiveProto({
+	op: "OnSuccess",
+	[evaluate]: evaluateCont
+});
+const ContImpl = function(self, cont, payload) {
+	this[args] = self;
+	this[contA] = cont;
+	this.payload = payload;
+};
+ContImpl.prototype = OnSuccessProto;
+const returnPayload = function() {
+	return this.payload;
+};
+const succeedPayload = function(_value, fiber) {
+	return fiber.succeedWith(this.payload);
+};
+const continuationMarksStack = /*#__PURE__*/ (() => {
+	const marker = "~effect/Effect/stackProbe";
+	return { [marker]: function stackProbe() {
+		return (/* @__PURE__ */ new Error()).stack;
+	} }[marker]()?.includes("[as " + marker + "]") === true;
+})();
+const mapCont = function(value, fiber) {
+	const f = this.payload;
+	return fiber.succeedWith(continuationMarksStack ? f(value) : internalCall(() => f(value)));
+};
+const andThenCont = function(value) {
+	const f = this.payload;
+	return f(value);
+};
+const tapCont = function(value) {
+	const f = this.payload;
+	return new ContImpl(f(value), succeedPayload, value);
+};
+const tapEffectCont = function(value) {
+	return new ContImpl(this.payload, succeedPayload, value);
+};
+/** @internal */
+const asSome = (self) => map$7(self, some);
+/** @internal */
+const andThen$1 = /*#__PURE__*/ dual(2, (self, f) => new ContImpl(self, isEffect$1(f) ? returnPayload : andThenCont, f));
+/** @internal */
+const tap$1 = /*#__PURE__*/ dual(2, (self, f) => new ContImpl(self, isEffect$1(f) ? tapEffectCont : tapCont, f));
+/** @internal */
+const asVoid = (self) => new ContImpl(self, returnPayload, exitVoid);
+/** @internal */
+const raceAllFirst = (all, options) => withFiber$1((parent) => callback$2((resume) => {
+	let done = false;
+	const fibers = /* @__PURE__ */ new Set();
+	const onExit = (exit) => {
+		done = true;
+		resume(fibers.size === 0 ? exit : flatMap$2(uninterruptible$1(fiberInterruptAll(fibers)), () => exit));
+	};
+	let i = 0;
+	for (const effect of all) {
+		if (done) break;
+		const index = i++;
+		const fiber = forkUnsafe$1(parent, effect, true, true, false);
+		fibers.add(fiber);
+		fiber.addObserver((exit) => {
+			fibers.delete(fiber);
+			const isWinner = !done;
+			onExit(exit);
+			if (isWinner && options?.onWinner) options.onWinner({
+				fiber,
+				index,
+				parentFiber: parent
+			});
+		});
+	}
+	return fiberInterruptAll(fibers);
+}));
+/** @internal */
+const raceFirst$1 = /*#__PURE__*/ dual((args) => isEffect$1(args[1]), (self, that, options) => raceAllFirst([self, that], options));
+/** @internal */
+const flatMap$2 = /*#__PURE__*/ dual(2, (self, f) => new ContImpl(self, andThenCont, f));
+/** @internal */
+const effectIsExit = (effect) => effect[ExitTypeId] !== void 0;
+/** @internal */
+const flatMapEager$1 = /*#__PURE__*/ dual(2, (self, f) => {
+	if (effectIsExit(self)) return self._tag === "Success" ? f(self.value) : self;
+	return flatMap$2(self, f);
+});
+/** @internal */
+const map$7 = /*#__PURE__*/ dual(2, (self, f) => new ContImpl(self, mapCont, f));
+/** @internal */
+const mapEager$1 = /*#__PURE__*/ dual(2, (self, f) => effectIsExit(self) ? exitMap(self, f) : map$7(self, f));
+/** @internal */
+const exitInterrupt$1 = (fiberId) => exitFailCause(causeInterrupt(fiberId));
+/** @internal */
+const exitIsSuccess = (self) => self._tag === "Success";
+/** @internal */
+const exitIsFailure = (self) => self._tag === "Failure";
+/** @internal */
+const exitFilterCause = (self) => self._tag === "Failure" ? succeed$6(self.cause) : fail$5(self);
+/** @internal */
+const exitVoid = /*#__PURE__*/ exitSucceed(void 0);
+/** @internal */
+const exitMap = /*#__PURE__*/ dual(2, (self, f) => self._tag === "Success" ? exitSucceed(f(self.value)) : self);
+/** @internal */
+const exitZipRight = /*#__PURE__*/ dual(2, (self, that) => exitIsSuccess(self) ? that : self);
+/** @internal */
+const exitAsVoidAll = (exits) => {
+	const failures = [];
+	for (const exit of exits) if (exit._tag === "Failure") failures.push(...exit.cause.reasons);
+	return failures.length === 0 ? exitVoid : exitFailCause(causeFromReasons(failures));
+};
+/** @internal */
+const serviceOption$1 = (service) => withFiber$1((fiber) => succeed$5(getOption(fiber.context, service)));
+/** @internal */
+const updateContext = /*#__PURE__*/ dual(2, (self, f) => withFiber$1((fiber) => {
+	const prevContext = fiber.context;
+	const nextContext = f(prevContext);
+	if (prevContext === nextContext) return self;
+	fiber.setContext(nextContext);
+	onExitUnsafe(fiber, () => {
+		fiber.setContext(prevContext);
+	});
+	return self;
+}));
+/** @internal */
+const contextWith = (f) => withFiber$1((fiber) => f(fiber.context));
+/** @internal */
+const provideContext$1 = /*#__PURE__*/ dual(2, (self, context) => {
+	if (effectIsExit(self)) return self;
+	return updateContext(self, merge$2(context));
+});
+/** @internal */
+const provideService$1 = function() {
+	if (arguments.length === 1) return dual(2, (self, impl) => provideServiceImpl(self, arguments[0], impl));
+	return dual(3, (self, service, impl) => provideServiceImpl(self, service, impl)).apply(this, arguments);
+};
+const provideServiceImpl = (self, service, implementation) => updateContext(self, add(service, implementation));
+/** @internal */
+const forever$1 = /*#__PURE__*/ dual((args) => isEffect$1(args[0]), (self, options) => whileLoop$1({
+	while: constTrue,
+	body: constant(options?.disableYield ? self : flatMap$2(self, (_) => yieldNow)),
+	step: constVoid
+}));
+/** @internal */
+const catchCause$1 = /*#__PURE__*/ dual(2, (self, f) => new OnFailureImpl(self, f.length !== 1 ? (cause) => f(cause) : f));
+const OnFailureProto = /*#__PURE__*/ makePrimitiveProto({
+	op: "OnFailure",
+	[evaluate]: evaluateCont
+});
+const OnFailureImpl = function(self, f) {
+	this[args] = self;
+	this[contE] = f;
+};
+OnFailureImpl.prototype = OnFailureProto;
+/** @internal */
+const catchCauseFilter = /*#__PURE__*/ dual(3, (self, filter, f) => catchCause$1(self, (cause) => {
+	const eb = filter(cause);
+	return isFailure$1(eb) ? failCause$3(eb.failure) : f(eb.success, cause);
+}));
+/** @internal */
+const catch_$1 = /*#__PURE__*/ dual(2, (self, f) => catchCauseFilter(self, findError, (e) => f(e)));
+/** @internal */
+const catchIf = /*#__PURE__*/ dual((args) => isEffect$1(args[0]), (self, predicate, f, orElse) => catchCause$1(self, (cause) => {
+	const error = findError(cause);
+	if (isFailure$1(error)) return failCause$3(error.failure);
+	if (!predicate(error.success)) return orElse ? orElse(error.success) : failCause$3(cause);
+	return f(error.success);
+}));
+/** @internal */
+const catchFilter$1 = /*#__PURE__*/ dual((args) => isEffect$1(args[0]), (self, filter, f, orElse) => catchCause$1(self, (cause) => {
+	const error = findError(cause);
+	if (isFailure$1(error)) return failCause$3(error.failure);
+	const result = filter(error.success);
+	if (isFailure$1(result)) return orElse ? orElse(result.failure) : failCause$3(cause);
+	return f(result.success);
+}));
+/** @internal */
+const catchTag$1 = /*#__PURE__*/ dual((args) => isEffect$1(args[0]), (self, k, f, orElse) => {
+	const pred = Array.isArray(k) ? (e) => hasProperty(e, "_tag") && k.includes(e._tag) : isTagged(k);
+	return catchIf(self, pred, f, orElse);
+});
+/** @internal */
+const catchTags$1 = /*#__PURE__*/ dual((args) => isEffect$1(args[0]), (self, cases, orElse) => {
+	let keys;
+	return catchFilter$1(self, (e) => {
+		keys ??= Object.keys(cases);
+		return hasProperty(e, "_tag") && isString(e["_tag"]) && keys.includes(e["_tag"]) ? succeed$6(e) : fail$5(e);
+	}, (e) => cases[e["_tag"]](e), orElse);
+});
+/** @internal */
+const mapError$1 = /*#__PURE__*/ dual(2, (self, f) => catch_$1(self, (error) => failSync(() => f(error))));
+/** @internal */
+const orDie$1 = (self) => catch_$1(self, die$2);
+/** @internal */
+const ignore$1 = /*#__PURE__*/ dual((args) => isEffect$1(args[0]), (self, options) => {
+	if (!options?.log) return matchEffect$2(self, {
+		onFailure: (_) => void_$2,
+		onSuccess: (_) => void_$2
+	});
+	const logEffect = logWithLevel(options.log === true ? void 0 : options.log);
+	return matchCauseEffect(self, {
+		onFailure(cause) {
+			const failure = findFail(cause);
+			return isFailure$1(failure) ? failCause$3(failure.failure) : options.message === void 0 ? logEffect(cause) : logEffect(options.message, cause);
+		},
+		onSuccess: (_) => void_$2
+	});
+});
+/** @internal */
+const result$1 = (self) => matchEager(self, {
+	onFailure: fail$5,
+	onSuccess: succeed$6
+});
+/** @internal */
+const matchCauseEffect = /*#__PURE__*/ dual(2, (self, options) => new OnSuccessAndFailureImpl(self, options.onSuccess.length !== 1 ? (a) => options.onSuccess(a) : options.onSuccess, options.onFailure.length !== 1 ? (cause) => options.onFailure(cause) : options.onFailure));
+const OnSuccessAndFailureProto = /*#__PURE__*/ makePrimitiveProto({
+	op: "OnSuccessAndFailure",
+	[evaluate]: evaluateCont
+});
+const OnSuccessAndFailureImpl = function(self, onSuccess, onFailure) {
+	this[args] = self;
+	this[contA] = onSuccess;
+	this[contE] = onFailure;
+};
+OnSuccessAndFailureImpl.prototype = OnSuccessAndFailureProto;
+const matchSuccess = function(value, fiber) {
+	const handlers = this.payload;
+	return fiber.succeedWith(continuationMarksStack ? handlers.onSuccess(value) : internalCall(() => handlers.onSuccess(value)));
+};
+const makeMatch = (op, onFailure) => {
+	const Proto = makePrimitiveProto({
+		op,
+		[evaluate]: evaluateCont,
+		[contA]: matchSuccess,
+		[contE]: onFailure
+	});
+	const MatchImpl = function(self, handlers) {
+		this[args] = self;
+		this.payload = handlers;
+	};
+	MatchImpl.prototype = Proto;
+	return MatchImpl;
+};
+const MatchImpl = /*#__PURE__*/ makeMatch("Match", function(cause, fiber) {
+	const fail = cause.reasons.find(isFailReason$1);
+	if (fail === void 0) return failCause$3(cause);
+	const handlers = this.payload;
+	return fiber.succeedWith(continuationMarksStack ? handlers.onFailure(fail.error) : internalCall(() => handlers.onFailure(fail.error)));
+});
+/** @internal */
+const matchEffect$2 = /*#__PURE__*/ dual(2, (self, options) => matchCauseEffect(self, {
+	onFailure: (cause) => {
+		const fail = cause.reasons.find(isFailReason$1);
+		return fail ? options.onFailure(fail.error) : failCause$3(cause);
+	},
+	onSuccess: options.onSuccess
+}));
+/** @internal */
+const match$1 = /*#__PURE__*/ dual(2, (self, options) => new MatchImpl(self, options));
+/** @internal */
+const matchEager = /*#__PURE__*/ dual(2, (self, options) => {
+	if (effectIsExit(self)) {
+		if (self._tag === "Success") return exitSucceed(options.onSuccess(self.value));
+		const error = findError(self.cause);
+		if (isFailure$1(error)) return self;
+		return exitSucceed(options.onFailure(error.success));
+	}
+	return match$1(self, options);
+});
+/** @internal */
+const exit$1 = (self) => effectIsExit(self) ? exitSucceed(self) : exitPrimitive(self);
+const exitPrimitive = /*#__PURE__*/ makePrimitive$1({
+	op: "Exit",
+	[evaluate](fiber) {
+		fiber._stack.push(this);
+		return this[args];
+	},
+	[contA](value, fiber, exit) {
+		return fiber.succeedWith(exit ?? exitSucceed(value));
+	},
+	[contE](cause, fiber, exit) {
+		return fiber.succeedWith(exit ?? exitFailCause(cause));
+	}
+});
+/** @internal */
+const ScopeTypeId = "~effect/Scope";
+/** @internal */
+const ScopeCloseableTypeId = "~effect/Scope/Closeable";
+/** @internal */
+const scopeTag = /*#__PURE__*/ Service("effect/Scope");
+/** @internal */
+const scopeClose = (self, exit_) => withFiber$1((fiber) => {
+	const close = scopeCloseUnsafe(self, exit_);
+	if (close === void 0) return void_$2;
+	fiberEnterUninterruptibleUnsafe(fiber);
+	return close;
+});
+/** @internal */
+const scopeCloseUnsafe = (self, exit_) => {
+	const state = self.state;
+	if (state._tag === "Closed") return;
+	self.state = {
+		_tag: "Closed",
+		exit: exit_
+	};
+	if (self.parent !== void 0) scopeRemoveFinalizerUnsafe(self.parent, self);
+	if (state._tag === "Empty") return;
+	if (state.finalizer !== void 0) return runFinalizer(state.finalizer, exit_);
+	const finalizers = state.finalizers;
+	if (finalizers.size === 1) return runFinalizer(finalizers.values().next().value, exit_);
+	return scopeCloseFinalizers(self, finalizers, exit_);
+};
+const runFinalizer = (finalizer, exit_) => {
+	try {
+		return finalizer(exit_);
+	} catch (defect) {
+		return exitDie(defect);
+	}
+};
+const combineFinalizerCause = (exit_, finalizer) => exitIsSuccess(exit_) ? finalizer : catchCause$1(finalizer, (cause) => failCause$3(causeCombine(exit_.cause, cause)));
+const scopeCloseFinalizers = /*#__PURE__*/ fnUntraced$1(function* (self, finalizers, exit_) {
+	let exits = [];
+	const fibers = [];
+	const arr = Array.from(finalizers.values());
+	const parent = getCurrentFiber();
+	for (let i = arr.length - 1; i >= 0; i--) {
+		const finalizer = arr[i];
+		if (self.strategy === "sequential") exits.push(yield* exit$1(runFinalizer(finalizer, exit_)));
+		else fibers.push(forkUnsafe$1(parent, runFinalizer(finalizer, exit_), true, true, "inherit"));
+	}
+	if (fibers.length > 0) exits = yield* fiberAwaitAll(fibers);
+	return yield* exitAsVoidAll(exits);
+});
+/** @internal */
+const scopeForkUnsafe = (scope, finalizerStrategy) => {
+	const child = makeScope(finalizerStrategy, scope);
+	if (scope.state._tag === "Closed") {
+		child.state = scope.state;
+		return child;
+	}
+	scopeAddFinalizerUnsafe(scope, child, (exit) => scopeClose(child, exit));
+	return child;
+};
+/** @internal */
+const scopeAddFinalizerExit = (scope, finalizer) => {
+	return suspend$3(() => {
+		if (scope.state._tag === "Closed") return finalizer(scope.state.exit);
+		scopeAddFinalizerUnsafe(scope, {}, finalizer);
+		return void_$2;
+	});
+};
+/** @internal */
+const scopeAddFinalizer = (scope, finalizer) => scopeAddFinalizerExit(scope, constant(finalizer));
+/** @internal */
+const scopeAddFinalizerUnsafe = (scope, key, finalizer) => {
+	if (scope.state._tag === "Empty") scope.state = {
+		_tag: "Open",
+		finalizerKey: key,
+		finalizer,
+		finalizers: void 0
+	};
+	else if (scope.state._tag === "Open") {
+		const state = scope.state;
+		if (state.finalizer !== void 0) {
+			state.finalizers = /* @__PURE__ */ new Map([[state.finalizerKey, state.finalizer]]);
+			state.finalizerKey = void 0;
+			state.finalizer = void 0;
+			state.finalizers.set(key, finalizer);
+		} else state.finalizers.set(key, finalizer);
+	}
+};
+/** @internal */
+const scopeRemoveFinalizerUnsafe = (scope, key) => {
+	if (scope.state._tag !== "Open") return;
+	const state = scope.state;
+	if (state.finalizerKey === key) scope.state = constScopeEmpty;
+	else if (state.finalizers !== void 0) {
+		state.finalizers.delete(key);
+		if (state.finalizers.size === 0) scope.state = constScopeEmpty;
+	}
+};
+/** @internal */
+const scopeMakeUnsafe = (finalizerStrategy) => makeScope(finalizerStrategy, void 0);
+const makeScope = (finalizerStrategy = "sequential", parent) => ({
+	[ScopeCloseableTypeId]: ScopeCloseableTypeId,
+	[ScopeTypeId]: ScopeTypeId,
+	strategy: finalizerStrategy,
+	parent,
+	state: constScopeEmpty
+});
+const constScopeEmpty = { _tag: "Empty" };
+/** @internal */
+const scope$1 = scopeTag;
+/** @internal */
+const provideScope = /*#__PURE__*/ provideService$1(scopeTag);
+/** @internal */
+const scoped$1 = (self) => withFiber$1((fiber) => {
+	const prev = fiber.context;
+	const scope = scopeMakeUnsafe();
+	fiber.setContext(add(fiber.context, scopeTag, scope));
+	onExitUnsafe(fiber, (exit) => {
+		fiber.setContext(prev);
+		return scopeCloseUnsafe(scope, exit);
+	});
+	return self;
+});
+/** @internal */
+const scopedWith$1 = (f) => suspend$3(() => {
+	const scope = scopeMakeUnsafe();
+	return onExit$1(f(scope), (exit) => suspend$3(() => scopeCloseUnsafe(scope, exit) ?? void_$2));
+});
+/** @internal */
+const acquireRelease$1 = (acquire, release, options) => contextWith((context) => uninterruptibleMask$1((restore) => flatMap$2(scope$1, (scope) => tap$1(options?.interruptible ? restore(acquire) : acquire, (a) => scopeAddFinalizerExit(scope, (exit) => provideContext$1(release(a, exit), context))))));
+/** @internal */
+const addFinalizer$2 = (finalizer) => flatMap$2(scope$1, (scope) => contextWith((context) => scopeAddFinalizerExit(scope, (exit) => provideContext$1(finalizer(exit), context))));
+const OnExitImpl = /*#__PURE__*/ function() {
+	const Proto = /*#__PURE__*/ makePrimitiveProto({
+		op: "OnExit",
+		[evaluate](fiber) {
+			fiber._stack.push(this);
+			return this.effect;
+		},
+		[contAll](fiber) {
+			if (fiber.interruptible && this.interruptible !== true) {
+				fiber._stack.push(setInterruptibleTrue);
+				fiber.interruptible = false;
+			}
+		},
+		[contA](value, _, exit) {
+			exit ??= exitSucceed(value);
+			let eff;
+			try {
+				eff = this.onExit(exit);
+			} catch (defect) {
+				eff = exitDie(defect);
+			}
+			return eff ? flatMap$2(eff, (_) => exit) : exit;
+		},
+		[contE](cause, _, exit) {
+			exit ??= exitFailCause(cause);
+			let eff;
+			try {
+				eff = this.onExit(exit);
+			} catch (defect) {
+				eff = exitDie(defect);
+			}
+			return eff ? flatMap$2(combineFinalizerCause(exit, eff), (_) => exit) : exit;
+		}
+	});
+	const OnExitImpl = function(effect, onExit, interruptible) {
+		this.effect = effect;
+		this.onExit = onExit;
+		this.interruptible = interruptible;
+	};
+	OnExitImpl.prototype = Proto;
+	return OnExitImpl;
+}();
+/** @internal */
+const onExitPrimitive = (effect, onExit, interruptible) => new OnExitImpl(effect, onExit, interruptible);
+/**
+* Pushes an exit finalizer for the current `withFiber` evaluation. Only call inside `withFiber`.
+* @internal
+*/
+const onExitUnsafe = (fiber, f) => {
+	fiber._stack.push(new OnExitImpl(void 0, f, void 0));
+};
+/** @internal */
+const onExit$1 = /*#__PURE__*/ dual(2, onExitPrimitive);
+/** @internal */
+const ensuring$1 = /*#__PURE__*/ dual(2, (self, finalizer) => onExit$1(self, (_) => finalizer));
+/** @internal */
+const onExitFilter = /*#__PURE__*/ dual(3, (self, filter, f) => onExit$1(self, (exit) => {
+	const b = filter(exit);
+	return isFailure$1(b) ? void_$2 : f(b.success, exit);
+}));
+/** @internal */
+const onError$1 = /*#__PURE__*/ dual(2, (self, f) => onExitFilter(self, exitFilterCause, f));
+/** @internal */
+const interrupt$2 = /*#__PURE__*/ withFiber$1((fiber) => failCause$3(causeInterrupt(fiber.id)));
+/** @internal */
+const uninterruptible$1 = (self) => withFiber$1((fiber) => {
+	if (!fiber.interruptible) return self;
+	fiber.interruptible = false;
+	fiber._stack.push(setInterruptibleTrue);
+	return self;
+});
+const setInterruptible = /*#__PURE__*/ makePrimitive$1({
+	op: "SetInterruptible",
+	[contAll](fiber) {
+		fiber.interruptible = this[args];
+		if (fiber._interruptedCause && fiber.interruptible) return () => failCause$3(fiber._interruptedCause);
+	}
+});
+const setInterruptibleTrue = /*#__PURE__*/ setInterruptible(true);
+const setInterruptibleFalse = /*#__PURE__*/ setInterruptible(false);
+const setFiberInterruptible = (fiber) => {
+	fiber.interruptible = true;
+	fiber._stack.push(setInterruptibleFalse);
+	if (fiber._interruptedCause) return failCause$3(fiber._interruptedCause);
+};
+/**
+* Makes the current fiber uninterruptible for the returned effect without an
+* extra primitive. Call only within `withFiber`.
+*
+* @internal
+*/
+const fiberEnterUninterruptibleUnsafe = (fiber) => {
+	const impl = fiber;
+	if (!impl.interruptible) return;
+	impl.interruptible = false;
+	impl._stack.push(setInterruptibleTrue);
+};
+/** @internal */
+const interruptible = (self) => withFiber$1((fiber) => {
+	if (fiber.interruptible) return self;
+	return setFiberInterruptible(fiber) ?? self;
+});
+/** @internal */
+const uninterruptibleMask$1 = (f) => withFiber$1((fiber) => {
+	if (!fiber.interruptible) return f(identity);
+	fiber.interruptible = false;
+	fiber._stack.push(setInterruptibleTrue);
+	return f(interruptible);
+});
+/** @internal */
+const all$1 = (arg, options) => {
+	if (isIterable(arg)) return options?.mode === "result" ? forEach$2(arg, result$1, options) : forEach$2(arg, identity, options);
+	else if (options?.discard) return options.mode === "result" ? forEach$2(Object.values(arg), result$1, options) : forEach$2(Object.values(arg), identity, options);
+	return suspend$3(() => {
+		const out = {};
+		return as$1(forEach$2(Object.entries(arg), ([key, effect]) => map$7(options?.mode === "result" ? result$1(effect) : effect, (value) => {
+			assignProperty(out, key, value);
+		}), {
+			discard: true,
+			concurrency: options?.concurrency
+		}), out);
+	});
+};
+/** @internal */
+const whileLoop$1 = /*#__PURE__*/ makePrimitive$1({
+	op: "While",
+	[contA](value, fiber) {
+		this[args].step(value);
+		if (this[args].while()) {
+			fiber._stack.push(this);
+			return this[args].body();
+		}
+		return exitVoid;
+	},
+	[evaluate](fiber) {
+		if (this[args].while()) {
+			fiber._stack.push(this);
+			return this[args].body();
+		}
+		return exitVoid;
+	}
+});
+/** @internal */
+const forEach$2 = /*#__PURE__*/ dual((args) => typeof args[1] === "function", (iterable, f, options) => suspend$3(() => {
+	const concurrency = resolveConcurrency(options?.concurrency);
+	if (concurrency === 1) return forEachSequential(iterable, f, options);
+	const items = fromIterable$1(iterable);
+	let length = items.length;
+	if (length === 0) return options?.discard ? void_$2 : succeed$5([]);
+	const out = options?.discard ? void 0 : new Array(length);
+	const eff = forEachConcurrent({
+		f,
+		out
+	}, items, { concurrency });
+	return eff ? as$1(eff, out) : succeed$5(out);
+}));
+const forEachSequential = (iterable, f, options) => suspend$3(() => {
+	const out = options?.discard ? void 0 : [];
+	const iterator = iterable[Symbol.iterator]();
+	let state = iterator.next();
+	let index = 0;
+	return as$1(whileLoop$1({
+		while: () => !state.done,
+		body: () => f(state.value, index++),
+		step: (b) => {
+			if (out) out.push(b);
+			state = iterator.next();
+		}
+	}), out);
+});
+/** @internal */
+const resolveConcurrency = (concurrency) => concurrency === "unbounded" ? Number.POSITIVE_INFINITY : Math.max(1, concurrency ?? 1);
+/** @internal */
+const iterateEager = () => (options) => {
+	const onItem = options.onItem;
+	const step = options.step;
+	const resumeSequential = (state, items, index, end, effect) => flatMap$2(exit$1(effect), (itemExit) => step(state, items[index], itemExit, index) ?? runSequential(state, items, index + 1, end) ?? void_$2);
+	const runSequential = (state, items, index = 0, end = items.length) => {
+		for (; index < end; index++) {
+			const item = items[index];
+			const effect = onItem(state, item, index);
+			if (!effectIsExit(effect)) return resumeSequential(state, items, index, end, effect);
+			const terminal = step(state, item, effect, index);
+			if (terminal) return terminal._tag === "Failure" ? terminal : void 0;
+		}
+	};
+	return runSequential;
+};
+const iterateConcurrentImpl = (options) => {
+	const onItem = options.onItem;
+	const step = options.step;
+	return (state, items, opts) => {
+		let index = 0;
+		const end = opts.end ?? items.length;
+		const concurrency = opts.concurrency;
+		let done = false;
+		let parentFiber;
+		let fibers;
+		let resume;
+		let interrupted = false;
+		let terminal;
+		let effect;
+		const failDefect = (error) => {
+			const defect = exitDie(error);
+			terminal = defect;
+			done = true;
+			interrupted = true;
+			return fibers && fibers.size > 0 ? flatMap$2(uninterruptible$1(fiberInterruptAll(Array.from(fibers))), () => defect) : defect;
+		};
+		const go = () => {
+			let paused = false;
+			for (; !terminal && index < end; index++) {
+				const item = items[index];
+				const eff = effect ?? onItem(state, item, index);
+				if (effectIsExit(eff)) {
+					terminal = step(state, item, eff, index);
+					if (terminal) break;
+				} else if (!parentFiber) return callback$2((cb) => {
+					parentFiber = getCurrentFiber();
+					fibers = /* @__PURE__ */ new Set();
+					effect = eff;
+					resume = cb;
+					let result;
+					try {
+						result = go();
+					} catch (error) {
+						return cb(failDefect(error));
+					}
+					if (result) return cb(result);
+					return suspend$3(() => {
+						terminal = exitVoid;
+						interrupted = true;
+						return fibers ? fiberInterruptAll(fibers) : void_$2;
+					});
+				});
+				else {
+					effect = void 0;
+					const fiber = forkUnsafe$1(parentFiber, eff, true, true, "inherit");
+					if (fiber._exit) {
+						terminal = step(state, item, fiber._exit, index);
+						if (terminal) break;
+						continue;
+					}
+					fibers.add(fiber);
+					const currentIndex = index;
+					fiber.addObserver((exit) => {
+						fibers.delete(fiber);
+						try {
+							if (terminal) {
+								if (!interrupted && exit._tag === "Failure") for (const reason of exit.cause.reasons) if (reason._tag === "Interrupt") continue;
+								else if (terminal._tag === "Failure") terminal.cause.reasons.push(reason);
+								else terminal = exitFailCause(causeFromReasons([reason]));
+							} else {
+								const result = step(state, item, exit, currentIndex);
+								if (result) {
+									terminal = result._tag === "Failure" ? exitFailCause(causeFromReasons(result.cause.reasons.slice())) : result;
+									go();
+								}
+							}
+							if (paused) {
+								const eff = go();
+								if (eff) resume(eff);
+							} else if (done && fibers.size === 0) resume(terminal ?? void_$2);
+						} catch (error) {
+							resume(failDefect(error));
+						}
+					});
+					if (fibers.size < concurrency) continue;
+					paused = true;
+					index++;
+					return;
+				}
+			}
+			done = true;
+			if (terminal) {
+				if (fibers && fibers.size > 0) {
+					const annotations = fiberStackAnnotations(parentFiber);
+					fibers.forEach((f) => f.interruptUnsafe(parentFiber.id, annotations));
+					return;
+				}
+				if (resume || terminal._tag === "Failure") return terminal;
+			} else if (resume) {
+				if (!fibers) return exitVoid;
+				else if (fibers.size === 0) resume(void_$2);
+			}
+		};
+		return go();
+	};
+};
+/** @internal */
+const iterateConcurrent = () => (options) => iterateConcurrentImpl(options);
+const forEachConcurrent = /*#__PURE__*/ iterateConcurrentImpl({
+	onItem(state, item, index) {
+		return state.f(item, index);
+	},
+	step(state, _, exit, index) {
+		if (exit._tag === "Failure") return exit;
+		else if (state.out) state.out[index] = exit.value;
+	}
+});
+/** @internal */
+const forkUnsafe$1 = (parent, effect, immediate = false, daemon = false, uninterruptible = false) => {
+	const parentRuntime = parent;
+	const interruptible = uninterruptible === "inherit" ? parentRuntime.interruptible : !uninterruptible;
+	const child = new FiberImpl(parentRuntime.context, interruptible);
+	if (immediate) child.evaluate(effect);
+	else parentRuntime.currentDispatcher.scheduleTask(() => child.evaluate(effect), 0);
+	if (!daemon && !child._exit) {
+		parentRuntime.children().add(child);
+		child._parent = parentRuntime;
+	}
+	return child;
+};
+/** @internal */
+const forkIn$1 = /*#__PURE__*/ dual((args) => isEffect$1(args[0]), (self, scope, options) => withFiber$1((parent) => {
+	const fiber = forkUnsafe$1(parent, self, options?.startImmediately, true, options?.uninterruptible);
+	if (!fiber._exit) {
+		if (scope.state._tag !== "Closed") {
+			const key = {};
+			const finalizer = () => withFiberId((interruptor) => interruptor === fiber.id ? void_$2 : fiberInterrupt(fiber));
+			scopeAddFinalizerUnsafe(scope, key, finalizer);
+			fiber.addObserver(() => scopeRemoveFinalizerUnsafe(scope, key));
+		} else fiber.interruptUnsafe(parent.id, fiberStackAnnotations(parent));
+	}
+	return succeed$5(fiber);
+}));
+/** @internal */
+const forkScoped$1 = /*#__PURE__*/ dual((args) => isEffect$1(args[0]), (self, options) => flatMap$2(scope$1, (scope) => forkIn$1(self, scope, options)));
+/** @internal */
+const runForkWith$1 = (context) => (effect, options) => {
+	const fiber = new FiberImpl(options?.scheduler ? add(context, Scheduler, options.scheduler) : context, options?.uninterruptible !== true);
+	fiber.evaluate(effect);
+	if (fiber._exit) return fiber;
+	if (options?.signal) {
+		if (options.signal.aborted) fiber.interruptUnsafe();
+		else {
+			const abort = () => fiber.interruptUnsafe();
+			options.signal.addEventListener("abort", abort, { once: true });
+			fiber.addObserver(() => options.signal.removeEventListener("abort", abort));
+		}
+	}
+	if (options?.onFiberStart) options.onFiberStart(fiber);
+	return fiber;
+};
+/** @internal */
+const fiberRunIn = /*#__PURE__*/ dual(2, (self, scope) => {
+	if (self._exit) return self;
+	else if (scope.state._tag === "Closed") {
+		self.interruptUnsafe(self.id);
+		return self;
+	}
+	const key = {};
+	scopeAddFinalizerUnsafe(scope, key, () => fiberInterrupt(self));
+	self.addObserver(() => scopeRemoveFinalizerUnsafe(scope, key));
+	return self;
+});
+/** @internal */
+const runFork$1 = /*#__PURE__*/ runForkWith$1(/*#__PURE__*/ empty$3());
+/** @internal */
+const runPromiseExitWith = (context) => {
+	const runFork = runForkWith$1(context);
+	return (effect, options) => {
+		const fiber = runFork(effect, options);
+		return new Promise((resolve) => {
+			fiber.addObserver((exit) => resolve(exit));
+		});
+	};
+};
+/** @internal */
+const runPromiseWith = (context) => {
+	const runPromiseExit = runPromiseExitWith(context);
+	return (effect, options) => runPromiseExit(effect, options).then((exit) => {
+		if (exit._tag === "Failure") throw causeSquash(exit.cause);
+		return exit.value;
+	});
+};
+/** @internal */
+const runPromise$1 = /*#__PURE__*/ runPromiseWith(/*#__PURE__*/ empty$3());
+/** @internal */
+const runSyncExitWith = (context) => {
+	const runFork = runForkWith$1(context);
+	return (effect) => {
+		if (effectIsExit(effect)) return effect;
+		const scheduler = new MixedScheduler("sync");
+		const fiber = runFork(effect, { scheduler });
+		fiber._dispatcher?.flush();
+		return fiber._exit ?? exitDie(new AsyncFiberError(fiber));
+	};
+};
+/** @internal */
+const runSyncExit$1 = /*#__PURE__*/ runSyncExitWith(/*#__PURE__*/ empty$3());
+const succeedTrue = /*#__PURE__*/ succeed$5(true);
+const succeedFalse = /*#__PURE__*/ succeed$5(false);
+var Latch = class {
+	waiters = [];
+	scheduled = void 0;
+	_isOpen;
+	constructor(isOpen) {
+		this._isOpen = isOpen;
+	}
+	scheduleUnsafe(fiber) {
+		if (this.waiters.length === 0) return succeedTrue;
+		if (this.scheduled === void 0) {
+			this.scheduled = this.waiters;
+			fiber.currentDispatcher.scheduleTask(this.flushScheduled, 0);
+		} else for (let i = 0; i < this.waiters.length; i++) this.scheduled.push(this.waiters[i]);
+		this.waiters = [];
+		return succeedTrue;
+	}
+	flushScheduled = () => {
+		if (this.scheduled === void 0) return;
+		const waiters = this.scheduled;
+		this.scheduled = void 0;
+		for (let i = 0; i < waiters.length; i++) waiters[i](exitVoid);
+	};
+	flushWaiters() {
+		const waiters = this.waiters;
+		this.waiters = [];
+		this.flushScheduled();
+		for (let i = 0; i < waiters.length; i++) waiters[i](exitVoid);
+	}
+	open = /*#__PURE__*/ withFiber$1((fiber) => {
+		if (this._isOpen) return succeedFalse;
+		this._isOpen = true;
+		return this.scheduleUnsafe(fiber);
+	});
+	release = /*#__PURE__*/ withFiber$1((fiber) => this._isOpen ? succeedFalse : this.scheduleUnsafe(fiber));
+	openUnsafe() {
+		if (this._isOpen) return false;
+		this._isOpen = true;
+		this.flushWaiters();
+		return true;
+	}
+	await = /*#__PURE__*/ callback$2((resume) => {
+		if (this._isOpen) return resume(void_$2);
+		this.waiters.push(resume);
+		return sync$1(() => {
+			let index = this.waiters.indexOf(resume);
+			if (index !== -1) this.waiters.splice(index, 1);
+			else if (this.scheduled !== void 0) {
+				index = this.scheduled.indexOf(resume);
+				if (index !== -1) this.scheduled.splice(index, 1);
+			}
+		});
+	});
+	closeUnsafe() {
+		if (!this._isOpen) return false;
+		this._isOpen = false;
+		return true;
+	}
+	close = /*#__PURE__*/ sync$1(() => this.closeUnsafe());
+	whenOpen = (self) => flatMap$2(this.await, () => self);
+	isOpen() {
+		return this._isOpen;
+	}
+};
+/** @internal */
+const makeLatchUnsafe = (open) => new Latch(open ?? false);
+/** @internal */
+const ClockRef = /*#__PURE__*/ Reference("effect/Clock", { defaultValue: () => new ClockImpl() });
+const MAX_TIMER_MILLIS = 2 ** 31 - 1;
+var ClockImpl = class {
+	currentTimeMillisUnsafe() {
+		return Date.now();
+	}
+	currentTimeMillis = /*#__PURE__*/ sync$1(() => this.currentTimeMillisUnsafe());
+	currentTimeNanosUnsafe() {
+		return wallTimeNanos();
+	}
+	currentTimeNanos = /*#__PURE__*/ sync$1(() => this.currentTimeNanosUnsafe());
+	monotonicTimeNanosUnsafe() {
+		return monotonicNowNanos();
+	}
+	monotonicTimeNanos = /*#__PURE__*/ sync$1(() => this.monotonicTimeNanosUnsafe());
+	sleep(duration) {
+		return this.sleepMillis(toMillis(duration));
+	}
+	sleepMillis(millis) {
+		if (millis <= 0) return yieldNow;
+		else if (!Number.isFinite(millis)) return never;
+		return callback$2((resume) => {
+			const continuation = millis > MAX_TIMER_MILLIS ? this.sleepMillis(millis - MAX_TIMER_MILLIS) : void_$2;
+			const handle = setTimeout(() => resume(continuation), Math.min(millis, MAX_TIMER_MILLIS));
+			return sync$1(() => clearTimeout(handle));
+		});
+	}
+};
+const nanosPerMilli = /*#__PURE__*/ BigInt(1e6);
+const monotonicNowNanos = /*#__PURE__*/ function() {
+	const processHrtime = globalThis.process?.hrtime;
+	if (typeof processHrtime?.bigint === "function") return () => processHrtime.bigint();
+	if (typeof performance !== "undefined" && typeof performance.now === "function") return () => BigInt(Math.round(performance.now() * 1e6));
+	let previous = /*#__PURE__*/ BigInt(0);
+	return () => {
+		const current = BigInt(Date.now()) * nanosPerMilli;
+		if (current > previous) previous = current;
+		return previous;
+	};
+}();
+const wallTimeNanos = /*#__PURE__*/ function() {
+	const reanchorThresholdNanos = /*#__PURE__*/ BigInt(1e9);
+	let origin;
+	return () => {
+		const monotonic = monotonicNowNanos();
+		const wall = BigInt(Date.now()) * nanosPerMilli;
+		if (origin === void 0) origin = wall - monotonic;
+		else {
+			const projected = origin + monotonic;
+			if ((wall > projected ? wall - projected : projected - wall) > reanchorThresholdNanos) origin = wall - monotonic;
+		}
+		return origin + monotonic;
+	};
+}();
+/** @internal */
+const clockWith$1 = (f) => withFiber$1((fiber) => f(fiber.getRef(ClockRef)));
+/** @internal */
+const sleep$1 = (duration) => clockWith$1((clock) => clock.sleep(fromInputUnsafe$1(duration)));
+/** @internal */
+const AsyncFiberErrorTypeId = "~effect/Cause/AsyncFiberError";
+/** @internal */
+var AsyncFiberError = class extends (/*#__PURE__*/ TaggedError$2("AsyncFiberError")) {
+	[AsyncFiberErrorTypeId] = AsyncFiberErrorTypeId;
+	constructor(fiber) {
+		super({
+			message: "An asynchronous Effect was executed with Effect.runSync",
+			fiber
+		});
+	}
+};
+/** @internal */
+const UnknownErrorTypeId = "~effect/Cause/UnknownError";
+/** @internal */
+var UnknownError$1 = class extends (/*#__PURE__*/ TaggedError$2("UnknownError")) {
+	[UnknownErrorTypeId] = UnknownErrorTypeId;
+	constructor(cause, message) {
+		super({
+			message,
+			cause
+		});
+	}
+};
+/** @internal */
+const ConsoleRef = /*#__PURE__*/ Reference("effect/Console", { defaultValue: () => globalThis.console });
+/** @internal */
+const logLevelToOrder = (level) => {
+	switch (level) {
+		case "All": return Number.MIN_SAFE_INTEGER;
+		case "Fatal": return 5e4;
+		case "Error": return 4e4;
+		case "Warn": return 3e4;
+		case "Info": return 2e4;
+		case "Debug": return 1e4;
+		case "Trace": return 0;
+		case "None": return Number.MAX_SAFE_INTEGER;
+	}
+};
+/** @internal */
+const isLogLevelGreaterThan = /*#__PURE__*/ isGreaterThan$1(/* @__PURE__ */ mapInput(Number$6, logLevelToOrder));
+/** @internal */
+const CurrentLoggers = /*#__PURE__*/ Reference("effect/Logger/CurrentLoggers", { defaultValue: () => /* @__PURE__ */ new Set([defaultLogger, tracerLogger]) });
+/** @internal */
+const LogToStderr = /*#__PURE__*/ Reference("effect/Logger/LogToStderr", { defaultValue: constFalse });
+const LoggerProto = {
+	["~effect/Logger"]: {
+		_Message: identity,
+		_Output: identity
+	},
+	pipe() {
+		return pipeArguments(this, arguments);
+	}
+};
+/** @internal */
+const loggerMake = (log) => {
+	const self = Object.create(LoggerProto);
+	self.log = log;
+	return self;
+};
+/**
+* Sanitize a given string by replacing spaces, equal signs, and double quotes
+* with underscores.
+*
+* @internal
+*/
+const formatLabel = (key) => key.replace(/[\s="]/g, "_");
+/**
+* Formats a log span into a `<label>=<value>ms` string.
+*
+* @internal
+*/
+const formatLogSpan = (self, now) => {
+	return `${formatLabel(self[0])}=${now - self[1]}ms`;
+};
+/** @internal */
+const logWithLevel = (level) => (...message) => {
+	let cause = void 0;
+	for (let i = 0, len = message.length; i < len; i++) {
+		const msg = message[i];
+		if (isCause(msg)) {
+			if (cause) message.splice(i, 1);
+			else message = message.slice(0, i).concat(message.slice(i + 1));
+			cause = cause ? causeFromReasons(cause.reasons.concat(msg.reasons)) : msg;
+			i--;
+		}
+	}
+	if (cause === void 0) cause = causeEmpty;
+	return withFiber$1((fiber) => {
+		const logLevel = level ?? fiber.cache.logLevel;
+		if (isLogLevelGreaterThan(fiber.cache.minimumLogLevel, logLevel)) return void_$2;
+		const clock = fiber.getRef(ClockRef);
+		const loggers = fiber.getRef(CurrentLoggers);
+		if (loggers.size > 0) {
+			const date = new Date(clock.currentTimeMillisUnsafe());
+			for (const logger of loggers) logger.log({
+				cause,
+				fiber,
+				date,
+				logLevel,
+				message
+			});
+		}
+		return void_$2;
+	});
+};
+const colors = {
+	bold: "1",
+	red: "31",
+	green: "32",
+	yellow: "33",
+	blue: "34",
+	cyan: "36",
+	white: "37",
+	gray: "90",
+	black: "30",
+	bgBrightRed: "101"
+};
+colors.gray, colors.blue, colors.green, colors.yellow, colors.red, colors.bgBrightRed, colors.black;
+const defaultDateFormat = (date) => `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}:${date.getSeconds().toString().padStart(2, "0")}.${date.getMilliseconds().toString().padStart(3, "0")}`;
+/** @internal */
+const defaultLogger = /*#__PURE__*/ loggerMake(({ cause, date, fiber, logLevel, message }) => {
+	const message_ = Array.isArray(message) ? message.slice() : [message];
+	if (cause.reasons.length > 0) message_.push(causePretty(cause));
+	const now = date.getTime();
+	const spans = fiber.getRef(CurrentLogSpans);
+	let spanString = "";
+	for (const span of spans) spanString += ` ${formatLogSpan(span, now)}`;
+	const annotations = fiber.getRef(CurrentLogAnnotations);
+	if (Object.keys(annotations).length > 0) message_.push(annotations);
+	const console = fiber.getRef(ConsoleRef);
+	(fiber.getRef(LogToStderr) ? console.error : console.log)(`[${defaultDateFormat(date)}] ${logLevel.toUpperCase()} (#${fiber.id})${spanString}:`, ...message_);
+});
+/** @internal */
+const tracerLogger = /*#__PURE__*/ loggerMake(({ cause, fiber, logLevel, message }) => {
+	const clock = fiber.getRef(ClockRef);
+	const annotations = fiber.getRef(CurrentLogAnnotations);
+	const span = fiber.cache.span;
+	if (span === void 0 || span._tag === "ExternalSpan") return;
+	const attributes = {};
+	for (const [key, value] of Object.entries(annotations)) assignProperty(attributes, key, value);
+	attributes["effect.fiberId"] = fiber.id;
+	attributes["effect.logLevel"] = logLevel.toUpperCase();
+	if (cause.reasons.length > 0) attributes["effect.cause"] = causePretty(cause);
+	span.event(toStringUnknown(Array.isArray(message) && message.length === 1 ? message[0] : message), clock.currentTimeNanosUnsafe(), attributes);
+});
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Cause.js
+/**
+* Narrows a `Reason` to `Fail`.
+*
+* **When to use**
+*
+* Use as a predicate for `Array.filter` to pick out typed `Fail` reasons when
+* iterating over `cause.reasons`.
+*
+* **Example** (Filtering fail reasons)
+*
+* ```ts import.meta.vitest
+* import { Cause } from "effect"
+*
+* const cause = Cause.fail("error")
+* const fails = cause.reasons.filter(Cause.isFailReason)
+* fails[0].error // => "error"
+* ```
+*
+* @see {@link isDieReason} — narrow to `Die`
+* @see {@link isInterruptReason} — narrow to `Interrupt`
+*
+* @category guards
+* @since 4.0.0
+*/
+const isFailReason = isFailReason$1;
+/**
+* Creates a `Cause` from an array of `Reason` values.
+*
+* **When to use**
+*
+* Use when you already have individual reasons (e.g. from filtering or
+* transforming another cause's `reasons` array) and need to wrap them back
+* into a `Cause`.
+*
+* **Details**
+*
+* - Returns a new `Cause`.
+* - An empty array produces a cause equivalent to `empty`.
+*
+* **Gotchas**
+*
+* The `reasons` array is stored as provided. Treat the array as immutable
+* after passing it to this function.
+*
+* **Example** (Building a cause from reasons)
+*
+* ```ts import.meta.vitest
+* import { Cause } from "effect"
+*
+* const reasons = [
+*   Cause.makeFailReason("err1"),
+*   Cause.makeFailReason("err2")
+* ]
+* Cause.fromReasons(reasons) // => Cause.combine(Cause.fail("err1"), Cause.fail("err2"))
+* ```
+*
+* @see {@link combine} — merge two existing causes
+*
+* @category constructors
+* @since 4.0.0
+*/
+const fromReasons = causeFromReasons;
+/**
+* Creates a `Cause` containing a single `Fail` reason with the
+* given typed error.
+*
+* **When to use**
+*
+* Use to construct a cause from an expected typed error.
+*
+* **Example** (Creating a fail cause)
+*
+* ```ts import.meta.vitest
+* import { Cause } from "effect"
+*
+* Cause.fail("Something went wrong") // => Cause.fromReasons([Cause.makeFailReason("Something went wrong")])
+* ```
+*
+* @see {@link die} — for untyped defects
+* @see {@link interrupt} — for fiber interruptions
+*
+* @category constructors
+* @since 2.0.0
+*/
+const fail$3 = causeFail;
+/**
+* Creates a `Cause` containing a single `Die` reason with the
+* given defect.
+*
+* **When to use**
+*
+* Use to construct a cause from an untyped defect or unexpected thrown value.
+*
+* **Example** (Creating a die cause)
+*
+* ```ts import.meta.vitest
+* import { Cause } from "effect"
+*
+* Cause.die("Unexpected") // => Cause.fromReasons([Cause.makeDieReason("Unexpected")])
+* ```
+*
+* @see {@link fail} — for typed errors
+* @see {@link interrupt} — for fiber interruptions
+*
+* @category constructors
+* @since 2.0.0
+*/
+const die$1 = causeDie;
+/**
+* Transforms the typed error values inside a `Cause` using the
+* provided function. Only `Fail` reasons are affected; `Die` and `Interrupt`
+* reasons pass through unchanged.
+*
+* **When to use**
+*
+* Use to transform expected typed failures while preserving defects and
+* interruptions unchanged.
+*
+* **Details**
+*
+* If at least one `Fail` reason exists, this returns a new `Cause`
+* containing the mapped failures. If the cause has no `Fail` reasons, the
+* original cause is returned unchanged.
+*
+* **Example** (Mapping errors to uppercase)
+*
+* ```ts import.meta.vitest
+* import { Cause } from "effect"
+*
+* const cause = Cause.fail("error")
+* const mapped = Cause.map(cause, (e) => e.toUpperCase())
+* const reason = mapped.reasons[0]
+* if (Cause.isFailReason(reason)) {
+*   reason.error // => "ERROR"
+* }
+* ```
+*
+* @category mapping
+* @since 2.0.0
+*/
+const map$6 = causeMap;
+/**
+* Checks whether an arbitrary value is a `Done` signal.
+*
+* **Example** (Checking the runtime type)
+*
+* ```ts import.meta.vitest
+* import { Cause } from "effect"
+*
+* Cause.isDone(Cause.Done()) // => true
+* Cause.isDone("not done") // => false
+* ```
+*
+* @category guards
+* @since 4.0.0
+*/
+const isDone$1 = isDone$2;
+/**
+* Creates a `Done` signal with an optional value.
+*
+* **When to use**
+*
+* Use when you need to construct a low-level pull completion signal directly.
+*
+* @see {@link done} — create a failing `Effect` with `Done`
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Done = Done$1;
+/**
+* Creates an Effect that fails with a `Done` error. Shorthand for
+* `Effect.fail(Cause.Done(value))`.
+*
+* **When to use**
+*
+* Use when you model stream or queue completion through the error channel.
+*
+* **Example** (Failing with Done)
+*
+* ```ts import.meta.vitest
+* import { Cause, Effect, Exit } from "effect"
+*
+* const program = Cause.done("finished")
+*
+* await Effect.runPromiseExit(program) // => Exit.fail(Cause.Done("finished"))
+* ```
+*
+* @see {@link Done} — create the signal value without an Effect
+*
+* @category constructors
+* @since 4.0.0
+*/
+const done = done$1;
+/**
+* Constructs an `UnknownError`. The first argument is the original
+* cause (stored in `Error.cause`); the second is an optional human-readable
+* message.
+*
+* **Example** (Creating an UnknownError)
+*
+* ```ts import.meta.vitest
+* import { Cause } from "effect"
+*
+* new Cause.UnknownError({ raw: true }, "Unexpected value").message // => "Unexpected value"
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const UnknownError = UnknownError$1;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Exit.js
+/**
+* Creates a successful Exit containing the given value.
+*
+* **When to use**
+*
+* Use when you need an Exit that contains a known success value.
+*
+* **Details**
+*
+* Returns a `Success<A>` with the provided value. Does not perform any
+* computation.
+*
+* **Example** (Creating a successful Exit)
+*
+* ```ts import.meta.vitest
+* import { Exit } from "effect"
+*
+* Exit.succeed(42) // => Exit.succeed(42)
+* ```
+*
+* @see {@link fail} to create a failed Exit
+* @see {@link void_ void} for a pre-allocated success with no value
+*
+* @category constructors
+* @since 2.0.0
+*/
+const succeed$4 = exitSucceed;
+/**
+* Creates a failed Exit from a Cause.
+*
+* **When to use**
+*
+* Use when you already have a `Cause<E>` and want to wrap it in an Exit
+* for advanced error handling where you need full control over the Cause
+* structure.
+*
+* **Details**
+*
+* Returns a `Failure<never, E>`. If you only have an error value, use
+* {@link fail} instead.
+*
+* **Example** (Creating a failed Exit from a Cause)
+*
+* ```ts import.meta.vitest
+* import { Cause, Exit } from "effect"
+*
+* Exit.failCause(Cause.fail("Something went wrong")) // => Exit.fail("Something went wrong")
+* ```
+*
+* @see {@link fail} to create a Failure from a plain error value
+* @see {@link die} to create a Failure from a defect
+*
+* @category constructors
+* @since 2.0.0
+*/
+const failCause$2 = exitFailCause;
+/**
+* Creates a failed Exit from a typed error value.
+*
+* **When to use**
+*
+* Use when you need to represent an expected typed failure as an `Exit`.
+*
+* **Details**
+*
+* The error is wrapped in a `Cause.Fail` internally.
+*
+* Returns a `Failure<never, E>`.
+*
+* **Example** (Creating a failed Exit)
+*
+* ```ts import.meta.vitest
+* import { Exit } from "effect"
+*
+* Exit.fail("Something went wrong") // => Exit.fail("Something went wrong")
+* ```
+*
+* @see {@link succeed} to create a successful Exit
+* @see {@link die} to create a Failure from an unexpected defect
+* @see {@link failCause} to create a Failure from a full Cause
+*
+* @category constructors
+* @since 2.0.0
+*/
+const fail$2 = exitFail;
+const void_$1 = exitVoid;
+/**
+* Checks whether an Exit is a Success.
+*
+* **When to use**
+*
+* Use as a type guard to narrow `Exit<A, E>` to `Success<A, E>` and access the
+* `value` property.
+*
+* **Example** (Narrowing to success)
+*
+* ```ts import.meta.vitest
+* import { Exit } from "effect"
+*
+* const exit = Exit.succeed(42)
+*
+* if (Exit.isSuccess(exit)) {
+*   exit.value // => 42
+* }
+* ```
+*
+* @see {@link isFailure} for the opposite check
+* @see {@link match} for exhaustive pattern matching
+*
+* @category guards
+* @since 2.0.0
+*/
+const isSuccess = exitIsSuccess;
+/**
+* Checks whether an Exit is a Failure.
+*
+* **When to use**
+*
+* Use as a type guard to narrow `Exit<A, E>` to `Failure<A, E>` and access the
+* `cause` property.
+*
+* **Example** (Narrowing to failure)
+*
+* ```ts import.meta.vitest
+* import { Cause, Exit } from "effect"
+*
+* const exit = Exit.fail("error")
+*
+* if (Exit.isFailure(exit)) {
+*   exit.cause // => Cause.fail("error")
+* }
+* ```
+*
+* @see {@link isSuccess} for the opposite check
+* @see {@link match} for exhaustive pattern matching
+*
+* @category guards
+* @since 2.0.0
+*/
+const isFailure = exitIsFailure;
+const DeferredProto = {
+	["~effect/Deferred"]: {
+		_A: identity,
+		_E: identity
+	},
+	pipe() {
+		return pipeArguments(this, arguments);
+	}
+};
+const DeferredImpl = function() {
+	this.resumes = void 0;
+	this.effect = void 0;
+};
+DeferredImpl.prototype = DeferredProto;
+/**
+* Creates an empty `Deferred` synchronously outside the `Effect` runtime.
+*
+* **When to use**
+*
+* Use to allocate a `Deferred` synchronously when direct allocation outside
+* `Effect` is required.
+*
+* **Example** (Creating a Deferred unsafely)
+*
+* ```ts import.meta.vitest
+* import { Deferred } from "effect"
+*
+* const deferred = Deferred.makeUnsafe<number>()
+* Deferred.isDoneUnsafe(deferred) // => false
+* ```
+*
+* @category unsafe
+* @since 4.0.0
+*/
+const makeUnsafe$5 = () => new DeferredImpl();
+const _await = (self) => callback$2((resume) => {
+	if (self.effect) return resume(self.effect);
+	self.resumes ??= [];
+	self.resumes.push(resume);
+	return sync$1(() => {
+		const resumes = self.resumes;
+		if (resumes === void 0) return;
+		const index = resumes.indexOf(resume);
+		if (index >= 0) resumes.splice(index, 1);
+	});
+});
+/**
+* Returns `true` if this `Deferred` has already been completed with a value or
+* an error, `false` otherwise.
+*
+* **When to use**
+*
+* Use to check completion status inside an `Effect` workflow.
+*
+* **Example** (Checking Deferred completion)
+*
+* ```ts import.meta.vitest
+* import { Deferred, Effect } from "effect"
+*
+* const program = Effect.gen(function*() {
+*   const deferred = yield* Deferred.make<number>()
+*   const beforeCompletion = yield* Deferred.isDone(deferred)
+*   yield* Deferred.succeed(deferred, 42)
+*   const afterCompletion = yield* Deferred.isDone(deferred)
+*   return [beforeCompletion, afterCompletion]
+* })
+*
+* await Effect.runPromise(program) // => [false, true]
+* ```
+*
+* @category predicates
+* @since 2.0.0
+*/
+const isDone = (self) => sync$1(() => isDoneUnsafe(self));
+/**
+* Returns whether this `Deferred` has already been completed synchronously.
+*
+* **When to use**
+*
+* Use to check `Deferred` completion synchronously in code that cannot return
+* an `Effect`, such as low-level integration code.
+*
+* @see {@link isDone} for checking completion inside `Effect`
+* @see {@link poll} for reading the completed effect when available
+*
+* @category predicates
+* @since 4.0.0
+*/
+const isDoneUnsafe = (self) => self.effect !== void 0;
+/**
+* Attempts to complete the `Deferred` synchronously with the specified
+* completion effect.
+*
+* **When to use**
+*
+* Use to complete a `Deferred` synchronously in low-level code that already has
+* the completion effect.
+*
+* **Details**
+*
+* This mutates the `Deferred` directly and should be reserved for low-level
+* code; prefer the effectful completion APIs when possible. Returns `true` if
+* this call completed the `Deferred`, or `false` if it was already completed.
+*
+* **Example** (Completing a Deferred unsafely)
+*
+* ```ts import.meta.vitest
+* import { Deferred, Effect } from "effect"
+*
+* const deferred = Deferred.makeUnsafe<number>()
+* Deferred.doneUnsafe(deferred, Effect.succeed(42)) // => true
+* ```
+*
+* @category unsafe
+* @since 4.0.0
+*/
+const doneUnsafe = (self, effect) => {
+	if (self.effect) return false;
+	self.effect = effect;
+	if (self.resumes) {
+		const resumes = self.resumes;
+		self.resumes = void 0;
+		for (let i = 0; i < resumes.length; i++) resumes[i](effect);
+	}
+	return true;
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/References.js
+/**
+* Context reference for setting the minimum log level threshold. Log entries below this
+* level will be filtered out completely.
+*
+* **When to use**
+*
+* Use to filter out log entries below a severity threshold.
+*
+* **Example** (Filtering logs below the minimum level)
+*
+* ```ts import.meta.vitest
+* import { Effect, Logger, References } from "effect"
+*
+* const levels: Array<string> = []
+* const logger = Logger.make<unknown, void>(({ logLevel }) => {
+*   levels.push(logLevel)
+* })
+*
+* const program = Effect.gen(function*() {
+*   yield* Effect.logInfo("filtered out")
+*   yield* Effect.logWarning("included at the threshold")
+*   yield* Effect.logError("included above the threshold")
+* })
+*
+* await Effect.runPromise(program.pipe(
+*   Effect.provideService(References.MinimumLogLevel, "Warn"),
+*   Effect.provide(Logger.layer([logger]))
+* ))
+* levels // => ["Warn", "Error"]
+* ```
+*
+* @category references
+* @since 4.0.0
+*/
+const MinimumLogLevel = MinimumLogLevel$1;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Scope.js
+/**
+* Controls how long resources stay open.
+*
+* A scope is a lifetime boundary. Code can register cleanup effects on it, and
+* closing the scope runs those cleanups with the `Exit` value that ended the
+* work. Most application code uses higher-level APIs such as `Effect.scoped`
+* and `Layer`, while this module is useful when code needs to create, provide,
+* fork, close, or inspect scopes directly.
+*
+* @since 2.0.0
+*/
+/**
+* Service tag for the active resource lifetime.
+*
+* **When to use**
+*
+* Use to access the active lifetime when registering finalizers or sharing
+* resources with the surrounding scope.
+*
+* **Example** (Accessing the scope service)
+*
+* ```ts import.meta.vitest
+* import { Effect, Scope } from "effect"
+*
+* const cleanups: Array<string> = []
+* const program = Effect.gen(function*() {
+*   const scope = yield* Scope.Scope
+*   yield* Scope.addFinalizer(scope, Effect.sync(() => cleanups.push("Cleanup")))
+* })
+*
+* Effect.runSync(Effect.scoped(program))
+* cleanups // => ["Cleanup"]
+* ```
+*
+* @category services
+* @since 2.0.0
+*/
+const Scope = scopeTag;
+/**
+* Creates a new `Scope` synchronously without wrapping it in an `Effect`.
+* This is useful when you need a scope immediately but should be used with caution
+* as it doesn't provide the same safety guarantees as the `Effect`-wrapped version.
+*
+* **When to use**
+*
+* Use when a scope must be allocated synchronously and the caller will close it
+* manually.
+*
+* **Example** (Creating a scope synchronously)
+*
+* ```ts import.meta.vitest
+* import { Effect, Exit, Scope } from "effect"
+*
+* const scope = Scope.makeUnsafe("sequential")
+* const cleanups: Array<string> = []
+* const program = Effect.gen(function*() {
+*   yield* Scope.addFinalizer(scope, Effect.sync(() => cleanups.push("Cleanup")))
+*   yield* Scope.close(scope, Exit.void)
+* })
+*
+* Effect.runSync(program)
+* cleanups // => ["Cleanup"]
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const makeUnsafe$4 = scopeMakeUnsafe;
+/**
+* Provides a concrete `Scope` to an effect.
+*
+* **When to use**
+*
+* Use to run an effect that requires `Scope` with a scope managed by the
+* caller.
+*
+* **Details**
+*
+* Providing the scope removes the `Scope` requirement from the effect context.
+*
+* **Example** (Providing a scope)
+*
+* ```ts import.meta.vitest
+* import { Effect, Exit, Scope } from "effect"
+*
+* const events: Array<string> = []
+* const program = Effect.gen(function*() {
+*   const scope = yield* Scope.Scope
+*   yield* Scope.addFinalizer(scope, Effect.sync(() => events.push("cleanup")))
+*   events.push("working")
+* })
+*
+* const withScope = Effect.gen(function*() {
+*   const scope = yield* Scope.make()
+*   yield* Scope.provide(scope)(program)
+*   yield* Scope.close(scope, Exit.void)
+* })
+*
+* Effect.runSync(withScope)
+* events // => ["working", "cleanup"]
+* ```
+*
+* @category combinators
+* @since 4.0.0
+*/
+const provide$2 = provideScope;
+/**
+* Registers an exit-aware finalizer on a scope.
+*
+* **When to use**
+*
+* Use when cleanup needs to know whether the scope closed with success,
+* failure, or interruption.
+*
+* **Details**
+*
+* If the scope is open, the finalizer runs when the scope closes and receives
+* the scope's exit value. If the scope is already closed, the finalizer runs
+* immediately with the stored exit value.
+*
+* **Example** (Adding an exit-aware finalizer)
+*
+* ```ts import.meta.vitest
+* import { Effect, Exit, Scope } from "effect"
+*
+* const exits: Array<Exit.Exit<unknown, unknown>> = []
+* const withResource = Effect.gen(function*() {
+*   const scope = yield* Scope.make()
+*   yield* Scope.addFinalizerExit(scope, (exit) => Effect.sync(() => exits.push(exit)))
+*   yield* Scope.close(scope, Exit.void)
+* })
+*
+* Effect.runSync(withResource)
+* exits // => [Exit.void]
+* ```
+*
+* @category combinators
+* @since 2.0.0
+*/
+const addFinalizerExit = scopeAddFinalizerExit;
+/**
+* Registers a finalizer effect on a scope.
+*
+* **Details**
+*
+* If the scope is open, the finalizer runs when the scope closes, regardless of
+* whether the scope closes successfully or with an error. If the scope is
+* already closed, the finalizer runs immediately.
+*
+* **Example** (Adding finalizers)
+*
+* ```ts import.meta.vitest
+* import { Effect, Exit, Scope } from "effect"
+*
+* const events: Array<string> = []
+* const program = Effect.gen(function*() {
+*   const scope = yield* Scope.make()
+*   yield* Scope.addFinalizer(scope, Effect.sync(() => events.push("cleanup 1")))
+*   yield* Scope.addFinalizer(scope, Effect.sync(() => events.push("cleanup 2")))
+*   yield* Scope.addFinalizer(scope, Effect.sync(() => events.push("cleanup 3")))
+*   events.push("work")
+*   yield* Scope.close(scope, Exit.void)
+* })
+*
+* Effect.runSync(program)
+* events // => ["work", "cleanup 3", "cleanup 2", "cleanup 1"]
+* ```
+*
+* @category combinators
+* @since 2.0.0
+*/
+const addFinalizer$1 = scopeAddFinalizer;
+/**
+* Creates a closeable child scope synchronously and registers it with a parent scope.
+*
+* **When to use**
+*
+* Use when a child scope must be created synchronously and the caller controls
+* both parent and child scope lifetimes.
+*
+* **Details**
+*
+* Closing the parent closes the child with the same exit value, and closing the
+* child detaches it from the parent. The optional finalizer strategy configures
+* the child scope and defaults to `"sequential"` when omitted.
+*
+* **Example** (Creating a child scope synchronously)
+*
+* ```ts import.meta.vitest
+* import { Effect, Exit, Scope } from "effect"
+*
+* const cleanups: Array<string> = []
+* const program = Effect.gen(function*() {
+*   const parentScope = Scope.makeUnsafe("sequential")
+*   const childScope = Scope.forkUnsafe(parentScope, "parallel")
+*   yield* Scope.addFinalizer(parentScope, Effect.sync(() => cleanups.push("parent")))
+*   yield* Scope.addFinalizer(childScope, Effect.sync(() => cleanups.push("child")))
+*   yield* Scope.close(childScope, Exit.void)
+*   yield* Scope.close(parentScope, Exit.void)
+* })
+*
+* Effect.runSync(program)
+* cleanups // => ["child", "parent"]
+* ```
+*
+* @category combinators
+* @since 4.0.0
+*/
+const forkUnsafe = scopeForkUnsafe;
+/**
+* Closes a scope and runs its registered finalizers.
+*
+* **When to use**
+*
+* Use to close a scope manually with a specific exit value.
+*
+* **Details**
+*
+* Finalizers run in the scope's configured order and receive the supplied
+* `Exit`.
+* By default, finalizers run uninterruptibly, so interrupting the closing fiber
+* waits for them to finish; a finalizer can explicitly restore interruptibility.
+*
+* **Example** (Running scope finalizers)
+*
+* ```ts import.meta.vitest
+* import { Effect, Exit, Scope } from "effect"
+*
+* const events: Array<string> = []
+* const resourceManagement = Effect.gen(function*() {
+*   const scope = yield* Scope.make("sequential")
+*   yield* Scope.addFinalizer(scope, Effect.sync(() => events.push("database")))
+*   yield* Scope.addFinalizer(scope, Effect.sync(() => events.push("file")))
+*   yield* Scope.addFinalizer(scope, Effect.sync(() => events.push("memory")))
+*   events.push("work")
+*   yield* Scope.close(scope, Exit.succeed("Success!"))
+* })
+*
+* Effect.runSync(resourceManagement)
+* events // => ["work", "memory", "file", "database"]
+* ```
+*
+* @category combinators
+* @since 2.0.0
+*/
+const close = scopeClose;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Layer.js
+const TypeId$28 = "~effect/Layer";
+const MemoMapTypeId = "~effect/Layer/MemoMap";
+const makeMemoMapEntry = (memoMap, layer) => {
+	const entry = {
+		observers: 0,
+		deferred: makeUnsafe$5(),
+		scope: makeUnsafe$4(),
+		finalizer: (exit) => suspend$3(() => {
+			if (--entry.observers > 0) return void_$2;
+			memoMap.map.delete(layer);
+			return close(entry.scope, exit);
+		})
+	};
+	return entry;
+};
+const memoMapObserve = (entry, scope) => {
+	if (scope.state._tag === "Closed") return false;
+	entry.observers++;
+	scopeAddFinalizerUnsafe(scope, {}, entry.finalizer);
+	return true;
+};
+const LayerProto = {
+	[TypeId$28]: {
+		_ROut: identity,
+		_E: identity,
+		_RIn: identity
+	},
+	pipe() {
+		return pipeArguments(this, arguments);
+	}
+};
+const fromBuildUnsafe = (build) => {
+	const self = Object.create(LayerProto);
+	self.build = build;
+	return self;
+};
+/**
+* Constructs a `Layer` from a function that uses a `MemoMap` and `Scope` to
+* build the layer.
+*
+* **Details**
+*
+* The function receives a `MemoMap` for memoization and a `Scope` for resource management.
+* A child scope is created, and if the build fails, the child scope is closed.
+*
+* **Example** (Constructing a layer from a build function)
+*
+* ```ts import.meta.vitest
+* import { Context, Effect, Layer } from "effect"
+*
+* class Database extends Context.Service<Database, {
+*   readonly query: (sql: string) => Effect.Effect<string>
+* }>()("Database") {}
+*
+* const databaseLayer = Layer.fromBuild(() =>
+*   Effect.sync(() =>
+*     Context.make(Database, {
+*       query: (sql: string) => Effect.succeed("result")
+*     })
+*   )
+* )
+*
+* const program = Database.use((database) => database.query("SELECT 1"))
+* Effect.runSync(Effect.provide(program, databaseLayer)) // => "result"
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const fromBuild = (build) => fromBuildUnsafe((memoMap, scope) => {
+	const layerScope = forkUnsafe(scope);
+	return onExit$1(build(memoMap, layerScope), (exit) => exit._tag === "Failure" ? close(layerScope, exit) : void_$2);
+});
+/**
+* Constructs a `Layer` from a function that uses a `MemoMap` and `Scope` to
+* build the layer, with automatic memoization.
+*
+* **Details**
+*
+* This is similar to `fromBuild` but provides automatic memoization of the layer construction.
+* The layer will be memoized based on the provided `MemoMap`.
+*
+* **Example** (Memoizing layer construction)
+*
+* ```ts import.meta.vitest
+* import { Context, Effect, Layer } from "effect"
+*
+* class Database extends Context.Service<Database, {
+*   readonly query: (sql: string) => Effect.Effect<string>
+* }>()("Database") {}
+*
+* const databaseLayer = Layer.fromBuildMemo(() =>
+*   Effect.sync(() =>
+*     Context.make(Database, {
+*       query: (sql: string) => Effect.succeed("result")
+*     })
+*   )
+* )
+*
+* const program = Database.use((database) => database.query("SELECT 1"))
+* Effect.runSync(Effect.provide(program, databaseLayer)) // => "result"
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const fromBuildMemo = (build) => {
+	const self = fromBuild((memoMap, scope) => memoMap.getOrElseMemoize(self, scope, build));
+	return self;
+};
+var MemoMapImpl = class {
+	get [MemoMapTypeId]() {
+		return MemoMapTypeId;
+	}
+	parent;
+	constructor(parent) {
+		this.parent = parent;
+	}
+	map = /*#__PURE__*/ new Map();
+	get(layer, scope) {
+		const local = this.map.get(layer);
+		if (local) {
+			memoMapObserve(local, scope);
+			return local.deferred.effect ?? _await(local.deferred);
+		}
+		return this.parent?.get(layer, scope);
+	}
+	getOrElseMemoize(layer, scope, build) {
+		return suspend$3(() => {
+			let deferred;
+			return onExitPrimitive(suspend$3(() => {
+				const existing = this.get(layer, scope);
+				if (existing) return existing;
+				const entry = makeMemoMapEntry(this, layer);
+				if (!memoMapObserve(entry, scope)) return build(this, scope);
+				deferred = entry.deferred;
+				this.map.set(layer, entry);
+				return build(this, entry.scope);
+			}), (exit) => {
+				if (deferred) doneUnsafe(deferred, exit);
+			});
+		});
+	}
+};
+/**
+* Constructs a `MemoMap` synchronously so it can be used to build additional layers.
+*
+* **Example** (Creating a memo map unsafely)
+*
+* ```ts import.meta.vitest
+* import { Context, Effect, Layer } from "effect"
+*
+* class Database extends Context.Service<Database, {
+*   readonly query: (sql: string) => Effect.Effect<string>
+* }>()("Database") {}
+*
+* // Create a memo map for manual layer building
+* const program = Effect.gen(function*() {
+*   const memoMap = Layer.makeMemoMapUnsafe()
+*   const scope = yield* Effect.scope
+*
+*   const dbLayer = Layer.succeed(Database, {
+*     query: Effect.fn("Database.query")((sql: string) => Effect.succeed("result"))
+*   })
+*   const context = yield* Layer.buildWithMemoMap(dbLayer, memoMap, scope)
+*
+*   return Context.get(context, Database)
+* })
+*
+* const database = Effect.runSync(Effect.scoped(program))
+* Effect.runSync(database.query("SELECT 1")) // => "result"
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const makeMemoMapUnsafe = () => new MemoMapImpl();
+/**
+* Constructs a child `MemoMap` synchronously, allowing it to reuse layers
+* already memoized in the parent while isolating any new layer allocations to
+* the child map.
+*
+* **When to use**
+*
+* Use to synchronously fork a memo map for manual layer building when child
+* builds should see parent memoized layers without writing newly built layers
+* back to the parent.
+*
+* @see {@link forkMemoMap} for allocating the child memo map inside `Effect`
+* @see {@link makeMemoMapUnsafe} for creating a root memo map without a parent
+*
+* @category constructors
+* @since 4.0.0
+*/
+const forkMemoMapUnsafe = (parent) => new MemoMapImpl(parent);
+/**
+* Context service for the current `MemoMap` used in layer construction.
+*
+* **When to use**
+*
+* Use when building custom layer operations that need to access the current
+* memoization map from the fiber context.
+*
+* **Details**
+*
+* This service wraps a `MemoMap` as a `Context.Service`, making it available
+* for dependency injection during layer construction.
+*
+* @see {@link MemoMap} the memoization map type wrapped by this service
+*
+* @category services
+* @since 3.13.0
+*/
+var CurrentMemoMap = class CurrentMemoMap extends (/*#__PURE__*/ Service()("effect/Layer/CurrentMemoMap")) {
+	static forkOrCreate(self) {
+		const current = getOrUndefined(self, CurrentMemoMap);
+		return current ? forkMemoMapUnsafe(current) : makeMemoMapUnsafe();
+	}
+};
+/**
+* Builds a layer into an `Effect` value, using the specified `MemoMap` to memoize
+* the layer construction.
+*
+* **Example** (Building layers with an explicit memo map)
+*
+* ```ts import.meta.vitest
+* import { Context, Effect, Layer } from "effect"
+*
+* class Database extends Context.Service<Database, {
+*   readonly query: (sql: string) => Effect.Effect<string>
+* }>()("Database") {}
+*
+* class Logger extends Context.Service<Logger, {
+*   readonly log: (msg: string) => Effect.Effect<void>
+* }>()("Logger") {}
+*
+* const logs: Array<string> = []
+*
+* // Build layers with explicit memoization control
+* const program = Effect.gen(function*() {
+*   const memoMap = yield* Layer.makeMemoMap
+*   const scope = yield* Effect.scope
+*
+*   // Build database layer with memoization
+*   const dbLayer = Layer.succeed(Database, {
+*     query: Effect.fn("Database.query")((sql: string) => Effect.succeed("result"))
+*   })
+*   const dbContext = yield* Layer.buildWithMemoMap(dbLayer, memoMap, scope)
+*
+*   // Build logger layer with same memoization (reuses memo if same layer)
+*   const loggerLayer = Layer.succeed(Logger, {
+*     log: Effect.fn("Logger.log")((msg: string) => Effect.sync(() => logs.push(msg)))
+*   })
+*   const loggerContext = yield* Layer.buildWithMemoMap(
+*     loggerLayer,
+*     memoMap,
+*     scope
+*   )
+*
+*   return {
+*     database: Context.get(dbContext, Database),
+*     logger: Context.get(loggerContext, Logger)
+*   }
+* })
+*
+* const services = Effect.runSync(Effect.scoped(program))
+* Effect.runSync(services.logger.log("ready"))
+* logs // => ["ready"]
+* ```
+*
+* @category destructors
+* @since 2.0.0
+*/
+const buildWithMemoMap = /*#__PURE__*/ dual(3, (self, memoMap, scope) => provideService$1(map$7(self.build(memoMap, scope), add(CurrentMemoMap, memoMap)), CurrentMemoMap, memoMap));
+/**
+* Builds a layer using an explicit scope.
+*
+* **When to use**
+*
+* Use to control the lifetime of layer resources with a scope supplied by the
+* caller.
+*
+* **Details**
+*
+* Resources created by the layer are released when the supplied scope is
+* closed, unless a resource extends its own scope.
+*
+* **Example** (Building a layer with an explicit scope)
+*
+* ```ts import.meta.vitest
+* import { Context, Effect, Layer, Scope } from "effect"
+*
+* class Database extends Context.Service<Database, {
+*   readonly query: (sql: string) => Effect.Effect<string>
+* }>()("Database") {}
+*
+* const logs: Array<string> = []
+*
+* // Build a layer with explicit scope control
+* const program = Effect.gen(function*() {
+*   const scope = yield* Effect.scope
+*
+*   const dbLayer = Layer.effect(Database, Effect.gen(function*() {
+*     logs.push("Initializing database...")
+*     yield* Scope.addFinalizer(
+*       scope,
+*       Effect.sync(() => logs.push("Database closed"))
+*     )
+*     return { query: Effect.fn("Database.query")((sql: string) => Effect.succeed(`Result: ${sql}`)) }
+*   }))
+*
+*   // Build with specific scope - resources tied to this scope
+*   const context = yield* Layer.buildWithScope(dbLayer, scope)
+*   const database = Context.get(context, Database)
+*
+*   return yield* database.query("SELECT * FROM users")
+*   // Database will be closed when scope is closed
+* })
+*
+* Effect.runSync(Effect.scoped(program)) // => "Result: SELECT * FROM users"
+* logs // => ["Initializing database...", "Database closed"]
+* ```
+*
+* @category destructors
+* @since 2.0.0
+*/
+const buildWithScope = /*#__PURE__*/ dual(2, (self, scope) => withFiber$1((fiber) => buildWithMemoMap(self, CurrentMemoMap.forkOrCreate(fiber.context), scope)));
+/**
+* Constructs a layer that provides a single service from an already available
+* value.
+*
+* **When to use**
+*
+* Use when you need a `Layer` that provides a service from an already
+* constructed implementation without effectful acquisition.
+*
+* **Example** (Creating a layer from a service implementation)
+*
+* ```ts import.meta.vitest
+* import { Context, Effect, Layer } from "effect"
+*
+* class Database extends Context.Service<Database, {
+*   readonly query: (sql: string) => Effect.Effect<string>
+* }>()("Database") {}
+*
+* const DatabaseLayer = Layer.succeed(Database, {
+*   query: Effect.fn("Database.query")((sql: string) => Effect.succeed(`Query result: ${sql}`))
+* })
+* const program = Database.use((database) => database.query("SELECT 1"))
+* Effect.runSync(Effect.provide(program, DatabaseLayer)) // => "Query result: SELECT 1"
+* ```
+*
+* @see {@link sync} for constructing layers from lazy values
+*
+* @category constructors
+* @since 2.0.0
+*/
+const succeed$3 = function() {
+	if (arguments.length === 1) return (resource) => succeedContext(make$26(arguments[0], resource));
+	return succeedContext(make$26(arguments[0], arguments[1]));
+};
+/**
+* Constructs a layer that provides all services in an already available
+* `Context`.
+*
+* **When to use**
+*
+* Use when you need a `Layer` built from an existing `Context`, including when
+* you need to provide multiple services at once.
+*
+* **Details**
+*
+* This is a more general version of `succeed` that allows you to provide
+* multiple services at once through a `Context`.
+*
+* **Example** (Providing multiple services from a context)
+*
+* ```ts import.meta.vitest
+* import { Context, Effect, Layer } from "effect"
+*
+* class Database extends Context.Service<Database, {
+*   readonly query: (sql: string) => Effect.Effect<string>
+* }>()("Database") {}
+*
+* class Logger extends Context.Service<Logger, {
+*   readonly log: (msg: string) => Effect.Effect<void>
+* }>()("Logger") {}
+*
+* const logs: Array<string> = []
+* const context = Context.make(Database, {
+*   query: Effect.fn("Database.query")((sql: string) => Effect.succeed("result"))
+* }).pipe(
+*   Context.add(Logger, {
+*     log: (msg: string) => Effect.sync(() => logs.push(msg))
+*   })
+* )
+*
+* const layer = Layer.succeedContext(context)
+* const program = Logger.use((logger) => logger.log("ready"))
+* Effect.runSync(Effect.provide(program, layer))
+* logs // => ["ready"]
+* ```
+*
+* @see {@link succeed} for providing a single service from a value
+*
+* @category constructors
+* @since 2.0.0
+*/
+const succeedContext = (context) => fromBuildUnsafe(constant(succeed$5(context)));
+/**
+* Constructs a layer from an effect that produces a single service.
+*
+* **When to use**
+*
+* Use when you need to construct a `Layer`-provided service with an `Effect`,
+* dependencies, or scoped resource acquisition.
+*
+* **Details**
+*
+* This allows you to create a `Layer` from an `Effect` that produces a service.
+* The `Effect` is executed in the scope of the layer, allowing for proper
+* resource management.
+*
+* **Example** (Creating a layer from an effect)
+*
+* ```ts import.meta.vitest
+* import { Context, Effect, Layer } from "effect"
+*
+* class Database extends Context.Service<Database, {
+*   readonly query: (sql: string) => Effect.Effect<string>
+* }>()("Database") {}
+*
+* const layer = Layer.effect(Database,
+*   Effect.sync(() => ({
+*     query: (sql: string) => Effect.succeed(`Query: ${sql}`)
+*   }))
+* )
+* const program = Database.use((database) => database.query("SELECT 1"))
+* Effect.runSync(Effect.provide(program, layer)) // => "Query: SELECT 1"
+* ```
+*
+* @see {@link effectContext} for effectfully providing multiple services
+* @see {@link effectDiscard} for running construction work without providing services
+*
+* @category constructors
+* @since 2.0.0
+*/
+const effect = function() {
+	if (arguments.length === 1) return (effect) => effectImpl(arguments[0], effect);
+	return effectImpl(arguments[0], arguments[1]);
+};
+const effectImpl = (service, effect) => effectContext(map$7(effect, (value) => make$26(service, value)));
+/**
+* Constructs a layer from an effect that produces all services in a `Context`.
+*
+* **When to use**
+*
+* Use when you need a `Layer` that effectfully constructs a `Context` with
+* multiple services.
+*
+* **Details**
+*
+* This allows you to create a `Layer` from an effectful computation that
+* returns multiple services. The `Effect` is executed in the scope of the
+* layer.
+*
+* **Example** (Creating a layer from an effectful context)
+*
+* ```ts import.meta.vitest
+* import { Context, Effect, Layer } from "effect"
+*
+* class Database extends Context.Service<
+*   Database,
+*   { readonly query: (sql: string) => Effect.Effect<string> }
+* >()("Database") {}
+*
+* const layer = Layer.effectContext(
+*   Effect.succeed(Context.make(Database, {
+*     query: (sql: string) => Effect.succeed(`Query: ${sql}`)
+*   }))
+* )
+* const program = Database.use((database) => database.query("SELECT 1"))
+* Effect.runSync(Effect.provide(program, layer)) // => "Query: SELECT 1"
+* ```
+*
+* @see {@link effect} for effectfully providing a single service
+*
+* @category constructors
+* @since 2.0.0
+*/
+const effectContext = (effect) => fromBuildMemo((_, scope) => provide$2(effect, scope));
+const mergeAllEffect = (layers, memoMap, scope) => {
+	const parentScope = forkUnsafe(scope, "parallel");
+	return forEach$2(layers, (layer) => layer.build(memoMap, forkUnsafe(parentScope, "sequential")), { concurrency: layers.length }).pipe(map$7((context) => mergeAll$1(...context)));
+};
+/**
+* Combines all the provided layers concurrently, creating a new layer with
+* merged input, error, and output types.
+*
+* **When to use**
+*
+* Use when you need to combine multiple independent layers.
+*
+* **Details**
+*
+* All layers are built concurrently, and their outputs are merged into a single layer.
+*
+* If multiple merged layers depend on the same layer value, that dependency is
+* shared by default. Reuse a named layer value when you want services to share
+* the same resource, such as one database pool.
+*
+* **Example** (Merging independent layers)
+*
+* ```ts import.meta.vitest
+* import { Context, Effect, Layer } from "effect"
+*
+* class Database extends Context.Service<Database, {
+*   readonly query: (sql: string) => Effect.Effect<string>
+* }>()("Database") {}
+*
+* class Logger extends Context.Service<Logger, {
+*   readonly log: (msg: string) => Effect.Effect<void>
+* }>()("Logger") {}
+*
+* const dbLayer = Layer.succeed(Database, {
+*   query: Effect.fn("Database.query")((sql: string) => Effect.succeed("result"))
+* })
+* const logs: Array<string> = []
+* const loggerLayer = Layer.succeed(Logger, {
+*   log: Effect.fn("Logger.log")((msg: string) => Effect.sync(() => logs.push(msg)))
+* })
+*
+* const mergedLayer = Layer.mergeAll(dbLayer, loggerLayer)
+* const program = Logger.use((logger) => logger.log("ready"))
+* Effect.runSync(Effect.provide(program, mergedLayer))
+* logs // => ["ready"]
+* ```
+*
+* @see {@link merge} for merging one layer with another layer or array
+*
+* @category zipping
+* @since 2.0.0
+*/
+const mergeAll = (...layers) => fromBuild((memoMap, scope) => mergeAllEffect(layers, memoMap, scope));
+const provideWith = (self, that, f) => fromBuild((memoMap, scope) => flatMap$2(Array.isArray(that) ? mergeAllEffect(that, memoMap, scope) : that.build(memoMap, scope), (context) => self.build(memoMap, scope).pipe(provideContext$1(context), map$7((merged) => f(merged, context)))));
+/**
+* Feeds the output services of the dependency layer into the requirements of
+* this layer, returning a layer that provides both sets of services.
+*
+* **When to use**
+*
+* Use when you need to compose `Layer`s while keeping both the constructed
+* service and the dependency used to build it available.
+*
+* **Details**
+*
+* Prefer {@link provide} when the dependency should stay private.
+*
+* **Example** (Providing dependencies while retaining services)
+*
+* ```ts import.meta.vitest
+* import { Context, Effect, Layer } from "effect"
+*
+* class Database extends Context.Service<Database, {
+*   readonly query: (sql: string) => Effect.Effect<string>
+* }>()("Database") {}
+*
+* class Logger extends Context.Service<Logger, {
+*   readonly log: (msg: string) => Effect.Effect<void>
+* }>()("Logger") {}
+*
+* class UserService extends Context.Service<UserService, {
+*   readonly getUser: (id: string) => Effect.Effect<{
+*     id: string
+*     name: string
+*   }>
+* }>()("UserService") {}
+*
+* // Create dependency layers
+* const databaseLayer = Layer.succeed(Database, {
+*   query: Effect.fn("Database.query")((sql: string) => Effect.succeed(`DB: ${sql}`))
+* })
+*
+* const logs: Array<string> = []
+* const loggerLayer = Layer.succeed(Logger, {
+*   log: Effect.fn("Logger.log")((msg: string) => Effect.sync(() => logs.push(`[LOG] ${msg}`)))
+* })
+*
+* // UserService depends on Database and Logger
+* const userServiceLayer = Layer.effect(UserService, Effect.gen(function*() {
+*   const database = yield* Database
+*   const logger = yield* Logger
+*
+*   return {
+*     getUser: Effect.fn("UserService.getUser")(function*(id: string) {
+*         yield* logger.log(`Looking up user ${id}`)
+*         const result = yield* database.query(
+*           `SELECT * FROM users WHERE id = ${id}`
+*         )
+*         return { id, name: result }
+*       })
+*   }
+* }))
+*
+* // Provide dependencies and merge all services together
+* const allServicesLayer = userServiceLayer.pipe(
+*   Layer.provideMerge(Layer.mergeAll(databaseLayer, loggerLayer))
+* )
+*
+* // Now the resulting layer provides UserService, Database, AND Logger
+* const program = Effect.gen(function*() {
+*   const userService = yield* UserService
+*   const logger = yield* Logger // Still available!
+*   const database = yield* Database // Still available!
+*
+*   const user = yield* userService.getUser("123")
+*   yield* logger.log(`Found user: ${user.name}`)
+*
+*   return user
+* }).pipe(
+*   Effect.provide(allServicesLayer)
+* )
+* Effect.runSync(program) // => { id: "123", name: "DB: SELECT * FROM users WHERE id = 123" }
+* logs // => ["[LOG] Looking up user 123", "[LOG] Found user: DB: SELECT * FROM users WHERE id = 123"]
+* ```
+*
+* @see {@link provide} for keeping dependency services private
+*
+* @category providing services
+* @since 2.0.0
+*/
+const provideMerge = /*#__PURE__*/ dual(2, (self, that) => provideWith(self, that, (self, that) => merge$2(that, self)));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/dateTime.js
+/** @internal */
+const TypeId$27 = "~effect/DateTime";
+/** @internal */
+const TimeZoneTypeId = "~effect/DateTime/TimeZone";
+const Proto$7 = {
+	[TypeId$27]: TypeId$27,
+	pipe() {
+		return pipeArguments(this, arguments);
+	},
+	[NodeInspectSymbol]() {
+		return this.toString();
+	},
+	toJSON() {
+		return toDateUtc$1(this).toJSON();
+	}
+};
+({ ...Proto$7 });
+({ ...Proto$7 });
+const ProtoTimeZone = {
+	[TimeZoneTypeId]: TimeZoneTypeId,
+	[NodeInspectSymbol]() {
+		return this.toString();
+	}
+};
+({ ...ProtoTimeZone });
+({ ...ProtoTimeZone });
+/** @internal */
+const toDateUtc$1 = (self) => new Date(self.epochMilliseconds);
+globalThis.Number;
+/**
+* Returns the number rounded with the given precision.
+*
+* **When to use**
+*
+* Use to round a number to a fixed number of decimal places.
+*
+* **Example** (Rounding with precision)
+*
+* ```ts import.meta.vitest
+* import { Number } from "effect"
+*
+* Number.round(1.1234, 2) // => 1.12
+* Number.round(1.567, 2) // => 1.57
+* ```
+*
+* @category math
+* @since 3.8.0
+*/
+const round = /*#__PURE__*/ dual(2, (self, precision) => {
+	const factor = Math.pow(10, precision);
+	return Math.round(self * factor) / factor;
+});
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/random.js
+/** @internal */
+const nextBetween = (min, max, draw) => {
+	const value = draw * (max - min) + min;
+	if (value !== max || min >= max || !Number.isFinite(max)) return value;
+	if (max === 0) return -Number.MIN_VALUE;
+	const view = /* @__PURE__ */ new DataView(/* @__PURE__ */ new ArrayBuffer(8));
+	view.setFloat64(0, max);
+	const bits = view.getBigUint64(0);
+	view.setBigUint64(0, max > 0 ? bits - BigInt(1) : bits + BigInt(1));
+	return view.getFloat64(0);
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Pull.js
+/**
+* Models one low-level pull step for stream-like consumers.
+*
+* A `Pull<A, E, Done, R>` is an `Effect` that can produce one `A`, fail with an
+* ordinary error `E`, or signal end-of-input with `Cause.Done<Done>`. The
+* separate done signal lets low-level consumers distinguish normal completion
+* from failure. This module includes type extractors and helpers for detecting,
+* filtering, catching, converting, and matching done signals separately from
+* ordinary failures.
+*
+* @since 4.0.0
+*/
+/**
+* Handles `Cause.Done` failures in an effect while leaving ordinary failures
+* in the error channel.
+*
+* **When to use**
+*
+* Use to recover from a `Cause.Done` completion signal in an effect, such as
+* turning a pull leftover value into a successful recovery effect while
+* preserving ordinary failures.
+*
+* **Details**
+*
+* The handler receives the done leftover value and may recover with a new
+* effect. Non-done errors are preserved.
+*
+* @see {@link matchEffect} for handling success, ordinary failure, and done outcomes explicitly
+* @see {@link filterDoneLeftover} for extracting a done leftover from an existing `Cause`
+*
+* @category error handling
+* @since 4.0.0
+*/
+const catchDone = /*#__PURE__*/ dual(2, (effect, f) => catchCauseFilter(effect, filterDoneLeftover, (l) => f(l)));
+/**
+* Checks whether a Cause contains any done errors.
+*
+* **When to use**
+*
+* Use when you need to test whether a pull failure cause represents normal
+* completion and only need a boolean result.
+*
+* @see {@link isDoneFailure} for checking a single `Cause.Reason`
+* @see {@link filterDone} for extracting the `Cause.Done` value from a `Cause`
+* @see {@link filterNoDone} for selecting causes with no done failures
+*
+* @category predicates
+* @since 4.0.0
+*/
+const isDoneCause = (cause) => cause.reasons.some(isDoneFailure);
+/**
+* Checks whether a `Cause.Reason` is a `Fail` reason whose error is a
+* `Cause.Done` signal.
+*
+* **When to use**
+*
+* Use when you need to identify done completion reasons while traversing
+* `cause.reasons`, before handling ordinary failures.
+*
+* @see {@link isDoneCause} for checking an entire `Cause` for any done reason
+* @see {@link filterDone} for extracting the `Cause.Done` value from a `Cause`
+*
+* @category guards
+* @since 4.0.0
+*/
+const isDoneFailure = (failure) => failure._tag === "Fail" && isDone$1(failure.error);
+/**
+* Finds a `Cause.Done` failure in a `Cause`.
+*
+* **When to use**
+*
+* Use to separate `Cause.Done` completion from ordinary causes while preserving
+* the typed done value.
+*
+* **Details**
+*
+* Returns a successful `Result` with the `Cause.Done` value when the cause
+* contains a done signal and no other failures besides interruptions. When the
+* done signal was merged with a real failure (for example a failing
+* finalizer), the `Result` fails with the remaining cause, stripped of the
+* done signal. Without a done signal the `Result` fails with the original
+* cause.
+*
+* @category filtering
+* @since 4.0.0
+*/
+const filterDone = (cause) => {
+	let done;
+	let hasFailure = false;
+	for (const reason of cause.reasons) if (isDoneFailure(reason)) done ??= reason.error;
+	else if (reason._tag !== "Interrupt") hasFailure = true;
+	if (done === void 0) return fail$5(cause);
+	return hasFailure ? fail$5(fromReasons(cause.reasons.filter((reason) => !isDoneFailure(reason)))) : succeed$6(done);
+};
+/**
+* Filters a Cause to extract the leftover value from done errors.
+*
+* **When to use**
+*
+* Use to extract only the leftover value carried by a `Cause.Done` completion
+* signal.
+*
+* @category filtering
+* @since 4.0.0
+*/
+const filterDoneLeftover = (cause) => {
+	const done = filterDone(cause);
+	return isFailure$1(done) ? done : succeed$6(done.success.value);
+};
+/**
+* Converts a `Cause` into an `Exit`, treating `Cause.Done` as successful
+* completion.
+*
+* **When to use**
+*
+* Use to produce an `Exit` for finalizing a low-level pull workflow when a
+* `Cause.Done` signal should be treated as success and any remaining cause
+* should fail.
+*
+* **Details**
+*
+* If the done signal is the only failure in the cause, its leftover becomes
+* the successful value. Otherwise the non-done cause becomes the failure
+* cause.
+*
+* @see {@link filterDone} for extracting the done signal without converting the cause to an `Exit`
+* @see {@link matchEffect} for handling `Pull` success, failure, and done outcomes directly
+*
+* @category converting
+* @since 4.0.0
+*/
+const doneExitFromCause = (cause) => {
+	const halt = filterDone(cause);
+	return !isFailure$1(halt) ? succeed$4(halt.success.value) : failCause$2(halt.failure);
+};
+/**
+* Pattern matches on a Pull, handling success, failure, and done cases.
+*
+* **When to use**
+*
+* Use to handle all three `Pull` outcomes with effectful handlers.
+*
+* **Example** (Matching Pull outcomes)
+*
+* ```ts import.meta.vitest
+* import { Cause, Effect, Pull } from "effect"
+*
+* const pull = Cause.done("stream ended")
+*
+* const result = Pull.matchEffect(pull, {
+*   onSuccess: (value) => Effect.succeed(`Got value: ${value}`),
+*   onFailure: (cause) => Effect.succeed(`Got error: ${cause}`),
+*   onDone: (leftover) => Effect.succeed(`Stream halted with: ${leftover}`)
+* })
+*
+* await Effect.runPromise(result) // => "Stream halted with: stream ended"
+* ```
+*
+* @category pattern matching
+* @since 4.0.0
+*/
+const matchEffect$1 = /*#__PURE__*/ dual(2, (self, options) => matchCauseEffect(self, {
+	onSuccess: options.onSuccess,
+	onFailure: (cause) => {
+		const halt = filterDone(cause);
+		return !isFailure$1(halt) ? options.onDone(halt.success.value) : options.onFailure(halt.failure);
+	}
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/layer.js
+const provideLayer = (self, layer, options) => scopedWith$1((scope) => flatMap$2(options?.local ? buildWithMemoMap(layer, makeMemoMapUnsafe(), scope) : buildWithScope(layer, scope), (context) => provideContext$1(self, context)));
+/** @internal */
+const provide$1 = /*#__PURE__*/ dual((args) => isEffect$1(args[0]), (self, source, options) => isContext(source) ? provideContext$1(self, source) : provideLayer(self, Array.isArray(source) ? mergeAll(...source) : source, options));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Effect.js
+/**
+* Checks whether a value is an `Effect`.
+*
+* **Example** (Checking whether a value is an Effect)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* Effect.isEffect(Effect.succeed(1)) // => true
+* Effect.isEffect("hello") // => false
+* ```
+*
+* @category guards
+* @since 2.0.0
+*/
+const isEffect = isEffect$1;
+/**
+* Combines an iterable or record of effects into one effect whose success shape
+* follows the input.
+*
+* **When to use**
+*
+* Use to run a known collection of effects and collect results in the same
+* tuple, iterable, or record shape.
+*
+* **Details**
+*
+* Tuple and iterable inputs collect results in order. Record inputs collect
+* results under the same keys. By default, the combined effect fails on the
+* first failure; with concurrent execution, effects that have already started
+* may be interrupted, while effects not yet started are skipped.
+*
+* Options:
+*
+* Use `concurrency` to control sequential or concurrent execution. Use
+* `mode: "result"` to run every effect and collect each success or failure as a
+* `Result` in the same output shape. Use `discard: true` to ignore successful
+* values and return `void`.
+*
+* **Example** (Collecting tuple results in order)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const tupleOfEffects = [
+*   Effect.succeed(42),
+*   Effect.succeed("Hello")
+* ] as const
+*
+* //      ┌─── Effect<[number, string], never, never>
+* //      ▼
+* const resultsAsTuple = Effect.all(tupleOfEffects)
+*
+* await Effect.runPromise(resultsAsTuple) // => [42, "Hello"]
+* ```
+*
+* **Example** (Collecting iterable results in order)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const iterableOfEffects: Iterable<Effect.Effect<number>> = [1, 2, 3].map(
+*   Effect.succeed
+* )
+*
+* //      ┌─── Effect<number[], never, never>
+* //      ▼
+* const resultsAsArray = Effect.all(iterableOfEffects)
+*
+* await Effect.runPromise(resultsAsArray) // => [1, 2, 3]
+* ```
+*
+* **Example** (Collecting struct results by key)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const structOfEffects = {
+*   a: Effect.succeed(42),
+*   b: Effect.succeed("Hello")
+* }
+*
+* //      ┌─── Effect<{ a: number; b: string; }, never, never>
+* //      ▼
+* const resultsAsStruct = Effect.all(structOfEffects)
+*
+* await Effect.runPromise(resultsAsStruct) // => { a: 42, b: "Hello" }
+* ```
+*
+* **Example** (Collecting record results by key)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const recordOfEffects: Record<string, Effect.Effect<number>> = {
+*   key1: Effect.succeed(1),
+*   key2: Effect.succeed(2)
+* }
+*
+* //      ┌─── Effect<{ [x: string]: number; }, never, never>
+* //      ▼
+* const resultsAsRecord = Effect.all(recordOfEffects)
+*
+* await Effect.runPromise(resultsAsRecord) // => { key1: 1, key2: 2 }
+* ```
+*
+* **Example** (Stopping on the first failure)
+*
+* ```ts import.meta.vitest
+* import { Effect, Exit } from "effect"
+* const output: Array<unknown> = []
+* const record = (value: unknown) => Effect.sync(() => { output.push(value) })
+*
+* const program = Effect.all([
+*   Effect.succeed("Task1").pipe(Effect.tap(record)),
+*   Effect.fail("Task2: Oh no!").pipe(Effect.tap(record)),
+*   // Won't execute due to earlier failure
+*   Effect.succeed("Task3").pipe(Effect.tap(record))
+* ])
+*
+* const outcome = await Effect.runPromiseExit(program)
+* const observation = [output, outcome] // => [["Task1"], Exit.fail("Task2: Oh no!")]
+* ```
+*
+* @see {@link forEach} for iterating over elements and applying an effect.
+* @category collecting
+* @since 2.0.0
+*/
+const all = all$1;
+/**
+* Executes an effectful operation for each element in an `Iterable`.
+*
+* **When to use**
+*
+* Use to traverse an iterable with an effectful function while preserving
+* element order in the collected results.
+*
+* **Details**
+*
+* The `forEach` function applies a provided operation to each element in the
+* iterable, producing a new effect that returns an array of results.
+*
+* If any effect fails, the iteration stops immediately (short-circuiting), and
+* the error is propagated.
+*
+* Concurrency:
+*
+* The `concurrency` option controls how many operations are performed
+* concurrently. By default, the operations are performed sequentially.
+*
+* Discarding Results:
+*
+* If the `discard` option is set to `true`, the intermediate results are not
+* collected, and the final result of the operation is `void`.
+*
+* **Example** (Mapping over an iterable with effects)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* const result = Effect.forEach(
+*   [1, 2, 3, 4, 5],
+*   (n, index) =>
+*     Effect.sync(() => { output.push(`Currently at index ${index}`) }).pipe(Effect.as(n * 2))
+* )
+*
+* void output.push(await Effect.runPromise(result))
+* output // => ["Currently at index 0", "Currently at index 1", "Currently at index 2", "Currently at index 3", "Currently at index 4", [2, 4, 6, 8, 10]]
+* ```
+*
+* **Example** (Running effects without collecting results)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* // Apply effects but discard the results
+* const result = Effect.forEach(
+*   [1, 2, 3, 4, 5],
+*   (n, index) =>
+*     Effect.sync(() => { output.push(`Currently at index ${index}`) }).pipe(Effect.as(n * 2)),
+*   { discard: true }
+* )
+*
+* void output.push(await Effect.runPromise(result))
+* output // => ["Currently at index 0", "Currently at index 1", "Currently at index 2", "Currently at index 3", "Currently at index 4", undefined]
+* ```
+*
+* @see {@link all} for combining multiple effects into one.
+* @category collecting
+* @since 2.0.0
+*/
+const forEach$1 = forEach$2;
+/**
+* Executes a body effect repeatedly while a condition holds true.
+*
+* **Example** (Repeating an effectful loop)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* let counter = 0
+*
+* const program = Effect.whileLoop({
+*   while: () => counter < 5,
+*   body: () => Effect.sync(() => ++counter),
+*   step: (n) => void output.push(`Current count: ${n}`)
+* })
+*
+* await Effect.runPromise(program)
+* output // => ["Current count: 1", "Current count: 2", "Current count: 3", "Current count: 4", "Current count: 5"]
+* ```
+*
+* @category repetition
+* @since 2.0.0
+*/
+const whileLoop = whileLoop$1;
+/**
+* Creates an `Effect` from an asynchronous computation that may throw or
+* reject, mapping failures into the error channel.
+*
+* **When to use**
+*
+* Use when you need to perform asynchronous operations that might fail, such
+* as fetching data from an API, and want thrown exceptions or rejected promises
+* captured as Effect errors.
+*
+* **Details**
+*
+* The promise thunk is evaluated when the effect runs. If it returns a promise
+* that resolves, the resolved value becomes the success value. If the thunk
+* throws before returning a promise, or if the returned promise rejects, the
+* thrown or rejected value is mapped into the error channel.
+*
+* Passing the thunk directly maps failures to {@link Cause.UnknownError}.
+* Passing `{ try, catch }` uses `catch` to map failures to an error of type
+* `E`.
+*
+* The thunk receives an `AbortSignal` that is aborted if the effect is
+* interrupted. The underlying asynchronous operation only stops if it observes
+* that signal.
+*
+* **Gotchas**
+*
+* If `catch` throws while mapping the error, that thrown value is treated as a
+* defect. Return the error value you want in the error channel instead of
+* throwing it.
+*
+* **Example** (Wrapping a fetch request that may fail)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const getTodo = (id: number) =>
+*   Effect.tryPromise(() => Promise.resolve({ id, completed: false }))
+*
+* //      ┌─── Effect<{ id: number; completed: boolean }, UnknownError, never>
+* //      ▼
+* const program = getTodo(1)
+* await Effect.runPromise(program) // => { id: 1, completed: false }
+* ```
+*
+* **Example** (Mapping Promise rejections to a tagged error)
+*
+* ```ts import.meta.vitest
+* import { Data, Effect } from "effect"
+*
+* class TodoFetchError extends Data.TaggedError("TodoFetchError")<{ readonly cause: unknown }> {}
+*
+* const getTodo = (id: number) =>
+*   Effect.tryPromise({
+*     try: () => Promise.reject(`Todo ${id} is unavailable`),
+*     // remap the error
+*     catch: (cause) => new TodoFetchError({ cause })
+*   })
+*
+* //      ┌─── Effect<never, TodoFetchError, never>
+* //      ▼
+* const program = Effect.flip(getTodo(1))
+* const error = await Effect.runPromise(program)
+* error._tag // => "TodoFetchError"
+* ```
+*
+* @see {@link promise} if the effectful computation is asynchronous and does not throw errors.
+* @category constructors
+* @since 2.0.0
+*/
+const tryPromise = tryPromise$1;
+/**
+* Creates an `Effect` that always succeeds with a given value.
+*
+* **When to use**
+*
+* Use when an effect should complete successfully with a specific value without any errors
+* or external dependencies.
+*
+* **Example** (Creating a successful effect)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* // Creating an effect that represents a successful scenario
+* //
+* //      ┌─── Effect<number, never, never>
+* //      ▼
+* const success = Effect.succeed(42)
+* Effect.runSync(success) // => 42
+* ```
+*
+* @see {@link fail} to create an effect that represents a failure.
+* @category constructors
+* @since 2.0.0
+*/
+const succeed$2 = succeed$5;
+/**
+* Creates an `Effect` lazily, delaying construction until it is needed.
+*
+* **When to use**
+*
+* Use when you need to defer the evaluation of an effect until it is required.
+*
+* **Details**
+*
+* `suspend` takes a thunk that represents an effect and delays creating it
+* until the suspended effect is evaluated. This is useful for optimizing
+* expensive computations, managing circular dependencies such as recursive
+* functions, and helping TypeScript unify return types when branches construct
+* different effects. Any side effects or scoped captures inside the thunk are
+* re-executed on each invocation.
+*
+* **Example** (Lazily evaluating side effects)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* let i = 0
+*
+* const bad = Effect.succeed(i++)
+*
+* const good = Effect.suspend(() => Effect.succeed(i++))
+*
+* Effect.runSync(bad) // => 0
+* Effect.runSync(bad) // => 0
+*
+* Effect.runSync(good) // => 1
+* Effect.runSync(good) // => 2
+* ```
+*
+* **Example** (Suspending recursive Fibonacci evaluation)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const blowsUp = (n: number): Effect.Effect<number> =>
+*   n < 2
+*     ? Effect.succeed(1)
+*     : Effect.zipWith(blowsUp(n - 1), blowsUp(n - 2), (a, b) => a + b)
+*
+* // console.log(Effect.runSync(blowsUp(32)))
+* // crash: JavaScript heap out of memory
+*
+* const allGood = (n: number): Effect.Effect<number> =>
+*   n < 2
+*     ? Effect.succeed(1)
+*     : Effect.zipWith(
+*         Effect.suspend(() => allGood(n - 1)),
+*         Effect.suspend(() => allGood(n - 2)),
+*         (a, b) => a + b
+*       )
+*
+* Effect.runSync(allGood(16)) // => 1597
+* ```
+*
+* **Example** (Helping TypeScript infer recursive effect types)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* //   Without suspend, TypeScript may struggle with type inference.
+* //   Inferred type:
+* //     (a: number, b: number) =>
+* //       Effect<never, Error, never> | Effect<number, never, never>
+* const withoutSuspend = (a: number, b: number) =>
+*   b === 0
+*     ? Effect.fail(new Error("Cannot divide by zero"))
+*     : Effect.succeed(a / b)
+*
+* //   Using suspend to unify return types.
+* //   Inferred type:
+* //     (a: number, b: number) => Effect<number, Error, never>
+* const withSuspend = (a: number, b: number) =>
+*   Effect.suspend(() =>
+*     b === 0
+*       ? Effect.fail(new Error("Cannot divide by zero"))
+*       : Effect.succeed(a / b)
+*   )
+*
+* Effect.runSync(withSuspend(6, 2)) // => 3
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const suspend$2 = suspend$3;
+/**
+* Creates an `Effect` that represents a synchronous side-effectful computation.
+*
+* **When to use**
+*
+* Use when you need to wrap a synchronous side-effectful operation that is not
+* expected to throw.
+*
+* **Details**
+*
+* The provided function is evaluated lazily when the effect runs.
+*
+* **Gotchas**
+*
+* The function must not throw. If it throws, the thrown value is treated as a
+* defect, not as a typed failure. Use `try` when throwing is expected.
+*
+* **Example** (Capturing synchronous logging in an Effect)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* const log = (message: string) =>
+*   Effect.sync(() => {
+*     void output.push(message) // side effect
+*   })
+*
+* //      ┌─── Effect<void, never, never>
+* //      ▼
+* const program = log("Hello, World!")
+* Effect.runSync(program)
+* output // => ["Hello, World!"]
+* ```
+*
+* @see {@link try_ | try} for a version that can handle failures.
+* @category constructors
+* @since 2.0.0
+*/
+const sync = sync$1;
+const void_ = void_$2;
+/**
+* Creates an `Effect` from a callback-based asynchronous API.
+*
+* **When to use**
+*
+* Use when you need to integrate APIs that complete through callbacks instead
+* of returning a `Promise`.
+*
+* **Details**
+*
+* The registration function receives a `resume` callback and, when requested,
+* an `AbortSignal`. Call `resume` at most once with the effect that should
+* complete the fiber; later calls are ignored. Return an optional cleanup
+* effect from the registration function to run if the fiber is interrupted.
+*
+* **Example** (Integrating callback APIs)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* const fromCallback = (message: string) =>
+*   Effect.callback<void>((resume) => {
+*     queueMicrotask(() => {
+*       void output.push(message)
+*       resume(Effect.void)
+*     })
+*   })
+*
+* await Effect.runPromise(fromCallback("callback completed"))
+* output // => ["callback completed"]
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const callback$1 = callback$2;
+/**
+* Provides a way to write effectful code using generator functions, simplifying
+* control flow and error handling.
+*
+* **When to use**
+*
+* Use when you want to write effectful code that looks and behaves like
+* synchronous code, while still handling asynchronous tasks, errors, and complex
+* control flow such as loops and conditions.
+*
+* Generator functions work similarly to `async/await` but keep errors,
+* requirements, and interruption in the Effect type. You can `yield*` values
+* from effects and return the final result at the end.
+*
+* **Example** (Sequencing effects with generators)
+*
+* ```ts import.meta.vitest
+* import { Data, Effect } from "effect"
+*
+* class DiscountRateError extends Data.TaggedError("DiscountRateError")<{}> {}
+*
+* const addServiceCharge = (amount: number) => amount + 1
+*
+* const applyDiscount = (
+*   total: number,
+*   discountRate: number
+* ): Effect.Effect<number, DiscountRateError> =>
+*   discountRate === 0
+*     ? Effect.fail(new DiscountRateError())
+*     : Effect.succeed(total - (total * discountRate) / 100)
+*
+* const fetchTransactionAmount = Effect.promise(() => Promise.resolve(100))
+*
+* const fetchDiscountRate = Effect.promise(() => Promise.resolve(5))
+*
+* export const program = Effect.gen(function*() {
+*   const transactionAmount = yield* fetchTransactionAmount
+*   const discountRate = yield* fetchDiscountRate
+*   const discountedAmount = yield* applyDiscount(
+*     transactionAmount,
+*     discountRate
+*   )
+*   const finalAmount = addServiceCharge(discountedAmount)
+*   return `Final amount to charge: ${finalAmount}`
+* })
+*
+* await Effect.runPromise(program) // => "Final amount to charge: 96"
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const gen = gen$1;
+/**
+* Creates an `Effect` that represents a recoverable error.
+*
+* **When to use**
+*
+* Use to explicitly signal a recoverable error in an `Effect`.
+*
+* **Details**
+*
+* The error keeps propagating unless it is handled. You can handle tagged
+* errors with functions like {@link catchTag} or {@link catchTags}.
+*
+* **Example** (Creating a failed effect)
+*
+* ```ts import.meta.vitest
+* import { Data, Effect } from "effect"
+*
+* class OperationFailedError extends Data.TaggedError("OperationFailedError")<{}> {}
+*
+* //      ┌─── Effect<never, OperationFailedError, never>
+* //      ▼
+* const failure = Effect.fail(
+*   new OperationFailedError()
+* )
+* Effect.runSync(Effect.flip(failure))._tag // => "OperationFailedError"
+* ```
+*
+* @see {@link succeed} to create an effect that represents a successful value.
+* @category constructors
+* @since 2.0.0
+*/
+const fail$1 = fail$4;
+/**
+* Creates an `Effect` that represents a failure with a specific `Cause`.
+*
+* **When to use**
+*
+* Use when you already have a full `Cause` and need to preserve defects,
+* interruptions, annotations, or combined failures in the effect's failure
+* channel.
+*
+* **Details**
+*
+* This function allows you to create effects that fail with complex error
+* structures, including multiple errors, defects, interruptions, and more.
+*
+* **Example** (Failing with a full Cause)
+*
+* ```ts import.meta.vitest
+* import { Cause, Effect } from "effect"
+*
+* const program = Effect.failCause(
+*   Cause.fail("Network error")
+* )
+*
+* Effect.runSync(Effect.flip(program)) // => "Network error"
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const failCause$1 = failCause$3;
+/**
+* Creates an `Effect` that represents a failure with a `Cause` computed lazily.
+*
+* **When to use**
+*
+* Use to defer computing a full `Cause` until the effect is run.
+*
+* **Details**
+*
+* The cause-producing function is evaluated each time the effect is executed.
+*
+* **Example** (Lazily creating a Cause)
+*
+* ```ts import.meta.vitest
+* import { Cause, Effect } from "effect"
+*
+* const program = Effect.failCauseSync(() =>
+*   Cause.fail("Error computed at runtime")
+* )
+*
+* Effect.runSync(Effect.flip(program)) // => "Error computed at runtime"
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const failCauseSync = failCauseSync$1;
+/**
+* Creates an effect that terminates a fiber with a specified error.
+*
+* **When to use**
+*
+* Use when you need an `Effect` to report an unrecoverable defect instead of a
+* typed error.
+*
+* **Details**
+*
+* The `die` function is used to signal a defect, which represents a critical
+* and unexpected error in the code. When invoked, it produces an effect that
+* does not handle the error and instead terminates the fiber.
+*
+* The error channel of the resulting effect is of type `never`, indicating that
+* it cannot recover from this failure.
+*
+* **Example** (Failing on division by zero)
+*
+* ```ts import.meta.vitest
+* import { Effect, Exit } from "effect"
+*
+* const defect = new Error("Cannot divide by zero")
+* const divide = (a: number, b: number) =>
+*   b === 0
+*     ? Effect.die(defect)
+*     : Effect.succeed(a / b)
+*
+* //      ┌─── Effect<number, never, never>
+* //      ▼
+* const program = divide(1, 0)
+*
+* Effect.runSyncExit(program) // => Exit.die(defect)
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const die = die$2;
+const try_ = try_$1;
+/**
+* Provides access to the current fiber within an effect computation.
+*
+* **Example** (Reading the current fiber)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const program = Effect.withFiber((fiber) => Effect.succeed(typeof fiber.id))
+*
+* Effect.runSync(program) // => "number"
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const withFiber = withFiber$1;
+/**
+* Chains effects to produce new `Effect` instances, useful for combining
+* operations that depend on previous results.
+*
+* **When to use**
+*
+* Use when you need to chain multiple effects, ensuring that each
+* step produces a new `Effect` while flattening any nested effects that may
+* occur.
+*
+* **Details**
+*
+* `flatMap` lets you sequence effects so that the result of one effect can be
+* used in the next step. It is similar to `flatMap` used with arrays but works
+* specifically with `Effect` instances, allowing you to avoid deeply nested
+* effect structures.
+*
+* Since effects are immutable, `flatMap` always returns a new effect instead of
+* changing the original one.
+*
+* **Example** (Choosing flatMap syntax variants)
+*
+* ```ts import.meta.vitest
+* import { Effect, pipe } from "effect"
+* const output: Array<unknown> = []
+*
+* const myEffect = Effect.succeed(1)
+* const transformation = (n: number) => Effect.succeed(n + 1)
+*
+* const flatMappedWithPipe = pipe(myEffect, Effect.flatMap(transformation))
+* const flatMappedWithDataFirst = Effect.flatMap(myEffect, transformation)
+* const flatMappedWithMethod = myEffect.pipe(Effect.flatMap(transformation))
+*
+* void output.push(Effect.runSync(Effect.all([
+*   flatMappedWithPipe,
+*   flatMappedWithDataFirst,
+*   flatMappedWithMethod
+* ])))
+* output // => [[2, 2, 2]]
+* ```
+*
+* **Example** (Sequencing dependent effects)
+*
+* ```ts import.meta.vitest
+* import { Data, Effect, pipe } from "effect"
+*
+* class DiscountRateError extends Data.TaggedError("DiscountRateError")<{}> {}
+*
+* // Function to apply a discount safely to a transaction amount
+* const applyDiscount = (
+*   total: number,
+*   discountRate: number
+* ): Effect.Effect<number, DiscountRateError> =>
+*   discountRate === 0
+*     ? Effect.fail(new DiscountRateError())
+*     : Effect.succeed(total - (total * discountRate) / 100)
+*
+* // Simulated asynchronous task to fetch a transaction amount from database
+* const fetchTransactionAmount = Effect.promise(() => Promise.resolve(100))
+*
+* // Chaining the fetch and discount application using `flatMap`
+* const finalAmount = pipe(
+*   fetchTransactionAmount,
+*   Effect.flatMap((amount) => applyDiscount(amount, 5))
+* )
+*
+* await Effect.runPromise(finalAmount) // => 95
+* ```
+*
+* @see {@link tap} for a version that ignores the result of the effect.
+* @category sequencing
+* @since 2.0.0
+*/
+const flatMap$1 = flatMap$2;
+/**
+* Runs this effect and then runs another effect, optionally using the first
+* effect's success value to choose the next effect.
+*
+* **When to use**
+*
+* Use when you need one effect to run after another and the second effect may
+* depend on the first effect's success value.
+*
+* **Details**
+*
+* When the second argument is an `Effect`, the first success value is discarded
+* and the returned effect produces the second effect's value. When the second
+* argument is a function, it receives the first success value and must return
+* the next `Effect`.
+*
+* Failures or requirements from either effect are preserved in the returned
+* effect.
+*
+* **Example** (Choosing andThen syntax variants)
+*
+* ```ts import.meta.vitest
+* import { Effect, pipe } from "effect"
+* const output: Array<unknown> = []
+*
+* const myEffect = Effect.succeed(1)
+* const anotherEffect = Effect.succeed("done")
+*
+* const transformedWithPipe = pipe(myEffect, Effect.andThen(anotherEffect))
+* const transformedWithDataFirst = Effect.andThen(myEffect, anotherEffect)
+* const transformedWithMethod = myEffect.pipe(Effect.andThen(anotherEffect))
+*
+* void output.push(Effect.runSync(Effect.all([
+*   transformedWithPipe,
+*   transformedWithDataFirst,
+*   transformedWithMethod
+* ])))
+* output // => [['done', 'done', 'done']]
+* ```
+*
+* **Example** (Sequencing a discount calculation after fetching a total)
+*
+* ```ts import.meta.vitest
+* import { Data, Effect, pipe } from "effect"
+*
+* class DiscountRateError extends Data.TaggedError("DiscountRateError")<{}> {}
+*
+* // Function to apply a discount safely to a transaction amount
+* const applyDiscount = (
+*   total: number,
+*   discountRate: number
+* ): Effect.Effect<number, DiscountRateError> =>
+*   discountRate === 0
+*     ? Effect.fail(new DiscountRateError())
+*     : Effect.succeed(total - (total * discountRate) / 100)
+*
+* // Simulated asynchronous task to fetch a transaction amount from database
+* const fetchTransactionAmount = Effect.promise(() => Promise.resolve(100))
+*
+* // Using Effect.map and Effect.flatMap
+* const result1 = pipe(
+*   fetchTransactionAmount,
+*   Effect.map((amount) => amount * 2),
+*   Effect.flatMap((amount) => applyDiscount(amount, 5))
+* )
+*
+* await Effect.runPromise(result1) // => 190
+*
+* // Using Effect.andThen
+* const result2 = pipe(
+*   fetchTransactionAmount,
+*   Effect.andThen((amount) => Effect.succeed(amount * 2)),
+*   Effect.andThen((amount) => applyDiscount(amount, 5))
+* )
+*
+* await Effect.runPromise(result2) // => 190
+* ```
+*
+* @category sequencing
+* @since 2.0.0
+*/
+const andThen = andThen$1;
+/**
+* Runs a side effect with the result of an effect without changing the original
+* value.
+*
+* **When to use**
+*
+* Use when you need to run an effectful observation, such as logging or
+* tracking, while passing the original success value to the next step.
+*
+* **Details**
+*
+* `tap` works similarly to `flatMap`, but it ignores the result of the function
+* passed to it. The value from the previous effect remains available for the
+* next part of the chain. Note that if the side effect fails, the entire chain
+* will fail too.
+*
+* **Example** (Logging a step in a pipeline)
+*
+* ```ts import.meta.vitest
+* import { Data, Effect, pipe } from "effect"
+* const output: Array<unknown> = []
+*
+* class DiscountRateError extends Data.TaggedError("DiscountRateError")<{}> {}
+*
+* // Function to apply a discount safely to a transaction amount
+* const applyDiscount = (
+*   total: number,
+*   discountRate: number
+* ): Effect.Effect<number, DiscountRateError> =>
+*   discountRate === 0
+*     ? Effect.fail(new DiscountRateError())
+*     : Effect.succeed(total - (total * discountRate) / 100)
+*
+* // Simulated asynchronous task to fetch a transaction amount from database
+* const fetchTransactionAmount = Effect.promise(() => Promise.resolve(100))
+*
+* const finalAmount = pipe(
+*   fetchTransactionAmount,
+*   // Log the fetched transaction amount
+*   Effect.tap((amount) => Effect.sync(() => { output.push(`Apply a discount to: ${amount}`) })),
+*   // `amount` is still available!
+*   Effect.flatMap((amount) => applyDiscount(amount, 5))
+* )
+*
+* void output.push(await Effect.runPromise(finalAmount))
+* output // => ["Apply a discount to: 100", 95]
+* ```
+*
+* @category sequencing
+* @since 2.0.0
+*/
+const tap = tap$1;
+/**
+* Converts both success and failure of an `Effect` into a `Result` type.
+*
+* **When to use**
+*
+* Use when you want an `Effect`'s typed failures to be handled as `Result`
+* data while preserving the original error value.
+*
+* **Details**
+*
+* This function converts an effect that may fail into an effect that always
+* succeeds, wrapping the outcome in a `Result` type. The result will be
+* `Result.Failure` if the effect fails, containing the recoverable error, or
+* `Result.Success` if it succeeds, containing the result.
+*
+* Using this function, you can handle recoverable errors explicitly without
+* causing the effect to fail. This is particularly useful in scenarios where
+* you want to chain effects and manage both success and failure in the same
+* logical flow.
+*
+* The resulting effect cannot fail directly because all recoverable failures
+* are represented inside the `Result` type.
+*
+* **Gotchas**
+*
+* `result` only captures typed, recoverable failures. Defects and
+* interruptions are not captured inside the `Result` and still fail the
+* effect.
+*
+* **Example** (Capturing success or failure as Result)
+*
+* ```ts import.meta.vitest
+* import { Effect, Result } from "effect"
+*
+* const success = Effect.succeed(42)
+* const failure = Effect.fail("Something went wrong")
+*
+* const program1 = Effect.result(success)
+* const program2 = Effect.result(failure)
+*
+* Effect.runSync(program1) // => Result.succeed(42)
+*
+* Effect.runSync(program2) // => Result.fail("Something went wrong")
+* ```
+*
+* @see {@link option} for a version that uses `Option` instead.
+* @see {@link exit} for a version that encapsulates both recoverable errors and defects in an `Exit`.
+*
+* @category error handling
+* @since 4.0.0
+*/
+const result = result$1;
+/**
+* Transforms an effect to encapsulate both failure and success using the `Exit`
+* data type.
+*
+* **When to use**
+*
+* Use when you need to inspect the full outcome, including typed failures, defects,
+* and interruptions.
+*
+* **Details**
+*
+* `exit` wraps an effect's success or failure inside an `Exit` type, allowing
+* you to handle both cases explicitly.
+*
+* The resulting effect cannot fail because the failure is encapsulated within
+* the `Exit.Failure` type. The error type is set to `never`, indicating that
+* the effect is structured to never fail directly.
+*
+* **Example** (Capturing completion as Exit)
+*
+* ```ts import.meta.vitest
+* import { Effect, Exit } from "effect"
+*
+* const success = Effect.succeed(42)
+* const failure = Effect.fail("Something went wrong")
+*
+* const program1 = Effect.exit(success)
+* const program2 = Effect.exit(failure)
+*
+* Effect.runSync(program1) // => Exit.succeed(42)
+*
+* Effect.runSync(program2) // => Exit.fail("Something went wrong")
+* ```
+*
+* @see {@link option} for a version that uses `Option` instead.
+* @see {@link result} for a version that uses `Result` instead.
+*
+* @category error handling
+* @since 2.0.0
+*/
+const exit = exit$1;
+/**
+* Transforms the value inside an effect by applying a function to it.
+*
+* **When to use**
+*
+* Use to transform an effect's success value with a function that returns a
+* plain value, producing a new effect without changing the original effect's
+* typed error or context requirements.
+*
+* **Details**
+*
+* `map` takes a function and applies it to the value contained within an
+* effect, creating a new effect with the transformed value.
+*
+* It's important to note that effects are immutable, meaning that the original
+* effect is not modified. Instead, a new effect is returned with the updated
+* value.
+*
+* **Example** (Choosing map syntax variants)
+*
+* ```ts import.meta.vitest
+* import { Effect, pipe } from "effect"
+* const output: Array<unknown> = []
+*
+* const myEffect = Effect.succeed(1)
+* const transformation = (n: number) => n + 1
+*
+* const mappedWithPipe = pipe(myEffect, Effect.map(transformation))
+* const mappedWithDataFirst = Effect.map(myEffect, transformation)
+* const mappedWithMethod = myEffect.pipe(Effect.map(transformation))
+*
+* void output.push(Effect.runSync(Effect.all([
+*   mappedWithPipe,
+*   mappedWithDataFirst,
+*   mappedWithMethod
+* ])))
+* output // => [[2, 2, 2]]
+* ```
+*
+* **Example** (Adding a service charge)
+*
+* ```ts import.meta.vitest
+* import { Effect, pipe } from "effect"
+*
+* const addServiceCharge = (amount: number) => amount + 1
+*
+* const fetchTransactionAmount = Effect.promise(() => Promise.resolve(100))
+*
+* const finalAmount = pipe(
+*   fetchTransactionAmount,
+*   Effect.map(addServiceCharge)
+* )
+*
+* await Effect.runPromise(finalAmount) // => 101
+* ```
+*
+* @see {@link mapError} for a version that operates on the error channel.
+* @see {@link mapBoth} for a version that operates on both channels.
+* @see {@link flatMap} or {@link andThen} for a version that can return a new effect.
+* @category mapping
+* @since 2.0.0
+*/
+const map$5 = map$7;
+/**
+* Replaces the value inside an effect with a constant value.
+*
+* **When to use**
+*
+* Use to replace a successful value with a constant while preserving failures
+* and requirements.
+*
+* **Details**
+*
+* `as` allows you to ignore the original value inside an effect and
+* replace it with a new constant value.
+*
+* **Example** (Replacing a success value)
+*
+* ```ts import.meta.vitest
+* import { Effect, pipe } from "effect"
+*
+* // Replaces the value 5 with the constant "new value"
+* const program = pipe(Effect.succeed(5), Effect.as("new value"))
+*
+* Effect.runSync(program) // => "new value"
+* ```
+*
+* @see {@link map} for deriving the replacement value from the success value
+* @see {@link asVoid} for replacing the success value with `void`
+*
+* @category mapping
+* @since 2.0.0
+*/
+const as = as$1;
+const catch_ = catch_$1;
+/**
+* Catches and handles specific errors by their `_tag` field, which is used as a
+* discriminator.
+*
+* **When to use**
+*
+* Use when you need to recover from one specific tagged error in an effect
+* error channel.
+*
+* **Details**
+*
+* The error type must have a readonly `_tag` field. `catchTag` matches that
+* field and only handles errors with the requested tag.
+*
+* **Example** (Handling a tagged error)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* class NetworkError {
+*   readonly _tag = "NetworkError"
+*   constructor(readonly message: string) {}
+* }
+*
+* class ValidationError {
+*   readonly _tag = "ValidationError"
+*   constructor(readonly message: string) {}
+* }
+*
+* const task: Effect.Effect<string, NetworkError | ValidationError> =
+*   Effect.fail(new NetworkError("offline"))
+*
+* const program = Effect.catchTag(
+*   task,
+*   "NetworkError",
+*   (error) => Effect.succeed(`Recovered from network error: ${error.message}`)
+* )
+*
+* Effect.runSync(program) // => "Recovered from network error: offline"
+* ```
+*
+* @see {@link catchTags} for handling multiple tagged errors in one call
+* @see {@link catchIf} for recovering from errors that match a predicate
+*
+* @category error handling
+* @since 2.0.0
+*/
+const catchTag = catchTag$1;
+/**
+* Handles multiple errors in a single block of code using their `_tag` field.
+*
+* **When to use**
+*
+* Use when one recovery step should handle several tagged error types by
+* matching their readonly `_tag` fields.
+*
+* **Details**
+*
+* Pass a handler table whose keys are tags, plus an optional fallback for
+* unmatched errors.
+*
+* The error type must have a readonly `_tag` field to use `catchTags`. This
+* field is used to identify and match errors.
+*
+* **Example** (Handling multiple tagged errors)
+*
+* ```ts import.meta.vitest
+* import { Data, Effect } from "effect"
+*
+* // Define tagged error types
+* class ValidationError extends Data.TaggedError("ValidationError")<{
+*   message: string
+* }> {}
+*
+* class NetworkError extends Data.TaggedError("NetworkError")<{
+*   statusCode: number
+* }> {}
+*
+* // An effect that might fail with multiple error types
+* const program: Effect.Effect<string, ValidationError | NetworkError> =
+*   Effect.fail(new NetworkError({ statusCode: 503 }))
+*
+* // Handle multiple error types at once
+* const handled = Effect.catchTags(program, {
+*   ValidationError: (error) =>
+*     Effect.succeed(`Validation failed: ${error.message}`),
+*   NetworkError: (error) => Effect.succeed(`Network error: ${error.statusCode}`)
+* })
+*
+* Effect.runSync(handled) // => "Network error: 503"
+* ```
+*
+* @category error handling
+* @since 2.0.0
+*/
+const catchTags = catchTags$1;
+/**
+* Handles both recoverable and unrecoverable errors by providing a recovery
+* effect.
+*
+* **When to use**
+*
+* Use when you need to recover from an `Effect` by inspecting the full `Cause`,
+* including recoverable failures, defects, and interruptions, instead of only
+* the typed error value.
+*
+* **Details**
+*
+* When to Recover from Defects:
+*
+* Defects are unexpected errors that typically shouldn't be recovered from, as
+* they often indicate serious issues. However, in some cases, such as
+* dynamically loaded plugins, controlled recovery might be needed.
+*
+* **Example** (Recovering from full failure causes)
+*
+* ```ts import.meta.vitest
+* import { Cause, Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* // An effect that might fail in different ways
+* const program = Effect.die("Something went wrong")
+*
+* // Recover from any cause (including defects)
+* const recovered = Effect.catchCause(program, (cause) => {
+*   if (Cause.hasDies(cause)) {
+*     return Effect.sync(() => { output.push("Caught defect") }).pipe(
+*       Effect.as("Recovered from defect")
+*     )
+*   }
+*   return Effect.succeed("Unknown error")
+* })
+*
+* void output.push(Effect.runSync(recovered))
+* output // => ["Caught defect", "Recovered from defect"]
+* ```
+*
+* @category error handling
+* @since 4.0.0
+*/
+const catchCause = catchCause$1;
+/**
+* Recovers from specific errors using a `Filter`.
+*
+* **When to use**
+*
+* Use to recover from typed `Effect` errors with a reusable `Filter` when
+* matching can also narrow or transform the error before choosing the recovery
+* effect.
+*
+* **Details**
+*
+* The filter runs on typed failures extracted from the `Cause`. Successful
+* filter results are passed to `f`; failed filter results are passed to
+* `orElse` when provided. Without `orElse`, the original failure cause is
+* preserved.
+*
+* @see {@link catchIf} for predicate-based recovery from typed errors
+* @see {@link catchTag} for recovering from a single tagged error
+* @see {@link catchTags} for recovering from several tagged errors
+* @see {@link catchCauseFilter} for filtering full causes instead of typed errors
+*
+* @category error handling
+* @since 4.0.0
+*/
+const catchFilter = catchFilter$1;
+/**
+* Transforms the failure value of an effect without changing its success value.
+*
+* **When to use**
+*
+* Use to translate an `Effect`'s typed failures while leaving successful values
+* unchanged.
+*
+* **Details**
+*
+* Only the failure channel is transformed. The success channel and requirements
+* are preserved.
+*
+* **Example** (Transforming the error channel)
+*
+* ```ts import.meta.vitest
+* import { Data, Effect } from "effect"
+*
+* class TaskError extends Data.TaggedError("TaskError")<{ readonly message: string }> {}
+*
+* //      ┌─── Effect<number, string, never>
+* //      ▼
+* const simulatedTask = Effect.fail("Oh no!").pipe(Effect.as(1))
+*
+* //      ┌─── Effect<number, TaskError, never>
+* //      ▼
+* const mapped = Effect.mapError(
+*   simulatedTask,
+*   (message) => new TaskError({ message })
+* )
+* Effect.runSync(Effect.flip(mapped)).message // => "Oh no!"
+* ```
+*
+* @see {@link map} for a version that operates on the success channel.
+* @see {@link mapBoth} for a version that operates on both channels.
+*
+* @category error handling
+* @since 2.0.0
+*/
+const mapError = mapError$1;
+/**
+* Converts typed failures from the error channel into defects, removing the
+* error type from the returned effect.
+*
+* **When to use**
+*
+* Use when you need to turn an `Effect` typed failure that represents an
+* unrecoverable bug or invalid state into a defect.
+*
+* **Example** (Converting typed failures into defects)
+*
+* ```ts import.meta.vitest
+* import { Data, Effect, Exit } from "effect"
+*
+* class DivideByZeroError extends Data.TaggedError("DivideByZeroError")<{}> {}
+*
+* const divide = (a: number, b: number) =>
+*   b === 0
+*     ? Effect.fail(new DivideByZeroError())
+*     : Effect.succeed(a / b)
+*
+* //      ┌─── Effect<number, never, never>
+* //      ▼
+* const program = Effect.orDie(divide(1, 0))
+*
+* Effect.runSyncExit(program) // => Exit.die(new DivideByZeroError())
+* ```
+*
+* @category error handling
+* @since 2.0.0
+*/
+const orDie = orDie$1;
+/**
+* Discards both the success and failure values of an effect.
+*
+* **When to use**
+*
+* Use when an effect should run for its side effects while both success and
+* failure values are discarded.
+*
+* **Details**
+*
+* Use the `log` option to emit the full {@link Cause} when the effect fails,
+* and `message` to prepend a custom log message.
+*
+* **Example** (Discarding success and failure values)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* //      ┌─── Effect<number, string, never>
+* //      ▼
+* const task = Effect.fail("Uh oh!").pipe(Effect.as(5))
+*
+* //      ┌─── Effect<void, never, never>
+* //      ▼
+* const program = task.pipe(Effect.ignore)
+* Effect.runSync(program) // => undefined
+* ```
+*
+* **Example** (Logging failures while ignoring results)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const task = Effect.fail("Uh oh!")
+*
+* const program = task.pipe(Effect.ignore)
+* Effect.runSync(program) // => undefined
+* ```
+*
+* @category error handling
+* @since 2.0.0
+*/
+const ignore = ignore$1;
+/**
+* Returns an effect that suspends the current fiber for the specified duration
+* without blocking a JavaScript thread.
+*
+* **Example** (Pausing without blocking)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* const program = Effect.gen(function*() {
+*   yield* Effect.sync(() => { output.push("Start") })
+*   yield* Effect.sleep(0)
+*   yield* Effect.sync(() => { output.push("End") })
+* })
+*
+* await Effect.runPromise(program)
+* output // => ["Start", "End"]
+* ```
+*
+* @category delays & timeouts
+* @since 2.0.0
+*/
+const sleep = sleep$1;
+/**
+* Races two effects and returns the result of the first one to complete, whether
+* it succeeds or fails.
+*
+* **When to use**
+*
+* Use when any completion, including failure, should decide the race and
+* interrupt the losing effect.
+*
+* **Details**
+*
+* The losing effect is interrupted, and `onWinner` can observe the winning fiber.
+*
+* **Example** (Observing the winning fiber)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* const fastFail = Effect.fail("fast-fail")
+* const slowSuccess = Effect.never
+*
+* const program = Effect.gen(function*() {
+*   const message = yield* Effect.match(Effect.raceFirst(fastFail, slowSuccess), {
+*     onFailure: (error) => `failed: ${error}`,
+*     onSuccess: (value) => `succeeded: ${value}`
+*   })
+*   yield* Effect.sync(() => { output.push(message) })
+* })
+*
+* await Effect.runPromise(program)
+* output // => ["failed: fast-fail"]
+* ```
+*
+* @category racing
+* @since 2.0.0
+*/
+const raceFirst = raceFirst$1;
+/**
+* Handles both success and failure cases of an effect without performing side
+* effects.
+*
+* **When to use**
+*
+* Use when you need to fold an `Effect` into a value by handling success and
+* failure differently without triggering side effects.
+*
+* **Details**
+*
+* `match` lets you define custom handlers for both success and failure
+* scenarios. You provide separate functions to handle each case, allowing you
+* to process the result if the effect succeeds, or handle the error if the
+* effect fails.
+*
+* **Example** (Matching success and failure values)
+*
+* ```ts import.meta.vitest
+* import { Data, Effect } from "effect"
+*
+* class ExampleError extends Data.TaggedError("ExampleError")<{ readonly message: string }> {}
+*
+* const success: Effect.Effect<number, ExampleError> = Effect.succeed(42)
+*
+* const program1 = Effect.match(success, {
+*   onFailure: (error) => `failure: ${error.message}`,
+*   onSuccess: (value) => `success: ${value}`
+* })
+*
+* // Run and log the result of the successful effect
+* Effect.runSync(program1) // => "success: 42"
+*
+* const failure: Effect.Effect<number, ExampleError> = Effect.fail(
+*   new ExampleError({ message: "Uh oh!" })
+* )
+*
+* const program2 = Effect.match(failure, {
+*   onFailure: (error) => `failure: ${error.message}`,
+*   onSuccess: (value) => `success: ${value}`
+* })
+*
+* // Run and log the result of the failed effect
+* Effect.runSync(program2) // => "failure: Uh oh!"
+* ```
+*
+* @see {@link matchEffect} if you need to perform side effects in the handlers.
+* @category pattern matching
+* @since 2.0.0
+*/
+const match = match$1;
+/**
+* Handles both success and failure by running effectful handlers.
+*
+* **When to use**
+*
+* Use when you need to handle an `Effect`'s failure or success with handlers
+* that return effects.
+*
+* **Details**
+*
+* Use `matchEffect` when either branch needs to return an `Effect`, such as
+* performing logging, recovery, notification, or other effectful work. The
+* returned effect succeeds or fails according to the handler that is run.
+*
+* **Example** (Matching success and failure with effectful handlers)
+*
+* ```ts import.meta.vitest
+* import { Data, Effect } from "effect"
+*
+* class ExampleError extends Data.TaggedError("ExampleError")<{ readonly message: string }> {}
+*
+* const success: Effect.Effect<number, ExampleError> = Effect.succeed(42)
+* const failure: Effect.Effect<number, ExampleError> = Effect.fail(
+*   new ExampleError({ message: "Uh oh!" })
+* )
+*
+* const program1 = Effect.matchEffect(success, {
+*   onFailure: (error) =>
+*     Effect.succeed(`failure: ${error.message}`),
+*   onSuccess: (value) =>
+*     Effect.succeed(`success: ${value}`)
+* })
+*
+* Effect.runSync(program1) // => "success: 42"
+*
+* const program2 = Effect.matchEffect(failure, {
+*   onFailure: (error) =>
+*     Effect.succeed(`failure: ${error.message}`),
+*   onSuccess: (value) =>
+*     Effect.succeed(`success: ${value}`)
+* })
+*
+* Effect.runSync(program2) // => "failure: Uh oh!"
+* ```
+*
+* @see {@link match} if you don't need side effects and only want to handle the
+* result or failure.
+* @category pattern matching
+* @since 2.0.0
+*/
+const matchEffect = matchEffect$2;
+/**
+* Provides dependencies to an effect using layers or a context. Use `options.local`
+* to build the layer every time; by default, layers are shared between provide
+* calls.
+*
+* **Example** (Providing dependencies with a layer)
+*
+* ```ts import.meta.vitest
+* import { Context, Effect, Layer } from "effect"
+*
+* interface Database {
+*   readonly query: (sql: string) => Effect.Effect<string>
+* }
+*
+* const Database = Context.Service<Database>("Database")
+*
+* const DatabaseLayer = Layer.succeed(Database)({
+*   query: Effect.fn("Database.query")((sql: string) => Effect.succeed(`Result for: ${sql}`))
+* })
+*
+* const program = Effect.gen(function*() {
+*   const db = yield* Database
+*   return yield* db.query("SELECT * FROM users")
+* })
+*
+* const provided = Effect.provide(program, DatabaseLayer)
+*
+* await Effect.runPromise(provided) // => "Result for: SELECT * FROM users"
+* ```
+*
+* @category providing services
+* @since 2.0.0
+*/
+const provide = provide$1;
+/**
+* Provides a context to an effect, fulfilling its service requirements.
+*
+* **Details**
+*
+* This function provides multiple services at once by supplying a context
+* that contains all the required services. It removes the provided services
+* from the effect's requirements, making them available to the effect.
+*
+* **Example** (Providing a complete context)
+*
+* ```ts import.meta.vitest
+* import { Context, Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* // Define service keys
+* const Logger = Context.Service<{
+*   log: (msg: string) => void
+* }>("Logger")
+* const Database = Context.Service<{
+*   query: (sql: string) => string
+* }>("Database")
+*
+* // Create a context with multiple services
+* const context = Context.make(Logger, { log: (message) => { output.push(message) } })
+*   .pipe(Context.add(Database, { query: () => "result" }))
+*
+* // An effect that requires both services
+* const program = Effect.gen(function*() {
+*   const logger = yield* Effect.service(Logger)
+*   const db = yield* Effect.service(Database)
+*   logger.log("Querying database")
+*   return db.query("SELECT * FROM users")
+* })
+*
+* const provided = Effect.provideContext(program, context)
+* void output.push(Effect.runSync(provided))
+* output // => ["Querying database", "result"]
+* ```
+*
+* @category providing services
+* @since 4.0.0
+*/
+const provideContext = provideContext$1;
+/**
+* Optionally accesses a service from the environment.
+*
+* **When to use**
+*
+* Use to read an optional dependency from the current context without making
+* that dependency part of the effect's required environment.
+*
+* **Details**
+*
+* This function attempts to access a service from the environment. If the
+* service is available, it returns `Some(service)`. If the service is not
+* available, it returns `None`. Unlike `service`, this function does not
+* require the service to be present in the environment.
+*
+* **Example** (Accessing an optional service)
+*
+* ```ts import.meta.vitest
+* import { Context, Effect, Option } from "effect"
+* const output: Array<unknown> = []
+*
+* // Define a service key
+* const Logger = Context.Service<{
+*   log: (msg: string) => void
+* }>("Logger")
+*
+* // Use serviceOption to optionally access the logger
+* const program = Effect.gen(function*() {
+*   const maybeLogger = yield* Effect.serviceOption(Logger)
+*
+*   if (Option.isSome(maybeLogger)) {
+*     maybeLogger.value.log("Service is available")
+*   } else {
+*     void output.push("Service not available")
+*   }
+* })
+*
+* Effect.runSync(program)
+* output // => ["Service not available"]
+* ```
+*
+* @category accessors
+* @since 2.0.0
+*/
+const serviceOption = serviceOption$1;
+/**
+* Provides one concrete service implementation to an effect.
+*
+* **When to use**
+*
+* Use to satisfy one service requirement with an already-built implementation.
+*
+* **Details**
+*
+* The service requirement identified by the `Context.Key` is removed from the
+* effect requirements after the implementation is provided.
+*
+* **Example** (Providing a service value)
+*
+* ```ts import.meta.vitest
+* import { Context, Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* // Define a service for configuration
+* const Config = Context.Service<{
+*   apiUrl: string
+*   timeout: number
+* }>("Config")
+*
+* const fetchData = Effect.gen(function*() {
+*   const config = yield* Effect.service(Config)
+*   yield* Effect.sync(() => { output.push(`Fetching from: ${config.apiUrl}`) })
+*   yield* Effect.sync(() => { output.push(`Timeout: ${config.timeout}ms`) })
+*   return "data"
+* })
+*
+* // Provide the service implementation
+* const program = Effect.provideService(fetchData, Config, {
+*   apiUrl: "https://api.example.com",
+*   timeout: 5000
+* })
+*
+* void output.push(Effect.runSync(program))
+* output // => ["Fetching from: https://api.example.com", "Timeout: 5000ms", "data"]
+* ```
+*
+* @see {@link provide} for providing multiple layers to an effect.
+* @see {@link provideServiceEffect} for acquiring the service implementation effectfully.
+* @see {@link provideContext} for providing a complete context.
+* @category providing services
+* @since 2.0.0
+*/
+const provideService = provideService$1;
+/**
+* Returns the current scope for resource management.
+*
+* **Example** (Accessing the current scope)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* const program = Effect.gen(function*() {
+*   const currentScope = yield* Effect.scope
+*   yield* Effect.sync(() => { output.push("Got scope for resource management") })
+*
+*   // Use the scope to manually manage resources if needed
+*   const resource = yield* Effect.acquireRelease(
+*     Effect.sync(() => { output.push("Acquiring resource") }).pipe(Effect.as("resource")),
+*     () => Effect.sync(() => { output.push("Releasing resource") })
+*   )
+*
+*   return resource
+* })
+*
+* void output.push(Effect.runSync(Effect.scoped(program)))
+* output // => ["Got scope for resource management", "Acquiring resource", "Releasing resource", "resource"]
+* ```
+*
+* @category resource management
+* @since 2.0.0
+*/
+const scope = scope$1;
+/**
+* Runs an effect with a scope that closes when the effect completes.
+*
+* **When to use**
+*
+* Use to acquire scoped resources for the duration of a single workflow.
+*
+* **Details**
+*
+* Finalizers for resources acquired inside the workflow run as soon as the
+* workflow completes, whether by success, failure, or interruption.
+*
+* **Example** (Running a scoped acquisition)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* const resource = Effect.acquireRelease(
+*   Effect.sync(() => { output.push("Acquiring resource") }).pipe(Effect.as("resource")),
+*   () => Effect.sync(() => { output.push("Releasing resource") })
+* )
+*
+* const program = Effect.scoped(
+*   Effect.gen(function*() {
+*     const res = yield* resource
+*     yield* Effect.sync(() => { output.push(`Using ${res}`) })
+*     return res
+*   })
+* )
+*
+* Effect.runSync(program)
+* output // => ["Acquiring resource", "Using resource", "Releasing resource"]
+* ```
+*
+* @category resource management
+* @since 2.0.0
+*/
+const scoped = scoped$1;
+/**
+* Creates a scoped effect by providing access to the scope.
+*
+* **When to use**
+*
+* Use when resource acquisition needs direct access to the scope being created,
+* for example to register finalizers manually.
+*
+* **Example** (Working with an explicit scope)
+*
+* ```ts import.meta.vitest
+* import { Effect, Scope } from "effect"
+* const output: Array<unknown> = []
+*
+* const program = Effect.scopedWith((scope) =>
+*   Effect.gen(function*() {
+*     yield* Effect.sync(() => { output.push("Inside scoped context") })
+*
+*     // Manually add a finalizer to the scope
+*     yield* Scope.addFinalizer(scope, Effect.sync(() => { output.push("Manual finalizer") }))
+*
+*     // Create a scoped resource
+*     const resource = yield* Effect.scoped(
+*       Effect.acquireRelease(
+*         Effect.sync(() => { output.push("Acquiring resource") }).pipe(Effect.as("resource")),
+*         () => Effect.sync(() => { output.push("Releasing resource") })
+*       )
+*     )
+*
+*     return resource
+*   })
+* )
+*
+* void output.push(Effect.runSync(program))
+* output // => ["Inside scoped context", "Acquiring resource", "Releasing resource", "Manual finalizer", "resource"]
+* ```
+*
+* @category resource management
+* @since 3.11.0
+*/
+const scopedWith = scopedWith$1;
+/**
+* Constructs a scoped resource from an acquisition effect and a release
+* finalizer.
+*
+* **When to use**
+*
+* Use to acquire a scoped resource with an explicit release finalizer.
+*
+* **Details**
+*
+* If acquisition succeeds, the release finalizer is added to the current scope
+* and is guaranteed to run when that scope closes. The finalizer receives the
+* `Exit` value used to close the scope.
+*
+* By default, acquisition is protected by an uninterruptible region. Pass
+* `{ interruptible: true }` to allow the acquisition effect to be interrupted.
+*
+* **Example** (Acquiring and releasing a resource)
+*
+* ```ts import.meta.vitest
+* import { Effect, Exit } from "effect"
+* const output: Array<unknown> = []
+*
+* // Simulate a resource that needs cleanup
+* interface FileHandle {
+*   readonly path: string
+*   readonly content: string
+* }
+*
+* // Acquire a file handle
+* const acquire = Effect.gen(function*() {
+*   yield* Effect.sync(() => { output.push("Opening file") })
+*   return { path: "/tmp/file.txt", content: "file content" }
+* })
+*
+* // Release the file handle
+* const release = (handle: FileHandle, exit: Exit.Exit<unknown, unknown>) =>
+*   Effect.sync(() => { output.push(
+*     `Closing file ${handle.path} with exit: ${
+*       Exit.isSuccess(exit) ? "success" : "failure"
+*     }`
+*   ) })
+*
+* // Create a scoped resource
+* const resource = Effect.acquireRelease(acquire, release)
+*
+* // Use the resource within a scope
+* const program = Effect.scoped(
+*   Effect.gen(function*() {
+*     const handle = yield* resource
+*     yield* Effect.sync(() => { output.push(`Using file: ${handle.path}`) })
+*     return handle.content
+*   })
+* )
+*
+* void output.push(Effect.runSync(program))
+* output // => ["Opening file", "Using file: /tmp/file.txt", "Closing file /tmp/file.txt with exit: success", "file content"]
+* ```
+*
+* @see {@link acquireDisposable} for resources that implement JavaScript disposal protocols
+* @see {@link acquireUseRelease} for bracketing acquire, use, and release in one effect
+*
+* @category resource management
+* @since 2.0.0
+*/
+const acquireRelease = acquireRelease$1;
+/**
+* Adds a finalizer to the current scope.
+*
+* **When to use**
+*
+* Use to register low-level cleanup in the current scope.
+*
+* **Details**
+*
+* The finalizer runs when the surrounding scope is closed and receives the
+* `Exit` value used to close the scope.
+*
+* **Example** (Registering scope finalizers)
+*
+* ```ts import.meta.vitest
+* import { Effect, Exit } from "effect"
+* const output: Array<unknown> = []
+*
+* const program = Effect.scoped(
+*   Effect.gen(function*() {
+*     // Add a finalizer that runs when the scope closes
+*     yield* Effect.addFinalizer((exit) =>
+*       Effect.sync(() => { output.push(
+*         Exit.isSuccess(exit)
+*           ? "Cleanup: Operation completed successfully"
+*           : "Cleanup: Operation failed, cleaning up resources"
+*       ) })
+*     )
+*
+*     yield* Effect.sync(() => { output.push("Performing main operation...") })
+*
+*     // This could succeed or fail
+*     return "operation result"
+*   })
+* )
+*
+* void output.push(Effect.runSync(program))
+* output // => ["Performing main operation...", "Cleanup: Operation completed successfully", "operation result"]
+* ```
+*
+* @see {@link acquireRelease} for resource acquisition with a release finalizer
+* @see {@link ensuring} for attaching a finalizer to one effect
+*
+* @category resource management
+* @since 2.0.0
+*/
+const addFinalizer = addFinalizer$2;
+/**
+* Returns an effect that, if this effect _starts_ execution, then the
+* specified `finalizer` is guaranteed to be executed, whether this effect
+* succeeds, fails, or is interrupted.
+*
+* **Details**
+*
+* For use cases that need access to the effect's result, see `onExit`.
+*
+* Finalizers offer very powerful guarantees, but they are low-level, and
+* should generally not be used for releasing resources. For higher-level
+* logic built on `ensuring`, see the `acquireRelease` family of methods.
+*
+* **Example** (Always running cleanup)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* const task = Effect.gen(function*() {
+*   yield* Effect.sync(() => { output.push("Task started") })
+*   yield* Effect.sync(() => { output.push("Task completed") })
+*   return 42
+* })
+*
+* // Ensure cleanup always runs, regardless of success or failure
+* const program = Effect.ensuring(
+*   task,
+*   Effect.sync(() => { output.push("Cleanup: This always runs!") })
+* )
+*
+* void output.push(Effect.runSync(program))
+* output // => ["Task started", "Task completed", "Cleanup: This always runs!", 42]
+* ```
+*
+* @category resource management
+* @since 2.0.0
+*/
+const ensuring = ensuring$1;
+/**
+* Runs the specified effect if this effect fails, providing the error to the
+* effect if it exists. The provided effect will not be interrupted.
+*
+* **Example** (Running cleanup on failure)
+*
+* ```ts import.meta.vitest
+* import { Cause, Data, Effect, Exit } from "effect"
+* const output: Array<unknown> = []
+*
+* class TaskError extends Data.TaggedError("TaskError")<{ readonly message: string }> {}
+*
+* const error = new TaskError({ message: "Something went wrong" })
+* const task = Effect.fail(error)
+*
+* const program = Effect.onError(
+*   task,
+*   (cause) => Effect.sync(() => { output.push(`Cleanup on error: ${Cause.squash(cause)}`) })
+* )
+*
+* void output.push(Effect.runSyncExit(program))
+* output // => ["Cleanup on error: TaskError: Something went wrong", Exit.fail(error)]
+* ```
+*
+* @category resource management
+* @since 2.0.0
+*/
+const onError = onError$1;
+/**
+* Ensures that a cleanup function runs whether this effect succeeds, fails, or
+* is interrupted.
+*
+* **Details**
+*
+* If both the effect and the cleanup function fail, the two causes are merged.
+*
+* **Example** (Observing every exit)
+*
+* ```ts import.meta.vitest
+* import { Effect, Exit } from "effect"
+* const output: Array<unknown> = []
+*
+* const task = Effect.succeed(42)
+*
+* const program = Effect.onExit(task, (exit) =>
+*   Effect.sync(() => { output.push(
+*     Exit.isSuccess(exit)
+*       ? `Task succeeded with: ${exit.value}`
+*       : `Task failed: ${Exit.isFailure(exit) ? exit.cause : "interrupted"}`
+*   ) }))
+*
+* void output.push(Effect.runSync(program))
+* output // => ["Task succeeded with: 42", 42]
+* ```
+*
+* @category resource management
+* @since 2.0.0
+*/
+const onExit = onExit$1;
+/**
+* Returns an effect that is immediately interrupted.
+*
+* **Example** (Creating an interrupted effect)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const program = Effect.gen(function*() {
+*   return yield* Effect.interrupt
+*   yield* Effect.succeed("This won't execute and is unreachable")
+* })
+*
+* Effect.runSyncExit(program)._tag // => "Failure"
+* ```
+*
+* @category interruption
+* @since 2.0.0
+*/
+const interrupt$1 = interrupt$2;
+/**
+* Returns a new effect that disables interruption for the given effect.
+*
+* **Example** (Preventing interruption)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* const criticalTask = Effect.gen(function*() {
+*   yield* Effect.sync(() => { output.push("Starting critical section...") })
+*   yield* Effect.sync(() => { output.push("Critical section completed") })
+* })
+*
+* const program = Effect.uninterruptible(criticalTask)
+*
+* Effect.runSync(program)
+* output // => ["Starting critical section...", "Critical section completed"]
+* ```
+*
+* @category interruption
+* @since 2.0.0
+*/
+const uninterruptible = uninterruptible$1;
+/**
+* Disables interruption and provides a restore function to restore the
+* interruptible state within the effect.
+*
+* **Example** (Restoring interruption in protected regions)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* const program = Effect.uninterruptibleMask((restore) =>
+*   Effect.gen(function*() {
+*     yield* Effect.sync(() => { output.push("Uninterruptible phase...") })
+*     // Restore interruptibility for this part
+*     yield* restore(
+*       Effect.gen(function*() {
+*         yield* Effect.sync(() => { output.push("Interruptible phase...") })
+*       })
+*     )
+*
+*     yield* Effect.sync(() => { output.push("Back to uninterruptible") })
+*   })
+* )
+*
+* Effect.runSync(program)
+* output // => ["Uninterruptible phase...", "Interruptible phase...", "Back to uninterruptible"]
+* ```
+*
+* @category interruption
+* @since 2.0.0
+*/
+const uninterruptibleMask = uninterruptibleMask$1;
+/**
+* Repeats this effect forever (until the first error).
+*
+* **Example** (Repeating forever)
+*
+* ```ts import.meta.vitest
+* import { Effect, Option } from "effect"
+*
+* const program = Effect.forever(Effect.never).pipe(Effect.timeoutOption(0))
+* await Effect.runPromise(program) // => Option.none()
+* ```
+*
+* @category repetition
+* @since 2.0.0
+*/
+const forever = forever$1;
+/**
+* Forks the effect in the specified scope. The fiber will be interrupted
+* when the scope is closed.
+*
+* **Example** (Forking into a supplied scope)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const task = Effect.never
+*
+* const program = Effect.scoped(
+*   Effect.gen(function*() {
+*     const scope = yield* Effect.scope
+*     const fiber = yield* Effect.forkIn(task, scope)
+*     // Fiber will be interrupted when scope closes
+*     return "done"
+*   })
+* )
+*
+* await Effect.runPromise(program) // => "done"
+* ```
+*
+* @category forking
+* @since 2.0.0
+*/
+const forkIn = forkIn$1;
+/**
+* Forks the fiber in a `Scope`, interrupting it when the scope is closed.
+*
+* **Example** (Forking into the current scope)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const backgroundTask = Effect.never
+*
+* const program = Effect.scoped(
+*   Effect.gen(function*() {
+*     yield* backgroundTask.pipe(Effect.forkScoped)
+*
+*     // Fiber will be interrupted when scope closes
+*     return "scope completed"
+*   })
+* )
+*
+* await Effect.runPromise(program) // => "scope completed"
+* ```
+*
+* @category forking
+* @since 2.0.0
+*/
+const forkScoped = forkScoped$1;
+/**
+* Runs an effect in the background, returning a fiber that can
+* be observed or interrupted.
+*
+* **When to use**
+*
+* Use when you need to start an effect in the background and receive a fiber.
+*
+* **Example** (Running an effect in the background)
+*
+* ```ts import.meta.vitest
+* import { Effect, Fiber } from "effect"
+* const output: Array<unknown> = []
+*
+* //      ┌─── Effect<number, never, never>
+* //      ▼
+* const program = Effect.sync(() => { output.push("running...") }).pipe(Effect.as("done"))
+*
+* //      ┌─── RuntimeFiber<number, never>
+* //      ▼
+* const fiber = Effect.runFork(program)
+*
+* void output.push(await Effect.runPromise(Fiber.join(fiber)))
+* output // => ["running...", "done"]
+* ```
+*
+* @category running
+* @since 2.0.0
+*/
+const runFork = runFork$1;
+/**
+* Runs an effect in the background with the provided services.
+*
+* **When to use**
+*
+* Use when an effect still requires services, you already have a `Context`, and
+* you want a background fiber.
+*
+* **Example** (Running with services in the background)
+*
+* ```ts import.meta.vitest
+* import { Context, Effect, Fiber } from "effect"
+* const output: Array<unknown> = []
+*
+* interface Logger {
+*   log: (message: string) => void
+* }
+*
+* const Logger = Context.Service<Logger>("Logger")
+*
+* const services = Context.make(Logger, {
+*   log: (message) => void output.push(message)
+* })
+*
+* const program = Effect.gen(function*() {
+*   const logger = yield* Logger
+*   logger.log("Hello from service!")
+*   return "done"
+* })
+*
+* const fiber = Effect.runForkWith(services)(program)
+* void output.push(await Effect.runPromise(Fiber.join(fiber)))
+* output // => ["Hello from service!", "done"]
+* ```
+*
+* @category running
+* @since 4.0.0
+*/
+const runForkWith = runForkWith$1;
+/**
+* Executes an effect and returns the result as a `Promise`.
+*
+* **When to use**
+*
+* Use when you need to execute an effect and work with the
+* result using `Promise` syntax, typically for compatibility with other
+* promise-based code.
+*
+* If the effect succeeds, the promise will resolve with the result. If the
+* effect fails, the promise will reject with an error.
+*
+* **Example** (Running a successful effect as a Promise)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* await Effect.runPromise(Effect.succeed(1)) // => 1
+* ```
+*
+* **Example** (Running effects as promises)
+*
+* ```ts import.meta.vitest
+* //Example: Handling a Failing Effect as a Rejected Promise
+* import { Effect } from "effect"
+* const output: Array<unknown> = []
+*
+* await Effect.runPromise(Effect.fail("my error")).catch(() => {
+*   void output.push("rejected")
+* })
+* output // => ["rejected"]
+* ```
+*
+* @see {@link runPromiseExit} for a version that returns an `Exit` type instead of rejecting.
+* @category running
+* @since 2.0.0
+*/
+const runPromise = runPromise$1;
+/**
+* Runs an effect synchronously and captures the outcome safely as an `Exit` type, which
+* represents the outcome (success or failure) of the effect.
+*
+* **When to use**
+*
+* Use to find out whether an effect succeeded or failed,
+* including any defects, without dealing with asynchronous operations.
+*
+* **Details**
+*
+* The `Exit` type represents the result of the effect. Successful effects are
+* wrapped in `Success`, and failed effects are wrapped in `Failure` with a
+* `Cause`.
+*
+* If the effect contains asynchronous operations, `runSyncExit` will
+* return an `Failure` with a `Die` cause, indicating that the effect cannot be
+* resolved synchronously.
+*
+* **Example** (Observing synchronous results as Exit)
+*
+* ```ts import.meta.vitest
+* import { Effect, Exit } from "effect"
+*
+* Effect.runSyncExit(Effect.succeed(1)) // => Exit.succeed(1)
+*
+* Effect.runSyncExit(Effect.fail("my error")) // => Exit.fail("my error")
+* ```
+*
+* **Example** (Capturing async work as a Die cause)
+*
+* ```ts import.meta.vitest
+* import { Cause, Effect, Exit } from "effect"
+*
+* const exit = Effect.runSyncExit(Effect.promise(() => Promise.resolve(1)))
+* const isAsyncDie = Exit.hasDies(exit) && exit.cause.reasons.some(
+*   (reason) => Cause.isDieReason(reason) && Cause.isAsyncFiberError(reason.defect)
+* )
+*
+* isAsyncDie // => true
+* ```
+*
+* @see {@link runSync} for a version that throws on failure.
+*
+* @category running
+* @since 2.0.0
+*/
+const runSyncExit = runSyncExit$1;
+/**
+* Creates an Effect-returning function without tracing.
+*
+* **When to use**
+*
+* Use when you are defining a reusable Effect function whose implementation
+* would otherwise be a normal function returning {@link gen}, especially when
+* tracing spans or stack-frame capture are not needed.
+*
+* **Details**
+*
+* Compared to a plain function that returns {@link gen}, `Effect.fnUntraced`
+* reuses the generator body instead of allocating a fresh generator closure
+* around the arguments on every call. It does not record an Effect stack-frame
+* boundary and does not create tracing spans. Use {@link fn} when you need
+* those stack frames or spans. Additional arguments after the generator body
+* act like `pipe` transforms: each transform receives the previous result and
+* the original function arguments. Annotate the generator return type with
+* `Effect.fn.Return<A, E, R>` when the produced `Effect` type needs to be
+* stated explicitly.
+*
+* **Example** (Defining untraced effect functions)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const f = Effect.fnUntraced(function*(
+*   value: string
+* ) {
+*   return yield* Effect.succeed(value.length)
+* })
+*
+* //      ┌─── Effect.Effect<number>
+* //      ▼
+* const program = f("hello")
+* Effect.runSync(program) // => 5
+* ```
+*
+* **Example** (Transforming the returned Effect)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const f = Effect.fnUntraced(
+*   function*(value: string) {
+*     return yield* Effect.succeed(value.length)
+*   },
+*   (effect, value) =>
+*     effect.pipe(Effect.map((length) => `${value}: ${length}`))
+* )
+*
+* //      ┌─── Effect.Effect<string>
+* //      ▼
+* const program = f("hello")
+* Effect.runSync(program) // => "hello: 5"
+* ```
+*
+* **Example** (Annotating an untraced non-parametric function)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const f = Effect.fnUntraced(function*(
+*   value: string
+* ): Effect.fn.Return<number> {
+*   return yield* Effect.succeed(value.length)
+* })
+*
+* //      ┌─── Effect.Effect<number>
+* //      ▼
+* const program = f("hello")
+* Effect.runSync(program) // => 5
+* ```
+*
+* **Example** (Annotating an untraced parametric function)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const f = Effect.fnUntraced(function*<A>(
+*   value: A
+* ): Effect.fn.Return<A> {
+*   return yield* Effect.succeed(value)
+* })
+*
+* //      ┌─── Effect.Effect<string>
+* //      ▼
+* const program = f("hello")
+* Effect.runSync(program) // => "hello"
+* ```
+*
+* @category constructors
+* @since 3.12.0
+*/
+const fnUntraced = fnUntraced$1;
+/**
+* Retrieves the `Clock` service from the context and provides it to the
+* specified effectful function.
+*
+* **Example** (Accessing the Clock service)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const program = Effect.clockWith((clock) =>
+*   clock.currentTimeMillis.pipe(
+*     Effect.map(() => "Clock is available")
+*   )
+* )
+*
+* Effect.runSync(program) // => "Clock is available"
+* ```
+*
+* @category accessors
+* @since 2.0.0
+*/
+const clockWith = clockWith$1;
+/**
+* Converts an error-first callback API into a function that returns an
+* `Effect`.
+*
+* **Details**
+*
+* The original function is called with the supplied arguments plus a final
+* callback. A non-null callback error fails the returned effect, while a
+* successful callback value becomes the effect success. Use `onError` to map
+* callback errors and `onSyncError` to turn synchronous throws into typed
+* failures; otherwise synchronous throws become defects.
+*
+* **Example** (Converting callbacks to effects)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const uppercase = (
+*   input: string,
+*   callback: (error: Error | null, value?: string) => void
+* ) => queueMicrotask(() => callback(null, input.toUpperCase()))
+*
+* const effectfulUppercase = Effect.effectify(uppercase)
+* const program = effectfulUppercase("hello")
+*
+* await Effect.runPromise(program) // => "HELLO"
+* ```
+*
+* **Example** (Mapping callback errors to typed failures)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const fail = (
+*   input: string,
+*   callback: (error: Error | null, value?: string) => void
+* ) => queueMicrotask(() => callback(new Error("unavailable")))
+*
+* const effectfulFail = Effect.effectify(
+*   fail,
+*   (error, args) => new Error(`Failed to process ${args[0]}: ${error.message}`)
+* )
+*
+* const program = Effect.flip(effectfulFail("hello"))
+*
+* const error = await Effect.runPromise(program)
+* error.message // => "Failed to process hello: unavailable"
+* ```
+*
+* @category converting
+* @since 4.0.0
+*/
+const effectify = (fn, onError, onSyncError) => (...args) => callback$1((resume) => {
+	try {
+		fn(...args, (err, result) => {
+			if (err) resume(fail$1(onError ? onError(err, args) : err));
+			else resume(succeed$2(result));
+		});
+	} catch (err) {
+		resume(onSyncError ? fail$1(onSyncError(err, args)) : die(err));
+	}
+});
+/**
+* Applies `map` eagerly when an effect is already resolved.
+*
+* **When to use**
+*
+* Use when an already-resolved effect should apply a success transformation
+* immediately while pending effects still use regular mapping.
+*
+* **Details**
+*
+* Success effects apply the mapping function immediately. Failure effects pass
+* through unchanged, and pending effects fall back to regular `map` behavior.
+*
+* **Example** (Mapping already completed effects)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* // For resolved effects, the mapping is applied immediately
+* const resolved = Effect.succeed(5)
+* const mapped = Effect.mapEager(resolved, (n) => n * 2) // Applied eagerly
+*
+* // For pending effects, behaves like regular map
+* const pending = Effect.delay(Effect.succeed(5), 0)
+* const mappedPending = Effect.mapEager(pending, (n) => n * 2) // Uses regular map
+*
+* await Effect.runPromise(Effect.all([mapped, mappedPending])) // => [10, 10]
+* ```
+*
+* @category mapping
+* @since 4.0.0
+*/
+const mapEager = mapEager$1;
+/**
+* Applies `flatMap` eagerly when an effect is already resolved.
+*
+* **When to use**
+*
+* Use when an already-resolved successful effect should bind immediately to the
+* next effect while pending effects still use regular flat mapping.
+*
+* **Details**
+*
+* Success effects apply the flatMap function immediately. Failure effects pass
+* through unchanged, and pending effects fall back to regular `flatMap`
+* behavior.
+*
+* **Example** (Flat mapping eagerly when possible)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* // For resolved effects, the flatMap is applied immediately
+* const resolved = Effect.succeed(5)
+* const flatMapped = Effect.flatMapEager(resolved, (n) => Effect.succeed(n * 2)) // Applied eagerly
+*
+* // For pending effects, behaves like regular flatMap
+* const pending = Effect.delay(Effect.succeed(5), 0)
+* const flatMappedPending = Effect.flatMapEager(
+*   pending,
+*   (n) => Effect.succeed(n * 2)
+* ) // Uses regular flatMap
+*
+* await Effect.runPromise(Effect.all([flatMapped, flatMappedPending])) // => [10, 10]
+* ```
+*
+* @category sequencing
+* @since 4.0.0
+*/
+const flatMapEager = flatMapEager$1;
+/**
+* Creates untraced function effects with eager evaluation optimization.
+*
+* **Details**
+*
+* Executes generator functions eagerly when all yielded effects are synchronous,
+* stopping at the first async effect and deferring to normal execution.
+*
+* **Example** (Defining eager untraced effect functions)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+*
+* const computation = Effect.fnUntracedEager(function*() {
+*   yield* Effect.succeed(1)
+*   yield* Effect.succeed(2)
+*   return "computed eagerly"
+* })
+*
+* const effect = computation() // Executed immediately if all effects are sync
+* Effect.runSync(effect) // => "computed eagerly"
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const fnUntracedEager = fnUntracedEager$1;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/BigDecimal.js
+/**
+* Decimal numbers and arithmetic for cases where JavaScript `number` rounding
+* is not precise enough. A `BigDecimal` stores digits as a `bigint` plus a
+* decimal scale, which lets the module parse, compare, add, subtract, multiply,
+* divide, round, and format decimal values such as money, quantities, and
+* measurements.
+*
+* @since 2.0.0
+*/
+const TypeId$26 = "~effect/BigDecimal";
+const BigDecimalProto = {
+	[TypeId$26]: TypeId$26,
+	[symbol$1]() {
+		const normalized = normalize(this);
+		return combine$1(string$1(String(normalized.value)), number$1(normalized.scale));
+	},
+	[symbol](that) {
+		return isBigDecimal(that) && compare(this, that) === 0;
+	},
+	toString() {
+		return `BigDecimal(${format(this)})`;
+	},
+	toJSON() {
+		return {
+			_id: "BigDecimal",
+			value: String(this.value),
+			scale: this.scale
+		};
+	},
+	[NodeInspectSymbol]() {
+		return this.toJSON();
+	},
+	pipe() {
+		return pipeArguments(this, arguments);
+	}
+};
+/**
+* Checks whether a given value is a `BigDecimal`.
+*
+* **When to use**
+*
+* Use to validate unknown input and narrow it to `BigDecimal`.
+*
+* **Example** (Checking BigDecimal values)
+*
+* ```ts import.meta.vitest
+* import { BigDecimal } from "effect"
+*
+* const decimal = BigDecimal.fromNumber(123.45)
+* BigDecimal.isBigDecimal(decimal) // => false
+* BigDecimal.isBigDecimal(BigDecimal.fromStringUnsafe("123.45")) // => true
+* BigDecimal.isBigDecimal(123.45) // => false
+* BigDecimal.isBigDecimal("123.45") // => false
+* ```
+*
+* @category guards
+* @since 2.0.0
+*/
+const isBigDecimal = (u) => hasProperty(u, TypeId$26);
+/**
+* Creates a `BigDecimal` from a `bigint` value and a safe integer scale.
+*
+* **When to use**
+*
+* Use to construct a decimal directly from its unscaled integer value and
+* decimal scale.
+*
+* **Gotchas**
+*
+* Throws a `RangeError` if `scale` is not a safe integer.
+*
+* **Example** (Creating decimals from bigint and scale)
+*
+* ```ts import.meta.vitest
+* import { BigDecimal } from "effect"
+*
+* // Create 123.45 (12345 with scale 2)
+* const decimal = BigDecimal.make(12345n, 2)
+* decimal // => BigDecimal.fromStringUnsafe("123.45")
+*
+* // Create 42 (42 with scale 0)
+* const integer = BigDecimal.make(42n, 0)
+* integer // => BigDecimal.fromBigInt(42n)
+* ```
+*
+* @see {@link fromBigInt} for constructing an integer decimal from a `bigint`
+*
+* @category constructors
+* @since 2.0.0
+*/
+const make$23 = (value, scale) => {
+	if (!Number.isSafeInteger(scale)) throw new RangeError(`Scale must be a safe integer, got ${scale}`);
+	const o = Object.create(BigDecimalProto);
+	o.value = value;
+	o.scale = scale;
+	return o;
+};
+const makeNormalized = (value, scale) => {
+	const o = make$23(value, scale);
+	o.normalized = o;
+	return o;
+};
+const bigint0$1 = /*#__PURE__*/ BigInt(0);
+const bigint1$1 = /*#__PURE__*/ BigInt(1);
+const bigint10 = /*#__PURE__*/ BigInt(10);
+const zero = /*#__PURE__*/ makeNormalized(bigint0$1, 0);
+/**
+* Normalizes a given `BigDecimal` by removing trailing zeros.
+*
+* **When to use**
+*
+* Use to canonicalize decimals that have equivalent values but different
+* internal scales.
+*
+* **Example** (Normalizing trailing zeros)
+*
+* ```ts import.meta.vitest
+* import { BigDecimal } from "effect"
+*
+* const decimal = BigDecimal.normalize(BigDecimal.fromStringUnsafe("123.00000"))
+* const decimalStorage = [decimal.value, decimal.scale] // => [123n, 0]
+*
+* const largeDecimal = BigDecimal.normalize(BigDecimal.fromStringUnsafe("12300000"))
+* const largeDecimalStorage = [largeDecimal.value, largeDecimal.scale] // => [123n, -5]
+* ```
+*
+* @see {@link format} for rendering normalized decimals as strings
+*
+* @category scaling
+* @since 2.0.0
+*/
+const normalize = (self) => {
+	if (self.normalized === void 0) {
+		if (self.value === bigint0$1) self.normalized = zero;
+		else {
+			const digits = `${self.value}`;
+			let end = digits.length;
+			while (digits[end - 1] === "0") end--;
+			self.normalized = makeNormalized(BigInt(digits.slice(0, end)), self.scale - (digits.length - end));
+		}
+	}
+	return self.normalized;
+};
+const MAX_COMPARISON_SCALE_ALIGNMENT = 100;
+const comparisonPowersOfTen = [bigint1$1];
+const compareBigInt = (self, that) => self === that ? 0 : self < that ? -1 : 1;
+const compareMagnitude = (self, that) => {
+	const selfDigits = `${self.value < bigint0$1 ? -self.value : self.value}`;
+	const thatDigits = `${that.value < bigint0$1 ? -that.value : that.value}`;
+	const exponentDifference = BigInt(selfDigits.length - thatDigits.length) - BigInt(self.scale) + BigInt(that.scale);
+	if (exponentDifference !== bigint0$1) return exponentDifference < bigint0$1 ? -1 : 1;
+	const length = Math.max(selfDigits.length, thatDigits.length);
+	return String$8(selfDigits.padEnd(length, "0"), thatDigits.padEnd(length, "0"));
+};
+const compare = (self, that) => {
+	if (self.scale === that.scale) return compareBigInt(self.value, that.value);
+	const selfSign = sign(self);
+	const thatSign = sign(that);
+	if (selfSign !== thatSign) return selfSign < thatSign ? -1 : 1;
+	if (selfSign === 0) return 0;
+	const scaleDifference = self.scale - that.scale;
+	const absoluteScaleDifference = Math.abs(scaleDifference);
+	if (absoluteScaleDifference > MAX_COMPARISON_SCALE_ALIGNMENT) return selfSign === -1 ? compareMagnitude(that, self) : compareMagnitude(self, that);
+	const powerOfTen = comparisonPowersOfTen[absoluteScaleDifference] ??= bigint10 ** BigInt(absoluteScaleDifference);
+	return scaleDifference > 0 ? compareBigInt(self.value, that.value * powerOfTen) : compareBigInt(self.value * powerOfTen, that.value);
+};
+/**
+* Determines the sign of a given `BigDecimal`.
+*
+* **When to use**
+*
+* Use to classify a `BigDecimal` as negative, zero, or positive.
+*
+* **Example** (Reading decimal signs)
+*
+* ```ts import.meta.vitest
+* import { BigDecimal } from "effect"
+*
+* BigDecimal.sign(BigDecimal.fromStringUnsafe("-5")) // => -1
+* BigDecimal.sign(BigDecimal.fromStringUnsafe("0")) // => 0
+* BigDecimal.sign(BigDecimal.fromStringUnsafe("5")) // => 1
+* ```
+*
+* @category math
+* @since 2.0.0
+*/
+const sign = (n) => n.value === bigint0$1 ? 0 : n.value < bigint0$1 ? -1 : 1;
+/**
+* Formats a `BigDecimal` as a string.
+*
+* **When to use**
+*
+* Use to render a `BigDecimal` as plain decimal text when possible.
+*
+* **Details**
+*
+* The value is normalized before formatting. Scientific notation is used when
+* the absolute value of the normalized scale is at least `16`; otherwise plain
+* decimal notation is used.
+*
+* **Example** (Formatting decimals)
+*
+* ```ts import.meta.vitest
+* import { BigDecimal } from "effect"
+*
+* BigDecimal.format(BigDecimal.fromStringUnsafe("-5")) // => "-5"
+* BigDecimal.format(BigDecimal.fromStringUnsafe("123.456")) // => "123.456"
+* BigDecimal.format(BigDecimal.fromStringUnsafe("-0.00000123")) // => "-0.00000123"
+* ```
+*
+* @see {@link toExponential} for always rendering scientific notation
+*
+* @category converting
+* @since 2.0.0
+*/
+const format = (n) => {
+	const normalized = normalize(n);
+	if (Math.abs(normalized.scale) >= 16) return toExponential(normalized);
+	const negative = normalized.value < bigint0$1;
+	const absolute = `${negative ? -normalized.value : normalized.value}`;
+	const digits = normalized.scale > 0 ? absolute.padStart(normalized.scale + 1, "0") : absolute.padEnd(absolute.length - normalized.scale, "0");
+	const point = digits.length - normalized.scale;
+	const complete = normalized.scale > 0 ? `${digits.slice(0, point)}.${digits.slice(point)}` : digits;
+	return negative ? `-${complete}` : complete;
+};
+/**
+* Formats a given `BigDecimal` as a `string` in scientific notation.
+*
+* **When to use**
+*
+* Use to render a `BigDecimal` in scientific notation.
+*
+* **Example** (Formatting decimals exponentially)
+*
+* ```ts import.meta.vitest
+* import { BigDecimal } from "effect"
+*
+* BigDecimal.toExponential(BigDecimal.make(123456n, -5)) // => "1.23456e+10"
+* ```
+*
+* @see {@link format} for plain decimal formatting when possible
+*
+* @category converting
+* @since 3.11.0
+*/
+const toExponential = (n) => {
+	if (isZero(n)) return "0e+0";
+	const normalized = normalize(n);
+	const digits = `${normalized.value}`;
+	const point = normalized.value < bigint0$1 ? 2 : 1;
+	const head = digits.slice(0, point);
+	const tail = digits.slice(point);
+	const exp = tail.length - normalized.scale;
+	return `${head}${tail === "" ? "" : `.${tail}`}e${exp >= 0 ? "+" : ""}${exp}`;
+};
+/**
+* Checks whether a given `BigDecimal` is `0`.
+*
+* **When to use**
+*
+* Use to test whether a `BigDecimal` is exactly zero.
+*
+* **Example** (Checking zero decimals)
+*
+* ```ts import.meta.vitest
+* import { BigDecimal } from "effect"
+*
+* BigDecimal.isZero(BigDecimal.fromStringUnsafe("0")) // => true
+* BigDecimal.isZero(BigDecimal.fromStringUnsafe("1")) // => false
+* ```
+*
+* @category predicates
+* @since 2.0.0
+*/
+const isZero = (n) => n.value === bigint0$1;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/BigInt.js
+/**
+* Exposes the global bigint constructor for JavaScript bigint coercion.
+*
+* **When to use**
+*
+* Use to access native JavaScript bigint constructor coercion from the Effect
+* module namespace.
+*
+* **Gotchas**
+*
+* This follows native `BigInt` coercion rules. It throws for invalid strings or
+* non-integral numbers, and whitespace-only strings coerce to `0n`.
+*
+* @see {@link fromString} for parsing strings into an `Option`
+* @see {@link fromNumber} for converting safe integers into an `Option`
+*
+* **Example** (Constructing bigints)
+*
+* ```ts import.meta.vitest
+* import { BigInt } from "effect"
+*
+* BigInt.BigInt(123) // => 123n
+* BigInt.BigInt("456") // => 456n
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const BigInt$2 = globalThis.BigInt;
+/**
+* Converts a `bigint` to a `number` safely.
+*
+* **When to use**
+*
+* Use to convert a `bigint` to a JavaScript number only when it is a safe
+* integer.
+*
+* **Details**
+*
+* If the `bigint` is outside the safe integer range for JavaScript (`Number.MAX_SAFE_INTEGER`
+* and `Number.MIN_SAFE_INTEGER`), it returns `Option.none()`.
+*
+* **Example** (Converting bigints to numbers)
+*
+* ```ts import.meta.vitest
+* import { BigInt as BI, Option } from "effect"
+*
+* BI.toNumber(42n) // => Option.some(42)
+* BI.toNumber(9007199254740992n) // => Option.none()
+* BI.toNumber(-9007199254740992n) // => Option.none()
+* ```
+*
+* @see {@link fromNumber} for converting a safe integer number to `bigint`
+*
+* @category converting
+* @since 2.0.0
+*/
+const toNumber = (b) => {
+	if (b > BigInt$2(Number.MAX_SAFE_INTEGER) || b < BigInt$2(Number.MIN_SAFE_INTEGER)) return none();
+	return some(Number(b));
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/ByteSize.js
+const bigint0 = /*#__PURE__*/ BigInt(0);
+const bigint1 = /*#__PURE__*/ BigInt(1);
+const decimalBase = /*#__PURE__*/ BigInt(1e3);
+const binaryBase = /*#__PURE__*/ BigInt(1024);
+const decimalUnits = [
+	{
+		symbol: "B",
+		factor: bigint1,
+		names: [
+			"B",
+			"byte",
+			"bytes"
+		]
+	},
+	{
+		symbol: "kB",
+		factor: decimalBase,
+		names: [
+			"kB",
+			"kilobyte",
+			"kilobytes"
+		]
+	},
+	{
+		symbol: "MB",
+		factor: decimalBase ** /*#__PURE__*/ BigInt(2),
+		names: [
+			"MB",
+			"megabyte",
+			"megabytes"
+		]
+	},
+	{
+		symbol: "GB",
+		factor: decimalBase ** /*#__PURE__*/ BigInt(3),
+		names: [
+			"GB",
+			"gigabyte",
+			"gigabytes"
+		]
+	},
+	{
+		symbol: "TB",
+		factor: decimalBase ** /*#__PURE__*/ BigInt(4),
+		names: [
+			"TB",
+			"terabyte",
+			"terabytes"
+		]
+	},
+	{
+		symbol: "PB",
+		factor: decimalBase ** /*#__PURE__*/ BigInt(5),
+		names: [
+			"PB",
+			"petabyte",
+			"petabytes"
+		]
+	},
+	{
+		symbol: "EB",
+		factor: decimalBase ** /*#__PURE__*/ BigInt(6),
+		names: [
+			"EB",
+			"exabyte",
+			"exabytes"
+		]
+	},
+	{
+		symbol: "ZB",
+		factor: decimalBase ** /*#__PURE__*/ BigInt(7),
+		names: [
+			"ZB",
+			"zettabyte",
+			"zettabytes"
+		]
+	},
+	{
+		symbol: "YB",
+		factor: decimalBase ** /*#__PURE__*/ BigInt(8),
+		names: [
+			"YB",
+			"yottabyte",
+			"yottabytes"
+		]
+	},
+	{
+		symbol: "RB",
+		factor: decimalBase ** /*#__PURE__*/ BigInt(9),
+		names: [
+			"RB",
+			"ronnabyte",
+			"ronnabytes"
+		]
+	},
+	{
+		symbol: "QB",
+		factor: decimalBase ** /*#__PURE__*/ BigInt(10),
+		names: [
+			"QB",
+			"quettabyte",
+			"quettabytes"
+		]
+	}
+];
+const binaryUnits = [
+	decimalUnits[0],
+	{
+		symbol: "KiB",
+		factor: binaryBase,
+		names: [
+			"KiB",
+			"kibibyte",
+			"kibibytes"
+		]
+	},
+	{
+		symbol: "MiB",
+		factor: binaryBase ** /*#__PURE__*/ BigInt(2),
+		names: [
+			"MiB",
+			"mebibyte",
+			"mebibytes"
+		]
+	},
+	{
+		symbol: "GiB",
+		factor: binaryBase ** /*#__PURE__*/ BigInt(3),
+		names: [
+			"GiB",
+			"gibibyte",
+			"gibibytes"
+		]
+	},
+	{
+		symbol: "TiB",
+		factor: binaryBase ** /*#__PURE__*/ BigInt(4),
+		names: [
+			"TiB",
+			"tebibyte",
+			"tebibytes"
+		]
+	},
+	{
+		symbol: "PiB",
+		factor: binaryBase ** /*#__PURE__*/ BigInt(5),
+		names: [
+			"PiB",
+			"pebibyte",
+			"pebibytes"
+		]
+	},
+	{
+		symbol: "EiB",
+		factor: binaryBase ** /*#__PURE__*/ BigInt(6),
+		names: [
+			"EiB",
+			"exbibyte",
+			"exbibytes"
+		]
+	},
+	{
+		symbol: "ZiB",
+		factor: binaryBase ** /*#__PURE__*/ BigInt(7),
+		names: [
+			"ZiB",
+			"zebibyte",
+			"zebibytes"
+		]
+	},
+	{
+		symbol: "YiB",
+		factor: binaryBase ** /*#__PURE__*/ BigInt(8),
+		names: [
+			"YiB",
+			"yobibyte",
+			"yobibytes"
+		]
+	}
+];
+const allUnits = [...decimalUnits, .../*#__PURE__*/ binaryUnits.slice(1)];
+const unitsByName = /*#__PURE__*/ new Map(/*#__PURE__*/ allUnits.flatMap((unit) => unit.names.map((name) => [name, unit])));
+const make$22 = (value) => value;
+const invalid$1 = (message) => {
+	throw new Error(`Invalid ByteSize: ${message}`);
+};
+const fromNumber = (input) => {
+	if (!Number.isSafeInteger(input) || input < 0) return invalid$1(`expected a non-negative safe integer, received ${input}`);
+	return make$22(BigInt(input));
+};
+/**
+* Parses a byte-size string and throws for invalid syntax, unsupported units,
+* or quantities that do not represent non-negative integral bytes.
+*
+* **Details**
+*
+* Accepts decimal fractions, canonical SI and IEC symbols, lowercase unit
+* names, and whitespace around the quantity and unit. Parsing uses exact
+* bigint arithmetic, including above the safe integer range.
+*
+* @see {@link fromString} for non-throwing validation
+* @category constructors
+* @since 4.0.0
+*/
+const fromStringUnsafe = (input) => {
+	const match = /^\s*(\d+)(?:\.(\d+))?\s*([A-Za-z]+)\s*$/.exec(input);
+	if (match === null) return invalid$1(`unsupported syntax ${JSON.stringify(input)}`);
+	const unit = unitsByName.get(match[3]);
+	if (unit === void 0) return invalid$1(`unsupported unit ${JSON.stringify(match[3])}`);
+	const fraction = match[2] ?? "";
+	const scale = BigInt(10) ** BigInt(fraction.length);
+	const numerator = BigInt(match[1] + fraction) * unit.factor;
+	if (numerator % scale !== bigint0) return invalid$1(`${JSON.stringify(input)} does not represent an integral number of bytes`);
+	return make$22(numerator / scale);
+};
+/**
+* Decodes a trusted input into a byte size and throws for invalid input.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const fromInputUnsafe = (input) => {
+	switch (typeof input) {
+		case "bigint":
+			if (input < bigint0) return invalid$1(`expected a non-negative bigint, received ${input}`);
+			return make$22(input);
+		case "number": return fromNumber(input);
+		case "string": return fromStringUnsafe(input);
+	}
+	return invalid$1(`unsupported input ${input}`);
+};
+/**
+* Creates a byte size from a non-negative byte count.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const bytes = (value) => typeof value === "bigint" ? fromInputUnsafe(value) : fromNumber(value);
+const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const codes = /*#__PURE__*/ (/* @__PURE__ */ new Uint8Array(123)).fill(255);
+for (let i = 0; i < 64; i++) codes[/*#__PURE__*/ alphabet.charCodeAt(i)] = i;
+codes[/*#__PURE__*/ "=".charCodeAt(0)] = 0;
+({ ...BaseProto });
+({ ...BaseProto });
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/redacted.js
+/** @internal */
+const redactedRegistry = /*#__PURE__*/ new WeakMap();
+/** @internal */
+const value$1 = (self) => {
+	if (redactedRegistry.has(self)) return redactedRegistry.get(self);
+	else throw new Error("Unable to get redacted value" + (self.label ? ` with label: "${self.label}"` : ""));
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Redacted.js
+/**
+* Wraps sensitive values so normal output does not reveal them.
+*
+* A `Redacted<A>` shows a redacted placeholder in string, JSON, and inspection
+* output, while still storing the original value for trusted code that needs to
+* recover it. This helps reduce accidental leaks in logs and diagnostics. This
+* module includes constructors, runtime checks, value recovery, wiping of stored
+* values, and comparison helpers that avoid exposing the wrapped value at the
+* call site.
+*
+* @since 3.3.0
+*/
+const TypeId$24 = "~effect/Redacted";
+/**
+* Returns `true` if a value is a `Redacted` wrapper.
+*
+* **When to use**
+*
+* Use to validate unknown input and narrow it to `Redacted`.
+*
+* **Details**
+*
+* When this function returns `true`, TypeScript narrows the value to
+* `Redacted<unknown>`.
+*
+* **Example** (Checking for redacted values)
+*
+* ```ts import.meta.vitest
+* import { Redacted } from "effect"
+*
+* const secret = Redacted.make("my-secret")
+* const plainString = "not-secret"
+*
+* Redacted.isRedacted(secret) // => true
+* Redacted.isRedacted(plainString) // => false
+* ```
+*
+* @category guards
+* @since 3.3.0
+*/
+const isRedacted = (u) => hasProperty(u, TypeId$24);
+/**
+* Creates a `Redacted` wrapper for a sensitive value.
+*
+* **When to use**
+*
+* Use to wrap a sensitive value so normal string, JSON, and inspection output
+* is redacted.
+*
+* **Details**
+*
+* The wrapper redacts string, JSON, and inspection output to reduce accidental
+* disclosure. The original value remains retrievable with `Redacted.value`
+* until the wrapper is wiped or becomes unreachable.
+*
+* **Example** (Creating a redacted value)
+*
+* ```ts import.meta.vitest
+* import { Redacted } from "effect"
+*
+* const API_KEY = Redacted.make("1234567890")
+* String(API_KEY) // => "<redacted>"
+* ```
+*
+* @category constructors
+* @since 3.3.0
+*/
+const make$20 = (value, options) => {
+	const self = Object.create(Proto$5);
+	if (options?.label) self.label = options.label;
+	redactedRegistry.set(self, value);
+	return self;
+};
+const Proto$5 = {
+	[TypeId$24]: { _A: (_) => _ },
+	label: void 0,
+	...PipeInspectableProto,
+	toJSON() {
+		return this.toString();
+	},
+	toString() {
+		return `<redacted${isString(this.label) ? ":" + this.label : ""}>`;
+	},
+	[symbol$1]() {
+		return hash(redactedRegistry.get(this));
+	},
+	[symbol](that) {
+		return isRedacted(that) && equals$1(redactedRegistry.get(this), redactedRegistry.get(that));
+	}
+};
+/**
+* Retrieves the original value from a `Redacted` instance. Use this function
+* with caution, as it exposes the sensitive data.
+*
+* **When to use**
+*
+* Use when you need the underlying sensitive value at a trusted boundary.
+*
+* **Example** (Retrieving a redacted value)
+*
+* ```ts import.meta.vitest
+* import { Redacted } from "effect"
+*
+* const API_KEY = Redacted.make("1234567890")
+*
+* Redacted.value(API_KEY) // => "1234567890"
+* ```
+*
+* @category getters
+* @since 3.3.0
+*/
+const value = value$1;
+({ ...PipeInspectableProto });
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/annotations.js
+/** @internal */
+function resolve$1(ast) {
+	return ast.checks ? ast.checks[ast.checks.length - 1].annotations : ast.annotations;
+}
+/** @internal */
+const SENTINELS_ANNOTATION_KEY = "~sentinels";
+/** @internal */
+const CONSTRUCTOR_ANNOTATION_KEY = "~constructor";
+/** @internal */
+const getExpected = /*#__PURE__*/ memoize((ast) => {
+	const identifier = resolve$1(ast)?.identifier;
+	if (typeof identifier === "string") return identifier;
+	return ast.getExpected(getExpected);
+});
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/parser.js
+/** @internal */
+const missing = /*#__PURE__*/ Symbol();
+/** @internal */
+const succeed$1 = succeed$4;
+/** @internal */
+const missingExit = /*#__PURE__*/ succeed$1(missing);
+/** @internal */
+const sameExit = /*#__PURE__*/ succeed$1(missing);
+/** @internal */
+const toOption = (value) => value === missing ? none() : some(value);
+/** @internal */
+const fromOptionExit = (option) => option._tag === "None" ? missingExit : succeed$1(option.value);
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/SchemaIssue.js
+/**
+* Describes problems found while decoding, encoding, or checking data with
+* schemas.
+*
+* An `Issue` records what failed and, for nested data, where the failure
+* happened. The Schema system uses these values for missing keys, unexpected
+* keys, invalid types, invalid values, failed filters, failed transformations,
+* and alternatives that did not match. This module also formats issues.
+*
+* @since 4.0.0
+*/
+const TypeId$22 = "~effect/SchemaIssue/Issue";
+/**
+* Returns `true` if the given value is an {@link Issue}.
+*
+* **When to use**
+*
+* Use when you need to narrow an `unknown` value to `Issue` in error-handling
+* code, such as distinguishing an `Issue` from other error types in a catch-all
+* handler.
+*
+* **Details**
+*
+* - Checks for the internal `TypeId` brand on the value.
+*
+* **Example** (Type-guarding an unknown error)
+*
+* ```ts import.meta.vitest
+* import { SchemaIssue } from "effect"
+*
+* const issue = new SchemaIssue.MissingKey(undefined)
+* SchemaIssue.isIssue(issue) // => true
+* SchemaIssue.isIssue("not an issue") // => false
+* ```
+*
+* @see {@link Issue}
+*
+* @category guards
+* @since 4.0.0
+*/
+function isIssue(u) {
+	return hasProperty(u, TypeId$22) && u[TypeId$22] === TypeId$22;
+}
+/**
+* Returns `true` when an issue contains an input reported by the schema parser.
+*
+* **When to use**
+*
+* Use when reading `Issue.input`, especially when `undefined` is a valid input
+* value.
+*
+* **Details**
+*
+* Reported input is stored as an own property. This guard checks for that
+* property and narrows `input` from optional to required.
+*
+* **Example** (Reading a reported input)
+*
+* ```ts import.meta.vitest
+* import { Result, Schema, SchemaIssue } from "effect"
+*
+* const result = Schema.decodeUnknownResult(Schema.String)(1, { reportInput: true })
+* if (Result.isFailure(result) && SchemaIssue.hasInput(result.failure.issue)) {
+*   result.failure.issue.input // => 1
+* }
+* ```
+*
+* @see {@link Issue} for the complete issue model
+*
+* @category guards
+* @since 4.0.0
+*/
+function hasInput(issue) {
+	return Object.hasOwn(issue, "input");
+}
+var IssueNodeImpl = class {
+	[TypeId$22] = TypeId$22;
+	constructor(input, options) {
+		if (options?.reportInput === true && input !== missing) this.input = input;
+	}
+};
+/**
+* Constructs a schema issue for a failed refinement check.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Filter$1 = class extends IssueNodeImpl {
+	_tag = "Filter";
+	/**
+	* The filter that failed.
+	*/
+	filter;
+	/**
+	* The issue that occurred.
+	*/
+	issue;
+	constructor(filter, issue, input, options) {
+		super(input, options);
+		this.filter = filter;
+		this.issue = issue;
+	}
+};
+/**
+* Constructs a schema issue for a failed transformation.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Encoding = class extends IssueNodeImpl {
+	_tag = "Encoding";
+	/**
+	* The schema that caused the issue.
+	*/
+	ast;
+	/**
+	* The issue that occurred.
+	*/
+	issue;
+	constructor(ast, issue, input, options) {
+		super(input, options);
+		this.ast = ast;
+		this.issue = issue;
+	}
+};
+/**
+* Constructs a schema issue that points to a nested location.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Pointer = class extends IssueNodeImpl {
+	_tag = "Pointer";
+	/**
+	* The path to the location in the input that caused the issue.
+	*/
+	path;
+	/**
+	* The issue that occurred.
+	*/
+	issue;
+	constructor(path, issue) {
+		super();
+		this.path = path;
+		this.issue = issue;
+	}
+};
+/**
+* Constructs a schema issue for a missing key or tuple index.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const MissingKey = class extends IssueNodeImpl {
+	_tag = "MissingKey";
+	/**
+	* The metadata for the issue.
+	*/
+	annotations;
+	constructor(annotations) {
+		super();
+		this.annotations = annotations;
+	}
+};
+/**
+* Constructs a schema issue for an unexpected key or tuple index.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const UnexpectedKey = class extends IssueNodeImpl {
+	_tag = "UnexpectedKey";
+	/**
+	* The schema that caused the issue.
+	*/
+	ast;
+	constructor(ast, input, options) {
+		super(input, options);
+		this.ast = ast;
+	}
+};
+/**
+* Constructs a schema issue that groups multiple child issues.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Composite = class extends IssueNodeImpl {
+	_tag = "Composite";
+	/**
+	* The schema that caused the issue.
+	*/
+	ast;
+	/**
+	* The issues that occurred.
+	*/
+	issues;
+	constructor(ast, issues, input, options) {
+		super(input, options);
+		this.ast = ast;
+		this.issues = issues;
+	}
+};
+/**
+* Constructs a schema issue for an input with an invalid runtime type.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const InvalidType = class extends IssueNodeImpl {
+	_tag = "InvalidType";
+	/**
+	* The schema that caused the issue.
+	*/
+	ast;
+	constructor(ast, input, options) {
+		super(input, options);
+		this.ast = ast;
+	}
+};
+/**
+* Constructs a schema issue for a value that violates a constraint.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const InvalidValue$1 = class extends IssueNodeImpl {
+	_tag = "InvalidValue";
+	/**
+	* The metadata for the issue.
+	*/
+	annotations;
+	constructor(annotations, input, options) {
+		super(input, options);
+		this.annotations = annotations;
+	}
+};
+/**
+* Constructs a schema issue for a value that matches no union member.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const AnyOf = class extends IssueNodeImpl {
+	_tag = "AnyOf";
+	/**
+	* The schema that caused the issue.
+	*/
+	ast;
+	/**
+	* The issues that occurred.
+	*/
+	issues;
+	constructor(ast, issues, input, options) {
+		super(input, options);
+		this.ast = ast;
+		this.issues = issues;
+	}
+};
+/**
+* Constructs a schema issue for a value that matches multiple union members.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const OneOf = class extends IssueNodeImpl {
+	_tag = "OneOf";
+	/**
+	* The schema that caused the issue.
+	*/
+	ast;
+	/**
+	* The schemas that were successful.
+	*/
+	successes;
+	constructor(ast, successes, input, options) {
+		super(input, options);
+		this.ast = ast;
+		this.successes = successes;
+	}
+};
+function makeFilterIssue(entry, input, options) {
+	if (isIssue(entry)) return entry;
+	if (typeof entry === "string") return new InvalidValue$1({ message: entry }, input, options);
+	const inner = typeof entry.issue === "string" ? new InvalidValue$1({ message: entry.issue }, input, options) : entry.issue;
+	return new Pointer(entry.path, inner);
+}
+/** @internal */
+function makeSingle$1(out, input, options) {
+	if (out === void 0) return;
+	if (typeof out === "boolean") return out ? void 0 : new InvalidValue$1(void 0, input, options);
+	return makeFilterIssue(out, input, options);
+}
+/** @internal */
+function normalizeFilterOutput(ast, out, input, options) {
+	if (Array.isArray(out)) {
+		if (!isReadonlyArrayNonEmpty(out)) return;
+		return out.length === 1 ? makeFilterIssue(out[0], input, options) : new Composite(ast, map$8(out, (entry) => makeFilterIssue(entry, input, options)), input, options);
+	}
+	return makeSingle$1(out, input, options);
+}
+/**
+* Returns the built-in {@link LeafHook} used by default formatters.
+*
+* **When to use**
+*
+* Use as the default leaf renderer when customizing only the {@link CheckHook}.
+*
+* **Details**
+*
+* - Checks for a `message` annotation first; returns it if present.
+* - For `InvalidValue`, an `expected` annotation uses the standard expected
+*   value message and includes reported input when available.
+* - Otherwise generates a default message per `_tag`. When the issue reports
+*   input, the message includes its formatted value where applicable:
+*   - `InvalidType` → `"Expected <type>"` or `"Expected <type>, got <input>"`
+*   - `InvalidValue` → `"Expected a valid value"` or `"Invalid data <input>"`
+*   - `MissingKey` → `"Missing key"`
+*   - `UnexpectedKey` → `"Expected no excess property"` or
+*     `"Unexpected key with value <input>"`
+*   - `Forbidden` → `"Forbidden operation"`
+*   - `OneOf` → `"Expected exactly one member to match"` or
+*     `"Expected exactly one member to match the input <input>"`
+*
+* **Example** (Formatting Standard Schema issues with defaultLeafHook)
+*
+* ```ts import.meta.vitest
+* import { SchemaIssue } from "effect"
+*
+* const formatter = SchemaIssue.makeFormatterStandardSchemaV1({
+*   leafHook: SchemaIssue.defaultLeafHook
+* })
+* formatter(new SchemaIssue.MissingKey(undefined)) // => { issues: [{ path: [], message: "Missing key" }] }
+* ```
+*
+* @see {@link LeafHook}
+* @see {@link makeFormatterStandardSchemaV1}
+*
+* @category formatting
+* @since 4.0.0
+*/
+const defaultLeafHook = (issue) => {
+	const message = findMessage(issue);
+	if (message !== void 0) return message;
+	switch (issue._tag) {
+		case "InvalidType": return getExpectedMessage(getExpected(issue.ast), issue);
+		case "InvalidValue": {
+			const expected = findExpected(issue);
+			if (expected !== void 0) return getExpectedMessage(expected, issue);
+			const input = formatInput(issue);
+			return input === void 0 ? "Expected a valid value" : `Invalid data ${input}`;
+		}
+		case "MissingKey": return "Missing key";
+		case "UnexpectedKey": {
+			const input = formatInput(issue);
+			return input === void 0 ? "Expected no excess property" : `Unexpected key with value ${input}`;
+		}
+		case "Forbidden": return "Forbidden operation";
+		case "OneOf": {
+			const input = formatInput(issue);
+			return input === void 0 ? "Expected exactly one member to match" : `Expected exactly one member to match the input ${input}`;
+		}
+	}
+};
+/**
+* Returns the built-in {@link CheckHook} used by default formatters.
+*
+* **When to use**
+*
+* Use as the default filter renderer when customizing only the {@link LeafHook}.
+*
+* **Details**
+*
+* - Looks for a `message` annotation on the inner issue first, then on the
+*   filter itself.
+* - Returns `undefined` when no annotation is found, causing the formatter to
+*   fall back to `"Expected <filter>"` or, when the filter reports input,
+*   `"Expected <filter>, got <input>"`.
+*
+* @see {@link CheckHook}
+* @see {@link makeFormatterStandardSchemaV1}
+*
+* @category formatting
+* @since 4.0.0
+*/
+const defaultCheckHook = (issue) => findMessage(issue.issue) ?? findMessage(issue);
+function formatInput(issue) {
+	return hasInput(issue) ? format$1(issue.input) : void 0;
+}
+function findExpected(issue) {
+	const expected = issue.annotations?.expected;
+	return typeof expected === "string" ? expected : void 0;
+}
+function getExpectedMessage(expected, issue) {
+	const input = formatInput(issue);
+	return input === void 0 ? `Expected ${expected}` : `Expected ${expected}, got ${input}`;
+}
+function formatCheck(check) {
+	const expected = check.annotations?.expected;
+	if (typeof expected === "string") return expected;
+	switch (check._tag) {
+		case "Filter": return "<filter>";
+		case "FilterGroup": return check.checks.map((check) => formatCheck(check)).join(" & ");
+	}
+}
+/**
+* Creates a {@link Formatter} that converts an {@link Issue} into a
+* human-readable multi-line string.
+*
+* **When to use**
+*
+* Use when you need to format a `SchemaIssue.Issue` as error messages for
+* logging, CLI output, or developer-facing diagnostics.
+*
+* **Details**
+*
+* - Flattens the issue tree into `{ message, path }` entries using
+*   {@link defaultLeafHook} and {@link defaultCheckHook}.
+* - Includes reported input in default messages when the node producing the
+*   message has an `input` field.
+* - Each entry is rendered as `"<message>"` or `"<message>\n  at <path>"`.
+* - Multiple entries are joined with newlines.
+*
+* **Gotchas**
+*
+* Formatting an issue can disclose input retained with `reportInput: true`.
+* Wrapper inputs are not inherited by child messages, and custom messages are
+* returned unchanged.
+*
+* **Example** (Formatting an issue as a string)
+*
+* ```ts import.meta.vitest
+* import { SchemaIssue } from "effect"
+*
+* const formatter = SchemaIssue.makeFormatterDefault()
+* formatter(new SchemaIssue.MissingKey(undefined)) // => "Missing key"
+* ```
+*
+* @see {@link makeFormatterStandardSchemaV1} — produces Standard Schema V1 format instead
+* @see {@link Formatter}
+*
+* @category formatting
+* @since 4.0.0
+*/
+function makeFormatterDefault() {
+	return (issue) => formatIssue(issue, "");
+}
+/** @internal */
+const defaultFormatter$1 = /*#__PURE__*/ makeFormatterDefault();
+function formatIssue(issue, path) {
+	let message;
+	switch (issue._tag) {
+		case "Filter": {
+			const annotated = defaultCheckHook(issue);
+			if (annotated !== void 0) message = annotated;
+			else {
+				if (issue.issue._tag !== "InvalidValue") return formatIssue(issue.issue, path);
+				const expected = findExpected(issue.issue);
+				message = expected === void 0 ? getExpectedMessage(formatCheck(issue.filter), issue) : getExpectedMessage(expected, issue.issue);
+			}
+			break;
+		}
+		case "Encoding": return formatIssue(issue.issue, path);
+		case "Pointer": return formatIssue(issue.issue, path + formatPath(issue.path));
+		case "Composite":
+		case "AnyOf":
+			if (issue._tag === "Composite" || issue.issues.length > 0) return issue.issues.map((issue) => formatIssue(issue, path)).join("\n");
+			message = findMessage(issue) ?? getExpectedMessage(getExpected(issue.ast), issue);
+			break;
+		default: message = defaultLeafHook(issue);
+	}
+	return path ? `${message}\n  at ${path}` : message;
+}
+function findMessage(issue) {
+	if (issue._tag === "Pointer") return;
+	if (issue._tag === "Encoding") return findMessage(issue.issue);
+	const message = (issue._tag === "Filter" ? issue.filter.annotations : "annotations" in issue ? issue.annotations : issue.ast.annotations)?.[issue._tag === "MissingKey" ? "messageMissingKey" : issue._tag === "UnexpectedKey" ? "messageUnexpectedKey" : "message"];
+	if (typeof message === "string") return message;
+}
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/cause.js
+/** @internal */
+function getSchemaIssue(cause) {
+	let issue;
+	for (const reason of cause.reasons) {
+		if (!isFailReason(reason) || !isIssue(reason.error)) return;
+		issue ??= reason.error;
+	}
+	return issue;
+}
+/** @internal */
+function getSchemaIssueOrThrow(cause, message) {
+	const issue = getSchemaIssue(cause);
+	if (issue === void 0) throw new Error(message, { cause });
+	return issue;
+}
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/SchemaGetter.js
+const makeGetter = (fields) => Object.assign(Object.create(Prototype$1), fields);
+const passthrough_$1 = /*#__PURE__*/ makeGetter({ _tag: "Passthrough" });
+function passthrough$1() {
+	return passthrough_$1;
+}
+/**
+* Creates a getter that applies a pure function to present values.
+*
+* **When to use**
+*
+* Use when you need a schema getter for a pure, infallible transformation
+* between types.
+* - Building encode/decode pairs for `Schema.decodeTo`.
+*
+* **Details**
+*
+* - This is the most commonly used constructor.
+* - Transforms `Some(e)` to `Some(f(e))` and leaves `None` unchanged.
+* - Skips `None` inputs — only called when a value is present.
+* - Never fails.
+*
+* **Example** (Transforming strings to numbers)
+*
+* ```ts import.meta.vitest
+* import { Schema, SchemaGetter } from "effect"
+*
+* const NumberFromString = Schema.String.pipe(
+*   Schema.decodeTo(Schema.Number, {
+*     decode: SchemaGetter.transform((s) => Number(s)),
+*     encode: SchemaGetter.transform((n) => String(n))
+*   })
+* )
+* Schema.decodeSync(NumberFromString)("42") // => 42
+* ```
+*
+* @see {@link transformEffect} when the transformation returns an `Effect`
+* @see {@link transformOptional} when you need to handle `None` inputs
+* @see {@link passthrough} when no transformation is needed
+*
+* @category transforming
+* @since 4.0.0
+*/
+function transform$2(f) {
+	return makeGetter({
+		_tag: "Transform",
+		transform: f
+	});
+}
+/**
+* Coerces any value to a `string` using the global `String()` constructor.
+*
+* **When to use**
+*
+* Use when you need a schema getter to coerce a present encoded value to a
+* string with `String()`.
+*
+* **Details**
+*
+* The getter is pure, never fails, and delegates to `globalThis.String`.
+*
+* **Example** (Coercing to a string)
+*
+* ```ts import.meta.vitest
+* import { Effect, Option, SchemaGetter } from "effect"
+*
+* const toString = SchemaGetter.String<number>()
+* Effect.runSync(SchemaGetter.run(toString, Option.some(42), {})) // => Option.some("42")
+* ```
+*
+* @see {@link transform} for custom string conversions
+*
+* @category converting
+* @since 4.0.0
+*/
+function String$7() {
+	return transform$2(globalThis.String);
+}
+/**
+* Coerces any value to a `number` using the global `Number()` constructor.
+*
+* **When to use**
+*
+* Use when you need a schema getter to coerce a present encoded value to a
+* number with `Number()`.
+*
+* **Details**
+*
+* The getter is pure, never fails, and delegates to `globalThis.Number`. It may
+* produce `NaN` for non-numeric inputs.
+*
+* **Example** (Coercing to a number)
+*
+* ```ts import.meta.vitest
+* import { Effect, Option, SchemaGetter } from "effect"
+*
+* const toNumber = SchemaGetter.Number<string>()
+* Effect.runSync(SchemaGetter.run(toNumber, Option.some("42"), {})) // => Option.some(42)
+* ```
+*
+* @see {@link transformEffect} for effectful or validated number parsing
+*
+* @category converting
+* @since 4.0.0
+*/
+function Number$4() {
+	return transform$2(globalThis.Number);
+}
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/SchemaTransformation.js
+/**
+* Constructs schema middleware from its decode and encode functions.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Middleware = class extends Class$1 {
+	_tag = "Middleware";
+	decode;
+	encode;
+	constructor(decode, encode) {
+		super();
+		this.decode = decode;
+		this.encode = encode;
+	}
+	flip() {
+		return new Middleware(this.encode, this.decode);
+	}
+};
+const TypeId$21 = "~effect/SchemaTransformation/Transformation";
+/**
+* Constructs a bidirectional schema transformation from its decode and encode getters.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Transformation = class extends Class$1 {
+	[TypeId$21] = TypeId$21;
+	_tag = "Transformation";
+	decode;
+	encode;
+	constructor(decode, encode) {
+		super();
+		this.decode = decode;
+		this.encode = encode;
+	}
+	flip() {
+		return new Transformation(this.encode, this.decode);
+	}
+};
+/**
+* Returns `true` if `u` is a `Transformation` instance.
+*
+* **When to use**
+*
+* Use to check whether a value is already a schema transformation before
+* wrapping it.
+*
+* **Details**
+*
+* - Pure predicate, no side effects.
+* - Acts as a TypeScript type guard.
+*
+* **Example** (Checking a value)
+*
+* ```ts import.meta.vitest
+* import { SchemaTransformation } from "effect"
+*
+* SchemaTransformation.isTransformation(SchemaTransformation.trim()) // => true
+* SchemaTransformation.isTransformation({ decode: null, encode: null }) // => false
+* ```
+*
+* @see {@link Transformation}
+* @see {@link makeTransformation}
+*
+* @category guards
+* @since 4.0.0
+*/
+function isTransformation(u) {
+	return hasProperty(u, TypeId$21) && u[TypeId$21] === TypeId$21;
+}
+/**
+* Constructs a `Transformation` from an object with `decode` and `encode`
+* `Getter`s. If the input is already a `Transformation`, returns it as-is.
+*
+* **When to use**
+*
+* Use when you already have schema getter instances and want to pair them into
+* a schema transformation.
+* - You want idempotent wrapping (won't double-wrap).
+*
+* **Details**
+*
+* - Returns the input unchanged if it is already a `Transformation`.
+*
+* **Example** (Wrapping existing getters)
+*
+* ```ts import.meta.vitest
+* import { SchemaGetter, SchemaTransformation } from "effect"
+*
+* const t = SchemaTransformation.makeTransformation({
+*   decode: SchemaGetter.transform<number, string>((s) => Number(s)),
+*   encode: SchemaGetter.transform<string, number>((n) => String(n))
+* })
+* t._tag // => "Transformation"
+* ```
+*
+* @see {@link transform} — simpler constructor from pure functions
+* @see {@link transformEffect} — constructor from effectful functions
+* @see {@link Transformation}
+*
+* @category constructors
+* @since 3.10.0
+*/
+const makeTransformation = (options) => {
+	if (isTransformation(options)) return options;
+	return new Transformation(options.decode, options.encode);
+};
+/**
+* Creates a `Transformation` from pure (sync, infallible) decode and encode
+* functions.
+*
+* **When to use**
+*
+* Use when you need an infallible schema transformation that does not require
+* Effect services.
+*
+* **Details**
+*
+* - Each function receives the input and returns the output directly.
+* - Skips `None` inputs (missing keys) — functions are only called on present values.
+* - Does not allocate Effects internally; uses optimized sync path.
+*
+* **Example** (Converting between cents and dollars)
+*
+* ```ts import.meta.vitest
+* import { Schema, SchemaTransformation } from "effect"
+*
+* const CentsFromDollars = Schema.Number.pipe(
+*   Schema.decodeTo(
+*     Schema.Number,
+*     SchemaTransformation.transform({
+*       decode: (dollars) => dollars * 100,
+*       encode: (cents) => cents / 100
+*     })
+*   )
+* )
+* Schema.decodeSync(CentsFromDollars)(2.5) // => 250
+* ```
+*
+* @see {@link transformEffect} — for fallible or effectful transformations
+* @see {@link transformOptional} — for transformations that handle missing keys
+* @see {@link passthrough} — when no conversion is needed
+*
+* @category transforming
+* @since 3.10.0
+*/
+function transform$1(options) {
+	return new Transformation(transform$2(options.decode), transform$2(options.encode));
+}
+const passthrough_ = /*#__PURE__*/ new Transformation(/*#__PURE__*/ passthrough$1(), /*#__PURE__*/ passthrough$1());
+function passthrough() {
+	return passthrough_;
+}
+/**
+* Decodes a `string` into a `number` and encodes a `number` back to a
+* `string`.
+*
+* **When to use**
+*
+* Use when you need a schema transformation to parse numeric strings from APIs,
+* form data, or URL parameters.
+*
+* **Details**
+*
+* Decoding coerces the string to a number like `Number(s)`. Encoding coerces
+* the number to a string like `String(n)`. This does not validate that the
+* result is finite; combine with `Schema.Finite` or `Schema.Int` for stricter
+* checks.
+*
+* **Example** (Converting a string to a number)
+*
+* ```ts import.meta.vitest
+* import { Schema, SchemaTransformation } from "effect"
+*
+* const schema = Schema.String.pipe(
+*   Schema.decodeTo(Schema.Number, SchemaTransformation.numberFromString)
+* )
+* Schema.decodeSync(schema)("42") // => 42
+* ```
+*
+* @see {@link bigintFromString}
+* @see {@link transform}
+*
+* @category converting
+* @since 4.0.0
+*/
+const numberFromString = /*#__PURE__*/ new Transformation(/*#__PURE__*/ Number$4(), /*#__PURE__*/ String$7());
+const isJsonError = (input) => isObject(input) && typeof input["message"] === "string";
+const decodeJsonError = (input) => {
+	const err = Object.hasOwn(input, "cause") ? new Error(input.message, { cause: decodeDefect(input.cause) }) : new Error(input.message);
+	if (typeof input.name === "string" && input.name !== "Error") err.name = input.name;
+	if (typeof input.stack === "string") err.stack = input.stack;
+	return err;
+};
+const encodeUnknownAsJson = (input) => {
+	try {
+		const json = formatJson(input);
+		return json === void 0 ? format$1(input) : JSON.parse(json);
+	} catch {
+		return format$1(input);
+	}
+};
+const encodeJsonError = (input, options, encodeDefect) => {
+	const encoded = {
+		name: input.name,
+		message: typeof input.message === "string" ? input.message : ""
+	};
+	if (options?.includeStack && typeof input.stack === "string") encoded.stack = input.stack;
+	if (!options?.excludeCause && input.cause !== void 0) encoded.cause = encodeDefect(input.cause);
+	return encoded;
+};
+const makeEncodeDefect = (options) => {
+	const seen = /* @__PURE__ */ new WeakSet();
+	const encode = (input) => {
+		if (isError(input)) {
+			if (seen.has(input)) return "[Circular]";
+			seen.add(input);
+			const encoded = encodeJsonError(input, options, encode);
+			seen.delete(input);
+			return encoded;
+		}
+		return encodeUnknownAsJson(input);
+	};
+	return encode;
+};
+const decodeDefect = (input) => isJsonError(input) ? decodeJsonError(input) : input;
+/** @internal */
+const defectFromJson = (options) => transform$1({
+	decode: decodeDefect,
+	encode: makeEncodeDefect(options)
+});
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/SchemaAST.js
+/**
+* Represents Effect schemas as runtime trees.
+*
+* Every `Schema` has an AST made from nodes for declarations, primitives,
+* literals, arrays, objects, unions, suspended schemas, checks, annotations,
+* encoding links, and parsing context. Most users work with the higher-level
+* `Schema` module. Use `SchemaAST` when you need to inspect schema nodes, build
+* ASTs programmatically, change encoded or decoded views, collect issues, or
+* run low-level schema checks.
+*
+* @since 4.0.0
+*/
+function makeGuard(tag) {
+	return (ast) => ast._tag === tag;
+}
+/**
+* Narrows an {@link AST} to {@link Declaration}.
+*
+* **When to use**
+*
+* Use to recognize declaration AST nodes before running declaration-specific
+* handling.
+*
+* @see {@link Declaration} for the AST node type narrowed by this guard
+*
+* @category guards
+* @since 3.10.0
+*/
+const isDeclaration = /*#__PURE__*/ makeGuard("Declaration");
+/**
+* Narrows an {@link AST} to {@link Never}.
+*
+* **When to use**
+*
+* Use to detect the AST node for a schema that can never match before handling
+* other schema variants.
+*
+* @see {@link Never} for the AST node type narrowed by this guard
+* @see {@link never} for the singleton `Never` AST instance
+*
+* @category guards
+* @since 4.0.0
+*/
+const isNever = /*#__PURE__*/ makeGuard("Never");
+/**
+* Narrows an {@link AST} to {@link Literal}.
+*
+* **When to use**
+*
+* Use to recognize exact string, number, boolean, or bigint literal AST nodes.
+*
+* @see {@link Literal} for the AST node type narrowed by this guard
+* @see {@link LiteralValue} for the values stored by literal nodes
+*
+* @category guards
+* @since 3.10.0
+*/
+const isLiteral = /*#__PURE__*/ makeGuard("Literal");
+/**
+* Narrows an {@link AST} to {@link UniqueSymbol}.
+*
+* @category guards
+* @since 3.10.0
+*/
+const isUniqueSymbol = /*#__PURE__*/ makeGuard("UniqueSymbol");
+/**
+* Narrows an {@link AST} to {@link Arrays}.
+*
+* **When to use**
+*
+* Use to recognize array-like AST nodes before reading their element, rest, or
+* mutability metadata.
+*
+* @see {@link Arrays} for the AST node type narrowed by this guard
+*
+* @category guards
+* @since 4.0.0
+*/
+const isArrays = /*#__PURE__*/ makeGuard("Arrays");
+/**
+* Narrows an {@link AST} to {@link Objects}.
+*
+* @category guards
+* @since 4.0.0
+*/
+const isObjects = /*#__PURE__*/ makeGuard("Objects");
+/**
+* Narrows an {@link AST} to {@link Suspend}.
+*
+* @category guards
+* @since 3.10.0
+*/
+const isSuspend = /*#__PURE__*/ makeGuard("Suspend");
+/**
+* Constructs a {@link Link}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Link = class {
+	to;
+	transformation;
+	constructor(to, transformation) {
+		this.to = to;
+		this.transformation = transformation;
+	}
+};
+/** @internal */
+const defaultParseOptions = {};
+/**
+* Constructs a {@link Context}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Context = class {
+	isOptional;
+	isMutable;
+	/** Used for constructor default values (e.g. `withConstructorDefault` API) */
+	constructorDefault;
+	annotations;
+	constructor(isOptional, isMutable, constructorDefault = void 0, annotations = void 0) {
+		this.isOptional = isOptional;
+		this.isMutable = isMutable;
+		this.constructorDefault = constructorDefault;
+		this.annotations = annotations;
+	}
+};
+const TypeId$20 = "~effect/Schema";
+var ASTNodeImpl = class {
+	[TypeId$20] = TypeId$20;
+	annotations;
+	checks;
+	encoding;
+	context;
+	constructor(annotations = void 0, checks = void 0, encoding = void 0, context = void 0) {
+		this.annotations = annotations;
+		this.checks = checks;
+		this.encoding = encoding;
+		this.context = context;
+	}
+	toString() {
+		return `<${this._tag}>`;
+	}
+};
+/**
+* Constructs a {@link Declaration}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Declaration = class extends ASTNodeImpl {
+	_tag = "Declaration";
+	typeParameters;
+	run;
+	encodingChecks;
+	/**
+	* Parser factory {@link flip} swaps in, so a declaration can behave
+	* differently when encoding. `undefined` reuses `run`.
+	*/
+	encodingRun;
+	constructor(typeParameters, run, annotations, checks, encoding, context, encodingChecks, encodingRun) {
+		super(annotations, checks, encoding, context);
+		this.typeParameters = typeParameters;
+		this.run = run;
+		this.encodingChecks = encodingChecks;
+		this.encodingRun = encodingRun;
+	}
+	/** @internal */
+	getParser() {
+		let run;
+		return (input, options) => {
+			if (input === missing) return missingExit;
+			return (run ??= this.run(this.typeParameters))(input, this, options);
+		};
+	}
+	_rebuild(recur, checks, encodingChecks, run, encodingRun) {
+		const tps = mapOrSame(this.typeParameters, recur);
+		return tps === this.typeParameters && checks === this.checks && encodingChecks === this.encodingChecks && run === this.run && encodingRun === this.encodingRun ? this : new Declaration(tps, run, this.annotations, checks, void 0, this.context, encodingChecks, encodingRun);
+	}
+	/** @internal */
+	recur(recur) {
+		return this._rebuild(recur, this.checks, this.encodingChecks, this.run, this.encodingRun);
+	}
+	/** @internal */
+	flip(recur) {
+		return this._rebuild(recur, this.encodingChecks, this.checks, this.encodingRun ?? this.run, this.run);
+	}
+	/** @internal */
+	getExpected() {
+		const expected = this.annotations?.expected;
+		if (typeof expected === "string") return expected;
+		return "<Declaration>";
+	}
+};
+/**
+* Constructs a {@link Null}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Null = class extends ASTNodeImpl {
+	_tag = "Null";
+	/** @internal */
+	getParser() {
+		return fromConst(this, null);
+	}
+	/** @internal */
+	getExpected() {
+		return "null";
+	}
+};
+const null_ = /*#__PURE__*/ new Null();
+/**
+* Constructs a {@link Undefined}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Undefined$1 = class extends ASTNodeImpl {
+	_tag = "Undefined";
+	/** @internal */
+	getParser() {
+		return fromConst(this, void 0);
+	}
+	/** @internal */
+	toCodecJson() {
+		return replaceEncoding(this, [undefinedToNull]);
+	}
+	/** @internal */
+	getExpected() {
+		return "undefined";
+	}
+};
+const undefinedToNull = /*#__PURE__*/ new Link(null_, /*#__PURE__*/ new Transformation(/*#__PURE__*/ transform$2(() => void 0), /*#__PURE__*/ transform$2(() => null)));
+const undefined_ = /*#__PURE__*/ new Undefined$1();
+/**
+* Constructs a {@link Unknown}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Unknown$1 = class extends ASTNodeImpl {
+	_tag = "Unknown";
+	/** @internal */
+	getParser() {
+		return fromRefinement(this, isUnknown);
+	}
+	/** @internal */
+	getExpected() {
+		return "unknown";
+	}
+};
+/**
+* Provides the singleton {@link Unknown} AST instance.
+*
+* **When to use**
+*
+* Use when you need the reusable AST singleton for a schema node that accepts
+* every value while keeping parsed values opaque.
+*
+* @see {@link any} for the singleton that accepts every value as `any`
+*
+* @category constructors
+* @since 4.0.0
+*/
+const unknown = /*#__PURE__*/ new Unknown$1();
+/**
+* Constructs a {@link Literal}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Literal$1 = class extends ASTNodeImpl {
+	_tag = "Literal";
+	literal;
+	constructor(literal, annotations, checks, encoding, context) {
+		super(annotations, checks, encoding, context);
+		if (typeof literal === "number" && !globalThis.Number.isFinite(literal)) throw new Error(`A numeric literal must be finite, got ${format$1(literal)}`);
+		this.literal = literal;
+	}
+	/** @internal */
+	getParser() {
+		return fromConst(this, this.literal);
+	}
+	/** @internal */
+	matchPart(s, _options) {
+		return s === globalThis.String(this.literal) ? this.literal : void 0;
+	}
+	/** @internal */
+	toCodecJson() {
+		return typeof this.literal === "bigint" ? literalToString(this) : this;
+	}
+	/** @internal */
+	toCodecStringTree() {
+		return typeof this.literal === "string" ? this : literalToString(this);
+	}
+	/** @internal */
+	getExpected() {
+		return typeof this.literal === "string" ? JSON.stringify(this.literal) : globalThis.String(this.literal);
+	}
+};
+function literalToString(ast) {
+	const literalAsString = globalThis.String(ast.literal);
+	return replaceEncoding(ast, [new Link(new Literal$1(literalAsString), new Transformation(transform$2(() => ast.literal), transform$2(() => literalAsString)))]);
+}
+/**
+* Constructs a {@link String}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const String$6 = class extends ASTNodeImpl {
+	_tag = "String";
+	/** @internal */
+	getParser() {
+		return fromRefinement(this, isString);
+	}
+	/** @internal */
+	matchPart(s, options) {
+		const checks = this.checks;
+		return checks && !options.disableChecks && collectIssues(checks, s, void 0, this, options) ? void 0 : s;
+	}
+	/** @internal */
+	getExpected() {
+		return "string";
+	}
+};
+/**
+* Provides the singleton {@link String} AST instance.
+*
+* **When to use**
+*
+* Use as the shared `SchemaAST` node for unconstrained JavaScript strings.
+*
+* @see {@link String} for the AST node class
+* @see {@link isString} for narrowing an AST to a string node
+*
+* @category constructors
+* @since 4.0.0
+*/
+const string = /*#__PURE__*/ new String$6();
+/**
+* Constructs a {@link Number}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Number$3 = class extends ASTNodeImpl {
+	_tag = "Number";
+	/** @internal */
+	getParser() {
+		return fromRefinement(this, isNumber);
+	}
+	/** @internal */
+	matchKey(s, options) {
+		return this._match(isStringNumberRegExp, s, options);
+	}
+	/** @internal */
+	matchPart(s, options) {
+		return this._match(isStringFiniteRegExp, s, options);
+	}
+	_match(regexp, s, options) {
+		if (!regexp.test(s)) return void 0;
+		const value = globalThis.Number(s);
+		if (options.disableChecks || !this.checks) return value;
+		return collectIssues(this.checks, value, void 0, this, options) ? void 0 : value;
+	}
+	/** @internal */
+	toCodecJson() {
+		if (this.checks && (hasCheck(this.checks, "effect/schema/isFinite") || hasCheck(this.checks, "effect/schema/isInt"))) return this;
+		return replaceEncoding(this, [numberToJson]);
+	}
+	/** @internal */
+	toCodecStringTree() {
+		if (this.toCodecJson() === this) return replaceEncoding(this, [finiteToString]);
+		return replaceEncoding(this, [numberToString]);
+	}
+	/** @internal */
+	getExpected() {
+		return "number";
+	}
+};
+function hasCheck(checks, id) {
+	return checks.some((check) => check.annotations?.representation?.id === id || check._tag === "FilterGroup" && hasCheck(check.checks, id));
+}
+/**
+* Provides the singleton {@link Number} AST instance.
+*
+* **When to use**
+*
+* Use when you need the canonical `SchemaAST` node for schemas that accept any
+* JavaScript number value.
+*
+* @see {@link Number} for the AST node class and serialization behavior
+* @see {@link Literal} for exact finite numeric literal AST nodes
+*
+* @category constructors
+* @since 4.0.0
+*/
+const number = /*#__PURE__*/ new Number$3();
+/**
+* Constructs a {@link Boolean}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Boolean$5 = class extends ASTNodeImpl {
+	_tag = "Boolean";
+	/** @internal */
+	getParser() {
+		return fromRefinement(this, isBoolean$1);
+	}
+	/** @internal */
+	getExpected() {
+		return "boolean";
+	}
+};
+/**
+* Provides the singleton {@link Boolean} AST instance.
+*
+* **When to use**
+*
+* Use to reuse the standard AST node that accepts either `true` or `false` when
+* constructing schema ASTs directly.
+*
+* @see {@link Boolean} for the AST node class
+* @see {@link Literal} for exact boolean literal AST nodes
+*
+* @category constructors
+* @since 4.0.0
+*/
+const boolean = /*#__PURE__*/ new Boolean$5();
+/**
+* Constructs a {@link Arrays}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Arrays = class extends ASTNodeImpl {
+	_tag = "Arrays";
+	isMutable;
+	elements;
+	rest;
+	encodingChecks;
+	constructor(isMutable, elements, rest, annotations, checks, encoding, context, encodingChecks) {
+		super(annotations, checks, encoding, context);
+		this.isMutable = isMutable;
+		this.elements = elements;
+		this.rest = rest;
+		this.encodingChecks = encodingChecks;
+		let hasOptional = false;
+		for (let i = 0; i < elements.length; i++) if (isOptional(elements[i])) hasOptional = true;
+		else if (hasOptional) throw new Error("A required element cannot follow an optional element. ts(1257)");
+		if (hasOptional && rest.length > 1) throw new Error("A required element cannot follow an optional element. ts(1257)");
+		for (let i = 1; i < rest.length; i++) if (isOptional(rest[i])) throw new Error("An optional element cannot follow a rest element. ts(1266)");
+	}
+	/** @internal */
+	getParser(compile, compileField = compile) {
+		const ast = this;
+		let elements;
+		let rest;
+		const elementLen = ast.elements.length;
+		const tailLen = Math.max(0, ast.rest.length - 1);
+		function getParser(tailThreshold, index) {
+			if (index < elementLen) return elements[index];
+			else if (index >= tailThreshold) return rest[index - tailThreshold + 1];
+			return rest[0];
+		}
+		const finish = (state) => {
+			const { input, len, options } = state;
+			if (ast.rest.length === 0 && len > elementLen) for (let i = elementLen; i < len; i++) {
+				const unexpected = new UnexpectedKey(ast, input[i], options);
+				const issue = new Pointer([i], unexpected);
+				if (options.errors === "all") {
+					if (state.issues) state.issues.push(issue);
+					else state.issues = [issue];
+				} else return fail$1(new Composite(ast, [issue], input, options));
+			}
+			if (state.issues) return fail$1(new Composite(ast, state.issues, input, options));
+			return succeed$1(state.output);
+		};
+		const parse = (input, options) => {
+			const len = input.length;
+			const state = {
+				ast,
+				getParser,
+				input,
+				len,
+				tailThreshold: Math.max(elementLen, len - tailLen),
+				output: new globalThis.Array(len),
+				issues: void 0,
+				options
+			};
+			const end = ast.rest.length === 0 ? elementLen : Math.max(len, elementLen + tailLen);
+			const concurrency = options.concurrency === void 0 ? 1 : resolveConcurrency(options.concurrency);
+			const eff = concurrency === 1 ? parseArray(state, input, 0, end) : parseArrayConcurrent(state, input, {
+				concurrency,
+				end
+			});
+			if (!eff) return finish(state);
+			if (effectIsExit(eff)) return flatMapEager(eff, () => finish(state));
+			let first = true;
+			return suspend$2(() => {
+				if (!first) return parse(input, options);
+				first = false;
+				return flatMap$1(eff, () => finish(state));
+			});
+		};
+		return (input, options) => {
+			if (input === missing) return missingExit;
+			try {
+				if (!Array.isArray(input)) return fail$1(new InvalidType(ast, input, options));
+				if (!elements) {
+					elements = ast.elements.map((ast) => ({
+						ast,
+						parser: compileField(ast)
+					}));
+					rest = ast.rest.map((ast) => ({
+						ast,
+						parser: compileField(ast)
+					}));
+				}
+				return parse(input, options);
+			} catch (error) {
+				return die(error);
+			}
+		};
+	}
+	_rebuild(recur, checks, encodingChecks) {
+		const elements = mapOrSame(this.elements, recur);
+		const rest = mapOrSame(this.rest, recur);
+		return elements === this.elements && rest === this.rest && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Arrays(this.isMutable, elements, rest, this.annotations, checks, void 0, this.context, encodingChecks);
+	}
+	/** @internal */
+	recur(recur) {
+		return this._rebuild(recur, this.checks, this.encodingChecks);
+	}
+	/** @internal */
+	flip(recur) {
+		return this._rebuild(recur, this.encodingChecks, this.checks);
+	}
+	/** @internal */
+	getExpected() {
+		return "array";
+	}
+};
+/** @internal */
+function stepArray(s, item, exit, i) {
+	if (exit._tag === "Failure") return wrapPropertyKeyIssue(s, s.ast, i, exit);
+	const value = exit === sameExit ? item : exit[args];
+	if (value !== missing) s.output[i] = value;
+	else {
+		const p = s.getParser(s.tailThreshold, i);
+		if (isOptional(p.ast)) return;
+		const issue = new Pointer([i], new MissingKey(p.ast.context?.annotations));
+		if (s.options.errors === "all") {
+			if (s.issues) s.issues.push(issue);
+			else s.issues = [issue];
+		} else return fail$2(new Composite(s.ast, [issue], s.input, s.options));
+	}
+}
+const parseArrayOptions = {
+	onItem(s, item, i) {
+		const value = i < s.len ? item : missing;
+		return s.getParser(s.tailThreshold, i).parser(value, s.options);
+	},
+	step: stepArray
+};
+/** @internal */
+const parseArray = /*#__PURE__*/ iterateEager()(parseArrayOptions);
+const parseArrayConcurrent = /*#__PURE__*/ iterateConcurrent()(parseArrayOptions);
+const wrapPropertyKeyIssue = (s, ast, key, exit) => {
+	if (exit.cause.reasons.length === 0) return exit;
+	const issue = getSchemaIssue(exit.cause);
+	if (issue === void 0) return failCause$2(map$6(exit.cause, (issue) => new Composite(ast, [new Pointer([key], issue)], s.input, s.options)));
+	const pointer = new Pointer([key], issue);
+	if (s.options.errors === "all") {
+		if (s.issues) s.issues.push(pointer);
+		else s.issues = [pointer];
+	} else return fail$2(new Composite(ast, [pointer], s.input, s.options));
+};
+/**
+* floating point or integer, with optional exponent
+* @internal
+*/
+const FINITE_PATTERN = "[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?";
+/**
+* Returns the object keys that match the index signature parameter schema.
+* @internal
+*/
+function getIndexSignatureKeys(input, parameter, options = defaultParseOptions) {
+	let stringKeys;
+	let symbolKeys;
+	function go(parameter) {
+		switch (parameter._tag) {
+			case "String":
+			case "TemplateLiteral": return (stringKeys ??= Object.keys(input)).filter((k) => parameter.matchPart(k, options) !== void 0);
+			case "Number": return (stringKeys ??= Object.keys(input)).filter((k) => parameter.matchKey(k, options) !== void 0);
+			case "Symbol": return (symbolKeys ??= Object.getOwnPropertySymbols(input)).filter((k) => Object.prototype.propertyIsEnumerable.call(input, k) && parameter.matchKey(k, options) !== void 0);
+			case "Union": return [...new Set(parameter.types.flatMap(go))];
+			default: return [];
+		}
+	}
+	return go(parameterFromPropertyKey(toEncoded(parameter)));
+}
+/**
+* Constructs a {@link PropertySignature}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const PropertySignature = class {
+	name;
+	type;
+	constructor(name, type) {
+		this.name = name;
+		this.type = type;
+	}
+};
+function isIndexSignatureParameterSide(ast) {
+	switch (ast._tag) {
+		case "String":
+		case "Number":
+		case "Symbol":
+		case "TemplateLiteral": return true;
+		case "Union": return ast.types.every(isIndexSignatureParameterSide);
+		default: return false;
+	}
+}
+function isIndexSignatureParameterEncodedSide(ast) {
+	const encoded = getLastEncoding(ast);
+	switch (encoded._tag) {
+		case "String":
+		case "Number":
+		case "Symbol":
+		case "TemplateLiteral": return true;
+		case "Union": return encoded.types.every(isIndexSignatureParameterEncodedSide);
+		default: return false;
+	}
+}
+function isIndexSignatureParameter(ast) {
+	return isIndexSignatureParameterSide(ast) && isIndexSignatureParameterEncodedSide(ast);
+}
+/**
+* Constructs a {@link IndexSignature}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const IndexSignature = class {
+	parameter;
+	type;
+	constructor(parameter, type) {
+		if (!isIndexSignatureParameter(parameter)) throw new Error(`Invalid index signature parameter ${parameter._tag}`);
+		this.parameter = parameter;
+		this.type = type;
+		if (isOptional(type) && !containsUndefined(type)) throw new Error("Cannot use `Schema.optionalKey` with index signatures, use `Schema.optional` instead.");
+	}
+};
+/**
+* Constructs a {@link Objects}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Objects = class extends ASTNodeImpl {
+	_tag = "Objects";
+	propertySignatures;
+	indexSignatures;
+	encodingChecks;
+	constructor(propertySignatures, indexSignatures, annotations, checks, encoding, context, encodingChecks) {
+		super(annotations, checks, encoding, context);
+		this.propertySignatures = propertySignatures;
+		this.indexSignatures = indexSignatures;
+		this.encodingChecks = encodingChecks;
+	}
+	/** @internal */
+	getParser(compile, compileField = compile) {
+		const ast = this;
+		const hasProperties = ast.propertySignatures.length;
+		const indexCount = ast.indexSignatures.length;
+		if (!hasProperties && !indexCount) return fromRefinement(ast, isNotNullish);
+		let properties;
+		let indexes;
+		const compileMembers = () => {
+			if (!properties) {
+				properties = ast.propertySignatures.map((ps) => ({
+					parser: compileField(ps.type),
+					name: ps.name,
+					type: ps.type
+				}));
+				indexes = indexCount ? ast.indexSignatures.map((is) => ({
+					is,
+					parserKey: compile(parameterFromPropertyKey(is.parameter)),
+					parserValue: compileField(is.type)
+				})) : void 0;
+			}
+			return properties;
+		};
+		const makeFallback = () => {
+			const expectedKeys = new Set(ast.propertySignatures.map((ps) => typeof ps.name === "number" ? globalThis.String(ps.name) : ps.name));
+			const finishIndex = (s, key, k2, inputValue, exitValue) => {
+				if (exitValue._tag === "Failure") return wrapPropertyKeyIssue(s, ast, key, exitValue) ?? void_$1;
+				const value = exitValue === sameExit ? inputValue : exitValue[args];
+				if (k2 !== missing && value !== missing) {
+					if (hasProperties && (expectedKeys.has(key) || expectedKeys.has(typeof k2 === "number" ? globalThis.String(k2) : k2))) return void_$1;
+					assignProperty(s.out, k2, value);
+				}
+				return void_$1;
+			};
+			const parseIndex = (s, key, index, exitKey) => {
+				if (!exitKey) {
+					const eff = index.parserKey(key, s.options);
+					if (!effectIsExit(eff)) return flatMap$1(exit(eff), (exit) => parseIndex(s, key, index, exit));
+					exitKey = eff;
+				}
+				if (exitKey._tag === "Failure") return wrapPropertyKeyIssue(s, ast, key, exitKey) ?? void_$1;
+				const k2 = exitKey === sameExit ? key : exitKey[args];
+				const inputValue = s.input[key];
+				const result = index.parserValue(inputValue, s.options);
+				return effectIsExit(result) ? finishIndex(s, key, k2, inputValue, result) : flatMap$1(exit(result), (exit) => finishIndex(s, key, k2, inputValue, exit));
+			};
+			const parseStringIndex = (s, key, index) => {
+				const inputValue = s.input[key];
+				const result = index.parserValue(inputValue, s.options);
+				return effectIsExit(result) ? finishIndex(s, key, key, inputValue, result) : flatMap$1(exit(result), (exit) => finishIndex(s, key, key, inputValue, exit));
+			};
+			const parseIndexes = indexCount ? iterateConcurrent()({
+				onItem: (s, [key, index]) => index.is.parameter === string ? parseStringIndex(s, key, index) : parseIndex(s, key, index),
+				step: (_s, _item, exit) => exit._tag === "Failure" ? exit : void 0
+			}) : void 0;
+			return fnUntracedEager(function* (input, options) {
+				if (input === missing) return missing;
+				if (!(typeof input === "object" && input !== null && !Array.isArray(input))) return yield* fail$1(new InvalidType(ast, input, options));
+				compileMembers();
+				const record = input;
+				const out = {};
+				const state = {
+					ast,
+					input: record,
+					out,
+					issues: void 0,
+					options
+				};
+				const errorsAllOption = options.errors === "all";
+				const onExcessPropertyError = options.onExcessProperty === "error";
+				const concurrency = options.concurrency === void 0 ? 1 : resolveConcurrency(options.concurrency);
+				const indexKeys = indexCount && onExcessPropertyError ? ast.indexSignatures.map((index) => getIndexSignatureKeys(record, index.parameter, options)) : void 0;
+				if (onExcessPropertyError) {
+					const coveredKeys = indexKeys ? new Set(expectedKeys) : expectedKeys;
+					if (indexKeys) for (const keys of indexKeys) for (const key of keys) coveredKeys.add(key);
+					const inputKeys = Reflect.ownKeys(record);
+					for (let i = 0; i < inputKeys.length; i++) {
+						const key = inputKeys[i];
+						if (!coveredKeys.has(key) && Object.prototype.propertyIsEnumerable.call(record, key)) {
+							const unexpected = new UnexpectedKey(ast, record[key], options);
+							const issue = new Pointer([key], unexpected);
+							if (errorsAllOption) {
+								if (state.issues) state.issues.push(issue);
+								else state.issues = [issue];
+								continue;
+							} else return yield* fail$1(new Composite(ast, [issue], input, options));
+						}
+					}
+				}
+				if (hasProperties) {
+					const eff = concurrency === 1 ? parseProperties(state, properties) : parsePropertiesConcurrent(state, properties, { concurrency });
+					if (eff) yield* eff;
+				}
+				if (indexCount && concurrency === 1) for (let i = 0; i < indexCount; i++) {
+					const index = indexes[i];
+					const parse = index.is.parameter === string ? parseStringIndex : parseIndex;
+					const keys = indexKeys?.[i] ?? (index.is.parameter === string ? Object.keys(record) : getIndexSignatureKeys(record, index.is.parameter, options));
+					for (let j = 0; j < keys.length; j++) {
+						const eff = parse(state, keys[j], index);
+						if (!effectIsExit(eff)) yield* eff;
+						else if (eff._tag === "Failure") return yield* eff;
+					}
+				}
+				else if (parseIndexes) {
+					const keyPairs = empty$2();
+					for (let i = 0; i < indexCount; i++) {
+						const index = indexes[i];
+						const keys = indexKeys?.[i] ?? (index.is.parameter === string ? Object.keys(record) : getIndexSignatureKeys(record, index.is.parameter, options));
+						for (let j = 0; j < keys.length; j++) keyPairs.push([keys[j], index]);
+					}
+					const eff = parseIndexes(state, keyPairs, { concurrency });
+					if (eff) yield* eff;
+				}
+				if (state.issues) return yield* fail$1(new Composite(ast, state.issues, input, options));
+				return out;
+			});
+		};
+		if (indexCount) return makeFallback();
+		let fallback;
+		const resume = (state, index, pending) => {
+			const property = properties[index];
+			return flatMap$1(exit(pending), (exit) => {
+				const terminal = stepProperty(state, property, exit);
+				if (terminal) return terminal;
+				const done = () => succeed$1(state.out);
+				const eff = parseProperties(state, properties.slice(index + 1));
+				return eff ? flatMapEager(eff, done) : done();
+			});
+		};
+		return (input, options) => {
+			if (input === missing) return missingExit;
+			if (options.errors === "all" || options.onExcessProperty !== void 0 || options.concurrency !== void 0 && resolveConcurrency(options.concurrency) !== 1) return (fallback ??= makeFallback())(input, options);
+			if (!(typeof input === "object" && input !== null && !Array.isArray(input))) return fail$1(new InvalidType(ast, input, options));
+			const props = compileMembers();
+			const record = input;
+			const out = {};
+			const state = {
+				ast,
+				input: record,
+				out,
+				issues: void 0,
+				options
+			};
+			try {
+				for (let index = 0; index < props.length; index++) {
+					const property = props[index];
+					const name = property.name;
+					const hasKey = hasPropertySignature(record, name);
+					const value = hasKey ? record[name] : missing;
+					const exit = property.parser(value, options);
+					if (!effectIsExit(exit)) return resume(state, index, exit);
+					if (exit === sameExit) {
+						if (hasKey) assignProperty(out, name, value);
+						continue;
+					}
+					const terminal = stepProperty(state, property, exit);
+					if (terminal) return terminal;
+				}
+			} catch (error) {
+				return die(error);
+			}
+			return succeed$1(out);
+		};
+	}
+	_rebuild(recur, recurParameter, checks, encodingChecks) {
+		const props = mapOrSame(this.propertySignatures, (ps) => {
+			const t = recur(ps.type);
+			return t === ps.type ? ps : new PropertySignature(ps.name, t);
+		});
+		const indexes = mapOrSame(this.indexSignatures, (is) => {
+			const p = recurParameter(is.parameter);
+			const t = recur(is.type);
+			return p === is.parameter && t === is.type ? is : new IndexSignature(p, t);
+		});
+		return props === this.propertySignatures && indexes === this.indexSignatures && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Objects(props, indexes, this.annotations, checks, void 0, this.context, encodingChecks);
+	}
+	/** @internal */
+	flip(recur) {
+		return this._rebuild(recur, recur, this.encodingChecks, this.checks);
+	}
+	/** @internal */
+	recur(recur, recurParameter = recur) {
+		return this._rebuild(recur, recurParameter, this.checks, this.encodingChecks);
+	}
+	/** @internal */
+	getExpected() {
+		if (this.propertySignatures.length === 0 && this.indexSignatures.length === 0) return "object | array";
+		return "object";
+	}
+};
+/** @internal */
+function stepProperty(s, p, exit) {
+	if (exit._tag === "Failure") return wrapPropertyKeyIssue(s, s.ast, p.name, exit);
+	if (exit === sameExit) return;
+	const value = exit[args];
+	if (value !== missing) {
+		assignProperty(s.out, p.name, value);
+		return;
+	}
+	delete s.out[p.name];
+	if (!isOptional(p.type)) {
+		const issue = new Pointer([p.name], new MissingKey(p.type.context?.annotations));
+		if (s.options.errors === "all") {
+			if (s.issues) s.issues.push(issue);
+			else s.issues = [issue];
+			return;
+		} else return fail$2(new Composite(s.ast, [issue], s.input, s.options));
+	}
+}
+const parsePropertiesOptions = {
+	onItem(s, p) {
+		if (!hasPropertySignature(s.input, p.name)) return p.parser(missing, s.options);
+		const value = s.input[p.name];
+		assignProperty(s.out, p.name, value);
+		return p.parser(value, s.options);
+	},
+	step: stepProperty
+};
+/** @internal */
+const parseProperties = /*#__PURE__*/ iterateEager()(parsePropertiesOptions);
+const parsePropertiesConcurrent = /*#__PURE__*/ iterateConcurrent()(parsePropertiesOptions);
+function combineChecks(a, b) {
+	if (!a) return b;
+	if (!b) return a;
+	return [...a, ...b];
+}
+/** @internal */
+function struct(fields, checks, annotations) {
+	return new Objects(Reflect.ownKeys(fields).map((key) => {
+		return new PropertySignature(key, fields[key].ast);
+	}), [], annotations, checks);
+}
+/** @internal */
+function getAST(self) {
+	return self.ast;
+}
+/** @internal */
+function union(members, options, checks) {
+	return new Union$1(members.map(getAST), options, void 0, checks);
+}
+const toCandidate = /*#__PURE__*/ memoizeIdempotent((ast) => {
+	while (true) {
+		if (isSuspend(ast)) return unknown;
+		const encoding = ast.encoding;
+		if (!encoding) return ast.recur?.(toCandidate, identity) ?? ast;
+		if (encoding.some((link) => link.transformation._tag === "Middleware" && link.transformation.decode !== identity)) return unknown;
+		ast = encoding[encoding.length - 1].to;
+	}
+});
+function getCandidateTypes(ast) {
+	switch (ast._tag) {
+		case "Null": return ["null"];
+		case "Undefined": return ["undefined"];
+		case "String":
+		case "TemplateLiteral": return ["string"];
+		case "Number": return ["number"];
+		case "Boolean": return ["boolean"];
+		case "Symbol":
+		case "UniqueSymbol": return ["symbol"];
+		case "BigInt": return ["bigint"];
+		case "Arrays": return ["array"];
+		case "ObjectKeyword": return [
+			"object",
+			"array",
+			"function"
+		];
+		case "Objects": return ast.propertySignatures.length || ast.indexSignatures.length ? ["object"] : [
+			"string",
+			"number",
+			"boolean",
+			"symbol",
+			"bigint",
+			"object",
+			"array",
+			"function"
+		];
+		case "Enum": return Array.from(new Set(ast.enums.map(([, v]) => typeof v)));
+		case "Literal": return [typeof ast.literal];
+		case "Union": return Array.from(new Set(ast.types.flatMap(getCandidateTypes)));
+		default: return [
+			"null",
+			"undefined",
+			"string",
+			"number",
+			"boolean",
+			"symbol",
+			"bigint",
+			"object",
+			"array",
+			"function"
+		];
+	}
+}
+/** @internal */
+function collectSentinels(ast) {
+	switch (ast._tag) {
+		default: return [];
+		case "Declaration": {
+			const s = ast.annotations?.[SENTINELS_ANNOTATION_KEY];
+			return Array.isArray(s) ? s : [];
+		}
+		case "Objects": return ast.propertySignatures.flatMap((ps) => {
+			const type = ps.type;
+			if (!isOptional(type)) {
+				if (isLiteral(type)) return [{
+					key: ps.name,
+					literal: type.literal
+				}];
+				if (isUniqueSymbol(type)) return [{
+					key: ps.name,
+					literal: type.symbol
+				}];
+			}
+			return [];
+		});
+		case "Arrays": return ast.elements.flatMap((e, i) => {
+			if (!isOptional(e)) {
+				if (isLiteral(e)) return [{
+					key: i,
+					literal: e.literal
+				}];
+				if (isUniqueSymbol(e)) return [{
+					key: i,
+					literal: e.symbol
+				}];
+			}
+			return [];
+		});
+		case "Union": {
+			if (ast.types.length === 0) return [];
+			const members = ast.types.map((type) => collectSentinels(toCandidate(type)));
+			return members[0].filter((s) => members.every((sentinels) => sentinels.some((o) => o.key === s.key && o.literal === s.literal)));
+		}
+		case "Suspend": return collectSentinels(ast.thunk());
+	}
+}
+const candidateIndexCache = /*#__PURE__*/ new WeakMap();
+const emptyCandidates = /*#__PURE__*/ Object.freeze([]);
+const getRuntimeType = (input) => input === null ? "null" : Array.isArray(input) ? "array" : typeof input;
+const hasPropertySignature = (input, key) => key === "__proto__" ? Object.hasOwn(input, key) : key in input;
+function getIndex(types) {
+	let index = candidateIndexCache.get(types);
+	if (index) return index;
+	let bySentinel;
+	let sentinelCandidateCount = 0;
+	let otherwise;
+	let literalCandidates;
+	let onlyLiterals = true;
+	for (let i = 0; i < types.length; i++) {
+		const a = types[i];
+		const encoded = toCandidate(a);
+		if (isNever(encoded)) continue;
+		if (isLiteral(encoded) || isUniqueSymbol(encoded)) {
+			literalCandidates ??= /* @__PURE__ */ new Map();
+			const literal = isLiteral(encoded) ? encoded.literal : encoded.symbol;
+			let arr = literalCandidates.get(literal);
+			if (!arr) literalCandidates.set(literal, arr = []);
+			arr.push(a);
+		} else onlyLiterals = false;
+		const sentinels = collectSentinels(encoded);
+		if (sentinels.length) {
+			bySentinel ??= /* @__PURE__ */ new Map();
+			sentinelCandidateCount++;
+			for (const { key, literal } of sentinels) {
+				let entry = bySentinel.get(key);
+				if (!entry) bySentinel.set(key, entry = [/* @__PURE__ */ new Map(), /* @__PURE__ */ new Set()]);
+				entry[1].add(i);
+				let indexes = entry[0].get(literal);
+				if (!indexes) entry[0].set(literal, indexes = /* @__PURE__ */ new Set());
+				indexes.add(i);
+			}
+		} else {
+			otherwise ??= {};
+			const candidateTypes = getCandidateTypes(encoded);
+			for (const t of candidateTypes) (otherwise[t] ??= []).push(i);
+		}
+	}
+	const fallbacks = {};
+	const getFallback = (type) => fallbacks[type] ??= Object.freeze((otherwise?.[type] ?? emptyCandidates).map((i) => types[i]));
+	if (onlyLiterals && literalCandidates) {
+		literalCandidates.forEach(Object.freeze);
+		index = (input) => literalCandidates.get(input) ?? emptyCandidates;
+	} else if (bySentinel?.size === 1 && !otherwise) {
+		const [key, [byValue]] = bySentinel.entries().next().value;
+		const candidates = byValue;
+		for (const [literal, indexes] of byValue) candidates.set(literal, Object.freeze(Array.from(indexes, (index) => types[index])));
+		index = (input, isConstructor) => {
+			if (isObjectKeyword(input)) {
+				const value = hasPropertySignature(input, key) ? input[key] : void 0;
+				if (value !== void 0) return candidates.get(value) ?? emptyCandidates;
+				if (isConstructor) return types;
+			}
+			return emptyCandidates;
+		};
+	} else if (bySentinel) {
+		let commonSentinel;
+		for (const entry of bySentinel) if ((!commonSentinel || entry[1][0].size > commonSentinel[1][0].size) && entry[1][1].size === sentinelCandidateCount) commonSentinel = entry;
+		index = (input, isConstructor) => {
+			const runtimeType = getRuntimeType(input);
+			if (!isObjectKeyword(input)) return getFallback(runtimeType);
+			const selected = new Set(otherwise?.[runtimeType]);
+			let directKey;
+			if (commonSentinel) {
+				const [key, [byValue]] = commonSentinel;
+				const hasKey = hasPropertySignature(input, key);
+				const value = hasKey ? input[key] : void 0;
+				if (hasKey && (!isConstructor || value !== void 0)) {
+					const match = byValue.get(value);
+					if (!match) return getFallback(runtimeType);
+					for (const i of match) selected.add(i);
+					directKey = key;
+				}
+			}
+			if (directKey === void 0) for (const [key, [byValue, all]] of bySentinel) {
+				const hasKey = hasPropertySignature(input, key);
+				const value = hasKey ? input[key] : void 0;
+				if (hasKey && (!isConstructor || value !== void 0)) {
+					const match = byValue.get(value);
+					if (match) for (const i of match) selected.add(i);
+				} else if (isConstructor) for (const i of all) selected.add(i);
+			}
+			for (const [key, [byValue, all]] of bySentinel) {
+				if (key === directKey) continue;
+				const hasKey = hasPropertySignature(input, key);
+				const value = hasKey ? input[key] : void 0;
+				if (hasKey && (!isConstructor || value !== void 0)) {
+					const match = byValue.get(value);
+					for (const i of selected) if (all.has(i) && !match?.has(i)) selected.delete(i);
+				}
+			}
+			return Array.from(selected).sort((a, b) => a - b).map((i) => types[i]);
+		};
+	} else index = (input) => {
+		const fallback = getFallback(getRuntimeType(input));
+		return literalCandidates ? fallback.filter(filterLiterals(input)) : fallback;
+	};
+	candidateIndexCache.set(types, index);
+	return index;
+}
+function filterLiterals(input) {
+	return (ast) => {
+		const encoded = toCandidate(ast);
+		return encoded._tag === "Literal" ? encoded.literal === input : encoded._tag === "UniqueSymbol" ? encoded.symbol === input : true;
+	};
+}
+/**
+* The goal is to reduce the number of a union members that will be checked.
+* This is useful to reduce the number of issues that will be returned.
+*
+* @internal
+*/
+function getCandidates(input, types, isConstructor = false) {
+	return getIndex(types)(input, isConstructor);
+}
+/**
+* Constructs a {@link Union}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Union$1 = class extends ASTNodeImpl {
+	_tag = "Union";
+	types;
+	options;
+	encodingChecks;
+	constructor(types, options, annotations, checks, encoding, context, encodingChecks) {
+		super(annotations, checks, encoding, context);
+		this.types = types;
+		this.options = options;
+		this.encodingChecks = encodingChecks;
+	}
+	/** @internal */
+	getParser(compile, compileField) {
+		const ast = this;
+		return (input, options) => {
+			if (input === missing) return missingExit;
+			const candidates = getCandidates(input, ast.types, compileField !== void 0);
+			if (candidates.length === 0) return fail$1(new AnyOf(ast, [], input, options));
+			if (candidates.length === 1) {
+				const result = compile(candidates[0])(input, options);
+				if (result._tag === "Success") return result;
+				return effectIsExit(result) ? failSingleUnionCandidate(ast, result.cause, input, options) : catchCause(result, (cause) => failSingleUnionCandidate(ast, cause, input, options));
+			}
+			const state = {
+				ast,
+				compile,
+				input,
+				out: void 0,
+				successes: ast.options?.mode === "oneOf" ? [] : void 0,
+				issues: void 0,
+				options
+			};
+			const eff = parseUnion(state, candidates);
+			if (!eff) {
+				if (state.out) return state.out;
+				return fail$1(new AnyOf(ast, state.issues ?? [], input, options));
+			}
+			return flatMapEager(eff, (_) => {
+				if (state.out === sameExit) return succeed$2(input);
+				if (state.out) return state.out;
+				return fail$1(new AnyOf(ast, state.issues ?? [], input, options));
+			});
+		};
+	}
+	_rebuild(recur, checks, encodingChecks) {
+		const types = mapOrSame(this.types, recur);
+		return types === this.types && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Union$1(types, this.options, this.annotations, checks, void 0, this.context, encodingChecks);
+	}
+	/** @internal */
+	recur(recur) {
+		return this._rebuild(recur, this.checks, this.encodingChecks);
+	}
+	/** @internal */
+	flip(recur) {
+		return this._rebuild(recur, this.encodingChecks, this.checks);
+	}
+	/** @internal */
+	matchPart(s, options) {
+		for (const type of this.types) {
+			const out = type.matchPart(s, options);
+			if (out !== void 0) return out;
+		}
+	}
+	/** @internal */
+	getExpected(getExpected) {
+		const expected = this.annotations?.expected;
+		if (typeof expected === "string") return expected;
+		if (this.types.length === 0) return "never";
+		const types = this.types.map((type) => {
+			const encoded = toEncoded(type);
+			switch (encoded._tag) {
+				case "Arrays": {
+					const literals = encoded.elements.filter(isLiteral);
+					if (literals.length > 0) return `${formatIsMutable(encoded.isMutable)}[ ${literals.map((e) => getExpected(e) + formatIsOptional(e.context?.isOptional)).join(", ")}, ... ]`;
+					break;
+				}
+				case "Objects": {
+					const literals = encoded.propertySignatures.filter((ps) => isLiteral(ps.type));
+					if (literals.length > 0) return `{ ${literals.map((ps) => `${formatIsMutable(ps.type.context?.isMutable)}${formatPropertyKey(ps.name)}${formatIsOptional(ps.type.context?.isOptional)}: ${getExpected(ps.type)}`).join(", ")}, ... }`;
+					break;
+				}
+			}
+			return getExpected(encoded);
+		});
+		return Array.from(new Set(types)).join(" | ");
+	}
+};
+function failSingleUnionCandidate(ast, cause, input, options) {
+	const issue = getSchemaIssue(cause);
+	if (!issue) return failCause$2(cause);
+	return fail$2(new AnyOf(ast, [issue], input, options));
+}
+const parseUnion = /*#__PURE__*/ iterateEager()({
+	onItem(s, ast) {
+		return s.compile(ast)(s.input, s.options);
+	},
+	step(s, candidate, exit) {
+		if (exit._tag === "Failure") {
+			const issue = getSchemaIssue(exit.cause);
+			if (issue === void 0) return exit;
+			if (s.issues) s.issues.push(issue);
+			else s.issues = [issue];
+		} else {
+			if (s.out && s.successes) {
+				s.successes.push(candidate);
+				return fail$2(new OneOf(s.ast, s.successes, s.input, s.options));
+			}
+			s.out = exit;
+			if (s.successes) s.successes.push(candidate);
+			else return void_$1;
+		}
+	}
+});
+const nonFiniteLiterals = /*#__PURE__*/ new Union$1([
+	/*#__PURE__*/ new Literal$1("Infinity"),
+	/*#__PURE__*/ new Literal$1("-Infinity"),
+	/*#__PURE__*/ new Literal$1("NaN")
+]);
+function formatIsMutable(isMutable) {
+	return isMutable ? "" : "readonly ";
+}
+function formatIsOptional(isOptional) {
+	return isOptional ? "?" : "";
+}
+/**
+* Constructs a {@link Filter}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Filter = class extends Class$1 {
+	_tag = "Filter";
+	run;
+	annotations;
+	/**
+	* Whether the parsing process should be aborted after this check has failed.
+	*/
+	aborted;
+	constructor(run, annotations = void 0, aborted = false) {
+		super();
+		this.run = run;
+		this.annotations = annotations;
+		this.aborted = aborted;
+	}
+	annotate(annotations) {
+		return new Filter(this.run, {
+			...this.annotations,
+			...annotations
+		}, this.aborted);
+	}
+	abort() {
+		return new Filter(this.run, this.annotations, true);
+	}
+	and(other, annotations) {
+		return new FilterGroup([this, other], annotations);
+	}
+};
+/**
+* Constructs a {@link FilterGroup}.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const FilterGroup = class extends Class$1 {
+	_tag = "FilterGroup";
+	checks;
+	annotations;
+	constructor(checks, annotations = void 0) {
+		super();
+		this.checks = checks;
+		this.annotations = annotations;
+	}
+	annotate(annotations) {
+		return new FilterGroup(this.checks, {
+			...this.annotations,
+			...annotations
+		});
+	}
+	and(other, annotations) {
+		return new FilterGroup([this, other], annotations);
+	}
+};
+/** @internal */
+function makeFilter$1(filter, annotations, aborted = false) {
+	return new Filter((input, ast, options) => normalizeFilterOutput(ast, filter(input, ast, options), input, options), annotations, aborted);
+}
+/** @internal */
+function isFinite(annotations) {
+	return makeFilter$1((n) => globalThis.Number.isFinite(n), {
+		expected: "a finite number",
+		representation: {
+			id: "effect/schema/isFinite",
+			payload: null
+		},
+		toJsonSchema: () => ({ type: "number" }),
+		toCode: () => ({ runtime: "Schema.isFinite()" }),
+		arbitraryConstraint: { number: "finite" },
+		...annotations
+	});
+}
+const numberToJson = /*#__PURE__*/ new Link(/*#__PURE__*/ new Union$1([/* @__PURE__ */ appendChecks(number, [/*#__PURE__*/ isFinite()]), nonFiniteLiterals]), /*#__PURE__*/ new Transformation(/*#__PURE__*/ Number$4(), /*#__PURE__*/ transform$2((n) => globalThis.Number.isFinite(n) ? n : globalThis.String(n))));
+/**
+* Creates a {@link Filter} that validates strings by running `RegExp.test`.
+*
+* **When to use**
+*
+* Use when string validation should be represented as a schema `Filter` backed
+* by a regular expression.
+*
+* **Details**
+*
+* The filter can be used with `Schema.filter` or attached directly to a
+* `String` AST node through checks. The regular expression is cloned and its
+* `lastIndex` is reset before each test, so global and sticky expressions are
+* deterministic and the provided regular expression is not mutated. The
+* regular expression source is stored in annotations for serialization and
+* arbitrary generation.
+*
+* **Gotchas**
+*
+* Arbitrary metadata preserves both `regExp.source` and `regExp.flags`.
+* Implementations that cannot consume all flags may still use the source as a
+* generation hint because the Schema filter validates every generated value.
+* JSON Schema has no way to carry JavaScript regular-expression flags. Unless
+* annotations provide `toJsonSchema`, the RegExp constraint is omitted from
+* JSON Schema export.
+*
+* **Example** (Validating an email pattern)
+*
+* ```ts import.meta.vitest
+* import { SchemaAST } from "effect"
+*
+* const emailFilter = SchemaAST.isPattern(/^[^@]+@[^@]+$/)
+* emailFilter.run("alice@example.com", SchemaAST.string, {}) // => undefined
+* emailFilter.run("invalid", SchemaAST.string, {})?._tag // => "InvalidValue"
+* ```
+*
+* @see {@link Filter}
+* @category constructors
+* @since 4.0.0
+*/
+function isPattern$1(regExp, annotations) {
+	const copy = new globalThis.RegExp(regExp);
+	const payload = {
+		source: copy.source,
+		flags: copy.flags
+	};
+	return makeFilter$1((s) => {
+		copy.lastIndex = 0;
+		return copy.test(s);
+	}, {
+		expected: `a string matching the RegExp ${payload.source}`,
+		representation: {
+			id: "effect/schema/isPattern",
+			payload
+		},
+		toJsonSchema: () => [{}, true],
+		arbitraryConstraint: { patterns: [payload] },
+		...annotations
+	});
+}
+function copy$1(ast) {
+	return Object.assign(Object.create(Object.getPrototypeOf(ast)), ast);
+}
+const contextOwners = /*#__PURE__*/ new WeakMap();
+/** @internal */
+function getContextOwner(ast) {
+	return contextOwners.get(ast) ?? ast;
+}
+/** @internal */
+function replaceEncoding(ast, encoding) {
+	if (ast.encoding === encoding) return ast;
+	const out = copy$1(ast);
+	out.encoding = encoding;
+	return out;
+}
+/** @internal */
+function replaceContext(ast, context) {
+	if (ast.context === context) return ast;
+	const owner = getContextOwner(ast);
+	if (owner.context === context) return owner;
+	const out = copy$1(ast);
+	out.context = context;
+	contextOwners.set(out, owner);
+	return out;
+}
+/** @internal */
+function getLastEncoding(ast) {
+	return ast.encoding ? getLastEncoding(ast.encoding[ast.encoding.length - 1].to) : ast;
+}
+/** @internal */
+function annotate$1(ast, annotations) {
+	if (ast.checks) {
+		const last = ast.checks[ast.checks.length - 1];
+		return replaceChecks(ast, append$1(ast.checks.slice(0, -1), last.annotate(annotations)));
+	}
+	const out = copy$1(ast);
+	out.annotations = {
+		...ast.annotations,
+		...annotations
+	};
+	return out;
+}
+/** @internal */
+function replaceChecks(ast, checks) {
+	if (ast._tag === "Suspend" && checks) throw new Error("Cannot add checks to Suspend");
+	if (ast.checks === checks) return ast;
+	const out = copy$1(ast);
+	out.checks = checks;
+	return out;
+}
+/** @internal */
+function appendChecks(ast, checks) {
+	return replaceChecks(ast, combineChecks(ast.checks, checks));
+}
+/** @internal */
+function mapLink(link, f) {
+	const to = f(link.to);
+	return to === link.to ? link : new Link(to, link.transformation);
+}
+function updateLastLink(encoding, f) {
+	const links = encoding;
+	const last = links[links.length - 1];
+	const out = mapLink(last, f);
+	return out === last ? encoding : append$1(encoding.slice(0, encoding.length - 1), out);
+}
+/** @internal */
+function applyToLastLink(f) {
+	return (ast) => ast.encoding ? replaceEncoding(ast, updateLastLink(ast.encoding, f)) : ast;
+}
+/** @internal */
+function replaceContextLastLink(ast, context) {
+	return applyToLastLink((ast) => replaceContext(ast, context))(ast);
+}
+/** @internal */
+function applyToSelfOrLastLinkEncodingIdempotent(f, options) {
+	function out(ast) {
+		if (ast.encoding) {
+			const last = ast.encoding[ast.encoding.length - 1];
+			return options?.stopAt?.(last) ? ast : replaceEncoding(ast, updateLastLink(ast.encoding, out));
+		}
+		return f(ast);
+	}
+	return memoizeIdempotent(out);
+}
+function appendTransformation(from, transformation, to) {
+	const link = new Link(from, transformation);
+	return replaceEncoding(to, to.encoding ? [...to.encoding, link] : [link]);
+}
+function mapOrSame(as, f) {
+	let out;
+	for (let i = 0; i < as.length; i++) {
+		const a = as[i];
+		const fa = f(a);
+		if (out) out[i] = fa;
+		else if (fa !== a) {
+			out = new Array(as.length);
+			for (let j = 0; j < i; j++) out[j] = as[j];
+			out[i] = fa;
+		}
+	}
+	return out ?? as;
+}
+/** @internal */
+function annotateKey(ast, annotations) {
+	return replaceContext(ast, ast.context ? new Context(ast.context.isOptional, ast.context.isMutable, ast.context.constructorDefault, {
+		...ast.context.annotations,
+		...annotations
+	}) : new Context(false, false, void 0, annotations));
+}
+/** @internal */
+const optionalKey$1 = /*#__PURE__*/ memoizeIdempotent((ast) => {
+	const context = ast.context ? ast.context.isOptional === false ? new Context(true, ast.context.isMutable, ast.context.constructorDefault, ast.context.annotations) : ast.context : new Context(true, false);
+	return optionalKeyLastLink(replaceContext(ast, context));
+});
+const optionalKeyLastLink = /*#__PURE__*/ applyToLastLink(optionalKey$1);
+/** @internal */
+const optional$3 = /*#__PURE__*/ memoize((ast) => optionalKey$1(new Union$1([ast, undefined_])));
+/** @internal */
+function withConstructorDefault$1(ast, defaultValue) {
+	return replaceContext(ast, ast.context ? new Context(ast.context.isOptional, ast.context.isMutable, defaultValue, ast.context.annotations) : new Context(false, false, defaultValue));
+}
+/**
+* Attaches a `Transformation` to the `to` AST, making it decode from the
+* `from` AST and encode back to it.
+*
+* **Details**
+*
+* This is the low-level primitive behind `Schema.decodeTo`. It appends a
+* {@link Link} to the `to` node's encoding chain.
+*
+* - Returns a new AST with the same type as `to`.
+*
+* @see {@link Link}
+* @see {@link Encoding}
+* @see {@link flip}
+* @category transforming
+* @since 4.0.0
+*/
+function decodeTo$1(from, to, transformation) {
+	return appendTransformation(from, transformation, to);
+}
+/**
+* Returns `true` if the AST node represents an optional property.
+*
+* **Details**
+*
+* Checks `ast.context?.isOptional`. Defaults to `false` when no
+* {@link Context} is set.
+*
+* @see `Schema.optionalKey`
+* @see {@link Context}
+* @category predicates
+* @since 4.0.0
+*/
+function isOptional(ast) {
+	return ast.context?.isOptional ?? false;
+}
+function isStructuralCheck(check) {
+	return check.annotations?.["~structural"] === true || check._tag === "FilterGroup" && check.checks.every(isStructuralCheck);
+}
+function extractStructuralChecks(checks) {
+	function extract(check) {
+		if (isStructuralCheck(check)) return [check];
+		return check._tag === "FilterGroup" ? check.checks.flatMap(extract) : [];
+	}
+	const out = checks.flatMap(extract);
+	return isArrayNonEmpty(out) ? out : void 0;
+}
+/**
+* Strips all encoding transformations from an AST, returning the decoded
+* (type-level) representation.
+*
+* **Details**
+*
+* - Memoized: same input reference → same output reference.
+* - Recursively walks into composite nodes ({@link Arrays}, {@link Objects},
+*   {@link Union}, {@link Suspend}).
+*
+* **Example** (Getting the type AST)
+*
+* ```ts import.meta.vitest
+* import { Schema, SchemaAST } from "effect"
+*
+* const schema = Schema.NumberFromString
+* const typeAst = SchemaAST.toType(schema.ast)
+* typeAst._tag // => "Number"
+* ```
+*
+* @see {@link toEncoded}
+* @see {@link flip}
+* @category transforming
+* @since 4.0.0
+*/
+const toType = /*#__PURE__*/ memoizeIdempotent((ast) => {
+	const out = ast;
+	const type = out.recur?.(toType) ?? out;
+	const encodingChecks = type.encodingChecks;
+	if (encodingChecks) {
+		const checks = type === ast ? encodingChecks : isArrays(type) || isObjects(type) || isDeclaration(type) && type.typeParameters.length > 0 ? extractStructuralChecks(encodingChecks) : void 0;
+		const copyOfType = copy$1(type);
+		copyOfType.encoding = void 0;
+		copyOfType.encodingChecks = void 0;
+		copyOfType.checks = combineChecks(type.checks, checks);
+		return copyOfType;
+	}
+	return type.encoding ? replaceEncoding(type, void 0) : type;
+});
+/**
+* Returns the encoded (wire-format) AST by flipping and then stripping
+* encodings.
+*
+* **Details**
+*
+* Equivalent to `toType(flip(ast))`. This gives you the AST that describes
+* the shape of the serialized/encoded data.
+*
+* - Memoized: same input reference → same output reference.
+*
+* **Example** (Getting the encoded AST)
+*
+* ```ts import.meta.vitest
+* import { Schema, SchemaAST } from "effect"
+*
+* const schema = Schema.NumberFromString
+* const encodedAst = SchemaAST.toEncoded(schema.ast)
+* encodedAst._tag // => "String"
+* ```
+*
+* @see {@link toType}
+* @see {@link flip}
+* @category transforming
+* @since 4.0.0
+*/
+const toEncoded = /*#__PURE__*/ memoizeIdempotent((ast) => {
+	return toType(flip(ast));
+});
+function flipEncoding(ast, encoding) {
+	const links = encoding;
+	const len = links.length;
+	const last = links[len - 1];
+	const ls = [new Link(flip(replaceEncoding(ast, void 0)), links[0].transformation.flip())];
+	for (let i = 1; i < len; i++) ls.unshift(new Link(flip(links[i - 1].to), links[i].transformation.flip()));
+	const to = flip(last.to);
+	if (to.encoding) return replaceEncoding(to, [...to.encoding, ...ls]);
+	else return replaceEncoding(to, ls);
+}
+/**
+* Swaps the decode and encode directions of an AST's {@link Encoding} chain.
+*
+* **Details**
+*
+* After flipping, what was decoding becomes encoding and vice versa. This is
+* the core operation behind `Schema.encode` — encoding a value is decoding
+* with a flipped SchemaAST.
+*
+* - Memoized: same input reference → same output reference.
+* - Recursively walks composite nodes.
+*
+* @see {@link toType}
+* @see {@link toEncoded}
+* @category transforming
+* @since 4.0.0
+*/
+const flip = /*#__PURE__*/ memoize((ast) => {
+	if (ast.encoding) return flipEncoding(ast, ast.encoding);
+	const out = ast;
+	return out.flip?.(flip) ?? out.recur?.(flip) ?? out;
+});
+/** @internal */
+function containsUndefined(ast) {
+	switch (ast._tag) {
+		case "Undefined": return true;
+		case "Union": return ast.types.some(containsUndefined);
+		default: return false;
+	}
+}
+function fromConst(ast, value) {
+	const succeed = value === 0 ? sameExit : succeed$1(value);
+	return (input, options) => {
+		if (input === missing) return missingExit;
+		if (input === value) return succeed;
+		return fail$1(new InvalidType(ast, input, options));
+	};
+}
+function fromRefinement(ast, refinement) {
+	return (input, options) => {
+		if (input === missing) return missingExit;
+		if (refinement(input)) return sameExit;
+		return fail$1(new InvalidType(ast, input, options));
+	};
+}
+/** @internal */
+const parameterFromPropertyKey = /*#__PURE__*/ applyToSelfOrLastLinkEncodingIdempotent((ast) => {
+	switch (ast._tag) {
+		default: return ast;
+		case "Number": return ast.toCodecStringTree();
+		case "Union": return ast.recur(parameterFromPropertyKey);
+	}
+});
+/** @internal */
+const parameterFromString = /*#__PURE__*/ applyToSelfOrLastLinkEncodingIdempotent((ast) => {
+	switch (ast._tag) {
+		default: return ast;
+		case "Symbol":
+		case "UniqueSymbol": return ast.toCodecStringTree();
+		case "Union": return ast.recur(parameterFromString);
+	}
+});
+const isStringFiniteRegExp = /*#__PURE__*/ new globalThis.RegExp(`^${FINITE_PATTERN}$`);
+const isStringNumberRegExp = /*#__PURE__*/ new globalThis.RegExp(`^(?:${FINITE_PATTERN}|Infinity|-Infinity|NaN)$`);
+/** @internal */
+function isStringFinite(annotations) {
+	return isPattern$1(isStringFiniteRegExp, {
+		expected: "a string representing a finite number",
+		representation: {
+			id: "effect/schema/isStringFinite",
+			payload: null
+		},
+		toJsonSchema: () => ({ pattern: isStringFiniteRegExp.source }),
+		...annotations
+	});
+}
+const finiteString = /*#__PURE__*/ appendChecks(string, [/*#__PURE__*/ isStringFinite()]);
+const finiteToString = /*#__PURE__*/ new Link(finiteString, numberFromString);
+const numberToString = /*#__PURE__*/ new Link(/*#__PURE__*/ new Union$1([finiteString, nonFiniteLiterals]), numberFromString);
+/** @internal */
+function collectIssues(checks, value, issues, ast, options) {
+	for (let i = 0; i < checks.length; i++) {
+		const check = checks[i];
+		if (check._tag === "FilterGroup") {
+			issues = collectIssues(check.checks, value, issues, ast, options);
+			if (issues && (options.errors !== "all" || issues[issues.length - 1].filter.aborted)) return issues;
+		} else {
+			const issue = check.run(value, ast, options);
+			if (issue) {
+				const filter = new Filter$1(check, issue, value, options);
+				if (issues) issues.push(filter);
+				else issues = [filter];
+				if (options.errors !== "all" || check.aborted) return issues;
+			}
+		}
+	}
+	return issues;
+}
+/** @internal */
+function getConstructorDescriptor(ast) {
+	if (!isDeclaration(ast)) return void 0;
+	const getDescriptor = ast.annotations?.[CONSTRUCTOR_ANNOTATION_KEY];
+	return isFunction(getDescriptor) ? getDescriptor(ast.typeParameters) : void 0;
+}
+function isJsonLeaf(u) {
+	return u === null || typeof u === "string" || typeof u === "boolean" || typeof u === "number" && globalThis.Number.isFinite(u);
+}
+function isStringTreeLeaf(u) {
+	return u === void 0 || typeof u === "string";
+}
+function isTree(u, isLeaf) {
+	const cache = /* @__PURE__ */ new WeakMap();
+	const stack = [];
+	outer: while (true) {
+		if (typeof u !== "object" || u === null) {
+			if (!isLeaf(u)) return false;
+		} else {
+			const value = u;
+			const cached = cache.get(value);
+			if (cached === false) return false;
+			if (cached === void 0) {
+				const isArray = Array.isArray(value);
+				if (!isArray) {
+					const prototype = Object.getPrototypeOf(value);
+					if (prototype !== null && prototype !== Object.prototype && Object.getPrototypeOf(prototype) !== null) return false;
+				}
+				cache.set(value, false);
+				stack.push({
+					value,
+					keys: isArray ? value.length : Object.keys(value),
+					index: 0
+				});
+			}
+		}
+		while (stack.length > 0) {
+			const frame = stack[stack.length - 1];
+			const keys = frame.keys;
+			if (typeof keys === "number") {
+				if (frame.index < keys) {
+					u = frame.value[frame.index++];
+					continue outer;
+				}
+			} else if (frame.index < keys.length) {
+				u = frame.value[keys[frame.index++]];
+				continue outer;
+			}
+			cache.set(frame.value, true);
+			stack.pop();
+		}
+		return true;
+	}
+}
+/**
+* Returns true if the value is a JSON value.
+*
+* When a cyclic reference is detected, returns false.
+*
+* @internal
+*/
+function isJson(u) {
+	return isTree(u, isJsonLeaf);
+}
+/** @internal */
+const Json$1 = /*#__PURE__*/ new Declaration([], () => (input, ast, options) => isJson(input) ? sameExit : fail$1(new InvalidType(ast, input, options)), {
+	representation: {
+		id: "effect/schema/Json",
+		payload: null
+	},
+	expected: "JSON value",
+	toCodecJson: () => void 0,
+	toCodecStringTree: () => unknownToStringTree
+});
+/**
+* Returns true if the value is a StringTree value.
+*
+* When a cyclic reference is detected, returns false.
+*
+* @internal
+*/
+function isStringTree(u) {
+	return isTree(u, isStringTreeLeaf);
+}
+/** @internal */
+const unknownToStringTree = /*#__PURE__*/ new Link(/* @__PURE__ */ new Declaration([], () => (input, ast, options) => isStringTree(input) ? sameExit : fail$1(new InvalidType(ast, input, options)), {
+	expected: "StringTree",
+	toCodecStringTree: () => void 0
+}), /*#__PURE__*/ passthrough());
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/interpreter.js
+const flatMapTransformation = (result, current, f) => result === sameExit ? f(current) : flatMapEager(result, f);
+function compileTransformation(transformation) {
+	if (transformation._tag === "Middleware") return (result, current, options) => {
+		const transformed = result === sameExit ? transformation.decode(succeed$1(toOption(current)), options) : transformation.decode(mapEager(result, toOption), options);
+		return fromOptionalEffect(transformed);
+	};
+	const getter = transformation.decode;
+	switch (getter._tag) {
+		case "Passthrough": return (result, current) => result === sameExit ? succeed$1(current) : result;
+		case "Transform": {
+			const transform = (value) => value === missing ? missingExit : succeed$1(getter.transform(value));
+			return (result, current) => flatMapTransformation(result, current, transform);
+		}
+		case "TransformOptional": {
+			const transform = (value) => fromOptionExit(getter.transform(toOption(value)));
+			return (result, current) => flatMapTransformation(result, current, transform);
+		}
+		case "TransformEffect": return (result, current, options) => flatMapTransformation(result, current, (value) => value === missing ? missingExit : getter.transform(value, options));
+		case "TransformOptionalEffect": return (result, current, options) => flatMapTransformation(result, current, (value) => fromOptionalEffect(getter.transform(toOption(value), options)));
+	}
+}
+const fromOptionalEffect = (effect) => flatMapEager(effect, fromOptionExit);
+/** @internal */
+const wrapEncoding = (ast, input, options, effect) => catchCause(effect, (cause) => failCauseSync(() => map$6(cause, (issue) => new Encoding(ast, issue, input, options))));
+function makeConstructorParser(descriptor, compile) {
+	const transform = compileTransformation(descriptor.link.transformation);
+	let sourceParser;
+	return (input, options) => {
+		if (input === missing) return missingExit;
+		if (descriptor.isConstructed(input)) return sameExit;
+		const result = (sourceParser ??= compile(descriptor.link.to))(input, options);
+		return transform(result, input, options);
+	};
+}
+function withDefault$2(ast, parser) {
+	const defaultValue = ast.context.constructorDefault;
+	return (input, options) => {
+		if (input !== missing && input !== void 0) return parser(input, options);
+		const result = defaultValue;
+		if (effectIsExit(result) && result._tag === "Success") {
+			const local = parser(result[args], options);
+			return local === sameExit ? result : local;
+		}
+		return flatMapEager(wrapEncoding(ast, input, options, result), (value) => {
+			const local = parser(value, options);
+			return local === sameExit ? succeed$1(value) : local;
+		});
+	};
+}
+/** @internal */
+function compileField(ast, compile) {
+	const parser = compile(ast);
+	return ast.context?.constructorDefault === void 0 ? parser : withDefault$2(ast, parser);
+}
+/** @internal */
+function compile(ast, compile, compileField, base, specialize) {
+	if (ast._tag === "Declaration") for (const parameter of ast.typeParameters) compile(parameter);
+	const descriptor = compileField ? getConstructorDescriptor(ast) : void 0;
+	const parser = descriptor ? makeConstructorParser(descriptor, compile) : base ?? ast.getParser(compile, compileField);
+	const checks = ast.checks;
+	const links = ast.encoding;
+	const transformations = links?.map((link) => compileTransformation(link.transformation));
+	const encodingChecks = ast.encodingChecks;
+	if (!links && !checks && !encodingChecks) return parser;
+	let encodingParsers;
+	const parseChecks = (input, options) => {
+		let result = parser(input, options);
+		if (encodingChecks && !options.disableChecks) {
+			if (effectIsExit(result)) {
+				if (result._tag === "Success") {
+					const output = result === sameExit ? input : result[args];
+					if (input !== missing && output !== missing) {
+						const issues = collectIssues(encodingChecks, input, void 0, ast, options);
+						if (issues) result = fail$1(new Composite(ast, issues, input, options));
+					}
+				}
+			} else result = flatMap$1(result, (value) => {
+				if (input !== missing && value !== missing) {
+					const issues = collectIssues(encodingChecks, input, void 0, ast, options);
+					if (issues) return fail$1(new Composite(ast, issues, input, options));
+				}
+				return succeed$2(value);
+			});
+		}
+		if (checks && !options.disableChecks) {
+			if (effectIsExit(result)) {
+				if (result._tag === "Success") {
+					const value = result === sameExit ? input : result[args];
+					if (value === missing) return result;
+					const issues = collectIssues(checks, value, void 0, ast, options);
+					if (issues) result = fail$1(new Composite(ast, issues, value, options));
+				}
+			} else result = flatMap$1(result, (value) => {
+				if (value !== missing) {
+					const issues = collectIssues(checks, value, void 0, ast, options);
+					if (issues) return fail$1(new Composite(ast, issues, value, options));
+				}
+				return succeed$2(value);
+			});
+		}
+		return result;
+	};
+	const parseLocal = specialize === void 0 ? parseChecks : specialize(parseChecks);
+	if (!links) return parseLocal;
+	return (input, options) => {
+		const parsers = encodingParsers ??= links.map((link) => compile(link.to));
+		let current = input;
+		let result = parsers[parsers.length - 1](input, options);
+		for (let i = links.length - 1; i >= 0; i--) {
+			result = transformations[i](result, current, options);
+			if (i !== 0) {
+				const next = parsers[i - 1];
+				if (result._tag === "Success") {
+					current = result[args];
+					result = next(current, options);
+				} else result = flatMapEager(result, (value) => {
+					const nextResult = next(value, options);
+					return nextResult === sameExit ? succeed$1(value) : nextResult;
+				});
+			}
+		}
+		if (result._tag === "Success") {
+			const value = result[args];
+			const local = parseLocal(value, options);
+			return local === sameExit ? result : local;
+		}
+		result = wrapEncoding(ast, input, options, result);
+		return flatMapEager(result, (value) => {
+			const local = parseLocal(value, options);
+			return local === sameExit ? succeed$1(value) : local;
+		});
+	};
+}
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/compilerRegistry.js
+/** @internal */
+const invalid = /*#__PURE__*/ Symbol();
+const cache = /*#__PURE__*/ new WeakMap();
+const decodeChild = (ast) => resolve(ast).parser;
+const makeChild = (ast) => resolve(ast).makeEffect;
+const makeField = (ast) => compileField(ast, makeChild);
+var InterpretedEntry = class {
+	ast;
+	constructor(ast) {
+		this.ast = ast;
+	}
+	get decodeEffect() {
+		return this.cachedDecodeEffect ??= compile(this.ast, decodeChild);
+	}
+	get parser() {
+		return this.decodeEffect;
+	}
+	get makeEffect() {
+		return this.cachedMakeEffect ??= compile(this.ast, makeChild, makeField);
+	}
+};
+/** @internal */
+function resolve(ast) {
+	const cached = cache.get(ast);
+	if (cached !== void 0) return cached;
+	const entry = new InterpretedEntry(ast);
+	cache.set(ast, entry);
+	return entry;
+}
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/SchemaParser.js
+/**
+* Runs schemas against real values.
+*
+* Schema parsers construct values from schema input, check whether a value
+* matches a schema, decode encoded input, and encode decoded values back to
+* their external form. This module exposes those operations through several
+* result styles, including `Effect`, `Promise`, `Exit`, `Option`, `Result`, and
+* synchronous functions that throw. It also contains the lower-level runner that
+* walks a schema AST and reports schema failures as `SchemaIssue.Issue` values.
+*
+* @since 4.0.0
+*/
+/**
+* Creates an effectful maker for the schema's decoded type side.
+*
+* **When to use**
+*
+* Use to construct decoded schema values in `Effect` while preserving
+* construction failures as `SchemaIssue.Issue` values in the error channel.
+*
+* **Details**
+*
+* The returned function accepts constructor input, applies constructor defaults,
+* runs type-side validation unless checks are disabled, and fails with a
+* `SchemaIssue.Issue` when construction fails.
+*
+* @category constructors
+* @since 4.0.0
+*/
+function makeEffect(schema) {
+	const ast = schema.ast;
+	let parser;
+	return (input, options) => {
+		return (parser ??= runWithCompiler(constructorCompiler, toType(ast)))(input, options?.disableChecks ? options?.parseOptions ? {
+			...options.parseOptions,
+			disableChecks: true
+		} : { disableChecks: true } : options?.parseOptions);
+	};
+}
+/**
+* Creates a synchronous maker that returns `Option.some` with the constructed
+* value on success, or `Option.none` when construction fails with schema issues.
+*
+* **When to use**
+*
+* Use when you need to validate schema constructor input and only care whether
+* construction succeeds, without exposing `SchemaIssue.Issue` details.
+*
+* **Gotchas**
+*
+* Only causes made entirely of schema issues are converted to `Option.none`.
+* Causes that contain defects, interruptions, or asynchronous work at this
+* synchronous boundary throw an `Error` whose cause is the underlying `Cause`.
+*
+* @category constructors
+* @since 4.0.0
+*/
+function makeOption(schema) {
+	const parser = makeEffect(schema);
+	return (input, options) => {
+		const exit = runSyncExit(parser(input, options));
+		if (isSuccess(exit)) return some(exit.value);
+		getSchemaIssueOrThrow(exit.cause, "Option adapter can only return none for schema issues");
+		return none();
+	};
+}
+/**
+* Creates a synchronous maker for the schema's decoded type side.
+*
+* **When to use**
+*
+* Use to construct decoded schema values synchronously when invalid input
+* should throw an `Error` whose cause is `SchemaIssue.Issue`.
+*
+* **Details**
+*
+* The returned function constructs a value from constructor input and throws an
+* `Error` with the `SchemaIssue.Issue` in its `cause` when construction fails.
+* Schema validation failures use the generic message `"Schema validation failed"`.
+* Format the `cause` explicitly with `SchemaIssue.makeFormatterDefault()` when
+* human-readable details are needed.
+*
+* **Gotchas**
+*
+* Causes that contain defects, interruptions, or asynchronous work at this
+* synchronous boundary throw an `Error` whose cause is the underlying `Cause`,
+* instead of being converted to a schema validation error.
+*
+* @category constructors
+* @since 4.0.0
+*/
+function make$18(schema) {
+	return makeConstructorSync(toType(schema.ast));
+}
+/**
+* Creates a type guard that checks whether an input satisfies the schema's decoded
+* type side.
+*
+* **When to use**
+*
+* Use to build a type guard for checking the decoded side of a schema without
+* exposing issue details.
+*
+* **Details**
+*
+* The guard returns `true` on successful validation and `false` when validation
+* fails only with schema issues, without exposing issue details.
+*
+* **Gotchas**
+*
+* Only causes made entirely of schema issues are converted to `false`. Causes
+* that contain defects, interruptions, or asynchronous work at this synchronous
+* boundary throw an `Error` whose cause is the underlying `Cause`.
+*
+* @category guards
+* @since 3.10.0
+*/
+function is$1(schema) {
+	return _is(schema.ast);
+}
+function makeIs(ast) {
+	{
+		const parser = asExit(run$3(ast));
+		return (input) => {
+			const exit = parser(input, defaultParseOptions);
+			if (isSuccess(exit)) return true;
+			getSchemaIssueOrThrow(exit.cause, "Type guard adapter can only return false for schema issues");
+			return false;
+		};
+	}
+}
+/** @internal */
+function _is(ast) {
+	const typeAST = toType(ast);
+	let guard = (input) => {
+		guard = makeIs(typeAST);
+		return guard(input);
+	};
+	return (input) => {
+		return guard(input);
+	};
+}
+/**
+* Creates an effectful decoder for `unknown` input.
+*
+* **When to use**
+*
+* Use when you need to decode untyped boundary input in an `Effect` whose
+* failure channel is `SchemaIssue.Issue`, while preserving transformations
+* and service requirements.
+*
+* **Details**
+*
+* The returned function succeeds with the schema's decoded `Type` or fails with a
+* `SchemaIssue.Issue`. Decoding service requirements are preserved in the returned
+* `Effect`. Parse options may be provided when creating the decoder and overridden
+* when applying it.
+*
+* @see {@link decodeEffect} for input already typed as the schema's `Encoded` type
+*
+* @category decoding
+* @since 4.0.0
+*/
+function decodeUnknownEffect$1(schema, options) {
+	const parser = run$3(schema.ast);
+	return options === void 0 ? parser : (input, overrideOptions) => parser(input, mergeParseOptions(options, overrideOptions));
+}
+const mergeParseOptions = (options, overrideOptions) => overrideOptions ? {
+	...options,
+	...overrideOptions
+} : options;
+const getValue = (value) => {
+	if (value === missing) return fail$1(new InvalidValue$1());
+	return succeed$2(value);
+};
+/** @internal */
+function run$3(ast) {
+	return runWithCompiler(normalCompiler, ast);
+}
+function parserResult(result, input) {
+	if (result === sameExit) return succeed$2(input);
+	if (!effectIsExit(result)) return flatMapEager(result, getValue);
+	return result[args] === missing ? getValue(missing) : result;
+}
+function runWithCompiler(compiler, ast) {
+	let parser;
+	return (input, options) => {
+		const result = (parser ??= compiler(ast))(input, options ?? defaultParseOptions);
+		if (result === sameExit) return succeed$2(input);
+		if (!effectIsExit(result)) return flatMapEager(result, getValue);
+		return result[args] === missing ? getValue(missing) : result;
+	};
+}
+function asExit(parser) {
+	return (input, options) => runSyncExit(parser(input, options));
+}
+function runSync(effect, message) {
+	const exit = runSyncExit(effect);
+	if (isSuccess(exit)) return exit.value;
+	const issue = getSchemaIssueOrThrow(exit.cause, message);
+	throw new Error("Schema validation failed", { cause: issue });
+}
+function makeConstructorSync(ast) {
+	let entry;
+	let parser;
+	return (input, options) => {
+		entry ??= resolve(ast);
+		const parseOptions = options?.disableChecks ? options.parseOptions ? {
+			...options.parseOptions,
+			disableChecks: true
+		} : { disableChecks: true } : options?.parseOptions ?? defaultParseOptions;
+		const make = entry.make;
+		if (make !== void 0 && input !== missing) {
+			let output;
+			try {
+				output = make(input, parseOptions);
+			} catch (error) {
+				getSchemaIssueOrThrow(die$1(error), "Constructor adapter can only throw schema issues");
+				throw error;
+			}
+			if (output !== invalid && output !== missing) return output;
+		}
+		return runSync(parserResult((parser ??= entry.makeEffect)(input, parseOptions), input), "Constructor adapter can only throw schema issues");
+	};
+}
+const normalCompiler = (ast) => resolve(ast).parser;
+const constructorCompiler = (ast) => resolve(ast).makeEffect;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/make.js
+/** @internal */
+const TypeId$19 = "~effect/Schema/Schema";
+const RebuildOptions = /*#__PURE__*/ Symbol();
+const SchemaProto = {
+	[TypeId$19]: TypeId$19,
+	get make() {
+		const value = make$18(this);
+		Object.defineProperty(this, "make", {
+			value,
+			enumerable: true
+		});
+		return value;
+	},
+	get makeEffect() {
+		const value = makeEffect(this);
+		Object.defineProperty(this, "makeEffect", {
+			value,
+			enumerable: true
+		});
+		return value;
+	},
+	get makeOption() {
+		const value = makeOption(this);
+		Object.defineProperty(this, "makeOption", {
+			value,
+			enumerable: true
+		});
+		return value;
+	},
+	pipe() {
+		return pipeArguments(this, arguments);
+	},
+	annotate(annotations) {
+		return this.rebuild(annotate$1(this.ast, annotations));
+	},
+	annotateKey(annotations) {
+		return this.rebuild(annotateKey(this.ast, annotations));
+	},
+	check(...checks) {
+		return this.rebuild(appendChecks(this.ast, checks));
+	},
+	rebuild(ast) {
+		return make$17(ast, this[RebuildOptions]);
+	}
+};
+/** @internal */
+function make$17(ast, options) {
+	function Schema() {}
+	const self = Object.setPrototypeOf(Schema, SchemaProto);
+	if (options && (Object.hasOwn(options, "name") || Object.hasOwn(options, "length") || Object.hasOwn(options, "__proto__"))) Object.defineProperties(self, Object.getOwnPropertyDescriptors({ ...options }));
+	else Object.assign(self, options);
+	self[RebuildOptions] = options;
+	self.ast = ast;
+	return self;
+}
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/toCodec.js
+function withoutConstructorDefault(context) {
+	return context.constructorDefault === void 0 ? context : new Context(context.isOptional, context.isMutable, void 0, context.annotations);
+}
+function validateCanonicalObjectPropertyNames(ast) {
+	if (ast.propertySignatures.some((ps) => typeof ps.name !== "string")) throw new globalThis.Error("Objects property names must be strings", { cause: ast });
+}
+function makeReorder(getPriority) {
+	return (types) => {
+		const indexMap = /* @__PURE__ */ new Map();
+		for (let i = 0; i < types.length; i++) indexMap.set(toEncoded(types[i]), i);
+		const sortedTypes = [...types].sort((a, b) => {
+			a = toEncoded(a);
+			b = toEncoded(b);
+			const pa = getPriority(a);
+			const pb = getPriority(b);
+			if (pa !== pb) return pa - pb;
+			return indexMap.get(a) - indexMap.get(b);
+		});
+		if (!sortedTypes.some((ast, index) => ast !== types[index])) return types;
+		return sortedTypes;
+	};
+}
+/** @internal */
+function toCodecStringTree$1(schema) {
+	return make$17(toCodecStringTreeAST(schema.ast), { schema });
+}
+const toStringTreeReorder = /*#__PURE__*/ makeReorder((ast) => {
+	switch (ast._tag) {
+		case "Null":
+		case "Boolean":
+		case "Number":
+		case "BigInt":
+		case "Symbol":
+		case "UniqueSymbol": return 0;
+		default: return 1;
+	}
+});
+function toCodecStringTreeASTStep(ast, recur, onMissingAnnotation) {
+	switch (ast._tag) {
+		case "Declaration": {
+			const typeParameters = ast.typeParameters.map((tp) => make$17(recur(toEncoded(tp))));
+			const getStringTreeLink = ast.annotations?.toCodecStringTree;
+			if (isFunction(getStringTreeLink)) {
+				const link = getStringTreeLink(typeParameters);
+				if (link === void 0) return ast;
+				return replaceEncoding(ast, [mapLink(link, recur)]);
+			}
+			const getJsonLink = ast.annotations?.toCodecJson;
+			const jsonLink = isFunction(getJsonLink) ? getJsonLink(typeParameters) : void 0;
+			const getLink = jsonLink === void 0 ? ast.annotations?.toCodec : void 0;
+			const link = jsonLink ?? (isFunction(getLink) ? getLink(typeParameters) : void 0);
+			return link === void 0 ? onMissingAnnotation(ast) : replaceEncoding(ast, [mapLink(link, recur)]);
+		}
+		case "Null": return replaceEncoding(ast, [nullToString]);
+		case "Boolean": return replaceEncoding(ast, [booleanToString]);
+		case "Unknown":
+		case "ObjectKeyword": return replaceEncoding(ast, [unknownToStringTree]);
+		case "Enum":
+		case "Number":
+		case "Literal":
+		case "UniqueSymbol":
+		case "Symbol":
+		case "BigInt": return ast.toCodecStringTree();
+		case "Objects":
+			validateCanonicalObjectPropertyNames(ast);
+			return ast.recur(recur, parameterFromString);
+		case "Union": {
+			const sortedTypes = toStringTreeReorder(ast.types);
+			if (sortedTypes !== ast.types) return new Union$1(sortedTypes, ast.options, ast.annotations, ast.checks, ast.encoding, ast.context, ast.encodingChecks).recur(recur);
+			return ast.recur(recur);
+		}
+		case "Arrays":
+		case "Suspend": return ast.recur(recur);
+	}
+	return ast;
+}
+const nullToString = /*#__PURE__*/ new Link(/*#__PURE__*/ new Literal$1("null"), /*#__PURE__*/ new Transformation(/*#__PURE__*/ transform$2(() => null), /*#__PURE__*/ transform$2(() => "null")));
+const booleanToString = /*#__PURE__*/ new Link(/*#__PURE__*/ new Union$1([/*#__PURE__*/ new Literal$1("true"), /*#__PURE__*/ new Literal$1("false")]), /*#__PURE__*/ new Transformation(/*#__PURE__*/ transform$2((s) => s === "true"), /*#__PURE__*/ String$7()));
+const arrayFromSingleTransformation = /*#__PURE__*/ new Transformation(/*#__PURE__*/ transform$2((input) => typeof input === "string" ? [input] : input), /*#__PURE__*/ passthrough$1());
+const isCodecArrayFromSingleLink = (link) => link.transformation === arrayFromSingleTransformation;
+const toCodecStringTreeAST = /*#__PURE__*/ applyToSelfOrLastLinkEncodingIdempotent((ast) => {
+	const out = toCodecStringTreeASTStep(ast, toCodecStringTreeAST, (ast) => {
+		throw new globalThis.Error("Missing structural codec for StringTree", { cause: ast });
+	});
+	if (out !== ast && ast.context !== void 0) return replaceContextLastLink(out, withoutConstructorDefault(ast.context));
+	return out;
+}, { stopAt: isCodecArrayFromSingleLink });
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Struct.js
+/**
+* Wraps a plain function as a {@link Lambda} value so it can be used with
+* {@link map}, {@link mapPick}, and {@link mapOmit}.
+*
+* **When to use**
+*
+* Use to create a typed lambda for struct mapping APIs that need type-level
+* input and output tracking.
+*
+* **Details**
+*
+* The type parameter `L` encodes both the input and output types at the type
+* level, allowing the compiler to track how struct value types change. At
+* runtime, the returned value is the same function; `lambda` only adjusts the
+* type.
+*
+* **Example** (Wrapping values in arrays)
+*
+* ```ts import.meta.vitest
+* import { pipe, Struct } from "effect"
+*
+* interface AsArray extends Struct.Lambda {
+*   <A>(self: A): Array<A>
+*   readonly "~lambda.out": Array<this["~lambda.in"]>
+* }
+*
+* const asArray = Struct.lambda<AsArray>((a) => [a])
+* const result = pipe({ x: 1, y: "hello" }, Struct.map(asArray))
+* result // => { x: [1], y: ["hello"] }
+* ```
+*
+* @see {@link Lambda} – the type-level interface
+* @see {@link map} – apply a lambda to all struct values
+* @category constructors
+* @since 4.0.0
+*/
+const lambda = (f) => f;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schemaError.js
+const SchemaErrorTypeId = "~effect/Schema/SchemaError";
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Schema.js
+const TypeId$18 = TypeId$19;
+/**
+* Error thrown or returned when schema decoding or encoding fails.
+*
+* **Details**
+*
+* The `issue` field contains a structured {@link SchemaIssue.Issue} tree describing
+* every validation failure, including the path to the problematic value and
+* the expected type or constraint. The `message` field renders the issue tree
+* with the default formatter.
+*
+* **Gotchas**
+*
+* Parsing with `reportInput: true` adds an enumerable `input` field to
+* value-bearing issues. Built-in messages may include reported input, and
+* custom annotations or messages are not sanitized.
+*
+* **Example** (Inspecting a SchemaError)
+*
+* ```ts import.meta.vitest
+* import { Result, Schema } from "effect"
+*
+* const result = Schema.decodeUnknownResult(Schema.Number)("not a number")
+* const message = Result.isFailure(result) ? result.failure.message : ""
+* message // => "Expected number"
+* ```
+*
+* @see {@link isSchemaError} for narrowing unknown values
+* @category errors
+* @since 4.0.0
+*/
+var SchemaError = class extends (/*#__PURE__*/ TaggedError$1("SchemaError")) {
+	[SchemaErrorTypeId] = SchemaErrorTypeId;
+	constructor(issue) {
+		const stackTraceLimit = getStackTraceLimit();
+		setStackTraceLimit(0);
+		try {
+			super({ issue });
+		} finally {
+			setStackTraceLimit(stackTraceLimit);
+		}
+	}
+	get message() {
+		return defaultFormatter$1(this.issue);
+	}
+	toString() {
+		return `SchemaError(${this.message})`;
+	}
+};
+function fromIssueEffect(self) {
+	if (effectIsExit(self)) return fromIssueExit(self);
+	return catchCause(self, (cause) => failCauseSync(() => map$6(cause, (issue) => new SchemaError(issue))));
+}
+function fromIssueExit(exit) {
+	return isSuccess(exit) ? exit : failCause$2(map$6(exit.cause, (issue) => new SchemaError(issue)));
+}
+/**
+* Creates a type guard function that checks if a value conforms to a given
+* schema.
+*
+* **Details**
+*
+* This function returns a predicate that performs a type-safe check, narrowing
+* the type of the input value if the check passes. The predicate returns `false`
+* for schema mismatches.
+*
+* **Gotchas**
+*
+* Only causes made entirely of schema issues are converted to `false`. Causes
+* that contain defects, interruptions, or other non-schema reasons throw
+* instead.
+*
+* **Example** (Defining a basic type guard)
+*
+* ```ts import.meta.vitest
+* import { Schema } from "effect"
+*
+* const isString = Schema.is(Schema.String)
+*
+* isString("hello") // => true
+* isString(42) // => false
+*
+* // Type narrowing in action
+* const value: unknown = "hello"
+* if (isString(value)) {
+*   // value is now typed as string
+*   value.toUpperCase() // => "HELLO"
+* }
+* ```
+*
+* @category guards
+* @since 3.10.0
+*/
+const is = is$1;
+/**
+* Decodes an `unknown` input against a schema, returning an `Effect` that
+* succeeds with the decoded value or fails with a {@link SchemaError}.
+*
+* **When to use**
+*
+* Use when you need to decode unknown input in an `Effect` whose failure
+* channel is `SchemaError`.
+*
+* **Details**
+*
+* Prefer {@link decodeEffect} when the input is already typed as the schema's
+* `Encoded` type.
+* Options may be provided either when creating the decoder or when applying it;
+* application options override creation options.
+*
+* @see {@link SchemaParser.decodeUnknownEffect} for the adapter that fails with `SchemaIssue.Issue` directly
+*
+* @category decoding
+* @since 4.0.0
+*/
+function decodeUnknownEffect(schema, options) {
+	const parser = decodeUnknownEffect$1(schema, options);
+	return (input, options) => {
+		return fromIssueEffect(parser(input, options));
+	};
+}
+/**
+* Creates a schema from an AST (Abstract Syntax Tree) node.
+*
+* **Details**
+*
+* This is the fundamental constructor for all schemas in the Effect Schema
+* library. It takes an AST node and wraps it in a fully-typed schema that
+* preserves all type information and provides the complete schema API.
+*
+* The `make` function is used internally to create all primitive schemas like
+* `String`, `Number`, `Boolean`, etc., as well as more complex schemas. It's
+* the bridge between the untyped AST representation and the strongly-typed
+* schema.
+*
+* @category constructors
+* @since 3.10.0
+*/
+const make$16 = make$17;
+/**
+* Checks whether a value is a `Schema`.
+*
+* @category guards
+* @since 3.10.0
+*/
+function isSchema(u) {
+	return hasProperty(u, TypeId$18) && u[TypeId$18] === TypeId$18;
+}
+/**
+* Creates an exact optional key schema for struct fields. Unlike `optional`,
+* this creates exact optional properties (not `| undefined`) that can be
+* completely omitted from the object.
+*
+* **Example** (Creating a struct with optional key)
+*
+* ```ts import.meta.vitest
+* import { Schema } from "effect"
+*
+* const schema = Schema.Struct({
+*   name: Schema.String,
+*   age: Schema.optionalKey(Schema.Number)
+* })
+*
+* // Type: { readonly name: string; readonly age?: number }
+* type Person = typeof schema["Type"]
+* ```
+*
+* @category combinators
+* @since 4.0.0
+*/
+const optionalKey = /*#__PURE__*/ lambda((schema) => make$16(optionalKey$1(schema.ast), { schema }));
+/**
+* Marks a struct field as optional, allowing the key to be absent or
+* `undefined`.
+*
+* **Details**
+*
+* The resulting property may be absent or explicitly set to `undefined`.
+* Equivalent to `optionalKey(UndefinedOr(S))`.
+*
+* Use {@link optionalKey} instead if you want exact optional semantics (absent
+* only, not `undefined`).
+*
+* **Example** (Defining an optional field accepting undefined)
+*
+* ```ts import.meta.vitest
+* import { Schema } from "effect"
+*
+* const schema = Schema.Struct({
+*   name: Schema.String,
+*   age: Schema.optional(Schema.Number)
+* })
+*
+* // { readonly name: string; readonly age?: number | undefined }
+* type Person = typeof schema.Type
+* ```
+*
+* @category combinators
+* @since 3.10.0
+*/
+const optional$2 = /*#__PURE__*/ lambda((self) => {
+	const schema = UndefinedOr(self);
+	return make$16(optional$3(self.ast), { schema });
+});
+/**
+* Creates a schema for a single literal value (string, number, bigint, boolean, or null).
+*
+* **Example** (Defining a string literal)
+*
+* ```ts import.meta.vitest
+* import { Schema } from "effect"
+*
+* const schema = Schema.Literal("hello")
+* // Type: Schema.Literal<"hello">
+* Schema.decodeSync(schema)("hello") // => "hello"
+* ```
+*
+* @see {@link Literals} for a schema that represents a union of literals.
+* @see {@link tag} for a schema that represents a literal value that can be
+* used as a discriminator field in tagged unions and has a constructor default.
+* @category constructors
+* @since 3.10.0
+*/
+function Literal(literal) {
+	const out = make$16(new Literal$1(literal), {
+		literal,
+		transform(to) {
+			return out.pipe(decodeTo(Literal(to), {
+				decode: transform$2(() => to),
+				encode: transform$2(() => literal)
+			}));
+		}
+	});
+	return out;
+}
+/**
+* Schema for the `unknown` type. Accepts any value without validation.
+*
+* **When to use**
+*
+* Use as a top schema when you need to accept any input while preserving
+* TypeScript's `unknown` safety at use sites.
+*
+* @see {@link Any} for the `any` variant.
+* @category schemas
+* @since 3.10.0
+*/
+const Unknown = /*#__PURE__*/ make$16(unknown);
+/**
+* Schema for the `undefined` literal. Validates that the input is strictly `undefined`.
+*
+* @see {@link UndefinedOr} for a union with another schema.
+* @category schemas
+* @since 3.10.0
+*/
+const Undefined = /*#__PURE__*/ make$16(undefined_);
+/**
+* Schema for `string` values. Validates that the input is `typeof` `"string"`.
+*
+* @category schemas
+* @since 4.0.0
+*/
+const String$5 = /*#__PURE__*/ make$16(string);
+/**
+* Schema for `boolean` values. Validates that the input is `typeof` `"boolean"`.
+*
+* **When to use**
+*
+* Use to validate values that are already JavaScript booleans.
+*
+* @see {@link BooleanFromBit} for a schema that decodes bit literals `0` or `1` into a boolean
+*
+* @category schemas
+* @since 4.0.0
+*/
+const Boolean$4 = /*#__PURE__*/ make$16(boolean);
+function makeStruct(ast, fields) {
+	return make$16(ast, {
+		fields,
+		mapFields(f, options) {
+			const fields = f(this.fields);
+			return makeStruct(struct(fields, options?.unsafePreserveChecks ? this.ast.checks : void 0), fields);
+		}
+	});
+}
+/**
+* Defines a struct schema from a map of field schemas.
+*
+* **Details**
+*
+* Each field value is a schema. Use {@link optionalKey} or {@link optional} to
+* mark fields as optional, and {@link mutableKey} to mark them as mutable.
+*
+* The resulting schema's `Type` is a readonly object type with the fields'
+* decoded types. The `Encoded` form mirrors the field schemas' encoded types.
+* Declared fields may be inherited and are copied to own properties in the
+* output. The `__proto__` field is accepted only when it is an own property.
+* Parsing does not guarantee that output keys retain their input order.
+*
+* **Example** (Defining a basic struct)
+*
+* ```ts import.meta.vitest
+* import { Schema } from "effect"
+*
+* const Person = Schema.Struct({
+*   name: Schema.String,
+*   age: Schema.Number,
+*   email: Schema.optionalKey(Schema.String)
+* })
+*
+* // { readonly name: string; readonly age: number; readonly email?: string }
+* type Person = typeof Person.Type
+*
+* Schema.decodeUnknownSync(Person)({ name: "Alice", age: 30 }) // => { name: "Alice", age: 30 }
+* ```
+*
+* @category constructors
+* @since 3.10.0
+*/
+function Struct(fields) {
+	return makeStruct(struct(fields, void 0), fields);
+}
+/**
+* @category constructors
+* @since 4.0.0
+*/
+const ArraySchema = /*#__PURE__*/ lambda((schema) => make$16(new Arrays(false, [], [schema.ast]), { value: schema }));
+function makeUnion(ast, members) {
+	return make$16(ast, {
+		members,
+		mapMembers(f, options) {
+			const members = f(this.members);
+			return makeUnion(union(members, this.ast.options, options?.unsafePreserveChecks ? this.ast.checks : void 0), members);
+		}
+	});
+}
+/**
+* Creates a union schema from an array of member schemas. Members are tested in
+* order; the first match is returned.
+*
+* **Details**
+*
+* Optionally, specify `mode`:
+* - `"anyOf"` (default) — matches if any member matches.
+* - `"oneOf"` — matches if exactly one member matches.
+*
+* **Example** (Defining a string or number union)
+*
+* ```ts import.meta.vitest
+* import { Schema } from "effect"
+*
+* const schema = Schema.Union([Schema.String, Schema.Number])
+*
+* Schema.decodeUnknownSync(schema)("hello") // => "hello"
+* Schema.decodeUnknownSync(schema)(42) // => 42
+* ```
+*
+* @category constructors
+* @since 3.10.0
+*/
+function Union(members, options) {
+	return makeUnion(union(members, options, void 0), members);
+}
+/**
+* Creates a union schema from an array of literal values.
+*
+* **Example** (Defining status codes)
+*
+* ```ts import.meta.vitest
+* import { Schema } from "effect"
+*
+* const schema = Schema.Literals(["active", "inactive", "pending"])
+* Schema.decodeSync(schema)("active") // => "active"
+* ```
+*
+* @see {@link Literal} for a schema that represents a single literal.
+* @category constructors
+* @since 4.0.0
+*/
+function Literals$3(literals) {
+	const members = literals.map(Literal);
+	return make$16(union(members, void 0, void 0), {
+		literals,
+		members,
+		mapMembers(f) {
+			return Union(f(this.members));
+		},
+		pick(literals) {
+			return Literals$3(literals);
+		},
+		transform(to) {
+			return Union(members.map((member, index) => member.transform(to[index])));
+		}
+	});
+}
+/**
+* Creates a union schema of `S | undefined`.
+*
+* @category constructors
+* @since 3.10.0
+*/
+const UndefinedOr = /*#__PURE__*/ lambda((self) => Union([self, Undefined]));
+function decodeTo(to, transformation) {
+	return (from) => {
+		return make$16(decodeTo$1(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough()), {
+			from,
+			to
+		});
+	};
+}
+/** @internal */
+const TrueLiterals = /*#__PURE__*/ Literals$3([
+	"true",
+	"yes",
+	"on",
+	"1",
+	"y"
+]);
+/** @internal */
+const FalseLiterals = /*#__PURE__*/ Literals$3([
+	"false",
+	"no",
+	"off",
+	"0",
+	"n"
+]);
+/** @internal */
+const BooleanLiterals = /*#__PURE__*/ Literals$3([...TrueLiterals.literals, ...FalseLiterals.literals]).pipe(/*#__PURE__*/ decodeTo(Boolean$4, /*#__PURE__*/ transform$1({
+	decode: (value) => value === "true" || value === "yes" || value === "on" || value === "1" || value === "y",
+	encode: (value) => value ? "true" : "false"
+})));
+/**
+* Attaches a constructor default value to a schema field.
+*
+* **Details**
+*
+* Constructor defaults are applied only during `make*`, not during decoding or
+* encoding. Failures are represented directly as `SchemaIssue.Issue` values.
+*
+* **Example** (Defining an optional field with a static default)
+*
+* ```ts import.meta.vitest
+* import { Effect, Schema } from "effect"
+*
+* const MySchema = Schema.Struct({
+*   name: Schema.String.pipe(
+*     Schema.optionalKey,
+*     Schema.withConstructorDefault(Effect.succeed("anonymous"))
+*   )
+* })
+*
+* MySchema.make({}).name // => "anonymous"
+* ```
+*
+* @category constructors
+* @since 3.10.0
+*/
+function withConstructorDefault(defaultValue) {
+	return (schema) => make$16(withConstructorDefault$1(schema.ast, defaultValue), { schema });
+}
+/**
+* Combines a {@link Literal} schema with {@link withConstructorDefault}, making it ideal
+* for discriminator fields in tagged unions. When constructing via `make`, the
+* `_tag` field can be omitted and will be filled automatically.
+*
+* **Example** (Defining a discriminated union tag)
+*
+* ```ts import.meta.vitest
+* import { Schema } from "effect"
+*
+* const A = Schema.Struct({ _tag: Schema.tag("A"), value: Schema.Number })
+*
+* // _tag is optional in make, auto-filled to "A"
+* const a = A.make({ value: 42 })
+* a // => { _tag: "A", value: 42 }
+* ```
+*
+* @see {@link tagDefaultOmit} to also omit the tag during encoding
+* @see {@link TaggedStruct} for a shorthand that adds `_tag` automatically
+* @category constructors
+* @since 3.10.0
+*/
+function tag(literal) {
+	return Literal(literal).pipe(withConstructorDefault(succeed$2(literal)));
+}
+/**
+* Creates a struct schema with an automatically populated `_tag` field.
+*
+* **When to use**
+*
+* Use to define a tagged union case from a literal tag and a set of fields.
+*
+* **Details**
+*
+* When using the `make` method, the `_tag` field is optional and will be
+* added automatically. However, when decoding or encoding, the `_tag` field
+* must be present in the input.
+*
+* **Example** (Defining a tagged struct shorthand)
+*
+* ```ts import.meta.vitest
+* import { Schema } from "effect"
+*
+* // Defines a struct with a fixed `_tag` field
+* const tagged = Schema.TaggedStruct("A", {
+*   a: Schema.String
+* })
+*
+* // This is the same as writing:
+* const equivalent = Schema.Struct({
+*   _tag: Schema.tag("A"),
+*   a: Schema.String
+* })
+* void tagged
+* void equivalent
+* ```
+*
+* **Example** (Accessing the literal value of the tag)
+*
+* ```ts import.meta.vitest
+* import { Schema } from "effect"
+*
+* const tagged = Schema.TaggedStruct("A", {
+*   a: Schema.String
+* })
+*
+* tagged.fields._tag.schema.literal // => "A"
+* ```
+*
+* @category constructors
+* @since 3.10.0
+*/
+function TaggedStruct(value, fields) {
+	return Struct({
+		_tag: tag(value),
+		...fields
+	});
+}
+const getErrorOptionsKey = (options) => (options?.includeStack === true ? 1 : 0) | (options?.excludeCause === true ? 2 : 0);
+const getErrorOptions = (key) => {
+	switch (key) {
+		case 0: return;
+		case 1: return { includeStack: true };
+		case 2: return { excludeCause: true };
+		case 3: return {
+			includeStack: true,
+			excludeCause: true
+		};
+	}
+};
+const defectSchemaCache = [];
+/**
+* Schema for unexpected defect values represented as `unknown` with a JSON
+* encoded form.
+*
+* **When to use**
+*
+* Use when you need a schema for `Cause` defects or other unexpected failures
+* whose runtime value may be any value.
+*
+* **Details**
+*
+* The encoded side is {@link Json}. During decoding, JSON objects with a string
+* `message` property are decoded into JavaScript `Error` values, preserving a
+* non-default `name` and any string `stack`. Other JSON values decode
+* unchanged.
+*
+* During encoding, JavaScript `Error` values encode to JSON objects with
+* `name`, `message`, and optional `cause` properties. Pass
+* `{ includeStack: true }` to include string stack traces in encoded `Error`
+* defects, or `{ excludeCause: true }` to omit causes. Other values are
+* serialized through Effect's JSON formatter and then parsed back into JSON
+* when possible.
+*
+* **Gotchas**
+*
+* This schema is for carrying defects across JSON boundaries, not for
+* preserving every JavaScript value exactly. Some values cannot round-trip
+* unchanged:
+*
+* - A non-`Error` object such as `{ message: "boom" }` encodes as an
+*   error-shaped JSON object and decodes back as an `Error`.
+* - JSON serialization normalizes unsupported values. For example,
+*   `undefined` array elements encode as `null`, unsupported object properties
+*   are omitted, and circular references are dropped.
+* - Values that cannot be represented as JSON fall back to Effect's formatted
+*   string representation.
+*
+* @see {@link ErrorInstance} for a schema that only accepts JavaScript `Error` values.
+* @category schemas
+* @since 4.0.0
+*/
+function Defect(options) {
+	const key = getErrorOptionsKey(options);
+	const cached = defectSchemaCache[key];
+	if (cached !== void 0) return cached;
+	const schema = Json.pipe(decodeTo(Unknown, defectFromJson(getErrorOptions(key))));
+	defectSchemaCache[key] = schema;
+	return schema;
+}
+globalThis.RegExp;
+globalThis.URL;
+globalThis.File;
+globalThis.FormData;
+globalThis.URLSearchParams;
+globalThis.Uint8Array;
+const immerable = /*#__PURE__*/ globalThis.Symbol.for("immer-draftable");
+const payloadToken = {};
+function makeClass(Inherited, identifier, struct$1, annotations, proto) {
+	const getClassSchema = getClassSchemaFactory(struct$1, identifier, annotations);
+	const ClassTypeId = getClassTypeId(identifier);
+	const out = class extends Inherited {
+		constructor(...[input, options]) {
+			const payload = options?.["~payload"];
+			const value = payload?.token === payloadToken ? payload.value : struct$1.make(input ?? {}, options);
+			super(value, {
+				...options,
+				disableChecks: true,
+				"~payload": {
+					token: payloadToken,
+					value
+				}
+			});
+		}
+		static [TypeId$18] = TypeId$18;
+		get [ClassTypeId]() {
+			return ClassTypeId;
+		}
+		static [immerable] = true;
+		static identifier = identifier;
+		static fields = struct$1.fields;
+		static get ast() {
+			return getClassSchema(this).ast;
+		}
+		static pipe() {
+			return pipeArguments(this, arguments);
+		}
+		static rebuild(ast) {
+			return getClassSchema(this).rebuild(ast);
+		}
+		static make(input, options) {
+			return make$18(getClassSchema(this))(input ?? {}, options);
+		}
+		static makeOption(input, options) {
+			return makeOption(getClassSchema(this))(input ?? {}, options);
+		}
+		static makeEffect(input, options) {
+			return getClassSchema(this).makeEffect(input ?? {}, options);
+		}
+		static annotate(annotations) {
+			return this.rebuild(annotate$1(this.ast, annotations));
+		}
+		static annotateKey(annotations) {
+			return this.rebuild(annotateKey(this.ast, annotations));
+		}
+		static check(...checks) {
+			return this.rebuild(appendChecks(this.ast, checks));
+		}
+		static extend(identifier) {
+			return (schema, annotations) => {
+				const extension = isStruct(schema) ? schema : Struct(schema);
+				const fields = {
+					...struct$1.fields,
+					...extension.fields
+				};
+				const ast = struct(fields, struct$1.ast.checks, { identifier });
+				return makeClass(this, identifier, makeStruct(appendChecks(ast, extension.ast.checks), fields), annotations, proto);
+			};
+		}
+		static mapFields(f, options) {
+			return struct$1.mapFields(f, options);
+		}
+	};
+	if (proto !== void 0) Object.assign(out.prototype, proto(identifier));
+	return out;
+}
+function getClassTransformation(self) {
+	return new Transformation(transform$2((input) => new self(input, { "~payload": {
+		token: payloadToken,
+		value: input
+	} })), passthrough$1());
+}
+function getClassTypeId(identifier) {
+	return `~effect/Schema/Class/${identifier}`;
+}
+function getClassSchemaFactory(from, identifier, annotations) {
+	let memo;
+	return (self) => {
+		if (memo !== void 0) return memo;
+		const ClassTypeId = getClassTypeId(identifier);
+		const isClassValue = (input) => input instanceof self || hasProperty(input, ClassTypeId);
+		const transformation = getClassTransformation(self);
+		return memo = decodeTo(make$16(new Declaration([from.ast], () => (input, ast, options) => {
+			return isClassValue(input) ? succeed$2(input) : fail$1(new InvalidType(ast, input, options));
+		}, {
+			identifier,
+			[CONSTRUCTOR_ANNOTATION_KEY]: ([from]) => ({
+				isConstructed: isClassValue,
+				link: new Link(from, transformation)
+			}),
+			toCodec: ([from]) => new Link(from.ast, transformation),
+			toEquivalence: ([from]) => from,
+			toFormatter: ([from]) => (t) => `${self.identifier}(${from(t)})`,
+			[SENTINELS_ANNOTATION_KEY]: collectSentinels(from.ast),
+			...annotations
+		})), transformation)(from);
+	};
+}
+function isStruct(schema) {
+	return isSchema(schema);
+}
+/**
+* Creates a schema-backed error class that can be used as a typed,
+* yieldable error in Effect programs. Combines {@link Class} validation with
+* the `YieldableError` interface so instances can be yielded directly inside
+* `Effect.gen`.
+*
+* **Example** (Schema-backed error)
+*
+* ```ts import.meta.vitest
+* import { Effect, Schema } from "effect"
+*
+* class NotFound extends Schema.Error<NotFound>("NotFound")({
+*   id: Schema.Number
+* }) {}
+*
+* const program = Effect.gen(function*() {
+*   yield* new NotFound({ id: 1 })
+* })
+* const error = await Effect.runPromise(Effect.flip(program))
+* error.id // => 1
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const Error$1 = (identifier) => (schema, annotations) => {
+	const struct = isStruct(schema) ? schema : Struct(schema);
+	return makeClass(Error$3, identifier, struct, annotations, (identifier) => ({ name: identifier }));
+};
+/**
+* Defines a schema-backed yieldable error class with an automatically populated
+* `_tag` field.
+*
+* **When to use**
+*
+* Use to define typed errors that are schema validated, yielded in `Effect.gen`,
+* and matched as tagged union members.
+*
+* **Example** (Defining a tagged error class)
+*
+* ```ts import.meta.vitest
+* import { Effect, Schema } from "effect"
+*
+* class NotFound extends Schema.TaggedError<NotFound>()("NotFound", {
+*   id: Schema.Number
+* }) {}
+*
+* const program = Effect.gen(function*() {
+*   yield* new NotFound({ id: 42 })
+* })
+* const error = await Effect.runPromise(Effect.flip(program))
+* error._tag // => "NotFound"
+* error.id // => 42
+* ```
+*
+* @category constructors
+* @since 3.10.0
+*/
+const TaggedError = (identifier) => {
+	return (tagValue, schema, annotations) => {
+		const struct = isStruct(schema) ? schema.mapFields((fields) => ({
+			_tag: tag(tagValue),
+			...fields
+		}), { unsafePreserveChecks: true }) : TaggedStruct(tagValue, schema);
+		return Error$1(identifier ?? tagValue)(struct, annotations);
+	};
+};
+/**
+* Converts a schema to the StringTree canonical codec, where every leaf value
+* becomes a string while preserving the original structure.
+*
+* **Details**
+*
+* Derivation does not run transformations. Annotation links may be asynchronous,
+* may fail, and may use optional services; the consuming parser chooses the
+* execution and failure handling. Links cannot require services not declared by
+* the input schema because hooks do not widen the returned service types.
+*
+* **Gotchas**
+*
+* Declarations must provide a structural `toCodecStringTree`, `toCodecJson`, or
+* `toCodec` encoding. A callback can return `undefined` when the declaration is
+* already in canonical StringTree form.
+*
+* @category converting
+* @since 4.0.0
+*/
+const toCodecStringTree = toCodecStringTree$1;
+/**
+* Schema that accepts and validates any immutable JSON-compatible value.
+*
+* **Example** (Validating a JSON value)
+*
+* ```ts import.meta.vitest
+* import { Option, Schema } from "effect"
+*
+* Schema.decodeUnknownOption(Schema.Json)({ key: [1, true, null] }) // => Option.some({ key: [1, true, null] })
+* ```
+*
+* @category schemas
+* @since 4.0.0
+*/
+const Json = /*#__PURE__*/ make$16(/*#__PURE__*/ annotate$1(Json$1, { toCode: () => ({
+	runtime: "Schema.Json",
+	Type: "Schema.Json"
+}) }));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Brand.js
+/**
+* Returns a `Constructor` that **does not apply any runtime checks** and just
+* returns the provided value.
+*
+* **When to use**
+*
+* Use to create nominal types that allow distinguishing between two values
+* of the same type but with different meanings.
+*
+* @see {@link make} for constructing branded values with validation.
+* @see {@link check} for constructing branded values from schema checks.
+*
+* @category constructors
+* @since 2.0.0
+*/
+function nominal() {
+	return Object.assign((input) => input, {
+		option: (input) => some(input),
+		result: (input) => succeed$6(input),
+		is: (_) => true
+	});
+}
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Fiber.js
+/**
+* Interrupts a fiber, causing it to stop executing and clean up any
+* acquired resources.
+*
+* **When to use**
+*
+* Use when you need to cancel a forked fiber and wait for its cleanup to
+* complete.
+*
+* **Details**
+*
+* The returned Effect completes only after the interrupted fiber has completed.
+*
+* **Gotchas**
+*
+* Interruption is cooperative. A fiber can continue running while it is inside
+* uninterruptible work or finalizers.
+*
+* **Example** (Interrupting a fiber)
+*
+* ```ts import.meta.vitest
+* import { Effect, Fiber } from "effect"
+*
+* const program = Effect.gen(function*() {
+*   const fiber = yield* Effect.forkChild(
+*     Effect.delay("1 second")(Effect.succeed(42))
+*   )
+*   yield* Fiber.interrupt(fiber)
+* })
+*
+* await Effect.runPromise(program)
+* ```
+*
+* @see {@link interruptAs} for specifying the interrupting fiber ID
+* @see {@link await_ await} for observing the interrupted fiber's Exit
+*
+* @category interruption
+* @since 2.0.0
+*/
+const interrupt = fiberInterrupt;
+/**
+* Adds a fiber to a `Scope` and returns the same fiber.
+*
+* **When to use**
+*
+* Use when a manually managed fiber should be interrupted when a Scope closes.
+*
+* **Details**
+*
+* When the scope is closed, the fiber is interrupted. If the scope is already
+* closed, the fiber is interrupted immediately.
+*
+* **Gotchas**
+*
+* This does not wait for the fiber to complete. It only registers the
+* interruption finalizer and returns the same fiber.
+*
+* @see {@link interrupt} for interrupting and waiting for completion
+*
+* @category resource management
+* @since 4.0.0
+*/
+const runIn = fiberRunIn;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Latch.js
+/**
+* Creates a `Latch` synchronously, outside of `Effect`.
+*
+* **When to use**
+*
+* Use when you need to allocate a `Latch` synchronously outside an Effect
+* workflow.
+*
+* **Details**
+*
+* The latch starts closed by default; pass `true` to create it open.
+*
+* **Example** (Creating a latch unsafely)
+*
+* ```ts import.meta.vitest
+* import { Effect, Fiber, Latch } from "effect"
+*
+* const latch = Latch.makeUnsafe(false)
+* const waiter = latch.await.pipe(Effect.as("opened"))
+*
+* const program = Effect.gen(function*() {
+*   const fiber = yield* Effect.forkChild(waiter)
+*   yield* latch.open
+*   return yield* Fiber.join(fiber)
+* })
+*
+* await Effect.runPromise(program) // => "opened"
+* ```
+*
+* @see {@link make} for creating a latch inside Effect code
+*
+* @category constructors
+* @since 4.0.0
+*/
+const makeUnsafe$1 = makeLatchUnsafe;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/MutableRef.js
+const TypeId$17 = "~effect/MutableRef";
+const MutableRefProto = {
+	[TypeId$17]: TypeId$17,
+	...PipeInspectableProto,
+	toJSON() {
+		return {
+			_id: "MutableRef",
+			current: toJson(this.current)
+		};
+	}
+};
+/**
+* Creates a new MutableRef with the specified initial value.
+*
+* **When to use**
+*
+* Use to create a synchronous `MutableRef` initialized with a value.
+*
+* **Example** (Creating mutable refs)
+*
+* ```ts import.meta.vitest
+* import { MutableRef } from "effect"
+*
+* // Create a counter reference
+* const counter = MutableRef.make(0)
+*
+* MutableRef.get(counter) // => 0
+*
+* // Create a configuration reference
+* const config = MutableRef.make({ debug: false, timeout: 5000 })
+*
+* MutableRef.get(config) // => { debug: false, timeout: 5000 }
+*
+* // Create a string reference
+* const status = MutableRef.make("idle")
+* MutableRef.set(status, "running")
+*
+* MutableRef.get(status) // => "running"
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const make$15 = (value) => {
+	const ref = Object.create(MutableRefProto);
+	ref.current = value;
+	return ref;
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/MutableList.js
+/**
+* Defines the unique symbol used to represent an empty result when taking elements from a MutableList.
+* This symbol is returned by `take` when the list is empty, allowing for safe type checking.
+*
+* **When to use**
+*
+* Use to detect that `take` returned no element before handling the result as a
+* list item.
+*
+* **Example** (Checking for empty results)
+*
+* ```ts import.meta.vitest
+* import { MutableList } from "effect"
+*
+* const list = MutableList.make<string>()
+*
+* MutableList.take(list) === MutableList.Empty // => true
+* ```
+*
+* @category symbols
+* @since 4.0.0
+*/
+const Empty = /*#__PURE__*/ Symbol.for("effect/MutableList/Empty");
+/**
+* Creates an empty MutableList.
+*
+* **Example** (Creating an empty mutable list)
+*
+* ```ts import.meta.vitest
+* import { MutableList } from "effect"
+*
+* const list = MutableList.make<string>()
+*
+* list.length // => 0
+* MutableList.append(list, "first")
+* MutableList.take(list) // => "first"
+* list.length // => 0
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const make$14 = () => ({
+	head: void 0,
+	tail: void 0,
+	length: 0
+});
+const compactHead = (self) => {
+	const head = self.head;
+	if (head.offset >= 1024 && head === self.tail && head.mutable && (head.array.length - head.offset) * 8 <= head.offset) self.head = self.tail = {
+		array: head.array.slice(head.offset),
+		mutable: true,
+		offset: 0,
+		next: void 0
+	};
+};
+const emptyBucket = () => ({
+	array: [],
+	mutable: true,
+	offset: 0,
+	next: void 0
+});
+/**
+* Appends an element to the end of the MutableList.
+* This operation is optimized for high-frequency usage.
+*
+* **Example** (Appending elements)
+*
+* ```ts import.meta.vitest
+* import { MutableList } from "effect"
+*
+* const list = MutableList.make<number>()
+* MutableList.append(list, 1)
+* MutableList.append(list, 2)
+* MutableList.append(list, 3)
+*
+* MutableList.toArray(list) // => [1, 2, 3]
+* list.length // => 3
+* ```
+*
+* @category mutations
+* @since 2.0.0
+*/
+const append = (self, message) => {
+	if (!self.tail) self.head = self.tail = emptyBucket();
+	else if (!self.tail.mutable) {
+		self.tail.next = emptyBucket();
+		self.tail = self.tail.next;
+	}
+	self.tail.array.push(message);
+	self.length++;
+};
+/**
+* Removes all elements from the MutableList, resetting it to an empty state.
+* This operation is highly optimized and releases all internal memory.
+*
+* **Example** (Clearing a mutable list)
+*
+* ```ts import.meta.vitest
+* import { MutableList } from "effect"
+*
+* const list = MutableList.make<number>()
+* MutableList.appendAll(list, [1, 2, 3, 4, 5])
+*
+* MutableList.clear(list)
+*
+* MutableList.toArray(list) // => []
+* list.length // => 0
+* MutableList.take(list) === MutableList.Empty // => true
+* ```
+*
+* @category mutations
+* @since 4.0.0
+*/
+const clear = (self) => {
+	self.head = self.tail = void 0;
+	self.length = 0;
+};
+/**
+* Takes up to N elements from the beginning of the MutableList and returns them as an array.
+* The taken elements are removed from the list. This operation is optimized for performance
+* and includes zero-copy optimizations when possible.
+*
+* **Details**
+*
+* Finite fractional values of `n` are rounded down. `NaN` and non-positive
+* values leave the list unchanged and return an empty array.
+*
+* **Example** (Taking batches)
+*
+* ```ts import.meta.vitest
+* import { MutableList } from "effect"
+*
+* const list = MutableList.make<number>()
+* MutableList.appendAll(list, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+*
+* MutableList.takeN(list, 3) // => [1, 2, 3]
+* MutableList.toArray(list) // => [4, 5, 6, 7, 8, 9, 10]
+* list.length // => 7
+* ```
+*
+* @category mutations
+* @since 4.0.0
+*/
+const takeN = (self, n) => {
+	n = normalize$1(n);
+	if (n <= 0 || !self.head) return [];
+	n = Math.min(n, self.length);
+	if (n === self.length && self.head?.offset === 0 && !self.head.next) {
+		const array = self.head.array;
+		clear(self);
+		return array;
+	}
+	const array = new Array(n);
+	let index = 0;
+	let chunk = self.head;
+	while (chunk) {
+		while (chunk.offset < chunk.array.length) {
+			array[index++] = chunk.array[chunk.offset];
+			if (chunk.mutable) chunk.array[chunk.offset] = void 0;
+			chunk.offset++;
+			if (index === n) {
+				self.head = chunk.offset === chunk.array.length && chunk.next ? chunk.next : chunk;
+				self.length -= n;
+				if (self.length === 0) clear(self);
+				else compactHead(self);
+				return array;
+			}
+		}
+		chunk = chunk.next;
+	}
+	clear(self);
+	return array;
+};
+/**
+* Takes a single element from the beginning of the MutableList.
+* Returns the element if available, or the Empty symbol if the list is empty.
+* The taken element is removed from the list.
+*
+* **Example** (Taking one element)
+*
+* ```ts import.meta.vitest
+* import { MutableList } from "effect"
+*
+* const list = MutableList.make<string>()
+* MutableList.appendAll(list, ["first", "second", "third"])
+*
+* MutableList.take(list) // => "first"
+* MutableList.toArray(list) // => ["second", "third"]
+* list.length // => 2
+* ```
+*
+* @category mutations
+* @since 4.0.0
+*/
+const take$1 = (self) => {
+	if (!self.head) return Empty;
+	const message = self.head.array[self.head.offset];
+	if (self.head.mutable) self.head.array[self.head.offset] = void 0;
+	self.head.offset++;
+	self.length--;
+	if (self.head.offset === self.head.array.length) {
+		if (self.head.next) self.head = self.head.next;
+		else clear(self);
+	} else compactHead(self);
+	return message;
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Queue.js
+const TypeId$16 = "~effect/Queue";
+const EnqueueTypeId = "~effect/Queue/Enqueue";
+const DequeueTypeId = "~effect/Queue/Dequeue";
+const variance$1 = {
+	_A: identity,
+	_E: identity
+};
+const QueueProto = {
+	[TypeId$16]: variance$1,
+	[EnqueueTypeId]: variance$1,
+	[DequeueTypeId]: variance$1,
+	...PipeInspectableProto,
+	toJSON() {
+		return {
+			_id: "effect/Queue",
+			state: this.state._tag,
+			size: sizeUnsafe(this)
+		};
+	}
+};
+/**
+* Creates a `Queue` with optional capacity and overflow strategy.
+*
+* **Details**
+*
+* By default the queue is unbounded and uses the `"suspend"` strategy. Provide
+* `capacity` for a bounded queue and choose `"suspend"`, `"dropping"`, or
+* `"sliding"` to control what happens when the queue is full. The returned
+* queue can be offered to, taken from, failed, ended, interrupted, or shut down.
+*
+* **Example** (Creating queues)
+*
+* ```ts import.meta.vitest
+* import { Cause, Effect, Queue } from "effect"
+*
+* const program = Effect.gen(function*() {
+*   const queue = yield* Queue.make<number, string | Cause.Done>()
+*
+*   // add messages to the queue
+*   yield* Queue.offer(queue, 1)
+*   yield* Queue.offer(queue, 2)
+*   yield* Queue.offerAll(queue, [3, 4, 5])
+*
+*   // take messages from the queue
+*   const messages = yield* Queue.takeAll(queue)
+*
+*   // signal that the queue is done
+*   yield* Queue.end(queue)
+*   const done = yield* Effect.flip(Queue.take(queue))
+*
+*   // signal that another queue has failed
+*   const failedQueue = yield* Queue.make<number, string>()
+*   const failed = yield* Queue.fail(failedQueue, "boom")
+*   return { messages, done, failed }
+* })
+*
+* await Effect.runPromise(program) // => { messages: [1, 2, 3, 4, 5], done: Cause.Done(), failed: true }
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const make$13 = (options) => withFiber$1((fiber) => {
+	const self = Object.create(QueueProto);
+	self.dispatcher = fiber.currentDispatcher;
+	self.capacity = options?.capacity ?? Number.POSITIVE_INFINITY;
+	self.strategy = options?.strategy ?? "suspend";
+	self.messages = make$14();
+	self.scheduleRunning = false;
+	self.state = {
+		_tag: "Open",
+		takers: /* @__PURE__ */ new Set(),
+		offers: /* @__PURE__ */ new Set(),
+		awaiters: /* @__PURE__ */ new Set()
+	};
+	return succeed$5(self);
+});
+/**
+* Creates a bounded queue with the specified capacity that uses backpressure strategy.
+*
+* **Details**
+*
+* When the queue reaches capacity, producers will be suspended until space becomes available.
+* This ensures all messages are processed but may slow down producers.
+*
+* **Example** (Creating bounded queues)
+*
+* ```ts import.meta.vitest
+* import { Effect, Queue } from "effect"
+*
+* const program = Effect.gen(function*() {
+*   const queue = yield* Queue.bounded<string>(5)
+*
+*   // This will succeed as queue has capacity
+*   yield* Queue.offer(queue, "first")
+*   yield* Queue.offer(queue, "second")
+*
+*   const size = yield* Queue.size(queue)
+*   return size
+* })
+*
+* await Effect.runPromise(program) // => 2
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const bounded = (capacity) => make$13({ capacity });
+/**
+* Adds a message to the queue. Returns `false` if the queue is done.
+*
+* **Details**
+*
+* For bounded queues, this operation may suspend if the queue is at capacity,
+* depending on the backpressure strategy. For dropping/sliding queues, it may
+* return false or succeed immediately by dropping/sliding existing messages.
+*
+* **Example** (Offering a value)
+*
+* ```ts import.meta.vitest
+* import { Effect, Queue } from "effect"
+*
+* const program = Effect.gen(function*() {
+*   const queue = yield* Queue.bounded<number>(3)
+*
+*   // Successfully add messages to queue
+*   const success1 = yield* Queue.offer(queue, 1)
+*   const success2 = yield* Queue.offer(queue, 2)
+*
+*   // Queue state
+*   const size = yield* Queue.size(queue)
+*   return { offered: [success1, success2], size }
+* })
+*
+* await Effect.runPromise(program) // => { offered: [true, true], size: 2 }
+* ```
+*
+* @category offering
+* @since 2.0.0
+*/
+const offer = /*#__PURE__*/ dual(2, (self, message) => suspend$3(() => offerUnsafe(self, message) ? exitTrue : self.state._tag === "Open" && self.strategy === "suspend" ? offerOrWait(self, message) : exitFalse));
+/**
+* Adds a message to the queue synchronously. Returns `false` if the queue is done.
+*
+* **When to use**
+*
+* Use when you are already in synchronous queue internals or a performance
+* boundary where wrapping the mutation in `Effect` is intentionally avoided.
+*
+* **Gotchas**
+*
+* This is an unsafe operation that directly modifies the queue without Effect wrapping.
+* Use this only when you're certain about the synchronous nature of the operation.
+*
+* **Example** (Offering a value synchronously)
+*
+* ```ts import.meta.vitest
+* import { Effect, Queue } from "effect"
+*
+* // Create a queue effect and extract the queue for unsafe operations
+* const program = Effect.gen(function*() {
+*   const queue = yield* Queue.bounded<number>(3)
+*
+*   // Add messages synchronously using unsafe API
+*   const success1 = Queue.offerUnsafe(queue, 1)
+*   const success2 = Queue.offerUnsafe(queue, 2)
+*
+*   // Check current size
+*   const size = Queue.sizeUnsafe(queue)
+*   return { offered: [success1, success2], size }
+* })
+*
+* await Effect.runPromise(program) // => { offered: [true, true], size: 2 }
+* ```
+*
+* @category offering
+* @since 4.0.0
+*/
+const offerUnsafe = (self, message) => {
+	if (self.state._tag !== "Open") return false;
+	else if (self.messages.length >= self.capacity) {
+		if (self.strategy === "sliding") {
+			take$1(self.messages);
+			append(self.messages, message);
+			return true;
+		} else if (self.capacity <= 0 && self.state.takers.size > 0) {
+			append(self.messages, message);
+			releaseTakers(self);
+			return true;
+		}
+		return false;
+	}
+	append(self.messages, message);
+	scheduleReleaseTaker(self);
+	return true;
+};
+/**
+* Fails the queue with a cause. If the queue is already done, `false` is
+* returned.
+*
+* **Example** (Failing queues with a cause)
+*
+* ```ts import.meta.vitest
+* import { Cause, Effect, Exit, Queue } from "effect"
+*
+* const program = Effect.gen(function*() {
+*   const queue = yield* Queue.bounded<number, string>(10)
+*
+*   // Create a cause and fail the queue
+*   const cause = Cause.fail("Queue processing failed")
+*   const failed = yield* Queue.failCause(queue, cause)
+*
+*   // The queue is now done with the specified failure cause
+*   const exit = yield* Effect.exit(Queue.take(queue))
+*   return [failed, exit]
+* })
+*
+* await Effect.runPromise(program) // => [true, Exit.failCause(Cause.fail("Queue processing failed"))]
+* ```
+*
+* @category completion
+* @since 4.0.0
+*/
+const failCause = /*#__PURE__*/ dual(2, (self, cause) => sync$1(() => failCauseUnsafe(self, cause)));
+/**
+* Fails the queue with a cause synchronously. If the queue is already done, `false` is
+* returned.
+*
+* **When to use**
+*
+* Use when queue completion must be driven from synchronous internals while
+* preserving the full failure `Cause`.
+*
+* **Gotchas**
+*
+* This is an unsafe operation that directly modifies the queue without Effect wrapping.
+*
+* **Example** (Failing queues with a cause synchronously)
+*
+* ```ts import.meta.vitest
+* import { Cause, Effect, Exit, Queue } from "effect"
+*
+* const program = Effect.gen(function*() {
+*   const queue = yield* Queue.bounded<number, string>(10)
+*
+*   // Create a cause and fail the queue synchronously
+*   const cause = Cause.fail("Processing error")
+*   const failed = Queue.failCauseUnsafe(queue, cause)
+*
+*   // The queue is now done with the specified failure cause
+*   const exit = Queue.takeUnsafe(queue)
+*   return [failed, exit]
+* })
+*
+* await Effect.runPromise(program) // => [true, Exit.failCause(Cause.fail("Processing error"))]
+* ```
+*
+* @category completion
+* @since 4.0.0
+*/
+const failCauseUnsafe = (self, cause) => {
+	if (self.state._tag !== "Open") return false;
+	const exit = exitFailCause(cause);
+	const fail = exitZipRight(exit, exitFailDone);
+	if (self.state.offers.size === 0 && self.messages.length === 0) {
+		finalize(self, fail);
+		return true;
+	}
+	self.state = {
+		...self.state,
+		_tag: "Closing",
+		exit: fail
+	};
+	scheduleReleaseTaker(self);
+	return true;
+};
+/**
+* Signals queue completion synchronously.
+*
+* **When to use**
+*
+* Use when implementing low-level queue integrations that must complete a queue
+* without wrapping the operation in `Effect`.
+*
+* **Details**
+*
+* Returns `false` if the queue is already done.
+*
+* **Gotchas**
+*
+* This is an unsafe operation that directly modifies the queue without Effect wrapping.
+*
+* **Example** (Ending queues synchronously)
+*
+* ```ts import.meta.vitest
+* import { Cause, Effect, Queue } from "effect"
+*
+* // Create a queue and use unsafe operations
+* const program = Effect.gen(function*() {
+*   const queue = yield* Queue.bounded<number, Cause.Done>(10)
+*
+*   // Add some messages
+*   Queue.offerUnsafe(queue, 1)
+*   Queue.offerUnsafe(queue, 2)
+*
+*   // End the queue synchronously
+*   const ended = Queue.endUnsafe(queue)
+*
+*   // Existing messages can still be consumed while the queue is closing
+*   const states = [queue.state._tag]
+*
+*   Queue.takeUnsafe(queue)
+*   Queue.takeUnsafe(queue)
+*
+*   // After buffered messages are consumed, the queue is done
+*   states.push(queue.state._tag)
+*   return { ended, states }
+* })
+*
+* await Effect.runPromise(program) // => { ended: true, states: ["Closing", "Done"] }
+* ```
+*
+* @category completion
+* @since 4.0.0
+*/
+const endUnsafe = (self) => failCauseUnsafe(self, causeFail(Done$1()));
+/**
+* Shuts down the queue immediately, discarding buffered messages and resuming
+* pending operations.
+*
+* **Details**
+*
+* Returns `true` when the queue is shut down by this call, or `false` when it
+* has already been shut down or completed.
+*
+* **Example** (Shutting down queues)
+*
+* ```ts import.meta.vitest
+* import { Effect, Queue } from "effect"
+*
+* const program = Effect.gen(function*() {
+*   const queue = yield* Queue.bounded<number>(2)
+*
+*   // Add messages
+*   yield* Queue.offer(queue, 1)
+*   yield* Queue.offer(queue, 2)
+*
+*   // Shutdown clears buffered messages and prevents further offers
+*   const wasShutdown = yield* Queue.shutdown(queue)
+*
+*   // Queue is now done and cleared
+*   const size = yield* Queue.size(queue)
+*   return { wasShutdown, size }
+* })
+*
+* await Effect.runPromise(program) // => { wasShutdown: true, size: 0 }
+* ```
+*
+* @see {@link shutdownUnsafe} for synchronous shutdown
+* @category completion
+* @since 2.0.0
+*/
+const shutdown = (self) => sync$1(() => shutdownUnsafe(self));
+/**
+* Shuts down the queue synchronously, discarding buffered messages and resuming
+* pending operations.
+*
+* **When to use**
+*
+* Use when a synchronous callback must discard buffered messages and settle
+* pending queue operations before returning.
+*
+* **Details**
+*
+* An open queue completes with an interruption. A queue already closing retains
+* its completion cause. Call `failCauseUnsafe` first to shut down with a specific
+* failure. Returns `true` when the queue is shut down by this call, or `false`
+* when it has already been shut down or completed.
+*
+* @see {@link shutdown} for the effectful variant
+* @see {@link failCauseUnsafe} to set a failure before discarding buffered messages
+* @category completion
+* @since 4.0.0
+*/
+const shutdownUnsafe = (self) => {
+	if (self.state._tag === "Done") return false;
+	clear(self.messages);
+	const offers = self.state.offers;
+	finalize(self, self.state._tag === "Open" ? exitInterrupt : self.state.exit);
+	for (const entry of offers) resumeUnoffered(entry);
+	return true;
+};
+/**
+* Takes all currently available messages, waiting until at least one message
+* is available when the queue is empty.
+*
+* **When to use**
+*
+* Use when consumers should process the next non-empty batch of buffered
+* messages instead of repeatedly taking one message at a time.
+*
+* **Details**
+*
+* Returns a non-empty array. If the queue completes or fails before a message
+* can be taken, the effect fails with the queue's terminal error.
+*
+* **Example** (Taking all available values)
+*
+* ```ts import.meta.vitest
+* import { Cause, Effect, Queue } from "effect"
+*
+* const program = Effect.gen(function*() {
+*   const queue = yield* Queue.bounded<number, Cause.Done>(5)
+*
+*   // Add several messages
+*   yield* Queue.offerAll(queue, [1, 2, 3, 4, 5])
+*
+*   // Take all available messages
+*   const messages1 = yield* Queue.takeAll(queue)
+*   return messages1
+* })
+*
+* await Effect.runPromise(program) // => [1, 2, 3, 4, 5]
+* ```
+*
+* @category taking
+* @since 2.0.0
+*/
+const takeAll = (self) => takeBetween(self, 1, Number.POSITIVE_INFINITY);
+/**
+* Takes between `min` and `max` messages from the queue.
+*
+* **Details**
+*
+* The operation waits when fewer than the required minimum messages are
+* available. It returns at most `max` messages. Finite fractional bounds are
+* rounded down, while `NaN` and non-positive bounds are treated as `0`. If the
+* queue is closing, drains the currently available messages even when fewer
+* than `min` are available. Once the queue is done, the effect fails with the
+* queue's terminal error.
+*
+* **Example** (Taking a bounded batch of values)
+*
+* ```ts import.meta.vitest
+* import { Cause, Effect, Queue } from "effect"
+*
+* const program = Effect.gen(function*() {
+*   const queue = yield* Queue.bounded<number>(10)
+*
+*   // Add several messages
+*   yield* Queue.offerAll(queue, [1, 2, 3, 4, 5, 6, 7, 8])
+*
+*   // Take between 2 and 5 messages
+*   const batch1 = yield* Queue.takeBetween(queue, 2, 5)
+*
+*   // Take between 1 and 10 messages (but only 3 remain)
+*   const batch2 = yield* Queue.takeBetween(queue, 1, 10)
+*
+*   // No more messages available, will wait or return done
+*   // const batch3 = yield* Queue.takeBetween(queue, 1, 3)
+*   return [batch1, batch2]
+* })
+*
+* await Effect.runPromise(program) // => [[1, 2, 3, 4, 5], [6, 7, 8]]
+* ```
+*
+* @category taking
+* @since 2.0.0
+*/
+const takeBetween = /*#__PURE__*/ dual(3, (self, min, max) => {
+	min = normalize$1(min);
+	max = normalize$1(max);
+	return suspend$3(() => takeBetweenUnsafe(self, min, max) ?? andThen$1(awaitTake(self, () => canTake(self, min)), takeBetween(self, min, max)));
+});
+/**
+* Takes a single message from the queue, or wait for a message to be
+* available.
+*
+* **Details**
+*
+* If the queue is done, it will fail with `Done`. If the
+* queue fails, the Effect will fail with the error.
+*
+* **Example** (Taking one value)
+*
+* ```ts import.meta.vitest
+* import { Cause, Effect, Exit, Queue } from "effect"
+*
+* const program = Effect.gen(function*() {
+*   const queue = yield* Queue.bounded<string, Cause.Done>(3)
+*
+*   // Add some messages
+*   yield* Queue.offer(queue, "first")
+*   yield* Queue.offer(queue, "second")
+*
+*   // Take messages one by one
+*   const msg1 = yield* Queue.take(queue)
+*   const msg2 = yield* Queue.take(queue)
+*
+*   // End the queue
+*   yield* Queue.end(queue)
+*
+*   // Taking from an ended queue fails with Done
+*   const result = yield* Effect.exit(Queue.take(queue))
+*   return [[msg1, msg2], result]
+* })
+*
+* await Effect.runPromise(program) // => [["first", "second"], Exit.fail(Cause.Done())]
+* ```
+*
+* @category taking
+* @since 2.0.0
+*/
+const take = (self) => suspend$3(() => takeUnsafe(self) ?? andThen$1(awaitTake(self, () => canTake(self, 1)), take(self)));
+/**
+* Attempts to take one item from the queue without waiting.
+*
+* **Details**
+*
+* Returns `Option.some` when an item is immediately available. Returns
+* `Option.none` when no item is available, when the queue is done, or when the
+* immediate take observes a queue failure.
+*
+* **Example** (Polling without blocking)
+*
+* ```ts import.meta.vitest
+* import { Effect, Option, Queue } from "effect"
+*
+* const program = Effect.gen(function*() {
+*   const queue = yield* Queue.bounded<number>(10)
+*
+*   // Poll returns Option.none if empty
+*   const maybe1 = yield* Queue.poll(queue)
+*
+*   // Add an item
+*   yield* Queue.offer(queue, 42)
+*
+*   // Poll returns Option.some with the item
+*   const maybe2 = yield* Queue.poll(queue)
+*   return [maybe1, maybe2]
+* })
+*
+* await Effect.runPromise(program) // => [Option.none(), Option.some(42)]
+* ```
+*
+* @category taking
+* @since 2.0.0
+*/
+const poll = (self) => suspend$3(() => {
+	const result = takeUnsafe(self);
+	if (result === void 0) return succeed$5(none());
+	if (result._tag === "Success") return succeed$5(some(result.value));
+	return succeed$5(none());
+});
+/**
+* Attempts to take one message from the queue synchronously.
+*
+* **When to use**
+*
+* Use when polling queue internals must not suspend or register a waiting taker,
+* and `undefined` is an acceptable result for an empty queue.
+*
+* **Details**
+*
+* Returns an `Exit` for an immediately available message or for the queue's
+* terminal state. Returns `undefined` when no message is immediately available.
+* This operation does not wait or register a taker.
+*
+* **Example** (Taking one value synchronously)
+*
+* ```ts import.meta.vitest
+* import { Effect, Exit, Queue } from "effect"
+*
+* // Create a queue and use unsafe operations
+* const program = Effect.gen(function*() {
+*   const queue = yield* Queue.bounded<number>(10)
+*
+*   // Add some messages
+*   Queue.offerUnsafe(queue, 1)
+*   Queue.offerUnsafe(queue, 2)
+*
+*   // Take a message synchronously
+*   const result1 = Queue.takeUnsafe(queue)
+*
+*   const result2 = Queue.takeUnsafe(queue)
+*
+*   // No more messages - returns undefined
+*   const result3 = Queue.takeUnsafe(queue)
+*   return [result1, result2, result3]
+* })
+*
+* await Effect.runPromise(program) // => [Exit.succeed(1), Exit.succeed(2), undefined]
+* ```
+*
+* @category taking
+* @since 4.0.0
+*/
+const takeUnsafe = (self) => {
+	if (self.state._tag === "Done") return self.state.exit;
+	if (self.messages.length > 0) {
+		const message = take$1(self.messages);
+		releaseCapacity(self);
+		return exitSucceed(message);
+	} else if (self.capacity <= 0 && self.state.offers.size > 0) {
+		const message = takeOfferUnsafe(self.state.offers);
+		releaseCapacity(self);
+		return exitSucceed(message);
+	}
+};
+/**
+* Returns the current number of buffered messages in the queue synchronously.
+*
+* **When to use**
+*
+* Use when you need an immediate `Queue` size snapshot for diagnostics or
+* internals and do not need the read wrapped in `Effect`.
+*
+* **Details**
+*
+* After `endUnsafe`, a queue remains `Closing` while buffered messages are
+* drained, and its size continues to include those messages. A `Done` queue
+* reports a size of `0`. This unsafe operation reads the queue state directly
+* without Effect wrapping.
+*
+* **Example** (Checking queue size synchronously)
+*
+* ```ts import.meta.vitest
+* import { Cause, Effect, Queue } from "effect"
+*
+* const program = Effect.gen(function*() {
+*   const queue = yield* Queue.bounded<number, Cause.Done>(10)
+*
+*   // Check size of empty queue
+*   const size1 = Queue.sizeUnsafe(queue)
+*
+*   // Add some messages
+*   Queue.offerUnsafe(queue, 1)
+*   Queue.offerUnsafe(queue, 2)
+*   Queue.offerUnsafe(queue, 3)
+*
+*   // Check size after adding messages
+*   const size2 = Queue.sizeUnsafe(queue)
+*
+*   // End the queue
+*   Queue.endUnsafe(queue)
+*
+*   // Ending retains the buffered size while the queue is Closing
+*   const size3 = Queue.sizeUnsafe(queue)
+*   return [size1, size2, size3]
+* })
+*
+* await Effect.runPromise(program) // => [0, 3, 3]
+* ```
+*
+* @category sizes
+* @since 4.0.0
+*/
+const sizeUnsafe = (self) => self.state._tag === "Done" ? 0 : self.messages.length;
+const exitFalse = /*#__PURE__*/ exitSucceed(false);
+const exitTrue = /*#__PURE__*/ exitSucceed(true);
+const exitFailDone = /*#__PURE__*/ exitFail(/*#__PURE__*/ Done$1());
+const exitInterrupt = /*#__PURE__*/ exitInterrupt$1();
+const releaseTakers = (self) => {
+	if (self.state._tag === "Done" || self.state.takers.size === 0) return;
+	for (const taker of self.state.takers) {
+		self.state.takers.delete(taker);
+		taker(exitVoid);
+		if (self.messages.length === 0) break;
+	}
+};
+const scheduleReleaseTaker = (self) => {
+	if (self.scheduleRunning || self.state._tag === "Done" || self.state.takers.size === 0) return;
+	self.scheduleRunning = true;
+	self.dispatcher.scheduleTask(() => {
+		self.scheduleRunning = false;
+		releaseTakers(self);
+	}, 0);
+};
+const takeBetweenUnsafe = (self, min, max) => {
+	if (self.state._tag === "Done") return self.state.exit;
+	else if (max <= 0 || min <= 0) return exitSucceed([]);
+	else if (!canTake(self, min)) return;
+	const messages = self.messages.length > 0 ? takeN(self.messages, max) : [takeOfferUnsafe(self.state.offers)];
+	releaseCapacity(self);
+	return exitSucceed(messages);
+};
+const canTake = (self, min) => self.messages.length >= (self.state._tag === "Closing" ? 1 : Math.min(min, self.capacity || 1)) || self.capacity <= 0 && self.state._tag !== "Done" && self.state.offers.size > 0;
+const awaitTake = (self, ready) => callback$2((resume) => {
+	if (self.state._tag === "Done") return resume(self.state.exit);
+	if (ready()) return resume(exitVoid);
+	self.state.takers.add(resume);
+	return sync$1(() => {
+		if (self.state._tag !== "Done") self.state.takers.delete(resume);
+	});
+});
+const offerOrWait = (self, message) => callback$2((resume) => offerUnsafe(self, message) ? resume(exitTrue) : waitToOffer(self, {
+	_tag: "Single",
+	message,
+	resume
+}));
+const waitToOffer = (self, entry) => {
+	if (self.state._tag !== "Open") return resumeUnoffered(entry);
+	const offers = self.state.offers;
+	offers.add(entry);
+	return sync$1(() => {
+		if (self.state._tag === "Done") return;
+		offers.delete(entry);
+		if (self.state._tag === "Closing" && offers.size === 0 && self.messages.length === 0) finalize(self, self.state.exit);
+	});
+};
+const resumeUnoffered = (entry) => entry._tag === "Single" ? entry.resume(exitFalse) : entry.resume(exitSucceed(entry.remaining.slice(entry.offset)));
+const takeOfferUnsafe = (offers) => {
+	const entry = offers.values().next().value;
+	if (entry._tag === "Single") {
+		offers.delete(entry);
+		entry.resume(exitTrue);
+		return entry.message;
+	}
+	const message = entry.remaining[entry.offset++];
+	if (entry.offset === entry.remaining.length) {
+		offers.delete(entry);
+		entry.resume(exitSucceed([]));
+	}
+	return message;
+};
+const releaseCapacity = (self) => {
+	if (self.state._tag === "Done") return isDoneCause(self.state.exit.cause);
+	else if (self.state.offers.size === 0) {
+		if (self.state._tag === "Closing" && self.messages.length === 0) {
+			finalize(self, self.state.exit);
+			return isDoneCause(self.state.exit.cause);
+		}
+		return false;
+	}
+	for (const entry of self.state.offers) {
+		let n = self.capacity - self.messages.length;
+		if (n <= 0) break;
+		else if (entry._tag === "Single") {
+			append(self.messages, entry.message);
+			self.state.offers.delete(entry);
+			entry.resume(exitTrue);
+		} else {
+			for (; entry.offset < entry.remaining.length; entry.offset++) {
+				if (n === 0) return false;
+				append(self.messages, entry.remaining[entry.offset]);
+				n--;
+			}
+			self.state.offers.delete(entry);
+			entry.resume(exitSucceed([]));
+		}
+	}
+	return false;
+};
+const finalize = (self, exit) => {
+	if (self.state._tag === "Done") return;
+	const openState = self.state;
+	self.state = {
+		_tag: "Done",
+		exit
+	};
+	for (const taker of openState.takers) taker(exit);
+	openState.takers.clear();
+	for (const awaiter of openState.awaiters) awaiter(exit);
+	openState.awaiters.clear();
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Semaphore.js
+/**
+* Creates a `Semaphore` synchronously with the specified total
+* number of permits.
+*
+* **When to use**
+*
+* Use to construct a semaphore synchronously when an immediate value is
+* required outside an Effect workflow.
+*
+* **Example** (Creating an unsafe semaphore)
+*
+* ```ts import.meta.vitest
+* import { Effect, Semaphore } from "effect"
+*
+* const semaphore = Semaphore.makeUnsafe(3)
+*
+* const task = (id: number) =>
+*   semaphore.withPermits(1)(
+*     Effect.gen(function*() {
+*       yield* Effect.yieldNow
+*       return id
+*     })
+*   )
+*
+* // Only 3 tasks can run concurrently
+* const program = Effect.all([
+*   task(1),
+*   task(2),
+*   task(3),
+*   task(4),
+*   task(5)
+* ], { concurrency: "unbounded" })
+*
+* await Effect.runPromise(program) // => [1, 2, 3, 4, 5]
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const makeUnsafe = (permits) => new SemaphoreImpl(permits);
+const waitForPermits = (self, n, effect) => callback$2((resume) => {
+	if (self.free >= n) return resume(effect);
+	const observer = () => {
+		if (self.free < n) return;
+		self.waiters.delete(observer);
+		resume(effect);
+	};
+	self.waiters.add(observer);
+	return sync$1(() => {
+		self.waiters.delete(observer);
+	});
+});
+var SemaphoreImpl = class {
+	waiters = /*#__PURE__*/ new Set();
+	taken = 0;
+	permits;
+	constructor(permits) {
+		this.permits = permits;
+	}
+	get free() {
+		return this.permits - this.taken;
+	}
+	take(n) {
+		const take = suspend$3(() => {
+			if (this.free < n) return waitForPermits(this, n, take);
+			this.taken += n;
+			return succeed$5(n);
+		});
+		return take;
+	}
+	takeIfAvailable(n) {
+		return suspend$3(() => {
+			if (this.free < n) return succeed$5(false);
+			this.taken += n;
+			return succeed$5(true);
+		});
+	}
+	releaseUnsafe(fiber, n) {
+		this.taken -= n;
+		if (this.waiters.size > 0) fiber.currentDispatcher.scheduleTask(() => {
+			for (const observer of this.waiters) {
+				if (this.free <= 0) break;
+				observer();
+			}
+		}, 0);
+		return this.free;
+	}
+	resize(permits) {
+		return withFiber$1((fiber) => {
+			this.permits = permits;
+			if (this.free < 0) return void_$2;
+			this.releaseUnsafe(fiber, 0);
+			return void_$2;
+		});
+	}
+	release(n) {
+		return withFiber$1((fiber) => succeed$5(this.releaseUnsafe(fiber, n)));
+	}
+	get releaseAll() {
+		return withFiber$1((fiber) => succeed$5(this.releaseUnsafe(fiber, this.taken)));
+	}
+	withPermits(n) {
+		return (self) => uninterruptibleMask$1((restore) => {
+			const acquire = suspend$3(() => {
+				if (this.free < n) {
+					const wait = waitForPermits(this, n, void_$2);
+					return flatMap$2(restore(wait), () => acquire);
+				}
+				this.taken += n;
+				return onExitPrimitive(restore(self), () => {
+					this.releaseUnsafe(getCurrentFiber(), n);
+				}, true);
+			});
+			return acquire;
+		});
+	}
+	withPermit = /*#__PURE__*/ this.withPermits(1);
+	withPermitsIfAvailable(n) {
+		return (self) => uninterruptibleMask$1((restore) => {
+			if (this.free < n) return succeedNone;
+			this.taken += n;
+			return onExitPrimitive(restore(asSome(self)), () => {
+				this.releaseUnsafe(getCurrentFiber(), n);
+			}, true);
+		});
+	}
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Channel.js
+/**
+* Provides low-level building blocks for streaming data through Effect.
+*
+* A `Channel` can read input elements, write output elements, fail with a typed
+* error, and finish with a typed result while managing resources safely.
+* Streams and sinks are built on channels, so most application code uses those
+* higher-level modules instead. This module is useful when implementing stream
+* operators or specialized streaming workflows.
+*
+* @since 2.0.0
+*/
+/**
+* Runtime identifier stored on `Channel` values and used by `isChannel` to
+* recognize them.
+*
+* @category type IDs
+* @since 4.0.0
+*/
+const TypeId$15 = "~effect/Channel";
+/**
+* Checks whether a value is a `Channel`.
+*
+* **Example** (Checking for channels)
+*
+* ```ts import.meta.vitest
+* import { Channel } from "effect"
+*
+* const channel = Channel.succeed(42)
+* Channel.isChannel(channel) // => true
+* Channel.isChannel("not a channel") // => false
+* ```
+*
+* @category guards
+* @since 3.5.4
+*/
+const isChannel = (u) => hasProperty(u, TypeId$15);
+const ChannelProto = {
+	[TypeId$15]: {
+		_Env: identity,
+		_InErr: identity,
+		_InElem: identity,
+		_OutErr: identity,
+		_OutElem: identity
+	},
+	pipe() {
+		return pipeArguments(this, arguments);
+	}
+};
+/**
+* Creates a `Channel` from a transformation function that operates on upstream pulls.
+*
+* **Example** (Creating channels from transforms)
+*
+* ```ts import.meta.vitest
+* import { Channel, Effect } from "effect"
+*
+* const channel = Channel.fromTransform((upstream, scope) =>
+*   Effect.succeed(upstream)
+* )
+* await Effect.runPromise(Channel.runCollect(channel)) // => []
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const fromTransform$1 = (transform) => {
+	const self = Object.create(ChannelProto);
+	self.transform = (upstream, scope) => catchCause(transform(upstream, scope), (cause) => succeed$2(failCause$1(cause)));
+	return self;
+};
+/**
+* Transforms a Channel by applying a function to its Pull implementation.
+*
+* **Example** (Transforming pull behavior)
+*
+* ```ts import.meta.vitest
+* import { Channel, Effect } from "effect"
+*
+* // Transform a channel by modifying its pull behavior
+* const originalChannel = Channel.fromIterable([1, 2, 3])
+*
+* const transformedChannel = Channel.transformPull(
+*   originalChannel,
+*   (pull, scope) =>
+*     Effect.succeed(
+*       Effect.map(pull, (value) => value * 2)
+*     )
+* )
+* await Effect.runPromise(Channel.runCollect(transformedChannel)) // => [2, 4, 6]
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const transformPull$1 = (self, f) => fromTransform$1((upstream, scope) => flatMap$1(toTransform(self)(upstream, scope), (pull) => f(pull, scope)));
+/**
+* Creates a `Channel` from an `Effect` that produces a `Pull`.
+*
+* **Example** (Creating channels from pulls)
+*
+* ```ts import.meta.vitest
+* import { Cause, Channel, Effect } from "effect"
+*
+* const channel = Channel.fromPull(Effect.sync(() => {
+*   let emitted = false
+*   return Effect.suspend(() => {
+*     if (emitted) return Cause.done()
+*     emitted = true
+*     return Effect.succeed(42)
+*   })
+* }))
+* await Effect.runPromise(Channel.runCollect(channel)) // => [42]
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const fromPull$1 = (effect) => fromTransform$1((_, __) => effect);
+/**
+* Creates a `Channel` from a transformation function that operates on upstream
+* pulls, but also provides a forked scope that closes when the resulting
+* Channel completes.
+*
+* **When to use**
+*
+* Use when building channels that require scoped resource lifecycle management,
+* providing both the channel scope and a forked scope that automatically closes
+* when the channel completes.
+*
+* @see {@link fromTransform} for a simpler transformation without a forked scope
+* @category constructors
+* @since 4.0.0
+*/
+const fromTransformBracket = (f) => fromTransform$1(fnUntraced(function* (upstream, scope) {
+	const closableScope = forkUnsafe(scope);
+	const onCause = (cause) => close(closableScope, doneExitFromCause(cause));
+	const pull = yield* onError(f(upstream, scope, closableScope), onCause);
+	return onError(pull, onCause);
+}));
+/**
+* Converts a `Channel` back to its underlying transformation function.
+*
+* **Example** (Extracting channel transforms)
+*
+* ```ts import.meta.vitest
+* import { Channel, Effect } from "effect"
+*
+* const channel = Channel.succeed(42)
+* const transform = Channel.toTransform(channel)
+* typeof transform // => "function"
+* Effect.runSync(Channel.runCollect(channel)) // => [42]
+* ```
+*
+* @category destructors
+* @since 4.0.0
+*/
+const toTransform = (channel) => channel.transform;
+const asyncQueue = (scope, f, options) => make$13({
+	capacity: options?.bufferSize,
+	strategy: options?.strategy
+}).pipe(tap((queue) => addFinalizer$1(scope, shutdown(queue))), tap((queue) => forkIn(provide$2(f(queue), scope), scope)));
+/**
+* Creates a `Channel` that interacts with a callback function using a queue, emitting arrays.
+*
+* **Example** (Creating array channels from callbacks)
+*
+* ```ts import.meta.vitest
+* import { Channel, Effect, Queue } from "effect"
+*
+* const channel = Channel.callbackArray<number>(Effect.fn(function*(queue) {
+*   yield* Queue.offer(queue, 1)
+*   yield* Queue.offer(queue, 2)
+*   yield* Queue.end(queue)
+* }))
+* await Effect.runPromise(Channel.runCollect(channel)) // => [[1, 2]]
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const callbackArray = (f, options) => fromTransform$1((_, scope) => map$5(asyncQueue(scope, f, options), takeAll));
+/**
+* Creates a `Channel` that lazily evaluates to another channel.
+*
+* **Example** (Suspending channel creation)
+*
+* ```ts import.meta.vitest
+* import { Channel, Effect } from "effect"
+*
+* const channel = Channel.suspend(() => Channel.succeed(42))
+* Effect.runSync(Channel.runCollect(channel)) // => [42]
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const suspend$1 = (evaluate) => fromTransform$1((upstream, scope) => suspend$2(() => toTransform(evaluate())(upstream, scope)));
+/**
+* Represents a `Channel` that emits no elements.
+*
+* **Example** (Creating empty channels)
+*
+* ```ts import.meta.vitest
+* import { Channel, Effect } from "effect"
+*
+* // Create an empty channel
+* const emptyChannel = Channel.empty
+*
+* // Use empty channel in composition
+* const combined = Channel.concatWith(emptyChannel, () => Channel.succeed(42))
+* // Will immediately provide the second channel's output
+*
+* // Empty channel can be used as a no-op in conditional logic
+* const conditionalChannel = (shouldEmit: boolean) =>
+*   shouldEmit ? Channel.succeed("data") : Channel.empty
+*
+* Effect.runSync(Channel.runCollect(conditionalChannel(true))) // => ["data"]
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const empty$1 = /*#__PURE__*/ fromPull$1(/*#__PURE__*/ succeed$2(/*#__PURE__*/ done()));
+/**
+* Maps the output of this channel using the specified function.
+*
+* **Example** (Mapping channel output)
+*
+* ```ts import.meta.vitest
+* import { Channel, Data, Effect } from "effect"
+*
+* class TransformError extends Data.TaggedError("TransformError")<{
+*   readonly reason: string
+* }> {}
+*
+* // Basic mapping of channel values
+* const numbersChannel = Channel.fromIterable([1, 2, 3, 4, 5])
+* const doubledChannel = Channel.map(numbersChannel, (n) => n * 2)
+* Effect.runSync(Channel.runCollect(doubledChannel)) // => [2, 4, 6, 8, 10]
+*
+* // Transform string data
+* const wordsChannel = Channel.fromIterable(["hello", "world", "effect"])
+* const upperCaseChannel = Channel.map(wordsChannel, (word) => word.toUpperCase())
+* Effect.runSync(Channel.runCollect(upperCaseChannel)) // => ["HELLO", "WORLD", "EFFECT"]
+*
+* // Complex object transformation
+* type User = { id: number; name: string }
+* type UserDisplay = { displayName: string; isActive: boolean }
+*
+* const usersChannel = Channel.fromIterable([
+*   { id: 1, name: "Alice" },
+*   { id: 2, name: "Bob" }
+* ])
+* const displayChannel = Channel.map(usersChannel, (user): UserDisplay => ({
+*   displayName: `User: ${user.name}`,
+*   isActive: true
+* }))
+* Effect.runSync(Channel.runCollect(displayChannel)) // => [{ displayName: "User: Alice", isActive: true }, { displayName: "User: Bob", isActive: true }]
+* ```
+*
+* @category sequencing
+* @since 2.0.0
+*/
+const map$4 = /*#__PURE__*/ dual(2, (self, f) => transformPull$1(self, (pull) => sync(() => {
+	let i = 0;
+	return map$5(pull, (o) => f(o, i++));
+})));
+/**
+* Maps the done value of this channel using the specified function.
+*
+* @category sequencing
+* @since 4.0.0
+*/
+const mapDone = /*#__PURE__*/ dual(2, (self, f) => mapDoneEffect(self, (o) => succeed$2(f(o))));
+/**
+* Maps the done value of this channel using the specified effectful function.
+*
+* **When to use**
+*
+* Use when the terminal done value transformation needs services or can fail,
+* while emitted elements should pass through unchanged.
+*
+* @category sequencing
+* @since 4.0.0
+*/
+const mapDoneEffect = /*#__PURE__*/ dual(2, (self, f) => transformPull$1(self, (pull) => succeed$2(catchDone(pull, (done$17) => flatMap$1(f(done$17), done)))));
+/**
+* Returns a new channel, which is the merge of this channel and the specified
+* channel.
+*
+* **Example** (Merging channels)
+*
+* ```ts import.meta.vitest
+* import { Channel, Effect } from "effect"
+*
+* // Create two channels
+* const leftChannel = Channel.fromIterable([1, 2, 3])
+* const rightChannel = Channel.fromIterable(["a", "b", "c"])
+*
+* // The default "both" strategy waits for both channels to complete
+* const mergedChannel = Channel.merge(leftChannel, rightChannel)
+*
+* const values = await Effect.runPromise(Channel.runCollect(mergedChannel))
+* values.map(String).sort() // => ["1", "2", "3", "a", "b", "c"]
+* ```
+*
+* @category combining
+* @since 4.0.0
+*/
+const merge$1 = /*#__PURE__*/ dual((args) => isChannel(args[0]) && isChannel(args[1]), (left, right, options) => fromTransformBracket(fnUntraced(function* (upstream, _scope, forkedScope) {
+	const strategy = options?.haltStrategy ?? "both";
+	const queue = yield* bounded(0);
+	yield* addFinalizer$1(forkedScope, shutdown(queue));
+	let done = 0;
+	function onExit(side, cause) {
+		done++;
+		if (!isDoneCause(cause)) return failCause(queue, cause);
+		switch (strategy) {
+			case "both": return done === 2 ? failCause(queue, cause) : void_;
+			case "left":
+			case "right": return side === strategy ? failCause(queue, cause) : void_;
+			case "either": return failCause(queue, cause);
+		}
+	}
+	const runSide = (side, channel, scope) => toTransform(channel)(upstream, scope).pipe(flatMap$1((pull) => pull.pipe(flatMap$1((value) => offer(queue, value)), forever)), onError((cause) => andThen(close(scope, doneExitFromCause(cause)), onExit(side, cause))), forkIn(forkedScope));
+	yield* runSide("left", left, forkUnsafe(forkedScope));
+	yield* runSide("right", right, forkUnsafe(forkedScope));
+	return take(queue);
+})));
+/**
+* Splits upstream string chunks into lines, recognizing `\n`, `\r\n`, and
+* standalone `\r` as line terminators. The behavior matches
+* `String.linesIterator` regardless of how the input is chunked.
+*
+* **Details**
+*
+* A line terminator at the very end of the stream does **not** produce a
+* trailing empty line (consistent with `String.linesIterator`). Conversely,
+* if the stream ends without a terminator the final partial line is still
+* emitted.
+*
+* **Example** (Splitting string chunks into lines)
+*
+* ```ts import.meta.vitest
+* import { Effect, Stream } from "effect"
+*
+* const result = await Effect.runPromise(Stream.runCollect(
+*   Stream.splitLines(Stream.make("hel", "lo\r\nwor", "ld\n"))
+* ))
+* result // => ["hello", "world"]
+* ```
+*
+* @category splitting
+* @since 2.0.0
+*/
+const splitLines$1 = () => fromTransform$1((upstream, _scope) => sync(() => {
+	let stringBuilder = "";
+	let midCRLF = false;
+	let done$13 = none();
+	function splitLinesArray(chunk) {
+		const chunkBuilder = [];
+		function pushLine(segment) {
+			if (stringBuilder.length === 0) chunkBuilder.push(segment);
+			else {
+				chunkBuilder.push(stringBuilder + segment);
+				stringBuilder = "";
+			}
+		}
+		for (let i = 0; i < chunk.length; i++) {
+			const str = chunk[i];
+			if (str.length !== 0) {
+				let from = 0;
+				let indexOfCR = str.indexOf("\r");
+				let indexOfLF = str.indexOf("\n");
+				if (midCRLF) {
+					if (indexOfLF === 0) {
+						from = 1;
+						indexOfLF = str.indexOf("\n", from);
+					}
+					midCRLF = false;
+				}
+				while (indexOfCR !== -1 || indexOfLF !== -1) if (indexOfCR === -1 || indexOfLF !== -1 && indexOfLF < indexOfCR) {
+					pushLine(str.substring(from, indexOfLF));
+					from = indexOfLF + 1;
+					indexOfLF = str.indexOf("\n", from);
+				} else {
+					pushLine(str.substring(from, indexOfCR));
+					if (str.length === indexOfCR + 1) {
+						midCRLF = true;
+						from = str.length;
+						indexOfCR = -1;
+					} else {
+						from = indexOfCR + (indexOfLF === indexOfCR + 1 ? 2 : 1);
+						indexOfCR = str.indexOf("\r", from);
+						indexOfLF = str.indexOf("\n", from);
+					}
+				}
+				stringBuilder = stringBuilder + str.substring(from);
+			}
+		}
+		return isReadonlyArrayNonEmpty(chunkBuilder) ? chunkBuilder : null;
+	}
+	const pullOrFlush = suspend$2(() => {
+		if (done$13._tag === "Some") return done(done$13.value);
+		return matchEffect$1(upstream, {
+			onSuccess: loop,
+			onFailure: failCause$1,
+			onDone: (leftover) => {
+				done$13 = some(leftover);
+				if (stringBuilder.length > 0) {
+					const last = stringBuilder;
+					stringBuilder = "";
+					midCRLF = false;
+					return succeed$2([last]);
+				}
+				return done(leftover);
+			}
+		});
+	});
+	function loop(chunk) {
+		const lines = splitLinesArray(chunk);
+		return lines !== null ? succeed$2(lines) : pullOrFlush;
+	}
+	return pullOrFlush;
+}));
+/**
+* Returns a new channel that pipes the output of this channel into the
+* specified channel. The returned channel has the input type of this channel,
+* and the output type of the specified channel, terminating with the value of
+* the specified channel.
+*
+* **Example** (Piping one channel into another)
+*
+* ```ts import.meta.vitest
+* import { Channel, Data, Effect } from "effect"
+*
+* class PipeError extends Data.TaggedError("PipeError")<{
+*   readonly stage: string
+* }> {}
+*
+* // Create source and transform channels
+* const sourceChannel = Channel.fromIterable([1, 2, 3])
+* const transformChannel = Channel.map(sourceChannel, (n: number) => n * 2)
+*
+* // Pipe the source into the transform
+* const pipedChannel = Channel.pipeTo(sourceChannel, transformChannel)
+*
+* Effect.runSync(Channel.runCollect(pipedChannel)) // => [2, 4, 6]
+* ```
+*
+* @category sequencing
+* @since 2.0.0
+*/
+const pipeTo = /*#__PURE__*/ dual(2, (self, that) => fromTransform$1((upstream, scope) => flatMap$1(toTransform(self)(upstream, scope), (upstream) => toTransform(that)(upstream, scope))));
+/**
+* Constructs a `Channel` from a scoped effect that will result in a
+* `Channel` if successful.
+*
+* **Example** (Unwrapping channel effects)
+*
+* ```ts import.meta.vitest
+* import { Channel, Data, Effect } from "effect"
+*
+* class UnwrapError extends Data.TaggedError("UnwrapError")<{
+*   readonly reason: string
+* }> {}
+*
+* // Create an effect that produces a channel
+* const channelEffect = Effect.succeed(
+*   Channel.fromIterable([1, 2, 3])
+* )
+*
+* // Unwrap the effect to get the channel
+* const unwrappedChannel = Channel.unwrap(channelEffect)
+*
+* Effect.runSync(Channel.runCollect(unwrappedChannel)) // => [1, 2, 3]
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const unwrap$2 = (channel) => fromTransform$1((upstream, scope) => {
+	let pull;
+	return succeed$2(suspend$2(() => {
+		if (pull) return pull;
+		return channel.pipe(provide$2(scope), flatMap$1((channel) => toTransform(channel)(upstream, scope)), flatMap$1((pull_) => pull = pull_));
+	}));
+});
+const runWith$1 = (self, f, onHalt) => suspend$2(() => {
+	const scope = makeUnsafe$4();
+	const makePull = toTransform(self)(done(), scope);
+	return catchDone(flatMap$1(makePull, f), onHalt ? onHalt : succeed$2).pipe(onExit((exit) => close(scope, exit)));
+});
+/**
+* Runs a channel and folds over all output elements with an accumulator.
+*
+* **Example** (Folding channel output)
+*
+* ```ts import.meta.vitest
+* import { Channel, Data, Effect } from "effect"
+*
+* class FoldError extends Data.TaggedError("FoldError")<{
+*   readonly operation: string
+* }> {}
+*
+* // Create a channel with numbers
+* const numbersChannel = Channel.fromIterable([1, 2, 3, 4, 5])
+*
+* // Fold to calculate sum
+* const sumEffect = Channel.runFold(numbersChannel, () => 0, (acc, n) => acc + n)
+*
+* Effect.runSync(sumEffect) // => 15
+* ```
+*
+* @category running
+* @since 4.0.0
+*/
+const runFold = /*#__PURE__*/ dual(3, (self, initial, f) => suspend$2(() => {
+	let state = initial();
+	return runWith$1(self, (pull) => whileLoop({
+		while: constTrue,
+		body: () => pull,
+		step: (value) => {
+			state = f(state, value);
+		}
+	}), () => succeed$2(state));
+}));
+/**
+* Converts a channel to a Pull within an existing scope.
+*
+* **Example** (Converting channels to scoped pulls)
+*
+* ```ts import.meta.vitest
+* import { Channel, Data, Effect, Scope } from "effect"
+*
+* class ScopedPullError extends Data.TaggedError("ScopedPullError")<{
+*   readonly reason: string
+* }> {}
+*
+* // Create a channel
+* const numbersChannel = Channel.fromIterable([1, 2, 3])
+*
+* // Convert to Pull with explicit scope
+* const scopedPullEffect = Effect.gen(function*() {
+*   const scope = yield* Effect.scope
+*   const pull = yield* Channel.toPullScoped(numbersChannel, scope)
+*   return [yield* pull, yield* pull, yield* pull]
+* })
+* await Effect.runPromise(Effect.scoped(scopedPullEffect)) // => [1, 2, 3]
+* ```
+*
+* @category destructors
+* @since 4.0.0
+*/
+const toPullScoped = (self, scope) => toTransform(self)(done(), scope);
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/PlatformError.js
+/**
+* Normalized errors for platform APIs.
+*
+* Platform services such as file systems, terminals, and sockets use
+* `PlatformError` to report host-level failures in a consistent shape. The
+* wrapper records whether the problem came from an invalid argument or from the
+* operating system, while preserving useful details such as the module, method,
+* path, descriptor, description, and original cause when available.
+*
+* @since 4.0.0
+*/
+const TypeId$14 = "~effect/PlatformError";
+/**
+* Error data for an invalid argument passed to a platform API.
+*
+* **When to use**
+*
+* Use when you need to model caller input rejected before a platform operation
+* runs, including invalid-argument reason data.
+*
+* **Details**
+*
+* The error records the module and method that rejected the argument, with an
+* optional description and cause. It is usually wrapped in `PlatformError`.
+*
+* @see {@link badArgument} for creating a wrapped `PlatformError` whose reason is `BadArgument`
+* @see {@link SystemError} for failures reported by the host platform or operating system
+* @see {@link PlatformError} for the wrapper used by most platform APIs
+*
+* @category errors
+* @since 4.0.0
+*/
+var BadArgument = class extends (/*#__PURE__*/ TaggedError$1("BadArgument")) {
+	/**
+	* Formats the module, method, and optional description that rejected the argument.
+	*
+	* **When to use**
+	*
+	* Use to read the formatted error message for a rejected platform argument.
+	*
+	* @since 4.0.0
+	*/
+	get message() {
+		return `${this.module}.${this.method}${this.description ? `: ${this.description}` : ""}`;
+	}
+};
+/**
+* Error data for a platform or system operation failure.
+*
+* **When to use**
+*
+* Use when you need normalized reason data for a platform or system operation
+* failure, including the operation details.
+*
+* **Details**
+*
+* The error records a normalized `_tag`, the module and method that failed,
+* and optional details such as the syscall, path or descriptor, description,
+* and original cause. It is usually wrapped in `PlatformError`.
+*
+* @see {@link systemError} for creating the usual `PlatformError` wrapper from this reason data
+* @see {@link BadArgument} for platform API failures caused by rejected caller input before an operation runs
+* @see {@link SystemErrorTag} for the normalized tag values stored in `_tag`
+*
+* @category errors
+* @since 4.0.0
+*/
+var SystemError = class extends Error$2 {
+	/**
+	* Formats the normalized system error tag with operation and path details.
+	*
+	* **When to use**
+	*
+	* Use to read the formatted error message for a normalized system failure.
+	*
+	* @since 4.0.0
+	*/
+	get message() {
+		return `${this._tag}: ${this.module}.${this.method}${this.pathOrDescriptor !== void 0 ? ` (${this.pathOrDescriptor})` : ""}${this.description ? `: ${this.description}` : ""}`;
+	}
+};
+/**
+* Tagged error used by platform APIs to report either invalid arguments or
+* system-level failures.
+*
+* **When to use**
+*
+* Use as the shared error type for platform APIs that expose invalid arguments
+* and host or operating-system failures through a single `Effect` error
+* channel.
+*
+* **Details**
+*
+* The `reason` field contains the underlying `BadArgument` or `SystemError`.
+* When that reason has a cause, the cause is preserved on the wrapper.
+*
+* @see {@link BadArgument} for invalid inputs rejected before an operation runs
+* @see {@link SystemError} for failures reported by the host platform or operating system
+* @see {@link badArgument} for creating this wrapper from rejected caller input
+* @see {@link systemError} for creating this wrapper from a host or operating-system failure
+*
+* @category errors
+* @since 4.0.0
+*/
+var PlatformError = class extends (/*#__PURE__*/ TaggedError$1("PlatformError")) {
+	constructor(reason) {
+		if ("cause" in reason) super({
+			reason,
+			cause: reason.cause
+		});
+		else super({ reason });
+	}
+	/**
+	* Marks this value as a platform error wrapper for runtime guards.
+	*
+	* **When to use**
+	*
+	* Use to identify `PlatformError` values through their runtime type marker.
+	*
+	* @since 4.0.0
+	*/
+	[TypeId$14] = TypeId$14;
+	get message() {
+		return this.reason.message;
+	}
+};
+/**
+* Creates a `PlatformError` whose reason is a `SystemError`.
+*
+* **When to use**
+*
+* Use to adapt an operating-system or platform failure into the normalized
+* platform error model.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const systemError = (options) => new PlatformError(new SystemError(options));
+/**
+* Creates a `PlatformError` whose reason is a `BadArgument`.
+*
+* **When to use**
+*
+* Use to report a platform API rejecting caller input before performing the
+* underlying operation.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const badArgument = (options) => new PlatformError(new BadArgument(options));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/stream.js
+const TypeId$13 = "~effect/Stream";
+const streamVariance = {
+	_R: identity,
+	_E: identity,
+	_A: identity
+};
+const Stream = function(channel) {
+	this.channel = channel;
+};
+Stream.prototype = {
+	[TypeId$13]: streamVariance,
+	pipe() {
+		return pipeArguments(this, arguments);
+	}
+};
+/** @internal */
+const fromChannel$2 = (channel) => new Stream(channel);
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Sink.js
+const TypeId$12 = "~effect/Sink";
+const endVoid = /*#__PURE__*/ succeed$2([void 0]);
+const sinkVariance = {
+	_A: identity,
+	_In: identity,
+	_L: identity,
+	_E: identity,
+	_R: identity
+};
+const SinkProto = {
+	[TypeId$12]: sinkVariance,
+	pipe() {
+		return pipeArguments(this, arguments);
+	}
+};
+/**
+* Checks whether a value is a Sink.
+*
+* **Example** (Checking for a sink)
+*
+* ```ts import.meta.vitest
+* import { Sink } from "effect"
+*
+* const sink = Sink.never
+* const notStream = { data: [1, 2, 3] }
+*
+* Sink.isSink(sink) // => true
+* Sink.isSink(notStream) // => false
+* ```
+*
+* @category guards
+* @since 4.0.0
+*/
+const isSink = (u) => hasProperty(u, TypeId$12);
+/**
+* Creates a sink from a `Channel`.
+*
+* **When to use**
+*
+* Use to create a `Sink` from a `Channel` that processes non-empty arrays of
+* input values.
+*
+* **Example** (Using channel completion as the sink result)
+*
+* ```ts import.meta.vitest
+* import { Channel, Effect, Sink, Stream } from "effect"
+*
+* const channel = Channel.identity<readonly [number, ...Array<number>], never, void>().pipe(
+*   Channel.drain,
+*   Channel.mapDone(() => ["consumed"] as const)
+* )
+* const sink = Sink.fromChannel(channel)
+*
+* await Effect.runPromise(Stream.run(Stream.make(1, 2, 3), sink)) // => "consumed"
+* ```
+*
+* @see {@link toChannel} for converting a `Sink` back to a `Channel`
+* @category constructors
+* @since 2.0.0
+*/
+const fromChannel$1 = (channel) => fromTransform((upstream, scope) => toTransform(channel)(upstream, scope).pipe(flatMap$1(forever({ disableYield: true })), catchDone(succeed$2)));
+/**
+* Creates a `Sink` from a low-level transform function.
+*
+* **Details**
+*
+* The transform receives the upstream pull of non-empty input arrays and the
+* active scope, and returns an effect that completes with the sink's `End`
+* value.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const fromTransform = (transform) => {
+	const self = Object.create(SinkProto);
+	self.transform = transform;
+	return self;
+};
+/**
+* Creates a `Channel` from a Sink.
+*
+* **Example** (Running a sink as a channel)
+*
+* ```ts import.meta.vitest
+* import { Channel, Effect, Sink, Stream } from "effect"
+*
+* const channel = Stream.toChannel(Stream.make(1, 2, 3)).pipe(
+*   Channel.pipeTo(Sink.toChannel(Sink.sum))
+* )
+*
+* await Effect.runPromise(Channel.runDrain(channel)) // => [6]
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const toChannel$1 = (self) => fromTransform$1((upstream, scope) => succeed$2(flatMap$1(self.transform(upstream, scope), done)));
+/**
+* Consumes and ignores all stream inputs.
+*
+* **When to use**
+*
+* Use to consume all upstream input and complete with void when the input
+* values and any aggregate result are not needed.
+*
+* @see {@link count} for consuming all input while returning the number of elements
+* @see {@link forEach} for consuming all input while running an effect for each element
+*
+* @category constructors
+* @since 2.0.0
+*/
+const drain = /*#__PURE__*/ fromTransform((upstream) => catchDone(forever(upstream, { disableYield: true }), () => endVoid));
+/**
+* A sink that executes the provided effectful function for every item fed
+* to it.
+*
+* **Example** (Running effects for each item)
+*
+* ```ts import.meta.vitest
+* import { Effect, Sink, Stream } from "effect"
+*
+* const processed: Array<number> = []
+* const sink = Sink.forEach((item: number) => Effect.sync(() => processed.push(item)))
+*
+* // Use it with a stream
+* const stream = Stream.make(1, 2, 3)
+* await Effect.runPromise(Stream.run(stream, sink))
+* processed // => [1, 2, 3]
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const forEach = (f) => forEachArray(forEach$1((_) => f(_), { discard: true }));
+/**
+* A sink that executes the provided effectful function for every Chunk fed
+* to it.
+*
+* **Example** (Running effects for each chunk)
+*
+* ```ts import.meta.vitest
+* import { Effect, Sink, Stream } from "effect"
+*
+* const processed: Array<Array<number>> = []
+* const sink = Sink.forEachArray((chunk: ReadonlyArray<number>) => Effect.sync(() => processed.push([...chunk])))
+*
+* // Use it with a stream
+* const stream = Stream.make(1, 2, 3, 4, 5)
+* await Effect.runPromise(Stream.run(stream, sink))
+* processed // => [[1, 2, 3, 4, 5]]
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const forEachArray = (f) => fromTransform((upstream) => upstream.pipe(flatMap$1(f), forever({ disableYield: true }), catchDone(() => endVoid)));
+/**
+* Creates a sink produced from a scoped effect.
+*
+* **Example** (Unwrapping a sink effect)
+*
+* ```ts import.meta.vitest
+* import { Effect, Sink, Stream } from "effect"
+*
+* // Create a sink from an effect that produces a sink
+* const processed: Array<number> = []
+* const sinkEffect = Effect.succeed(
+*   Sink.forEach((item: number) => Effect.sync(() => processed.push(item)))
+* )
+* const sink = Sink.unwrap(sinkEffect)
+*
+* // Use it with a stream
+* const stream = Stream.make(1, 2, 3)
+* await Effect.runPromise(Stream.run(stream, sink))
+* processed // => [1, 2, 3]
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const unwrap$1 = (effect) => fromChannel$1(unwrap$2(map$5(effect, toChannel$1)));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/rcRef.js
+const TypeId$11 = "~effect/RcRef";
+const stateEmpty = { _tag: "Empty" };
+const stateClosed = { _tag: "Closed" };
+const variance = {
+	_A: identity,
+	_E: identity
+};
+var RcRefImpl = class {
+	[TypeId$11] = variance;
+	pipe() {
+		return pipeArguments(this, arguments);
+	}
+	state = stateEmpty;
+	semaphore = /*#__PURE__*/ makeUnsafe(1);
+	acquire;
+	context;
+	scope;
+	idleTimeToLive;
+	constructor(acquire, context, scope, idleTimeToLive) {
+		this.acquire = acquire;
+		this.context = context;
+		this.scope = scope;
+		this.idleTimeToLive = idleTimeToLive;
+	}
+};
+/** @internal */
+const make$12 = (options) => withFiber((fiber) => {
+	const context = fiber.context;
+	const scope = get$2(context, Scope);
+	const ref = new RcRefImpl(options.acquire, context, scope, options.idleTimeToLive !== void 0 ? fromInputUnsafe$1(options.idleTimeToLive) : void 0);
+	return as(addFinalizerExit(scope, () => {
+		const close$2 = ref.state._tag === "Acquired" ? close(ref.state.scope, void_$1) : void_;
+		ref.state = stateClosed;
+		return close$2;
+	}), ref);
+});
+const getState = (self, restore) => {
+	switch (self.state._tag) {
+		case "Closed": return interrupt$1;
+		case "Acquired": {
+			const state = self.state;
+			state.refCount++;
+			return state.fiber ? as(interrupt(state.fiber), state) : succeed$2(state);
+		}
+		case "Empty": return self.semaphore.withPermit(suspend$2(() => {
+			if (self.state._tag !== "Empty") return getState(self, restore);
+			const scope = makeUnsafe$4();
+			return restore(provideContext(self.acquire, add(self.context, Scope, scope))).pipe(flatMap$1((value) => {
+				if (self.state._tag === "Closed") return interrupt$1;
+				const state = {
+					_tag: "Acquired",
+					value,
+					scope,
+					fiber: void 0,
+					refCount: 1,
+					invalidated: false
+				};
+				self.state = state;
+				return succeed$2(state);
+			}), onExit((exit) => isFailure(exit) ? close(scope, exit) : void_));
+		}));
+	}
+};
+/** @internal */
+const get$1 = (self_) => {
+	const self = self_;
+	return uninterruptibleMask((restore) => flatMap$1(scope, (scope) => flatMap$1(getState(self, restore), (state) => as(addFinalizerExit(scope, () => release(self, state)), state.value))));
+};
+const release = (self, state) => {
+	state.refCount--;
+	if (state.refCount > 0) return void_;
+	const idleTimeToLive = self.idleTimeToLive;
+	if (idleTimeToLive === void 0 || state.invalidated) {
+		if (self.state === state) self.state = stateEmpty;
+		return close(state.scope, void_$1);
+	} else if (!isFinite$1(idleTimeToLive)) return void_;
+	state.fiber = uninterruptibleMask((restore) => flatMap$1(restore(sleep(idleTimeToLive)), () => {
+		if (self.state === state && state.refCount === 0) {
+			self.state = stateEmpty;
+			return close(state.scope, void_$1);
+		}
+		return void_;
+	})).pipe(ensuring(sync(() => {
+		state.fiber = void 0;
+	})), runForkWith(self.context), runIn(self.scope));
+	return void_;
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/RcRef.js
+/**
+* Creates an `RcRef` from an acquire effect.
+*
+* **When to use**
+*
+* Use to create a lazily acquired, reference-counted resource from an acquire
+* effect.
+*
+* **Details**
+*
+* The resource is acquired lazily on the first `get` and shared by subsequent
+* gets while it remains cached. Each `get` adds a reference to the current
+* `Scope`. When the last reference is released, the resource is closed
+* immediately by default, or after `idleTimeToLive` when that option is
+* provided.
+*
+* **Example** (Creating a reference-counted resource)
+*
+* ```ts import.meta.vitest
+* import { Effect, RcRef } from "effect"
+*
+* const events: Array<string> = []
+*
+* const program = Effect.gen(function*() {
+*   const ref = yield* RcRef.make({
+*     acquire: Effect.acquireRelease(
+*       Effect.succeed("foo"),
+*       () => Effect.sync(() => events.push("released foo"))
+*     )
+*   })
+*
+*   // will only acquire the resource once, and release it
+*   // when the scope is closed
+*   yield* RcRef.get(ref).pipe(
+*     Effect.andThen(RcRef.get(ref)),
+*     Effect.scoped
+*   )
+* })
+*
+* await Effect.runPromise(Effect.scoped(program))
+* events // => ["released foo"]
+* ```
+*
+* @category constructors
+* @since 3.5.0
+*/
+const make$11 = make$12;
+/**
+* Gets the value from an `RcRef`, acquiring it first if needed.
+*
+* **When to use**
+*
+* Use to borrow the current resource within a `Scope`, acquiring it first if
+* necessary.
+*
+* **Details**
+*
+* The reference count is incremented for the current `Scope`, and a release
+* finalizer is added to that scope. When the current scope closes, the
+* reference is released; the resource is closed when the final reference is
+* released, subject to any configured idle time-to-live.
+*
+* **Example** (Sharing one acquired value)
+*
+* ```ts import.meta.vitest
+* import { Effect, RcRef } from "effect"
+*
+* const events: Array<string> = []
+*
+* const program = Effect.gen(function*() {
+*   // Create an RcRef with a resource
+*   const ref = yield* RcRef.make({
+*     acquire: Effect.acquireRelease(
+*       Effect.succeed("shared resource"),
+*       (resource) => Effect.sync(() => events.push(`released ${resource}`))
+*     )
+*   })
+*
+*   // Get the value from the RcRef
+*   const value1 = yield* RcRef.get(ref)
+*   const value2 = yield* RcRef.get(ref)
+*
+*   return [value1 === value2, events] as const
+* })
+*
+* await Effect.runPromise(Effect.scoped(program)) // => [true, ["released shared resource"]]
+* ```
+*
+* @category combinators
+* @since 3.5.0
+*/
+const get = get$1;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Stream.js
+/**
+* Describes effectful sources that emit values over time.
+*
+* A `Stream<A, E, R>` can emit many `A` values, fail with `E`, and require
+* services `R` while it is being consumed. Streams are useful for data that is
+* pulled in steps, such as values from collections, queues, pubsubs, schedules,
+* callbacks, async iterables, or platform streams. The APIs here cover the full
+* stream lifecycle: create a stream, transform or combine it, control buffering
+* and timing, handle failures, and finally consume it.
+*
+* @since 2.0.0
+*/
+/**
+* Runtime identifier stored on `Stream` values and used by `isStream` to
+* recognize them.
+*
+* **Details**
+*
+* This marker is part of the runtime representation of `Stream` values. Prefer
+* `isStream` when narrowing unknown values.
+*
+* @see {@link isStream} for the public guard that checks this identifier
+*
+* @category type IDs
+* @since 4.0.0
+*/
+const TypeId$10 = "~effect/Stream";
+/**
+* Checks whether a value is a Stream.
+*
+* **Example** (Checking whether a value is a Stream)
+*
+* ```ts import.meta.vitest
+* import { Stream } from "effect"
+*
+* Stream.isStream(Stream.make(1, 2, 3)) // => true
+* Stream.isStream({ data: [1, 2, 3] }) // => false
+* ```
+*
+* @category guards
+* @since 4.0.0
+*/
+const isStream = (u) => hasProperty(u, TypeId$10);
+/**
+* Creates a stream from a array-emitting `Channel`.
+*
+* **Example** (Creating a stream from an array-emitting channel)
+*
+* ```ts import.meta.vitest
+* import { Channel, Effect, Stream } from "effect"
+*
+* const channel = Channel.succeed([1, 2, 3] as const)
+* const stream = Stream.fromChannel(channel)
+* await Effect.runPromise(Stream.runCollect(stream)) // => [1, 2, 3]
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const fromChannel = fromChannel$2;
+/**
+* Creates a stream from a pull effect, such as one produced by `Stream.toPull`.
+*
+* **Details**
+*
+* A pull effect yields chunks on demand and completes when the upstream stream ends.
+* See `Stream.toPull` for a matching producer.
+*
+* **Example** (Creating a stream from a pull effect)
+*
+* ```ts import.meta.vitest
+* import { Effect, Stream } from "effect"
+*
+* const program = Effect.scoped(
+*   Effect.gen(function*() {
+*     const source = Stream.make(1, 2, 3)
+*     const pull = yield* Stream.toPull(source)
+*     const stream = Stream.fromPull(Effect.succeed(pull))
+*     return yield* Stream.runCollect(stream)
+*   })
+* )
+*
+* await Effect.runPromise(program) // => [1, 2, 3]
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const fromPull = (pull) => fromChannel(fromPull$1(pull));
+/**
+* Derives a stream by transforming its pull effect.
+*
+* **Example** (Transforming a pull effect)
+*
+* ```ts import.meta.vitest
+* import { Effect, Stream } from "effect"
+*
+* const stream = Stream.make(1, 2, 3)
+*
+* const transformed = Stream.transformPull(stream, (pull) => Effect.succeed(pull))
+*
+* await Effect.runPromise(Stream.runCollect(transformed)) // => [1, 2, 3]
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const transformPull = (self, f) => fromChannel(fromTransform$1((_, scope) => flatMap$1(toPullScoped(self.channel, scope), (pull) => f(pull, scope))));
+/**
+* Creates a channel from a stream.
+*
+* **Example** (Converting a stream to a channel)
+*
+* ```ts import.meta.vitest
+* import { Channel, Effect, Stream } from "effect"
+*
+* const channel = Stream.toChannel(Stream.make(1, 2, 3))
+* const values = await Effect.runPromise(Channel.runCollect(channel))
+* values.flat() // => [1, 2, 3]
+* ```
+*
+* @category destructors
+* @since 2.0.0
+*/
+const toChannel = (stream) => stream.channel;
+/**
+* Creates a stream from a callback that can emit values into a queue.
+*
+* **When to use**
+*
+* Use when you need callback-based code to emit stream values by offering to a
+* `Queue`, or signal stream completion through the `Queue` module APIs.
+*
+* By default it uses an "unbounded" buffer size.
+* You can customize the buffer size and strategy by passing an object as the
+* second argument with the `bufferSize` and `strategy` fields.
+*
+* **Example** (Creating a stream from a callback that can emit values into a queue)
+*
+* ```ts import.meta.vitest
+* import { Effect, Queue, Stream } from "effect"
+*
+* const stream = Stream.callback<number>((queue) =>
+*   Effect.sync(() => {
+*     // Emit values to the stream
+*     Queue.offerUnsafe(queue, 1)
+*     Queue.offerUnsafe(queue, 2)
+*     Queue.offerUnsafe(queue, 3)
+*     // Signal completion
+*     Queue.endUnsafe(queue)
+*   })
+* )
+*
+* await Effect.runPromise(Stream.runCollect(stream)) // => [1, 2, 3]
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const callback = (f, options) => fromChannel(callbackArray(f, options));
+/**
+* Creates an empty stream.
+*
+* **Example** (Creating an empty stream)
+*
+* ```ts import.meta.vitest
+* import { Effect, Stream } from "effect"
+*
+* await Effect.runPromise(Stream.runCollect(Stream.empty)) // => []
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const empty = /*#__PURE__*/ fromChannel(empty$1);
+/**
+* Creates a lazily constructed stream.
+*
+* **Details**
+*
+* The stream factory is evaluated each time the stream is run.
+*
+* **Example** (Creating a lazily constructed stream)
+*
+* ```ts import.meta.vitest
+* import { Effect, Stream } from "effect"
+*
+* await Effect.runPromise(Stream.suspend(() => Stream.make(1, 2, 3)).pipe(Stream.runCollect)) // => [1, 2, 3]
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const suspend = (stream) => fromChannel(suspend$1(() => stream().channel));
+/**
+* Creates a stream produced from an `Effect`.
+*
+* **Example** (Unwrapping a stream effect)
+*
+* ```ts import.meta.vitest
+* import { Effect, Stream } from "effect"
+*
+* const effect = Effect.succeed(Stream.make(1, 2, 3))
+*
+* const stream = Stream.unwrap(effect)
+*
+* const program = Effect.gen(function*() {
+*   const chunk = yield* Stream.runCollect(stream)
+*   chunk // => [ 1, 2, 3 ]
+* })
+* await Effect.runPromise(program)
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const unwrap = (effect) => fromChannel(unwrap$2(map$5(effect, toChannel)));
+/**
+* Transforms the elements of this stream using the supplied function.
+*
+* **Example** (Mapping stream values)
+*
+* ```ts import.meta.vitest
+* import { Effect, Option, Stream } from "effect"
+*
+* const stream = Stream.fromArray([1, 2, 3]).pipe(Stream.map((n, i) => n + i))
+* await Effect.runPromise(Stream.runCollect(stream)) // => [1, 3, 5]
+* ```
+*
+* @category mapping
+* @since 2.0.0
+*/
+const map$3 = /*#__PURE__*/ dual(2, (self, f) => suspend(() => {
+	let i = 0;
+	return fromChannel(map$4(self.channel, map$8((o) => f(o, i++))));
+}));
+/**
+* Merges two streams, emitting elements from both as they arrive.
+*
+* **Details**
+*
+* By default, the merged stream ends when both streams end. Use
+* `haltStrategy` to change the termination behavior.
+*
+* **Example** (Merging stream values)
+*
+* ```ts import.meta.vitest
+* import { Effect, Stream } from "effect"
+*
+* const fast = Stream.make(1, 2, 3)
+* const slow = Stream.fromEffect(Effect.delay(Effect.succeed(4), "50 millis"))
+*
+* const program = Effect.gen(function*() {
+*   const result = yield* Stream.runCollect(Stream.merge(fast, slow))
+*   result // => [ 1, 2, 3, 4 ]
+* })
+*
+* await Effect.runPromise(program)
+* ```
+*
+* @category merging
+* @since 2.0.0
+*/
+const merge = /*#__PURE__*/ dual((args) => isStream(args[0]) && isStream(args[1]), (self, that, options) => fromChannel(merge$1(toChannel(self), toChannel(that), options)));
+/**
+* Applies a sink transducer to the stream and emits each sink result.
+*
+* **Example** (Transducing with a sink)
+*
+* ```ts import.meta.vitest
+* import { Effect, Sink, Stream } from "effect"
+*
+* const program = Effect.gen(function* () {
+*   const result = yield* Stream.make(1, 2, 3, 4).pipe(
+*     Stream.transduce(Sink.take(2)),
+*     Stream.runCollect
+*   )
+*
+*   result // => [ [ 1, 2 ], [ 3, 4 ], [] ]
+* })
+* await Effect.runPromise(program)
+* ```
+*
+* @category aggregation
+* @since 2.0.0
+*/
+const transduce = /*#__PURE__*/ dual(2, (self, sink) => transformPull(self, (upstream, scope) => sync(() => {
+	let done$9;
+	let leftover;
+	const upstreamWithLeftover = suspend$2(() => {
+		if (leftover !== void 0) {
+			const chunk = leftover;
+			leftover = void 0;
+			return succeed$2(chunk);
+		}
+		return upstream;
+	}).pipe(catch_((error) => {
+		done$9 = fail$2(error);
+		return done();
+	}));
+	const pull = map$5(suspend$2(() => sink.transform(upstreamWithLeftover, scope)), ([value, leftover_]) => {
+		leftover = leftover_;
+		return of(value);
+	});
+	return suspend$2(() => done$9 ? done$9 : pull);
+})));
+/**
+* Decodes Uint8Array chunks into strings using TextDecoder with an optional encoding.
+*
+* **Example** (Decoding Uint8Array chunks into strings using TextDecoder with an optional encoding)
+*
+* ```ts import.meta.vitest
+* import { Effect, Stream } from "effect"
+*
+* const encoder = new TextEncoder()
+* const stream = Stream.make(
+*   encoder.encode("Hello"),
+*   encoder.encode(" World")
+* )
+*
+* const program = Effect.gen(function*() {
+*   const decoded = yield* stream.pipe(
+*     Stream.decodeText,
+*     Stream.runCollect
+*   )
+*   decoded // => [ 'Hello', ' World' ]
+* })
+*
+* await Effect.runPromise(program)
+* ```
+*
+* @category text
+* @since 2.0.0
+*/
+const decodeText = /*#__PURE__*/ dual((args) => isStream(args[0]), (self, options) => suspend(() => {
+	const decoder = new TextDecoder(options?.encoding);
+	return map$3(self, (chunk) => decoder.decode(chunk, { stream: true }));
+}));
+/**
+* Splits a stream of strings into lines, handling `\n`, `\r`, and `\r\n` delimiters across chunks.
+*
+* **Example** (Splitting streamed text into lines)
+*
+* ```ts import.meta.vitest
+* import { Effect, Stream } from "effect"
+*
+* await Effect.runPromise(Effect.gen(function* () {
+*   const lines = yield* Stream.runCollect(
+*     Stream.make("a\nb\r\n", "c\n").pipe(Stream.splitLines)
+*   )
+*   lines // => [ 'a', 'b', 'c' ]
+* }))
+* ```
+*
+* @category text
+* @since 2.0.0
+*/
+const splitLines = (self) => self.channel.pipe(pipeTo(splitLines$1()), fromChannel);
+/**
+* Runs a stream with a sink and returns the sink result.
+*
+* **Example** (Running a stream with a sink)
+*
+* ```ts import.meta.vitest
+* import { Effect, Sink, Stream } from "effect"
+*
+* const program = Stream.run(Stream.make(1, 2, 3), Sink.sum)
+*
+* await Effect.runPromise(program) // => 6
+* ```
+*
+* @category destructors
+* @since 2.0.0
+*/
+const run$2 = /*#__PURE__*/ dual(2, (self, sink) => scopedWith((scope) => toPullScoped(self.channel, scope).pipe(flatMap$1((upstream) => sink.transform(upstream, scope)), map$5(([a]) => a))));
+/**
+* Runs the stream and collects all elements into an array.
+*
+* **Example** (Collecting stream values)
+*
+* ```ts import.meta.vitest
+* import { Effect, Stream } from "effect"
+*
+* const stream = Stream.make(1, 2, 3, 4, 5)
+*
+* const program = Effect.gen(function*() {
+*   const collected = yield* Stream.runCollect(stream)
+*   collected // => [ 1, 2, 3, 4, 5 ]
+* })
+*
+* await Effect.runPromise(program)
+* ```
+*
+* @category destructors
+* @since 2.0.0
+*/
+const runCollect = (self) => runFold(self.channel, () => [], (acc, chunk) => {
+	for (let i = 0; i < chunk.length; i++) acc.push(chunk[i]);
+	return acc;
+});
+/**
+* Concatenates all emitted strings into a single string.
+*
+* **Example** (Joining strings from a stream)
+*
+* ```ts import.meta.vitest
+* import { Effect, Stream } from "effect"
+*
+* const stream = Stream.make("Hello", " ", "World", "!")
+* const program = Effect.gen(function*() {
+*   const text = yield* Stream.mkString(stream)
+*   text // => "Hello World!"
+* })
+*
+* await Effect.runPromise(program)
+* ```
+*
+* @category destructors
+* @since 2.0.0
+*/
+const mkString = (self) => runFold(self.channel, () => "", (acc, chunk) => acc + chunk.join(""));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/FileSystem.js
+/**
+* Defines the portable file system service for Effect programs.
+*
+* `FileSystem` is the boundary between Effect code and the host file system.
+* Platform packages provide concrete layers, while this module defines the
+* operations for reading, writing, inspecting, streaming, and watching files.
+* Operations return `Effect`, `Stream`, or `Sink` values and fail with
+* `PlatformError`. The module also includes file handles, open flags, watch
+* events, and the watch backend service.
+*
+* @since 4.0.0
+*/
+const TypeId$9 = "~effect/FileSystem";
+/**
+* Service tag for platform file-system operations.
+*
+* **When to use**
+*
+* Use to access or provide operations for files, directories, permissions,
+* streams, and sinks through the Effect context.
+*
+* **Details**
+*
+* This key is used to provide and access the FileSystem service in the Effect context.
+*
+* **Example** (Accessing and providing FileSystem)
+*
+* ```ts import.meta.vitest
+* import { Effect, FileSystem } from "effect"
+*
+* const customFs = FileSystem.makeNoop({
+*   exists: () => Effect.succeed(true),
+*   readFileString: () => Effect.succeed("contents")
+* })
+*
+* // Access the FileSystem service
+* const program = Effect.gen(function*() {
+*   const fs = yield* FileSystem.FileSystem
+*
+*   const exists = yield* fs.exists("./data.txt")
+*   return exists ? yield* fs.readFileString("./data.txt") : undefined
+* })
+*
+* const withCustomFs = Effect.provideService(
+*   program,
+*   FileSystem.FileSystem,
+*   customFs
+* )
+* Effect.runSync(withCustomFs) // => "contents"
+* ```
+*
+* @category services
+* @since 4.0.0
+*/
+const FileSystem = /*#__PURE__*/ Service("effect/FileSystem");
+/**
+* Creates a FileSystem implementation from a partial implementation.
+*
+* **When to use**
+*
+* Use to build a concrete `FileSystem` service from platform-specific core
+* operations while deriving the convenience methods that can be implemented
+* from them.
+*
+* **Details**
+*
+* This function takes a partial FileSystem implementation and automatically provides
+* default implementations for `exists`, `readFileString`, `stream`, `sink`, and
+* `writeFileString` methods based on the provided core methods.
+*
+* @see {@link makeNoop} for a testing stub that accepts method overrides without requiring a complete implementation
+* @see {@link layerNoop} for providing a no-op `FileSystem` as a `Layer` in tests
+*
+* @category constructors
+* @since 4.0.0
+*/
+const make$10 = (impl) => FileSystem.of({
+	...impl,
+	[TypeId$9]: TypeId$9,
+	exists: (path) => pipe(impl.access(path), as(true), catchTag("PlatformError", (e) => e.reason._tag === "NotFound" ? succeed$2(false) : fail$1(e))),
+	readFileString: (path, encoding) => flatMap$1(impl.readFile(path), (_) => try_({
+		try: () => new TextDecoder(encoding).decode(_),
+		catch: (cause) => badArgument({
+			module: "FileSystem",
+			method: "readFileString",
+			description: "invalid encoding",
+			cause
+		})
+	})),
+	stream: fnUntraced(function* (path, options) {
+		const file = yield* impl.open(path, { flag: "r" });
+		const offset = options?.offset === void 0 ? void 0 : fromInputUnsafe(options.offset);
+		if (offset) yield* file.seek(offset, "start");
+		const bytesToRead = options?.bytesToRead === void 0 ? void 0 : fromInputUnsafe(options.bytesToRead);
+		let totalBytesRead = BigInt(0);
+		const chunkSize = Number(BigInt(options?.chunkSize ?? 65536));
+		const readChunk = file.readAlloc(chunkSize);
+		return fromPull(succeed$2(flatMap$1(suspend$2(() => {
+			if (bytesToRead !== void 0 && bytesToRead <= totalBytesRead) return done();
+			return bytesToRead !== void 0 && bytesToRead - totalBytesRead < chunkSize ? file.readAlloc(Number(bytesToRead - totalBytesRead)) : readChunk;
+		}), match$5({
+			onNone: () => done(),
+			onSome: (buf) => {
+				totalBytesRead += BigInt(buf.length);
+				return succeed$2(of(buf));
+			}
+		}))));
+	}, unwrap),
+	sink: (path, options) => pipe(impl.open(path, {
+		...options,
+		flag: options?.flag ?? "w"
+	}), map$5((file) => forEach((_) => file.writeAll(_))), unwrap$1),
+	writeFileString: (path, data, options) => flatMap$1(try_({
+		try: () => new TextEncoder().encode(data),
+		catch: (cause) => badArgument({
+			module: "FileSystem",
+			method: "writeFileString",
+			description: "could not encode string",
+			cause
+		})
+	}), (_) => impl.writeFile(path, _, options))
+});
+/**
+* Runtime type identifier attached to `FileSystem.File` handles and used by
+* `isFile` to recognize them.
+*
+* **Details**
+*
+* This marker is part of the runtime representation of file handles. Prefer
+* `isFile` when narrowing unknown values.
+*
+* @see {@link File} for the open file handle shape that carries this marker
+* @see {@link isFile} for the public guard that checks this marker
+*
+* @category type IDs
+* @since 4.0.0
+*/
+const FileTypeId = "~effect/FileSystem/File";
+/**
+* Service key for file system watch backend implementations.
+*
+* **Details**
+*
+* This service provides the low-level file watching capabilities that can be
+* implemented differently on various platforms (e.g., inotify on Linux,
+* FSEvents on macOS, etc.).
+*
+* **Example** (Providing a custom watch backend)
+*
+* ```ts import.meta.vitest
+* import { Effect, FileSystem, Option, Stream } from "effect"
+*
+* // Custom watch backend implementation
+* const customWatchBackend = {
+*   register: (path: string, stat: FileSystem.File.Info) => {
+*     // Implementation would depend on platform
+*     return Option.some(Stream.empty) // Placeholder implementation
+*   }
+* }
+*
+* const program = Effect.gen(function*() {
+*   const backend = yield* FileSystem.WatchBackend
+*   return Option.isSome(
+*     backend.register("./directory", { type: "Directory" } as FileSystem.File.Info)
+*   )
+* })
+*
+* const withCustomBackend = Effect.provideService(
+*   program,
+*   FileSystem.WatchBackend,
+*   customWatchBackend
+* )
+* Effect.runSync(withCustomBackend) // => true
+* ```
+*
+* @category services
+* @since 4.0.0
+*/
+var WatchBackend = class extends (/*#__PURE__*/ Service()("effect/FileSystem/WatchBackend")) {};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Path.js
+/**
+* Provides path operations through the Effect environment.
+*
+* The `Path` service works with file system paths without tying code to one
+* concrete platform module. It exposes common operations such as joining,
+* normalizing, parsing, formatting, resolving, and converting paths to or from
+* file URLs. This module includes the service interface, parsed path type,
+* service tag, runtime marker, and built-in POSIX path layer.
+*
+* @since 4.0.0
+*/
+/**
+* Runtime type identifier used to mark implementations of the `Path` service.
+*
+* **Details**
+*
+* The marker is the exact string stored on `Path` service implementations.
+* Most code should depend on the `Path` service instead of inspecting this
+* value directly.
+*
+* @see {@link layer} for the built-in POSIX `Path` service layer
+*
+* @category type IDs
+* @since 4.0.0
+*/
+const TypeId$8 = "~effect/Path";
+/**
+* Service tag for accessing the current `Path` implementation.
+*
+* **When to use**
+*
+* Use when you need path operations supplied by an effect's environment.
+*
+* **Example** (Providing a custom Path service)
+*
+* ```ts import.meta.vitest
+* import { Effect, Layer, Path } from "effect"
+*
+* // Create a custom path implementation
+* const customPath: Path.Path = {
+*   [Path.TypeId]: Path.TypeId,
+*   sep: "/",
+*   basename: (path: string, suffix?: string) => {
+*     const base = path.split("/").pop() || ""
+*     return suffix && base.endsWith(suffix)
+*       ? base.slice(0, -suffix.length)
+*       : base
+*   },
+*   dirname: (path: string) => path.split("/").slice(0, -1).join("/") || "/",
+*   extname: (path: string) => {
+*     const match = path.match(/\.[^.]*$/)
+*     return match ? match[0] : ""
+*   },
+*   format: (pathObject) => {
+*     const dir = pathObject.dir || ""
+*     const name = pathObject.name || ""
+*     const ext = pathObject.ext || ""
+*     return dir ? `${dir}/${name}${ext}` : `${name}${ext}`
+*   },
+*   fromFileUrl: (url: URL) => Effect.succeed(url.pathname),
+*   isAbsolute: (path: string) => path.startsWith("/"),
+*   join: (...paths: ReadonlyArray<string>) => paths.join("/"),
+*   normalize: (path: string) => path.replace(/\/+/g, "/"),
+*   parse: (path: string) => ({
+*     root: path.startsWith("/") ? "/" : "",
+*     dir: path.split("/").slice(0, -1).join("/") || "/",
+*     base: path.split("/").pop() || "",
+*     ext: path.match(/\.[^.]*$/)?.[0] || "",
+*     name: path.split("/").pop()?.replace(/\.[^.]*$/, "") || ""
+*   }),
+*   relative: (from: string, to: string) => to.replace(from, ""),
+*   resolve: (...pathSegments: ReadonlyArray<string>) => pathSegments.join("/"),
+*   toFileUrl: (path: string) => Effect.succeed(new URL(`file://${path}`)),
+*   toNamespacedPath: (path: string) => path
+* }
+*
+* // Provide the path service
+* const customPathLayer = Layer.succeed(Path.Path)(customPath)
+*
+* const program = Effect.gen(function*() {
+*   const path = yield* Path.Path
+*   return path.join("home", "user", "file.txt")
+* })
+*
+* // Run with custom path implementation
+* Effect.runSync(Effect.provide(program, customPathLayer)) // => "home/user/file.txt"
+* ```
+*
+* @category services
+* @since 4.0.0
+*/
+const Path$1 = /*#__PURE__*/ Service("effect/Path");
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Console.js
+/**
+* Context reference for the current console service in the Effect system, allowing access to the active console implementation from within the Effect context.
+*
+* **When to use**
+*
+* Use when you need an effect to run against a provided console implementation,
+* such as tests or alternate runtimes, rather than the default console.
+*
+* **Details**
+*
+* When no override is provided, the reference resolves to `globalThis.console`.
+*
+* **Example** (Accessing the current console)
+*
+* ```ts import.meta.vitest
+* import { Console, Effect } from "effect"
+*
+* const messages: Array<unknown> = []
+* const testConsole: Console.Console = Object.assign(Object.create(console), {
+*   log: (...args: ReadonlyArray<unknown>) => messages.push(...args)
+* })
+* const program = Console.consoleWith((console) =>
+*   Effect.sync(() => {
+*     console.log("Hello from current console!")
+*   })
+* )
+*
+* Effect.runSync(Effect.provideService(program, Console.Console, testConsole))
+* messages // => ["Hello from current console!"]
+* ```
+*
+* @see {@link consoleWith} for using the current console service inside an effect
+*
+* @category services
+* @since 2.0.0
+*/
+const Console = ConsoleRef;
+/**
+* Creates an Effect that provides access to the current console service and lets you perform operations with it within an Effect context.
+*
+* **Example** (Accessing the current console service)
+*
+* ```ts import.meta.vitest
+* import { Console, Effect } from "effect"
+*
+* const messages: Array<unknown> = []
+* const testConsole: Console.Console = Object.assign(Object.create(console), {
+*   log: (...args: ReadonlyArray<unknown>) => messages.push(...args),
+*   error: (...args: ReadonlyArray<unknown>) => messages.push(...args)
+* })
+* const program = Console.consoleWith((console) =>
+*   Effect.sync(() => {
+*     console.log("Hello, world!")
+*     console.error("This is an error message")
+*   })
+* )
+*
+* Effect.runSync(Effect.provideService(program, Console.Console, testConsole))
+* messages // => ["Hello, world!", "This is an error message"]
+* ```
+*
+* @category constructors
+* @since 2.0.0
+*/
+const consoleWith = (f) => withFiber$1((fiber) => f(fiber.getRef(Console)));
+/**
+* Writes an error-level message to the console, typically displayed with error
+* styling by the active console implementation.
+*
+* **Example** (Writing error messages)
+*
+* ```ts import.meta.vitest
+* import { Console, Effect } from "effect"
+*
+* const messages: Array<ReadonlyArray<unknown>> = []
+* const testConsole: Console.Console = Object.assign(Object.create(console), {
+*   error: (...args: ReadonlyArray<unknown>) => messages.push(args)
+* })
+* const program = Effect.gen(function*() {
+*   yield* Console.error("Something went wrong!")
+*   yield* Console.error("Error details:", {
+*     code: 500,
+*     message: "Internal Server Error"
+*   })
+* })
+*
+* Effect.runSync(Effect.provideService(program, Console.Console, testConsole))
+* const expected = [
+*   ["Something went wrong!"],
+*   ["Error details:", { code: 500, message: "Internal Server Error" }]
+* ]
+* messages // => expected
+* ```
+*
+* @category accessors
+* @since 2.0.0
+*/
+const error = (...args) => consoleWith((console) => sync$1(() => {
+	console.error(...args);
+}));
+/**
+* Logs a general-purpose message to the console.
+*
+* **Example** (Writing log messages)
+*
+* ```ts import.meta.vitest
+* import { Console, Effect } from "effect"
+*
+* const messages: Array<ReadonlyArray<unknown>> = []
+* const testConsole: Console.Console = Object.assign(Object.create(console), {
+*   log: (...args: ReadonlyArray<unknown>) => messages.push(args)
+* })
+* const program = Effect.gen(function*() {
+*   yield* Console.log("Hello, world!")
+*   yield* Console.log("User data:", { name: "John", age: 30 })
+*   yield* Console.log("Processing", 42, "items")
+* })
+*
+* Effect.runSync(Effect.provideService(program, Console.Console, testConsole))
+* const expected = [
+*   ["Hello, world!"],
+*   ["User data:", { name: "John", age: 30 }],
+*   ["Processing", 42, "items"]
+* ]
+* messages // => expected
+* ```
+*
+* @category accessors
+* @since 2.0.0
+*/
+const log = (...args) => consoleWith((console) => sync$1(() => {
+	console.log(...args);
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/ulid.js
+const maxTimestamp = 2 ** 48 - 1;
+const base32Chars = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+/** @internal */
+const ulidString = (timestampMillis, bytes) => {
+	if (bytes.length !== 10) throw new Error(`ULID randomness must be exactly 10 bytes, received ${bytes.length}`);
+	const timestamp = Math.min(Math.max(0, Math.trunc(timestampMillis)), maxTimestamp);
+	let out = "";
+	for (let shift = 45; shift >= 0; shift -= 5) out += base32Chars[Math.floor(timestamp / 2 ** shift) & 31];
+	let accumulator = 0;
+	let bits = 0;
+	for (const byte of bytes) {
+		accumulator = accumulator << 8 | byte;
+		bits += 8;
+		while (bits >= 5) {
+			bits -= 5;
+			out += base32Chars[accumulator >>> bits & 31];
+		}
+		accumulator &= (1 << bits) - 1;
+	}
+	return out;
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/uuid.js
+const hex = (byte) => byte.toString(16).padStart(2, "0");
+/** @internal */
+const stringify = (bytes) => {
+	return [
+		bytes.subarray(0, 4),
+		bytes.subarray(4, 6),
+		bytes.subarray(6, 8),
+		bytes.subarray(8, 10),
+		bytes.subarray(10, 16)
+	].map((segment) => Array.from(segment, hex).join("")).join("-");
+};
+const randomBytes = () => globalThis.crypto.getRandomValues(/* @__PURE__ */ new Uint8Array(16));
+/** @internal */
+function v4Bytes(bytes = randomBytes()) {
+	bytes[6] = bytes[6] & 15 | 64;
+	bytes[8] = bytes[8] & 63 | 128;
+	return bytes;
+}
+/** @internal */
+const v4String = (bytes) => stringify(bytes === void 0 ? v4Bytes() : v4Bytes(bytes));
+const maxV7Timestamp = 2 ** 48 - 1;
+/** @internal */
+function v7Bytes(timestampMillis, bytes = randomBytes()) {
+	const timestamp = Math.min(Math.max(0, Math.trunc(timestampMillis)), maxV7Timestamp);
+	bytes[0] = Math.floor(timestamp / 2 ** 40);
+	bytes[1] = Math.floor(timestamp / 2 ** 32) & 255;
+	bytes[2] = Math.floor(timestamp / 2 ** 24) & 255;
+	bytes[3] = Math.floor(timestamp / 2 ** 16) & 255;
+	bytes[4] = Math.floor(timestamp / 256) & 255;
+	bytes[5] = timestamp & 255;
+	bytes[6] = bytes[6] & 15 | 112;
+	bytes[8] = bytes[8] & 63 | 128;
+	return bytes;
+}
+/** @internal */
+const v7String = (timestampMillis, bytes) => stringify(bytes === void 0 ? v7Bytes(timestampMillis) : v7Bytes(timestampMillis, bytes));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Crypto.js
+/**
+* Defines a platform-independent service for cryptographic operations.
+*
+* Runtime packages provide concrete implementations backed by the host
+* platform's cryptography APIs. This module defines the service interface and a
+* constructor from random-byte and digest primitives. The service provides
+* secure random bytes and numbers, UUIDv4 and UUIDv7 generation, shuffling, and
+* SHA message digests.
+*
+* @since 4.0.0
+*/
+const TypeId$7 = "~effect/Crypto";
+/**
+* Service tag for platform cryptography.
+*
+* **When to use**
+*
+* Use when you need to provide or retrieve the full platform cryptography
+* service from an effect's context.
+*
+* **Details**
+*
+* Providing this service supplies platform-agnostic cryptographic operations
+* such as hashing, UUID generation, and secure random values.
+*
+* @see {@link make} for constructing a Crypto service from primitive operations
+*
+* @category services
+* @since 4.0.0
+*/
+const Crypto = /*#__PURE__*/ Service("effect/Crypto");
+/**
+* Creates a `Crypto` service from the primitive implementation, deriving the
+* random generator helpers and UUID generation from those primitives.
+*
+* **When to use**
+*
+* Use to build a Crypto service for a platform integration, test layer, or
+* custom runtime from primitive random-byte and digest operations.
+*
+* **Details**
+*
+* The constructor derives random numbers, booleans, integer ranges, shuffling,
+* and UUID generation from `impl.randomBytes`. Digest operations delegate to
+* `impl.digest`.
+*
+* **Gotchas**
+*
+* `impl.randomBytes` must return cryptographically secure bytes of the
+* requested length. UUID formatting mutates the byte array returned for UUID
+* generation, so the implementation should return a fresh array for each call.
+*
+* **Example** (Creating a Crypto service)
+*
+* ```ts import.meta.vitest
+* import { Crypto, Effect } from "effect"
+*
+* const testCrypto = Crypto.make({
+*   randomBytes: (size) => new Uint8Array(size),
+*   digest: (_algorithm, data) => Effect.succeed(data)
+* })
+*
+* await Effect.runPromise(testCrypto.randomBytes(4)) // => new Uint8Array([0, 0, 0, 0])
+* ```
+*
+* @category constructors
+* @since 4.0.0
+*/
+const make$9 = (impl) => {
+	const randomBytesUnsafe = impl.randomBytes;
+	const randomBytes = (size) => map$5(validateSize("randomBytes", size), randomBytesUnsafe);
+	const readUint53 = (bytes) => (bytes[0] & 31) * 2 ** 48 + bytes[1] * 2 ** 40 + bytes[2] * 2 ** 32 + bytes[3] * 2 ** 24 + bytes[4] * 2 ** 16 + bytes[5] * 256 + bytes[6];
+	const nextDoubleUnsafe = () => readUint53(randomBytesUnsafe(7)) / 2 ** 53;
+	const nextIntUnsafe = () => {
+		while (true) {
+			const bytes = randomBytesUnsafe(7);
+			const value = readUint53(bytes);
+			if ((bytes[0] & 32) === 0) return value + Number.MIN_SAFE_INTEGER;
+			if (value < Number.MAX_SAFE_INTEGER) return value + 1;
+		}
+	};
+	return Crypto.of({
+		[TypeId$7]: TypeId$7,
+		randomBytes,
+		nextDoubleUnsafe,
+		nextIntUnsafe,
+		digest: impl.digest,
+		random: sync(() => nextDoubleUnsafe()),
+		randomBoolean: sync(() => nextDoubleUnsafe() > .5),
+		randomInt: sync(() => nextIntUnsafe()),
+		randomBetween: (min, max) => sync(() => nextBetween(min, max, nextDoubleUnsafe())),
+		randomIntBetween(min, max, options) {
+			const extra = options?.halfOpen === true ? 0 : 1;
+			return sync(() => {
+				const minInt = Math.ceil(min);
+				const maxInt = Math.floor(max);
+				return Math.floor(nextDoubleUnsafe() * (maxInt - minInt + extra)) + minInt;
+			});
+		},
+		randomShuffle: (elements) => sync(() => {
+			const buffer = Array.from(elements);
+			for (let i = buffer.length - 1; i >= 1; i = i - 1) {
+				const index = Math.min(i, Math.floor(nextDoubleUnsafe() * (i + 1)));
+				const value = buffer[i];
+				buffer[i] = buffer[index];
+				buffer[index] = value;
+			}
+			return buffer;
+		}),
+		randomUUIDv4: sync(() => v4String(randomBytesUnsafe(16))),
+		randomUUIDv7: clockWith((clock) => succeed$2(v7String(clock.currentTimeMillisUnsafe(), randomBytesUnsafe(16)))),
+		randomULID: clockWith((clock) => succeed$2(ulidString(clock.currentTimeMillisUnsafe(), randomBytesUnsafe(10))))
+	});
+};
+const validateSize = (method, size) => Number.isSafeInteger(size) && size >= 0 ? succeed$2(size) : fail$1(badArgument({
+	module: "Crypto",
+	method,
+	description: "size must be a non-negative safe integer"
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Runtime.js
+/**
+* Allows associating an exit code with an error for determining the process
+* exit code on failure.
+*
+* **When to use**
+*
+* Use when error classes should map failures to a specific process exit code
+* when handled by {@link defaultTeardown}.
+*
+* **Details**
+*
+* Attach this marker as a readonly property on an error object. When the main
+* program fails, {@link defaultTeardown} squashes the Cause and reads the marker
+* from the resulting error value.
+*
+* **Gotchas**
+*
+* The marker is read from the squashed failure value. If a Cause contains
+* multiple failures, the selected squashed error determines the exit code.
+*
+* **Example** (Setting a process exit code)
+*
+* ```ts import.meta.vitest
+* import { Data, Runtime } from "effect"
+*
+* class MyError extends Data.TaggedError("MyError") {
+*   readonly [Runtime.errorExitCode] = 42
+* }
+*
+* Runtime.getErrorExitCode(new MyError()) // => 42
+* ```
+*
+* @see {@link errorReported} for controlling automatic error logging
+* @see {@link defaultTeardown} for the default failure exit-code rules that read this marker
+* @see {@link getErrorExitCode} for reading the marker from unknown error values
+*
+* @category symbols
+* @since 4.0.0
+*/
+const errorExitCode = "~effect/Runtime/errorExitCode";
+/**
+* Defines the runtime marker that controls default `runMain` error logging for an error.
+*
+* **When to use**
+*
+* Use when you need error classes reported by application code to avoid being
+* logged again by the default main runner.
+*
+* **Details**
+*
+* Set `[Runtime.errorReported]` to `false` on an error object to suppress the
+* runtime log because the error has already been reported. Omitted or
+* non-boolean values are treated as `true`, so failures are logged by default.
+*
+* **Gotchas**
+*
+* This marker controls only automatic error logging. It does not change the
+* failure Cause or the process exit code.
+* `makeRunMain` reads the marker from `Cause.squash(cause)`, so for causes
+* with multiple failures, the squashed error determines whether default logging
+* is suppressed.
+*
+* **Example** (Suppressing error reporting)
+*
+* ```ts import.meta.vitest
+* import { Data, Runtime } from "effect"
+*
+* class MyError extends Data.TaggedError("MyError") {
+*   readonly [Runtime.errorReported] = false
+* }
+*
+* Runtime.getErrorReported(new MyError()) // => false
+* ```
+*
+* @see {@link errorExitCode} for controlling failure exit codes
+* @see {@link getErrorReported} for reading the marker from unknown error values
+*
+* @category symbols
+* @since 4.0.0
+*/
+const errorReported = "~effect/Runtime/errorReported";
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Stdio.js
+/**
+* Service contract for command-line arguments and standard input, output, and
+* error output. It lets programs depend on standard I/O through the Effect
+* environment instead of reading from or writing to global process handles
+* directly.
+*
+* The service exposes arguments as an `Effect`, stdout and stderr as `Sink`s
+* that accept strings or bytes, and stdin as a byte `Stream`. This module also
+* provides a constructor for service values and a small test layer with
+* overridable defaults.
+*
+* @since 4.0.0
+*/
+/**
+* Runtime identifier stored on `Stdio` service implementations.
+*
+* **Details**
+*
+* This marker is part of the runtime representation of `Stdio` service
+* implementations.
+*
+* @category type IDs
+* @since 4.0.0
+*/
+const TypeId$6 = "~effect/Stdio";
+/**
+* Service tag for process standard I/O.
+*
+* **When to use**
+*
+* Use when you need command-line arguments or standard I/O streams supplied by
+* an effect's environment.
+*
+* @see {@link make} for constructing a `Stdio` service directly
+* @see {@link layerTest} for a test layer with defaults and overrides
+*
+* @category services
+* @since 4.0.0
+*/
+const Stdio = /*#__PURE__*/ Service(TypeId$6);
+/**
+* Creates a `Stdio` service implementation from the provided fields and
+* attaches the `Stdio` type identifier.
+*
+* **When to use**
+*
+* Use when you need to assemble a concrete `Stdio` service from command-line
+* arguments and standard I/O implementations.
+*
+* **Details**
+*
+* The returned service reuses the supplied fields unchanged and adds the
+* `Stdio` type identifier. Omitted terminal-detection fields default to
+* effects that succeed with `false`.
+*
+* @see {@link layerTest} for a test layer with default fields that can be overridden
+*
+* @category constructors
+* @since 4.0.0
+*/
+const make$8 = (options) => ({
+	[TypeId$6]: TypeId$6,
+	stdinIsTerminal: succeed$2(false),
+	stdoutIsTerminal: succeed$2(false),
+	...options
+});
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Terminal.js
+const TypeId$5 = "~effect/Terminal";
+const QuitErrorTypeId = "~effect/Terminal/QuitError";
+/**
+* Represents an error that occurs when a user attempts to
+* quit out of a `Terminal` prompt for input (usually by entering `ctrl`+`c`).
+*
+* **When to use**
+*
+* Use when implementing terminal input or prompts that need to signal
+* user-requested cancellation through the typed error channel.
+*
+* @see {@link isQuitError} for checking unknown errors when handling terminal cancellation
+*
+* @category errors
+* @since 4.0.0
+*/
+var QuitError = class extends (/*#__PURE__*/ Error$1("QuitError")({ _tag: /*#__PURE__*/ tag("QuitError") })) {
+	/**
+	* Marks this value as a terminal quit error for runtime guards.
+	*
+	* @since 4.0.0
+	*/
+	[QuitErrorTypeId] = QuitErrorTypeId;
+};
+/**
+* Returns `true` if the provided value is a `Terminal.QuitError`.
+*
+* **When to use**
+*
+* Use to narrow unknown failures to `QuitError` when handling terminal input
+* cancellation.
+*
+* **Details**
+*
+* Returns `true` when the value carries the `QuitError` runtime marker and
+* narrows it to `QuitError`.
+*
+* @see {@link QuitError} for the error value produced when terminal input is quit
+*
+* @category guards
+* @since 4.0.0
+*/
+const isQuitError = (u) => hasProperty(u, QuitErrorTypeId);
+/**
+* Service tag for command-line input and output services.
+*
+* **When to use**
+*
+* Use to access or provide platform terminal capabilities such as reading
+* input, writing output, and inspecting terminal dimensions.
+*
+* @category services
+* @since 4.0.0
+*/
+const Terminal = /*#__PURE__*/ Service("effect/Terminal");
+/**
+* Creates a `Terminal` service implementation.
+*
+* **When to use**
+*
+* Use to construct a custom `Terminal` service implementation from concrete
+* terminal capabilities when writing a platform adapter, test implementation,
+* or custom runtime service.
+*
+* **Details**
+*
+* The implementation object supplies `columns`, `rows`, `readInput`,
+* `readLine`, and `display`; `make` attaches the `Terminal` service marker so
+* the result can be provided through the `Terminal` context service.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const make$7 = (impl) => Terminal.of({
+	...impl,
+	[TypeId$5]: TypeId$5
+});
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/CliError.js
+/**
+* Defines structured errors for the unstable CLI parser and runner.
+*
+* CLI errors describe problems such as unknown or duplicate flags, missing
+* flags or arguments, unexpected positional arguments, invalid values, unknown
+* subcommands, user handler failures, and requests to show command help. This
+* module includes the `CliError` union, the `isCliError` guard, schema-backed
+* error classes with display messages, and the `NonShowHelpErrors` union used
+* when parse or validation errors should be shown with help output.
+*
+* @stability unstable
+* @since 4.0.0
+*/
+/**
+* @stability unstable
+* @category type IDs
+* @since 4.0.0
+*/
+const TypeId$4 = "~effect/cli/CliError";
+/**
+* Type guard to check if a value is a CLI error.
+*
+* **Example** (Checking CLI errors)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* import { CliError } from "effect/cli"
+*
+* const error = new CliError.MissingOption({ option: "api-key" })
+* const program = CliError.isCliError(error)
+*   ? Effect.succeed(error.message)
+*   : Effect.fail("Unknown error")
+*
+* await Effect.runPromise(program) // => "Missing required flag: --api-key"
+* ```
+*
+* @stability unstable
+* @category guards
+* @since 4.0.0
+*/
+const isCliError = (u) => hasProperty(u, TypeId$4);
+/**
+* Error thrown when an unrecognized option is encountered.
+*
+* **Example** (Creating unrecognized option errors)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* import { CliError } from "effect/cli"
+*
+* // Creating an unrecognized option error
+* const unrecognizedError = new CliError.UnrecognizedOption({
+*   option: "--unknown-flag",
+*   command: ["deploy", "production"],
+*   suggestions: ["--verbose", "--force"]
+* })
+*
+* unrecognizedError._tag // => "UnrecognizedOption"
+* unrecognizedError.option // => "--unknown-flag"
+* unrecognizedError.command // => ["deploy", "production"]
+*
+* // In CLI parsing context
+* const parseCommand = Effect.gen(function*() {
+*   // If parsing encounters unknown flag
+*   return yield* unrecognizedError
+* })
+*
+* const parseError = await Effect.runPromise(Effect.flip(parseCommand))
+* parseError._tag // => "UnrecognizedOption"
+* ```
+*
+* @stability unstable
+* @category errors
+* @since 4.0.0
+*/
+var UnrecognizedOption = class extends (/*#__PURE__*/ TaggedError(`${TypeId$4}/UnrecognizedOption`)("UnrecognizedOption", {
+	option: String$5,
+	command: /*#__PURE__*/ optional$2(/*#__PURE__*/ ArraySchema(String$5)),
+	suggestions: /*#__PURE__*/ ArraySchema(String$5)
+})) {
+	/**
+	* Marks this value as a CLI parsing error for runtime guards.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	[TypeId$4] = TypeId$4;
+	/**
+	* Formats the unrecognized option with command context and suggestions.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	get message() {
+		const suggestionText = this.suggestions.length > 0 ? `\n\n  Did you mean this?\n    ${this.suggestions.join("\n    ")}` : "";
+		return (this.command ? `Unrecognized flag: ${this.option} in command ${this.command.join(" ")}` : `Unrecognized flag: ${this.option}`) + suggestionText;
+	}
+};
+/**
+* Error thrown when duplicate option names are detected between parent and child commands.
+*
+* **Example** (Creating duplicate option errors)
+*
+* ```ts import.meta.vitest
+* import { CliError } from "effect/cli"
+*
+* const duplicateError = new CliError.DuplicateOption({
+*   option: "--verbose",
+*   parentCommand: "myapp",
+*   childCommand: "deploy"
+* })
+*
+* duplicateError._tag // => "DuplicateOption"
+* duplicateError.option // => "--verbose"
+* duplicateError.parentCommand // => "myapp"
+* duplicateError.childCommand // => "deploy"
+* ```
+*
+* @stability unstable
+* @category errors
+* @since 4.0.0
+*/
+var DuplicateOption = class extends (/*#__PURE__*/ TaggedError(`${TypeId$4}/DuplicateOption`)("DuplicateOption", {
+	option: String$5,
+	parentCommand: String$5,
+	childCommand: String$5
+})) {
+	/**
+	* Marks this value as a CLI configuration error for runtime guards.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	[TypeId$4] = TypeId$4;
+	/**
+	* Explains which parent and child commands define the duplicate option.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	get message() {
+		return `Duplicate flag name "${this.option}" in parent command "${this.parentCommand}" and subcommand "${this.childCommand}". Parent will always claim this flag (Mode A semantics). Consider renaming one of them to avoid confusion.`;
+	}
+};
+/**
+* Error thrown when a required option is missing.
+*
+* **Example** (Creating missing option errors)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* import { CliError } from "effect/cli"
+*
+* const missingOptionError = new CliError.MissingOption({
+*   option: "api-key"
+* })
+*
+* const details = [missingOptionError._tag, missingOptionError.option] // => ["MissingOption", "api-key"]
+*
+* // In validation context
+* const validateRequiredOptions = (options: Record<string, string | undefined>) =>
+*   Effect.gen(function*() {
+*     const apiKey = options["api-key"]
+*     if (!apiKey) {
+*       return yield* missingOptionError
+*     }
+*     return apiKey
+*   })
+*
+* const validationError = await Effect.runPromise(Effect.flip(validateRequiredOptions({})))
+* validationError._tag // => "MissingOption"
+* ```
+*
+* @stability unstable
+* @category errors
+* @since 4.0.0
+*/
+var MissingOption = class extends (/*#__PURE__*/ TaggedError(`${TypeId$4}/MissingOption`)("MissingOption", { option: String$5 })) {
+	/**
+	* Marks this value as a missing CLI option error for runtime guards.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	[TypeId$4] = TypeId$4;
+	/**
+	* Formats the missing required flag for display.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	get message() {
+		return `Missing required flag: --${this.option}`;
+	}
+};
+/**
+* Error thrown when a required positional argument is missing.
+*
+* **Example** (Creating missing argument errors)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* import { CliError } from "effect/cli"
+*
+* const missingArgError = new CliError.MissingArgument({
+*   argument: "target"
+* })
+*
+* const details = [missingArgError._tag, missingArgError.argument] // => ["MissingArgument", "target"]
+*
+* // In argument parsing
+* const parseArguments = (args: Array<string>) =>
+*   Effect.gen(function*() {
+*     if (args.length === 0) {
+*       return yield* missingArgError
+*     }
+*     return args[0]
+*   })
+*
+* const parseError = await Effect.runPromise(Effect.flip(parseArguments([])))
+* parseError._tag // => "MissingArgument"
+* ```
+*
+* @stability unstable
+* @category errors
+* @since 4.0.0
+*/
+var MissingArgument = class extends (/*#__PURE__*/ TaggedError(`${TypeId$4}/MissingArgument`)("MissingArgument", { argument: String$5 })) {
+	/**
+	* Marks this value as a missing CLI argument error for runtime guards.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	[TypeId$4] = TypeId$4;
+	/**
+	* Formats the missing required positional argument for display.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	get message() {
+		return `Missing required argument: ${this.argument}`;
+	}
+};
+/**
+* Error thrown when positional arguments remain after a command has parsed all
+* of its parameters.
+*
+* **Example** (Reporting unexpected arguments)
+*
+* ```ts import.meta.vitest
+* import { CliError } from "effect/cli"
+*
+* const error = new CliError.UnexpectedArgument({
+*   arguments: ["extra.txt"]
+* })
+*
+* const details = [error._tag, error.arguments] // => ["UnexpectedArgument", ["extra.txt"]]
+* ```
+*
+* @stability unstable
+* @category errors
+* @since 4.0.0
+*/
+var UnexpectedArgument = class extends (/*#__PURE__*/ TaggedError(`${TypeId$4}/UnexpectedArgument`)("UnexpectedArgument", { arguments: /*#__PURE__*/ ArraySchema(String$5) })) {
+	/**
+	* Marks this value as an unexpected CLI argument error for runtime guards.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	[TypeId$4] = TypeId$4;
+	/**
+	* Formats the unexpected positional arguments for display.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	get message() {
+		return `Unexpected positional ${this.arguments.length === 1 ? "argument" : "arguments"}: ${this.arguments.map((value) => JSON.stringify(value)).join(", ")}`;
+	}
+};
+/**
+* Error thrown when an option or argument value is invalid.
+*
+* **Example** (Creating invalid value errors)
+*
+* ```ts import.meta.vitest
+* import { CliError } from "effect/cli"
+*
+* const invalidValueError = new CliError.InvalidValue({
+*   option: "port",
+*   value: "abc123",
+*   expected: "integer between 1 and 65535",
+*   kind: "flag"
+* })
+*
+* invalidValueError._tag // => "InvalidValue"
+* invalidValueError.kind // => "flag"
+* invalidValueError.option // => "port"
+* invalidValueError.value // => "abc123"
+*
+* // For positional arguments
+* const invalidArgError = new CliError.InvalidValue({
+*   option: "count",
+*   value: "abc",
+*   expected: "integer",
+*   kind: "argument"
+* })
+*
+* const details = [invalidArgError.kind, invalidArgError.option, invalidArgError.value] // => ["argument", "count", "abc"]
+* ```
+*
+* @stability unstable
+* @category errors
+* @since 4.0.0
+*/
+var InvalidValue = class extends (/*#__PURE__*/ TaggedError(`${TypeId$4}/InvalidValue`)("InvalidValue", {
+	option: String$5,
+	value: String$5,
+	expected: String$5,
+	kind: /*#__PURE__*/ Union([/*#__PURE__*/ Literal("flag"), /*#__PURE__*/ Literal("argument")])
+})) {
+	/**
+	* Marks this value as an invalid CLI value error for runtime guards.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	[TypeId$4] = TypeId$4;
+	/**
+	* Formats the invalid flag or argument value with the expected input.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	get message() {
+		const expectation = this.expected.startsWith("Expected ") || this.expected.startsWith("Expected:") ? this.expected : `Expected: ${this.expected}`;
+		if (this.kind === "argument") return `Invalid value for argument <${this.option}>: "${this.value}". ${expectation}`;
+		if (this.value.length === 0) return `Missing value for flag --${this.option}. ${expectation}`;
+		return `Invalid value for flag --${this.option}: "${this.value}". ${expectation}`;
+	}
+};
+/**
+* Error thrown when an unknown subcommand is encountered.
+*
+* **Example** (Creating unknown subcommand errors)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* import { CliError } from "effect/cli"
+*
+* const unknownSubcommandError = new CliError.UnknownSubcommand({
+*   subcommand: "deplyo", // typo
+*   parent: ["myapp"],
+*   suggestions: ["deploy", "destroy"]
+* })
+*
+* unknownSubcommandError._tag // => "UnknownSubcommand"
+* unknownSubcommandError.subcommand // => "deplyo"
+* unknownSubcommandError.parent // => ["myapp"]
+*
+* // In subcommand parsing
+* const parseSubcommand = (subcommand: string) =>
+*   Effect.gen(function*() {
+*     const validCommands = ["deploy", "destroy", "status"]
+*     if (!validCommands.includes(subcommand)) {
+*       return yield* unknownSubcommandError
+*     }
+*     return subcommand
+*   })
+*
+* const parseError = await Effect.runPromise(Effect.flip(parseSubcommand("deplyo")))
+* parseError._tag // => "UnknownSubcommand"
+* ```
+*
+* @stability unstable
+* @category errors
+* @since 4.0.0
+*/
+var UnknownSubcommand = class extends (/*#__PURE__*/ TaggedError(`${TypeId$4}/UnknownSubcommand`)("UnknownSubcommand", {
+	subcommand: String$5,
+	parent: /*#__PURE__*/ optional$2(/*#__PURE__*/ ArraySchema(String$5)),
+	suggestions: /*#__PURE__*/ ArraySchema(String$5)
+})) {
+	/**
+	* Marks this value as an unknown CLI subcommand error for runtime guards.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	[TypeId$4] = TypeId$4;
+	/**
+	* Formats the unknown subcommand with parent command context and suggestions.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	get message() {
+		const suggestionText = this.suggestions.length > 0 ? `\n\n  Did you mean this?\n    ${this.suggestions.join("\n    ")}` : "";
+		return this.parent ? `Unknown subcommand "${this.subcommand}" for "${this.parent.join(" ")}"${suggestionText}` : `Unknown subcommand "${this.subcommand}"${suggestionText}`;
+	}
+};
+/**
+* Error wrapper for user handler failures in the CLI error channel.
+*
+* **Details**
+*
+* `userMessage` can provide safe, user-facing text independently of the
+* underlying cause. When omitted or empty, `message` uses a non-empty string
+* cause or `Error.message`, then falls back to `"An error occurred"`.
+*
+* **Example** (Wrapping user errors)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* import { CliError } from "effect/cli"
+*
+* // Wrapping user errors
+* const userError = new CliError.UserError({
+*   cause: new Error("Database connection failed for postgres://localhost"),
+*   userMessage: "Could not connect to the database"
+* })
+*
+* // In command handler
+* const deployCommand = Effect.gen(function*() {
+*   const result = yield* Effect.try({
+*     try: () => ({ deployed: true }),
+*     catch: (error) => new CliError.UserError({ cause: error })
+*   })
+*   return result
+* })
+*
+* // In error handling
+* const handleError = (error: CliError.CliError): Effect.Effect<number> => {
+*   if (error._tag === "UserError") {
+*     return Effect.succeed(1) // Exit code 1
+*   }
+*   return Effect.succeed(0)
+* }
+*
+* await Effect.runPromise(deployCommand) // => { deployed: true }
+* await Effect.runPromise(handleError(userError)) // => 1
+* ```
+*
+* @stability unstable
+* @category errors
+* @since 4.0.0
+*/
+var UserError = class extends (/*#__PURE__*/ TaggedError(`${TypeId$4}/UserError`)("UserError", {
+	cause: /*#__PURE__*/ Defect(),
+	userMessage: /*#__PURE__*/ optionalKey(String$5)
+})) {
+	/**
+	* Marks this value as a user handler error for runtime guards.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	[TypeId$4] = TypeId$4;
+	/**
+	* Controls whether the runtime logger should report this error. The CLI
+	* runner sets this to `false` after rendering the error itself.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	[errorReported] = true;
+	/**
+	* Returns the explicit user-facing message or a safe fallback from `cause`.
+	*
+	* @stability unstable
+	* @since 4.0.0
+	*/
+	get message() {
+		if (this.userMessage) return this.userMessage;
+		if (typeof this.cause === "string" && this.cause) return this.cause;
+		if (this.cause instanceof Error && this.cause.message) return this.cause.message;
+		return "An error occurred";
+	}
+};
+/**
+* Schema for concrete CLI errors that can be reported together with help output.
+*
+* **Details**
+*
+* This excludes `ShowHelp` itself, allowing parse and validation errors to be
+* stored in `ShowHelp.errors` without nesting another help-control value.
+*
+* @stability unstable
+* @category schemas
+* @since 4.0.0
+*/
+const NonShowHelpErrors = /*#__PURE__*/ Union([
+	UnrecognizedOption,
+	DuplicateOption,
+	MissingOption,
+	MissingArgument,
+	UnexpectedArgument,
+	InvalidValue,
+	UnknownSubcommand,
+	UserError
+]);
+/**
+* Error data requesting CLI help rendering for a command path.
+*
+* **Details**
+*
+* It is used for explicit help requests and for parse or validation failures
+* that should be shown with help text. When `errors` is non-empty, the runtime
+* exit code is `1`; otherwise it is `0`.
+*
+* @stability unstable
+* @category errors
+* @since 4.0.0
+*/
+var ShowHelp = class extends (/*#__PURE__*/ TaggedError(`${TypeId$4}/ShowHelp`)("ShowHelp", {
+	commandPath: /*#__PURE__*/ ArraySchema(String$5),
+	errors: /*#__PURE__*/ ArraySchema(NonShowHelpErrors)
+})) {
+	[TypeId$4] = TypeId$4;
+	[errorExitCode] = this.errors.length ? 1 : 0;
+	[errorReported] = false;
+	get message() {
+		return "Help requested";
+	}
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/Primitive.js
+/**
+* Parses raw command-line strings into typed values.
+*
+* A `Primitive<A>` receives one string and returns an `Effect` that either
+* produces an `A` or fails with a parser message. `Argument` and `Flag` build
+* on these primitives to add names, aliases, defaults, prompts, configuration
+* fallbacks, repetition, and help metadata. Primitive parsers cover common
+* scalar values, paths, files, structured config files, schema-decoded input,
+* redacted values, and key-value pairs.
+*
+* @stability unstable
+* @since 4.0.0
+*/
+const Proto$3 = { ["~effect/cli/Primitive"]: { _A: identity } };
+/**
+* @internal
+*/
+const isTrueLiteral = /*#__PURE__*/ is(TrueLiterals);
+/**
+* @internal
+*/
+const isFalseLiteral = /*#__PURE__*/ is(FalseLiterals);
+/**
+* @internal
+*/
+const isBoolean = (p) => p._tag === "Boolean";
+const makePrimitive = (tag, parse) => Object.assign(Object.create(Proto$3), {
+	_tag: tag,
+	parse
+});
+const makeSchemaPrimitive = (tag, schema) => {
+	const decode = decodeUnknownEffect(toCodecStringTree(schema));
+	return makePrimitive(tag, (value) => mapError(decode(value), (error) => error.message));
+};
+/**
+* Creates a primitive that parses boolean values from string input.
+*
+* **Details**
+*
+* Recognizes various forms of true/false values:
+* - True values: "true", "1", "y", "yes", "on"
+* - False values: "false", "0", "n", "no", "off"
+*
+* **Example** (Parsing boolean values)
+*
+* ```ts import.meta.vitest
+* import { Effect, FileSystem, Layer, Path, Stdio, Terminal } from "effect"
+* import { Primitive } from "effect/cli"
+* import { ChildProcessSpawner } from "effect/process"
+*
+* const CliTestLayer = Layer.mergeAll(
+*   FileSystem.layerNoop({}),
+*   Path.layer,
+*   Stdio.layerTest({}),
+*   Layer.succeed(Terminal.Terminal, Terminal.make({
+*     columns: Effect.succeed(80),
+*     rows: Effect.succeed(24),
+*     readInput: Effect.die("unused"),
+*     readLine: Effect.die("unused"),
+*     display: () => Effect.void
+*   })),
+*   Layer.succeed(
+*     ChildProcessSpawner.ChildProcessSpawner,
+*     ChildProcessSpawner.make(() => Effect.die("unused"))
+*   )
+* )
+*
+* const parseBoolean = Effect.all([
+*   Primitive.Boolean.parse("true"),
+*   Primitive.Boolean.parse("yes"),
+*   Primitive.Boolean.parse("false"),
+*   Primitive.Boolean.parse("0")
+* ])
+*
+* await Effect.runPromise(parseBoolean.pipe(Effect.provide(CliTestLayer))) // => [true, true, false, false]
+* ```
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Boolean$3 = /*#__PURE__*/ makeSchemaPrimitive("Boolean", BooleanLiterals);
+/**
+* Creates a primitive that accepts any string value without validation.
+*
+* **Example** (Parsing string values)
+*
+* ```ts import.meta.vitest
+* import { Effect, FileSystem, Layer, Path, Stdio, Terminal } from "effect"
+* import { Primitive } from "effect/cli"
+* import { ChildProcessSpawner } from "effect/process"
+*
+* const CliTestLayer = Layer.mergeAll(
+*   FileSystem.layerNoop({}),
+*   Path.layer,
+*   Stdio.layerTest({}),
+*   Layer.succeed(Terminal.Terminal, Terminal.make({
+*     columns: Effect.succeed(80),
+*     rows: Effect.succeed(24),
+*     readInput: Effect.die("unused"),
+*     readLine: Effect.die("unused"),
+*     display: () => Effect.void
+*   })),
+*   Layer.succeed(
+*     ChildProcessSpawner.ChildProcessSpawner,
+*     ChildProcessSpawner.make(() => Effect.die("unused"))
+*   )
+* )
+*
+* const parseString = Effect.all([
+*   Primitive.String.parse("hello world"),
+*   Primitive.String.parse(""),
+*   Primitive.String.parse("123")
+* ])
+*
+* await Effect.runPromise(parseString.pipe(Effect.provide(CliTestLayer))) // => ["hello world", "", "123"]
+* ```
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const String$4 = /*#__PURE__*/ makePrimitive("String", (value) => succeed$2(value));
+/**
+* Creates a primitive that accepts only specific choice values mapped to custom types.
+*
+* **Example** (Parsing choices)
+*
+* ```ts import.meta.vitest
+* import { Effect, FileSystem, Layer, Path, Stdio, Terminal } from "effect"
+* import { Primitive } from "effect/cli"
+* import { ChildProcessSpawner } from "effect/process"
+*
+* const CliTestLayer = Layer.mergeAll(
+*   FileSystem.layerNoop({}),
+*   Path.layer,
+*   Stdio.layerTest({}),
+*   Layer.succeed(Terminal.Terminal, Terminal.make({
+*     columns: Effect.succeed(80),
+*     rows: Effect.succeed(24),
+*     readInput: Effect.die("unused"),
+*     readLine: Effect.die("unused"),
+*     display: () => Effect.void
+*   })),
+*   Layer.succeed(
+*     ChildProcessSpawner.ChildProcessSpawner,
+*     ChildProcessSpawner.make(() => Effect.die("unused"))
+*   )
+* )
+*
+* type LogLevel = "debug" | "info" | "warn" | "error"
+*
+* const logLevelPrimitive = Primitive.Choice<LogLevel>([
+*   ["debug", "debug"],
+*   ["info", "info"],
+*   ["warn", "warn"],
+*   ["error", "error"]
+* ])
+*
+* const parseLogLevel = Effect.all([
+*   logLevelPrimitive.parse("info"),
+*   logLevelPrimitive.parse("debug")
+* ])
+*
+* await Effect.runPromise(parseLogLevel.pipe(Effect.provide(CliTestLayer))) // => ["info", "debug"]
+* ```
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Choice = (choices) => {
+	const choiceMap = new Map(choices);
+	const validChoices = choices.map(([key]) => format$1(key)).join(" | ");
+	const primitive = makePrimitive("Choice", (value) => {
+		if (choiceMap.has(value)) return succeed$2(choiceMap.get(value));
+		return fail$1(validChoices);
+	});
+	return Object.assign(primitive, { choiceKeys: choices.map(([key]) => key) });
+};
+/**
+* Gets a human-readable type name for a primitive.
+*
+* **When to use**
+*
+* Use when you need the display type name for a `Primitive`, such as when
+* generating CLI help documentation.
+*
+* **Example** (Getting primitive type names)
+*
+* ```ts import.meta.vitest
+* import { Primitive } from "effect/cli"
+*
+* Primitive.getTypeName(Primitive.String) // => "string"
+* Primitive.getTypeName(Primitive.Int) // => "integer"
+* Primitive.getTypeName(Primitive.Boolean) // => "boolean"
+* Primitive.getTypeName(Primitive.Date) // => "date"
+* Primitive.getTypeName(Primitive.KeyValuePair) // => "key=value"
+*
+* const logLevelChoice = Primitive.Choice([
+*   ["debug", "debug"],
+*   ["info", "info"]
+* ])
+* Primitive.getTypeName(logLevelChoice) // => "choice"
+* ```
+*
+* @stability unstable
+* @category getters
+* @since 4.0.0
+*/
+const getTypeName = (primitive) => {
+	switch (primitive._tag) {
+		case "Boolean": return "boolean";
+		case "String": return "string";
+		case "Int": return "integer";
+		case "Finite": return "number";
+		case "Date": return "date";
+		case "Path": return "path";
+		case "Choice": return "choice";
+		case "Redacted": return "string";
+		case "FileText": return "file";
+		case "FileParse": return "file";
+		case "FileSchema": return "file";
+		case "KeyValuePair": return "key=value";
+		case "Never": return "none";
+		default: return "value";
+	}
+};
+/**
+* @internal
+*/
+const getChoiceKeys = (primitive) => primitive._tag === "Choice" ? primitive.choiceKeys : void 0;
+/**
+* @internal
+*/
+const getPathType = (primitive) => primitive._tag === "Path" ? primitive.pathType : void 0;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/internal/ansi.js
+/**
+* Internal ANSI escape sequence helpers used by the unstable CLI rendering
+* implementation. This module centralizes the control codes for text styling,
+* cursor movement, line erasing, and terminal notifications so renderers can
+* compose terminal output without scattering raw escape sequences throughout
+* the CLI internals.
+*
+* The helpers deliberately work with plain strings because terminal rendering
+* is sensitive to ordering: style codes must be reset after annotated text,
+* cursor operations must account for one-based terminal coordinates, and line
+* clearing usually needs to preserve the cursor position expected by the next
+* frame.
+*/
+const ESC = "\x1B[";
+const SEP = ";";
+/**
+* @internal
+*/
+const reset = `${ESC}0m`;
+/**
+* @internal
+*/
+const bold = `${ESC}1m`;
+/**
+* @internal
+*/
+const italicized = `${ESC}3m`;
+/**
+* @internal
+*/
+const underlined = `${ESC}4m`;
+/**
+* @internal
+*/
+const strikethrough = `${ESC}9m`;
+/**
+* @internal
+*/
+const cursorShow = `${ESC}?25h`;
+/**
+* @internal
+*/
+const cursorHide = `${ESC}?25l`;
+/**
+* @internal
+*/
+const cursorLeft = `${ESC}G`;
+/**
+* @internal
+*/
+const cursorSavePosition = `${ESC}s`;
+/**
+* @internal
+*/
+const cursorRestorePosition = `${ESC}u`;
+/**
+* @internal
+*/
+const eraseLine = `${ESC}2K`;
+/**
+* @internal
+*/
+const red = `${ESC}31m`;
+/**
+* @internal
+*/
+const green = `${ESC}32m`;
+/**
+* @internal
+*/
+const magenta = `${ESC}35m`;
+/**
+* @internal
+*/
+const white = `${ESC}37m`;
+/**
+* @internal
+*/
+const blackBright = `${ESC}90m`;
+/**
+* @internal
+*/
+const cyanBright = `${ESC}96m`;
+const annotate = (text, ...styles) => {
+	return `${styles.flat().join("")}${text}${reset}`;
+};
+const combine = (...styles) => styles;
+/**
+* @internal
+*/
+const cursorTo = (column, row) => {
+	if (row === void 0) return `${ESC}${Math.max(column + 1, 0)}G`;
+	return `${ESC}${row + 1}${SEP}${Math.max(column + 1, 0)}H`;
+};
+/**
+* @internal
+*/
+const cursorDown = (lines = 1) => {
+	return `${ESC}${lines}B`;
+};
+/**
+* @internal
+*/
+const cursorMove = (column, row = 0) => {
+	let command = "";
+	if (row < 0) command += `${ESC}${-row}A`;
+	if (row > 0) command += `${ESC}${row}B`;
+	if (column > 0) command += `${ESC}${column}C`;
+	if (column < 0) command += `${ESC}${-column}D`;
+	return command;
+};
+/**
+* @internal
+*/
+const eraseLines = (rows) => {
+	let command = "";
+	for (let i = 0; i < rows; i++) command += `${ESC}2K` + (i < rows - 1 ? `${ESC}1A` : "");
+	if (rows > 0) command += `${ESC}G`;
+	return command;
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/Prompt.js
+/**
+* Builds interactive terminal prompts for CLI applications.
+*
+* A `Prompt<A>` describes a small terminal UI that renders frames, reads
+* keyboard input, validates responses, and eventually produces an `A`. Prompts
+* can ask for simple values, selections, lists, files, hidden text, or custom
+* interactions. This module includes prompt constructors, tools for combining
+* and transforming prompt output, and support for running prompts through the
+* `Terminal` service.
+*
+* @stability unstable
+* @since 4.0.0
+*/
+const TypeId$3 = "~effect/cli/Prompt";
+const defaultTheme = {
+	prefix: "?",
+	arrowUp: "↑",
+	arrowDown: "↓",
+	checkboxOn: "☒",
+	checkboxOff: "☐",
+	tick: "✔",
+	ellipsis: "…",
+	pointerSmall: "›",
+	pointer: "❯",
+	descriptionSeparator: "- ",
+	passwordMask: "*",
+	toggleSeparator: "/",
+	primaryColor: cyanBright,
+	mutedColor: blackBright,
+	successColor: green,
+	errorColor: red,
+	submittedColor: white
+};
+const windowsTheme = {
+	...defaultTheme,
+	checkboxOn: "[*]",
+	checkboxOff: "[ ]",
+	tick: "√",
+	ellipsis: "...",
+	pointerSmall: "»",
+	pointer: ">"
+};
+/**
+* Creates a prompt theme using the current platform defaults.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const makeTheme = (options) => ({
+	...process.platform === "win32" ? windowsTheme : defaultTheme,
+	...options
+});
+/**
+* Context reference for the theme used by built-in prompts.
+*
+* **Details**
+*
+* Provide this reference once to theme every prompt in an application. A
+* prompt's `theme` option takes precedence over the context value.
+*
+* @stability unstable
+* @category services
+* @since 4.0.0
+*/
+const Theme = /*#__PURE__*/ Reference("effect/cli/Prompt/Theme", { defaultValue: makeTheme });
+const getTheme = (options) => map$5(Theme, (theme) => ({
+	...theme,
+	...options.theme
+}));
+const annotateLine = (line) => annotate(line, bold);
+const annotateErrorLine = (line, color) => annotate(line, combine(italicized, color));
+const annotateSymbol = (symbol, ...styles) => symbol.length === 0 ? "" : annotate(symbol, ...styles);
+const separateSymbol = (symbol, text) => symbol.length === 0 ? text : symbol + " " + text;
+const renderPagingPrefix = (theme, showArrowUp, showArrowDown) => {
+	const width = Math.max(theme.arrowUp.length, theme.arrowDown.length);
+	if (showArrowUp) return theme.arrowUp.padEnd(width);
+	if (showArrowDown) return theme.arrowDown.padEnd(width);
+	return " ".repeat(width);
+};
+/**
+* Creates a confirmation prompt that asks the user to choose a boolean yes/no
+* value.
+*
+* **When to use**
+*
+* Use to ask for a yes/no answer that can be submitted directly.
+*
+* **Details**
+*
+* `initial` defaults to `false`. Enter submits the current default, yes-style
+* input submits `true`, no-style input submits `false`, and other input beeps.
+*
+* @see {@link Toggle} for an interactive switch-before-submit boolean prompt
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Confirm = (options) => {
+	const opts = {
+		initial: false,
+		...options,
+		label: {
+			confirm: "yes",
+			deny: "no",
+			...options.label
+		},
+		placeholder: {
+			defaultConfirm: "(Y/n)",
+			defaultDeny: "(y/N)",
+			...options.placeholder
+		}
+	};
+	const initialState = { value: opts.initial };
+	return Custom(initialState, {
+		render: handleConfirmRender(opts),
+		process: (input) => handleConfirmProcess(input, opts.initial),
+		clear: handleConfirmClear(opts)
+	});
+};
+/**
+* Creates a custom `Prompt` from the specified initial state and handlers.
+*
+* **Details**
+*
+* The initial state can either be a pure value or an `Effect`. This is
+* particularly useful when the initial state of the `Prompt` must be computed
+* by performing an effectful computation, such as reading data from the file
+* system. A `Prompt` runs as a render loop: `render` returns ANSI output for
+* the current frame, the `Terminal` obtains user input, `process` returns the
+* next prompt action, and `clear` returns ANSI output used to clear the previous
+* frame.
+*
+* Optionally, an external `events` dequeue can be provided as the third
+* argument. When present, the render loop will race user input against events
+* from the dequeue, allowing background events to trigger re-renders without
+* waiting for a keypress. When an event is received from the dequeue, the
+* `receive` handler is called instead of `process`.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Custom = (initialState, ...args) => {
+	const [events, handlers] = args.length === 1 ? [void 0, args[0]] : [args[0], args[1]];
+	const op = Object.create(proto);
+	op._tag = "Loop";
+	op.initialState = initialState;
+	op.render = handlers.render;
+	op.process = handlers.process;
+	op.clear = handlers.clear;
+	op.events = events;
+	return op;
+};
+/**
+* Creates a date prompt that lets the user edit a formatted date value and
+* validates the final `Date` before submission.
+*
+* **Details**
+*
+* `initial` defaults to the current `Date`, `dateMask` defaults to
+* `YYYY-MM-DD HH:mm:ss`, mask parsing creates editable date parts plus literal
+* tokens, `locales` customizes month and weekday labels, and `validate` runs on
+* submission.
+*
+* **Gotchas**
+*
+* A supplied `initial` `Date` is edited in place during prompt interaction.
+* Date edits use JavaScript `Date` setters, so out-of-range typed values can
+* normalize before validation. If the prompt is meant to be editable,
+* `dateMask` should contain at least one editable date token.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Date$1 = (options) => {
+	const opts = {
+		initial: new globalThis.Date(),
+		dateMask: "YYYY-MM-DD HH:mm:ss",
+		validate: succeed$2,
+		...options,
+		locales: {
+			...defaultLocales,
+			...options.locales
+		}
+	};
+	const dateParts = makeDateParts(opts.dateMask, opts.initial, opts.locales);
+	const initialState = {
+		dateParts,
+		typed: "",
+		cursor: dateParts.findIndex((part) => !part.isToken()),
+		value: opts.initial,
+		error: none()
+	};
+	return Custom(initialState, {
+		render: handleDateRender(opts),
+		process: handleDateProcess(opts),
+		clear: handleDateClear(opts)
+	});
+};
+/**
+* Composes prompts by using the output of this prompt to create the next prompt.
+*
+* @stability unstable
+* @category combinators
+* @since 4.0.0
+*/
+const flatMap = /*#__PURE__*/ dual(2, (self, f) => {
+	const op = Object.create(proto);
+	op._tag = "OnSuccess";
+	op.prompt = self;
+	op.onSuccess = f;
+	return op;
+});
+/**
+* Creates a floating-point number prompt.
+*
+* **Details**
+*
+* The prompt supports minimum and maximum bounds, keyboard step sizes, display
+* precision, and additional validation before submission.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Number$1 = (options) => {
+	const opts = {
+		default: 0,
+		min: globalThis.Number.NEGATIVE_INFINITY,
+		max: globalThis.Number.POSITIVE_INFINITY,
+		incrementBy: 1,
+		decrementBy: 1,
+		precision: 2,
+		validate: (n) => {
+			if (n < opts.min) return fail$1(`${n} must be greater than or equal to ${opts.min}`);
+			if (n > opts.max) return fail$1(`${n} must be less than or equal to ${opts.max}`);
+			return succeed$2(n);
+		},
+		...options
+	};
+	const initialValue = options.default === void 0 ? "" : `${opts.default}`;
+	const initialState = {
+		cursor: initialValue.length,
+		value: initialValue,
+		error: none()
+	};
+	return Custom(initialState, {
+		render: handleRenderFloat(opts),
+		process: handleProcessFloat(opts),
+		clear: handleNumberClear(opts)
+	});
+};
+/**
+* Creates an integer prompt.
+*
+* **Details**
+*
+* The prompt supports minimum and maximum bounds, keyboard step sizes, and
+* additional validation before submission.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Int = (options) => {
+	const opts = {
+		default: 0,
+		min: globalThis.Number.NEGATIVE_INFINITY,
+		max: globalThis.Number.POSITIVE_INFINITY,
+		incrementBy: 1,
+		decrementBy: 1,
+		validate: (n) => {
+			if (n < opts.min) return fail$1(`${n} must be greater than or equal to ${opts.min}`);
+			if (n > opts.max) return fail$1(`${n} must be less than or equal to ${opts.max}`);
+			return succeed$2(n);
+		},
+		...options
+	};
+	const initialValue = options.default === void 0 ? "" : `${opts.default}`;
+	const initialState = {
+		cursor: initialValue.length,
+		value: initialValue,
+		error: none()
+	};
+	return Custom(initialState, {
+		render: handleRenderInteger(opts),
+		process: handleProcessInteger(opts),
+		clear: handleNumberClear(opts)
+	});
+};
+/**
+* Transforms the output value produced by a prompt.
+*
+* @stability unstable
+* @category combinators
+* @since 4.0.0
+*/
+const map$2 = /*#__PURE__*/ dual(2, (self, f) => flatMap(self, (a) => succeed(f(a))));
+/**
+* Creates a password prompt that masks typed input and returns the submitted
+* value wrapped in `Redacted`.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Password = (options) => basePrompt(options, "password").pipe(map$2(make$20));
+/**
+* Runs a prompt by reading terminal input and rendering prompt frames until the
+* prompt submits a value.
+*
+* **Gotchas**
+*
+* The returned effect may fail with `Terminal.QuitError` if terminal input ends
+* or the prompt is quit.
+*
+* @stability unstable
+* @category running
+* @since 4.0.0
+*/
+const run$1 = /*#__PURE__*/ fnUntraced(function* (self) {
+	const terminal = yield* Terminal;
+	const input = yield* terminal.readInput;
+	return yield* runWithInput(self, terminal, input);
+}, /*#__PURE__*/ mapError(() => new QuitError({})), scoped);
+const getSelectInitialIndex = (choices) => {
+	let initialIndex = 0;
+	let seenSelected = -1;
+	for (let i = 0; i < choices.length; i++) if (choices[i].selected === true) {
+		if (seenSelected !== -1) throw new Error("InvalidArgumentException: only a single choice can be selected by default for Prompt.Select");
+		seenSelected = i;
+	}
+	if (seenSelected !== -1) initialIndex = seenSelected;
+	return initialIndex;
+};
+/**
+* Creates a prompt that lets the user select a single value from a list of
+* choices.
+*
+* **Gotchas**
+*
+* At most one choice may be marked as selected by default.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Select = (options) => {
+	const opts = {
+		maxPerPage: 10,
+		...options
+	};
+	const initialIndex = getSelectInitialIndex(opts.choices);
+	return Custom(initialIndex, {
+		render: handleSelectRender(opts),
+		process: handleSelectProcess(opts),
+		clear: handleSelectClear(opts)
+	});
+};
+/**
+* Creates a `Prompt` which immediately succeeds with the specified value.
+*
+* **Details**
+*
+* This prompt does not attempt to obtain user input or render anything to the
+* screen.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const succeed = (value) => {
+	const op = Object.create(proto);
+	op._tag = "Succeed";
+	op.value = value;
+	return op;
+};
+/**
+* Creates a text-entry prompt that echoes input and returns the submitted
+* string after validation.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const String$3 = (options) => basePrompt(options, "text");
+/**
+* Creates a toggle prompt that lets the user switch between active and inactive
+* states and returns the selected boolean value.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Toggle = (options) => {
+	const opts = {
+		initial: false,
+		active: "on",
+		inactive: "off",
+		...options
+	};
+	return Custom(opts.initial, {
+		render: handleToggleRender(opts),
+		process: handleToggleProcess,
+		clear: () => handleToggleClear(opts)
+	});
+};
+const proto = {
+	.../*#__PURE__*/ Prototype({
+		label: "Prompt",
+		evaluate() {
+			return run$1(this);
+		}
+	}),
+	[TypeId$3]: { _Output: (_) => _ }
+};
+const runWithInput = (prompt, terminal, input) => suspend$2(() => {
+	const op = prompt;
+	switch (op._tag) {
+		case "Loop": return runLoop(op, terminal, input);
+		case "OnSuccess": return flatMap$1(runWithInput(op.prompt, terminal, input), (a) => runWithInput(op.onSuccess(a), terminal, input));
+		case "Succeed": return succeed$2(op.value);
+	}
+});
+const runLoop = /*#__PURE__*/ fnUntraced(function* (loop, terminal, input) {
+	let state = isEffect(loop.initialState) ? yield* loop.initialState : loop.initialState;
+	let action = Action$1.NextFrame({ state });
+	let clear = "";
+	while (true) {
+		const msg = yield* loop.render(state, action);
+		yield* orDie(terminal.display(clear + msg));
+		clear = "";
+		if (loop.events) {
+			const takeInput = take(input).pipe(map$5((input) => ({
+				_tag: "Input",
+				input
+			})));
+			const result = yield* raceFirst(takeInput, take(loop.events).pipe(map$5((value) => ({
+				_tag: "Event",
+				value
+			}))));
+			action = yield* loop.process(result, state);
+		} else {
+			const result = yield* take(input);
+			action = yield* loop.process(result, state);
+		}
+		switch (action._tag) {
+			case "Beep": continue;
+			case "NextFrame":
+				clear = yield* loop.clear(state, action);
+				state = action.state;
+				continue;
+			case "Submit": {
+				clear = yield* loop.clear(state, action);
+				const msg = yield* loop.render(state, action);
+				yield* orDie(terminal.display(clear + msg));
+				return action.value;
+			}
+		}
+	}
+}, (effect, _, terminal) => ensuring(effect, orDie(terminal.display(cursorShow))));
+const Action$1 = /*#__PURE__*/ taggedEnum();
+/**
+* Clears all lines taken up by the specified `text`.
+*/
+const eraseText = (text, columns) => {
+	if (columns === 0) return eraseLine + cursorTo(0);
+	let rows = 0;
+	const lines = text.split(NEWLINE_REGEXP);
+	for (const line of lines) rows += 1 + Math.floor(Math.max(line.length - 1, 0) / columns);
+	return eraseLines(rows);
+};
+const lines$1 = (prompt, columns) => {
+	const lines = prompt.split(NEWLINE_REGEXP);
+	return columns === 0 ? lines.length : pipe(map$8(lines, (line) => Math.ceil(line.length / columns)), reduce(0, (left, right) => left + right));
+};
+const clearOutputWithError = (outputText, columns, errorText) => {
+	if (errorText !== void 0 && errorText.length > 0) return cursorDown(lines$1(errorText, columns)) + eraseText(`\n${errorText}`, columns) + eraseText(outputText, columns);
+	return eraseText(outputText, columns);
+};
+const renderBeep = "\x07";
+const NEWLINE_REGEXP = /\r?\n/;
+const handleConfirmClear = (options) => {
+	return fnUntraced(function* (state, _) {
+		const columns = yield* (yield* Terminal).columns;
+		const figures = yield* getTheme(options);
+		const confirmMessage = state.value ? options.placeholder.defaultConfirm : options.placeholder.defaultDeny;
+		const promptText = renderConfirmOutput(confirmMessage, figures.prefix, figures.pointerSmall, options, { plain: true });
+		return eraseText(promptText, columns) + (eraseLine + cursorLeft);
+	});
+};
+const renderConfirmOutput = (confirm, leadingSymbol, trailingSymbol, options, renderOptions) => renderPrompt(confirm, options.message, leadingSymbol, trailingSymbol, renderOptions);
+const renderConfirmNextFrame = /*#__PURE__*/ fnUntraced(function* (state, options) {
+	const figures = yield* getTheme(options);
+	const leadingSymbol = annotateSymbol(figures.prefix, figures.primaryColor);
+	const trailingSymbol = annotateSymbol(figures.pointerSmall, figures.mutedColor);
+	const confirmMessage = state.value ? options.placeholder.defaultConfirm : options.placeholder.defaultDeny;
+	const confirm = annotate(confirmMessage, figures.mutedColor);
+	const promptMsg = renderConfirmOutput(confirm, leadingSymbol, trailingSymbol, options);
+	return cursorHide + promptMsg;
+});
+const renderConfirmSubmission = /*#__PURE__*/ fnUntraced(function* (value, options) {
+	const figures = yield* getTheme(options);
+	const leadingSymbol = annotateSymbol(figures.tick, figures.successColor);
+	const trailingSymbol = annotateSymbol(figures.ellipsis, figures.mutedColor);
+	const confirmMessage = value ? options.label.confirm : options.label.deny;
+	return renderConfirmOutput(confirmMessage, leadingSymbol, trailingSymbol, options) + "\n";
+});
+const handleConfirmRender = (options) => {
+	return (_, action) => {
+		return Action$1.$match(action, {
+			Beep: () => succeed$2(renderBeep),
+			NextFrame: ({ state }) => renderConfirmNextFrame(state, options),
+			Submit: ({ value }) => renderConfirmSubmission(value, options)
+		});
+	};
+};
+const TRUE_VALUE_REGEXP = /^y|t$/;
+const FALSE_VALUE_REGEXP = /^n|f$/;
+const handleConfirmProcess = (input, defaultValue) => {
+	const value = getOrElse(input.input, () => "");
+	if (input.key.name === "enter" || input.key.name === "return") return succeed$2(Action$1.Submit({ value: defaultValue }));
+	if (TRUE_VALUE_REGEXP.test(value.toLowerCase())) return succeed$2(Action$1.Submit({ value: true }));
+	if (FALSE_VALUE_REGEXP.test(value.toLowerCase())) return succeed$2(Action$1.Submit({ value: false }));
+	return succeed$2(Action$1.Beep());
+};
+const handleDateClear = (options) => {
+	return fnUntraced(function* (state, _) {
+		const columns = yield* (yield* Terminal).columns;
+		const figures = yield* getTheme(options);
+		const resetCurrentLine = eraseLine + cursorLeft;
+		const parts = reduce(state.dateParts, "", (doc, part) => doc + part.toString());
+		const promptText = renderDateOutput(figures.prefix, figures.pointerSmall, parts, options, { plain: true });
+		const errorText = isSome(state.error) ? match$3(state.error.value.split(NEWLINE_REGEXP), {
+			onEmpty: () => "",
+			onNonEmpty: (errorLines) => separateSymbol(figures.pointerSmall, errorLines.join("\n"))
+		}) : "";
+		return clearOutputWithError(promptText, columns, errorText) + resetCurrentLine;
+	});
+};
+const renderDateError = (state, pointer, theme) => {
+	if (isSome(state.error)) {
+		const errorLines = state.error.value.split(NEWLINE_REGEXP);
+		if (isReadonlyArrayNonEmpty(errorLines)) {
+			const prefix = annotateSymbol(pointer, theme.errorColor);
+			const lines = map$8(errorLines, (str) => annotateErrorLine(str, theme.errorColor));
+			return cursorSavePosition + "\n" + separateSymbol(prefix, lines.join("\n")) + cursorRestorePosition;
+		}
+	}
+	return "";
+};
+const renderParts = (state, theme, submitted = false) => {
+	return reduce(state.dateParts, "", (doc, part, currentIndex) => {
+		const partDoc = part.toString();
+		if (currentIndex === state.cursor && !submitted) {
+			const annotation = combine(underlined, theme.primaryColor);
+			return doc + annotate(partDoc, annotation);
+		}
+		return doc + partDoc;
+	});
+};
+const renderDateOutput = (leadingSymbol, trailingSymbol, parts, options, renderOptions) => renderPrompt(parts, options.message, leadingSymbol, trailingSymbol, renderOptions);
+const renderDateNextFrame = /*#__PURE__*/ fnUntraced(function* (state, options) {
+	const figures = yield* getTheme(options);
+	const leadingSymbol = annotateSymbol(figures.prefix, figures.primaryColor);
+	const trailingSymbol = annotateSymbol(figures.pointerSmall, figures.mutedColor);
+	const parts = renderParts(state, figures);
+	const promptMsg = renderDateOutput(leadingSymbol, trailingSymbol, parts, options);
+	const errorMsg = renderDateError(state, figures.pointerSmall, figures);
+	return cursorHide + promptMsg + errorMsg;
+});
+const renderDateSubmission = /*#__PURE__*/ fnUntraced(function* (state, options) {
+	const figures = yield* getTheme(options);
+	const leadingSymbol = annotateSymbol(figures.tick, figures.successColor);
+	const trailingSymbol = annotateSymbol(figures.ellipsis, figures.mutedColor);
+	const parts = renderParts(state, figures, true);
+	return renderDateOutput(leadingSymbol, trailingSymbol, parts, options) + "\n";
+});
+const processUp = (state) => {
+	state.dateParts[state.cursor].increment();
+	return Action$1.NextFrame({ state: {
+		...state,
+		typed: ""
+	} });
+};
+const processDown = (state) => {
+	state.dateParts[state.cursor].decrement();
+	return Action$1.NextFrame({ state: {
+		...state,
+		typed: ""
+	} });
+};
+const processDateCursorLeft = (state) => {
+	const previous = state.dateParts[state.cursor].previousPart();
+	if (isSome(previous)) return Action$1.NextFrame({ state: {
+		...state,
+		typed: "",
+		cursor: state.dateParts.indexOf(previous.value)
+	} });
+	return Action$1.Beep();
+};
+const processDateCursorRight = (state) => {
+	const next = state.dateParts[state.cursor].nextPart();
+	if (isSome(next)) return Action$1.NextFrame({ state: {
+		...state,
+		typed: "",
+		cursor: state.dateParts.indexOf(next.value)
+	} });
+	return Action$1.Beep();
+};
+const processDateNext = (state) => {
+	const next = state.dateParts[state.cursor].nextPart();
+	const cursor = match$5(next, {
+		onNone: () => state.dateParts.findIndex((part) => !part.isToken()),
+		onSome: (next) => state.dateParts.indexOf(next)
+	});
+	return Action$1.NextFrame({ state: {
+		...state,
+		typed: "",
+		cursor
+	} });
+};
+const defaultDateProcessor = (value, state) => {
+	if (/\d/.test(value)) {
+		const typed = state.typed + value;
+		state.dateParts[state.cursor].setValue(typed);
+		return Action$1.NextFrame({ state: {
+			...state,
+			typed
+		} });
+	}
+	return Action$1.Beep();
+};
+const defaultLocales = {
+	months: [
+		"January",
+		"February",
+		"March",
+		"April",
+		"May",
+		"June",
+		"July",
+		"August",
+		"September",
+		"October",
+		"November",
+		"December"
+	],
+	monthsShort: [
+		"Jan",
+		"Feb",
+		"Mar",
+		"Apr",
+		"May",
+		"Jun",
+		"Jul",
+		"Aug",
+		"Sep",
+		"Oct",
+		"Nov",
+		"Dec"
+	],
+	weekdays: [
+		"Sunday",
+		"Monday",
+		"Tuesday",
+		"Wednesday",
+		"Thursday",
+		"Friday",
+		"Saturday"
+	],
+	weekdaysShort: [
+		"Sun",
+		"Mon",
+		"Tue",
+		"Wed",
+		"Thu",
+		"Fri",
+		"Sat"
+	]
+};
+const handleDateRender = (options) => {
+	return (state, action) => {
+		return Action$1.$match(action, {
+			Beep: () => succeed$2(renderBeep),
+			NextFrame: ({ state }) => renderDateNextFrame(state, options),
+			Submit: () => renderDateSubmission(state, options)
+		});
+	};
+};
+const handleDateProcess = (options) => {
+	return (input, state) => {
+		switch (input.key.name) {
+			case "left": return succeed$2(processDateCursorLeft(state));
+			case "right": return succeed$2(processDateCursorRight(state));
+			case "k":
+			case "up": return succeed$2(processUp(state));
+			case "j":
+			case "down": return succeed$2(processDown(state));
+			case "tab": return succeed$2(processDateNext(state));
+			case "enter":
+			case "return": return match(options.validate(state.value), {
+				onFailure: (error) => Action$1.NextFrame({ state: {
+					...state,
+					error: some(error)
+				} }),
+				onSuccess: (value) => Action$1.Submit({ value })
+			});
+			default: return succeed$2(defaultDateProcessor(getOrElse(input.input, () => ""), state));
+		}
+	};
+};
+const DATE_PART_REGEXP = /\\(.)|"((?:\\["\\]|[^"])+)"|(D[Do]?|d{3,4}|d)|(M{1,4})|(YY(?:YY)?)|([aA])|([Hh]{1,2})|(m{1,2})|(s{1,2})|(S{1,4})|./g;
+const regExpGroups = {
+	1: ({ token, ...opts }) => new Token({
+		token: token.replace(/\\(.)/g, "$1"),
+		...opts
+	}),
+	2: (opts) => new Day(opts),
+	3: (opts) => new Month(opts),
+	4: (opts) => new Year(opts),
+	5: (opts) => new Meridiem(opts),
+	6: (opts) => new Hours(opts),
+	7: (opts) => new Minutes(opts),
+	8: (opts) => new Seconds(opts),
+	9: (opts) => new Milliseconds(opts)
+};
+const makeDateParts = (dateMask, date, locales) => {
+	const parts = [];
+	let result = null;
+	while (result = DATE_PART_REGEXP.exec(dateMask)) {
+		const match = result.shift();
+		const index = result.findIndex((group) => group !== void 0);
+		if (index in regExpGroups) {
+			const token = result[index] || match;
+			parts.push(regExpGroups[index]({
+				token,
+				date,
+				parts,
+				locales
+			}));
+		} else parts.push(new Token({
+			token: result[index] || match,
+			date,
+			parts,
+			locales
+		}));
+	}
+	const orderedParts = parts.reduce((array, element) => {
+		const lastElement = array[array.length - 1];
+		if (element.isToken() && lastElement !== void 0 && lastElement.isToken()) lastElement.setValue(element.token);
+		else array.push(element);
+		return array;
+	}, empty$2());
+	parts.splice(0, parts.length, ...orderedParts);
+	return parts;
+};
+var DatePart = class {
+	token;
+	date;
+	parts;
+	locales;
+	constructor(params) {
+		this.token = params.token;
+		this.locales = params.locales;
+		this.date = params.date || new globalThis.Date();
+		this.parts = params.parts || [this];
+	}
+	/**
+	* Returns `true` if this `DatePart` is a `Token`, `false` otherwise.
+	*/
+	isToken() {
+		return false;
+	}
+	/**
+	* Retrieves the next date part in the list of parts.
+	*/
+	nextPart() {
+		const currentPartIndex = getOrElse(findFirstIndex(this.parts, (part) => part === this), () => 0);
+		return findFirst(this.parts.slice(currentPartIndex + 1), (part) => !part.isToken());
+	}
+	/**
+	* Retrieves the previous date part in the list of parts.
+	*/
+	previousPart() {
+		const currentPartIndex = findFirstIndex(this.parts, (part) => part === this);
+		if (isSome(currentPartIndex)) return findLast(this.parts.slice(0, currentPartIndex.value), (part) => !part.isToken());
+		return none();
+	}
+	toString() {
+		return globalThis.String(this.date);
+	}
+};
+var Token = class extends DatePart {
+	increment() {}
+	decrement() {}
+	setValue(value) {
+		this.token = this.token + value;
+	}
+	isToken() {
+		return true;
+	}
+	toString() {
+		return this.token;
+	}
+};
+var Milliseconds = class extends DatePart {
+	increment() {
+		this.date.setMilliseconds(this.date.getMilliseconds() + 1);
+	}
+	decrement() {
+		this.date.setMilliseconds(this.date.getMilliseconds() - 1);
+	}
+	setValue(value) {
+		this.date.setMilliseconds(globalThis.Number.parseInt(value.slice(-this.token.length)));
+	}
+	toString() {
+		return `${this.date.getMilliseconds()}`.padStart(4, "0").substring(0, this.token.length);
+	}
+};
+var Seconds = class extends DatePart {
+	increment() {
+		this.date.setSeconds(this.date.getSeconds() + 1);
+	}
+	decrement() {
+		this.date.setSeconds(this.date.getSeconds() - 1);
+	}
+	setValue(value) {
+		this.date.setSeconds(globalThis.Number.parseInt(value.slice(-2)));
+	}
+	toString() {
+		const seconds = `${this.date.getSeconds()}`;
+		return this.token.length > 1 ? seconds.padStart(2, "0") : seconds;
+	}
+};
+var Minutes = class extends DatePart {
+	increment() {
+		this.date.setMinutes(this.date.getMinutes() + 1);
+	}
+	decrement() {
+		this.date.setMinutes(this.date.getMinutes() - 1);
+	}
+	setValue(value) {
+		this.date.setMinutes(globalThis.Number.parseInt(value.slice(-2)));
+	}
+	toString() {
+		const minutes = `${this.date.getMinutes()}`;
+		return this.token.length > 1 ? minutes.padStart(2, "0") : minutes;
+	}
+};
+var Hours = class extends DatePart {
+	increment() {
+		this.date.setHours(this.date.getHours() + 1);
+	}
+	decrement() {
+		this.date.setHours(this.date.getHours() - 1);
+	}
+	setValue(value) {
+		this.date.setHours(globalThis.Number.parseInt(value.slice(-2)));
+	}
+	toString() {
+		const hours = /h/.test(this.token) ? this.date.getHours() % 12 || 12 : this.date.getHours();
+		return this.token.length > 1 ? `${hours}`.padStart(2, "0") : `${hours}`;
+	}
+};
+var Day = class extends DatePart {
+	increment() {
+		this.date.setDate(this.date.getDate() + 1);
+	}
+	decrement() {
+		this.date.setDate(this.date.getDate() - 1);
+	}
+	setValue(value) {
+		this.date.setDate(globalThis.Number.parseInt(value.slice(-2)));
+	}
+	toString() {
+		const date = this.date.getDate();
+		const day = this.date.getDay();
+		switch (this.token) {
+			case "DD": return `${date}`.padStart(2, "0");
+			case "Do": return `${date}${this.ordinalIndicator(date)}`;
+			case "d": return `${day + 1}`;
+			case "ddd": return this.locales.weekdaysShort[day];
+			case "dddd": return this.locales.weekdays[day];
+			default: return `${date}`;
+		}
+	}
+	ordinalIndicator(day) {
+		if (day >= 11 && day <= 13) return "th";
+		switch (day % 10) {
+			case 1: return "st";
+			case 2: return "nd";
+			case 3: return "rd";
+			default: return "th";
+		}
+	}
+};
+var Month = class extends DatePart {
+	increment() {
+		this.date.setMonth(this.date.getMonth() + 1);
+	}
+	decrement() {
+		this.date.setMonth(this.date.getMonth() - 1);
+	}
+	setValue(value) {
+		const month = globalThis.Number.parseInt(value.slice(-2)) - 1;
+		this.date.setMonth(month < 0 ? 0 : month);
+	}
+	toString() {
+		const month = this.date.getMonth();
+		switch (this.token.length) {
+			case 2: return `${month + 1}`.padStart(2, "0");
+			case 3: return this.locales.monthsShort[month];
+			case 4: return this.locales.months[month];
+			default: return `${month + 1}`;
+		}
+	}
+};
+var Year = class extends DatePart {
+	increment() {
+		this.date.setFullYear(this.date.getFullYear() + 1);
+	}
+	decrement() {
+		this.date.setFullYear(this.date.getFullYear() - 1);
+	}
+	setValue(value) {
+		this.date.setFullYear(globalThis.Number.parseInt(value.slice(-4)));
+	}
+	toString() {
+		const year = `${this.date.getFullYear()}`.padStart(4, "0");
+		return this.token.length === 2 ? year.slice(-2) : year;
+	}
+};
+var Meridiem = class extends DatePart {
+	increment() {
+		this.date.setHours((this.date.getHours() + 12) % 24);
+	}
+	decrement() {
+		this.increment();
+	}
+	setValue(_value) {}
+	toString() {
+		const meridiem = this.date.getHours() >= 12 ? "pm" : "am";
+		return /A/.test(this.token) ? meridiem.toUpperCase() : meridiem;
+	}
+};
+const renderPrompt = (confirm, message, leadingSymbol, trailingSymbol, options) => {
+	const prefix = leadingSymbol.length === 0 ? "" : leadingSymbol + " ";
+	const renderLine = (line) => {
+		let output = prefix + line;
+		if (trailingSymbol.length > 0) output += " " + trailingSymbol;
+		if (confirm.length > 0) output += " " + confirm;
+		else if (trailingSymbol.length > 0) output += " ";
+		return output;
+	};
+	const annotate = options?.plain === true ? (line) => line : annotateLine;
+	return match$3(message.split(NEWLINE_REGEXP), {
+		onEmpty: () => renderLine(""),
+		onNonEmpty: (promptLines) => {
+			const lines = map$8(promptLines, (line) => annotate(line));
+			return renderLine(lines.join("\n"));
+		}
+	});
+};
+const renderChoiceDescription = (choice, isActive, theme, renderOptions) => {
+	if (!choice.disabled && choice.description && isActive) {
+		const text = theme.descriptionSeparator + choice.description;
+		return renderOptions?.plain === true ? text : annotate(text, theme.mutedColor);
+	}
+	return "";
+};
+const handleNumberClear = (options) => {
+	return fnUntraced(function* (state, _) {
+		const columns = yield* (yield* Terminal).columns;
+		const figures = yield* getTheme(options);
+		const resetCurrentLine = eraseLine + cursorLeft;
+		const errorText = renderNumberError(state, figures.pointerSmall, figures, { plain: true });
+		const promptText = renderNumberOutput(state, figures.prefix, figures.pointerSmall, options, figures, { plain: true });
+		return clearOutputWithError(promptText, columns, errorText) + resetCurrentLine;
+	});
+};
+const renderNumberInput = (state, submitted, theme, renderOptions) => {
+	const value = state.value === "" ? "" : `${state.value}`;
+	if (submitted || renderOptions?.plain === true) return value;
+	const annotation = isSome(state.error) ? theme.errorColor : combine(underlined, theme.primaryColor);
+	return annotate(value, annotation);
+};
+const renderNumberError = (state, pointer, theme, renderOptions) => {
+	if (isSome(state.error)) return match$3(state.error.value.split(NEWLINE_REGEXP), {
+		onEmpty: () => "",
+		onNonEmpty: (errorLines) => {
+			if (renderOptions?.plain === true) return separateSymbol(pointer, errorLines.join("\n"));
+			const prefix = annotateSymbol(pointer, theme.errorColor);
+			const lines = map$8(errorLines, (str) => annotateErrorLine(str, theme.errorColor));
+			return cursorSavePosition + "\n" + separateSymbol(prefix, lines.join("\n")) + cursorRestorePosition;
+		}
+	});
+	return "";
+};
+const renderNumberOutput = (state, leadingSymbol, trailingSymbol, options, theme, renderOptions, submitted = false) => {
+	const value = renderNumberInput(state, submitted, theme, renderOptions);
+	return renderPrompt(value, options.message, leadingSymbol, trailingSymbol, renderOptions);
+};
+const renderNumberNextFrame = /*#__PURE__*/ fnUntraced(function* (state, options) {
+	const figures = yield* getTheme(options);
+	const leadingSymbol = annotateSymbol(figures.prefix, figures.primaryColor);
+	const trailingSymbol = annotateSymbol(figures.pointerSmall, figures.mutedColor);
+	const errorMsg = renderNumberError(state, figures.pointerSmall, figures);
+	return renderNumberOutput(state, leadingSymbol, trailingSymbol, options, figures) + errorMsg;
+});
+const renderNumberSubmission = /*#__PURE__*/ fnUntraced(function* (nextState, options) {
+	const figures = yield* getTheme(options);
+	const leadingSymbol = annotateSymbol(figures.tick, figures.successColor);
+	const trailingSymbol = annotateSymbol(figures.ellipsis, figures.mutedColor);
+	return renderNumberOutput(nextState, leadingSymbol, trailingSymbol, options, figures, void 0, true) + "\n";
+});
+const processNumberBackspace = (state) => {
+	if (state.value.length <= 0) return succeed$2(Action$1.Beep());
+	const value = state.value.slice(0, state.value.length - 1);
+	return succeed$2(Action$1.NextFrame({ state: {
+		...state,
+		value,
+		error: none()
+	} }));
+};
+const processNumberClear = (state) => succeed$2(Action$1.NextFrame({ state: {
+	...state,
+	cursor: 0,
+	value: "",
+	error: none()
+} }));
+const defaultIntProcessor = (input, state) => {
+	if (state.value.length === 0 && input === "-") return succeed$2(Action$1.NextFrame({ state: {
+		...state,
+		value: "-",
+		error: none()
+	} }));
+	const parsed = globalThis.Number.parseInt(state.value + input);
+	if (globalThis.Number.isNaN(parsed)) return succeed$2(Action$1.Beep());
+	else return succeed$2(Action$1.NextFrame({ state: {
+		...state,
+		value: `${parsed}`,
+		error: none()
+	} }));
+};
+const defaultFloatProcessor = (input, state) => {
+	if (input === "." && state.value.includes(".")) return succeed$2(Action$1.Beep());
+	if (state.value.length === 0 && input === "-") return succeed$2(Action$1.NextFrame({ state: {
+		...state,
+		value: "-",
+		error: none()
+	} }));
+	const parsed = globalThis.Number.parseFloat(state.value + input);
+	if (globalThis.Number.isNaN(parsed)) return succeed$2(Action$1.Beep());
+	else return succeed$2(Action$1.NextFrame({ state: {
+		...state,
+		value: input === "." ? `${parsed}.` : state.value.includes(".") && /^\d$/.test(input) ? state.value + input : `${parsed}`,
+		error: none()
+	} }));
+};
+const handleRenderInteger = (options) => {
+	return (state, action) => {
+		return Action$1.$match(action, {
+			Beep: () => succeed$2(renderBeep),
+			NextFrame: ({ state }) => renderNumberNextFrame(state, options),
+			Submit: () => renderNumberSubmission(state, options)
+		});
+	};
+};
+const handleProcessInteger = (options) => {
+	return (input, state) => {
+		if (input.key.ctrl && input.key.name === "u") return processNumberClear(state);
+		switch (input.key.name) {
+			case "backspace": return processNumberBackspace(state);
+			case "k":
+			case "up": return succeed$2(Action$1.NextFrame({ state: {
+				...state,
+				value: state.value === "" || state.value === "-" ? `${options.incrementBy}` : `${globalThis.Number.parseInt(state.value) + options.incrementBy}`,
+				error: none()
+			} }));
+			case "j":
+			case "down": return succeed$2(Action$1.NextFrame({ state: {
+				...state,
+				value: state.value === "" || state.value === "-" ? `-${options.decrementBy}` : `${globalThis.Number.parseInt(state.value) - options.decrementBy}`,
+				error: none()
+			} }));
+			case "enter":
+			case "return": {
+				const parsed = globalThis.Number.parseInt(state.value);
+				if (globalThis.Number.isNaN(parsed)) return succeed$2(Action$1.NextFrame({ state: {
+					...state,
+					error: some("Must provide an integer value")
+				} }));
+				else return match(options.validate(parsed), {
+					onFailure: (error) => Action$1.NextFrame({ state: {
+						...state,
+						error: some(error)
+					} }),
+					onSuccess: (value) => Action$1.Submit({ value })
+				});
+			}
+			default: return defaultIntProcessor(getOrElse(input.input, () => ""), state);
+		}
+	};
+};
+const handleRenderFloat = (options) => {
+	return (state, action) => {
+		return Action$1.$match(action, {
+			Beep: () => succeed$2(renderBeep),
+			NextFrame: ({ state }) => renderNumberNextFrame(state, options),
+			Submit: () => renderNumberSubmission(state, options)
+		});
+	};
+};
+const handleProcessFloat = (options) => {
+	return (input, state) => {
+		if (input.key.ctrl && input.key.name === "u") return processNumberClear(state);
+		switch (input.key.name) {
+			case "backspace": return processNumberBackspace(state);
+			case "k":
+			case "up": return succeed$2(Action$1.NextFrame({ state: {
+				...state,
+				value: state.value === "" || state.value === "-" ? `${options.incrementBy}` : `${globalThis.Number.parseFloat(state.value) + options.incrementBy}`,
+				error: none()
+			} }));
+			case "j":
+			case "down": return succeed$2(Action$1.NextFrame({ state: {
+				...state,
+				value: state.value === "" || state.value === "-" ? `-${options.decrementBy}` : `${globalThis.Number.parseFloat(state.value) - options.decrementBy}`,
+				error: none()
+			} }));
+			case "enter":
+			case "return": {
+				const parsed = globalThis.Number.parseFloat(state.value);
+				if (globalThis.Number.isNaN(parsed)) return succeed$2(Action$1.NextFrame({ state: {
+					...state,
+					error: some("Must provide a floating point value")
+				} }));
+				else return flatMap$1(sync(() => round(parsed, options.precision)), (rounded) => match(options.validate(rounded), {
+					onFailure: (error) => Action$1.NextFrame({ state: {
+						...state,
+						error: some(error)
+					} }),
+					onSuccess: (value) => Action$1.Submit({ value })
+				}));
+			}
+			default: return defaultFloatProcessor(getOrElse(input.input, () => ""), state);
+		}
+	};
+};
+const renderSelectOutput = (leadingSymbol, trailingSymbol, options, renderOptions) => options.message === void 0 ? void 0 : renderPrompt("", options.message, leadingSymbol, trailingSymbol, renderOptions);
+const withSelectHeader = (header, body) => header === void 0 ? body : header + "\n" + body;
+const renderChoicePrefix = (state, choices, toDisplay, currentIndex, figures, renderOptions) => {
+	const prefix = renderPagingPrefix(figures, currentIndex === toDisplay.startIndex && toDisplay.startIndex > 0, currentIndex === toDisplay.endIndex - 1 && toDisplay.endIndex < choices.length);
+	if (renderOptions?.plain === true) return state === currentIndex ? figures.pointer + prefix : prefix + " ".repeat(figures.pointer.length);
+	if (choices[currentIndex].disabled) {
+		const annotation = combine(bold, figures.mutedColor);
+		return state === currentIndex ? annotateSymbol(figures.pointer, annotation) + prefix : prefix + " ".repeat(figures.pointer.length);
+	}
+	return state === currentIndex ? annotateSymbol(figures.pointer, figures.primaryColor) + prefix : prefix + " ".repeat(figures.pointer.length);
+};
+const renderChoiceTitle = (choice, isSelected, theme, renderOptions) => {
+	if (renderOptions?.plain === true) return choice.title;
+	const title = choice.title;
+	if (isSelected) return choice.disabled ? annotate(title, combine(underlined, theme.mutedColor)) : annotate(title, combine(underlined, theme.primaryColor));
+	return choice.disabled ? annotate(title, combine(strikethrough, theme.mutedColor)) : title;
+};
+const renderSelectChoices = (state, options, figures, renderOptions) => {
+	const choices = options.choices;
+	const toDisplay = entriesToDisplay(state, choices.length, options.maxPerPage);
+	const documents = [];
+	for (let index = toDisplay.startIndex; index < toDisplay.endIndex; index++) {
+		const choice = choices[index];
+		const isSelected = state === index;
+		const prefix = renderChoicePrefix(state, choices, toDisplay, index, figures, renderOptions);
+		const title = renderChoiceTitle(choice, isSelected, figures, renderOptions);
+		const description = renderChoiceDescription(choice, isSelected, figures, renderOptions);
+		documents.push(prefix + title + " " + description);
+	}
+	return documents.join("\n");
+};
+const renderSelectNextFrame = /*#__PURE__*/ fnUntraced(function* (state, options) {
+	const figures = yield* getTheme(options);
+	const choices = renderSelectChoices(state, options, figures);
+	const leadingSymbol = annotateSymbol(figures.prefix, figures.primaryColor);
+	const trailingSymbol = annotateSymbol(figures.pointerSmall, figures.mutedColor);
+	const promptMsg = renderSelectOutput(leadingSymbol, trailingSymbol, options);
+	return cursorHide + withSelectHeader(promptMsg, choices);
+});
+const renderSelectSubmission = /*#__PURE__*/ fnUntraced(function* (state, options) {
+	const figures = yield* getTheme(options);
+	const selected = options.choices[state].title;
+	const leadingSymbol = annotateSymbol(figures.tick, figures.successColor);
+	const trailingSymbol = annotateSymbol(figures.ellipsis, figures.mutedColor);
+	return (renderSelectOutput(leadingSymbol, trailingSymbol, options) ?? leadingSymbol) + " " + annotate(selected, figures.submittedColor) + "\n";
+});
+const processSelectCursorUp = (state, choices) => {
+	if (state === 0) return succeed$2(Action$1.NextFrame({ state: choices.length - 1 }));
+	return succeed$2(Action$1.NextFrame({ state: state - 1 }));
+};
+const processSelectCursorDown = (state, choices) => {
+	if (state === choices.length - 1) return succeed$2(Action$1.NextFrame({ state: 0 }));
+	return succeed$2(Action$1.NextFrame({ state: state + 1 }));
+};
+const processSelectNext = (state, choices) => {
+	return succeed$2(Action$1.NextFrame({ state: (state + 1) % choices.length }));
+};
+const handleSelectRender = (options) => {
+	return (state, action) => {
+		return Action$1.$match(action, {
+			Beep: () => succeed$2(renderBeep),
+			NextFrame: ({ state }) => renderSelectNextFrame(state, options),
+			Submit: () => renderSelectSubmission(state, options)
+		});
+	};
+};
+const handleSelectClear = (options) => fnUntraced(function* (state, _) {
+	const columns = yield* (yield* Terminal).columns;
+	const figures = yield* getTheme(options);
+	const clearPrompt = eraseLine + cursorLeft;
+	const promptText = renderSelectOutput(figures.prefix, figures.pointerSmall, options, { plain: true });
+	const choicesText = renderSelectChoices(state, options, figures, { plain: true });
+	return eraseText(withSelectHeader(promptText, choicesText), columns) + clearPrompt;
+});
+const handleSelectProcess = (options) => {
+	return (input, state) => {
+		switch (input.key.name) {
+			case "k":
+			case "up": return processSelectCursorUp(state, options.choices);
+			case "j":
+			case "down": return processSelectCursorDown(state, options.choices);
+			case "tab": return processSelectNext(state, options.choices);
+			case "enter":
+			case "return": {
+				const selected = options.choices[state];
+				if (selected.disabled) return succeed$2(Action$1.Beep());
+				return succeed$2(Action$1.Submit({ value: selected.value }));
+			}
+			default: return succeed$2(Action$1.Beep());
+		}
+	};
+};
+const renderClearScreen = /*#__PURE__*/ fnUntraced(function* (state, options) {
+	const columns = yield* (yield* Terminal).columns;
+	const figures = yield* getTheme(options);
+	const resetCurrentLine = eraseLine + cursorLeft;
+	const errorText = renderTextError(state, figures.pointerSmall, figures, { plain: true });
+	return clearOutputWithError(renderTextOutput(state, figures.prefix, figures.pointerSmall, options, figures, { plain: true }), columns, errorText) + resetCurrentLine;
+});
+const renderTextInput = (nextState, options, theme, submitted, renderOptions) => {
+	const text = nextState.value;
+	if (renderOptions?.plain === true) switch (options.type) {
+		case "hidden": return "";
+		case "password": return theme.passwordMask.repeat(text.length);
+		case "text": return text;
+	}
+	if (text.length === 0) return "";
+	const annotation = isSome(nextState.error) ? theme.errorColor : submitted ? theme.submittedColor : combine(underlined, theme.primaryColor);
+	switch (options.type) {
+		case "hidden": return "";
+		case "password": return annotateSymbol(theme.passwordMask.repeat(text.length), annotation);
+		case "text": return annotate(text, annotation);
+	}
+};
+const renderTextError = (nextState, pointer, theme, renderOptions) => {
+	if (isSome(nextState.error)) return match$3(nextState.error.value.split(NEWLINE_REGEXP), {
+		onEmpty: () => "",
+		onNonEmpty: (errorLines) => {
+			if (renderOptions?.plain === true) return separateSymbol(pointer, errorLines.join("\n"));
+			const prefix = annotateSymbol(pointer, theme.errorColor);
+			const lines = map$8(errorLines, (str) => annotateErrorLine(str, theme.errorColor));
+			return cursorSavePosition + "\n" + separateSymbol(prefix, lines.join("\n")) + cursorRestorePosition;
+		}
+	});
+	return "";
+};
+const renderTextOutput = (nextState, leadingSymbol, trailingSymbol, options, theme, renderOptions, submitted = false) => {
+	const value = renderTextInput(nextState, options, theme, submitted, renderOptions);
+	return renderPrompt(value, options.message, leadingSymbol, trailingSymbol, renderOptions);
+};
+const renderTextNextFrame = /*#__PURE__*/ fnUntraced(function* (state, options) {
+	const figures = yield* getTheme(options);
+	const leadingSymbol = annotateSymbol(figures.prefix, figures.primaryColor);
+	const trailingSymbol = annotateSymbol(figures.pointerSmall, figures.mutedColor);
+	const promptMsg = renderTextOutput(state, leadingSymbol, trailingSymbol, options, figures);
+	const errorMsg = renderTextError(state, figures.pointerSmall, figures);
+	const cursorWidth = options.type === "password" ? figures.passwordMask.length : 1;
+	const offset = (state.cursor - state.value.length) * cursorWidth;
+	return promptMsg + errorMsg + cursorMove(offset);
+});
+const renderTextSubmission = /*#__PURE__*/ fnUntraced(function* (state, options) {
+	const figures = yield* getTheme(options);
+	const leadingSymbol = annotateSymbol(figures.tick, figures.successColor);
+	const trailingSymbol = annotateSymbol(figures.ellipsis, figures.mutedColor);
+	return renderTextOutput(state, leadingSymbol, trailingSymbol, options, figures, void 0, true) + "\n";
+});
+const processTextBackspace = (state) => {
+	if (state.cursor <= 0) return succeed$2(Action$1.Beep());
+	const beforeCursor = state.value.slice(0, state.cursor - 1);
+	const afterCursor = state.value.slice(state.cursor);
+	const cursor = state.cursor - 1;
+	const value = `${beforeCursor}${afterCursor}`;
+	return succeed$2(Action$1.NextFrame({ state: {
+		...state,
+		cursor,
+		value,
+		error: none()
+	} }));
+};
+const processTextClear = (state) => succeed$2(Action$1.NextFrame({ state: {
+	...state,
+	cursor: 0,
+	value: "",
+	error: none()
+} }));
+const processTextCursorLeft = (state) => {
+	if (state.cursor <= 0) return succeed$2(Action$1.Beep());
+	const cursor = state.cursor - 1;
+	return succeed$2(Action$1.NextFrame({ state: {
+		...state,
+		cursor,
+		error: none()
+	} }));
+};
+const processTextCursorRight = (state) => {
+	if (state.cursor >= state.value.length) return succeed$2(Action$1.Beep());
+	const cursor = Math.min(state.cursor + 1, state.value.length);
+	return succeed$2(Action$1.NextFrame({ state: {
+		...state,
+		cursor,
+		error: none()
+	} }));
+};
+const processTextCursorStart = (state) => succeed$2(Action$1.NextFrame({ state: {
+	...state,
+	cursor: 0,
+	error: none()
+} }));
+const processTextCursorEnd = (state) => succeed$2(Action$1.NextFrame({ state: {
+	...state,
+	cursor: state.value.length,
+	error: none()
+} }));
+const processTab = (state, options) => {
+	if (state.value === options.default) return succeed$2(Action$1.Beep());
+	const value = state.value.length === 0 ? options.default : state.value;
+	return succeed$2(Action$1.NextFrame({ state: {
+		...state,
+		value,
+		cursor: value.length,
+		error: none()
+	} }));
+};
+const defaultTextProcessor = (input, state) => {
+	const value = `${state.value.slice(0, state.cursor)}${input}${state.value.slice(state.cursor)}`;
+	const cursor = state.cursor + input.length;
+	return succeed$2(Action$1.NextFrame({ state: {
+		...state,
+		cursor,
+		value,
+		error: none()
+	} }));
+};
+const handleTextRender = (options) => {
+	return (state, action) => {
+		return Action$1.$match(action, {
+			Beep: () => succeed$2(renderBeep),
+			NextFrame: ({ state }) => renderTextNextFrame(state, options),
+			Submit: () => renderTextSubmission(state, options)
+		});
+	};
+};
+const handleTextProcess = (options) => {
+	return (input, state) => {
+		if (input.key.ctrl) switch (input.key.name) {
+			case "u": return processTextClear(state);
+			case "a": return processTextCursorStart(state);
+			case "e": return processTextCursorEnd(state);
+			default: return succeed$2(Action$1.Beep());
+		}
+		switch (input.key.name) {
+			case "backspace": return processTextBackspace(state);
+			case "left": return processTextCursorLeft(state);
+			case "right": return processTextCursorRight(state);
+			case "home": return processTextCursorStart(state);
+			case "end": return processTextCursorEnd(state);
+			case "enter":
+			case "return": {
+				const value = state.value;
+				return match(options.validate(value), {
+					onFailure: (error) => Action$1.NextFrame({ state: {
+						...state,
+						value,
+						error: some(error)
+					} }),
+					onSuccess: (value) => Action$1.Submit({ value })
+				});
+			}
+			case "tab": return processTab(state, options);
+			default: return defaultTextProcessor(getOrElse(input.input, () => ""), state);
+		}
+	};
+};
+const handleTextClear = (options) => {
+	return (state, _) => {
+		return renderClearScreen(state, options);
+	};
+};
+const basePrompt = (options, type) => {
+	const opts = {
+		default: "",
+		type,
+		validate: succeed$2,
+		...options
+	};
+	const initialState = {
+		cursor: opts.default.length,
+		value: opts.default,
+		error: none()
+	};
+	return Custom(initialState, {
+		render: handleTextRender(opts),
+		process: handleTextProcess(opts),
+		clear: handleTextClear(opts)
+	});
+};
+const handleToggleClear = /*#__PURE__*/ fnUntraced(function* (options) {
+	const columns = yield* (yield* Terminal).columns;
+	const figures = yield* getTheme(options);
+	const clearPrompt = eraseLine + cursorLeft;
+	const toggleText = options.active + " " + separateSymbol(figures.toggleSeparator, options.inactive);
+	const promptText = renderPrompt(toggleText, options.message, figures.prefix, figures.pointerSmall, { plain: true });
+	return eraseText(promptText, columns) + clearPrompt;
+});
+const renderToggle = (value, options, theme, submitted = false) => {
+	const separator = annotateSymbol(theme.toggleSeparator, theme.mutedColor);
+	const selectedAnnotation = combine(underlined, submitted ? theme.submittedColor : theme.primaryColor);
+	const inactive = value ? options.inactive : annotate(options.inactive, selectedAnnotation);
+	return (value ? annotate(options.active, selectedAnnotation) : options.active) + " " + separateSymbol(separator, inactive);
+};
+const renderToggleOutput = (toggle, leadingSymbol, trailingSymbol, options) => {
+	return renderPrompt(toggle, options.message, leadingSymbol, trailingSymbol);
+};
+const renderToggleNextFrame = /*#__PURE__*/ fnUntraced(function* (state, options) {
+	const figures = yield* getTheme(options);
+	const leadingSymbol = annotateSymbol(figures.prefix, figures.primaryColor);
+	const trailingSymbol = annotateSymbol(figures.pointerSmall, figures.mutedColor);
+	const toggle = renderToggle(state, options, figures);
+	const promptMsg = renderToggleOutput(toggle, leadingSymbol, trailingSymbol, options);
+	return cursorHide + promptMsg;
+});
+const renderToggleSubmission = /*#__PURE__*/ fnUntraced(function* (value, options) {
+	const figures = yield* getTheme(options);
+	const leadingSymbol = annotateSymbol(figures.tick, figures.successColor);
+	const trailingSymbol = annotateSymbol(figures.ellipsis, figures.mutedColor);
+	const toggle = renderToggle(value, options, figures, true);
+	return renderToggleOutput(toggle, leadingSymbol, trailingSymbol, options) + "\n";
+});
+const activate = /*#__PURE__*/ succeed$2(/*#__PURE__*/ Action$1.NextFrame({ state: true }));
+const deactivate = /*#__PURE__*/ succeed$2(/*#__PURE__*/ Action$1.NextFrame({ state: false }));
+const handleToggleRender = (options) => {
+	return (state, action) => {
+		switch (action._tag) {
+			case "Beep": return succeed$2(renderBeep);
+			case "NextFrame": return renderToggleNextFrame(state, options);
+			case "Submit": return renderToggleSubmission(state, options);
+		}
+	};
+};
+const handleToggleProcess = (input, state) => {
+	switch (input.key.name) {
+		case "0":
+		case "j":
+		case "delete":
+		case "right":
+		case "down": return deactivate;
+		case "1":
+		case "k":
+		case "left":
+		case "up": return activate;
+		case " ":
+		case "tab": return state ? deactivate : activate;
+		case "enter":
+		case "return": return succeed$2(Action$1.Submit({ value: state }));
+		default: return succeed$2(Action$1.Beep());
+	}
+};
+const entriesToDisplay = (cursor, total, maxVisible) => {
+	const max = maxVisible === void 0 ? total : maxVisible;
+	let startIndex = Math.min(total - max, cursor - Math.floor(max / 2));
+	if (startIndex < 0) startIndex = 0;
+	const endIndex = Math.min(startIndex + max, total);
+	return {
+		startIndex,
+		endIndex
+	};
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/Param.js
+const TypeId$2 = "~effect/cli/Param";
+/**
+* Defines the kind discriminator for positional argument parameters.
+*
+* **When to use**
+*
+* Use to build low-level `Param` constructors or type positions for positional
+* argument parameters.
+*
+* @see {@link flagKind} for the named flag parameter discriminator
+* @see {@link ParamKind} for the full parameter kind union
+*
+* @stability unstable
+* @category constants
+* @since 4.0.0
+*/
+const argumentKind = "argument";
+/**
+* Defines the kind discriminator for flag parameters.
+*
+* **When to use**
+*
+* Use to build low-level `Param` constructors or type positions for named flag
+* parameters.
+*
+* @see {@link argumentKind} for the positional argument parameter discriminator
+*
+* @stability unstable
+* @category constants
+* @since 4.0.0
+*/
+const flagKind = "flag";
+const Proto$2 = {
+	[TypeId$2]: { _A: identity },
+	pipe() {
+		return pipeArguments(this, arguments);
+	}
+};
+/**
+* Type guard to check if a value is a Param.
+*
+* **Example** (Checking for params)
+*
+* ```ts import.meta.vitest
+* import { Param } from "effect/cli"
+*
+* const maybeParam = Param.String(Param.flagKind, "name")
+*
+* Param.isParam(maybeParam) // => true
+* ```
+*
+* @stability unstable
+* @category guards
+* @since 4.0.0
+*/
+const isParam = (u) => hasProperty(u, TypeId$2);
+/**
+* Type guard to check if a Single param is a flag (not an argument).
+*
+* @internal
+*/
+const isFlagParam = (single) => single.kind === "flag";
+/**
+* Constructs a leaf `Single` parameter from its kind, name, primitive parser,
+* and optional help metadata.
+*
+* **Details**
+*
+* The returned parser reads either one positional argument or the named flag,
+* depending on `kind`.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const makeSingle = (params) => {
+	const parse = (args) => params.kind === "argument" ? parsePositional(params.name, params.primitiveType, args) : parseFlag(params.name, params.primitiveType, args);
+	return Object.setPrototypeOf({
+		_tag: "Single",
+		...params,
+		description: params.description ?? none(),
+		aliases: params.aliases ?? [],
+		hidden: params.hidden ?? false,
+		parse
+	}, Proto$2);
+};
+/**
+* Creates a string parameter.
+*
+* **Example** (Creating string parameters)
+*
+* ```ts import.meta.vitest
+* import { Param } from "effect/cli"
+*
+* // Create a string flag
+* const nameFlag = Param.String(Param.flagKind, "name")
+*
+* // Create a string argument
+* const fileArg = Param.String(Param.argumentKind, "file")
+*
+* // Usage in CLI: --name "John Doe" or as positional argument
+* const kinds = [nameFlag.kind, fileArg.kind] // => ["flag", "argument"]
+* ```
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const String$2 = (kind, name) => makeSingle({
+	name,
+	primitiveType: String$4,
+	kind
+});
+/**
+* Creates a boolean parameter.
+*
+* **Example** (Creating boolean parameters)
+*
+* ```ts import.meta.vitest
+* import { Param } from "effect/cli"
+*
+* // Create a boolean flag
+* const verboseFlag = Param.Boolean(Param.flagKind, "verbose")
+*
+* // Create a boolean argument
+* const enableArg = Param.Boolean(Param.argumentKind, "enable")
+*
+* // Usage in CLI: --verbose (true) or --no-verbose (false).
+* // The flag is required unless made optional or given a fallback.
+* // Boolean positional arguments accept true/false.
+* const kinds = [verboseFlag.kind, enableArg.kind] // => ["flag", "argument"]
+* ```
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Boolean$2 = (kind, name) => makeSingle({
+	name,
+	primitiveType: Boolean$3,
+	kind
+});
+/**
+* Constructs command-line params that represent a choice between several
+* inputs. The input will be mapped to it's associated value during parsing.
+*
+* **Example** (Creating valued choices)
+*
+* ```ts import.meta.vitest
+* import { Param } from "effect/cli"
+*
+* type Animal = Dog | Cat
+*
+* interface Dog {
+*   readonly _tag: "Dog"
+* }
+*
+* interface Cat {
+*   readonly _tag: "Cat"
+* }
+*
+* const animal = Param.ChoiceWithValue(Param.flagKind, "animal", [
+*   ["dog", { _tag: "Dog" }],
+*   ["cat", { _tag: "Cat" }]
+* ])
+* animal.kind // => "flag"
+* ```
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const ChoiceWithValue$1 = (kind, name, choices) => makeSingle({
+	name,
+	primitiveType: Choice(choices),
+	kind
+});
+/**
+* Constructs command-line params that represent a choice between several
+* string inputs.
+*
+* **Example** (Creating string choices)
+*
+* ```ts import.meta.vitest
+* import { Param } from "effect/cli"
+*
+* const logLevel = Param.Literals(Param.flagKind, "log-level", [
+*   "debug",
+*   "info",
+*   "warn",
+*   "error"
+* ])
+* logLevel.kind // => "flag"
+* ```
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Literals$2 = (kind, name, choices) => {
+	const mappedChoices = choices.map((value) => [value, value]);
+	return ChoiceWithValue$1(kind, name, mappedChoices);
+};
+const FLAG_DASH_REGEXP = /^-+/;
+/**
+* Adds an alias to an option.
+*
+* **When to use**
+*
+* Use when you need a CLI parameter to accept an alternate name, such as "-f"
+* for "--force".
+*
+* **Details**
+*
+* This works on any param structure by recursively finding the underlying
+* `Single` node and applying the alias there.
+*
+* **Example** (Adding parameter aliases)
+*
+* ```ts import.meta.vitest
+* import { Param } from "effect/cli"
+*
+* const force = Param.Boolean(Param.flagKind, "force").pipe(
+*   Param.withAlias("-f"),
+*   Param.withAlias("-F")
+* )
+*
+* // Also works on composed params:
+* const count = Param.Int(Param.flagKind, "count").pipe(
+*   Param.optional,
+*   Param.withAlias("-c") // finds the underlying Single and adds alias
+* )
+* const kinds = [force.kind, count.kind] // => ["flag", "flag"]
+* ```
+*
+* @stability unstable
+* @category combinators
+* @since 4.0.0
+*/
+const withAlias$1 = /*#__PURE__*/ dual(2, (self, alias) => {
+	return transformSingle(self, (single) => makeSingle({
+		...single,
+		aliases: [...single.aliases, alias.replace(FLAG_DASH_REGEXP, "")]
+	}));
+});
+/**
+* Adds a description to an option for help text.
+*
+* **Details**
+*
+* Descriptions provide users with information about what the option does
+* when they view help documentation.
+*
+* **Example** (Adding help descriptions)
+*
+* ```ts import.meta.vitest
+* import { Param } from "effect/cli"
+*
+* const verbose = Param.Boolean(Param.flagKind, "verbose").pipe(
+*   Param.withAlias("-v"),
+*   Param.withDescription("Enable verbose output")
+* )
+* verbose.kind // => "flag"
+* ```
+*
+* @stability unstable
+* @category combinators
+* @since 4.0.0
+*/
+const withDescription$3 = /*#__PURE__*/ dual(2, (self, description) => {
+	return transformSingle(self, (single) => makeSingle({
+		...single,
+		description: some(description)
+	}));
+});
+/**
+* Transforms the parsed value of an option using a mapping function.
+*
+* **Example** (Mapping parsed values)
+*
+* ```ts import.meta.vitest
+* import { Param } from "effect/cli"
+*
+* const port = Param.Int(Param.flagKind, "port").pipe(
+*   Param.map((n) => ({ port: n, url: `http://localhost:${n}` }))
+* )
+* port.kind // => "flag"
+* ```
+*
+* @stability unstable
+* @category combinators
+* @since 4.0.0
+*/
+const map$1 = /*#__PURE__*/ dual(2, (self, f) => {
+	const parse = (args) => map$5(self.parse(args), ([operands, value]) => [operands, f(value)]);
+	return Object.assign(Object.create(Proto$2), {
+		_tag: "Map",
+		kind: self.kind,
+		param: self,
+		f,
+		parse
+	});
+});
+const transform = (self, f, alternatives = []) => {
+	const alternativeParsers = alternatives.map((alternative) => () => alternative().parse);
+	return Object.assign(Object.create(Proto$2), {
+		_tag: "Transform",
+		kind: self.kind,
+		param: self,
+		alternatives,
+		f,
+		parse: f(self.parse, alternativeParsers)
+	});
+};
+/**
+* Transforms the parsed value of an option using an effectful mapping function.
+*
+* **Example** (Mapping parsed values effectfully)
+*
+* ```ts import.meta.vitest
+* import { Effect, FileSystem, Layer, Path, Stdio, Terminal } from "effect"
+* import { CliError, Param } from "effect/cli"
+* import { ChildProcessSpawner } from "effect/process"
+*
+* const CliTestLayer = Layer.mergeAll(
+*   FileSystem.layerNoop({}),
+*   Path.layer,
+*   Stdio.layerTest({}),
+*   Layer.succeed(Terminal.Terminal, Terminal.make({
+*     columns: Effect.succeed(80),
+*     rows: Effect.succeed(24),
+*     readInput: Effect.die("unused"),
+*     readLine: Effect.die("unused"),
+*     display: () => Effect.void
+*   })),
+*   Layer.succeed(
+*     ChildProcessSpawner.ChildProcessSpawner,
+*     ChildProcessSpawner.make(() => Effect.die("unused"))
+*   )
+* )
+*
+* const validatedEmail = Param.String(Param.flagKind, "email").pipe(
+*   Param.mapEffect((email) =>
+*     email.includes("@")
+*       ? Effect.succeed(email)
+*       : Effect.fail(
+*         new CliError.InvalidValue({
+*           option: "email",
+*           value: email,
+*           expected: "valid email format",
+*           kind: "flag"
+*         })
+*       )
+*   )
+* )
+*
+* const [, value] = await Effect.runPromise(
+*   validatedEmail.parse({
+*     arguments: [],
+*     flags: { email: ["alice@example.com"] }
+*   }).pipe(Effect.provide(CliTestLayer))
+* )
+* value // => "alice@example.com"
+* ```
+*
+* @stability unstable
+* @category combinators
+* @since 4.0.0
+*/
+const mapEffect = /*#__PURE__*/ dual(2, (self, f) => transform(self, (parse) => (args) => flatMap$1(parse(args), ([leftover, a]) => f(a).pipe(map$5((b) => [leftover, b])))));
+/**
+* Makes a flag or positional argument optional.
+*
+* **Details**
+*
+* When the parameter is absent, parsing succeeds with `Option.none()` instead
+* of failing with a missing option or missing argument error. When present, the
+* parsed value is wrapped in `Option.some()`.
+*
+* **Example** (Making parameters optional)
+*
+* ```ts import.meta.vitest
+* import { Param } from "effect/cli"
+*
+* // Create an optional port option
+* // - When not provided: returns Option.none()
+* // - When provided: returns Option.some(parsedValue)
+* const port = Param.optional(Param.Int(Param.flagKind, "port"))
+* port.kind // => "flag"
+* ```
+*
+* @stability unstable
+* @category combinators
+* @since 4.0.0
+*/
+const optional$1 = (param) => {
+	const parse = (args) => param.parse(args).pipe(map$5(([leftover, value]) => [leftover, some(value)]), catchTags({
+		MissingOption: () => succeed$2([args.arguments, none()]),
+		MissingArgument: () => succeed$2([args.arguments, none()])
+	}));
+	return Object.assign(Object.create(Proto$2), {
+		_tag: "Optional",
+		kind: param.kind,
+		param,
+		parse
+	});
+};
+/**
+* Makes a flag or positional argument optional by supplying a fallback value.
+*
+* **Details**
+*
+* The fallback may be a pure value or an effect. It is used only when the
+* parameter is absent; provided values are parsed normally.
+*
+* **Example** (Providing default values)
+*
+* ```ts import.meta.vitest
+* import { Param } from "effect/cli"
+*
+* // Using the pipe operator to make an option optional
+* const port = Param.Int(Param.flagKind, "port").pipe(
+*   Param.withDefault(8080)
+* )
+*
+* // Can also be used with other combinators
+* const verbose = Param.Boolean(Param.flagKind, "verbose").pipe(
+*   Param.withAlias("-v"),
+*   Param.withDescription("Enable verbose output"),
+*   Param.withDefault(false)
+* )
+* const kinds = [port.kind, verbose.kind] // => ["flag", "flag"]
+* ```
+*
+* @stability unstable
+* @category combinators
+* @since 4.0.0
+*/
+const withDefault$1 = /*#__PURE__*/ dual(2, (self, defaultValue) => {
+	if (!isEffect(defaultValue)) return map$1(optional$1(self), getOrElse(() => defaultValue));
+	return mapEffect(optional$1(self), match$5({
+		onNone: () => defaultValue,
+		onSome: succeed$2
+	}));
+});
+/**
+* Creates a variadic parameter that can be specified multiple times.
+*
+* **Details**
+*
+* This is the base combinator for creating parameters that accept multiple values.
+* The `min` and `max` parameters are optional. When they are not provided, the
+* parameter can be specified any number of times, from 0 to infinity.
+*
+* **Example** (Accepting multiple values)
+*
+* ```ts import.meta.vitest
+* import { Param } from "effect/cli"
+*
+* // Basic variadic parameter (0 to infinity)
+* const tags = Param.variadic(Param.String(Param.flagKind, "tag"))
+*
+* // Variadic with minimum count
+* const inputs = Param.variadic(
+*   Param.String(Param.flagKind, "input"),
+*   { min: 1 } // at least 1 required
+* )
+*
+* // Variadic with both min and max
+* const limited = Param.variadic(Param.String(Param.flagKind, "item"), {
+*   min: 2, // at least 2 times
+*   max: 2 // at most 2 times
+* })
+* const kinds = [tags.kind, inputs.kind, limited.kind] // => ["flag", "flag", "flag"]
+* ```
+*
+* @stability unstable
+* @category combinators
+* @since 4.0.0
+*/
+const variadic = (self, options) => {
+	const single = getUnderlyingSingleOrThrow(self);
+	const parse = (args) => {
+		if (single.kind === "argument") return parsePositionalVariadic(self, single, args, options);
+		else return parseOptionVariadic(self, single, args, options);
+	};
+	return Object.assign(Object.create(Proto$2), {
+		_tag: "Variadic",
+		kind: self.kind,
+		param: self,
+		min: fromUndefinedOr(options?.min),
+		max: fromUndefinedOr(options?.max),
+		parse
+	});
+};
+/**
+* Sets a custom metavar (placeholder name) for the param in help documentation.
+*
+* **Details**
+*
+* The metavar is displayed in usage text to indicate what value the user should provide.
+* For example, `--output FILE` shows `FILE` as the metavar.
+*
+* **Example** (Setting metavars)
+*
+* ```ts import.meta.vitest
+* import { Param } from "effect/cli"
+*
+* const port = Param.Int(Param.flagKind, "port").pipe(
+*   Param.withMetavar("PORT"),
+*   Param.filter(
+*     (p) => p >= 1 && p <= 65535,
+*     () => "Port must be between 1 and 65535"
+*   )
+* )
+* port.kind // => "flag"
+* ```
+*
+* @stability unstable
+* @category metadata
+* @since 4.0.0
+*/
+const withMetavar$1 = /*#__PURE__*/ dual(2, (self, metavar) => transformSingle(self, (single) => makeSingle({
+	...single,
+	typeName: metavar
+})));
+const parsePositional = /*#__PURE__*/ fnUntraced(function* (name, primitiveType, args) {
+	if (args.arguments.length === 0) return yield* new MissingArgument({ argument: name });
+	const arg = args.arguments[0];
+	const value = yield* mapError(primitiveType.parse(arg), (error) => new InvalidValue({
+		option: name,
+		value: arg,
+		expected: error,
+		kind: "argument"
+	}));
+	return [args.arguments.slice(1), value];
+});
+const parseFlag = /*#__PURE__*/ fnUntraced(function* (name, primitiveType, args) {
+	const providedValues = args.flags[name];
+	if (providedValues === void 0 || providedValues.length === 0) return yield* new MissingOption({ option: name });
+	const arg = providedValues[0];
+	const value = yield* mapError(primitiveType.parse(arg), (error) => new InvalidValue({
+		option: name,
+		value: arg,
+		expected: error,
+		kind: "flag"
+	}));
+	return [args.arguments, value];
+});
+const parsePositionalVariadic = /*#__PURE__*/ fnUntraced(function* (self, single, args, options) {
+	const results = [];
+	const minValue = options?.min ?? 0;
+	const maxValue = options?.max ?? Number.POSITIVE_INFINITY;
+	let count = 0;
+	let currentArgs = args.arguments;
+	while (currentArgs.length > 0 && count < maxValue) {
+		const [remainingArgs, value] = yield* self.parse({
+			flags: args.flags,
+			arguments: currentArgs
+		});
+		results.push(value);
+		currentArgs = remainingArgs;
+		count++;
+	}
+	if (count < minValue) return yield* count === 0 ? new MissingArgument({ argument: single.name }) : new InvalidValue({
+		option: single.name,
+		value: `${count} values`,
+		expected: `at least ${minValue} value${minValue === 1 ? "" : "s"}`,
+		kind: single.kind
+	});
+	return [currentArgs, results];
+});
+const parseOptionVariadic = /*#__PURE__*/ fnUntraced(function* (self, single, args, options) {
+	const results = [];
+	const values = [single.name, ...single.aliases].flatMap((name) => args.flags[name] ?? []);
+	const count = values.length;
+	if (isNotUndefined(options?.min) && count < options.min) return yield* count === 0 ? new MissingOption({ option: single.name }) : new InvalidValue({
+		option: single.name,
+		value: `${count} occurrences`,
+		expected: `at least ${options.min} value${options.min === 1 ? "" : "s"}`,
+		kind: single.kind
+	});
+	if (isNotUndefined(options?.max) && count > options.max) return yield* new InvalidValue({
+		option: single.name,
+		value: `${count} occurrences`,
+		expected: `at most ${options.max} value${options.max === 1 ? "" : "s"}`,
+		kind: single.kind
+	});
+	for (const value of values) {
+		const [, parsedValue] = yield* self.parse({
+			flags: { [single.name]: [value] },
+			arguments: []
+		});
+		results.push(parsedValue);
+	}
+	return [args.arguments, results];
+});
+/**
+* Type-safe param matcher that handles the unsafe casting internally.
+* This provides a clean API for pattern matching on param types while
+* maintaining type safety at the call site.
+*/
+const matchParam = (param, patterns) => {
+	const p = param;
+	switch (p._tag) {
+		case "Single": return patterns.Single(p);
+		case "Map": return patterns.Map(p);
+		case "Transform": return patterns.Transform(p);
+		case "Optional": return patterns.Optional(p);
+		case "Variadic": return patterns.Variadic(p);
+	}
+};
+/**
+* Recursively transforms a param by applying a function to any `Single` nodes.
+* This is used internally by combinators like `withAlias` to traverse the param tree.
+*/
+const transformSingle = (param, f) => {
+	return matchParam(param, {
+		Single: (single) => f(single),
+		Map: (mapped) => map$1(transformSingle(mapped.param, f), mapped.f),
+		Transform: (mapped) => transform(transformSingle(mapped.param, f), mapped.f, mapped.alternatives.map((alternative) => () => transformSingle(alternative(), f))),
+		Optional: (p) => optional$1(transformSingle(p.param, f)),
+		Variadic: (p) => variadic(transformSingle(p.param, f), {
+			min: getOrUndefined$1(p.min),
+			max: getOrUndefined$1(p.max)
+		})
+	});
+};
+/**
+* Extracts all Single params from a potentially nested param structure.
+* This handles all param combinators including Map, Transform, Optional, and Variadic.
+*
+* @internal
+*/
+const extractSingleParams = (param) => {
+	return matchParam(param, {
+		Single: (single) => [single],
+		Map: (mapped) => extractSingleParams(mapped.param),
+		Transform: (mapped) => [...extractSingleParams(mapped.param), ...mapped.alternatives.flatMap((alternative) => extractSingleParams(alternative()))],
+		Optional: (optional) => extractSingleParams(optional.param),
+		Variadic: (variadic) => extractSingleParams(variadic.param)
+	});
+};
+/**
+* Gets the underlying Single param from a potentially nested param structure.
+* Throws an error if there are no singles or multiple singles found.
+*
+* @internal
+*/
+const getUnderlyingSingleOrThrow = (param) => {
+	const singles = extractSingleParams(param);
+	if (singles.length === 0) throw new Error("No Single param found in param structure");
+	if (singles.length > 1) throw new Error(`Multiple Single params found: ${singles.map((s) => s.name).join(", ")}`);
+	return singles[0];
+};
+/**
+* Gets param metadata by traversing the structure.
+*
+* @internal
+*/
+const getParamMetadata = (param) => {
+	return matchParam(param, {
+		Single: () => ({
+			isOptional: false,
+			isVariadic: false,
+			variadicMin: none(),
+			variadicMax: none()
+		}),
+		Map: (mapped) => getParamMetadata(mapped.param),
+		Transform: (mapped) => getParamMetadata(mapped.param),
+		Optional: (optional) => ({
+			...getParamMetadata(optional.param),
+			isOptional: true
+		}),
+		Variadic: (variadic) => ({
+			...getParamMetadata(variadic.param),
+			isVariadic: true,
+			variadicMin: variadic.min,
+			variadicMax: variadic.max
+		})
+	});
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/Argument.js
+/**
+* Creates a positional choice argument.
+*
+* **Example** (Creating a choice argument)
+*
+* ```ts import.meta.vitest
+* import { Argument } from "effect/cli"
+*
+* const environment = Argument.Literals("environment", ["dev", "staging", "prod"])
+* environment.kind // => "argument"
+* ```
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Literals$1 = (name, choices) => Literals$2(argumentKind, name, choices);
+/**
+* Adds a description to a positional argument.
+*
+* **Example** (Adding an argument description)
+*
+* ```ts import.meta.vitest
+* import { Argument } from "effect/cli"
+*
+* const filename = Argument.String("filename").pipe(
+*   Argument.withDescription("The input file to process")
+* )
+* filename.kind // => "argument"
+* ```
+*
+* @stability unstable
+* @category combinators
+* @since 4.0.0
+*/
+const withDescription$2 = /*#__PURE__*/ dual(2, (self, description) => withDescription$3(self, description));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/CliOutput.js
+/**
+* Formats CLI help and errors as text.
+*
+* This module turns help documents, CLI errors, grouped errors, and version
+* information into strings. It does not write those strings to the terminal
+* itself. It includes the `Formatter` interface, the formatter service, a layer
+* for custom formatters, and the default formatter with configurable color
+* support.
+*
+* @stability unstable
+* @since 4.0.0
+*/
+/**
+* Service reference for the CLI output formatter. Provides a default implementation
+* that can be overridden for custom formatting or testing.
+*
+* **Example** (Accessing the output formatter)
+*
+* ```ts import.meta.vitest
+* import { Effect } from "effect"
+* import { CliOutput } from "effect/cli"
+*
+* // Access the formatter service
+* const program = Effect.gen(function*() {
+*   const formatter = yield* CliOutput.Formatter
+*
+*   // Format version information
+*   return formatter.formatVersion("my-cli", "2.1.0")
+* })
+*
+* // Run with default formatter
+* await Effect.runPromise(program.pipe(
+*   Effect.provide(CliOutput.layer(CliOutput.defaultFormatter({ colors: false })))
+* )) // => "my-cli v2.1.0"
+* ```
+*
+* @stability unstable
+* @category services
+* @since 4.0.0
+*/
+const Formatter = /*#__PURE__*/ Reference("effect/cli/CliOutput", { defaultValue: () => defaultFormatter() });
+const escapeControlCharacters = (text) => text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, (character) => `\\x${character.charCodeAt(0).toString(16).padStart(2, "0")}`);
+/**
+* Creates a default formatter with configurable options.
+*
+* **Example** (Creating default formatters)
+*
+* ```ts import.meta.vitest
+* import { CliError, CliOutput } from "effect/cli"
+*
+* // Create a formatter without colors for tests or CI environments
+* const noColorFormatter = CliOutput.defaultFormatter({ colors: false })
+*
+* // Create a formatter with colors forced on
+* const colorFormatter = CliOutput.defaultFormatter({ colors: true })
+*
+* // Auto-detect colors based on terminal support (default behavior)
+* const autoFormatter = CliOutput.defaultFormatter()
+*
+* const error = new CliError.InvalidValue({
+*   option: "foo",
+*   value: "bar",
+*   expected: "baz",
+*   kind: "flag"
+* })
+*
+* noColorFormatter.formatError(error).includes("Invalid value") // => true
+* colorFormatter.formatVersion("my-tool", "1.2.3").includes("my-tool") // => true
+* autoFormatter.formatVersion("my-tool", "1.2.3").includes("1.2.3") // => true
+* ```
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const defaultFormatter = (options) => {
+	const globalProcess = globalThis.process;
+	const hasProcess = typeof globalProcess === "object" && globalProcess !== null;
+	const useColor = options?.colors !== void 0 ? options.colors : hasProcess && typeof globalProcess.stdout === "object" && globalProcess.stdout !== null && globalProcess.stdout.isTTY === true && !globalProcess.env?.NO_COLOR;
+	const colors = useColor ? {
+		bold: (text) => `\x1b[1m${text}\x1b[0m`,
+		dim: (text) => `\x1b[2m${text}\x1b[0m`,
+		cyan: (text) => `\x1b[36m${text}\x1b[0m`,
+		green: (text) => `\x1b[32m${text}\x1b[0m`,
+		blue: (text) => `\x1b[34m${text}\x1b[0m`,
+		yellow: (text) => `\x1b[33m${text}\x1b[0m`,
+		magenta: (text) => `\x1b[35m${text}\x1b[0m`
+	} : {
+		bold: (text) => text,
+		dim: (text) => text,
+		cyan: (text) => text,
+		green: (text) => text,
+		blue: (text) => text,
+		yellow: (text) => text,
+		magenta: (text) => text
+	};
+	const reset = useColor ? "\x1B[0m" : "";
+	const red = useColor ? "\x1B[31m" : "";
+	const bold = useColor ? "\x1B[1m" : "";
+	return {
+		formatHelpDoc: (doc) => formatHelpDocImpl(doc, colors),
+		formatCliError: (error) => escapeControlCharacters(error.message),
+		formatError: (error) => {
+			return `\n${bold}${red}ERROR${reset}\n  ${escapeControlCharacters(error.message)}${reset}`;
+		},
+		formatErrors: (errors) => {
+			if (errors.length === 0) return "";
+			if (errors.length === 1) return `\n${bold}${red}ERROR${reset}\n  ${escapeControlCharacters(errors[0].message)}${reset}`;
+			const grouped = /* @__PURE__ */ new Map();
+			for (const error of errors) {
+				const tag = error._tag ?? "Error";
+				const group = grouped.get(tag) ?? [];
+				group.push(error);
+				grouped.set(tag, group);
+			}
+			const sections = [];
+			sections.push(`\n${bold}${red}ERRORS${reset}`);
+			for (const [, group] of grouped) for (const error of group) sections.push(`  ${escapeControlCharacters(error.message)}${reset}`);
+			return sections.join("\n");
+		},
+		formatVersion: (name, version) => `${colors.bold(name)} ${colors.dim("v")}${colors.bold(version)}`
+	};
+};
+/**
+* Strips ANSI escape codes from a string to calculate visual width.
+* @internal
+*/
+const stripAnsi = (text) => {
+	return text.replace(/\u001B\[[0-9;]*m/g, "");
+};
+/**
+* Gets the terminal display width of a string (excluding ANSI codes).
+* @internal
+*/
+const graphemeSegmenter = /*#__PURE__*/ new Intl.Segmenter(void 0, { granularity: "grapheme" });
+const zeroWidthCodePoints = /[\p{Mark}\p{Control}\p{Default_Ignorable_Code_Point}]/gu;
+const emojiPresentation = /\p{Emoji_Presentation}/u;
+const isFullWidthCodePoint = (codePoint) => {
+	if (codePoint < 4352) return false;
+	return codePoint <= 4447 || codePoint === 9001 || codePoint === 9002 || codePoint >= 11904 && codePoint <= 12350 || codePoint >= 12352 && codePoint <= 42191 || codePoint >= 44032 && codePoint <= 55203 || codePoint >= 63744 && codePoint <= 64255 || codePoint >= 65040 && codePoint <= 65049 || codePoint >= 65072 && codePoint <= 65135 || codePoint >= 65280 && codePoint <= 65376 || codePoint >= 65504 && codePoint <= 65510 || codePoint >= 110592 && codePoint <= 111359 || codePoint >= 127488 && codePoint <= 127569 || codePoint >= 131072 && codePoint <= 262141;
+};
+const graphemeWidth = (grapheme) => {
+	const visible = grapheme.replace(zeroWidthCodePoints, "");
+	if (visible.length === 0) return 0;
+	if (emojiPresentation.test(grapheme) || grapheme.includes("️")) return 2;
+	return isFullWidthCodePoint(visible.codePointAt(0)) ? 2 : 1;
+};
+const visualLength = (text) => {
+	let length = 0;
+	for (const { segment } of graphemeSegmenter.segment(stripAnsi(text))) length += graphemeWidth(segment);
+	return length;
+};
+/**
+* Helper function to pad strings to a specified width.
+* @internal
+*/
+const pad = (s, width) => {
+	const actualLength = visualLength(s);
+	const padding = Math.max(0, width - actualLength);
+	return s + " ".repeat(padding);
+};
+/**
+* Renders a table with aligned columns.
+* @internal
+*/
+const renderTable = (rows, widthCap) => {
+	const maxColumn = Math.max(...rows.map((r) => visualLength(r.left))) + 4;
+	const col = widthCap === void 0 ? maxColumn : Math.min(maxColumn, widthCap);
+	return rows.map(({ left, right }) => `  ${pad(left, Math.max(col, visualLength(left) + 1))}${right}`).join("\n");
+};
+const formatSubcommandName = (name, alias) => alias ? `${name}, ${alias}` : name;
+/**
+* Internal implementation of help formatting that accepts configurable color functions.
+* @internal
+*/
+const formatHelpDocImpl = (doc, colors) => {
+	const sections = [];
+	if (doc.description) {
+		sections.push(colors.bold("DESCRIPTION"));
+		sections.push(`  ${doc.description}`);
+		sections.push("");
+	}
+	sections.push(colors.bold("USAGE"));
+	sections.push(`  ${colors.cyan(doc.usage)}`);
+	sections.push("");
+	if (doc.args && doc.args.length > 0) {
+		sections.push(colors.bold("ARGUMENTS"));
+		const argRows = doc.args.map((arg) => {
+			let name = arg.name;
+			if (arg.variadic) name += "...";
+			const nameType = `${colors.green(name)} ${colors.dim(arg.type)}`;
+			const optionalSuffix = arg.required ? "" : colors.dim(" (optional)");
+			return {
+				left: nameType,
+				right: getOrElse(arg.description, () => "") + optionalSuffix
+			};
+		});
+		sections.push(renderTable(argRows, 25));
+		sections.push("");
+	}
+	if (doc.flags.length > 0) {
+		sections.push(colors.bold("FLAGS"));
+		const flagRows = doc.flags.map((flag) => {
+			const names = [];
+			names.push(colors.green(`--${flag.name}`));
+			for (const alias of flag.aliases) names.push(colors.green(alias));
+			return {
+				left: names.join(", ") + (flag.type !== "boolean" ? ` ${colors.dim(flag.type)}` : ""),
+				right: getOrElse(flag.description, () => "")
+			};
+		});
+		sections.push(renderTable(flagRows));
+		sections.push("");
+	}
+	if (doc.globalFlags && doc.globalFlags.length > 0) {
+		sections.push(colors.bold("GLOBAL FLAGS"));
+		const globalFlagRows = doc.globalFlags.map((flag) => {
+			const names = [];
+			names.push(colors.green(`--${flag.name}`));
+			for (const alias of flag.aliases) names.push(colors.green(alias));
+			return {
+				left: names.join(", ") + (flag.type !== "boolean" ? ` ${colors.dim(flag.type)}` : ""),
+				right: getOrElse(flag.description, () => "")
+			};
+		});
+		sections.push(renderTable(globalFlagRows));
+		sections.push("");
+	}
+	if (doc.subcommands && doc.subcommands.length > 0) {
+		const ungrouped = doc.subcommands.find((group) => group.group === void 0);
+		if (ungrouped) {
+			sections.push(colors.bold("SUBCOMMANDS"));
+			sections.push(renderTable(ungrouped.commands.map((sub) => ({
+				left: colors.cyan(formatSubcommandName(sub.name, sub.alias)),
+				right: sub.shortDescription ?? sub.description
+			})), 20));
+			if (doc.subcommands.length > 1) sections.push("");
+		}
+		for (const group of doc.subcommands) {
+			if (group.group === void 0) continue;
+			sections.push(colors.bold(`${group.group}:`));
+			sections.push(renderTable(group.commands.map((sub) => ({
+				left: colors.cyan(formatSubcommandName(sub.name, sub.alias)),
+				right: sub.shortDescription ?? sub.description
+			})), 20));
+			sections.push("");
+		}
+	}
+	if (doc.examples && doc.examples.length > 0) {
+		sections.push(colors.bold("EXAMPLES"));
+		let first = true;
+		let previousHadDescription = false;
+		for (const example of doc.examples) {
+			if (example.description) {
+				if (!first) sections.push("");
+				sections.push(`  ${colors.dim(`# ${example.description}`)}`);
+			} else if (previousHadDescription) sections.push("");
+			sections.push(`  ${colors.cyan(example.command)}`);
+			first = false;
+			previousHadDescription = !!example.description;
+		}
+		sections.push("");
+	}
+	if (sections[sections.length - 1] === "") sections.pop();
+	return sections.join("\n");
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/internal/completions/bash.js
+const escapeForBash = (s) => s.replace(/'/g, "'\\''");
+const sanitizeFunctionName = (s) => s.replace(/[^a-zA-Z0-9_]/g, "_");
+const flagNamesForWordlist = (flag) => {
+	const names = [`--${flag.name}`];
+	for (const alias of flag.aliases) names.push(alias.length === 1 ? `-${alias}` : `--${alias}`);
+	if (flag.type._tag === "Boolean") names.push(`--no-${flag.name}`);
+	return names;
+};
+/** Emit a Bash 3.2-compatible used-flag filter. */
+const buildFlagGroupDeclarations = (flags, lines) => {
+	if (flags.length === 0) return;
+	const groups = flags.map(flagNamesForWordlist);
+	lines.push(`  local ${groups.map((_, index) => `_used_${index}=""`).join(" ")}`);
+	lines.push(`  for ((i = 1; i < cword; i++)); do`);
+	lines.push(`    case "\${words[i]%%=*}" in`);
+	groups.forEach((forms, index) => {
+		lines.push(`      ${forms.join("|")}) _used_${index}=1 ;;`);
+	});
+	lines.push(`    esac`);
+	lines.push(`  done`);
+	lines.push(`  local _filtered_flags=""`);
+	groups.forEach((forms, index) => {
+		lines.push(`  [[ -n "$_used_${index}" ]] || _filtered_flags+=" ${forms.join(" ")}"`);
+	});
+	lines.push(``);
+};
+/**
+* Complete choices without `compgen -W`, which reparses quoted values. Escape
+* only the portion readline replaces for the active quote context.
+*
+* `!` cannot be escaped inside a user-opened double quote without changing the
+* resulting argument.
+*/
+const choicesHelper = (helperName, lines) => {
+	lines.push(`${helperName}()`);
+	lines.push(`{`);
+	lines.push(`  local _cur="$1" _word="$2"; shift 2`);
+	lines.push(``);
+	lines.push(`  local _head="\${_cur%"$_word"}"`);
+	lines.push(`  local _open=""`);
+	lines.push(`  case "$_head" in`);
+	lines.push(`    *\\') _open="'" ;;`);
+	lines.push(`    *\\") _open='"' ;;`);
+	lines.push(`  esac`);
+	lines.push(``);
+	lines.push(`  local _prefix="$_cur" _committed="$_head"`);
+	lines.push(`  _prefix=\${_prefix//\\\\/}; _prefix=\${_prefix//\\"/}; _prefix=\${_prefix//\\'/}`);
+	lines.push(`  _committed=\${_committed//\\\\/}; _committed=\${_committed//\\"/}; _committed=\${_committed//\\'/}`);
+	lines.push(``);
+	lines.push(`  COMPREPLY=()`);
+	lines.push(`  local _choice _rest _match`);
+	lines.push(`  for _choice in "$@"; do`);
+	lines.push(`    [[ "$_choice" == "$_prefix"* ]] || continue`);
+	lines.push(`    _rest="\${_choice#"$_committed"}"`);
+	lines.push(`    case "$_open" in`);
+	lines.push(`      "'")`);
+	lines.push(`        if [[ "$_head" == "'" ]]; then`);
+	lines.push(`          _match=\${_rest//\\'/\\'\\\\\\'\\'}`);
+	lines.push(`        else`);
+	lines.push(`          [[ "$_rest" == *\\'* ]] && continue`);
+	lines.push(`          _match="$_rest"`);
+	lines.push(`        fi`);
+	lines.push(`        ;;`);
+	lines.push(`      '"')`);
+	lines.push(`        _match="\${_rest//\\\\/\\\\\\\\}"`);
+	lines.push(`        _match="\${_match//\\$/\\\\$}"`);
+	lines.push("        _match=\"${_match//\\`/\\\\\\`}\"");
+	lines.push(`        _match="\${_match//\\"/\\\\\\"}"`);
+	lines.push(`        ;;`);
+	lines.push(`      *)`);
+	lines.push(`        printf -v _match '%q' "$_rest"`);
+	lines.push(`        [[ -z "$_head" && "$_match" == '~'* ]] && _match="\\\\$_match"`);
+	lines.push(`        ;;`);
+	lines.push(`    esac`);
+	lines.push(`    [[ -n "$_open" && "$_match" == *"$_open" ]] && _match+="$_open"`);
+	lines.push(`    COMPREPLY+=("$_match")`);
+	lines.push(`  done`);
+	lines.push(`}`);
+	lines.push(``);
+};
+const choiceCompletion = (helperName, values) => `${helperName} "$cur" "$_comp_word" ${values.map((value) => `'${escapeForBash(value)}'`).join(" ")}`;
+const flagValueCompletion = (type, helperName) => {
+	switch (type._tag) {
+		case "Boolean": return;
+		case "Choice": return choiceCompletion(helperName, type.values);
+		case "Path":
+			if (type.pathType === "directory") return `COMPREPLY=( $(compgen -d -- "$cur") )`;
+			return `COMPREPLY=( $(compgen -f -- "$cur") )`;
+		default: return;
+	}
+};
+const argCompletion = (type, helperName) => {
+	switch (type._tag) {
+		case "Choice": return choiceCompletion(helperName, type.values);
+		case "Path":
+			if (type.pathType === "directory") return `COMPREPLY=( $(compgen -d -- "$cur") )`;
+			return `COMPREPLY=( $(compgen -f -- "$cur") )`;
+		default: return;
+	}
+};
+const generateFunction$1 = (descriptor, parentPath, lines, helperName) => {
+	const currentPath = [...parentPath, descriptor.name];
+	const funcName = `_${currentPath.map(sanitizeFunctionName).join("_")}`;
+	lines.push(`${funcName}()`);
+	lines.push(`{`);
+	lines.push(`  local cur prev words cword i`);
+	lines.push(parentPath.length === 0 ? `  local _command_index=0` : `  local _command_index="$1"`);
+	lines.push(`  _init_completion -n "$COMP_WORDBREAKS" || return`);
+	if (parentPath.length === 0) lines.push(`  local _comp_word="$2"`);
+	lines.push(``);
+	const flagsWithValues = descriptor.flags.filter((f) => f.type._tag !== "Boolean");
+	if (flagsWithValues.length > 0) {
+		lines.push(`  # Flag value completions`);
+		lines.push(`  case "$prev" in`);
+		for (const flag of flagsWithValues) {
+			const longNames = [`--${flag.name}`];
+			for (const alias of flag.aliases) longNames.push(alias.length === 1 ? `-${alias}` : `--${alias}`);
+			const completion = flagValueCompletion(flag.type, helperName);
+			if (completion) {
+				lines.push(`    ${longNames.join("|")})`);
+				lines.push(`      ${completion}`);
+				lines.push(`      return`);
+				lines.push(`      ;;`);
+			}
+		}
+		lines.push(`  esac`);
+		lines.push(``);
+	}
+	if (descriptor.subcommands.length > 0) {
+		lines.push(`  # Subcommand dispatch`);
+		lines.push(`  local cmd _skip_next=0`);
+		lines.push(`  for ((i = _command_index + 1; i < cword; i++)); do`);
+		lines.push(`    if (( _skip_next )); then`);
+		lines.push(`      _skip_next=0`);
+		lines.push(`      continue`);
+		lines.push(`    fi`);
+		lines.push(`    case "\${words[i]}" in`);
+		for (const flag of descriptor.flags) {
+			if (flag.type._tag === "Boolean") continue;
+			const forms = flagNamesForWordlist(flag);
+			lines.push(`      ${forms.join("|")}) _skip_next=1 ;;`);
+			lines.push(`      ${forms.map((form) => `${form}=*`).join("|")}) ;;`);
+		}
+		for (const sub of descriptor.subcommands) {
+			const subFuncName = `_${[...currentPath, sub.name].map(sanitizeFunctionName).join("_")}`;
+			lines.push(`      ${sub.name})`);
+			lines.push(`        ${subFuncName} "$i"`);
+			lines.push(`        return`);
+			lines.push(`        ;;`);
+		}
+		lines.push(`    esac`);
+		lines.push(`  done`);
+		lines.push(``);
+	}
+	buildFlagGroupDeclarations(descriptor.flags, lines);
+	if (descriptor.flags.length > 0 || descriptor.subcommands.length > 0) {
+		lines.push(`  # Complete flags (filtered) and subcommands`);
+		lines.push(`  if [[ "$cur" == -* ]]; then`);
+		if (descriptor.flags.length > 0) lines.push(`    COMPREPLY=( $(compgen -W "$_filtered_flags" -- "$cur") )`);
+		lines.push(`    return`);
+		lines.push(`  fi`);
+		lines.push(``);
+	}
+	const argsWithCompletions = descriptor.arguments.flatMap((argument, index) => {
+		const completion = argCompletion(argument.type, helperName);
+		return completion === void 0 ? [] : [{
+			argument,
+			completion,
+			index
+		}];
+	});
+	if (argsWithCompletions.length > 0) {
+		lines.push(`  # Positional argument completions`);
+		lines.push(`  local _position=0 _skip_next=0 _end_of_options=0`);
+		lines.push(`  for ((i = _command_index + 1; i < cword; i++)); do`);
+		lines.push(`    if (( _skip_next )); then`);
+		lines.push(`      _skip_next=0`);
+		lines.push(`      continue`);
+		lines.push(`    fi`);
+		lines.push(`    if (( _end_of_options )); then`);
+		lines.push(`      ((_position += 1))`);
+		lines.push(`      continue`);
+		lines.push(`    fi`);
+		lines.push(`    case "\${words[i]}" in`);
+		lines.push(`      --) _end_of_options=1 ;;`);
+		for (const flag of descriptor.flags) {
+			const forms = flagNamesForWordlist(flag);
+			if (flag.type._tag === "Boolean") lines.push(`      ${forms.join("|")}) ;;`);
+			else {
+				lines.push(`      ${forms.join("|")}) _skip_next=1 ;;`);
+				lines.push(`      ${forms.map((form) => `${form}=*`).join("|")}) ;;`);
+			}
+		}
+		lines.push(`      -*) ;;`);
+		lines.push(`      *) ((_position += 1)) ;;`);
+		lines.push(`    esac`);
+		lines.push(`  done`);
+		lines.push(`  case "$_position" in`);
+		for (const { argument, completion, index } of argsWithCompletions) {
+			if (argument.variadic) continue;
+			lines.push(`    ${index})`);
+			lines.push(`      ${completion}`);
+			lines.push(`      return`);
+			lines.push(`      ;;`);
+		}
+		lines.push(`  esac`);
+		const variadic = argsWithCompletions.find(({ argument }) => argument.variadic);
+		if (variadic !== void 0) {
+			lines.push(`  if (( _position >= ${variadic.index} )); then`);
+			lines.push(`    ${variadic.completion}`);
+			lines.push(`    return`);
+			lines.push(`  fi`);
+		}
+	} else if (descriptor.subcommands.length > 0) {
+		const subNames = descriptor.subcommands.map((s) => s.name);
+		lines.push(`  COMPREPLY=( $(compgen -W '${subNames.join(" ")}' -- "$cur") )`);
+	}
+	lines.push(`}`);
+	lines.push(``);
+	for (const sub of descriptor.subcommands) generateFunction$1(sub, currentPath, lines, helperName);
+};
+/**
+* @internal
+*/
+const generate$3 = (executableName, descriptor) => {
+	const lines = [];
+	const safeName = sanitizeFunctionName(executableName);
+	const helperName = `_${safeName}--choices`;
+	lines.push(`###-begin-${escapeForBash(executableName)}-completions-###`);
+	lines.push(`#`);
+	lines.push(`# Static completion script for Bash`);
+	lines.push(`#`);
+	lines.push(`# Installation:`);
+	lines.push(`#   ${escapeForBash(executableName)} --completions bash >> ~/.bashrc`);
+	lines.push(`#`);
+	lines.push(``);
+	lines.push(`if ! type _init_completion &>/dev/null; then`);
+	lines.push(`  _init_completion()`);
+	lines.push(`  {`);
+	lines.push(`    COMPREPLY=()`);
+	lines.push(`    local _i _j=0 _piece _line="$COMP_LINE"`);
+	lines.push(`    words=("\${COMP_WORDS[0]}")`);
+	lines.push(`    cword=0`);
+	lines.push(`    _line="\${_line#*"\${COMP_WORDS[0]}"}"`);
+	lines.push(`    for ((_i = 1; _i < \${#COMP_WORDS[@]}; _i++)); do`);
+	lines.push(`      _piece="\${COMP_WORDS[_i]}"`);
+	lines.push(`      if [[ "$_line" == [[:blank:]]* ]]; then`);
+	lines.push(`        ((_j++))`);
+	lines.push(`        words[_j]="$_piece"`);
+	lines.push(`      else`);
+	lines.push(`        words[_j]="\${words[_j]}$_piece"`);
+	lines.push(`      fi`);
+	lines.push(`      ((_i == COMP_CWORD)) && cword=$_j`);
+	lines.push(`      _line="\${_line#*"$_piece"}"`);
+	lines.push(`    done`);
+	lines.push(`    cur="\${words[cword]}"`);
+	lines.push(`    prev=""`);
+	lines.push(`    ((cword > 0)) && prev="\${words[cword-1]}"`);
+	lines.push(`    return 0`);
+	lines.push(`  }`);
+	lines.push(`fi`);
+	lines.push(``);
+	choicesHelper(helperName, lines);
+	generateFunction$1(descriptor, [], lines, helperName);
+	lines.push(`complete -F _${safeName} ${escapeForBash(executableName)}`);
+	lines.push(`###-end-${escapeForBash(executableName)}-completions-###`);
+	return lines.join("\n");
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/internal/completions/fish.js
+const escapeFishString = (s) => s.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+/** Escape choices for Fish's second expansion of `complete -a`. */
+const escapeFishChoice = (s) => escapeFishString(s.replace(/[^A-Za-z0-9_.,/@%+-]/gu, "\\$&"));
+/**
+* Build a Fish condition that checks the current subcommand context.
+*
+* For root-level completions with subcommands: `__fish_use_subcommand`
+* For nested commands: verify the full parent path is active AND none of its
+* child subcommands have been entered yet.
+*/
+const subcommandCondition = (parentPath, childSubcommandNames) => {
+	if (parentPath.length === 0) {
+		if (childSubcommandNames.length > 0) return `__fish_use_subcommand`;
+		return ``;
+	}
+	const parentCondition = parentPath.map((parent) => `__fish_seen_subcommand_from ${parent}`).join("; and ");
+	if (childSubcommandNames.length > 0) return `${parentCondition}; and not __fish_seen_subcommand_from ${childSubcommandNames.join(" ")}`;
+	return parentCondition;
+};
+/**
+* Build a __fish_contains_opt condition that checks whether any form of this
+* flag has already been typed. Returns the condition string without wrapping
+* quotes (the caller adds those).
+*/
+const flagContainsOptCondition = (flag) => {
+	const optArgs = [];
+	for (const alias of flag.aliases) if (alias.length === 1) optArgs.push(`-s ${alias}`);
+	optArgs.push(flag.name);
+	for (const alias of flag.aliases) if (alias.length > 1) optArgs.push(alias);
+	if (flag.type._tag === "Boolean") optArgs.push(`no-${flag.name}`);
+	return `not __fish_contains_opt ${optArgs.join(" ")}`;
+};
+/** Hide used value flags without suppressing their value completions. */
+const valueFlagDedupCondition = (flag) => {
+	const forms = [`--${flag.name}`];
+	for (const alias of flag.aliases) forms.push(alias.length === 1 ? `-${alias}` : `--${alias}`);
+	return `begin; ${flagContainsOptCondition(flag)}; or contains -- (commandline -poc)[-1] ${forms.join(" ")}; end`;
+};
+const flagCompletionArgs = (flag) => {
+	const args = [`-l ${flag.name}`];
+	for (const alias of flag.aliases) if (alias.length === 1) args.push(`-s ${alias}`);
+	else args.push(`-l ${alias}`);
+	if (flag.description) args.push(`-d '${escapeFishString(flag.description)}'`);
+	const valueArgs = flagValueArgs(flag.type);
+	if (valueArgs) args.push(valueArgs);
+	return args;
+};
+const flagValueArgs = (type) => {
+	switch (type._tag) {
+		case "Boolean": return;
+		case "Choice": return `-r -f -a '${type.values.map(escapeFishChoice).join(" ")}'`;
+		case "Path":
+			if (type.pathType === "directory") return `-r -F`;
+			return `-r -F`;
+		default: return `-r -f`;
+	}
+};
+const argValueArgs = (type) => {
+	switch (type._tag) {
+		case "Choice": return `-r -f -a '${type.values.map(escapeFishChoice).join(" ")}'`;
+		case "Path": return `-r -F`;
+		default: return;
+	}
+};
+const generateCompletions = (executableName, descriptor, parentPath, lines) => {
+	const allSubNames = descriptor.subcommands.map((s) => s.name);
+	const condition = subcommandCondition(parentPath, allSubNames);
+	const conditionArg = condition ? `-n '${condition}'` : ``;
+	if (!descriptor.arguments.some((a) => a.type._tag === "Path")) {
+		const parts = [`complete -c ${executableName}`];
+		if (conditionArg) parts.push(conditionArg);
+		parts.push(`-f`);
+		lines.push(parts.join(" "));
+	}
+	for (const sub of descriptor.subcommands) {
+		const parts = [`complete -c ${executableName}`];
+		if (conditionArg) parts.push(conditionArg);
+		parts.push(`-f -a '${escapeFishString(sub.name)}'`);
+		if (sub.description) parts.push(`-d '${escapeFishString(sub.description)}'`);
+		lines.push(parts.join(" "));
+	}
+	for (const flag of descriptor.flags) {
+		const isBoolean = flag.type._tag === "Boolean";
+		const dedup = isBoolean ? flagContainsOptCondition(flag) : valueFlagDedupCondition(flag);
+		const flagCondition = condition ? `${condition}; and ${dedup}` : dedup;
+		const flagCondArg = flagCondition ? `-n '${flagCondition}'` : ``;
+		const parts = [`complete -c ${executableName}`];
+		if (flagCondArg) parts.push(flagCondArg);
+		parts.push(...flagCompletionArgs(flag));
+		lines.push(parts.join(" "));
+		if (isBoolean) {
+			const negParts = [`complete -c ${executableName}`];
+			if (flagCondArg) negParts.push(flagCondArg);
+			negParts.push(`-l no-${flag.name}`);
+			if (flag.description) negParts.push(`-d '${escapeFishString(`Disable ${flag.name}`)}'`);
+			lines.push(negParts.join(" "));
+		}
+	}
+	if (descriptor.flags.length > 0) {
+		const notDash = `not string match -q -- "-*" (commandline -ct)`;
+		const bareBase = condition ? `${condition}; and ${notDash}` : notDash;
+		for (const flag of descriptor.flags) {
+			const bareCondition = `${bareBase}; and ${flagContainsOptCondition(flag)}`;
+			const isBoolean = flag.type._tag === "Boolean";
+			const parts = [`complete -c ${executableName}`];
+			parts.push(`-n '${bareCondition}'`);
+			parts.push(`-f -a '--${flag.name}'`);
+			if (flag.description) parts.push(`-d '${escapeFishString(flag.description)}'`);
+			lines.push(parts.join(" "));
+			if (isBoolean) {
+				const negParts = [`complete -c ${executableName}`];
+				negParts.push(`-n '${bareCondition}'`);
+				negParts.push(`-f -a '--no-${flag.name}'`);
+				if (flag.description) negParts.push(`-d '${escapeFishString(`Disable ${flag.name}`)}'`);
+				lines.push(negParts.join(" "));
+			}
+		}
+	}
+	for (const arg of descriptor.arguments) {
+		const valueArg = argValueArgs(arg.type);
+		if (valueArg) {
+			const parts = [`complete -c ${executableName}`];
+			if (conditionArg) parts.push(conditionArg);
+			parts.push(valueArg);
+			if (arg.description) parts.push(`-d '${escapeFishString(arg.description)}'`);
+			lines.push(parts.join(" "));
+		}
+	}
+	for (const sub of descriptor.subcommands) generateCompletions(executableName, sub, [...parentPath, sub.name], lines);
+};
+/**
+* @internal
+*/
+const generate$2 = (executableName, descriptor) => {
+	const lines = [];
+	lines.push(`###-begin-${executableName}-completions-###`);
+	lines.push(`#`);
+	lines.push(`# Static completion script for Fish`);
+	lines.push(`#`);
+	lines.push(`# Installation:`);
+	lines.push(`#   ${executableName} --completions fish > ~/.config/fish/completions/${executableName}.fish`);
+	lines.push(`#`);
+	lines.push(``);
+	generateCompletions(executableName, descriptor, [], lines);
+	lines.push(``);
+	lines.push(`###-end-${executableName}-completions-###`);
+	return lines.join("\n");
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/internal/completions/zsh.js
+const escapeZsh = (s) => s.replace(/\\/g, "\\\\").replace(/'/g, "'\\''").replace(/:/g, "\\:");
+/** Escape choices for the second parse of a Zsh `_arguments` action. */
+const escapeZshChoice = (s) => s.replace(/[^A-Za-z0-9_.,/@%+-]/gu, "\\$&").replace(/'/g, "'\\''");
+const sanitize = (s) => s.replace(/[^a-zA-Z0-9_]/g, "_");
+/**
+* All forms of a flag (--name, -alias, --no-name) for the exclusion group.
+*/
+const allForms = (flag) => {
+	const forms = [`--${flag.name}`];
+	for (const alias of flag.aliases) forms.push(alias.length === 1 ? `-${alias}` : `--${alias}`);
+	if (flag.type._tag === "Boolean") forms.push(`--no-${flag.name}`);
+	return forms;
+};
+const valueAction = (type) => {
+	switch (type._tag) {
+		case "Boolean": return "";
+		case "Choice": return `:value:(${type.values.map(escapeZshChoice).join(" ")})`;
+		case "Path": return type.pathType === "directory" ? `:directory:_directories` : `:file:_files`;
+		case "Int": return `:integer:`;
+		case "Finite": return `:float:`;
+		case "Date": return `:date:`;
+		default: return `:value:`;
+	}
+};
+const argAction = (type) => {
+	switch (type._tag) {
+		case "Choice": return `(${type.values.map(escapeZshChoice).join(" ")})`;
+		case "Path": return type.pathType === "directory" ? `_directories` : `_files`;
+		default: return ``;
+	}
+};
+/**
+* Produce _arguments optspecs for a single flag. Each spec is a complete,
+* single-quoted string — no brace expansion, no line continuations.
+*/
+const flagSpecs = (flag) => {
+	const specs = [];
+	const desc = flag.description ? `[${escapeZsh(flag.description)}]` : "";
+	const action = valueAction(flag.type);
+	const excl = `(${allForms(flag).join(" ")})`;
+	specs.push(`'${excl}--${flag.name}${desc}${action}'`);
+	for (const alias of flag.aliases) {
+		const prefix = alias.length === 1 ? "-" : "--";
+		specs.push(`'${excl}${prefix}${alias}${desc}${action}'`);
+	}
+	if (flag.type._tag === "Boolean") {
+		const negDesc = flag.description ? `[${escapeZsh(`Disable ${flag.name}`)}]` : "";
+		specs.push(`'${excl}--no-${flag.name}${negDesc}'`);
+	}
+	return specs;
+};
+const argSpec = (arg) => {
+	const desc = arg.description ? escapeZsh(arg.description) : arg.name;
+	const action = argAction(arg.type);
+	return `'${arg.variadic ? "*" : ""}:${desc}:${action}'`;
+};
+const generateFunction = (descriptor, parentPath, lines) => {
+	const currentPath = [...parentPath, descriptor.name];
+	const funcName = `_${currentPath.map(sanitize).join("_")}`;
+	lines.push(`${funcName}() {`);
+	if (descriptor.subcommands.length > 0) {
+		lines.push(`  local context state state_descr line`);
+		lines.push(`  typeset -A opt_args`);
+		lines.push(``);
+		lines.push(`  local -a commands`);
+		lines.push(`  commands=(`);
+		for (const sub of descriptor.subcommands) {
+			const desc = sub.description ? escapeZsh(sub.description) : "";
+			lines.push(`    '${sub.name}:${desc}'`);
+		}
+		lines.push(`  )`);
+		lines.push(``);
+		lines.push(`  local -a specs`);
+		lines.push(`  specs=(`);
+		for (const flag of descriptor.flags) for (const spec of flagSpecs(flag)) lines.push(`    ${spec}`);
+		if (descriptor.arguments.length > 0) {
+			lines.push(`    -`);
+			lines.push(`    parent-arguments`);
+			for (const arg of descriptor.arguments) lines.push(`    ${argSpec(arg)}`);
+			lines.push(`    -`);
+			lines.push(`    subcommands`);
+		}
+		lines.push(`    '1:command:->command'`);
+		lines.push(`    '*::arg:->args'`);
+		lines.push(`  )`);
+		lines.push(``);
+		lines.push(`  _arguments -C "\${specs[@]}"`);
+		lines.push(``);
+		lines.push(`  case "$state" in`);
+		lines.push(`    command)`);
+		lines.push(`      _describe -t commands 'commands' commands`);
+		lines.push(`      ;;`);
+		lines.push(`    args)`);
+		lines.push(`      case "$words[1]" in`);
+		for (const sub of descriptor.subcommands) {
+			const subFunc = `_${[...currentPath, sub.name].map(sanitize).join("_")}`;
+			lines.push(`        ${sub.name})`);
+			lines.push(`          ${subFunc}`);
+			lines.push(`          ;;`);
+		}
+		lines.push(`      esac`);
+		lines.push(`      ;;`);
+		lines.push(`  esac`);
+	} else {
+		const allSpecs = [];
+		for (const flag of descriptor.flags) allSpecs.push(...flagSpecs(flag));
+		for (const arg of descriptor.arguments) allSpecs.push(argSpec(arg));
+		if (allSpecs.length > 0) {
+			lines.push(`  local -a specs`);
+			lines.push(`  specs=(`);
+			for (const spec of allSpecs) lines.push(`    ${spec}`);
+			lines.push(`  )`);
+			lines.push(`  _arguments "\${specs[@]}"`);
+		}
+	}
+	lines.push(`}`);
+	lines.push(``);
+	for (const sub of descriptor.subcommands) generateFunction(sub, currentPath, lines);
+};
+/**
+* @internal
+*/
+const generate$1 = (executableName, descriptor) => {
+	const lines = [];
+	const safeName = sanitize(executableName);
+	lines.push(`#compdef ${executableName}`);
+	lines.push(`###-begin-${executableName}-completions-###`);
+	lines.push(`#`);
+	lines.push(`# Static completion script for Zsh`);
+	lines.push(`#`);
+	lines.push(`# Installation:`);
+	lines.push(`#   ${executableName} --completions zsh > ~/.zsh/completions/_${executableName}`);
+	lines.push(`#   then add ~/.zsh/completions to your fpath`);
+	lines.push(`#`);
+	lines.push(``);
+	generateFunction(descriptor, [], lines);
+	lines.push(`# Handle both direct invocation and autoload`);
+	lines.push(`if [[ "\${zsh_eval_context[-1]}" == "loadautofunc" ]]; then`);
+	lines.push(`  _${safeName} "$@"`);
+	lines.push(`else`);
+	lines.push(`  compdef _${safeName} ${executableName}`);
+	lines.push(`fi`);
+	lines.push(`###-end-${executableName}-completions-###`);
+	return lines.join("\n");
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/Completions.js
+/**
+* The `Completions` module turns a plain description of an Effect CLI command
+* tree into shell completion scripts for Bash, Zsh, and Fish. It is the
+* low-level script generation surface used by the unstable CLI package and by
+* the built-in completions global flag.
+*
+* @stability unstable
+* @since 4.0.0
+*/
+/**
+* Generates a shell completion script for a command descriptor.
+*
+* **When to use**
+*
+* Use when you need an installable completion script from an existing
+* `CommandDescriptor`.
+*
+* **Details**
+*
+* Dispatches by `shell` to Bash, Zsh, or Fish generation and returns a static
+* script string for `executableName`.
+*
+* @see {@link Shell} for supported shell names
+* @see {@link CommandDescriptor} for the command shape used by completion generation
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const generate = (executableName, shell, descriptor) => {
+	switch (shell) {
+		case "bash": return generate$3(executableName, descriptor);
+		case "zsh": return generate$1(executableName, descriptor);
+		case "fish": return generate$2(executableName, descriptor);
+	}
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/Flag.js
+/**
+* Creates a string flag that accepts text input.
+*
+* **Example** (Creating string flags)
+*
+* ```ts import.meta.vitest
+* import { Flag } from "effect/cli"
+*
+* const nameFlag = Flag.String("name")
+* // Usage: --name "John Doe"
+* nameFlag.kind // => "flag"
+* ```
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const String$1 = (name) => String$2(flagKind, name);
+/**
+* Creates a boolean flag that can be enabled or disabled.
+*
+* **Example** (Creating boolean flags)
+*
+* ```ts import.meta.vitest
+* import { Flag } from "effect/cli"
+*
+* const verboseFlag = Flag.Boolean("verbose")
+* // Usage: --verbose (true) or --no-verbose (false)
+* // Omission fails unless the flag is made optional or given a fallback.
+* verboseFlag.kind // => "flag"
+* ```
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Boolean$1 = (name) => Boolean$2(flagKind, name);
+/**
+* Constructs option parameters that represent a choice between several inputs.
+* Each tuple maps a string flag value to an associated typed value.
+*
+* **Example** (Creating flag choices with values)
+*
+* ```ts import.meta.vitest
+* import { Flag } from "effect/cli"
+*
+* // simple enum like choice mapping directly to string union
+* const color = Flag.Literals("color", ["red", "green", "blue"])
+*
+* // choice with custom value mapping
+* const logLevel = Flag.ChoiceWithValue("log-level", [
+*   ["debug", "Debug" as const],
+*   ["info", "Info" as const],
+*   ["error", "Error" as const]
+* ])
+* const kinds = [color.kind, logLevel.kind] // => ["flag", "flag"]
+* ```
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const ChoiceWithValue = (name, choices) => ChoiceWithValue$1(flagKind, name, choices);
+/**
+* Accepts one of the provided strings. An empty array rejects all input.
+*
+* @see {@link ChoiceWithValue} for mapping accepted strings to different typed values
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Literals = (name, literals) => Literals$2(flagKind, name, literals);
+/**
+* Adds an alias to a flag, allowing it to be referenced by multiple names.
+*
+* **Example** (Adding flag aliases)
+*
+* ```ts import.meta.vitest
+* import { Flag } from "effect/cli"
+*
+* // Flag can be used as both --verbose and -v
+* const verboseFlag = Flag.Boolean("verbose").pipe(
+*   Flag.withAlias("v")
+* )
+*
+* // Multiple aliases can be chained
+* const helpFlag = Flag.Boolean("help").pipe(
+*   Flag.withAlias("h"),
+*   Flag.withAlias("?")
+* )
+* const kinds = [verboseFlag.kind, helpFlag.kind] // => ["flag", "flag"]
+* ```
+*
+* @stability unstable
+* @category aliasing
+* @since 4.0.0
+*/
+const withAlias = /*#__PURE__*/ dual(2, (self, alias) => withAlias$1(self, alias));
+/**
+* Adds a description to a flag for help documentation.
+*
+* **Example** (Adding help descriptions)
+*
+* ```ts import.meta.vitest
+* import { Flag } from "effect/cli"
+*
+* const portFlag = Flag.Int("port").pipe(
+*   Flag.withDescription("The port number to listen on")
+* )
+*
+* const configFlag = Flag.File("config").pipe(
+*   Flag.withDescription("Path to the configuration file")
+* )
+* const kinds = [portFlag.kind, configFlag.kind] // => ["flag", "flag"]
+* ```
+*
+* @stability unstable
+* @category metadata
+* @since 4.0.0
+*/
+const withDescription$1 = /*#__PURE__*/ dual(2, (self, description) => withDescription$3(self, description));
+/**
+* Sets a custom metavar (placeholder name) for the flag in help documentation.
+*
+* **Details**
+*
+* The metavar is displayed in usage text to indicate what value the user should
+* provide. For example, `--output FILE` shows `FILE` as the metavar.
+*
+* **Example** (Setting metavars)
+*
+* ```ts import.meta.vitest
+* import { Flag } from "effect/cli"
+*
+* const databaseFlag = Flag.String("database-url").pipe(
+*   Flag.withMetavar("URL"),
+*   Flag.withDescription("Database connection URL")
+* )
+* // In help: --database-url URL
+*
+* const timeoutFlag = Flag.Int("timeout").pipe(
+*   Flag.withMetavar("SECONDS")
+* )
+* // In help: --timeout SECONDS
+* const kinds = [databaseFlag.kind, timeoutFlag.kind] // => ["flag", "flag"]
+* ```
+*
+* @stability unstable
+* @category metadata
+* @since 4.0.0
+*/
+const withMetavar = /*#__PURE__*/ dual(2, (self, metavar) => withMetavar$1(self, metavar));
+/**
+* Makes a flag optional, returning an Option type that can be None if not provided.
+*
+* **Example** (Making flags optional)
+*
+* ```ts import.meta.vitest
+* import { Effect, FileSystem, Layer, Option, Path, Stdio, Terminal } from "effect"
+* import { Flag } from "effect/cli"
+* import { ChildProcessSpawner } from "effect/process"
+*
+* const CliTestLayer = Layer.mergeAll(
+*   FileSystem.layerNoop({}),
+*   Path.layer,
+*   Stdio.layerTest({}),
+*   Layer.succeed(Terminal.Terminal, Terminal.make({
+*     columns: Effect.succeed(80),
+*     rows: Effect.succeed(24),
+*     readInput: Effect.die("unused"),
+*     readLine: Effect.die("unused"),
+*     display: () => Effect.void
+*   })),
+*   Layer.succeed(
+*     ChildProcessSpawner.ChildProcessSpawner,
+*     ChildProcessSpawner.make(() => Effect.die("unused"))
+*   )
+* )
+*
+* const optionalPort = Flag.optional(Flag.Int("port"))
+*
+* const program = Effect.gen(function*() {
+*   const [, port] = yield* optionalPort.parse({
+*     arguments: [],
+*     flags: { "port": ["4000"] }
+*   })
+*   return port
+* })
+*
+* await Effect.runPromise(program.pipe(Effect.provide(CliTestLayer))) // => Option.some(4000)
+* ```
+*
+* @stability unstable
+* @category optionality
+* @since 4.0.0
+*/
+const optional = (param) => optional$1(param);
+/**
+* Provides a default value for a flag when it's not specified.
+*
+* **Example** (Providing default values)
+*
+* ```ts import.meta.vitest
+* import { Flag } from "effect/cli"
+*
+* const portFlag = Flag.Int("port").pipe(
+*   Flag.withDefault(8080)
+* )
+* // If --port is not provided, defaults to 8080
+*
+* const hostFlag = Flag.String("host").pipe(
+*   Flag.withDefault("localhost")
+* )
+* // If --host is not provided, defaults to "localhost"
+* const kinds = [portFlag.kind, hostFlag.kind] // => ["flag", "flag"]
+* ```
+*
+* @stability unstable
+* @category optionality
+* @since 4.0.0
+*/
+const withDefault = withDefault$1;
+/**
+* Transforms the parsed value of a flag using a mapping function.
+*
+* **Example** (Mapping parsed values)
+*
+* ```ts import.meta.vitest
+* import { Flag } from "effect/cli"
+*
+* // Convert string to uppercase
+* const nameFlag = Flag.String("name").pipe(
+*   Flag.map((name) => name.toUpperCase())
+* )
+*
+* // Convert port to URL
+* const urlFlag = Flag.Int("port").pipe(
+*   Flag.map((port) => `http://localhost:${port}`)
+* )
+* const kinds = [nameFlag.kind, urlFlag.kind] // => ["flag", "flag"]
+* ```
+*
+* @stability unstable
+* @category mapping
+* @since 4.0.0
+*/
+const map = /*#__PURE__*/ dual(2, (self, f) => map$1(self, f));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/internal/config.js
+/**
+* Config Internal
+* ================
+*
+* The processed internal representation of a Command.Config declaration.
+* Separates the user's declared config shape from the flat parsing representation.
+*
+* Key concepts:
+* - ConfigInternal: The full processed form (flags, arguments, tree)
+* - ConfigInternal.Tree: Maps declaration keys to nodes
+* - ConfigInternal.Node: Param reference, Array, or Nested subtree
+*
+* Example transformation from Command.Config to Command.Config.Internal:
+*
+* ```ts
+* // User declares:
+* const config = {
+*   verbose: Flag.Boolean("verbose").pipe(Flag.withDefault(false)),
+*   server: {
+*     host: Flag.String("host"),
+*     port: Flag.Int("port")
+*   },
+*   files: Argument.String("files").pipe(Argument.variadic)
+* }
+*
+* // Becomes Config.Internal:
+* {
+*   arguments: [filesParam],           // Flat array of arguments
+*   flags: [verboseParam, hostParam, portParam],  // Flat array of flags
+*   orderedParams: [verboseParam, hostParam, portParam, filesParam],
+*   tree: {                            // Preserves nested structure
+*     verbose: { _tag: "Param", index: 0 },
+*     server: {
+*       _tag: "Nested",
+*       tree: {
+*         host: { _tag: "Param", index: 1 },
+*         port: { _tag: "Param", index: 2 }
+*       }
+*     },
+*     files: { _tag: "Param", index: 3 }
+*   }
+* }
+* ```
+*
+* This separation allows:
+* 1. Flat iteration over all params for parsing/validation
+* 2. Reconstruction of original nested shape for handler input
+*/
+const ConfigInternalTypeId = "~effect/cli/Command/Config/Internal";
+/**
+* Parses a Command.Config into a ConfigInternal.
+*
+* Walks the config structure and:
+* 1. Extracts all Params into flat arrays (flags, arguments, orderedParams)
+* 2. Builds a tree that remembers the original nested structure
+* 3. Assigns each Param an index to link parsed values back
+*
+* @internal
+*/
+const parseConfig = (config) => {
+	const orderedParams = [];
+	const flags = [];
+	const args = [];
+	function parse(config) {
+		const tree = Object.create(null);
+		for (const key of Object.keys(config)) tree[key] = parseValue(config[key]);
+		return tree;
+	}
+	function parseValue(value) {
+		if (Array.isArray(value)) return {
+			_tag: "Array",
+			children: value.map((v) => parseValue(v))
+		};
+		else if (isParam(value)) {
+			const index = orderedParams.length;
+			orderedParams.push(value);
+			if (value.kind === "argument") args.push(value);
+			else flags.push(value);
+			return {
+				_tag: "Param",
+				index
+			};
+		} else return {
+			_tag: "Nested",
+			tree: parse(value)
+		};
+	}
+	return {
+		[ConfigInternalTypeId]: ConfigInternalTypeId,
+		flags,
+		arguments: args,
+		orderedParams,
+		tree: parse(config)
+	};
+};
+/**
+* @internal
+*/
+const emptyConfig = /*#__PURE__*/ parseConfig({});
+/**
+* Reconstructs the original nested config shape from parsed values.
+*
+* Uses the tree as a blueprint to place each parsed value back into
+* its original position in the nested structure.
+*
+* @internal
+*/
+const reconstructTree = (tree, results) => {
+	const output = {};
+	for (const key of Object.keys(tree)) assignProperty(output, key, nodeValue(tree[key]));
+	return output;
+	function nodeValue(node) {
+		switch (node._tag) {
+			case "Param": return results[node.index];
+			case "Array": return node.children.map((child) => nodeValue(child));
+			case "Nested": return reconstructTree(node.tree, results);
+		}
+	}
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/internal/command.js
+/**
+* Command Implementation
+* ======================
+*
+* Internal implementation details for CLI commands.
+* Public API is in ../Command.ts
+*/
+const TypeId$1 = "~effect/cli/Command";
+/**
+* Casts a Command to its internal implementation.
+* For use by internal modules that need access to config, parse, handle, etc.
+*/
+const toImpl = (self) => self;
+const Proto$1 = { .../*#__PURE__*/ Prototype({
+	label: "Command",
+	evaluate() {
+		return toImpl(this).service;
+	}
+}) };
+/**
+* Internal command constructor. Only accepts already-parsed ConfigInternal.
+*/
+const makeCommand = (options) => {
+	const config = options.config;
+	const contextConfig = options.contextConfig ?? emptyConfig;
+	const service = options.service ?? Service(`~effect/cli/Command/${options.name}`);
+	const annotations = options.annotations ?? empty$3();
+	const globalFlags = options.globalFlags ?? [];
+	const subcommands = options.subcommands ?? [];
+	const handle = (input, commandPath) => isNotUndefined(options.handle) ? options.handle(input, commandPath) : fail$1(new ShowHelp({
+		commandPath,
+		errors: []
+	}));
+	const parse = options.parse ?? makeParser(config);
+	const parseContext = options.parseContext ?? makeParser(contextConfig, { allowLeftovers: true });
+	const buildHelpDoc = (commandPath) => {
+		const args = [];
+		const flags = [];
+		for (const arg of config.arguments) {
+			const singles = extractSingleParams(arg);
+			const metadata = getParamMetadata(arg);
+			for (const single of singles) args.push({
+				name: single.name,
+				type: single.typeName ?? getTypeName(single.primitiveType),
+				description: single.description,
+				required: !metadata.isOptional && (!metadata.isVariadic || exists$1(metadata.variadicMin, (min) => min > 0)),
+				variadic: metadata.isVariadic
+			});
+		}
+		let usage = commandPath.length > 0 ? commandPath.join(" ") : options.name;
+		if (subcommands.some((group) => group.commands.some((c) => !c.unlisted))) usage += " <subcommand>";
+		usage += " [flags]";
+		for (const arg of args) {
+			const argName = arg.variadic ? `<${arg.name}...>` : `<${arg.name}>`;
+			usage += ` ${arg.required ? argName : `[${argName}]`}`;
+		}
+		for (const option of config.flags) {
+			const singles = extractSingleParams(option);
+			const metadata = getParamMetadata(option);
+			for (const single of singles) {
+				if (single.hidden) continue;
+				flags.push(toFlagDoc(single, metadata));
+			}
+		}
+		const subcommandDocs = [];
+		for (const group of subcommands) {
+			const visible = group.commands.filter((c) => !c.unlisted);
+			if (visible.length === 0) continue;
+			subcommandDocs.push({
+				group: group.group,
+				commands: map$8(visible, (subcommand) => ({
+					name: subcommand.name,
+					alias: subcommand.alias,
+					shortDescription: subcommand.shortDescription,
+					description: subcommand.description ?? ""
+				}))
+			});
+		}
+		const examples = options.examples ?? [];
+		return {
+			description: options.description ?? "",
+			usage,
+			flags,
+			annotations,
+			...args.length > 0 && { args },
+			...subcommandDocs.length > 0 && { subcommands: subcommandDocs },
+			...examples.length > 0 && { examples }
+		};
+	};
+	return Object.assign(Object.create(Proto$1), {
+		[TypeId$1]: TypeId$1,
+		name: options.name,
+		examples: options.examples ?? [],
+		annotations,
+		globalFlags,
+		subcommands,
+		unlisted: options.unlisted ?? false,
+		config,
+		contextConfig,
+		service,
+		parse,
+		parseContext,
+		handle,
+		buildHelpDoc,
+		...isNotUndefined(options.description) ? { description: options.description } : {},
+		...isNotUndefined(options.shortDescription) ? { shortDescription: options.shortDescription } : {},
+		...isNotUndefined(options.alias) ? { alias: options.alias } : {}
+	});
+};
+/**
+* Converts a single flag param into a FlagDoc for help display.
+*
+* @internal
+*/
+const toFlagDoc = (single, metadata) => {
+	const formattedAliases = single.aliases.map((alias) => alias.length === 1 ? `-${alias}` : `--${alias}`);
+	return {
+		name: single.name,
+		aliases: formattedAliases,
+		type: single.typeName ?? getTypeName(single.primitiveType),
+		description: appendChoiceKeys(single.description, getChoiceKeys(single.primitiveType)),
+		required: single.primitiveType._tag !== "Boolean" && !metadata.isOptional
+	};
+};
+const appendChoiceKeys = (description, choiceKeys) => {
+	if (choiceKeys === void 0 || choiceKeys.length === 0) return description;
+	const choiceSuffix = `(choices: ${choiceKeys.join(", ")})`;
+	return match$5(description, {
+		onNone: () => some(choiceSuffix),
+		onSome: (value) => some(`${value} ${choiceSuffix}`)
+	});
+};
+/**
+* Creates a parser for a given config. Used as the default for both `parse`
+* and `parseContext`, and also by `withSharedFlags` to avoid constructing a
+* full throwaway command.
+*/
+const makeParser = (cfg, options) => fnUntraced(function* (input) {
+	const parsedArgs = {
+		flags: input.flags,
+		arguments: input.arguments
+	};
+	const [remainingArguments, values] = yield* parseParams(parsedArgs, cfg.orderedParams);
+	if (options?.allowLeftovers !== true && remainingArguments.length > 0) return yield* new UnexpectedArgument({ arguments: remainingArguments });
+	return reconstructTree(cfg.tree, values);
+});
+/**
+* Parses param values from parsed command arguments into their typed
+* representations.
+*/
+const parseParams = /*#__PURE__*/ fnUntraced(function* (parsedArgs, params) {
+	const results = [];
+	let currentArguments = parsedArgs.arguments;
+	for (const option of params) {
+		const [remainingArguments, parsed] = yield* option.parse({
+			flags: parsedArgs.flags,
+			arguments: currentArguments
+		});
+		results.push(parsed);
+		currentArguments = remainingArguments;
+	}
+	return [currentArguments, results];
+});
+/**
+* Checks that inherited parent context flags do not reuse names declared by
+* child command flags.
+*
+* When `contextConfig` is supplied, it is used as the inherited flag set;
+* otherwise the parent's current context config is checked.
+*/
+const checkForDuplicateFlags = (parent, subcommands, options) => {
+	const parentImpl = toImpl(parent);
+	const parentOptionNames = /* @__PURE__ */ new Set();
+	const extractNames = (flags) => {
+		for (const option of flags) {
+			const singles = extractSingleParams(option);
+			for (const single of singles) parentOptionNames.add(single.name);
+		}
+	};
+	extractNames((options?.contextConfig ?? parentImpl.contextConfig).flags);
+	for (const subcommand of subcommands) {
+		const subImpl = toImpl(subcommand);
+		for (const option of subImpl.config.flags) {
+			const singles = extractSingleParams(option);
+			for (const single of singles) if (parentOptionNames.has(single.name)) throw new DuplicateOption({
+				option: single.name,
+				parentCommand: parent.name,
+				childCommand: subcommand.name
+			});
+		}
+	}
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/internal/completions/descriptor.js
+/**
+* CommandDescriptor — pure-data representation of a command tree for
+* shell completion generation.
+*
+* @internal
+*/
+const toFlagType = (single) => {
+	switch (single.primitiveType._tag) {
+		case "Boolean": return { _tag: "Boolean" };
+		case "Int": return { _tag: "Int" };
+		case "Finite": return { _tag: "Finite" };
+		case "Date": return { _tag: "Date" };
+		case "Choice": return {
+			_tag: "Choice",
+			values: getChoiceKeys(single.primitiveType) ?? []
+		};
+		case "Path": return {
+			_tag: "Path",
+			pathType: getPathType(single.primitiveType) ?? "either"
+		};
+		case "FileText":
+		case "FileParse":
+		case "FileSchema": return {
+			_tag: "Path",
+			pathType: "file"
+		};
+		default: return { _tag: "String" };
+	}
+};
+const toArgumentType = (single) => {
+	switch (single.primitiveType._tag) {
+		case "Int": return { _tag: "Int" };
+		case "Finite": return { _tag: "Finite" };
+		case "Date": return { _tag: "Date" };
+		case "Choice": return {
+			_tag: "Choice",
+			values: getChoiceKeys(single.primitiveType) ?? []
+		};
+		case "Path": return {
+			_tag: "Path",
+			pathType: getPathType(single.primitiveType) ?? "either"
+		};
+		case "FileText":
+		case "FileParse":
+		case "FileSchema": return {
+			_tag: "Path",
+			pathType: "file"
+		};
+		default: return { _tag: "String" };
+	}
+};
+/**
+* @internal
+*/
+const fromCommand = (cmd, inheritedFlags = []) => {
+	const impl = toImpl(cmd);
+	const config = impl.config;
+	const flags = [];
+	const seen = /* @__PURE__ */ new Set();
+	for (const [index, flag] of [...config.flags, ...inheritedFlags].entries()) {
+		const singles = extractSingleParams(flag);
+		for (const single of singles) {
+			if (single.kind !== "flag") continue;
+			if (single.hidden) continue;
+			if (index >= config.flags.length && seen.has(single.name)) continue;
+			seen.add(single.name);
+			flags.push({
+				name: single.name,
+				aliases: single.aliases,
+				description: getOrUndefined$1(single.description),
+				type: toFlagType(single)
+			});
+		}
+	}
+	const args = [];
+	for (const arg of config.arguments) {
+		const singles = extractSingleParams(arg);
+		const metadata = getParamMetadata(arg);
+		for (const single of singles) {
+			if (single.kind !== "argument") continue;
+			args.push({
+				name: single.name,
+				description: getOrUndefined$1(single.description),
+				required: !metadata.isOptional,
+				variadic: metadata.isVariadic,
+				type: toArgumentType(single)
+			});
+		}
+	}
+	const subcommands = [];
+	const sharedFlags = [...inheritedFlags, ...impl.contextConfig.flags];
+	for (const group of cmd.subcommands) for (const subcommand of group.commands) {
+		if (subcommand.unlisted) continue;
+		const descriptor = fromCommand(subcommand, sharedFlags);
+		subcommands.push(descriptor);
+		if (subcommand.alias && subcommand.alias !== subcommand.name) subcommands.push({
+			...descriptor,
+			name: subcommand.alias
+		});
+	}
+	return {
+		name: cmd.name,
+		description: cmd.shortDescription ?? cmd.description,
+		flags,
+		arguments: args,
+		subcommands
+	};
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/internal/help.js
+/**
+* Help Documentation
+* ================
+*
+* Internal helpers for generating help documentation.
+* Extracted from command.ts to avoid circular dependencies.
+*/
+const dedupeGlobalFlags = (flags) => {
+	const seen = /* @__PURE__ */ new Set();
+	const deduped = [];
+	for (const flag of flags) {
+		if (seen.has(flag)) continue;
+		seen.add(flag);
+		deduped.push(flag);
+	}
+	return deduped;
+};
+/**
+* Returns the resolved command lineage for the provided path.
+* Includes the root command as the first element.
+*/
+const getCommandsForCommandPath = (command, commandPath) => {
+	const commands = [command];
+	let currentCommand = command;
+	for (let i = 1; i < commandPath.length; i++) {
+		const subcommandName = commandPath[i];
+		let subcommand = void 0;
+		for (const group of currentCommand.subcommands) {
+			subcommand = group.commands.find((sub) => sub.name === subcommandName);
+			if (subcommand) break;
+		}
+		if (!subcommand) break;
+		commands.push(subcommand);
+		currentCommand = subcommand;
+	}
+	return commands;
+};
+/**
+* Returns active global flags for a command path.
+* Built-ins are prepended and declarations are collected root -> leaf.
+*/
+const getGlobalFlagsForCommandPath = (command, commandPath, builtIns) => {
+	const declared = getCommandsForCommandPath(command, commandPath).flatMap((current) => toImpl(current).globalFlags);
+	return dedupeGlobalFlags([...builtIns, ...declared]);
+};
+const collectDeclaredGlobalFlags = (command) => {
+	const collected = [];
+	const visit = (current) => {
+		const impl = toImpl(current);
+		for (const flag of impl.globalFlags) collected.push(flag);
+		for (const group of current.subcommands) for (const subcommand of group.commands) visit(subcommand);
+	};
+	visit(command);
+	return dedupeGlobalFlags(collected);
+};
+const getSharedFlagsForCommandPath = (commands, currentFlags) => {
+	if (commands.length <= 1) return [];
+	const seen = new Set(currentFlags.map((flag) => flag.name));
+	const sharedFlags = [];
+	for (const ancestor of commands.slice(0, -1)) {
+		const ancestorImpl = toImpl(ancestor);
+		for (const flag of ancestorImpl.contextConfig.flags) {
+			const singles = extractSingleParams(flag);
+			const metadata = getParamMetadata(flag);
+			for (const single of singles) {
+				if (seen.has(single.name)) continue;
+				if (single.hidden) continue;
+				seen.add(single.name);
+				sharedFlags.push(toFlagDoc(single, metadata));
+			}
+		}
+	}
+	return sharedFlags;
+};
+/**
+* Returns all global flags declared in a command tree.
+* Built-ins are prepended and command declarations are deduplicated by identity.
+*/
+const getGlobalFlagsForCommandTree = (command, builtIns) => dedupeGlobalFlags([...builtIns, ...collectDeclaredGlobalFlags(command)]);
+/**
+* Helper function to get help documentation for a specific command path.
+* Navigates through the command hierarchy to find the right command.
+* Reads active global flags for the path and includes them in the help doc.
+*/
+const getHelpForCommandPath = (command, commandPath, builtIns) => gen(function* () {
+	const commands = getCommandsForCommandPath(command, commandPath);
+	const currentCommand = commands.length > 0 ? commands[commands.length - 1] : command;
+	const baseDoc = toImpl(currentCommand).buildHelpDoc(commandPath);
+	const sharedFlags = getSharedFlagsForCommandPath(commands, baseDoc.flags);
+	const flags = getGlobalFlagsForCommandPath(command, commandPath, builtIns);
+	const globalFlagDocs = [];
+	for (const flag of flags) {
+		const singles = extractSingleParams(flag.flag);
+		const metadata = getParamMetadata(flag.flag);
+		for (const single of singles) {
+			if (single.hidden) continue;
+			globalFlagDocs.push({
+				...toFlagDoc(single, metadata),
+				required: false
+			});
+		}
+	}
+	return {
+		...baseDoc,
+		flags: [...sharedFlags, ...baseDoc.flags],
+		globalFlags: globalFlagDocs
+	};
+});
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/GlobalFlag.js
+/**
+* Global flags for Effect CLI command trees. Global flags are parsed outside a
+* single command's local flags and can apply to a command and its descendants.
+*
+* This module defines two kinds of global flags: action flags, which run an
+* effect and stop normal command execution, and setting flags, which provide a
+* parsed value to the command handler through the Effect context. It also
+* defines the built-in help, version, wizard, shell-completion, and log-level flags
+* used by `Command.run` and `Command.runWith`.
+*
+* @stability unstable
+* @since 4.0.0
+*/
+/**
+* Creates an Action flag that performs a side effect and exits.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Action = (options) => ({
+	_tag: "Action",
+	flag: options.flag,
+	run: options.run
+});
+/**
+* Creates a Setting flag that configures the command handler's environment.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const Setting = (id) => (options) => {
+	settingIdCounter += 1;
+	const ref = Service(`effect/cli/GlobalFlag/${id}/${settingIdCounter}`);
+	return Object.assign(ref, {
+		_tag: "Setting",
+		id,
+		flag: options.flag
+	});
+};
+let settingIdCounter = 0;
+/**
+* Defines the `--help` / `-h` global flag, which shows help documentation for the
+* active command path.
+*
+* @see {@link BuiltIns} for the default list containing this flag
+* @see {@link Action} for defining custom action global flags
+*
+* @stability unstable
+* @category references
+* @since 4.0.0
+*/
+const Help = /*#__PURE__*/ Action({
+	flag: /*#__PURE__*/ Boolean$1("help").pipe(/*#__PURE__*/ withAlias("h"), /*#__PURE__*/ withDescription$1("Show help information"), /*#__PURE__*/ withDefault(false)),
+	run: /*#__PURE__*/ fnUntraced(function* (_, { builtIns, command, commandPath }) {
+		const formatter = yield* Formatter;
+		const helpDoc = yield* getHelpForCommandPath(command, commandPath, builtIns);
+		yield* log(formatter.formatHelpDoc(helpDoc));
+	})
+});
+/**
+* Defines the global action flag for showing command version information.
+*
+* **When to use**
+*
+* Use to add a built-in `--version / -v` flag to a command runner.
+*
+* @stability unstable
+* @category references
+* @since 4.0.0
+*/
+const Version = /*#__PURE__*/ Action({
+	flag: /*#__PURE__*/ Boolean$1("version").pipe(/*#__PURE__*/ withAlias("v"), /*#__PURE__*/ withDescription$1("Show version information"), /*#__PURE__*/ withDefault(false)),
+	run: /*#__PURE__*/ fnUntraced(function* (_, { command, version }) {
+		const formatter = yield* Formatter;
+		yield* log(formatter.formatVersion(command.name, version));
+	})
+});
+/**
+* Defines the global action flag for starting interactive wizard mode.
+*
+* **Details**
+*
+* `Command.run` and `Command.runWith` handle this action specially so the
+* generated arguments can be passed back through the command parser.
+*
+* @stability unstable
+* @category references
+* @since 4.0.0
+*/
+const Wizard = /*#__PURE__*/ Action({
+	flag: /*#__PURE__*/ Boolean$1("wizard").pipe(/*#__PURE__*/ withDescription$1("Start wizard mode for a command"), /*#__PURE__*/ withDefault(false)),
+	run: () => void_
+});
+/**
+* Defines the `--completions` global flag, which prints a shell completion script for
+* the given shell.
+*
+* **Details**
+*
+* Accepted values are `bash`, `zsh`, `fish`, and `sh`; `sh` is normalized to
+* `bash`.
+*
+* @stability unstable
+* @category references
+* @since 4.0.0
+*/
+const Completions = /*#__PURE__*/ Action({
+	flag: /*#__PURE__*/ Literals("completions", [
+		"bash",
+		"zsh",
+		"fish",
+		"sh"
+	]).pipe(optional, /*#__PURE__*/ map((v) => map$10(v, (s) => s === "sh" ? "bash" : s)), /*#__PURE__*/ withMetavar("<bash|zsh|fish|sh>"), /*#__PURE__*/ withDescription$1("Print shell completion script")),
+	run: /*#__PURE__*/ fnUntraced(function* (shell, { command }) {
+		if (isNone(shell)) return;
+		const descriptor = fromCommand(command);
+		yield* log(generate(command.name, shell.value, descriptor));
+	})
+});
+/**
+* Defines the global setting flag for command log level.
+*
+* **When to use**
+*
+* Use to add a built-in `--log-level` option that configures the minimum log
+* level for the command.
+*
+* @stability unstable
+* @category references
+* @since 4.0.0
+*/
+const LogLevel = /*#__PURE__*/ Setting("log-level")({ flag: /*#__PURE__*/ ChoiceWithValue("log-level", [
+	["all", "All"],
+	["trace", "Trace"],
+	["debug", "Debug"],
+	["info", "Info"],
+	["warn", "Warn"],
+	["warning", "Warn"],
+	["error", "Error"],
+	["fatal", "Fatal"],
+	["none", "None"]
+]).pipe(optional, /*#__PURE__*/ withDescription$1("Sets the minimum log level"), /*#__PURE__*/ withMetavar("<all|trace|debug|info|warn|warning|error|fatal|none>")) });
+/**
+* Built-in global flags in default precedence order.
+*
+* **When to use**
+*
+* Use when extending or inspecting the default global-flag set that
+* `Command.runWith` prepends before user-defined global flags.
+*
+* **Details**
+*
+* The built-ins are `Help`, `Version`, `Wizard`, `Completions`, and `LogLevel`.
+* `Command.runWith` prepends these built-ins when collecting and parsing global
+* flags.
+*
+* **Gotchas**
+*
+* Action flags are processed in active flag order and the first present action
+* exits, so this array controls built-in action precedence.
+*
+* @see {@link Help} for the help action flag
+* @see {@link Version} for the version action flag
+* @see {@link Completions} for the shell-completions action flag
+* @see {@link LogLevel} for the built-in log-level setting flag
+*
+* @stability unstable
+* @category references
+* @since 4.0.0
+*/
+const BuiltIns = [
+	Help,
+	Version,
+	Wizard,
+	Completions,
+	LogLevel
+];
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/CliConfig.js
+/**
+* Configuration for Effect CLI command execution.
+*
+* @stability unstable
+* @since 4.0.0
+*/
+/**
+* Context reference for configuration shared by CLI parsing, help generation,
+* and command execution.
+*
+* **When to use**
+*
+* Use when you need to customize runner-wide CLI behavior, such as which
+* built-in global flags are available.
+*
+* @stability unstable
+* @category services
+* @since 4.0.0
+*/
+var CliConfig = class extends (/*#__PURE__*/ Reference("effect/cli/CliConfig", { defaultValue: () => defaults })) {};
+/**
+* Default CLI configuration containing every built-in global flag.
+*
+* @stability unstable
+* @category defaults
+* @since 4.0.0
+*/
+const defaults = { builtIns: BuiltIns };
+/**
+* Creates CLI configuration by merging the provided options over `defaults`.
+*
+* **When to use**
+*
+* Use when you need a configuration value to provide directly through the
+* `CliConfig` context reference.
+*
+* @see {@link layer} for providing configuration as a layer
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const make$6 = (options) => ({
+	...defaults,
+	...options
+});
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/internal/lexer.js
+/**
+* @internal
+*/
+function lex(argv) {
+	const endIndex = argv.indexOf("--");
+	if (endIndex === -1) return {
+		tokens: lexTokens(argv),
+		trailingOperands: []
+	};
+	return {
+		tokens: lexTokens(argv.slice(0, endIndex)),
+		trailingOperands: argv.slice(endIndex + 1)
+	};
+}
+const negativeNumberRegex = /^-(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
+const lexTokens = (args) => {
+	const tokens = [];
+	for (const arg of args) if (!arg.startsWith("-") || negativeNumberRegex.test(arg)) tokens.push({
+		_tag: "Value",
+		value: arg
+	});
+	else if (arg.startsWith("--")) {
+		const equalIndex = arg.indexOf("=");
+		if (equalIndex !== -1) {
+			const name = arg.slice(2, equalIndex);
+			const value = arg.slice(equalIndex + 1);
+			tokens.push({
+				_tag: "LongOption",
+				name,
+				raw: arg,
+				value
+			});
+		} else tokens.push({
+			_tag: "LongOption",
+			name: arg.slice(2),
+			raw: arg
+		});
+	} else if (arg.length > 1) {
+		const flags = arg.slice(1);
+		const equalIndex = flags.indexOf("=");
+		if (equalIndex !== -1) {
+			const flag = flags.slice(0, equalIndex);
+			const value = flags.slice(equalIndex + 1);
+			tokens.push({
+				_tag: "ShortOption",
+				flag,
+				raw: `-${flag}`,
+				value
+			});
+		} else for (const ch of flags) tokens.push({
+			_tag: "ShortOption",
+			flag: ch,
+			raw: `-${ch}`
+		});
+	} else tokens.push({
+		_tag: "Value",
+		value: arg
+	});
+	return tokens;
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/internal/auto-suggest.js
+/**
+* Simple Levenshtein distance implementation (small N, no perf worries)
+*/
+const levenshtein = (a, b) => {
+	const m = a.length;
+	const n = b.length;
+	const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+	for (let i = 0; i <= m; i++) dp[i][0] = i;
+	for (let j = 0; j <= n; j++) dp[0][j] = j;
+	for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) {
+		const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+		dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+	}
+	return dp[m][n];
+};
+/**
+* Return suggestions with minimum distance found, up to distance 2.
+*
+* @internal
+*/
+const suggest = (input, candidates) => {
+	const distances = candidates.map((c) => [levenshtein(input, c), c]).filter(([d]) => d <= 2).sort(([a], [b]) => a - b);
+	if (distances.length === 0) return [];
+	const minDistance = distances[0][0];
+	return distances.filter(([d]) => d === minDistance).map(([, c]) => c);
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/internal/parser.js
+/**
+* Parsing Pipeline for CLI Commands
+* ==================================
+*
+* The parser transforms raw argv tokens into structured command input through
+* three main phases:
+*
+* 1. **Lexer** (external): Converts argv strings into typed tokens
+*    - LongOption: --name or --name=value
+*    - ShortOption: -n or -n=value (also handles -abc as three flags)
+*    - Value: positional arguments
+*
+* 2. **Built-in Extraction**: Peels off built-in flags (help/version/completions)
+*    before command-specific parsing begins.
+*
+* 3. **Command Parsing**: Recursively processes command levels:
+*    - Collects flags defined at this level
+*    - Detects subcommand from first value token
+*    - Forwards remaining tokens to child command
+*
+* Key Behaviors
+* -------------
+* - Inherited parent flags may appear before OR after the subcommand name (npm-style)
+* - Only the first Value token can open a subcommand
+* - Errors accumulate rather than throwing exceptions
+*/
+/**
+* @internal
+*/
+const getCommandPath = (parsedInput) => match$5(parsedInput.subcommand, {
+	onNone: () => [],
+	onSome: (subcommand) => [subcommand.name, ...getCommandPath(subcommand.parsedInput)]
+});
+/**
+* @internal
+*/
+const parseArgs = (lexResult, command, commandPath = []) => gen(function* () {
+	const { tokens, trailingOperands: afterEndOfOptions } = lexResult;
+	const newCommandPath = [...commandPath, command.name];
+	const commandImpl = toImpl(command);
+	const flagParams = commandImpl.config.flags.flatMap(extractSingleParams).filter(isFlagParam);
+	const flagRegistry = createFlagRegistry(flagParams);
+	const inheritedFlagParams = commandImpl.contextConfig.flags.flatMap(extractSingleParams).filter(isFlagParam);
+	const inheritedFlagRegistry = createFlagRegistry(inheritedFlagParams);
+	const inheritedNames = new Set(inheritedFlagParams.map((param) => param.name));
+	const context = {
+		command,
+		commandPath: newCommandPath,
+		flagRegistry,
+		inheritedFlagRegistry,
+		localFlagNames: flagParams.filter((param) => !inheritedNames.has(param.name)).map((param) => param.name)
+	};
+	const result = scanCommandLevel(tokens, context);
+	if (result._tag === "Leaf") return {
+		flags: result.flags,
+		arguments: [...result.arguments, ...afterEndOfOptions],
+		subcommand: none(),
+		...result.errors.length > 0 && { errors: result.errors }
+	};
+	const subLex = {
+		tokens: result.childTokens,
+		trailingOperands: afterEndOfOptions
+	};
+	const subParsed = yield* parseArgs(subLex, result.sub, newCommandPath);
+	const allErrors = [...result.errors, ...subParsed.errors ?? []];
+	return {
+		flags: result.flags,
+		arguments: [],
+		subcommand: some({
+			name: result.sub.name,
+			parsedInput: subParsed
+		}),
+		...allErrors.length > 0 && { errors: allErrors }
+	};
+});
+const makeCursor = (tokens) => {
+	let i = 0;
+	return {
+		peek: () => tokens[i],
+		take: () => tokens[i++],
+		rest: () => tokens.slice(i)
+	};
+};
+/**
+* Creates a registry for O(1) flag lookup by name or alias.
+* @internal
+*/
+const createFlagRegistry = (params) => {
+	const index = /* @__PURE__ */ new Map();
+	for (const param of params) {
+		if (index.has(param.name)) throw new Error(`Duplicate flag name "${param.name}" in command definition`);
+		index.set(param.name, param);
+		for (const alias of param.aliases) {
+			if (index.has(alias)) throw new Error(`Duplicate flag/alias "${alias}" in command definition (conflicts with "${index.get(alias).name}")`);
+			index.set(alias, param);
+		}
+	}
+	return {
+		params,
+		index
+	};
+};
+const buildSubcommandIndex = (subcommands) => {
+	const index = /* @__PURE__ */ new Map();
+	const setKey = (key, command) => {
+		const existing = index.get(key);
+		if (existing && existing !== command) throw new Error(`Duplicate subcommand name/alias "${key}" in command definition (conflicts with "${existing.name}")`);
+		index.set(key, command);
+	};
+	for (const group of subcommands) for (const subcommand of group.commands) {
+		setKey(subcommand.name, subcommand);
+		if (subcommand.alias && subcommand.alias !== subcommand.name) setKey(subcommand.alias, subcommand);
+	}
+	return index;
+};
+/** Creates an empty flag map with all known flag names initialized to [].
+* @internal
+*/
+const createEmptyFlagMap = (params) => Object.fromEntries(params.map((p) => [p.name, []]));
+/**
+* Creates a mutable accumulator for collecting flag values.
+* Pre-initializes empty arrays for all known flags.
+*/
+const createFlagAccumulator = (params) => {
+	const map = createEmptyFlagMap(params);
+	return {
+		add: (name, raw) => {
+			if (raw !== void 0) map[name].push(raw);
+		},
+		merge: (from) => {
+			for (const key in from) {
+				const values = from[key];
+				if (values?.length) for (let i = 0; i < values.length; i++) map[key].push(values[i]);
+			}
+		},
+		snapshot: () => map
+	};
+};
+const isFlagToken = (t) => t._tag === "LongOption" || t._tag === "ShortOption";
+const getFlagName = (t) => t._tag === "LongOption" ? t.name : t.flag;
+const resolveFlag = (token, registry) => {
+	const tokenName = getFlagName(token);
+	const direct = registry.index.get(tokenName);
+	if (direct && direct.name === tokenName) return {
+		param: direct,
+		negated: false
+	};
+	if (token._tag === "LongOption" && token.name.startsWith("no-")) {
+		const canonicalName = token.name.slice(3);
+		const param = registry.index.get(canonicalName);
+		if (param && param.name === canonicalName && isBoolean(param.primitiveType)) return {
+			param,
+			negated: true
+		};
+	}
+	if (direct) return {
+		param: direct,
+		negated: false
+	};
+};
+const invalidNegatedFlagValue = (token, spec, value) => new InvalidValue({
+	option: spec.name,
+	value,
+	expected: `omit the value and use ${token.raw} by itself to set --${spec.name} to false`,
+	kind: "flag"
+});
+const missingFlagValue = (spec) => {
+	const choices = getChoiceKeys(spec.primitiveType);
+	return new InvalidValue({
+		option: spec.name,
+		value: "",
+		expected: choices === void 0 ? spec.typeName ?? getTypeName(spec.primitiveType) : choices.join(" | "),
+		kind: "flag"
+	});
+};
+/**
+* Checks whether a token is a boolean literal value.
+* Recognizes: true/false, yes/no, on/off, 1/0
+*/
+const asBooleanLiteral = (token) => token?._tag === "Value" && (isTrueLiteral(token.value) || isFalseLiteral(token.value)) ? token.value : void 0;
+/**
+* Reads a flag's value from the token stream.
+*
+* Value resolution order:
+* 1. Inline value: --flag=value or -f=value
+* 2. Boolean special case: implicit "true" or explicit boolean literal
+* 3. Next token: consume following Value token if present
+*/
+const consumeFlagValue = (cursor, token, spec, negated = false) => {
+	const consumed = consumeFlagValueWithTokens(cursor, token, spec, negated);
+	switch (consumed._tag) {
+		case "Value": return {
+			_tag: "Value",
+			value: consumed.value
+		};
+		case "Error": return {
+			_tag: "Error",
+			error: consumed.error
+		};
+	}
+};
+const consumeFlagValueWithTokens = (cursor, token, spec, negated = false) => {
+	if (negated) {
+		if (token.value !== void 0) return {
+			_tag: "Error",
+			error: invalidNegatedFlagValue(token, spec, token.value),
+			tokens: []
+		};
+		const literal = asBooleanLiteral(cursor.peek());
+		if (literal !== void 0) {
+			const literalToken = cursor.take();
+			return {
+				_tag: "Error",
+				error: invalidNegatedFlagValue(token, spec, literal),
+				tokens: literalToken === void 0 ? [] : [literalToken]
+			};
+		}
+		return {
+			_tag: "Value",
+			value: "false",
+			tokens: []
+		};
+	}
+	if (token.value !== void 0) return {
+		_tag: "Value",
+		value: token.value,
+		tokens: []
+	};
+	if (isBoolean(spec.primitiveType)) {
+		const literal = asBooleanLiteral(cursor.peek());
+		const literalToken = literal !== void 0 ? cursor.take() : void 0;
+		return {
+			_tag: "Value",
+			value: literal ?? "true",
+			tokens: literalToken === void 0 ? [] : [literalToken]
+		};
+	}
+	const next = cursor.peek();
+	if (next?._tag === "Value") {
+		const valueToken = cursor.take();
+		return {
+			_tag: "Value",
+			value: next.value,
+			tokens: valueToken === void 0 ? [] : [valueToken]
+		};
+	}
+	return {
+		_tag: "Error",
+		error: missingFlagValue(spec),
+		tokens: []
+	};
+};
+/**
+* Consumes known flags from a token stream.
+* Unrecognized tokens are passed through to remainder.
+* Used for both global flag extraction and npm-style parent flag collection.
+* @internal
+*/
+const consumeKnownFlags = (tokens, registry) => {
+	const flagMap = createEmptyFlagMap(registry.params);
+	const remainder = [];
+	const errors = [];
+	const cursor = makeCursor(tokens);
+	for (let t = cursor.take(); t; t = cursor.take()) {
+		if (!isFlagToken(t)) {
+			remainder.push(t);
+			continue;
+		}
+		const resolved = resolveFlag(t, registry);
+		if (!resolved) {
+			remainder.push(t);
+			continue;
+		}
+		const consumed = consumeFlagValue(cursor, t, resolved.param, resolved.negated);
+		if (consumed._tag === "Error") {
+			errors.push(consumed.error);
+			continue;
+		}
+		if (consumed.value !== void 0) flagMap[resolved.param.name].push(consumed.value);
+	}
+	return {
+		flagMap,
+		remainder,
+		errors
+	};
+};
+const extractFlagParams = (command) => {
+	return toImpl(command).config.flags.flatMap(extractSingleParams).filter(isFlagParam);
+};
+const extractContextFlagParams = (command) => {
+	return toImpl(command).contextConfig.flags.flatMap(extractSingleParams).filter(isFlagParam);
+};
+const resolveFromRegistries = (token, registries) => {
+	for (const registry of registries) {
+		const resolved = resolveFlag(token, registry);
+		if (resolved !== void 0) return resolved;
+	}
+};
+const preserveFlag = (remainder, cursor, token, resolved) => {
+	remainder.push(token);
+	const consumed = consumeFlagValueWithTokens(cursor, token, resolved.param, resolved.negated);
+	remainder.push(...consumed.tokens);
+};
+const localFlagWouldPrecedeSubcommand = (token, remainingTokens, resolved, subIndex, registries) => {
+	const cursor = makeCursor(remainingTokens);
+	consumeFlagValueWithTokens(cursor, token, resolved.param, resolved.negated);
+	for (let token = cursor.take(); token; token = cursor.take()) {
+		if (isFlagToken(token)) {
+			const known = resolveFromRegistries(token, registries);
+			if (known !== void 0) consumeFlagValueWithTokens(cursor, token, known.param, known.negated);
+			continue;
+		}
+		if (token._tag === "Value") return subIndex.has(token.value);
+	}
+	return false;
+};
+/**
+* Consumes global flags while walking the command tree.
+*
+* Command-local flags take precedence over global flags at the selected command
+* level. This lets commands reuse a global flag name, for example a subcommand
+* with its own `--version <value>` flag overriding the built-in global
+* `--version` action.
+* @internal
+*/
+const consumeGlobalFlags = (tokens, command, registry) => {
+	const flagMap = createEmptyFlagMap(registry.params);
+	const errors = [];
+	const consumeLevel = (tokens, command, ignoredRegistries) => {
+		const localRegistry = createFlagRegistry(extractFlagParams(command));
+		const inheritedRegistry = createFlagRegistry(extractContextFlagParams(command));
+		const subIndex = buildSubcommandIndex(command.subcommands);
+		const cursor = makeCursor(tokens);
+		const remainder = [];
+		let awaitingFirstValue = true;
+		for (let token = cursor.take(); token; token = cursor.take()) {
+			if (isFlagToken(token)) {
+				const ignored = resolveFromRegistries(token, ignoredRegistries);
+				if (ignored !== void 0) {
+					preserveFlag(remainder, cursor, token, ignored);
+					continue;
+				}
+				const inherited = resolveFlag(token, inheritedRegistry);
+				if (inherited !== void 0) {
+					preserveFlag(remainder, cursor, token, inherited);
+					continue;
+				}
+				const local = resolveFlag(token, localRegistry);
+				const global = resolveFlag(token, registry);
+				if (local !== void 0) {
+					if (global === void 0 || !awaitingFirstValue || !localFlagWouldPrecedeSubcommand(token, cursor.rest(), local, subIndex, [
+						localRegistry,
+						inheritedRegistry,
+						registry
+					])) {
+						preserveFlag(remainder, cursor, token, local);
+						continue;
+					}
+				}
+				if (global !== void 0) {
+					const consumed = consumeFlagValueWithTokens(cursor, token, global.param, global.negated);
+					if (consumed._tag === "Error") {
+						errors.push(consumed.error);
+						continue;
+					}
+					if (consumed.value !== void 0) flagMap[global.param.name].push(consumed.value);
+					continue;
+				}
+				remainder.push(token);
+				continue;
+			}
+			if (token._tag === "Value" && awaitingFirstValue) {
+				const sub = subIndex.get(token.value);
+				if (sub !== void 0) {
+					remainder.push(token);
+					remainder.push(...consumeLevel(cursor.rest(), sub, [...ignoredRegistries, inheritedRegistry]));
+					return remainder;
+				}
+				awaitingFirstValue = false;
+			}
+			remainder.push(token);
+		}
+		return remainder;
+	};
+	return {
+		flagMap,
+		remainder: consumeLevel(tokens, command, []),
+		errors
+	};
+};
+const createUnrecognizedFlagError = (token, params, commandPath) => {
+	const printable = token._tag === "LongOption" ? `--${token.name}` : `-${token.flag}`;
+	const validNames = [];
+	for (const p of params) {
+		if (p.hidden) continue;
+		validNames.push(p.name);
+		if (isBoolean(p.primitiveType)) validNames.push(`no-${p.name}`);
+		for (const alias of p.aliases) validNames.push(alias);
+	}
+	return new UnrecognizedOption({
+		option: printable,
+		suggestions: suggest(getFlagName(token), validNames).map((n) => n.length === 1 ? `-${n}` : `--${n}`),
+		command: commandPath
+	});
+};
+const createParseState = (registry) => ({
+	flags: createFlagAccumulator(registry.params),
+	arguments: [],
+	errors: [],
+	mode: { _tag: "AwaitingFirstValue" }
+});
+const toLeafResult = (state) => ({
+	_tag: "Leaf",
+	flags: state.flags.snapshot(),
+	arguments: state.arguments,
+	errors: state.errors
+});
+/**
+* Determines how to handle the first value token.
+*
+* If it matches a known subcommand:
+* - Collect inherited parent flags from remaining tokens (npm-style)
+* - Return SubcommandResult with child tokens
+*
+* Otherwise:
+* - Return Argument to treat it as a positional argument
+* - Report error if command expects subcommand but got unknown value
+*/
+const resolveFirstValue = (value, cursor, context, state) => {
+	const { command, commandPath, inheritedFlagRegistry, localFlagNames } = context;
+	const subIndex = buildSubcommandIndex(command.subcommands);
+	const sub = subIndex.get(value);
+	if (sub) {
+		const selectedPath = [...commandPath, sub.name];
+		const parentFlags = state.flags.snapshot();
+		for (const localFlagName of localFlagNames) {
+			const values = parentFlags[localFlagName];
+			if (values !== void 0 && values.length > 0) state.errors.push(new UnrecognizedOption({
+				option: `--${localFlagName}`,
+				suggestions: [],
+				command: selectedPath
+			}));
+		}
+		const tail = consumeKnownFlags(cursor.rest(), inheritedFlagRegistry);
+		state.flags.merge(tail.flagMap);
+		state.errors.push(...tail.errors);
+		return {
+			_tag: "Subcommand",
+			result: {
+				_tag: "Sub",
+				flags: state.flags.snapshot(),
+				sub,
+				childTokens: tail.remainder,
+				errors: state.errors
+			}
+		};
+	}
+	if (!(toImpl(command).config.arguments.length > 0) && subIndex.size > 0) {
+		const visibleKeys = [];
+		for (const [key, sub] of subIndex) if (!sub.unlisted) visibleKeys.push(key);
+		const suggestions = suggest(value, visibleKeys);
+		state.errors.push(new UnknownSubcommand({
+			subcommand: value,
+			parent: commandPath,
+			suggestions
+		}));
+	}
+	return { _tag: "Argument" };
+};
+/**
+* Processes a flag token: looks up in registry, consumes value, records it.
+* Reports unrecognized flags as errors.
+*/
+const processFlag = (token, cursor, context, state) => {
+	const { commandPath, flagRegistry } = context;
+	const resolved = resolveFlag(token, flagRegistry);
+	if (!resolved) {
+		state.errors.push(createUnrecognizedFlagError(token, flagRegistry.params, commandPath));
+		return;
+	}
+	const consumed = consumeFlagValue(cursor, token, resolved.param, resolved.negated);
+	if (consumed._tag === "Error") {
+		state.errors.push(consumed.error);
+		return;
+	}
+	state.flags.add(resolved.param.name, consumed.value);
+};
+/**
+* Processes a value token based on current parsing mode.
+*
+* In AwaitingFirstValue mode:
+* - Check if value is a subcommand
+* - If so, return SubcommandResult to exit scanning
+* - If not, switch to CollectingArguments mode
+*
+* In CollectingArguments mode:
+* - Simply add value to arguments list
+*/
+const processValue = (value, cursor, context, state) => {
+	if (state.mode._tag === "AwaitingFirstValue") {
+		const result = resolveFirstValue(value, cursor, context, state);
+		if (result._tag === "Subcommand") return result.result;
+		state.mode = { _tag: "CollectingArguments" };
+	}
+	state.arguments.push(value);
+};
+/**
+* Scans a single command level, processing all tokens.
+*
+* For each token:
+* - Flags: Look up, consume value, record in accumulator
+* - Values: Check for subcommand (first value only), then collect as arguments
+*
+* Returns LeafResult if no subcommand detected, SubcommandResult otherwise.
+*/
+const scanCommandLevel = (tokens, context) => {
+	const cursor = makeCursor(tokens);
+	const state = createParseState(context.flagRegistry);
+	for (let token = cursor.take(); token; token = cursor.take()) {
+		if (isFlagToken(token)) {
+			processFlag(token, cursor, context, state);
+			continue;
+		}
+		if (token._tag === "Value") {
+			const subResult = processValue(token.value, cursor, context, state);
+			if (subResult) return subResult;
+		}
+	}
+	return toLeafResult(state);
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/internal/wizard.js
+const run = /*#__PURE__*/ fnUntraced(function* (command, options) {
+	const commandPath = options?.commandPath ?? [command.name];
+	const selected = getCommandAtPath(command, commandPath);
+	const commandLine = (options?.prefix ?? commandPath).map((value) => commandLineArg(value));
+	yield* logCurrentCommand(commandLine);
+	yield* promptCommand(selected, commandLine, selected === command ? "ROOT" : selected.name);
+	return {
+		args: commandLine.map((arg) => arg.value),
+		displayArgs: commandLine.map((arg) => arg.displayValue)
+	};
+});
+const getCommandAtPath = (command, commandPath) => {
+	let current = command;
+	for (const name of commandPath.slice(1)) {
+		const child = current.subcommands.flatMap((group) => group.commands).find((candidate) => candidate.name === name || candidate.alias === name);
+		if (child === void 0) break;
+		current = child;
+	}
+	return current;
+};
+const promptCommand = /*#__PURE__*/ fnUntraced(function* (command, commandLine, sectionName) {
+	const impl = toImpl(command);
+	const visibleSubcommands = command.subcommands.flatMap((group) => group.commands.filter((child) => !child.unlisted));
+	const config = visibleSubcommands.length === 0 ? impl.config : impl.contextConfig;
+	if (config.flags.length > 0) {
+		yield* log(renderSection(sectionName, "FLAGS"));
+		for (const param of config.flags) commandLine.push(...yield* promptParam(param));
+		if (config.arguments.length > 0 || visibleSubcommands.length > 0) yield* logCurrentCommand(commandLine);
+	}
+	if (config.arguments.length > 0) {
+		yield* log(renderSection(sectionName, "ARGUMENTS"));
+		for (const param of config.arguments) commandLine.push(...yield* promptParam(param));
+		if (visibleSubcommands.length > 0) yield* logCurrentCommand(commandLine);
+	}
+	if (visibleSubcommands.length === 0) return;
+	const child = yield* run$1(Select({
+		message: "Command",
+		choices: visibleSubcommands.map((command) => ({
+			title: command.name,
+			value: command,
+			...command.shortDescription !== void 0 ? { description: command.shortDescription } : command.description !== void 0 ? { description: command.description } : {}
+		}))
+	}));
+	yield* log();
+	commandLine.push(commandLineArg(child.name));
+	if (hasWizardSteps(child)) yield* logCurrentCommand(commandLine);
+	yield* promptCommand(child, commandLine, child.name);
+});
+const hasWizardSteps = (command) => {
+	return command.subcommands.some((group) => group.commands.some((child) => !child.unlisted)) || toImpl(command).config.orderedParams.length > 0;
+};
+const promptParam = /*#__PURE__*/ fnUntraced(function* (param) {
+	const single = getUnderlyingSingleOrThrow(param);
+	const metadata = getParamMetadata(param);
+	if (metadata.isOptional) {
+		if (!(yield* run$1(Confirm({
+			message: `Set ${renderParamLabel(single)}?`,
+			initial: false
+		})))) {
+			yield* log();
+			return [];
+		}
+	}
+	const count = !metadata.isVariadic ? 1 : yield* run$1(Int({
+		message: `${renderParamLabel(single)} count`,
+		default: getOrElse(metadata.variadicMin, () => 0),
+		min: getOrElse(metadata.variadicMin, () => 0),
+		...isSome(metadata.variadicMax) ? { max: metadata.variadicMax.value } : {}
+	}));
+	const values = [];
+	for (let i = 0; i < count; i++) values.push(yield* promptSingle(single));
+	const parsed = single.kind === "flag" ? {
+		flags: { [single.name]: values.map((arg) => arg.value) },
+		arguments: []
+	} : {
+		flags: {},
+		arguments: values.map((arg) => arg.value)
+	};
+	yield* param.parse(parsed);
+	yield* log();
+	if (single.kind === "argument") return values;
+	return values.flatMap((value) => value.value.startsWith("-") && value.value.length > 1 ? [commandLineArg(`--${single.name}=${value.value}`, `--${single.name}=${value.displayValue}`)] : [commandLineArg(`--${single.name}`), value]);
+});
+const promptSingle = (single) => {
+	const message = renderParamMessage(single);
+	switch (single.primitiveType._tag) {
+		case "Boolean": return map$5(run$1(Confirm({
+			message,
+			label: {
+				confirm: "true",
+				deny: "false"
+			},
+			placeholder: {
+				defaultConfirm: "(T/f)",
+				defaultDeny: "(t/F)"
+			}
+		})), (value) => commandLineArg(String(value)));
+		case "Choice": {
+			const choices = getChoiceKeys(single.primitiveType) ?? [];
+			return map$5(run$1(Select({
+				message,
+				choices: choices.map((choice) => ({
+					title: choice,
+					value: choice
+				}))
+			})), commandLineArg);
+		}
+		case "Date": return map$5(run$1(Date$1({ message })), (date) => commandLineArg(date.toISOString()));
+		case "Finite": return map$5(run$1(Number$1({ message })), (value) => commandLineArg(String(value)));
+		case "Int": return map$5(run$1(Int({ message })), (value) => commandLineArg(String(value)));
+		case "Redacted": return map$5(run$1(Password({ message })), (value$2) => commandLineArg(value(value$2), "<redacted>"));
+		default: return map$5(run$1(String$3({ message })), commandLineArg);
+	}
+};
+const commandLineArg = (value, displayValue = value) => ({
+	value,
+	displayValue
+});
+const formatName = (single) => single.kind === "flag" ? `--${single.name}` : single.name;
+const renderParamMessage = (single) => renderParamLabel(single);
+const renderParamLabel = (single) => {
+	const description = getOrUndefined$1(single.description)?.trim();
+	const label = single.kind === "flag" && description !== void 0 && description.length <= 32 ? description : humanize(single.name);
+	return single.kind === "flag" ? `${label} (${formatName(single)})` : label;
+};
+const humanize = (name) => {
+	const words = name.split(/[-_]+/).filter((word) => word.length > 0);
+	if (words.length === 0) return name;
+	return [words[0][0].toUpperCase() + words[0].slice(1), ...words.slice(1)].join(" ");
+};
+const logCurrentCommand = (commandLine) => log(renderCommandBlock("Current command", commandLine.map((arg) => arg.displayValue), magenta));
+const renderSection = (commandName, section) => `${annotate(commandName.toUpperCase(), bold, cyanBright)} ${annotate("·", blackBright)} ${annotate(section, bold, white)}`;
+const renderIntroduction = (name, version, summary) => {
+	return [
+		`${annotate(name, bold, cyanBright)} ${annotate(`v${version}`, white)} ${annotate("· Command wizard", bold, white)}`,
+		...summary === void 0 || summary.length === 0 ? [] : [summary],
+		annotate("Build a command interactively. Press Ctrl+C to cancel.", blackBright),
+		""
+	].join("\n");
+};
+const renderCompletion = (commandLine) => renderCommandBlock("Command ready", commandLine, cyanBright, green);
+const renderQuit = () => `\n${annotate("Wizard cancelled.", red)}`;
+const renderCommandBlock = (label, commandLine, commandColor, labelColor = white) => {
+	const lines = wrapCommand(commandLine);
+	return [
+		annotate(label, bold, labelColor),
+		...lines.map((line) => annotate(line, commandColor)),
+		""
+	].join("\n");
+};
+const wrapCommand = (commandLine) => {
+	const width = 88;
+	const firstIndent = "  $ ";
+	const continuationIndent = "    ";
+	const args = commandLine.map(formatShellArg);
+	const lines = [];
+	let current = firstIndent;
+	for (const arg of args) {
+		const separator = current === firstIndent || current === continuationIndent ? "" : " ";
+		if (current.length + separator.length + arg.length > width && current !== firstIndent) {
+			lines.push(`${current} \\`);
+			current = `${continuationIndent}${arg}`;
+		} else current += `${separator}${arg}`;
+	}
+	if (current !== firstIndent) lines.push(current);
+	return lines;
+};
+const formatShellArg = (arg) => /^[A-Za-z0-9_./:@%+=,-]+$/.test(arg) ? arg : `'${arg.replaceAll("'", `'"'"'`)}'`;
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/cli/Command.js
+/**
+* Returns `true` if the provided value is a `Command`.
+*
+* **Gotchas**
+*
+* This checks for the `Command` type-id property; it does not validate the full
+* command shape.
+*
+* @stability unstable
+* @category guards
+* @since 4.0.0
+*/
+const isCommand = (u) => hasProperty(u, TypeId$1);
+/**
+* Creates a `Command` from a name, an optional configuration, and an optional
+* handler.
+*
+* **Details**
+*
+* Use `withDescription` and related metadata combinators to add help text. The
+* overloads support simple commands, configured commands, and commands with
+* effectful handlers.
+*
+* **Example** (Creating commands)
+*
+* ```ts import.meta.vitest
+* import { Effect, FileSystem, Layer, Path, Stdio, Terminal } from "effect"
+* import { Argument, Command, Flag } from "effect/cli"
+* import { ChildProcessSpawner } from "effect/process"
+*
+* const CliTestLayer = Layer.mergeAll(
+*   FileSystem.layerNoop({}),
+*   Path.layer,
+*   Stdio.layerTest({}),
+*   Layer.succeed(Terminal.Terminal, Terminal.make({
+*     columns: Effect.succeed(80),
+*     rows: Effect.succeed(24),
+*     readInput: Effect.die("unused"),
+*     readLine: Effect.die("unused"),
+*     display: () => Effect.void
+*   })),
+*   Layer.succeed(
+*     ChildProcessSpawner.ChildProcessSpawner,
+*     ChildProcessSpawner.make(() => Effect.die("unused"))
+*   )
+* )
+*
+* // Simple command with no configuration
+* const version = Command.make("version")
+*
+* // Command with simple flags
+* const greet = Command.make("greet", {
+*   name: Flag.String("name"),
+*   count: Flag.Int("count").pipe(Flag.withDefault(1))
+* })
+*
+* // Command with nested configuration
+* const deploy = Command.make("deploy", {
+*   environment: Flag.String("env").pipe(
+*     Flag.withDescription("Target environment")
+*   ),
+*   server: {
+*     host: Flag.String("host").pipe(Flag.withDefault("localhost")),
+*     port: Flag.Int("port").pipe(Flag.withDefault(3000))
+*   },
+*   files: Argument.String("files").pipe(Argument.variadic),
+*   force: Flag.Boolean("force").pipe(
+*     Flag.withDescription("Force deployment"),
+*     Flag.withDefault(false)
+*   )
+* })
+*
+* // Command with handler
+* const output: Array<string> = []
+* const deployWithHandler = Command.make("deploy", {
+*   environment: Flag.String("env"),
+*   force: Flag.Boolean("force").pipe(Flag.withDefault(false))
+* }, (config) =>
+*   Effect.gen(function*() {
+*     yield* Effect.sync(() => output.push(`Starting deployment to ${config.environment}`))
+*
+*     if (!config.force && config.environment === "production") {
+*       return yield* Effect.fail("Production deployments require --force flag")
+*     }
+*
+*     yield* Effect.sync(() => output.push("Deployment completed successfully"))
+*   }))
+*
+* await Effect.runPromise(
+*   Command.runWith(deployWithHandler, { version: "1.0.0" })([
+*     "--env",
+*     "staging",
+*     "--force"
+*   ]).pipe(Effect.provide(CliTestLayer))
+* )
+* output // => ["Starting deployment to staging", "Deployment completed successfully"]
+* ```
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const make$5 = (name, config, handler) => {
+	const parsedConfig = parseConfig(config ?? {});
+	return makeCommand({
+		name,
+		config: parsedConfig,
+		...isNotUndefined(handler) ? { handle: handler } : {}
+	});
+};
+const normalizeSubcommandEntries = (entries) => {
+	const flat = [];
+	const grouped = /* @__PURE__ */ new Map();
+	const addToGroup = (group, command) => {
+		flat.push(command);
+		const existing = grouped.get(group);
+		if (existing) existing.push(command);
+		else grouped.set(group, [command]);
+	};
+	for (const entry of entries) {
+		if (isCommand(entry)) {
+			addToGroup(void 0, entry);
+			continue;
+		}
+		for (const command of entry.commands) addToGroup(entry.group, command);
+	}
+	const groups = [];
+	const ungroupedCommands = grouped.get(void 0);
+	if (ungroupedCommands && ungroupedCommands.length > 0) groups.push({
+		group: void 0,
+		commands: ungroupedCommands
+	});
+	for (const [group, commands] of grouped) {
+		if (group === void 0) continue;
+		groups.push({
+			group,
+			commands
+		});
+	}
+	return {
+		flat,
+		groups
+	};
+};
+/**
+* Adds subcommands to a command, creating a hierarchical command structure.
+*
+* **Details**
+*
+* Subcommands can access their parent's parsed configuration by yielding the parent
+* command within their handler. This enables shared parent flags that affect
+* all subcommands.
+*
+* **Example** (Adding subcommands)
+*
+* ```ts import.meta.vitest
+* import { Effect, FileSystem, Layer, Path, Stdio, Terminal } from "effect"
+* import { Command, Flag } from "effect/cli"
+* import { ChildProcessSpawner } from "effect/process"
+*
+* const CliTestLayer = Layer.mergeAll(
+*   FileSystem.layerNoop({}),
+*   Path.layer,
+*   Stdio.layerTest({}),
+*   Layer.succeed(Terminal.Terminal, Terminal.make({
+*     columns: Effect.succeed(80),
+*     rows: Effect.succeed(24),
+*     readInput: Effect.die("unused"),
+*     readLine: Effect.die("unused"),
+*     display: () => Effect.void
+*   })),
+*   Layer.succeed(
+*     ChildProcessSpawner.ChildProcessSpawner,
+*     ChildProcessSpawner.make(() => Effect.die("unused"))
+*   )
+* )
+*
+* // Parent command with shared flags
+* const git = Command.make("git").pipe(
+*   Command.withSharedFlags({
+*     verbose: Flag.Boolean("verbose").pipe(Flag.withDefault(false))
+*   })
+* )
+*
+* // Subcommand that accesses parent config
+* const output: Array<string> = []
+* const clone = Command.make("clone", {
+*   repository: Flag.String("repo")
+* }, (config) =>
+*   Effect.gen(function*() {
+*     const parent = yield* git // Access parent's parsed config
+*     if (parent.verbose) {
+*       yield* Effect.sync(() => output.push("Verbose mode enabled"))
+*     }
+*     yield* Effect.sync(() => output.push(`Cloning ${config.repository}`))
+*   }))
+*
+* const app = git.pipe(Command.withSubcommands([clone]))
+*
+* await Effect.runPromise(
+*   Command.runWith(app, { version: "1.0.0" })([
+*     "--verbose",
+*     "clone",
+*     "--repo",
+*     "github.com/foo/bar"
+*   ]).pipe(Effect.provide(CliTestLayer))
+* )
+* output // => ["Verbose mode enabled", "Cloning github.com/foo/bar"]
+* ```
+*
+* @stability unstable
+* @category combinators
+* @since 4.0.0
+*/
+const withSubcommands = /*#__PURE__*/ dual(2, (self, subcommands) => {
+	const normalized = normalizeSubcommandEntries(subcommands);
+	checkForDuplicateFlags(self, normalized.flat);
+	const impl = toImpl(self);
+	const byName = new Map(normalized.flat.map((s) => [s.name, toImpl(s)]));
+	const SubcommandStateSymbol = Symbol("effect/cli/SubcommandState");
+	const parse = fnUntraced(function* (raw) {
+		if (isNone(raw.subcommand)) return yield* impl.parse(raw);
+		const sub = byName.get(raw.subcommand.value.name);
+		if (!sub) return yield* impl.parse(raw);
+		const context = yield* impl.parseContext(raw);
+		const result = yield* sub.parse(raw.subcommand.value.parsedInput);
+		return {
+			...context,
+			[SubcommandStateSymbol]: {
+				name: sub.name,
+				result
+			}
+		};
+	});
+	const handle = fnUntraced(function* (input, path) {
+		const selectedSubcommand = input[SubcommandStateSymbol];
+		if (selectedSubcommand) {
+			const child = byName.get(selectedSubcommand.name);
+			if (!child) return yield* new ShowHelp({
+				commandPath: path,
+				errors: []
+			});
+			return yield* child.handle(selectedSubcommand.result, [...path, child.name]).pipe(provideService(impl.service, input));
+		}
+		return yield* impl.handle(input, path);
+	});
+	return makeCommand({
+		name: impl.name,
+		config: impl.config,
+		contextConfig: impl.contextConfig,
+		description: impl.description,
+		shortDescription: impl.shortDescription,
+		alias: impl.alias,
+		unlisted: impl.unlisted,
+		annotations: impl.annotations,
+		globalFlags: impl.globalFlags,
+		examples: impl.examples,
+		service: impl.service,
+		subcommands: normalized.groups,
+		parse,
+		parseContext: impl.parseContext,
+		handle
+	});
+});
+/**
+* Sets the description for a command.
+*
+* **Details**
+*
+* Descriptions provide users with information about what the command does
+* when they view help documentation.
+*
+* **Example** (Setting descriptions)
+*
+* ```ts import.meta.vitest
+* import { Effect, FileSystem, Layer, Path, Stdio, Terminal } from "effect"
+* import { Command, Flag } from "effect/cli"
+* import { ChildProcessSpawner } from "effect/process"
+*
+* const CliTestLayer = Layer.mergeAll(
+*   FileSystem.layerNoop({}),
+*   Path.layer,
+*   Stdio.layerTest({}),
+*   Layer.succeed(Terminal.Terminal, Terminal.make({
+*     columns: Effect.succeed(80),
+*     rows: Effect.succeed(24),
+*     readInput: Effect.die("unused"),
+*     readLine: Effect.die("unused"),
+*     display: () => Effect.void
+*   })),
+*   Layer.succeed(
+*     ChildProcessSpawner.ChildProcessSpawner,
+*     ChildProcessSpawner.make(() => Effect.die("unused"))
+*   )
+* )
+*
+* const output: Array<string> = []
+* const deploy = Command.make("deploy", {
+*   environment: Flag.String("env")
+* }, (config) =>
+*   Effect.gen(function*() {
+*     yield* Effect.sync(() => output.push(`Deploying to ${config.environment}`))
+*   })).pipe(
+*     Command.withDescription("Deploy the application to a specified environment")
+*   )
+*
+* await Effect.runPromise(
+*   Command.runWith(deploy, { version: "1.0.0" })(["--env", "staging"]).pipe(Effect.provide(CliTestLayer))
+* )
+* output // => ["Deploying to staging"]
+* ```
+*
+* @stability unstable
+* @category combinators
+* @since 4.0.0
+*/
+const withDescription = /*#__PURE__*/ dual(2, (self, description) => makeCommand({
+	...toImpl(self),
+	description
+}));
+const getOutOfScopeGlobalFlagErrors = (allFlags, activeFlags, flagMap, commandPath) => {
+	const activeSet = new Set(activeFlags);
+	const errors = [];
+	const seen = /* @__PURE__ */ new Set();
+	for (const flag of allFlags) {
+		if (activeSet.has(flag)) continue;
+		const singles = extractSingleParams(flag.flag);
+		for (const single of singles) {
+			const entries = flagMap[single.name];
+			if (!entries || entries.length === 0) continue;
+			const option = `--${single.name}`;
+			if (seen.has(option)) continue;
+			seen.add(option);
+			errors.push(new UnrecognizedOption({
+				option,
+				suggestions: [],
+				command: commandPath
+			}));
+		}
+	}
+	return errors;
+};
+const showHelp = (command, error$2, renderErrors) => gen(function* () {
+	const { builtIns } = yield* CliConfig;
+	const formatter = yield* Formatter;
+	const helpDoc = yield* getHelpForCommandPath(command, error$2.commandPath, builtIns);
+	yield* log(formatter.formatHelpDoc(helpDoc));
+	if (renderErrors && error$2.errors.length > 0) yield* error(formatter.formatErrors(error$2.errors));
+});
+const showUserError = (error$1) => gen(function* () {
+	const formatter = yield* Formatter;
+	yield* error(formatter.formatError(error$1));
+	error$1[errorReported] = false;
+});
+/**
+* Runs a command with explicitly provided arguments instead of using arguments from `Stdio`.
+*
+* **When to use**
+*
+* Use when you need to test CLI applications or programmatically execute
+* commands with specific arguments.
+*
+* Help documents are always rendered. By default, parse error details and
+* `CliError.UserError` failures are also rendered with the installed
+* `CliOutput.Formatter` before the error is rethrown. Set `renderErrors` to
+* `false` when the host application owns error rendering.
+*
+* **Example** (Running commands with explicit arguments)
+*
+* ```ts import.meta.vitest
+* import { Effect, FileSystem, Layer, Path, Stdio, Terminal } from "effect"
+* import { Command, Flag } from "effect/cli"
+* import { ChildProcessSpawner } from "effect/process"
+*
+* const CliTestLayer = Layer.mergeAll(
+*   FileSystem.layerNoop({}),
+*   Path.layer,
+*   Stdio.layerTest({}),
+*   Layer.succeed(Terminal.Terminal, Terminal.make({
+*     columns: Effect.succeed(80),
+*     rows: Effect.succeed(24),
+*     readInput: Effect.die("unused"),
+*     readLine: Effect.die("unused"),
+*     display: () => Effect.void
+*   })),
+*   Layer.succeed(
+*     ChildProcessSpawner.ChildProcessSpawner,
+*     ChildProcessSpawner.make(() => Effect.die("unused"))
+*   )
+* )
+*
+* const output: Array<string> = []
+* const greet = Command.make("greet", {
+*   name: Flag.String("name"),
+*   count: Flag.Int("count").pipe(Flag.withDefault(1))
+* }, (config) =>
+*   Effect.gen(function*() {
+*     for (let i = 0; i < config.count; i++) {
+*       yield* Effect.sync(() => output.push(`Hello, ${config.name}!`))
+*     }
+*   }))
+*
+* // Test with specific arguments
+* const testProgram = Effect.gen(function*() {
+*   const runCommand = Command.runWith(greet, { version: "1.0.0" })
+*
+*   yield* runCommand(["--name", "Alice", "--count", "2"])
+* })
+*
+* await Effect.runPromise(testProgram.pipe(Effect.provide(CliTestLayer)))
+* output // => ["Hello, Alice!", "Hello, Alice!"]
+* ```
+*
+* @stability unstable
+* @category running
+* @since 4.0.0
+*/
+const runWith = (command, config) => {
+	const commandImpl = toImpl(command);
+	return fnUntraced(function* (args) {
+		const { builtIns } = yield* CliConfig;
+		const { tokens, trailingOperands } = lex(args);
+		const allFlags = getGlobalFlagsForCommandTree(command, builtIns);
+		const allFlagParams = allFlags.flatMap((f) => extractSingleParams(f.flag));
+		const globalRegistry = createFlagRegistry(allFlagParams.filter(isFlagParam));
+		const { flagMap, remainder, errors: globalFlagErrors } = consumeGlobalFlags(tokens, command, globalRegistry);
+		const emptyArgs = {
+			flags: flagMap,
+			arguments: []
+		};
+		const parsedArgs = yield* parseArgs({
+			tokens: remainder,
+			trailingOperands
+		}, command);
+		const commandPath = [command.name, ...getCommandPath(parsedArgs)];
+		const handlerCtx = {
+			builtIns,
+			command,
+			commandPath,
+			version: config.version
+		};
+		const activeFlags = getGlobalFlagsForCommandPath(command, commandPath, builtIns);
+		const outOfScopeErrors = getOutOfScopeGlobalFlagErrors(allFlags, activeFlags, flagMap, commandPath);
+		if (outOfScopeErrors.length > 0 || globalFlagErrors.length > 0) {
+			const parseErrors = parsedArgs.errors ?? [];
+			return yield* new ShowHelp({
+				commandPath,
+				errors: [
+					...globalFlagErrors,
+					...outOfScopeErrors,
+					...parseErrors
+				]
+			});
+		}
+		for (const flag of activeFlags) {
+			if (flag._tag !== "Action") continue;
+			if (!extractSingleParams(flag.flag).some((s) => {
+				const entries = flagMap[s.name];
+				return entries !== void 0 && entries.length > 0;
+			})) continue;
+			const [, value] = yield* flag.flag.parse(emptyArgs);
+			if (flag === Wizard) return yield* gen(function* () {
+				yield* log(renderIntroduction(command.name, config.version, command.description));
+				const prefix = [command.name, ...args.filter((arg) => arg !== "--wizard" && !arg.startsWith("--wizard="))];
+				const wizardResult = yield* run(command, {
+					commandPath,
+					prefix
+				});
+				yield* log(renderCompletion(wizardResult.displayArgs));
+				if (yield* run$1(Toggle({
+					message: "Run this command?",
+					initial: true,
+					active: "yes",
+					inactive: "no"
+				}))) {
+					yield* log();
+					yield* runWith(command, {
+						...config,
+						renderErrors: false
+					})(wizardResult.args.slice(1));
+				}
+			}).pipe(catchTag("QuitError", () => log(renderQuit())));
+			yield* flag.run(value, handlerCtx);
+			return;
+		}
+		if (parsedArgs.errors && parsedArgs.errors.length > 0) return yield* new ShowHelp({
+			commandPath,
+			errors: parsedArgs.errors
+		});
+		const parseResult = yield* result(commandImpl.parse(parsedArgs));
+		if (parseResult._tag === "Failure") return yield* new ShowHelp({
+			commandPath,
+			errors: [parseResult.failure]
+		});
+		let program = commandImpl.handle(parseResult.success, [command.name]);
+		const logLevel = activeFlags.includes(LogLevel) ? (yield* LogLevel.flag.parse(emptyArgs))[1] : none();
+		program = provideService(program, LogLevel, logLevel);
+		for (const flag of activeFlags) {
+			if (flag._tag !== "Setting" || flag === LogLevel) continue;
+			const [, value] = yield* flag.flag.parse(emptyArgs);
+			program = provideService(program, flag, value);
+		}
+		const services = match$5(logLevel, {
+			onNone: () => empty$3(),
+			onSome: (level) => make$26(MinimumLogLevel, level)
+		});
+		yield* provideContext(program, services);
+	}, catchFilter((error) => isCliError(error) && error._tag === "ShowHelp" ? succeed$6(error) : fail$5(error), (error) => andThen(showHelp(command, error, config.renderErrors !== false), fail$1(error))), catchFilter((error) => config.renderErrors !== false && isCliError(error) && error._tag === "UserError" ? succeed$6(error) : fail$5(error), (error) => andThen(showUserError(error), fail$1(error))), catchFilter((e) => isQuitError(e) ? succeed$6(e) : fail$5(e), (_) => interrupt$1));
+};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/process/ChildProcessSpawner.js
+/**
+* Service boundary for starting and controlling child processes.
+*
+* `ChildProcessSpawner` is the service used by `ChildProcess` commands to start
+* operating-system processes. A spawner turns a command description into a
+* handle that can write to stdin, read stdout and stderr, wait for exit, kill
+* the process, and manage whether the process keeps its parent alive. Platform
+* backends implement this service, while most application code uses the higher
+* level `ChildProcess` module.
+*
+* @stability unstable
+* @since 4.0.0
+*/
+/**
+* Constructs branded child process `ExitCode` values.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const ExitCode = /*#__PURE__*/ nominal();
+/**
+* Constructs branded child process `ProcessId` values.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const ProcessId = /*#__PURE__*/ nominal();
+const HandleTypeId = "~effect/process/ChildProcessSpawner/ChildProcessHandle";
+const HandleProto = {
+	[HandleTypeId]: HandleTypeId,
+	...BaseProto,
+	toJSON() {
+		return {
+			_id: "ChildProcessHandle",
+			pid: this.pid
+		};
+	}
+};
+/**
+* Constructs a new `ChildProcessHandle`.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const makeHandle = (params) => Object.setPrototypeOf({ ...params }, HandleProto);
+/**
+* Creates a `ChildProcessSpawner` service from a `spawn` function, deriving
+* helpers for exit codes and output collection from that implementation.
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const make$4 = (spawn) => {
+	const streamString = (command, options) => spawn(command).pipe(map$5((handle) => decodeText(options?.includeStderr === true ? handle.all : handle.stdout)), unwrap);
+	const streamLines = (command, options) => splitLines(streamString(command, options));
+	return ChildProcessSpawner.of({
+		spawn,
+		exitCode: (command) => scoped(flatMap$1(spawn(command), (handle) => handle.exitCode)),
+		streamString,
+		streamLines,
+		lines: (command, options) => runCollect(streamLines(command, options)),
+		string: (command, options) => mkString(streamString(command, options))
+	});
+};
+/**
+* Service tag for child process spawning.
+*
+* @stability unstable
+* @category services
+* @since 4.0.0
+*/
+var ChildProcessSpawner = class extends (/*#__PURE__*/ Service()("effect/process/ChildProcessSpawner")) {};
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/process/ChildProcess.js
+/**
+* Describes child processes before they are started.
+*
+* A `Command` stores the executable, arguments, environment, standard streams,
+* working directory, and other process options. Commands can also be piped
+* together. A command is an `Effect`; running it asks the
+* `ChildProcessSpawner` service to start the process and returns a
+* `ChildProcessHandle`.
+*
+* @stability unstable
+* @since 4.0.0
+*/
+const TypeId = "~effect/process/ChildProcess";
+const Proto = {
+	.../*#__PURE__*/ Prototype({
+		label: "Command",
+		evaluate(fiber) {
+			return getUnsafe(fiber.context, ChildProcessSpawner).spawn(this);
+		}
+	}),
+	[TypeId]: TypeId
+};
+const makeStandardCommand = (command, args, options) => Object.assign(Object.create(Proto), {
+	_tag: "StandardCommand",
+	command,
+	args,
+	options
+});
+/**
+* Create a command from a template literal, options + template, or array form.
+*
+* **Details**
+*
+* This function supports three calling conventions:
+* 1. Template literal: `make\`npm run build\``
+* 2. Options + template literal: `make({ cwd: "/app" })\`npm run build\``
+* 3. Array form: `make("npm", ["run", "build"], options?)`
+*
+* Template literals are not parsed until execution time, allowing parsing
+* errors to flow through Effect's error channel.
+*
+* **Example** (Creating commands)
+*
+* ```ts import.meta.vitest
+* import { ChildProcess } from "effect/process"
+*
+* // Template literal form
+* const cmd1 = ChildProcess.make`echo "hello"`
+*
+* // With options
+* const cmd2 = ChildProcess.make({ cwd: "/tmp" })`ls -la`
+*
+* // Array form
+* const cmd3 = ChildProcess.make("git", ["status"])
+*
+* const result = [cmd1.command, cmd2.options.cwd, cmd3.args[0]] // => ["echo", "/tmp", "status"]
+* ```
+*
+* @stability unstable
+* @category constructors
+* @since 4.0.0
+*/
+const make$3 = function make(...args) {
+	if (isTemplateString(args[0])) {
+		const [templates, ...expressions] = args;
+		const tokens = parseTemplates(templates, expressions);
+		return makeStandardCommand(tokens[0] ?? "", tokens.slice(1), {});
+	}
+	if (typeof args[0] === "object" && !Array.isArray(args[0]) && !isTemplateString(args[0])) {
+		const options = args[0];
+		return function(templates, ...expressions) {
+			const tokens = parseTemplates(templates, expressions);
+			return makeStandardCommand(tokens[0] ?? "", tokens.slice(1), options);
+		};
+	}
+	if (typeof args[0] === "string" && !Array.isArray(args[1])) {
+		const [command, options = {}] = args;
+		return makeStandardCommand(command, [], options);
+	}
+	const [command, cmdArgs = [], options = {}] = args;
+	return makeStandardCommand(command, cmdArgs, options);
+};
+const isTemplateString = (u) => Array.isArray(u) && "raw" in u && Array.isArray(u.raw);
+/**
+* Parses an fd name like "fd3" to its numeric index.
+* Returns undefined if the name is invalid.
+*
+* @stability unstable
+* @category converting
+* @since 4.0.0
+*/
+const parseFdName = (name) => {
+	const match = /^fd(\d+)$/.exec(name);
+	if (match === null) return void 0;
+	const fd = parseInt(match[1], 10);
+	return fd >= 3 ? fd : void 0;
+};
+/**
+* Create an fd name from its numeric index.
+*
+* @stability unstable
+* @category converting
+* @since 4.0.0
+*/
+const fdName = (fd) => `fd${fd}`;
+const parseTemplates = (templates, expressions) => {
+	let tokens = [];
+	for (const [index, template] of templates.entries()) tokens = parseTemplate(templates, expressions, tokens, template, index);
+	return tokens;
+};
+const parseTemplate = (templates, expressions, prevTokens, template, index) => {
+	const rawTemplate = templates.raw[index];
+	if (rawTemplate === void 0) throw new Error(`Invalid backslash sequence: ${templates.raw[index]}`);
+	const { hasLeadingWhitespace, hasTrailingWhitespace, tokens } = splitByWhitespaces(template, rawTemplate);
+	const nextTokens = concatTokens(prevTokens, tokens, hasLeadingWhitespace);
+	if (index === expressions.length) return nextTokens;
+	const expression = expressions[index];
+	const expressionTokens = Array.isArray(expression) ? expression.map((expression) => parseExpression(expression)) : [parseExpression(expression)];
+	return concatTokens(nextTokens, expressionTokens, hasTrailingWhitespace);
+};
+/**
+* Convert valid expressions defined in a template string command (i.e. using
+* `${expression}` into strings.
+*/
+const parseExpression = (expression) => {
+	if (typeof expression === "string") return expression;
+	return String(expression);
+};
+const DELIMITERS = /*#__PURE__*/ new Set([
+	" ",
+	"	",
+	"\r",
+	"\n"
+]);
+/**
+* Number of characters in backslash escape sequences: \0 \xXX or \uXXXX
+* \cX is allowed in RegExps but not in strings
+* Octal sequences are not allowed in strict mode
+*/
+const ESCAPE_LENGTH = {
+	x: 3,
+	u: 5
+};
+/**
+* Splits a template string by whitespace while also properly handling escape
+* sequences.
+*
+* As an example, let's review the following valid commands:
+*
+* ```ts
+* ChildProcess.exec`echo foo\n bar`
+* // We should run `["echo", "foo\n", "bar"]`
+*
+* ChildProcess.exec`echo foo
+*  bar`
+* // We should run `["echo", "foo", "bar]`
+* ```
+*
+* The problem is that when we evaluate the template string for both of the above
+* commands, we will end up with the same string "echo foo\n bar".
+*
+* What we really want is to include the escaped character in the arguments for
+* the first command, since it was written explicitly by the user.
+*
+* This is why also having access to the raw template string is useful - in a
+* template string, there are two representations of the same string:
+* 1. `template`     - The processed string (escape sequences are evaluated).
+* 2. `template.raw` - The raw string (escape sequences are literal).
+*/
+const splitByWhitespaces = (template, rawTemplate) => {
+	if (rawTemplate.length === 0) return {
+		tokens: [],
+		hasLeadingWhitespace: false,
+		hasTrailingWhitespace: false
+	};
+	const hasLeadingWhitespace = DELIMITERS.has(rawTemplate[0]);
+	const tokens = [];
+	let templateCursor = 0;
+	for (let templateIndex = 0, rawIndex = 0; templateIndex < template.length; templateIndex += 1, rawIndex += 1) {
+		const rawCharacter = rawTemplate[rawIndex];
+		if (DELIMITERS.has(rawCharacter)) {
+			if (templateCursor !== templateIndex) tokens.push(template.slice(templateCursor, templateIndex));
+			templateCursor = templateIndex + 1;
+		} else if (rawCharacter === "\\") {
+			const nextRawCharacter = rawTemplate[rawIndex + 1];
+			if (nextRawCharacter === "\n") {
+				templateIndex -= 1;
+				rawIndex += 1;
+			} else if (nextRawCharacter === "u" && rawTemplate[rawIndex + 2] === "{") {
+				const end = rawTemplate.indexOf("}", rawIndex + 3);
+				if (parseInt(rawTemplate.slice(rawIndex + 3, end), 16) > 65535) templateIndex += 1;
+				rawIndex = end;
+			} else rawIndex += ESCAPE_LENGTH[nextRawCharacter] ?? 1;
+		}
+	}
+	const hasTrailingWhitespace = templateCursor === template.length;
+	if (!hasTrailingWhitespace) tokens.push(template.slice(templateCursor));
+	return {
+		tokens,
+		hasLeadingWhitespace,
+		hasTrailingWhitespace
+	};
+};
+/**
+* Concatenates two separate sets of string tokens together.
+*
+* If either set is empty or `isSeparated=false`, the last element of `prevTokens`
+* and the first element of `nextTokens` will be joined into a single token.
+*/
+const concatTokens = (prevTokens, nextTokens, isSeparated) => isSeparated || prevTokens.length === 0 || nextTokens.length === 0 ? [...prevTokens, ...nextTokens] : [
+	...prevTokens.slice(0, -1),
+	`${prevTokens.at(-1)}${nextTokens.at(0)}`,
+	...nextTokens.slice(1)
+];
+//#endregion
+//#region node_modules/.pnpm/@effect+platform-node-shared@4.0.0-rc.118_effect@4.0.0-rc.118/node_modules/@effect/platform-node-shared/dist/internal/nodeChildProcessSpawner.js
+const buildSpawnOptions = (options, base, platform) => {
+	const detached = options.detached ?? platform !== "win32";
+	return {
+		...base,
+		detached,
+		shell: options.shell,
+		windowsHide: options.windowsHide ?? !detached
+	};
+};
+//#endregion
+//#region node_modules/.pnpm/@effect+platform-node-shared@4.0.0-rc.118_effect@4.0.0-rc.118/node_modules/@effect/platform-node-shared/dist/internal/utils.js
+/** @internal */
+const handleErrnoException = (module, method) => (err, [path]) => {
+	let reason = "Unknown";
+	switch (err.code) {
+		case "ENOENT":
+			reason = "NotFound";
+			break;
+		case "EACCES":
+			reason = "PermissionDenied";
+			break;
+		case "EEXIST":
+			reason = "AlreadyExists";
+			break;
+		case "EISDIR":
+			reason = "BadResource";
+			break;
+		case "ENOTDIR":
+			reason = "BadResource";
+			break;
+		case "EBUSY":
+			reason = "Busy";
+			break;
+		case "ELOOP": reason = "BadResource";
+	}
+	return systemError({
+		_tag: reason,
+		module,
+		method,
+		pathOrDescriptor: path,
+		syscall: err.syscall,
+		cause: err
+	});
+};
+//#endregion
+//#region node_modules/.pnpm/@effect+platform-node-shared@4.0.0-rc.118_effect@4.0.0-rc.118/node_modules/@effect/platform-node-shared/dist/NodeSink.js
+/**
+* Creates a `Sink` that writes chunks to a Node writable stream, respecting
+* backpressure, mapping writable errors with `onError`, and ending the stream
+* on completion unless `endOnDone` is `false`.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const fromWritable = (options) => fromChannel$1(mapDone(fromWritableChannel(options), (_) => [_]));
+/**
+* Creates a `Channel` that pulls chunks from upstream and writes them to a
+* Node writable stream, respecting backpressure and optionally ending the
+* writable when upstream is done.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const fromWritableChannel = (options) => fromTransform$1((pull) => {
+	const writable = options.evaluate();
+	return succeed$2(pullIntoWritable({
+		...options,
+		writable,
+		pull
+	}));
+});
+/**
+* Writes Effect chunks into a Node writable stream.
+*
+* **When to use**
+*
+* Use to implement custom Node stream adapters that already have an upstream
+* pull and need direct control over a writable stream.
+*
+* **Details**
+*
+* The loop waits for `drain` when needed, fails on writable errors, and ends
+* the writable on upstream completion unless `endOnDone` is `false`.
+*
+* @category converting
+* @since 4.0.0
+*/
+const pullIntoWritable = (options) => options.pull.pipe(flatMap$1((chunk) => {
+	let i = 0;
+	return callback$1((resume) => {
+		let cancelled = false;
+		const loop = () => {
+			for (; i < chunk.length;) {
+				if (cancelled) return;
+				if (!options.writable.write(chunk[i++], options.encoding)) {
+					if (!cancelled) options.writable.once("drain", loop);
+					return;
+				}
+			}
+			if (!cancelled) resume(void_);
+		};
+		loop();
+		return sync(() => {
+			cancelled = true;
+			options.writable.off("drain", loop);
+		});
+	});
+}), forever({ disableYield: true }), options.endOnDone !== false ? catchDone((_) => {
+	if ("closed" in options.writable && options.writable.closed) return done(_);
+	return callback$1((resume) => {
+		const onFinish = () => resume(done(_));
+		options.writable.once("finish", onFinish);
+		options.writable.end();
+		return sync(() => {
+			options.writable.off("finish", onFinish);
+		});
+	});
+}) : identity, raceFirst(callback$1((resume) => {
+	const onError = (error) => resume(fail$1(options.onError(error)));
+	options.writable.once("error", onError);
+	return sync(() => {
+		options.writable.off("error", onError);
+	});
+})));
+//#endregion
+//#region node_modules/.pnpm/@effect+platform-node-shared@4.0.0-rc.118_effect@4.0.0-rc.118/node_modules/@effect/platform-node-shared/dist/NodeStream.js
+/**
+* Adapters between Node streams and Effect streams, channels, and readables.
+*
+* This module is the stream boundary for Node APIs. It wraps `Readable` and
+* `Duplex` values as Effect `Stream`s and `Channel`s, pipes Effect streams
+* through Node duplex streams, exposes an Effect `Stream` back to Node as a
+* `Readable`, and collects readable payloads into strings, array buffers, or
+* `Uint8Array`s with optional byte limits.
+*
+* @since 4.0.0
+*/
+/**
+* Converts a Node readable stream into an Effect `Stream`, reading chunks with
+* an optional chunk size, mapping stream errors with `onError`, and destroying
+* the readable on completion unless `closeOnDone` is `false`.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const fromReadable = (options) => fromChannel(fromReadableChannel(options));
+/**
+* Creates a `Channel` that pulls chunks from a Node readable stream, mapping
+* errors with `onError` and destroying the readable on completion unless
+* `closeOnDone` is `false`.
+*
+* @category constructors
+* @since 4.0.0
+*/
+const fromReadableChannel = (options) => fromTransform$1((_, scope) => readableToPullUnsafe({
+	scope,
+	readable: options.evaluate(),
+	onError: options.onError ?? defaultOnError,
+	chunkSize: options.chunkSize,
+	closeOnDone: options.closeOnDone
+}));
+const readableToPullUnsafe = (options) => {
+	const readable = options.readable;
+	const closeOnDone = options.closeOnDone ?? true;
+	const exit = options.exit ?? make$15(void 0);
+	const latch = options.latch ?? makeUnsafe$1(false);
+	function onReadable() {
+		latch.openUnsafe();
+	}
+	function onError(error) {
+		exit.current = fail$2(options.onError(error));
+		latch.openUnsafe();
+	}
+	function onEnd() {
+		exit.current = fail$2(Done());
+		latch.openUnsafe();
+	}
+	readable.on("readable", onReadable);
+	readable.once("error", onError);
+	readable.once("end", onEnd);
+	const pull = suspend$2(function loop() {
+		let item = options.readable.read(options.chunkSize);
+		if (item === null) {
+			if (exit.current) return exit.current;
+			if (readable.readableEnded) return fail$1(Done());
+			latch.closeUnsafe();
+			return flatMap$1(latch.await, loop);
+		}
+		const chunk = of(item);
+		while (true) {
+			item = options.readable.read(options.chunkSize);
+			if (item === null) break;
+			chunk.push(item);
+		}
+		return succeed$2(chunk);
+	});
+	return as(addFinalizer$1(options.scope, sync(() => {
+		readable.off("readable", onReadable);
+		readable.off("error", onError);
+		readable.off("end", onEnd);
+		if (closeOnDone && "closed" in options.readable && !options.readable.closed) options.readable.destroy();
+	})), pull);
+};
+const defaultOnError = (error) => new UnknownError(error);
+//#endregion
+//#region node_modules/.pnpm/@effect+platform-node-shared@4.0.0-rc.118_effect@4.0.0-rc.118/node_modules/@effect/platform-node-shared/dist/NodeChildProcessSpawner.js
+const toError = (error) => error instanceof globalThis.Error ? error : new globalThis.Error(String(error));
+const toPlatformError = (method, error, command) => {
+	const { commands } = flattenCommand(command);
+	const commandStr = commands.reduce((acc, curr) => {
+		const cmd = `${curr.command} ${curr.args.join(" ")}`;
+		return acc.length === 0 ? cmd : `${acc} | ${cmd}`;
+	}, "");
+	return handleErrnoException("ChildProcess", method)(error, [commandStr]);
+};
+const processGroupGraceMillis = 1e3;
+const processGroupPollIntervalMillis = 10;
+/** The leader has not exited, or a member of its process group still exists. */
+const isProcessAlive = (childProcess, exitSignal) => {
+	if (!isDoneUnsafe(exitSignal)) return true;
+	if (globalThis.process.platform === "win32") return false;
+	try {
+		globalThis.process.kill(-childProcess.pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
+};
+const taskkill = (childProcess, onExit = () => {}) => NodeChildProcess.execFile("taskkill", [
+	"/pid",
+	String(childProcess.pid),
+	"/T",
+	"/F"
+], { windowsHide: true }, onExit);
+/**
+* Layer that provides the `NodeChildProcessSpawner` implementation.
+*
+* @category layers
+* @since 4.0.0
+*/
+const layer$11 = /*#__PURE__*/ effect(ChildProcessSpawner, /* @__PURE__ */ gen(function* () {
+	const fs = yield* FileSystem;
+	const path = yield* Path$1;
+	const resolveWorkingDirectory = fnUntraced(function* (options) {
+		if (isUndefined(options.cwd)) return void 0;
+		yield* fs.access(options.cwd);
+		return path.resolve(options.cwd);
+	});
+	const resolveEnvironment = (options) => {
+		return options.extendEnv ? {
+			...globalThis.process.env,
+			...options.env
+		} : options.env;
+	};
+	const inputToStdioOption = (input) => isStream(input) ? "pipe" : input;
+	const outputToStdioOption = (input) => isSink(input) ? "pipe" : input;
+	const resolveStdinOption = (options) => {
+		const defaultConfig = {
+			stream: "pipe",
+			encoding: "utf-8",
+			endOnDone: true
+		};
+		if (isUndefined(options.stdin)) return defaultConfig;
+		if (typeof options.stdin === "string") return {
+			...defaultConfig,
+			stream: options.stdin
+		};
+		if (isStream(options.stdin)) return {
+			...defaultConfig,
+			stream: options.stdin
+		};
+		return {
+			stream: options.stdin.stream,
+			encoding: options.stdin.encoding ?? defaultConfig.encoding,
+			endOnDone: options.stdin.endOnDone ?? defaultConfig.endOnDone
+		};
+	};
+	const resolveOutputOption = (options, streamName) => {
+		const option = options[streamName];
+		if (isUndefined(option)) return { stream: "pipe" };
+		if (typeof option === "string") return { stream: option };
+		if (isSink(option)) return { stream: option };
+		return { stream: option.stream };
+	};
+	const resolveAdditionalFds = (options) => {
+		if (isUndefined(options.additionalFds)) return [];
+		const result = [];
+		for (const [name, config] of Object.entries(options.additionalFds)) {
+			const fd = parseFdName(name);
+			if (isNotUndefined(fd)) result.push({
+				fd,
+				config
+			});
+		}
+		return result.sort((a, b) => a.fd - b.fd);
+	};
+	const buildStdioArray = (stdinConfig, stdoutConfig, stderrConfig, additionalFds) => {
+		const stdio = [
+			inputToStdioOption(stdinConfig.stream),
+			outputToStdioOption(stdoutConfig.stream),
+			outputToStdioOption(stderrConfig.stream)
+		];
+		if (additionalFds.length === 0) return stdio;
+		const maxFd = additionalFds.reduce((max, { fd }) => Math.max(max, fd), 2);
+		for (let i = 3; i <= maxFd; i++) stdio[i] = "ignore";
+		for (const { fd } of additionalFds) stdio[fd] = "pipe";
+		return stdio;
+	};
+	const setupAdditionalFds = fnUntraced(function* (command, childProcess, additionalFds) {
+		if (additionalFds.length === 0) return {
+			getInputFd: () => drain,
+			getOutputFd: () => empty
+		};
+		const inputSinks = /* @__PURE__ */ new Map();
+		const outputStreams = /* @__PURE__ */ new Map();
+		for (const { config, fd } of additionalFds) {
+			const nodeStream = childProcess.stdio[fd];
+			switch (config.type) {
+				case "input": {
+					let sink = drain;
+					if (nodeStream && "write" in nodeStream) sink = fromWritable({
+						evaluate: () => nodeStream,
+						onError: (error) => toPlatformError(`fromWritable(fd${fd})`, toError(error), command)
+					});
+					if (config.stream) yield* forkScoped(run$2(config.stream, sink));
+					inputSinks.set(fd, sink);
+					break;
+				}
+				case "output": {
+					let stream = empty;
+					if (nodeStream && "read" in nodeStream) {
+						const passThrough = new PassThrough();
+						nodeStream.on("error", (error) => passThrough.destroy(error));
+						nodeStream.pipe(passThrough);
+						stream = fromReadable({
+							evaluate: () => passThrough,
+							onError: (error) => toPlatformError(`fromReadable(fd${fd})`, toError(error), command)
+						});
+					}
+					if (config.sink) stream = transduce(stream, config.sink);
+					outputStreams.set(fd, stream);
+					break;
+				}
+			}
+		}
+		return {
+			getInputFd: (fd) => inputSinks.get(fd) ?? drain,
+			getOutputFd: (fd) => outputStreams.get(fd) ?? empty
+		};
+	});
+	const setupChildStdin = (command, childProcess, config) => suspend$2(() => {
+		let sink = drain;
+		if (isNotNull(childProcess.stdin)) sink = fromWritable({
+			evaluate: () => childProcess.stdin,
+			onError: (error) => toPlatformError("fromWritable(stdin)", toError(error), command),
+			endOnDone: config.endOnDone,
+			encoding: config.encoding
+		});
+		if (isStream(config.stream)) return as(forkScoped(run$2(config.stream, sink)), sink);
+		return succeed$2(sink);
+	});
+	const setupChildOutputStreams = (command, childProcess, stdoutConfig, stderrConfig) => {
+		let stdout = childProcess.stdout ? (() => {
+			const passThrough = new PassThrough();
+			childProcess.stdout.on("error", (error) => passThrough.destroy(error));
+			childProcess.stdout.pipe(passThrough);
+			return fromReadable({
+				evaluate: () => passThrough,
+				onError: (error) => toPlatformError("fromReadable(stdout)", toError(error), command)
+			});
+		})() : empty;
+		let stderr = childProcess.stderr ? (() => {
+			const passThrough = new PassThrough();
+			childProcess.stderr.on("error", (error) => passThrough.destroy(error));
+			childProcess.stderr.pipe(passThrough);
+			return fromReadable({
+				evaluate: () => passThrough,
+				onError: (error) => toPlatformError("fromReadable(stderr)", toError(error), command)
+			});
+		})() : empty;
+		if (isSink(stdoutConfig.stream)) stdout = transduce(stdout, stdoutConfig.stream);
+		if (isSink(stderrConfig.stream)) stderr = transduce(stderr, stderrConfig.stream);
+		const all = merge(stdout, stderr);
+		return {
+			stdout,
+			stderr,
+			all
+		};
+	};
+	const spawn = (command, spawnOptions) => callback$1((resume) => {
+		const deferred = makeUnsafe$5();
+		const handle = NodeChildProcess.spawn(command.command, command.args, spawnOptions);
+		handle.on("error", (error) => {
+			resume(fail$1(toPlatformError("spawn", error, command)));
+		});
+		handle.on("exit", (...args) => {
+			doneUnsafe(deferred, succeed$4(args));
+		});
+		handle.on("spawn", () => {
+			resume(succeed$2([handle, deferred]));
+		});
+		return sync(() => {
+			handle.kill("SIGTERM");
+		});
+	});
+	const killProcessGroup = (command, childProcess, signal) => {
+		if (globalThis.process.platform === "win32") return callback$1((resume) => {
+			taskkill(childProcess, (error) => {
+				if (error) resume(fail$1(toPlatformError("kill", toError(error), command)));
+				else resume(void_);
+			});
+		});
+		return try_({
+			try: () => {
+				globalThis.process.kill(-childProcess.pid, signal);
+			},
+			catch: (error) => toPlatformError("kill", toError(error), command)
+		});
+	};
+	const killProcessGroupOnExit = (childProcess, signal) => {
+		if (globalThis.process.platform === "win32") {
+			taskkill(childProcess);
+			return;
+		}
+		try {
+			globalThis.process.kill(-childProcess.pid, signal);
+		} catch {}
+	};
+	const killProcess = (command, childProcess, signal) => suspend$2(() => {
+		if (!childProcess.kill(signal)) {
+			const error = new globalThis.Error("Failed to kill child process");
+			return fail$1(toPlatformError("kill", error, command));
+		}
+		return void_;
+	});
+	/** Waits for the leader and its process group, bounded by native time. */
+	const awaitProcessExit = (childProcess, exitSignal, timeoutMillis) => callback$1((resume) => {
+		const deadline = Date.now() + timeoutMillis;
+		let timer;
+		const stop = () => {
+			clearTimeout(timer);
+			childProcess.removeListener("exit", poll);
+		};
+		const poll = () => {
+			clearTimeout(timer);
+			if (Date.now() >= deadline || !isProcessAlive(childProcess, exitSignal)) {
+				stop();
+				resume(void_);
+				return;
+			}
+			timer = setTimeout(poll, processGroupPollIntervalMillis);
+		};
+		childProcess.on("exit", poll);
+		poll();
+		return sync(stop);
+	});
+	const terminateProcessGroup = fnUntraced(function* (command, childProcess, exitSignal, options) {
+		const signalGroup = (signal) => killProcessGroup(command, childProcess, signal).pipe(catch_(() => killProcess(command, childProcess, signal)));
+		yield* signalGroup(options?.killSignal ?? "SIGTERM");
+		if (isUndefined(options?.forceKillAfter)) yield* awaitProcessExit(childProcess, exitSignal, processGroupGraceMillis);
+		else {
+			yield* awaitProcessExit(childProcess, exitSignal, toMillis(options.forceKillAfter));
+			if (isProcessAlive(childProcess, exitSignal)) {
+				yield* signalGroup("SIGKILL");
+				yield* awaitProcessExit(childProcess, exitSignal, processGroupGraceMillis);
+			}
+		}
+		yield* _await(exitSignal);
+	});
+	/**
+	* Get the appropriate source stream from a process handle based on the
+	* `from` pipe option.
+	*/
+	const getSourceStream = (handle, from) => {
+		const fromOption = from ?? "stdout";
+		switch (fromOption) {
+			case "stdout": return handle.stdout;
+			case "stderr": return handle.stderr;
+			case "all": return handle.all;
+			default: {
+				const fd = parseFdName(fromOption);
+				if (isNotUndefined(fd)) return handle.getOutputFd(fd);
+				return handle.stdout;
+			}
+		}
+	};
+	const spawnCommand = fnUntraced(function* (cmd) {
+		switch (cmd._tag) {
+			case "StandardCommand": {
+				const stdinConfig = resolveStdinOption(cmd.options);
+				const stdoutConfig = resolveOutputOption(cmd.options, "stdout");
+				const stderrConfig = resolveOutputOption(cmd.options, "stderr");
+				const resolvedAdditionalFds = resolveAdditionalFds(cmd.options);
+				let isReferenced = true;
+				const cwd = yield* resolveWorkingDirectory(cmd.options);
+				const env = resolveEnvironment(cmd.options);
+				const stdio = buildStdioArray(stdinConfig, stdoutConfig, stderrConfig, resolvedAdditionalFds);
+				const [childProcess, exitSignal] = yield* acquireRelease(spawn(cmd, buildSpawnOptions(cmd.options, {
+					cwd,
+					env,
+					stdio
+				}, process.platform)), fnUntraced(function* ([childProcess, exitSignal]) {
+					if (yield* isDone(exitSignal)) {
+						const [code] = yield* _await(exitSignal);
+						if (code !== 0 && isNotNull(code)) yield* ignore(killProcessGroup(cmd, childProcess, cmd.options.killSignal ?? "SIGTERM"));
+						else if (isReferenced && process.platform !== "win32" && cmd.options.detached !== false) yield* ignore(terminateProcessGroup(cmd, childProcess, exitSignal, cmd.options));
+						return;
+					}
+					if (!isReferenced) return;
+					yield* ignore(terminateProcessGroup(cmd, childProcess, exitSignal, cmd.options));
+				}));
+				const pid = ProcessId(childProcess.pid);
+				childProcess.on("exit", (code) => {
+					if (code !== 0 && isNotNull(code)) killProcessGroupOnExit(childProcess, cmd.options.killSignal ?? "SIGTERM");
+				});
+				const reref = sync(() => {
+					if (!isReferenced) {
+						childProcess.ref();
+						isReferenced = true;
+					}
+				});
+				const unref = sync(() => {
+					if (isReferenced) {
+						childProcess.unref();
+						isReferenced = false;
+					}
+					return reref;
+				});
+				const stdin = yield* setupChildStdin(cmd, childProcess, stdinConfig);
+				const { all, stderr, stdout } = setupChildOutputStreams(cmd, childProcess, stdoutConfig, stderrConfig);
+				const { getInputFd, getOutputFd } = yield* setupAdditionalFds(cmd, childProcess, resolvedAdditionalFds);
+				const isRunning = map$5(isDone(exitSignal), (done) => !done);
+				const exitCode = flatMap$1(_await(exitSignal), ([code, signal]) => {
+					if (isNotNull(code)) return succeed$2(ExitCode(code));
+					const error = new globalThis.Error(`Process interrupted due to receipt of signal: '${signal}'`);
+					return fail$1(toPlatformError("exitCode", error, cmd));
+				});
+				const kill = (options) => terminateProcessGroup(cmd, childProcess, exitSignal, options);
+				return makeHandle({
+					pid,
+					exitCode,
+					isRunning,
+					kill,
+					stdin,
+					stdout,
+					stderr,
+					all,
+					getInputFd,
+					getOutputFd,
+					unref
+				});
+			}
+			case "PipedCommand": {
+				const { commands, pipeOptions } = flattenCommand(cmd);
+				const [root, ...pipeline] = commands;
+				const handles = [yield* spawnCommand(root)];
+				for (let i = 0; i < pipeline.length; i++) {
+					const command = pipeline[i];
+					const options = pipeOptions[i] ?? {};
+					const stdinConfig = resolveStdinOption(command.options);
+					const sourceStream = unwrap(succeed$2(getSourceStream(handles[handles.length - 1], options.from)));
+					const toOption = options.to ?? "stdin";
+					if (toOption === "stdin") handles.push(yield* spawnCommand(make$3(command.command, command.args, {
+						...command.options,
+						stdin: {
+							...stdinConfig,
+							stream: sourceStream
+						}
+					})));
+					else {
+						const fd = parseFdName(toOption);
+						if (isNotUndefined(fd)) {
+							const fdName$1 = fdName(fd);
+							const existingFds = command.options.additionalFds ?? {};
+							handles.push(yield* spawnCommand(make$3(command.command, command.args, {
+								...command.options,
+								additionalFds: {
+									...existingFds,
+									[fdName$1]: {
+										type: "input",
+										stream: sourceStream
+									}
+								}
+							})));
+						} else handles.push(yield* spawnCommand(make$3(command.command, command.args, {
+							...command.options,
+							stdin: {
+								...stdinConfig,
+								stream: sourceStream
+							}
+						})));
+					}
+				}
+				const handle = handles[handles.length - 1];
+				const kill = (options) => forEach$1([...handles].reverse(), (handle) => ignore(handle.kill(options)), { discard: true });
+				const unref = gen(function* () {
+					const rerefs = [];
+					for (const handle of handles) rerefs.push(yield* handle.unref);
+					return forEach$1([...rerefs].reverse(), (reref) => reref, { discard: true });
+				});
+				return makeHandle({
+					pid: handle.pid,
+					exitCode: handle.exitCode,
+					isRunning: handle.isRunning,
+					kill,
+					stdin: handles[0].stdin,
+					stdout: handle.stdout,
+					stderr: handle.stderr,
+					all: handle.all,
+					getInputFd: handle.getInputFd,
+					getOutputFd: handle.getOutputFd,
+					unref
+				});
+			}
+		}
+	});
+	return make$4(spawnCommand);
+}));
+/**
+* Flattens a `Command` into an array of `StandardCommand`s along with pipe
+* options for each connection.
+*
+* @category transforming
+* @since 4.0.0
+*/
+const flattenCommand = (command) => {
+	const commands = [];
+	const pipeOptions = [];
+	const flatten = (cmd) => {
+		switch (cmd._tag) {
+			case "StandardCommand":
+				commands.push(cmd);
+				break;
+			case "PipedCommand":
+				flatten(cmd.left);
+				pipeOptions.push(cmd.options);
+				flatten(cmd.right);
+		}
+	};
+	flatten(command);
+	if (commands.length === 0) throw new Error("flattenCommand produced empty commands array");
+	const [first, ...rest] = commands;
+	return {
+		commands: [first, ...rest],
+		pipeOptions
+	};
+};
+//#endregion
+//#region node_modules/.pnpm/@effect+platform-node-shared@4.0.0-rc.118_effect@4.0.0-rc.118/node_modules/@effect/platform-node-shared/dist/NodeCrypto.js
+/**
+* Node-compatible implementation of Effect's `Crypto` service.
+*
+* This module builds the service from `node:crypto`, using `randomBytes` for
+* random data and `createHash` for supported digest algorithms. It exports
+* `make` as the concrete service value and `layer` for providing it through
+* Effect context.
+*
+* @since 1.0.0
+*/
+const toHashAlgorithm = (algorithm) => {
+	switch (algorithm) {
+		case "SHA-1": return "sha1";
+		case "SHA-256": return "sha256";
+		case "SHA-384": return "sha384";
+		case "SHA-512": return "sha512";
+	}
+};
+const digest = (algorithm, data) => try_({
+	try: () => Uint8Array.from(NodeCrypto.createHash(toHashAlgorithm(algorithm)).update(data).digest()),
+	catch: (cause) => systemError({
+		module: "Crypto",
+		method: "digest",
+		_tag: "Unknown",
+		description: "Could not compute digest",
+		cause
+	})
+});
+//#endregion
+//#region node_modules/.pnpm/@effect+platform-node@4.0.0-rc.118_effect@4.0.0-rc.118_redis@6.2.1/node_modules/@effect/platform-node/dist/NodeCrypto.js
+/**
+* The `NodeCrypto` module provides the Node.js `Crypto` service layer for
+* Effect programs. Provide {@link layer} at the edge of a Node application,
+* CLI, script, or test to satisfy `effect/Crypto` with Node's `node:crypto`
+* implementation for secure random bytes, UUID generation, random values, and
+* SHA digest operations.
+*
+* This module is the public Node adapter around the shared Node-compatible
+* implementation. Digest failures are reported as platform errors, and SHA-1
+* remains available only for interoperability with existing protocols.
+*
+* @since 1.0.0
+*/
+/**
+* Layer that provides the Node.js Crypto service implementation.
+*
+* @category layers
+* @since 1.0.0
+*/
+const layer$9 = /* @__PURE__ */ succeed$3(Crypto, /* @__PURE__ */ make$9({
+	randomBytes: NodeCrypto.randomBytes,
+	digest
+}));
+//#endregion
+//#region node_modules/.pnpm/@effect+platform-node-shared@4.0.0-rc.118_effect@4.0.0-rc.118/node_modules/@effect/platform-node-shared/dist/NodeFileSystem.js
+/**
+* Shared Node-compatible implementation of Effect's `FileSystem` service.
+*
+* This module adapts Node's `node:fs`, `node:os`, and `node:path` APIs into a
+* `FileSystem` layer for Effect programs running on Node-compatible runtimes.
+* Platform packages use it to provide file and directory I/O, permissions,
+* links, metadata, temporary files and directories, and file watching through
+* the shared `FileSystem` service.
+*
+* @since 4.0.0
+*/
+const handleBadArgument = (method) => (err) => badArgument({
+	module: "FileSystem",
+	method,
+	description: err.message ?? String(err)
+});
+const bigintToNumber = (value, field) => {
+	const number = Number(value);
+	if (!Number.isSafeInteger(number)) throw new RangeError(`${field} exceeds the safe integer range: ${value}`);
+	return number;
+};
+const bigintToNumberOption = (value) => flatMap$3(fromNullishOr(value), toNumber);
+const positionToNumber = (position, method) => try_({
+	try: () => bigintToNumber(position, "position"),
+	catch: handleBadArgument(method)
+});
+const access = /*#__PURE__*/ (() => {
+	const nodeAccess = /*#__PURE__*/ effectify(NFS.access, /*#__PURE__*/ handleErrnoException("FileSystem", "access"), /*#__PURE__*/ handleBadArgument("access"));
+	return (path, options) => {
+		let mode = NFS.constants.F_OK;
+		if (options?.readable) mode |= NFS.constants.R_OK;
+		if (options?.writable) mode |= NFS.constants.W_OK;
+		return nodeAccess(path, mode);
+	};
+})();
+const copy = /*#__PURE__*/ (() => {
+	const nodeCp = /*#__PURE__*/ effectify(NFS.cp, /*#__PURE__*/ handleErrnoException("FileSystem", "copy"), /*#__PURE__*/ handleBadArgument("copy"));
+	return (fromPath, toPath, options) => nodeCp(fromPath, toPath, {
+		force: options?.overwrite ?? false,
+		preserveTimestamps: options?.preserveTimestamps ?? false,
+		recursive: true
+	});
+})();
+const copyFile = /*#__PURE__*/ (() => {
+	const nodeCopyFile = /*#__PURE__*/ effectify(NFS.copyFile, /*#__PURE__*/ handleErrnoException("FileSystem", "copyFile"), /*#__PURE__*/ handleBadArgument("copyFile"));
+	return (fromPath, toPath) => nodeCopyFile(fromPath, toPath);
+})();
+const chmod = /*#__PURE__*/ (() => {
+	const nodeChmod = /*#__PURE__*/ effectify(NFS.chmod, /*#__PURE__*/ handleErrnoException("FileSystem", "chmod"), /*#__PURE__*/ handleBadArgument("chmod"));
+	return (path, mode) => nodeChmod(path, mode);
+})();
+const chown = /*#__PURE__*/ (() => {
+	const nodeChown = /*#__PURE__*/ effectify(NFS.chown, /*#__PURE__*/ handleErrnoException("FileSystem", "chown"), /*#__PURE__*/ handleBadArgument("chown"));
+	return (path, uid, gid) => nodeChown(path, uid, gid);
+})();
+const glob = /*#__PURE__*/ (() => {
+	const nodeGlob = /*#__PURE__*/ effectify(NFS.glob, /*#__PURE__*/ handleErrnoException("FileSystem", "glob"), /*#__PURE__*/ handleBadArgument("glob"));
+	return (pattern, options) => nodeGlob(pattern, {
+		cwd: options?.root,
+		exclude: options?.exclude
+	});
+})();
+const link = /*#__PURE__*/ (() => {
+	const nodeLink = /*#__PURE__*/ effectify(NFS.link, /*#__PURE__*/ handleErrnoException("FileSystem", "link"), /*#__PURE__*/ handleBadArgument("link"));
+	return (existingPath, newPath) => nodeLink(existingPath, newPath);
+})();
+const makeDirectory = /*#__PURE__*/ (() => {
+	const nodeMkdir = /*#__PURE__*/ effectify(NFS.mkdir, /*#__PURE__*/ handleErrnoException("FileSystem", "makeDirectory"), /*#__PURE__*/ handleBadArgument("makeDirectory"));
+	return (path, options) => nodeMkdir(path, {
+		recursive: options?.recursive ?? false,
+		mode: options?.mode
+	});
+})();
+const makeTempDirectoryFactory = (method) => {
+	const nodeMkdtemp = effectify(NFS.mkdtemp, handleErrnoException("FileSystem", method), handleBadArgument(method));
+	return (options) => suspend$2(() => {
+		const prefix = options?.prefix ?? "";
+		const directory = typeof options?.directory === "string" ? Path.join(options.directory, ".") : OS.tmpdir();
+		return nodeMkdtemp(prefix ? Path.join(directory, prefix) : directory + "/");
+	});
+};
+const makeTempDirectory = /*#__PURE__*/ makeTempDirectoryFactory("makeTempDirectory");
+const removeFactory = (method) => {
+	const nodeRm = effectify(NFS.rm, handleErrnoException("FileSystem", method), handleBadArgument(method));
+	return (path, options) => nodeRm(path, {
+		recursive: options?.recursive ?? false,
+		force: options?.force ?? false
+	});
+};
+const remove = /*#__PURE__*/ removeFactory("remove");
+const makeTempDirectoryScoped = /*#__PURE__*/ (() => {
+	const makeDirectory = /*#__PURE__*/ makeTempDirectoryFactory("makeTempDirectoryScoped");
+	const removeDirectory = /*#__PURE__*/ removeFactory("makeTempDirectoryScoped");
+	return (options) => acquireRelease(makeDirectory(options), (directory) => orDie(removeDirectory(directory, { recursive: true })));
+})();
+const openFactory = (method) => {
+	const nodeOpen = effectify(NFS.open, handleErrnoException("FileSystem", method), handleBadArgument(method));
+	const nodeClose = effectify(NFS.close, handleErrnoException("FileSystem", method), handleBadArgument(method));
+	return (path, options) => pipe(acquireRelease(nodeOpen(path, options?.flag ?? "r", options?.mode), (fd) => orDie(nodeClose(fd))), map$5((fd) => makeFile(fd, options?.flag?.startsWith("a") ?? false)));
+};
+const open = /*#__PURE__*/ openFactory("open");
+const makeFile = /*#__PURE__*/ (() => {
+	const nodeReadFactory = (method) => effectify(NFS.read, handleErrnoException("FileSystem", method), handleBadArgument(method));
+	const nodeRead = /*#__PURE__*/ nodeReadFactory("read");
+	const nodeReadAlloc = /*#__PURE__*/ nodeReadFactory("readAlloc");
+	const nodeStat = /*#__PURE__*/ effectify(NFS.fstat, /*#__PURE__*/ handleErrnoException("FileSystem", "stat"), /*#__PURE__*/ handleBadArgument("stat"));
+	const nodeTruncate = /*#__PURE__*/ effectify(NFS.ftruncate, /*#__PURE__*/ handleErrnoException("FileSystem", "truncate"), /*#__PURE__*/ handleBadArgument("truncate"));
+	const nodeSync = /*#__PURE__*/ effectify(NFS.fsync, /*#__PURE__*/ handleErrnoException("FileSystem", "sync"), /*#__PURE__*/ handleBadArgument("sync"));
+	const nodeWriteFactory = (method) => effectify(NFS.write, handleErrnoException("FileSystem", method), handleBadArgument(method));
+	const nodeWrite = /*#__PURE__*/ nodeWriteFactory("write");
+	const nodeWriteAll = /*#__PURE__*/ nodeWriteFactory("writeAll");
+	class FileImpl {
+		[FileTypeId];
+		fd;
+		append;
+		position = /*#__PURE__*/ BigInt(0);
+		constructor(fd, append) {
+			this[FileTypeId] = FileTypeId;
+			this.fd = fd;
+			this.append = append;
+		}
+		get stat() {
+			return flatMap$1(nodeStat(this.fd, { bigint: true }), makeFileInfo);
+		}
+		get sync() {
+			return nodeSync(this.fd);
+		}
+		seek(offset, from) {
+			return suspend$2(() => {
+				const position = from === "start" ? offset : this.position + offset;
+				if (position < BigInt(0)) return fail$1(badArgument({
+					module: "FileSystem",
+					method: "seek",
+					description: "Cannot seek before the start of the file"
+				}));
+				this.position = position;
+				return succeed$2(position);
+			});
+		}
+		read(buffer) {
+			return suspend$2(() => {
+				const position = this.position;
+				return map$5(nodeRead(this.fd, {
+					buffer,
+					position
+				}), (bytesRead) => {
+					this.position = position + BigInt(bytesRead);
+					return bytesRead;
+				});
+			});
+		}
+		readAlloc(size) {
+			return suspend$2(() => {
+				try {
+					if (!Number.isInteger(size) || size < 0) throw new RangeError("size must be a non-negative integer");
+					const buffer = Buffer.allocUnsafeSlow(size);
+					const position = this.position;
+					return map$5(nodeReadAlloc(this.fd, {
+						buffer,
+						position
+					}), (bytesRead) => {
+						if (bytesRead === 0) return none();
+						this.position = position + BigInt(bytesRead);
+						if (bytesRead === size) return some(buffer);
+						const dst = Buffer.allocUnsafeSlow(bytesRead);
+						buffer.copy(dst, 0, 0, bytesRead);
+						return some(dst);
+					});
+				} catch (cause) {
+					return fail$1(handleBadArgument("readAlloc")(cause));
+				}
+			});
+		}
+		truncate(length) {
+			return map$5(nodeTruncate(this.fd, length || void 0), () => {
+				if (!this.append) {
+					const len = BigInt(length ?? 0);
+					if (this.position > len) this.position = len;
+				}
+			});
+		}
+		write(buffer) {
+			return suspend$2(() => {
+				const position = this.position;
+				return flatMap$1(this.append ? succeed$2(void 0) : positionToNumber(position, "write"), (nodePosition) => map$5(nodeWrite(this.fd, buffer, void 0, void 0, nodePosition), (bytesWritten) => {
+					if (!this.append) this.position = position + BigInt(bytesWritten);
+					return bytesWritten;
+				}));
+			});
+		}
+		writeAllChunk(buffer) {
+			return suspend$2(() => {
+				const position = this.position;
+				return flatMap$1(this.append ? succeed$2(void 0) : positionToNumber(position, "writeAll"), (nodePosition) => flatMap$1(nodeWriteAll(this.fd, buffer, void 0, void 0, nodePosition), (bytesWritten) => {
+					if (bytesWritten === 0) return fail$1(systemError({
+						module: "FileSystem",
+						method: "writeAll",
+						_tag: "WriteZero",
+						pathOrDescriptor: this.fd,
+						description: "write returned 0 bytes written"
+					}));
+					if (!this.append) this.position = position + BigInt(bytesWritten);
+					return bytesWritten < buffer.length ? this.writeAllChunk(buffer.subarray(bytesWritten)) : void_;
+				}));
+			});
+		}
+		writeAll(buffer) {
+			return buffer.length === 0 ? void_ : this.writeAllChunk(buffer);
+		}
+	}
+	return (fd, append) => new FileImpl(fd, append);
+})();
+const makeTempFileFactory = (method) => {
+	const makeDirectory = makeTempDirectoryFactory(method);
+	return fnUntraced(function* (options) {
+		const directory = yield* makeDirectory(options);
+		const random = NodeCrypto.randomBytes(6).toString("hex");
+		const name = Path.join(directory, options?.suffix ? `${random}${options.suffix}` : random);
+		yield* writeFile(name, /* @__PURE__ */ new Uint8Array(0));
+		return name;
+	});
+};
+const makeTempFile = /*#__PURE__*/ makeTempFileFactory("makeTempFile");
+const makeTempFileScoped = /*#__PURE__*/ (() => {
+	const makeFile = /*#__PURE__*/ makeTempFileFactory("makeTempFileScoped");
+	const removeDirectory = /*#__PURE__*/ removeFactory("makeTempFileScoped");
+	return (options) => acquireRelease(makeFile(options), (file) => orDie(removeDirectory(Path.dirname(file), { recursive: true })));
+})();
+const readDirectory = (path, options) => tryPromise({
+	try: () => NFS.promises.readdir(path, options),
+	catch: (err) => handleErrnoException("FileSystem", "readDirectory")(err, [path])
+});
+const readFile = (path) => callback$1((resume, signal) => {
+	try {
+		NFS.readFile(path, { signal }, (err, data) => {
+			if (err) resume(fail$1(handleErrnoException("FileSystem", "readFile")(err, [path])));
+			else resume(succeed$2(data));
+		});
+	} catch (err) {
+		resume(fail$1(handleBadArgument("readFile")(err)));
+	}
+});
+const readLink = /*#__PURE__*/ (() => {
+	const nodeReadLink = /*#__PURE__*/ effectify(NFS.readlink, /*#__PURE__*/ handleErrnoException("FileSystem", "readLink"), /*#__PURE__*/ handleBadArgument("readLink"));
+	return (path) => nodeReadLink(path);
+})();
+const realPath = /*#__PURE__*/ (() => {
+	const nodeRealPath = /*#__PURE__*/ effectify(NFS.realpath, /*#__PURE__*/ handleErrnoException("FileSystem", "realPath"), /*#__PURE__*/ handleBadArgument("realPath"));
+	return (path) => nodeRealPath(path);
+})();
+const rename$1 = /*#__PURE__*/ (() => {
+	const nodeRename = /*#__PURE__*/ effectify(NFS.rename, /*#__PURE__*/ handleErrnoException("FileSystem", "rename"), /*#__PURE__*/ handleBadArgument("rename"));
+	return (oldPath, newPath) => nodeRename(oldPath, newPath);
+})();
+const makeFileInfo = (stat) => try_({
+	try: () => ({
+		type: stat.isFile() ? "File" : stat.isDirectory() ? "Directory" : stat.isSymbolicLink() ? "SymbolicLink" : stat.isBlockDevice() ? "BlockDevice" : stat.isCharacterDevice() ? "CharacterDevice" : stat.isFIFO() ? "FIFO" : stat.isSocket() ? "Socket" : "Unknown",
+		mtime: fromNullishOr(stat.mtime),
+		atime: fromNullishOr(stat.atime),
+		birthtime: fromNullishOr(stat.birthtime),
+		dev: bigintToNumber(stat.dev, "dev"),
+		rdev: bigintToNumberOption(stat.rdev),
+		ino: bigintToNumberOption(stat.ino),
+		mode: bigintToNumber(stat.mode, "mode"),
+		nlink: bigintToNumberOption(stat.nlink),
+		uid: bigintToNumberOption(stat.uid),
+		gid: bigintToNumberOption(stat.gid),
+		size: bytes(stat.size),
+		blksize: stat.blksize !== void 0 ? some(bytes(stat.blksize)) : none(),
+		blocks: bigintToNumberOption(stat.blocks)
+	}),
+	catch: handleBadArgument("stat")
+});
+const stat$1 = /*#__PURE__*/ (() => {
+	const nodeStat = /*#__PURE__*/ effectify(NFS.stat, /*#__PURE__*/ handleErrnoException("FileSystem", "stat"), /*#__PURE__*/ handleBadArgument("stat"));
+	return (path) => flatMap$1(nodeStat(path, { bigint: true }), makeFileInfo);
+})();
+const symlink = /*#__PURE__*/ (() => {
+	const nodeSymlink = /*#__PURE__*/ effectify(NFS.symlink, /*#__PURE__*/ handleErrnoException("FileSystem", "symlink"), /*#__PURE__*/ handleBadArgument("symlink"));
+	return (target, path) => nodeSymlink(target, path);
+})();
+const truncate = /*#__PURE__*/ (() => {
+	const nodeTruncate = /*#__PURE__*/ effectify(NFS.truncate, /*#__PURE__*/ handleErrnoException("FileSystem", "truncate"), /*#__PURE__*/ handleBadArgument("truncate"));
+	return (path, length) => nodeTruncate(path, length);
+})();
+const utimes = /*#__PURE__*/ (() => {
+	const nodeUtimes = /*#__PURE__*/ effectify(NFS.utimes, /*#__PURE__*/ handleErrnoException("FileSystem", "utime"), /*#__PURE__*/ handleBadArgument("utime"));
+	return (path, atime, mtime) => nodeUtimes(path, atime, mtime);
+})();
+const watchNode = (path, info, options) => callback((queue) => acquireRelease(sync(() => {
+	const directory = info.type === "Directory" ? path : Path.dirname(path);
+	const watcher = NFS.watch(path, { recursive: options?.recursive ?? false }, (event, path) => {
+		if (!path) return;
+		switch (event) {
+			case "rename":
+				runFork(matchEffect(stat$1(Path.resolve(directory, path)), {
+					onSuccess: (_) => offer(queue, {
+						_tag: "Create",
+						path
+					}),
+					onFailure: (_) => offer(queue, {
+						_tag: "Remove",
+						path
+					})
+				}));
+				return;
+			case "change":
+				offerUnsafe(queue, {
+					_tag: "Update",
+					path
+				});
+				return;
+		}
+	});
+	watcher.on("error", (error) => {
+		failCauseUnsafe(queue, fail$3(systemError({
+			module: "FileSystem",
+			_tag: "Unknown",
+			method: "watch",
+			pathOrDescriptor: path,
+			cause: error
+		})));
+	});
+	watcher.on("close", () => {
+		endUnsafe(queue);
+	});
+	return watcher;
+}), (watcher) => sync(() => watcher.close())));
+const watch = (backend, path, options) => stat$1(path).pipe(map$5((stat) => backend.pipe(flatMap$3((_) => _.register(path, stat, options)), getOrElse(() => watchNode(path, stat, options)))), unwrap);
+const writeFile = (path, data, options) => callback$1((resume, signal) => {
+	try {
+		NFS.writeFile(path, data, {
+			signal,
+			flag: options?.flag,
+			mode: options?.mode
+		}, (err) => {
+			if (err) resume(fail$1(handleErrnoException("FileSystem", "writeFile")(err, [path])));
+			else resume(void_);
+		});
+	} catch (err) {
+		resume(fail$1(handleBadArgument("writeFile")(err)));
+	}
+});
+const makeFileSystem = /*#__PURE__*/ map$5(/*#__PURE__*/ serviceOption(WatchBackend), (backend) => make$10({
+	access,
+	chmod,
+	chown,
+	copy,
+	copyFile,
+	glob,
+	link,
+	makeDirectory,
+	makeTempDirectory,
+	makeTempDirectoryScoped,
+	makeTempFile,
+	makeTempFileScoped,
+	open,
+	readDirectory,
+	readFile,
+	readLink,
+	realPath,
+	remove,
+	rename: rename$1,
+	stat: stat$1,
+	symlink,
+	truncate,
+	utimes,
+	watch(path, options) {
+		return watch(backend, path, options);
+	},
+	writeFile
+}));
+//#endregion
+//#region node_modules/.pnpm/@effect+platform-node@4.0.0-rc.118_effect@4.0.0-rc.118_redis@6.2.1/node_modules/@effect/platform-node/dist/NodeFileSystem.js
+/**
+* Node.js `FileSystem` layer for programs that perform real filesystem I/O.
+*
+* The exported layer satisfies the platform-independent `FileSystem` service
+* with Node-backed operations for files, directories, metadata, permissions,
+* links, temporary paths, and path watching. Effects still call the service from
+* `effect/FileSystem`; this module only chooses the Node implementation.
+*
+* @since 4.0.0
+*/
+/**
+* Provides the `FileSystem` service backed by Node filesystem APIs.
+*
+* @category layers
+* @since 4.0.0
+*/
+const layer$7 = /* @__PURE__ */ effect(FileSystem)(makeFileSystem);
+//#endregion
+//#region node_modules/.pnpm/@effect+platform-node-shared@4.0.0-rc.118_effect@4.0.0-rc.118/node_modules/@effect/platform-node-shared/dist/NodePath.js
+/**
+* Node-backed provider for Effect's `Path` service.
+*
+* This module turns Node's `node:path` and `node:url` APIs into `Path` layers.
+* `layer` uses the host platform path implementation, while `layerPosix` and
+* `layerWin32` provide fixed POSIX and Windows variants. All three layers also
+* include helpers for converting between file paths and file URLs.
+*
+* @since 4.0.0
+*/
+const fileUrlOps = (windows) => ({
+	fromFileUrl: (url) => try_({
+		try: () => NodeUrl.fileURLToPath(url, { windows }),
+		catch: (cause) => new BadArgument({
+			module: "Path",
+			method: "fromFileUrl",
+			cause
+		})
+	}),
+	toFileUrl: (path) => try_({
+		try: () => NodeUrl.pathToFileURL(path, { windows }),
+		catch: (cause) => new BadArgument({
+			module: "Path",
+			method: "toFileUrl",
+			cause
+		})
+	})
+});
+({
+	...Path.posix,
+	.../*#__PURE__*/ fileUrlOps(false)
+});
+({
+	...Path.win32,
+	.../*#__PURE__*/ fileUrlOps(true)
+});
+//#endregion
+//#region node_modules/.pnpm/@effect+platform-node@4.0.0-rc.118_effect@4.0.0-rc.118_redis@6.2.1/node_modules/@effect/platform-node/dist/NodePath.js
+/**
+* Node.js layers for Effect's `Path` service.
+*
+* This module provides the default, POSIX, and Windows variants of the
+* platform-independent `Path` service by reusing the shared Node path
+* implementation. The provided path services include Node file URL conversion
+* behavior.
+*
+* @since 4.0.0
+*/
+/**
+* Provides the default Node `Path` service using the platform's `node:path`
+* implementation.
+*
+* @category layers
+* @since 4.0.0
+*/
+const layer$5 = /* @__PURE__ */ succeed$3(Path$1)({
+	[TypeId$8]: TypeId$8,
+	...Path,
+	.../*#__PURE__*/ fileUrlOps(void 0)
+});
+//#endregion
+//#region node_modules/.pnpm/@effect+platform-node@4.0.0-rc.118_effect@4.0.0-rc.118_redis@6.2.1/node_modules/@effect/platform-node/dist/NodeStdio.js
+/**
+* Node.js `Stdio` layer for the current process.
+*
+* The exported layer reuses the shared Node stdio implementation. It satisfies
+* the platform-independent `Stdio` service by reading command-line arguments
+* from `process.argv`, consuming input from `process.stdin`, and writing output
+* streams to `process.stdout` and `process.stderr`.
+*
+* @since 4.0.0
+*/
+/**
+* Provides the `Stdio` service backed by the current process arguments,
+* stdin, stdout, and stderr streams.
+*
+* @category layers
+* @since 4.0.0
+*/
+const layer$3 = /* @__PURE__ */ succeed$3(Stdio, /*#__PURE__*/ make$8({
+	args: /*#__PURE__*/ sync(() => process.argv.slice(2)),
+	stdinIsTerminal: /*#__PURE__*/ sync(() => process.stdin.isTTY === true),
+	stdoutIsTerminal: /*#__PURE__*/ sync(() => process.stdout.isTTY === true),
+	stdout: (options) => fromWritable({
+		evaluate: () => process.stdout,
+		onError: (cause) => systemError({
+			module: "Stdio",
+			method: "stdout",
+			_tag: "Unknown",
+			cause
+		}),
+		endOnDone: options?.endOnDone ?? false
+	}),
+	stderr: (options) => fromWritable({
+		evaluate: () => process.stderr,
+		onError: (cause) => systemError({
+			module: "Stdio",
+			method: "stderr",
+			_tag: "Unknown",
+			cause
+		}),
+		endOnDone: options?.endOnDone ?? false
+	}),
+	stdin: /*#__PURE__*/ fromReadable({
+		evaluate: () => process.stdin,
+		onError: (cause) => systemError({
+			module: "Stdio",
+			method: "stdin",
+			_tag: "Unknown",
+			cause
+		}),
+		closeOnDone: false
+	})
+}));
+/**
+* Provides the default process-backed `Terminal` service, ending key input on
+* Ctrl+C or Ctrl+D.
+*
+* @category layers
+* @since 4.0.0
+*/
+const layer$2 = /*#__PURE__*/ effect(Terminal, /*#__PURE__*/ (/* @__PURE__ */ fnUntraced(function* (shouldQuit = defaultShouldQuit) {
+	const stdin = process.stdin;
+	const stdout = process.stdout;
+	const lines = yield* make$13();
+	let inputEnded = stdin.readableEnded;
+	let readlineActive = false;
+	const onStdinEnd = () => {
+		inputEnded = true;
+		if (!readlineActive) endUnsafe(lines);
+	};
+	stdin.once("end", onStdinEnd);
+	yield* addFinalizer(() => sync(() => stdin.off("end", onStdinEnd)));
+	const rlRef = yield* make$11({
+		acquire: acquireRelease(sync(() => {
+			const rl = readline.createInterface({
+				input: stdin,
+				escapeCodeTimeout: 50
+			});
+			const onLine = (line) => offerUnsafe(lines, line);
+			const onClose = () => {
+				readlineActive = false;
+				endUnsafe(lines);
+			};
+			readlineActive = true;
+			readline.emitKeypressEvents(stdin, rl);
+			rl.on("line", onLine);
+			rl.once("close", onClose);
+			if (stdin.isTTY) stdin.setRawMode(true);
+			return {
+				rl,
+				onClose,
+				onLine
+			};
+		}), ({ rl, onClose, onLine }) => sync(() => {
+			readlineActive = false;
+			rl.off("line", onLine);
+			rl.off("close", onClose);
+			if (stdin.isTTY) stdin.setRawMode(false);
+			rl.close();
+			if (inputEnded) endUnsafe(lines);
+		})),
+		idleTimeToLive: "10 millis"
+	});
+	const columns = sync(() => stdout.columns ?? 0);
+	const rows = sync(() => stdout.rows ?? 0);
+	const readInput = gen(function* () {
+		const queue = yield* make$13();
+		const handleKeypress = (s, k) => {
+			const userInput = {
+				input: fromUndefinedOr(s),
+				key: {
+					name: k.name ?? "",
+					ctrl: !!k.ctrl,
+					meta: !!k.meta,
+					shift: !!k.shift
+				}
+			};
+			offerUnsafe(queue, userInput);
+			if (shouldQuit(userInput)) endUnsafe(queue);
+		};
+		const keepAlive = setInterval(() => {}, 2147483647);
+		const handleEnd = () => {
+			clearInterval(keepAlive);
+			endUnsafe(queue);
+		};
+		yield* addFinalizer(() => sync(() => {
+			clearInterval(keepAlive);
+			stdin.off("keypress", handleKeypress);
+			stdin.off("end", handleEnd);
+		}));
+		stdin.on("keypress", handleKeypress);
+		if (inputEnded) handleEnd();
+		else {
+			yield* get(rlRef);
+			stdin.once("end", handleEnd);
+		}
+		return queue;
+	});
+	const readLine = suspend$2(() => poll(lines).pipe(flatMap$1(match$5({
+		onNone: () => scoped(andThen(get(rlRef), take(lines))),
+		onSome: succeed$2
+	})), mapError(() => new QuitError({}))));
+	const display = (prompt) => uninterruptible(callback$1((resume) => {
+		stdout.write(prompt, (err) => isNullish(err) ? resume(void_) : resume(fail$1(badArgument({
+			module: "Terminal",
+			method: "display",
+			description: "Failed to write prompt to stdout",
+			cause: err
+		}))));
+	}));
+	return make$7({
+		columns,
+		rows,
+		readInput,
+		readLine,
+		display
+	});
+}))(defaultShouldQuit));
+function defaultShouldQuit(input) {
+	return input.key.ctrl && (input.key.name === "c" || input.key.name === "d");
+}
+//#endregion
+//#region node_modules/.pnpm/@effect+platform-node@4.0.0-rc.118_effect@4.0.0-rc.118_redis@6.2.1/node_modules/@effect/platform-node/dist/NodeServices.js
+/**
+* Provides the default Node implementations for child process spawning,
+* filesystem, path, stdio, and terminal services.
+*
+* @category layers
+* @since 4.0.0
+*/
+const layer = /*#__PURE__*/ provideMerge(layer$11, /*#__PURE__*/ mergeAll(layer$7, layer$9, layer$5, layer$3, layer$2));
+//#endregion
+//#region archive/src/cli/failure.ts
+/**
+* Failure boundary between the Promise-based toolkit library and the Effect
+* CLI, plus the diagnostic format every consumer (launcher, Ansible, humans)
+* sees.
+*
+* Invariants: failures exit nonzero, print `repo-jj-archive: <detail>` on
+* stderr, and leave stdout empty (see output.ts for the buffering that keeps
+* help-on-parse-failure off stdout). Meaningful multi-line diagnostics such
+* as the declared/actual remotes table are intentional and preserved.
+*/
+/**
+* A toolkit library operation rejected the request; `cause` carries the
+* original thrown error. Declared as a plain Error subclass (explicit,
+* isolatedDeclarations-friendly members) rather than a schema-derived class.
+*/
+var ToolkitFailure = class extends Error {
+	name = "ToolkitFailure";
+	cause;
+	constructor(cause) {
+		super("archive toolkit operation failed");
+		this.cause = cause;
+	}
+};
+/** Lift a (possibly throwing) Promise-returning library call into the Effect error channel. */
+const runLibrary = (operation) => tryPromise({
+	try: operation,
+	catch: (cause) => new ToolkitFailure(cause)
+});
+const memberDetail = (error) => error instanceof Error ? error.message : String(error);
+/** One diagnostic string for any failure shape the runner can produce. */
+const failureDetail = (error) => {
+	if (isCliError(error) && error._tag === "ShowHelp") return error.errors.map((item) => item.message).join("; ");
+	if (error instanceof ToolkitFailure) return memberDetail(error.cause);
+	if (error instanceof AggregateError) return error.errors.map(memberDetail).join("; ");
+	return memberDetail(error);
+};
+/** Report a failure on stderr and mark the process exit nonzero; never touches stdout. */
+const reportFailure = (error) => {
+	console.error(`repo-jj-archive: ${failureDetail(error)}`);
+	process.exitCode = 1;
+};
+//#endregion
+//#region archive/src/cli/output.ts
+const write = (line) => {
+	process.stdout.write(line);
+	process.stdout.write("\n");
+};
+const createOutputBuffer = () => {
+	const lines = [];
+	const buffered = Object.assign(Object.create(console), {
+		log: (...args) => {
+			lines.push(args.map(String).join(" "));
+		},
+		error: (...args) => {
+			process.stderr.write(`${args.map(String).join(" ")}\n`);
+		}
+	});
+	const flush = () => {
+		for (const line of lines) write(line);
+		lines.length = 0;
+	};
+	return {
+		console: buffered,
+		flush,
+		discard: () => {
+			lines.length = 0;
+		}
+	};
+};
+//#endregion
+//#region archive/src/cli/completions.ts
+/**
+* PowerShell completion support. Effect CLI generates bash/zsh/fish natively
+* (`Completions.generate` via the built-in `--completions` action); it has no
+* PowerShell generator, so this module provides a static, functionally honest
+* script: native-command argument completion for subcommand names and the
+* runner's global flags.
+*/
+/** Complete subcommand names, and global flags for `--`-prefixed words. */
+const powershellCompletion = (name, subcommands) => {
+	const list = [
+		...subcommands,
+		"--help",
+		"--version",
+		"--completions"
+	].map((word) => `        '${word.replaceAll("'", "''")}'`).join("\n");
+	return `# ${name} PowerShell completion generated by repo-jj-archive.
+Register-ArgumentCompleter -Native -CommandName '${name.replaceAll("'", "''")}' -ScriptBlock {
+    param($wordToComplete, $commandAst, $cursorPosition)
+    $completions = @(
+${list}
+    )
+    $completions | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+        [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
+    }
+}
+`;
+};
+//#endregion
+//#region archive/src/cli/version.ts
+/**
+* Single source for the CLI's reported version.
+*
+* The committed bundle embeds this value at build time; bump it here and
+* rebuild `archive/repo-jj-archive.mjs` together.
+*/
+const VERSION = "0.1.0";
+//#endregion
+//#region archive/src/cli/commands/complete.ts
+/**
+* `complete` — generate a tab-completion script for a shell. bash/zsh/fish
+* come from Effect CLI's native generator (invoked through the built-in
+* `--completions` action against the real command tree, so scripts cannot
+* drift from actual flags); PowerShell uses the static generator in
+* ../completions.ts because upstream has none.
+*/
+const subcommandNames = (root) => root.subcommands.flatMap((group) => group.commands.map((command) => command.name));
+/**
+* Takes the root command lazily: `complete` is part of that same tree, so the
+* reference must stay a thunk to avoid an import cycle.
+*/
+const completeCommand = (root) => make$5("complete", { shell: Literals$1("shell", [
+	"bash",
+	"zsh",
+	"fish",
+	"powershell"
+]).pipe(withDescription$2("Shell to generate a completion script for")) }, (input) => input.shell === "powershell" ? log(powershellCompletion("repo-jj-archive", subcommandNames(root()))) : runWith(root(), {
+	version: VERSION,
+	renderErrors: false
+})(["--completions", input.shell])).pipe(withDescription("Generate a tab-completion script for the given shell."));
+//#endregion
+//#region archive/src/cli/flags.ts
+/**
+* Shared flag definitions reused across command modules. Definitions live
+* outside the commands so help text and parsing stay identical wherever a
+* concept (destination checkout, declared origin, …) appears.
+*/
+const destFlag = String$1("dest").pipe(withDescription$1("Path to jj-colocated archive checkout"));
+const repoFlag = String$1("repo").pipe(withDescription$1("Declared origin URL"));
+const remotesFlag = String$1("remotes").pipe(withDefault("{}"), withDescription$1("JSON object of additional remote names and URLs"));
+const labelFlag = String$1("label").pipe(withDescription$1("Deployment label for recovery bookmarks"));
+//#endregion
+//#region archive/src/repository/jj.ts
+/**
+* The only shell boundary for jj; never interpolates user arguments into a
+* shell. jj runs through `effect/process` `ChildProcess` spawned by the
+* `ChildProcessSpawner` (`NodeServices.layer`), so scope and cancellation
+* belong to the spawner; this module only collects output and checks the
+* exit code. The library boundary stays Promise-based for the repository,
+* recovery, and custody callers.
+*
+* The child inherits the parent environment untouched. jj is
+* operator-facing tooling: `JJ_CONFIG`, `JJ_EDITOR`, a `PATH` override, and
+* the rest of the operator's jj setup must keep working. Unlike the raw-git
+* adapter (see git.ts, which strips `GIT_*` because it executes real git),
+* jj cannot be redirected through inherited Git variables: it locates the
+* repository by `.jj` discovery from the explicit `cwd` and opens the
+* colocated Git backend at the path recorded in the repo, ignoring
+* `GIT_DIR`/`GIT_WORK_TREE` and `GIT_CONFIG_*` injection (verified against
+* jj 0.45.1 on colocated fixtures: decoy `GIT_DIR` neither rerouted reads
+* like `log` nor writes like `git remote add`, and `GIT_CONFIG_GLOBAL`
+* identity injection left jj authors untouched). Routing is therefore
+* always the explicit `cwd`, and there is deliberately no env sanitizer
+* here that could silently break operator jj configuration.
+*/
+var JjError = class extends Error {
+	args;
+	detail;
+	constructor(args, detail) {
+		super(`jj ${args.join(" ")}: ${detail}`);
+		this.args = args;
+		this.detail = detail;
+	}
+};
+/** Flags shared by every query-mode invocation. */
+const QUERY_FLAGS = ["--ignore-working-copy", "--at-op=@"];
+/**
+* Spawn jj through the native spawner, draining both pipes concurrently
+* with waiting for exit so large template output cannot deadlock the child
+* on pipe backpressure. Output is UTF-8 text (jj human/template output);
+* trimming happens only at the text boundary in {@link jj}, not here. The
+* previous execFile 64 MiB cap is gone — streams collect whatever jj
+* emits.
+*/
+const jjOutcome = (argv, cwd) => gen(function* () {
+	const handle = yield* (yield* ChildProcessSpawner).spawn(make$3("jj", argv, {
+		cwd,
+		stdin: "ignore"
+	}));
+	const [stdout, stderr, exitCode] = yield* all([
+		runCollect(handle.stdout),
+		runCollect(handle.stderr),
+		handle.exitCode
+	], { concurrency: "unbounded" });
+	return {
+		stdout: utf8(concatBytes(stdout)),
+		stderr: utf8(concatBytes(stderr)),
+		exitCode
+	};
+}).pipe(scoped, provide(layer));
+async function jj(args, cwd, options) {
+	const argv = [
+		"--no-pager",
+		"--color=never",
+		...options?.readOnly === true || options?.pinned === true ? QUERY_FLAGS : [],
+		...args
+	];
+	try {
+		const outcome = await runPromise(jjOutcome(argv, cwd));
+		if (outcome.exitCode !== 0) throw new JjError(args, outcome.stderr.trim());
+		return outcome.stdout.trim();
+	} catch (error) {
+		throw error instanceof JjError ? error : new JjError(args, error instanceof Error ? error.message : String(error));
+	}
+}
+function lines(output) {
+	return output === "" ? [] : output.split("\n").filter(Boolean);
+}
+async function exists(path) {
+	return await stat(path, { throwIfNoEntry: false }) !== void 0;
+}
+async function isDirectory(path) {
+	const info = await stat(path, { throwIfNoEntry: false });
+	return info !== void 0 && info.isDirectory();
+}
+const REF_TEMPLATE = "name ++ \"\\t\" ++ if(remote,remote,\"-\") ++ \"\\t\" ++ if(normal_target,normal_target.commit_id(),\"conflict\") ++ \"\\t\" ++ tracked ++ \"\\n\"";
+const COMMIT_TEMPLATE = "commit_id ++ \"\\t\" ++ empty ++ \"\\t\" ++ parents.map(|c| c.commit_id()).join(\",\") ++ \"\\t\" ++ conflict ++ \"\\n\"";
+const HEAD_TEMPLATE = "commit_id ++ \"\\n\"";
+const refKey = (name, remote) => `${name}\t${remote}`;
+async function refs(dest, options) {
+	const result = /* @__PURE__ */ new Map();
+	for (const line of lines(await jj([
+		"bookmark",
+		"list",
+		"--all-remotes",
+		"-T",
+		REF_TEMPLATE
+	], dest, options))) {
+		const parts = line.split("	");
+		if (parts.length !== 4) throw new Error(`malformed bookmark line: ${line}`);
+		result.set(refKey(parts[0], parts[1]), {
+			name: parts[0],
+			remote: parts[1],
+			target: parts[2],
+			tracked: parts[3] === "true"
+		});
+	}
+	return result;
+}
+async function revision(dest, rev) {
+	const output = await jj([
+		"log",
+		"-G",
+		"-r",
+		rev,
+		"-T",
+		COMMIT_TEMPLATE
+	], dest);
+	const parts = output.split("	");
+	if (parts.length !== 4) throw new Error(`malformed revision line for ${rev}: ${output}`);
+	return {
+		commit: parts[0],
+		empty: parts[1] === "true",
+		parents: parts[2] === "" ? [] : parts[2].split(","),
+		conflict: parts[3] === "true"
+	};
+}
+async function ancestor(dest, older, newer) {
+	return Number(await jj([
+		"log",
+		"-r",
+		`${older}::${newer}`,
+		"--count"
+	], dest)) > 0;
+}
+/** Decode jj text output as UTF-8, replacing invalid bytes like execFile did. */
+const utf8 = (bytes) => new TextDecoder("utf-8").decode(bytes);
+const concatBytes = (chunks) => {
+	let size = 0;
+	for (const chunk of chunks) size += chunk.byteLength;
+	const bytes = new Uint8Array(size);
+	let offset = 0;
+	for (const chunk of chunks) {
+		bytes.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return bytes;
+};
+//#endregion
+//#region archive/src/repository/health.ts
+/** Materialize all visible view heads, including bare heads and bookmark conflict terms. */
+async function preflight(dest, options = {}) {
+	try {
+		await jj([
+			"log",
+			"-G",
+			"-r",
+			"visible_heads()",
+			"-T",
+			"commit_id ++ \"\\n\""
+		], dest, options);
+	} catch (error) {
+		if (!(error instanceof JjError)) throw error;
+		const ghosts = [...new Set([...error.detail.matchAll(/Object ([0-9a-f]{40,64}) of type commit not found/gi)].map((match) => match[1]))];
+		if (ghosts.length === 0) throw error;
+		throw new Error(`jj ghost commit(s) missing from Git object store: ${ghosts.join(", ")}. Resolve conflicted bookmarks and re-adopt the checkout, or explicitly run node '${(process.argv[1] ?? "archive/src/repo-jj-archive.ts").replaceAll("'", "'\\''")}' heal --dest '${dest.replaceAll("'", "'\\''")}' --yes (backs up .jj).`);
+	}
+	return [...(await refs(dest, options)).values()].filter((ref) => ref.target === "conflict").map((ref) => `${ref.name}${ref.remote === "-" ? "" : `@${ref.remote}`}`);
+}
+//#endregion
+//#region archive/src/recovery/harvest.ts
+function stamp() {
+	const now = /* @__PURE__ */ new Date();
+	const pad = (value) => String(value).padStart(2, "0");
+	return `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}-${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}`;
+}
+function safeLabel(label) {
+	return label.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[.-]+|[.-]+$/g, "") || "deployment";
+}
+/** Duplicate a mutable @ so its recovery bookmark cannot drift with subsequent edits. */
+async function harvest(dest, label, kind, target, copy = false) {
+	let commit = target;
+	if (copy) {
+		await preflight(dest);
+		const heads = new Set(lines(await jj([
+			"log",
+			"-G",
+			"-r",
+			"heads(all())",
+			"-T",
+			HEAD_TEMPLATE
+		], dest)));
+		await jj([
+			"duplicate",
+			"-r",
+			target
+		], dest);
+		await preflight(dest);
+		const newHeads = lines(await jj([
+			"log",
+			"-G",
+			"-r",
+			"heads(all())",
+			"-T",
+			HEAD_TEMPLATE
+		], dest)).filter((head) => !heads.has(head));
+		if (newHeads.length !== 1) throw new Error(`expected one duplicated jj snapshot; found [${newHeads.join(", ")}]`);
+		commit = newHeads[0];
+	}
+	const name = `harvest/${safeLabel(label)}/${kind}-${stamp()}-${randomUUID().replaceAll("-", "").slice(0, 8)}`;
+	await jj([
+		"bookmark",
+		"create",
+		name,
+		"-r",
+		commit
+	], dest);
+	return {
+		kind: "bookmark-created",
+		name,
+		target: commit
+	};
+}
+async function recoveryCovered(dest, label, before, parents) {
+	for (const ref of before.values()) {
+		if (!ref.name.startsWith(`harvest/${safeLabel(label)}/working-copy-`) || ref.remote !== "-") continue;
+		if ((await revision(dest, ref.target)).parents.join(",") !== parents.join(",")) continue;
+		if (await jj([
+			"diff",
+			"--from",
+			ref.target,
+			"--to",
+			"@",
+			"--summary"
+		], dest) !== "") continue;
+		return true;
+	}
+	return false;
+}
+//#endregion
+//#region archive/src/repository/snapshot.ts
+/**
+* Snapshot an archive worktree: materialize visible heads, then import
+* colocated Git refs and snapshot tracked/untracked working-copy changes.
+*
+* Library twin of the CLI `snapshot` command: returns a structured result
+* instead of printing. The conflicted-bookmark list comes from the health
+* preflight that must precede any history walk.
+*/
+async function snapshot(dest) {
+	const conflicts = await preflight(dest);
+	await jj(["status"], dest);
+	return {
+		dest,
+		conflicts
+	};
+}
+//#endregion
+//#region archive/src/repository/fetch.ts
+/**
+* Fetch one remote of an archive without moving the local base or
+* reconciling the worktree: snapshot, harvest a dirty `@` if recovery does
+* not already cover it, freeze tracked local bookmarks, then fetch with no
+* abandon of unreachable commits. Run `refresh` afterward for reconciliation.
+*
+* Library twin of the CLI `fetch` command: returns structured notices
+* instead of printing. No console I/O happens here.
+*/
+async function fetchRemote(options) {
+	const { dest, label } = options;
+	const remote = options.remote ?? "origin";
+	const notices = [];
+	await snapshot(dest);
+	const before = await refs(dest);
+	const working = await revision(dest, "@");
+	if (!working.empty && !await recoveryCovered(dest, label, before, working.parents)) notices.push(await harvest(dest, label, "working-copy", working.commit, true));
+	for (const ref of before.values()) if (ref.remote !== "-" && ref.remote !== "git" && ref.tracked) await jj([
+		"bookmark",
+		"untrack",
+		ref.name,
+		"--remote",
+		ref.remote
+	], dest);
+	await jj([
+		"--config",
+		"git.abandon-unreachable-commits=false",
+		"git",
+		"fetch",
+		"--remote",
+		remote
+	], dest);
+	return {
+		remote,
+		notices
+	};
+}
+//#endregion
+//#region archive/src/cli/commands/fetch.ts
+/**
+* `fetch` — safe single-remote fetch: snapshot, harvest dirty `@` if needed,
+* freeze tracked local bookmarks, fetch without abandoning unreachable
+* commits. Reconciliation stays with `refresh`.
+*/
+const fetchCommand = make$5("fetch", {
+	dest: destFlag,
+	remote: String$1("remote").pipe(withDefault("origin"), withDescription$1("Existing remote to fetch")),
+	label: labelFlag
+}, (input) => runLibrary(() => fetchRemote({
+	dest: input.dest,
+	label: input.label,
+	remote: input.remote
+})).pipe(flatMap$1((result) => {
+	const lines = result.notices.map((notice) => `BOOKMARK CREATED  ${notice.name} -> ${notice.target}`);
+	lines.push(`Fetched ${result.remote}; local bookmarks remain frozen until refresh`);
+	return log(lines.join("\n"));
+}))).pipe(withDescription("Snapshot, harvest dirty @, freeze tracked refs, then fetch one remote."));
+//#endregion
+//#region archive/src/cli/commands/harvest.ts
+/** `harvest` — pin a revision under a unique harvest/<label>/ recovery bookmark. */
+const harvestCommand = make$5("harvest", {
+	dest: destFlag,
+	label: labelFlag,
+	kind: String$1("kind").pipe(withDefault("manual"), withDescription$1("Recovery bookmark category")),
+	target: String$1("target").pipe(withDefault("@"), withDescription$1("Revision to pin")),
+	copy: Boolean$1("copy").pipe(withDefault(false), withDescription$1("Duplicate mutable @ to a fixed change ID before pinning"))
+}, (input) => runLibrary(async () => {
+	await snapshot(input.dest);
+	return harvest(input.dest, input.label, input.kind, input.target, input.copy);
+}).pipe(flatMap$1((notice) => log(`BOOKMARK CREATED  ${notice.name} -> ${notice.target}`)))).pipe(withDescription("Pin a revision under a unique harvest/<label>/ bookmark."));
+//#endregion
+//#region archive/src/cli/commands/health.ts
+/**
+* `health` — ghost-head preflight and conflicted-bookmark report. Runs in the
+* read-only query mode (`--ignore-working-copy`): the checkout's jj state is
+* observed, never snapshotted or re-imported.
+*/
+const health = make$5("health", { dest: destFlag }, (input) => runLibrary(() => preflight(input.dest, { readOnly: true })).pipe(flatMap$1((conflicts) => log(conflicts.length ? `Visible heads OK; conflicted bookmarks: ${conflicts.join(", ")}` : "Visible heads OK; no conflicted bookmarks")))).pipe(withDescription("Materialize visible_heads() and list conflicted bookmarks; no mutations."));
+//#endregion
+//#region archive/src/recovery/heal.ts
+/** Explicit re-adoption drops jj's broken view, not the Git checkout or backup. */
+async function heal(dest, yes) {
+	if (!yes) throw new Error("heal is destructive to jj's operation history; pass --yes to back up .jj and re-adopt");
+	if (!await isDirectory(dest) || !await exists(join(dest, ".git")) || !await isDirectory(join(dest, ".jj"))) throw new Error(`${dest} must be a jj-colocated Git checkout; refusing to re-adopt`);
+	const backup = join(dest, `.jj.broken-ghost-${stamp()}-${randomUUID().slice(0, 8)}`);
+	await rename(join(dest, ".jj"), backup);
+	await jj([
+		"git",
+		"init",
+		"--colocate"
+	], dest);
+	return backup;
+}
+//#endregion
+//#region archive/src/cli/commands/heal.ts
+/** `heal` — last-resort jj re-adoption from Git refs, gated on `--yes`. */
+const healCommand = make$5("heal", {
+	dest: destFlag,
+	yes: Boolean$1("yes").pipe(withDefault(false), withDescription$1("Required explicit permission to back up and replace .jj"))
+}, (input) => runLibrary(() => heal(input.dest, input.yes)).pipe(flatMap$1((backup) => log(`Re-adopted ${input.dest}; old jj state preserved at ${backup}`)))).pipe(withDescription("Back up .jj and re-adopt from Git refs; loses jj-only operation history."));
+//#endregion
+//#region archive/src/repository/remotes.ts
+const REMOTE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
+function declaredRemotes(repo, remotes) {
+	const json = JSON.parse(remotes);
+	if (json === null || typeof json !== "object" || Array.isArray(json)) throw new Error("--remotes must be a JSON object mapping remote names to URLs");
+	const declared = new Map([["origin", repo], ...Object.entries(json)]);
+	const urls = /* @__PURE__ */ new Map();
+	for (const [name, url] of declared) {
+		if (!REMOTE_NAME.test(name) || typeof url !== "string" || !url) throw new Error("remote names or URLs are invalid");
+		urls.set(name, url);
+	}
+	return urls;
+}
+async function remoteDiff(dest, urls) {
+	const actual = /* @__PURE__ */ new Map();
+	for (const line of lines(await jj([
+		"git",
+		"remote",
+		"list"
+	], dest))) {
+		const space = line.indexOf(" ");
+		actual.set(space === -1 ? line : line.slice(0, space), space === -1 ? "" : line.slice(space + 1));
+	}
+	return [...urls].filter(([name, url]) => actual.get(name) !== url).map(([name, declared]) => ({
+		name,
+		declared,
+		actual: actual.get(name) ?? null
+	}));
+}
+function mismatchError(dest, differences, repo, remotes) {
+	const table = differences.map(({ name, declared, actual }) => `${name}\t${JSON.stringify(declared)}\t${JSON.stringify(actual ?? "(missing)")}`).join("\n");
+	return /* @__PURE__ */ new Error(`declared remote URL mismatch (no remote was changed):\nname\tdeclared\tactual\n${table}\nTo apply deliberately: node ${quote(process.argv[1] ?? "archive/src/repo-jj-archive.ts")} remotes --dest ${quote(dest)} --repo ${quote(repo)} --remotes ${quote(remotes)} --reconcile`);
+}
+/** Adds missing remotes and rewrites mismatches only on explicit operator request. */
+async function reconcile(dest, differences) {
+	for (const { name, declared, actual } of differences) await jj([
+		"git",
+		"remote",
+		actual === null ? "add" : "set-url",
+		name,
+		declared
+	], dest);
+}
+//#endregion
+//#region archive/src/repository/refresh.ts
+/**
+* Refresh a canonical archive without using Git's worktree-resetting update path.
+*
+* Stdout is one JSON result for Ansible; jj diagnostics and failures go to stderr.
+* Only run this on a checkout whose working tree is not being edited concurrently.
+*/
+async function refreshArchive(options) {
+	const { dest, repo, remotes: remotesArg, label, reconcileRemotes } = options;
+	const update = options.update ?? "true";
+	if (update !== "true" && update !== "false") throw new Error(`argument --update: invalid choice: '${update}' (choose from 'true', 'false')`);
+	const urls = declaredRemotes(repo, remotesArg);
+	let version = options.version ?? "HEAD";
+	let selected = options.remote ?? "origin";
+	const marker = version.lastIndexOf("@");
+	if (marker !== -1 && urls.has(version.slice(marker + 1))) {
+		selected = version.slice(marker + 1);
+		version = version.slice(0, marker);
+	}
+	if (!urls.has(selected)) throw new Error(`selected remote '${selected}' is not declared`);
+	if (options.submodules) throw new Error("GIT_SUBMODULES requires explicit submodule safety handling; disable it for this archive render");
+	const depth = options.depth === void 0 ? void 0 : Number(options.depth);
+	if (depth !== void 0 && (!Number.isInteger(depth) || depth < 1)) throw new Error("GIT_DEPTH must be positive");
+	const notices = [];
+	let changed = false;
+	let cloned = false;
+	const harvest$1 = async (kind, target, copy = false) => {
+		notices.push(await harvest(dest, label, kind, target, copy));
+		changed = true;
+	};
+	if (!await exists(dest)) {
+		await mkdir(dirname(dest), { recursive: true });
+		const command = [
+			"git",
+			"clone",
+			"--colocate",
+			"--remote",
+			selected
+		];
+		if (depth !== void 0) command.push("--depth", String(depth));
+		if (version !== "HEAD") command.push("--branch", version);
+		await jj([
+			...command,
+			urls.get(selected),
+			dest
+		], dirname(dest));
+		notices.push({
+			kind: "notice",
+			message: `cloned jj-colocated archive ${dest}`
+		});
+		changed = true;
+		cloned = true;
+	} else if (!await isDirectory(dest) || !await exists(join(dest, ".git"))) throw new Error(`${dest} exists but is not a colocated Git checkout; refusing to replace it`);
+	else if (!await exists(join(dest, ".jj"))) {
+		await jj([
+			"git",
+			"init",
+			"--git-repo",
+			join(dest, ".git"),
+			dest
+		], dest);
+		notices.push({
+			kind: "notice",
+			message: `adopted existing Git archive into jj: ${dest}`
+		});
+		changed = true;
+	}
+	await snapshot(dest);
+	const before = await refs(dest);
+	const working = await revision(dest, "@");
+	const work = working.commit;
+	const empty = working.empty;
+	const parents = working.parents;
+	const differences = await remoteDiff(dest, urls);
+	if (differences.some((difference) => difference.actual !== null) && !reconcileRemotes) throw mismatchError(dest, differences, repo, remotesArg);
+	if (differences.length) {
+		await reconcile(dest, differences);
+		changed = true;
+	}
+	if (update === "false" && before.size > 0) return {
+		changed,
+		notices
+	};
+	if (!empty && !await recoveryCovered(dest, label, before, parents)) await harvest$1("working-copy", work, true);
+	for (const ref of before.values()) if (ref.remote !== "-" && ref.remote !== "git" && ref.tracked) await jj([
+		"bookmark",
+		"untrack",
+		ref.name,
+		"--remote",
+		ref.remote
+	], dest);
+	for (const name of urls.keys()) await jj([
+		"--config",
+		"git.abandon-unreachable-commits=false",
+		"git",
+		"fetch",
+		"--remote",
+		name
+	], dest);
+	const after = await refs(dest);
+	const base = version !== "HEAD" ? version : ["main", "master"].find((name) => after.has(refKey(name, selected))) ?? null;
+	if (base === null || !after.has(refKey(base, selected))) throw new Error(`remote ${selected} does not have branch ${version}; specify GIT_VERSION explicitly`);
+	const upstream = after.get(refKey(base, selected)).target;
+	if (upstream === "conflict") throw new Error(`remote ${base}@${selected} is conflicted`);
+	const oldBase = before.get(refKey(base, "-"))?.target ?? null;
+	if (oldBase === "conflict") throw new Error(`local bookmark ${base} is conflicted; resolve it before updating`);
+	for (const ref of before.values()) {
+		if (ref.remote !== "-" || ref.name === base || ref.target === "conflict") continue;
+		const current = after.get(refKey(ref.name, "-"));
+		if (current === void 0 || current.target !== ref.target) await harvest$1(`${ref.name.replaceAll("/", "-")}-local`, ref.target);
+	}
+	if (oldBase !== null && oldBase !== upstream && !await ancestor(dest, oldBase, upstream)) await harvest$1(base.replaceAll("/", "-"), oldBase);
+	if (oldBase !== upstream) {
+		await jj([
+			"bookmark",
+			"set",
+			"-B",
+			"-r",
+			upstream,
+			base
+		], dest);
+		if (oldBase === null) notices.push({
+			kind: "bookmark-created",
+			name: base,
+			target: upstream
+		});
+		else notices.push({
+			kind: "notice",
+			message: `${base} -> ${upstream} (${selected})`
+		});
+		changed = true;
+	} else if (cloned) notices.push({
+		kind: "bookmark-created",
+		name: base,
+		target: upstream
+	});
+	await jj([
+		"bookmark",
+		"track",
+		base,
+		"--remote",
+		selected
+	], dest);
+	const current = await revision(dest, "@");
+	if (oldBase === current.commit && oldBase !== upstream && await ancestor(dest, upstream, current.commit)) {
+		await jj(["new", "@"], dest);
+		changed = true;
+	} else if (!await ancestor(dest, upstream, current.commit)) {
+		if (current.empty && oldBase !== null && current.parents.join(",") === oldBase && await ancestor(dest, oldBase, upstream)) await jj([
+			"rebase",
+			"-r",
+			"@",
+			"-d",
+			base
+		], dest);
+		else {
+			if (empty && current.commit !== work) await harvest$1("head", work);
+			await jj([
+				"new",
+				"@",
+				base
+			], dest);
+		}
+		changed = true;
+		notices.push({
+			kind: "notice",
+			message: `merged local checkout with ${base}@${selected}`
+		});
+	}
+	if ((await revision(dest, "@")).conflict) notices.push({
+		kind: "notice",
+		message: "working copy has merge conflicts; resolve them before building"
+	});
+	if ((before.get(refKey(base, selected))?.target ?? null) !== upstream) changed = true;
+	return {
+		changed,
+		notices
+	};
+}
+//#endregion
+//#region archive/src/cli/commands/refresh.ts
+/**
+* `refresh` — the composed archive convergence operation for Ansible and
+* humans. Argument-value validation (update choice, depth, remotes JSON,
+* submodule refusal) intentionally stays in the library so the exact
+* diagnostics operators match on keep flowing through the failure boundary.
+*/
+const refresh = make$5("refresh", {
+	dest: destFlag,
+	repo: repoFlag,
+	remotes: remotesFlag,
+	label: labelFlag,
+	remote: String$1("remote").pipe(withDefault("origin"), withDescription$1("Selected declared remote")),
+	branch: String$1("branch").pipe(withDefault("HEAD"), withDescription$1("Branch or branch@remote; HEAD chooses main then master")),
+	update: String$1("update").pipe(withDefault("true"), withDescription$1("Fetch/reconcile: true or false")),
+	depth: optional(String$1("depth").pipe(withDescription$1("Clone depth (only for new archives)"))),
+	submodules: Boolean$1("submodules").pipe(withDefault(false), withDescription$1("Unsupported: fail rather than silently recurse")),
+	json: Boolean$1("json").pipe(withDefault(false), withDescription$1("Exactly one JSON line on stdout for Ansible")),
+	"reconcile-remotes": Boolean$1("reconcile-remotes").pipe(withDefault(false), withDescription$1("Explicitly add/rewrite declared remotes before refresh"))
+}, (input) => runLibrary(() => refreshArchive({
+	dest: input.dest,
+	repo: input.repo,
+	remotes: input.remotes,
+	label: input.label,
+	remote: input.remote,
+	version: input.branch,
+	update: input.update,
+	depth: getOrElse(input.depth, () => void 0),
+	submodules: input.submodules,
+	reconcileRemotes: input["reconcile-remotes"]
+})).pipe(flatMap$1((result) => render(result, input.json)))).pipe(withDescription("Snapshot, preserve recovery tips, fetch, and reconcile the selected base and worktree."));
+const render = (result, json) => {
+	if (json) return log(JSON.stringify(result));
+	const lines = [result.changed ? "Archive changed" : "Archive unchanged"];
+	for (const notice of result.notices) lines.push(notice.kind === "bookmark-created" ? `BOOKMARK CREATED  ${notice.name} -> ${notice.target}` : `REPO NOTICE ${notice.message}`);
+	return log(lines.join("\n"));
+};
+//#endregion
+//#region archive/src/cli/commands/remotes.ts
+/**
+* `remotes` — declared-vs-actual remote URL policy. Differences fail loudly
+* with the reconcile command; only `--reconcile` applies them.
+*/
+const remotesCommand = make$5("remotes", {
+	dest: destFlag,
+	repo: repoFlag,
+	remotes: remotesFlag,
+	reconcile: Boolean$1("reconcile").pipe(withDefault(false), withDescription$1("Apply missing or mismatched remote URLs"))
+}, (input) => runLibrary(async () => {
+	const diff = await remoteDiff(input.dest, declaredRemotes(input.repo, input.remotes));
+	if (input.reconcile) {
+		await reconcile(input.dest, diff);
+		return diff.length ? `Reconciled ${diff.map(({ name }) => name).join(", ")}` : "Remotes match";
+	}
+	if (diff.length) throw mismatchError(input.dest, diff, input.repo, input.remotes);
+	return "Remotes match";
+}).pipe(flatMap$1((message) => log(message)))).pipe(withDescription("Compare declared remote URLs; --reconcile deliberately applies differences."));
+//#endregion
+//#region archive/src/repository/self.ts
+/** Convenience only; compfuzor playbooks always use the launcher in playbook_dir. */
+async function locateCompfuzor(freshen, archiveDir) {
+	const root = archiveDir ?? join(homedir(), "archive");
+	const path = join(root, "rektide", "compfuzor");
+	if (!await exists(join(path, ".git"))) return null;
+	if (freshen) {
+		if (!await exists(join(path, ".jj"))) throw new Error(`${path} is not a jj checkout; cannot freshen`);
+		await jj([
+			"--config",
+			"git.abandon-unreachable-commits=false",
+			"git",
+			"fetch",
+			"--remote",
+			"origin"
+		], path);
+	}
+	return path;
+}
+//#endregion
+//#region archive/src/cli/commands/self.ts
+/** `self` — detect the standard ~/archive/rektide/compfuzor checkout. */
+const self = make$5("self", {
+	"archive-dir": optional(String$1("archive-dir").pipe(withDescription$1("Override ~/archive for detection (useful for fixtures)"))),
+	freshen: Boolean$1("freshen").pipe(withDefault(false), withDescription$1("Opt in to fetching origin of detected checkout"))
+}, (input) => runLibrary(() => locateCompfuzor(input.freshen, getOrElse(input["archive-dir"], () => void 0))).pipe(flatMap$1((location) => log(location === null ? "No compfuzor archive checkout detected" : `${location}${input.freshen ? " (origin fetched)" : ""}`)))).pipe(withDescription("Detect ~/archive/rektide/compfuzor; optionally fetch its origin."));
+//#endregion
+//#region archive/src/cli/commands.ts
+/**
+* The command registry — the toolkit's composition seam. Adding a command is
+* a new named module under commands/ plus one entry here; grouping (e.g. a
+* future custody group) can switch entries to `[group, [commands]]` form
+* without touching root.ts or main.ts. Custody commands (`adopt`,
+* `verify-adoption`) are deliberately absent until their implementations
+* exist — no stub successes. `complete` is wired in root.ts because it needs
+* the root command itself.
+*/
+const commands = [
+	refresh,
+	health,
+	make$5("snapshot", { dest: destFlag }, (input) => runLibrary(() => snapshot(input.dest)).pipe(flatMap$1((result) => log(`Snapshotted ${result.dest}`)))).pipe(withDescription("Snapshot current tracked/untracked work and import colocated Git refs.")),
+	harvestCommand,
+	remotesCommand,
+	fetchCommand,
+	healCommand,
+	self
+];
+//#endregion
+//#region archive/src/cli/root.ts
+/**
+* Root command composition. Invoked without a subcommand it prints the
+* orientation hint (an intentional, documented success — never JSON).
+*/
+const root = make$5("repo-jj-archive", {}, () => log("Run repo-jj-archive --help for commands.")).pipe(withDescription("Composable jj archive operations; use COMMAND --help for flags."), withSubcommands([...commands, completeCommand(() => root)]));
+//#endregion
+//#region archive/src/cli/main.ts
+/**
+* Runner wiring: legacy argv normalization, service provision, and the
+* stdout-purity flush discipline. `main` stays a plain exported Promise so
+* the launcher (script/repo-jj-archive.ts) and the committed bundle keep the
+* same import contract as before the Effect migration.
+*/
+/** Built-ins trimmed to the documented surface: no wizard, no log-level. */
+const builtIns = [
+	Help,
+	Version,
+	Completions
+];
+const baseFormatter = defaultFormatter({ colors: false });
+const formatter = {
+	formatHelpDoc: baseFormatter.formatHelpDoc,
+	formatCliError: baseFormatter.formatCliError,
+	formatError: baseFormatter.formatError,
+	formatErrors: baseFormatter.formatErrors,
+	formatVersion: (_name, version) => version
+};
+/**
+* Minimal legacy argv normalization, applied before Effect parsing. This is
+* compatibility translation only, not a parser.
+*
+* - A flag-only Ansible invocation (no subcommand) containing any known
+*   refresh flag is the `refresh` command with JSON output (`--json`
+*   appended last, matching the historical translation). Restricting the
+*   trigger to the refresh flag set keeps native root flags (`--help`,
+*   `--version`, `--completions`) and ordinary unknown-flag failures intact.
+* - Under `refresh`, the legacy `--version BRANCH` spelling maps to
+*   `--branch BRANCH`. Root `--version`/`-v` alone still prints the toolkit
+*   version: it is not a refresh flag, so it never triggers the translation.
+* - Scanning and rewriting stop at `--`, and a value token equal to
+*   `--version` (the value of a preceding value-taking flag) is never
+*   rewritten.
+*/
+const REFRESH_VALUE_FLAGS = /* @__PURE__ */ new Set([
+	"dest",
+	"repo",
+	"remotes",
+	"remote",
+	"branch",
+	"label",
+	"update",
+	"depth"
+]);
+const REFRESH_BOOLEAN_FLAGS = /* @__PURE__ */ new Set([
+	"submodules",
+	"json",
+	"reconcile-remotes"
+]);
+const flagName = (token) => token.slice(2).split("=")[0];
+/** Whether a flag-only invocation carries any known refresh flag. */
+const mentionsRefreshFlag = (args) => {
+	for (let i = 0; i < args.length; i++) {
+		const token = args[i];
+		if (token === "--") break;
+		if (!token.startsWith("--")) continue;
+		const name = flagName(token);
+		if (REFRESH_BOOLEAN_FLAGS.has(name) || REFRESH_VALUE_FLAGS.has(name)) return true;
+	}
+	return false;
+};
+const normalizeArgv = (args) => {
+	const argv = args[0] !== void 0 && args[0].startsWith("--") && mentionsRefreshFlag(args) ? [
+		"refresh",
+		...args,
+		"--json"
+	] : [...args];
+	if (argv[0] === "refresh") for (let i = 1; i < argv.length; i++) {
+		const token = argv[i];
+		if (token === "--") break;
+		if (!token.startsWith("--")) continue;
+		if (token === "--version") argv[i] = "--branch";
+		else if (!token.includes("=") && REFRESH_VALUE_FLAGS.has(flagName(token))) i++;
+	}
+	return argv;
+};
+const main = () => {
+	const output = createOutputBuffer();
+	const program = runWith(root, {
+		version: VERSION,
+		renderErrors: false
+	})(normalizeArgv(process.argv.slice(2))).pipe(provideService(Console, output.console), provideService(Formatter, formatter), provideService(CliConfig, make$6({ builtIns })), provide(layer));
+	return runPromise(program).then(() => output.flush(), (error) => {
+		output.discard();
+		reportFailure(error);
+	});
+};
+//#endregion
+//#region archive/src/repo-jj-archive.ts
+/** General jj toolkit, with a JSON-only refresh mode for Ansible. */
+const argvPath = process.argv[1];
+if (argvPath) realpath(argvPath).then((realArgv) => {
+	if (realArgv !== import.meta.filename) return;
+	return main().catch((error) => {
+		const detail = error instanceof AggregateError ? error.errors.map((item) => item instanceof Error ? item.message : String(item)).join("; ") : error instanceof Error ? error.message : String(error);
+		console.error(`repo-jj-archive: ${detail}`);
+		process.exitCode = 1;
+	});
+}, (error) => {
+	console.error(`repo-jj-archive: ${error instanceof Error ? error.message : String(error)}`);
+	process.exitCode = 1;
+});
+//#endregion
+export { main };
