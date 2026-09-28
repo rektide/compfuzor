@@ -699,56 +699,56 @@
       - name: etc_d/autoupdate.json
         json:
           autoupdate: false
-      - name: agent/mcp-gathering.md
-        content: |
-          ---
-          description: Tool and documentation gathering, review, and comparison
-          mode: fork
-          ---
+      #- name: agent/mcp-gathering.md
+      #  content: |
+      #    ---
+      #    description: Tool and documentation gathering, review, and comparison
+      #    mode: fork
+      #    ---
 
-          You are looking to find both the best documentation, and, crucially, you want to understand and explain the strengths and weaknesses of what each tool gives you, comparing against one another. Follow these steps:
+      #    You are looking to find both the best documentation, and, crucially, you want to understand and explain the strengths and weaknesses of what each tool gives you, comparing against one another. Follow these steps:
 
-          1. Identify and list which MCP tools might be best for doing research on the libraries or problem we need to work with next. For example, rustdocs, cratedocs, LSP, context7 are all well known MCPs for finding information on code and libraries.
-          2. After listing tools you want to try, work with each of those tool, one after another, trying to find relevant documentation for the context.
-          3. After looping through all tools, you will have seen more of the total documentation available. This might suggest other research and exploration you could do. Do a second pass. You don't have to, but if you think there might be a benefit, try new queries that you think could be useful for each tool.
-          4. Compare how the different sources do. Which sources do you think are the most pertinent? Which have the best examples? Which have are the most comprehensive? Which feel the most on target? How would you characterize the help you got from each tool, when trying to do research about this library or topic?
-          5. Outline what you have learned.
-      - name: agent/review.md
-        content: |
-          ---
-          description: Reviews code for quality and best practices
-          mode: subagent
-          tools:
-            write: false
-            edit: false
-            bash: false
-          ---
+      #    1. Identify and list which MCP tools might be best for doing research on the libraries or problem we need to work with next. For example, rustdocs, cratedocs, LSP, context7 are all well known MCPs for finding information on code and libraries.
+      #    2. After listing tools you want to try, work with each of those tool, one after another, trying to find relevant documentation for the context.
+      #    3. After looping through all tools, you will have seen more of the total documentation available. This might suggest other research and exploration you could do. Do a second pass. You don't have to, but if you think there might be a benefit, try new queries that you think could be useful for each tool.
+      #    4. Compare how the different sources do. Which sources do you think are the most pertinent? Which have the best examples? Which have are the most comprehensive? Which feel the most on target? How would you characterize the help you got from each tool, when trying to do research about this library or topic?
+      #    5. Outline what you have learned.
+      #- name: agent/review.md
+      #  content: |
+      #    ---
+      #    description: Reviews code for quality and best practices
+      #    mode: subagent
+      #    tools:
+      #      write: false
+      #      edit: false
+      #      bash: false
+      #    ---
 
-          You are in code review mode. Focus on:
+      #    You are in code review mode. Focus on:
 
-          - Code quality and best practices
-          - Potential bugs and edge cases
-          - Performance implications
-          - Security considerations
+      #    - Code quality and best practices
+      #    - Potential bugs and edge cases
+      #    - Performance implications
+      #    - Security considerations
 
-          Provide constructive feedback without making direct changes.
-      - name: agent/docs-writer.md
-        content: |
-          ---
-          description: Writes and maintains project documentation
-          mode: subagent
-          tools:
-            bash: false
-          ---
+      #    Provide constructive feedback without making direct changes.
+      #- name: agent/docs-writer.md
+      #  content: |
+      #    ---
+      #    description: Writes and maintains project documentation
+      #    mode: subagent
+      #    tools:
+      #      bash: false
+      #    ---
 
-          You are a technical writer. Create clear, comprehensive documentation.
+      #    You are a technical writer. Create clear, comprehensive documentation.
 
-          Focus on:
+      #    Focus on:
 
-          - Clear explanations
-          - Proper structure
-          - Code examples
-          - User-friendly language
+      #    - Clear explanations
+      #    - Proper structure
+      #    - Code examples
+      #    - User-friendly language
       #- name: provider/openrouter.json
       #  json:
       #    provider:
