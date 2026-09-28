@@ -1,242 +1,462 @@
-# Archive toolkit — keep local work recoverable
+# Archive toolkit
 
-Compfuzor keeps source checkouts under `~/archive/<org>/<repo>`. The archive
-toolkit manages their jj main worktrees and helps preserve local work across
-refreshes. It has two jobs:
+**Keep source checkouts useful without treating local work as disposable.**
 
-- **Routine checkout management:** inspect health, snapshot, harvest recovery
-  tips, check remotes, fetch and refresh without resetting a dirty tree.
-- **Cross-checkout Git custody:** plan the transfer of selected local Git history
-  and worktree content from an older checkout into an **existing** archive,
-  install named pins and a receipt, and verify the transfer later.
+An archive here is a long-lived Git repository with a colocated jj checkout.
+It can hold upstream history, local branches, unfinished work, and recovery
+tips. It is a place to keep working with source—not a compressed backup file.
 
-These are local operations, not remote backup, deployment migration or
-permission to delete an old checkout. Do not run them alongside another writer
-to either selected checkout. The toolkit operates on the archive's main
-worktree, not a deployment-specific jj workspace.
+Our convention is `~/archive/<org>/<repo>`. The toolkit accepts explicit paths;
+you do not need that directory layout to use its repository operations.
+
+The tool grew out of Compfuzor's need to update these checkouts without losing
+their local work. It is now both an operator-facing CLI and a reusable library.
+Compfuzor consumes the same operations rather than owning a separate implementation.
+
+## What it is for
+
+There are two related, but deliberately different, jobs:
+
+| Job | Starting point | Intended result |
+|---|---|---|
+| **Maintain an archive** | A checkout you want to keep working in or using | Fetch upstream changes, preserve recovery tips, and reconcile the selected base and worktree. |
+| **Take custody of another checkout's work** | An older checkout whose history or uncommitted files must not be overlooked | Account for the selected Git work, preserve it in an existing archive, and leave evidence that can be verified without the old checkout. |
+
+Use `refresh` for the first job. Use `adopt`, followed by `verify-adoption`, for
+the second. They are not interchangeable:
+
+- **Refresh changes the active checkout.** It can snapshot local files, import
+  refs, fetch, move the selected bookmark, and reconcile the worktree.
+- **Adoption adds custody without switching either checkout.** It preserves
+  selected objects under new refs and records what was preserved. It does not
+  choose which recovered history an application should run.
+
+This separation is the project's central boundary: **keeping work, using work,
+publishing work, and retiring its old location are different decisions.**
 
 ## Start using it
 
-Use Node **26 or newer**, Git and jj. For a copied distribution, run the
-committed executable [`archive/repo-jj-archive.ts`](/archive/repo-jj-archive.ts):
-it is one file with its JavaScript dependencies bundled, but does **not**
-include Node, Git or jj. After copying it to your chosen directory:
+You need system **Node 26**, **Git**, and **jj**. Custody has additional Linux
+requirements explained under [Limitations](#limitations).
+
+### Run the distributed file
+
+[`archive/repo-jj-archive.ts`](/archive/repo-jj-archive.ts) is the distributable:
+one executable TypeScript file containing the JavaScript dependencies. Copy
+that file where you need it; no source tree or adjacent `node_modules` is needed.
 
 ```sh
+# In the directory containing your copied distribution:
 ./repo-jj-archive.ts --help
 ./repo-jj-archive.ts health --dest ~/archive/ORG/REPO
+
+# Explicit Node invocation works too:
+node repo-jj-archive.ts refresh --help
 ```
 
-From a compfuzor checkout with CLI dependencies installed (`pnpm install`),
-develop against the TypeScript source instead:
+The file bundles the application and its dependencies, **not Node, Git, or jj**.
+Compfuzor provisions Node 26 through [`nodesource.repo.pb`](/nodesource.repo.pb).
+
+### Work from source
+
+In a Compfuzor checkout, install dependencies once and run the original modules
+directly. There is no build step in the development loop:
 
 ```sh
+pnpm install
 node archive/src/repo-jj-archive.ts --help
-node archive/src/repo-jj-archive.ts refresh --help
+node archive/src/repo-jj-archive.ts adopt --help
 ```
 
-For example, inspect an archive, then refresh it deliberately:
-
-```sh
-node archive/src/repo-jj-archive.ts health --dest ~/archive/ORG/REPO
-node archive/src/repo-jj-archive.ts refresh --dest ~/archive/ORG/REPO \
-  --repo https://github.com/ORG/REPO --label REPO --branch main
-```
-
-`refresh` **mutates** the selected checkout, even with `--update false`:
-it can adopt or create a checkout, snapshot/import refs and manage declared
-remotes. Inspect its options and select the destination before running it.
-A remote URL mismatch fails with the declared/actual table; only
-`--reconcile-remotes` authorizes replacing an existing URL. To inspect a
-remote policy without refreshing, use `remotes` without `--reconcile`.
-
-For an older checkout with local Git work worth keeping, start with a plan,
-not an apply:
-
-```sh
-node archive/src/repo-jj-archive.ts adopt \
-  --legacy /path/to/old-checkout --dest ~/archive/ORG/REPO \
-  --repo https://github.com/ORG/REPO --label REPO --branch main \
-  --generation g0 --json
-```
-
-Choose an **existing jj-colocated** destination. `adopt` never creates it.
-A separate `refresh` can do so, but is itself a mutating checkout operation.
-See the [custody guide](/doc/archive-toolkit/custody.md#plan-review-apply-verify)
-for review-file examples before using `--apply`.
+The remaining examples use this source entry. With a copied distribution,
+substitute `./repo-jj-archive.ts` for `node archive/src/repo-jj-archive.ts`.
 
 ## Choose a workflow
 
-| Need | Use | Expect |
+### Maintain a checkout
+
+Start by checking jj's view, then refresh only the checkout you intend to change:
+
+```sh
+node archive/src/repo-jj-archive.ts health --dest ~/archive/ORG/REPO
+
+node archive/src/repo-jj-archive.ts refresh \
+  --dest ~/archive/ORG/REPO \
+  --repo https://github.com/ORG/REPO \
+  --label REPO --branch main
+```
+
+`health` is a pinned, read-only jj query. It does not snapshot files or import
+new Git refs. A healthy result is not a claim that the checkout is clean or
+that all of its work has been backed up.
+
+`refresh` composes the maintenance sequence: initialize or clone when needed,
+snapshot, check remotes, preserve recovery tips, fetch, and reconcile. A merge
+can leave conflicts for you to resolve; preserving work is not conflict resolution.
+
+For finer control, use `snapshot`, `harvest`, `remotes`, and `fetch` separately.
+In particular, `fetch` freezes tracked local bookmarks before fetching; it
+does **not** then move the selected base or reconcile the checkout.
+
+**`refresh --update false` is not a dry run.** It can still initialize jj,
+snapshot/import, and manage declared remotes. There is no universal plan mode
+for maintenance commands; the plan model below belongs specifically to adoption.
+
+An existing remote URL mismatch fails rather than silently changing its meaning.
+Inspect the reported URLs before using `remotes --reconcile` or
+`refresh --reconcile-remotes` to authorize a change.
+
+### Preserve an older checkout
+
+An old checkout may contain more than its current branch: a detached HEAD,
+annotated tags, older stash entries, reflog-only commits, and uncommitted files.
+Cloning its upstream URL again is not an inventory of that work.
+
+Stop other writers to both repositories, choose an **existing jj-colocated
+destination**, and ask for a plan:
+
+```sh
+node archive/src/repo-jj-archive.ts adopt \
+  --legacy /path/to/old-checkout \
+  --dest ~/archive/ORG/REPO \
+  --repo https://github.com/ORG/REPO \
+  --label old-checkout --generation g0 --branch main --json
+```
+
+Here, `--legacy` is the source of work; `--dest` is where custody will live;
+`--repo` declares the destination's expected origin URL. `--label` names this
+custody lineage and `--generation` names one immutable capture within it.
+
+For adoption, `--branch` identifies the branch used for recorded baseline
+comparisons. It is not a request to keep only that branch or to deploy it;
+the plan inventories the other refs and candidate work too.
+
+No transfer happens without `--apply`. Planning may use private scratch to
+compute a proposed snapshot, but does not change either repository. Inspect
+the plan before deciding whether its proposal is the preservation you want.
+
+## Understand the plan
+
+A plan answers three questions together:
+
+1. **What did we observe?** Source history, index and worktree state, candidate
+   revisions, and the destination's current state.
+2. **What would we preserve?** Selected tips, an exact proposed worktree tree
+   when needed, and the refs that would protect the admitted transfer.
+3. **May that transfer proceed?** Unsupported conditions, missing decisions,
+   privacy review, and other admission checks.
+
+It is not merely a list of commands or a prediction of `changed: true`.
+The plan makes the boundary between **observed**, **selected**, **left behind**,
+and **not yet known** available to both a person and an automation caller.
+
+### Reading the result
+
+| Part of the plan | What to look for |
+|---|---|
+| `state` and `blockers` | Whether this capture is admissible now. A blocked plan identifies work to do before applying. |
+| `source` | HEAD, refs, candidates, index/worktree observations, ignored and excluded paths, and the source fingerprints. |
+| `source.head.treePaths` | The exact committed HEAD manifest, including when the source needs no new working-copy snapshot. |
+| `proposedSnapshot` | The proposed dirty tree's paths, modes and blob IDs. A blocked preview also exposes its manifest digest and review requirements. |
+| `baselines` | The concrete locally observed refs and OIDs behind comparisons—not a claim about what every remote server contains. |
+| `pins` | The concrete custody ref mapping for a ready plan. Blocked plans do not present an admitted pin set. |
+| `warnings` | Relevant caveats that are distinct from blockers. |
+| `retirementUnresolved` | Matters Git custody cannot settle, even if the transfer itself succeeds. |
+
+**Unknown is not empty.** An uninspected category is `null`; an inspected
+category with no entries can be `[]`. An inability to inspect something must
+not become a reassuring claim that there is nothing to preserve.
+
+`proposedSnapshot: null` needs its own interpretation: a clean source needs
+no synthetic commit. Its committed files are still described by the HEAD
+manifest. On a blocked plan, read the observations and blockers to distinguish
+that case from an unavailable preview.
+
+**Blocked is a useful planning result.** With `--json`, a valid blocked plan
+exits successfully and prints its report. Automation must inspect `state` and
+`blockers`, not treat exit code zero as permission to apply.
+
+**Ready is not preserved.** It means the observed inputs meet admission rules.
+No custody has been established until apply has installed the artifacts and
+independent verification has checked them.
+
+### Decisions belong to the observed content
+
+Some candidate revisions require a `--dispositions` file: select a candidate
+by its kind and full object ID, or explicitly mark it not required with a reason.
+The tool does not decide that unfamiliar dangling history is disposable.
+
+Sensitive included paths and a lost staged/unstaged distinction can require a
+`--path-review` file. That approval names exact paths, modes and blob IDs and
+binds to a manifest digest. It is not a blanket “force” flag.
+
+`--exclude-from` applies only to **untracked** input. It cannot erase a tracked
+credential or runtime file from history. A local-custody review likewise does
+not make that history safe to publish.
+
+The [review-file guide](/doc/archive-toolkit/custody.md#review-inputs) gives the
+actual JSON formats. Keep saved plans and review files private and **outside
+both checkouts**, so preparing the review does not itself change the capture.
+
+### A plan is not a reservation
+
+There is no saved-plan replay command. `adopt --apply` reads the current inputs
+and plans again. It checks the source and destination repeatedly around staging
+and transfer rather than trusting an earlier printout.
+
+This is why review is content-bound: a changed blob cannot inherit approval
+merely because it has the same filename. If the reviewed content changes,
+inspect a fresh plan and update the decision where necessary.
+
+Keep writers stopped throughout. Fingerprints detect drift; they do not turn
+two live repositories into an atomic filesystem snapshot.
+
+## From plan to custody to verification
+
+After reviewing an admissible plan, repeat the invocation with `--apply`.
+Include the same exclusion and decision files if the plan required them:
+
+```sh
+node archive/src/repo-jj-archive.ts adopt \
+  --legacy /path/to/old-checkout \
+  --dest ~/archive/ORG/REPO \
+  --repo https://github.com/ORG/REPO \
+  --label old-checkout --generation g0 --branch main --apply --json
+```
+
+For example, add `--dispositions /private/review/decisions.json` and
+`--path-review /private/review/paths.json` when those decisions are needed.
+Do not omit required reviews to bypass a blocked plan; apply enforces them.
+
+The implementation keeps the stages separate:
+
+```mermaid
+flowchart TD
+    Observe[Read source and destination; construct plan] --> Admit{Admissible and reviewed?}
+    Admit -->|No| Report[Return observations and blockers]
+    Admit -->|Yes: explicit apply| Stage[Build snapshot in a private Git repository]
+    Stage --> Prove[Build complete bundle and restore into an empty repository]
+    Prove --> Seal[Seal private bundle and intent durably]
+    Seal --> Import[Import objects without changing the destination worktree]
+    Import --> Install[Atomically create receipt and custody refs]
+    Install --> Verify[Independently verify custody before reporting success]
+```
+
+### Why private staging matters
+
+Git still does the Git work: writing trees and commits, making bundles, and
+updating refs. The toolkit does not implement its own object database.
+
+The staging repository keeps new objects out of the source. A separate index
+alone is insufficient: Git can still write newly staged blobs into the source
+object database. Private staging isolates **both** the index and object writes.
+
+The resulting worktree snapshot is deterministic for the same parent, tree
+and snapshot format. Its bundle is tested in an empty repository, not just in
+the already-populated destination where missing objects could go unnoticed.
+
+### Three artifacts with different jobs
+
+| Artifact | Role | Where it lives |
 |---|---|---|
-| Check a checkout without changing jj state | `health --dest DIR` | Read-only pinned jj health query and conflicted-bookmark report. |
-| Maintain the archive checkout | `snapshot`, `remotes`, `fetch`, or `refresh` | Individually controlled steps or a composed refresh; these can mutate the checkout. |
-| Preserve work from an older checkout | `adopt` plan, review, then `adopt --apply` | Existing-destination local Git custody, not a checkout merge or source deletion. |
-| Check a prior transfer | `verify-adoption --dest DIR --receipt REF` | Source-independent receipt/pin/vault verification; optional `--legacy` adds drift diagnostics. |
+| **Custody refs** | Protect exact selected tips with names that do not overwrite earlier captures. Branches, tags and other selected tips use separate lanes. | Destination Git refs: `refs/heads/harvest/…`, `refs/tags/harvest/…`, and `refs/adopt/custody/…`. |
+| **Receipt** | Records the expected transfer: source identities, manifests, decisions, pin mapping and bundle checksum. | `adoption.json` in a metadata commit at `refs/adopt/receipts/<label>/<generation>`. It is not checked out into the worktree. |
+| **Private bundle and intent** | Retain the self-contained Git transfer and its intended capture for restoration and diagnosis. | An owner-only `.compfuzor-adoptions/` vault beside the destination. |
 
-`fetch` snapshots, harvests dirty `@` when needed, freezes tracked local
-bookmarks, then fetches. It **does not** converge the archive's base bookmark
-or checkout; use `refresh` if you want reconciliation afterward. `health`
-uses jj's pinned read-only query mode (`--ignore-working-copy` and `--at-op=@`),
-so it does not snapshot or re-import the checkout.
+A receipt records what should exist; it is not a certificate that those
+objects are still present. Verification reads the evidence again.
 
-## Read an adoption plan
+### Verify without the old checkout
 
-A plan is an **observation, proposal and admission decision**, not a saved
-instruction to execute. Its `source` inventory describes what was actually
-inspected; `proposedSnapshot` describes a dirty worktree's candidate tree;
-`blockers`, `warnings` and `retirementUnresolved` keep different concerns
-separate. For an uninspectable category, `null` means **unknown**, never
-"observed empty". An observed empty list is `[]`.
-
-Read `state` and `blockers`, not just the process exit code. A valid read-only
-plan with `state: "blocked"` is a useful successful result: fix or investigate
-the named issue; do not run apply. `state: "ready"` only admits the reviewed
-transfer. It does **not** mean the work has already been preserved, nor that
-the old checkout can be retired.
-
-Inspect `source.candidates`, the included/excluded/ignored paths, the HEAD
-manifest and any `proposedSnapshot` manifest before deciding what to keep.
-Some histories need explicit `--dispositions` keyed by candidate kind and full
-OID. Sensitive included paths, or loss of the staged/unstaged distinction,
-need an exact `--path-review` bound to the plan's manifest digest. Reviews
-approve **local custody**, not publication; they cannot recover an omitted
-index-only version. The [guide's review inputs](/doc/archive-toolkit/custody.md#review-inputs)
-give the exact JSON shapes and digest locations.
-
-There is no lock, plan file to replay, or implicit approval. `--apply`
-**replans**, requires a ready plan and checks source and destination for drift
-before installing custody. Keep both checkouts quiescent from plan through
-apply; these checks are not an atomic snapshot of a live repository. Changed
-inputs require a new plan and review.
-
-## After apply: receipt and verification
-
-Once admitted, `adopt --apply` stages the selected work privately, seals a
-bundle in a sibling vault, imports Git objects, installs immutable pin refs and
-a receipt under `refs/adopt/receipts/<label>/<generation>`, then verifies.
-Apply does not edit either worktree, publish a ref or retire the source.
-
-The receipt records **what the transfer intended and expected**, including
-source tips, exact manifests, reviews, pin names and a bundle checksum. A
-receipt alone is not proof that the destination still has those objects. Run
-the independent verifier using the full receipt ref returned by apply:
+Use the full receipt ref returned by apply:
 
 ```sh
 node archive/src/repo-jj-archive.ts verify-adoption \
-  --dest ~/archive/ORG/REPO --receipt refs/adopt/receipts/REPO/g0 --json
+  --dest ~/archive/ORG/REPO \
+  --receipt refs/adopt/receipts/old-checkout/g0 --json
 ```
 
-`verify-adoption` checks destination pins, object closure, exact manifests,
-the bundle checksum and a fresh restore **without needing the source**.
-Optionally pass `--legacy /path/to/old-checkout` to diagnose source drift.
-Source and destination drift and `retirementUnresolved` are reported separately
-from historical `custodyVerified`; neither a receipt nor a true custody result
-authorizes deletion. The private bundle is under `.compfuzor-adoptions/`
-**beside** the destination, not inside its worktree or on a remote. Move the
-archive and its sibling vault together; a clone without the vault cannot pass
-the independent restore proof. Protect the vault's owner-only permissions.
+The verifier checks exact destination refs and object types, reachable object
+closure, path manifests, and bundle bytes. It restores the bundle into a fresh
+repository. None of that requires the old source directory to remain available.
 
-## Limitations and supported scope
+Optional `--legacy /path/to/old-checkout` adds source-drift diagnosis. Historical
+custody, subsequent source/destination drift, and unresolved retirement work
+are separate results; a later edit does not itself erase a preserved revision.
 
-**Custody currently requires Linux with usable procfs**. For custody path
-reads, the verifier opens directories through anchored `/proc/self/fd`
-descriptors and uses `O_NOFOLLOW` to avoid symlink/path-swap check/open races;
-the private vault additionally enforces effective-UID ownership and owner-only
-file/directory modes. This is a property of this custody implementation, not
-a fundamental requirement of Git, jj or Effect. It does **not** imply every
-routine checkout command intrinsically needs Linux, nor claim that those
-commands have been tested cross-platform.
+Move the archive and its sibling vault together if relocating them. Copying
+Git history alone is not enough for this verification contract: the receipt's
+private bundle must also be present and readable with the required permissions.
 
-Custody presently supports an **existing**, healthy jj-colocated destination,
-quiesced paths, and commit/tag-tip Git custody. It refuses unsupported source
-variants (for example linked worktrees, alternates, shallow or incomplete
-object closure, gitlinks/submodules, executable Git helpers and unsupported
-filters/LFS). A staged-index-only version without a synthetic snapshot is
-blocked; an approved dirty snapshot retains one resulting worktree tree, not
-separate index and unstaged versions. Consult the
-[admission boundary](/doc/archive-toolkit/custody.md#admission-boundary)
-for the full gate and left-behind categories.
+### Retries preserve the original capture
 
-Ignored runtime files, explicitly excluded untracked paths, Git/jj internals
-and jj operation history are not preserved by Git custody. Local
-remote-tracking refs are only a recorded baseline, not proof of server
-freshness. This toolkit does not automatically push, prune old artifacts,
-delete a source, or select/deploy a workspace. Plan and verification reports
-can still contain independently unresolved retirement work.
+An unchanged retry uses the original receipt and bundle; it does not mint a
+new timestamped receipt or overwrite existing pins. A matching incomplete
+installation can complete missing refs under the same immutable contract.
+
+Changed capture inputs under an occupied generation are refused. Choose a
+new generation, such as `--generation g1`, after reviewing the new plan. The
+previous generation remains intact.
+
+If apply fails after writing artifacts, it does not automatically roll them
+back or delete them. Preserve the error and evidence, verify what exists, and
+investigate before retrying. Failure is not proof that nothing happened.
+
+## Limitations
+
+### Why custody currently requires Linux
+
+The Linux requirement comes from **our secure file-access implementation**, not
+from Git, jj, Effect, or the idea of an adoption plan.
+
+Custody verification opens a directory, then opens children relative to that
+held directory through `/proc/self/fd/<fd>/…`. It uses no-follow flags and
+checks the opened objects, rather than trusting a pathname checked earlier.
+
+That matters because “check this is a safe file, then open its path” can read
+a different file if a directory or symlink changes between those operations.
+Vault contents may include private history, so the proof must use the checked
+bytes—not reopen a path and assume it still identifies the same bundle.
+
+This mechanism requires Linux with usable procfs. The vault also requires
+effective-user ownership and no group/other access. Existing insecure
+components are refused, not silently chmodded.
+
+Porting custody means replacing this narrow file-access mechanism with an
+equivalent guarantee. It does **not** require redesigning the plan or Git
+transfer. Routine checkout commands are not inherently Linux-only, but this
+project has not established cross-platform support for them.
+
+### What is deliberately not promised
+
+- **Destination creation during adoption:** `adopt` requires an existing,
+  healthy jj-colocated destination. Initialize one separately if needed;
+  `refresh` can do that, but also manages the selected checkout.
+- **Live-repository consistency:** stop writers and keep paths stable. Drift
+  checks are safeguards, not a lock or an atomic cross-repository snapshot.
+- **Every Git repository variant:** linked worktrees, shallow/partial clones,
+  alternates, submodules, unsupported filters/LFS and executable-helper
+  configurations can block admission. Tree/blob-tipped custody is not supported.
+- **Two independent dirty states:** one synthetic worktree tree does not
+  preserve both the staged and unstaged versions. Review must acknowledge that
+  loss where permitted; index-only staged work without a preserving snapshot
+  is blocked for separate preparation.
+- **Whole-directory backup:** ignored runtime files, excluded untracked files,
+  jj operation history and repository metadata are not captured as a filesystem
+  backup. Git custody does not establish a consistent database/WAL backup.
+- **Remote publication or independent backup:** the vault is local. A recorded
+  remote-tracking tip is a local baseline, not proof of what a server currently
+  holds. Secret-path classification is not a complete secret audit.
+- **Deployment or retirement:** the tool does not select a deployment workspace,
+  publish recovered refs, prune old artifacts, or delete a source. Verified Git
+  custody alone cannot establish that consumers and runtime state have moved.
+
+See the [detailed admission boundary](/doc/archive-toolkit/custody.md#admission-boundary)
+for the supported cases and the evidence each command does—and does not—provide.
 
 ## Command reference
 
-Each command accepts `--help`. `--dest` denotes a jj-colocated checkout unless
-the command explicitly creates or detects one.
+Every command has `--help`. Select destinations explicitly; a useful command
+name is not a substitute for understanding its mutation boundary.
 
-| Purpose | Command and notable options |
+| Command | Use it to |
 |---|---|
-| Inspect | `health --dest DIR` checks visible jj heads and conflicted bookmarks without mutation. `remotes --dest DIR --repo URL [--remotes JSON]` compares URLs; only `--reconcile` adds/sets them. |
-| Maintain | `snapshot --dest DIR` runs jj status/import. `fetch --dest DIR --label NAME [--remote NAME]` freezes local bookmarks before fetching without reconciling the checkout. `refresh --dest DIR --repo URL --label NAME [--branch HEAD\|branch\|branch@remote] [--remote NAME] [--remotes JSON] [--update true\|false] [--depth N] [--json] [--reconcile-remotes]` composes checkout maintenance; submodules are unsupported. |
-| Recover | `harvest --dest DIR --label NAME [--kind TYPE] [--target REV] [--copy]` creates a unique recovery bookmark. `heal --dest DIR --yes` backs up `.jj` and re-adopts from Git refs; use **only as an explicit last resort** after confirming Git refs are healthy. jj-only view/operation history will not survive the new `.jj`. |
-| Custody | `adopt --legacy DIR --dest DIR --repo URL --label NAME [--branch BRANCH] [--generation ID] [--exclude-from FILE] [--dispositions FILE] [--path-review FILE] [--json] [--apply]` plans by default; `--apply` transfers. `verify-adoption --dest DIR --receipt refs/adopt/receipts/NAME/ID [--legacy DIR] [--json]` checks installed custody. |
-| Toolkit | `self [--archive-dir PATH] [--freshen]` detects the canonical compfuzor checkout; freshening fetches its origin only. `complete SHELL` prints completions for bash, zsh, fish or PowerShell. PowerShell covers only subcommand names and global flags; POSIX shells get the command flag tree. |
+| `health --dest DIR` | Inspect visible jj heads and conflicted bookmarks without snapshotting or importing. |
+| `snapshot --dest DIR` | Explicitly run jj status, snapshot files and import colocated Git refs. |
+| `harvest --dest DIR --label NAME [--kind TYPE] [--target REV] [--copy]` | Pin a revision under a unique recovery bookmark; `--copy` duplicates mutable work before pinning. |
+| `remotes --dest DIR --repo URL [--remotes JSON] [--reconcile]` | Compare declared URLs; only `--reconcile` authorizes adding or changing them. |
+| `fetch --dest DIR --label NAME [--remote NAME]` | Snapshot, preserve dirty work and freeze tracked local bookmarks before fetching one remote. |
+| `refresh --dest DIR --repo URL --label NAME` | Compose maintenance. Options include `--branch HEAD\|branch\|branch@remote`, `--remote`, `--remotes`, `--update true\|false`, `--depth`, `--json`, and `--reconcile-remotes`. |
+| `adopt --legacy DIR --dest DIR --repo URL --label NAME` | Produce a custody plan; add `--apply` to transfer. Also accepts `--branch`, `--generation`, `--exclude-from`, `--dispositions`, `--path-review`, and `--json`. |
+| `verify-adoption --dest DIR --receipt REF [--legacy DIR] [--json]` | Check installed custody, optionally comparing the old source too. |
+| `heal --dest DIR --yes` | Back up `.jj` and re-adopt from existing Git refs. Explicit last resort, not recovery of missing Git objects or jj-only history. |
+| `self [--archive-dir PATH] [--freshen]` | Find the conventional Compfuzor archive; optionally fetch its origin without resetting the worktree. |
+| `complete SHELL` | Generate completion. Bash/zsh/fish use Effect's command tree; PowerShell currently covers command names and global flags only. |
 
-`health` detects missing jj-visible Git objects before broader head walks. If
-jj reports ghost heads, diagnose the [incident and repair context](/design/repo-jj-archive/incident-ghost-heads.glm53.md)
-before considering `heal`. `refresh` snapshots before fetching, harvests local
-work, untracks local bookmarks before fetch and preserves a diverged old base;
-it does not reset a dirty tree. `--update false` still has mutating checkout
-setup and remote checks; on an existing archive with refs, it skips fetch/base
-reconciliation. No command pushes or prunes old refs.
+For ghost-head failures, read the [incident and repair context](/design/repo-jj-archive/incident-ghost-heads.glm53.md)
+before using `heal`. Its retained `.jj` backup is evidence, not a guarantee
+that rebuilding jj metadata can recover objects Git no longer has.
 
 ## Compfuzor integration
 
-[`tasks/compfuzor/repo_jj_archive.tasks`](/tasks/compfuzor/repo_jj_archive.tasks)
-runs `refresh --json` for the declared `GIT_DIR` (fallback `REPO_DIR`/`DIR`),
-`REPO`, `GIT_REMOTES`, `GIT_REMOTE`, `GIT_VERSION`, `NAME`, `GIT_UPDATE` and
-optional `GIT_DEPTH`/`GIT_SUBMODULES`. A mismatched existing remote URL fails
-unless `GIT_REMOTE_FIX=true` explicitly requests reconciliation.
+[`repo_jj_archive.tasks`](/tasks/compfuzor/repo_jj_archive.tasks) calls
+`refresh --json`. Its repository declarations map to the same operator-facing
+options; `GIT_REMOTE_FIX=true` is explicit permission to reconcile remote URLs.
 
-For the runner, the host's canonical compfuzor checkout
-(`COMPFUZOR_ARCHIVE`, normally `~/archive/rektide/compfuzor`) is preferred
-**when its launcher is executable**. Otherwise the executing playbook's
-`script/repo-jj-archive.ts` is used. This remains the fallback even when
-another checkout rendered the playbook; runner selection is not an automatic
-update of either checkout. Set `COMPFUZOR_REPO_JJ_RUNNER` to choose a specific
-runner. `COMPFUZOR_SELF_FRESHEN=true` opts into fetching the host checkout's
-origin before selection, without resetting its worktree.
+The host's canonical Compfuzor checkout is preferred when its launcher is
+executable. The executing playbook's launcher is the fallback.
+`COMPFUZOR_REPO_JJ_RUNNER` overrides the selection.
 
-The launcher runs source when source and installed Effect CLI dependencies are
-available, otherwise the committed single-file bundle. In `--json` mode a
-successful refresh writes exactly one result line, for example
-`{"changed":false,"notices":[]}`. Failures write diagnostics to stderr and no
-partial JSON line; the task checks the exit code before parsing stdout. The
-older flag-only invocation remains an alias for `refresh --json`, including
-its `--version BRANCH` spelling; prefer the explicit subcommand.
+`COMPFUZOR_SELF_FRESHEN=true` separately opts into fetching the host checkout's
+origin. Choosing a runner is not itself an update of that runner's worktree.
+
+The launcher at [`script/repo-jj-archive.ts`](/script/repo-jj-archive.ts) uses
+source when source and Effect dependencies are available; otherwise it uses
+the single-file distribution. Neither path requires a separate tool implementation.
+
+A successful refresh's machine result is one JSON line:
+
+```json
+{"changed":false,"notices":[]}
+```
+
+Notices report created bookmarks and other repository changes. Failures use
+stderr and a nonzero exit status, without partial JSON on stdout. The Ansible
+task checks the return code before parsing the result.
+
+The old flag-only refresh invocation remains compatible, including its
+`--version BRANCH` spelling. Prefer explicit `refresh --branch …`; root
+`--version` means the toolkit's version.
 
 ## Architecture and development
 
-The source groups CLI parsing and commands under `archive/src/cli/`, ordinary
-checkout work under `repository/`, jj repair under `recovery/`, and local Git
-custody under `custody/`. The CLI uses Effect (`effect` and
-`@effect/platform-node`, pinned at 4.0.0-rc.118). Repository/recovery library
-helpers return Promises; custody planning/apply return Effects. See the
-[public library entry points](/doc/archive-toolkit/custody.md#public-library-entry-points).
+The CLI is one consumer of the library, not the place where repository policy
+lives. [`archive/src/index.ts`](/archive/src/index.ts) exposes the operations
+and data types; the domains below give the implementation its structure.
 
-`pnpm build` creates the committed `archive/repo-jj-archive.ts` for **distribution
-only** (ESM, Node 26, bundled JavaScript dependencies, no Node binary). Run
-source during development and rebuild/commit the bundle when source changes.
-Useful checks:
+| Domain | Responsibility |
+|---|---|
+| [`cli/`](/archive/src/cli/) | Effect command definitions, compatibility arguments, human/JSON presentation, executable lifecycle. |
+| [`repository/`](/archive/src/repository/) | Checkout operations, remote policy, and Git/jj invocation through Effect's process support. |
+| [`recovery/`](/archive/src/recovery/) | Recovery bookmarks, explicit jj repair, immutable custody-ref transactions and retry policy. |
+| [`custody/`](/archive/src/custody/) | Inventory and admission, plan/receipt contracts, private staging, vault storage, apply and independent verification. |
+
+The plan is the shared boundary between inventory and apply. Its
+[ready/blocked types](/archive/src/custody/model.ts) distinguish complete
+admitted evidence from partial observations. Private preview can explain a
+blocked proposal without returning a transferable stage or bypassing approval.
+
+The [receipt codec](/archive/src/custody/codec.ts) checks durable claims and ref
+mapping. The [verifier](/archive/src/custody/verify.ts) checks the actual objects
+and bundle rather than trusting the receipt's own check flags.
+
+Effect supplies CLI parsing, process execution and interruption. Git and jj
+remain the repository engines. Existing maintenance APIs return Promises;
+planning/apply return Effects. Promise adapters carry abort signals through to
+child execution, so interrupting a command also terminates its active child.
+
+See the [library guide](/doc/archive-toolkit/custody.md#public-library-entry-points)
+for the concrete signatures. Run source during development; build only for
+distribution, and commit the regenerated file with changes to reachable code.
 
 ```sh
 pnpm check
-pnpm build
 node --test 'archive/test/**/*.test.ts'
-python3 -m pytest --import-mode=importlib -q tests/integration/repo_jj_archive.test.py
+python3 -m pytest --import-mode=importlib -q \
+  tests/integration/repo_jj_archive.test.py \
+  tests/integration/archive_library.test.py \
+  tests/integration/archive_cli_contract.test.py \
+  tests/integration/archive_custody_cli.test.py
+pnpm build
 ```
 
-Local fixture [distribution verification](/design/archive-toolkit/verification0.gpt6luna.md)
-passed 127 Node tests, 34 integration tests and reproducible bundle builds.
-The [focused custody safety disposition](/design/archive-toolkit/safety-review0.gpt6sol.md#final-focused-checkpoint-standalone-verifier-helper-gate)
-found no remaining blocker **within its Linux, quiesced-path,
-existing-destination, commit/tag-tip scope**; it is not production or source
-retirement approval. For the design lineage, see the
-[original archive design](/design/repo-jj-archive/draft0.gpt6sol.md) and
-[custody guide](/doc/archive-toolkit/custody.md).
+The [verification checkpoint](/design/archive-toolkit/verification0.gpt6luna.md)
+records 127 Node tests, 34 integration tests, reproducible bundle bytes, and
+copied-bundle custody checks after source removal. Those are fixture results,
+not a report of a production migration.
+
+For deeper context, start with the [custody operator guide](/doc/archive-toolkit/custody.md),
+the [implementation brief](/design/archive-migration/brief0.gpt6sol.md), and the
+[focused safety review](/design/archive-toolkit/safety-review0.gpt6sol.md).
+The review's cleared scope is Linux, quiesced paths and existing destinations;
+it is not permission to retire a source or a claim that every brief feature exists.
