@@ -13,9 +13,9 @@
  * `PlanV1` — never a fabricated fact, never an inferred empty set.
  */
 import { Effect, Result } from "effect";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { lstat, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { gitRead } from "../repository/git.ts";
 import { previewSnapshot } from "./stage.ts";
 import {
@@ -128,14 +128,33 @@ function validateInput(input: AdoptInput): void {
 }
 
 function resolvePaths(input: AdoptInput): { legacy: string; dest: string } {
-  const legacy = input.legacy.replace(/\/+$/, "");
-  const dest = input.dest.replace(/\/+$/, "");
+  const legacy = resolve(input.legacy);
+  const dest = resolve(input.dest);
   if (legacy === dest) invalid(`legacy and destination are the same path: ${legacy}`);
   if (pathContains(legacy, dest))
     invalid(`destination nests inside the legacy checkout: ${dest} under ${legacy}`);
   if (pathContains(dest, legacy))
     invalid(`legacy checkout nests inside the destination: ${legacy} under ${dest}`);
   return { legacy, dest };
+}
+
+/** Canonicalize even an absent path through its nearest existing ancestor. */
+async function canonicalPath(path: string): Promise<{ path: string; exists: boolean }> {
+  const tail: string[] = [];
+  let cursor = path;
+  while (true) {
+    try {
+      await lstat(cursor);
+      const ancestor = await realpath(cursor);
+      return { path: resolve(ancestor, ...tail.reverse()), exists: tail.length === 0 };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      const parent = dirname(cursor);
+      if (parent === cursor) throw error;
+      tail.push(basename(cursor));
+      cursor = parent;
+    }
+  }
 }
 
 /**
@@ -148,6 +167,19 @@ export const planAdoption: (input: AdoptInput) => Effect.Effect<PlanV1, CustodyE
   Effect.gen(function* () {
     validateInput(input);
     const paths = resolvePaths(input);
+    // No repo query or private staging may run against aliased or nested
+    // roots. Lexical checks alone miss symlink aliases (including parents of
+    // a not-yet-existing destination).
+    const canonical = yield* Effect.tryPromise({
+      try: () => Promise.all([canonicalPath(paths.legacy), canonicalPath(paths.dest)]),
+      catch: (error) =>
+        new CustodyError("invalid-input", `resolve repository roots: ${String(error)}`),
+    });
+    if (
+      canonical[0].path === canonical[1].path ||
+      pathContains(canonical[0].path, canonical[1].path)
+    )
+      invalid("source and destination resolve to identical or nested paths");
 
     const dispositions =
       input.dispositions === null ? null : yield* loadDispositions(input.dispositions);

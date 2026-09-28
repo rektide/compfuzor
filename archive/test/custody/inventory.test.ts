@@ -16,12 +16,13 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile, readdir, readlink, rm, mkdir, writeFile } from "node:fs/promises";
+import { readFile, readdir, readlink, rm, mkdir, writeFile, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { test } from "node:test";
 import { Effect } from "effect";
 import { planAdoption } from "../../src/custody/inventory.ts";
+import { applyAdoption } from "../../src/custody/apply.ts";
 import { CustodyError } from "../../src/custody/errors.ts";
 import type { AdoptInput, PlanV1 } from "../../src/custody/model.ts";
 import {
@@ -783,6 +784,14 @@ test("nested or aliased paths are rejected as invalid input", async () => {
   await commit(source, "one", "README.md", "one\n");
   await assert.rejects(plan(input(source, join(source, "inside"))), CustodyError);
   await assert.rejects(plan(input(source, source)), CustodyError);
+  const alias = join(ROOT, "source-alias");
+  await rm(alias, { force: true });
+  await symlink(source, alias);
+  const before = await fingerprintTree(join(source, ".git/objects"));
+  await assert.rejects(plan(input(source, alias)), CustodyError);
+  await assert.rejects(Effect.runPromise(applyAdoption(input(source, alias))), CustodyError);
+  assert.equal(await fingerprintTree(join(source, ".git/objects")), before);
+  await assert.rejects(plan(input(source, join(alias, "nested"))), CustodyError);
 });
 
 test("dispositions referencing unknown candidates are rejected", async () => {
