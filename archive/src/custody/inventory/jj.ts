@@ -26,12 +26,8 @@ import type { Issue, JjCoverage, Oid } from "../model.ts";
 export const MAX_VISIBLE_HEADS = 512;
 
 const pinned = (args: string[], repo: string) =>
-  // Interruption contract: when the jj wrapper gains its optional execution
-  // AbortSignal, this callback MUST forward Effect.tryPromise's callback
-  // signal into the jj read options so an interrupted plan cannot leave a
-  // detached child behind. Until that API lands there is nothing to forward.
   Effect.tryPromise({
-    try: () => jj(args, repo, { readOnly: true }),
+    try: (signal) => jj(args, repo, { readOnly: true }, { signal }),
     catch: (error): CustodyError =>
       error instanceof JjError
         ? new CustodyError("inspection-failed", `jj ${error.args.join(" ")}: ${error.detail}`)

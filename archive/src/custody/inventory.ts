@@ -1,12 +1,10 @@
 /**
  * `planAdoption`: the read-only adoption plan for a standalone Git checkout.
  *
- * This is slice 1 of the custody contracts: source inventory and admission
- * only. The plan is an observation, not a reservation — nothing is staged,
- * bundled, imported or pinned. A dirty worktree reports the named blocker
- * `private-staging-pending` with its full observed inventory rather than a
- * fabricated snapshot; missing destinations report `destination-missing`
- * pending the safe-clone slice; `apply` does not exist here.
+ * The plan is an observation, not a reservation: dirty work is previewed in
+ * disposable private scratch, and approved snapshots may be planned, but no
+ * source or destination repository is mutated. Missing destinations report
+ * `destination-missing` pending deliberate cloning.
  *
  * Failure model: invalid operator input (bad label/generation/branch, a
  * dispositions or path-review file that does not parse, unknown disposition
@@ -281,27 +279,29 @@ export const planAdoption: (input: AdoptInput) => Effect.Effect<PlanV1, CustodyE
       });
       const previewed = yield* Effect.result(
         Effect.tryPromise({
-          // Interruption contract: when previewSnapshot gains its optional
-          // execution {signal}, forward this callback's AbortSignal so an
-          // interrupted plan stops staging instead of detaching the child.
-          try: () =>
-            previewSnapshot({
-              sourceRoot: probe.source,
-              scratchRoot,
-              objectFormat: probe.objectFormat as "sha1" | "sha256",
-              headOid: (probe.observed.head as { oid: Oid }).oid,
-              restageTracked: [...new Set(changes.map(({ path }) => path))],
-              addUntracked: (probe.observed.untrackedPaths as readonly RepoPath[]).filter(
-                (path) => !(probe.observed.excludedUntracked as readonly RepoPath[]).includes(path),
-              ),
-              stagedVsUnstaged: stagedExists && unstagedExists ? "reported-not-preserved" : "none",
-              excludeFileSha256: excludeBytes === null ? null : sha256(excludeBytes),
-              excludedUntracked: probe.observed.excludedUntracked as readonly RepoPath[],
-              ignoredPaths: probe.observed.ignoredPaths ?? [],
-              trackedSensitivePaths: sensitiveSubjects as RepoPath[],
-              pathReview: null,
-              expected: probe.includedManifest,
-            }),
+          try: (signal) =>
+            previewSnapshot(
+              {
+                sourceRoot: probe.source,
+                scratchRoot,
+                objectFormat: probe.objectFormat as "sha1" | "sha256",
+                headOid: (probe.observed.head as { oid: Oid }).oid,
+                restageTracked: [...new Set(changes.map(({ path }) => path))],
+                addUntracked: (probe.observed.untrackedPaths as readonly RepoPath[]).filter(
+                  (path) =>
+                    !(probe.observed.excludedUntracked as readonly RepoPath[]).includes(path),
+                ),
+                stagedVsUnstaged:
+                  stagedExists && unstagedExists ? "reported-not-preserved" : "none",
+                excludeFileSha256: excludeBytes === null ? null : sha256(excludeBytes),
+                excludedUntracked: probe.observed.excludedUntracked as readonly RepoPath[],
+                ignoredPaths: probe.observed.ignoredPaths ?? [],
+                trackedSensitivePaths: sensitiveSubjects as RepoPath[],
+                pathReview: null,
+                expected: probe.includedManifest,
+              },
+              { signal },
+            ),
           catch: (error) =>
             new CustodyError(
               "inspection-failed",

@@ -460,6 +460,13 @@ test("tracked LFS pointer without filter configuration is a named blocker", asyn
   assert.ok(codes(result).includes("source-lfs-pointer"), codes(result).join(","));
   // The pointer payload (its oid line) is never emitted in the plan.
   assert.ok(!JSON.stringify(result).includes("4355a46b19d348dc2f57c046f8ef63d4538ebb93"));
+
+  // HEAD/index pointers remain relevant when a worktree edit hides the header.
+  await writeFileUtf8(join(source, "asset.bin"), "new local payload\n");
+  const edited = await plan(input(source, dest));
+  assert.equal(edited.state, "blocked");
+  assert.ok(codes(edited).includes("source-lfs-pointer"));
+  assert.ok(!JSON.stringify(edited).includes("4355a46b19d348dc2f57c046f8ef63d4538ebb93"));
 });
 
 test("unborn HEAD reports a blocker and a null head category", async () => {

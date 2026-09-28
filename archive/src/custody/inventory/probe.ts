@@ -240,32 +240,100 @@ const LFS_POINTER_PREFIX = "version https://git-lfs.github.com/spec/v1\n";
 const LFS_PROBE_BYTES = LFS_POINTER_PREFIX.length;
 
 /**
- * Detect LFS pointer files among the files the synthetic tree would stage:
- * the current index/worktree state of tracked paths plus selected untracked
- * paths, never ignored files. Only the fixed-size header prefix is read and
- * only the match/no-match outcome is recorded — file contents are never
- * emitted. Scope is the current snapshot input, not the whole history:
- * pointers deeper in history surface when their blobs enter the manifest.
+ * Detect pointers in selected current worktree files. Do not follow symlinks:
+ * Git stages their target string, not the file they point to. Only the
+ * fixed-size header prefix is read; no content is emitted.
  */
 async function lfsPointers(root: string, paths: readonly RepoPath[]): Promise<readonly RepoPath[]> {
   const found: RepoPath[] = [];
   const header = Buffer.from(LFS_POINTER_PREFIX, "latin1");
   for (const path of paths) {
-    const handle = await open(join(root, path), "r").catch(() => null);
-    if (handle === null) continue; // deleted or unreadable: not a pointer
+    const full = join(root, path);
+    const info = await lstat(full).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === "ENOENT") return null;
+      throw error;
+    });
+    if (info === null || !info.isFile()) continue;
+    const handle = await open(full, "r");
     try {
       const buffer = Buffer.alloc(LFS_PROBE_BYTES);
       const { bytesRead } = await handle.read(buffer, 0, LFS_PROBE_BYTES, 0);
-      if (
-        buffer.subarray(0, bytesRead).equals(header.subarray(0, bytesRead)) &&
-        bytesRead === LFS_PROBE_BYTES
-      )
-        found.push(path);
+      if (bytesRead === LFS_PROBE_BYTES && buffer.equals(header)) found.push(path);
     } finally {
       await handle.close();
     }
   }
   return found;
+}
+
+/** Git grep only yields candidate names; inspect their small blobs to verify the header. */
+function gitLfsCandidates(
+  root: string,
+  entries: readonly PathEntry[],
+  revision: "HEAD" | "index",
+): Effect.Effect<readonly RepoPath[], CustodyError> {
+  return Effect.gen(function* () {
+    const args = [
+      "grep",
+      "-l",
+      "-z",
+      "-F",
+      "-e",
+      LFS_POINTER_PREFIX.trimEnd(),
+      ...(revision === "HEAD" ? ["HEAD"] : ["--cached"]),
+      "--",
+    ];
+    const matches = yield* git(args, root);
+    if (matches.exitCode === 1) return [];
+    if (matches.exitCode !== 0)
+      return yield* Effect.fail(
+        new CustodyError("inspection-failed", `LFS ${revision} grep failed`),
+      );
+    const byPath = new Map(
+      entries.filter(({ mode }) => mode !== "160000").map((entry) => [entry.path, entry]),
+    );
+    const names = yield* sync(() => parseNulPaths(matches.stdout));
+    if (names.length > BOUNDS.untracked)
+      return yield* Effect.fail(
+        new CustodyError(
+          "inspection-failed",
+          `LFS ${revision} candidates exceed ${BOUNDS.untracked}`,
+        ),
+      );
+    const pointers: RepoPath[] = [];
+    for (const name of names) {
+      const path = revision === "HEAD" ? name.slice("HEAD:".length) : name;
+      if (revision === "HEAD" && !name.startsWith("HEAD:"))
+        return yield* Effect.fail(
+          new CustodyError("inspection-failed", "LFS HEAD grep returned an unexpected path"),
+        );
+      const entry = byPath.get(path as RepoPath);
+      if (entry === undefined) continue;
+      const size = yield* git(["cat-file", "-s", entry.blobOid], root);
+      if (size.exitCode !== 0)
+        return yield* Effect.fail(
+          new CustodyError("inspection-failed", `LFS ${revision} blob size query failed`),
+        );
+      const length = yield* sync(() => Number(strictUtf8(size.stdout, "LFS blob size").trim()));
+      if (!Number.isSafeInteger(length) || length < 0)
+        return yield* Effect.fail(
+          new CustodyError("inspection-failed", "LFS blob size is invalid"),
+        );
+      if (length > 1024) continue;
+      const blob = yield* git(["cat-file", "blob", entry.blobOid], root);
+      if (blob.exitCode !== 0)
+        return yield* Effect.fail(
+          new CustodyError("inspection-failed", `LFS ${revision} blob read failed`),
+        );
+      if (
+        Buffer.from(blob.stdout.subarray(0, LFS_PROBE_BYTES)).equals(
+          Buffer.from(LFS_POINTER_PREFIX),
+        )
+      )
+        pointers.push(path as RepoPath);
+    }
+    return pointers;
+  });
 }
 
 function parseNulPaths(bytes: Uint8Array): RepoPath[] {
@@ -859,20 +927,37 @@ export function probeSource(
       });
     }
 
-    // --- LFS pointers among snapshot input (current index/worktree scope) ---
+    // --- LFS pointers in selected current input and retained HEAD/index blobs ---
+    // A smudged worktree can conceal a pointer retained in HEAD or the index.
+    // These queries inspect only current Git state, not historical commits.
+    const lfsFound = new Set<RepoPath>();
+    for (const [revision, entries] of [
+      ["HEAD", treePaths],
+      ["index", observed.indexEntries],
+    ] as const) {
+      if (entries === null) continue;
+      const candidates = yield* Effect.result(gitLfsCandidates(real, entries, revision));
+      if (Result.isFailure(candidates))
+        blockers.push({
+          code: "source-lfs-probe-failed",
+          subject: gitDir,
+          reason: candidates.failure.message,
+        });
+      else for (const path of candidates.success) lfsFound.add(path);
+    }
     if (observed.indexEntries !== null && untracked !== null && statusParsed !== null) {
       const deleted = new Set(
         statusParsed.changes
-          .filter(
-            ({ indexStatus, worktreeStatus }) =>
-              indexStatus === "deleted" || worktreeStatus === "deleted",
-          )
+          .filter(({ worktreeStatus }) => worktreeStatus === "deleted")
           .flatMap(({ path, originalPath }) =>
             originalPath === null ? [path] : [path, originalPath],
           ),
       );
       const staged = [
-        ...new Set([...observed.indexEntries.map(({ path }) => path), ...untracked]),
+        ...new Set([
+          ...observed.indexEntries.map(({ path }) => path),
+          ...untracked.filter((path) => !excludedUntracked.includes(path)),
+        ]),
       ].filter((path) => !deleted.has(path));
       if (staged.length > BOUNDS.untracked) {
         blockers.push({
@@ -890,18 +975,19 @@ export function probeSource(
             subject: gitDir,
             reason: pointers.failure.message,
           });
-        else
-          for (const path of pointers.success)
-            blockers.push({
-              code: "source-lfs-pointer",
-              subject: path,
-              reason:
-                "LFS pointer file in snapshot input: v1 custody cannot take custody of LFS payloads from pointers",
-            });
+        else for (const path of pointers.success) lfsFound.add(path);
       }
     }
+    for (const path of lfsFound)
+      blockers.push({
+        code: "source-lfs-pointer",
+        subject: path,
+        reason:
+          "LFS pointer in current HEAD, index, or selected worktree input; v1 custody cannot preserve LFS payloads",
+      });
 
-    // --- tracked sensitive paths (names/classes only) ---    const sensitive: Issue[] = [];
+    // --- tracked sensitive paths (names/classes only) ---
+    const sensitive: Issue[] = [];
     const seenSensitive = new Set<string>();
     for (const entry of [...(treePaths ?? []), ...(observed.indexEntries ?? [])]) {
       if (seenSensitive.has(entry.path)) continue;
