@@ -897,21 +897,22 @@ def test_runner_prefers_host_checkout_with_playbook_fallback() -> None:
         # Host checkout is preferred over the executing playbook's launcher;
         # opt-in freshen fetches its origin without resetting its worktree.
         output = play("a", hostcf)
-        assert "host compfuzor checkout preferred" in output, output
+        assert "host compfuzor checkout" in output, output
+        assert output.count("TASK [Compfuzor: announce jj archive runner]") == 1
+        assert output.index("TASK [Compfuzor: announce jj archive runner]") < output.index(
+            "TASK [Compfuzor: refresh jj deployment workspace]")
         assert marker.read_text() == "host\n", "host launcher should run only for deploy"
         assert run("git", "rev-parse", "refs/remotes/origin/main", cwd=hostcf) == freshened
         assert (archive / ".jj").is_dir()
         # Explicit runner override beats the host checkout.
         marker.unlink(missing_ok=True)
         output = play("b", hostcf, runner=RUNNER)
-        assert "host compfuzor checkout preferred" not in output, output
-        assert "using COMPFUZOR_REPO_JJ_RUNNER" in output, output
+        assert f"running {RUNNER} (override)" in output, output
         assert not marker.exists(), "override did not bypass the host launcher"
         # Missing host checkout falls back to the playbook_dir launcher.
         marker.unlink(missing_ok=True)
         output = play("c", tmp / "absent")
-        assert "host compfuzor checkout preferred" not in output, output
-        assert "using the playbook checkout's launcher" in output, output
+        assert "(playbook checkout)" in output, output
         assert not marker.exists(), "host launcher used despite missing checkout"
         assert (archive / ".jj").is_dir()
         # A checkout directory with a non-executable launcher is unavailable,
@@ -919,5 +920,5 @@ def test_runner_prefers_host_checkout_with_playbook_fallback() -> None:
         wrapper.chmod(0o644)
         marker.unlink(missing_ok=True)
         output = play("d", hostcf)
-        assert "no usable host compfuzor launcher found" in output, output
+        assert "(playbook checkout)" in output, output
         assert not marker.exists(), "non-executable host launcher was selected"

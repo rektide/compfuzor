@@ -33,28 +33,14 @@
               if compfuzor_host_launcher.stat.executable|default(False) else
            playbook_dir ~ '/script/repo-jj-archive.ts', True) }}
 
-- name: "Compfuzor: jj archive runner resolved to the host checkout"
+- name: "Compfuzor: announce jj archive runner"
   ansible.builtin.debug:
     msg: >-
-      repo-jj-archive: host compfuzor checkout preferred ({{COMPFUZOR_ARCHIVE|default(lookup('env', 'HOME') ~ '/archive/rektide/compfuzor', true)}});
-      set COMPFUZOR_REPO_JJ_RUNNER to pin a specific runner
-  when: compfuzor_host_launcher.stat.executable|default(False)
-
-- name: "Compfuzor: jj archive runner falling back to the playbook bundle"
-  ansible.builtin.debug:
-    msg: >-
-      repo-jj-archive: no usable host compfuzor launcher found at
-      {{COMPFUZOR_ARCHIVE|default(lookup('env', 'HOME') ~ '/archive/rektide/compfuzor', true)}};
-      using the playbook checkout's launcher (source when its deps exist,
-      otherwise its committed bundle)
-  when: >-
-    COMPFUZOR_REPO_JJ_RUNNER is undefined and
-    not (compfuzor_host_launcher.stat.executable|default(False))
-
-- name: "Compfuzor: jj archive runner pinned by override"
-  ansible.builtin.debug:
-    msg: "repo-jj-archive: using COMPFUZOR_REPO_JJ_RUNNER={{COMPFUZOR_REPO_JJ_RUNNER}}"
-  when: COMPFUZOR_REPO_JJ_RUNNER is defined
+      repo-jj-archive: running {{ compfuzor_repo_jj_runner }}
+      ({{ 'override' if COMPFUZOR_REPO_JJ_RUNNER is defined else
+          'host compfuzor checkout' if compfuzor_host_launcher.stat.executable|default(False) else
+          'playbook checkout' }})
+  when: JJ_BYPASS is deffalsy
 
 - name: "Compfuzor: refresh jj deployment workspace"
   ansible.builtin.command:
