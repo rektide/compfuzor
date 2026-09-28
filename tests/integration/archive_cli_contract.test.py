@@ -50,7 +50,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SCRATCH = ROOT / ".test-agent" / "archive-cli-contract" / "tests"
 SOURCE = ROOT / "archive/src/repo-jj-archive.ts"
-BUNDLE = ROOT / "archive/repo-jj-archive.mjs"
+BUNDLE = ROOT / "archive/repo-jj-archive.ts"
 RUNNER = ROOT / "script/repo-jj-archive.ts"
 SHEBANG = "#!/usr/bin/env -S node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON\n"
 NOOP = {"changed": False, "notices": []}
@@ -330,10 +330,11 @@ def test_refresh_json_contract_parity_across_entry_paths() -> None:
         assert success_json(str(RUNNER), "refresh", "--json", *refresh, cwd=tmp) == NOOP
 
         # The committed bundle, copied alone (no launcher, no source, no deps).
+        # Node 26 type-strips the erased-JS .ts artifact natively.
         standalone = tmp / "standalone"
         standalone.mkdir()
-        shutil.copy2(BUNDLE, standalone / "repo-jj-archive.mjs")
-        assert success_json(str(standalone / "repo-jj-archive.mjs"), "refresh", "--json",
+        shutil.copy2(BUNDLE, standalone / "repo-jj-archive.ts")
+        assert success_json(str(standalone / "repo-jj-archive.ts"), "refresh", "--json",
                             *refresh, cwd=standalone) == NOOP
 
         # Legacy flag-only alias is refresh --json; --version spells --branch.
@@ -395,7 +396,7 @@ def test_launcher_prefers_source_when_dependencies_present() -> None:
         shutil.copy2(RUNNER, tree / "script/repo-jj-archive.ts")
         shutil.copytree(ROOT / "archive/src", tree / "archive/src")
         # A poisoned bundle proves the healthy source (with deps) wins.
-        (tree / "archive/repo-jj-archive.mjs").write_text(
+        (tree / "archive/repo-jj-archive.ts").write_text(
             'throw Error("bundle must not run while source deps are installed")\n')
         os.symlink(ROOT / "node_modules", tree / "node_modules")
 
@@ -414,7 +415,7 @@ def test_launcher_falls_back_to_bundle_when_dependencies_absent() -> None:
         shutil.copy2(RUNNER, tree / "script/repo-jj-archive.ts")
         shutil.copytree(ROOT / "archive/src", tree / "archive/src")
         # Healthy source but no node_modules: the poisoned bundle must be chosen.
-        (tree / "archive/repo-jj-archive.mjs").write_text(
+        (tree / "archive/repo-jj-archive.ts").write_text(
             'throw Error("bundle fallback marker")\n')
         expect_failure(run(str(tree / "script/repo-jj-archive.ts"), "refresh", "--json",
                            "--dest", str(tmp / "out"), "--repo", str(tmp / "x.git"),
@@ -440,10 +441,10 @@ def test_standalone_bundle_executes_without_launcher_or_dependencies() -> None:
         remote, _ = create_remote(tmp)
         solo = tmp / "solo"
         solo.mkdir()
-        shutil.copy2(BUNDLE, solo / "repo-jj-archive.mjs")
+        shutil.copy2(BUNDLE, solo / "repo-jj-archive.ts")
 
-        for label, command in (("shebang", (str(solo / "repo-jj-archive.mjs"),)),
-                               ("node", ("node", str(solo / "repo-jj-archive.mjs")))):
+        for label, command in (("shebang", (str(solo / "repo-jj-archive.ts"),)),
+                               ("node", ("node", str(solo / "repo-jj-archive.ts")))):
             checkout = tmp / f"checkout-{label}"
             result = run(*command, "refresh", "--json", "--dest", str(checkout),
                          "--repo", str(remote), "--label", "fixture", cwd=solo)

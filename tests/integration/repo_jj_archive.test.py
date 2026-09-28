@@ -458,7 +458,7 @@ def test_launcher_uses_standalone_bundle_without_source_or_node_modules() -> Non
         (tmp / "archive").mkdir()
         launcher = tmp / "script/repo-jj-archive.ts"
         shutil.copy2(RUNNER, launcher)
-        shutil.copy2(ROOT / "archive/repo-jj-archive.mjs", tmp / "archive/repo-jj-archive.mjs")
+        shutil.copy2(ROOT / "archive/repo-jj-archive.ts", tmp / "archive/repo-jj-archive.ts")
         # Source in a slim deployment without pnpm install must not mask the bundle.
         (tmp / "archive/src").mkdir()
         (tmp / "archive/src/repo-jj-archive.ts").write_text("throw Error('unbundled import attempted')\n")
