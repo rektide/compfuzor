@@ -106,6 +106,29 @@ runtime prerequisites, not dependencies that JavaScript bundling can eliminate.
 Tests are not permission to exercise production migration. Existing unrelated
 working-copy changes remain outside these commits.
 
+# Custody contract checkpoint
+
+Reviewed [Sol's custody contracts](/design/archive-toolkit/custody-contracts0.gpt6sol.md)
+and approved these implementation decisions:
+
+- Add `--path-review FILE` separately from candidate dispositions. Bind review
+  to the exact manifest, path/mode/blob identities, and nonempty rationales.
+  Explicitly acknowledge a lost index/worktree distinction when applicable.
+  Approval is for local Git custody, never publication or retirement.
+- Prefer one atomic compare-and-create transaction for the receipt and all new
+  pins, after bundle sealing, empty-repository restoration, and object transfer.
+  This deliberately strengthens the brief's receipt-first sequence. Support
+  diagnosing and completing matching receipt/partial-pin states without ever
+  replacing the receipt or overwriting conflicting refs.
+- Absent-destination support remains a v1 goal, but requires a separately tested
+  full-clone path after admission. A named blocker is acceptable in an incomplete
+  implementation slice; it must not be presented as full v1 support.
+- Inventory SHA-1 and SHA-256 formats; reject source/destination mismatch and
+  any unproven jj format combination rather than assuming compatibility.
+- Use raw Node Buffer adapters for byte-sensitive plumbing where appropriate;
+  Effect supplies typed orchestration and the CLI, not lossy conversion of Git
+  path/object streams into terminal text.
+
 # Cross-references
 
 - [Custody brief](/design/archive-migration/brief0.gpt6sol.md): the detailed
@@ -114,3 +137,5 @@ working-copy changes remain outside these commits.
   explains the separation between custody, deployment, and retirement.
 - [Archive README](/archive/README.md): current commands, refresh behavior, and
   the Ansible result protocol that this expansion must preserve.
+- [Custody contracts](/design/archive-toolkit/custody-contracts0.gpt6sol.md):
+  module seams, privacy review, immutable retry, and acceptance ownership.
