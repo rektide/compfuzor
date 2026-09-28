@@ -22,6 +22,44 @@ export interface GitTip {
   readonly objectType: GitObjectType;
   readonly peeledOid: Oid | null;
 }
+export interface IndexEntry {
+  readonly path: RepoPath;
+  readonly stage: 0 | 1 | 2 | 3;
+  readonly mode: PathEntry["mode"];
+  readonly blobOid: Oid;
+}
+export interface WorktreeChange {
+  readonly path: RepoPath;
+  readonly originalPath: RepoPath | null;
+  readonly indexStatus:
+    | "unchanged"
+    | "added"
+    | "modified"
+    | "deleted"
+    | "renamed"
+    | "copied"
+    | "typechanged"
+    | "unmerged";
+  readonly worktreeStatus:
+    | "unchanged"
+    | "added"
+    | "modified"
+    | "deleted"
+    | "renamed"
+    | "copied"
+    | "typechanged"
+    | "unmerged";
+}
+export interface SourceFingerprints {
+  readonly indexSha256: Sha256;
+  readonly gitConfigSha256: Sha256;
+  readonly refsSha256: Sha256;
+  readonly reflogsSha256: Sha256;
+  readonly odbListingSha256: Sha256;
+  readonly includedWorktreeSha256: Sha256;
+  readonly jjStoreSha256: Sha256 | null;
+  readonly canonicalInputsSha256: Sha256;
+}
 export type CandidateKind = "stash-older" | "reflog" | "dangling";
 export interface Candidate {
   readonly kind: CandidateKind;
@@ -44,12 +82,21 @@ export interface JjCoverage {
 }
 export interface SourceInventory {
   readonly objectFormat: GitObjectFormat;
+  readonly sourceGitCommonDir: string;
   readonly head: Head;
   readonly refs: readonly GitTip[];
   readonly candidates: readonly Candidate[];
+  readonly remotes: readonly { readonly name: string; readonly url: string }[];
+  readonly indexEntries: readonly IndexEntry[];
+  readonly worktreeChanges: readonly WorktreeChange[];
+  readonly untrackedPaths: readonly RepoPath[];
+  readonly ignoredPaths: readonly RepoPath[];
+  readonly excludedUntracked: readonly RepoPath[];
+  readonly trackedSensitivePaths: readonly Issue[];
+  readonly leftBehind: readonly Issue[];
   readonly jjCoverage: JjCoverage;
-  readonly indexSha256: Sha256;
-  readonly inputFingerprintSha256: Sha256;
+  readonly fingerprints: SourceFingerprints;
+  readonly excludeFileSha256: Sha256 | null;
   readonly dispositionsFileSha256: Sha256 | null;
 }
 export interface ReviewedPath {

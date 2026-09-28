@@ -52,12 +52,30 @@ function sample(): ReceiptV1 {
     },
     source: {
       objectFormat: "sha1",
+      sourceGitCommonDir: "/fixtures/source/.git",
       head: { symbolicRef: null, oid: sourceOid, treeOid: O("2"), treePaths: [] },
       refs: [],
       candidates: [],
+      remotes: [],
+      indexEntries: [],
+      worktreeChanges: [],
+      untrackedPaths: [],
+      ignoredPaths: [],
+      excludedUntracked: [],
+      trackedSensitivePaths: [],
+      leftBehind: [],
       jjCoverage: { classification: "none", headOids: [], operationId: null },
-      indexSha256: D,
-      inputFingerprintSha256: D,
+      fingerprints: {
+        indexSha256: D,
+        gitConfigSha256: D,
+        refsSha256: D,
+        reflogsSha256: D,
+        odbListingSha256: D,
+        includedWorktreeSha256: D,
+        jjStoreSha256: null,
+        canonicalInputsSha256: D,
+      },
+      excludeFileSha256: null,
       dispositionsFileSha256: null,
     },
     snapshot: null,
@@ -290,7 +308,16 @@ test("same-input retry discounts only its own installed refs and retains the ori
   assert.throws(
     () =>
       approveSameInputRetry(
-        { ...plan, source: { ...plan.source, inputFingerprintSha256: digest("b".repeat(64)) } },
+        {
+          ...plan,
+          source: {
+            ...plan.source,
+            fingerprints: {
+              ...plan.source.fingerprints,
+              canonicalInputsSha256: digest("b".repeat(64)),
+            },
+          },
+        },
         receipt,
         receiptCommitOid,
         actual,

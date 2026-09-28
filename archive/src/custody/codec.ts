@@ -208,9 +208,9 @@ const lit =
     if (value !== expected) invalid(`${at} must be ${JSON.stringify(expected)}`);
   };
 const one =
-  (...values: readonly string[]): Validator =>
+  (...values: readonly (string | number)[]): Validator =>
   (value, at) => {
-    if (!values.includes(value as string)) invalid(`${at} has invalid value`);
+    if (!values.includes(value as string | number)) invalid(`${at} has invalid value`);
   };
 const arr =
   (check: Validator): Validator =>
@@ -236,6 +236,16 @@ const ref: Validator = (value, at) => {
   refName(value as string);
 };
 const mode = one("100644", "100755", "120000", "160000");
+const changeStatus = one(
+  "unchanged",
+  "added",
+  "modified",
+  "deleted",
+  "renamed",
+  "copied",
+  "typechanged",
+  "unmerged",
+);
 const gitOid =
   (format: GitObjectFormat): Validator =>
   (value, at) => {
@@ -349,16 +359,41 @@ export function validateReceipt(value: unknown): ReceiptV1 {
       identity,
       source: shape({
         objectFormat: lit(format),
+        sourceGitCommonDir: nonempty,
         head: shape({ symbolicRef: nul(ref), oid: id, treeOid: id, treePaths: arr(pathEntry(id)) }),
         refs: arr(tip),
         candidates: arr(candidate),
+        remotes: arr(shape({ name: nonempty, url: nonempty })),
+        indexEntries: arr(shape({ path, stage: one(0, 1, 2, 3), mode, blobOid: id })),
+        worktreeChanges: arr(
+          shape({
+            path,
+            originalPath: nul(path),
+            indexStatus: changeStatus,
+            worktreeStatus: changeStatus,
+          }),
+        ),
+        untrackedPaths: arr(path),
+        ignoredPaths: arr(path),
+        excludedUntracked: arr(path),
+        trackedSensitivePaths: arr(issue),
+        leftBehind: arr(issue),
         jjCoverage: shape({
           classification: one("none", "git-covered", "blocked"),
           headOids: arr(id),
           operationId: nul(str),
         }),
-        indexSha256: hash,
-        inputFingerprintSha256: hash,
+        fingerprints: shape({
+          indexSha256: hash,
+          gitConfigSha256: hash,
+          refsSha256: hash,
+          reflogsSha256: hash,
+          odbListingSha256: hash,
+          includedWorktreeSha256: hash,
+          jjStoreSha256: nul(hash),
+          canonicalInputsSha256: hash,
+        }),
+        excludeFileSha256: nul(hash),
         dispositionsFileSha256: nul(hash),
       }),
       snapshot: nul(snapshot),
