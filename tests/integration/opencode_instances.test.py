@@ -125,7 +125,6 @@ def test_primary_render_is_unchanged(fixture: Path) -> None:
         "SyslogIdentifier=opencode",
         f"ExecStart={deployment}/bin/serve.sh",
         f"EnvironmentFile=-{deployment}/env",
-        f"LoadCredential=OPENCODE_PASSWORD:{fixture}/config/opencode-git/secrets/OPENCODE_PASSWORD",
     ):
         if expected not in service:
             raise AssertionError(f"primary unit lost {expected!r}:\n{service}")
@@ -162,9 +161,11 @@ def test_primary_render_is_unchanged(fixture: Path) -> None:
         raise AssertionError(f"legacy shell wrapper remains imported:\n{retired_wrapper}")
 
     serve = require_file(deployment / "bin" / "serve.sh", "systemd serve launcher")
-    for expected in ("CREDENTIALS_DIRECTORY", "OPENCODE_SERVE_ARGS", '"${serve_argv[@]}"'):
+    for expected in ("OPENCODE_SERVE_ARGS", '"${serve_argv[@]}"'):
         if expected not in serve:
             raise AssertionError(f"serve.sh lost service behavior {expected!r}:\n{serve}")
+    if "CREDENTIALS_DIRECTORY" in serve:
+        raise AssertionError("interim launcher still requires the systemd credential")
     for forbidden in ("# guard helper:", "COMPFUZOR_OPENCODE_BYPASS", "env helper:", "# loud helper:"):
         if forbidden in serve:
             raise AssertionError(f"systemd serve launcher retained generic bin helper {forbidden!r}")

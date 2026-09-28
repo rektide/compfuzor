@@ -12,13 +12,13 @@ set -euo pipefail
 # single argument.
 #
 # Drop-in plan: when the opencode-args feature line (~/src/opencode-args)
-# is composed and deployed with OPENCODE_PASSWORD_FILE support, this vector
-# moves to the variable the CLI parses natively, serve.sh is deleted, and
-# ExecStart composes the credential path itself — systemd expands
-# ${CREDENTIALS_DIRECTORY} in ExecStart argv (not in Environment=), so the
-# unit runs `/usr/bin/env
-# OPENCODE_PASSWORD_FILE=${CREDENTIALS_DIRECTORY}/OPENCODE_PASSWORD
-# <binary> serve`.
+# is composed and deployed with the serve --password-file flag and
+# serve-route environment argument parsing, this vector moves to the
+# variable the CLI parses natively, serve.sh is deleted, and the unit
+# regains LoadCredential while ExecStart composes the credential path
+# itself — systemd expands the %d specifier in ExecStart argv (while
+# Environment= cannot compose credential paths), so the unit runs
+# `<binary> serve --password-file %d/OPENCODE_PASSWORD`.
 #
 # The playbook renders the key empty, so an Ansible re-render resets it
 # until the next build (or a manual run of this script). Manual runs are

@@ -24,6 +24,7 @@ def fake_binary(directory: Path, name: str = "opencode") -> Path:
         """#!/bin/bash
 printf '%s\\0' "$@" > "$OPENCODE_TEST_ARGS"
 printf '%s' "${OPENCODE_PASSWORD:-}" > "$OPENCODE_TEST_PASSWORD"
+printf '%s' "${OPENCODE_PASSWORD_FILE:-}" > "$OPENCODE_TEST_PASSWORD_FILE"
 printf '%s' "$0" > "$OPENCODE_TEST_BINARY"
 printf '%s' "${OPENCODE_ARGS:-}" > "$OPENCODE_TEST_OPENCODE_ARGS"
 """,
@@ -42,6 +43,7 @@ def capture_env(directory: Path, binary: Path, password_file: Path) -> dict[str,
             "OPENCODE_SERVER_URL": "http://127.0.0.1:49373",
             "OPENCODE_TEST_ARGS": str(directory / "args"),
             "OPENCODE_TEST_PASSWORD": str(directory / "password-capture"),
+            "OPENCODE_TEST_PASSWORD_FILE": str(directory / "password-file-capture"),
             "OPENCODE_TEST_BINARY": str(directory / "binary-capture"),
             "OPENCODE_TEST_OPENCODE_ARGS": str(directory / "opencode-args-capture"),
         }
@@ -292,7 +294,7 @@ def test_last_client_lists_and_runs_newest_snapshot_with_server() -> None:
             raise AssertionError("opencode-last did not derive native args from the overridden port")
 
 
-def test_launcher_reads_systemd_credential_without_argv_leak() -> None:
+def test_launcher_passes_password_file_pointer_through() -> None:
     with tempfile.TemporaryDirectory(prefix="compfuzor-opencode-serve-") as temporary:
         directory = Path(temporary)
         binary = fake_binary(directory)
@@ -301,13 +303,14 @@ def test_launcher_reads_systemd_credential_without_argv_leak() -> None:
         env = capture_env(directory, binary, password_file)
         env.update(
             {
-                "CREDENTIALS_DIRECTORY": str(directory),
+                # A stale systemd credential must be ignored, not required.
+                "CREDENTIALS_DIRECTORY": str(directory / "stale-credentials"),
                 "OPENCODE_SERVE_ARGS": "--hostname 0.0.0.0 --port 49373",
             }
         )
 
         result = subprocess.run(
-            ["bash", "-x", str(LAUNCHER)],
+            ["bash", str(LAUNCHER)],
             cwd=ROOT,
             env=env,
             check=False,
@@ -323,11 +326,14 @@ def test_launcher_reads_systemd_credential_without_argv_leak() -> None:
             raise AssertionError(f"expected {expected!r}, got {arguments!r}")
         if TEST_PASSWORD in arguments:
             raise AssertionError("password leaked into the server argument vector")
-        if TEST_PASSWORD in result.stderr:
-            raise AssertionError("password leaked to xtrace output")
+        captured_pointer = (directory / "password-file-capture").read_text(encoding="utf-8")
+        if captured_pointer != str(password_file):
+            raise AssertionError(
+                f"launcher did not pass OPENCODE_PASSWORD_FILE through unchanged: {captured_pointer!r}"
+            )
         captured_password = (directory / "password-capture").read_text(encoding="utf-8")
-        if captured_password != TEST_PASSWORD:
-            raise AssertionError("launcher did not export the systemd credential")
+        if captured_password != "":
+            raise AssertionError("launcher put the password value into the process environment")
 
 
 def test_launcher_word_splits_baked_serve_args() -> None:
@@ -339,7 +345,6 @@ def test_launcher_word_splits_baked_serve_args() -> None:
         env = capture_env(directory, binary, password_file)
         env.update(
             {
-                "CREDENTIALS_DIRECTORY": str(directory),
                 "OPENCODE_SERVE_ARGS": (
                     "--hostname 0.0.0.0 --port 49373 "
                     "--cors http://workhorse.local:49373 "
@@ -382,7 +387,6 @@ def test_launcher_fails_without_baked_serve_args() -> None:
         password_file = directory / "OPENCODE_PASSWORD"
         password_file.write_text(TEST_PASSWORD, encoding="utf-8")
         env = capture_env(directory, binary, password_file)
-        env.update({"CREDENTIALS_DIRECTORY": str(directory)})
         env.pop("OPENCODE_SERVE_ARGS", None)
 
         result = subprocess.run(
@@ -407,7 +411,7 @@ if __name__ == "__main__":
     test_zim_routes_without_lifecycle_management()
     test_zim_fails_before_execution_without_password()
     test_last_client_lists_and_runs_newest_snapshot_with_server()
-    test_launcher_reads_systemd_credential_without_argv_leak()
+    test_launcher_passes_password_file_pointer_through()
     test_launcher_word_splits_baked_serve_args()
     test_launcher_fails_without_baked_serve_args()
     print("ok: OpenCode foreground service and ZIM routing")

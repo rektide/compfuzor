@@ -94,10 +94,13 @@
       # reassembled per boot. serve.sh word-splits it into exec argv because
       # systemd cannot: ExecStart ${VAR} expansion passes the whole value as a
       # single argument. When the opencode-args feature line
-      # (~/src/opencode-args) lands native LoadCredential password reading and
-      # serve-route environment argument parsing, serve.sh is deleted,
-      # ExecStart becomes bare `opencode serve`, and this vector moves to the
-      # variable the CLI parses natively from the unit EnvironmentFile.
+      # (~/src/opencode-args) is composed and deployed with its serve-route
+      # environment argument parsing and --password-file flag, serve.sh is
+      # deleted, ExecStart becomes
+      # `<binary> serve --password-file %d/OPENCODE_PASSWORD` with
+      # LoadCredential regained (%d expands in ExecStart argv, unlike
+      # Environment=), and this vector moves to the variable the CLI parses
+      # natively from the unit EnvironmentFile.
       OPENCODE_SERVE_ARGS: ""
       # Root-scoped watchman backend; inert until the composed working
       # workspace carries the watchman stack, then opts the service in.
@@ -148,7 +151,12 @@
         Type: exec
         ExecStart: "{{DIR}}/bin/serve.sh"
         WorkingDirectory: "%h"
-        LoadCredential: "OPENCODE_PASSWORD:{{PASSWORDS_DIR}}/OPENCODE_PASSWORD"
+        # Interim form: no credential is loaded — the server reads its
+        # password from OPENCODE_PASSWORD_FILE via the unit EnvironmentFile.
+        # LoadCredential returns with the final form:
+        #   ExecStart=<binary> serve --password-file %d/OPENCODE_PASSWORD
+        # (%d expands in ExecStart argv on systemd 262; Environment= cannot
+        # compose credential paths at all).
         SuccessExitStatus: 130
         Restart: always
         RestartSec: 1
@@ -334,34 +342,38 @@
       targets are an operator choice, not an isolation boundary.
 
       The persisted 43-character password lives at `${OPENCODE_PASSWORD_FILE}`
-      with mode 0600. systemd copies it into a read-only runtime credential;
-      `serve.sh` exports it only to the server process. The ZIM module reads the
-      same file once in each new shell and exports `OPENCODE_PASSWORD` for
-      clients. The secret is never copied into `env`, `env.export`, a unit file,
-      or a generated ZIM fragment.
+      with mode 0600. The server reads it directly from that path — an ENV
+      key delivered by the unit's `EnvironmentFile`, the same pointer the
+      ZIM module hands to clients — so the secret value never appears in the
+      server process environment at all. The ZIM module reads the same file
+      once in each new shell and exports `OPENCODE_PASSWORD` for clients.
+      The secret is never copied into `env`, `env.export`, a unit file, or a
+      generated ZIM fragment. **Deploy ordering**: this route requires a
+      binary with the opencode-args line's `OPENCODE_PASSWORD_FILE` support;
+      restarting the unit onto an older binary boots the server with an
+      ephemeral random password.
 
       The user unit gets ordinary runtime settings from its generated
       `EnvironmentFile={{DIR}}/env`: hostname, port, CORS origins, the baked
-      serve argument vector, Watchman socket, and instance-specific binary.
-      `LoadCredential` supplies the password file separately. `serve.sh` is
-      only the systemd credential and argument adapter: it exports the
-      credential to the server process, word-splits the baked
-      `OPENCODE_SERVE_ARGS` vector into exec argv (systemd cannot —
-      `ExecStart` `${VAR}` expansion passes the whole value as a single
-      argument), and execs `opencode serve`. It is rendered without generic
-      BINS helpers because a long-running `ExecStart` must not exit
-      successfully through a provisioning bypass guard.
+      serve argument vector, the password-file pointer, Watchman socket, and
+      instance-specific binary. `serve.sh` is now only the argument adapter:
+      it word-splits the baked `OPENCODE_SERVE_ARGS` vector into exec argv
+      (systemd cannot — `ExecStart` `${VAR}` expansion passes the whole
+      value as a single argument) and execs `opencode serve`. It is rendered
+      without generic BINS helpers because a long-running `ExecStart` must
+      not exit successfully through a provisioning bypass guard.
 
-      When the `opencode-args` feature line (`~/src/opencode-args`) is
-      composed and deployed with `OPENCODE_PASSWORD_FILE` support,
-      `serve.sh` is deleted. systemd expands `${CREDENTIALS_DIRECTORY}` in
-      `ExecStart` argv but not in `Environment=` (verified on systemd 262),
-      so the unit runs
-      `ExecStart=/usr/bin/env OPENCODE_PASSWORD_FILE=${CREDENTIALS_DIRECTORY}/OPENCODE_PASSWORD <binary> serve`
-      and the baked vector moves to the variable the CLI parses natively
-      from the unit EnvironmentFile — paired with filtering serve-scoped
-      argument variables from the session env so tool shells spawned by the
-      server do not inherit them.
+      Final form, once the `opencode-args` feature line (`~/src/opencode-args`)
+      is composed and deployed with its `serve --password-file` flag and
+      serve-route environment argument parsing: `serve.sh` is deleted and the
+      unit regains `LoadCredential`, running
+      `ExecStart=<binary> serve --password-file %d/OPENCODE_PASSWORD`
+      (systemd expands the `%d` credentials specifier in `ExecStart` argv —
+      verified on systemd 262 — while `Environment=` cannot compose
+      credential paths at all), with the baked vector on the variable the
+      CLI parses natively — paired with filtering serve-scoped argument
+      variables from the session env so tool shells spawned by the server
+      do not inherit them.
 
       ## Operations
 
@@ -840,17 +852,24 @@
         basedir: False
         # ExecStart is a long-running systemd process, not a provisioning
         # action. The generic TYPE=opencode bypass wrapper can exit 0 on a
-        # bypass and fight Restart=always. systemd's EnvironmentFile and
-        # LoadCredential supply its inputs; the body validates required values.
-        # Drop-in plan (mechanism verified on systemd 262): deleted once the
+        # bypass and fight Restart=always. The unit EnvironmentFile supplies
+        # every input (serve vector, password-file pointer); the body
+        # validates required values.
+        # Interim form: the credential rides the envfile's existing
+        # OPENCODE_PASSWORD_FILE pointer — the server reads it itself, so
+        # serve.sh only word-splits the baked vector. LoadCredential is
+        # dropped until the final form.
+        # Final form (mechanism verified on systemd 262): deleted once the
         # opencode-args feature line (~/src/opencode-args) is composed and
-        # deployed with OPENCODE_PASSWORD_FILE support. systemd expands
-        # ${CREDENTIALS_DIRECTORY} in ExecStart argv but not in Environment=,
-        # so the unit runs
-        #   ExecStart=/usr/bin/env OPENCODE_PASSWORD_FILE=${CREDENTIALS_DIRECTORY}/OPENCODE_PASSWORD <binary> serve
-        # with the baked vector in the unit environment on the variable the
-        # CLI parses natively, paired with session-env filtering so tool
-        # shells do not inherit serve-scoped args.
+        # deployed with the serve --password-file flag and serve-route
+        # environment argument parsing. systemd expands the
+        # %d credentials specifier in ExecStart argv — Environment= cannot
+        # compose credential paths at all — so the unit regains
+        # LoadCredential and runs
+        #   ExecStart=<binary> serve --password-file %d/OPENCODE_PASSWORD
+        # with the baked vector on the variable the CLI parses natively,
+        # paired with session-env filtering so tool shells do not inherit
+        # serve-scoped args.
         helpers: false
       - name: restart.sh
         basedir: False
