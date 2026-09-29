@@ -17,6 +17,7 @@ import { createHash } from "node:crypto";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { safeLabel } from "../recovery/harvest.ts";
 import { refKey, refs, jj, type ExecutionOptions } from "./jj.ts";
+import { preflight } from "./health.ts";
 import { declaredRemotes, mismatchError, remoteDiff } from "./remotes.ts";
 import {
   refreshArchive,
@@ -101,7 +102,10 @@ export async function deployWorkspace(
     (await followEntry(workspace))?.isDirectory() &&
     (await realpath(workspace)) === actualArchive;
   const aliasTarget = archiveAlias ? await readlink(workspace) : undefined;
-  if (archiveAlias) validateRefreshOptions(options);
+  if (archiveAlias) {
+    validateRefreshOptions(options);
+    await preflight(archive, { readOnly: true }, execution);
+  }
   if (workspaceEntry && !workspaceEntry.isDirectory() && !archiveAlias) {
     throw new Error(
       `${workspace} is occupied; move it aside or clean it up manually before creating a jj workspace`,
