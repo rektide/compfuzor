@@ -287,6 +287,34 @@ def test_deploy_archive_alias_keeps_link_when_selected_bookmark_is_conflicted() 
         assert (archive / "local").read_text() == "local progress\n"
 
 
+def test_deploy_archive_alias_keeps_link_when_archive_health_preflight_fails() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, _ = create_remote(tmp)
+        archive = tmp / "archive"
+        render(archive, remote)
+        run("jj", "new", "main", cwd=archive)
+        (archive / "ghost-only").write_text("missing commit fixture\n")
+        run("jj", "status", cwd=archive)
+        ghost = run("jj", "log", "-G", "-r", "@", "-T", "commit_id", cwd=archive)
+        run("jj", "new", "main", cwd=archive)
+        # Quarantine a visible jj-only commit object in this disposable fixture.
+        loose = archive / ".git" / "objects" / ghost[:2] / ghost[2:]
+        assert loose.is_file()
+        loose.rename(tmp / "missing-visible-head")
+        workspace = tmp / "deployment" / "repo"
+        workspace.parent.mkdir()
+        workspace.symlink_to(archive, target_is_directory=True)
+        original = workspace.lstat()
+        failed = subprocess.run((str(RUNNER), "deploy", "--json", "--archive", str(archive),
+                                 "--workspace", str(workspace), "--repo", str(remote), "--label", "fixture"),
+                                cwd=tmp, capture_output=True, text=True)
+        assert failed.returncode and failed.stdout == "" and ghost in failed.stderr
+        assert workspace.is_symlink() and workspace.resolve() == archive
+        assert workspace.lstat().st_ino == original.st_ino
+
+
 def test_deploy_accepts_symlinked_archive_but_refuses_dangling_link() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
