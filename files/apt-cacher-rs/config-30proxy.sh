@@ -13,14 +13,21 @@
 # rpi4=192.168.1.8); once installed the line belongs to the client.
 #
 # Usage:
+#   config-30proxy.sh               # discover (default): stage all tailnet
+#                                   # linux peers via tailscale status
 #   config-30proxy.sh <host>[=<proxy>] [<host>[=<proxy>] ...]
-#   config-30proxy.sh --discover     # add tailnet linux peers (tailscale)
-#   config-30proxy.sh --list         # show staged snippets
+#   config-30proxy.sh --discover    # explicit: add tailnet linux peers
+#   config-30proxy.sh --list        # show staged snippets
 #
 # Options:
 #   --proxy-host NAME   proxy hostname clients point at
 #                       (default $APT_PROXY_HOST or 'workhorse')
 #   --proxy-port PORT   default $APT_PROXY_PORT or 3142
+#
+# With no host arguments, discovery runs by default: each tailnet linux
+# peer gets a snippet, so rerunning keeps the staged set in sync with the
+# peer list (block-in-file ensure mode makes regeneration idempotent).
+# Explicit hosts stage exactly those hosts.
 #
 # After (re)generating, re-render is NOT needed: these files are staged
 # artifacts beside the ansible-rendered ones under DIR/etc/.
@@ -34,17 +41,24 @@ hosts=()
 
 usage() { awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print} NR>1 && !/^#/ {exit}' "$0"; exit "${1:-0}"; }
 
+# Append tailnet linux peers (self excluded) to hosts[].
+discover_peers() {
+  command -v tailscale >/dev/null 2>&1 || {
+    echo "error: tailscale not found; pass client hostnames explicitly" >&2
+    return 1
+  }
+  local self_host peer
+  self_host="$(tailscale status | awk 'NR==1{print $2}')"
+  while read -r peer; do hosts+=("$peer"); done < <(
+    tailscale status | awk -v self="$self_host" '$4=="linux" && $2!=self {print $2}')
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help) usage 0 ;;
     --proxy-host) PROXY_HOST="$2"; shift 2 ;;
     --proxy-port) PROXY_PORT="$2"; shift 2 ;;
-    --discover)
-      command -v tailscale >/dev/null 2>&1 || { echo "error: tailscale not found" >&2; exit 1; }
-      self_host="$(tailscale status | awk 'NR==1{print $2}')"
-      while read -r peer; do hosts+=("$peer"); done < <(
-        tailscale status | awk -v self="$self_host" '$4=="linux" && $2!=self {print $2}')
-      shift ;;
+    --discover) discover_peers; shift ;;
     --list)
       found=0
       for f in "$ETC_DIR"/30proxy.*; do
@@ -52,14 +66,22 @@ while [ $# -gt 0 ]; do
         echo "$f"
         found=1
       done
-      [ "$found" = 1 ] || echo "no staged snippets under $ETC_DIR (generate: config-30proxy.sh <host>...)"
+      [ "$found" = 1 ] || echo "no staged snippets under $ETC_DIR (run config-30proxy.sh to discover)"
       exit 0 ;;
     --*) echo "error: unknown option $1" >&2; usage 1 ;;
     *) hosts+=("$1"); shift ;;
   esac
 done
 
-[ ${#hosts[@]} -gt 0 ] || usage 1
+# Discovery is the default: no host arguments means every tailnet linux
+# peer. Explicit hosts (or --discover additions) stage exactly hosts[].
+if [ ${#hosts[@]} -eq 0 ]; then
+  discover_peers
+fi
+if [ ${#hosts[@]} -eq 0 ]; then
+  echo "error: no client hosts to stage (discovery found none; pass hostnames)" >&2
+  exit 1
+fi
 command -v block-in-file >/dev/null 2>&1 || {
   echo "error: block-in-file not on PATH (block-in-file.src.pb deployment)" >&2; exit 1; }
 [ -d "$ETC_DIR" ] || { echo "error: $ETC_DIR missing (render the playbook first)" >&2; exit 1; }

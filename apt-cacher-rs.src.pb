@@ -235,8 +235,8 @@
       snippets are staged under `{{DIR}}/etc/30proxy.<hostname>` (rule:
       hostname -> filename) by the config lane:
 
-          bin/config.sh dynabook            # stage 30proxy.dynabook
-          bin/config.sh --discover          # + tailnet linux peers
+          bin/config.sh                     # discover: stage tailnet linux peers
+          bin/config.sh dynabook            # stage (just) 30proxy.dynabook
           bin/config.sh rpi4=192.168.1.8    # host that can't resolve `workhorse`
           bin/client-install.sh dynabook    # scp + install on the client
 
