@@ -1,8 +1,18 @@
 /**
  * A Compfuzor deployment is a real jj workspace (and Git worktree) of the
- * canonical archive. Never convert, replace, or clear an occupied destination.
+ * canonical archive. Only a final-component alias of that archive may be
+ * replaced; never convert or clear other occupied destinations.
  */
-import { lstat, mkdir, readFile, readdir, realpath, stat } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  readFile,
+  readdir,
+  readlink,
+  realpath,
+  stat,
+  unlink,
+} from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { safeLabel } from "../recovery/harvest.ts";
@@ -79,19 +89,34 @@ export async function deployWorkspace(
     throw new Error(`${archive} is not a jj-colocated archive; prepare it separately`);
   }
   const workspaceEntry = await entry(workspace);
-  if (workspaceEntry && !workspaceEntry.isDirectory()) {
+  const actualArchive = await canonicalPath(archive);
+  const archiveAlias =
+    workspaceEntry?.isSymbolicLink() &&
+    archiveEntry !== undefined &&
+    (await followEntry(workspace))?.isDirectory() &&
+    (await realpath(workspace)) === actualArchive;
+  const aliasTarget = archiveAlias ? await readlink(workspace) : undefined;
+  if (workspaceEntry && !workspaceEntry.isDirectory() && !archiveAlias) {
     throw new Error(
       `${workspace} is occupied; move it aside or clean it up manually before creating a jj workspace`,
     );
   }
-  const actualArchive = await canonicalPath(archive);
-  const actualWorkspace = await canonicalPath(workspace);
-  if (within(actualArchive, actualWorkspace) || within(actualWorkspace, actualArchive)) {
+  // An admitted alias will become a directory at this location, not at the
+  // existing link's target. Resolve its parent, keeping the final name literal.
+  const actualWorkspace = archiveAlias
+    ? join(await canonicalPath(dirname(workspace)), basename(workspace))
+    : await canonicalPath(workspace);
+  if (
+    within(archive, workspace) ||
+    within(workspace, archive) ||
+    within(actualArchive, actualWorkspace) ||
+    within(actualWorkspace, actualArchive)
+  ) {
     throw new Error(
       `archive ${archive} and workspace ${workspace} must be distinct, non-nested paths`,
     );
   }
-  const contents = workspaceEntry ? await readdir(workspace) : [];
+  const contents = workspaceEntry && !archiveAlias ? await readdir(workspace) : [];
   const existing = contents.length > 0;
   let addGitWorktree = false;
   if (existing) {
@@ -165,6 +190,24 @@ export async function deployWorkspace(
     }
     await mkdir(dirname(workspace), { recursive: true });
     const workspaceName = `compfuzor-${safeLabel(options.label)}-${createHash("sha256").update(workspace).digest("hex").slice(0, 12)}`;
+    if (archiveAlias) {
+      // Preflight above is read-only. Recheck the admitted entry immediately
+      // before unlinking: a replaced or redirected path is no longer authorized.
+      const current = await entry(workspace);
+      if (
+        !current?.isSymbolicLink() ||
+        current.dev !== workspaceEntry?.dev ||
+        current.ino !== workspaceEntry?.ino ||
+        (await readlink(workspace)) !== aliasTarget ||
+        (await realpath(workspace)) !== actualArchive ||
+        join(await canonicalPath(dirname(workspace)), basename(workspace)) !== actualWorkspace
+      ) {
+        throw new Error(
+          `${workspace} changed since archive symlink admission; refusing to replace it`,
+        );
+      }
+      await unlink(workspace);
+    }
     await jj(
       [
         "workspace",
@@ -186,6 +229,14 @@ export async function deployWorkspace(
     changed: createdArchive.changed || !existing || addGitWorktree || result.changed,
     notices: [
       ...createdArchive.notices,
+      ...(archiveAlias
+        ? [
+            {
+              kind: "notice" as const,
+              message: `replaced archive symlink ${workspace} to ${archive} with a dedicated jj/Git workspace`,
+            },
+          ]
+        : []),
       ...(!existing
         ? [
             {
