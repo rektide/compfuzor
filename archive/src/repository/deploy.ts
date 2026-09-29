@@ -194,6 +194,9 @@ export async function deployWorkspace(
     if (available.get(refKey(branch, remote))?.target === "conflict") {
       throw new Error(`${branch}@${remote} is conflicted; resolve it before creating ${workspace}`);
     }
+    if (archiveAlias && available.get(refKey(branch, "-"))?.target === "conflict") {
+      throw new Error(`local bookmark ${branch} is conflicted; resolve it before creating ${workspace}`);
+    }
     await mkdir(dirname(workspace), { recursive: true });
     const workspaceName = `compfuzor-${safeLabel(options.label)}-${createHash("sha256").update(workspace).digest("hex").slice(0, 12)}`;
     if (archiveAlias) {
