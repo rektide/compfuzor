@@ -126,3 +126,18 @@ its selected checkout, rather than only adding `.git` metadata.
 - [OpenCode playbook](/opencode.src.pb): `OPENCODE_WORKING_DIR` selects the
   composed workspace for builds and global binary links, independently of the
   generic repository deployment lane.
+
+# Addendum: migration tested in the disposable reproduction
+
+The same scratch harness now moves its disposable `repo` symlink to
+`repo.archive-link` and repeats the identical `deploy` invocation. This succeeds
+and creates a directory with `.jj/repo` and `.git` pointer files. The saved
+symlink still resolves to the original archive. Thus the proposed layout change
+has an observed failing-to-passing signal, not only a code-reading rationale:
+
+```text
+VERIFIED IN FIXTURE: moving only the link permits a dedicated colocated deployment
+```
+
+This is fixture verification only. The live deployment symlink, archive,
+composed build workspace, binaries, and services remain unchanged.
