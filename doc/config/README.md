@@ -66,6 +66,30 @@ calls a focused internal operation.
 The context defaults to `user`; a playbook may change `CONTEXT_DEFAULT` or a
 domain-specific default. Copy/link/assembly remain runtime options.
 
+## The `config-*` compositor lane
+
+The `config-` prefix is also a generic compositor action, alongside `build`,
+`install`, and `apply`: any authored bin named `config-<thing>.sh` aggregates
+into a `config.sh` scope compositor for its deployment (see
+[`bin_composers.py`](/library/filter_plugins/bin_composers.py), where the
+action set is data). The lane is the extension point for deployment
+configuration generators — scripts that (re)materialize configuration
+artifacts for their deployment, such as per-host client snippets.
+
+The two vocabularies share a namespace and coexist by construction:
+
+- the six fixed CONFIG subsystem commands above arrive with `compose: false`
+  (or, for `config-install.sh`, an explicit `action: install` that classifies
+  it into the install lane ahead of filename grammar), so they never join the
+  `config.sh` compositor;
+- authored `config-<thing>.sh` generators join the lane unless they opt out
+  with `compose: false`.
+
+Like the other compositor lanes, `config.sh` executes through the legacy
+shell compositors today; the annealing runtime intends to cover config and
+aggregation, with the read-only catalog already projecting these leaves (see
+[Attributed runtime flows](/design/config-anneal/execution-model0.gpt6.md)).
+
 Where the omnibus runtime is present, `compfuzor-catalog.sh` provides read-only
 inventory of attributed contributors, actions, commands, resource references,
 and build/install/status flow order. Existing generated shell compositors remain

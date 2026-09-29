@@ -4,6 +4,14 @@ Compfuzor exposes CONFIG through six fixed action commands. Context, recipe,
 and copy/link choices are runtime selections; they are not multiplied into
 generated filenames.
 
+> **Namespace note:** these six fixed commands are the CONFIG subsystem's
+> consumer-facing surface. The broader `config-<thing>.sh` namespace is also a
+> compositor lane for authored deployment configuration generators
+> (`config.sh` aggregates them); see
+> [the `config-*` compositor lane](/doc/config/README.md#the-config-compositor-lane).
+> The fixed commands never join that lane (`compose: false`, or explicit
+> `action: install` for `config-install.sh`).
+
 ```text
 config-install.sh
 config-assemble.sh
@@ -19,8 +27,11 @@ inference, and action-specific help remain in domain-grouped TypeScript sources;
 the dispatcher selects an action and context, then delegates to the bundled
 assembly, input, publication, install, and status operations. The transaction
 runner and shell processor leaves remain internal. There is no public
-`config.sh`, `config-context.sh`, per-recipe assembly wrapper, per-context
-wrapper, or strategy-specific wrapper.
+`config-context.sh`, per-recipe assembly wrapper, per-context
+wrapper, or strategy-specific wrapper. (`config.sh` exists only as the generic
+`config-*` compositor lane entry point when a deployment authors config
+generators; it is not a CONFIG subsystem command — see the namespace note
+above.)
 
 ## Controller compilation and deployed runtime
 
@@ -491,7 +502,9 @@ the legacy user lane because that is a contributor-domain choice.
 
 ## Old-to-new command mapping
 
-No compatibility aliases are generated.
+No compatibility aliases are generated. (The historical CONFIG-subsystem
+`config.sh` below predates and is unrelated to today's generic `config-*`
+compositor lane.)
 
 | Removed command | Current command |
 |---|---|
