@@ -231,6 +231,34 @@ def test_deploy_replaces_selected_archive_alias_with_dedicated_workspace() -> No
         assert run("jj", "--ignore-working-copy", "log", "-G", "-r", "@", "-T", "commit_id", cwd=archive) == archive_at
 
 
+def test_deploy_archive_alias_keeps_link_on_invalid_refresh_options() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, _ = create_remote(tmp)
+        archive = tmp / "archive"
+        render(archive, remote)
+        workspace = tmp / "deployment" / "repo"
+        workspace.parent.mkdir()
+        args = ("deploy", "--json", "--archive", str(archive), "--workspace", str(workspace),
+                "--repo", str(remote), "--label", "fixture")
+        for extra, message in [
+            (("--update", "sometimes"), "invalid choice"),
+            (("--fetch-scope", "some"), "invalid fetch scope"),
+            (("--untrack", "some"), "invalid untrack scope"),
+            (("--depth", "0"), "GIT_DEPTH must be positive"),
+            (("--submodules",), "requires explicit submodule safety handling"),
+        ]:
+            workspace.symlink_to("../archive", target_is_directory=True)
+            original = workspace.lstat()
+            failed = subprocess.run((str(RUNNER), *args, *extra), cwd=tmp,
+                                    capture_output=True, text=True)
+            assert failed.returncode and failed.stdout == "" and message in failed.stderr
+            assert workspace.is_symlink() and workspace.readlink() == Path("../archive")
+            assert workspace.lstat().st_ino == original.st_ino
+            workspace.unlink()
+
+
 def test_deploy_accepts_symlinked_archive_but_refuses_dangling_link() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
