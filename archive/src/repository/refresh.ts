@@ -44,21 +44,40 @@ export type RefreshOptions = {
 };
 export type RefreshResult = { changed: boolean; notices: Notice[] };
 
+/** Pure option checks shared with deployment before any destination mutation. */
+export function validateRefreshOptions(
+  options: Pick<RefreshOptions, "update" | "fetchScope" | "untrack" | "submodules" | "depth">,
+): void {
+  const update = options.update ?? "true";
+  if (update !== "true" && update !== "false") {
+    throw new Error(`argument --update: invalid choice: '${update}' (choose from 'true', 'false')`);
+  }
+  const fetchScope = options.fetchScope ?? "all";
+  const untrack = options.untrack ?? "none";
+  if (fetchScope !== "all" && fetchScope !== "selected")
+    throw new Error(`invalid fetch scope: ${fetchScope}`);
+  if (!["none", "selected", "all"].includes(untrack))
+    throw new Error(`invalid untrack scope: ${untrack}`);
+  if (options.submodules) {
+    throw new Error(
+      "GIT_SUBMODULES requires explicit submodule safety handling; disable it for this archive render",
+    );
+  }
+  const depth = options.depth === undefined ? undefined : Number(options.depth);
+  if (depth !== undefined && (!Number.isInteger(depth) || depth < 1)) {
+    throw new Error("GIT_DEPTH must be positive");
+  }
+}
+
 export async function refreshArchive(
   options: RefreshOptions,
   execution?: ExecutionOptions,
 ): Promise<RefreshResult> {
   const { dest, repo, remotes: remotesArg, label, reconcileRemotes } = options;
+  validateRefreshOptions(options);
   const update = options.update ?? "true";
-  if (update !== "true" && update !== "false") {
-    throw new Error(`argument --update: invalid choice: '${update}' (choose from 'true', 'false')`);
-  }
   const fetchScope: string = options.fetchScope ?? "all";
   const untrack: string = options.untrack ?? "none";
-  if (fetchScope !== "all" && fetchScope !== "selected")
-    throw new Error(`invalid fetch scope: ${fetchScope}`);
-  if (!["none", "selected", "all"].includes(untrack))
-    throw new Error(`invalid untrack scope: ${untrack}`);
   const urls = declaredRemotes(repo, remotesArg);
   let version = options.version ?? "HEAD";
   let selected = options.remote ?? "origin";
@@ -70,15 +89,7 @@ export async function refreshArchive(
     followSelectedRemote = true;
   }
   if (!urls.has(selected)) throw new Error(`selected remote '${selected}' is not declared`);
-  if (options.submodules) {
-    throw new Error(
-      "GIT_SUBMODULES requires explicit submodule safety handling; disable it for this archive render",
-    );
-  }
   const depth = options.depth === undefined ? undefined : Number(options.depth);
-  if (depth !== undefined && (!Number.isInteger(depth) || depth < 1)) {
-    throw new Error("GIT_DEPTH must be positive");
-  }
   const notices: Notice[] = [];
   let changed = false;
   let cloned = false;

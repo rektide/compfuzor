@@ -18,7 +18,12 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { safeLabel } from "../recovery/harvest.ts";
 import { refKey, refs, jj, type ExecutionOptions } from "./jj.ts";
 import { declaredRemotes, mismatchError, remoteDiff } from "./remotes.ts";
-import { refreshArchive, type RefreshOptions, type RefreshResult } from "./refresh.ts";
+import {
+  refreshArchive,
+  validateRefreshOptions,
+  type RefreshOptions,
+  type RefreshResult,
+} from "./refresh.ts";
 
 export type DeployOptions = Omit<RefreshOptions, "dest"> & { archive: string; workspace: string };
 
@@ -96,6 +101,7 @@ export async function deployWorkspace(
     (await followEntry(workspace))?.isDirectory() &&
     (await realpath(workspace)) === actualArchive;
   const aliasTarget = archiveAlias ? await readlink(workspace) : undefined;
+  if (archiveAlias) validateRefreshOptions(options);
   if (workspaceEntry && !workspaceEntry.isDirectory() && !archiveAlias) {
     throw new Error(
       `${workspace} is occupied; move it aside or clean it up manually before creating a jj workspace`,
