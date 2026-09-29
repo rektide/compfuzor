@@ -402,9 +402,13 @@ that rebuilding jj metadata can recover objects Git no longer has.
 workspace and colocated Git worktree** backed by that repository. A missing or
 empty workspace path is created. An existing jj workspace of this archive
 without `.git` gains a Git worktree via `jj git colocation enable`, retaining
-its worktree files; subsequent runs are no-ops when already colocated. An old
-symlink, standalone checkout, unrelated jj repository, or occupied `.git` entry
-is refused without converting or deleting its contents. Fetching from
+its worktree files; subsequent runs are no-ops when already colocated. A legacy
+**final-component workspace symlink to the selected, validated archive** is
+replaced with a dedicated jj/Git workspace at that path. Canonical identity
+admits relative links and symlinked archive roots; lexical and canonical nesting
+are still refused. Unrelated or dangling symlinks, standalone checkouts,
+unrelated jj repositories, and occupied `.git` entries are refused without
+converting or deleting their contents. Fetching from
 the deployment workspace does not use the archive main worktree as its
 deployment checkout. **Creating** a workspace from an existing archive runs
 `jj workspace add` in the archive; jj may snapshot previously unsnapshotted
@@ -416,8 +420,15 @@ workspace only if the exposure path is vacant or already points there.
 `GIT_REMOTE_FIX=true` permits remote URL reconciliation. `JJ_FETCH_SCOPE`,
 `JJ_UNTRACK`, and `JJ_SAVE_DISPLACED` expose the corresponding CLI controls;
 the defaults fetch all, untrack none, and save displaced local tips. A
-deployment with an old checkout or symlink needs a deliberate operator
-cutover; the repository task does not silently migrate it.
+deployment with an old checkout or unrelated symlink still needs a deliberate
+operator cutover. Only the archive-alias case above migrates automatically.
+Archive health, refresh options, declared URLs, and the selected branch are
+checked before removing that link; its identity is rechecked immediately before
+unlinking. If `jj workspace add` fails without creating a destination entry,
+the exact original link is restored and the failure is still reported. Any
+partial destination or repository registration is left intact for investigation,
+not automatically cleaned up. Keep paths stable during deployment: these checks
+are safeguards, not an atomic filesystem transaction.
 
 The host's canonical Compfuzor checkout is preferred when its launcher is
 executable. The executing playbook's launcher is the fallback.
