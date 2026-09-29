@@ -146,7 +146,8 @@ export async function deployWorkspace(
       (await realpath(
         resolve(`${workspace}/.jj`, (await readFile(`${workspace}/.jj/repo`, "utf8")).trim()),
       )) !== (await realpath(`${archive}/.jj/repo`)) ||
-      (await jj(["workspace", "root"], workspace, { readOnly: true }, execution)) !== actualWorkspace ||
+      (await jj(["workspace", "root"], workspace, { readOnly: true }, execution)) !==
+        actualWorkspace ||
       (gitEntry !== undefined && !(await gitWorktreeBelongsTo(archive, workspace)))
     ) {
       throw new Error(

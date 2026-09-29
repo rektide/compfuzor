@@ -1,5 +1,5 @@
 #!/usr/bin/env -S node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
-import { link, lstat, mkdir, mkdtemp, open, readFile, readdir, readlink, realpath, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { link, lstat, mkdir, mkdtemp, open, readFile, readdir, readlink, realpath, rename, rm, stat, symlink, unlink, writeFile } from "node:fs/promises";
 import * as NodeChildProcess from "node:child_process";
 import { PassThrough } from "node:stream";
 import * as NodeCrypto from "node:crypto";
@@ -28434,7 +28434,7 @@ const stat$1 = /*#__PURE__*/ (() => {
 	const nodeStat = /*#__PURE__*/ effectify(NFS.stat, /*#__PURE__*/ handleErrnoException("FileSystem", "stat"), /*#__PURE__*/ handleBadArgument("stat"));
 	return (path) => flatMap$1(nodeStat(path, { bigint: true }), makeFileInfo);
 })();
-const symlink = /*#__PURE__*/ (() => {
+const symlink$1 = /*#__PURE__*/ (() => {
 	const nodeSymlink = /*#__PURE__*/ effectify(NFS.symlink, /*#__PURE__*/ handleErrnoException("FileSystem", "symlink"), /*#__PURE__*/ handleBadArgument("symlink"));
 	return (target, path) => nodeSymlink(target, path);
 })();
@@ -28521,7 +28521,7 @@ const makeFileSystem = /*#__PURE__*/ map$5(/*#__PURE__*/ serviceOption(WatchBack
 	remove,
 	rename: rename$1,
 	stat: stat$1,
-	symlink,
+	symlink: symlink$1,
 	truncate,
 	utimes,
 	watch(path, options) {
@@ -34499,8 +34499,8 @@ async function snapshot(dest, execution) {
 * Stdout is one JSON result for Ansible; jj diagnostics and failures go to stderr.
 * Only run this on a checkout whose working tree is not being edited concurrently.
 */
-async function refreshArchive(options, execution) {
-	const { dest, repo, remotes: remotesArg, label, reconcileRemotes } = options;
+/** Pure option checks shared with deployment before any destination mutation. */
+function validateRefreshOptions(options) {
 	const update = options.update ?? "true";
 	if (update !== "true" && update !== "false") throw new Error(`argument --update: invalid choice: '${update}' (choose from 'true', 'false')`);
 	const fetchScope = options.fetchScope ?? "all";
@@ -34511,6 +34511,16 @@ async function refreshArchive(options, execution) {
 		"selected",
 		"all"
 	].includes(untrack)) throw new Error(`invalid untrack scope: ${untrack}`);
+	if (options.submodules) throw new Error("GIT_SUBMODULES requires explicit submodule safety handling; disable it for this archive render");
+	const depth = options.depth === void 0 ? void 0 : Number(options.depth);
+	if (depth !== void 0 && (!Number.isInteger(depth) || depth < 1)) throw new Error("GIT_DEPTH must be positive");
+}
+async function refreshArchive(options, execution) {
+	const { dest, repo, remotes: remotesArg, label, reconcileRemotes } = options;
+	validateRefreshOptions(options);
+	const update = options.update ?? "true";
+	const fetchScope = options.fetchScope ?? "all";
+	const untrack = options.untrack ?? "none";
 	const urls = declaredRemotes(repo, remotesArg);
 	let version = options.version ?? "HEAD";
 	let selected = options.remote ?? "origin";
@@ -34522,9 +34532,7 @@ async function refreshArchive(options, execution) {
 		followSelectedRemote = true;
 	}
 	if (!urls.has(selected)) throw new Error(`selected remote '${selected}' is not declared`);
-	if (options.submodules) throw new Error("GIT_SUBMODULES requires explicit submodule safety handling; disable it for this archive render");
 	const depth = options.depth === void 0 ? void 0 : Number(options.depth);
-	if (depth !== void 0 && (!Number.isInteger(depth) || depth < 1)) throw new Error("GIT_DEPTH must be positive");
 	const notices = [];
 	let changed = false;
 	let cloned = false;
@@ -34742,7 +34750,8 @@ async function refreshArchive(options, execution) {
 //#region archive/src/repository/deploy.ts
 /**
 * A Compfuzor deployment is a real jj workspace (and Git worktree) of the
-* canonical archive. Never convert, replace, or clear an occupied destination.
+* canonical archive. Only a final-component alias of that archive may be
+* replaced; never convert or clear other occupied destinations.
 */
 const entry = async (path) => {
 	try {
@@ -34788,16 +34797,22 @@ async function deployWorkspace(options, execution) {
 	const archiveEntry = await archiveEntryAt(archive);
 	if (archiveEntry && (!archiveEntry.isDirectory() || !(await entry(`${archive}/.jj`))?.isDirectory() || !(await entry(`${archive}/.git`))?.isDirectory())) throw new Error(`${archive} is not a jj-colocated archive; prepare it separately`);
 	const workspaceEntry = await entry(workspace);
-	if (workspaceEntry && !workspaceEntry.isDirectory()) throw new Error(`${workspace} is occupied; move it aside or clean it up manually before creating a jj workspace`);
 	const actualArchive = await canonicalPath(archive);
-	const actualWorkspace = await canonicalPath(workspace);
-	if (within(actualArchive, actualWorkspace) || within(actualWorkspace, actualArchive)) throw new Error(`archive ${archive} and workspace ${workspace} must be distinct, non-nested paths`);
-	const existing = (workspaceEntry ? await readdir(workspace) : []).length > 0;
+	const archiveAlias = workspaceEntry?.isSymbolicLink() && archiveEntry !== void 0 && (await followEntry(workspace))?.isDirectory() && await realpath(workspace) === actualArchive;
+	const aliasTarget = archiveAlias ? await readlink(workspace) : void 0;
+	if (archiveAlias) {
+		validateRefreshOptions(options);
+		await preflight(archive, { readOnly: true }, execution);
+	}
+	if (workspaceEntry && !workspaceEntry.isDirectory() && !archiveAlias) throw new Error(`${workspace} is occupied; move it aside or clean it up manually before creating a jj workspace`);
+	const actualWorkspace = archiveAlias ? join(await canonicalPath(dirname(workspace)), basename(workspace)) : await canonicalPath(workspace);
+	if (within(archive, workspace) || within(workspace, archive) || within(actualArchive, actualWorkspace) || within(actualWorkspace, actualArchive)) throw new Error(`archive ${archive} and workspace ${workspace} must be distinct, non-nested paths`);
+	const existing = (workspaceEntry && !archiveAlias ? await readdir(workspace) : []).length > 0;
 	let addGitWorktree = false;
 	if (existing) {
 		if (!archiveEntry || !(await entry(`${workspace}/.jj`))?.isDirectory()) throw new Error(`${workspace} is occupied; move it aside or clean it up manually before creating a jj workspace`);
 		const gitEntry = await entry(`${workspace}/.git`);
-		if (!(await entry(`${workspace}/.jj/repo`))?.isFile() || await realpath(resolve(`${workspace}/.jj`, (await readFile(`${workspace}/.jj/repo`, "utf8")).trim())) !== await realpath(`${archive}/.jj/repo`) || await jj(["workspace", "root"], workspace, { readOnly: true }, execution) !== workspace || gitEntry !== void 0 && !await gitWorktreeBelongsTo(archive, workspace)) throw new Error(`${workspace} is not a verified jj workspace of ${archive}; refusing to change it`);
+		if (!(await entry(`${workspace}/.jj/repo`))?.isFile() || await realpath(resolve(`${workspace}/.jj`, (await readFile(`${workspace}/.jj/repo`, "utf8")).trim())) !== await realpath(`${archive}/.jj/repo`) || await jj(["workspace", "root"], workspace, { readOnly: true }, execution) !== actualWorkspace || gitEntry !== void 0 && !await gitWorktreeBelongsTo(archive, workspace)) throw new Error(`${workspace} is not a verified jj workspace of ${archive}; refusing to change it`);
 		addGitWorktree = gitEntry === void 0;
 	}
 	let createdArchive = {
@@ -34834,17 +34849,33 @@ async function deployWorkspace(options, execution) {
 		if (branch === "HEAD") branch = ["main", "master"].find((name) => available.has(refKey(name, remote))) ?? "";
 		if (!branch || !available.has(refKey(branch, remote))) throw new Error(`${branch || "HEAD"}@${remote} is unavailable in ${archive}; fetch it before creating ${workspace}`);
 		if (available.get(refKey(branch, remote))?.target === "conflict") throw new Error(`${branch}@${remote} is conflicted; resolve it before creating ${workspace}`);
+		if (archiveAlias && available.get(refKey(branch, "-"))?.target === "conflict") throw new Error(`local bookmark ${branch} is conflicted; resolve it before creating ${workspace}`);
 		await mkdir(dirname(workspace), { recursive: true });
-		await jj([
-			"workspace",
-			"add",
-			"--colocate",
-			"--name",
-			`compfuzor-${safeLabel(options.label)}-${createHash("sha256").update(workspace).digest("hex").slice(0, 12)}`,
-			"--revision",
-			`${branch}@${remote}`,
-			workspace
-		], archive, void 0, execution);
+		const workspaceName = `compfuzor-${safeLabel(options.label)}-${createHash("sha256").update(workspace).digest("hex").slice(0, 12)}`;
+		if (archiveAlias) {
+			const current = await entry(workspace);
+			if (!current?.isSymbolicLink() || current.dev !== workspaceEntry?.dev || current.ino !== workspaceEntry?.ino || await readlink(workspace) !== aliasTarget || await realpath(workspace) !== actualArchive || join(await canonicalPath(dirname(workspace)), basename(workspace)) !== actualWorkspace) throw new Error(`${workspace} changed since archive symlink admission; refusing to replace it`);
+			await unlink(workspace);
+		}
+		try {
+			await jj([
+				"workspace",
+				"add",
+				"--colocate",
+				"--name",
+				workspaceName,
+				"--revision",
+				`${branch}@${remote}`,
+				workspace
+			], archive, void 0, execution);
+		} catch (error) {
+			if (aliasTarget !== void 0 && !await entry(workspace)) try {
+				await symlink(aliasTarget, workspace, "dir");
+			} catch (recoveryError) {
+				throw new AggregateError([error, recoveryError], `${error instanceof Error ? error.message : String(error)}; failed to restore archive symlink ${workspace}: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`);
+			}
+			throw error;
+		}
 	}
 	const result = await refreshArchive({
 		...options,
@@ -34854,6 +34885,10 @@ async function deployWorkspace(options, execution) {
 		changed: createdArchive.changed || !existing || addGitWorktree || result.changed,
 		notices: [
 			...createdArchive.notices,
+			...archiveAlias ? [{
+				kind: "notice",
+				message: `replaced archive symlink ${workspace} to ${archive} with a dedicated jj/Git workspace`
+			}] : [],
 			...!existing ? [{
 				kind: "notice",
 				message: `created jj workspace ${workspace} backed by ${archive}`

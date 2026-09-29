@@ -52,8 +52,8 @@ export function validateRefreshOptions(
   if (update !== "true" && update !== "false") {
     throw new Error(`argument --update: invalid choice: '${update}' (choose from 'true', 'false')`);
   }
-  const fetchScope = options.fetchScope ?? "all";
-  const untrack = options.untrack ?? "none";
+  const fetchScope: string = options.fetchScope ?? "all";
+  const untrack: string = options.untrack ?? "none";
   if (fetchScope !== "all" && fetchScope !== "selected")
     throw new Error(`invalid fetch scope: ${fetchScope}`);
   if (!["none", "selected", "all"].includes(untrack))
