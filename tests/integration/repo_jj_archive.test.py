@@ -382,6 +382,145 @@ def test_deploy_archive_alias_uses_canonical_archive_and_parent_identity() -> No
         assert json.loads(toolkit(*args, cwd=tmp)) == NOOP
 
 
+def test_deploy_refuses_unrelated_and_dangling_workspace_links_untouched() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, _ = create_remote(tmp)
+        archive = tmp / "archive"
+        render(archive, remote)
+        unrelated = tmp / "other-archive"
+        render(unrelated, remote)
+        (unrelated / "operator-note").write_text("unrelated local work\n")
+        child = tmp / "child-workspace"
+        toolkit("deploy", "--archive", str(archive), "--workspace", str(child),
+                "--repo", str(remote), "--label", "fixture", cwd=tmp)
+        workspace = tmp / "deployment" / "repo"
+        workspace.parent.mkdir()
+        for target in (unrelated, child, tmp / "missing"):
+            workspace.symlink_to(target, target_is_directory=True)
+            original = workspace.lstat()
+            failed = subprocess.run((str(RUNNER), "deploy", "--json", "--archive", str(archive),
+                                     "--workspace", str(workspace), "--repo", str(remote), "--label", "fixture"),
+                                    cwd=tmp, capture_output=True, text=True)
+            assert failed.returncode and failed.stdout == "" and "is occupied" in failed.stderr
+            assert workspace.is_symlink() and workspace.readlink() == target
+            assert workspace.lstat().st_ino == original.st_ino
+            workspace.unlink()
+        assert (unrelated / "operator-note").read_text() == "unrelated local work\n"
+        assert (child / ".git").is_file() and not (tmp / "missing").exists()
+
+
+def test_deploy_archive_alias_keeps_link_on_failed_remote_or_branch_preflight() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, _ = create_remote(tmp)
+        archive = tmp / "archive"
+        render(archive, remote)
+        (archive / "operator-note").write_text("still unsnapshotted\n")
+        archive_at = run("jj", "--ignore-working-copy", "log", "-G", "-r", "@", "-T", "commit_id", cwd=archive)
+        workspace = tmp / "deployment" / "repo"
+        workspace.parent.mkdir()
+        for declared, extra, message in [
+            (remote, ("--branch", "absent"), "absent@origin is unavailable"),
+            (remote, ("--remote", "absent"), "selected remote 'absent' is not declared"),
+            (remote, ("--remotes", "[]"), "--remotes must be a JSON object"),
+            (remote, ("--remotes", '{"peer":""}'), "remote names or URLs are invalid"),
+            (tmp / "other.git", (), "declared remote URL mismatch"),
+        ]:
+            workspace.symlink_to(archive, target_is_directory=True)
+            original = workspace.lstat()
+            failed = subprocess.run((str(RUNNER), "deploy", "--json", "--archive", str(archive),
+                                     "--workspace", str(workspace), "--repo", str(declared),
+                                     "--label", "fixture", *extra),
+                                    cwd=tmp, capture_output=True, text=True)
+            assert failed.returncode and failed.stdout == "" and message in failed.stderr
+            assert workspace.is_symlink() and workspace.resolve() == archive
+            assert workspace.lstat().st_ino == original.st_ino
+            assert (archive / "operator-note").read_text() == "still unsnapshotted\n"
+            assert run("jj", "--ignore-working-copy", "log", "-G", "-r", "@", "-T", "commit_id", cwd=archive) == archive_at
+            workspace.unlink()
+
+
+def test_deploy_archive_alias_refuses_lexical_and_canonical_nesting() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, _ = create_remote(tmp)
+        archive = tmp / "archive"
+        render(archive, remote)
+        parent_alias = tmp / "parent-alias"
+        parent_alias.symlink_to(archive, target_is_directory=True)
+        outside = tmp / "outside"
+        outside.mkdir()
+        (archive / "outward-parent").symlink_to(outside, target_is_directory=True)
+        for workspace in (archive / "repo", parent_alias / "repo", archive / "outward-parent" / "repo"):
+            workspace.symlink_to(archive, target_is_directory=True)
+            original = workspace.lstat()
+            failed = subprocess.run((str(RUNNER), "deploy", "--json", "--archive", str(archive),
+                                     "--workspace", str(workspace), "--repo", str(remote), "--label", "fixture"),
+                                    cwd=tmp, capture_output=True, text=True)
+            assert failed.returncode and failed.stdout == "" and "non-nested" in failed.stderr
+            assert workspace.is_symlink() and workspace.resolve() == archive
+            assert workspace.lstat().st_ino == original.st_ino
+            workspace.unlink()
+        assert (archive / "tracked").read_text() == "original\n"
+
+
+def test_deploy_archive_alias_rechecks_changed_link_before_unlinking() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, _ = create_remote(tmp)
+        archive = tmp / "archive"
+        render(archive, remote)
+        workspace = tmp / "deployment" / "repo"
+        workspace.parent.mkdir()
+        workspace.symlink_to(archive, target_is_directory=True)
+        unrelated = tmp / "unrelated"
+        unrelated.mkdir()
+        (unrelated / "sentinel").write_text("do not touch\n")
+        environment = intercept_jj(tmp, f"""if args[-3:] == ['git', 'remote', 'list']:
+    link = Path({str(workspace)!r})
+    link.unlink()
+    link.symlink_to({str(unrelated)!r}, target_is_directory=True)
+""")
+        failed = subprocess.run((str(RUNNER), "deploy", "--json", "--archive", str(archive),
+                                 "--workspace", str(workspace), "--repo", str(remote), "--label", "fixture"),
+                                cwd=tmp, capture_output=True, text=True, env=environment)
+        assert failed.returncode and failed.stdout == "" and "changed since archive symlink admission" in failed.stderr
+        assert workspace.is_symlink() and workspace.resolve() == unrelated
+        assert (unrelated / "sentinel").read_text() == "do not touch\n"
+        assert (archive / "tracked").read_text() == "original\n"
+
+
+def test_deploy_archive_alias_does_not_delete_partial_creation_state() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, _ = create_remote(tmp)
+        archive = tmp / "archive"
+        render(archive, remote)
+        workspace = tmp / "deployment" / "repo"
+        workspace.parent.mkdir()
+        workspace.symlink_to(archive, target_is_directory=True)
+        environment = intercept_jj(tmp, """if 'workspace' in args and 'add' in args:
+    destination = Path(args[-1])
+    destination.mkdir()
+    (destination / 'partial-state').write_text('retain for investigation\\n')
+    print('fixture partial workspace creation failure', file=sys.stderr)
+    sys.exit(74)
+""")
+        failed = subprocess.run((str(RUNNER), "deploy", "--json", "--archive", str(archive),
+                                 "--workspace", str(workspace), "--repo", str(remote), "--label", "fixture"),
+                                cwd=tmp, capture_output=True, text=True, env=environment)
+        assert failed.returncode and failed.stdout == "" and "fixture partial workspace creation failure" in failed.stderr
+        assert workspace.is_dir() and not workspace.is_symlink()
+        assert (workspace / "partial-state").read_text() == "retain for investigation\n"
+        assert (archive / "tracked").read_text() == "original\n"
+
+
 def test_deploy_accepts_symlinked_archive_but_refuses_dangling_link() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
