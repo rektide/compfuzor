@@ -419,10 +419,13 @@ SUBSYSTEM:
             [[ -n "${RUST_FEATURES:-}" ]] && FEATURES_FLAG="--features ${RUST_FEATURES}"
             if [[ -z "${RUST_LOCKED+x}" ]]; then
                 [ -f Cargo.lock ] && LOCKED_FLAG="--locked" || LOCKED_FLAG=""
-            elif [[ "${RUST_LOCKED}" == "true" ]]; then
-                LOCKED_FLAG="--locked"
             else
-                LOCKED_FLAG=""
+                # Truthy acceptance matches COMPFUZOR_MISE_LINK_FORCE and
+                # lowercases first: env.export renders YAML booleans "True".
+                case "${RUST_LOCKED,,}" in
+                    1|true|yes|on) LOCKED_FLAG="--locked" ;;
+                    *) LOCKED_FLAG="" ;;
+                esac
             fi
             cargo build ${PROFILE} ${PKG_FLAG:-} ${FEATURES_FLAG:-} ${LOCKED_FLAG:-} ${RUST_CARGO_ARGS:-}
         - name: install-rust.sh
@@ -443,39 +446,48 @@ SUBSYSTEM:
             # source checkout (repo symlink, often ~/archive), which a daemon
             # under ProtectHome=yes with its own user cannot traverse.
             # (_copy/_all default-empty first: the setopts helper enables
-            # nounset, and bare ${VAR,,} aborts on unexported vars; ",,"
-            # then lowercases -- env.export renders YAML booleans as "True".)
+            # nounset, and bare ${VAR,,} aborts on unexported vars. Truthy
+            # acceptance -- 1|true|yes|on, case-insensitive -- matches
+            # COMPFUZOR_MISE_LINK_FORCE; env.export renders YAML booleans
+            # "True", and 1/yes/on should not silently mean the opposite.)
             _copy="${RUST_COPY:-}"
             _all="${RUST_ALL:-}"
-            if [[ "${_copy,,}" == "true" ]]; then
-                _cf_rust_install() {
-                    # --remove-destination: a previous symlink install would
-                    # otherwise write *through* the link into target/
-                    cp -f --remove-destination "$1" "$2"
-                    chmod 0755 "$2"
-                    printf 'copied %s -> %s\n' "$1" "$2"
-                }
-            else
-                _cf_rust_install() { ln -sfv "$1" "$2"; }
-            fi
-            if [[ "${_all,,}" == "true" ]]; then
-                for _bin in $(cargo metadata --format-version 1 --no-deps 2>/dev/null | jq -r '[ .packages[] | .targets[] | select(.kind[] | . == "bin") | .name ] | unique[]'); do
-                    _cf_rust_install "$(pwd)/${_target_dir}/${_bin}" "${GLOBAL_BINS_DIR}/${_bin}"
-                done
-            else
-                [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${RUST_BIN:-{{ TYPE }}}"
-                _cf_rust_install "$(pwd)/${_target_dir}/${INSTALL_BIN}" "${GLOBAL_BINS_DIR}/$(basename "${INSTALL_BIN}")"
-            fi
+            case "${_copy,,}" in
+                1|true|yes|on)
+                    _cf_rust_install() {
+                        # --remove-destination: a previous symlink install would
+                        # otherwise write *through* the link into target/
+                        cp -f --remove-destination "$1" "$2"
+                        chmod 0755 "$2"
+                        printf 'copied %s -> %s\n' "$1" "$2"
+                    }
+                    ;;
+                *)
+                    _cf_rust_install() { ln -sfv "$1" "$2"; }
+                    ;;
+            esac
+            case "${_all,,}" in
+                1|true|yes|on)
+                    for _bin in $(cargo metadata --format-version 1 --no-deps 2>/dev/null | jq -r '[ .packages[] | .targets[] | select(.kind[] | . == "bin") | .name ] | unique[]'); do
+                        _cf_rust_install "$(pwd)/${_target_dir}/${_bin}" "${GLOBAL_BINS_DIR}/${_bin}"
+                    done
+                    ;;
+                *)
+                    [ -n "${INSTALL_BIN-}" ] || INSTALL_BIN="${RUST_BIN:-{{ TYPE }}}"
+                    _cf_rust_install "$(pwd)/${_target_dir}/${INSTALL_BIN}" "${GLOBAL_BINS_DIR}/$(basename "${INSTALL_BIN}")"
+                    ;;
+            esac
         - name: install-rust-user.sh
           bypass: ["LINK", "RUST"]
           basedir: repo
           generated: |
             if [[ -z "${RUST_LOCKED+x}" ]]; then
                 [ -f Cargo.lock ] && LOCKED_FLAG="--locked" || LOCKED_FLAG=""
-            elif [[ "${RUST_LOCKED}" == "true" ]]; then
-                LOCKED_FLAG="--locked"
             else
-                LOCKED_FLAG=""
+                case "${RUST_LOCKED,,}" in
+                    1|true|yes|on) LOCKED_FLAG="--locked" ;;
+                    *) LOCKED_FLAG="" ;;
+                esac
             fi
             if grep -q '^\[workspace\]' Cargo.toml 2>/dev/null && ! grep -q '^\[package\]' Cargo.toml 2>/dev/null; then
                 if [[ -n "${RUST_PKG:-}" ]]; then

@@ -20,7 +20,7 @@ def run(*command: str, cwd: Path, env: dict[str, str] | None = None, check: bool
     return result.stdout.strip()
 
 
-def render_build_rust(tmp: Path) -> Path:
+def render_build_rust(tmp: Path) -> tuple[Path, Path]:
     deployment = tmp / "payload"
     repository = deployment / "repo"
     deployment.mkdir(parents=True, exist_ok=True)
@@ -54,13 +54,19 @@ def render_build_rust(tmp: Path) -> Path:
         mode: '0755'
       vars:
         item: "{{{{ BINS | selectattr('name', 'equalto', 'build-rust.sh') | first }}}}"
+    - ansible.builtin.template:
+        src: {str(ROOT / 'files/_bin')!r}
+        dest: {str(deployment / 'bin/install-rust.sh')!r}
+        mode: '0755'
+      vars:
+        item: "{{{{ BINS | selectattr('name', 'equalto', 'install-rust.sh') | first }}}}"
 """)
     env = os.environ | {"ANSIBLE_CONFIG": str(ROOT / "ansible.cfg")}
     # -e outranks the vars_files load of common.yaml, whose own TYPE is
     # derived from the executing playbook's filename (/proc/self/cmdline).
     run("ansible-playbook", "-i", "localhost,", "-c", "local", "-e", "TYPE=opt",
         "-e", "NAME=fixture", str(playbook), cwd=ROOT, env=env)
-    return deployment / "bin/build-rust.sh"
+    return deployment / "bin/build-rust.sh", deployment / "bin/install-rust.sh"
 
 
 def stub_env(tmp: Path, deploy: Path) -> dict[str, str]:
@@ -76,7 +82,7 @@ def test_build_rust_without_links_runtime_still_builds() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
         tmp = Path(directory)
-        script = render_build_rust(tmp)
+        script, _ = render_build_rust(tmp)
         deploy = tmp / "payload"
         assert not (deploy / "bin/links.mjs").exists()
         env = stub_env(tmp, deploy)
@@ -94,4 +100,42 @@ def test_build_rust_without_links_runtime_still_builds() -> None:
         assert (tmp / "cargo.log").read_text().splitlines() == [
             "links:apply --scope system --id */.tool-versions,*/mise.toml -q",
             "cargo:build --release",
+        ]
+
+
+def test_install_rust_accepts_truthy_copy_and_locked() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        build, install = render_build_rust(tmp)
+        deploy = tmp / "payload"
+        release = deploy / "repo" / "target" / "release"
+        release.mkdir(parents=True)
+        (release / "hyalo").write_text("#!/bin/sh\necho fixture-hyalo\n")
+        (release / "hyalo").chmod(0o755)
+        gbins = tmp / "gbins"
+        gbins.mkdir()
+        env = stub_env(tmp, deploy) | {"GLOBAL_BINS_DIR": str(gbins), "RUST_BIN": "hyalo"}
+        # 1 is truthy for RUST_COPY, matching COMPFUZOR_MISE_LINK_FORCE;
+        # only a real file (not a symlink) lands, mode 0755.
+        out = run(str(install), cwd=tmp, env=env | {"RUST_COPY": "1"})
+        assert "copied" in out
+        assert (gbins / "hyalo").is_file() and not (gbins / "hyalo").is_symlink()
+        assert ((gbins / "hyalo").stat().st_mode & 0o777) == 0o755
+        assert (gbins / "hyalo").read_text().startswith("#!/bin/sh")
+        # Unset RUST_COPY keeps the symlink default...
+        (gbins / "hyalo").unlink()
+        run(str(install), cwd=tmp, env=env)
+        assert (gbins / "hyalo").is_symlink()
+        # ...and "yes" copies again, converting the symlink in place rather
+        # than writing through it into target/.
+        run(str(install), cwd=tmp, env=env | {"RUST_COPY": "yes"})
+        assert (gbins / "hyalo").is_file() and not (gbins / "hyalo").is_symlink()
+        assert (release / "hyalo").read_text().startswith("#!/bin/sh")
+        # RUST_LOCKED=1 is truthy for --locked; the fixture repo has no
+        # Cargo.lock, so the auto-detect arm would stay unlocked.
+        (tmp / "cargo.log").unlink(missing_ok=True)
+        run(str(build), cwd=tmp, env=env | {"RUST_LOCKED": "1"})
+        assert (tmp / "cargo.log").read_text().splitlines() == [
+            "cargo:build --release --locked",
         ]
