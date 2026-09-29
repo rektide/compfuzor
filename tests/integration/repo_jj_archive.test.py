@@ -357,6 +357,31 @@ def test_deploy_restores_exact_archive_alias_when_creation_fails_without_new_ent
         assert workspace.is_dir() and not workspace.is_symlink() and (workspace / ".git").is_file()
 
 
+def test_deploy_archive_alias_uses_canonical_archive_and_parent_identity() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, _ = create_remote(tmp)
+        archive = tmp / "store" / "fixture"
+        archive.parent.mkdir()
+        render(archive, remote)
+        archive_root = tmp / "archives"
+        archive_root.symlink_to(archive.parent, target_is_directory=True)
+        selected = archive_root / "fixture"
+        (tmp / "deployment").mkdir()
+        parent_alias = tmp / "deployment-alias"
+        parent_alias.symlink_to(tmp / "deployment", target_is_directory=True)
+        workspace = parent_alias / "repo"
+        workspace.symlink_to("../archives/fixture", target_is_directory=True)
+        args = ("deploy", "--json", "--archive", str(selected), "--workspace", str(workspace),
+                "--repo", str(remote), "--label", "fixture")
+        assert json.loads(toolkit(*args, cwd=tmp))["changed"]
+        assert not workspace.is_symlink() and (workspace / ".git").is_file()
+        assert archive_root.is_symlink() and parent_alias.is_symlink()
+        assert (archive / "tracked").read_text() == "original\n"
+        assert json.loads(toolkit(*args, cwd=tmp)) == NOOP
+
+
 def test_deploy_accepts_symlinked_archive_but_refuses_dangling_link() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
