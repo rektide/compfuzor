@@ -12,7 +12,14 @@ from ansible.template import accept_args_markers
 # The action set, as data. The composer is driven off this list, so extending
 # the recognized actions (e.g. adding "status") is a one-line change here.
 # `bin_composers(bins, actions=None)` also accepts an override list.
-BIN_ACTIONS: tuple[str, ...] = ("build", "install", "apply")
+#
+# `config` composes deployment configuration generators: `config-<thing>.sh`
+# leaves aggregate into a `config.sh` scope compositor. It shares its namespace
+# with the CONFIG subsystem's six fixed consumer-config commands, which are
+# safe by construction: config_context_compile emits them with `compose: False`
+# except `config-install.sh`, whose explicit `action: install` classifies it
+# into the install lane ahead of filename grammar.
+BIN_ACTIONS: tuple[str, ...] = ("build", "install", "apply", "config")
 
 # Ordered scheduling lanes for compositor `run_all`. Leaves sort by lane
 # (stable: within a lane, BINS list order decides); an untagged bin is

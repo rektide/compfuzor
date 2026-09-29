@@ -544,6 +544,66 @@ def test_unknown_phase_raises():
     )
 
 
+def test_composes_config_actions():
+    result = bin_composers(
+        [
+            {"name": "config-30proxy.sh"},
+            {"name": "config-client-install.sh"},
+        ]
+    )
+    check(
+        "composes config actions",
+        result,
+        [
+            {
+                "name": "config.sh",
+                "action": "config",
+                "generated_by": "gen_bins",
+                "run_all": ["config-30proxy.sh", "config-client-install.sh"],
+                "base_helpers": ["env", "setopts", "loud"],
+            },
+        ],
+    )
+
+
+def test_config_subsystem_fixed_commands_stay_out_of_config_lane():
+    # The CONFIG subsystem's six fixed commands share the config-* namespace.
+    # Five arrive compose: False; config-install.sh carries an explicit
+    # action: install when it joins the install lane. Neither may land in the
+    # config compositor.
+    result = bin_composers(
+        [
+            {"name": "config-assemble.sh", "compose": False},
+            {"name": "config-status.sh", "compose": False},
+            {"name": "config-inputs.sh", "compose": False},
+            {"name": "config-install.sh", "action": "install", "compose": False},
+            {"name": "config-30proxy.sh"},
+        ]
+    )
+    names = [c["name"] for c in result]
+    check("no config compositor sweep", "config.sh" in names, True)
+    config_c = [c for c in result if c["name"] == "config.sh"][0]
+    check(
+        "config compositor holds only authored generators",
+        config_c["run_all"],
+        ["config-30proxy.sh"],
+    )
+    check(
+        "config-install.sh excluded despite config- filename",
+        "config-install.sh" not in [n for c in result for n in c.get("run_all", [])],
+        True,
+    )
+
+
+def test_config_install_explicit_action_beats_filename():
+    # When config-install.sh joins the install lane (no compose: False), its
+    # explicit action wins over the config- filename grammar.
+    result = bin_composers([{"name": "config-install.sh", "action": "install"}])
+    names = [c["name"] for c in result]
+    check("joins install compositor", "install.sh" in names, True)
+    check("no config compositor from explicit install action", "config.sh" in names, False)
+
+
 if __name__ == "__main__":
     test_composes_unscoped_actions()
     test_composes_explicit_and_filename_user_scopes()
@@ -566,3 +626,6 @@ if __name__ == "__main__":
     test_phase_stable_within_lane()
     test_phase_compositor_takes_earliest_leaf_lane()
     test_unknown_phase_raises()
+    test_composes_config_actions()
+    test_config_subsystem_fixed_commands_stay_out_of_config_lane()
+    test_config_install_explicit_action_beats_filename()
