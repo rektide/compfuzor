@@ -77,6 +77,27 @@ torrent dir left pristine (image only).
 
 ## Open
 
+## Addendum: the empty-first-mount race (2026-09-29)
+
+Six days of real use surfaced it: `/mnt/rimworld` mounted successfully but
+showed an **empty** view. Journal correlation showed the overlay
+mounting at 18:08:29 while the dwarfs layer only mounted at 18:08:35 —
+`Requires=<ro>.automount` only guarantees the autofs trigger is *armed*;
+nothing ordered the actual dwarfs *mount* before the overlay helper ran.
+fuse-overlayfs scanned the untriggered (empty) lowerdir and built its
+inode table on it — it never re-scans, so the view stays empty until
+remounted ("i restarted it huh now it worked").
+
+Fix: `Requires=<ro>.mount` + `After=<ro>.mount` on the overlay mount —
+systemd mounts the dwarfs layer first, on demand, then runs the overlay
+helper against a populated lowerdir. Dependencies between .mount units
+are ordinary unit machinery (what fstab's `x-systemd.requires-mounts-for=`
+generates); the automount stays for direct access and idle reaping.
+Journal now shows dwarfs `Mounted` strictly before overlay `Mounting`,
+content on first access, cold-verified.
+
+## Open (updated)
+
 - The saves fake-`$HOME` (STATE_DIR/home) is reserved but unbuilt — it
   belongs to the sandbox/launcher layer, which now likely belongs to Lutris
   config rather than compfuzor.

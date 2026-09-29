@@ -96,10 +96,13 @@
       SYSTEMD_INSTALLS: false
       SYSTEMD_UNITS:
         Description: "rimworld rw overlay {{WHERE}}"
-        # Require the ro automount so the autofs trigger exists when the
-        # overlay helper opens the lowerdir (access mounts the dwarf).
-        Requires: "{{RO_UNIT}}.automount"
-        After: "{{RO_UNIT}}.automount"
+        # Require the ro MOUNT, not just its automount: with only the
+        # automount required, the overlay helper can race ahead of the
+        # dwarfs trigger, scan an untriggered (empty) lowerdir, and mount
+        # an empty view that never re-scans. Requiring the .mount makes
+        # systemd mount the dwarfs layer first, on demand.
+        Requires: "{{RO_UNIT}}.mount"
+        After: "{{RO_UNIT}}.mount"
       SYSTEMD_MOUNTS:
         What: overlay
         Where: "{{WHERE}}"
