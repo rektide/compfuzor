@@ -188,6 +188,49 @@ def test_deploy_uses_colocated_workspace_without_moving_archive_main() -> None:
         assert (archive / "operator-note").read_text() == "unsnapshotted archive work\n"
 
 
+def test_deploy_replaces_selected_archive_alias_with_dedicated_workspace() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, seed = create_remote(tmp)
+        archive = tmp / "archive"
+        render(archive, remote)
+        saved = run("jj", "--ignore-working-copy", "log", "-G", "-r", "main", "-T", "commit_id", cwd=archive)
+        run("jj", "bookmark", "create", "operator-saved", "-r", "main", cwd=archive)
+        (archive / "tracked").write_text("unsnapshotted archive edit\n")
+        (archive / "operator-note").write_text("unsnapshotted archive work\n")
+        (archive / ".gitignore").write_text(".runtime/\n")
+        (archive / ".runtime").mkdir()
+        (archive / ".runtime" / "db").write_bytes(b"ignored runtime bytes\n")
+        workspace = tmp / "deployment" / "repo"
+        workspace.parent.mkdir()
+        workspace.symlink_to(archive, target_is_directory=True)
+        args = ("deploy", "--json", "--archive", str(archive), "--workspace", str(workspace),
+                "--repo", str(remote), "--branch", "main@origin", "--label", "fixture")
+        first = json.loads(run(str(RUNNER), *args, cwd=tmp))
+        assert first["changed"] and not workspace.is_symlink() and workspace.is_dir()
+        assert any("replaced archive symlink" in n.get("message", "") for n in first["notices"])
+        assert (workspace / ".git").is_file() and (workspace / ".jj" / "repo").is_file()
+        pointer = (workspace / ".jj" / "repo").read_text().strip()
+        assert (workspace / ".jj" / pointer).resolve() == (archive / ".jj" / "repo").resolve()
+        assert run("jj", "workspace", "root", cwd=workspace) == str(workspace)
+        assert run("git", "rev-parse", "--show-toplevel", cwd=workspace) == str(workspace)
+        assert (workspace / "tracked").read_text() == "original\n"
+        assert (archive / "tracked").read_text() == "unsnapshotted archive edit\n"
+        assert (archive / "operator-note").read_text() == "unsnapshotted archive work\n"
+        assert (archive / ".runtime" / "db").read_bytes() == b"ignored runtime bytes\n"
+        assert run("jj", "--ignore-working-copy", "log", "-G", "-r", "operator-saved", "-T", "commit_id", cwd=archive) == saved
+        archive_at = run("jj", "--ignore-working-copy", "log", "-G", "-r", "@", "-T", "commit_id", cwd=archive)
+        assert json.loads(toolkit(*args, cwd=tmp)) == NOOP
+        advance(seed)
+        assert json.loads(toolkit(*args, cwd=tmp))["changed"]
+        assert (workspace / "tracked").read_text() == "upstream\n"
+        assert (archive / "tracked").read_text() == "unsnapshotted archive edit\n"
+        assert (archive / "operator-note").read_text() == "unsnapshotted archive work\n"
+        assert (archive / ".runtime" / "db").read_bytes() == b"ignored runtime bytes\n"
+        assert run("jj", "--ignore-working-copy", "log", "-G", "-r", "@", "-T", "commit_id", cwd=archive) == archive_at
+
+
 def test_deploy_accepts_symlinked_archive_but_refuses_dangling_link() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
