@@ -254,8 +254,12 @@ admin API beyond that (no user listing, no password reset — self-service
     subsystem only if we ever want it), `host = "127.0.0.1"`,
     `open_registration` **false** in steady state.
   - `SYSTEMD_SCOPE: system` service unit modeled on upstream's
-    (`ExecStart=<bins>/atuin-server start`, `Environment=ATUIN_CONFIG_DIR={{DIR}}/etc`,
-    the upstream hardening keys as a starting point).
+    (`ExecStart=<bins>/atuin-server start`; config dir via the playbook's
+    `ENV:` mapping — `ATUIN_CONFIG_DIR: "{{DIR}}/etc"` — which lands in
+    `{{DIR}}/env` and auto-injects `EnvironmentFile=-{{DIR}}/env`, the
+    compfuzor pattern; a raw `Environment=` key is not. Values must be
+    render-time absolute: EnvironmentFile never expands variables), plus
+    the upstream hardening keys as a starting point.
   - TLS: bind localhost and terminate at an existing reverse proxy (caddy/
     nginx) with a real cert for e.g. `atuin.hosts.voodoowarez.com`, or skip
     the proxy and use the wireguard/tailscale mesh for transport protection.

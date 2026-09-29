@@ -32,6 +32,22 @@
     # asdf/mise doesn't float below MSRV chasing the global RUST_VERSION: 1.
     TOOL_VERSIONS:
       rust: "1.98.0"
+    # Daemon env, provided the compfuzor way: ENV keys land in {{DIR}}/env and
+    # SYSTEMD_SERVICES_DEFAULT auto-injects EnvironmentFile=-{{DIR}}/env into
+    # the unit. Values must be render-time ABSOLUTE -- EnvironmentFile never
+    # expands shell variables (verified: ${XDG_RUNTIME_DIR} and %t both stay
+    # literal), same reason WATCHMAN_CANONICAL_SOCKET_ABS exists.
+    ENV:
+      # The search-index rebuild (daemon start + "shell filter change") pages
+      # a GROUP BY ... ORDER BY query over the whole history table; SQLite
+      # spills the per-page temp b-trees to its temp dir, which defaults to
+      # /var/tmp -- on the root btrfs, ~1GB written and freed per rebuild.
+      # Point it at the per-user tmpfs so the churn never touches disk.
+      # Rendered for the activating user; this hybrid deploy activates
+      # per-user, and the shared env file makes any second activating user
+      # inherit this path -- they'd need their own override. NOTE:
+      # ansible_user_uid (numeric) -- ansible_user_id is the username here.
+      SQLITE_TMPDIR: "/run/user/{{ansible_user_uid}}"
     SYSTEMD_SCOPE: user
     SYSTEMD_INSTALL: user
     # Link the service before enabling/starting its socket; systemd refuses to
@@ -61,14 +77,6 @@
         # `atuin daemon start` runs in the foreground (only the hidden
         # --daemonize flag backgrounds it), so it suits systemd directly.
         ExecStart: "{{GLOBAL_BINS_DIR}}/atuin daemon start --show-logs"
-        # The search-index rebuild (daemon start + "shell filter change")
-        # pages a GROUP BY ... ORDER BY query over the whole history table;
-        # SQLite spills the per-page temp b-trees to its temp dir, which
-        # defaults to /var/tmp -- on the root btrfs, ~1GB written and freed
-        # per rebuild. Point it at the per-user tmpfs (%t == $XDG_RUNTIME_DIR,
-        # the same dir as the socket) so the churn never touches disk.
-        Environment:
-          - "SQLITE_TMPDIR=%t"
     # Interactive search routing, managed. daemon-fuzzy makes ctrl-r use the
     # daemon's hot in-memory index; non-interactive searches fall back to plain
     # fuzzy, so scripts are unaffected. Set empty to use local database fuzzy.
