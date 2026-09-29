@@ -1221,6 +1221,19 @@ def test_launcher_uses_standalone_bundle_without_source_or_node_modules() -> Non
         output = run(str(launcher), "refresh", "--json", "--dest", str(checkout),
                      "--repo", str(remote), "--label", "fixture", cwd=tmp)
         assert json.loads(output)["changed"] and (checkout / ".jj").is_dir()
+        workspace = tmp / "deployment" / "repo"
+        workspace.parent.mkdir()
+        workspace.symlink_to(checkout, target_is_directory=True)
+        (checkout / "operator-note").write_text("bundle must keep archive work\n")
+        args = ("deploy", "--json", "--archive", str(checkout), "--workspace", str(workspace),
+                "--repo", str(remote), "--label", "fixture")
+        first = json.loads(run(str(launcher), *args, cwd=tmp))
+        assert first["changed"] and any("replaced archive symlink" in n.get("message", "")
+                                         for n in first["notices"])
+        assert not workspace.is_symlink() and (workspace / ".jj" / "repo").is_file()
+        assert (workspace / ".git").is_file()
+        assert (checkout / "operator-note").read_text() == "bundle must keep archive work\n"
+        assert json.loads(run(str(launcher), *args, cwd=tmp)) == NOOP
 
 
 def test_runner_prefers_host_checkout_with_playbook_fallback() -> None:
