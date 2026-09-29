@@ -136,6 +136,9 @@ what should be deleted rather than celebrated.
 Current maintained behavior lives in this directory. Inquiry and implementation
 checkpoints remain available for rationale:
 
+- [Runtime resumption guide](/design/runtime-direction/index.md) — recovered
+  recent intent, earlier roadmaps, adoption counterexamples, and the still-open
+  composition/Effect direction; distinguishes proposals from shipped behavior.
 - [Fixed CONFIG command](/design/config-context/command0.solx.md)
 - [Command review corrections](/design/config-context/command0-review0.solx.md)
 - [Systemd is not a CONFIG context](/design/install-context/systemd0.unknown.md)
