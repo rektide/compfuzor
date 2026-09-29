@@ -76,8 +76,10 @@
             '*.ubuntu.com', 'archive.ubuntu.com', 'security.ubuntu.com',
             'apt.llvm.org', 'download.vscodium.com',
           ]
-          allowed_proxy_clients = [ '127.0.0.1', '::1', '192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12' ]
-          allowed_webif_clients = [ '127.0.0.1', '::1', '192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12' ]
+          # 100.64.0.0/10 = tailscale CGNAT range: tailnet clients (MagicDNS
+          # name `workhorse`) reach the cache like LAN ones do.
+          allowed_proxy_clients = [ '127.0.0.1', '::1', '192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12', '100.64.0.0/10' ]
+          allowed_webif_clients = [ '127.0.0.1', '::1', '192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12', '100.64.0.0/10' ]
 
           # HTTPS CONNECT tunnels (uncached passthrough for https:// apt
           # sources). Post-v0.8.0 upstream made these opt-in and fail-closed
@@ -158,6 +160,19 @@
     SYSTEMD_INSTALLS:
       WantedBy: multi-user.target
 
+    # Client-distribution lane (config-* compositor action): config-30proxy.sh
+    # generates per-host staged snippets under DIR/etc (rule: hostname ->
+    # filename, one block-in-file managed block, envsubst-filled) and
+    # composes into bin/config.sh. client-install.sh pushes a snippet to a
+    # client over ssh/scp; an operator action taking a hostname, so it is
+    # compose:false (never a lane member).
+    BINS:
+      - name: config-30proxy.sh
+        raw: True
+      - name: client-install.sh
+        raw: True
+        compose: False
+
     # No VAR_DIRS: the unit's StateDirectory= plus the daemon's own
     # cache_directory/database_path mkdirs own the var tree. Declaring
     # VAR_DIRS here would fight systemd's chown (post-deploy, the dir is
@@ -211,6 +226,28 @@
 
       Each mirror flipped this way must also appear in `allowed_mirrors`
       above, or the cache path refuses it (fail-closed like the tunnel ACL).
+
+      ## Serving other systems
+
+      The daemon already listens on `*:3142` and the client ACLs cover the
+      RFC1918 ranges plus `100.64.0.0/10` (tailscale), so remote clients
+      only need `/etc/apt/apt.conf.d/30proxy` pointing here. Per-host
+      snippets are staged under `{{DIR}}/etc/30proxy.<hostname>` (rule:
+      hostname -> filename) by the config lane:
+
+          bin/config.sh dynabook            # stage 30proxy.dynabook
+          bin/config.sh --discover          # + tailnet linux peers
+          bin/config.sh rpi4=192.168.1.8    # host that can't resolve `workhorse`
+          bin/client-install.sh dynabook    # scp + install on the client
+
+      Snippets point clients at the proxy by name -- MagicDNS `workhorse`
+      on the tailnet, `workhorse.local` via mDNS on the LAN; use
+      `host=addr` for clients with no resolver path. New clients bring new
+      repositories: their https-only repo hosts 403 until allowlisted, so
+      after onboarding refresh the tunnel mirror list from what clients
+      actually asked for (`script/apt-tunnel-mirrors.ts --journal`) and
+      re-render. `disk_quota` is shared across all clients; revisit as the
+      client population grows.
 
       ## Locations
 
