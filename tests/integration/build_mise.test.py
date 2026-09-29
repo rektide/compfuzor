@@ -127,6 +127,35 @@ def test_build_mise_preserves_repo_file_reports_diff_and_force_is_explicit() -> 
         assert (repo / "mise.toml").resolve() == tmp / "deployment/mise.toml"
 
 
+def test_build_mise_links_pin_into_jj_workspace_deployment() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        script, data = render(tmp, version_vars='TOOL_VERSIONS: {rust: "1"}')
+        assert data["etc"] == [] and data["links"] == []
+        # The repo_jj_archive lane deploys a jj workspace created with
+        # `jj workspace add --colocate`: its .git is a gitdir *file*, not a
+        # directory, so the exclude must resolve through git's common dir.
+        remote = tmp / "upstream.git"
+        run("git", "init", "--bare", str(remote), cwd=tmp)
+        archive = tmp / "archive"
+        run("jj", "git", "clone", "--colocate", str(remote), str(archive), cwd=tmp)
+        run("jj", "workspace", "add", "--colocate", "--revision", "main@", str(tmp / "repo"),
+            cwd=archive, check=False)
+        (tmp / "repo" / ".git").exists() or run(
+            "jj", "workspace", "add", "--colocate", str(tmp / "repo"), cwd=archive)
+        assert (tmp / "repo" / ".git").is_file()
+        deploy = tmp / "deployment"
+        env = mise_env(tmp, deploy) | {"REPO_DIR": str(tmp / "repo")}
+        assert run(str(script), cwd=tmp, env=env) == ""
+        assert (deploy / ".tool-versions").read_text() == "rust 1\n"
+        assert (tmp / "repo" / ".tool-versions").is_symlink()
+        assert (tmp / "repo" / ".tool-versions").resolve() == deploy / ".tool-versions"
+        assert (archive / ".git/info/exclude").read_text().splitlines().count("/.tool-versions") == 1
+        assert "The working copy has no changes" in run("jj", "status", cwd=tmp / "repo")
+        assert "The working copy has no changes" in run("jj", "status", cwd=archive)
+
+
 def test_full_render_collects_mise_diff_after_build_run() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:

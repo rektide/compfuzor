@@ -398,7 +398,14 @@ SUBSYSTEM:
           generated: |
             {{ RUST_COMMENT | join2(prefix='# ') }}
             # Symlink the .tool-version/mise.toml before build, so we get the right version.
-            "$DIR/bin/links.mjs" apply --scope system --id '*/.tool-versions,*/mise.toml' -q
+            # links.mjs is a provider here (same shape as install-unit.sh):
+            # apply the version-manager slice when a link plan exists. A
+            # deployment without LINKS artifacts ships no links.mjs; its pin
+            # link is build-mise.sh's job, and that runs before this bin in
+            # both the build.sh compositor and the bins lane.
+            if [ -x "$DIR/bin/links.mjs" ]; then
+                "$DIR/bin/links.mjs" apply --scope system --id '*/.tool-versions,*/mise.toml' -q
+            fi
             if [[ -n "${RUST_PROFILE:-}" ]]; then
                 PROFILE="--profile ${RUST_PROFILE}"
             elif [[ -z "${RELEASE+x}" ]]; then

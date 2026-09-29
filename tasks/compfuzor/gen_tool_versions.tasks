@@ -48,9 +48,16 @@
         {% if TOOL_VERSIONS_LINK_BYPASS | default(false) | bool %}
         : # TOOL_VERSIONS_LINK_BYPASS: deploy pin, but leave repo alone
         {% else %}
-        if [ -n "${_cf_mise_repo}" ] && [ "${_cf_mise_repo}" != "${DIR%/}" ] && [ -d "${_cf_mise_repo}/.git" ]; then
-            _cf_mise_exclude="${_cf_mise_repo}/.git/info/exclude"
-            mkdir -p -- "${_cf_mise_repo}/.git/info"
+        # Plain checkouts carry .git as a directory, but jj-colocated and
+        # linked-worktree deployments carry a .git *file*; resolve the exclude
+        # through git itself (the shared common dir for worktrees). rev-parse
+        # may print a repo-relative path; anchor it before use.
+        if [ -n "${_cf_mise_repo}" ] && [ "${_cf_mise_repo}" != "${DIR%/}" ] && _cf_mise_exclude=$(git -C "${_cf_mise_repo}" rev-parse --git-path info/exclude 2>/dev/null); then
+            case "${_cf_mise_exclude}" in
+                /*) ;;
+                *) _cf_mise_exclude="${_cf_mise_repo}/${_cf_mise_exclude}" ;;
+            esac
+            mkdir -p -- "$(dirname -- "${_cf_mise_exclude}")"
             if ! grep -Fxq -- '/{{ _pin_name }}' "${_cf_mise_exclude}" 2>/dev/null; then
                 [ ! -s "${_cf_mise_exclude}" ] || [ "$(tail -c 1 "${_cf_mise_exclude}" | wc -l)" -eq 1 ] || printf '\n' >> "${_cf_mise_exclude}"
                 printf '/{{ _pin_name }}\n' >> "${_cf_mise_exclude}"
