@@ -60,6 +60,22 @@ def toolkit(*args: str, cwd: Path, check: bool = True) -> str:
     return run("node", str(ROOT / "archive/src/repo-jj-archive.ts"), *args, cwd=cwd, check=check)
 
 
+def intercept_jj(tmp: Path, action: str) -> dict[str, str]:
+    """Intercept selected external jj invocations; delegate everything else to real jj."""
+    actual = shutil.which("jj")
+    assert actual
+    bindir = tmp / "bin"
+    bindir.mkdir()
+    wrapper = bindir / "jj"
+    wrapper.write_text(
+        "#!/usr/bin/env python3\nimport os, sys\nfrom pathlib import Path\n"
+        "args = sys.argv[1:]\n" + action +
+        f"\nos.execv({actual!r}, [{actual!r}, *args])\n"
+    )
+    wrapper.chmod(0o755)
+    return os.environ | {"PATH": f"{bindir}{os.pathsep}{os.environ['PATH']}"}
+
+
 def names(archive: Path) -> list[str]:
     return run("jj", "bookmark", "list", "--all-remotes", "-T", 'name ++ "\\n"', cwd=archive).splitlines()
 
@@ -313,6 +329,32 @@ def test_deploy_archive_alias_keeps_link_when_archive_health_preflight_fails() -
         assert failed.returncode and failed.stdout == "" and ghost in failed.stderr
         assert workspace.is_symlink() and workspace.resolve() == archive
         assert workspace.lstat().st_ino == original.st_ino
+
+
+def test_deploy_restores_exact_archive_alias_when_creation_fails_without_new_entry() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, _ = create_remote(tmp)
+        archive = tmp / "archive"
+        render(archive, remote)
+        workspace = tmp / "deployment" / "repo"
+        workspace.parent.mkdir()
+        workspace.symlink_to("../archive", target_is_directory=True)
+        environment = intercept_jj(tmp, """if 'workspace' in args and 'add' in args:
+    print('fixture workspace creation failure', file=sys.stderr)
+    sys.exit(74)
+""")
+        failed = subprocess.run((str(RUNNER), "deploy", "--json", "--archive", str(archive),
+                                 "--workspace", str(workspace), "--repo", str(remote), "--label", "fixture"),
+                                cwd=tmp, capture_output=True, text=True, env=environment)
+        assert failed.returncode and failed.stdout == "" and "fixture workspace creation failure" in failed.stderr
+        assert workspace.is_symlink() and workspace.readlink() == Path("../archive")
+        assert workspace.resolve() == archive and (archive / "tracked").read_text() == "original\n"
+        assert json.loads(toolkit("deploy", "--json", "--archive", str(archive),
+                                  "--workspace", str(workspace), "--repo", str(remote),
+                                  "--label", "fixture", cwd=tmp))["changed"]
+        assert workspace.is_dir() and not workspace.is_symlink() and (workspace / ".git").is_file()
 
 
 def test_deploy_accepts_symlinked_archive_but_refuses_dangling_link() -> None:
