@@ -8,6 +8,9 @@
 
 ## Latest direction and constraints
 
+- [Present-world map and route toward a new Effect draft](/design/compfuzor-runtime/world-map0.gpt61sol.md):
+  current authorities, draft0's specified/open interfaces, Zim/Mise and multi-client
+  MCP examples, native TS delivery, and the new Workflow composition hypothesis.
 - [September 26 composition brief](/design/compfuzor-runtime/composition-problem0.gpt6a.md):
   operator direction reopening the existing runtime model; specificity,
   contribution identity, material placement, and shared-runtime bootstrap.
