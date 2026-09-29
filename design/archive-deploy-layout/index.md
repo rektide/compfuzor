@@ -11,3 +11,9 @@
 - [Narrow automatic alias migration](/design/archive-deploy-layout/migration0.gpt61sol.md):
   operator-approved scope, CLI regression boundary, preservation constraints,
   and distinction from custom workspace exposure links.
+
+## Implementation evidence
+
+- [Alias cutover verification](/design/archive-deploy-layout/verification0.gpt61sol.md):
+  exact red/green regressions, guarded link recovery, canonical-path findings,
+  source/bundle coverage, and final archive-suite results.
