@@ -367,7 +367,8 @@ def test_deploy_archive_alias_uses_canonical_archive_and_parent_identity() -> No
         render(archive, remote)
         archive_root = tmp / "archives"
         archive_root.symlink_to(archive.parent, target_is_directory=True)
-        selected = archive_root / "fixture"
+        selected = tmp / "selected-archive"
+        selected.symlink_to(archive_root / "fixture", target_is_directory=True)
         (tmp / "deployment").mkdir()
         parent_alias = tmp / "deployment-alias"
         parent_alias.symlink_to(tmp / "deployment", target_is_directory=True)
@@ -377,7 +378,31 @@ def test_deploy_archive_alias_uses_canonical_archive_and_parent_identity() -> No
                 "--repo", str(remote), "--label", "fixture")
         assert json.loads(toolkit(*args, cwd=tmp))["changed"]
         assert not workspace.is_symlink() and (workspace / ".git").is_file()
-        assert archive_root.is_symlink() and parent_alias.is_symlink()
+        assert selected.is_symlink() and archive_root.is_symlink() and parent_alias.is_symlink()
+        assert (archive / "tracked").read_text() == "original\n"
+        assert json.loads(toolkit(*args, cwd=tmp)) == NOOP
+
+
+def test_deploy_archive_alias_selects_declared_branch_remote_without_switching_archive() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, seed = create_remote(tmp)
+        run("git", "switch", "-c", "release", cwd=seed)
+        (seed / "tracked").write_text("release deployment\n")
+        run("git", "commit", "-am", "release", cwd=seed)
+        run("git", "push", "-u", "origin", "release", cwd=seed)
+        archive = tmp / "archive"
+        remotes = json.dumps({"peer": str(remote)})
+        toolkit("refresh", "--dest", str(archive), "--repo", str(remote),
+                "--remotes", remotes, "--label", "fixture", cwd=tmp)
+        workspace = tmp / "deployment" / "repo"
+        workspace.parent.mkdir()
+        workspace.symlink_to(archive, target_is_directory=True)
+        args = ("deploy", "--json", "--archive", str(archive), "--workspace", str(workspace),
+                "--repo", str(remote), "--remotes", remotes, "--branch", "release@peer", "--label", "fixture")
+        assert json.loads(toolkit(*args, cwd=tmp))["changed"]
+        assert (workspace / "tracked").read_text() == "release deployment\n"
         assert (archive / "tracked").read_text() == "original\n"
         assert json.loads(toolkit(*args, cwd=tmp)) == NOOP
 
