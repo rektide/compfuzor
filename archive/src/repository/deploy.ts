@@ -11,6 +11,7 @@ import {
   readlink,
   realpath,
   stat,
+  symlink,
   unlink,
 } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -199,7 +200,9 @@ export async function deployWorkspace(
       throw new Error(`${branch}@${remote} is conflicted; resolve it before creating ${workspace}`);
     }
     if (archiveAlias && available.get(refKey(branch, "-"))?.target === "conflict") {
-      throw new Error(`local bookmark ${branch} is conflicted; resolve it before creating ${workspace}`);
+      throw new Error(
+        `local bookmark ${branch} is conflicted; resolve it before creating ${workspace}`,
+      );
     }
     await mkdir(dirname(workspace), { recursive: true });
     const workspaceName = `compfuzor-${safeLabel(options.label)}-${createHash("sha256").update(workspace).digest("hex").slice(0, 12)}`;
@@ -221,21 +224,38 @@ export async function deployWorkspace(
       }
       await unlink(workspace);
     }
-    await jj(
-      [
-        "workspace",
-        "add",
-        "--colocate",
-        "--name",
-        workspaceName,
-        "--revision",
-        `${branch}@${remote}`,
-        workspace,
-      ],
-      archive,
-      undefined,
-      execution,
-    );
+    try {
+      await jj(
+        [
+          "workspace",
+          "add",
+          "--colocate",
+          "--name",
+          workspaceName,
+          "--revision",
+          `${branch}@${remote}`,
+          workspace,
+        ],
+        archive,
+        undefined,
+        execution,
+      );
+    } catch (error) {
+      // Restore only a link we removed, and only if jj left no destination.
+      // symlink() itself refuses an entry arriving after this check. Partial
+      // workspaces and repository registrations are never removed here.
+      if (aliasTarget !== undefined && !(await entry(workspace))) {
+        try {
+          await symlink(aliasTarget, workspace, "dir");
+        } catch (recoveryError) {
+          throw new AggregateError(
+            [error, recoveryError],
+            `${error instanceof Error ? error.message : String(error)}; failed to restore archive symlink ${workspace}: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
+          );
+        }
+      }
+      throw error;
+    }
   }
   const result = await refreshArchive({ ...options, dest: workspace }, execution);
   return {
