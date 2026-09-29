@@ -29,7 +29,15 @@ hostname=${OPENCODE_SERVER_HOSTNAME:?OPENCODE_SERVER_HOSTNAME is not set}
 port=${OPENCODE_SERVER_PORT:?OPENCODE_SERVER_PORT is not set}
 cors=${OPENCODE_SERVER_CORS:-}
 
-args=(--hostname "$hostname" --port "$port")
+# --publish registers this foreground server as the operator-owned
+# mode:"server" entry in the channel's service registration file
+# (~/.local/state/opencode/service-local.json under OPENCODE_CHANNEL=local),
+# claiming the single local-discovery slot: clients connect natively with no
+# OPENCODE_ARGS routing. The register path refuses to replace a live
+# registration, so stop any channel-local managed service
+# (`opencode service stop`) before restarting the unit with --publish baked,
+# or the boot fails and Restart=always crash-loops.
+args=(--hostname "$hostname" --port "$port" --publish)
 if [[ -n $cors ]]; then
   IFS=',' read -r -a origins <<<"$cors"
   for origin in "${origins[@]}"; do

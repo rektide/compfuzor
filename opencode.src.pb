@@ -89,11 +89,16 @@
       OPENCODE_SERVER_CORS: ""
       # Rendered empty and rewritten in place by bin/build-env-serve-args.sh,
       # the second build.sh compositor leaf (BINS order runs it after the cors
-      # leaf): the complete `serve` argument vector -- --hostname, --port, one
-      # --cors per discovered origin -- baked once per build instead of
-      # reassembled per boot. serve.sh word-splits it into exec argv because
-      # systemd cannot: ExecStart ${VAR} expansion passes the whole value as a
-      # single argument. When the opencode-args feature line
+      # leaf): the complete `serve` argument vector -- --hostname, --port,
+      # --publish, one --cors per discovered origin -- baked once per build
+      # instead of reassembled per boot. --publish claims the channel's single
+      # local-discovery registration slot as operator-owned (mode:"server" in
+      # service-local.json), so clients connect natively without OPENCODE_ARGS;
+      # stop the channel-local managed service before restarting the unit onto
+      # a --publish vector (register refuses to replace a live registration).
+      # serve.sh word-splits the vector into exec argv because systemd cannot:
+      # ExecStart ${VAR} expansion passes the whole value as a single
+      # argument. When the opencode-args feature line
       # (~/src/opencode-args) is composed and deployed with its serve-route
       # environment argument parsing and --password-file flag, serve.sh is
       # deleted, ExecStart becomes
@@ -268,8 +273,11 @@
 
       `opencode.service` runs plain foreground `opencode serve` on
       `${OPENCODE_SERVER_HOSTNAME}:${OPENCODE_SERVER_PORT}`. It deliberately
-      does not use `--service`: OpenCode publishes no registration, performs no
-      incumbent election or self-eviction, and never manages this process.
+      does not use `--service`: with `--publish` baked into the serve vector
+      the server writes an operator-owned `mode:"server"` registration into
+      the channel's discovery file (service-local.json), but OpenCode still
+      performs no incumbent election or self-eviction, never manages this
+      process, and refuses to replace or stop it from the client side.
       Lifecycle authority belongs only to the systemd user unit.
 
       ## Instances
@@ -498,7 +506,12 @@
       clients. The native CLI parses this shell-word string before command
       routing; explicit `--server` arguments take precedence. `OPENCODE_ARGS`
       is not in ENV/env.export or the systemd unit, so the `serve` process
-      never inherits this client default. The shell functions in
+      never inherits this client default. With `--publish` registration
+      active, clients also discover the server natively from
+      service-local.json with no environment at all — the module default is
+      now an explicit override held for shells/launchers where discovery
+      should not apply (`OPENCODE_ARGS= opencode` exercises discovery
+      instead). The shell functions in
       `files/opencode/opencode-service.zsh` remain as an inactive legacy
       fallback; no current ZIM module loads them.
 
@@ -541,7 +554,24 @@
       --standalone`). Routes without a `--server` option drop the environment
       default and may print a warning before using their ordinary behavior.
 
-      Foreground mode never writes `~/.local/state/opencode/service.json`.
+      Foreground serve with `--publish` writes an operator-owned
+      `mode:"server"` registration into the channel's discovery file —
+      `~/.local/state/opencode/service-local.json` under the local channel
+      (the stock channel's `service.json` is a separate file and world). That
+      file is a single slot, not a directory of records: exactly one
+      registration, last claimant wins, and the register path refuses to
+      replace a live one. Bring-up order matters — stop the channel-local
+      managed service first (`opencode service stop`, which also clears its
+      registration) and then restart this unit, otherwise the boot fails on
+      the refusal and `Restart=always` crash-loops. While the operator
+      registration exists, clients neither spawn nor stop a managed service
+      on their own; after the unit is stopped, `opencode service forget`
+      clears the stale registration. The registered URL is the bind address
+      (`http://0.0.0.0:49373`); Linux dials 0.0.0.0 as loopback, so local
+      clients connect. Discovery also version-gates: the registration
+      carries the build stamp, so clients from a different build refuse with
+      "the operator owns this deployment" rather than replacing — rebuild
+      server and clients together (the restart-clients.sh flow already does).
       Existing default-world processes and registrations on port 49374 may
       coexist and share the channel database; concurrent SQLite writers are
       supported but can contend.
@@ -594,15 +624,19 @@
          `http://<name>:<port>`, comma-separated.
       2. `bin/build-env-serve-args.sh` folds `OPENCODE_SERVER_HOSTNAME`,
          `OPENCODE_SERVER_PORT`, and those origins into the baked
-         `OPENCODE_SERVE_ARGS` vector — `--hostname`, `--port`, one `--cors`
-         per origin — the complete serve argument list, computed once per
-         build instead of reassembled per boot. `serve.sh` word-splits it
-         into exec argv.
+         `OPENCODE_SERVE_ARGS` vector — `--hostname`, `--port`, `--publish`,
+         one `--cors` per origin — the complete serve argument list, computed
+         once per build instead of reassembling per boot. `--publish` claims
+         the channel's discovery slot (see the registration notes under
+         Dated CLI clients); stop the managed service before restarting onto
+         a `--publish` vector. `serve.sh` word-splits it into exec argv.
 
       The playbook renders both keys empty, so an Ansible re-render resets
       them until the next build (or a manual run of either script). An empty
       CORS value means no `--cors` flags. Apply changes with
-      `systemctl --user restart {{OPENCODE_UNIT}}.service`.
+      `opencode service stop && systemctl --user restart {{OPENCODE_UNIT}}.service`
+      — service stop first, because registering refuses while a live managed
+      registration holds the slot.
 
       ## Native-library cleanup
 
