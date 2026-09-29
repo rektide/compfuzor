@@ -8,6 +8,9 @@
 
 ## Latest direction and constraints
 
+- [BINS-first Workflow/Activity draft](/design/compfuzor-runtime/effect-draft1.gpt61sol.md):
+  conservative script admission, recursive collection, native TS modules and
+  named configuration pipelines; follows the September 29 authoring clarification.
 - [Present-world map and route toward a new Effect draft](/design/compfuzor-runtime/world-map0.gpt61sol.md):
   current authorities, draft0's specified/open interfaces, Zim/Mise and multi-client
   MCP examples, native TS delivery, and the new Workflow composition hypothesis.
