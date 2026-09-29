@@ -259,6 +259,34 @@ def test_deploy_archive_alias_keeps_link_on_invalid_refresh_options() -> None:
             workspace.unlink()
 
 
+def test_deploy_archive_alias_keeps_link_when_selected_bookmark_is_conflicted() -> None:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
+        tmp = Path(directory)
+        remote, seed = create_remote(tmp)
+        archive = tmp / "archive"
+        render(archive, remote)
+        run("jj", "new", "main", cwd=archive)
+        (archive / "local").write_text("local progress\n")
+        run("jj", "bookmark", "set", "main", "-r", "@", cwd=archive)
+        advance(seed)
+        conflicted = subprocess.run((str(RUNNER), "refresh", "--json", "--dest", str(archive),
+                                     "--repo", str(remote), "--label", "fixture", "--no-save-displaced"),
+                                    cwd=tmp, capture_output=True, text=True)
+        assert conflicted.returncode and "conflicted after fetch" in conflicted.stderr
+        workspace = tmp / "deployment" / "repo"
+        workspace.parent.mkdir()
+        workspace.symlink_to(archive, target_is_directory=True)
+        original = workspace.lstat()
+        failed = subprocess.run((str(RUNNER), "deploy", "--json", "--archive", str(archive),
+                                 "--workspace", str(workspace), "--repo", str(remote), "--label", "fixture"),
+                                cwd=tmp, capture_output=True, text=True)
+        assert failed.returncode and failed.stdout == "" and "local bookmark main is conflicted" in failed.stderr
+        assert workspace.is_symlink() and workspace.resolve() == archive
+        assert workspace.lstat().st_ino == original.st_ino
+        assert (archive / "local").read_text() == "local progress\n"
+
+
 def test_deploy_accepts_symlinked_archive_but_refuses_dangling_link() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
