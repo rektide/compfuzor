@@ -85,10 +85,22 @@ The two vocabularies share a namespace and coexist by construction:
 - authored `config-<thing>.sh` generators join the lane unless they opt out
   with `compose: false`.
 
+The resulting `config.sh` is a shell aggregate for authored domain generators,
+**not** an alias for the fixed CONFIG runtime. For example, apt-cacher's
+`config.sh` calls its `config-30proxy.sh` generator, while `config-assemble.sh`
+and `config-inputs.sh` reach CONFIG through the shared multicall runtime. The
+shared prefix does not imply a shared implementation or argument contract.
+
 Like the other compositor lanes, `config.sh` executes through the legacy
 shell compositors today; the annealing runtime intends to cover config and
 aggregation, with the read-only catalog already projecting these leaves (see
 [Attributed runtime flows](/design/config-anneal/execution-model0.gpt6.md)).
+
+Native flow execution currently covers only `build`, `install`, and `status`.
+The new config lane is inventoried as commands, with its generated root also
+recorded as an action, but has no native config-flow projection. See the
+[apt-client runtime alignment assessment](/design/runtime-config-lane/assessment0.gpt61sol.md)
+for the verified gap and the distinction between domain actions and aggregates.
 
 Where the omnibus runtime is present, `compfuzor-catalog.sh` provides read-only
 inventory of attributed contributors, actions, commands, resource references,
