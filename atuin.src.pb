@@ -61,11 +61,28 @@
         # `atuin daemon start` runs in the foreground (only the hidden
         # --daemonize flag backgrounds it), so it suits systemd directly.
         ExecStart: "{{GLOBAL_BINS_DIR}}/atuin daemon start --show-logs"
+        # The search-index rebuild (daemon start + "shell filter change")
+        # pages a GROUP BY ... ORDER BY query over the whole history table;
+        # SQLite spills the per-page temp b-trees to its temp dir, which
+        # defaults to /var/tmp -- on the root btrfs, ~1GB written and freed
+        # per rebuild. Point it at the per-user tmpfs (%t == $XDG_RUNTIME_DIR,
+        # the same dir as the socket) so the churn never touches disk.
+        Environment:
+          - "SQLITE_TMPDIR=%t"
     # Interactive search routing, managed. daemon-fuzzy makes ctrl-r use the
     # daemon's hot in-memory index; non-interactive searches fall back to plain
     # fuzzy, so scripts are unaffected. Set empty to use local database fuzzy.
     # Managed as a TOP-LEVEL config key (see install-atuin-config.sh).
     ATUIN_SEARCH_MODE: daemon-fuzzy
+    # Network sync: off. Everything (history, records store, search, stats)
+    # is local; the only "central" piece is the sync component, whose 300s
+    # tick errors "Not logged in" forever against the default atuin.sh
+    # account we don't use. auto_sync = false makes the daemon skip the
+    # tick entirely (components/sync.rs: ticks are skipped in Idle state).
+    # String on purpose: rendered raw (no quotes) as the TOML boolean.
+    # Unset = remove the managed block: a deliberate local override (e.g.
+    # pointing sync_address at a self-hosted server) is never clobbered.
+    ATUIN_AUTO_SYNC: "false"
     ZIM_MODULES:
       - name: atuin-emergency
         source: emergency.zsh
@@ -133,6 +150,18 @@
                 -b '^\[' -C file --append-newline
           else
             block-in-file --remove-all atuin-search-mode -i /dev/null -o "$CFG"
+          fi
+          # Network sync, managed. auto_sync is a TOP-LEVEL TOML BOOLEAN --
+          # rendered raw (no quotes), unlike the string search_mode above.
+          # Same anchor discipline: -b '^\[' keeps it top-level, unset =
+          # remove the managed block so a deliberate local override (e.g. a
+          # self-hosted sync_address) survives re-runs.
+          if [ -n "{{ATUIN_AUTO_SYNC|default('')}}" ]; then
+            printf 'auto_sync = %s\n' "{{ATUIN_AUTO_SYNC}}" \
+              | block-in-file -n atuin-auto-sync -i - -o "$CFG" \
+                -b '^\[' -C file --append-newline
+          else
+            block-in-file --remove-all atuin-auto-sync -i /dev/null -o "$CFG"
           fi
       - name: status-atuin.sh
         # Hybrid-deploy drift reporter (watchman-grade): managed unit links,
