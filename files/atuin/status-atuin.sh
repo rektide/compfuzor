@@ -188,7 +188,15 @@ if [ "$_svc_state" = active ]; then
   _mainpid="$(systemctl --user show "${_ubase}.service" -p MainPID --value 2>/dev/null || echo 0)"
   if [ -r "$_pidfile" ]; then
     _dpid="$(sed -n '1p' "$_pidfile" | tr -dc '0-9')"
-    _dver="$(sed -n '2p' "$_pidfile" | tr -d '\r')"
+    # Pidfile formats: atuin >= 18.23 writes pid / "v1" marker / JSON
+    # info line ({"version":...,"socket_path":...}); older daemons wrote
+    # the bare version string on line 2. Parse both.
+    _pf2="$(sed -n '2p' "$_pidfile" | tr -d '\r')"
+    if [ "$_pf2" = "v1" ]; then
+      _dver="$(sed -n '3p' "$_pidfile" | tr -d '\r' | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+    else
+      _dver="$_pf2"
+    fi
     if [ -n "$_dpid" ] && kill -0 "$_dpid" 2>/dev/null && [ "$(cat "/proc/$_dpid/comm" 2>/dev/null)" = atuin ]; then
       if [ "$_dpid" = "$_mainpid" ]; then
         _say daemon "OK: pid $_dpid matches unit MainPID"
