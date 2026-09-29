@@ -141,3 +141,18 @@ VERIFIED IN FIXTURE: moving only the link permits a dedicated colocated deployme
 
 This is fixture verification only. The live deployment symlink, archive,
 composed build workspace, binaries, and services remain unchanged.
+
+# Addendum: operator-approved automatic migration
+
+The operator subsequently requested automatic replacement specifically for the
+deployment `repo` symlink that resolves to its selected archive. The
+[implementation brief](/design/archive-deploy-layout/migration0.gpt61sol.md)
+records this narrower exception to the original refusal policy, the agreed CLI
+test seam, and the safety constraints. This diagnosis describes the pre-change
+behavior; it is not an argument against that authorized migration.
+
+The follow-up investigation also narrows the alternate-path suggestion above:
+[`fs_repo.tasks`](/tasks/compfuzor/fs_repo.tasks) refuses a custom `GIT_DIR`
+exposure while `DIR/repo` still points to the old archive. A custom path alone
+does not bypass that guard. Automatic migration here is scoped to the reported
+default deployment path, not a change to the separate exposure-link policy.
