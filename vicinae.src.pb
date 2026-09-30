@@ -3,7 +3,13 @@
   vars:
     TYPE: vicinae
     INSTANCE: git
+    # Canonical jj archive at ~/archive/vicinaehq/vicinae backs this
+    # deployment; repo_jj_archive.tasks keeps a dedicated colocated jj/Git
+    # workspace at DIR/repo (a repo symlink pointing straight at the archive
+    # is admitted by the deploy runner and replaced with that workspace).
+    # Evacuated local work lives under evac/* bookmarks in the archive.
     REPO: https://github.com/vicinaehq/vicinae
+    GIT_VERSION: main
     TOOL_VERSIONS:
       nodejs: True
     # Matches upstream's Arch CI image (scripts/runners/arch/base.Dockerfile).
@@ -85,6 +91,7 @@
     BINS:
       - name: build.sh
         content: |
+          cd "{{DIR}}/repo"
           mkdir -p build
           #cmake -G Ninja .. \
           #  -DLTO=ON
@@ -96,6 +103,7 @@
           make host-optimized
       - name: install.sh
         content: |
+          cd "{{DIR}}/repo"
           #ln -s $(pwd)/build/vicinae/vicinae $GLOBAL_BINS_DIR/
           cmake --install build
           sudo systemctl daemon-reload
@@ -110,6 +118,6 @@
           for f in {{DIR}}/etc/niri/*.kdl; do
             ln -sf "$f" $NIRI_CONFIG_DIR/vicinae
             echo 'include "./vicinae/'"$(basename "$f")"'"'
-          done | block-in-file -n vicinae --comment "//" "$NIRI_CONFIG_DIR/config.kdl
+          done | block-in-file -n vicinae --comment "//" "$NIRI_CONFIG_DIR/config.kdl"
   tasks:
     - import_tasks: tasks/compfuzor.includes
