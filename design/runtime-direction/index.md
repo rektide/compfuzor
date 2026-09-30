@@ -8,6 +8,9 @@
 
 ## Latest direction and constraints
 
+- [Native contributions and collaborative pipelines — draft2](/design/compfuzor-runtime/effect-draft2.gpt6a.md):
+  latest synthesis: annotated native exports, default directory discovery,
+  extensible init, mutable typed run data, stage ordering and durable history.
 - [BINS-first Workflow/Activity draft](/design/compfuzor-runtime/effect-draft1.gpt61sol.md):
   conservative script admission, recursive collection, native TS modules and
   named configuration pipelines; follows the September 29 authoring clarification.
