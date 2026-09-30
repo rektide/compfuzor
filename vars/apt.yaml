@@ -3,3 +3,11 @@ APT_DEFAULTS:
   Types: deb
   Suites: "{{ APT_DEFAULT_DISTRIBUTIONS | default(APT_DEFAULT_DISTRIBUTION) }}"
   Components: "{{ APT_DEFAULT_COMPONENTS | default(APT_DEFAULT_COMPONENT) }}"
+  # Most vendor repos in this family are amd64-only while hosts carry
+  # foreign architectures (i386 for gaming multiarch) -- declaring the
+  # source's real arches keeps apt from ever probing undeclared ones
+  # (well-behaved Release files already filter this, but a lying or
+  # missing Release Architectures field does not). Repos that genuinely
+  # publish more arches override per stanza: the Debian archive
+  # [amd64, i386], arm64-capable vendors [amd64, arm64].
+  Architectures: amd64

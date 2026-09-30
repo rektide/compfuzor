@@ -10,6 +10,7 @@
     # APT: defined -> legacy APT_REPO/APT_DISTRIBUTION vars ignored.
     APT:
       URIs: https://repo.jellyfin.org/debian
+      Architectures: [amd64, arm64]
       # jellyfin publishes per-stable-codename suites only (bookworm,
       # trixie, ...); there is no forky/unstable suite -- the forky default
       # 404s here. Track the newest suite jellyfin ships.
