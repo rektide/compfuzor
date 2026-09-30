@@ -31,13 +31,17 @@
         conditional: "{{APT_PIN_PRIORITY|truthy}}"
       - name: "{{_trusted}}"
         ext: "gpg.params"
-        template: "files/apt-repos/{{_trusted}}.gpg.params"
-        conditional: "{{ (_trusted + '.gpg.params') is file }}"
+        template: "apt-repos/{{_trusted}}.gpg.params"
+        # fileglob (not `is file`): bare-name `is file` resolved against the
+        # playbook dir and never matched, so vendored keyrings silently never
+        # deployed (waydroid/jellyfin rendered .list but no keyring). The
+        # apt_legacy template task prepends "files/" to item.template itself.
+        conditional: "{{ lookup('fileglob', 'files/apt-repos/' ~ _trusted ~ '.gpg.params', wantlist=True) | length > 0 }}"
       - name: "{{_trusted}}"
         ext: "{{_gpg}}{{_armor}}"
         dir: /usr/share/keyrings
-        template: "files/apt-repos/{{_trusted}}.{{_gpg}}"
-        conditional: "{{ (_trusted + '.' + _gpg) is file }}"
+        template: "apt-repos/{{_trusted}}.{{_gpg}}"
+        conditional: "{{ lookup('fileglob', 'files/apt-repos/' ~ _trusted ~ '.' ~ _gpg, wantlist=True) | length > 0 }}"
       # alt to above, keyring via url
       - name: "{{_trusted}}"
         ext: "{{_gpg}}"
