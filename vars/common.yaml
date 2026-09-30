@@ -88,6 +88,8 @@ APT_INSTALL: latest
 APT_BYPASS: False
 APT_DEFAULT_COMPONENT: main
 APT_DEFAULT_DISTRIBUTION: forky
+# current stable release (old sonames live here; see debian-stable.repo.pb)
+APT_STABLE_DISTRIBUTION: trixie
 APT_DEFAULT_ARCH: True
 # Canonical Debian mirror for every consumer (repo playbooks, debootstrap,
 # multistrap bootstrap, mkosi, pivot-root). APT_DEBIAN_MIRROR is the bare
