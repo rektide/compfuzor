@@ -224,6 +224,13 @@
 
           sudo apt-src-scheme.ts --to http /etc/apt/sources.list.d/debian.list
 
+      This flip is the required step for the cache to be more than a
+      conduit: http rows are fetched-over-TLS by the proxy and cached;
+      https rows are uncacheable tunnel passthrough. apt-src-scheme.ts
+      handles one-line `.list` and deb822 `.sources` entries alike (and
+      apt-src-convert-dir.ts migrates a host's sources dir to deb822
+      wholesale); see the apt-srctools README for the full why.
+
       Each mirror flipped this way must also appear in `allowed_mirrors`
       above, or the cache path refuses it (fail-closed like the tunnel ACL).
 

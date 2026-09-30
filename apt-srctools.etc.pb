@@ -85,6 +85,22 @@
         block-in-file version with that option; keep the two tools promoted
         together so provenance is stable.
 
+      ## why flip to http: apt-cacher-rs
+
+      The local apt cache (apt-cacher-rs.src.pb, :3142) can only CACHE
+      plain-http client URLs: http rows are fetched-over-TLS by the proxy
+      (https_upgrade_mode=Auto) and stored; https rows ride CONNECT tunnels,
+      which are uncacheable passthrough. So pointing apt at the cache usefully
+      -- and getting hit ratios -- means flipping every mirror that also
+      serves http to `--to http`:
+
+          apt-src-scheme.ts --to http /etc/apt/sources.list.d/<mirror>.list
+
+      Both formats are supported for every tool here (one-line `.list` and
+      deb822 `.sources`), so flipped sources and deb822-migrated sources are
+      equally in scope. https-only vendors stay on tunnels (see the cacher's
+      https_tunnel_allowed_mirrors).
+
       See design/apt-srctools/ for the JSON schema, the roundtrip fidelity
       map (what is bijective through JSON, what normalizes or is lossy), and
       the block-in-file wishlist.
