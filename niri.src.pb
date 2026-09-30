@@ -11,6 +11,13 @@
     REPO: https://github.com/niri-wm/niri
     GIT_VERSION: main
     ENV: True
+    # Rust lane: build-rust.sh cargo-builds the workspace (release default)
+    # and install-rust.sh links repo/target/release/niri into
+    # GLOBAL_BINS_DIR (RUST_BIN defaults to the TYPE name). install-usr.sh
+    # below auto-joins the generated install.sh composite (main phase, after
+    # the packages lane) to link the session/desktop/portal/systemd
+    # resources; the binary itself stays owned by the rust lane.
+    RUST: True
     README: |
       # niri-git — niri deployment (niri-wm archive lane)
 
@@ -31,9 +38,11 @@
 
       ## Build & install
 
-          bin/build.sh        # cargo build --release in repo/
-          sudo bin/install.sh # links niri, niri-session, session/desktop,
-                              # portals, systemd user units into place
+          bin/build.sh        # rust lane: cargo build --release in repo/
+          sudo bin/install.sh # composite: install-apt.sh (deps) ->
+                              # install-rust.sh (niri binary) ->
+                              # install-usr.sh (niri-session, session/desktop,
+                              # portals, systemd user units)
 
       On the deck, the packaged niri from `steamos-niri.opt.pb` replaces this
       git build (see ARCH_PKGS notes in the playbook).
@@ -84,16 +93,10 @@
             Alt+Grave hotkey-overlay-title="Vicinae clipboard" { spawn-sh "vicinae vicinae://extensions/vicinae/clipboard/history"; }
           }
     BINS:
-      - name: build.sh
-        content: |
-          cd "{{DIR}}/repo"
-          cargo build --release
-      - name: install.sh
+      - name: install-usr.sh
         content: |
           cd "{{DIR}}/repo"
           # https://github.com/niri-wm/niri/wiki/Packaging-niri
-          ln -sfv $(pwd)/target/release/niri $GLOBAL_BINS_DIR/
-          ln -sfv $(pwd)/target/release/niri /usr/bin/niri
           ln -sfv $(pwd)/resources/niri-session $GLOBAL_BINS_DIR/
           ln -sfv $(pwd)/resources/niri.desktop /usr/share/wayland-sessions/
           ln -sfv $(pwd)/resources/niri-portals.conf /usr/share/xdg-desktop-portal/
@@ -102,7 +105,7 @@
           ln -sfv $(pwd)/resources/niri-shutdown.target /etc/systemd/user/
     PKGS:
       # also: clang
-      - libudev-bin
+      - libudev-dev
       - libgbm-dev
       - libxkbcommon-dev
       - libegl1-mesa-dev
