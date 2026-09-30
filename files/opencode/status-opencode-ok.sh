@@ -2,16 +2,18 @@
 # deployment. Linked globally as opencode-status-ok so any shell — including
 # ones that never loaded the client-env ZIM module — can quickly answer:
 #
-#   client   did the ZIM client-env module export the 0600 credential and the
-#            native OPENCODE_ARGS default? The secret itself never reaches
-#            env or env.export.
+#   client   is the 0600 credential available (exported by the ZIM module
+#            or readable through the pointer), and does the --publish
+#            discovery registration reference this deployment's port?
 #   global   do the operator-managed global links (install.sh: opencode,
 #            opencode2-node) resolve, agree on version, and point into the
 #            composed working workspace instead of a stale checkout?
 #   shell    what does opencode resolve to on this shell's PATH, and
 #            does that binary match the managed one?
 #
-# No network: versions come from --version on local binaries only.
+# No network: versions come from --version on local binaries only; the
+# registration is checked by grepping the discovery file, never by
+# contacting the server or printing the file (it holds the password).
 #
 # Env overrides: OPENCODE_BINARY (managed binary), OPENCODE_GLOBAL_BINS_DIR
 # (managed link directory), OPENCODE_WORKING_DIR (deployment workspace).
@@ -40,8 +42,9 @@ while [ "$#" -gt 0 ]; do
       cat <<'EOF'
 usage: status-opencode-ok.sh
   Check the invoking shell against the operator-managed OpenCode V2
-  deployment: client environment loaded, managed global links healthy and current, and
-  PATH-resolved opencode at the managed version.
+  deployment: client credential available and discovery registration
+  present, managed global links healthy and current, and PATH-resolved
+  opencode at the managed version.
 EOF
       exit 0 ;;
     *)
@@ -64,19 +67,29 @@ realpath_of() {
   realpath -e -- "$1" 2>/dev/null || true
 }
 
-# client environment -------------------------------------------------------
-if [ -n "${OPENCODE_PASSWORD:-}" ] && [ -n "${OPENCODE_SERVER_URL:-}" ]; then
-  expected_server_args="--server ${OPENCODE_SERVER_URL}"
-  case " ${OPENCODE_ARGS:-} " in
-    *" $expected_server_args "*)
-      ok "client environment loaded (OPENCODE_PASSWORD exported; native args route to ${OPENCODE_SERVER_URL})"
-      ;;
-    *)
-      bad "client OPENCODE_ARGS does not include the managed server default: $expected_server_args"
-      ;;
-  esac
+# client credential ---------------------------------------------------------
+if [ -n "${OPENCODE_PASSWORD:-}" ]; then
+  ok "client credential exported (OPENCODE_PASSWORD)"
+elif [ -r "${OPENCODE_PASSWORD_FILE:-}" ]; then
+  ok "client credential readable through OPENCODE_PASSWORD_FILE (${OPENCODE_PASSWORD_FILE})"
 else
-  bad "client environment not loaded: OPENCODE_PASSWORD or OPENCODE_SERVER_URL unset; source the opencode-client-args ZIM module"
+  bad "client credential unavailable: OPENCODE_PASSWORD unset and OPENCODE_PASSWORD_FILE unreadable; source the opencode-client-args ZIM module"
+fi
+
+# discovery registration -----------------------------------------------------
+# service-local.json holds the password: grep it, never print it.
+state_dir="${XDG_STATE_HOME:-$HOME/.local/state}/opencode"
+registration="$state_dir/service-local.json"
+reg_port="${OPENCODE_SERVER_PORT:-49373}"
+if [ -r "$registration" ]; then
+  if grep -q '"mode":"server"' "$registration" 2>/dev/null \
+     && grep -q ":${reg_port}\"" "$registration" 2>/dev/null; then
+    ok "discovery registration present for port ${reg_port} (${registration})"
+  else
+    bad "discovery registration does not reference port ${reg_port}: ${registration}"
+  fi
+else
+  bad "no discovery registration at ${registration}: clients without an explicit --server would spawn the stock managed service"
 fi
 
 # global managed deployment -------------------------------------------------

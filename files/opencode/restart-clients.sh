@@ -5,8 +5,8 @@
 # Restarting a client means: kill the client process, wait for its tmux pane
 # to fall back to the shell, then type
 #   cd <recorded cwd> && opencode --session <recorded session id>
-# into the pane with tmux send-keys. The pane's client-env ZIM module exports
-# OPENCODE_ARGS, so the relaunched client attaches to the
+# into the pane with tmux send-keys. The pane's --publish discovery
+# registration routes the relaunched client to the
 # managed deployment exactly like a manual relaunch would. No `cd` is sent
 # by default: the pane shell is normally still in the directory the client
 # was launched from; when the shell's path has drifted from the recorded

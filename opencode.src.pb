@@ -241,15 +241,7 @@
       - name: opencode-client-args
         source: opencode-client-env.zsh
         phase: 55
-        comment: Export the client credential and native server-argument default.
-      # Retain the old boundary-aware shell functions in
-      # files/opencode/opencode-service.zsh, but keep this module disabled now
-      # that the deployed CLI handles OPENCODE_ARGS natively. Uncomment only
-      # for a client build without native argument defaults; keep it after
-      # client-env so it consumes the shared credential and OPENCODE_ARGS.
-      # - name: opencode-service-legacy
-      #   source: opencode-service.zsh
-      #   phase: 56
+        comment: Export the client credential.
     README: |
       # Operator-managed OpenCode V2 server
 
@@ -289,10 +281,10 @@
 
           opencode-<INSTANCE> [args...]     # e.g. opencode-dev api get /api/info
 
-      The launcher sources the instance env and client-env module, so native
-      `OPENCODE_ARGS` routes supported commands to the instance server. An
-      explicit `--server` takes precedence; use
-      `OPENCODE_ARGS= opencode-<INSTANCE> --standalone` to bypass it. It never
+      The launcher sources the instance env and client-env module and
+      prepends `--server <instance URL>` to your arguments (an explicit
+      `--server` or `--standalone` in your own arguments suppresses the
+      prepend). It never
       manages the server's lifecycle; that stays
       with `systemctl --user` and the instance's own `bin/restart.sh`.
 
@@ -305,6 +297,9 @@
         secondary deliberately with `-e OPENCODE_SERVER_HOSTNAME=<addr>` and
         the same trust/funnel considerations as the primary's wildcard notes
         below.
+      - No `--publish`: the channel's discovery slot is single and
+        primary-owned. Instance clients route through the launcher's
+        prepended `--server`, never through discovery.
       - The database defaults to `opencode-<INSTANCE>.db` under
         `~/.local/share/opencode/`, separate from every other instance.
        - No ZIM modules are emitted and no `~/.config/opencode` link is made;
@@ -403,8 +398,8 @@
          drift against the recorded cwd is reported, and a cd-prefixed
          form is kept commented in the bin). Reads the registry without
          re-recording — the clients are dead, a fresh scan would find
-         nothing. The pane's exported `OPENCODE_ARGS` default sends the
-         relaunched client to the managed deployment exactly
+         nothing. The pane's `--publish` discovery registration routes
+         the relaunched client to the managed deployment exactly
          like a manual relaunch.
       4. **restart** (default) — one-pass kill + relaunch for client-only
          churn when the server is current and builds match.
@@ -465,9 +460,10 @@
       shell — including ones without the ZIM module — can quickly verify three
       things:
 
-      - client environment: whether OPENCODE_PASSWORD and OPENCODE_ARGS were
-        exported by the ZIM module. The secret itself is never written to env
-        or env.export.
+      - client: whether the credential is available (exported by the ZIM
+        module or readable through the pointer) and the `--publish` discovery
+        registration references this deployment's port. The secret itself is
+        never written to env or env.export.
       - global: whether the managed links (opencode, opencode2-node) resolve,
         agree on version, and point into OPENCODE_WORKING_DIR rather than a
         stale checkout.
@@ -477,30 +473,25 @@
       Exit 0 means this shell is on the managed deployment; exit 1 prints each
       drift line. No network is involved — versions come from `--version`.
 
-      The local `opencode-client-args` ZIM module exports the credential and
-      scalar `OPENCODE_ARGS="--server ${OPENCODE_SERVER_URL}"` to interactive
-      clients. The native CLI parses this shell-word string before command
-      routing; explicit `--server` arguments take precedence. `OPENCODE_ARGS`
-      is not in ENV/env.export or the systemd unit, so the `serve` process
-      never inherits this client default. With `--publish` registration
-      active, clients also discover the server natively from
-      service-local.json with no environment at all — the module default is
-      now an explicit override held for shells/launchers where discovery
-      should not apply (`OPENCODE_ARGS= opencode` exercises discovery
-      instead). The shell functions in
-      `files/opencode/opencode-service.zsh` remain as an inactive legacy
-      fallback; no current ZIM module loads them.
+      The local `opencode-client-args` ZIM module exports the credential for
+      interactive clients. The deployed CLI also reads the
+      `OPENCODE_PASSWORD_FILE` pointer itself; the export keeps dated
+      snapshot binaries that predate pointer support working. Routing needs
+      no environment: with the `--publish` registration active, clients
+      discover the server natively from service-local.json. Interactive
+      shells opened before the OPENCODE_ARGS removal may still carry a
+      stale export — `unset OPENCODE_ARGS` in them.
 
-      Native defaults are dropped with a warning on routes that do not declare
-      `--server`. For standalone mode, clear the default explicitly:
-      `OPENCODE_ARGS= opencode --standalone`.
+      For standalone mode, pass `--standalone` explicitly.
 
-      `OPENCODE_SERVER_PORT` is the port source of truth; `OPENCODE_SERVER_URL`
-      and the client `OPENCODE_ARGS` default are derived from it.
+      `OPENCODE_SERVER_PORT` is the port source of truth;
+      `OPENCODE_SERVER_URL` is derived from it.
 
       `opencode-last` selects the newest executable dated client snapshot from
-      `/usr/local/bin/opencode-<datestamp>` and runs it with the same native
-      `OPENCODE_ARGS` environment. `opencode-last list` lists clients
+      `/usr/local/bin/opencode-<datestamp>` and runs it against the managed
+      server with an explicit prepended `--server` (discovery is
+      build-stamped, and old snapshots predate it; a `--standalone` in your
+      arguments suppresses the prepend). `opencode-last list` lists clients
       newest-first.
 
       ## Dated CLI clients
@@ -525,10 +516,9 @@
       it is not repointed for each snapshot. Keep dated clients until deliberate
       operator cleanup.
 
-      Explicit `--server` arguments take precedence over OPENCODE_ARGS. Clear
-      OPENCODE_ARGS for standalone operation (`OPENCODE_ARGS= opencode
-      --standalone`). Routes without a `--server` option drop the environment
-      default and may print a warning before using their ordinary behavior.
+      Discovery is build-stamped, so dated snapshots cannot use it:
+      `opencode-last` prepends `--server` for them. Run a snapshot
+      standalone with an explicit `--standalone`.
 
       Foreground serve with `--publish` writes an operator-owned
       `mode:"server"` registration into the channel's discovery file —
@@ -718,11 +708,11 @@
         json:
           "$schema": "https://opencode.ai/config.json"
       # Replace the former active wrapper import in place on ZIM context
-      # install. The wrapper source stays in files/opencode/opencode-service.zsh
-      # for deliberate fallback; the primary client now uses native OPENCODE_ARGS.
+      # install. The wrapper is gone; the client-env module exports the
+      # credential only and routing rides --publish discovery.
       - name: zim/zimrc/active/55-opencode-service.conf
         content: |
-          # Legacy shell helper-wrapper intentionally unloaded; native client-env is active.
+          # Legacy shell helper-wrapper removed.
       - name: etc_d/keybind-tabs.json
         json:
           keybinds:
@@ -910,8 +900,9 @@
       # (cotail find-id) and tmux pane into an in-mem tmpfs registry, kills
       # the clients, then relaunches each in its recorded pane via tmux
       # send-keys with `cd <cwd> && opencode --session <id>` — the pane's
-      # ZIM client-env module supplies OPENCODE_ARGS, and the managed server is never
-      # touched. Dated-snapshot clients (opencode-<stamp>) relaunch through
+      # --publish discovery registration routes the relaunched client, and
+      # the managed server is never touched. Dated-snapshot clients
+      # (opencode-<stamp>) relaunch through
       # the managed client rather than their original binary. Global link
       # is primary-only; secondaries keep the local, env-driven bin.
       - name: restart-clients.sh

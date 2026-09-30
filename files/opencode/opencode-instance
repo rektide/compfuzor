@@ -2,12 +2,13 @@
 # opencode-<INSTANCE> — explicit-server client entrypoint for one secondary
 # OpenCode deployment. Linked globally under the instance's own name (for the
 # primary `git` instance this launcher is not installed; interactive shells
-# there get native OPENCODE_ARGS from the opencode ZIM module instead).
+# there route through --publish discovery instead).
 #
 # The launcher is deliberately instance-neutral: deployment facts come from
 # its rendered env file. It loads the same client environment ZIM module as the
-# primary shell (with this instance's server URL and credential), then execs
-# the configured client binary. OpenCode itself interprets OPENCODE_ARGS.
+# primary shell (with this instance's credential), then execs the configured
+# client binary with `--server <instance URL>` prepended — an explicit
+# `--server` or `--standalone` in your own arguments suppresses the prepend.
 # The launcher never manages the server lifecycle; its systemd user unit does.
 
 emulate -L zsh
@@ -36,8 +37,9 @@ if [[ ! -r ${OPENCODE_CLIENT_ENV_MODULE} ]]; then
   exit 1
 fi
 
-# Drop an inherited non-empty primary default so the instance module supplies
-# this instance's URL. Preserve an explicit empty override for --standalone.
+# Guard against a stale OPENCODE_ARGS default inherited from a
+# pre-removal interactive shell: without this, an old export would
+# silently reroute the instance client at the primary server.
 if [[ -n ${OPENCODE_ARGS:-} ]]; then
   unset OPENCODE_ARGS
 fi
@@ -52,5 +54,12 @@ fi
 if [[ -z ${OPENCODE_PASSWORD:-} ]]; then
   print -u2 "opencode: OPENCODE_PASSWORD was not loaded from ${OPENCODE_PASSWORD_FILE:-the configured password file}"
   exit 1
+fi
+
+# Route explicitly at this instance's server. Dated-snapshot and
+# discovery-independent: the guard keeps an explicit --server or
+# --standalone in the caller's arguments in charge.
+if [[ -n ${OPENCODE_SERVER_URL:-} ]]    && (( ! ${argv[(I)--server*]} && ! ${argv[(I)--standalone*]} )); then
+  argv=(--server "${OPENCODE_SERVER_URL}" "$@")
 fi
 exec "$OPENCODE_BINARY" "$@"

@@ -1,6 +1,7 @@
 #!/usr/bin/env zsh
 # `opencode-last list` prints executable dated snapshots newest-first;
-# otherwise run the newest snapshot with the managed client environment.
+# otherwise run the newest snapshot against the managed server, with the
+# managed client environment and an explicit prepended --server.
 
 emulate -L zsh
 setopt extended_glob
@@ -62,5 +63,12 @@ fi
 if [[ -z ${OPENCODE_PASSWORD:-} ]]; then
   print -u2 "opencode-last: OPENCODE_PASSWORD was not loaded from $OPENCODE_PASSWORD_FILE"
   exit 1
+fi
+# Route explicitly at the managed server: dated snapshots predate --publish
+# discovery, and discovery is build-stamped anyway. The guard keeps an
+# explicit --server or --standalone in the caller's arguments in charge.
+if [[ -n ${OPENCODE_SERVER_URL:-} ]] \
+   && (( ! ${argv[(I)--server*]} && ! ${argv[(I)--standalone*]} )); then
+  argv=(--server "${OPENCODE_SERVER_URL}" "$@")
 fi
 exec "$OPENCODE_BINARY" "$@"
