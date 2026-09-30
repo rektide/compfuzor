@@ -3,8 +3,9 @@ ARCH: "{{INSTANCE}}"
 #noauth: true
 MULTISTRAP_REPOS:
 - name: debian
-  # source: http://localhost:3142/mirrors.kernel.org/debian # apt-cacher-ng
-  source: http://mirrors.kernel.org/debian
+  # centralized in vars/common.yaml (APT_DEFAULT_MIRROR); kernel.org measured
+  # ~450kB/s/stream from this network vs ~15-22MB/s via deb.debian.org
+  source: "{{APT_DEFAULT_MIRROR}}"
   suite: unstable
   keyring: debian-archive-keyring
   pkg_sets:

@@ -89,7 +89,12 @@ APT_BYPASS: False
 APT_DEFAULT_COMPONENT: main
 APT_DEFAULT_DISTRIBUTION: forky
 APT_DEFAULT_ARCH: True
-APT_DEFAULT_MIRROR: http://deb.debian.org/debian
+# Canonical Debian mirror for every consumer (repo playbooks, debootstrap,
+# multistrap bootstrap, mkosi, pivot-root). APT_DEBIAN_MIRROR is the bare
+# host base for tools that append the repo path themselves (mkosi Mirror=
+# joins "/debian"); APT_DEFAULT_MIRROR is the full archive URL.
+APT_DEBIAN_MIRROR: http://deb.debian.org
+APT_DEFAULT_MIRROR: "{{APT_DEBIAN_MIRROR}}/debian"
 APT_ARCH: amd64
 UBUNTU_DISTRIBUTION: noble
 TMUX_CONF_D_DIR: conf.d

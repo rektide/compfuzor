@@ -6,7 +6,7 @@
   - root
   vars:
     NAME: debian-experimental
-    APT_REPO: http://deb.debian.org/debian
+    APT_REPO: "{{APT_DEFAULT_MIRROR}}"
     APT_DISTRIBUTION: experimental
     APT_PIN: "release a=experimental"
     APT_PIN_PRIORITY: 200

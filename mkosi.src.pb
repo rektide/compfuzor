@@ -82,6 +82,10 @@
           Distribution=debian
           Release=trixie
           Repositories=main,contrib,non-free,non-free-firmware
+          # Centralized Debian mirror (vars/common.yaml APT_DEBIAN_MIRROR).
+          # mkosi joins "/debian" onto the base itself; fetched through
+          # APT_PROXY below either way.
+          Mirror={{APT_DEBIAN_MIRROR}}
 
           [Build]
           CacheDirectory={{DIR}}/var/cache

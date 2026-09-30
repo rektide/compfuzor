@@ -44,7 +44,7 @@
       SSHD_NEW_UNIT: sshd-newport
       NETBOOT_SUITE: bookworm
       NETBOOT_ARCH: amd64
-      NETBOOT_MIRROR: https://deb.debian.org/debian
+      NETBOOT_MIRROR: "{{APT_DEFAULT_MIRROR}}"
       NETBOOT_DIR: /installer
       NETBOOT_KERNEL: linux
       NETBOOT_INITRD: initrd.gz
