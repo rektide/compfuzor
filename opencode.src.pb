@@ -139,10 +139,23 @@
         # the instance launcher's prepended --server. CORS origins are
         # host-dynamic and deliberately not here: with no --cors flags the
         # server falls back to the config `cors` array maintained by
-        # bin/config-cors.sh. The credential is 100% env: the binary reads
-        # the OPENCODE_PASSWORD_FILE pointer from the unit EnvironmentFile
-        # itself (requires a binary with that env-pointer support).
+        # bin/config-cors.sh.
+        #
+        # Credential: LoadCredential= copies the 0600 password to
+        # /run/user/<uid>/credentials/<unit>/ on tmpfs at each start, and the
+        # second EnvironmentFile= ({{ETC}}/env-credential, later files win)
+        # repoints OPENCODE_PASSWORD_FILE at that copy for the server alone —
+        # the binary's existing env-pointer support reads it, 100% env, no
+        # --password-file flag. ExecStartPre asserts the pointer against
+        # $CREDENTIALS_DIRECTORY (exported to every unit process): a path
+        # layout drift fails the boot loudly instead of silently booting an
+        # ephemeral password. Requires a binary with env-pointer support.
         ExecStart: "{{OPENCODE_GLOBAL_BINS}}/{{OPENCODE_CLIENT}} serve --hostname {{OPENCODE_SERVER_HOSTNAME}} --port {{OPENCODE_SERVER_PORT}}{{ ' --publish' if OPENCODE_PRIMARY else '' }}"
+        EnvironmentFile:
+          - "-{{DIR}}/env"
+          - "{{ETC}}/env-credential"
+        LoadCredential: "OPENCODE_PASSWORD:{{PASSWORDS_DIR}}/OPENCODE_PASSWORD"
+        ExecStartPre: /bin/sh -c 'test "${OPENCODE_PASSWORD_FILE}" = "${CREDENTIALS_DIRECTORY}/OPENCODE_PASSWORD"'
         WorkingDirectory: "%h"
         SuccessExitStatus: 130
         Restart: always
@@ -220,6 +233,16 @@
         manager: user
         expected:
           WATCHMAN_SOCK: "{{WATCHMAN_CANONICAL_SOCKET_ABS}}"
+      # Credential view of the running server: systemd's LoadCredential
+      # tmpfs dir plus the unit-only pointer override that directs the
+      # binary at the copy (see {{ETC}}/env-credential).
+      - name: opencode-credential-env
+        check: mainpid-env
+        unit: "{{OPENCODE_UNIT}}.service"
+        manager: user
+        expected:
+          CREDENTIALS_DIRECTORY: "/run/user/{{ ansible_user_uid }}/credentials/{{OPENCODE_UNIT}}.service"
+          OPENCODE_PASSWORD_FILE: "/run/user/{{ ansible_user_uid }}/credentials/{{OPENCODE_UNIT}}.service/OPENCODE_PASSWORD"
       - name: opencode-executable
         check: exe-current
         unit: "{{OPENCODE_UNIT}}.service"
@@ -327,14 +350,23 @@
       `/mnt/bitblaster/backup/opencode/` by default), so per-instance backup
       targets are an operator choice, not an isolation boundary.
 
-      The persisted 43-character password lives at `${OPENCODE_PASSWORD_FILE}`
-      with mode 0600. The server reads it directly from that path — an ENV
-      key delivered by the unit's `EnvironmentFile`, the same pointer the
-      ZIM module hands to clients — so the secret value never appears in the
-      server process environment at all. The ZIM module reads the same file
-      once in each new shell and exports `OPENCODE_PASSWORD` for clients.
-      The secret is never copied into `env`, `env.export`, a unit file, or a
-      generated ZIM fragment. **Deploy ordering**: this route requires a
+      The persisted 43-character password lives at
+      `{{PASSWORDS_DIR}}/OPENCODE_PASSWORD` with mode 0600 — one source,
+      two views. Clients get the stable home-file pointer: the
+      `OPENCODE_PASSWORD_FILE` ENV key rides env.export, and the ZIM module
+      reads that file once in each new shell and exports
+      `OPENCODE_PASSWORD`. The secret value never appears in any
+      environment, env file, unit file, or generated ZIM fragment. The
+      server gets systemd's copy: `LoadCredential=` snapshots the file to
+      `/run/user/<uid>/credentials/{{OPENCODE_UNIT}}.service/` on tmpfs at
+      each start (0400, gone when the unit stops), and the unit's second
+      EnvironmentFile (`{{ETC}}/env-credential`, nothing else in it;
+      later files win) repoints `OPENCODE_PASSWORD_FILE` at that copy for
+      the server alone — the same env-pointer support the binary already
+      has, no `--password-file` flag. An `ExecStartPre` assertion compares
+      the pointer against `$CREDENTIALS_DIRECTORY` — which systemd exports
+      to every unit process — so a credentials-path layout drift fails the
+      boot loudly instead of silently booting an ephemeral password. **Deploy ordering**: this route requires a
       binary with `OPENCODE_PASSWORD_FILE` env-pointer support (composed in
       the working workspace since 2026-09); restarting the unit onto an
       older binary boots the server with an ephemeral random password.
@@ -349,10 +381,12 @@
       (see CORS origins below). There is no wrapper: the former
       `serve.sh` word-split adapter existed only because systemd cannot
       split an env var across `ExecStart` argv, and died once nothing
-      needed to ride a variable. The credential stays fully
-      environment-based: the server reads its password from the
-      `OPENCODE_PASSWORD_FILE` pointer delivered by the unit's
-      EnvironmentFile.
+      needed to ride a variable. The credential is fully environment-based
+      with two views of one source: the unit reads its password from the
+      `OPENCODE_PASSWORD_FILE` pointer that its second EnvironmentFile
+      (`{{ETC}}/env-credential`) aims at systemd's `LoadCredential=` tmpfs
+      copy, while env.export keeps pointing clients at the stable home
+      file — see the password section above for the full story.
 
       ## Operations
 
@@ -453,8 +487,10 @@
       `bin/status.sh` runs the registered reporters: status-cleanup.sh (leaked
       native libraries and the cleanup timer's state), status-opencode-ok.sh
       (below), status-mainpid-env.sh (the live server inherited the canonical
-      WATCHMAN_SOCK), status-exe-current.sh (the MainPID still executes the
-      currently deployed opencode inode), plus the config and link drift
+      WATCHMAN_SOCK and serves the LoadCredential password view:
+      `$CREDENTIALS_DIRECTORY` present, `OPENCODE_PASSWORD_FILE` pointing
+      at the tmpfs copy), status-exe-current.sh (the MainPID still executes
+      the currently deployed opencode inode), plus the config and link drift
       reporters.
       `opencode-status-ok` is the same ok-checker as a global command, so any
       shell — including ones without the ZIM module — can quickly verify three
@@ -704,6 +740,18 @@
             envsubst:
               file: ../env.export
     ETC_FILES:
+      - name: env-credential
+        content: |
+          # Unit-only credential pointer override: the second unit
+          # EnvironmentFile= (listed after {{DIR}}/env, later files win).
+          # systemd's LoadCredential= copies the 0600 password from
+          # {{PASSWORDS_DIR}}/OPENCODE_PASSWORD to the unit's tmpfs
+          # credentials directory at each start; the server reads that copy
+          # through the same env-pointer support, while env.export keeps
+          # pointing clients at the stable home file. ExecStartPre asserts
+          # this path against $CREDENTIALS_DIRECTORY, so a layout drift
+          # fails the boot loudly. This file contains no secret.
+          OPENCODE_PASSWORD_FILE=/run/user/{{ ansible_user_uid }}/credentials/{{OPENCODE_UNIT}}.service/OPENCODE_PASSWORD
       - name: base.json
         json:
           "$schema": "https://opencode.ai/config.json"
