@@ -11,6 +11,33 @@
     REPO: https://github.com/niri-wm/niri
     GIT_VERSION: main
     ENV: True
+    README: |
+      # niri-git — niri deployment (niri-wm archive lane)
+
+      niri moved upstream from `YaLTeR/niri` to the **niri-wm** org; this
+      deployment was migrated off the old in-place DIR clone onto the archive
+      lane. The old `~/archive/YaLTeR/niri` checkout is decommissioned.
+
+      ## Layout
+
+      - Canonical jj archive: `~/archive/niri-wm/niri` (bookmarks, user
+        commits, preserved snapshots live here).
+      - Deployment workspace: `{{DIR}}/repo`, a dedicated colocated jj/Git
+        workspace of the archive maintained by
+        [`repo_jj_archive.tasks`](/tasks/compfuzor/repo_jj_archive.tasks),
+        tracking `main` (`GIT_VERSION: main`).
+      - Generated: `bin/` (build.sh, install.sh), `env`/`env.export`, `etc`
+        symlink to `/etc/opt/niri-git` (config-overlay.kdl).
+
+      ## Build & install
+
+          bin/build.sh        # cargo build --release in repo/
+          sudo bin/install.sh # links niri, niri-session, session/desktop,
+                              # portals, systemd user units into place
+
+      On the deck, the packaged niri from `steamos-niri.opt.pb` replaces this
+      git build (see ARCH_PKGS notes in the playbook).
+
     # Arch package list: companions + build deps (upstream PKGBUILD
     # depends/makedepends), consumed by the archlane (gen_arch.tasks ->
     # install-arch.sh lane / render-side pacman). On the deck the packaged
