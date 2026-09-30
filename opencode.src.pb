@@ -964,15 +964,13 @@
         basedir: False
         raw: True
         global: "{{ 'opencode-restart-clients' if OPENCODE_PRIMARY else False }}"
-      # Auto-grouped under the build.sh compositor by its build* name; every
-      # build.sh run refreshes the origins, no explicit call site required.
-      - name: build-env-cors.sh
-        basedir: False
-      # Second build.sh leaf, deliberately after build-env-cors.sh in BINS
-      # order (the compositor lane sort is stable, BINS order decides): folds
-      # OPENCODE_SERVER_HOSTNAME/PORT plus the CORS origins the cors leaf just
-      # refreshed into the baked OPENCODE_SERVE_ARGS vector.
-      - name: build-env-serve-args.sh
+      # Host-side CORS regeneration. The serve unit passes no --cors flags,
+      # so the server falls back to the config `cors` array; this bin writes
+      # the host-owned etc_d/cors.json fragment from live host names and
+      # reassembles the config. --restart applies it immediately; a plain
+      # run leaves the restart to the operator (a build lane must never
+      # restart the live server, which is why this is not a build* leaf).
+      - name: config-cors.sh
         basedir: False
       - name: cleanup.sh
         basedir: False
