@@ -3,7 +3,13 @@
   vars:
     TYPE: niri
     INSTANCE: git
-    REPO: https://github.com/YaLTeR/niri
+    # niri moved from YaLTeR/niri to the niri-wm org. The canonical jj
+    # archive at ~/archive/niri-wm/niri backs this deployment;
+    # repo_jj_archive.tasks keeps a dedicated colocated jj/Git workspace at
+    # DIR/repo (a repo symlink pointing straight at the archive is admitted
+    # by the deploy runner and replaced with that workspace).
+    REPO: https://github.com/niri-wm/niri
+    GIT_VERSION: main
     ENV: True
     # Arch package list: companions + build deps (upstream PKGBUILD
     # depends/makedepends), consumed by the archlane (gen_arch.tasks ->
@@ -52,10 +58,13 @@
           }
     BINS:
       - name: build.sh
-        content: cargo build --release
+        content: |
+          cd "{{DIR}}/repo"
+          cargo build --release
       - name: install.sh
         content: |
-          # https://github.com/YaLTeR/niri/wiki/Packaging-niri
+          cd "{{DIR}}/repo"
+          # https://github.com/niri-wm/niri/wiki/Packaging-niri
           ln -sfv $(pwd)/target/release/niri $GLOBAL_BINS_DIR/
           ln -sfv $(pwd)/target/release/niri /usr/bin/niri
           ln -sfv $(pwd)/resources/niri-session $GLOBAL_BINS_DIR/
