@@ -1,59 +1,19 @@
 ---
 - hosts: all
   vars:
-    PASSWORDS:
-      - clickhouse
-    # deb822 lane: renders clickhouse-main.sources; keyring fetched from
-    # APT_KEYRING_URL (dearmored) by install-apt-sources.sh on install.
+    TYPE: clickhouse
+    INSTANCE: main
+    # apt repository ONLY: deb822 source stanza + keyring
+    # (install-apt-sources.sh links both into place). The server
+    # deployment -- packages, config, db init, passwords -- lives in
+    # clickhouse.srv.pb (/srv/clickhouse-main).
     APT:
       URIs: https://packages.clickhouse.com/deb
       Suites: stable
       Components: [main]
     APT_KEYRING_URL: https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key
     APT_DEARMOR: True
-    PKGS:
-      - clickhouse-server
-      - clickhouse-client
-      - apt-transport-https
-      - ca-certificates
-      - gnupg
-      - curl
-    CLICKHOUSE_DB: click_db
-    CLICKHOUSE_PASSWORD: "{{PASSWORD.clickhouse}}"
-    CLICKHOUSE_USER: click_user
-    ENV_LIST:
-      - clickhouse_db
-      - clickhouse_user
-    BINS:
-      - name: init-db.sh
-        content: |
-          clickhouse-client --password "{{CLICKHOUSE_PASSWORD}}" \
-            "CREATE DATABASE IF NOT EXISTS {{CLICKHOUSE_DB}};"
-          clickhouse-client --password "{{CLICKHOUSE_PASSWORD}}" \
-            "CREATE USER IF NOT EXISTS {{CLICKHOUSE_USER}} IDENTIFIED BY '{{CLICKHOUSE_PASSWORD}}';"
-          clickhouse-client --password "{{CLICKHOUSE_PASSWORD}}" \
-            "GRANT ALL ON {{CLICKHOUSE_DB}}.* TO {{CLICKHOUSE_USER}};"
-    ETC_FILES:
-      - name: users.xml
-        content: |
-          <yandex>
-            <users>
-              <default_password>{{PASSWORD.clickhouse}}</default_password>
-              <profiles>
-                <default>
-                  <default_database>{{CLICKHOUSE_DB}}</default_database>
-                </default>
-              </profiles>
-            </users>
-          </yandex>
-      - name: config.xml
-        content: |
-          <yandex>
-            <listen_host>0.0.0.0</listen_host>
-            <http_port>8123</http_port>
-            <tcp_port>9000</tcp_port>
-            <mysql_port>9004</mysql_port>
-            <max_server_memory_usage_percentage>90</max_server_memory_usage_percentage>
-          </yandex>
   tasks:
     - import_tasks: tasks/compfuzor.includes
+      vars:
+        type: etc
