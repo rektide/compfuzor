@@ -82,31 +82,6 @@
       OPENCODE_SERVER_URL: "{{OPENCODE_SERVER_URL}}"
       OPENCODE_PASSWORD_FILE: "{{PASSWORDS_DIR}}/OPENCODE_PASSWORD"
       OPENCODE_DISABLE_AUTOUPDATE: 1
-      # Rendered empty and rewritten in place by bin/build-env-cors.sh, a
-      # build.sh compositor leaf: all hostname -A names plus
-      # <short hostname>.local, deduped, each http://<name>:<port>.
-      # bin/build-env-serve-args.sh folds these into OPENCODE_SERVE_ARGS.
-      OPENCODE_SERVER_CORS: ""
-      # Rendered empty and rewritten in place by bin/build-env-serve-args.sh,
-      # the second build.sh compositor leaf (BINS order runs it after the cors
-      # leaf): the complete `serve` argument vector -- --hostname, --port,
-      # --publish, one --cors per discovered origin -- baked once per build
-      # instead of reassembled per boot. --publish claims the channel's single
-      # local-discovery registration slot as operator-owned (mode:"server" in
-      # service-local.json), so clients connect natively without OPENCODE_ARGS;
-      # stop the channel-local managed service before restarting the unit onto
-      # a --publish vector (register refuses to replace a live registration).
-      # serve.sh word-splits the vector into exec argv because systemd cannot:
-      # ExecStart ${VAR} expansion passes the whole value as a single
-      # argument. When the opencode-args feature line
-      # (~/src/opencode-args) is composed and deployed with its serve-route
-      # environment argument parsing and --password-file flag, serve.sh is
-      # deleted, ExecStart becomes
-      # `<binary> serve --password-file %d/OPENCODE_PASSWORD` with
-      # LoadCredential regained (%d expands in ExecStart argv, unlike
-      # Environment=), and this vector moves to the variable the CLI parses
-      # natively from the unit EnvironmentFile.
-      OPENCODE_SERVE_ARGS: ""
       # Root-scoped watchman backend; inert until the composed working
       # workspace carries the watchman stack, then opts the service in.
       # 4m command deadline: loaded host, prefer waiting over generation churn.
@@ -154,14 +129,21 @@
         # projects, tools, and /tmp. Generic filesystem/process sandboxing would
         # silently break its core job, so harden lifecycle rather than access.
         Type: exec
-        ExecStart: "{{DIR}}/bin/serve.sh"
+        # Literal serve arguments, no wrapper. hostname/port are per-instance
+        # render-time constants; --publish claims the channel's single
+        # local-discovery registration slot as operator-owned (mode:"server"
+        # in service-local.json) — stop the channel-local managed service
+        # before restarting the unit onto a --publish vector (register
+        # refuses to replace a live registration). Secondaries omit
+        # --publish: the slot is primary-owned, and their clients route via
+        # the instance launcher's prepended --server. CORS origins are
+        # host-dynamic and deliberately not here: with no --cors flags the
+        # server falls back to the config `cors` array maintained by
+        # bin/config-cors.sh. The credential is 100% env: the binary reads
+        # the OPENCODE_PASSWORD_FILE pointer from the unit EnvironmentFile
+        # itself (requires a binary with that env-pointer support).
+        ExecStart: "{{OPENCODE_GLOBAL_BINS}}/{{OPENCODE_CLIENT}} serve --hostname {{OPENCODE_SERVER_HOSTNAME}} --port {{OPENCODE_SERVER_PORT}}{{ ' --publish' if OPENCODE_PRIMARY else '' }}"
         WorkingDirectory: "%h"
-        # Interim form: no credential is loaded — the server reads its
-        # password from OPENCODE_PASSWORD_FILE via the unit EnvironmentFile.
-        # LoadCredential returns with the final form:
-        #   ExecStart=<binary> serve --password-file %d/OPENCODE_PASSWORD
-        # (%d expands in ExecStart argv on systemd 262; Environment= cannot
-        # compose credential paths at all).
         SuccessExitStatus: 130
         Restart: always
         RestartSec: 1
@@ -273,9 +255,10 @@
 
       `opencode.service` runs plain foreground `opencode serve` on
       `${OPENCODE_SERVER_HOSTNAME}:${OPENCODE_SERVER_PORT}`. It deliberately
-      does not use `--service`: with `--publish` baked into the serve vector
-      the server writes an operator-owned `mode:"server"` registration into
-      the channel's discovery file (service-local.json), but OpenCode still
+      does not use `--service`: with `--publish` among the unit's literal
+      serve arguments the server writes an operator-owned `mode:"server"`
+      registration into the channel's discovery file
+      (service-local.json), but OpenCode still
       performs no incumbent election or self-eviction, never manages this
       process, and refuses to replace or stop it from the client side.
       Lifecycle authority belongs only to the systemd user unit.
@@ -357,31 +340,24 @@
       once in each new shell and exports `OPENCODE_PASSWORD` for clients.
       The secret is never copied into `env`, `env.export`, a unit file, or a
       generated ZIM fragment. **Deploy ordering**: this route requires a
-      binary with the opencode-args line's `OPENCODE_PASSWORD_FILE` support;
-      restarting the unit onto an older binary boots the server with an
-      ephemeral random password.
+      binary with `OPENCODE_PASSWORD_FILE` env-pointer support (composed in
+      the working workspace since 2026-09); restarting the unit onto an
+      older binary boots the server with an ephemeral random password.
 
       The user unit gets ordinary runtime settings from its generated
-      `EnvironmentFile={{DIR}}/env`: hostname, port, CORS origins, the baked
-      serve argument vector, the password-file pointer, Watchman socket, and
-      instance-specific binary. `serve.sh` is now only the argument adapter:
-      it word-splits the baked `OPENCODE_SERVE_ARGS` vector into exec argv
-      (systemd cannot — `ExecStart` `${VAR}` expansion passes the whole
-      value as a single argument) and execs `opencode serve`. It is rendered
-      without generic BINS helpers because a long-running `ExecStart` must
-      not exit successfully through a provisioning bypass guard.
-
-      Final form, once the `opencode-args` feature line (`~/src/opencode-args`)
-      is composed and deployed with its `serve --password-file` flag and
-      serve-route environment argument parsing: `serve.sh` is deleted and the
-      unit regains `LoadCredential`, running
-      `ExecStart=<binary> serve --password-file %d/OPENCODE_PASSWORD`
-      (systemd expands the `%d` credentials specifier in `ExecStart` argv —
-      verified on systemd 262 — while `Environment=` cannot compose
-      credential paths at all), with the baked vector on the variable the
-      CLI parses natively — paired with filtering serve-scoped argument
-      variables from the session env so tool shells spawned by the server
-      do not inherit them.
+      `EnvironmentFile={{DIR}}/env`: the password-file pointer, Watchman
+      socket, logging, and the instance binary. The serve arguments
+      themselves are literal in the unit — `ExecStart=<binary> serve
+      --hostname <addr> --port <port> --publish` (secondaries omit
+      `--publish`; their clients route through the instance launcher's
+      explicit `--server`) — and CORS origins live in the assembled config
+      (see CORS origins below). There is no wrapper: the former
+      `serve.sh` word-split adapter existed only because systemd cannot
+      split an env var across `ExecStart` argv, and died once nothing
+      needed to ride a variable. The credential stays fully
+      environment-based: the server reads its password from the
+      `OPENCODE_PASSWORD_FILE` pointer delivered by the unit's
+      EnvironmentFile.
 
       ## Operations
 
@@ -613,30 +589,31 @@
           {{DIR}}/bin/backup.sh --snapshot  # consistent DB snapshot
           BACKUP_ROOT=user@host:/path {{DIR}}/bin/backup.sh  # ad-hoc target
 
-      ## CORS origins and serve arguments
+      ## CORS origins (config-cors.sh)
 
-      Two config tasks are composed into `build.sh` by the bin compositor
-      (their `build*` names group them there; BINS order runs cors first):
+      The serve unit carries no `--cors` flags. With none given, the
+      server falls back to the top-level `cors` array in the assembled
+      `etc/opencode.json`, and that array is host-owned:
 
-      1. `bin/build-env-cors.sh` rewrites `OPENCODE_SERVER_CORS` in `env`
-         and `env.export` in place: every name from `hostname -A` plus
-         `<short hostname>.local`, deduplicated in first-seen order, each as
-         `http://<name>:<port>`, comma-separated.
-      2. `bin/build-env-serve-args.sh` folds `OPENCODE_SERVER_HOSTNAME`,
-         `OPENCODE_SERVER_PORT`, and those origins into the baked
-         `OPENCODE_SERVE_ARGS` vector — `--hostname`, `--port`, `--publish`,
-         one `--cors` per origin — the complete serve argument list, computed
-         once per build instead of reassembling per boot. `--publish` claims
-         the channel's discovery slot (see the registration notes under
-         Dated CLI clients); stop the managed service before restarting onto
-         a `--publish` vector. `serve.sh` word-splits it into exec argv.
+          {{DIR}}/bin/config-cors.sh              # write etc_d/cors.json + reassemble
+          {{DIR}}/bin/config-cors.sh --restart    # ... and restart the unit to apply
 
-      The playbook renders both keys empty, so an Ansible re-render resets
-      them until the next build (or a manual run of either script). An empty
-      CORS value means no `--cors` flags. Apply changes with
-      `opencode service stop && systemctl --user restart {{OPENCODE_UNIT}}.service`
-      — service stop first, because registering refuses while a live managed
-      registration holds the slot.
+      `config-cors.sh` recomputes the origins from live host state —
+      `<short hostname>.local` plus every name from `hostname -A`, trailing
+      dots stripped, deduplicated in first-seen order, each
+      `http://<name>:{{OPENCODE_SERVER_PORT}}` — writes them to the
+      host-owned `etc_d/cors.json` fragment (deliberately not a playbook
+      ETC_FILES entry: Ansible re-renders never touch it), and reassembles
+      the config recipe. Run it whenever hostnames change; new origins
+      apply on the next server start. `localhost:`/`127.0.0.1:` origins
+      are always allowed by the server and never need listing, and an
+      origin whose host matches the request's own Host header is accepted
+      without listing.
+
+      The former two-phase env bake (build-env-cors.sh writing
+      OPENCODE_SERVER_CORS, build-env-serve-args.sh folding it into a baked
+      serve vector) is gone: it had already drifted once in production,
+      leaving the running server without any of its origins.
 
       ## Native-library cleanup
 
@@ -882,29 +859,6 @@
           ln -sv ${dir}/etc $TARGET/
           {% endif %}
       # TODO: compfuzor helpers for installing content, automate this in install-user
-      - name: serve.sh
-        basedir: False
-        # ExecStart is a long-running systemd process, not a provisioning
-        # action. The generic TYPE=opencode bypass wrapper can exit 0 on a
-        # bypass and fight Restart=always. The unit EnvironmentFile supplies
-        # every input (serve vector, password-file pointer); the body
-        # validates required values.
-        # Interim form: the credential rides the envfile's existing
-        # OPENCODE_PASSWORD_FILE pointer — the server reads it itself, so
-        # serve.sh only word-splits the baked vector. LoadCredential is
-        # dropped until the final form.
-        # Final form (mechanism verified on systemd 262): deleted once the
-        # opencode-args feature line (~/src/opencode-args) is composed and
-        # deployed with the serve --password-file flag and serve-route
-        # environment argument parsing. systemd expands the
-        # %d credentials specifier in ExecStart argv — Environment= cannot
-        # compose credential paths at all — so the unit regains
-        # LoadCredential and runs
-        #   ExecStart=<binary> serve --password-file %d/OPENCODE_PASSWORD
-        # with the baked vector on the variable the CLI parses natively,
-        # paired with session-env filtering so tool shells do not inherit
-        # serve-scoped args.
-        helpers: false
       - name: restart.sh
         basedir: False
         content: |
