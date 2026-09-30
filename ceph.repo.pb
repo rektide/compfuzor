@@ -1,13 +1,15 @@
 ---
 - hosts: all
-  become: True
-  tags:
-  - packages
-  - root
-  gather_facts: False
   vars:
-    NAME: ceph
-    APT_REPO: http://ceph.com/debian-firefly/
-    APT_DISTRIBUTION: wheezy
+    TYPE: ceph
+    INSTANCE: main
+    # deb822 lane. DEAD UPSTREAM (ceph.com/debian-firefly was the 2014-era
+    # repo, wheezy suites; kept for archaeology) -- do not deploy.
+    APT:
+      URIs: http://ceph.com/debian-firefly/
+      Suites: wheezy
+      Components: [main]
   tasks:
-  - import_tasks: tasks/compfuzor/apt.tasks
+  - import_tasks: tasks/compfuzor.includes
+    vars:
+      type: etc

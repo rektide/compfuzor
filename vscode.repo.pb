@@ -3,11 +3,15 @@
   vars:
     TYPE: vscode
     INSTANCE: main
-    APT_KEYRING_URL: https://packages.microsoft.com/keys/microsoft.asc 
-    APT_KEYRING_DEARMOR: True
-    APT_REPO: https://packages.microsoft.com/repos/vscode
-    APT_COMPONENT: main
-    APT_DISTRIBUTION: stable
+    # deb822 lane: renders vscode-main.sources; keyring via APT_KEYRING_URL
+    # (microsoft.asc, dearmored on install). APT_KEYRING_DEARMOR was a dead
+    # var the legacy lane never consumed -- APT_DEARMOR is the real one.
+    APT:
+      URIs: https://packages.microsoft.com/repos/vscode
+      Suites: stable
+      Components: [main]
+    APT_KEYRING_URL: https://packages.microsoft.com/keys/microsoft.asc
+    APT_DEARMOR: True
     BINS:
       - name: install-ext.sh
         content: |

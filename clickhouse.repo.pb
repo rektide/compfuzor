@@ -3,8 +3,12 @@
   vars:
     PASSWORDS:
       - clickhouse
-    APT_DISTRIBUTION: stable
-    APT_REPO: https://packages.clickhouse.com/deb
+    # deb822 lane: renders clickhouse-main.sources; keyring fetched from
+    # APT_KEYRING_URL (dearmored) by install-apt-sources.sh on install.
+    APT:
+      URIs: https://packages.clickhouse.com/deb
+      Suites: stable
+      Components: [main]
     APT_KEYRING_URL: https://packages.clickhouse.com/rpm/lts/repodata/repomd.xml.key
     APT_DEARMOR: True
     PKGS:
@@ -17,7 +21,7 @@
     CLICKHOUSE_DB: click_db
     CLICKHOUSE_PASSWORD: "{{PASSWORD.clickhouse}}"
     CLICKHOUSE_USER: click_user
-    ENV:
+    ENV_LIST:
       - clickhouse_db
       - clickhouse_user
     BINS:
@@ -28,7 +32,7 @@
           clickhouse-client --password "{{CLICKHOUSE_PASSWORD}}" \
             "CREATE USER IF NOT EXISTS {{CLICKHOUSE_USER}} IDENTIFIED BY '{{CLICKHOUSE_PASSWORD}}';"
           clickhouse-client --password "{{CLICKHOUSE_PASSWORD}}" \
-            "GRANT ALL PRIVILEGES ON {{CLICKHOUSE_DB}}.* TO {{CLICKHOUSE_USER}};"
+            "GRANT ALL ON {{CLICKHOUSE_DB}}.* TO {{CLICKHOUSE_USER}};"
     ETC_FILES:
       - name: users.xml
         content: |

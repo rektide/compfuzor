@@ -1,13 +1,15 @@
 ---
 - hosts: all
-  become: True
-  tags:
-  - packages
-  - root
-  gather_facts: False
   vars:
-    NAME: pali
-    APT_REPO: http://ppa.launchpad.net/pali/pali/ubuntu
-    APT_DISTRIBUTION: oneiric
+    TYPE: pali
+    INSTANCE: main
+    # deb822 lane. DEAD UPSTREAM (launchpad PPA, oneiric-era; kept for
+    # archaeology) -- do not deploy.
+    APT:
+      URIs: http://ppa.launchpad.net/pali/pali/ubuntu
+      Suites: oneiric
+      Components: [main]
   tasks:
-  - import_tasks: tasks/compfuzor/apt.tasks
+  - import_tasks: tasks/compfuzor.includes
+    vars:
+      type: etc

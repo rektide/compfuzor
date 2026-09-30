@@ -1,19 +1,19 @@
 ---
 - hosts: all
-  become: True
-  tags:
-  - packages
-  - root
   vars:
-    NAME: debian-experimental
-    APT_REPO: "{{APT_DEFAULT_MIRROR}}"
-    APT_DISTRIBUTION: experimental
-    APT_PIN: "release a=experimental"
-    APT_PIN_PRIORITY: 200
-    APT_TRUST: false # assume we have debian keys
-    APT_COMPONENTS:
-    - main
-    - contrib
-    - non-free
+    TYPE: debian-experimental
+    INSTANCE: main
+    # deb822 lane: renders debian-experimental-main.sources + pin .pref.
+    # Archive keys already trusted system-wide (debian-archive-keyring) --
+    # no keyring configured, so no Signed-By in the stanza.
+    APT:
+      URIs: "{{APT_DEFAULT_MIRROR}}"
+      Suites: experimental
+      Components: [main, contrib, non-free]
+    APT_PREFS:
+      Pin: "release a=experimental"
+      Pin-Priority: 200
   tasks:
-  - import_tasks: tasks/compfuzor/apt.tasks
+  - import_tasks: tasks/compfuzor.includes
+    vars:
+      type: etc
