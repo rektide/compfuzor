@@ -9,7 +9,7 @@ Description: {{ repo.description }}
 DebOverride: override-deb.{{ repo.name }}
 DscOverride: override-dsc.{{ repo.name }}
 {% endif -%}
-{% if repo.has_key("keyid") -%}
+{% if repo.keyid is defined -%}
 SignWith: {{ repo.keyid }}
 {% endif %}
 
