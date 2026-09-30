@@ -9,4 +9,6 @@
     # forky default 404s here. Track the newest suite jellyfin ships.
     APT_DISTRIBUTION: trixie
   tasks:
-    - include: tasks/compfuzor.includes type=etc
+    - import_tasks: tasks/compfuzor.includes
+      vars:
+        type: etc
