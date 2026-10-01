@@ -73,6 +73,7 @@
     ETC_DIRS:
       - niri
       - kde/kwin-scripts/vicinae/contents/code
+      - umbriel
     ETC_FILES:
       - name: niri/keybinding-launch.kdl
         content: |
@@ -115,6 +116,21 @@
           registerShortcut(
             "VicinaeSwitchWindows", "Vicinae: Switch Windows", "Meta+F",
             () => spawn("vicinae", "vicinae://extensions/vicinae/wm/switch-windows"));
+      # Umbriel: unlike niri/KDE there is no include-directory convention to
+      # hook; umbriel's TOML config supports explicit [include] files and
+      # merges [keybinds] chord-by-chord over them, so the user root config
+      # includes the system default (installed by umbriel.src.pb) plus this
+      # fragment. install-umbriel.sh wires the chain below.
+      - name: umbriel/keybinds.toml
+        content: |
+          # Vicinae launcher keybinds for the Umbriel compositor.
+          # Managed by vicinae.src.pb; included from ~/.config/umbriel/config.toml.
+          # Umbriel merges [keybinds] chord-by-chord over included files, so these
+          # override same-chord defaults (Mod+Space replaces scratchpad-toggle) and
+          # add the rest.
+          [keybinds]
+          "Mod+Space" = "spawn:vicinae toggle"
+          "Mod+Slash" = "spawn:vicinae deeplink 'vicinae://launch/wm/switch-windows?toggle=true'"
     BINS:
       - name: build.sh
         content: |
@@ -173,5 +189,36 @@
           else
             echo "no kwin on the bus; script installs for next login"
           fi
+      - name: install-umbriel.sh
+        basedir: etc
+        content: |
+          UMBRIEL_CONFIG_DIR="$HOME/.config/umbriel"
+          mkdir -p "$UMBRIEL_CONFIG_DIR"
+          ln -sfn "{{DIR}}/etc/umbriel/keybinds.toml" \
+            "$UMBRIEL_CONFIG_DIR/keybinds-vicinae.toml"
+          CFG="$UMBRIEL_CONFIG_DIR/config.toml"
+          # Umbriel loads the FIRST config it finds (user, XDG_CONFIG_DIRS,
+          # data dir) with no auto-layering, and [include] may appear only
+          # once per TOML file: create the root config as an include chain
+          # over the system default when absent, and otherwise only wire the
+          # fragment in when that can be done without rewriting the user's
+          # [include] table by hand.
+          if [ ! -e "$CFG" ]; then
+            cat > "$CFG" <<'EOF'
+          [include]
+          files = ["/usr/local/share/umbriel/config.toml"]
+          optional = { files = ["keybinds-vicinae.toml"] }
+          EOF
+          elif grep -q 'keybinds-vicinae.toml' "$CFG"; then
+            :
+          elif grep -qE '^[[:space:]]*\[include\]' "$CFG"; then
+            echo "note: $CFG already has an [include] table; add manually:"
+            echo '  optional = { files = ["keybinds-vicinae.toml"] }'
+          else
+            printf '[include]\noptional = { files = ["keybinds-vicinae.toml"] }\n' \
+              | block-in-file -n vicinae --comment "#" "$CFG"
+          fi
+          command -v umbriel >/dev/null 2>&1 \
+            && umbriel validate -c "$CFG" || true
   tasks:
     - import_tasks: tasks/compfuzor.includes
