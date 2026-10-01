@@ -1,16 +1,16 @@
 ---
 # Deployment-only management for the debplus kernel configuration material.
-# Imported 2026-10-01 from the self-owned local jj repo at
-# /usr/local/src/linux-config-debplus (Linux 7.1-era inputs); see
-# doc/linux-debplus/README.md for provenance, usage, and known limits.
+# Initially imported 2026-10-01 from the local jj repo at
+# /usr/local/src/linux-config-debplus; the bundle README now carries the
+# maintained 7.3 target, provenance, usage, and verification limits.
 #
 # This playbook declares and restores bytes. It does not configure, build,
 # install, patch, or boot anything. The Linux checkout at
 # /usr/local/src/linux, its build output, and its jj/git metadata are NOT
 # owned here: no REPO, no KERNEL_PARAMS, no bins, no packages, and no
 # readme synthesis. hotfixes/amdgpu-power.sh stays an explicit
-# --check/apply script run by a human; MAKE.sh is retained as a historical
-# saved command, not expanded into build automation.
+# --check/apply script run by a human; MAKE.sh remains an explicit package
+# build recipe, not an automatically executed deployment step.
 #
 # FILES rows use copyDir:true — an odd name, but it routes the copy
 # module's src branch (which works for individual files as well as

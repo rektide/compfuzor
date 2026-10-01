@@ -5,6 +5,21 @@ hotfix in this repository into installable Debian packages. It targets the
 local x86-64 workstation, Clang/LLVM, systemd-boot, and the crash-diagnostic
 configuration in `config-debian-plus`.
 
+## Current 7.3 target
+
+The maintained entry point is [README.md](README.md). The target checked on
+2026-10-01 is upstream commit `551c722f40809618230001baccf219193e22fc5a`
+(2026-09-29), based on `v7.3-rc5` — not a final 7.3 release. The configuration
+is migrated from the saved Debian-plus seed rather than a new Debian base;
+the AMDGPU hotfix is ported to the per-power-source PPT-limit API.
+
+Use the current `MAKE.sh` for the pinned baseline package recipe. This detailed
+guide retains the **historical Linux 7.1 worked examples and 2026-08 host
+measurements** below. Their filenames, package versions, tool availability,
+storage headroom, and source line references are not current 7.3 instructions.
+Adapt them to the actual release reported by `make kernelrelease`, and consult
+the README for current normalization and patch-validation procedures.
+
 Nothing in this document runs automatically. Configuration, compilation,
 packaging, installation, and boot selection are separate operator decisions.
 
@@ -27,12 +42,12 @@ kernel supports more advanced LLVM optimization modes, but it still labels
 ThinLTO and AutoFDO experimental, and their benefit depends on representative
 measurement rather than the toolchain switch alone.
 
-## Current host assumptions
+## Historical host assumptions (2026-08)
 
 The recommendations were checked on 2026-08-08 against the local Linux 7.1
 source and host:
 
-| Item | Current state |
+| Item | Recorded state |
 |---|---|
 | Architecture | Debian `amd64`, kernel `x86_64` |
 | Toolchains | Clang/LLD 21.1.8; GCC 16.1; binutils 2.46 |
