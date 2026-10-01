@@ -159,10 +159,16 @@
           vicinae=Enabled
           EOF
           # load into the running session without restarting kwin; the
-          # [Plugins] entry carries it from the next login onward
+          # [Plugins] entry carries it from the next login onward.
+          # NOTE: registerShortcut defaults silently LOSE to existing key
+          # owners (krunner holds Alt+Space, kwin holds Alt+`). Claiming
+          # via the org.kde.KGlobalAccel D-Bus is NOT safe from scripts --
+          # setForeignShortcutKeys with hand-encoded keys knocked plasmashell
+          # over once (2026-09-30). Bind final keys in System Settings ->
+          # Shortcuts (search "Vicinae") instead; the KCM steals cleanly.
           if busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting loadScript ss "$SCRIPTS/vicinae/contents/code/main.js" vicinae >/dev/null 2>&1; then
             busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting start >/dev/null 2>&1 \
-              && echo "kwin script loaded into the running session" \
+              && echo "kwin script loaded; verify key binds in System Settings > Shortcuts (search Vicinae)" \
               || echo "kwin script registered; starts next login"
           else
             echo "no kwin on the bus; script installs for next login"
