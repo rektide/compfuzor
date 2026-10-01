@@ -323,6 +323,15 @@ another session available before experimenting.
 | B | Current `kanata-kinata`, `kanata-blueturn`; all A services | Main `kanata` with its current exclusions |
 | SmartSet alternatives | Current `kanata-kinata`; other Edge examples | Main `kanata`, current `kanata-blueturn` |
 
+The “keep Main” column requires its **live** configuration to exclude the
+devices claimed by the alternative. The checked-in [main playbook](/kanata.srv.pb)
+already declares those exclusions, but they do not affect a running daemon
+until deployed and reloaded/restarted as appropriate. Check its registration
+logs and active config first. If the live exclusions aren't in place, either
+deliberately apply that prerequisite or temporarily stop main too during the
+test (which also removes its remapping of other keyboards). These alternatives
+do not silently perform that takeover.
+
 Inspect actual unit names and grabs on the host first; a root playbook being
 present doesn't prove its service was deployed. For temporary testing, stop
 the conflicting units, start **only** the chosen alternative, and reverse those
