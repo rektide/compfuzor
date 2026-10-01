@@ -17,47 +17,79 @@ by the research agent.
 
 ```
 make -C source O=$PWD/output-defconfig LLVM=1 x86_64_defconfig
-cp output-defconfig/.config <bundle>/baselines/7.3/config-upstream-defconfig
-# roundtrip check:
-cp config-upstream-defconfig output-roundtrip/.config
-make -C source O=$PWD/output-roundtrip LLVM=1 olddefconfig
-diff output-defconfig/.config output-roundtrip/.config   # byte-identical
-# audit diff (keys printed WITHOUT the CONFIG_ prefix):
+cp output-defconfig/.config baselines/7.3/config-upstream-defconfig
 /usr/bin/python3 source/scripts/diffconfig \
-    config-debian-plus baselines/7.3/config-upstream-defconfig \
+    baselines/7.3/config-upstream-defconfig config-debian-plus \
     > baselines/7.3/config-debian-plus-vs-defconfig.diff
+/usr/bin/python3 source/scripts/diffconfig -m \
+    baselines/7.3/config-upstream-defconfig config-debian-plus \
+    > baselines/7.3/defconfig-to-debian-plus.fragment
+# diffconfig -m omits baseline-only keys (42 here); negate them explicitly:
+grep '^-' <full diff above> | sed 's/^-//' | awk '{print $1}' \
+    | sed 's/^/# CONFIG_/; s/$/ is not set/' >> baselines/7.3/defconfig-to-debian-plus.fragment
 ```
 
 `config-upstream-defconfig` is the unmodified generated file (5516 lines,
 sha256 `0c236fada2c40ab78733de631613db5ae8ea709c69ac3fc853dc919bb401c480`).
+The fixedpoint roundtrip (a second `olddefconfig` on the baseline is
+byte-identical) only proves baseline stability — see next section for the
+verification that actually matters here.
 
-## Roundtrip
+## Fragment: defconfig -> config-debian-plus reconstruction
 
-Saved baseline re-resolves **byte-identical** under a second `LLVM=1
-olddefconfig` in a fresh O= dir — the artifact is a fixed point, safe to
-re-normalize from.
+`defconfig-to-debian-plus.fragment` = `diffconfig -m` of baseline→ours
+(7419 entries: differing values as `CONFIG_…=…`, our explicit not-set
+negations as `# CONFIG_… is not set`) **plus 42 explicit negations** of
+baseline-only keys that `diffconfig -m` cannot express (without them, a
+merge would keep the baseline's `=y` for keys like `IP_PNP_BOOTP`,
+`MD_AUTODETECT`, `RANDOMIZE_MEMORY`).
 
-## Critical audit — config-debian-plus vs defconfig
+Roundtrip verification (the delta reconstruction, not the fixedpoint):
 
-Diff: 7461 entries = 42 defconfig-only, 5533 debian-plus-only, 1886 changed
-(direction: `ours -> defconfig`).
+```
+sh source/scripts/kconfig/merge_config.sh -m -O output-fragment \
+    baselines/7.3/config-upstream-defconfig \
+    baselines/7.3/defconfig-to-debian-plus.fragment
+make -C source O=$PWD/output-fragment LLVM=1 olddefconfig
+/usr/bin/python3 source/scripts/diffconfig output-fragment/.config config-debian-plus
+```
 
-- The **5533 removed + bulk of 1886 changes are the large Debian-derived
+Result: **0 differing entries** — baseline + fragment resolved with the same
+`LLVM=1 olddefconfig` reproduces `config-debian-plus` exactly at the keymap
+level. No normalization differences to explain: both sides come from the same
+tree, toolchain, and resolution step, and every key that differs from the
+baseline is captured in the fragment (including `# … is not set` lines, which
+`olddefconfig` honors for prompt symbols and ignores for promptless/forced
+symbols — which resolve to the same values our config carries).
+
+Note `merge_config.sh -m` does NOT verify fragments against Kconfig (it stops
+before the make step); the verification above is the separate olddefconfig
+resolution plus explicit keymap diff.
+
+## Critical audit — defconfig vs config-debian-plus
+
+`config-debian-plus-vs-defconfig.diff` direction: **baseline → ours**
+(`diffconfig config-upstream-defconfig config-debian-plus`); keys are printed
+WITHOUT the `CONFIG_` prefix. 7461 entries = 5533 added (ours-only), 42
+removed (baseline-only), 1886 changed.
+
+- The **5533 added + bulk of the 1886 changes are the large Debian-derived
   policy** (Debian's driver/filesystem/debug/module coverage carried through
   the 7.1 seed): expected and deliberate to keep — this is exactly the
   Debian-plus delta over a lean upstream baseline, not drift to be "fixed".
 - The **deliberate overrides** are the small loud subset in
-  `overrides.config`/`overrides.llvm`; anchor deltas visible in the audit:
-  `X86_NATIVE_CPU y->n`, `DEFAULT_TCP_CONG "bbr"->"cubic"`, `RUST y->n`,
-  `DRM_AMDGPU m->n`, `PSTORE y->n` (+PSTORE_RAM), `DRM_PANIC y->n`,
-  `LKDTM m->n`, `MODULE_SIG y->n`, `PROC_MEM_ALWAYS_FORCE y->n`,
+  `overrides.config`/`overrides.llvm`; anchor deltas: `X86_NATIVE_CPU y->n`,
+  `DEFAULT_TCP_CONG "bbr"->"cubic"`, `RUST y->n`, `DRM_AMDGPU m->n`,
+  `PSTORE y->n` (+PSTORE_RAM), `DRM_PANIC y->n`, `LKDTM m->n`,
+  `MODULE_SIG y->n`, `PROC_MEM_ALWAYS_FORCE y->n`,
   `WQ_POWER_EFFICIENT_DEFAULT y->n`, `X86_INTEL_TSX_MODE_OFF y->n`,
-  `BTRFS_FS/XFS_FS y->n`, `DEBUG_INFO(+BTF) y` absent, `RANDOMIZE_BASE
-  n->y` (defconfig hardens; our low-hardening host policy is the choice).
+  `BTRFS_FS/XFS_FS y->n`, `DEBUG_INFO(+BTF) y` absent from baseline,
+  `RANDOMIZE_BASE n->y` (baseline hardens; our low-hardening host policy is
+  the choice).
 - Upstream defconfig already carries `KEXEC/CRASH_DUMP/PROC_VMCORE=y`,
   `HIBERNATION=y`, `LTO_NONE=y`, `EXT4_FS=y`, `CRYPTO_LZ4=y` — those do not
   differ.
-- The 42 defconfig-only entries are mostly forced/internal symbols
+- The 42 baseline-only entries are mostly forced/internal symbols
   (`X86_REQUIRED/DISABLED_FEATURE_*`, `ARCH_*`, `NOINSTR_VALIDATION`) plus
   real lean-baseline items we drop (NFS-root/IP_PNP, MD_AUTODETECT,
   PM_TRACE, EARLY_PRINTK_USB, `RANDOMIZE_MEMORY=y`,
