@@ -1,0 +1,76 @@
+#!/usr/bin/python3
+"""Switch the kanata-a-pedal service between its pedal layers.
+
+Invoked as a kanata `cmd` action (keyboard.srv.pb maps the Edge's spare
+F19/F20 to it), or by hand from a shell. kanata executes cmd actions via
+std::process::Command argv (no shell), and this helper never touches a
+shell either: argv[1] is validated against the exact layer names the
+pedal config defines, then sent as one newline-terminated JSON line:
+
+    {"ChangeLayer":{"new":"pages"}}
+    {"ChangeLayer":{"new":"media"}}
+
+to the kanata-a-pedal TCP server (build.src.pb binary, tcp_server
+feature; kanata 1.9.0 packaged has no --port).
+
+Layer names are coupled to pedal.srv.pb's deflayers: `pages` and `media`
+are the ChangeLayer targets; `base` (first deflayer) is the startup
+default; `pedal-meta` is the held overlay. kanata's change_layer
+silently ignores unknown names, so this helper rejects anything else
+up front instead of no-op'ing.
+
+Environment overrides (tests; the deployed defaults are the contract):
+  BLUETURN_SWITCH_ADDR     host:port, default 127.0.0.1:16666
+  BLUETURN_SWITCH_TIMEOUT  connect timeout seconds, default 0.5
+
+Exit codes: 0 layer switch sent; 1 usage error (bad/missing target);
+2 pedal endpoint unreachable (refused/timeout). Never reads stdin.
+"""
+
+import json
+import os
+import socket
+import sys
+
+LAYERS = ("pages", "media")
+DEFAULT_ADDR = "127.0.0.1:16666"
+DEFAULT_TIMEOUT = 0.5
+
+USAGE_EXIT = 1
+UNREACHABLE_EXIT = 2
+
+
+def fail(message: str, code: int) -> "int":
+    print(f"blueturn-switch: {message}", file=sys.stderr)
+    return code
+
+
+def main(argv: "list[str]") -> int:
+    if len(argv) != 2 or argv[1] not in LAYERS:
+        targets = "|".join(LAYERS)
+        return fail(f"usage: blueturn-switch {{{targets}}} (got {argv[1:]!r})", USAGE_EXIT)
+
+    target = argv[1]
+    addr = os.environ.get("BLUETURN_SWITCH_ADDR", DEFAULT_ADDR)
+    host, _, port = addr.rpartition(":")
+    if not host or not port.isdigit():
+        return fail(f"bad BLUETURN_SWITCH_ADDR {addr!r}", USAGE_EXIT)
+    try:
+        timeout = float(os.environ.get("BLUETURN_SWITCH_TIMEOUT", DEFAULT_TIMEOUT))
+    except ValueError:
+        return fail("BLUETURN_SWITCH_TIMEOUT must be a number", USAGE_EXIT)
+
+    payload = (json.dumps({"ChangeLayer": {"new": target}}, separators=(",", ":")) + "\n").encode()
+
+    try:
+        with socket.create_connection((host, int(port)), timeout=timeout) as sock:
+            sock.sendall(payload)
+    except OSError as err:
+        return fail(f"pedal {addr} unreachable: {err}", UNREACHABLE_EXIT)
+
+    print(f"blueturn-switch: pedal layer -> {target}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))
