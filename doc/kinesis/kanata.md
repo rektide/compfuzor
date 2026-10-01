@@ -171,6 +171,10 @@ controls. Pages mode gives keyboard PgUp the pedal's tap/hold behavior too.
 Timing/history state is shared as well. This is why B is an alternative rather
 than an automatic improvement over A.
 
+Two layouts sharing input does not make Alt/Windows a layer selector: hk5/hk6
+remain real output modifiers in A/B. hk3/hk4 are the explicit mode selectors.
+Changing the mode doesn't require holding an OS modifier down.
+
 An ordinary keyboard emitting another input mode does not automatically solve
 this: switching the BlueTurn to up/down would merely collide with keyboard
 arrow keys instead. Without device-aware mapping, genuinely unused keycodes or
@@ -291,6 +295,12 @@ present doesn't prove its service was deployed. For temporary testing, stop
 the conflicting units, start **only** the chosen alternative, and reverse those
 operations when finished. For a persistent selection, explicitly review which
 services are enabled for boot. No automatic pruning/reconciliation is included.
+
+Keep the examples' default virtual output name **`kanata`**. Upstream Linux
+auto-detection explicitly skips that name; giving an example a custom output
+name can cause the current broad-auto-detect main daemon to grab it and apply
+another mapping pass. Unique service names provide log separation without
+changing that input-isolation contract.
 
 A switch affects **subsequent presses**. Release the pedals before selecting a
 different base: an already-held key has already activated its old action, and a
