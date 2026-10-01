@@ -205,6 +205,11 @@
     DISABLE_NETWORK_POLICY: "{{ DISABLE|default([], true)|intersect(['network-policy'])|length() == 0}}"
     DISABLE_KUBE_PROXY:     "{{ DISABLE|default([], true)|intersect(['kube-proxy']    )|length() == 1}}"
     ETCD_SNAPSHOT_RETENTION: "{{k3s_etcd_snapshot_retention|default(28)}}"
+    # etcd slow-apply warning threshold. Embedded etcd logs "apply request
+    # took too long" past this duration (upstream default 100ms); on this
+    # iops-starved box 500ms is the realistic floor. Inventory override:
+    #   k3s_etcd_warn_apply_duration: 1s
+    ETCD_WARN_APPLY_DURATION: "{{k3s_etcd_warn_apply_duration|default('500ms')}}"
     # Off-box snapshot sync: set inventory input k3s_etcd_snapshot_sink (e.g.
     # an autofs CIFS mount like /mnt/bitblaster/backup/<name>); an hourly
     # <NAME>-snapshot-sync.{service,timer} pair copies new snapshot zips
@@ -300,6 +305,8 @@
     - "--default-local-storage-path {{LOCAL_PROVISIONER_PATH}}"
     - "{{ '--container-runtime-endpoint $CONTAINER_RUNTIME_ENDPOINT' if CONTAINER_RUNTIME_ENDPOINT|default(False) else '' }}"
     - "{{ '--etcd-snapshot-retention $ETCD_SNAPSHOT_RETENTION' if ETCD_SNAPSHOT_RETENTION|default(False) else '' }}" # at 12 hour interval
+    - "--etcd-arg warning-apply-duration={{ETCD_WARN_APPLY_DURATION}}"
+    # - "--etcd-arg warning-unary-request-duration=500ms"
     - "--etcd-snapshot-compress"
     - "--secrets-encryption"
     - "--secrets-encryption-provider {{SECRETS_ENCRYPTION_PROVIDER}}"
