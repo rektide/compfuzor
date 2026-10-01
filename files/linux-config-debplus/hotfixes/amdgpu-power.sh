@@ -1,5 +1,7 @@
 #!/bin/sh
 # Apply the amdgpu.ignore_min_pcap hotfix to a Linux kernel source tree.
+# Verified against v7.3-rc5 (72d3fcf802c45d00b300f25b848a93c3a2bd7c7e).
+# Also verified against 7.3 development tip 551c722f40809618230001baccf219193e22fc5a.
 
 set -eu
 
@@ -63,7 +65,7 @@ cat >"$patch_file" <<'PATCH'
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
-@@ -159,6 +159,7 @@ struct amdgpu_watchdog_timer {
+@@ -156,6 +156,7 @@ struct amdgpu_watchdog_timer {
   * Modules parameters.
   */
  extern int amdgpu_modeset;
@@ -75,14 +77,14 @@ diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgp
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 +++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
 @@ -149,6 +149,7 @@ enum AMDGPU_DEBUG_MASK {
- 	AMDGPU_DEBUG_ENABLE_CE_CS = BIT(10)
+ 	AMDGPU_DEBUG_DISABLE_IP_BLOCK_SOFT_RESET = BIT(12),
  };
  
 +bool amdgpu_ignore_min_pcap;
  unsigned int amdgpu_vram_limit = UINT_MAX;
  int amdgpu_vis_vram_limit;
  int amdgpu_gart_size = -1; /* auto */
-@@ -270,6 +271,15 @@ struct amdgpu_watchdog_timer amdgpu_watchdog_timer = {
+@@ -271,6 +272,15 @@ struct amdgpu_watchdog_timer amdgpu_watchdog_timer = {
  	.period = 0x0, /* default to 0x0 (timeout disable) */
  };
  
@@ -101,7 +103,7 @@ diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgp
 diff --git a/drivers/gpu/drm/amd/pm/amdgpu_pm.c b/drivers/gpu/drm/amd/pm/amdgpu_pm.c
 --- a/drivers/gpu/drm/amd/pm/amdgpu_pm.c
 +++ b/drivers/gpu/drm/amd/pm/amdgpu_pm.c
-@@ -3385,6 +3385,9 @@ static ssize_t amdgpu_hwmon_show_power_cap_min(struct device *dev,
+@@ -3422,6 +3422,9 @@ static ssize_t amdgpu_hwmon_show_power_cap_min(struct device *dev,
  					 struct device_attribute *attr,
  					 char *buf)
  {
@@ -114,32 +116,40 @@ diff --git a/drivers/gpu/drm/amd/pm/amdgpu_pm.c b/drivers/gpu/drm/amd/pm/amdgpu_
 diff --git a/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c b/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
 --- a/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
 +++ b/drivers/gpu/drm/amd/pm/swsmu/amdgpu_smu.c
-@@ -2987,7 +2987,10 @@ int smu_get_power_limit(void *handle,
- 			*limit = smu->max_power_limit;
- 			break;
- 		case SMU_PPT_LIMIT_MIN:
--			*limit = smu->min_power_limit;
-+			if (amdgpu_ignore_min_pcap)
-+				*limit = 0;
-+			else
-+				*limit = smu->min_power_limit;
- 			break;
- 		default:
- 			return -EINVAL;
-@@ -3008,7 +3011,8 @@ static int smu_set_power_limit(void *handle, uint32_t limit_type, uint32_t limit)
- 	if (limit_type == SMU_DEFAULT_PPT_LIMIT) {
- 		if (!limit)
- 			limit = smu->current_power_limit;
--		if ((limit > smu->max_power_limit) || (limit < smu->min_power_limit)) {
-+		if (limit > smu->max_power_limit ||
-+		    (!amdgpu_ignore_min_pcap && limit < smu->min_power_limit)) {
- 			dev_err(smu->adev->dev,
- 				"New power limit (%d) is out of range [%d,%d]\n",
- 				limit, smu->min_power_limit, smu->max_power_limit);
+@@ -3001,9 +3001,12 @@ int smu_get_ppt_limit(void *handle,
+ 			smu->ppt_limits.range[power_source][limit_type].max;
+ 		break;
+ 	case SMU_PPT_LIMIT_MIN:
+-		*limit = smu->od_enabled ?
+-			smu->ppt_limits.range[power_source][limit_type].od_min :
+-			smu->ppt_limits.range[power_source][limit_type].min;
++		if (amdgpu_ignore_min_pcap)
++			*limit = 0;
++		else
++			*limit = smu->od_enabled ?
++				smu->ppt_limits.range[power_source][limit_type].od_min :
++				smu->ppt_limits.range[power_source][limit_type].min;
+ 		break;
+ 	default:
+ 		return -EINVAL;
+@@ -3028,7 +3031,8 @@ static int smu_set_ppt_limit(void *handle, uint32_t limit_type, uint32_t limit)
+ 	power_source = smu->adev->pm.ac_power ?
+ 		SMU_POWER_SOURCE_AC : SMU_POWER_SOURCE_DC;
+ 	range = &smu->ppt_limits.range[power_source][limit_type];
+-	min_limit = smu->od_enabled ? range->od_min : range->min;
++	min_limit = amdgpu_ignore_min_pcap ? 0 :
++		(smu->od_enabled ? range->od_min : range->min);
+ 	max_limit = smu->od_enabled ? range->od_max : range->max;
+ 
+ 	if (!(smu->ppt_limits.supported_mask & BIT(limit_type)))
 PATCH
 
 kernel_tree=$(CDPATH='' cd -- "$kernel_tree" && pwd)
 echo "AMD-HOTFIX: kernel tree: $kernel_tree"
+
+# A plain source directory may sit inside another repository. Do not let git
+# discover that parent and silently skip this tree's patch paths.
+export GIT_CEILING_DIRECTORIES="$(dirname -- "$kernel_tree")"
 
 if git -C "$kernel_tree" apply --reverse --check "$patch_file" 2>/dev/null; then
 	echo "AMD-HOTFIX: hotfix is already applied."
