@@ -32,4 +32,6 @@
             f19 f20 lalt lmet
           )
   tasks:
+    - set_fact:
+        PKGS: [kanata, python3]
     - import_tasks: ../../../tasks/compfuzor.includes

@@ -4,12 +4,13 @@
     - ../shared/service.yaml
   vars:
     INSTANCE: a-keyboard
+    ETC: "{{ ETCS_DIR }}/kanata-{{ INSTANCE }}"
     SYSTEMD_SERVICE: kanata-a-keyboard
     KANATA_BIN: /usr/local/src/kanata-a-build/bin/kanata
     PKGS: [kanata, python3]
     # cmd executes the helper directly with argv, not a shell. The client
     # needs the host loopback namespace, like the pedal TCP listener.
-    SYSTEMD_SERVICES: "{{ KANATA_SERVICE_BASE | combine({
+    TCP_SERVICE_CONFIG: "{{ KANATA_SERVICE_BASE | combine({
       'PrivateNetwork': 'no',
       'RestrictAddressFamilies': ['AF_UNIX', 'AF_INET'],
       'IPAddressAllow': 'localhost',
@@ -41,4 +42,11 @@
             lalt lmet
           )
   tasks:
+    # vars_files outranks play vars; freeze the combined service as a fact
+    # before Compfuzor renders it, rather than losing overrides silently.
+    - include_defaults:
+        file: vars/common.yaml
+    - set_fact:
+        SYSTEMD_SERVICES: "{{ TCP_SERVICE_CONFIG }}"
+        PKGS: [kanata, python3]
     - import_tasks: ../../../tasks/compfuzor.includes

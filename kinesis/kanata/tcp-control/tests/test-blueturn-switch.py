@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Stdlib unittest suite for files/kanata/blueturn-switch.
+"""Stdlib unittest suite for scripts/blueturn-switch.
 
 Runs the helper as a subprocess (the deployed invocation shape) against
 a loopback stub server, overriding only the documented environment

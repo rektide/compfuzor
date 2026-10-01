@@ -5,6 +5,7 @@
   vars:
     TYPE: kanata
     INSTANCE: a-pedal
+    ETC: "{{ ETCS_DIR }}/kanata-{{ INSTANCE }}"
     # Alternative to the root kanata-blueturn.srv.pb: the BlueTurn pedal
     # runs a PRIVATE kanata build (build.src.pb; tcp_server+cmd, upstream
     # stable tag) and exposes the kanata TCP protocol on loopback, so the
@@ -67,7 +68,7 @@
     #   that skipped build.src.pb fails here, in the journal, instead
     #   of crashlooping ExecStart. --check parses and exits without
     #   touching /dev/input (upstream main.rs args.check path).
-    SYSTEMD_SERVICES: "{{ KANATA_SERVICE_BASE | combine({
+    TCP_SERVICE_CONFIG: "{{ KANATA_SERVICE_BASE | combine({
       'ExecStart': KANATA_BIN ~ ' --cfg ' ~ ETC ~ '/kanata.kbd --port ' ~ KANATA_A_TCP_ADDR,
       'PrivateNetwork': 'no',
       'RestrictAddressFamilies': ['AF_UNIX', 'AF_INET'],
@@ -124,4 +125,8 @@
             pp
           )
   tasks:
+    - include_defaults:
+        file: vars/common.yaml
+    - set_fact:
+        SYSTEMD_SERVICES: "{{ TCP_SERVICE_CONFIG }}"
     - import_tasks: ../../../tasks/compfuzor.includes
