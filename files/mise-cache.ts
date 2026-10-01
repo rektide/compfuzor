@@ -47,8 +47,9 @@
 
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { access, readFile, readdir, rm, stat } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { access, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { basename, delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -59,6 +60,8 @@ const isCommand = (value: string): value is Command =>
 
 interface Area {
   readonly name: string;
+  readonly group?: string;
+  readonly kind?: string;
   readonly desc: string;
   readonly paths: readonly string[];
   readonly query: string;
@@ -90,6 +93,8 @@ const MISE2_CONFIG_DEFAULT: string | null = null;
 // preferred; this union applies until that config step has run.
 {% macro area_literal(a) %}  {
     name: "{{ a['name'] }}",
+    group: "{{ a['group'] | default('Other') }}",
+    kind: "{{ a['kind'] | default('') }}",
     desc: "{{ a['desc'] }}",
     paths: [{% for p in a['paths'] | default([]) %}"{{ p }}", {% endfor %}],
     query: "{{ a['query'] | default("") }}",
@@ -126,6 +131,7 @@ interface ResolvedArea extends Area {
   readonly present: boolean;
   /** KiB, set when measured */
   kb?: number;
+  measurementFailed?: boolean;
   /** du output rows for expand areas: [KiB, path] */
   children?: readonly (readonly [number, string])[];
 }
@@ -307,21 +313,45 @@ function runTool(cmd: string): Promise<ToolResult> {
   });
 }
 
+/** Lookup only: never execute a bare tool to test its availability. */
+async function executableAvailable(command: string): Promise<boolean> {
+  const paths = command.includes("/") ? [command] :
+    (process.env.PATH ?? "").split(delimiter).map((dir) => join(dir || ".", command));
+  for (const path of paths) {
+    try {
+      await access(path, constants.X_OK);
+      if ((await stat(path)).isFile()) return true;
+    } catch { /* next PATH entry */ }
+  }
+  return false;
+}
+
+/** Physical, existing roots, without duplicates or descendants of another root. */
+async function uniqueRoots(paths: readonly string[]): Promise<string[]> {
+  const roots = new Set<string>();
+  for (const path of paths) {
+    if (await pathExists(path)) roots.add(await realpath(path));
+  }
+  return [...roots].filter((path) => ![...roots].some((parent) =>
+    parent !== path && path.startsWith(parent.endsWith(sep) ? parent : parent + sep)));
+}
+
 /** `du -sk` over the given paths; resolves to parsed [KiB, path] rows */
-function du(paths: readonly string[]): Promise<readonly (readonly [number, string])[]> {
+function du(paths: readonly string[]): Promise<readonly (readonly [number, string])[] | undefined> {
   if (paths.length === 0) return Promise.resolve([]);
   return new Promise((resolve) => {
     let child;
     try {
       child = spawn("du", ["-sk", "--", ...paths]);
     } catch {
-      resolve([]);
+      resolve(undefined);
       return;
     }
     let stdout = "";
-    child.on("error", () => resolve([]));
+    child.on("error", () => resolve(undefined));
     child.stdout?.on("data", (d) => (stdout += d));
-    child.on("close", () => {
+    child.on("close", (code) => {
+      if (code !== 0) { resolve(undefined); return; }
       const rows: [number, string][] = [];
       for (const line of stdout.split("\n")) {
         const m = line.match(/^(\d+)\t(.*)$/);
@@ -337,7 +367,7 @@ async function resolveArea(area: Area): Promise<ResolvedArea> {
   if (area.query) {
     const result = await runTool(area.query);
     const line = result.stdout.trimEnd().split("\n").filter(Boolean).at(-1);
-    if (line !== undefined) candidates.push(line);
+    if (!result.failed && line !== undefined && isAbsolute(line)) candidates.push(line);
     else if (area.fallback) candidates.push(expandPath(area.fallback));
   } else if (area.fallback) {
     candidates.push(expandPath(area.fallback));
@@ -346,7 +376,7 @@ async function resolveArea(area: Area): Promise<ResolvedArea> {
     const expanded = expandPath(p);
     if (expanded && !candidates.includes(expanded)) candidates.push(expanded);
   }
-  const unique = [...new Set(candidates)].filter(Boolean);
+  const unique = [...new Set(candidates.filter(Boolean).map((path) => resolve(path)))];
   let present = false;
   for (const c of unique) {
     if (await pathExists(c)) present = true;
@@ -358,10 +388,14 @@ async function measureAreas(areas: readonly ResolvedArea[]): Promise<void> {
   await Promise.all(
     areas.map(async (area) => {
       if (!area.present) return;
+      const roots = await uniqueRoots(area.candidates);
+      const rows = await du(roots);
+      area.measurementFailed = rows === undefined;
+      area.kb = rows?.reduce((sum, [kb]) => sum + kb, 0);
       if (area.expand) {
         // one level of children instead of only the aggregate
         const childPaths: string[] = [];
-        for (const c of area.candidates) {
+        for (const c of roots) {
           try {
             const entries = await readdir(c);
             childPaths.push(...entries.map((e) => join(c, e)));
@@ -370,12 +404,8 @@ async function measureAreas(areas: readonly ResolvedArea[]): Promise<void> {
             childPaths.push(c);
           }
         }
-        area.children = await du(childPaths);
-        area.kb = area.children.reduce((sum, [kb]) => sum + kb, 0);
-      } else {
-        const rows = await du(area.candidates);
-        area.kb = rows.reduce((sum, [kb]) => sum + kb, 0);
-      }
+        area.children = await du(await uniqueRoots(childPaths));
+      } else if (roots.length > 1) area.children = rows;
     }),
   );
 }
@@ -409,15 +439,26 @@ async function cmdStatus(
   console.log(`catalog: ${source}`);
   console.log(`cache areas: ${present.length} present, ${absent.length} absent`);
   if (present.length > 0) {
+    console.log("allocated storage (du); installed tools and state are not cache reclaim estimates");
     console.log(statusLine("AREA", "SIZE", "PATHS"));
-    let grand = 0;
-    let measured = false;
+    const groups = new Map<string, ResolvedArea[]>();
     for (const area of present) {
-      const size = area.kb === undefined ? "-" : human(area.kb * 1024);
-      if (area.kb !== undefined) {
-        grand += area.kb;
-        measured = true;
+      const group = area.group || "Other";
+      groups.set(group, [...(groups.get(group) ?? []), area]);
+    }
+    for (const [group, members] of groups) {
+      const rows = fast ? undefined : await du(await uniqueRoots(members.flatMap((a) => a.candidates)));
+      console.log(statusLine(group, fast ? "-" : rows === undefined ? "unknown" : human(rows.reduce((sum, [kb]) => sum + kb, 0) * 1024), "topic total"));
+      if (group === "Rust") {
+        for (const kind of ["toolchains", "libraries", "ancillary"]) {
+          const leaves = members.filter((area) => area.kind === kind);
+          if (!leaves.length) continue;
+          const part = fast ? undefined : await du(await uniqueRoots(leaves.flatMap((a) => a.candidates)));
+          console.log(statusLine(`  ${kind}`, fast ? "-" : part === undefined ? "unknown" : human(part.reduce((sum, [kb]) => sum + kb, 0) * 1024), "Rust subtotal"));
+        }
       }
+      for (const area of members) {
+      const size = area.measurementFailed ? "unknown" : area.kb === undefined ? "-" : human(area.kb * 1024);
       console.log(statusLine(area.name, size, area.candidates.join(" ")));
       if (area.children?.length) {
         const sorted = [...area.children].sort((a, b) => b[0] - a[0]);
@@ -425,20 +466,33 @@ async function cmdStatus(
           console.log(`    ${human(kb * 1024).padStart(9)}  ${basename(path)}`);
         }
       }
+      }
     }
-    if (measured) console.log(statusLine("TOTAL", human(grand * 1024), ""));
+    if (!fast) {
+      const rows = await du(await uniqueRoots(present.flatMap((a) => a.candidates)));
+      console.log(statusLine("TOTAL", rows === undefined ? "unknown" : human(rows.reduce((sum, [kb]) => sum + kb, 0) * 1024), "unique physical roots; topic totals may overlap"));
+    }
   }
   if (absent.length > 0) console.log(`absent: ${absent.join(" ")}`);
-  const mise = await runTool("mise --version");
+  const mise = await runTool("mise ls --prunable --json");
   if (!mise.missing) {
     console.log("\nmise prune candidates (mise prune --tools):");
-    // mise prune reports on stderr; merge before filtering, truncate the
-    // (sometimes huge) reason to keep the status readable
-    const merged = `${mise.stdout}\n${mise.stderr}`;
-    const lines = [
-      ...merged.matchAll(/^mise (.*) is prunable: (.*)$/gm),
-    ].map((m) => `  ${m[1]}: ${m[2].slice(0, 57)}...`);
-    console.log(lines.length > 0 ? lines.join("\n") : "  none");
+    try {
+      if (mise.failed) throw new Error(mise.stderr.trim() || "query failed");
+      const parsed: unknown = JSON.parse(mise.stdout);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("unexpected response");
+      const lines: string[] = [];
+      for (const [tool, versions] of Object.entries(parsed)) {
+        if (!Array.isArray(versions)) throw new Error("unexpected tool versions");
+        for (const version of versions) {
+          if (!version || typeof version.version !== "string") throw new Error("unexpected version");
+          lines.push(`  ${tool}@${version.version}`);
+        }
+      }
+      console.log(lines.length ? lines.join("\n") : "  none");
+    } catch (error) {
+      console.log(`  unavailable: ${String(error)}`);
+    }
   }
   if (present.length === 0) {
     console.log("no cache areas present");
@@ -492,8 +546,7 @@ async function runNative(cmd: string, dryRun: boolean): Promise<boolean> {
     return true;
   }
   const words = cmd.trim().split(/\s+/);
-  const probe = await runTool(words[0]);
-  if (probe.missing) {
+  if (!(await executableAvailable(words[0]))) {
     console.error(`  ${words[0]} is not on PATH`);
     return false;
   }
@@ -553,8 +606,7 @@ async function cmdAct(
       if (!(await rmPaths(area, dryRun))) rc = 1;
     } else {
       const words = area.clear.trim().split(/\s+/);
-      const probe = await runTool(words[0]);
-      if (probe.missing) {
+      if (!(await executableAvailable(words[0]))) {
         console.log(`  ${words[0]} not available, removing paths directly`);
         if (!(await rmPaths(area, dryRun))) rc = 1;
       } else if (!(await runNative(area.clear, dryRun))) {

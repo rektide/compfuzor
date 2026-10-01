@@ -62,24 +62,27 @@
     # Base areas: mise's own directories, always in the catalog.
     mise_cache_areas:
       - name: mise-cache
+        group: Mise
         desc: mise internal metadata cache
         query: mise cache path
         fallback: "${MISE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/mise}"
         gc: mise cache prune
         clear: mise cache clear
       - name: mise-downloads
+        group: Mise
         desc: mise install download staging
-        paths: ["${MISE_DATA_DIR:-$HOME/.local/share/mise}/downloads"]
+        paths: ["${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}/downloads"]
         clear: rm
       - name: mise-installs
+        group: Mise
         desc: mise-managed tool installs
-        paths: ["${MISE_DATA_DIR:-$HOME/.local/share/mise}/installs"]
-        gc: mise prune --tools
+        paths: ["${MISE_INSTALLS_DIR:-${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}/installs}"]
         clear: none
         expand: true
       - name: mise-state
+        group: Mise
         desc: mise local state (tracked configs; not a cache)
-        paths: ["${MISE_STATE_DIR:-$HOME/.local/state}/mise"]
+        paths: ["${MISE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/mise}"]
         clear: none
     # Tool-mapped areas: included when that tool is installed via mise
     # (detected by config-mise-cache.ts). The stores are ecosystem caches,
@@ -88,12 +91,14 @@
     mise_tool_cache_areas:
       node:
         - name: npm
+          group: Node
           desc: npm download cache
           query: npm config get cache
           fallback: "$HOME/.npm"
           clear: npm cache clean --force
       pnpm:
         - name: pnpm
+          group: Node
           desc: pnpm content-addressed store and metadata cache
           query: pnpm store path
           fallback: "${XDG_DATA_HOME:-$HOME/.local/share}/pnpm/store"
@@ -102,68 +107,96 @@
           clear: rm
       yarn:
         - name: yarn
+          group: Node
           desc: yarn classic and berry caches
           paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/yarn", "$HOME/.yarn/berry/cache"]
           clear: rm
       bun:
         - name: bun
+          group: Bun
           desc: bun install cache
           paths: ["${BUN_INSTALL:-$HOME/.bun}/install/cache"]
           clear: bun pm cache rm
       deno:
         - name: deno
+          group: Deno
           desc: deno remote module cache
           paths: ["${DENO_DIR:-$HOME/.cache/deno}"]
           clear: deno clean
       rust:
         - name: cargo
+          group: Rust
+          kind: libraries
           desc: cargo registry and git caches
           paths: ["${CARGO_HOME:-$HOME/.cargo}/registry", "${CARGO_HOME:-$HOME/.cargo}/git"]
           clear: rm
         - name: rustup
-          desc: rustup toolchains outside mise (visibility only)
-          paths: ["${RUSTUP_HOME:-$HOME/.rustup}"]
+          group: Rust
+          kind: toolchains
+          desc: rustup installed toolchains (visibility only)
+          paths: ["${RUSTUP_HOME:-$HOME/.rustup}/toolchains"]
           clear: none
           expand: true
+        - name: rust-mise
+          group: Rust
+          kind: toolchains
+          desc: mise-managed Rust installs (also visible under mise-installs)
+          paths: ["${MISE_INSTALLS_DIR:-${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}/installs}/rust"]
+          clear: none
+          expand: true
+        - name: rustup-cache
+          group: Rust
+          kind: ancillary
+          desc: rustup download staging and metadata (visibility only)
+          paths: ["${RUSTUP_HOME:-$HOME/.rustup}/downloads", "${RUSTUP_HOME:-$HOME/.rustup}/tmp", "${RUSTUP_HOME:-$HOME/.rustup}/update-hashes", "${RUSTUP_HOME:-$HOME/.rustup}/settings.toml"]
+          clear: none
       go:
         - name: go-mod
+          group: Go
           desc: go module source cache
           query: go env GOMODCACHE
           fallback: "${GOPATH:-$HOME/go}/pkg/mod"
           clear: go clean -modcache
         - name: go-build
+          group: Go
           desc: go build cache
           query: go env GOCACHE
           fallback: "${XDG_CACHE_HOME:-$HOME/.cache}/go-build"
           clear: go clean -cache
       gradle:
         - name: gradle
+          group: JVM
           desc: gradle dependency caches
           paths: ["${GRADLE_USER_HOME:-$HOME/.gradle}/caches"]
           clear: rm
       maven:
         - name: maven
+          group: JVM
           desc: maven local repository
           paths: ["$HOME/.m2/repository"]
           clear: rm
       python:
         - name: pip
+          group: Python
           desc: pip download and build cache
           paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/pip"]
           clear: pip cache purge
       uv:
         - name: uv
+          group: Python
           desc: uv python and package cache
           paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/uv"]
           gc: uv cache prune
           clear: uv cache clean
       dotnet:
         - name: nuget
+          group: .NET
           desc: dotnet nuget packages
-          paths: ["$HOME/.nuget/packages"]
-          clear: dotnet nuget locals all --clear
+          paths: ["${NUGET_PACKAGES:-$HOME/.nuget/packages}"]
+          clear: dotnet nuget locals global-packages --clear
       prettier:
         - name: prettier
+          group: Node
           desc: prettier cache
           paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/prettier"]
           clear: rm

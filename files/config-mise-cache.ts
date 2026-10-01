@@ -22,9 +22,7 @@
  *   config-mise-cache.ts            # detect + stage (writes the JSON)
  *   config-mise-cache.ts --stdout   # detect only; print JSON to stdout
  *
- * When mise is unavailable or `mise ls` fails, the base areas are staged
- * with a warning (never an error): mise-cache.ts would find no tool-mapped
- * caches either.
+ * Discovery failure exits nonzero without replacing the previous catalog.
  *
  * Exit: 0 staged/printed, 2 usage error, 1 write failure.
  */
@@ -37,6 +35,8 @@ import { parseArgs } from "node:util";
 
 interface Area {
   readonly name: string;
+  readonly group?: string;
+  readonly kind?: string;
   readonly desc: string;
   readonly paths: readonly string[];
   readonly query: string;
@@ -72,6 +72,8 @@ const MISE2_CONFIG_DEFAULT: string | null = null;
 
 {% macro area_literal(a) %}    {
       name: "{{ a['name'] }}",
+      group: "{{ a['group'] | default('Other') }}",
+      kind: "{{ a['kind'] | default('') }}",
       desc: "{{ a['desc'] }}",
       paths: [{% for p in a['paths'] | default([]) %}"{{ p }}", {% endfor %}],
       query: "{{ a['query'] | default("") }}",
@@ -163,27 +165,24 @@ function runTool(cmd: string): Promise<ToolResult> {
   });
 }
 
-/** tool names installed via mise; empty (with a warning) when detection fails */
+/** Empty installation is valid; failed discovery must not erase a catalog. */
 async function detectTools(): Promise<string[]> {
   const result = await runTool("mise ls --json --installed");
   if (result.missing) {
-    console.error("config-mise-cache: mise is not on PATH; staging base areas only");
-    return [];
+    throw new Error("config-mise-cache: mise is not on PATH; catalog unchanged");
   }
   if (result.failed) {
     const reason = result.stderr.trim().split("\n")[0] ?? "";
-    console.error(`config-mise-cache: mise ls failed (${reason}); staging base areas only`);
-    return [];
+    throw new Error(`config-mise-cache: mise ls failed (${reason}); catalog unchanged`);
   }
   try {
-    const parsed: unknown = JSON.parse(result.stdout || "{}");
+    const parsed: unknown = JSON.parse(result.stdout);
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
       throw new Error("unexpected shape");
     }
     return Object.keys(parsed).sort();
   } catch {
-    console.error("config-mise-cache: mise ls output was not a tool map; staging base areas only");
-    return [];
+    throw new Error("config-mise-cache: mise ls output was not a tool map; catalog unchanged");
   }
 }
 
