@@ -32,9 +32,10 @@ self-owned local jj repo at `/usr/local/src/linux-config-debplus` into
 [`files/linux-config-debplus/`](/files/linux-config-debplus/). The inputs
 are Linux 7.1-era: the running debplus kernel was built from commit
 `987301279ffaf3a6f2eaca7ad7f4a8b7eec3008e` (parent = the `v7.1` tag,
-build timestamp 2026-08-09). The source repo remains the upstream home
-for this material; compfuzor manages a faithful mirror of it, not its
-history. The historical `archive/` subtree is retained verbatim
+ build timestamp 2026-08-09). Compfuzor now holds the deployable snapshot;
+ the original local repo remains intact as provenance and history. Later
+ edits to either copy are not automatically synchronized. The historical
+ `archive/` subtree is retained verbatim
 (old Kconfig scratch, superseded hotfix scripts/patches/source backups);
 nothing in the current workflow reads it.
 
@@ -76,6 +77,21 @@ nothing in the current workflow reads it.
 
 ## Usage
 
+Deploy the declared bundle without patching or building the kernel:
+
+```sh
+ansible-playbook -i 'localhost,' -c local linux-config-debplus.src.pb
+```
+
+For isolated staging, redirect both the bundle and the standard etc
+furniture (overriding `DIR` alone still creates the default `/etc/opt` path):
+
+```sh
+ansible-playbook -i 'localhost,' -c local linux-config-debplus.src.pb \
+  -e DIR="$PWD/.test-agent/linux-debplus/stage" \
+  -e ETCS_DIR="$PWD/.test-agent/linux-debplus/etc"
+```
+
 Restore the configuration (from any cwd; Kconfig accounts for source
 version drift):
 
@@ -88,7 +104,10 @@ make -C /usr/local/src/linux LLVM=1 olddefconfig
 Build the package: **run `MAKE.sh` from the kernel checkout's cwd**, not
 from the config repo — the script exports reproducibility variables and
 invokes a bare `make`, so it resolves the tree from the current
-directory:
+directory. This is a historical recipe, not a ready-to-run upgrade:
+first resolve patch compatibility, review the resulting configuration,
+and update its fixed `LOCALVERSION` and `KDEB_PKGVERSION` for the intended
+build. Only after that review:
 
 ```sh
 cd /usr/local/src/linux
@@ -119,8 +138,8 @@ establish kernel-version compatibility, nor build or runtime success.
 ## Current-checkout incompatibility (as checked 2026-10-01)
 
 The live `/usr/local/src/linux` checkout is
-`v7.3-rc3-60-g587858367581` (HEAD `587858367581b9c55c3690f4e63382ad622
-719d4`, 2026-09-14, 2367 locally dirty files) — two minor lines past the
+`v7.3-rc3-60-g587858367581` (HEAD `587858367581`, 2026-09-14,
+2367 locally dirty files) — two minor lines past the
 7.1-era material. The hotfix `--check` fails concretely:
 
 ```
