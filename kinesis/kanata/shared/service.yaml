@@ -1,0 +1,46 @@
+---
+# Example services are installed link-only; switching variants is deliberate.
+# ExecStart points at the staged config: no /etc/kanata links to overwrite.
+TYPE: kanata
+PKGS: [kanata]
+ETC_PROP:
+  mode: "0755"
+SYSTEMD_ALIAS: false
+SYSTEMD_ENABLE: false
+SYSTEMD_START: false
+SYSTEMD_UNITS:
+  Description: "Kanata example -- {{ INSTANCE }}"
+  Wants: modprobe@uinput.service
+  After: modprobe@uinput.service
+SYSTEMD_SERVICES:
+  Type: simple
+  User: _kanata
+  Group: _kanata
+  SupplementaryGroups: input
+  ExecStart: "{{ KANATA_BIN | default('/usr/bin/kanata') }} --cfg {{ ETC }}/kanata.kbd"
+  Restart: on-failure
+  RestartSec: 2
+  DeviceAllow: [/dev/uinput rw, char-input]
+  DevicePolicy: strict
+  PrivateDevices: true
+  BindPaths: /dev/uinput
+  BindReadOnlyPaths: /dev/input/
+  NoNewPrivileges: true
+  PrivateTmp: true
+  PrivateNetwork: true
+  PrivateUsers: true
+  ProtectHome: true
+  ProtectSystem: strict
+  ProtectKernelTunables: true
+  ProtectKernelModules: true
+  ProtectKernelLogs: true
+  ProtectControlGroups: true
+  RestrictAddressFamilies: AF_UNIX
+  IPAddressDeny: any
+  RestrictSUIDSGID: true
+  RestrictRealtime: true
+  LockPersonality: true
+  MemoryDenyWriteExecute: true
+  UMask: "0077"
+SYSTEMD_INSTALLS:
+  WantedBy: multi-user.target
