@@ -81,7 +81,11 @@
       - build-essential
       - git
       - libcairo2-dev
-      - libcurl4-openssl-dev
+      # gnutls flavor, not the openssl one BUILDING.md lists alongside
+      # libqalculate-dev: on Debian the two -dev flavors conflict and
+      # libqalculate-dev depends on gnutls, so openssl would evict it
+      # (verified the hard way). Noctalia only needs libcurl via pkg-config.
+      - libcurl4-gnutls-dev
       - libegl-dev
       - libfontconfig-dev
       - libfreetype-dev
