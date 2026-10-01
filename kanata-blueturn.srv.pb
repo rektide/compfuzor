@@ -16,10 +16,13 @@
     #
     # CAVEAT kernel 7.1.0-debplus: hid-core drops the pedal's 7-byte
     # keyboard reports (uhid short-report regression; "Event data for
-    # report 0 was too short (8 vs 7)" in dmesg; fixed in 7.2, backport
-    # cfc0d283d931 on 7.1.y). This instance runs and grabs the device,
-    # but NO keys arrive until a kernel with the fix. Full story:
-    # design/blueturn/blueturn-linux-research.general.md
+    # report 0 was too short (8 vs 7)" in dmesg; fixed in 7.1.4+/7.2,
+    # backport cfc0d283d931). This instance runs and grabs the device,
+    # but no keys arrive until a kernel with the fix -- unless
+    # blueturn-hidbpf.etc.pb is applied: its device_event eBPF pad
+    # (7->8 trailing zero, auto-attached per uhid instance via
+    # udev-hid-bpf) restores pre-7.0 semantics on affected kernels.
+    # Full story: design/blueturn/kernel-uhid-shortreport.general.md
     #
     # Reuses the packaged kanata package's static _kanata user (input
     # group) -- same shape as /usr/lib/systemd/system/kanata.service,
