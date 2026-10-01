@@ -5,6 +5,7 @@ from __future__ import annotations
 import collections.abc
 import posixpath
 import re
+import shlex
 
 from ansible.errors import AnsibleFilterError
 from ansible.template import accept_args_markers
@@ -16,6 +17,25 @@ from runtime_bundles import runtime_alias_bin
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 _PROCESSORS = {"concat", "json-deep-merge", "block-in-file"}
 _PLACEMENTS = ("before", "after")
+
+
+def _processor(value, label):
+    if isinstance(value, str):
+        if value not in _PROCESSORS:
+            _error("unsupported processor {!r}".format(value))
+        return value
+    declaration = _mapping(value, label)
+    if set(declaration) - {"command", "args"}:
+        _error("{} has unknown settings".format(label))
+    command = declaration.get("command")
+    if not isinstance(command, str) or not command or any(c in command for c in "\0\r\n"):
+        _error("{}.command must be a non-empty executable path without control characters".format(label))
+    if not command.startswith("/") and any(part in ("", ".", "..") for part in command.split("/")):
+        _error("{}.command must be absolute or a bin-relative path without traversal".format(label))
+    args = _sequence(declaration.get("args", []), "{}.args".format(label))
+    if any(not isinstance(arg, str) or any(c in arg for c in "\0\r\n") for arg in args):
+        _error("{}.args must contain strings without control characters".format(label))
+    return {"command": command, "args": args}
 
 
 def _error(message):
@@ -180,9 +200,7 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled"):
             _error("output {!r} is claimed by {} and {}".format(output, output_owners[output], name))
         output_owners[output] = name
 
-        processor = raw.get("processor")
-        if processor not in _PROCESSORS:
-            _error("unsupported processor {!r}".format(processor))
+        processor = _processor(raw.get("processor"), "CONFIGS.{}.processor".format(output_key))
         validate = raw.get("validate")
         if validate is not None and (not isinstance(validate, str) or not validate):
             _error("CONFIGS.{}.validate must be a non-empty command".format(output_key))
@@ -287,12 +305,25 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled"):
         if output_dir and output_dir not in dirs:
             dirs.append(output_dir)
         leaf = "internal/config/{}".format(name)
-        bins.append({
-            "name": leaf,
-            "dest": leaf,
-            "link": "config/processors/{}".format(processor),
-            "bypass": False,
-        })
+        if isinstance(processor, str):
+            bins.append({
+                "name": leaf,
+                "dest": leaf,
+                "link": "config/processors/{}".format(processor),
+                "bypass": False,
+            })
+        else:
+            command = shlex.quote(processor["command"])
+            if not processor["command"].startswith("/"):
+                command = '"$DIR/bin/"' + command
+            bins.append({
+                "name": leaf,
+                "basedir": False,
+                "compose": False,
+                "helpers": ["env"],
+                "bypass": False,
+                "content": 'exec {}{} "$@"'.format(command, "".join(" " + shlex.quote(arg) for arg in processor["args"])),
+            })
 
     if remotes:
         bins.append(runtime_alias_bin("config-remote.mjs"))

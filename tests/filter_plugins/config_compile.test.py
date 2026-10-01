@@ -143,6 +143,30 @@ def test_validation():
     )
 
 
+def test_external_processor():
+    processor = {"command": "config/keybinding processor", "args": ["--target", "niri", "a'b", "$(false)", ""]}
+    plan = compile_config({"launch.kdl": {"processor": processor, "inputs": []}}, "/etc")
+    check("external processor spec", plan["spec"]["configs"]["launch"]["processor"], processor)
+    leaf = next(item for item in plan["bins"] if item["name"] == "internal/config/launch")
+    check("external leaf quoting", leaf["content"], 'exec "$DIR/bin/"\'config/keybinding processor\' --target niri \'a\'"\'"\'b\' \'$(false)\' \'\' "$@"')
+    check("external leaf environment", leaf["helpers"], ["env"])
+    absolute = compile_config({"x": {"processor": {"command": "/opt/processor"}, "inputs": []}}, "/etc")
+    check("absolute command", absolute["bins"][-1]["content"], 'exec /opt/processor "$@"')
+    for bad, message in [
+        ({"command": ""}, "executable path"),
+        ({"command": "../processor"}, "without traversal"),
+        ({"command": "a//b"}, "without traversal"),
+        ({"command": "a\n"}, "control characters"),
+        ({"command": "a", "args": "--flag"}, "sequence"),
+        ({"command": "a", "args": [1]}, "strings"),
+        ({"command": "a", "args": ["\0"]}, "control characters"),
+        ({"command": "a", "shell": True}, "unknown settings"),
+        ("unknown", "unsupported processor"),
+    ]:
+        check_raises("bad external processor", lambda bad=bad: compile_config({"x": {"processor": bad}}, "/etc"), message)
+
+
 if __name__ == "__main__":
     test_compile()
     test_validation()
+    test_external_processor()
