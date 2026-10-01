@@ -7,11 +7,24 @@
 # moving ref (FETCH_HEAD, HEAD) for the pin.
 #
 # Usage, from any cwd:  MAKE.sh [SOURCE-TREE]
-# SOURCE-TREE defaults to /usr/local/src/linux (user-managed). The tree must
-# actually BE the pinned snapshot: a git checkout is refused unless its HEAD
-# is the pin, and a plain export is refused unless its Makefile carries the
-# pinned kernel version. The default checkout usually sits elsewhere; export
-# the pin to a clean tree (git archive) and run this recipe against that.
+#
+# SOURCE-TREE defaults to /usr/local/src/linux (user-managed). Two accepted
+# source forms:
+#
+# - git checkout: its physical toplevel must BE SOURCE-TREE (no parent-repo
+#   discovery) and HEAD must be the pin. Uncommitted files matching
+#   HOTFIX_ALLOW (default: ^drivers/gpu/drm/amd/) are allowed but declared
+#   loudly on stderr: the artifact is then base-pin + hotfix, NOT pristine
+#   or bit-reproducible. Any other uncommitted change refuses the run.
+#
+# - plain export: must carry a .debplus-source-revision file whose content
+#   is the pin. The marker asserts the export's declared base revision
+#   only; it is NOT a proof of tree content. Create it explicitly when
+#   exporting a verified pin:
+#       git -C /usr/local/src/linux archive <pin> | tar -x -C <dir>
+#       echo <pin> > <dir>/.debplus-source-revision
+#
+# Both forms are additionally guarded by the tree's kernelversion.
 set -eu
 
 PIN_COMMIT=551c722f40809618230001baccf219193e22fc5a
@@ -19,35 +32,47 @@ PIN_TAG=v7.3-rc5
 PIN_EPOCH=1790733261
 PIN_ISO=2026-09-29T18:54:21-07:00
 PIN_KERNELVERSION=7.3.0-rc5
+HOTFIX_ALLOW="${HOTFIX_ALLOW:-^drivers/gpu/drm/amd/}"
+
+die() { echo "MAKE.sh: $*" >&2; exit 1; }
 
 SRC="$(readlink -f "${1:-/usr/local/src/linux}")"
+
 if [ -e "$SRC/.git" ]; then
-	git -C "$SRC" cat-file -e "$PIN_COMMIT^{commit}" || {
-		echo "MAKE.sh: $SRC lacks pinned commit $PIN_COMMIT" >&2
-		exit 1
-	}
-	head_commit="$(git -C "$SRC" rev-parse HEAD)"
-	if [ "$head_commit" != "$PIN_COMMIT" ]; then
-		echo "MAKE.sh: $SRC HEAD $head_commit is not pinned snapshot $PIN_COMMIT ($PIN_TAG + fixes)." >&2
-		echo "MAKE.sh: run against a clean export of the pin instead." >&2
-		exit 1
+	[ "$(git -C "$SRC" rev-parse --show-toplevel)" = "$SRC" ] ||
+		die "$SRC is not the physical root of its git checkout"
+	git -C "$SRC" cat-file -e "$PIN_COMMIT^{commit}" ||
+		die "$SRC lacks pinned commit $PIN_COMMIT"
+	[ "$(git -C "$SRC" rev-parse HEAD)" = "$PIN_COMMIT" ] ||
+		die "$SRC HEAD is not pinned snapshot $PIN_COMMIT ($PIN_TAG + fixes); run against a clean verified-pin export instead"
+	# Expected uncommitted hotfix files are allowed but declared; anything
+	# else refuses rather than being silently built in or dropped.
+	dirty="$(git -C "$SRC" status --porcelain)" || dirty=""
+	if [ -n "$dirty" ]; then
+		other="$(printf '%s\n' "$dirty" | cut -c4- | grep -Ev "$HOTFIX_ALLOW" || true)"
+		if [ -n "$other" ]; then
+			echo "MAKE.sh: $SRC has uncommitted changes outside the hotfix allowance:" >&2
+			printf '%s\n' "$other" >&2
+			die "commit, stash, or remove them; they will not be silently built in or dropped"
+		fi
+		allowed_n="$(printf '%s\n' "$dirty" | grep -Ec "$HOTFIX_ALLOW" || true)"
+		echo "MAKE.sh: NOTE: $SRC is base pin $PIN_COMMIT plus $allowed_n uncommitted hotfix file(s) (HOTFIX_ALLOW); artifact is NOT pristine/reproducible" >&2
 	fi
 	SOURCE_DATE_EPOCH="$(git -C "$SRC" show -s --format=%ct "$PIN_COMMIT")"
 	KBUILD_BUILD_TIMESTAMP="$(git -C "$SRC" show -s --format=%cI "$PIN_COMMIT")"
-	if [ "$SOURCE_DATE_EPOCH" != "$PIN_EPOCH" ]; then
-		echo "MAKE.sh: pin date constants stale for $PIN_COMMIT" >&2
-		exit 1
-	fi
+	[ "$SOURCE_DATE_EPOCH" = "$PIN_EPOCH" ] ||
+		die "pin date constants stale for $PIN_COMMIT"
 else
-	# Portable export of the pin: reproducibility metadata from the pinned
-	# commit, not from export mtimes or wall clock.
+	[ -f "$SRC/.debplus-source-revision" ] ||
+		die "unmarked export: plain exports need .debplus-source-revision == $PIN_COMMIT; create it only when exporting a verified pin (see header)"
+	rev="$(tr -d ' \t\n\r' < "$SRC/.debplus-source-revision")"
+	[ "$rev" = "$PIN_COMMIT" ] ||
+		die "export declares base revision '$rev', not pinned $PIN_COMMIT"
 	SOURCE_DATE_EPOCH="$PIN_EPOCH"
 	KBUILD_BUILD_TIMESTAMP="$PIN_ISO"
 fi
-if [ "$(make -s -C "$SRC" kernelversion)" != "$PIN_KERNELVERSION" ]; then
-	echo "MAKE.sh: $SRC is not kernel $PIN_KERNELVERSION (pin mismatch)" >&2
-	exit 1
-fi
+[ "$(make -s -C "$SRC" kernelversion)" = "$PIN_KERNELVERSION" ] ||
+	die "$SRC is not kernel $PIN_KERNELVERSION (pin mismatch)"
 export SOURCE_DATE_EPOCH KBUILD_BUILD_TIMESTAMP
 export KBUILD_BUILD_USER=rektide KBUILD_BUILD_HOST=workhorse
 export DPKG_DEB_COMPRESSOR_TYPE=xz
