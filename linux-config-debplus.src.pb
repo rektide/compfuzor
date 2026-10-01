@@ -68,6 +68,9 @@
     - name: tests/amdgpu-power/assertions.c
       copyDir: True
       mode: "0644"
+    - name: tests/package-recipe/make-sh-guards.sh
+      copyDir: True
+      mode: "0755"
     - name: baselines/7.1/README.md
       copyDir: True
       mode: "0644"
@@ -107,6 +110,18 @@
     # Historical archive, retained verbatim; nothing in the current
     # workflow reads it.
     - name: archive/previous-normalization/config-debian-plus.7.1.0.xz
+      copyDir: True
+      mode: "0644"
+    - name: archive/recovered-inputs/README.md
+      copyDir: True
+      mode: "0644"
+    - name: archive/recovered-inputs/config-6.13-amd64.xz
+      copyDir: True
+      mode: "0644"
+    - name: archive/recovered-inputs/config-7.1.3+deb14.xz
+      copyDir: True
+      mode: "0644"
+    - name: archive/recovered-inputs/mise.toml.recovered
       copyDir: True
       mode: "0644"
     - name: archive/previous-normalization/.config.xz

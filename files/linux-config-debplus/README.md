@@ -254,6 +254,10 @@ tree's `.config` and apply the hotfix explicitly before running the recipe.
 The package identity is `7.3.0~rc5+git20260929.551c722f4080-1`, sorting before
 the eventual final 7.3 release.
 
+[Package-recipe guard tests](tests/package-recipe/make-sh-guards.sh) exercise
+revision, source-root, marker, and expected-hotfix checks with recording
+Git/Make stubs. They do not compile a kernel.
+
 ## Archive
 
 `archive/previous-normalization/` contains old GCC-era Kconfig scratch output.
@@ -266,6 +270,17 @@ The initial import came from the local jj repo at
 hotfix, and build command are preserved in compfuzor's commit history. The
 original local repo remains intact; it and the compfuzor inputs do not
 automatically synchronize.
+
+[Recovered inputs](archive/recovered-inputs/README.md) include the old
+`config-7.1.3+deb14` base, a 6.13 config, and the small tool declaration found
+in JJ history. They are compressed evidence, not automatically restored files.
+
+The old in-place kernel build was cleaned on 2026-10-01, reclaiming 24.16 GB.
+Its small private preservation set is at
+`/usr/local/src/linux-build-preserved/7.1.0-debplus.1-20261001/`, including
+configs, signing material, build metadata, and the exact unstripped kernel
+image. That directory and the old `.deb` packages are separate from this public
+bundle; private keys are never committed here.
 
 Related compfuzor material: [rektide/compfuzor `pstore.etc.pb`](https://github.com/rektide/compfuzor/blob/main/pstore.etc.pb) explains the
 runtime crash-evidence policy enabled by the `CONFIG_PSTORE*` options;

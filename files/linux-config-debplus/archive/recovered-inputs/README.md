@@ -2,15 +2,18 @@
 
 Recovered 2026-10-01 from the jj working-copy history of `/usr/local/src/linux`
 (colocated git/jj; read via read-only `git cat-file` on the git objects). An
-interrupted 2026-09-15 `jj new master@origin` materialization deleted these
-uncommitted root files from the tree; they survive in the hidden prior
+apparently interrupted 2026-09-15 `jj new master@origin` materialization
+removed these uncommitted root files from the tree; they survive in the hidden prior
 working-copy commit `df0fa920ad9ab6cc8f11bc65a0addb21cd46be84` (change
 `xvuklsmr`, hidden, protected by `refs/jj/keep/df0fa920…`). No other copy of
-the two `.xz` configs exists on disk (checked `/usr/local/src`, `/boot`).
+the two original configs was found on disk at discovery (checked
+`/usr/local/src`, `/boot`). The compressed copies here are now durable.
 
-These are Debian **packaging inputs** for the debplus config lineage — relevant
-baseline material for config-diff research. The `debian/` analysis directory of
-this bundle is owned separately; this directory only preserves the raw inputs.
+These are recovered inputs from the debplus config lineage, including the
+Debian-named base used by the old regeneration instructions. Their recovery
+does not independently establish exact package provenance. This directory
+preserves the inputs; current Debian retrieval and layering belong in
+`debian/`.
 
 ## Contents and provenance
 
@@ -41,7 +44,7 @@ compressions of the same input produced byte-identical output.
 Reproduce:
 
 ```sh
-python3 -c 'import lzma,sys; sys.stdout.buffer.write(lzma.compress(open("CONFIG","rb").read(), format=lzma.FORMAT_XZ, preset=9|lzma.PRESET_EXTREME))' < config-6.13-amd64 | sha256sum
+python3 -c 'import lzma,sys; sys.stdout.buffer.write(lzma.compress(sys.stdin.buffer.read(), format=lzma.FORMAT_XZ, preset=9|lzma.PRESET_EXTREME))' < config-6.13-amd64 | sha256sum
 ```
 
 Verify a snapshot against the table above:
@@ -64,7 +67,8 @@ xz metadata: single block, CRC64, presets 9e (`xz -l` reports 56.3/58.5 KiB).
 
 - `MAKE.sh`, `LIQUORIX-SELECT.sh`, `config-debian-plus` — also present in
   `df0fa920`, but duplicates of files already canonical here
-  (`MAKE.sh`, `config-debian-plus`) and in `/usr/local/src/LIQUORIX-SELECT.sh`.
+  (the historical `MAKE.sh` in commit history and the compressed 7.1 seed)
+  and in `/usr/local/src/LIQUORIX-SELECT.sh`.
 - The in-tree kernel `.config` family, `certs/signing_key.pem`, build outputs —
   live in `/usr/local/src/linux` and are out of scope for this bundle; no
   private key material is committed anywhere in this directory.
