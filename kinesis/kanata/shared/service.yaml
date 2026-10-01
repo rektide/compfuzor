@@ -4,8 +4,10 @@
 TYPE: kanata
 PKGS: [kanata]
 DIRMODE: "0755"
-ETC_PROP:
-  mode: "0755"
+# ETC_PROP.mode applies to both directories and generated files. Leave it
+# unset so each falls back to its proper mode; helper entries override to 0755.
+FILEMODE: "0644"
+ETC_PROP: {}
 SYSTEMD_ALIAS: false
 SYSTEMD_ENABLE: false
 SYSTEMD_START: false
