@@ -9,29 +9,24 @@
  * single key that unlocks deletion. There is no code path that deletes
  * without `--apply`.
  *
- * What it targets:
- *   Rust:   cargo target/ INNARDS, never whole target/ trees —
- *             target/<profile>/incremental/   (debug + release + custom)
- *             target/package/, target/doc/
- *           A target/ dir only counts when a Cargo.toml sits beside it.
- *           `--rust-aggressive` additionally targets
- *             target/<profile>/deps/, build/, .fingerprint/
- *           which FORCES FULL REBUILDS of every project it touches —
- *           next cargo build recompiles everything, redownloads nothing.
- *   Node:   whole node_modules/ trees (traversal prunes at the first one;
- *           a nested node_modules is unreachable anyway once the outer
- *           tree goes).
+ * Restructured 2026-10-01 per operator decisions: the DEFAULT pass is
+ * rust-safe cargo target/ innards ONLY — never whole target/ trees:
+ *   target/<profile>/incremental/   (debug + release + custom profiles)
+ *   target/package/, target/doc/
+ * A target/ dir only counts when a Cargo.toml sits beside it.
  *
- * pnpm semantics (why node_modules deletion can "free nothing"):
- *   pnpm node_modules are hardlinks/reflinks into a content-addressable
- *   store (`pnpm store path`). Unlinking a project's node_modules drops
- *   directory entries, not the store's blocks — freed space stays ~0 until
- *   the store itself is pruned. The flip side: re-running pnpm install
- *   after deleting only node_modules is cheap (re-link, no re-download)
- *   as long as the store still holds the content. So the report keeps
- *   "space freed by unlinking" and "space freed by store prune" separate,
- *   and `--pnpm-store-prune` (apply-mode only) runs `pnpm store prune`
- *   after node_modules removal to actually release bytes.
+ * node_modules removal is an OPT-IN anti-feature (--node-modules): pnpm
+ * node_modules are hardlinks/reflinks into a content-addressable store,
+ * so deleting them frees almost nothing until the store is pruned — and
+ * re-install is cheap (re-link, no re-download) only while the store
+ * still holds the content. Operator-measured 2026-10-01: `pnpm store
+ * prune` alone freed 6.0 GB / 140,780 files; node_modules unlinking
+ * freed ~nothing by itself. The sweep is kept for the rare cases where
+ * the DIRECTORY ENTRIES themselves are the problem (disk inode/dirent
+ * bloat, broken trees), not space.
+ *
+ * The aggressive cargo sweep (target/<profile>/{deps,build,.fingerprint},
+ * forces full rebuilds) moved to its own bin: rust-aggressive.ts.
  *
  * Sizes are block usage (du -s style: st_blocks × 512), an UPPER bound on
  * what unlinking frees — hardlinked/reflinked content shared with the
@@ -42,31 +37,26 @@
  * directories quietly instead of failing.
  *
  * Usage:
- *   src-clean.ts [--root <dir>] [--max-depth N] [--rust-aggressive]
- *   src-clean.ts --apply [--rust-aggressive] [--pnpm-store-prune]
+ *   src-clean.ts [--root <dir>] [--max-depth N]
+ *   src-clean.ts --apply [--node-modules] [--pnpm-store-prune]
  *
  * Exit: 0 ok, 1 runtime failure, 2 usage error.
  */
 
-import { spawn } from "node:child_process";
-import { lstat, readdir, rm, rmdir, stat } from "node:fs/promises";
+import { readdir, rm, rmdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { parseArgs } from "node:util";
 import type { Dirent } from "node:fs";
+import { DEFAULT_MAX_DEPTH, SKIP_DIR_NAMES, UsageError, capture, duBytes, human, isErrnoError, isRealDir, run } from "./lib.ts";
 
 const PROG = "src-clean.ts";
-const DEFAULT_MAX_DEPTH = 6;
-/** Directory names never descended into (VCS internals). */
-const SKIP_DIR_NAMES: ReadonlySet<string> = new Set([".git", ".jj"]);
 /** Cargo target/ children handled directly at the target level. */
 const RUST_TARGET_TOP: readonly string[] = ["package", "doc"];
-/** target/<profile>/ innards removed in the default (safe) mode. */
+/** target/<profile>/ innards removed by the default (rust-safe) pass. */
 const RUST_PROFILE_INNARDS: readonly string[] = ["incremental"];
-/** target/<profile>/ innards additionally removed by --rust-aggressive. */
-const RUST_AGGRESSIVE_INNARDS: readonly string[] = ["deps", "build", ".fingerprint"];
 
-type Category = "rust-safe" | "rust-aggressive" | "node-modules";
+type Category = "rust-safe" | "node-modules";
 
 interface Candidate {
 	category: Category;
@@ -86,7 +76,7 @@ interface TargetLayout {
 	target: string;
 	/** Entry names directly under target/. */
 	targetEntries: readonly string[];
-	/** Non-candidate entry names per profile dir under target/. */
+	/** Entry names per profile dir under target/. */
 	profiles: ReadonlyArray<{ path: string; entries: readonly string[] }>;
 }
 
@@ -97,161 +87,54 @@ interface DiscoverResult {
 	pruned: number;
 }
 
-interface DuOutcome {
-	bytes: bigint;
-	errors: number;
-}
-
-class UsageError extends Error {
-	readonly code = 2;
+interface PnpmStoreInfo {
+	/** Resolved store path, or null when pnpm is absent/failed. */
+	path: string | null;
+	/** Store size in bytes from bounded `du -s -B1`, or null when unknown. */
+	bytes: bigint | null;
+	duBounded: boolean;
 }
 
 function usage(): string {
 	return `usage: ${PROG} [options]
 
-Walk a source tree (default $HOME/src), report reclaimable build-artifact
-space, and optionally remove it. DRY-RUN BY DEFAULT: nothing is deleted
-without --apply.
+Walk a source tree (default $HOME/src), report reclaimable cargo
+target/ innards, and optionally remove them. DRY-RUN BY DEFAULT:
+nothing is deleted without --apply.
 
 options:
   --apply              actually remove candidates (destructive)
   --root <dir>         scan root (default: $HOME/src)
   --max-depth <n>      directory depth cap for the walk (default ${DEFAULT_MAX_DEPTH})
-  --rust-aggressive    also remove target/<profile>/{deps,build,.fingerprint};
-                       FORCES FULL REBUILDS — next cargo build recompiles
-                       every touched project from scratch
+  --node-modules       ALSO remove whole node_modules/ trees. Opt-in
+                       anti-feature: pnpm trees are store hardlinks, so
+                       this rarely frees bytes (see semantics below); use
+                       it for dirent/inode bloat or broken trees
   --pnpm-store-prune   with --apply only: run \`pnpm store prune\` after
-                       node_modules removal to release store bytes
+                       removals to release store bytes
   --help               this help
 
-what is removed:
-  rust (default):    target/<profile>/incremental/, target/package/,
-                     target/doc/ — target/ itself is kept, so incremental
-                     metadata and packaging caches go but the build tree
-                     skeleton and most artifacts survive
-  rust (aggressive): additionally target/<profile>/{deps,build,.fingerprint}
-                     — cheap on disk, expensive later: full recompile
-  node:              whole node_modules/ trees
+what is removed (default pass — rust-safe only):
+  target/<profile>/incremental/, target/package/, target/doc/ — target/
+  itself is kept, so incremental metadata and packaging caches go but the
+  build tree skeleton and most artifacts survive (next build is
+  incremental-but-slower, not from-scratch). The aggressive sweep
+  (deps/build/.fingerprint — FORCES FULL REBUILDS) is a separate bin:
+  rust-aggressive.ts.
 
-pnpm semantics:
+pnpm semantics (why --node-modules is opt-in):
   pnpm node_modules are hardlinks/reflinks into the content-addressable
   pnpm store. Deleting node_modules frees almost nothing until the store
   is pruned; conversely, re-install after only deleting node_modules is
-  cheap (re-link, no re-download) while the store still holds the content.
-  The report separates "space freed by unlinking" from "space freed by
-  store prune" for exactly this reason.
+  cheap (re-link, no re-download) while the store still holds the
+  content. Measured on this host 2026-10-01: store prune freed 6.0 GB /
+  140,780 files; node_modules unlinking ~nothing by itself. The report
+  separates "space freed by unlinking" from "space freed by store
+  prune"; the store itself is pruned weekly by the
+  ${PROG.replace("src-clean.ts", "pnpm-prune")}.timer user unit.
 
 sizes are block usage and upper bounds: content shared with the pnpm
 store or other checkouts (hardlinks/reflinks) is not freed by unlinking.`;
-}
-
-function human(bytes: bigint): string {
-	const units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
-	let value = Number(bytes);
-	let unit = 0;
-	while (value >= 1024 && unit < units.length - 1) {
-		value /= 1024;
-		unit++;
-	}
-	return unit === 0 ? `${value} ${units[unit]}` : `${value.toFixed(1)} ${units[unit]}`;
-}
-
-/** Capture a command's stdout, bounded by a timeout; null on any failure. */
-function capture(command: string, args: readonly string[], timeoutMs: number): Promise<string | null> {
-	return new Promise((resolve) => {
-		let child;
-		try {
-			child = spawn(command, args, { stdio: ["ignore", "pipe", "ignore"] });
-		} catch {
-			resolve(null);
-			return;
-		}
-		let out = "";
-		const timer = setTimeout(() => child.kill("SIGKILL"), timeoutMs);
-		child.stdout?.on("data", (chunk: Buffer) => {
-			out += chunk.toString("utf8");
-		});
-		child.on("error", () => {
-			clearTimeout(timer);
-			resolve(null);
-		});
-		child.on("close", (code) => {
-			clearTimeout(timer);
-			resolve(code === 0 ? out : null);
-		});
-	});
-}
-
-/** Run a command inheriting stdio; resolve to its exit code (never rejects). */
-function run(command: string, args: readonly string[]): Promise<number | null> {
-	return new Promise((resolve) => {
-		let child;
-		try {
-			child = spawn(command, args, { stdio: "inherit" });
-		} catch (error) {
-			console.error(`${PROG}: failed to spawn ${command}:`, error);
-			resolve(1);
-			return;
-		}
-		child.on("error", (error) => {
-			console.error(`${PROG}: ${command}:`, error);
-			resolve(1);
-		});
-		child.on("close", (code) => resolve(code));
-	});
-}
-
-/**
- * Block-usage size of a subtree, du -s style: st_blocks × 512 per inode,
- * hardlinks counted once per traversal (parity with du within one tree).
- * Read errors are counted, not thrown.
- */
-async function duBytes(rootPath: string): Promise<DuOutcome> {
-	let bytes = 0n;
-	let errors = 0;
-	const seen = new Set<string>();
-	const walk = async (dir: string): Promise<void> => {
-		let entries: Dirent[];
-		try {
-			entries = await readdir(dir, { withFileTypes: true });
-		} catch {
-			errors++;
-			return;
-		}
-		await Promise.all(
-			entries.map(async (entry) => {
-				const entryPath = join(dir, entry.name);
-				try {
-					const info = await lstat(entryPath);
-					if (info.nlink > 1) {
-						const key = `${info.dev}:${info.ino}`;
-						if (seen.has(key)) return;
-						seen.add(key);
-					}
-					bytes += BigInt(info.blocks ?? 0) * 512n;
-					if (info.isDirectory()) await walk(entryPath);
-				} catch {
-					errors++;
-				}
-			}),
-		);
-	};
-	try {
-		const info = await lstat(rootPath);
-		bytes += BigInt(info.blocks ?? 0) * 512n;
-		if (info.isDirectory()) await walk(rootPath);
-	} catch {
-		errors++;
-	}
-	return { bytes, errors };
-}
-
-async function isRealDir(path: string): Promise<boolean> {
-	try {
-		return (await lstat(path)).isDirectory();
-	} catch {
-		return false;
-	}
 }
 
 async function measureCandidate(category: Category, path: string): Promise<Candidate> {
@@ -263,7 +146,7 @@ async function measureCandidate(category: Category, path: string): Promise<Candi
 async function discover(
 	root: string,
 	maxDepth: number,
-	rustAggressive: boolean,
+	nodeModules: boolean,
 ): Promise<DiscoverResult> {
 	const candidates: Candidate[] = [];
 	const targets: TargetLayout[] = [];
@@ -273,18 +156,22 @@ async function discover(
 	// A root that is itself a node_modules is one candidate, not a tree to
 	// mine for nested ones (.pnpm package dirs each carry node_modules).
 	if (basename(root) === "node_modules") {
+		if (!nodeModules) {
+			return { candidates, targets, unreadable, pruned };
+		}
 		pruned++;
 		candidates.push(await measureCandidate("node-modules", root));
 		return { candidates, targets, unreadable, pruned };
 	}
 
-	/** Scan a cargo target/ dir for removable innards (never whole target/). */
+	/** Scan a cargo target/ dir for rust-safe innards (never whole target/). */
 	const handleTarget = async (target: string): Promise<void> => {
 		pruned++;
 		let children: Dirent[];
 		try {
 			children = await readdir(target, { withFileTypes: true });
-		} catch {
+		} catch (error) {
+			if (!isErrnoError(error)) throw error;
 			unreadable++;
 			return;
 		}
@@ -300,7 +187,8 @@ async function discover(
 			let innards: Dirent[];
 			try {
 				innards = await readdir(childPath, { withFileTypes: true });
-			} catch {
+			} catch (error) {
+				if (!isErrnoError(error)) throw error;
 				unreadable++;
 				continue;
 			}
@@ -308,11 +196,8 @@ async function discover(
 			layout.profiles.push(profileLayout);
 			for (const innard of innards) {
 				if (!innard.isDirectory()) continue;
-				const innardPath = join(childPath, innard.name);
 				if (RUST_PROFILE_INNARDS.includes(innard.name)) {
-					candidates.push(await measureCandidate("rust-safe", innardPath));
-				} else if (rustAggressive && RUST_AGGRESSIVE_INNARDS.includes(innard.name)) {
-					candidates.push(await measureCandidate("rust-aggressive", innardPath));
+					candidates.push(await measureCandidate("rust-safe", join(childPath, innard.name)));
 				}
 			}
 		}
@@ -323,7 +208,8 @@ async function discover(
 		let entries: Dirent[];
 		try {
 			entries = await readdir(dir, { withFileTypes: true });
-		} catch {
+		} catch (error) {
+			if (!isErrnoError(error)) throw error;
 			unreadable++;
 			return;
 		}
@@ -337,7 +223,7 @@ async function discover(
 				const entryPath = join(dir, entry.name);
 				if (entry.name === "node_modules") {
 					pruned++;
-					candidates.push(await measureCandidate("node-modules", entryPath));
+					if (nodeModules) candidates.push(await measureCandidate("node-modules", entryPath));
 					return;
 				}
 				if (entry.name === "target" && cargoRoot) {
@@ -351,14 +237,6 @@ async function discover(
 
 	await visitDir(root, 0);
 	return { candidates, targets, unreadable, pruned };
-}
-
-interface PnpmStoreInfo {
-	/** Resolved store path, or null when pnpm is absent/failed. */
-	path: string | null;
-	/** Store size in bytes from bounded `du -s -B1`, or null when unknown. */
-	bytes: bigint | null;
-	duBounded: boolean;
 }
 
 async function inspectPnpmStore(): Promise<PnpmStoreInfo> {
@@ -406,7 +284,7 @@ function report(
 	root: string,
 	result: DiscoverResult,
 	store: PnpmStoreInfo,
-	opts: { maxDepth: number; rustAggressive: boolean; pnpmStorePrune: boolean },
+	opts: { maxDepth: number; nodeModules: boolean; pnpmStorePrune: boolean },
 ): string {
 	const lines: string[] = [];
 	const byCategory = new Map<Category, Candidate[]>();
@@ -418,7 +296,9 @@ function report(
 	const total = result.candidates.reduce((sum, candidate) => sum + candidate.bytes, 0n);
 
 	lines.push(`${PROG}: DRY RUN (no --apply) — nothing will be deleted`);
-	lines.push(`root: ${root}  max-depth: ${opts.maxDepth}  rust-aggressive: ${opts.rustAggressive ? "on" : "off"}`);
+	lines.push(
+		`root: ${root}  max-depth: ${opts.maxDepth}  node-modules: ${opts.nodeModules ? "on (opt-in)" : "off"}`,
+	);
 	lines.push("");
 	lines.push("candidates:");
 	if (result.candidates.length === 0) {
@@ -436,7 +316,7 @@ function report(
 	}
 	lines.push("");
 	lines.push("totals — space freed by unlinking (UPPER bound; see pnpm semantics in --help):");
-	const order: Category[] = ["rust-safe", "rust-aggressive", "node-modules"];
+	const order: Category[] = ["rust-safe", "node-modules"];
 	for (const category of order) {
 		const bucket = byCategory.get(category);
 		if (!bucket) continue;
@@ -455,9 +335,15 @@ function report(
 			lines.push(`  space freed by \`pnpm store prune\`: up to ${human(store.bytes)} (upper bound —`);
 			lines.push("    prune releases only packages no longer referenced by any project)");
 		}
-		lines.push("  note: unlinking store-linked node_modules frees ~0 by itself; the store");
-		lines.push("        prune is what releases bytes, and it only counts after projects");
-		lines.push("        stopped referencing the content (i.e. after node_modules removal).");
+		if (!opts.nodeModules) {
+			lines.push("  note: node_modules removal is opt-in (--node-modules) because unlinking");
+			lines.push("        store-linked trees frees ~0 by itself; the weekly prune (user unit)");
+			lines.push("        is what releases store bytes here.");
+		} else {
+			lines.push("  note: unlinking store-linked node_modules frees ~0 by itself; the store");
+			lines.push("        prune is what releases bytes, and it only counts after projects");
+			lines.push("        stopped referencing the content (i.e. after node_modules removal).");
+		}
 	}
 	lines.push("");
 	lines.push(`skipped: ${result.unreadable} unreadable dir(s) (quiet), ${result.pruned} pruned subtree(s) (node_modules/target)`);
@@ -478,7 +364,7 @@ async function main(argv: string[]): Promise<number> {
 		options: {
 			apply: { type: "boolean", default: false },
 			root: { type: "string" },
-			"rust-aggressive": { type: "boolean", default: false },
+			"node-modules": { type: "boolean", default: false },
 			"pnpm-store-prune": { type: "boolean", default: false },
 			"max-depth": { type: "string" },
 			help: { type: "boolean", default: false },
@@ -507,13 +393,14 @@ async function main(argv: string[]): Promise<number> {
 		throw new UsageError(`--root is unreadable or missing: ${rootPath} (${(error as NodeJS.ErrnoException).code ?? error})`);
 	}
 
-	const result = await discover(rootPath, maxDepth, values["rust-aggressive"] ?? false);
+	const nodeModules = values["node-modules"] ?? false;
+	const result = await discover(rootPath, maxDepth, nodeModules);
 	const store = await inspectPnpmStore();
 
 	if (!values.apply) {
 		console.log(report(rootPath, result, store, {
 			maxDepth,
-			rustAggressive: values["rust-aggressive"] ?? false,
+			nodeModules,
 			pnpmStorePrune: values["pnpm-store-prune"] ?? false,
 		}));
 		return 0;
