@@ -43,16 +43,19 @@
       - bash_rc
       - bash_profile
       - mise_npm_package_manager
-    # Cache areas inventoried by bin/mise-cache.sh (status/list/gc/clear).
-    # Fields: name (gc/clear selection key), desc, paths (list; space-joined
-    # into the rendered catalog; runtime-expanded, so $HOME and
+    # Cache catalog for bin/mise-cache.ts (status/list/gc/clear) and
+    # bin/config-mise-cache.ts (config lane: recomputes the catalog from
+    # `mise ls --json --installed` into etc/mise-cache.areas.json; mise-cache
+    # prefers that staged file, falling back to the rendered union below).
+    # Area fields: name (gc/clear selection key), desc, paths (list;
+    # space-joined into the rendered catalog; runtime-expanded, so $HOME and
     # ${XDG_CACHE_HOME:-...} forms work; entries must not contain spaces),
-    # query (ask the tool itself for its
-    # root), fallback (used when the query tool is off PATH), gc (safe
-    # reclaim command), clear (native command, `rm`, or `none` for
-    # visibility-only areas), expand (status reports one-level child sizes).
-    # Cache/data roots follow mise's own env overrides (MISE_CACHE_DIR,
-    # MISE_DATA_DIR) so a redirected mise sees its redirected caches.
+    # query (ask the tool itself for its root), fallback (used when the query
+    # tool is unavailable or answers empty), gc (safe reclaim command),
+    # clear (native command, `rm`, or `none` for visibility-only areas),
+    # expand (status reports one-level child sizes).
+    # Base areas: mise's own directories, always in the catalog. Cache/data
+    # roots follow mise's own env overrides (MISE_CACHE_DIR, MISE_DATA_DIR).
     mise_cache_areas:
       - name: mise-cache
         desc: mise internal metadata cache
@@ -70,74 +73,96 @@
         gc: mise prune --tools
         clear: none
         expand: true
-      - name: rustup
-        desc: rustup toolchains outside mise (visibility only)
-        paths: ["${RUSTUP_HOME:-$HOME/.rustup}"]
+      - name: mise-state
+        desc: mise local state (tracked configs; not a cache)
+        paths: ["${MISE_STATE_DIR:-$HOME/.local/state}/mise"]
         clear: none
-        expand: true
-      - name: cargo
-        desc: cargo registry and git caches
-        paths: ["${CARGO_HOME:-$HOME/.cargo}/registry", "${CARGO_HOME:-$HOME/.cargo}/git"]
-        clear: rm
-      - name: npm
-        desc: npm download cache
-        query: npm config get cache
-        fallback: "$HOME/.npm"
-        clear: npm cache clean --force
-      - name: pnpm
-        desc: pnpm content-addressed store and metadata cache
-        query: pnpm store path
-        fallback: "${XDG_DATA_HOME:-$HOME/.local/share}/pnpm/store"
-        paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/pnpm"]
-        gc: pnpm store prune
-        clear: rm
-      - name: yarn
-        desc: yarn classic and berry caches
-        paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/yarn", "$HOME/.yarn/berry/cache"]
-        clear: rm
-      - name: bun
-        desc: bun install cache
-        paths: ["${BUN_INSTALL:-$HOME/.bun}/install/cache"]
-        clear: bun pm cache rm
-      - name: deno
-        desc: deno remote module cache
-        paths: ["${DENO_DIR:-$HOME/.cache/deno}"]
-        clear: deno clean
-      - name: go-mod
-        desc: go module source cache
-        query: go env GOMODCACHE
-        fallback: "${GOPATH:-$HOME/go}/pkg/mod"
-        clear: go clean -modcache
-      - name: go-build
-        desc: go build cache
-        query: go env GOCACHE
-        fallback: "${XDG_CACHE_HOME:-$HOME/.cache}/go-build"
-        clear: go clean -cache
-      - name: gradle
-        desc: gradle dependency caches
-        paths: ["${GRADLE_USER_HOME:-$HOME/.gradle}/caches"]
-        clear: rm
-      - name: maven
-        desc: maven local repository
-        paths: ["$HOME/.m2/repository"]
-        clear: rm
-      - name: pip
-        desc: pip download and build cache
-        paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/pip"]
-        clear: pip cache purge
-      - name: uv
-        desc: uv python and package cache
-        paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/uv"]
-        gc: uv cache prune
-        clear: uv cache clean
-      - name: nuget
-        desc: dotnet nuget packages
-        paths: ["$HOME/.nuget/packages"]
-        clear: dotnet nuget locals all --clear
-      - name: prettier
-        desc: prettier cache
-        paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/prettier"]
-        clear: rm
+    # Tool-mapped areas: included when that tool is installed via mise
+    # (detected by config-mise-cache.ts). The stores are ecosystem caches,
+    # not mise-owned -- they appear because the tool that populates them is
+    # mise-managed here.
+    mise_tool_cache_areas:
+      node:
+        - name: npm
+          desc: npm download cache
+          query: npm config get cache
+          fallback: "$HOME/.npm"
+          clear: npm cache clean --force
+      pnpm:
+        - name: pnpm
+          desc: pnpm content-addressed store and metadata cache
+          query: pnpm store path
+          fallback: "${XDG_DATA_HOME:-$HOME/.local/share}/pnpm/store"
+          paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/pnpm"]
+          gc: pnpm store prune
+          clear: rm
+      yarn:
+        - name: yarn
+          desc: yarn classic and berry caches
+          paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/yarn", "$HOME/.yarn/berry/cache"]
+          clear: rm
+      bun:
+        - name: bun
+          desc: bun install cache
+          paths: ["${BUN_INSTALL:-$HOME/.bun}/install/cache"]
+          clear: bun pm cache rm
+      deno:
+        - name: deno
+          desc: deno remote module cache
+          paths: ["${DENO_DIR:-$HOME/.cache/deno}"]
+          clear: deno clean
+      rust:
+        - name: cargo
+          desc: cargo registry and git caches
+          paths: ["${CARGO_HOME:-$HOME/.cargo}/registry", "${CARGO_HOME:-$HOME/.cargo}/git"]
+          clear: rm
+        - name: rustup
+          desc: rustup toolchains outside mise (visibility only)
+          paths: ["${RUSTUP_HOME:-$HOME/.rustup}"]
+          clear: none
+          expand: true
+      go:
+        - name: go-mod
+          desc: go module source cache
+          query: go env GOMODCACHE
+          fallback: "${GOPATH:-$HOME/go}/pkg/mod"
+          clear: go clean -modcache
+        - name: go-build
+          desc: go build cache
+          query: go env GOCACHE
+          fallback: "${XDG_CACHE_HOME:-$HOME/.cache}/go-build"
+          clear: go clean -cache
+      gradle:
+        - name: gradle
+          desc: gradle dependency caches
+          paths: ["${GRADLE_USER_HOME:-$HOME/.gradle}/caches"]
+          clear: rm
+      maven:
+        - name: maven
+          desc: maven local repository
+          paths: ["$HOME/.m2/repository"]
+          clear: rm
+      python:
+        - name: pip
+          desc: pip download and build cache
+          paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/pip"]
+          clear: pip cache purge
+      uv:
+        - name: uv
+          desc: uv python and package cache
+          paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/uv"]
+          gc: uv cache prune
+          clear: uv cache clean
+      dotnet:
+        - name: nuget
+          desc: dotnet nuget packages
+          paths: ["$HOME/.nuget/packages"]
+          clear: dotnet nuget locals all --clear
+      prettier:
+        - name: prettier
+          desc: prettier cache
+          paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/prettier"]
+          clear: rm
     STATUSES:
       - status-mise-bash.sh
       # --fast: sizes come from du, which can take minutes across ~100G of
@@ -183,6 +208,17 @@
         runtime: node
         basedir: False
         compose: False
+      # Config-lane generator (joins bin/config.sh): recomputes the cache
+      # catalog from `mise ls --json --installed` -- base areas plus the
+      # per-tool areas mapped above -- and stages it as
+      # etc/mise-cache.areas.json. mise-cache.ts prefers the staged catalog.
+      # The explicit action classifies this .ts leaf into the config lane
+      # (the filename grammar only matches .sh).
+      - name: config-mise-cache.ts
+        src: ../config-mise-cache.ts
+        runtime: node
+        action: config
+        basedir: False
       - name: status-mise-bash.sh
         basedir: False
         content: |

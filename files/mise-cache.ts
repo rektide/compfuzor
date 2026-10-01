@@ -25,14 +25,18 @@
  * status.sh stays quick; invoke `mise-cache.ts status` directly for real
  * sizes — a full du across every area can take minutes on a warm machine.
  *
- * Areas are rendered from the playbook's mise_cache_areas var. `query` asks
- * the tool itself for its root (pnpm store path, go env GOMODCACHE, npm
- * config get cache, mise cache path); `fallback` applies when the tool is
- * unavailable or answers empty. Authored path strings are runtime-expanded
- * ($HOME and ${XDG_CACHE_HOME:-...} forms, nesting supported); query output
- * is used verbatim and never re-expanded. `expand` areas report one-level
- * child sizes instead of only an aggregate (mise installs, rustup
- * toolchains). `clear` is a native command, the literal `rm`, or `none` for
+ * Areas come from the staged catalog etc/mise-cache.areas.json written by
+ * config-mise-cache.ts (config lane: base areas plus per-tool areas
+ * selected by `mise ls --installed` detection), falling back to the
+ * rendered union of the playbook's mise_cache_areas and
+ * mise_tool_cache_areas until that step has run. `query` asks the tool
+ * itself for its root (pnpm store path, go env GOMODCACHE, npm config get
+ * cache, mise cache path); `fallback` applies when the tool is unavailable
+ * or answers empty. Authored path strings are runtime-expanded ($HOME and
+ * ${XDG_CACHE_HOME:-...} forms, nesting supported); query output is used
+ * verbatim and never re-expanded. `expand` areas report one-level child
+ * sizes instead of only an aggregate (mise installs, rustup toolchains).
+ * `clear` is a native command, the literal `rm`, or `none` for
  * visibility-only areas. Cache/data roots follow mise's own env overrides
  * (MISE_CACHE_DIR, MISE_DATA_DIR) so a redirected mise sees its redirected
  * caches.
@@ -42,6 +46,7 @@
  */
 
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { access, readFile, readdir, rm, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -63,6 +68,13 @@ interface Area {
   readonly expand: boolean;
 }
 
+/** etc/mise-cache.areas.json written by config-mise-cache.ts */
+interface CatalogFile {
+  readonly generated: string;
+  readonly tools: readonly string[];
+  readonly areas: readonly Area[];
+}
+
 {% if TYPE == "mise2" %}
 // mise2: route mise invocations through this deployment's isolated config
 // root. Cache and data roots stay shared with the mise deployment until
@@ -72,9 +84,11 @@ const MISE2_CONFIG_DEFAULT = "{{ mise2_config_dir }}";
 const MISE2_CONFIG_DEFAULT: string | null = null;
 {% endif %}
 
-// Rendered from the playbook's mise_cache_areas var.
-const AREAS: readonly Area[] = [
-{% for a in mise_cache_areas | default([]) %}  {
+// Rendered fallback catalog: base areas plus every tool-mapped area
+// flattened. At runtime the staged catalog from config-mise-cache.ts
+// (etc/mise-cache.areas.json, computed from `mise ls --installed`) is
+// preferred; this union applies until that config step has run.
+{% macro area_literal(a) %}  {
     name: "{{ a['name'] }}",
     desc: "{{ a['desc'] }}",
     paths: [{% for p in a['paths'] | default([]) %}"{{ p }}", {% endfor %}],
@@ -84,7 +98,8 @@ const AREAS: readonly Area[] = [
     clear: "{{ a['clear'] | default("") }}",
     expand: {{ "true" if a['expand'] | default(False) | bool else "false" }},
   },
-{% endfor %}];
+{% endmacro %}const FALLBACK_AREAS: readonly Area[] = [
+{% for a in mise_cache_areas | default([]) %}{{ area_literal(a) }}{% endfor %}{% for entry in mise_tool_cache_areas | default({}) | dict2items %}{% for a in entry.value %}{{ area_literal(a) }}{% endfor %}{% endfor %}];
 
 class UsageError extends Error {
   readonly code: number;
@@ -96,7 +111,7 @@ class UsageError extends Error {
 }
 
 function usage(): void {
-  const names = AREAS.map((a) => a.name).join(" ");
+  const names = FALLBACK_AREAS.map((a) => a.name).join(" ");
   console.error(`usage: mise-cache.ts status [--fast]
        mise-cache.ts list
        mise-cache.ts gc    AREAS...|--all [--dry-run]
@@ -211,6 +226,35 @@ interface ToolResult {
 }
 
 let mise2Config: string | null = null;
+
+/** deployment root: import.meta.url is <DIR>/bin/mise-cache.ts */
+const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
+const CATALOG_PATH = join(ROOT, "etc", "mise-cache.areas.json");
+
+/**
+ * Catalog selection: prefer the staged etc/mise-cache.areas.json computed
+ * by config-mise-cache.ts from `mise ls --installed` (present once the
+ * config lane has run); fall back to the rendered union. Returns the areas
+ * and a one-line provenance for status/list output.
+ */
+function loadCatalog(): { areas: readonly Area[]; source: string } {
+  try {
+    const parsed = JSON.parse(readFileSync(CATALOG_PATH, "utf8")) as CatalogFile;
+    if (Array.isArray(parsed.areas) && parsed.areas.length > 0) {
+      const tools = Array.isArray(parsed.tools) ? parsed.tools.length : 0;
+      return {
+        areas: parsed.areas,
+        source: `computed ${parsed.generated} (${parsed.areas.length} areas from ${tools} mise tools)`,
+      };
+    }
+  } catch {
+    // absent or unreadable staged catalog -> rendered fallback
+  }
+  return {
+    areas: FALLBACK_AREAS,
+    source: `rendered fallback (${FALLBACK_AREAS.length} areas; run config-mise-cache.ts to compute from mise ls)`,
+  };
+}
 
 /** how the command appears in logs (mise2 prefixes its config root) */
 function displayCmd(cmd: string): string {
@@ -354,10 +398,15 @@ function statusLine(name: string, size: string, paths: string): string {
   return `${name.padEnd(PAD)} ${size.padStart(9)}  ${paths}`;
 }
 
-async function cmdStatus(areas: readonly ResolvedArea[], fast: boolean): Promise<number> {
+async function cmdStatus(
+  areas: readonly ResolvedArea[],
+  fast: boolean,
+  source: string,
+): Promise<number> {
   if (!fast) await measureAreas(areas);
   const present = areas.filter((a) => a.present);
   const absent = areas.filter((a) => !a.present).map((a) => a.name);
+  console.log(`catalog: ${source}`);
   console.log(`cache areas: ${present.length} present, ${absent.length} absent`);
   if (present.length > 0) {
     console.log(statusLine("AREA", "SIZE", "PATHS"));
@@ -398,7 +447,8 @@ async function cmdStatus(areas: readonly ResolvedArea[], fast: boolean): Promise
   return 0;
 }
 
-function cmdList(areas: readonly ResolvedArea[]): number {
+function cmdList(areas: readonly ResolvedArea[], source: string): number {
+  console.log(`catalog: ${source}`);
   console.log(
     `${"AREA".padEnd(PAD)} ${"PRESENT".padEnd(7)} ${"GC".padEnd(3)} ${"CLEAR".padEnd(5)}  DESCRIPTION`,
   );
@@ -561,21 +611,20 @@ async function main(): Promise<number> {
 
   // import.meta.url is <DIR>/bin/mise-cache.ts; the deployment root is one
   // dirname up (fileURLToPath form for older @types/node).
-  if (!envExportLoaded) {
-    await sourceEnv(join(dirname(dirname(fileURLToPath(import.meta.url))), "env.export"));
-  }
+  if (!envExportLoaded) await sourceEnv(join(ROOT, "env.export"));
   if (MISE2_CONFIG_DEFAULT !== null) {
     // env.export values arrive as literal text (sourceEnv does not shell
     // expand); expandPath handles both the $HOME forms and plain paths
     mise2Config = expandPath(process.env.MISE2_CONFIG_DIR ?? MISE2_CONFIG_DEFAULT);
   }
 
-  const areas = await Promise.all(AREAS.map(resolveArea));
+  const { areas: catalog, source } = loadCatalog();
+  const areas = await Promise.all(catalog.map(resolveArea));
   switch (command) {
     case "status":
-      return cmdStatus(areas, values.fast ?? false);
+      return cmdStatus(areas, values.fast ?? false, source);
     case "list":
-      return cmdList(areas);
+      return cmdList(areas, source);
     case "gc":
     case "clear":
       return cmdAct(command, areas, selected, all, dryRun);

@@ -89,6 +89,16 @@ def test_mise_cache_bin() -> None:
             stub = shims / tool
             stub.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
             stub.chmod(0o755)
+        # mise becomes a dispatcher: a fixed installed-tool map for `ls`
+        # (detection input) and an XDG-relative answer for `cache path`.
+        (shims / "mise").write_text(
+            "#!/bin/sh\n"
+            'case "$1" in\n'
+            '  ls) printf \'{"bun":[{"version":"1.0.0"}],"go":[{"version":"1.26.0"}]}\\n\' ;;\n'
+            '  cache) [ "$2" = "path" ] && printf \'%s/mise\\n\' "$XDG_CACHE_HOME" ;;\n'
+            "esac\n",
+            encoding="utf-8",
+        )
         env = {
             "HOME": str(home),
             "XDG_CACHE_HOME": str(xdg_cache),
@@ -139,6 +149,32 @@ def test_mise_cache_bin() -> None:
         # unselected areas untouched
         assert (home / ".npm").exists()
 
+        # config lane: config-mise-cache.ts composes into config.sh and
+        # stages the detected catalog (base + areas mapped from the fake
+        # mise tool list: bun, go)
+        config_bin = bin_dir / "config-mise-cache.ts"
+        assert config_bin.is_file()
+        assert "config-mise-cache.ts" in (bin_dir / "config.sh").read_text(encoding="utf-8")
+        staged = run([str(config_bin)], cwd=temporary, env=env)
+        assert "staged" in staged.stdout and "2 mise tools" in staged.stdout, staged.stdout
+        assert (payload / "etc" / "mise-cache.areas.json").is_file()
+
+        detected = run([str(cache_bin), "list"], cwd=temporary, env=env)
+        assert "catalog: computed" in detected.stdout, detected.stdout
+        for name in ("bun", "go-mod", "go-build"):  # mapped from fake mise ls
+            assert f"{name:<14} present" in detected.stdout or f"{name:<14} absent" in detected.stdout
+        assert "npm" not in detected.stdout  # node not in the fake tool list
+        assert "pnpm" not in detected.stdout
+        # detection gates gc selection too: pnpm has no gc offer anymore
+        detected_gc = run([str(cache_bin), "gc", "--all", "--dry-run"], cwd=temporary, env=env)
+        assert "[dry-run] mise prune --tools" in detected_gc.stdout, detected_gc.stdout
+        assert "pnpm store prune" not in detected_gc.stdout
+
+        # staged catalog removed -> rendered fallback returns
+        (payload / "etc" / "mise-cache.areas.json").unlink()
+        fallback = run([str(cache_bin), "list"], cwd=temporary, env=env)
+        assert "rendered fallback" in fallback.stdout and "npm" in fallback.stdout
+
         empty = temporary / "empty-home"
         empty.mkdir()
         env["HOME"] = str(empty)
@@ -152,6 +188,7 @@ def test_mise_cache_bin() -> None:
         render("mise2.opt.pb", payload2, "mise2", "mise2-main")
         text = (payload2 / "bin" / "mise-cache.ts").read_text(encoding="utf-8")
         assert 'MISE2_CONFIG_DEFAULT = "' in text
+        assert "MISE2_CONFIG_DEFAULT" in (payload2 / "bin" / "config-mise-cache.ts").read_text(encoding="utf-8")
 
 
 if __name__ == "__main__":
