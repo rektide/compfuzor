@@ -39,13 +39,13 @@
       journald caps disk by BOTH size and time; systemd's size defaults
       are `SystemMaxUse=min(10% of fs, 4G)` (why /var/log/journal sat at
       4.1G on a 3.4T root) and `MaxRetentionSec=0` (keep forever). This
-      drop-in sets `SystemMaxUse=1G`, `SystemKeepFree=4G`,
+      drop-in sets `SystemMaxUse=2G`, `SystemKeepFree=4G`,
       `MaxRetentionSec=1month` — all playbook vars below.
 
       One-shot reclaim after linking (operator decision, not run by
       compfuzor):
 
-          journalctl --vacuum-size=1G
+          journalctl --vacuum-size=2G
 
       then `systemctl restart systemd-journald` (or `systemctl kill
       -s SIGUSR2 systemd-journald` to just flush) so the running daemon
@@ -66,7 +66,7 @@
       `DIR_BYPASS`/`FS_BYPASS` pair skips the tree.
 
     # ---- journald caps (vars, not literals, so a run can retune) ----
-    JOURNALD_SYSTEM_MAX_USE: 1G
+    JOURNALD_SYSTEM_MAX_USE: 2G
     JOURNALD_SYSTEM_KEEP_FREE: 4G
     JOURNALD_MAX_RETENTION_SEC: 1month
 
@@ -82,7 +82,7 @@
           #   MaxRetentionSec = 0 (retain forever)
           # See journald.conf(5); Runtime* variants apply to /run only.
           # One-shot reclaim after installing this drop-in (operator):
-          #   journalctl --vacuum-size=1G
+          #   journalctl --vacuum-size=2G
           [Journal]
           SystemMaxUse={{JOURNALD_SYSTEM_MAX_USE}}
           SystemKeepFree={{JOURNALD_SYSTEM_KEEP_FREE}}

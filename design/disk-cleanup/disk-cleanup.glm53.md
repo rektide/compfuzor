@@ -220,7 +220,7 @@ Chosen policy (playbook vars, retunable at run time with `-e`):
 
 ```ini
 [Journal]
-SystemMaxUse=1G          # was min(10%, 4G) → 4.1G actual
+SystemMaxUse=2G          # operator decision 2026-10-01: 2G, not 1G (postmortem headroom)
 SystemKeepFree=4G        # shrink harder when the fs is tight
 MaxRetentionSec=1month   # was 0 (forever)
 ```
@@ -232,7 +232,7 @@ shrinks existing files retroactively, so after linking the one-shot
 runbook (**operator decision; deliberately not automated**):
 
 ```
-journalctl --vacuum-size=1G     # immediate reclaim of ~3.1G
+journalctl --vacuum-size=2G     # immediate reclaim of ~2.1G
 sudo systemctl restart systemd-journald   # or SIGUSR2 to just flush
 ```
 
@@ -248,9 +248,9 @@ sudo systemctl restart systemd-journald   # or SIGUSR2 to just flush
 
 ## Open questions for the operator
 
-1. **journald values** — 1G/4G/1month sit where "post-incident
-   conservative" landed. If k3s postmortems need longer boot-to-crash
-   journal history, raise `SystemMaxUse` (2G?) and keep the retention.
+1. **journald values** — ANSWERED 2026-10-01: operator chose
+   `SystemMaxUse=2G` (postmortem headroom), keep `SystemKeepFree=4G` and
+   `MaxRetentionSec=1month`.
 2. **First real run** — approve `--apply` order: journald vacuum first
    (frees ~3.1G immediately, zero risk), then `src-clean` default pass
    (rust incremental + node_modules), then decide `--pnpm-store-prune`
