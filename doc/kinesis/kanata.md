@@ -229,6 +229,11 @@ listed in `defsrc`. That matters when a letter must consume a one-shot modifier
 or influence a tap/hold decision. `defsrc` isn't a device filter—the `linux-dev`
 options choose devices.
 
+“Next key” means a key observed by **this instance**. An Edge-only one-shot
+cannot use a press from the independently owned BlueTurn to end its one-shot
+state. The merged B layout can observe both; that's another consequence of its
+shared state, separate from the PgUp/PgDn collision.
+
 All definitions are not evaluated in file order like ordinary Lisp code:
 Kanata processes definition categories in load-time passes. **Alias-to-alias
 dependencies still require the referenced alias to be declared earlier.**
@@ -327,7 +332,7 @@ held overlay can still sit above the new base.
 1. Verify the active SmartSet profile emits the intended F-key **press and release**.
 2. Hold hk5 while pressing Tab: it should behave as Alt+Tab. Check hk6 with a
    desktop Super shortcut. In the one-shot variant, also test tap→next key and
-   timeout expiration.
+timeout expiration.
 3. In A/B, choose Pages with hk3 and test both pedals; choose Media with hk4 and
    test previous/next; switch back. In A check the **pedal service's** layer log.
 4. In B, deliberately test the keyboard's PgUp/PgDn to experience the collision.
