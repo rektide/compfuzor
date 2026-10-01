@@ -11,12 +11,20 @@ import { main as runCatalog } from "../catalog/runtime.ts";
 import { main as runFlow } from "../flow/runtime.ts";
 import { main as runLinks } from "../links/runtime.ts";
 import { main as runZim } from "../zim/runtime.ts";
+import { runProcessor as runKeybindings } from "../config/keybindings/processor.ts";
 
-export type RuntimeDomain = "catalog" | "config" | "config-remote" | "flow" | "links" | "zim";
+export type RuntimeDomain =
+  | "catalog"
+  | "config"
+  | "config-remote"
+  | "flow"
+  | "links"
+  | "zim"
+  | "keybindings";
 
 const RUNTIME_NAME = "compfuzor-runtime.mjs";
 const RUNTIME_SOURCE_NAME = "compfuzor-runtime.ts";
-const USAGE = `Usage: compfuzor-runtime.mjs <catalog|config|config-remote|flow|links|zim> ...
+const USAGE = `Usage: compfuzor-runtime.mjs <catalog|config|config-remote|flow|links|zim|keybindings> ...
 
 Ordinary deployments invoke this multicall runtime through stable domain
 aliases such as config/command.mjs, config-remote.mjs, links.mjs, and
@@ -31,6 +39,7 @@ function classifyCandidate(path: string): RuntimeDomain | undefined {
   if (name === "compfuzor-catalog.sh") return "catalog";
   if (name === "compfuzor-flow.sh") return "flow";
   if (name === "config-remote.mjs") return "config-remote";
+  if (name === "keybinding-processor.mjs") return "keybindings";
   if (name === "links.mjs") return "links";
   if (name === "command.mjs" && basename(dirname(path)) === "config") return "config";
   if (name === "install.mjs" && basename(dirname(path)) === "zim") return "zim";
@@ -78,7 +87,8 @@ async function selectedDomain(
     domain !== "config-remote" &&
     domain !== "flow" &&
     domain !== "links" &&
-    domain !== "zim"
+    domain !== "zim" &&
+    domain !== "keybindings"
   ) {
     fail(USAGE);
   }
@@ -97,6 +107,10 @@ async function runDomain(
     if (domain === "config") return await runConfig(argv, deploymentDir, invokedAs);
     if (domain === "links") return await runLinks(argv, deploymentDir);
     if (domain === "zim") return await runZim(argv, deploymentDir);
+    if (domain === "keybindings") {
+      await runKeybindings(argv, process.env);
+      return 0;
+    }
     await runConfigRemote(argv, deploymentDir);
     return 0;
   } catch (error) {

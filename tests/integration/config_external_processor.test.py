@@ -9,12 +9,17 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
+SCRATCH = ROOT / ".test-agent/keybindings"
 sys.path.insert(0, str(ROOT / "library/filter_plugins"))
 from config_compile import compile_config
 
 
 def test_external_processor():
-    with tempfile.TemporaryDirectory(prefix="config-external-") as tmp:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    readme = SCRATCH / "README.md"
+    if not readme.exists():
+        readme.write_text("# Keybinding scratch\n\nIsolated CONFIG and keybinding test fixtures only.\n")
+    with tempfile.TemporaryDirectory(prefix="config-external-", dir=SCRATCH) as tmp:
         root = Path(tmp)
         (root / "bin/internal/config").mkdir(parents=True)
         (root / "bin/config").mkdir()

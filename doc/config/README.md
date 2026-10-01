@@ -11,6 +11,9 @@ configuration for a selected consumer context.
   Zim workflow, and status semantics.
 - [Simplification plan](/doc/config/simplification.md) — candid account of the
   remaining accidental complexity and the deletion-oriented route out.
+- [Named actions and keybindings](/doc/config/keybindings.md) — first TypeScript
+  processor slice, per-binding native/include material, and boundaries before
+  compositor installation; no live cutover yet.
 - [Attributed runtime flows](/design/config-anneal/execution-model0.gpt6.md) —
   current annealing checkpoint for contributors, composition, catalog order,
   and cross-plane execution policy.
