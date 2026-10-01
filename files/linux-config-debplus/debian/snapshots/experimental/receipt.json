@@ -11,10 +11,15 @@
   "release_date": "Thu, 01 Oct 2026 08:07:53 UTC",
   "release_sha256": "9209594547845258e0057938dd7e5f1a11a26dff3ee35b24eee42a53fa40e5ff",
   "release_url": "https://deb.debian.org/debian/dists/experimental/InRelease",
-  "retrieved_utc": "2026-10-01T11:37:09.474756+00:00",
+  "release_valid_until": "Thu, 08 Oct 2026 08:07:53 UTC",
+  "retrieved_utc": "2026-10-01T11:44:22.419837+00:00",
   "schema": 1,
   "selection": "latest generic headers by Debian version (no metapackage)",
   "status": "unavailable-in-suite-index",
   "suite": "experimental",
-  "trust": "Debian InRelease signature + SHA256 chain"
+  "trust": "Debian InRelease signature + SHA256 chain",
+  "verified_signing_fingerprints": [
+    "4CB50190207B4758A3F73A796ED0E7B82643E131",
+    "B8E5F13176D2A7A75220028078DBA3BC47EF2265"
+  ]
 }

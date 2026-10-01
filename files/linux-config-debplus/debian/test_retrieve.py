@@ -3,7 +3,6 @@
 import importlib.util
 from pathlib import Path
 import unittest
-from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location("retrieve", Path(__file__).with_name("retrieve.py"))
 retrieve = importlib.util.module_from_spec(spec)
@@ -54,6 +53,17 @@ class RetrievalTests(unittest.TestCase):
         before = retrieve.parse_config('CONFIG_GCC_VERSION=160000\n# CONFIG_RUST is not set\n')
         after = retrieve.parse_config('CONFIG_GCC_VERSION=0\nCONFIG_RUST=y\nCONFIG_NEW=y\n')
         self.assertEqual(retrieve.delta(before, after, exclude_metadata=True), "NEW: <absent> -> y\nRUST: n -> y\n")
+
+    def test_required_intent_distinguishes_inherited_match_and_missing_value(self):
+        result = retrieve.required_audit({"RUST": "y", "DEBUG_INFO_BTF": "y"}, {"RUST": "y"}, {})
+        self.assertTrue(result["RUST"]["fulfilled"])
+        self.assertEqual(result["RUST"]["declaration"], "inherited/not explicitly declared")
+        self.assertFalse(result["DEBUG_INFO_BTF"]["fulfilled"])
+
+    def test_merge_replaces_prior_assignments_without_duplicate_symbols(self):
+        text = retrieve.merged_config("CONFIG_X=y\nCONFIG_Y=m\n", "# CONFIG_X is not set\nCONFIG_Z=y\n")
+        self.assertEqual(retrieve.parse_config(text), {"X": "n", "Y": "m", "Z": "y"})
+        self.assertEqual(len(text.splitlines()), 3)
 
 
 if __name__ == "__main__":

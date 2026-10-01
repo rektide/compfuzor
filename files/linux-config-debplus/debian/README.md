@@ -23,6 +23,26 @@ Receipts: [unstable](/files/linux-config-debplus/debian/snapshots/unstable/recei
 
 Debian already enables Rust and the panic QR screen here; restating them in our durable fragment does not make them a Debian difference. Pstore console/pmsg/ftrace and built-in ramoops do differ.
 
+### Required intent: fulfilled, but five expectations still rely on inheritance
+
+[required-intent.config](/files/linux-config-debplus/debian/required-intent.config) is an **audit-only expectation list**. It is never automatically merged into the configuration. The audit JSON separately reports fulfillment and whether a value is explicitly declared. All nine Rust/debug/QR expectations are fulfilled in fresh unstable and the effective 7.3 projection; [target-required-intent-unfulfilled.diff](/files/linux-config-debplus/debian/snapshots/unstable/audit-7.3/target-required-intent-unfulfilled.diff) is empty.
+
+The current common fragment already declares Rust, panic enablement, the `qr_code` screen and QR enablement. It does **not** declare the QR URL/version or debug/BTF choices. Proposed small additions, **pending parent approval**, are:
+
+```config
+CONFIG_DRM_PANIC_SCREEN_QR_CODE_URL="https://deb.li/panic#"
+CONFIG_DRM_PANIC_SCREEN_QR_VERSION=40
+CONFIG_DEBUG_KERNEL=y
+# CONFIG_DEBUG_INFO_NONE is not set
+CONFIG_DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT=y
+CONFIG_DEBUG_INFO_BTF=y
+CONFIG_DEBUG_INFO_BTF_MODULES=y
+```
+
+`DEBUG_INFO` itself is a derived, promptless bool: selecting the DWARF choice preserves it correctly instead of pretending it is independently selectable. BTF additionally depends on inherited `BPF_SYSCALL`, valid pahole, module support for module BTF, and compatible debug-info options. The evaluator reports losses rather than installing tools or copying the entire old config. No shared overrides were changed by this slice.
+
+[Running 7.1 versus native Debian 7.2.8, raw](/files/linux-config-debplus/debian/snapshots/unstable/audit-running-7.1/our-current-vs-debian.raw.diff) is retained as a separately labeled historical cross-version/toolchain audit; [declared-policy symbols only](/files/linux-config-debplus/debian/snapshots/unstable/audit-running-7.1/our-current-declared-policy-vs-debian.diff) is the pertinent view. Neither is the canonical deliberate policy layer.
+
 **Version distinction:** native Debian is 7.2.8, target upstream is **7.3.0-rc5**, pin `551c722f40809618230001baccf219193e22fc5a`. The recorded first layer is explicitly **projected**, not a native 7.2.8 upstream comparison. All three evaluated layers use the same clean exported 7.3 source and LLVM invocation. No source tree was modified and only Kconfig/host configuration tools were compiled. [Audit receipt](/files/linux-config-debplus/debian/snapshots/unstable/audit-7.3/audit.json) identifies inputs and source fingerprints. The three generated `.config.xz` files are replay/audit evidence.
 
 ## Portable standalone commands
@@ -60,7 +80,7 @@ Use the versioned config filename from the receipt after a refresh. The script r
 
 Package selection uses the `linux-headers-amd64` exact dependency where present; otherwise it chooses the latest indexed generic headers using **Debian version ordering**, never cloud/RT. Experimental can lack a metapackage or all kernel packages. Missing exact dependencies fail rather than selecting an unrelated build. Headers are substantially smaller than image packages and contained the complete config in the observed unstable package. If Debian changes that layout, extraction fails explicitly; this first slice does not invent a source-fragment or image fallback.
 
-The default trust chain requires `gpgv` and `/usr/share/keyrings/debian-archive-keyring.gpg`, replaceable with `--keyring`. `--tls-only` is an explicit weaker mode recorded in the receipt; it is not the default. No automatic key download, apt install, git checkout, source fetch, full kernel build, cleanup or pruning is performed. Keep the explicit cache to reproduce pinned receipts offline; receipts/config evidence alone do not contain the complete package indexes. Debian can remove an old package from the live mirror, so retaining cached bytes matters.
+The default trust chain requires `gpgv` and `/usr/share/keyrings/debian-archive-keyring.gpg`, replaceable with `--keyring`. Verified signing fingerprints and release expiration (when supplied) are recorded; expired current releases are rejected, while deliberate offline replay accepts old pinned metadata. Signed release evidence is retained as `InRelease.xz` per suite. `--tls-only` is an explicit weaker mode recorded in the receipt; it is not the default. No automatic key download, apt install, git checkout, source fetch, full kernel build, cleanup or pruning is performed. Keep the explicit cache to reproduce pinned receipts offline; receipts/config evidence alone do not contain the complete package indexes. Debian can remove an old package from the live mirror, so retaining cached bytes matters.
 
 ## Checks and references
 
@@ -68,7 +88,7 @@ The default trust chain requires `gpgv` and `/usr/share/keyrings/debian-archive-
 ./debian/test_retrieve.py
 ```
 
-Eight focused tests cover folded Debian control fields, exact dependency selection, Debian version ordering, cloud/RT exclusion, missing suite packages, broken dependencies, checksum failure, release-index parsing, and absent-versus-disabled/metadata semantics. Both real suite retrieval and offline pinned replay passed. The real clean-source projected policy audit fulfilled every declared symbol; Debian normalization reported one expected upstream boolification (`ANDROID_BINDER_IPC=m` no longer valid).
+Ten focused tests cover folded Debian control fields, exact dependency selection, Debian version ordering, cloud/RT exclusion, missing suite packages, broken dependencies, checksum failure, release-index parsing, absent-versus-disabled/metadata semantics, inherited-versus-declared intent, and ordered duplicate-free policy merging. Both real suite retrieval and offline pinned replay passed. An intentionally corrupted pinned package cache was rejected with a SHA256 mismatch before extraction; no config was emitted. The real clean-source projected policy audit fulfilled every declared symbol and every required Rust/debug/QR expectation; Debian normalization reported one expected upstream boolification (`ANDROID_BINDER_IPC=m` no longer valid).
 
 - [Debian unstable primary metadata](https://deb.debian.org/debian/dists/unstable/InRelease) and [experimental metadata](https://deb.debian.org/debian/dists/experimental/InRelease): source of suite/package selection.
 - [Preserved running 7.1 baseline](/files/linux-config-debplus/baselines/7.1/README.md): historical exact running config and its upstream audit; distinct from current Debian retrieval.

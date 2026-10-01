@@ -6,6 +6,17 @@
     "path": "files/linux-config-debplus/debian/snapshots/unstable/config-7.2.8-1-amd64.xz",
     "sha256": "471f1a3b3dce76dad0cf0da19f29e4562c517cad0855bcd8b74502b92ef892ea"
   },
+  "output_sha256": {
+    "policy-declared-vs-debian.diff": "66cab6f196d7546baa68cb79fd9891d8b3b03961adba852f78c6766c9f03e57a",
+    "target-debian-vs-upstream.diff": "27ba690ebcb5278b73f61033b9448ef6534e432df081c9c473c6122accd16131",
+    "target-debian.config.xz": "a658c3f1123f23f09a7b8eb23016dde2abb1cb682b61bc11eaecd8593c8a5706",
+    "target-policy-unfulfilled.diff": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target-policy-vs-debian.diff": "8db6fa3a08872c3dc0a10e311dcce409ddaf4eaa2ffe63421f3679d218341ce9",
+    "target-policy.config.xz": "46f833c365d02b859f653589eede565401a3416c72822a547a4609206c2e807d",
+    "target-required-intent-unfulfilled.diff": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "target-toolchain-metadata.diff": "46dad13258e5c803e4dcfc43b01cf5f6cf0bcad13e337d4349ea1e30e5e4ef21",
+    "target-upstream.config.xz": "315652804aa5bb10d866475cd24771cf31f665e13ffb966130e4e2feaaabb0ae"
+  },
   "policy_inputs": [
     {
       "path": "/home/rektide/src/compfuzor/files/linux-config-debplus/overrides.config",
@@ -16,18 +27,142 @@
       "sha256": "781670a8fd7d5debe2e6eef76c68921894bdced39cab4f7c6932bc9649a11fcc"
     }
   ],
+  "required_intent": {
+    "input": "/home/rektide/src/compfuzor/files/linux-config-debplus/debian/required-intent.config",
+    "native_debian": {
+      "DEBUG_INFO": {
+        "actual": "y",
+        "declaration": "inherited/not explicitly declared",
+        "expected": "y",
+        "fulfilled": true
+      },
+      "DEBUG_INFO_BTF": {
+        "actual": "y",
+        "declaration": "inherited/not explicitly declared",
+        "expected": "y",
+        "fulfilled": true
+      },
+      "DEBUG_INFO_BTF_MODULES": {
+        "actual": "y",
+        "declaration": "inherited/not explicitly declared",
+        "expected": "y",
+        "fulfilled": true
+      },
+      "DRM_PANIC": {
+        "actual": "y",
+        "declaration": "explicit",
+        "expected": "y",
+        "fulfilled": true
+      },
+      "DRM_PANIC_SCREEN": {
+        "actual": "\"qr_code\"",
+        "declaration": "explicit",
+        "expected": "\"qr_code\"",
+        "fulfilled": true
+      },
+      "DRM_PANIC_SCREEN_QR_CODE": {
+        "actual": "y",
+        "declaration": "explicit",
+        "expected": "y",
+        "fulfilled": true
+      },
+      "DRM_PANIC_SCREEN_QR_CODE_URL": {
+        "actual": "\"https://deb.li/panic#\"",
+        "declaration": "inherited/not explicitly declared",
+        "expected": "\"https://deb.li/panic#\"",
+        "fulfilled": true
+      },
+      "DRM_PANIC_SCREEN_QR_VERSION": {
+        "actual": "40",
+        "declaration": "inherited/not explicitly declared",
+        "expected": "40",
+        "fulfilled": true
+      },
+      "RUST": {
+        "actual": "y",
+        "declaration": "explicit",
+        "expected": "y",
+        "fulfilled": true
+      }
+    },
+    "sha256": "9d8cff3710ea1a1d9d8c493216e5e7fffadae48a1bd7a973da3f6a2cf6faa0ad",
+    "target_policy": {
+      "DEBUG_INFO": {
+        "actual": "y",
+        "declaration": "inherited/not explicitly declared",
+        "expected": "y",
+        "fulfilled": true
+      },
+      "DEBUG_INFO_BTF": {
+        "actual": "y",
+        "declaration": "inherited/not explicitly declared",
+        "expected": "y",
+        "fulfilled": true
+      },
+      "DEBUG_INFO_BTF_MODULES": {
+        "actual": "y",
+        "declaration": "inherited/not explicitly declared",
+        "expected": "y",
+        "fulfilled": true
+      },
+      "DRM_PANIC": {
+        "actual": "y",
+        "declaration": "explicit",
+        "expected": "y",
+        "fulfilled": true
+      },
+      "DRM_PANIC_SCREEN": {
+        "actual": "\"qr_code\"",
+        "declaration": "explicit",
+        "expected": "\"qr_code\"",
+        "fulfilled": true
+      },
+      "DRM_PANIC_SCREEN_QR_CODE": {
+        "actual": "y",
+        "declaration": "explicit",
+        "expected": "y",
+        "fulfilled": true
+      },
+      "DRM_PANIC_SCREEN_QR_CODE_URL": {
+        "actual": "\"https://deb.li/panic#\"",
+        "declaration": "inherited/not explicitly declared",
+        "expected": "\"https://deb.li/panic#\"",
+        "fulfilled": true
+      },
+      "DRM_PANIC_SCREEN_QR_VERSION": {
+        "actual": "40",
+        "declaration": "inherited/not explicitly declared",
+        "expected": "40",
+        "fulfilled": true
+      },
+      "RUST": {
+        "actual": "y",
+        "declaration": "explicit",
+        "expected": "y",
+        "fulfilled": true
+      }
+    }
+  },
   "semantics": "Declared policy differs from Debian; absent symbols are not assumed disabled; metadata is not policy.",
   "target": {
     "declared_revision": "551c722f40809618230001baccf219193e22fc5a",
-    "git_head_if_available": "1ec2200a4c580bcf47b55370d54d7a5a4e3f2108",
+    "git_head_if_available": "1743eb26c267a8d10055b8c57b522e339f617402",
     "semantics": "PROJECTED: upstream -> Debian normalized on target -> declared policy normalized on same target; not native Debian defaults",
     "source_fingerprints": {
       "Kconfig": "5262073fc9c710d13e6940d857ffe72f850702db12c068bbb4041d8ca9555e5f",
       "Makefile": "de7a0fa8e0a6fafc1cc63949ad3de4aa0d1b19f05b04d2afbd7f107fa3053e0b"
     },
+    "tool_versions": {
+      "bindgen": "bindgen 0.71.1",
+      "clang": "Debian clang version 21.1.8 (10)",
+      "ld.lld": "Debian LLD 21.1.8 (compatible with GNU linkers)",
+      "make": "GNU Make 4.4.1",
+      "pahole": "v1.30",
+      "rustc": "rustc 1.101.0-nightly (5c543b0b8 2026-09-29)"
+    },
     "toolchain": "llvm",
     "tree": "/home/rektide/src/compfuzor/.test-agent/linux-debplus-7.3/config/source",
     "version": "7.3.0-rc5",
-    "work_dir": "/home/rektide/src/compfuzor/.test-agent/linux-debian-retrieval/projected-7.3"
+    "work_dir": "/home/rektide/src/compfuzor/.test-agent/linux-debian-retrieval/projected-7.3-intent"
   }
 }

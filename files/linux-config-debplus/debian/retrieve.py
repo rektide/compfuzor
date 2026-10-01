@@ -2,6 +2,7 @@
 """Retrieve Debian's generic amd64 config; audit distinct configuration layers."""
 import argparse
 import datetime
+import email.utils
 import hashlib
 import io
 import json
@@ -136,8 +137,10 @@ def fetch(args):
             release = get(release_url)
             release_cache = sha(release) + ".InRelease"
             (cache / release_cache).write_bytes(release)
-            if not args.tls_only:
-                verify_release(cache / release_cache, args.keyring)
+            fingerprints = verify_release(cache / release_cache, args.keyring) if not args.tls_only else []
+            expires = re.search(r"^Valid-Until: (.+)$", release.decode(), re.M)
+            if expires and email.utils.parsedate_to_datetime(expires.group(1)) < datetime.datetime.now(datetime.timezone.utc):
+                raise ValueError("Expired current InRelease; use --offline only for deliberate pinned replay")
             digest, size = release_index(release)
             index_url = MIRROR + f"dists/{suite}/" + INDEX
             index = checked(get(index_url), digest)
@@ -153,6 +156,8 @@ def fetch(args):
                 "trust": "TLS + SHA256 only (no archive signature verification)" if args.tls_only
                          else "Debian InRelease signature + SHA256 chain",
                 "keyring": str(args.keyring) if not args.tls_only else None,
+                "verified_signing_fingerprints": fingerprints,
+                "release_valid_until": expires.group(1) if expires else None,
                 "release_date": re.search(r"^Date: (.+)$", release.decode(), re.M).group(1),
             }
         package, meta, selection = select_package(records(lzma.decompress(index).decode()))
@@ -160,6 +165,7 @@ def fetch(args):
         receipt["metapackage"] = meta
         receipt["package"] = package
         receipt["status"] = "available" if package else "unavailable-in-suite-index"
+        (destination / "InRelease.xz").write_bytes(lzma.compress(release))
         if package:
             filename = package["Filename"]
             if not filename.startswith("pool/") or ".." in Path(filename).parts:
@@ -188,7 +194,9 @@ def fetch(args):
 def verify_release(path, keyring):
     if not keyring.is_file():
         raise FileNotFoundError("Archive keyring unavailable; supply --keyring or explicitly choose --tls-only")
-    subprocess.run(["gpgv", "--keyring", str(keyring.resolve()), str(path)], check=True)
+    result = subprocess.run(["gpgv", "--status-fd", "1", "--keyring", str(keyring.resolve()), str(path)],
+                            stdout=subprocess.PIPE, text=True, check=True)
+    return re.findall(r"^\[GNUPG:\] VALIDSIG ([0-9A-F]+) ", result.stdout, re.M)
 
 
 def parse_config(text):
@@ -220,6 +228,19 @@ def delta(before, after, keys=None, exclude_metadata=False):
     return "\n".join(lines) + ("\n" if lines else "")
 
 
+def required_audit(required, actual, declared):
+    return {symbol: {"expected": value, "actual": actual.get(symbol, "<absent>"),
+                     "fulfilled": actual.get(symbol) == value,
+                     "declaration": "explicit" if declared.get(symbol) == value else "inherited/not explicitly declared"}
+            for symbol, value in sorted(required.items())}
+
+
+def merged_config(base, policy):
+    values = parse_config(base) | parse_config(policy)
+    return "\n".join(f"# CONFIG_{key} is not set" if value == "n" else f"CONFIG_{key}={value}"
+                     for key, value in sorted(values.items())) + "\n"
+
+
 def kernel_version(tree):
     values = {}
     for line in (tree / "Makefile").read_text().splitlines():
@@ -245,6 +266,9 @@ def audit(args):
               "debian_header": [line for line in debian_text.splitlines()[:8] if "Kernel Configuration" in line],
               "policy_inputs": [{"path": str(path), "sha256": sha(path.read_bytes())} for path in paths],
               "semantics": "Declared policy differs from Debian; absent symbols are not assumed disabled; metadata is not policy."}
+    required = parse_config(config_text(args.required_intent))
+    report["required_intent"] = {"input": str(args.required_intent), "sha256": sha(args.required_intent.read_bytes()),
+                                 "native_debian": required_audit(required, debian, policy)}
     (output / "policy-declared-vs-debian.diff").write_text(delta(debian, policy, policy.keys(), True))
     if args.upstream_config:
         upstream_text = config_text(args.upstream_config)
@@ -284,11 +308,13 @@ def audit(args):
             return parse_config(result), result
         upstream, _ = make("target-upstream", "x86_64_defconfig")
         projected, projected_text = make("target-debian", "olddefconfig", debian_text)
-        custom, _ = make("target-policy", "olddefconfig", projected_text + "\n" + policy_text)
+        custom, _ = make("target-policy", "olddefconfig", merged_config(projected_text, policy_text))
         (output / "target-debian-vs-upstream.diff").write_text(delta(upstream, projected, exclude_metadata=True))
         (output / "target-policy-vs-debian.diff").write_text(delta(projected, custom, exclude_metadata=True))
         (output / "target-toolchain-metadata.diff").write_text(delta(debian, projected, [k for k in debian.keys() | projected.keys() if METADATA.fullmatch(k)]))
         (output / "target-policy-unfulfilled.diff").write_text(delta(policy, custom, policy.keys(), True))
+        (output / "target-required-intent-unfulfilled.diff").write_text(delta(required, custom, required.keys(), True))
+        report["required_intent"]["target_policy"] = required_audit(required, custom, policy)
         report["target"] = {"tree": str(tree), "version": kernel_version(tree), "toolchain": args.toolchain,
                             "declared_revision": args.kernel_revision,
                             "source_fingerprints": {name: sha((tree / name).read_bytes()) for name in ("Makefile", "Kconfig")},
@@ -296,6 +322,15 @@ def audit(args):
                             "work_dir": str(work)}
         result = subprocess.run(["git", "-C", str(tree), "rev-parse", "HEAD"], capture_output=True, text=True)
         report["target"]["git_head_if_available"] = result.stdout.strip() if result.returncode == 0 else None
+        report["target"]["tool_versions"] = {}
+        for tool in ("make", "clang" if args.toolchain == "llvm" else "gcc", "ld.lld" if args.toolchain == "llvm" else "ld", "rustc", "bindgen", "pahole"):
+            try:
+                result = subprocess.run([tool, "--version"], capture_output=True, text=True)
+                report["target"]["tool_versions"][tool] = (result.stdout or result.stderr).splitlines()[0] if result.returncode == 0 else "unavailable"
+            except FileNotFoundError:
+                report["target"]["tool_versions"][tool] = "unavailable"
+    report["output_sha256"] = {path.name: sha(path.read_bytes()) for path in sorted(output.iterdir())
+                               if path.is_file() and path.name != "audit.json"}
     dump(output / "audit.json", report)
     print(output / "audit.json")
 
@@ -316,6 +351,8 @@ def main():
     p.add_argument("--debian-config", required=True, type=Path)
     p.add_argument("--output-dir", required=True, type=Path)
     p.add_argument("--policy", action="append", type=Path, help="Ordered policy fragments; defaults to common+LLVM in copied bundle")
+    p.add_argument("--required-intent", type=Path, default=Path(__file__).resolve().with_name("required-intent.config"),
+                   help="Audit expectations only; never silently added to policy")
     p.add_argument("--our-config", type=Path)
     p.add_argument("--upstream-config", type=Path)
     p.add_argument("--kernel-tree", type=Path)

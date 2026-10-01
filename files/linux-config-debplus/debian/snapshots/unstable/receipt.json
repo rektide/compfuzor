@@ -56,10 +56,15 @@
   "release_date": "Thu, 01 Oct 2026 08:07:53 UTC",
   "release_sha256": "7135ec5973f71a4a322fa621632ac69286e30b5fb51031d5614c9d3ee21440be",
   "release_url": "https://deb.debian.org/debian/dists/unstable/InRelease",
-  "retrieved_utc": "2026-10-01T11:37:06.962196+00:00",
+  "release_valid_until": "Thu, 08 Oct 2026 08:07:53 UTC",
+  "retrieved_utc": "2026-10-01T11:44:20.556417+00:00",
   "schema": 1,
   "selection": "linux-headers-amd64 exact dependency",
   "status": "available",
   "suite": "unstable",
-  "trust": "Debian InRelease signature + SHA256 chain"
+  "trust": "Debian InRelease signature + SHA256 chain",
+  "verified_signing_fingerprints": [
+    "4CB50190207B4758A3F73A796ED0E7B82643E131",
+    "B8E5F13176D2A7A75220028078DBA3BC47EF2265"
+  ]
 }
