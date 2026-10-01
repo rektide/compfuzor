@@ -49,6 +49,10 @@ semantics. This supports `status-zim.sh --activation-only` in aggregation
 without generating another executable or turning BINS into a generic command
 graph.
 
+[Mise cache inventory](/doc/mise/cache.md) uses this fixed-argument status lane
+(`status --fast`) and an explicit `action: config` TypeScript catalog generator;
+manual leaf cleanup remains separate from the compositors.
+
 ## The `subsystem` field
 
 A bin declares its grouping via `subsystem`:

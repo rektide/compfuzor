@@ -11,8 +11,8 @@
  *   status [--fast]    per-area sizes + resolved paths, plus a `mise prune`
  *                      candidate list. --fast skips du (sizes print as "-").
  *   list               every catalog area with presence and actions
- *   gc AREAS...|--all  safe reclaim commands (mise cache prune, pnpm store
- *                      prune, uv cache prune, mise prune --tools)
+ *   gc AREAS...|--all  cache reclaim commands (mise cache prune, pnpm store
+ *                      prune, uv cache prune), never installed-tool pruning
  *   clear AREAS...|--all
  *                      wipe areas: the native tool command when it is
  *                      available, else rm -rf of the resolved roots
@@ -41,14 +41,17 @@
  * (MISE_CACHE_DIR, MISE_DATA_DIR) so a redirected mise sees its redirected
  * caches.
  *
- * Sizes come from `du -sk` (all areas in parallel). Exit: 0 ok, 1 an action
+ * Optional group/kind labels add topic and Rust-kind rollups without changing
+ * leaf action selectors. Rollups canonicalize roots and omit duplicates and
+ * nested roots. Topics can overlap (mise installs include Rust); TOTAL is the
+ * union, not their sum. Sizes are allocated storage, not reclaim estimates.
+ * Sizes come from `du -sk`; failed measurements print unknown. Exit: 0 ok, 1 an action
  * failed, 2 usage error or nothing to report (status N/A contract).
  */
 
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { constants, readFileSync } from "node:fs";
 import { access, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
-import { constants } from "node:fs";
 import { basename, delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -337,7 +340,19 @@ async function uniqueRoots(paths: readonly string[]): Promise<string[]> {
 }
 
 /** `du -sk` over the given paths; resolves to parsed [KiB, path] rows */
+const measurements = new Map<string, Promise<readonly (readonly [number, string])[] | undefined>>();
 function du(paths: readonly string[]): Promise<readonly (readonly [number, string])[] | undefined> {
+  const sorted = [...paths].sort();
+  const key = JSON.stringify(sorted);
+  let measurement = measurements.get(key);
+  if (!measurement) {
+    measurement = runDu(sorted);
+    measurements.set(key, measurement);
+  }
+  return measurement;
+}
+
+function runDu(paths: readonly string[]): Promise<readonly (readonly [number, string])[] | undefined> {
   if (paths.length === 0) return Promise.resolve([]);
   return new Promise((resolve) => {
     let child;
@@ -458,14 +473,14 @@ async function cmdStatus(
         }
       }
       for (const area of members) {
-      const size = area.measurementFailed ? "unknown" : area.kb === undefined ? "-" : human(area.kb * 1024);
-      console.log(statusLine(area.name, size, area.candidates.join(" ")));
-      if (area.children?.length) {
-        const sorted = [...area.children].sort((a, b) => b[0] - a[0]);
-        for (const [kb, path] of sorted) {
-          console.log(`    ${human(kb * 1024).padStart(9)}  ${basename(path)}`);
+        const size = area.measurementFailed ? "unknown" : area.kb === undefined ? "-" : human(area.kb * 1024);
+        console.log(statusLine(area.name, size, area.candidates.join(" ")));
+        if (area.children?.length) {
+          const sorted = [...area.children].sort((a, b) => b[0] - a[0]);
+          for (const [kb, path] of sorted) {
+            console.log(`    ${human(kb * 1024).padStart(9)}  ${basename(path)}`);
+          }
         }
-      }
       }
     }
     if (!fast) {

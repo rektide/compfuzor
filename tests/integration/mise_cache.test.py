@@ -190,12 +190,16 @@ def test_mise_cache_bin() -> None:
         assert f'{"  ancillary":<14} {"4.0K":>9}  Rust subtotal' in grouped.stdout, grouped.stdout
         assert "registry" in grouped.stdout and "git" in grouped.stdout
         assert "Node" in grouped.stdout
+        assert f'{"Node":<14} {"8.0K":>9}  topic total' in grouped.stdout, grouped.stdout
+        assert f'{"TOTAL":<14} {"44.0K":>9}' in grouped.stdout, grouped.stdout
         (home / "go" / "pkg" / "mod").mkdir(parents=True)
         (xdg_cache / "go-build").mkdir()
         go_grouped = run([str(cache_bin), "status"], cwd=temporary, env=env)
         assert f'{"Go":<14} {"8.0K":>9}  topic total' in go_grouped.stdout, go_grouped.stdout
         failed_du = run([str(cache_bin), "status"], cwd=temporary, env={**env, "DU_FAIL": "1"})
         assert f'{"Rust":<14} {"unknown":>9}  topic total' in failed_du.stdout, failed_du.stdout
+        failed_prunable = run([str(cache_bin), "status", "--fast"], cwd=temporary, env={**env, "DISCOVERY_FAIL": "1"})
+        assert "unavailable:" in failed_prunable.stdout and "  none" not in failed_prunable.stdout
         du_stub.unlink()
 
         # Exact overrides: an explicit state root must not acquire /mise;
