@@ -5,6 +5,7 @@ import { runProcessor } from "./processor.ts";
 import { validateClosure } from "./closure.ts";
 import { assembleConsumer, type ConsumerRequest } from "./consumer.ts";
 import { withInputBatch, type InputRegistration } from "../registration.ts";
+import { resolvePathSelector } from "../context.ts";
 import {
   assembleHost,
   defaultProfile,
@@ -28,6 +29,7 @@ export async function main(
       options: {
         manifest: { type: "string" },
         profile: { type: "string" },
+        "profile-selector": { type: "string" },
         target: { type: "string" },
         context: { type: "string", default: "user" },
         scope: { type: "string", default: "user" },
@@ -43,8 +45,13 @@ export async function main(
       throw new Error("--scope must be user or system");
     const runner = values.runner ?? defaults.runner;
     if (!runner) throw new Error("installed CONFIG runner or --runner required");
-    const loaded = values.profile
-      ? await loadProfile(values.profile)
+    if (values.profile && values["profile-selector"])
+      throw new Error("choose profile or profile-selector, not both");
+    const profilePath = values["profile-selector"]
+      ? resolvePathSelector(JSON.parse(values["profile-selector"]), undefined, "consumer profile")
+      : values.profile;
+    const loaded = profilePath
+      ? await loadProfile(profilePath)
       : { profile: defaultProfile(values.target) };
     if (loaded.profile.target !== values.target)
       throw new Error("consumer profile target mismatch");

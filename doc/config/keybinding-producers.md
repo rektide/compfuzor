@@ -1,0 +1,230 @@
+---
+type: ImplementationGuide
+title: Declared keybinding producers and consumer profiles
+description: Automatic singular YAML packaging, generated scoped target installers and durable explicit membership using the shared TypeScript CONFIG consumer.
+resource: /doc/config/keybinding-producers.md
+status: draft
+generated: { by: model:gpt61sol, at: 2026-10-01 }
+verified: { by: unverified }
+stale_after: 2026-11-01
+sources:
+  - resource: /library/filter_plugins/keybindings_compile.py
+    title: Thin declaration packaging and installer synthesis
+  - resource: /files/config/keybindings/membership.ts
+    title: Durable membership and context-bound installation
+  - resource: /tests/integration/keybindings_generated.test.py
+    title: Actual stock rendered installation proof
+---
+
+# Producer authoring: no per-binding plumbing
+
+The public names are **`KEYBINDING_ACTIONS`** and **`KEYBINDINGS`**. A producer
+declares named records; it does not write ETC_FILES, CONFIGS, target text or BINS
+for individual bindings:
+
+```yaml
+KEYBINDING_ACTIONS:
+  terminal-open:
+    exec: [foot]
+KEYBINDINGS:
+  terminal-open:
+    action: terminal-open
+    keys: [Mod+Return]
+    title: Open a Terminal
+    umbriel:
+      add-keys: [Alt+Return]
+KEYBINDING_TARGETS:
+  niri: {consumer: /opt/desktop, context: user, scope: user}
+  umbriel: {consumer: /opt/desktop, context: user, scope: user}
+```
+
+Normal playbook task entry remains `tasks/compfuzor.includes`. The thin generator
+packages `action/<id>.yaml` and `keybinding/<id>.yaml` directly under ETC, using
+the existing YAML artifact writer. It stamps `version`, `kind`, and the named ID;
+an explicitly supplied conflicting ID/kind/version is an error. Runtime YAML IDs
+are authoritative; filenames are provenance, not another naming scheme.
+
+`KEYBINDING_PRODUCER` defaults to deployment NAME and identifies a durable
+**membership group**, not an action prefix. It can be declared explicitly.
+`KEYBINDING_ORDER` defaults to 100. Named action/binding IDs remain global in a
+consumer graph; use readable application prefixes. Accidental duplicate
+definitions still fail, while intentional `patch: true` retains the domain's
+field-specific override behavior.
+
+`KEYBINDING_TARGETS` accepts a list of targets or the explicit bindings above.
+If omitted for an ordinary producer, Niri and Umbriel target entries are generated
+using known user defaults—never PATH discovery. Set the list to the intended
+targets. A `consumer` is an explicit deployment or profile JSON path. A deployment
+resolves to `etc/keybinding-<target>.json`; HOME/XDG-rooted profile paths and existing
+env/default selectors resolve at invocation. For example,
+`consumer: "${XDG_CONFIG_HOME}/umbriel/keybinding-umbriel.json"` binds a user host
+without baking the controller's home directory into a system producer. Selector
+mappings select a profile file. No universal consumer registry is added.
+
+The generated commands are `install-keybindings-niri.sh` and
+`install-keybindings-umbriel.sh`. They call the shared installed TypeScript runtime
+with the packaged manifest, target, context and declared scope. Normal bin
+composition creates one subsystem/user aggregate and calls each target exactly
+once. An authored system `install.sh` remains a system builder/installer; an
+authored `install-user.sh` retains its own body and gains the scoped children.
+Generated installers have `run: false`: rendering is not deployment or reload.
+
+# Consumer profiles: ordinary context/root conventions
+
+A host declares target policy once:
+
+```yaml
+KEYBINDING_CONSUMERS:
+  niri:
+    contexts:
+      user: {scope: user, root: config, subpath: niri}
+    baseline: [/absolute/niri-baseline.kdl]
+    personal: [personal.kdl]
+    placement: copy
+    registration: copy
+    native_sources:
+      - {id: own, path: own.kdl, order: 9000, placement: direct}
+  umbriel:
+    contexts:
+      user: {scope: user, root: config, subpath: umbriel}
+    baseline: [/usr/local/share/umbriel/config.toml]
+    personal: [keybinds-local.toml, animation.toml]
+    placement: link
+    registration: link
+```
+
+`scope`, named `root` (`config`, `state`, `home`, etc.), `subpath`, and
+env/default path selectors reuse current CONFIG conventions. User roots resolve
+HOME/XDG at invocation, independently from packaged system producer paths. A
+generated user entry cannot silently select a system-scoped context: the runtime
+checks the context against its declared scope.
+
+Defaults are user `root: config`, `subpath: <target>`, `config.kdl` or
+`config.toml`, `.keybindings/generated`, and `keybindings/` placement. Umbriel's
+built-in profile includes `/usr/local/share/umbriel/config.toml`; Niri's built-in
+profile has **no fabricated baseline**. Declare the desired baseline when making
+a complete fresh Niri configuration. Existing roots still require the adopted
+insertion area described in the [consumer guide](/doc/config/keybinding-consumers.md).
+No default overwrites/adopts an arbitrary existing file.
+
+This is a domain installation owner over CONFIG workers, like Zim's owner
+pattern. If replacing an existing ordinary CONFIG installer for the same root,
+declare `CONFIG_INSTALL_OWNER: keybindings` to suppress that duplicate install
+participation. Unrelated CONFIG recipes retain their existing owner; the
+keybinding generator does not silently take ownership of every other subsystem.
+
+Other profile fields are `root_file`, `material_root`, `membership`,
+`placement_directory`, `template_file`, and binding-specific `bindings` policies.
+These paths accept the existing selector grammar, including relative-to-context
+paths and `{env: VARIABLE, default: ...}`. Native sources use the same explicit
+ID/path/format/order/placement/incorporation interface as generated material.
+There are no native suffix-wide scans.
+
+A host's own `KEYBINDING_ACTIONS`/`KEYBINDINGS` resources become its late user layer
+when `KEYBINDING_CONSUMERS` is declared, unless it explicitly also declares producer
+targets. For example, a chord override does not repeat the command:
+
+```yaml
+KEYBINDINGS:
+  terminal-open:
+    patch: true
+    niri: {keys: [Alt+Return]}
+```
+
+These packaged consumer-owned patches are persisted in the generated profile,
+not in each application's include list. Patch records are explicitly
+`whenPresent`: they remain dormant while their producer is absent/disabled and
+activate only when the named base exists. Unconditional core patches remain
+strict. Additional receiver-owned `user_sources` can be declared by path with
+`when_present` and `disabled_suffix`; they are ordered after producers and host
+declarations. Native user files can likewise be declared once in the profile.
+
+# Source registrations versus editable material
+
+The two strategies are deliberately separate:
+
+| Policy | Install/reinstall behavior |
+|---|---|
+| `registration: link` | Refresh each managed YAML registration link to the declared producer file. |
+| `registration: copy` | Refresh managed YAML declaration copies from the producer on explicit reinstall. These are not the editable native copies. |
+| `placement: copy` | Seed missing native receiver files, preserve existing edits on ordinary reinstall/reassembly. |
+| `placement: link` | Seed a native receiver link to the newly rendered canonical definition; linked data tracks future definition updates. |
+| `placement: direct` | Include the canonical definition directly. |
+
+User overrides belong in the user layer or selected native copies, not edits to
+managed YAML registrations. Explicit `--mode refresh` replaces declared native
+placements; default producer installation is `seed`. Reassembly does not silently
+restore a producer over an edited user copy.
+
+# Durable closed membership and failure semantics
+
+Each context stores `.keybindings/membership.json`. It lists named producer groups,
+their order/enabled state and **exact** registered resource paths/identities. The
+registration directory is `.keybindings/source/<producer>/<action|keybinding>/`;
+producer packaging itself remains flat singular directories directly under ETC.
+
+Group order is numeric, then producer ID; user layers follow. Membership is not
+inferred by scanning directories. Reinstalling fewer declarations replaces that
+group's declared resource list. Old physical files remain, but no longer enter
+assembly. Neither stale registrations nor native artifacts are auto-pruned.
+
+Registration preserves existing active/disabled slots. Group enabled state also
+survives reinstall. A binding registration named `*.yaml.disabled` stays disabled
+when its producer is updated. A disabled group is excluded while its files remain.
+
+Membership updates are ordinary single-output recipes in the **same existing CONFIG
+transaction** as definitions, placements, companions and root. They are not saved
+as accepted state before output validation/commit. The shared registration batch
+installs action/binding resources coherently, invokes assembly once, and restores
+prior entries after normal failure. CONFIG restores staged metadata/output entries
+on a later publication failure. This is not crash atomicity or concurrent-reader
+isolation; the observed-state guards still apply.
+
+The registration preflight also rejects any destination/disabled slot reaching
+another batch donor, including through symlinks/parent aliases. It does not rely
+on later copying a donor that an earlier entry may have replaced.
+
+# Commands
+
+Common operations use generated wrappers, not a human-authored request JSON:
+
+```sh
+/producer/bin/install-user.sh
+/producer/bin/install-keybindings-niri.sh
+/host/bin/install-user.sh
+```
+
+The host runtime can explicitly control membership:
+
+```sh
+/host/bin/keybindings.mjs disable --profile /host/etc/keybinding-niri.json \
+  --target niri --context user --scope user --group terminal
+/host/bin/keybindings.mjs enable --profile /host/etc/keybinding-niri.json \
+  --target niri --context user --scope user --group terminal
+/host/bin/keybindings.mjs host --profile /host/etc/keybinding-niri.json \
+  --target niri --context user --scope user --mode assemble --check
+```
+
+Development uses `node files/config/keybindings/command.ts` with the same commands
+and an explicit `--runner` when outside a deployment. No unrequested compositor
+reload is performed. Existing bypass wrappers remain in force.
+
+# Proof and cross-references
+
+[Generated installation test](/tests/integration/keybindings_generated.test.py)
+renders actual stock runner, processor and omnibus artifacts via the existing
+Ansible tasks, then runs complete generated user aggregates. It installs two
+producers into isolated XDG consumers with own patch/native inputs, checks copy
+and link behavior, updates commands and smaller membership, rejects invalid
+reinstall without accepting membership, and preserves disabled group/slots.
+It also checks authored install bodies and exactly-once target participation.
+
+- [Source/domain grammar](/doc/config/keybindings.md): action independence,
+  explicit scripts/native implementations and target override/extension rules.
+- [Consumer assembly](/doc/config/keybinding-consumers.md): adopted root areas,
+  mirrored candidate closure validation and the existing publication boundary.
+- [Vicinae proposal fixture](/examples/keybindings/vicinae.yaml): proposed modern
+  routes and target differences; not a live playbook cutover.
+- [Generator](/library/filter_plugins/keybindings_compile.py) and
+  [membership runtime](/files/config/keybindings/membership.ts): controller glue
+  packages data; TypeScript owns capture, identity, ordering and lifecycle.

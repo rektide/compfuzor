@@ -15167,6 +15167,7 @@ async function main$1(argv, defaults) {
 			options: {
 				manifest: { type: "string" },
 				profile: { type: "string" },
+				"profile-selector": { type: "string" },
 				target: { type: "string" },
 				context: {
 					type: "string",
@@ -15186,7 +15187,9 @@ async function main$1(argv, defaults) {
 		if (values.scope !== "user" && values.scope !== "system") throw new Error("--scope must be user or system");
 		const runner = values.runner ?? defaults.runner;
 		if (!runner) throw new Error("installed CONFIG runner or --runner required");
-		const loaded = values.profile ? await loadProfile(values.profile) : { profile: defaultProfile(values.target) };
+		if (values.profile && values["profile-selector"]) throw new Error("choose profile or profile-selector, not both");
+		const profilePath = values["profile-selector"] ? resolvePathSelector(JSON.parse(values["profile-selector"]), void 0, "consumer profile") : values.profile;
+		const loaded = profilePath ? await loadProfile(profilePath) : { profile: defaultProfile(values.target) };
 		if (loaded.profile.target !== values.target) throw new Error("consumer profile target mismatch");
 		const options = {
 			...loaded,

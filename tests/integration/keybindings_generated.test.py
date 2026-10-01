@@ -20,7 +20,7 @@ def render(directory, name, declarations, env):
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "files").symlink_to(ROOT / "files", target_is_directory=True) if not (directory / "files").exists() else None
     payload = directory / "deployment"
-    variables = {"TYPE": name, "NAME": name, "DIR": str(payload), "ETC": str(payload / "etc"), "BINS_DIR": str(payload / "bin"), "DIRSET": ["etc"], "FILES": [], "ETC_FILES": [], "BINS": [{"name": "install.sh", "content": "printf 'authored-system-body\\n'\n"}], "DIRS": [], "STATUSES": [], "PKGS": [], "ENV": {}, "BINS_RUN_BYPASS": True, **declarations}
+    variables = {"TYPE": name, "NAME": name, "DIR": str(payload), "ETC": str(payload / "etc"), "BINS_DIR": str(payload / "bin"), "DIRSET": ["etc"], "FILES": [], "ETC_FILES": [], "BINS": [{"name": "install.sh", "content": "printf 'authored-system-body\\n'\n"}, {"name": "install-user.sh", "content": "printf 'authored-user-body\\n'\n"}], "DIRS": [], "STATUSES": [], "PKGS": [], "ENV": {}, "BINS_RUN_BYPASS": True, **declarations}
     tasks = [{"set_fact": {"SUBSYSTEM": {}}}]
     for task in ["sub_attribution", "sub_config", "gen_keybindings", "gen_config", "gen_bins", "gen_attribution", "compile_artifacts"]:
         tasks.append({"import_tasks": str(ROOT / f"tasks/compfuzor/{task}.tasks")})
@@ -71,7 +71,8 @@ def test_generated():
         assert not (config / "niri/config.kdl").exists() # Render does not install.
         # Consumer own patch is dormant before the producer exists.
         run([str(host / "bin/install-user.sh")], env)
-        run([str(first / "bin/install-user.sh")], env)
+        installed = run([str(first / "bin/install-user.sh")], env)
+        assert installed.stdout.count("authored-user-body\n") == 1
         run([str(second / "bin/install-user.sh")], env)
         states = {target: config / target / ".keybindings/membership.json" for target in ["niri", "umbriel"]}
         roots = {"niri": config / "niri/config.kdl", "umbriel": config / "umbriel/config.toml"}
@@ -115,6 +116,14 @@ def test_generated():
             assert "beta-launch start" in roots[target].read_text()
         run([str(first / "bin/install-user.sh")], env)
         assert all(json.loads(path.read_text())["groups"]["alpha"]["enabled"] is False for path in states.values())
+        for target in states:
+            active = config / target / ".keybindings/source/beta/keybinding/beta-launch.yaml"
+            active.rename(str(active) + ".disabled")
+        run([str(second / "bin/install-user.sh")], env)
+        for target in states:
+            active = config / target / ".keybindings/source/beta/keybinding/beta-launch.yaml"
+            assert not active.exists() and Path(str(active) + ".disabled").exists()
+            assert "beta-launch start" not in roots[target].read_text()
         print("ok: generated stock workers/install aggregation, two producers, overlays/native, source/material policies, smaller membership, rollback and durable disable")
 
 if __name__ == "__main__":

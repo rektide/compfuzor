@@ -1,0 +1,33 @@
+# Proposed Vicinae declarations only; NOT a live playbook cutover.
+# The isolated proposal test binds these targets to rendered user consumers.
+KEYBINDING_ACTIONS:
+  vicinae-toggle:
+    exec: [vicinae, toggle]
+  vicinae-clipboard:
+    exec: [vicinae, deeplink, "vicinae://launch/clipboard/history"]
+    umbriel:
+      exec: [vicinae, deeplink, "vicinae://launch/clipboard/history?toggle=true"]
+  vicinae-switch-windows:
+    exec: [vicinae, deeplink, "vicinae://launch/wm/switch-windows"]
+    umbriel:
+      exec: [vicinae, deeplink, "vicinae://launch/wm/switch-windows?toggle=true"]
+KEYBINDINGS:
+  vicinae-launch:
+    action: vicinae-toggle
+    keys: [Mod+D]
+    title: "Run an Application: vicinae"
+    umbriel:
+      keys: [Mod+Space]
+  vicinae-clipboard:
+    action: vicinae-clipboard
+    keys: [Alt+Grave]
+    title: "Vicinae clipboard"
+    umbriel:
+      keys: [] # The user's Umbriel policy selects Mod+Grave; no repeated command.
+  vicinae-switch-windows:
+    action: vicinae-switch-windows
+    keys: [Mod+F]
+    title: "Switch windows: vicinae"
+    umbriel:
+      keys: [Mod+Slash]
+KEYBINDING_TARGETS: [niri, umbriel]

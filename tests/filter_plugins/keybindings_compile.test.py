@@ -14,12 +14,16 @@ def test_compile():
     assert len(entries) == 2 and all(entry["scope"] == ["user"] and entry["run"] is False for entry in entries)
     assert all("--profile /opt/desktop/etc/keybinding-" in entry["content"] for entry in entries)
     assert all(bin.get("run") is False for bin in result["bins"] if bin["name"] == "config/run.sh")
+    runtime = compile_keybindings({"a": {"exec": ["app"]}}, {"b": {"action": "a", "keys": ["Mod+D"]}}, {}, {"niri": {"consumer": "${XDG_CONFIG_HOME}/niri/keybinding-niri.json"}}, "app", "/opt/app/etc", "/opt/app/bin")
+    assert "--profile-selector" in next(bin["content"] for bin in runtime["bins"] if bin["name"] == "install-keybindings-niri.sh")
     host = compile_keybindings({}, {"launch": {"patch": True, "keys": ["Alt+D"]}}, {"niri": {"contexts": {"user": {"scope": "user", "root": "config", "subpath": "niri"}}, "native_sources": [{"id": "own", "path": "own.kdl"}]}}, None, "host", "/opt/host/etc", "/opt/host/bin")
     profile = next(file["json"] for file in host["files"] if file["name"] == "keybinding-niri.json")
     assert profile["contexts"]["user"]["root"] == {"path": "${XDG_CONFIG_HOME}"}
     assert profile["userSources"][0]["whenPresent"] is True
     assert profile["nativeSources"][0]["path"] == {"relative": "own.kdl"}
     assert " host " in " " + next(bin["content"] for bin in host["bins"] if bin["name"] == "install-keybindings-niri.sh")
+    combined = compile_keybindings({"a": {"exec": ["app"]}}, {"b": {"action": "a", "keys": ["Mod+D"]}}, {"niri": {}}, ["niri"], "both", "/opt/both/etc", "/opt/both/bin")
+    assert next(file["json"] for file in combined["files"] if file["name"] == "keybinding-niri.json")["userSources"] == []
     try:
         compile_keybindings({}, {"launch": {"id": "different"}}, {}, ["niri"], "app", "/etc", "/bin")
     except AnsibleFilterError as error:

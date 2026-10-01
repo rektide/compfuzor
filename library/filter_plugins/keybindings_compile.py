@@ -131,7 +131,7 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
     for target, value in consumers.items():
         if target not in TARGETS:
             fail("consumer target must be niri/umbriel")
-        profiles[target] = profile(target, value, own_sources)
+        profiles[target] = profile(target, value, own_sources if targets is None else [])
         files.append({"name": "keybinding-" + target + ".json", "json": profiles[target]})
     target_map = {} if targets is None and consumers else {target: {} for target in TARGETS} if targets is None else {target: {} for target in targets} if isinstance(targets, list) else mapping(targets, "KEYBINDING_TARGETS")
     for target, value in target_map.items():
@@ -157,10 +157,17 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
         selected_scope = value.get("scope", scope)
         consumer = value.get("consumer")
         profile_path = None
+        profile_selector = None
         if consumer:
-            if not isinstance(consumer, str) or not consumer.startswith("/"):
-                fail("consumer must be an explicit deployment/profile path")
-            profile_path = consumer if consumer.endswith(".json") else posixpath.join(consumer, "etc/keybinding-" + target + ".json")
+            if isinstance(consumer, str):
+                selected_path = consumer if consumer.endswith(".json") else posixpath.join(consumer, "etc/keybinding-" + target + ".json")
+                compiled = compile_path_selector(selected_path, "consumer profile", allow_relative=False)
+                if selected_path.startswith("/"):
+                    profile_path = selected_path
+                else:
+                    profile_selector = compiled
+            else:
+                profile_selector = compile_path_selector(consumer, "consumer profile", allow_relative=False)
         elif target in profiles:
             profile_path = posixpath.join(etc, "keybinding-" + target + ".json")
             if selected_context not in profiles[target]["contexts"]:
@@ -174,6 +181,9 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
             args.extend(["--manifest", posixpath.join(etc, "keybinding-producer.json")])
         if profile_path:
             args.extend(["--profile", profile_path])
+        if profile_selector:
+            import json
+            args.extend(["--profile-selector", json.dumps(profile_selector)])
         bins.append({"name": "install-keybindings-" + target + ".sh", "action": "install", "scope": [selected_scope], "basedir": False, "deployment_rooted": True, "bypass": "KEYBINDINGS", "run": False, "content": 'exec "$DIR/bin/keybindings.mjs" ' + " ".join(shlex.quote(arg) for arg in args) + ' "$@"'})
     return {"files": files, "bins": bins, "dirs": dirs}
 

@@ -17,6 +17,9 @@ configuration for a selected consumer context.
 - [Keybinding consumer assembly](/doc/config/keybinding-consumers.md) — staged
   direct/copy/link and Niri inline, adopted root areas, native candidate closures
   and coherent registration through the existing CONFIG commit boundary.
+- [Declared keybinding producers](/doc/config/keybinding-producers.md) — author
+  actions/bindings directly, generate scoped installers and maintain durable closed
+  membership without per-binding ETC_FILES/CONFIGS/BINS lists.
 - [Attributed runtime flows](/design/config-anneal/execution-model0.gpt6.md) —
   current annealing checkpoint for contributors, composition, catalog order,
   and cross-plane execution policy.
