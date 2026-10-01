@@ -5,6 +5,13 @@ playbooks (`.pb`); compfuzor compiles that intent into subsystem state,
 synthesizes shared artifacts, then applies the result to repositories,
 filesystems, services, packages, and kernel state.
 
+## Hardware examples
+
+- [Kinesis / Kanata examples](/kinesis/README.md): opt-in alternatives for
+  keyboard-controlled BlueTurn layers and SmartSet-backed modifier keys, with
+  [an example-based guide](/doc/kinesis/kanata.md). Current root playbooks remain
+  unchanged.
+
 ## Filter plugins
 
 The authoritative plugin catalog, signatures, undefined-value behavior, and
