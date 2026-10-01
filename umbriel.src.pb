@@ -6,9 +6,8 @@
     REPO: https://github.com/noctalia-dev/umbriel
     ENV: True
 
-    # Arch packages include their development headers. xdg-desktop-portal-
-    # umbriel is a separate source project and is intentionally not covered
-    # here yet.
+    # Arch packages include their development headers. The portal backend
+    # (ScreenCast/Screenshot) is covered by xdg-desktop-portal-umbriel.src.pb.
     ARCH_PKGS:
       - cairo
       - gcc
