@@ -168,6 +168,13 @@ inferred by scanning directories. Reinstalling fewer declarations replaces that
 group's declared resource list. Old physical files remain, but no longer enter
 assembly. Neither stale registrations nor native artifacts are auto-pruned.
 
+This includes removing the **last** resource: keep the producer's target bindings
+and declare empty `KEYBINDING_ACTIONS: {}` / `KEYBINDINGS: {}`. Rendering replaces
+its manifest with an empty resource list, and the generated installer still runs
+producer installation to commit empty membership. It never falls back to an old
+manifest or changes into a host reassembly operation. An implicit consumer-only
+host (`KEYBINDING_CONSUMERS` without producer targets) remains a distinct role.
+
 Registration preserves existing active/disabled slots. Group enabled state also
 survives reinstall. A binding registration named `*.yaml.disabled` stays disabled
 when its producer is updated. A disabled group is excluded while its files remain.

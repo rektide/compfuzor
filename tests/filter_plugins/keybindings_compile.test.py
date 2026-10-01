@@ -24,6 +24,12 @@ def test_compile():
     assert " host " in " " + next(bin["content"] for bin in host["bins"] if bin["name"] == "install-keybindings-niri.sh")
     combined = compile_keybindings({"a": {"exec": ["app"]}}, {"b": {"action": "a", "keys": ["Mod+D"]}}, {"niri": {}}, ["niri"], "both", "/opt/both/etc", "/opt/both/bin")
     assert next(file["json"] for file in combined["files"] if file["name"] == "keybinding-niri.json")["userSources"] == []
+    empty = compile_keybindings({}, {}, {}, {"niri": {"consumer": "/opt/desktop"}}, "producer", "/opt/app/etc", "/opt/app/bin")
+    assert next(file["json"] for file in empty["files"] if file["name"] == "keybinding-producer.json")["resources"] == []
+    assert " install " in " " + next(bin["content"] for bin in empty["bins"] if bin["name"] == "install-keybindings-niri.sh")
+    host_only = compile_keybindings({}, {}, {"niri": {}}, None, "host", "/opt/host/etc", "/opt/host/bin")
+    assert not any(file["name"] == "keybinding-producer.json" for file in host_only["files"])
+    assert " host " in " " + next(bin["content"] for bin in host_only["bins"] if bin["name"] == "install-keybindings-niri.sh")
     try:
         compile_keybindings({}, {"launch": {"id": "different"}}, {}, ["niri"], "app", "/etc", "/bin")
     except AnsibleFilterError as error:

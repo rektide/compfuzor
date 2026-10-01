@@ -140,7 +140,11 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
         value = mapping(value, "target binding")
         if set(value) - {"consumer", "context", "scope"}:
             fail("unknown target binding")
-    if resources:
+    # Role is declaration-driven, not inferred from current resource count.
+    # Empty producer reinstalls must replace stale manifests/membership; only an
+    # implicit consumer-only host omits the producer manifest.
+    producer_role = targets is not None or not consumers
+    if producer_role:
         files.append({"name": "keybinding-producer.json", "json": {"version": 1, "producer": producer, "order": order, "resources": resources, "targets": list(target_map)}})
     # A domain host reuses STOCK CONFIG worker artifacts, without fabricating an
     # empty output recipe or auto-running installers during Ansible rendering.
@@ -175,7 +179,7 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
             selected_scope = profiles[target]["contexts"][selected_context]["scope"]
         if selected_scope not in ("user", "system"):
             fail("target scope must be user/system")
-        installing = target in target_map and bool(resources)
+        installing = target in target_map
         args = ["install" if installing else "host", "--target", target, "--context", selected_context, "--scope", selected_scope]
         if installing:
             args.extend(["--manifest", posixpath.join(etc, "keybinding-producer.json")])
