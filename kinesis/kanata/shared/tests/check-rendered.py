@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Inspect scratch artifacts only; never grab input devices or apply units."""
+"""Inspect SmartSet and merged scratch artifacts; never grab input or apply units."""
 from pathlib import Path
 import re
 import subprocess

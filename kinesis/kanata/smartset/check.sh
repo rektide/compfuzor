@@ -8,4 +8,4 @@ for variant in native one-shot command-layer; do
   ansible-playbook -i 'localhost,' -c local "$play" \
     -e @kinesis/kanata/shared/render-only.yaml
 done
-python3 kinesis/kanata/smartset/tests/check-rendered.py
+python3 kinesis/kanata/shared/tests/check-rendered.py

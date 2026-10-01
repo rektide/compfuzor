@@ -6,4 +6,4 @@ play=kinesis/kanata/merged/keyboard-pedal.srv.pb
 ansible-playbook "$play" --syntax-check
 ansible-playbook -i 'localhost,' -c local "$play" \
   -e @kinesis/kanata/shared/render-only.yaml
-python3 kinesis/kanata/smartset/tests/check-rendered.py b-merged
+python3 kinesis/kanata/shared/tests/check-rendered.py b-merged
