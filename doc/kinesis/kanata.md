@@ -106,6 +106,11 @@ a layout. `pages` is the reset target. In pages mode, left tap pages back and
 left hold activates the existing play/pause overlay; in media mode, the pedals
 become previous/next track.
 
+The selector sets a named mode rather than toggling blindly: pressing Media
+twice still leaves Media selected. This is persistent **within the running
+process**, not saved hardware state; restarting/reloading the pedal config
+returns to its first base layer, Pages.
+
 Two keyboard trigger variants share the same pedal service:
 
 | Playbook | Trigger path | Binary requirement |
