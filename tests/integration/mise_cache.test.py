@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the rendered mise-cache.sh cache inventory/gc/clear bin."""
+"""Exercise the rendered mise-cache.ts cache inventory/gc/clear bin."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRATCH = ROOT / ".test-agent" / "mise-cache-test"
+NODE = subprocess.run(["node", "-p", "process.execPath"], check=True, text=True, capture_output=True).stdout.strip()
 
 
 def run(command: list[str], *, cwd: Path, env: dict[str, str], check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -55,11 +56,14 @@ def test_mise_cache_bin() -> None:
         render("mise.opt.pb", payload, "mise", "mise-main")
 
         bin_dir = payload / "bin"
-        cache_bin = bin_dir / "mise-cache.sh"
+        cache_bin = bin_dir / "mise-cache.ts"
         assert cache_bin.is_file()
-        assert "MISE_PREFIX=\"\"" in cache_bin.read_text(encoding="utf-8")
+        assert not (bin_dir / "mise-cache.sh").exists()  # bash precursor retired
+        rendered = cache_bin.read_text(encoding="utf-8")
+        assert rendered.startswith("#!/usr/bin/env node")
+        assert "MISE2_CONFIG_DEFAULT: string | null = null" in rendered  # plain mise render
         # aggregate status.sh bakes the reporter with its fixed --fast arg
-        assert "mise-cache.sh" in (bin_dir / "status.sh").read_text(encoding="utf-8")
+        assert "mise-cache.ts" in (bin_dir / "status.sh").read_text(encoding="utf-8")
 
         home = temporary / "home"
         xdg_cache = temporary / "xdg" / "cache"
@@ -89,9 +93,8 @@ def test_mise_cache_bin() -> None:
             "HOME": str(home),
             "XDG_CACHE_HOME": str(xdg_cache),
             "MISE_DATA_DIR": str(data),
-            # neutralize this machine's exported tool roots so the catalog
-            # resolves against the sandbox
-            "PATH": f"{shims}:/usr/bin:/bin",
+            # node for the bin itself; the stubs shadow the catalog tools
+            "PATH": f"{shims}:{Path(NODE).parent}:/usr/bin:/bin",
             "RUSTUP_HOME": "",
             "CARGO_HOME": "",
         }
@@ -113,7 +116,7 @@ def test_mise_cache_bin() -> None:
 
         # aggregate status runs the reporter with its fixed args
         aggregate = run([str(bin_dir / "status.sh"), "--fast"], cwd=temporary, env=env, check=False)
-        assert "=== mise-cache.sh ===" in aggregate.stdout, aggregate.stdout
+        assert "=== mise-cache.ts ===" in aggregate.stdout, aggregate.stdout
 
         gc = run([str(cache_bin), "gc", "--all", "--dry-run"], cwd=temporary, env=env)
         assert "[dry-run] mise prune --tools" in gc.stdout, gc.stdout
@@ -147,8 +150,8 @@ def test_mise_cache_bin() -> None:
         # mise2 render routes mise through its isolated config root
         payload2 = temporary / "deploy2"
         render("mise2.opt.pb", payload2, "mise2", "mise2-main")
-        text = (payload2 / "bin" / "mise-cache.sh").read_text(encoding="utf-8")
-        assert "MISE_CONFIG_DIR=" in text and "MISE_PREFIX=\"\"" not in text
+        text = (payload2 / "bin" / "mise-cache.ts").read_text(encoding="utf-8")
+        assert 'MISE2_CONFIG_DEFAULT = "' in text
 
 
 if __name__ == "__main__":

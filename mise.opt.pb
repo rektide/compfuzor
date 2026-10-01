@@ -142,7 +142,7 @@
       - status-mise-bash.sh
       # --fast: sizes come from du, which can take minutes across ~100G of
       # caches; the aggregate status.sh skips du, direct runs measure.
-      - name: mise-cache.sh
+      - name: mise-cache.ts
         args: [status, --fast]
     BINS:
       - name: install-user.sh
@@ -172,10 +172,15 @@
         src: ../block-status.sh
         basedir: False
         compose: False
+      # Retire the bash precursor; mise-cache.ts replaces it.
+      - name: mise-cache.sh
+        state: absent
       # Cache inventory + selective gc/clear for mise and the tools it
       # installs; shared template, rendered from mise_cache_areas above.
-      - name: mise-cache.sh
-        src: ../mise-cache.sh
+      # TypeScript (node:util parse-args CLI) via the Node bin template.
+      - name: mise-cache.ts
+        src: ../mise-cache.ts
+        runtime: node
         basedir: False
         compose: False
       - name: status-mise-bash.sh
