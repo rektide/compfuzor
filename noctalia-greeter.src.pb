@@ -95,6 +95,44 @@
       - pkg-config
       - wayland-protocols
 
+    README: |
+      # noctalia-greeter-git — greetd login greeter
+
+      Noctalia Greeter + its bundled wlroots compositor. `bin/install.sh`:
+      package lanes -> meson build -> install under **/usr** (see the
+      playbook header for why /usr and not /usr/local: polkitd only reads
+      /usr/share/polkit-1/actions, the installed print-config wrapper
+      hardcodes /usr/share/noctalia-greeter) -> mode hygiene. It never
+      touches greetd config, PAM, or the state dir — that wiring is the
+      operator steps below, in order:
+
+      ## Cutover runbook
+
+          bin/setup-greeter.sh    # upstream script: /var/lib/noctalia-greeter,
+                                  # _greetd user, greetd PAM patch, prints config
+          bin/greetd-config.sh    # ready-to-paste [default_session] block
+          # merge that block into /etc/greetd/config.toml (it backs up first),
+          # then:
+          sudo systemctl enable --now greetd
+
+      Pin a session from the picker with
+      `command = "/usr/bin/noctalia-greeter-session -- --session niri"`.
+      Switching display managers restarts the graphical session — do it from
+      a TTY or ssh, not from inside the desktop.
+
+      ## Verify / debug
+
+          systemctl status greetd
+          journalctl -u greetd -b          # greeter logs go to syslog
+          # inside the greeter session, WLR_LOG=info and
+          # NOCTALIA_GREETER_LOG=stderr surface compositor detail
+
+      ## Polkit appearance-sync (optional)
+
+      The policy ships admin-authenticated in /usr/share/polkit-1/actions.
+      Passwordless sync for specific users is an explicit choice:
+      `sudo noctalia-greeter passwordless-sync enable USER` (never blanket).
+
     BINS:
       - name: build.sh
         basedir: repo

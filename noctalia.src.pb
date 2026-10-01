@@ -123,6 +123,85 @@
       - wireplumber
       - polkitd
 
+    # Session autostart as a supervised user service, the alternative to
+    # umbriel's `general.autostart` config. Wired to umbriel-session.target
+    # (started by start-umbriel, Binds=graphical-session.target): PartOf+After
+    # start the shell when the session comes up, PartOf stops it when the
+    # compositor exits. Umbriel imports WAYLAND_DISPLAY/XDG_CURRENT_DESKTOP
+    # into the user manager, so ConditionEnvironment gates stray manual
+    # starts outside a session. Link-only on install (SYSTEMD_ENABLE: False):
+    # noctalia claims org.freedesktop.Notifications + the StatusNotifier host
+    # on non-Plasma sessions, so enabling it while mako or another daemon
+    # owns those names is an operator decision -- README documents the
+    # enable one-liner and the conflict.
+    SYSTEMD_SERVICE: noctalia
+    SYSTEMD_SCOPE: user
+    SYSTEMD_INSTALL: user
+    SYSTEMD_USERMODE: True
+    SYSTEMD_ENABLE: False
+    SYSTEMD_LINK: False
+    SYSTEMD_UNITS:
+      Description: Noctalia desktop shell (umbriel session)
+      PartOf: umbriel-session.target
+      After: umbriel-session.target
+      ConditionEnvironment: WAYLAND_DISPLAY
+    SYSTEMD_SERVICES:
+      # Plain foreground noctalia: --daemon self-backgrounds (desktop-entry
+      # style) and would defeat systemd supervision.
+      ExecStart: /usr/local/bin/noctalia
+      Slice: session.slice
+    SYSTEMD_INSTALLS:
+      WantedBy: umbriel-session.target
+
+    README: |
+      # noctalia-git — Noctalia v5 desktop shell
+
+      Source deployment of [noctalia-dev/noctalia](https://github.com/noctalia-dev/noctalia),
+      the native Wayland shell built to pair with umbriel. `bin/install.sh`
+      runs the chain: package lanes -> meson build -> install to /usr/local
+      -> completions generation -> assets mode hygiene. Separately,
+      `bin/install-service-noctalia-user.sh` links the session unit (below).
+
+      ## Autostart — pick exactly ONE lane
+
+      1. **systemd (recommended, supervised)**: this deployment links
+         `noctalia.service` (user scope) into `~/.config/systemd/user/`.
+         It is `PartOf=`/`After=`/`WantedBy=` `umbriel-session.target`, so it
+         starts when an umbriel session starts and stops with the compositor.
+         It is linked (`systemctl --user is-enabled` reports `linked`) but
+         deliberately NOT enabled; opt in with:
+
+             systemctl --user enable --now noctalia.service
+
+      2. **umbriel config autostart**: add `general.autostart = ["noctalia"]`
+         to your umbriel config chain (umbriel.user.pb owns the root include
+         chain; a fragment works). Do not enable both lanes — you would race
+         two shells on one session.
+
+      ## Conflicts before enabling
+
+      Noctalia claims `org.freedesktop.Notifications` and the
+      `org.kde.StatusNotifierWatcher` host on non-Plasma sessions. mako and
+      vicinae's tray registration own those names in the current session:
+      disable the other daemon(s) first, or noctalia's notifications/tray
+      will misbehave.
+
+      ## Control
+
+          bin/run.sh                         # foreground run (testing)
+          bin/msg.sh panel-toggle launcher   # IPC to the running shell
+          noctalia msg ...                   # same, from PATH
+
+      Umbriel keybind example:
+      `"Mod" = "spawn:noctalia msg panel-toggle launcher"`.
+
+      ## Runtime notes
+
+      - Aborts without a running pipewire daemon (+ wireplumber).
+      - Config `~/.config/noctalia/config.toml`, state `~/.local/state/noctalia`,
+        logs `~/.cache/noctalia`.
+      - Update path: `bin/install.sh` again after the repo moves.
+
     BINS:
       - name: build.sh
         basedir: repo

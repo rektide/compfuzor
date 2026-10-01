@@ -67,10 +67,41 @@
       - nlohmann-json3-dev
       - pkg-config
       - wayland-protocols
-      # runtime, not just -dev: the daemon side of ScreenCast
+    # runtime, not just -dev: the daemon side of ScreenCast
       - pipewire
       - wireplumber
       - xdg-desktop-portal
+
+    README: |
+      # xdg-desktop-portal-umbriel-git — ScreenCast/Screenshot for umbriel
+
+      Portal backend (plus the GTK share picker) for the umbriel compositor.
+      `bin/install.sh`: package lanes -> meson build -> install to /usr/local
+      -> mode hygiene -> user-manager daemon-reload. No enable step exists:
+      the backend is D-Bus activated (`org.freedesktop.impl.portal.desktop.umbriel`),
+      gated by the pipewire-backed ScreenCast path.
+
+      ## After installing into a live session
+
+      The running xdg-desktop-portal frontend only rescans backends on
+      restart:
+
+          bin/restart.sh    # restarts xdg-desktop-portal (+ backend)
+
+      ## Verify
+
+          bin/status.sh     # user-unit status + bus names
+      # in a session: take a screenshot through the frontend
+          gdbus call --session --dest org.freedesktop.portal.Desktop \
+            --object-path /org/freedesktop/portal/desktop \
+            --method org.freedesktop.portal.Screenshot.Screenshot '' '{}'
+
+      ## Config
+
+      Optional `~/.config/xdg-desktop-portal-umbriel/config.toml` overrides
+      (`screencast.chooser_cmd`, `screencast.max_fps`, `screenshot.cmd`,
+      `screenshot.color_pick_cmd`); defaults are baked in at build with the
+      installed libexecdir, so no config file is needed.
 
     BINS:
       - name: build.sh
