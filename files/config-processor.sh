@@ -101,11 +101,14 @@ case "$processor" in
   block-in-file)
     output=$(jq -r --arg config "$config" '.configs[$config].output' "$spec")
     namespace=$(jq -r --arg config "$config" '.configs[$config].block.namespace' "$spec")
+    comment=$(jq -r --arg config "$config" '.configs[$config].block.comment // empty' "$spec")
+    comment_args=()
+    [ -z "$comment" ] || comment_args=(--comment "$comment")
     if [ -f "$output" ]; then cp "$output" "$CONFIG_CANDIDATE"; else : > "$CONFIG_CANDIDATE"; fi
     command=${CONFIG_BLOCK_IN_FILE:-block-in-file}
     escaped=$(printf '%s' "$namespace" | sed 's/[][\\.^$*+?(){}|]/\\&/g')
     removal_error=$(mktemp)
-    if ! "$command" --remove-match "^${escaped}/" -o "$CONFIG_CANDIDATE" 2>"$removal_error"; then
+    if ! "$command" "${comment_args[@]}" --remove-match "^${escaped}/" -o "$CONFIG_CANDIDATE" 2>"$removal_error"; then
       printf 'block-in-file command lacks required --remove-match support: %s\n' "$command" >&2
       cat "$removal_error" >&2
       rm -f "$removal_error"
@@ -113,10 +116,11 @@ case "$processor" in
     fi
     rm -f "$removal_error"
     while IFS= read -r pattern; do
-      "$command" --remove-match "$pattern" -o "$CONFIG_CANDIDATE"
+      "$command" "${comment_args[@]}" --remove-match "$pattern" -o "$CONFIG_CANDIDATE"
     done < <(jq -r --arg config "$config" '.configs[$config].block.remove_match[]?' "$spec")
     while IFS=$'\t' read -r _kind identity path block; do
-      args=(-n "$namespace/$identity" -i "$path" -o "$CONFIG_CANDIDATE")
+      stable=$(jq -r '.id // empty' <<<"$block")
+      args=(-n "$namespace/${stable:-$identity}" "${comment_args[@]}" -i "$path" -o "$CONFIG_CANDIDATE")
       for placement in before after anchor; do
         value=$(jq -r --arg key "$placement" '.[$key] // empty' <<<"$block")
         [ -z "$value" ] || args+=("--$placement" "$value")

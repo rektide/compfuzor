@@ -5,7 +5,7 @@
   vars:
     base_compiled: >-
       {{ CONFIGS | default({}) | resolve |
-         config_compile(ETC, BINS_DIR, CONFIG_DISABLED_SUFFIX) }}
+         config_compile(ETC, BINS_DIR, CONFIG_DISABLED_SUFFIX, CONFIG_TRANSACTION_VALIDATE | default(None)) }}
     compiled: >-
       {{ base_compiled |
          config_context_compile(

@@ -166,7 +166,25 @@ def test_external_processor():
         check_raises("bad external processor", lambda bad=bad: compile_config({"x": {"processor": bad}}, "/etc"), message)
 
 
+def test_commit_and_block_seams():
+    plan = compile_config({"root.kdl": {"processor": "block-in-file", "block": {"comment": "//", "before": "^// anchor$"}, "inputs": [
+        {"file": "one.kdl", "block": {"id": "first"}}, {"file": "two.kdl", "block": {"id": "second"}},
+    ]}, "linked.kdl": {"processor": "concat", "link": "/source/body.kdl"}}, "/etc", transaction_validate='validate-closure "$CONFIG_CANDIDATES_FILE"')
+    check("transaction hook", plan["spec"]["transaction_validate"], 'validate-closure "$CONFIG_CANDIDATES_FILE"')
+    check("link declaration", plan["spec"]["configs"]["linked"]["link"], "/source/body.kdl")
+    check("stable block id", plan["spec"]["configs"]["root"]["inputs"][0]["block"]["id"], "first")
+    check("inherited comment", plan["spec"]["configs"]["root"]["inputs"][0]["block"]["comment"], "//")
+    for configs, message in [
+        ({"x": {"processor": "concat", "link": "relative"}}, "absolute symlink"),
+        ({"x": {"processor": "block-in-file", "inputs": [{"glob": "d/*", "block": {"id": "x"}}]}}, "explicit file"),
+        ({"x": {"processor": "block-in-file", "inputs": [{"file": "a", "block": {"id": "x"}}, {"file": "b", "block": {"id": "x"}}]}}, "duplicate block.id"),
+        ({"x": {"processor": "block-in-file", "inputs": [{"file": "a", "block": {"comment": "//"}}]}}, "consistently"),
+    ]:
+        check_raises("invalid commit/block settings", lambda configs=configs: compile_config(configs, "/etc"), message)
+
+
 if __name__ == "__main__":
     test_compile()
     test_validation()
     test_external_processor()
+    test_commit_and_block_seams()

@@ -75,6 +75,13 @@ trap cleanup EXIT
 drift=0
 pending_sources=()
 pending_outputs=()
+pending_links=()
+candidate_sources=()
+candidate_outputs=()
+candidate_links=()
+candidate_map="$transaction/candidates.json"
+candidate_entries="$transaction/candidate-entries.jsonl"
+: > "$candidate_entries"
 
 for config in "${configs[@]}"; do
     output=$(jq -r --arg config "$config" '.configs[$config].output' "$spec")
@@ -146,16 +153,32 @@ for config in "${configs[@]}"; do
         CONFIG_CANDIDATE="$tmp" bash -c "$validate" || { printf '%s: candidate validation failed\n' "$config" >&2; exit 1; }
       fi
     fi
-    if [ "$print" = 1 ]; then
-      cat "$tmp"
-      rm -f "$tmp"
-      continue
-    fi
+    link=$(jq -r --arg config "$config" '.configs[$config].link // empty' "$spec")
+    candidate_sources+=("$tmp"); candidate_outputs+=("$output"); candidate_links+=("$link")
+    jq -nc --arg name "$config" --arg output "$output" --arg candidate "$tmp" --arg link "$link" \
+      '{name: $name, output: $output, candidate: $candidate, link: (if $link == "" then null else $link end)}' >> "$candidate_entries"
+done
+
+jq -s '{version: 1, candidates: .}' "$candidate_entries" > "$candidate_map"
+transaction_validate=$(jq -r '.transaction_validate // empty' "$spec")
+if [ -n "$transaction_validate" ]; then
+  mode=apply
+  [ "$check" = 0 ] || mode=check
+  [ "$print" = 0 ] || mode=stdout
+  CONFIG_TRANSACTION="$transaction" CONFIG_CANDIDATES_FILE="$candidate_map" CONFIG_MODE="$mode" \
+    bash -c "$transaction_validate" >&2 || { printf 'transaction candidate validation failed\n' >&2; exit 1; }
+fi
+
+for index in "${!candidate_sources[@]}"; do
+    tmp=${candidate_sources[$index]}; output=${candidate_outputs[$index]}; link=${candidate_links[$index]}
+    if [ "$print" = 1 ]; then cat "$tmp"; continue; fi
     # A matching symlink is still pending: assembly owns the directory entry
     # and must detach it rather than leave a link to (and later write into) a
     # donor output.
-    if [ ! -L "$output" ] && [ -f "$output" ] && cmp -s "$tmp" "$output"; then
-      rm -f "$tmp"; continue
+    if [ -n "$link" ]; then
+      if [ -L "$output" ] && [ "$(readlink -- "$output")" = "$link" ]; then continue; fi
+    elif [ ! -L "$output" ] && [ -f "$output" ] && cmp -s "$tmp" "$output"; then
+      continue
     fi
     temps+=("$tmp")
     if [ "$check" = 1 ]; then
@@ -168,7 +191,7 @@ for config in "${configs[@]}"; do
         fi
       fi
     else
-      pending_sources+=("$tmp"); pending_outputs+=("$output")
+      pending_sources+=("$tmp"); pending_outputs+=("$output"); pending_links+=("$link")
     fi
 done
 
@@ -184,10 +207,16 @@ if [ "$check" = 0 ]; then
     mkdir -p "$parent"
     staged=$(mktemp "$parent/.config-candidate.XXXXXX")
     temps+=("$staged")
-    mode=0600
-    if [ ! -L "$output" ] && [ -f "$output" ]; then mode=$(stat -c '%a' -- "$output"); fi
-    cp -- "${pending_sources[$index]}" "$staged"
-    chmod "$mode" "$staged"
+    link=${pending_links[$index]}
+    if [ -n "$link" ]; then
+      rm -f "$staged"
+      ln -s -- "$link" "$staged"
+    else
+      mode=0600
+      if [ ! -L "$output" ] && [ -f "$output" ]; then mode=$(stat -c '%a' -- "$output"); fi
+      cp -- "${pending_sources[$index]}" "$staged"
+      chmod "$mode" "$staged"
+    fi
     staged_sources+=("$staged")
     staged_outputs+=("$output")
   done

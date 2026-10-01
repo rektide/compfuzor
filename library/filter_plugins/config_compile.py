@@ -84,7 +84,7 @@ def _glob_parts(path, label):
 def _block(value, label, inherited=None):
     block = dict(inherited or {})
     local = _mapping(value, label)
-    unknown = set(local) - set(_PLACEMENTS) - {"remove_match"}
+    unknown = set(local) - set(_PLACEMENTS) - {"remove_match", "id", "comment"}
     if unknown:
         _error("{} has unknown settings: {}".format(label, ", ".join(sorted(unknown))))
     for key, setting in local.items():
@@ -96,6 +96,10 @@ def _block(value, label, inherited=None):
         elif not isinstance(setting, str) or not setting:
             _error("{}.{} must be a non-empty string".format(label, key))
         else:
+            if key == "id" and not _ID.fullmatch(setting):
+                _error("{}.id must be a stable identifier".format(label))
+            if key == "comment" and any(c in setting for c in "\0\r\n"):
+                _error("{}.comment must be a single-line marker".format(label))
             block[key] = setting
     placements = [key for key in _PLACEMENTS if key in block]
     if len(placements) > 1:
@@ -145,9 +149,11 @@ def _json_input_settings(item, label, processor):
 
 
 @accept_args_markers
-def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled"):
+def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled", transaction_validate=None):
     """Normalize CONFIGS and emit config subsystem contributions."""
     configs = _mapping(raw_copy_template_data(configs), "CONFIGS")
+    if transaction_validate is not None and (not isinstance(transaction_validate, str) or not transaction_validate):
+        _error("transaction_validate must be a non-empty command")
     normalized = {}
     remotes = {}
     mutable_inputs = {}
@@ -202,6 +208,9 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled"):
 
         processor = _processor(raw.get("processor"), "CONFIGS.{}.processor".format(output_key))
         validate = raw.get("validate")
+        link = raw.get("link")
+        if link is not None and (not isinstance(link, str) or not link.startswith("/") or any(c in link for c in "\0\r\n\t")):
+            _error("CONFIGS.{}.link must be an absolute symlink target".format(output_key))
         if validate is not None and (not isinstance(validate, str) or not validate):
             _error("CONFIGS.{}.validate must be a non-empty command".format(output_key))
         block = None
@@ -265,9 +274,17 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled"):
             normalized_input.update(_json_input_settings(item, "CONFIGS.{}.inputs[{}]".format(output_key, index), processor))
             if processor == "block-in-file":
                 normalized_input["block"] = _block(item.get("block"), "CONFIGS.{}.inputs[{}].block".format(output_key, index), block)
+                if kind == "glob" and "id" in normalized_input["block"]:
+                    _error("block.id requires one explicit file input")
+                if normalized_input["block"].get("comment") != block.get("comment"):
+                    _error("block.comment must be configured consistently on the recipe")
             elif "block" in item:
                 _error("input block settings require the block-in-file processor")
             inputs.append(normalized_input)
+
+        block_ids = [item["block"]["id"] for item in inputs if "id" in item.get("block", {})]
+        if len(block_ids) != len(set(block_ids)):
+            _error("duplicate block.id in config {!r}".format(name))
 
         if raw.get("remote", False):
             if not glob_indices:
@@ -301,6 +318,8 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled"):
         }
         if block is not None:
             normalized[name]["block"] = block
+        if link is not None:
+            normalized[name]["link"] = posixpath.normpath(link)
         output_dir = posixpath.dirname(output)
         if output_dir and output_dir not in dirs:
             dirs.append(output_dir)
@@ -336,7 +355,7 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled"):
 
     return {
         "dirs": dirs,
-        "spec": {"configs": normalized, "remotes": remotes},
+        "spec": {"configs": normalized, "remotes": remotes, **({} if transaction_validate is None else {"transaction_validate": transaction_validate})},
         "bins": bins,
         "statuses": statuses,
     }
