@@ -10,3 +10,18 @@
 # (src/server/server_keybinds.cpp matchKeybind, rawKeysym path), so this
 # fires on Shift+Slash as typed.
 "Mod+Shift+Slash" = "cheatsheet-toggle"
+# Vim-style move chords. The default set binds only the arrow variants
+# (Mod+Shift+Left/Down/Up/Right), so H/J/K/L moves were lost when the
+# hand-copied keybind set became the include chain. J/K use the hybrid
+# actions: move the window within its column, and carry it to the adjacent
+# workspace when it hits the edge -- in-workspace behavior stays intact.
+"Mod+Shift+H" = "column-move-left"
+"Mod+Shift+L" = "column-move-right"
+"Mod+Shift+J" = "window-move-or-workspace-down"
+"Mod+Shift+K" = "window-move-or-workspace-up"
+# Relative workspace navigation, niri-style Page keys (chords borrowed from
+# the example config's optional recipes; unbound in the default).
+"Mod+Page_Down" = "workspace-next"
+"Mod+Page_Up" = "workspace-previous"
+"Mod+Shift+Page_Down" = "window-move-to-workspace-next"
+"Mod+Shift+Page_Up" = "window-move-to-workspace-previous"
