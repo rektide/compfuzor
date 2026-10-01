@@ -43,8 +43,107 @@
       - bash_rc
       - bash_profile
       - mise_npm_package_manager
+    # Cache areas inventoried by bin/mise-cache.sh (status/list/gc/clear).
+    # Fields: name (gc/clear selection key), desc, paths (list; space-joined
+    # into the rendered catalog; runtime-expanded, so $HOME and
+    # ${XDG_CACHE_HOME:-...} forms work; entries must not contain spaces),
+    # query (ask the tool itself for its
+    # root), fallback (used when the query tool is off PATH), gc (safe
+    # reclaim command), clear (native command, `rm`, or `none` for
+    # visibility-only areas), expand (status reports one-level child sizes).
+    # Cache/data roots follow mise's own env overrides (MISE_CACHE_DIR,
+    # MISE_DATA_DIR) so a redirected mise sees its redirected caches.
+    mise_cache_areas:
+      - name: mise-cache
+        desc: mise internal metadata cache
+        query: mise cache path
+        fallback: "${MISE_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/mise}"
+        gc: mise cache prune
+        clear: mise cache clear
+      - name: mise-downloads
+        desc: mise install download staging
+        paths: ["${MISE_DATA_DIR:-$HOME/.local/share/mise}/downloads"]
+        clear: rm
+      - name: mise-installs
+        desc: mise-managed tool installs
+        paths: ["${MISE_DATA_DIR:-$HOME/.local/share/mise}/installs"]
+        gc: mise prune --tools
+        clear: none
+        expand: true
+      - name: rustup
+        desc: rustup toolchains outside mise (visibility only)
+        paths: ["${RUSTUP_HOME:-$HOME/.rustup}"]
+        clear: none
+        expand: true
+      - name: cargo
+        desc: cargo registry and git caches
+        paths: ["${CARGO_HOME:-$HOME/.cargo}/registry", "${CARGO_HOME:-$HOME/.cargo}/git"]
+        clear: rm
+      - name: npm
+        desc: npm download cache
+        query: npm config get cache
+        fallback: "$HOME/.npm"
+        clear: npm cache clean --force
+      - name: pnpm
+        desc: pnpm content-addressed store and metadata cache
+        query: pnpm store path
+        fallback: "${XDG_DATA_HOME:-$HOME/.local/share}/pnpm/store"
+        paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/pnpm"]
+        gc: pnpm store prune
+        clear: rm
+      - name: yarn
+        desc: yarn classic and berry caches
+        paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/yarn", "$HOME/.yarn/berry/cache"]
+        clear: rm
+      - name: bun
+        desc: bun install cache
+        paths: ["${BUN_INSTALL:-$HOME/.bun}/install/cache"]
+        clear: bun pm cache rm
+      - name: deno
+        desc: deno remote module cache
+        paths: ["${DENO_DIR:-$HOME/.cache/deno}"]
+        clear: deno clean
+      - name: go-mod
+        desc: go module source cache
+        query: go env GOMODCACHE
+        fallback: "${GOPATH:-$HOME/go}/pkg/mod"
+        clear: go clean -modcache
+      - name: go-build
+        desc: go build cache
+        query: go env GOCACHE
+        fallback: "${XDG_CACHE_HOME:-$HOME/.cache}/go-build"
+        clear: go clean -cache
+      - name: gradle
+        desc: gradle dependency caches
+        paths: ["${GRADLE_USER_HOME:-$HOME/.gradle}/caches"]
+        clear: rm
+      - name: maven
+        desc: maven local repository
+        paths: ["$HOME/.m2/repository"]
+        clear: rm
+      - name: pip
+        desc: pip download and build cache
+        paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/pip"]
+        clear: pip cache purge
+      - name: uv
+        desc: uv python and package cache
+        paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/uv"]
+        gc: uv cache prune
+        clear: uv cache clean
+      - name: nuget
+        desc: dotnet nuget packages
+        paths: ["$HOME/.nuget/packages"]
+        clear: dotnet nuget locals all --clear
+      - name: prettier
+        desc: prettier cache
+        paths: ["${XDG_CACHE_HOME:-$HOME/.cache}/prettier"]
+        clear: rm
     STATUSES:
       - status-mise-bash.sh
+      # --fast: sizes come from du, which can take minutes across ~100G of
+      # caches; the aggregate status.sh skips du, direct runs measure.
+      - name: mise-cache.sh
+        args: [status, --fast]
     BINS:
       - name: install-user.sh
         content: |
@@ -71,6 +170,12 @@
             -o "${BASH_PROFILE:-{{bash_profile}}}"
       - name: block-status.sh
         src: ../block-status.sh
+        basedir: False
+        compose: False
+      # Cache inventory + selective gc/clear for mise and the tools it
+      # installs; shared template, rendered from mise_cache_areas above.
+      - name: mise-cache.sh
+        src: ../mise-cache.sh
         basedir: False
         compose: False
       - name: status-mise-bash.sh
