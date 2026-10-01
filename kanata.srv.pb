@@ -33,12 +33,15 @@
           )
 
           ;; one keymap for all devices (shared layer state). The iRig
-          ;; BlueTurn footpedal sends plain arrows; holding its LEFT pad
-          ;; switches to the pedal-meta layer (tap = left arrow still).
-          ;; True per-device behavior when wanted: definputdevices +
-          ;; (device-history) in switch actions, e.g.
-          ;;   (definputdevices pedal (name "BlueTurn"))
+          ;; BlueTurn (BLE; enumerates as "ADAPTER_95AB Keyboard" from its
+          ;; random address, vendor 07d7) sends plain arrows; holding its
+          ;; LEFT pad switches to the pedal-meta layer (tap = left arrow
+          ;; still). True per-device behavior when wanted: definputdevices
+          ;; + (device-history) in switch actions, e.g.
+          ;;   (definputdevices pedal (vendor_id 0x07d7))
           ;;   ... (switch ((device-history pedal 500) X Y) (t Z))
+          ;; BT recovery recipe if it drops after sleep: disconnect, then
+          ;; pair (bonding refuses to start on a live connection), trust.
           (defsrc
             caps
             left right up down
