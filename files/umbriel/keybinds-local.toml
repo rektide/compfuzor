@@ -10,6 +10,10 @@
 # (src/server/server_keybinds.cpp matchKeybind, rawKeysym path), so this
 # fires on Shift+Slash as typed.
 "Mod+Shift+Slash" = "cheatsheet-toggle"
+
+# Vicinae clipboard history (paste picker); ?toggle=true closes it when
+# already showing, matching the launcher/window-switcher binds.
+"Mod+Grave" = "spawn:vicinae deeplink 'vicinae://launch/clipboard/history?toggle=true'"
 # Vim-style move chords. The default set binds only the arrow variants
 # (Mod+Shift+Left/Down/Up/Right), so H/J/K/L moves were lost when the
 # hand-copied keybind set became the include chain. J/K use the hybrid
