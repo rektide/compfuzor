@@ -283,6 +283,12 @@ ansible-playbook -i 'localhost,' -c local \
   -e @kinesis/kanata/shared/render-only.yaml
 ```
 
+Compfuzor's existing task/lookup machinery expects root `vars`, `files`, and
+`roles` resources beside the playbook. The example directories expose those
+through small relative resource symlinks; they reuse the toolkit, not copies of
+its templates or a second set of defaults. Do not remove those links when
+copying an example directory into another checkout.
+
 The [render-only profile](/kinesis/kanata/shared/render-only.yaml) directs
 artifacts into `.test-agent/kinesis-kanata/render/` and disables packages,
 checkouts, kernel modules, link installation, bin execution, and service
@@ -362,6 +368,9 @@ below before interpreting an unresponsive pedal as a DSL failure.
 - [Kinesis RGB support](https://gaming.kinesis-ergo.com/fs-edge-rgb-support/):
   firmware/profile mechanics and the Direct Programming Guide, distinct from
   Kanata's own DSL.
+- [Optional v-Drive mount playbook](/kinesis.etc.pb): declares the keyboard's
+  removable configuration-volume mount (default `/mnt/kinesis`); deploying
+  that machinery is separate from editing native SmartSet assignments.
 
 ## Worth exploring next — not implemented here
 

@@ -26,3 +26,8 @@ These examples are **alternatives, not a bundle to run simultaneously**.
 
 SmartSet firmware-side control belongs to the separate `~/src/kinefolk` project.
 The examples document that boundary; they do not rewrite the keyboard's v-Drive.
+
+## Native configuration access
+
+- [v-Drive mount](/kinesis.etc.pb): optional systemd mount/automount declarations
+  for accessing the Edge's configuration volume; not an editor or remapper.
