@@ -65,6 +65,10 @@ and refresh are planned candidates, not preparatory live writes. A newly rendere
 definition can therefore back a newly copied or linked consumer file without a
 dependent-candidate DAG: all bytes are prepared explicitly before invoking CONFIG.
 Definition outputs precede placement outputs, and root publication comes last.
+Runtime-expanded recipes may explicitly select an existing deployed `leaf` path
+(for example the shared concat processor). The legacy per-name leaf remains the
+default. This avoids installing dynamic per-binding executable wrappers merely
+to copy already captured inputs; it is explicit spec binding, not PATH discovery.
 
 Shared CONFIG block assembly must provide explicit contribution IDs and comment
 markers, preserve unmanaged text, and use adopted insertion areas. A readable

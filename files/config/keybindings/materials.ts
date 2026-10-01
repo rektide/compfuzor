@@ -1,6 +1,6 @@
 /** Pure source/placement/incorporation planning shared with future native admission. */
 
-import { isAbsolute, join } from "node:path";
+import { isAbsolute, join, normalize } from "node:path";
 import type { Target } from "./model.ts";
 import { renderInclude } from "./render.ts";
 
@@ -9,6 +9,7 @@ export type NativeSource = {
   path: string;
   format: Target;
   order: number;
+  incorporation?: "include" | "inline";
   placement: { strategy: "direct" } | { strategy: "copy" | "link"; path: string };
 };
 export type SelectedMaterial = {
@@ -19,6 +20,7 @@ export type SelectedMaterial = {
   strategy: "direct" | "copy" | "link";
   order: number;
   blockIdentity: string;
+  incorporation: "include" | "inline";
   include: string;
 };
 
@@ -44,6 +46,7 @@ export function selectMaterials(
   sources: readonly NativeSource[],
 ): SelectedMaterial[] {
   const seen = new Set<string>();
+  const placements = new Map<string, string>();
   return [...sources]
     .sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .map((source) => {
@@ -54,20 +57,26 @@ export function selectMaterials(
         throw new Error(`contribution ${source.id}: expected ${target} source format`);
       if (!Number.isFinite(source.order))
         throw new Error(`contribution ${source.id}: order must be finite`);
+      renderInclude(target, source.path);
       const effectivePath =
-        source.placement.strategy === "direct" ? source.path : source.placement.path;
+        normalize(source.placement.strategy === "direct" ? source.path : source.placement.path);
       if (!isAbsolute(source.path) || !isAbsolute(effectivePath))
         throw new Error(
           `contribution ${source.id}: source and selected placement paths must be absolute`,
         );
+      const prior = placements.get(effectivePath);
+      if (prior) throw new Error(`contributions ${prior} and ${source.id} claim placement ${effectivePath}`);
+      placements.set(effectivePath, source.id);
+      if (source.incorporation === "inline" && target !== "niri") throw new Error("Umbriel body inline requires explicit table adaptation; use include");
       return {
         id: source.id,
         target,
-        sourcePath: source.path,
+        sourcePath: normalize(source.path),
         effectivePath,
         order: source.order,
         strategy: source.placement.strategy,
         blockIdentity: `keybinding/${target}/${source.id}`,
+        incorporation: source.incorporation ?? "include",
         include: renderInclude(target, effectivePath),
       };
     });

@@ -131,7 +131,8 @@ for config in "${configs[@]}"; do
     # their outputs later, immediately before the atomic commit. Thus check and
     # stdout never require a writable destination directory.
     tmp=$(mktemp "$transaction/candidate.XXXXXX")
-    leaf="$DIR/bin/internal/config/$config"
+    leaf=$(jq -r --arg config "$config" '.configs[$config].leaf // empty' "$spec")
+    [ -n "$leaf" ] || leaf="$DIR/bin/internal/config/$config"
     [ -x "$leaf" ] || { printf 'missing config leaf: %s\n' "$leaf" >&2; exit 2; }
     if [ "$print" = 1 ]; then
       # processor chatter (banners, per-input progress) must not pollute the stream
