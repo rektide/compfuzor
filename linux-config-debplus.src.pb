@@ -68,8 +68,44 @@
     - name: tests/amdgpu-power/assertions.c
       copyDir: True
       mode: "0644"
+    - name: baselines/7.1/README.md
+      copyDir: True
+      mode: "0644"
+    - name: baselines/7.1/config-running
+      copyDir: True
+      mode: "0644"
+    - name: baselines/7.1/config-upstream-defconfig
+      copyDir: True
+      mode: "0644"
+    - name: baselines/7.1/config-running-vs-defconfig.diff
+      copyDir: True
+      mode: "0644"
+    - name: baselines/7.1/config-running-vs-defconfig.fragment
+      copyDir: True
+      mode: "0644"
+    - name: baselines/7.1/config-running-normalization.diff
+      copyDir: True
+      mode: "0644"
+    - name: baselines/7.1/source-config-inventory.json
+      copyDir: True
+      mode: "0644"
+    - name: baselines/7.1/validation.json
+      copyDir: True
+      mode: "0644"
+    - name: baselines/7.3/README.md
+      copyDir: True
+      mode: "0644"
+    - name: baselines/7.3/config-upstream-defconfig
+      copyDir: True
+      mode: "0644"
+    - name: baselines/7.3/config-debian-plus-vs-defconfig.diff
+      copyDir: True
+      mode: "0644"
     # Historical archive, retained verbatim; nothing in the current
     # workflow reads it.
+    - name: archive/previous-normalization/config-debian-plus.7.1.0
+      copyDir: True
+      mode: "0644"
     - name: archive/previous-normalization/.config
       copyDir: True
       mode: "0644"

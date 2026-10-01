@@ -30,7 +30,7 @@
   "prior_preservation_manifest_contents_unchanged": true,
   "private_key_copied": false,
   "artifact_sha256": {
-    "README.md": "4c1472ba62952e2d1619c93d6336e0437ce9ba15742f2bf8b0cc99e97cd29d61",
+    "README.md": "84c32dbfb32fde78ea44235fc944f14d2ba594cba1256fdde326207ae6b70fd6",
     "config-running": "0898648962b24943c1d312b30d8cf4fcf959b4a107ee3580692af001c70789d3",
     "config-running-normalization.diff": "1741ce2ff22791457c324d12358dcb8492c8371c6e1b4c433844309bd895bb71",
     "config-running-vs-defconfig.diff": "53c91c3ba473c1d20fad3c9a79c04b724fe77acff02c077ea6397347c210bbe7",

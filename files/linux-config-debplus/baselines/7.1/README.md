@@ -1,24 +1,24 @@
 # Running 7.1 configuration and upstream-defconfig audit
 
-This is a historical, full-configuration audit of `7.1.0-debplus.1`, **not** a minimal portable policy fragment or the current 7.3 seed. The deliberately maintained policy remains [`overrides.config`](/files/linux-config-debplus/overrides.config) and its compiler-specific companions. The Debian-derived full configuration enables thousands of devices/features beyond upstream's small default configuration; the delta does not identify which differences were deliberate human choices.
+This is a historical, full-configuration audit of `7.1.0-debplus.1`, **not** a minimal portable policy fragment or the current 7.3 seed. The deliberately maintained policy remains [overrides.config](../../overrides.config) and its compiler-specific companions. The Debian-derived full configuration enables thousands of devices/features beyond upstream's small default configuration; the delta does not identify which differences were deliberate human choices.
 
 ## Preserved artifacts
 
 | File | Meaning |
 |---|---|
-| [`config-running`](/files/linux-config-debplus/baselines/7.1/config-running) | Exact 295,658-byte copy of `/boot/config-7.1.0-debplus.1`, identical to `/usr/local/src/linux/.config`; no normalization applied. Mode 0644. |
-| [`config-upstream-defconfig`](/files/linux-config-debplus/baselines/7.1/config-upstream-defconfig) | Fully expanded upstream `x86_64_defconfig` generated from the 7.1 build base with the audit toolchain. |
-| [`config-running-vs-defconfig.diff`](/files/linux-config-debplus/baselines/7.1/config-running-vs-defconfig.diff) | Canonical human audit, upstream `scripts/diffconfig` format: baseline → exact saved running configuration. `+`/`-` mean symbol present only in one full config; unprefixed changes show old → new. Not a unified patch. |
-| [`config-running-vs-defconfig.fragment`](/files/linux-config-debplus/baselines/7.1/config-running-vs-defconfig.fragment) | `diffconfig -m` replay fragment, valid only with this baseline/source and subsequent normalization. It cannot express removal of symbols absent from the target config and includes compiler-generated/read-only values; do not promote it into primary policy. |
-| [`config-running-normalization.diff`](/files/linux-config-debplus/baselines/7.1/config-running-normalization.diff) | Five observed normalization differences under today's Rust toolchain, exact running config → normalized config. |
-| [`source-config-inventory.json`](/files/linux-config-debplus/baselines/7.1/source-config-inventory.json) | Selected `/usr/local/src` configs, their hashes, headers, critical values, and symbol comparisons against running 7.1. No key material. |
-| [`validation.json`](/files/linux-config-debplus/baselines/7.1/validation.json) | Provenance, tool identities, artifact hashes and replay results. |
+| [config-running](config-running) | Exact 295,658-byte copy of `/boot/config-7.1.0-debplus.1`, identical to `/usr/local/src/linux/.config`; no normalization applied. Mode 0644. |
+| [config-upstream-defconfig](config-upstream-defconfig) | Fully expanded upstream `x86_64_defconfig` generated from the 7.1 build base with the audit toolchain. |
+| [config-running-vs-defconfig.diff](config-running-vs-defconfig.diff) | Canonical human audit, upstream `scripts/diffconfig` format: baseline → exact saved running configuration. `+`/`-` mean symbol present only in one full config; unprefixed changes show old → new. Not a unified patch. |
+| [config-running-vs-defconfig.fragment](config-running-vs-defconfig.fragment) | `diffconfig -m` replay fragment, valid only with this baseline/source and subsequent normalization. It cannot express removal of symbols absent from the target config and includes compiler-generated/read-only values; do not promote it into primary policy. |
+| [config-running-normalization.diff](config-running-normalization.diff) | Five observed normalization differences under today's Rust toolchain, exact running config → normalized config. |
+| [source-config-inventory.json](source-config-inventory.json) | Selected `/usr/local/src` configs, their hashes, headers, critical values, and symbol comparisons against running 7.1. No key material. |
+| [validation.json](validation.json) | Provenance, tool identities, artifact hashes and replay results. |
 
 The running-config SHA-256 is **`0898648962b24943c1d312b30d8cf4fcf959b4a107ee3580692af001c70789d3`**. Baseline and generated audits were captured October 1, 2026, by GPT-6.1 Sol.
 
 ## Source and toolchain provenance
 
-Source is [`8cd9520d35a6c38db6567e97dd93b1f11f185dc6`](https://github.com/torvalds/linux/commit/8cd9520d35a6c38db6567e97dd93b1f11f185dc6), the parent of the locally preserved `987301279ffaf3a6f2eaca7ad7f4a8b7eec3008e` AMDGPU fix used for the 7.1 build. See [the fix's forensic provenance](/.test-agent/linux-source-assessment/README.md#buildconfiguration-and-preservation-assessment). The AMDGPU fix does not alter Kconfig. An exact source export was used; no make command ran in the old in-place source/build directory.
+Source is [`8cd9520d35a6c38db6567e97dd93b1f11f185dc6`](https://github.com/torvalds/linux/commit/8cd9520d35a6c38db6567e97dd93b1f11f185dc6), the parent of the locally preserved `987301279ffaf3a6f2eaca7ad7f4a8b7eec3008e` AMDGPU fix used for the 7.1 build. The AMDGPU fix does not alter Kconfig. An exact source export was used; no make command ran in the old in-place source/build directory. Artifact fingerprints and source references are preserved in [validation.json](validation.json).
 
 Use the full commit hash rather than bare `v7.1`: that name is ambiguous among local refs. This is **not** a defconfig generated from the current 7.3 checkout.
 

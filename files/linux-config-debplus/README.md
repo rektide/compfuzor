@@ -50,6 +50,28 @@ standard `etc` symlink. Deployment and kernel modification are separate actions.
 - `archive/` contains old inputs and backups. Nothing in the current workflow
   reads it.
 
+## Preserved configs and upstream-default comparisons
+
+- [7.1 preservation and audit](baselines/7.1/README.md): exact running
+  `7.1.0-debplus.1` config, matching `/usr/local/src/linux/.config` and `/boot`,
+  plus an upstream defconfig baseline, readable delta, and replay fragment.
+- [7.3 baseline and audit](baselines/7.3/README.md): upstream
+  `x86_64_defconfig` for the pinned source and a comparison with the updated
+  `config-debian-plus`.
+
+The original saved Debian-plus seed matches the old checkout's `.config.old`,
+**not** its running `.config`: they differ in 22 symbol states, mostly Rust
+availability/support, Rust-dependent features, and toolchain metadata. The
+7.3 migration follows the saved seed's intended policy; the exact running
+config is preserved separately rather than overwritten or conflated with it.
+
+These large upstream-default deltas capture thousands of inherited Debian
+driver/module choices as well as custom policy. They are audit/replay material,
+not a minimal portable set of personal tweaks. Keep `overrides.config` and the
+compiler fragments as the concise record of deliberate choices. No private
+signing key is included; its default-path automatic generation is explained
+in the 7.1 audit.
+
 ## Compiler tuning
 
 The common fragment applies the tuning choices shared by both compilers:
@@ -161,6 +183,10 @@ install -m 0644 "$work/out/.config" \
 
 Here, `O="$work/out"` only tells Kconfig where to place temporary generated
 files. Check required options and inspect the diff before the final `install`.
+In particular, confirm `CONFIG_RUST=y`, `CONFIG_DEBUG_INFO_BTF=y`, and
+`CONFIG_DRM_PANIC_SCREEN_QR_CODE=y`: a missing `rust-src` component can make
+Kconfig drop Rust-dependent policy even when it appears in a fragment.
+`merge_config.sh -m` only merges text; the later `olddefconfig` can change it.
 Edits made to the deployed bundle are not automatically copied back to
 compfuzor; bring accepted changes into its `files/linux-config-debplus/` inputs.
 
