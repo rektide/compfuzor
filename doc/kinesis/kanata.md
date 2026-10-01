@@ -101,6 +101,11 @@ pedal's TCP server:
 {"ChangeLayer":{"new":"media"}}
 ```
 
+Likewise, a `switch` condition in the pedal layout cannot inspect a modifier
+held in the other Kanata process. Separate **layout state** does not mean
+separate desktop output destinations: both still emit ordinary OS input. The
+IPC message is what deliberately connects their internal layer state.
+
 `ChangeLayer` sets the pedal's **base layer**, just as `layer-switch` does inside
 a layout. `pages` is the reset target. In pages mode, left tap pages back and
 left hold activates the existing play/pause overlay; in media mode, the pedals
