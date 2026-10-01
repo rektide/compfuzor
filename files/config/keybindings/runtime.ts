@@ -5,12 +5,72 @@ import { runProcessor } from "./processor.ts";
 import { validateClosure } from "./closure.ts";
 import { assembleConsumer, type ConsumerRequest } from "./consumer.ts";
 import { withInputBatch, type InputRegistration } from "../registration.ts";
+import {
+  assembleHost,
+  defaultProfile,
+  installProducer,
+  loadProfile,
+  toggleGroup,
+  type HostOptions,
+  type ProducerManifest,
+} from "./membership.ts";
 
 export async function main(
   argv: string[],
   defaults: { runner?: string; validatorCommand: string[] },
 ): Promise<number> {
   const [command, ...args] = argv;
+  if (["install", "host", "enable", "disable"].includes(command)) {
+    const { values } = parseArgs({
+      args,
+      strict: true,
+      allowPositionals: false,
+      options: {
+        manifest: { type: "string" },
+        profile: { type: "string" },
+        target: { type: "string" },
+        context: { type: "string", default: "user" },
+        scope: { type: "string", default: "user" },
+        group: { type: "string" },
+        mode: { type: "string" },
+        check: { type: "boolean" },
+        runner: { type: "string" },
+      },
+    });
+    if (values.target !== "niri" && values.target !== "umbriel")
+      throw new Error("explicit --target niri|umbriel required");
+    if (values.scope !== "user" && values.scope !== "system")
+      throw new Error("--scope must be user or system");
+    const runner = values.runner ?? defaults.runner;
+    if (!runner) throw new Error("installed CONFIG runner or --runner required");
+    const loaded = values.profile
+      ? await loadProfile(values.profile)
+      : { profile: defaultProfile(values.target) };
+    if (loaded.profile.target !== values.target)
+      throw new Error("consumer profile target mismatch");
+    const options: HostOptions = {
+      ...loaded,
+      context: values.context!,
+      scope: values.scope,
+      runner,
+      validatorCommand: defaults.validatorCommand,
+      mode: values.mode as HostOptions["mode"],
+      check: values.check,
+    };
+    let result;
+    if (command === "install") {
+      if (!values.manifest) throw new Error("install requires --manifest");
+      const manifest = JSON.parse(await readFile(values.manifest, "utf8")) as ProducerManifest;
+      result = await installProducer(manifest, options);
+    } else if (command === "host")
+      result = await assembleHost({ ...options, mode: options.mode ?? "seed" });
+    else {
+      if (!values.group) throw new Error("enable/disable requires --group");
+      if (values.check) throw new Error("membership mutation does not accept --check");
+      result = await toggleGroup(values.group, command === "enable", options);
+    }
+    return result.code;
+  }
   if (command === "validate") {
     const { values } = parseArgs({
       args,

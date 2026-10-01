@@ -148,6 +148,17 @@ def _json_input_settings(item, label, processor):
     return result
 
 
+def config_runtime_bins():
+    """Stock candidate runner and built-in leaves, also reused by domain hosts."""
+    bins = [
+        {"name": "config/run.sh", "src": "../config-run.sh", "raw": True, "compose": False, "bypass": False, "basedir": False, "run": True, "requires_fs": True},
+        {"name": "config/processor.sh", "src": "../config-processor.sh", "compose": False, "bypass": False, "basedir": False},
+    ]
+    for processor in sorted(_PROCESSORS):
+        bins.append({"name": "config/processors/" + processor, "basedir": False, "helpers": ["env"], "bypass": False, "content": 'exec "$DIR/bin/config/processor.sh" {} "$@"'.format(processor)})
+    return bins
+
+
 @accept_args_markers
 def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled", transaction_validate=None):
     """Normalize CONFIGS and emit config subsystem contributions."""
@@ -162,33 +173,7 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled", tra
     statuses = []
 
     if configs:
-        bins.extend([
-            {
-                "name": "config/run.sh",
-                "src": "../config-run.sh",
-                "raw": True,
-                "compose": False,
-                "bypass": False,
-                "basedir": False,
-                "run": True,
-                "requires_fs": True,
-            },
-            {
-                "name": "config/processor.sh",
-                "src": "../config-processor.sh",
-                "compose": False,
-                "bypass": False,
-                "basedir": False,
-            },
-        ])
-        for processor in sorted(_PROCESSORS):
-            bins.append({
-                "name": "config/processors/{}".format(processor),
-                "basedir": False,
-                "helpers": ["env"],
-                "bypass": False,
-                "content": 'exec "$DIR/bin/config/processor.sh" {} "$@"'.format(processor),
-            })
+        bins.extend(config_runtime_bins())
 
     output_owners = {}
     for output_key, raw in configs.items():

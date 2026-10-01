@@ -10295,7 +10295,7 @@ var import_dist = (/* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.visit = visit.visit;
 	exports.visitAsync = visit.visitAsync;
 })))();
-const ID = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+const ID$1 = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 const NAME = /^[A-Za-z][A-Za-z0-9_-]*$/;
 function object(value, label) {
 	if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label}: expected mapping`);
@@ -10311,7 +10311,7 @@ function text(value, label, empty = false) {
 }
 function id(value, label) {
 	const result = text(value, label);
-	if (!ID.test(result)) throw new Error(`${label}: invalid identifier ${result}`);
+	if (!ID$1.test(result)) throw new Error(`${label}: invalid identifier ${result}`);
 	return result;
 }
 function bool(value, label) {
@@ -14733,6 +14733,11 @@ async function assembleConsumer(options) {
 			content
 		});
 	}
+	for (const metadata of options.supplementalOutputs ?? []) {
+		const path = absolute(metadata.path);
+		if (outputBodies.has(path) || claims.has(await entryKey(path)) || await entryKey(path) === await entryKey(root)) throw new Error(`metadata output collision ${path}`);
+		outputBodies.set(path, metadata.text);
+	}
 	const outputKeys = /* @__PURE__ */ new Set();
 	for (const path of [...outputBodies.keys(), root]) {
 		const key = await entryKey(path);
@@ -14771,7 +14776,7 @@ async function assembleConsumer(options) {
 			target,
 			root,
 			captured: capturedPaths,
-			guards: [...files.values()].map((file) => file.guard),
+			guards: [...files.values()].map((file) => file.guard).concat(options.inputGuards ?? []),
 			environment,
 			validator: options.nativeValidator,
 			definitions: [...generated.keys()]
@@ -14862,6 +14867,20 @@ async function withInputBatch(records, operation, options) {
 			previous
 		});
 	}
+	for (const entry of selected) {
+		const slots = [entry.record.destination, entry.record.disabledSuffix ? entry.record.destination + entry.record.disabledSuffix : void 0].filter((path) => !!path);
+		for (const slot of slots) for (const donor of records) {
+			let source = donor.source;
+			const seen = /* @__PURE__ */ new Set();
+			while (!seen.has(source)) {
+				seen.add(source);
+				if (await pathsSharePhysicalEntry(slot, source)) throw new Error(`registration destination aliases a batch donor: ${slot}`);
+				const state = await inspectDeliveryEntry(source);
+				if (state.kind !== "symlink") break;
+				source = state.targetPath;
+			}
+		}
+	}
 	const workspace = await mkdtemp(join(options.workspaceRoot ?? tmpdir(), "config-input-batch-"));
 	let mutated = 0;
 	let accepted = false;
@@ -14907,10 +14926,292 @@ async function withInputBatch(records, operation, options) {
 	}
 }
 //#endregion
+//#region files/config/keybindings/membership.ts
+/** Closed producer membership, context binding and generated installation. */
+const ID = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+function defaultProfile(target) {
+	return {
+		version: 1,
+		target,
+		contexts: { user: {
+			scope: "user",
+			root: { path: "${XDG_CONFIG_HOME}" },
+			subpath: target
+		} },
+		placement: "link",
+		registration: "link",
+		baseline: target === "umbriel" ? [{ path: "/usr/local/share/umbriel/config.toml" }] : []
+	};
+}
+function bindProfile(options) {
+	const profile = options.profile;
+	if (profile.version !== 1 || profile.target !== "niri" && profile.target !== "umbriel") throw new Error("unsupported keybinding profile");
+	const context = profile.contexts[options.context];
+	if (!context || context.scope !== options.scope) throw new Error(`context ${options.context} does not match generated ${options.scope} scope`);
+	const root = resolvePathSelector(context.root, void 0, `keybinding context ${options.context}.root`);
+	const base = context.subpath ? resolvePathSelector({ relative: context.subpath }, root, "keybinding context subpath") : root;
+	const path = (selector, label) => resolvePathSelector(selector, base, label);
+	const statePath = path(profile.membership ?? { relative: ".keybindings/membership.json" }, "membership");
+	const nativeSources = (profile.nativeSources ?? []).map((source) => ({
+		...source,
+		path: path(source.path, `native ${source.id}`),
+		placement: source.placement.strategy === "direct" ? { strategy: "direct" } : {
+			strategy: source.placement.strategy,
+			path: path(source.placement.path, `native ${source.id} placement`)
+		}
+	}));
+	const bindings = {};
+	for (const [id, value] of Object.entries(profile.bindings ?? {})) bindings[id] = {
+		...value,
+		placement: value.placement === void 0 ? void 0 : value.placement.strategy === "direct" ? { strategy: "direct" } : {
+			strategy: value.placement.strategy,
+			path: path(value.placement.path, `binding ${id} placement`)
+		}
+	};
+	return {
+		base,
+		statePath,
+		request: {
+			version: 1,
+			target: profile.target,
+			root: {
+				path: path(profile.rootFile ?? { relative: profile.target === "niri" ? "config.kdl" : "config.toml" }, "consumer root"),
+				...profile.templateFile ? { templateFile: path(profile.templateFile, "root template") } : {}
+			},
+			materialRoot: path(profile.materialRoot ?? { relative: ".keybindings/generated" }, "material root"),
+			nativeSources,
+			bindings,
+			baseline: (profile.baseline ?? []).map((selector) => path(selector, "baseline")),
+			personal: (profile.personal ?? []).map((selector) => path(selector, "personal")),
+			mode: options.mode ?? "assemble"
+		}
+	};
+}
+async function readState(path, target) {
+	const file = await captureFile(path);
+	const text = fileText(file);
+	const state = text === void 0 ? {
+		version: 1,
+		target,
+		groups: {}
+	} : JSON.parse(text);
+	if (state.version !== 1 || state.target !== target || !state.groups || typeof state.groups !== "object" || Array.isArray(state.groups)) throw new Error("invalid keybinding membership");
+	for (const [id, group] of Object.entries(state.groups)) {
+		if (!ID.test(id) || typeof group.enabled !== "boolean" || !Number.isFinite(group.order) || !Array.isArray(group.resources)) throw new Error(`invalid membership group ${id}`);
+		for (const resource of group.resources) if (!isAbsolute(resource.path) || !ID.test(resource.id) || resource.kind !== "action" && resource.kind !== "keybinding") throw new Error(`invalid declared resource in ${id}`);
+	}
+	return {
+		state,
+		guard: file.guard
+	};
+}
+/** User overlays with explicit whenPresent stay dormant when a producer is
+* disabled/absent. Core composition remains strict for unconditional patches. */
+async function selectedRequest(bound, state, options) {
+	const request = bound.request;
+	const selected = [];
+	const guards = [];
+	const identities = /* @__PURE__ */ new Set();
+	const groups = Object.entries(state.groups).filter(([, group]) => group.enabled).sort(([a, first], [b, second]) => first.order - second.order || (a < b ? -1 : a > b ? 1 : 0));
+	const placement = options.profile.placement ?? "link";
+	if (![
+		"direct",
+		"copy",
+		"link"
+	].includes(placement)) throw new Error("invalid native placement policy");
+	const directory = resolvePathSelector(options.profile.placementDirectory ?? { relative: "keybindings" }, bound.base, "placement directory");
+	let order = 0;
+	const read = async (path, suffix) => {
+		const active = await captureFile(path);
+		guards.push(active.guard);
+		if (suffix) {
+			if (!/^\.[A-Za-z0-9_.-]+$/.test(suffix)) throw new Error("invalid source disabled suffix");
+			const disabled = await captureFile(path + suffix);
+			guards.push(disabled.guard);
+			if (disabled.guard.kind !== "missing" && active.guard.kind !== "missing") throw new Error(`both enabled and disabled slots exist: ${path}`);
+			if (disabled.guard.kind !== "missing") return void 0;
+		}
+		const text = fileText(active);
+		if (text === void 0) throw new Error(`missing declared membership source ${path}`);
+		return decodeYaml(text, path);
+	};
+	for (const [, group] of groups) for (const resource of group.resources) {
+		const record = await read(resource.path, ".disabled");
+		if (!record) continue;
+		if (record.kind !== resource.kind || record.id !== resource.id) throw new Error(`record identity changed; reinstall declared contribution: ${resource.path}`);
+		selected.push({
+			path: resource.path,
+			disabledSuffix: ".disabled"
+		});
+		identities.add(`${record.kind}/${record.id}`);
+		if (record.kind === "keybinding" && !record.patch) request.bindings[record.id] = {
+			order: order++,
+			placement: placement === "direct" ? { strategy: "direct" } : {
+				strategy: placement,
+				path: join(directory, `${record.id}.binding.${request.target === "niri" ? "kdl" : "toml"}`)
+			},
+			...request.bindings[record.id]
+		};
+	}
+	for (const source of options.profile.userSources ?? []) {
+		const path = resolvePathSelector(source.path, bound.base, "user overlay");
+		const record = await read(path, source.disabledSuffix);
+		if (!record) continue;
+		if (record.patch && source.whenPresent && !identities.has(`${record.kind}/${record.id}`)) continue;
+		selected.push({
+			path,
+			disabledSuffix: source.disabledSuffix
+		});
+		identities.add(`${record.kind}/${record.id}`);
+	}
+	request.yamlSources = selected;
+	return {
+		request,
+		guards
+	};
+}
+async function applyState(bound, state, guard, options, changed) {
+	const selected = await selectedRequest(bound, state, options);
+	selected.request.mode = options.mode ?? "assemble";
+	return assembleConsumer({
+		...options,
+		request: selected.request,
+		inputGuards: [
+			guard,
+			...selected.guards,
+			...options.profileGuard ? [options.profileGuard] : []
+		],
+		supplementalOutputs: changed ? [{
+			path: bound.statePath,
+			text: JSON.stringify(state, null, 2) + "\n"
+		}] : []
+	});
+}
+async function assembleHost(options) {
+	const bound = bindProfile(options);
+	const { state, guard } = await readState(bound.statePath, options.profile.target);
+	return applyState(bound, state, guard, options, false);
+}
+async function installProducer(manifest, options) {
+	if (manifest.version !== 1 || !ID.test(manifest.producer) || !Number.isFinite(manifest.order) || !Array.isArray(manifest.resources) || !manifest.targets.includes(options.profile.target)) throw new Error("invalid producer manifest/target");
+	if (options.check) throw new Error("producer registration is explicit mutation; check host assembly instead");
+	const bound = bindProfile(options);
+	const { state, guard } = await readState(bound.statePath, options.profile.target);
+	const resources = [];
+	const registrations = [];
+	const seen = /* @__PURE__ */ new Set();
+	for (const source of manifest.resources) {
+		const text = fileText(await captureFile(source.path));
+		if (text === void 0) throw new Error(`missing packaged producer source ${source.path}`);
+		const record = decodeYaml(text, source.path);
+		const identity = `${record.kind}/${record.id}`;
+		if (seen.has(identity)) throw new Error(`duplicate packaged resource ${identity}`);
+		seen.add(identity);
+		const path = join(bound.base, ".keybindings/source", manifest.producer, record.kind === "action" ? "action" : "keybinding", `${record.id}.yaml`);
+		resources.push({
+			path,
+			kind: record.kind,
+			id: record.id
+		});
+		registrations.push({
+			source: normalize(source.path),
+			destination: path,
+			strategy: options.profile.registration ?? "link",
+			disabledSuffix: ".disabled"
+		});
+	}
+	state.groups[manifest.producer] = {
+		enabled: state.groups[manifest.producer]?.enabled ?? true,
+		order: manifest.order,
+		resources
+	};
+	return withInputBatch(registrations, () => applyState(bound, state, guard, {
+		...options,
+		mode: options.mode ?? "seed"
+	}, true), {
+		success: (result) => result.code === 0,
+		workspaceRoot: options.workspaceRoot
+	});
+}
+async function toggleGroup(group, enabled, options) {
+	const bound = bindProfile(options);
+	const { state, guard } = await readState(bound.statePath, options.profile.target);
+	if (!Object.hasOwn(state.groups, group)) throw new Error(`unknown contribution ${group}`);
+	state.groups[group].enabled = enabled;
+	return applyState(bound, state, guard, options, true);
+}
+async function loadProfile(path) {
+	const file = await captureFile(path);
+	const text = fileText(file);
+	if (text === void 0) throw new Error(`missing keybinding consumer profile ${path}`);
+	return {
+		profile: JSON.parse(text),
+		profileGuard: file.guard
+	};
+}
+//#endregion
 //#region files/config/keybindings/runtime.ts
 /** CLI admission for internal processors, closure validation and explicit consumers. */
 async function main$1(argv, defaults) {
 	const [command, ...args] = argv;
+	if ([
+		"install",
+		"host",
+		"enable",
+		"disable"
+	].includes(command)) {
+		const { values } = parseArgs({
+			args,
+			strict: true,
+			allowPositionals: false,
+			options: {
+				manifest: { type: "string" },
+				profile: { type: "string" },
+				target: { type: "string" },
+				context: {
+					type: "string",
+					default: "user"
+				},
+				scope: {
+					type: "string",
+					default: "user"
+				},
+				group: { type: "string" },
+				mode: { type: "string" },
+				check: { type: "boolean" },
+				runner: { type: "string" }
+			}
+		});
+		if (values.target !== "niri" && values.target !== "umbriel") throw new Error("explicit --target niri|umbriel required");
+		if (values.scope !== "user" && values.scope !== "system") throw new Error("--scope must be user or system");
+		const runner = values.runner ?? defaults.runner;
+		if (!runner) throw new Error("installed CONFIG runner or --runner required");
+		const loaded = values.profile ? await loadProfile(values.profile) : { profile: defaultProfile(values.target) };
+		if (loaded.profile.target !== values.target) throw new Error("consumer profile target mismatch");
+		const options = {
+			...loaded,
+			context: values.context,
+			scope: values.scope,
+			runner,
+			validatorCommand: defaults.validatorCommand,
+			mode: values.mode,
+			check: values.check
+		};
+		let result;
+		if (command === "install") {
+			if (!values.manifest) throw new Error("install requires --manifest");
+			result = await installProducer(JSON.parse(await readFile(values.manifest, "utf8")), options);
+		} else if (command === "host") result = await assembleHost({
+			...options,
+			mode: options.mode ?? "seed"
+		});
+		else {
+			if (!values.group) throw new Error("enable/disable requires --group");
+			if (values.check) throw new Error("membership mutation does not accept --check");
+			result = await toggleGroup(values.group, command === "enable", options);
+		}
+		return result.code;
+	}
 	if (command === "validate") {
 		const { values } = parseArgs({
 			args,

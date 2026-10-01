@@ -72,6 +72,9 @@
   tags: ['vars', 'always']
 - import_tasks: compfuzor/sub_config.tasks
   tags: ['vars', 'always']
+- import_tasks: compfuzor/gen_keybindings.tasks
+  when: KEYBINDING_ACTIONS is defined or KEYBINDINGS is defined or KEYBINDING_CONSUMERS is defined
+  tags: ['vars', 'always']
 - import_tasks: compfuzor/sub_status_proc.tasks
   when: STATUS_PROC is defined
   tags: ['vars', 'always']

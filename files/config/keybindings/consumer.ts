@@ -45,6 +45,9 @@ export type ConsumerOptions = {
   blockCommand?: string;
   check?: boolean;
   stdio?: "inherit" | "pipe" | "ignore";
+  /** Domain-owned metadata published by the SAME CONFIG transaction as roots. */
+  supplementalOutputs?: { path: string; text: string }[];
+  inputGuards?: FileGuard[];
 };
 export type ConsumerResult = AssemblyResult & { materials: SelectedMaterial[]; outputs: string[] };
 
@@ -272,6 +275,16 @@ export async function assembleConsumer(options: ConsumerOptions): Promise<Consum
     outputBodies.set(companion, content);
     blocks.push({ id: material.id, content });
   }
+  for (const metadata of options.supplementalOutputs ?? []) {
+    const path = absolute(metadata.path);
+    if (
+      outputBodies.has(path) ||
+      claims.has(await entryKey(path)) ||
+      (await entryKey(path)) === (await entryKey(root))
+    )
+      throw new Error(`metadata output collision ${path}`);
+    outputBodies.set(path, metadata.text);
+  }
   // All placement/output aliases are rejected before creating private work or
   // publishing anything. Existing local bodies are inputs, not refresh recipes.
   const outputKeys = new Set<string>();
@@ -317,7 +330,9 @@ export async function assembleConsumer(options: ConsumerOptions): Promise<Consum
       await writeFile(file, text, { mode: 0o600 });
       capturedPaths[path] = file;
     }
-    const guards: FileGuard[] = [...files.values()].map((file) => file.guard);
+    const guards: FileGuard[] = [...files.values()]
+      .map((file) => file.guard)
+      .concat(options.inputGuards ?? []);
     const plan: ClosurePlan = {
       version: 1,
       target,
