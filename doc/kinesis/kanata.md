@@ -213,6 +213,12 @@ keys produce F21/F22—not the desired modifiers.
 - `(one-shot 1000 lalt)` is a configured behavior: release it and Alt remains
   armed for the next key until its timeout. Holding it behaves as a held modifier.
 
+The examples set `process-unmapped-keys yes`: ordinary typing still passes
+through, but those presses are visible to the state machine even when not
+listed in `defsrc`. That matters when a letter must consume a one-shot modifier
+or influence a tap/hold decision. `defsrc` isn't a device filter—the `linux-dev`
+options choose devices.
+
 All definitions are not evaluated in file order like ordinary Lisp code:
 Kanata processes definition categories in load-time passes. **Alias-to-alias
 dependencies still require the referenced alias to be declared earlier.**
