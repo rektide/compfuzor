@@ -71,9 +71,10 @@ and state:
   columns* as the pedals. In `pages` a physical PgUp tap pages back and a
   physical PgUp **hold** opens `pedal-meta`; in `media` both physical keys
   become prev/next. The pedal can also reach those columns in either page.
-- **Shared timing/history** — tap-hold windows and one-shot arming are
-  per-configuration: a pedal press inside a keyboard tap-hold window (or vice
-  versa) influences the outcome. Input idle is shared too.
+- **Shared timing/history** — timers, input history and idle are shared, not
+  per-device. Plain `tap-hold` here is timeout-based and need not resolve early
+  on another keypress. Extensions using `tap-hold-press`/`-release` or one-shots
+  can be resolved/consumed by input from either device.
 - **Output name invariant** — kanata's Linux autodetect skips only the literal
   output name `kanata` (`src/oskbd/linux.rs`, `is_input_device`). This variant
   deliberately sets no `linux-output-device-name`: renaming its output would
@@ -84,7 +85,8 @@ and state:
 
 The Game Bank is factory-blank: hk3–hk6 emit nothing until programmed. In the
 active profile's `layouts/layoutN.txt` (SmartSet+F8 opens the v-Drive, which is
-mounted by [`kinesis.etc.pb`](/kinesis.etc.pb) at `/mnt/kinesis`):
+optionally mounted at `/mnt/kinesis` if [`kinesis.etc.pb`](/kinesis.etc.pb)
+has been deployed):
 
 ```text
 [hk3]>[f19]     [hk4]>[f20]     [hk5]>[f21]     [hk6]>[f22]
@@ -116,6 +118,10 @@ that matter (explicit caps/selector/modifier repeats in *both* bases; no
 `/etc/kanata`).
 
 ## Switching variants on a live host
+
+The `roles`, `vars`, and `files` symlinks expose root framework resources to
+this nested playbook: role lookup and `include_defaults` resolve from the
+playbook directory, so the relative task import alone is insufficient.
 
 Stop `kanata-kinata`, `kanata-blueturn` (and any option-A services) before
 starting `kanata-b-merged` — two consumers of one evdev node never run

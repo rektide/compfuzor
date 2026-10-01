@@ -28,10 +28,11 @@
     #     can also reach media mode's columns, of course. No fix without
     #     device-aware mapping (option A) or genuinely unused keycodes.
     #
-    #   SHARED INPUT STATE  tap-hold timers, one-shot arming and kanata's
-    #     input history are per-configuration, not per-device: a pedal
-    #     press inside a keyboard tap-hold window influences its outcome
-    #     and vice versa.
+    #   SHARED INPUT STATE  timers, idle and input history are shared,
+    #     not per-device. Plain tap-hold here is timeout-based; it need
+    #     not resolve early on another device's keypress. If extended to
+    #     tap-hold-press/-release or one-shots, other-device input can
+    #     resolve or consume those actions too.
     #
     #   OBSERVABILITY  do not give this instance a custom
     #     linux-output-device-name: kanata's Linux input detection skips
