@@ -9,11 +9,12 @@
 #   - arrays of tables (window_rule, workspace, ...) accumulate
 #   - anything set below wins over the default
 # The vicinae fragment is optional so the config stays valid without it.
+# keybinds-local.toml (umbriel.user.pb) loads after it and wins conflicts.
 # Managed includes live beside this file (see keybinds-vicinae.toml).
 # Do not add a [keybinds] table here: in the root config it would REPLACE
 # the entire built-in default set. Chord overrides belong in included
-# fragments (see vicinae.src.pb's keybinds-vicinae.toml for the pattern).
+# fragments (see keybinds-vicinae.toml and keybinds-local.toml).
 
 [include]
 files = ["/usr/local/share/umbriel/config.toml"]
-optional = { files = ["keybinds-vicinae.toml"] }
+optional = { files = ["keybinds-vicinae.toml", "keybinds-local.toml"] }

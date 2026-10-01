@@ -52,6 +52,9 @@
     ETC_FILES:
       # Rendered to {{ETC}}/config.toml == ~/.config/umbriel/config.toml.
       - config.toml
+      # Personal chord overrides; declared in the root chain's
+      # optional.files AFTER the vicinae fragment so these win conflicts.
+      - keybinds-local.toml
   tasks:
     # Modern form of `include: tasks/compfuzor.includes type="opt"`: this
     # box's ansible-core (2.21) removed bare `include:`, while older
