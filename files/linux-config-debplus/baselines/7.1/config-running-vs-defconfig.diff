@@ -1,0 +1,7419 @@
+-ARCH_SUPPORTS_KMAP_LOCAL_FORCE_MAP y
+-ARCH_VMLINUX_NEEDS_RELOCS y
+-DEBUG_KMAP_LOCAL_FORCE_MAP n
+-DM_INIT n
+-EARLY_PRINTK_USB y
+-FONT_AUTOSELECT y
+-IP_PNP_BOOTP y
+-IP_PNP_DHCP y
+-IP_PNP_RARP y
+-KEXEC_HANDOVER n
+-MD_AUTODETECT y
+-MSEAL_SYSTEM_MAPPINGS n
+-NOINSTR_VALIDATION y
+-PM_TRACE y
+-PROFILE_ALL_BRANCHES n
+-RANDOMIZE_KSTACK_OFFSET_DEFAULT n
+-RANDOMIZE_MEMORY y
+-RANDOMIZE_MEMORY_PHYSICAL_PADDING 0x0
+-ROOT_NFS y
+-RUST n
+-RUST_IS_AVAILABLE y
+-SND_SE6X n
+-TICK_CPU_ACCOUNTING y
+-WL1251 n
+-WL12XX n
+-WL18XX n
+-WLCORE n
+-X86_BOOTPARAM_MEMORY_CORRUPTION_CHECK y
+-X86_DISABLED_FEATURE_ENQCMD y
+-X86_DISABLED_FEATURE_FRED y
+-X86_DISABLED_FEATURE_SEV_SNP y
+-X86_DISABLED_FEATURE_SGX y
+-X86_DISABLED_FEATURE_TDX_GUEST y
+-X86_DISABLED_FEATURE_USER_SHSTK y
+-X86_DISABLED_FEATURE_XENPV y
+-X86_GOLDFISH n
+-X86_INTEL_MID n
+-X86_NEED_RELOCS y
+-X86_NUMACHIP n
+-X86_REQUIRED_FEATURE_PGE y
+-X86_REQUIRED_FEATURE_PSE y
+-X86_REQUIRED_FEATURE_SYSFAST32 y
+-X86_UV n
+-X86_VSMP n
+ 60XX_WDT n -> m
+ 6LOWPAN n -> m
+ 8139CP n -> m
+ 8139TOO y -> m
+ 8139TOO_8129 n -> y
+ 8139TOO_PIO y -> n
+ 8139TOO_TUNE_TWISTER n -> y
+ 9P_FS y -> m
+ 9P_FS_POSIX_ACL n -> y
+ 9P_FS_SECURITY n -> y
+ ACCESSIBILITY n -> y
+ ACERHDF n -> m
+ ACER_WIRELESS n -> m
+ ACER_WMI n -> m
+ ACPI_AC y -> m
+ ACPI_APEI n -> y
+ ACPI_BATTERY y -> m
+ ACPI_BUTTON y -> m
+ ACPI_CMPC n -> m
+ ACPI_DEBUG y -> n
+ ACPI_EC_DEBUGFS n -> y
+ ACPI_FAN y -> m
+ ACPI_HED n -> y
+ ACPI_HMAT n -> y
+ ACPI_NFIT n -> m
+ ACPI_PCI_SLOT n -> y
+ ACPI_PROCESSOR_AGGREGATOR n -> m
+ ACPI_SBS n -> m
+ ACPI_TAD n -> m
+ ACPI_VIDEO y -> m
+ ACPI_WMI y -> m
+ ACQUIRE_WDT n -> m
+ AD525X_DPOT n -> m
+ ADAPTEC_STARFIRE n -> m
+ ADFS_FS n -> m
+ ADM8211 n -> m
+ ADVANTECH_EC_WDT n -> m
+ ADVANTECH_WDT n -> m
+ AFFS_FS n -> m
+ AFS_FS n -> m
+ AF_KCM n -> m
+ AF_RXRPC n -> m
+ AGP_SIS n -> y
+ AGP_VIA n -> y
+ ALIM1535_WDT n -> m
+ ALIM7101_WDT n -> m
+ ALTERA_STAPL n -> m
+ ALX n -> m
+ AMD8111_ETH n -> m
+ AMD_MEM_ENCRYPT n -> y
+ AMD_PHY n -> m
+ AMD_PMC n -> m
+ AMD_SFH_HID n -> m
+ AMD_XGBE n -> m
+ AMILO_RFKILL n -> m
+ APDS9802ALS n -> m
+ APPLE_GMUX n -> m
+ APPLE_MFI_FASTCHARGE n -> m
+ APPLE_PROPERTIES n -> y
+ APPLICOM n -> m
+ AQTION n -> m
+ AQUANTIA_PHY n -> m
+ AR5523 n -> m
+ ARCNET n -> m
+ ASUS_LAPTOP n -> m
+ ASUS_WIRELESS n -> m
+ ASUS_WMI n -> m
+ ASYNC_TX_DMA n -> y
+ AT76C50X_USB n -> m
+ ATA y -> m
+ ATALK n -> m
+ ATA_GENERIC n -> m
+ ATA_OVER_ETH n -> m
+ ATA_PIIX y -> m
+ ATH10K n -> m
+ ATH11K n -> m
+ ATH12K n -> m
+ ATH5K n -> m
+ ATH5K_PCI n -> y
+ ATH6KL n -> m
+ ATH9K n -> m
+ ATH9K_HTC n -> m
+ ATL1 n -> m
+ ATL1C n -> m
+ ATL1E n -> m
+ ATL2 n -> m
+ ATM n -> m
+ AUTOFS_FS y -> m
+ AX88796B_PHY n -> m
+ B43 n -> m
+ B43LEGACY n -> m
+ B44 n -> m
+ BACKLIGHT_APPLE n -> m
+ BATMAN_ADV n -> m
+ BATTERY_BQ27XXX n -> m
+ BATTERY_MAX17042 n -> m
+ BATTERY_SBS n -> m
+ BCACHE n -> m
+ BCM87XX_PHY n -> m
+ BCMA n -> m
+ BE2ISCSI n -> m
+ BE2NET n -> m
+ BEFS_FS n -> m
+ BFS_FS n -> m
+ BINFMT_MISC y -> m
+ BLK_CGROUP_IOLATENCY y -> n
+ BLK_CGROUP_IOPRIO y -> n
+ BLK_DEV_3W_XXXX_RAID n -> m
+ BLK_DEV_BSGLIB n -> y
+ BLK_DEV_DM y -> m
+ BLK_DEV_DRBD n -> m
+ BLK_DEV_FD n -> m
+ BLK_DEV_INTEGRITY n -> y
+ BLK_DEV_LOOP y -> m
+ BLK_DEV_MD y -> m
+ BLK_DEV_NBD n -> m
+ BLK_DEV_NULL_BLK n -> m
+ BLK_DEV_NVME n -> m
+ BLK_DEV_PCIESSD_MTIP32XX n -> m
+ BLK_DEV_RAM n -> m
+ BLK_DEV_RBD n -> m
+ BLK_DEV_SD y -> m
+ BLK_DEV_SR y -> m
+ BLK_DEV_THROTTLING n -> y
+ BLK_DEV_UBLK n -> m
+ BLK_DEV_ZONED n -> y
+ BLK_SED_OPAL n -> y
+ BLK_WBT n -> y
+ BNA n -> m
+ BNX2 n -> m
+ BNX2X n -> m
+ BNXT n -> m
+ BONDING n -> m
+ BOOT_PRINTK_DELAY n -> y
+ BPF_JIT n -> y
+ BPF_SYSCALL n -> y
+ BRCMFMAC n -> m
+ BRCMSMAC n -> m
+ BRIDGE n -> m
+ BROADCOM_PHY n -> m
+ BSD_PROCESS_ACCT_V3 n -> y
+ BT n -> m
+ BTRFS_FS n -> y
+ BUG_ON_DATA_CORRUPTION n -> y
+ C2PORT n -> m
+ CAN n -> m
+ CARL9170 n -> m
+ CASSINI n -> m
+ CAVIUM_PTP n -> m
+ CB710_CORE n -> m
+ CDROM y -> m
+ CEPH_FS n -> m
+ CEPH_LIB n -> m
+ CFG80211 y -> m
+ CFG80211_WEXT n -> y
+ CFS_BANDWIDTH n -> y
+ CGROUP_DEBUG y -> n
+ CHECKPOINT_RESTORE n -> y
+ CHELSIO_T1 n -> m
+ CHELSIO_T3 n -> m
+ CHELSIO_T4 n -> m
+ CHELSIO_T4VF n -> m
+ CHROME_PLATFORMS n -> y
+ CHR_DEV_SCH n -> m
+ CHR_DEV_SG y -> m
+ CHR_DEV_ST n -> m
+ CICADA_PHY n -> m
+ CIFS n -> m
+ CNIC n -> m
+ CODA_FS n -> m
+ COMEDI n -> m
+ COMMON_CLK n -> y
+ COMPAL_LAPTOP n -> m
+ CONFIGFS_FS n -> m
+ CORDIC n -> m
+ CORTINA_PHY n -> m
+ CPU_FREQ_DEFAULT_GOV_SCHEDUTIL n -> y
+ CPU_FREQ_DEFAULT_GOV_USERSPACE y -> n
+ CPU_FREQ_GOV_CONSERVATIVE n -> m
+ CPU_FREQ_GOV_ONDEMAND y -> m
+ CPU_FREQ_GOV_POWERSAVE n -> m
+ CPU_FREQ_GOV_USERSPACE y -> m
+ CPU_FREQ_STAT n -> y
+ CPU_IDLE_GOV_LADDER n -> y
+ CRYPTO_ADIANTUM n -> m
+ CRYPTO_AEAD y -> m
+ CRYPTO_AEGIS128 n -> m
+ CRYPTO_AEGIS128_AESNI_SSE2 n -> m
+ CRYPTO_AES_NI_INTEL n -> m
+ CRYPTO_AUTHENC y -> m
+ CRYPTO_BENCHMARK n -> m
+ CRYPTO_BLOWFISH n -> m
+ CRYPTO_BLOWFISH_X86_64 n -> m
+ CRYPTO_CAMELLIA n -> m
+ CRYPTO_CAMELLIA_AESNI_AVX2_X86_64 n -> m
+ CRYPTO_CAMELLIA_AESNI_AVX_X86_64 n -> m
+ CRYPTO_CAMELLIA_X86_64 n -> m
+ CRYPTO_CAST5 n -> m
+ CRYPTO_CAST5_AVX_X86_64 n -> m
+ CRYPTO_CAST6 n -> m
+ CRYPTO_CAST6_AVX_X86_64 n -> m
+ CRYPTO_CCM y -> m
+ CRYPTO_CHACHA20 n -> m
+ CRYPTO_CHACHA20POLY1305 n -> m
+ CRYPTO_CMAC n -> m
+ CRYPTO_CRC32 n -> m
+ CRYPTO_CRC32C n -> m
+ CRYPTO_CTR y -> m
+ CRYPTO_CTS n -> y
+ CRYPTO_DEFLATE n -> m
+ CRYPTO_DES n -> m
+ CRYPTO_DEV_CCP n -> y
+ CRYPTO_DEV_PADLOCK n -> m
+ CRYPTO_DEV_QAT_C3XXX n -> m
+ CRYPTO_DEV_QAT_C3XXXVF n -> m
+ CRYPTO_DEV_QAT_C62X n -> m
+ CRYPTO_DEV_QAT_C62XVF n -> m
+ CRYPTO_DEV_QAT_DH895xCC n -> m
+ CRYPTO_DEV_QAT_DH895xCCVF n -> m
+ CRYPTO_DEV_VIRTIO n -> m
+ CRYPTO_DH n -> y
+ CRYPTO_DRBG_MENU n -> m
+ CRYPTO_ECDH n -> m
+ CRYPTO_ECDSA n -> y
+ CRYPTO_ECHAINIV y -> m
+ CRYPTO_ECRDSA n -> m
+ CRYPTO_ESSIV n -> m
+ CRYPTO_FCRYPT n -> m
+ CRYPTO_GCM y -> m
+ CRYPTO_GENIV y -> m
+ CRYPTO_JITTERENTROPY n -> m
+ CRYPTO_KRB5 n -> m
+ CRYPTO_KRB5ENC n -> m
+ CRYPTO_LIB_AES_CBC_MACS y -> m
+ CRYPTO_LIB_ARC4 y -> m
+ CRYPTO_LRW n -> m
+ CRYPTO_LZ4 n -> y
+ CRYPTO_LZ4HC n -> m
+ CRYPTO_MD4 n -> m
+ CRYPTO_MD5 n -> y
+ CRYPTO_NULL n -> m
+ CRYPTO_PCBC n -> m
+ CRYPTO_PCRYPT n -> m
+ CRYPTO_RMD160 n -> m
+ CRYPTO_SEQIV y -> m
+ CRYPTO_SERPENT n -> m
+ CRYPTO_SERPENT_AVX2_X86_64 n -> m
+ CRYPTO_SERPENT_AVX_X86_64 n -> m
+ CRYPTO_SERPENT_SSE2_X86_64 n -> m
+ CRYPTO_SHA1 n -> y
+ CRYPTO_SHA3 n -> m
+ CRYPTO_SHA512 n -> m
+ CRYPTO_STREEBOG n -> m
+ CRYPTO_TWOFISH n -> m
+ CRYPTO_TWOFISH_AVX_X86_64 n -> m
+ CRYPTO_TWOFISH_X86_64 n -> m
+ CRYPTO_TWOFISH_X86_64_3WAY n -> m
+ CRYPTO_USER n -> m
+ CRYPTO_USER_API_AEAD n -> m
+ CRYPTO_USER_API_HASH n -> m
+ CRYPTO_USER_API_RNG n -> m
+ CRYPTO_USER_API_SKCIPHER n -> m
+ CRYPTO_WP512 n -> m
+ CRYPTO_XCBC n -> m
+ CRYPTO_XTS n -> y
+ CRYPTO_ZSTD n -> m
+ CXL_BUS n -> y
+ DAMON n -> y
+ DAVICOM_PHY n -> m
+ DAX n -> y
+ DCB n -> y
+ DE2104X n -> m
+ DEBUG_BOOT_PARAMS y -> n
+ DEBUG_DEVRES y -> n
+ DEBUG_ENTRY y -> n
+ DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT n -> y
+ DEBUG_INFO_NONE y -> n
+ DEBUG_LIST n -> y
+ DEBUG_STACK_USAGE y -> n
+ DEFAULT_CUBIC y -> n
+ DEFAULT_MMAP_MIN_ADDR 4096 -> 65536
+ DEFAULT_SECURITY_SELINUX y -> n
+ DEFAULT_TCP_CONG "cubic" -> "bbr"
+ DEFERRED_STRUCT_PAGE_INIT n -> y
+ DETECT_HUNG_TASK n -> y
+ DEVTMPFS_MOUNT y -> n
+ DL2K n -> m
+ DM9102 n -> m
+ DMABUF_HEAPS n -> y
+ DMI_SYSFS n -> y
+ DM_AUDIT n -> y
+ DM_CACHE n -> m
+ DM_CLONE n -> m
+ DM_CRYPT n -> m
+ DM_DELAY n -> m
+ DM_ERA n -> m
+ DM_FLAKEY n -> m
+ DM_INTEGRITY n -> m
+ DM_LOG_USERSPACE n -> m
+ DM_LOG_WRITES n -> m
+ DM_MIRROR y -> m
+ DM_MULTIPATH n -> m
+ DM_RAID n -> m
+ DM_SNAPSHOT n -> m
+ DM_SWITCH n -> m
+ DM_THIN_PROVISIONING n -> m
+ DM_UEVENT n -> y
+ DM_UNSTRIPED n -> m
+ DM_VDO n -> m
+ DM_VERITY n -> m
+ DM_WRITECACHE n -> m
+ DM_ZERO y -> m
+ DNS_RESOLVER y -> m
+ DP83822_PHY n -> m
+ DP83848_PHY n -> m
+ DP83867_PHY n -> m
+ DP83TC811_PHY n -> m
+ DP83TD510_PHY n -> m
+ DRM y -> m
+ DRM_ACCEL n -> y
+ DRM_AMDGPU n -> m
+ DRM_AST n -> m
+ DRM_BOCHS n -> m
+ DRM_BUDDY y -> m
+ DRM_CIRRUS_QEMU n -> m
+ DRM_CLIENT_SELECTION y -> m
+ DRM_DISPLAY_DP_AUX_CEC n -> y
+ DRM_DISPLAY_DP_AUX_CHARDEV n -> y
+ DRM_DISPLAY_HELPER y -> m
+ DRM_FBDEV_EMULATION n -> y
+ DRM_GEM_SHMEM_HELPER y -> m
+ DRM_GMA500 n -> m
+ DRM_I915 y -> m
+ DRM_KMS_HELPER y -> m
+ DRM_LOAD_EDID_FIRMWARE n -> y
+ DRM_MGAG200 n -> m
+ DRM_NOUVEAU n -> m
+ DRM_PANIC n -> y
+ DRM_QXL n -> m
+ DRM_RADEON n -> m
+ DRM_TTM y -> m
+ DRM_UDL n -> m
+ DRM_VBOXVIDEO n -> m
+ DRM_VGEM n -> m
+ DRM_VIRTIO_GPU y -> m
+ DRM_VMWGFX n -> m
+ DRM_XE n -> m
+ DS1682 n -> m
+ DUMMY n -> m
+ DW_DMAC n -> m
+ DW_DMAC_CORE y -> m
+ DW_DMAC_PCI n -> m
+ DYNAMIC_DEBUG n -> y
+ DYNAMIC_DEBUG_CORE n -> y
+ E100 y -> m
+ E1000 y -> m
+ E1000E y -> m
+ EARLY_PRINTK_DBGP y -> n
+ ECRYPT_FS n -> m
+ EDD n -> m
+ EEEPC_LAPTOP y -> m
+ EEPROM_93CX6 y -> m
+ EEPROM_AT24 n -> m
+ EEPROM_EE1004 n -> m
+ EEPROM_MAX6875 n -> m
+ EFI_BOOTLOADER_CONTROL n -> m
+ EFI_CAPSULE_LOADER n -> m
+ EFS_FS n -> m
+ ENA_ETHERNET n -> m
+ ENCLOSURE_SERVICES n -> m
+ ENCRYPTED_KEYS n -> y
+ ENERGY_MODEL n -> y
+ ENIC n -> m
+ EPIC100 n -> m
+ EQUALIZER n -> m
+ EROFS_FS n -> y
+ ET131X n -> m
+ EUROTECH_WDT n -> m
+ EVM n -> y
+ EXFAT_FS n -> m
+ EXPERT n -> y
+ EXPORTFS_BLOCK_OPS n -> y
+ EXTCON n -> m
+ F2FS_FS n -> y
+ F71808E_WDT n -> m
+ FAILOVER y -> m
+ FANOTIFY n -> y
+ FAT_DEFAULT_IOCHARSET "iso8859-1" -> "ascii"
+ FAT_DEFAULT_UTF8 n -> y
+ FAT_FS y -> m
+ FB n -> y
+ FDDI n -> y
+ FIREWIRE n -> m
+ FIREWIRE_NOSY n -> m
+ FIRMWARE_EDID n -> y
+ FIXED_PHY n -> m
+ FORCEDETH y -> m
+ FORTIFY_SOURCE n -> y
+ FSCACHE n -> y
+ FS_ENCRYPTION n -> y
+ FS_VERITY n -> y
+ FTRACE_SYSCALLS n -> y
+ FUJITSU_ES n -> m
+ FUJITSU_LAPTOP n -> m
+ FUJITSU_TABLET n -> m
+ FUNCTION_TRACER n -> y
+ FUSE_FS n -> y
+ FUSION n -> y
+ FW_CFG_SYSFS n -> m
+ FW_LOADER_COMPRESS n -> y
+ FW_LOADER_USER_HELPER n -> y
+ FW_UPLOAD n -> y
+ GAMEPORT n -> m
+ GART_IOMMU n -> y
+ GENERIC_PHY n -> y
+ GENEVE n -> m
+ GFS2_FS n -> m
+ GIGABYTE_WMI n -> m
+ GNSS n -> m
+ GOOGLE_FIRMWARE n -> y
+ GPD_POCKET_FAN n -> m
+ GPIOLIB n -> y
+ GRACE_PERIOD y -> m
+ GTP n -> m
+ GVE n -> m
+ HANGCHECK_TIMER n -> m
+ HAPPYMEAL n -> m
+ HARDENED_USERCOPY n -> y
+ HARDLOCKUP_DETECTOR n -> y
+ HDMI_LPE_AUDIO n -> m
+ HFSPLUS_FS n -> m
+ HFS_FS n -> m
+ HIBERNATION_COMP_LZO y -> n
+ HIBERNATION_DEF_COMP "lzo" -> "lz4"
+ HID y -> m
+ HID_A4TECH n -> m
+ HID_ACCUTOUCH n -> m
+ HID_ACRUX n -> m
+ HID_ALPS n -> m
+ HID_APPLE n -> m
+ HID_APPLEIR n -> m
+ HID_ASUS n -> m
+ HID_AUREAL n -> m
+ HID_BATTERY_STRENGTH n -> y
+ HID_BELKIN n -> m
+ HID_BETOP_FF n -> m
+ HID_BIGBEN_FF n -> m
+ HID_CHERRY n -> m
+ HID_CHICONY n -> m
+ HID_CMEDIA n -> m
+ HID_CORSAIR n -> m
+ HID_COUGAR n -> m
+ HID_CREATIVE_SB0540 n -> m
+ HID_CYPRESS n -> m
+ HID_DRAGONRISE n -> m
+ HID_ELAN n -> m
+ HID_ELECOM n -> m
+ HID_ELO n -> m
+ HID_EMS_FF n -> m
+ HID_EZKEY n -> m
+ HID_FT260 n -> m
+ HID_GEMBIRD n -> m
+ HID_GENERIC y -> m
+ HID_GFRM n -> m
+ HID_GLORIOUS n -> m
+ HID_GREENASIA n -> m
+ HID_GT683R n -> m
+ HID_GYRATION y -> m
+ HID_HOLTEK n -> m
+ HID_ICADE n -> m
+ HID_ITE n -> m
+ HID_JABRA n -> m
+ HID_KENSINGTON n -> m
+ HID_KEYTOUCH n -> m
+ HID_KYE n -> m
+ HID_LCPOWER n -> m
+ HID_LED n -> m
+ HID_LENOVO n -> m
+ HID_MACALLY n -> m
+ HID_MAGICMOUSE n -> m
+ HID_MALTRON n -> m
+ HID_MAYFLASH n -> m
+ HID_MCP2221 n -> m
+ HID_MICROSOFT n -> m
+ HID_MONTEREY n -> m
+ HID_MULTITOUCH n -> m
+ HID_NINTENDO n -> m
+ HID_NTI n -> m
+ HID_NTRIG y -> m
+ HID_ORTEK n -> m
+ HID_PANTHERLORD y -> m
+ HID_PENMOUNT n -> m
+ HID_PETALYNX y -> m
+ HID_PICOLCD n -> m
+ HID_PLANTRONICS n -> m
+ HID_PRIMAX n -> m
+ HID_PRODIKEYS n -> m
+ HID_REDRAGON n -> m
+ HID_RETRODE n -> m
+ HID_RMI n -> m
+ HID_ROCCAT n -> m
+ HID_SAITEK n -> m
+ HID_SAMSUNG y -> m
+ HID_SEMITEK n -> m
+ HID_SENSOR_HUB n -> m
+ HID_SMARTJOYPLUS n -> m
+ HID_SONY y -> m
+ HID_SPEEDLINK n -> m
+ HID_STEAM n -> m
+ HID_STEELSERIES n -> m
+ HID_SUNPLUS y -> m
+ HID_THINGM n -> m
+ HID_THRUSTMASTER n -> m
+ HID_TIVO n -> m
+ HID_TOPSEED y -> m
+ HID_TWINHAN n -> m
+ HID_U2FZERO n -> m
+ HID_UCLOGIC n -> m
+ HID_UDRAW_PS3 n -> m
+ HID_UNIVERSAL_PIDFF n -> m
+ HID_VIEWSONIC n -> m
+ HID_VIVALDI n -> m
+ HID_WACOM n -> m
+ HID_WALTOP n -> m
+ HID_WIIMOTE n -> m
+ HID_XINMO n -> m
+ HID_ZEROPLUS n -> m
+ HID_ZYDACRON n -> m
+ HINIC n -> m
+ HIST_TRIGGERS n -> y
+ HMC6352 n -> m
+ HOTPLUG_PCI_ACPI n -> y
+ HOTPLUG_PCI_CPCI n -> y
+ HOTPLUG_PCI_PCIE n -> y
+ HOTPLUG_PCI_SHPC n -> y
+ HPET_MMAP n -> y
+ HPFS_FS n -> m
+ HP_ILO n -> m
+ HP_WATCHDOG n -> m
+ HSR n -> m
+ HUAWEI_WMI n -> m
+ HW_RANDOM_AMD n -> m
+ HW_RANDOM_INTEL n -> m
+ HW_RANDOM_VIA y -> m
+ HW_RANDOM_VIRTIO n -> m
+ HYPERV n -> y
+ HZ 1000 -> 250
+ HZ_1000 y -> n
+ HZ_250 n -> y
+ I2C_ALGOBIT y -> m
+ I2C_ALI1535 n -> m
+ I2C_ALI1563 n -> m
+ I2C_ALI15X3 n -> m
+ I2C_AMD756 n -> m
+ I2C_AMD8111 n -> m
+ I2C_AMD_MP2 n -> m
+ I2C_CHARDEV n -> m
+ I2C_DESIGNWARE_CORE n -> y
+ I2C_DIOLAN_U2C n -> m
+ I2C_HID y -> m
+ I2C_HID_ACPI n -> m
+ I2C_HID_OF n -> m
+ I2C_I801 y -> m
+ I2C_ISCH n -> m
+ I2C_ISMT n -> m
+ I2C_MUX n -> m
+ I2C_NFORCE2 n -> m
+ I2C_OCORES n -> m
+ I2C_PCA_PLATFORM n -> m
+ I2C_PIIX4 n -> m
+ I2C_ROBOTFUZZ_OSIF n -> m
+ I2C_SCMI n -> m
+ I2C_SIMTEC n -> m
+ I2C_SIS5595 n -> m
+ I2C_SIS630 n -> m
+ I2C_SIS96X n -> m
+ I2C_SMBUS y -> m
+ I2C_STUB n -> m
+ I2C_TAOS_EVM n -> m
+ I2C_TINY_USB n -> m
+ I2C_VIA n -> m
+ I2C_VIAPRO n -> m
+ I40E n -> m
+ I40EVF n -> m
+ I6300ESB_WDT n -> m
+ IB700_WDT n -> m
+ IBMASR n -> m
+ IBM_ASM n -> m
+ IBM_RTL n -> m
+ ICE n -> m
+ ICPLUS_PHY n -> m
+ ICS932S401 n -> m
+ IDEAPAD_LAPTOP n -> m
+ IDPF n -> m
+ IE6XX_WDT n -> m
+ IEEE802154 n -> m
+ IGB n -> m
+ IGBVF n -> m
+ IGC n -> m
+ IIO n -> m
+ IMA n -> y
+ IMA_SECURE_AND_OR_TRUSTED_BOOT n -> y
+ INET6_AH y -> m
+ INET6_ESP y -> m
+ INET6_ESP_OFFLOAD n -> m
+ INET6_IPCOMP n -> m
+ INET_AH n -> m
+ INET_DIAG n -> m
+ INET_ESP n -> m
+ INET_IPCOMP n -> m
+ INFINIBAND n -> m
+ INIT_ON_ALLOC_DEFAULT_ON n -> y
+ INPUT_APANEL n -> m
+ INPUT_ATI_REMOTE2 n -> m
+ INPUT_ATLAS_BTNS n -> m
+ INPUT_CM109 n -> m
+ INPUT_EVDEV y -> m
+ INPUT_FF_MEMLESS y -> m
+ INPUT_IDEAPAD_SLIDEBAR n -> m
+ INPUT_JOYDEV n -> m
+ INPUT_KEYSPAN_REMOTE n -> m
+ INPUT_MATRIXKMAP n -> m
+ INPUT_MOUSEDEV n -> y
+ INPUT_PCSPKR n -> m
+ INPUT_POWERMATE n -> m
+ INPUT_SPARSEKMAP y -> m
+ INPUT_UINPUT n -> m
+ INPUT_YEALINK n -> m
+ INT340X_THERMAL n -> m
+ INTEGRITY_SIGNATURE n -> y
+ INTEL_ATOMISP2_PM n -> m
+ INTEL_HFI_THERMAL n -> y
+ INTEL_HID_EVENT n -> m
+ INTEL_IDLE n -> y
+ INTEL_IDMA64 n -> m
+ INTEL_IDXD n -> m
+ INTEL_IFS n -> m
+ INTEL_IOATDMA n -> m
+ INTEL_IOMMU_SVM n -> y
+ INTEL_IPS n -> m
+ INTEL_ISH_HID n -> m
+ INTEL_MEI y -> m
+ INTEL_MEI_GSC n -> m
+ INTEL_MEI_GSC_PROXY n -> m
+ INTEL_MEI_HDCP n -> m
+ INTEL_MEI_ME y -> m
+ INTEL_MEI_PXP n -> m
+ INTEL_MEI_TXE n -> m
+ INTEL_MEI_WDT n -> m
+ INTEL_OAKTRAIL n -> m
+ INTEL_PCH_THERMAL n -> m
+ INTEL_POWERCLAMP n -> m
+ INTEL_RST n -> m
+ INTEL_SMARTCONNECT n -> m
+ INTEL_SOC_DTS_THERMAL n -> m
+ INTEL_SPEED_SELECT_INTERFACE n -> m
+ INTEL_TDX_GUEST n -> y
+ INTEL_TH n -> m
+ INTEL_THC_HID n -> m
+ INTEL_TURBO_MAX_3 n -> y
+ INTEL_TXT n -> y
+ INTEL_UNCORE_FREQ_CONTROL n -> m
+ INTEL_VBTN n -> m
+ INTEL_VSEC n -> m
+ INTEL_WMI_THUNDERBOLT n -> m
+ IONIC n -> m
+ IOSCHED_BFQ n -> m
+ IO_STRICT_DEVMEM n -> y
+ IP6_NF_IPTABLES y -> m
+ IP6_NF_MATCH_IPV6HEADER y -> m
+ IPMI_HANDLER n -> m
+ IPV6_ILA n -> m
+ IPV6_MIP6 n -> y
+ IPV6_MROUTE n -> y
+ IPV6_MULTIPLE_TABLES n -> y
+ IPV6_OPTIMISTIC_DAD n -> y
+ IPV6_ROUTER_PREF n -> y
+ IPV6_RPL_LWTUNNEL n -> y
+ IPV6_SEG6_HMAC n -> y
+ IPV6_SEG6_LWTUNNEL n -> y
+ IPV6_SIT_6RD n -> y
+ IPV6_TUNNEL n -> m
+ IPV6_VTI n -> m
+ IPVLAN n -> m
+ IPW2200 n -> m
+ IPWIRELESS n -> m
+ IP_FIB_TRIE_STATS n -> y
+ IP_MROUTE_MULTIPLE_TABLES n -> y
+ IP_NF_IPTABLES y -> m
+ IP_PNP y -> n
+ IP_SCTP n -> m
+ IP_SET n -> m
+ IP_VS n -> m
+ IRQ_POLL n -> y
+ ISCSI_BOOT_SYSFS n -> m
+ ISCSI_IBFT n -> m
+ ISCSI_TCP n -> m
+ ISL29003 n -> m
+ ISL29020 n -> m
+ ISO9660_FS y -> m
+ IT8712F_WDT n -> m
+ IT87_WDT n -> m
+ ITCO_WDT n -> m
+ IWL3945 n -> m
+ IWL4965 n -> m
+ IWLWIFI n -> m
+ IXGBE n -> m
+ IXGBEVF n -> m
+ JFS_FS n -> m
+ JME n -> m
+ JOYSTICK_A3D n -> m
+ JOYSTICK_ADI n -> m
+ JOYSTICK_ANALOG n -> m
+ JOYSTICK_COBRA n -> m
+ JOYSTICK_GF2K n -> m
+ JOYSTICK_GRIP n -> m
+ JOYSTICK_GRIP_MP n -> m
+ JOYSTICK_GUILLEMOT n -> m
+ JOYSTICK_IFORCE n -> m
+ JOYSTICK_INTERACT n -> m
+ JOYSTICK_JOYDUMP n -> m
+ JOYSTICK_MAGELLAN n -> m
+ JOYSTICK_PXRC n -> m
+ JOYSTICK_SIDEWINDER n -> m
+ JOYSTICK_SPACEBALL n -> m
+ JOYSTICK_SPACEORB n -> m
+ JOYSTICK_STINGER n -> m
+ JOYSTICK_TMDC n -> m
+ JOYSTICK_TWIDJOY n -> m
+ JOYSTICK_WARRIOR n -> m
+ JOYSTICK_XPAD n -> m
+ JOYSTICK_ZHENHUA n -> m
+ KERNEL_GZIP y -> n
+ KERNEL_ZSTD n -> y
+ KEXEC_FILE n -> y
+ KEYBOARD_ADP5588 n -> m
+ KEYBOARD_LKKBD n -> m
+ KEYBOARD_LM8323 n -> m
+ KEYBOARD_MAX7359 n -> m
+ KEYBOARD_NEWTON n -> m
+ KEYBOARD_OPENCORES n -> m
+ KEYBOARD_QT2160 n -> m
+ KEYBOARD_STOWAWAY n -> m
+ KEYBOARD_SUNKBD n -> m
+ KEYBOARD_XTKBD n -> m
+ KEY_DH_OPERATIONS n -> y
+ KFENCE n -> y
+ KSM n -> y
+ KSZ884X_PCI n -> m
+ KVM n -> m
+ L2TP n -> m
+ LAN743X n -> m
+ LAPB n -> m
+ LD_ORPHAN_WARN_LEVEL "error" -> "warn"
+ LEDS_APU n -> m
+ LEDS_BD2802 n -> m
+ LEDS_BRIGHTNESS_HW_CHANGED n -> y
+ LEDS_CLASS_MULTICOLOR n -> m
+ LEDS_INTEL_SS4200 n -> m
+ LEDS_LP3944 n -> m
+ LEDS_PCA955X n -> m
+ LEDS_TRIGGER_ACTIVITY n -> m
+ LEDS_TRIGGER_BACKLIGHT n -> m
+ LEDS_TRIGGER_CAMERA n -> m
+ LEDS_TRIGGER_CPU n -> y
+ LEDS_TRIGGER_DEFAULT_ON n -> m
+ LEDS_TRIGGER_DISK n -> y
+ LEDS_TRIGGER_HEARTBEAT n -> m
+ LEDS_TRIGGER_INPUT_EVENTS n -> m
+ LEDS_TRIGGER_NETDEV n -> m
+ LEDS_TRIGGER_ONESHOT n -> m
+ LEDS_TRIGGER_PANIC n -> y
+ LEDS_TRIGGER_PATTERN n -> m
+ LEDS_TRIGGER_TIMER n -> m
+ LEDS_TRIGGER_TRANSIENT n -> m
+ LED_TRIGGER_PHY n -> y
+ LEGACY_TIOCSTI y -> n
+ LEGACY_VSYSCALL_NONE n -> y
+ LEGACY_VSYSCALL_XONLY y -> n
+ LENOVO_WMI_GAMEZONE n -> m
+ LG_LAPTOP n -> m
+ LIBERTAS n -> m
+ LIBERTAS_THINFIRM n -> m
+ LIBNVDIMM n -> m
+ LIQUIDIO n -> m
+ LIQUIDIO_VF n -> m
+ LIST_HARDENED n -> y
+ LKDTM n -> m
+ LLC2 n -> m
+ LOCALVERSION_AUTO y -> n
+ LOCKD y -> m
+ LOG_BUF_SHIFT 18 -> 17
+ LPC_ICH n -> m
+ LPC_SCH n -> m
+ LRU_GEN n -> y
+ LSI_ET1011C_PHY n -> m
+ LSM "landlock,lockdown,yama,loadpin,safesetid,selinux,smack,tomoyo,apparmor,ipe,bpf" -> "landlock,lockdown,yama,loadpin,safesetid,integrity,apparmor,selinux,smack,tomoyo,bpf,ipe"
+ LWTUNNEL n -> y
+ LXT_PHY n -> m
+ MAC80211 y -> m
+ MAC80211_HWSIM n -> m
+ MAC80211_MESH n -> y
+ MACHZ_WDT n -> m
+ MACSEC n -> m
+ MACVLAN n -> m
+ MAGIC_SYSRQ_DEFAULT_ENABLE 0x1 -> 0x01b6
+ MARVELL_10G_PHY n -> m
+ MARVELL_PHY n -> m
+ MAXSMP n -> y
+ MD_RAID0 n -> m
+ MD_RAID1 n -> m
+ MD_RAID10 n -> m
+ MD_RAID456 n -> m
+ MEDIA_CEC_SUPPORT n -> y
+ MEDIA_SUPPORT n -> m
+ MEGARAID_LEGACY n -> m
+ MEGARAID_NEWGEN n -> y
+ MEGARAID_SAS n -> m
+ MEMCG n -> y
+ MEMORY n -> y
+ MEMORY_FAILURE n -> y
+ MEMORY_HOTPLUG n -> y
+ MEMSTICK n -> m
+ MEMTEST n -> y
+ MFD_AXP20X_I2C n -> m
+ MFD_INTEL_LPSS_ACPI n -> m
+ MFD_INTEL_LPSS_PCI n -> m
+ MFD_INTEL_PMC_BXT n -> m
+ MFD_KEMPLD n -> m
+ MFD_MENF21BMC n -> m
+ MFD_SYSCON n -> y
+ MFD_VIPERBOARD n -> m
+ MHI_BUS n -> m
+ MICREL_PHY n -> m
+ MICROCHIP_PHY n -> m
+ MICROCHIP_T1_PHY n -> m
+ MICROSEMI_PHY n -> m
+ MII y -> m
+ MINIX_FS n -> m
+ MISC_RTSX_PCI n -> m
+ MISC_RTSX_USB n -> m
+ MITIGATION_SLS n -> y
+ MLX4_EN n -> m
+ MLX5_CORE n -> m
+ MLXFW n -> m
+ MMC n -> m
+ MMIOTRACE n -> y
+ MODULE_COMPRESS n -> y
+ MODULE_FORCE_LOAD n -> y
+ MODULE_SIG n -> y
+ MOTORCOMM_PHY n -> m
+ MOUSE_APPLETOUCH n -> m
+ MOUSE_BCM5974 n -> m
+ MOUSE_CYAPA n -> m
+ MOUSE_ELAN_I2C n -> m
+ MOUSE_PS2 y -> m
+ MOUSE_PS2_ELANTECH n -> y
+ MOUSE_PS2_SENTELIC n -> y
+ MOUSE_PS2_VMMOUSE n -> y
+ MOUSE_SERIAL n -> m
+ MOUSE_SYNAPTICS_I2C n -> m
+ MOUSE_SYNAPTICS_USB n -> m
+ MOUSE_VSXXXAA n -> m
+ MOXA_INTELLIO n -> m
+ MOXA_SMARTIO n -> m
+ MPLS n -> y
+ MPTCP n -> y
+ MQ_IOSCHED_KYBER y -> m
+ MSDOS_FS y -> m
+ MSI_EC n -> m
+ MSI_LAPTOP n -> m
+ MSI_WMI n -> m
+ MT7601U n -> m
+ MT7615E n -> m
+ MT7663U n -> m
+ MT76x0E n -> m
+ MT76x0U n -> m
+ MT76x2E n -> m
+ MT76x2U n -> m
+ MT7915E n -> m
+ MT7921E n -> m
+ MT7921U n -> m
+ MT7925E n -> m
+ MT7925U n -> m
+ MT7996E n -> m
+ MTD n -> m
+ MTRR_SANITIZER n -> y
+ MWIFIEX n -> m
+ MWL8K n -> m
+ MXM_WMI n -> m
+ MYRI10GE n -> m
+ NATIONAL_PHY n -> m
+ NATSEMI n -> m
+ NE2K_PCI n -> m
+ NETCONSOLE y -> m
+ NETFILTER_ADVANCED n -> y
+ NETFILTER_NETLINK y -> m
+ NETFILTER_NETLINK_GLUE_CT n -> y
+ NETFILTER_NETLINK_LOG y -> m
+ NETFILTER_XTABLES y -> m
+ NETFILTER_XTABLES_LEGACY n -> y
+ NETFILTER_XT_MATCH_CONNTRACK y -> m
+ NETFILTER_XT_MATCH_POLICY y -> m
+ NETFILTER_XT_MATCH_STATE y -> m
+ NETFILTER_XT_NAT n -> m
+ NETFILTER_XT_TARGET_CONNSECMARK y -> m
+ NETFILTER_XT_TARGET_NETMAP n -> m
+ NETFILTER_XT_TARGET_NFLOG y -> m
+ NETFILTER_XT_TARGET_REDIRECT n -> m
+ NETFILTER_XT_TARGET_SECMARK y -> m
+ NETFILTER_XT_TARGET_TCPMSS y -> m
+ NETFS_STATS n -> y
+ NETFS_SUPPORT y -> m
+ NETLINK_DIAG n -> m
+ NETWORK_PHY_TIMESTAMPING n -> y
+ NETXEN_NIC n -> m
+ NET_9P y -> m
+ NET_9P_FD y -> m
+ NET_9P_VIRTIO y -> m
+ NET_ACT_BPF n -> m
+ NET_ACT_CSUM n -> m
+ NET_ACT_GACT n -> m
+ NET_ACT_GATE n -> m
+ NET_ACT_IFE n -> m
+ NET_ACT_MIRRED n -> m
+ NET_ACT_MPLS n -> m
+ NET_ACT_NAT n -> m
+ NET_ACT_PEDIT n -> m
+ NET_ACT_POLICE n -> m
+ NET_ACT_SAMPLE n -> m
+ NET_ACT_SIMP n -> m
+ NET_ACT_SKBEDIT n -> m
+ NET_ACT_SKBMOD n -> m
+ NET_ACT_TUNNEL_KEY n -> m
+ NET_ACT_VLAN n -> m
+ NET_CLS_BASIC n -> m
+ NET_CLS_BPF n -> m
+ NET_CLS_CGROUP y -> m
+ NET_CLS_FLOW n -> m
+ NET_CLS_FLOWER n -> m
+ NET_CLS_FW n -> m
+ NET_CLS_MATCHALL n -> m
+ NET_CLS_ROUTE4 n -> m
+ NET_CLS_U32 n -> m
+ NET_DROP_MONITOR n -> m
+ NET_EMATCH_CMP n -> m
+ NET_EMATCH_IPT n -> m
+ NET_EMATCH_META n -> m
+ NET_EMATCH_NBYTE n -> m
+ NET_EMATCH_TEXT n -> m
+ NET_EMATCH_U32 n -> m
+ NET_FAILOVER y -> m
+ NET_FC n -> y
+ NET_FOU n -> m
+ NET_FOU_IP_TUNNELS n -> y
+ NET_IFE n -> m
+ NET_IPGRE_DEMUX n -> m
+ NET_IPIP n -> m
+ NET_IPVTI n -> m
+ NET_KEY n -> m
+ NET_L3_MASTER_DEV n -> y
+ NET_NSH n -> m
+ NET_PKTGEN n -> m
+ NET_SCH_CAKE n -> m
+ NET_SCH_CBS n -> m
+ NET_SCH_CHOKE n -> m
+ NET_SCH_CODEL n -> m
+ NET_SCH_DEFAULT n -> y
+ NET_SCH_DRR n -> m
+ NET_SCH_ETF n -> m
+ NET_SCH_ETS n -> m
+ NET_SCH_FQ n -> m
+ NET_SCH_FQ_CODEL n -> y
+ NET_SCH_GRED n -> m
+ NET_SCH_HFSC n -> m
+ NET_SCH_HHF n -> m
+ NET_SCH_HTB n -> m
+ NET_SCH_INGRESS n -> m
+ NET_SCH_MQPRIO n -> m
+ NET_SCH_MULTIQ n -> m
+ NET_SCH_NETEM n -> m
+ NET_SCH_PIE n -> m
+ NET_SCH_PLUG n -> m
+ NET_SCH_PRIO n -> m
+ NET_SCH_QFQ n -> m
+ NET_SCH_RED n -> m
+ NET_SCH_SFB n -> m
+ NET_SCH_SFQ n -> m
+ NET_SCH_SKBPRIO n -> m
+ NET_SCH_TAPRIO n -> m
+ NET_SCH_TBF n -> m
+ NET_SCH_TEQL n -> m
+ NET_SWITCHDEV n -> y
+ NET_TEAM n -> m
+ NET_VENDOR_ARC y -> n
+ NET_VENDOR_SEEQ y -> n
+ NFC n -> m
+ NFP n -> m
+ NFSD n -> m
+ NFS_ACL_SUPPORT y -> m
+ NFS_FS y -> m
+ NFS_FSCACHE n -> y
+ NFS_SWAP n -> y
+ NFS_V2 n -> m
+ NFS_V3 y -> m
+ NFS_V4 y -> m
+ NFS_V4_2 n -> y
+ NF_CONNTRACK y -> m
+ NF_CONNTRACK_BRIDGE n -> m
+ NF_CONNTRACK_FTP y -> m
+ NF_CONNTRACK_IRC y -> m
+ NF_CONNTRACK_LABELS n -> y
+ NF_CONNTRACK_NETBIOS_NS n -> m
+ NF_CONNTRACK_PROCFS n -> y
+ NF_CONNTRACK_SIP y -> m
+ NF_CT_NETLINK y -> m
+ NF_DEFRAG_IPV4 y -> m
+ NF_DEFRAG_IPV6 y -> m
+ NF_DUP_IPV4 n -> m
+ NF_DUP_IPV6 n -> m
+ NF_NAT y -> m
+ NF_NAT_FTP y -> m
+ NF_NAT_IRC y -> m
+ NF_NAT_SIP y -> m
+ NF_SOCKET_IPV4 n -> m
+ NF_SOCKET_IPV6 n -> m
+ NF_TABLES n -> m
+ NF_TPROXY_IPV4 n -> m
+ NF_TPROXY_IPV6 n -> m
+ NI903X_WDT n -> m
+ NIC7018_WDT n -> m
+ NILFS2_FS n -> m
+ NIU n -> m
+ NLMON n -> m
+ NLS_ASCII y -> m
+ NLS_CODEPAGE_1250 n -> m
+ NLS_CODEPAGE_1251 n -> m
+ NLS_CODEPAGE_437 y -> m
+ NLS_CODEPAGE_737 n -> m
+ NLS_CODEPAGE_775 n -> m
+ NLS_CODEPAGE_850 n -> m
+ NLS_CODEPAGE_852 n -> m
+ NLS_CODEPAGE_855 n -> m
+ NLS_CODEPAGE_857 n -> m
+ NLS_CODEPAGE_860 n -> m
+ NLS_CODEPAGE_861 n -> m
+ NLS_CODEPAGE_862 n -> m
+ NLS_CODEPAGE_863 n -> m
+ NLS_CODEPAGE_864 n -> m
+ NLS_CODEPAGE_865 n -> m
+ NLS_CODEPAGE_866 n -> m
+ NLS_CODEPAGE_869 n -> m
+ NLS_CODEPAGE_874 n -> m
+ NLS_CODEPAGE_932 n -> m
+ NLS_CODEPAGE_936 n -> m
+ NLS_CODEPAGE_949 n -> m
+ NLS_CODEPAGE_950 n -> m
+ NLS_ISO8859_1 y -> m
+ NLS_ISO8859_13 n -> m
+ NLS_ISO8859_14 n -> m
+ NLS_ISO8859_15 n -> m
+ NLS_ISO8859_2 n -> m
+ NLS_ISO8859_3 n -> m
+ NLS_ISO8859_4 n -> m
+ NLS_ISO8859_5 n -> m
+ NLS_ISO8859_6 n -> m
+ NLS_ISO8859_7 n -> m
+ NLS_ISO8859_8 n -> m
+ NLS_ISO8859_9 n -> m
+ NLS_KOI8_R n -> m
+ NLS_KOI8_U n -> m
+ NLS_MAC_CELTIC n -> m
+ NLS_MAC_CENTEURO n -> m
+ NLS_MAC_CROATIAN n -> m
+ NLS_MAC_CYRILLIC n -> m
+ NLS_MAC_GAELIC n -> m
+ NLS_MAC_GREEK n -> m
+ NLS_MAC_ICELAND n -> m
+ NLS_MAC_INUIT n -> m
+ NLS_MAC_ROMAN n -> m
+ NLS_MAC_ROMANIAN n -> m
+ NLS_MAC_TURKISH n -> m
+ NLS_UTF8 y -> m
+ NODES_SHIFT 6 -> 10
+ NOTIFIER_ERROR_INJECTION n -> m
+ NOZOMI n -> m
+ NO_HZ y -> n
+ NO_HZ_FULL n -> y
+ NO_HZ_IDLE y -> n
+ NR_CPUS 64 -> 8192
+ NR_CPUS_DEFAULT 64 -> 8192
+ NR_CPUS_RANGE_BEGIN 2 -> 8192
+ NR_CPUS_RANGE_END 512 -> 8192
+ NS83820 n -> m
+ NSM n -> m
+ NTFS3_FS n -> m
+ NTSYNC n -> m
+ NUMA_BALANCING n -> y
+ NUMA_EMU n -> y
+ NVIDIA_WMI_EC_BACKLIGHT n -> m
+ NVME_FC n -> m
+ NVME_TARGET n -> m
+ NVME_TCP n -> m
+ NVRAM y -> m
+ NV_TCO n -> m
+ N_HDLC n -> m
+ OMFS_FS n -> m
+ OPENVSWITCH n -> m
+ ORANGEFS_FS n -> m
+ OVERLAY_FS n -> m
+ OVPN n -> m
+ OXP_EC n -> m
+ P54_COMMON n -> m
+ PACKET_DIAG n -> m
+ PACKING n -> y
+ PAGE_EXTENSION n -> y
+ PAGE_POISONING n -> y
+ PAGE_POOL_STATS n -> y
+ PAGE_REPORTING n -> y
+ PANASONIC_LAPTOP n -> m
+ PARAVIRT_SPINLOCKS n -> y
+ PARPORT n -> m
+ PARTITION_ADVANCED n -> y
+ PATA_ALI n -> m
+ PATA_AMD y -> m
+ PATA_ARTOP n -> m
+ PATA_ATIIXP n -> m
+ PATA_ATP867X n -> m
+ PATA_CMD64X n -> m
+ PATA_EFAR n -> m
+ PATA_HPT366 n -> m
+ PATA_HPT37X n -> m
+ PATA_IT8213 n -> m
+ PATA_IT821X n -> m
+ PATA_JMICRON n -> m
+ PATA_LEGACY n -> m
+ PATA_MARVELL n -> m
+ PATA_MPIIX n -> m
+ PATA_NETCELL n -> m
+ PATA_NINJA32 n -> m
+ PATA_NS87410 n -> m
+ PATA_NS87415 n -> m
+ PATA_OLDPIIX y -> m
+ PATA_PCMCIA n -> m
+ PATA_PDC2027X n -> m
+ PATA_PDC_OLD n -> m
+ PATA_RDC n -> m
+ PATA_RZ1000 n -> m
+ PATA_SCH y -> m
+ PATA_SERVERWORKS n -> m
+ PATA_SIL680 n -> m
+ PATA_SIS n -> m
+ PATA_TOSHIBA n -> m
+ PATA_TRIFLEX n -> m
+ PATA_VIA n -> m
+ PC87413_WDT n -> m
+ PCCARD y -> m
+ PCIEAER n -> y
+ PCIE_PTM n -> y
+ PCIPCWATCHDOG n -> m
+ PCI_DOE n -> y
+ PCI_IOV n -> y
+ PCI_STUB n -> m
+ PCI_TSM n -> y
+ PCMCIA y -> m
+ PCMCIA_PCNET n -> m
+ PCMCIA_XIRC2PS n -> m
+ PCMCIA_XIRCOM n -> m
+ PCNET32 n -> m
+ PCS_XPCS n -> m
+ PD6729 n -> m
+ PDC_ADMA n -> m
+ PERF_EVENTS_AMD_POWER n -> m
+ PERF_EVENTS_INTEL_CSTATE y -> m
+ PERF_EVENTS_INTEL_RAPL y -> m
+ PERF_EVENTS_INTEL_UNCORE y -> m
+ PERSISTENT_KEYRINGS n -> y
+ PHANTOM n -> m
+ PHONET n -> m
+ PHY_PACKAGE y -> m
+ PINCTRL n -> y
+ PKCS8_PRIVATE_KEY_PARSER n -> m
+ PMBUS n -> m
+ PMIC_OPREGION n -> y
+ PM_ADVANCED_DEBUG n -> y
+ PM_DEVFREQ n -> y
+ PM_TRACE_RTC y -> n
+ PNFS_BLOCK y -> m
+ PNFS_FILE_LAYOUT y -> m
+ PNFS_FLEXFILE_LAYOUT y -> m
+ PNP_DEBUG_MESSAGES y -> n
+ POWERCAP n -> y
+ PPP n -> m
+ PPS_CLIENT_LDISC n -> m
+ PPS_GENERATOR n -> m
+ PROC_CHILDREN n -> y
+ PROC_MEM_ALWAYS_FORCE n -> y
+ PROC_MEM_FORCE_PTRACE y -> n
+ PROVIDE_OHCI1394_DMA_INIT y -> n
+ PSAMPLE n -> m
+ PSI n -> y
+ PSTORE n -> y
+ PTP_1588_CLOCK_IDT82P33 n -> m
+ PTP_1588_CLOCK_IDTCM n -> m
+ PTP_1588_CLOCK_KVM y -> m
+ PTP_1588_CLOCK_VMCLOCK y -> m
+ PTP_1588_CLOCK_VMW n -> m
+ PVH n -> y
+ PVPANIC n -> y
+ PWM n -> y
+ QED n -> m
+ QFMT_V1 n -> m
+ QFMT_V2 y -> m
+ QLA3XXX n -> m
+ QLCNIC n -> m
+ QNX4FS_FS n -> m
+ QNX6FS_FS n -> m
+ QRTR n -> m
+ QSEMI_PHY n -> m
+ QUOTA_TREE y -> m
+ R6040 n -> m
+ R8169 y -> m
+ RAID_ATTRS n -> m
+ RANDOMIZE_BASE y -> n
+ RANDOMIZE_KSTACK_OFFSET y -> n
+ RAS n -> y
+ RCU_TRACE y -> n
+ RC_CORE n -> m
+ RDS n -> m
+ REALTEK_PHY y -> m
+ REALTEK_PHY_HWMON n -> y
+ REGULATOR n -> y
+ RENESAS_PHY n -> m
+ RESET_ATTACK_MITIGATION n -> y
+ RESET_CONTROLLER n -> y
+ RFKILL y -> m
+ RMI4_CORE n -> m
+ ROCKCHIP_PHY n -> m
+ ROMFS_FS n -> m
+ RPCSEC_GSS_KRB5 y -> m
+ RSI_91X n -> m
+ RT2X00 n -> m
+ RTC_HCTOSYS n -> y
+ RTL8180 n -> m
+ RTL8187 n -> m
+ RTL8188EE n -> m
+ RTL8192CE n -> m
+ RTL8192CU n -> m
+ RTL8192DE n -> m
+ RTL8192EE n -> m
+ RTL8192SE n -> m
+ RTL8723AE n -> m
+ RTL8723BE n -> m
+ RTL8821AE n -> m
+ RTL8XXXU n -> m
+ RTL_CARDS y -> m
+ RTW88 n -> m
+ RTW89 n -> m
+ RUSTC_LLVM_MAJOR_VERSION 23 -> 22
+ RUSTC_LLVM_VERSION 230101 -> 220106
+ RUSTC_VERSION 110100 -> 109701
+ SAMSUNG_GALAXYBOOK n -> m
+ SAMSUNG_LAPTOP n -> m
+ SAMSUNG_Q10 n -> m
+ SATA_ACARD_AHCI n -> m
+ SATA_AHCI y -> m
+ SATA_MV n -> m
+ SATA_NV n -> m
+ SATA_PROMISE n -> m
+ SATA_QSTOR n -> m
+ SATA_SIL n -> m
+ SATA_SIL24 n -> m
+ SATA_SIS n -> m
+ SATA_SVW n -> m
+ SATA_SX4 n -> m
+ SATA_ULI n -> m
+ SATA_VIA n -> m
+ SATA_VITESSE n -> m
+ SATA_ZPODD n -> y
+ SBC_EPX_C3_WATCHDOG n -> m
+ SBC_FITPC2_WATCHDOG n -> m
+ SC1200_WDT n -> m
+ SC92031 n -> m
+ SCHED_AUTOGROUP n -> y
+ SCHED_STACK_END_CHECK n -> y
+ SCSI y -> m
+ SCSI_3W_9XXX n -> m
+ SCSI_3W_SAS n -> m
+ SCSI_AACRAID n -> m
+ SCSI_ACARD n -> m
+ SCSI_ADVANSYS n -> m
+ SCSI_AIC79XX n -> m
+ SCSI_AIC7XXX n -> m
+ SCSI_AIC94XX n -> m
+ SCSI_AM53C974 n -> m
+ SCSI_ARCMSR n -> m
+ SCSI_BNX2_ISCSI n -> m
+ SCSI_BUSLOGIC n -> m
+ SCSI_COMMON y -> m
+ SCSI_CXGB3_ISCSI n -> m
+ SCSI_CXGB4_ISCSI n -> m
+ SCSI_DC395x n -> m
+ SCSI_DEBUG n -> m
+ SCSI_DH n -> y
+ SCSI_DMX3191D n -> m
+ SCSI_ESAS2R n -> m
+ SCSI_FC_ATTRS n -> m
+ SCSI_HPSA n -> m
+ SCSI_HPTIOP n -> m
+ SCSI_INIA100 n -> m
+ SCSI_INITIO n -> m
+ SCSI_IPR n -> m
+ SCSI_IPS n -> m
+ SCSI_ISCI n -> m
+ SCSI_ISCSI_ATTRS n -> m
+ SCSI_LOGGING n -> y
+ SCSI_LOWLEVEL_PCMCIA n -> y
+ SCSI_MOD y -> m
+ SCSI_MPI3MR n -> m
+ SCSI_MPT2SAS n -> m
+ SCSI_MPT3SAS n -> m
+ SCSI_MVSAS n -> m
+ SCSI_MVUMI n -> m
+ SCSI_MYRB n -> m
+ SCSI_MYRS n -> m
+ SCSI_PM8001 n -> m
+ SCSI_PMCRAID n -> m
+ SCSI_PROC_FS y -> n
+ SCSI_QLA_ISCSI n -> m
+ SCSI_QLOGIC_1280 n -> m
+ SCSI_SAS_ATTRS n -> m
+ SCSI_SAS_LIBSAS n -> m
+ SCSI_SCAN_ASYNC n -> y
+ SCSI_SMARTPQI n -> m
+ SCSI_SNIC n -> m
+ SCSI_SPI_ATTRS y -> m
+ SCSI_SRP_ATTRS n -> m
+ SCSI_STEX n -> m
+ SCSI_SYM53C8XX_2 n -> m
+ SCSI_UFSHCD n -> m
+ SCSI_VIRTIO y -> m
+ SCSI_WD719X n -> m
+ SECONDARY_TRUSTED_KEYRING n -> y
+ SECURITYFS n -> y
+ SECURITY_APPARMOR n -> y
+ SECURITY_DMESG_RESTRICT n -> y
+ SECURITY_LANDLOCK n -> y
+ SECURITY_LOCKDOWN_LSM n -> y
+ SECURITY_NETWORK_XFRM n -> y
+ SECURITY_PATH n -> y
+ SECURITY_SELINUX_BOOTPARAM y -> n
+ SECURITY_TOMOYO n -> y
+ SECURITY_YAMA n -> y
+ SENSORS_ABITUGURU n -> m
+ SENSORS_ABITUGURU3 n -> m
+ SENSORS_ACPI_POWER n -> m
+ SENSORS_AD7414 n -> m
+ SENSORS_AD7418 n -> m
+ SENSORS_ADM1025 n -> m
+ SENSORS_ADM1026 n -> m
+ SENSORS_ADM1029 n -> m
+ SENSORS_ADM1031 n -> m
+ SENSORS_ADM9240 n -> m
+ SENSORS_ADS7828 n -> m
+ SENSORS_ADT7411 n -> m
+ SENSORS_ADT7462 n -> m
+ SENSORS_ADT7470 n -> m
+ SENSORS_ADT7475 n -> m
+ SENSORS_AMC6821 n -> m
+ SENSORS_APDS990X n -> m
+ SENSORS_APPLESMC n -> m
+ SENSORS_AQUACOMPUTER_D5NEXT n -> m
+ SENSORS_ASB100 n -> m
+ SENSORS_ASC7621 n -> m
+ SENSORS_ASUS_EC n -> m
+ SENSORS_ASUS_WMI n -> m
+ SENSORS_ATK0110 n -> m
+ SENSORS_ATXP1 n -> m
+ SENSORS_BH1770 n -> m
+ SENSORS_CORETEMP n -> m
+ SENSORS_CORSAIR_CPRO n -> m
+ SENSORS_CORSAIR_PSU n -> m
+ SENSORS_DELL_SMM n -> m
+ SENSORS_DME1737 n -> m
+ SENSORS_DRIVETEMP n -> m
+ SENSORS_DS1621 n -> m
+ SENSORS_DS620 n -> m
+ SENSORS_EMC1403 n -> m
+ SENSORS_EMC2103 n -> m
+ SENSORS_EMC6W201 n -> m
+ SENSORS_F71805F n -> m
+ SENSORS_F71882FG n -> m
+ SENSORS_F75375S n -> m
+ SENSORS_FAM15H_POWER n -> m
+ SENSORS_FSCHMD n -> m
+ SENSORS_FTSTEUTATES n -> m
+ SENSORS_G760A n -> m
+ SENSORS_GL518SM n -> m
+ SENSORS_GL520SM n -> m
+ SENSORS_HDAPS n -> m
+ SENSORS_HP_WMI n -> m
+ SENSORS_I5500 n -> m
+ SENSORS_I5K_AMB n -> m
+ SENSORS_IT87 n -> m
+ SENSORS_JC42 n -> m
+ SENSORS_K10TEMP n -> m
+ SENSORS_K8TEMP n -> m
+ SENSORS_LINEAGE n -> m
+ SENSORS_LIS3_I2C n -> m
+ SENSORS_LM63 n -> m
+ SENSORS_LM73 n -> m
+ SENSORS_LM75 n -> m
+ SENSORS_LM77 n -> m
+ SENSORS_LM78 n -> m
+ SENSORS_LM80 n -> m
+ SENSORS_LM83 n -> m
+ SENSORS_LM85 n -> m
+ SENSORS_LM87 n -> m
+ SENSORS_LM90 n -> m
+ SENSORS_LM92 n -> m
+ SENSORS_LM93 n -> m
+ SENSORS_LM95241 n -> m
+ SENSORS_LM95245 n -> m
+ SENSORS_LTC4151 n -> m
+ SENSORS_LTC4215 n -> m
+ SENSORS_LTC4245 n -> m
+ SENSORS_LTC4261 n -> m
+ SENSORS_MAX16065 n -> m
+ SENSORS_MAX1619 n -> m
+ SENSORS_MAX1668 n -> m
+ SENSORS_MAX6639 n -> m
+ SENSORS_MAX6650 n -> m
+ SENSORS_NCT6683 n -> m
+ SENSORS_NCT6775 n -> m
+ SENSORS_NCT7802 n -> m
+ SENSORS_NCT7904 n -> m
+ SENSORS_NPCM7XX n -> m
+ SENSORS_PC87360 n -> m
+ SENSORS_PC87427 n -> m
+ SENSORS_PCF8591 n -> m
+ SENSORS_SCH5627 n -> m
+ SENSORS_SCH5636 n -> m
+ SENSORS_SHT21 n -> m
+ SENSORS_SHT3x n -> m
+ SENSORS_SHT4x n -> m
+ SENSORS_SIS5595 n -> m
+ SENSORS_SMSC47B397 n -> m
+ SENSORS_SMSC47M1 n -> m
+ SENSORS_SMSC47M192 n -> m
+ SENSORS_SPD5118 n -> m
+ SENSORS_THMC50 n -> m
+ SENSORS_TMP102 n -> m
+ SENSORS_TMP401 n -> m
+ SENSORS_TMP421 n -> m
+ SENSORS_TSL2550 n -> m
+ SENSORS_VIA686A n -> m
+ SENSORS_VIA_CPUTEMP n -> m
+ SENSORS_VT1211 n -> m
+ SENSORS_VT8231 n -> m
+ SENSORS_W83627EHF n -> m
+ SENSORS_W83627HF n -> m
+ SENSORS_W83773G n -> m
+ SENSORS_W83781D n -> m
+ SENSORS_W83791D n -> m
+ SENSORS_W83792D n -> m
+ SENSORS_W83793 n -> m
+ SENSORS_W83795 n -> m
+ SENSORS_W83L785TS n -> m
+ SENSORS_W83L786NG n -> m
+ SERIAL_8250_CS n -> m
+ SERIAL_8250_DETECT_IRQ y -> n
+ SERIAL_8250_DW n -> y
+ SERIAL_8250_EXAR y -> m
+ SERIAL_8250_FINTEK n -> y
+ SERIAL_8250_LPSS y -> m
+ SERIAL_DEV_BUS n -> y
+ SERIAL_JSM n -> m
+ SERIAL_MULTI_INSTANTIATE n -> m
+ SERIAL_RP2 n -> m
+ SERIO_ALTERA_PS2 n -> m
+ SERIO_PCIPS2 n -> m
+ SERIO_RAW n -> m
+ SERIO_SERPORT y -> m
+ SFC n -> m
+ SFC_FALCON n -> m
+ SFC_SIENA n -> m
+ SHUFFLE_PAGE_ALLOCATOR n -> y
+ SIEMENS_SIMATIC_IPC n -> m
+ SIGNED_PE_FILE_VERIFICATION n -> y
+ SIS190 n -> m
+ SIS900 n -> m
+ SKGE n -> m
+ SKY2 y -> m
+ SLAB_FREELIST_RANDOM n -> y
+ SLIMBUS n -> m
+ SLIP n -> m
+ SMB_SERVER n -> m
+ SMSC37B787_WDT n -> m
+ SMSC9420 n -> m
+ SMSC_PHY n -> m
+ SMSC_SCH311X_WDT n -> m
+ SND y -> m
+ SND_AD1889 n -> m
+ SND_ALI5451 n -> m
+ SND_ALOOP n -> m
+ SND_ALS300 n -> m
+ SND_ALS4000 n -> m
+ SND_ASIHPI n -> m
+ SND_ATIIXP n -> m
+ SND_ATIIXP_MODEM n -> m
+ SND_AU8810 n -> m
+ SND_AU8820 n -> m
+ SND_AU8830 n -> m
+ SND_AZT3328 n -> m
+ SND_BCD2000 n -> m
+ SND_BT87X n -> m
+ SND_CA0106 n -> m
+ SND_CMIPCI n -> m
+ SND_CS4281 n -> m
+ SND_CS46XX n -> m
+ SND_CTXFI n -> m
+ SND_DARLA20 n -> m
+ SND_DARLA24 n -> m
+ SND_DUMMY n -> m
+ SND_DYNAMIC_MINORS n -> y
+ SND_ECHO3G n -> m
+ SND_EMU10K1 n -> m
+ SND_EMU10K1X n -> m
+ SND_ENS1370 n -> m
+ SND_ENS1371 n -> m
+ SND_ES1938 n -> m
+ SND_ES1968 n -> m
+ SND_FM801 n -> m
+ SND_GINA20 n -> m
+ SND_GINA24 n -> m
+ SND_HDA y -> m
+ SND_HDA_CODEC_ANALOG n -> m
+ SND_HDA_CODEC_CA0110 n -> m
+ SND_HDA_CODEC_CA0132 n -> m
+ SND_HDA_CODEC_CIRRUS n -> m
+ SND_HDA_CODEC_CMEDIA n -> m
+ SND_HDA_CODEC_CONEXANT n -> m
+ SND_HDA_CODEC_HDMI n -> m
+ SND_HDA_CODEC_REALTEK n -> m
+ SND_HDA_CODEC_SI3054 n -> m
+ SND_HDA_CODEC_SIGMATEL n -> m
+ SND_HDA_CODEC_VIA n -> m
+ SND_HDA_CORE y -> m
+ SND_HDA_GENERIC n -> m
+ SND_HDA_INPUT_BEEP n -> y
+ SND_HDA_INTEL y -> m
+ SND_HDA_PATCH_LOADER n -> y
+ SND_HDA_POWER_SAVE_DEFAULT 0 -> 10
+ SND_HDA_PREALLOC_SIZE 0 -> 2048
+ SND_HDA_RECONFIG n -> y
+ SND_HDSP n -> m
+ SND_HDSPM n -> m
+ SND_HRTIMER y -> m
+ SND_HWDEP y -> m
+ SND_ICE1712 n -> m
+ SND_ICE1724 n -> m
+ SND_INDIGO n -> m
+ SND_INDIGODJ n -> m
+ SND_INDIGODJX n -> m
+ SND_INDIGOIO n -> m
+ SND_INDIGOIOX n -> m
+ SND_INTEL8X0 n -> m
+ SND_INTEL8X0M n -> m
+ SND_INTEL_DSP_CONFIG y -> m
+ SND_INTEL_SOUNDWIRE_ACPI y -> m
+ SND_KORG1212 n -> m
+ SND_LAYLA20 n -> m
+ SND_LAYLA24 n -> m
+ SND_LOLA n -> m
+ SND_LX6464ES n -> m
+ SND_MAESTRO3 n -> m
+ SND_MIA n -> m
+ SND_MIXART n -> m
+ SND_MONA n -> m
+ SND_MPU401 n -> m
+ SND_MTPAV n -> m
+ SND_NM256 n -> m
+ SND_OSSEMUL n -> y
+ SND_OXYGEN n -> m
+ SND_PCM y -> m
+ SND_PCSP n -> m
+ SND_PCXHR n -> m
+ SND_PDAUDIOCF n -> m
+ SND_RIPTIDE n -> m
+ SND_RME32 n -> m
+ SND_RME96 n -> m
+ SND_RME9652 n -> m
+ SND_SEQUENCER y -> m
+ SND_SEQ_DEVICE y -> m
+ SND_SEQ_DUMMY y -> m
+ SND_SERIAL_U16550 n -> m
+ SND_SOC n -> m
+ SND_SONICVIBES n -> m
+ SND_SUPPORT_OLD_API n -> y
+ SND_TIMER y -> m
+ SND_TRIDENT n -> m
+ SND_USB_6FIRE n -> m
+ SND_USB_AUDIO n -> m
+ SND_USB_CAIAQ n -> m
+ SND_USB_HIFACE n -> m
+ SND_USB_POD n -> m
+ SND_USB_PODHD n -> m
+ SND_USB_TONEPORT n -> m
+ SND_USB_UA101 n -> m
+ SND_USB_US122L n -> m
+ SND_USB_USX2Y n -> m
+ SND_USB_VARIAX n -> m
+ SND_VIA82XX n -> m
+ SND_VIA82XX_MODEM n -> m
+ SND_VIRMIDI n -> m
+ SND_VIRTIO n -> m
+ SND_VIRTUOSO n -> m
+ SND_VX222 n -> m
+ SND_VXPOCKET n -> m
+ SND_YMFPCI n -> m
+ SOFTLOCKUP_DETECTOR n -> y
+ SOFT_WATCHDOG n -> m
+ SONY_FF n -> y
+ SONY_LAPTOP n -> m
+ SOUND y -> m
+ SP5100_TCO n -> m
+ SPI n -> y
+ SQUASHFS n -> m
+ SSB n -> m
+ STACK_TRACER n -> y
+ STAGING n -> y
+ STE10XP n -> m
+ STM n -> m
+ STMMAC_ETH n -> m
+ STRIP_ASM_SYMS n -> y
+ SUNGEM n -> m
+ SUNRPC y -> m
+ SUNRPC_DEBUG n -> y
+ SUNRPC_GSS y -> m
+ SURFACE_3_POWER_OPREGION n -> m
+ SURFACE_GPE n -> m
+ SURFACE_PRO3_BUTTON n -> m
+ SYNTH_EVENTS n -> y
+ SYSFS_SYSCALL n -> y
+ SYSTEM76_ACPI n -> m
+ SYSTEM_BLACKLIST_KEYRING n -> y
+ TABLET_SERIAL_WACOM4 n -> m
+ TABLET_USB_ACECAD n -> m
+ TABLET_USB_AIPTEK n -> m
+ TABLET_USB_HANWANG n -> m
+ TABLET_USB_KBTAB n -> m
+ TABLET_USB_PEGASUS n -> m
+ TARGET_CORE n -> m
+ TCG_TPM n -> y
+ TCP_AO n -> y
+ TCP_CONG_BBR n -> y
+ TCP_CONG_BIC n -> m
+ TCP_CONG_CDG n -> m
+ TCP_CONG_DCTCP n -> m
+ TCP_CONG_HSTCP n -> m
+ TCP_CONG_HTCP n -> m
+ TCP_CONG_HYBLA n -> m
+ TCP_CONG_ILLINOIS n -> m
+ TCP_CONG_LP n -> m
+ TCP_CONG_NV n -> m
+ TCP_CONG_SCALABLE n -> m
+ TCP_CONG_VEGAS n -> m
+ TCP_CONG_VENO n -> m
+ TCP_CONG_WESTWOOD n -> m
+ TCP_CONG_YEAH n -> m
+ TEE n -> m
+ TEHUTI n -> m
+ TELCLOCK n -> m
+ TERANETICS_PHY n -> m
+ TEST_BPF n -> m
+ TEST_FIRMWARE n -> m
+ TEST_STATIC_KEYS n -> m
+ THERMAL_GOV_BANG_BANG n -> y
+ THERMAL_GOV_FAIR_SHARE n -> y
+ THERMAL_GOV_USER_SPACE n -> y
+ THERMAL_STATISTICS n -> y
+ THINKPAD_ACPI n -> m
+ THINKPAD_LMI n -> m
+ TIFM_CORE n -> m
+ TIGON3 y -> m
+ TIPC n -> m
+ TLAN n -> m
+ TLS n -> m
+ TMPFS_INODE64 n -> y
+ TOPSTAR_LAPTOP n -> m
+ TOSHIBA_BT_RFKILL n -> m
+ TOSHIBA_HAPS n -> m
+ TOSHIBA_WMI n -> m
+ TOUCHSCREEN_AD7879 n -> m
+ TOUCHSCREEN_ATMEL_MXT n -> m
+ TOUCHSCREEN_DYNAPRO n -> m
+ TOUCHSCREEN_EETI n -> m
+ TOUCHSCREEN_ELAN n -> m
+ TOUCHSCREEN_ELO n -> m
+ TOUCHSCREEN_FUJITSU n -> m
+ TOUCHSCREEN_GUNZE n -> m
+ TOUCHSCREEN_HAMPSHIRE n -> m
+ TOUCHSCREEN_INEXIO n -> m
+ TOUCHSCREEN_MTOUCH n -> m
+ TOUCHSCREEN_PENMOUNT n -> m
+ TOUCHSCREEN_SILEAD n -> m
+ TOUCHSCREEN_TOUCHIT213 n -> m
+ TOUCHSCREEN_TOUCHRIGHT n -> m
+ TOUCHSCREEN_TOUCHWIN n -> m
+ TOUCHSCREEN_TPS6507X n -> m
+ TOUCHSCREEN_TSC2007 n -> m
+ TOUCHSCREEN_TSC_SERIO n -> m
+ TOUCHSCREEN_USB_COMPOSITE n -> m
+ TOUCHSCREEN_WACOM_W8001 n -> m
+ TRACER_SNAPSHOT n -> y
+ TRANSPARENT_HUGEPAGE n -> y
+ TULIP n -> m
+ TUN n -> m
+ TYPEC n -> m
+ TYPHOON n -> m
+ UBSAN n -> y
+ UCLAMP_TASK n -> y
+ UDF_FS n -> m
+ UDMABUF n -> y
+ UFS_FS n -> m
+ UHID n -> m
+ UIO n -> m
+ ULI526X n -> m
+ UNICODE n -> y
+ UNIX_DIAG n -> m
+ USB y -> m
+ USB4 n -> m
+ USBIP_CORE n -> m
+ USBPCWATCHDOG n -> m
+ USB_ACM n -> m
+ USB_ADUTUX n -> m
+ USB_APPLEDISPLAY n -> m
+ USB_CATC n -> m
+ USB_CHAOSKEY n -> m
+ USB_COMMON y -> m
+ USB_CYPRESS_CY7C63 n -> m
+ USB_CYTHERM n -> m
+ USB_DWC3 n -> m
+ USB_DYNAMIC_MINORS n -> y
+ USB_EHCI_HCD y -> m
+ USB_EHCI_PCI y -> m
+ USB_EHCI_ROOT_HUB_TT n -> y
+ USB_EHSET_TEST_FIXTURE n -> m
+ USB_EMI26 n -> m
+ USB_EMI62 n -> m
+ USB_EZUSB_FX2 n -> m
+ USB_GADGET n -> m
+ USB_HID y -> m
+ USB_HSO n -> m
+ USB_IDMOUSE n -> m
+ USB_IOWARRIOR n -> m
+ USB_IPHETH n -> m
+ USB_ISIGHTFW n -> m
+ USB_KAWETH n -> m
+ USB_LAN78XX n -> m
+ USB_LCD n -> m
+ USB_LD n -> m
+ USB_LEDS_TRIGGER_USBPORT n -> m
+ USB_LED_TRIG n -> y
+ USB_LEGOTOWER n -> m
+ USB_LJCA n -> m
+ USB_MDC800 n -> m
+ USB_MICROTEK n -> m
+ USB_MON y -> m
+ USB_NET_DRIVERS y -> m
+ USB_OHCI_HCD y -> m
+ USB_OHCI_HCD_PCI y -> m
+ USB_PEGASUS n -> m
+ USB_PRINTER y -> m
+ USB_ROLE_SWITCH n -> m
+ USB_RTL8150 n -> m
+ USB_RTL8152 n -> m
+ USB_SERIAL n -> m
+ USB_SEVSEG n -> m
+ USB_SISUSBVGA n -> m
+ USB_SL811_HCD n -> m
+ USB_STORAGE y -> m
+ USB_STORAGE_ALAUDA n -> m
+ USB_STORAGE_CYPRESS_ATACB n -> m
+ USB_STORAGE_DATAFAB n -> m
+ USB_STORAGE_ENE_UB6250 n -> m
+ USB_STORAGE_FREECOM n -> m
+ USB_STORAGE_ISD200 n -> m
+ USB_STORAGE_JUMPSHOT n -> m
+ USB_STORAGE_KARMA n -> m
+ USB_STORAGE_ONETOUCH n -> m
+ USB_STORAGE_REALTEK n -> m
+ USB_STORAGE_SDDR09 n -> m
+ USB_STORAGE_SDDR55 n -> m
+ USB_STORAGE_USBAT n -> m
+ USB_TEST n -> m
+ USB_TMC n -> m
+ USB_TRANCEVIBRATOR n -> m
+ USB_UAS n -> m
+ USB_UHCI_HCD y -> m
+ USB_USBIO n -> m
+ USB_USBNET n -> m
+ USB_WDM n -> m
+ USB_XHCI_HCD y -> m
+ USB_XHCI_PCI y -> m
+ USB_XHCI_PCI_RENESAS n -> m
+ USB_XHCI_PLATFORM n -> m
+ USB_YUREX n -> m
+ USERFAULTFD n -> y
+ USER_NS n -> y
+ VDPA n -> m
+ VETH n -> m
+ VFAT_FS y -> m
+ VFIO n -> m
+ VGA_SWITCHEROO n -> y
+ VHOST_NET n -> m
+ VIA_RHINE n -> m
+ VIA_VELOCITY n -> m
+ VIA_WDT n -> m
+ VIRTIO_BALLOON n -> m
+ VIRTIO_BLK y -> m
+ VIRTIO_DMA_SHARED_BUFFER y -> m
+ VIRTIO_INPUT y -> m
+ VIRTIO_IOMMU n -> m
+ VIRTIO_MMIO n -> m
+ VIRTIO_NET y -> m
+ VIRT_CPU_ACCOUNTING_GEN n -> y
+ VIRT_DRIVERS n -> y
+ VITESSE_PHY n -> m
+ VLAN_8021Q n -> m
+ VMD n -> m
+ VMWARE_PVSCSI n -> m
+ VMWARE_VMCI n -> m
+ VMXNET3 n -> m
+ VORTEX n -> m
+ VSOCKETS n -> m
+ VT_HW_CONSOLE_BINDING n -> y
+ VXFS_FS n -> m
+ VXLAN n -> m
+ W1 n -> m
+ W83627HF_WDT n -> m
+ W83877F_WDT n -> m
+ W83977F_WDT n -> m
+ WAFER_WDT n -> m
+ WAN n -> y
+ WATCHDOG_CORE n -> m
+ WATCHDOG_HRTIMER_PRETIMEOUT n -> y
+ WATCHDOG_SYSFS n -> y
+ WDAT_WDT n -> m
+ WDTPCI n -> m
+ WERROR y -> n
+ WIL6210 n -> m
+ WINBOND_840 n -> m
+ WIREGUARD n -> m
+ WLAN_VENDOR_TI y -> n
+ WMI_BMOF y -> m
+ WQ_POWER_EFFICIENT_DEFAULT n -> y
+ WWAN n -> m
+ X86_ACPI_CPUFREQ y -> m
+ X86_AMD_FREQ_SENSITIVITY n -> m
+ X86_AMD_PLATFORM_DEVICE n -> y
+ X86_CHECK_BIOS_CORRUPTION y -> n
+ X86_CPUID y -> m
+ X86_CPU_RESCTRL n -> y
+ X86_EXTENDED_PLATFORM y -> n
+ X86_FRED n -> y
+ X86_INTEL_LPSS n -> y
+ X86_INTEL_TSX_MODE_AUTO y -> n
+ X86_INTEL_TSX_MODE_OFF n -> y
+ X86_MCE_INJECT n -> m
+ X86_MSR y -> m
+ X86_NATIVE_CPU n -> y
+ X86_P4_CLOCKMOD n -> m
+ X86_PCC_CPUFREQ n -> m
+ X86_PLATFORM_DRIVERS_DELL n -> y
+ X86_PLATFORM_DRIVERS_HP n -> y
+ X86_PLATFORM_DRIVERS_UNIWILL n -> y
+ X86_PMEM_LEGACY n -> m
+ X86_POWERNOW_K8 n -> m
+ X86_SGX n -> y
+ X86_SPEEDSTEP_CENTRINO n -> m
+ X86_USER_SHADOW_STACK n -> y
+ X86_VERBOSE_BOOTUP y -> n
+ XEN n -> y
+ XFRM_AH y -> m
+ XFRM_ALGO y -> m
+ XFRM_ESP y -> m
+ XFRM_INTERFACE n -> m
+ XFRM_MIGRATE n -> y
+ XFRM_STATISTICS n -> y
+ XFRM_SUB_POLICY n -> y
+ XFRM_USER y -> m
+ XFS_FS n -> y
+ XIAOMI_WMI n -> m
+ XZ_DEC_ARM y -> n
+ XZ_DEC_ARMTHUMB y -> n
+ XZ_DEC_MICROLZMA n -> y
+ XZ_DEC_POWERPC y -> n
+ XZ_DEC_SPARC y -> n
+ YENTA y -> m
+ ZD1211RW n -> m
+ ZRAM n -> m
+ ZSWAP n -> y
++6LOWPAN_DEBUGFS n
++6LOWPAN_GHC_EXT_HDR_DEST m
++6LOWPAN_GHC_EXT_HDR_FRAG m
++6LOWPAN_GHC_EXT_HDR_HOP m
++6LOWPAN_GHC_EXT_HDR_ROUTE m
++6LOWPAN_GHC_ICMPV6 m
++6LOWPAN_GHC_UDP m
++6LOWPAN_NHC m
++6LOWPAN_NHC_DEST m
++6LOWPAN_NHC_FRAGMENT m
++6LOWPAN_NHC_HOP m
++6LOWPAN_NHC_IPV6 m
++6LOWPAN_NHC_MOBILITY m
++6LOWPAN_NHC_ROUTING m
++6LOWPAN_NHC_UDP m
++9P_FSCACHE y
++A11Y_BRAILLE_CONSOLE y
++ABP060MG m
++ABP2030PA_I2C n
++ABP2030PA_SPI n
++AC97_BUS m
++ACORN_PARTITION y
++ACORN_PARTITION_ADFS n
++ACORN_PARTITION_CUMANA n
++ACORN_PARTITION_EESOX n
++ACORN_PARTITION_ICS y
++ACORN_PARTITION_POWERTEC n
++ACORN_PARTITION_RISCIX y
++ACPI_ADXL y
++ACPI_ALS m
++ACPI_APEI_EINJ m
++ACPI_APEI_ERST_DEBUG n
++ACPI_APEI_GHES y
++ACPI_APEI_GHES_NVIDIA n
++ACPI_APEI_MEMORY_FAILURE y
++ACPI_APEI_PCIEAER y
++ACPI_EXTLOG y
++ACPI_HOTPLUG_MEMORY y
++ACPI_IPMI m
++ACPI_REDUCED_HARDWARE_ONLY n
++ACPI_TABLE_LIB y
++ACPI_THERMAL_REL m
++ACPI_TINY_POWER_BUTTON n
++ACPI_TOSHIBA m
++ACPI_VIOT y
++ACPI_WATCHDOG y
++AD2S1200 n
++AD2S1210 n
++AD2S90 n
++AD3530R n
++AD3552R n
++AD3552R_HS n
++AD4000 n
++AD4030 n
++AD4080 n
++AD4130 n
++AD4134 n
++AD4170_4 n
++AD4695 n
++AD4851 n
++AD5064 m
++AD5110 n
++AD525X_DPOT_I2C m
++AD525X_DPOT_SPI m
++AD5272 n
++AD5360 m
++AD5380 m
++AD5421 m
++AD5446_I2C n
++AD5446_SPI n
++AD5449 m
++AD5504 m
++AD5592R m
++AD5592R_BASE m
++AD5593R m
++AD5624R_SPI m
++AD5686 m
++AD5686_SPI m
++AD5696_I2C m
++AD5755 m
++AD5758 m
++AD5761 m
++AD5764 m
++AD5766 n
++AD5770R m
++AD5791 m
++AD5933 n
++AD7091R m
++AD7091R5 m
++AD7091R8 n
++AD7124 m
++AD7150 n
++AD7173 n
++AD7191 n
++AD7192 m
++AD7266 m
++AD7280 n
++AD7291 m
++AD7292 m
++AD7293 n
++AD7298 m
++AD7303 m
++AD7380 n
++AD7405 n
++AD74115 n
++AD74413R n
++AD7476 m
++AD7606 m
++AD7606_IFACE_PARALLEL m
++AD7606_IFACE_SPI m
++AD7625 n
++AD7746 n
++AD7766 m
++AD7768_1 m
++AD7779 n
++AD7780 m
++AD7791 m
++AD7793 m
++AD7816 n
++AD7887 m
++AD7923 m
++AD7944 n
++AD7949 m
++AD799X m
++AD8366 n
++AD8460 n
++AD8801 m
++AD9467 m
++AD9523 n
++AD9739A n
++AD9832 n
++AD9834 n
++ADA4250 n
++ADE9000 n
++ADF4350 n
++ADF4371 n
++ADF4377 n
++ADFS_FS_RW n
++ADIN1110 n
++ADIS16080 m
++ADIS16130 m
++ADIS16136 m
++ADIS16201 m
++ADIS16203 n
++ADIS16209 m
++ADIS16260 m
++ADIS16400 n
++ADIS16460 m
++ADIS16475 m
++ADIS16480 m
++ADIS16550 n
++ADJD_S311 m
++ADL8113 n
++ADMFM2000 n
++ADMV1013 n
++ADMV1014 n
++ADMV4420 n
++ADMV8818 n
++ADP810 n
++ADRF6780 n
++ADT7316 n
++ADUX1020 m
++ADXL313_I2C n
++ADXL313_SPI n
++ADXL345 m
++ADXL345_I2C m
++ADXL345_SPI m
++ADXL355_I2C n
++ADXL355_SPI n
++ADXL367_I2C n
++ADXL367_SPI n
++ADXL372 m
++ADXL372_I2C m
++ADXL372_SPI m
++ADXL380_I2C n
++ADXL380_SPI n
++ADXRS290 m
++ADXRS450 m
++AD_SIGMA_DELTA m
++AFE4403 n
++AFE4404 n
++AFS_DEBUG n
++AFS_DEBUG_CURSOR n
++AFS_FSCACHE y
++AF_RXRPC_DEBUG n
++AF_RXRPC_INJECT_LOSS n
++AF_RXRPC_INJECT_RX_DELAY n
++AF_RXRPC_IPV6 y
++AIC79XX_CMDS_PER_DEVICE 32
++AIC79XX_DEBUG_ENABLE y
++AIC79XX_DEBUG_MASK 0
++AIC79XX_REG_PRETTY_PRINT y
++AIC79XX_RESET_DELAY_MS 15000
++AIC7XXX_CMDS_PER_DEVICE 8
++AIC7XXX_DEBUG_ENABLE y
++AIC7XXX_DEBUG_MASK 0
++AIC7XXX_REG_PRETTY_PRINT y
++AIC7XXX_RESET_DELAY_MS 15000
++AIC94XX_DEBUG n
++AIX_PARTITION n
++AK09911 m
++AK8974 n
++AK8975 m
++AL3000A n
++AL3010 m
++AL3320A m
++ALIBABA_ENI_VDPA n
++ALIENWARE_WMI m
++ALIENWARE_WMI_LEGACY y
++ALIENWARE_WMI_WMAX y
++ALS31300 n
++AM2315 n
++AMDTEE m
++AMD_ATL m
++AMD_ATL_PRM y
++AMD_MP2_STB y
++AMD_PMF m
++AMD_PMF_DEBUG n
++AMD_SECURE_AVIC n
++AMD_XGBE_DCB y
++AMD_XGBE_HAVE_ECC y
++AMIGA_PARTITION y
++AOSONG_AGS02MA n
++APDS9160 n
++APDS9300 m
++APDS9306 n
++APDS9960 m
++ARCH_ENABLE_THP_MIGRATION y
++ARCH_HAS_CC_PLATFORM y
++ARCH_HAS_CPU_RESCTRL y
++ARCH_HAS_DMA_OPS y
++ARCH_HAS_FORCE_DMA_UNENCRYPTED y
++ARCH_HAS_LAZY_MMU_MODE y
++ARCH_HAS_USER_SHADOW_STACK y
++ARCH_HAS_ZONE_DMA_SET y
++ARCH_MEMORY_PROBE n
++ARCH_SELECTS_KEXEC_FILE y
++ARCH_SUPPORTS_HUGE_PFNMAP y
++ARCH_SUPPORTS_PMD_PFNMAP y
++ARCH_SUPPORTS_PUD_PFNMAP y
++ARCH_WANT_PMD_MKWRITE y
++ARCNET_1051 m
++ARCNET_1201 m
++ARCNET_CAP m
++ARCNET_COM20020 m
++ARCNET_COM20020_CS m
++ARCNET_COM20020_PCI m
++ARCNET_COM90xx m
++ARCNET_COM90xxIO m
++ARCNET_RAW m
++ARCNET_RIM_I m
++AS3935 n
++AS73211 m
++ASUS_ARMOURY m
++ASUS_NB_WMI m
++ASUS_TF103C_DOCK n
++ASUS_WMI_DEPRECATED_ATTRS y
++ASYNC_CORE m
++ASYNC_MEMCPY m
++ASYNC_PQ m
++ASYNC_RAID6_RECOV m
++ASYNC_RAID6_TEST n
++ASYNC_XOR m
++AT803X_PHY m
++ATARI_PARTITION y
++ATH10K_CE y
++ATH10K_DEBUG n
++ATH10K_DEBUGFS n
++ATH10K_LEDS y
++ATH10K_PCI m
++ATH10K_SDIO n
++ATH10K_TRACING n
++ATH10K_USB m
++ATH11K_DEBUG n
++ATH11K_PCI m
++ATH11K_TRACING n
++ATH12K_COREDUMP n
++ATH12K_DEBUG n
++ATH12K_TRACING n
++ATH5K_DEBUG n
++ATH5K_TRACER n
++ATH6KL_DEBUG n
++ATH6KL_SDIO m
++ATH6KL_TRACING n
++ATH6KL_USB m
++ATH9K_BTCOEX_SUPPORT y
++ATH9K_CHANNEL_CONTEXT y
++ATH9K_COMMON m
++ATH9K_DYNACK n
++ATH9K_HTC_DEBUGFS n
++ATH9K_HW m
++ATH9K_HWRNG n
++ATH9K_PCI y
++ATH9K_PCI_NO_EEPROM n
++ATH9K_PCOEM y
++ATH9K_RFKILL y
++ATH9K_WOW n
++ATH_COMMON m
++ATLAS_EZO_SENSOR n
++ATLAS_PH_SENSOR n
++ATM_BR2684 m
++ATM_BR2684_IPFILTER n
++ATM_DRIVERS y
++ATM_SOLOS m
++AW96103 n
++AXP20X_ADC m
++AXP20X_POWER n
++AXP288_ADC m
++AXP288_CHARGER m
++AXP288_FUEL_GAUGE m
++B43LEGACY_DEBUG y
++B43LEGACY_DMA y
++B43LEGACY_DMA_AND_PIO_MODE y
++B43LEGACY_DMA_MODE n
++B43LEGACY_HWRNG y
++B43LEGACY_LEDS y
++B43LEGACY_PCICORE_AUTOSELECT y
++B43LEGACY_PCI_AUTOSELECT y
++B43LEGACY_PIO y
++B43LEGACY_PIO_MODE n
++B43_BCMA y
++B43_BCMA_PIO y
++B43_BUSES_BCMA n
++B43_BUSES_BCMA_AND_SSB y
++B43_BUSES_SSB n
++B43_DEBUG n
++B43_HWRNG y
++B43_LEDS y
++B43_PCICORE_AUTOSELECT y
++B43_PCI_AUTOSELECT y
++B43_PHY_G y
++B43_PHY_HT y
++B43_PHY_LP y
++B43_PHY_N y
++B43_PIO y
++B43_SDIO y
++B43_SSB y
++B44_PCI y
++B44_PCICORE_AUTOSELECT y
++B44_PCI_AUTOSELECT y
++BACKLIGHT_GPIO n
++BACKLIGHT_KTD253 n
++BACKLIGHT_KTD2801 n
++BACKLIGHT_LM3630A n
++BACKLIGHT_LP855X n
++BACKLIGHT_MP3309C n
++BACKLIGHT_PWM m
++BALLOON y
++BALLOON_MIGRATION y
++BARCO_P50_GPIO n
++BASE_SMALL n
++BATMAN_ADV_BATMAN_V y
++BATMAN_ADV_BLA y
++BATMAN_ADV_DAT y
++BATMAN_ADV_DEBUG n
++BATMAN_ADV_MCAST y
++BATMAN_ADV_TRACING n
++BATTERY_AXP20X n
++BATTERY_BQ27XXX_HDQ m
++BATTERY_BQ27XXX_I2C n
++BATTERY_DS2760 m
++BATTERY_MAX17040 n
++BATTERY_MAX1721X n
++BATTERY_SURFACE m
++BCACHE_ASYNC_REGISTRATION n
++BCACHE_DEBUG n
++BCH m
++BCMA_BLOCKIO y
++BCMA_DEBUG n
++BCMA_DRIVER_GMAC_CMN n
++BCMA_DRIVER_GPIO n
++BCMA_DRIVER_PCI y
++BCMA_HOST_PCI y
++BCMA_HOST_PCI_POSSIBLE y
++BCMA_HOST_SOC n
++BCM_NET_PHYLIB m
++BCM_NET_PHYPTP m
++BD79703 n
++BE2NET_BE2 y
++BE2NET_BE3 y
++BE2NET_HWMON y
++BE2NET_LANCER y
++BE2NET_SKYHAWK y
++BEFS_DEBUG n
++BFQ_CGROUP_DEBUG n
++BFQ_GROUP_IOSCHED y
++BH1745 n
++BH1750 m
++BH1780 m
++BLKDEV_UBLK_LEGACY_OPCODES y
++BLK_CGROUP_FC_APPID n
++BLK_CGROUP_PUNT_BIO y
++BLK_CGROUP_RWSTAT y
++BLK_DEV_FD_RAWCMD n
++BLK_DEV_PMEM m
++BLK_DEV_RAM_COUNT 16
++BLK_DEV_RAM_SIZE 16384
++BLK_DEV_ZONED_LOOP n
++BLK_ICQ y
++BLK_WBT_MQ y
++BMA180 m
++BMA220 m
++BMA220_I2C m
++BMA220_SPI m
++BMA400 m
++BMA400_I2C m
++BMA400_SPI m
++BMC150_ACCEL m
++BMC150_ACCEL_I2C m
++BMC150_ACCEL_SPI m
++BMC150_MAGN m
++BMC150_MAGN_I2C m
++BMC150_MAGN_SPI m
++BME680 n
++BMG160 m
++BMG160_I2C m
++BMG160_SPI m
++BMI088_ACCEL n
++BMI160 m
++BMI160_I2C m
++BMI160_SPI m
++BMI270_I2C n
++BMI270_SPI n
++BMI323_I2C n
++BMI323_SPI n
++BMP280 m
++BMP280_I2C m
++BMP280_SPI m
++BNX2X_SRIOV y
++BNXT_DCB y
++BNXT_FLOWER_OFFLOAD y
++BNXT_HWMON y
++BNXT_SRIOV y
++BOOTPARAM_HARDLOCKUP_PANIC n
++BOOTPARAM_HUNG_TASK_PANIC 0
++BOOTPARAM_SOFTLOCKUP_PANIC 0
++BOOT_VESA_SUPPORT y
++BOSCH_BNO055_I2C n
++BOSCH_BNO055_SERIAL n
++BPF_EVENTS y
++BPF_JIT_ALWAYS_ON n
++BPF_JIT_DEFAULT_ON y
++BPF_LSM y
++BPF_PRELOAD n
++BPF_STREAM_PARSER y
++BPF_UNPRIV_DEFAULT_OFF y
++BRCMDBG n
++BRCMFMAC_PCIE y
++BRCMFMAC_PROTO_BCDC y
++BRCMFMAC_PROTO_MSGBUF y
++BRCMFMAC_SDIO y
++BRCMFMAC_USB y
++BRCMUTIL m
++BRCM_TRACING n
++BRIDGE_CFM n
++BRIDGE_EBT_802_3 m
++BRIDGE_EBT_AMONG m
++BRIDGE_EBT_ARP m
++BRIDGE_EBT_ARPREPLY m
++BRIDGE_EBT_DNAT m
++BRIDGE_EBT_IP m
++BRIDGE_EBT_IP6 m
++BRIDGE_EBT_LIMIT m
++BRIDGE_EBT_LOG m
++BRIDGE_EBT_MARK m
++BRIDGE_EBT_MARK_T m
++BRIDGE_EBT_NFLOG m
++BRIDGE_EBT_PKTTYPE m
++BRIDGE_EBT_REDIRECT m
++BRIDGE_EBT_SNAT m
++BRIDGE_EBT_STP m
++BRIDGE_EBT_VLAN m
++BRIDGE_IGMP_SNOOPING y
++BRIDGE_MRP n
++BRIDGE_NETFILTER m
++BRIDGE_NF_EBTABLES m
++BRIDGE_NF_EBTABLES_LEGACY n
++BRIDGE_VLAN_FILTERING y
++BSD_DISKLABEL y
++BTREE y
++BTRFS_ASSERT n
++BTRFS_DEBUG n
++BTRFS_EXPERIMENTAL n
++BTRFS_FS_POSIX_ACL y
++BTRFS_FS_RUN_SANITY_TESTS n
++BTT y
++BT_6LOWPAN m
++BT_AOSPEXT n
++BT_ATH3K m
++BT_BCM m
++BT_BNEP m
++BT_BNEP_MC_FILTER y
++BT_BNEP_PROTO_FILTER y
++BT_BREDR y
++BT_DEBUGFS y
++BT_HCIBCM203X m
++BT_HCIBCM4377 n
++BT_HCIBFUSB m
++BT_HCIBLUECARD m
++BT_HCIBPA10X m
++BT_HCIBT3C m
++BT_HCIBTSDIO m
++BT_HCIBTUSB m
++BT_HCIBTUSB_AUTOSUSPEND y
++BT_HCIBTUSB_BCM y
++BT_HCIBTUSB_MTK y
++BT_HCIBTUSB_POLL_SYNC y
++BT_HCIBTUSB_RTL y
++BT_HCIDTL1 m
++BT_HCIRSI m
++BT_HCIUART m
++BT_HCIUART_3WIRE y
++BT_HCIUART_AG6XX y
++BT_HCIUART_AML n
++BT_HCIUART_ATH3K y
++BT_HCIUART_BCM y
++BT_HCIUART_BCSP y
++BT_HCIUART_H4 y
++BT_HCIUART_INTEL y
++BT_HCIUART_LL y
++BT_HCIUART_MRVL y
++BT_HCIUART_NOKIA m
++BT_HCIUART_QCA y
++BT_HCIUART_RTL y
++BT_HCIUART_SERDEV y
++BT_HCIVHCI m
++BT_HIDP m
++BT_INTEL m
++BT_INTEL_PCIE m
++BT_LE y
++BT_LEDS y
++BT_LE_L2CAP_ECRED y
++BT_MRVL m
++BT_MRVL_SDIO m
++BT_MSFTEXT n
++BT_MTK m
++BT_MTKSDIO n
++BT_MTKUART m
++BT_NXPUART n
++BT_QCA m
++BT_RFCOMM m
++BT_RFCOMM_TTY y
++BT_RTL m
++BT_SELFTEST n
++BT_VIRTIO n
++BUILDTIME_MCOUNT_SORT y
++BXT_WC_PMIC_OPREGION y
++BYTCRC_PMIC_OPREGION y
++C2PORT_DURAMAR_2150 m
++CACHEFILES m
++CACHEFILES_DEBUG n
++CACHEFILES_ERROR_INJECTION n
++CACHEFILES_ONDEMAND n
++CAN_8DEV_USB m
++CAN_BCM m
++CAN_CALC_BITTIMING y
++CAN_CAN327 m
++CAN_CC770 n
++CAN_CTUCANFD_PCI n
++CAN_C_CAN n
++CAN_DEBUG_DEVICES n
++CAN_DEV m
++CAN_DUMMY n
++CAN_EMS_PCI m
++CAN_EMS_PCMCIA m
++CAN_EMS_USB m
++CAN_ESD_402_PCI n
++CAN_ESD_USB m
++CAN_ETAS_ES58X n
++CAN_F81601 n
++CAN_F81604 n
++CAN_GS_USB m
++CAN_GW m
++CAN_HI311X m
++CAN_IFI_CANFD n
++CAN_ISOTP m
++CAN_J1939 m
++CAN_KVASER_PCI m
++CAN_KVASER_PCIEFD n
++CAN_KVASER_USB m
++CAN_MCBA_USB m
++CAN_MCP251X m
++CAN_MCP251XFD m
++CAN_MCP251XFD_SANITY n
++CAN_M_CAN n
++CAN_NETLINK y
++CAN_PEAK_PCI m
++CAN_PEAK_PCIEC y
++CAN_PEAK_PCIEFD m
++CAN_PEAK_PCMCIA m
++CAN_PEAK_USB m
++CAN_PLX_PCI m
++CAN_RAW m
++CAN_RX_OFFLOAD y
++CAN_SJA1000 m
++CAN_SJA1000_ISA m
++CAN_SJA1000_PLATFORM n
++CAN_SLCAN m
++CAN_SOFTING m
++CAN_SOFTING_CS m
++CAN_UCAN m
++CAN_VCAN m
++CAN_VXCAN m
++CARL9170_HWRNG n
++CARL9170_LEDS y
++CARL9170_WPC y
++CB710_DEBUG n
++CB710_DEBUG_ASSUMPTIONS y
++CC10001_ADC m
++CCS811 n
++CC_HAS_UBSAN_ARRAY_BOUNDS y
++CEC_CH7322 n
++CEC_CORE m
++CEC_CROS_EC m
++CEC_GPIO n
++CEC_NOTIFIER y
++CEC_NXP_TDA9950 n
++CEC_SECO m
++CEC_SECO_RC n
++CEPH_FSCACHE y
++CEPH_FS_POSIX_ACL y
++CEPH_FS_SECURITY_LABEL n
++CEPH_LIB_PRETTYDEBUG n
++CEPH_LIB_USE_DNS_RESOLVER n
++CFG80211_CERTIFICATION_ONUS n
++CGROUP_BPF y
++CGROUP_WRITEBACK y
++CHARGER_AXP20X n
++CHARGER_BQ24190 m
++CHARGER_BQ24257 n
++CHARGER_BQ24735 n
++CHARGER_BQ2515X n
++CHARGER_BQ256XX n
++CHARGER_BQ25890 n
++CHARGER_BQ25980 n
++CHARGER_CROS_CONTROL m
++CHARGER_CROS_PCHG m
++CHARGER_CROS_USBPD m
++CHARGER_GPIO n
++CHARGER_LT3651 n
++CHARGER_MANAGER n
++CHARGER_RT9455 n
++CHARGER_RT9467 n
++CHARGER_RT9471 n
++CHARGER_SMB347 n
++CHARGER_SURFACE m
++CHARGER_WILCO m
++CHELSIO_INLINE_CRYPTO y
++CHELSIO_IPSEC_INLINE n
++CHELSIO_LIB m
++CHELSIO_T1_1G y
++CHELSIO_T4_DCB y
++CHELSIO_T4_FCOE y
++CHELSIO_TLS_DEVICE n
++CHROMEOS_ACPI m
++CHROMEOS_LAPTOP m
++CHROMEOS_PRIVACY_SCREEN m
++CHROMEOS_PSTORE m
++CHROMEOS_TBMC m
++CHTCRC_PMIC_OPREGION y
++CHT_DC_TI_PMIC_OPREGION y
++CHT_WC_PMIC_OPREGION y
++CIFS_ALLOW_INSECURE_LEGACY y
++CIFS_COMPRESSION n
++CIFS_DEBUG y
++CIFS_DEBUG2 n
++CIFS_DEBUG_DUMP_KEYS n
++CIFS_DFS_UPCALL y
++CIFS_FSCACHE y
++CIFS_POSIX y
++CIFS_SMB_DIRECT n
++CIFS_STATS2 y
++CIFS_SWN_UPCALL n
++CIFS_UPCALL y
++CIFS_XATTR y
++CLOSURES y
++CLS_U32_MARK y
++CLS_U32_PERF y
++CM32181 m
++CM3232 m
++CM3323 m
++CM3605 n
++CM36651 m
++CMDLINE_PARTITION n
++COMEDI_8254 m
++COMEDI_8255 m
++COMEDI_8255_PCI m
++COMEDI_8255_SA m
++COMEDI_ADDI_APCI_1032 m
++COMEDI_ADDI_APCI_1500 m
++COMEDI_ADDI_APCI_1516 m
++COMEDI_ADDI_APCI_1564 m
++COMEDI_ADDI_APCI_16XX m
++COMEDI_ADDI_APCI_2032 m
++COMEDI_ADDI_APCI_2200 m
++COMEDI_ADDI_APCI_3120 m
++COMEDI_ADDI_APCI_3501 m
++COMEDI_ADDI_APCI_3XXX m
++COMEDI_ADDI_WATCHDOG m
++COMEDI_ADL_PCI6208 m
++COMEDI_ADL_PCI7250 n
++COMEDI_ADL_PCI7X3X m
++COMEDI_ADL_PCI8164 m
++COMEDI_ADL_PCI9111 m
++COMEDI_ADL_PCI9118 m
++COMEDI_ADV_PCI1710 m
++COMEDI_ADV_PCI1720 m
++COMEDI_ADV_PCI1723 m
++COMEDI_ADV_PCI1724 m
++COMEDI_ADV_PCI1760 m
++COMEDI_ADV_PCI_DIO m
++COMEDI_AMPLC_DIO200 m
++COMEDI_AMPLC_DIO200_PCI m
++COMEDI_AMPLC_PC236 m
++COMEDI_AMPLC_PC236_PCI m
++COMEDI_AMPLC_PC263_PCI m
++COMEDI_AMPLC_PCI224 m
++COMEDI_AMPLC_PCI230 m
++COMEDI_BOND m
++COMEDI_CB_DAS16_CS m
++COMEDI_CB_PCIDAS m
++COMEDI_CB_PCIDAS64 m
++COMEDI_CB_PCIDDA m
++COMEDI_CB_PCIMDAS m
++COMEDI_CB_PCIMDDA m
++COMEDI_CONTEC_PCI_DIO m
++COMEDI_DAQBOARD2000 m
++COMEDI_DAS08 m
++COMEDI_DAS08_CS m
++COMEDI_DAS08_PCI m
++COMEDI_DEBUG n
++COMEDI_DEFAULT_BUF_MAXSIZE_KB 20480
++COMEDI_DEFAULT_BUF_SIZE_KB 2048
++COMEDI_DT3000 m
++COMEDI_DT9812 m
++COMEDI_DYNA_PCI10XX m
++COMEDI_GSC_HPDI m
++COMEDI_ICP_MULTI m
++COMEDI_JR3_PCI m
++COMEDI_KCOMEDILIB m
++COMEDI_KE_COUNTER m
++COMEDI_ME4000 m
++COMEDI_ME_DAQ m
++COMEDI_MF6X4 m
++COMEDI_MISC_DRIVERS y
++COMEDI_MITE m
++COMEDI_NI_6527 m
++COMEDI_NI_65XX m
++COMEDI_NI_660X m
++COMEDI_NI_670X m
++COMEDI_NI_DAQ_700_CS m
++COMEDI_NI_DAQ_DIO24_CS m
++COMEDI_NI_LABPC m
++COMEDI_NI_LABPC_CS m
++COMEDI_NI_LABPC_PCI m
++COMEDI_NI_MIO_CS m
++COMEDI_NI_PCIDIO m
++COMEDI_NI_PCIMIO m
++COMEDI_NI_ROUTING m
++COMEDI_NI_TIO m
++COMEDI_NI_TIOCMD m
++COMEDI_NI_USB6501 m
++COMEDI_PARPORT m
++COMEDI_PCI_DRIVERS m
++COMEDI_PCMCIA_DRIVERS m
++COMEDI_QUATECH_DAQP_CS m
++COMEDI_RTD520 m
++COMEDI_S626 m
++COMEDI_TEST m
++COMEDI_TESTS n
++COMEDI_USBDUX m
++COMEDI_USBDUXFAST m
++COMEDI_USBDUXSIGMA m
++COMEDI_USB_DRIVERS m
++COMEDI_VMK80XX m
++COMMON_CLK_CDCE706 n
++COMMON_CLK_CS2000_CP n
++COMMON_CLK_MAX9485 n
++COMMON_CLK_PWM n
++COMMON_CLK_SI5341 n
++COMMON_CLK_SI5351 n
++COMMON_CLK_SI544 n
++COMMON_CLK_TPS68470 n
++COMPAT_NETLINK_MESSAGES y
++CONTEXT_ANALYSIS_TEST n
++CONTEXT_TRACKING_USER y
++CONTEXT_TRACKING_USER_FORCE n
++CONTIG_ALLOC y
++CPUMASK_OFFSTACK y
++CRASH_DM_CRYPT n
++CRC64 y
++CRC64_ARCH y
++CRC8 m
++CRC_ITU_T m
++CRC_T10DIF y
++CRC_T10DIF_ARCH y
++CROS_EC m
++CROS_EC_CHARDEV m
++CROS_EC_DEBUGFS m
++CROS_EC_I2C m
++CROS_EC_ISHTP m
++CROS_EC_LIGHTBAR m
++CROS_EC_LPC m
++CROS_EC_MKBP_PROXIMITY n
++CROS_EC_PROTO m
++CROS_EC_SENSORHUB m
++CROS_EC_SPI m
++CROS_EC_SYSFS m
++CROS_EC_TYPEC m
++CROS_EC_TYPEC_ALTMODES y
++CROS_EC_UART n
++CROS_EC_UCSI m
++CROS_EC_WATCHDOG n
++CROS_HPS_I2C n
++CROS_KBD_LED_BACKLIGHT m
++CROS_TYPEC_SWITCH m
++CROS_USBPD_LOGGER m
++CROS_USBPD_NOTIFY m
++CRYPTO_ACOMP m
++CRYPTO_BLOWFISH_COMMON m
++CRYPTO_CAST_COMMON m
++CRYPTO_DEV_CCP_CRYPTO m
++CRYPTO_DEV_CCP_DD m
++CRYPTO_DEV_CCP_DEBUGFS n
++CRYPTO_DEV_CHELSIO m
++CRYPTO_DEV_IAA_CRYPTO m
++CRYPTO_DEV_IAA_CRYPTO_STATS n
++CRYPTO_DEV_PADLOCK_AES m
++CRYPTO_DEV_PADLOCK_SHA m
++CRYPTO_DEV_QAT m
++CRYPTO_DEV_QAT_ERROR_INJECTION n
++CRYPTO_DEV_SP_CCP y
++CRYPTO_DEV_SP_PSP y
++CRYPTO_DF80090A m
++CRYPTO_DH_RFC7919_GROUPS y
++CRYPTO_DRBG m
++CRYPTO_DRBG_CTR y
++CRYPTO_DRBG_HASH y
++CRYPTO_DRBG_HMAC y
++CRYPTO_ECC y
++CRYPTO_ENGINE m
++CRYPTO_JITTERENTROPY_MEMORY_BLOCKS 64
++CRYPTO_JITTERENTROPY_MEMORY_BLOCKSIZE 32
++CRYPTO_JITTERENTROPY_OSR 1
++CRYPTO_KDF800108_CTR y
++CRYPTO_KPP y
++CRYPTO_KPP2 y
++CRYPTO_KRB5_SELFTESTS n
++CRYPTO_LIB_AESGCM y
++CRYPTO_LIB_BLAKE2B y
++CRYPTO_LIB_CHACHA m
++CRYPTO_LIB_CHACHA20POLY1305 m
++CRYPTO_LIB_CHACHA_ARCH y
++CRYPTO_LIB_CURVE25519 m
++CRYPTO_LIB_CURVE25519_ARCH y
++CRYPTO_LIB_CURVE25519_GENERIC y
++CRYPTO_LIB_DES m
++CRYPTO_LIB_GF128MUL m
++CRYPTO_LIB_NH m
++CRYPTO_LIB_NH_ARCH y
++CRYPTO_LIB_POLY1305 m
++CRYPTO_LIB_POLY1305_ARCH y
++CRYPTO_LIB_POLY1305_GENERIC y
++CRYPTO_LIB_SHA3 m
++CRYPTO_LIB_SHA512 y
++CRYPTO_LIB_SHA512_ARCH y
++CRYPTO_RNG y
++CRYPTO_RNG2 y
++CRYPTO_SELFTESTS y
++CRYPTO_SELFTESTS_FULL n
++CRYPTO_TWOFISH_COMMON m
++CRYPTO_USER_API m
++CRYPTO_USER_API_ENABLE_OBSOLETE n
++CRYPTO_USER_API_RNG_CAVP n
++CUSE m
++CXD2880_SPI_DRV n
++CXL_ACPI m
++CXL_ATL y
++CXL_FEATURES n
++CXL_MCE y
++CXL_MEM m
++CXL_MEM_RAW_COMMANDS n
++CXL_PCI m
++CXL_PMEM m
++CXL_PMU n
++CXL_PORT y
++CXL_RAS y
++CXL_REGION y
++CXL_REGION_INVALIDATION_TEST n
++CXL_SUSPEND y
++CYPRESS_FIRMWARE m
++D3323AA n
++DA280 m
++DA311 m
++DAMON_DEBUG_SANITY n
++DAMON_LRU_SORT y
++DAMON_PADDR y
++DAMON_RECLAIM y
++DAMON_STAT y
++DAMON_STAT_ENABLED_DEFAULT y
++DAMON_SYSFS y
++DAMON_VADDR y
++DCA m
++DCDBAS m
++DE2104X_DSL 0
++DEBUG_CLOSURES n
++DEBUG_FORCE_FUNCTION_ALIGN_64B n
++DEBUG_GPIO n
++DEBUG_INFO y
++DEBUG_INFO_BTF y
++DEBUG_INFO_BTF_MODULES y
++DEBUG_INFO_COMPRESSED_NONE y
++DEBUG_INFO_COMPRESSED_ZLIB n
++DEBUG_INFO_COMPRESSED_ZSTD n
++DEBUG_INFO_REDUCED n
++DEBUG_INFO_SPLIT n
++DEBUG_PINCTRL n
++DEFAULT_BBR y
++DEFAULT_CODEL n
++DEFAULT_FQ n
++DEFAULT_FQ_CODEL y
++DEFAULT_FQ_PIE n
++DEFAULT_HUNG_TASK_TIMEOUT 120
++DEFAULT_NET_SCH "fq_codel"
++DEFAULT_PFIFO_FAST n
++DEFAULT_SECURITY_APPARMOR y
++DEFAULT_SECURITY_TOMOYO n
++DEFAULT_SFQ n
++DEFXX m
++DELL_LAPTOP m
++DELL_PC m
++DELL_RBTN m
++DELL_RBU m
++DELL_SMBIOS m
++DELL_SMBIOS_SMM y
++DELL_SMBIOS_WMI y
++DELL_SMO8800 m
++DELL_UART_BACKLIGHT n
++DELL_WMI m
++DELL_WMI_AIO m
++DELL_WMI_DDV m
++DELL_WMI_DESCRIPTOR m
++DELL_WMI_LED m
++DELL_WMI_PRIVACY n
++DELL_WMI_SYSMAN m
++DETECT_HUNG_TASK_BLOCKER y
++DEVFREQ_GOV_PASSIVE n
++DEVFREQ_GOV_PERFORMANCE n
++DEVFREQ_GOV_POWERSAVE n
++DEVFREQ_GOV_SIMPLE_ONDEMAND m
++DEVFREQ_GOV_USERSPACE n
++DEVFREQ_THERMAL y
++DEVICE_MIGRATION y
++DEVICE_PRIVATE y
++DEV_COREDUMP y
++DEV_DAX m
++DEV_DAX_CXL m
++DEV_DAX_FSDEV m
++DEV_DAX_HMEM m
++DEV_DAX_HMEM_DEVICES y
++DEV_DAX_KMEM m
++DEV_DAX_PMEM m
++DHT11 n
++DLHL60D m
++DLM m
++DLM_DEBUG y
++DM9051 n
++DMABUF_HEAPS_SYSTEM y
++DMARD06 n
++DMARD09 m
++DMARD10 m
++DMA_COHERENT_POOL y
++DMA_ENGINE_RAID y
++DM_BIO_PRISON m
++DM_BUFIO m
++DM_CACHE_SMQ m
++DM_DEBUG_BLOCK_MANAGER_LOCKING n
++DM_MULTIPATH_HST n
++DM_MULTIPATH_IOA n
++DM_MULTIPATH_QL m
++DM_MULTIPATH_ST m
++DM_PCACHE n
++DM_PERSISTENT_DATA m
++DM_VERITY_FEC y
++DM_VERITY_VERIFY_ROOTHASH_SIG y
++DM_VERITY_VERIFY_ROOTHASH_SIG_PLATFORM_KEYRING y
++DM_VERITY_VERIFY_ROOTHASH_SIG_SECONDARY_KEYRING y
++DM_ZONED m
++DP83640_PHY m
++DPLL y
++DPLL_REFCNT_TRACKER n
++DPM_WATCHDOG n
++DPOT_DAC n
++DPS310 m
++DRAGONRISE_FF y
++DRBD_FAULT_INJECTION n
++DRM_ACCEL_AMDXDNA m
++DRM_ACCEL_HABANALABS m
++DRM_ACCEL_IVPU m
++DRM_ACCEL_IVPU_DEBUG n
++DRM_ACCEL_QAIC n
++DRM_AMDGPU_CIK y
++DRM_AMDGPU_SI y
++DRM_AMDGPU_USERPTR y
++DRM_AMDGPU_WERROR n
++DRM_AMD_ACP y
++DRM_AMD_DC y
++DRM_AMD_DC_FP y
++DRM_AMD_DC_SI y
++DRM_AMD_ISP n
++DRM_AMD_SECURE_DISPLAY n
++DRM_CLIENT y
++DRM_CLIENT_DEFAULT "fbdev"
++DRM_CLIENT_DEFAULT_FBDEV y
++DRM_CLIENT_LIB m
++DRM_CLIENT_SETUP y
++DRM_COREBOOTDRM n
++DRM_DEBUG_DP_MST_TOPOLOGY_REFS n
++DRM_DEBUG_MODESET_LOCK n
++DRM_DISPLAY_DP_TUNNEL y
++DRM_DISPLAY_HDMI_CEC_NOTIFIER_HELPER y
++DRM_DRAW y
++DRM_EXEC m
++DRM_FBDEV_LEAK_PHYS_SMEM n
++DRM_FBDEV_OVERALLOC 100
++DRM_GPUSVM m
++DRM_GPUVM m
++DRM_HYPERV m
++DRM_I915_DEBUG n
++DRM_I915_DEBUG_GUC n
++DRM_I915_DEBUG_MMIO n
++DRM_I915_DEBUG_RUNTIME_PM n
++DRM_I915_DEBUG_VBLANK_EVADE n
++DRM_I915_DEBUG_WAKEREF n
++DRM_I915_DP_TUNNEL y
++DRM_I915_GVT y
++DRM_I915_GVT_KVMGT m
++DRM_I915_LOW_LEVEL_TRACEPOINTS n
++DRM_I915_PXP y
++DRM_I915_REPLAY_GPU_HANGS_API n
++DRM_I915_SELFTEST n
++DRM_I915_SW_FENCE_CHECK_DAG n
++DRM_I915_SW_FENCE_DEBUG_OBJECTS n
++DRM_I915_WERROR n
++DRM_NOUVEAU_BACKLIGHT y
++DRM_NOUVEAU_CH7006 m
++DRM_NOUVEAU_SIL164 m
++DRM_NOUVEAU_SVM n
++DRM_PANEL_AUO_A030JTN01 n
++DRM_PANEL_BACKLIGHT_QUIRKS m
++DRM_PANEL_ILITEK_ILI9341 n
++DRM_PANEL_MIPI_DBI n
++DRM_PANEL_ORISETECH_OTA5601A n
++DRM_PANEL_WIDECHIPS_WS2401 n
++DRM_PANIC_BACKGROUND_COLOR 0x000000
++DRM_PANIC_DEBUG n
++DRM_PANIC_FOREGROUND_COLOR 0xffffff
++DRM_PANIC_SCREEN "qr_code"
++DRM_PIXPAPER n
++DRM_PRIVACY_SCREEN y
++DRM_RADEON_USERPTR n
++DRM_SCHED m
++DRM_ST7586 n
++DRM_ST7735R n
++DRM_ST7920 n
++DRM_SUBALLOC_HELPER m
++DRM_TTM_HELPER m
++DRM_VMWGFX_MKSSTATS n
++DRM_VRAM_HELPER m
++DRM_WERROR n
++DRM_XEN y
++DRM_XEN_FRONTEND m
++DRM_XE_DEBUG n
++DRM_XE_DEBUG_MEM n
++DRM_XE_DEBUG_MEMIRQ n
++DRM_XE_DEBUG_SRIOV n
++DRM_XE_DEBUG_VM n
++DRM_XE_DISPLAY y
++DRM_XE_DP_TUNNEL y
++DRM_XE_ENABLE_SCHEDTIMEOUT_LIMIT y
++DRM_XE_FORCE_PROBE ""
++DRM_XE_GPUSVM y
++DRM_XE_JOB_TIMEOUT_MAX 10000
++DRM_XE_JOB_TIMEOUT_MIN 1
++DRM_XE_PAGEMAP y
++DRM_XE_PREEMPT_TIMEOUT 640000
++DRM_XE_PREEMPT_TIMEOUT_MAX 10000000
++DRM_XE_PREEMPT_TIMEOUT_MIN 1
++DRM_XE_TIMESLICE_MAX 10000000
++DRM_XE_TIMESLICE_MIN 1
++DRM_XE_USERPTR_INVAL_INJECT n
++DRM_XE_WERROR n
++DS1803 n
++DS4424 m
++DVB_A8293 m
++DVB_AF9013 m
++DVB_AF9033 m
++DVB_AS102 m
++DVB_AS102_FE m
++DVB_ASCOT2E m
++DVB_ATBM8830 m
++DVB_AU8522 m
++DVB_AU8522_DTV m
++DVB_AU8522_V4L m
++DVB_AV7110 m
++DVB_AV7110_IR y
++DVB_AV7110_OSD y
++DVB_B2C2_FLEXCOP m
++DVB_B2C2_FLEXCOP_PCI m
++DVB_B2C2_FLEXCOP_PCI_DEBUG n
++DVB_B2C2_FLEXCOP_USB m
++DVB_B2C2_FLEXCOP_USB_DEBUG n
++DVB_BCM3510 m
++DVB_BT8XX m
++DVB_BUDGET m
++DVB_BUDGET_AV m
++DVB_BUDGET_CI m
++DVB_BUDGET_CORE m
++DVB_CORE m
++DVB_CX22700 m
++DVB_CX22702 m
++DVB_CX24110 m
++DVB_CX24116 m
++DVB_CX24117 m
++DVB_CX24120 m
++DVB_CX24123 m
++DVB_CXD2099 m
++DVB_CXD2820R m
++DVB_CXD2841ER m
++DVB_CXD2880 n
++DVB_DDBRIDGE m
++DVB_DDBRIDGE_MSIENABLE n
++DVB_DEMUX_SECTION_LOSS_LOG n
++DVB_DIB3000MB m
++DVB_DIB3000MC m
++DVB_DIB7000M m
++DVB_DIB7000P m
++DVB_DIB8000 m
++DVB_DIB9000 n
++DVB_DM1105 m
++DVB_DRX39XYJ m
++DVB_DRXD m
++DVB_DRXK m
++DVB_DS3000 m
++DVB_DUMMY_FE m
++DVB_DYNAMIC_MINORS y
++DVB_EC100 m
++DVB_FIREDTV m
++DVB_FIREDTV_INPUT y
++DVB_GP8PSK_FE m
++DVB_HELENE m
++DVB_HOPPER m
++DVB_HORUS3A m
++DVB_ISL6405 m
++DVB_ISL6421 m
++DVB_ISL6423 m
++DVB_IX2505V m
++DVB_L64781 m
++DVB_LG2160 m
++DVB_LGDT3305 m
++DVB_LGDT3306A m
++DVB_LGDT330X m
++DVB_LGS8GL5 n
++DVB_LGS8GXX m
++DVB_LNBH25 m
++DVB_LNBH29 n
++DVB_LNBP21 m
++DVB_LNBP22 m
++DVB_M88DS3103 m
++DVB_M88RS2000 m
++DVB_MANTIS m
++DVB_MAX_ADAPTERS 16
++DVB_MB86A16 m
++DVB_MB86A20S m
++DVB_MMAP n
++DVB_MN88443X n
++DVB_MN88472 m
++DVB_MN88473 m
++DVB_MT312 m
++DVB_MT352 m
++DVB_MXL5XX m
++DVB_MXL692 m
++DVB_NET y
++DVB_NETUP_UNIDVB m
++DVB_NGENE m
++DVB_NXT200X m
++DVB_NXT6000 m
++DVB_OR51132 m
++DVB_OR51211 m
++DVB_PLATFORM_DRIVERS n
++DVB_PLL m
++DVB_PLUTO2 m
++DVB_PT1 m
++DVB_PT3 m
++DVB_RTL2830 m
++DVB_RTL2832 m
++DVB_RTL2832_SDR m
++DVB_S5H1409 m
++DVB_S5H1411 m
++DVB_S5H1420 m
++DVB_S5H1432 n
++DVB_S921 m
++DVB_SI2165 m
++DVB_SI2168 m
++DVB_SI21XX m
++DVB_SMIPCIE m
++DVB_SP2 m
++DVB_SP8870 m
++DVB_SP887X m
++DVB_STB0899 m
++DVB_STB6000 m
++DVB_STB6100 m
++DVB_STV0288 m
++DVB_STV0297 m
++DVB_STV0299 m
++DVB_STV0367 m
++DVB_STV0900 m
++DVB_STV090x m
++DVB_STV0910 m
++DVB_STV6110 m
++DVB_STV6110x m
++DVB_STV6111 m
++DVB_TC90522 m
++DVB_TDA10021 m
++DVB_TDA10023 m
++DVB_TDA10048 m
++DVB_TDA1004X m
++DVB_TDA10071 m
++DVB_TDA10086 m
++DVB_TDA18271C2DD m
++DVB_TDA665x m
++DVB_TDA8083 m
++DVB_TDA8261 m
++DVB_TDA826X m
++DVB_TEST_DRIVERS n
++DVB_TS2020 m
++DVB_TTUSB_BUDGET m
++DVB_TTUSB_DEC m
++DVB_TUA6100 m
++DVB_TUNER_CX24113 m
++DVB_TUNER_DIB0070 m
++DVB_TUNER_DIB0090 m
++DVB_TUNER_ITD1000 m
++DVB_ULE_DEBUG n
++DVB_USB m
++DVB_USB_A800 m
++DVB_USB_AF9005 m
++DVB_USB_AF9005_REMOTE m
++DVB_USB_AF9015 m
++DVB_USB_AF9035 m
++DVB_USB_ANYSEE m
++DVB_USB_AU6610 m
++DVB_USB_AZ6007 m
++DVB_USB_AZ6027 m
++DVB_USB_CE6230 m
++DVB_USB_CINERGY_T2 m
++DVB_USB_CXUSB m
++DVB_USB_CXUSB_ANALOG n
++DVB_USB_DEBUG n
++DVB_USB_DIB0700 m
++DVB_USB_DIB3000MC m
++DVB_USB_DIBUSB_MB m
++DVB_USB_DIBUSB_MB_FAULTY y
++DVB_USB_DIBUSB_MC m
++DVB_USB_DIGITV m
++DVB_USB_DTT200U m
++DVB_USB_DTV5100 m
++DVB_USB_DVBSKY m
++DVB_USB_DW2102 m
++DVB_USB_EC168 m
++DVB_USB_GL861 m
++DVB_USB_GP8PSK m
++DVB_USB_LME2510 m
++DVB_USB_M920X m
++DVB_USB_MXL111SF m
++DVB_USB_NOVA_T_USB2 m
++DVB_USB_OPERA1 m
++DVB_USB_PCTV452E m
++DVB_USB_RTL28XXU m
++DVB_USB_TECHNISAT_USB2 m
++DVB_USB_TTUSB2 m
++DVB_USB_UMT_010 m
++DVB_USB_V2 m
++DVB_USB_VP702X m
++DVB_USB_VP7045 m
++DVB_USB_ZD1301 m
++DVB_VES1820 m
++DVB_VES1X93 m
++DVB_ZD1301_DEMOD m
++DVB_ZL10036 m
++DVB_ZL10039 m
++DVB_ZL10353 m
++DWMAC_GENERIC m
++DWMAC_INTEL m
++DWMAC_MOTORCOMM m
++DYNAMIC_FTRACE y
++DYNAMIC_FTRACE_WITH_ARGS y
++DYNAMIC_FTRACE_WITH_DIRECT_CALLS y
++DYNAMIC_FTRACE_WITH_JMP y
++DYNAMIC_FTRACE_WITH_REGS y
++DYNAMIC_PHYSICAL_MASK y
++ECRYPT_FS_MESSAGING y
++EDAC y
++EDAC_AMD64 m
++EDAC_DEBUG n
++EDAC_DECODE_MCE m
++EDAC_E752X m
++EDAC_ECS n
++EDAC_GHES n
++EDAC_I10NM m
++EDAC_I3000 m
++EDAC_I3200 m
++EDAC_I5100 m
++EDAC_I5400 m
++EDAC_I7300 m
++EDAC_I7CORE m
++EDAC_I82975X m
++EDAC_IE31200 m
++EDAC_IGEN6 m
++EDAC_IMH m
++EDAC_MEM_REPAIR n
++EDAC_PND2 m
++EDAC_SBRIDGE m
++EDAC_SCRUB n
++EDAC_SKX m
++EDAC_X38 m
++EDD_OFF n
++EEEPC_WMI m
++EEPROM_93XX46 n
++EEPROM_AT25 m
++EFI_DEV_PATH_PARSER y
++EFI_EMBEDDED_FIRMWARE y
++EFI_SECRET n
++EFI_SOFT_RESERVE y
++EFI_VARS_PSTORE m
++EFI_VARS_PSTORE_DEFAULT_DISABLE n
++ENC28J60 n
++ENCX24J600 n
++ENS160 n
++ENS210 n
++ENVELOPE_DETECTOR n
++EROFS_FS_BACKED_BY_FILE y
++EROFS_FS_DEBUG n
++EROFS_FS_ONDEMAND n
++EROFS_FS_PAGE_CACHE_SHARE n
++EROFS_FS_PCPU_KTHREAD n
++EROFS_FS_POSIX_ACL y
++EROFS_FS_SECURITY y
++EROFS_FS_XATTR y
++EROFS_FS_ZIP y
++EROFS_FS_ZIP_ACCEL n
++EROFS_FS_ZIP_DEFLATE y
++EROFS_FS_ZIP_LZMA y
++EROFS_FS_ZIP_ZSTD y
++EVM_ADD_XATTRS n
++EVM_ATTR_FSUUID y
++EXFAT_DEFAULT_IOCHARSET "utf8"
++EXTCON_ADC_JACK n
++EXTCON_AXP288 m
++EXTCON_FSA9480 n
++EXTCON_GPIO n
++EXTCON_INTEL_CHT_WC m
++EXTCON_INTEL_INT3496 n
++EXTCON_LC824206XA n
++EXTCON_MAX14526 n
++EXTCON_MAX3355 n
++EXTCON_PTN5150 n
++EXTCON_RT8973A n
++EXTCON_SM5502 n
++EXTCON_USBC_CROS_EC m
++EXTCON_USBC_TUSB320 n
++EXTCON_USB_GPIO n
++EXT_GROUP_SCHED y
++EXT_SUB_SCHED y
++EZX_PCAP n
++F2FS_CHECK_FS n
++F2FS_FAULT_INJECTION n
++F2FS_FS_COMPRESSION y
++F2FS_FS_LZ4 y
++F2FS_FS_LZ4HC y
++F2FS_FS_LZO y
++F2FS_FS_LZORLE y
++F2FS_FS_POSIX_ACL y
++F2FS_FS_SECURITY y
++F2FS_FS_XATTR y
++F2FS_FS_ZSTD y
++F2FS_IOSTAT y
++F2FS_STAT_FS y
++F2FS_UNFAIR_RWSEM n
++FANOTIFY_ACCESS_PERMISSIONS y
++FARSYNC m
++FB_3DFX m
++FB_3DFX_ACCEL n
++FB_3DFX_I2C y
++FB_ARC m
++FB_ARK m
++FB_ASILIANT n
++FB_ATY m
++FB_ATY128 m
++FB_ATY128_BACKLIGHT y
++FB_ATY_BACKLIGHT y
++FB_ATY_CT y
++FB_ATY_GENERIC_LCD n
++FB_ATY_GX y
++FB_BACKLIGHT y
++FB_CARMINE n
++FB_CFB_COPYAREA y
++FB_CFB_FILLRECT y
++FB_CFB_IMAGEBLIT y
++FB_CFB_REV_PIXELS_IN_BYTE y
++FB_CIRRUS m
++FB_CORE y
++FB_CYBER2000 m
++FB_CYBER2000_DDC y
++FB_DDC m
++FB_DEFERRED_IO y
++FB_DEVICE y
++FB_EFI y
++FB_FOREIGN_ENDIAN n
++FB_HECUBA m
++FB_HGA m
++FB_I740 n
++FB_IBM_GXT4500 n
++FB_IMSTT n
++FB_IOMEM_FOPS y
++FB_IOMEM_HELPERS y
++FB_KYRO m
++FB_MATROX m
++FB_MATROX_G y
++FB_MATROX_I2C m
++FB_MATROX_MAVEN m
++FB_MATROX_MILLENIUM y
++FB_MATROX_MYSTIQUE y
++FB_MB862XX m
++FB_MB862XX_I2C y
++FB_MB862XX_PCI_GDC y
++FB_METRONOME n
++FB_MODE_HELPERS y
++FB_N411 m
++FB_NEOMAGIC m
++FB_NOTIFY y
++FB_NVIDIA n
++FB_OPENCORES n
++FB_PM2 m
++FB_PM2_FIFO_DISCONNECT y
++FB_PM3 m
++FB_RADEON m
++FB_RADEON_BACKLIGHT y
++FB_RADEON_DEBUG n
++FB_RADEON_I2C y
++FB_RIVA n
++FB_S1D13XXX n
++FB_S3 m
++FB_S3_DDC y
++FB_SAVAGE m
++FB_SAVAGE_ACCEL n
++FB_SAVAGE_I2C n
++FB_SIMPLE y
++FB_SIS m
++FB_SIS_300 y
++FB_SIS_315 y
++FB_SM712 n
++FB_SM750 n
++FB_SMSCUFX m
++FB_SSD1307 n
++FB_SVGALIB m
++FB_SYSMEM_FOPS y
++FB_SYSMEM_HELPERS y
++FB_SYSMEM_HELPERS_DEFERRED y
++FB_SYS_COPYAREA y
++FB_SYS_FILLRECT y
++FB_SYS_IMAGEBLIT y
++FB_TFT n
++FB_TILEBLITTING y
++FB_TRIDENT m
++FB_UDL n
++FB_UVESA m
++FB_VESA y
++FB_VGA16 m
++FB_VIA m
++FB_VIA_DIRECT_PROCFS n
++FB_VIA_X_COMPATIBILITY y
++FB_VIRTUAL m
++FB_VOODOO1 m
++FB_VT8623 m
++FCOE m
++FCOE_FNIC m
++FIND_NORMAL_PAGE y
++FIREWIRE_NET m
++FIREWIRE_OHCI m
++FIREWIRE_SBP2 m
++FONTS y
++FONT_10x18 n
++FONT_6x10 n
++FONT_6x11 n
++FONT_6x8 n
++FONT_7x14 n
++FONT_8x8 y
++FONT_ACORN_8x8 n
++FONT_MINI_4x6 n
++FONT_PEARL_8x8 n
++FONT_SUN12x22 n
++FONT_SUN8x16 n
++FONT_TER10x18 n
++FONT_TER16x32 y
++FPROBE y
++FPROBE_EVENTS y
++FRAMEBUFFER_CONSOLE y
++FRAMEBUFFER_CONSOLE_DEFERRED_TAKEOVER n
++FRAMEBUFFER_CONSOLE_DETECT_PRIMARY y
++FRAMEBUFFER_CONSOLE_LEGACY_ACCELERATION n
++FRAMEBUFFER_CONSOLE_ROTATION y
++FRAMER n
++FSCACHE_STATS y
++FS_DAX y
++FS_DAX_PMD y
++FS_ENCRYPTION_ALGS y
++FS_STACK y
++FS_VERITY_BUILTIN_SIGNATURES y
++FTL m
++FTRACE_MCOUNT_USE_OBJTOOL y
++FTRACE_RECORD_RECURSION n
++FTRACE_SORT_STARTUP_TEST n
++FTRACE_VALIDATE_RCU_IS_WATCHING n
++FUEL_GAUGE_STC3117 n
++FUNCTION_GRAPH_RETADDR n
++FUNCTION_GRAPH_RETVAL n
++FUNCTION_GRAPH_TRACER y
++FUNCTION_PROFILER n
++FUNCTION_SELF_TRACING n
++FUNCTION_TRACE_ARGS y
++FUSE_DAX y
++FUSE_IO_URING y
++FUSE_PASSTHROUGH y
++FUSION_CTL m
++FUSION_FC m
++FUSION_LAN m
++FUSION_LOGGING n
++FUSION_MAX_SGE 128
++FUSION_SAS m
++FUSION_SPI m
++FW_ATTR_CLASS m
++FW_CFG_SYSFS_CMDLINE n
++FW_CS_DSP m
++FW_LOADER_COMPRESS_XZ y
++FW_LOADER_COMPRESS_ZSTD y
++FW_LOADER_DEBUG y
++FW_LOADER_PAGED_BUF y
++FW_LOADER_SYSFS y
++FW_LOADER_USER_HELPER_FALLBACK n
++FXAS21002C m
++FXAS21002C_I2C m
++FXAS21002C_SPI m
++FXLS8962AF_I2C n
++FXLS8962AF_SPI n
++FXOS8700 m
++FXOS8700_I2C m
++FXOS8700_SPI m
++GACT_PROB y
++GAMEPORT_EMU10K1 m
++GAMEPORT_FM801 m
++GARP m
++GDB_SCRIPTS n
++GEHC_PMC_ADC n
++GENERIC_ADC_BATTERY n
++GENERIC_ADC_THERMAL n
++GENERIC_IRQ_CHIP y
++GENERIC_IRQ_INJECTION y
++GENERIC_PINCONF y
++GET_FREE_REGION y
++GFS2_FS_LOCKING_DLM y
++GNSS_MTK_SERIAL m
++GNSS_SERIAL m
++GNSS_SIRF_SERIAL m
++GNSS_UBX_SERIAL m
++GNSS_USB m
++GOOGLE_CBMEM n
++GOOGLE_COREBOOT_TABLE y
++GOOGLE_FRAMEBUFFER_COREBOOT y
++GOOGLE_MEMCONSOLE m
++GOOGLE_MEMCONSOLE_COREBOOT m
++GOOGLE_MEMCONSOLE_X86_LEGACY n
++GOOGLE_SMI m
++GOOGLE_VPD m
++GP2AP002 m
++GP2AP020A00F m
++GPIOLIB_FASTPATH_LIMIT 512
++GPIOLIB_IRQCHIP y
++GPIO_74X164 n
++GPIO_ACPI y
++GPIO_AGGREGATOR n
++GPIO_ALTERA n
++GPIO_AMD8111 n
++GPIO_AMDPT m
++GPIO_AMD_FCH m
++GPIO_BY_PINCTRL n
++GPIO_CDEV y
++GPIO_CDEV_V1 n
++GPIO_CROS_EC n
++GPIO_CRYSTAL_COVE n
++GPIO_DS4520 n
++GPIO_DWAPB n
++GPIO_EXAR m
++GPIO_F7188X m
++GPIO_FXL6408 n
++GPIO_GENERIC m
++GPIO_GENERIC_PLATFORM n
++GPIO_GRANITERAPIDS n
++GPIO_ICH n
++GPIO_IDIO_16 m
++GPIO_IT87 n
++GPIO_KEMPLD m
++GPIO_LATCH n
++GPIO_LJCA m
++GPIO_MAX3191X n
++GPIO_MAX7300 n
++GPIO_MAX7301 n
++GPIO_MAX732X n
++GPIO_MB86S7X n
++GPIO_MC33880 n
++GPIO_ML_IOH m
++GPIO_MOCKUP n
++GPIO_MPSSE m
++GPIO_NOVALAKE n
++GPIO_PCA953X n
++GPIO_PCA9570 n
++GPIO_PCF857X n
++GPIO_PCIE_IDIO_24 m
++GPIO_PCI_IDIO_16 m
++GPIO_PISOSR n
++GPIO_POLARFIRE_SOC n
++GPIO_RDC321X n
++GPIO_REGMAP m
++GPIO_SCH n
++GPIO_SCH311X n
++GPIO_SIM n
++GPIO_SLOPPY_LOGIC_ANALYZER n
++GPIO_SWNODE_UNDEFINED y
++GPIO_SYSFS y
++GPIO_SYSFS_LEGACY y
++GPIO_TPIC2810 n
++GPIO_TPS68470 n
++GPIO_USBIO m
++GPIO_VIPERBOARD m
++GPIO_VIRTIO n
++GPIO_VIRTUSER n
++GPIO_VX855 n
++GPIO_WHISKEY_COVE m
++GPIO_WINBOND n
++GPIO_WS16C48 n
++GPIO_XILINX n
++GPIO_XRA1403 n
++GP_PCI1XXXX n
++GREENASIA_FF y
++GROUP_SCHED_BANDWIDTH y
++GUEST_PERF_EVENTS y
++HARDENED_USERCOPY_DEFAULT_ON y
++HARDLOCKUP_DETECTOR_ARCH n
++HARDLOCKUP_DETECTOR_BUDDY n
++HARDLOCKUP_DETECTOR_COUNTS_HRTIMER y
++HARDLOCKUP_DETECTOR_PERF y
++HARDLOCKUP_DETECTOR_PREFER_BUDDY n
++HAVE_ARCH_NODE_DEV_GROUP y
++HAVE_ARCH_USERFAULTFD_MINOR y
++HAVE_ARCH_USERFAULTFD_WP y
++HAVE_BOOTMEM_INFO_NODE y
++HAVE_CLK y
++HAVE_CLK_PREPARE y
++HAVE_FTRACE_GRAPH_FUNC y
++HAVE_FUNCTION_GRAPH_FREGS y
++HAVE_FUNCTION_GRAPH_TRACER y
++HAVE_IMA_KEXEC y
++HAVE_KVM_ARCH_GMEM_INVALIDATE y
++HAVE_KVM_ARCH_GMEM_POPULATE y
++HAVE_KVM_ARCH_GMEM_PREPARE y
++HAVE_KVM_CPU_RELAX_INTERCEPT y
++HAVE_KVM_DIRTY_RING y
++HAVE_KVM_DIRTY_RING_ACQ_REL y
++HAVE_KVM_DIRTY_RING_TSO y
++HAVE_KVM_IRQCHIP y
++HAVE_KVM_IRQ_BYPASS m
++HAVE_KVM_IRQ_ROUTING y
++HAVE_KVM_MSI y
++HAVE_KVM_NO_POLL y
++HAVE_KVM_PFNCACHE y
++HAVE_KVM_PM_NOTIFIER y
++HAVE_KVM_READONLY_MEM y
++HAVE_SINGLE_FTRACE_DIRECT_OPS y
++HDC100X n
++HDC2010 n
++HDC3020 n
++HDLC m
++HDLC_CISCO m
++HDLC_FR m
++HDLC_PPP m
++HDLC_RAW m
++HDLC_RAW_ETH m
++HDLC_X25 n
++HFI1_DEBUG_SDMA_ORDER n
++HI8435 m
++HIBERNATION_COMP_LZ4 y
++HID_ACRUX_FF y
++HID_BPF y
++HID_CP2112 m
++HID_GOODIX_SPI n
++HID_GOOGLE_HAMMER m
++HID_HYPERV_MOUSE m
++HID_LENOVO_GO n
++HID_LENOVO_GO_S n
++HID_LOGITECH m
++HID_LOGITECH_DJ m
++HID_LOGITECH_HIDPP m
++HID_MCP2200 n
++HID_NVIDIA_SHIELD n
++HID_PICOLCD_BACKLIGHT y
++HID_PICOLCD_CIR y
++HID_PICOLCD_FB y
++HID_PICOLCD_LEDS y
++HID_PLAYSTATION m
++HID_SENSOR_ACCEL_3D m
++HID_SENSOR_ALS m
++HID_SENSOR_CUSTOM_INTEL_HINGE n
++HID_SENSOR_CUSTOM_SENSOR m
++HID_SENSOR_DEVICE_ROTATION m
++HID_SENSOR_GYRO_3D m
++HID_SENSOR_HUMIDITY n
++HID_SENSOR_IIO_COMMON m
++HID_SENSOR_IIO_TRIGGER m
++HID_SENSOR_INCLINOMETER_3D m
++HID_SENSOR_MAGNETOMETER_3D m
++HID_SENSOR_PRESS m
++HID_SENSOR_PROX m
++HID_SENSOR_TEMP m
++HID_VIVALDI_COMMON m
++HIST_TRIGGERS_DEBUG n
++HL_HLDIO n
++HMC425 n
++HMEM_REPORTING y
++HMM_MIRROR y
++HOLTEK_FF y
++HOTPLUG_PCI_ACPI_IBM m
++HOTPLUG_PCI_CPCI_GENERIC m
++HOTPLUG_PCI_CPCI_ZT5550 m
++HP03 m
++HP206C m
++HPET_MMAP_DEFAULT y
++HPWDT_NMI_DECODING y
++HP_ACCEL m
++HP_BIOSCFG m
++HP_WMI m
++HSA_AMD y
++HSA_AMD_P2P n
++HSA_AMD_SVM y
++HSC030PA n
++HTS221 n
++HTU21 n
++HVC_IRQ y
++HVC_XEN y
++HVC_XEN_FRONTEND y
++HWMON_VID m
++HWPOISON_INJECT m
++HW_RANDOM_TPM y
++HX711 m
++HX9023S n
++HYPERV_BALLOON m
++HYPERV_IOMMU y
++HYPERV_KEYBOARD m
++HYPERV_NET m
++HYPERV_STORAGE m
++HYPERV_TESTING n
++HYPERV_TIMER y
++HYPERV_UTILS m
++HYPERV_VMBUS y
++HYPERV_VSOCKETS m
++HYPERV_VTL_MODE n
++I2C_ALGOPCA m
++I2C_AMD_ASF n
++I2C_CBUS_GPIO n
++I2C_CCGX_UCSI m
++I2C_CHT_WC m
++I2C_CROS_EC_TUNNEL m
++I2C_DESIGNWARE_BAYTRAIL y
++I2C_DESIGNWARE_PCI m
++I2C_DESIGNWARE_PLATFORM y
++I2C_EMEV2 n
++I2C_GPIO n
++I2C_HID_CORE m
++I2C_KEMPLD m
++I2C_LJCA m
++I2C_MUX_GPIO n
++I2C_MUX_LTC4306 n
++I2C_MUX_MLXCPLD n
++I2C_MUX_PCA9541 n
++I2C_MUX_PCA954x n
++I2C_MUX_REG n
++I2C_PARPORT m
++I2C_SI470X n
++I2C_USBIO m
++I2C_VIPERBOARD m
++I40E_DCB y
++I8K y
++IAQCORE n
++IAVF m
++ICE_HWMON y
++ICE_HWTS y
++ICE_SWITCHDEV y
++ICP10100 m
++IDLE_INJECT y
++IDPF_SINGLEQ n
++IEEE802154_6LOWPAN m
++IEEE802154_ADF7242 m
++IEEE802154_AT86RF230 m
++IEEE802154_ATUSB m
++IEEE802154_CA8210 n
++IEEE802154_CC2520 m
++IEEE802154_DRIVERS m
++IEEE802154_FAKELB m
++IEEE802154_HWSIM m
++IEEE802154_MCR20A n
++IEEE802154_MRF24J40 m
++IEEE802154_NL802154_EXPERIMENTAL n
++IEEE802154_SOCKET m
++IFB m
++IFCVF n
++IGB_DCA y
++IGB_HWMON y
++IGC_LEDS y
++IIO_ADIS_LIB m
++IIO_ADIS_LIB_BUFFER y
++IIO_BACKEND m
++IIO_BUFFER y
++IIO_BUFFER_CB n
++IIO_BUFFER_DMA m
++IIO_BUFFER_DMAENGINE m
++IIO_BUFFER_HW_CONSUMER n
++IIO_CONFIGFS m
++IIO_CONSUMERS_PER_TRIGGER 2
++IIO_CROS_EC_ACCEL_LEGACY m
++IIO_CROS_EC_ACTIVITY n
++IIO_CROS_EC_BARO m
++IIO_CROS_EC_LIGHT_PROX m
++IIO_CROS_EC_SENSORS m
++IIO_CROS_EC_SENSORS_CORE m
++IIO_CROS_EC_SENSORS_LID_ANGLE m
++IIO_GTS_HELPER m
++IIO_HRTIMER_TRIGGER m
++IIO_INTERRUPT_TRIGGER n
++IIO_INV_SENSORS_TIMESTAMP m
++IIO_KFIFO_BUF m
++IIO_KX022A_I2C n
++IIO_KX022A_SPI n
++IIO_MS_SENSORS_I2C m
++IIO_MUX n
++IIO_RESCALE n
++IIO_SSP_SENSORHUB n
++IIO_ST_ACCEL_3AXIS m
++IIO_ST_ACCEL_I2C_3AXIS m
++IIO_ST_ACCEL_SPI_3AXIS m
++IIO_ST_GYRO_3AXIS m
++IIO_ST_GYRO_I2C_3AXIS m
++IIO_ST_GYRO_SPI_3AXIS m
++IIO_ST_LSM6DSX m
++IIO_ST_LSM6DSX_I2C m
++IIO_ST_LSM6DSX_SPI m
++IIO_ST_LSM9DS0 n
++IIO_ST_MAGN_3AXIS m
++IIO_ST_MAGN_I2C_3AXIS m
++IIO_ST_MAGN_SPI_3AXIS m
++IIO_ST_PRESS m
++IIO_ST_PRESS_I2C m
++IIO_ST_PRESS_SPI m
++IIO_ST_SENSORS_CORE m
++IIO_ST_SENSORS_I2C m
++IIO_ST_SENSORS_SPI m
++IIO_SW_DEVICE n
++IIO_SW_TRIGGER m
++IIO_SYSFS_TRIGGER m
++IIO_TIGHTLOOP_TRIGGER n
++IIO_TRIGGER y
++IIO_TRIGGERED_BUFFER m
++IIO_TRIGGERED_EVENT m
++IMA_APPRAISE y
++IMA_APPRAISE_BOOTPARAM y
++IMA_APPRAISE_BUILD_POLICY n
++IMA_APPRAISE_MODSIG n
++IMA_ARCH_POLICY y
++IMA_DEFAULT_HASH "sha256"
++IMA_DEFAULT_HASH_SHA1 n
++IMA_DEFAULT_HASH_SHA256 y
++IMA_DEFAULT_TEMPLATE "ima-sig"
++IMA_DISABLE_HTABLE n
++IMA_KEXEC n
++IMA_KEYRINGS_PERMIT_SIGNED_BY_BUILTIN_OR_SECONDARY n
++IMA_LSM_RULES y
++IMA_MEASURE_ASYMMETRIC_KEYS y
++IMA_MEASURE_PCR_IDX 10
++IMA_NG_TEMPLATE n
++IMA_QUEUE_EARLY_BOOT_KEYS y
++IMA_READ_POLICY n
++IMA_SIG_TEMPLATE y
++IMA_WRITE_POLICY n
++INA2XX_ADC m
++INET6_TUNNEL m
++INET6_XFRM_TUNNEL m
++INET_DIAG_DESTROY y
++INET_ESPINTCP n
++INET_ESP_OFFLOAD m
++INET_MPTCP_DIAG m
++INET_RAW_DIAG m
++INET_SCTP_DIAG m
++INET_TCP_DIAG m
++INET_UDP_DIAG m
++INET_XFRM_TUNNEL m
++INFINEON_TLV493D n
++INFINIBAND_ADDR_TRANS y
++INFINIBAND_ADDR_TRANS_CONFIGFS y
++INFINIBAND_BNXT_RE m
++INFINIBAND_CXGB4 m
++INFINIBAND_EFA n
++INFINIBAND_ERDMA n
++INFINIBAND_HFI1 m
++INFINIBAND_IONIC n
++INFINIBAND_IPOIB m
++INFINIBAND_IPOIB_CM y
++INFINIBAND_IPOIB_DEBUG y
++INFINIBAND_IPOIB_DEBUG_DATA n
++INFINIBAND_IRDMA m
++INFINIBAND_ISER m
++INFINIBAND_ISERT m
++INFINIBAND_MTHCA m
++INFINIBAND_MTHCA_DEBUG y
++INFINIBAND_OCRDMA m
++INFINIBAND_ON_DEMAND_PAGING y
++INFINIBAND_QEDR m
++INFINIBAND_RDMAVT m
++INFINIBAND_RTRS_CLIENT n
++INFINIBAND_RTRS_SERVER n
++INFINIBAND_SRP m
++INFINIBAND_SRPT m
++INFINIBAND_USER_ACCESS m
++INFINIBAND_USER_MAD m
++INFINIBAND_USER_MEM y
++INFINIBAND_USNIC m
++INFINIBAND_VIRT_DMA y
++INFINIBAND_VMWARE_PVRDMA n
++INFTL m
++INPUT_AXP20X_PEK m
++INPUT_DRV260X_HAPTICS n
++INPUT_GPIO_BEEPER n
++INPUT_GPIO_DECODER n
++INPUT_GPIO_ROTARY_ENCODER n
++INPUT_GPIO_VIBRA n
++INPUT_MOUSEDEV_PSAUX y
++INPUT_MOUSEDEV_SCREEN_X 1024
++INPUT_MOUSEDEV_SCREEN_Y 768
++INPUT_PWM_BEEPER n
++INPUT_PWM_VIBRA n
++INPUT_REGULATOR_HAPTIC n
++INPUT_SOC_BUTTON_ARRAY m
++INPUT_XEN_KBDDEV_FRONTEND y
++INT3406_THERMAL m
++INTEGRITY_ASYMMETRIC_KEYS y
++INTEGRITY_CA_MACHINE_KEYRING n
++INTEGRITY_MACHINE_KEYRING y
++INTEGRITY_PLATFORM_KEYRING y
++INTEGRITY_TRUSTED_KEYRING n
++INTEL_ATOMISP n
++INTEL_ATOMISP2_LED n
++INTEL_ATOMISP2_PDX86 y
++INTEL_BXTWC_PMIC_TMU m
++INTEL_BXT_PMIC_THERMAL m
++INTEL_BYTCRC_PWRSRC n
++INTEL_CHTDC_TI_PWRBTN n
++INTEL_CHTWC_INT33FE m
++INTEL_DC_TI_ADC n
++INTEL_IDXD_BUS m
++INTEL_IDXD_PERFMON y
++INTEL_IDXD_SVM y
++INTEL_INT0002_VGPIO m
++INTEL_IOMMU_FLOPPY_WA y
++INTEL_ISHTP_ECLITE n
++INTEL_ISH_FIRMWARE_DOWNLOADER n
++INTEL_MEI_LB m
++INTEL_MEI_VSC m
++INTEL_MEI_VSC_HW m
++INTEL_PLR_TPMI n
++INTEL_PMC_CORE m
++INTEL_PMC_SSRAM_TELEMETRY m
++INTEL_PMT_CLASS m
++INTEL_PMT_CRASHLOG m
++INTEL_PMT_DISCOVERY m
++INTEL_PMT_TELEMETRY m
++INTEL_QUICKI2C m
++INTEL_QUICKSPI m
++INTEL_RAPL m
++INTEL_RAPL_CORE m
++INTEL_RAPL_TPMI m
++INTEL_SCU_IPC y
++INTEL_SDSI m
++INTEL_SKL_INT3472 m
++INTEL_SOC_DTS_IOSF_CORE m
++INTEL_SOC_PMIC y
++INTEL_SOC_PMIC_BXTWC m
++INTEL_SOC_PMIC_CHTDC_TI m
++INTEL_SOC_PMIC_CHTWC y
++INTEL_SPEED_SELECT_TPMI m
++INTEL_TDX_HOST n
++INTEL_TH_ACPI m
++INTEL_TH_DEBUG n
++INTEL_TH_GTH m
++INTEL_TH_MSU m
++INTEL_TH_PCI m
++INTEL_TH_PTI m
++INTEL_TH_STH m
++INTEL_TPMI m
++INTEL_TPMI_POWER_DOMAINS m
++INTEL_UNCORE_FREQ_CONTROL_TPMI m
++INTEL_VSC m
++INTEL_WMI y
++INV_ICM42600 m
++INV_ICM42600_I2C m
++INV_ICM42600_SPI m
++INV_ICM45600_I2C n
++INV_ICM45600_SPI n
++INV_MPU6050_I2C m
++INV_MPU6050_IIO m
++INV_MPU6050_SPI m
++IOMMU_DEBUG n
++IOMMU_HELPER y
++IOSM m
++IO_URING_BPF_OPS y
++IO_URING_MOCK_FILE n
++IP6_NF_FILTER m
++IP6_NF_IPTABLES_LEGACY m
++IP6_NF_MANGLE m
++IP6_NF_MATCH_AH m
++IP6_NF_MATCH_EUI64 m
++IP6_NF_MATCH_FRAG m
++IP6_NF_MATCH_HL m
++IP6_NF_MATCH_MH m
++IP6_NF_MATCH_OPTS m
++IP6_NF_MATCH_RPFILTER m
++IP6_NF_MATCH_RT m
++IP6_NF_MATCH_SRH m
++IP6_NF_NAT m
++IP6_NF_RAW m
++IP6_NF_SECURITY m
++IP6_NF_TARGET_HL m
++IP6_NF_TARGET_MASQUERADE m
++IP6_NF_TARGET_NPT m
++IP6_NF_TARGET_REJECT m
++IP6_NF_TARGET_SYNPROXY m
++IPE_BOOT_POLICY ""
++IPE_POLICY_SIG_PLATFORM_KEYRING y
++IPE_POLICY_SIG_SECONDARY_KEYRING y
++IPE_PROP_DM_VERITY y
++IPE_PROP_DM_VERITY_SIGNATURE y
++IPE_PROP_FS_VERITY y
++IPE_PROP_FS_VERITY_BUILTIN_SIG y
++IPMI_DEVICE_INTERFACE m
++IPMI_DMI_DECODE y
++IPMI_PANIC_EVENT n
++IPMI_PLAT_DATA y
++IPMI_POWEROFF m
++IPMI_SI m
++IPMI_SSIF m
++IPMI_WATCHDOG m
++IPU_BRIDGE m
++IPV6_FOU m
++IPV6_FOU_TUNNEL m
++IPV6_GRE m
++IPV6_MROUTE_MULTIPLE_TABLES y
++IPV6_PIMSM_V2 y
++IPV6_ROUTE_INFO y
++IPV6_SEG6_BPF y
++IPV6_SUBTREES y
++IPVLAN_L3S y
++IPVTAP m
++IPW2200_DEBUG n
++IPW2200_MONITOR y
++IPW2200_PROMISCUOUS y
++IPW2200_QOS y
++IPW2200_RADIOTAP y
++IP_NF_ARPFILTER m
++IP_NF_ARPTABLES m
++IP_NF_ARP_MANGLE m
++IP_NF_FILTER m
++IP_NF_IPTABLES_LEGACY m
++IP_NF_MANGLE m
++IP_NF_MATCH_AH m
++IP_NF_MATCH_ECN m
++IP_NF_MATCH_RPFILTER m
++IP_NF_MATCH_TTL m
++IP_NF_NAT m
++IP_NF_RAW m
++IP_NF_SECURITY m
++IP_NF_TARGET_ECN m
++IP_NF_TARGET_MASQUERADE m
++IP_NF_TARGET_NETMAP m
++IP_NF_TARGET_REDIRECT m
++IP_NF_TARGET_REJECT m
++IP_NF_TARGET_SYNPROXY m
++IP_NF_TARGET_TTL m
++IP_ROUTE_CLASSID y
++IP_SET_BITMAP_IP m
++IP_SET_BITMAP_IPMAC m
++IP_SET_BITMAP_PORT m
++IP_SET_HASH_IP m
++IP_SET_HASH_IPMAC m
++IP_SET_HASH_IPMARK m
++IP_SET_HASH_IPPORT m
++IP_SET_HASH_IPPORTIP m
++IP_SET_HASH_IPPORTNET m
++IP_SET_HASH_MAC m
++IP_SET_HASH_NET m
++IP_SET_HASH_NETIFACE m
++IP_SET_HASH_NETNET m
++IP_SET_HASH_NETPORT m
++IP_SET_HASH_NETPORTNET m
++IP_SET_LIST_SET m
++IP_SET_MAX 256
++IP_VS_DEBUG n
++IP_VS_DH m
++IP_VS_FO m
++IP_VS_FTP m
++IP_VS_IPV6 y
++IP_VS_LBLC m
++IP_VS_LBLCR m
++IP_VS_LC m
++IP_VS_MH m
++IP_VS_MH_TAB_INDEX 12
++IP_VS_NFCT y
++IP_VS_NQ m
++IP_VS_OVF m
++IP_VS_PE_SIP m
++IP_VS_PROTO_AH y
++IP_VS_PROTO_AH_ESP y
++IP_VS_PROTO_ESP y
++IP_VS_PROTO_SCTP y
++IP_VS_PROTO_TCP y
++IP_VS_PROTO_UDP y
++IP_VS_RR m
++IP_VS_SED m
++IP_VS_SH m
++IP_VS_SH_TAB_BITS 8
++IP_VS_TAB_BITS 12
++IP_VS_TWOS m
++IP_VS_WLC m
++IP_VS_WRR m
++IRQ_BYPASS_MANAGER m
++IRSD200 n
++IR_ENE m
++IR_FINTEK m
++IR_IGORPLUGUSB m
++IR_IGUANA m
++IR_IMON m
++IR_IMON_DECODER m
++IR_IMON_RAW m
++IR_ITE_CIR m
++IR_JVC_DECODER m
++IR_MCEUSB m
++IR_MCE_KBD_DECODER m
++IR_NEC_DECODER m
++IR_NUVOTON m
++IR_RC5_DECODER m
++IR_RC6_DECODER m
++IR_RCMM_DECODER n
++IR_REDRAT3 m
++IR_SANYO_DECODER m
++IR_SERIAL m
++IR_SERIAL_TRANSMITTER y
++IR_SHARP_DECODER m
++IR_SONY_DECODER m
++IR_STREAMZAP m
++IR_TOY n
++IR_TTUSBIR m
++IR_WINBOND_CIR m
++IR_XMP_DECODER m
++ISA_BUS n
++ISA_BUS_API y
++ISCSI_IBFT_FIND y
++ISCSI_TARGET m
++ISCSI_TARGET_CXGB4 m
++ISL29125 m
++ISL29501 m
++ISL76682 n
++ITG3200 m
++IWLDVM m
++IWLEGACY m
++IWLEGACY_DEBUG n
++IWLMLD m
++IWLMVM m
++IWLWIFI_DEBUG n
++IWLWIFI_DEVICE_TRACING y
++IWLWIFI_LEDS y
++IWLWIFI_OPMODE_MODULAR y
++IXGBEVF_IPSEC y
++IXGBE_DCA y
++IXGBE_DCB y
++IXGBE_HWMON y
++IXGBE_IPSEC y
++JFFS2_CMODE_FAVOURLZO n
++JFFS2_CMODE_NONE n
++JFFS2_CMODE_PRIORITY y
++JFFS2_CMODE_SIZE n
++JFFS2_COMPRESSION_OPTIONS y
++JFFS2_FS m
++JFFS2_FS_DEBUG 0
++JFFS2_FS_POSIX_ACL y
++JFFS2_FS_SECURITY y
++JFFS2_FS_WBUF_VERIFY n
++JFFS2_FS_WRITEBUFFER y
++JFFS2_FS_XATTR y
++JFFS2_LZO y
++JFFS2_RTIME y
++JFFS2_RUBIN n
++JFFS2_SUMMARY y
++JFFS2_ZLIB y
++JFS_DEBUG n
++JFS_POSIX_ACL y
++JFS_SECURITY y
++JFS_STATISTICS n
++JOYSTICK_ADC n
++JOYSTICK_DB9 m
++JOYSTICK_GAMECON m
++JOYSTICK_IFORCE_232 m
++JOYSTICK_IFORCE_USB m
++JOYSTICK_PSXPAD_SPI n
++JOYSTICK_TURBOGRAFX m
++JOYSTICK_WALKERA0701 m
++JOYSTICK_XPAD_FF y
++JOYSTICK_XPAD_LEDS y
++JSA1212 m
++KARMA_PARTITION y
++KEMPLD_WDT m
++KEXEC_BZIMAGE_VERIFY_SIG y
++KEXEC_SIG y
++KEXEC_SIG_FORCE n
++KEYBOARD_ADC n
++KEYBOARD_APPLESPI m
++KEYBOARD_CHARLIEPLEX n
++KEYBOARD_CROS_EC m
++KEYBOARD_GPIO m
++KEYBOARD_GPIO_POLLED m
++KEYBOARD_MATRIX n
++KEYBOARD_PINEPHONE n
++KEYBOARD_SAMSUNG n
++KFENCE_DEFERRABLE n
++KFENCE_NUM_OBJECTS 255
++KFENCE_SAMPLE_INTERVAL 0
++KFENCE_STATIC_KEYS n
++KFENCE_STRESS_TEST_FAULTS 0
++KLP_BUILD y
++KMX61 m
++KPROBES_ON_FTRACE y
++KPROBE_EVENTS_ON_NOTRACE n
++KS8851 n
++KVM_AMD m
++KVM_AMD_SEV y
++KVM_ASYNC_PF y
++KVM_COMMON y
++KVM_COMPAT y
++KVM_ELIDE_TLB_FLUSH_IF_YOUNG y
++KVM_EXTERNAL_WRITE_TRACKING y
++KVM_GENERIC_DIRTYLOG_READ_PROTECT y
++KVM_GENERIC_HARDWARE_ENABLING y
++KVM_GENERIC_MEMORY_ATTRIBUTES y
++KVM_GENERIC_PRE_FAULT_MEMORY y
++KVM_GUEST_MEMFD y
++KVM_HYPERV y
++KVM_INTEL m
++KVM_INTEL_PROVE_VE n
++KVM_IOAPIC y
++KVM_MAX_NR_VCPUS 4096
++KVM_MMIO y
++KVM_MMU_LOCKLESS_AGING y
++KVM_PROVE_MMU n
++KVM_SMM y
++KVM_SW_PROTECTED_VM n
++KVM_VFIO y
++KVM_WERROR n
++KVM_X86 m
++KVM_XEN y
++KXCJK1013 m
++KXSD9 m
++KXSD9_I2C m
++KXSD9_SPI m
++L2TP_DEBUGFS m
++L2TP_ETH m
++L2TP_IP m
++L2TP_V3 y
++LAN865X n
++LATTICE_ECP3_CONFIG n
++LDM_DEBUG n
++LDM_PARTITION y
++LEDS_CHT_WCOVE n
++LEDS_CROS_EC m
++LEDS_DAC124S085 m
++LEDS_GPIO m
++LEDS_KTD202X n
++LEDS_LP3952 n
++LEDS_LP50XX n
++LEDS_LP5812 n
++LEDS_LT3593 m
++LEDS_MENF21BMC m
++LEDS_PCA955X_GPIO n
++LEDS_PWM n
++LEDS_PWM_MULTICOLOR n
++LEDS_REGULATOR m
++LEDS_SIEMENS_SIMATIC_IPC m
++LEDS_SIEMENS_SIMATIC_IPC_APOLLOLAKE m
++LEDS_SIEMENS_SIMATIC_IPC_ELKHARTLAKE m
++LEDS_SIEMENS_SIMATIC_IPC_F7188X m
++LEDS_SPI_BYTE n
++LEDS_TRIGGER_GPIO m
++LEDS_TRIGGER_MTD y
++LENOVO_WMI_EVENTS m
++LENOVO_WMI_HELPERS m
++LENOVO_YMC m
++LIBERTAS_DEBUG n
++LIBERTAS_MESH y
++LIBERTAS_SDIO m
++LIBERTAS_SPI n
++LIBERTAS_THINFIRM_DEBUG n
++LIBERTAS_THINFIRM_USB m
++LIBERTAS_USB m
++LIBETH m
++LIBETH_XDP m
++LIBFC m
++LIBFCOE m
++LIBIE m
++LIBIE_ADMINQ m
++LIBIE_FWLOG m
++LIBIPW m
++LIBIPW_DEBUG n
++LIDAR_LITE_V2 m
++LINEAR_RANGES y
++LIQUIDIO_CORE m
++LIRC y
++LIVEPATCH y
++LLC m
++LMK04832 n
++LMP91000 n
++LOAD_UEFI_KEYS y
++LOCKUP_DETECTOR y
++LOCK_DOWN_KERNEL_FORCE_CONFIDENTIALITY n
++LOCK_DOWN_KERNEL_FORCE_INTEGRITY n
++LOCK_DOWN_KERNEL_FORCE_NONE y
++LOGIG940_FF y
++LOGIRUMBLEPAD2_FF y
++LOGITECH_FF y
++LOGIWHEELS_FF y
++LOGO n
++LOOPBACK_TARGET m
++LP_CONSOLE n
++LRU_CACHE m
++LRU_GEN_ENABLED y
++LRU_GEN_STATS n
++LRU_GEN_WALKS_MMU y
++LTC1660 m
++LTC2309 n
++LTC2471 m
++LTC2485 m
++LTC2496 m
++LTC2497 m
++LTC2632 m
++LTC2664 n
++LTC2688 n
++LTC2983 m
++LTR390 n
++LTR501 m
++LTRF216A n
++LV0104CS m
++LWTUNNEL_BPF y
++LZ4HC_COMPRESS y
++LZ4_COMPRESS y
++M62332 m
++MAC802154 m
++MACB n
++MACVTAP m
++MAC_PARTITION y
++MAG3110 m
++MANAGER_SBS n
++MANA_INFINIBAND m
++MANTIS_CORE m
++MAPPING_DIRTY_HELPERS y
++MAX1027 m
++MAX11100 m
++MAX1118 m
++MAX11205 n
++MAX11410 n
++MAX1241 m
++MAX1363 m
++MAX14001 n
++MAX22007 n
++MAX30100 n
++MAX30102 n
++MAX30208 n
++MAX31856 m
++MAX31865 n
++MAX34408 n
++MAX44000 m
++MAX44009 m
++MAX517 m
++MAX5432 n
++MAX5481 n
++MAX5487 n
++MAX5522 n
++MAX5821 n
++MAX9611 m
++MAXIM_THERMOCOUPLE m
++MB1232 m
++MC3230 m
++MCP320X m
++MCP3422 m
++MCP3564 n
++MCP3911 m
++MCP4018 n
++MCP41010 n
++MCP4131 n
++MCP4531 n
++MCP4725 m
++MCP4728 n
++MCP47FEB02 n
++MCP4821 n
++MCP4922 m
++MCP9600 n
++MDIO m
++MDIO_I2C m
++MDIO_MSCC_MIIM n
++MD_CLUSTER m
++MEDIA_ALTERA_CI m
++MEDIA_ANALOG_TV_SUPPORT y
++MEDIA_ATTACH y
++MEDIA_CAMERA_SUPPORT y
++MEDIA_CEC_RC y
++MEDIA_COMMON_OPTIONS y
++MEDIA_CONTROLLER y
++MEDIA_CONTROLLER_DVB y
++MEDIA_DIGITAL_TV_SUPPORT y
++MEDIA_PCI_SUPPORT y
++MEDIA_PLATFORM_DRIVERS y
++MEDIA_PLATFORM_SUPPORT y
++MEDIA_RADIO_SUPPORT y
++MEDIA_SDR_SUPPORT y
++MEDIA_SUBDRV_AUTOSELECT y
++MEDIA_SUPPORT_FILTER n
++MEDIA_TEST_SUPPORT y
++MEDIA_TUNER m
++MEDIA_TUNER_E4000 m
++MEDIA_TUNER_FC0011 m
++MEDIA_TUNER_FC0012 m
++MEDIA_TUNER_FC0013 m
++MEDIA_TUNER_FC2580 m
++MEDIA_TUNER_IT913X m
++MEDIA_TUNER_M88RS6000T m
++MEDIA_TUNER_MAX2165 m
++MEDIA_TUNER_MC44S803 m
++MEDIA_TUNER_MSI001 m
++MEDIA_TUNER_MT2060 m
++MEDIA_TUNER_MT2063 m
++MEDIA_TUNER_MT20XX m
++MEDIA_TUNER_MT2131 m
++MEDIA_TUNER_MT2266 m
++MEDIA_TUNER_MXL301RF m
++MEDIA_TUNER_MXL5005S m
++MEDIA_TUNER_MXL5007T m
++MEDIA_TUNER_QM1D1B0004 m
++MEDIA_TUNER_QM1D1C0042 m
++MEDIA_TUNER_QT1010 m
++MEDIA_TUNER_R820T m
++MEDIA_TUNER_SI2157 m
++MEDIA_TUNER_SIMPLE m
++MEDIA_TUNER_TDA18212 m
++MEDIA_TUNER_TDA18218 m
++MEDIA_TUNER_TDA18250 m
++MEDIA_TUNER_TDA18271 m
++MEDIA_TUNER_TDA827X m
++MEDIA_TUNER_TDA8290 m
++MEDIA_TUNER_TDA9887 m
++MEDIA_TUNER_TEA5761 m
++MEDIA_TUNER_TEA5767 m
++MEDIA_TUNER_TUA9001 m
++MEDIA_TUNER_XC2028 m
++MEDIA_TUNER_XC4000 m
++MEDIA_TUNER_XC5000 m
++MEDIA_USB_SUPPORT y
++MEEGOPAD_ANX7428 n
++MEGARAID_MAILBOX m
++MEGARAID_MM m
++MEMCG_V1 n
++MEMORY_HOTREMOVE y
++MEMORY_ISOLATION y
++MEMORY_NOTIFIER_ERROR_INJECT m
++MEMREGION y
++MEMSTICK_DEBUG n
++MEMSTICK_JMICRON_38X m
++MEMSTICK_R592 m
++MEMSTICK_REALTEK_USB m
++MEMSTICK_TIFM_MS m
++MEMSTICK_UNSAFE_RESUME n
++MEM_SOFT_DIRTY y
++MENF21BMC_WATCHDOG m
++MEN_A21_WDT n
++MFD_AAT2870_CORE n
++MFD_ARIZONA_SPI n
++MFD_AXP20X m
++MFD_CORE y
++MFD_CROS_EC_DEV m
++MFD_CS40L50_SPI n
++MFD_CS42L43 m
++MFD_CS42L43_SDW m
++MFD_DA9052_SPI n
++MFD_INTEL_LPSS m
++MFD_INTEL_M10_BMC_SPI n
++MFD_INTEL_QUARK_I2C_GPIO n
++MFD_MC13XXX_SPI n
++MFD_OCELOT n
++MFD_QNAP_MCU n
++MFD_TPS65910 n
++MFD_TPS65912_SPI n
++MFD_TPS6594_SPI n
++MFD_WCD934X n
++MFD_WM831X_SPI n
++MHI_BUS_DEBUG n
++MHI_BUS_PCI_GENERIC m
++MHI_NET m
++MHI_WWAN_CTRL m
++MHI_WWAN_MBIM m
++MHP_DEFAULT_ONLINE_TYPE_OFFLINE n
++MHP_DEFAULT_ONLINE_TYPE_ONLINE_AUTO y
++MHP_DEFAULT_ONLINE_TYPE_ONLINE_KERNEL n
++MHP_DEFAULT_ONLINE_TYPE_ONLINE_MOVABLE n
++MHP_MEMMAP_ON_MEMORY y
++MHZ19B n
++MICROCHIP_PHY_RDS_PTP m
++MICROSOFT_MANA m
++MINIX_SUBPARTITION y
++MIN_HEAP y
++MISC_RTSX m
++MITIGATION_VMSCAPE y
++MLX4_CORE m
++MLX4_CORE_GEN2 y
++MLX4_DEBUG y
++MLX4_EN_DCB y
++MLX4_INFINIBAND m
++MLX5_BRIDGE y
++MLX5_CORE_EN y
++MLX5_CORE_EN_DCB y
++MLX5_CORE_IPOIB y
++MLX5_DPLL n
++MLX5_EN_ARFS y
++MLX5_EN_IPSEC n
++MLX5_EN_RXNFC y
++MLX5_EN_TLS n
++MLX5_ESWITCH y
++MLX5_FPGA y
++MLX5_HW_STEERING y
++MLX5_INFINIBAND m
++MLX5_MACSEC n
++MLX5_MPFS y
++MLX5_SF n
++MLX5_SW_STEERING y
++MLX5_VDPA_NET n
++MLX5_VDPA_STEERING_DEBUG n
++MLX5_VFIO_PCI n
++MLX90614 m
++MLX90632 m
++MLX90635 n
++MMA7455 m
++MMA7455_I2C m
++MMA7455_SPI m
++MMA7660 m
++MMA8452 m
++MMA9551 m
++MMA9551_CORE m
++MMA9553 m
++MMC35240 m
++MMC5633 n
++MMC_BLOCK m
++MMC_BLOCK_MINORS 256
++MMC_CB710 m
++MMC_CQHCI m
++MMC_DEBUG n
++MMC_HSQ n
++MMC_MTK n
++MMC_REALTEK_PCI m
++MMC_REALTEK_USB m
++MMC_RICOH_MMC y
++MMC_SDHCI m
++MMC_SDHCI_ACPI m
++MMC_SDHCI_IO_ACCESSORS y
++MMC_SDHCI_PCI m
++MMC_SDHCI_PLTFM n
++MMC_SDHCI_UHS2 m
++MMC_SDRICOH_CS m
++MMC_SPI n
++MMC_TEST n
++MMC_TIFM_SD m
++MMC_TOSHIBA_PCI m
++MMC_USDHI6ROL0 n
++MMC_USHC m
++MMC_VIA_SDMMC m
++MMC_VUB300 m
++MMC_WBSD m
++MMIOTRACE_TEST n
++MM_ID y
++MODULE_ALLOW_BTF_MISMATCH n
++MODULE_COMPRESS_ALL y
++MODULE_COMPRESS_GZIP n
++MODULE_COMPRESS_XZ y
++MODULE_COMPRESS_ZSTD n
++MODULE_DECOMPRESS y
++MODULE_SIG_ALL y
++MODULE_SIG_FORCE n
++MODULE_SIG_FORMAT y
++MODULE_SIG_HASH "sha256"
++MODULE_SIG_KEY "certs/signing_key.pem"
++MODULE_SIG_KEY_TYPE_MLDSA_44 n
++MODULE_SIG_KEY_TYPE_MLDSA_65 n
++MODULE_SIG_KEY_TYPE_MLDSA_87 n
++MODULE_SIG_KEY_TYPE_RSA y
++MODULE_SIG_SHA256 y
++MODULE_SIG_SHA384 n
++MODULE_SIG_SHA3_256 n
++MODULE_SIG_SHA3_384 n
++MODULE_SIG_SHA3_512 n
++MODULE_SIG_SHA512 n
++MOST n
++MOUSE_ELAN_I2C_I2C y
++MOUSE_ELAN_I2C_SMBUS y
++MOUSE_GPIO n
++MOUSE_PS2_ELANTECH_SMBUS y
++MPL115 m
++MPL115_I2C m
++MPL115_SPI m
++MPL3115 m
++MPLS_IPTUNNEL m
++MPLS_ROUTING m
++MPRLS0025PA_I2C n
++MPRLS0025PA_SPI n
++MPTCP_IPV6 y
++MPU3050 m
++MPU3050_I2C m
++MRP m
++MS5611 m
++MS5611_I2C n
++MS5611_SPI n
++MS5637 m
++MSA311 n
++MSE102X n
++MSHV_ROOT n
++MSPRO_BLOCK m
++MS_BLOCK n
++MT7615_COMMON m
++MT7663S n
++MT7663_USB_SDIO_COMMON m
++MT76_CONNAC_LIB m
++MT76_CORE m
++MT76_LEDS y
++MT76_USB m
++MT76x02_LIB m
++MT76x02_USB m
++MT76x0_COMMON m
++MT76x2_COMMON m
++MT7921S n
++MT7921_COMMON m
++MT7925_COMMON m
++MT792x_LIB m
++MT792x_USB m
++MTDRAM_ERASE_SIZE 128
++MTDRAM_TOTAL_SIZE 4096
++MTD_ABSENT m
++MTD_AMD76XROM n
++MTD_BLKDEVS m
++MTD_BLOCK m
++MTD_BLOCK2MTD m
++MTD_BLOCK_RO m
++MTD_CFI m
++MTD_CFI_ADV_OPTIONS n
++MTD_CFI_AMDSTD m
++MTD_CFI_I1 y
++MTD_CFI_I2 y
++MTD_CFI_INTELEXT m
++MTD_CFI_STAA m
++MTD_CFI_UTIL m
++MTD_CK804XROM n
++MTD_CMDLINE_PARTS n
++MTD_COMPLEX_MAPPINGS y
++MTD_DATAFLASH m
++MTD_DATAFLASH_OTP n
++MTD_DATAFLASH_WRITE_VERIFY n
++MTD_DOCG3 n
++MTD_ESB2ROM n
++MTD_GEN_PROBE m
++MTD_HYPERBUS n
++MTD_ICHXROM n
++MTD_INTEL_DG n
++MTD_JEDECPROBE m
++MTD_L440GX n
++MTD_LPDDR m
++MTD_MAP_BANK_WIDTH_1 y
++MTD_MAP_BANK_WIDTH_2 y
++MTD_MAP_BANK_WIDTH_4 y
++MTD_MCHP23K256 n
++MTD_MCHP48L640 n
++MTD_MTDRAM m
++MTD_NAND_ARASAN n
++MTD_NAND_CAFE m
++MTD_NAND_CORE m
++MTD_NAND_DENALI_PCI n
++MTD_NAND_DISKONCHIP m
++MTD_NAND_DISKONCHIP_BBTWRITE n
++MTD_NAND_DISKONCHIP_PROBE_ADDRESS 0
++MTD_NAND_DISKONCHIP_PROBE_ADVANCED n
++MTD_NAND_ECC y
++MTD_NAND_ECC_MXIC n
++MTD_NAND_ECC_SW_BCH y
++MTD_NAND_ECC_SW_HAMMING y
++MTD_NAND_ECC_SW_HAMMING_SMC n
++MTD_NAND_GPIO n
++MTD_NAND_MXIC n
++MTD_NAND_NANDSIM m
++MTD_NAND_PLATFORM n
++MTD_NAND_RICOH m
++MTD_NETtel m
++MTD_ONENAND m
++MTD_ONENAND_2X_PROGRAM y
++MTD_ONENAND_GENERIC n
++MTD_ONENAND_OTP n
++MTD_ONENAND_VERIFY_WRITE y
++MTD_OOPS m
++MTD_PARTITIONED_MASTER n
++MTD_PCI m
++MTD_PCMCIA m
++MTD_PCMCIA_ANONYMOUS n
++MTD_PHRAM m
++MTD_PHYSMAP m
++MTD_PHYSMAP_COMPAT n
++MTD_PHYSMAP_GPIO_ADDR n
++MTD_PLATRAM m
++MTD_PMC551 n
++MTD_PSTORE n
++MTD_QINFO_PROBE m
++MTD_RAM m
++MTD_RAW_NAND m
++MTD_REDBOOT_DIRECTORY_BLOCK -1
++MTD_REDBOOT_PARTS m
++MTD_REDBOOT_PARTS_READONLY n
++MTD_REDBOOT_PARTS_UNALLOCATED n
++MTD_ROM m
++MTD_SBC_GXX m
++MTD_SCB2_FLASH n
++MTD_SLRAM m
++MTD_SM_COMMON m
++MTD_SPI_NAND n
++MTD_SPI_NOR m
++MTD_SPI_NOR_SWP_DISABLE n
++MTD_SPI_NOR_SWP_DISABLE_ON_VOLATILE y
++MTD_SPI_NOR_SWP_KEEP n
++MTD_SPI_NOR_USE_4K_SECTORS y
++MTD_SST25L m
++MTD_SWAP m
++MTD_TESTS n
++MTD_UBI m
++MTD_UBI_BEB_LIMIT 20
++MTD_UBI_BLOCK y
++MTD_UBI_FASTMAP n
++MTD_UBI_GLUEBI n
++MTD_UBI_NVMEM n
++MTD_UBI_WL_THRESHOLD 4096
++MTK_T7XX m
++MTRR_SANITIZER_ENABLE_DEFAULT 0
++MTRR_SANITIZER_SPARE_REG_NR_DEFAULT 1
++MWIFIEX_PCIE m
++MWIFIEX_SDIO m
++MWIFIEX_USB m
++MXC4005 m
++MXC6255 m
++MYRI10GE_DCA y
++NAU7802 m
++NCT7201 n
++ND_BTT m
++ND_CLAIM y
++ND_PFN m
++NETCONSOLE_DYNAMIC y
++NETDEV_NOTIFIER_ERROR_INJECT n
++NETFILTER_BPF_LINK y
++NETFILTER_CONNCOUNT m
++NETFILTER_FAMILY_ARP y
++NETFILTER_FAMILY_BRIDGE y
++NETFILTER_NETLINK_ACCT m
++NETFILTER_NETLINK_HOOK m
++NETFILTER_NETLINK_OSF m
++NETFILTER_NETLINK_QUEUE m
++NETFILTER_SYNPROXY m
++NETFILTER_XT_CONNMARK m
++NETFILTER_XT_MATCH_BPF m
++NETFILTER_XT_MATCH_CGROUP m
++NETFILTER_XT_MATCH_CLUSTER m
++NETFILTER_XT_MATCH_COMMENT m
++NETFILTER_XT_MATCH_CONNBYTES m
++NETFILTER_XT_MATCH_CONNLABEL m
++NETFILTER_XT_MATCH_CONNLIMIT m
++NETFILTER_XT_MATCH_CONNMARK m
++NETFILTER_XT_MATCH_CPU m
++NETFILTER_XT_MATCH_DCCP m
++NETFILTER_XT_MATCH_DEVGROUP m
++NETFILTER_XT_MATCH_DSCP m
++NETFILTER_XT_MATCH_ECN m
++NETFILTER_XT_MATCH_ESP m
++NETFILTER_XT_MATCH_HASHLIMIT m
++NETFILTER_XT_MATCH_HELPER m
++NETFILTER_XT_MATCH_HL m
++NETFILTER_XT_MATCH_IPCOMP m
++NETFILTER_XT_MATCH_IPRANGE m
++NETFILTER_XT_MATCH_IPVS m
++NETFILTER_XT_MATCH_L2TP m
++NETFILTER_XT_MATCH_LENGTH m
++NETFILTER_XT_MATCH_LIMIT m
++NETFILTER_XT_MATCH_MAC m
++NETFILTER_XT_MATCH_MARK m
++NETFILTER_XT_MATCH_MULTIPORT m
++NETFILTER_XT_MATCH_NFACCT m
++NETFILTER_XT_MATCH_OSF m
++NETFILTER_XT_MATCH_OWNER m
++NETFILTER_XT_MATCH_PHYSDEV m
++NETFILTER_XT_MATCH_PKTTYPE m
++NETFILTER_XT_MATCH_QUOTA m
++NETFILTER_XT_MATCH_RATEEST m
++NETFILTER_XT_MATCH_REALM m
++NETFILTER_XT_MATCH_RECENT m
++NETFILTER_XT_MATCH_SCTP m
++NETFILTER_XT_MATCH_SOCKET m
++NETFILTER_XT_MATCH_STATISTIC m
++NETFILTER_XT_MATCH_STRING m
++NETFILTER_XT_MATCH_TCPMSS m
++NETFILTER_XT_MATCH_TIME m
++NETFILTER_XT_MATCH_U32 m
++NETFILTER_XT_SET m
++NETFILTER_XT_TARGET_AUDIT m
++NETFILTER_XT_TARGET_CHECKSUM m
++NETFILTER_XT_TARGET_CLASSIFY m
++NETFILTER_XT_TARGET_CONNMARK m
++NETFILTER_XT_TARGET_CT m
++NETFILTER_XT_TARGET_DSCP m
++NETFILTER_XT_TARGET_HL m
++NETFILTER_XT_TARGET_HMARK m
++NETFILTER_XT_TARGET_IDLETIMER m
++NETFILTER_XT_TARGET_LED m
++NETFILTER_XT_TARGET_MARK m
++NETFILTER_XT_TARGET_NFQUEUE m
++NETFILTER_XT_TARGET_NOTRACK n
++NETFILTER_XT_TARGET_RATEEST m
++NETFILTER_XT_TARGET_TCPOPTSTRIP m
++NETFILTER_XT_TARGET_TEE m
++NETFILTER_XT_TARGET_TPROXY m
++NETFILTER_XT_TARGET_TRACE m
++NETKIT y
++NET_9P_RDMA m
++NET_9P_USBG n
++NET_9P_XEN m
++NET_ACT_CONNMARK m
++NET_ACT_CT m
++NET_ACT_CTINFO m
++NET_CRC32C y
++NET_DEVLINK y
++NET_EMATCH_CANID m
++NET_EMATCH_IPSET m
++NET_IFE_SKBMARK m
++NET_IFE_SKBPRIO m
++NET_IFE_SKBTCINDEX m
++NET_IPGRE m
++NET_IPGRE_BROADCAST y
++NET_KEY_MIGRATE y
++NET_MPLS_GSO y
++NET_REDIRECT y
++NET_SCH_BPF y
++NET_SCH_FQ_PIE m
++NET_SCH_MQPRIO_LIB m
++NET_SHAPER y
++NET_SOCK_MSG y
++NET_TEAM_MODE_ACTIVEBACKUP m
++NET_TEAM_MODE_BROADCAST m
++NET_TEAM_MODE_LOADBALANCE m
++NET_TEAM_MODE_RANDOM m
++NET_TEAM_MODE_ROUNDROBIN m
++NET_UDP_TUNNEL m
++NET_VENDOR_ADI y
++NET_VRF m
++NFC_DIGITAL m
++NFC_FDP n
++NFC_HCI m
++NFC_MEI_PHY m
++NFC_MICROREAD_MEI n
++NFC_MRVL_USB n
++NFC_NCI m
++NFC_NCI_SPI n
++NFC_NCI_UART n
++NFC_NXP_NCI m
++NFC_NXP_NCI_I2C m
++NFC_PN532_UART n
++NFC_PN533 m
++NFC_PN533_I2C n
++NFC_PN533_USB m
++NFC_PN544 m
++NFC_PN544_MEI m
++NFC_PORT100 m
++NFC_S3FWRN5_I2C n
++NFC_S3FWRN82_UART n
++NFC_SHDLC n
++NFC_SIM m
++NFC_ST95HF n
++NFC_ST_NCI_I2C n
++NFC_ST_NCI_SPI n
++NFC_TRF7970A n
++NFC_VIRTUAL_NCI n
++NFIT_SECURITY_DEBUG n
++NFP_APP_ABM_NIC y
++NFP_APP_FLOWER y
++NFP_DEBUG n
++NFP_NET_IPSEC y
++NFSD_BLOCKLAYOUT y
++NFSD_FLEXFILELAYOUT n
++NFSD_LEGACY_CLIENT_TRACKING n
++NFSD_PNFS y
++NFSD_SCSILAYOUT y
++NFSD_V2 n
++NFSD_V3_ACL y
++NFSD_V4 y
++NFSD_V4_2_INTER_SSC n
++NFSD_V4_POSIX_ACLS n
++NFSD_V4_SECURITY_LABEL y
++NFS_DEBUG y
++NFS_LOCALIO n
++NFS_V4_2_READ_PLUS y
++NFS_V4_2_SSC_HELPER y
++NFS_V4_SECURITY_LABEL y
++NFTL m
++NFTL_RW y
++NFT_BRIDGE_META m
++NFT_BRIDGE_REJECT m
++NFT_COMPAT m
++NFT_COMPAT_ARP m
++NFT_CONNLIMIT m
++NFT_CT m
++NFT_DUP_IPV4 m
++NFT_DUP_IPV6 m
++NFT_DUP_NETDEV m
++NFT_EXTHDR_DCCP n
++NFT_FIB m
++NFT_FIB_INET m
++NFT_FIB_IPV4 m
++NFT_FIB_IPV6 m
++NFT_FIB_NETDEV m
++NFT_FLOW_OFFLOAD m
++NFT_FWD_NETDEV m
++NFT_HASH m
++NFT_LIMIT m
++NFT_LOG m
++NFT_MASQ m
++NFT_NAT m
++NFT_NUMGEN m
++NFT_OSF m
++NFT_QUEUE m
++NFT_QUOTA m
++NFT_REDIR m
++NFT_REJECT m
++NFT_REJECT_INET m
++NFT_REJECT_IPV4 m
++NFT_REJECT_IPV6 m
++NFT_REJECT_NETDEV n
++NFT_SOCKET m
++NFT_SYNPROXY m
++NFT_TPROXY m
++NFT_TUNNEL m
++NFT_XFRM m
++NF_CONNTRACK_AMANDA m
++NF_CONNTRACK_BROADCAST m
++NF_CONNTRACK_EVENTS y
++NF_CONNTRACK_H323 m
++NF_CONNTRACK_MARK y
++NF_CONNTRACK_OVS y
++NF_CONNTRACK_PPTP m
++NF_CONNTRACK_SANE m
++NF_CONNTRACK_SNMP m
++NF_CONNTRACK_TFTP m
++NF_CONNTRACK_TIMEOUT y
++NF_CONNTRACK_TIMESTAMP y
++NF_CONNTRACK_ZONES y
++NF_CT_NETLINK_HELPER m
++NF_CT_NETLINK_TIMEOUT m
++NF_CT_PROTO_GRE y
++NF_CT_PROTO_SCTP y
++NF_DUP_NETDEV m
++NF_FLOW_TABLE m
++NF_FLOW_TABLE_INET m
++NF_FLOW_TABLE_PROCFS n
++NF_NAT_AMANDA m
++NF_NAT_H323 m
++NF_NAT_OVS y
++NF_NAT_PPTP m
++NF_NAT_REDIRECT y
++NF_NAT_SNMP_BASIC m
++NF_NAT_TFTP m
++NF_TABLES_ARP y
++NF_TABLES_BRIDGE m
++NF_TABLES_INET y
++NF_TABLES_IPV4 y
++NF_TABLES_IPV6 y
++NF_TABLES_NETDEV y
++NINTENDO_FF y
++NITRO_ENCLAVES m
++NLS_UCS2_UTILS m
++NOA1305 m
++NOUVEAU_DEBUG 5
++NOUVEAU_DEBUG_DEFAULT 3
++NOUVEAU_DEBUG_MMU n
++NOUVEAU_DEBUG_PUSH n
++NO_PAGE_MAPCOUNT n
++NTFS3_64BIT_CLUSTER n
++NTFS3_FS_POSIX_ACL n
++NTFS3_LZX_XPRESS n
++NUMA_BALANCING_DEFAULT_ENABLED y
++NUMA_KEEP_MEMINFO y
++NVDIMM_DAX y
++NVDIMM_KEYS y
++NVDIMM_PFN y
++NVDIMM_SECURITY_TEST n
++NVME_AUTH m
++NVME_CORE m
++NVME_FABRICS m
++NVME_HOST_AUTH y
++NVME_HWMON y
++NVME_KEYRING m
++NVME_MULTIPATH y
++NVME_RDMA m
++NVME_TARGET_AUTH y
++NVME_TARGET_AUTH_DEBUG n
++NVME_TARGET_DEBUGFS n
++NVME_TARGET_FC m
++NVME_TARGET_FCLOOP m
++NVME_TARGET_LOOP m
++NVME_TARGET_PASSTHRU y
++NVME_TARGET_RDMA m
++NVME_TARGET_TCP m
++NVME_TARGET_TCP_TLS y
++NVME_TCP_TLS y
++NVME_VERBOSE_ERRORS n
++OCFS2_DEBUG_FS n
++OCFS2_DEBUG_MASKLOG y
++OCFS2_FS m
++OCFS2_FS_O2CB m
++OCFS2_FS_STATS y
++OCFS2_FS_USERSPACE_CLUSTER m
++OCTEONEP_VDPA n
++OPENVSWITCH_GENEVE m
++OPENVSWITCH_GRE m
++OPENVSWITCH_VXLAN m
++OPT3001 m
++OPT4001 n
++OPT4060 n
++OPTEE_STATIC_PROTMEM_POOL y
++OSF_PARTITION y
++OVERLAY_FS_DEBUG n
++OVERLAY_FS_INDEX n
++OVERLAY_FS_METACOPY n
++OVERLAY_FS_REDIRECT_ALWAYS_FOLLOW y
++OVERLAY_FS_REDIRECT_DIR n
++OVERLAY_FS_XINO_AUTO n
++P54_LEDS y
++P54_PCI m
++P54_SPI n
++P54_USB m
++PA12203001 m
++PAC1921 n
++PAC1934 n
++PAGE_IDLE_FLAG y
++PAHOLE_HAS_BTF_TAG y
++PAHOLE_HAS_LANG_EXCLUDE y
++PANEL n
++PARAVIRT_XXL y
++PARPORT_1284 y
++PARPORT_NOT_PC y
++PARPORT_PC m
++PARPORT_PC_FIFO n
++PARPORT_PC_PCMCIA m
++PARPORT_PC_SUPERIO n
++PARPORT_SERIAL m
++PATA_PARPORT n
++PC104 n
++PC300TOO n
++PCENGINES_APU2 m
++PCI200SYN m
++PCIEAER_INJECT m
++PCIE_BUS_DEFAULT y
++PCIE_BUS_PEER2PEER n
++PCIE_BUS_PERFORMANCE n
++PCIE_BUS_SAFE n
++PCIE_BUS_TUNE_OFF n
++PCIE_DPC y
++PCIE_ECRC n
++PCIE_EDR n
++PCI_HYPERV y
++PCI_HYPERV_INTERFACE y
++PCI_IDE y
++PCI_P2PDMA y
++PCI_PF_STUB m
++PCI_REALLOC_ENABLE_AUTO y
++PCI_XEN y
++PCMCIA_AHA152X m
++PCMCIA_FDOMAIN n
++PCMCIA_QLOGIC m
++PCMCIA_SYM53C500 m
++PERF_GUEST_MEDIATED_PMU y
++PERSISTENT_HUGE_ZERO_FOLIO n
++PHYLINK m
++PHY_CPCAP_USB n
++PHY_GOOGLE_USB n
++PINCONF y
++PINCTRL_ALDERLAKE m
++PINCTRL_AMD y
++PINCTRL_BAYTRAIL y
++PINCTRL_BROXTON y
++PINCTRL_CANNONLAKE y
++PINCTRL_CEDARFORK y
++PINCTRL_CHERRYVIEW y
++PINCTRL_CS42L43 m
++PINCTRL_CY8C95X0 n
++PINCTRL_DENVERTON y
++PINCTRL_ELKHARTLAKE m
++PINCTRL_EMMITSBURG m
++PINCTRL_GEMINILAKE y
++PINCTRL_ICELAKE y
++PINCTRL_INTEL y
++PINCTRL_INTEL_PLATFORM m
++PINCTRL_JASPERLAKE m
++PINCTRL_LAKEFIELD m
++PINCTRL_LEWISBURG y
++PINCTRL_LYNXPOINT n
++PINCTRL_MCP23S08 n
++PINCTRL_METEORLAKE m
++PINCTRL_METEORPOINT m
++PINCTRL_STMFX n
++PINCTRL_SUNRISEPOINT y
++PINCTRL_SX150X n
++PINCTRL_TIGERLAKE y
++PING m
++PINMUX y
++PLAYSTATION_FF y
++PLDMFW y
++PLIP m
++PMS7003 n
++PM_CLK y
++PM_DEVFREQ_EVENT n
++PM_GENERIC_DOMAINS y
++PM_GENERIC_DOMAINS_SLEEP y
++PM_NOTIFIER_ERROR_INJECT m
++PM_OPP y
++PORTWELL_EC n
++PPDEV m
++PPPOATM m
++PPPOE m
++PPPOE_HASH_BITS 4
++PPPOE_HASH_BITS_1 n
++PPPOE_HASH_BITS_2 n
++PPPOE_HASH_BITS_4 y
++PPPOE_HASH_BITS_8 n
++PPPOL2TP m
++PPP_ASYNC m
++PPP_BSDCOMP m
++PPP_DEFLATE m
++PPP_FILTER y
++PPP_MPPE m
++PPP_MULTILINK y
++PPP_SYNC_TTY m
++PPS_CLIENT_PARPORT m
++PPS_GENERATOR_DUMMY n
++PPS_GENERATOR_TIO m
++PPTP m
++PREEMPT_NOTIFIERS y
++PREEMPT_RT n
++PRESTERA n
++PRINTER m
++PRINTK_EXECUTION_CTX y
++PROBE_EVENTS_BTF_ARGS y
++PROCESSOR_SELECT n
++PROC_CPU_RESCTRL y
++PROC_THERMAL_MMIO_RAPL m
++PSE_CONTROLLER n
++PSI_DEFAULT_DISABLED n
++PSTORE_BLK m
++PSTORE_BLK_BLKDEV ""
++PSTORE_BLK_CONSOLE_SIZE 64
++PSTORE_BLK_FTRACE_SIZE 64
++PSTORE_BLK_KMSG_SIZE 64
++PSTORE_BLK_MAX_REASON 2
++PSTORE_BLK_PMSG_SIZE 64
++PSTORE_COMPRESS y
++PSTORE_CONSOLE y
++PSTORE_DEFAULT_KMSG_BYTES 1
++PSTORE_FTRACE y
++PSTORE_PMSG y
++PSTORE_RAM y
++PSTORE_ZONE m
++PTE_MARKER_UFFD_WP y
++PTP_1588_CLOCK_INES m
++PTP_1588_CLOCK_OCP m
++PVPANIC_MMIO m
++PVPANIC_PCI m
++PWM_CLK n
++PWM_CRC y
++PWM_CROS_EC m
++PWM_DEBUG n
++PWM_DWC n
++PWM_GPIO n
++PWM_LPSS m
++PWM_LPSS_PCI n
++PWM_LPSS_PLATFORM m
++PWM_PCA9685 n
++PWM_PROVIDE_GPIO n
++QCOM_NET_PHYLIB m
++QCOM_QMI_HELPERS m
++QEDE m
++QEDF m
++QEDI m
++QED_FCOE y
++QED_ISCSI y
++QED_LL2 y
++QED_OOO y
++QED_RDMA y
++QED_SRIOV y
++QLCNIC_DCB y
++QLCNIC_HWMON y
++QLCNIC_SRIOV y
++QNX6FS_DEBUG n
++QRTR_MHI m
++QRTR_TUN n
++R8169_LEDS n
++RADIO_ADAPTERS m
++RADIO_MAXIRADIO m
++RADIO_SAA7706H n
++RADIO_SHARK m
++RADIO_SHARK2 m
++RADIO_SI470X m
++RADIO_SI4713 n
++RADIO_TEA575X m
++RADIO_TEA5764 n
++RADIO_TEF6862 n
++RAID6_PQ y
++RAID6_PQ_BENCHMARK y
++RAMDAX m
++RAS_CEC y
++RAS_CEC_DEBUG n
++RAS_FMPM m
++RAVE_SP_CORE n
++RCU_LAZY y
++RCU_LAZY_DEFAULT_OFF n
++RCU_NOCB_CPU y
++RCU_NOCB_CPU_DEFAULT_ALL n
++RC_ATI_REMOTE m
++RC_DECODERS y
++RC_DEVICES y
++RC_LOOPBACK m
++RC_MAP m
++RC_XBOX_DVD n
++RDMA_RXE m
++RDMA_SIW n
++RDS_DEBUG n
++RDS_RDMA m
++RDS_TCP m
++READ_ONLY_THP_FOR_FS n
++REALTEK_AUTOPM y
++REED_SOLOMON y
++REED_SOLOMON_DEC16 y
++REED_SOLOMON_DEC8 y
++REED_SOLOMON_ENC8 y
++REGMAP_I2C y
++REGMAP_IRQ y
++REGMAP_MMIO y
++REGMAP_SOUNDWIRE m
++REGMAP_SOUNDWIRE_MBQ m
++REGMAP_SPI m
++REGULATOR_88PG86X n
++REGULATOR_ACT8865 n
++REGULATOR_AD5398 n
++REGULATOR_ADP5055 n
++REGULATOR_AW37503 n
++REGULATOR_AXP20X n
++REGULATOR_DA9210 n
++REGULATOR_DA9211 n
++REGULATOR_DEBUG n
++REGULATOR_FAN53555 n
++REGULATOR_FIXED_VOLTAGE n
++REGULATOR_FP9931 n
++REGULATOR_GPIO n
++REGULATOR_ISL6271A n
++REGULATOR_ISL9305 n
++REGULATOR_LP3971 n
++REGULATOR_LP3972 n
++REGULATOR_LP872X n
++REGULATOR_LP8755 n
++REGULATOR_LTC3589 n
++REGULATOR_LTC3676 n
++REGULATOR_MAX1586 n
++REGULATOR_MAX20086 n
++REGULATOR_MAX20411 n
++REGULATOR_MAX77503 n
++REGULATOR_MAX77826 n
++REGULATOR_MAX77838 n
++REGULATOR_MAX77857 n
++REGULATOR_MAX8649 n
++REGULATOR_MAX8660 n
++REGULATOR_MAX8893 n
++REGULATOR_MAX8952 n
++REGULATOR_MP8859 n
++REGULATOR_MT6311 n
++REGULATOR_NETLINK_EVENTS n
++REGULATOR_PCA9450 n
++REGULATOR_PF0900 n
++REGULATOR_PF9453 n
++REGULATOR_PV88060 n
++REGULATOR_PV88080 n
++REGULATOR_PV88090 n
++REGULATOR_PWM n
++REGULATOR_RAA215300 n
++REGULATOR_RT4801 n
++REGULATOR_RT4803 n
++REGULATOR_RT5190A n
++REGULATOR_RT5739 n
++REGULATOR_RT5759 n
++REGULATOR_RT6160 n
++REGULATOR_RT6190 n
++REGULATOR_RT6245 n
++REGULATOR_RT8092 n
++REGULATOR_RTMV20 n
++REGULATOR_RTQ2134 n
++REGULATOR_RTQ2208 n
++REGULATOR_RTQ6752 n
++REGULATOR_SLG51000 n
++REGULATOR_TPS51632 n
++REGULATOR_TPS62360 n
++REGULATOR_TPS65023 n
++REGULATOR_TPS6507X n
++REGULATOR_TPS65132 n
++REGULATOR_TPS65185 n
++REGULATOR_TPS6524X n
++REGULATOR_TPS68470 n
++REGULATOR_USERSPACE_CONSUMER n
++REGULATOR_VIRTUAL_CONSUMER n
++REMOTE_TARGET n
++RESCTRL_FS y
++RESCTRL_FS_PSEUDO_LOCK y
++RESET_GPIO n
++RESET_SIMPLE n
++RESET_TI_SYSCON n
++RESET_TI_TPS380X n
++RFD77402 m
++RFD_FTL m
++RFKILL_GPIO n
++RICHTEK_RTQ6056 n
++RMI4_2D_SENSOR y
++RMI4_F03 y
++RMI4_F03_SERIO m
++RMI4_F11 y
++RMI4_F12 y
++RMI4_F1A n
++RMI4_F21 n
++RMI4_F30 y
++RMI4_F34 y
++RMI4_F3A y
++RMI4_F54 n
++RMI4_F55 y
++RMI4_I2C n
++RMI4_SMB m
++RMI4_SPI n
++ROCKER n
++ROHM_BD79112 n
++ROHM_BD79124 n
++ROHM_BM1390 n
++ROHM_BU27034 n
++ROMFS_BACKED_BY_BLOCK n
++ROMFS_BACKED_BY_BOTH y
++ROMFS_BACKED_BY_MTD n
++ROMFS_ON_BLOCK y
++ROMFS_ON_MTD y
++RPCSEC_GSS_KRB5_ENCTYPES_AES_SHA1 y
++RPCSEC_GSS_KRB5_ENCTYPES_AES_SHA2 y
++RPCSEC_GSS_KRB5_ENCTYPES_CAMELLIA n
++RPR0521 m
++RSEQ_DEBUG_DEFAULT_ENABLE n
++RSEQ_STATS n
++RSI_COEX y
++RSI_DEBUGFS y
++RSI_SDIO n
++RSI_USB m
++RT2400PCI m
++RT2500PCI m
++RT2500USB m
++RT2800PCI m
++RT2800PCI_RT3290 y
++RT2800PCI_RT33XX y
++RT2800PCI_RT35XX y
++RT2800PCI_RT53XX y
++RT2800USB m
++RT2800USB_RT33XX y
++RT2800USB_RT3573 y
++RT2800USB_RT35XX y
++RT2800USB_RT53XX y
++RT2800USB_RT55XX y
++RT2800USB_UNKNOWN n
++RT2800_LIB m
++RT2800_LIB_MMIO m
++RT2X00_DEBUG n
++RT2X00_LIB m
++RT2X00_LIB_CRYPTO y
++RT2X00_LIB_FIRMWARE y
++RT2X00_LIB_LEDS y
++RT2X00_LIB_MMIO m
++RT2X00_LIB_PCI m
++RT2X00_LIB_USB m
++RT61PCI m
++RT73USB m
++RTC_DRV_CROS_EC m
++RTC_DRV_DS1302 n
++RTC_DRV_DS1305 n
++RTC_DRV_DS1343 n
++RTC_DRV_DS1347 n
++RTC_DRV_DS1390 n
++RTC_DRV_HID_SENSOR_TIME n
++RTC_DRV_M41T93 n
++RTC_DRV_M41T94 n
++RTC_DRV_MAX31335 n
++RTC_DRV_MAX6902 n
++RTC_DRV_MAX6916 n
++RTC_DRV_MCP795 n
++RTC_DRV_PCF2123 n
++RTC_DRV_R9701 n
++RTC_DRV_RS5C348 n
++RTC_DRV_RX4581 n
++RTC_DRV_WILCO_EC m
++RTC_HCTOSYS_DEVICE "rtc0"
++RTL8187_LEDS y
++RTL8192C_COMMON m
++RTL8192D_COMMON m
++RTL8723BS m
++RTL8723_COMMON m
++RTL8XXXU_UNTESTED n
++RTLBTCOEXIST m
++RTLWIFI m
++RTLWIFI_DEBUG n
++RTLWIFI_PCI m
++RTLWIFI_USB m
++RTW88_8703B m
++RTW88_8723CS m
++RTW88_8723D m
++RTW88_8723DE m
++RTW88_8723DS m
++RTW88_8723DU m
++RTW88_8723X m
++RTW88_8812A m
++RTW88_8812AU m
++RTW88_8814A m
++RTW88_8814AE m
++RTW88_8814AU m
++RTW88_8821A m
++RTW88_8821AU m
++RTW88_8821C m
++RTW88_8821CE m
++RTW88_8821CS m
++RTW88_8821CU m
++RTW88_8822B m
++RTW88_8822BE m
++RTW88_8822BS m
++RTW88_8822BU m
++RTW88_8822C m
++RTW88_8822CE m
++RTW88_8822CS m
++RTW88_8822CU m
++RTW88_88XXA m
++RTW88_CORE m
++RTW88_DEBUG n
++RTW88_DEBUGFS n
++RTW88_LEDS y
++RTW88_PCI m
++RTW88_SDIO m
++RTW88_USB m
++RTW89_8851B m
++RTW89_8851BE m
++RTW89_8851BU m
++RTW89_8852A m
++RTW89_8852AE m
++RTW89_8852AU n
++RTW89_8852B m
++RTW89_8852BE m
++RTW89_8852BT m
++RTW89_8852BTE m
++RTW89_8852BU m
++RTW89_8852B_COMMON m
++RTW89_8852C m
++RTW89_8852CE m
++RTW89_8852CU n
++RTW89_8922A m
++RTW89_8922AE m
++RTW89_CORE m
++RTW89_DEBUGMSG n
++RTW89_PCI m
++RTW89_USB m
++RXGK n
++RXKAD y
++RXPERF n
++SBP_TARGET m
++SCA3000 m
++SCA3300 n
++SCD30_CORE n
++SCD4X n
++SCHED_CLASS_EXT y
++SCSI_BFA_FC m
++SCSI_BNX2X_FCOE m
++SCSI_CHELSIO_FCOE m
++SCSI_DH_ALUA m
++SCSI_DH_EMC m
++SCSI_DH_HP_SW m
++SCSI_DH_RDAC m
++SCSI_EFCT n
++SCSI_ENCLOSURE m
++SCSI_FLASHPOINT n
++SCSI_IMM n
++SCSI_IPR_DUMP n
++SCSI_IPR_TRACE n
++SCSI_LPFC m
++SCSI_LPFC_DEBUG_FS n
++SCSI_MPT2SAS_MAX_SGE 128
++SCSI_MPT3SAS_MAX_SGE 128
++SCSI_MVSAS_DEBUG n
++SCSI_MVSAS_TASKLET n
++SCSI_NETLINK y
++SCSI_PPA n
++SCSI_QLA_FC m
++SCSI_SAS_ATA y
++SCSI_SAS_HOST_SMP y
++SCSI_SNIC_DEBUG_FS n
++SCSI_SYM53C8XX_DEFAULT_TAGS 16
++SCSI_SYM53C8XX_DMA_ADDRESSING_MODE 1
++SCSI_SYM53C8XX_MAX_TAGS 64
++SCSI_SYM53C8XX_MMIO y
++SCSI_UFSHCD_PCI m
++SCSI_UFSHCD_PLATFORM n
++SCSI_UFS_BSG n
++SCSI_UFS_DWC_TC_PCI n
++SCSI_UFS_HWMON n
++SCTP_DBG_OBJCNT n
++SCTP_DEFAULT_COOKIE_HMAC_NONE n
++SCTP_DEFAULT_COOKIE_HMAC_SHA256 y
++SDIO_UART m
++SDMA_VERBOSITY n
++SDP500 n
++SDR_MAX2175 n
++SDR_PLATFORM_DRIVERS n
++SD_ADC_MODULATOR n
++SECONDARY_TRUSTED_KEYRING_SIGNED_BY_BUILTIN n
++SECURITY_APPARMOR_DEBUG n
++SECURITY_APPARMOR_EXPORT_BINARY y
++SECURITY_APPARMOR_HASH y
++SECURITY_APPARMOR_HASH_DEFAULT y
++SECURITY_APPARMOR_INTROSPECT_POLICY y
++SECURITY_APPARMOR_PARANOID_LOAD y
++SECURITY_INFINIBAND n
++SECURITY_IPE y
++SECURITY_LOCKDOWN_LSM_EARLY y
++SECURITY_TOMOYO_ACTIVATION_TRIGGER "/sbin/init"
++SECURITY_TOMOYO_INSECURE_BUILTIN_SETTING n
++SECURITY_TOMOYO_MAX_ACCEPT_ENTRY 2048
++SECURITY_TOMOYO_MAX_AUDIT_LOG 1024
++SECURITY_TOMOYO_OMIT_USERSPACE_LOADER n
++SECURITY_TOMOYO_POLICY_LOADER "/sbin/tomoyo-init"
++SEL3350_PLATFORM n
++SEN0322 n
++SENSEAIR_SUNRISE_CO2 n
++SENSIRION_SGP30 n
++SENSIRION_SGP40 n
++SENSORS_ACBEL_FSG032 n
++SENSORS_AD7314 n
++SENSORS_ADCXX m
++SENSORS_ADM1266 n
++SENSORS_ADM1275 n
++SENSORS_ADP1050 n
++SENSORS_ADS7871 m
++SENSORS_ADT7310 n
++SENSORS_APS_379 n
++SENSORS_BEL_PFE n
++SENSORS_BPA_RS600 n
++SENSORS_CROS_EC m
++SENSORS_CRPS n
++SENSORS_DELTA_AHE50DC_FAN n
++SENSORS_DPS920AB n
++SENSORS_FSP_3Y n
++SENSORS_GPIO_FAN n
++SENSORS_HAC300S n
++SENSORS_HMC5843 m
++SENSORS_HMC5843_I2C m
++SENSORS_HMC5843_SPI m
++SENSORS_IBMAEM m
++SENSORS_IBMPEX m
++SENSORS_IBM_CFFPS n
++SENSORS_IIO_HWMON m
++SENSORS_INA233 n
++SENSORS_INSPUR_IPSPS n
++SENSORS_IR35221 n
++SENSORS_IR36021 n
++SENSORS_IR38064 n
++SENSORS_IRPS5401 n
++SENSORS_ISL29018 m
++SENSORS_ISL29028 m
++SENSORS_ISL68137 n
++SENSORS_LIS3LV02D m
++SENSORS_LM25066 n
++SENSORS_LM70 m
++SENSORS_LT3074 n
++SENSORS_LT7182S n
++SENSORS_LTC2947_SPI n
++SENSORS_LTC2978 n
++SENSORS_LTC2992 n
++SENSORS_LTC3815 n
++SENSORS_LTC4286 n
++SENSORS_MAX1111 m
++SENSORS_MAX15301 n
++SENSORS_MAX16064 n
++SENSORS_MAX16601 n
++SENSORS_MAX17616 n
++SENSORS_MAX20730 n
++SENSORS_MAX20751 n
++SENSORS_MAX31722 n
++SENSORS_MAX31785 n
++SENSORS_MAX34440 n
++SENSORS_MAX8688 n
++SENSORS_MENF21BMC_HWMON m
++SENSORS_MP2856 n
++SENSORS_MP2869 n
++SENSORS_MP2888 n
++SENSORS_MP2891 n
++SENSORS_MP2925 n
++SENSORS_MP29502 n
++SENSORS_MP2975 n
++SENSORS_MP2993 n
++SENSORS_MP5023 n
++SENSORS_MP5920 n
++SENSORS_MP5926 n
++SENSORS_MP5990 n
++SENSORS_MP9941 n
++SENSORS_MP9945 n
++SENSORS_MPQ7932 n
++SENSORS_MPQ8785 n
++SENSORS_NCT6775_CORE m
++SENSORS_NTC_THERMISTOR m
++SENSORS_PIM4328 n
++SENSORS_PLI1209BC n
++SENSORS_PM6764TR n
++SENSORS_PMBUS m
++SENSORS_PWM_FAN n
++SENSORS_PXE1610 n
++SENSORS_Q54SJ108A2 n
++SENSORS_RM3100 m
++SENSORS_RM3100_I2C m
++SENSORS_RM3100_SPI m
++SENSORS_SCH56XX_COMMON m
++SENSORS_SHT15 n
++SENSORS_SPD5118_DETECT n
++SENSORS_STEF48H28 n
++SENSORS_STPDDC60 n
++SENSORS_SURFACE_FAN n
++SENSORS_SURFACE_TEMP n
++SENSORS_TDA38640 n
++SENSORS_TPS25990 n
++SENSORS_TPS40422 n
++SENSORS_TPS53679 n
++SENSORS_TPS546D24 n
++SENSORS_TSL2563 m
++SENSORS_UCD9000 n
++SENSORS_UCD9200 n
++SENSORS_W83795_FANCTRL n
++SENSORS_XDP710 n
++SENSORS_XDP720 n
++SENSORS_XDPE122 n
++SENSORS_XDPE152 n
++SENSORS_XDPE1A2G7B n
++SENSORS_ZL6100 n
++SERIAL_DEV_CTRL_TTYPORT y
++SERIAL_MAX3100 n
++SERIAL_MAX310X n
++SERIAL_MCTRL_GPIO y
++SERIAL_RP2_NR_UARTS 32
++SERIAL_SPRD n
++SERIO_GPIO_PS2 n
++SERIO_PARKBD m
++SEV_GUEST m
++SFC_FALCON_MTD y
++SFC_MCDI_LOGGING y
++SFC_MCDI_MON y
++SFC_MTD y
++SFC_SIENA_MCDI_LOGGING y
++SFC_SIENA_MCDI_MON y
++SFC_SIENA_MTD y
++SFC_SIENA_SRIOV y
++SFC_SRIOV y
++SFP m
++SGI_PARTITION y
++SI1133 m
++SI1145 m
++SI7005 n
++SI7020 n
++SI7210 n
++SIEMENS_SIMATIC_IPC_BATT m
++SIEMENS_SIMATIC_IPC_BATT_APOLLOLAKE m
++SIEMENS_SIMATIC_IPC_BATT_ELKHARTLAKE m
++SIEMENS_SIMATIC_IPC_BATT_F7188X m
++SIEMENS_SIMATIC_IPC_WDT m
++SIGNATURE y
++SILICOM_PLATFORM n
++SKB_DECRYPTED y
++SKFP m
++SKGE_DEBUG n
++SKGE_GENESIS y
++SLAB_OBJ_EXT y
++SLHC m
++SLIP_COMPRESSED y
++SLIP_MODE_SLIP6 y
++SLIP_SMART y
++SLUB_TINY n
++SMARTJOYPLUS_FF y
++SMBFS m
++SMB_SERVER_CHECK_CAP_NET_ADMIN y
++SMB_SERVER_KERBEROS5 y
++SMB_SERVER_SMBDIRECT n
++SMI240 n
++SMI330_I2C n
++SMI330_SPI n
++SMS_SDIO_DRV m
++SMS_SIANO_DEBUGFS n
++SMS_SIANO_MDTV m
++SMS_SIANO_RC y
++SMS_USB_DRV m
++SM_FTL n
++SND_AC97_CODEC m
++SND_AC97_POWER_SAVE y
++SND_AC97_POWER_SAVE_DEFAULT 0
++SND_AMD_ACP_CONFIG m
++SND_AMD_ASOC_ACP63 n
++SND_AMD_ASOC_ACP70 m
++SND_AMD_ASOC_REMBRANDT n
++SND_AMD_ASOC_RENOIR m
++SND_AMD_SOUNDWIRE_ACPI m
++SND_BCM63XX_I2S_WHISTLER n
++SND_BEBOB m
++SND_BT87X_OVERCLOCK n
++SND_COMPRESS_OFFLOAD m
++SND_CS46XX_NEW_DSP y
++SND_CTL_LED m
++SND_DESIGNWARE_I2S m
++SND_DESIGNWARE_PCM n
++SND_DICE m
++SND_DMAENGINE_PCM m
++SND_EMU10K1_SEQ m
++SND_ES1968_INPUT y
++SND_ES1968_RADIO y
++SND_FIREFACE m
++SND_FIREWIRE y
++SND_FIREWIRE_DIGI00X m
++SND_FIREWIRE_LIB m
++SND_FIREWIRE_MOTU m
++SND_FIREWIRE_TASCAM m
++SND_FIREWORKS m
++SND_FM801_TEA575X_BOOL y
++SND_HDA_CIRRUS_SCODEC m
++SND_HDA_CODEC_ALC260 m
++SND_HDA_CODEC_ALC262 m
++SND_HDA_CODEC_ALC268 m
++SND_HDA_CODEC_ALC269 m
++SND_HDA_CODEC_ALC662 m
++SND_HDA_CODEC_ALC680 m
++SND_HDA_CODEC_ALC861 m
++SND_HDA_CODEC_ALC861VD m
++SND_HDA_CODEC_ALC880 m
++SND_HDA_CODEC_ALC882 m
++SND_HDA_CODEC_CA0132_DSP y
++SND_HDA_CODEC_CS420X m
++SND_HDA_CODEC_CS421X m
++SND_HDA_CODEC_CS8409 m
++SND_HDA_CODEC_HDMI_ATI m
++SND_HDA_CODEC_HDMI_GENERIC m
++SND_HDA_CODEC_HDMI_INTEL m
++SND_HDA_CODEC_HDMI_NVIDIA m
++SND_HDA_CODEC_HDMI_NVIDIA_MCP m
++SND_HDA_CODEC_HDMI_SIMPLE m
++SND_HDA_CODEC_HDMI_TEGRA m
++SND_HDA_CODEC_REALTEK_LIB m
++SND_HDA_DSP_LOADER y
++SND_HDA_EXT_CORE m
++SND_HDA_GENERIC_LEDS y
++SND_HDA_INPUT_BEEP_MODE 1
++SND_HDA_INTEL_HDMI_SILENT_STREAM n
++SND_HDA_SCODEC_COMPONENT m
++SND_HDA_SCODEC_CS35L41 m
++SND_HDA_SCODEC_CS35L41_I2C m
++SND_HDA_SCODEC_CS35L41_SPI m
++SND_HDA_SCODEC_CS35L56 m
++SND_HDA_SCODEC_CS35L56_CAL_DEBUGFS n
++SND_HDA_SCODEC_CS35L56_I2C m
++SND_HDA_SCODEC_CS35L56_SPI m
++SND_HDA_SCODEC_TAS2781 m
++SND_HDA_SCODEC_TAS2781_I2C m
++SND_HDA_SCODEC_TAS2781_SPI n
++SND_I2S_HI6210_I2S n
++SND_ISIGHT m
++SND_MAESTRO3_INPUT y
++SND_MAX_CARDS 32
++SND_MIXER_OSS m
++SND_MPU401_UART m
++SND_MTS64 m
++SND_OPL3_LIB m
++SND_OPL3_LIB_SEQ m
++SND_OXFW m
++SND_OXYGEN_LIB m
++SND_PCM_ELD y
++SND_PCM_OSS m
++SND_PCM_OSS_PLUGINS y
++SND_PORTMAN2X4 m
++SND_RAWMIDI m
++SND_SB_COMMON m
++SND_SEQUENCER_OSS n
++SND_SEQ_MIDI m
++SND_SEQ_MIDI_EMUL m
++SND_SEQ_MIDI_EVENT m
++SND_SEQ_VIRMIDI m
++SND_SIMPLE_CARD n
++SND_SOC_AC97_CODEC n
++SND_SOC_ACPI m
++SND_SOC_ACPI_AMD_MATCH m
++SND_SOC_ACPI_AMD_SDCA_QUIRKS m
++SND_SOC_ACPI_INTEL_MATCH m
++SND_SOC_ACPI_INTEL_SDCA_QUIRKS m
++SND_SOC_ADAU1372_I2C n
++SND_SOC_ADAU1372_SPI n
++SND_SOC_ADAU1373 n
++SND_SOC_ADAU1701 n
++SND_SOC_ADAU1761_I2C n
++SND_SOC_ADAU1761_SPI n
++SND_SOC_ADAU7002 m
++SND_SOC_ADAU7118_HW n
++SND_SOC_ADAU7118_I2C n
++SND_SOC_ADI_AXI_I2S n
++SND_SOC_ADI_AXI_SPDIF n
++SND_SOC_AK4104 n
++SND_SOC_AK4118 n
++SND_SOC_AK4375 n
++SND_SOC_AK4458 n
++SND_SOC_AK4554 n
++SND_SOC_AK4613 n
++SND_SOC_AK4619 n
++SND_SOC_AK4642 n
++SND_SOC_AK5386 n
++SND_SOC_AK5558 n
++SND_SOC_ALC5623 n
++SND_SOC_AMD_ACP m
++SND_SOC_AMD_ACP3x m
++SND_SOC_AMD_ACP5x m
++SND_SOC_AMD_ACP63_TOPLEVEL m
++SND_SOC_AMD_ACP6x m
++SND_SOC_AMD_ACPI_MACH m
++SND_SOC_AMD_ACP_COMMON m
++SND_SOC_AMD_ACP_I2S m
++SND_SOC_AMD_ACP_LEGACY_COMMON m
++SND_SOC_AMD_ACP_PCI m
++SND_SOC_AMD_ACP_PCM m
++SND_SOC_AMD_ACP_PDM m
++SND_SOC_AMD_CZ_DA7219MX98357_MACH m
++SND_SOC_AMD_CZ_RT5645_MACH m
++SND_SOC_AMD_LEGACY_MACH m
++SND_SOC_AMD_LEGACY_SDW_MACH m
++SND_SOC_AMD_MACH_COMMON m
++SND_SOC_AMD_PS m
++SND_SOC_AMD_PS_MACH m
++SND_SOC_AMD_RENOIR m
++SND_SOC_AMD_RENOIR_MACH m
++SND_SOC_AMD_RV_RT5682_MACH m
++SND_SOC_AMD_SDW_MACH_COMMON m
++SND_SOC_AMD_SOF_MACH m
++SND_SOC_AMD_SOF_SDW_MACH m
++SND_SOC_AMD_SOUNDWIRE m
++SND_SOC_AMD_SOUNDWIRE_LINK_BASELINE m
++SND_SOC_AMD_ST_ES8336_MACH n
++SND_SOC_AMD_VANGOGH_MACH m
++SND_SOC_AMD_YC_MACH m
++SND_SOC_AUDIO_IIO_AUX n
++SND_SOC_AW8738 n
++SND_SOC_AW87390 n
++SND_SOC_AW88081 n
++SND_SOC_AW88166 n
++SND_SOC_AW88261 n
++SND_SOC_AW88395 n
++SND_SOC_AW88399 n
++SND_SOC_BD28623 n
++SND_SOC_BT_SCO n
++SND_SOC_CHV3_CODEC n
++SND_SOC_CHV3_I2S n
++SND_SOC_COMPRESS y
++SND_SOC_CROS_EC_CODEC m
++SND_SOC_CS35L32 n
++SND_SOC_CS35L33 n
++SND_SOC_CS35L34 n
++SND_SOC_CS35L35 n
++SND_SOC_CS35L36 n
++SND_SOC_CS35L41 m
++SND_SOC_CS35L41_I2C m
++SND_SOC_CS35L41_LIB m
++SND_SOC_CS35L41_SPI m
++SND_SOC_CS35L45_I2C n
++SND_SOC_CS35L45_SPI n
++SND_SOC_CS35L56 m
++SND_SOC_CS35L56_CAL_DEBUGFS n
++SND_SOC_CS35L56_CAL_PERFORM_CTRL n
++SND_SOC_CS35L56_CAL_SET_CTRL n
++SND_SOC_CS35L56_I2C m
++SND_SOC_CS35L56_SDW m
++SND_SOC_CS35L56_SHARED m
++SND_SOC_CS35L56_SPI m
++SND_SOC_CS4234 n
++SND_SOC_CS4265 n
++SND_SOC_CS4270 n
++SND_SOC_CS4271_I2C n
++SND_SOC_CS4271_SPI n
++SND_SOC_CS42L42 m
++SND_SOC_CS42L42_CORE m
++SND_SOC_CS42L42_SDW m
++SND_SOC_CS42L43 m
++SND_SOC_CS42L43_SDW m
++SND_SOC_CS42L51_I2C n
++SND_SOC_CS42L52 n
++SND_SOC_CS42L56 n
++SND_SOC_CS42L73 n
++SND_SOC_CS42L83 n
++SND_SOC_CS42L84 n
++SND_SOC_CS42XX8_I2C n
++SND_SOC_CS43130 n
++SND_SOC_CS4341 n
++SND_SOC_CS4349 n
++SND_SOC_CS48L32 n
++SND_SOC_CS530X_I2C n
++SND_SOC_CS530X_SPI n
++SND_SOC_CS53L30 n
++SND_SOC_CS_AMP_LIB m
++SND_SOC_CX2072X m
++SND_SOC_DA7213 m
++SND_SOC_DA7219 m
++SND_SOC_DMIC m
++SND_SOC_ES7134 n
++SND_SOC_ES7241 n
++SND_SOC_ES8311 n
++SND_SOC_ES8316 m
++SND_SOC_ES8323 n
++SND_SOC_ES8326 m
++SND_SOC_ES8328_I2C n
++SND_SOC_ES8328_SPI n
++SND_SOC_ES8375 n
++SND_SOC_ES8389 n
++SND_SOC_ES83XX_DSM_COMMON m
++SND_SOC_FS210X n
++SND_SOC_FSL_ASRC n
++SND_SOC_FSL_AUDMIX n
++SND_SOC_FSL_ESAI n
++SND_SOC_FSL_MICFIL n
++SND_SOC_FSL_SAI n
++SND_SOC_FSL_SPDIF n
++SND_SOC_FSL_SSI n
++SND_SOC_FSL_XCVR n
++SND_SOC_GENERIC_DMAENGINE_PCM y
++SND_SOC_GTM601 n
++SND_SOC_HDA m
++SND_SOC_HDAC_HDA m
++SND_SOC_I2C_AND_SPI m
++SND_SOC_ICS43432 n
++SND_SOC_IDT821034 n
++SND_SOC_IMX_AUDMUX n
++SND_SOC_INTEL_AVS m
++SND_SOC_INTEL_AVS_CARDNAME_OBSOLETE n
++SND_SOC_INTEL_AVS_MACH_DA7219 m
++SND_SOC_INTEL_AVS_MACH_DMIC m
++SND_SOC_INTEL_AVS_MACH_ES8336 n
++SND_SOC_INTEL_AVS_MACH_HDAUDIO m
++SND_SOC_INTEL_AVS_MACH_I2S_TEST n
++SND_SOC_INTEL_AVS_MACH_MAX98357A n
++SND_SOC_INTEL_AVS_MACH_MAX98373 m
++SND_SOC_INTEL_AVS_MACH_MAX98927 m
++SND_SOC_INTEL_AVS_MACH_NAU8825 m
++SND_SOC_INTEL_AVS_MACH_PCM3168A n
++SND_SOC_INTEL_AVS_MACH_PROBE n
++SND_SOC_INTEL_AVS_MACH_RT274 n
++SND_SOC_INTEL_AVS_MACH_RT286 m
++SND_SOC_INTEL_AVS_MACH_RT298 n
++SND_SOC_INTEL_AVS_MACH_RT5514 m
++SND_SOC_INTEL_AVS_MACH_RT5640 n
++SND_SOC_INTEL_AVS_MACH_RT5663 m
++SND_SOC_INTEL_AVS_MACH_RT5682 n
++SND_SOC_INTEL_AVS_MACH_SSM4567 m
++SND_SOC_INTEL_BDW_RT5650_MACH m
++SND_SOC_INTEL_BDW_RT5677_MACH m
++SND_SOC_INTEL_BROADWELL_MACH m
++SND_SOC_INTEL_BYTCR_RT5640_MACH m
++SND_SOC_INTEL_BYTCR_RT5651_MACH m
++SND_SOC_INTEL_BYT_CHT_CX2072X_MACH m
++SND_SOC_INTEL_BYT_CHT_DA7213_MACH m
++SND_SOC_INTEL_BYT_CHT_ES8316_MACH m
++SND_SOC_INTEL_BYT_CHT_NOCODEC_MACH n
++SND_SOC_INTEL_CATPT m
++SND_SOC_INTEL_CHT_BSW_MAX98090_TI_MACH m
++SND_SOC_INTEL_CHT_BSW_NAU8824_MACH m
++SND_SOC_INTEL_CHT_BSW_RT5645_MACH m
++SND_SOC_INTEL_CHT_BSW_RT5672_MACH m
++SND_SOC_INTEL_CML_LP_DA7219_MAX98357A_MACH m
++SND_SOC_INTEL_EHL_RT5660_MACH n
++SND_SOC_INTEL_GLK_DA7219_MAX98357A_MACH m
++SND_SOC_INTEL_GLK_RT5682_MAX98357A_MACH m
++SND_SOC_INTEL_HASWELL_MACH m
++SND_SOC_INTEL_HDA_DSP_COMMON m
++SND_SOC_INTEL_MACH y
++SND_SOC_INTEL_SKL_HDA_DSP_GENERIC_MACH m
++SND_SOC_INTEL_SOF_BOARD_HELPERS m
++SND_SOC_INTEL_SOF_CIRRUS_COMMON m
++SND_SOC_INTEL_SOF_CML_RT1011_RT5682_MACH m
++SND_SOC_INTEL_SOF_CS42L42_MACH m
++SND_SOC_INTEL_SOF_DA7219_MACH m
++SND_SOC_INTEL_SOF_ES8336_MACH m
++SND_SOC_INTEL_SOF_MAXIM_COMMON m
++SND_SOC_INTEL_SOF_NAU8825_MACH m
++SND_SOC_INTEL_SOF_NUVOTON_COMMON m
++SND_SOC_INTEL_SOF_PCM512x_MACH n
++SND_SOC_INTEL_SOF_REALTEK_COMMON m
++SND_SOC_INTEL_SOF_RT5682_MACH m
++SND_SOC_INTEL_SOF_SSP_AMP_MACH m
++SND_SOC_INTEL_SOF_TI_COMMON m
++SND_SOC_INTEL_SOF_WM8804_MACH n
++SND_SOC_INTEL_SOUNDWIRE_SOF_MACH m
++SND_SOC_INTEL_SST_TOPLEVEL y
++SND_SOC_INTEL_USER_FRIENDLY_LONG_NAMES y
++SND_SOC_LPASS_RX_MACRO n
++SND_SOC_LPASS_TX_MACRO n
++SND_SOC_LPASS_VA_MACRO n
++SND_SOC_LPASS_WSA_MACRO n
++SND_SOC_MAX9759 n
++SND_SOC_MAX98088 n
++SND_SOC_MAX98090 m
++SND_SOC_MAX98357A m
++SND_SOC_MAX98363 m
++SND_SOC_MAX98373 m
++SND_SOC_MAX98373_I2C m
++SND_SOC_MAX98373_SDW m
++SND_SOC_MAX98388 m
++SND_SOC_MAX98390 m
++SND_SOC_MAX98396 n
++SND_SOC_MAX98504 n
++SND_SOC_MAX98520 n
++SND_SOC_MAX9860 n
++SND_SOC_MAX9867 n
++SND_SOC_MAX98927 m
++SND_SOC_MSM8916_WCD_DIGITAL n
++SND_SOC_MT6351 n
++SND_SOC_MT6357 n
++SND_SOC_MT6358 n
++SND_SOC_MT6660 n
++SND_SOC_MTK_BTCVSD n
++SND_SOC_NAU8315 m
++SND_SOC_NAU8325 n
++SND_SOC_NAU8540 n
++SND_SOC_NAU8810 n
++SND_SOC_NAU8821 m
++SND_SOC_NAU8822 n
++SND_SOC_NAU8824 m
++SND_SOC_NAU8825 m
++SND_SOC_NTP8835 n
++SND_SOC_NTP8918 n
++SND_SOC_PCM1681 n
++SND_SOC_PCM1754 n
++SND_SOC_PCM1789_I2C n
++SND_SOC_PCM179X_I2C n
++SND_SOC_PCM179X_SPI n
++SND_SOC_PCM186X_I2C n
++SND_SOC_PCM186X_SPI n
++SND_SOC_PCM3060_I2C n
++SND_SOC_PCM3060_SPI n
++SND_SOC_PCM3168A_I2C n
++SND_SOC_PCM3168A_SPI n
++SND_SOC_PCM5102A n
++SND_SOC_PCM512x_I2C n
++SND_SOC_PCM512x_SPI n
++SND_SOC_PCM6240 n
++SND_SOC_PEB2466 n
++SND_SOC_PM4125_SDW n
++SND_SOC_RL6231 m
++SND_SOC_RL6347A m
++SND_SOC_RT1011 m
++SND_SOC_RT1015 m
++SND_SOC_RT1015P m
++SND_SOC_RT1017_SDCA_SDW n
++SND_SOC_RT1019 m
++SND_SOC_RT1308 m
++SND_SOC_RT1308_SDW m
++SND_SOC_RT1316_SDW m
++SND_SOC_RT1318_SDW m
++SND_SOC_RT1320_SDW m
++SND_SOC_RT286 m
++SND_SOC_RT5514 m
++SND_SOC_RT5575 n
++SND_SOC_RT5616 n
++SND_SOC_RT5631 n
++SND_SOC_RT5640 m
++SND_SOC_RT5645 m
++SND_SOC_RT5651 m
++SND_SOC_RT5659 n
++SND_SOC_RT5663 m
++SND_SOC_RT5670 m
++SND_SOC_RT5677 m
++SND_SOC_RT5677_SPI m
++SND_SOC_RT5682 m
++SND_SOC_RT5682S m
++SND_SOC_RT5682_I2C m
++SND_SOC_RT5682_SDW m
++SND_SOC_RT700 m
++SND_SOC_RT700_SDW m
++SND_SOC_RT711 m
++SND_SOC_RT711_SDCA_SDW m
++SND_SOC_RT711_SDW m
++SND_SOC_RT712_SDCA_DMIC_SDW m
++SND_SOC_RT712_SDCA_SDW m
++SND_SOC_RT715 m
++SND_SOC_RT715_SDCA_SDW m
++SND_SOC_RT715_SDW m
++SND_SOC_RT721_SDCA_SDW m
++SND_SOC_RT722_SDCA_SDW m
++SND_SOC_RT9120 n
++SND_SOC_RT9123 n
++SND_SOC_RT9123P n
++SND_SOC_RTQ9124 n
++SND_SOC_RTQ9128 n
++SND_SOC_RT_SDW_COMMON m
++SND_SOC_SDCA m
++SND_SOC_SDCA_CLASS m
++SND_SOC_SDCA_CLASS_FUNCTION m
++SND_SOC_SDCA_FDL y
++SND_SOC_SDCA_HID y
++SND_SOC_SDCA_IRQ y
++SND_SOC_SDCA_OPTIONAL m
++SND_SOC_SDW_MOCKUP m
++SND_SOC_SDW_UTILS m
++SND_SOC_SGTL5000 n
++SND_SOC_SIMPLE_AMPLIFIER n
++SND_SOC_SIMPLE_MUX n
++SND_SOC_SMA1303 n
++SND_SOC_SMA1307 n
++SND_SOC_SOF m
++SND_SOC_SOF_ACPI n
++SND_SOC_SOF_ACP_PROBES m
++SND_SOC_SOF_ALDERLAKE m
++SND_SOC_SOF_AMD_ACP63 n
++SND_SOC_SOF_AMD_ACP70 n
++SND_SOC_SOF_AMD_COMMON m
++SND_SOC_SOF_AMD_REMBRANDT m
++SND_SOC_SOF_AMD_RENOIR n
++SND_SOC_SOF_AMD_TOPLEVEL m
++SND_SOC_SOF_AMD_VANGOGH n
++SND_SOC_SOF_APOLLOLAKE m
++SND_SOC_SOF_CANNONLAKE m
++SND_SOC_SOF_CLIENT m
++SND_SOC_SOF_COFFEELAKE m
++SND_SOC_SOF_COMETLAKE m
++SND_SOC_SOF_DEBUG_PROBES m
++SND_SOC_SOF_DEVELOPER_SUPPORT n
++SND_SOC_SOF_ELKHARTLAKE m
++SND_SOC_SOF_GEMINILAKE m
++SND_SOC_SOF_HDA m
++SND_SOC_SOF_HDA_AUDIO_CODEC y
++SND_SOC_SOF_HDA_COMMON m
++SND_SOC_SOF_HDA_GENERIC m
++SND_SOC_SOF_HDA_LINK y
++SND_SOC_SOF_HDA_LINK_BASELINE m
++SND_SOC_SOF_HDA_MLINK m
++SND_SOC_SOF_HDA_PROBES m
++SND_SOC_SOF_ICELAKE m
++SND_SOC_SOF_INTEL_APL m
++SND_SOC_SOF_INTEL_ATOM_HIFI_EP m
++SND_SOC_SOF_INTEL_CNL m
++SND_SOC_SOF_INTEL_COMMON m
++SND_SOC_SOF_INTEL_HIFI_EP_IPC m
++SND_SOC_SOF_INTEL_ICL m
++SND_SOC_SOF_INTEL_LNL m
++SND_SOC_SOF_INTEL_MTL m
++SND_SOC_SOF_INTEL_NVL m
++SND_SOC_SOF_INTEL_PTL m
++SND_SOC_SOF_INTEL_SKL m
++SND_SOC_SOF_INTEL_SOUNDWIRE m
++SND_SOC_SOF_INTEL_SOUNDWIRE_LINK_BASELINE m
++SND_SOC_SOF_INTEL_TGL m
++SND_SOC_SOF_INTEL_TOPLEVEL y
++SND_SOC_SOF_IPC3 y
++SND_SOC_SOF_IPC4 y
++SND_SOC_SOF_JASPERLAKE m
++SND_SOC_SOF_KABYLAKE m
++SND_SOC_SOF_LUNARLAKE m
++SND_SOC_SOF_MERRIFIELD m
++SND_SOC_SOF_METEORLAKE m
++SND_SOC_SOF_NOVALAKE m
++SND_SOC_SOF_PANTHERLAKE m
++SND_SOC_SOF_PCI m
++SND_SOC_SOF_PCI_DEV m
++SND_SOC_SOF_PROBE_WORK_QUEUE y
++SND_SOC_SOF_SKYLAKE m
++SND_SOC_SOF_TIGERLAKE m
++SND_SOC_SOF_TOPLEVEL y
++SND_SOC_SOF_XTENSA m
++SND_SOC_SPDIF n
++SND_SOC_SRC4XXX_I2C n
++SND_SOC_SSM2305 n
++SND_SOC_SSM2518 n
++SND_SOC_SSM2602_I2C n
++SND_SOC_SSM2602_SPI n
++SND_SOC_SSM4567 m
++SND_SOC_STA32X n
++SND_SOC_STA350 n
++SND_SOC_STI_SAS n
++SND_SOC_TAS2552 n
++SND_SOC_TAS2562 n
++SND_SOC_TAS2764 n
++SND_SOC_TAS2770 n
++SND_SOC_TAS2780 n
++SND_SOC_TAS2781_COMLIB m
++SND_SOC_TAS2781_COMLIB_I2C m
++SND_SOC_TAS2781_FMWLIB m
++SND_SOC_TAS2781_I2C m
++SND_SOC_TAS2783_SDW n
++SND_SOC_TAS5086 n
++SND_SOC_TAS571X n
++SND_SOC_TAS5720 n
++SND_SOC_TAS5805M n
++SND_SOC_TAS6424 n
++SND_SOC_TDA7419 n
++SND_SOC_TFA9879 n
++SND_SOC_TFA989X n
++SND_SOC_TLV320ADC3XXX n
++SND_SOC_TLV320ADCX140 n
++SND_SOC_TLV320AIC23_I2C n
++SND_SOC_TLV320AIC23_SPI n
++SND_SOC_TLV320AIC31XX n
++SND_SOC_TLV320AIC32X4_I2C n
++SND_SOC_TLV320AIC32X4_SPI n
++SND_SOC_TLV320AIC3X_I2C n
++SND_SOC_TLV320AIC3X_SPI n
++SND_SOC_TOPOLOGY y
++SND_SOC_TPA6130A2 n
++SND_SOC_TS3A227E m
++SND_SOC_TSCS42XX n
++SND_SOC_TSCS454 n
++SND_SOC_UDA1334 n
++SND_SOC_UDA1342 n
++SND_SOC_UDA1380 n
++SND_SOC_USB n
++SND_SOC_WCD9335 n
++SND_SOC_WCD937X_SDW n
++SND_SOC_WCD938X_SDW n
++SND_SOC_WCD939X_SDW n
++SND_SOC_WM8510 n
++SND_SOC_WM8523 n
++SND_SOC_WM8524 n
++SND_SOC_WM8580 n
++SND_SOC_WM8711 n
++SND_SOC_WM8728 n
++SND_SOC_WM8731_I2C n
++SND_SOC_WM8731_SPI n
++SND_SOC_WM8737 n
++SND_SOC_WM8741 n
++SND_SOC_WM8750 n
++SND_SOC_WM8753 n
++SND_SOC_WM8770 n
++SND_SOC_WM8776 n
++SND_SOC_WM8782 n
++SND_SOC_WM8804_I2C n
++SND_SOC_WM8804_SPI n
++SND_SOC_WM8903 n
++SND_SOC_WM8904 n
++SND_SOC_WM8940 n
++SND_SOC_WM8960 n
++SND_SOC_WM8961 n
++SND_SOC_WM8962 n
++SND_SOC_WM8974 n
++SND_SOC_WM8978 n
++SND_SOC_WM8985 n
++SND_SOC_WM_ADSP m
++SND_SOC_WSA881X n
++SND_SOC_WSA883X n
++SND_SOC_WSA884X n
++SND_SOC_XILINX_AUDIO_FORMATTER n
++SND_SOC_XILINX_I2S n
++SND_SOC_XILINX_SPDIF n
++SND_SOC_XTFPGA_I2S n
++SND_SOC_ZL38060 n
++SND_SOF_SOF_HDA_SDW_BPT m
++SND_SPI y
++SND_SST_ATOM_HIFI2_PLATFORM m
++SND_SST_ATOM_HIFI2_PLATFORM_ACPI m
++SND_SST_ATOM_HIFI2_PLATFORM_PCI n
++SND_SYNTH_EMUX m
++SND_USB_AUDIO_MIDI_V2 n
++SND_USB_AUDIO_USE_MEDIA_CONTROLLER y
++SND_USB_CAIAQ_INPUT y
++SND_USB_LINE6 m
++SND_VX_LIB m
++SND_XEN_FRONTEND m
++SNET_VDPA n
++SOCK_VALIDATE_XMIT y
++SOFT_WATCHDOG_PRETIMEOUT n
++SOLARIS_X86_PARTITION y
++SONYPI_COMPAT y
++SOUNDWIRE m
++SOUNDWIRE_AMD m
++SOUNDWIRE_CADENCE m
++SOUNDWIRE_GENERIC_ALLOCATION m
++SOUNDWIRE_INTEL m
++SOUNDWIRE_QCOM m
++SOUND_OSS_CORE y
++SOUND_OSS_CORE_PRECLAIM n
++SPEAKUP m
++SPEAKUP_SYNTH_ACNTSA m
++SPEAKUP_SYNTH_APOLLO m
++SPEAKUP_SYNTH_AUDPTR m
++SPEAKUP_SYNTH_BNS m
++SPEAKUP_SYNTH_DECEXT m
++SPEAKUP_SYNTH_DECTLK m
++SPEAKUP_SYNTH_DUMMY m
++SPEAKUP_SYNTH_LTLK m
++SPEAKUP_SYNTH_SOFT m
++SPEAKUP_SYNTH_SPKOUT m
++SPEAKUP_SYNTH_TXPRT m
++SPI_ALTERA n
++SPI_AMD m
++SPI_AX88796C n
++SPI_AXI_SPI_ENGINE n
++SPI_BITBANG m
++SPI_BUTTERFLY m
++SPI_CADENCE n
++SPI_CH341 n
++SPI_CS42L43 m
++SPI_DEBUG n
++SPI_DESIGNWARE n
++SPI_DYNAMIC y
++SPI_GPIO n
++SPI_INTEL_PCI n
++SPI_INTEL_PLATFORM n
++SPI_LANTIQ_SSC n
++SPI_LJCA m
++SPI_LM70_LLP m
++SPI_LOOPBACK_TEST n
++SPI_MASTER y
++SPI_MEM y
++SPI_MICROCHIP_CORE_QSPI n
++SPI_MICROCHIP_CORE_SPI n
++SPI_MUX n
++SPI_MXIC n
++SPI_OC_TINY n
++SPI_OFFLOAD y
++SPI_OFFLOAD_TRIGGER_ADI_UTIL_SD n
++SPI_OFFLOAD_TRIGGER_PWM n
++SPI_PCI1XXXX n
++SPI_PXA2XX m
++SPI_PXA2XX_PCI m
++SPI_SC18IS602 n
++SPI_SIFIVE n
++SPI_SLAVE n
++SPI_SPIDEV y
++SPI_TLE62X0 n
++SPI_VIRTIO n
++SPI_XCOMM n
++SPI_XILINX n
++SPI_ZYNQMP_GQSPI n
++SPS30_I2C n
++SPS30_SERIAL n
++SQUASHFS_4K_DEVBLK_SIZE n
++SQUASHFS_CHOICE_DECOMP_BY_MOUNT n
++SQUASHFS_COMPILE_DECOMP_MULTI n
++SQUASHFS_COMPILE_DECOMP_MULTI_PERCPU y
++SQUASHFS_COMPILE_DECOMP_SINGLE n
++SQUASHFS_COMP_CACHE_FULL n
++SQUASHFS_DECOMP_MULTI_PERCPU y
++SQUASHFS_EMBEDDED n
++SQUASHFS_FILE_CACHE n
++SQUASHFS_FILE_DIRECT y
++SQUASHFS_FRAGMENT_CACHE_SIZE 3
++SQUASHFS_LZ4 y
++SQUASHFS_LZO y
++SQUASHFS_XATTR y
++SQUASHFS_XZ y
++SQUASHFS_ZLIB y
++SQUASHFS_ZSTD y
++SRF04 m
++SRF08 m
++SSB_B43_PCI_BRIDGE y
++SSB_BLOCKIO y
++SSB_DRIVER_GPIO n
++SSB_DRIVER_PCICORE y
++SSB_DRIVER_PCICORE_POSSIBLE y
++SSB_PCIHOST y
++SSB_PCIHOST_POSSIBLE y
++SSB_PCMCIAHOST y
++SSB_PCMCIAHOST_POSSIBLE y
++SSB_SDIOHOST y
++SSB_SDIOHOST_POSSIBLE y
++SSB_SPROM y
++SSFDC m
++STAGING_MEDIA y
++STAGING_MEDIA_DEPRECATED n
++STEAM_FF n
++STK3310 m
++STK8312 m
++STK8BA50 m
++STMMAC_LIBPCI m
++STMMAC_PCI n
++STMMAC_PLATFORM m
++STMMAC_SELFTESTS n
++STM_DUMMY m
++STM_PROTO_BASIC m
++STM_PROTO_SYS_T m
++STM_SOURCE_CONSOLE m
++STM_SOURCE_FTRACE m
++STM_SOURCE_HEARTBEAT m
++STP m
++STREAM_PARSER y
++ST_UVIS25 m
++ST_UVIS25_I2C m
++ST_UVIS25_SPI m
++SUNGEM_PHY m
++SUNRPC_DEBUG_TRACE n
++SUNRPC_SWAP y
++SUNRPC_XPRT_RDMA m
++SUN_PARTITION y
++SURFACE3_WMI m
++SURFACE_ACPI_NOTIFY m
++SURFACE_AGGREGATOR m
++SURFACE_AGGREGATOR_BUS y
++SURFACE_AGGREGATOR_CDEV n
++SURFACE_AGGREGATOR_HUB n
++SURFACE_AGGREGATOR_REGISTRY m
++SURFACE_AGGREGATOR_TABLET_SWITCH n
++SURFACE_DTX m
++SURFACE_HID m
++SURFACE_HID_CORE m
++SURFACE_HOTPLUG m
++SURFACE_KBD m
++SURFACE_PLATFORM_PROFILE m
++SUSPEND_SKIP_SYNC n
++SWIOTLB_XEN y
++SWPHY y
++SX9310 m
++SX9324 n
++SX9360 n
++SX9500 n
++SX_COMMON m
++SYNTH_EVENT_GEN_TEST n
++SYSFB y
++SYSTEM_BLACKLIST_AUTH_UPDATE n
++SYSTEM_BLACKLIST_HASH_LIST ""
++SYSTEM_REVOCATION_LIST n
++SYSV68_PARTITION n
++SYS_HYPERVISOR y
++T5403 m
++TAP m
++TASKS_RUDE_RCU y
++TCG_ATMEL m
++TCG_CRB y
++TCG_INFINEON m
++TCG_NSC m
++TCG_SVSM n
++TCG_TIS y
++TCG_TIS_CORE y
++TCG_TIS_I2C n
++TCG_TIS_I2C_ATMEL m
++TCG_TIS_I2C_CR50 m
++TCG_TIS_I2C_INFINEON m
++TCG_TIS_I2C_NUVOTON m
++TCG_TIS_SPI m
++TCG_TIS_SPI_CR50 y
++TCG_TIS_ST33ZP24 m
++TCG_TIS_ST33ZP24_I2C m
++TCG_TIS_ST33ZP24_SPI n
++TCG_TPM2_HMAC n
++TCG_VTPM_PROXY m
++TCG_XEN m
++TCM_FC m
++TCM_FILEIO m
++TCM_IBLOCK m
++TCM_PSCSI m
++TCM_QLA2XXX m
++TCM_QLA2XXX_DEBUG n
++TCM_USER2 m
++TCP_SIGPOOL y
++TCS3414 m
++TCS3472 m
++TDX_GUEST_DRIVER m
++TEE_DMABUF_HEAPS y
++TEST_DYNAMIC_DEBUG n
++TEST_HMM n
++TEST_UBSAN n
++TEXTSEARCH y
++TEXTSEARCH_BM m
++TEXTSEARCH_FSM m
++TEXTSEARCH_KMP m
++THERMAL_DEFAULT_GOV_BANG_BANG n
++THERMAL_DEFAULT_GOV_POWER_ALLOCATOR n
++THERMAL_GOV_POWER_ALLOCATOR y
++THINKPAD_ACPI_ALSA_SUPPORT y
++THINKPAD_ACPI_DEBUG n
++THINKPAD_ACPI_DEBUGFACILITIES n
++THINKPAD_ACPI_HOTKEY_POLL y
++THINKPAD_ACPI_UNSAFE_LEDS n
++THINKPAD_ACPI_VIDEO y
++THP_SWAP y
++THRUSTMASTER_FF y
++TIFM_7XX1 m
++TINYDRM_HX8357D n
++TINYDRM_ILI9163 n
++TINYDRM_ILI9225 n
++TINYDRM_ILI9341 n
++TINYDRM_ILI9486 n
++TINYDRM_MI0283QT n
++TINYDRM_REPAPER n
++TINYDRM_SHARP_MEMORY n
++TIPC_CRYPTO y
++TIPC_DIAG m
++TIPC_MEDIA_IB y
++TIPC_MEDIA_UDP y
++TI_ADC081C m
++TI_ADC0832 m
++TI_ADC084S021 m
++TI_ADC108S102 m
++TI_ADC12138 m
++TI_ADC128S052 m
++TI_ADC161S626 m
++TI_ADS1015 m
++TI_ADS1018 n
++TI_ADS1100 n
++TI_ADS1119 n
++TI_ADS124S08 n
++TI_ADS1298 n
++TI_ADS131E08 n
++TI_ADS131M02 n
++TI_ADS7138 n
++TI_ADS7924 n
++TI_ADS7950 m
++TI_ADS8344 n
++TI_ADS8688 n
++TI_DAC082S085 m
++TI_DAC5571 m
++TI_DAC7311 m
++TI_DAC7612 m
++TI_FPC202 n
++TI_LMP92064 n
++TI_TLC4541 n
++TI_TMAG5273 n
++TI_TSC2046 n
++TLS_DEVICE y
++TLS_TOE n
++TMP006 m
++TMP007 m
++TMP117 n
++TOUCHSCREEN_AD7877 m
++TOUCHSCREEN_AD7879_I2C m
++TOUCHSCREEN_AD7879_SPI n
++TOUCHSCREEN_ADC n
++TOUCHSCREEN_ADS7846 m
++TOUCHSCREEN_ATMEL_MXT_T37 n
++TOUCHSCREEN_AUO_PIXCIR n
++TOUCHSCREEN_COLIBRI_VF50 n
++TOUCHSCREEN_CY8CTMG110 n
++TOUCHSCREEN_DMI y
++TOUCHSCREEN_GOODIX m
++TOUCHSCREEN_GOODIX_BERLIN_SPI n
++TOUCHSCREEN_MSG2638 n
++TOUCHSCREEN_RM_TS n
++TOUCHSCREEN_SIS_I2C n
++TOUCHSCREEN_SUR40 m
++TOUCHSCREEN_SURFACE3_SPI m
++TOUCHSCREEN_TSC2005 n
++TOUCHSCREEN_TSC2007_IIO n
++TOUCHSCREEN_USB_3M y
++TOUCHSCREEN_USB_DMC_TSC10 y
++TOUCHSCREEN_USB_E2I y
++TOUCHSCREEN_USB_EASYTOUCH y
++TOUCHSCREEN_USB_EGALAX y
++TOUCHSCREEN_USB_ELO y
++TOUCHSCREEN_USB_ETT_TC45USB y
++TOUCHSCREEN_USB_ETURBO y
++TOUCHSCREEN_USB_GENERAL_TOUCH y
++TOUCHSCREEN_USB_GOTOP y
++TOUCHSCREEN_USB_GUNZE y
++TOUCHSCREEN_USB_IDEALTEK y
++TOUCHSCREEN_USB_IRTOUCH y
++TOUCHSCREEN_USB_ITM y
++TOUCHSCREEN_USB_JASTEC y
++TOUCHSCREEN_USB_NEXIO y
++TOUCHSCREEN_USB_PANJIT y
++TOUCHSCREEN_USB_ZYTRONIC y
++TOUCHSCREEN_WM9705 y
++TOUCHSCREEN_WM9712 y
++TOUCHSCREEN_WM9713 y
++TOUCHSCREEN_WM97XX m
++TOUCHSCREEN_ZFORCE n
++TPL0102 n
++TPS65010 n
++TPS68470_PMIC_OPREGION n
++TRACER_SNAPSHOT_PER_CPU_SWAP n
++TRACE_SYSCALL_BUF_SIZE_DEFAULT 63
++TRACING_MAP y
++TRANSPARENT_HUGEPAGE_ALWAYS y
++TRANSPARENT_HUGEPAGE_MADVISE n
++TRANSPARENT_HUGEPAGE_NEVER n
++TRANSPARENT_HUGEPAGE_SHMEM_HUGE_ADVISE n
++TRANSPARENT_HUGEPAGE_SHMEM_HUGE_ALWAYS n
++TRANSPARENT_HUGEPAGE_SHMEM_HUGE_NEVER y
++TRANSPARENT_HUGEPAGE_SHMEM_HUGE_WITHIN_SIZE n
++TRANSPARENT_HUGEPAGE_TMPFS_HUGE_ADVISE n
++TRANSPARENT_HUGEPAGE_TMPFS_HUGE_ALWAYS n
++TRANSPARENT_HUGEPAGE_TMPFS_HUGE_NEVER y
++TRANSPARENT_HUGEPAGE_TMPFS_HUGE_WITHIN_SIZE n
++TSL2583 m
++TSL2591 n
++TSL2772 m
++TSL4531 m
++TSM y
++TSM_GUEST y
++TSM_MEASUREMENTS y
++TSM_REPORTS m
++TSYS01 m
++TSYS02D m
++TTPCI_EEPROM m
++TTY_PRINTK m
++TTY_PRINTK_LEVEL 6
++TULIP_MMIO n
++TULIP_MWI n
++TULIP_NAPI y
++TULIP_NAPI_HW_MITIGATION y
++TXGBE n
++TYPEC_ANX7411 n
++TYPEC_DP_ALTMODE m
++TYPEC_FUSB302 m
++TYPEC_HD3SS3220 n
++TYPEC_MUX_FSA4480 n
++TYPEC_MUX_GPIO_SBU n
++TYPEC_MUX_INTEL_PMC n
++TYPEC_MUX_IT5205 n
++TYPEC_MUX_NB7VPQ904M n
++TYPEC_MUX_PI3USB30532 m
++TYPEC_MUX_PS883X n
++TYPEC_MUX_PTN36502 n
++TYPEC_MUX_TUSB1046 n
++TYPEC_MUX_WCD939X_USBSS n
++TYPEC_NVIDIA_ALTMODE m
++TYPEC_RT1719 n
++TYPEC_STUSB160X n
++TYPEC_TBT_ALTMODE n
++TYPEC_TCPCI n
++TYPEC_TCPM m
++TYPEC_TPS6598X m
++TYPEC_UCSI m
++TYPEC_WCOVE m
++TYPEC_WUSB3801 n
++UBIFS_ATIME_SUPPORT n
++UBIFS_FS m
++UBIFS_FS_ADVANCED_COMPR y
++UBIFS_FS_AUTHENTICATION n
++UBIFS_FS_LZO y
++UBIFS_FS_SECURITY y
++UBIFS_FS_XATTR y
++UBIFS_FS_ZLIB y
++UBIFS_FS_ZSTD y
++UBSAN_ALIGNMENT n
++UBSAN_ARRAY_BOUNDS y
++UBSAN_BOOL n
++UBSAN_BOUNDS y
++UBSAN_ENUM n
++UBSAN_SHIFT y
++UBSAN_TRAP n
++UCLAMP_BUCKETS_COUNT 5
++UCLAMP_TASK_GROUP y
++UCSI_ACPI m
++UCSI_CCG n
++UCSI_STM32G0 n
++UEFI_CPER y
++UEFI_CPER_X86 y
++UFS_DEBUG n
++UFS_FS_WRITE n
++UIO_AEC m
++UIO_CIF m
++UIO_DMEM_GENIRQ n
++UIO_HV_GENERIC m
++UIO_MF624 m
++UIO_NETX m
++UIO_PCI_GENERIC m
++UIO_PCI_GENERIC_SVA n
++UIO_PDRV_GENIRQ n
++UIO_SERCOS3 m
++ULTRIX_PARTITION y
++UNACCEPTED_MEMORY y
++UNIWILL_LAPTOP m
++UNIXWARE_DISKLABEL y
++US5182D m
++USB4_DEBUGFS_WRITE n
++USB4_DMA_TEST n
++USB4_NET m
++USBIP_DEBUG n
++USBIP_HOST m
++USBIP_VHCI_HCD m
++USBIP_VHCI_HC_PORTS 15
++USBIP_VHCI_NR_HCS 8
++USBIP_VUDC m
++USB_AIRSPY m
++USB_ALI_M5632 y
++USB_AMD5536UDC n
++USB_AN2720 y
++USB_ARMLINUX y
++USB_ATM m
++USB_AUDIO n
++USB_BDC_UDC n
++USB_BELKIN y
++USB_CDC_COMPOSITE n
++USB_CDC_PHONET m
++USB_CDNS2_UDC n
++USB_CONFIGFS m
++USB_CONFIGFS_ACM y
++USB_CONFIGFS_ECM y
++USB_CONFIGFS_ECM_SUBSET y
++USB_CONFIGFS_EEM y
++USB_CONFIGFS_F_FS y
++USB_CONFIGFS_F_HID y
++USB_CONFIGFS_F_LB_SS y
++USB_CONFIGFS_F_MIDI y
++USB_CONFIGFS_F_MIDI2 n
++USB_CONFIGFS_F_PRINTER y
++USB_CONFIGFS_F_TCM n
++USB_CONFIGFS_F_UAC1 y
++USB_CONFIGFS_F_UAC1_LEGACY n
++USB_CONFIGFS_F_UAC2 y
++USB_CONFIGFS_F_UVC y
++USB_CONFIGFS_MASS_STORAGE y
++USB_CONFIGFS_NCM y
++USB_CONFIGFS_OBEX y
++USB_CONFIGFS_PHONET y
++USB_CONFIGFS_RNDIS y
++USB_CONFIGFS_SERIAL y
++USB_CONN_GPIO n
++USB_CXACRU m
++USB_DSBR m
++USB_DUMMY_HCD m
++USB_DWC3_DUAL_ROLE y
++USB_DWC3_GADGET n
++USB_DWC3_GOOGLE n
++USB_DWC3_HAPS m
++USB_DWC3_HOST n
++USB_DWC3_PCI m
++USB_EG20T m
++USB_EPSON2888 y
++USB_ETH m
++USB_ETH_EEM n
++USB_ETH_RNDIS y
++USB_EXTRON_DA_HD_4K_PLUS_CEC n
++USB_FUNCTIONFS m
++USB_FUNCTIONFS_ETH y
++USB_FUNCTIONFS_GENERIC y
++USB_FUNCTIONFS_RNDIS y
++USB_F_ACM m
++USB_F_ECM m
++USB_F_EEM m
++USB_F_FS m
++USB_F_HID m
++USB_F_MASS_STORAGE m
++USB_F_MIDI m
++USB_F_NCM m
++USB_F_OBEX m
++USB_F_PHONET m
++USB_F_PRINTER m
++USB_F_RNDIS m
++USB_F_SERIAL m
++USB_F_SS_LB m
++USB_F_SUBSET m
++USB_F_UAC1 m
++USB_F_UAC2 m
++USB_F_UVC m
++USB_GADGETFS m
++USB_GADGET_DEBUG n
++USB_GADGET_DEBUG_FILES n
++USB_GADGET_DEBUG_FS n
++USB_GADGET_STORAGE_NUM_BUFFERS 2
++USB_GADGET_TARGET n
++USB_GADGET_VBUS_DRAW 2
++USB_GL860 m
++USB_GOKU n
++USB_GPIO_VBUS n
++USB_GR_UDC n
++USB_GSPCA m
++USB_GSPCA_BENQ m
++USB_GSPCA_CONEX m
++USB_GSPCA_CPIA1 m
++USB_GSPCA_DTCS033 m
++USB_GSPCA_ETOMS m
++USB_GSPCA_FINEPIX m
++USB_GSPCA_JEILINJ m
++USB_GSPCA_JL2005BCD m
++USB_GSPCA_KINECT m
++USB_GSPCA_KONICA m
++USB_GSPCA_MARS m
++USB_GSPCA_MR97310A m
++USB_GSPCA_NW80X m
++USB_GSPCA_OV519 m
++USB_GSPCA_OV534 m
++USB_GSPCA_OV534_9 m
++USB_GSPCA_PAC207 m
++USB_GSPCA_PAC7302 m
++USB_GSPCA_PAC7311 m
++USB_GSPCA_SE401 m
++USB_GSPCA_SN9C2028 m
++USB_GSPCA_SN9C20X m
++USB_GSPCA_SONIXB m
++USB_GSPCA_SONIXJ m
++USB_GSPCA_SPCA1528 m
++USB_GSPCA_SPCA500 m
++USB_GSPCA_SPCA501 m
++USB_GSPCA_SPCA505 m
++USB_GSPCA_SPCA506 m
++USB_GSPCA_SPCA508 m
++USB_GSPCA_SPCA561 m
++USB_GSPCA_SQ905 m
++USB_GSPCA_SQ905C m
++USB_GSPCA_SQ930X m
++USB_GSPCA_STK014 m
++USB_GSPCA_STK1135 m
++USB_GSPCA_STV0680 m
++USB_GSPCA_SUNPLUS m
++USB_GSPCA_T613 m
++USB_GSPCA_TOPRO m
++USB_GSPCA_TOUPTEK m
++USB_GSPCA_TV8532 m
++USB_GSPCA_VC032X m
++USB_GSPCA_VICAM m
++USB_GSPCA_XIRLINK_CIT m
++USB_GSPCA_ZC3XX m
++USB_G_ACM_MS n
++USB_G_DBGP n
++USB_G_HID n
++USB_G_MULTI n
++USB_G_NCM n
++USB_G_NOKIA n
++USB_G_PRINTER n
++USB_G_SERIAL m
++USB_G_WEBCAM n
++USB_HACKRF m
++USB_HCD_BCMA n
++USB_HCD_SSB n
++USB_KBD n
++USB_KC2190 y
++USB_KEENE m
++USB_LIBCOMPOSITE m
++USB_M5602 m
++USB_M66592 n
++USB_MA901 m
++USB_MASS_STORAGE m
++USB_MAX3420_UDC n
++USB_MAX3421_HCD n
++USB_MIDI_GADGET n
++USB_MOUSE n
++USB_MR800 m
++USB_MSI2500 m
++USB_NET2280 m
++USB_NET_AQC111 m
++USB_NET_AX88179_178A m
++USB_NET_AX8817X m
++USB_NET_CDCETHER m
++USB_NET_CDC_EEM m
++USB_NET_CDC_MBIM m
++USB_NET_CDC_NCM m
++USB_NET_CDC_SUBSET m
++USB_NET_CDC_SUBSET_ENABLE m
++USB_NET_CH9200 m
++USB_NET_CX82310_ETH m
++USB_NET_DM9601 m
++USB_NET_GL620A m
++USB_NET_HUAWEI_CDC_NCM m
++USB_NET_INT51X1 m
++USB_NET_KALMIA m
++USB_NET_MCS7830 m
++USB_NET_NET1080 m
++USB_NET_PLUSB m
++USB_NET_QMI_WWAN m
++USB_NET_RNDIS_HOST m
++USB_NET_SMSC75XX m
++USB_NET_SMSC95XX m
++USB_NET_SR9700 m
++USB_NET_SR9800 m
++USB_NET_ZAURUS m
++USB_OHCI_HCD_SSB n
++USB_OTG_DISABLE_EXTERNAL_HUB n
++USB_PULSE8_CEC m
++USB_PWC m
++USB_PWC_DEBUG n
++USB_PWC_INPUT_EVDEV y
++USB_PXA27X n
++USB_R8A66597 n
++USB_RAINSHADOW_CEC m
++USB_RAREMONO m
++USB_RAW_GADGET n
++USB_ROLES_INTEL_XHCI m
++USB_RTL8153_ECM m
++USB_S2255 m
++USB_SERIAL_AIRCABLE m
++USB_SERIAL_ARK3116 m
++USB_SERIAL_BELKIN m
++USB_SERIAL_CH341 m
++USB_SERIAL_CP210X m
++USB_SERIAL_CYBERJACK m
++USB_SERIAL_CYPRESS_M8 m
++USB_SERIAL_DEBUG m
++USB_SERIAL_DIGI_ACCELEPORT m
++USB_SERIAL_EDGEPORT m
++USB_SERIAL_EDGEPORT_TI m
++USB_SERIAL_EMPEG m
++USB_SERIAL_F81232 m
++USB_SERIAL_F8153X m
++USB_SERIAL_FTDI_SIO m
++USB_SERIAL_GARMIN m
++USB_SERIAL_GENERIC y
++USB_SERIAL_IPAQ m
++USB_SERIAL_IPW m
++USB_SERIAL_IR m
++USB_SERIAL_IUU m
++USB_SERIAL_KEYSPAN m
++USB_SERIAL_KEYSPAN_PDA m
++USB_SERIAL_KLSI m
++USB_SERIAL_KOBIL_SCT m
++USB_SERIAL_MCT_U232 m
++USB_SERIAL_METRO m
++USB_SERIAL_MOS7715_PARPORT y
++USB_SERIAL_MOS7720 m
++USB_SERIAL_MOS7840 m
++USB_SERIAL_MXUPORT m
++USB_SERIAL_NAVMAN m
++USB_SERIAL_OMNINET m
++USB_SERIAL_OPTICON m
++USB_SERIAL_OPTION m
++USB_SERIAL_OTI6858 m
++USB_SERIAL_PL2303 m
++USB_SERIAL_QCAUX m
++USB_SERIAL_QT2 m
++USB_SERIAL_QUALCOMM m
++USB_SERIAL_SAFE m
++USB_SERIAL_SAFE_PADDED n
++USB_SERIAL_SIERRAWIRELESS m
++USB_SERIAL_SIMPLE m
++USB_SERIAL_SPCP8X5 m
++USB_SERIAL_SSU100 m
++USB_SERIAL_SYMBOL m
++USB_SERIAL_TI m
++USB_SERIAL_UPD78F0730 m
++USB_SERIAL_VISOR m
++USB_SERIAL_WHITEHEAT m
++USB_SERIAL_WISHBONE m
++USB_SERIAL_WWAN m
++USB_SERIAL_XR m
++USB_SERIAL_XSENS_MT m
++USB_SI470X m
++USB_SIERRA_NET m
++USB_SL811_CS m
++USB_SL811_HCD_ISO n
++USB_SPEEDTOUCH m
++USB_STV06XX m
++USB_UEAGLEATM m
++USB_USS720 m
++USB_U_AUDIO m
++USB_U_ETHER m
++USB_U_SERIAL m
++USB_VIDEO_CLASS m
++USB_VIDEO_CLASS_INPUT_EVDEV y
++USB_VL600 m
++USB_XEN_HCD m
++USB_XUSBATM m
++USB_ZERO n
++USER_DECRYPTED_DATA n
++USER_RETURN_NOTIFIER y
++UVC_COMMON m
++U_SERIAL_CONSOLE n
++V4L2_ASYNC m
++V4L2_CCI m
++V4L2_CCI_I2C m
++V4L2_FWNODE m
++V4L_MEM2MEM_DRIVERS y
++V4L_PLATFORM_DRIVERS y
++V4L_TEST_DRIVERS y
++VBOXGUEST m
++VBOXSF_FS m
++VCNL3020 m
++VCNL4000 m
++VCNL4035 m
++VDPA_SIM n
++VDPA_USER m
++VEML3235 n
++VEML6030 m
++VEML6040 n
++VEML6046X00 n
++VEML6070 m
++VEML6075 n
++VF610_ADC n
++VF610_DAC n
++VFIO_CONTAINER y
++VFIO_DEBUGFS n
++VFIO_GROUP y
++VFIO_IOMMU_TYPE1 m
++VFIO_MDEV m
++VFIO_NOIOMMU n
++VFIO_PCI m
++VFIO_PCI_CORE m
++VFIO_PCI_DMABUF y
++VFIO_PCI_IGD y
++VFIO_PCI_INTX y
++VFIO_PCI_VGA y
++VFIO_VIRQFD y
++VGASTATE m
++VHOST m
++VHOST_IOTLB m
++VHOST_SCSI m
++VHOST_TASK y
++VHOST_VDPA m
++VHOST_VSOCK m
++VIA_RHINE_MMIO n
++VIDEOBUF2_CORE m
++VIDEOBUF2_DMA_CONTIG m
++VIDEOBUF2_DMA_SG m
++VIDEOBUF2_DVB m
++VIDEOBUF2_MEMOPS m
++VIDEOBUF2_V4L2 m
++VIDEOBUF2_VMALLOC m
++VIDEOMODE_HELPERS y
++VIDEO_AD5820 n
++VIDEO_ADP1653 n
++VIDEO_ADV7170 m
++VIDEO_ADV7175 m
++VIDEO_ADV7180 n
++VIDEO_ADV7183 n
++VIDEO_ADV7343 n
++VIDEO_ADV7393 n
++VIDEO_ADV7511 n
++VIDEO_ADV7604 n
++VIDEO_ADV7842 n
++VIDEO_ADV_DEBUG n
++VIDEO_AK7375 n
++VIDEO_AK881X n
++VIDEO_ALVIUM_CSI2 n
++VIDEO_AR0521 n
++VIDEO_AU0828 m
++VIDEO_AU0828_RC y
++VIDEO_AU0828_V4L2 y
++VIDEO_BT819 m
++VIDEO_BT848 m
++VIDEO_BT856 m
++VIDEO_BT866 n
++VIDEO_CADENCE_CSI2RX n
++VIDEO_CADENCE_CSI2TX n
++VIDEO_CAFE_CCIC m
++VIDEO_CAMERA_LENS y
++VIDEO_CAMERA_SENSOR y
++VIDEO_CCS n
++VIDEO_COBALT n
++VIDEO_CS3308 m
++VIDEO_CS5345 m
++VIDEO_CS53L32A m
++VIDEO_CX18 m
++VIDEO_CX18_ALSA m
++VIDEO_CX231XX m
++VIDEO_CX231XX_ALSA m
++VIDEO_CX231XX_DVB m
++VIDEO_CX231XX_RC y
++VIDEO_CX2341X m
++VIDEO_CX23885 m
++VIDEO_CX25821 n
++VIDEO_CX25840 m
++VIDEO_CX88 m
++VIDEO_CX88_ALSA m
++VIDEO_CX88_BLACKBIRD m
++VIDEO_CX88_DVB m
++VIDEO_CX88_ENABLE_VP3054 y
++VIDEO_CX88_MPEG m
++VIDEO_CX88_VP3054 m
++VIDEO_DEV m
++VIDEO_DT3155 m
++VIDEO_DW9714 n
++VIDEO_DW9719 n
++VIDEO_DW9768 n
++VIDEO_DW9807_VCM n
++VIDEO_EM28XX m
++VIDEO_EM28XX_ALSA m
++VIDEO_EM28XX_DVB m
++VIDEO_EM28XX_RC m
++VIDEO_EM28XX_V4L2 m
++VIDEO_ET8EK8 n
++VIDEO_FB_IVTV m
++VIDEO_FB_IVTV_FORCE_PAT n
++VIDEO_FIXED_MINOR_RANGES n
++VIDEO_GC0308 n
++VIDEO_GC0310 n
++VIDEO_GC05A2 n
++VIDEO_GC08A3 n
++VIDEO_GC2145 n
++VIDEO_GO7007 n
++VIDEO_GS1662 n
++VIDEO_HDPVR m
++VIDEO_HEXIUM_GEMINI m
++VIDEO_HEXIUM_ORION m
++VIDEO_HI556 m
++VIDEO_HI846 n
++VIDEO_HI847 n
++VIDEO_I2C n
++VIDEO_IMX111 n
++VIDEO_IMX208 n
++VIDEO_IMX214 n
++VIDEO_IMX219 n
++VIDEO_IMX258 n
++VIDEO_IMX274 n
++VIDEO_IMX283 n
++VIDEO_IMX290 n
++VIDEO_IMX296 n
++VIDEO_IMX319 n
++VIDEO_IMX355 n
++VIDEO_INTEL_IPU6 m
++VIDEO_INTEL_IPU7 m
++VIDEO_IPU3_CIO2 m
++VIDEO_IPU3_IMGU m
++VIDEO_IR_I2C m
++VIDEO_IVTV m
++VIDEO_IVTV_ALSA m
++VIDEO_KS0127 m
++VIDEO_LM3560 n
++VIDEO_LM3646 n
++VIDEO_LT6911UXE m
++VIDEO_M52790 m
++VIDEO_MAX96717 n
++VIDEO_MEM2MEM_DEINTERLACE n
++VIDEO_MGB4 n
++VIDEO_ML86V7667 n
++VIDEO_MSP3400 m
++VIDEO_MT9M001 n
++VIDEO_MT9M111 n
++VIDEO_MT9M114 n
++VIDEO_MT9P031 n
++VIDEO_MT9T112 n
++VIDEO_MT9V011 m
++VIDEO_MT9V111 n
++VIDEO_MXB m
++VIDEO_OG01A1B n
++VIDEO_OG0VE1B n
++VIDEO_OS05B10 n
++VIDEO_OV01A10 m
++VIDEO_OV02A10 n
++VIDEO_OV02C10 m
++VIDEO_OV02E10 m
++VIDEO_OV08D10 n
++VIDEO_OV08X40 m
++VIDEO_OV13858 n
++VIDEO_OV13B10 m
++VIDEO_OV2640 m
++VIDEO_OV2659 n
++VIDEO_OV2680 m
++VIDEO_OV2685 n
++VIDEO_OV2735 n
++VIDEO_OV2740 m
++VIDEO_OV4689 n
++VIDEO_OV5647 n
++VIDEO_OV5648 n
++VIDEO_OV5670 m
++VIDEO_OV5675 n
++VIDEO_OV5693 m
++VIDEO_OV5695 n
++VIDEO_OV6211 n
++VIDEO_OV64A40 n
++VIDEO_OV7251 m
++VIDEO_OV7640 n
++VIDEO_OV7670 m
++VIDEO_OV772X n
++VIDEO_OV7740 n
++VIDEO_OV8856 m
++VIDEO_OV8858 m
++VIDEO_OV8865 m
++VIDEO_OV9640 n
++VIDEO_OV9650 n
++VIDEO_OV9734 n
++VIDEO_PVRUSB2 m
++VIDEO_PVRUSB2_DEBUGIFC n
++VIDEO_PVRUSB2_DVB y
++VIDEO_PVRUSB2_SYSFS y
++VIDEO_RDACM20 n
++VIDEO_RDACM21 n
++VIDEO_RJ54N1 n
++VIDEO_RP1_CFE n
++VIDEO_S5C73M3 n
++VIDEO_S5K3M5 n
++VIDEO_S5K5BAF n
++VIDEO_S5K6A3 n
++VIDEO_S5KJN1 n
++VIDEO_SAA6588 m
++VIDEO_SAA6752HS m
++VIDEO_SAA7110 m
++VIDEO_SAA711X m
++VIDEO_SAA7127 m
++VIDEO_SAA7134 m
++VIDEO_SAA7134_ALSA m
++VIDEO_SAA7134_DVB m
++VIDEO_SAA7134_RC y
++VIDEO_SAA7146 m
++VIDEO_SAA7146_VV m
++VIDEO_SAA7164 m
++VIDEO_SAA717X m
++VIDEO_SAA7185 m
++VIDEO_SOLO6X10 m
++VIDEO_SONY_BTF_MPX n
++VIDEO_STK1160 m
++VIDEO_ST_MIPID02 n
++VIDEO_T4KA3 n
++VIDEO_TC358743 n
++VIDEO_TC358746 n
++VIDEO_TDA1997X n
++VIDEO_TDA7432 m
++VIDEO_TDA9840 m
++VIDEO_TEA6415C m
++VIDEO_TEA6420 m
++VIDEO_THP7312 n
++VIDEO_THS7303 n
++VIDEO_THS8200 n
++VIDEO_TLV320AIC23B m
++VIDEO_TUNER m
++VIDEO_TVAUDIO m
++VIDEO_TVEEPROM m
++VIDEO_TVP514X n
++VIDEO_TVP5150 m
++VIDEO_TVP7002 n
++VIDEO_TW2804 n
++VIDEO_TW5864 m
++VIDEO_TW68 m
++VIDEO_TW686X m
++VIDEO_TW9900 n
++VIDEO_TW9903 n
++VIDEO_TW9906 n
++VIDEO_TW9910 n
++VIDEO_UDA1342 n
++VIDEO_UPD64031A m
++VIDEO_UPD64083 m
++VIDEO_USBTV m
++VIDEO_V4L2_I2C y
++VIDEO_V4L2_SUBDEV_API y
++VIDEO_V4L2_TPG m
++VIDEO_VD55G1 n
++VIDEO_VD56G3 n
++VIDEO_VIA_CAMERA m
++VIDEO_VICODEC n
++VIDEO_VIM2M n
++VIDEO_VIMC n
++VIDEO_VISL n
++VIDEO_VIVID m
++VIDEO_VIVID_CEC y
++VIDEO_VIVID_MAX_DEVS 64
++VIDEO_VIVID_OSD y
++VIDEO_VP27SMPX m
++VIDEO_VPX3220 m
++VIDEO_WM8739 m
++VIDEO_WM8775 m
++VIDEO_ZORAN n
++VIPERBOARD_ADC m
++VIRTIO_FS y
++VIRTIO_MEM m
++VIRTIO_MMIO_CMDLINE_DEVICES n
++VIRTIO_PMEM m
++VIRTIO_VDPA m
++VIRTIO_VFIO_PCI n
++VIRTIO_VSOCKETS m
++VIRTIO_VSOCKETS_COMMON m
++VIRT_CPU_ACCOUNTING y
++VIRT_XFER_TO_GUEST_WORK y
++VL53L0X_I2C m
++VL53L1X_I2C n
++VL6180 m
++VLAN_8021Q_GVRP y
++VLAN_8021Q_MVRP y
++VME_BUS n
++VMGENID y
++VMLINUX_MAP n
++VMWARE_BALLOON m
++VMWARE_VMCI_VSOCKETS m
++VP_VDPA n
++VSOCKETS_DIAG m
++VSOCKETS_LOOPBACK m
++VSOCKMON m
++VZ89X n
++W1_CON y
++W1_MASTER_AMD_AXI n
++W1_MASTER_DS2482 m
++W1_MASTER_DS2490 m
++W1_MASTER_GPIO m
++W1_MASTER_MATROX n
++W1_MASTER_SGI n
++W1_MASTER_UART n
++W1_SLAVE_DS2405 m
++W1_SLAVE_DS2406 m
++W1_SLAVE_DS2408 m
++W1_SLAVE_DS2408_READBACK y
++W1_SLAVE_DS2413 m
++W1_SLAVE_DS2423 m
++W1_SLAVE_DS2430 n
++W1_SLAVE_DS2431 m
++W1_SLAVE_DS2433 m
++W1_SLAVE_DS2433_CRC n
++W1_SLAVE_DS2438 m
++W1_SLAVE_DS250X n
++W1_SLAVE_DS2780 m
++W1_SLAVE_DS2781 m
++W1_SLAVE_DS2805 m
++W1_SLAVE_DS28E04 m
++W1_SLAVE_DS28E17 m
++W1_SLAVE_SMEM m
++W1_SLAVE_THERM m
++WANT_DEV_COREDUMP y
++WANXL m
++WATCHDOG_PRETIMEOUT_DEFAULT_GOV_NOOP y
++WATCHDOG_PRETIMEOUT_DEFAULT_GOV_PANIC n
++WATCHDOG_PRETIMEOUT_GOV y
++WATCHDOG_PRETIMEOUT_GOV_NOOP m
++WATCHDOG_PRETIMEOUT_GOV_PANIC m
++WATCHDOG_PRETIMEOUT_GOV_SEL m
++WEXT_CORE y
++WEXT_PRIV y
++WEXT_PROC y
++WFX n
++WIL6210_DEBUGFS y
++WIL6210_ISR_COR y
++WIL6210_TRACING y
++WILC1000_SDIO n
++WILC1000_SPI n
++WILCO_EC m
++WILCO_EC_DEBUGFS m
++WILCO_EC_EVENTS m
++WILCO_EC_TELEMETRY m
++WIREGUARD_DEBUG n
++WIRELESS_EXT y
++WWAN_DEBUGFS y
++WWAN_HWSIM n
++X86_ANDROID_TABLETS m
++X86_MEM_ENCRYPT y
++X86_PMEM_LEGACY_DEVICE y
++X86_SGX_KVM y
++X86_SPEEDSTEP_LIB m
++X9250 n
++XDP_SOCKETS y
++XDP_SOCKETS_DIAG m
++XENFS m
++XEN_512GB y
++XEN_ACPI y
++XEN_ACPI_PROCESSOR m
++XEN_AUTO_XLATE y
++XEN_BACKEND y
++XEN_BALLOON y
++XEN_BALLOON_MEMORY_HOTPLUG y
++XEN_BLKDEV_BACKEND m
++XEN_BLKDEV_FRONTEND m
++XEN_COMPAT_XENFS y
++XEN_DEBUG_FS n
++XEN_DEV_EVTCHN m
++XEN_DOM0 y
++XEN_EFI y
++XEN_FBDEV_FRONTEND y
++XEN_FRONT_PGDIR_SHBUF m
++XEN_GNTDEV m
++XEN_GRANT_DEV_ALLOC m
++XEN_GRANT_DMA_ALLOC n
++XEN_HAVE_PVMMU y
++XEN_HAVE_VPMU y
++XEN_MCE_LOG y
++XEN_MEMORY_HOTPLUG_LIMIT 512
++XEN_NETDEV_BACKEND m
++XEN_NETDEV_FRONTEND m
++XEN_PCIDEV_BACKEND m
++XEN_PCIDEV_FRONTEND m
++XEN_PCI_STUB y
++XEN_PRIVCMD m
++XEN_PV y
++XEN_PVCALLS_BACKEND n
++XEN_PVCALLS_FRONTEND n
++XEN_PVH y
++XEN_PVHVM y
++XEN_PVHVM_GUEST y
++XEN_PVHVM_SMP y
++XEN_PV_DOM0 y
++XEN_PV_MSR_SAFE y
++XEN_PV_SMP y
++XEN_SCRUB_PAGES_DEFAULT y
++XEN_SCSI_BACKEND m
++XEN_SCSI_FRONTEND m
++XEN_SYMS y
++XEN_SYS_HYPERVISOR y
++XEN_UNPOPULATED_ALLOC y
++XEN_VIRTIO n
++XEN_WDT m
++XEN_XENBUS_FRONTEND y
++XE_VFIO_PCI n
++XFRM_IPCOMP m
++XFRM_OFFLOAD y
++XFS_BTREE_IN_MEM y
++XFS_DEBUG n
++XFS_DRAIN_INTENTS y
++XFS_LIVE_HOOKS y
++XFS_MEMORY_BUFS y
++XFS_ONLINE_REPAIR y
++XFS_ONLINE_SCRUB y
++XFS_ONLINE_SCRUB_STATS y
++XFS_POSIX_ACL y
++XFS_QUOTA y
++XFS_RT y
++XFS_SUPPORT_ASCII_CI n
++XFS_SUPPORT_V4 n
++XFS_WARN n
++XILINX_VCU n
++XILINX_XADC n
++XOR_BLOCKS y
++XOR_BLOCKS_ARCH y
++XPOWER_PMIC_OPREGION y
++YAMAHA_YAS530 n
++YT2_1380 n
++ZD1211RW_DEBUG n
++ZEROPLUS_FF y
++ZL3073X_SPI n
++ZONEFS_FS m
++ZONE_DEVICE y
++ZOPT2201 m
++ZPA2326 m
++ZPA2326_I2C m
++ZPA2326_SPI m
++ZRAM_BACKEND_842 n
++ZRAM_BACKEND_DEFLATE y
++ZRAM_BACKEND_LZ4 y
++ZRAM_BACKEND_LZ4HC y
++ZRAM_BACKEND_LZO n
++ZRAM_BACKEND_ZSTD y
++ZRAM_DEF_COMP "lz4"
++ZRAM_DEF_COMP_DEFLATE n
++ZRAM_DEF_COMP_LZ4 y
++ZRAM_DEF_COMP_LZ4HC n
++ZRAM_DEF_COMP_ZSTD n
++ZRAM_MEMORY_TRACKING y
++ZRAM_MULTI_COMP n
++ZRAM_TRACK_ENTRY_ACTIME y
++ZRAM_WRITEBACK y
++ZSMALLOC y
++ZSMALLOC_CHAIN_SIZE 8
++ZSMALLOC_STAT n
++ZSTD_COMPRESS y
++ZSWAP_COMPRESSOR_DEFAULT "lzo"
++ZSWAP_COMPRESSOR_DEFAULT_842 n
++ZSWAP_COMPRESSOR_DEFAULT_DEFLATE n
++ZSWAP_COMPRESSOR_DEFAULT_LZ4 n
++ZSWAP_COMPRESSOR_DEFAULT_LZ4HC n
++ZSWAP_COMPRESSOR_DEFAULT_LZO y
++ZSWAP_COMPRESSOR_DEFAULT_ZSTD n
++ZSWAP_DEFAULT_ON n
++ZSWAP_SHRINKER_DEFAULT_ON n
