@@ -15,11 +15,29 @@ SmartSet prerequisites: `[hk3]>[f19]`, `[hk4]>[f20]`, `[hk5]>[f21]`,
 `[hk6]>[f22]`; refresh and disconnect v-Drive. Caps remains
 `(tap-hold 100 100 esc lctl)`, F21/F22 become lalt/lmet. Both keyboard
 variants own only `Kinesis Freestyle Edge RGB Keyboard`, not Consumer Control.
-Pedal uses mode 2 (LEFT pgup / RIGHT pgdn). Base starts with pages semantics;
-TCP selects `pages` or `media`; LEFT hold overlays `pedal-meta`, RIGHT becomes
-play/pause. Release pedals before changing defaults: held-overlay transitions
-have not been hardware-tested. `_` falls through the active default/base;
+Pedal uses mode 2 (LEFT pgup / RIGHT pgdn). First layer `pages` is the startup
+default; TCP selects `pages` or `media`. In pages, LEFT hold overlays
+`pedal-meta`, RIGHT becomes play/pause. Media is plain prev/next with no held
+overlay activation. Release pedals before changing defaults: held-overlay
+transitions have not been hardware-tested. `_` falls through the active default;
 it is not another ChangeLayer target.
+
+### Compositor bindings (hotkeys variant)
+
+For Sway, add these bindings to its config after deliberately staging the
+hotkeys helper and starting the pedal alternative:
+
+```sway
+bindsym F19 exec /etc/opt/kanata-a-keyboard-hotkeys/blueturn-switch pages
+bindsym F20 exec /etc/opt/kanata-a-keyboard-hotkeys/blueturn-switch media
+```
+
+For KDE Plasma, create two command shortcuts in System Settings → Keyboard →
+Shortcuts: assign F19 to
+`/etc/opt/kanata-a-keyboard-hotkeys/blueturn-switch pages` and F20 to
+`/etc/opt/kanata-a-keyboard-hotkeys/blueturn-switch media`. Remove conflicting
+bindings and ensure SmartSet emits these keys. This variant uses no Kanata
+`cmd` action; the desktop session executes the helper.
 
 ## Rendering and checking
 

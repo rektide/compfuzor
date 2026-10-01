@@ -14,7 +14,7 @@ to the kanata-a-pedal TCP server (build.src.pb binary, tcp_server
 feature; kanata 1.9.0 packaged has no --port).
 
 Layer names are coupled to pedal.srv.pb's deflayers: `pages` and `media`
-are the ChangeLayer targets; `base` (first deflayer) is the startup
+are the ChangeLayer targets; `pages` (first deflayer) is the startup
 default; `pedal-meta` is the held overlay. kanata's change_layer
 silently ignores unknown names, so this helper rejects anything else
 up front instead of no-op'ing.
@@ -68,7 +68,7 @@ def main(argv: "list[str]") -> int:
     except OSError as err:
         return fail(f"pedal {addr} unreachable: {err}", UNREACHABLE_EXIT)
 
-    print(f"blueturn-switch: pedal layer -> {target}")
+    print(f"blueturn-switch: sent pedal layer request: {target}")
     return 0
 
 

@@ -17,8 +17,10 @@ for name in ("a-keyboard", "a-keyboard-hotkeys", "a-pedal"):
     if name == "a-pedal":
         assert "--port 127.0.0.1:16666" in unit
         assert '"iRig BlueTurn Keyboard"' in cfg
-        for layer in ("base", "pages", "media", "pedal-meta"):
+        for layer in ("pages", "media", "pedal-meta"):
             assert f"(deflayer {layer}" in cfg
+        assert "(deflayer base" not in cfg
+        assert "(deflayer media\n  prev\n  next\n)" in cfg
     else:
         assert '"Kinesis Freestyle Edge RGB Keyboard"' in cfg
         assert "(tap-hold 100 100 esc lctl)" in cfg

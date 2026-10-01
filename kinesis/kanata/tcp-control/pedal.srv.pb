@@ -16,18 +16,16 @@
     # instances fight over the same "iRig BlueTurn Keyboard" evdev node.
     #
     # Layer model (ChangeLayer targets pages/media):
-    #   base        first deflayer: startup default; pages semantics so a
-    #               freshly started (or switched-back) pedal pages
-    #   pages       LEFT tap pgup / RIGHT pgdn (same as base, explicit
-    #               target of {"ChangeLayer":{"new":"pages"}})
-    #   media       LEFT tap prev / RIGHT next (media-mode target)
-    #   pedal-meta  held overlay from the LEFT tap-hold in every default
-    #               layer: transparent (_) LEFT, RIGHT pp
+    #   pages       first deflayer: startup default; LEFT tap pgup /
+    #               RIGHT pgdn; target of ChangeLayer pages
+    #   media       LEFT prev / RIGHT next (plain media keys)
+    #   pedal-meta  held overlay from the LEFT tap-hold in pages:
+    #               transparent (_) LEFT, RIGHT pp
     # Transparent fallback: kanata change_layer (1.12 src/kanata/mod.rs)
     # matches the name against deflayers and silently ignores unknown
-    # ones, so a mis-sent name no-ops rather than crashing; held
-    # layer-while-held overlays sit on top of whatever default layer is
-    # active, so pedal-meta works in pages and media alike.
+    # ones, so a mis-sent name no-ops rather than crashing. The held
+    # overlay falls through to the default layer; release pedals before
+    # changing defaults. Media does not activate pedal-meta.
     #
     # Output naming: NO linux-output-device-name override anywhere in
     # these alternatives. kanata names its virtual output device
@@ -94,17 +92,12 @@
             linux-continue-if-no-devs-found yes
           )
 
-          ;; TCP-selected layers. `base` (first deflayer) is the startup
-          ;; default and deliberately mirrors pages: a pedal that just
-          ;; booted pages, no client required. kanata-a-keyboard's
+          ;; TCP-selected layers. `pages` (first deflayer) is the startup
+          ;; default: a pedal that just booted pages, no client required.
+          ;; kanata-a-keyboard's
           ;; blueturn-switch sends {"ChangeLayer":{"new":"pages"|"media"}}.
           (defsrc
             pgup pgdn
-          )
-
-          (deflayer base
-            (tap-hold 180 180 pgup (layer-while-held pedal-meta))
-            pgdn
           )
 
           (deflayer pages
@@ -113,11 +106,11 @@
           )
 
           (deflayer media
-            (tap-hold 180 180 prev (layer-while-held pedal-meta))
+            prev
             next
           )
 
-          ;; held overlay, identical shape over both default layers:
+          ;; held overlay activated by LEFT hold in pages only:
           ;; LEFT stays transparent (_) -- the press falls through to
           ;; the default layer's action -- while RIGHT becomes pp.
           (deflayer pedal-meta
