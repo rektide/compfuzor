@@ -63,8 +63,9 @@
     #   systemd's canonical localhost-only shape.
     # - ExecStartPre is the prerequisite gate: the config must parse
     #   with THIS binary, and the binary must exist -- a fresh host
-    #   that skipped build.src.pb fails here, in the journal, instead
-    #   of crashlooping ExecStart. --check parses and exits without
+    #   that skipped build.src.pb fails here, in the journal, before
+    #   ExecStart can grab a device (Restart=on-failure still retries).
+    #   --check parses and exits without
     #   touching /dev/input (upstream main.rs args.check path).
     TCP_SERVICE_CONFIG: "{{ KANATA_SERVICE_BASE | combine({
       'ExecStart': KANATA_BIN ~ ' --cfg ' ~ ETC ~ '/kanata.kbd --port ' ~ KANATA_A_TCP_ADDR,

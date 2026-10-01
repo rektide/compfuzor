@@ -375,6 +375,26 @@ events arriving at all. These examples do not repair that transport failure.
 Separate “input never arrives” from “wrong layer selected”; consult the research
 below before interpreting an unresponsive pedal as a DSL failure.
 
+## Verification scope
+
+Verified without activating services or grabbing input:
+
+- All **eight** new playbooks passed Ansible syntax-check and scratch rendering.
+- Six non-`cmd` service configs passed the installed Kanata 1.9.0 parser.
+- All seven service units and link-only installers passed artifact assertions;
+  directory/config/unit/helper permissions were checked on rendered files.
+- Five units using the installed executable passed `systemd-analyze verify`,
+  with no warnings about the new units.
+- Nine helper tests exercised fake loopback transport, JSON framing, rejected
+  layer names, malformed endpoint/timeout overrides, and connection failure.
+
+**Not verified:** the private `v1.12.0` build, its direct-`cmd` config parser,
+actual Kanata TCP server interaction, or physical keyboard/pedal behavior. The
+offline build attempt stopped at missing cached `karabiner-driverkit` metadata,
+before compilation. This is a dependency-cache blocker, not evidence of a
+compile error. Build with prerequisites/network access and perform the hardware
+acceptance checks before treating A as a tested deployment.
+
 ## Cross-references
 
 - [Compfuzor architecture](/doc/arch.md): explains why playbooks declare
