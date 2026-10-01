@@ -137,6 +137,11 @@ On the inspected host, `/usr/bin/kanata` is **1.9.0** and its help does not expo
 The build playbook keeps its binary separate from `/usr/bin/kanata`; verify the
 result's `--help` and validate the cmd-enabled config before activation.
 
+Source-level explanations were checked against the local upstream archive,
+which reports **1.12.1-prerelease-1**, not the installed package. Linked `main`
+documentation is mutable. The examples use conservative grammar checked with
+the actual selected binary; feature/build requirements remain explicit.
+
 TCP requires both services involved in IPC to share host loopback:
 `PrivateNetwork=false`, `AF_INET` allowed, loopback allowed against an otherwise
 deny-all IP policy. A private network namespace has its **own** loopback; binding
@@ -291,9 +296,10 @@ copying an example directory into another checkout.
 
 The [render-only profile](/kinesis/kanata/shared/render-only.yaml) directs
 artifacts into `.test-agent/kinesis-kanata/render/` and disables packages,
-checkouts, kernel modules, link installation, bin execution, and service
+checkouts, kernel modules, host/global link installation, bin execution, and service
 activation. It keeps system-unit semantics rather than changing them to user
-services. It still reads normal host facts.
+services. It still reads normal host facts and can create internal hierarchy
+symlinks within scratch as part of materialization.
 
 Inspect the generated `etc/kanata.kbd`, service unit, and install scripts.
 Validate generated config with `kanata --check --cfg PATH`; the direct-cmd
@@ -322,6 +328,16 @@ present doesn't prove its service was deployed. For temporary testing, stop
 the conflicting units, start **only** the chosen alternative, and reverse those
 operations when finished. For a persistent selection, explicitly review which
 services are enabled for boot. No automatic pruning/reconciliation is included.
+
+The shared system services also require the package-provided **static**
+`_kanata` user/group and the `input` group. A private source-built executable
+doesn't create those accounts. Check before activation:
+
+```sh
+getent passwd _kanata
+getent group _kanata
+getent group input
+```
 
 Keep the examples' default virtual output name **`kanata`**. Upstream Linux
 auto-detection explicitly skips that name; giving an example a custom output
