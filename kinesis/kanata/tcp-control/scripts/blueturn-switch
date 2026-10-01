@@ -21,13 +21,14 @@ up front instead of no-op'ing.
 
 Environment overrides (tests; the deployed defaults are the contract):
   BLUETURN_SWITCH_ADDR     host:port, default 127.0.0.1:16666
-  BLUETURN_SWITCH_TIMEOUT  connect timeout seconds, default 0.5
+  BLUETURN_SWITCH_TIMEOUT  timeout seconds, 0 < value <= 60, default 0.5
 
 Exit codes: 0 layer switch sent; 1 usage error (bad/missing target);
 2 pedal endpoint unreachable (refused/timeout). Never reads stdin.
 """
 
 import json
+import math
 import os
 import socket
 import sys
@@ -56,14 +57,22 @@ def main(argv: "list[str]") -> int:
     if not host or not port.isdigit():
         return fail(f"bad BLUETURN_SWITCH_ADDR {addr!r}", USAGE_EXIT)
     try:
+        port_number = int(port)
+    except ValueError:
+        return fail(f"bad BLUETURN_SWITCH_ADDR {addr!r}", USAGE_EXIT)
+    if not 1 <= port_number <= 65535:
+        return fail("BLUETURN_SWITCH_ADDR port must be between 1 and 65535", USAGE_EXIT)
+    try:
         timeout = float(os.environ.get("BLUETURN_SWITCH_TIMEOUT", DEFAULT_TIMEOUT))
     except ValueError:
         return fail("BLUETURN_SWITCH_TIMEOUT must be a number", USAGE_EXIT)
+    if not math.isfinite(timeout) or not 0 < timeout <= 60:
+        return fail("BLUETURN_SWITCH_TIMEOUT must be finite and between 0 (exclusive) and 60", USAGE_EXIT)
 
     payload = (json.dumps({"ChangeLayer": {"new": target}}, separators=(",", ":")) + "\n").encode()
 
     try:
-        with socket.create_connection((host, int(port)), timeout=timeout) as sock:
+        with socket.create_connection((host, port_number), timeout=timeout) as sock:
             sock.sendall(payload)
     except OSError as err:
         return fail(f"pedal {addr} unreachable: {err}", UNREACHABLE_EXIT)

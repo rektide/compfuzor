@@ -65,7 +65,7 @@ kanata --check --cfg .test-agent/kinesis-kanata/render/etc/kanata-a-keyboard-hot
 ```
 
 Verified: four syntax checks; all four scratch renders; real rendered config,
-unit, helper and link-only installer assertions; seven fake-loopback helper
+unit, helper and link-only installer assertions; nine fake-loopback helper
 tests; generated build script `bash -n`; packaged Kanata 1.9.0 `--check` passes
 pedal/hotkeys. Direct keyboard config **cannot be checked by packaged Kanata**:
 it rejects `cmd`. Packaged help also lacks `--port`.
