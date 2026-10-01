@@ -3,7 +3,7 @@
 This guide describes the recommended way to turn the configuration and source
 hotfix in this repository into installable Debian packages. It targets the
 local x86-64 workstation, Clang/LLVM, systemd-boot, and the crash-diagnostic
-configuration in `config-debian-plus`.
+configuration preserved in `config-debian-plus.xz`.
 
 ## Current 7.3 target
 
@@ -19,6 +19,10 @@ measurements** below. Their filenames, package versions, tool availability,
 storage headroom, and source line references are not current 7.3 instructions.
 Adapt them to the actual release reported by `make kernelrelease`, and consult
 the README for current normalization and patch-validation procedures.
+
+Full configuration snapshots are now stored compressed. The historical plain
+`config-debian-plus` paths below refer to the decompressed contents; use
+`xz -dc config-debian-plus.xz` when preparing a current `.config`.
 
 Nothing in this document runs automatically. Configuration, compilation,
 packaging, installation, and boot selection are separate operator decisions.

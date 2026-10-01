@@ -38,7 +38,7 @@
     - name: DEBIAN.md
       copyDir: True
       mode: "0644"
-    - name: config-debian-plus
+    - name: config-debian-plus.xz
       copyDir: True
       mode: "0644"
     - name: overrides.config
@@ -52,7 +52,7 @@
       mode: "0644"
     - name: MAKE.sh
       copyDir: True
-      mode: "0644"
+      mode: "0755"
     - name: hotfixes/amdgpu-power.sh
       copyDir: True
       mode: "0755"
@@ -71,10 +71,10 @@
     - name: baselines/7.1/README.md
       copyDir: True
       mode: "0644"
-    - name: baselines/7.1/config-running
+    - name: baselines/7.1/config-running.xz
       copyDir: True
       mode: "0644"
-    - name: baselines/7.1/config-upstream-defconfig
+    - name: baselines/7.1/config-upstream-defconfig.xz
       copyDir: True
       mode: "0644"
     - name: baselines/7.1/config-running-vs-defconfig.diff
@@ -95,21 +95,24 @@
     - name: baselines/7.3/README.md
       copyDir: True
       mode: "0644"
-    - name: baselines/7.3/config-upstream-defconfig
+    - name: baselines/7.3/config-upstream-defconfig.xz
       copyDir: True
       mode: "0644"
     - name: baselines/7.3/config-debian-plus-vs-defconfig.diff
       copyDir: True
       mode: "0644"
+    - name: baselines/7.3/defconfig-to-debian-plus.fragment
+      copyDir: True
+      mode: "0644"
     # Historical archive, retained verbatim; nothing in the current
     # workflow reads it.
-    - name: archive/previous-normalization/config-debian-plus.7.1.0
+    - name: archive/previous-normalization/config-debian-plus.7.1.0.xz
       copyDir: True
       mode: "0644"
-    - name: archive/previous-normalization/.config
+    - name: archive/previous-normalization/.config.xz
       copyDir: True
       mode: "0644"
-    - name: archive/previous-normalization/.config.old
+    - name: archive/previous-normalization/.config.old.xz
       copyDir: True
       mode: "0644"
     - name: archive/previous-normalization/Makefile

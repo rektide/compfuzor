@@ -38,7 +38,9 @@ standard `etc` symlink. Deployment and kernel modification are separate actions.
 
 ## Files
 
-- `config-debian-plus` is the complete, ready-to-use kernel configuration.
+- `config-debian-plus.xz` preserves the complete generated kernel configuration.
+  The diffs and policy fragments are the useful review surface; decompress the
+  snapshot only when a full configuration is needed.
 - `overrides.config` is the shorter list of deliberate changes from Debian's
   configuration that apply to every compiler.
 - `overrides.llvm` selects the current Clang/LLVM optimization policy.
@@ -57,7 +59,7 @@ standard `etc` symlink. Deployment and kernel modification are separate actions.
   plus an upstream defconfig baseline, readable delta, and replay fragment.
 - [7.3 baseline and audit](baselines/7.3/README.md): upstream
   `x86_64_defconfig` for the pinned source and a comparison with the updated
-  `config-debian-plus`.
+  `config-debian-plus.xz`.
 
 The original saved Debian-plus seed matches the old checkout's `.config.old`,
 **not** its running `.config`: they differ in 22 symbol states, mostly Rust
@@ -135,12 +137,12 @@ module BTF, and sched-ext. Keep dynamic ftrace for the crash-diagnostic design.
 
 ## Use the saved configuration
 
-Copy the complete configuration into a Linux checkout, then let Kconfig account
+Decompress the complete configuration into a Linux checkout, then let Kconfig account
 for any options added or removed by that source version:
 
 ```sh
-cp /usr/local/src/linux-config-debplus/config-debian-plus \
-  /usr/local/src/linux/.config
+xz -dc /usr/local/src/linux-config-debplus/config-debian-plus.xz \
+  > /usr/local/src/linux/.config
 make -C /usr/local/src/linux LLVM=1 olddefconfig
 ```
 
@@ -171,14 +173,16 @@ revision=551c722f40809618230001baccf219193e22fc5a
 work=$(mktemp -d "$HOME/tmp-opencode/linux-config-debplus.XXXXXX")
 mkdir "$work/src" "$work/out"
 git -C /usr/local/src/linux archive "$revision" | tar -x -C "$work/src"
+printf '%s\n' "$revision" > "$work/src/.debplus-source-revision"
+xz -dc "$bundle/config-debian-plus.xz" > "$work/seed.config"
 "$work/src/scripts/kconfig/merge_config.sh" -m \
   -O "$work/out" \
-  "$bundle/config-debian-plus" \
+  "$work/seed.config" \
   "$bundle/overrides.config" \
   "$bundle/overrides.llvm"
 make -C "$work/src" O="$work/out" LLVM=1 olddefconfig
-install -m 0644 "$work/out/.config" \
-  "$bundle/config-debian-plus"
+xz -9 --check=crc64 -T1 -c "$work/out/.config" > "$work/config-debian-plus.xz"
+install -m 0644 "$work/config-debian-plus.xz" "$bundle/config-debian-plus.xz"
 ```
 
 Here, `O="$work/out"` only tells Kconfig where to place temporary generated
@@ -240,6 +244,15 @@ remain explicit operator decisions. Review the versioned `MAKE.sh` recipe and
 [DEBIAN.md](DEBIAN.md) before building; do not reuse a package identity for a
 different source or patch. Keep matching debug symbols and a bootable previous
 kernel. No 7.3 kernel is built or installed by deploying this bundle.
+
+`MAKE.sh [SOURCE-TREE]` works from any directory and checks the pinned base
+revision. Its default `/usr/local/src/linux` is still user-managed; the recipe
+refuses an older Git HEAD. Plain exports must contain the
+`.debplus-source-revision` marker shown above. That marker records the declared
+base, not a cryptographic proof of the exported contents. Prepare the selected
+tree's `.config` and apply the hotfix explicitly before running the recipe.
+The package identity is `7.3.0~rc5+git20260929.551c722f4080-1`, sorting before
+the eventual final 7.3 release.
 
 ## Archive
 
