@@ -93,9 +93,9 @@ does not silently reevaluate compiler-gated options under GCC.
 | AutoFDO and Propeller | Unavailable | These kernel options are Clang-specific |
 
 The GCC build is a diagnostic fallback for identifying a Clang-specific build
-or runtime problem. It is not a second canonical package. Generate it from the
-Debian base with `overrides.config` plus `overrides.gcc`, use a separate output
-directory, and assign a distinct kernel and Debian package version.
+or runtime problem. It is not a second canonical package. Merge the saved seed
+with `overrides.config` plus `overrides.gcc`, normalize under GCC in a separate
+output directory, and assign a distinct kernel and Debian package version.
 
 ### Remaining performance policy
 
@@ -217,9 +217,9 @@ hotfix, and build command are preserved in compfuzor's commit history. The
 original local repo remains intact; it and the compfuzor inputs do not
 automatically synchronize.
 
-Related compfuzor material: [`pstore.etc.pb`](/pstore.etc.pb) explains the
+Related compfuzor material: [rektide/compfuzor `pstore.etc.pb`](https://github.com/rektide/compfuzor/blob/main/pstore.etc.pb) explains the
 runtime crash-evidence policy enabled by the `CONFIG_PSTORE*` options;
-[`crashkernel.etc.pb`](/crashkernel.etc.pb) explains kdump and matching symbols.
-The [Blueturn kernel investigation](/design/blueturn/kernel-uhid-shortreport.general.md)
+[`crashkernel.etc.pb`](https://github.com/rektide/compfuzor/blob/main/crashkernel.etc.pb) explains kdump and matching symbols.
+The [Blueturn kernel investigation](https://github.com/rektide/compfuzor/blob/main/design/blueturn/kernel-uhid-shortreport.general.md)
 records why the previous `7.1.0-debplus.1` build needed a HID fix; that is
 historical context, not a reason to reapply its backport to 7.3.
