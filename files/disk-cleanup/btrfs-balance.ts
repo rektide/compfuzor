@@ -10,6 +10,15 @@
  * chunks whose usage is AT OR BELOW N%, emptying them so the allocator
  * can hand the space out again.
  *
+ * HOST FINDING 2026-10-01: stages 2/8/20 relocated 0/0/1 of 3340 data
+ * chunks — this filesystem has NO sparse chunks; its 3.22TiB is dense
+ * live data. Balance is a null lever here TODAY. The tool stays because
+ * big deletions (src-clean passes, toolchain uninstalls) can re-sparse
+ * chunks later; re-run the cheap stages then. 45/65 would rewrite large
+ * amounts of live data for ~1GiB chunks — not worth it absent new
+ * evidence, which is why --dusage-cap exists: "stop at 20" had to be
+ * done by hand once already.
+ *
  * Stages ascend 2 → 8 → 20 → 45 on purpose:
  *   -dusage=2   nearly-empty chunks: a few % of live data rewritten per
  *               reclaimed chunk — cheapest pass, often the big win
@@ -86,16 +95,23 @@ class UsageError extends Error {
 }
 
 function usage(): string {
-	return `usage: ${PROG} [--mount <path>] [--apply] [--deep]
+	return `usage: ${PROG} [--mount <path>] [--dusage-cap N] [--apply] [--deep]
 
 Staged btrfs data-chunk balance (2 → 8 → 20 → 45% dusage, +65% with
 --deep). DRY-RUN BY DEFAULT: prints the exact commands and expectations;
 --apply executes stages sequentially, printing progress between stages
 and aborting the chain on the first failure.
 
+Host finding 2026-10-01: this fs has NO sparse chunks (stages 2/8/20
+relocated 0/0/1 of 3340) — balance reclaims nothing here until big
+deletions re-sparse chunks. Prefer the cheap stages after cleanup runs.
+
 options:
   --apply            execute the balance stages (requires root; dry run
                      does not)
+  --dusage-cap <n>   only run stages with dusage <= n (e.g. --dusage-cap 20
+                     stops after the 20% stage; the 45% stage is skipped
+                     unless n >= 45). Clamps --deep's 65% stage too
   --deep             append a final -dusage=65 stage (OFF by default: it
                      rewrites huge amounts of live data for marginal gain)
   --mount <path>     mount point to balance (default: /)
@@ -160,6 +176,7 @@ async function main(argv: string[]): Promise<number> {
 		options: {
 			apply: { type: "boolean", default: false },
 			deep: { type: "boolean", default: false },
+			"dusage-cap": { type: "string" },
 			mount: { type: "string", default: "/" },
 			help: { type: "boolean", default: false },
 		},
@@ -169,8 +186,25 @@ async function main(argv: string[]): Promise<number> {
 		return 0;
 	}
 	const mount = values.mount ?? "/";
-	const stages: Stage[] = [...STAGES];
-	if (values.deep) stages.push(DEEP_STAGE);
+	const capRaw = values["dusage-cap"];
+	let cap: number | null = null;
+	if (capRaw !== undefined) {
+		cap = Number.parseInt(capRaw, 10);
+		if (!Number.isInteger(cap) || cap < 1 || cap > 100) {
+			console.error(`${PROG}: --dusage-cap expects an integer 1..100 (got "${capRaw}")`);
+			console.error(`${PROG}: try --help`);
+			return 2;
+		}
+	}
+	const allStages: Stage[] = [...STAGES];
+	if (values.deep) allStages.push(DEEP_STAGE);
+	// The cap clamps everything, --deep included: "stop at 20" must be
+	// expressible without silently keeping a 65% rewrite in the chain.
+	const stages = cap === null ? allStages : allStages.filter((stage) => stage.dusage <= cap);
+	if (stages.length === 0) {
+		console.error(`${PROG}: --dusage-cap ${cap} filters out every stage (smallest is ${STAGES[0].dusage})`);
+		return 2;
+	}
 
 	// Guard: btrfs only, checked before anything else — even the dry run
 	// must refuse a non-btrfs target so nobody previews-and-habit-retries
@@ -188,6 +222,10 @@ async function main(argv: string[]): Promise<number> {
 	if (!values.apply) {
 		console.log(`${PROG}: DRY RUN (no --apply) — printing commands only, nothing will run`);
 		console.log(`target: ${mount} (fstype btrfs, confirmed via findmnt)`);
+		console.log(`stages: ${stages.map((stage) => stage.dusage).join(" → ")}${cap === null ? "" : `  (capped at --dusage-cap ${cap})`}`);
+		if (cap !== null && allStages.length > stages.length) {
+			console.log(`skipped by cap: ${allStages.filter((stage) => stage.dusage > cap).map((stage) => stage.dusage).join(", ")}`);
+		}
 		console.log("");
 		console.log("before:  btrfs filesystem usage " + mount + "   # note Data size / unallocated");
 		for (const stage of stages) {
@@ -199,13 +237,13 @@ async function main(argv: string[]): Promise<number> {
 		console.log("after:   btrfs filesystem usage " + mount + "   # unallocated should grow;");
 		console.log("         df free space grows only as the allocator releases emptied chunks");
 		console.log("");
-		console.log(`to execute: sudo ${PROG} --apply${values.deep ? " --deep" : ""}`);
+		console.log(`to execute: sudo ${PROG} --apply${values.deep ? " --deep" : ""}${cap === null ? "" : ` --dusage-cap ${cap}`}`);
 		return 0;
 	}
 
 	if (process.geteuid === undefined || process.geteuid() !== 0) {
 		console.error(`${PROG}: --apply needs root (balance ioctls are privileged).`);
-		console.error(`${PROG}: re-run as: sudo ${PROG} --apply${values.deep ? " --deep" : ""}`);
+		console.error(`${PROG}: re-run as: sudo ${PROG} --apply${values.deep ? " --deep" : ""}${cap === null ? "" : ` --dusage-cap ${cap}`}`);
 		return 1;
 	}
 
