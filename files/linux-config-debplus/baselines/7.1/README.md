@@ -6,15 +6,17 @@ This is a historical, full-configuration audit of `7.1.0-debplus.1`, **not** a m
 
 | File | Meaning |
 |---|---|
-| [config-running](config-running) | Exact 295,658-byte copy of `/boot/config-7.1.0-debplus.1`, identical to `/usr/local/src/linux/.config`; no normalization applied. Mode 0644. |
-| [config-upstream-defconfig](config-upstream-defconfig) | Fully expanded upstream `x86_64_defconfig` generated from the 7.1 build base with the audit toolchain. |
+| [config-running.xz](config-running.xz) | xz-compressed exact 295,658-byte copy of `/boot/config-7.1.0-debplus.1`, identical to `/usr/local/src/linux/.config`; no normalization applied. Decompresses byte-identical (SHA-256 verified); mode 0644. |
+| [config-upstream-defconfig.xz](config-upstream-defconfig.xz) | Fully expanded upstream `x86_64_defconfig` generated from the 7.1 build base with the audit toolchain, xz-compressed (decode-verified byte-identical). |
 | [config-running-vs-defconfig.diff](config-running-vs-defconfig.diff) | Canonical human audit, upstream `scripts/diffconfig` format: baseline → exact saved running configuration. `+`/`-` mean symbol present only in one full config; unprefixed changes show old → new. Not a unified patch. |
 | [config-running-vs-defconfig.fragment](config-running-vs-defconfig.fragment) | `diffconfig -m` replay fragment, valid only with this baseline/source and subsequent normalization. It cannot express removal of symbols absent from the target config and includes compiler-generated/read-only values; do not promote it into primary policy. |
 | [config-running-normalization.diff](config-running-normalization.diff) | Five observed normalization differences under today's Rust toolchain, exact running config → normalized config. |
 | [source-config-inventory.json](source-config-inventory.json) | Selected `/usr/local/src` configs, their hashes, headers, critical values, and symbol comparisons against running 7.1. No key material. |
 | [validation.json](validation.json) | Provenance, tool identities, artifact hashes and replay results. |
 
-The running-config SHA-256 is **`0898648962b24943c1d312b30d8cf4fcf959b4a107ee3580692af001c70789d3`**. Baseline and generated audits were captured October 1, 2026, by GPT-6.1 Sol.
+The running-config SHA-256 (of the decompressed plaintext) is **`0898648962b24943c1d312b30d8cf4fcf959b4a107ee3580692af001c70789d3`**. Baseline and generated audits were captured October 1, 2026, by GPT-6.1 Sol.
+
+Full configurations are stored xz-compressed with the deterministic codec `xz -9 --check=crc64 -T1`; each artifact's compressed and plaintext hashes are recorded in [validation.json](validation.json). Diff, fragment, inventory, and documentation artifacts remain uncompressed. Compression changes storage only — every hash, replay result, and audit claim in this bundle describes the identical plaintext content.
 
 ## Source and toolchain provenance
 
@@ -46,7 +48,7 @@ Examples against the upstream default:
 ### Which previous configs were actually the same?
 
 - `/usr/local/src/linux/.config` **equals the running `/boot` config exactly**.
-- `/usr/local/src/linux/.config.old` **equals `/usr/local/src/linux-config-debplus/config-debian-plus` exactly**: 296,498 bytes, SHA-256 `37f91f777b343b08807872548a91783483f593b0d31f87616ba6b93f6ae81484`. That preserved seed differs from the running configuration by **22 symbol states**, predominantly Rust support/availability, Rust-driven drivers/panic QR options and toolchain metadata. It is not an exact backup of the running config.
+- `/usr/local/src/linux/.config.old` **equals `/usr/local/src/linux-config-debplus/config-debian-plus` exactly**: 296,498 bytes, SHA-256 `37f91f777b343b08807872548a91783483f593b0d31f87616ba6b93f6ae81484`. (The committed repo copy of that seed is now stored compressed as [`../../config-debian-plus.xz`](../../config-debian-plus.xz); `/usr/local` source files were not modified.) That preserved seed differs from the running configuration by **22 symbol states**, predominantly Rust support/availability, Rust-driven drivers/panic QR options and toolchain metadata. It is not an exact backup of the running config.
 - February backups are x86 6.19-rc6/rc7 GCC configs, 410/396 symbol differences from running 7.1. Both remain untouched in the old source tree.
 - `.config-greatish` and `/usr/local/src/config-rpi4` are distinct arm64 6.8-rc5 configurations, not this host's running seed.
 - `/usr/local/src/config-6.15` is actually headed x86 **6.14.0-rc6**, with GCC 14 metadata. `config-rax120*` are OpenWrt configs, not candidates for host-kernel replacement.
@@ -55,36 +57,44 @@ The inventory is a scoped audit, not a recursive scan of all repositories. Histo
 
 ## Reproduce and validate without touching the old build
 
-From the repository root, choose a new scratch directory; never use `/usr/local/src/linux` as the make working directory or output directory:
+From the repository root, choose a new scratch directory; never use `/usr/local/src/linux` as the make working directory or output directory. The stored full configurations are xz-compressed, so decompress them into scratch first:
 
 ```sh
 mkdir -p .test-agent/linux-config-preservation-replay/source
 git -C /usr/local/src/linux archive 8cd9520d35a6c38db6567e97dd93b1f11f185dc6 |
   tar -x -C .test-agent/linux-config-preservation-replay/source
 
+mkdir -p .test-agent/linux-config-preservation-replay/baseline
+xz -dc files/linux-config-debplus/baselines/7.1/config-running.xz \
+  > .test-agent/linux-config-preservation-replay/baseline/config-running
+xz -dc files/linux-config-debplus/baselines/7.1/config-upstream-defconfig.xz \
+  > .test-agent/linux-config-preservation-replay/baseline/config-upstream-defconfig
+# plaintext hashes must match validation.json:
+sha256sum .test-agent/linux-config-preservation-replay/baseline/*
+
 make -C .test-agent/linux-config-preservation-replay/source \
   O="$PWD/.test-agent/linux-config-preservation-replay/default" ARCH=x86 LLVM=1 x86_64_defconfig
 
 python3 .test-agent/linux-config-preservation-replay/source/scripts/diffconfig \
   .test-agent/linux-config-preservation-replay/default/.config \
-  files/linux-config-debplus/baselines/7.1/config-running
+  .test-agent/linux-config-preservation-replay/baseline/config-running
 ```
 
-For replay, use the **preserved baseline** rather than a newly generated baseline if testing the committed fragment. Run the merge script from scratch so its temporary files stay there:
+For replay, use the **preserved baseline** (the decompressed plaintext above) rather than a newly generated baseline if testing the committed fragment. Run the merge script from scratch so its temporary files stay there:
 
 ```sh
 mkdir -p .test-agent/linux-config-preservation-replay/reconstructed
 (
   cd .test-agent/linux-config-preservation-replay
   source/scripts/kconfig/merge_config.sh -m -O reconstructed \
-    ../../files/linux-config-debplus/baselines/7.1/config-upstream-defconfig \
+    baseline/config-upstream-defconfig \
     ../../files/linux-config-debplus/baselines/7.1/config-running-vs-defconfig.fragment
 )
 make -C .test-agent/linux-config-preservation-replay/source \
   O="$PWD/.test-agent/linux-config-preservation-replay/reconstructed" ARCH=x86 LLVM=1 olddefconfig
 
 mkdir -p .test-agent/linux-config-preservation-replay/normalized-running
-cp files/linux-config-debplus/baselines/7.1/config-running \
+cp .test-agent/linux-config-preservation-replay/baseline/config-running \
   .test-agent/linux-config-preservation-replay/normalized-running/.config
 make -C .test-agent/linux-config-preservation-replay/source \
   O="$PWD/.test-agent/linux-config-preservation-replay/normalized-running" ARCH=x86 LLVM=1 olddefconfig
@@ -93,7 +103,7 @@ python3 .test-agent/linux-config-preservation-replay/source/scripts/diffconfig \
   .test-agent/linux-config-preservation-replay/reconstructed/.config
 ```
 
-**Validated result:** the last command reports zero symbol differences. Comparing reconstruction directly against `config-running` gives exactly the five recorded normalization differences: three Rust metadata changes, two newly visible entries. No original explicit policy-valued symbol differs after excluding those three toolchain metadata integers.
+**Validated result:** the last command reports zero symbol differences. Comparing reconstruction directly against the decompressed `config-running` gives exactly the five recorded normalization differences: three Rust metadata changes, two newly visible entries. No original explicit policy-valued symbol differs after excluding those three toolchain metadata integers.
 
 ## Signing material: likely automatic, still preserved in place
 

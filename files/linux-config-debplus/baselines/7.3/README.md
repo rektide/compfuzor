@@ -2,8 +2,15 @@
 
 Reference baseline for the 7.3 slice only; NOT a Debian baseline and NOT a
 proposed replacement. The durable Debian-plus host policy remains
-`config-debian-plus`. Sibling `../7.1/` (exact original preservation) is owned
-by the research agent.
+`config-debian-plus` (committed xz-compressed as `../config-debian-plus.xz`;
+decompress into scratch to read it). Sibling `../7.1/` (exact original
+preservation) is owned by the research agent.
+
+Full configurations in this bundle are stored with the deterministic codec
+`xz -9 --check=crc64 -T1`, mode 0644; each decompresses byte-identical to its
+original (SHA-256 verified, hashes registered in `../7.1/validation.json`).
+`.diff`/`.fragment` artifacts stay plain. Decompress into scratch — never into
+`/usr/local` — before any merge, eval, or diff.
 
 ## Target / source / toolchain
 
@@ -14,6 +21,9 @@ by the research agent.
 | Toolchain | Debian clang 21.1.8 (`CC_IS_CLANG=y`), ld.lld, rustc 1.101.0-nightly + rust-src (probe `RUST_IS_AVAILABLE=y`), bindgen 0.71.1, pahole 1.30 — same LLVM=1 toolchain as `config-debian-plus` |
 
 ## Commands
+
+Generation record (when `config-debian-plus` and the defconfig were still
+plaintext at these paths):
 
 ```
 make -C source O=$PWD/output-defconfig LLVM=1 x86_64_defconfig
@@ -29,8 +39,27 @@ grep '^-' <full diff above> | sed 's/^-//' | awk '{print $1}' \
     | sed 's/^/# CONFIG_/; s/$/ is not set/' >> baselines/7.3/defconfig-to-debian-plus.fragment
 ```
 
-`config-upstream-defconfig` is the unmodified generated file (5516 lines,
-sha256 `0c236fada2c40ab78733de631613db5ae8ea709c69ac3fc853dc919bb401c480`).
+Reproduction today — decompress the committed `.xz` artifacts into scratch
+first, then run the same merge/eval/diff against the plaintext copies:
+
+```
+mkdir -p .test-agent/linux-debplus-7.3/plain
+xz -dc baselines/7.3/config-upstream-defconfig.xz \
+    > .test-agent/linux-debplus-7.3/plain/config-upstream-defconfig
+xz -dc config-debian-plus.xz \
+    > .test-agent/linux-debplus-7.3/plain/config-debian-plus
+# plaintext sha256 must match ../7.1/validation.json (compression registry):
+sha256sum .test-agent/linux-debplus-7.3/plain/*
+
+/usr/bin/python3 source/scripts/diffconfig \
+    .test-agent/linux-debplus-7.3/plain/config-upstream-defconfig \
+    .test-agent/linux-debplus-7.3/plain/config-debian-plus
+```
+
+`config-upstream-defconfig` is the unmodified generated file (5516 lines);
+stored as `config-upstream-defconfig.xz` (decode-verified). sha256
+`0c236fada2c40ab78733de631613db5ae8ea709c69ac3fc853dc919bb401c480` is the
+decompressed plaintext content hash.
 The fixedpoint roundtrip (a second `olddefconfig` on the baseline is
 byte-identical) only proves baseline stability — see next section for the
 verification that actually matters here.
@@ -48,10 +77,11 @@ Roundtrip verification (the delta reconstruction, not the fixedpoint):
 
 ```
 sh source/scripts/kconfig/merge_config.sh -m -O output-fragment \
-    baselines/7.3/config-upstream-defconfig \
+    .test-agent/linux-debplus-7.3/plain/config-upstream-defconfig \
     baselines/7.3/defconfig-to-debian-plus.fragment
 make -C source O=$PWD/output-fragment LLVM=1 olddefconfig
-/usr/bin/python3 source/scripts/diffconfig output-fragment/.config config-debian-plus
+/usr/bin/python3 source/scripts/diffconfig output-fragment/.config \
+    .test-agent/linux-debplus-7.3/plain/config-debian-plus
 ```
 
 Result: **0 differing entries** — baseline + fragment resolved with the same

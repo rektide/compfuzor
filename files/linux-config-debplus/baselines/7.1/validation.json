@@ -29,13 +29,70 @@
   "original_configs_unchanged": true,
   "prior_preservation_manifest_contents_unchanged": true,
   "private_key_copied": false,
+  "compression": {
+    "applied_date": "2026-10-01",
+    "codec": "xz -9 --check=crc64 -T1 (deterministic; single-threaded)",
+    "mode": "0644",
+    "note": "Full configurations are stored xz-compressed; each artifact was verified to decompress byte-identical to its original (sha256 match) before the plaintext file was removed. plaintext_sha256 is the preserved content hash; sha256 is the committed .xz artifact. .diff/.fragment/.json/.md artifacts remain uncompressed. Compression is storage-only: every audit, replay, and normalization claim above describes the identical plaintext.",
+    "artifacts": {
+      "config-debian-plus.xz": {
+        "path": "files/linux-config-debplus/config-debian-plus.xz",
+        "sha256": "2e041b8093a472100011773c31367579a38299cff2cef21c57abbb828ca9f6d3",
+        "plaintext_sha256": "9728eba658e290c1fdc4da0a7238d839dd3e4ac33ded4d22b8c577fdccb579ff",
+        "plaintext_bytes": 300100,
+        "xz_bytes": 60388
+      },
+      "config-running.xz": {
+        "path": "files/linux-config-debplus/baselines/7.1/config-running.xz",
+        "sha256": "33e981453e37f2b3a2fe7ec7752f13d040495c89a295c85e248f5d4af668769f",
+        "plaintext_sha256": "0898648962b24943c1d312b30d8cf4fcf959b4a107ee3580692af001c70789d3",
+        "plaintext_bytes": 295658,
+        "xz_bytes": 59520
+      },
+      "config-upstream-defconfig.xz": {
+        "path": "files/linux-config-debplus/baselines/7.1/config-upstream-defconfig.xz",
+        "sha256": "363f8a9a83f365fcd9a45a837e03437db89655fc4945c97794ad41d6f687dac7",
+        "plaintext_sha256": "39c1526d8e55114a580a0e041ac21fb300376604f63ca4d010f2b20a32606b75",
+        "plaintext_bytes": 147120,
+        "xz_bytes": 29312
+      },
+      "baselines/7.3/config-upstream-defconfig.xz": {
+        "path": "files/linux-config-debplus/baselines/7.3/config-upstream-defconfig.xz",
+        "sha256": "53ddae1fa2d28ef53bc2466b6760cc7872905cc58c163172c70e2d469434bba7",
+        "plaintext_sha256": "0c236fada2c40ab78733de631613db5ae8ea709c69ac3fc853dc919bb401c480",
+        "plaintext_bytes": 148488,
+        "xz_bytes": 29572
+      },
+      "config-debian-plus.7.1.0.xz": {
+        "path": "files/linux-config-debplus/archive/previous-normalization/config-debian-plus.7.1.0.xz",
+        "sha256": "f8a18fccaeb85738d22de69c32e64a68d00ab937cf5bf0e3eef654bf561a7ce1",
+        "plaintext_sha256": "37f91f777b343b08807872548a91783483f593b0d31f87616ba6b93f6ae81484",
+        "plaintext_bytes": 296498,
+        "xz_bytes": 59780
+      },
+      "previous-normalization/.config.xz": {
+        "path": "files/linux-config-debplus/archive/previous-normalization/.config.xz",
+        "sha256": "12aa90f632a9f109b12269a16f917629a59ba76e4bcfccb70f1ef8693c2c59f5",
+        "plaintext_sha256": "736b1403540dbf62dbb8ae4c49ac1b2f9bf305b17109fa50945fbcf35386e2bc",
+        "plaintext_bytes": 294936,
+        "xz_bytes": 59384
+      },
+      "previous-normalization/.config.old.xz": {
+        "path": "files/linux-config-debplus/archive/previous-normalization/.config.old.xz",
+        "sha256": "063c8f7d9e3301d20bb9c21b3a11b0cb854b424976df7ff439cfb69ad5e81c62",
+        "plaintext_sha256": "7041f568ac2c227ca802387797676e110f610e8961aeeeb77d4bdfbe8fd3efa6",
+        "plaintext_bytes": 296720,
+        "xz_bytes": 60012
+      }
+    }
+  },
   "artifact_sha256": {
-    "README.md": "84c32dbfb32fde78ea44235fc944f14d2ba594cba1256fdde326207ae6b70fd6",
-    "config-running": "0898648962b24943c1d312b30d8cf4fcf959b4a107ee3580692af001c70789d3",
+    "README.md": "a9e368eac74b33fae0ceac0764a9d4fdfc67252756ca237f58d3671c6567266e",
+    "config-running.xz": "33e981453e37f2b3a2fe7ec7752f13d040495c89a295c85e248f5d4af668769f",
     "config-running-normalization.diff": "1741ce2ff22791457c324d12358dcb8492c8371c6e1b4c433844309bd895bb71",
     "config-running-vs-defconfig.diff": "53c91c3ba473c1d20fad3c9a79c04b724fe77acff02c077ea6397347c210bbe7",
     "config-running-vs-defconfig.fragment": "7f584b0b17bf1fa4125c7b4e1d7ab7e8e05e160223199dac09e7dd39d0819ad0",
-    "config-upstream-defconfig": "39c1526d8e55114a580a0e041ac21fb300376604f63ca4d010f2b20a32606b75",
+    "config-upstream-defconfig.xz": "363f8a9a83f365fcd9a45a837e03437db89655fc4945c97794ad41d6f687dac7",
     "source-config-inventory.json": "5ebcade69cd73612be7c1cf47099b8da6f27a50b4aff3f1f91b2a6aa5cd11bb1"
   }
 }
