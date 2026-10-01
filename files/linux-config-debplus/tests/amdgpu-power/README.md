@@ -1,15 +1,28 @@
 # AMDGPU power hotfix regression tests
 
-Run from any directory:
+From the Compfuzor repository root:
 
 ```sh
 files/linux-config-debplus/tests/amdgpu-power/run.py --kernel-repo /usr/local/src/linux
 ```
 
+For a copied bundle, invoke its absolute path from any directory and choose a
+writable scratch directory explicitly, for example:
+
+```sh
+/usr/local/src/linux-config-debplus/tests/amdgpu-power/run.py \
+  --kernel-repo /usr/local/src/linux \
+  --scratch-dir "$HOME/tmp-opencode/linux-debplus-7.3/hotfix"
+```
+
 Requires Python 3.12+, Git, and a C compiler (`CC` may select one). Reads Git
 objects only; the kernel checkout and its configuration are never changed.
 Archives five source files into temporary directories under
-`.test-agent/linux-debplus-7.3/hotfix/` and removes those test directories on exit.
+`--scratch-dir` (default: `.test-agent/linux-debplus-7.3/hotfix/` beneath the
+current working directory) and removes those test directories on exit. Hotfix
+invocations set `TMPDIR` to their temporary test directory, keeping the embedded
+patch temporary files within the same scratch root. No repository layout is
+assumed for the scratch location.
 
 Checks both pinned upstream 7.3 development tip
 `551c722f40809618230001baccf219193e22fc5a` and rc5 baseline

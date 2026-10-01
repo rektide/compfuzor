@@ -12,7 +12,6 @@ import io
 import tempfile
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[3]
 SCRIPT = HERE.parents[1] / "hotfixes/amdgpu-power.sh"
 TIP = "551c722f40809618230001baccf219193e22fc5a"
 RC5 = "72d3fcf802c45d00b300f25b848a93c3a2bd7c7e"
@@ -43,8 +42,9 @@ def snapshot(tree):
 
 
 def invoke(tree, check=False, success=True):
+    env = dict(os.environ, TMPDIR=str(tree.parent))
     result = subprocess.run([str(SCRIPT), *(["--check"] if check else []), str(tree)],
-                            text=True, capture_output=True)
+                            text=True, capture_output=True, env=env)
     assert (result.returncode == 0) == success, result.stdout + result.stderr
     return result.stdout
 
@@ -107,12 +107,15 @@ def test_tree(repo, revision, work):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--kernel-repo", type=Path, default=Path("/usr/local/src/linux"))
+    parser.add_argument("--scratch-dir", type=Path,
+                        default=Path.cwd() / ".test-agent/linux-debplus-7.3/hotfix",
+                        help="temporary test root (default: cwd/.test-agent/linux-debplus-7.3/hotfix)")
     args = parser.parse_args()
     for path in FILES[1:]:
         contents = [run("git", "-C", str(args.kernel_repo), "show", rev + ":" + path,
                         capture_output=True).stdout for rev in (RC5, TIP)]
         assert contents[0] == contents[1], "rc5/tip differ: " + path
-    scratch = ROOT / ".test-agent/linux-debplus-7.3/hotfix"
+    scratch = args.scratch_dir.resolve()
     scratch.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="tests-", dir=scratch) as work:
         for revision in (RC5, TIP):
