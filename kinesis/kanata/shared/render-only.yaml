@@ -1,0 +1,24 @@
+---
+# Run from the Compfuzor checkout root. This profile confines generated artifacts
+# to scratch and disables application. It does NOT enable USERMODE: these are
+# system-service examples, and changing their scope would test a different unit.
+KINESIS_RENDER_ROOT: "{{ lookup('env', 'PWD') }}/.test-agent/kinesis-kanata/render"
+SRVS_DIR: "{{ KINESIS_RENDER_ROOT }}/srv"
+SRCS_DIR: "{{ KINESIS_RENDER_ROOT }}/src"
+ETCS_DIR: "{{ KINESIS_RENDER_ROOT }}/etc"
+VARS_DIR: "{{ KINESIS_RENDER_ROOT }}/var"
+CACHES_DIR: "{{ KINESIS_RENDER_ROOT }}/cache"
+LOGS_DIR: "{{ KINESIS_RENDER_ROOT }}/log"
+SHARES_DIR: "{{ KINESIS_RENDER_ROOT }}/share"
+GLOBAL_BINS_DIR: "{{ KINESIS_RENDER_ROOT }}/bin"
+SYSTEMD_UNIT_DIR: "{{ KINESIS_RENDER_ROOT }}/units"
+PKGS_BYPASS: true
+APT_BYPASS: true
+MODULES_BYPASS: true
+REPO_BYPASS: true
+GIT_BYPASS: true
+LINKS_BYPASS: true
+BINS_RUN_BYPASS: true
+SYSTEMD_THUNK_BYPASS: true
+SYSTEMD_ENABLE: false
+SYSTEMD_START: false
