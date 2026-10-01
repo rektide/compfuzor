@@ -3,6 +3,7 @@
 # ExecStart points at the staged config: no /etc/kanata links to overwrite.
 TYPE: kanata
 PKGS: [kanata]
+DIRMODE: "0755"
 ETC_PROP:
   mode: "0755"
 SYSTEMD_ALIAS: false
@@ -12,7 +13,7 @@ SYSTEMD_UNITS:
   Description: "Kanata example -- {{ INSTANCE }}"
   Wants: modprobe@uinput.service
   After: modprobe@uinput.service
-SYSTEMD_SERVICES:
+KANATA_SERVICE_BASE:
   Type: simple
   User: _kanata
   Group: _kanata
@@ -42,5 +43,6 @@ SYSTEMD_SERVICES:
   LockPersonality: true
   MemoryDenyWriteExecute: true
   UMask: "0077"
+SYSTEMD_SERVICES: "{{ KANATA_SERVICE_BASE }}"
 SYSTEMD_INSTALLS:
   WantedBy: multi-user.target
