@@ -72,6 +72,7 @@
     ENV: True
     ETC_DIRS:
       - niri
+      - kde/kwin-scripts/vicinae/contents/code
     ETC_FILES:
       - name: niri/keybinding-launch.kdl
         content: |
@@ -88,6 +89,32 @@
           binds {
             Mod+F hotkey-overlay-title="Switch windows: vicinae" { spawn-sh "vicinae vicinae://extensions/vicinae/wm/switch-windows"; }
           }
+      # KDE: kwin hosts org.kde.kglobalaccel on Plasma 6, so the scriptable
+      # shortcut-registration path is a kwin script (string keys, rebindable
+      # in the shortcuts KCM, autostarted via kwinrc [Plugins]).
+      - name: kde/kwin-scripts/vicinae/metadata.desktop
+        content: |
+          [Desktop Entry]
+          Name=Vicinae Shortcuts
+          Comment=Global shortcuts for the Vicinae launcher
+          Type=Service
+          X-KDE-ServiceTypes=KWin/Script
+          X-KDE-PluginInfo-Name=vicinae
+          X-KDE-PluginInfo-Version=1.0
+          X-KDE-PluginInfo-License=GPL-3.0
+      - name: kde/kwin-scripts/vicinae/contents/code/main.js
+        content: |
+          // KWin-owned global shortcuts for Vicinae. Keys are defaults:
+          // rebind in System Settings > Shortcuts (search "Vicinae").
+          registerShortcut(
+            "VicinaeToggle", "Vicinae: Toggle Launcher", "Alt+Space",
+            () => spawn("vicinae", "toggle"));
+          registerShortcut(
+            "VicinaeClipboard", "Vicinae: Clipboard History", "Alt+Grave",
+            () => spawn("vicinae", "vicinae://launch/clipboard/history"));
+          registerShortcut(
+            "VicinaeSwitchWindows", "Vicinae: Switch Windows", "Meta+F",
+            () => spawn("vicinae", "vicinae://extensions/vicinae/wm/switch-windows"));
     BINS:
       - name: build.sh
         content: |
@@ -119,5 +146,26 @@
             ln -sf "$f" $NIRI_CONFIG_DIR/vicinae
             echo 'include "./vicinae/'"$(basename "$f")"'"'
           done | block-in-file -n vicinae --comment "//" "$NIRI_CONFIG_DIR/config.kdl"
+      - name: install-kde.sh
+        basedir: etc
+        content: |
+          DATA="${XDG_DATA_HOME:-$HOME/.local/share}"
+          SCRIPTS="$DATA/kwin/scripts"
+          mkdir -p "$SCRIPTS"
+          ln -sfn "{{DIR}}/etc/kde/kwin-scripts/vicinae" "$SCRIPTS/vicinae"
+          # autostart at login (kwin reads [Plugins] itself; additive + idempotent)
+          block-in-file -n vicinae-kwin-script --comment "#" "$HOME/.config/kwinrc" <<'EOF'
+          [Plugins]
+          vicinae=Enabled
+          EOF
+          # load into the running session without restarting kwin; the
+          # [Plugins] entry carries it from the next login onward
+          if busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting loadScript ss "$SCRIPTS/vicinae/contents/code/main.js" vicinae >/dev/null 2>&1; then
+            busctl --user call org.kde.KWin /Scripting org.kde.kwin.Scripting start >/dev/null 2>&1 \
+              && echo "kwin script loaded into the running session" \
+              || echo "kwin script registered; starts next login"
+          else
+            echo "no kwin on the bus; script installs for next login"
+          fi
   tasks:
     - import_tasks: tasks/compfuzor.includes
