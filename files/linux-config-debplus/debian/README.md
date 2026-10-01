@@ -17,9 +17,9 @@ An additional, bounded check of experimental's **signed source index** found no 
 
 ### Read the useful differences first
 
-- [Declared policy versus native Debian](snapshots/unstable/audit-7.3/policy-declared-vs-debian.diff): **33 entries** from common+LLVM declarations only. `<absent>` means not represented in that full config, not necessarily disabled. GCC-produced configs do not expose several Clang choices; these availability differences are not claims that Debian deliberately chose a different Clang policy.
+- [Declared policy versus native Debian](snapshots/unstable/audit-7.3/policy-declared-vs-debian.diff): **35 entries** from common+LLVM declarations only. `<absent>` means not represented in that full config, not necessarily disabled. GCC-produced configs do not expose several Clang choices; these availability differences are not claims that Debian deliberately chose a different Clang policy.
 - [Debian versus upstream, both projected onto 7.3](snapshots/unstable/audit-7.3/target-debian-vs-upstream.diff): **7,468 entries**, mostly Debian's broad hardware/modules/subsystem coverage. This is the first layer; it is not our custom policy.
-- [Our effective policy atop projected Debian](snapshots/unstable/audit-7.3/target-policy-vs-debian.diff): **47 entries**, including dependency consequences. Built-in filesystems, BBR, reduced hardening, host-native CPU/TSX-off, LZ4 hibernation and pstore frontend choices dominate.
+- [Our effective policy atop projected Debian](snapshots/unstable/audit-7.3/target-policy-vs-debian.diff): **49 entries**, including dependency consequences and two standalone-build normalizations. Built-in filesystems, BBR, reduced hardening, host-native CPU/TSX-off, LZ4 hibernation and pstore frontend choices dominate.
 - [Unfulfilled policy](snapshots/unstable/audit-7.3/target-policy-unfulfilled.diff): **empty**; every declared common+LLVM symbol was fulfilled on this host.
 - [Toolchain metadata](snapshots/unstable/audit-7.3/target-toolchain-metadata.diff): kept separate, not attributed to deliberate custom policy.
 
@@ -27,7 +27,7 @@ Debian already enables Rust and the panic QR screen here; restating them in our 
 
 ### Required intent: approved declarations, verified effective behavior
 
-[required-intent.config](required-intent.config) is an **audit-only expectation list**. It is never automatically merged into the configuration. The audit JSON separately reports fulfillment and whether a value is explicitly declared or derived from a declared selectable choice. All nine Rust/debug/QR expectations are fulfilled in fresh unstable and the effective 7.3 projection; [target-required-intent-unfulfilled.diff](snapshots/unstable/audit-7.3/target-required-intent-unfulfilled.diff) is empty.
+[required-intent.config](required-intent.config) is an **audit-only expectation list**. It is never automatically merged into the configuration. The audit JSON separately reports fulfillment and whether a value is explicitly declared or derived from a declared selectable choice. All nine Rust/debug/QR expectations are fulfilled in fresh unstable and the effective 7.3 projection. Two additional expectations normalize standalone build metadata; all eleven expectations are fulfilled in our projection, and [target-required-intent-unfulfilled.diff](snapshots/unstable/audit-7.3/target-required-intent-unfulfilled.diff) is empty.
 
 The parent approved and committed seven small additions to [overrides.config](../overrides.config) in `5d5edbc0`. Alongside the existing Rust, panic enablement, `qr_code` screen and QR enablement declarations, the common fragment now explicitly contains:
 
@@ -41,9 +41,23 @@ CONFIG_DEBUG_INFO_BTF=y
 CONFIG_DEBUG_INFO_BTF_MODULES=y
 ```
 
-`DEBUG_INFO` itself is a derived, promptless bool: selecting the declared DWARF choice preserves it correctly instead of pretending it is independently selectable. The receipt labels this expectation as derived from the explicit debug-information choice; the other eight expectations are directly declared. BTF additionally depends on inherited `BPF_SYSCALL`, valid pahole, module support for module BTF, and compatible debug-info options. The evaluator reports losses rather than installing tools or copying the entire old config.
+`DEBUG_INFO` itself is a derived, promptless bool: selecting the declared DWARF choice preserves it correctly instead of pretending it is independently selectable. The receipt labels this expectation as derived from the explicit debug-information choice; the other ten expectations are directly declared. BTF additionally depends on inherited `BPF_SYSCALL`, valid pahole, module support for module BTF, and compatible debug-info options. The evaluator reports losses rather than installing tools or copying the entire old config.
 
-The projected audit was rerun after approval, with refreshed policy hashes and output receipts. **No additional effective differences appeared:** the policy delta remains 47 symbols because Debian already supplied all seven newly declared states. Every declaration and required expectation is fulfilled. The main compressed configuration was not modified by this revision.
+The projected audit was rerun after approval, with refreshed policy hashes and output receipts. The seven intent declarations did not change effective behavior because Debian already supplied their values. A subsequent standalone-build review added two actual differences:
+
+```config
+CONFIG_MODULE_SIG_KEY="certs/signing_key.pem"
+CONFIG_BUILD_SALT=""
+```
+
+Debian's `output/signing_key.pem` is supplied by its package build machinery,
+not a plain upstream build. The upstream default path permits normal key
+generation at build time; no key is included or copied by this policy. Clearing
+the old Debian ABI build salt avoids carrying `7.2.8+deb14-amd64` into a 7.3
+build. The final effective delta is **49 symbols**: the original 47 plus these
+two build normalizations. Every declaration and required expectation is
+fulfilled. The main compressed saved configuration already had these values
+and remains unchanged.
 
 [Running 7.1 versus native Debian 7.2.8, raw](snapshots/unstable/audit-running-7.1/our-current-vs-debian.raw.diff) is retained as a separately labeled historical cross-version/toolchain audit; [declared-policy symbols only](snapshots/unstable/audit-running-7.1/our-current-declared-policy-vs-debian.diff) is the pertinent view. Neither is the canonical deliberate policy layer. Its policy-input hashes were also refreshed after approval.
 

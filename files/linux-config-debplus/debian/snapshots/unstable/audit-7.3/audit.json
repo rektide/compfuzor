@@ -7,12 +7,12 @@
     "sha256": "471f1a3b3dce76dad0cf0da19f29e4562c517cad0855bcd8b74502b92ef892ea"
   },
   "output_sha256": {
-    "policy-declared-vs-debian.diff": "66cab6f196d7546baa68cb79fd9891d8b3b03961adba852f78c6766c9f03e57a",
+    "policy-declared-vs-debian.diff": "b98b10ff3aefba7263bea7dfe559d4977d5b209a61fdceeee3bda6142615d220",
     "target-debian-vs-upstream.diff": "27ba690ebcb5278b73f61033b9448ef6534e432df081c9c473c6122accd16131",
     "target-debian.config.xz": "a658c3f1123f23f09a7b8eb23016dde2abb1cb682b61bc11eaecd8593c8a5706",
     "target-policy-unfulfilled.diff": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "target-policy-vs-debian.diff": "8db6fa3a08872c3dc0a10e311dcce409ddaf4eaa2ffe63421f3679d218341ce9",
-    "target-policy.config.xz": "46f833c365d02b859f653589eede565401a3416c72822a547a4609206c2e807d",
+    "target-policy-vs-debian.diff": "cc82728a4e1f4fd8971d8360ffc090a0c0028c4301b0b96dca5493aefb19d413",
+    "target-policy.config.xz": "122ba9e174c3e15aab4faa6113c3a9d84746163615ca73cc648052b12e84aae7",
     "target-required-intent-unfulfilled.diff": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "target-toolchain-metadata.diff": "46dad13258e5c803e4dcfc43b01cf5f6cf0bcad13e337d4349ea1e30e5e4ef21",
     "target-upstream.config.xz": "315652804aa5bb10d866475cd24771cf31f665e13ffb966130e4e2feaaabb0ae"
@@ -20,7 +20,7 @@
   "policy_inputs": [
     {
       "path": "/home/rektide/src/compfuzor/files/linux-config-debplus/overrides.config",
-      "sha256": "cb7a28ac8ffd7504e5fff48c2fe14a75d419b50836f7dcf0d2e4e57cbaee1b52"
+      "sha256": "eeb8e7fd831189b349cacc79b401ca431b242a9e7b2edf97b1f82c7727836443"
     },
     {
       "path": "/home/rektide/src/compfuzor/files/linux-config-debplus/overrides.llvm",
@@ -30,6 +30,12 @@
   "required_intent": {
     "input": "/home/rektide/src/compfuzor/files/linux-config-debplus/debian/required-intent.config",
     "native_debian": {
+      "BUILD_SALT": {
+        "actual": "\"7.2.8+deb14-amd64\"",
+        "declaration": "explicit",
+        "expected": "\"\"",
+        "fulfilled": false
+      },
       "DEBUG_INFO": {
         "actual": "y",
         "declaration": "derived from explicitly declared debug-information choice",
@@ -77,6 +83,12 @@
         "declaration": "explicit",
         "expected": "40",
         "fulfilled": true
+      },
+      "MODULE_SIG_KEY": {
+        "actual": "\"output/signing_key.pem\"",
+        "declaration": "explicit",
+        "expected": "\"certs/signing_key.pem\"",
+        "fulfilled": false
       },
       "RUST": {
         "actual": "y",
@@ -85,8 +97,14 @@
         "fulfilled": true
       }
     },
-    "sha256": "9d8cff3710ea1a1d9d8c493216e5e7fffadae48a1bd7a973da3f6a2cf6faa0ad",
+    "sha256": "ce66de545f45b5096ec0e27b47c6b3b4978549f898e604a41b5852c25b1a5685",
     "target_policy": {
+      "BUILD_SALT": {
+        "actual": "\"\"",
+        "declaration": "explicit",
+        "expected": "\"\"",
+        "fulfilled": true
+      },
       "DEBUG_INFO": {
         "actual": "y",
         "declaration": "derived from explicitly declared debug-information choice",
@@ -133,6 +151,12 @@
         "actual": "40",
         "declaration": "explicit",
         "expected": "40",
+        "fulfilled": true
+      },
+      "MODULE_SIG_KEY": {
+        "actual": "\"certs/signing_key.pem\"",
+        "declaration": "explicit",
+        "expected": "\"certs/signing_key.pem\"",
         "fulfilled": true
       },
       "RUST": {
@@ -161,8 +185,8 @@
       "rustc": "rustc 1.101.0-nightly (5c543b0b8 2026-09-29)"
     },
     "toolchain": "llvm",
-    "tree": "/home/rektide/src/compfuzor/.test-agent/linux-debplus-7.3/config/source",
+    "tree": "/home/rektide/src/compfuzor/.test-agent/linux-debplus-final/source",
     "version": "7.3.0-rc5",
-    "work_dir": "/home/rektide/src/compfuzor/.test-agent/linux-debian-retrieval/projected-7.3-declared-intent"
+    "work_dir": "/home/rektide/src/compfuzor/.test-agent/linux-debplus-final/key-path-replay"
   }
 }

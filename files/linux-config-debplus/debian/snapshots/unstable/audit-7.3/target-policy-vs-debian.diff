@@ -1,5 +1,6 @@
 ARCH_VMLINUX_NEEDS_RELOCS: y -> <absent>
 BTRFS_FS: m -> y
+BUILD_SALT: "7.2.8+deb14-amd64" -> ""
 CRC16: m -> y
 CRYPTO_CTS: m -> y
 CRYPTO_LIB_BLAKE2B: m -> y
@@ -18,6 +19,7 @@ HIBERNATION_DEF_COMP: "lzo" -> "lz4"
 JBD2: m -> y
 LKDTM: n -> m
 LZ4HC_COMPRESS: m -> y
+MODULE_SIG_KEY: "output/signing_key.pem" -> "certs/signing_key.pem"
 PROC_MEM_ALWAYS_FORCE: n -> y
 PROC_MEM_FORCE_PTRACE: y -> n
 PSTORE_BLK_CONSOLE_SIZE: <absent> -> 64

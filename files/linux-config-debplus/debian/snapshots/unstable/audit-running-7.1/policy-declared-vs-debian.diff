@@ -1,5 +1,6 @@
 AUTOFDO_CLANG: <absent> -> n
 BTRFS_FS: m -> y
+BUILD_SALT: "7.2.8+deb14-amd64" -> ""
 CFI: <absent> -> n
 DEFAULT_BBR: <absent> -> y
 DEFAULT_CUBIC: y -> n
@@ -13,6 +14,7 @@ HIBERNATION_DEF_COMP: "lzo" -> "lz4"
 LKDTM: n -> m
 LTO_CLANG_FULL: <absent> -> n
 LTO_CLANG_THIN: <absent> -> n
+MODULE_SIG_KEY: "output/signing_key.pem" -> "certs/signing_key.pem"
 PROC_MEM_ALWAYS_FORCE: n -> y
 PROC_MEM_FORCE_PTRACE: y -> n
 PROPELLER_CLANG: <absent> -> n

@@ -8,14 +8,14 @@
   },
   "our_current_comparison": "RAW cross-version/toolchain audit, not attribution of all differences to policy",
   "output_sha256": {
-    "our-current-declared-policy-vs-debian.diff": "826660930aae6c0058d14eed7278b3e26a521d7bd500932a9a03c0c579f4cb21",
+    "our-current-declared-policy-vs-debian.diff": "455862f0ae2ea90a4f3da57319d57c0fbcee45d7a271ba6886ad717b78768bf0",
     "our-current-vs-debian.raw.diff": "b96c229e0864e669edfbecd16d3c5e830d6521f0fd48421b9f84086e18fad83f",
-    "policy-declared-vs-debian.diff": "66cab6f196d7546baa68cb79fd9891d8b3b03961adba852f78c6766c9f03e57a"
+    "policy-declared-vs-debian.diff": "b98b10ff3aefba7263bea7dfe559d4977d5b209a61fdceeee3bda6142615d220"
   },
   "policy_inputs": [
     {
       "path": "/home/rektide/src/compfuzor/files/linux-config-debplus/overrides.config",
-      "sha256": "cb7a28ac8ffd7504e5fff48c2fe14a75d419b50836f7dcf0d2e4e57cbaee1b52"
+      "sha256": "eeb8e7fd831189b349cacc79b401ca431b242a9e7b2edf97b1f82c7727836443"
     },
     {
       "path": "/home/rektide/src/compfuzor/files/linux-config-debplus/overrides.llvm",
@@ -25,6 +25,12 @@
   "required_intent": {
     "input": "/home/rektide/src/compfuzor/files/linux-config-debplus/debian/required-intent.config",
     "native_debian": {
+      "BUILD_SALT": {
+        "actual": "\"7.2.8+deb14-amd64\"",
+        "declaration": "explicit",
+        "expected": "\"\"",
+        "fulfilled": false
+      },
       "DEBUG_INFO": {
         "actual": "y",
         "declaration": "derived from explicitly declared debug-information choice",
@@ -73,6 +79,12 @@
         "expected": "40",
         "fulfilled": true
       },
+      "MODULE_SIG_KEY": {
+        "actual": "\"output/signing_key.pem\"",
+        "declaration": "explicit",
+        "expected": "\"certs/signing_key.pem\"",
+        "fulfilled": false
+      },
       "RUST": {
         "actual": "y",
         "declaration": "explicit",
@@ -80,7 +92,7 @@
         "fulfilled": true
       }
     },
-    "sha256": "9d8cff3710ea1a1d9d8c493216e5e7fffadae48a1bd7a973da3f6a2cf6faa0ad"
+    "sha256": "ce66de545f45b5096ec0e27b47c6b3b4978549f898e604a41b5852c25b1a5685"
   },
   "semantics": "Declared policy differs from Debian; absent symbols are not assumed disabled; metadata is not policy."
 }
