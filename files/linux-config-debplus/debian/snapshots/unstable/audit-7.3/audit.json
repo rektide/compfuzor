@@ -1,0 +1,33 @@
+{
+  "debian_header": [
+    "# Linux/x86 7.2.8 Kernel Configuration"
+  ],
+  "debian_input": {
+    "path": "files/linux-config-debplus/debian/snapshots/unstable/config-7.2.8-1-amd64.xz",
+    "sha256": "471f1a3b3dce76dad0cf0da19f29e4562c517cad0855bcd8b74502b92ef892ea"
+  },
+  "policy_inputs": [
+    {
+      "path": "/home/rektide/src/compfuzor/files/linux-config-debplus/overrides.config",
+      "sha256": "f90e7477bf8ccd6bc32b65a67bbe097c026700e077f1c9eb77079b71be0bd137"
+    },
+    {
+      "path": "/home/rektide/src/compfuzor/files/linux-config-debplus/overrides.llvm",
+      "sha256": "781670a8fd7d5debe2e6eef76c68921894bdced39cab4f7c6932bc9649a11fcc"
+    }
+  ],
+  "semantics": "Declared policy differs from Debian; absent symbols are not assumed disabled; metadata is not policy.",
+  "target": {
+    "declared_revision": "551c722f40809618230001baccf219193e22fc5a",
+    "git_head_if_available": "1ec2200a4c580bcf47b55370d54d7a5a4e3f2108",
+    "semantics": "PROJECTED: upstream -> Debian normalized on target -> declared policy normalized on same target; not native Debian defaults",
+    "source_fingerprints": {
+      "Kconfig": "5262073fc9c710d13e6940d857ffe72f850702db12c068bbb4041d8ca9555e5f",
+      "Makefile": "de7a0fa8e0a6fafc1cc63949ad3de4aa0d1b19f05b04d2afbd7f107fa3053e0b"
+    },
+    "toolchain": "llvm",
+    "tree": "/home/rektide/src/compfuzor/.test-agent/linux-debplus-7.3/config/source",
+    "version": "7.3.0-rc5",
+    "work_dir": "/home/rektide/src/compfuzor/.test-agent/linux-debian-retrieval/projected-7.3"
+  }
+}

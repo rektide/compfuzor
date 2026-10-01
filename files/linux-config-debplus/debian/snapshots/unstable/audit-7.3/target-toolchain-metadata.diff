@@ -1,0 +1,16 @@
+AS_IS_GNU: y -> <absent>
+AS_IS_LLVM: <absent> -> y
+AS_VERSION: 24700 -> 210108
+CC_IS_CLANG: <absent> -> y
+CC_IS_GCC: y -> <absent>
+CC_VERSION_TEXT: "x86_64-linux-gnu-gcc-16 (Debian 16.2.0-3) 16.2.0" -> "Debian clang version 21.1.8 (10)"
+CLANG_VERSION: 0 -> 210108
+GCC_VERSION: 160200 -> 0
+LD_IS_BFD: y -> <absent>
+LD_IS_LLD: <absent> -> y
+LD_VERSION: 24700 -> 0
+LLD_VERSION: 0 -> 210108
+PAHOLE_VERSION: 132 -> 130
+RUSTC_LLVM_VERSION: 210108 -> 230101
+RUSTC_VERSION: 109500 -> 110100
+RUSTC_VERSION_TEXT: "rustc 1.95.0 (59807616e 2026-04-14) (built from a source tarball)" -> "rustc 1.101.0-nightly (5c543b0b8 2026-09-29)"

@@ -1,0 +1,20 @@
+{
+  "architecture": "amd64",
+  "flavour": "generic",
+  "index_cache": "a1dea829d4f4d75863140dc10fb095e8af35014a383d3e4807c76878b14f9591.Packages.xz",
+  "index_sha256": "a1dea829d4f4d75863140dc10fb095e8af35014a383d3e4807c76878b14f9591",
+  "index_url": "https://deb.debian.org/debian/dists/experimental/main/binary-amd64/Packages.xz",
+  "keyring": "/usr/share/keyrings/debian-archive-keyring.gpg",
+  "metapackage": null,
+  "package": null,
+  "release_cache": "9209594547845258e0057938dd7e5f1a11a26dff3ee35b24eee42a53fa40e5ff.InRelease",
+  "release_date": "Thu, 01 Oct 2026 08:07:53 UTC",
+  "release_sha256": "9209594547845258e0057938dd7e5f1a11a26dff3ee35b24eee42a53fa40e5ff",
+  "release_url": "https://deb.debian.org/debian/dists/experimental/InRelease",
+  "retrieved_utc": "2026-10-01T11:37:09.474756+00:00",
+  "schema": 1,
+  "selection": "latest generic headers by Debian version (no metapackage)",
+  "status": "unavailable-in-suite-index",
+  "suite": "experimental",
+  "trust": "Debian InRelease signature + SHA256 chain"
+}
