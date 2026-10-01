@@ -35,8 +35,17 @@
             ;; keymap never applies pedal semantics (e.g. tap-hold on
             ;; pgup) to real keyboards. Exact-name match, no regex --
             ;; name as printed by kanata's "registering" lines.
+            ;;
+            ;; the Freestyle Edge RGB keyboard node likewise moved to
+            ;; its own instance (kinata.srv.pb: Game Bank hk5/hk6 map
+            ;; f21/f22 -> lalt/lmet + this same caps remap). Its
+            ;; "Kinesis Freestyle Edge RGB Keyboard Consumer Control"
+            ;; node is a different exact name and stays here --
+            ;; multimedia passes through untouched (defsrc is caps
+            ;; only, process-unmapped-keys yes).
             linux-dev-names-exclude (
               "iRig BlueTurn Keyboard"
+              "Kinesis Freestyle Edge RGB Keyboard"
             )
           )
 
