@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { execFile, spawn } from "node:child_process";
 import { constants as constants$1, tmpdir } from "node:os";
 import { parseArgs, promisify } from "node:util";
+import { createHash } from "node:crypto";
 //#region \0rolldown/runtime.js
 var __commonJSMin = (cb, mod) => () => (mod || (cb((mod = { exports: {} }).exports, mod), cb = null), mod.exports);
 var __require = /* #__PURE__ */ (() => createRequire(import.meta.url))();
@@ -1701,7 +1702,7 @@ async function runConfigCommand(options) {
 	if (outcome.status === "skipped") console.error(`skipped config install for ${contextName}: ${outcome.reason}`);
 	return outcome.code;
 }
-async function main$6(argv, deploymentDir, invokedAs) {
+async function main$7(argv, deploymentDir, invokedAs) {
 	return runConfigCommand(parseConfigCommandArgs(argv, deploymentDir, invokedAs));
 }
 //#endregion
@@ -1763,7 +1764,7 @@ async function inspect(remote, target, name) {
 		disabled
 	};
 }
-async function main$5(argv, deploymentDir) {
+async function main$6(argv, deploymentDir) {
 	const parsed = parseArgs({
 		args: argv,
 		allowPositionals: true,
@@ -2174,7 +2175,7 @@ async function runCatalog(options) {
 	]));
 	return 0;
 }
-async function main$4(argv, deploymentDir) {
+async function main$5(argv, deploymentDir) {
 	return runCatalog(parseOptions$1(argv, deploymentDir));
 }
 //#endregion
@@ -2302,7 +2303,7 @@ async function executeFlow(options) {
 	}
 	return attention ? 1 : 0;
 }
-async function main$3(argv, deploymentDir) {
+async function main$4(argv, deploymentDir) {
 	return executeFlow(parseOptions(argv, deploymentDir));
 }
 //#endregion
@@ -3031,7 +3032,7 @@ function output(rows, options) {
 		}
 	}
 }
-async function main$2(argv, deploymentDir) {
+async function main$3(argv, deploymentDir) {
 	const options = parseLinksArgs(argv, join(process.env.DIR ?? deploymentDir, "links.json"));
 	const sudoMode = resolveSudoMode(options.sudo);
 	if ([
@@ -3579,8 +3580,65 @@ async function runZim(options, deploymentDir) {
 	if (options.action === "import") return importProducer(options, settings, activation, zimSpec);
 	return statusZim(activation, zimSpec, deploymentDir, options.configRunner, options.activationOnly);
 }
-async function main$1(argv, deploymentDir) {
+async function main$2(argv, deploymentDir) {
 	return runZim(parseZimArgs(argv, deploymentDir), deploymentDir);
+}
+//#endregion
+//#region files/config/capture.ts
+/** Reusable CONFIG input capture and ordinary pre-commit revision guards. */
+function fileText(file) {
+	if (file.bytes === void 0) return void 0;
+	try {
+		return new TextDecoder("utf-8", {
+			fatal: true,
+			ignoreBOM: true
+		}).decode(file.bytes);
+	} catch (error) {
+		throw new Error(`configuration text is not valid UTF-8: ${file.guard.path}`, { cause: error });
+	}
+}
+function contentHash(bytes) {
+	return createHash("sha256").update(bytes).digest("hex");
+}
+async function captureFile(path) {
+	const entry = await inspectDeliveryEntry(path);
+	const parent = await physicalParent(path);
+	if (entry.kind === "missing") return { guard: {
+		path,
+		parent,
+		kind: "missing"
+	} };
+	if (entry.kind !== "file" && entry.kind !== "symlink") throw new Error(`not a usable configuration file: ${path}`);
+	let referent;
+	try {
+		referent = await stat(path);
+	} catch (error) {
+		if (entry.kind === "symlink" && error.code === "ENOENT") return { guard: {
+			path,
+			parent,
+			kind: "symlink",
+			target: entry.target
+		} };
+		throw error;
+	}
+	if (!referent.isFile()) throw new Error(`not a regular configuration referent: ${path}`);
+	const bytes = await readFile(path);
+	return {
+		bytes,
+		guard: {
+			path,
+			parent,
+			kind: entry.kind,
+			hash: contentHash(bytes),
+			...entry.kind === "symlink" ? { target: entry.target } : {}
+		}
+	};
+}
+async function assertFileGuards(guards) {
+	for (const expected of guards) {
+		const current = (await captureFile(expected.path)).guard;
+		if (current.parent !== expected.parent || current.kind !== expected.kind || current.hash !== expected.hash || current.target !== expected.target) throw new Error(`configuration source changed since capture: ${expected.path}`);
+	}
 }
 //#endregion
 //#region node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/identity.js
@@ -10593,11 +10651,4312 @@ async function runProcessor(argv, environment) {
 		text = renderInclude(target, rows[0].path);
 	} else {
 		const binding = required(values.binding, "--binding");
-		const resolved = compose(await Promise.all(rows.map(async (row) => decodeYaml(await readFile(row.path, "utf8"), `${row.identity} (${row.path})`))), target).bindings.find((entry) => entry.id === binding);
+		const resolved = compose(await Promise.all(rows.map(async (row) => {
+			const text = fileText(await captureFile(row.path));
+			if (text === void 0) throw new Error(`missing selected YAML input ${row.path}`);
+			return decodeYaml(text, `${row.identity} (${row.path})`);
+		})), target).bindings.find((entry) => entry.id === binding);
 		if (!resolved) throw new Error(`unknown or disabled keybinding ${binding}`);
 		text = renderDefinition(resolved, target);
 	}
 	await writeFile(candidate, text);
+}
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/model/identifier.js
+/**
+* An identifier
+*/
+var Identifier = class Identifier {
+	/**
+	* @readonly
+	* @hidden
+	*/
+	type = "identifier";
+	/**
+	* @readonly
+	* @hidden
+	*/
+	static type = "identifier";
+	/**
+	* String representation of the identifier
+	*
+	* @type {string=}
+	* @hidden
+	*/
+	representation;
+	/**
+	* @param {string} name
+	*/
+	constructor(name) {
+		/**
+		* The identifier itself
+		*
+		* @type {string}
+		* @hidden
+		*/
+		this.name = name;
+	}
+	/**
+	* Returns the name of this identifier
+	*/
+	getName() {
+		return this.name;
+	}
+	/**
+	* Change the name of the identifier
+	*
+	* @param {string} name
+	*/
+	setName(name) {
+		if (name !== this.name) {
+			this.name = name;
+			this.representation = void 0;
+		}
+	}
+	/**
+	* Create an identical copy of this identifier
+	*
+	* @returns {Identifier}
+	*/
+	clone() {
+		const clone = new Identifier(this.name);
+		clone.representation = this.representation;
+		return clone;
+	}
+};
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/model/tag.js
+/**
+* A tag is tied to anode or entry
+*/
+var Tag = class Tag {
+	/**
+	* @readonly
+	* @hidden
+	*/
+	type = "tag";
+	/**
+	* @readonly
+	* @hidden
+	*/
+	static type = "tag";
+	/**
+	* String representation of the tag
+	*
+	* @type {string=}
+	* @hidden
+	*/
+	representation;
+	/**
+	* Leading whitespace
+	*
+	* @type {string=}
+	* @hidden
+	*/
+	leading;
+	/**
+	* Trailing whitespace
+	*
+	* @type {string=}
+	* @hidden
+	*/
+	trailing;
+	/**
+	* Whether the tag is shown as suffix or not
+	* @type {boolean=}
+	* @hidden
+	*/
+	suffix;
+	/**
+	* @param {string} name
+	*/
+	constructor(name) {
+		/**
+		* The tag itself
+		*
+		* @type {string}
+		* @readonly
+		* @hidden
+		*/
+		this.name;
+		Object.defineProperty(this, "name", {
+			enumerable: true,
+			configurable: true,
+			writable: false,
+			value: name
+		});
+	}
+	/**
+	* Return the tag name
+	*
+	* @returns {string}
+	*/
+	getName() {
+		return this.name;
+	}
+	/**
+	* Change the tag name
+	*
+	* @param {string} name
+	*/
+	setName(name) {
+		if (name !== this.name) {
+			/** @type {{name: string}} */ this.name = name;
+			this.representation = void 0;
+		}
+	}
+	/**
+	* Create an identical copy of this tag
+	*
+	* @returns {Tag}
+	*/
+	clone() {
+		const clone = new Tag(this.name);
+		clone.representation = this.representation;
+		clone.leading = this.leading;
+		clone.trailing = this.trailing;
+		clone.suffix = this.suffix;
+		return clone;
+	}
+};
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/model/value.js
+/**
+* @typedef {string | number | boolean | null} Primitive
+* A primitive is any type that can be represented as an argument or property
+*/
+/**
+* A value represents a primitive in KDL, i.e. a string, boolean, number, or null
+*
+* Values are always tied to an entry.
+*/
+var Value = class Value {
+	/**
+	* @readonly
+	* @hidden
+	*/
+	type = "value";
+	/**
+	* @readonly
+	* @hidden
+	*/
+	static type = "value";
+	/**
+	* String representation of the value
+	*
+	* @type {string=}
+	*/
+	representation;
+	/**
+	* Tag attached to this value, if any
+	*
+	* @type {Tag | null}
+	* @hidden
+	*/
+	tag = null;
+	/**
+	* Whitespace between the tag and the value
+	*
+	* @type {string=}
+	*/
+	betweenTagAndValue;
+	/**
+	* @param {Primitive} value
+	*/
+	constructor(value) {
+		/**
+		* The value itself
+		*
+		* @type {Primitive}
+		* @readonly
+		* @hidden
+		*/
+		this.value = value;
+	}
+	/**
+	* Create an identical copy of this value
+	*
+	* @returns {Value}
+	*/
+	clone() {
+		const clone = new Value(this.value);
+		clone.tag = this.tag?.clone() ?? null;
+		clone.betweenTagAndValue = this.betweenTagAndValue;
+		clone.representation = this.representation;
+		return clone;
+	}
+	/**
+	* Return the value itself
+	*
+	* @returns {Primitive}
+	*/
+	getValue() {
+		return this.value;
+	}
+	/**
+	* Change the value
+	*
+	* @param {Primitive} value
+	*/
+	setValue(value) {
+		if (value !== this.value) {
+			/** @type {{value: Primitive}} */ this.value = value;
+			this.representation = void 0;
+		}
+	}
+	/**
+	* Return the tag of this entry, if any
+	*
+	* @returns {string | null}
+	*/
+	getTag() {
+		return this.tag ? this.tag.name : null;
+	}
+	/**
+	* Set the tag of this entry to the given tag
+	*
+	* @param {string | null | undefined} tag
+	*/
+	setTag(tag) {
+		if (tag == null) this.tag = null;
+		else if (this.tag != null) this.tag.setName(tag);
+		else this.tag = new Tag(tag);
+	}
+};
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/model/entry.js
+/**
+* An entry represents either an argument or a property to a node
+*/
+var Entry = class Entry {
+	/**
+	* Create a new argument entry with the given value
+	*
+	* @param {Value['value']} value
+	* @returns {Entry}
+	*/
+	static createArgument(value) {
+		return new Entry(new Value(value), null);
+	}
+	/**
+	* Create a new property entry for the given key and value
+	*
+	* @param {string} name
+	* @param {Value['value']} value
+	* @returns {Entry}
+	*/
+	static createProperty(name, value) {
+		return new Entry(new Value(value), new Identifier(name));
+	}
+	/**
+	* @readonly
+	* @hidden
+	*/
+	type = "entry";
+	/**
+	* @readonly
+	* @hidden
+	*/
+	static type = "entry";
+	/**
+	* The name of this entry if it's a property, or null if it's an argument
+	*
+	* @type {Identifier | null}
+	*/
+	name;
+	/**
+	* The value of this entry
+	*
+	* @type {Value}
+	*/
+	value;
+	/**
+	* Leading whitespace
+	*
+	* @type {string=}
+	*/
+	leading;
+	/**
+	* Trailing whitespace
+	*
+	* @type {string=}
+	*/
+	trailing;
+	/**
+	* Equals sign
+	*
+	* @type {string=}
+	*/
+	equals;
+	/**
+	* @param {Value} value
+	* @param {Identifier | null} name
+	*/
+	constructor(value, name) {
+		this.value = value;
+		this.name = name;
+	}
+	/**
+	* Create an identical copy of this entry
+	*
+	* @returns {Entry}
+	*/
+	clone() {
+		const clone = new Entry(this.value.clone(), this.name?.clone() ?? null);
+		clone.leading = this.leading;
+		clone.trailing = this.trailing;
+		clone.equals = this.equals;
+		return clone;
+	}
+	/**
+	* Return the tag of this entry, if any
+	*
+	* @returns {string | null}
+	* @see {@link Value.prototype.getTag}
+	*/
+	getTag() {
+		return this.value.getTag();
+	}
+	/**
+	* Set the tag of this entry to the given tag
+	*
+	* @param {string | null | undefined} tag
+	* @see {@link Value.prototype.setTag}
+	*/
+	setTag(tag) {
+		this.value.setTag(tag);
+	}
+	/**
+	* Return the name of this entry, if any
+	*
+	* @returns {string | null}
+	*/
+	getName() {
+		return this.name ? this.name.name : null;
+	}
+	/**
+	* Set the name of this entry to the given name
+	*
+	* @param {string | null | undefined} name
+	*/
+	setName(name) {
+		this.name = name != null ? new Identifier(name) : null;
+	}
+	/**
+	* Return the value of this entry
+	*
+	* @returns {Value['value']}
+	*/
+	getValue() {
+		return this.value.value;
+	}
+	/**
+	* Set the name of this entry to the given name
+	*
+	* @param {Value['value']} value
+	*/
+	setValue(value) {
+		this.value = new Value(value);
+	}
+	/**
+	* Return whether this entry is an argument
+	*
+	* @returns {boolean}
+	*/
+	isArgument() {
+		return this.name == null;
+	}
+	/**
+	* Return whether this entry is a named property
+	*
+	* @returns {boolean}
+	*/
+	isProperty() {
+		return this.name != null;
+	}
+};
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/model/utils.js
+/**
+* @template T
+* @param {readonly T[]} items
+*/
+function* reverseIterate(items) {
+	for (let i = items.length - 1; i >= 0; i--) yield items[i];
+}
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/model/node.js
+/**
+* @param {Node} node
+*/
+function getOrCreateDocument(node) {
+	return node.children ?? (node.children = new Document());
+}
+/**
+* A node is a node name, followed by zero or more arguments and/or properties, and children
+*/
+var Node = class Node {
+	/**
+	* Create a new node with the given name
+	*
+	* @param {string} name
+	* @returns {Node}
+	*/
+	static create(name) {
+		return new Node(new Identifier(name));
+	}
+	/**
+	* @readonly
+	* @hidden
+	*/
+	type = "node";
+	/**
+	* @readonly
+	* @hidden
+	*/
+	static type = "node";
+	/**
+	* The name (also known as "tag name") of this node
+	*
+	* @type {Identifier}
+	*/
+	name;
+	/**
+	* Tag attached to this node, if any
+	*
+	* @type {Tag | null}
+	*/
+	tag = null;
+	/**
+	* Entries of the node
+	*
+	* @type {Entry[]}
+	*/
+	entries;
+	/**
+	* Children of the node
+	*
+	* An empty array means the children block is present but empty,
+	* if the value is `null` then there is no children block.
+	*
+	* @type {Document | null}
+	*/
+	children;
+	/**
+	* Leading whitespace
+	*
+	* @type {string=}
+	* @hidden
+	*/
+	leading;
+	/**
+	* Trailing whitespace
+	*
+	* @type {string=}
+	* @hidden
+	*/
+	trailing;
+	/**
+	* Whitespace between the last entry and the children
+	*
+	* @type {string=}
+	* @hidden
+	*/
+	beforeChildren;
+	/**
+	* Whitespace between the tag and the node name
+	*
+	* @type {string=}
+	* @hidden
+	*/
+	betweenTagAndName;
+	/**
+	* @param {Identifier} name
+	* @param {Entry[]} [entries]
+	* @param {Document | null} [children]
+	*/
+	constructor(name, entries = [], children = null) {
+		this.name = name;
+		this.entries = entries;
+		this.children = children;
+	}
+	/**
+	* Create an identical copy of this node
+	*
+	* @param {object} [options]
+	* @param {boolean} [options.shallow] If true, only copy this node but don't clone this node's children.
+	* @returns {Node}
+	*/
+	clone({ shallow = false } = {}) {
+		const clone = new Node(this.name.clone(), shallow ? [] : this.entries.map((entry) => entry.clone()), this.children?.clone({ shallow }));
+		if (this.tag) clone.tag = this.tag.clone();
+		clone.leading = this.leading;
+		clone.betweenTagAndName = this.betweenTagAndName;
+		clone.beforeChildren = this.beforeChildren;
+		clone.trailing = this.trailing;
+		return clone;
+	}
+	/**
+	* Return the tag of this node, if any
+	*
+	* @returns {string | null}
+	*/
+	getTag() {
+		return this.tag ? this.tag.name : null;
+	}
+	/**
+	* Set the tag of this node to the given tag
+	*
+	* @param {string | null | undefined} tag
+	*/
+	setTag(tag) {
+		this.tag = tag != null ? new Tag(tag) : null;
+	}
+	/**
+	* Return the name of this node
+	*
+	* @returns {string}
+	*/
+	getName() {
+		return this.name.name;
+	}
+	/**
+	* Set the name of this node to the given name
+	*
+	* @param {string} name
+	*/
+	setName(name) {
+		this.name.setName(name);
+	}
+	/**
+	* Return whether this node has arguments
+	*
+	* @returns {boolean}
+	*/
+	hasArguments() {
+		return this.entries.some((entry) => entry.isArgument());
+	}
+	/**
+	* Return a snapshot of all arguments of this node
+	*
+	* Changes to the returned array are not reflected back onto this node
+	* itself, and updates to the node won't reflect in the returned array.
+	*
+	* @returns {Value['value'][]}
+	*/
+	getArguments() {
+		return this.getArgumentEntries().map((entry) => entry.getValue());
+	}
+	/**
+	* Return a snapshot of all arguments of this node
+	*
+	* Changes to the returned array are not reflected back onto this node
+	* itself, and updates to the node won't reflect in the returned array.
+	*
+	* @returns {Entry[]}
+	*/
+	getArgumentEntries() {
+		return this.entries.filter((entry) => entry.isArgument());
+	}
+	/**
+	* Return the value at the given index, if present
+	*
+	* This index counts towards the arguments only, i.e. if the node has five
+	* entries, three of which are arguments then passing `1` returns the second
+	* argument, regardless of the whether properties and arguments are
+	* interspersed or not.
+	*
+	* @param {number} index
+	* @returns {boolean}
+	*/
+	hasArgument(index) {
+		return this.getArgumentEntry(index) != null;
+	}
+	/**
+	* Return the argument at the given index, if present
+	*
+	* This index counts towards the arguments only, i.e. if the node has five
+	* entries, three of which are arguments then passing `1` returns the second
+	* argument, regardless of the whether properties and arguments are
+	* interspersed or not.
+	*
+	* @param {number} index
+	* @returns {Value['value'] | undefined}
+	*/
+	getArgument(index) {
+		return this.getArgumentEntry(index)?.getValue();
+	}
+	/**
+	* Return the argument entry at the given index, if present
+	*
+	* This index counts towards the arguments only, i.e. if the node has five
+	* entries, three of which are arguments then passing `1` returns the second
+	* argument, regardless of the whether properties and arguments are
+	* interspersed or not.
+	*
+	* @param {number} index
+	* @returns {Entry | undefined}
+	*/
+	getArgumentEntry(index) {
+		for (const entry of this.entries) {
+			if (!entry.isArgument()) continue;
+			if (index === 0) return entry;
+			index--;
+		}
+	}
+	/**
+	* Add the given value as argument to this node
+	*
+	* The argument is added at the given index, or at the end.
+	* This index counts towards the arguments only, i.e. if the node has five
+	* entries, three of which are arguments then inserting an argument between
+	* the second and third can be achieved by passing `2` regardless of the
+	* whether properties and arguments are interspersed or not.
+	*
+	* @param {Value['value']} value The value to insert as argument
+	* @param {string | null} [tag] The tag to attach to the argument, if any
+	* @param {number} [index] The index
+	*/
+	addArgument(value, tag, index) {
+		const entry = Entry.createArgument(value);
+		entry.value.setTag(tag);
+		if (index != null) for (const [i, entry] of this.entries.entries()) {
+			if (!entry.isArgument()) continue;
+			if (index === 0) {
+				this.entries.splice(i, 0, entry);
+				return;
+			}
+			index--;
+		}
+		this.entries.push(entry);
+	}
+	/**
+	* Remove the argument at the given index
+	*
+	* The index counts towards the arguments only, i.e. if the node has five
+	* entries, three of which are arguments then the last argument can be
+	* removed by passing `2`, regardless of whether the third argument is also
+	* the third entry.
+	*
+	* @param {number} index
+	*/
+	removeArgument(index) {
+		for (const [i, entry] of this.entries.entries()) {
+			if (!entry.isArgument()) continue;
+			if (index === 0) {
+				this.entries.splice(i, 1);
+				return;
+			}
+			index--;
+		}
+	}
+	/**
+	* Return whether this node has properties
+	*
+	* @returns {boolean}
+	*/
+	hasProperties() {
+		return this.entries.some((entry) => entry.isProperty());
+	}
+	/**
+	* Return a snapshot of all properties of this node
+	*
+	* Changes to the returned object are not reflected back onto this node
+	* itself, and updates to the node won't reflect in the returned object.
+	*
+	* @returns {Map<string, Value['value']>}
+	*/
+	getProperties() {
+		return new Map(this.getPropertyEntries().map((entry) => [entry.getName(), entry.getValue()]));
+	}
+	/**
+	* Return a snapshot of all properties of this node
+	*
+	* Changes to the returned array are not reflected back onto this node
+	* itself, and updates to the node won't reflect in the returned array.
+	*
+	* @returns {Entry[]}
+	*/
+	getPropertyEntries() {
+		return this.entries.filter((entry) => entry.isProperty());
+	}
+	/**
+	* Return a snapshot of all properties of this node
+	*
+	* Changes to the returned map are not reflected back onto this node
+	* itself, and updates to the node won't reflect in the returned map.
+	*
+	* @returns {Map<string, Entry>}
+	*/
+	getPropertyEntryMap() {
+		return new Map(this.getPropertyEntries().map((entry) => [entry.getName(), entry]));
+	}
+	/**
+	* Return whether this node has the given property
+	*
+	* @param {string} name
+	* @returns {boolean}
+	*/
+	hasProperty(name) {
+		return this.getPropertyEntry(name) != null;
+	}
+	/**
+	* Return the value of the property with the given name, or undefined
+	* if it doesn't exist.
+	*
+	* @param {string} name
+	* @returns {Value['value'] | undefined}
+	*/
+	getProperty(name) {
+		return this.getPropertyEntry(name)?.getValue();
+	}
+	/**
+	* Return the property entry with the given name, or undefined if it doesn't
+	* exist.
+	*
+	* @param {string} name
+	* @returns {Entry | undefined}
+	*/
+	getPropertyEntry(name) {
+		for (const entry of reverseIterate(this.entries)) if (entry.getName() === name) return entry;
+	}
+	/**
+	* Set the given property on this node
+	*
+	* This function updates the property entry with the given name,
+	* if it exists.
+	*
+	* @param {string} name
+	* @param {Value['value']} value
+	* @param {string | null} [tag]
+	*/
+	setProperty(name, value, tag) {
+		for (const entry of reverseIterate(this.entries)) if (entry.getName() === name) {
+			entry.setValue(value);
+			entry.value.setTag(tag);
+			return;
+		}
+		const entry = Entry.createProperty(name, value);
+		entry.value.setTag(tag);
+		this.entries.push(entry);
+	}
+	/**
+	* Delete the property with the given name
+	*
+	* @param {string} name
+	*/
+	deleteProperty(name) {
+		this.entries = this.entries.filter((entry) => entry.getName() !== name);
+	}
+	/**
+	* Return whether this node has child nodes
+	*
+	* @returns {boolean}
+	*/
+	hasChildren() {
+		return this.children != null && !this.children.isEmpty();
+	}
+	/**
+	* Add the given node at the end of this node's children
+	*
+	* @param {Node | Document} node
+	*/
+	appendNode(node) {
+		getOrCreateDocument(this).appendNode(node);
+	}
+	/**
+	* Insert the given node to the node's children before the referenceNode, or at the end if no reference is passed
+	*
+	* @param {Node | Document} newNode
+	* @param {Node | null} referenceNode
+	* @throws {Error} If the given referenceNode is not part of this node's children
+	*/
+	insertNodeBefore(newNode, referenceNode) {
+		getOrCreateDocument(this).insertNodeBefore(newNode, referenceNode);
+	}
+	/**
+	* Insert the given node to the node's children after the referenceNode, or at the beginning if no reference is passed
+	*
+	* @param {Node | Document} newNode
+	* @param {Node | null} referenceNode
+	* @throws {Error} If the given referenceNode is not part of this document
+	*/
+	insertNodeAfter(newNode, referenceNode) {
+		getOrCreateDocument(this).insertNodeAfter(newNode, referenceNode);
+	}
+	/**
+	* Remove the given node from this node's children
+	*
+	* @param {Node} node
+	* @throws {Error} if the given node is not in this node's children
+	*/
+	removeNode(node) {
+		if (this.children == null) throw new Error("Node to remove is not in document");
+		this.children.removeNode(node);
+	}
+	/**
+	* Replace the old node with the new node in this node's children
+	*
+	* @param {Node} oldNode
+	* @param {Node | Document} newNode
+	* @throws {Error} if the oldNode is not in this node's children
+	*/
+	replaceNode(oldNode, newNode) {
+		if (this.children == null) throw new Error("Node to remove is not in document");
+		this.children.replaceNode(oldNode, newNode);
+	}
+	/**
+	* Return all nodes with the given node name
+	*
+	* Changes to the returned array are not reflected back onto this document
+	* itself, and updates to the document won't reflect in the returned array.
+	*
+	* @param {string} name
+	* @returns {Node[]}
+	*/
+	findNodesByName(name) {
+		return this.children != null ? this.children.findNodesByName(name) : [];
+	}
+	/**
+	* Return the last node in this node's children with the given name
+	*
+	* This function returns the last node instead of first to be in line with
+	* how properties are defined in the KDL specification where the last
+	* property with the given name is used and the rest is shadowed.
+	*
+	* @param {string} name
+	* @returns {Node | undefined}
+	*/
+	findNodeByName(name) {
+		return this.children?.findNodeByName(name);
+	}
+	/**
+	* Return the last node in this node's children with the given name, matching the parameter
+	*
+	* If the parameter is `undefined`, this method looks for a node with any single
+	* arguments. If a parameter is passed, this method looks for a node with
+	* a single parameter, equal to the given parameter.
+	*
+	* @param {string} name
+	* @param {Value['value']} [parameter]
+	* @returns {Node | undefined}
+	*/
+	findParameterizedNode(name, parameter) {
+		return this.children?.findParameterizedNode(name, parameter);
+	}
+	/**
+	* Remove all nodes with the given name from this document
+	*
+	* @param {string} name
+	* @returns {void}
+	*/
+	removeNodesByName(name) {
+		this.children?.removeNodesByName(name);
+	}
+};
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/model/document.js
+/**
+* @param {Node | Document} node
+*/
+function* getNodes(node) {
+	if (node instanceof Document) yield* node.nodes;
+	else yield node;
+}
+/**
+* A document is a collection of zero or mode {@link Node}s
+*/
+var Document = class Document {
+	/**
+	* @readonly
+	* @hidden
+	*/
+	type = "document";
+	/**
+	* @readonly
+	* @hidden
+	*/
+	static type = "document";
+	/**
+	* The nodes in this document
+	*
+	* @type {Node[]}
+	*/
+	nodes;
+	/**
+	* Trailing whitespace
+	*
+	* @type {string=}
+	* @hidden
+	*/
+	trailing;
+	/**
+	* @param {Node[]} [nodes]
+	*/
+	constructor(nodes = []) {
+		this.nodes = nodes;
+	}
+	/**
+	* Create an identical copy of this document
+	*
+	* @returns {Document}
+	* @param {object} [options]
+	* @param {boolean} [options.shallow] If true, only clone this document and without any children
+	*/
+	clone({ shallow } = {}) {
+		const clone = new Document(shallow ? [] : this.nodes.map((node) => node.clone()));
+		clone.trailing = this.trailing;
+		return clone;
+	}
+	/**
+	* Add the given node at the end of this document
+	*
+	* @param {Node | Document} node
+	*/
+	appendNode(node) {
+		this.nodes.push(...getNodes(node));
+	}
+	/**
+	* Insert the given node to the document before the referenceNode, or at the end if no reference is passed
+	*
+	* @param {Node | Document} newNode
+	* @param {Node | null} referenceNode
+	* @throws {Error} If the given referenceNode is not part of this document
+	*/
+	insertNodeBefore(newNode, referenceNode) {
+		if (referenceNode == null) {
+			this.nodes.push(...getNodes(newNode));
+			return;
+		}
+		const index = this.nodes.indexOf(referenceNode);
+		if (index === -1) throw new Error("Reference node is not in document");
+		this.nodes.splice(index, 0, ...getNodes(newNode));
+	}
+	/**
+	* Insert the given node to the document after the referenceNode, or at the beginning if no reference is passed
+	*
+	* @param {Node | Document} newNode
+	* @param {Node | null} referenceNode
+	* @throws {Error} If the given referenceNode is not part of this document
+	*/
+	insertNodeAfter(newNode, referenceNode) {
+		if (referenceNode == null) {
+			this.nodes.unshift(...getNodes(newNode));
+			return;
+		}
+		const index = this.nodes.indexOf(referenceNode);
+		if (index === -1) throw new Error("Reference node is not in document");
+		this.nodes.splice(index + 1, 0, ...getNodes(newNode));
+	}
+	/**
+	* Remove the given node from this document
+	*
+	* @param {Node} node
+	* @throws {Error} if the given node is not in this document
+	*/
+	removeNode(node) {
+		const index = this.nodes.indexOf(node);
+		if (index === -1) throw new Error("Node to remove is not in document");
+		this.nodes.splice(index, 1);
+	}
+	/**
+	* Replace the old node with the new node in this document
+	*
+	* @param {Node} oldNode
+	* @param {Node | Document} newNode
+	* @throws {Error} if the oldNode is not in this document
+	*/
+	replaceNode(oldNode, newNode) {
+		const index = this.nodes.indexOf(oldNode);
+		if (index === -1) throw new Error("Node to replace is not in document");
+		this.nodes.splice(index, 1, ...getNodes(newNode));
+	}
+	/**
+	* Return all nodes with the given node name
+	*
+	* Changes to the returned array are not reflected back onto this document
+	* itself, and updates to the document won't reflect in the returned array.
+	*
+	* @param {string} name
+	* @returns {Node[]}
+	*/
+	findNodesByName(name) {
+		return this.nodes.filter((node) => node.name.name === name);
+	}
+	/**
+	* Return the last node in this document with the given name
+	*
+	* This function returns the last node instead of first to be in line with
+	* how properties are defined in the KDL specification where the last
+	* property with the given name is used and the rest is shadowed.
+	*
+	* @param {string} name
+	* @returns {Node | undefined}
+	*/
+	findNodeByName(name) {
+		for (const node of reverseIterate(this.nodes)) if (node.name.name === name) return node;
+	}
+	/**
+	* Return the last node in this document with the given name, matching the parameter
+	*
+	* If the parameter is `undefined`, this method looks for a node with any single
+	* arguments. If a parameter is passed, this method looks for a node with
+	* a single parameter, equal to the given parameter.
+	*
+	* @param {string} name
+	* @param {Value['value']} [parameter]
+	* @returns {Node | undefined}
+	*/
+	findParameterizedNode(name, parameter) {
+		for (const node of reverseIterate(this.nodes)) {
+			if (node.name.name !== name) continue;
+			const args = node.getArguments();
+			if (args.length !== 1 || parameter !== void 0 && args[0] !== parameter) continue;
+			return node;
+		}
+	}
+	/**
+	* Remove all nodes with the given name from this document
+	*
+	* @param {string} name
+	* @returns {void}
+	*/
+	removeNodesByName(name) {
+		this.nodes = this.nodes.filter((node) => node.name.name !== name);
+	}
+	/**
+	* Return whether the document is empty
+	*
+	* @returns {boolean}
+	*/
+	isEmpty() {
+		return this.nodes.length === 0;
+	}
+};
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/parser/tokenize/types.js
+/** @param {number} codePoint  */
+function isUnicodeSpace(codePoint) {
+	switch (codePoint) {
+		case 9:
+		case 32:
+		case 160:
+		case 5760:
+		case 8192:
+		case 8193:
+		case 8194:
+		case 8195:
+		case 8196:
+		case 8197:
+		case 8198:
+		case 8199:
+		case 8200:
+		case 8201:
+		case 8202:
+		case 8239:
+		case 8287:
+		case 12288: return true;
+	}
+	return false;
+}
+/** @param {number} codePoint */
+function isNewLine(codePoint) {
+	return codePoint === 13 || codePoint === 10 || codePoint === 133 || codePoint === 11 || codePoint === 12 || codePoint === 8232 || codePoint === 8233 || false;
+}
+/** @param {number} codePoint */
+function isInvalidCharacter(codePoint) {
+	return codePoint < 8 || codePoint >= 14 && codePoint <= 25 || codePoint === 127 || codePoint >= 55296 && codePoint <= 57343 || codePoint > 1114111 || codePoint === 8206 || codePoint === 8207 || codePoint >= 8234 && codePoint <= 8238 || codePoint >= 8294 && codePoint <= 8297 || codePoint === 65279;
+}
+/** @param {number} codePoint */
+function isIdentifierChar(codePoint) {
+	return !isNaN(codePoint) && !isUnicodeSpace(codePoint) && !isNewLine(codePoint) && codePoint !== 61 && codePoint !== 92 && codePoint !== 47 && codePoint !== 40 && codePoint !== 41 && codePoint !== 123 && codePoint !== 125 && codePoint !== 59 && codePoint !== 91 && codePoint !== 93 && codePoint !== 34 && codePoint !== 35 && true;
+}
+/** @param {number} codePoint */
+function isAlpha(codePoint) {
+	return codePoint >= 65 && codePoint < 91 || codePoint >= 97 && codePoint < 123 || false;
+}
+/** @param {number} codePoint */
+function isHexadecimalDigit(codePoint) {
+	return codePoint >= 48 && codePoint < 64 || codePoint >= 65 && codePoint < 71 || codePoint >= 97 && codePoint < 103 || false;
+}
+/** @param {number} codePoint */
+function isHexadecimalDigitOrUnderscore(codePoint) {
+	return isHexadecimalDigit(codePoint) || codePoint === 95;
+}
+/** @param {number} codePoint */
+function isDecimalDigit(codePoint) {
+	return codePoint >= 48 && codePoint < 58;
+}
+/** @param {number} codePoint */
+function isDecimalDigitOrUnderscore(codePoint) {
+	return isDecimalDigit(codePoint) || codePoint === 95;
+}
+/** @param {number} codePoint */
+function isOctalDigit(codePoint) {
+	return codePoint >= 48 && codePoint < 56;
+}
+/** @param {number} codePoint */
+function isOctalDigitOrUnderscore(codePoint) {
+	return isOctalDigit(codePoint) || codePoint === 95;
+}
+/** @param {number} codePoint */
+function isBinaryDigit(codePoint) {
+	return codePoint === 48 || codePoint === 49;
+}
+/** @param {number} codePoint */
+function isBinaryDigitOrUnderscore(codePoint) {
+	return isBinaryDigit(codePoint) || codePoint === 95;
+}
+/** @param {number} codePoint */
+function isNumberSign(codePoint) {
+	return codePoint === 45 || codePoint === 43;
+}
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/parser/tokenize/context.js
+/** @import {Location, Token} from "../token.js" */
+/** @type {Intl.Segmenter=} */
+let segmenter;
+/** @param {string} text */
+function* iterateGraphemes(text) {
+	for (const segment of (segmenter ??= new Intl.Segmenter("en")).segment(text)) yield segment.segment;
+}
+/**
+* @param {string} text
+* @returns {Iterator<string>}
+*/
+function iterateCodePoints(text) {
+	return text[Symbol.iterator]();
+}
+/**
+* @typedef {object} TokenizeContext
+* @prop {string} text
+* @prop {number} line
+* @prop {number} column
+* @prop {number} offset
+* @prop {number} length
+* @prop {Iterator<string, void, any>} iterator
+* @prop {IteratorResult<string, void>} currentIter
+* @prop {number} current
+* @prop {Location} start
+* @prop {boolean} graphemeLocations
+* @prop {InvalidKdlError[] | null} errorsInToken
+* @prop {import('../../flags.js').ParserFlags} flags
+*/
+/**
+* @param {string} text
+* @param {object} opts
+* @param {boolean} [opts.graphemeLocations]
+* @param {import('../../flags.js').ParserFlags} opts.flags
+* @returns {TokenizeContext}
+*/
+function createContext(text, { flags, graphemeLocations = false }) {
+	const iterator = graphemeLocations ? iterateGraphemes(text) : iterateCodePoints(text);
+	const currentIter = iterator.next();
+	return {
+		text,
+		graphemeLocations,
+		line: 1,
+		column: 1,
+		offset: 0,
+		length: text.length,
+		iterator,
+		currentIter,
+		/**
+		* The first code point of the iterator's last result, or NaN if the iterator has ended
+		*
+		* While the last result can consist of multiple code points, we can limit
+		* ourselves to only looking at the first code point:
+		*
+		* - We don't have special handling for any grapheme that contains multiple
+		*   code points, those are all either string content or part of an identifier
+		* - "\r\n" is the only exception, which we want to count as a single newline,
+		*   and by looking at the first code point we can easily handle that.
+		*/
+		current: currentIter.done ? NaN : currentIter.value.codePointAt(0),
+		start: {
+			line: 1,
+			column: 1,
+			offset: 0
+		},
+		errorsInToken: null,
+		flags
+	};
+}
+/**
+* @param {TokenizeContext} ctx
+* @returns {Generator<Token, void>}
+*/
+function* init(ctx) {
+	if (consumeCodePoint(ctx, 65279)) {
+		ctx.column = 1;
+		yield mkToken(ctx, 2);
+	}
+	if (isInvalidCharacter(ctx.current)) throw mkError$1(ctx, `Invalid character \\u${ctx.current.toString(16)}`);
+}
+/**
+* @param {TokenizeContext} ctx
+*/
+function pop$1(ctx) {
+	ctx.offset += ctx.currentIter.value.length;
+	ctx.column++;
+	const currentIter = ctx.currentIter = ctx.iterator.next();
+	const current = ctx.current = currentIter.done ? NaN : currentIter.value.codePointAt(0);
+	if (isInvalidCharacter(current)) {
+		if (current >= 55296 && current <= 57343 || current > 1114111) pushError(ctx, `Invalid character \\u${current.toString(16)}`);
+		else pushError(ctx, `Invalid character \\u${current.toString(16)}, this character is not allowed but can be included in strings as \\u{${current.toString(16)}}`);
+	}
+	return current;
+}
+/**
+* @param {TokenizeContext} ctx
+* @param {(codePoint: number) => boolean} test
+*/
+function consume$1(ctx, test) {
+	if (test(ctx.current)) {
+		const previous = ctx.current;
+		pop$1(ctx);
+		return previous;
+	}
+}
+/**
+* Consume the current code point if it matches the given code point
+*
+* @param {TokenizeContext} ctx
+* @param {number} codePoint
+*/
+function consumeCodePoint(ctx, codePoint) {
+	if (ctx.current === codePoint) {
+		pop$1(ctx);
+		return codePoint;
+	}
+}
+/**
+* @param {TokenizeContext} ctx
+*/
+function consumeNewline(ctx) {
+	if (!isNewLine(ctx.current)) return false;
+	if (!ctx.graphemeLocations && ctx.current === 13 && ctx.text.codePointAt(ctx.offset + 1) === 10) {
+		ctx.iterator.next();
+		ctx.offset++;
+	}
+	pop$1(ctx);
+	ctx.column = 1;
+	ctx.line++;
+	return true;
+}
+/**
+* @param {TokenizeContext} ctx
+* @param {number} codePoint
+*/
+function zerOrMoreCodePoint(ctx, codePoint) {
+	while (ctx.current === codePoint) pop$1(ctx);
+}
+/**
+* @param {TokenizeContext} ctx
+* @param {(codePoint: number) => boolean} test
+*/
+function zerOrMore(ctx, test) {
+	while (test(ctx.current)) pop$1(ctx);
+}
+/**
+* @param {TokenizeContext} ctx
+* @param {number} type
+* @param {string?=} error
+* @returns {Token}
+*/
+function mkToken(ctx, type, error) {
+	const { line, column, offset } = ctx;
+	const end = {
+		line,
+		column,
+		offset
+	};
+	const s = ctx.start;
+	ctx.start = end;
+	const errors = ctx.errorsInToken;
+	ctx.errorsInToken = null;
+	/** @type {Token} */
+	const token = {
+		type,
+		text: ctx.text.slice(s.offset, end.offset),
+		start: s,
+		end,
+		errors
+	};
+	if (error) {
+		if (!token.errors) token.errors = [];
+		token.errors.push(new InvalidKdlError(error, { token }));
+	}
+	return token;
+}
+/**
+* Create an error based on the current token and location
+*
+* @param {TokenizeContext} ctx
+* @param {string | InvalidKdlError} message
+*/
+function mkError$1(ctx, message) {
+	if (message instanceof InvalidKdlError) return message;
+	const { line, column, offset } = ctx;
+	const start = {
+		line,
+		column,
+		offset
+	};
+	let end;
+	if (offset < ctx.length) {
+		if (isNewLine(ctx.current)) end = {
+			line: line + 1,
+			column: 1,
+			offset: offset + 1
+		};
+		else end = {
+			line,
+			column: column + 1,
+			offset: offset + 1
+		};
+	}
+	return new InvalidKdlError(`${message}`, {
+		start,
+		end
+	});
+}
+/**
+* Create an error based on the current token and location
+*
+* @param {TokenizeContext} ctx
+* @param {string | InvalidKdlError} message
+*/
+function pushError(ctx, message) {
+	(ctx.errorsInToken ??= []).push(mkError$1(ctx, message));
+}
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/parser/tokenize/tokenize.js
+/** @import {Token} from "../token.js" */
+/** @import {TokenizeContext} from "./context.js" */
+/** @param {number} type */
+function createSingleCharacterToken(type) {
+	/** @param {TokenizeContext} ctx */
+	return (ctx) => {
+		pop$1(ctx);
+		return mkToken(ctx, type);
+	};
+}
+/** @param {TokenizeContext} ctx */
+function handleWhitespaceCharacter(ctx) {
+	zerOrMore(ctx, isUnicodeSpace);
+	return mkToken(ctx, 18);
+}
+/** @param {TokenizeContext} ctx */
+function handleNewlineCharacter(ctx) {
+	consumeNewline(ctx);
+	return mkToken(ctx, 19);
+}
+/** @param {TokenizeContext} ctx */
+function handleQuoteCharacter$1(ctx) {
+	pop$1(ctx);
+	let finished = false;
+	let multiline = false;
+	if (consumeCodePoint(ctx, 34)) {
+		if (!consumeCodePoint(ctx, 34)) return mkToken(ctx, 9);
+		multiline = true;
+		if (ctx.current === 34) throw mkError$1(ctx, "Multiline strings must start with exactly three quotes");
+		while (!finished && ctx.offset < ctx.length) if (consumeCodePoint(ctx, 34)) {
+			if (consumeCodePoint(ctx, 34) && consumeCodePoint(ctx, 34)) finished = true;
+		} else {
+			consumeCodePoint(ctx, 92);
+			consumeNewline(ctx) || pop$1(ctx);
+		}
+	} else while (!finished && ctx.offset < ctx.length) if (consumeCodePoint(ctx, 34)) finished = true;
+	else {
+		consumeCodePoint(ctx, 92);
+		consumeNewline(ctx) || pop$1(ctx);
+	}
+	if (!finished) throw mkError$1(ctx, "Unexpected EOF inside string");
+	return mkToken(ctx, multiline ? 23 : 9);
+}
+/** @param {TokenizeContext} ctx */
+function handleHashCharacter(ctx) {
+	pop$1(ctx);
+	if (ctx.current === 35 || ctx.current === 34) {
+		let numberOfOpeningHashes = 1;
+		while (consumeCodePoint(ctx, 35)) numberOfOpeningHashes++;
+		if (!consumeCodePoint(ctx, 34)) throw mkError$1(ctx, `Expected a quote after ${"#".repeat(numberOfOpeningHashes)}`);
+		let multiline = false;
+		if (consumeCodePoint(ctx, 34)) {
+			if (consumeCodePoint(ctx, 34)) {
+				if (ctx.current === 34) throw mkError$1(ctx, "Multiline strings must start with exactly three quotes");
+				multiline = true;
+			} else {
+				let numberOfClosingHashes = 0;
+				while (consumeCodePoint(ctx, 35)) numberOfClosingHashes++;
+				if (numberOfClosingHashes === numberOfOpeningHashes) return mkToken(ctx, 10);
+			}
+		}
+		while (true) {
+			if (ctx.offset >= ctx.length) throw mkError$1(ctx, "Unexpected EOF while parsing raw string");
+			if (consumeCodePoint(ctx, 34)) {
+				if (multiline) {
+					if (!consumeCodePoint(ctx, 34) || !consumeCodePoint(ctx, 34)) continue;
+				}
+				let numberOfClosingHashes = 0;
+				while (numberOfClosingHashes < numberOfOpeningHashes && consumeCodePoint(ctx, 35)) numberOfClosingHashes++;
+				if (numberOfClosingHashes === numberOfOpeningHashes) return mkToken(ctx, multiline ? 24 : 10);
+			} else consumeNewline(ctx) || pop$1(ctx);
+		}
+	} else {
+		let token;
+		if (ctx.current < 255) {
+			const handler = characterHandlers$1[ctx.current];
+			token = handler(ctx);
+		} else if (isUnicodeSpace(ctx.current)) token = handleWhitespaceCharacter(ctx);
+		else if (isNewLine(ctx.current)) token = handleNewlineCharacter(ctx);
+		else token = handleIdentifierCharacter(ctx);
+		if (token.type !== 11) (token.errors ??= []).push(new InvalidKdlError("Expected a valid identifier", { token }));
+		token.type = 13;
+		return token;
+	}
+}
+/** @param {TokenizeContext} ctx */
+function handleDotCharacter$1(ctx) {
+	pop$1(ctx);
+	if (consume$1(ctx, isDecimalDigit)) {
+		zerOrMore(ctx, isIdentifierChar);
+		return mkToken(ctx, 11, "Invalid identifier, identifiers that start with a sign and a dot must be quoted if the next character is a digit to prevent confusion with decimal numbers");
+	}
+	zerOrMore(ctx, isIdentifierChar);
+	return mkToken(ctx, 11);
+}
+/** @param {TokenizeContext} ctx */
+function handleSlashCharacter$1(ctx) {
+	pop$1(ctx);
+	if (consumeCodePoint(ctx, 45)) return mkToken(ctx, 3);
+	else if (consumeCodePoint(ctx, 47)) {
+		while (ctx.offset < ctx.length && !isNewLine(ctx.current)) pop$1(ctx);
+		return mkToken(ctx, 21);
+	} else if (consumeCodePoint(ctx, 42)) {
+		let level = 1;
+		while (ctx.offset < ctx.length) if (consumeCodePoint(ctx, 42)) {
+			if (consumeCodePoint(ctx, 47)) {
+				level--;
+				if (level === 0) return mkToken(ctx, 22);
+			}
+		} else if (consumeCodePoint(ctx, 47)) {
+			if (consumeCodePoint(ctx, 42)) level++;
+		} else consumeNewline(ctx) || pop$1(ctx);
+		throw mkError$1(ctx, "Unexpected EOF in multiline comment");
+	} else handleInvalidCharacter(ctx);
+}
+/** @param {TokenizeContext} ctx */
+function handleSignCharacter(ctx) {
+	pop$1(ctx);
+	return handleSignCharacterAfterPop(ctx);
+}
+/** @param {TokenizeContext} ctx */
+function handleSignCharacterAfterPop(ctx) {
+	if (isDecimalDigit(ctx.current)) return handleNumberCharacter(ctx);
+	else if (consumeCodePoint(ctx, 46)) {
+		if (consume$1(ctx, isDecimalDigit)) {
+			zerOrMore(ctx, isIdentifierChar);
+			return mkToken(ctx, 11, "Invalid identifier or number, surround with quotes to make it an identifier or add a zero between the sign and the decimal point");
+		}
+		zerOrMore(ctx, isIdentifierChar);
+		return mkToken(ctx, 11);
+	} else {
+		zerOrMore(ctx, isIdentifierChar);
+		return mkToken(ctx, 11);
+	}
+}
+/**
+* @param {string} type
+* @param {number} tokenType
+* @param {(codePoint: number) => boolean} isDigit
+* @param {(codePoint: number) => boolean} isDigitOrUnderscore
+* @returns {(ctx: TokenizeContext) => Token}
+*/
+function createBaseNumberHandler(type, tokenType, isDigit, isDigitOrUnderscore) {
+	return (ctx) => {
+		const prefixCodePoint = pop$1(ctx);
+		if (consume$1(ctx, isDigit)) {
+			zerOrMore(ctx, isDigitOrUnderscore);
+			return mkToken(ctx, tokenType);
+		} else if (!ctx.flags.experimentalSuffixedNumbers) {
+			if (consumeCodePoint(ctx, 95)) {
+				zerOrMore(ctx, isDigitOrUnderscore);
+				if (!isIdentifierChar(ctx.current)) return mkToken(ctx, tokenType, `Invalid ${type} number, the first character after 0${String.fromCodePoint(prefixCodePoint)} cannot be an underscore`);
+			}
+			zerOrMore(ctx, isIdentifierChar);
+			return mkToken(ctx, 11, `Invalid ${type} number`);
+		} else if (consumeCodePoint(ctx, 95)) {
+			zerOrMoreCodePoint(ctx, 95);
+			if (isDigit(ctx.current)) {
+				zerOrMore(ctx, isDigitOrUnderscore);
+				if (!isIdentifierChar(ctx.current)) return mkToken(ctx, tokenType, `Invalid ${type} number, the first character after 0${String.fromCodePoint(prefixCodePoint)} cannot be an underscore`);
+			}
+			zerOrMore(ctx, isIdentifierChar);
+			return mkToken(ctx, 11, "Invalid number with suffix, a suffix cannot start with a letter followed by an underscore");
+		} else if (isDecimalDigit(ctx.current)) return mkToken(ctx, 11, "Invalid number with suffix, a suffix cannot start with a letter followed by a number");
+		else {
+			zerOrMore(ctx, isIdentifierChar);
+			return mkToken(ctx, 28);
+		}
+	};
+}
+/** @type {(((ctx: TokenizeContext) => Token) | null)[]} */
+const baseNumberHandlers = Array(256).fill(null);
+baseNumberHandlers[98] = createBaseNumberHandler("binary", 17, isBinaryDigit, isBinaryDigitOrUnderscore);
+baseNumberHandlers[111] = createBaseNumberHandler("octal", 16, isOctalDigit, isOctalDigitOrUnderscore);
+baseNumberHandlers[120] = createBaseNumberHandler("hexadecimal", 14, isHexadecimalDigit, isHexadecimalDigitOrUnderscore);
+/** @param {TokenizeContext} ctx */
+function handleNumberCharacter(ctx) {
+	if (consumeCodePoint(ctx, 48)) {
+		const baseNumberHandler = baseNumberHandlers[ctx.current];
+		if (baseNumberHandler) return baseNumberHandler(ctx);
+	}
+	zerOrMore(ctx, isDecimalDigitOrUnderscore);
+	if (consumeCodePoint(ctx, 46)) {
+		if (!consume$1(ctx, isDecimalDigit)) {
+			if (ctx.current === 95) pushError(ctx, "Invalid decimal number, the part after the decimal point mustn't start on an underscore");
+			else pushError(ctx, "Invalid decimal number, a decimal point must be followed by a digit");
+		}
+		zerOrMore(ctx, isDecimalDigitOrUnderscore);
+	}
+	if (consumeCodePoint(ctx, 101) || consumeCodePoint(ctx, 69)) {
+		consume$1(ctx, isNumberSign);
+		if (consume$1(ctx, isDecimalDigit)) {
+			zerOrMore(ctx, isDecimalDigitOrUnderscore);
+			if (isIdentifierChar(ctx.current)) {
+				zerOrMore(ctx, isIdentifierChar);
+				return mkToken(ctx, 11, "Invalid number with suffix, a number with an exponent cannot have a suffix");
+			}
+			return mkToken(ctx, 15);
+		} else if (!ctx.flags.experimentalSuffixedNumbers) {
+			if (ctx.current === 95) {
+				zerOrMore(ctx, isDecimalDigitOrUnderscore);
+				return mkToken(ctx, 15, "Invalid decimal number, the number after the exponent mustn't start on an underscore");
+			} else {
+				zerOrMore(ctx, isIdentifierChar);
+				return mkToken(ctx, 15, "Invalid decimal number, missing a number after the exponent");
+			}
+		} else if (consumeCodePoint(ctx, 95)) {
+			zerOrMoreCodePoint(ctx, 95);
+			if (isDecimalDigit(ctx.current)) {
+				zerOrMore(ctx, isDecimalDigitOrUnderscore);
+				if (!isIdentifierChar(ctx.current)) return mkToken(ctx, 15, "Invalid decimal number, the number after the exponent mustn't start on an underscore");
+			}
+			zerOrMore(ctx, isIdentifierChar);
+			return mkToken(ctx, 11, "Invalid number with suffix, a suffix cannot start with a letter followed by an underscore");
+		} else {
+			zerOrMore(ctx, isIdentifierChar);
+			return mkToken(ctx, 28);
+		}
+	} else if (ctx.flags.experimentalSuffixedNumbers) {
+		if (ctx.current === 88 || ctx.current === 120) {
+			pop$1(ctx);
+			let error = null;
+			if (consume$1(ctx, isHexadecimalDigitOrUnderscore)) error = "Invalid number with suffix, a suffix cannot start with an x followed by a hexidecimal number";
+			zerOrMore(ctx, isIdentifierChar);
+			return mkToken(ctx, 28, error);
+		} else if (consume$1(ctx, isAlpha)) {
+			let error = null;
+			if (consume$1(ctx, isDecimalDigitOrUnderscore)) error = "Invalid number with suffix, a suffix cannot start with a letter followed by a digit";
+			zerOrMore(ctx, isIdentifierChar);
+			return mkToken(ctx, 28, error);
+		} else if (consumeCodePoint(ctx, 44)) {
+			zerOrMore(ctx, isIdentifierChar);
+			return mkToken(ctx, 28, "Invalid number with suffix, a suffix cannot start with a comma");
+		} else if (consumeCodePoint(ctx, 46)) {
+			zerOrMore(ctx, isIdentifierChar);
+			return mkToken(ctx, 28, "Invalid number with suffix, a suffix cannot start with a dot");
+		} else if (consume$1(ctx, isIdentifierChar)) {
+			zerOrMore(ctx, isIdentifierChar);
+			return mkToken(ctx, 28);
+		} else return mkToken(ctx, 15);
+	} else return mkToken(ctx, 15);
+}
+/** @param {TokenizeContext} ctx */
+function handleR(ctx) {
+	pop$1(ctx);
+	if (ctx.current != 35) {
+		zerOrMore(ctx, isIdentifierChar);
+		return mkToken(ctx, 11);
+	}
+	const token = handleHashCharacter(ctx);
+	token.start.offset--;
+	token.start.column--;
+	let message;
+	switch (token.type) {
+		case 10:
+		case 24:
+			message = "Invalid raw string, the correct syntax is #\" \"#, not r#\" \"#";
+			break;
+		default: message = "Invalid token, did you forget a whitespace after this r?";
+	}
+	(token.errors ??= []).push(new InvalidKdlError(message, { token }));
+	return token;
+}
+/** @param {TokenizeContext} ctx */
+function handleIdentifierCharacter(ctx) {
+	pop$1(ctx);
+	zerOrMore(ctx, isIdentifierChar);
+	return mkToken(ctx, 11);
+}
+/**
+* @param {TokenizeContext} ctx
+* @returns {never}
+*/
+function handleInvalidCharacter(ctx) {
+	throw mkError$1(ctx, `Unexpected character ${JSON.stringify(String.fromCodePoint(ctx.current))}, did you forget to quote an identifier?`);
+}
+/** @type {((ctx: TokenizeContext) => Token)[]} */
+const characterHandlers$1 = Array(255);
+characterHandlers$1.fill(handleIdentifierCharacter);
+for (let i = 0; i < 32; i++) characterHandlers$1[i] = handleInvalidCharacter;
+characterHandlers$1[9] = handleWhitespaceCharacter;
+characterHandlers$1[10] = handleNewlineCharacter;
+characterHandlers$1[11] = handleNewlineCharacter;
+characterHandlers$1[12] = handleNewlineCharacter;
+characterHandlers$1[13] = handleNewlineCharacter;
+characterHandlers$1[32] = handleWhitespaceCharacter;
+characterHandlers$1[34] = handleQuoteCharacter$1;
+characterHandlers$1[35] = handleHashCharacter;
+characterHandlers$1[40] = createSingleCharacterToken(4);
+characterHandlers$1[41] = createSingleCharacterToken(6);
+characterHandlers$1[43] = handleSignCharacter;
+characterHandlers$1[45] = handleSignCharacter;
+characterHandlers$1[46] = handleDotCharacter$1;
+characterHandlers$1[47] = handleSlashCharacter$1;
+characterHandlers$1[48] = handleNumberCharacter;
+characterHandlers$1[49] = handleNumberCharacter;
+characterHandlers$1[50] = handleNumberCharacter;
+characterHandlers$1[51] = handleNumberCharacter;
+characterHandlers$1[52] = handleNumberCharacter;
+characterHandlers$1[53] = handleNumberCharacter;
+characterHandlers$1[54] = handleNumberCharacter;
+characterHandlers$1[55] = handleNumberCharacter;
+characterHandlers$1[56] = handleNumberCharacter;
+characterHandlers$1[57] = handleNumberCharacter;
+characterHandlers$1[59] = createSingleCharacterToken(8);
+characterHandlers$1[61] = createSingleCharacterToken(12);
+characterHandlers$1[91] = handleInvalidCharacter;
+characterHandlers$1[92] = createSingleCharacterToken(20);
+characterHandlers$1[93] = handleInvalidCharacter;
+characterHandlers$1[114] = handleR;
+characterHandlers$1[123] = createSingleCharacterToken(5);
+characterHandlers$1[125] = createSingleCharacterToken(7);
+characterHandlers$1[133] = handleNewlineCharacter;
+characterHandlers$1[160] = handleWhitespaceCharacter;
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/error.js
+/** @import {Location, Token} from "./parser/token.js" */
+/**
+* Error thrown when invalid KDL is encountered
+*/
+var InvalidKdlError = class extends Error {
+	/**
+	* @hidden
+	*/
+	name = "InvalidKdlError";
+	/**
+	* The location of the start of the error, if it can be tied to a single location
+	*
+	* @readonly
+	* @type {Location=}
+	*/
+	start;
+	/**
+	* The location of the end of the error, if it can be tied to a single location
+	*
+	* @readonly
+	* @type {Location=}
+	*/
+	end;
+	/**
+	* Token tied to the error, if it can be tied to a single token
+	*
+	* @readonly
+	* @type {Token=}
+	*/
+	token;
+	/**
+	* Collection of more specific errors
+	*
+	* If this property is present, then the message of this error will be something generic and
+	* the errors in this property will contain more useful information.
+	*
+	* @readonly
+	* @type {InvalidKdlError[]=}
+	*/
+	errors;
+	/**
+	* @param {string} message
+	* @param {ErrorOptions & {token?: Token; start?: Location; end?: Location; errors?: InvalidKdlError[]}} [options]
+	*/
+	constructor(message, { token, start = token?.start, end = token?.end, errors, ...options } = {}) {
+		if (token?.type === 1) message = `${message} at end of input`;
+		else if (start) message = `${message} at ${start.line}:${start.column}`;
+		super(message, options);
+		this.token = token;
+		this.start = start;
+		this.end = end;
+		this.errors = errors;
+	}
+	/**
+	* Returns an iterable for the details of this error
+	*
+	* If this error contains more detailed errors, this iterable yields those detailed errors.
+	* If this error doesn't have more detailed errors, this iterable yields this error itself.
+	*
+	* @returns {Generator<InvalidKdlError, void, void>}
+	*/
+	*flat() {
+		if (this.errors == null) {
+			yield this;
+			return;
+		}
+		for (const error of this.errors) yield* error.flat();
+	}
+};
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/string-utils.js
+/** @import {ParserCtx} from "./parser/parse.js" */
+/** @import {Location, Token} from "./parser/token.js" */
+const escapedCodePointsInStringify = new Map([
+	...Array.from({ length: 32 }, (_, codePoint) => [codePoint, `\\u{${codePoint.toString(16).padStart(2, "0")}}`]),
+	[127, "\\u{7f}"],
+	[8206, "\\u{200e}"],
+	[8207, "\\u{200f}"],
+	[8234, "\\u{202a}"],
+	[8235, "\\u{202b}"],
+	[8236, "\\u{202c}"],
+	[8237, "\\u{202d}"],
+	[8238, "\\u{202e}"],
+	[8294, "\\u{2066}"],
+	[8295, "\\u{2067}"],
+	[8296, "\\u{2068}"],
+	[8297, "\\u{2069}"],
+	[65279, "\\u{feff}"],
+	[34, "\\\""],
+	[92, "\\\\"],
+	[10, "\\n"],
+	[11, "\\u{0b}"],
+	[12, "\\f"],
+	[13, "\\r"],
+	[133, "\\u{85}"],
+	[8232, "\\u{2028}"],
+	[8233, "\\u{2029}"],
+	[8, "\\b"],
+	[9, "\\t"]
+]);
+/**
+* @param {string} string
+*/
+function stringifyString(string) {
+	let isValidBareIdentifier = !(string === "" || string === "true" || string === "false" || string === "null" || string === "inf" || string === "-inf" || string === "nan" || /^[+-]?\.?[0-9]/.test(string));
+	let stringified = "\"";
+	for (const part of string) {
+		const codePoint = part.codePointAt(0);
+		const escape = escapedCodePointsInStringify.get(codePoint);
+		if (escape) {
+			isValidBareIdentifier = false;
+			stringified += escape;
+		} else if (isInvalidCharacter(codePoint)) throw new InvalidKdlError(`Codepoint \\u{${codePoint.toString(16)}} cannot be present in a KDL string, even escaped in its \\u{} form`);
+		else {
+			if (!isIdentifierChar(codePoint)) isValidBareIdentifier = false;
+			stringified += part;
+		}
+	}
+	if (isValidBareIdentifier) return string;
+	return stringified + "\"";
+}
+const reNewline = /\x0D\x0A|[\x0A\x0B\x0C\x0D\x85\u2028\u2029]/;
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/format.js
+const reStartsWithInlineWhitespace = /^[\uFEFF\u0009\u0020\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/;
+/**
+* @param {Tag | null} tag
+* @returns {string}
+*/
+function formatTag(tag) {
+	if (tag == null) return "";
+	let representation;
+	if (tag.representation?.[0] === "#") representation = stringifyString(tag.name);
+	else representation = formatIdentifier(tag);
+	return `(${tag.leading ?? ""}${representation}${tag.trailing ?? ""})`;
+}
+/**
+* @param {string} valueRepresentation
+* @param {Tag} tag
+* @returns {string?}
+*/
+function formatTagAsSuffix(valueRepresentation, tag) {
+	let representation = tag.representation;
+	if (!representation) representation = stringifyString(tag.name);
+	if (representation[0] === "\"" || representation.startsWith("#") && representation.endsWith("#")) return null;
+	let useHash = false;
+	if (representation?.[0] === "#") {
+		useHash = true;
+		representation = representation.slice(1);
+	}
+	if (!useHash) useHash = valueRepresentation.startsWith("0b") || valueRepresentation.startsWith("0o") || valueRepresentation.startsWith("0x") || /^[,._]|^[a-zA-Z][0-9_]|^[eE][+-][0-9_]|[xX][a-fA-F]/.test(representation);
+	return useHash ? "#" + representation : representation;
+}
+/**
+* @param {string=} text
+* @returns {string}
+*/
+function ensureStartsWithWhitespace(text) {
+	if (text == null) return " ";
+	return reStartsWithInlineWhitespace.test(text) || text.startsWith("\\") ? text : ` ${text}`;
+}
+/**
+* @param {Value} value
+* @returns {string}
+*/
+function formatValue(value) {
+	let representation = value.representation;
+	if (representation == null) {
+		if (typeof value.value === "boolean" || value.value === null) representation = `#${value.value}`;
+		else if (typeof value.value === "string") representation = stringifyString(value.value);
+		else if (typeof value.value === "number") {
+			if (Number.isNaN(value.value)) representation = "#nan";
+			else if (!Number.isFinite(value.value)) representation = value.value > 0 ? "#inf" : "#-inf";
+		}
+	}
+	if (representation == null) representation = JSON.stringify(value.value);
+	if (value.tag?.suffix && typeof value.value === "number" && representation[0] !== "#") {
+		const tagRepresentation = formatTagAsSuffix(representation, value.tag);
+		if (tagRepresentation) return representation + tagRepresentation;
+	}
+	return (value.tag ? formatTag(value.tag) + (value.betweenTagAndValue ?? "") : "") + representation;
+}
+/**
+* @param {Pick<Identifier, 'name' | 'representation'>} identifier
+* @returns {string}
+*/
+function formatIdentifier(identifier) {
+	if (identifier.representation != null) return identifier.representation;
+	return stringifyString(identifier.name);
+}
+/**
+* @param {Entry} entry
+* @returns {string}
+*/
+function formatEntry(entry) {
+	return `${ensureStartsWithWhitespace(entry.leading)}${entry.name ? `${formatIdentifier(entry.name)}${entry.equals ?? "="}` : ""}${formatValue(entry.value)}${entry.trailing ?? ""}`;
+}
+/**
+* @param {Node} node
+* @param {number} indentation
+* @returns {string}
+*/
+function formatNode(node, indentation) {
+	return `${node.leading ?? "	".repeat(indentation)}${formatTag(node.tag)}${node.betweenTagAndName ?? ""}${formatIdentifier(node.name)}${node.entries.map((entry) => formatEntry(entry)).join("")}${node.children ? `${node.beforeChildren ?? " "}{${formatDocument(node.children, indentation + 1)}}` : ""}${node.trailing ?? "\n"}`;
+}
+/**
+* @param {Document} document
+* @param {number} indentation
+* @returns {string}
+*/
+function formatDocument(document, indentation) {
+	return `${document.nodes[0] != null && document.nodes[0].leading == null && indentation ? "\n" : ""}${document.nodes.map((node) => formatNode(node, indentation)).join("")}${document.trailing ?? "	".repeat((indentation || 1) - 1)}`;
+}
+const formatters = /* @__PURE__ */ new Map([
+	[Value.type, formatValue],
+	[Identifier.type, formatIdentifier],
+	[Tag.type, formatTag],
+	[Entry.type, formatEntry],
+	[Node.type, formatNode],
+	[Document.type, formatDocument]
+]);
+/**
+* @param {Value | Identifier | Tag | Entry | Node | Document} v
+* @returns {string}
+*/
+function format(v) {
+	const formatter = formatters.get(v.type);
+	if (formatter == null) throw new InvalidKdlError(`Cannot format non-KDL ${v}`);
+	return formatter(v, 0);
+}
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/locations.js
+/** @import {Document, Entry, Identifier, Node, Tag, Value} from "./model.js" */
+/** @import {Token, Location} from "./parser/token.js" */
+/**
+* @typedef {object} StoredLocation
+* Stored location of a {@link Document}, {@link Entry}, {@link Identifier}, {@link Node}, {@link Tag}, or {@link Value}.
+*
+* @prop {Location} start The location of the first character
+* @prop {Location} end The location after the last character
+*/
+/**
+* @type {WeakMap<Value | Identifier | Tag | Entry | Node | Document, StoredLocation>}
+*/
+const locations = /* @__PURE__ */ new WeakMap();
+/**
+* Get location information of the given parsed element
+*
+* If the element was not created by the parser, or if the parser option `storeLocations`
+* was not set to `true`, the result will be undefined.
+*
+* @param {Value | Identifier | Tag | Entry | Node | Document} element
+* @returns {StoredLocation=}
+*/
+function getLocation(element) {
+	return locations.get(element);
+}
+/**
+* @param {Value | Identifier | Tag | Entry | Node | Document} element
+* @param {Token} start
+* @param {Token} end
+*/
+function storeLocation$1(element, { start }, { end }) {
+	locations.set(element, {
+		start,
+		end
+	});
+}
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/parser/parse.js
+/** @import {Token} from "./token.js" */
+/**
+* @typedef {object} ParserCtx
+* @prop {string} text
+* @prop {IteratorResult<Token, void>} current
+* @prop {Iterator<Token, void>} tokens
+* @prop {Token} lastToken
+* @prop {boolean} storeLocations
+* @prop {InvalidKdlError[]} errors
+* @prop {import('../flags.js').ParserFlags} flags
+*/
+/** @param {ParserCtx} ctx */
+function pop(ctx) {
+	if (!ctx.current.done) ctx.lastToken = ctx.current.value;
+	ctx.current = ctx.tokens.next();
+	const errors = !ctx.current.done && ctx.current.value.errors;
+	if (errors) ctx.errors.push(...errors);
+}
+/**
+* @param {ParserCtx} ctx
+* @param {Token['type']} tokenType
+*/
+function consume(ctx, tokenType) {
+	if (!ctx.current.done && ctx.current.value.type === tokenType) {
+		const token = ctx.current.value;
+		pop(ctx);
+		return token;
+	}
+}
+/**
+* @param {ParserCtx | Token} ctx
+* @param {string} message
+*/
+function mkError(ctx, message) {
+	return new InvalidKdlError(message, { token: "current" in ctx ? ctx.current.value ?? ctx.lastToken : ctx });
+}
+/**
+* @param {ParserCtx} ctx
+* @param {Value | Identifier | Tag | Entry | Node | Document} value
+* @param {Token} start
+* @param {Token} [end]
+*/
+function storeLocation(ctx, value, start, end = start) {
+	if (ctx.storeLocations) storeLocation$1(value, start, end);
+}
+function concatenate(one = "", two = "", three = "") {
+	return one + two + three || void 0;
+}
+/**
+* @param {string} text
+* @param {Iterable<Token>} tokens
+* @param {object} options
+* @param {boolean} [options.storeLocations]
+* @param {import('../flags.js').ParserFlags} options.flags
+* @returns {ParserCtx}
+*/
+function createParserCtx(text, tokens, { storeLocations = false, flags }) {
+	const iterator = tokens[Symbol.iterator]();
+	return {
+		text,
+		tokens: iterator,
+		current: iterator.next(),
+		storeLocations,
+		lastToken: {
+			type: -1,
+			text: "",
+			start: {
+				offset: 0,
+				line: 1,
+				column: 1
+			},
+			end: {
+				offset: 0,
+				line: 1,
+				column: 1
+			},
+			errors: null
+		},
+		errors: [],
+		flags
+	};
+}
+/**
+* @param {ParserCtx} ctx
+* @param {unknown} [fatalError]
+*/
+function finalize(ctx, fatalError) {
+	if (!fatalError && !ctx.current.done && ctx.current.value.type !== 1) fatalError = mkError(ctx, `Unexpected token ${JSON.stringify(ctx.current.value.text)}, did you forget to quote an identifier?`);
+	const errors = ctx.errors ?? [];
+	if (fatalError != null) {
+		if (fatalError instanceof InvalidKdlError) {
+			if (fatalError.errors) errors.push(...fatalError.errors);
+			else errors.push(fatalError);
+		} else errors.push(new InvalidKdlError(`An unexpected error occurred, ${String(fatalError)}, this is likely a bug in the KDL parser`, { cause: fatalError }));
+	}
+	if (errors.length) {
+		if (errors.length === 1) throw errors[0];
+		else throw new InvalidKdlError("Encountered multiple errors", { errors });
+	}
+}
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/parser/parse-v1.js
+/** @import {ParserCtx} from "./parse.js"; */
+/** @import {Token} from "./token.js" */
+/**
+* @param {ParserCtx} ctx
+* @returns {Value=}
+*/
+function parseNonStringValue(ctx) {
+	const { value: token } = ctx.current;
+	let value;
+	let text = token?.text;
+	switch (token?.type) {
+		case 17:
+			value = Number.parseInt(token.text.slice(2).replaceAll("_", ""), 2);
+			break;
+		case 16:
+			value = Number.parseInt(token.text.slice(2).replaceAll("_", ""), 8);
+			break;
+		case 15:
+			value = Number.parseFloat(token.text.replaceAll("_", ""));
+			break;
+		case 14:
+			value = Number.parseInt(token.text.slice(2).replaceAll("_", ""), 16);
+			break;
+		case 13:
+			text = "#" + text;
+			switch (token.text) {
+				case "null":
+					value = null;
+					break;
+				case "true":
+					value = true;
+					break;
+				case "false":
+					value = false;
+					break;
+				default: throw new Error(`Unreachable, unexpected keyword ${JSON.stringify(token.text)}`);
+			}
+			break;
+		default: return;
+	}
+	pop(ctx);
+	const result = new Value(value);
+	result.representation = text;
+	storeLocation(ctx, result, token);
+	return result;
+}
+const escapes = /* @__PURE__ */ new Map([
+	["\\n", "\n"],
+	["\\r", "\r"],
+	["\\t", "	"],
+	["\\\\", "\\"],
+	["\\/", "/"],
+	["\\\"", "\""],
+	["\\b", "\b"],
+	["\\f", "\f"]
+]);
+/**
+* @param {ParserCtx} ctx
+* @returns {[string, string, Token]=}
+*/
+function _parseString(ctx) {
+	if (ctx.current.done) return;
+	let token = consume(ctx, 9);
+	if (token) {
+		let raw = token.text;
+		const text = raw.slice(1, -1).replaceAll(/\\u\{(0?[0-9a-fA-F]{1,5}|10[0-9a-fA-F]{4})\}/g, (_, codePoint) => String.fromCodePoint(parseInt(codePoint, 16))).replaceAll(/\\[nrt\\/"bf]/g, (s) => escapes.get(s));
+		if (reNewline.test(raw)) raw = "\"\"\"\n" + raw.slice(1, -1) + "\n\"\"\"";
+		raw = raw.replaceAll(/\\[\\/]/g, (s) => s === "\\/" ? "/" : s);
+		return [
+			text,
+			raw,
+			token
+		];
+	}
+	token = consume(ctx, 10);
+	if (token) {
+		let raw = token.text.slice(1);
+		let quoteIndex = raw.indexOf("\"");
+		const text = raw.slice(quoteIndex + 1, -(quoteIndex + 1));
+		if (quoteIndex === 0) {
+			raw = `#${raw}#`;
+			quoteIndex = 1;
+		}
+		if (reNewline.test(text)) raw = raw.slice(0, quoteIndex + 1) + "\"\"\n" + raw.slice(quoteIndex + 1, -(quoteIndex + 1)) + "\n\"\"" + raw.slice(-(quoteIndex + 1));
+		if (text === "\"") raw = "\"\\\"\"";
+		return [
+			text,
+			raw,
+			token
+		];
+	}
+}
+/** @param {ParserCtx} ctx */
+function parseIdentifier(ctx) {
+	/** @type {[string, string, Token]=} */
+	let name;
+	let token = consume(ctx, 11);
+	if (token) name = [
+		token.text,
+		stringifyString(token.text),
+		token
+	];
+	else name = _parseString(ctx);
+	if (!name) return;
+	const result = new Identifier(name[0]);
+	result.representation = name[1];
+	storeLocation(ctx, result, name[2], ctx.lastToken);
+	return result;
+}
+/** @param {ParserCtx} ctx */
+function parseValue(ctx) {
+	const value = parseNonStringValue(ctx);
+	if (value) return value;
+	const string = _parseString(ctx);
+	if (!string) return;
+	const result = new Value(string[0]);
+	result.representation = string[1];
+	storeLocation(ctx, result, string[2], ctx.lastToken);
+	return result;
+}
+/** @param {ParserCtx} ctx */
+function parseSingleLineComment(ctx) {
+	const comment = consume(ctx, 21);
+	if (!comment) return;
+	const { value: newlineToken } = ctx.current;
+	pop(ctx);
+	return comment.text + (newlineToken?.text ?? "");
+}
+/** @param {ParserCtx} ctx */
+function parseMultilineComment(ctx) {
+	return consume(ctx, 22)?.text;
+}
+/** @param {ParserCtx} ctx */
+function parseWs(ctx) {
+	return consume(ctx, 18) ?? parseMultilineComment(ctx);
+}
+/** @param {ParserCtx} ctx */
+function parseEscline(ctx) {
+	const start = consume(ctx, 20);
+	if (!start) return;
+	while (parseWs(ctx));
+	if (!parseSingleLineComment(ctx) && !consume(ctx, 19)) ctx.errors.push(mkError(ctx, `Expected newline or single-line comment after backslash but got ${ctx.current.value?.text ?? "EOF"}`));
+	return ctx.text.slice(start.start.offset, ctx.lastToken.end.offset);
+}
+/** @param {ParserCtx} ctx */
+function parseLineSpace(ctx) {
+	const start = ctx.lastToken.end;
+	while (consume(ctx, 19)?.text ?? parseSingleLineComment(ctx) ?? parseWs(ctx));
+	if (ctx.lastToken.end === start) return;
+	return ctx.text.slice(start.offset, ctx.lastToken.end.offset);
+}
+/** @param {ParserCtx} ctx */
+function parseNodeSpace(ctx) {
+	const start = ctx.lastToken.end;
+	while (parseWs(ctx) ?? parseEscline(ctx));
+	if (ctx.lastToken.end === start) return;
+	return ctx.text.slice(start.offset, ctx.lastToken.end.offset);
+}
+/** @param {ParserCtx} ctx */
+function parseTag(ctx) {
+	const start = consume(ctx, 4);
+	if (!start) return;
+	let name = parseIdentifier(ctx);
+	if (!name) {
+		if (parseNonStringValue(ctx)) {
+			ctx.errors.push(mkError(ctx, "Invalid tag, did you forget to quote a string?"));
+			name = new Identifier("error");
+			name.representation = "error";
+		}
+	}
+	if (!name) throw mkError(ctx, "Invalid tag, did you forget to quote a string?");
+	if (!consume(ctx, 6)) throw mkError(ctx, "Invalid tag, did you forget to quote a string?");
+	const result = new Tag(name.name);
+	result.representation = name.representation;
+	storeLocation(ctx, result, start, ctx.lastToken);
+	return result;
+}
+/** @param {ParserCtx} ctx */
+function parseNodeTerminator(ctx) {
+	return parseSingleLineComment(ctx) ?? consume(ctx, 19)?.text ?? consume(ctx, 8)?.text ?? consume(ctx, 1)?.text;
+}
+/** @param {ParserCtx} ctx */
+function parseNodeChildren(ctx) {
+	if (!consume(ctx, 5)) return;
+	const document = _parseDocument(ctx);
+	if (!consume(ctx, 7)) throw mkError(ctx, `Invalid node children`);
+	return document;
+}
+/**
+* @param {ParserCtx} ctx
+* @returns {Entry=}
+*/
+function parseNodePropOrArg(ctx) {
+	const start = ctx.current.value;
+	{
+		let tag = parseTag(ctx);
+		if (tag) {
+			const value = parseValue(ctx);
+			if (!value) throw mkError(ctx, `Invalid argument`);
+			value.tag = tag;
+			const entry = new Entry(value, null);
+			storeLocation(ctx, value, start, ctx.lastToken);
+			storeLocation(ctx, entry, start, ctx.lastToken);
+			if (consume(ctx, 12)) ctx.errors.push(mkError(ctx.lastToken, typeof value.value === "string" ? "Unexpected equals sign, properties are name=(tag)value not (tag)name=value" : "Unexpected equals sign"));
+			return entry;
+		}
+	}
+	{
+		let value = parseNonStringValue(ctx);
+		if (value) {
+			const entry = new Entry(value, null);
+			storeLocation(ctx, entry, start, ctx.lastToken);
+			if (consume(ctx, 12)) ctx.errors.push(mkError(ctx.lastToken, "Unexpected equals sign, did you forget to quote the property name?"));
+			return entry;
+		}
+	}
+	const nameOrValue = _parseString(ctx);
+	if (nameOrValue && !consume(ctx, 12)) {
+		const value = new Value(nameOrValue[0]);
+		value.representation = nameOrValue[1];
+		storeLocation(ctx, value, nameOrValue[2]);
+		const entry = new Entry(value, null);
+		storeLocation(ctx, entry, start, ctx.lastToken);
+		return entry;
+	}
+	let name;
+	if (nameOrValue) {
+		name = new Identifier(nameOrValue[0]);
+		name.representation = nameOrValue[1];
+		storeLocation(ctx, name, nameOrValue[2]);
+	} else {
+		name = parseIdentifier(ctx);
+		if (name && !consume(ctx, 12)) {
+			ctx.errors.push(mkError(ctx, "Unexpected identifier, did you forget to quote a string?"));
+			return new Entry(new Value(name.name), null);
+		}
+	}
+	if (!name) return;
+	const tag = parseTag(ctx);
+	const value = parseValue(ctx);
+	if (!value) throw mkError(ctx, `Expected a value`);
+	if (tag) value.tag = tag;
+	const entry = new Entry(value, name);
+	entry.equals = "=";
+	storeLocation(ctx, entry, start, ctx.lastToken);
+	return entry;
+}
+/** @param {ParserCtx} ctx */
+function parseSlashdash(ctx) {
+	let text = consume(ctx, 3)?.text;
+	if (!text) return;
+	return concatenate(text, parseNodeSpace(ctx));
+}
+/** @param {ParserCtx} ctx */
+function parseBaseNode(ctx) {
+	const startOfNode = ctx.current.value;
+	const tag = parseTag(ctx);
+	const name = parseIdentifier(ctx);
+	if (!name) {
+		if (tag) throw mkError(ctx, `Couldn't find node name`);
+		else return;
+	}
+	let space = parseNodeSpace(ctx);
+	let hasSpace = true;
+	/** @type {string=} */
+	let slashdash;
+	/** @type {Entry[]} */
+	const entries = [];
+	while (hasSpace) {
+		slashdash = parseSlashdash(ctx);
+		const entry = parseNodePropOrArg(ctx);
+		if (!entry) break;
+		if (slashdash) {
+			space = concatenate(space, slashdash, format(entry).slice(1));
+			const extra = parseNodeSpace(ctx);
+			hasSpace = !!extra;
+			space = concatenate(space, extra);
+			slashdash = void 0;
+		} else {
+			entry.leading = space;
+			entries.push(entry);
+			space = parseNodeSpace(ctx);
+			hasSpace = !!space;
+		}
+	}
+	let trailing = space;
+	/** @type {string=} */
+	let beforeChildren;
+	let children = parseNodeChildren(ctx);
+	if (slashdash) {
+		if (children) {
+			trailing = concatenate(trailing, slashdash, "{" + format(children) + "}");
+			children = void 0;
+			space = void 0;
+		} else if (slashdash) throw mkError(ctx, `Unexpected slashdash`);
+	}
+	if (children) {
+		beforeChildren = trailing;
+		trailing = void 0;
+	}
+	const node = new Node(name, entries, children);
+	node.tag = tag ?? null;
+	node.beforeChildren = beforeChildren;
+	node.trailing = trailing;
+	storeLocation(ctx, node, startOfNode, ctx.lastToken);
+	return node;
+}
+/** @param {ParserCtx} ctx */
+function parseDocument(ctx) {
+	const bom = consume(ctx, 2)?.text;
+	const document = _parseDocument(ctx);
+	if (!bom) return document;
+	if (document.nodes[0]) document.nodes[0].leading = concatenate(bom, document.nodes[0].leading);
+	else document.trailing = concatenate(bom, document.trailing);
+	return document;
+}
+/** @param {ParserCtx} ctx */
+function _parseDocument(ctx) {
+	const startOfDocument = ctx.current.value;
+	/** @type {Node[]} */
+	const nodes = [];
+	let space = parseLineSpace(ctx);
+	while (true) {
+		const slashdash = parseSlashdash(ctx);
+		const node = parseBaseNode(ctx);
+		if (!node) {
+			if (slashdash) throw mkError(ctx, `Unexpected slashdash`);
+			break;
+		}
+		const trailing = parseNodeSpace(ctx);
+		const terminator = parseNodeTerminator(ctx);
+		if (terminator == null) ctx.errors.push(mkError(ctx, "Missing node terminator"));
+		if (slashdash) {
+			node.trailing ??= "";
+			space = concatenate(concatenate(space, slashdash), concatenate(format(node), trailing, terminator), parseLineSpace(ctx));
+		} else {
+			node.trailing = concatenate(node.trailing, trailing, terminator) ?? "";
+			nodes.push(node);
+			node.leading = space ?? "";
+			space = parseLineSpace(ctx);
+		}
+	}
+	const document = new Document(nodes);
+	storeLocation(ctx, document, startOfDocument, ctx.lastToken);
+	document.trailing = space ?? "";
+	return document;
+}
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/parser/tokenize/tokenize-v1.js
+/** @import {Token} from "../token.js" */
+/** @import {TokenizeContext} from "./context.js" */
+/** @param {number} codePoint */
+function isV1IdentifierChar(codePoint) {
+	if (codePoint === 60 || codePoint === 62 || codePoint === 44) return false;
+	if (codePoint === 35) return true;
+	return isIdentifierChar(codePoint);
+}
+/** @param {TokenizeContext} ctx */
+function handleQuoteCharacter(ctx) {
+	pop$1(ctx);
+	let finished = false;
+	let multiline = false;
+	if (consumeCodePoint(ctx, 34)) {
+		if (!consumeCodePoint(ctx, 34)) return mkToken(ctx, 9);
+		multiline = true;
+		if (ctx.current === 34) throw mkError$1(ctx, "Multiline strings must start with exactly three quotes");
+		while (!finished && ctx.offset < ctx.length) if (consumeCodePoint(ctx, 34)) {
+			if (consumeCodePoint(ctx, 34) && consumeCodePoint(ctx, 34)) finished = true;
+		} else {
+			consumeCodePoint(ctx, 92);
+			consumeNewline(ctx) || pop$1(ctx);
+		}
+	} else while (!finished && ctx.offset < ctx.length) if (consumeCodePoint(ctx, 34)) finished = true;
+	else {
+		consumeCodePoint(ctx, 92);
+		consumeNewline(ctx) || pop$1(ctx);
+	}
+	if (!finished) throw mkError$1(ctx, "Unexpected EOF inside string");
+	return mkToken(ctx, multiline ? 23 : 9);
+}
+/** @param {TokenizeContext} ctx */
+function handleDotCharacter(ctx) {
+	pop$1(ctx);
+	if (consume$1(ctx, isDecimalDigit)) {
+		zerOrMore(ctx, isV1IdentifierChar);
+		return mkToken(ctx, 11, "Invalid identifier, identifiers that start with a sign and a dot must be quoted if the next character is a digit to prevent confusion with decimal numbers");
+	}
+	zerOrMore(ctx, isV1IdentifierChar);
+	return mkToken(ctx, 11);
+}
+/** @param {TokenizeContext} ctx */
+function handleSlashCharacter(ctx) {
+	pop$1(ctx);
+	if (consumeCodePoint(ctx, 45)) return mkToken(ctx, 3);
+	else if (consumeCodePoint(ctx, 47)) {
+		while (ctx.offset < ctx.length && !isNewLine(ctx.current)) pop$1(ctx);
+		return mkToken(ctx, 21);
+	} else if (consumeCodePoint(ctx, 42)) {
+		let level = 1;
+		while (ctx.offset < ctx.length) if (consumeCodePoint(ctx, 42)) {
+			if (consumeCodePoint(ctx, 47)) {
+				level--;
+				if (level === 0) return mkToken(ctx, 22);
+			}
+		} else if (consumeCodePoint(ctx, 47)) {
+			if (consumeCodePoint(ctx, 42)) level++;
+		} else consumeNewline(ctx) || pop$1(ctx);
+		throw mkError$1(ctx, "Unexpected EOF in multiline comment");
+	} else handleInvalidCharacter(ctx);
+}
+/** @param {TokenizeContext} ctx */
+function handleV1IdentifierCharacter(ctx) {
+	pop$1(ctx);
+	zerOrMore(ctx, isV1IdentifierChar);
+	return mkToken(ctx, 11);
+}
+/**
+* @param {string} keyword
+* @returns {(ctx: TokenizeContext) => Token}
+*/
+function handleV1KeywordOrIdentifier(keyword) {
+	const keywordCodePoints = Array.from(keyword, (c) => c.codePointAt(0));
+	const { length } = keywordCodePoints;
+	return (ctx) => {
+		pop$1(ctx);
+		let matchesKeyword = true;
+		for (let i = 1; i < length; i++) {
+			if (ctx.current !== keywordCodePoints[i]) {
+				matchesKeyword = false;
+				break;
+			}
+			pop$1(ctx);
+		}
+		if (matchesKeyword && !isV1IdentifierChar(ctx.current)) return mkToken(ctx, 13);
+		zerOrMore(ctx, isV1IdentifierChar);
+		return mkToken(ctx, 11);
+	};
+}
+/**
+* @param {TokenizeContext} ctx
+* @returns {Token}
+*/
+function handleV1RawStringOrIdentifier(ctx) {
+	pop$1(ctx);
+	if (ctx.current !== 34 && ctx.current !== 35) {
+		zerOrMore(ctx, isV1IdentifierChar);
+		return mkToken(ctx, 11);
+	}
+	let numberOfOpeningHashes = 0;
+	while (consumeCodePoint(ctx, 35)) numberOfOpeningHashes++;
+	if (!consumeCodePoint(ctx, 34)) throw mkError$1(ctx, `Expected a quote after r${"#".repeat(numberOfOpeningHashes)}`);
+	while (true) {
+		if (ctx.offset >= ctx.length) throw mkError$1(ctx, "Unexpected EOF while parsing raw string");
+		if (consumeCodePoint(ctx, 34)) {
+			let numberOfClosingHashes = 0;
+			while (numberOfClosingHashes < numberOfOpeningHashes && consumeCodePoint(ctx, 35)) numberOfClosingHashes++;
+			if (numberOfClosingHashes === numberOfOpeningHashes) return mkToken(ctx, 10);
+		} else consumeNewline(ctx) || pop$1(ctx);
+	}
+}
+/** @type {((ctx: TokenizeContext) => Token)[]} */
+const characterHandlers = Array(255);
+characterHandlers.fill(handleV1IdentifierCharacter);
+for (let i = 0; i < 32; i++) characterHandlers[i] = handleInvalidCharacter;
+characterHandlers[9] = handleWhitespaceCharacter;
+characterHandlers[10] = handleNewlineCharacter;
+characterHandlers[11] = handleNewlineCharacter;
+characterHandlers[12] = handleNewlineCharacter;
+characterHandlers[13] = handleNewlineCharacter;
+characterHandlers[32] = handleWhitespaceCharacter;
+characterHandlers[34] = handleQuoteCharacter;
+characterHandlers[40] = createSingleCharacterToken(4);
+characterHandlers[41] = createSingleCharacterToken(6);
+characterHandlers[43] = handleSignCharacter;
+characterHandlers[45] = handleSignCharacter;
+characterHandlers[46] = handleDotCharacter;
+characterHandlers[47] = handleSlashCharacter;
+characterHandlers[48] = handleNumberCharacter;
+characterHandlers[49] = handleNumberCharacter;
+characterHandlers[50] = handleNumberCharacter;
+characterHandlers[51] = handleNumberCharacter;
+characterHandlers[52] = handleNumberCharacter;
+characterHandlers[53] = handleNumberCharacter;
+characterHandlers[54] = handleNumberCharacter;
+characterHandlers[55] = handleNumberCharacter;
+characterHandlers[56] = handleNumberCharacter;
+characterHandlers[57] = handleNumberCharacter;
+characterHandlers[59] = createSingleCharacterToken(8);
+characterHandlers[61] = createSingleCharacterToken(12);
+characterHandlers[91] = handleInvalidCharacter;
+characterHandlers[92] = createSingleCharacterToken(20);
+characterHandlers[93] = handleInvalidCharacter;
+characterHandlers[102] = handleV1KeywordOrIdentifier("false");
+characterHandlers[110] = handleV1KeywordOrIdentifier("null");
+characterHandlers[114] = handleV1RawStringOrIdentifier;
+characterHandlers[116] = handleV1KeywordOrIdentifier("true");
+characterHandlers[123] = createSingleCharacterToken(5);
+characterHandlers[125] = createSingleCharacterToken(7);
+characterHandlers[133] = handleNewlineCharacter;
+characterHandlers[160] = handleWhitespaceCharacter;
+/**
+* @param {string} t
+* @param {{graphemeLocations?: boolean}} opts
+* @returns {Generator<Token, void>}
+*/
+function* tokenize(t, { graphemeLocations }) {
+	const ctx = createContext(t, {
+		graphemeLocations,
+		flags: { experimentalSuffixedNumbers: false }
+	});
+	yield* init(ctx);
+	while (!ctx.currentIter.done) {
+		if (ctx.current < 255) {
+			const handler = characterHandlers[ctx.current];
+			yield handler(ctx);
+			continue;
+		}
+		if (isUnicodeSpace(ctx.current)) {
+			yield handleWhitespaceCharacter(ctx);
+			continue;
+		}
+		if (isNewLine(ctx.current)) {
+			yield handleNewlineCharacter(ctx);
+			continue;
+		}
+		yield handleV1IdentifierCharacter(ctx);
+	}
+	yield mkToken(ctx, 1);
+}
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/v1-compat.js
+/**
+* Parse the given KDL v1 text and turn it into a KDL v2 document
+*
+* {@link format Formatting} the given document will result in a KDL v2 text
+* equivalent to the original KDL v1 text.
+*
+* @param {Parameters<typeof import("./index.js").parse>[0]} text
+* @param {object} [options]
+* @param {boolean} [options.storeLocations]
+* @param {boolean} [options.graphemeLocations]
+* @returns {Document}
+*/
+function parse$1(text, options = {}) {
+	if (typeof text !== "string") {
+		if (typeof TextDecoder !== "function") throw new TypeError("Uint8Array input is only supported on platforms that include TextDecoder");
+		text = new TextDecoder("utf-8", { fatal: true }).decode(text);
+	}
+	const tokens = tokenize(text, options);
+	const ctx = createParserCtx(text, tokens, {
+		...options,
+		flags: { experimentalSuffixedNumbers: false }
+	});
+	let value;
+	try {
+		value = parseDocument(ctx);
+	} catch (e) {
+		finalize(ctx, e);
+	}
+	finalize(ctx);
+	if (!value) throw new InvalidKdlError(`Expected a document`);
+	return value;
+}
+//#endregion
+//#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/error.js
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+function getLineColFromPtr(string, ptr) {
+	let lines = string.slice(0, ptr).split(/\r?\n/);
+	return [lines.length, lines.pop().length + 1];
+}
+function makeCodeBlock(string, line, column) {
+	let lines = string.split(/\r?\n/);
+	let codeblock = "";
+	let numberLen = (Math.log10(line + 1) | 0) + 1;
+	for (let i = line - 1; i <= line + 1; i++) {
+		let l = lines[i - 1];
+		if (!l) continue;
+		codeblock += i.toString().padEnd(numberLen, " ");
+		codeblock += ":  ";
+		codeblock += l;
+		codeblock += "\n";
+		if (i === line) {
+			codeblock += " ".repeat(numberLen + column + 2);
+			codeblock += "^\n";
+		}
+	}
+	return codeblock;
+}
+var TomlError = class TomlError extends Error {
+	line;
+	column;
+	codeblock;
+	constructor(message, options) {
+		const [line, column] = getLineColFromPtr(options.toml, options.ptr);
+		const codeblock = makeCodeBlock(options.toml, line, column);
+		super(`Invalid TOML document: ${message}\n\n${codeblock}`, options);
+		this.line = line;
+		this.column = column;
+		this.codeblock = codeblock;
+	}
+	/** @internal */
+	static x(message, ctx, ptr) {
+		throw new TomlError(message, {
+			toml: ctx.s,
+			ptr: ptr ?? ctx.p
+		});
+	}
+};
+//#endregion
+//#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/primitive.js
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+/** @internal */
+function parseString(ctx) {
+	let startPtr = ctx.p;
+	let c = ctx.s.charCodeAt(ctx.p++);
+	let first = c;
+	let isLiteral = c === 39;
+	let isMultiline = c === ctx.s.charCodeAt(ctx.p) && c === ctx.s.charCodeAt(ctx.p + 1);
+	if (isMultiline) {
+		if ((c = ctx.s.charCodeAt(ctx.p += 2)) === 10) ctx.p++;
+		else if (c === 13 && ctx.s.charCodeAt(ctx.p + 1) === 10) ctx.p += 2;
+	}
+	let parsed = "";
+	let sliceStart = ctx.p;
+	let state = 0;
+	for (; ctx.p < ctx.s.length; ctx.p++) {
+		c = ctx.s.charCodeAt(ctx.p);
+		if (isMultiline && (c === 10 || c === 13 && ctx.s.charCodeAt(ctx.p + 1) === 10)) state = state && 3;
+		else if (c < 32 && c !== 9 || c === 127) TomlError.x("control characters are not allowed in strings", ctx);
+		else if ((!state || state === 3) && c === first && (!isMultiline || ctx.s.charCodeAt(ctx.p + 1) === first && ctx.s.charCodeAt(ctx.p + 2) === first)) {
+			if (isMultiline) {
+				if (ctx.s.charCodeAt(ctx.p + 3) === first) ctx.p++;
+				if (ctx.s.charCodeAt(ctx.p + 3) === first) ctx.p++;
+			}
+			if (!state) {
+				let s = ctx.s.slice(sliceStart, ctx.p);
+				parsed = parsed ? parsed + s : s;
+			}
+			ctx.p += isMultiline ? 3 : 1;
+			return parsed;
+		} else if (!state) {
+			if (!isLiteral && c === 92) {
+				parsed += ctx.s.slice(sliceStart, sliceStart = ctx.p);
+				state = 1;
+			}
+		} else if (state === 1) {
+			if (c === 120 || c === 117 || c === 85) {
+				let errPtr = ctx.p++ - 1;
+				let value = 0;
+				let len = c === 120 ? 2 : c === 117 ? 4 : 8;
+				for (let j = 0; j < len; j++, ctx.p++) {
+					let hex = ctx.s.charCodeAt(ctx.p);
+					let digit = hex >= 48 && hex <= 57 ? hex - 48 : hex >= 65 && hex <= 70 ? hex - 65 + 10 : hex >= 97 && hex <= 102 ? hex - 97 + 10 : -1;
+					if (digit < 0) TomlError.x("invalid non-hex character in unicode escape", ctx);
+					value = value << 4 | digit;
+				}
+				if (value < 0 || value > 1114111 || value >= 55296 && value <= 57343) TomlError.x("invalid unicode escape", ctx, errPtr);
+				parsed += String.fromCodePoint(value);
+				sliceStart = ctx.p--;
+				state = 0;
+			} else if (isMultiline && (c === 32 || c === 9)) state = 2;
+			else {
+				if (c === 98) parsed += "\b";
+				else if (c === 116) parsed += "	";
+				else if (c === 110) parsed += "\n";
+				else if (c === 102) parsed += "\f";
+				else if (c === 114) parsed += "\r";
+				else if (c === 101) parsed += "\x1B";
+				else if (c === 34) parsed += "\"";
+				else if (c === 92) parsed += "\\";
+				else TomlError.x("unrecognised escape sequence", ctx);
+				sliceStart = ctx.p + 1;
+				state = 0;
+			}
+		} else if (c !== 32 && c !== 9) {
+			if (state === 2) TomlError.x("invalid escape: only line-ending whitespace may be escaped", ctx, sliceStart);
+			state = !isLiteral && c === 92 ? 1 : 0;
+			sliceStart = ctx.p;
+		}
+	}
+	TomlError.x("unfinished string", ctx, startPtr);
+}
+//#endregion
+//#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/date.js
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+let DATE_TIME_RE = /^(\d{4}-\d{2}-\d{2})?[Tt ]?(?:(\d{2}):\d{2}(?::\d{2}(?:\.\d+)?)?)?(Z|z|[-+]\d{2}:\d{2})?$/i;
+var TomlDate = class TomlDate extends Date {
+	#hasDate = false;
+	#hasTime = false;
+	#offset = null;
+	constructor(date, fasttype, unsafeDelim) {
+		let hasDate = true;
+		let hasTime = true;
+		let offset = "Z";
+		let c;
+		if (typeof date === "string") {
+			if (fasttype) prep: {
+				if (fasttype < 3) {
+					if (+date.slice(11, 13) > 23) {
+						date = "";
+						break prep;
+					}
+					if (fasttype === 2) {
+						offset = null;
+						date += "Z";
+					} else if ((c = date.charCodeAt(date.length - 1)) !== 90 && c !== 122) offset = date.slice(date.length - 6);
+					if (unsafeDelim) date = date.slice(0, 10) + "T" + date.slice(11);
+				} else if (fasttype === 4) date = +date.slice(0, 2) > 23 ? "" : `0000-01-01T${date}Z`;
+				hasDate = fasttype !== 4;
+				hasTime = fasttype !== 3;
+			}
+			else {
+				let match = date.match(DATE_TIME_RE);
+				if (match) {
+					if (!match[1]) {
+						hasDate = false;
+						date = `0000-01-01T${date}`;
+					}
+					hasTime = !!match[2];
+					hasTime && date[10] === " " && (date = date.replace(" ", "T"));
+					if (match[2] && +match[2] > 23) date = "";
+					else {
+						offset = match[3] || null;
+						if (!offset && hasTime) date += "Z";
+					}
+				} else date = "";
+			}
+		}
+		super(date);
+		if (!isNaN(this.getTime())) {
+			this.#hasDate = hasDate;
+			this.#hasTime = hasTime;
+			this.#offset = offset;
+		}
+	}
+	isDateTime() {
+		return this.#hasDate && this.#hasTime;
+	}
+	isLocal() {
+		return !this.#hasDate || !this.#hasTime || !this.#offset;
+	}
+	isDate() {
+		return this.#hasDate && !this.#hasTime;
+	}
+	isTime() {
+		return this.#hasTime && !this.#hasDate;
+	}
+	isValid() {
+		return this.#hasDate || this.#hasTime;
+	}
+	toISOString() {
+		let iso = super.toISOString();
+		if (this.isDate()) return iso.slice(0, 10);
+		if (this.isTime()) return iso.slice(11, 23);
+		if (this.#offset === null) return iso.slice(0, -1);
+		if (this.#offset === "Z" || this.#offset === "z") return iso;
+		let offset = +this.#offset.slice(1, 3) * 60 + +this.#offset.slice(4, 6);
+		offset = this.#offset[0] === "-" ? offset : -offset;
+		return (/* @__PURE__ */ new Date(this.getTime() - offset * 6e4)).toISOString().slice(0, -1) + this.#offset;
+	}
+	static wrapAsOffsetDateTime(jsDate, offset = "Z") {
+		let date = new TomlDate(jsDate);
+		date.#offset = offset;
+		return date;
+	}
+	static wrapAsLocalDateTime(jsDate) {
+		let date = new TomlDate(jsDate);
+		date.#offset = null;
+		return date;
+	}
+	static wrapAsLocalDate(jsDate) {
+		let date = new TomlDate(jsDate);
+		date.#hasTime = false;
+		date.#offset = null;
+		return date;
+	}
+	static wrapAsLocalTime(jsDate) {
+		let date = new TomlDate(jsDate);
+		date.#hasDate = false;
+		date.#offset = null;
+		return date;
+	}
+};
+//#endregion
+//#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/extract.js
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+function isDigit(char, base = 10) {
+	return base === 16 ? char > 47 && char < 58 || char > 64 && char < 71 || char > 96 && char < 103 : char > 47 && char < 48 + base;
+}
+function isEndOfValue(char, delim) {
+	return char === 32 || char === 9 || char === 10 || char === 13 || delim && (char === delim || char === 44) || char === 35;
+}
+/** @internal */
+function extractValue(ctx, end) {
+	let errPtr = ctx.p;
+	let c = ctx.s.charCodeAt(ctx.p);
+	if (c === 91 || c === 123) {
+		ctx.d-- || TomlError.x("document contains excessively nested structures. aborting.", ctx);
+		let value = c === 91 ? parseArray(ctx) : parseInlineTable(ctx);
+		ctx.d++;
+		return value;
+	}
+	if (c === 34 || c === 39) return parseString(ctx);
+	if (c === 116) {
+		if (ctx.s.charCodeAt(++ctx.p) !== 114 || ctx.s.charCodeAt(++ctx.p) !== 117 || ctx.s.charCodeAt(++ctx.p) !== 101) TomlError.x("invalid value", ctx, errPtr);
+		return ctx.p++, true;
+	}
+	if (c === 102) {
+		if (ctx.s.charCodeAt(++ctx.p) !== 97 || ctx.s.charCodeAt(++ctx.p) !== 108 || ctx.s.charCodeAt(++ctx.p) !== 115 || ctx.s.charCodeAt(++ctx.p) !== 101) TomlError.x("invalid value", ctx, errPtr);
+		return ctx.p++, false;
+	}
+	if (c === 43 || c === 45) return parseNumber(ctx, ctx.p, ctx.s.charCodeAt(++ctx.p), 44 - c, end);
+	if (ctx.s.charCodeAt(ctx.p + 4) === 45 && ctx.s.charCodeAt(ctx.p + 7) === 45) return parseDate(ctx, c, end);
+	if (ctx.s.charCodeAt(ctx.p + 2) === 58) return parseTime(ctx, c, end);
+	return parseNumber(ctx, ctx.p, c, 0, end);
+}
+function parseNumber(ctx, startPtr, startChr, sign, endChr) {
+	let c = startChr;
+	let state = 0;
+	let hasUnderscores = false;
+	if (c === 105) {
+		if (ctx.s.charCodeAt(++ctx.p) !== 110 || ctx.s.charCodeAt(++ctx.p) !== 102) TomlError.x("invalid value", ctx, startPtr);
+		return ctx.p++, (sign || 1) / 0;
+	}
+	if (c === 110) {
+		if (ctx.s.charCodeAt(++ctx.p) !== 97 || ctx.s.charCodeAt(++ctx.p) !== 110) TomlError.x("invalid value", ctx, startPtr);
+		return ctx.p++, NaN;
+	}
+	if (c === 48) {
+		if (++ctx.p >= ctx.s.length || isEndOfValue(c = ctx.s.charCodeAt(ctx.p), endChr)) return ctx.bi === true ? 0n : 0;
+		if (!sign) {
+			if (c === 120) return parseIntegerBaseN(ctx, startPtr, 16, endChr);
+			else if (c === 98) return parseIntegerBaseN(ctx, startPtr, 2, endChr);
+			else if (c === 111) return parseIntegerBaseN(ctx, startPtr, 8, endChr);
+		}
+		if (c === 46) state = 2;
+		else if (c === 101 || c === 69) state = 4;
+		else TomlError.x("illegal leading zero", ctx, startPtr);
+	} else if (!isDigit(c)) TomlError.x("invalid value", ctx, startPtr);
+	while (++ctx.p < ctx.s.length && (c = ctx.s.charCodeAt(ctx.p), !isEndOfValue(c, endChr))) {
+		if (!state) state = 1;
+		if (c === 95) {
+			if (!(state & 1)) TomlError.x("illegal underscore", ctx);
+			state += 11;
+			hasUnderscores = true;
+		} else if (state === 1 && c === 46) state = 2;
+		else if ((state === 1 || state === 3) && (c === 101 || c === 69)) state = 4;
+		else if (state === 4 && (c === 43 || c === 45)) {} else if (!isDigit(c)) TomlError.x(`illegal character in numeric literal`, ctx);
+		else if (state > 9) state -= 11;
+		else if (!(state & 1)) state++;
+	}
+	if (!state) {
+		let val = (startChr - 48) * (sign || 1);
+		return ctx.bi === true ? BigInt(val) : val;
+	}
+	if (!(state & 1)) TomlError.x("unfinished numeric value", ctx, startPtr);
+	let str = ctx.s.slice(startPtr, ctx.p);
+	if (hasUnderscores) str = str.replaceAll("_", "");
+	return state > 1 ? parseFloat(str) : parseInteger(ctx, str, 10, startPtr);
+}
+function parseIntegerBaseN(ctx, startPtr, base, endChr) {
+	let c, underscore = 1;
+	while (++ctx.p < ctx.s.length && (c = ctx.s.charCodeAt(ctx.p), !isEndOfValue(c, endChr))) if (c === 95) {
+		if (underscore & 1) TomlError.x("illegal underscore", ctx);
+		underscore = 3;
+	} else if (!isDigit(c, base)) TomlError.x(`illegal character in numeric literal`, ctx);
+	else if (underscore & 1) underscore--;
+	if (underscore & 1) TomlError.x("unfinished numeric value", ctx);
+	let str = ctx.s.slice(startPtr + 2, ctx.p);
+	if (underscore) str = str.replaceAll("_", "");
+	return parseInteger(ctx, str, base, startPtr);
+}
+function parseInteger(ctx, str, base, startPtr) {
+	if (ctx.bi !== true) int: {
+		let val = parseInt(str, base);
+		if (!Number.isSafeInteger(val)) {
+			if (ctx.bi) break int;
+			TomlError.x("integer value cannot be represented losslessly", ctx, startPtr);
+		}
+		return val;
+	}
+	return base === 10 ? BigInt(str) : BigInt((base === 2 ? "0b" : base === 8 ? "0o" : "0x") + str);
+}
+function parseDate(ctx, c, endChr) {
+	let startPtr = ctx.p++, unsafeSeparator;
+	if (!isDigit(c) || !isDigit(ctx.s.charCodeAt(ctx.p++)) || !isDigit(ctx.s.charCodeAt(ctx.p++)) || !isDigit(ctx.s.charCodeAt(ctx.p++))) return parseNumber(ctx, ctx.p = startPtr, c, 0, endChr);
+	ctx.p += 5;
+	if (!isDigit(ctx.s.charCodeAt(ctx.p++))) TomlError.x("invalid date-time: date part is malformed", ctx, startPtr);
+	if (ctx.p >= ctx.s.length || ((c = ctx.s.charCodeAt(ctx.p)) !== 32 || (unsafeSeparator = true, !isDigit(ctx.s.charCodeAt(ctx.p + 1)))) && c !== 84 && c !== 116) return readDate(ctx, ctx.s.slice(startPtr, ctx.p), 3, false, startPtr);
+	if (ctx.s.charCodeAt(ctx.p += 3) !== 58) TomlError.x("invalid date-time: time part is malformed", ctx, startPtr);
+	if (ctx.s.charCodeAt(ctx.p += 3) === 58) ctx.p += 3;
+	if (ctx.s.charCodeAt(ctx.p) === 46) while (isDigit(ctx.s.charCodeAt(++ctx.p)));
+	if (c = ctx.s.charCodeAt(ctx.p)) {
+		if (c === 90 || c === 122) return readDate(ctx, ctx.s.slice(startPtr, ++ctx.p), 1, unsafeSeparator, startPtr, "[+00:00]");
+		if (c === 43 || c === 45) return readDate(ctx, ctx.s.slice(startPtr, ctx.p += 6), 1, unsafeSeparator, startPtr, !ctx.ld && "[" + ctx.s.slice(ctx.p - 6, ctx.p) + "]");
+	}
+	return readDate(ctx, ctx.s.slice(startPtr, ctx.p), 2, unsafeSeparator, startPtr);
+}
+function parseTime(ctx, c, endChr) {
+	let start = ctx.p;
+	if (!isDigit(c) || !isDigit(ctx.s.charCodeAt(++ctx.p))) return parseNumber(ctx, --ctx.p, c, 0, endChr);
+	if (ctx.s.charCodeAt(ctx.p += 4) === 58) ctx.p += 3;
+	if (ctx.s.charCodeAt(ctx.p) === 46) while (isDigit(ctx.s.charCodeAt(++ctx.p)));
+	return readDate(ctx, ctx.s.slice(start, ctx.p), 4, false, start);
+}
+function readDate(ctx, str, type, unsafeDelim, errPtr, temporalSuffix) {
+	if (ctx.ld) {
+		let date = new TomlDate(str, type, unsafeDelim);
+		if (!date.isValid()) TomlError.x("invalid date", ctx, errPtr);
+		return date;
+	}
+	try {
+		if (temporalSuffix) str += temporalSuffix;
+		switch (type) {
+			case 1: return Temporal.ZonedDateTime.from(str);
+			case 2: return Temporal.PlainDateTime.from(str);
+			case 3: return Temporal.PlainDate.from(str);
+			case 4: return Temporal.PlainTime.from(str);
+		}
+	} catch (e) {
+		TomlError.x(e instanceof Error ? e.message : "" + e, ctx, errPtr);
+	}
+}
+//#endregion
+//#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/util.js
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+/** @internal */
+function skipComment(ctx) {
+	for (; ctx.p < ctx.s.length; ctx.p++) {
+		let c = ctx.s.charCodeAt(ctx.p);
+		if (c === 10) break;
+		if (c === 13 && ctx.s.charCodeAt(ctx.p + 1) === 10) {
+			ctx.p++;
+			break;
+		}
+		if (c < 32 && c !== 9 || c === 127) TomlError.x("control characters are not allowed in comments", ctx);
+	}
+}
+/** @internal */
+function skipVoid(ctx, banNewLines, banComments) {
+	let c;
+	while (ctx.p < ctx.s.length) {
+		while (ctx.p < ctx.s.length && ((c = ctx.s.charCodeAt(ctx.p)) === 32 || c === 9 || !banNewLines && (c === 10 || c === 13 && ctx.s.charCodeAt(ctx.p + 1) === 10))) ctx.p++;
+		if (banComments || c !== 35) break;
+		skipComment(ctx);
+	}
+}
+//#endregion
+//#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/struct.js
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+/** @internal */
+function parseKey(ctx, end = 61) {
+	let startPtr;
+	let state = 0;
+	let parsed = [];
+	let sliceStart;
+	let c = ctx.s.charCodeAt(startPtr = ctx.p);
+	do
+		if (c === end) {
+			if (!state) TomlError.x("unexpected end of key", ctx);
+			if (state === 1) parsed.push(ctx.s.slice(sliceStart, ctx.p));
+			return ctx.p++, parsed;
+		} else if (c === 46) {
+			if (!state) TomlError.x("illegal empty bare key", ctx);
+			if (state === 1) parsed.push(ctx.s.slice(sliceStart, ctx.p));
+			state = 0;
+		} else if (!state && (c === 34 || c === 39)) {
+			if (c === ctx.s.charCodeAt(ctx.p + 1) && c === ctx.s.charCodeAt(ctx.p + 2)) TomlError.x("illegal quoted key: multiline strings are not allowed", ctx);
+			parsed.push(parseString(ctx));
+			state = 2;
+			ctx.p--;
+		} else if (c === 32 || c === 9) {
+			if (state === 1) {
+				parsed.push(ctx.s.slice(sliceStart, ctx.p));
+				state = 2;
+			}
+		} else if (state === 2 || c < 48 && c !== 45 || c > 57 && c < 65 || c > 90 && c < 97 && c !== 95 || c > 122) TomlError.x("illegal character in key", ctx);
+		else if (!state) {
+			state = 1;
+			sliceStart = ctx.p;
+		}
+	while (c = ctx.s.charCodeAt(++ctx.p));
+	TomlError.x("incomplete key-value: cannot find end of key", ctx, startPtr);
+}
+/** @internal */
+function parseInlineTable(ctx) {
+	let startPtr = ctx.p++;
+	let res = Object.create(null);
+	let seen = /* @__PURE__ */ new Set();
+	let c;
+	while (ctx.p < ctx.s.length) {
+		skipVoid(ctx);
+		if ((c = ctx.s.charCodeAt(ctx.p)) === 125) {
+			ctx.p++;
+			return res;
+		}
+		let k;
+		let t = res;
+		let hasOwn = false;
+		let errPtr = ctx.p;
+		let key = parseKey(ctx);
+		for (let i = 0; i < key.length; i++) {
+			if (i) t = hasOwn ? t[k] : t[k] = Object.create(null);
+			k = key[i];
+			if ((hasOwn = Object.hasOwn(t, k)) && (typeof t[k] !== "object" || seen.has(t[k]))) TomlError.x("trying to redefine an already defined value", ctx, errPtr);
+			let unsafe = k === "__proto__";
+			if (ctx.uk && (unsafe || k === "constructor")) {
+				t = ctx.uk !== 1 && TomlError.x("document contains an unsafe property", ctx, errPtr);
+				break;
+			}
+			if (!hasOwn && unsafe) Object.defineProperty(t, k, {
+				enumerable: true,
+				configurable: true,
+				writable: true
+			});
+		}
+		if (hasOwn) TomlError.x("trying to redefine an already defined value", ctx, errPtr);
+		skipVoid(ctx, true, true);
+		let value = extractValue(ctx, 125);
+		if (t && typeof (t[k] = value) === "object") seen.add(value);
+		skipVoid(ctx);
+		if ((c = ctx.s.charCodeAt(ctx.p++)) === 125) return res;
+		if (c !== 44) TomlError.x("expected comma or end of structure", ctx, ctx.p - 1);
+	}
+	TomlError.x("unfinished table", ctx, startPtr);
+}
+/** @internal */
+function parseArray(ctx) {
+	let startPtr = ctx.p++;
+	let res = [];
+	let c;
+	while (ctx.p < ctx.s.length) {
+		skipVoid(ctx);
+		if ((c = ctx.s.charCodeAt(ctx.p)) === 93) {
+			ctx.p++;
+			return res;
+		}
+		res.push(extractValue(ctx, 93));
+		skipVoid(ctx);
+		if ((c = ctx.s.charCodeAt(ctx.p++)) === 93) return res;
+		if (c !== 44) TomlError.x("expected comma or end of structure", ctx, ctx.p - 1);
+	}
+	TomlError.x("unfinished array", ctx, startPtr);
+}
+//#endregion
+//#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/parse.js
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+function peekTable(ctx, key, table, meta, type) {
+	let t = table;
+	let m = meta;
+	let k;
+	let hasOwn = false;
+	let state;
+	for (let i = 0; i < key.length; i++) {
+		if (i) {
+			t = hasOwn ? t[k] : t[k] = Object.create(null);
+			m = (state = m[k]).c;
+			if (type === 0 && (state.t === 1 || state.t === 2)) return null;
+			if (state.t === 2) {
+				let l = t.length - 1;
+				t = t[l];
+				m = m[l].c;
+			}
+		}
+		k = key[i];
+		if ((hasOwn = Object.hasOwn(t, k)) && m[k]?.t === 0 && m[k]?.d) return null;
+		if (!hasOwn) {
+			let unsafe = k === "__proto__";
+			if (ctx.uk && (unsafe || k === "constructor")) return false;
+			if (unsafe) {
+				Object.defineProperty(t, k, {
+					enumerable: true,
+					configurable: true,
+					writable: true
+				});
+				Object.defineProperty(m, k, {
+					enumerable: true,
+					configurable: true,
+					writable: true
+				});
+			}
+			m[k] = {
+				t: i < key.length - 1 && type === 2 ? 3 : type,
+				d: false,
+				i: 0,
+				c: Object.create(null)
+			};
+		}
+	}
+	state = m[k];
+	if (state.t !== type && !(type === 1 && state.t === 3)) return null;
+	if (type === 2) {
+		if (!state.d) {
+			state.d = true;
+			t[k] = [];
+		}
+		t[k].push(t = Object.create(null));
+		state.c[state.i++] = state = {
+			t: 1,
+			d: false,
+			i: 0,
+			c: Object.create(null)
+		};
+	}
+	if (state.d) return null;
+	state.d = true;
+	if (type === 1) t = hasOwn ? t[k] : t[k] = Object.create(null);
+	else if (type === 0 && hasOwn) return null;
+	return [
+		k,
+		t,
+		state.c
+	];
+}
+function validateTablePeek(ctx, peek, ptr) {
+	if (peek === null || ctx.uk === 2) TomlError.x(peek === null ? "trying to redefine an already defined table or value" : "document contains an unsafe property", ctx, ptr);
+}
+function parse(toml, options = {}) {
+	let ctx = {
+		s: toml,
+		p: 0,
+		d: options.maxDepth ?? 1e3,
+		bi: options.integersAsBigInt ?? false,
+		ld: options.useLegacyDate ?? true,
+		uk: options.unsafeKeyBehaviour === "throw" ? 2 : options.unsafeKeyBehaviour === "drop" ? 1 : 0
+	};
+	let res = Object.create(null);
+	let meta = Object.create(null);
+	let tmp;
+	let skipping = false;
+	let tbl = res;
+	let m = meta;
+	if (toml.charCodeAt(0) === 65279) ctx.p++;
+	skipVoid(ctx);
+	while (ctx.p < toml.length) {
+		if (toml.charCodeAt(ctx.p) === 91) {
+			let isTableArray = toml.charCodeAt(++ctx.p) === 91;
+			tmp = ctx.p += +isTableArray;
+			skipping = false;
+			let k = parseKey(ctx, 93);
+			if (isTableArray) {
+				if (toml.charCodeAt(ctx.p) !== 93) TomlError.x("expected end of table array declaration", ctx);
+				ctx.p++;
+			}
+			let p = peekTable(ctx, k, res, meta, isTableArray ? 2 : 1);
+			if (!p) {
+				validateTablePeek(ctx, p, tmp);
+				skipping = true;
+			} else {
+				m = p[2];
+				tbl = p[1];
+			}
+		} else {
+			tmp = ctx.p;
+			let p = peekTable(ctx, parseKey(ctx), tbl, m, 0);
+			if (!p && !skipping) validateTablePeek(ctx, p, tmp);
+			skipVoid(ctx, true, true);
+			let v = extractValue(ctx, void 0);
+			if (p && !skipping) p[1][p[0]] = v;
+		}
+		skipVoid(ctx, true);
+		if (ctx.p < toml.length && (tmp = toml.charCodeAt(ctx.p)) !== 10 && (tmp !== 13 || toml.charCodeAt(ctx.p + 1) !== 10)) TomlError.x("each key-value declaration must be followed by an end-of-line", ctx);
+		skipVoid(ctx);
+	}
+	return res;
+}
+//#endregion
+//#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/stringify.js
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+let BARE_KEY = /^[a-z0-9-_]+$/i;
+let HAS_WELLFORMED = !!"".isWellFormed;
+function extendedTypeOf(obj) {
+	let type = typeof obj;
+	if (type === "object") {
+		if (Array.isArray(obj)) return "array";
+		if (typeof obj.getUTCDate === "function" && obj instanceof Date) return "date";
+		if (globalThis.Temporal) {
+			if (obj.until) {
+				if (obj instanceof Temporal.ZonedDateTime) return "temporal/tz+uc";
+				if (obj instanceof Temporal.PlainDateTime || obj instanceof Temporal.PlainDate) return "temporal/uc";
+				if (obj instanceof Temporal.PlainTime || obj instanceof Temporal.Instant) return "temporal";
+				if (obj instanceof Temporal.PlainYearMonth) return "temporal/x";
+			} else if (obj.toPlainDate && obj instanceof Temporal.PlainMonthDay || obj.negated && obj instanceof Temporal.Duration) return "temporal/x";
+		}
+	}
+	return type;
+}
+function isArrayOfTables(obj) {
+	for (let i = 0; i < obj.length; i++) if (extendedTypeOf(obj[i]) !== "object") return false;
+	return obj.length != 0;
+}
+function formatWellFormedStringUnchecked(s) {
+	return JSON.stringify(s).replaceAll("", "\\u007f");
+}
+function formatString(s) {
+	return formatWellFormedStringUnchecked(HAS_WELLFORMED ? s.toWellFormed() : s);
+}
+function formatKey(s) {
+	if (BARE_KEY.test(s)) return s;
+	if (HAS_WELLFORMED && !s.isWellFormed()) throw new RangeError("key contains illegal lone surrogates");
+	return formatWellFormedStringUnchecked(s);
+}
+function stringifyValue(val, type, depth, numberAsFloat, strictTemporal) {
+	if (depth === 0) throw new Error("Could not stringify the object: maximum object depth exceeded");
+	switch (type) {
+		case "number":
+			if (isNaN(val)) return "nan";
+			if (val === Infinity) return "inf";
+			if (val === -Infinity) return "-inf";
+			if (Number.isInteger(val) && (numberAsFloat || !Number.isSafeInteger(val))) return val.toFixed(1);
+		case "bigint":
+		case "boolean":
+		case "temporal": return val.toString();
+		case "string": return formatString(val);
+		case "date":
+			if (isNaN(val.getTime())) throw new TypeError("cannot serialize invalid date");
+			return val.toISOString();
+		case "object": return stringifyInlineTable(val, depth, numberAsFloat, strictTemporal);
+		case "array": return stringifyArray(val, depth, numberAsFloat, strictTemporal);
+		case "temporal/tz+uc": if (strictTemporal) {
+			let tz = val.timeZoneId;
+			let tzc = tz.charCodeAt(0);
+			if (tzc !== 43 && tzc !== 45 && (tzc !== 85 && tzc !== 71 && tzc !== 90 && tzc !== 69 || tz !== "UTC" && tz !== "UCT" && tz !== "Universal" && tz !== "Zulu" && !tz.startsWith("GMT") && tz !== "Greenwich" && !tz.startsWith("Etc/"))) throw new TypeError("Temporal objects with an IANA timezone are not allowed in Temporal strict mode");
+		}
+		case "temporal/uc":
+			if (strictTemporal && val.calendarId !== "iso8601") throw new TypeError("Temporal objects with a non-default calendar are not allowed in Temporal strict mode");
+			return val.toString({
+				calendarName: "never",
+				timeZoneName: "never"
+			});
+		case "temporal/x": throw new TypeError("Unsupported " + val[Symbol.toStringTag]);
+	}
+}
+function stringifyInlineTable(obj, depth, numberAsFloat, strictTemporal) {
+	let keys = Object.keys(obj);
+	if (keys.length === 0) return "{}";
+	let res = "{ ";
+	for (let i = 0; i < keys.length; i++) {
+		let k = keys[i];
+		if (i) res += ", ";
+		res += formatKey(k) + " = " + stringifyValue(obj[k], extendedTypeOf(obj[k]), depth - 1, numberAsFloat, strictTemporal);
+	}
+	return res + " }";
+}
+function stringifyArray(array, depth, numberAsFloat, strictTemporal) {
+	if (array.length === 0) return "[]";
+	let res = "[ ";
+	for (let i = 0; i < array.length; i++) {
+		if (i) res += ", ";
+		if (array[i] === null || array[i] === void 0) throw new TypeError("arrays cannot contain null or undefined values");
+		res += stringifyValue(array[i], extendedTypeOf(array[i]), depth - 1, numberAsFloat, strictTemporal);
+	}
+	return res + " ]";
+}
+function stringifyArrayTable(array, key, depth, numberAsFloat, strictTemporal) {
+	if (depth === 0) throw new Error("Could not stringify the object: maximum object depth exceeded");
+	let res = "";
+	for (let i = 0; i < array.length; i++) {
+		res += `${res && "\n"}[[${key}]]\n`;
+		res += stringifyTable(0, array[i], key, depth, numberAsFloat, strictTemporal);
+	}
+	return res;
+}
+function stringifyTable(tableKey, obj, prefix, depth, numberAsFloat, strictTemporal) {
+	if (depth === 0) throw new Error("Could not stringify the object: maximum object depth exceeded");
+	let preamble = "";
+	let tables = "";
+	let keys = Object.keys(obj);
+	for (let i = 0; i < keys.length; i++) {
+		let k = keys[i];
+		if (obj[k] !== null && obj[k] !== void 0) {
+			let type = extendedTypeOf(obj[k]);
+			if (type === "symbol" || type === "function") throw new TypeError(`cannot serialize values of type '${type}'`);
+			let key = formatKey(k);
+			if (type === "array" && isArrayOfTables(obj[k])) tables += (tables && "\n") + stringifyArrayTable(obj[k], prefix ? `${prefix}.${key}` : key, depth - 1, numberAsFloat, strictTemporal);
+			else if (type === "object") {
+				let tblKey = prefix ? `${prefix}.${key}` : key;
+				tables += (tables && "\n") + stringifyTable(tblKey, obj[k], tblKey, depth - 1, numberAsFloat, strictTemporal);
+			} else {
+				preamble += key;
+				preamble += " = ";
+				preamble += stringifyValue(obj[k], type, depth, numberAsFloat, strictTemporal);
+				preamble += "\n";
+			}
+		}
+	}
+	if (tableKey && (preamble || !tables)) preamble = preamble ? `[${tableKey}]\n${preamble}` : `[${tableKey}]`;
+	return preamble && tables ? `${preamble}\n${tables}` : preamble || tables;
+}
+function stringify(obj, { maxDepth = 1e3, numbersAsFloat = false, strictTemporal = false } = {}) {
+	if (extendedTypeOf(obj) !== "object") throw new TypeError("stringify can only be called with an object");
+	let str = stringifyTable(0, obj, "", maxDepth, numbersAsFloat, strictTemporal);
+	if (str[str.length - 1] !== "\n") return str + "\n";
+	return str;
+}
+//#endregion
+//#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/index.js
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+//#endregion
+//#region files/config/keybindings/native.ts
+/** Pure native include inspection; only validation copies are normalized. */
+function tomlIncludes(table) {
+	const entries = [];
+	const arrays = [];
+	if (table.include !== void 0) {
+		if (!table.include || typeof table.include !== "object" || Array.isArray(table.include) || table.include instanceof TomlDate) throw new Error("include must be a table");
+		const include = table.include;
+		if (include.optional !== void 0 && (!include.optional || typeof include.optional !== "object" || Array.isArray(include.optional) || include.optional instanceof TomlDate)) throw new Error("include.optional must be a table");
+		for (const [value, optional] of [[include.files, false], [include.optional?.files, true]]) {
+			if (value === void 0) continue;
+			if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) throw new Error("include files must be a string array");
+			arrays.push(value);
+			entries.push(...value.map((path) => ({
+				path,
+				optional
+			})));
+		}
+	}
+	return {
+		entries,
+		rewrite(paths) {
+			let index = 0;
+			for (const array of arrays) for (let slot = 0; slot < array.length; slot++) array[slot] = paths[index++];
+		}
+	};
+}
+function nativeIncludes(text, target) {
+	if (target === "umbriel") return tomlIncludes(parse(text, { integersAsBigInt: "asNeeded" })).entries;
+	return parse$1(text).nodes.filter((node) => node.getName() === "include").map((node) => {
+		const args = node.getArguments();
+		if (args.length !== 1 || typeof args[0] !== "string") throw new Error("Niri include requires exactly one string path");
+		return {
+			path: args[0],
+			optional: node.getProperty("optional") === true
+		};
+	});
+}
+function rewriteNativeIncludes(text, target, paths) {
+	if (target === "umbriel") {
+		const table = parse(text, { integersAsBigInt: "asNeeded" });
+		const inclusion = tomlIncludes(table);
+		if (inclusion.entries.length !== paths.length) throw new Error("include replacement arity differs");
+		inclusion.rewrite([...paths]);
+		return stringify(table);
+	}
+	const includes = parse$1(text, { storeLocations: true }).nodes.filter((node) => node.getName() === "include");
+	if (includes.length !== paths.length) throw new Error("include replacement arity differs");
+	const edits = includes.map((node, index) => {
+		const argument = node.getArgumentEntry(0);
+		const location = argument && getLocation(argument.value);
+		if (!location) throw new Error("include argument has no source location");
+		return {
+			start: location.start.offset,
+			end: location.end.offset,
+			text: kdlString(paths[index])
+		};
+	});
+	let output = text;
+	for (const edit of edits.reverse()) output = output.slice(0, edit.start) + edit.text + output.slice(edit.end);
+	return output;
+}
+function resolveNativeInclude(raw, owner, target, environment) {
+	let path = raw;
+	if (target === "umbriel") path = path.replace(/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g, (_match, braced, plain) => {
+		const key = braced ?? plain;
+		if (!Object.hasOwn(environment, key) || typeof environment[key] !== "string") throw new Error(`native include needs explicit environment ${key}`);
+		return environment[key];
+	});
+	if (path === "~" || path.startsWith("~/")) {
+		if (!environment.HOME) throw new Error("native include needs explicit HOME");
+		path = environment.HOME + path.slice(1);
+	}
+	if (!path || /[\0\t\r\n]/.test(path)) throw new Error(`invalid native include path ${raw}`);
+	return resolve(dirname(owner), path);
+}
+//#endregion
+//#region files/config/keybindings/materials.ts
+/** Pure source/placement/incorporation planning shared with future native admission. */
+function materialNames(id, target) {
+	if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(id)) throw new Error(`invalid binding id ${id}`);
+	return target === "niri" ? {
+		definition: join("niri", `${id}.binding.kdl`),
+		incorporation: join("niri", `${id}.include.kdl`)
+	} : {
+		definition: join("umbriel", `${id}.binding.toml`),
+		incorporation: join("umbriel", `${id}.include.toml.part`)
+	};
+}
+/** Explicit membership: no wildcard can accidentally admit include fragments. */
+function selectMaterials(target, sources) {
+	const seen = /* @__PURE__ */ new Set();
+	const placements = /* @__PURE__ */ new Map();
+	if (sources.some((source) => source.enabled !== void 0 && typeof source.enabled !== "boolean")) throw new Error("native source enabled must be boolean");
+	return sources.filter((source) => source.enabled !== false).sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).map((source) => {
+		materialNames(source.id, target);
+		if (seen.has(source.id)) throw new Error(`duplicate contribution ${source.id}`);
+		seen.add(source.id);
+		if (source.format !== target) throw new Error(`contribution ${source.id}: expected ${target} source format`);
+		if (!Number.isFinite(source.order)) throw new Error(`contribution ${source.id}: order must be finite`);
+		renderInclude(target, source.path);
+		const effectivePath = normalize(source.placement.strategy === "direct" ? source.path : source.placement.path);
+		if (!isAbsolute(source.path) || !isAbsolute(effectivePath)) throw new Error(`contribution ${source.id}: source and selected placement paths must be absolute`);
+		const prior = placements.get(effectivePath);
+		if (prior) throw new Error(`contributions ${prior} and ${source.id} claim placement ${effectivePath}`);
+		placements.set(effectivePath, source.id);
+		if (source.incorporation === "inline" && target !== "niri") throw new Error("Umbriel body inline requires explicit table adaptation; use include");
+		return {
+			id: source.id,
+			target,
+			sourcePath: normalize(source.path),
+			effectivePath,
+			order: source.order,
+			strategy: source.placement.strategy,
+			blockIdentity: `keybinding/${target}/${source.id}`,
+			incorporation: source.incorporation ?? "include",
+			include: renderInclude(target, effectivePath)
+		};
+	});
+}
+/** New root skeleton only, NOT an adoption editor for existing user TOML/KDL. */
+function renderRoot(target, materials, baseline, personal = []) {
+	if (materials.some((material) => material.target !== target)) throw new Error(`root ${target}: incorporation material belongs to another target`);
+	if (materials.some((material) => material.incorporation === "inline")) throw new Error("renderRoot composes include references only; inline requires captured body block assembly");
+	const refs = [
+		...baseline.map((path) => renderInclude(target, path)),
+		...materials.map((material) => material.include),
+		...personal.map((path) => renderInclude(target, path))
+	];
+	return target === "niri" ? refs.join("") : `[include]\nfiles = [\n${refs.map((entry) => "  " + entry).join("")}]\n`;
+}
+//#endregion
+//#region files/config/keybindings/closure.ts
+/** Captured include closure validation at the existing CONFIG transaction hook. */
+const exec$1 = promisify(execFile);
+async function entryKey(path) {
+	return join(await physicalParent(path), basename(path));
+}
+/** Reads planned outputs first, including through ordinary symlink aliases. */
+async function plannedReader(planned, fallback) {
+	const physical = /* @__PURE__ */ new Map();
+	for (const [path, text] of planned) physical.set(await entryKey(path), text);
+	return async (path, optional) => {
+		let current = normalize(path);
+		const seen = /* @__PURE__ */ new Set();
+		while (!seen.has(current)) {
+			seen.add(current);
+			const selected = physical.get(await entryKey(current));
+			if (selected !== void 0) return selected;
+			const entry = await inspectDeliveryEntry(current);
+			if (entry.kind !== "symlink") return fallback(path, optional);
+			current = entry.targetPath;
+		}
+		throw new Error(`symlink cycle in native include ${path}`);
+	};
+}
+async function captureClosure(root, target, reader, environment) {
+	const captured = /* @__PURE__ */ new Map();
+	const active = /* @__PURE__ */ new Set();
+	const visited = /* @__PURE__ */ new Set();
+	const visit = async (path, optional) => {
+		path = normalize(path);
+		const identity = await entryKey(path);
+		if (active.has(identity)) throw new Error(`native include cycle at ${path}`);
+		if (visited.has(path)) return;
+		visited.add(path);
+		const text = await reader(path, optional);
+		if (text === void 0) {
+			if (!optional) throw new Error(`missing selected native source ${path}`);
+			return;
+		}
+		captured.set(path, text);
+		active.add(identity);
+		if (active.size > 64) throw new Error("native include closure exceeds 64 levels");
+		for (const ref of nativeIncludes(text, target)) await visit(resolveNativeInclude(ref.path, path, target, environment), ref.optional);
+		active.delete(identity);
+	};
+	await visit(root, false);
+	return captured;
+}
+async function validateClosure(planPath, environment) {
+	if (!environment.CONFIG_CANDIDATES_FILE || !environment.CONFIG_TRANSACTION) throw new Error("closure validation requires CONFIG transaction candidate map");
+	const plan = JSON.parse(await readFile(planPath, "utf8"));
+	const map = JSON.parse(await readFile(environment.CONFIG_CANDIDATES_FILE, "utf8"));
+	if (plan.version !== 1 || map.version !== 1) throw new Error("unsupported candidate closure version");
+	await assertFileGuards(plan.guards);
+	const planned = /* @__PURE__ */ new Map();
+	for (const candidate of map.candidates) planned.set(candidate.output, await readFile(candidate.candidate, "utf8"));
+	if (!planned.has(plan.root)) throw new Error("transaction does not select candidate root");
+	const fallback = async (path, optional) => {
+		const source = plan.captured[normalize(path)];
+		if (source === void 0) {
+			if (optional) return void 0;
+			throw new Error(`uncaptured native source ${path}`);
+		}
+		return readFile(source, "utf8");
+	};
+	const layout = join(environment.CONFIG_TRANSACTION, "native-layout");
+	const mirrored = (path) => join(layout, normalize(path).slice(1));
+	const validateRoot = async (root) => {
+		const closure = await captureClosure(root, plan.target, await plannedReader(planned, fallback), plan.environment);
+		for (const [path, text] of closure) {
+			const refs = nativeIncludes(text, plan.target).map((ref) => mirrored(resolveNativeInclude(ref.path, path, plan.target, plan.environment)));
+			const copy = mirrored(path);
+			await mkdir(dirname(copy), { recursive: true });
+			await writeFile(copy, rewriteNativeIncludes(text, plan.target, refs));
+		}
+		await exec$1(plan.validator ?? plan.target, plan.target === "niri" ? [
+			"validate",
+			"--config",
+			mirrored(root)
+		] : [
+			"validate",
+			"-c",
+			mirrored(root)
+		]);
+		return closure;
+	};
+	const effective = await validateRoot(plan.root);
+	const unused = (plan.definitions ?? []).filter((path) => !effective.has(normalize(path)));
+	if (unused.length) {
+		for (const path of unused) if (!planned.has(path)) throw new Error(`unselected generated definition ${path}`);
+		const envelope = join(environment.CONFIG_TRANSACTION, `definition-admission.${plan.target === "niri" ? "kdl" : "toml"}`);
+		planned.set(envelope, renderRoot(plan.target, [], unused, [plan.root]));
+		await validateRoot(envelope);
+	}
+	await assertFileGuards(plan.guards);
+}
+//#endregion
+//#region files/config/blocks.ts
+/** Shared CONFIG block-in-file adapter over a private adopted insertion area.
+* Live publication remains the sole CONFIG runner's responsibility. */
+const exec = promisify(execFile);
+function areaOffsets(text, area) {
+	const lines = [...text.matchAll(/[^\n]*(?:\n|$)/g)].filter((match) => match[0]);
+	const begins = lines.filter((line) => line[0].trim() === area.begin);
+	const ends = lines.filter((line) => line[0].trim() === area.end);
+	if (begins.length !== 1 || ends.length !== 1 || begins[0].index >= ends[0].index) throw new Error("root requires exactly one adopted insertion area (begin before end)");
+	return {
+		start: begins[0].index,
+		end: ends[0].index + ends[0][0].length,
+		insert: ends[0].index
+	};
+}
+function regexEscape(value) {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+async function assembleBlocks(text, blocks, options) {
+	const span = areaOffsets(text, options.area);
+	if (!/^[A-Za-z0-9][A-Za-z0-9_./-]*$/.test(options.namespace)) throw new Error("invalid block namespace");
+	const ids = /* @__PURE__ */ new Set();
+	const prefix = `${options.comment} ${options.namespace}/`;
+	if ((text.slice(0, span.start) + text.slice(span.end)).split(/\r?\n/).some((line) => line.trim().startsWith(prefix))) throw new Error("owned block appears outside adopted insertion area");
+	const seen = /* @__PURE__ */ new Set();
+	let opened;
+	const markers = new RegExp(`^${regexEscape(prefix)}([A-Za-z0-9][A-Za-z0-9_.-]*) (start|end)(?:\\s.*)?$`);
+	for (const line of text.slice(span.start, span.end).split(/\r?\n/).map((line) => line.trim())) {
+		if (!line.startsWith(prefix)) continue;
+		const marker = markers.exec(line);
+		if (!marker) throw new Error("malformed owned block marker");
+		if (marker[2] === "start") {
+			if (opened || seen.has(marker[1])) throw new Error("nested or duplicate owned block");
+			opened = marker[1];
+			seen.add(opened);
+		} else {
+			if (opened !== marker[1]) throw new Error("unmatched owned block closer");
+			opened = void 0;
+		}
+	}
+	if (opened) throw new Error("unclosed owned block");
+	for (const block of blocks) {
+		if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(block.id) || ids.has(block.id)) throw new Error(`invalid or duplicate block ID ${block.id}`);
+		ids.add(block.id);
+		if (block.content.split(/\r?\n/).some((line) => line.trim() === options.area.begin || line.trim() === options.area.end || line.trim().startsWith(prefix))) throw new Error("block material contains reserved management markers");
+	}
+	const output = join(options.workspace, "block-area");
+	await writeFile(output, text.slice(span.start, span.end));
+	const command = options.command ?? process.env.CONFIG_BLOCK_IN_FILE ?? "block-in-file";
+	const common = [
+		"--comment",
+		options.comment,
+		"--timestamp=",
+		"--source-attribution=false",
+		"-o",
+		output
+	];
+	await exec(command, [
+		...common,
+		"--remove-match",
+		`^${regexEscape(options.namespace)}/`
+	]);
+	for (const [index, block] of blocks.entries()) {
+		const input = join(options.workspace, `block-${index}`);
+		await writeFile(input, block.content);
+		await exec(command, [
+			...common,
+			"-n",
+			`${options.namespace}/${block.id}`,
+			"-i",
+			input,
+			"--before",
+			`^\\s*${regexEscape(options.area.end)}\\s*$`
+		]);
+	}
+	const updated = await readFile(output, "utf8");
+	areaOffsets(updated, options.area);
+	return text.slice(0, span.start) + updated + text.slice(span.end);
+}
+//#endregion
+//#region files/config/keybindings/consumer.ts
+/** Bounded consumer capture/planning over CONFIG's existing sole commit boundary. */
+function absolute(path) {
+	if (typeof path !== "string" || !isAbsolute(path) || /[\0\r\n\t]/.test(path)) throw new Error(`consumer path must be an absolute concrete path: ${String(path)}`);
+	return normalize(path);
+}
+function consumerArea(target) {
+	const comment = target === "niri" ? "//" : "#";
+	return {
+		begin: `${comment} compfuzor-keybindings-begin`,
+		end: `${comment} compfuzor-keybindings-end`
+	};
+}
+function consumerTemplate(target, baseline, personal, area = consumerArea(target)) {
+	const refs = (paths) => paths.map((path) => renderInclude(target, absolute(path))).join("");
+	return target === "niri" ? refs(baseline) + `${area.begin}\n${area.end}\n` + refs(personal) : `[include]\nfiles = [\n${refs(baseline)}${area.begin}\n${area.end}\n${refs(personal)}]\n`;
+}
+function assertAreaContext(text, target, area) {
+	const span = areaOffsets(text, area);
+	const probe = "/compfuzor-insertion-area-probe";
+	const candidate = text.slice(0, span.insert) + renderInclude(target, probe) + text.slice(span.insert);
+	try {
+		if (!nativeIncludes(candidate, target).some((ref) => ref.path === probe && !ref.optional)) throw new Error("probe is not in the required include scope");
+	} catch (error) {
+		throw new Error("adopted area must be top-level Niri or inside Umbriel include.files array", { cause: error });
+	}
+}
+/** Stable YAML IDs are authoritative. Paths/filenames identify provenance only. */
+async function assembleConsumer(options) {
+	const request = options.request;
+	if (request.version !== 1 || request.target !== "niri" && request.target !== "umbriel") throw new Error("unsupported consumer request version/target");
+	if (request.mode !== void 0 && ![
+		"assemble",
+		"seed",
+		"refresh"
+	].includes(request.mode)) throw new Error("mode must be assemble, seed or refresh");
+	if (!options.validatorCommand.length) throw new Error("explicit deployed closure-validator command is required");
+	const target = request.target;
+	const root = absolute(request.root.path);
+	const materialRoot = absolute(request.materialRoot);
+	const mode = request.mode ?? "assemble";
+	const environment = request.environment ?? { HOME: process.env.HOME };
+	const files = /* @__PURE__ */ new Map();
+	const capture = async (raw) => {
+		const path = absolute(raw);
+		let file = files.get(path);
+		if (!file) {
+			file = await captureFile(path);
+			files.set(path, file);
+		}
+		return file;
+	};
+	const yaml = [];
+	for (const selected of request.yamlSources ?? []) {
+		if (selected.enabled === false) continue;
+		const path = absolute(selected.path);
+		const active = await capture(path);
+		if (selected.disabledSuffix !== void 0) {
+			if (!/^\.[A-Za-z0-9_.-]+$/.test(selected.disabledSuffix)) throw new Error("invalid disabled suffix");
+			const disabled = await capture(path + selected.disabledSuffix);
+			if (disabled.guard.kind !== "missing" && active.guard.kind !== "missing") throw new Error(`both enabled and disabled YAML source entries exist: ${path}`);
+			if (disabled.guard.kind !== "missing") continue;
+		}
+		if (!active.bytes) throw new Error(`missing selected YAML source ${path}`);
+		yaml.push({
+			path,
+			text: fileText(active)
+		});
+	}
+	const composition = compose(yaml.map((file) => decodeYaml(file.text, file.path)), target);
+	const generated = /* @__PURE__ */ new Map();
+	const definitionOwners = /* @__PURE__ */ new Map();
+	const sources = [];
+	for (const source of request.nativeSources ?? []) {
+		if (source.enabled === false) continue;
+		if (source.disabledSuffix !== void 0) {
+			if (!/^\.[A-Za-z0-9_.-]+$/.test(source.disabledSuffix)) throw new Error("invalid native registration disabled suffix");
+			const active = await capture(source.path);
+			const disabled = await capture(source.path + source.disabledSuffix);
+			if (active.guard.kind !== "missing" && disabled.guard.kind !== "missing") throw new Error(`both enabled and disabled native source entries exist: ${source.path}`);
+			if (disabled.guard.kind !== "missing") continue;
+		}
+		sources.push(source);
+	}
+	for (const [index, binding] of composition.bindings.entries()) {
+		const settings = request.bindings?.[binding.id];
+		const path = join(materialRoot, materialNames(binding.id, target).definition);
+		generated.set(path, renderDefinition(binding, target));
+		definitionOwners.set(path, binding.id);
+		sources.push({
+			id: binding.id,
+			path,
+			format: target,
+			order: settings?.order ?? index,
+			placement: settings?.placement ?? { strategy: "direct" },
+			incorporation: settings?.incorporation
+		});
+	}
+	const materials = selectMaterials(target, sources);
+	const definitionKeys = new Set(await Promise.all([...generated.keys()].map(entryKey)));
+	const claims = /* @__PURE__ */ new Map();
+	for (const material of materials) {
+		const key = await entryKey(material.effectivePath);
+		const prior = claims.get(key);
+		if (prior) throw new Error(`contributions ${prior} and ${material.id} claim physical placement ${material.effectivePath}`);
+		claims.set(key, material.id);
+		if (material.strategy !== "direct" && await pathsSharePhysicalEntry(material.sourcePath, material.effectivePath)) throw new Error(`placement aliases donor for ${material.id}`);
+		if (material.strategy !== "direct") {
+			let source = material.sourcePath;
+			const seen = /* @__PURE__ */ new Set();
+			while (!seen.has(await entryKey(source))) {
+				const key = await entryKey(source);
+				seen.add(key);
+				if (key === await entryKey(material.effectivePath)) throw new Error(`donor symlink chain reaches placement for ${material.id}`);
+				if (definitionKeys.has(key)) break;
+				const entry = await inspectDeliveryEntry(source);
+				if (entry.kind !== "symlink") break;
+				source = entry.targetPath;
+			}
+		}
+		if (await pathsSharePhysicalEntry(root, material.effectivePath) || await pathsSharePhysicalEntry(root, material.sourcePath)) throw new Error(`root aliases source/placement for ${material.id}`);
+	}
+	const outputBodies = new Map(generated);
+	const links = /* @__PURE__ */ new Map();
+	const effectiveBodies = /* @__PURE__ */ new Map();
+	const reader = await plannedReader(outputBodies, async (path, optional) => {
+		const file = await capture(path);
+		if (!file.bytes && !optional) throw new Error(`missing selected native source ${path}`);
+		return fileText(file);
+	});
+	for (const material of materials) {
+		if (material.strategy === "direct") {
+			effectiveBodies.set(material.id, await reader(material.effectivePath, false));
+			continue;
+		}
+		const current = await capture(material.effectivePath);
+		if (mode === "refresh" || mode === "seed" && current.guard.kind === "missing") {
+			const body = await reader(material.sourcePath, false);
+			outputBodies.set(material.effectivePath, body);
+			if (material.strategy === "link") links.set(material.effectivePath, material.sourcePath);
+			effectiveBodies.set(material.id, body);
+		} else {
+			if (!current.bytes) throw new Error(`selected user placement is missing or dangling: ${material.effectivePath}; request seed or refresh explicitly`);
+			effectiveBodies.set(material.id, await reader(material.effectivePath, false));
+		}
+	}
+	const area = request.root.area ?? consumerArea(target);
+	const existingRoot = await capture(root);
+	let rootText = fileText(existingRoot);
+	if (rootText === void 0) {
+		if (existingRoot.guard.kind !== "missing") throw new Error(`root is dangling: ${root}`);
+		rootText = request.root.templateFile === void 0 ? consumerTemplate(target, request.baseline ?? [], request.personal ?? [], area) : fileText(await capture(request.root.templateFile));
+	}
+	if (rootText === void 0) throw new Error("missing root template");
+	assertAreaContext(rootText, target, area);
+	const blocks = [];
+	for (const material of materials) {
+		let content = material.include;
+		if (material.incorporation === "inline") {
+			const body = effectiveBodies.get(material.id);
+			content = rewriteNativeIncludes(body, target, nativeIncludes(body, target).map((ref) => resolveNativeInclude(ref.path, material.effectivePath, target, environment)));
+		}
+		const names = materialNames(material.id, target);
+		const companion = join(materialRoot, material.incorporation === "inline" ? names.incorporation.replace(/\.include\.kdl$/, ".inline.kdl") : names.incorporation);
+		if (outputBodies.has(companion) || claims.has(await entryKey(companion)) || await entryKey(root) === await entryKey(companion)) throw new Error(`incorporation output collision ${companion}`);
+		outputBodies.set(companion, content);
+		blocks.push({
+			id: material.id,
+			content
+		});
+	}
+	const outputKeys = /* @__PURE__ */ new Set();
+	for (const path of [...outputBodies.keys(), root]) {
+		const key = await entryKey(path);
+		if (outputKeys.has(key)) throw new Error(`two outputs claim physical path ${path}`);
+		outputKeys.add(key);
+		const claimant = claims.get(key);
+		if (definitionOwners.has(path) && claimant && claimant !== definitionOwners.get(path)) throw new Error(`generated definition overwrites placement of ${claimant}`);
+		await capture(path);
+		for (const source of yaml) if (await entryKey(source.path) === key) throw new Error(`output aliases YAML input ${source.path}`);
+		for (const source of request.nativeSources ?? []) if (await entryKey(source.path) === key) throw new Error(`output aliases native donor ${source.path}`);
+	}
+	const workspace = await mkdtemp(join(options.workspaceRoot ?? tmpdir(), "keybindings-consumer-"));
+	try {
+		rootText = await assembleBlocks(rootText, blocks, {
+			area,
+			namespace: `keybinding/${target}`,
+			comment: target === "niri" ? "//" : "#",
+			workspace,
+			command: options.blockCommand
+		});
+		outputBodies.set(root, rootText);
+		const captured = await captureClosure(root, target, await plannedReader(outputBodies, async (path, optional) => {
+			const file = await capture(path);
+			if (!file.bytes && !optional) throw new Error(`missing selected native source ${path}`);
+			return fileText(file);
+		}), environment);
+		const capturedPaths = {};
+		await mkdir(join(workspace, "inputs"));
+		for (const [index, [path, text]] of [...captured].entries()) {
+			const file = join(workspace, "inputs", `closure-${index}`);
+			await writeFile(file, text, { mode: 384 });
+			capturedPaths[path] = file;
+		}
+		const plan = {
+			version: 1,
+			target,
+			root,
+			captured: capturedPaths,
+			guards: [...files.values()].map((file) => file.guard),
+			environment,
+			validator: options.nativeValidator,
+			definitions: [...generated.keys()]
+		};
+		const planPath = join(workspace, "closure.json");
+		await writeFile(planPath, JSON.stringify(plan), { mode: 384 });
+		const configs = {};
+		const bindings = {};
+		const leaf = join(dirname(options.runner), "processors/concat");
+		for (const [index, [output, text]] of [...outputBodies].entries()) {
+			const name = `keybinding-${target}-${index}`;
+			const input = join(workspace, "inputs", `output-${index}`);
+			await writeFile(input, text, { mode: 384 });
+			configs[name] = {
+				output,
+				leaf,
+				processor: "concat",
+				inputs: [{ file: input }],
+				apply: true,
+				...links.has(output) ? { link: links.get(output) } : {}
+			};
+			bindings[name] = {
+				output: { path: output },
+				inputs: [{ path: input }]
+			};
+		}
+		return {
+			...await runAssemblyResult({
+				spec: {
+					version: 2,
+					defaultContext: "consumer",
+					configs,
+					contexts: { consumer: {
+						scope: "user",
+						canonical: true,
+						root: { path: "/" },
+						configs: bindings
+					} },
+					transaction_validate: [
+						...options.validatorCommand,
+						"--plan",
+						planPath
+					].map(shellQuote).join(" ")
+				},
+				contextName: "consumer",
+				runner: options.runner,
+				names: Object.keys(configs),
+				check: options.check,
+				quiet: options.check,
+				stdio: options.stdio ?? "inherit"
+			}),
+			materials,
+			outputs: [...outputBodies.keys()]
+		};
+	} finally {
+		await rm(workspace, {
+			recursive: true,
+			force: true
+		});
+	}
+}
+//#endregion
+//#region files/config/registration.ts
+/** Coherent input-registration batches with one caller-owned assembly operation.
+* Rollback covers ordinary failures, not crash atomicity or concurrent writers. */
+async function withInputBatch(records, operation, options) {
+	const selected = [];
+	for (const record of records) {
+		if (!isAbsolute(record.source) || !isAbsolute(record.destination) || /[\0\r\n\t]/.test(record.source + record.destination)) throw new Error("registration paths must be absolute concrete paths");
+		if (record.strategy !== "copy" && record.strategy !== "link") throw new Error("registration strategy must be copy or link");
+		if (record.disabledSuffix !== void 0 && !/^\.[A-Za-z0-9_.-]+$/.test(record.disabledSuffix)) throw new Error("invalid registration disabled suffix");
+		if (!(await captureFile(record.source)).bytes) throw new Error(`registration source missing or dangling: ${record.source}`);
+		const active = await inspectDeliveryEntry(record.destination);
+		const disabledPath = record.disabledSuffix ? record.destination + record.disabledSuffix : void 0;
+		const disabled = disabledPath ? await inspectDeliveryEntry(disabledPath) : { kind: "missing" };
+		if (active.kind !== "missing" && disabled.kind !== "missing") throw new Error(`both enabled and disabled registration entries exist: ${record.destination}`);
+		const useDisabled = disabled.kind !== "missing" || active.kind === "missing" && (record.initiallyDisabled ?? false);
+		if (useDisabled && !disabledPath) throw new Error("disabled registration requires a suffix");
+		const path = normalize(useDisabled ? disabledPath : record.destination);
+		const previous = useDisabled ? disabled : active;
+		if (previous.kind === "directory" || previous.kind === "special") throw new Error(`registration destination is not replaceable: ${path}`);
+		if (await pathsSharePhysicalEntry(record.source, path)) throw new Error(`registration aliases donor: ${path}`);
+		for (const other of selected) for (const first of [record.destination, disabledPath].filter((value) => !!value)) for (const second of [other.record.destination, other.record.disabledSuffix ? other.record.destination + other.record.disabledSuffix : void 0].filter((value) => !!value)) if (await pathsSharePhysicalEntry(first, second)) throw new Error(`registration batch claims the same slot: ${path}`);
+		selected.push({
+			record,
+			path,
+			disabled: useDisabled,
+			previous
+		});
+	}
+	const workspace = await mkdtemp(join(options.workspaceRoot ?? tmpdir(), "config-input-batch-"));
+	let mutated = 0;
+	let accepted = false;
+	const restore = async () => {
+		for (const entry of selected.slice(0, mutated).reverse()) if (entry.previous.kind === "missing") await rm(entry.path, { force: true });
+		else if (entry.previous.kind === "file") await replaceWithCopy(entry.backup, entry.path);
+		else if (entry.previous.kind === "symlink") {
+			const temporary = join(dirname(entry.path), `.registration-restore-${process.pid}-${Math.random().toString(16).slice(2)}`);
+			try {
+				await localLinkDeliveryExecutor.symlink(entry.previous.target, temporary);
+				await localLinkDeliveryExecutor.rename(temporary, entry.path);
+			} finally {
+				await localLinkDeliveryExecutor.rm(temporary);
+			}
+		}
+		mutated = 0;
+	};
+	try {
+		for (const [index, entry] of selected.entries()) if (entry.previous.kind === "file") {
+			entry.backup = join(workspace, `previous-${index}`);
+			await replaceWithCopy(entry.path, entry.backup);
+		}
+		for (const entry of selected) {
+			if (entry.record.strategy === "link") await replaceWithLink(entry.record.source, entry.path);
+			else await replaceWithCopy(entry.record.source, entry.path);
+			mutated++;
+		}
+		const result = await operation(selected.map(({ path, disabled }) => ({
+			path,
+			disabled
+		})));
+		accepted = options.success(result);
+		if (!accepted) await restore();
+		return result;
+	} catch (error) {
+		if (!accepted) await restore();
+		throw error;
+	} finally {
+		await rm(workspace, {
+			recursive: true,
+			force: true
+		});
+	}
+}
+//#endregion
+//#region files/config/keybindings/runtime.ts
+/** CLI admission for internal processors, closure validation and explicit consumers. */
+async function main$1(argv, defaults) {
+	const [command, ...args] = argv;
+	if (command === "validate") {
+		const { values } = parseArgs({
+			args,
+			options: { plan: { type: "string" } },
+			strict: true,
+			allowPositionals: false
+		});
+		if (!values.plan) throw new Error("validate requires --plan");
+		await validateClosure(values.plan, process.env);
+		return 0;
+	}
+	if (command !== "assemble" && command !== "register") {
+		await runProcessor(argv, process.env);
+		return 0;
+	}
+	const { values } = parseArgs({
+		args,
+		options: {
+			request: { type: "string" },
+			batch: { type: "string" },
+			runner: { type: "string" },
+			check: { type: "boolean" }
+		},
+		strict: true,
+		allowPositionals: false
+	});
+	if (!values.request) throw new Error("assemble requires explicit --request");
+	const runner = values.runner ?? defaults.runner;
+	if (!runner) throw new Error("assemble requires --runner outside an installed deployment");
+	const request = JSON.parse(await readFile(values.request, "utf8"));
+	const assemble = () => assembleConsumer({
+		request,
+		runner,
+		validatorCommand: defaults.validatorCommand,
+		check: values.check
+	});
+	if (command === "assemble" && values.batch) throw new Error("--batch requires register");
+	if (command === "register" && !values.batch) throw new Error("register requires --batch");
+	if (command === "register" && values.check) throw new Error("register mutates selected registrations; --check is assembly-only");
+	let result;
+	if (command === "register") {
+		const records = JSON.parse(await readFile(values.batch, "utf8"));
+		if (!Array.isArray(records)) throw new Error("registration batch must be an array");
+		result = await withInputBatch(records, assemble, { success: (outcome) => outcome.code === 0 });
+	} else result = await assemble();
+	return result.code;
 }
 //#endregion
 //#region files/runtime/compfuzor-runtime.ts
@@ -10617,7 +14976,7 @@ function classifyCandidate(path) {
 	if (name === "compfuzor-catalog.sh") return "catalog";
 	if (name === "compfuzor-flow.sh") return "flow";
 	if (name === "config-remote.mjs") return "config-remote";
-	if (name === "keybinding-processor.mjs") return "keybindings";
+	if (name === "keybinding-processor.mjs" || name === "keybindings.mjs") return "keybindings";
 	if (name === "links.mjs") return "links";
 	if (name === "command.mjs" && basename(dirname(path)) === "config") return "config";
 	if (name === "install.mjs" && basename(dirname(path)) === "zim") return "zim";
@@ -10664,16 +15023,21 @@ async function selectedDomain(argvPath, argv) {
 }
 async function runDomain(domain, argv, invokedAs, deploymentDir) {
 	try {
-		if (domain === "catalog") return await main$4(argv, deploymentDir);
-		if (domain === "flow") return await main$3(argv, deploymentDir);
-		if (domain === "config") return await main$6(argv, deploymentDir, invokedAs);
-		if (domain === "links") return await main$2(argv, deploymentDir);
-		if (domain === "zim") return await main$1(argv, deploymentDir);
-		if (domain === "keybindings") {
-			await runProcessor(argv, process.env);
-			return 0;
-		}
-		await main$5(argv, deploymentDir);
+		if (domain === "catalog") return await main$5(argv, deploymentDir);
+		if (domain === "flow") return await main$4(argv, deploymentDir);
+		if (domain === "config") return await main$7(argv, deploymentDir, invokedAs);
+		if (domain === "links") return await main$3(argv, deploymentDir);
+		if (domain === "zim") return await main$2(argv, deploymentDir);
+		if (domain === "keybindings") return await main$1(argv, {
+			runner: resolve(deploymentDir, "bin/config/run.sh"),
+			validatorCommand: [
+				process.execPath,
+				fileURLToPath(import.meta.url),
+				"keybindings",
+				"validate"
+			]
+		});
+		await main$6(argv, deploymentDir);
 		return 0;
 	} catch (error) {
 		if (domain === "config-remote") {

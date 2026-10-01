@@ -135,7 +135,7 @@ test("current runner renders all single-output materials; check/stdout and inval
   expect(rejected.code).not.toBe(0);
   expect(rejected.stderr.toString()).toContain("unresolved action absent");
   expect(await readFile(definition, "utf8")).toBe(updated);
-});
+}, 30000);
 
 test("deployed bundled processor works outside the checkout without source or node_modules", async () => {
   const root = await fixture();

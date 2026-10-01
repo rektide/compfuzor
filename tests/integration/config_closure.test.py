@@ -56,6 +56,25 @@ if os.environ.get("REJECT") == "1": raise ValueError("reject closure")
         preview = run(["--stdout", "linked"], EXPECTED="1")
         assert preview.returncode == 0 and preview.stdout == "captured body", preview
         assert run(["--check", "--quiet"]).returncode == 1 and output.readlink().as_posix() == "old"
+        # Fail publication of a later regular output after a symlink candidate
+        # committed. The existing rollback loop restores both directory entries.
+        unchanged.write_text("before")
+        shims = root / "shims"
+        shims.mkdir()
+        counter = root / "move-count"
+        tool = shims / "mv"
+        tool.write_text(f'''#!/bin/bash
+count=0; [ ! -f {shlex.quote(str(counter))} ] || count=$(cat {shlex.quote(str(counter))})
+count=$((count + 1)); printf '%s' "$count" > {shlex.quote(str(counter))}
+[ "$count" -ne 4 ] || exit 74
+exec /usr/bin/mv "$@"
+''')
+        tool.chmod(0o755)
+        failed_commit = run(PATH=str(shims) + os.pathsep + env["PATH"])
+        assert failed_commit.returncode != 0 and output.readlink().as_posix() == "old", failed_commit
+        assert unchanged.read_text() == "before"
+        assert not list(root.glob(".config-*"))
+        unchanged.write_text("same")
         installed = run()
         assert installed.returncode == 0 and output.readlink() == source, installed
         assert run(["--check", "--quiet"], OLD_LINK=str(source), OLD_BYTES="captured body").returncode == 0

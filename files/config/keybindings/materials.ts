@@ -10,6 +10,8 @@ export type NativeSource = {
   format: Target;
   order: number;
   incorporation?: "include" | "inline";
+  enabled?: boolean;
+  disabledSuffix?: string;
   placement: { strategy: "direct" } | { strategy: "copy" | "link"; path: string };
 };
 export type SelectedMaterial = {
@@ -47,7 +49,10 @@ export function selectMaterials(
 ): SelectedMaterial[] {
   const seen = new Set<string>();
   const placements = new Map<string, string>();
-  return [...sources]
+  if (sources.some((source) => source.enabled !== undefined && typeof source.enabled !== "boolean"))
+    throw new Error("native source enabled must be boolean");
+  return sources
+    .filter((source) => source.enabled !== false)
     .sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     .map((source) => {
       materialNames(source.id, target);
@@ -58,16 +63,19 @@ export function selectMaterials(
       if (!Number.isFinite(source.order))
         throw new Error(`contribution ${source.id}: order must be finite`);
       renderInclude(target, source.path);
-      const effectivePath =
-        normalize(source.placement.strategy === "direct" ? source.path : source.placement.path);
+      const effectivePath = normalize(
+        source.placement.strategy === "direct" ? source.path : source.placement.path,
+      );
       if (!isAbsolute(source.path) || !isAbsolute(effectivePath))
         throw new Error(
           `contribution ${source.id}: source and selected placement paths must be absolute`,
         );
       const prior = placements.get(effectivePath);
-      if (prior) throw new Error(`contributions ${prior} and ${source.id} claim placement ${effectivePath}`);
+      if (prior)
+        throw new Error(`contributions ${prior} and ${source.id} claim placement ${effectivePath}`);
       placements.set(effectivePath, source.id);
-      if (source.incorporation === "inline" && target !== "niri") throw new Error("Umbriel body inline requires explicit table adaptation; use include");
+      if (source.incorporation === "inline" && target !== "niri")
+        throw new Error("Umbriel body inline requires explicit table adaptation; use include");
       return {
         id: source.id,
         target,
@@ -91,6 +99,10 @@ export function renderRoot(
 ): string {
   if (materials.some((material) => material.target !== target))
     throw new Error(`root ${target}: incorporation material belongs to another target`);
+  if (materials.some((material) => material.incorporation === "inline"))
+    throw new Error(
+      "renderRoot composes include references only; inline requires captured body block assembly",
+    );
   const refs = [
     ...baseline.map((path) => renderInclude(target, path)),
     ...materials.map((material) => material.include),

@@ -14,6 +14,9 @@ configuration for a selected consumer context.
 - [Named actions and keybindings](/doc/config/keybindings.md) — first TypeScript
   processor slice, per-binding native/include material, and boundaries before
   compositor installation; no live cutover yet.
+- [Keybinding consumer assembly](/doc/config/keybinding-consumers.md) — staged
+  direct/copy/link and Niri inline, adopted root areas, native candidate closures
+  and coherent registration through the existing CONFIG commit boundary.
 - [Attributed runtime flows](/design/config-anneal/execution-model0.gpt6.md) —
   current annealing checkpoint for contributors, composition, catalog order,
   and cross-plane execution policy.

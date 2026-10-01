@@ -18,6 +18,12 @@ sources:
 
 # What is implemented
 
+**Consumer delivery is now implemented in the next slice:** see
+[consumer assembly and delivery](/doc/config/keybinding-consumers.md) for staged
+copy/link, seed/refresh, adopted root areas, native closure validation and coherent
+registration. The final boundary section below records the original first-slice
+gate; current behavior and remaining limits live in that companion guide.
+
 **Processor** renders one private candidate for a recipe. **Assembly** selects
 inputs, runs processors, validates candidates, and commits outputs. This slice
 adds a TypeScript processor, not another executor or an Effect rewrite.
@@ -162,7 +168,7 @@ references first, ordered contribution references, personal references last.
 Umbriel gets exactly one `[include]` table. It never concatenates `[keybinds]`
 tables or pretends an array-entry fragment is standalone TOML.
 
-# Boundaries before installation
+# Original first-slice boundaries (superseded by the consumer guide)
 
 This first slice is intentionally **not a live target installer**. In particular:
 

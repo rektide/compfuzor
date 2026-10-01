@@ -272,5 +272,16 @@ describe("definition versus incorporation material", () => {
       ]),
     ).toThrow("absolute");
     expect(() => renderInclude("umbriel", "/bad\npath")).toThrow("include path");
+    const inline = selectMaterials("niri", [
+      {
+        id: "x",
+        format: "niri",
+        path: "/x",
+        order: 0,
+        placement: { strategy: "direct" },
+        incorporation: "inline",
+      },
+    ]);
+    expect(() => renderRoot("niri", inline, [])).toThrow("captured body block assembly");
   });
 });

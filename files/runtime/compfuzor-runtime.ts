@@ -108,7 +108,15 @@ async function runDomain(
     if (domain === "links") return await runLinks(argv, deploymentDir);
     if (domain === "zim") return await runZim(argv, deploymentDir);
     if (domain === "keybindings") {
-      return await runKeybindings(argv, { runner: resolve(deploymentDir, "bin/config/run.sh"), validatorCommand: [process.execPath, fileURLToPath(import.meta.url), "keybindings", "validate"] });
+      return await runKeybindings(argv, {
+        runner: resolve(deploymentDir, "bin/config/run.sh"),
+        validatorCommand: [
+          process.execPath,
+          fileURLToPath(import.meta.url),
+          "keybindings",
+          "validate",
+        ],
+      });
     }
     await runConfigRemote(argv, deploymentDir);
     return 0;

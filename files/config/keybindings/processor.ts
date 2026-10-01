@@ -2,6 +2,7 @@
 
 import { readFile, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
+import { captureFile, fileText } from "../capture.ts";
 import { decodeYaml } from "./decode.ts";
 import { compose, type Target } from "./model.ts";
 import { renderDefinition, renderInclude } from "./render.ts";
@@ -69,9 +70,11 @@ export async function runProcessor(
   } else {
     const binding = required(values.binding, "--binding");
     const captured = await Promise.all(
-      rows.map(async (row) =>
-        decodeYaml(await readFile(row.path, "utf8"), `${row.identity} (${row.path})`),
-      ),
+      rows.map(async (row) => {
+        const text = fileText(await captureFile(row.path));
+        if (text === undefined) throw new Error(`missing selected YAML input ${row.path}`);
+        return decodeYaml(text, `${row.identity} (${row.path})`);
+      }),
     );
     const composition = compose(captured, target);
     const resolved = composition.bindings.find((entry) => entry.id === binding);
