@@ -20,6 +20,7 @@
   set_fact:
     STATUSES: "{{ lookup('merge_subsys', id='aptlane', contrib='STATUSES') }}"
     BINS: "{{ lookup('merge_subsys', id='aptlane', contrib='BINS') }}"
+    ENV: "{{ lookup('merge_subsys', id='aptlane', contrib='ENV') }}"
   when: _apt_active
   vars:
     _apt_active: "{{ lookup('subsys', id='aptlane', get='active', default=false) | bool }}"

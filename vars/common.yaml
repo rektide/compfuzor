@@ -84,7 +84,11 @@ SYSCTL_DIR: "/etc/sysctl.d"
 WWW_LINKS_D: /etc/lighttpd2/links.d
 NGINX: /etc/nginx
 # package installation config
-APT_INSTALL: latest
+# state=present style: install missing packages, never upgrade silently —
+# the install lane warns with installed-vs-candidate versions instead.
+# 'latest' chases the apt candidate; set it per playbook, or per run
+# (APT_INSTALL=latest bin/install.sh), RUST_COPY-knob style.
+APT_INSTALL: present
 APT_BYPASS: False
 APT_DEFAULT_COMPONENT: main
 APT_DEFAULT_DISTRIBUTION: forky
@@ -913,8 +917,13 @@ SUBSYSTEM:
   # lane); APTLANE_BYPASS is the explicit generation opt-out.
   # Deliberately NO apt-get update in the lane: repo configuration and
   # index refresh stay render-side (apt.tasks -> ../apt.update.tasks).
-  # APT_INSTALL parity: default 'latest' upgrades named packages to the
-  # apt candidate; 'present' pins via --no-upgrade.
+  # APT_INSTALL disposition (default 'present', matching the render-side
+  # default): install missing packages only (--no-upgrade), then report
+  # installed-vs-candidate drift with both versions rather than upgrading
+  # silently; 'latest' upgrades to the apt candidate. The playbook default
+  # is baked into the lane and runtime-overridable
+  # (APT_INSTALL=latest bin/install.sh) — the same expectation-altering
+  # knob pattern as RUST_COPY. APTLANE_BYPASS remains the hard opt-out.
   # status-apt.sh reports drift per the PKG_STATUS map (pkg -> installed |
   # latest | ignore; unlisted = installed) per the status.sh convention.
   aptlane:
@@ -922,6 +931,8 @@ SUBSYSTEM:
     contrib:
       STATUSES:
         - status-apt.sh
+      ENV: >-
+        {{ {} | combine_iff({'APT_INSTALL': APT_INSTALL|default('present')}) }}
       BINS:
         - name: install-apt.sh
           phase: packages
@@ -931,11 +942,46 @@ SUBSYSTEM:
             _pkgs="{{ _apt_pkgs | join(' ') }}"
             [ -n "$_pkgs" ] || { echo "apt: no packages declared"; exit 0; }
             # No apt-get update here on purpose (see apt subsystem notes).
-            # APT_INSTALL parity with render-time pkgs.tasks: 'latest'
-            # (default) upgrades the named packages; 'present' must not.
-            {% if APT_INSTALL|default('latest') == 'present' %}_upgrade=""
-            {% else %}_upgrade="--upgrade"
-            {% endif %}            $SUDO_CMD env DEBIAN_FRONTEND=noninteractive apt-get install -y ${_upgrade} ${_pkgs}
+            # APT_INSTALL disposition (RUST_COPY-style knob): the playbook
+            # default is baked in below; an exported or shell-local
+            # APT_INSTALL overrides it for this run (envdefault never
+            # stomps a caller value). 'present' installs missing packages
+            # only (--no-upgrade) then reports installed-vs-candidate
+            # drift; 'latest' upgrades to the candidate. Parity with
+            # render-time pkgs.tasks state.
+            _install="${APT_INSTALL:-{{ APT_INSTALL|default('present') }}}"
+            case "${_install}" in
+                present|latest) ;;
+                *) echo "apt: unknown APT_INSTALL '${_install}' (expected present|latest)" >&2; exit 1 ;;
+            esac
+            if [ "${_install}" = "latest" ]; then
+                _upgrade="--upgrade"
+            else
+                _upgrade="--no-upgrade"
+            fi
+            $SUDO_CMD env DEBIAN_FRONTEND=noninteractive apt-get install -y ${_upgrade} ${_pkgs}
+            if [ "${_install}" = "present" ]; then
+                # state=present never upgrades silently: warn with both
+                # versions instead. Exit stays 0; status-apt.sh owns the
+                # drift exit semantics.
+                _stale=0
+                for _p in ${_pkgs}; do
+                    _v="$(dpkg-query -W -f='${Version}' "${_p}" 2>/dev/null || true)"
+                    [ -n "${_v}" ] || continue
+                    _c="$(apt-cache policy "${_p}" 2>/dev/null | awk '/Candidate:/ {print $2; exit}' || true)"
+                    # `|| true`: awk's early `exit` SIGPIPEs apt-cache under
+                    # pipefail, and set -e would kill the lane on it.
+                    if [ -n "${_c}" ] && [ "${_c}" != "(none)" ] && [ "${_c}" != "${_v}" ]; then
+                        echo "apt: stale (present): ${_p} installed ${_v} < candidate ${_c}" >&2
+                        _stale=$((_stale + 1))
+                    fi
+                done
+                if [ "${_stale}" -gt 0 ]; then
+                    echo "apt: ${_stale} declared package(s) behind candidates; APT_INSTALL=latest upgrades them" >&2
+                else
+                    echo "apt: all declared packages present, no newer candidates"
+                fi
+            fi
         - name: status-apt.sh
           basedir: False
           compose: False
@@ -960,7 +1006,7 @@ SUBSYSTEM:
                 [ "${_level}" = latest ] || continue
                 # 'latest' compares against the CURRENT apt index (no
                 # update here): status is advisory against what apt knows.
-                _cand="$(apt-cache policy "${_p}" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+                _cand="$(apt-cache policy "${_p}" 2>/dev/null | awk '/Candidate:/ {print $2; exit}' || true)"
                 if [ -n "${_cand}" ] && [ "${_cand}" != "(none)" ] && [ "${_cand}" != "${_ver}" ]; then
                     echo "stale package: ${_p} (${_ver} != candidate ${_cand})"
                     _drift=1
