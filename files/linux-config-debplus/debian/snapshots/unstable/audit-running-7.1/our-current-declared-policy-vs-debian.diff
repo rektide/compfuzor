@@ -5,6 +5,8 @@ DEFAULT_BBR: <absent> -> y
 DEFAULT_CUBIC: y -> n
 DEFAULT_TCP_CONG: "cubic" -> "bbr"
 DRM_PANIC_SCREEN_QR_CODE: y -> <absent>
+DRM_PANIC_SCREEN_QR_CODE_URL: "https://deb.li/panic#" -> <absent>
+DRM_PANIC_SCREEN_QR_VERSION: 40 -> <absent>
 EROFS_FS: m -> y
 EXT4_FS: m -> y
 F2FS_FS: m -> y

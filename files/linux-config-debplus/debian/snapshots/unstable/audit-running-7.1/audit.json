@@ -8,14 +8,14 @@
   },
   "our_current_comparison": "RAW cross-version/toolchain audit, not attribution of all differences to policy",
   "output_sha256": {
-    "our-current-declared-policy-vs-debian.diff": "58f0ec96feec6afe2f31531d86d5bbb1182b07a2c06a6e729d5e3427b03cf1fb",
+    "our-current-declared-policy-vs-debian.diff": "826660930aae6c0058d14eed7278b3e26a521d7bd500932a9a03c0c579f4cb21",
     "our-current-vs-debian.raw.diff": "b96c229e0864e669edfbecd16d3c5e830d6521f0fd48421b9f84086e18fad83f",
     "policy-declared-vs-debian.diff": "66cab6f196d7546baa68cb79fd9891d8b3b03961adba852f78c6766c9f03e57a"
   },
   "policy_inputs": [
     {
       "path": "/home/rektide/src/compfuzor/files/linux-config-debplus/overrides.config",
-      "sha256": "f90e7477bf8ccd6bc32b65a67bbe097c026700e077f1c9eb77079b71be0bd137"
+      "sha256": "cb7a28ac8ffd7504e5fff48c2fe14a75d419b50836f7dcf0d2e4e57cbaee1b52"
     },
     {
       "path": "/home/rektide/src/compfuzor/files/linux-config-debplus/overrides.llvm",
@@ -27,19 +27,19 @@
     "native_debian": {
       "DEBUG_INFO": {
         "actual": "y",
-        "declaration": "inherited/not explicitly declared",
+        "declaration": "derived from explicitly declared debug-information choice",
         "expected": "y",
         "fulfilled": true
       },
       "DEBUG_INFO_BTF": {
         "actual": "y",
-        "declaration": "inherited/not explicitly declared",
+        "declaration": "explicit",
         "expected": "y",
         "fulfilled": true
       },
       "DEBUG_INFO_BTF_MODULES": {
         "actual": "y",
-        "declaration": "inherited/not explicitly declared",
+        "declaration": "explicit",
         "expected": "y",
         "fulfilled": true
       },
@@ -63,13 +63,13 @@
       },
       "DRM_PANIC_SCREEN_QR_CODE_URL": {
         "actual": "\"https://deb.li/panic#\"",
-        "declaration": "inherited/not explicitly declared",
+        "declaration": "explicit",
         "expected": "\"https://deb.li/panic#\"",
         "fulfilled": true
       },
       "DRM_PANIC_SCREEN_QR_VERSION": {
         "actual": "40",
-        "declaration": "inherited/not explicitly declared",
+        "declaration": "explicit",
         "expected": "40",
         "fulfilled": true
       },

@@ -229,10 +229,16 @@ def delta(before, after, keys=None, exclude_metadata=False):
 
 
 def required_audit(required, actual, declared):
-    return {symbol: {"expected": value, "actual": actual.get(symbol, "<absent>"),
-                     "fulfilled": actual.get(symbol) == value,
-                     "declaration": "explicit" if declared.get(symbol) == value else "inherited/not explicitly declared"}
-            for symbol, value in sorted(required.items())}
+    result = {}
+    for symbol, value in sorted(required.items()):
+        declaration = "explicit" if declared.get(symbol) == value else "inherited/not explicitly declared"
+        if symbol == "DEBUG_INFO" and value == "y" and declared.get("DEBUG_KERNEL") == "y" and any(
+            declared.get(choice) == "y" for choice in ("DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT", "DEBUG_INFO_DWARF4", "DEBUG_INFO_DWARF5")
+        ):
+            declaration = "derived from explicitly declared debug-information choice"
+        result[symbol] = {"expected": value, "actual": actual.get(symbol, "<absent>"),
+                          "fulfilled": actual.get(symbol) == value, "declaration": declaration}
+    return result
 
 
 def merged_config(base, policy):
@@ -248,6 +254,15 @@ def kernel_version(tree):
         if match:
             values[match[1]] = match[2]
     return ".".join(values[k] for k in ["VERSION", "PATCHLEVEL", "SUBLEVEL"]) + values.get("EXTRAVERSION", "")
+
+
+def kernel_git_head(tree):
+    tree = tree.resolve()
+    result = subprocess.run(["git", "-C", str(tree), "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    if result.returncode != 0 or Path(result.stdout.strip()).resolve() != tree:
+        return None
+    result = subprocess.run(["git", "-C", str(tree), "rev-parse", "HEAD"], capture_output=True, text=True)
+    return result.stdout.strip() if result.returncode == 0 else None
 
 
 def audit(args):
@@ -320,8 +335,7 @@ def audit(args):
                             "source_fingerprints": {name: sha((tree / name).read_bytes()) for name in ("Makefile", "Kconfig")},
                             "semantics": "PROJECTED: upstream -> Debian normalized on target -> declared policy normalized on same target; not native Debian defaults",
                             "work_dir": str(work)}
-        result = subprocess.run(["git", "-C", str(tree), "rev-parse", "HEAD"], capture_output=True, text=True)
-        report["target"]["git_head_if_available"] = result.stdout.strip() if result.returncode == 0 else None
+        report["target"]["git_head_if_available"] = kernel_git_head(tree)
         report["target"]["tool_versions"] = {}
         for tool in ("make", "clang" if args.toolchain == "llvm" else "gcc", "ld.lld" if args.toolchain == "llvm" else "ld", "rustc", "bindgen", "pahole"):
             try:

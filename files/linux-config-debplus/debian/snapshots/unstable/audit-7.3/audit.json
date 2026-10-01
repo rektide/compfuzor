@@ -20,7 +20,7 @@
   "policy_inputs": [
     {
       "path": "/home/rektide/src/compfuzor/files/linux-config-debplus/overrides.config",
-      "sha256": "f90e7477bf8ccd6bc32b65a67bbe097c026700e077f1c9eb77079b71be0bd137"
+      "sha256": "cb7a28ac8ffd7504e5fff48c2fe14a75d419b50836f7dcf0d2e4e57cbaee1b52"
     },
     {
       "path": "/home/rektide/src/compfuzor/files/linux-config-debplus/overrides.llvm",
@@ -32,19 +32,19 @@
     "native_debian": {
       "DEBUG_INFO": {
         "actual": "y",
-        "declaration": "inherited/not explicitly declared",
+        "declaration": "derived from explicitly declared debug-information choice",
         "expected": "y",
         "fulfilled": true
       },
       "DEBUG_INFO_BTF": {
         "actual": "y",
-        "declaration": "inherited/not explicitly declared",
+        "declaration": "explicit",
         "expected": "y",
         "fulfilled": true
       },
       "DEBUG_INFO_BTF_MODULES": {
         "actual": "y",
-        "declaration": "inherited/not explicitly declared",
+        "declaration": "explicit",
         "expected": "y",
         "fulfilled": true
       },
@@ -68,13 +68,13 @@
       },
       "DRM_PANIC_SCREEN_QR_CODE_URL": {
         "actual": "\"https://deb.li/panic#\"",
-        "declaration": "inherited/not explicitly declared",
+        "declaration": "explicit",
         "expected": "\"https://deb.li/panic#\"",
         "fulfilled": true
       },
       "DRM_PANIC_SCREEN_QR_VERSION": {
         "actual": "40",
-        "declaration": "inherited/not explicitly declared",
+        "declaration": "explicit",
         "expected": "40",
         "fulfilled": true
       },
@@ -89,19 +89,19 @@
     "target_policy": {
       "DEBUG_INFO": {
         "actual": "y",
-        "declaration": "inherited/not explicitly declared",
+        "declaration": "derived from explicitly declared debug-information choice",
         "expected": "y",
         "fulfilled": true
       },
       "DEBUG_INFO_BTF": {
         "actual": "y",
-        "declaration": "inherited/not explicitly declared",
+        "declaration": "explicit",
         "expected": "y",
         "fulfilled": true
       },
       "DEBUG_INFO_BTF_MODULES": {
         "actual": "y",
-        "declaration": "inherited/not explicitly declared",
+        "declaration": "explicit",
         "expected": "y",
         "fulfilled": true
       },
@@ -125,13 +125,13 @@
       },
       "DRM_PANIC_SCREEN_QR_CODE_URL": {
         "actual": "\"https://deb.li/panic#\"",
-        "declaration": "inherited/not explicitly declared",
+        "declaration": "explicit",
         "expected": "\"https://deb.li/panic#\"",
         "fulfilled": true
       },
       "DRM_PANIC_SCREEN_QR_VERSION": {
         "actual": "40",
-        "declaration": "inherited/not explicitly declared",
+        "declaration": "explicit",
         "expected": "40",
         "fulfilled": true
       },
@@ -146,7 +146,7 @@
   "semantics": "Declared policy differs from Debian; absent symbols are not assumed disabled; metadata is not policy.",
   "target": {
     "declared_revision": "551c722f40809618230001baccf219193e22fc5a",
-    "git_head_if_available": "1743eb26c267a8d10055b8c57b522e339f617402",
+    "git_head_if_available": null,
     "semantics": "PROJECTED: upstream -> Debian normalized on target -> declared policy normalized on same target; not native Debian defaults",
     "source_fingerprints": {
       "Kconfig": "5262073fc9c710d13e6940d857ffe72f850702db12c068bbb4041d8ca9555e5f",
@@ -163,6 +163,6 @@
     "toolchain": "llvm",
     "tree": "/home/rektide/src/compfuzor/.test-agent/linux-debplus-7.3/config/source",
     "version": "7.3.0-rc5",
-    "work_dir": "/home/rektide/src/compfuzor/.test-agent/linux-debian-retrieval/projected-7.3-intent"
+    "work_dir": "/home/rektide/src/compfuzor/.test-agent/linux-debian-retrieval/projected-7.3-declared-intent"
   }
 }

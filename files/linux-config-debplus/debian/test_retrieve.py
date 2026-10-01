@@ -2,6 +2,8 @@
 """Focused metadata/config tests; no network or host configuration writes."""
 import importlib.util
 from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 
 spec = importlib.util.spec_from_file_location("retrieve", Path(__file__).with_name("retrieve.py"))
@@ -64,6 +66,31 @@ class RetrievalTests(unittest.TestCase):
         text = retrieve.merged_config("CONFIG_X=y\nCONFIG_Y=m\n", "# CONFIG_X is not set\nCONFIG_Z=y\n")
         self.assertEqual(retrieve.parse_config(text), {"X": "n", "Y": "m", "Z": "y"})
         self.assertEqual(len(text.splitlines()), 3)
+
+    def test_debug_info_is_derived_from_declared_selectable_choice(self):
+        result = retrieve.required_audit({"DEBUG_INFO": "y"}, {"DEBUG_INFO": "y"},
+                                        {"DEBUG_KERNEL": "y", "DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT": "y"})
+        self.assertTrue(result["DEBUG_INFO"]["fulfilled"])
+        self.assertEqual(result["DEBUG_INFO"]["declaration"], "derived from explicitly declared debug-information choice")
+
+    def test_kernel_export_does_not_inherit_parent_repository_head(self):
+        scratch = Path.cwd() / ".test-agent" / "linux-debian-retrieval" / "git-provenance-tests"
+        scratch.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=scratch) as directory:
+            repository = Path(directory) / "parent-repository"
+            repository.mkdir()
+            subprocess.run(["git", "init", "-q", str(repository)], check=True)
+            subprocess.run(["git", "-C", str(repository), "-c", "user.name=Config audit test",
+                            "-c", "user.email=config-audit@example.invalid", "commit", "-q", "--allow-empty",
+                            "-m", "Fixture parent HEAD"], check=True)
+            expected = subprocess.check_output(["git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
+            export = repository / "plain-kernel-export"
+            export.mkdir()
+            self.assertEqual(retrieve.kernel_git_head(repository), expected)
+            self.assertIsNone(retrieve.kernel_git_head(export))
+            alias = Path(directory) / "repository-alias"
+            alias.symlink_to(repository, target_is_directory=True)
+            self.assertEqual(retrieve.kernel_git_head(alias), expected)
 
 
 if __name__ == "__main__":
