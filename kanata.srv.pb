@@ -32,13 +32,28 @@
             process-unmapped-keys yes
           )
 
+          ;; one keymap for all devices (shared layer state). The iRig
+          ;; BlueTurn footpedal sends plain arrows; holding its LEFT pad
+          ;; switches to the pedal-meta layer (tap = left arrow still).
+          ;; True per-device behavior when wanted: definputdevices +
+          ;; (device-history) in switch actions, e.g.
+          ;;   (definputdevices pedal (name "BlueTurn"))
+          ;;   ... (switch ((device-history pedal 500) X Y) (t Z))
           (defsrc
             caps
+            left right up down
           )
 
           (deflayer base
-            ;; caps2esc: tap = escape, hold = left control
             (tap-hold 100 100 esc lctl)
+            (tap-hold 180 180 left (layer-while-held pedal-meta))
+            right up down
+          )
+
+          (deflayer pedal-meta
+            _
+            _
+            pp volu vold
           )
   tasks:
     - import_tasks: tasks/compfuzor.includes
