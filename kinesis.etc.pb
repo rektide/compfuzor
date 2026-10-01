@@ -31,6 +31,14 @@
 # declares the mount machinery only — nothing on the volume is read or
 # written here, and there is deliberately no unmount/cleanup logic.
 #
+# Write-protect note: the v-drive LUN's WP state is firmware-toggled and
+# does not follow the block device (observed: mount(8) fell back to ro
+# with "source write-protected" during a WP-on window, while
+# `blockdev --getro` reported 0 both before and after). A mount that
+# lands ro self-heals — the idle timeout releases it and the next access
+# remounts at whatever WP state the keyboard then presents — or flip a
+# live mount directly with `sudo mount -o remount,rw /mnt/kinesis`.
+#
 # Vars (optional, -e overrides):
 #   what        mount source (default by-id path above)
 #   where       mountpoint (default /mnt/kinesis)
