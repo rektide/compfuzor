@@ -107,6 +107,83 @@
     - name: baselines/7.3/defconfig-to-debian-plus.fragment
       copyDir: True
       mode: "0644"
+    # Authenticated Debian retrieval and independently reviewed config layers.
+    # Declare files explicitly rather than copying Python bytecode/cache dirs.
+    - name: debian/README.md
+      copyDir: True
+      mode: "0644"
+    - name: debian/retrieve.py
+      copyDir: True
+      mode: "0755"
+    - name: debian/test_retrieve.py
+      copyDir: True
+      mode: "0755"
+    - name: debian/required-intent.config
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/experimental/receipt.json
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/experimental/InRelease.xz
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/experimental/Sources.xz
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/experimental/source-index-receipt.json
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/receipt.json
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/InRelease.xz
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/config-7.2.8-1-amd64.xz
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/audit-7.3/audit.json
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/audit-7.3/policy-declared-vs-debian.diff
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/audit-7.3/target-debian-vs-upstream.diff
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/audit-7.3/target-policy-vs-debian.diff
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/audit-7.3/target-policy-unfulfilled.diff
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/audit-7.3/target-required-intent-unfulfilled.diff
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/audit-7.3/target-toolchain-metadata.diff
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/audit-7.3/target-upstream.config.xz
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/audit-7.3/target-debian.config.xz
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/audit-7.3/target-policy.config.xz
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/audit-running-7.1/audit.json
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/audit-running-7.1/policy-declared-vs-debian.diff
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/audit-running-7.1/our-current-vs-debian.raw.diff
+      copyDir: True
+      mode: "0644"
+    - name: debian/snapshots/unstable/audit-running-7.1/our-current-declared-policy-vs-debian.diff
+      copyDir: True
+      mode: "0644"
     # Historical archive, retained verbatim; nothing in the current
     # workflow reads it.
     - name: archive/previous-normalization/config-debian-plus.7.1.0.xz

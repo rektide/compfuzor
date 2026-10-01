@@ -54,6 +54,40 @@ standard `etc` symlink. Deployment and kernel modification are separate actions.
 
 ## Preserved configs and upstream-default comparisons
 
+### Fresh Debian base, then our changes
+
+[Debian retrieval and layers](debian/README.md) is the useful entry point for
+current configuration differences. The helper checks **unstable and
+experimental independently**, verifies archive signatures and package
+checksums, and saves full inputs only as compressed evidence.
+
+The captured unstable kernel is **7.2.8-1**. Experimental currently has neither
+a matching amd64 kernel config nor a `linux` source package. That is recorded
+as absence, not replaced with unstable under an experimental label.
+
+The same-target comparison evaluates both inputs on the pinned 7.3 source:
+
+1. [Upstream → projected Debian](debian/snapshots/unstable/audit-7.3/target-debian-vs-upstream.diff):
+   Debian's broad driver/module and subsystem choices.
+2. [Projected Debian → our policy](debian/snapshots/unstable/audit-7.3/target-policy-vs-debian.diff):
+   **47 effective changes**, driven by the small common and LLVM fragments.
+
+This is explicitly a 7.3 projection of Debian 7.2.8, not a native-version
+Debian delta. It does not automatically replace the saved legacy-seed config.
+
+From this bundle's root, refresh the suites into a separate output directory:
+
+```sh
+./debian/retrieve.py fetch --suite both \
+  --cache-dir "$HOME/.cache/debplus-debian" --output-dir ./debian-latest
+```
+
+Use `diff --kernel-tree ...` for evaluated layers, or `diff` without a source
+tree for the declaration-only comparison. See the Debian README for exact
+commands, offline replay, trust details, and required-option audit results.
+
+### Historical preservation
+
 - [7.1 preservation and audit](baselines/7.1/README.md): exact running
   `7.1.0-debplus.1` config, matching `/usr/local/src/linux/.config` and `/boot`,
   plus an upstream defconfig baseline, readable delta, and replay fragment.
