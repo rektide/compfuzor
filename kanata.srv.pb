@@ -30,33 +30,45 @@
         content: |
           (defcfg
             process-unmapped-keys yes
+            ;; the iRig BlueTurn pedal has its own kanata instance
+            ;; (kanata-blueturn.srv.pb): exclude it here so the shared
+            ;; keymap never applies pedal semantics (e.g. tap-hold on
+            ;; pgup) to real keyboards. Exact-name match, no regex --
+            ;; name as printed by kanata's "registering" lines.
+            linux-dev-names-exclude (
+              "iRig BlueTurn Keyboard"
+            )
           )
 
-          ;; one keymap for all devices (shared layer state). The iRig
-          ;; BlueTurn (BLE; enumerates as "ADAPTER_95AB Keyboard" from its
-          ;; random address, vendor 07d7) sends plain arrows; holding its
-          ;; LEFT pad switches to the pedal-meta layer (tap = left arrow
-          ;; still). True per-device behavior when wanted: definputdevices
-          ;; + (device-history) in switch actions, e.g.
-          ;;   (definputdevices pedal (vendor_id 0x07d7))
-          ;;   ... (switch ((device-history pedal 500) X Y) (t Z))
-          ;; BT recovery recipe if it drops after sleep: disconnect, then
-          ;; pair (bonding refuses to start on a live connection), trust.
           (defsrc
             caps
-            left right up down
           )
 
           (deflayer base
             (tap-hold 100 100 esc lctl)
-            (tap-hold 180 180 left (layer-while-held pedal-meta))
-            right up down
           )
 
-          (deflayer pedal-meta
-            _
-            _
-            pp volu vold
-          )
+          ;; BlueTurn notes (2026-10-01, all verified on-device):
+          ;; identity: "iRig BlueTurn Keyboard", bus 0005 (BT), vendor
+          ;; 0214 (IK Multimedia), product 0002 -- from its PUBLIC
+          ;; address 00:A0:50:14:19:28 once bonded (the earlier
+          ;; "ADAPTER_95AB Keyboard" / vendor 07d7 random-address
+          ;; identity was the pre-bonding era).
+          ;; bonding: JustWorksRepairing=always lives in
+          ;; bluetooth-justworkrepair.etc.pb; pairing needs ONE
+          ;; bluetoothctl session (agent on; default-agent; disconnect;
+          ;; pair; trust) -- pairing dies without that session's agent.
+          ;; report drops: kernel 7.1 hid-core drops its 7-byte keyboard
+          ;; reports ("Event data for report 0 was too short (8 vs 7)",
+          ;; uhid regression, fixed 7.2 / backport cfc0d283d931) --
+          ;; pedal keys stay dead until then:
+          ;; design/blueturn/blueturn-linux-research.general.md
+          ;; modes (select at power-on: hold LEFT=1, RIGHT=2, BOTH=3):
+          ;; 1 LEFT=up RIGHT=down; 2 LEFT=pgup RIGHT=pgdn; 3 LEFT=left
+          ;; RIGHT=right. momentary keys; no long/short distinction.
+          ;; half-attached bearer ("Connected" but no HID node, silent
+          ;; ATT death ~10min): btusb adapter autosuspend -- disabled
+          ;; via kernel-usb-autosuspend.etc.pb; zombie links clear with
+          ;; a controller power cycle (bluetoothctl power off; on).
   tasks:
     - import_tasks: tasks/compfuzor.includes
