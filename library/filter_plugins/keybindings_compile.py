@@ -9,7 +9,7 @@ from ansible.template import accept_args_markers
 from template_data import raw_copy_template_data
 from config_selectors import compile_path_selector, relative_path
 from config_context_compile import _root as context_root
-from config_compile import config_runtime_bins
+from config_compile import config_runtime_bins, config_runtime_packages
 from runtime_bundles import compfuzor_runtime_bins, runtime_alias_bin
 
 ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -189,7 +189,7 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
             import json
             args.extend(["--profile-selector", json.dumps(profile_selector)])
         bins.append({"name": "install-keybindings-" + target + ".sh", "action": "install", "scope": [selected_scope], "basedir": False, "deployment_rooted": True, "bypass": "KEYBINDINGS", "run": False, "content": 'exec "$DIR/bin/keybindings.mjs" ' + " ".join(shlex.quote(arg) for arg in args) + ' "$@"'})
-    return {"files": files, "bins": bins, "dirs": dirs}
+    return {"files": files, "bins": bins, "dirs": dirs, "pkgs": config_runtime_packages()}
 
 class FilterModule(object):
     def filters(self):

@@ -3,6 +3,7 @@ import sys
 sys.path.insert(0, "library/filter_plugins")
 from ansible.errors import AnsibleFilterError
 from keybindings_compile import compile_keybindings
+from config_compile import compile_config, publish_config, config_runtime_packages
 
 def test_compile():
     result = compile_keybindings({"launch-action": {"exec": ["app", "toggle"]}}, {"launch": {"action": "launch-action", "keys": ["Mod+D"], "umbriel": {"keys": ["Mod+Space"]}}}, {}, {"niri": {"consumer": "/opt/desktop"}, "umbriel": {"consumer": "/opt/desktop"}}, "producer", "/opt/app/etc", "/opt/app/bin")
@@ -14,6 +15,8 @@ def test_compile():
     assert len(entries) == 2 and all(entry["scope"] == ["user"] and entry["run"] is False for entry in entries)
     assert all("--profile /opt/desktop/etc/keybinding-" in entry["content"] for entry in entries)
     assert all(bin.get("run") is False for bin in result["bins"] if bin["name"] == "config/run.sh")
+    ordinary = publish_config({}, compile_config({"x": {"processor": "concat"}}, "/etc"))["config"]["contrib"]["PKGS"]
+    assert result["pkgs"] == ordinary == config_runtime_packages() == ["jq"]
     runtime = compile_keybindings({"a": {"exec": ["app"]}}, {"b": {"action": "a", "keys": ["Mod+D"]}}, {}, {"niri": {"consumer": "${XDG_CONFIG_HOME}/niri/keybinding-niri.json"}}, "app", "/opt/app/etc", "/opt/app/bin")
     assert "--profile-selector" in next(bin["content"] for bin in runtime["bins"] if bin["name"] == "install-keybindings-niri.sh")
     host = compile_keybindings({}, {"launch": {"patch": True, "keys": ["Alt+D"]}}, {"niri": {"contexts": {"user": {"scope": "user", "root": "config", "subpath": "niri"}}, "native_sources": [{"id": "own", "path": "own.kdl"}]}}, None, "host", "/opt/host/etc", "/opt/host/bin")
@@ -30,6 +33,9 @@ def test_compile():
     host_only = compile_keybindings({}, {}, {"niri": {}}, None, "host", "/opt/host/etc", "/opt/host/bin")
     assert not any(file["name"] == "keybinding-producer.json" for file in host_only["files"])
     assert " host " in " " + next(bin["content"] for bin in host_only["bins"] if bin["name"] == "install-keybindings-niri.sh")
+    assert host_only["pkgs"] == ["jq"]
+    combined_runtime = compile_keybindings({}, {}, {"niri": {}}, None, "host", "/etc", "/bin", has_configs=True)
+    assert combined_runtime["pkgs"] == ["jq"]
     try:
         compile_keybindings({}, {"launch": {"id": "different"}}, {}, ["niri"], "app", "/etc", "/bin")
     except AnsibleFilterError as error:

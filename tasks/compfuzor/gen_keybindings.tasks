@@ -14,3 +14,4 @@
     ETC_FILES: "{{ ETC_FILES | merge_list(_keybindings_compiled.files, preset='append') }}"
     BINS: "{{ BINS | merge_list(_keybindings_compiled.bins | annotate_bins('keybindings'), preset='bins_generated') }}"
     DIRS: "{{ DIRS | merge_list(_keybindings_compiled.dirs, preset='append_unique') }}"
+    PKGS: "{{ PKGS | default([]) | merge_list(_keybindings_compiled.pkgs, preset='append_unique') }}"

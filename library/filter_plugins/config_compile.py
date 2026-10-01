@@ -159,6 +159,11 @@ def config_runtime_bins():
     return bins
 
 
+def config_runtime_packages():
+    """Package contribution required by the shared shell candidate workers."""
+    return ["jq"]
+
+
 @accept_args_markers
 def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled", transaction_validate=None):
     """Normalize CONFIGS and emit config subsystem contributions."""
@@ -358,7 +363,7 @@ def publish_config(subsystems, compiled):
         "ETC_FILES": [{"name": "config.spec.json", "json": spec}],
         "BINS": list(compiled.get("bins", [])),
         "STATUSES": list(compiled.get("statuses", [])),
-        "PKGS": ["jq"],
+        "PKGS": config_runtime_packages(),
     }
     current.update({"requested": True, "spec": spec, "contrib": contrib})
     subsystems["config"] = current

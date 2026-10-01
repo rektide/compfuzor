@@ -24,11 +24,12 @@ def render(directory, name, declarations, env):
     tasks = [{"set_fact": {"SUBSYSTEM": {}}}]
     for task in ["sub_attribution", "sub_config", "gen_keybindings", "gen_config", "gen_bins", "gen_attribution", "compile_artifacts"]:
         tasks.append({"import_tasks": str(ROOT / f"tasks/compfuzor/{task}.tasks")})
-    tasks += [{"file": {"path": str(payload), "state": "directory"}}, {"import_tasks": str(ROOT / "tasks/compfuzor/fs_hierarchy.tasks"), "vars": {"include": "etc"}}, {"file": {"path": "{{item}}", "state": "directory"}, "loop": "{{DIRS}}"}, {"import_tasks": str(ROOT / "tasks/compfuzor/bins.tasks")}, {"import_tasks": str(ROOT / "tasks/compfuzor/bins_link.tasks")}, {"copy": {"dest": str(directory / "plan.json"), "content": "{{ {'bins': BINS} | to_nice_json }}"}}]
+    tasks += [{"file": {"path": str(payload), "state": "directory"}}, {"import_tasks": str(ROOT / "tasks/compfuzor/fs_hierarchy.tasks"), "vars": {"include": "etc"}}, {"file": {"path": "{{item}}", "state": "directory"}, "loop": "{{DIRS}}"}, {"import_tasks": str(ROOT / "tasks/compfuzor/bins.tasks")}, {"import_tasks": str(ROOT / "tasks/compfuzor/bins_link.tasks")}, {"copy": {"dest": str(directory / "plan.json"), "content": "{{ {'bins': BINS, 'pkgs': PKGS} | to_nice_json }}"}}]
     playbook = directory / "render.pb"
     playbook.write_text(yaml.safe_dump([{"hosts": "all", "gather_facts": False, "vars_files": [str(ROOT / "vars/common.yaml")], "vars": variables, "tasks": tasks}], sort_keys=False))
     run(["ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook), "-e", json.dumps({"TYPE": name, "NAME": name})], env)
     plan = json.loads((directory / "plan.json").read_text())
+    assert plan["pkgs"].count("jq") == 1
     for target in ["niri", "umbriel"]:
         members = [item for item in plan["bins"] if item.get("name") == f"install-keybindings-{target}.sh"]
         assert len(members) == 1 and members[0]["scope"] == ["user"] and members[0]["run"] is False

@@ -69,6 +69,37 @@ once. An authored system `install.sh` remains a system builder/installer; an
 authored `install-user.sh` retains its own body and gains the scoped children.
 Generated installers have `run: false`: rendering is not deployment or reload.
 
+## Runtime packages and separately provided commands
+
+Both ordinary CONFIG and standalone keybinding generation reuse the same worker
+package contribution: **`PKGS: [jq]`**. `gen_keybindings.tasks` merges it once into
+the playbook package metadata, even when no ordinary `CONFIGS` are declared. This
+declares the requirement; it does not opportunistically run package installation.
+
+The existing runtime convention provides the other commands separately:
+
+- **Node** must satisfy the [repository engine range](/package.json). The
+  deployment executes the bundled `.mjs` through Node; it does not need receiver
+  node_modules. [NodeSource provisioning](/nodesource.repo.pb) is the existing
+  explicit `nodejs` package/repository entry, not a dependency silently activated
+  by this generator. Do not set `NODEJS: true` merely for the runtime: that
+  subsystem describes source package build/install work.
+- **`block-in-file`** is a separately deployed command, not an invented apt
+  package. [Its source playbook](/block-in-file.src.pb) builds/promotes a standalone
+  artifact and exposes a global command. It needs the supported comment, named
+  block/removal, before-placement, source-attribution and timestamp options.
+  `CONFIG_BLOCK_IN_FILE` can bind its explicit command path, just as in the
+  [Mise2 block installers](/mise2.opt.pb).
+- The explicitly selected **Niri/Umbriel validator** must be available. Source
+  provisioning remains owned by [niri.src.pb](/niri.src.pb) and
+  [umbriel.src.pb](/umbriel.src.pb); the keybinding installer does not discover or
+  install compositors. Missing prerequisites fail preparation rather than
+  skipping target validation or mutating live output.
+
+This follows current CONFIG's package-versus-external-command convention. The
+standalone generator now contributes the same worker packages, while these
+non-package prerequisites are explicit operator/deployment requirements.
+
 # Consumer profiles: ordinary context/root conventions
 
 A host declares target policy once:
