@@ -56,6 +56,18 @@
     - name: hotfixes/amdgpu-power.sh
       copyDir: True
       mode: "0755"
+    - name: tests/amdgpu-power/README.md
+      copyDir: True
+      mode: "0644"
+    - name: tests/amdgpu-power/run.py
+      copyDir: True
+      mode: "0755"
+    - name: tests/amdgpu-power/stubs.h
+      copyDir: True
+      mode: "0644"
+    - name: tests/amdgpu-power/assertions.c
+      copyDir: True
+      mode: "0644"
     # Historical archive, retained verbatim; nothing in the current
     # workflow reads it.
     - name: archive/previous-normalization/.config

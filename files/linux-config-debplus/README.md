@@ -191,10 +191,21 @@ limits, disabled-device errors, the default-cap zero sentinel, and firmware
 failures retain their normal behavior. A reported minimum of zero does not
 promise the firmware will accept every low value.
 
+In particular, the SMU 13.0.6 and 15.0.8 fast-PPT setters independently enforce
+`PPT1Min`. They can reject a low fast cap with `-EINVAL` despite zero minimum
+readback. This port leaves those hardware-specific checks intact.
+
 The 7.3 port targets `smu_get_ppt_limit()` / `smu_set_ppt_limit()` and
 `ppt_limits.range[power_source][limit_type]`, replacing the old 7.1
 `min_power_limit` API. A clean `--check` establishes only that source hunks fit;
 it is not proof of a successful kernel build, boot, or GPU power-control test.
+
+The [regression tests](tests/amdgpu-power/README.md) check both the pinned tip
+and rc5 baseline without changing the original checkout. They verify patch
+lifecycle and compile the actual patched getter, setter, and hwmon functions
+with stubbed kernel/firmware interfaces to exercise bounds, AC/DC, overdrive,
+supported limits, errors, and user-profile updates. They do not simulate real
+GPU firmware acceptance.
 
 ## Build and installation
 
