@@ -24,11 +24,16 @@
       }}
   when: _status_proc_compiled.spec | length > 0
   vars:
+    # STATUS_PROC rows carry templated values (unit names, expected
+    # executables). status_proc_compile validates through
+    # raw_copy_template_data, which sees unrendered strings, so resolve the
+    # declarations at this scope first -- the same lazy-template contract as
+    # gen_zim's projections (.design/zim-generator/init0.gpt56.md).
     _status_proc_input: >-
       {{
         []
         if (STATUS_PROC_BYPASS is deftruthy or STATUS_BYPASS is deftruthy)
-        else STATUS_PROC
+        else STATUS_PROC | resolve
       }}
     _status_proc_compiled: >-
       {{
