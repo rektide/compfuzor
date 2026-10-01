@@ -88,6 +88,22 @@ export async function withInputBatch<T>(
     }
     selected.push({ record, path, disabled: useDisabled, previous });
   }
+  // Reject a destination that can alter ANY donor, not just its own. Copying
+  // donor bytes alone would not make staged symlink semantics safe here.
+  for (const entry of selected) {
+    const slots = [entry.record.destination, entry.record.disabledSuffix ? entry.record.destination + entry.record.disabledSuffix : undefined].filter((path): path is string => !!path);
+    for (const slot of slots) for (const donor of records) {
+      let source = donor.source;
+      const seen = new Set<string>();
+      while (!seen.has(source)) {
+        seen.add(source);
+        if (await pathsSharePhysicalEntry(slot, source)) throw new Error(`registration destination aliases a batch donor: ${slot}`);
+        const state = await inspectDeliveryEntry(source);
+        if (state.kind !== "symlink") break;
+        source = state.targetPath;
+      }
+    }
+  }
   const workspace = await mkdtemp(join(options.workspaceRoot ?? tmpdir(), "config-input-batch-"));
   let mutated = 0;
   let accepted = false;
