@@ -98,6 +98,9 @@
     README: |
       # noctalia-greeter-git — greetd login greeter
 
+      For the complete desktop and safe display-manager cutover, see
+      [the Compfuzor ecosystem guide](https://github.com/rektide/compfuzor/blob/main/doc/noctalia/README.md).
+
       Noctalia Greeter + its bundled wlroots compositor. `bin/install.sh`:
       package lanes -> meson build -> install under **/usr** (see the
       playbook header for why /usr and not /usr/local: polkitd only reads
@@ -108,12 +111,17 @@
 
       ## Cutover runbook
 
-          bin/setup-greeter.sh    # upstream script: /var/lib/noctalia-greeter,
-                                  # _greetd user, greetd PAM patch, prints config
-          bin/greetd-config.sh    # ready-to-paste [default_session] block
-          # merge that block into /etc/greetd/config.toml (it backs up first),
-          # then:
-          sudo systemctl enable --now greetd
+          bin/greetd-config.sh    # PRINTS proposed commands; does not execute them
+
+      Back up the existing config, confirm/create the actual greetd session
+      account, and merge the desired block into /etc/greetd/config.toml. The
+      printed tee command replaces the file, not an additive merge; review it.
+      Then deliberately run `bin/setup-greeter.sh` for state-directory/default
+      config preparation and PAM patching. It resolves the configured account,
+      not necessarily `_greetd`, and does not guarantee creation of a missing
+      account. Check the installed tmpfiles rule's hardcoded `greeter:greeter`
+      ownership against that account. Finally arrange old-manager shutdown and
+      `sudo systemctl enable --now greetd` as a controlled seat cutover.
 
       Pin a session from the picker with
       `command = "/usr/bin/noctalia-greeter-session -- --session niri"`.

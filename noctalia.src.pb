@@ -156,6 +156,9 @@
     README: |
       # noctalia-git — Noctalia v5 desktop shell
 
+      For the end-to-end desktop setup and systemd lifecycle, see
+      [the Compfuzor ecosystem guide](https://github.com/rektide/compfuzor/blob/main/doc/noctalia/README.md).
+
       Source deployment of [noctalia-dev/noctalia](https://github.com/noctalia-dev/noctalia),
       the native Wayland shell built to pair with umbriel. `bin/install.sh`
       runs the chain: package lanes -> meson build -> install to /usr/local
@@ -181,10 +184,11 @@
       ## Conflicts before enabling
 
       Noctalia claims `org.freedesktop.Notifications` and the
-      `org.kde.StatusNotifierWatcher` host on non-Plasma sessions. mako and
-      vicinae's tray registration own those names in the current session:
-      disable the other daemon(s) first, or noctalia's notifications/tray
-      will misbehave.
+      `org.kde.StatusNotifierWatcher` name on non-Plasma sessions. Inspect
+      their owners with `busctl --user list` and remove competing notification
+      daemons (mako/dunst/swaync) or tray watchers from startup before enabling.
+      A tray item or host registration (including Vicinae's tray icon) is not
+      by itself a competing watcher and does not require disabling that app.
 
       ## Control
 

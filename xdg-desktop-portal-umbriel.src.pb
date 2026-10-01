@@ -75,6 +75,9 @@
     README: |
       # xdg-desktop-portal-umbriel-git — ScreenCast/Screenshot for umbriel
 
+      For desktop assembly, backend selection, and activation diagnostics, see
+      [the Compfuzor ecosystem guide](https://github.com/rektide/compfuzor/blob/main/doc/noctalia/README.md).
+
       Portal backend (plus the GTK share picker) for the umbriel compositor.
       `bin/install.sh`: package lanes -> meson build -> install to /usr/local
       -> mode hygiene -> user-manager daemon-reload. No enable step exists:

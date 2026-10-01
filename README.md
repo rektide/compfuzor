@@ -5,6 +5,12 @@ playbooks (`.pb`); compfuzor compiles that intent into subsystem state,
 synthesizes shared artifacts, then applies the result to repositories,
 filesystems, services, packages, and kernel state.
 
+## Desktop ecosystems
+
+- [Noctalia desktop architecture and operations](/doc/noctalia/README.md):
+  Umbriel + Noctalia v5, portal capture, optional greetd greeter, installation,
+  user-systemd session lifecycle, safe cutover, updates, and troubleshooting.
+
 ## Hardware examples
 
 - [Kinesis / Kanata examples](/kinesis/README.md): opt-in alternatives for
