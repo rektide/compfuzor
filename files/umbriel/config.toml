@@ -1,0 +1,19 @@
+# Umbriel user configuration
+# Managed by compfuzor: edit umbriel.user.pb / files/umbriel/config.toml,
+# not this rendered copy.
+#
+# Umbriel picks the first config it finds and never auto-layers, so this file
+# explicitly includes the system default installed by umbriel.src.pb
+# (/usr/local/share/umbriel/config.toml) and layers on top of it:
+#   - tables merge key-by-key ([keybinds] merges chord-by-chord)
+#   - arrays of tables (window_rule, workspace, ...) accumulate
+#   - anything set below wins over the default
+# The vicinae fragment is optional so the config stays valid without it.
+# Managed includes live beside this file (see keybinds-vicinae.toml).
+# Do not add a [keybinds] table here: in the root config it would REPLACE
+# the entire built-in default set. Chord overrides belong in included
+# fragments (see vicinae.src.pb's keybinds-vicinae.toml for the pattern).
+
+[include]
+files = ["/usr/local/share/umbriel/config.toml"]
+optional = { files = ["keybinds-vicinae.toml"] }
