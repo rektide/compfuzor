@@ -1,0 +1,12 @@
+# Clang/LLVM policy. Toolchain identity is derived from make LLVM=1.
+# Keep the well-supported non-LTO baseline; experimental optimization flows
+# belong in separate measured configurations.
+CONFIG_LTO_NONE=y
+# CONFIG_LTO_CLANG_FULL is not set
+# CONFIG_LTO_CLANG_THIN is not set
+# CONFIG_AUTOFDO_CLANG is not set
+# CONFIG_PROPELLER_CLANG is not set
+
+# kCFI is a hardening policy rather than a general performance optimization.
+# The common configuration intentionally retains its low-hardening policy.
+# CONFIG_CFI is not set

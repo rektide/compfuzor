@@ -1,0 +1,4 @@
+# GCC/binutils policy. Configure and build without LLVM=1.
+# Upstream x86 Kconfig does not offer a GCC LTO mode, so the conventional
+# non-LTO baseline is the only compiler-specific setting needed here.
+CONFIG_LTO_NONE=y
