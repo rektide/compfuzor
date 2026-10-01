@@ -10,6 +10,8 @@
 #   - anything set below wins over the default
 # The vicinae fragment is optional so the config stays valid without it.
 # keybinds-local.toml (umbriel.user.pb) loads after it and wins conflicts.
+# animation.toml (umbriel.user.pb) layers focus-navigation motion tuning on
+# top of the default animation tables; it conflicts with nothing.
 # Managed includes live beside this file (see keybinds-vicinae.toml).
 # Do not add a [keybinds] table here: in the root config it would REPLACE
 # the entire built-in default set. Chord overrides belong in included
@@ -17,4 +19,4 @@
 
 [include]
 files = ["/usr/local/share/umbriel/config.toml"]
-optional = { files = ["keybinds-vicinae.toml", "keybinds-local.toml"] }
+optional = { files = ["keybinds-vicinae.toml", "keybinds-local.toml", "animation.toml"] }

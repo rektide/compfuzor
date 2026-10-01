@@ -1,0 +1,23 @@
+# Animation tuning for the Umbriel compositor.
+# Managed by compfuzor (umbriel.user.pb); included optionally from
+# ~/.config/umbriel/config.toml. Include tables merge key-by-key, so only the
+# values set here change: every other event table (windows_in, windows_out,
+# workspaces, overview, scratchpad, border) keeps the system default.
+#
+# Why windows_move is dialed here: Umbriel has no navigation-specific
+# animation event. Focus navigation (ForeignActivation) reveals offscreen
+# windows by scrolling the layout, and that scroll rides the windows_move
+# timeline -- which also drives plain moves, resizes, reflows, and
+# maximize/restore. The default spring:1,4400 settles in ~183 ms: too quick
+# to read as motion when a whole column scrolls in from offscreen. A
+# 650 ms symmetric cubic bezier (x1,y1,x2,y2 = ease-in-out) makes the
+# reveal legible. Trade-off to know about: manual moves, resizes, and
+# layout reflows get the same 650 ms ramp; there is no separate knob yet.
+
+[animation]
+enabled = true
+
+[animation.windows_move]
+enabled = true
+duration_ms = 650
+curve = "0.42,0,0.58,1"

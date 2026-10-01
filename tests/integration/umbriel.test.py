@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render regular/SteamOS Umbriel deployments and verify their contracts.
+"""Render regular/SteamOS/user Umbriel deployments and verify their contracts.
 
 Run directly:
 
@@ -64,6 +64,14 @@ def render(name: str, playbook: str) -> Path:
     if result.returncode:
         raise AssertionError(f"{playbook} render failed:\n{result.stdout}\n{result.stderr}")
     return payload
+
+
+import tomllib
+
+
+def read_toml(path: Path) -> dict:
+    with path.open("rb") as handle:
+        return tomllib.load(handle)
 
 
 def assert_shell_syntax(bin_dir: Path) -> None:
@@ -137,7 +145,49 @@ def test_steamos_umbriel_session_tools() -> None:
     print("ok: self-contained SteamOS Umbriel session operators render")
 
 
+def test_user_config_include_chain_and_animation() -> None:
+    payload = render("user", "umbriel.user.pb")
+    etc = payload / "etc"
+
+    # The root config stays a pure include chain: system default baseline,
+    # then optional fragments. No [keybinds] table here -- in the root it
+    # would REPLACE the entire built-in default keybind set.
+    config = read_toml(etc / "config.toml")
+    assert config["include"]["files"] == ["/usr/local/share/umbriel/config.toml"]
+    optional = config["include"]["optional"]["files"]
+    assert optional.index("keybinds-vicinae.toml") < optional.index("keybinds-local.toml")
+    assert "animation.toml" in optional
+    assert "keybinds" not in config
+
+    # Fragments render beside the root config.
+    keybinds = read_toml(etc / "keybinds-local.toml")
+    assert "Mod+Shift+Slash" in keybinds["keybinds"]
+
+    # Animation fragment: focus-navigation reveal rides the windows_move
+    # timeline (no separate nav event exists), dialed to a 650 ms symmetric
+    # bezier. Tables merge key-by-key, so sibling event tables keep defaults.
+    animation = read_toml(etc / "animation.toml")
+    assert animation["animation"]["enabled"] is True
+    move = animation["animation"]["windows_move"]
+    assert move["enabled"] is True
+    assert move["duration_ms"] == 650
+    assert move["curve"] == "0.42,0,0.58,1"
+
+    # Validate the full chain (system default + fragments) with the
+    # installed compositor when present.
+    umbriel = shutil.which("umbriel")
+    if umbriel:
+        result = subprocess.run(
+            [umbriel, "validate", "-c", str(etc / "config.toml")],
+            text=True,
+            capture_output=True,
+        )
+        assert result.returncode == 0, f"umbriel validate failed:\n{result.stdout}\n{result.stderr}"
+    print("ok: user config chain orders vicinae < local keybinds; animation fragment values render")
+
+
 if __name__ == "__main__":
     test_regular_source_deployment()
     test_steamos_deployment_is_reinstallable()
     test_steamos_umbriel_session_tools()
+    test_user_config_include_chain_and_animation()

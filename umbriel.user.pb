@@ -4,7 +4,9 @@
 # Owns the ROOT user config, ~/.config/umbriel/config.toml, which is a thin
 # [include] chain: it layers the system default (installed by umbriel.src.pb
 # to /usr/local/share/umbriel/config.toml) plus optional fragments contributed
-# by other entries (currently vicinae.src.pb's keybinds-vicinae.toml symlink).
+# by other entries (currently vicinae.src.pb's keybinds-vicinae.toml symlink)
+# and by this entry itself (keybinds-local.toml chords, animation.toml motion
+# tuning).
 #
 # Why the root config is a chain, and why it must NOT carry a [keybinds]
 # table of its own -- Umbriel's config model, learned the hard way:
@@ -33,7 +35,10 @@
 #   vicinae.src.pb  -- keybinds-vicinae.toml fragment (Mod+Space launcher,
 #                      Mod+Slash window switcher) symlinked into
 #                      ~/.config/umbriel/ by its install-umbriel.sh
-#   this entry      -- the root include chain itself
+#   this entry      -- the root include chain itself, plus its personal
+#                      fragments: keybinds-local.toml (chord overrides) and
+#                      animation.toml (windows_move motion tuning for the
+#                      focus-navigation offscreen reveal)
 #
 # USERMODE: no sudo; everything lands under ~/.config and ~/.local/opt.
 # Idempotent: re-running re-renders config.toml content-in-place. The
@@ -55,6 +60,9 @@
       # Personal chord overrides; declared in the root chain's
       # optional.files AFTER the vicinae fragment so these win conflicts.
       - keybinds-local.toml
+      # Animation tuning (focus-navigation reveal rides windows_move);
+      # declared in optional.files; merges key-by-key over the default.
+      - animation.toml
   tasks:
     # Modern form of `include: tasks/compfuzor.includes type="opt"`: this
     # box's ansible-core (2.21) removed bare `include:`, while older
