@@ -16,7 +16,7 @@ import threading
 import unittest
 from pathlib import Path
 
-HELPER = Path(__file__).resolve().parent.parent / "files" / "kanata" / "blueturn-switch"
+HELPER = Path(__file__).resolve().parent.parent / "scripts" / "blueturn-switch"
 
 
 class StubPedal:
