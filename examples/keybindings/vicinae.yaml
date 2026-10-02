@@ -1,5 +1,6 @@
-# Proposed Vicinae declarations only; NOT a live playbook cutover.
-# The isolated proposal test binds these targets to rendered user consumers.
+# Reviewed Vicinae declarations; the live cutover landed in vicinae.src.pb.
+# niri.etc.pb / umbriel.etc.pb host the consumer profiles these targets bind.
+# The isolated proposal test renders the real playbooks with these values.
 KEYBINDING_ACTIONS:
   vicinae-toggle:
     exec: [vicinae, toggle]

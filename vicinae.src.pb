@@ -77,6 +77,8 @@
     # user-scoped install-keybindings-{niri,umbriel}.sh installers; the
     # hand-authored KDL/TOML fragments and bespoke install-niri.sh /
     # install-umbriel.sh bodies they replace are gone.
+    # NAME defaults to "vicinae-git" here (TYPE + git instance); the durable
+    # membership group ID reads better as plain "vicinae":
     KEYBINDING_PRODUCER: vicinae
     KEYBINDING_ACTIONS:
       vicinae-toggle:

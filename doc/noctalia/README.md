@@ -36,7 +36,7 @@ Neither installation nor this guide silently switches the running desktop.
 | **xdg-desktop-portal frontend** | Stable application-facing D-Bus API; selects and activates backends | Distro package, declared in the portal entry |
 | **PipeWire + WirePlumber** | Media graph and session policy; shell audio integration and portal capture transport | Distro packages declared in the entries |
 | **greetd + Noctalia Greeter** | Optional system login route, authentication UI, desktop-session selection | [`noctalia-greeter.src.pb`](/noctalia-greeter.src.pb) |
-| **Umbriel user config** | Root include chain and local keybind/animation overrides | [`umbriel.user.pb`](/umbriel.user.pb), [`files/umbriel/config.toml`](/files/umbriel/config.toml) |
+| **Umbriel user config** | Root include chain, local keybind/animation overrides, and the Umbriel keybinding consumer profile | [`umbriel.etc.pb`](/umbriel.etc.pb), [`files/umbriel/config.toml`](/files/umbriel/config.toml) |
 | **Secret Service / Polkit / PAM** | Credential storage, privilege authorization, lock/login authentication | Existing host/session services; not interchangeable |
 
 Noctalia is **not** a compositor or display manager. The greeter's bundled
@@ -117,17 +117,22 @@ and privileged helpers must be installed as well as its executable.
 ### Configure Umbriel without losing the baseline
 
 ```sh
-ansible-playbook -i 'localhost,' -c local umbriel.user.pb
+ansible-playbook -i 'localhost,' -c local umbriel.etc.pb
+/etc/opt/umbriel/bin/install-user.sh
 /usr/local/src/umbriel-git/bin/validate.sh
 ```
 
 Umbriel uses the **first configuration found**, not automatic layering of
-user and system files. Our user root explicitly includes
-`/usr/local/share/umbriel/config.toml`, then optional fragments. Maintain the
-source [`files/umbriel/config.toml`](/files/umbriel/config.toml), not its rendered
-`~/.config/umbriel/config.toml` copy. Keep keybind overrides in included
-fragments so the packaged default chords survive. Validate changes before
-depending on them; a new include must be declared in the root chain.
+user and system files. The staged root template explicitly includes
+`/usr/local/share/umbriel/config.toml`, carries the keybinding insertion
+area inside its `include.files` array, then optional fragments. The user
+installer seeds missing files, migrates live files that still byte-match
+the previously managed templates, and never overwrites user-edited text.
+Maintain the source [`files/umbriel/config.toml`](/files/umbriel/config.toml),
+not your seeded `~/.config/umbriel/config.toml` copy. Keep keybind
+overrides in included fragments (or producer declarations) so the packaged
+default chords survive. Validate changes before depending on them; a new
+include must be declared in the root chain.
 
 ### Choose ONE shell startup route
 

@@ -261,8 +261,10 @@ It also checks authored install bodies and exactly-once target participation.
   explicit scripts/native implementations and target override/extension rules.
 - [Consumer assembly](/doc/config/keybinding-consumers.md): adopted root areas,
   mirrored candidate closure validation and the existing publication boundary.
-- [Vicinae proposal fixture](/examples/keybindings/vicinae.yaml): proposed modern
-  routes and target differences; not a live playbook cutover.
+- [Vicinae declaration fixture](/examples/keybindings/vicinae.yaml): reviewed
+  modern routes and target differences, now declared live by
+  [vicinae.src.pb](/vicinae.src.pb) against the [niri](/niri.etc.pb) and
+  [umbriel](/umbriel.etc.pb) consumer-host deployments.
 - [Generator](/library/filter_plugins/keybindings_compile.py) and
   [membership runtime](/files/config/keybindings/membership.ts): controller glue
   packages data; TypeScript owns capture, identity, ordering and lifecycle.

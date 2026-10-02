@@ -177,7 +177,7 @@
              systemctl --user enable --now noctalia.service
 
       2. **umbriel config autostart**: add `general.autostart = ["noctalia"]`
-         to your umbriel config chain (umbriel.user.pb owns the root include
+         to your umbriel config chain (umbriel.etc.pb owns the root include
          chain; a fragment works). Do not enable both lanes — you would race
          two shells on one session.
 
