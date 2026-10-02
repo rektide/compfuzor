@@ -1,8 +1,12 @@
 # Personal keybind overrides for the Umbriel compositor.
-# Managed by compfuzor (umbriel.user.pb); included optionally from
-# ~/.config/umbriel/config.toml AFTER the vicinae fragment, so these win
-# same-chord conflicts. Merges chord-by-chord over the system default --
+# Managed by compfuzor (umbriel.etc.pb); included optionally from
+# ~/.config/umbriel/config.toml, so these win same-chord conflicts against
+# producer-owned bindings. Merges chord-by-chord over the system default --
 # adding chords here never disturbs binds defined elsewhere in the chain.
+#
+# Mod+Grave (Vicinae clipboard) deliberately has NO entry here: the consumer
+# profile in umbriel.etc.pb patches the vicinae-clipboard binding with that
+# chord, so the command stays owned by the producer's declaration.
 [keybinds]
 # "?"-means-help: reopen the keybind cheatsheet overlay (the keybind listing
 # shown at startup via general.show_cheatsheet). Stored as the level-0
@@ -11,9 +15,6 @@
 # fires on Shift+Slash as typed.
 "Mod+Shift+Slash" = "cheatsheet-toggle"
 
-# Vicinae clipboard history (paste picker); ?toggle=true closes it when
-# already showing, matching the launcher/window-switcher binds.
-"Mod+Grave" = "spawn:vicinae deeplink 'vicinae://launch/clipboard/history?toggle=true'"
 # Vim-style move chords. The default set binds only the arrow variants
 # (Mod+Shift+Left/Down/Up/Right), so H/J/K/L moves were lost when the
 # hand-copied keybind set became the include chain. J/K use the hybrid

@@ -1,6 +1,8 @@
-# Umbriel user configuration
-# Managed by compfuzor: edit umbriel.user.pb / files/umbriel/config.toml,
-# not this rendered copy.
+# Umbriel user configuration (root include-chain template).
+# Managed by compfuzor: edit umbriel.etc.pb / files/umbriel/config.toml,
+# not the seeded ~/.config/umbriel/config.toml copy (user edits win; the
+# deployment installer only seeds this file when missing or migrates it
+# when it still byte-matches the previously managed template).
 #
 # Umbriel picks the first config it finds and never auto-layers, so this file
 # explicitly includes the system default installed by umbriel.src.pb
@@ -8,15 +10,25 @@
 #   - tables merge key-by-key ([keybinds] merges chord-by-chord)
 #   - arrays of tables (window_rule, workspace, ...) accumulate
 #   - anything set below wins over the default
-# The vicinae fragment is optional so the config stays valid without it.
-# keybinds-local.toml (umbriel.user.pb) loads after it and wins conflicts.
-# animation.toml (umbriel.user.pb) layers focus-navigation motion tuning on
-# top of the default animation tables; it conflicts with nothing.
-# Managed includes live beside this file (see keybinds-vicinae.toml).
+# keybinds-local.toml and animation.toml (both staged by umbriel.etc.pb) are
+# optional so the config stays valid without them; they load last so local
+# chords win same-chord conflicts.
+#
+# The insertion area between the compfuzor-keybindings markers lives INSIDE
+# the single required [include].files array: the keybinding consumer runtime
+# rebuilds only the array entries between those markers (producers such as
+# vicinae.src.pb own that area now -- the old hardcoded keybinds-vicinae.toml
+# include is gone by design, and a stale file/symlink of that name is simply
+# no longer referenced). Do not add a second [include] table or move the
+# markers out of the files array.
 # Do not add a [keybinds] table here: in the root config it would REPLACE
 # the entire built-in default set. Chord overrides belong in included
-# fragments (see keybinds-vicinae.toml and keybinds-local.toml).
+# fragments (keybinds-local.toml) or in named keybinding declarations.
 
 [include]
-files = ["/usr/local/share/umbriel/config.toml"]
-optional = { files = ["keybinds-vicinae.toml", "keybinds-local.toml", "animation.toml"] }
+files = [
+  "/usr/local/share/umbriel/config.toml",
+  # compfuzor-keybindings-begin
+  # compfuzor-keybindings-end
+]
+optional = { files = ["keybinds-local.toml", "animation.toml"] }

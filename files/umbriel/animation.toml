@@ -1,5 +1,5 @@
 # Animation tuning for the Umbriel compositor.
-# Managed by compfuzor (umbriel.user.pb); included optionally from
+# Managed by compfuzor (umbriel.etc.pb); included optionally from
 # ~/.config/umbriel/config.toml. Include tables merge key-by-key, so only the
 # values set here change: every other event table (windows_in, windows_out,
 # workspaces, overview, scratchpad, border) keeps the system default.

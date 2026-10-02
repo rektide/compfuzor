@@ -70,29 +70,67 @@
     #  "/usr/share/icons/hicolor/scalable/apps/vicinae.svg": "vicinae/icons/vicinae.svg"
     #  "/etc/chromium/native-messaging-hosts/com.vicinae.vicinae.json": "build/src/browser-extension/com.vicinae.vicinae.chromium.json"
     ENV: True
+    # Named keybinding declarations (reviewed cutover values: see
+    # examples/keybindings/vicinae.yaml and
+    # design/keybindings/vicinae-proposal0.gpt61sol.md). The generator
+    # packages action/<id>.yaml + keybinding/<id>.yaml and synthesizes
+    # user-scoped install-keybindings-{niri,umbriel}.sh installers; the
+    # hand-authored KDL/TOML fragments and bespoke install-niri.sh /
+    # install-umbriel.sh bodies they replace are gone.
+    KEYBINDING_PRODUCER: vicinae
+    KEYBINDING_ACTIONS:
+      vicinae-toggle:
+        exec: [vicinae, toggle]
+      vicinae-clipboard:
+        exec: [vicinae, deeplink, "vicinae://launch/clipboard/history"]
+        umbriel:
+          exec: [vicinae, deeplink, "vicinae://launch/clipboard/history?toggle=true"]
+      vicinae-switch-windows:
+        exec: [vicinae, deeplink, "vicinae://launch/wm/switch-windows"]
+        umbriel:
+          exec: [vicinae, deeplink, "vicinae://launch/wm/switch-windows?toggle=true"]
+    KEYBINDINGS:
+      vicinae-launch:
+        action: vicinae-toggle
+        keys: [Mod+D]
+        title: "Run an Application: vicinae"
+        umbriel:
+          keys: [Mod+Space]
+      vicinae-clipboard:
+        action: vicinae-clipboard
+        keys: [Alt+Grave]
+        title: "Vicinae clipboard"
+        umbriel:
+          keys: [] # Umbriel's Mod+Grave chord is the consumer-owned patch in umbriel.etc.pb.
+      vicinae-switch-windows:
+        action: vicinae-switch-windows
+        keys: [Mod+F]
+        title: "Switch windows: vicinae"
+        umbriel:
+          keys: [Mod+Slash]
+    # ONE deployment per compositor (operator decision): the location-typed
+    # consumer hosts own the profiles. A consumer deployment root resolves
+    # to its etc/keybinding-<target>.json profile (for etc-type deployments
+    # that path resolves through the structural DIR/etc exposure link).
+    # These stay USER-scoped installers joined into install-user.sh; they
+    # do not become system build/install operations.
+    KEYBINDING_TARGETS:
+      niri:
+        consumer: /etc/opt/niri
+        context: user
+        scope: user
+      umbriel:
+        consumer: /etc/opt/umbriel
+        context: user
+        scope: user
     ETC_DIRS:
-      - niri
       - kde/kwin-scripts/vicinae/contents/code
-      - umbriel
     ETC_FILES:
-      - name: niri/keybinding-launch.kdl
-        content: |
-          binds {
-            Mod+D hotkey-overlay-title="Run an Application: vicinae" { spawn-sh "vicinae toggle"; }
-          }
-      - name: niri/keybinding-clipboard.kdl
-        content: |
-          binds {
-            Alt+Grave hotkey-overlay-title="Vicinae clipboard" { spawn-sh "vicinae vicinae://extensions/vicinae/clipboard/history"; }
-          }
-      - name: niri/keybinding-switch-windows.kdl
-        content: |
-          binds {
-            Mod+F hotkey-overlay-title="Switch windows: vicinae" { spawn-sh "vicinae vicinae://extensions/vicinae/wm/switch-windows"; }
-          }
       # KDE: kwin hosts org.kde.kglobalaccel on Plasma 6, so the scriptable
       # shortcut-registration path is a kwin script (string keys, rebindable
-      # in the shortcuts KCM, autostarted via kwinrc [Plugins]).
+      # in the shortcuts KCM, autostarted via kwinrc [Plugins]). KDE is not
+      # part of the named-keybindings consumer world yet and keeps its
+      # hand-authored resources + install-kde.sh unchanged.
       - name: kde/kwin-scripts/vicinae/metadata.desktop
         content: |
           [Desktop Entry]
@@ -116,21 +154,6 @@
           registerShortcut(
             "VicinaeSwitchWindows", "Vicinae: Switch Windows", "Meta+F",
             () => spawn("vicinae", "vicinae://extensions/vicinae/wm/switch-windows"));
-      # Umbriel: unlike niri/KDE there is no include-directory convention to
-      # hook; umbriel's TOML config supports explicit [include] files and
-      # merges [keybinds] chord-by-chord over them, so the user root config
-      # includes the system default (installed by umbriel.src.pb) plus this
-      # fragment. install-umbriel.sh wires the chain below.
-      - name: umbriel/keybinds.toml
-        content: |
-          # Vicinae launcher keybinds for the Umbriel compositor.
-          # Managed by vicinae.src.pb; included from ~/.config/umbriel/config.toml.
-          # Umbriel merges [keybinds] chord-by-chord over included files, so these
-          # override same-chord defaults (Mod+Space replaces scratchpad-toggle) and
-          # add the rest.
-          [keybinds]
-          "Mod+Space" = "spawn:vicinae toggle"
-          "Mod+Slash" = "spawn:vicinae deeplink 'vicinae://launch/wm/switch-windows?toggle=true'"
     BINS:
       - name: build.sh
         content: |
@@ -153,15 +176,11 @@
       - name: install-user.sh
         content: |
           systemctl --user enable vicinae.service
-      - name: install-niri.sh
-        basedir: etc
-        content: |
-          NIRI_CONFIG_DIR="$HOME/.config/niri"
-          mkdir -p "$NIRI_CONFIG_DIR/vicinae"
-          for f in {{DIR}}/etc/niri/*.kdl; do
-            ln -sf "$f" $NIRI_CONFIG_DIR/vicinae
-            echo 'include "./vicinae/'"$(basename "$f")"'"'
-          done | block-in-file -n vicinae --comment "//" "$NIRI_CONFIG_DIR/config.kdl"
+          # The generated install-keybindings-{niri,umbriel}.sh children are
+          # appended here by gen_bins: they register this producer's named
+          # bindings into the consumer hosts declared in KEYBINDING_TARGETS
+          # (niri.etc.pb / umbriel.etc.pb). Run their consumer installers
+          # (install-user.sh) once first for root adoption.
       - name: install-kde.sh
         basedir: etc
         content: |
@@ -189,36 +208,5 @@
           else
             echo "no kwin on the bus; script installs for next login"
           fi
-      - name: install-umbriel.sh
-        basedir: etc
-        content: |
-          UMBRIEL_CONFIG_DIR="$HOME/.config/umbriel"
-          mkdir -p "$UMBRIEL_CONFIG_DIR"
-          ln -sfn "{{DIR}}/etc/umbriel/keybinds.toml" \
-            "$UMBRIEL_CONFIG_DIR/keybinds-vicinae.toml"
-          CFG="$UMBRIEL_CONFIG_DIR/config.toml"
-          # Umbriel loads the FIRST config it finds (user, XDG_CONFIG_DIRS,
-          # data dir) with no auto-layering, and [include] may appear only
-          # once per TOML file: create the root config as an include chain
-          # over the system default when absent, and otherwise only wire the
-          # fragment in when that can be done without rewriting the user's
-          # [include] table by hand.
-          if [ ! -e "$CFG" ]; then
-            cat > "$CFG" <<'EOF'
-          [include]
-          files = ["/usr/local/share/umbriel/config.toml"]
-          optional = { files = ["keybinds-vicinae.toml"] }
-          EOF
-          elif grep -q 'keybinds-vicinae.toml' "$CFG"; then
-            :
-          elif grep -qE '^[[:space:]]*\[include\]' "$CFG"; then
-            echo "note: $CFG already has an [include] table; add manually:"
-            echo '  optional = { files = ["keybinds-vicinae.toml"] }'
-          else
-            printf '[include]\noptional = { files = ["keybinds-vicinae.toml"] }\n' \
-              | block-in-file -n vicinae --comment "#" "$CFG"
-          fi
-          command -v umbriel >/dev/null 2>&1 \
-            && umbriel validate -c "$CFG" || true
   tasks:
     - import_tasks: tasks/compfuzor.includes
