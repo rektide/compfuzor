@@ -1,48 +1,133 @@
 #!/usr/bin/env python3
-"""Executable isolated proposal; it neither starts Vicinae nor cuts over playbooks."""
+"""End-to-end Vicinae cutover proof over the real consumer/producer playbooks.
+
+Run directly:
+
+    ./tests/integration/keybindings_vicinae_proposal.test.py
+
+Renders niri.etc.pb and umbriel.etc.pb (real consumer hosts) plus
+vicinae.src.pb (real producer, KEYBINDING_TARGETS overridden to the isolated
+deployment roots using the same deployment-root form the playbook pins for
+/etc/opt). Adopts both roots with the consumer install-user.sh, registers the
+producer through its generated target installers, and checks the reviewed
+chord outcomes and toggle policy without launching any application.
+"""
+from __future__ import annotations
+
 import importlib.util
 import json
 import os
 from pathlib import Path
 import subprocess
 import tempfile
-import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location("generated", ROOT / "tests/integration/keybindings_generated.test.py")
-generated = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(generated)
+spec = importlib.util.spec_from_file_location("consumer_hosts", ROOT / "tests/integration/keybindings_consumer_hosts.test.py")
+consumer_hosts = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(consumer_hosts)
+
+run = consumer_hosts.run
+render_playbook = consumer_hosts.render_playbook
+consumer_env = consumer_hosts.consumer_env
+SCRATCH = ROOT / ".test-agent/keybindings-vicinae-proposal"
+
 
 def test_proposal():
-    scratch = ROOT / ".test-agent/keybindings-vicinae-proposal"
-    scratch.mkdir(parents=True, exist_ok=True)
-    if not (scratch / "README.md").exists():
-        (scratch / "README.md").write_text("# Vicinae proposal scratch\nIsolated generated consumer fixtures; no live app/config changes.\n")
-    with tempfile.TemporaryDirectory(prefix="proposal-", dir=scratch) as tmp:
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    if not (SCRATCH / "README.md").exists():
+        (SCRATCH / "README.md").write_text("# Vicinae proposal scratch\nIsolated real-playbook consumer/producer fixtures; no live app/config changes.\n")
+    with tempfile.TemporaryDirectory(prefix="proposal-", dir=SCRATCH) as tmp:
         area = Path(tmp)
-        home = area / "home"
-        node = subprocess.run(["node", "-p", "process.execPath"], check=True, text=True, capture_output=True).stdout.strip()
-        env = {**os.environ, "HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"), "TMPDIR": str(scratch), "ANSIBLE_CONFIG": str(ROOT / "ansible.cfg"), "PATH": os.pathsep.join([str(Path(node).parent), "/usr/local/bin", "/usr/bin", "/bin", str(Path.home() / ".local/share/pnpm")])}
-        env.pop("DIR", None)
-        consumers = {}
-        for target in ["niri", "umbriel"]:
-            baseline = area / ("baseline.kdl" if target == "niri" else "baseline.toml")
-            baseline.write_text('binds { Mod+B { spawn "echo" "base"; }; }\n' if target == "niri" else '[keybinds]\n"Mod+B" = "spawn:echo base"\n')
-            consumers[target] = {"baseline": [str(baseline)], "placement": "link"}
-        host = generated.render(area / "host", "proposal-host", {"KEYBINDING_CONSUMERS": consumers, "KEYBINDINGS": {"vicinae-clipboard": {"patch": True, "umbriel": {"keys": ["Mod+Grave"]}}}}, env)
-        declarations = yaml.safe_load((ROOT / "examples/keybindings/vicinae.yaml").read_text())
-        declarations["KEYBINDING_TARGETS"] = {target: {"consumer": str(host)} for target in consumers}
-        producer = generated.render(area / "producer", "vicinae-proposal", declarations, env)
-        generated.run([str(producer / "bin/install-user.sh")], env)
-        niri = home / ".config/niri/.keybindings/generated/niri"
-        umbriel = home / ".config/umbriel/.keybindings/generated/umbriel"
+        niri_host = render_playbook("niri.etc.pb", "proposal-niri-host", etc_typed=True)
+        umbriel_host = render_playbook("umbriel.etc.pb", "proposal-umbriel-host", etc_typed=True)
+        producer = render_playbook(
+            "vicinae.src.pb",
+            "proposal-vicinae",
+            etc_typed=False,
+            extra={
+                # Same deployment-root form the playbook pins for the real
+                # /etc/opt deployments; resolves through DIR/etc exposure.
+                "KEYBINDING_TARGETS": {
+                    target: {"consumer": str(host), "context": "user", "scope": "user"}
+                    for target, host in [("niri", niri_host), ("umbriel", umbriel_host)]
+                }
+            },
+        )
+        # The producer bakes the deployment-root profile form, exactly as it
+        # will against /etc/opt/<target>/etc/keybinding-<target>.json.
+        for target, host in [("niri", niri_host), ("umbriel", umbriel_host)]:
+            leaf = (producer / f"bin/install-keybindings-{target}.sh").read_text()
+            assert f"--profile {host}/etc/keybinding-{target}.json" in leaf and " install " in leaf
+        assert (producer / "etc/keybinding-producer.json").is_file()
+        for hand in ["install-niri.sh", "install-umbriel.sh"]:
+            assert not (producer / "bin" / hand).exists()
+        assert (producer / "bin/install-kde.sh").is_file()
+        aggregate = (producer / "bin/install-user.sh").read_text()
+        assert aggregate.count('"$DIR/bin/install-keybindings-niri.sh"') == 1
+        assert aggregate.count('"$DIR/bin/install-keybindings-umbriel.sh"') == 1
+
+        # Niri live root mimics the real one: handy + vicinae blocks, a
+        # config.d include, and unrelated text; its includes must exist.
+        niri_home = area / "home-niri"
+        niri_dir = niri_home / ".config/niri"
+        (niri_dir / "handy").mkdir(parents=True)
+        (niri_dir / "config.d").mkdir(parents=True)
+        (niri_dir / "handy/handy.kdl").write_text('binds { Mod+H hotkey-overlay-title="handy" { spawn "echo" "handy"; }; }\n')
+        (niri_dir / "config.d/display-alt.kdl").write_text('output "DP-1" { scale 2; }\n')
+        (niri_dir / "config.kdl").write_text(
+            'output "DP-1" {\n    scale 1\n}\n\n'
+            "// handy start\ninclude \"./handy/handy.kdl\"\n// handy end\n"
+            '// vicinae start\ninclude "./vicinae/keybinding-launch.kdl"\n// vicinae end\n\n'
+            'include "./config.d/display-alt.kdl"\n'
+        )
+        # Umbriel live files still carry the previously managed bytes.
+        umbriel_home = area / "home-umbriel"
+        umbriel_dir = umbriel_home / ".config/umbriel"
+        umbriel_dir.mkdir(parents=True)
+        (umbriel_dir / "config.toml").write_text(consumer_hosts.OLD_CONFIG_TOML)
+        (umbriel_dir / "keybinds-local.toml").write_text(consumer_hosts.OLD_KEYBINDS_LOCAL_TOML)
+
+        niri_env = consumer_env(niri_home)
+        umbriel_env = consumer_env(umbriel_home)
+        # Adopt first (consumer installers), then register the producer.
+        run([str(niri_host / "bin/install-user.sh")], niri_env)
+        run([str(umbriel_host / "bin/install-user.sh")], umbriel_env)
+        # Producer leaves directly: the authored aggregate body enables a
+        # user service, which needs a session bus the isolated HOME lacks.
+        run([str(producer / "bin/install-keybindings-niri.sh")], niri_env)
+        run([str(producer / "bin/install-keybindings-umbriel.sh")], umbriel_env)
+
+        niri_root = (niri_dir / "config.kdl").read_text()
+        assert "vicinae/keybinding-launch.kdl" not in niri_root and "vicinae start" not in niri_root
+        assert 'include "./handy/handy.kdl"' in niri_root
+        niri_generated = niri_home / ".config/niri/.keybindings/generated/niri"
         for name, chord in [("vicinae-launch", "Mod+D"), ("vicinae-clipboard", "Alt+Grave"), ("vicinae-switch-windows", "Mod+F")]:
-            assert json.dumps(chord) in (niri / f"{name}.binding.kdl").read_text()
+            body = (niri_generated / f"{name}.binding.kdl").read_text()
+            assert json.dumps(chord) in body and (niri_dir / f"keybindings/{name}.binding.kdl").is_symlink()
+            assert f"keybinding/niri/{name} start" in niri_root
+        assert "?toggle=true" not in (niri_generated / "vicinae-switch-windows.binding.kdl").read_text()
+        assert "vicinae://launch/clipboard/history\"" in (niri_generated / "vicinae-clipboard.binding.kdl").read_text()
+
+        umbriel_root = (umbriel_dir / "config.toml").read_text()
+        assert '"Mod+Grave"' not in (umbriel_dir / "keybinds-local.toml").read_text().split("[keybinds]")[1]
+        umbriel_generated = umbriel_home / ".config/umbriel/.keybindings/generated/umbriel"
         for name, chord in [("vicinae-launch", "Mod+Space"), ("vicinae-clipboard", "Mod+Grave"), ("vicinae-switch-windows", "Mod+Slash")]:
-            assert json.dumps(chord) in (umbriel / f"{name}.binding.toml").read_text()
-        assert "?toggle=true" not in (niri / "vicinae-switch-windows.binding.kdl").read_text()
-        assert "?toggle=true" in (umbriel / "vicinae-switch-windows.binding.toml").read_text()
-        print("ok: isolated Vicinae proposed chords, shared modern routes and intentional toggle policy")
+            body = (umbriel_generated / f"{name}.binding.toml").read_text()
+            assert json.dumps(chord) in body and (umbriel_dir / f"keybindings/{name}.binding.toml").is_symlink()
+            assert f"keybinding/umbriel/{name} start" in umbriel_root
+        assert "?toggle=true" in (umbriel_generated / "vicinae-clipboard.binding.toml").read_text()
+        assert "?toggle=true" in (umbriel_generated / "vicinae-switch-windows.binding.toml").read_text()
+        assert "?toggle=true" not in (umbriel_generated / "vicinae-launch.binding.toml").read_text()
+
+        for target, home in [("niri", niri_home), ("umbriel", umbriel_home)]:
+            state = json.loads((home / f".config/{target}/.keybindings/membership.json").read_text())
+            assert set(state["groups"]) == {"vicinae"}
+        if subprocess.run(["sh", "-c", "command -v niri"], capture_output=True).returncode == 0:
+            subprocess.run(["niri", "validate", "-c", str(niri_dir / "config.kdl")], env=niri_env, check=True, capture_output=True)
+        if subprocess.run(["sh", "-c", "command -v umbriel"], capture_output=True).returncode == 0:
+            subprocess.run(["umbriel", "validate", "-c", str(umbriel_dir / "config.toml")], env=umbriel_env, check=True, capture_output=True)
+        print("ok: real-playbook cutover — adoption, registration, target chords, toggle policy, native validation")
+
 
 if __name__ == "__main__":
     test_proposal()

@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRATCH = ROOT / ".test-agent" / "umbriel-test"
 
 
-def render(name: str, playbook: str) -> Path:
+def render(name: str, playbook: str, etc_typed: bool = False) -> Path:
     deployment = SCRATCH / name
     shutil.rmtree(deployment, ignore_errors=True)
     payload = deployment / "payload"
@@ -31,7 +31,10 @@ def render(name: str, playbook: str) -> Path:
         json.dumps(
             {
                 "DIR": str(payload),
-                "ETC": str(payload / "etc"),
+                # etc-typed deployments materialize ETC at DIR itself (the
+                # real /etc/opt/NAME shape with the structural DIR/etc link);
+                # other types keep DIR/etc as a real subdirectory.
+                "ETC": str(payload if etc_typed else payload / "etc"),
                 "BINS_DIR": str(payload / "bin"),
                 "REPO_BYPASS": True,
                 "PKGS_BYPASS": True,
@@ -146,22 +149,29 @@ def test_steamos_umbriel_session_tools() -> None:
 
 
 def test_user_config_include_chain_and_animation() -> None:
-    payload = render("user", "umbriel.user.pb")
-    etc = payload / "etc"
+    # umbriel.user.pb was absorbed by umbriel.etc.pb: the root template and
+    # personal fragments are deployment material under an etc-typed DIR
+    # (scenario pins ETC==DIR to mirror the real /etc/opt/umbriel shape).
+    payload = render("user", "umbriel.etc.pb", etc_typed=True)
+    etc = payload
 
     # The root config stays a pure include chain: system default baseline,
+    # then the keybinding insertion area (comments inside the files array),
     # then optional fragments. No [keybinds] table here -- in the root it
-    # would REPLACE the entire built-in default keybind set.
+    # would REPLACE the entire built-in default keybind set. The hardcoded
+    # keybinds-vicinae.toml include is gone: producers own that binding now.
     config = read_toml(etc / "config.toml")
     assert config["include"]["files"] == ["/usr/local/share/umbriel/config.toml"]
     optional = config["include"]["optional"]["files"]
-    assert optional.index("keybinds-vicinae.toml") < optional.index("keybinds-local.toml")
-    assert "animation.toml" in optional
+    assert optional == ["keybinds-local.toml", "animation.toml"]
+    assert "# compfuzor-keybindings-begin" in (etc / "config.toml").read_text()
     assert "keybinds" not in config
 
-    # Fragments render beside the root config.
+    # Fragments stage beside the root config. The duplicate command-valued
+    # Mod+Grave entry is gone: the consumer profile patch owns that chord.
     keybinds = read_toml(etc / "keybinds-local.toml")
     assert "Mod+Shift+Slash" in keybinds["keybinds"]
+    assert "Mod+Grave" not in keybinds["keybinds"]
 
     # Animation fragment: focus-navigation reveal rides the windows_move
     # timeline (no separate nav event exists), dialed to a 650 ms symmetric
@@ -173,6 +183,17 @@ def test_user_config_include_chain_and_animation() -> None:
     assert move["duration_ms"] == 650
     assert move["curve"] == "0.42,0,0.58,1"
 
+    # Consumer profile: templateFile pins the staged root template; the
+    # consumer-owned vicinae-clipboard chord patch rides as a dormant
+    # (whenPresent) user source until the producer registers.
+    profile = json.loads((etc / "keybinding-umbriel.json").read_text())
+    assert profile["target"] == "umbriel"
+    assert profile["templateFile"] == {"path": str(etc / "config.toml")}
+    assert [source["path"]["path"] for source in profile["userSources"]] == [
+        str(etc / "keybinding/vicinae-clipboard.yaml")
+    ]
+    assert profile["userSources"][0]["whenPresent"] is True
+
     # Validate the full chain (system default + fragments) with the
     # installed compositor when present.
     umbriel = shutil.which("umbriel")
@@ -183,7 +204,7 @@ def test_user_config_include_chain_and_animation() -> None:
             capture_output=True,
         )
         assert result.returncode == 0, f"umbriel validate failed:\n{result.stdout}\n{result.stderr}"
-    print("ok: user config chain orders vicinae < local keybinds; animation fragment values render")
+    print("ok: etc deployment stages area-marked chain template, Mod+Grave-free local chords, animation values, consumer profile")
 
 
 if __name__ == "__main__":
