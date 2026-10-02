@@ -1,5 +1,14 @@
-/** Coherent input-registration batches with one caller-owned assembly operation.
- * Rollback covers ordinary failures, not crash atomicity or concurrent writers. */
+/**
+ * Shared mutable input-registration batch, separate from native material placement.
+ * It reads sources/slots, backs up prior regular entries privately and uses existing
+ * copy/link primitives to refresh explicitly declared source registrations. Exactly
+ * one caller operation runs after the entire batch is available, so action/binding
+ * resources do not trigger two half-graph rebuilds.
+ * Normal failure restores prior chosen entries, including disabled state and literal
+ * symlink targets. This is not the CONFIG artifact publisher, crash atomicity or
+ * concurrent-reader/writer isolation; the callback owns its CONFIG commit outcome.
+ * @see /doc/config/keybinding-producers.md
+ */
 import { mkdtemp, rm } from "node:fs/promises";
 import { dirname, isAbsolute, join, normalize } from "node:path";
 import { tmpdir } from "node:os";
@@ -13,20 +22,53 @@ import {
   type DeliveryEntry,
 } from "../links/delivery.ts";
 
+/** One explicit managed source refresh; these copies are not editable native receiver copies. */
 export type InputRegistration = {
+  /** Concrete absolute usable donor path, provided by producer/batch declaration. */
   source: string;
+  /** Concrete absolute ACTIVE slot; an existing disabled alternate remains selected. */
   destination: string;
+  /** Source copy/link refresh policy; producer reinstall refreshes either deliberately. */
   strategy: "copy" | "link";
+  /** Alternate slot suffix; both enabled and disabled slots present is a preflight error. */
   disabledSuffix?: string;
+  /** Initial state only when no slot exists; never overrides an existing enabled/disabled state. */
   initiallyDisabled?: boolean;
 };
-export type RegisteredInput = { path: string; disabled: boolean };
+/** Selected refreshed slot supplied to the single coherent callback. */
+export type RegisteredInput = {
+  /** Actual chosen entry, possibly the disabled alternate rather than active destination. */
+  path: string;
+  /** Retained/initial disabled state; caller source selection must not re-enable it implicitly. */
+  disabled: boolean;
+};
 
+/**
+ * Refresh a closed registration batch, invoke one operation and accept only its
+ * explicit success result. Preflight checks both active/disabled slot claims and
+ * each destination against EVERY donor's symlink chain/physical-parent aliases;
+ * an earlier registration must not overwrite a later donor. Copying donor bytes
+ * alone would not make requested link topology safe.
+ *
+ * Normal non-success or thrown operation errors restore old entries/new-slot
+ * absence. No crash-atomicity or concurrent-writer isolation is supplied. The
+ * callback must not treat a completed CONFIG commit as preparation; a thrown
+ * post-commit failure cannot make the artifact mutation un-happen. Cleanup errors
+ * may surface after accepted publication and must not be advertised as safe retry.
+ * @param records Explicit absolute source/slot declarations; no filesystem scan adds records.
+ * @param operation Runs once only after all registrations are present, with chosen slot states.
+ * @param options Caller success predicate and private backup parent.
+ * @returns The operation result after acceptance or ordinary restoration; non-success
+ * remains a non-success result rather than silently becoming a successful install.
+ * @throws On source/slot/alias preflight, delivery, callback, restoration or cleanup failure.
+ */
 export async function withInputBatch<T>(
   records: readonly InputRegistration[],
   operation: (inputs: RegisteredInput[]) => Promise<T>,
   options: {
+    /** True accepts the callback outcome; e.g. consumer code === 0, not a premature metadata save. */
     success: (result: T) => boolean;
+    /** Private backup directory parent; defaults to platform temp, never a live output tree. */
     workspaceRoot?: string;
   },
 ): Promise<T> {
