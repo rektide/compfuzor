@@ -17,9 +17,9 @@ An additional, bounded check of experimental's **signed source index** found no 
 
 ### Read the useful differences first
 
-- [Declared policy versus native Debian](snapshots/unstable/audit-7.3/policy-declared-vs-debian.diff): **35 entries** from common+LLVM declarations only. `<absent>` means not represented in that full config, not necessarily disabled. GCC-produced configs do not expose several Clang choices; these availability differences are not claims that Debian deliberately chose a different Clang policy.
+- [Declared policy versus native Debian](snapshots/unstable/audit-7.3/policy-declared-vs-debian.diff): **36 entries** from common+LLVM declarations only. `<absent>` means not represented in that full config, not necessarily disabled. GCC-produced configs do not expose several Clang choices; these availability differences are not claims that Debian deliberately chose a different Clang policy. The newest entry is `CRYPTO_ZSTD m -> y`: Debian ships the algorithm modular while our policy builds it in for early-boot zswap.
 - [Debian versus upstream, both projected onto 7.3](snapshots/unstable/audit-7.3/target-debian-vs-upstream.diff): **7,468 entries**, mostly Debian's broad hardware/modules/subsystem coverage. This is the first layer; it is not our custom policy.
-- [Our effective policy atop projected Debian](snapshots/unstable/audit-7.3/target-policy-vs-debian.diff): **49 entries**, including dependency consequences and two standalone-build normalizations. Built-in filesystems, BBR, reduced hardening, host-native CPU/TSX-off, LZ4 hibernation and pstore frontend choices dominate.
+- [Our effective policy atop projected Debian](snapshots/unstable/audit-7.3/target-policy-vs-debian.diff): **50 entries**, including dependency consequences and two standalone-build normalizations. Built-in filesystems, BBR, reduced hardening, host-native CPU/TSX-off, LZ4 hibernation, built-in zswap zstd and pstore frontend choices dominate.
 - [Unfulfilled policy](snapshots/unstable/audit-7.3/target-policy-unfulfilled.diff): **empty**; every declared common+LLVM symbol was fulfilled on this host.
 - [Toolchain metadata](snapshots/unstable/audit-7.3/target-toolchain-metadata.diff): kept separate, not attributed to deliberate custom policy.
 
@@ -54,10 +54,13 @@ Debian's `output/signing_key.pem` is supplied by its package build machinery,
 not a plain upstream build. The upstream default path permits normal key
 generation at build time; no key is included or copied by this policy. Clearing
 the old Debian ABI build salt avoids carrying `7.2.8+deb14-amd64` into a 7.3
-build. The final effective delta is **49 symbols**: the original 47 plus these
-two build normalizations. Every declaration and required expectation is
-fulfilled. The main compressed saved configuration already had these values
-and remains unchanged.
+build. The final effective delta is **50 symbols**: the original 47 plus these
+two build normalizations plus the zswap zstd declaration (`CRYPTO_ZSTD=y`,
+added in `4b254ff1`). Every declaration and required expectation is
+fulfilled. On 2026-10-02 the main compressed saved configuration was
+regenerated so the saved artifact itself picks up the zstd declaration; that
+single symbol is the only change the regeneration made, and it had already
+carried these normalization values unchanged.
 
 [Running 7.1 versus native Debian 7.2.8, raw](snapshots/unstable/audit-running-7.1/our-current-vs-debian.raw.diff) is retained as a separately labeled historical cross-version/toolchain audit; [declared-policy symbols only](snapshots/unstable/audit-running-7.1/our-current-declared-policy-vs-debian.diff) is the pertinent view. Neither is the canonical deliberate policy layer. Its policy-input hashes were also refreshed after approval.
 

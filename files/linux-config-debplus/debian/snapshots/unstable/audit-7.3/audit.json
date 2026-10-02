@@ -7,12 +7,12 @@
     "sha256": "471f1a3b3dce76dad0cf0da19f29e4562c517cad0855bcd8b74502b92ef892ea"
   },
   "output_sha256": {
-    "policy-declared-vs-debian.diff": "b98b10ff3aefba7263bea7dfe559d4977d5b209a61fdceeee3bda6142615d220",
+    "policy-declared-vs-debian.diff": "b17ba993d3c758933e80cbbeaf39838d314514fad607d12a935f697c746cdd9b",
     "target-debian-vs-upstream.diff": "27ba690ebcb5278b73f61033b9448ef6534e432df081c9c473c6122accd16131",
     "target-debian.config.xz": "a658c3f1123f23f09a7b8eb23016dde2abb1cb682b61bc11eaecd8593c8a5706",
     "target-policy-unfulfilled.diff": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "target-policy-vs-debian.diff": "cc82728a4e1f4fd8971d8360ffc090a0c0028c4301b0b96dca5493aefb19d413",
-    "target-policy.config.xz": "122ba9e174c3e15aab4faa6113c3a9d84746163615ca73cc648052b12e84aae7",
+    "target-policy-vs-debian.diff": "eb80059731065c1670879783cabedfd0a1350aa5e7752362888a748d9758c5b8",
+    "target-policy.config.xz": "a19f122970a2219506140e9f1158c8eeb1f46c20a18ebfed03f05de36a03c5e3",
     "target-required-intent-unfulfilled.diff": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "target-toolchain-metadata.diff": "46dad13258e5c803e4dcfc43b01cf5f6cf0bcad13e337d4349ea1e30e5e4ef21",
     "target-upstream.config.xz": "315652804aa5bb10d866475cd24771cf31f665e13ffb966130e4e2feaaabb0ae"
@@ -20,7 +20,7 @@
   "policy_inputs": [
     {
       "path": "/home/rektide/src/compfuzor/files/linux-config-debplus/overrides.config",
-      "sha256": "eeb8e7fd831189b349cacc79b401ca431b242a9e7b2edf97b1f82c7727836443"
+      "sha256": "6fa372fc7434f5c8e54997df08afea9089aadb55a0727eda276ba60425253398"
     },
     {
       "path": "/home/rektide/src/compfuzor/files/linux-config-debplus/overrides.llvm",
@@ -185,8 +185,8 @@
       "rustc": "rustc 1.101.0-nightly (5c543b0b8 2026-09-29)"
     },
     "toolchain": "llvm",
-    "tree": "/home/rektide/src/compfuzor/.test-agent/linux-debplus-final/source",
+    "tree": "/home/rektide/src/compfuzor/.test-agent/linux-debplus-regen/src",
     "version": "7.3.0-rc5",
-    "work_dir": "/home/rektide/src/compfuzor/.test-agent/linux-debplus-final/key-path-replay"
+    "work_dir": "/home/rektide/src/compfuzor/.test-agent/linux-debplus-regen/audit-work"
   }
 }

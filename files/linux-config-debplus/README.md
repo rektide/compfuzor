@@ -70,9 +70,12 @@ The same-target comparison evaluates both inputs on the pinned 7.3 source:
 1. [Upstream → projected Debian](debian/snapshots/unstable/audit-7.3/target-debian-vs-upstream.diff):
    Debian's broad driver/module and subsystem choices.
 2. [Projected Debian → our policy](debian/snapshots/unstable/audit-7.3/target-policy-vs-debian.diff):
-   **49 effective changes**, driven by the small common and LLVM fragments:
-   47 kernel-policy/dependency changes plus standalone signing-path and
-   build-salt normalization.
+   **50 effective changes**, driven by the small common and LLVM fragments:
+   48 kernel-policy/dependency changes plus standalone signing-path and
+   build-salt normalization. The fiftieth line is `CRYPTO_ZSTD` built in
+   (`=y`) so early-boot zswap can honor its compressor before disk modules
+   load; the runtime compressor choice is owned jointly with compfuzor's
+   `zswap.etc.pb`, which sets `compressor: zstd`.
 
 This is explicitly a 7.3 projection of Debian 7.2.8, not a native-version
 Debian delta. It does not automatically replace the saved legacy-seed config.

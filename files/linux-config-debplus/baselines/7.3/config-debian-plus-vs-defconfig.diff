@@ -297,7 +297,7 @@
  CRYPTO_WP512 n -> m
  CRYPTO_XCBC n -> m
  CRYPTO_XTS n -> y
- CRYPTO_ZSTD n -> m
+ CRYPTO_ZSTD n -> y
  CXL_BUS n -> y
  DAMON n -> y
  DAVICOM_PHY n -> m

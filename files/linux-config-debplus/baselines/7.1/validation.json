@@ -33,14 +33,14 @@
     "applied_date": "2026-10-01",
     "codec": "xz -9 --check=crc64 -T1 (deterministic; single-threaded)",
     "mode": "0644",
-    "note": "Full configurations are stored xz-compressed; each artifact was verified to decompress byte-identical to its original (sha256 match) before the plaintext file was removed. plaintext_sha256 is the preserved content hash; sha256 is the committed .xz artifact. .diff/.fragment/.json/.md artifacts remain uncompressed. Compression is storage-only: every audit, replay, and normalization claim above describes the identical plaintext.",
+    "note": "Full configurations are stored xz-compressed; each artifact was verified to decompress byte-identical to its original (sha256 match) before the plaintext file was removed. plaintext_sha256 is the preserved content hash; sha256 is the committed .xz artifact. .diff/.fragment/.json/.md artifacts remain uncompressed. Compression is storage-only: every audit, replay, and normalization claim above describes the identical plaintext. config-debian-plus.xz was regenerated on 2026-10-02 for the built-in zswap zstd policy declared in overrides.config (commit 4b254ff1): CRYPTO_ZSTD is the only configuration symbol that changed (m -> y); the replaced 2026-10-01 artifact remains recoverable from repository history.",
     "artifacts": {
       "config-debian-plus.xz": {
         "path": "files/linux-config-debplus/config-debian-plus.xz",
-        "sha256": "2e041b8093a472100011773c31367579a38299cff2cef21c57abbb828ca9f6d3",
-        "plaintext_sha256": "9728eba658e290c1fdc4da0a7238d839dd3e4ac33ded4d22b8c577fdccb579ff",
-        "plaintext_bytes": 300100,
-        "xz_bytes": 60388
+        "sha256": "0a0d3802839ff4b0fc84e899065ca9a6e11d6211247f7ab16c0f744707749763",
+        "plaintext_sha256": "04855f55d6974f70f3d16b5e586978dca99342def173b353ab20e7851004fb40",
+        "plaintext_bytes": 299961,
+        "xz_bytes": 60288
       },
       "config-running.xz": {
         "path": "files/linux-config-debplus/baselines/7.1/config-running.xz",

@@ -10,12 +10,12 @@
   "output_sha256": {
     "our-current-declared-policy-vs-debian.diff": "455862f0ae2ea90a4f3da57319d57c0fbcee45d7a271ba6886ad717b78768bf0",
     "our-current-vs-debian.raw.diff": "b96c229e0864e669edfbecd16d3c5e830d6521f0fd48421b9f84086e18fad83f",
-    "policy-declared-vs-debian.diff": "b98b10ff3aefba7263bea7dfe559d4977d5b209a61fdceeee3bda6142615d220"
+    "policy-declared-vs-debian.diff": "b17ba993d3c758933e80cbbeaf39838d314514fad607d12a935f697c746cdd9b"
   },
   "policy_inputs": [
     {
       "path": "/home/rektide/src/compfuzor/files/linux-config-debplus/overrides.config",
-      "sha256": "eeb8e7fd831189b349cacc79b401ca431b242a9e7b2edf97b1f82c7727836443"
+      "sha256": "6fa372fc7434f5c8e54997df08afea9089aadb55a0727eda276ba60425253398"
     },
     {
       "path": "/home/rektide/src/compfuzor/files/linux-config-debplus/overrides.llvm",

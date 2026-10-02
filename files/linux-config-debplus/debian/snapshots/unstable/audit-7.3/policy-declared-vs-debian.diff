@@ -2,6 +2,7 @@ AUTOFDO_CLANG: <absent> -> n
 BTRFS_FS: m -> y
 BUILD_SALT: "7.2.8+deb14-amd64" -> ""
 CFI: <absent> -> n
+CRYPTO_ZSTD: m -> y
 DEFAULT_BBR: <absent> -> y
 DEFAULT_CUBIC: y -> n
 DEFAULT_TCP_CONG: "cubic" -> "bbr"

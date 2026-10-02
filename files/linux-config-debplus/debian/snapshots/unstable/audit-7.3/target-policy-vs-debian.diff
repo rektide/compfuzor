@@ -5,6 +5,7 @@ CRC16: m -> y
 CRYPTO_CTS: m -> y
 CRYPTO_LIB_BLAKE2B: m -> y
 CRYPTO_XTS: m -> y
+CRYPTO_ZSTD: m -> y
 DEFAULT_BBR: <absent> -> y
 DEFAULT_CUBIC: y -> n
 DEFAULT_TCP_CONG: "cubic" -> "bbr"

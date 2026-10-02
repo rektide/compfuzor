@@ -98,6 +98,22 @@ def run_tests(scratch):
                              ("RUST", ("n", "y"))]:
         assert changes.get(symbol) == expected, (symbol, changes.get(symbol))
 
+    # The full defconfig->current keymap stays pinned at the 7461 differing
+    # entries recorded in baselines/7.3/README.md (the recorded audit counts
+    # RUSTC_VERSION_TEXT, so --include-metadata matches its keymap exactly).
+    # A regenerated saved config that grows or shrinks the Debian-plus delta
+    # fails here instead of drifting silently. Spot-anchor the deliberate
+    # overrides, including built-in zswap zstd (zswap.etc.pb policy).
+    full = run_tool(str(DEFCONFIG), str(CURRENT), "--include-metadata")
+    (scratch / "defconfig-vs-current-full.txt").write_text("\n".join(full) + "\n")
+    assert len(full) == 7461, f"expected 7461 differences, got {len(full)}"
+    full_changes = transitions(full)
+    for symbol, expected in [("CRYPTO_ZSTD", ("n", "y")),
+                             ("X86_NATIVE_CPU", ("n", "y")),
+                             ("DEFAULT_TCP_CONG", ('"cubic"', '"bbr"')),
+                             ("RUST", ("n", "y"))]:
+        assert full_changes.get(symbol) == expected, (symbol, full_changes.get(symbol))
+
     # Mixed input: the seed as decompressed plain text must yield the
     # identical comparison to its .xz container.
     plain = scratch / SEED_ARCHIVE.with_suffix("").name
