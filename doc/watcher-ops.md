@@ -403,7 +403,7 @@ compfuzor's managed symlinks).
 | watchman-main reporters | `/srv/watchman-main/bin/` (from `watchman.srv.pb`) | `status-watchman.sh` (identity/guard/linger/inotify drift), `guard-refusals.sh` (names silent offenders), `takeover.sh`, `install-cli-symlink.sh` |
 | watchwoman reporters | `/opt/watchwoman-git/bin/` (from `watchwoman.src.pb`) | `status-watchwoman.sh` (drift, get-sockname/XDG check), `init-watchmanconfig.sh` (seed per-root ignore floor + root marker) |
 | inotify usage | `/etc/opt/fs-inotify-git/bin/usage.sh` (from `sysctl-fs-inotify.etc.pb`) | per-user watch/instance consumption, top consumers |
-| opencode ops | `/usr/local/src/opencode-git/bin/` (from `opencode.src.pb`) | `status.sh`, `status-cleanup.sh`, global `opencode-status-ok` (shell-vs-managed drift), `cleanup.sh` + timer |
+| opencode ops | `/usr/local/src/opencode-git/bin/` (from `opencode.src.pb`) | `status.sh`, `status-cleanup.sh`, global `opencode-status-ok` (shell-vs-managed drift), `cleanup-tmp.sh` + timer |
 | watchman metrics reading guide | `~/src/opencode-watchman/.design/watchman/metrics0.glm53.md` | decoding the plugin's `watchman_metrics` dumps: symptom→field table, jq recipes |
 | plugin maintenance log | `~/src/opencode-watchman/.design/watchman/README.md` | the 25-commit stack, config table (all `OPENCODE_WATCHMAN_*` knobs), verification record |
 

@@ -190,7 +190,7 @@
       SYSTEMD_INSTALLS:
         WantedBy: default.target
     opencodeCleanupService:
-      SYSTEMD_SERVICE: "{{OPENCODE_UNIT}}-cleanup"
+      SYSTEMD_SERVICE: "{{OPENCODE_UNIT}}-cleanup-tmp"
       # The timer activates this unit; installing it must only link the file.
       SYSTEMD_ENABLE: false
       SYSTEMD_UNITS:
@@ -198,7 +198,7 @@
         Documentation: https://github.com/anomalyco/opencode
       SYSTEMD_SERVICES:
         Type: oneshot
-        ExecStart: "{{DIR}}/bin/cleanup.sh --apply --min-age 0s"
+        ExecStart: "{{DIR}}/bin/cleanup-tmp.sh --apply --min-age 0s"
         # Do not inherit daemon defaults or the server's environment.
         EnvironmentFile: false
         Restart: false
@@ -206,18 +206,18 @@
       SYSTEMD_INSTALLS:
         WantedBy: false
     opencodeCleanupTimer:
-      SYSTEMD_TIMER: "{{OPENCODE_UNIT}}-cleanup"
+      SYSTEMD_TIMER: "{{OPENCODE_UNIT}}-cleanup-tmp"
       SYSTEMD_UNITS:
         Description: Clean inactive OpenCode native-library artifacts every eight hours
         Documentation: https://github.com/anomalyco/opencode
       SYSTEMD_TIMERS:
         OnCalendar: "*-*-* 00/8:00:00"
         Persistent: true
-        Unit: opencode-cleanup.service
+        Unit: opencode-cleanup-tmp.service
       SYSTEMD_INSTALLS:
         WantedBy: timers.target
     # status.sh reporters (prepended before the config/links contributors):
-    # status-cleanup.sh dry-runs cleanup.sh with the timer's eligibility window
+    # status-cleanup.sh dry-runs cleanup-tmp.sh with the timer's eligibility window
     # plus the timer's own unit state; status-opencode-ok.sh checks the
     # invoking shell against the managed deployment and is also globally
     # linked as opencode-status-ok for quick checks from shells without ZIM env.
@@ -282,7 +282,7 @@
 
       This deployment is instance-scoped. `INSTANCE=git` (the default) is the
       primary instance and keeps the historical unsuffixed surface: unit
-      `opencode.service` / `opencode-cleanup.timer`, global links `opencode`
+      `opencode.service` / `opencode-cleanup-tmp.timer`, global links `opencode`
       and `opencode2-node` (plus `opencode-status-ok`, `opencode-last`,
       `opencode-live`, `opencode-restart-clients`), the `~/.config/opencode`
       symlink, the interactive
@@ -298,7 +298,7 @@
       `/usr/local/src/opencode-<INSTANCE>` (checkout via `GIT_VERSION`, build
       from `~/src/opencode-working-<INSTANCE>`), config `/etc/opt/opencode-<INSTANCE>`,
       credential `~/.config/opencode-<INSTANCE>/secrets/OPENCODE_PASSWORD`,
-      units `opencode-<INSTANCE>.service` / `opencode-<INSTANCE>-cleanup.timer`,
+      units `opencode-<INSTANCE>.service` / `opencode-<INSTANCE>-cleanup-tmp.timer`,
       client links `opencode-<INSTANCE>` / `opencode2-node-<INSTANCE>` — and
       its clients enter through one global launcher:
 
@@ -649,10 +649,10 @@
       extraction filename slots. It never traverses `/tmp/opencode` and
       defaults to a dry run with no age delay:
 
-          {{DIR}}/bin/cleanup.sh
-          {{DIR}}/bin/cleanup.sh --min-age 24h
-          {{DIR}}/bin/cleanup.sh --apply
-          {{DIR}}/bin/cleanup.sh --apply --min-age 24h
+          {{DIR}}/bin/cleanup-tmp.sh
+          {{DIR}}/bin/cleanup-tmp.sh --min-age 24h
+          {{DIR}}/bin/cleanup-tmp.sh --apply
+          {{DIR}}/bin/cleanup-tmp.sh --apply --min-age 24h
 
       Files mapped or held open by any process are excluded. New dependency
       builds remain eligible as their bytes and sizes change, while unrelated
@@ -660,17 +660,17 @@
       `--min-age` when an additional retention delay is desired; summaries
       report the count and allocated bytes retained by that delay.
 
-      `opencode-cleanup.timer` runs the apply form every eight hours.
+      `opencode-cleanup-tmp.timer` runs the apply form every eight hours.
       `Persistent=true` catches up a missed calendar run when the user manager
       next starts; user lingering keeps that manager available outside login
       sessions on hosts where it is enabled.
 
-          systemctl --user status opencode-cleanup.timer
-          systemctl --user list-timers opencode-cleanup.timer
-          journalctl --user -u opencode-cleanup.service
+          systemctl --user status opencode-cleanup-tmp.timer
+          systemctl --user list-timers opencode-cleanup-tmp.timer
+          journalctl --user -u opencode-cleanup-tmp.service
 
       `bin/status.sh` reports cleanup through status-cleanup.sh: it dry-runs
-      `cleanup.sh` with the timer's eligibility window (`--min-age 0s`), so an
+      `cleanup-tmp.sh` with the timer's eligibility window (`--min-age 0s`), so an
       eligible count above zero is drift the next timer run should clear, and
       it also verifies the timer is active and enabled. `--no-timer` skips the
       timer half; `--min-age`/`--tmp-dir` pass through to the dry run.
@@ -965,7 +965,7 @@
       # restart the live server, which is why this is not a build* leaf).
       - name: config-cors.sh
         basedir: False
-      - name: cleanup.sh
+      - name: cleanup-tmp.sh
         basedir: False
       # status.sh reporter: leaked native libraries + timer state. Local bin
       # only (STATUSES runs it via bin/status.sh).

@@ -1,7 +1,7 @@
 # status-cleanup.sh — report leaked OpenCode native libraries and timer state.
 #
-# Dry-runs bin/cleanup.sh with the same eligibility window the
-# opencode-cleanup.timer applies (default --min-age 0s), so status mirrors
+# Dry-runs bin/cleanup-tmp.sh with the same eligibility window the
+# opencode-cleanup-tmp.timer applies (default --min-age 0s), so status mirrors
 # exactly what the next timer run would delete. Eligible inactive libraries
 # count as drift: the timer should reap them, so a persistently non-zero count
 # means the timer is not running (or dependency churn outruns it).
@@ -14,7 +14,7 @@
 # This is a compfuzor _bin body: files/_bin supplies the shebang,
 # `set -euo pipefail`, env loading, and option restoration.
 
-cleanup="${DIR}/bin/cleanup.sh"
+cleanup="${DIR}/bin/cleanup-tmp.sh"
 timer="{{ opencodeCleanupTimer.SYSTEMD_TIMER }}.timer"
 [ -x "$cleanup" ] || exit 2
 
@@ -37,8 +37,8 @@ while [ "$#" -gt 0 ]; do
     -h|--help)
       cat <<'EOF'
 usage: status-cleanup.sh [--min-age DURATION] [--tmp-dir DIR] [--no-timer]
-  Dry-run bin/cleanup.sh with the timer's eligibility window and report the
-  eligible leaked native libraries plus opencode-cleanup.timer's unit state.
+  Dry-run bin/cleanup-tmp.sh with the timer's eligibility window and report the
+  eligible leaked native libraries plus opencode-cleanup-tmp.timer's unit state.
 EOF
       exit 0 ;;
     *)
@@ -55,10 +55,10 @@ fi
 drift=0
 
 # dry-run evidence first: eligible lines plus the summary come straight from
-# cleanup.sh; the verdict below only interprets them
+# cleanup-tmp.sh; the verdict below only interprets them
 if ! out="$("$cleanup" "${args[@]}" 2>&1)"; then
   printf '%s\n' "$out"
-  printf 'drift: cleanup.sh failed\n'
+  printf 'drift: cleanup-tmp.sh failed\n'
   exit 1
 fi
 printf '%s\n' "$out"
