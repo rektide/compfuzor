@@ -65,9 +65,15 @@ def parse_files_entries(text):
     return [(match[1], match[2]) for match in pattern.finditer(text)]
 
 
-def tracked_material_files(playbook_dir):
+def playbook_type(text):
+    """The playbook's TYPE var names the controller directory under files/."""
+    match = re.search(r"^\s*TYPE:[ \t]*(\S+)", text, re.M)
+    return match[1] if match else None
+
+
+def tracked_material_files(playbook_dir, bundle_name):
     """Bundle-relative names of tracked material files, or None without a repo."""
-    repo_relative = Path("files") / BUNDLE.name
+    repo_relative = Path("files") / bundle_name
     for command in (["git", "ls-files", str(repo_relative)],
                     ["jj", "file", "list", str(repo_relative)]):
         result = subprocess.run(command, cwd=playbook_dir, text=True,
@@ -105,7 +111,9 @@ def verify(stage, playbook):
                   f"content differs from controller input: {name}")
             check(rendered.stat().st_mode & 0o777 == int(mode, 8),
                   f"mode differs from declaration: {name}")
-        tracked = tracked_material_files(playbook.parent)
+        tracked = tracked_material_files(playbook.parent,
+                                         playbook_type(playbook.read_text())
+                                         or BUNDLE.name)
         if tracked is None:
             notes.append("no usable git/jj repository above the playbook; "
                          "tracked-set check skipped")
