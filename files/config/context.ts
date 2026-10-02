@@ -21,9 +21,18 @@ export type ConfigInput = {
 }
 
 export type ConfigRecord = {
+  /** Sole output entry; keybinding adapters bind an absolute live path before invoking CONFIG. */
   output: string
+  /** Ordered selected inputs; naming a pending output here does not establish a candidate DAG. */
   inputs: ConfigInput[]
   apply?: boolean
+  /**
+   * Retains compiled/runtime recipe settings. The keybinding seam uses `leaf`
+   * (explicit deployed shared processor path) and `link` (absolute requested
+   * symlink target) without changing this open record contract. A link recipe
+   * still produces captured candidate bytes for validation; the runner stages
+   * its directory-entry representation only at the existing commit boundary.
+   */
   [key: string]: unknown
 }
 
@@ -48,6 +57,13 @@ export type ConfigSpec = {
   defaultContext: string
   configs: Record<string, ConfigRecord>
   contexts?: Record<string, ConfigContext>
+  /**
+   * Retains spec-level extensions such as `transaction_validate`. That trusted
+   * command receives the complete versioned candidate map after production and
+   * immediate per-recipe validation, before check/stdout/publication. It may write
+   * private validation layouts, not publish live outputs or modify candidates.
+   * @see /files/config/keybindings/closure.ts
+   */
   [key: string]: unknown
 }
 

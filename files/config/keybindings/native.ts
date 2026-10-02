@@ -1,4 +1,13 @@
-/** Pure native include inspection; only validation copies are normalized. */
+/**
+ * Pure native include inspection, resolution and text rebinding. Niri is parsed
+ * as KDL v1 with source locations; Umbriel is parsed as TOML with large integers
+ * preserved. No filesystem/env lookup, subprocess, registration or publication
+ * occurs. Callers provide explicit environment and owner paths.
+ * Rewriting is for private closure copies or deliberate Niri inline rebinding:
+ * Umbriel normalization must not be mistaken for editing unrelated live user TOML.
+ * Native validators still own complete compositor-schema admission.
+ * @see /doc/config/keybinding-consumers.md
+ */
 import { getLocation } from "@bgotink/kdl";
 import { parse as parseKdl } from "@bgotink/kdl/v1-compat";
 import {
@@ -11,7 +20,13 @@ import { dirname, resolve } from "node:path";
 import type { Target } from "./model.ts";
 import { kdlString } from "./render.ts";
 
-export type NativeInclude = { path: string; optional: boolean };
+/** One native reference in parsed order, before owner-relative/environment resolution. */
+export type NativeInclude = {
+  /** Raw authored string; may be relative, absolute, tilde-rooted or Umbriel env-dependent. */
+  path: string;
+  /** Native missing-file allowance; required references must never use hidden fallbacks. */
+  optional: boolean;
+};
 
 function tomlIncludes(table: TomlTable): {
   entries: NativeInclude[];
@@ -57,6 +72,15 @@ function tomlIncludes(table: TomlTable): {
   };
 }
 
+/**
+ * Inspect explicit top-level native includes without reading their referenced files.
+ * Niri recognizes include nodes; Umbriel returns required files then optional files.
+ * Slash-dash/comments/quoted text do not become membership through regex matching.
+ * @param text Captured valid-UTF-8 text; capture adapters reject invalid byte sequences.
+ * @param target Explicit grammar, independent of filename suffix.
+ * @returns Ordered unresolved references, not a full native semantic validation result.
+ * @throws On parse errors, invalid include tables/arrays or malformed Niri path arguments.
+ */
 export function nativeIncludes(text: string, target: Target): NativeInclude[] {
   if (target === "umbriel")
     return tomlIncludes(parseToml(text, { integersAsBigInt: "asNeeded" })).entries;
@@ -70,6 +94,18 @@ export function nativeIncludes(text: string, target: Target): NativeInclude[] {
     });
 }
 
+/**
+ * Replace reference paths in native text while keeping include order/optional semantics.
+ * Niri edits only parsed argument spans in the original bytes-as-text. Umbriel
+ * serializes parsed TOML, so comments/formatting may change: use it only on validation
+ * copies, never as arbitrary live-root adoption. Niri inline callers use resolved
+ * LIVE body-relative paths; validation callers use mirrored PRIVATE paths.
+ * @param text Native source/root whose include count determines replacement arity.
+ * @param target Target parser/serializer.
+ * @param paths One replacement per reference in nativeIncludes order.
+ * @returns Rebound text without writing or validating files.
+ * @throws On parse errors, wrong replacement arity or unavailable KDL locations.
+ */
 export function rewriteNativeIncludes(
   text: string,
   target: Target,
@@ -102,6 +138,18 @@ export function rewriteNativeIncludes(
   return output;
 }
 
+/**
+ * Resolve an include against its logical owner's directory and explicit native env.
+ * Umbriel expands named $VAR/${VAR}; both adapters support HOME-based tilde paths.
+ * No ambient environment is consulted or shell evaluation performed. The owner
+ * must be the selected body's location for inline content, not the containing root.
+ * @param raw Native authored include string, not a generic CONFIG selector object.
+ * @param owner Absolute logical file path determining relative include base.
+ * @param target Target-specific variable expansion semantics.
+ * @param environment Caller-declared values; missing variables/HOME fail explicitly.
+ * @returns Normalized absolute path; does not test existence or select candidates.
+ * @throws For absent declared expansions or empty/control-delimited resulting paths.
+ */
 export function resolveNativeInclude(
   raw: string,
   owner: string,

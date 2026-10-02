@@ -1,4 +1,15 @@
-/** CLI admission for internal processors, closure validation and explicit consumers. */
+/**
+ * Import-safe CLI admission shared by source and installed omnibus entry points.
+ * Explicit commands select producer installation, host assembly, group toggling,
+ * closure validation or lower-level consumer/registration operations. Other argv
+ * are admitted only through the strict internal single-candidate processor parser.
+ * No work runs at import; main may read profiles/manifests, mutate registration
+ * batches, write private plans and spawn existing CONFIG/native workers.
+ * Publication remains CONFIG's commit, not a CLI-owned transaction. Target/context/
+ * scope are explicit; no PATH discovery, compositor reload or interactive adoption.
+ * @see /doc/config/keybinding-producers.md
+ * @see /doc/config/keybinding-consumers.md
+ */
 import { readFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { runProcessor } from "./processor.ts";
@@ -16,9 +27,30 @@ import {
   type ProducerManifest,
 } from "./membership.ts";
 
+/**
+ * Dispatch one explicit keybinding operation and return its process-style outcome.
+ * Install defaults native delivery to seed while managed YAML registration refreshes;
+ * host CLI also defaults to seed (assembleHost's direct API defaults assemble).
+ * Enable/disable stage membership with reassembly. Profile selectors resolve at
+ * invocation; generated scope must match the chosen context. Register/install reject
+ * --check because registration is a real mutation, unlike assembly preview.
+ * @param argv Arguments after the domain alias; supported operations are install,
+ * host, enable, disable, validate, assemble, register, or internal --config flags.
+ * @param defaults Host-supplied installed worker/hook binding. runner may be omitted
+ * for source use requiring --runner; validatorCommand is executable plus fixed argv,
+ * not a shell command string. Consumer preparation appends its private --plan path.
+ * @returns Runner/consumer code, or zero for successful hook/processor-only work.
+ * @throws On strict argument/protocol errors, scope/profile mismatch, invalid files
+ * or delegated registration/preparation failures; the outer entry owns error reporting.
+ */
 export async function main(
   argv: string[],
-  defaults: { runner?: string; validatorCommand: string[] },
+  defaults: {
+    /** Installed CONFIG runner selected by the omnibus; explicit --runner may override it. */
+    runner?: string;
+    /** Existing closure-validator executable and fixed prefix, supplied by the entry adapter. */
+    validatorCommand: string[];
+  },
 ): Promise<number> {
   const [command, ...args] = argv;
   if (["install", "host", "enable", "disable"].includes(command)) {

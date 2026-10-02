@@ -1,4 +1,13 @@
-/** Current CONFIG adapter: capture selected inputs and write ONE private candidate. */
+/**
+ * Existing CONFIG leaf-protocol adapter: capture ordered YAML for one definition,
+ * or render one selected native path's include metadata, and write ONE candidate.
+ * It reads the spec/TSV manifest and selected declaration files, but never installs,
+ * registers sources, commits outputs or executes authored actions/scripts.
+ * Include mode deliberately does not read the referenced live body's bytes: a body
+ * may be another pending output and the runner is not a dependent-candidate DAG.
+ * Full-root consumer admission belongs to the separate closure hook before commit.
+ * @see /doc/config/keybindings.md
+ */
 
 import { readFile, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
@@ -7,10 +16,15 @@ import { decodeYaml } from "./decode.ts";
 import { compose, type Target } from "./model.ts";
 import { renderDefinition, renderInclude } from "./render.ts";
 
+/** Runner-owned internal leaf binding; optional types permit admission diagnostics for missing values. */
 export type ProcessorEnvironment = {
+  /** Active recipe spec JSON path, including context-bound input/output paths. */
   CONFIG_SPEC?: string;
+  /** Existing private transaction directory; presence prevents accidental direct leaf use. */
   CONFIG_TRANSACTION?: string;
+  /** Sole private candidate output file; the processor writes no other publication target. */
   CONFIG_CANDIDATE?: string;
+  /** Ordered TSV manifest: kind, identity, selected path, settings; not a byte snapshot. */
   CONFIG_INPUTS_FILE?: string;
 };
 
@@ -20,6 +34,18 @@ function required(value: string | undefined, label: string): string {
   return value;
 }
 
+/**
+ * Render exactly one recipe candidate under the existing internal protocol.
+ * Definition mode captures its selected YAML, composes the whole target graph and
+ * renders the requested binding. Include mode accepts exactly one native path and
+ * returns a reference (Umbriel array entry, not a standalone document). The runner
+ * owns every later per-recipe/transaction validation, check/stdout and commit step.
+ * @param argv Fixed --target/--material/optional --binding plus runner --config.
+ * @param environment Explicit runner paths; no ambient source/target installation scan.
+ * @returns Resolves after writing CONFIG_CANDIDATE only; no deployed output is accepted.
+ * @throws On bad args/protocol/spec/manifest, missing or invalid YAML, unresolved or
+ * disabled binding, composition/render errors or capture/write failure.
+ */
 export async function runProcessor(
   argv: string[],
   environment: ProcessorEnvironment,

@@ -1,4 +1,17 @@
-/** Bounded consumer capture/planning over CONFIG's existing sole commit boundary. */
+/**
+ * Invocation-time consumer adapter: capture declared YAML/native inputs, prepare
+ * per-binding material and an adopted root, then call the existing CONFIG runner
+ * exactly once. Filesystem reads and private scratch writes occur here; block
+ * preparation and CONFIG run as subprocesses. Processors do not install anything.
+ * The runner owns the sole publication/rollback boundary, including optional
+ * membership metadata outputs. Check mode prepares/validates without delivery.
+ *
+ * Editable native copies are preserved by assemble/seed, unlike managed YAML
+ * registrations refreshed by membership installation. Live references point to
+ * effective placements; only closure validation copies point to private candidates.
+ * @see /doc/config/keybinding-consumers.md
+ * @see /design/keybindings/implementation1.gpt61sol.md
+ */
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, normalize } from "node:path";
 import { tmpdir } from "node:os";
@@ -19,37 +32,92 @@ import { renderDefinition, renderInclude, shellQuote } from "./render.ts";
 import { captureClosure, entryKey, plannedReader, type ClosurePlan } from "./closure.ts";
 import { nativeIncludes, resolveNativeInclude, rewriteNativeIncludes } from "./native.ts";
 
-export type YamlSelection = { path: string; enabled?: boolean; disabledSuffix?: string };
+/** One explicitly selected YAML layer; array order determines composition precedence. */
+export type YamlSelection = {
+  /** Absolute concrete invocation-time source path; its filename is only provenance. */
+  path: string;
+  /** False skips the source without deleting its physical registration. */
+  enabled?: boolean;
+  /** Declared alternate slot suffix; both active and disabled entries existing is an error. */
+  disabledSuffix?: string;
+};
+/** Fully invocation-bound consumer data; portable selectors are resolved upstream. */
 export type ConsumerRequest = {
+  /** Request format discriminator; unsupported versions fail before publication. */
   version: 1;
+  /** Explicit compositor; never selected by scanning installed commands. */
   target: Target;
-  root: { path: string; templateFile?: string; area?: BlockArea };
+  /** Consumer entry point and declared adoption/bootstrap policy. */
+  root: {
+    /** Absolute concrete live output; CONFIG publishes it after dependent material. */
+    path: string;
+    /** Absolute template input used only when the root is missing, not to overwrite users. */
+    templateFile?: string;
+    /** Exact adopted marker pair; default target comments enclose the insertion area. */
+    area?: BlockArea;
+  };
+  /** Absolute generated-material directory, distinct from editable receiver placements. */
   materialRoot: string;
+  /** Closed ordered declaration membership, including later patches; no source glob discovery. */
   yamlSources?: YamlSelection[];
+  /** Authored native files using the same selection/placement interface as generated bodies. */
   nativeSources?: NativeSource[];
+  /** Policies by authoritative YAML binding ID; policies do not themselves add membership. */
   bindings?: Record<
     string,
-    { order?: number; placement?: NativeSource["placement"]; incorporation?: "include" | "inline" }
+    {
+      /** Root contribution precedence; default follows resolved binding insertion order. */
+      order?: number;
+      /** Native direct/copy/link choice; edits are retained unless refresh is explicit. */
+      placement?: NativeSource["placement"];
+      /** Include by default; inline is body-aware and initially Niri-only. */
+      incorporation?: "include" | "inline";
+    }
   >;
+  /** Absolute required leading references for a missing-root template; existing text is preserved. */
   baseline?: string[];
+  /** Absolute late references for bootstrap; existing personal text is not rewritten from this list. */
   personal?: string[];
+  /** Assemble requires usable placements; seed fills missing entries; refresh replaces explicitly. */
   mode?: "assemble" | "seed" | "refresh";
+  /** Native include-expansion values, not executable argv substitution; defaults to HOME only. */
   environment?: Record<string, string | undefined>;
 };
+/** Host services/policy for one bounded operation, separate from authored request data. */
 export type ConsumerOptions = {
+  /** Already bound target, paths and explicit membership for this invocation. */
   request: ConsumerRequest;
+  /** Existing executable CONFIG runner path; its deployment supplies the shared concat leaf. */
   runner: string;
+  /** Explicit executable plus fixed argv for the transaction hook; --plan is appended safely. */
   validatorCommand: string[];
+  /** Native validator executable override; default is the selected target command. */
   nativeValidator?: string;
+  /** Scratch parent for private capture/plan files; defaults to the platform temporary directory. */
   workspaceRoot?: string;
+  /** Existing block-in-file executable override; applies only to private root preparation. */
   blockCommand?: string;
+  /** Validate prospective state and report drift without writing live outputs or seeded placements. */
   check?: boolean;
+  /** Runner stream handling; pipe exposes captured stdout/stderr in the returned result. */
   stdio?: "inherit" | "pipe" | "ignore";
-  /** Domain-owned metadata published by the SAME CONFIG transaction as roots. */
-  supplementalOutputs?: { path: string; text: string }[];
+  /** Domain-owned metadata accepted only in the SAME CONFIG transaction as native outputs/root. */
+  supplementalOutputs?: {
+    /** Absolute metadata output, preflighted against roots, bodies and donor aliases. */
+    path: string;
+    /** Prepared serialized bytes as text, such as durable membership JSON. */
+    text: string;
+  }[];
+  /** Upstream captured profile/membership/source guards checked by the closure hook; not locks. */
   inputGuards?: FileGuard[];
 };
-export type ConsumerResult = AssemblyResult & { materials: SelectedMaterial[]; outputs: string[] };
+/** Runner outcome plus declared material/output inventory, not proof of crash atomicity. */
+export type ConsumerResult = AssemblyResult & {
+  /** Effective selected source/placement metadata, including stable contribution identities. */
+  materials: SelectedMaterial[];
+  /** Exact outputs offered to CONFIG, including metadata/root; excludes unowned direct inputs. */
+  outputs: string[];
+};
 
 function absolute(path: string): string {
   if (typeof path !== "string" || !isAbsolute(path) || /[\0\r\n\t]/.test(path))
@@ -57,6 +125,11 @@ function absolute(path: string): string {
   return normalize(path);
 }
 
+/**
+ * Choose the default exact adoption sentinels using valid target comment syntax.
+ * @param target Explicit target; Niri uses // and Umbriel uses #.
+ * @returns Marker text only; never edits, adopts or validates a file.
+ */
 export function consumerArea(target: Target): BlockArea {
   const comment = target === "niri" ? "//" : "#";
   return {
@@ -65,6 +138,17 @@ export function consumerArea(target: Target): BlockArea {
   };
 }
 
+/**
+ * Create a missing-root skeleton with baseline first, adopted area, personal last.
+ * Umbriel has exactly one include table/files array with sentinels INSIDE the array.
+ * This pure formatter is bootstrap policy, not an editor for existing user roots.
+ * @param target Native syntax to emit.
+ * @param baseline Concrete absolute leading references supplied by the host.
+ * @param personal Concrete absolute late references supplied by the host.
+ * @param area Exact sentinel pair, defaulting to the target convention.
+ * @returns Template text without file creation, source reads or publication.
+ * @throws For nonabsolute/control-delimited reference paths.
+ */
 export function consumerTemplate(
   target: Target,
   baseline: readonly string[],
@@ -78,6 +162,12 @@ export function consumerTemplate(
     : `[include]\nfiles = [\n${refs(baseline)}${area.begin}\n${area.end}\n${refs(personal)}]\n`;
 }
 
+/**
+ * Probe a temporary include at the sentinel boundary and inspect its native scope.
+ * Marker presence alone cannot prove an Umbriel area sits in include.files rather
+ * than optional.files, another table/array or quoted text. Only the probe string is
+ * inserted here; neither an existing root nor its unrelated tables are rewritten.
+ */
 function assertAreaContext(text: string, target: Target, area: BlockArea): void {
   const span = areaOffsets(text, area);
   const probe = "/compfuzor-insertion-area-probe";
@@ -93,7 +183,27 @@ function assertAreaContext(text: string, target: Target, area: BlockArea): void 
   }
 }
 
-/** Stable YAML IDs are authoritative. Paths/filenames identify provenance only. */
+/**
+ * Capture/compose/render a consumer and delegate validated publication to CONFIG.
+ * Assemble reads existing selected copies/links; seed creates only missing entries;
+ * refresh stages explicit replacements. Even seed does not repair a dangling
+ * existing selection silently. A preserved native copy need not have a usable donor.
+ * Niri inline rebinding uses the selected BODY's directory, not the root's directory.
+ *
+ * Preparation writes private scratch only. The transaction_validate hook sees every
+ * produced candidate after immediate per-recipe validation and before check/stdout/
+ * publication; it validates mirrored effective refs and shadowed generated defaults.
+ * The existing runner commits once. Guards are observed-state checks, not locks;
+ * registration coordination, crash recovery and external input restoration are not
+ * supplied by this function. Temporary cleanup failure after commit can still reject.
+ * @param options Bound request, explicit existing workers and execution policy.
+ * @returns Runner exit/streams with closed material/output inventory; check drift is
+ * nonzero, and a returned failure does not authorize publishing supplemental metadata.
+ * @throws For malformed requests, missing/conflicting inputs or placements, path/
+ * marker aliases, invalid adopted scope, preparation I/O/subprocess or runner setup.
+ * Native admission/runner failures normally return a nonzero code instead.
+ * @see /doc/config/keybinding-consumers.md
+ */
 export async function assembleConsumer(options: ConsumerOptions): Promise<ConsumerResult> {
   const request = options.request;
   if (request.version !== 1 || (request.target !== "niri" && request.target !== "umbriel"))

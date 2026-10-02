@@ -9,20 +9,33 @@ import { tmpdir } from "node:os"
 import { bindContextConfigs, getConfigContext, type ConfigSpec } from "./context.ts"
 import { pathsSharePhysicalEntry } from "../links/delivery.ts"
 
+/** Existing runner invocation used by domain adapters; apply is already a complete publication. */
 export type AssemblyOptions = {
+  /** Compiled/runtime spec; context binding retains leaf/link and transaction hook extensions. */
   spec: ConfigSpec
+  /** Explicit context key whose selectors resolve before spawning the runner. */
   contextName: string
+  /** Existing worker executable; deployment identity is derived from this path, not inherited DIR. */
   runner: string
+  /** Explicit recipe selection/order; consumer adapters offer one sole-candidate recipe per output. */
   names: string[]
+  /** Prepare/validate and report drift without output publication. */
   check?: boolean
+  /** Return one selected validated candidate's bytes; not multi-output preparation or commit. */
   stdout?: boolean
+  /** Suppress drift detail where supported by the existing runner. */
   quiet?: boolean
+  /** Pipe captures streams in AssemblyResult; inherit/ignore normally return empty buffers. */
   stdio?: "inherit" | "ignore" | "pipe"
 }
 
+/** Process outcome, not a durable history or crash-atomic transaction claim. */
 export type AssemblyResult = {
+  /** Exit code (or signal-derived code); native/transaction validation failure stays nonzero. */
   code: number
+  /** Captured stdout when piped; stdout mode contains candidate bytes, apply contains runner output. */
   stdout: Buffer
+  /** Captured diagnostics when piped; the adapter does not reinterpret native errors as success. */
   stderr: Buffer
 }
 
@@ -92,6 +105,17 @@ async function invokeRunner(options: AssemblyOptions, specPath: string): Promise
   })
 }
 
+/**
+ * Bind context paths, write a private resolved spec and invoke the existing runner once.
+ * Apply commits inside that runner; callers must not call this as prepare-only and
+ * then publish the same outputs again. Retained transaction_validate hooks see all
+ * candidates before publication; stdout/check remain non-publishing modes.
+ * @param options Explicit worker/context/recipe binding and stream/mode policy.
+ * @returns Runner outcome/streams after it completes; no second publisher runs here.
+ * @throws On context/path/alias validation, scratch/spec I/O, process setup or cleanup
+ * errors. Cleanup can fail after a successful mutation, so rejection is not safe-retry proof.
+ * @see /doc/config/keybinding-consumers.md
+ */
 export async function runAssemblyResult(options: AssemblyOptions): Promise<AssemblyResult> {
   const resolvedSpec = bindContextConfigs(options.spec, options.contextName, options.names)
   const context = getConfigContext(options.spec, options.contextName)
@@ -108,6 +132,12 @@ export async function runAssemblyResult(options: AssemblyOptions): Promise<Assem
   }
 }
 
+/**
+ * Convenience form of the same COMPLETE runner operation, returning only its code.
+ * @param options Same explicit binding/mode policy as runAssemblyResult.
+ * @returns Runner code; no additional publication follows successful apply.
+ * @throws Propagates context/process/scratch errors from runAssemblyResult.
+ */
 export async function runAssembly(options: AssemblyOptions): Promise<number> {
   return (await runAssemblyResult(options)).code
 }

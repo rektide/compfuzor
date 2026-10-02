@@ -1,4 +1,18 @@
-/** Closed producer membership, context binding and generated installation. */
+/**
+ * Durable, CLOSED producer membership and invocation-time binding of consumer
+ * profiles. The controller packages selectors/manifests; this adapter reads those
+ * declarations and registered YAML, orders producer groups before consumer layers,
+ * and delegates native work to assembleConsumer. No directory/PATH scan adds members.
+ *
+ * Producer installation refreshes managed YAML registrations as one batch; native
+ * editable placements independently seed/preserve unless refresh is requested.
+ * Membership updates are supplemental CONFIG candidates, accepted only with the
+ * outputs/root in the existing runner's commit, not an earlier metadata write.
+ * Registration rollback covers normal failures, not crash atomicity or reader isolation.
+ * @see /doc/config/keybinding-producers.md
+ * @see /design/keybindings/implementation2.gpt61sol.md
+ * @see /design/keybindings/review-fixes0.gpt61sol.md
+ */
 import { join, normalize, isAbsolute } from "node:path";
 import { captureFile, fileText, type FileGuard } from "../capture.ts";
 import { resolvePathSelector, type PathSelector } from "../context.ts";
@@ -14,56 +28,160 @@ import {
 import type { NativeSource } from "./materials.ts";
 import type { Target } from "./model.ts";
 
+/** Native material placement, not managed source-YAML registration strategy. */
 export type PlacementStrategy = "direct" | "copy" | "link";
+/** Render-time host policy whose portable paths resolve against the selected context at invocation. */
 export type Profile = {
+  /** Profile format version; loader does not migrate unsupported versions implicitly. */
   version: 1;
+  /** Declared target; install CLI and membership state must agree with it. */
   target: Target;
-  contexts: Record<string, { scope: "user" | "system"; root: PathSelector; subpath?: string }>;
+  /** Explicit named CONFIG-style contexts, not a universal deployment registry. */
+  contexts: Record<
+    string,
+    {
+      /** Expected installer scope; runtime rejects context/scope mismatch before delivery. */
+      scope: "user" | "system";
+      /** HOME/XDG/system/env selector resolved with the existing CONFIG path helper. */
+      root: PathSelector;
+      /** Optional contained relative suffix forming the base for profile-relative paths. */
+      subpath?: string;
+    }
+  >;
+  /** Root output selector; default is config.kdl/config.toml under the bound base. */
   rootFile?: PathSelector;
+  /** Generated definitions/companions selector; default .keybindings/generated. */
   materialRoot?: PathSelector;
+  /** Durable closed state selector; default .keybindings/membership.json. */
   membership?: PathSelector;
+  /** Default native receiver policy, link by default; not source registration copy/link. */
   placement?: PlacementStrategy;
+  /** Default receiver directory selector, keybindings/ under the selected base. */
   placementDirectory?: PathSelector;
+  /** Managed YAML copy/link policy; producer reinstall refreshes these declarations. */
   registration?: "copy" | "link";
+  /** Leading bootstrap references; existing root baseline text is not rewritten. */
   baseline?: PathSelector[];
+  /** Late bootstrap references; existing personal text remains author-owned. */
   personal?: PathSelector[];
-  userSources?: { path: PathSelector; whenPresent?: boolean; disabledSuffix?: string }[];
-  nativeSources?: (Omit<NativeSource, "path" | "placement"> & {
+  /** Ordered consumer-owned YAML layers after enabled producer groups. */
+  userSources?: {
+    /** Portable source selector resolved at invocation, not a filename-derived record ID. */
     path: PathSelector;
-    placement: { strategy: "direct" } | { strategy: "copy" | "link"; path: PathSelector };
+    /** A patch is dormant until its same-kind/ID base exists; unconditional patches stay strict. */
+    whenPresent?: boolean;
+    /** Explicit alternate disabled slot convention; both slots existing is invalid. */
+    disabledSuffix?: string;
+  }[];
+  /** Authored native memberships sharing generated-body selection semantics after path binding. */
+  nativeSources?: (Omit<NativeSource, "path" | "placement"> & {
+    /** Portable donor/native input selector, resolved before consumer capture. */
+    path: PathSelector;
+    /** Receiver policy with portable rather than already concrete paths. */
+    placement:
+      | {
+          /** Use the source directly, without receiver delivery. */
+          strategy: "direct";
+        }
+      | {
+          /** Native copy/link selection; seed/preserve versus refresh is invocation policy. */
+          strategy: "copy" | "link";
+          /** Receiver selector resolved against the chosen context base. */
+          path: PathSelector;
+        };
   })[];
+  /** Policies by binding ID, not membership declarations; inactive settings may remain. */
   bindings?: Record<
     string,
     {
+      /** Optional contribution ordering override after membership-derived defaults. */
       order?: number;
+      /** Native root representation; inline is initially Niri-only. */
       incorporation?: "include" | "inline";
-      placement?: { strategy: "direct" } | { strategy: "copy" | "link"; path: PathSelector };
+      /** Binding-specific receiver override, resolved at invocation. */
+      placement?:
+        | {
+            /** Include the generated canonical definition directly. */
+            strategy: "direct";
+          }
+        | {
+            /** Choose an editable copy or source-tracking link receiver. */
+            strategy: "copy" | "link";
+            /** Receiver selector, not the producer's packaged system path. */
+            path: PathSelector;
+          };
     }
   >;
+  /** Explicit missing-root template selector; never an implicit overwrite policy for existing text. */
   templateFile?: PathSelector;
 };
+/** Controller-packaged producer declaration; an empty resource list remains a real producer update. */
 export type ProducerManifest = {
+  /** Producer format discriminator checked before registration. */
   version: 1;
+  /** Stable membership/storage group ID; does not prefix/rewrite YAML action or binding IDs. */
   producer: string;
+  /** Finite group precedence; equal values sort by producer ID. */
   order: number;
-  resources: { path: string }[];
+  /** Exact packaged resources; reinstall replaces this list, including with [], without pruning files. */
+  resources: {
+    /** Concrete packaged system file; kind and authoritative ID are decoded from its YAML. */
+    path: string;
+  }[];
+  /** Explicit generated target participation; no compositor availability scan occurs. */
   targets: Target[];
 };
-type Resource = { path: string; kind: "action" | "keybinding"; id: string };
-export type Membership = {
-  version: 1;
-  target: Target;
-  groups: Record<string, { enabled: boolean; order: number; resources: Resource[] }>;
+/** Stored record identity is a consistency assertion, never a replacement for current YAML identity. */
+type Resource = {
+  /** Concrete registered ACTIVE slot; disabled convention is applied at source selection. */
+  path: string;
+  /** Stored decoded record kind, asserted against current YAML on every assembly. */
+  kind: "action" | "keybinding";
+  /** Stored decoded ID, asserted rather than used to override a changed YAML identity. */
+  id: string;
 };
+/** Durable exact source selection; pending updates publish only with CONFIG artifact commit. */
+export type Membership = {
+  /** State schema discriminator; not an implicit migration marker. */
+  version: 1;
+  /** Target of this context's state; prevents loading another compositor's graph. */
+  target: Target;
+  /** Explicit producer groups; stale physical files outside these lists are not rediscovered. */
+  groups: Record<
+    string,
+    {
+      /** Whole-group selection, preserved across reinstall; disabling does not delete resources. */
+      enabled: boolean;
+      /** Finite precedence before the group-ID tie breaker and later consumer overlays. */
+      order: number;
+      /** Exact registered active paths/kinds/IDs; .disabled alternate slots are interpreted on read. */
+      resources: Resource[];
+    }
+  >;
+};
+/** Host invocation services plus context choice; derives a concrete ConsumerRequest upstream of capture. */
 export type HostOptions = Omit<ConsumerOptions, "request"> & {
+  /** Loaded/generated portable policy, bound for this invocation rather than render-time HOME. */
   profile: Profile;
+  /** Optional observation of profile file state, included in the pre-commit closure guard set. */
   profileGuard?: FileGuard;
+  /** Explicit context key in profile.contexts, commonly user. */
   context: string;
+  /** Generated/caller-declared scope which must agree with the selected context. */
   scope: "user" | "system";
+  /** Native placement mode; producer install defaults seed, host API defaults assemble. */
   mode?: "assemble" | "seed" | "refresh";
 };
 const ID = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 
+/**
+ * Return known user defaults without reading configuration or discovering targets.
+ * The context uses invocation-time XDG resolution; native placement and managed
+ * registration default to link. Umbriel references its explicit system baseline;
+ * Niri deliberately fabricates no baseline. Existing roots still require adoption.
+ * @param target Declared target whose default root/validator convention is desired.
+ * @returns A fresh portable profile; does not provision prerequisites or create roots.
+ */
 export function defaultProfile(target: Target): Profile {
   return {
     version: 1,
@@ -75,6 +193,7 @@ export function defaultProfile(target: Target): Profile {
   };
 }
 
+/** Resolve selectors once against an explicitly scope-checked CONFIG-style context. */
 function bindProfile(options: HostOptions): {
   base: string;
   statePath: string;
@@ -155,6 +274,7 @@ function bindProfile(options: HostOptions): {
   };
 }
 
+/** Read only declared JSON state (or an empty missing state), never infer members from directories. */
 async function readState(
   path: string,
   target: Target,
@@ -192,8 +312,12 @@ async function readState(
   return { state, guard: file.guard };
 }
 
-/** User overlays with explicit whenPresent stay dormant when a producer is
- * disabled/absent. Core composition remains strict for unconditional patches. */
+/**
+ * Select enabled groups by order/ID, then late consumer layers, retaining input guards.
+ * whenPresent makes only conditional patches dormant when their base is missing;
+ * it does not weaken strict core composition or turn policy settings into members.
+ * Stored resource IDs/kinds assert current YAML identity; mismatch requires reinstall.
+ */
 async function selectedRequest(
   bound: ReturnType<typeof bindProfile>,
   state: Membership,
@@ -270,6 +394,7 @@ async function selectedRequest(
   return { request, guards };
 }
 
+/** Offer changed membership as a supplemental CONFIG output, not a prior accepted metadata write. */
 async function applyState(
   bound: ReturnType<typeof bindProfile>,
   state: Membership,
@@ -293,12 +418,37 @@ async function applyState(
   });
 }
 
+/**
+ * Bind the host profile and reassemble only its closed durable membership/user layer.
+ * Reads state/registered sources and delegates preparation/publication to the consumer;
+ * it does not refresh source registrations, add discovered files or rewrite membership.
+ * @param options Context/scope, workers and native placement mode (assemble by default).
+ * @returns Consumer/runner outcome; check mode reports drift without delivery.
+ * @throws On invalid profile/state/identity, absent declared inputs or consumer preparation.
+ */
 export async function assembleHost(options: HostOptions): Promise<ConsumerResult> {
   const bound = bindProfile(options);
   const { state, guard } = await readState(bound.statePath, options.profile.target);
   return applyState(bound, state, guard, options, false);
 }
 
+/**
+ * Upsert one declared producer group and perform one coherent registration/assembly.
+ * Decode authoritative YAML IDs, refresh managed source copies/links while preserving
+ * disabled slots, then stage exact membership with all native outputs in CONFIG.
+ * Empty resources replace the group's selection with []; stale physical files stay
+ * excluded, not pruned. Group enabled state survives reinstall. Native copies default
+ * to seed/preserve, independently from refreshed YAML registrations.
+ * @param manifest Packaged producer identity/order/resources and explicit target list.
+ * @param options Bound host policy/context and workers; check is not a registration mode.
+ * @returns Consumer code/streams; only zero accepts registration and membership together
+ * under normal operation. Nonzero causes the registration batch to restore old entries.
+ * @throws On manifest/target/check errors, malformed or duplicate records, preflight,
+ * registration or thrown preparation failures. No crash-atomicity/concurrent isolation
+ * or safe retry after unknown post-publication cleanup failure is promised.
+ * @see /doc/config/keybinding-producers.md
+ * @see /design/keybindings/review-fixes0.gpt61sol.md
+ */
 export async function installProducer(
   manifest: ProducerManifest,
   options: HostOptions,
@@ -353,6 +503,16 @@ export async function installProducer(
   );
 }
 
+/**
+ * Stage a named group's enabled flag with native reassembly at the same CONFIG commit.
+ * Resource files/slots remain untouched; reinstall retains this explicit state and
+ * whenPresent user patches can become dormant without reactivating the group.
+ * @param group Existing membership producer ID, not an action/binding ID.
+ * @param enabled Whether this group enters the next closed selection.
+ * @param options Explicit host context and assembly services.
+ * @returns Consumer outcome; a failed commit does not accept the new membership flag.
+ * @throws On unknown groups, invalid profile/state or consumer preparation errors.
+ */
 export async function toggleGroup(
   group: string,
   enabled: boolean,
@@ -365,9 +525,20 @@ export async function toggleGroup(
   return applyState(bound, state, guard, options, true);
 }
 
-export async function loadProfile(
-  path: string,
-): Promise<{ profile: Profile; profileGuard: FileGuard }> {
+/**
+ * Read/decode profile JSON and retain an observed-state guard for later validation.
+ * This only checks usable captured text/JSON; binding validates profile/context
+ * shape later. No selector resolution, registration, root write or commit occurs.
+ * @param path Explicit profile file selected by the caller/portable locator boundary.
+ * @returns Parsed profile and its file/link/physical-parent/content observation.
+ * @throws On missing/dangling/non-file input, invalid UTF-8/JSON or capture failure.
+ */
+export async function loadProfile(path: string): Promise<{
+  /** Captured policy, with portable selectors still unresolved until context binding. */
+  profile: Profile;
+  /** Captured profile observation included in later native admission guards. */
+  profileGuard: FileGuard;
+}> {
   const file = await captureFile(path);
   const text = fileText(file);
   if (text === undefined) throw new Error(`missing keybinding consumer profile ${path}`);

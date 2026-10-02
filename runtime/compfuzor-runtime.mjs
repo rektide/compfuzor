@@ -353,6 +353,17 @@ async function invokeRunner(options, specPath) {
 		});
 	});
 }
+/**
+* Bind context paths, write a private resolved spec and invoke the existing runner once.
+* Apply commits inside that runner; callers must not call this as prepare-only and
+* then publish the same outputs again. Retained transaction_validate hooks see all
+* candidates before publication; stdout/check remain non-publishing modes.
+* @param options Explicit worker/context/recipe binding and stream/mode policy.
+* @returns Runner outcome/streams after it completes; no second publisher runs here.
+* @throws On context/path/alias validation, scratch/spec I/O, process setup or cleanup
+* errors. Cleanup can fail after a successful mutation, so rejection is not safe-retry proof.
+* @see /doc/config/keybinding-consumers.md
+*/
 async function runAssemblyResult(options) {
 	const resolvedSpec = bindContextConfigs(options.spec, options.contextName, options.names);
 	if (!getConfigContext(options.spec, options.contextName).canonical && !options.check && !options.stdout) await assertContextOutputsSeparated(options.spec, resolvedSpec);
@@ -368,6 +379,12 @@ async function runAssemblyResult(options) {
 		});
 	}
 }
+/**
+* Convenience form of the same COMPLETE runner operation, returning only its code.
+* @param options Same explicit binding/mode policy as runAssemblyResult.
+* @returns Runner code; no additional publication follows successful apply.
+* @throws Propagates context/process/scratch errors from runAssemblyResult.
+*/
 async function runAssembly(options) {
 	return (await runAssemblyResult(options)).code;
 }
@@ -3585,7 +3602,22 @@ async function main$2(argv, deploymentDir) {
 }
 //#endregion
 //#region files/config/capture.ts
-/** Reusable CONFIG input capture and ordinary pre-commit revision guards. */
+/**
+* Reusable filesystem observation for CONFIG source/root/profile guards. Capture
+* reads entry topology, physical parent and regular referent bytes; it never writes,
+* locks, registers, validates a native schema or commits outputs. UTF-8 decoding
+* is separate so generic registration can capture binary bytes without text coercion.
+* Guard comparisons detect observed changes before/after admission, not atomic
+* snapshots, concurrent-writer isolation or elimination of the check-to-commit race.
+* @see /doc/config/keybinding-consumers.md
+*/
+/**
+* Decode captured bytes strictly as UTF-8, preserving a BOM rather than replacing
+* invalid bytes with different text that native validation would accidentally admit.
+* @param file Existing capture; no additional filesystem observation occurs.
+* @returns Text or undefined when the capture has no usable bytes.
+* @throws On invalid UTF-8, with the logical source path in the diagnostic.
+*/
 function fileText(file) {
 	if (file.bytes === void 0) return void 0;
 	try {
@@ -3597,9 +3629,24 @@ function fileText(file) {
 		throw new Error(`configuration text is not valid UTF-8: ${file.guard.path}`, { cause: error });
 	}
 }
+/**
+* Compute a deterministic SHA-256 observation without I/O or mutable registration.
+* @param bytes Exact captured referent content, not normalized native text.
+* @returns Hex digest used for equality checks, not an identity/locking guarantee.
+*/
 function contentHash(bytes) {
 	return createHash("sha256").update(bytes).digest("hex");
 }
+/**
+* Observe a final file/link entry and read its regular referent without writing.
+* Missing entries and ENOENT-dangling symlinks retain explicit guards but no bytes;
+* caller policy decides whether that absence is optional, seedable or an error.
+* Multiple filesystem reads are not one atomic snapshot; later guards can detect
+* observed changes but cannot prevent them.
+* @param path Concrete invocation-bound file path, normally absolute in CONFIG adapters.
+* @returns Raw bytes when usable plus kind/parent/hash/literal-target observation.
+* @throws On directory/special/nonregular referents or other filesystem errors.
+*/
 async function captureFile(path) {
 	const entry = await inspectDeliveryEntry(path);
 	const parent = await physicalParent(path);
@@ -3634,6 +3681,14 @@ async function captureFile(path) {
 		}
 	};
 }
+/**
+* Reobserve each guarded input/root and reject changed parent, kind, bytes or target.
+* Closure admission calls this before and after native validation; it supplies no
+* lock, compare-and-swap publication, concurrent-writer isolation or race elimination.
+* @param guards Observations captured by the caller before planning prospective outputs.
+* @returns Resolves when every comparison still matches; does not accept/commit state.
+* @throws On detected changes or capture failure while checking current state.
+*/
 async function assertFileGuards(guards) {
 	for (const expected of guards) {
 		const current = (await captureFile(expected.path)).guard;
@@ -10417,6 +10472,16 @@ function bindingFields(raw, label) {
 	if (raw.enabled !== void 0) result.enabled = bool(raw.enabled, `${label}.enabled`);
 	return result;
 }
+/**
+* Admit one source record and translate authoring fields into the domain model.
+* Exec/script/native are mutually exclusive per layer; native implementations
+* require a target specifier. Partial records are allowed for later composition.
+* @param value Parsed data containing version, kind, ID and declaration fields.
+* @param source Diagnostic label; never used to infer or overwrite the record ID.
+* @returns A decoded contribution without reading, registering or publishing anything.
+* @throws On unsupported version/kind, unknown fields, malformed identifiers,
+* invalid field types, unsafe scalar spelling or ambiguous implementation selection.
+*/
 function decodeContribution(value, source) {
 	const { version, kind, id: rawId, patch, niri, umbriel, ...fields } = object(value, source);
 	if (version !== 1) throw new Error(`${source}: expected version: 1`);
@@ -10445,6 +10510,16 @@ function decodeContribution(value, source) {
 		}
 	};
 }
+/**
+* Decode exactly one captured YAML document using the strict record contract.
+* Duplicate keys, custom/unsupported syntax warnings, multiple documents and
+* aliases are rejected rather than silently reduced into a different declaration.
+* UTF-8 byte admission belongs to the capture adapter, not this text-only function.
+* @param text Already captured YAML text; no file lookup or env substitution occurs.
+* @param source Provenance label included in parser and record diagnostics.
+* @returns One decoded contribution for ordered composition.
+* @throws On YAML admission errors or any invalid record field.
+*/
 function decodeYaml(text, source) {
 	const document = (0, import_dist.parseDocument)(text, {
 		uniqueKeys: true,
@@ -10456,6 +10531,11 @@ function decodeYaml(text, source) {
 }
 //#endregion
 //#region files/config/keybindings/model.ts
+/**
+* Field-specific merge: supplying keys resets earlier addKeys, while addKeys alone
+* extends the prior selection. Actual union/deduplication happens after layering;
+* this must not become generic array concatenation for action argv.
+*/
 function mergeBinding(base, patch) {
 	const { addKeys, ...replacement } = patch;
 	return {
@@ -10469,13 +10549,30 @@ function mergeBinding(base, patch) {
 		}
 	};
 }
-/** Only modifier ordering/case is normalized, not target-dependent Mod resolution
-* or XKB key aliases. Native whole-root validation remains necessary. */
+/**
+* Produce the deliberately limited identity used to detect effective chord overlap.
+* Only modifier ordering/case is normalized; key spelling is retained. Configurable
+* Mod equivalence and XKB aliases remain the native validator's concern.
+* @param chord Decoded ordinary `+` chord, not arbitrary native submap syntax.
+* @returns Deterministic comparison string; performs no I/O or target discovery.
+*/
 function chordIdentity(chord) {
 	const tokens = chord.split("+");
 	const key = tokens.pop();
 	return [...tokens.map((token) => token.toLowerCase()).sort(), key].join("+");
 }
+/**
+* Resolve ordered source layers into named actions and bindings for one compositor.
+* Each record's target fields apply before advancing to later producer/user layers.
+* Disabled bindings are omitted; an action with no target implementation is omitted
+* unless an enabled binding tries to reference it, which is an error.
+* @param contributions Decoded layers in explicit precedence order; no files are read.
+* @param target Consumer-selected target; only its refinements participate.
+* @returns Effective values/provenance ready for rendering, without publishing state.
+* @throws On duplicate definitions, orphan patches, unavailable references, missing
+* keys, wrong-target native implementations or conflicting effective chords.
+* @see /doc/config/keybindings.md
+*/
 function compose(contributions, target) {
 	const actions = /* @__PURE__ */ new Map();
 	const bindings = /* @__PURE__ */ new Map();
@@ -10550,9 +10647,19 @@ function compose(contributions, target) {
 }
 //#endregion
 //#region files/config/keybindings/render.ts
+/**
+* Quote one literal POSIX shell argument without enabling variable/subcommand expansion.
+* @param value One complete argument, including possibly empty or quoted text.
+* @returns Single-argument shell spelling; does not execute it or split a command.
+*/
 function shellQuote(value) {
 	return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
+/**
+* Serialize one KDL v1 quoted string, escaping ASCII controls/quotes/backslashes.
+* @param value Decoded text; Unicode outside those controls remains unchanged.
+* @returns A string literal, not a parsed node or native-schema validity guarantee.
+*/
 function kdlString(value) {
 	return "\"" + value.replace(/["\\\u0000-\u001f\u007f]/g, (character) => {
 		if (character === "\"" || character === "\\") return "\\" + character;
@@ -10589,6 +10696,17 @@ function umbrielAction(implementation) {
 		implementation.body
 	]).map(shellQuote).join(" ");
 }
+/**
+* Render one complete binding fragment, retaining native option spelling.
+* Portable argv becomes Niri spawn arguments or individually shell-quoted Umbriel
+* spawn text. Explicit scripts become shell `-c` invocations, not executable files.
+* Empty chord selection still emits an empty binds section/keybinds table.
+* @param binding Resolved reference/options/chords from composition.
+* @param target Matching compositor; target-native actions cannot cross adapters.
+* @returns Native definition text only; callers own delivery and closure admission.
+* @throws On wrong-target native actions or Umbriel options.action overriding the
+* resolved implementation. Native option/action schema errors are checked later.
+*/
 function renderDefinition(binding, target) {
 	if (target === "niri") {
 		const options = {
@@ -10603,18 +10721,49 @@ function renderDefinition(binding, target) {
 	const value = options.length ? `{ action = ${action}, ${options.join(", ")} }` : action;
 	return `[keybinds]\n${binding.keys.map((key) => `${JSON.stringify(key)} = ${value}\n`).join("")}`;
 }
-/** Umbriel incorporation is an ARRAY ENTRY, deliberately not standalone TOML. */
+/**
+* Render incorporation against the effective live placement, not a producer guess.
+* Niri gets an include statement; Umbriel gets a quoted, comma-terminated ARRAY
+* ENTRY which must be assembled inside one include.files array. No body existence
+* or contents are checked: a referenced output may still be a pending candidate.
+* @param target Compositor selecting the reference syntax.
+* @param effectivePath Explicit path chosen/bound by the caller; selection normally
+* requires absolute concrete paths, but this serializer does not resolve them.
+* @returns Reference text, deliberately distinct from a definition document.
+* @throws For empty paths or NUL, tab or newline separators.
+*/
 function renderInclude(target, effectivePath) {
 	if (!effectivePath || /[\0\r\n\t]/.test(effectivePath)) throw new Error("include path must be non-empty without NUL/newlines");
 	return target === "niri" ? `include ${kdlString(effectivePath)}\n` : `${JSON.stringify(effectivePath)},\n`;
 }
 //#endregion
 //#region files/config/keybindings/processor.ts
-/** Current CONFIG adapter: capture selected inputs and write ONE private candidate. */
+/**
+* Existing CONFIG leaf-protocol adapter: capture ordered YAML for one definition,
+* or render one selected native path's include metadata, and write ONE candidate.
+* It reads the spec/TSV manifest and selected declaration files, but never installs,
+* registers sources, commits outputs or executes authored actions/scripts.
+* Include mode deliberately does not read the referenced live body's bytes: a body
+* may be another pending output and the runner is not a dependent-candidate DAG.
+* Full-root consumer admission belongs to the separate closure hook before commit.
+* @see /doc/config/keybindings.md
+*/
 function required(value, label) {
 	if (!value) throw new Error(`${label} is required; use CONFIG assembly, not a direct internal leaf`);
 	return value;
 }
+/**
+* Render exactly one recipe candidate under the existing internal protocol.
+* Definition mode captures its selected YAML, composes the whole target graph and
+* renders the requested binding. Include mode accepts exactly one native path and
+* returns a reference (Umbriel array entry, not a standalone document). The runner
+* owns every later per-recipe/transaction validation, check/stdout and commit step.
+* @param argv Fixed --target/--material/optional --binding plus runner --config.
+* @param environment Explicit runner paths; no ambient source/target installation scan.
+* @returns Resolves after writing CONFIG_CANDIDATE only; no deployed output is accepted.
+* @throws On bad args/protocol/spec/manifest, missing or invalid YAML, unresolved or
+* disabled binding, composition/render errors or capture/write failure.
+*/
 async function runProcessor(argv, environment) {
 	const { values } = parseArgs({
 		args: argv,
@@ -14254,7 +14403,16 @@ function stringify(obj, { maxDepth = 1e3, numbersAsFloat = false, strictTemporal
 */
 //#endregion
 //#region files/config/keybindings/native.ts
-/** Pure native include inspection; only validation copies are normalized. */
+/**
+* Pure native include inspection, resolution and text rebinding. Niri is parsed
+* as KDL v1 with source locations; Umbriel is parsed as TOML with large integers
+* preserved. No filesystem/env lookup, subprocess, registration or publication
+* occurs. Callers provide explicit environment and owner paths.
+* Rewriting is for private closure copies or deliberate Niri inline rebinding:
+* Umbriel normalization must not be mistaken for editing unrelated live user TOML.
+* Native validators still own complete compositor-schema admission.
+* @see /doc/config/keybinding-consumers.md
+*/
 function tomlIncludes(table) {
 	const entries = [];
 	const arrays = [];
@@ -14280,6 +14438,15 @@ function tomlIncludes(table) {
 		}
 	};
 }
+/**
+* Inspect explicit top-level native includes without reading their referenced files.
+* Niri recognizes include nodes; Umbriel returns required files then optional files.
+* Slash-dash/comments/quoted text do not become membership through regex matching.
+* @param text Captured valid-UTF-8 text; capture adapters reject invalid byte sequences.
+* @param target Explicit grammar, independent of filename suffix.
+* @returns Ordered unresolved references, not a full native semantic validation result.
+* @throws On parse errors, invalid include tables/arrays or malformed Niri path arguments.
+*/
 function nativeIncludes(text, target) {
 	if (target === "umbriel") return tomlIncludes(parse(text, { integersAsBigInt: "asNeeded" })).entries;
 	return parse$1(text).nodes.filter((node) => node.getName() === "include").map((node) => {
@@ -14291,6 +14458,18 @@ function nativeIncludes(text, target) {
 		};
 	});
 }
+/**
+* Replace reference paths in native text while keeping include order/optional semantics.
+* Niri edits only parsed argument spans in the original bytes-as-text. Umbriel
+* serializes parsed TOML, so comments/formatting may change: use it only on validation
+* copies, never as arbitrary live-root adoption. Niri inline callers use resolved
+* LIVE body-relative paths; validation callers use mirrored PRIVATE paths.
+* @param text Native source/root whose include count determines replacement arity.
+* @param target Target parser/serializer.
+* @param paths One replacement per reference in nativeIncludes order.
+* @returns Rebound text without writing or validating files.
+* @throws On parse errors, wrong replacement arity or unavailable KDL locations.
+*/
 function rewriteNativeIncludes(text, target, paths) {
 	if (target === "umbriel") {
 		const table = parse(text, { integersAsBigInt: "asNeeded" });
@@ -14315,6 +14494,18 @@ function rewriteNativeIncludes(text, target, paths) {
 	for (const edit of edits.reverse()) output = output.slice(0, edit.start) + edit.text + output.slice(edit.end);
 	return output;
 }
+/**
+* Resolve an include against its logical owner's directory and explicit native env.
+* Umbriel expands named $VAR/${VAR}; both adapters support HOME-based tilde paths.
+* No ambient environment is consulted or shell evaluation performed. The owner
+* must be the selected body's location for inline content, not the containing root.
+* @param raw Native authored include string, not a generic CONFIG selector object.
+* @param owner Absolute logical file path determining relative include base.
+* @param target Target-specific variable expansion semantics.
+* @param environment Caller-declared values; missing variables/HOME fail explicitly.
+* @returns Normalized absolute path; does not test existence or select candidates.
+* @throws For absent declared expansions or empty/control-delimited resulting paths.
+*/
 function resolveNativeInclude(raw, owner, target, environment) {
 	let path = raw;
 	if (target === "umbriel") path = path.replace(/\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g, (_match, braced, plain) => {
@@ -14331,7 +14522,25 @@ function resolveNativeInclude(raw, owner, target, environment) {
 }
 //#endregion
 //#region files/config/keybindings/materials.ts
-/** Pure source/placement/incorporation planning shared with future native admission. */
+/**
+* Pure selection and naming of native material and its incorporation references.
+* Generated binding bodies and user-authored native files enter the same explicit
+* source interface. Selection does not scan directories, inspect existence,
+* resolve filesystem aliases, copy/link files or publish CONFIG state; the consumer
+* adapter owns those observed-state checks and stages delivery with the runner.
+* Material suffixes identify definitions/includes/inline pieces, not glob membership.
+* @see /doc/config/keybinding-consumers.md
+*/
+/**
+* Name collision-resistant, target-relative definition and include material.
+* A .binding suffix keeps IDs such as launch.include distinct from companions;
+* broad *.kdl scans would still admit companions and are explicitly forbidden.
+* Niri inline naming is chosen by the consumer after body capture.
+* @param id Stable binding/contributor ID, not a source filename.
+* @param target Native adapter selection.
+* @returns Relative definition and incorporation filenames, without creating them.
+* @throws For IDs outside the safe named-record grammar.
+*/
 function materialNames(id, target) {
 	if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(id)) throw new Error(`invalid binding id ${id}`);
 	return target === "niri" ? {
@@ -14342,7 +14551,16 @@ function materialNames(id, target) {
 		incorporation: join("umbriel", `${id}.include.toml.part`)
 	};
 }
-/** Explicit membership: no wildcard can accidentally admit include fragments. */
+/**
+* Validate and order explicit native membership and render effective include metadata.
+* Disabled sources are omitted; no existence or physical alias checks happen here.
+* Consumer I/O preflight adds physical-entry checks before writes.
+* @param target Matching target required of every enabled source.
+* @param sources Declared memberships with concrete absolute donor/receiver paths.
+* @returns Selected metadata sorted by order then ID; no copy/link or commit occurs.
+* @throws For invalid enabled flags/IDs/order/paths, duplicate IDs/normalized
+* placements, wrong formats or unsupported Umbriel body inline.
+*/
 function selectMaterials(target, sources) {
 	const seen = /* @__PURE__ */ new Set();
 	const placements = /* @__PURE__ */ new Map();
@@ -14373,7 +14591,18 @@ function selectMaterials(target, sources) {
 		};
 	});
 }
-/** New root skeleton only, NOT an adoption editor for existing user TOML/KDL. */
+/**
+* Build a new include-only root/envelope: baseline first, members, personal last.
+* Umbriel emits exactly one include table and files array, never concatenated
+* keybinds tables. This is not an adoption editor for existing user text and cannot
+* supply captured inline bodies; consumer block assembly handles that path.
+* @param target Target for the complete skeleton.
+* @param materials Explicitly ordered include-only selections of that target.
+* @param baseline Ordered leading references; this helper does not check existence.
+* @param personal Ordered late references, defaulting to none.
+* @returns Root text only; no filesystem, validation subprocess or publication.
+* @throws On target mismatch, inline material or invalid reference spelling.
+*/
 function renderRoot(target, materials, baseline, personal = []) {
 	if (materials.some((material) => material.target !== target)) throw new Error(`root ${target}: incorporation material belongs to another target`);
 	if (materials.some((material) => material.incorporation === "inline")) throw new Error("renderRoot composes include references only; inline requires captured body block assembly");
@@ -14386,12 +14615,41 @@ function renderRoot(target, materials, baseline, personal = []) {
 }
 //#endregion
 //#region files/config/keybindings/closure.ts
-/** Captured include closure validation at the existing CONFIG transaction hook. */
+/**
+* Transaction-hook adapter for captured native include closures. It reads candidate
+* maps/snapshots and filesystem topology, writes mirrored validation copies only
+* inside CONFIG_TRANSACTION, and runs the native validator. It never changes live
+* outputs or candidate bytes; CONFIG alone owns commit/rollback after hook success.
+* Candidate precedence prevents accidentally validating old live definitions.
+* Observed-state guards bracket validation but do not lock or eliminate races.
+* @see /doc/config/keybinding-consumers.md
+* @see /design/keybindings/implementation1.gpt61sol.md
+*/
 const exec$1 = promisify(execFile);
+/**
+* Identify a directory entry by resolved physical parent plus its literal basename.
+* Parent aliases are collapsed; the final entry is deliberately NOT followed, so a
+* symlink pending replacement is not confused with its old referent. Existing
+* delivery utilities resolve missing parent suffixes without creating directories.
+* @param path Concrete absolute entry path supplied by selection/closure traversal.
+* @returns Filesystem-aware comparison key, not a content hash or locking token.
+* @throws On filesystem resolution errors from the parent-path helper.
+*/
 async function entryKey(path) {
 	return join(await physicalParent(path), basename(path));
 }
-/** Reads planned outputs first, including through ordinary symlink aliases. */
+/**
+* Build a reader where prospective output text takes precedence over live bytes.
+* It snapshots planned physical-entry keys at construction, then checks those keys
+* BEFORE following each current final symlink. Thus a live alias to a pending
+* regular output returns that candidate, not its old live referent. Fallback gets
+* the originally requested path, preserving that logical file's include base.
+* @param planned Absolute output paths mapped to prepared/candidate text; callers
+* preflight duplicate physical claims and must rebuild this reader after map additions.
+* @param fallback Read policy for paths not claimed by a candidate chain.
+* @returns A topology-reading reader; constructing/calling it writes nothing.
+* @throws On parent/entry I/O errors or a final symlink cycle encountered by the reader.
+*/
 async function plannedReader(planned, fallback) {
 	const physical = /* @__PURE__ */ new Map();
 	for (const [path, text] of planned) physical.set(await entryKey(path), text);
@@ -14409,6 +14667,19 @@ async function plannedReader(planned, fallback) {
 		throw new Error(`symlink cycle in native include ${path}`);
 	};
 }
+/**
+* Capture a root and recursively selected includes with an explicit read/env policy.
+* Logical paths retain their own include bases; active physical-entry keys detect
+* recursion, and repeated logical files are visited once. Optional missing refs are
+* absent from the result, never replaced with undisclosed producer/live fallbacks.
+* @param root Absolute logical root path.
+* @param target Native include grammar, not inferred from filename extension.
+* @param reader Candidate/snapshot/live policy chosen explicitly by the caller.
+* @param environment Declared native include variable/HOME values.
+* @returns Original normalized absolute paths and captured text; no layout is written.
+* @throws On missing required refs, cycles, depth beyond 64 active entries, parse,
+* path/environment or reader/filesystem failures.
+*/
 async function captureClosure(root, target, reader, environment) {
 	const captured = /* @__PURE__ */ new Map();
 	const active = /* @__PURE__ */ new Set();
@@ -14433,6 +14704,21 @@ async function captureClosure(root, target, reader, environment) {
 	await visit(root, false);
 	return captured;
 }
+/**
+* Execute CONFIG's read-only-to-live transaction validation hook.
+* The runner calls this after every candidate exists and legacy per-recipe
+* validators have passed, before check/stdout/publication. Candidate bytes override
+* captured unselected files. Only mirrored copies rewrite live include paths to
+* private layout paths, including optional references; live candidates stay unchanged.
+* Effective-root admission is followed, when needed, by a contextual envelope for
+* shadowed generated defaults, never a context-free standalone fragment check.
+* @param planPath Private UTF-8 ClosurePlan JSON written during consumer preparation.
+* @param environment Runner-supplied map path and owned transaction scratch directory.
+* @returns Resolves only when guards and native admission pass; makes no commit claim.
+* @throws On absent/invalid protocol, changed observations, uncaptured/invalid includes,
+* unselected defaults, scratch I/O or native-validator failure. CONFIG handles abort.
+* @see /doc/config/keybinding-consumers.md
+*/
 async function validateClosure(planPath, environment) {
 	if (!environment.CONFIG_CANDIDATES_FILE || !environment.CONFIG_TRANSACTION) throw new Error("closure validation requires CONFIG transaction candidate map");
 	const plan = JSON.parse(await readFile(planPath, "utf8"));
@@ -14483,9 +14769,24 @@ async function validateClosure(planPath, environment) {
 }
 //#endregion
 //#region files/config/blocks.ts
-/** Shared CONFIG block-in-file adapter over a private adopted insertion area.
-* Live publication remains the sole CONFIG runner's responsibility. */
+/**
+* Shared CONFIG adapter for named blocks inside one explicitly adopted area.
+* It inspects caller-supplied text, writes private workspace inputs, invokes the
+* existing block-in-file CLI and returns prepared text. It never reads/writes a
+* live root or performs publication; CONFIG alone commits the returned candidate.
+* Namespace/ID markers must be well formed and contained in the area, and new
+* content cannot inject reserved management markers. Unmanaged outside text remains
+* byte-for-byte intact; native structural scope is checked by the consumer separately.
+* @see /doc/config/keybinding-consumers.md
+*/
 const exec = promisify(execFile);
+/**
+* Locate the single ordered adoption pair without interpreting native grammar.
+* @param text Complete root/area text; no file is read or modified.
+* @param area Exact trimmed sentinel text supplied by adoption/bootstrap policy.
+* @returns Source-string offsets spanning both sentinel lines and the insertion boundary.
+* @throws On absent, duplicated or reversed sentinels. Native scope must be probed separately.
+*/
 function areaOffsets(text, area) {
 	const lines = [...text.matchAll(/[^\n]*(?:\n|$)/g)].filter((match) => match[0]);
 	const begins = lines.filter((line) => line[0].trim() === area.begin);
@@ -14500,6 +14801,19 @@ function areaOffsets(text, area) {
 function regexEscape(value) {
 	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
+/**
+* Prepare named namespace/ID blocks in a private copy of the adopted area.
+* Reject owned markers outside the area, malformed/orphaned/nested/duplicate
+* markers, unsafe IDs and reserved-marker injection. Remove only owned blocks
+* within the area, then insert the supplied ordered members; no stale file pruning
+* or arbitrary live-root takeover occurs. Timestamps/source attribution are disabled
+* so private paths and incidental time do not become persistent drift.
+* @param text Caller-captured root text, including exactly one adopted area.
+* @param blocks Closed desired named contributions, already rendered for the native context.
+* @param options Ownership/comment convention and caller-owned existing private workspace.
+* @returns Prepared full text with outside text preserved, ready for CONFIG candidate use.
+* @throws On marker/ownership/injection errors, private I/O or block-in-file failure.
+*/
 async function assembleBlocks(text, blocks, options) {
 	const span = areaOffsets(text, options.area);
 	if (!/^[A-Za-z0-9][A-Za-z0-9_./-]*$/.test(options.namespace)) throw new Error("invalid block namespace");
@@ -14563,11 +14877,29 @@ async function assembleBlocks(text, blocks, options) {
 }
 //#endregion
 //#region files/config/keybindings/consumer.ts
-/** Bounded consumer capture/planning over CONFIG's existing sole commit boundary. */
+/**
+* Invocation-time consumer adapter: capture declared YAML/native inputs, prepare
+* per-binding material and an adopted root, then call the existing CONFIG runner
+* exactly once. Filesystem reads and private scratch writes occur here; block
+* preparation and CONFIG run as subprocesses. Processors do not install anything.
+* The runner owns the sole publication/rollback boundary, including optional
+* membership metadata outputs. Check mode prepares/validates without delivery.
+*
+* Editable native copies are preserved by assemble/seed, unlike managed YAML
+* registrations refreshed by membership installation. Live references point to
+* effective placements; only closure validation copies point to private candidates.
+* @see /doc/config/keybinding-consumers.md
+* @see /design/keybindings/implementation1.gpt61sol.md
+*/
 function absolute(path) {
 	if (typeof path !== "string" || !isAbsolute(path) || /[\0\r\n\t]/.test(path)) throw new Error(`consumer path must be an absolute concrete path: ${String(path)}`);
 	return normalize(path);
 }
+/**
+* Choose the default exact adoption sentinels using valid target comment syntax.
+* @param target Explicit target; Niri uses // and Umbriel uses #.
+* @returns Marker text only; never edits, adopts or validates a file.
+*/
 function consumerArea(target) {
 	const comment = target === "niri" ? "//" : "#";
 	return {
@@ -14575,10 +14907,27 @@ function consumerArea(target) {
 		end: `${comment} compfuzor-keybindings-end`
 	};
 }
+/**
+* Create a missing-root skeleton with baseline first, adopted area, personal last.
+* Umbriel has exactly one include table/files array with sentinels INSIDE the array.
+* This pure formatter is bootstrap policy, not an editor for existing user roots.
+* @param target Native syntax to emit.
+* @param baseline Concrete absolute leading references supplied by the host.
+* @param personal Concrete absolute late references supplied by the host.
+* @param area Exact sentinel pair, defaulting to the target convention.
+* @returns Template text without file creation, source reads or publication.
+* @throws For nonabsolute/control-delimited reference paths.
+*/
 function consumerTemplate(target, baseline, personal, area = consumerArea(target)) {
 	const refs = (paths) => paths.map((path) => renderInclude(target, absolute(path))).join("");
 	return target === "niri" ? refs(baseline) + `${area.begin}\n${area.end}\n` + refs(personal) : `[include]\nfiles = [\n${refs(baseline)}${area.begin}\n${area.end}\n${refs(personal)}]\n`;
 }
+/**
+* Probe a temporary include at the sentinel boundary and inspect its native scope.
+* Marker presence alone cannot prove an Umbriel area sits in include.files rather
+* than optional.files, another table/array or quoted text. Only the probe string is
+* inserted here; neither an existing root nor its unrelated tables are rewritten.
+*/
 function assertAreaContext(text, target, area) {
 	const span = areaOffsets(text, area);
 	const probe = "/compfuzor-insertion-area-probe";
@@ -14589,7 +14938,27 @@ function assertAreaContext(text, target, area) {
 		throw new Error("adopted area must be top-level Niri or inside Umbriel include.files array", { cause: error });
 	}
 }
-/** Stable YAML IDs are authoritative. Paths/filenames identify provenance only. */
+/**
+* Capture/compose/render a consumer and delegate validated publication to CONFIG.
+* Assemble reads existing selected copies/links; seed creates only missing entries;
+* refresh stages explicit replacements. Even seed does not repair a dangling
+* existing selection silently. A preserved native copy need not have a usable donor.
+* Niri inline rebinding uses the selected BODY's directory, not the root's directory.
+*
+* Preparation writes private scratch only. The transaction_validate hook sees every
+* produced candidate after immediate per-recipe validation and before check/stdout/
+* publication; it validates mirrored effective refs and shadowed generated defaults.
+* The existing runner commits once. Guards are observed-state checks, not locks;
+* registration coordination, crash recovery and external input restoration are not
+* supplied by this function. Temporary cleanup failure after commit can still reject.
+* @param options Bound request, explicit existing workers and execution policy.
+* @returns Runner exit/streams with closed material/output inventory; check drift is
+* nonzero, and a returned failure does not authorize publishing supplemental metadata.
+* @throws For malformed requests, missing/conflicting inputs or placements, path/
+* marker aliases, invalid adopted scope, preparation I/O/subprocess or runner setup.
+* Native admission/runner failures normally return a nonzero code instead.
+* @see /doc/config/keybinding-consumers.md
+*/
 async function assembleConsumer(options) {
 	const request = options.request;
 	if (request.version !== 1 || request.target !== "niri" && request.target !== "umbriel") throw new Error("unsupported consumer request version/target");
@@ -14840,8 +15209,36 @@ async function assembleConsumer(options) {
 }
 //#endregion
 //#region files/config/registration.ts
-/** Coherent input-registration batches with one caller-owned assembly operation.
-* Rollback covers ordinary failures, not crash atomicity or concurrent writers. */
+/**
+* Shared mutable input-registration batch, separate from native material placement.
+* It reads sources/slots, backs up prior regular entries privately and uses existing
+* copy/link primitives to refresh explicitly declared source registrations. Exactly
+* one caller operation runs after the entire batch is available, so action/binding
+* resources do not trigger two half-graph rebuilds.
+* Normal failure restores prior chosen entries, including disabled state and literal
+* symlink targets. This is not the CONFIG artifact publisher, crash atomicity or
+* concurrent-reader/writer isolation; the callback owns its CONFIG commit outcome.
+* @see /doc/config/keybinding-producers.md
+*/
+/**
+* Refresh a closed registration batch, invoke one operation and accept only its
+* explicit success result. Preflight checks both active/disabled slot claims and
+* each destination against EVERY donor's symlink chain/physical-parent aliases;
+* an earlier registration must not overwrite a later donor. Copying donor bytes
+* alone would not make requested link topology safe.
+*
+* Normal non-success or thrown operation errors restore old entries/new-slot
+* absence. No crash-atomicity or concurrent-writer isolation is supplied. The
+* callback must not treat a completed CONFIG commit as preparation; a thrown
+* post-commit failure cannot make the artifact mutation un-happen. Cleanup errors
+* may surface after accepted publication and must not be advertised as safe retry.
+* @param records Explicit absolute source/slot declarations; no filesystem scan adds records.
+* @param operation Runs once only after all registrations are present, with chosen slot states.
+* @param options Caller success predicate and private backup parent.
+* @returns The operation result after acceptance or ordinary restoration; non-success
+* remains a non-success result rather than silently becoming a successful install.
+* @throws On source/slot/alias preflight, delivery, callback, restoration or cleanup failure.
+*/
 async function withInputBatch(records, operation, options) {
 	const selected = [];
 	for (const record of records) {
@@ -14927,8 +15324,30 @@ async function withInputBatch(records, operation, options) {
 }
 //#endregion
 //#region files/config/keybindings/membership.ts
-/** Closed producer membership, context binding and generated installation. */
+/**
+* Durable, CLOSED producer membership and invocation-time binding of consumer
+* profiles. The controller packages selectors/manifests; this adapter reads those
+* declarations and registered YAML, orders producer groups before consumer layers,
+* and delegates native work to assembleConsumer. No directory/PATH scan adds members.
+*
+* Producer installation refreshes managed YAML registrations as one batch; native
+* editable placements independently seed/preserve unless refresh is requested.
+* Membership updates are supplemental CONFIG candidates, accepted only with the
+* outputs/root in the existing runner's commit, not an earlier metadata write.
+* Registration rollback covers normal failures, not crash atomicity or reader isolation.
+* @see /doc/config/keybinding-producers.md
+* @see /design/keybindings/implementation2.gpt61sol.md
+* @see /design/keybindings/review-fixes0.gpt61sol.md
+*/
 const ID = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+/**
+* Return known user defaults without reading configuration or discovering targets.
+* The context uses invocation-time XDG resolution; native placement and managed
+* registration default to link. Umbriel references its explicit system baseline;
+* Niri deliberately fabricates no baseline. Existing roots still require adoption.
+* @param target Declared target whose default root/validator convention is desired.
+* @returns A fresh portable profile; does not provision prerequisites or create roots.
+*/
 function defaultProfile(target) {
 	return {
 		version: 1,
@@ -14943,6 +15362,7 @@ function defaultProfile(target) {
 		baseline: target === "umbriel" ? [{ path: "/usr/local/share/umbriel/config.toml" }] : []
 	};
 }
+/** Resolve selectors once against an explicitly scope-checked CONFIG-style context. */
 function bindProfile(options) {
 	const profile = options.profile;
 	if (profile.version !== 1 || profile.target !== "niri" && profile.target !== "umbriel") throw new Error("unsupported keybinding profile");
@@ -14987,6 +15407,7 @@ function bindProfile(options) {
 		}
 	};
 }
+/** Read only declared JSON state (or an empty missing state), never infer members from directories. */
 async function readState(path, target) {
 	const file = await captureFile(path);
 	const text = fileText(file);
@@ -15005,8 +15426,12 @@ async function readState(path, target) {
 		guard: file.guard
 	};
 }
-/** User overlays with explicit whenPresent stay dormant when a producer is
-* disabled/absent. Core composition remains strict for unconditional patches. */
+/**
+* Select enabled groups by order/ID, then late consumer layers, retaining input guards.
+* whenPresent makes only conditional patches dormant when their base is missing;
+* it does not weaken strict core composition or turn policy settings into members.
+* Stored resource IDs/kinds assert current YAML identity; mismatch requires reinstall.
+*/
 async function selectedRequest(bound, state, options) {
 	const request = bound.request;
 	const selected = [];
@@ -15070,6 +15495,7 @@ async function selectedRequest(bound, state, options) {
 		guards
 	};
 }
+/** Offer changed membership as a supplemental CONFIG output, not a prior accepted metadata write. */
 async function applyState(bound, state, guard, options, changed) {
 	const selected = await selectedRequest(bound, state, options);
 	selected.request.mode = options.mode ?? "assemble";
@@ -15087,11 +15513,36 @@ async function applyState(bound, state, guard, options, changed) {
 		}] : []
 	});
 }
+/**
+* Bind the host profile and reassemble only its closed durable membership/user layer.
+* Reads state/registered sources and delegates preparation/publication to the consumer;
+* it does not refresh source registrations, add discovered files or rewrite membership.
+* @param options Context/scope, workers and native placement mode (assemble by default).
+* @returns Consumer/runner outcome; check mode reports drift without delivery.
+* @throws On invalid profile/state/identity, absent declared inputs or consumer preparation.
+*/
 async function assembleHost(options) {
 	const bound = bindProfile(options);
 	const { state, guard } = await readState(bound.statePath, options.profile.target);
 	return applyState(bound, state, guard, options, false);
 }
+/**
+* Upsert one declared producer group and perform one coherent registration/assembly.
+* Decode authoritative YAML IDs, refresh managed source copies/links while preserving
+* disabled slots, then stage exact membership with all native outputs in CONFIG.
+* Empty resources replace the group's selection with []; stale physical files stay
+* excluded, not pruned. Group enabled state survives reinstall. Native copies default
+* to seed/preserve, independently from refreshed YAML registrations.
+* @param manifest Packaged producer identity/order/resources and explicit target list.
+* @param options Bound host policy/context and workers; check is not a registration mode.
+* @returns Consumer code/streams; only zero accepts registration and membership together
+* under normal operation. Nonzero causes the registration batch to restore old entries.
+* @throws On manifest/target/check errors, malformed or duplicate records, preflight,
+* registration or thrown preparation failures. No crash-atomicity/concurrent isolation
+* or safe retry after unknown post-publication cleanup failure is promised.
+* @see /doc/config/keybinding-producers.md
+* @see /design/keybindings/review-fixes0.gpt61sol.md
+*/
 async function installProducer(manifest, options) {
 	if (manifest.version !== 1 || !ID.test(manifest.producer) || !Number.isFinite(manifest.order) || !Array.isArray(manifest.resources) || !manifest.targets.includes(options.profile.target)) throw new Error("invalid producer manifest/target");
 	if (options.check) throw new Error("producer registration is explicit mutation; check host assembly instead");
@@ -15133,6 +15584,16 @@ async function installProducer(manifest, options) {
 		workspaceRoot: options.workspaceRoot
 	});
 }
+/**
+* Stage a named group's enabled flag with native reassembly at the same CONFIG commit.
+* Resource files/slots remain untouched; reinstall retains this explicit state and
+* whenPresent user patches can become dormant without reactivating the group.
+* @param group Existing membership producer ID, not an action/binding ID.
+* @param enabled Whether this group enters the next closed selection.
+* @param options Explicit host context and assembly services.
+* @returns Consumer outcome; a failed commit does not accept the new membership flag.
+* @throws On unknown groups, invalid profile/state or consumer preparation errors.
+*/
 async function toggleGroup(group, enabled, options) {
 	const bound = bindProfile(options);
 	const { state, guard } = await readState(bound.statePath, options.profile.target);
@@ -15140,6 +15601,14 @@ async function toggleGroup(group, enabled, options) {
 	state.groups[group].enabled = enabled;
 	return applyState(bound, state, guard, options, true);
 }
+/**
+* Read/decode profile JSON and retain an observed-state guard for later validation.
+* This only checks usable captured text/JSON; binding validates profile/context
+* shape later. No selector resolution, registration, root write or commit occurs.
+* @param path Explicit profile file selected by the caller/portable locator boundary.
+* @returns Parsed profile and its file/link/physical-parent/content observation.
+* @throws On missing/dangling/non-file input, invalid UTF-8/JSON or capture failure.
+*/
 async function loadProfile(path) {
 	const file = await captureFile(path);
 	const text = fileText(file);
@@ -15151,7 +15620,34 @@ async function loadProfile(path) {
 }
 //#endregion
 //#region files/config/keybindings/runtime.ts
-/** CLI admission for internal processors, closure validation and explicit consumers. */
+/**
+* Import-safe CLI admission shared by source and installed omnibus entry points.
+* Explicit commands select producer installation, host assembly, group toggling,
+* closure validation or lower-level consumer/registration operations. Other argv
+* are admitted only through the strict internal single-candidate processor parser.
+* No work runs at import; main may read profiles/manifests, mutate registration
+* batches, write private plans and spawn existing CONFIG/native workers.
+* Publication remains CONFIG's commit, not a CLI-owned transaction. Target/context/
+* scope are explicit; no PATH discovery, compositor reload or interactive adoption.
+* @see /doc/config/keybinding-producers.md
+* @see /doc/config/keybinding-consumers.md
+*/
+/**
+* Dispatch one explicit keybinding operation and return its process-style outcome.
+* Install defaults native delivery to seed while managed YAML registration refreshes;
+* host CLI also defaults to seed (assembleHost's direct API defaults assemble).
+* Enable/disable stage membership with reassembly. Profile selectors resolve at
+* invocation; generated scope must match the chosen context. Register/install reject
+* --check because registration is a real mutation, unlike assembly preview.
+* @param argv Arguments after the domain alias; supported operations are install,
+* host, enable, disable, validate, assemble, register, or internal --config flags.
+* @param defaults Host-supplied installed worker/hook binding. runner may be omitted
+* for source use requiring --runner; validatorCommand is executable plus fixed argv,
+* not a shell command string. Consumer preparation appends its private --plan path.
+* @returns Runner/consumer code, or zero for successful hook/processor-only work.
+* @throws On strict argument/protocol errors, scope/profile mismatch, invalid files
+* or delegated registration/preparation failures; the outer entry owns error reporting.
+*/
 async function main$1(argv, defaults) {
 	const [command, ...args] = argv;
 	if ([
