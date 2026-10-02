@@ -14,6 +14,10 @@ Usage: $script_name [options]
 Find leaked OpenCode OpenTUI/FFF native libraries directly under /tmp.
 The default is a dry run; deletion requires --apply.
 
+Recognized filename shapes: .<hex>-0000000[012].so (Bun extraction
+slots) and .bun-<uid>-<hex>.so (Bun runtime cache names). Every match
+must still pass the ELF identity checks below.
+
 Options:
       --apply                 Delete eligible files.
       --min-age DURATION      Minimum age (default: 0s). Suffix: s, m, h, d.
@@ -69,23 +73,29 @@ classify_library() {
   header=$(readelf --file-header --wide -- "$path" 2>/dev/null) || return 1
   grep -Eq 'Type:[[:space:]]+DYN[[:space:]]' <<<"$header" || return 1
 
+  # Bun extraction slot numbers are not stable across builds (2026-09
+  # builds carried FFF in the -00000001 slot, the current one in
+  # -00000002), so every recognized shape runs both identity checks:
+  # OpenTUI by ELF SONAME, FFF by its exported API symbols.
   case $name in
-    *-00000000.so)
-      metadata=$(readelf --dynamic --wide -- "$path" 2>/dev/null) || return 1
-      grep -Fq 'Library soname: [libopentui.so]' <<<"$metadata" || return 1
-      printf 'opentui\n'
-      ;;
-    *-00000002.so)
-      metadata=$(readelf --dyn-syms --wide -- "$path" 2>/dev/null) || return 1
-      grep -Eq '[[:space:]]fff_search_directories$' <<<"$metadata" || return 1
-      grep -Eq '[[:space:]]fff_free_result$' <<<"$metadata" || return 1
-      grep -Eq '[[:space:]]fff_file_item_get_file_name$' <<<"$metadata" || return 1
-      printf 'fff\n'
-      ;;
-    *)
-      return 1
-      ;;
+    *-0000000[012].so|.bun-*.so) ;;
+    *) return 1 ;;
   esac
+
+  metadata=$(readelf --dynamic --wide -- "$path" 2>/dev/null) || return 1
+  if grep -Fq 'Library soname: [libopentui.so]' <<<"$metadata"; then
+    printf 'opentui\n'
+    return 0
+  fi
+
+  metadata=$(readelf --dyn-syms --wide -- "$path" 2>/dev/null) || return 1
+  if grep -Eq '[[:space:]]fff_search_directories$' <<<"$metadata" &&
+    grep -Eq '[[:space:]]fff_free_result$' <<<"$metadata" &&
+    grep -Eq '[[:space:]]fff_file_item_get_file_name$' <<<"$metadata"; then
+    printf 'fff\n'
+    return 0
+  fi
+  return 1
 }
 
 declare -A active_paths=()
@@ -187,7 +197,7 @@ skipped_changed=0
 
 while IFS= read -r -d '' path; do
   name=${path##*/}
-  [[ $name =~ ^\.[0-9a-f]+-0000000(0|2)\.so$ ]] || continue
+  [[ $name =~ ^(\.[0-9a-f]+-0000000[012]|\.bun-[0-9]+-[0-9a-f]+)\.so$ ]] || continue
   ((scanned += 1))
 
   [[ ! -L $path ]] || { ((skipped_identity += 1)); continue; }
