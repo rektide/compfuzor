@@ -17,7 +17,16 @@
         # restores clean status runs.
         params:
           enabled: Y
-          compressor: lz4
+          # zstd over lz4: ~2-3x better ratio, and this 5800X has CPU to
+          # spare for the slower compress — fewer writebacks to the NVMe.
+          # Requires CONFIG_CRYPTO_ZSTD=y (linux-config-debplus
+          # overrides.config): built-in zswap requests its compressor
+          # before disk modules can load, so a modular zstd boots with
+          # the lzo fallback pool (__zswap_pool_create_fallback) until a
+          # runtime switch. Live param switched by hand 2026-10-01; the
+          # /etc/kernel/cmdline token flips at the next
+          # install-kernel-cmdline.sh run once the rebuilt kernel is in.
+          compressor: zstd
           max_pool_percent: "14"
           accept_threshold_percent: "90"
           shrinker_enabled: Y
