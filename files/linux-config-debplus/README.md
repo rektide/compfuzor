@@ -110,6 +110,45 @@ compiler fragments as the concise record of deliberate choices. No private
 signing key is included; its default-path automatic generation is explained
 in the 7.1 audit.
 
+## Maintenance tools
+
+Two standalone maintenance tools travel with the bundle. Both are stdlib-only
+Python and work from a repository checkout or from a deployed copy.
+
+[tools/diff-configs.py](tools/diff-configs.py) compares two kernel
+configuration files — plain text or `.xz`, or `-` for standard input — and
+prints one `SYMBOL: old -> new` line per difference, matching the format of
+the recorded layer diffs. Toolchain version/identity symbols are excluded by
+default because Kconfig records them per invocation rather than as policy;
+`--include-metadata` reports them, `--keys-from` restricts the comparison to
+the symbols declared in a policy fragment, and `--quiet` prints only the
+count. The exit status is 0 whether or not symbols differ:
+
+```sh
+./tools/diff-configs.py --keys-from overrides.config \
+  baselines/7.3/config-upstream-defconfig.xz config-debian-plus.xz
+```
+
+[tests/bundle/verify.py](tests/bundle/verify.py) checks a rendered stage
+against the bundle's own receipts: declared file bytes and modes, the
+repository-tracked file set, the compression registry and saved audit-output
+hashes, and relative README links. It is a maintenance tool, not part of an
+automatic test run; from a deployed copy without the playbook it skips the
+declaration checks with a note:
+
+```sh
+python3 tests/bundle/verify.py --stage .test-agent/linux-debplus/stage
+```
+
+[tests/tools/run.py](tests/tools/run.py) exercises the diff tool against the
+durable in-bundle fixtures, including the preserved 22-symbol 7.1 state
+between the exact running configuration and the saved seed.
+
+The full 2026-10-01 session verification transcript (render logs, audit runs,
+and the original verify script) remains in the gitignored
+`.test-agent/linux-debplus-final/` scratch directory as history; it is not
+part of the bundle.
+
 ## Compiler tuning
 
 The common fragment applies the tuning choices shared by both compilers:

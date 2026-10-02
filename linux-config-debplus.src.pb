@@ -71,6 +71,17 @@
     - name: tests/package-recipe/make-sh-guards.sh
       copyDir: True
       mode: "0755"
+    # Maintenance tools promoted from the gitignored 2026-10-01 verification
+    # session: standalone config diff, bundle verification, fixture runner.
+    - name: tools/diff-configs.py
+      copyDir: True
+      mode: "0755"
+    - name: tests/bundle/verify.py
+      copyDir: True
+      mode: "0755"
+    - name: tests/tools/run.py
+      copyDir: True
+      mode: "0755"
     - name: baselines/7.1/README.md
       copyDir: True
       mode: "0644"
