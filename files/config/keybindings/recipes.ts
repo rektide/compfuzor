@@ -1,20 +1,61 @@
-/** Expand captured binding membership into today's filename-keyed CONFIG recipes.
- * No dependent-candidate scheduler or multi-output processor is implied. */
+/**
+ * Pure expansion of explicit binding membership into filename-keyed CONFIG recipes.
+ * Each definition and include piece is one independent single-output recipe; the
+ * runner invokes its deployed processor and owns validation/publication. Include
+ * inputs identify selected paths, not a promise that pending definition candidates
+ * are readable as live files. This adds no scheduler, multi-output protocol or I/O.
+ * The bounded consumer adapter instead prepares captured byte inputs before CONFIG
+ * when complete placement/root closure must be validated coherently.
+ * @see /doc/config/keybindings.md
+ * @see /doc/config/keybinding-consumers.md
+ */
 
 import { isAbsolute, join } from "node:path";
 import { materialNames } from "./materials.ts";
 import type { Composition } from "./model.ts";
 
 export type ProjectionRecipe = {
+  /** Explicit CONFIG identifier, distinct for definition versus inclusion material. */
   name: string;
-  processor: { command: string; args: string[] };
-  inputs: { file: string }[];
+  /** Existing external processor declaration consumed by controller compilation. */
+  processor: {
+    /** Deployed executable path, absolute or bin-relative; no PATH discovery. */
+    command: string;
+    /** Fixed argv selecting target/material/binding; compiler quotes each separately. */
+    args: string[];
+  };
+  /** Explicit ordered file inputs; no native suffix glob can admit companion pieces. */
+  inputs: {
+    /** Absolute selected input path, later bindable through ordinary CONFIG contexts. */
+    file: string;
+  }[];
 };
+/** Recipe declarations plus explicit material relationships, not produced artifacts. */
 export type ProjectionRecipes = {
+  /** Absolute output filenames mapped to their sole-candidate recipe declarations. */
   recipes: Record<string, ProjectionRecipe>;
-  members: { id: string; definition: string; incorporation: string }[];
+  /** Closed output membership that callers use instead of inspecting a directory. */
+  members: {
+    /** Authoritative binding ID from the supplied composition. */
+    id: string;
+    /** Absolute definition output containing binds/keybinds native material. */
+    definition: string;
+    /** Absolute include-piece output; Umbriel's piece is not standalone TOML. */
+    incorporation: string;
+  }[];
 };
 
+/**
+ * Expand every resolved binding into independent definition/include recipes.
+ * Supplying a composition does not freeze source bytes for later processor calls;
+ * those processors capture their own inputs unless a higher adapter snapshots them.
+ * @param composition Pure target-specific semantic result defining exact membership.
+ * @param yamlPaths Absolute ordered YAML inputs, including patches in precedence order.
+ * @param outputRoot Absolute material directory chosen by the caller.
+ * @param processor Already deployed external command, defaulting to the stable alias.
+ * @returns Declarations and relationships; does not compile bins, render files or commit.
+ * @throws For nonabsolute input/output paths or invalid material IDs.
+ */
 export function projectionRecipes(
   composition: Composition,
   yamlPaths: readonly string[],

@@ -1,31 +1,78 @@
-/** Pure source/placement/incorporation planning shared with future native admission. */
+/**
+ * Pure selection and naming of native material and its incorporation references.
+ * Generated binding bodies and user-authored native files enter the same explicit
+ * source interface. Selection does not scan directories, inspect existence,
+ * resolve filesystem aliases, copy/link files or publish CONFIG state; the consumer
+ * adapter owns those observed-state checks and stages delivery with the runner.
+ * Material suffixes identify definitions/includes/inline pieces, not glob membership.
+ * @see /doc/config/keybinding-consumers.md
+ */
 
 import { isAbsolute, join, normalize } from "node:path";
 import type { Target } from "./model.ts";
 import { renderInclude } from "./render.ts";
 
+/** Invocation-bound source membership and placement policy, before any delivery. */
 export type NativeSource = {
+  /** Stable contributor ID, supplied explicitly; not derived from the filename. */
   id: string;
+  /** Absolute concrete native donor path; generated and user-authored bodies use it alike. */
   path: string;
+  /** Explicit native language/target; extension does not determine format. */
   format: Target;
+  /** Finite precedence value; ties use ID ordering, not filesystem enumeration. */
   order: number;
+  /** Include by default; inline needs captured body bytes and is initially Niri-only. */
   incorporation?: "include" | "inline";
+  /** False excludes membership without deleting its physical files. */
   enabled?: boolean;
+  /** Optional source-registration disabled-slot suffix, interpreted by the I/O adapter. */
   disabledSuffix?: string;
-  placement: { strategy: "direct" } | { strategy: "copy" | "link"; path: string };
+  /** Native receiver policy, separate from managed YAML registration copy/link. */
+  placement:
+    | {
+        /** Read/include the donor itself; never create a receiver copy/link. */
+        strategy: "direct";
+      }
+    | {
+        /** Plan receiver copy/link; assemble/seed preserve edits, refresh replaces explicitly. */
+        strategy: "copy" | "link";
+        /** Absolute concrete receiver entry used by live includes and inline rebinding. */
+        path: string;
+      };
 };
+/** Selected metadata in deterministic order; not proof that files exist or were installed. */
 export type SelectedMaterial = {
+  /** Stable source/contribution identity retained across path and order changes. */
   id: string;
+  /** Consumer target for format checks and managed block namespace. */
   target: Target;
+  /** Normalized absolute donor path; may be unneeded when an edited copy is selected. */
   sourcePath: string;
+  /** Normalized live path selected for include or captured inline body resolution. */
   effectivePath: string;
+  /** Requested native placement policy; actual mutation depends on consumer mode. */
   strategy: "direct" | "copy" | "link";
+  /** Finite source precedence used to order root contributions. */
   order: number;
+  /** Contribution-based keybinding/target/ID name; never an absolute-path block identity. */
   blockIdentity: string;
+  /** Representation selected for root insertion; inline requires a body-aware adapter. */
   incorporation: "include" | "inline";
+  /** Reference alternative pointing at effectivePath; not used as the inline body. */
   include: string;
 };
 
+/**
+ * Name collision-resistant, target-relative definition and include material.
+ * A .binding suffix keeps IDs such as launch.include distinct from companions;
+ * broad *.kdl scans would still admit companions and are explicitly forbidden.
+ * Niri inline naming is chosen by the consumer after body capture.
+ * @param id Stable binding/contributor ID, not a source filename.
+ * @param target Native adapter selection.
+ * @returns Relative definition and incorporation filenames, without creating them.
+ * @throws For IDs outside the safe named-record grammar.
+ */
 export function materialNames(
   id: string,
   target: Target,
@@ -42,7 +89,16 @@ export function materialNames(
       };
 }
 
-/** Explicit membership: no wildcard can accidentally admit include fragments. */
+/**
+ * Validate and order explicit native membership and render effective include metadata.
+ * Disabled sources are omitted; no existence or physical alias checks happen here.
+ * Consumer I/O preflight adds physical-entry checks before writes.
+ * @param target Matching target required of every enabled source.
+ * @param sources Declared memberships with concrete absolute donor/receiver paths.
+ * @returns Selected metadata sorted by order then ID; no copy/link or commit occurs.
+ * @throws For invalid enabled flags/IDs/order/paths, duplicate IDs/normalized
+ * placements, wrong formats or unsupported Umbriel body inline.
+ */
 export function selectMaterials(
   target: Target,
   sources: readonly NativeSource[],
@@ -90,7 +146,18 @@ export function selectMaterials(
     });
 }
 
-/** New root skeleton only, NOT an adoption editor for existing user TOML/KDL. */
+/**
+ * Build a new include-only root/envelope: baseline first, members, personal last.
+ * Umbriel emits exactly one include table and files array, never concatenated
+ * keybinds tables. This is not an adoption editor for existing user text and cannot
+ * supply captured inline bodies; consumer block assembly handles that path.
+ * @param target Target for the complete skeleton.
+ * @param materials Explicitly ordered include-only selections of that target.
+ * @param baseline Ordered leading references; this helper does not check existence.
+ * @param personal Ordered late references, defaulting to none.
+ * @returns Root text only; no filesystem, validation subprocess or publication.
+ * @throws On target mismatch, inline material or invalid reference spelling.
+ */
 export function renderRoot(
   target: Target,
   materials: readonly SelectedMaterial[],

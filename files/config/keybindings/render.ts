@@ -1,10 +1,28 @@
-/** Native single-binding definitions, distinct from incorporation material. */
+/**
+ * Pure serializers for a resolved binding definition or its include reference.
+ * Native definitions and incorporation pieces are different material kinds:
+ * Niri definitions own a binds section; Umbriel definitions own one keybinds table.
+ * Umbriel incorporation is only a files-array entry, never standalone TOML.
+ * No command/script is executed, file is read/written or CONFIG output published.
+ * Callers validate the complete native candidate closure before the runner commits.
+ * @see /doc/config/keybindings.md
+ */
 
 import type { Implementation, Properties, ResolvedBinding, Scalar, Target } from "./model.ts";
 
+/**
+ * Quote one literal POSIX shell argument without enabling variable/subcommand expansion.
+ * @param value One complete argument, including possibly empty or quoted text.
+ * @returns Single-argument shell spelling; does not execute it or split a command.
+ */
 export function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
+/**
+ * Serialize one KDL v1 quoted string, escaping ASCII controls/quotes/backslashes.
+ * @param value Decoded text; Unicode outside those controls remains unchanged.
+ * @returns A string literal, not a parsed node or native-schema validity guarantee.
+ */
 export function kdlString(value: string): string {
   return (
     '"' +
@@ -50,6 +68,17 @@ function umbrielAction(implementation: Implementation): string {
   return "spawn:" + argv.map(shellQuote).join(" ");
 }
 
+/**
+ * Render one complete binding fragment, retaining native option spelling.
+ * Portable argv becomes Niri spawn arguments or individually shell-quoted Umbriel
+ * spawn text. Explicit scripts become shell `-c` invocations, not executable files.
+ * Empty chord selection still emits an empty binds section/keybinds table.
+ * @param binding Resolved reference/options/chords from composition.
+ * @param target Matching compositor; target-native actions cannot cross adapters.
+ * @returns Native definition text only; callers own delivery and closure admission.
+ * @throws On wrong-target native actions or Umbriel options.action overriding the
+ * resolved implementation. Native option/action schema errors are checked later.
+ */
 export function renderDefinition(binding: ResolvedBinding, target: Target): string {
   if (target === "niri") {
     const options = {
@@ -68,7 +97,17 @@ export function renderDefinition(binding: ResolvedBinding, target: Target): stri
   return `[keybinds]\n${binding.keys.map((key) => `${JSON.stringify(key)} = ${value}\n`).join("")}`;
 }
 
-/** Umbriel incorporation is an ARRAY ENTRY, deliberately not standalone TOML. */
+/**
+ * Render incorporation against the effective live placement, not a producer guess.
+ * Niri gets an include statement; Umbriel gets a quoted, comma-terminated ARRAY
+ * ENTRY which must be assembled inside one include.files array. No body existence
+ * or contents are checked: a referenced output may still be a pending candidate.
+ * @param target Compositor selecting the reference syntax.
+ * @param effectivePath Explicit path chosen/bound by the caller; selection normally
+ * requires absolute concrete paths, but this serializer does not resolve them.
+ * @returns Reference text, deliberately distinct from a definition document.
+ * @throws For empty paths or NUL, tab or newline separators.
+ */
 export function renderInclude(target: Target, effectivePath: string): string {
   if (!effectivePath || /[\0\r\n\t]/.test(effectivePath))
     throw new Error("include path must be non-empty without NUL/newlines");

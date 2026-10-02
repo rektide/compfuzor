@@ -1,4 +1,11 @@
-/** Strict versioned one-record YAML decoding, independent of filesystem capture. */
+/**
+ * Pure admission of version-1, one-record action/binding declarations from captured
+ * values or YAML text. It validates record shape and explicit target refinements,
+ * not cross-record references or complete compositor schemas. No filesystem,
+ * environment, registration, command execution or CONFIG publication occurs here.
+ * Record-authored IDs remain authoritative; caller labels provide provenance only.
+ * @see /doc/config/keybindings.md
+ */
 
 import { parseDocument } from "yaml";
 import type {
@@ -131,6 +138,16 @@ function bindingFields(raw: Record<string, unknown>, label: string): BindingFiel
   return result;
 }
 
+/**
+ * Admit one source record and translate authoring fields into the domain model.
+ * Exec/script/native are mutually exclusive per layer; native implementations
+ * require a target specifier. Partial records are allowed for later composition.
+ * @param value Parsed data containing version, kind, ID and declaration fields.
+ * @param source Diagnostic label; never used to infer or overwrite the record ID.
+ * @returns A decoded contribution without reading, registering or publishing anything.
+ * @throws On unsupported version/kind, unknown fields, malformed identifiers,
+ * invalid field types, unsafe scalar spelling or ambiguous implementation selection.
+ */
 export function decodeContribution(value: unknown, source: string): Contribution {
   const raw = object(value, source);
   const { version, kind, id: rawId, patch, niri, umbriel, ...fields } = raw;
@@ -177,6 +194,16 @@ export function decodeContribution(value: unknown, source: string): Contribution
   };
 }
 
+/**
+ * Decode exactly one captured YAML document using the strict record contract.
+ * Duplicate keys, custom/unsupported syntax warnings, multiple documents and
+ * aliases are rejected rather than silently reduced into a different declaration.
+ * UTF-8 byte admission belongs to the capture adapter, not this text-only function.
+ * @param text Already captured YAML text; no file lookup or env substitution occurs.
+ * @param source Provenance label included in parser and record diagnostics.
+ * @returns One decoded contribution for ordered composition.
+ * @throws On YAML admission errors or any invalid record field.
+ */
 export function decodeYaml(text: string, source: string): Contribution {
   const document = parseDocument(text, { uniqueKeys: true, schema: "core" });
   if (document.errors.length)
