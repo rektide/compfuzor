@@ -79,3 +79,23 @@ umbriel.user.pb).
   executes.
 - [vicinae.src.pb](/vicinae.src.pb): the first real producer; the media-keys
   producer follows its shape.
+
+# Addendum: resolved (2026-10-05)
+
+Fixed the same day via the plan above, as the keybinding system's model
+implementation:
+
+- `media-keys.etc.pb` — pure-declaration producer owning the XF86Audio*
+  chords for both compositors (proof:
+  [keybindings_media_keys.test.py](/tests/integration/keybindings_media_keys.test.py)).
+- The pending consumer-host adoption from
+  [adoption0](/design/keybindings/adoption0.glm53.md) was executed live
+  (clean byte-match migrations, no manual reconciliation).
+- The hand-written media block in `~/.config/niri/config.kdl` was retired in
+  favor of the producer; `umbriel msg config-reload` picked up the new chain.
+
+Verified end-to-end by injecting `Shift+VOLUMEUP/DOWN` clicks into the
+daemon's uinput device (`/dev/input/event27`, the probe at
+`~/tmp-opencode/surface-dial-probe/`): `combine_sink` moved 0.34 → 0.36 →
+0.32 with two 0.02 fine steps each way. The physical dial shares this exact
+path.

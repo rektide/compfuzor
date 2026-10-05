@@ -165,3 +165,24 @@ look. `niri validate -c ~/.config/niri/config.kdl` and
   because the deployment no longer renders into `~/.config` at all).
 - [Noctalia desktop guide](/doc/noctalia/README.md): updated to the new
   Umbriel config owner.
+
+# Addendum: live adoption completed (2026-10-05)
+
+The remaining operator steps above were executed on `workhorse` on
+2026-10-05, in the documented order, with exactly the expected outcomes:
+
+- `niri.etc.pb` / `umbriel.etc.pb` / `vicinae.src.pb` rendered to
+  `/etc/opt/niri`, `/etc/opt/umbriel`, `/usr/local/src/vicinae-git`.
+- Niri root adopted: marker pair appended at EOF, the old `vicinae`
+  block-in-file namespace retired (1 block), handy/config.d untouched.
+- Umbriel: all three managed files (`config.toml`, `keybinds-local.toml`,
+  `animation.toml`) byte-matched the pinned old-template hashes and migrated
+  cleanly — no user-edit notes, no manual reconciliation.
+- Vicinae producer registered into both consumers; memberships created.
+
+The same session registered the second producer — `media-keys.etc.pb`
+([examples fixture](/examples/keybindings/media-keys.yaml)) — and retired
+the hand-written XF86Audio* block from the niri root in favor of it.
+Both roots pass `niri validate` / `umbriel validate`; the running Umbriel
+picked the new chain up via `umbriel msg config-reload`. This closes the
+render-only state this checkpoint recorded.
