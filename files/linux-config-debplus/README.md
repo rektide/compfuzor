@@ -36,6 +36,25 @@ ansible-playbook -i 'localhost,' -c local linux-config-debplus.src.pb \
 Overriding `DIR` alone still creates `/etc/opt/linux-config-debplus` for the
 standard `etc` symlink. Deployment and kernel modification are separate actions.
 
+## Stock Debian kernel posture
+
+The custom kernel is **opt-in**, not a host requirement. Nothing in this bundle
+needs to exist for the machine to boot and run its runtime policy (zswap, pstore,
+kernel parameters) on a stock Debian kernel. What differs on stock:
+
+- `amdgpu.ignore_min_pcap` does not exist upstream — the minimum-power-cap
+  override, the original motivation for a custom kernel, is the one feature
+  that genuinely requires this kernel.
+- zswap's zstd compressor is modular in Debian (`CRYPTO_ZSTD=m`). Swap here
+  activates from the real root, so the module auto-loads and zstd normally
+  works anyway; the worst case is the silent lzo-fallback pool in early-boot
+  edge cases. Acceptable degradation, not a failure.
+- Native-CPU tuning, low-hardening choices, built-in filesystems, and the
+  panic QR screen are conveniences of this configuration, not requirements.
+
+Build the debplus kernel when the power-cap override matters; run stock Debian
+otherwise. Nothing here installs, removes, or prefers either.
+
 ## Files
 
 - `config-debian-plus.xz` preserves the complete generated kernel configuration.
