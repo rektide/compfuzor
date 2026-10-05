@@ -1,0 +1,92 @@
+# Model media-key declarations; the live producer is media-keys.etc.pb.
+# niri.etc.pb / umbriel.etc.pb host the consumer profiles these targets bind.
+# Chords mirror the retired hand-written niri media block 1:1.
+KEYBINDING_ACTIONS:
+  media-volume-up:
+    exec: [wpctl, set-volume, "@DEFAULT_AUDIO_SINK@", "0.06+", "-l", "1.0"]
+  media-volume-down:
+    exec: [wpctl, set-volume, "@DEFAULT_AUDIO_SINK@", "0.06-"]
+  media-volume-up-fine:
+    exec: [wpctl, set-volume, "@DEFAULT_AUDIO_SINK@", "0.02+", "-l", "1.0"]
+  media-volume-down-fine:
+    exec: [wpctl, set-volume, "@DEFAULT_AUDIO_SINK@", "0.02-"]
+  media-mute:
+    exec: [wpctl, set-mute, "@DEFAULT_AUDIO_SINK@", toggle]
+  media-mic-mute:
+    exec: [wpctl, set-mute, "@DEFAULT_AUDIO_SOURCE@", toggle]
+  media-play-pause:
+    exec: [playerctl, play-pause]
+  media-stop:
+    exec: [playerctl, stop]
+  media-prev:
+    exec: [playerctl, previous]
+  media-next:
+    exec: [playerctl, next]
+KEYBINDINGS:
+  media-volume-up:
+    action: media-volume-up
+    keys: [XF86AudioRaiseVolume]
+    title: Volume up
+    niri:
+      options: {allow-when-locked: true}
+  media-volume-down:
+    action: media-volume-down
+    keys: [XF86AudioLowerVolume]
+    title: Volume down
+    niri:
+      options: {allow-when-locked: true}
+  media-volume-up-fine:
+    action: media-volume-up-fine
+    keys: [Shift+XF86AudioRaiseVolume]
+    title: Volume up (fine)
+    niri:
+      options: {allow-when-locked: true}
+  media-volume-down-fine:
+    action: media-volume-down-fine
+    keys: [Shift+XF86AudioLowerVolume]
+    title: Volume down (fine)
+    niri:
+      options: {allow-when-locked: true}
+  media-mute:
+    action: media-mute
+    keys: [XF86AudioMute]
+    add-keys: [Shift+XF86AudioMute]
+    title: Mute output
+    niri:
+      options: {allow-when-locked: true}
+  media-mic-mute:
+    action: media-mic-mute
+    keys: [XF86AudioMicMute]
+    add-keys: [Shift+XF86AudioMicMute]
+    title: Mute microphone
+    niri:
+      options: {allow-when-locked: true}
+  media-play-pause:
+    action: media-play-pause
+    keys: [XF86AudioPlay]
+    add-keys: [Shift+XF86AudioPlay]
+    title: Play/Pause
+    niri:
+      options: {allow-when-locked: true}
+  media-stop:
+    action: media-stop
+    keys: [XF86AudioStop]
+    add-keys: [Shift+XF86AudioStop]
+    title: Stop
+    niri:
+      options: {allow-when-locked: true}
+  media-prev:
+    action: media-prev
+    keys: [XF86AudioPrev]
+    add-keys: [Shift+XF86AudioPrev]
+    title: Previous track
+    niri:
+      options: {allow-when-locked: true}
+  media-next:
+    action: media-next
+    keys: [XF86AudioNext]
+    add-keys: [Shift+XF86AudioNext]
+    title: Next track
+    niri:
+      options: {allow-when-locked: true}
+KEYBINDING_TARGETS: [niri, umbriel]
