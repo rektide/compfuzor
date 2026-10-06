@@ -355,6 +355,10 @@ from the broader contribution-registry and composition redesign."
 
 ## Cross-references
 
+- [Later operator direction and synthesis](/design/runtime-sourcing/direction0-syn.gpt61sol.md) —
+  clarifies the preferred editable `changed → canonical → deployed` policy,
+  deployment-time SHA-512 burn, optional tooling delivery and advertised receiver
+  rendezvous. This extends the inquiry; those mechanisms are not implemented.
 - [`tasks/compfuzor/repo_jj_archive.tasks`](/tasks/compfuzor/repo_jj_archive.tasks) —
   the implemented canonical-checkout-first resolution this inquiry centers on.
 - [`design/compfuzor-runtime/composition-problem0.gpt6a.md`](/design/compfuzor-runtime/composition-problem0.gpt6a.md) —
