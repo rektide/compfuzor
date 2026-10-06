@@ -121,7 +121,7 @@
         niri:
           options: {allow-when-locked: true}
     # Keep INSTANCE/NAME semantics independent of material placement.
-    PREFIX_DIR: "{{ XDG_DATA_HOME | default(ansible_env.XDG_DATA_HOME | default(ansible_env.HOME ~ '/.local/share', true), true) }}/compfuzor/etc"
+    PREFIX_DIR: "{{ ansible_env.XDG_DATA_HOME | default(ansible_env.HOME ~ '/.local/share', true) }}/compfuzor/etc"
     ETC: "{{DIR}}"
     ACTION_AUDIENCES: {default: user}
     KEYBINDING_TARGETS:
