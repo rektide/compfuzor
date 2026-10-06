@@ -46,6 +46,16 @@ per-type `min`/`od_min` and `max`/`od_max` ranges. The override now selects zero
 for the effective minimum in the shared setter and minimum getter, for every
 supported sustained/fast cap. All other policy and callback paths stay upstream.
 
+Upstream timeline: the 7.1-era patch still applied through v7.2 unchanged. The
+break is entirely v7.3-rc1 — chiefly commit 6c9e0328d1de ("drm/amd/pm: refactor
+PPT limits by controller and power source") which removed the scalar
+min/max_power_limit fields and renamed the smu_get/set_power_limit entry
+points, plus unrelated debug-mask enum churn that shifted the amdgpu_drv.c
+insertion context. The hwmon function has been untouched since 2021. Between
+v7.3-rc5 and the pinned tip no commit touched drivers/gpu/drm/amd/pm/ at all.
+Full trace with links: design/linux-debplus/smu-power-api-timeline.glm53f.md
+in the compfuzor repository (not part of the deployed bundle).
+
 The firmware-specific SMU 13.0.6 and 15.0.8 fast-PPT setters still reject caps
 below `PPT1Min` before issuing firmware messages. Thus minimum readback can be
 zero while a lower fast cap returns `-EINVAL` on those devices. This is a real
