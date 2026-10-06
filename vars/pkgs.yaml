@@ -93,7 +93,7 @@ BASE:
   - jq
   - kmod
   - libacl1
-  - libapt-pkg6.0
+  - libapt-pkg7.0
   - libattr1
   - libblkid1
   - libbz2-1.0
@@ -106,15 +106,15 @@ BASE:
   - liblocale-gettext-perl
   - liblzma5
   - libmount1
-  - libncurses5
-  - libncursesw5
+  - libncurses6
+  - libncursesw6
   - libnss-mdns
   - libpam-systemd
   - libpam-modules
   - libpam-modules-bin
   - libpam-runtime
   - libpam0g
-  - libprocps8
+  - libproc2-0
   - libreadline8
   - libselinux1
   - libsemanage-common
@@ -126,10 +126,10 @@ BASE:
   - libtext-charwidth-perl
   - libtext-iconv-perl
   - libtext-wrapi18n-perl
-  - libtinfo5
+  - libtinfo6
   - libudev1
   - libusb-0.1-4
-  - libustr-1.0-1
+  #- libustr-1.0-1 # gone from Debian
   - libuuid1
   - locales
   - login
@@ -137,7 +137,7 @@ BASE:
   - lsof
   - manpages
   - mawk
-  - mime-support
+  - media-types
   - mount
   - mtd-utils
   #- multiarch-support
@@ -206,7 +206,7 @@ BASE:
   - xz-utils
   - less
   - git
-  - ntpdate
+  - ntpsec-ntpdate
   - grep
   - base-files
   - btrfs-progs
@@ -224,8 +224,9 @@ BASE:
   - libdbus-1-3
   - libcap2
   - libc6
-  - policykit-1
+  - polkitd
   - pm-utils
+  - pkexec
   - iptables
   - ebtables
   - bridge-utils
@@ -272,7 +273,7 @@ BASE:
   - j2cli
   - jc
   - console-data
-  - console-data-linux
+  #- console-data-linux # gone from Debian
   - console-setup
   - console-setup-linux
 WORKSTATION:
@@ -360,7 +361,7 @@ WORKSTATION:
   - libu2f-udev
   - libpam-u2f
   - pamu2fcfg
-  - watchman
+  #- watchman # not in Debian; watchman.src.pb
   - weather-util
   - weather-util-data
   - wipe
@@ -384,7 +385,7 @@ WORKSTATION:
   - cec-utils
   - ddcci-dkms
   #- acpi-call-dkms
-  - libcec6
+  - libcec7
   - kcapi-tools
   - netcat-openbsd
   - linux-cpupower
@@ -408,19 +409,19 @@ WORKSTATION:
   - snapper
   - libpam-snapper
   - snapper-gui
-  - libsnapper5
+  - libsnapper7t64
   - miniupnpc
   - libnfc-bin
-  - neard
+  #- neard # gone from Debian
   - input-utils
   - kacpimon
   - bindfs
   - casync
   - libxml2-utils
-  - bcachefs-tools
+  #- bcachefs-tools # removed from Debian
   #- bookworm
   - bpytop
-  - crazydiskinfo
+  #- crazydiskinfo # gone from Debian
   - disk-filltest
   - fido2-tools
   - otpclient
@@ -460,10 +461,10 @@ WORDS:
   - wordnet-base
   # chrome uses hunspell
   - hunspell
-  - hunspell-en
+  - hunspell-en-us
 VIRTUALIZATION:
   #- qemu
-  - qemu-efi
+  - ovmf
   - qemu-efi-aarch64
   - qemu-efi-arm
   #- qemu-kvm
@@ -508,15 +509,15 @@ WORKSTATION_X:
   - ddccontrol
   - gddccontrol
   - openbox
-  - openbox-menu
+  #- openbox-menu # gone from Debian
   - tint2
-  - vim-gtk
+  - vim-gtk3
   - obconf
   - dbus-x11
   - redshift
   - redshift-gtk
   - gnome-settings-daemon
-  - parcellite # clipboard manager
+  #- parcellite # gone from Debian
   - rxvt-unicode
   - stalonetray
   - x11-apps
@@ -533,7 +534,7 @@ WORKSTATION_X:
   - xserver-xorg-video-qxl
   - xserver-xorg-input-libinput
   #- xmonad
-  - xpra
+  #- xpra # removed from Debian; xpra.pb
   - python3-gst-1.0
   - python3-pyinotify
   - python3-uritools
@@ -560,13 +561,13 @@ WORKSTATION_X:
   - fonts-open-sans
   - fonts-noto-hinted
   - fonts-noto-mono
-  - fonts-roboto-hinted
+  - fonts-roboto
   - fonts-powerline
   - fonts-recommended
   - fonts-lmodern
   - fonts-terminus
   - xfonts-terminus
-  - ttf-anonymous-pro
+  - fonts-anonymous-pro
   - lightdm
   - d-feet
   - xterm
@@ -589,7 +590,7 @@ WORKSTATION_X:
   - mesa-utils
   - mesa-vulkan-drivers
   - libegl1
-  - libegl1-mesa
+  - libegl-mesa0
   - libgl1
   - libgl1-mesa-dri
   - libvulkan1
@@ -660,7 +661,7 @@ OPENCL:
 #- clinfo
 #- ocl-icd-opencl-dev
 XPRA:
-  - xpra
+  #- xpra # removed from Debian; xpra.pb
   - python3-opengl
   - python3-mako
   - python3-matplotlib
@@ -836,7 +837,7 @@ DEVEL:
   - zlib1g-dev
   - build-essential
   - cmake
-  - libncurses5-dev
+  - libncurses-dev
   - meson
   - ninja-build
   - gperf
@@ -889,7 +890,7 @@ DEBDEV:
   - pbuilder
   - devscripts
   - dput-ng
-  - multistrap
+  #- multistrap # dropped from Debian; mmdebstrap above
   - mmdebstrap
   - debos
   - ovmf
@@ -898,7 +899,7 @@ DEBDEV:
   - mtd-utils
   - u-boot-tools
   - device-tree-compiler
-  - multistrap
+  #- multistrap
   - dpkg-cross
   - libterm-size-perl
   - libtimedate-perl
@@ -929,7 +930,7 @@ AUDIO:
   #- libasound2-plugin-equal
   - pulseaudio
   - libpulse0
-  - liblircclient0
+  - liblirc-client0t64
   - pulseaudio-module-gsettings
   #- pulseaudio-module-lirc
   #- pulseaudio-module-raop
@@ -947,7 +948,7 @@ AUDIO_X:
   - paprefs
   - pavucontrol
   - pasystray
-  - pavumeter
+  #- pavumeter # gone from Debian
   # big, pyqt5
   - mkchromecast
   - mkchromecast-pulseaudio
@@ -1081,7 +1082,7 @@ JACK_X:
   #- ladish
   #- meterbridge
   #- patchage
-  - jack-tools
+  - jack-example-tools
   - timemachine
 MEDIA:
   #- forked-daapd
@@ -1098,7 +1099,7 @@ MEDIA:
   - libgstreamer-plugins-base1.0-0
   - libavcodec-extra
   - playerctl
-  - youtube-dl
+  - yt-dlp
   - lame
   - opus-tools
   - vpx-tools
@@ -1109,13 +1110,13 @@ MEDIA:
   - libwebm-tools
   - libwebm1
   - webp
-  - libwebp6
+  - libwebp7
   - ffmpeg
-  - davs2
-  - libdavs2-16
+  #- davs2 # removed from Debian
+  #- libdavs2-16 # removed from Debian
   - dav1d
-  - libdav1d5
-  - libavif13
+  - libdav1d7
+  - libavif16
   - libavif-bin
   #- libgav1-0
   #- libgav1-bin
@@ -1151,7 +1152,7 @@ KODI:
   - kodi-eventclients-zeroconf
   - kodi-inputstream-rtmp
   - kodi-repository-kodi
-  - libcec6
+  - libcec7
 #- libwayland-client++0
 #- libwayland-client-cursor++0
 #- libwayland-egl++0
@@ -1179,7 +1180,7 @@ VAAPI_amd64:
 WORKSTATION_WAYLAND:
   - xwayland
   - helvum
-  - libwayland-egl1-mesa
+  - libwayland-egl1
   - weston
   - sway
   - swayidle
@@ -1201,7 +1202,7 @@ WORKSTATION_WAYLAND:
   - pipewire
   - pipewire-bin
   - gstreamer1.0-libcamera
-  - libcamera0.2
+  - libcamera0.4
   - libcamera-doc
   - libcamera-tools
   - libcamera-v4l2
@@ -1232,12 +1233,12 @@ WORKSTATION_WAYLAND:
   - imv
   - waypipe
   - wtype
-  - ydotool
-  - ydotoold
+  #- ydotool # gone from Debian
+  #- ydotoold # gone from Debian
   - desktop-base
   - wayvnc
   - interception-tools
-  - interception-tools-caps2esc
+  - interception-caps2esc
   - cec-utils
 WORKSTATION_GNOME:
   - accountservice
@@ -1341,12 +1342,12 @@ MEDIA_X:
   - gstreamer1.0-rtsp
   - ario
   - sonata
-  - glurp
+  #- glurp # gone from Debian
   - mpv
   - mpv-mpris
   - streamtuner2
   #- tunapie
-  - gnome-mpv
+  #- gnome-mpv # celluloid (MEDIA) supersedes
 JAVA:
   - oracle-java9-installer
   - oracle-java9-unlimited-jce-policy
@@ -1523,7 +1524,7 @@ ANDROID:
   - build-essential
   - zip
   - curl
-  - libncurses5-dev
+  - libncurses-dev
   - zlib1g-dev
   - pngcrush
   - schedtool
@@ -1584,7 +1585,7 @@ BONUS:
   #- openrazer-daemon
   #- python3-openrazer
   - ratbagd
-  - libratbag-tools
+  #- libratbag-tools # gone; ratbagd above ships the tools
   - piper
   #- s3ql
   #- btfs
@@ -1597,7 +1598,7 @@ BONUS:
   - fuse2fs
   - fusefat
   #- fuseiso9600
-  - fusesmb
+  #- fusesmb # gone from Debian
   - smbnetfs
   - gocryptfs
   - gphoto2
@@ -1607,7 +1608,7 @@ BONUS:
   - winregfs
   #- libregf-utils
   - libvshadow-utils
-  - mhddfs
+  #- mhddfs # gone from Debian
   - ostree
   - tmfs
   #- waydroid
@@ -1627,13 +1628,13 @@ BONUS:
   - bchunk
   - inkscape
   - thefuck
-  - firefox
+  - firefox-esr
   - golang-cfssl
-  - shotdetect
-  - libevdi0
+  #- shotdetect # gone from Debian
+  #- libevdi0 # gone from Debian; evdi-dkms below
   - evdi-dkms
   - wireguard
-  - wireguard-dkms
+  #- wireguard-dkms # in upstream kernel; wireguard-tools below
   - wireguard-tools
   - playerctl
 #- w3-recs
@@ -1652,10 +1653,10 @@ GO_DEV:
 DOCKER:
   - docker.io
   - docker-clean
-  - aufs-tools
+  #- aufs-tools # gone from Debian
   #- aufs-kdms
   - btrfs-progs
-  - cgroupfs-mount
+  #- cgroupfs-mount # gone from Debian
   - git
   - xz-utils
   - vim-syntax-docker
@@ -1690,7 +1691,7 @@ CONTAINER:
   - gir1.2-libosinfo-1.0
   - gir1.2-libvirt-glib-1.0
   - gir1.2-libosinfo-1.0
-  - gir1.2-libvirt-sandbox-1.0
+  #- gir1.2-libvirt-sandbox-1.0 # gone from Debian
   - gir1.2-spiceclientglib-2.0
   - gir1.2-spiceclientgtk-3.0
   - gir1.2-secret-1
@@ -1730,8 +1731,8 @@ CONTAINER:
   - golang-github-containernetworking-plugin-dnsname
   - golang-github-containers-common
   - golang-github-containers-image
-  - aufs-tools
-  - cgroupfs-mount
+  #- aufs-tools # gone from Debian
+  #- cgroupfs-mount # gone from Debian
   - slirp4netns
   - rootlesskit
   - bpftrace
@@ -1795,15 +1796,15 @@ CONTAINER:
   #- apparmor
   - numad
   - numatop
-  - open-infrastructure-container-tools
+  - open-infrastructure-compute-tools # renamed from container-tools
   - open-infrastructure-storage-tools
   - vlan
   #- collectd
   #- collectd-utils
   - schroot
-  - aufs-tools
+  #- aufs-tools # gone from Debian
   #- aufs-dkms
-  - unionfs-fuse
+  #- unionfs-fuse # removed from Debian
   - skopeo
   - virgl-server
 META:
@@ -1981,11 +1982,11 @@ POSTGRES:
   - postgresql-doc
   - postgis
   - postgis-doc
-  - postgresql-14-postgis-3
-  - postgresql-14-postgis-3-scripts
+  - postgresql-17-postgis-3
+  - postgresql-17-postgis-3-scripts
   - pgcluu
   - postgresql-client-common
-  - postgresql-doc-14
+  - postgresql-doc-17
   - libpq5
   - dbconfig-common
   #- dbconfig-no-thanks
