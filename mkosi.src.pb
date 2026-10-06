@@ -10,6 +10,16 @@
     # (files/repart/defs/universal.d/10-esp.conf, 384M) — override via
     # REPART_SED if ever needed.
     SWAP_SIZE: "24G"
+    # Build-time floor for the disk subimage's ROOT partition. The kit's
+    # format.d/50-root.conf floor is 8G -- right for format-time, where root
+    # grows into the whole physical disk. But mkosi runs repart --size=auto
+    # (hardcoded in mkosi 26's make_image), which sizes the disk to the SUM
+    # OF PARTITION MINIMUMS, so the built root lands at exactly its floor --
+    # too small for the full-desktop pkgset (~10G installed; the first build
+    # died copying the rootfs into an 8G root). 16G gives headroom; on a real
+    # disk root still grows into everything the fixed partitions don't claim
+    # (GrowFileSystem=yes, root is last).
+    MKOSI_ROOT_SIZE: "16G"
     ENV:
       scratchsize: "{{scratchsize|default()}}"
       INSTANCE: git
@@ -136,7 +146,7 @@
         content: "{{ lookup('file', '../../files/repart/defs/universal.d/20-swap.conf') }}"
       - name: mkosi.images/disk/mkosi.repart/50-root.conf
         content: |
-          {{ lookup('file', '../../files/repart/defs/format.d/50-root.conf') }}
+          {{ lookup('file', '../../files/repart/defs/format.d/50-root.conf') | replace('SizeMinBytes=8G', 'SizeMinBytes=' ~ MKOSI_ROOT_SIZE) }}
           # mkosi build-time population: the built rootfs is copied into the
           # DEFAULT subvolume (the dated OS slot); MountPoint= tells mkosi
           # where the root lives (nspawn/testing).
