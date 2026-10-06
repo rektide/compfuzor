@@ -7,7 +7,6 @@
     SYSTEMD_SCOPE: user
     SYSTEMD_INSTALL: user
     BINS_RUN_BYPASS: true
-    DEFAULT_HELPERS: [setopts, loud]
 
     RUST_STORAGE_MISE_BIN: /usr/bin/mise
     CARGO_SWEEP_VERSION: 0.8.0
@@ -81,6 +80,8 @@
         Type: oneshot
         WorkingDirectory: '%h'
         ExecStart: "{{ (BINS_DIR ~ '/sweep.sh') | replace('%', '%%') | replace('$', '$$') | to_json }} src --apply"
+      SYSTEMD_INSTALLS:
+        WantedBy: ''
     srcTimer:
       SYSTEMD_TIMER: "{{NAME}}-src"
       SYSTEMD_UNITS:
@@ -100,6 +101,8 @@
         Type: oneshot
         WorkingDirectory: '%h'
         ExecStart: "{{ (BINS_DIR ~ '/sweep.sh') | replace('%', '%%') | replace('$', '$$') | to_json }} archive --apply"
+      SYSTEMD_INSTALLS:
+        WantedBy: ''
     archiveTimer:
       SYSTEMD_TIMER: "{{NAME}}-archive"
       SYSTEMD_UNITS:

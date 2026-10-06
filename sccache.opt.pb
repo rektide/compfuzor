@@ -7,7 +7,6 @@
     SYSTEMD_SCOPE: user
     SYSTEMD_INSTALL: user
     BINS_RUN_BYPASS: true
-    DEFAULT_HELPERS: [setopts, loud]
 
     RUST_STORAGE_MISE_BIN: /usr/bin/mise
     SCCACHE_VERSION: 0.18.0
