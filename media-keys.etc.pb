@@ -7,7 +7,7 @@
 # only KEYBINDING_ACTIONS/KEYBINDINGS declarations packaged by the thin
 # generator into etc/action/*.yaml + etc/keybinding/*.yaml, the
 # keybinding-producer.json manifest, and the generated scoped target
-# installers that gen_bins aggregates into install-user.sh.
+# operations composed behind the user-default install.mjs action family.
 #
 # Domain: system-wide media keys (XF86Audio*). Any emitter works -- physical
 # keyboards, and the Surface Dial daemon (surface-dial.src.pb), whose Volume
@@ -21,7 +21,7 @@
 # producer when the consumer hosts are adopted.
 #
 # This producer binds the one-deployment-per-compositor consumer hosts:
-#   KEYBINDING_TARGETS -> /etc/opt/niri + /etc/opt/umbriel (niri.etc.pb /
+#   KEYBINDING_TARGETS -> invocation-time home-local host profiles (niri.etc.pb /
 #   umbriel.etc.pb), user context/scope: installers register into the
 #   durable membership those profiles own; nothing renders into ~/.config
 #   at playbook time.
@@ -120,19 +120,28 @@
         title: Next track
         niri:
           options: {allow-when-locked: true}
+    # Keep INSTANCE/NAME semantics independent of material placement.
+    PREFIX_DIR: "{{ XDG_DATA_HOME | default(ansible_env.XDG_DATA_HOME | default(ansible_env.HOME ~ '/.local/share', true), true) }}/compfuzor/etc"
+    ETC: "{{DIR}}"
+    ACTION_AUDIENCES: {default: user}
     KEYBINDING_TARGETS:
       niri:
-        consumer: /etc/opt/niri
+        consumer:
+          env: COMPFUZOR_NIRI_PROFILE
+          default: "${XDG_DATA_HOME}/compfuzor/etc/niri/etc/keybinding-niri.json"
         context: user
         scope: user
       umbriel:
-        consumer: /etc/opt/umbriel
+        consumer:
+          env: COMPFUZOR_UMBRIEL_PROFILE
+          default: "${XDG_DATA_HOME}/compfuzor/etc/umbriel/etc/keybinding-umbriel.json"
         context: user
         scope: user
     README: |
       # media-keys.etc.pb
 
-      Etc-typed deployment (material under `/etc/opt/media-keys`) that is the
+      Home-local material under
+      `${XDG_DATA_HOME:-$HOME/.local/share}/compfuzor/etc/{{NAME}}`, the
       **model implementation** of a pure keybinding producer: declarations
       only, generated packaging, no authored installer body.
 
@@ -146,19 +155,28 @@
 
       ```sh
       ansible-playbook -i 'localhost,' -c local media-keys.etc.pb
-      /etc/opt/media-keys/bin/install-user.sh
+      material="${XDG_DATA_HOME:-$HOME/.local/share}/compfuzor/etc/{{NAME}}"
+      "$material/bin/install.mjs"
       ```
 
-      `install-user.sh` is fully generated: it registers the producer into
-      the durable memberships owned by `/etc/opt/niri` and `/etc/opt/umbriel`
-      (run their `install-user.sh` adoption first) and rebuilds each
+      `install.mjs` / `install-user.mjs` register the producer into
+      home-local Niri/Umbriel consumer profiles (run their `install.mjs`
+      adoption first) and rebuild each
       compositor's managed insertion area with native validation.
+
+      Consumer selectors resolve HOME/XDG at invocation, not the rendering user's
+      literal home. `COMPFUZOR_NIRI_PROFILE` and `COMPFUZOR_UMBRIEL_PROFILE`
+      explicitly select shared/other profile JSON files. Shared producer material
+      itself is separately selected with `-e PREFIX_DIR=/etc/opt`.
+      Only user targets are declared: no install-system.mjs is emitted. This
+      producer does not own a host assembly action; use the hosts' assemble.mjs.
+      No old material, registrations or services are automatically cleaned up/reloaded.
 
       ## Files
 
       - `etc/action/*.yaml` + `etc/keybinding/*.yaml` -- packaged declarations
       - `etc/keybinding-producer.json` -- producer manifest
-      - `bin/install-user.sh` -- generated user aggregate
+      - `bin/install-user.mjs` + `bin/install.mjs` -- generated user action family
       - `bin/install-keybindings-{niri,umbriel}.sh` -- generated target installers
       - `bin/keybindings.mjs` -- generated shared keybindings runtime
 
