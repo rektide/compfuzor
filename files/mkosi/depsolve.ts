@@ -295,12 +295,11 @@ function aptRun(args, timeoutMs) {
   })
 }
 
-/** The scratch-root options every apt-get invocation carries. */
+/** The scratch-root options every apt-get invocation carries. Dir points
+ * every apt path at the scratch root; the empty status file is spelled out
+ * because fresh-rootfs semantics are the whole point.
+ */
 function aptBaseArgs() {
-  // Dir points every apt path at the scratch root; the empty status file is
-  // spelled out because fresh-rootfs semantics are the whole point.
-  // Dir points every apt path at the scratch root; the empty status file is
-  // spelled out because fresh-rootfs semantics are the whole point.
   return ["-o", `Dir=${aptRoot}`, "-o", `Dir::State::status=${statusFile}`]
 }
 
