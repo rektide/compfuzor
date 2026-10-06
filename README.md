@@ -18,6 +18,12 @@ filesystems, services, packages, and kernel state.
   [an example-based guide](/doc/kinesis/kanata.md). Current root playbooks remain
   unchanged.
 
+## Developer storage
+
+- [Rust cache and age-based reclamation](/doc/rust-storage/README.md): independent
+  user-scoped sccache and cargo-sweep deployments, inert rendering, explicit
+  tool installation, and approved persistent sweep timers.
+
 ## Filter plugins
 
 The authoritative plugin catalog, signatures, undefined-value behavior, and

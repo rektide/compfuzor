@@ -54,3 +54,8 @@ experimental build-dir, and successful status is not proof of complete cleanup.
   [cargo backend](https://mise.jdx.dev/dev-tools/backends/cargo.html) defaults to locked installs.
 - [`disk-cleanup.opt.pb`](/disk-cleanup.opt.pb): independent interactive emergency
   cleanup tools. These playbooks do not invoke its broader cleanup actions.
+- [Subsystem action runner](/doc/subsys.md#action-runner-_cf_action) and
+  [version-manager pins](/doc/subsys.md#build-time-version-manager-pins): existing
+  build/install lane conventions. These standalone tool deployments deliberately
+  install exact mise specs in their build lane without creating repo-local pins
+  or changing a project's Rust selection.
