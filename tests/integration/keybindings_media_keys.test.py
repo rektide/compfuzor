@@ -15,9 +15,12 @@ import importlib.util
 import json
 import subprocess
 import tempfile
+import yaml
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+MEDIA_VARS = yaml.safe_load((ROOT / "media-keys.etc.pb").read_text())[0]["vars"]
+MEDIA_NAME = MEDIA_VARS.get("NAME", MEDIA_VARS["TYPE"] + ("-" + MEDIA_VARS["INSTANCE"] if MEDIA_VARS.get("INSTANCE") else ""))
 
 spec = importlib.util.spec_from_file_location("consumer_hosts", ROOT / "tests/integration/keybindings_consumer_hosts.test.py")
 consumer_hosts = importlib.util.module_from_spec(spec)
@@ -63,7 +66,7 @@ def test_media_keys_model_producer() -> None:
         # installers, a fully generated aggregate with each target exactly
         # once, and nothing else authored.
         manifest = json.loads((producer / "etc/keybinding-producer.json").read_text())
-        assert manifest["producer"] == "media-keys" and manifest["targets"] == ["niri", "umbriel"]
+        assert manifest["producer"] == MEDIA_NAME and manifest["targets"] == ["niri", "umbriel"]
         resources = [entry["path"] for entry in manifest["resources"]]
         assert len(resources) == 20
         assert len([path for path in resources if "/action/" in path]) == 10
@@ -71,17 +74,18 @@ def test_media_keys_model_producer() -> None:
         for target, host in [("niri", niri_host), ("umbriel", umbriel_host)]:
             leaf = (producer / f"bin/install-keybindings-{target}.sh").read_text()
             assert f"--profile {host}/etc/keybinding-{target}.json" in leaf and " install " in leaf
-        aggregate = (producer / "bin/install-user.sh").read_text()
-        assert aggregate.count('"$DIR/bin/install-keybindings-niri.sh"') == 1
-        assert aggregate.count('"$DIR/bin/install-keybindings-umbriel.sh"') == 1
+        assert (producer / "bin/install.mjs").is_symlink()
+        assert (producer / "bin/install-user.mjs").is_file() and not (producer / "bin/install-user.mjs").is_symlink()
+        action_spec = json.loads((producer / "etc/compfuzor-actions/spec.json").read_text())
+        assert action_spec["actions"]["install"]["plans"]["user"] == [{"kind": "action", "action": "install-keybindings-niri"}, {"kind": "action", "action": "install-keybindings-umbriel"}]
 
         # Fresh roots; adoption first (consumer installers), then register.
         niri_home = area / "home-niri"
         umbriel_home = area / "home-umbriel"
         niri_env = consumer_env(niri_home)
         umbriel_env = consumer_env(umbriel_home)
-        run([str(niri_host / "bin/install-user.sh")], niri_env)
-        run([str(umbriel_host / "bin/install-user.sh")], umbriel_env)
+        run([str(niri_host / "bin/install.mjs")], niri_env)
+        run([str(umbriel_host / "bin/install.mjs")], umbriel_env)
         # Producer leaves directly (the proposal test's pattern): the
         # aggregate would run both targets against one environment.
         run([str(producer / "bin/install-keybindings-niri.sh")], niri_env)
@@ -122,7 +126,7 @@ def test_media_keys_model_producer() -> None:
         # Durable membership: exactly the media-keys producer group.
         for target, home in [("niri", niri_home), ("umbriel", umbriel_home)]:
             state = json.loads((home / f".config/{target}/.keybindings/membership.json").read_text())
-            assert set(state["groups"]) == {"media-keys"}
+            assert set(state["groups"]) == {MEDIA_NAME}
 
         # Native validation of both assembled roots when binaries exist.
         if subprocess.run(["sh", "-c", "command -v niri"], capture_output=True).returncode == 0:

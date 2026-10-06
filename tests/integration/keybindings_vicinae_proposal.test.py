@@ -6,9 +6,9 @@ Run directly:
     ./tests/integration/keybindings_vicinae_proposal.test.py
 
 Renders niri.etc.pb and umbriel.etc.pb (real consumer hosts) plus
-vicinae.src.pb (real producer, KEYBINDING_TARGETS overridden to the isolated
-deployment roots using the same deployment-root form the playbook pins for
-/etc/opt). Adopts both roots with the consumer install-user.sh, registers the
+vicinae.src.pb (real producer, existing profile selector overrides point to
+isolated consumers while source deployment remains separate). Adopts both roots
+with the consumer install.mjs, registers the
 producer through its generated target installers, and checks the reviewed
 chord outcomes and toggle policy without launching any application.
 """
@@ -44,20 +44,12 @@ def test_proposal():
             "vicinae.src.pb",
             "proposal-vicinae",
             etc_typed=False,
-            extra={
-                # Same deployment-root form the playbook pins for the real
-                # /etc/opt deployments; resolves through DIR/etc exposure.
-                "KEYBINDING_TARGETS": {
-                    target: {"consumer": str(host), "context": "user", "scope": "user"}
-                    for target, host in [("niri", niri_host), ("umbriel", umbriel_host)]
-                }
-            },
         )
-        # The producer bakes the deployment-root profile form, exactly as it
-        # will against /etc/opt/<target>/etc/keybinding-<target>.json.
+        # Consumers are invocation-time selectors, not a pinned /etc/opt receiver.
         for target, host in [("niri", niri_host), ("umbriel", umbriel_host)]:
             leaf = (producer / f"bin/install-keybindings-{target}.sh").read_text()
-            assert f"--profile {host}/etc/keybinding-{target}.json" in leaf and " install " in leaf
+            assert "--profile-selector" in leaf and "${XDG_DATA_HOME}" in leaf and " install " in leaf
+            assert "/etc/opt/" not in leaf
         assert (producer / "etc/keybinding-producer.json").is_file()
         for hand in ["install-niri.sh", "install-umbriel.sh"]:
             assert not (producer / "bin" / hand).exists()
@@ -89,11 +81,13 @@ def test_proposal():
 
         niri_env = consumer_env(niri_home)
         umbriel_env = consumer_env(umbriel_home)
+        niri_env["COMPFUZOR_NIRI_PROFILE"] = str(niri_host / "etc/keybinding-niri.json")
+        umbriel_env["COMPFUZOR_UMBRIEL_PROFILE"] = str(umbriel_host / "etc/keybinding-umbriel.json")
         # Adopt first (consumer installers), then register the producer.
-        run([str(niri_host / "bin/install-user.sh")], niri_env)
-        run([str(umbriel_host / "bin/install-user.sh")], umbriel_env)
+        run([str(niri_host / "bin/install.mjs")], niri_env)
+        run([str(umbriel_host / "bin/install.mjs")], umbriel_env)
         # Producer leaves directly: the authored aggregate body enables a
-        # user service, which needs a session bus the isolated HOME lacks.
+        # user service. We never execute it; HOME isolation does not isolate DBus.
         run([str(producer / "bin/install-keybindings-niri.sh")], niri_env)
         run([str(producer / "bin/install-keybindings-umbriel.sh")], umbriel_env)
 

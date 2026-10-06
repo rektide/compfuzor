@@ -105,6 +105,7 @@ def render_playbook(playbook: str, name: str, extra: dict | None = None, etc_typ
     deployment.mkdir(parents=True, exist_ok=True)
     scenario = {
         "DIR": str(payload),
+        "PREFIX_DIR": str(deployment),
         "ETC": str(payload if etc_typed else payload / "etc"),
         "BINS_DIR": str(payload / "bin"),
         "REPO_BYPASS": True,
@@ -114,8 +115,20 @@ def render_playbook(playbook: str, name: str, extra: dict | None = None, etc_typ
         "BINS_RUN_BYPASS": True,
         "GLOBAL_BINS_BYPASS": True,
         "LINKS_BYPASS": True,
+        "MODULES_BYPASS": True,
+        "SYSTEMD_THUNK_BYPASS": True,
         "GET_URLS": [],
     }
+    if playbook == "vicinae.src.pb":
+        # Rendering producer declarations must not create /usr/share/vicinae,
+        # archive workspaces or source-to-/opt exposure links on the workstation.
+        scenario.update({"DIRS": [], "DIRSET": ["etc"], "FS_SRCS_BYPASS": True,
+                         "SRC": str(payload), "OPT": str(payload / "opt"),
+                         "REPO_DIR": str(payload / "repo"), "GIT_DIR": str(payload / "repo")})
+        for kind in ["VAR", "LOG", "CACHE", "SHARE", "PID", "SRV", "SPOOL"]:
+            scenario[kind] = str(payload / kind.lower())
+        for relative in ["bin/config/processors", "bin/internal/config", "bin/zim"]:
+            (payload / relative).mkdir(parents=True, exist_ok=True)
     if extra:
         scenario.update(extra)
     scenario_file = deployment / "scenario.json"
@@ -134,12 +147,24 @@ def render_playbook(playbook: str, name: str, extra: dict | None = None, etc_typ
 
 
 def consumer_env(home: Path) -> dict:
+    assert home.resolve().is_relative_to(ROOT / ".test-agent"), "consumer tests require isolated HOME"
+    commands = home / "test-commands"
+    commands.mkdir(parents=True, exist_ok=True)
+    # HOME alone does not isolate the session bus: never touch the real user manager.
+    systemctl = commands / "systemctl"
+    systemctl.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$SERVICE_TEST_TRACE"\nexit 0\n')
+    systemctl.chmod(0o755)
+    for forbidden in ["sudo", "steamos-readonly", "steamosctl"]:
+        command = commands / forbidden
+        command.write_text('#!/bin/sh\nprintf "unexpected privileged/session command: %s\\n" "$0" >&2\nexit 97\n')
+        command.chmod(0o755)
     node = subprocess.run(["node", "-p", "process.execPath"], check=True, text=True, capture_output=True).stdout.strip()
     env = {
         **os.environ,
         "HOME": str(home),
         "TMPDIR": str(SCRATCH),
-        "PATH": os.pathsep.join([str(Path(node).parent), "/usr/local/bin", "/usr/bin", "/bin", str(Path.home() / ".local/share/pnpm")]),
+        "SERVICE_TEST_TRACE": str(home / "service-test-trace"),
+        "PATH": os.pathsep.join([str(commands), str(Path(node).parent), "/usr/local/bin", "/usr/bin", "/bin", str(Path.home() / ".local/share/pnpm")]),
     }
     for variable in ["DIR", "XDG_STATE_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "COMPFUZOR_CONFIG_BYPASS", "COMPFUZOR_KEYBINDINGS_BYPASS"]:
         env.pop(variable, None)
@@ -164,8 +189,9 @@ def test_niri_consumer_host() -> None:
     installer = (payload / "bin/install-keybindings-niri.sh").read_text()
     assert f"--profile {payload}/keybinding-niri.json" in installer and " host " in installer
     aggregate = (payload / "bin/install-user.sh").read_text()
-    assert aggregate.index("--remove vicinae") < aggregate.index('"$DIR/bin/install-keybindings-niri.sh"')
-    assert aggregate.count('"$DIR/bin/install-keybindings-niri.sh"') == 1
+    assert aggregate.index("--remove vicinae") < aggregate.index("actions children")
+    assert aggregate.count("actions children") == 1
+    assert (payload / "bin/install.mjs").is_symlink() and (payload / "bin/assemble.mjs").is_symlink()
     assert (payload / "bin/keybindings.mjs").is_symlink()
     assert_shell_syntax(payload / "bin")
 
@@ -184,7 +210,7 @@ def test_niri_consumer_host() -> None:
             'include "./config.d/display-alt.kdl"\n'
         )
         env = consumer_env(home)
-        run([str(payload / "bin/install-user.sh")], env)
+        run([str(payload / "bin/install.mjs")], env)
         root = (config_dir / "config.kdl").read_text()
         assert root.count("// compfuzor-keybindings-begin") == 1 and root.count("// compfuzor-keybindings-end") == 1
         assert root.index("// handy start") < root.index('include "./handy/handy.kdl"') < root.index("// handy end")
@@ -194,14 +220,14 @@ def test_niri_consumer_host() -> None:
         if shutil.which("niri"):
             assert subprocess.run(["niri", "validate", "-c", str(config_dir / "config.kdl")], env=env, capture_output=True).returncode == 0
         stable = root
-        run([str(payload / "bin/install-user.sh")], env)  # Idempotent adoption.
+        run([str(payload / "bin/install.mjs")], env)  # Idempotent adoption.
         assert (config_dir / "config.kdl").read_text() == stable
 
         # Missing root: minimal skeleton with the managed area only.
         fresh = Path(tmp) / "fresh" / ".config/niri"
         fresh.mkdir(parents=True)
         env2 = consumer_env(Path(tmp) / "fresh")
-        run([str(payload / "bin/install-user.sh")], env2)
+        run([str(payload / "bin/install.mjs")], env2)
         created = (fresh / "config.kdl").read_text()
         assert created == "// compfuzor-keybindings-begin\n// compfuzor-keybindings-end\n"
     print("ok: niri consumer host renders, adopts conservatively and is idempotent")
@@ -234,8 +260,8 @@ def test_umbriel_consumer_host() -> None:
     with (payload / "keybinds-local.toml").open("rb") as handle:
         assert tomllib.load(handle)["keybinds"]["Mod+Shift+Slash"] == "cheatsheet-toggle"
     aggregate = (payload / "bin/install-user.sh").read_text()
-    assert aggregate.index("umbriel_seed") < aggregate.index('"$DIR/bin/install-keybindings-umbriel.sh"')
-    assert aggregate.count('"$DIR/bin/install-keybindings-umbriel.sh"') == 1
+    assert aggregate.index("umbriel_seed") < aggregate.index("actions children")
+    assert aggregate.count("actions children") == 1
     assert_shell_syntax(payload / "bin")
 
     with tempfile.TemporaryDirectory(prefix="umbriel-", dir=SCRATCH) as tmp:
@@ -246,7 +272,7 @@ def test_umbriel_consumer_host() -> None:
         (live / "config.toml").write_text(OLD_CONFIG_TOML)
         (live / "keybinds-local.toml").write_text(OLD_KEYBINDS_LOCAL_TOML)
         env = consumer_env(home)
-        migrated = run([str(payload / "bin/install-user.sh")], env)
+        migrated = run([str(payload / "bin/install.mjs")], env)
         assert migrated.stdout.count("migrated") == 2
         assert (live / "config.toml").read_text() == (payload / "config.toml").read_text()
         assert (live / "keybinds-local.toml").read_text() == (payload / "keybinds-local.toml").read_text()
@@ -255,7 +281,7 @@ def test_umbriel_consumer_host() -> None:
 
         # A stale vicinae fragment stays on disk, merely unreferenced.
         (live / "keybinds-vicinae.toml").write_text('[keybinds]\n"Mod+Space" = "spawn:vicinae toggle"\n')
-        rerun = run([str(payload / "bin/install-user.sh")], env)
+        rerun = run([str(payload / "bin/install.mjs")], env)
         with (live / "config.toml").open("rb") as handle:
             live_template = tomllib.load(handle)
         assert "keybinds-vicinae.toml" not in live_template["include"]["optional"]["files"]  # Unreferenced, not pruned.
@@ -269,7 +295,7 @@ def test_umbriel_consumer_host() -> None:
         (edited / "config.toml").write_text('# my own root\n[include]\nfiles = ["/usr/local/share/umbriel/config.toml"]\n')
         (edited / "animation.toml").write_text("# my tuning\n[animation]\nenabled = false\n")
         env2 = consumer_env(Path(tmp) / "edited")
-        noted = run([str(payload / "bin/install-user.sh")], env2, check=False)
+        noted = run([str(payload / "bin/install.mjs")], env2, check=False)
         assert noted.returncode != 0  # Operator action required, not silent rewrite.
         assert "user edits" in noted.stderr
         assert (edited / "config.toml").read_text().startswith("# my own root")

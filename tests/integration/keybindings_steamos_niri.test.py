@@ -1,6 +1,6 @@
 """Deck host-layer proof: steamos-niri.opt.pb as consumer host + own user layer.
 
-Renders the real opt-typed deck playbook, then runs its install-user.sh
+Renders the real opt-typed deck playbook, then runs its user-default install.mjs
 against isolated homes in both shapes the deck actually sees:
 
 * an EXISTING root mimicking a previously managed deck: an output block,
@@ -66,10 +66,14 @@ def test_steamos_niri_host_layer() -> None:
         assert (host / "etc/keybinding-niri.json").is_file()
         assert not (host / "etc/keybinding-producer.json").exists()
         aggregate = (host / "bin/install-user.sh").read_text()
-        assert aggregate.count('"$DIR/bin/install-keybindings-niri.sh"') == 1
+        assert aggregate.count("actions children") == 1
         assert "config-overlay.kdl" in aggregate and "add-wants niri.service mako.service" in aggregate
         # The deck's old hand-written overlay is gone from declarations.
         assert not (host / "etc/config-overlay.kdl").exists()
+        action_spec = json.loads((host / "etc/compfuzor-actions/spec.json").read_text())
+        assert action_spec["actions"]["install"]["entry"] == "install-user.mjs"
+        assert (host / "bin/install-system.mjs").is_symlink()
+        assert not (host / "bin/assemble-system.mjs").exists()
 
         # EXISTING root: output block + old overlay include + personal bind.
         existing_home = area / "home-existing"
@@ -81,7 +85,8 @@ def test_steamos_niri_host_layer() -> None:
             'binds { Mod+P { spawn "wlogout"; }; }\n'
         )
         env = consumer_env(existing_home)
-        run([str(host / "bin/install-user.sh")], env)
+        run([str(host / "bin/install.mjs")], env)
+        assert Path(env["SERVICE_TEST_TRACE"]).read_text().strip() == "--user add-wants niri.service mako.service"
 
         root = (niri_dir / "config.kdl").read_text()
         assert 'output "eDP-1" { scale 2.0; }' in root and 'spawn "wlogout";' in root
@@ -97,7 +102,7 @@ def test_steamos_niri_host_layer() -> None:
         # FRESH root: skeleton + the same assembled binds.
         fresh_home = area / "home-fresh"
         fresh_env = consumer_env(fresh_home)
-        run([str(host / "bin/install-user.sh")], fresh_env)
+        run([str(host / "bin/install.mjs")], fresh_env)
         fresh_root = (fresh_home / ".config/niri/config.kdl").read_text()
         assert "compfuzor-keybindings-begin" in fresh_root
         fresh_binds = assembled_binds(fresh_home)
@@ -111,7 +116,7 @@ def test_steamos_niri_host_layer() -> None:
 
         # Idempotence: a second run changes nothing semantic.
         before = (niri_dir / "config.kdl").read_text()
-        run([str(host / "bin/install-user.sh")], env)
+        run([str(host / "bin/install.mjs")], env)
         assert (niri_dir / "config.kdl").read_text() == before
 
         if subprocess.run(["sh", "-c", "command -v niri"], capture_output=True).returncode == 0:

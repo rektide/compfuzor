@@ -74,7 +74,7 @@
     TYPE: umbriel
     # Stable host identity; narrow material placement does not change receivers.
     NAME: umbriel
-    PREFIX_DIR: "{{ XDG_DATA_HOME | default(ansible_env.XDG_DATA_HOME | default(ansible_env.HOME ~ '/.local/share', true), true) }}/compfuzor/etc"
+    PREFIX_DIR: "{{ ansible_env.XDG_DATA_HOME | default(ansible_env.HOME ~ '/.local/share', true) }}/compfuzor/etc"
     ETC: "{{DIR}}"
     ACTION_AUDIENCES: {default: user}
     ETC_FILES:

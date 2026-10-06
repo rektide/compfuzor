@@ -38,7 +38,7 @@
     TYPE: niri
     # Stable host identity; ETC must follow DIR instead of the /etc/opt hierarchy.
     NAME: niri
-    PREFIX_DIR: "{{ XDG_DATA_HOME | default(ansible_env.XDG_DATA_HOME | default(ansible_env.HOME ~ '/.local/share', true), true) }}/compfuzor/etc"
+    PREFIX_DIR: "{{ ansible_env.XDG_DATA_HOME | default(ansible_env.HOME ~ '/.local/share', true) }}/compfuzor/etc"
     ETC: "{{DIR}}"
     ACTION_AUDIENCES: {default: user}
     # Root/membership/material paths are all invocation-time XDG defaults:
