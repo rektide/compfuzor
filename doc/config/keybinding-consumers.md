@@ -33,6 +33,27 @@ recipes using an existing deployed concat leaf. Root preparation reuses a shared
 processor remains available; this bounded consumer path avoids pretending those
 separate recipes form a dependent-candidate DAG.
 
+## How this reuses CONFIG
+
+[`gen_config.tasks`](/tasks/compfuzor/gen_config.tasks) synthesizes artifacts for
+statically declared `CONFIGS`. Keybinding membership is selected at **invocation
+time**, so a consumer does not need an authored `CONFIGS` recipe per binding:
+
+- [The thin keybinding generator](/library/filter_plugins/keybindings_compile.py)
+  reuses CONFIG's stock runner and processor artifacts. When ordinary `CONFIGS`
+  already supply those workers, keybindings uses the same deployment runtime.
+- [Consumer assembly](/files/config/keybindings/consumer.ts) turns the selected
+  bindings, native placements, include companions and root into ordinary
+  single-output `concat` recipes, then calls the
+  [shared CONFIG assembly entry](/files/config/assembly.ts) once. Native closure
+  validation is a CONFIG transaction hook, not a second publisher.
+- [Membership updates](/files/config/keybindings/membership.ts) enter that same
+  transaction as an additional output. Source registration has its own bounded
+  rollback around assembly; it does not accept membership before CONFIG commits.
+
+Thus keybindings owns **which contributions participate and their native form**;
+CONFIG owns **candidate processing, validation hooks, publication and rollback**.
+
 The current repo supplies [producer participation and durable explicit membership](/doc/config/keybinding-producers.md)
 and [general audience action families](/doc/actions/README.md). New home-local
 placement/action defaults were validated only in disposable HOME/XDG fixtures;

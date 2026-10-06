@@ -20,7 +20,7 @@ sources:
 
 The public names are **`KEYBINDING_ACTIONS`** and **`KEYBINDINGS`**. A producer
 declares named records; it does not write ETC_FILES, CONFIGS, target text or BINS
-for individual bindings:
+for individual bindings, or repeat the standard target wiring:
 
 ```yaml
 ACTION_AUDIENCES: {default: user}
@@ -34,15 +34,6 @@ KEYBINDINGS:
     title: Open a Terminal
     umbriel:
       add-keys: [Alt+Return]
-KEYBINDING_TARGETS:
-  niri:
-    consumer: {env: COMPFUZOR_NIRI_PROFILE, default: "${XDG_DATA_HOME}/compfuzor/etc/niri/etc/keybinding-niri.json"}
-    context: user
-    scope: user
-  umbriel:
-    consumer: {env: COMPFUZOR_UMBRIEL_PROFILE, default: "${XDG_DATA_HOME}/compfuzor/etc/umbriel/etc/keybinding-umbriel.json"}
-    context: user
-    scope: user
 ```
 
 Normal playbook task entry remains `tasks/compfuzor.includes`. The thin generator
@@ -58,10 +49,29 @@ consumer graph; use readable application prefixes. Accidental duplicate
 definitions still fail, while intentional `patch: true` retains the domain's
 field-specific override behavior.
 
-`KEYBINDING_TARGETS` accepts a list of targets or the explicit bindings above.
-If omitted for an ordinary producer, Niri and Umbriel target entries are generated
-using known user defaults—never PATH discovery. Set the list to the intended
-targets. A `consumer` is an explicit deployment or profile JSON path. A deployment
+Declaring `KEYBINDING_ACTIONS` or `KEYBINDINGS` without `KEYBINDING_CONSUMERS`
+automatically applies **`KEYBINDING_TARGET_DEFAULTS`** from
+[`vars/common.yaml`](/vars/common.yaml). Its Niri and Umbriel targets bind the
+home-local consumer profiles using invocation-time `${XDG_DATA_HOME}` paths,
+`context: user` and `scope: user`. The existing `COMPFUZOR_NIRI_PROFILE` and
+`COMPFUZOR_UMBRIEL_PROFILE` environment overrides select other profile files.
+Vicinae and media-keys therefore declare resources, not their own copies of this
+wiring. Rendering still does not install bindings or discover targets on PATH.
+
+`KEYBINDING_TARGETS` remains an optional **override**: a list of targets or a
+mapping of target settings. Explicit empty lists/maps are respected, and empty
+resource declarations still use the common producer defaults for reinstalls.
+Consumer hosts do not inherit producer targets; their own declarations remain
+their local user layer unless targets are explicitly supplied for a combined role.
+For example, select a different host for just Umbriel:
+
+```yaml
+KEYBINDING_TARGETS:
+  umbriel: {consumer: /opt/desktop, context: user, scope: user}
+```
+
+A target list retains the runtime's built-in profile defaults; a `consumer` binds
+an explicit deployment or profile JSON path. A deployment
 resolves to `etc/keybinding-<target>.json`; HOME/XDG-rooted profile paths and existing
 env/default selectors resolve at invocation. For example,
 `consumer: "${XDG_CONFIG_HOME}/umbriel/keybinding-umbriel.json"` binds a user host
@@ -344,6 +354,12 @@ and link behavior, updates commands and smaller membership, rejects invalid
 reinstall without accepting membership, and preserves disabled group/slots.
 It also checks authored install bodies and exactly-once target participation.
 
+- [Common target defaults proof](/tests/integration/keybindings_target_defaults.test.py):
+  producer activation, empty reinstalls, consumer-local patches and explicit
+  target/default overrides through the stock generator.
+- [Media-keys producer proof](/tests/integration/keybindings_media_keys.test.py):
+  real producer installation into both consumer hosts using common target selectors,
+  with no producer-authored target wiring.
 - [Source/domain grammar](/doc/config/keybindings.md): action independence,
   explicit scripts/native implementations and target override/extension rules.
 - [Consumer assembly](/doc/config/keybinding-consumers.md): adopted root areas,

@@ -20,8 +20,8 @@
 # keyboards with a mic button. That niri block is retired in favor of this
 # producer when the consumer hosts are adopted.
 #
-# This producer binds the one-deployment-per-compositor consumer hosts:
-#   KEYBINDING_TARGETS -> invocation-time home-local host profiles (niri.etc.pb /
+# Shared producer targets from vars/common.yaml bind the compositor hosts:
+#   invocation-time home-local host profiles (niri.etc.pb /
 #   umbriel.etc.pb), user context/scope: installers register into the
 #   durable membership those profiles own; nothing renders into ~/.config
 #   at playbook time.
@@ -124,19 +124,6 @@
     PREFIX_DIR: "{{ ansible_env.XDG_DATA_HOME | default(ansible_env.HOME ~ '/.local/share', true) }}/compfuzor/etc"
     ETC: "{{DIR}}"
     ACTION_AUDIENCES: {default: user}
-    KEYBINDING_TARGETS:
-      niri:
-        consumer:
-          env: COMPFUZOR_NIRI_PROFILE
-          default: "${XDG_DATA_HOME}/compfuzor/etc/niri/etc/keybinding-niri.json"
-        context: user
-        scope: user
-      umbriel:
-        consumer:
-          env: COMPFUZOR_UMBRIEL_PROFILE
-          default: "${XDG_DATA_HOME}/compfuzor/etc/umbriel/etc/keybinding-umbriel.json"
-        context: user
-        scope: user
     README: |
       # media-keys.etc.pb
 

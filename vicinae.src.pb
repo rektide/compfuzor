@@ -110,26 +110,11 @@
         title: "Switch windows: vicinae"
         umbriel:
           keys: [Mod+Slash]
-    # ONE deployment per compositor (operator decision): the location-typed
-    # consumer hosts own home-local profiles. Invocation-time selectors follow
-    # those hosts without relocating this source checkout/deployment or changing
-    # Vicinae's separate service audience policy. Explicit environment selectors
-    # can continue to use shared consumer material.
+    # Shared producer targets in vars/common.yaml bind the home-local consumer
+    # profiles at invocation, independently of Vicinae's source deployment and
+    # service audiences. Profile environment overrides select shared material.
     # These stay USER-scoped installers joined into install-user.sh; they
     # do not become system build/install operations.
-    KEYBINDING_TARGETS:
-      niri:
-        consumer:
-          env: COMPFUZOR_NIRI_PROFILE
-          default: "${XDG_DATA_HOME}/compfuzor/etc/niri/etc/keybinding-niri.json"
-        context: user
-        scope: user
-      umbriel:
-        consumer:
-          env: COMPFUZOR_UMBRIEL_PROFILE
-          default: "${XDG_DATA_HOME}/compfuzor/etc/umbriel/etc/keybinding-umbriel.json"
-        context: user
-        scope: user
     ETC_DIRS:
       - kde/kwin-scripts/vicinae/contents/code
     ETC_FILES:

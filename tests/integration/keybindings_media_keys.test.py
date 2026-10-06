@@ -1,7 +1,7 @@
 """Model-implementation proof: the media-keys pure producer over real consumer hosts.
 
-Renders media-keys.etc.pb (declarations only -- no ETC_FILES, no authored
-installer body) plus the real niri.etc.pb / umbriel.etc.pb consumer hosts,
+Renders media-keys.etc.pb (declarations only -- no authored target wiring,
+ETC_FILES or installer body) plus the real niri.etc.pb / umbriel.etc.pb consumer hosts,
 adopts fresh roots, registers the producer through its generated per-target
 installers, and checks the exact media-key chord/action outcomes for both
 compositors: the Surface Dial's Shift+ fine-step chords, plain coarse chords,
@@ -46,20 +46,13 @@ def test_media_keys_model_producer() -> None:
         )
     with tempfile.TemporaryDirectory(prefix="media-keys-", dir=SCRATCH) as tmp:
         area = Path(tmp)
+        assert "KEYBINDING_TARGETS" not in MEDIA_VARS
         niri_host = render_playbook("niri.etc.pb", "media-keys-niri-host", etc_typed=True)
         umbriel_host = render_playbook("umbriel.etc.pb", "media-keys-umbriel-host", etc_typed=True)
         producer = render_playbook(
             "media-keys.etc.pb",
             "media-keys-producer",
             etc_typed=True,
-            extra={
-                # Same deployment-root form the playbook pins for the real
-                # /etc/opt consumers; resolves through DIR/etc exposure.
-                "KEYBINDING_TARGETS": {
-                    target: {"consumer": str(host), "context": "user", "scope": "user"}
-                    for target, host in [("niri", niri_host), ("umbriel", umbriel_host)]
-                }
-            },
         )
 
         # Declarations-only producer: packaged singular YAML, generated
@@ -71,9 +64,11 @@ def test_media_keys_model_producer() -> None:
         assert len(resources) == 20
         assert len([path for path in resources if "/action/" in path]) == 10
         assert len([path for path in resources if "/keybinding/" in path]) == 10
-        for target, host in [("niri", niri_host), ("umbriel", umbriel_host)]:
+        for target in ["niri", "umbriel"]:
             leaf = (producer / f"bin/install-keybindings-{target}.sh").read_text()
-            assert f"--profile {host}/etc/keybinding-{target}.json" in leaf and " install " in leaf
+            assert "--profile-selector" in leaf and " install " in leaf
+            assert f"COMPFUZOR_{target.upper()}_PROFILE" in leaf
+            assert f"${{XDG_DATA_HOME}}/compfuzor/etc/{target}/etc/keybinding-{target}.json" in leaf
         assert (producer / "bin/install.mjs").is_symlink()
         assert (producer / "bin/install-user.mjs").is_file() and not (producer / "bin/install-user.mjs").is_symlink()
         action_spec = json.loads((producer / "etc/compfuzor-actions/spec.json").read_text())
@@ -84,6 +79,10 @@ def test_media_keys_model_producer() -> None:
         umbriel_home = area / "home-umbriel"
         niri_env = consumer_env(niri_home)
         umbriel_env = consumer_env(umbriel_home)
+        # The common target selectors retain invocation-time profile overrides;
+        # no fixture-specific target wiring is added to the producer at render time.
+        niri_env["COMPFUZOR_NIRI_PROFILE"] = str(niri_host / "etc/keybinding-niri.json")
+        umbriel_env["COMPFUZOR_UMBRIEL_PROFILE"] = str(umbriel_host / "etc/keybinding-umbriel.json")
         run([str(niri_host / "bin/install.mjs")], niri_env)
         run([str(umbriel_host / "bin/install.mjs")], umbriel_env)
         # Producer leaves directly (the proposal test's pattern): the
