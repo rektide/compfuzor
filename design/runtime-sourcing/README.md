@@ -9,6 +9,13 @@
   masked using systemd nomenclature. Proposed implementation checkpoints;
   not an implemented or accepted interface.
 
+## Implementation planning
+
+- [Advertised receivers and masks: code plan](/design/runtime-sourcing/receiver-plan0.gpt6a.md)
+  — proposed overlay layout, receiver identity, batch admission, host publication,
+  generator cutover and file-level verification; followed by the producer-drop
+  membership extension.
+
 ## Evidence
 
 - [Sourcing precedents](/design/runtime-sourcing/precedents0.glm53.md)
