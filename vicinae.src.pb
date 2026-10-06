@@ -111,18 +111,23 @@
         umbriel:
           keys: [Mod+Slash]
     # ONE deployment per compositor (operator decision): the location-typed
-    # consumer hosts own the profiles. A consumer deployment root resolves
-    # to its etc/keybinding-<target>.json profile (for etc-type deployments
-    # that path resolves through the structural DIR/etc exposure link).
+    # consumer hosts own home-local profiles. Invocation-time selectors follow
+    # those hosts without relocating this source checkout/deployment or changing
+    # Vicinae's separate service audience policy. Explicit environment selectors
+    # can continue to use shared consumer material.
     # These stay USER-scoped installers joined into install-user.sh; they
     # do not become system build/install operations.
     KEYBINDING_TARGETS:
       niri:
-        consumer: /etc/opt/niri
+        consumer:
+          env: COMPFUZOR_NIRI_PROFILE
+          default: "${XDG_DATA_HOME}/compfuzor/etc/niri/etc/keybinding-niri.json"
         context: user
         scope: user
       umbriel:
-        consumer: /etc/opt/umbriel
+        consumer:
+          env: COMPFUZOR_UMBRIEL_PROFILE
+          default: "${XDG_DATA_HOME}/compfuzor/etc/umbriel/etc/keybinding-umbriel.json"
         context: user
         scope: user
     ETC_DIRS:
@@ -182,7 +187,8 @@
           # appended here by gen_bins: they register this producer's named
           # bindings into the consumer hosts declared in KEYBINDING_TARGETS
           # (niri.etc.pb / umbriel.etc.pb). Run their consumer installers
-          # (install-user.sh) once first for root adoption.
+          # (install.mjs) once first for root adoption. This deployment retains
+          # its existing compatible install-user.sh/service behavior.
       - name: install-kde.sh
         basedir: etc
         content: |

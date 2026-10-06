@@ -1,12 +1,11 @@
 ---
 # niri.etc.pb -- Niri keybinding consumer host deployment.
 #
-# Location-typed deployment (TYPE=etc => material under /etc/opt/niri) that
-# carries USER-SCOPED installers: the operator runs bin/install-user.sh as
-# themselves, and the bound consumer context resolves ~/.config/niri at
-# invocation time. "user" is an audience of this deployment's installers,
-# not a place for deployment material -- there is deliberately no niri.user.pb
-# (same one-deployment-per-compositor decision as umbriel.etc.pb).
+# One deployment, home-local material by default, user-first action audiences.
+# Material lives at ${XDG_DATA_HOME:-$HOME/.local/share}/compfuzor/etc/niri;
+# the receiver remains ${XDG_CONFIG_HOME:-$HOME/.config}/niri. PREFIX_DIR can
+# explicitly select shared material without changing the receiver audience.
+# Retiring .user.pb was filename consolidation, not system-first placement.
 #
 # This deployment hosts the Niri KEYBINDING_CONSUMERS profile ONLY. It
 # declares no KEYBINDING_ACTIONS/KEYBINDINGS of its own and installs no
@@ -20,7 +19,7 @@
 # MISSING ~/.config/niri/config.kdl is created by the consumer runtime as a
 # minimal skeleton (just the managed insertion area -- nothing else is
 # invented). The EXISTING live root is adopted conservatively by
-# install-user.sh:
+# install.mjs / install-user.mjs:
 #   * the insertion-area marker pair is appended at EOF when absent
 #     (trailing top-level comments are valid KDL); existing text --
 #     output blocks, the handy block, config.d includes, personal binds,
@@ -37,9 +36,11 @@
 - hosts: all
   vars:
     TYPE: niri
-    # Pin NAME: the implicit instance suffix would put deployment material
-    # at /etc/opt/niri-main, and producers bind /etc/opt/niri.
+    # Stable host identity; ETC must follow DIR instead of the /etc/opt hierarchy.
     NAME: niri
+    PREFIX_DIR: "{{ XDG_DATA_HOME | default(ansible_env.XDG_DATA_HOME | default(ansible_env.HOME ~ '/.local/share', true), true) }}/compfuzor/etc"
+    ETC: "{{DIR}}"
+    ACTION_AUDIENCES: {default: user}
     # Root/membership/material paths are all invocation-time XDG defaults:
     # root config.kdl + .keybindings/ + keybindings/ under ~/.config/niri.
     # No baseline (see header); placement/registration default to link so
@@ -50,9 +51,8 @@
           user: {scope: user, root: config, subpath: niri}
     BINS:
       # User aggregate. The authored body performs conservative root
-      # adoption/migration FIRST; gen_bins then appends the generated
-      # install-keybindings-niri.sh child (host assembly: membership-driven
-      # rebuild of the managed area + native validation) after it.
+      # adoption/migration FIRST; the shared child runner then executes the
+      # admitted complete keybinding host operation with native validation.
       - name: install-user.sh
         deployment_rooted: True
         content: |
@@ -81,8 +81,9 @@
     README: |
       # niri.etc.pb
 
-      Etc-typed deployment (material under `/etc/opt/niri`) hosting the Niri
-      keybinding consumer profile. The live root stays at
+      Home-local etc-typed material under
+      `${XDG_DATA_HOME:-$HOME/.local/share}/compfuzor/etc/niri`, hosting the Niri
+      keybinding consumer profile. The receiver root stays at
       `~/.config/niri/config.kdl` and is only modified by the user-scoped
       installer, which appends the managed insertion-area markers when
       absent and rebuilds only the entries between them.
@@ -91,25 +92,35 @@
 
       ```sh
       ansible-playbook -i 'localhost,' -c local niri.etc.pb
-      /etc/opt/niri/bin/install-user.sh
+      material="${XDG_DATA_HOME:-$HOME/.local/share}/compfuzor/etc/niri"
+      "$material/bin/install.mjs"
+      "$material/bin/assemble.mjs" --check
       ```
 
-      `install-user.sh` adopts the live root (markers appended at EOF when
+      `install.mjs` and explicit `install-user.mjs` adopt the root (markers appended at EOF when
       missing; the old `vicinae` include block retired once; `handy` and any
       other text untouched) and then runs the generated
-      `install-keybindings-niri.sh` host assembly, which rebuilds the
+      complete keybinding host operation, which rebuilds the
       managed area from the durable membership and validates the full
       include closure with the installed `niri` binary.
 
       Producers register into this consumer with their own generated
       installers, e.g. `/usr/local/src/vicinae-git/bin/install-user.sh`.
 
+      `assemble.mjs` / `assemble-user.mjs` reassemble existing placements;
+      `--check` validates without publishing. No system receiver is declared,
+      so no install-system.mjs or assemble-system.mjs is emitted.
+      Shared material is explicit: render with `-e PREFIX_DIR=/etc/opt` and set
+      producers' `COMPFUZOR_NIRI_PROFILE=/etc/opt/niri/etc/keybinding-niri.json`.
+      Existing deployments are not moved, pruned or activated automatically.
+
       ## Files
 
       - `etc/keybinding-niri.json` -- generated consumer profile
-      - `bin/install-user.sh` -- adoption + host assembly aggregate
-      - `bin/install-keybindings-niri.sh` -- generated host installer
-      - `bin/keybindings.mjs` -- generated shared keybindings runtime
+      - `bin/install-user.mjs` + `bin/install.mjs` -- user-default action family
+      - `bin/assemble-user.mjs` + `bin/assemble.mjs` -- existing-placement assembly
+      - `bin/install-user.sh` -- internal original-path adoption body
+      - `bin/install-keybindings-niri.sh` / `bin/keybindings.mjs` -- compatible internal endpoints
 
       Requires node, jq, `block-in-file`, and `niri` on PATH at invocation
       time; none are installed by this deployment.

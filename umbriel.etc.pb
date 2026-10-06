@@ -13,13 +13,12 @@
 #     vicinae.src.pb) bind this deployment as their umbriel target, and the
 #     consumer-owned vicinae-clipboard chord patch below lives here.
 #
-# WHY .etc, NOT .user (operator decision): ONE deployment per compositor,
-# location-typed. "user" is an audience of this deployment's USER-SCOPED
-# installers, not a place to store deployment material. Deployment material
-# renders under /etc/opt/umbriel (TYPE=etc => DIR=ETC=ETCS_DIR/NAME); the
-# live user config under ~/.config/umbriel is only ever touched by the
-# operator running bin/install-user.sh as themselves, which resolves
-# HOME/XDG at invocation time. There is deliberately no .user.pb anymore,
+# ONE deployment per compositor: retiring .user.pb did not choose system-first
+# material placement. Home-local etc material defaults to
+# ${XDG_DATA_HOME:-$HOME/.local/share}/compfuzor/etc/umbriel. The receiver stays
+# under ~/.config/umbriel and only changes when the operator runs install.mjs
+# (or install-user.mjs); explicit PREFIX_DIR selects shared material separately.
+# There is deliberately no .user.pb anymore,
 # and a future "thing that runs" umbriel service-instance deployment
 # (.srv.pb) is intentionally not built here.
 #
@@ -55,7 +54,7 @@
 #                      are gone; the hardcoded include was dropped from the
 #                      root template deliberately, not by pruning)
 #
-# ONE-TIME ADOPTION / MIGRATION (run bin/install-user.sh once as yourself):
+# DELIBERATE ADOPTION / MIGRATION (run bin/install.mjs as yourself):
 #   * missing files are seeded from the deployment material;
 #   * a live file that still BYTE-MATCHES the previously managed
 #     umbriel.user.pb template is migrated to the new template (the
@@ -73,9 +72,11 @@
 - hosts: all
   vars:
     TYPE: umbriel
-    # Pin NAME: the implicit instance suffix would put deployment material
-    # at /etc/opt/umbriel-main, and producers bind /etc/opt/umbriel.
+    # Stable host identity; narrow material placement does not change receivers.
     NAME: umbriel
+    PREFIX_DIR: "{{ XDG_DATA_HOME | default(ansible_env.XDG_DATA_HOME | default(ansible_env.HOME ~ '/.local/share', true), true) }}/compfuzor/etc"
+    ETC: "{{DIR}}"
+    ACTION_AUDIENCES: {default: user}
     ETC_FILES:
       # Root include-chain template (staged at {{ETC}}/config.toml). Also
       # bound as the consumer profile's template_file, so a MISSING live
@@ -122,9 +123,8 @@
           keys: [Mod+Grave]
     BINS:
       # User aggregate. The authored body seeds/migrates the live config
-      # FIRST; gen_bins then appends the generated install-keybindings-
-      # umbriel.sh child (host assembly: membership-driven root rebuild +
-      # native validation) after it.
+      # FIRST; the shared child runner applies its admitted host operation
+      # (membership-driven root rebuild + native validation) exactly once.
       - name: install-user.sh
         deployment_rooted: True
         content: |
@@ -166,7 +166,8 @@
     README: |
       # umbriel.etc.pb
 
-      Etc-typed deployment (material under `/etc/opt/umbriel`) hosting the
+      Home-local material under
+      `${XDG_DATA_HOME:-$HOME/.local/share}/compfuzor/etc/umbriel`, hosting the
       Umbriel user-config material and the Umbriel keybinding consumer
       profile. Live user config lives under `~/.config/umbriel` and is only
       modified by the user-scoped installer.
@@ -175,14 +176,16 @@
 
       ```sh
       ansible-playbook -i 'localhost,' -c local umbriel.etc.pb
-      /etc/opt/umbriel/bin/install-user.sh
+      material="${XDG_DATA_HOME:-$HOME/.local/share}/compfuzor/etc/umbriel"
+      "$material/bin/install.mjs"
+      "$material/bin/assemble.mjs" --check
       ```
 
-      `install-user.sh` seeds missing files from the staged material,
+      `install.mjs` / `install-user.mjs` seed missing files from the staged material,
       migrates live files that still byte-match the previously managed
       `umbriel.user.pb` templates, and never overwrites user-edited text
       (a NOTE is printed instead). It then runs the generated
-      `install-keybindings-umbriel.sh` host assembly, which rebuilds the
+      complete keybinding host operation, which rebuilds the
       managed area inside `~/.config/umbriel/config.toml`'s
       `include.files` array from the durable membership and validates the
       whole chain with the installed `umbriel` binary.
@@ -190,6 +193,13 @@
       After producers change, re-run their own `install-user.sh` (e.g.
       `/usr/local/src/vicinae-git/bin/install-user.sh`) to register updated
       bindings into this consumer.
+
+      `assemble.mjs` / `assemble-user.mjs` reassemble existing placements;
+      `--check` validates without publishing. Only a user receiver is declared,
+      so no system-qualified install/assemble alias is emitted.
+      For shared material render with `-e PREFIX_DIR=/etc/opt`, then explicitly
+      bind producer `COMPFUZOR_UMBRIEL_PROFILE=/etc/opt/umbriel/etc/keybinding-umbriel.json`.
+      Old material is left in place; no automatic move, cleanup or reload occurs.
 
       ## Files
 
@@ -199,9 +209,10 @@
         the consumer patch in this playbook owns that chord)
       - `etc/animation.toml` -- focus-navigation animation tuning
       - `etc/keybinding-umbriel.json` -- generated consumer profile
-      - `bin/install-user.sh` -- seed/migrate + host assembly aggregate
-      - `bin/install-keybindings-umbriel.sh` -- generated host installer
-      - `bin/keybindings.mjs` -- generated shared keybindings runtime
+      - `bin/install-user.mjs` + `bin/install.mjs` -- user-default action family
+      - `bin/assemble-user.mjs` + `bin/assemble.mjs` -- existing-placement assembly
+      - `bin/install-user.sh` -- internal original-path seed/migration body
+      - `bin/install-keybindings-umbriel.sh` / `bin/keybindings.mjs` -- compatible internal endpoints
 
       Requires node, jq, `block-in-file`, and `umbriel` on PATH at
       invocation time; none are installed by this deployment.

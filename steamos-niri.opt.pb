@@ -3,14 +3,15 @@
   vars:
     TYPE: steamos-niri
     INSTANCE: main
+    ACTION_AUDIENCES: {default: user}
     # niri as the SteamOS desktop-mode session on deck, replacing plasma.
     # Gamemode/gamescope is untouched: steamosctl owns the session switch.
     # Assessment: design/niri-deck/niri-deck.glm53.md
     #
     # SteamOS updates wipe /usr (and re-enable steamos-readonly), so after
     # any steamos-update re-apply from this DIR:
-    #   sudo bash bin/install.sh   # readonly disable + archlane pacman --needed
-    #   bin/install-user.sh        # adopt root + assemble keybindings
+    #   bin/install-system.mjs     # explicit readonly disable + archlane pacman
+    #   bin/install.mjs            # user default: adopt root + keybindings
     #   bin/session.sh             # steamosctl set-default-desktop-session
     #
     # Deck binds are declared through the keybindings producer system
@@ -20,7 +21,7 @@
     # targets -- the declarations package into the generated profile, no
     # membership groups, no separate producer deployment to survive wipes).
     # The old hand-written etc/config-overlay.kdl include is retired by
-    # install-user.sh as a one-time migration; the file itself stays on
+    # install.mjs as a deliberate migration; the file itself stays on
     # disk unreferenced. Runtime prerequisites (node, jq) ride ARCH_PKGS;
     # the apt lane the generator contributes self-gates off (no apt on
     # SteamOS).
@@ -97,7 +98,7 @@
         content: |
           sudo steamos-readonly disable
       # make niri the SteamOS desktop-mode session; fails loudly if
-      # niri.desktop is not yet registered (run install.sh first)
+      # niri.desktop is not yet registered (run install-system.mjs first)
       - name: session.sh
         content: |
           set -e
@@ -112,7 +113,7 @@
       # Adopt the deck's live niri root (managed insertion-area markers;
       # retire the superseded config-overlay.kdl include line once), keep
       # the mako companion. gen_bins then appends the generated
-      # install-keybindings-niri.sh child: host assembly rebuilds the
+      # admitted keybinding host operation: host assembly rebuilds the
       # managed area from this deployment's packaged declarations and
       # validates the full closure with the installed niri binary.
       - name: install-user.sh
@@ -146,7 +147,7 @@
       Opt-typed deck deployment (persistent `/opt/steamos-niri-main`) making
       niri the SteamOS desktop-mode session. Binds are declared through the
       keybindings system: this deployment hosts the Niri consumer profile and
-      owns its own late user layer; `install-user.sh` adopts
+      owns its own late user layer; `install.mjs` / `install-user.mjs` adopt
       `~/.config/niri/config.kdl` (marker pair at EOF, old overlay include
       retired once) and rebuilds the managed insertion area with native
       validation.
@@ -154,13 +155,17 @@
       ## Re-apply after any steamos-update (SteamOS wipes /usr)
 
       ```sh
-      sudo bash bin/install.sh
-      bin/install-user.sh
+      bin/install-system.mjs
+      bin/install.mjs
+      bin/assemble.mjs --check
       bin/session.sh
       ```
 
       Requires node, jq and niri (all in ARCH_PKGS) on PATH at invocation
       time; the apt lane self-gates off on Arch-family hosts.
+      The system action provisions packages/readonly state; it does not invent a
+      system Niri receiver. assemble-system.mjs is therefore absent. `/opt` material
+      stays persistent across SteamOS updates; audience selection does not relocate it.
   tasks:
     - import_tasks: tasks/compfuzor.includes
       vars:
