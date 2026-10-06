@@ -150,3 +150,21 @@ runtime is still bundled as `.mjs` targeting Node 20.19.
   explains the existing choice to avoid an action-by-context wrapper matrix.
 - [Systemd context inquiry](/design/install-context/systemd0.unknown.md): prior
   tension between audience selection and manager-scope operational partition.
+
+# Addendum: native .mts alias behavior exercised
+
+The parent subsequently created a minimal executable in the gitignored
+`.test-agent/action-audiences/` scratch area and ran it under Node v26.6.0:
+
+| Invocation | Physical executable | Selected audience |
+|---|---|---|
+| `./probe-user.mts` | `probe-user.mts` | user |
+| `./probe.mts` (symlink) | `probe-user.mts` | user |
+| `./probe-system.mts` (symlink) | `probe-user.mts` | system |
+| `node probe-system.mts` | `probe-user.mts` | system |
+
+The probe separates `process.argv[1]` from
+`realpath(fileURLToPath(import.meta.url))`. It demonstrates the requested
+real-filename default and alias override with native `.mts`; it does not prove
+Node 20 compatibility, project typechecking coverage, generated dispatch or
+compositor/systemd semantics. No live deployment was modified.
