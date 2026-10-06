@@ -128,6 +128,19 @@ def test_compiled_domains(area: Path):
     invoke(payload / "bin/assemble-system.mjs", sysenv)
     assert session_dirs() == before and not wrong.exists()
     assert Path(env["TRACE"]).read_text().splitlines().count("assemble-body") == 1
+    (payload / "etc/result.conf").write_text("published canonical\n")
+    invoke(payload / "bin/publish.mjs", env, ["--strategy", "copy"])
+    invoke(payload / "bin/publish-system.mjs", sysenv, ["--strategy", "copy"])
+    assert (user / "cfg/result.conf").read_text() == "published canonical\n"
+    assert (system / "cfg/result.conf").read_text() == "published canonical\n"
+    invoke(payload / "bin/sync-inputs.mjs", env, ["--strategy", "copy"])
+    listed = invoke(payload / "bin/inputs.mjs", env, ["list"])
+    assert "result/0" in listed.stdout and str(user / "cfg/input.txt") in listed.stdout, listed.stdout
+    alternative = payload / "etc/alternative.txt"
+    alternative.write_text("editable input\n")
+    invoke(payload / "bin/inputs.mjs", env, ["put", "result/0", str(alternative), "--strategy", "copy", "--no-rebuild"])
+    assert (user / "cfg/input.txt").read_text() == "editable input\n"
+    assert session_dirs() == before
     # Apply bypass remains live: bindings still admit, but actual wrapper skips its domain effects.
     old = (user / "niri/config.kdl").read_bytes()
     invoke(payload / "bin/install-keybindings-niri.mjs", {**env, "COMPFUZOR_KEYBINDINGS_BYPASS": "1"})
@@ -144,6 +157,8 @@ def test_early_errors(payload: Path, env: dict, before: set[Path]):
     initial = trace.read_bytes()
     rejected = invoke(payload / "bin/install.mjs", env, ["--context", "host"], expected=2)
     assert "scope" in rejected.stderr and trace.read_bytes() == initial and session_dirs() == before
+    invoke(payload / "bin/install.mjs", {**env, "COMPFUZOR_CONFIG_CONTEXT": "host"}, expected=2)
+    assert trace.read_bytes() == initial and session_dirs() == before
     profile = payload / "etc/keybinding-umbriel.json"
     original = profile.read_bytes()
     invalid = json.loads(original)
@@ -152,8 +167,8 @@ def test_early_errors(payload: Path, env: dict, before: set[Path]):
     invoke(payload / "bin/install.mjs", {**env, "COMPFUZOR_KEYBINDINGS_BYPASS": "1"}, expected=2)
     assert trace.read_bytes() == initial and session_dirs() == before
     profile.write_bytes(original)
-    invoke(payload / "bin/inputs.mjs", env, ["put", "result.conf/0"], expected=2)
-    invoke(payload / "bin/inputs.mjs", env, ["remove", "result.conf/0", "extra"], expected=2)
+    invoke(payload / "bin/inputs.mjs", env, ["put", "result/0"], expected=2)
+    invoke(payload / "bin/inputs.mjs", env, ["remove", "result/0", "extra"], expected=2)
     assert trace.read_bytes() == initial and session_dirs() == before
     invoke(payload / "bin/install.mjs", {**env, "COMPFUZOR_ACTION_SESSION": str(SCRATCH / "nonexistent/session.json")}, expected=2)
     assert trace.read_bytes() == initial and session_dirs() == before

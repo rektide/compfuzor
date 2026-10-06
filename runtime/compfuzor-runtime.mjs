@@ -1749,7 +1749,10 @@ async function admitConfigCommand(options, binding) {
 		if (fixed.stdout && selected.length !== 1) fail$10("--stdout requires exactly one selected config");
 	} else if (action === "inputs") {
 		if (fixed.args[0] === "put") fixed.strategy = contextInputStrategy(frozen, contextName, fixed.strategy);
-		else if (fixed.strategy !== void 0) fail$10(`${fixed.args[0]} does not accept --strategy`);
+		else {
+			if (fixed.strategy !== void 0) fail$10(`${fixed.args[0]} does not accept --strategy`);
+			if (fixed.initiallyDisabled || !fixed.rebuild) fail$10(`${fixed.args[0]} does not accept put-only flags --disabled/--no-rebuild`);
+		}
 	} else {
 		selectRecipeNames(frozen, contextName, fixed.args);
 		if (action === "install") {
@@ -15795,6 +15798,8 @@ async function admitKeybindingCommand(command, args, defaults, binding) {
 		if (values.target !== binding.target) throw new Error("keybinding target does not match declared operation");
 		if (values.scope !== binding.audience) throw new Error(`keybinding scope does not match selected ${binding.audience} audience`);
 		if (binding.mode && values.mode !== void 0 && values.mode !== binding.mode) throw new Error(`keybinding mode must remain ${binding.mode} for the declared operation`);
+		if (command === "host" && values.manifest !== void 0) throw new Error("host operation does not accept --manifest");
+		if (values.group !== void 0) throw new Error("host/install operation does not accept --group");
 	}
 	if (values.mode !== void 0 && ![
 		"assemble",
@@ -16664,8 +16669,7 @@ async function runAction(argv, invokedPath, entryUrl) {
 					env: true,
 					basedir: true
 				};
-				const basedir = setup.basedir;
-				const directory = typeof basedir === "string" ? resolve(deploymentDir, basedir) : deploymentDir;
+				const directory = setupCwd(selection, process.env);
 				const capture = await captureSetup(selection, output, process.env, setup.env, directory);
 				if (!capture.captured) return capture.outcome;
 				env = capture.captured.env;

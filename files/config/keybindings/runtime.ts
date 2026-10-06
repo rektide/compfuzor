@@ -91,6 +91,10 @@ export async function admitKeybindingCommand(
       throw new Error(`keybinding scope does not match selected ${binding.audience} audience`);
     if (binding.mode && values.mode !== undefined && values.mode !== binding.mode)
       throw new Error(`keybinding mode must remain ${binding.mode} for the declared operation`);
+    if (command === "host" && values.manifest !== undefined)
+      throw new Error("host operation does not accept --manifest");
+    if (values.group !== undefined)
+      throw new Error("host/install operation does not accept --group");
   }
   if (values.mode !== undefined && !["assemble", "seed", "refresh"].includes(values.mode))
     throw new Error("keybinding mode must be assemble, seed, or refresh");

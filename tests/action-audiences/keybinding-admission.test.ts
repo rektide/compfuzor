@@ -67,6 +67,12 @@ test("keybinding admission binds arbitrary same-audience contexts and rejects sc
   await expect(
     admitKeybindingCommand("host", [...args, "--mode", "seed"], defaults, binding),
   ).rejects.toThrow("must remain assemble");
+  await expect(
+    admitKeybindingCommand("host", [...args, "--manifest", "/unused"], defaults, binding),
+  ).rejects.toThrow("does not accept --manifest");
+  await expect(
+    admitKeybindingCommand("host", [...args, "--group", "unused"], defaults, binding),
+  ).rejects.toThrow("does not accept --group");
   profile.contexts.desktop.scope = "system";
   await writeFile(path, JSON.stringify(profile));
   await expect(admitKeybindingCommand("host", args, defaults, binding)).rejects.toThrow(

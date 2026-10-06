@@ -185,7 +185,11 @@ export async function admitConfigCommand(
   } else if (action === "inputs") {
     if (fixed.args[0] === "put")
       fixed.strategy = contextInputStrategy(frozen, contextName, fixed.strategy);
-    else if (fixed.strategy !== undefined) fail(`${fixed.args[0]} does not accept --strategy`);
+    else {
+      if (fixed.strategy !== undefined) fail(`${fixed.args[0]} does not accept --strategy`);
+      if (fixed.initiallyDisabled || !fixed.rebuild)
+        fail(`${fixed.args[0]} does not accept put-only flags --disabled/--no-rebuild`);
+    }
   } else {
     selectRecipeNames(frozen, contextName, fixed.args);
     if (action === "install") {

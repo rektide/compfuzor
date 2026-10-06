@@ -224,7 +224,7 @@ export async function readSession(
   };
 }
 
-function setupCwd(selection: ActionSelection, env: NodeJS.ProcessEnv): string {
+export function setupCwd(selection: ActionSelection, env: NodeJS.ProcessEnv): string {
   const basedir = selection.family.setup?.[selection.audience]?.basedir ?? true;
   if (basedir === false || basedir === true) return selection.deploymentDir;
   return basedir.startsWith("~")

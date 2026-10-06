@@ -25,6 +25,7 @@ import {
   domainsIn,
   loadActionSpec,
   readSession,
+  setupCwd,
   type ActionSession,
   type LoadedSpec,
   type SessionHandle,
@@ -175,9 +176,7 @@ export async function runAction(
       const output = resolve(dirname(session.path), `env-${process.pid}${captureSequence++}.json`);
       try {
         const setup = selection.family.setup?.[selection.audience] ?? { env: true, basedir: true };
-        const basedir = setup.basedir;
-        const directory =
-          typeof basedir === "string" ? resolve(deploymentDir, basedir) : deploymentDir;
+        const directory = setupCwd(selection, process.env);
         const capture = await captureSetup(selection, output, process.env, setup.env, directory);
         if (!capture.captured) return capture.outcome;
         env = capture.captured.env;
