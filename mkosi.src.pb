@@ -252,6 +252,11 @@
           Bootable=yes
           # Runtime for the embedded /opt/repart-main/bin/repart TypeScript CLI.
           Packages=nodejs
+          # Bootable=yes wants a bootloader binary; Debian splits systemd-boot
+          # out of the main systemd package (mkosi looks in
+          # /usr/lib/systemd/boot/efi). The 00-grub BIOS-boot partition in
+          # mkosi.repart/ is the kit's own grub flow, not mkosi's bootloader.
+          Packages=systemd-boot-efi
           {% for setname in MKOSI_PKGSETS %}# {{ setname }} ({{ lookup('pkgs', setname) | length }})
           Packages={{ (lookup('pkgs', setname) | unique) | join(',') }}
           {% endfor %}
