@@ -18,7 +18,7 @@
       {{ KEYBINDING_TARGETS | default(
            KEYBINDING_TARGET_DEFAULTS
            if (KEYBINDING_ACTIONS is defined or KEYBINDINGS is defined)
-              and KEYBINDING_CONSUMERS is not defined
+              and not (KEYBINDING_CONSUMERS | default({}))
            else None) }}
 - name: "Compfuzor: synthesize keybinding artifacts"
   set_fact:

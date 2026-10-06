@@ -170,8 +170,8 @@
           systemctl --user enable vicinae.service
           # The generated install-keybindings-{niri,umbriel}.sh children are
           # appended here by gen_bins: they register this producer's named
-          # bindings into the consumer hosts declared in KEYBINDING_TARGETS
-          # (niri.etc.pb / umbriel.etc.pb). Run their consumer installers
+          # bindings into the common consumer hosts (niri.etc.pb / umbriel.etc.pb),
+          # unless KEYBINDING_TARGETS overrides them. Run their consumer installers
           # (install.mjs) once first for root adoption. This deployment retains
           # its existing compatible install-user.sh/service behavior.
       - name: install-kde.sh

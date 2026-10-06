@@ -96,6 +96,8 @@ def test_target_defaults() -> None:
         for name, declarations in [
             ("bindings-only", {"KEYBINDINGS": {}}),
             ("empty-producer", {"KEYBINDING_ACTIONS": {}, "KEYBINDINGS": {}}),
+            ("empty-consumers", {"KEYBINDING_ACTIONS": {}, "KEYBINDING_CONSUMERS": {}}),
+            ("null-consumers", {"KEYBINDING_ACTIONS": {}, "KEYBINDING_CONSUMERS": None}),
         ]:
             empty = render(area, name, declarations, env)
             assert_common_targets(empty)

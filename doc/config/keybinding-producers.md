@@ -49,7 +49,8 @@ consumer graph; use readable application prefixes. Accidental duplicate
 definitions still fail, while intentional `patch: true` retains the domain's
 field-specific override behavior.
 
-Declaring `KEYBINDING_ACTIONS` or `KEYBINDINGS` without `KEYBINDING_CONSUMERS`
+Declaring `KEYBINDING_ACTIONS` or `KEYBINDINGS` without a consumer host in
+`KEYBINDING_CONSUMERS` (an empty map declares no host)
 automatically applies **`KEYBINDING_TARGET_DEFAULTS`** from
 [`vars/common.yaml`](/vars/common.yaml). Its Niri and Umbriel targets bind the
 home-local consumer profiles using invocation-time `${XDG_DATA_HOME}` paths,
