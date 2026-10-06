@@ -22,6 +22,13 @@ sources:
     title: Real-playbook adoption and migration proof
 ---
 
+> Historical checkpoint: the operator subsequently corrected the system-first
+> material assumption below. Retiring `.user.pb` was filename consolidation, not
+> rejection of home-local material. Current XDG-data placement, `.mjs` audiences,
+> selectors and deliberate migration guidance are recorded in the
+> [final action implementation](/design/action-audiences/implementation2.gpt61sol.md).
+> The original render/adoption evidence is retained, not rewritten into a new live claim.
+
 # Situation and decision
 
 The producer/consumer machinery from

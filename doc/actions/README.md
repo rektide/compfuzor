@@ -203,7 +203,56 @@ low-level leaves and arbitrary shell bodies are not sandboxed.
 This is a sequential action aggregate, not a new cross-domain transaction,
 configuration assembler, privilege escalator or placement mode. CONFIG's
 candidate commit and domain-specific activation remain their own operations.
-Deployment material placement is unchanged.
+Audience selection itself does not choose material placement.
+
+## Adopted playbook defaults: material versus receiver
+
+`niri.etc.pb`, `umbriel.etc.pb` and `media-keys.etc.pb` now use the existing
+`PREFIX_DIR`/`DIR`/`ETC` primitives for grouped home-local material:
+
+```text
+${XDG_DATA_HOME:-$HOME/.local/share}/compfuzor/etc/<NAME>/
+  bin/                 # runtime/action entries
+  etc -> .             # existing etc-type structural exposure
+  keybinding-*.json    # host profile, or producer manifest/declarations
+```
+
+Niri/Umbriel keep stable host NAMEs `niri` and `umbriel`. Producer NAME/group
+identity follows its declaration (or explicit NAME/KEYBINDING_PRODUCER override),
+independently from where material is stored. Existing prefix-level `env.NAME`
+exposures remain inside this XDG-data material group.
+
+The live receivers remain `${XDG_CONFIG_HOME:-$HOME/.config}/{niri,umbriel}`.
+Generation is not adoption/registration: install is deliberate. No material-root
+API or global USERMODE flip was introduced. For these user-only receiver profiles,
+the emitted public families are `install-user.mjs`/`install.mjs` and
+`assemble-user.mjs`/`assemble.mjs`; no system-qualified host aliases are fabricated.
+The producer owns install/registration, not a synthetic host assemble operation.
+
+Shared material is an explicit existing override:
+
+```sh
+ansible-playbook -i 'localhost,' -c local niri.etc.pb -e PREFIX_DIR=/etc/opt
+export COMPFUZOR_NIRI_PROFILE=/etc/opt/niri/etc/keybinding-niri.json
+```
+
+`COMPFUZOR_NIRI_PROFILE` and `COMPFUZOR_UMBRIEL_PROFILE` select consumer JSON
+files for Media Keys and Vicinae. Their defaults use invocation-time XDG data/HOME,
+not the producer's source checkout or the rendering user's literal home. Vicinae
+retains its existing build, source placement and service installers; only receiver
+selectors changed. Shared material alone does not enable a system receiver.
+
+SteamOS keeps persistent `/opt/steamos-niri-main` material. Its bare `install.mjs`
+means user configuration; `install-system.mjs` selects readonly/package provisioning.
+`assemble.mjs` is user assembly, with no invented system Niri fallback. Node must
+already be available to execute `.mjs` entrypoints. Session switching remains an
+explicit separate command; no workstation SteamOS commands were executed in tests.
+
+See [producer/consumer operator examples](/doc/config/keybinding-producers.md#home-local-consumer-and-producer-example)
+for deliberate adoption and migration, and the
+[final implementation checkpoint](/design/action-audiences/implementation2.gpt61sol.md)
+for placement proof and limitations. Old live material is never auto-moved/pruned;
+this repository implementation does not itself migrate a live desktop.
 
 ## Implementation and tests
 
@@ -221,3 +270,6 @@ Deployment material placement is unchanged.
   [compiled mixed-domain tests](/tests/integration/action_domains.test.py).
 - [Domain implementation checkpoint](/design/action-audiences/implementation1.gpt61sol.md)
   — implemented boundary, evidence and next placement/adoption proposal.
+- [Placement/adoption proof](/tests/integration/action_placement.test.py) — real
+  playbook defaults without DIR/ETC overrides, full user install, explicit shared
+  selection and both audiences from one home-local profile fixture.

@@ -118,7 +118,8 @@ and privileged helpers must be installed as well as its executable.
 
 ```sh
 ansible-playbook -i 'localhost,' -c local umbriel.etc.pb
-/etc/opt/umbriel/bin/install-user.sh
+"${XDG_DATA_HOME:-$HOME/.local/share}/compfuzor/etc/umbriel/bin/install.mjs"
+"${XDG_DATA_HOME:-$HOME/.local/share}/compfuzor/etc/umbriel/bin/assemble.mjs" --check
 /usr/local/src/umbriel-git/bin/validate.sh
 ```
 
@@ -133,6 +134,10 @@ not your seeded `~/.config/umbriel/config.toml` copy. Keep keybind
 overrides in included fragments (or producer declarations) so the packaged
 default chords survive. Validate changes before depending on them; a new
 include must be declared in the root chain.
+This etc-typed host now defaults to home-local material; its receiver remains
+`~/.config/umbriel`. Explicit `PREFIX_DIR=/etc/opt` can retain shared material.
+Existing installed trees are not auto-moved or pruned; see
+[audience/placement guidance](/doc/actions/README.md#adopted-playbook-defaults-material-versus-receiver).
 
 ### Choose ONE shell startup route
 

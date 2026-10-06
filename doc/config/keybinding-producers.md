@@ -23,6 +23,7 @@ declares named records; it does not write ETC_FILES, CONFIGS, target text or BIN
 for individual bindings:
 
 ```yaml
+ACTION_AUDIENCES: {default: user}
 KEYBINDING_ACTIONS:
   terminal-open:
     exec: [foot]
@@ -34,8 +35,14 @@ KEYBINDINGS:
     umbriel:
       add-keys: [Alt+Return]
 KEYBINDING_TARGETS:
-  niri: {consumer: /opt/desktop, context: user, scope: user}
-  umbriel: {consumer: /opt/desktop, context: user, scope: user}
+  niri:
+    consumer: {env: COMPFUZOR_NIRI_PROFILE, default: "${XDG_DATA_HOME}/compfuzor/etc/niri/etc/keybinding-niri.json"}
+    context: user
+    scope: user
+  umbriel:
+    consumer: {env: COMPFUZOR_UMBRIEL_PROFILE, default: "${XDG_DATA_HOME}/compfuzor/etc/umbriel/etc/keybinding-umbriel.json"}
+    context: user
+    scope: user
 ```
 
 Normal playbook task entry remains `tasks/compfuzor.includes`. The thin generator
@@ -61,13 +68,18 @@ env/default selectors resolve at invocation. For example,
 without baking the controller's home directory into a system producer. Selector
 mappings select a profile file. No universal consumer registry is added.
 
-The generated commands are `install-keybindings-niri.sh` and
+The compatible generated commands are `install-keybindings-niri.sh` and
 `install-keybindings-umbriel.sh`. They call the shared installed TypeScript runtime
 with the packaged manifest, target, context and declared scope. Normal bin
 composition creates one subsystem/user aggregate and calls each target exactly
 once. An authored system `install.sh` remains a system builder/installer; an
 authored `install-user.sh` retains its own body and gains the scoped children.
 Generated installers have `run: false`: rendering is not deployment or reload.
+With `ACTION_AUDIENCES`, those records contribute complete typed operations behind
+one real `install-user.mjs` plus `install.mjs` (and an available system alias).
+Public subsystem action families remain available without a per-context wrapper
+matrix. Native selection/admission is fixed before authored effects; see
+[general actions](/doc/actions/README.md) for audience/flag/bypass semantics.
 
 ## Runtime packages and separately provided commands
 
@@ -126,7 +138,7 @@ KEYBINDING_CONSUMERS:
 
 `scope`, named `root` (`config`, `state`, `home`, etc.), `subpath`, and
 env/default path selectors reuse current CONFIG conventions. User roots resolve
-HOME/XDG at invocation, independently from packaged system producer paths. A
+HOME/XDG at invocation, independently from producer source/material placement. A
 generated user entry cannot silently select a system-scoped context: the runtime
 checks the context against its declared scope.
 
@@ -224,13 +236,19 @@ on later copying a donor that an earlier entry may have replaced.
 
 # Commands
 
-Common operations use generated wrappers, not a human-authored request JSON:
+Current audience-mode operations use general generated action families, not a
+human-authored request JSON or bespoke domain command:
 
 ```sh
-/producer/bin/install-user.sh
-/producer/bin/install-keybindings-niri.sh
-/host/bin/install-user.sh
+/producer/bin/install.mjs
+/producer/bin/install-user.mjs
+/host/bin/install.mjs
+/host/bin/assemble.mjs --check
 ```
+
+Legacy deployments without `ACTION_AUDIENCES` keep `install-user.sh` and the
+compatible target installers. Low-level `keybindings.mjs` remains available for
+explicit membership control and debugging, not the ordinary audience-mode endpoint.
 
 The host runtime can explicitly control membership:
 
@@ -247,6 +265,75 @@ Development uses `node files/config/keybindings/command.ts` with the same comman
 and an explicit `--runner` when outside a deployment. No unrequested compositor
 reload is performed. Existing bypass wrappers remain in force.
 
+# Home-local consumer and producer example
+
+The real host playbooks now stage material under
+`${XDG_DATA_HOME:-$HOME/.local/share}/compfuzor/etc/{niri,umbriel}`. The Media Keys
+producer uses the same material group with its declared NAME. This example chooses
+an explicit stable producer NAME using the existing override:
+
+```sh
+ansible-playbook -i 'localhost,' -c local niri.etc.pb
+ansible-playbook -i 'localhost,' -c local umbriel.etc.pb
+ansible-playbook -i 'localhost,' -c local media-keys.etc.pb -e NAME=media-keys
+
+material="${XDG_DATA_HOME:-$HOME/.local/share}/compfuzor/etc"
+"$material/niri/bin/install.mjs"
+"$material/umbriel/bin/install.mjs"
+"$material/media-keys/bin/install.mjs"
+"$material/niri/bin/assemble.mjs" --check
+"$material/umbriel/bin/assemble.mjs" --check
+```
+
+Generation does not modify the `.config` receiver roots. Host install performs
+explicit conservative adoption/seed/migration; producer install registers exact
+membership and validates both native targets through CONFIG. Host assembly uses
+existing placements; `--check` validates without publishing. Delivery link/copy/
+assemble choices are separate from both audience and material location.
+
+Niri/Umbriel host declarations currently contain only user contexts. Therefore
+`install-system.mjs` and `assemble-system.mjs` are absent, not aliases that secretly
+fall back to user configuration. To support a real system receiver, declare its
+actual scoped context/root and (for external producers) `action_contexts`; mere
+shared placement is insufficient. Isolated tests exercise both audiences from
+the same home-local profile without claiming a new compositor system fallback.
+
+For explicitly shared consumers, keep their material location and bind profiles:
+
+```sh
+ansible-playbook -i 'localhost,' -c local niri.etc.pb -e PREFIX_DIR=/etc/opt
+export COMPFUZOR_NIRI_PROFILE=/etc/opt/niri/etc/keybinding-niri.json
+export COMPFUZOR_UMBRIEL_PROFILE=/etc/opt/umbriel/etc/keybinding-umbriel.json
+"$material/media-keys/bin/install.mjs"
+```
+
+Unset those environment overrides to use invocation-time home-local defaults.
+Vicinae uses the same selectors but keeps its source build/deployment and existing
+service audience policy. Its compatible `install-user.sh` still enables a user
+service; do not confuse rendering its declarations with authorization to build,
+install or start Vicinae.
+
+## Deliberate migration only
+
+1. Keep old `/etc/opt` material and current receivers intact while generating the
+   new material. Inspect the host profile paths, context scopes, templates and
+   producer NAME/group identity before installation.
+2. Choose old shared or new local consumers explicitly through the existing
+   profile selectors. Adopt the intended host with its new `install.mjs` only as
+   the desktop user; existing user edits are not silently overwritten.
+3. Reinstall each producer deliberately to refresh the declared registrations.
+   Preserve stable `KEYBINDING_PRODUCER` if changing deployment NAME would otherwise
+   create a different membership group. Disable an obsolete group explicitly if
+   that is the intended migration; do not infer pruning from a filename change.
+4. Run host `assemble.mjs --check`, review changes and apply assembly when desired.
+   No automatic service reload/restart, compositor reload, tree move or cleanup is
+   part of these steps. Remove old material only after manually reviewing references.
+
+These are operator instructions, not a claim that this implementation migrated
+any live consumer. Historical live adoption checkpoints retain their own evidence;
+their older system-first material rationale is superseded by
+[current action/placement direction](/design/action-audiences/implementation2.gpt61sol.md).
+
 # Proof and cross-references
 
 [Generated installation test](/tests/integration/keybindings_generated.test.py)
@@ -262,9 +349,12 @@ It also checks authored install bodies and exactly-once target participation.
 - [Consumer assembly](/doc/config/keybinding-consumers.md): adopted root areas,
   mirrored candidate closure validation and the existing publication boundary.
 - [Vicinae declaration fixture](/examples/keybindings/vicinae.yaml): reviewed
-  modern routes and target differences, now declared live by
+  modern routes and target differences, now declared in the repo by
   [vicinae.src.pb](/vicinae.src.pb) against the [niri](/niri.etc.pb) and
   [umbriel](/umbriel.etc.pb) consumer-host deployments.
+- [Placement and action proof](/tests/integration/action_placement.test.py): actual
+  HOME/XDG defaults, root-template isolation, full user producer path, shared
+  overrides and system receiver fixture; service commands are stubbed or not invoked.
 - [Generator](/library/filter_plugins/keybindings_compile.py) and
   [membership runtime](/files/config/keybindings/membership.ts): controller glue
   packages data; TypeScript owns capture, identity, ordering and lifecycle.

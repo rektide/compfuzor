@@ -2,6 +2,9 @@
 
 ## Implementation checkpoints
 
+- [Final placement/adoption implementation](/design/action-audiences/implementation2.gpt61sol.md):
+  real user-first playbooks, home-local defaults, dynamic consumer selectors,
+  SteamOS mixed scopes, isolated native proof and deliberate migration limitations.
 - [Complete domain integration](/design/action-audiences/implementation1.gpt61sol.md):
   implemented CONFIG/keybinding contributions, frozen receiver admission, shared
   body execution, cleanup evidence and the concrete next placement/adoption proposal.
@@ -14,7 +17,7 @@
   first proposed schema and slice; later authorization removed implicit fallback
   and the verified implementation retains authored body filenames.
 - [Maintained action contract](/doc/actions/README.md): current schema and behavior,
-  including CONFIG/keybinding binding; placement and other-domain adoption stay separate.
+  including CONFIG/keybinding binding and representative placement/adoption defaults.
 
 ## Direction
 

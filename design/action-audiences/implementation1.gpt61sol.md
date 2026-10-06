@@ -19,6 +19,10 @@ sources:
 
 # Outcome
 
+> The subsequent authorized [placement/adoption implementation](/design/action-audiences/implementation2.gpt61sol.md)
+> completes the representative home-local defaults and real playbook opt-in. The
+> pending-placement proposal below is retained as this checkpoint's historical boundary.
+
 **Authorized domain integration is complete.** CONFIG and keybinding complete
 operations attach to generated audience action families. All selected domain
 bindings/options/receiver selectors/strategies admit before authored effects;
