@@ -93,13 +93,16 @@ def test_home_defaults(area: Path):
         invoke(host / "bin/install.mjs", env)
         assert (host / "bin/assemble.mjs").is_symlink() and not (host / "bin/assemble-system.mjs").exists()
     receiver = Path(env["XDG_CONFIG_HOME"])
-    assert (receiver / "umbriel/config.toml").read_bytes() != (umbriel / "config.toml").read_bytes() or (receiver / "umbriel/config.toml").is_file()
+    assert (receiver / "umbriel/config.toml").is_file() and not (receiver / "umbriel/config.toml").is_symlink()
+    assert (receiver / "umbriel/config.toml").resolve() != (umbriel / "config.toml").resolve()
     assert not (umbriel / ".keybindings").exists(), "material root is not the live receiver"
     for target in ["niri", "umbriel"]:
         wrapper = (producer / f"bin/install-keybindings-{target}.sh").read_text()
         assert "--profile-selector" in wrapper and "${XDG_DATA_HOME}" in wrapper
         assert env["HOME"] not in wrapper and "/etc/opt/" not in wrapper
     invoke(producer / "bin/install.mjs", env)
+    assert (umbriel / "config.toml").read_text() == template, "native publication must not rewrite the staged template"
+    assert (receiver / "umbriel/config.toml").read_text() != template
     for target, host in [("niri", niri), ("umbriel", umbriel)]:
         state = json.loads((receiver / target / ".keybindings/membership.json").read_text())
         assert set(state["groups"]) == {MEDIA_NAME} and len(state["groups"][MEDIA_NAME]["resources"]) == 20
