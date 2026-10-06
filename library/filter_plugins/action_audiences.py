@@ -117,8 +117,22 @@ def compile_action_audiences(bins, policy):
         settings[action] = None if value is False else policy_settings(value, "ACTION_AUDIENCES.actions." + action, base)
 
     normalized, roots, retained = [], {}, []
+    operation_steps = {}
     occupied = {item.get("dest", item.get("name")) for item in bins if isinstance(item, Mapping)}
     for item in bins:
+        if isinstance(item, Mapping) and item.get("state") != "absent" and "action_operations" in item:
+            retained.append(item)
+            for contribution in item["action_operations"]:
+                action = contribution["action"]
+                if action not in ACTIONS:
+                    fail("unknown domain contribution action: " + action)
+                for audience, definition in contribution["audiences"].items():
+                    if audience not in AUDIENCES:
+                        fail("domain contribution audience must be user/system")
+                    label = "operation.{}.{}.{}".format(len(operation_steps) + 1, action, audience)
+                    operation_steps[label] = {**definition, "id": label}
+                    normalized.append({"name": label, "action": action, "scope": [audience], "subsystem": contribution.get("subsystem"), "phase": contribution.get("phase", _resolve_phase(item)), "contributors": item.get("contributors", [])})
+            continue
         if not isinstance(item, Mapping) or item.get("state") == "absent" or item.get("compose") is False:
             retained.append(item)
             continue
@@ -208,6 +222,8 @@ def compile_action_audiences(bins, policy):
                 relative_bin(child)
                 if child in child_actions:
                     steps.append({"kind": "action", "action": child_actions[child]})
+                elif child in operation_steps:
+                    steps.append(operation_steps[child])
                 else:
                     steps.append({"kind": "exec", "path": "bin/" + child})
             if root is not None:
@@ -219,6 +235,8 @@ def compile_action_audiences(bins, policy):
                 steps = [{"kind": "exec", "path": "bin/" + private, "children": steps}]
             plans[audience] = steps
         family = {"name": name, "action": action, "entry": entry, "aliases": aliases, "plans": plans}
+        if operation_steps:
+            family["setup"] = {audience: {"env": not (roots.get((name, audience), {}).get("env") is False or roots.get((name, audience), {}).get("helpers") is False), "basedir": roots.get((name, audience), {}).get("basedir", True)} for audience in available}
         if default is not None:
             family["default"] = default
         spec["actions"][name] = family
@@ -230,12 +248,14 @@ def compile_action_audiences(bins, policy):
     # to execute when a policy removes all actions. Do not prune those entries.
     if "compfuzor-runtime.mjs" not in occupied:
         generated.append(compfuzor_runtime_bin())
+    if operation_steps:
+        generated.append({"name": "internal/action-environment.sh", "src": "../actions/environment.sh", "helpers": False, "compose": False, "basedir": False, "env": True})
     return {
         "bins": retained + generated,
         "spec": spec,
         "etc_files": [{"name": SPEC_PATH, "json": spec}],
         "etc_dirs": ["compfuzor-actions"],
-        "bin_dirs": [],
+        "bin_dirs": ["internal"] if operation_steps else [],
     }
 
 

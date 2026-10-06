@@ -12,7 +12,9 @@ import { main as runFlow } from "../flow/runtime.ts";
 import { main as runLinks } from "../links/runtime.ts";
 import { main as runZim } from "../zim/runtime.ts";
 import { main as runKeybindings } from "../config/keybindings/runtime.ts";
-import { guardActionBody } from "../actions/runtime.ts";
+import { main as runActions } from "../actions/runtime.ts";
+import { applyPrepared } from "../actions/session.ts";
+import { clearProcessMarkers } from "../actions/process.ts";
 
 export { actionEntry } from "../actions/entry.ts";
 
@@ -107,9 +109,21 @@ async function runDomain(
   deploymentDir: string,
 ): Promise<number> {
   try {
+    if (domain !== "actions" && process.env.COMPFUZOR_ACTION_OPERATION_MODE === "apply") {
+      const session = process.env.COMPFUZOR_ACTION_SESSION;
+      const id = process.env.COMPFUZOR_ACTION_OPERATION;
+      if (!session || !id || (domain !== "config" && domain !== "keybindings"))
+        throw new Error("unrelated prepared domain invocation");
+      return await applyPrepared(session, id, domain, deploymentDir);
+    }
+    if (domain !== "actions") clearProcessMarkers();
     if (domain === "catalog") return await runCatalog(argv, deploymentDir);
     if (domain === "flow") return await runFlow(argv, deploymentDir);
-    if (domain === "actions") return await guardActionBody(argv, deploymentDir);
+    if (domain === "actions") {
+      const outcome = await runActions(argv, deploymentDir, fileURLToPath(import.meta.url));
+      if (outcome.signal) process.kill(process.pid, outcome.signal);
+      return outcome.code;
+    }
     if (domain === "config") return await runConfig(argv, deploymentDir, invokedAs);
     if (domain === "links") return await runLinks(argv, deploymentDir);
     if (domain === "zim") return await runZim(argv, deploymentDir);

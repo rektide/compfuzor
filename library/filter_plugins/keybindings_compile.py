@@ -11,6 +11,7 @@ from config_selectors import compile_path_selector, relative_path
 from config_context_compile import _root as context_root
 from config_compile import config_runtime_bins, config_runtime_packages
 from runtime_bundles import compfuzor_runtime_bins, runtime_alias_bin
+from action_contexts import bind_action_contexts, participating_audiences
 
 ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 TARGETS = ("niri", "umbriel")
@@ -40,7 +41,7 @@ def sequence(value, label):
 
 def profile(target, raw, own_sources):
     raw = mapping(raw, target)
-    unknown = set(raw) - {"contexts", "root_file", "material_root", "membership", "placement", "placement_directory", "registration", "baseline", "personal", "user_sources", "native_sources", "bindings", "template_file"}
+    unknown = set(raw) - {"contexts", "action_contexts", "root_file", "material_root", "membership", "placement", "placement_directory", "registration", "baseline", "personal", "user_sources", "native_sources", "bindings", "template_file"}
     if unknown:
         fail("unknown consumer settings: " + ", ".join(sorted(unknown)))
     contexts = {}
@@ -105,7 +106,7 @@ def profile(target, raw, own_sources):
     return result
 
 @accept_args_markers
-def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bins_dir, order=100, context="user", scope="user", has_configs=False):
+def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bins_dir, order=100, context="user", scope="user", has_configs=False, audience_policy=None):
     actions = mapping(raw_copy_template_data(actions), "KEYBINDING_ACTIONS")
     bindings = mapping(raw_copy_template_data(bindings), "KEYBINDINGS")
     consumers = mapping(raw_copy_template_data(consumers), "KEYBINDING_CONSUMERS")
@@ -138,7 +139,7 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
         if target not in TARGETS:
             fail("installer target must be niri/umbriel")
         value = mapping(value, "target binding")
-        if set(value) - {"consumer", "context", "scope"}:
+        if set(value) - {"consumer", "context", "scope", "action_contexts"}:
             fail("unknown target binding")
     # Role is declaration-driven, not inferred from current resource count.
     # Empty producer reinstalls must replace stale manifests/membership; only an
@@ -188,7 +189,46 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
         if profile_selector:
             import json
             args.extend(["--profile-selector", json.dumps(profile_selector)])
-        bins.append({"name": "install-keybindings-" + target + ".sh", "action": "install", "scope": [selected_scope], "basedir": False, "deployment_rooted": True, "bypass": "KEYBINDINGS", "run": False, "content": 'exec "$DIR/bin/keybindings.mjs" ' + " ".join(shlex.quote(arg) for arg in args) + ' "$@"'})
+        descriptor = {"name": "install-keybindings-" + target + ".sh", "action": "install", "scope": [selected_scope], "basedir": False, "deployment_rooted": True, "bypass": "KEYBINDINGS", "run": False, "content": 'exec "$DIR/bin/keybindings.mjs" ' + " ".join(shlex.quote(arg) for arg in args) + ' "$@"'}
+        if audience_policy is not None:
+            descriptor["compose"] = False
+            public_actions = ["install"] + (["assemble"] if target in profiles else [])
+            eligible = participating_audiences(audience_policy, public_actions)
+            explicit = value.get("action_contexts", consumers.get(target, {}).get("action_contexts"))
+            if consumer:
+                audience_contexts = mapping(explicit, "KEYBINDING_TARGETS." + target + ".action_contexts") if explicit is not None else {selected_scope: selected_context}
+                if set(audience_contexts) - {"user", "system"}:
+                    fail("action_contexts keys must be user/system")
+                audience_contexts = {audience: identifier(name, "action context") for audience, name in audience_contexts.items() if audience in eligible}
+            elif target in profiles:
+                audience_contexts = bind_action_contexts(profiles[target]["contexts"], explicit, "KEYBINDING_CONSUMERS." + target + ".action_contexts", eligible)
+            else:
+                audience_contexts = {selected_scope: selected_context} if selected_scope in eligible else {}
+            descriptor["action_operations"] = []
+            for public_action in public_actions:
+                operation = "install" if installing and public_action == "install" else "host"
+                selected_bindings = audience_contexts
+                common = {"kind": "domain", "domain": "keybindings", "operation": operation, "target": target,
+                    "envelope": "bin/" + descriptor["name"], **({"mode": "assemble"} if public_action == "assemble" else {})}
+                if operation == "install":
+                    common.update({"manifest": posixpath.join(etc, "keybinding-producer.json"), "producer": producer})
+                if public_action == "assemble":
+                    common["profile"] = posixpath.join(etc, "keybinding-" + target + ".json")
+                    selected_bindings = bind_action_contexts(profiles[target]["contexts"], consumers[target].get("action_contexts"), "KEYBINDING_CONSUMERS." + target + ".action_contexts", eligible)
+                elif profile_path:
+                    common["profile"] = profile_path
+                elif profile_selector:
+                    common["profileSelector"] = profile_selector
+                descriptor["action_operations"].append({"action": public_action, "subsystem": "keybindings-" + target,
+                    "audiences": {audience: {**common, "context": name} for audience, name in selected_bindings.items()}})
+            if installing and target in profiles:
+                owned_path = posixpath.join(etc, "keybinding-" + target + ".json")
+                host_bindings = bind_action_contexts(profiles[target]["contexts"], consumers[target].get("action_contexts"), "KEYBINDING_CONSUMERS." + target + ".action_contexts", eligible)
+                distinct = {audience: name for audience, name in host_bindings.items() if profile_path != owned_path or audience_contexts.get(audience) != name}
+                if distinct:
+                    descriptor["action_operations"].insert(0, {"action": "install", "subsystem": "keybindings-" + target,
+                        "audiences": {audience: {"kind": "domain", "domain": "keybindings", "operation": "host", "target": target, "envelope": "bin/" + descriptor["name"], "context": name, "profile": owned_path} for audience, name in distinct.items()}})
+        bins.append(descriptor)
     return {"files": files, "bins": bins, "dirs": dirs, "pkgs": config_runtime_packages()}
 
 class FilterModule(object):

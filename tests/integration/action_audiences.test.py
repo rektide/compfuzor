@@ -124,7 +124,7 @@ def test_generation_and_execution(temporary: Path) -> None:
     assert not trace.exists()
     render(payload, bins, {"actions": {"install": False}})
     assert "stale action entry" in run(output / "install.mjs", env, expected=2).stderr
-    assert "stale authored action body" in run(output / "install-user.sh", env, expected=2).stderr
+    assert "stale" in run(output / "install-user.sh", env, expected=2).stderr
     assert not trace.exists()
     print("ok: generated real/alias families, both defaults, body semantics, lexical identity and omission")
 
@@ -197,7 +197,7 @@ def test_real_mixed_scope_render(temporary: Path) -> None:
     assert install["entry"] == "install-user.mjs" and set(install["plans"]) == {"user", "system"}
     user, system = install["plans"]["user"][0], install["plans"]["system"][0]
     assert user["path"] == "bin/install-user.sh" and system["path"] == "bin/install.sh"
-    assert any(step.get("path") == "bin/install-keybindings-niri.sh" for step in user["children"]), user
+    assert any(step.get("path") == "bin/install-keybindings-niri.sh" or step.get("action") == "install-keybindings-niri" for step in user["children"]), user
     assert any(step.get("action") == "install-archlane" or step.get("path") == "bin/install-arch.sh" for step in system["children"]), system
     assert "sudo steamos-readonly disable" in (payload / "bin/install.sh").read_text()
     assert 'NIRI_CONFIG="$NIRI_DIR/config.kdl"' in (payload / "bin/install-user.sh").read_text()

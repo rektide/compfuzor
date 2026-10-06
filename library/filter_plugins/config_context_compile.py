@@ -14,6 +14,7 @@ from ansible.template import accept_args_markers
 from config_selectors import compile_path_selector, relative_path
 from template_data import raw_copy_template_data
 from runtime_bundles import compfuzor_runtime_bins
+from action_contexts import bind_action_contexts, participating_audiences
 
 
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -156,7 +157,7 @@ def _canonical_context(configs):
 
 
 @accept_args_markers
-def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_context="user", install_owner="config"):
+def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_context="user", install_owner="config", audience_policy=None, action_contexts=None):
     """Compile the v2 context schema and one fixed multicall command surface."""
     compiled = copy.deepcopy(_mapping(raw_copy_template_data(compiled), "compiled config"))
     contexts = _mapping(raw_copy_template_data(contexts), "CONFIG_CONTEXTS")
@@ -257,6 +258,8 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
         selected_default = _CANONICAL
     normalized_contexts[_CANONICAL] = _canonical_context(configs)
 
+    action_bindings = bind_action_contexts(normalized_contexts, raw_copy_template_data(action_contexts), "CONFIG_ACTION_CONTEXTS", participating_audiences(audience_policy, _ACTIONS)) if audience_policy is not None else {}
+
     for action in _ACTIONS:
         command_name = "config-{}.sh".format(action)
         if command_name in occupied_bins:
@@ -271,6 +274,15 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
         if action == "install" and normalized_contexts and selected_default != _CANONICAL and install_owner == "config":
             descriptor["action"] = "install"
             descriptor.pop("compose")
+        if audience_policy is not None:
+            descriptor["compose"] = False
+            if action != "status" and (action != "install" or install_owner == "config") and action_bindings:
+                descriptor["action_operations"] = [{
+                    "action": action, "subsystem": "config",
+                    "audiences": {audience: {"kind": "domain", "domain": "config", "operation": action, "context": name,
+                        "envelope": "bin/" + command_name, "spec": "etc/config.spec.json"}
+                        for audience, name in action_bindings.items()},
+                }]
         bins.append(descriptor)
         occupied_bins.add(command_name)
 

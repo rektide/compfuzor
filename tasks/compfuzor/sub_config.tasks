@@ -13,5 +13,7 @@
             ETC,
             BINS_DIR,
             CONFIG_CONTEXT,
-            CONFIG_INSTALL_OWNER) }}
+             CONFIG_INSTALL_OWNER,
+             ACTION_AUDIENCES | default(None),
+             CONFIG_ACTION_CONTEXTS | default(None)) }}
   when: CONFIGS is defined

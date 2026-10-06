@@ -12,12 +12,19 @@ import {
   type ConfigCliOptions,
 } from "./cli.ts";
 import {
+  bindContextConfigs,
   getConfigContext,
   selectRecipeNames,
   type ConfigScope,
   type ConfigSpec,
 } from "./context.ts";
-import { runInputAction, syncInputs, type InputStrategy } from "./inputs.ts";
+import {
+  admitInputArgs,
+  inputActionRecipeNames,
+  runInputAction,
+  syncInputs,
+  type InputStrategy,
+} from "./inputs.ts";
 import { installContext, type ConfigInstallStrategy } from "./install.ts";
 import { resolveSelectedName } from "./invocation.ts";
 import { publishOutputs } from "./publication.ts";
@@ -135,7 +142,65 @@ export async function admitConfigCommand(
     );
   }
 
-  return { spec, options: { ...options, args: [...options.args] }, action, contextName };
+  if (!binding)
+    return { spec, options: { ...options, args: [...options.args] }, action, contextName };
+  const frozen = structuredClone(spec);
+  const fixed = { ...options, args: [...options.args], action, context: contextName };
+  if (action === "inputs")
+    fixed.args = admitInputArgs(
+      { spec, contextName, runner: fixed.runner, initiallyDisabled: fixed.initiallyDisabled },
+      fixed.args,
+    );
+  const names =
+    action === "inputs"
+      ? inputActionRecipeNames(spec, contextName, fixed.args)
+      : selectRecipeNames(spec, contextName, fixed.args, !fixed.list);
+  const resolved = bindContextConfigs(spec, contextName, names);
+  frozen.configs = Object.fromEntries(names.map((name) => [name, frozen.configs[name]]));
+  frozen.contexts = {
+    [contextName]: {
+      ...context,
+      root: { path: "/" },
+      subpath: undefined,
+      configs: Object.fromEntries(
+        names.map((name) => [
+          name,
+          {
+            output: { path: resolved.configs[name].output },
+            inputs: resolved.configs[name].inputs.map((input) => ({
+              path: String(input.file ?? input.directory),
+            })),
+          },
+        ]),
+      ),
+    },
+  };
+  if (action === "assemble") {
+    if (fixed.strategy !== undefined) fail("assemble does not accept --strategy");
+    if (fixed.check && fixed.stdout) fail("--check and --stdout are mutually exclusive");
+    if (fixed.list && fixed.args.length) fail("--list does not accept recipe names");
+    const selected = selectRecipeNames(frozen, contextName, fixed.args, !fixed.list);
+    if (fixed.stdout && selected.length !== 1)
+      fail("--stdout requires exactly one selected config");
+  } else if (action === "inputs") {
+    if (fixed.args[0] === "put")
+      fixed.strategy = contextInputStrategy(frozen, contextName, fixed.strategy);
+    else if (fixed.strategy !== undefined) fail(`${fixed.args[0]} does not accept --strategy`);
+  } else {
+    selectRecipeNames(frozen, contextName, fixed.args);
+    if (action === "install") {
+      fixed.strategy = contextInstallStrategy(frozen, contextName, fixed.strategy);
+      fixed.dropins = contextInputStrategy(frozen, contextName, fixed.dropins);
+    } else if (action === "sync-inputs")
+      fixed.strategy = contextInputStrategy(frozen, contextName, fixed.strategy);
+    else if (action === "publish")
+      fixed.strategy = parseInputStrategy(
+        fixed.strategy ?? process.env.COMPFUZOR_CONFIG_PUBLISH_STRATEGY,
+        "config publish strategy",
+      );
+    else if (fixed.strategy !== undefined) fail(`${action} does not accept --strategy`);
+  }
+  return { spec: frozen, options: fixed, action, contextName };
 }
 
 export async function runAdmittedConfigCommand(admitted: AdmittedConfigCommand): Promise<number> {

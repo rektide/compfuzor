@@ -31,11 +31,20 @@ unset _cf_script
 {% endif %}
 {% if item.action_body is defined %}
 # Internal authored body bridge: the current spec must still declare this path.
+if [ -z "${COMPFUZOR_ACTION_SESSION:-}" ] && [ "${COMPFUZOR_ACTION_BODY:-}" != '{{ item.action_body.path }}' ]; then
+  exec "$DIR/bin/{{ item.action_body.name }}-{{ item.action_body.audience }}.mjs" "$@"
+fi
 "$DIR/bin/compfuzor-runtime.mjs" actions guard '{{ item.action_body.name }}' '{{ item.action_body.audience }}' '{{ item.action_body.path }}' || exit "$?"
 {% endif %}
 {% for _h in _helpers %}
+{% if _h == 'env' and item.action_body is defined %}
+if [ "${COMPFUZOR_ACTION_ROOT_ENV_READY:-}" != '{{ item.action_body.name }}' ]; then
+{% endif %}
 {{ _h | helper_comment }}
 {% include "_helpers/" ~ _h %}
+{% if _h == 'env' and item.action_body is defined %}
+fi
+{% endif %}
 
 {% endfor %}
 {% if not _nuclear %}
@@ -105,10 +114,18 @@ _cf_body_completed=1
 fi
 {% endif %}
 {% if _cf_run_all|length > 0 %}
+{% if item.action_body is defined %}
+if [ -n "${COMPFUZOR_ACTION_SESSION:-}" ]; then
+  "$DIR/bin/compfuzor-runtime.mjs" actions children '{{ item.action_body.name }}' '{{ item.action_body.audience }}' '{{ item.action_body.path }}' "$@" || exit "$?"
+else
+{% endif %}
 {% for run_bin in _cf_run_all %}
 if [ "$_cf_loud" = 1 ]; then printf '+ %s\n' '{{ run_bin }}'; fi
 "$DIR/bin/{{ run_bin }}" "$@"
 {% endfor %}
+{% if item.action_body is defined %}
+fi
+{% endif %}
 {% if _body_local_bypass %}
 if [ "$_cf_body_completed" = 0 ] && [ "$_cf_loud" = 1 ]; then printf 'complete\n'; fi
 {% else %}

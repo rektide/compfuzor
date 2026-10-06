@@ -117,6 +117,30 @@ export async function admitKeybindingCommand(
     check: values.check,
   };
   const bound = bindProfile(options);
+  if (binding) {
+    const placement = options.profile.placement ?? "link";
+    const registration = options.profile.registration ?? "link";
+    if (!["direct", "copy", "link"].includes(placement))
+      throw new Error("invalid native placement policy");
+    if (!["copy", "link"].includes(registration))
+      throw new Error("invalid source registration policy");
+    options.profile = {
+      ...structuredClone(options.profile),
+      placement,
+      registration,
+      placementDirectory: {
+        path: resolvePathSelector(
+          options.profile.placementDirectory ?? { relative: "keybindings" },
+          bound.base,
+          "placement directory",
+        ),
+      },
+      userSources: (options.profile.userSources ?? []).map((source) => ({
+        ...source,
+        path: { path: resolvePathSelector(source.path, bound.base, "consumer source") },
+      })),
+    };
+  }
   let manifest: ProducerManifest | undefined;
   if (command === "install") {
     if (!values.manifest) throw new Error("install requires --manifest");

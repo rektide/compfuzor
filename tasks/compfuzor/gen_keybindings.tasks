@@ -8,7 +8,8 @@
            KEYBINDING_TARGETS | default(None) | resolve,
            KEYBINDING_PRODUCER | default(NAME), ETC, BINS_DIR,
            KEYBINDING_ORDER | default(100), KEYBINDING_CONTEXT | default('user'),
-           KEYBINDING_SCOPE | default('user'), (CONFIGS | default({}) | length > 0)) }}
+            KEYBINDING_SCOPE | default('user'), (CONFIGS | default({}) | length > 0),
+            ACTION_AUDIENCES | default(None)) }}
 - name: "Compfuzor: synthesize keybinding artifacts"
   set_fact:
     ETC_FILES: "{{ ETC_FILES | merge_list(_keybindings_compiled.files, preset='append') }}"
