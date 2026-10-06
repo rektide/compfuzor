@@ -16,7 +16,10 @@ Neither playbook installs root packages, changes main mise/Cargo configuration,
 or enables linger. Stop an existing sccache daemon before enabling its service.
 
 Mise installation is confined to the build lane. Runtime executables are direct
-deployment symlinks, not per-crate mise wrappers. Sweeps use absolute mise exec
+deployment symlinks, not per-crate mise wrappers. Build-time `mise where` and
+`mise which --tool` resolve the exact pinned installation/executable without
+assuming aqua's archive layout; an executable outside that installation fails.
+Sweeps use absolute mise exec
 from home for Cargo metadata's Rust environment, with tool/toolchain auto-install
 disabled. A missing sweep root is an error. A shared nonblocking flock serializes
 these sweeps only; it does **not** protect builds.

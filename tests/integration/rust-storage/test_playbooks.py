@@ -49,6 +49,8 @@ with open(os.environ["RUST_STORAGE_LOG"], "a") as log:
         ("MISE_AUTO_INSTALL", "MISE_EXEC_AUTO_INSTALL", "RUSTUP_AUTO_INSTALL")}}) + "\\n")
 if sys.argv[1] == "where":
     print(os.environ["RUST_STORAGE_INSTALLED"])
+elif sys.argv[1] == "which":
+    print(os.environ["RUST_STORAGE_EXECUTABLE"])
 elif sys.argv[1] == "exec":
     assert sys.argv[2] == "--"
     os.execv(sys.argv[3], sys.argv[3:])
@@ -96,19 +98,24 @@ def calls(tmp: Path) -> list[dict]:
 
 def fake_build(tmp: Path, deployment: Path, tool: str, home: Path) -> dict[str, str]:
     installed = tmp / f"installed {tool}"
-    (installed / "bin").mkdir(parents=True, exist_ok=True)
-    executable = installed / "bin" / tool
+    # Aqua can expose a nested archive path, unlike cargo backend's bin/.
+    bindir = installed / ("sccache-v0.18.0-platform" if tool == "sccache" else "bin")
+    bindir.mkdir(parents=True, exist_ok=True)
+    executable = bindir / tool
     executable.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$RUST_STORAGE_SWEEP_ARGS"\n')
     executable.chmod(0o755)
     env = os.environ | {
         "HOME": str(home), "RUST_STORAGE_INSTALLED": str(installed),
         "RUST_STORAGE_LOG": str(tmp / "mise.log"),
+        "RUST_STORAGE_EXECUTABLE": str(executable),
         "RUST_STORAGE_SWEEP_ARGS": str(tmp / "sweep.args"),
     }
     before = len(calls(tmp))
     run(str(deployment / "bin/build.sh"), cwd=ROOT, env=env)
     pin = "aqua:mozilla/sccache@0.18.0" if tool == "sccache" else "cargo:cargo-sweep@0.8.0"
-    assert [call["argv"] for call in calls(tmp)[before:]] == [["install", pin], ["where", pin]]
+    assert [call["argv"] for call in calls(tmp)[before:]] == [
+        ["install", pin], ["where", pin], ["which", tool, "--tool", pin],
+    ]
     assert all(call["cwd"] == str(home) for call in calls(tmp)[before:])
     assert (deployment / "bin" / tool).is_symlink()
     assert (deployment / "bin" / tool).resolve() == executable
@@ -157,7 +164,12 @@ def test_render_user_units_mise_env_and_inert_lanes(rendered):
 def test_build_pinned_mise_and_direct_executables(rendered):
     tmp, home, deployments = rendered
     for tool, deployment in deployments.items():
-        fake_build(tmp, deployment, tool, home)
+        env = fake_build(tmp, deployment, tool, home)
+        linked = (deployment / "bin" / tool).resolve()
+        rejected = run(str(deployment / "bin/build.sh"), cwd=ROOT,
+                       env=env | {"RUST_STORAGE_EXECUTABLE": "/bin/sh"}, check=False)
+        assert rejected.returncode != 0 and "outside the pinned" in rejected.stderr
+        assert (deployment / "bin" / tool).resolve() == linked
     assert (home / ".cache/sccache").is_dir()
 
 
