@@ -6,6 +6,9 @@ configuration for a selected consumer context.
 
 ## Start here
 
+- [General action audiences](/doc/actions/README.md) — opt-in `.mjs` action
+  families and scoped composition; automatic CONFIG/keybinding context attachment
+  is still pending, so existing context-aware deployments are not broadly opted in.
 - [Consumer configuration toolkit](/doc/config/consumer-toolkit.md) — current
   commands, contexts, copy/link choices, portable JSON input placement,
   Zim workflow, and status semantics.
