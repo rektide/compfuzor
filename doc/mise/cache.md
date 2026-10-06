@@ -86,6 +86,9 @@ automatic cleanup, or undeclared-root scan is performed.
 
 - [`files/mise-cache.ts`](/files/mise-cache.ts) — runtime inventory and leaf actions.
 - [`files/config-mise-cache.ts`](/files/config-mise-cache.ts) — staged discovery.
+- [Rust storage playbooks](/doc/rust-storage/README.md) — separate mise-compatible
+  sccache and scheduled Cargo build-artifact sweeps. These are not the registry,
+  Git-cache, or toolchain cleanup actions inventoried here.
 - [Bin compositors](/doc/bins.md) — explicit config-lane action and aggregate status integration.
 - [`tests/integration/mise_cache.test.py`](/tests/integration/mise_cache.test.py)
   — isolated render of both playbooks, stubbed allocation/query/action checks,
