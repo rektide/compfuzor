@@ -117,6 +117,17 @@ export function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
+/** str(Path(p)): collapse redundant separators and "." components like pathlib. */
+export function pythonPath(p: string): string {
+  if (p === "") return ".";
+  const absolute = p.startsWith("/");
+  const parts = p.split("/").filter((piece) => piece !== "" && piece !== ".");
+  let out = parts.join("/");
+  if (absolute) out = `/${out}`;
+  if (out === "") out = absolute ? "/" : ".";
+  return out;
+}
+
 /** Python datetime.now(timezone.utc).isoformat(): microseconds, +00:00 offset. */
 export function pythonUtcNow(): string {
   const now = new Date();
@@ -657,14 +668,14 @@ export function auditCommand(args: AuditArgs): void {
     policyText += text + "\n";
   }
   const report: Record<string, unknown> = {
-    debian_input: { path: args.debianConfig, sha256: sha(Buffer.from(debianText, "utf8")) },
+    debian_input: { path: pythonPath(args.debianConfig), sha256: sha(Buffer.from(debianText, "utf8")) },
     debian_header: debianText.split("\n").slice(0, 8).filter((line) => line.includes("Kernel Configuration")),
-    policy_inputs: paths.map((policyPath) => ({ path: policyPath, sha256: sha(readFileSync(policyPath)) })),
+    policy_inputs: paths.map((policyPath) => ({ path: pythonPath(policyPath), sha256: sha(readFileSync(policyPath)) })),
     semantics: "Declared policy differs from Debian; absent symbols are not assumed disabled; metadata is not policy.",
   };
   const required = parseConfig(configText(args.requiredIntent));
   report["required_intent"] = {
-    input: args.requiredIntent,
+    input: pythonPath(args.requiredIntent),
     sha256: sha(readFileSync(args.requiredIntent)),
     native_debian: requiredAudit(required, debian, policy),
   };
@@ -672,7 +683,7 @@ export function auditCommand(args: AuditArgs): void {
   if (args.upstreamConfig !== null) {
     const upstreamText = configText(args.upstreamConfig);
     writeFileSync(join(output, "debian-vs-upstream.raw.diff"), delta(parseConfig(upstreamText), debian));
-    report["upstream_input"] = { path: args.upstreamConfig, sha256: sha(Buffer.from(upstreamText, "utf8")) };
+    report["upstream_input"] = { path: pythonPath(args.upstreamConfig), sha256: sha(Buffer.from(upstreamText, "utf8")) };
     report["upstream_comparison"] =
       "RAW: caller must establish matching version/architecture/toolchain; not implied native by this helper";
   }
