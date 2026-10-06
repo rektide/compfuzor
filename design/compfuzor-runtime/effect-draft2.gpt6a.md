@@ -529,6 +529,11 @@ these examples rather than another broad catalog ontology.
 
 ## Cross-references
 
+- [Runtime sourcing and receiver rendezvous direction](/design/runtime-sourcing/direction0-syn.gpt61sol.md)
+  — later operator preference for editable `changed → canonical → deployed`
+  source selection and deployment-time SHA-512 burns. Supplies a source-root
+  resolution question for this draft's native discovery/init, not a replacement
+  execution language or mandatory module envelope; still unimplemented.
 - [Effect draft1](/design/compfuzor-runtime/effect-draft1.gpt61sol.md) — predecessor;
   retains BINS admission and recursive collection, replaces its mandatory-looking
   module envelope with native annotated exports, and adds default discovery,

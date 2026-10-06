@@ -21,6 +21,10 @@ sources:
     title: Current unconditional per-deployment runtime claims
   - resource: /files/config/keybindings/membership.ts
     title: Closed membership and existing CONFIG publication
+  - resource: /design/compfuzor-runtime/effect-draft2.gpt6a.md
+    title: Native annotated contributions, default discovery and extensible mutable init
+  - resource: /design/keybindings/config-lifecycle0.gpt61sol.md
+    title: Domain-grouped compositor implementations without a central kind union
 ---
 
 # What is up
@@ -90,6 +94,15 @@ These may share descriptor and locator machinery, but they answer different
 questions. Loading live implementation code must not replace the deployment's
 workload with the canonical checkout's workload.
 
+This is not a new execution language or a mandatory per-file JSON module
+envelope. [CFR's native contribution direction](/design/compfuzor-runtime/effect-draft2.gpt6a.md#3-default-discovery-and-loader-activities)
+already calls for discovering annotated native Effect exports; policy chooses
+the source roots supplied to that loader. Catalog transport may be a data
+projection, while executable bindings stay live references. Receiver
+advertisements and producer registration files are inert domain data, not a
+replacement for that native module interface. This integration is a design
+direction, not a claim the native loader is implemented.
+
 Likewise distinguish **provider root** (selected implementation/assets) from
 **deployment root** (the workload being operated on). Today the
 [multicall runtime](/files/runtime/compfuzor-runtime.ts#L153-L174) infers deployment
@@ -144,6 +157,11 @@ invocation. **Do not retry the next provider after execution failure**: the
 operation may already have effects. Live source changes during an invocation
 also require an honest observation/pinning contract, not a claim of immutable
 code simply because the root was selected once.
+
+Provider selection does not freeze all collaborative run data or forbid later
+discovery. Retain the native draft's [per-collector selection semantics](/design/compfuzor-runtime/effect-draft2.gpt6a.md#L189-L206):
+new discovery can affect later collections, but cannot silently replace code or
+membership already admitted for a running operation.
 
 `deploy: false` affects new artifact claims; it does not prune old files. If all
 configured providers are unavailable, fail with an actionable error. The presence
@@ -239,6 +257,15 @@ rendezvous catalogs and lean delivery are **not implemented**.
 - [Runtime world map](/design/compfuzor-runtime/world-map0.gpt61sol.md#L64-L86):
   static multicall dispatch is not dynamic provider discovery; root separation
   and a uniform explicit workload contract remain consequential gaps.
+- [Native Effect discovery and init](/design/compfuzor-runtime/effect-draft2.gpt6a.md#L163-L235):
+  the loader/initialization direction this source policy should feed, not replace;
+  includes later discovery, mutable collaboration and imported-graph identity gaps.
+- [Native compositor/configuration lifecycle](/design/keybindings/config-lifecycle0.gpt61sol.md#L111-L142):
+  prior domain-grouped adapter direction explicitly rejects central compositor-kind
+  unions; rendezvous adds receiver discovery while preserving declared selection.
+- [Probe fingerprint limitation](/design/compfuzor-runtime/experiment4.sxh.md#L314-L321):
+  unchanged input metadata previously missed implementation changes. A pertinent
+  source/dependency burn must address that gap rather than reuse an input-only hash.
 - [Shared runtime bootstrap draft](/design/compfuzor-runtime/composition-draft1.glm53.md#L218-L242):
   prior art for host executor/deployment data and optional bundled fallback;
   its exact installation layout is a proposal, not an installed capability.

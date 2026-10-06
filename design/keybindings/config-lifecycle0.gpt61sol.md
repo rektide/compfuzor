@@ -295,6 +295,11 @@ assembly, not general filesystem reconciliation.
 
 # Cross-references
 
+- [Runtime sourcing and advertised receiver rendezvous](/design/runtime-sourcing/direction0-syn.gpt61sol.md):
+  later operator direction for arbitrary named receivers, registration by dropped
+  declarations, dynamic adapter discovery and optional deployed tooling. Extends
+  this document's open-domain intent while retaining CONFIG publication and
+  distinguishing discovery from default target enrollment; still unimplemented.
 - [CFR native draft2](/design/compfuzor-runtime/effect-draft2.gpt6a.md): execution
   authority, native discovery, mutable init, target-qualified occurrences, and
   history; this proposal is a concrete configuration application of that direction.
