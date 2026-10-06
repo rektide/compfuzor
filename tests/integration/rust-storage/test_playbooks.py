@@ -195,8 +195,16 @@ def test_sweep_default_preview_explicit_apply_missing_root_and_overlap(rendered)
         for profile in ("src", "archive"):
             overlap = run(str(script), profile, "--apply", cwd=ROOT, env=env)
             assert "skipping" in overlap.stdout and len(calls(tmp)) == before
-    # Invalid root is checked even when another sweep holds the lock.
+    # A released lock permits the next preview.
     run(str(script), "src", cwd=ROOT, env=env)
+    assert len(calls(tmp)) == before + 1
+
+    broken = tmp / "broken flock"
+    broken.mkdir()
+    (broken / "flock").write_text('#!/bin/sh\nexit 73\n')
+    (broken / "flock").chmod(0o755)
+    failure = run(str(script), "src", cwd=ROOT, env=env | {"PATH": f"{broken}:/usr/bin:/bin"}, check=False)
+    assert failure.returncode == 73 and "skipping" not in failure.stdout
     assert len(calls(tmp)) == before + 1
 
 

@@ -19,7 +19,12 @@ fi
 lock={{ CARGO_SWEEP_LOCK | quote }}
 mkdir -p -- "$(dirname -- "$lock")"
 exec 9>"$lock"
-if ! flock --nonblock 9; then
+if flock --nonblock 9; then
+    :
+else
+    result=$?
+    # Only flock's conflict status is an expected skip; other failures are errors.
+    if [ "$result" -ne 1 ]; then exit "$result"; fi
     printf 'Another cargo-sweep holds %s; skipping %s. This lock does not coordinate builders.\n' "$lock" "$root"
     exit 0
 fi
