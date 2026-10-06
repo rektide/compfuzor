@@ -60,6 +60,10 @@ keybinding: {command: host|install, target, audience, context,
 The host assembly binding asserts `mode: assemble`; it cannot silently become
 seed/refresh installation. Raw host CLI still defaults to seed. Producer binding
 can assert the declared producer ID; it is not replaced by host-only assembly.
+CONFIG's seam currently admits selection and irrelevant-flag checks; remaining
+pure recipe/strategy/action-specific checks must move into admission before a typed
+plan record is marked fully ready. Native/root/input validation remains inside
+the complete operation where it can observe prerequisites produced by the body.
 
 The action executor now requires physically contained **regular executable files**,
 not merely successful `realpath`. A later directory or non-executable leaf fails
