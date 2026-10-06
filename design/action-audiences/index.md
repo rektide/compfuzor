@@ -2,6 +2,9 @@
 
 ## Implementation checkpoints
 
+- [Domain admission foundations and bridge gate](/design/action-audiences/domain-admission0.gpt61sol.md):
+  committed CONFIG/keybinding admission seams; proposed minimal context mapping and
+  prepared-operation/body-child transport awaiting architectural review.
 - [Verified composition seam](/design/action-audiences/implementation0.gpt61sol.md):
   implemented opt-in `.mjs` families, exact changed paths, Node 20 evidence and
   the still-pending domain/context and material-placement integration.
