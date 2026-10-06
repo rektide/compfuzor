@@ -10,7 +10,13 @@ import {
   type ActionSelection,
   type ActionStep,
 } from "./model.ts";
-import { cleanEnvironment, executablePath, runExecutable } from "./process.ts";
+import {
+  cleanEnvironment,
+  executablePath,
+  runExecutable,
+  watchInvocationSignals,
+  type InvocationSignals,
+} from "./process.ts";
 import {
   admitRequest,
   captureEnvironment,
@@ -40,6 +46,7 @@ type Execution = {
   cwd: string;
   session?: { path: string; data: ActionSession };
   envReady: boolean;
+  interrupted?: () => NodeJS.Signals | undefined;
 };
 let captureSequence = 0;
 
@@ -81,6 +88,7 @@ async function executeSteps(
 ): Promise<ActionOutcome> {
   const { selection, session } = execution;
   for (const step of steps) {
+    if (execution.interrupted?.()) return { code: 1, signal: execution.interrupted() };
     const env: NodeJS.ProcessEnv = {
       ...cleanEnvironment(execution.env),
       DIR: selection.deploymentDir,
@@ -143,16 +151,19 @@ export async function runAction(
   }
   await preflight(loaded, selection);
   let owner: SessionHandle | undefined;
+  let signals: InvocationSignals | undefined;
   let env = cleanEnvironment();
   let cwd = deploymentDir;
   let envReady = false;
   try {
     if (!session && domainsIn(loaded, selection).operations.length) {
+      signals = watchInvocationSignals();
       const prepared = await createSession(
         selection,
         loaded,
         argv,
         resolve(deploymentDir, "bin/compfuzor-runtime.mjs"),
+        () => signals?.signal,
       );
       if (!prepared.handle) return prepared.outcome;
       owner = prepared.handle;
@@ -176,16 +187,19 @@ export async function runAction(
         await rm(output, { force: true });
       }
     }
-    return await executeSteps(selection.family.plans[selection.audience]!, argv, {
+    const outcome = await executeSteps(selection.family.plans[selection.audience]!, argv, {
       selection,
       loaded,
       session,
       env,
       cwd,
       envReady,
+      interrupted: () => signals?.signal,
     });
+    return signals?.signal ? { code: 1, signal: signals.signal } : outcome;
   } finally {
     await owner?.dispose();
+    signals?.stop();
   }
 }
 

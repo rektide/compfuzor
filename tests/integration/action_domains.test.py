@@ -58,6 +58,14 @@ def build_fixture(area: Path):
     body = '''
 printf '%s-body\n' "$COMPFUZOR_ACTION_AUDIENCE" >> "$TRACE"
 export BODY_EXPORT=from-body
+if [ -n "${WAIT_FOR_SIGNAL:-}" ]; then
+  printf '%s\n' "$COMPFUZOR_ACTION_SESSION" > "$SESSION_TRACE"
+  trap 'printf caught > "$SIGNAL_TRACE"; exit 0' TERM
+  sleep 60 &
+  waiting=$!
+  printf 'ready\n'
+  wait "$waiting"
+fi
 mkdir -p "$RECEIVER/niri" "$RECEIVER/umbriel"
 if [ ! -e "$RECEIVER/niri/config.kdl" ]; then printf '// compfuzor-keybindings-begin\n// compfuzor-keybindings-end\n' > "$RECEIVER/niri/config.kdl"; fi
 if [ ! -e "$RECEIVER/umbriel/config.toml" ]; then printf '[include]\nfiles = [\n# compfuzor-keybindings-begin\n# compfuzor-keybindings-end\n]\n' > "$RECEIVER/umbriel/config.toml"; fi
@@ -81,6 +89,7 @@ export COMPFUZOR_CONFIG_DROPINS_STRATEGY=link
             {"name": "install.sh", "content": body},
             {"name": "assemble-user.sh", "content": 'printf "assemble-body\\n" >> "$TRACE"\nexport BODY_EXPORT=assembled-body\nexport XDG_CONFIG_HOME="$WRONG/config"\nexport NIRI_PLACEMENT_ROOT="$WRONG/niri-placement"'},
             {"name": "assemble.sh", "content": 'printf "assemble-system-body\\n" >> "$TRACE"\nexport BODY_EXPORT=assembled-body'},
+            {"name": "inputs-user.sh", "content": 'printf "inputs-body\\n" >> "$TRACE"'},
             {"name": "install-observe-user.sh", "phase": "records", "content": 'printf "ordinary:%s:%s\\n" "$BODY_EXPORT" "${COMPFUZOR_ACTION_SESSION:-none}" >> "$TRACE"'},
         ],
     }
@@ -123,6 +132,10 @@ def test_compiled_domains(area: Path):
     old = (user / "niri/config.kdl").read_bytes()
     invoke(payload / "bin/install-keybindings-niri.mjs", {**env, "COMPFUZOR_KEYBINDINGS_BYPASS": "1"})
     assert (user / "niri/config.kdl").read_bytes() == old and session_dirs() == before
+    start = len(Path(env["TRACE"]).read_text().splitlines())
+    invoke(payload / "bin/install.mjs", {**env, "COMPFUZOR_BODY_BYPASS": "1", "BODY_EXPORT": "preexisting"})
+    assert Path(env["TRACE"]).read_text().splitlines()[start:] == ["ordinary:preexisting:none"]
+    assert session_dirs() == before
     return payload, env, before
 
 
@@ -146,6 +159,74 @@ def test_early_errors(payload: Path, env: dict, before: set[Path]):
     assert trace.read_bytes() == initial and session_dirs() == before
 
 
+def test_session_lifetime(payload: Path, env: dict, before: set[Path]):
+    area = Path(env["TRACE"]).parent
+    session_trace = area / "session-trace"
+    signal_trace = area / "signal-trace"
+    env_trace = Path(env["ENV_TRACE"])
+    sources_before = len(env_trace.read_text().splitlines())
+    process = subprocess.Popen([str(payload / "bin/install.mjs")], cwd=SCRATCH, env={**env, "WAIT_FOR_SIGNAL": "1", "SESSION_TRACE": str(session_trace), "SIGNAL_TRACE": str(signal_trace)}, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        assert process.stdout.readline().strip() == "ready"
+        session = Path(session_trace.read_text().strip())
+        assert session.exists() and session.stat().st_mode & 0o777 == 0o600
+        assert session.parent.stat().st_mode & 0o777 == 0o700
+        assert len(env_trace.read_text().splitlines()) - sources_before == 1  # preparation did not execute bodies or re-source root setup
+        data = json.loads(session.read_text())
+        invoke(payload / "bin/install-system.mjs", {**env, "COMPFUZOR_ACTION_SESSION": str(session)}, expected=2)
+        invoke(payload / "bin/assemble.mjs", {**env, "COMPFUZOR_ACTION_SESSION": str(session)}, expected=2)
+        operation = next(key for key, value in data["operations"].items() if value["step"]["domain"] == "config")
+        invoke(payload / "bin/config-assemble.sh", {**env, "COMPFUZOR_ACTION_SESSION": str(session), "COMPFUZOR_ACTION_OPERATION": operation, "COMPFUZOR_ACTION_OPERATION_MODE": "apply"}, expected=2)
+        with tempfile.TemporaryDirectory(prefix="compfuzor-actions-stale-", dir=SCRATCH) as stale_dir:
+            stale = Path(stale_dir) / "session.json"
+            data["specDigest"] = "stale"
+            stale.write_text(json.dumps(data))
+            stale.chmod(0o600)
+            invoke(payload / "bin/install.mjs", {**env, "COMPFUZOR_ACTION_SESSION": str(stale)}, expected=2)
+        process.send_signal(signal.SIGTERM)
+        process.communicate(timeout=15)
+        assert process.returncode == -signal.SIGTERM and signal_trace.read_text() == "caught"
+        assert not session.parent.exists() and session_dirs() == before
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.communicate()
+    validator = area / "validators/niri"
+    original = validator.read_bytes()
+    validator.write_text("#!/bin/sh\nexit 13\n")
+    validator.chmod(0o755)
+    try:
+        invoke(payload / "bin/install.mjs", env, expected=1)
+        assert session_dirs() == before
+    finally:
+        validator.write_bytes(original)
+
+
+def test_external_producer(host: Path, env: dict, before: set[Path]):
+    area = Path(env["TRACE"]).parent
+    producer = render(area / "producer", {
+        "KEYBINDING_TARGETS": {"niri": {"consumer": {"env": "CONSUMER_PROFILE"}, "context": "desktop", "scope": "user", "action_contexts": {"user": "desktop", "system": "host"}}},
+        "KEYBINDING_ACTIONS": {"external-run": {"exec": ["echo", "external"]}},
+        "KEYBINDINGS": {"external-launch": {"action": "external-run", "keys": ["Mod+E"]}},
+        "BINS": [{"name": "install-user.sh", "content": 'printf "producer-body\\n" >> "$PRODUCER_TRACE"\nexport CONSUMER_PROFILE="$WRONG/not-a-profile.json"\nexport XDG_CONFIG_HOME="$WRONG/config"\nexport NIRI_PLACEMENT_ROOT="$WRONG/producer-placement"'}, {"name": "install.sh", "content": 'printf "system-producer-body\\n" >> "$PRODUCER_TRACE"'}],
+    })
+    prod_env = {**env, "CONSUMER_PROFILE": str(host / "etc/keybinding-niri.json"), "PRODUCER_TRACE": str(area / "producer-trace")}
+    invoke(producer / "bin/install.mjs", prod_env)
+    user = Path(env["XDG_CONFIG_HOME"])
+    membership = json.loads((user / "niri/.keybindings/membership.json").read_text())
+    assert membership["groups"]["action-domain-fixture"]["resources"]
+    assert (user / "niri-placement/external-launch.binding.kdl").is_symlink()
+    assert Path(prod_env["PRODUCER_TRACE"]).read_text().splitlines() == ["producer-body"]
+    system = area / "system"
+    sysenv = {**prod_env, "NIRI_PLACEMENT_ROOT": str(system / "niri-placement"), "NIRI_PLACEMENT_FILE": str(system / "niri-placement/launch.binding.kdl")}
+    invoke(producer / "bin/install-system.mjs", sysenv)
+    assert (system / "niri/.keybindings/membership.json").exists()
+    assert session_dirs() == before and not Path(env["WRONG"]).exists()
+    current = Path(prod_env["PRODUCER_TRACE"]).read_bytes()
+    invoke(producer / "bin/install.mjs", {**prod_env, "CONSUMER_PROFILE": str(host / "etc/keybinding-umbriel.json")}, expected=2)
+    assert Path(prod_env["PRODUCER_TRACE"]).read_bytes() == current and session_dirs() == before
+
+
 if __name__ == "__main__":
     SCRATCH.mkdir(parents=True, exist_ok=True)
     if not (SCRATCH / "README.md").exists():
@@ -153,4 +234,6 @@ if __name__ == "__main__":
     with tempfile.TemporaryDirectory(prefix="typed-", dir=SCRATCH) as tmp:
         payload, env, before = test_compiled_domains(Path(tmp))
         test_early_errors(payload, env, before)
+        test_session_lifetime(payload, env, before)
+        test_external_producer(payload, env, before)
         print("ok: typed CONFIG/keybinding aggregate, named audiences, frozen receivers, exports, bypass and early failure cleanup")

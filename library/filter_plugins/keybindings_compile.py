@@ -205,6 +205,9 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
             else:
                 audience_contexts = {selected_scope: selected_context} if selected_scope in eligible else {}
             descriptor["action_operations"] = []
+            owned_mapping = consumers.get(target, {}).get("action_contexts")
+            if owned_mapping is None and not consumer:
+                owned_mapping = value.get("action_contexts")
             for public_action in public_actions:
                 operation = "install" if installing and public_action == "install" else "host"
                 selected_bindings = audience_contexts
@@ -214,7 +217,7 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
                     common.update({"manifest": posixpath.join(etc, "keybinding-producer.json"), "producer": producer})
                 if public_action == "assemble":
                     common["profile"] = posixpath.join(etc, "keybinding-" + target + ".json")
-                    selected_bindings = bind_action_contexts(profiles[target]["contexts"], consumers[target].get("action_contexts"), "KEYBINDING_CONSUMERS." + target + ".action_contexts", eligible)
+                    selected_bindings = bind_action_contexts(profiles[target]["contexts"], owned_mapping, "KEYBINDING_CONSUMERS." + target + ".action_contexts", eligible)
                 elif profile_path:
                     common["profile"] = profile_path
                 elif profile_selector:
@@ -223,7 +226,7 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
                     "audiences": {audience: {**common, "context": name} for audience, name in selected_bindings.items()}})
             if installing and target in profiles:
                 owned_path = posixpath.join(etc, "keybinding-" + target + ".json")
-                host_bindings = bind_action_contexts(profiles[target]["contexts"], consumers[target].get("action_contexts"), "KEYBINDING_CONSUMERS." + target + ".action_contexts", eligible)
+                host_bindings = bind_action_contexts(profiles[target]["contexts"], owned_mapping, "KEYBINDING_CONSUMERS." + target + ".action_contexts", eligible)
                 distinct = {audience: name for audience, name in host_bindings.items() if profile_path != owned_path or audience_contexts.get(audience) != name}
                 if distinct:
                     descriptor["action_operations"].insert(0, {"action": "install", "subsystem": "keybindings-" + target,

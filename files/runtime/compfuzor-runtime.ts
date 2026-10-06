@@ -114,7 +114,7 @@ async function runDomain(
       const id = process.env.COMPFUZOR_ACTION_OPERATION;
       if (!session || !id || (domain !== "config" && domain !== "keybindings"))
         throw new Error("unrelated prepared domain invocation");
-      return await applyPrepared(session, id, domain, deploymentDir);
+      return await applyPrepared(session, id, domain, deploymentDir, invokedAs);
     }
     if (domain !== "actions") clearProcessMarkers();
     if (domain === "catalog") return await runCatalog(argv, deploymentDir);

@@ -14,6 +14,7 @@ import {
   domainStep,
   fail,
   object,
+  knownKeys,
   parseActionSpec,
   type ActionFamily,
   type ActionOutcome,
@@ -31,6 +32,8 @@ export type SessionOperation = { family: string; step: DomainStep; prepared: Pre
 export type ActionSession = {
   version: 1;
   kind: "action-session";
+  directory: string;
+  ownerPid: number;
   deploymentDir: string;
   specDigest: string;
   rootAction: string;
@@ -96,6 +99,18 @@ async function readPrivate(path: string): Promise<unknown> {
     fail("invalid private action file");
   return JSON.parse(await readFile(path, "utf8"));
 }
+
+/** Transport must remain beneath its live owner, not become an ambient replay capability. */
+async function ownsInvocation(owner: unknown): Promise<boolean> {
+  if (!Number.isSafeInteger(owner) || Number(owner) <= 0) return false;
+  let pid = process.pid;
+  for (let depth = 0; pid > 0 && depth < MAX_OPERATIONS; depth++) {
+    if (pid === owner) return true;
+    const status = await readFile(`/proc/${pid}/status`, "utf8");
+    pid = Number(/^PPid:\s+(\d+)$/m.exec(status)?.[1] ?? 0);
+  }
+  return false;
+}
 export function domainsIn(
   loaded: LoadedSpec,
   selection: ActionSelection,
@@ -140,9 +155,27 @@ export async function readSession(
 ): Promise<ActionSession> {
   if (basename(path) !== "session.json") fail("unknown action session path");
   const raw = object(await readPrivate(path), "action session");
+  knownKeys(
+    raw,
+    [
+      "version",
+      "kind",
+      "directory",
+      "ownerPid",
+      "deploymentDir",
+      "specDigest",
+      "rootAction",
+      "audience",
+      "actions",
+      "operations",
+    ],
+    "action session",
+  );
   if (
     raw.version !== 1 ||
     raw.kind !== "action-session" ||
+    raw.directory !== dirname(path) ||
+    !(await ownsInvocation(raw.ownerPid)) ||
     raw.deploymentDir !== deploymentDir ||
     raw.specDigest !== loaded.digest ||
     !AUDIENCES.includes(raw.audience as Audience) ||
@@ -167,6 +200,7 @@ export async function readSession(
   ) as ActionSession["operations"];
   for (const declared of selected.operations) {
     const entry = object(values[declared.step.id], "prepared operation");
+    knownKeys(entry, ["family", "step", "prepared"], "session operation");
     if (
       entry.family !== declared.family ||
       JSON.stringify(entry.step) !== JSON.stringify(declared.step)
@@ -179,6 +213,8 @@ export async function readSession(
   return {
     version: 1,
     kind: "action-session",
+    directory: dirname(path),
+    ownerPid: raw.ownerPid as number,
     deploymentDir,
     specDigest: loaded.digest,
     rootAction: raw.rootAction,
@@ -206,16 +242,31 @@ export async function captureSetup(
   env: NodeJS.ProcessEnv,
   sourceEnv: boolean,
   cwd: string,
+  useBody = true,
 ): Promise<{ outcome: ActionOutcome; captured?: EnvironmentCapture }> {
-  const path = await executablePath(selection.deploymentDir, "bin/internal/action-environment.sh");
+  const body = useBody
+    ? selection.family.plans[selection.audience]?.find(
+        (step) => step.kind === "exec" && step.children !== undefined,
+      )
+    : undefined;
+  const path = await executablePath(
+    selection.deploymentDir,
+    body?.kind === "exec" ? body.path : "bin/internal/action-environment.sh",
+  );
+  const setupEnv: NodeJS.ProcessEnv = { ...cleanEnvironment(env), DIR: selection.deploymentDir };
+  if (body) {
+    setupEnv.COMPFUZOR_ACTION_PREPARE_ENV = output;
+    if (!sourceEnv) setupEnv.COMPFUZOR_ACTION_ROOT_ENV_READY = selection.family.name;
+  }
   const outcome = await runExecutable(
     path,
-    [sourceEnv ? "1" : "0", cwd, output],
+    body ? [] : [sourceEnv ? "1" : "0", cwd, output],
     selection.deploymentDir,
-    { ...cleanEnvironment(env), DIR: selection.deploymentDir },
+    setupEnv,
   );
   if (outcome.code || outcome.signal) return { outcome };
   const raw = object(await readPrivate(output), "environment capture");
+  knownKeys(raw, ["version", "env", "cwd"], "environment capture");
   const values = object(raw.env, "captured environment");
   if (
     raw.version !== 1 ||
@@ -238,6 +289,7 @@ export async function createSession(
   loaded: LoadedSpec,
   argv: string[],
   runtimePath: string,
+  interrupted: () => NodeJS.Signals | undefined = () => undefined,
 ): Promise<{ handle?: SessionHandle; outcome: ActionOutcome }> {
   const directory = await mkdtemp(resolve(tmpdir(), "compfuzor-actions-"));
   const dispose = async (): Promise<void> => {
@@ -245,6 +297,7 @@ export async function createSession(
   };
   let transferred = false;
   try {
+    if (interrupted()) return { outcome: { code: 1, signal: interrupted() } };
     const sourceEnv = selection.family.setup?.[selection.audience]?.env ?? true;
     const root = await captureSetup(
       selection,
@@ -265,6 +318,7 @@ export async function createSession(
         leaf.env,
         true,
         leaf.cwd,
+        false,
       );
       if (capture.outcome.code || capture.outcome.signal) return { outcome: capture.outcome };
       leaf = capture.captured!;
@@ -273,6 +327,8 @@ export async function createSession(
     const data: ActionSession = {
       version: 1,
       kind: "action-session",
+      directory,
+      ownerPid: process.pid,
       deploymentDir: selection.deploymentDir,
       specDigest: loaded.digest,
       rootAction: selection.family.name,
@@ -281,6 +337,7 @@ export async function createSession(
       operations: Object.create(null) as ActionSession["operations"],
     };
     for (const [index, entry] of graph.operations.entries()) {
+      if (interrupted()) return { outcome: { code: 1, signal: interrupted() } };
       const request = resolve(directory, `request-${index}.json`);
       await writePrivate(request, {
         version: 1,
@@ -314,6 +371,7 @@ export async function createSession(
       data.operations[entry.step.id] = { ...entry, prepared };
     }
     const path = resolve(directory, "session.json");
+    if (interrupted()) return { outcome: { code: 1, signal: interrupted() } };
     await writePrivate(path, data);
     for (const name of [
       "env-0.json",
@@ -341,6 +399,11 @@ export async function admitRequest(
 ): Promise<number> {
   if (!/^request-[0-9]+\.json$/.test(basename(path))) fail("invalid operation request path");
   const raw = object(await readPrivate(path), "operation request");
+  knownKeys(
+    raw,
+    ["version", "kind", "deploymentDir", "specDigest", "family", "audience", "step", "argv"],
+    "operation request",
+  );
   const loaded = await loadActionSpec(deploymentDir);
   if (
     raw.version !== 1 ||
@@ -383,11 +446,14 @@ export async function applyPrepared(
   id: string,
   domain: string,
   deploymentDir: string,
+  invokedAs: string,
 ): Promise<number> {
   const loaded = await loadActionSpec(deploymentDir);
   const session = await readSession(path, deploymentDir, loaded);
   const entry = session.operations[id];
   if (!entry || entry.step.domain !== domain) fail("unknown or unrelated prepared operation");
+  if (invokedAs !== (domain === "config" ? basename(entry.step.envelope) : "keybindings.mjs"))
+    fail("prepared operation invoked through an unrelated domain alias");
   clearProcessMarkers();
   return applyOperation(entry.prepared);
 }

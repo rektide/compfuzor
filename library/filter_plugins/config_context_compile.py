@@ -258,7 +258,8 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
         selected_default = _CANONICAL
     normalized_contexts[_CANONICAL] = _canonical_context(configs)
 
-    action_bindings = bind_action_contexts(normalized_contexts, raw_copy_template_data(action_contexts), "CONFIG_ACTION_CONTEXTS", participating_audiences(audience_policy, _ACTIONS)) if audience_policy is not None else {}
+    public_operations = [action for action in _ACTIONS if action != "status" and (action != "install" or install_owner == "config")]
+    action_bindings = bind_action_contexts(normalized_contexts, raw_copy_template_data(action_contexts), "CONFIG_ACTION_CONTEXTS", participating_audiences(audience_policy, public_operations)) if audience_policy is not None else {}
 
     for action in _ACTIONS:
         command_name = "config-{}.sh".format(action)

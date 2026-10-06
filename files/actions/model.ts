@@ -46,6 +46,14 @@ export function object(value: unknown, label: string): Record<string, unknown> {
     fail(`${label} must be an object`);
   return value as Record<string, unknown>;
 }
+export function knownKeys(
+  value: Record<string, unknown>,
+  keys: readonly string[],
+  label: string,
+): void {
+  const unknown = Object.keys(value).filter((key) => !keys.includes(key));
+  if (unknown.length) fail(`${label} has unknown fields: ${unknown.join(", ")}`);
+}
 export function named(value: unknown, label: string): string {
   if (typeof value !== "string" || !NAME.test(value)) fail(`invalid ${label}`);
   return value;
@@ -62,6 +70,25 @@ export function binPath(value: unknown): string {
 }
 export function domainStep(value: unknown): DomainStep {
   const raw = object(value, "domain step");
+  knownKeys(
+    raw,
+    [
+      "kind",
+      "id",
+      "domain",
+      "operation",
+      "context",
+      "envelope",
+      "spec",
+      "target",
+      "profile",
+      "profileSelector",
+      "mode",
+      "manifest",
+      "producer",
+    ],
+    "domain step",
+  );
   const id = named(raw.id, "operation ID");
   const context = named(raw.context, "operation context");
   const envelope = binPath(raw.envelope);

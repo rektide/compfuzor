@@ -131,7 +131,8 @@ def compile_action_audiences(bins, policy):
                         fail("domain contribution audience must be user/system")
                     label = "operation.{}.{}.{}".format(len(operation_steps) + 1, action, audience)
                     operation_steps[label] = {**definition, "id": label}
-                    normalized.append({"name": label, "action": action, "scope": [audience], "subsystem": contribution.get("subsystem"), "phase": contribution.get("phase", _resolve_phase(item)), "contributors": item.get("contributors", [])})
+                    refs = _arrayitize(item.get("contributors")) + ["subsystem:" + origin for origin in _arrayitize(item.get("origin_subsystems"))]
+                    normalized.append({"name": label, "action": action, "scope": [audience], "subsystem": contribution.get("subsystem"), "phase": contribution.get("phase", _resolve_phase(item)), "contributors": list(dict.fromkeys(refs))})
             continue
         if not isinstance(item, Mapping) or item.get("state") == "absent" or item.get("compose") is False:
             retained.append(item)
@@ -204,8 +205,8 @@ def compile_action_audiences(bins, policy):
                 fail("generated action entry collision: " + generated_name)
             occupied.add(generated_name)
         plans = {}
-        members = [item for item in normalized if item["action"] == action]
-        contributors = _contributors(members + [item for (root_action, _), item in roots.items() if root_action == action])
+        members = [item for item in normalized if item["action"] == action and any(scope in available for scope in item["scope"]) and (name == action or name == action + "-" + str(item.get("subsystem")))]
+        contributors = _contributors(members + [item for (root_action, scope), item in roots.items() if root_action == name and scope in available])
         for audience in available:
             steps = []
             root = roots.get((name, audience))

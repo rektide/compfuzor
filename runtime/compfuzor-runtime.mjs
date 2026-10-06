@@ -15945,6 +15945,10 @@ function object(value, label) {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) fail$1(`${label} must be an object`);
 	return value;
 }
+function knownKeys(value, keys, label) {
+	const unknown = Object.keys(value).filter((key) => !keys.includes(key));
+	if (unknown.length) fail$1(`${label} has unknown fields: ${unknown.join(", ")}`);
+}
 function named(value, label) {
 	if (typeof value !== "string" || !NAME.test(value)) fail$1(`invalid ${label}`);
 	return value;
@@ -15955,6 +15959,21 @@ function binPath(value) {
 }
 function domainStep(value) {
 	const raw = object(value, "domain step");
+	knownKeys(raw, [
+		"kind",
+		"id",
+		"domain",
+		"operation",
+		"context",
+		"envelope",
+		"spec",
+		"target",
+		"profile",
+		"profileSelector",
+		"mode",
+		"manifest",
+		"producer"
+	], "domain step");
 	const id = named(raw.id, "operation ID");
 	const context = named(raw.context, "operation context");
 	const envelope = binPath(raw.envelope);
@@ -16062,6 +16081,7 @@ function selectAction(spec, invokedPath, physicalEntry) {
 //#region files/actions/process.ts
 /** Process boundary: physical admission, lexical execution and explicit marker inheritance. */
 const MARKERS = [
+	"COMPFUZOR_ACTION_PREPARE_ENV",
 	"COMPFUZOR_ACTION_SESSION",
 	"COMPFUZOR_ACTION_OPERATION",
 	"COMPFUZOR_ACTION_OPERATION_MODE",
@@ -16075,6 +16095,25 @@ function cleanEnvironment(env = process.env) {
 }
 function clearProcessMarkers() {
 	for (const key of MARKERS) delete process.env[key];
+}
+/** Keep cleanup possible between child processes too; active children still receive forwarding. */
+function watchInvocationSignals() {
+	const listeners = /* @__PURE__ */ new Map();
+	const state = { stop: () => {
+		for (const [signal, listener] of listeners) process.off(signal, listener);
+	} };
+	for (const signal of [
+		"SIGINT",
+		"SIGTERM",
+		"SIGHUP"
+	]) {
+		const listener = () => {
+			state.signal ??= signal;
+		};
+		listeners.set(signal, listener);
+		process.on(signal, listener);
+	}
+	return state;
 }
 async function executablePath(deploymentDir, configured) {
 	const lexical = resolve(deploymentDir, configured);
@@ -16236,6 +16275,17 @@ async function readPrivate(path) {
 	if (!entry.isFile() || entry.uid !== process.geteuid?.() || entry.mode & 63 || entry.size > MAX_BYTES) fail$1("invalid private action file");
 	return JSON.parse(await readFile(path, "utf8"));
 }
+/** Transport must remain beneath its live owner, not become an ambient replay capability. */
+async function ownsInvocation(owner) {
+	if (!Number.isSafeInteger(owner) || Number(owner) <= 0) return false;
+	let pid = process.pid;
+	for (let depth = 0; pid > 0 && depth < MAX_OPERATIONS; depth++) {
+		if (pid === owner) return true;
+		const status = await readFile(`/proc/${pid}/status`, "utf8");
+		pid = Number(/^PPid:\s+(\d+)$/m.exec(status)?.[1] ?? 0);
+	}
+	return false;
+}
 function domainsIn(loaded, selection) {
 	const actions = /* @__PURE__ */ new Set();
 	const operations = /* @__PURE__ */ new Map();
@@ -16269,7 +16319,19 @@ function domainsIn(loaded, selection) {
 async function readSession(path, deploymentDir, loaded) {
 	if (basename(path) !== "session.json") fail$1("unknown action session path");
 	const raw = object(await readPrivate(path), "action session");
-	if (raw.version !== 1 || raw.kind !== "action-session" || raw.deploymentDir !== deploymentDir || raw.specDigest !== loaded.digest || !AUDIENCES.includes(raw.audience) || typeof raw.rootAction !== "string" || !Array.isArray(raw.actions)) fail$1("stale or foreign action session");
+	knownKeys(raw, [
+		"version",
+		"kind",
+		"directory",
+		"ownerPid",
+		"deploymentDir",
+		"specDigest",
+		"rootAction",
+		"audience",
+		"actions",
+		"operations"
+	], "action session");
+	if (raw.version !== 1 || raw.kind !== "action-session" || raw.directory !== dirname(path) || !await ownsInvocation(raw.ownerPid) || raw.deploymentDir !== deploymentDir || raw.specDigest !== loaded.digest || !AUDIENCES.includes(raw.audience) || typeof raw.rootAction !== "string" || !Array.isArray(raw.actions)) fail$1("stale or foreign action session");
 	const root = loaded.spec.actions[raw.rootAction];
 	if (!root?.plans[raw.audience]) fail$1("unavailable session root action");
 	const selected = domainsIn(loaded, {
@@ -16283,6 +16345,11 @@ async function readSession(path, deploymentDir, loaded) {
 	const operations = Object.create(null);
 	for (const declared of selected.operations) {
 		const entry = object(values[declared.step.id], "prepared operation");
+		knownKeys(entry, [
+			"family",
+			"step",
+			"prepared"
+		], "session operation");
 		if (entry.family !== declared.family || JSON.stringify(entry.step) !== JSON.stringify(declared.step)) fail$1("session operation declaration mismatch");
 		const prepared = object(entry.prepared, "prepared state");
 		verifyPreparedOperation(prepared, declared.step, raw.audience);
@@ -16294,6 +16361,8 @@ async function readSession(path, deploymentDir, loaded) {
 	return {
 		version: 1,
 		kind: "action-session",
+		directory: dirname(path),
+		ownerPid: raw.ownerPid,
 		deploymentDir,
 		specDigest: loaded.digest,
 		rootAction: raw.rootAction,
@@ -16316,17 +16385,29 @@ async function captureEnvironment(output) {
 	});
 	return 0;
 }
-async function captureSetup(selection, output, env, sourceEnv, cwd) {
-	const outcome = await runExecutable(await executablePath(selection.deploymentDir, "bin/internal/action-environment.sh"), [
+async function captureSetup(selection, output, env, sourceEnv, cwd, useBody = true) {
+	const body = useBody ? selection.family.plans[selection.audience]?.find((step) => step.kind === "exec" && step.children !== void 0) : void 0;
+	const path = await executablePath(selection.deploymentDir, body?.kind === "exec" ? body.path : "bin/internal/action-environment.sh");
+	const setupEnv = {
+		...cleanEnvironment(env),
+		DIR: selection.deploymentDir
+	};
+	if (body) {
+		setupEnv.COMPFUZOR_ACTION_PREPARE_ENV = output;
+		if (!sourceEnv) setupEnv.COMPFUZOR_ACTION_ROOT_ENV_READY = selection.family.name;
+	}
+	const outcome = await runExecutable(path, body ? [] : [
 		sourceEnv ? "1" : "0",
 		cwd,
 		output
-	], selection.deploymentDir, {
-		...cleanEnvironment(env),
-		DIR: selection.deploymentDir
-	});
+	], selection.deploymentDir, setupEnv);
 	if (outcome.code || outcome.signal) return { outcome };
 	const raw = object(await readPrivate(output), "environment capture");
+	knownKeys(raw, [
+		"version",
+		"env",
+		"cwd"
+	], "environment capture");
 	const values = object(raw.env, "captured environment");
 	if (raw.version !== 1 || typeof raw.cwd !== "string" || Object.values(values).some((value) => typeof value !== "string")) fail$1("invalid environment capture");
 	return {
@@ -16341,7 +16422,7 @@ async function captureSetup(selection, output, env, sourceEnv, cwd) {
 		}
 	};
 }
-async function createSession(selection, loaded, argv, runtimePath) {
+async function createSession(selection, loaded, argv, runtimePath, interrupted = () => void 0) {
 	const directory = await mkdtemp(resolve(tmpdir(), "compfuzor-actions-"));
 	const dispose = async () => {
 		await rm(directory, {
@@ -16351,12 +16432,16 @@ async function createSession(selection, loaded, argv, runtimePath) {
 	};
 	let transferred = false;
 	try {
+		if (interrupted()) return { outcome: {
+			code: 1,
+			signal: interrupted()
+		} };
 		const sourceEnv = selection.family.setup?.[selection.audience]?.env ?? true;
 		const root = await captureSetup(selection, resolve(directory, "env-0.json"), process.env, sourceEnv, setupCwd(selection, process.env));
 		if (root.outcome.code || root.outcome.signal) return { outcome: root.outcome };
 		let leaf = root.captured;
 		if (!sourceEnv && domainsIn(loaded, selection).operations.some((entry) => entry.step.domain === "keybindings")) {
-			const capture = await captureSetup(selection, resolve(directory, "env-1.json"), leaf.env, true, leaf.cwd);
+			const capture = await captureSetup(selection, resolve(directory, "env-1.json"), leaf.env, true, leaf.cwd, false);
 			if (capture.outcome.code || capture.outcome.signal) return { outcome: capture.outcome };
 			leaf = capture.captured;
 		}
@@ -16364,6 +16449,8 @@ async function createSession(selection, loaded, argv, runtimePath) {
 		const data = {
 			version: 1,
 			kind: "action-session",
+			directory,
+			ownerPid: process.pid,
 			deploymentDir: selection.deploymentDir,
 			specDigest: loaded.digest,
 			rootAction: selection.family.name,
@@ -16372,6 +16459,10 @@ async function createSession(selection, loaded, argv, runtimePath) {
 			operations: Object.create(null)
 		};
 		for (const [index, entry] of graph.operations.entries()) {
+			if (interrupted()) return { outcome: {
+				code: 1,
+				signal: interrupted()
+			} };
 			const request = resolve(directory, `request-${index}.json`);
 			await writePrivate(request, {
 				version: 1,
@@ -16404,6 +16495,10 @@ async function createSession(selection, loaded, argv, runtimePath) {
 			};
 		}
 		const path = resolve(directory, "session.json");
+		if (interrupted()) return { outcome: {
+			code: 1,
+			signal: interrupted()
+		} };
 		await writePrivate(path, data);
 		for (const name of [
 			"env-0.json",
@@ -16428,6 +16523,16 @@ async function createSession(selection, loaded, argv, runtimePath) {
 async function admitRequest(path, deploymentDir, runtimePath) {
 	if (!/^request-[0-9]+\.json$/.test(basename(path))) fail$1("invalid operation request path");
 	const raw = object(await readPrivate(path), "operation request");
+	knownKeys(raw, [
+		"version",
+		"kind",
+		"deploymentDir",
+		"specDigest",
+		"family",
+		"audience",
+		"step",
+		"argv"
+	], "operation request");
 	const loaded = await loadActionSpec(deploymentDir);
 	if (raw.version !== 1 || raw.kind !== "operation-request" || raw.deploymentDir !== deploymentDir || raw.specDigest !== loaded.digest || !AUDIENCES.includes(raw.audience) || typeof raw.family !== "string" || !Array.isArray(raw.argv) || raw.argv.some((arg) => typeof arg !== "string")) fail$1("stale or foreign operation request");
 	const step = domainStep(raw.step);
@@ -16442,9 +16547,10 @@ async function admitRequest(path, deploymentDir, runtimePath) {
 	await writePrivate(path + ".prepared", prepared);
 	return 0;
 }
-async function applyPrepared(path, id, domain, deploymentDir) {
+async function applyPrepared(path, id, domain, deploymentDir, invokedAs) {
 	const entry = (await readSession(path, deploymentDir, await loadActionSpec(deploymentDir))).operations[id];
 	if (!entry || entry.step.domain !== domain) fail$1("unknown or unrelated prepared operation");
+	if (invokedAs !== (domain === "config" ? basename(entry.step.envelope) : "keybindings.mjs")) fail$1("prepared operation invoked through an unrelated domain alias");
 	clearProcessMarkers();
 	return applyOperation(entry.prepared);
 }
@@ -16477,6 +16583,10 @@ async function preflight(loaded, selection, visiting = /* @__PURE__ */ new Set()
 async function executeSteps(steps, argv, execution) {
 	const { selection, session } = execution;
 	for (const step of steps) {
+		if (execution.interrupted?.()) return {
+			code: 1,
+			signal: execution.interrupted()
+		};
 		const env = {
 			...cleanEnvironment(execution.env),
 			DIR: selection.deploymentDir,
@@ -16530,12 +16640,14 @@ async function runAction(argv, invokedPath, entryUrl) {
 	}
 	await preflight(loaded, selection);
 	let owner;
+	let signals;
 	let env = cleanEnvironment();
 	let cwd = deploymentDir;
 	let envReady = false;
 	try {
 		if (!session && domainsIn(loaded, selection).operations.length) {
-			const prepared = await createSession(selection, loaded, argv, resolve(deploymentDir, "bin/compfuzor-runtime.mjs"));
+			signals = watchInvocationSignals();
+			const prepared = await createSession(selection, loaded, argv, resolve(deploymentDir, "bin/compfuzor-runtime.mjs"), () => signals?.signal);
 			if (!prepared.handle) return prepared.outcome;
 			owner = prepared.handle;
 			session = {
@@ -16563,16 +16675,22 @@ async function runAction(argv, invokedPath, entryUrl) {
 				await rm(output, { force: true });
 			}
 		}
-		return await executeSteps(selection.family.plans[selection.audience], argv, {
+		const outcome = await executeSteps(selection.family.plans[selection.audience], argv, {
 			selection,
 			loaded,
 			session,
 			env,
 			cwd,
-			envReady
+			envReady,
+			interrupted: () => signals?.signal
 		});
+		return signals?.signal ? {
+			code: 1,
+			signal: signals.signal
+		} : outcome;
 	} finally {
 		await owner?.dispose();
+		signals?.stop();
 	}
 }
 /** Private bridge admission and single child runner; no public operation/context wrappers. */
@@ -16695,7 +16813,7 @@ async function runDomain(domain, argv, invokedAs, deploymentDir) {
 			const session = process.env.COMPFUZOR_ACTION_SESSION;
 			const id = process.env.COMPFUZOR_ACTION_OPERATION;
 			if (!session || !id || domain !== "config" && domain !== "keybindings") throw new Error("unrelated prepared domain invocation");
-			return await applyPrepared(session, id, domain, deploymentDir);
+			return await applyPrepared(session, id, domain, deploymentDir, invokedAs);
 		}
 		if (domain !== "actions") clearProcessMarkers();
 		if (domain === "catalog") return await main$6(argv, deploymentDir);

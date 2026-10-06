@@ -30,19 +30,29 @@ export DIR="$(dirname "$(dirname "$_cf_script")")"
 unset _cf_script
 {% endif %}
 {% if item.action_body is defined %}
+readonly _cf_action_deployment="$DIR"
 # Internal authored body bridge: the current spec must still declare this path.
+if [ -z "${COMPFUZOR_ACTION_PREPARE_ENV:-}" ]; then
 if [ -z "${COMPFUZOR_ACTION_SESSION:-}" ] && [ "${COMPFUZOR_ACTION_BODY:-}" != '{{ item.action_body.path }}' ]; then
   exec "$DIR/bin/{{ item.action_body.name }}-{{ item.action_body.audience }}.mjs" "$@"
 fi
 "$DIR/bin/compfuzor-runtime.mjs" actions guard '{{ item.action_body.name }}' '{{ item.action_body.audience }}' '{{ item.action_body.path }}' || exit "$?"
+fi
 {% endif %}
 {% for _h in _helpers %}
+{% if item.action_body is defined and _h != 'env' %}
+if [ -z "${COMPFUZOR_ACTION_PREPARE_ENV:-}" ]; then
+{% endif %}
 {% if _h == 'env' and item.action_body is defined %}
 if [ "${COMPFUZOR_ACTION_ROOT_ENV_READY:-}" != '{{ item.action_body.name }}' ]; then
 {% endif %}
 {{ _h | helper_comment }}
 {% include "_helpers/" ~ _h %}
+
 {% if _h == 'env' and item.action_body is defined %}
+fi
+{% endif %}
+{% if item.action_body is defined and _h != 'env' %}
 fi
 {% endif %}
 
@@ -55,6 +65,9 @@ fi
 export {{var}}="{{ '${' }}{{ var }}-{{ lookup('vars', var) }}{{ '}'}}"
 {% endfor %}
 {% if 'env' in _helpers %}
+{% if item.action_body is defined %}
+export DIR="$_cf_action_deployment"
+{% endif %}
 {% if item.basedir|default(True) == True %}
 cd "${DIR}"
 {% elif item.basedir|default(True) == False %}
@@ -65,6 +78,12 @@ cd {{DIR}}/{{item.basedir}}
 {% endif %}
 {% endif %}
 
+{% endif %}
+{% if item.action_body is defined %}
+if [ -n "${COMPFUZOR_ACTION_PREPARE_ENV:-}" ]; then
+  export DIR="$_cf_action_deployment"
+  exec "$DIR/bin/compfuzor-runtime.mjs" actions capture-env "$COMPFUZOR_ACTION_PREPARE_ENV"
+fi
 {% endif %}
 {% if _is_compositor %}
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
@@ -116,6 +135,7 @@ fi
 {% if _cf_run_all|length > 0 %}
 {% if item.action_body is defined %}
 if [ -n "${COMPFUZOR_ACTION_SESSION:-}" ]; then
+  export DIR="$_cf_action_deployment"
   "$DIR/bin/compfuzor-runtime.mjs" actions children '{{ item.action_body.name }}' '{{ item.action_body.audience }}' '{{ item.action_body.path }}' "$@" || exit "$?"
 else
 {% endif %}

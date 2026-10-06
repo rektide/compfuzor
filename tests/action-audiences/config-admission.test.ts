@@ -115,3 +115,31 @@ test("admitted execution reuses its loaded spec and selected context rather than
   expect(await readFile(join(root, "desktop/receiver.txt"), "utf8")).toBe("canonical output\n");
   await expect(readFile(join(root, "host/receiver.txt"))).rejects.toMatchObject({ code: "ENOENT" });
 });
+
+test("general CONFIG admission freezes receiver selectors and strategy before body env changes", async () => {
+  const { root, options, spec, path } = await fixture();
+  spec.contexts!.desktop.root = { env: "TEST_CONFIG_RECEIVER" };
+  await writeFile(path, JSON.stringify(spec));
+  vi.stubEnv("TEST_CONFIG_RECEIVER", join(root, "before"));
+  vi.stubEnv("COMPFUZOR_CONFIG_PUBLISH_STRATEGY", "copy");
+  const parsed = options();
+  parsed.strategy = undefined;
+  const admitted = await admitConfigCommand(parsed, {
+    action: "publish",
+    audience: "user",
+    context: "desktop",
+  });
+  vi.stubEnv("TEST_CONFIG_RECEIVER", join(root, "after"));
+  vi.stubEnv("COMPFUZOR_CONFIG_PUBLISH_STRATEGY", "link");
+  expect(await runAdmittedConfigCommand(admitted)).toBe(0);
+  expect(await readFile(join(root, "before/receiver.txt"), "utf8")).toBe("canonical output\n");
+  await expect(readFile(join(root, "after/receiver.txt"))).rejects.toMatchObject({
+    code: "ENOENT",
+  });
+  const malformed = options(["--action", "inputs"]);
+  malformed.strategy = undefined;
+  malformed.args = ["put", "receiver/0"];
+  await expect(
+    admitConfigCommand(malformed, { action: "inputs", audience: "user", context: "desktop" }),
+  ).rejects.toThrow();
+});

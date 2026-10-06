@@ -5,6 +5,7 @@ import { isAbsolute, relative, resolve, sep } from "node:path";
 import { fail, type ActionOutcome } from "./model.ts";
 
 export const MARKERS: readonly string[] = [
+  "COMPFUZOR_ACTION_PREPARE_ENV",
   "COMPFUZOR_ACTION_SESSION",
   "COMPFUZOR_ACTION_OPERATION",
   "COMPFUZOR_ACTION_OPERATION_MODE",
@@ -18,6 +19,24 @@ export function cleanEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.P
 }
 export function clearProcessMarkers(): void {
   for (const key of MARKERS) delete process.env[key];
+}
+export type InvocationSignals = { signal?: NodeJS.Signals; stop: () => void };
+/** Keep cleanup possible between child processes too; active children still receive forwarding. */
+export function watchInvocationSignals(): InvocationSignals {
+  const listeners = new Map<NodeJS.Signals, () => void>();
+  const state: InvocationSignals = {
+    stop: () => {
+      for (const [signal, listener] of listeners) process.off(signal, listener);
+    },
+  };
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+    const listener = (): void => {
+      state.signal ??= signal;
+    };
+    listeners.set(signal, listener);
+    process.on(signal, listener);
+  }
+  return state;
 }
 export async function executablePath(deploymentDir: string, configured: string): Promise<string> {
   const lexical = resolve(deploymentDir, configured);
