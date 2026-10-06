@@ -84,25 +84,25 @@ Run from the bundle root (the directory containing `overrides.config`). Paths be
 
 ```sh
 # Refresh both suites. Requires Node.js, xz, dpkg, ar, gpgv and a trusted Debian keyring.
-node ./debian/retrieve.ts fetch --suite both \
+./debian/retrieve.ts fetch --suite both \
   --cache-dir "$HOME/.cache/debplus-debian" --output-dir ./debian-latest
 
 # Select/pin metadata without downloading the headers package.
-node ./debian/retrieve.ts fetch --inspect-only --suite both \
+./debian/retrieve.ts fetch --inspect-only --suite both \
   --cache-dir "$HOME/.cache/debplus-debian" --output-dir ./debian-inspected
 
 # Replay existing receipts with exclusively pinned cached bytes, including signatures.
-node ./debian/retrieve.ts fetch --offline --suite both \
+./debian/retrieve.ts fetch --offline --suite both \
   --cache-dir "$HOME/.cache/debplus-debian" --output-dir ./debian-latest
 
 # Declaration-only audit: no make invocation, no source required.
-node ./debian/retrieve.ts diff \
+./debian/retrieve.ts diff \
   --debian-config ./debian-latest/unstable/config-7.2.8-1-amd64.xz \
   --output-dir ./debian-policy-audit
 
 # Optional same-target upstream -> projected Debian -> projected policy evaluation.
 # --work-dir MUST be new/empty and outside --kernel-tree.
-node ./debian/retrieve.ts diff \
+./debian/retrieve.ts diff \
   --debian-config ./debian-latest/unstable/config-7.2.8-1-amd64.xz \
   --kernel-tree /path/to/user-managed/clean-linux-export \
   --kernel-revision 551c722f40809618230001baccf219193e22fc5a \
@@ -118,7 +118,7 @@ The default trust chain requires `gpgv` and `/usr/share/keyrings/debian-archive-
 ## Checks and references
 
 ```sh
-node ./debian/test-retrieve.ts
+./debian/test-retrieve.ts
 ```
 
 Twelve focused tests cover folded Debian control fields, exact dependency selection, Debian version ordering, cloud/RT exclusion, missing suite packages, broken dependencies, checksum failure, release-index parsing, absent-versus-disabled/metadata semantics, inherited-versus-declared intent, derived debug-info intent, ordered duplicate-free policy merging, and Git provenance. The latter creates a real temporary parent repository and verifies that a nested plain export reports no HEAD while the actual toplevel and its physical symlink alias do. Both real suite retrieval and offline pinned replay passed. An intentionally corrupted pinned package cache was rejected with a SHA256 mismatch before extraction; no config was emitted. The refreshed clean-source projected policy audit fulfilled every declared symbol and every required Rust/debug/QR expectation; Debian normalization reported one expected upstream boolification (`ANDROID_BINDER_IPC=m` no longer valid).

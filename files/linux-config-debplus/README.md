@@ -102,7 +102,7 @@ Debian delta. It does not automatically replace the saved legacy-seed config.
 From this bundle's root, refresh the suites into a separate output directory:
 
 ```sh
-node ./debian/retrieve.ts fetch --suite both \
+./debian/retrieve.ts fetch --suite both \
   --cache-dir "$HOME/.cache/debplus-debian" --output-dir ./debian-latest
 ```
 
@@ -135,7 +135,8 @@ in the 7.1 audit.
 ## Maintenance tools
 
 The maintenance tools travel with the bundle as TypeScript and run directly
-under Node (`node <tool>.ts`, no build or transpilation step). They depend
+executable directly (`./<tool>.ts` via its Node shebang; `node <tool>.ts`
+works identically). No build or transpilation step. They depend
 only on the Node standard library plus system binaries — `xz` for compressed
 artifacts, `dpkg` for Debian version ordering, `ar`/`tar` for package
 extraction, `gpgv` for InRelease signatures — and work from a repository
@@ -151,7 +152,7 @@ the symbols declared in a policy fragment, and `--quiet` prints only the
 count. The exit status is 0 whether or not symbols differ:
 
 ```sh
-node ./tools/diff-configs.ts --keys-from overrides.config \
+./tools/diff-configs.ts --keys-from overrides.config \
   baselines/7.3/config-upstream-defconfig.xz config-debian-plus.xz
 ```
 
@@ -163,7 +164,7 @@ automatic test run; from a deployed copy without the playbook it skips the
 declaration checks with a note:
 
 ```sh
-node tests/bundle/verify.ts --stage .test-agent/linux-debplus/stage
+./tests/bundle/verify.ts --stage .test-agent/linux-debplus/stage
 ```
 
 [tests/tools/run.ts](tests/tools/run.ts) exercises the diff tool against the
@@ -171,7 +172,7 @@ durable in-bundle fixtures, including the preserved 22-symbol 7.1 state
 between the exact running configuration and the saved seed:
 
 ```sh
-node tests/tools/run.ts
+./tests/tools/run.ts
 ```
 
 The full 2026-10-01 session verification transcript (render logs, audit runs,

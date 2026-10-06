@@ -78,7 +78,8 @@ function declaredSymbols(text: string): Set<string> {
   return found;
 }
 
-function runTests(scratch: string): void {
+function runTests(scratch: string): string[] {
+  const checks: string[] = [];
   // The preserved 22-state shape, metadata included (recorded count).
   const included = runTool(RUNNING, SEED_ARCHIVE, "--include-metadata");
   writeFileSync(join(scratch, "running-vs-seed-22.txt"), `${included.join("\n")}\n`);
@@ -86,6 +87,7 @@ function runTests(scratch: string): void {
   assert.deepEqual(symbols(included), PRESERVED_22,
     [...new Set([...symbols(included), ...PRESERVED_22])].filter(
       (symbol) => symbols(included).has(symbol) !== PRESERVED_22.has(symbol)).sort());
+  checks.push(`ok   running-vs-seed: 22 preserved states with metadata`);
 
   // Default output excludes toolchain metadata symbols; exactly the
   // 19 non-metadata states of the same preserved shape remain.
@@ -94,6 +96,7 @@ function runTests(scratch: string): void {
   assert.equal(standard.length, 19, `expected 19 differences, got ${standard.length}`);
   const expectedDefault = new Set([...PRESERVED_22].filter((symbol) => !METADATA_SYMBOLS.has(symbol)));
   assert.deepEqual(symbols(standard), expectedDefault);
+  checks.push(`ok   running-vs-seed: 19 with toolchain metadata excluded`);
 
   // --keys-from restricts the comparison to symbols declared in the
   // fragment; the defconfig->current pair then shows only declared policy.
@@ -113,6 +116,7 @@ function runTests(scratch: string): void {
   for (const [symbol, expected] of expectations) {
     assert.deepEqual(changes.get(symbol), expected, `${symbol}: ${JSON.stringify(changes.get(symbol))}`);
   }
+  checks.push(`ok   keys-from-overrides: ${fragment.length} declared-policy differences, anchors verified`);
 
   // The full defconfig->current keymap stays pinned at the 7461 differing
   // entries recorded in baselines/7.3/README.md (the recorded audit counts
@@ -133,6 +137,7 @@ function runTests(scratch: string): void {
   for (const [symbol, expected] of fullExpectations) {
     assert.deepEqual(fullChanges.get(symbol), expected, `${symbol}: ${JSON.stringify(fullChanges.get(symbol))}`);
   }
+  checks.push(`ok   defconfig-vs-current: 7461 entries, spot anchors verified`);
 
   // Mixed input: the seed as decompressed plain text must yield the
   // identical comparison to its .xz container.
@@ -141,6 +146,8 @@ function runTests(scratch: string): void {
   const mixed = runTool(RUNNING, plain, "--include-metadata");
   writeFileSync(join(scratch, "running-vs-seed-plain.txt"), `${mixed.join("\n")}\n`);
   assert.deepEqual(mixed, included, "plain-text input changed the comparison");
+  checks.push("ok   mixed xz/plain inputs: identical comparison");
+  return checks;
 }
 
 function xzDecompress(data: Buffer): Buffer {
@@ -288,13 +295,16 @@ function main(argv: string[]): void {
   }
   const scratch = resolve(scratchDir ?? join(process.cwd(), ".test-agent/linux-debplus-tools"));
   mkdirSync(scratch, { recursive: true });
+  let checks: string[];
   try {
-    runTests(scratch);
+    checks = runTests(scratch);
   } catch (error) {
     process.stderr.write(`results kept for diagnosis: ${scratch}\n`);
     throw error;
   }
   rmSync(scratch, { recursive: true, force: true });
+  for (const check of checks) process.stdout.write(`${check}\n`);
+  process.stdout.write("RESULT: all fixture checks pass\n");
 }
 
 // Run only when executed directly. The realpath comparison resolves symlinks
