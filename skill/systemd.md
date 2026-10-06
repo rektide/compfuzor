@@ -309,10 +309,10 @@ SYSTEMD_ENV:
   the D-Bus activation environment so graphical apps inherit it).
 - **stop** — `systemctl [--user] unset-environment VAR ...`.
 
-Consumers then read it via `systemctl [--user] show-environment` (the path
-`ssh-agent.srv.pb` uses). This
+Consumers then read it via `systemctl [--user] show-environment`. This
 generalizes the ad-hoc `ExecStartPost` patterns previously hand-written in
-`ssh-agent.srv.pb` and `mise.opt.pb`.
+`ssh-agent.srv.pb` (overhauled 2026-10-06 into [`ssh-agent.opt.pb`](../ssh-agent.opt.pb),
+which no longer hosts a unit) and `mise.opt.pb`.
 
 > **Scope semantics.** `SYSTEMD_ENV` is *manager-wide* publishing. For vars
 > that should only be in the service's *own* environment, use `ENV` instead

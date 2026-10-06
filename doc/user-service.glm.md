@@ -76,19 +76,20 @@ BINS:
       systemctl --user enable --now <service>
 ```
 
-### Example: [`ssh-agent.srv.pb`](../ssh-agent.srv.pb)
+### Example: [`ssh-agent.opt.pb`](../ssh-agent.opt.pb)
 
 ```yaml
 BINS:
   - name: install-user.sh
     content: |
-      mkdir -p ~/.config/systemd/user
-      ln -sf ${DIR}/etc/ssh-agent.service ~/.config/systemd/user/
-      systemctl --user daemon-reload
-      systemctl --user enable --now ssh-agent
+      "$command" -n "${NAME:-{{NAME}}}" -C true -i "{{DIR}}/etc/ssh-agent-env.zsh" -o "${HOME}/.zshenv"
+      systemctl --user mask ssh-agent.socket ssh-agent.service 2>/dev/null || true
 ```
 
-SSH agent uses a custom script because it also needs to manage environment variables and integrate with the shell via `~/.zshrc`.
+Overhauled 2026-10-06 from the old self-hosted-unit form (`ssh-agent.srv.pb`,
+which ran its own `ssh-agent.service` and enabled it here): the distro now
+ships the units, so the playbook's custom script instead owns consumption
+policy — block-in-file shell wiring and masking the losing agent channel.
 
 ### Example: [`pw-loopback.srv.pb`](../pw-loopback.srv.pb)
 
@@ -127,14 +128,14 @@ SYSTEMD_INSTALL:
 
 Wob (Wayland Overlay Bar) requires a graphical session, so it uses `graphical-session.target`.
 
-### Example: [`ssh-agent.srv.pb`](../ssh-agent.srv.pb)
+### Example: [`tmux.srv.pb`](../tmux.srv.pb)
 
 ```yaml
-[Install]
-WantedBy: default.target
+SYSTEMD_INSTALLS:
+  WantedBy: default.target
 ```
 
-SSH agent uses `default.target` since it should be available throughout the user session.
+tmux server uses `default.target` since it should be available throughout the user session. (The former example here, `ssh-agent.srv.pb`, no longer hosts a unit — see [`ssh-agent.opt.pb`](../ssh-agent.opt.pb).)
 
 ---
 
