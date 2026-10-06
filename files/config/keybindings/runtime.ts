@@ -19,13 +19,134 @@ import { withInputBatch, type InputRegistration } from "../registration.ts";
 import { resolvePathSelector } from "../context.ts";
 import {
   assembleHost,
+  bindProfile,
   defaultProfile,
   installProducer,
   loadProfile,
   toggleGroup,
+  validateProducerManifest,
+  type BoundProfile,
   type HostOptions,
   type ProducerManifest,
 } from "./membership.ts";
+import type { ConfigScope } from "../context.ts";
+import type { Target } from "./model.ts";
+
+export type KeybindingHostCommand = "install" | "host" | "enable" | "disable";
+export type KeybindingRuntimeDefaults = {
+  runner?: string;
+  validatorCommand: string[];
+};
+export type KeybindingActionBinding = {
+  command: "install" | "host";
+  target: Target;
+  audience: ConfigScope;
+  context: string;
+  /** A host assembly plan can assert assemble rather than accept install delivery modes. */
+  mode?: "assemble";
+  producer?: string;
+};
+export type AdmittedKeybindingCommand = {
+  command: KeybindingHostCommand;
+  options: HostOptions;
+  bound: BoundProfile;
+  manifest?: ProducerManifest;
+  group?: string;
+};
+
+/** Load and bind the effective profile/context without membership, registration or publication. */
+export async function admitKeybindingCommand(
+  command: KeybindingHostCommand,
+  args: string[],
+  defaults: KeybindingRuntimeDefaults,
+  binding?: KeybindingActionBinding,
+): Promise<AdmittedKeybindingCommand> {
+  const { values } = parseArgs({
+    args,
+    strict: true,
+    allowPositionals: false,
+    options: {
+      manifest: { type: "string" },
+      profile: { type: "string" },
+      "profile-selector": { type: "string" },
+      target: { type: "string", ...(binding ? { default: binding.target } : {}) },
+      context: { type: "string", default: binding?.context ?? "user" },
+      scope: { type: "string", default: binding?.audience ?? "user" },
+      group: { type: "string" },
+      mode: { type: "string" },
+      check: { type: "boolean" },
+      runner: { type: "string" },
+    },
+  });
+  if (values.target !== "niri" && values.target !== "umbriel")
+    throw new Error("explicit --target niri|umbriel required");
+  if (values.scope !== "user" && values.scope !== "system")
+    throw new Error("--scope must be user or system");
+  if (binding) {
+    if (command !== binding.command)
+      throw new Error("keybinding command does not match declared operation");
+    if (values.target !== binding.target)
+      throw new Error("keybinding target does not match declared operation");
+    if (values.scope !== binding.audience)
+      throw new Error(`keybinding scope does not match selected ${binding.audience} audience`);
+    if (binding.mode && values.mode !== undefined && values.mode !== binding.mode)
+      throw new Error(`keybinding mode must remain ${binding.mode} for the declared operation`);
+  }
+  if (values.mode !== undefined && !["assemble", "seed", "refresh"].includes(values.mode))
+    throw new Error("keybinding mode must be assemble, seed, or refresh");
+  const runner = values.runner ?? defaults.runner;
+  if (!runner) throw new Error("installed CONFIG runner or --runner required");
+  if (values.profile && values["profile-selector"])
+    throw new Error("choose profile or profile-selector, not both");
+  const profilePath = values["profile-selector"]
+    ? resolvePathSelector(JSON.parse(values["profile-selector"]), undefined, "consumer profile")
+    : values.profile;
+  const loaded = profilePath
+    ? await loadProfile(profilePath)
+    : { profile: defaultProfile(values.target) };
+  if (loaded.profile.target !== values.target) throw new Error("consumer profile target mismatch");
+  const options: HostOptions = {
+    ...loaded,
+    context: values.context!,
+    scope: values.scope,
+    runner,
+    validatorCommand: [...defaults.validatorCommand],
+    mode: (values.mode ??
+      binding?.mode ??
+      (command === "host" ? "seed" : undefined)) as HostOptions["mode"],
+    check: values.check,
+  };
+  const bound = bindProfile(options);
+  let manifest: ProducerManifest | undefined;
+  if (command === "install") {
+    if (!values.manifest) throw new Error("install requires --manifest");
+    manifest = JSON.parse(await readFile(values.manifest, "utf8")) as ProducerManifest;
+    validateProducerManifest(manifest, options.profile.target);
+    if (binding?.producer && manifest.producer !== binding.producer)
+      throw new Error("producer manifest does not match declared operation");
+    if (options.check)
+      throw new Error("producer registration is explicit mutation; check host assembly instead");
+  }
+  if (command === "enable" || command === "disable") {
+    if (!values.group) throw new Error("enable/disable requires --group");
+    if (values.check) throw new Error("membership mutation does not accept --check");
+  }
+  return { command, options, bound, manifest, group: values.group };
+}
+
+/** Reuse the admitted binding while keeping each complete domain operation's commit boundary. */
+export async function runAdmittedKeybindingCommand(
+  admitted: AdmittedKeybindingCommand,
+): Promise<number> {
+  const { command, options, bound } = admitted;
+  const result =
+    command === "install"
+      ? await installProducer(admitted.manifest!, options, bound)
+      : command === "host"
+        ? await assembleHost(options, bound)
+        : await toggleGroup(admitted.group!, command === "enable", options, bound);
+  return result.code;
+}
 
 /**
  * Dispatch one explicit keybinding operation and return its process-style outcome.
@@ -43,72 +164,12 @@ import {
  * @throws On strict argument/protocol errors, scope/profile mismatch, invalid files
  * or delegated registration/preparation failures; the outer entry owns error reporting.
  */
-export async function main(
-  argv: string[],
-  defaults: {
-    /** Installed CONFIG runner selected by the omnibus; explicit --runner may override it. */
-    runner?: string;
-    /** Existing closure-validator executable and fixed prefix, supplied by the entry adapter. */
-    validatorCommand: string[];
-  },
-): Promise<number> {
+export async function main(argv: string[], defaults: KeybindingRuntimeDefaults): Promise<number> {
   const [command, ...args] = argv;
   if (["install", "host", "enable", "disable"].includes(command)) {
-    const { values } = parseArgs({
-      args,
-      strict: true,
-      allowPositionals: false,
-      options: {
-        manifest: { type: "string" },
-        profile: { type: "string" },
-        "profile-selector": { type: "string" },
-        target: { type: "string" },
-        context: { type: "string", default: "user" },
-        scope: { type: "string", default: "user" },
-        group: { type: "string" },
-        mode: { type: "string" },
-        check: { type: "boolean" },
-        runner: { type: "string" },
-      },
-    });
-    if (values.target !== "niri" && values.target !== "umbriel")
-      throw new Error("explicit --target niri|umbriel required");
-    if (values.scope !== "user" && values.scope !== "system")
-      throw new Error("--scope must be user or system");
-    const runner = values.runner ?? defaults.runner;
-    if (!runner) throw new Error("installed CONFIG runner or --runner required");
-    if (values.profile && values["profile-selector"])
-      throw new Error("choose profile or profile-selector, not both");
-    const profilePath = values["profile-selector"]
-      ? resolvePathSelector(JSON.parse(values["profile-selector"]), undefined, "consumer profile")
-      : values.profile;
-    const loaded = profilePath
-      ? await loadProfile(profilePath)
-      : { profile: defaultProfile(values.target) };
-    if (loaded.profile.target !== values.target)
-      throw new Error("consumer profile target mismatch");
-    const options: HostOptions = {
-      ...loaded,
-      context: values.context!,
-      scope: values.scope,
-      runner,
-      validatorCommand: defaults.validatorCommand,
-      mode: values.mode as HostOptions["mode"],
-      check: values.check,
-    };
-    let result;
-    if (command === "install") {
-      if (!values.manifest) throw new Error("install requires --manifest");
-      const manifest = JSON.parse(await readFile(values.manifest, "utf8")) as ProducerManifest;
-      result = await installProducer(manifest, options);
-    } else if (command === "host")
-      result = await assembleHost({ ...options, mode: options.mode ?? "seed" });
-    else {
-      if (!values.group) throw new Error("enable/disable requires --group");
-      if (values.check) throw new Error("membership mutation does not accept --check");
-      result = await toggleGroup(values.group, command === "enable", options);
-    }
-    return result.code;
+    return runAdmittedKeybindingCommand(
+      await admitKeybindingCommand(command as KeybindingHostCommand, args, defaults),
+    );
   }
   if (command === "validate") {
     const { values } = parseArgs({

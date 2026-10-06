@@ -193,12 +193,15 @@ export function defaultProfile(target: Target): Profile {
   };
 }
 
-/** Resolve selectors once against an explicitly scope-checked CONFIG-style context. */
-function bindProfile(options: HostOptions): {
+/** Serializable invocation-bound paths; admission does not mutate membership or outputs. */
+export type BoundProfile = {
   base: string;
   statePath: string;
   request: ConsumerRequest;
-} {
+};
+
+/** Resolve selectors once against an explicitly scope-checked CONFIG-style context. */
+export function bindProfile(options: HostOptions): BoundProfile {
   const profile = options.profile;
   if (profile.version !== 1 || (profile.target !== "niri" && profile.target !== "umbriel"))
     throw new Error("unsupported keybinding profile");
@@ -426,8 +429,11 @@ async function applyState(
  * @returns Consumer/runner outcome; check mode reports drift without delivery.
  * @throws On invalid profile/state/identity, absent declared inputs or consumer preparation.
  */
-export async function assembleHost(options: HostOptions): Promise<ConsumerResult> {
-  const bound = bindProfile(options);
+export async function assembleHost(
+  options: HostOptions,
+  admitted?: BoundProfile,
+): Promise<ConsumerResult> {
+  const bound = admitted ?? bindProfile(options);
   const { state, guard } = await readState(bound.statePath, options.profile.target);
   return applyState(bound, state, guard, options, false);
 }
@@ -452,18 +458,12 @@ export async function assembleHost(options: HostOptions): Promise<ConsumerResult
 export async function installProducer(
   manifest: ProducerManifest,
   options: HostOptions,
+  admitted?: BoundProfile,
 ): Promise<ConsumerResult> {
-  if (
-    manifest.version !== 1 ||
-    !ID.test(manifest.producer) ||
-    !Number.isFinite(manifest.order) ||
-    !Array.isArray(manifest.resources) ||
-    !manifest.targets.includes(options.profile.target)
-  )
-    throw new Error("invalid producer manifest/target");
+  validateProducerManifest(manifest, options.profile.target);
   if (options.check)
     throw new Error("producer registration is explicit mutation; check host assembly instead");
-  const bound = bindProfile(options);
+  const bound = admitted ?? bindProfile(options);
   const { state, guard } = await readState(bound.statePath, options.profile.target);
   const resources: Resource[] = [];
   const registrations: InputRegistration[] = [];
@@ -503,6 +503,19 @@ export async function installProducer(
   );
 }
 
+/** Shared structural admission; producer source decoding remains inside its complete operation. */
+export function validateProducerManifest(manifest: ProducerManifest, target: Target): void {
+  if (
+    manifest.version !== 1 ||
+    !ID.test(manifest.producer) ||
+    !Number.isFinite(manifest.order) ||
+    !Array.isArray(manifest.resources) ||
+    !Array.isArray(manifest.targets) ||
+    !manifest.targets.includes(target)
+  )
+    throw new Error("invalid producer manifest/target");
+}
+
 /**
  * Stage a named group's enabled flag with native reassembly at the same CONFIG commit.
  * Resource files/slots remain untouched; reinstall retains this explicit state and
@@ -517,8 +530,9 @@ export async function toggleGroup(
   group: string,
   enabled: boolean,
   options: HostOptions,
+  admitted?: BoundProfile,
 ): Promise<ConsumerResult> {
-  const bound = bindProfile(options);
+  const bound = admitted ?? bindProfile(options);
   const { state, guard } = await readState(bound.statePath, options.profile.target);
   if (!Object.hasOwn(state.groups, group)) throw new Error(`unknown contribution ${group}`);
   state.groups[group].enabled = enabled;
