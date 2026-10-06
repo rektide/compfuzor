@@ -172,6 +172,11 @@
       - name: client-install.sh
         raw: True
         compose: False
+      # Read-only daemon/cache/health reporter over the web UI + systemd +
+      # journal (operator action, never an install-lane member).
+      - name: status-cacher.sh
+        raw: True
+        compose: False
 
     # No VAR_DIRS: the unit's StateDirectory= plus the daemon's own
     # cache_directory/database_path mkdirs own the var tree. Declaring
@@ -255,6 +260,28 @@
       actually asked for (`script/apt-tunnel-mirrors.ts --journal`) and
       re-render. `disk_quota` is shared across all clients; revisit as the
       client population grows.
+
+      ## Status
+
+      `bin/status-cacher.sh` is a read-only reporter over the running
+      daemon — safe to run any time, even mid-build:
+
+      - systemd state: activity, MainPID, uptime, and whether the
+        `apt-cacher-rs.service` alias is actually linked
+      - an HTTP probe of the dashboard (status code + latency; nonzero
+        exit with a clear message when the daemon is down)
+      - the parsed web UI: Daemon Status and Cache Statistics, the
+        operationally-important Metrics (integrity mismatch/throttled,
+        cache I/O + DB failures, rate-limit cancels, HTTP timeouts,
+        uncacheables, tunnels), and the Mirrors / Clients / Uncacheables
+        tables. Absent rows degrade to `-`.
+
+          bin/status-cacher.sh                # summary
+          bin/status-cacher.sh --logs         # the web UI /logs page
+          bin/status-cacher.sh --journal 50   # unit journal tail
+          bin/status-cacher.sh --all          # everything above
+          bin/status-cacher.sh --watch 5      # refresh every 5s
+          APT_CACHER_URL=http://host:3142/ bin/status-cacher.sh
 
       ## Locations
 
