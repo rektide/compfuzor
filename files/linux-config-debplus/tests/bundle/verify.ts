@@ -414,26 +414,31 @@ function main(argv: string[]): void {
   const prog = basename(process.argv[1] ?? "verify.ts");
   let stage: string | null = null;
   let playbook: string | null = null;
+  const expected = (flag: string): never => {
+    process.stderr.write(usage(prog, terminalWidth(), false) + "\n" +
+      `${prog}: error: argument ${flag}: expected one argument\n`);
+    process.exit(2);
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "-h" || argument === "--help") {
       process.stdout.write(buildHelp(prog));
       process.exit(0);
     }
-    if (argument === "--stage") {
-      stage = argv[++index] ?? null;
-      if (stage === undefined || stage === null || stage.startsWith("-")) {
-        process.stderr.write(usage(prog, terminalWidth(), false) + "\n" +
-          `${prog}: error: argument --stage: expected one argument\n`);
-        process.exit(2);
+    let flag = argument;
+    let inline: string | undefined;
+    if (argument.startsWith("--") && argument.includes("=")) {
+      flag = argument.slice(0, argument.indexOf("="));
+      inline = argument.slice(argument.indexOf("=") + 1);
+    }
+    if (flag === "--stage" || flag === "--playbook") {
+      let value = inline;
+      if (value === undefined) {
+        value = argv[++index];
+        if (value === undefined || value.startsWith("-")) expected(flag);
       }
-    } else if (argument === "--playbook") {
-      playbook = argv[++index] ?? null;
-      if (playbook === null || playbook.startsWith("-")) {
-        process.stderr.write(usage(prog, terminalWidth(), false) + "\n" +
-          `${prog}: error: argument --playbook: expected one argument\n`);
-        process.exit(2);
-      }
+      if (flag === "--stage") stage = value;
+      else playbook = value;
     } else {
       process.stderr.write(usage(prog, terminalWidth(), false) + "\n" +
         `${prog}: error: unrecognized arguments: ${argument}\n`);

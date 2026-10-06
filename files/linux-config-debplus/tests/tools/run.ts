@@ -266,8 +266,14 @@ function main(argv: string[]): void {
       process.stdout.write(buildHelp(prog));
       process.exit(0);
     }
-    if (argument === "--scratch-dir") {
-      const value = argv[++index];
+    let flag = argument;
+    let inline: string | undefined;
+    if (argument.startsWith("--") && argument.includes("=")) {
+      flag = argument.slice(0, argument.indexOf("="));
+      inline = argument.slice(argument.indexOf("=") + 1);
+    }
+    if (flag === "--scratch-dir") {
+      const value = inline ?? argv[++index];
       if (value === undefined || value.startsWith("-")) {
         process.stderr.write(usage(prog, terminalWidth()) + "\n" +
           `${prog}: error: argument --scratch-dir: expected one argument\n`);
