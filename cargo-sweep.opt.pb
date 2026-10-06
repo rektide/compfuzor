@@ -38,15 +38,16 @@
       `bin/install-user.sh` links two services and enables their persistent
       timers: `{{NAME}}-src.timer` and `{{NAME}}-archive.timer`. This schedule
       is standing approval for deletion: only the service invocations pass
-      --apply automatically. Persistent catch-up can run promptly on enabling
-      or resuming the user manager. No linger is enabled. Disable timers with
+      --apply automatically. Reactivating a timer can promptly catch up missed
+      calendar events; a first installation starts its future schedule.
+      No linger is enabled. Disable timers with
       `systemctl --user disable --now {{NAME}}-src.timer {{NAME}}-archive.timer`.
 
       Both sweeps take a shared blocking flock (`{{CARGO_SWEEP_LOCK}}`);
       overlapping runs wait and execute in turn, including persistent catch-up
       after login. Lock errors fail rather than silently skipping a schedule.
-      This coordinates
-      sweeps only, NOT active Cargo builds. Run previews before enabling timers
+      This coordinates sweeps only, NOT active Cargo builds.
+      Run previews before enabling timers
       and avoid building during sweeps. Execution uses absolute mise from the
       home directory to supply its configured cargo/rustup environment for
       metadata. MISE_AUTO_INSTALL=false and MISE_EXEC_AUTO_INSTALL=false disable

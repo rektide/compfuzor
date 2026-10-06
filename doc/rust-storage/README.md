@@ -2,7 +2,7 @@
 
 Two independent, user-scoped deployments:
 
-- [`sccache.opt.pb`](/sccache.opt.pb): prebuilt compiler cache, 20G shared cache,
+- [`sccache.opt.pb`](/sccache.opt.pb): prebuilt compiler cache, 20 GiB shared cache,
   foreground user daemon, and a dedicated global mise env drop-in.
 - [`cargo-sweep.opt.pb`](/cargo-sweep.opt.pb): upstream Cargo artifact sweeping;
   src older than 14 days Mon/Thu 03:00, archive older than 30 days monthly on
@@ -68,6 +68,8 @@ experimental build-dir, and successful status is not proof of complete cleanup.
   foreground server flags; use no CLI arguments alongside SCCACHE_START_SERVER=1.
 - [sccache Rust limits](https://github.com/mozilla/sccache/blob/v0.18.0/docs/Rust.md)
   and [local cache](https://github.com/mozilla/sccache/blob/v0.18.0/docs/Local.md).
+- [sccache size parser](https://github.com/mozilla/sccache/blob/v0.18.0/src/config.rs):
+  its `G` suffix multiplies by 1024³, so the configured `20G` means 20 GiB.
 - [cargo-sweep v0.8.0 CLI](https://github.com/holmgr/cargo-sweep/blob/v0.8.0/src/cli.rs),
   [discovery](https://github.com/holmgr/cargo-sweep/blob/v0.8.0/src/main.rs), and
   [artifact matching](https://github.com/holmgr/cargo-sweep/blob/v0.8.0/src/fingerprint.rs).
@@ -80,6 +82,8 @@ experimental build-dir, and successful status is not proof of complete cleanup.
   [cargo backend](https://mise.jdx.dev/dev-tools/backends/cargo.html) defaults to locked installs.
 - [`disk-cleanup.opt.pb`](/disk-cleanup.opt.pb): independent interactive emergency
   cleanup tools. These playbooks do not invoke its broader cleanup actions.
+- [Mise cache inventory](/doc/mise/cache.md): complementary registry/Git cache
+  and toolchain accounting, distinct from these compiler-cache and target-artifact policies.
 - [Subsystem action runner](/doc/subsys.md#action-runner-_cf_action) and
   [version-manager pins](/doc/subsys.md#build-time-version-manager-pins): existing
   build/install lane conventions. These standalone tool deployments deliberately
