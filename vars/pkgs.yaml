@@ -85,8 +85,8 @@ BASE:
   - hostname
   #- ifupdown
   - iputils-ping
-  - initscripts
-  - insserv
+  #- initscripts # conflicts systemd-sysv; legacy sysvinit bookkeeping
+  #- insserv # conflicts systemd-sysv; legacy sysvinit bookkeeping
   - iproute2
   - iwd
   - i2c-tools
@@ -163,7 +163,7 @@ BASE:
   - sensible-utils
   - sshpass
   - sysstat
-  - sysv-rc
+  #- sysv-rc # conflicts systemd-sysv; legacy sysvinit bookkeeping
   - sysvinit-utils
   - tar
   - tzdata
@@ -894,7 +894,7 @@ DEBDEV:
   - mmdebstrap
   - debos
   - ovmf
-  - busybox
+  #- busybox # conflicts busybox-static (CONTAINER); static wins for image builds
   - proot
   - mtd-utils
   - u-boot-tools
