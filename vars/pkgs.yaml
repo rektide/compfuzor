@@ -156,7 +156,7 @@ BASE:
   - python-is-python3
   - python3-pytools
   - readline-common
-  - resolvconf
+  #- resolvconf # conflicts systemd-resolved (debos dep); resolved owns resolv.conf
   - ripgrep
   - fd-find
   - sed
@@ -945,13 +945,13 @@ AUDIO_X:
   #- pulseaudio-module-x11
   - pulseaudio-utils
   #- paman
-  - paprefs
+  #- paprefs # Depends pulseaudio daemon; conflicts pipewire
   - pavucontrol
   - pasystray
   #- pavumeter # gone from Debian
   # big, pyqt5
   - mkchromecast
-  - mkchromecast-pulseaudio
+  #- mkchromecast-pulseaudio # Depends pulseaudio daemon; conflicts pipewire; mkchromecast-gstreamer stays
   - mkchromecast-gstreamer
 MOPIDY:
   - mopidy
