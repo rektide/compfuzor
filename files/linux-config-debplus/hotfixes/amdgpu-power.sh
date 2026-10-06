@@ -2,6 +2,9 @@
 # Apply the amdgpu.ignore_min_pcap hotfix to a Linux kernel source tree.
 # Verified against v7.3-rc5 (72d3fcf802c45d00b300f25b848a93c3a2bd7c7e).
 # Also verified against 7.3 development tip 551c722f40809618230001baccf219193e22fc5a.
+# Lineage: zen-kernel 0fd723f37481 (Steven Barrett, 2024-03, int-typed), bool-ified
+# for the 7.1 build, then ported to the 7.2+ shared PPT-limit API. When a future
+# kernel reworks this API again, cross-check the port against liquorix's carry.
 
 set -eu
 
