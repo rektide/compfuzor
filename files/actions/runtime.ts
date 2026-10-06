@@ -3,7 +3,7 @@
  * Domain leaves, not this adapter, own their options and context validation.
  */
 import { spawn } from "node:child_process";
-import { readFile, realpath } from "node:fs/promises";
+import { access, constants, readFile, realpath, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -144,6 +144,8 @@ async function executablePath(deploymentDir: string, configured: string): Promis
   const remainder = relative(deploymentDir, physical);
   if (remainder === ".." || remainder.startsWith(`..${sep}`) || isAbsolute(remainder))
     fail(`executable escapes deployment: ${configured}`);
+  if (!(await stat(physical)).isFile()) fail(`executable is not a regular file: ${configured}`);
+  await access(physical, constants.X_OK);
   return lexical; // Do not erase invocation identity after verifying containment.
 }
 

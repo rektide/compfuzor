@@ -11,7 +11,12 @@ import {
   type ConfigAction,
   type ConfigCliOptions,
 } from "./cli.ts";
-import { getConfigContext, selectRecipeNames, type ConfigSpec } from "./context.ts";
+import {
+  getConfigContext,
+  selectRecipeNames,
+  type ConfigScope,
+  type ConfigSpec,
+} from "./context.ts";
 import { runInputAction, syncInputs, type InputStrategy } from "./inputs.ts";
 import { installContext, type ConfigInstallStrategy } from "./install.ts";
 import { resolveSelectedName } from "./invocation.ts";
@@ -20,6 +25,21 @@ import { statusContext } from "./status.ts";
 
 export { CONFIG_ACTIONS, parseConfigCommandArgs };
 export type { ConfigAction, ConfigCliOptions };
+
+/** Optional general-action assertion; low-level CONFIG calls retain their precedence. */
+export type ConfigActionBinding = {
+  action: ConfigAction;
+  audience: ConfigScope;
+  context: string;
+};
+
+/** Serializable loaded selection, admitted without registration/publication effects. */
+export type AdmittedConfigCommand = {
+  spec: ConfigSpec;
+  options: ConfigCliOptions;
+  action: ConfigAction;
+  contextName: string;
+};
 
 function fail(message: string): never {
   throw new Error(message);
@@ -63,7 +83,10 @@ function contextInstallStrategy(
   );
 }
 
-export async function runConfigCommand(options: ConfigCliOptions): Promise<number> {
+export async function admitConfigCommand(
+  options: ConfigCliOptions,
+  binding?: ConfigActionBinding,
+): Promise<AdmittedConfigCommand> {
   const spec = JSON.parse(await readFile(options.specPath, "utf8")) as ConfigSpec;
   const contextNames = Object.keys(spec.contexts ?? {});
   const inferred = configAliasPieces(options, contextNames);
@@ -80,11 +103,25 @@ export async function runConfigCommand(options: ConfigCliOptions): Promise<numbe
     invokedAs: options.invokedAs,
     inferAlias: () => inferred.context,
     environment: process.env.COMPFUZOR_CONFIG_CONTEXT ?? process.env.COMPFUZOR_CONTEXT,
-    fallback: spec.defaultContext,
+    fallback: binding?.context ?? spec.defaultContext,
     declared: contextNames,
     label: "config context",
   });
   const context = getConfigContext(spec, contextName);
+  if (binding) {
+    if (action !== binding.action)
+      fail(`config action ${action} does not match declared ${binding.action} operation`);
+    if (context.canonical) fail("canonical donor context is not a receiver action audience");
+    if (context.scope !== binding.audience)
+      fail(
+        `config context ${contextName} has ${context.scope} scope, not selected ${binding.audience} audience`,
+      );
+    if (action === "install" && spec.installOwner !== undefined) {
+      if (typeof spec.installOwner !== "string") fail("config install owner must be a domain name");
+      if (spec.installOwner !== "config")
+        fail(`config installation is owned by ${spec.installOwner}, not config`);
+    }
+  }
   rejectIrrelevantFlags(options, action);
   const canonicalInputAction = action === "inputs" ? options.args[0] : undefined;
   const canonicalAllowed =
@@ -97,6 +134,12 @@ export async function runConfigCommand(options: ConfigCliOptions): Promise<numbe
       `config ${action} is not meaningful for canonical source=destination context; use assemble, status, or explicit input list/status/enable/disable`,
     );
   }
+
+  return { spec, options: { ...options, args: [...options.args] }, action, contextName };
+}
+
+export async function runAdmittedConfigCommand(admitted: AdmittedConfigCommand): Promise<number> {
+  const { spec, options, action, contextName } = admitted;
 
   if (action === "assemble") {
     if (options.check && options.stdout) fail("--check and --stdout are mutually exclusive");
@@ -185,6 +228,10 @@ export async function runConfigCommand(options: ConfigCliOptions): Promise<numbe
   if (outcome.status === "skipped")
     console.error(`skipped config install for ${contextName}: ${outcome.reason}`);
   return outcome.code;
+}
+
+export async function runConfigCommand(options: ConfigCliOptions): Promise<number> {
+  return runAdmittedConfigCommand(await admitConfigCommand(options));
 }
 
 export async function main(

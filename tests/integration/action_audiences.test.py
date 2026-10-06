@@ -206,6 +206,25 @@ def test_real_mixed_scope_render(temporary: Path) -> None:
     print("ok: real mixed-scope SteamOS playbook isolated render preserves provisioning and adoption plans")
 
 
+def test_regular_executable_admission(temporary: Path) -> None:
+    payload = temporary / "executable-admission"
+    trace = temporary / "executable-trace"
+    render(payload, [
+        {"name": "install-first-user.sh", "content": 'echo too-early >> "$TRACE"'},
+        {"name": "install-second-user.sh", "content": "true"},
+    ], {})
+    second = payload / "bin/install-second-user.sh"
+    second.chmod(0o644)
+    env = {**os.environ, "TRACE": str(trace)}
+    assert "EACCES" in run(payload / "bin/install.mjs", env, expected=2).stderr
+    assert not trace.exists()
+    second.unlink()
+    second.mkdir()
+    assert "not a regular file" in run(payload / "bin/install.mjs", env, expected=2).stderr
+    assert not trace.exists()
+    print("ok: non-executable and directory leaves fail preflight before preceding effects")
+
+
 if __name__ == "__main__":
     SCRATCH.mkdir(parents=True, exist_ok=True)
     if not (SCRATCH / "README.md").exists():
@@ -214,3 +233,4 @@ if __name__ == "__main__":
         test_generation_and_execution(Path(tmp))
         test_failures_and_signals(Path(tmp))
         test_real_mixed_scope_render(Path(tmp))
+        test_regular_executable_admission(Path(tmp))

@@ -1616,7 +1616,7 @@ function contextInputStrategy(spec, contextName, explicit) {
 function contextInstallStrategy(spec, contextName, explicit) {
 	return parseInstallStrategy$1(explicit ?? process.env.COMPFUZOR_CONFIG_INSTALL_STRATEGY ?? getConfigContext(spec, contextName).install ?? "assemble", "effective config install strategy");
 }
-async function runConfigCommand(options) {
+async function admitConfigCommand(options, binding) {
 	const spec = JSON.parse(await readFile(options.specPath, "utf8"));
 	const contextNames = Object.keys(spec.contexts ?? {});
 	const inferred = configAliasPieces(options, contextNames);
@@ -1633,11 +1633,20 @@ async function runConfigCommand(options) {
 		invokedAs: options.invokedAs,
 		inferAlias: () => inferred.context,
 		environment: process.env.COMPFUZOR_CONFIG_CONTEXT ?? process.env.COMPFUZOR_CONTEXT,
-		fallback: spec.defaultContext,
+		fallback: binding?.context ?? spec.defaultContext,
 		declared: contextNames,
 		label: "config context"
 	});
 	const context = getConfigContext(spec, contextName);
+	if (binding) {
+		if (action !== binding.action) fail$10(`config action ${action} does not match declared ${binding.action} operation`);
+		if (context.canonical) fail$10("canonical donor context is not a receiver action audience");
+		if (context.scope !== binding.audience) fail$10(`config context ${contextName} has ${context.scope} scope, not selected ${binding.audience} audience`);
+		if (action === "install" && spec.installOwner !== void 0) {
+			if (typeof spec.installOwner !== "string") fail$10("config install owner must be a domain name");
+			if (spec.installOwner !== "config") fail$10(`config installation is owned by ${spec.installOwner}, not config`);
+		}
+	}
 	rejectIrrelevantFlags(options, action);
 	const canonicalInputAction = action === "inputs" ? options.args[0] : void 0;
 	const canonicalAllowed = action === "assemble" || action === "status" || action === "inputs" && [
@@ -1647,6 +1656,18 @@ async function runConfigCommand(options) {
 		"disable"
 	].includes(canonicalInputAction ?? "");
 	if (context.canonical && !canonicalAllowed) fail$10(`config ${action} is not meaningful for canonical source=destination context; use assemble, status, or explicit input list/status/enable/disable`);
+	return {
+		spec,
+		options: {
+			...options,
+			args: [...options.args]
+		},
+		action,
+		contextName
+	};
+}
+async function runAdmittedConfigCommand(admitted) {
+	const { spec, options, action, contextName } = admitted;
 	if (action === "assemble") {
 		if (options.check && options.stdout) fail$10("--check and --stdout are mutually exclusive");
 		if (options.list) {
@@ -1718,6 +1739,9 @@ async function runConfigCommand(options) {
 	});
 	if (outcome.status === "skipped") console.error(`skipped config install for ${contextName}: ${outcome.reason}`);
 	return outcome.code;
+}
+async function runConfigCommand(options) {
+	return runAdmittedConfigCommand(await admitConfigCommand(options));
 }
 async function main$7(argv, deploymentDir, invokedAs) {
 	return runConfigCommand(parseConfigCommandArgs(argv, deploymentDir, invokedAs));
@@ -15851,6 +15875,8 @@ async function executablePath(deploymentDir, configured) {
 	const physical = await realpath(lexical);
 	const remainder = relative(deploymentDir, physical);
 	if (remainder === ".." || remainder.startsWith(`..${sep}`) || isAbsolute(remainder)) fail$1(`executable escapes deployment: ${configured}`);
+	if (!(await stat(physical)).isFile()) fail$1(`executable is not a regular file: ${configured}`);
+	await access(physical, constants.X_OK);
 	return lexical;
 }
 async function actionPath(selection, name) {
