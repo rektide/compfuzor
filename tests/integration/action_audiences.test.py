@@ -179,6 +179,33 @@ def test_failures_and_signals(temporary: Path) -> None:
     print("ok: fail-fast exact exit status, whole-graph containment and signal propagation")
 
 
+def test_real_mixed_scope_render(temporary: Path) -> None:
+    """Render the real SteamOS declaration in isolation; never execute its actions."""
+    payload = temporary / "steamos-render"
+    scenario = temporary / "steamos-scenario.json"
+    scenario.write_text(json.dumps({
+        "DIR": str(payload), "ETC": str(payload / "etc"), "BINS_DIR": str(payload / "bin"),
+        "ACTION_AUDIENCES": {}, "REPO_BYPASS": True, "PKGS_BYPASS": True,
+        "APT_BYPASS": True, "ARCH_BYPASS": True, "MODULES_BYPASS": True,
+        "SYSTEMD_THUNK_BYPASS": True, "BINS_RUN_BYPASS": True,
+        "GLOBAL_BINS_BYPASS": True, "LINKS_BYPASS": True, "GET_URLS": [],
+    }))
+    result = subprocess.run(["ansible-playbook", "-i", "localhost,", "-c", "local", str(ROOT / "steamos-niri.opt.pb"), "-e", "@" + str(scenario)], cwd=ROOT, env={**os.environ, "ANSIBLE_CONFIG": str(ROOT / "ansible.cfg")}, text=True, capture_output=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    spec = json.loads((payload / "etc/compfuzor-actions/spec.json").read_text())
+    install = spec["actions"]["install"]
+    assert install["entry"] == "install-user.mjs" and set(install["plans"]) == {"user", "system"}
+    user, system = install["plans"]["user"][0], install["plans"]["system"][0]
+    assert user["path"] == "bin/install-user.sh" and system["path"] == "bin/install.sh"
+    assert any(step.get("path") == "bin/install-keybindings-niri.sh" for step in user["children"]), user
+    assert any(step.get("action") == "install-archlane" or step.get("path") == "bin/install-arch.sh" for step in system["children"]), system
+    assert "sudo steamos-readonly disable" in (payload / "bin/install.sh").read_text()
+    assert 'NIRI_CONFIG="$NIRI_DIR/config.kdl"' in (payload / "bin/install-user.sh").read_text()
+    catalog = json.loads((payload / "etc/compfuzor-runtime/catalog.json").read_text())
+    assert catalog["execution"] == {"authority": "action-audiences", "catalogOnly": True}
+    print("ok: real mixed-scope SteamOS playbook isolated render preserves provisioning and adoption plans")
+
+
 if __name__ == "__main__":
     SCRATCH.mkdir(parents=True, exist_ok=True)
     if not (SCRATCH / "README.md").exists():
@@ -186,3 +213,4 @@ if __name__ == "__main__":
     with tempfile.TemporaryDirectory(prefix="integration-", dir=SCRATCH) as tmp:
         test_generation_and_execution(Path(tmp))
         test_failures_and_signals(Path(tmp))
+        test_real_mixed_scope_render(Path(tmp))
