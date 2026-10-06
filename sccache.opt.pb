@@ -14,7 +14,11 @@
     SCCACHE_DIR: "{{XDG_CACHE_HOME}}/sccache"
     SCCACHE_CACHE_SIZE: 20G
     SCCACHE_MISE_CONFIG_DIR: "{{ ansible_env.MISE_CONFIG_DIR | default(XDG_CONFIG_HOME ~ '/mise', true) }}"
-    SCCACHE_DISABLE_INCREMENTAL: false
+    ENV:
+      CARGO_INCREMENTAL: '0'
+    ZIM_ENV: [CARGO_INCREMENTAL]
+    # Activate the existing contributor gate without adding any upstream modules.
+    ZIM_MODULES: []
 
     README: |
       # sccache: shared Rust compiler cache
@@ -26,12 +30,16 @@
       `bin/sccache` directly to its executable. Override `SCCACHE_VERSION`,
       `SCCACHE_TOOL`, or `RUST_STORAGE_MISE_BIN` at render time if needed.
 
-      Before `bin/install-user.sh`, stop any auto-started server with
+      Before installing the service, stop any auto-started server with
       `bin/sccache --stop-server` (inspect other processes first). The service
       uses the default endpoint (port 4226): it must not compete with another
       server, and there must be only one server per cache. Installation links
       the managed mise drop-in and enables `{{NAME}}.service` in systemd --user.
       Installing starts it; rendering does not. No linger is enabled.
+      WARNING: `bin/install-user.sh` also imports the generated Zim contributor
+      described below. To install ONLY the daemon and mise client link, run
+      `bin/install-systemd-user.sh` then `bin/install-links-user.sh` instead.
+      Those selective lanes do not import the shell contribution.
 
       The drop-in is `{{SCCACHE_MISE_CONFIG_DIR}}/conf.d/compfuzor-sccache.toml`.
       It does not overwrite the main mise config or any Cargo config. Global
@@ -44,10 +52,16 @@
       This disk-cache cap is approximate; it does not bound Cargo target trees.
       START_SERVER/NO_DAEMON are service-private, never client env settings.
 
-      Incremental compilation is unchanged by default. Set
-      `SCCACHE_DISABLE_INCREMENTAL=true` to emit CARGO_INCREMENTAL=0 globally:
-      incremental Rust compilations are not cached by sccache; evaluate this
-      tradeoff rather than assuming a running server means effective caching.
+      LIMITATION: sccache cannot cache incremental Rust compilations. This
+      deployment renders ENV CARGO_INCREMENTAL=0 and projects it through ZIM_ENV
+      into the normal generated Zim env module, proposing non-incremental builds.
+      NOTHING has been installed or applied to your live shell by rendering.
+      Importing the contributor later is an explicit shell-configuration action.
+      Its existing don't-stomp policy preserves a non-empty CARGO_INCREMENTAL
+      already set in the shell unless COMPFUZOR_ENV_OVERWRITE matches that key.
+      The mise drop-in intentionally does not set CARGO_INCREMENTAL. Evaluate
+      the loss of incremental compilation rather than assuming a running server
+      means effective caching; explicit Cargo settings may also affect builds.
       rustup proxies are resolved by sccache using `rustup which rustc`.
 
       Inspect `bin/status.sh`, `bin/sccache --show-stats`, and
@@ -69,9 +83,6 @@
           RUSTC_WRAPPER = {{ (BINS_DIR ~ '/sccache') | to_json }}
           SCCACHE_DIR = {{ SCCACHE_DIR | to_json }}
           SCCACHE_CACHE_SIZE = {{ SCCACHE_CACHE_SIZE | to_json }}
-          {% if SCCACHE_DISABLE_INCREMENTAL | bool %}
-          CARGO_INCREMENTAL = "0"
-          {% endif %}
     LINKS:
       - src: "{{ETC}}/compfuzor-sccache.toml"
         dest: "{{SCCACHE_MISE_CONFIG_DIR}}/conf.d/compfuzor-sccache.toml"

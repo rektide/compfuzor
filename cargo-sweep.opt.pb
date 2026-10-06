@@ -42,8 +42,10 @@
       or resuming the user manager. No linger is enabled. Disable timers with
       `systemctl --user disable --now {{NAME}}-src.timer {{NAME}}-archive.timer`.
 
-      Both sweeps take a shared nonblocking flock (`{{CARGO_SWEEP_LOCK}}`);
-      overlap skips successfully with an explicit message. This coordinates
+      Both sweeps take a shared blocking flock (`{{CARGO_SWEEP_LOCK}}`);
+      overlapping runs wait and execute in turn, including persistent catch-up
+      after login. Lock errors fail rather than silently skipping a schedule.
+      This coordinates
       sweeps only, NOT active Cargo builds. Run previews before enabling timers
       and avoid building during sweeps. Execution uses absolute mise from the
       home directory to supply its configured cargo/rustup environment for

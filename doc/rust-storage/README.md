@@ -11,7 +11,11 @@ Two independent, user-scoped deployments:
 Render with `ansible-playbook -i 'localhost,' -c local <playbook>.pb`.
 Both set `BINS_RUN_BYPASS=true`: rendering only generates deployment artifacts.
 Read the generated `README.md`, run `bin/build.sh` to install the pinned tool,
-preview sweep candidates, then explicitly run `bin/install-user.sh`.
+preview sweep candidates, then explicitly choose the installation lanes.
+For sccache, `bin/install-user.sh` also imports a generated Zim shell contributor:
+to install only its daemon and mise client link, instead run
+`bin/install-systemd-user.sh` followed by `bin/install-links-user.sh`.
+For cargo-sweep, `bin/install-user.sh` installs its services/timers.
 Neither playbook installs root packages, changes main mise/Cargo configuration,
 or enables linger. Stop an existing sccache daemon before enabling its service.
 
@@ -21,14 +25,22 @@ deployment symlinks, not per-crate mise wrappers. Build-time `mise where` and
 assuming aqua's archive layout; an executable outside that installation fails.
 Sweeps use absolute mise exec
 from home for Cargo metadata's Rust environment, with tool/toolchain auto-install
-disabled. A missing sweep root is an error. A shared nonblocking flock serializes
-these sweeps only; it does **not** protect builds.
+disabled. A missing sweep root is an error. A shared blocking flock serializes
+these sweeps only; overlapping persistent catch-up runs wait rather than being
+skipped. Lock errors propagate. It does **not** protect builds.
 
 ## Boundaries and limitations
 
-The sccache size cap is not a Cargo target cap. Incremental compilation is
-unchanged unless `SCCACHE_DISABLE_INCREMENTAL=true` explicitly opts into
-CARGO_INCREMENTAL=0. Confirm cache effectiveness with real builds and statistics,
+The sccache size cap is not a Cargo target cap. **sccache cannot cache incremental
+Rust compilations.** The deployment renders `ENV: {CARGO_INCREMENTAL: '0'}` and
+`ZIM_ENV: [CARGO_INCREMENTAL]`, proposing non-incremental builds through the normal
+generated Zim contributor. `ZIM_MODULES: []` activates that existing generation
+gate without adding other modules or changing shared infrastructure.
+Rendering does **not** install or apply this contribution to the live shell.
+Importing it later is explicit; existing non-empty shell values win unless
+`COMPFUZOR_ENV_OVERWRITE` matches `CARGO_INCREMENTAL`. The mise drop-in contains
+only wrapper/cache settings, not the incremental policy. Evaluate the loss of
+incremental builds and confirm cache effectiveness with real builds/statistics,
 not only green service/link status.
 
 Cargo-sweep age uses access time; filesystem atime policy affects eligibility.
@@ -62,3 +74,7 @@ experimental build-dir, and successful status is not proof of complete cleanup.
   build/install lane conventions. These standalone tool deployments deliberately
   install exact mise specs in their build lane without creating repo-local pins
   or changing a project's Rust selection.
+- [Zim contributor synthesis](/tasks/compfuzor/gen_zim.tasks) and
+  [env-module don't-stomp policy](/library/filter_plugins/zim_fragment.py):
+  `ZIM_ENV` projects the declared incremental setting into a generated module;
+  contributor import remains an operator action, separate from inert rendering.

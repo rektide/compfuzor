@@ -19,15 +19,8 @@ fi
 lock={{ CARGO_SWEEP_LOCK | quote }}
 mkdir -p -- "$(dirname -- "$lock")"
 exec 9>"$lock"
-if flock --nonblock 9; then
-    :
-else
-    result=$?
-    # Only flock's conflict status is an expected skip; other failures are errors.
-    if [ "$result" -ne 1 ]; then exit "$result"; fi
-    printf 'Another cargo-sweep holds %s; skipping %s. This lock does not coordinate builders.\n' "$lock" "$root"
-    exit 0
-fi
+# Wait rather than discard a persistent catch-up run. This is not a build lock.
+flock 9
 cd {{ HOMEDIR | quote }}
 # Preserve mise's selected Rust environment without unattended installation.
 export MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false RUSTUP_AUTO_INSTALL=0

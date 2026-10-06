@@ -40,6 +40,8 @@ def rendered():
         main_config.write_text('[tools]\nrust = "nightly"\n')
         cargo_config = home / ".cargo/config.toml"
         cargo_config.write_text('[build]\njobs = 2\n')
+        for name in (".zshenv", ".zshrc"):
+            (home / name).write_text("# Preserve this fake shell config.\n")
         fake = tmp / "fake mise"
         fake.write_text(f'#!{sys.executable}\n' + '''
 import json, os, pathlib, sys
@@ -88,6 +90,9 @@ elif sys.argv[1] == "exec":
         assert not (home / ".config/systemd/user").exists()
         assert main_config.read_text() == '[tools]\nrust = "nightly"\n'
         assert cargo_config.read_text() == '[build]\njobs = 2\n'
+        for name in (".zshenv", ".zshrc"):
+            assert (home / name).read_text() == "# Preserve this fake shell config.\n"
+        assert not (home / ".config/zsh").exists()
         yield tmp, home, deployments
 
 
@@ -173,7 +178,7 @@ def test_build_pinned_mise_and_direct_executables(rendered):
     assert (home / ".cache/sccache").is_dir()
 
 
-def test_sweep_default_preview_explicit_apply_missing_root_and_overlap(rendered):
+def test_sweep_default_preview_explicit_apply_missing_root_and_queue(rendered):
     tmp, home, deployments = rendered
     deployment = deployments["cargo-sweep"]
     env = fake_build(tmp, deployment, "cargo-sweep", home)
@@ -204,12 +209,22 @@ def test_sweep_default_preview_explicit_apply_missing_root_and_overlap(rendered)
     lock = home / ".local/state/compfuzor/cargo-sweep.lock"
     with lock.open("w") as holder:
         fcntl.flock(holder, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        for profile in ("src", "archive"):
-            overlap = run(str(script), profile, "--apply", cwd=ROOT, env=env)
-            assert "skipping" in overlap.stdout and len(calls(tmp)) == before
-    # A released lock permits the next preview.
-    run(str(script), "src", cwd=ROOT, env=env)
-    assert len(calls(tmp)) == before + 1
+        queued = [subprocess.Popen([str(script), profile, "--apply"], cwd=ROOT, env=env,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                  for profile in ("src", "archive")]
+        try:
+            for child in queued:
+                with pytest.raises(subprocess.TimeoutExpired):
+                    child.wait(timeout=0.25)
+            assert len(calls(tmp)) == before
+        finally:
+            fcntl.flock(holder, fcntl.LOCK_UN)
+            for child in queued:
+                stdout, stderr = child.communicate(timeout=10)
+                assert child.returncode == 0, (stdout, stderr)
+                assert "skipping" not in stdout
+    assert len(calls(tmp)) == before + 2
+    assert {call["argv"][-1] for call in calls(tmp)[before:]} == {str(home / "src"), str(home / "archive")}
 
     broken = tmp / "broken flock"
     broken.mkdir()
@@ -217,7 +232,34 @@ def test_sweep_default_preview_explicit_apply_missing_root_and_overlap(rendered)
     (broken / "flock").chmod(0o755)
     failure = run(str(script), "src", cwd=ROOT, env=env | {"PATH": f"{broken}:/usr/bin:/bin"}, check=False)
     assert failure.returncode == 73 and "skipping" not in failure.stdout
-    assert len(calls(tmp)) == before + 1
+    assert len(calls(tmp)) == before + 2
+
+
+def test_zim_incremental_contributor_is_inert_and_preserves_existing_values(rendered):
+    tmp, home, deployments = rendered
+    deployment = deployments["sccache"]
+    module = deployment / "etc/zim-modules/sccache-main-env/init.zsh"
+    fragment = deployment / "etc/zim/zimrc/active/55-sccache-main-env.conf"
+    assert module.is_file() and fragment.is_file()
+    assert '_compfuzor_env_set CARGO_INCREMENTAL "0"' in module.read_text()
+    assert str(module.resolve().parent) in fragment.read_text()
+    assert (deployment / "bin/install-zimfw.sh").is_file()
+    assert "install-zimfw.sh" in (deployment / "bin/install-user.sh").read_text()
+    env = {key: value for key, value in os.environ.items()
+           if key not in ("CARGO_INCREMENTAL", "COMPFUZOR_ENV_OVERWRITE")}
+    env |= {"HOME": str(home), "MODULE": str(module)}
+    # Source only the generated module in a disposable child with fake HOME;
+    # never invoke the contributor installer or activate a real shell config.
+    command = 'source "$MODULE"; print -r -- "$CARGO_INCREMENTAL"'
+    for overrides, expected in (({}, "0"), ({"CARGO_INCREMENTAL": "1"}, "1"),
+                                ({"CARGO_INCREMENTAL": "1", "COMPFUZOR_ENV_OVERWRITE": "CARGO_INCREMENTAL"}, "0")):
+        result = run("/usr/bin/zsh", "-dfc", command, cwd=home, env=env | overrides)
+        assert result.stdout.strip() == expected
+    config = tomllib.loads((deployment / "etc/compfuzor-sccache.toml").read_text())
+    assert "CARGO_INCREMENTAL" not in config["env"]
+    assert not (home / ".config/zsh").exists()
+    for name in (".zshenv", ".zshrc"):
+        assert (home / name).read_text() == "# Preserve this fake shell config.\n"
 
 
 def test_dropin_link_preserves_main_config_and_real_mise_loads_it(rendered):
