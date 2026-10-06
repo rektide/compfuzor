@@ -73,13 +73,15 @@
       mode: "0755"
     # Maintenance tools promoted from the gitignored 2026-10-01 verification
     # session: standalone config diff, bundle verification, fixture runner.
-    - name: tools/diff-configs.py
+    # TypeScript ports (run directly with node, no build step); the replaced
+    # Python tools were deleted in the same change.
+    - name: tools/diff-configs.ts
       copyDir: True
       mode: "0755"
-    - name: tests/bundle/verify.py
+    - name: tests/bundle/verify.ts
       copyDir: True
       mode: "0755"
-    - name: tests/tools/run.py
+    - name: tests/tools/run.ts
       copyDir: True
       mode: "0755"
     - name: baselines/7.1/README.md
@@ -123,10 +125,10 @@
     - name: debian/README.md
       copyDir: True
       mode: "0644"
-    - name: debian/retrieve.py
+    - name: debian/retrieve.ts
       copyDir: True
       mode: "0755"
-    - name: debian/test_retrieve.py
+    - name: debian/test-retrieve.ts
       copyDir: True
       mode: "0755"
     - name: debian/required-intent.config

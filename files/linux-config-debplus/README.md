@@ -102,7 +102,7 @@ Debian delta. It does not automatically replace the saved legacy-seed config.
 From this bundle's root, refresh the suites into a separate output directory:
 
 ```sh
-./debian/retrieve.py fetch --suite both \
+node ./debian/retrieve.ts fetch --suite both \
   --cache-dir "$HOME/.cache/debplus-debian" --output-dir ./debian-latest
 ```
 
@@ -134,10 +134,14 @@ in the 7.1 audit.
 
 ## Maintenance tools
 
-Two standalone maintenance tools travel with the bundle. Both are stdlib-only
-Python and work from a repository checkout or from a deployed copy.
+The maintenance tools travel with the bundle as TypeScript and run directly
+under Node (`node <tool>.ts`, no build or transpilation step). They depend
+only on the Node standard library plus system binaries — `xz` for compressed
+artifacts, `dpkg` for Debian version ordering, `ar`/`tar` for package
+extraction, `gpgv` for InRelease signatures — and work from a repository
+checkout or from a deployed copy.
 
-[tools/diff-configs.py](tools/diff-configs.py) compares two kernel
+[tools/diff-configs.ts](tools/diff-configs.ts) compares two kernel
 configuration files — plain text or `.xz`, or `-` for standard input — and
 prints one `SYMBOL: old -> new` line per difference, matching the format of
 the recorded layer diffs. Toolchain version/identity symbols are excluded by
@@ -147,11 +151,11 @@ the symbols declared in a policy fragment, and `--quiet` prints only the
 count. The exit status is 0 whether or not symbols differ:
 
 ```sh
-./tools/diff-configs.py --keys-from overrides.config \
+node ./tools/diff-configs.ts --keys-from overrides.config \
   baselines/7.3/config-upstream-defconfig.xz config-debian-plus.xz
 ```
 
-[tests/bundle/verify.py](tests/bundle/verify.py) checks a rendered stage
+[tests/bundle/verify.ts](tests/bundle/verify.ts) checks a rendered stage
 against the bundle's own receipts: declared file bytes and modes, the
 repository-tracked file set, the compression registry and saved audit-output
 hashes, and relative README links. It is a maintenance tool, not part of an
@@ -159,12 +163,16 @@ automatic test run; from a deployed copy without the playbook it skips the
 declaration checks with a note:
 
 ```sh
-python3 tests/bundle/verify.py --stage .test-agent/linux-debplus/stage
+node tests/bundle/verify.ts --stage .test-agent/linux-debplus/stage
 ```
 
-[tests/tools/run.py](tests/tools/run.py) exercises the diff tool against the
+[tests/tools/run.ts](tests/tools/run.ts) exercises the diff tool against the
 durable in-bundle fixtures, including the preserved 22-symbol 7.1 state
-between the exact running configuration and the saved seed.
+between the exact running configuration and the saved seed:
+
+```sh
+node tests/tools/run.ts
+```
 
 The full 2026-10-01 session verification transcript (render logs, audit runs,
 and the original verify script) remains in the gitignored
