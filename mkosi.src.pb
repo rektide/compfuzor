@@ -344,6 +344,14 @@
           [ "$variant" = disk ] || set -- --repart-offline=yes "$@"
           [ -n "$variant" ] && set -- --dependency "$variant" "$@"
           mkosi -B -f -C "$BUILD" "$@"
+      # depsolve.ts (files/mkosi/depsolve.ts, copied raw): pre-solve the
+      # subimage Packages= lists against a scratch apt root BEFORE burning a
+      # build on apt resolution failures (one conflict per mkosi run
+      # otherwise). README "pre-solving package dependencies".
+      - name: depsolve.ts
+        src: depsolve.ts
+        raw: true
+        mode: "0755"
       - name: identity.sh
         src: identity.sh
         raw: true
@@ -362,6 +370,7 @@
           cd /usr/local/src/mkosi-git
           bin/image.sh                          # build default subimage (oci)
           bin/image.sh disk                     # full disk image, universal layout
+          bin/depsolve.ts                       # pre-solve disk pkgsets (see below)
           MKOSI_DATE=20260901 bin/image.sh disk # explicit slot date
           bin/vps-seed.sh myseed                # host-tailored initrd (this kernel)
           bin/identity.sh --first-boot /mnt     # de-identify a mounted clone
@@ -373,6 +382,7 @@
       | `build.sh` | legacy: builds `image.raw` (Debian trixie disk + mkosi-vm) from `etc/pkgs.txt` via CLI |
       | `run-nspawn.sh` | boots `image.raw` in systemd-nspawn |
       | `image.sh [variant]` | **config-driven multi-build** — builds the `etc/mkosi.conf` graph; `image.sh vps-seed` / `oci` builds one subimage via `mkosi --dependency` |
+      | `depsolve.ts` | **pre-solve dependencies** — simulate a subimage's `Packages=` against a scratch apt root; `--fix` converges stale names/conflicts in seconds instead of one failed build per apt error |
       | `vps-seed.sh [name] [mkosi-initrd opts…]` | HOST-tailored initrd (cpio) for this box's kernel via `mkosi-initrd`. Ships fs *kernel modules* (mount ext4/xfs/btrfs) but NOT mkfs.\* tools |
       | `identity.sh` | (re)provision system/disk identity for clone-ready images — see below |
       | `debian-pkgs.sh essential\|recommends\|suggests\|all [pkgs…]` | screen Debian package tiers to stdout for review |
@@ -438,6 +448,49 @@
       BASE_amd64` = 238 pkgs; uncomment the rest for a ~1000-pkg workstation
       image). Use this for full disk/workstation subimages — keep initrd/oci
       subimages lean with explicit `Packages=`.
+
+      ## pre-solving package dependencies (`bin/depsolve.ts`)
+
+      Each failed `image.sh disk` surfaces exactly ONE apt resolution error
+      per multi-minute run. `bin/depsolve.ts` (source: `files/mkosi/depsolve.ts`)
+      converges the same answer in seconds without building: it simulates
+      `apt-get install` of a subimage's `Packages=` list against a **scratch
+      apt root** (`var/cache/depsolve/aptroot/` — suite sources, the apt-cacher
+      proxy, and an empty dpkg status = the same fresh-rootfs semantics as the
+      mkosi install; indices cache between runs, so rounds are fast).
+
+          bin/depsolve.ts                        # verify disk subimage: clean or findings
+          bin/depsolve.ts --fix                  # converge drops; prints the kept list
+          bin/depsolve.ts --json                 # machine-readable findings/drops
+          bin/depsolve.ts --conf etc/mkosi.images/vps-seed/mkosi.conf
+          bin/depsolve.ts resolvconf pipewire-audio      # ad-hoc names / stdin list
+
+      Findings come in two kinds with two DIFFERENT fixes in `vars/pkgs.yaml`
+      (never conflate them):
+
+      - **missing** (`E: Unable to locate package X` / no installation
+        candidate) — a stale name from an older suite: **RENAME** to the
+        current package; dropping it silently loses software.
+      - **conflict** (`E: Unable to satisfy dependencies. Reached two
+        conflicting assignments`) — the requested set asks for two mutually
+        exclusive things (busybox vs busybox-static, resolvconf vs
+        systemd-resolved, the pulseaudio daemon vs pipewire-audio):
+        **DROP or REPLACE** the losing side. `--fix` drops the first
+        explicitly-requested package apt names in its conflict block, which
+        handles both the direct and the transitive ("selected because … but
+        none installable because …") shapes, and stops for manual resolution
+        when that package is protected (`systemd linux-image-amd64 base-files
+        bash apt dpkg util-linux mount pipewire pipewire-audio`; extend with
+        `--protect`).
+
+      Run it after changing `MKOSI_PKGSETS` or `vars/pkgs.yaml`, **before**
+      `image.sh disk`. No root needed (simulate only — no debs download).
+      Suite/components/arch/mirror default from `etc/mkosi.conf`
+      `[Distribution]` (`--suite`/`--components`/`--arch`/`--mirror`
+      override); proxy defaults to this host's apt-cacher (`--proxy ""`
+      disables, like `-e APT_PROXY=`); every flag has a `DEPSOLVE_*` env
+      fallback. Ported from the `.test-agent/mkosi-desktop/solve.sh`
+      prototype that converged the 846-package trixie desktop set.
 
       ## apt caching
 
