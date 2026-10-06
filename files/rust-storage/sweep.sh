@@ -35,4 +35,4 @@ if [ ! -x "$cargo" ]; then
 fi
 # Preserve rustup proxy basename and mise's Rust env; force CARGO after mise env
 # evaluation so metadata cannot fall back to an ambient/system Cargo command.
-exec {{ RUST_STORAGE_MISE_BIN | quote }} exec --no-deps -- /usr/bin/env "CARGO=$cargo" {{ (BINS_DIR ~ '/cargo-sweep') | quote }} sweep --recursive --time "$days" "${preview[@]}" -- "$root"
+exec {{ RUST_STORAGE_MISE_BIN | quote }} exec --no-deps -- /usr/bin/env "CARGO=$cargo" {{ (BINS_DIR ~ '/cargo-sweep') | quote }} sweep --recursive --hidden --time "$days" "${preview[@]}" -- "$root"

@@ -31,6 +31,8 @@
       Preview `bin/sweep.sh src` or `bin/sweep.sh archive`; the default includes
       --dry-run --verbose. Only explicit `--apply` deletes. A missing requested
       root fails loudly. Roots/ages/calendars are configurable at render time.
+      Both profiles discover recursively with --hidden, including Cargo projects
+      in nested hidden directories such as .test-agent; ages are unchanged.
       Defaults are `{{CARGO_SWEEP_SRC_ROOT}}` older than {{CARGO_SWEEP_SRC_DAYS}}
       days Mon/Thu 03:00, and `{{CARGO_SWEEP_ARCHIVE_ROOT}}` older than
       {{CARGO_SWEEP_ARCHIVE_DAYS}} days on the first of each month at 04:00.

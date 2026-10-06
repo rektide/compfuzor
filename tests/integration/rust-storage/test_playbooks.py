@@ -207,7 +207,7 @@ def test_sweep_default_preview_explicit_apply_missing_root_and_queue(rendered):
     for profile, days in (("src", "14"), ("archive", "30")):
         run(str(script), profile, cwd=ROOT, env=env)
         assert (tmp / "sweep.args").read_text().splitlines() == [
-            "sweep", "--recursive", "--time", days, "--dry-run", "--verbose", "--", str(home / profile),
+            "sweep", "--recursive", "--hidden", "--time", days, "--dry-run", "--verbose", "--", str(home / profile),
         ]
         invocation = calls(tmp)[-1]
         assert invocation["cwd"] == str(home)
@@ -222,7 +222,7 @@ def test_sweep_default_preview_explicit_apply_missing_root_and_queue(rendered):
         ]
         run(str(script), profile, "--apply", cwd=ROOT, env=env)
         assert (tmp / "sweep.args").read_text().splitlines() == [
-            "sweep", "--recursive", "--time", days, "--", str(home / profile),
+            "sweep", "--recursive", "--hidden", "--time", days, "--", str(home / profile),
         ]
     before = len(calls(tmp))
     invalid = run(str(script), "src", "--bogus", cwd=ROOT, env=env, check=False)

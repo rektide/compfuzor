@@ -55,6 +55,8 @@ incremental builds and confirm cache effectiveness with real builds/statistics,
 not only green service/link status.
 
 Cargo-sweep age uses access time; filesystem atime policy affects eligibility.
+Both profiles use `--recursive --hidden`, including Cargo projects inside nested
+hidden directories such as `.test-agent`, under the same 14/30-day age policies.
 Recursive manifests can resolve shared/external target directories through Cargo
 metadata: the selected root is a discovery root, **not** a deletion boundary.
 Incremental/examples are excluded; hashed dependencies/build outputs may be
