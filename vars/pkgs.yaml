@@ -58,11 +58,11 @@ BASE:
   - dpkg
   - dpkg-source-gitarchive
   - efivar
-  - libefiboot1
-  - libefivar1
+  - libefiboot1t64
+  - libefivar1t64
   - efitools
   - efibootmgr
-  - libext2fs2
+  - libext2fs2t64
   - e2fsprogs
   - ethtool
   - feedbackd
@@ -101,7 +101,7 @@ BASE:
   - libc6
   - libcap2
   - libcom-err2
-  - libdb5.3
+  - libdb5.3t64
   - libgcc-s1
   - liblocale-gettext-perl
   - liblzma5
@@ -115,7 +115,7 @@ BASE:
   - libpam-runtime
   - libpam0g
   - libproc2-0
-  - libreadline8
+  - libreadline8t64
   - libselinux1
   - libsemanage-common
   - libsemanage2
@@ -242,7 +242,7 @@ BASE:
   - gdisk
   - mdadm
   - cryptsetup-bin
-  - rng-tools
+  - rng-tools-debian
   #- upower
   - vim-tiny
   - curl
@@ -277,8 +277,8 @@ BASE:
   - console-setup
   - console-setup-linux
 WORKSTATION:
-  - dnsutils
-  - dstat
+  - bind9-dnsutils
+  - pcp # provides dstat
   - strace
   - htop
   - rtkit
@@ -594,7 +594,7 @@ WORKSTATION_X:
   - libgl1
   - libgl1-mesa-dri
   - libvulkan1
-  - libglapi-mesa
+  - mesa-libgallium
   - libdrm2
   - libdrm-radeon1
   - libdrm-nouveau2
@@ -925,7 +925,7 @@ DEBDEV:
   - apt-cacher-ng
 AUDIO:
   - alsa-utils
-  - libasound2
+  - libasound2t64
   - libasound2-plugins
   #- libasound2-plugin-equal
   - pulseaudio
@@ -1173,7 +1173,7 @@ VAAPI:
   - mesa-vdpau-drivers
   #- vdpau-va-driver
   - vdpauinfo
-  - mesa-utils-extra
+  #- mesa-utils-extra # merged into mesa-utils (WORKSTATION_X)
 # multimedia-audio-plugins
 VAAPI_amd64:
   - i965-va-driver-shaders
@@ -1209,7 +1209,7 @@ WORKSTATION_WAYLAND:
   - libeis1
   - liboeffis1
   - libei1
-  - libspa-0.2
+  #- libspa-0.2 # not a package; -modules/-bluetooth/-libcamera below suffice
   - libspa-0.2-bluetooth
   - libspa-0.2-libcamera
   - libspa-0.2-modules
@@ -1914,7 +1914,7 @@ FREEIPA:
   - softhsm2-common
   - libsofthsm2
   - libhsm-bin
-  - dnsutils
+  - bind9-dnsutils
   - dns-root-data
   - freeipa-server-trust-ad
   - freeipa-tests
