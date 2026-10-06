@@ -677,7 +677,7 @@ XPRA:
   - ssh-askpass
   #- kssaskpass
   - python3-dbus
-  - pulseaudio
+  #- pulseaudio # daemon conflicts pipewire-alsa; pipewire-pulse is the server
   - pulseaudio-utils
   - pulsemixer
   - gstreamer1.0-plugins-good
@@ -928,13 +928,13 @@ AUDIO:
   - libasound2t64
   - libasound2-plugins
   #- libasound2-plugin-equal
-  - pulseaudio
+  #- pulseaudio # daemon conflicts pipewire-alsa; pipewire-pulse is the server
   - libpulse0
   - liblirc-client0t64
-  - pulseaudio-module-gsettings
+  #- pulseaudio-module-gsettings # daemon module; conflicts pipewire-alsa
   #- pulseaudio-module-lirc
   #- pulseaudio-module-raop
-  - pulseaudio-module-zeroconf
+  #- pulseaudio-module-zeroconf # daemon module; pipewire-pulse serves module-zeroconf-publish
   - vorbis-tools
   #- earcandy
   - playerctl
@@ -994,7 +994,7 @@ PIPEWIRE:
   - libpipewire-0.3-modules
   - libwebrtc-audio-processing1
   - gstreamer1.0-pipewire
-  - pipewire-audio-client-libraries
+  - pipewire-audio # metapackage: pipewire-pulse + wireplumber + pipewire-alsa
   - pipewire-media-session
   - pipewire-pulse
   - pipewire-tests
@@ -1197,7 +1197,7 @@ WORKSTATION_WAYLAND:
   - wf-recorder
   #- fonts-recommended
   - foot
-  - pipewire-audio-client-libraries
+  - pipewire-audio # metapackage: pipewire-pulse + wireplumber + pipewire-alsa
   - helvum
   - pipewire
   - pipewire-bin
