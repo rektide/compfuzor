@@ -249,3 +249,11 @@ completion of the user's whole implementation request.
   lose deployment environment setup for current generated keybinding installers.
 - [Generated keybinding installer](/library/filter_plugins/keybindings_compile.py):
   current one-context external target declaration and original wrapper contract.
+
+# Implemented follow-through
+
+The parent approved the mapping and prepared-session/body-child contract, including
+mandatory early binding validation under later bypass. The
+[complete implementation checkpoint](/design/action-audiences/implementation1.gpt61sol.md)
+records the landed typed contributions, frozen selectors/strategies, completed pure
+argument checks, ownership/cleanup evidence and separate placement/adoption proposal.

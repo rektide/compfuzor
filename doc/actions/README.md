@@ -2,11 +2,10 @@
 
 Compfuzor has an **opt-in** JavaScript action compositor. Without
 `ACTION_AUDIENCES`, existing shell composition and `USERMODE` are unchanged.
-The current seam supports explicitly scoped BINS contributions; automatic
-CONFIG/keybinding context attachment is a separate integration checkpoint.
-Do not globally enable it on context-aware deployments before those mappings
-are provided: an old unscoped CONFIG installer may internally default to user
-context, despite participating in the legacy system compositor.
+It combines explicitly scoped BINS leaves with audience-bound **complete CONFIG
+and keybinding operations**. Other context-selecting domains must still acquire
+their own bindings before broad adoption; merely renaming an unscoped domain
+installer does not make its internal defaults audience-safe.
 
 ## Declaration
 
@@ -67,11 +66,97 @@ Unknown names, omitted audiences/actions and stale entries fail without
 falling back. External same-name symlinks are allowed and still use the real
 deployment's material.
 
-There is no generic `--audience` or environment override. Ordinary arguments
-are forwarded unchanged. Existing domain CLI selection precedence is not
-changed; audience/context validation belongs to each domain adapter, not a
-universal flag scrubber. Merely tagging a legacy leaf does not make its
-arbitrary flags or hardcoded receiver paths audience-safe.
+There is no generic `--audience` or environment override. Ordinary exec children
+receive forwarded argv. Typed domain operations instead parse domain options and
+assert the effective spec/profile/context audience **before authored effects**.
+Existing low-level domain CLI precedence remains compatible. There is no universal
+flag scrubber; a flag valid for CONFIG can be invalid for another selected domain.
+Use a focused family such as `assemble-config.mjs` or
+`assemble-keybindings-niri.mjs` when options only apply to that subsystem.
+
+## Domain bindings
+
+CONFIG attaches `assemble`, `publish`, `sync-inputs`, `inputs` and config-owned
+`install`. An audience binds automatically only when exactly one noncanonical
+declared context has that scope. Resolve ambiguity explicitly:
+
+```yaml
+CONFIG_CONTEXT: desktop              # existing low-level default
+CONFIG_ACTION_CONTEXTS:
+  user: desktop
+  system: host
+```
+
+Context names are arbitrary; an audience is not a context name. Canonical donor
+assembly stays available through the existing low-level CONFIG interface, not as
+a system receiver install. `CONFIG_INSTALL_OWNER` suppresses duplicate generic
+CONFIG install contributions when another domain owns installation.
+
+Keybinding hosts attach complete install and host assembly; generic `assemble`
+asserts native placement mode `assemble`, while install retains seed behavior.
+Producer install retains source registration and membership with its existing
+CONFIG commit/rollback boundary. Declaring both roles preserves different owned
+and external receivers without repeating an identical owned producer install.
+
+Owned consumer contexts infer uniquely per scope. Use `action_contexts` for
+ambiguity; an external target uses it to **declare**, not discover, audiences:
+
+```yaml
+KEYBINDING_CONTEXT: desktop          # existing low-level host default
+KEYBINDING_CONSUMERS:
+  niri:
+    contexts:
+      desktop: {scope: user, root: config, subpath: niri}
+      alternative: {scope: user, root: config, subpath: other-niri}
+      host: {scope: system, root: /etc/niri}
+    action_contexts: {user: desktop, system: host}
+
+KEYBINDING_TARGETS:
+  niri:
+    consumer: {env: CONSUMER_PROFILE}
+    context: desktop
+    scope: user
+    action_contexts: {user: desktop, system: host}
+```
+
+Without an external mapping, the existing target `context`/`scope` pair declares
+one audience. The controller does not fetch arbitrary external profiles. Actual
+profile target/context/scope assertions happen at invocation before body effects.
+Consumers' mappings govern their host operations; target mappings govern producer
+delivery. For an owned target without a consumer override, its mapping can also
+resolve an otherwise unspecified host mapping.
+
+Explicit same-audience contexts or profiles may override a domain default if all
+selected operations accept them. Other-audience overrides, different declared
+targets/producers, canonical receiver misuse and operation/mode switches fail
+clearly. Recipe/strategy/input-command syntax is checked early too.
+
+## Admission and authored work
+
+Receiver roots, output/input bindings, placement selectors and delivery strategies
+are resolved before authored effects. Later `HOME`, XDG, selector-environment,
+strategy or argv changes cannot redirect those admitted domain operations.
+Operational exports still reach execution and ordinary children. No adopted root,
+generated input or native candidate is required merely to bind a context: authored
+work can create those prerequisites before each complete operation validates/applies.
+
+Every selected domain binding is admitted even if an apply-time bypass will skip
+its effects. Thus an invalid audience/profile fails early under bypass in the
+**new general interface**. Existing low-level wrapper skip behavior is unchanged.
+
+Typed graphs use an invocation-private, versioned JSON transport: one owner,
+private `0700` directory / `0600` files, at most 128 selected operations/actions,
+and bounded payloads. It belongs to the physical deployment, current action graph,
+audience and live owner process ancestry (Linux `/proc`). It is not a durable
+workflow, registry, replay token, locking layer or privilege broker. Success,
+failure and handled signals clean it up. Pure exec-only graphs do not create it.
+
+Preparation uses only verified env/variable/cwd setup, never early/content/generated/
+late blocks or a child loop. Trusted `env.export` remains executable shell code;
+preparation is **not globally effect-free**. Root setup is captured once and reused
+by the body, avoiding a second root source. Subsystem setup and existing keybinding
+apply envelopes keep their normal environment sourcing/bypass behavior. Domain
+selection is already frozen when those later sources run.
 
 Default changes update the newly declared real-file/symlink representations.
 Omission does **not** prune old files. A current spec, including an empty
@@ -88,20 +173,28 @@ low-level leaves and arbitrary shell bodies are not sandboxed.
   are reused. Subsystems receive the same qualified action families.
 - Pure aggregates execute sequentially in JavaScript. Selected child paths
   are physically contained in the deployment, but their lexical alias paths
-  are executed. The selected graph is checked before the first child runs.
+  are executed. They must be regular executable files. The selected graph is
+  checked before the first child runs.
 - Authored inline shell roots keep their original `.sh` path as internal body
   bridges. This preserves `$0`, `dirname($0)`, exported state, original
   `run_all`, helpers and body-local bypass semantics. A shared-runtime guard
   verifies that the current spec still claims the body before it executes.
+  Typed bodies execute their children through one shared runner, not through
+  both the old loop and JavaScript. Direct body invocation redirects to its
+  qualified action to establish the same admission barrier.
   Existing guarded `late` blocks run **before** composed children, as before;
   the new compositor does not silently reorder them.
 - Raw/source/Node authored roots are rejected rather than moved unsafely.
   Declare such work as a named composing leaf instead.
-- Child cwd and `DIR` are deployment-rooted. `COMPFUZOR_ACTION_AUDIENCE` is
+- Entry rooting and `DIR` are physical-deployment based. Ordinary children under
+  a body inherit its cwd; nested action aggregates retain their own setup.
+  `COMPFUZOR_ACTION_AUDIENCE` is
   exported to specifically audience-aware children; it does not rewrite
   arbitrary leaf bodies. Nonzero child exit codes are preserved and stop the
   aggregate. Interrupt/termination/hangup signals forward to the active process
   group and terminate the action with that signal.
+  Private session/operation markers are cleared from unrelated ordinary children
+  and from complete operations' workers/native validators.
 - The catalog observes scoped public action entries and their plans. Its
   authority is `action-audiences`, read-only. Enabling the old unscoped native
   flow executor alongside this lane is rejected; it must not run both
@@ -116,12 +209,15 @@ Deployment material placement is unchanged.
 
 - [Controller compiler](/library/filter_plugins/action_audiences.py) — policy,
   alias families, original composer reuse and body-bridge claims.
-- [Runtime](/files/actions/runtime.ts) and [entry adapter](/files/actions/entry.ts)
-  — import-safe selection, graph admission and process outcomes.
+- [Runtime](/files/actions/runtime.ts), [operation adapter](/files/actions/operations.ts),
+  [private transport](/files/actions/session.ts) and [entry adapter](/files/actions/entry.ts)
+  — selection, shared domain admission/execution and process outcomes.
 - [Ansible wiring](/tasks/compfuzor/gen_bins.tasks) — mutually exclusive new and
   legacy composition; no global action-vocabulary expansion.
 - [Controller tests](/tests/filter_plugins/action_audiences.test.py),
   [selection tests](/tests/action-audiences/selection.test.ts), and
   [isolated execution tests](/tests/integration/action_audiences.test.py).
-- [Implementation checkpoint](/design/action-audiences/implementation0.gpt61sol.md)
-  — exact implemented boundary, evidence and proposed domain integration.
+- [Domain mapping tests](/tests/filter_plugins/action_contexts.test.py) and
+  [compiled mixed-domain tests](/tests/integration/action_domains.test.py).
+- [Domain implementation checkpoint](/design/action-audiences/implementation1.gpt61sol.md)
+  — implemented boundary, evidence and next placement/adoption proposal.

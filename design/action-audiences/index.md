@@ -2,9 +2,11 @@
 
 ## Implementation checkpoints
 
+- [Complete domain integration](/design/action-audiences/implementation1.gpt61sol.md):
+  implemented CONFIG/keybinding contributions, frozen receiver admission, shared
+  body execution, cleanup evidence and the concrete next placement/adoption proposal.
 - [Domain admission foundations and bridge gate](/design/action-audiences/domain-admission0.gpt61sol.md):
-  committed CONFIG/keybinding admission seams; proposed minimal context mapping and
-  prepared-operation/body-child transport awaiting architectural review.
+  earlier admission foundations and subsequently approved mapping/transport choices.
 - [Verified composition seam](/design/action-audiences/implementation0.gpt61sol.md):
   implemented opt-in `.mjs` families, exact changed paths, Node 20 evidence and
   the still-pending domain/context and material-placement integration.
@@ -12,7 +14,7 @@
   first proposed schema and slice; later authorization removed implicit fallback
   and the verified implementation retains authored body filenames.
 - [Maintained action contract](/doc/actions/README.md): current schema and behavior,
-  with an explicit warning against broad adoption before domain mappings land.
+  including CONFIG/keybinding binding; placement and other-domain adoption stay separate.
 
 ## Direction
 
