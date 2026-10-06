@@ -264,3 +264,34 @@ export async function runAction(
   }
   return { code: 0 };
 }
+
+/** Internal shell bridge admission. Stale bodies cannot outlive their plan claim. */
+export async function guardActionBody(argv: string[], deploymentDir: string): Promise<number> {
+  const [command, name, audience, path, ...extra] = argv;
+  if (
+    command !== "guard" ||
+    extra.length ||
+    !name ||
+    !path ||
+    !AUDIENCES.includes(audience as Audience)
+  )
+    fail("internal usage: actions guard NAME user|system bin/PATH");
+  const spec = parseActionSpec(
+    JSON.parse(await readFile(resolve(deploymentDir, "etc/compfuzor-actions/spec.json"), "utf8")),
+  );
+  const family = spec.actions[name];
+  if (
+    !family?.plans[audience as Audience]?.some(
+      (step) => step.kind === "exec" && step.path === path && step.children !== undefined,
+    )
+  )
+    fail(`unavailable or stale authored action body: ${path}`);
+  const physicalEntry = await realpath(resolve(deploymentDir, "bin", family.entry));
+  const selection = selectAction(
+    spec,
+    resolve(deploymentDir, "bin", `${name}-${audience}.mjs`),
+    physicalEntry,
+  );
+  await preflight(spec, selection);
+  return 0;
+}

@@ -12,6 +12,7 @@ import { main as runFlow } from "../flow/runtime.ts";
 import { main as runLinks } from "../links/runtime.ts";
 import { main as runZim } from "../zim/runtime.ts";
 import { main as runKeybindings } from "../config/keybindings/runtime.ts";
+import { guardActionBody } from "../actions/runtime.ts";
 
 export { actionEntry } from "../actions/entry.ts";
 
@@ -22,11 +23,12 @@ export type RuntimeDomain =
   | "flow"
   | "links"
   | "zim"
-  | "keybindings";
+  | "keybindings"
+  | "actions";
 
 const RUNTIME_NAME = "compfuzor-runtime.mjs";
 const RUNTIME_SOURCE_NAME = "compfuzor-runtime.ts";
-const USAGE = `Usage: compfuzor-runtime.mjs <catalog|config|config-remote|flow|links|zim|keybindings> ...
+const USAGE = `Usage: compfuzor-runtime.mjs <catalog|config|config-remote|flow|links|zim|keybindings|actions> ...
 
 Ordinary deployments invoke this multicall runtime through stable domain
 aliases such as config/command.mjs, config-remote.mjs, links.mjs, and
@@ -90,7 +92,8 @@ async function selectedDomain(
     domain !== "flow" &&
     domain !== "links" &&
     domain !== "zim" &&
-    domain !== "keybindings"
+    domain !== "keybindings" &&
+    domain !== "actions"
   ) {
     fail(USAGE);
   }
@@ -106,6 +109,7 @@ async function runDomain(
   try {
     if (domain === "catalog") return await runCatalog(argv, deploymentDir);
     if (domain === "flow") return await runFlow(argv, deploymentDir);
+    if (domain === "actions") return await guardActionBody(argv, deploymentDir);
     if (domain === "config") return await runConfig(argv, deploymentDir, invokedAs);
     if (domain === "links") return await runLinks(argv, deploymentDir);
     if (domain === "zim") return await runZim(argv, deploymentDir);

@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import copy
+import os
 import posixpath
 import re
+import sys
 from collections.abc import Mapping
 
 from ansible.errors import AnsibleFilterError
 from ansible.template import accept_args_markers
+
+_PLUGIN_DIR = os.path.abspath(os.path.dirname(__file__))
+if _PLUGIN_DIR not in sys.path:
+    sys.path.insert(0, _PLUGIN_DIR)
 
 from bin_composers import (
     BIN_ACTIONS, _arrayitize, _contributors, _resolve_phase, bin_composers,
@@ -23,6 +29,7 @@ AUDIENCES = ("user", "system")
 SPEC_PATH = "compfuzor-actions/spec.json"
 _ACTION = re.compile(r"^(" + "|".join(ACTIONS) + r")(?:-[A-Za-z0-9.\\][A-Za-z0-9._\\-]*)?(?:\.user)?\.(?:sh|mjs|ts)$")
 _BODY = ("early", "content", "exec", "execs", "generated", "late", "src")
+_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
 
 def fail(message):
@@ -55,16 +62,20 @@ def policy_settings(value, label, inherited=None):
     unknown = set(value) - {"default", "available"}
     if unknown:
         fail(label + " has unknown settings: " + ", ".join(sorted(unknown)))
+    parent = inherited
     inherited = inherited or {"default": "user", "available": list(AUDIENCES)}
     result = {**inherited, **value}
     if result["default"] not in AUDIENCES:
         fail(label + ".default must be user/system")
+    if not isinstance(result["available"], list):
+        fail(label + ".available must be a list")
     result["available"] = audiences(result["available"], label + ".available")
+    if parent is not None and set(result["available"]) - set(parent["available"]):
+        fail(label + ".available cannot enable a globally unavailable audience")
     # An inherited default may have no plan/shortcut. An explicitly contradictory
     # declaration is an error, not an invitation to run the other audience.
     if "default" in value and result["default"] not in result["available"]:
         fail(label + ".default is not in its declared available audiences")
-    result["explicitDefault"] = "default" in value
     return result
 
 
@@ -133,7 +144,7 @@ def compile_action_audiences(bins, policy):
             key = (action, scopes[0])
             if key in roots:
                 fail("multiple authored roots for {} {}".format(*key))
-            if item.get("raw") or item.get("link") or item.get("runtime", "shell") != "shell" or "src" in item:
+            if not name.endswith(".sh") or item.get("raw") or item.get("link") or item.get("runtime", "shell") != "shell" or "src" in item:
                 fail("authored action roots require inline shell bodies; use a named composing leaf for source/raw/node commands")
             roots[key] = item
         else:
@@ -150,19 +161,22 @@ def compile_action_audiences(bins, policy):
         name = comp["name"][:-len("-" + audience + ".sh")]
         groups.setdefault(name, {"action": action, "plans": {}})["plans"][audience] = comp["run_all"]
         comp_keys[comp["name"]] = name
-    for action, audience in roots:
-        groups.setdefault(action, {"action": action, "plans": {}})["plans"].setdefault(audience, [])
+    root_paths = {}
+    for (action, audience), root in roots.items():
+        root_paths[root.get("dest", root["name"])] = (action, audience)
+        if any(root.get(field) not in (None, False, "", []) for field in _BODY) or _arrayitize(root.get("run_all")):
+            groups.setdefault(action, {"action": action, "plans": {}})["plans"].setdefault(audience, [])
 
     spec = {"version": 1, "actions": {}}
     generated = []
     for name, group in groups.items():
+        if not _NAME.fullmatch(name):
+            fail("action/subsystem name must be a stable identifier: " + name)
         action = group["action"]
         config = settings[action]
         if config is None:
             continue
         available = [audience for audience in AUDIENCES if audience in config["available"] and audience in group["plans"]]
-        if config["explicitDefault"] and config["default"] not in available and name == action:
-            fail("{} explicitly defaults to an audience with no contributed plan: {}".format(action, config["default"]))
         if not available:
             continue
         default = config["default"] if config["default"] in available else None
@@ -183,19 +197,25 @@ def compile_action_audiences(bins, policy):
             root = roots.get((name, audience))
             authored_children = _arrayitize(root.get("run_all")) if root is not None else []
             children = authored_children + group["plans"][audience]
+            child_actions = dict(comp_keys)
+            for child in authored_children:
+                if child in root_paths:
+                    referenced_action, referenced_audience = root_paths[child]
+                    if referenced_audience != audience:
+                        fail("authored run_all cannot cross audiences: " + child)
+                    child_actions[child] = referenced_action
             for child in children:
                 relative_bin(child)
-                if child in comp_keys:
-                    steps.append({"kind": "action", "action": comp_keys[child]})
+                if child in child_actions:
+                    steps.append({"kind": "action", "action": child_actions[child]})
                 else:
                     steps.append({"kind": "exec", "path": "bin/" + child})
             if root is not None:
-                private = "internal/action-audiences/" + name + "-" + audience + ".sh"
-                if private in occupied:
-                    fail("private action body collision: " + private)
-                occupied.add(private)
-                children = [comp_keys[child] + "-" + audience + ".mjs" if child in comp_keys else child for child in children]
-                generated.append({**root, "name": private, "dest": private, "generated_by": "gen_bins", "compose": False, "run_all": children, "deployment_rooted": True, "deployment_root_relative": "../../..", "action_report_name": root.get("name"), "action": action, "scope": [audience]})
+                # Keep the authored shell path: $0/dirname($0), exported state
+                # and late blocks are all observable legacy body semantics.
+                private = root.get("dest", root["name"])
+                children = [child_actions[child] + "-" + audience + ".mjs" if child in child_actions else child for child in children]
+                generated.append({**root, "name": private, "dest": private, "generated_by": "gen_bins", "compose": False, "run_all": children, "deployment_rooted": True, "action_body": {"name": name, "audience": audience, "path": "bin/" + private}, "action": action, "scope": [audience]})
                 steps = [{"kind": "exec", "path": "bin/" + private, "children": steps}]
             plans[audience] = steps
         family = {"name": name, "action": action, "entry": entry, "aliases": aliases, "plans": plans}
@@ -215,7 +235,7 @@ def compile_action_audiences(bins, policy):
         "spec": spec,
         "etc_files": [{"name": SPEC_PATH, "json": spec}],
         "etc_dirs": ["compfuzor-actions"],
-        "bin_dirs": ["internal", "internal/action-audiences"],
+        "bin_dirs": [],
     }
 
 

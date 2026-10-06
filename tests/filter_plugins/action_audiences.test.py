@@ -52,10 +52,13 @@ def test_families():
     empty = compile_action_audiences(bins, {"available": []})
     assert empty["spec"] == {"version": 1, "actions": {}}
     assert empty["etc_files"][0]["json"] == empty["spec"]
+    assert compile_action_audiences([{"name": "install-user.sh"}], {})["spec"]["actions"] == {}
     assert sum(item.get("name") == "compfuzor-runtime.mjs" for item in compiled["bins"]) == 1
 
     reject(lambda: compile_action_audiences(bins, {"default": "user", "available": ["system"]}), "not in")
-    reject(lambda: compile_action_audiences(bins, {"actions": {"build": {"default": "user"}}}), "no contributed plan")
+    assert compile_action_audiences(bins, {"actions": {"build": {"default": "user"}}})["spec"]["actions"]["build"]["aliases"] == []
+    reject(lambda: compile_action_audiences(bins, {"available": False}), "must be a list")
+    reject(lambda: compile_action_audiences(bins, {"available": ["user"], "actions": {"install": {"available": ["system"]}}}), "globally unavailable")
     reject(lambda: compile_action_audiences(bins, {"actions": {"bogus": False}}), "unknown actions")
     reject(lambda: compile_action_audiences([{"name": "install-x.sh", "scope": "shell"}], {}), "only user/system")
     reject(lambda: compile_action_audiences([{"name": "../install-x.sh", "action": "install"}], {}), "contained relative")
@@ -75,10 +78,10 @@ def test_body_and_catalog():
         {"name": "install-first-user.sh", "phase": "main"},
         {"name": "manual.sh", "compose": False},
     ], {})
-    body = next(item for item in compiled["bins"] if item["name"].startswith("internal/action-audiences/"))
+    body = next(item for item in compiled["bins"] if "action_body" in item)
     assert body["run_all"] == ["manual.sh", "install-first-user.sh", "install-bookkeeping-user.mjs"]
     assert body["content"] == "export BODY_STATE=yes" and body["late"] == "echo after" and body["bypass"] == "OWN"
-    assert body["deployment_root_relative"] == "../../.." and body["action_report_name"] == "install-user.sh"
+    assert body["name"] == "install-user.sh" and body["action_body"] == {"name": "install", "audience": "user", "path": "bin/install-user.sh"}
     plan = compiled["spec"]["actions"]["install"]["plans"]["user"]
     assert len(plan) == 1 and plan[0]["children"][0]["path"] == "bin/manual.sh"
     catalog = compile_runtime_catalog({"id": "deployment:demo"}, compiled["bins"], [], etc_files=compiled["etc_files"])

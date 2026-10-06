@@ -240,7 +240,7 @@ def compile_runtime_catalog(
             "path": "bin/{}".format(name),
             "contributors": _refs(record),
         }
-        for field in ("scope", "subsystem", "phase", "compose", "run", "generated_by", "audience_action"):
+        for field in ("scope", "subsystem", "phase", "compose", "run", "generated_by", "audience_action", "action_body"):
             if field in record:
                 command[field] = copy.deepcopy(record[field])
         commands.append(command)
@@ -263,6 +263,8 @@ def compile_runtime_catalog(
         for child in record.get("run_all", [])
     }
     for name, record in bins_by_name.items():
+        if "action_body" in record:
+            continue
         family = record.get("audience_action")
         if isinstance(family, collections.abc.Mapping) and family.get("name") in ("build", "install"):
             flow = family["name"]
