@@ -5,6 +5,7 @@
     src: "{{item.link|defaultDir(BINS_DIR)}}"
     dest: "{{_dest}}"
     state: link
+    force: "{{ item.force | default(omit) }}"
   with_items: "{{ BINS|normalize(to='list') }}"
   become: "{{ _become.become }}"
   when: item is mapping and item.link is deftruthy and item.delay|default(False) == delay_phase|default(False)

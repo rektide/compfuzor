@@ -13,6 +13,8 @@ import { main as runLinks } from "../links/runtime.ts";
 import { main as runZim } from "../zim/runtime.ts";
 import { main as runKeybindings } from "../config/keybindings/runtime.ts";
 
+export { actionEntry } from "../actions/entry.ts";
+
 export type RuntimeDomain =
   | "catalog"
   | "config"

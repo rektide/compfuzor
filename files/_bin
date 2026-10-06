@@ -7,7 +7,7 @@
 {% set _has_own_body = item.early is defined or item.generated is defined or item.content is defined or item.exec is defined or item.execs is defined or item.late is defined %}
 {% set _fallback_type = TYPE | default(none) if not _is_compositor or _has_own_body else none %}
 {% set _resolver_bypass = false if _is_compositor and not _has_own_body else item.bypass | default(none) %}
-{% set _disarm = item.name | resolve_bin_disarm(
+{% set _disarm = item.action_report_name | default(item.name) | resolve_bin_disarm(
   item.origin_subsystems | default(none),
   item.bypass_scopes | default(none),
   _resolver_bypass,
@@ -26,7 +26,11 @@
 {% if _deployment_rooted %}
 # Deployment orchestrators never inherit another deployment's DIR.
 _cf_script="$(readlink -f -- "$0")"
+{% if item.deployment_root_relative is defined %}
+export DIR="$(realpath -- "$(dirname "$_cf_script")/{{ item.deployment_root_relative }}")"
+{% else %}
 export DIR="$(dirname "$(dirname "$_cf_script")")"
+{% endif %}
 unset _cf_script
 {% endif %}
 {% for _h in _helpers %}

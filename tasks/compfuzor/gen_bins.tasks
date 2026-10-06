@@ -13,7 +13,20 @@
 - name: "Compfuzor: synthesize bin action compositors"
   set_fact:
     BINS: "{{ BINS | merge_list(BINS | bin_composers, preset='bins_generated') }}"
-  when: BINS | bin_composers | length > 0
+  when: ACTION_AUDIENCES is not defined and BINS | bin_composers | length > 0
+
+- name: "Compfuzor: compile audience action families"
+  set_fact:
+    _ACTION_AUDIENCES: "{{ BINS | action_audiences_compile(ACTION_AUDIENCES) }}"
+  when: ACTION_AUDIENCES is defined
+
+- name: "Compfuzor: contribute audience action families"
+  set_fact:
+    BINS: "{{ _ACTION_AUDIENCES.bins }}"
+    ETC_FILES: "{{ (ETC_FILES | default([])) + _ACTION_AUDIENCES.etc_files }}"
+    ETC_DIRS: "{{ (ETC_DIRS | default([])) + _ACTION_AUDIENCES.etc_dirs }}"
+    DIRS: "{{ (DIRS | default([])) + (_ACTION_AUDIENCES.bin_dirs | map('defaultDir', BINS_DIR) | list) }}"
+  when: ACTION_AUDIENCES is defined
 
 - name: "Compfuzor: resolve absent bin tombstones"
   set_fact:

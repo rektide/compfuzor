@@ -142,6 +142,8 @@ def _resource_records(etc_files, links_plan, subsystems):
         resources.append({"id": "config", "contract": "compfuzor.config/v2", "path": "etc/config.spec.json"})
     if "zim.spec.json" in names:
         resources.append({"id": "zim", "contract": "compfuzor.zim/v2", "path": "etc/zim.spec.json"})
+    if "compfuzor-actions/spec.json" in names:
+        resources.append({"id": "action-audiences", "contract": "compfuzor.actions/v1", "path": "etc/compfuzor-actions/spec.json"})
     if isinstance(links_plan, collections.abc.Mapping) and links_plan.get("links"):
         resources.append({"id": "links", "contract": "compfuzor.links/v2", "path": "links.json"})
     return resources
@@ -180,6 +182,11 @@ def compile_runtime_catalog(
 
     bin_records = [copy.deepcopy(dict(item)) for item in _list(bins, "BINS") if isinstance(item, collections.abc.Mapping)]
     bins_by_name = {name: item for item in bin_records if isinstance((name := _name(item)), str)}
+    audience_mode = any("audience_action" in item for item in bin_records) or any(
+        _name(item) == "compfuzor-actions/spec.json" for item in _list(etc_files, "ETC_FILES")
+    )
+    if audience_mode and execution_enabled:
+        _error("audience actions cannot enable the unscoped native flow runner; invoke qualified action entries instead")
     status_records = []
     for raw in _list(statuses, "STATUSES"):
         if isinstance(raw, str):
@@ -233,7 +240,7 @@ def compile_runtime_catalog(
             "path": "bin/{}".format(name),
             "contributors": _refs(record),
         }
-        for field in ("scope", "subsystem", "phase", "compose", "run", "generated_by"):
+        for field in ("scope", "subsystem", "phase", "compose", "run", "generated_by", "audience_action"):
             if field in record:
                 command[field] = copy.deepcopy(record[field])
         commands.append(command)
@@ -256,6 +263,16 @@ def compile_runtime_catalog(
         for child in record.get("run_all", [])
     }
     for name, record in bins_by_name.items():
+        family = record.get("audience_action")
+        if isinstance(family, collections.abc.Mapping) and family.get("name") in ("build", "install"):
+            flow = family["name"]
+            for sequence, audience in enumerate(family["plans"], start=1):
+                child = "{}-{}.mjs".format(flow, audience)
+                filename, invocation = _invocation_file(flow, audience, child, sequence, bins_by_name)
+                invocation["source"] = {"kind": "audience-action", "name": flow}
+                files.append({"name": filename, "invocation": invocation})
+                flows[flow].append(invocation["id"])
+            continue
         match = _ROOT.fullmatch(name)
         if not match or record.get("generated_by") != "gen_bins" or name in generated_children:
             continue
@@ -310,7 +327,7 @@ def compile_runtime_catalog(
         "actions": actions,
         "flows": {name: {"name": name, "entries": entries} for name, entries in flows.items()},
         "execution": {
-            "authority": "catalog" if execution_enabled else "legacy-shell",
+            "authority": "action-audiences" if audience_mode else ("catalog" if execution_enabled else "legacy-shell"),
             "catalogOnly": not execution_enabled,
         },
     }
