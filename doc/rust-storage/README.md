@@ -24,10 +24,21 @@ deployment symlinks, not per-crate mise wrappers. Build-time `mise where` and
 `mise which --tool` resolve the exact pinned installation/executable without
 assuming aqua's archive layout; an executable outside that installation fails.
 Sweeps use absolute mise exec
-from home for Cargo metadata's Rust environment, with tool/toolchain auto-install
-disabled. A missing sweep root is an error. A shared blocking flock serializes
+from home for Cargo metadata's Rust environment. Tool auto-install is disabled,
+and `exec --no-deps` disables automatic dependency preparation. A preflight
+`mise which cargo --tool rust` requires an installed selected Cargo; its absolute
+proxy path is passed as CARGO after mise's env evaluation, without resolving a
+basename-sensitive rustup symlink. Metadata cannot fall back to ambient/system
+Cargo. `RUSTUP_AUTO_INSTALL=0` requires **rustup >=1.28.1** to prevent missing
+toolchain installation; install the selected toolchain ahead of time. These
+controls are not a network sandbox. Metadata stays in HOME, so mise's global
+RUSTUP_TOOLCHAIN can override project toolchain files.
+A missing sweep root is an error. A shared blocking flock serializes
 these sweeps only; overlapping persistent catch-up runs wait rather than being
 skipped. Lock errors propagate. It does **not** protect builds.
+Sweep oneshots do not restart automatically on failure; inspect their results
+and retry manually or wait for the next timer. The sccache daemon retains its
+intended restart-on-failure policy.
 
 ## Boundaries and limitations
 
@@ -78,3 +89,9 @@ experimental build-dir, and successful status is not proof of complete cleanup.
   [env-module don't-stomp policy](/library/filter_plugins/zim_fragment.py):
   `ZIM_ENV` projects the declared incremental setting into a generated module;
   contributor import remains an operator action, separate from inert rendering.
+- [rustup environment variables](https://rust-lang.github.io/rustup/environment-variables.html)
+  and [rustup 1.28.1 change](https://github.com/rust-lang/rustup/blob/1.28.2/CHANGELOG.md#L23-L28):
+  the minimum supported prerequisite for the unattended auto-install guard.
+- [cargo_metadata 0.9.1 Cargo selection](https://docs.rs/cargo_metadata/0.9.1/src/cargo_metadata/lib.rs.html):
+  metadata honors CARGO before its PATH-based fallback; the sweep wrapper supplies
+  the absolute mise-selected proxy while preserving mise's Rust environment.

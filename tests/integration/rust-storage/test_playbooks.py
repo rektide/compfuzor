@@ -52,10 +52,17 @@ with open(os.environ["RUST_STORAGE_LOG"], "a") as log:
 if sys.argv[1] == "where":
     print(os.environ["RUST_STORAGE_INSTALLED"])
 elif sys.argv[1] == "which":
-    print(os.environ["RUST_STORAGE_EXECUTABLE"])
+    if sys.argv[2] == "cargo":
+        if os.environ.get("RUST_STORAGE_MISSING_RUST"):
+            sys.exit(41)
+        print(os.environ["RUST_STORAGE_CARGO"])
+    else:
+        print(os.environ["RUST_STORAGE_EXECUTABLE"])
 elif sys.argv[1] == "exec":
-    assert sys.argv[2] == "--"
-    os.execv(sys.argv[3], sys.argv[3:])
+    assert sys.argv[2:4] == ["--no-deps", "--"]
+    os.environ["RUSTUP_TOOLCHAIN"] = "fixture-nightly"
+    os.environ["RUSTUP_HOME"] = str(pathlib.Path(os.environ["HOME"]) / ".rustup")
+    os.execv(sys.argv[4], sys.argv[4:])
 ''')
         fake.chmod(0o755)
         common = {
@@ -84,6 +91,8 @@ elif sys.argv[1] == "exec":
                          f"{tool}.opt.pb", "-e", json.dumps(variables), cwd=ROOT)
             (tmp / f"{tool}.render.log").write_text(result.stdout + result.stderr)
             deployments[tool] = deployment
+            assert not (deployment / "bin" / tool).exists()
+            assert not (deployment / "bin" / tool).is_symlink()
         # Render must never reach the fake mise or apply its deferred links.
         assert not (tmp / "mise.log").exists()
         assert not (home / ".config/mise/conf.d/compfuzor-sccache.toml").exists()
@@ -107,13 +116,23 @@ def fake_build(tmp: Path, deployment: Path, tool: str, home: Path) -> dict[str, 
     bindir = installed / ("sccache-v0.18.0-platform" if tool == "sccache" else "bin")
     bindir.mkdir(parents=True, exist_ok=True)
     executable = bindir / tool
-    executable.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$RUST_STORAGE_SWEEP_ARGS"\n')
+    executable.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$RUST_STORAGE_SWEEP_ARGS"\n'
+                          + ('"$CARGO" metadata-fixture\n' if tool == "cargo-sweep" else ''))
     executable.chmod(0o755)
+    proxies = tmp / "fake rustup"
+    proxies.mkdir(exist_ok=True)
+    (proxies / "rustup").write_text('#!/bin/sh\nprintf "%s\\n" "$0" "$CARGO" "$RUSTUP_TOOLCHAIN" "$RUSTUP_HOME" > "$RUST_STORAGE_METADATA_ENV"\n')
+    (proxies / "rustup").chmod(0o755)
+    cargo_proxy = proxies / "cargo"
+    if not cargo_proxy.is_symlink():
+        cargo_proxy.symlink_to("rustup")
     env = os.environ | {
         "HOME": str(home), "RUST_STORAGE_INSTALLED": str(installed),
         "RUST_STORAGE_LOG": str(tmp / "mise.log"),
         "RUST_STORAGE_EXECUTABLE": str(executable),
         "RUST_STORAGE_SWEEP_ARGS": str(tmp / "sweep.args"),
+        "RUST_STORAGE_CARGO": str(cargo_proxy),
+        "RUST_STORAGE_METADATA_ENV": str(tmp / "metadata.env"),
     }
     before = len(calls(tmp))
     run(str(deployment / "bin/build.sh"), cwd=ROOT, env=env)
@@ -139,10 +158,10 @@ def test_render_user_units_mise_env_and_inert_lanes(rendered):
         links = json.loads((deployment / "links.json").read_text())["links"]
         assert links and all(link["scope"] == "user" for link in links)
         assert not any(link["dest"].startswith("/etc/") for link in links)
-        assert not (deployment / "bin" / deployment.name.removesuffix("-main")).exists()
     unit = (sccache / "etc/sccache-main.service").read_text()
     assert f'ExecStart="{sccache}/bin/sccache"\n' in unit
     assert "Type=exec" in unit and "WantedBy=default.target" in unit
+    assert "Restart=on-failure\n" in unit
     assert "--start-server" not in unit
     for setting in ("SCCACHE_START_SERVER=1", "SCCACHE_NO_DAEMON=1",
                     "SCCACHE_IDLE_TIMEOUT=0", "SCCACHE_CACHE_SIZE=20G"):
@@ -162,6 +181,8 @@ def test_render_user_units_mise_env_and_inert_lanes(rendered):
         assert "WorkingDirectory=%h" in service
         assert f'ExecStart="{sweep}/bin/sweep.sh" {profile} --apply' in service
         assert "WantedBy=default.target" not in service
+        assert "Restart=" not in service and "RestartSec=" not in service
+        assert "EnvironmentFile=" not in service
     assert len(list(sweep.joinpath("etc").glob("*.timer"))) == 2
     assert len(list(sweep.joinpath("etc").glob("*.service"))) == 2
 
@@ -190,10 +211,15 @@ def test_sweep_default_preview_explicit_apply_missing_root_and_queue(rendered):
         ]
         invocation = calls(tmp)[-1]
         assert invocation["cwd"] == str(home)
-        assert invocation["argv"][:3] == ["exec", "--", str(deployment / "bin/cargo-sweep")]
+        assert invocation["argv"][:6] == ["exec", "--no-deps", "--", "/usr/bin/env",
+                                          f'CARGO={env["RUST_STORAGE_CARGO"]}', str(deployment / "bin/cargo-sweep")]
         assert invocation["env"] == {
             "MISE_AUTO_INSTALL": "false", "MISE_EXEC_AUTO_INSTALL": "false", "RUSTUP_AUTO_INSTALL": "0",
         }
+        assert calls(tmp)[-2]["argv"] == ["which", "cargo", "--tool", "rust"]
+        assert (tmp / "metadata.env").read_text().splitlines() == [
+            env["RUST_STORAGE_CARGO"], env["RUST_STORAGE_CARGO"], "fixture-nightly", str(home / ".rustup"),
+        ]
         run(str(script), profile, "--apply", cwd=ROOT, env=env)
         assert (tmp / "sweep.args").read_text().splitlines() == [
             "sweep", "--recursive", "--time", days, "--", str(home / profile),
@@ -223,8 +249,8 @@ def test_sweep_default_preview_explicit_apply_missing_root_and_queue(rendered):
                 stdout, stderr = child.communicate(timeout=10)
                 assert child.returncode == 0, (stdout, stderr)
                 assert "skipping" not in stdout
-    assert len(calls(tmp)) == before + 2
-    assert {call["argv"][-1] for call in calls(tmp)[before:]} == {str(home / "src"), str(home / "archive")}
+    assert len(calls(tmp)) == before + 4
+    assert {call["argv"][-1] for call in calls(tmp)[before:] if call["argv"][0] == "exec"} == {str(home / "src"), str(home / "archive")}
 
     broken = tmp / "broken flock"
     broken.mkdir()
@@ -232,7 +258,21 @@ def test_sweep_default_preview_explicit_apply_missing_root_and_queue(rendered):
     (broken / "flock").chmod(0o755)
     failure = run(str(script), "src", cwd=ROOT, env=env | {"PATH": f"{broken}:/usr/bin:/bin"}, check=False)
     assert failure.returncode == 73 and "skipping" not in failure.stdout
-    assert len(calls(tmp)) == before + 2
+    assert len(calls(tmp)) == before + 4
+
+
+def test_missing_selected_cargo_fails_without_running_sweep(rendered):
+    tmp, home, deployments = rendered
+    deployment = deployments["cargo-sweep"]
+    env = fake_build(tmp, deployment, "cargo-sweep", home)
+    script = deployment / "bin/sweep.sh"
+    for overrides, expected in (({"RUST_STORAGE_MISSING_RUST": "1"}, 41),
+                                ({"RUST_STORAGE_CARGO": str(tmp / "missing cargo")}, 1),
+                                ({"RUST_STORAGE_CARGO": "cargo"}, 1)):
+        before = len(calls(tmp))
+        result = run(str(script), "src", "--apply", cwd=home, env=env | overrides, check=False)
+        assert result.returncode == expected
+        assert [call["argv"] for call in calls(tmp)[before:]] == [["which", "cargo", "--tool", "rust"]]
 
 
 def test_zim_incremental_contributor_is_inert_and_preserves_existing_values(rendered):

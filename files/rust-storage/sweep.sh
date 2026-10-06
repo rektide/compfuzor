@@ -24,4 +24,15 @@ flock 9
 cd {{ HOMEDIR | quote }}
 # Preserve mise's selected Rust environment without unattended installation.
 export MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false RUSTUP_AUTO_INSTALL=0
-exec {{ RUST_STORAGE_MISE_BIN | quote }} exec -- {{ (BINS_DIR ~ '/cargo-sweep') | quote }} sweep --recursive --time "$days" "${preview[@]}" -- "$root"
+cargo=$({{ RUST_STORAGE_MISE_BIN | quote }} which cargo --tool rust)
+case "$cargo" in
+    /*) ;;
+    *) printf 'Mise-selected Cargo must be an absolute path: %s\n' "$cargo" >&2; exit 1 ;;
+esac
+if [ ! -x "$cargo" ]; then
+    printf 'Mise-selected Cargo is not executable: %s\n' "$cargo" >&2
+    exit 1
+fi
+# Preserve rustup proxy basename and mise's Rust env; force CARGO after mise env
+# evaluation so metadata cannot fall back to an ambient/system Cargo command.
+exec {{ RUST_STORAGE_MISE_BIN | quote }} exec --no-deps -- /usr/bin/env "CARGO=$cargo" {{ (BINS_DIR ~ '/cargo-sweep') | quote }} sweep --recursive --time "$days" "${preview[@]}" -- "$root"

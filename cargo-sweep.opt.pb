@@ -49,10 +49,17 @@
       sweeps only, NOT active Cargo builds. Run previews before enabling timers
       and avoid building during sweeps. Execution uses absolute mise from the
       home directory to supply its configured cargo/rustup environment for
-      metadata. MISE_AUTO_INSTALL=false, MISE_EXEC_AUTO_INSTALL=false and
-      RUSTUP_AUTO_INSTALL=0 prevent unattended tool/toolchain installation.
-      Missing tools fail rather than being installed. Install the selected
-      toolchain ahead of time; timers do not adopt per-project mise configs.
+      metadata. MISE_AUTO_INSTALL=false and MISE_EXEC_AUTO_INSTALL=false disable
+      mise tool installation; exec --no-deps also disables automatic dependency
+      preparation. A preflight `mise which cargo --tool rust` requires an
+      installed mise-selected Cargo, passed via absolute CARGO to metadata:
+      there is no ambient/system Cargo fallback. Rustup proxy paths retain the
+      cargo basename rather than resolving their symlink to rustup.
+      RUSTUP_AUTO_INSTALL=0 disables missing-toolchain installation with
+      rustup >=1.28.1 (required). Install the selected toolchain ahead of time.
+      These controls are NOT a network sandbox. Timers do not adopt per-project
+      mise configs; metadata stays in HOME, and mise's global RUSTUP_TOOLCHAIN
+      can override project rust-toolchain files.
 
       Upstream limitations: age uses access time (filesystem atime policies
       matter), not a workspace's last build. Recursive manifest discovery uses
@@ -70,7 +77,10 @@
       [cargo-sweep CLI](https://github.com/holmgr/cargo-sweep/blob/v0.8.0/src/cli.rs),
       [discovery](https://github.com/holmgr/cargo-sweep/blob/v0.8.0/src/main.rs),
       [artifact matching](https://github.com/holmgr/cargo-sweep/blob/v0.8.0/src/fingerprint.rs),
-      [mise cargo backend](https://mise.jdx.dev/dev-tools/backends/cargo.html).
+      [mise cargo backend](https://mise.jdx.dev/dev-tools/backends/cargo.html),
+      [rustup environment](https://rust-lang.github.io/rustup/environment-variables.html),
+      [rustup prerequisite](https://github.com/rust-lang/rustup/blob/1.28.2/CHANGELOG.md#L23-L28),
+      [cargo_metadata CARGO selection](https://docs.rs/cargo_metadata/0.9.1/src/cargo_metadata/lib.rs.html).
 
     SYSTEMD_ROOTS: [srcService, srcTimer, archiveService, archiveTimer]
     srcService:
@@ -80,6 +90,9 @@
         Description: Rust src artifacts older than {{CARGO_SWEEP_SRC_DAYS}} days
       SYSTEMD_SERVICES:
         Type: oneshot
+        Restart: false
+        RestartSec: false
+        EnvironmentFile: false
         WorkingDirectory: '%h'
         ExecStart: "{{ (BINS_DIR ~ '/sweep.sh') | replace('%', '%%') | replace('$', '$$') | to_json }} src --apply"
       SYSTEMD_INSTALLS:
@@ -101,6 +114,9 @@
         Description: Rust archive artifacts older than {{CARGO_SWEEP_ARCHIVE_DAYS}} days
       SYSTEMD_SERVICES:
         Type: oneshot
+        Restart: false
+        RestartSec: false
+        EnvironmentFile: false
         WorkingDirectory: '%h'
         ExecStart: "{{ (BINS_DIR ~ '/sweep.sh') | replace('%', '%%') | replace('$', '$$') | to_json }} archive --apply"
       SYSTEMD_INSTALLS:
