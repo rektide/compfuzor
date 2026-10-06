@@ -1,7 +1,7 @@
 ---
 type: DesignInquiry
 title: Editable runtime resolution and advertised keybinding rendezvous
-description: Operator-directed changed/canonical/deployed source selection, SHA-512 deployment burns, optional code delivery, and open receiver discovery rather than baked-in compositor targets.
+description: Editable changed/canonical/deployed source selection, SHA-512 deployment burns, optional code delivery, and advertised receivers selected by default unless masked.
 resource: /design/runtime-sourcing/direction0-syn.gpt61sol.md
 tags: [runtime, sourcing, keybindings, discovery, catalogs, deployment]
 status: draft
@@ -25,6 +25,10 @@ sources:
     title: Native annotated contributions, default discovery and extensible mutable init
   - resource: /design/keybindings/config-lifecycle0.gpt61sol.md
     title: Domain-grouped compositor implementations without a central kind union
+  - resource: https://github.com/systemd/systemd/blob/main/man/systemctl.xml
+    title: Systemd mask/unmask nomenclature and explicit activation blocking
+  - resource: https://github.com/systemd/systemd/blob/main/man/systemd.unit.xml
+    title: Systemd masked load state and higher-priority masks
 ---
 
 # What is up
@@ -40,6 +44,9 @@ The latest explicit direction is:
 - Support **runtime target selection**, **arbitrary named receivers**, and
   **new compositor adapters**. Niri/Umbriel should provide their own rendezvous;
   the generic producer should not hard-code where either lives.
+- **Run all unmasked registered receivers** for the selected audience by default.
+  Use systemd's **mask/unmask** nomenclature to shade an unwanted target, rather
+  than requiring an enable/default flag for every receiver.
 - A playbook's Ansible variable sets a preferred runtime resolution chain.
   Deploy that policy as **editable data**, not only baked launcher logic.
 - Preferred order: **`changed → canonical → deployed`**.
@@ -199,11 +206,42 @@ not invite an uncontrolled scan of native/YAML fragments.
 
 "Drop a file" means a typed, admitted declaration, not arbitrary executable
 discovery from PATH. A host may then assemble it using its registered adapter.
-Discovery, availability, selection and execution remain distinguishable:
-**whether advertisement automatically enrolls a receiver in default producer
-installation is still a policy decision**, not something to hide in directory order.
-The runtime should support listing targets, explicit one/many selection, and
-catalog-defined defaults without hard-coded compositor names.
+Discovery, availability, selection and execution remain distinguishable, but
+default enrollment is now decided: **run all unmasked registered receivers**
+compatible with the invocation's audience. The runtime should also support
+listing targets and explicitly narrowing to one/many registered IDs, without
+hard-coded compositor names or a separate opt-in/default-target list.
+
+## Receiver masks
+
+Use **`masked`**, **`mask`**, and **`unmask`** consistently. A mask is an explicit
+negative declaration for a receiver identity, not a missing advertisement:
+
+| Effective catalog state | Default invocation | Explicit target selection |
+|---|---|---|
+| Registered, unmasked, compatible audience | Selected | Selected |
+| Masked | Excluded, with inspectable mask provenance | Reject as masked; selection does not override the mask |
+| No receiver for that ID | Not selected | Report missing receiver |
+| Unmasked but malformed/unusable selected advertisement | Report the problem; do not silently pretend it is absent | Same admission failure |
+
+The proposed file representation is a **same-name symlink to `/dev/null`** in a
+higher-priority registration overlay. It suppresses lower-priority advertisements
+for the same identity; it must not fall through to another copy of the target.
+An overlay lets masking leave the original advertisement intact, and unmasking
+remove only the mask. Exact overlay paths/order remain a layout decision.
+
+This borrows the semantics of
+[`systemd/systemd` mask/unmask](https://github.com/systemd/systemd/blob/main/man/systemctl.xml)
+and [masked unit lookup](https://github.com/systemd/systemd/blob/main/man/systemd.unit.xml),
+checked against the local archived source. It does not mean calling systemctl
+or adopting every unit-file behavior. In particular, systemd also regards an
+empty unit file as masked; that representation is not required by this proposal.
+
+Listing should expose masks and their source instead of hiding them as absent
+targets. Determine the effective mask/advertisement state before loading selected
+profiles or dispatching their installers. These are **receiver-target masks**;
+the existing producer-group enabled state remains a separate concern. Masking
+does not uninstall material, prune registrations or reload a compositor.
 
 This extends the current deliberately **closed**
 [membership contract](/files/config/keybindings/membership.ts#L118-L159).
@@ -231,7 +269,9 @@ does not authorize pruning physical artifacts or restarting compositors.
 2. **Advertised receivers and transferable target selection.** Niri/Umbriel
    advertise themselves; a producer lists/selects arbitrary registered IDs via
    catalog data. Preserve current profile overrides and scoped pre-effects
-   admission. Settle default enrollment before changing install behavior.
+   admission. Prove all unmasked receivers are selected, higher-priority masks
+   block lower advertisements, explicit selection cannot activate a masked target,
+   and unmasking reveals the retained advertisement without destructive cleanup.
 3. **Registration and adapter extension through that interface.** Typed
    producer drops enter the consumer's selected graph; native adapters own
    decoding, rendering, material naming/include semantics and validation. New
