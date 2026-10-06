@@ -150,6 +150,11 @@ outer general action runtime, with JSON data rather than generated executable co
    environment setup, then calls the shared adapter **before** authored content or
    installation. This avoids reimplementing shell env/default/bypass primitives
    in a universal TypeScript flag/environment parser.
+   CONFIG's fixed aliases do not source env themselves: reuse one shared internal
+   environment-preparation envelope where the legacy aggregate supplied that
+   setup. Respect the aggregate's helper/env opt-outs. Apply beneath an authored
+   body using its inherited exports, rather than sourcing the root env file again
+   and changing existing overwrite semantics. No per-context wrapper is needed.
 3. Store prepared operation records in a private `0600` invocation session. Domain
    selection is sealed: operation, effective context/audience, profile/spec and
    parsed domain flags are not rediscovered after provisioning/adoption effects.
