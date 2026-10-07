@@ -23,3 +23,7 @@
 - [Earlier input assessment](/design/surface-dial-input/index.md): established that the stock dial supplies Shift and installed Umbriel aggregates shortcut modifiers. This inquiry follows the user's clarification that an additional precision tier may be wanted, rather than assuming the original fine action is broken.
 
 These documents are inquiry, not an accepted implementation or key allocation.
+
+## Subsequent steering
+
+[Kanata source migration](/design/kanata-source/index.md): the user authorizes replacing the Debian build to enable upstream capabilities and clarifies that dial policy belongs in media-keys and/or Surface Dial. The earlier Debian transport limitations are adjustable deployment prerequisites, not a fundamental blocker; Umbriel remains a generated-binding consumer.
