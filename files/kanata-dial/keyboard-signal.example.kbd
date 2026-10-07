@@ -1,0 +1,16 @@
+;; Example only. Merge into the actual main owner after topology review:
+;; do not replace its device/body configuration with this demonstration.
+(defcfg
+  process-unmapped-keys yes
+  linux-dev-names-exclude (
+    "Surface Dial Virtual Keyboard/Mouse"
+    "kanata-surface-dial"
+  )
+)
+(defsrc caps lsft rsft)
+(defalias
+  left-shift (multi lsft (layer-while-held dial-precision))
+  right-shift (multi rsft (layer-while-held dial-precision))
+)
+(deflayer base (tap-hold 100 100 esc lctl) @left-shift @right-shift)
+(deflayer dial-precision _ _ _)
