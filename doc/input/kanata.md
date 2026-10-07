@@ -66,6 +66,8 @@ This prepares durable material; it does not install or start new units. Review a
 
 `--port` is compiled in, but the current services have no port argument and retain their network sandbox. Starting a state publisher/listener requires a deliberate endpoint and access-policy change; it no longer requires replacing the Debian build.
 
+The [TCP scheme assessment](/design/surface-dial-layers/tcp-scheme0.gpt61s.md) distinguishes built-in layer/virtual-key commands from outbound notifications and the proposed Surface Dial consumer. A port enables the existing protocol; it does not provide an arbitrary variable setter or automatically connect the dial.
+
 Dial action/tier/step policy belongs in [`media-keys.etc.pb`](/media-keys.etc.pb) and/or [`surface-dial.src.pb`](/surface-dial.src.pb), or the dial daemon's own config. Umbriel may consume generated bindings; it is not the authoritative dial configuration or state store. See the [precision-layer inquiry](/design/surface-dial-layers/index.md) for unresolved publisher/provenance and protocol choices.
 
 # Removal and verification cautions

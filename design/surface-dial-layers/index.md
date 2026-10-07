@@ -8,6 +8,7 @@
 
 - [Inquiry brief](/design/surface-dial-layers/brief0.gpt61s.md): smaller per-tick increments, a separate keyboard-held precision dimension, observable dispatch, and no-deployment boundaries.
 - [Umbriel and state-source boundary](/design/surface-dial-layers/routing0.gpt61s.md): dedicated direction-key routing versus sideways state; installed Kanata transport restrictions and an isolated XKB check.
+- [Actual Kanata TCP scheme](/design/surface-dial-layers/tcp-scheme0.gpt61s.md): existing base-layer and virtual-key control, outbound notifications, and how a dial consumer could use them; no arbitrary variable setter or physical F-key requirement.
 
 ## G investigations
 
