@@ -1,7 +1,11 @@
 # Registry and discovery inquiry
 
+- [Registry library and symmetric rendezvous](/design/registry-discovery/rendezvous0.gpt6a.md)
+  — latest clarification: providers and consumers self-register owned descriptions
+  through separate XDG symlink directories; pipeline tools share registry readers
+  and registration-material helpers.
 - [Ownership and runtime placement](/design/registry-discovery/ownership0.gpt6a.md)
-  — latest clarification: playbooks retain producer/consumer ownership, lookup
+  — playbooks retain producer/consumer ownership, lookup
   entries reference owned declarations, common code belongs in `runtime/`, and
   disabled advertisement visibility is distinct from accepted native output.
 - [Broader architectural direction](/design/registry-discovery/direction0.gpt6a.md)

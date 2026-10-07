@@ -11,6 +11,9 @@
 
 ## Implementation planning
 
+- [Registry library and symmetric rendezvous](/design/registry-discovery/rendezvous0.gpt6a.md)
+  — producer/consumer self-registration through XDG symlinks, consumed by domain
+  pipeline tools using shared registry and installer-material helpers.
 - [Ownership and reusable-runtime clarification](/design/registry-discovery/ownership0.gpt6a.md)
   — producer/consumer artifacts stay with their playbooks; shared tools belong
   under `runtime/`, with registry references connecting the owned declarations.
