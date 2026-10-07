@@ -206,6 +206,16 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@bomb.sh/router':
+        specifier: ^0.7.1
+        version: 0.7.1
+      '@bomb.sh/tab':
+        specifier: ^0.0.22
+        version: 0.0.22
+      figmen-ts:
+        specifier: link:../figments
+        version: link:../figments
     devDependencies:
       '@bgotink/kdl':
         specifier: ^0.4.0
@@ -254,6 +264,25 @@ packages:
 
   '@blazediff/core@1.9.1':
     resolution: {integrity: sha512-ehg3jIkYKulZh+8om/O25vkvSsXXwC+skXmyA87FFx6A/45eqOkZsBltMw/TVteb0mloiGT8oGRTcjRAz66zaA==}
+
+  '@bomb.sh/router@0.7.1':
+    resolution: {integrity: sha512-/KbtFidAJ1hjbeii2Geg7oXLj5QhVcO6I2cQHThBOSPoCWr3Qg1Syg6itm4W7Z4zcliCoccvN3kKI3wFxjKb2Q==}
+    engines: {node: '>= 20'}
+
+  '@bomb.sh/tab@0.0.22':
+    resolution: {integrity: sha512-l5IuWpV7szqG4MM6A7I+qPMmP2qPMq2TD4veIXaOH0sD53dV0Tv8WZPARp5O5Kp4+y4fnVCl3VL1HZKNghO1yg==}
+    hasBin: true
+    peerDependencies:
+      cac: ^6.7.14 || ^7.0.0
+      citty: ^0.1.6 || ^0.2.0
+      commander: ^13.1.0 || ^14.0.0 || ^15.0.0
+    peerDependenciesMeta:
+      cac:
+        optional: true
+      citty:
+        optional: true
+      commander:
+        optional: true
 
   '@effect/platform-node-shared@4.0.0-rc.118':
     resolution: {integrity: sha512-pNbmIlxbAUxAthUNsp2xm1NLG9kxoYecsPkoYl9mNF2oxPcKDxAvkOar7tYnLSUpXJeATm4pxYVipdZjQfqO4Q==}
@@ -1563,6 +1592,12 @@ snapshots:
   '@bgotink/kdl@0.4.0': {}
 
   '@blazediff/core@1.9.1': {}
+
+  '@bomb.sh/router@0.7.1':
+    dependencies:
+      '@standard-schema/spec': 1.1.0
+
+  '@bomb.sh/tab@0.0.22': {}
 
   '@effect/platform-node-shared@4.0.0-rc.118(effect@4.0.0-rc.118)':
     dependencies:

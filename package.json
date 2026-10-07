@@ -2,6 +2,8 @@
   "name": "compfuzor",
   "version": "1.0.0",
   "scripts": {
+    "check:registry": "vp fmt runtime/discovery runtime/registry runtime/keybindings runtime/zim runtime/cli tests/registry-discovery --check && vp lint runtime/discovery runtime/registry runtime/keybindings runtime/zim runtime/cli tests/registry-discovery",
+    "fix:registry": "vp fmt runtime/discovery runtime/registry runtime/keybindings runtime/zim runtime/cli tests/registry-discovery --write && vp lint --fix runtime/discovery runtime/registry runtime/keybindings runtime/zim runtime/cli tests/registry-discovery",
     "build": "vp pack",
     "check": "vp fmt vite.config.ts files/catalog files/flow files/runtime files/config-remote files/config-remote.ts files/config/command.ts files/config/runtime.ts files/links/links.ts files/links/runtime.ts files/zim/install.ts files/zim/runtime.ts archive/src script/repo-jj-archive.ts --check && vp lint files/catalog files/flow files/config files/links files/zim files/runtime files/config-remote files/config-remote.ts archive/src script/repo-jj-archive.ts vite.config.ts && pnpm check:type",
     "fix": "vp fmt vite.config.ts files/catalog files/flow files/runtime files/config-remote files/config-remote.ts files/config/command.ts files/config/runtime.ts files/links/links.ts files/links/runtime.ts files/zim/install.ts files/zim/runtime.ts archive/src script/repo-jj-archive.ts --write && vp lint --fix files/catalog files/flow files/config files/links files/zim files/runtime files/config-remote files/config-remote.ts archive/src script/repo-jj-archive.ts vite.config.ts",
@@ -22,5 +24,10 @@
   },
   "engines": {
     "node": "^20.19.0 || ^22.18.0 || >=24.11.0"
+  },
+  "dependencies": {
+    "@bomb.sh/router": "^0.7.1",
+    "@bomb.sh/tab": "^0.0.22",
+    "figmen-ts": "link:../figments"
   }
 }

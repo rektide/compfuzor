@@ -19,6 +19,7 @@ import { clearProcessMarkers } from "../actions/process.ts";
 export { actionEntry } from "../actions/entry.ts";
 
 export type RuntimeDomain =
+  | "registry"
   | "catalog"
   | "config"
   | "config-remote"
@@ -30,7 +31,7 @@ export type RuntimeDomain =
 
 const RUNTIME_NAME = "compfuzor-runtime.mjs";
 const RUNTIME_SOURCE_NAME = "compfuzor-runtime.ts";
-const USAGE = `Usage: compfuzor-runtime.mjs <catalog|config|config-remote|flow|links|zim|keybindings|actions> ...
+const USAGE = `Usage: compfuzor-runtime.mjs <registry|catalog|config|config-remote|flow|links|zim|keybindings|actions> ...
 
 Ordinary deployments invoke this multicall runtime through stable domain
 aliases such as config/command.mjs, config-remote.mjs, links.mjs, and
@@ -89,6 +90,7 @@ async function selectedDomain(
   const [domain, ...domainArgv] = argv;
   if (
     domain !== "catalog" &&
+    domain !== "registry" &&
     domain !== "config" &&
     domain !== "config-remote" &&
     domain !== "flow" &&
@@ -117,6 +119,10 @@ async function runDomain(
       return await applyPrepared(session, id, domain, deploymentDir, invokedAs);
     }
     if (domain !== "actions") clearProcessMarkers();
+    if (domain === "registry") {
+      const { main: runRegistry } = await import("../../runtime/cli/registry.ts");
+      return await runRegistry(argv);
+    }
     if (domain === "catalog") return await runCatalog(argv, deploymentDir);
     if (domain === "flow") return await runFlow(argv, deploymentDir);
     if (domain === "actions") {
