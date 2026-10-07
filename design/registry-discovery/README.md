@@ -1,7 +1,10 @@
 # Registry and discovery inquiry
 
+- [Selection and force-enable decision](/design/registry-discovery/selection0.gpt6a.md)
+  — operator-chosen invocation-only override for disabled registrations, with masks
+  preserved; review direction for passive publication and generator integration.
 - [Registry library and symmetric rendezvous](/design/registry-discovery/rendezvous0.gpt6a.md)
-  — latest clarification: providers and consumers self-register owned descriptions
+  — providers and consumers self-register owned descriptions
   through separate XDG symlink directories; pipeline tools share registry readers
   and registration-material helpers.
 - [Ownership and runtime placement](/design/registry-discovery/ownership0.gpt6a.md)
@@ -24,6 +27,12 @@
 - [Substrate review and loader integration direction](/design/registry-discovery/figments-review0.gpt6a.md)
   — G's implemented foundation, parent-reviewed edge cases and the next authorized
   operator/captured-selection slice.
+
+## Compfuzor implementation checkpoints
+
+- [First executable rendezvous slice](/design/registry-discovery/implementation0.gpt61s.md)
+  — shared library, reference registration, domain descriptions, Router/tab CLI,
+  local source dependency wiring and isolated checks before generator cutover.
 
 ## Predecessor
 
