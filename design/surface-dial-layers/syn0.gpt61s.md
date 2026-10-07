@@ -53,6 +53,8 @@ Today the first shows direction; the second distinguishes `0.02` and `0.06` comm
 
 The smallest useful daemon change is logging **control mode, raw delta, and intended emission**, plus haptic configuration when applied. An optional daemon-local sequence can help compare windows, but cannot magically correlate through an ordinary key event to Umbriel's launch log. Add emission outcomes or action results only where that outcome is actually known.
 
+Haptic logs need the same stage discipline: the [proxy `set_mode`](https://github.com/daniel5151/surface-dial-linux/blob/43dd973092871d8ef0c452b0797b519f5a9ddfac/src/dial_device/haptics.rs#L17-L22) discards its channel-send result and returns `Ok`; that is not proof of hardware application. The [worker's report-write call](https://github.com/daniel5151/surface-dial-linux/blob/43dd973092871d8ef0c452b0797b519f5a9ddfac/src/dial_device/haptics.rs#L71-L73) is the stronger place to log returned write success, still distinct from observed physical detents. Logging-first need not change either behavior, but should label its observation point honestly.
+
 # Three knobs, one extra dimension
 
 - **Haptic density:** current volume modes request 72 detents per revolution. Altering this changes tactile angle/event density.
