@@ -142,7 +142,8 @@ def test_system_fixture_and_shared(area: Path, env: dict, deployed: dict, umbrel
     assert shared_host == shared / "niri" and Path(report["etc"]) == shared_host
     invoke(shared_host / "bin/register-keybindings-consumer-niri-user.sh", env)
     policy_locator = str(shared_host / "etc/keybindings/registry-policy.json")
-    invoke(producer / "bin/install.mjs", env, ["--registry-policy", policy_locator, "--target", "niri"])
+    override = {**env, "COMPFUZOR_NIRI_PROFILE": str(shared_host / "etc/keybinding-niri.json")}
+    invoke(producer / "bin/install.mjs", override, ["--registry-policy", policy_locator, "--target", "niri"])
     received = Path(env["XDG_CONFIG_HOME"]) / "niri"
     assert (received / "shared-native/media-mute.binding.kdl").exists()
     assert not (received / f".keybindings/source/{MEDIA_NAME}/action/media-mute.yaml").is_symlink()

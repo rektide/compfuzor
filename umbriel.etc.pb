@@ -200,8 +200,9 @@
       `assemble.mjs` / `assemble-user.mjs` reassemble existing placements;
       `--check` validates without publishing. Only a user receiver is declared,
       so no system-qualified install/assemble alias is emitted.
-      For shared material render with `-e PREFIX_DIR=/etc/opt`, then explicitly
-      bind producer `COMPFUZOR_UMBRIEL_PROFILE=/etc/opt/umbriel/etc/keybinding-umbriel.json`.
+      For shared material render with `-e PREFIX_DIR=/etc/opt`, then advertise the
+      intended host's owned description. Same-ID foreign owner references require
+      deliberate reconciliation or a distinct identity/policy, not automatic retargeting.
       Old material is left in place; no automatic move, cleanup or reload occurs.
 
       ## Files

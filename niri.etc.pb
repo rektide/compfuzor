@@ -113,8 +113,9 @@
       `assemble.mjs` / `assemble-user.mjs` reassemble existing placements;
       `--check` validates without publishing. No system receiver is declared,
       so no install-system.mjs or assemble-system.mjs is emitted.
-      Shared material is explicit: render with `-e PREFIX_DIR=/etc/opt` and set
-      producers' `COMPFUZOR_NIRI_PROFILE=/etc/opt/niri/etc/keybinding-niri.json`.
+      Shared material is explicit: render with `-e PREFIX_DIR=/etc/opt` and advertise
+      that host's owned description. Same-ID foreign owner references are not silently
+      retargeted; choose a distinct identity/policy or reconcile deliberately.
       Existing deployments are not moved, pruned or activated automatically.
 
       ## Files

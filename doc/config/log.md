@@ -1,5 +1,33 @@
 # Configuration deployment log
 
+## 2026-10-07
+
+### Advertised native registry cutover — isolated repository verification only
+
+Keybinding producers now advertise exact owned manifests and deliver one admitted
+offer batch to registered consumer descriptions. Hosts keep profiles, late patches,
+accepted membership and native outputs under their existing ownership. Passive
+registration is separate from native activation; invocation-only `--force-enable`
+does not change saved disables, defeat masks or enable consumer-owned groups.
+
+The generated first-install seam includes explicit prospective owned descriptions
+and one public provider/consumer policy pair. Older fixture entry assumptions were
+migrated while retaining native chord, copy/link/edit, empty membership, adoption,
+rollback and typed-action acceptance. Native source suites that previously exceeded
+an outer 120-second limit completed when given an adequate limit. Maintained
+[producer](/doc/config/keybinding-producers.md),
+[consumer](/doc/config/keybinding-consumers.md) and
+[action](/doc/actions/README.md) guides and playbook-generated READMEs now describe
+the actual registry interface. See the
+[registry guide](/runtime/registry/README.md) for policy/selection schemas.
+
+All native verification used disposable HOME/XDG/explicit SYSTEM policy roots,
+with service commands stubbed or never executed. This is **not a live deployment**:
+no installed registry/configuration was migrated, no service/compositor was
+reloaded, and no stale material was automatically pruned. Registry administration,
+consumer-driven provider collection, Zim registered-offer consumption, additional
+native adapters and changed/canonical/deployed runtime sourcing remain separate work.
+
 ## 2026-09-26
 
 ### mcp-cli live migration to portable MCP records

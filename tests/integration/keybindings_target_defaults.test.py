@@ -23,7 +23,7 @@ def render(area: Path, name: str, declarations: dict, env: dict) -> dict:
         "ETC_FILES": [], "BINS": [], "DIRS": [], "PKGS": [],
         "ACTION_AUDIENCES": {"default": "user"}, **declarations,
     }
-    # Use the real entry condition: common targets alone must not activate generation.
+    # Use the real entry condition: receiver selection alone must not activate generation.
     entry = next(task for task in yaml.safe_load((ROOT / "tasks/compfuzor.includes").read_text())
                  if task.get("import_tasks") == "compfuzor/gen_keybindings.tasks")
     playbook = directory / "render.pb"
@@ -56,7 +56,7 @@ def installers(result: dict) -> dict:
             if entry["name"].startswith("install-keybindings")}
 
 
-def assert_common_targets(result: dict) -> None:
+def assert_default_all(result: dict) -> None:
     manifest = files(result)["keybinding-producer.json"]["json"]
     assert manifest["targets"] == ["niri", "umbriel"]
     entries = installers(result)
@@ -74,7 +74,7 @@ def test_target_defaults() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     if not (SCRATCH / "README.md").exists():
         (SCRATCH / "README.md").write_text(
-            "# Common keybinding targets scratch\nStock include_defaults and generator fixtures; no live installs.\n"
+            "# Advertised keybinding selection scratch\nStock include_defaults and generator fixtures; no live installs.\n"
         )
     with tempfile.TemporaryDirectory(prefix="defaults-", dir=SCRATCH) as tmp:
         area = Path(tmp)
@@ -90,7 +90,7 @@ def test_target_defaults() -> None:
 
         actions = {"open": {"exec": ["foot"]}}
         producer = render(area, "actions-only", {"KEYBINDING_ACTIONS": actions}, env)
-        assert_common_targets(producer)
+        assert_default_all(producer)
         assert files(producer)["action/open.yaml"]["yaml"]["exec"] == ["foot"]
         for name, declarations in [
             ("bindings-only", {"KEYBINDINGS": {}}),
@@ -99,7 +99,7 @@ def test_target_defaults() -> None:
             ("null-consumers", {"KEYBINDING_ACTIONS": {}, "KEYBINDING_CONSUMERS": None}),
         ]:
             empty = render(area, name, declarations, env)
-            assert_common_targets(empty)
+            assert_default_all(empty)
             assert files(empty)["keybinding-producer.json"]["json"]["resources"] == []
 
         host = render(area, "host", {"KEYBINDING_CONSUMERS": {"niri": {}, "umbriel": {}}}, env)
@@ -140,7 +140,7 @@ def test_target_defaults() -> None:
             "KEYBINDING_TARGET_DEFAULTS": {"umbriel": {"consumer": "{{ selected_consumer }}", "context": "user", "scope": "user"}},
         }, env)
         assert custom["explicit_targets"] is False
-        assert_common_targets(custom)  # retired shared defaults must not revive hardcoded profiles
+        assert_default_all(custom)  # retired shared defaults must not revive hardcoded profiles
 
         combined = render(area, "combined", {
             "KEYBINDING_ACTIONS": actions,
