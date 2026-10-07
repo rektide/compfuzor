@@ -11,6 +11,16 @@
     # docs/ + cfg tests live in the tree.
     RUST: True
     RUST_BIN: kanata
+    # explicit tcp_server (also in default features): Debian 1.9.0+ds-1
+    # ships WITHOUT it -- no --port on /usr/bin/kanata, which blocks the
+    # surface-dial TCP bridge direction (see
+    # design/surface-dial-layers/routing0.gpt61s.md addendum).
+    RUST_FEATURES: tcp_server
+    # copy a real file to /usr/local/bin/kanata instead of a symlink:
+    # the symlink would resolve through DIR (DIRMODE 0770) and repo/
+    # (a git worktree of ~/archive/jtroo/kanata) -- untraversable for a
+    # non-root daemon under ProtectHome like the _kanata services.
+    RUST_COPY: True
     # libudev via the evdev/udev crates; pkg-config to find them
     PKGS:
       - build-essential
