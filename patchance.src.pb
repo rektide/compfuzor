@@ -1,0 +1,34 @@
+---
+- hosts: all
+  vars:
+    TYPE: patchance
+    INSTANCE: git
+    REPO: https://github.com/Houston4444/Patchance.git
+    GIT_SUBMODULES: true
+    PKGS:
+      - make
+      - git
+      - pyqt6-dev-tools
+      - qt6-base-dev-tools
+      - qtchooser
+      - qttools5-dev-tools
+      - qt6-svg-plugins
+      - python3-pyqt6
+      - python3-pyqt6.qtsvg
+      - python3-qtpy
+      - python3-jack-client
+      - python3-liblo
+      - python3-pyalsa
+      - fonts-roboto
+    BINS:
+      - name: build.sh
+        basedir: repo
+        run: true
+        exec: |
+          make QT_VERSION=6
+      - name: install.sh
+        basedir: repo
+        exec: |
+          sudo make install PREFIX=/usr/local
+  tasks:
+    - import_tasks: tasks/compfuzor.includes
