@@ -336,3 +336,8 @@ artifact/capability checkpoint. Decisions recorded:
 Remaining ownership/status statements in this document stay as the
 first-slice snapshot (dated 2026-10-06) unless superseded above.
 
+The gate named above is now closed on the declaration side: the services
+slice landed in [services0.glm53.md](/design/kanata-source/services0.glm53.md)
+(unit, sysusers identity, uinput rule, helper retargets; scratch-fenced,
+no live change).
+
