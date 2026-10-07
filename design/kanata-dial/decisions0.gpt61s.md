@@ -67,3 +67,13 @@ Sol M owns this next coherent integration slice and its tests. Parent reviews th
 - [Optional producer machinery](/doc/config/keybinding-producers.md): group enablement/disabled preservation; the current checkout's installer interfaces must be followed rather than older command examples assumed literally.
 - [Source Kanata guide](/doc/input/kanata.md): existing account/binary/unit ownership and the absence of current listeners.
 - [Parked device-aware inquiry](/design/kanata-devices/init0.glm53.md): promising dormant Linux ID/history plumbing, plus the separate input-state ownership problem. No hack is authorized by this implementation decision.
+
+# Addendum: system runtime evidence during integration review
+
+The system Node is `/usr/bin/node` v26.10.0. A standalone device-free `.ts` fixture with one typed number prints `42` under plain Node. The same fixture fails under `--jitless` with `ERR_WEBASSEMBLY_NOT_SUPPORTED`: native TypeScript stripping requires WebAssembly. The previously suggested `--no-expose-wasm` flag is also rejected by this version. Do not put either invocation into a purportedly working relay unit.
+
+This justifies a narrowly scoped relay-runtime executable-memory policy rather than copying the input daemons' `MemoryDenyWriteExecute=true` blindly. Keep input-daemon restrictions unchanged, and retain the relay's no-input/private-network/no-new-privileges/capability restrictions. Fixture and command notes: `.test-agent/kanata-dial-parent/`.
+
+The installed systemd is 262. The archived primary manuals confirm shared private networking through `JoinsNamespaceOf`; sharing private temporary directories requires both participants to enable that setting. An anchor with `PrivateTmp=false` therefore avoids accidentally making main/dial/relay share their private temporary directories through this relationship.
+
+Parent source review also confirmed that `handle_fakekey_action(Release)` queues a layout event. A query-dispatch barrier is not a substitute for observing the fallback layer after processing. The delayed-application reset regression remains an integration gate.
