@@ -5,6 +5,7 @@ description: Parent-reviewed build evidence and decisions for the authorized Deb
 resource: /design/kanata-source/handoff0.gpt61s.md
 status: draft
 generated: { by: model:gpt-6.1-sol, at: 2026-10-06 }
+updated: { by: model:gpt-6.1-sol, at: 2026-10-07 }
 sources:
   - resource: /design/kanata-source/build0.glm53.md
     title: Source artifact, config validation, package scripts, and prerequisite inventory
@@ -27,7 +28,7 @@ The missing flag is therefore addressed by an installed source artifact. Active 
 1. **Preserve service identity:** main remains `kanata.service`, with a Compfuzor-owned `/etc` unit taking precedence over Debian's vendor unit. BlueTurn retains its existing identity. Do not install/start the undeployed kinata instance.
 2. **Own uinput permissions:** main declares the equivalent `50-kanata-uinput.rules` under `/etc/udev/rules.d`. Do not rely on ydotool or Sunshine continuing to provide matching permissions. Their present redundancy is not Kanata's durable contract.
 3. **Own the persistent account:** `_kanata` is a long-lived ordinary system account. UID 990/GID 985 were allocated by `useradd`; that is not `DynamicUser=` lifecycle. Sysusers must preserve existing IDs and establish an account on a fresh machine. Main is the one declarer; helpers consume it with explicit input access.
-4. **Preserve live configuration exactly:** main currently excludes only BlueTurn. The authored Kinesis split is not deployed, and this migration must not silently apply it. Do not run filesystem generation against the live main config's symlink target during unit handoff.
+4. **Preserve live configuration exactly:** main currently excludes only BlueTurn. The authored Kinesis split is not deployed, and this migration must not silently apply it. Do not run filesystem generation against the live main config's symlink target without the explicitly tested preservation guard described below.
 5. **Retain sandbox and no listener:** the replacement gains compiled TCP support; no consumer endpoint, broader network access, or command execution feature is introduced here. Endpoint/security changes are deliberate later configuration, not a blocker to building the capability.
 6. **Remove, not purge:** remove only package `kanata`; no autoremove. Its `prerm` stops canonical `kanata.service`, and purge would delete `_kanata`. Preserve configuration and identity.
 
@@ -47,7 +48,7 @@ After reviewing the prepared service declarations and their generated artifacts:
 - Verify the Kanata-owned udev rule and module-loading dependency survive package removal. Reloading rule definitions is not permission to trigger every input device or reboot the host.
 - Record discovery/startup checks separately from manual caps/pedal behavior. Do not inject keys merely to claim end-to-end verification.
 
-The old enabled main-unit link points at Debian's vendor path. Repair that specific enable link for the owned canonical unit (e.g. deliberate `enable --force`) rather than leaving a dangling boot-time reference after removal. Do not publish live artifacts from disposable scratch roots; copy the selected generated files to durable Kanata material before linking them.
+The old enabled main-unit link points at Debian's vendor path. Repair that specific enable link for the owned canonical unit (e.g. deliberate `enable --force`) rather than leaving a dangling boot-time reference after removal. Do not publish live artifacts from disposable scratch roots; selected generated files must be in durable Kanata material before linking them.
 
 Refreshing only the unit file would leave older generated installation composites/catalogs capable of composing the Debian apt lane. The requested preparation revision therefore adds an explicit per-config `KANATA_CONFIG_PRESERVE` generation flag, using the existing filesystem writer's `once` primitive. With that flag, rerendering the deployed main/BlueTurn material can refresh current declared units, rules, sysusers, installer compositions, and link plans while leaving existing keymap files byte-identical. Execution/package/thunk phases remain bypassed during that refresh; only the selected owned install lanes run afterward. Inert obsolete leaf files are left in place rather than pruned. Its isolated preservation test must pass before live use.
 
