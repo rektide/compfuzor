@@ -11,7 +11,7 @@
 
 ## G investigations
 
-- [Unit and observability](/design/surface-dial-layers/unit0.glm53.md): live unit, binary identity, current mode and command logging, and the unresolved burst-count imbalance.
+- [Unit and observability, revised](/design/surface-dial-layers/unit1.glm53.md): live unit, binary identity, current mode and command logging, and the unresolved burst-count imbalance, with attempt/request/completion limits explicit. [Unit0](/design/surface-dial-layers/unit0.glm53.md) is the preserved predecessor.
 - [Daemon state and control](/design/surface-dial-layers/daemon-state0.glm53.md): current control seams, proposed state transports and publisher constraints, and daemon-owned action alternatives.
 
 ## Kinefolk background

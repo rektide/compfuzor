@@ -9,7 +9,7 @@ stale_after: 2027-01-06
 sources:
   - resource: /design/surface-dial-layers/brief0.gpt61s.md
     title: Revised user intent
-  - resource: /design/surface-dial-layers/unit0.glm53.md
+  - resource: /design/surface-dial-layers/unit1.glm53.md
     title: G investigation of the live unit and journal observability
   - resource: /design/surface-dial-layers/daemon-state0.glm53.md
     title: G investigation of daemon state and proposed transports
@@ -38,7 +38,7 @@ This checkpoint keeps that broader direction open; it does not silently substitu
 | Modifier source | Umbriel can use keyboard modifiers for shortcut matching, but its public IPC does not expose held modifiers. Installed Kanata appears to lack TCP support, and its service denies networking. |
 | Kinefolk | Static native keyboard configuration and named sparse contexts, not a live modifier publisher. The idea is registered there; deployment does not depend on it. |
 
-See the [unit report](/design/surface-dial-layers/unit0.glm53.md) and [routing report](/design/surface-dial-layers/routing0.gpt61s.md) for commands, source revisions, and observation limits.
+See the [revised unit report](/design/surface-dial-layers/unit1.glm53.md) and [routing report](/design/surface-dial-layers/routing0.gpt61s.md) for commands, source revisions, and observation limits.
 
 # Observability already available
 
@@ -129,7 +129,7 @@ F13–F20 appear in the bundled `f` context; F21/F22 are earmarked by the declar
 
 # Cross-review and cross-references
 
-- [Unit G](/design/surface-dial-layers/unit0.glm53.md) contributes the strongest live evidence and exposes the journal-count imbalance. Its scope is observational: requested/emitted/completed stages must remain distinct, and binary-to-source attribution is not a reproducible build.
+- [Revised unit G](/design/surface-dial-layers/unit1.glm53.md) contributes the strongest live evidence and exposes the journal-count imbalance. Its scope is observational: requested/emitted/completed stages must remain distinct, and binary-to-source attribution is not a reproducible build. [Unit0](/design/surface-dial-layers/unit0.glm53.md) is the preserved predecessor with stronger claims that this review narrowed.
 - [Daemon-state G](/design/surface-dial-layers/daemon-state0.glm53.md) maps the existing dispatch seam and compares richer state channels with dedicated-key routing. Its protocol sketch is exploratory; publisher authority, transport credentials, stale state, and source contamination must be settled before adoption.
 - [Kinefolk G](/design/surface-dial-layers/kinefolk0.glm53.md) establishes configuration/runtime boundaries and registers the idea. Its candidate keyboard signal is not a substitute for the requested held-Shift interaction, and code allocation remains open.
 - [Parent routing](/design/surface-dial-layers/routing0.gpt61s.md) verifies installed Umbriel and Kanata constraints and the XKB fixture. It does not establish an end-to-end physical-input test.
