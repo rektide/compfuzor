@@ -139,3 +139,9 @@ F13–F20 appear in the bundled `f` context; F21/F22 are earmarked by the declar
 - [Parent routing](/design/surface-dial-layers/routing0.gpt61s.md) verifies installed Umbriel and Kanata constraints and the XKB fixture. It does not establish an end-to-end physical-input test.
 - [Previous input assessment](/design/surface-dial-input/assessment0.gpt61s.md) and [Kanata merger analysis](/design/surface-dial-input/kanata-assessment0.gpt61s.md) explain why a second physical Shift needs a distinct state dimension rather than more merging.
 - [Producer authoring](/doc/config/keybinding-producers.md) supplies the existing packaging mechanism for dial-owned action declarations. [User-service patterns](/doc/user-service.glm.md#pattern-6-post-install-user-service-enablement) explain the copied upstream unit pattern whose actual deployed form the unit G inspected.
+
+# Addendum: source Kanata is authorized; Umbriel stays a consumer
+
+The user clarifies that a Debian build choice is not a blocker: run [`kanata.src.pb`](/kanata.src.pb) and replace the Debian package to obtain upstream capabilities. The [source-migration intent](/design/kanata-source/brief0.gpt61s.md) captures the authorized handoff and service/config preservation checkpoints. The earlier missing TCP feature and service sandbox are adjustable deployment prerequisites, not grounds to dismiss sideways state. Merely having the feature compiled still does not define a publisher or protocol semantics.
+
+The user also establishes the configuration boundary: dial action/tier/step policy belongs in media-keys and/or Surface Dial, not Umbriel. Generated Umbriel binding artifacts are acceptable as target output; no dial-specific state store or substantial compositor-authored policy is being proposed. A source-built Kanata publisher and daemon-side state/action ownership should be assessed within that boundary.
