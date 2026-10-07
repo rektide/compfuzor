@@ -326,8 +326,24 @@ it("does not collect a newly eligible consumer after default-all admission", asy
   const descriptor = join(f.owner, "later.json");
   const payload = JSON.parse(await readFile(join(f.owner, "deck-main.json"), "utf8"));
   payload.id = "later";
+  const profile = join(f.owner, "later-profile.json");
+  await writeFile(
+    profile,
+    JSON.stringify({
+      version: 1,
+      target: "niri",
+      contexts: { user: { scope: "user", root: { path: join(f.root, "later-native") } } },
+      baseline: [],
+    }),
+  );
+  payload.profile = { path: profile };
   await writeFile(descriptor, JSON.stringify(payload));
   await register({ domain: keybindingConsumers, policy: f.policy, source: descriptor });
+  expect(
+    (await admitKeybindingBatch({ args: [], manifest: f.provider, defaults })).members.map(
+      (member) => member.id,
+    ),
+  ).toEqual(["deck-main", "desk.one", "later"]);
   const execute = vi.spyOn(nativeRuntime, "runAdmittedKeybindingCommand").mockResolvedValue(0);
   expect(await runAdmittedKeybindingBatch(batch)).toBe(0);
   expect(execute.mock.calls.map(([admitted]) => admitted.bound.base)).toEqual(
