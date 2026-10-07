@@ -176,6 +176,14 @@ it("admission applies enabled:false only at receiver registration level and reta
     originalState: "disabled",
     forceEnable: true,
   });
+  data.profile = { env: "CUSTOM_PROFILE", ignore: ["none"], default: { relative: "two.json" } };
+  await writeFile(descriptor, JSON.stringify(data));
+  const relative = await admitKeybindingBatch({
+    args: ["--target", "deck-main", "--force-enable"],
+    manifest: f.provider,
+    defaults,
+  });
+  expect(relative.members[0]?.admitted.options.profileGuard?.path).toBe(join(f.owner, "two.json"));
 });
 
 it("explicit empty declaration stays no-delivery and CLI cannot widen a declared subset", async () => {

@@ -16,7 +16,7 @@ def run(command, env, check=True):
         raise AssertionError(f"failed {command}\n{result.stdout}\n{result.stderr}")
     return result
 
-def render(directory, name, declarations, env):
+def render(directory, name, declarations, env, domain="keybindings"):
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "files").symlink_to(ROOT / "files", target_is_directory=True)
     payload = directory / "deployment"
@@ -24,7 +24,7 @@ def render(directory, name, declarations, env):
         "DIRSET": ["etc"], "FILES": [], "ETC_FILES": [], "BINS": [], "DIRS": [], "STATUSES": [], "PKGS": [], "ENV": {}, "BINS_RUN_BYPASS": True,
         "ACTION_AUDIENCES": {"default": "user"}, **declarations}
     tasks = [{"set_fact": {"SUBSYSTEM": {}}}]
-    for task in ["sub_attribution", "sub_config", "gen_keybindings", "gen_config", "gen_bins", "gen_attribution", "compile_artifacts"]:
+    for task in ["sub_attribution", "sub_config", "gen_keybindings" if domain == "keybindings" else "gen_zim", "gen_config", "gen_bins", "gen_attribution", "compile_artifacts"]:
         tasks.append({"import_tasks": str(ROOT / f"tasks/compfuzor/{task}.tasks")})
     tasks += [{"file": {"path": str(payload), "state": "directory"}}, {"import_tasks": str(ROOT / "tasks/compfuzor/fs_hierarchy.tasks"), "vars": {"include": "etc"}},
         {"file": {"path": "{{item}}", "state": "directory"}, "loop": "{{DIRS}}"}, {"import_tasks": str(ROOT / "tasks/compfuzor/bins.tasks")},
@@ -52,8 +52,15 @@ def test_generated():
             env.pop(key, None)
         niri = render(area / "niri", "niri", playbook("niri.etc.pb"), env)
         umbriel = render(area / "umbriel", "umbriel", playbook("umbriel.etc.pb"), env)
-        deck = render(area / "deck", "deck", {"KEYBINDING_CONSUMERS": {"deck-main": {"adapter": "niri", "contexts": {"user": {"scope": "user", "root": "config", "subpath": "deck-main"}}, "baseline": []}}}, env)
+        deck = render(area / "deck", "deck", {"KEYBINDING_CONSUMERS": {"deck-main": {"adapter": "niri", "contexts": {"user": {"scope": "user", "root": "config", "subpath": "deck-main"}}, "baseline": [], "registration": "copy"}}}, env)
         media = render(area / "media", "media-keys-main", playbook("media-keys.etc.pb"), env)
+        zim = render(area / "zim", "shell-owner", {"ZIM_PHASE": "tools", "ZIM_MODULES": [{"name": "shell-tools", "env": {"EDITOR": "vim"}}, {"name": "retained", "source": "owner/repo", "enabled": False}]}, env, domain="zim")
+        run([str(zim / "bin/register-zim-provider.sh")], env)
+        run([str(zim / "bin/status-zim-provider.sh")], env)
+        zim_link = area / "data/compfuzor/zim/providers.d/shell-owner.json"
+        assert zim_link.resolve() == (zim / "etc/zim-provider.json").resolve()
+        zim_offer = json.loads(zim_link.read_text())
+        assert len(zim_offer["fragments"]) == 2 and {part["enabled"] for part in zim_offer["fragments"]} == {True, False}
         rendezvous = area / "data/compfuzor/keybindings/consumers.d"
         assert not rendezvous.exists(), "render must not register or discover controller HOME"
         # Passive publication works before native install; descriptions are still owner-held.
@@ -90,8 +97,25 @@ def test_generated():
         rejected = run([str(media / "bin/install.mjs"), "--force-enable", "--target", "umbriel"], env, False)
         assert rejected.returncode and "masked" in rejected.stderr
         assert (masks / "umbriel.json").readlink() == Path("/dev/null")
+        # Native rejection preserves membership/native output and restores managed copied YAML.
+        action = media / "etc/action/media-volume-up.yaml"
+        original = action.read_bytes()
+        invalid = yaml.safe_load(original)
+        invalid["niri"] = {"native": {"name": "invented-invalid-action"}}
+        old_state = states["deck-main"].read_bytes()
+        native_root = area / "config/deck-main/config.kdl"
+        old_native = native_root.read_bytes()
+        managed = area / "config/deck-main/.keybindings/source/media-keys-main/action/media-volume-up.yaml"
+        old_managed = managed.read_bytes()
+        action.write_text(yaml.safe_dump(invalid))
+        rejected = run([str(media / "bin/install.mjs"), "--force-enable", "--target", "deck-main"], env, False)
+        assert rejected.returncode and states["deck-main"].read_bytes() == old_state and native_root.read_bytes() == old_native
+        assert managed.read_bytes() == old_managed
+        action.write_bytes(original)
         # A newly prospective host can install before its advertisement exists.
         (rendezvous / "deck-main.json").unlink()
+        run([str(deck / "bin/assemble.mjs"), "--check"], env)
+        assert not (rendezvous / "deck-main.json").exists(), "assembly/check is not advertisement publication"
         run([str(deck / "bin/install.mjs")], env)
         assert (rendezvous / "deck-main.json").is_symlink()
         print("ok: actual media-keys + Niri/Umbriel ownership, named receiver, bundled generated registration, CONFIG commits, disabled force and mask veto")

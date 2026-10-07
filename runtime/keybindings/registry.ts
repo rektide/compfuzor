@@ -1,8 +1,13 @@
 /** Domain decoders: manifest ownership stays with the producer, profile/policy with the consumer. */
-import { isAbsolute } from "node:path";
+import { isAbsolute, dirname } from "node:path";
+import { realpath } from "node:fs/promises";
 import { Schema } from "effect";
 import type { Domain, Scope } from "../registry/model.ts";
-import { validatePathSelector, type PathSelector } from "../../files/config/context.ts";
+import {
+  validatePathSelector,
+  resolvePathSelector,
+  type PathSelector,
+} from "../../files/config/context.ts";
 
 const ProducerSchema = Schema.Struct({
   version: Schema.Literal(1),
@@ -78,3 +83,12 @@ export const keybindingConsumers: Domain<Consumer> = {
   enabled: (value) => value.enabled !== false,
   scope: (value): Scope => value.audience,
 };
+
+/** Bind only after domain selection; relative/default/env-relative locators use the owned descriptor's directory. */
+export async function resolveConsumerProfile(
+  selector: PathSelector,
+  descriptor: string,
+  label: string,
+): Promise<string> {
+  return resolvePathSelector(selector, dirname(await realpath(descriptor)), label);
+}

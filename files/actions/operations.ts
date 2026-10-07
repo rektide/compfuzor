@@ -151,6 +151,18 @@ export function verifyPreparedOperation(
     }
   } else {
     const { options, command, bound } = value.admitted;
+    if (step.descriptor) {
+      const selected = value.admitted.registrySelection;
+      if (
+        !selected ||
+        !["active", "disabled"].includes(selected.originalState) ||
+        typeof selected.forceEnable !== "boolean" ||
+        selected.forced !== (selected.originalState === "disabled" && selected.forceEnable) ||
+        (selected.originalState === "disabled" && !selected.forceEnable) ||
+        value.admitted.publication?.source !== step.descriptor
+      )
+        fail("prepared owned receiver policy mismatch");
+    }
     if (
       command !== step.operation ||
       options.scope !== audience ||

@@ -29,7 +29,7 @@ export async function fixtures(): Promise<Fixtures> {
   await mkdir(join(owner, "action"));
   await writeFile(
     resource,
-    "id: media-volume-up\nexec: [wpctl, set-volume, '@DEFAULT_AUDIO_SINK@', '0.03+', '-l', '1.0']\n",
+    "version: 1\nkind: action\nid: media-volume-up\nexec: [wpctl, set-volume, '@DEFAULT_AUDIO_SINK@', '0.03+', '-l', '1.0']\n",
   );
   const provider = join(owner, "keybinding-producer.json");
   const consumer = join(owner, "deck-main.json");

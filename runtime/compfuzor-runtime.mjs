@@ -15765,6 +15765,10 @@ var init_dist$2 = __esmMin((() => {
 //#endregion
 //#region runtime/keybindings/registry.ts
 /** Domain decoders: manifest ownership stays with the producer, profile/policy with the consumer. */
+/** Bind only after domain selection; relative/default/env-relative locators use the owned descriptor's directory. */
+async function resolveConsumerProfile(selector, descriptor, label) {
+	return resolvePathSelector(selector, dirname(await realpath(descriptor)), label);
+}
 var ProducerSchema, keybindingProviders, ConsumerSchema, keybindingConsumers;
 var init_registry$2 = __esmMin((() => {
 	init_dist$2();
@@ -15846,7 +15850,7 @@ async function planRegistration(request) {
 		destination,
 		participation,
 		guard: JSON.stringify({
-			roots: snapshot.roots,
+			roots: policy.roots,
 			source: effective?.source,
 			state: effective?.state,
 			active,
@@ -29113,10 +29117,12 @@ function selection(value) {
 			seen.add(raw.id);
 			if (raw.context !== void 0 && (typeof raw.context !== "string" || !raw.context.trim())) throw new Error("invalid receiver context override");
 			if (raw.scope !== void 0 && raw.scope !== "user" && raw.scope !== "system") throw new Error("invalid receiver scope override");
+			if (raw.actionContexts !== void 0 && (typeof raw.actionContexts !== "object" || raw.actionContexts === null || Array.isArray(raw.actionContexts) || Object.entries(raw.actionContexts).some(([audience, context]) => !["user", "system"].includes(audience) || typeof context !== "string" || !context.trim()))) throw new Error("invalid receiver audience/context mapping");
 			return {
 				id: raw.id,
 				context: raw.context,
 				scope: raw.scope,
+				actionContexts: raw.actionContexts,
 				...raw.profile === void 0 ? {} : { profile: validatePathSelector(raw.profile, "receiver profile override") }
 			};
 		})
@@ -29167,10 +29173,13 @@ async function admitKeybindingBatch(request) {
 	const publicationPlan = await planRegistration(publicationRequest);
 	if (publicationPlan.disposition === "blocked") throw new Error(`provider publication blocked: ${publicationPlan.reason}`);
 	if (publicationPlan.effective.state === "masked") throw new Error("producer registration is masked");
+	if (publicationPlan.effective.state === "invalid" || publicationPlan.effective.state === "conflict") throw new Error(`producer registration is ${publicationPlan.effective.state}`);
 	if (publicationPlan.effective.state === "disabled" && !values["force-enable"]) throw new Error("producer registration is disabled; use --force-enable");
 	const guards = [manifestFile.guard];
+	if (publicationPlan.effective.winner) guards.push((await captureFile(publicationPlan.effective.winner)).guard);
 	if (manifest.enabled === false && !values["force-enable"]) throw new Error("producer offer is disabled; use --force-enable for invocation-only selection");
-	for (const resource of manifest.resources) guards.push((await captureFile(resource.path)).guard);
+	const resourceFiles = await Promise.all(manifest.resources.map((resource) => captureFile(resource.path)));
+	guards.push(...resourceFiles.map((file) => file.guard));
 	const policyPath = values.selection ?? request.selection;
 	const declared = policyPath ? selection(JSON.parse(await readFile(policyPath, "utf8"))) : {
 		version: 1,
@@ -29198,6 +29207,9 @@ async function admitKeybindingBatch(request) {
 			continue;
 		}
 		if (!record.payload || record.state === "invalid" || record.state === "conflict") throw new Error(`receiver ${record.id} is ${record.state}: ${record.error ?? "unusable registration"}`);
+		const descriptor = await captureFile(record.source.winner.path);
+		const descriptorText = fileText(descriptor);
+		if (descriptorText === void 0 || JSON.stringify(keybindingConsumers.decode(JSON.parse(descriptorText))) !== JSON.stringify(record.payload)) throw new Error(`receiver ${record.id} changed during admission`);
 		const consumer = record.payload;
 		if (consumer.adapter !== "niri" && consumer.adapter !== "umbriel") {
 			if (explicit) throw new Error(`unsupported receiver adapter ${consumer.adapter}`);
@@ -29208,10 +29220,11 @@ async function admitKeybindingBatch(request) {
 			continue;
 		}
 		const override = declared.receivers?.find((entry) => entry.id === record.id);
-		if (override?.scope && override.scope !== values.scope) throw new Error("receiver scope override disagrees with invocation audience");
-		const context = values.context ?? override?.context ?? consumer.defaultContext;
+		if (override?.actionContexts && !override.actionContexts[values.scope]) throw new Error("receiver is not declared for invocation audience");
+		if (!override?.actionContexts && override?.scope && override.scope !== values.scope) throw new Error("receiver scope override disagrees with invocation audience");
+		const context = values.context ?? override?.actionContexts?.[values.scope] ?? override?.context ?? consumer.defaultContext;
 		if (!consumer.contexts.includes(context)) throw new Error(`receiver ${record.id} does not advertise context ${context}`);
-		const profile = values.profile ?? resolvePathSelector(values["profile-selector"] ? JSON.parse(values["profile-selector"]) : override?.profile ?? consumer.profile, void 0, `receiver ${record.id} profile`);
+		const profile = (values.profile ? resolve(values.profile) : void 0) ?? await resolveConsumerProfile(values["profile-selector"] ? JSON.parse(values["profile-selector"]) : override?.profile ?? consumer.profile, record.source.winner.path, `receiver ${record.id} profile`);
 		const args = [
 			"--manifest",
 			resolve(manifestPath),
@@ -29240,8 +29253,8 @@ async function admitKeybindingBatch(request) {
 			resources: manifest.resources.map((entry) => ({ ...entry })),
 			targets: [...manifest.targets]
 		};
-		const registration = registryGuard(policy, record.source);
-		const descriptorGuard = (await captureFile(record.source.winner.path)).guard;
+		const registration = registryGuard(snapshot.policy, record.source);
+		const descriptorGuard = descriptor.guard;
 		admitted.options.inputGuards = [...guards, descriptorGuard];
 		admitted.options.registryGuards = [registration];
 		members.push({
@@ -29253,9 +29266,21 @@ async function admitKeybindingBatch(request) {
 		});
 	}
 	if (members.length > 128) throw new Error("keybinding receiver batch exceeds admission bound");
+	if (members.length) {
+		const identities = /* @__PURE__ */ new Set();
+		for (const [index, file] of resourceFiles.entries()) {
+			const path = manifest.resources[index].path;
+			const text = fileText(file);
+			if (text === void 0) throw new Error(`missing packaged producer resource ${path}`);
+			const record = decodeYaml(text, path);
+			const identity = `${record.kind}/${record.id}`;
+			if (identities.has(identity)) throw new Error(`duplicate packaged producer resource ${identity}`);
+			identities.add(identity);
+		}
+	}
 	for (let i = 0; i < members.length; i++) for (let j = 0; j < i; j++) {
 		const left = members[i].admitted.bound, right = members[j].admitted.bound;
-		if (await pathsSharePhysicalEntry(left.request.root.path, right.request.root.path) || await pathsSharePhysicalEntry(left.statePath, right.statePath)) throw new Error("selected receivers alias the same owned root/membership");
+		if (await pathsSharePhysicalEntry(left.request.root.path, right.request.root.path) || await pathsSharePhysicalEntry(left.statePath, right.statePath) || await pathsSharePhysicalEntry(left.request.root.path, right.statePath) || await pathsSharePhysicalEntry(left.statePath, right.request.root.path) || await pathsSharePhysicalDirectory(left.request.materialRoot, right.request.materialRoot)) throw new Error("selected receivers alias the same owned root/membership");
 	}
 	return {
 		version: 1,
@@ -29298,6 +29323,7 @@ var init_invocation = __esmMin((() => {
 	init_policy();
 	init_read$1();
 	init_guard();
+	init_decode$1();
 	init_register();
 }));
 //#endregion
@@ -29376,19 +29402,24 @@ async function admitKeybindingCommand(command, args, defaults, binding) {
 		const record = view.records.find((entry) => entry.id === own.id);
 		if (record?.state === "masked") throw new Error(`receiver ${own.id} is masked`);
 		if (record && (record.state === "invalid" || record.state === "conflict")) throw new Error(`receiver ${own.id} is ${record.state}`);
+		const registered = record ? await captureFile(record.source.winner.path) : void 0;
+		if (registered) {
+			const registeredText = fileText(registered);
+			if (registeredText === void 0 || JSON.stringify(keybindingConsumers.decode(JSON.parse(registeredText))) !== JSON.stringify(record?.payload)) throw new Error("registered receiver changed during host admission");
+		}
 		const effective = record?.payload ?? own;
 		const state = record?.state === "disabled" || !record && own.enabled === false ? "disabled" : "active";
 		if (state === "disabled" && !values["force-enable"]) throw new Error(`receiver ${own.id} is disabled; use --force-enable`);
 		if (effective.adapter !== own.adapter || effective.audience !== own.audience) throw new Error("registered receiver disagrees with owned consumer");
-		receiverProfile = resolvePathSelector(effective.profile, void 0, "advertised host profile");
-		if (receiverProfile !== resolvePathSelector(own.profile, void 0, "owned host profile")) throw new Error("registered receiver redirects this owned host; select it through a producer instead");
+		receiverProfile = await resolveConsumerProfile(effective.profile, record?.source.winner.path ?? values.descriptor, "advertised host profile");
+		if (receiverProfile !== await resolveConsumerProfile(own.profile, values.descriptor, "owned host profile")) throw new Error("registered receiver redirects this owned host; select it through a producer instead");
 		if (!effective.contexts.includes(values.context)) throw new Error("host context is not advertised");
 		values.target ??= own.adapter;
 		if (values.target !== own.adapter) throw new Error("host native adapter mismatch");
 		registrationFiles.push(file.guard);
 		if (record) {
 			registrationGuards.push(registryGuard(policy, record.source));
-			registrationFiles.push((await captureFile(record.source.winner.path)).guard);
+			registrationFiles.push(registered.guard);
 		} else registrationGuards.push({
 			roots: [...policy.roots],
 			id: own.id,
@@ -29419,7 +29450,8 @@ async function admitKeybindingCommand(command, args, defaults, binding) {
 	const runner = values.runner ?? defaults.runner;
 	if (!runner) throw new Error("installed CONFIG runner or --runner required");
 	if (values.profile && values["profile-selector"]) throw new Error("choose profile or profile-selector, not both");
-	const profilePath = values["profile-selector"] ? resolvePathSelector(JSON.parse(values["profile-selector"]), void 0, "consumer profile") : values.profile ?? receiverProfile;
+	const requestedProfile = values["profile-selector"] ? resolvePathSelector(JSON.parse(values["profile-selector"]), void 0, "consumer profile") : values.profile ?? receiverProfile;
+	const profilePath = requestedProfile ? resolve(requestedProfile) : void 0;
 	if (receiverProfile && profilePath !== receiverProfile) throw new Error("host profile override disagrees with advertised receiver");
 	const loaded = profilePath ? await loadProfile(profilePath) : { profile: defaultProfile(values.target) };
 	if (loaded.profile.target !== values.target) throw new Error("consumer profile target mismatch");
@@ -29435,6 +29467,7 @@ async function admitKeybindingCommand(command, args, defaults, binding) {
 		registryGuards: registrationGuards
 	};
 	const bound = bindProfile(options);
+	bound.request.environment ??= { HOME: process.env.HOME };
 	if (binding) {
 		const placement = options.profile.placement ?? "link";
 		const registration = options.profile.registration ?? "link";
@@ -29483,7 +29516,7 @@ async function runAdmittedKeybindingCommand(admitted) {
 	await assertFileGuards(options.inputGuards ?? []);
 	await assertRegistryGuards(options.registryGuards ?? []);
 	const result = command === "install" ? await installProducer(admitted.manifest, options, bound) : command === "host" ? await assembleHost(options, bound) : await toggleGroup(admitted.group, command === "enable", options, bound);
-	if (result.code === 0 && admitted.publication) await applyRegistration({
+	if (result.code === 0 && !options.check && options.mode !== "assemble" && admitted.publication) await applyRegistration({
 		domain: keybindingConsumers,
 		policy: admitted.publication.policy,
 		source: admitted.publication.source
@@ -29528,7 +29561,13 @@ async function main$3(argv, defaults) {
 		"host",
 		"enable",
 		"disable"
-	].includes(command)) return runAdmittedKeybindingCommand(await admitKeybindingCommand(command, args, defaults));
+	].includes(command)) {
+		if (args.includes("--help") || args.includes("-h")) {
+			console.log(`${command} --target NATIVE --profile PATH --context ID --scope user|system\nOwned host admission also accepts --descriptor PATH and --force-enable.\n--force-enable overrides only registration disabled directives for this invocation; masks and producer-group state remain authoritative.`);
+			return 0;
+		}
+		return runAdmittedKeybindingCommand(await admitKeybindingCommand(command, args, defaults));
+	}
 	if (command === "validate") {
 		const { values } = parseArgs({
 			args,
@@ -29953,6 +29992,10 @@ function verifyPreparedOperation(value, step, audience) {
 		for (const binding of Object.values(context.configs)) if (!binding.output.path || binding.output.relative || binding.output.env || binding.inputs.some((input) => !input.path || input.relative || input.env)) fail$1("prepared config receivers are not frozen");
 	} else {
 		const { options, command, bound } = value.admitted;
+		if (step.descriptor) {
+			const selected = value.admitted.registrySelection;
+			if (!selected || !["active", "disabled"].includes(selected.originalState) || typeof selected.forceEnable !== "boolean" || selected.forced !== (selected.originalState === "disabled" && selected.forceEnable) || selected.originalState === "disabled" && !selected.forceEnable || value.admitted.publication?.source !== step.descriptor) fail$1("prepared owned receiver policy mismatch");
+		}
 		if (command !== step.operation || options.scope !== audience || options.profile.contexts[options.context]?.scope !== audience || options.profile.target !== step.target || step.mode && options.mode !== step.mode || !bound.request.root.path) fail$1("prepared keybinding selection mismatch");
 		if (step.producer && value.admitted.manifest?.producer !== step.producer) fail$1("prepared producer identity mismatch");
 	}
@@ -29970,6 +30013,9 @@ async function applyOperation(prepared) {
 /** Invocation-private transport for selected complete operations, never a durable registry. */
 const MAX_BYTES = 8388608;
 const MAX_OPERATIONS = 128;
+function assertAdmissionBound(operations) {
+	if (Object.values(operations).reduce((total, entry) => total + (entry.prepared.domain === "keybindings-batch" ? entry.prepared.admitted.members.length : 1), 0) > MAX_OPERATIONS) fail$1("selected action receivers/operations exceed admission bound");
+}
 async function loadActionSpec(deploymentDir) {
 	const bytes = await readFile(resolve(deploymentDir, "etc/compfuzor-actions/spec.json"));
 	if (bytes.length > MAX_BYTES) fail$1("action spec exceeds size bound");
@@ -30081,6 +30127,7 @@ async function readSession(path, deploymentDir, loaded) {
 			prepared
 		};
 	}
+	assertAdmissionBound(operations);
 	return {
 		version: 1,
 		kind: "action-session",
@@ -30216,6 +30263,7 @@ async function createSession(selection, loaded, argv, runtimePath, interrupted =
 				...entry,
 				prepared
 			};
+			assertAdmissionBound(data.operations);
 		}
 		const path = resolve(directory, "session.json");
 		if (interrupted()) return { outcome: {
@@ -31812,15 +31860,13 @@ var registry_exports = /* @__PURE__ */ __exportAll({
 async function main$1(argv, env = { ...process.env }) {
 	if (argv[0] === "complete" && argv[1] === "--") {
 		const words = argv.slice(2);
-		const options = [
-			"--collection",
-			"keybinding-consumers",
-			"--scope",
-			"user"
-		];
+		const options = /* @__PURE__ */ new Map([["--collection", "keybinding-consumers"], ["--scope", "user"]]);
+		const roots = [];
 		for (let i = 0; i < words.length; i++) {
-			const key = words[i];
-			const value = words[i + 1];
+			const token = words[i];
+			const equals = token.indexOf("=");
+			const key = equals === -1 ? token : token.slice(0, equals);
+			const value = equals === -1 ? words[i + 1] : token.slice(equals + 1);
 			if ([
 				"--collection",
 				"--scope",
@@ -31829,13 +31875,16 @@ async function main$1(argv, env = { ...process.env }) {
 			].includes(key) && value && !value.startsWith("--")) {
 				if (key === "--collection" && !definitions.some((entry) => entry.name === value)) continue;
 				if (key === "--scope" && value !== "user" && value !== "system") continue;
-				options.push(key, value);
-				i++;
+				if (key === "--root") roots.push(value);
+				else options.set(key, value);
+				if (equals === -1) i++;
 			}
 		}
+		if (!roots.length) options.delete("--write-root");
 		return main$1([
 			"complete",
-			...options,
+			...[...options].flatMap(([key, value]) => [key, value]),
+			...roots.flatMap((root) => ["--root", root]),
 			...words.map((word) => `--word=${word}`)
 		], env);
 	}
@@ -31845,7 +31894,7 @@ async function main$1(argv, env = { ...process.env }) {
 		"fish",
 		"powershell"
 	].includes(argv[1] ?? "")) {
-		new l().setup("compfuzor-registry", `${shellQuote(process.execPath)} ${shellQuote(process.argv[1])}`, argv[1]);
+		new l().setup("compfuzor-registry", `${shellQuote(process.execPath)} ${shellQuote(process.argv[1])}${basename(process.argv[1]).startsWith("compfuzor-runtime.") ? " registry" : ""}`, argv[1]);
 		return 0;
 	}
 	const parsed = parse(registryRoute, { argv });

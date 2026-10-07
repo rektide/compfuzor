@@ -85,7 +85,9 @@ export async function planRegistration<T>(
       ? disabled
       : active;
   const guard = JSON.stringify({
-    roots: snapshot.roots,
+    // Optional root creation by another publisher is not a membership change.
+    // Replanning still refuses every failed root, and compares this identity/slots.
+    roots: policy.roots,
     source: effective?.source,
     state: effective?.state,
     active,

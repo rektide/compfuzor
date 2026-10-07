@@ -11,11 +11,15 @@
  * @see /doc/config/keybinding-consumers.md
  */
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { captureFile, fileText, assertFileGuards, type FileGuard } from "../capture.ts";
 import { registryPolicy } from "../../../runtime/registry/policy.ts";
 import { inspectRegistry } from "../../../runtime/registry/read.ts";
 import { registryGuard, assertRegistryGuards } from "../../../runtime/registry/guard.ts";
-import { keybindingConsumers } from "../../../runtime/keybindings/registry.ts";
+import {
+  keybindingConsumers,
+  resolveConsumerProfile,
+} from "../../../runtime/keybindings/registry.ts";
 import {
   planRegistration,
   applyRegistration,
@@ -126,6 +130,16 @@ export async function admitKeybindingCommand(
     if (record?.state === "masked") throw new Error(`receiver ${own.id} is masked`);
     if (record && (record.state === "invalid" || record.state === "conflict"))
       throw new Error(`receiver ${own.id} is ${record.state}`);
+    const registered = record ? await captureFile(record.source.winner.path) : undefined;
+    if (registered) {
+      const registeredText = fileText(registered);
+      if (
+        registeredText === undefined ||
+        JSON.stringify(keybindingConsumers.decode(JSON.parse(registeredText))) !==
+          JSON.stringify(record?.payload)
+      )
+        throw new Error("registered receiver changed during host admission");
+    }
     const effective = record?.payload ?? own;
     const state =
       record?.state === "disabled" || (!record && own.enabled === false) ? "disabled" : "active";
@@ -133,8 +147,15 @@ export async function admitKeybindingCommand(
       throw new Error(`receiver ${own.id} is disabled; use --force-enable`);
     if (effective.adapter !== own.adapter || effective.audience !== own.audience)
       throw new Error("registered receiver disagrees with owned consumer");
-    receiverProfile = resolvePathSelector(effective.profile, undefined, "advertised host profile");
-    if (receiverProfile !== resolvePathSelector(own.profile, undefined, "owned host profile"))
+    receiverProfile = await resolveConsumerProfile(
+      effective.profile,
+      record?.source.winner.path ?? values.descriptor,
+      "advertised host profile",
+    );
+    if (
+      receiverProfile !==
+      (await resolveConsumerProfile(own.profile, values.descriptor, "owned host profile"))
+    )
       throw new Error(
         "registered receiver redirects this owned host; select it through a producer instead",
       );
@@ -145,7 +166,7 @@ export async function admitKeybindingCommand(
     registrationFiles.push(file.guard);
     if (record) {
       registrationGuards.push(registryGuard(policy, record.source));
-      registrationFiles.push((await captureFile(record.source.winner.path)).guard);
+      registrationFiles.push(registered!.guard);
     } else registrationGuards.push({ roots: [...policy.roots], id: own.id, expected: "missing" });
     receiver = {
       id: own.id,
@@ -178,9 +199,10 @@ export async function admitKeybindingCommand(
   if (!runner) throw new Error("installed CONFIG runner or --runner required");
   if (values.profile && values["profile-selector"])
     throw new Error("choose profile or profile-selector, not both");
-  const profilePath = values["profile-selector"]
+  const requestedProfile = values["profile-selector"]
     ? resolvePathSelector(JSON.parse(values["profile-selector"]), undefined, "consumer profile")
     : (values.profile ?? receiverProfile);
+  const profilePath = requestedProfile ? resolve(requestedProfile) : undefined;
   if (receiverProfile && profilePath !== receiverProfile)
     throw new Error("host profile override disagrees with advertised receiver");
   const loaded = profilePath
@@ -201,6 +223,8 @@ export async function admitKeybindingCommand(
     registryGuards: registrationGuards,
   };
   const bound = bindProfile(options);
+  // Native include expansion belongs to this selected invocation, not later body exports.
+  bound.request.environment ??= { HOME: process.env.HOME };
   if (binding) {
     const placement = options.profile.placement ?? "link";
     const registration = options.profile.registration ?? "link";
@@ -263,7 +287,7 @@ export async function runAdmittedKeybindingCommand(
       : command === "host"
         ? await assembleHost(options, bound)
         : await toggleGroup(admitted.group!, command === "enable", options, bound);
-  if (result.code === 0 && admitted.publication) {
+  if (result.code === 0 && !options.check && options.mode !== "assemble" && admitted.publication) {
     await applyRegistration(
       {
         domain: keybindingConsumers,
@@ -310,6 +334,12 @@ export async function main(argv: string[], defaults: KeybindingRuntimeDefaults):
     return runAdmittedKeybindingBatch(await admitKeybindingBatch({ args, defaults }));
   }
   if (["install", "host", "enable", "disable"].includes(command)) {
+    if (args.includes("--help") || args.includes("-h")) {
+      console.log(
+        `${command} --target NATIVE --profile PATH --context ID --scope user|system\nOwned host admission also accepts --descriptor PATH and --force-enable.\n--force-enable overrides only registration disabled directives for this invocation; masks and producer-group state remain authoritative.`,
+      );
+      return 0;
+    }
     return runAdmittedKeybindingCommand(
       await admitKeybindingCommand(command as KeybindingHostCommand, args, defaults),
     );

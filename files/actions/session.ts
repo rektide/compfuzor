@@ -29,6 +29,15 @@ import { cleanEnvironment, clearProcessMarkers, executablePath, runExecutable } 
 const MAX_BYTES = 8 * 1024 * 1024;
 const MAX_OPERATIONS = 128;
 export type SessionOperation = { family: string; step: DomainStep; prepared: PreparedOperation };
+function assertAdmissionBound(operations: Record<string, SessionOperation>): void {
+  const count = Object.values(operations).reduce(
+    (total, entry) =>
+      total +
+      (entry.prepared.domain === "keybindings-batch" ? entry.prepared.admitted.members.length : 1),
+    0,
+  );
+  if (count > MAX_OPERATIONS) fail("selected action receivers/operations exceed admission bound");
+}
 export type ActionSession = {
   version: 1;
   kind: "action-session";
@@ -210,6 +219,7 @@ export async function readSession(
     verifyPreparedOperation(prepared, declared.step, raw.audience as Audience);
     operations[declared.step.id] = { ...declared, prepared };
   }
+  assertAdmissionBound(operations);
   return {
     version: 1,
     kind: "action-session",
@@ -369,6 +379,7 @@ export async function createSession(
         return { outcome: { code: 0 } };
       }
       data.operations[entry.step.id] = { ...entry, prepared };
+      assertAdmissionBound(data.operations);
     }
     const path = resolve(directory, "session.json");
     if (interrupted()) return { outcome: { code: 1, signal: interrupted() } };

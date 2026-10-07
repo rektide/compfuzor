@@ -2,6 +2,7 @@
 /** Runnable Router inspection/owner-registration frontend. Domain execution remains downstream. */
 import { realpath } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { basename } from "node:path";
 import {
   argument,
   command,
@@ -71,10 +72,16 @@ export async function main(
 ): Promise<number> {
   if (argv[0] === "complete" && argv[1] === "--") {
     const words = argv.slice(2);
-    const options = ["--collection", "keybinding-consumers", "--scope", "user"];
+    const options = new Map([
+      ["--collection", "keybinding-consumers"],
+      ["--scope", "user"],
+    ]);
+    const roots: string[] = [];
     for (let i = 0; i < words.length; i++) {
-      const key = words[i]!;
-      const value = words[i + 1];
+      const token = words[i]!;
+      const equals = token.indexOf("=");
+      const key = equals === -1 ? token : token.slice(0, equals);
+      const value = equals === -1 ? words[i + 1] : token.slice(equals + 1);
       if (
         ["--collection", "--scope", "--root", "--write-root"].includes(key) &&
         value &&
@@ -82,16 +89,26 @@ export async function main(
       ) {
         if (key === "--collection" && !definitions.some((entry) => entry.name === value)) continue;
         if (key === "--scope" && value !== "user" && value !== "system") continue;
-        options.push(key, value);
-        i++;
+        if (key === "--root") roots.push(value);
+        else options.set(key, value);
+        if (equals === -1) i++;
       }
     }
-    return main(["complete", ...options, ...words.map((word) => `--word=${word}`)], env);
+    if (!roots.length) options.delete("--write-root");
+    return main(
+      [
+        "complete",
+        ...[...options].flatMap(([key, value]) => [key, value]),
+        ...roots.flatMap((root) => ["--root", root]),
+        ...words.map((word) => `--word=${word}`),
+      ],
+      env,
+    );
   }
   if (argv[0] === "complete" && ["bash", "zsh", "fish", "powershell"].includes(argv[1] ?? "")) {
     new RootCommand().setup(
       "compfuzor-registry",
-      `${shellQuote(process.execPath)} ${shellQuote(process.argv[1]!)}`,
+      `${shellQuote(process.execPath)} ${shellQuote(process.argv[1]!)}${basename(process.argv[1]!).startsWith("compfuzor-runtime.") ? " registry" : ""}`,
       argv[1]!,
     );
     return 0;

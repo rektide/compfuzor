@@ -41,6 +41,19 @@ async function cli(args: string[], entry = "runtime/cli/registry.ts") {
 }
 
 describe("shared registry rendezvous", () => {
+  it("allows independently preplanned owners to create one shared optional root", async () => {
+    const f = await setup();
+    const root = join(f.root, "initially-missing");
+    const policy = explicitPolicy("user", [root], root);
+    const second = join(f.owner, "other-consumer.json");
+    const declaration = JSON.parse(await readFile(f.consumer, "utf8"));
+    await writeFile(second, JSON.stringify({ ...declaration, id: "other-consumer" }));
+    const one = { domain: keybindingConsumers, policy, source: f.consumer };
+    const two = { domain: keybindingConsumers, policy, source: second };
+    const [planOne, planTwo] = await Promise.all([planRegistration(one), planRegistration(two)]);
+    await applyRegistration(one, planOne);
+    expect(await applyRegistration(two, planTwo)).toMatchObject({ disposition: "create" });
+  });
   it("publishes masked and shadowed offers passively, but does not replace a local mask", async () => {
     const f = await setup();
     const mask = join(f.overlay, "media-keys-main.json");
@@ -407,6 +420,15 @@ describe("shared registry rendezvous", () => {
       "",
     ]);
     expect(values.stdout).toContain("keybinding-consumers");
+    const protocol = await cli(["complete", "--", "list", ...common, "--collection", ""]);
+    expect(protocol.code, protocol.stderr).toBe(0);
+    expect(protocol.stdout).toContain("keybinding-consumers");
+    const script = await cli(
+      ["registry", "complete", "bash"],
+      "files/runtime/compfuzor-runtime.ts",
+    );
+    expect(script.code, script.stderr).toBe(0);
+    expect(script.stdout).toContain(" registry complete --");
     expect((await cli(["list", ...common, "--typo"])).code).toBe(2);
     expect(
       (await cli(["list", "--collection", "keybinding-consumers", "--scope", "root"])).code,

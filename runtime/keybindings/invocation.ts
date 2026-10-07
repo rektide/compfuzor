@@ -8,24 +8,24 @@ import {
   assertFileGuards,
   type FileGuard,
 } from "../../files/config/capture.ts";
-import {
-  resolvePathSelector,
-  validatePathSelector,
-  type PathSelector,
-} from "../../files/config/context.ts";
+import { validatePathSelector, type PathSelector } from "../../files/config/context.ts";
 import {
   admitKeybindingCommand,
   runAdmittedKeybindingCommand,
   type AdmittedKeybindingCommand,
   type KeybindingRuntimeDefaults,
 } from "../../files/config/keybindings/runtime.ts";
-import { pathsSharePhysicalEntry } from "../../files/links/delivery.ts";
-import { keybindingConsumers, keybindingProviders } from "./registry.ts";
+import {
+  pathsSharePhysicalEntry,
+  pathsSharePhysicalDirectory,
+} from "../../files/links/delivery.ts";
+import { keybindingConsumers, keybindingProviders, resolveConsumerProfile } from "./registry.ts";
 import { registryPolicy } from "../registry/policy.ts";
 import { inspectRegistry, lookup } from "../registry/read.ts";
 import { registryGuard, assertRegistryGuards, type RegistryGuard } from "../registry/guard.ts";
 import type { RegistryPolicy, RegistryRecord, Scope } from "../registry/model.ts";
 import type { Consumer } from "./registry.ts";
+import { decodeYaml } from "../../files/config/keybindings/decode.ts";
 import {
   planRegistration,
   applyRegistration,
@@ -37,6 +37,7 @@ export type ReceiverRequest = {
   profile?: PathSelector;
   context?: string;
   scope?: Scope;
+  actionContexts?: Partial<Record<Scope, string>>;
 };
 export type SelectionPolicy = { version: 1; receivers: null | ReceiverRequest[] };
 export type AdmittedReceiver = {
@@ -86,10 +87,24 @@ function selection(value: unknown): SelectionPolicy {
       throw new Error("invalid receiver context override");
     if (raw.scope !== undefined && raw.scope !== "user" && raw.scope !== "system")
       throw new Error("invalid receiver scope override");
+    if (
+      raw.actionContexts !== undefined &&
+      (typeof raw.actionContexts !== "object" ||
+        raw.actionContexts === null ||
+        Array.isArray(raw.actionContexts) ||
+        Object.entries(raw.actionContexts).some(
+          ([audience, context]) =>
+            !["user", "system"].includes(audience) ||
+            typeof context !== "string" ||
+            !context.trim(),
+        ))
+    )
+      throw new Error("invalid receiver audience/context mapping");
     return {
       id: raw.id,
       context: raw.context,
       scope: raw.scope,
+      actionContexts: raw.actionContexts,
       ...(raw.profile === undefined
         ? {}
         : { profile: validatePathSelector(raw.profile, "receiver profile override") }),
@@ -141,12 +156,22 @@ export async function admitKeybindingBatch(
     throw new Error(`provider publication blocked: ${publicationPlan.reason}`);
   if (publicationPlan.effective.state === "masked")
     throw new Error("producer registration is masked");
+  if (
+    publicationPlan.effective.state === "invalid" ||
+    publicationPlan.effective.state === "conflict"
+  )
+    throw new Error(`producer registration is ${publicationPlan.effective.state}`);
   if (publicationPlan.effective.state === "disabled" && !values["force-enable"])
     throw new Error("producer registration is disabled; use --force-enable");
   const guards: FileGuard[] = [manifestFile.guard];
+  if (publicationPlan.effective.winner)
+    guards.push((await captureFile(publicationPlan.effective.winner)).guard);
   if (manifest.enabled === false && !values["force-enable"])
     throw new Error("producer offer is disabled; use --force-enable for invocation-only selection");
-  for (const resource of manifest.resources) guards.push((await captureFile(resource.path)).guard);
+  const resourceFiles = await Promise.all(
+    manifest.resources.map((resource) => captureFile(resource.path)),
+  );
+  guards.push(...resourceFiles.map((file) => file.guard));
   const policyPath = values.selection ?? request.selection;
   const declared = policyPath
     ? selection(JSON.parse(await readFile(policyPath, "utf8")))
@@ -183,6 +208,14 @@ export async function admitKeybindingBatch(
       throw new Error(
         `receiver ${record.id} is ${record.state}: ${record.error ?? "unusable registration"}`,
       );
+    const descriptor = await captureFile(record.source.winner.path);
+    const descriptorText = fileText(descriptor);
+    if (
+      descriptorText === undefined ||
+      JSON.stringify(keybindingConsumers.decode(JSON.parse(descriptorText))) !==
+        JSON.stringify(record.payload)
+    )
+      throw new Error(`receiver ${record.id} changed during admission`);
     const consumer = record.payload;
     if (consumer.adapter !== "niri" && consumer.adapter !== "umbriel") {
       if (explicit) throw new Error(`unsupported receiver adapter ${consumer.adapter}`);
@@ -193,20 +226,26 @@ export async function admitKeybindingBatch(
       continue;
     }
     const override = declared.receivers?.find((entry) => entry.id === record.id);
-    if (override?.scope && override.scope !== values.scope)
+    if (override?.actionContexts && !override.actionContexts[values.scope])
+      throw new Error("receiver is not declared for invocation audience");
+    if (!override?.actionContexts && override?.scope && override.scope !== values.scope)
       throw new Error("receiver scope override disagrees with invocation audience");
-    const context = values.context ?? override?.context ?? consumer.defaultContext;
+    const context =
+      values.context ??
+      override?.actionContexts?.[values.scope] ??
+      override?.context ??
+      consumer.defaultContext;
     if (!consumer.contexts.includes(context))
       throw new Error(`receiver ${record.id} does not advertise context ${context}`);
     const profile =
-      values.profile ??
-      resolvePathSelector(
+      (values.profile ? resolve(values.profile) : undefined) ??
+      (await resolveConsumerProfile(
         values["profile-selector"]
           ? JSON.parse(values["profile-selector"])
           : (override?.profile ?? consumer.profile),
-        undefined,
+        record.source.winner.path,
         `receiver ${record.id} profile`,
-      );
+      ));
     const args = [
       "--manifest",
       resolve(manifestPath),
@@ -235,8 +274,8 @@ export async function admitKeybindingBatch(
       resources: manifest.resources.map((entry) => ({ ...entry })),
       targets: [...manifest.targets],
     };
-    const registration = registryGuard(policy, record.source);
-    const descriptorGuard = (await captureFile(record.source.winner.path)).guard;
+    const registration = registryGuard(snapshot.policy, record.source);
+    const descriptorGuard = descriptor.guard;
     admitted.options.inputGuards = [...guards, descriptorGuard];
     admitted.options.registryGuards = [registration];
     members.push({
@@ -248,13 +287,29 @@ export async function admitKeybindingBatch(
     });
   }
   if (members.length > 128) throw new Error("keybinding receiver batch exceeds admission bound");
+  if (members.length) {
+    const identities = new Set<string>();
+    for (const [index, file] of resourceFiles.entries()) {
+      const path = manifest.resources[index]!.path;
+      const text = fileText(file);
+      if (text === undefined) throw new Error(`missing packaged producer resource ${path}`);
+      const record = decodeYaml(text, path);
+      const identity = `${record.kind}/${record.id}`;
+      if (identities.has(identity))
+        throw new Error(`duplicate packaged producer resource ${identity}`);
+      identities.add(identity);
+    }
+  }
   for (let i = 0; i < members.length; i++)
     for (let j = 0; j < i; j++) {
       const left = members[i]!.admitted.bound,
         right = members[j]!.admitted.bound;
       if (
         (await pathsSharePhysicalEntry(left.request.root.path, right.request.root.path)) ||
-        (await pathsSharePhysicalEntry(left.statePath, right.statePath))
+        (await pathsSharePhysicalEntry(left.statePath, right.statePath)) ||
+        (await pathsSharePhysicalEntry(left.request.root.path, right.statePath)) ||
+        (await pathsSharePhysicalEntry(left.statePath, right.request.root.path)) ||
+        (await pathsSharePhysicalDirectory(left.request.materialRoot, right.request.materialRoot))
       )
         throw new Error("selected receivers alias the same owned root/membership");
     }
