@@ -1,4 +1,5 @@
 import { createServer, type Server, type Socket } from "node:net";
+import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import { fakeKey, JsonLines, layerName, object } from "../../files/kanata-dial/protocol.ts";
@@ -21,7 +22,9 @@ class Peer {
   public held: boolean = false;
   public answer: boolean = true;
   public names: string[] = ["precision-hold"];
-  public constructor(public role: "source" | "target") {
+  public processDelay: number = 0;
+  public queries: string[] = [];
+  public constructor(_role: "source" | "target") {
     this.server = createServer((socket) => {
       this.sockets.add(socket);
       socket.on("error", () => {});
@@ -36,10 +39,16 @@ class Peer {
           if (key) {
             this.actions.push(String(key.action));
             this.held = key.action === "Press";
+            const held = this.held;
+            setTimeout(() => {
+              this.layer = held ? "precision" : "base";
+            }, this.processDelay).unref();
           }
           if (!this.answer) continue;
-          if (message.RequestCurrentLayerName)
+          if (message.RequestCurrentLayerName) {
+            this.queries.push(this.layer);
             socket.write(JSON.stringify({ CurrentLayerName: { name: this.layer } }) + "\n");
+          }
           if (message.RequestFakeKeyNames)
             socket.write(JSON.stringify({ FakeKeyNames: { names: this.names } }) + "\n");
         }
@@ -122,6 +131,46 @@ describe("bounded Kanata framing", () => {
 });
 
 describe("precision relay mock TCP lifecycle", () => {
+  it("rejects a relay pointed at one instance and invalid layer names", async () => {
+    const endpoint = { host: "127.0.0.1", port: 5828 };
+    expect(() => new PrecisionRelay({ source: endpoint, target: endpoint })).toThrow("distinct");
+    await expect(resetTarget(endpoint, "precision-hold", 100, "bad layer")).rejects.toThrow(
+      "Invalid",
+    );
+  });
+  it("waits for delayed fallback processing and rejects a target stuck on another layer", async () => {
+    const target = new Peer("target");
+    const endpoint = await target.listen();
+    cleanup.push(() => target.close());
+    target.layer = "precision";
+    target.held = true;
+    target.processDelay = 60;
+    await resetTarget(endpoint, "precision-hold", 300);
+    expect(target.queries[0]).toBe("precision");
+    expect(target.queries.at(-1)).toBe("base");
+    target.layer = "precision";
+    target.processDelay = 1000;
+    await expect(resetTarget(endpoint, "precision-hold", 70)).rejects.toThrow("timeout");
+  });
+  it("runs the actual system Node native-TS CLI against a mock reset endpoint", async () => {
+    const target = new Peer("target");
+    const endpoint = await target.listen();
+    cleanup.push(() => target.close());
+    const child = spawn("/usr/bin/node", ["files/kanata-dial/cli.ts", "--reset"], {
+      env: { ...process.env, KANATA_DIAL_PORT: String(endpoint.port) },
+    });
+    let error = "";
+    child.stderr.on("data", (chunk: Buffer) => {
+      error += chunk.toString();
+    });
+    const code = await new Promise<number | null>((resolve, reject) => {
+      child.on("error", reject);
+      child.on("exit", resolve);
+    });
+    expect(error).toBe("");
+    expect(code).toBe(0);
+    expect(target.actions).toEqual(["Release"]);
+  });
   it("resets before applying the initial held snapshot; duplicate updates do not press twice", async () => {
     const { source, target } = await fixture("dial-precision");
     await eventually(() => target.held);
@@ -175,11 +224,10 @@ describe("precision relay mock TCP lifecycle", () => {
     await relay.stop();
     expect(target.held).toBe(false);
     const commands = target.commands.map((message) => Object.keys(object(message)!)[0]);
-    expect(commands.slice(-3)).toEqual([
-      "RequestFakeKeyNames",
-      "ActOnFakeKey",
-      "RequestCurrentLayerName",
-    ]);
+    expect(commands.at(-1)).toBe("RequestCurrentLayerName");
+    expect(commands.lastIndexOf("ActOnFakeKey")).toBeGreaterThan(
+      commands.lastIndexOf("RequestFakeKeyNames"),
+    );
   });
   it("reset rejects absent key, socket loss and timeout instead of claiming safe OFF", async () => {
     const target = new Peer("target");

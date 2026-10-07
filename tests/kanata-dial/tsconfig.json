@@ -1,4 +1,5 @@
 {
   "extends": "../../tsconfig.json",
+  "compilerOptions": { "erasableSyntaxOnly": true },
   "include": ["../../files/kanata-dial/**/*.ts", "./**/*.ts"]
 }

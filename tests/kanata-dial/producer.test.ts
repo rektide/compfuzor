@@ -25,7 +25,7 @@ describe("independent media precision contribution", () => {
         })),
       ].map((value) =>
         decodeContribution(
-          JSON.parse(JSON.stringify(value).replaceAll("{{KANATA_DIAL_PRECISION_STEP}}", "0.005")),
+          JSON.parse(JSON.stringify(value).replaceAll("{{KANATA_DIAL_PRECISION_STEP}}", "0.003")),
           vars.TYPE,
         ),
       );
@@ -54,7 +54,7 @@ describe("independent media precision contribution", () => {
         (binding) => binding.id === "kanata-dial-volume-down-precision",
       )!;
       expect(down.keys).toEqual(["F24", "Shift+F24"]);
-      expect(renderDefinition(up, target)).toContain("0.005+");
+      expect(renderDefinition(up, target)).toContain("0.003+");
       expect(off.bindings.some((binding) => binding.keys.includes("F23"))).toBe(false);
     }
   });

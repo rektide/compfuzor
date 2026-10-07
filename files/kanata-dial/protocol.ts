@@ -2,7 +2,11 @@
 export class JsonLines {
   public pending: Buffer = Buffer.alloc(0);
 
-  public constructor(public limit: number = 64 * 1024) {}
+  public limit: number;
+
+  public constructor(limit: number = 64 * 1024) {
+    this.limit = limit;
+  }
 
   public push(chunk: Buffer): unknown[] {
     const data = Buffer.concat([this.pending, chunk]);

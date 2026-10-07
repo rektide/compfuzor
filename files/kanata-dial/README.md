@@ -12,12 +12,18 @@ Node with native TypeScript stripping is required; there is no build step.
   held precision emits F23/F24.
 - `keyboard-signal.example.kbd`: parser-checkable example, **not** the main config.
 
-`ActOnFakeKey` has no success ACK. The reset helper waits for a subsequent query
-reply on the same stream, establishing dispatch ordering, not completed input
-processing. A failed reset must prevent binding disable unless the dial instance
-is stopped. SIGKILL cannot run cleanup: proposed systemd `ExecStopPost=… --reset`
+`ActOnFakeKey` has no success ACK. Reset sends Release and polls current layer
+until the configured fallback (`base`) is observed, within a bounded deadline.
+This proves effective-layer fallback, not completed OS output. A failed reset
+must prevent binding disable; stopping the dial instance is the fail-safe and
+bindings remain enabled until a later successful OFF. SIGKILL cannot run cleanup:
+systemd `ExecStopPost=… --reset`
 and reset-on-reconnect are required crash recovery, not an automatic TCP lease.
 Only one controller may own `precision-hold`.
 
-See [implementation checkpoint](/design/kanata-dial/implementation0.gpt61sm.md)
+The final selected precision amount is `0.003`; media `.03/.01` remains unchanged.
+Native Node execution is tested with `/usr/bin/node`. Runtime TypeScript uses
+erasable syntax only (no constructor parameter properties).
+
+See [implementation checkpoint](/design/kanata-dial/implementation1.gpt61sm.md)
 for integration gates and known passthrough/Zoom limits.

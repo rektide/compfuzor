@@ -18,11 +18,13 @@ export async function main(args: string[]): Promise<void> {
     throw new Error("Usage: cli.ts [--reset]; set KANATA_DIAL_PORT and KANATA_KEYBOARD_PORT");
   const target = endpoint("KANATA_DIAL");
   const virtualKey = process.env.KANATA_DIAL_VIRTUAL_KEY ?? "precision-hold";
-  if (args[0] === "--reset") return resetTarget(target, virtualKey);
+  const fallbackLayer = process.env.KANATA_DIAL_FALLBACK_LAYER ?? "base";
+  if (args[0] === "--reset") return resetTarget(target, virtualKey, 5000, fallbackLayer);
   const relay = new PrecisionRelay({
     source: endpoint("KANATA_KEYBOARD"),
     target,
     virtualKey,
+    fallbackLayer,
     precisionLayer: process.env.KANATA_PRECISION_LAYER ?? "dial-precision",
     log: (message) => console.error(message),
   });

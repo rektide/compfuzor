@@ -11,7 +11,7 @@
     KEYBINDING_ORDER: 110
     ACTION_AUDIENCES: {default: user}
     # Candidate amount: override explicitly; base media-keys .03/.01 unchanged.
-    KANATA_DIAL_PRECISION_STEP: "0.005"
+    KANATA_DIAL_PRECISION_STEP: "0.003"
     KEYBINDING_ACTIONS:
       kanata-dial-volume-up-precision:
         exec: [wpctl, set-volume, "@DEFAULT_AUDIO_SINK@", "{{KANATA_DIAL_PRECISION_STEP}}+", "-l", "1.0"]

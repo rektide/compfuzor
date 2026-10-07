@@ -12,6 +12,7 @@ export interface RelayOptions {
   target: Endpoint;
   precisionLayer?: string;
   virtualKey?: string;
+  fallbackLayer?: string;
   retryMs?: number;
   timeoutMs?: number;
   pollMs?: number;
@@ -33,10 +34,19 @@ export class PrecisionRelay {
   public timeoutMs: number;
   public pollMs: number;
   public log: (message: string) => void;
+  public options: RelayOptions;
+  public fallbackLayer: string;
 
-  public constructor(public options: RelayOptions) {
+  public constructor(options: RelayOptions) {
+    this.options = options;
     this.precisionLayer = options.precisionLayer ?? "dial-precision";
     this.virtualKey = options.virtualKey ?? "precision-hold";
+    this.fallbackLayer = options.fallbackLayer ?? "base";
+    validateName(this.fallbackLayer);
+    validateName(this.virtualKey);
+    validateName(this.precisionLayer);
+    if (options.source.port === options.target.port)
+      throw new Error("Source and target must use distinct TCP ports");
     this.retryMs = options.retryMs ?? 500;
     this.timeoutMs = options.timeoutMs ?? 5000;
     this.pollMs = options.pollMs ?? 2000;
@@ -81,14 +91,17 @@ export class PrecisionRelay {
       this.sockets.add(socket);
       const frames = new JsonLines();
       let ready = false;
+      let resetting = false;
       let awaiting = true;
       let deadline = Date.now() + this.timeoutMs;
+      const resetDeadline = deadline;
       let nextPoll = Date.now() + this.pollMs;
       const timer = setInterval(
         () => {
           const now = Date.now();
-          if (awaiting && now >= deadline) socket.destroy(new Error(`${role} response timeout`));
-          else if (ready && !awaiting && now >= nextPoll) {
+          if ((!ready && now >= resetDeadline) || (awaiting && now >= deadline))
+            socket.destroy(new Error(`${role} response/reset timeout`));
+          else if ((ready || resetting) && !awaiting && now >= nextPoll) {
             awaiting = true;
             deadline = now + this.timeoutMs;
             this.write(socket, '{"RequestCurrentLayerName":{}}\n');
@@ -116,16 +129,30 @@ export class PrecisionRelay {
                 this.apply();
               } else if (message.LayerChange || message.CurrentLayerName)
                 throw new Error("Malformed layer state");
-            } else if (!ready && message.FakeKeyNames) {
+            } else if (!ready && !resetting && message.FakeKeyNames) {
               const names = object(message.FakeKeyNames)?.names;
               if (!Array.isArray(names) || !names.includes(this.virtualKey))
                 throw new Error(`Target does not define ${this.virtualKey}`);
               // Release stale state left by a crashed relay BEFORE reapplying snapshot.
               if (!this.write(socket, fakeKey(this.virtualKey, false))) return;
-              ready = true;
-              this.target = socket;
-              this.sentHeld = false;
-              this.apply();
+              resetting = true;
+              awaiting = true;
+              this.write(socket, '{"RequestCurrentLayerName":{}}\n');
+              continue;
+            } else if (resetting && message.CurrentLayerName) {
+              const current = object(message.CurrentLayerName)?.name;
+              if (typeof current !== "string") throw new Error("Malformed target layer state");
+              if (current === this.fallbackLayer) {
+                resetting = false;
+                ready = true;
+                this.target = socket;
+                this.sentHeld = false;
+                this.apply();
+              } else {
+                awaiting = false;
+                nextPoll = Date.now() + Math.min(this.pollMs, 25);
+                continue;
+              }
             }
             // Poll replies, not unrelated notifications, prove ongoing command service.
             if ((role === "source" && !ready) || (role === "target" && !ready)) continue;
@@ -162,7 +189,7 @@ export class PrecisionRelay {
     this.controller.abort();
     // A separate connection also resets if the relay's target was unhealthy.
     try {
-      await resetTarget(this.options.target, this.virtualKey, this.timeoutMs);
+      await resetTarget(this.options.target, this.virtualKey, this.timeoutMs, this.fallbackLayer);
     } finally {
       for (const socket of this.sockets) socket.destroy();
       await Promise.all(this.tasks);
@@ -170,22 +197,31 @@ export class PrecisionRelay {
   }
 }
 
-/** Release then query on the same stream: command-dispatch barrier, not key-event ACK. */
+export function validateName(name: string): void {
+  if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/.test(name)) throw new Error("Invalid Kanata layer/key name");
+}
+
+/** Release, then query until fallback is observed. Still no OS-output completion ACK. */
 export async function resetTarget(
   endpoint: Endpoint,
   virtualKey: string = "precision-hold",
   timeoutMs: number = 5000,
+  fallbackLayer: string = "base",
 ): Promise<void> {
+  validateName(virtualKey);
+  validateName(fallbackLayer);
   await new Promise<void>((resolve, reject) => {
     const socket = createConnection(endpoint);
     const frames = new JsonLines();
     let phase: "names" | "barrier" = "names";
     const timer = setTimeout(() => socket.destroy(new Error("Target reset timeout")), timeoutMs);
     let finished = false;
+    let queryTimer: ReturnType<typeof setTimeout> | undefined;
     const finish = (error?: Error): void => {
       if (finished) return;
       finished = true;
       clearTimeout(timer);
+      clearTimeout(queryTimer);
       socket.destroy();
       if (error) reject(error);
       else resolve();
@@ -208,8 +244,16 @@ export async function resetTarget(
           } else if (
             phase === "barrier" &&
             typeof object(message.CurrentLayerName)?.name === "string"
-          )
-            finish();
+          ) {
+            const current = object(message.CurrentLayerName)?.name;
+            if (current === fallbackLayer) finish();
+            else {
+              clearTimeout(queryTimer);
+              queryTimer = setTimeout(() => {
+                if (!finished) socket.write('{"RequestCurrentLayerName":{}}\n');
+              }, 25);
+            }
+          }
         }
       } catch (error) {
         finish(error instanceof Error ? error : new Error(String(error)));
