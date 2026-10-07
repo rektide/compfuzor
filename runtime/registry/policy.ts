@@ -49,7 +49,8 @@ export function explicitPolicy(
   if (roots.length === 0 || ![...roots, writeRoot].every(isAbsolute)) {
     throw new Error("registry policy requires absolute roots and a writable root");
   }
-  const normalized = [...new Set(roots.map((root) => resolve(root)))];
+  // Repeated roots are one location; retain its LAST occurrence to preserve precedence.
+  const normalized = [...new Set(roots.map((root) => resolve(root)).toReversed())].toReversed();
   const writable = resolve(writeRoot);
   if (!normalized.includes(writable)) throw new Error("writeRoot must belong to registry roots");
   return { scope, roots: normalized, writeRoot: writable };

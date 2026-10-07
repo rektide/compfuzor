@@ -247,6 +247,10 @@ describe("shared registry rendezvous", () => {
   });
 
   it("binds user XDG roots at invocation; explicit system policy ignores HOME", () => {
+    expect(explicitPolicy("user", ["/lower", "/upper", "/lower"], "/lower").roots).toEqual([
+      "/upper",
+      "/lower",
+    ]);
     const env = {
       HOME: "/isolated/home",
       XDG_DATA_HOME: "/isolated/data",

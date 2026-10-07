@@ -104,7 +104,7 @@ export async function main(
     if (!snapshot.complete)
       throw new Error("completion unavailable: registry root acquisition failed");
     const tab = new RootCommand();
-    // One shared verb table drives both tab's static command descriptions and its ID provider.
+    // Await observation before tab's synchronous callbacks; execution still reobserves.
     for (const verb of verbs) {
       const entry = tab.command(verb, `${verb} registry`);
       entry.option("--collection", "Rendezvous", (complete) => {
