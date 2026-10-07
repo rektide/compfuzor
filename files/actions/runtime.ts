@@ -146,7 +146,7 @@ export async function runAction(
     );
     for (const step of selection.family.plans[selection.audience]!)
       console.log(
-        `  ${step.kind === "domain" ? `${step.domain} ${step.operation} context=${step.context}` : step.kind === "action" ? `${step.action}-${selection.audience}.mjs` : step.path}`,
+        `  ${step.kind === "domain" ? `${step.domain} ${step.operation} ${"context" in step ? `context=${step.context}` : "registry selection"}` : step.kind === "action" ? `${step.action}-${selection.audience}.mjs` : step.path}`,
       );
     return { code: 0 };
   }

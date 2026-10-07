@@ -11,6 +11,17 @@
  * @see /doc/config/keybinding-consumers.md
  */
 import { readFile } from "node:fs/promises";
+import { captureFile, fileText, assertFileGuards, type FileGuard } from "../capture.ts";
+import { registryPolicy } from "../../../runtime/registry/policy.ts";
+import { inspectRegistry } from "../../../runtime/registry/read.ts";
+import { registryGuard, assertRegistryGuards } from "../../../runtime/registry/guard.ts";
+import { keybindingConsumers } from "../../../runtime/keybindings/registry.ts";
+import {
+  planRegistration,
+  applyRegistration,
+  type RegistrationPlan,
+} from "../../../runtime/registry/register.ts";
+import type { RegistryPolicy } from "../../../runtime/registry/model.ts";
 import { parseArgs } from "node:util";
 import { runProcessor } from "./processor.ts";
 import { validateClosure } from "./closure.ts";
@@ -52,6 +63,13 @@ export type AdmittedKeybindingCommand = {
   bound: BoundProfile;
   manifest?: ProducerManifest;
   group?: string;
+  registrySelection?: {
+    id: string;
+    originalState: "active" | "disabled";
+    forceEnable: boolean;
+    forced: boolean;
+  };
+  publication?: { source: string; policy: RegistryPolicy; plan: RegistrationPlan };
 };
 
 /** Load and bind the effective profile/context without membership, registration or publication. */
@@ -76,8 +94,66 @@ export async function admitKeybindingCommand(
       mode: { type: "string" },
       check: { type: "boolean" },
       runner: { type: "string" },
+      descriptor: { type: "string" },
+      "force-enable": { type: "boolean", default: false },
     },
   });
+  let receiver: AdmittedKeybindingCommand["registrySelection"];
+  let receiverProfile: string | undefined;
+  const registrationGuards: HostOptions["registryGuards"] = [];
+  const registrationFiles: FileGuard[] = [];
+  let publication: AdmittedKeybindingCommand["publication"];
+  if (values.descriptor) {
+    if (command !== "host")
+      throw new Error("owned consumer descriptor applies only to host admission");
+    const file = await captureFile(values.descriptor);
+    const text = fileText(file);
+    if (text === undefined) throw new Error("missing owned consumer descriptor");
+    const own = keybindingConsumers.decode(JSON.parse(text));
+    if (own.audience !== values.scope) throw new Error("owned consumer audience mismatch");
+    const policy = registryPolicy(keybindingConsumers.collection, own.audience);
+    const publicationPlan = await planRegistration({
+      domain: keybindingConsumers,
+      policy,
+      source: values.descriptor,
+    });
+    if (publicationPlan.disposition === "blocked")
+      throw new Error(`owned receiver publication blocked: ${publicationPlan.reason}`);
+    publication = { source: values.descriptor, policy, plan: publicationPlan };
+    const view = await inspectRegistry(keybindingConsumers, policy);
+    if (!view.complete) throw new Error("incomplete consumer registry during host admission");
+    const record = view.records.find((entry) => entry.id === own.id);
+    if (record?.state === "masked") throw new Error(`receiver ${own.id} is masked`);
+    if (record && (record.state === "invalid" || record.state === "conflict"))
+      throw new Error(`receiver ${own.id} is ${record.state}`);
+    const effective = record?.payload ?? own;
+    const state =
+      record?.state === "disabled" || (!record && own.enabled === false) ? "disabled" : "active";
+    if (state === "disabled" && !values["force-enable"])
+      throw new Error(`receiver ${own.id} is disabled; use --force-enable`);
+    if (effective.adapter !== own.adapter || effective.audience !== own.audience)
+      throw new Error("registered receiver disagrees with owned consumer");
+    receiverProfile = resolvePathSelector(effective.profile, undefined, "advertised host profile");
+    if (receiverProfile !== resolvePathSelector(own.profile, undefined, "owned host profile"))
+      throw new Error(
+        "registered receiver redirects this owned host; select it through a producer instead",
+      );
+    if (!effective.contexts.includes(values.context!))
+      throw new Error("host context is not advertised");
+    values.target ??= own.adapter;
+    if (values.target !== own.adapter) throw new Error("host native adapter mismatch");
+    registrationFiles.push(file.guard);
+    if (record) {
+      registrationGuards.push(registryGuard(policy, record.source));
+      registrationFiles.push((await captureFile(record.source.winner.path)).guard);
+    } else registrationGuards.push({ roots: [...policy.roots], id: own.id, expected: "missing" });
+    receiver = {
+      id: own.id,
+      originalState: state,
+      forceEnable: values["force-enable"],
+      forced: state === "disabled" && values["force-enable"],
+    };
+  }
   if (values.target !== "niri" && values.target !== "umbriel")
     throw new Error("explicit --target niri|umbriel required");
   if (values.scope !== "user" && values.scope !== "system")
@@ -104,7 +180,9 @@ export async function admitKeybindingCommand(
     throw new Error("choose profile or profile-selector, not both");
   const profilePath = values["profile-selector"]
     ? resolvePathSelector(JSON.parse(values["profile-selector"]), undefined, "consumer profile")
-    : values.profile;
+    : (values.profile ?? receiverProfile);
+  if (receiverProfile && profilePath !== receiverProfile)
+    throw new Error("host profile override disagrees with advertised receiver");
   const loaded = profilePath
     ? await loadProfile(profilePath)
     : { profile: defaultProfile(values.target) };
@@ -119,6 +197,8 @@ export async function admitKeybindingCommand(
       binding?.mode ??
       (command === "host" ? "seed" : undefined)) as HostOptions["mode"],
     check: values.check,
+    inputGuards: registrationFiles,
+    registryGuards: registrationGuards,
   };
   const bound = bindProfile(options);
   if (binding) {
@@ -159,7 +239,15 @@ export async function admitKeybindingCommand(
     if (!values.group) throw new Error("enable/disable requires --group");
     if (values.check) throw new Error("membership mutation does not accept --check");
   }
-  return { command, options, bound, manifest, group: values.group };
+  return {
+    command,
+    options,
+    bound,
+    manifest,
+    group: values.group,
+    registrySelection: receiver,
+    publication,
+  };
 }
 
 /** Reuse the admitted binding while keeping each complete domain operation's commit boundary. */
@@ -167,12 +255,24 @@ export async function runAdmittedKeybindingCommand(
   admitted: AdmittedKeybindingCommand,
 ): Promise<number> {
   const { command, options, bound } = admitted;
+  await assertFileGuards(options.inputGuards ?? []);
+  await assertRegistryGuards(options.registryGuards ?? []);
   const result =
     command === "install"
       ? await installProducer(admitted.manifest!, options, bound)
       : command === "host"
         ? await assembleHost(options, bound)
         : await toggleGroup(admitted.group!, command === "enable", options, bound);
+  if (result.code === 0 && admitted.publication) {
+    await applyRegistration(
+      {
+        domain: keybindingConsumers,
+        policy: admitted.publication.policy,
+        source: admitted.publication.source,
+      },
+      admitted.publication.plan,
+    );
+  }
   return result.code;
 }
 
@@ -194,6 +294,21 @@ export async function runAdmittedKeybindingCommand(
  */
 export async function main(argv: string[], defaults: KeybindingRuntimeDefaults): Promise<number> {
   const [command, ...args] = argv;
+  if (command === "complete") {
+    const { completeKeybindings } = await import("../../../runtime/keybindings/completion.ts");
+    return completeKeybindings(args);
+  }
+  if (command === "install-offer") {
+    if (args.includes("--help") || args.includes("-h")) {
+      console.log(
+        "install-offer --manifest PATH [--selection POLICY] [--target RECEIVER ...] [--scope user|system] [--force-enable]\n--force-enable skips only registration disabled directives for this invocation; masks remain vetoes.",
+      );
+      return 0;
+    }
+    const { admitKeybindingBatch, runAdmittedKeybindingBatch } =
+      await import("../../../runtime/keybindings/invocation.ts");
+    return runAdmittedKeybindingBatch(await admitKeybindingBatch({ args, defaults }));
+  }
   if (["install", "host", "enable", "disable"].includes(command)) {
     return runAdmittedKeybindingCommand(
       await admitKeybindingCommand(command as KeybindingHostCommand, args, defaults),

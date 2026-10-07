@@ -22,6 +22,7 @@ import { explicitPolicy, registryPolicy } from "../registry/policy.ts";
 import { inspectRegistry, lookup } from "../registry/read.ts";
 import { planRegistration, register } from "../registry/register.ts";
 import type { Domain, Scope } from "../registry/model.ts";
+import { shellQuote } from "../../files/config/keybindings/render.ts";
 
 const definitions = [
   { name: "keybinding-providers", domain: keybindingProviders },
@@ -61,12 +62,40 @@ node runtime/cli/registry.ts <list|explain ID|register|status|complete> \\
   [--root /absolute/low --root /absolute/high --write-root /absolute/low] [--json]
 register/status require --source /absolute/owner/descriptor.json
 Explicit roots replace XDG lookup; write-root must be one of those roots.
-complete accepts repeated --word values for tab's synchronous completion driver.`;
+complete <bash|zsh|fish|powershell> prints shell setup; complete -- WORDS handles tab's protocol.
+Repeated --word values remain available for isolated completion probes.`;
 
 export async function main(
   argv: string[],
   env: Record<string, string | undefined> = { ...process.env },
 ): Promise<number> {
+  if (argv[0] === "complete" && argv[1] === "--") {
+    const words = argv.slice(2);
+    const options = ["--collection", "keybinding-consumers", "--scope", "user"];
+    for (let i = 0; i < words.length; i++) {
+      const key = words[i]!;
+      const value = words[i + 1];
+      if (
+        ["--collection", "--scope", "--root", "--write-root"].includes(key) &&
+        value &&
+        !value.startsWith("--")
+      ) {
+        if (key === "--collection" && !definitions.some((entry) => entry.name === value)) continue;
+        if (key === "--scope" && value !== "user" && value !== "system") continue;
+        options.push(key, value);
+        i++;
+      }
+    }
+    return main(["complete", ...options, ...words.map((word) => `--word=${word}`)], env);
+  }
+  if (argv[0] === "complete" && ["bash", "zsh", "fish", "powershell"].includes(argv[1] ?? "")) {
+    new RootCommand().setup(
+      "compfuzor-registry",
+      `${shellQuote(process.execPath)} ${shellQuote(process.argv[1]!)}`,
+      argv[1]!,
+    );
+    return 0;
+  }
   const parsed = parse(registryRoute, { argv });
   if (!parsed.ok) {
     console.error(JSON.stringify(parsed));

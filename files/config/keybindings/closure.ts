@@ -17,6 +17,7 @@ import { physicalParent, inspectDeliveryEntry } from "../../links/delivery.ts";
 import type { Target } from "./model.ts";
 import { nativeIncludes, resolveNativeInclude, rewriteNativeIncludes } from "./native.ts";
 import { renderRoot } from "./materials.ts";
+import { assertRegistryGuards, type RegistryGuard } from "../../../runtime/registry/guard.ts";
 
 const exec = promisify(execFile);
 /** Private invocation plan prepared by the consumer, consumed before CONFIG commit. */
@@ -31,6 +32,7 @@ export type ClosurePlan = {
   captured: Record<string, string>;
   /** Input/root/link/parent observations checked before and after validation, not held locks. */
   guards: FileGuard[];
+  registryGuards?: RegistryGuard[];
   /** Explicit include expansion values captured by the caller, not ambient env discovery. */
   environment: Record<string, string | undefined>;
   /** Native validator command override; defaults to the target's executable. */
@@ -180,6 +182,7 @@ export async function validateClosure(
   if (plan.version !== 1 || map.version !== 1)
     throw new Error("unsupported candidate closure version");
   await assertFileGuards(plan.guards);
+  await assertRegistryGuards(plan.registryGuards ?? []);
   const planned = new Map<string, string>();
   for (const candidate of map.candidates)
     planned.set(candidate.output, await readFile(candidate.candidate, "utf8"));
@@ -233,6 +236,7 @@ export async function validateClosure(
     await validateRoot(envelope);
   }
   await assertFileGuards(plan.guards);
+  await assertRegistryGuards(plan.registryGuards ?? []);
 }
 
 /**

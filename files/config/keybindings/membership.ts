@@ -411,6 +411,7 @@ async function applyState(
     ...options,
     request: selected.request,
     inputGuards: [
+      ...(options.inputGuards ?? []),
       guard,
       ...selected.guards,
       ...(options.profileGuard ? [options.profileGuard] : []),

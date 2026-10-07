@@ -31,6 +31,7 @@ import {
 import { renderDefinition, renderInclude, shellQuote } from "./render.ts";
 import { captureClosure, entryKey, plannedReader, type ClosurePlan } from "./closure.ts";
 import { nativeIncludes, resolveNativeInclude, rewriteNativeIncludes } from "./native.ts";
+import type { RegistryGuard } from "../../../runtime/registry/guard.ts";
 
 /** One explicitly selected YAML layer; array order determines composition precedence. */
 export type YamlSelection = {
@@ -110,6 +111,7 @@ export type ConsumerOptions = {
   }[];
   /** Upstream captured profile/membership/source guards checked by the closure hook; not locks. */
   inputGuards?: FileGuard[];
+  registryGuards?: RegistryGuard[];
 };
 /** Runner outcome plus declared material/output inventory, not proof of crash atomicity. */
 export type ConsumerResult = AssemblyResult & {
@@ -444,6 +446,7 @@ export async function assembleConsumer(options: ConsumerOptions): Promise<Consum
       .map((file) => file.guard)
       .concat(options.inputGuards ?? []);
     const plan: ClosurePlan = {
+      registryGuards: options.registryGuards,
       version: 1,
       target,
       root,

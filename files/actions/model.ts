@@ -3,7 +3,7 @@ import { basename, dirname, isAbsolute } from "node:path";
 import type { PathSelector } from "../config/context.ts";
 
 export type Audience = "user" | "system";
-export type DomainStep = {
+export type LegacyDomainStep = {
   kind: "domain";
   id: string;
   domain: "config" | "keybindings";
@@ -17,7 +17,19 @@ export type DomainStep = {
   mode?: "assemble";
   manifest?: string;
   producer?: string;
+  descriptor?: string;
 };
+export type KeybindingBatchStep = {
+  kind: "domain";
+  id: string;
+  domain: "keybindings";
+  operation: "install-offer";
+  envelope: string;
+  manifest: string;
+  producer: string;
+  selection?: string;
+};
+export type DomainStep = LegacyDomainStep | KeybindingBatchStep;
 export type ActionStep =
   | { kind: "action"; action: string }
   | { kind: "exec"; path: string; children?: ActionStep[] }
@@ -86,12 +98,37 @@ export function domainStep(value: unknown): DomainStep {
       "mode",
       "manifest",
       "producer",
+      "selection",
+      "descriptor",
     ],
     "domain step",
   );
   const id = named(raw.id, "operation ID");
-  const context = named(raw.context, "operation context");
   const envelope = binPath(raw.envelope);
+  if (raw.domain === "keybindings" && raw.operation === "install-offer") {
+    knownKeys(
+      raw,
+      ["kind", "id", "domain", "operation", "envelope", "manifest", "producer", "selection"],
+      "registry producer operation",
+    );
+    if (
+      typeof raw.manifest !== "string" ||
+      !raw.manifest ||
+      (raw.selection !== undefined && (typeof raw.selection !== "string" || !raw.selection))
+    )
+      fail("invalid registry producer locators");
+    return {
+      kind: "domain",
+      id,
+      domain: "keybindings",
+      operation: "install-offer",
+      envelope,
+      manifest: raw.manifest,
+      producer: named(raw.producer, "producer"),
+      ...(raw.selection === undefined ? {} : { selection: raw.selection as string }),
+    };
+  }
+  const context = named(raw.context, "operation context");
   if (raw.domain !== "config" && raw.domain !== "keybindings") fail("unsupported action domain");
   const operations =
     raw.domain === "config"
@@ -100,7 +137,7 @@ export function domainStep(value: unknown): DomainStep {
   if (!operations.includes(String(raw.operation))) fail("unsupported domain operation");
   if (raw.domain === "keybindings" && raw.target !== "niri" && raw.target !== "umbriel")
     fail("invalid keybinding target");
-  for (const key of ["spec", "profile", "manifest", "producer"] as const)
+  for (const key of ["spec", "profile", "manifest", "producer", "descriptor"] as const)
     if (raw[key] !== undefined && (typeof raw[key] !== "string" || !raw[key]))
       fail(`invalid domain ${key}`);
   if (raw.mode !== undefined && (raw.mode !== "assemble" || raw.operation !== "host"))
