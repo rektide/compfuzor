@@ -16,7 +16,8 @@ The user asked us to build Compfuzor's shared registry/rendezvous system with **
 medium implementation agents**, and asked **G** to improve the reusable Figments
 drop-in loader. G's work is complete and all six recorded Figments features are
 accepted/closed. Compfuzor has an executable library/CLI/generator/native slice;
-the combined-first-install and coherent policy boundary is actively being finished.
+the combined-first-install and coherent policy slice has now been committed and
+reported verified, ready for successor source review and regression migration.
 
 The current parent is **GPT-6 Astra xhigh**, petname **glowing-orchid**, session
 `ses_eeca88ca4ffeNJOs4u3yLQAIVJ`. Its context was measured at roughly **488k** during
@@ -54,14 +55,17 @@ Canonical current direction: [rendezvous](/design/registry-discovery/rendezvous0
 
 # Active agents and assignments
 
-## Current implementing Sol medium
+## Retired implementing Sol medium
 
 Session: `ses_eeaabf886ffe9Olh3sg1Th1RxZ`.
 
-Its last completed checkpoint is
-[`implementation1.gpt61s.md`](/design/registry-discovery/implementation1.gpt61s.md),
-reported context **319,588 / approximately 321k**. It is now running the next
-bounded slice specified in [publication0](/design/registry-discovery/publication0.gpt6a.md):
+Its latest completed checkpoint is
+[`implementation2.gpt61s.md`](/design/registry-discovery/implementation2.gpt61s.md),
+with [its code handoff](/design/registry-discovery/handoff0.gpt61s.md).
+It returned at **404,514 current tokens** (final harness readout about412k), within
+the rollover band. It has stopped; do not assign another build to that session.
+The completed bounded slice addressed
+[publication0](/design/registry-discovery/publication0.gpt6a.md):
 
 - explicit prospective owned consumers for combined first install;
 - reusable exact pre-state → planned reference publication expectations;
@@ -71,12 +75,13 @@ bounded slice specified in [publication0](/design/registry-discovery/publication
 - authored receiver audience filtering before lookup;
 - combined-role and isolated SYSTEM native proofs.
 
-It was told to prepare handoff from350k, target400k and stop by450k unless the parent
-authorizes a valuable exception. It must commit each coherent stage and return code,
-checks and successor references. Do not poll it for progress; await its completion
-notification or send substantive steering via its session ID.
+Reported new commits: `92f2dcf6`, `99e516f3`, `106a9da2`. Reported verification:
+55 focused tests, `pnpm check`, refreshed bundle, combined USER/SYSTEM native proof
+with rollback, and the previous media-keys/Niri/Umbriel/Zim proof. The successor
+must read the consequential code and handoff; this retiring parent has not reviewed
+the new slice's full implementation and does not claim to have rerun its checks.
 
-## Fresh Sol medium regression/successor preparation
+## Active rollover lead: Sol medium
 
 Session: `ses_eea1fae6bffeVu5nRXam8lmMLb`.
 
@@ -85,15 +90,19 @@ Its read-only investigation is complete and committed as `392cdb66`:
 It classifies old keybindings/action integration coverage into retained behavior,
 obsolete wrapper/default assumptions, real gaps and isolation prerequisites. It
 ran no tests/deployments and modified only that report. Reported context at return
-was about **125.6k**. It is stopped at its checkpoint, primed to become the next
-implementation agent after the current Sol rolls over. The fresh lead should read
-the report before authorizing fixture migration; this parent has not reviewed its
-full contents yet.
+was about **125.6k**. It has now been promoted and restarted as the **rollover lead
+and implementation successor**, using the already user-requested Sol medium model.
+Repeated server restarts interrupted the optional fresh-model choice, so continuation
+uses that existing model direction rather than waiting on the same question again.
+
+It is assigned to review implementation2's consequential code, then implement the
+remaining regression/fixture/documentation migration from its report. It owns
+architectural judgment for that continuation. The old parent becomes a light relay
+and should not redo the successor's research.
 
 It must not blindly run old SYSTEM/native integration tests: some have isolated
-native outputs but still use live default registry locations. Read-only mapping
-first. The current implementing agent knows this parallel audit exists and can
-focus its remaining context on the active architectural slice.
+native outputs but still use live default registry locations. The mapping is now
+complete; the public registry-policy pair must be bound before running those proofs.
 
 ## Completed G / Figments
 
@@ -177,16 +186,19 @@ Checkpoint commits (git hashes reported by Sol):
 | Generated registration / owned descriptions / bundled artifact | `b8c26e25` |
 | Shared-root, check-publication and admission corrections | `ffd01dd2` |
 | Executable checkpoint / successor notes | `7c6acd74` |
+| Prospective consumers, exact transitions and public registry policies | `92f2dcf6`, `99e516f3`, `106a9da2` |
 
 The committed `runtime/compfuzor-runtime.mjs` bundles the real Figments/confbox and
 Router/tab closure (about1.16MB), so deployed use does not require sibling source
 checkouts or receiver-side node_modules. New source development remains `.ts`.
 
-Reported current verification: **8 files /46 focused tests**, `pnpm check`, build,
+Implementation1 reported **8 files /46 focused tests**, `pnpm check`, build,
 compiler scripts, relevant playbook syntax checks, and generated media-keys +
 Niri/Umbriel + second named Niri + Zim offer endpoints. Native validation/rollback
 was real, beneath isolated HOME/XDG directories. The broad native Vitest attempt
 exceeded120s; old per-target integration assumptions still require migration.
+Implementation2 subsequently reports **55 focused tests**, checks/build and the
+combined USER/SYSTEM proof. Use its handoff for exact commands and current evidence.
 
 # Current architectural review findings / authorization
 
@@ -217,7 +229,7 @@ undashed tab option names and normal completion protocol.
 The fresh regression map should guide the next executable slice. Known remaining
 directions to distinguish rather than claim completed:
 
-- completion of combined-role and system-policy integration (active);
+- review/verification of the now-committed combined-role and system-policy integration;
 - migration of retained old generated/native behavior tests and maintained guides;
 - consumer-driven provider collection (current host assembly primarily reassembles
   accepted membership, not every newly registered offer);

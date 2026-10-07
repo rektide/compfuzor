@@ -30,6 +30,12 @@
 
 ## Compfuzor implementation checkpoints
 
+- [Prospective and scoped-policy implementation](/design/registry-discovery/implementation2.gpt61s.md)
+  — committed combined first-install/publication-transition and public policy-pair
+  slice, reported verified at the implementation agent's rollover checkpoint.
+- [Implementation successor handoff](/design/registry-discovery/handoff0.gpt61s.md)
+  — concrete code and verification continuation from the retired implementation
+  agent to the prepared Sol medium successor.
 - [Regression and documentation migration map](/design/registry-discovery/regression-map0.gpt61s.md)
   — independent inventory of retained native behavior, obsolete wiring assertions,
   isolation prerequisites and the next verification/fixture-migration slice.
