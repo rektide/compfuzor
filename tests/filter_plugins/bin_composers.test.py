@@ -216,6 +216,37 @@ def test_build_install_apply_coexist():
     )
 
 
+def test_apply_mixed_ungrouped_and_subsystem_leaves():
+    # kernel-usb-autosuspend's shape: a playbook-authored apply-devices.sh
+    # (ungrouped) plus gen_kernel's subsystem-tagged apply leaves. The scope
+    # compositor must nest both: apply-devices.sh directly, the kernel pair
+    # rolled up under apply-kernel.sh. BINS order within the main lane
+    # decides, and subsystem leaves merge in after playbook BINS.
+    result = bin_composers(
+        [
+            {"name": "apply-devices.sh"},
+            {"name": "apply-kernel-modprobe.sh", "subsystem": "kernel"},
+            {"name": "apply-kernel-sysfs.sh", "subsystem": "kernel"},
+        ]
+    )
+    by_name = {c["name"]: c for c in result}
+    check(
+        "emits apply scope + kernel subsystem compositors",
+        sorted(by_name),
+        ["apply-kernel.sh", "apply.sh"],
+    )
+    check(
+        "kernel subsystem compositor holds the tagged pair",
+        by_name["apply-kernel.sh"]["run_all"],
+        ["apply-kernel-modprobe.sh", "apply-kernel-sysfs.sh"],
+    )
+    check(
+        "apply scope compositor nests ungrouped leaf + subsystem compositor",
+        by_name["apply.sh"]["run_all"],
+        ["apply-devices.sh", "apply-kernel.sh"],
+    )
+
+
 def test_subsystem_groups_into_subcompositor():
     # Two systemd installers (user scope) + an ungrouped config installer:
     # the systemd pair rolls up under install-systemd-user.sh, which the
@@ -613,6 +644,7 @@ if __name__ == "__main__":
     test_compose_false_excludes_library_scripts()
     test_composes_apply_actions()
     test_build_install_apply_coexist()
+    test_apply_mixed_ungrouped_and_subsystem_leaves()
     test_subsystem_groups_into_subcompositor()
     test_kernel_leaf_names_create_pure_subsystem_compositors()
     test_subsystem_single_leaf_keeps_compositor()
