@@ -51,7 +51,11 @@ export class PrecisionRelay {
     this.timeoutMs = options.timeoutMs ?? 5000;
     this.pollMs = options.pollMs ?? 2000;
     this.log = options.log ?? (() => {});
-    if (this.retryMs <= 0 || this.timeoutMs <= 0 || this.pollMs <= 0)
+    if (
+      [this.retryMs, this.timeoutMs, this.pollMs].some(
+        (value) => !Number.isFinite(value) || value <= 0,
+      )
+    )
       throw new Error("Relay timing values must be positive");
   }
 
@@ -156,6 +160,11 @@ export class PrecisionRelay {
             }
             // Poll replies, not unrelated notifications, prove ongoing command service.
             if ((role === "source" && !ready) || (role === "target" && !ready)) continue;
+            if (
+              message.CurrentLayerName &&
+              typeof object(message.CurrentLayerName)?.name !== "string"
+            )
+              throw new Error("Malformed layer query response");
             if (message.CurrentLayerName || message.FakeKeyNames) {
               awaiting = false;
               nextPoll = Date.now() + this.pollMs;
@@ -210,6 +219,8 @@ export async function resetTarget(
 ): Promise<void> {
   validateName(virtualKey);
   validateName(fallbackLayer);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0)
+    throw new Error("Reset timeout must be positive and finite");
   await new Promise<void>((resolve, reject) => {
     const socket = createConnection(endpoint);
     const frames = new JsonLines();

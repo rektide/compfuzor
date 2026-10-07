@@ -1,0 +1,53 @@
+(defcfg
+  process-unmapped-keys yes
+  ;; the iRig BlueTurn pedal has its own kanata instance
+  ;; (kanata-blueturn.srv.pb): exclude it here so the shared
+  ;; keymap never applies pedal semantics (e.g. tap-hold on
+  ;; pgup) to real keyboards. Exact-name match, no regex --
+  ;; name as printed by kanata's "registering" lines.
+  ;;
+  ;; the Freestyle Edge RGB keyboard node likewise moved to
+  ;; its own instance (kinata.srv.pb: Game Bank hk5/hk6 map
+  ;; f21/f22 -> lalt/lmet + this same caps remap). Its
+  ;; "Kinesis Freestyle Edge RGB Keyboard Consumer Control"
+  ;; node is a different exact name and stays here --
+  ;; multimedia passes through untouched (defsrc is caps
+  ;; only, process-unmapped-keys yes).
+  linux-dev-names-exclude (
+    "iRig BlueTurn Keyboard"
+    "Kinesis Freestyle Edge RGB Keyboard"
+  )
+)
+
+(defsrc
+  caps
+)
+
+(deflayer base
+  (tap-hold 100 100 esc lctl)
+)
+
+;; BlueTurn notes (2026-10-01, all verified on-device):
+;; identity: "iRig BlueTurn Keyboard", bus 0005 (BT), vendor
+;; 0214 (IK Multimedia), product 0002 -- from its PUBLIC
+;; address 00:A0:50:14:19:28 once bonded (the earlier
+;; "ADAPTER_95AB Keyboard" / vendor 07d7 random-address
+;; identity was the pre-bonding era).
+;; bonding: JustWorksRepairing=always lives in
+;; bluetooth-justworkrepair.etc.pb; pairing needs ONE
+;; bluetoothctl session (agent on; default-agent; disconnect;
+;; pair; trust) -- pairing dies without that session's agent.
+;; report drops: kernel 7.1 hid-core drops its 7-byte keyboard
+;; reports ("Event data for report 0 was too short (8 vs 7)",
+;; uhid regression, fixed 7.2 / backport cfc0d283d931) --
+;; pedal keys stay dead until then:
+;; design/blueturn/blueturn-linux-research.general.md
+;; modes (select at power-on: hold LEFT=1, RIGHT=2, BOTH=3):
+;; 1 LEFT=up RIGHT=down; 2 LEFT=pgup RIGHT=pgdn; 3 LEFT=left
+;; RIGHT=right. momentary keys; no long/short distinction.
+;; half-attached bearer ("Connected" but no HID node, silent
+;; ATT death ~10min): btusb adapter autosuspend -- off entirely
+;; since 2026-10 via kernel-usb-autosuspend.etc.pb (the prior
+;; always-on rule never parsed, let alone pinned anything);
+;; zombie links clear with
+;; a controller power cycle (bluetoothctl power off; on).

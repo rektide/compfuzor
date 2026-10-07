@@ -3,6 +3,22 @@
   vars:
     TYPE: kanata
     INSTANCE: main
+    # Optional publisher/network integration only. Enhancement ON/OFF is the
+    # separate kanata-dial producer/relay toggle; OFF keeps dial legacy fallback.
+    KANATA_DIAL_ENABLED: false
+    KANATA_DIAL_KEYBOARD_PORT: 5828
+    KANATA_CONFIG_NEWLINE: "\n"
+    # Preserve authored defaults. Operators retaining the live BlueTurn-only
+    # topology can explicitly override this list; enabling dial must not silently
+    # adopt kinata or remove an authored exclusion.
+    KANATA_DEV_NAMES_EXCLUDE:
+      - iRig BlueTurn Keyboard
+      - Kinesis Freestyle Edge RGB Keyboard
+    KANATA_DIAL_SHIFT_ALIASES: |
+      (defalias
+        dial-left-shift (multi lsft (layer-while-held dial-precision))
+        dial-right-shift (multi rsft (layer-while-held dial-precision))
+      )
     # kanata: the maintained successor to interception-tools (Debian
     # removed the latter from sid 2026-06-26). One daemon replaces the
     # whole udevmon | intercept | caps2esc | uinput pipeline; deployed on
@@ -55,13 +71,20 @@
       Description: Kanata keyboard remapper
       Documentation: https://github.com/jtroo/kanata
       Wants: modprobe@uinput.service
-      After: modprobe@uinput.service
+      After: "{{ 'modprobe@uinput.service kanata-dial-network.service' if KANATA_DIAL_ENABLED | bool else 'modprobe@uinput.service' }}"
+      Requires: "{{ 'kanata-dial-network.service' if KANATA_DIAL_ENABLED | bool else false }}"
+      BindsTo: "{{ 'kanata-dial-network.service' if KANATA_DIAL_ENABLED | bool else false }}"
+      JoinsNamespaceOf: "{{ 'kanata-dial-network.service' if KANATA_DIAL_ENABLED | bool else false }}"
     SYSTEMD_SERVICES:
       Type: simple
       User: _kanata
       Group: _kanata
       SupplementaryGroups: input
-      ExecStart: /usr/local/bin/kanata --cfg /etc/kanata/config.kbd
+      ExecStart: "/usr/local/bin/kanata --cfg /etc/kanata/config.kbd{{ ' --port 127.0.0.1:' ~ KANATA_DIAL_KEYBOARD_PORT if KANATA_DIAL_ENABLED | bool else '' }}"
+      # Current-invocation fence: merely installing an enabled config while the
+      # old service is still running must not authorize the scoped dial grab.
+      RuntimeDirectory: "{{ 'kanata-dial-publisher' if KANATA_DIAL_ENABLED | bool else false }}"
+      RuntimeDirectoryMode: "{{ '0755' if KANATA_DIAL_ENABLED | bool else false }}"
       Restart: "no"
       CapabilityBoundingSet: ""
       DeviceAllow:
@@ -88,9 +111,7 @@
       ProtectKernelLogs: true
       ProtectSystem: strict
       ProtectControlGroups: true
-      RestrictAddressFamilies:
-        - AF_AX25
-        - ~AF_AX25
+      RestrictAddressFamilies: "{{ ['AF_UNIX', 'AF_INET'] if KANATA_DIAL_ENABLED | bool else ['AF_AX25', '~AF_AX25'] }}"
       RestrictNamespaces: true
       SystemCallArchitectures: native
       SystemCallErrorNumber: EPERM
@@ -100,6 +121,7 @@
         - "~@resources"
       RemoveIPC: true
       IPAddressDeny: any
+      IPAddressAllow: "{{ '127.0.0.1/32' if KANATA_DIAL_ENABLED | bool else false }}"
       RestrictSUIDSGID: true
       RestrictRealtime: true
       MemoryDenyWriteExecute: true
@@ -150,18 +172,17 @@
             ;; multimedia passes through untouched (defsrc is caps
             ;; only, process-unmapped-keys yes).
             linux-dev-names-exclude (
-              "iRig BlueTurn Keyboard"
-              "Kinesis Freestyle Edge RGB Keyboard"
+              {{ (KANATA_DEV_NAMES_EXCLUDE + (['Surface Dial Virtual Keyboard/Mouse', 'kanata-surface-dial'] if KANATA_DIAL_ENABLED | bool else [])) | map('to_json') | join(KANATA_CONFIG_NEWLINE ~ '    ') }}
             )
-          )
+          ){{ (KANATA_CONFIG_NEWLINE ~ KANATA_CONFIG_NEWLINE ~ ';; compfuzor kanata dial publisher enabled') if KANATA_DIAL_ENABLED | bool else '' }}
 
           (defsrc
-            caps
-          )
+            caps{{ (KANATA_CONFIG_NEWLINE ~ '  lsft rsft') if KANATA_DIAL_ENABLED | bool else '' }}
+          ){{ (KANATA_CONFIG_NEWLINE ~ KANATA_CONFIG_NEWLINE ~ (KANATA_DIAL_SHIFT_ALIASES | trim)) if KANATA_DIAL_ENABLED | bool else '' }}
 
           (deflayer base
-            (tap-hold 100 100 esc lctl)
-          )
+            (tap-hold 100 100 esc lctl){{ (KANATA_CONFIG_NEWLINE ~ '  @dial-left-shift @dial-right-shift') if KANATA_DIAL_ENABLED | bool else '' }}
+          ){{ (KANATA_CONFIG_NEWLINE ~ KANATA_CONFIG_NEWLINE ~ '(deflayer dial-precision _ _ _)') if KANATA_DIAL_ENABLED | bool else '' }}
 
           ;; BlueTurn notes (2026-10-01, all verified on-device):
           ;; identity: "iRig BlueTurn Keyboard", bus 0005 (BT), vendor
