@@ -11,7 +11,10 @@
 
 ## Implementation planning
 
-- [Broader registry/discovery inquiry](/design/registry-discovery/init0.gpt6a.md)
+- [Ownership and reusable-runtime clarification](/design/registry-discovery/ownership0.gpt6a.md)
+  — producer/consumer artifacts stay with their playbooks; shared tools belong
+  under `runtime/`, with registry references connecting the owned declarations.
+- [Broader registry/discovery inquiry](/design/registry-discovery/direction0.gpt6a.md)
   — subsequent operator direction adds disabled declarations alongside masks and
   asks for shared discovery across existing CONFIG/Zim roles, with layered config
   and Router/tab investigation before revising the implementation plan.
