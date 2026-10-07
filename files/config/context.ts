@@ -109,10 +109,23 @@ function expandPath(value: string, base: string | undefined, label: string): str
   return normalize(expanded)
 }
 
-export function resolvePathSelector(raw: unknown, base: string | undefined, label: string): string {
+/** Validate inert selector shape without binding HOME/XDG/env or opening its target. */
+export function validatePathSelector(raw: unknown, label: string, depth = 0): PathSelector {
+  if (depth > 32) fail(`${label}: selector fallback nesting is too deep`)
   const selector = object(raw, label) as PathSelector
+  if (Object.keys(selector).some(key => !["path", "relative", "env", "default", "ignore"].includes(key))) fail(`${label}: unknown selector field`)
   const fields = [selector.path !== undefined, selector.relative !== undefined, selector.env !== undefined].filter(Boolean).length
   if (fields !== 1) fail(`${label} must contain exactly one of path, relative, or env`)
+  for (const key of ["path", "relative", "env"] as const) {
+    if (selector[key] !== undefined && (typeof selector[key] !== "string" || !selector[key]?.trim())) fail(`${label}.${key} must be a non-empty string`)
+  }
+  if (selector.ignore !== undefined && (!Array.isArray(selector.ignore) || selector.ignore.some(value => typeof value !== "string"))) fail(`${label}.ignore must be a string list`)
+  if (selector.default !== undefined) validatePathSelector(selector.default, `${label}.default`, depth + 1)
+  return selector
+}
+
+export function resolvePathSelector(raw: unknown, base: string | undefined, label: string): string {
+  const selector = validatePathSelector(raw, label)
   if (selector.path !== undefined) {
     if (typeof selector.path !== "string" || !selector.path) fail(`${label}.path must be a non-empty string`)
     return expandPath(selector.path, undefined, `${label}.path`)

@@ -2,6 +2,7 @@
 import { isAbsolute } from "node:path";
 import { Schema } from "effect";
 import type { Domain, Scope } from "../registry/model.ts";
+import { validatePathSelector, type PathSelector } from "../../files/config/context.ts";
 
 const ProducerSchema = Schema.Struct({
   version: Schema.Literal(1),
@@ -37,17 +38,13 @@ export const keybindingProviders: Domain<Provider> = {
   scope: () => undefined,
 };
 
-const ProfileSelector = Schema.Union([
-  Schema.Struct({ path: Schema.String }),
-  Schema.Struct({ env: Schema.String, default: Schema.Struct({ path: Schema.String }) }),
-]);
 const ConsumerSchema = Schema.Struct({
   version: Schema.Literal(1),
   id: Schema.String,
   adapter: Schema.String,
   audience: Schema.Literals(["user", "system"]),
   enabled: Schema.optional(Schema.Boolean),
-  profile: ProfileSelector,
+  profile: Schema.Unknown,
   contexts: Schema.Array(Schema.String),
   defaultContext: Schema.String,
 });
@@ -57,7 +54,7 @@ export type Consumer = {
   adapter: string;
   audience: Scope;
   enabled?: boolean;
-  profile: { path: string } | { env: string; default: { path: string } };
+  profile: PathSelector;
   contexts: readonly string[];
   defaultContext: string;
 };
@@ -65,18 +62,17 @@ export const keybindingConsumers: Domain<Consumer> = {
   collection: "keybindings/consumers.d",
   decode(value) {
     const consumer = Schema.decodeUnknownSync(ConsumerSchema)(value);
-    const path = "path" in consumer.profile ? consumer.profile.path : consumer.profile.default.path;
     if (
-      !isAbsolute(path) ||
-      !consumer.adapter ||
+      !consumer.adapter.trim() ||
+      consumer.contexts.some((id) => !id.trim()) ||
       !consumer.contexts.includes(consumer.defaultContext) ||
       new Set(consumer.contexts).size !== consumer.contexts.length
     ) {
       throw new Error(
-        "consumer requires absolute profile, adapter and unique contexts containing defaultContext",
+        "consumer requires adapter and nonempty unique contexts containing defaultContext",
       );
     }
-    return consumer;
+    return { ...consumer, profile: validatePathSelector(consumer.profile, "consumer profile") };
   },
   identity: (value) => value.id,
   enabled: (value) => value.enabled !== false,

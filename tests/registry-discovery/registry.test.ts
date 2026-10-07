@@ -41,6 +41,96 @@ async function cli(args: string[], entry = "runtime/cli/registry.ts") {
 }
 
 describe("shared registry rendezvous", () => {
+  it("publishes masked and shadowed offers passively, but does not replace a local mask", async () => {
+    const f = await setup();
+    const mask = join(f.overlay, "media-keys-main.json");
+    await symlink("/dev/null", mask);
+    const request = { domain: keybindingProviders, policy: f.policy, source: f.provider };
+    const published = await register(request);
+    expect(published).toMatchObject({
+      disposition: "create",
+      participation: "active",
+      effective: { state: "masked" },
+    });
+    expect(await readlink(published.destination)).toBe(f.provider);
+    expect(await readlink(mask)).toBe("/dev/null");
+    await rm(mask);
+    const disabled = JSON.parse(await readFile(f.provider, "utf8"));
+    disabled.enabled = false;
+    await writeFile(mask, JSON.stringify(disabled));
+    expect(await register(request)).toMatchObject({
+      disposition: "current",
+      participation: "active",
+      effective: { state: "disabled" },
+    });
+    await rm(published.destination);
+    await symlink("/dev/null", published.destination);
+    expect(await register(request)).toMatchObject({
+      disposition: "blocked",
+      material: { links: [] },
+    });
+    expect(await readlink(published.destination)).toBe("/dev/null");
+  });
+
+  it("uses generic contained collections, separate audiences, and config root-major precedence", async () => {
+    const f = await setup();
+    const env = {
+      HOME: f.root,
+      XDG_DATA_HOME: f.writable,
+      XDG_DATA_DIRS: f.lower,
+      XDG_CONFIG_HOME: f.overlay,
+      XDG_CONFIG_DIRS: join(f.root, "site"),
+    };
+    const policy = registryPolicy("another-domain/hooks.d", "user", env);
+    expect(policy.roots).toEqual([
+      join(f.lower, "compfuzor/another-domain/hooks.d"),
+      join(f.writable, "compfuzor/another-domain/hooks.d"),
+      join(f.root, "site/compfuzor/another-domain/hooks.d"),
+      join(f.root, "site/compfuzor/another-domain/hooks.mask.d"),
+      join(f.overlay, "compfuzor/another-domain/hooks.d"),
+      join(f.overlay, "compfuzor/another-domain/hooks.mask.d"),
+    ]);
+    for (const bad of [
+      "../hooks.d",
+      "domain/../hooks.d",
+      "/domain/hooks.d",
+      "domain//hooks.d",
+      "hooks.d",
+    ])
+      expect(() => registryPolicy(bad, "user", env)).toThrow();
+    const user = registryPolicy("keybindings/consumers.d", "user", { HOME: f.root });
+    const system = registryPolicy("keybindings/consumers.d", "system", { HOME: f.root });
+    expect(system.roots.every((root) => root.includes("/compfuzor/system/"))).toBe(true);
+    expect(system.roots.some((root) => user.roots.includes(root))).toBe(false);
+    const consumerPolicy = registryPolicy("keybindings/consumers.d", "user", env);
+    const lowerMask = consumerPolicy.roots[3]!;
+    const upperDefinition = consumerPolicy.roots[4]!;
+    await import("node:fs/promises").then(async ({ mkdir }) => {
+      await mkdir(lowerMask, { recursive: true });
+      await mkdir(upperDefinition, { recursive: true });
+    });
+    await symlink("/dev/null", join(lowerMask, "deck-main.json"));
+    await symlink(f.consumer, join(upperDefinition, "deck-main.json"));
+    expect(
+      lookup(await inspectRegistry(keybindingConsumers, consumerPolicy), "deck-main").state,
+    ).toBe("active");
+  });
+
+  it("inspects existing recursive profile selectors without binding missing env", async () => {
+    const f = await setup();
+    const consumer = JSON.parse(await readFile(f.consumer, "utf8"));
+    consumer.profile = {
+      env: "UNSET_PROFILE",
+      ignore: ["none"],
+      default: { env: "OTHER_UNSET", default: { path: "${HOME}/owned/profile.json" } },
+    };
+    expect(keybindingConsumers.decode(consumer).profile).toEqual(consumer.profile);
+    for (const contexts of [[""], ["user", "user"], ["other"]])
+      expect(() => keybindingConsumers.decode({ ...consumer, contexts })).toThrow();
+    expect(() =>
+      keybindingConsumers.decode({ ...consumer, profile: { path: "x", env: "y" } }),
+    ).toThrow();
+  });
   it("retains literal dotted/numeric IDs and observed slot spelling", async () => {
     const f = await setup();
     const payload = JSON.parse(await readFile(f.consumer, "utf8"));
@@ -180,8 +270,8 @@ describe("shared registry rendezvous", () => {
     expect(record.state).toBe("masked");
     expect(record.source.observations).toHaveLength(2);
     expect(await register(request)).toMatchObject({
-      disposition: "blocked",
-      material: { links: [] },
+      disposition: "current",
+      effective: { state: "masked" },
     });
     expect(await readlink(mask)).toBe("/dev/null");
     // Deliberate operator removal, not a registry side effect.
@@ -304,6 +394,19 @@ describe("shared registry rendezvous", () => {
     const completion = await cli(["complete", ...common, "--word", "explain", "--word", ""]);
     expect(completion.code, completion.stderr).toBe(0);
     expect(completion.stdout).toContain("deck-main\tactive");
+    const flags = await cli(["complete", ...common, "--word", "list", "--word=--"]);
+    expect(flags.stdout).toContain("--collection");
+    expect(flags.stdout).not.toContain("----collection");
+    const values = await cli([
+      "complete",
+      ...common,
+      "--word",
+      "list",
+      "--word=--collection",
+      "--word",
+      "",
+    ]);
+    expect(values.stdout).toContain("keybinding-consumers");
     expect((await cli(["list", ...common, "--typo"])).code).toBe(2);
     expect(
       (await cli(["list", "--collection", "keybinding-consumers", "--scope", "root"])).code,

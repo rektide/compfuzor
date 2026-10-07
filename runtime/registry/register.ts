@@ -18,6 +18,11 @@ export type RegistrationPlan = {
   destination: string;
   disposition: "create" | "current" | "blocked";
   participation: "active" | "disabled";
+  /** Effective discovery state before publication; independent of the local link's status. */
+  effective: {
+    state: "missing" | "active" | "disabled" | "masked" | "invalid" | "conflict";
+    winner?: string;
+  };
   reason: string;
   /** Ordinary LINKS material, for generated installers to consume after policy admission. */
   material: {
@@ -70,13 +75,9 @@ export async function planRegistration<T>(
     throw new Error(`conflicting local registration slots for ${id}`);
   const existing = local[0];
   const disabledSlot =
-    existing?.disabled ??
-    (disabledPresent ||
-      (!activePresent && (effective?.state === "disabled" || !request.domain.enabled(payload))));
+    existing?.disabled ?? (disabledPresent || (!activePresent && !request.domain.enabled(payload)));
   const participation: RegistrationPlan["participation"] =
-    disabledSlot || effective?.state === "disabled" || !request.domain.enabled(payload)
-      ? "disabled"
-      : "active";
+    disabledSlot || !request.domain.enabled(payload) ? "disabled" : "active";
   const destination = existing?.path ?? (disabledSlot ? disabledPath : activePath);
   const slot = existing
     ? await inspectDeliveryEntry(existing.path)
@@ -90,19 +91,23 @@ export async function planRegistration<T>(
     active,
     disabled,
   });
-  const base = { id, source, destination, participation, guard };
+  const base = {
+    id,
+    source,
+    destination,
+    participation,
+    guard,
+    effective: {
+      state: effective?.state ?? ("missing" as const),
+      winner: effective?.source.winner.path,
+    },
+  };
   const blocked = (reason: string): RegistrationPlan => ({
     ...base,
     disposition: "blocked",
     reason,
     material: { version: 1, links: [] },
   });
-  if (effective?.state === "masked")
-    return blocked(
-      `masked by ${effective.source.winner.path}; ordinary registration never unmasks`,
-    );
-  if (effective?.state === "invalid" || effective?.state === "conflict")
-    return blocked(`effective registration is ${effective.state}; resolve it explicitly first`);
   // A regular operator declaration (including enabled:false) is never replaced.
   if (slot.kind !== "missing" && !linkMatches(slot, source))
     return blocked(`local slot is not this owner's reference: ${destination}`);

@@ -2,13 +2,20 @@ import { isAbsolute, join, resolve } from "node:path";
 import { xdgConfigDirs, xdgDataDirs } from "../discovery/figments.ts";
 import type { RegistryPolicy, Scope } from "./model.ts";
 
-/** Proposed default layout: data registrations, config overrides, then config masks. */
+/** Data registrations below root-major config policy; system audience is a separate namespace. */
 export function registryPolicy(
   collection: string,
   scope: Scope,
   env: Record<string, string | undefined> = { ...process.env },
 ): RegistryPolicy {
-  if (!/^[a-z][a-z0-9-]*\/(providers|consumers)\.d$/.test(collection)) {
+  const segments = collection.split("/");
+  if (
+    segments.length < 2 ||
+    segments.some(
+      (part) => !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(part) || part === "." || part === "..",
+    ) ||
+    !collection.endsWith(".d")
+  ) {
     throw new Error(`invalid rendezvous collection: ${collection}`);
   }
   const maskCollection = collection.replace(/\.d$/, ".mask.d");
@@ -16,13 +23,13 @@ export function registryPolicy(
     return explicitPolicy(
       scope,
       [
-        join("/usr/share/compfuzor", collection),
-        join("/usr/local/share/compfuzor", collection),
-        join("/var/lib/compfuzor", collection),
-        join("/etc/compfuzor", collection),
-        join("/etc/compfuzor", maskCollection),
+        join("/usr/share/compfuzor/system", collection),
+        join("/usr/local/share/compfuzor/system", collection),
+        join("/var/lib/compfuzor/system", collection),
+        join("/etc/compfuzor/system", collection),
+        join("/etc/compfuzor/system", maskCollection),
       ],
-      join("/var/lib/compfuzor", collection),
+      join("/var/lib/compfuzor/system", collection),
     );
   }
   const data = xdgDataDirs("compfuzor", { env });
@@ -31,8 +38,9 @@ export function registryPolicy(
     scope,
     [
       ...data.toReversed().map((root) => join(root, collection)),
-      ...config.toReversed().map((root) => join(root, collection)),
-      ...config.toReversed().map((root) => join(root, maskCollection)),
+      ...config
+        .toReversed()
+        .flatMap((root) => [join(root, collection), join(root, maskCollection)]),
     ],
     join(data[0]!, collection),
   );

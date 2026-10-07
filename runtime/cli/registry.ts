@@ -23,17 +23,17 @@ import { inspectRegistry, lookup } from "../registry/read.ts";
 import { planRegistration, register } from "../registry/register.ts";
 import type { Domain, Scope } from "../registry/model.ts";
 
-const definitions: readonly { name: string; domain: Domain<unknown> }[] = [
+const definitions = [
   { name: "keybinding-providers", domain: keybindingProviders },
   { name: "keybinding-consumers", domain: keybindingConsumers },
   { name: "zim-providers", domain: zimProviders },
-];
+] as const satisfies readonly { name: string; domain: Domain<unknown> }[];
 const text = Schema.toStandardSchemaV1(Schema.String);
 const strings = Schema.toStandardSchemaV1(Schema.UndefinedOr(Schema.Array(Schema.String)));
 const optionalText = Schema.toStandardSchemaV1(Schema.UndefinedOr(Schema.String));
 const scope = Schema.toStandardSchemaV1(Schema.Literals(["user", "system"]));
 const collection = Schema.toStandardSchemaV1(
-  Schema.Literals(["keybinding-providers", "keybinding-consumers", "zim-providers"]),
+  Schema.Literals(definitions.map((entry) => entry.name)),
 );
 const common = () =>
   [
@@ -77,7 +77,9 @@ export async function main(
     return 0;
   }
   const model = parsed.model;
-  const domain = definitions.find((entry) => entry.name === model.collection)!.domain;
+  const domain: Domain<unknown> = definitions.find(
+    (entry) => entry.name === model.collection,
+  )!.domain;
   const audience: Scope = model.scope;
   if (!model.root?.length && model["write-root"] !== undefined)
     throw new Error("--write-root requires explicit --root values");
@@ -91,7 +93,7 @@ export async function main(
     console.log(
       model.json
         ? JSON.stringify(plan, null, 2)
-        : `${plan.id}\t${plan.disposition}\t${plan.participation}\t${plan.destination}\n${plan.reason}`,
+        : `${plan.id}\t${plan.disposition}\tlocal:${plan.participation}\teffective:${plan.effective.state}\t${plan.destination}\n${plan.reason}`,
     );
     return plan.disposition === "blocked"
       ? 1
@@ -107,11 +109,11 @@ export async function main(
     // Await observation before tab's synchronous callbacks; execution still reobserves.
     for (const verb of verbs) {
       const entry = tab.command(verb, `${verb} registry`);
-      entry.option("--collection", "Rendezvous", (complete) => {
+      entry.option("collection", "Rendezvous", (complete) => {
         for (const definition of definitions)
           complete(definition.name, definition.domain.collection);
       });
-      entry.option("--scope", "Audience", (complete) => {
+      entry.option("scope", "Audience", (complete) => {
         complete("user", "invocation XDG");
         complete("system", "system roots only");
       });

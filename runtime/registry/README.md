@@ -26,11 +26,14 @@ and independently retained storage/participation facts.
 ## Root and state policy
 
 [`registryPolicy()`](/runtime/registry/policy.ts) binds the invocation environment.
-User precedence is low-to-high: reversed XDG data roots, reversed XDG config roots,
-then reversed config mask roots. Collections are `keybindings/providers.d`,
+User precedence is low-to-high: reversed XDG data roots, then root-major reversed
+XDG config roots (each root's definitions followed by its mask layer). A higher
+config declaration overrides a lower config mask; the local mask still wins.
+Collections are safe domain-grouped relative `.d` paths, including `keybindings/providers.d`,
 `keybindings/consumers.d`, and `zim/providers.d`; mask siblings use `.mask.d`.
 Registration writes only the user XDG data-home collection. System scope ignores
-HOME/XDG and uses explicit system locations; no automatic sudo is performed.
+HOME/XDG and uses explicit `/compfuzor/system/<collection>` system locations,
+separate from shared user offers in XDG_DATA_DIRS; no automatic sudo is performed.
 This default layout remains a policy proposal for generator cutover.
 
 `explicitPolicy(scope, roots, writeRoot)` replaces defaults. Paths must be absolute,
@@ -52,7 +55,10 @@ source/destination, participation, observation guard, and ordinary LINKS v1 mate
 Current owner references are no-ops; disabled filename slots and their spelling
 are retained. A new initially disabled descriptor uses a disabled slot. Operator
 regular files or references to another owner are blocked rather than overwritten.
-Effective masks produce blocked material with no links; registration never unmasks.
+Higher masks/overrides do not block passive lower owner publication. Plans expose
+local `disposition`/`participation` and independent pre-publication `effective.state`.
+A mask occupying the writable slot produces blocked material with no links;
+registration never unmasks. Execution policy, unlike publication, must reject masks.
 Changing an owner locator across an existing slot currently requires explicit
 operator action; no inferred ownership permits retargeting.
 
