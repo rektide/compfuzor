@@ -53,25 +53,24 @@ Cutover, including `apt remove kanata`, stays behind the parent gate.
   for it. This is the parent-approved same-name masking shape from
   [build0 §Cutover](/design/kanata-source/build0.glm53.md#cutover-proposal-for-parent-decision-not-executed).
 - **`SYSTEMD_SYSUSER: True` + `SYSUSERS`**: single declarer of `_kanata`.
-  The fragment pins this host's install-time allocation in sysusers.d(5)
-  `uid:gid` form — `u _kanata 990:985 "Kanata daemon" /nonexistent
-  /usr/sbin/nologin` plus `m _kanata input` — so the persistent account
-  (uid 990 / gid 985, created by the package's `useradd --system`
-  postinst, *not* a DynamicUser) survives removal as-is, and fresh hosts
-  converge on the same ids. systemd-sysusers never modifies existing
-  names: against the live account this is a deliberate no-op. A separate
-  `g _kanata` spec is impossible by design — the renderer declares one
-  line per name and `u` implies the same-name primary group — hence the
-  colon form.
+  The fragment is deliberately id-less — `u _kanata - "Kanata daemon"
+  /nonexistent /usr/sbin/nologin` plus `m _kanata input`. systemd-sysusers
+  never touches an existing name, so the persistent account the package
+  created (`useradd --system` postinst, install-time ids 990/985 here —
+  *not* DynamicUser lifecycle) survives removal verbatim as a no-op,
+  with **no machine-specific pinning**: fresh machines allocate normal
+  system ids. The `u` line implies the same-name primary group — a
+  separate `g _kanata` spec is impossible by design (the renderer
+  declares one line per name), and none is needed.
 - **Unit body**: mirrors the retired
   `/usr/lib/systemd/system/kanata.service` with the helpers' schema:
   `User=_kanata`/`Group=_kanata`/`SupplementaryGroups=input` spelled out,
   `ExecStart=/usr/local/bin/kanata --cfg /etc/kanata/config.kbd`
   ([`GLOBAL_BINS_DIR`](/vars/common.yaml), where
   [`kanata.src.pb`](/kanata.src.pb)'s `RUST_COPY: True` installs the real
-  file), `Restart: no` retained (renders empty — falsy — which is
-  systemd's default and the packaged policy), `WantedBy=default.target`
-  retained.
+  file), an explicit `Restart=no` (quoted in YAML — a bare `no` is
+  `False`, which the unit template drops), the packaged unit's empty
+  `CapabilityBoundingSet=` line, and `WantedBy=default.target` retained.
 - **`ETC_FILES` + `LINKS` for `50-kanata-uinput.rules`**: byte-exact copy
   of the vendor rule (`KERNEL=="uinput", MODE="0660", GROUP="input",
   OPTIONS+="static_node=uinput"`, 0644) linked to the same basename in
@@ -86,6 +85,15 @@ Cutover, including `apt remove kanata`, stays behind the parent gate.
 - **Config body byte-for-byte unchanged** — including the authored
   Kinesis exclusion, which stays *authored only*. The live main config is
   not touched by this slice, and the exclusion is not adopted.
+- **`KANATA_CONFIG_PRESERVE` once-flag on all three configs**: each
+  `kanata.kbd` ETC_FILES entry carries `once: "{{ KANATA_CONFIG_PRESERVE
+  | default(false) | bool }}"` — [fs_hierarchy](/tasks/compfuzor/fs_hierarchy.tasks)'s
+  per-item write-once (a per-file property, *not* an ETC_PROP-level
+  once). Authored content is unchanged and default renders stay
+  authoritative over the file; a cutover rerender with the flag set
+  skips writing the existing bytes (live topology preserved) while every
+  other declared artifact — units, sysusers fragment, udev rule, install
+  composites, links catalog — refreshes to current source-lane state.
 
 ## [`kanata-blueturn.srv.pb`](/kanata-blueturn.srv.pb), [`kinata.srv.pb`](/kinata.srv.pb) — helpers consume
 
@@ -111,9 +119,12 @@ deltas against `/usr/lib/systemd/system/kanata.service`:
 |---|---|
 | `+Group=_kanata`, `+SupplementaryGroups=input` | static identity + input access spelled out (packaged unit relied on primary-group/passwd membership) |
 | `ExecStart` → `/usr/local/bin/kanata` | source lane |
-| `Restart=no` omitted (renders falsy) | identical policy; systemd default is `no` |
-| `+RestartSec=5` | compfuzor default, inert without a restart trigger |
-| `CapabilityBoundingSet=` (empty) not carried | helpers' schema never had it; see open questions |
+| `+RestartSec=5` | compfuzor default, inert under `Restart=no` |
+
+`Restart=no` and the empty `CapabilityBoundingSet=` are carried
+explicitly (quoted/empty-string YAML, since the unit template skips only
+literal `False`), so hardening parity with the packaged unit is
+line-for-line complete.
 
 Everything else is line-for-line the packaged hardening, including
 `PrivateNetwork=true`, `RestrictAddressFamilies=AF_AX25` + `~AF_AX25`
@@ -126,7 +137,7 @@ are separate, and a listener needs a deliberate sandbox revision
 The sysusers fragment (`DIR/etc/sysusers.d/kanata-main.conf`):
 
 ```ini
-u _kanata 990:985 "Kanata daemon" /nonexistent /usr/sbin/nologin
+u _kanata - "Kanata daemon" /nonexistent /usr/sbin/nologin
 m _kanata input
 ```
 
@@ -142,34 +153,43 @@ renders all three playbooks with `SRVS_DIR`/`ETCS_DIR` redirected into
 
 - canonical unit: `kanata.service` rendered, **no** `kanata-main.service`,
   no `Alias=`, `WantedBy=default.target`, packaged Description;
-- identity: exact sysusers fragment (pinned `990:985` + `m input`);
+- identity: exact sysusers fragment (id-less `u _kanata -` + `m input`);
   repo-wide scan proving exactly one `_kanata` declarer (`kanata.srv.pb`);
   helpers declare nothing;
 - no Debian dependency: no `kanata` in any `PKGS*` of the three; no apt
   lane (`install-apt.sh`/`status-apt.sh`) in any rendered `bin/`;
 - source binary + protection: all three `ExecStart`s on
   `/usr/local/bin/kanata`; helper hardening key-set equal to main's;
-  `Restart=` absent; no `AF_INET`/`AF_UNIX`/`IPAddressAllow`/listener
-  vocabulary anywhere (sandbox not loosened);
+  explicit `Restart=no` and empty `CapabilityBoundingSet=` present; no
+  `AF_INET`/`AF_UNIX`/`IPAddressAllow`/listener vocabulary anywhere
+  (sandbox not loosened);
 - udev rule: byte-exact vendor copy at 0644 (also cross-checked against
   the live vendor file, failing if upstream's copy changes), with the
   `/etc/udev/rules.d/50-kanata-uinput.rules` link record present;
 - config bodies: authored main exclusion block (both device names) and
   keymap lines intact; blueturn's rendered config byte-identical to the
   live deployed one; helper include blocks intact;
+- **`KANATA_CONFIG_PRESERVE` regression** (both directions, all three
+  playbooks): replace the rendered config with a sentinel
+  current-topology body → a default rerender restores authored bytes
+  (renders stay authoritative) → sentinel again + corrupted unit +
+  deleted installer → a preserve-flag rerender retains the sentinel
+  **byte-exactly** while the unit is restored, the install composites
+  regenerate, and no apt leaf (`install-apt.sh`/`status-apt.sh`) or
+  `install-apt` reference exists anywhere in `bin/`;
 - **live fence**: `/etc/opt/kanata-*`, `/srv/kanata-*`, `/etc/kanata`,
   `/etc/systemd/system` kanata/kinata entries, `/etc/sysusers.d`,
-  `/etc/udev/rules.d` kanata entries, and the `_kanata` passwd/group
-  records snapshotted before and compared after — zero drift, no new
-  paths.
+  `/etc/udev/rules.d` `*kanata*` entries, and the `_kanata` passwd/group
+  records snapshotted before and compared after every render phase —
+  zero drift, no new paths.
 
-Result (2026-10-06):
+Result (2026-10-07):
 
 ```
 $ python3 tests/integration/kanata_source_services.test.py
 ok: kanata source services (canonical unit, one identity declarer, no
-Debian dependency, owned uinput rule, configs unchanged, live deployment
-untouched)
+Debian dependency, owned uinput rule, configs unchanged,
+config-preserve rerender verified, live deployment untouched)
 ```
 
 `ansible-playbook --syntax-check` passes for all three playbooks.
@@ -177,45 +197,61 @@ Commits: `zomuttw` (declarations + test), `ttolwwx` (udev rule slice).
 
 # How the live handoff installs the unit WITHOUT regenerating the config
 
-The hazard: a normal live render rewrites `/etc/opt/kanata-main/kanata.kbd`
-from the authored body (which carries the unadopted Kinesis exclusion),
-changing live device ownership mid-cutover. Two clean paths:
-
-**A — decide the config first (preferred).** The parent picks when the
-Kinesis exclusion goes live (i.e., whether kinata deploys at cutover).
-Once the authored body and the intended live body agree, a normal
-`ansible-playbook -i 'localhost,' -c local kanata.srv.pb` render plus
-`bin/install.sh` is safe: config, unit, sysusers fragment, and udev rule
-land together, lanes in order (packages → identity → artifacts → units).
-
-**B — unit-only handoff from a staging render (no config decision needed
-yet).** Render into a staging root exactly as the test does
-(`-e SRVS_DIR=… -e ETCS_DIR=…` + bypasses), then run only the specific
-install scripts from the staging deployment — they resolve their unit
-file relative to their own location, not `$DIR`:
+A plain live render would rewrite `/etc/opt/kanata-main/kanata.kbd` (the
+symlink target of `/etc/kanata/config.kbd`) with the authored body —
+adopting the un-decided Kinesis exclusion. The live config's **current
+topology is preserved exactly**; no Kinesis decision is needed or
+implied here. Copying unit files out of scratch is also not the shape:
+the live deployment's *composites* (`install.sh` lanes, links catalog)
+would stay stale — still composing the Debian apt installer the source
+playbooks no longer declare. The native primitive is the per-file `once`
+flag (above): the cutover **rerenders main and BlueTurn into their real
+durable roots with the flag set**, refreshing all declared state while
+the existing config bytes skip write:
 
 ```sh
-sudo bash <staging>/srv/kanata-main/bin/install-sysusers.sh      # fragment → /etc/sysusers.d + systemd-sysusers (no-op live)
-sudo bash <staging>/srv/kanata-main/bin/install-service-kanata.sh --skip-start  # /etc unit + daemon-reload + enable
-sudo bash <staging>/srv/kanata-main/bin/links.mjs apply --id system:/etc/udev/rules.d/50-kanata-uinput.rules
-sudo udevadm control --reload-rules && sudo udevadm trigger        # or reboot
+ansible-playbook -i 'localhost,' -c local kanata.srv.pb \
+  -e KANATA_CONFIG_PRESERVE=True -e BINS_RUN_BYPASS=True \
+  -e SYSTEMD_THUNK_BYPASS=True -e PKGS_BYPASS=True \
+  -e APT_BYPASS=True -e GLOBAL_BINS_BYPASS=True
+ansible-playbook -i 'localhost,' -c local kanata-blueturn.srv.pb \
+  -e KANATA_CONFIG_PRESERVE=True -e BINS_RUN_BYPASS=True \
+  -e SYSTEMD_THUNK_BYPASS=True -e PKGS_BYPASS=True \
+  -e APT_BYPASS=True -e GLOBAL_BINS_BYPASS=True   # kinata: NO live render
 ```
 
-`--skip-start` enables without starting (also available:
-`--skip-enable` to link + daemon-reload only). **Do not run the staging
-deployment's full `install.sh`**: its links lane would re-point
-`/etc/kanata/config.kbd` at the staging tree. Path B installs the unit,
-identity, and rule while the live config stays byte-identical; the
-prerm-stop/name-collision ordering around `apt remove kanata` remains
-the parent's to run ([build0 §Cutover](/design/kanata-source/build0.glm53.md#cutover-proposal-for-parent-decision-not-executed)).
+Prep only: the render writes material and `links.json`; no installer
+runs, no unit starts, and no `/etc` links publish (links.mjs only runs
+inside install scripts). Then publish the durable links and reload:
+
+```sh
+sudo ln -sfn /etc/opt/kanata-main/kanata.service               /etc/systemd/system/kanata.service
+sudo ln -sfn /etc/opt/kanata-main/sysusers.d/kanata-main.conf  /etc/sysusers.d/kanata-main.conf
+sudo ln -sfn /etc/opt/kanata-main/50-kanata-uinput.rules       /etc/udev/rules.d/50-kanata-uinput.rules
+sudo systemd-sysusers /etc/sysusers.d/kanata-main.conf   # no-op against the live account
+sudo systemctl daemon-reload
+sudo udevadm control --reload-rules                      # rules only; no device trigger, no reboot
+```
+
+The rerender does **not** prune old undeclared leaves (the PKGS-era
+`install-apt.sh`/`status-apt.sh`/`install-service.sh` and the inert
+pre-migration `kanata-main.service`): compfuzor creates declared state;
+removing undeclared files is a separate deliberate decision outside this
+migration. Unit enable/start and `apt remove kanata` (whose prerm stops
+the canonical `kanata.service` by name) stay in the parent's cutover
+sequence per [handoff0](/design/kanata-source/handoff0.gpt61s.md). This
+slice runs none of it; the cutover executor does, after parent approval.
 
 # What became possible / impossible
 
 **Possible now:** the whole source lane is declarative and test-fenced —
 unit identity, account survival, uinput permissions, and helper
 retargets need no hand-editing at cutover; fresh-machine convergence
-exists for an account the package created ad-hoc; the handoff can be
-staged without a config decision.
+exists for an account the package created ad-hoc; and the
+`KANATA_CONFIG_PRESERVE` rerender lets the cutover refresh current
+declared installer/catalog state in the durable roots — no scratch-path
+copying, no stale apt composites — while the live config bytes stay
+exactly as deployed.
 
 **Still impossible (deliberately):** any live state change (unit/sysusers/
 udev/config), kinata deployment, the Kinesis exclusion going live, and
@@ -224,32 +260,30 @@ design ([routing0](/design/surface-dial-layers/routing0.gpt61s.md)).
 
 # Open questions (parent-owned)
 
-- **Kinesis exclusion timing** — decide at cutover: adopt the split
-  (deploy kinata) or drop the exclusion from the authored body; until
-  then live main config ≠ authored (fenced by test).
-- **`CapabilityBoundingSet=` parity** — the packaged unit carries an
-  empty bounding set; the helpers' schema (now main's) never did. Add it
-  to all three for strict parity, or leave the established schema?
-- **Stale artifacts in live deployments** (cleanup at cutover, not
-  before): `/etc/opt/kanata-main/kanata-main.service` (pre-migration
-  unit, unlinked/inert), `install-service.sh` + `install-apt.sh` +
-  `status-apt.sh` in live `bin/` dirs (superseded by
-  `install-service-kanata.sh` / no-apt lanes).
+- **Kinesis exclusion timing** — decide separately from this migration:
+  adopt the split (deploy kinata) or drop the exclusion from the authored
+  body; until then live main config ≠ authored (default renders fenced,
+  preserve renders explicit).
+- **Stale undeclared leaves in live deployments** — the preserve-flag
+  rerender refreshes every *declared* artifact (composites, links
+  catalog included) but deliberately does not prune undeclared files:
+  the PKGS-era `install-apt.sh`/`status-apt.sh`/`install-service.sh` and
+  the inert pre-migration `/etc/opt/kanata-main/kanata-main.service`
+  remain until a separate deliberate removal decision; none is promised
+  here.
 - **Undeployed `kinesis/kanata/**` experiments** still declare
   `PKGS: [kanata, python3]` — flagged only (not this slice's files);
   they would reinstall the package if ever deployed.
 - **`WantedBy=default.target`** retained for packaged parity; whether to
   normalize to `multi-user.target` is a separate, deliberate change.
-- **Pinned `990:985` collision risk on fresh hosts** — a future dynamic
-  allocation could take those ids first; sysusers would warn and keep
-  the existing name. Acceptable for this fleet; revisit if it bites.
 
 # Cross-references
 
 - [`handoff0.gpt61s.md`](/design/kanata-source/handoff0.gpt61s.md) —
   the parent decisions this slice implements (canonical identity, owned
   uinput rule, persistent-account sysusers, config preservation, sandbox
-  retention, remove-not-purge) and the safe-cutover shape path B serves.
+  retention, remove-not-purge) whose safe-cutover shape the
+  preserve-rerender runbook serves.
 - [`brief0.gpt61s.md`](/design/kanata-source/brief0.gpt61s.md) —
   authorization scope and the three-checkpoint structure this slice
   completes the middle of.

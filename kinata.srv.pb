@@ -46,11 +46,11 @@
     # its own) and the kanata.src.pb binary at /usr/local/bin/kanata --
     # no PKGS: nothing here reinstalls the Debian package. Same sandbox
     # shape as kanata-blueturn.srv.pb and the main unit; NOT deployed
-    # yet (main's authored config already excludes the Edge keyboard
-    # node, but the live config does not -- see design/kanata-source/).
-    # SYSTEMD_ALIAS: false stays load-bearing: the -kinata name would
-    # otherwise alias to kanata.service and fight the canonical unit
-    # main owns.
+    # yet (the live main config keeps its current topology -- it does
+    # NOT carry this instance's Kinesis exclusion; see
+    # design/kanata-source/). SYSTEMD_ALIAS: false stays load-bearing:
+    # the -kinata name would otherwise alias to kanata.service and
+    # fight the canonical unit main owns.
     ETC_PROP:
       mode: "0755"
     SYSTEMD_ALIAS: false
@@ -65,7 +65,11 @@
       Group: _kanata
       SupplementaryGroups: input
       ExecStart: /usr/local/bin/kanata --cfg /etc/kanata/kinata.kbd
-      Restart: no
+      # quoted so the unit carries an explicit Restart=no (a bare YAML
+      # no is False, which the unit template drops); empty
+      # CapabilityBoundingSet renders the packaged unit's line
+      Restart: "no"
+      CapabilityBoundingSet: ""
       DeviceAllow:
         - /dev/uinput rw
         - char-input
@@ -116,6 +120,11 @@
     ETC_FILES:
       - name: kanata.kbd
         mode: "0644"
+        # write-once under KANATA_CONFIG_PRESERVE (see kanata.srv.pb):
+        # any future live rerender refreshes everything else while
+        # existing config bytes skip write; default false keeps renders
+        # authoritative. Not deployed: nothing renders this live yet.
+        once: "{{ KANATA_CONFIG_PRESERVE | default(false) | bool }}"
         content: |
           (defcfg
             process-unmapped-keys yes

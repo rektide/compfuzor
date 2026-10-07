@@ -22,31 +22,35 @@
     # the helpers carry: nothing of ours may alias onto kanata.service
     # from a second name. (A pre-migration kanata-main.service artifact
     # sits in ETC from an earlier experiment; it is unlinked and inert,
-    # and gets cleaned up at cutover rather than here.)
+    # left in place deliberately -- cleanup is outside this migration's
+    # scope.)
     SYSTEMD_SERVICE: kanata
     SYSTEMD_ALIAS: false
     # Single declarer of the shared _kanata identity. The Debian package
-    # provisioned it dynamically (useradd --system in its postinst: uid/
-    # gid landed at 990/985 here, plus input membership); SYSUSERS pins
-    # both ids in sysusers.d(5)'s uid:gid form so this host's account
-    # survives the package verbatim -- systemd-sysusers never modifies
-    # existing names, so against the live account this is a no-op, and
-    # fresh hosts converge on the same ids. (No separate g spec: the
-    # renderer declares one line per name, and u already implies the
-    # same-name primary group.) kanata-blueturn.srv.pb and kinata.srv.pb
-    # consume the identity (User=/Group=/SupplementaryGroups: input)
-    # without declaring it. home/shell stay at the sysusers defaults
-    # (/nonexistent, nologin): the live account's /home/_kanata + zsh
-    # predate this declaration and are not touched.
+    # provisioned it as a persistent system account (useradd --system in
+    # its postinst, NOT DynamicUser lifecycle) with ids allocated at
+    # install time (990/985 here) plus input membership. Declaring
+    # without an id is exactly right: systemd-sysusers never touches an
+    # existing name, so this host's account and its ids survive the
+    # package as a no-op, while fresh machines allocate normal system
+    # ids. The u line implies the same-name primary group (no separate g
+    # spec -- the renderer declares one line per name). Home/shell stay
+    # at the sysusers defaults (/nonexistent, nologin): the live
+    # account's /home/_kanata + zsh predate this declaration and are not
+    # touched. kanata-blueturn.srv.pb and kinata.srv.pb consume the
+    # identity (User=/Group=/SupplementaryGroups: input) without
+    # declaring it.
     SYSTEMD_SYSUSER: True
     SYSUSERS:
-      - {name: _kanata, id: "990:985", comment: Kanata daemon}
+      - {name: _kanata, comment: Kanata daemon}
       - {name: _kanata, member: input}
     # mirrors the retired /usr/lib/systemd/system/kanata.service
     # (same hardening schema as the helpers), with the static user/
     # group + input access spelled out and ExecStart swapped to the
-    # source binary. Restart: no renders empty (falsy) -- systemd's
-    # default -- matching the packaged Restart=no policy.
+    # source binary. Restart: "no" is quoted so the unit carries an
+    # explicit Restart=no (a bare YAML no is False, which the unit
+    # template drops); CapabilityBoundingSet: "" renders the packaged
+    # unit's empty bounding set (only literal False is skipped).
     SYSTEMD_UNITS:
       Description: Kanata keyboard remapper
       Documentation: https://github.com/jtroo/kanata
@@ -58,7 +62,8 @@
       Group: _kanata
       SupplementaryGroups: input
       ExecStart: /usr/local/bin/kanata --cfg /etc/kanata/config.kbd
-      Restart: no
+      Restart: "no"
+      CapabilityBoundingSet: ""
       DeviceAllow:
         - /dev/uinput rw
         - char-input
@@ -122,6 +127,12 @@
     ETC_FILES:
       - name: kanata.kbd
         mode: "0644"
+        # write-once under KANATA_CONFIG_PRESERVE: the cutover rerender
+        # refreshes units/identity/rule/install composites while the
+        # existing live config bytes (current topology, no Kinesis
+        # exclusion) skip write; default false keeps normal renders
+        # authoritative over this file
+        once: "{{ KANATA_CONFIG_PRESERVE | default(false) | bool }}"
         content: |
           (defcfg
             process-unmapped-keys yes

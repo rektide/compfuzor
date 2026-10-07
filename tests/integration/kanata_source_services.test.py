@@ -23,6 +23,19 @@ The uinput udev rule is kanata-owned: a byte-exact copy of the vendor
 to the same basename in /etc/udev/rules.d (masking the vendor file while
 the package is installed, surviving its removal). No udev reload happens
 here -- that is cutover territory.
+
+The sysusers declaration is deliberately id-less: systemd-sysusers
+leaves the existing _kanata account untouched (ids survive the package
+without pinning), and fresh machines allocate normal system ids. The
+units carry an explicit Restart=no (quoted in YAML -- a bare no is
+False, which the unit template drops) and the packaged unit's empty
+CapabilityBoundingSet= line.
+
+KANATA_CONFIG_PRESERVE exercises the kanata.kbd entries' native once
+flag (fs_hierarchy per-item): with it, a cutover rerender refreshes
+units/sysusers/rule/install composites into durable roots while
+existing config bytes skip write; without it, normal renders stay
+authoritative over the config.
 """
 
 from __future__ import annotations
@@ -88,6 +101,8 @@ HARDENING_LINES = (
     "RestrictRealtime=True",
     "MemoryDenyWriteExecute=True",
     "UMask=0077",
+    "CapabilityBoundingSet=",
+    "Restart=no",
 )
 
 LIVE_FENCE_DIRS = (
@@ -113,7 +128,7 @@ def playbook_vars(playbook: Path) -> dict:
     return plays[0].get("vars", {})
 
 
-def render(playbook: str, tmp: Path) -> tuple[Path, Path]:
+def render(playbook: str, tmp: Path, extra: tuple[str, ...] = ()) -> tuple[Path, Path]:
     """Render one owned playbook into isolated scratch roots, all
     side-effecting phases bypassed. Returns (srv_root, etc_root)."""
     srv, etc = tmp / "srv", tmp / "etc_opt"
@@ -123,7 +138,7 @@ def render(playbook: str, tmp: Path) -> tuple[Path, Path]:
         f"-e SRVS_DIR={srv}", f"-e ETCS_DIR={etc}",
         "-e PKGS_BYPASS=True", "-e APT_BYPASS=True",
         "-e SYSTEMD_THUNK_BYPASS=True", "-e BINS_RUN_BYPASS=True",
-        "-e GLOBAL_BINS_BYPASS=True",
+        "-e GLOBAL_BINS_BYPASS=True", *extra,
         env=env,
     )
     return srv, etc
@@ -177,7 +192,7 @@ def live_fence_snapshot() -> dict:
     sysusers = {str(p): f"link:{os.readlink(p)}" if p.is_symlink() else sha(p)
                 for p in Path("/etc/sysusers.d").glob("kanata*")}
     udev = {str(p): f"link:{os.readlink(p)}" if p.is_symlink() else sha(p)
-            for p in Path("/etc/udev/rules.d").glob("kanata*")}
+            for p in Path("/etc/udev/rules.d").glob("*kanata*")}
     passwd = run("getent", "passwd", "_kanata", check=False)
     group = run("getent", "group", "_kanata", check=False)
     return {"dirs": dirs, "units": unit_glob, "sysusers": sysusers, "udev": udev,
@@ -208,7 +223,7 @@ def assert_identity_consumer(unit_text: str, config: str) -> None:
     for line in HARDENING_LINES:
         if line not in service:
             raise AssertionError(f"missing hardening line: {line}\n{unit_text}")
-    if any(line.startswith("Restart=") for line in service):
+    if any(line != "Restart=no" and line.startswith("Restart=") for line in service):
         raise AssertionError(f"restart policy changed from the packaged no-op:\n{unit_text}")
     if any(line.startswith("Alias=") for line in unit_sections(unit_text).get("Install", [])):
         raise AssertionError(f"alias on a non-canonical unit would fight kanata.service:\n{unit_text}")
@@ -255,6 +270,61 @@ def test_identity_declared_exactly_once() -> None:
         raise AssertionError(f"_kanata identity must be declared by {MAIN} alone, got: {declarers}")
 
 
+def assert_no_apt_leaves(bin_dir: Path) -> None:
+    for stale in ("install-apt.sh", "status-apt.sh"):
+        if (bin_dir / stale).exists():
+            raise AssertionError(f"apt lane leaf present without PKGS: {bin_dir / stale}")
+    for script in sorted(bin_dir.iterdir()):
+        if script.is_file() and "install-apt" in script.read_text(errors="replace"):
+            raise AssertionError(f"installer composite still references the apt lane: {script}")
+
+
+def test_config_preserve_rerender(tmp: Path, srv: Path, etc: Path) -> None:
+    """KANATA_CONFIG_PRESERVE: a cutover rerender refreshes declared
+    state (unit, sysusers fragment, udev rule, install composites, link
+    catalog) while existing config bytes skip write; the default render
+    stays authoritative over the config."""
+    # current live topology shape: no Kinesis exclusion, keymap intact
+    sentinel = (
+        "(defcfg\n"
+        "  process-unmapped-keys yes\n"
+        ")\n"
+        "\n"
+        "(defsrc\n"
+        "  caps\n"
+        ")\n"
+        "\n"
+        "(deflayer base\n"
+        "  (tap-hold 100 100 esc lctl)\n"
+        ")\n"
+    )
+    for playbook, name, unit_file, cfg_arg in (
+        (MAIN, "kanata-main", "kanata.service", "/etc/kanata/config.kbd"),
+        ("kanata-blueturn.srv.pb", "kanata-blueturn", "kanata-blueturn.service", "/etc/kanata/blueturn.kbd"),
+        ("kinata.srv.pb", "kanata-kinata", "kanata-kinata.service", "/etc/kanata/kinata.kbd"),
+    ):
+        config = etc / name / "kanata.kbd"
+        unit = etc / name / unit_file
+        authored = config.read_text()
+
+        config.write_text(sentinel)
+        render(playbook, tmp)
+        if config.read_text() != authored:
+            raise AssertionError(f"{playbook}: default render must stay authoritative over the config")
+
+        config.write_text(sentinel)
+        if playbook == MAIN:
+            unit.write_text("# corrupted mid-cutover\n")
+            (srv / name / "bin" / "install-service-kanata.sh").unlink()
+        render(playbook, tmp, extra=("-e", "KANATA_CONFIG_PRESERVE=True"))
+        if config.read_text() != sentinel:
+            raise AssertionError(f"{playbook}: KANATA_CONFIG_PRESERVE must retain existing config bytes verbatim")
+        assert_identity_consumer(unit.read_text(), cfg_arg)
+        assert_no_apt_leaves(srv / name / "bin")
+        if playbook == MAIN and not (srv / name / "bin" / "install-service-kanata.sh").is_file():
+            raise AssertionError("preserve rerender did not refresh the install composites")
+
+
 def main() -> None:
     test_no_debian_package_dependency()
     test_identity_declared_exactly_once()
@@ -283,15 +353,16 @@ def main() -> None:
         if "WantedBy=default.target" not in unit_section["Install"]:
             raise AssertionError(f"packaged [Install] target not retained:\n{unit_text}")
 
-        # static account: sysusers fragment pins this host's uid/gid/input
+        # static account: sysusers fragment declares _kanata id-less --
+        # existing account/ids survive untouched, fresh hosts allocate
         fragment = main_etc / "sysusers.d" / "kanata-main.conf"
         expected = (
-            'u _kanata 990:985 "Kanata daemon" /nonexistent /usr/sbin/nologin\n'
+            'u _kanata - "Kanata daemon" /nonexistent /usr/sbin/nologin\n'
             "m _kanata input\n"
         )
         if not fragment.is_file() or fragment.read_text() != expected:
             raise AssertionError(
-                f"sysusers fragment must pin the live uid/gid verbatim:\n{fragment}\n"
+                f"sysusers fragment must declare _kanata id-less with input membership:\n{fragment}\n"
                 f"expected:\n{expected}\ngot:\n{fragment.read_text() if fragment.exists() else '<missing>'}"
             )
 
@@ -376,9 +447,12 @@ def main() -> None:
 
         assert_unchanged(fence_before, live_fence_snapshot(), "live fence")
 
+        test_config_preserve_rerender(tmp, srv, etc)
+        assert_unchanged(fence_before, live_fence_snapshot(), "live fence (preserve rerender)")
+
     print("ok: kanata source services (canonical unit, one identity declarer, "
           "no Debian dependency, owned uinput rule, configs unchanged, "
-          "live deployment untouched)")
+          "config-preserve rerender verified, live deployment untouched)")
 
 
 if __name__ == "__main__":

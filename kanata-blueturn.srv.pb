@@ -47,7 +47,11 @@
       Group: _kanata
       SupplementaryGroups: input
       ExecStart: /usr/local/bin/kanata --cfg /etc/kanata/blueturn.kbd
-      Restart: no
+      # quoted so the unit carries an explicit Restart=no (a bare YAML
+      # no is False, which the unit template drops); empty
+      # CapabilityBoundingSet renders the packaged unit's line
+      Restart: "no"
+      CapabilityBoundingSet: ""
       DeviceAllow:
         - /dev/uinput rw
         - char-input
@@ -98,6 +102,11 @@
     ETC_FILES:
       - name: kanata.kbd
         mode: "0644"
+        # write-once under KANATA_CONFIG_PRESERVE (see kanata.srv.pb):
+        # cutover rerenders refresh everything else while existing
+        # config bytes skip write; default false keeps renders
+        # authoritative
+        once: "{{ KANATA_CONFIG_PRESERVE | default(false) | bool }}"
         content: |
           (defcfg
             process-unmapped-keys yes
