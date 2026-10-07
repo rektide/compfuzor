@@ -23,8 +23,8 @@ sources:
     title: Declared daemon deployment (source build, user service)
   - resource: /media-keys.etc.pb
     title: Declared coarse 0.06 / fine 0.02 media actions
-  - resource: /design/surface-dial-layers/unit0.glm53.md
-    title: Unit-G runtime observation report (review context for this revision)
+  - resource: /design/surface-dial-layers/unit1.glm53.md
+    title: Unit report superseding unit0 (review context; honest lineage and yield boundary)
   - resource: /design/surface-dial-layers/routing0.gpt61s.md
     title: Parent routing and precision-state boundary report (review context for this revision)
   - resource: /design/surface-dial-layers/kinefolk0.glm53.md
@@ -67,10 +67,13 @@ Three source copies exist and diverge:
   flag threaded through `main.rs`, `config.rs`, and `controller/mod.rs`.
   Local daemon patching is therefore established practice, not a new fork.
 - The declared deployment source is `/usr/local/src/surface-dial-git` per
-  [`diagnosis0`](/design/surface-dial/diagnosis0.glm53.md). The unit-G
-  report has since pinned the running binary to a clean upstream `43dd973`
-  build — the fork is undeployed, and the layered `src/` is byte-identical
-  to the deployed tree ([unit0](/design/surface-dial-layers/unit0.glm53.md)).
+  [`diagnosis0`](/design/surface-dial/diagnosis0.glm53.md). The unit
+  report (superseding its unit0 draft) finds the running binary
+  *consistent with* upstream `43dd973` — matching hashes across the
+  install paths prove the artifact copies are one build, not that it was
+  built from that source — and the fork is undeployed
+  ([unit1](/design/surface-dial-layers/unit1.glm53.md); unit0's
+  source-build pin claim is retracted there).
 
 Architecture, per [`src/`](file:///home/rektide/src/surface-dial-layered/src) and
 the pre-existing
@@ -297,9 +300,11 @@ below):
    - **B4b, output-node watcher**: uinput outputs are ungrabbed by design
      (the compositor is a normal reader), and multiple readers of an
      evdev node each receive the full stream. Watching the **scoped
-     kinata output** of the declared split yields exactly
-     physical-keyboard events with clean provenance — no dial synthetic
-     Shift is merged there. Watching **main's output** on the deployed
+     kinata output** of the declared split is a conventional
+     keyboard-derived source — no dial synthetic Shift is merged there —
+     though not *exactly* physical events either, since remapper macros
+     and mapped actions on that instance can synthesize keys. Watching
+     **main's output** on the deployed
      single-instance topology is contaminated today (the dial's synthetic
      Shift is provenance-free once merged). Removing the dial's synthetic
      Shift under A2 removes *this* contamination source, but not every
@@ -462,8 +467,9 @@ Concrete smallest slice, in dependency order:
 - If Path B is pursued without A2: which provenance-clean publisher — the
   scoped kinata output (requires actually deploying the declared split)
   or `EVIOCGKEY` sampling (requires accepting poll latency and hotplug
-  bookkeeping)? With A2 first, main's output watcher is clean — is that
-  the agreed sequencing?
+  bookkeeping)? With A2 first, main's output watcher sheds the known dial
+  contamination but still requires source designation — is that the
+  agreed sequencing?
 - Watcher identity details if B4b is chosen: name-matched discovery must
   disambiguate default-named `kanata` outputs across instances (renamed
   `kanata-kinata` candidate or path pinning); who owns the watcher
@@ -474,10 +480,12 @@ Concrete smallest slice, in dependency order:
   routing caveats).
 - Step values and ratio: "significantly smaller baseline" and "reduced
   ratio" are still numbers nobody has picked; haptics detent density is an
-  independent preference. Unit G also measured sub-1:1 chord-to-action
-  yield under fast spins (roughly nine daemon chords per fired action) —
-  finer steps multiply events that may not become actions, so the numbers
-  should be chosen against observed yield, not assumed 1:1.
+  independent preference. The unit report (superseding unit0's draft
+  numbers) observed an attempt-to-dispatch-log imbalance under fast spins —
+  far more daemon chord lines than Umbriel launch lines — but actual
+  delivery/completion yield is unknown and the confounds are unresolved;
+  finer steps multiply events whose action yield is unmeasured, so the
+  numbers should not be chosen as if yield were 1:1.
 - Under A2, does anything legitimately want the dial's old synthetic-Shift
   fine chord preserved for other consumers (the
   [`media-keys.etc.pb`](/media-keys.etc.pb) comment says its vocabulary
@@ -515,10 +523,12 @@ Concrete smallest slice, in dependency order:
   agrees with it and adds the interface inventory and channel designs —
   its `com.prilik.…` config-path inference is corrected above per runtime
   observation).
-- [Unit report](/design/surface-dial-layers/unit0.glm53.md): pins the
-  deployed build to clean upstream `43dd973`, the runtime config path and
-  mode, the journal-line inventory, and the sub-1:1 chord-to-action yield
-  observation that constrains step-value choices.
+- [Unit report](/design/surface-dial-layers/unit1.glm53.md) (supersedes
+  [unit0](/design/surface-dial-layers/unit0.glm53.md)): running binary
+  consistent with upstream `43dd973` with hash-identical artifact copies
+  (not a source-build pin), the runtime config path and mode, the
+  journal-line inventory, and the attempt-to-dispatch-log imbalance with
+  delivery/completion yield unknown and confounds unresolved.
 - [Routing report](/design/surface-dial-layers/routing0.gpt61s.md): the
   Umbriel IPC/submap boundary, the F23/F24 keymap fixture and dedicated-key
   table Path A aligns with, and the same dial-owned producer placement.
