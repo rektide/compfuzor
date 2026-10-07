@@ -81,12 +81,46 @@ pnpm check
 Use repeated `--root /absolute/path` and `--write-root /absolute/path` for isolated
 commands instead of live XDG paths. `complete --word explain --word ''` exposes
 tab completion against an observed snapshot; it currently provides static verbs,
-collection/scope values and explain IDs, not installed shell scripts.
+collection/scope values and explain IDs. `complete -- WORDS` uses tab's normal
+protocol; `complete bash|zsh|fish|powershell` prints setup without installing it.
 
 Source imports require the installed `figmen-ts` sibling link and its source tree;
-no absolute checkout paths are embedded in production imports. The existing
-deployed `.mjs` bundle has **not** been cut over. Dependency-closure bundling belongs
-to the next deployment slice.
+no absolute checkout paths are embedded in production imports. The committed
+deployment artifact now bundles Figments, confbox, Router and tab alongside the
+existing native/CONFIG closure; no receiver-side sibling checkout or node_modules
+is required. Source development still uses `.ts` entries.
 
-See the [implementation checkpoint](/design/registry-discovery/implementation0.gpt61s.md)
-for domain schemas, evidence and remaining native-integration decisions.
+See the [library predecessor](/design/registry-discovery/implementation0.gpt61s.md)
+and [generated/native checkpoint](/design/registry-discovery/implementation1.gpt61s.md)
+for domain schemas, evidence and remaining integration decisions.
+
+## Advertised keybinding execution
+
+```sh
+node files/runtime/compfuzor-runtime.ts keybindings install-offer --manifest /owned/keybinding-producer.json
+node files/runtime/compfuzor-runtime.ts keybindings install-offer --manifest /owned/keybinding-producer.json --target deck-main --force-enable
+node files/runtime/compfuzor-runtime.ts registry complete bash
+node files/runtime/compfuzor-runtime.ts keybindings complete bash
+```
+
+[`admitKeybindingBatch()`](/runtime/keybindings/invocation.ts) admits all compatible
+active consumers by default or a declared/CLI subset. Disabled registration slots
+and `enabled:false` metadata require `--force-enable` for explicit selection and
+are otherwise skipped in default collection. Force is invocation-only, remains in
+serialized admission, never removes masks, and does not enable consumer-owned
+producer groups or individual actions/bindings.
+
+Consumer profile selectors reuse [`PathSelector`](/files/config/context.ts), with
+inert shape validation during inspection and binding only after selection. Relative
+selectors/defaults bind against the owned descriptor's physical directory. Native
+adapter/schema/audience/profile checks still apply under force.
+
+The complete receiver IDs, profiles, roots, manifest/resources and guards are bound
+before authored action bodies. Each receiver retains its existing independent
+CONFIG membership/native commit. Selected registry topology and captured input
+bytes are checked before execution and around native transaction validation.
+Ordinary producer install publishes its prospective owned manifest reference, then
+executes the frozen receiver batch. Ordinary owned-host install can bind its packaged
+description prospectively and publishes its reference after successful native work;
+assemble/check does not advertise. Separate generated registration endpoints support
+passive publication while native work is disabled, masked or not yet installed.
