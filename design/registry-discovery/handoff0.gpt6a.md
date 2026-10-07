@@ -95,10 +95,15 @@ and implementation successor**, using the already user-requested Sol medium mode
 Repeated server restarts interrupted the optional fresh-model choice, so continuation
 uses that existing model direction rather than waiting on the same question again.
 
-It is assigned to review implementation2's consequential code, then implement the
-remaining regression/fixture/documentation migration from its report. It owns
-architectural judgment for that continuation. The old parent becomes a light relay
-and should not redo the successor's research.
+It completed that continuation in
+[implementation3.gpt61s.md](/design/registry-discovery/implementation3.gpt61s.md),
+commit `d6375d01`: reviewed implementation2's consequential code, migrated retained
+regression fixtures and maintained/generated guides, and corrected standalone-host
+versus combined-subset `--target` handling. Reported verification: 70 source tests,
+14 integration scripts, four compiler scripts, checks/build and playbook syntax.
+It stopped at the completed advertised-native cutover checkpoint near **226.5k**
+context and is available for a later explicitly chosen follow-on. The old parent
+is a light relay and should not redo the successor's research or accepted checks.
 
 It must not blindly run old SYSTEM/native integration tests: some have isolated
 native outputs but still use live default registry locations. The mapping is now

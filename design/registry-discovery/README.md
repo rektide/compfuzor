@@ -30,6 +30,9 @@
 
 ## Compfuzor implementation checkpoints
 
+- [Completed advertised-native cutover](/design/registry-discovery/implementation3.gpt61s.md)
+  — successor-reviewed admission/publication contracts, migrated retained native
+  regressions, maintained guides and generated READMEs; current completion checkpoint.
 - [Prospective and scoped-policy implementation](/design/registry-discovery/implementation2.gpt61s.md)
   — committed combined first-install/publication-transition and public policy-pair
   slice, reported verified at the implementation agent's rollover checkpoint.
