@@ -32,5 +32,7 @@
         basedir: repo
         exec: |
           sudo make install PREFIX=/usr/local
+          # Upstream copies source directories, preserving restrictive modes.
+          sudo chmod -R a+rX /usr/local/share/patchance
   tasks:
     - import_tasks: tasks/compfuzor.includes
