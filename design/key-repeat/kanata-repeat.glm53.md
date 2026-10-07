@@ -157,6 +157,15 @@ This satisfies "increase the key repeat rate somehow" but not the per-key ramp.
 
 # Option 1 — kanata-hosted ramp daemon (recommended build)
 
+**Status: BUILT (2026-10-09).** [`~/src/kanramp`](https://github.com/rektide/kanramp) —
+Rust/tokio, built in three reviewed slices, 77 tests, `--check`, TOML config
+(builtin < file < CLI via explicit-set detection; figment2 deliberately
+declined — ruling recorded in its README). Layer convention `ramp-<key>`,
+vkey `<key>-tap`, supervisor with bounded backpressure (`SO_SNDBUF`-capped)
+and reconnect-resync. Deployment handoff facts (ExecStart shape, unit needs,
+kanata prerequisites) are in its final checkpoint and README service notes;
+the remaining work is the compfuzor lane below (Next slices 3 and 5).
+
 ## Config side (kanata.srv.pb content)
 
 ```lisp
@@ -384,10 +393,14 @@ request), vs kanata's already-deployed, already-proven TCP surface.
 2. Option 0 config bump if wanted immediately (`umbriel msg config-reload`
    or just edit-and-wait for inotify).
 3. `KANATA_TCP_ENABLED` generalization in [`kanata.srv.pb`](/kanata.srv.pb)
-   (small, self-contained, useful to dial work too).
-4. `kramp` daemon + config change behind a new playbook; validate with
-   `kanata --check` and the sim harness
-   ([init0 test seams](/design/kanata-devices/init0.glm53.md)).
+   (small, self-contained, useful to dial work too) — **now the gating item:
+   kanramp is built** ([status note above](#option-1--kanata-hosted-ramp-daemon-recommended-build));
+   deployment = this item + a kanramp unit (joins the TCP namespace anchor,
+   `--check` as ExecStartPre) + the config-bytes change (note the live
+   config's `once:` preservation — diff live vs authored before rendering).
+4. ~~`kramp` daemon~~ — **done as kanramp** (`~/src/kanramp`), slice 3 of
+   which subsumed the validation story (`--check` replaces the sim-harness
+   idea for the daemon side).
 5. Post-experiment decision between the end-states: fx-A `input-repeat-rate`
    IPC + kanata edge observer vs g-A″ in-compositor ramp vs plain kramp —
    all three docs now cross-reference the same `Server::setKeyboardRepeat`
